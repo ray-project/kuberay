@@ -38,6 +38,7 @@ const (
 	ServeName           = "serve"
 	ClusterDomainEnvKey = "CLUSTER_DOMAIN"
 	DefaultDomainName   = "cluster.local"
+	ContainersNotReady  = "ContainersNotReady"
 )
 
 // TODO (kevin85421): Define CRDType here rather than constant.go to avoid circular dependency.
@@ -92,16 +93,6 @@ func FindHeadPodReadyCondition(headPod *corev1.Pod) metav1.Condition {
 		headPodReadyCondition.Status = metav1.ConditionStatus(cond.Status)
 		headPodReadyCondition.Message = cond.Message
 
-		// Add details from failed or waiting container statuses if available.
-		details := containerStatusDetails(headPod)
-		if details != "" {
-			if headPodReadyCondition.Message == "" {
-				headPodReadyCondition.Message = details
-			} else {
-				headPodReadyCondition.Message += "; " + details
-			}
-		}
-
 		// Determine the reason; default to HeadPodRunningAndReady if the headPod is ready but no specific reason is provided
 		reason := cond.Reason
 		if cond.Status == corev1.ConditionTrue && reason == "" {
@@ -113,22 +104,34 @@ func FindHeadPodReadyCondition(headPod *corev1.Pod) metav1.Condition {
 			headPodReadyCondition.Reason = reason
 		}
 
+		// If reason is ContainersNotReady, then replace it with an available
+		// container status that may illuminate why the container is not ready.
+		if reason == ContainersNotReady {
+			reason, message, ok := firstNotReadyContainerStatus(headPod)
+			if ok {
+				if headPodReadyCondition.Message != "" {
+					headPodReadyCondition.Message += "; "
+				}
+				headPodReadyCondition.Message += message
+				headPodReadyCondition.Reason = reason
+			}
+		}
+
 		// Since we're only interested in the PodReady condition, break after processing it
 		break
 	}
 	return headPodReadyCondition
 }
 
-func containerStatusDetails(pod *corev1.Pod) string {
-	var details []string
+func firstNotReadyContainerStatus(pod *corev1.Pod) (reason string, message string, ok bool) {
 	for _, status := range pod.Status.ContainerStatuses {
 		if status.State.Waiting != nil {
-			details = append(details, fmt.Sprintf("%s: %s: %s", status.Name, status.State.Waiting.Reason, status.State.Waiting.Message))
+			return status.State.Waiting.Reason, status.Name + ": " + status.State.Waiting.Message, true
 		} else if status.State.Terminated != nil {
-			details = append(details, fmt.Sprintf("%s: %s: %s", status.Name, status.State.Terminated.Reason, status.State.Terminated.Message))
+			return status.State.Terminated.Reason, status.Name + ": " + status.State.Terminated.Message, true
 		}
 	}
-	return strings.Join(details, ", ")
+	return "", "", false
 }
 
 // FindRayClusterSuspendStatus returns the current suspend status from two conditions:

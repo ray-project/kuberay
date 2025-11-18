@@ -347,6 +347,7 @@ func createRayHeadPodWithPhaseAndCondition(phase corev1.PodPhase, status corev1.
 				{
 					Type:   corev1.PodReady,
 					Status: status,
+					Reason: ContainersNotReady,
 				},
 			},
 		},
@@ -979,16 +980,19 @@ func TestFindHeadPodReadyCondition(t *testing.T) {
 
 func TestFindHeadPodReadyMessage(t *testing.T) {
 	tests := []struct {
-		name            string
-		message         string
-		expectedMessage string
-		status          []corev1.ContainerStatus
+		name        string
+		message     string
+		wantMessage string
+		wantReason  string
+		status      []corev1.ContainerStatus
 	}{{
-		name: "no message no status want nothing",
+		name:       "no message no status want original reason",
+		wantReason: ContainersNotReady,
 	}, {
-		name:            "only reason",
-		message:         "TooEarlyInTheMorning",
-		expectedMessage: "TooEarlyInTheMorning",
+		name:        "no container status want original reason",
+		message:     "TooEarlyInTheMorning",
+		wantMessage: "TooEarlyInTheMorning",
+		wantReason:  ContainersNotReady,
 	}, {
 		name:    "one reason one status",
 		message: "containers not ready",
@@ -1001,9 +1005,10 @@ func TestFindHeadPodReadyMessage(t *testing.T) {
 				},
 			},
 		}},
-		expectedMessage: `containers not ready; ray: ImagePullBackOff: Back-off pulling image royproject/roy:latest: ErrImagePull: rpc error: code = NotFound`,
+		wantReason:  "ImagePullBackOff",
+		wantMessage: `containers not ready; ray: Back-off pulling image royproject/roy:latest: ErrImagePull: rpc error: code = NotFound`,
 	}, {
-		name:    "one reason two statuses",
+		name:    "one reason two statuses only copy first",
 		message: "aesthetic problems",
 		status: []corev1.ContainerStatus{{
 			Name: "indigo",
@@ -1022,7 +1027,8 @@ func TestFindHeadPodReadyMessage(t *testing.T) {
 				},
 			},
 		}},
-		expectedMessage: "aesthetic problems; indigo: BadColor: too blue, circle: BadGeometry: too round",
+		wantReason:  "BadColor",
+		wantMessage: "aesthetic problems; indigo: too blue",
 	}, {
 		name: "no reason one status",
 		status: []corev1.ContainerStatus{{
@@ -1034,7 +1040,8 @@ func TestFindHeadPodReadyMessage(t *testing.T) {
 				},
 			},
 		}},
-		expectedMessage: "my-image: Crashed: bash not found",
+		wantReason:  "Crashed",
+		wantMessage: "my-image: bash not found",
 	}}
 
 	for _, tc := range tests {
@@ -1043,8 +1050,11 @@ func TestFindHeadPodReadyMessage(t *testing.T) {
 			pod.Status.Conditions[0].Message = tc.message
 			pod.Status.ContainerStatuses = tc.status
 			cond := FindHeadPodReadyCondition(pod)
-			if cond.Message != tc.expectedMessage {
-				t.Errorf("FindHeadPodReadyCondition(...) returned condition with message %q, but wanted %q", cond.Message, tc.expectedMessage)
+			if cond.Message != tc.wantMessage {
+				t.Errorf("FindHeadPodReadyCondition(...) returned condition with message %q, but wanted %q", cond.Message, tc.wantMessage)
+			}
+			if cond.Reason != tc.wantReason {
+				t.Errorf("FindHeadPodReadyCondition(...) returned condition with reason %q, but wanted %q", cond.Reason, tc.wantReason)
 			}
 		})
 	}
