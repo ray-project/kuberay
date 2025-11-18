@@ -1446,7 +1446,8 @@ func (r *RayClusterReconciler) SetupWithManager(mgr ctrl.Manager, reconcileConcu
 			predicate.AnnotationChangedPredicate{},
 		))).
 		Owns(&corev1.Pod{}).
-		Owns(&corev1.Service{})
+		Owns(&corev1.Service{}).
+		Owns(&corev1.Secret{})
 	if r.options.BatchSchedulerManager != nil {
 		r.options.BatchSchedulerManager.ConfigureReconciler(b)
 	}
