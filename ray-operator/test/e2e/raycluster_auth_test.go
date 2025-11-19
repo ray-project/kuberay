@@ -28,7 +28,7 @@ func TestRayClusterAuthOptions(t *testing.T) {
 		t.Parallel()
 
 		rayClusterAC := rayv1ac.RayCluster("raycluster-auth-token", namespace.Name).
-			WithSpec(NewRayClusterSpecWithAuth(rayv1.AuthModeToken).WithRayVersion("2.51"))
+			WithSpec(NewRayClusterSpecWithAuth(rayv1.AuthModeToken).WithRayVersion("2.52"))
 
 		rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
 		g.Expect(err).NotTo(HaveOccurred())
