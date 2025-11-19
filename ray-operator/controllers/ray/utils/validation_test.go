@@ -859,11 +859,6 @@ func TestValidateRayClusterSpecRayVersionForAuth(t *testing.T) {
 		expectError  bool
 	}{
 		{
-			name:        "Valid Ray version 2.51.0",
-			rayVersion:  "2.51.0",
-			expectError: false,
-		},
-		{
 			name:        "Valid Ray version 2.52.0",
 			rayVersion:  "2.52.0",
 			expectError: false,
@@ -877,7 +872,7 @@ func TestValidateRayClusterSpecRayVersionForAuth(t *testing.T) {
 			name:         "Invalid Ray version 2.50.0",
 			rayVersion:   "2.50.0",
 			expectError:  true,
-			errorMessage: "authOptions.mode is 'token' but minimum Ray version is 2.51.0, got 2.50.0",
+			errorMessage: "authOptions.mode is 'token' but minimum Ray version is 2.52.0, got 2.50.0",
 		},
 		{
 			name:         "Invalid Ray version format",
@@ -889,7 +884,7 @@ func TestValidateRayClusterSpecRayVersionForAuth(t *testing.T) {
 			name:         "Empty Ray version",
 			rayVersion:   "",
 			expectError:  true,
-			errorMessage: "authOptions.mode is 'token' but RayVersion was not specified. Ray version 2.51.0 or later is required",
+			errorMessage: "authOptions.mode is 'token' but RayVersion was not specified. Ray version 2.52.0 or later is required",
 		},
 	}
 
