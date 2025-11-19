@@ -604,9 +604,6 @@ func configureSubmitterContainer(container *corev1.Container, rayJobInstance *ra
 	if rayClusterInstance != nil && utils.IsAuthEnabled(&rayClusterInstance.Spec) {
 		common.SetContainerTokenAuthEnvVars(rayClusterInstance.Name, container)
 	}
-	// else if rayJobInstance.Spec.RayClusterSpec != nil && utils.IsAuthEnabled(rayJobInstance.Spec.RayClusterSpec) {
-	// 	common.SetContainerTokenAuthEnvVars(rayJobInstance.Status.RayClusterName, container)
-	// }
 
 	return nil
 }
