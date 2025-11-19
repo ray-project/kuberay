@@ -29,6 +29,7 @@ func (r *RayHttpProxyClient) CheckProxyActorHealth(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+
 	resp, err := r.client.Do(req)
 	if err != nil {
 		return err

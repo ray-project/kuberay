@@ -158,6 +158,8 @@ func (r *RayDashboardClient) GetJobInfo(ctx context.Context, jobId string) (*uti
 		return nil, err
 	}
 
+	r.setAuthHeader(req)
+
 	resp, err := r.client.Do(req)
 	if err != nil {
 		return nil, err
@@ -187,6 +189,8 @@ func (r *RayDashboardClient) ListJobs(ctx context.Context) (*[]utiltypes.RayJobI
 	if err != nil {
 		return nil, err
 	}
+
+	r.setAuthHeader(req)
 
 	resp, err := r.client.Do(req)
 	if err != nil {
@@ -232,6 +236,8 @@ func (r *RayDashboardClient) SubmitJobReq(ctx context.Context, request *utiltype
 	}
 
 	req.Header.Set("Content-Type", "application/json")
+	r.setAuthHeader(req)
+
 	resp, err := r.client.Do(req)
 	if err != nil {
 		return
@@ -266,6 +272,9 @@ func (r *RayDashboardClient) GetJobLog(ctx context.Context, jobName string) (*st
 	if err != nil {
 		return nil, err
 	}
+
+	r.setAuthHeader(req)
+
 	resp, err := r.client.Do(req)
 	if err != nil {
 		return nil, err
@@ -299,6 +308,8 @@ func (r *RayDashboardClient) StopJob(ctx context.Context, jobName string) (err e
 	}
 
 	req.Header.Set("Content-Type", "application/json")
+	r.setAuthHeader(req)
+
 	resp, err := r.client.Do(req)
 	if err != nil {
 		return err
@@ -335,6 +346,8 @@ func (r *RayDashboardClient) DeleteJob(ctx context.Context, jobName string) erro
 	}
 
 	req.Header.Set("Content-Type", "application/json")
+	r.setAuthHeader(req)
+
 	resp, err := r.client.Do(req)
 	if err != nil {
 		return err
