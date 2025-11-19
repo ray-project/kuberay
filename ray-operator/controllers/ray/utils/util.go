@@ -900,6 +900,8 @@ func GetRayDashboardClientFunc(mgr manager.Manager, useKubernetesProxy bool) fun
 		dashboardClient := &dashboardclient.RayDashboardClient{}
 		authToken := ""
 
+		// TODO: Find a solution to support auth token when using Kubernetes proxy.
+		// Currently, we are discussing with ray side to see if they can support a fallback auth header like X-Ray-Auth: Bearer <token>
 		if useKubernetesProxy {
 			var err error
 			headSvcName := rayCluster.Status.Head.ServiceName
@@ -921,7 +923,7 @@ func GetRayDashboardClientFunc(mgr manager.Manager, useKubernetesProxy bool) fun
 			return dashboardClient, nil
 		}
 
-		if mgr != nil && rayCluster.Spec.AuthOptions != nil && rayCluster.Spec.AuthOptions.Mode == rayv1.AuthModeToken {
+		if rayCluster != nil && rayCluster.Spec.AuthOptions != nil && rayCluster.Spec.AuthOptions.Mode == rayv1.AuthModeToken {
 			secretName := CheckName(rayCluster.Name)
 			secret := &corev1.Secret{}
 			secretKey := types.NamespacedName{
