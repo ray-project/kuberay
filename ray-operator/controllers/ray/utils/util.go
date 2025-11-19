@@ -19,6 +19,7 @@ import (
 	meta "k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/client-go/discovery"
@@ -897,6 +898,28 @@ func FetchHeadServiceURL(ctx context.Context, cli client.Client, rayCluster *ray
 func GetRayDashboardClientFunc(mgr manager.Manager, useKubernetesProxy bool) func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error) {
 	return func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error) {
 		dashboardClient := &dashboardclient.RayDashboardClient{}
+		var authToken string
+
+		if rayCluster != nil && rayCluster.Spec.AuthOptions != nil && rayCluster.Spec.AuthOptions.Mode == rayv1.AuthModeToken {
+			secretName := CheckName(rayCluster.Name)
+			secret := &corev1.Secret{}
+			secretKey := types.NamespacedName{
+				Name:      secretName,
+				Namespace: rayCluster.Namespace,
+			}
+
+			if err := mgr.GetClient().Get(context.Background(), secretKey, secret); err != nil {
+				return nil, fmt.Errorf("failed to get auth secret %s/%s: %w", rayCluster.Namespace, secretName, err)
+			}
+
+			tokenBytes, exists := secret.Data[RAY_AUTH_TOKEN_SECRET_KEY]
+			if !exists {
+				return nil, fmt.Errorf("auth token key '%q' not found in secret %s/%s", RAY_AUTH_TOKEN_SECRET_KEY, rayCluster.Namespace, secretName)
+			}
+
+			authToken = string(tokenBytes)
+		}
+
 		if useKubernetesProxy {
 			var err error
 			headSvcName := rayCluster.Status.Head.ServiceName
@@ -913,13 +936,19 @@ func GetRayDashboardClientFunc(mgr manager.Manager, useKubernetesProxy bool) fun
 				// configured to communicate with the Kubernetes API server.
 				mgr.GetHTTPClient(),
 				fmt.Sprintf("%s/api/v1/namespaces/%s/services/%s:dashboard/proxy", mgr.GetConfig().Host, rayCluster.Namespace, headSvcName),
+				authToken,
 			)
 			return dashboardClient, nil
 		}
 
-		dashboardClient.InitClient(&http.Client{
-			Timeout: 2 * time.Second,
-		}, "http://"+url)
+		dashboardClient.InitClient(
+			&http.Client{
+				Timeout: 2 * time.Second,
+			},
+			"http://"+url,
+			authToken,
+		)
+
 		return dashboardClient, nil
 	}
 }
