@@ -250,12 +250,6 @@ func setAutoscalerV2EnvVars(podTemplate *corev1.PodTemplateSpec) {
 func configureTokenAuth(clusterName string, podTemplate *corev1.PodTemplateSpec) {
 	SetContainerTokenAuthEnvVars(clusterName, &podTemplate.Spec.Containers[utils.RayContainerIndex])
 	// For RayJob Sidecar mode, we need to set the auth token for the submitter container.
-	for i := range podTemplate.Spec.Containers {
-		if podTemplate.Spec.Containers[i].Name == utils.SubmitterContainerName {
-			SetContainerTokenAuthEnvVars(clusterName, &podTemplate.Spec.Containers[i])
-			break
-		}
-	}
 
 	// Configure auth token for wait-gcs-ready init container if it exists
 	for i, initContainer := range podTemplate.Spec.InitContainers {
