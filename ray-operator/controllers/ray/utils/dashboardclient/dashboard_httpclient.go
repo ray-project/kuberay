@@ -53,6 +53,7 @@ func (r *RayDashboardClient) InitClient(client *http.Client, dashboardURL string
 	r.authToken = authToken
 }
 
+// TODO: support a fallback auth header in Ray side, something like X-Ray-Auth: Bearer <token>
 func (r *RayDashboardClient) setAuthHeader(req *http.Request) {
 	if r.authToken != "" {
 		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", r.authToken))

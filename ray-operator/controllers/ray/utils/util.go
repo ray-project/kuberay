@@ -898,10 +898,9 @@ func FetchHeadServiceURL(ctx context.Context, cli client.Client, rayCluster *ray
 func GetRayDashboardClientFunc(mgr manager.Manager, useKubernetesProxy bool) func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error) {
 	return func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error) {
 		dashboardClient := &dashboardclient.RayDashboardClient{}
-		authToken := ""
+		var authToken string
 
-		// TODO: Find a solution to support auth token when using Kubernetes proxy.
-		// Currently, we are discussing with ray side to see if they can support a fallback auth header like X-Ray-Auth: Bearer <token>
+		// TODO: support a fallback auth header in Ray side, something like X-Ray-Auth: Bearer <token>
 		if useKubernetesProxy {
 			var err error
 			headSvcName := rayCluster.Status.Head.ServiceName
@@ -937,7 +936,7 @@ func GetRayDashboardClientFunc(mgr manager.Manager, useKubernetesProxy bool) fun
 
 			tokenBytes, exists := secret.Data[RAY_AUTH_TOKEN_SECRET_KEY]
 			if !exists {
-				return nil, fmt.Errorf("auth token key '%s' not found in secret %s/%s", RAY_AUTH_TOKEN_SECRET_KEY, rayCluster.Namespace, secretName)
+				return nil, fmt.Errorf("auth token key '%q' not found in secret %s/%s", RAY_AUTH_TOKEN_SECRET_KEY, rayCluster.Namespace, secretName)
 			}
 
 			authToken = string(tokenBytes)
