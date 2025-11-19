@@ -900,7 +900,26 @@ func GetRayDashboardClientFunc(mgr manager.Manager, useKubernetesProxy bool) fun
 		dashboardClient := &dashboardclient.RayDashboardClient{}
 		var authToken string
 
-		// TODO: support a fallback auth header in Ray side, something like X-Ray-Auth: Bearer <token>
+		if rayCluster != nil && rayCluster.Spec.AuthOptions != nil && rayCluster.Spec.AuthOptions.Mode == rayv1.AuthModeToken {
+			secretName := CheckName(rayCluster.Name)
+			secret := &corev1.Secret{}
+			secretKey := types.NamespacedName{
+				Name:      secretName,
+				Namespace: rayCluster.Namespace,
+			}
+
+			if err := mgr.GetClient().Get(context.Background(), secretKey, secret); err != nil {
+				return nil, fmt.Errorf("failed to get auth secret %s/%s: %w", rayCluster.Namespace, secretName, err)
+			}
+
+			tokenBytes, exists := secret.Data[RAY_AUTH_TOKEN_SECRET_KEY]
+			if !exists {
+				return nil, fmt.Errorf("auth token key '%q' not found in secret %s/%s", RAY_AUTH_TOKEN_SECRET_KEY, rayCluster.Namespace, secretName)
+			}
+
+			authToken = string(tokenBytes)
+		}
+
 		if useKubernetesProxy {
 			var err error
 			headSvcName := rayCluster.Status.Head.ServiceName
@@ -920,26 +939,6 @@ func GetRayDashboardClientFunc(mgr manager.Manager, useKubernetesProxy bool) fun
 				authToken,
 			)
 			return dashboardClient, nil
-		}
-
-		if rayCluster != nil && rayCluster.Spec.AuthOptions != nil && rayCluster.Spec.AuthOptions.Mode == rayv1.AuthModeToken {
-			secretName := CheckName(rayCluster.Name)
-			secret := &corev1.Secret{}
-			secretKey := types.NamespacedName{
-				Name:      secretName,
-				Namespace: rayCluster.Namespace,
-			}
-
-			if err := mgr.GetClient().Get(context.Background(), secretKey, secret); err != nil {
-				return nil, fmt.Errorf("failed to get auth secret %s/%s: %w", rayCluster.Namespace, secretName, err)
-			}
-
-			tokenBytes, exists := secret.Data[RAY_AUTH_TOKEN_SECRET_KEY]
-			if !exists {
-				return nil, fmt.Errorf("auth token key '%q' not found in secret %s/%s", RAY_AUTH_TOKEN_SECRET_KEY, rayCluster.Namespace, secretName)
-			}
-
-			authToken = string(tokenBytes)
 		}
 
 		dashboardClient.InitClient(
