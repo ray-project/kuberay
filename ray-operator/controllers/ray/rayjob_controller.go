@@ -601,6 +601,11 @@ func configureSubmitterContainer(container *corev1.Container, rayJobInstance *ra
 	container.Env = append(container.Env, corev1.EnvVar{Name: utils.RAY_DASHBOARD_ADDRESS, Value: rayJobInstance.Status.DashboardURL})
 	container.Env = append(container.Env, corev1.EnvVar{Name: utils.RAY_JOB_SUBMISSION_ID, Value: rayJobInstance.Status.JobId})
 
+	// TODO: support cluster selector
+	if rayJobInstance.Spec.RayClusterSpec != nil && utils.IsAuthEnabled(rayJobInstance.Spec.RayClusterSpec) {
+		common.SetContainerTokenAuthEnvVars(rayJobInstance.Status.RayClusterName, container)
+	}
+
 	return nil
 }
 
