@@ -53,10 +53,9 @@ func (r *RayDashboardClient) InitClient(client *http.Client, dashboardURL string
 	r.authToken = authToken
 }
 
-// TODO: change authorization to x-ray-authorization after this PR is merged: https://github.com/ray-project/ray/pull/58819
 func (r *RayDashboardClient) setAuthHeader(req *http.Request) {
 	if r.authToken != "" {
-		req.Header.Set("authorization", fmt.Sprintf("Bearer %s", r.authToken))
+		req.Header.Set("x-ray-authorization", fmt.Sprintf("Bearer %s", r.authToken))
 	}
 }
 
