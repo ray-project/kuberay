@@ -14,7 +14,7 @@ spec:
           - name: RAY_AUTH_MODE
             value: token
           # You can create the secret manually with the following command:
-          # kubectl create secret generic ray-cluster-with-manual-auth --from-literal=auth_token='raycluster_secret' -n default
+          # kubectl create secret generic ray-cluster-with-auth --from-literal=auth_token='raycluster_secret' -n default
           # And then use the following valueFrom to reference the secret:
           - name: RAY_AUTH_TOKEN
             valueFrom:
