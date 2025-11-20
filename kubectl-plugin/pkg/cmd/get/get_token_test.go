@@ -44,5 +44,5 @@ func TestTokenGetRun(t *testing.T) {
 	err = fakeTokenGetOptions.Run(t.Context(), k8sClients)
 	require.NoError(t, err)
 
-	assert.Equal(t, resBuf.Bytes(), secret.Data["auth_token"])
+	assert.Equal(t, secret.Data["auth_token"], resBuf.Bytes())
 }
