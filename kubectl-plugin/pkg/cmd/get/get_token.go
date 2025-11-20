@@ -11,13 +11,14 @@ import (
 
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client"
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/completion"
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
 type GetTokenOptions struct {
 	cmdFactory cmdutil.Factory
 	ioStreams  *genericclioptions.IOStreams
 	namespace  string
-	secret     string
+	cluster    string
 }
 
 func NewGetTokenOptions(cmdFactory cmdutil.Factory, streams genericclioptions.IOStreams) *GetTokenOptions {
@@ -31,12 +32,12 @@ func NewGetTokenCommand(cmdFactory cmdutil.Factory, streams genericclioptions.IO
 	options := NewGetTokenOptions(cmdFactory, streams)
 
 	cmd := &cobra.Command{
-		Use:               "token [SECRET NAME]",
+		Use:               "token [CLUSTER NAME]",
 		Aliases:           []string{"token"},
-		Short:             "Get the auth token from the secret.",
+		Short:             "Get the auth token from the ray cluster.",
 		SilenceUsage:      true,
 		ValidArgsFunction: completion.RayClusterCompletionFunc(cmdFactory),
-		Args:              cobra.MaximumNArgs(1),
+		Args:              cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := options.Complete(args, cmd); err != nil {
 				return err
@@ -61,21 +62,24 @@ func (options *GetTokenOptions) Complete(args []string, cmd *cobra.Command) erro
 	if options.namespace == "" {
 		options.namespace = "default"
 	}
-
-	if len(args) >= 1 {
-		options.secret = args[0]
-	} else {
-		return fmt.Errorf("secret name is required")
-	}
-
+	// guarded by cobra.ExactArgs(1)
+	options.cluster = args[0]
 	return nil
 }
 
 func (options *GetTokenOptions) Run(ctx context.Context, k8sClient client.Client) error {
-	secret, err := k8sClient.KubernetesClient().CoreV1().Secrets(options.namespace).Get(ctx, options.secret, v1.GetOptions{})
+	cluster, err := k8sClient.RayClient().RayV1().RayClusters(options.namespace).Get(ctx, options.cluster, v1.GetOptions{})
 	if err != nil {
 		return err
 	}
-	fmt.Fprint(options.ioStreams.Out, string(secret.Data["auth_token"]))
-	return nil
+	if cluster.Spec.AuthOptions == nil || cluster.Spec.AuthOptions.Mode != rayv1.AuthModeToken {
+		return fmt.Errorf("no auth token for this cluster")
+	}
+	// TODO: support custom token secret?
+	secret, err := k8sClient.KubernetesClient().CoreV1().Secrets(options.namespace).Get(ctx, options.cluster, v1.GetOptions{})
+	if err != nil {
+		return err
+	}
+	_, err = fmt.Fprint(options.ioStreams.Out, string(secret.Data["auth_token"]))
+	return err
 }
