@@ -41,7 +41,7 @@ func TailJobLogs(address, submissionId string, authToken string, out io.Writer) 
 	if authToken != "" {
 		dialOptions = &websocket.DialOptions{
 			HTTPHeader: map[string][]string{
-				"authorization": {fmt.Sprintf("Bearer %s", authToken)},
+				"X-Ray-Authorization": {fmt.Sprintf("Bearer %s", authToken)},
 			},
 		}
 	}
