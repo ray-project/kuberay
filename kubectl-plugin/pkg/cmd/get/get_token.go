@@ -64,6 +64,8 @@ func (options *GetTokenOptions) Complete(args []string, cmd *cobra.Command) erro
 
 	if len(args) >= 1 {
 		options.secret = args[0]
+	} else {
+		return fmt.Errorf("secret name is required")
 	}
 
 	return nil
