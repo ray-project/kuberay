@@ -1887,3 +1887,92 @@ func TestValidateClusterUpgradeOptions(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateRayClusterUpgradeOptions(t *testing.T) {
+	tests := []struct {
+		upgradeStrategy   *rayv1.RayClusterUpgradeStrategy
+		name              string
+		originatedFromCRD string
+		errorMessage      string
+		expectError       bool
+	}{
+		{
+			name:            "No upgrade strategy",
+			upgradeStrategy: nil,
+			expectError:     false,
+		},
+		{
+			name: "Upgrade strategy set None for RayCluster",
+			upgradeStrategy: &rayv1.RayClusterUpgradeStrategy{
+				Type: ptr.To(rayv1.RayClusterUpgradeNone),
+			},
+			originatedFromCRD: string(RayClusterCRD),
+			expectError:       false,
+		},
+		{
+			name: "Upgrade strategy set Recreate for RayCluster",
+			upgradeStrategy: &rayv1.RayClusterUpgradeStrategy{
+				Type: ptr.To(rayv1.Recreate),
+			},
+			originatedFromCRD: string(RayClusterCRD),
+			expectError:       false,
+		},
+		{
+			name: "Upgrade strategy set Recreate for RayCluster created by RayJob",
+			upgradeStrategy: &rayv1.RayClusterUpgradeStrategy{
+				Type: ptr.To(rayv1.Recreate),
+			},
+			originatedFromCRD: string(RayJobCRD),
+			expectError:       true,
+			errorMessage:      "upgradeStrategy cannot be set when RayCluster is created by RayJob",
+		},
+		{
+			name: "Upgrade strategy set Recreate for RayCluster created by RayService",
+			upgradeStrategy: &rayv1.RayClusterUpgradeStrategy{
+				Type: ptr.To(rayv1.Recreate),
+			},
+			originatedFromCRD: string(RayServiceCRD),
+			expectError:       true,
+			errorMessage:      "upgradeStrategy cannot be set when RayCluster is created by RayService",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cluster := &rayv1.RayCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cluster",
+					Namespace: "default",
+					Labels:    map[string]string{},
+				},
+				Spec: rayv1.RayClusterSpec{
+					UpgradeStrategy: tt.upgradeStrategy,
+					HeadGroupSpec: rayv1.HeadGroupSpec{
+						Template: corev1.PodTemplateSpec{
+							Spec: corev1.PodSpec{
+								Containers: []corev1.Container{
+									{Name: "ray-head", Image: "rayproject/ray:latest"},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			if tt.originatedFromCRD != "" {
+				cluster.Labels[RayOriginatedFromCRDLabelKey] = tt.originatedFromCRD
+			}
+
+			err := ValidateRayClusterUpgradeOptions(cluster)
+
+			if tt.expectError {
+				require.Error(t, err, "Expected error for test case: %s", tt.name)
+				if tt.errorMessage != "" {
+					assert.Contains(t, err.Error(), tt.errorMessage, "Error message mismatch for test case: %s", tt.name)
+				}
+			} else {
+				require.NoError(t, err, "Unexpected error for test case: %s", tt.name)
+			}
+		})
+	}
+}

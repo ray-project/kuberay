@@ -38,11 +38,14 @@ func ValidateRayClusterMetadata(metadata metav1.ObjectMeta) error {
 }
 
 func ValidateRayClusterUpgradeOptions(instance *rayv1.RayCluster) error {
-	if instance.Spec.UpgradeStrategy != nil {
-		creatorCRDType := GetCRDType(instance.Labels[RayOriginatedFromCRDLabelKey])
-		if creatorCRDType == RayJobCRD || creatorCRDType == RayServiceCRD {
-			return fmt.Errorf("upgradeStrategy cannot be set when RayCluster is created by %s", creatorCRDType)
-		}
+	strategy := instance.Spec.UpgradeStrategy
+	if strategy == nil || strategy.Type == nil || *strategy.Type == rayv1.RayClusterUpgradeNone {
+		return nil
+	}
+
+	creatorCRDType := GetCRDType(instance.Labels[RayOriginatedFromCRDLabelKey])
+	if creatorCRDType == RayJobCRD || creatorCRDType == RayServiceCRD {
+		return fmt.Errorf("upgradeStrategy cannot be set when RayCluster is created by %s", creatorCRDType)
 	}
 	return nil
 }
