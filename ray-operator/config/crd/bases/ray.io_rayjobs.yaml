@@ -144,6 +144,14 @@ spec:
                 type: object
               rayClusterSpec:
                 properties:
+                  authOptions:
+                    properties:
+                      mode:
+                        enum:
+                        - disabled
+                        - token
+                        type: string
+                    type: object
                   autoscalerOptions:
                     properties:
                       env:
