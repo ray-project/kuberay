@@ -147,6 +147,7 @@ spec:
 | nameOverride | string | `"kuberay-operator"` | String to partially override release name. |
 | fullnameOverride | string | `"kuberay-operator"` | String to fully override release name. |
 | componentOverride | string | `"kuberay-operator"` | String to override component name. |
+| replicas | int | `1` | Number of replicas for the KubeRay operator Deployment. |
 | image.repository | string | `"quay.io/kuberay/operator"` | Image repository. |
 | image.tag | string | `"v1.5.0"` | Image tag. |
 | image.pullPolicy | string | `"IfNotPresent"` | Image pull policy. |

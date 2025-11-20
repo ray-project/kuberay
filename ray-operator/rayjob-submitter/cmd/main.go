@@ -64,7 +64,7 @@ func main() {
 	}
 	rayDashboardClient := &dashboardclient.RayDashboardClient{}
 	address = rayjobsubmitter.JobSubmissionURL(address)
-	rayDashboardClient.InitClient(&http.Client{Timeout: time.Second * 10}, address)
+	rayDashboardClient.InitClient(&http.Client{Timeout: time.Second * 10}, address, "")
 	submissionId, err := rayDashboardClient.SubmitJobReq(context.Background(), &req)
 	if err != nil {
 		if strings.Contains(err.Error(), "Please use a different submission_id") {
