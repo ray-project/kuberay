@@ -126,9 +126,9 @@ func FindHeadPodReadyCondition(headPod *corev1.Pod) metav1.Condition {
 func firstNotReadyContainerStatus(pod *corev1.Pod) (reason string, message string, ok bool) {
 	for _, status := range pod.Status.ContainerStatuses {
 		if status.State.Waiting != nil {
-			return status.State.Waiting.Reason, status.Name + ": " + status.State.Waiting.Message, true
+			return status.State.Waiting.Reason, fmt.Sprintf("%s: %s", status.Name, status.State.Waiting.Message), true
 		} else if status.State.Terminated != nil {
-			return status.State.Terminated.Reason, status.Name + ": " + status.State.Terminated.Message, true
+			return status.State.Terminated.Reason, fmt.Sprintf("%s: %s", status.Name, status.State.Terminated.Message), true
 		}
 	}
 	return "", "", false
