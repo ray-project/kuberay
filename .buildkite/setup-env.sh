@@ -3,6 +3,9 @@
 # Install Go
 export PATH=$PATH:/usr/local/go/bin
 
+# Pin Docker API version
+export DOCKER_API_VERSION=1.43
+
 # Install kind
 curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.22.0/kind-linux-amd64
 chmod +x ./kind

@@ -16,6 +16,35 @@ Package v1 contains API Schema definitions for the ray v1 API group
 
 
 
+#### AuthMode
+
+_Underlying type:_ _string_
+
+AuthMode describes the authentication mode for the Ray cluster.
+
+
+
+_Appears in:_
+- [AuthOptions](#authoptions)
+
+
+
+#### AuthOptions
+
+
+
+AuthOptions defines the authentication options for a RayCluster.
+
+
+
+_Appears in:_
+- [RayClusterSpec](#rayclusterspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `mode` _[AuthMode](#authmode)_ | Mode specifies the authentication mode.<br />Supported values are "disabled" and "token".<br />Defaults to "token". |  | Enum: [disabled token] <br /> |
+
+
 #### AutoscalerOptions
 
 
@@ -268,6 +297,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
+| `authOptions` _[AuthOptions](#authoptions)_ | AuthOptions specifies the authentication options for the RayCluster. |  |  |
 | `suspend` _boolean_ | Suspend indicates whether a RayCluster should be suspended.<br />A suspended RayCluster will have head pods and worker pods deleted. |  |  |
 | `managedBy` _string_ | ManagedBy is an optional configuration for the controller or entity that manages a RayCluster.<br />The value must be either 'ray.io/kuberay-operator' or 'kueue.x-k8s.io/multikueue'.<br />The kuberay-operator reconciles a RayCluster which doesn't have this field at all or<br />the field value is the reserved string 'ray.io/kuberay-operator',<br />but delegates reconciling the RayCluster with 'kueue.x-k8s.io/multikueue' to the Kueue.<br />The field is immutable. |  |  |
 | `autoscalerOptions` _[AutoscalerOptions](#autoscaleroptions)_ | AutoscalerOptions specifies optional configuration for the Ray autoscaler. |  |  |
