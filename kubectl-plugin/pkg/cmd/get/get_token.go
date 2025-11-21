@@ -12,6 +12,7 @@ import (
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client"
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/completion"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 )
 
 type GetTokenOptions struct {
@@ -80,7 +81,7 @@ func (options *GetTokenOptions) Run(ctx context.Context, k8sClient client.Client
 	if err != nil {
 		return fmt.Errorf("failed to get secret %s/%s: %w", options.namespace, options.cluster, err)
 	}
-	if token, ok := secret.Data["auth_token"]; ok {
+	if token, ok := secret.Data[utils.RAY_AUTH_TOKEN_SECRET_KEY]; ok {
 		_, err = fmt.Fprint(options.ioStreams.Out, string(token))
 	} else {
 		err = fmt.Errorf("secret %s/%s does not have an auth_token", options.namespace, options.cluster)
