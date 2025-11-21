@@ -376,6 +376,10 @@ func (r *RayClusterReconciler) reconcileAuthSecret(ctx context.Context, instance
 		return err
 	}
 
+	if !metav1.IsControlledBy(secret, instance) {
+		return fmt.Errorf("secret %s/%s is not controlled by RayCluster %s", secret.Namespace, secret.Name, instance.Name)
+	}
+
 	return nil
 }
 

@@ -937,6 +937,10 @@ func GetRayDashboardClientFunc(mgr manager.Manager, useKubernetesProxy bool) fun
 				return nil, fmt.Errorf("failed to get auth secret %s/%s: %w", rayCluster.Namespace, secretName, err)
 			}
 
+			if !metav1.IsControlledBy(secret, rayCluster) {
+				return nil, fmt.Errorf("auth secret %s/%s is not owned by RayCluster %s", rayCluster.Namespace, secretName, rayCluster.Name)
+			}
+
 			tokenBytes, exists := secret.Data[RAY_AUTH_TOKEN_SECRET_KEY]
 			if !exists {
 				return nil, fmt.Errorf("auth token key '%q' not found in secret %s/%s", RAY_AUTH_TOKEN_SECRET_KEY, rayCluster.Namespace, secretName)
