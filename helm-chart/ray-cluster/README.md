@@ -73,7 +73,7 @@ helm uninstall raycluster
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | image.repository | string | `"rayproject/ray"` | Image repository. |
-| image.tag | string | `"2.50.1"` | Image tag. |
+| image.tag | string | `"2.52.0"` | Image tag. |
 | image.pullPolicy | string | `"IfNotPresent"` | Image pull policy. |
 | nameOverride | string | `"kuberay"` | String to partially override release name. |
 | fullnameOverride | string | `""` | String to fully override release name. |

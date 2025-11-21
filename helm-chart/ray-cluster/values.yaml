@@ -9,7 +9,7 @@ image:
   # -- Image repository.
   repository: rayproject/ray
   # -- Image tag.
-  tag: 2.50.1
+  tag: 2.52.0
   # -- Image pull policy.
   pullPolicy: IfNotPresent
 
@@ -59,7 +59,7 @@ common:
 head:
   # rayVersion determines the autoscaler's image version.
   # It should match the Ray version in the image of the containers.
-  # rayVersion: 2.50.1
+  # rayVersion: 2.52.0
 
   # If enableInTreeAutoscaling is true, the autoscaler sidecar will be added to the Ray head pod.
   # Ray autoscaler integration is supported only for Ray versions >= 1.11.0

@@ -70,7 +70,7 @@ spec:
       spec:
         containers:
         - name: ray-head
-          image: rayproject/ray:2.50.1
+          image: rayproject/ray:2.52.0
           resources:
             requests:
               cpu: "1"
@@ -83,7 +83,7 @@ spec:
       spec:
         containers:
         - name: ray-worker
-          image: rayproject/ray:2.50.1
+          image: rayproject/ray:2.52.0
           resources:
             requests:
               cpu: "1"

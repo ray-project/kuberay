@@ -35,7 +35,7 @@ apt-get update
 apt-get install -y python3.11 python3-pip python3-venv python3-dev build-essential
 
 # Install requirements
-pip install --break-system-packages ray[default]==2.50.1
+pip install --break-system-packages ray[default]==2.52.0
 
 # Bypass Git's ownership check due to unconventional user IDs in Docker containers
 git config --global --add safe.directory /workdir
