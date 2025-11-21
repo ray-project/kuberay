@@ -1,17 +1,19 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"os"
-	"os/signal"
-	"syscall"
+	"path"
 	"time"
 
 	"github.com/ray-project/kuberay/historyserver/backend"
 	"github.com/ray-project/kuberay/historyserver/backend/collector/runtime"
+	"github.com/ray-project/kuberay/historyserver/backend/server"
 	"github.com/ray-project/kuberay/historyserver/backend/types"
 	"github.com/ray-project/kuberay/historyserver/utils"
+	"github.com/sirupsen/logrus"
 )
 
 const runtimeClassConfigPath = "/var/collector-config/data"
@@ -23,7 +25,9 @@ func main() {
 	rayClusterId := ""
 	rayRootDir := ""
 	logBatching := 1000
+	eventsPort := 8080
 	pushInterval := time.Minute
+	runtimeClassConfigPath := "/var/collector-config/data"
 
 	flag.StringVar(&role, "role", "Worker", "")
 	flag.StringVar(&runtimeClassName, "runtime-class-name", "", "")
@@ -31,6 +35,8 @@ func main() {
 	flag.StringVar(&rayClusterId, "ray-cluster-id", "default", "")
 	flag.StringVar(&rayRootDir, "ray-root-dir", "", "")
 	flag.IntVar(&logBatching, "log-batching", 1000, "")
+	flag.IntVar(&eventsPort, "events-port", 8080, "")
+	flag.StringVar(&runtimeClassConfigPath, "runtime-class-config-path", "", "") //"/var/collector-config/data"
 	flag.DurationVar(&pushInterval, "push-interval", time.Minute, "")
 
 	flag.Parse()
@@ -45,14 +51,18 @@ func main() {
 		panic("Failed to get ray node id: " + err.Error())
 	}
 
-	data, err := os.ReadFile(runtimeClassConfigPath)
-	if err != nil {
-		panic("Failed to read runtime class config " + err.Error())
-	}
+	sessionName := path.Base(sessionDir)
+
 	jsonData := make(map[string]interface{})
-	err = json.Unmarshal(data, &jsonData)
-	if err != nil {
-		panic("Failed to parse runtime class config: " + err.Error())
+	if runtimeClassConfigPath != "" {
+		data, err := os.ReadFile(runtimeClassConfigPath)
+		if err != nil {
+			panic("Failed to read runtime class config " + err.Error())
+		}
+		err = json.Unmarshal(data, &jsonData)
+		if err != nil {
+			panic("Failed to parse runtime class config: " + err.Error())
+		}
 	}
 
 	registry := backend.GetWriterRegistry()
@@ -71,17 +81,25 @@ func main() {
 		PushInterval:   pushInterval,
 		LogBatching:    logBatching,
 	}
+	logrus.Info("Using collector config: ", globalConfig)
 
 	writter, err := factory(&globalConfig, jsonData)
 	if err != nil {
 		panic("Failed to create writter for runtime class name: " + runtimeClassName + " for role: " + role + ".")
 	}
-	collector := runtime.NewCollector(&globalConfig, writter)
 
-	sigChan := make(chan os.Signal, 1)
-	stop := make(chan struct{}, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM, syscall.SIGKILL)
-	collector.Start(stop)
-	<-sigChan
-	stop <- struct{}{}
+	// 创建并初始化EventServer
+	eventServer := server.NewEventServer(writter, rayRootDir, sessionDir, rayNodeId, rayClusterName, rayClusterId, sessionName)
+	eventServer.InitServer(eventsPort)
+
+	collector := runtime.NewCollector(&globalConfig, writter)
+	_ = collector.Start(context.TODO().Done())
+
+	eventStop := eventServer.WaitForStop()
+	logStop := collector.WaitForStop()
+	<-eventStop
+	logrus.Info("Event server shutdown")
+	<-logStop
+	logrus.Info("Log server shutdown")
+	logrus.Info("All servers shutdown")
 }

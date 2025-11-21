@@ -18,6 +18,7 @@ package utils
 
 type ClusterInfo struct {
 	Name            string `json:"name"`
+	Namespace       string `json:"namespace"`
 	SessionName     string `json:"sessionName"`
 	CreateTime      string `json:"createTime"`
 	CreateTimeStamp int64  `json:"createTimeStamp"`

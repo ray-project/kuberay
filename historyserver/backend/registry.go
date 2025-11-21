@@ -3,6 +3,8 @@ package backend
 import (
 	"github.com/ray-project/kuberay/historyserver/backend/collector/storage"
 	"github.com/ray-project/kuberay/historyserver/backend/collector/storage/aliyunoss/ray"
+	"github.com/ray-project/kuberay/historyserver/backend/collector/storage/localtest"
+	"github.com/ray-project/kuberay/historyserver/backend/collector/storage/s3"
 	"github.com/ray-project/kuberay/historyserver/backend/types"
 )
 
@@ -14,6 +16,7 @@ func GetWriterRegistry() WriterRegistry {
 
 var writerRegistry = WriterRegistry{
 	"aliyunoss": ray.NewWritter,
+	"s3":        s3.NewWritter,
 }
 
 type ReaderRegistry map[string]func(globalData *types.RayHistoryServerConfig, data map[string]interface{}) (storage.StorageReader, error)
@@ -24,4 +27,6 @@ func GetReaderRegistry() ReaderRegistry {
 
 var readerRegistry = ReaderRegistry{
 	"aliyunoss": ray.NewReader,
+	"localtest": localtest.NewReader,
+	"s3":        s3.NewReader,
 }

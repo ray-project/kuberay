@@ -2,6 +2,7 @@ package rrsa
 
 import (
 	"log"
+	"os"
 
 	"github.com/alibabacloud-go/tea/tea"
 	"github.com/aliyun/aliyun-oss-go-sdk/oss"
@@ -11,9 +12,15 @@ import (
 func newCredential() (credentials.Credential, error) {
 	// https://www.alibabacloud.com/help/doc-detail/378661.html
 	credType := "oidc_role_arn"
-	cred, err := credentials.NewCredential(&credentials.Config{
-		Type: &credType,
-	})
+	var cred credentials.Credential
+	var err error
+	if os.Getenv("LOCAL_TEST") == "true" {
+		cred, err = credentials.NewCredential(nil)
+	} else {
+		cred, err = credentials.NewCredential(&credentials.Config{
+			Type: &credType,
+		})
+	}
 	return cred, err
 }
 

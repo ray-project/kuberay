@@ -15,9 +15,9 @@ WORKDIR /historyserver
 COPY . .
 
 RUN if [ "$BUILD_RAYSERVER_DASHBOARD" = "yes" ] ; then \
- /bin/bash -c "source $HOME/.nvm/nvm.sh && cd dashboard/ray/client && npm ci && npm run build" ;\
+ /bin/bash -c "source $HOME/.nvm/nvm.sh && cd dashboard/v2.51.0/client && npm ci && npm run build" ;\
 else \
- mkdir -p dashboard/ray/client/build ;\
+ mkdir -p dashboard/v2.51.0/client/build ;\
  echo "do not npm run build"; \
 fi
 
@@ -29,4 +29,5 @@ RUN apt-get update && apt-get upgrade -y && rm -rf /var/cache/apt/ && apt-get in
 
 COPY --from=builder /historyserver/output/bin/historyserver /usr/local/bin/historyserver
 COPY --from=builder /historyserver/output/bin/collector /usr/local/bin/collector
-COPY --from=builder /historyserver/dashboard/ray/client/build /dashboard/ray/build
+COPY --from=builder /historyserver/dashboard/v2.51.0/client/build /dashboard/v2.51.0/client/build
+COPY --from=builder /historyserver/dashboard/homepage /dashboard/homepage

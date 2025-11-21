@@ -35,7 +35,8 @@ func NewCollector(config *types.RayCollectorConfig, writter storage.StorageWritt
 				IdleConnTimeout:     90 * time.Second, // 空闲连接的超时时间
 			},
 		},
-		Writter: writter,
+		Writter:      writter,
+		ShutdownChan: make(chan struct{}),
 	}
 	logDir := strings.TrimSpace(path.Join(config.SessionDir, utils.RAY_SESSIONDIR_LOGDIR_NAME))
 	handler.LogDir = logDir
