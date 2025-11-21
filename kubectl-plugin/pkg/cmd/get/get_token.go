@@ -70,16 +70,20 @@ func (options *GetTokenOptions) Complete(args []string, cmd *cobra.Command) erro
 func (options *GetTokenOptions) Run(ctx context.Context, k8sClient client.Client) error {
 	cluster, err := k8sClient.RayClient().RayV1().RayClusters(options.namespace).Get(ctx, options.cluster, v1.GetOptions{})
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get RayCluster %s/%s: %w", options.namespace, options.cluster, err)
 	}
 	if cluster.Spec.AuthOptions == nil || cluster.Spec.AuthOptions.Mode != rayv1.AuthModeToken {
-		return fmt.Errorf("no auth token for this cluster")
+		return fmt.Errorf("RayCluster %s/%s was not configured to use authentication tokens", options.namespace, options.cluster)
 	}
 	// TODO: support custom token secret?
 	secret, err := k8sClient.KubernetesClient().CoreV1().Secrets(options.namespace).Get(ctx, options.cluster, v1.GetOptions{})
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get secret %s/%s: %w", options.namespace, options.cluster, err)
 	}
-	_, err = fmt.Fprint(options.ioStreams.Out, string(secret.Data["auth_token"]))
+	if token, ok := secret.Data["auth_token"]; ok {
+		_, err = fmt.Fprint(options.ioStreams.Out, string(token))
+	} else {
+		err = fmt.Errorf("secret %s/%s does not have an auth_token", options.namespace, options.cluster)
+	}
 	return err
 }
