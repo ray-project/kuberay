@@ -1,6 +1,6 @@
 # RayCluster
 
-![Version: 1.5.0](https://img.shields.io/badge/Version-1.5.0-informational?style=flat-square)
+![Version: 1.5.1](https://img.shields.io/badge/Version-1.5.1-informational?style=flat-square)
 
 A Helm chart for deploying the RayCluster with the kuberay operator.
 
