@@ -38,6 +38,7 @@ const (
 	ServeName           = "serve"
 	ClusterDomainEnvKey = "CLUSTER_DOMAIN"
 	DefaultDomainName   = "cluster.local"
+	ContainersNotReady  = "ContainersNotReady"
 )
 
 // TODO (kevin85421): Define CRDType here rather than constant.go to avoid circular dependency.
@@ -103,10 +104,34 @@ func FindHeadPodReadyCondition(headPod *corev1.Pod) metav1.Condition {
 			headPodReadyCondition.Reason = reason
 		}
 
+		// If reason is ContainersNotReady, then replace it with an available
+		// container status that may illuminate why the container is not ready.
+		if reason == ContainersNotReady {
+			reason, message, ok := firstNotReadyContainerStatus(headPod)
+			if ok {
+				if headPodReadyCondition.Message != "" {
+					headPodReadyCondition.Message += "; "
+				}
+				headPodReadyCondition.Message += message
+				headPodReadyCondition.Reason = reason
+			}
+		}
+
 		// Since we're only interested in the PodReady condition, break after processing it
 		break
 	}
 	return headPodReadyCondition
+}
+
+func firstNotReadyContainerStatus(pod *corev1.Pod) (reason string, message string, ok bool) {
+	for _, status := range pod.Status.ContainerStatuses {
+		if status.State.Waiting != nil {
+			return status.State.Waiting.Reason, fmt.Sprintf("%s: %s", status.Name, status.State.Waiting.Message), true
+		} else if status.State.Terminated != nil {
+			return status.State.Terminated.Reason, fmt.Sprintf("%s: %s", status.Name, status.State.Terminated.Message), true
+		}
+	}
+	return "", "", false
 }
 
 // FindRayClusterSuspendStatus returns the current suspend status from two conditions:

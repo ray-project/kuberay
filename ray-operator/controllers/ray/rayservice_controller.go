@@ -1361,13 +1361,12 @@ func (r *RayServiceReconciler) applyServeTargetCapacity(ctx context.Context, ray
 		return err
 	}
 
-	// Update the status fields and cache new Serve config.
+	// Update the TargetCapacity status fields.
 	if rayClusterInstance.Name == rayServiceInstance.Status.ActiveServiceStatus.RayClusterName {
 		rayServiceInstance.Status.ActiveServiceStatus.TargetCapacity = ptr.To(goalTargetCapacity)
 	} else if rayClusterInstance.Name == rayServiceInstance.Status.PendingServiceStatus.RayClusterName {
 		rayServiceInstance.Status.PendingServiceStatus.TargetCapacity = ptr.To(goalTargetCapacity)
 	}
-	r.cacheServeConfig(rayServiceInstance, rayClusterInstance.Name)
 
 	return nil
 }
