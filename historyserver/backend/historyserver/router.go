@@ -1,22 +1,38 @@
 package historyserver
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path"
 	"strconv"
+	"strings"
 
 	"github.com/emicklei/go-restful/v3"
 	"github.com/ray-project/kuberay/historyserver/utils"
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/sirupsen/logrus"
+	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (
-	COOKIE_CLUSTER_NAME_KEY = "cluster_name"
-	COOKIE_SESSION_NAME_KEY = "session_name"
+	COOKIE_CLUSTER_NAME_KEY      = "cluster_name"
+	COOKIE_CLUSTER_NAMESPACE_KEY = "cluster_namespace"
+	COOKIE_SESSION_NAME_KEY      = "session_name"
+	COOKIE_DASHBOARD_VERSION_KEY = "dashboard_version"
+
+	ATTRIBUTE_SERVICE_NAME = "cluster_service_name"
 )
+
+func RequestLogFilter(req *restful.Request, resp *restful.Response, chain *restful.FilterChain) {
+	logrus.Infof("Received request: %s %s", req.Request.Method, req.Request.URL.String())
+	chain.ProcessFilter(req, resp)
+}
 
 func routerClusters(s *ServerHandler) {
 	ws := new(restful.WebService)
@@ -53,7 +69,7 @@ func routerEvents(s *ServerHandler) {
 func routerAPI(s *ServerHandler) {
 	ws := new(restful.WebService)
 	defer restful.Add(ws)
-	ws.Path("/api").Consumes(restful.MIME_JSON).Produces(restful.MIME_JSON) //.Filter(s.loginWrapper)
+	ws.Path("/api").Consumes(restful.MIME_JSON).Produces(restful.MIME_JSON).Filter(RequestLogFilter) //.Filter(s.loginWrapper)
 	ws.Route(ws.GET("/cluster_status").To(s.getClusterStatus).Filter(s.CookieHandle).
 		Doc("get clusters status").Param(ws.QueryParameter("format", "such as 1")).
 		Writes("")) // 这里你可以替换为具体的返回类型
@@ -115,11 +131,53 @@ func routerAPI(s *ServerHandler) {
 func routerRoot(s *ServerHandler) {
 	ws := new(restful.WebService)
 	defer restful.Add(ws)
-	ws.Route(ws.GET("/").To(func(_ *restful.Request, w *restful.Response) {
-		data, err := os.ReadFile(path.Join(s.dashboardDir, "index.html")) // 确保 index.html 文件存在
+	ws.Filter(RequestLogFilter)
+	ws.Route(ws.GET("/").To(func(req *restful.Request, w *restful.Response) {
+		isHomePage := true
+		_, err := req.Request.Cookie(COOKIE_CLUSTER_NAME_KEY)
+		isHomePage = err != nil
+		prefix := ""
+		if isHomePage {
+			prefix = "homepage"
+		} else {
+			version := "v2.51.0"
+			if versionCookie, err := req.Request.Cookie(COOKIE_DASHBOARD_VERSION_KEY); err == nil {
+				version = versionCookie.Value
+			}
+			prefix = version + "/client/build"
+		}
+		// 检查是否有homepage文件，如果有则使用，否则使用默认的index.html
+		homepagePath := path.Join(s.dashboardDir, prefix, "index.html")
+
+		var data []byte
+
+		if _, statErr := os.Stat(homepagePath); !os.IsNotExist(statErr) {
+			data, err = os.ReadFile(homepagePath)
+		} else {
+			http.Error(w, "could not read HTML file", http.StatusInternalServerError)
+			logrus.Errorf("could not read HTML file: %v", statErr)
+			return
+		}
+
 		if err != nil {
 			http.Error(w, "could not read HTML file", http.StatusInternalServerError)
-			logrus.Errorf("could not read HTML file")
+			logrus.Errorf("could not read HTML file: %v", err)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html")
+		w.Write(data)
+	}).Writes(""))
+}
+
+func routerHomepage(s *ServerHandler) {
+	ws := new(restful.WebService)
+	defer restful.Add(ws)
+	ws.Path("/homepage").Consumes("*/*").Produces("*/*").Filter(RequestLogFilter)
+	ws.Route(ws.GET("/").To(func(_ *restful.Request, w *restful.Response) {
+		data, err := os.ReadFile(path.Join(s.dashboardDir, "homepage/index.html"))
+		if err != nil {
+			// Fallback to root path
+			routerRoot(s)
 			return
 		}
 		w.Header().Set("Content-Type", "text/html")
@@ -130,11 +188,13 @@ func routerRoot(s *ServerHandler) {
 func routerHealthz(s *ServerHandler) {
 
 	http.HandleFunc("/readz", func(w http.ResponseWriter, r *http.Request) {
+		logrus.Infof("Received request: %s %s", r.Method, r.URL.String())
 		w.Header().Set("Content-Type", "text/plain")
 		w.Write([]byte("ok"))
 		logrus.Debugf("request /readz")
 	})
 	http.HandleFunc("/livez", func(w http.ResponseWriter, r *http.Request) {
+		logrus.Infof("Received request: %s %s", r.Method, r.URL.String())
 		w.Header().Set("Content-Type", "text/plain")
 		w.Write([]byte("ok"))
 		logrus.Debugf("request /livez")
@@ -145,7 +205,7 @@ func routerHealthz(s *ServerHandler) {
 func routerStatic(s *ServerHandler) {
 	ws := new(restful.WebService)
 	defer restful.Add(ws)
-	ws.Path("/static").Consumes("*/*").Produces("*/*")
+	ws.Path("/static").Consumes("*/*").Produces("*/*").Filter(RequestLogFilter)
 	ws.Route(ws.GET("/{path:*}").To(s.staticFileHandler).
 		Doc("Get static file or directory").
 		Param(ws.PathParameter("path", "path of the static file").DataType("string")))
@@ -155,7 +215,7 @@ func routerStatic(s *ServerHandler) {
 func routerLogical(s *ServerHandler) {
 	ws := new(restful.WebService)
 	defer restful.Add(ws)
-	ws.Path("/logical").Consumes(restful.MIME_JSON).Produces(restful.MIME_JSON) //.Filter(s.loginWrapper)
+	ws.Path("/logical").Consumes(restful.MIME_JSON).Produces(restful.MIME_JSON).Filter(RequestLogFilter) //.Filter(s.loginWrapper)
 	ws.Route(ws.GET("/actors").To(s.getLogicalActors).Filter(s.CookieHandle).
 		Doc("get logical actors").
 		Writes("")) // 这里你可以替换为具体的返回类型
@@ -166,15 +226,70 @@ func routerLogical(s *ServerHandler) {
 
 }
 
+func routerRayClusterSet(s *ServerHandler) {
+	ws := new(restful.WebService)
+	defer restful.Add(ws)
+
+	ws.Path("/enter_cluster").Consumes(restful.MIME_JSON).Produces(restful.MIME_JSON).Filter(RequestLogFilter)
+	ws.Route(ws.GET("/{namespace}/{name}/{session}").To(func(r1 *restful.Request, r2 *restful.Response) {
+		name := r1.PathParameter("name")
+		namespace := r1.PathParameter("namespace")
+		session := r1.PathParameter("session")
+		http.SetCookie(r2, &http.Cookie{MaxAge: 600, Path: "/", Name: COOKIE_CLUSTER_NAME_KEY, Value: name})
+		http.SetCookie(r2, &http.Cookie{MaxAge: 600, Path: "/", Name: COOKIE_CLUSTER_NAMESPACE_KEY, Value: namespace})
+		http.SetCookie(r2, &http.Cookie{MaxAge: 600, Path: "/", Name: COOKIE_SESSION_NAME_KEY, Value: session})
+		r2.WriteJson(map[string]interface{}{
+			"result":    "success",
+			"name":      name,
+			"namespace": namespace,
+			"session":   session,
+		}, "application/json")
+	}).
+		Doc("set cookie for cluster").
+		Param(ws.PathParameter("namespace", "namespace")).
+		Param(ws.PathParameter("name", "name")).
+		Param(ws.PathParameter("session", "session")).
+		Writes("")) // 这里你可以替换为具体的返回类型
+}
+
 func (s *ServerHandler) RegisterRouter() {
+	routerRayClusterSet(s)
 	routerClusters(s)
 	routerNodes(s)
 	routerEvents(s)
 	routerAPI(s)
 	routerRoot(s)
+	routerHomepage(s)
 	routerHealthz(s)
 	routerStatic(s)
 	routerLogical(s)
+}
+
+func (s *ServerHandler) redirectRequest(req *restful.Request, resp *restful.Response) {
+	svcName := req.Attribute(ATTRIBUTE_SERVICE_NAME).(string)
+	remoteResp, err := http.Get("http://" + svcName + req.Request.URL.String())
+	if err != nil {
+		logrus.Errorf("Error: %v", err)
+		resp.WriteError(remoteResp.StatusCode, err)
+		return
+	}
+	defer remoteResp.Body.Close()
+
+	// Copy headers from remote response
+	for key, values := range remoteResp.Header {
+		for _, value := range values {
+			resp.Header().Add(key, value)
+		}
+	}
+
+	// Set status code
+	resp.WriteHeader(remoteResp.StatusCode)
+
+	// Copy response body
+	_, err = io.Copy(resp, remoteResp.Body)
+	if err != nil {
+		logrus.Errorf("Failed to copy response body: %v", err)
+	}
 }
 
 func (s *ServerHandler) getClusters(req *restful.Request, resp *restful.Response) {
@@ -184,30 +299,65 @@ func (s *ServerHandler) getClusters(req *restful.Request, resp *restful.Response
 
 // getNodes 返回指定集群的节点
 func (s *ServerHandler) getNodes(req *restful.Request, resp *restful.Response) {
+	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
+	if sessionName == "live" {
+		s.redirectRequest(req, resp)
+		return
+	}
 	clusterNameID := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
-	view := req.QueryParameter("view")
-	logrus.Warnf("view is %s, but not do anything", view)
-	data := s.MetaKeyInfo(clusterNameID, utils.OssMetaFile_NodeSummaryKey)
-
+	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
+	data, err := s.GetNodes(clusterNameID+"_"+clusterNamespace, sessionName)
+	if err != nil {
+		logrus.Errorf("Error: %v", err)
+		resp.WriteError(400, err)
+		return
+	}
 	resp.Write(data)
 }
 
 func (s *ServerHandler) getEvents(req *restful.Request, resp *restful.Response) {
 	clusterNameID := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
+	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
+	if sessionName == "live" {
+		s.redirectRequest(req, resp)
+		return
+	}
+	return
 	data := s.MetaKeyInfo(clusterNameID, utils.OssMetaFile_Events)
 	resp.Write(data)
 }
+
 func (s *ServerHandler) getPrometheusHealth(req *restful.Request, resp *restful.Response) {
+	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
+	if sessionName == "live" {
+		s.redirectRequest(req, resp)
+		return
+	}
+	return
 	data := `{"result": true, "msg": "prometheus running", "data": {}}`
 	resp.Write([]byte(data))
 }
+
 func (s *ServerHandler) getJobs(req *restful.Request, resp *restful.Response) {
 	clusterNameID := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
+	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
+	if sessionName == "live" {
+		s.redirectRequest(req, resp)
+		return
+	}
+	return
 	data := s.MetaKeyInfo(clusterNameID, utils.OssMetaFile_Jobs)
 	resp.Write(data)
 }
+
 func (s *ServerHandler) getNode(req *restful.Request, resp *restful.Response) {
 	clusterNameID := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
+	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
+	if sessionName == "live" {
+		s.redirectRequest(req, resp)
+		return
+	}
+	return
 	node_id := req.PathParameter("node_id")
 	data := s.MetaKeyInfo(clusterNameID, fmt.Sprintf("%s%s", utils.OssMetaFile_Node_Prefix, node_id))
 	resp.Write(data)
@@ -215,6 +365,12 @@ func (s *ServerHandler) getNode(req *restful.Request, resp *restful.Response) {
 
 func (s *ServerHandler) getJob(req *restful.Request, resp *restful.Response) {
 	clusterNameID := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
+	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
+	if sessionName == "live" {
+		s.redirectRequest(req, resp)
+		return
+	}
+	return
 	job_id := req.PathParameter("job_id")
 	logrus.Debugf("job_id is %s", job_id)
 
@@ -250,6 +406,12 @@ func (s *ServerHandler) getJob(req *restful.Request, resp *restful.Response) {
 
 func (s *ServerHandler) getDatasets(req *restful.Request, resp *restful.Response) {
 	clusterNameID := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
+	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
+	if sessionName == "live" {
+		s.redirectRequest(req, resp)
+		return
+	}
+	return
 	job_id := req.PathParameter("job_id")
 	data := s.MetaKeyInfo(clusterNameID, fmt.Sprintf("%s%s", utils.OssMetaFile_JOBDATASETS_Prefix, job_id))
 	resp.Write(data)
@@ -257,40 +419,84 @@ func (s *ServerHandler) getDatasets(req *restful.Request, resp *restful.Response
 
 func (s *ServerHandler) getServeApplications(req *restful.Request, resp *restful.Response) {
 	clusterNameID := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
+	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
+	if sessionName == "live" {
+		s.redirectRequest(req, resp)
+		return
+	}
+	return
 	data := s.MetaKeyInfo(clusterNameID, utils.OssMetaFile_Applications)
 	resp.Write(data)
 }
 
 func (s *ServerHandler) getPlacementGroups(req *restful.Request, resp *restful.Response) {
 	clusterNameID := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
+	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
+	if sessionName == "live" {
+		s.redirectRequest(req, resp)
+		return
+	}
+	return
 	data := s.MetaKeyInfo(clusterNameID, utils.OssMetaFile_PlacementGroups)
 	resp.Write(data)
 }
 
 func (s *ServerHandler) getClusterStatus(req *restful.Request, resp *restful.Response) {
 	clusterNameID := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
-	data := s.MetaKeyInfo(clusterNameID, utils.OssMetaFile_ClusterStatus)
-
+	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
+	if sessionName == "live" {
+		s.redirectRequest(req, resp)
+		return
+	}
+	data := s.ClusterInfo(clusterNameID)
 	resp.Write(data)
 }
 
 func (s *ServerHandler) getNodeLogs(req *restful.Request, resp *restful.Response) {
 	clusterNameID := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
-	nodeId := req.QueryParameter("node_id")
-	data := s.MetaKeyInfo(clusterNameID, fmt.Sprintf("%s%s", utils.OssMetaFile_NodeLogs_Prefix, nodeId))
-	// 根据 clustername 返回节点信息，以下是示例
-	//resp.WriteEntity(data)
+	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
+	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
+	if sessionName == "live" {
+		s.redirectRequest(req, resp)
+		return
+	}
+	folder := ""
+	if req.QueryParameter("folder") != "" {
+		folder = req.QueryParameter("folder")
+	}
+	if req.QueryParameter("glob") != "" {
+		folder = req.QueryParameter("glob")
+		folder = strings.TrimSuffix(folder, "*")
+	}
+	data, err := s._getNodeLogs(clusterNameID+"_"+clusterNamespace, sessionName, req.QueryParameter("node_id"), folder)
+	if err != nil {
+		logrus.Errorf("Error: %v", err)
+		resp.WriteError(400, err)
+		return
+	}
 	resp.Write(data)
 }
 
 func (s *ServerHandler) getLogicalActors(req *restful.Request, resp *restful.Response) {
 	clusterNameID := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
+	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
+	if sessionName == "live" {
+		s.redirectRequest(req, resp)
+		return
+	}
+	return
 	data := s.MetaKeyInfo(clusterNameID, utils.OssMetaFile_LOGICAL_ACTORS)
 	resp.Write(data)
 }
 
 func (s *ServerHandler) getLogicalActor(req *restful.Request, resp *restful.Response) {
 	clusterNameID := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
+	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
+	if sessionName == "live" {
+		s.redirectRequest(req, resp)
+		return
+	}
+	return
 	nodeId := req.PathParameter("single_actor")
 	data := s.MetaKeyInfo(clusterNameID, utils.OssMetaFile_LOGICAL_ACTORS)
 	var allActors = map[string]interface{}{}
@@ -323,8 +529,15 @@ func (s *ServerHandler) getLogicalActor(req *restful.Request, resp *restful.Resp
 }
 
 func (s *ServerHandler) getNodeLogFile(req *restful.Request, resp *restful.Response) {
+	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
+	if sessionName == "live" {
+		s.redirectRequest(req, resp)
+		return
+	}
 	resp.Header().Set("Content-Type", "text/plain")
 	clusterNameID := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
+	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
+	sessionId := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
 	nodeId := req.QueryParameter("node_id")
 	filename := req.QueryParameter("filename")
 	lines := req.QueryParameter("lines")
@@ -338,13 +551,13 @@ func (s *ServerHandler) getNodeLogFile(req *restful.Request, resp *restful.Respo
 	}
 	data := make([]byte, 0, 1000)
 	if format == "leading_1" {
-		rawData := s.LogKeyInfo(clusterNameID, nodeId, filename, limit)
+		rawData := s.LogKeyInfo(clusterNameID+"_"+clusterNamespace, nodeId, sessionId, filename, limit)
 		if len(rawData) > 0 {
 			data = append(data, byte('1'))
 			data = append(data, rawData...)
 		}
 	} else {
-		data = append(data, s.LogKeyInfo(clusterNameID, nodeId, filename, limit)...)
+		data = append(data, s.LogKeyInfo(clusterNameID+"_"+clusterNamespace, nodeId, sessionId, filename, limit)...)
 	}
 
 	resp.Write(data)
@@ -382,6 +595,12 @@ func getTaskInfo(allTaskData []byte, findTaskID string) ([]byte, error) {
 
 func (s *ServerHandler) getTaskSummarize(req *restful.Request, resp *restful.Response) {
 	clusterNameID := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
+	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
+	if sessionName == "live" {
+		s.redirectRequest(req, resp)
+		return
+	}
+	return
 	// limit := req.QueryParameter("limit")
 	filter_keys := req.QueryParameter("filter_keys")
 	summary_by := req.QueryParameter("summary_by")
@@ -407,6 +626,12 @@ func (s *ServerHandler) getTaskSummarize(req *restful.Request, resp *restful.Res
 
 func (s *ServerHandler) getTaskDetail(req *restful.Request, resp *restful.Response) {
 	clusterNameID := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
+	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
+	if sessionName == "live" {
+		s.redirectRequest(req, resp)
+		return
+	}
+	return
 	// limit := req.QueryParameter("limit")
 	filter_keys := req.QueryParameter("filter_keys")
 	//filter_predicates := req.QueryParameter("filter_predicates")
@@ -446,8 +671,67 @@ func (s *ServerHandler) CookieHandle(req *restful.Request, resp *restful.Respons
 		resp.WriteHeaderAndEntity(http.StatusBadRequest, "RayCluster Session Name Cookie not found")
 		return
 	}
+	clusterNamespace, err := req.Request.Cookie(COOKIE_CLUSTER_NAMESPACE_KEY)
+	if err != nil {
+		resp.WriteHeaderAndEntity(http.StatusBadRequest, "Cluster Namespace Cookie not found")
+		return
+	}
+	http.SetCookie(resp, &http.Cookie{MaxAge: 600, Path: "/", Name: COOKIE_CLUSTER_NAME_KEY, Value: clusterName.Value})
+	http.SetCookie(resp, &http.Cookie{MaxAge: 600, Path: "/", Name: COOKIE_CLUSTER_NAMESPACE_KEY, Value: clusterNamespace.Value})
+	http.SetCookie(resp, &http.Cookie{MaxAge: 600, Path: "/", Name: COOKIE_SESSION_NAME_KEY, Value: sessionName.Value})
+
+	if sessionName.Value == "live" {
+		var svcName string
+		var err error
+		// 检查是否有svc cookie
+		svcCookie, err := req.Request.Cookie(ATTRIBUTE_SERVICE_NAME)
+		if err == nil && svcCookie != nil {
+			// 如果存在svc cookie，则直接使用
+			svcName = svcCookie.Value
+		} else {
+			// 否则获取svcName并设置cookie
+			svcName, err = getClusterSvcName(s.clientManager.clients, clusterName.Value, clusterNamespace.Value)
+			if err != nil {
+				resp.WriteHeaderAndEntity(http.StatusBadRequest, err.Error())
+				return
+			}
+
+			// 设置有效期为1分钟的cookie
+			cookie := &http.Cookie{
+				Name:   ATTRIBUTE_SERVICE_NAME,
+				Value:  svcName,
+				MaxAge: 60, // 1分钟
+			}
+			http.SetCookie(resp, cookie)
+		}
+		req.SetAttribute(ATTRIBUTE_SERVICE_NAME, svcName)
+	}
 	req.SetAttribute(COOKIE_CLUSTER_NAME_KEY, clusterName.Value)
 	req.SetAttribute(COOKIE_SESSION_NAME_KEY, sessionName.Value)
+	req.SetAttribute(COOKIE_CLUSTER_NAMESPACE_KEY, clusterNamespace.Value)
 	logrus.Infof("Request URL %s", req.Request.URL.String())
 	chain.ProcessFilter(req, resp)
+}
+
+var getClusterSvcName = func(clis []client.Client, name, namespace string) (string, error) {
+	svcName := ""
+	if len(clis) == 0 {
+		return "", errors.New("No available kubernetes config found")
+	}
+	cli := clis[0]
+	rc := rayv1.RayCluster{}
+	err := cli.Get(context.Background(), types.NamespacedName{Namespace: namespace, Name: name}, &rc)
+	if err != nil {
+		return "", errors.New("RayCluster not found")
+	}
+	svcName = rc.Status.Head.ServiceName
+	return svcName + ":8265", nil
+}
+
+func init() {
+	if proxy := os.Getenv("LOCAL_TEST_PROXY"); proxy != "" {
+		getClusterSvcName = func(clis []client.Client, name, namespace string) (string, error) {
+			return proxy, nil
+		}
+	}
 }
