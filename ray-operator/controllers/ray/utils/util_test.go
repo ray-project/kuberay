@@ -328,7 +328,7 @@ func createSomePodWithCondition(typ corev1.PodConditionType, status corev1.Condi
 	}
 }
 
-func createRayHeadPodWithPhaseAndCondition(phase corev1.PodPhase, typ corev1.PodConditionType, status corev1.ConditionStatus) (pod *corev1.Pod) {
+func createRayHeadPodWithPhaseAndCondition(phase corev1.PodPhase, status corev1.ConditionStatus) (pod *corev1.Pod) {
 	return &corev1.Pod{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "v1",
@@ -345,8 +345,9 @@ func createRayHeadPodWithPhaseAndCondition(phase corev1.PodPhase, typ corev1.Pod
 			Phase: phase,
 			Conditions: []corev1.PodCondition{
 				{
-					Type:   typ,
+					Type:   corev1.PodReady,
 					Status: status,
+					Reason: ContainersNotReady,
 				},
 			},
 		},
@@ -805,6 +806,100 @@ func TestCalculateDesiredReplicas(t *testing.T) {
 	}
 }
 
+func TestCalculateMaxReplicasOverflow(t *testing.T) {
+	tests := []struct {
+		name     string
+		specs    []rayv1.WorkerGroupSpec
+		expected int32
+	}{
+		{
+			name: "Bug reproduction: issue report with replicas=1, minReplicas=3, numOfHosts=4",
+			specs: []rayv1.WorkerGroupSpec{
+				{
+					GroupName:   "workergroup",
+					Replicas:    ptr.To[int32](1),
+					MinReplicas: ptr.To[int32](3),
+					MaxReplicas: ptr.To[int32](2147483647), // Default max int32
+					NumOfHosts:  4,
+				},
+			},
+			expected: 2147483647, // Was -4 before fix, should be capped at max int32
+		},
+		{
+			name: "Single group overflow with default maxReplicas and numOfHosts=4",
+			specs: []rayv1.WorkerGroupSpec{
+				{
+					NumOfHosts:  4,
+					MinReplicas: ptr.To[int32](3),
+					MaxReplicas: ptr.To[int32](2147483647),
+				},
+			},
+			expected: 2147483647, // Should be capped at max int32
+		},
+		{
+			name: "Single group overflow with large values",
+			specs: []rayv1.WorkerGroupSpec{
+				{
+					NumOfHosts:  1000,
+					MinReplicas: ptr.To[int32](1),
+					MaxReplicas: ptr.To[int32](2147483647),
+				},
+			},
+			expected: 2147483647, // Should be capped
+		},
+		{
+			name: "Multiple groups causing overflow when summed",
+			specs: []rayv1.WorkerGroupSpec{
+				{
+					NumOfHosts:  2,
+					MinReplicas: ptr.To[int32](1),
+					MaxReplicas: ptr.To[int32](1500000000),
+				},
+				{
+					NumOfHosts:  1,
+					MinReplicas: ptr.To[int32](1),
+					MaxReplicas: ptr.To[int32](1000000000),
+				},
+			},
+			expected: 2147483647, // 3B + 1B > max int32, should be capped
+		},
+		{
+			name: "No overflow with reasonable values",
+			specs: []rayv1.WorkerGroupSpec{
+				{
+					NumOfHosts:  4,
+					MinReplicas: ptr.To[int32](2),
+					MaxReplicas: ptr.To[int32](100),
+				},
+			},
+			expected: 400, // 100 * 4 = 400, no overflow
+		},
+		{
+			name: "Edge case: exactly at max int32",
+			specs: []rayv1.WorkerGroupSpec{
+				{
+					NumOfHosts:  1,
+					MinReplicas: ptr.To[int32](1),
+					MaxReplicas: ptr.To[int32](2147483647),
+				},
+			},
+			expected: 2147483647, // Exactly at limit
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cluster := &rayv1.RayCluster{
+				Spec: rayv1.RayClusterSpec{
+					WorkerGroupSpecs: tc.specs,
+				},
+			}
+			result := CalculateMaxReplicas(cluster)
+			assert.Equal(t, tc.expected, result)
+		})
+	}
+}
+
 func TestUnmarshalRuntimeEnv(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -851,7 +946,7 @@ func TestFindHeadPodReadyCondition(t *testing.T) {
 	}{
 		{
 			name: "condition true if Ray head pod is running and ready",
-			pod:  createRayHeadPodWithPhaseAndCondition(corev1.PodRunning, corev1.PodReady, corev1.ConditionTrue),
+			pod:  createRayHeadPodWithPhaseAndCondition(corev1.PodRunning, corev1.ConditionTrue),
 			expected: metav1.Condition{
 				Type:   string(rayv1.HeadPodReady),
 				Status: metav1.ConditionTrue,
@@ -859,7 +954,7 @@ func TestFindHeadPodReadyCondition(t *testing.T) {
 		},
 		{
 			name: "condition false if Ray head pod is not running",
-			pod:  createRayHeadPodWithPhaseAndCondition(corev1.PodPending, corev1.PodReady, corev1.ConditionFalse),
+			pod:  createRayHeadPodWithPhaseAndCondition(corev1.PodPending, corev1.ConditionFalse),
 			expected: metav1.Condition{
 				Type:   string(rayv1.HeadPodReady),
 				Status: metav1.ConditionFalse,
@@ -867,7 +962,7 @@ func TestFindHeadPodReadyCondition(t *testing.T) {
 		},
 		{
 			name: "condition false if Ray head pod is not ready",
-			pod:  createRayHeadPodWithPhaseAndCondition(corev1.PodRunning, corev1.PodReady, corev1.ConditionFalse),
+			pod:  createRayHeadPodWithPhaseAndCondition(corev1.PodRunning, corev1.ConditionFalse),
 			expected: metav1.Condition{
 				Type:   string(rayv1.HeadPodReady),
 				Status: metav1.ConditionFalse,
@@ -879,6 +974,88 @@ func TestFindHeadPodReadyCondition(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			headPodReadyCondition := FindHeadPodReadyCondition(tc.pod)
 			assert.Equal(t, tc.expected.Status, headPodReadyCondition.Status)
+		})
+	}
+}
+
+func TestFindHeadPodReadyMessage(t *testing.T) {
+	tests := []struct {
+		name        string
+		message     string
+		wantMessage string
+		wantReason  string
+		status      []corev1.ContainerStatus
+	}{{
+		name:       "no message no status want original reason",
+		wantReason: ContainersNotReady,
+	}, {
+		name:        "no container status want original reason",
+		message:     "TooEarlyInTheMorning",
+		wantMessage: "TooEarlyInTheMorning",
+		wantReason:  ContainersNotReady,
+	}, {
+		name:    "one reason one status",
+		message: "containers not ready",
+		status: []corev1.ContainerStatus{{
+			Name: "ray",
+			State: corev1.ContainerState{
+				Waiting: &corev1.ContainerStateWaiting{
+					Reason:  "ImagePullBackOff",
+					Message: `Back-off pulling image royproject/roy:latest: ErrImagePull: rpc error: code = NotFound`,
+				},
+			},
+		}},
+		wantReason:  "ImagePullBackOff",
+		wantMessage: `containers not ready; ray: Back-off pulling image royproject/roy:latest: ErrImagePull: rpc error: code = NotFound`,
+	}, {
+		name:    "one reason two statuses only copy first",
+		message: "aesthetic problems",
+		status: []corev1.ContainerStatus{{
+			Name: "indigo",
+			State: corev1.ContainerState{
+				Waiting: &corev1.ContainerStateWaiting{
+					Reason:  "BadColor",
+					Message: "too blue",
+				},
+			},
+		}, {
+			Name: "circle",
+			State: corev1.ContainerState{
+				Terminated: &corev1.ContainerStateTerminated{
+					Reason:  "BadGeometry",
+					Message: "too round",
+				},
+			},
+		}},
+		wantReason:  "BadColor",
+		wantMessage: "aesthetic problems; indigo: too blue",
+	}, {
+		name: "no reason one status",
+		status: []corev1.ContainerStatus{{
+			Name: "my-image",
+			State: corev1.ContainerState{
+				Terminated: &corev1.ContainerStateTerminated{
+					Reason:  "Crashed",
+					Message: "bash not found",
+				},
+			},
+		}},
+		wantReason:  "Crashed",
+		wantMessage: "my-image: bash not found",
+	}}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			pod := createRayHeadPodWithPhaseAndCondition(corev1.PodPending, corev1.ConditionFalse)
+			pod.Status.Conditions[0].Message = tc.message
+			pod.Status.ContainerStatuses = tc.status
+			cond := FindHeadPodReadyCondition(pod)
+			if cond.Message != tc.wantMessage {
+				t.Errorf("FindHeadPodReadyCondition(...) returned condition with message %q, but wanted %q", cond.Message, tc.wantMessage)
+			}
+			if cond.Reason != tc.wantReason {
+				t.Errorf("FindHeadPodReadyCondition(...) returned condition with reason %q, but wanted %q", cond.Reason, tc.wantReason)
+			}
 		})
 	}
 }

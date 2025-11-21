@@ -3,10 +3,6 @@ kind: RayCluster
 metadata:
   name: ray-cluster-with-auth
 spec:
-  enableInTreeAutoscaling: true
-  authOptions:
-    mode: token
-  rayVersion: '2.52.0'
   headGroupSpec:
     rayStartParams: {}
     template:
@@ -14,6 +10,17 @@ spec:
         containers:
         - name: ray-head
           image: rayproject/ray:nightly-py311-cpu
+          env:
+          - name: RAY_AUTH_MODE
+            value: token
+          # You can create the secret manually with the following command:
+          # kubectl create secret generic ray-cluster-with-auth --from-literal=auth_token='raycluster_secret' -n default
+          # And then use the following valueFrom to reference the secret:
+          - name: RAY_AUTH_TOKEN
+            valueFrom:
+              secretKeyRef:
+                key: auth_token
+                name: ray-cluster-with-auth # change this to match your Secret name
           resources:
             limits:
               memory: 8G
@@ -38,6 +45,14 @@ spec:
         containers:
         - name: ray-worker
           image: rayproject/ray:nightly-py311-cpu
+          env:
+          - name: RAY_AUTH_MODE
+            value: token
+          - name: RAY_AUTH_TOKEN
+            valueFrom:
+              secretKeyRef:
+                key: auth_token
+                name: ray-cluster-with-auth # change this to match your Secret name
           resources:
             limits:
               memory: 8G
