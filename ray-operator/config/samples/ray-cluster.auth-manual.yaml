@@ -9,7 +9,7 @@ spec:
       spec:
         containers:
         - name: ray-head
-          image: rayproject/ray:nightly-py311-cpu
+          image: rayproject/ray:2.52.0
           env:
           - name: RAY_AUTH_MODE
             value: token
@@ -44,7 +44,7 @@ spec:
       spec:
         containers:
         - name: ray-worker
-          image: rayproject/ray:nightly-py311-cpu
+          image: rayproject/ray:2.52.0
           env:
           - name: RAY_AUTH_MODE
             value: token
