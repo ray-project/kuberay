@@ -1116,7 +1116,7 @@ func (r *RayClusterReconciler) reconcileMultiHostWorkerGroup(ctx context.Context
 	return nil
 }
 
-// shouldRecreatePodsForUpgrade checks if any pods need to be recreated based on Head/Worker pod template changes
+// shouldRecreatePodsForUpgrade checks if any pods need to be recreated based on PodTemplateSpec changes
 func (r *RayClusterReconciler) shouldRecreatePodsForUpgrade(ctx context.Context, instance *rayv1.RayCluster) bool {
 	logger := ctrl.LoggerFrom(ctx)
 
@@ -1159,9 +1159,10 @@ func (r *RayClusterReconciler) shouldRecreatePodsForUpgrade(ctx context.Context,
 		actualHash := pod.Annotations[utils.PodTemplateHashKey]
 
 		var expectedHash string
-		if nodeType == string(rayv1.HeadNode) {
+		switch rayv1.RayNodeType(nodeType) {
+		case rayv1.HeadNode:
 			expectedHash = headHash
-		} else if nodeType == string(rayv1.WorkerNode) {
+		case rayv1.WorkerNode:
 			groupName := pod.Labels[utils.RayNodeGroupLabelKey]
 			var ok bool
 			expectedHash, ok = workerHashMap[groupName]
@@ -1169,21 +1170,16 @@ func (r *RayClusterReconciler) shouldRecreatePodsForUpgrade(ctx context.Context,
 				logger.Info("Worker group not found in spec, skipping pod", "pod", pod.Name, "groupName", groupName)
 				continue
 			}
-		} else {
+		default:
 			continue
 		}
 
 		if actualHash != expectedHash {
 			logger.Info("Pod template has changed, will recreate all pods",
-				"pod", pod.Name,
-				"nodeType", nodeType,
-				"actualHash", actualHash,
-				"expectedHash", expectedHash,
-				"upgradeStrategy", *instance.Spec.UpgradeStrategy.Type)
+				"rayCluster", instance.Name)
 			return true
 		}
 	}
-
 	return false
 }
 
