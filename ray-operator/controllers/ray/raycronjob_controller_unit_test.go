@@ -378,8 +378,19 @@ func TestUpdateRayCronJobStatus(t *testing.T) {
 				Recorder: &record.FakeRecorder{},
 			}
 
-			// Call updateRayCronJobStatus
-			err = reconciler.updateRayCronJobStatus(ctx, tc.oldCronJob, tc.newCronJob)
+			// Fetch the current object from the client to get valid resourceVersion
+			currentCronJob := &rayv1.RayCronJob{}
+			err = fakeClient.Get(ctx, types.NamespacedName{
+				Name:      "test-cronjob",
+				Namespace: "default",
+			}, currentCronJob)
+			require.NoError(t, err)
+
+			// Update the status of the fetched object to match the new status
+			currentCronJob.Status = tc.newCronJob.Status
+
+			// Call updateRayCronJobStatus with the fetched object that has valid resourceVersion
+			err = reconciler.updateRayCronJobStatus(ctx, tc.oldCronJob, currentCronJob)
 			require.NoError(t, err)
 
 			updatedCronJob := &rayv1.RayCronJob{}
