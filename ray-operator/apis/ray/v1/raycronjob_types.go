@@ -26,8 +26,7 @@ const (
 
 // RayCronJobStatus defines the observed state of RayCronJob
 type RayCronJobStatus struct {
-	LastScheduleTime metav1.Time    `json:"lastScheduleTime,omitempty"`
-	ScheduleStatus   ScheduleStatus `json:"scheduleStatus,omitempty"`
+	LastScheduleTime *metav1.Time `json:"lastScheduleTime,omitempty"`
 }
 
 //+kubebuilder:object:root=true
