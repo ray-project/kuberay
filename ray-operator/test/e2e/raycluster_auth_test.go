@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	. "github.com/onsi/gomega"
-	corev1 "k8s.io/api/core/v1"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
@@ -41,42 +40,15 @@ func TestRayClusterAuthOptions(t *testing.T) {
 		headPod, err := GetHeadPod(test, rayCluster)
 		g.Expect(err).NotTo(HaveOccurred())
 		g.Expect(headPod).NotTo(BeNil())
-		verifyAuthTokenEnvVars(t, rayCluster, *headPod)
+		VerifyContainerAuthTokenEnvVars(test, rayCluster, headPod, utils.RayContainerIndex)
 
 		workerPods, err := GetWorkerPods(test, rayCluster)
 		g.Expect(err).NotTo(HaveOccurred())
 		g.Expect(workerPods).ToNot(BeEmpty())
 		for _, workerPod := range workerPods {
-			verifyAuthTokenEnvVars(t, rayCluster, workerPod)
+			VerifyContainerAuthTokenEnvVars(test, rayCluster, &workerPod, utils.RayContainerIndex)
 		}
 
 		// TODO(andrewsykim): add job submission test with and without token once a Ray version with token support is released.
 	})
-}
-
-func verifyAuthTokenEnvVars(t *testing.T, rayCluster *rayv1.RayCluster, pod corev1.Pod) {
-	g := NewWithT(t)
-
-	var rayAuthModeEnvVar *corev1.EnvVar
-	for _, envVar := range pod.Spec.Containers[0].Env {
-		if envVar.Name == utils.RAY_AUTH_MODE_ENV_VAR {
-			rayAuthModeEnvVar = &envVar
-			break
-		}
-	}
-	g.Expect(rayAuthModeEnvVar).NotTo(BeNil(), "RAY_AUTH_MODE environment variable should be set")
-	g.Expect(rayAuthModeEnvVar.Value).To(Equal(string(rayv1.AuthModeToken)), "RAY_AUTH_MODE should be %s", rayv1.AuthModeToken)
-
-	var rayAuthTokenEnvVar *corev1.EnvVar
-	for _, envVar := range pod.Spec.Containers[0].Env {
-		if envVar.Name == utils.RAY_AUTH_TOKEN_ENV_VAR {
-			rayAuthTokenEnvVar = &envVar
-			break
-		}
-	}
-	g.Expect(rayAuthTokenEnvVar).NotTo(BeNil(), "RAY_AUTH_TOKEN environment variable should be set for AuthModeToken")
-	g.Expect(rayAuthTokenEnvVar.ValueFrom).NotTo(BeNil(), "RAY_AUTH_TOKEN should be populated from a secret")
-	g.Expect(rayAuthTokenEnvVar.ValueFrom.SecretKeyRef).NotTo(BeNil(), "RAY_AUTH_TOKEN should be populated from a secret key ref")
-	g.Expect(rayAuthTokenEnvVar.ValueFrom.SecretKeyRef.Name).To(ContainSubstring(rayCluster.Name), "Secret name should contain RayCluster name")
-	g.Expect(rayAuthTokenEnvVar.ValueFrom.SecretKeyRef.Key).To(Equal(utils.RAY_AUTH_TOKEN_SECRET_KEY), "Secret key should be %s", utils.RAY_AUTH_TOKEN_SECRET_KEY)
 }

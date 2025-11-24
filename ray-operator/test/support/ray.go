@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 
+	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/format"
 	"github.com/onsi/gomega/types"
 	corev1 "k8s.io/api/core/v1"
@@ -13,6 +14,7 @@ import (
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 )
 
 func RayJob(t Test, namespace, name string) func() (*rayv1.RayJob, error) {
@@ -246,4 +248,48 @@ func Gateway(t Test, namespace, name string) func() (*gwv1.Gateway, error) {
 	return func() (*gwv1.Gateway, error) {
 		return GetGateway(t, namespace, name)
 	}
+}
+
+// VerifyContainerAuthTokenEnvVars verifies that the specified container has the correct auth token environment variables.
+// This is a common helper function used across all auth-related E2E tests.
+func VerifyContainerAuthTokenEnvVars(t Test, rayCluster *rayv1.RayCluster, pod *corev1.Pod, containerIndex int) {
+	t.T().Helper()
+	g := NewWithT(t.T())
+
+	g.Expect(len(pod.Spec.Containers)).To(BeNumerically(">", containerIndex),
+		"Container index %d should exist in pod", containerIndex)
+
+	container := pod.Spec.Containers[containerIndex]
+
+	// Verify RAY_AUTH_MODE environment variable
+	var rayAuthModeEnvVar *corev1.EnvVar
+	for _, envVar := range container.Env {
+		if envVar.Name == utils.RAY_AUTH_MODE_ENV_VAR {
+			rayAuthModeEnvVar = &envVar
+			break
+		}
+	}
+	g.Expect(rayAuthModeEnvVar).NotTo(BeNil(),
+		"RAY_AUTH_MODE environment variable should be set in container %s", container.Name)
+	g.Expect(rayAuthModeEnvVar.Value).To(Equal(string(rayv1.AuthModeToken)),
+		"RAY_AUTH_MODE should be %s in container %s", rayv1.AuthModeToken, container.Name)
+
+	// Verify RAY_AUTH_TOKEN environment variable
+	var rayAuthTokenEnvVar *corev1.EnvVar
+	for _, envVar := range container.Env {
+		if envVar.Name == utils.RAY_AUTH_TOKEN_ENV_VAR {
+			rayAuthTokenEnvVar = &envVar
+			break
+		}
+	}
+	g.Expect(rayAuthTokenEnvVar).NotTo(BeNil(),
+		"RAY_AUTH_TOKEN environment variable should be set for AuthModeToken in container %s", container.Name)
+	g.Expect(rayAuthTokenEnvVar.ValueFrom).NotTo(BeNil(),
+		"RAY_AUTH_TOKEN should be populated from a secret in container %s", container.Name)
+	g.Expect(rayAuthTokenEnvVar.ValueFrom.SecretKeyRef).NotTo(BeNil(),
+		"RAY_AUTH_TOKEN should be populated from a secret key ref in container %s", container.Name)
+	g.Expect(rayAuthTokenEnvVar.ValueFrom.SecretKeyRef.Name).To(ContainSubstring(rayCluster.Name),
+		"Secret name should contain RayCluster name in container %s", container.Name)
+	g.Expect(rayAuthTokenEnvVar.ValueFrom.SecretKeyRef.Key).To(Equal(utils.RAY_AUTH_TOKEN_SECRET_KEY),
+		"Secret key should be %s in container %s", utils.RAY_AUTH_TOKEN_SECRET_KEY, container.Name)
 }
