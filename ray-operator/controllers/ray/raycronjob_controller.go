@@ -75,8 +75,7 @@ func (r *RayCronJobReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	originalRayCronJobInstance := rayCronJobInstance.DeepCopy()
 
 	// validate RayCronJob
-	schedule, err := validateAndParseRayCronJob(rayCronJobInstance)
-	if err != nil {
+	if err := utils.ValidateRayCronJobSpec(rayCronJobInstance); err != nil {
 		r.Recorder.Eventf(rayCronJobInstance, corev1.EventTypeWarning, string(utils.InvalidRayCronJobSpec),
 			"%s/%s: %v", rayCronJobInstance.Namespace, rayCronJobInstance.Name, err)
 
@@ -87,6 +86,14 @@ func (r *RayCronJobReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 			return ctrl.Result{RequeueAfter: RayCronJobDefaultRequeueDuration}, err
 		}
 		return ctrl.Result{}, nil
+	}
+
+	// Parse the schedule after validation
+	schedule, err := cron.ParseStandard(rayCronJobInstance.Spec.Schedule)
+	if err != nil {
+		// This should not happen as validation already checked the schedule
+		logger.Error(err, "Failed to parse validated cron schedule")
+		return ctrl.Result{RequeueAfter: RayCronJobDefaultRequeueDuration}, err
 	}
 
 	now := r.clock.Now()
@@ -136,20 +143,6 @@ func (r *RayCronJobReconciler) updateRayCronJobStatus(ctx context.Context, oldRa
 		}
 	}
 	return nil
-}
-
-// Validate the RayCronJob and return cron schedule string if valid
-func validateAndParseRayCronJob(rayCronJobInstance *rayv1.RayCronJob) (cron.Schedule, error) {
-	schedule, parseErr := cron.ParseStandard(rayCronJobInstance.Spec.Schedule)
-	if parseErr != nil {
-		// cron string validation error
-		return nil, fmt.Errorf("the RayJobCron spec is invalid: Parse cron schedule with error: %w", parseErr)
-	}
-	if err := utils.ValidateRayJobSpec(&rayv1.RayJob{Spec: *rayCronJobInstance.Spec.JobTemplate}); err != nil {
-		return nil, fmt.Errorf("the RayJobCron spec is invalid: The RayJob spec is invalid with error: %w", err)
-	}
-
-	return schedule, nil
 }
 
 func constructRayJob(cronJob *rayv1.RayCronJob) *rayv1.RayJob {
