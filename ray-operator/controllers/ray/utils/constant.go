@@ -28,12 +28,18 @@ const (
 	KubeRayVersion                           = "ray.io/kuberay-version"
 
 	// Labels for feature RayMultihostIndexing
-	// RayWorkerReplicaIndexKey label is the unique label for the replica in a specific worker group. It is made up of the worker group name
-	// and a unique identifier. e.g. multi-host-worker-group-xh3hf
 	//
-	// RayHostIndexKey label represents the index of the host within the RayWorkerReplicaIndexKey.
+	// RayWorkerReplicaNameKey label is the unique name for the replica in a specific worker group. It is made up
+	// of the worker group name and a unique identifier (e.g. multi-host-worker-group-xh3hf). This label is unique
+	// across RayClusters.
+	RayWorkerReplicaNameKey = "ray.io/worker-group-replica-name"
+
+	// RayWorkerReplicaIndexKey label is the integer index for the replica in it's worker group (0 to replicas-1).
+	// The value for this label is unique within its worker group, but not across worker groups or RayClusters.
 	RayWorkerReplicaIndexKey = "ray.io/worker-group-replica-index"
-	RayHostIndexKey          = "ray.io/replica-host-index"
+
+	// RayHostIndexKey label represents the index of the host within the replica group.
+	RayHostIndexKey = "ray.io/replica-host-index"
 
 	// In KubeRay, the Ray container must be the first application container in a head or worker Pod.
 	RayContainerIndex = 0
@@ -149,6 +155,13 @@ const (
 	// The value of RAY_NODE_TYPE_NAME is the name of the node group (i.e., the value of the "ray.io/group" label).
 	RAY_NODE_TYPE_NAME       = "RAY_NODE_TYPE_NAME"
 	RAY_ENABLE_AUTOSCALER_V2 = "RAY_enable_autoscaler_v2"
+
+	// RAY_AUTH_MODE_ENV_VAR is the Ray environment variable for configuring the authentication mode
+	RAY_AUTH_MODE_ENV_VAR = "RAY_AUTH_MODE"
+	// RAY_AUTH_TOKEN_ENV_VAR is the Ray environment variable containing the authentication token.
+	RAY_AUTH_TOKEN_ENV_VAR = "RAY_AUTH_TOKEN" // #nosec G101
+	// RAY_AUTH_TOKEN_SECRET_KEY is the key used in the Secret containing Ray auth token
+	RAY_AUTH_TOKEN_SECRET_KEY = "auth_token"
 
 	// This KubeRay operator environment variable is used to determine if random Pod
 	// deletion should be enabled. Note that this only takes effect when autoscaling

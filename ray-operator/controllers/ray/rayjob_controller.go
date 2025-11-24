@@ -152,8 +152,8 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		rayJobInstance.Status.Reason = rayv1.ValidationFailed
 		rayJobInstance.Status.Message = err.Error()
 
-		// This is the only 2 places where we update the RayJob status. This will directly
-		// update the JobDeploymentStatus to ValidationFailed if there's validation error
+		// This is one of the only 2 places where we update the RayJob status. This will directly
+		// update the JobDeploymentStatus to ValidationFailed if there's validation error.
 		if err = r.updateRayJobStatus(ctx, originalRayJobInstance, rayJobInstance); err != nil {
 			logger.Info("Failed to update RayJob status", "error", err)
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
@@ -204,7 +204,11 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		if clientURL := rayJobInstance.Status.DashboardURL; clientURL == "" {
 			if rayClusterInstance.Status.State != rayv1.Ready {
 				logger.Info("Wait for the RayCluster.Status.State to be ready before submitting the job.", "RayCluster", rayClusterInstance.Name, "State", rayClusterInstance.Status.State)
-				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+				// The nonready RayCluster status should be reflected in the RayJob's status.
+				// Breaking from the switch statement will drop directly to the status update code
+				// and return a default requeue duration and no error.
+				rayJobInstance.Status.RayClusterStatus = rayClusterInstance.Status
+				break
 			}
 
 			if clientURL, err = utils.FetchHeadServiceURL(ctx, r.Client, rayClusterInstance, utils.DashboardPortName); err != nil || clientURL == "" {
@@ -419,8 +423,8 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 	}
 	checkBackoffLimitAndUpdateStatusIfNeeded(ctx, rayJobInstance)
 
-	// This is the only 2 places where we update the RayJob status. Please do NOT add any code
-	// between `checkBackoffLimitAndUpdateStatusIfNeeded` and the following code.
+	// This is one of the only 2 places where we update the RayJob status. Please do NOT add any
+	// code between `checkBackoffLimitAndUpdateStatusIfNeeded` and the following code.
 	if err = r.updateRayJobStatus(ctx, originalRayJobInstance, rayJobInstance); err != nil {
 		logger.Info("Failed to update RayJob status", "error", err)
 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
@@ -555,7 +559,7 @@ func getSubmitterTemplate(rayJobInstance *rayv1.RayJob, rayClusterInstance *rayv
 	// Set the default value for the optional field SubmitterPodTemplate if not provided.
 	submitterTemplate := common.GetSubmitterTemplate(&rayJobInstance.Spec, &rayClusterInstance.Spec)
 
-	if err := configureSubmitterContainer(&submitterTemplate.Spec.Containers[utils.RayContainerIndex], rayJobInstance, rayv1.K8sJobMode); err != nil {
+	if err := configureSubmitterContainer(&submitterTemplate.Spec.Containers[utils.RayContainerIndex], rayJobInstance, rayClusterInstance, rayv1.K8sJobMode); err != nil {
 		return corev1.PodTemplateSpec{}, err
 	}
 
@@ -566,14 +570,15 @@ func getSubmitterTemplate(rayJobInstance *rayv1.RayJob, rayClusterInstance *rayv
 func getSubmitterContainer(rayJobInstance *rayv1.RayJob, rayClusterInstance *rayv1.RayCluster) (corev1.Container, error) {
 	var submitterContainer corev1.Container = common.GetDefaultSubmitterContainer(&rayClusterInstance.Spec)
 
-	if err := configureSubmitterContainer(&submitterContainer, rayJobInstance, rayv1.SidecarMode); err != nil {
+	if err := configureSubmitterContainer(&submitterContainer, rayJobInstance, rayClusterInstance, rayv1.SidecarMode); err != nil {
 		return corev1.Container{}, err
 	}
 
 	return submitterContainer, nil
 }
 
-func configureSubmitterContainer(container *corev1.Container, rayJobInstance *rayv1.RayJob, submissionMode rayv1.JobSubmissionMode) error {
+// pass the RayCluster instance for cluster selector case
+func configureSubmitterContainer(container *corev1.Container, rayJobInstance *rayv1.RayJob, rayClusterInstance *rayv1.RayCluster, submissionMode rayv1.JobSubmissionMode) error {
 	// If the command in the submitter container manifest isn't set, use the default command.
 	jobCmd, err := common.BuildJobSubmitCommand(rayJobInstance, submissionMode)
 	if err != nil {
@@ -596,6 +601,9 @@ func configureSubmitterContainer(container *corev1.Container, rayJobInstance *ra
 	// ray job submit --address=http://$RAY_DASHBOARD_ADDRESS --submission-id=$RAY_JOB_SUBMISSION_ID ...
 	container.Env = append(container.Env, corev1.EnvVar{Name: utils.RAY_DASHBOARD_ADDRESS, Value: rayJobInstance.Status.DashboardURL})
 	container.Env = append(container.Env, corev1.EnvVar{Name: utils.RAY_JOB_SUBMISSION_ID, Value: rayJobInstance.Status.JobId})
+	if rayClusterInstance != nil && utils.IsAuthEnabled(&rayClusterInstance.Spec) {
+		common.SetContainerTokenAuthEnvVars(rayClusterInstance.Name, container)
+	}
 
 	return nil
 }
@@ -854,10 +862,14 @@ func (r *RayJobReconciler) updateRayJobStatus(ctx context.Context, oldRayJob *ra
 	oldRayJobStatus := oldRayJob.Status
 	newRayJobStatus := newRayJob.Status
 	logger.Info("updateRayJobStatus", "oldRayJobStatus", oldRayJobStatus, "newRayJobStatus", newRayJobStatus)
+
+	rayClusterStatusChanged := utils.InconsistentRayClusterStatus(oldRayJobStatus.RayClusterStatus, newRayJobStatus.RayClusterStatus)
+
 	// If a status field is crucial for the RayJob state machine, it MUST be
 	// updated with a distinct JobStatus or JobDeploymentStatus value.
 	if oldRayJobStatus.JobStatus != newRayJobStatus.JobStatus ||
-		oldRayJobStatus.JobDeploymentStatus != newRayJobStatus.JobDeploymentStatus {
+		oldRayJobStatus.JobDeploymentStatus != newRayJobStatus.JobDeploymentStatus ||
+		rayClusterStatusChanged {
 
 		if newRayJobStatus.JobDeploymentStatus == rayv1.JobDeploymentStatusComplete || newRayJobStatus.JobDeploymentStatus == rayv1.JobDeploymentStatusFailed {
 			newRayJob.Status.EndTime = &metav1.Time{Time: time.Now()}

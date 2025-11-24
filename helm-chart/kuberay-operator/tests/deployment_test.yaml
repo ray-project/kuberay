@@ -276,6 +276,14 @@ tests:
           path: spec.template.spec.priorityClassName
           value: high-priority
 
+  - it: Should set replicas when `replicas` is set
+    set:
+      replicas: 3
+    asserts:
+      - equal:
+          path: spec.replicas
+          value: 3
+
   - it: Should use custom reconcile concurrency when set
     set:
       reconcileConcurrency: 5

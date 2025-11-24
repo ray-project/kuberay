@@ -26,15 +26,15 @@ const (
 
 // RayCronJobStatus defines the observed state of RayCronJob
 type RayCronJobStatus struct {
-	// LastScheduleTime is the last time the RayJob is being scheduled by this RayCronJob
-	// +optional
-	LastScheduleTime metav1.Time `json:"lastScheduleTime,omitempty"`
-	// +optional
-	ScheduleStatus ScheduleStatus `json:"scheduleStatus,omitempty"`
+	LastScheduleTime metav1.Time    `json:"lastScheduleTime,omitempty"`
+	ScheduleStatus   ScheduleStatus `json:"scheduleStatus,omitempty"`
 }
 
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
+//+kubebuilder:printcolumn:name="schedule",type=string,JSONPath=".spec.schedule",priority=0
+//+kubebuilder:printcolumn:name="last schedule",type=string,JSONPath=".status.lastScheduleTime",priority=0
+//+kubebuilder:printcolumn:name="age",type="date",JSONPath=".metadata.creationTimestamp",priority=0
 
 // RayCronJob is the Schema for the raycronjobs API
 type RayCronJob struct {

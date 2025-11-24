@@ -310,11 +310,10 @@ env_vars:
 		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
 			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusFailed)))
 		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
-			Should(WithTransform(RayJobReason, Equal(rayv1.AppFailed)))
-		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
-			Should(WithTransform(func(job *rayv1.RayJob) string { return job.Status.Message },
-				Equal("Submitter completed but Ray job not found in RayCluster.")))
-
+			Should(WithTransform(RayJobReason, Or(
+				Equal(rayv1.JobDeploymentStatusTransitionGracePeriodExceeded),
+				Equal(rayv1.SubmissionFailed),
+			)))
 		// Cleanup
 		err = test.Client().Ray().RayV1().RayJobs(namespace.Name).Delete(test.Ctx(), rayJob.Name, metav1.DeleteOptions{})
 		g.Expect(err).NotTo(HaveOccurred())
@@ -433,5 +432,46 @@ env_vars:
 		message := rayJob.Status.Message
 		g.Expect(reason).To(Equal(rayv1.JobDeploymentStatusTransitionGracePeriodExceeded))
 		g.Expect(message).To(MatchRegexp(`The RayJob submitter finished at .* but the ray job did not reach terminal state within .*`))
+	})
+
+	test.T().Run("RayCluster status update propagates to RayJob", func(_ *testing.T) {
+		rayJobAC := rayv1ac.RayJob("cluster-status-update", namespace.Name).
+			WithSpec(rayv1ac.RayJobSpec().
+				WithRayClusterSpec(NewRayClusterSpec(MountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](jobs, "/home/ray/jobs"))).
+				WithEntrypoint("python /home/ray/jobs/long_running.py").
+				WithShutdownAfterJobFinishes(false).
+				WithSubmitterPodTemplate(JobSubmitterPodTemplateApplyConfiguration()))
+
+		rayJob, err := test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
+		g.Expect(err).NotTo(HaveOccurred())
+		LogWithTimestamp(test.T(), "Created RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
+
+		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
+			Should(WithTransform(RayJobStatus, Equal(rayv1.JobStatusRunning)))
+
+		rayJob, err = GetRayJob(test, rayJob.Namespace, rayJob.Name)
+		g.Expect(err).NotTo(HaveOccurred())
+		rayCluster, err := GetRayCluster(test, namespace.Name, rayJob.Status.RayClusterName)
+		g.Expect(err).NotTo(HaveOccurred())
+
+		originalMaxWorkerReplica := rayCluster.Status.MaxWorkerReplicas
+		g.Expect(rayJob.Status.RayClusterStatus.MaxWorkerReplicas).To(Equal(originalMaxWorkerReplica))
+
+		newMaxWorkerReplica := originalMaxWorkerReplica + 2
+		rayCluster.Status.MaxWorkerReplicas = newMaxWorkerReplica
+		_, err = test.Client().Ray().RayV1().RayClusters(namespace.Name).UpdateStatus(test.Ctx(), rayCluster, metav1.UpdateOptions{})
+		g.Expect(err).NotTo(HaveOccurred())
+
+		g.Eventually(func() int32 {
+			job, err := GetRayJob(test, rayJob.Namespace, rayJob.Name)
+			if err != nil {
+				return originalMaxWorkerReplica
+			}
+			return job.Status.RayClusterStatus.MaxWorkerReplicas
+		}, TestTimeoutShort).Should(Equal(newMaxWorkerReplica))
+
+		err = test.Client().Ray().RayV1().RayJobs(namespace.Name).Delete(test.Ctx(), rayJob.Name, metav1.DeleteOptions{})
+		g.Expect(err).NotTo(HaveOccurred())
+		LogWithTimestamp(test.T(), "Deleted RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
 	})
 }

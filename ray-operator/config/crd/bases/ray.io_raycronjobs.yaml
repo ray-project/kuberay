@@ -14,7 +14,17 @@ spec:
     singular: raycronjob
   scope: Namespaced
   versions:
-  - name: v1
+  - additionalPrinterColumns:
+    - jsonPath: .spec.schedule
+      name: schedule
+      type: string
+    - jsonPath: .status.lastScheduleTime
+      name: last schedule
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: age
+      type: date
+    name: v1
     schema:
       openAPIV3Schema:
         properties:
@@ -11816,8 +11826,6 @@ spec:
             properties:
               lastScheduleTime:
                 format: date-time
-                type: string
-              scheduleStatus:
                 type: string
             type: object
         type: object
