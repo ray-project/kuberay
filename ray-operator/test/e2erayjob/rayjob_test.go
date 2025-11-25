@@ -530,28 +530,15 @@ env_vars:
 
 		// Wait for submitter Job to be created
 		LogWithTimestamp(test.T(), "Waiting for submitter Job to be created")
-		g.Eventually(Jobs(test, namespace.Name), TestTimeoutShort).ShouldNot(BeEmpty())
-
-		// Get the submitter Job and verify its pod has auth token env vars
-		jobList, err := test.Client().Core().BatchV1().Jobs(namespace.Name).List(test.Ctx(), metav1.ListOptions{})
-		g.Expect(err).NotTo(HaveOccurred())
-		g.Expect(jobList.Items).NotTo(BeEmpty())
-
-		submitterJob := jobList.Items[0]
-		g.Expect(submitterJob.Name).To(Equal(rayJob.Name))
+		g.Eventually(Job(test, namespace.Name, rayJob.Name), TestTimeoutShort).ShouldNot(BeEmpty())
 
 		// Wait for submitter Job pod to be created and running
-		var submitterPod *corev1.Pod
-		g.Eventually(func() bool {
-			podList, err := test.Client().Core().CoreV1().Pods(namespace.Name).List(test.Ctx(), metav1.ListOptions{
-				LabelSelector: "job-name=" + submitterJob.Name,
-			})
-			if err != nil || len(podList.Items) == 0 {
-				return false
-			}
-			submitterPod = &podList.Items[0]
-			return true
-		}, TestTimeoutShort).Should(BeTrue())
+		LogWithTimestamp(test.T(), "Waiting for submitter Job pod to be created")
+		g.Eventually(Pods(test, namespace.Name, LabelSelector("job-name="+rayJob.Name)), TestTimeoutShort).
+			ShouldNot(BeEmpty())
+
+		submitterPods := Pods(test, namespace.Name, LabelSelector("job-name="+rayJob.Name))(g)
+		submitterPod := &submitterPods[0]
 
 		// Verify submitter Job pod has auth token env vars in its Ray container
 		VerifyContainerAuthTokenEnvVars(test, rayCluster, submitterPod, utils.RayContainerIndex)
