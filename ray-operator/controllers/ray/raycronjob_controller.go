@@ -111,7 +111,10 @@ func (r *RayCronJobReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 			return ctrl.Result{RequeueAfter: nextScheduleTime.Sub(now)}, nil
 		}
 
-		rayJob := constructRayJob(rayCronJobInstance)
+		rayJob, err := r.constructRayJob(rayCronJobInstance)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
 		if err := r.Create(ctx, rayJob); err != nil {
 			logger.Error(err, "Failed to create RayJob from RayCronJob")
 			return ctrl.Result{}, err
@@ -145,7 +148,7 @@ func (r *RayCronJobReconciler) updateRayCronJobStatus(ctx context.Context, oldRa
 	return nil
 }
 
-func constructRayJob(cronJob *rayv1.RayCronJob) *rayv1.RayJob {
+func (r *RayCronJobReconciler) constructRayJob(cronJob *rayv1.RayCronJob) (*rayv1.RayJob, error) {
 	rayJob := &rayv1.RayJob{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("%s-%s", cronJob.Name, rand.String(5)),
@@ -156,7 +159,13 @@ func constructRayJob(cronJob *rayv1.RayCronJob) *rayv1.RayJob {
 		},
 		Spec: *cronJob.Spec.JobTemplate.DeepCopy(),
 	}
-	return rayJob
+
+	// Set the ownership in order to do the garbage collection by k8s.
+	if err := ctrl.SetControllerReference(cronJob, rayJob, r.Scheme); err != nil {
+		return nil, err
+	}
+
+	return rayJob, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
