@@ -94,26 +94,27 @@ func TestRayClusterAuthOptions(t *testing.T) {
 			LogWithTimestamp(test.T(), "Successfully submitted and verified job with auth token")
 		})
 
-		test.T().Run("Submit job without auth token should fail", func(_ *testing.T) {
-			LogWithTimestamp(test.T(), "Testing job submission WITHOUT auth token (should fail)")
+		test.T().Run("Submit job with incorrect auth token should fail", func(_ *testing.T) {
+			LogWithTimestamp(test.T(), "Testing job submission WITH incorrect auth token (should fail)")
 
-			submissionId := fmt.Sprintf("test-job-no-auth-%d", time.Now().Unix())
+			submissionId := fmt.Sprintf("test-job-bad-auth-%d", time.Now().Unix())
 
-			// Submit job via Ray Job CLI WITHOUT auth token (no RAY_AUTH_TOKEN env var)
+			// Submit job via Ray Job CLI with INCORRECT auth token
+			incorrectToken := "incorrect-token-12345"
 			submitCmd := []string{
 				"bash", "-c",
-				fmt.Sprintf("ray job submit --address http://127.0.0.1:8265 --submission-id %s --no-wait -- python -c 'print(\"Should not run\")'", submissionId),
+				fmt.Sprintf("RAY_AUTH_TOKEN=%s ray job submit --address http://127.0.0.1:8265 --submission-id %s --no-wait -- python -c 'print(\"Should not run\")'",
+					incorrectToken, submissionId),
 			}
 
 			stdout, stderr := ExecPodCmd(test, headPod, headPod.Spec.Containers[utils.RayContainerIndex].Name, submitCmd)
-			output := stdout.String() + stderr.String()
-
-			LogWithTimestamp(test.T(), "Job submission output without auth: %s", output)
+			LogWithTimestamp(test.T(), "Job submission stdout with incorrect auth: %s", stdout.String())
+			LogWithTimestamp(test.T(), "Job submission stderr with incorrect auth: %s", stderr.String())
 
 			// Verify response indicates authentication failure
-			g.Expect(output).To(ContainSubstring("Unauthorized"), "Job submission should fail with Unauthorized when auth token is missing")
+			g.Expect(stderr.String()).To(ContainSubstring("Unauthorized"), "Job submission should fail with Unauthorized when auth token is incorrect")
 
-			LogWithTimestamp(test.T(), "Job submission correctly rejected without auth token")
+			LogWithTimestamp(test.T(), "Job submission correctly rejected with incorrect auth token")
 		})
 	})
 }
