@@ -25,7 +25,7 @@ plugin simplifies running Ray on Kubernetes. See [kubectl-plugin](https://docs.r
 by some organizations to back user interfaces for KubeRay resource management. See [KubeRay APIServer V2](https://github.com/ray-project/kuberay/blob/master/apiserversdk/README.md) for more details.
 
 * **KubeRay Dashboard** (Experimental): Starting from KubeRay v1.4.0, we have introduced a new dashboard that enables users to view and manage KubeRay resources.
-While it is not yet production-ready, we welcome your feedback. See [KubeRay dashboard](https://docs.ray.io/en/master/cluster/kubernetes/user-guides/kuberay-dashboard.html) for more details.
+While it is not yet production-ready, we welcome your feedback. See [KubeRay Dashboard](https://docs.ray.io/en/master/cluster/kubernetes/user-guides/kuberay-dashboard.html) for more details.
 
 ## Documentation
 
