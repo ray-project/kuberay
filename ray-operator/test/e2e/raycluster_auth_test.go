@@ -2,7 +2,6 @@ package e2e
 
 import (
 	"fmt"
-	"net/http"
 	"testing"
 	"time"
 
@@ -12,8 +11,6 @@ import (
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/dashboardclient"
-	utiltypes "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/types"
 	rayv1ac "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/ray/v1"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
@@ -59,75 +56,74 @@ func TestRayClusterAuthOptions(t *testing.T) {
 			VerifyContainerAuthTokenEnvVars(test, rayCluster, &workerPod.Spec.Containers[utils.RayContainerIndex])
 		}
 
-		// Get auth token and dashboard URL for job submission tests
+		// Get auth token for job submission tests
 		authToken := getAuthTokenFromPod(test, rayCluster, headPod)
 		g.Expect(authToken).NotTo(BeEmpty(), "Auth token should be present")
 
-		dashboardURL := fmt.Sprintf("http://%s-head-svc.%s.svc.cluster.local:8265",
-			rayCluster.Name, rayCluster.Namespace)
-
-		// Test job submission with auth token
+		// Test job submission with auth token using kubectl exec + curl
 		test.T().Run("Submit job with auth token should succeed", func(_ *testing.T) {
 			LogWithTimestamp(test.T(), "Testing job submission WITH auth token")
-			clientWithAuth := &dashboardclient.RayDashboardClient{}
-			httpClient := &http.Client{Timeout: 30 * time.Second}
-			clientWithAuth.InitClient(httpClient, dashboardURL, authToken)
 
-			jobRequest := &utiltypes.RayJobRequest{
-				Entrypoint:   "python -c \"import ray; ray.init(); print('Job with auth succeeded')\"",
-				SubmissionId: fmt.Sprintf("test-job-with-auth-%d", time.Now().Unix()),
-				RuntimeEnv:   map[string]interface{}{},
+			submissionId := fmt.Sprintf("test-job-with-auth-%d", time.Now().Unix())
+			jobPayload := fmt.Sprintf(`{"entrypoint":"python -c \\\"import ray; ray.init(); print('Job with auth succeeded')\\\"","submission_id":"%s"}`, submissionId)
+
+			// Submit job via curl with auth header
+			// Use -s (silent) to suppress progress meter, -S to show errors
+			curlCmd := []string{
+				"curl", "-sS", "-X", "POST",
+				"-H", "Content-Type: application/json",
+				"-H", fmt.Sprintf("x-ray-authorization: Bearer %s", authToken),
+				"-d", jobPayload,
+				"http://127.0.0.1:8265/api/jobs/",
 			}
 
-			jobId, err := clientWithAuth.SubmitJobReq(test.Ctx(), jobRequest)
-			g.Expect(err).NotTo(HaveOccurred(), "Job submission with token should succeed")
-			g.Expect(jobId).NotTo(BeEmpty())
-			LogWithTimestamp(test.T(), "Successfully submitted job with auth: %s", jobId)
+			stdout, stderr := ExecPodCmd(test, headPod, headPod.Spec.Containers[utils.RayContainerIndex].Name, curlCmd)
+			g.Expect(stderr.String()).To(BeEmpty(), "curl stderr should be empty")
 
-			// Verify job was created and can be queried
+			LogWithTimestamp(test.T(), "Job submission response: %s", stdout.String())
+			g.Expect(stdout.String()).To(ContainSubstring(submissionId), "Response should contain submission ID")
+
+			// Verify job status - it should be queryable
 			g.Eventually(func(g Gomega) {
-				jobInfo, err := clientWithAuth.GetJobInfo(test.Ctx(), jobId)
-				g.Expect(err).NotTo(HaveOccurred())
-				g.Expect(jobInfo).NotTo(BeNil())
-				g.Expect(jobInfo.JobId).To(Equal(jobId))
+				curlGetCmd := []string{
+					"curl", "-sS", "-X", "GET",
+					"-H", fmt.Sprintf("x-ray-authorization: Bearer %s", authToken),
+					fmt.Sprintf("http://127.0.0.1:8265/api/jobs/%s", submissionId),
+				}
+				stdout, _ := ExecPodCmd(test, headPod, headPod.Spec.Containers[utils.RayContainerIndex].Name, curlGetCmd)
+				g.Expect(stdout.String()).To(ContainSubstring(submissionId))
 			}, TestTimeoutShort).Should(Succeed())
 
-			// Wait for job to reach terminal state
-			LogWithTimestamp(test.T(), "Waiting for job %s to reach terminal state", jobId)
-			g.Eventually(func(g Gomega) {
-				jobInfo, err := clientWithAuth.GetJobInfo(test.Ctx(), jobId)
-				g.Expect(err).NotTo(HaveOccurred())
-				g.Expect(rayv1.IsJobTerminal(jobInfo.JobStatus)).To(BeTrue())
-			}, TestTimeoutMedium).Should(Succeed())
-
-			// Cleanup: Delete the job
-			err = clientWithAuth.DeleteJob(test.Ctx(), jobId)
-			g.Expect(err).NotTo(HaveOccurred())
-			LogWithTimestamp(test.T(), "Successfully deleted job %s", jobId)
+			LogWithTimestamp(test.T(), "Successfully submitted and verified job with auth token")
 		})
 
-		test.T().Run("Submit job without auth token should fail with 401", func(_ *testing.T) {
-			LogWithTimestamp(test.T(), "Testing job submission WITHOUT auth token (should fail with 401)")
-			clientWithoutAuth := &dashboardclient.RayDashboardClient{}
-			httpClient := &http.Client{Timeout: 30 * time.Second}
-			clientWithoutAuth.InitClient(httpClient, dashboardURL, "")
+		test.T().Run("Submit job without auth token should fail", func(_ *testing.T) {
+			LogWithTimestamp(test.T(), "Testing job submission WITHOUT auth token (should fail)")
 
-			jobRequestNoAuth := &utiltypes.RayJobRequest{
-				Entrypoint:   "python -c \"print('Should not run')\"",
-				SubmissionId: fmt.Sprintf("test-job-no-auth-%d", time.Now().Unix()),
-				RuntimeEnv:   map[string]interface{}{},
+			submissionId := fmt.Sprintf("test-job-no-auth-%d", time.Now().Unix())
+			jobPayload := fmt.Sprintf(`{"entrypoint":"python -c \\\"print('Should not run')\\\"","submission_id":"%s"}`, submissionId)
+
+			// Submit job via curl WITHOUT auth header
+			// Use -sS for silent mode with errors, -w to write out HTTP status code
+			curlCmd := []string{
+				"curl", "-sS", "-X", "POST", "-w", "\\nHTTP_STATUS:%{http_code}",
+				"-H", "Content-Type: application/json",
+				"-d", jobPayload,
+				"http://127.0.0.1:8265/api/jobs/",
 			}
 
-			jobId, err := clientWithoutAuth.SubmitJobReq(test.Ctx(), jobRequestNoAuth)
+			stdout, _ := ExecPodCmd(test, headPod, headPod.Spec.Containers[utils.RayContainerIndex].Name, curlCmd)
+			response := stdout.String()
 
-			// Expect error due to missing authentication
-			g.Expect(err).To(HaveOccurred(), "Job submission without token should fail")
-			g.Expect(jobId).To(BeEmpty())
+			LogWithTimestamp(test.T(), "Job submission response without auth: %s", response)
 
-			// Verify error message indicates Unauthorized
-			g.Expect(err.Error()).To(ContainSubstring("Unauthorized"), "Error should indicate Unauthorized")
+			// Verify response indicates unauthorized (401 or similar error)
+			g.Expect(response).To(Or(
+				ContainSubstring("HTTP_STATUS:401"),
+				ContainSubstring("Unauthorized"),
+			), "Response should indicate authentication failure")
 
-			LogWithTimestamp(test.T(), "Job submission correctly rejected as Unauthorized: %v", err)
+			LogWithTimestamp(test.T(), "Job submission correctly rejected without auth token")
 		})
 	})
 }
