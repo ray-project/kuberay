@@ -81,15 +81,14 @@ func TestRayClusterAuthOptions(t *testing.T) {
 			// Verify job was submitted successfully
 			g.Expect(stdout.String()).To(ContainSubstring(submissionId), "Job submission should succeed with valid auth token")
 
-			// Verify job status - it should be queryable with auth
+			// Verify job status is queryable with auth token (confirms auth works)
 			g.Eventually(func(g Gomega) {
 				statusCmd := []string{
 					"bash", "-c",
 					fmt.Sprintf("RAY_AUTH_TOKEN=%s ray job status --address http://127.0.0.1:8265 %s", authToken, submissionId),
 				}
 				stdout, _ := ExecPodCmd(test, headPod, headPod.Spec.Containers[utils.RayContainerIndex].Name, statusCmd)
-				// Job should be queryable and show status info (not an error)
-				g.Expect(stdout.String()).To(ContainSubstring("status"))
+				g.Expect(stdout.String()).To(ContainSubstring("succeeded"))
 			}, TestTimeoutShort).Should(Succeed())
 
 			LogWithTimestamp(test.T(), "Successfully submitted and verified job with auth token")
@@ -112,7 +111,7 @@ func TestRayClusterAuthOptions(t *testing.T) {
 			LogWithTimestamp(test.T(), "Job submission output without auth: %s", output)
 
 			// Verify response indicates authentication failure
-			g.Expect(output).To(ContainSubstring("401"), "Job submission should fail with 401 when auth token is missing")
+			g.Expect(output).To(ContainSubstring("Unauthorized"), "Job submission should fail with Unauthorized when auth token is missing")
 
 			LogWithTimestamp(test.T(), "Job submission correctly rejected without auth token")
 		})
