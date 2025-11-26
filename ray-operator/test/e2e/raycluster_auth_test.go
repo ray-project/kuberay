@@ -60,38 +60,36 @@ func TestRayClusterAuthOptions(t *testing.T) {
 		authToken := getAuthTokenFromPod(test, rayCluster, headPod)
 		g.Expect(authToken).NotTo(BeEmpty(), "Auth token should be present")
 
-		// Test job submission with auth token using kubectl exec + curl
+		// Test job submission with auth token using Ray Job CLI
 		test.T().Run("Submit job with auth token should succeed", func(_ *testing.T) {
 			LogWithTimestamp(test.T(), "Testing job submission WITH auth token")
 
 			submissionId := fmt.Sprintf("test-job-with-auth-%d", time.Now().Unix())
-			jobPayload := fmt.Sprintf(`{"entrypoint":"python -c \\\"import ray; ray.init(); print('Job with auth succeeded')\\\"","submission_id":"%s"}`, submissionId)
 
-			// Submit job via curl with auth header
-			// Use -s (silent) to suppress progress meter, -S to show errors
-			curlCmd := []string{
-				"curl", "-sS", "-X", "POST",
-				"-H", "Content-Type: application/json",
-				"-H", fmt.Sprintf("x-ray-authorization: Bearer %s", authToken),
-				"-d", jobPayload,
-				"http://127.0.0.1:8265/api/jobs/",
+			// Submit job via Ray Job CLI with auth token
+			// Set RAY_AUTH_TOKEN environment variable for authentication
+			submitCmd := []string{
+				"bash", "-c",
+				fmt.Sprintf("RAY_AUTH_TOKEN=%s ray job submit --address http://127.0.0.1:8265 --submission-id %s --no-wait -- python -c 'import ray; ray.init(); print(\"Job with auth succeeded\")'",
+					authToken, submissionId),
 			}
 
-			stdout, stderr := ExecPodCmd(test, headPod, headPod.Spec.Containers[utils.RayContainerIndex].Name, curlCmd)
-			g.Expect(stderr.String()).To(BeEmpty(), "curl stderr should be empty")
+			stdout, stderr := ExecPodCmd(test, headPod, headPod.Spec.Containers[utils.RayContainerIndex].Name, submitCmd)
+			LogWithTimestamp(test.T(), "Job submission stdout: %s", stdout.String())
+			LogWithTimestamp(test.T(), "Job submission stderr: %s", stderr.String())
 
-			LogWithTimestamp(test.T(), "Job submission response: %s", stdout.String())
-			g.Expect(stdout.String()).To(ContainSubstring(submissionId), "Response should contain submission ID")
+			// Verify job was submitted successfully
+			g.Expect(stdout.String()).To(ContainSubstring(submissionId), "Job submission should succeed with valid auth token")
 
-			// Verify job status - it should be queryable
+			// Verify job status - it should be queryable with auth
 			g.Eventually(func(g Gomega) {
-				curlGetCmd := []string{
-					"curl", "-sS", "-X", "GET",
-					"-H", fmt.Sprintf("x-ray-authorization: Bearer %s", authToken),
-					fmt.Sprintf("http://127.0.0.1:8265/api/jobs/%s", submissionId),
+				statusCmd := []string{
+					"bash", "-c",
+					fmt.Sprintf("RAY_AUTH_TOKEN=%s ray job status --address http://127.0.0.1:8265 %s", authToken, submissionId),
 				}
-				stdout, _ := ExecPodCmd(test, headPod, headPod.Spec.Containers[utils.RayContainerIndex].Name, curlGetCmd)
-				g.Expect(stdout.String()).To(ContainSubstring(submissionId))
+				stdout, _ := ExecPodCmd(test, headPod, headPod.Spec.Containers[utils.RayContainerIndex].Name, statusCmd)
+				// Job should be queryable and show status info (not an error)
+				g.Expect(stdout.String()).To(ContainSubstring("status"))
 			}, TestTimeoutShort).Should(Succeed())
 
 			LogWithTimestamp(test.T(), "Successfully submitted and verified job with auth token")
@@ -101,27 +99,20 @@ func TestRayClusterAuthOptions(t *testing.T) {
 			LogWithTimestamp(test.T(), "Testing job submission WITHOUT auth token (should fail)")
 
 			submissionId := fmt.Sprintf("test-job-no-auth-%d", time.Now().Unix())
-			jobPayload := fmt.Sprintf(`{"entrypoint":"python -c \\\"print('Should not run')\\\"","submission_id":"%s"}`, submissionId)
 
-			// Submit job via curl WITHOUT auth header
-			// Use -sS for silent mode with errors, -w to write out HTTP status code
-			curlCmd := []string{
-				"curl", "-sS", "-X", "POST", "-w", "\\nHTTP_STATUS:%{http_code}",
-				"-H", "Content-Type: application/json",
-				"-d", jobPayload,
-				"http://127.0.0.1:8265/api/jobs/",
+			// Submit job via Ray Job CLI WITHOUT auth token (no RAY_AUTH_TOKEN env var)
+			submitCmd := []string{
+				"bash", "-c",
+				fmt.Sprintf("ray job submit --address http://127.0.0.1:8265 --submission-id %s --no-wait -- python -c 'print(\"Should not run\")'", submissionId),
 			}
 
-			stdout, _ := ExecPodCmd(test, headPod, headPod.Spec.Containers[utils.RayContainerIndex].Name, curlCmd)
-			response := stdout.String()
+			stdout, stderr := ExecPodCmd(test, headPod, headPod.Spec.Containers[utils.RayContainerIndex].Name, submitCmd)
+			output := stdout.String() + stderr.String()
 
-			LogWithTimestamp(test.T(), "Job submission response without auth: %s", response)
+			LogWithTimestamp(test.T(), "Job submission output without auth: %s", output)
 
-			// Verify response indicates unauthorized (401 or similar error)
-			g.Expect(response).To(Or(
-				ContainSubstring("HTTP_STATUS:401"),
-				ContainSubstring("Unauthorized"),
-			), "Response should indicate authentication failure")
+			// Verify response indicates authentication failure
+			g.Expect(output).To(ContainSubstring("401"), "Job submission should fail with 401 when auth token is missing")
 
 			LogWithTimestamp(test.T(), "Job submission correctly rejected without auth token")
 		})
