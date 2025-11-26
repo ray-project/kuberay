@@ -1,12 +1,19 @@
 package e2e
 
 import (
+	"fmt"
+	"net/http"
 	"testing"
+	"time"
 
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/dashboardclient"
+	utiltypes "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/types"
 	rayv1ac "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/ray/v1"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
@@ -52,6 +59,94 @@ func TestRayClusterAuthOptions(t *testing.T) {
 			VerifyContainerAuthTokenEnvVars(test, rayCluster, &workerPod.Spec.Containers[utils.RayContainerIndex])
 		}
 
-		// TODO(andrewsykim): add job submission test with and without token once a Ray version with token support is released.
+		// Get auth token and dashboard URL for job submission tests
+		authToken := getAuthTokenFromPod(test, rayCluster, headPod)
+		g.Expect(authToken).NotTo(BeEmpty(), "Auth token should be present")
+
+		dashboardURL := fmt.Sprintf("http://%s-head-svc.%s.svc.cluster.local:8265",
+			rayCluster.Name, rayCluster.Namespace)
+
+		// Test job submission with auth token
+		test.T().Run("Submit job with auth token should succeed", func(_ *testing.T) {
+			LogWithTimestamp(test.T(), "Testing job submission WITH auth token")
+			clientWithAuth := &dashboardclient.RayDashboardClient{}
+			httpClient := &http.Client{Timeout: 30 * time.Second}
+			clientWithAuth.InitClient(httpClient, dashboardURL, authToken)
+
+			jobRequest := &utiltypes.RayJobRequest{
+				Entrypoint:   "python -c \"import ray; ray.init(); print('Job with auth succeeded')\"",
+				SubmissionId: fmt.Sprintf("test-job-with-auth-%d", time.Now().Unix()),
+				RuntimeEnv:   map[string]interface{}{},
+			}
+
+			jobId, err := clientWithAuth.SubmitJobReq(test.Ctx(), jobRequest)
+			g.Expect(err).NotTo(HaveOccurred(), "Job submission with token should succeed")
+			g.Expect(jobId).NotTo(BeEmpty())
+			LogWithTimestamp(test.T(), "Successfully submitted job with auth: %s", jobId)
+
+			// Verify job was created and can be queried
+			g.Eventually(func(g Gomega) {
+				jobInfo, err := clientWithAuth.GetJobInfo(test.Ctx(), jobId)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(jobInfo).NotTo(BeNil())
+				g.Expect(jobInfo.JobId).To(Equal(jobId))
+			}, TestTimeoutShort).Should(Succeed())
+
+			// Wait for job to reach terminal state
+			LogWithTimestamp(test.T(), "Waiting for job %s to reach terminal state", jobId)
+			g.Eventually(func(g Gomega) {
+				jobInfo, err := clientWithAuth.GetJobInfo(test.Ctx(), jobId)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(rayv1.IsJobTerminal(jobInfo.JobStatus)).To(BeTrue())
+			}, TestTimeoutMedium).Should(Succeed())
+
+			// Cleanup: Delete the job
+			err = clientWithAuth.DeleteJob(test.Ctx(), jobId)
+			g.Expect(err).NotTo(HaveOccurred())
+			LogWithTimestamp(test.T(), "Successfully deleted job %s", jobId)
+		})
+
+		test.T().Run("Submit job without auth token should fail with 401", func(_ *testing.T) {
+			LogWithTimestamp(test.T(), "Testing job submission WITHOUT auth token (should fail with 401)")
+			clientWithoutAuth := &dashboardclient.RayDashboardClient{}
+			httpClient := &http.Client{Timeout: 30 * time.Second}
+			clientWithoutAuth.InitClient(httpClient, dashboardURL, "")
+
+			jobRequestNoAuth := &utiltypes.RayJobRequest{
+				Entrypoint:   "python -c \"print('Should not run')\"",
+				SubmissionId: fmt.Sprintf("test-job-no-auth-%d", time.Now().Unix()),
+				RuntimeEnv:   map[string]interface{}{},
+			}
+
+			jobId, err := clientWithoutAuth.SubmitJobReq(test.Ctx(), jobRequestNoAuth)
+
+			// Expect error due to missing authentication
+			g.Expect(err).To(HaveOccurred(), "Job submission without token should fail")
+			g.Expect(jobId).To(BeEmpty())
+
+			// Verify error message indicates Unauthorized
+			g.Expect(err.Error()).To(ContainSubstring("Unauthorized"), "Error should indicate Unauthorized")
+
+			LogWithTimestamp(test.T(), "Job submission correctly rejected as Unauthorized: %v", err)
+		})
 	})
+}
+
+// getAuthTokenFromPod extracts the auth token from the pod's environment variables.
+// It reads the token from the secret referenced by the RAY_AUTH_TOKEN environment variable.
+func getAuthTokenFromPod(test Test, rayCluster *rayv1.RayCluster, pod *corev1.Pod) string {
+	test.T().Helper()
+	g := NewWithT(test.T())
+
+	for _, envVar := range pod.Spec.Containers[utils.RayContainerIndex].Env {
+		if envVar.Name == utils.RAY_AUTH_TOKEN_ENV_VAR {
+			if envVar.ValueFrom != nil && envVar.ValueFrom.SecretKeyRef != nil {
+				secret, err := test.Client().Core().CoreV1().Secrets(rayCluster.Namespace).
+					Get(test.Ctx(), envVar.ValueFrom.SecretKeyRef.Name, metav1.GetOptions{})
+				g.Expect(err).NotTo(HaveOccurred())
+				return string(secret.Data[envVar.ValueFrom.SecretKeyRef.Key])
+			}
+		}
+	}
+	return ""
 }
