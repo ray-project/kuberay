@@ -252,14 +252,9 @@ func Gateway(t Test, namespace, name string) func() (*gwv1.Gateway, error) {
 
 // VerifyContainerAuthTokenEnvVars verifies that the specified container has the correct auth token environment variables.
 // This is a common helper function used across all auth-related E2E tests.
-func VerifyContainerAuthTokenEnvVars(t Test, rayCluster *rayv1.RayCluster, pod *corev1.Pod, containerIndex int) {
+func VerifyContainerAuthTokenEnvVars(t Test, rayCluster *rayv1.RayCluster, container *corev1.Container) {
 	t.T().Helper()
 	g := NewWithT(t.T())
-
-	g.Expect(len(pod.Spec.Containers)).To(BeNumerically(">", containerIndex),
-		"Container index %d should exist in pod", containerIndex)
-
-	container := pod.Spec.Containers[containerIndex]
 
 	// Verify RAY_AUTH_MODE environment variable
 	var rayAuthModeEnvVar *corev1.EnvVar

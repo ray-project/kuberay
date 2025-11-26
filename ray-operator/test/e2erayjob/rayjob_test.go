@@ -518,19 +518,21 @@ env_vars:
 		g.Expect(headPod).NotTo(BeNil())
 
 		// Verify Ray container has auth token env vars
-		VerifyContainerAuthTokenEnvVars(test, rayCluster, headPod, utils.RayContainerIndex)
+		VerifyContainerAuthTokenEnvVars(test, rayCluster, &headPod.Spec.Containers[utils.RayContainerIndex])
 
 		// Verify worker pods have auth token env vars
 		workerPods, err := GetWorkerPods(test, rayCluster)
 		g.Expect(err).NotTo(HaveOccurred())
 		g.Expect(workerPods).ToNot(BeEmpty())
 		for _, workerPod := range workerPods {
-			VerifyContainerAuthTokenEnvVars(test, rayCluster, &workerPod, utils.RayContainerIndex)
+			VerifyContainerAuthTokenEnvVars(test, rayCluster, &workerPod.Spec.Containers[utils.RayContainerIndex])
 		}
 
 		// Wait for submitter Job to be created
 		LogWithTimestamp(test.T(), "Waiting for submitter Job to be created")
-		g.Eventually(Job(test, namespace.Name, rayJob.Name), TestTimeoutShort).ShouldNot(BeEmpty())
+		g.Eventually(func(g Gomega) {
+			Job(test, namespace.Name, rayJob.Name)(g)
+		}, TestTimeoutShort).Should(Succeed())
 
 		// Wait for submitter Job pod to be created and running
 		LogWithTimestamp(test.T(), "Waiting for submitter Job pod to be created")
@@ -541,7 +543,7 @@ env_vars:
 		submitterPod := &submitterPods[0]
 
 		// Verify submitter Job pod has auth token env vars in its Ray container
-		VerifyContainerAuthTokenEnvVars(test, rayCluster, submitterPod, utils.RayContainerIndex)
+		VerifyContainerAuthTokenEnvVars(test, rayCluster, &submitterPod.Spec.Containers[utils.RayContainerIndex])
 
 		LogWithTimestamp(test.T(), "Waiting for RayJob %s/%s to complete", rayJob.Namespace, rayJob.Name)
 		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).

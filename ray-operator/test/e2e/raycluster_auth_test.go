@@ -40,13 +40,16 @@ func TestRayClusterAuthOptions(t *testing.T) {
 		headPod, err := GetHeadPod(test, rayCluster)
 		g.Expect(err).NotTo(HaveOccurred())
 		g.Expect(headPod).NotTo(BeNil())
-		VerifyContainerAuthTokenEnvVars(test, rayCluster, headPod, utils.RayContainerIndex)
 
+		// Verify Ray container has auth token env vars
+		VerifyContainerAuthTokenEnvVars(test, rayCluster, &headPod.Spec.Containers[utils.RayContainerIndex])
+
+		// Verify worker pods have auth token env vars
 		workerPods, err := GetWorkerPods(test, rayCluster)
 		g.Expect(err).NotTo(HaveOccurred())
 		g.Expect(workerPods).ToNot(BeEmpty())
 		for _, workerPod := range workerPods {
-			VerifyContainerAuthTokenEnvVars(test, rayCluster, &workerPod, utils.RayContainerIndex)
+			VerifyContainerAuthTokenEnvVars(test, rayCluster, &workerPod.Spec.Containers[utils.RayContainerIndex])
 		}
 
 		// TODO(andrewsykim): add job submission test with and without token once a Ray version with token support is released.

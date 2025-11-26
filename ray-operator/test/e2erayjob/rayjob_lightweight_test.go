@@ -180,14 +180,14 @@ env_vars:
 		g.Expect(headPod).NotTo(BeNil())
 
 		// Verify Ray container has auth token env vars
-		VerifyContainerAuthTokenEnvVars(test, rayCluster, headPod, utils.RayContainerIndex)
+		VerifyContainerAuthTokenEnvVars(test, rayCluster, &headPod.Spec.Containers[utils.RayContainerIndex])
 
 		// Verify worker pods have auth token env vars
 		workerPods, err := GetWorkerPods(test, rayCluster)
 		g.Expect(err).NotTo(HaveOccurred())
 		g.Expect(workerPods).ToNot(BeEmpty())
 		for _, workerPod := range workerPods {
-			VerifyContainerAuthTokenEnvVars(test, rayCluster, &workerPod, utils.RayContainerIndex)
+			VerifyContainerAuthTokenEnvVars(test, rayCluster, &workerPod.Spec.Containers[utils.RayContainerIndex])
 		}
 
 		LogWithTimestamp(test.T(), "Waiting for RayJob %s/%s to complete", rayJob.Namespace, rayJob.Name)

@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
@@ -241,25 +242,25 @@ env_vars:
 		g.Expect(headPod).NotTo(BeNil())
 
 		// Verify Ray container has auth token env vars
-		VerifyContainerAuthTokenEnvVars(test, rayCluster, headPod, utils.RayContainerIndex)
+		VerifyContainerAuthTokenEnvVars(test, rayCluster, &headPod.Spec.Containers[utils.RayContainerIndex])
 
 		// Verify submitter container has auth token env vars
-		submitterContainerIndex := -1
-		for i, container := range headPod.Spec.Containers {
-			if container.Name == utils.SubmitterContainerName {
-				submitterContainerIndex = i
+		var submitterContainer *corev1.Container
+		for i := range headPod.Spec.Containers {
+			if headPod.Spec.Containers[i].Name == utils.SubmitterContainerName {
+				submitterContainer = &headPod.Spec.Containers[i]
 				break
 			}
 		}
-		g.Expect(submitterContainerIndex).NotTo(Equal(-1), "submitter container should be present in head pod")
-		VerifyContainerAuthTokenEnvVars(test, rayCluster, headPod, submitterContainerIndex)
+		g.Expect(submitterContainer).NotTo(BeNil(), "submitter container should be present in head pod")
+		VerifyContainerAuthTokenEnvVars(test, rayCluster, submitterContainer)
 
 		// Verify worker pods have auth token env vars
 		workerPods, err := GetWorkerPods(test, rayCluster)
 		g.Expect(err).NotTo(HaveOccurred())
 		g.Expect(workerPods).ToNot(BeEmpty())
 		for _, workerPod := range workerPods {
-			VerifyContainerAuthTokenEnvVars(test, rayCluster, &workerPod, utils.RayContainerIndex)
+			VerifyContainerAuthTokenEnvVars(test, rayCluster, &workerPod.Spec.Containers[utils.RayContainerIndex])
 		}
 
 		LogWithTimestamp(test.T(), "Waiting for RayJob %s/%s to complete", rayJob.Namespace, rayJob.Name)
