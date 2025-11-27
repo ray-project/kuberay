@@ -17,11 +17,11 @@ spec:
           image: rayproject/ray:2.52.0
           resources:
             limits:
-              cpu: 4
-              memory: 16G
+              cpu: 2
+              memory: 8G
             requests:
-              cpu: 4
-              memory: 16G
+              cpu: 2
+              memory: 8G
           ports:
           - containerPort: 6379
             name: gcs-server
@@ -48,10 +48,10 @@ spec:
           image: rayproject/ray:2.52.0
           resources:
             limits:
-              cpu: 4
-              memory: 16G
+              cpu: 2
+              memory: 8G
             requests:
-              cpu: 4
-              memory: 16G
+              cpu: 2
+              memory: 8G
         nodeSelector:
           node.gke.io/enable-writable-cgroups: "true"
