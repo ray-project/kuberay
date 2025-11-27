@@ -680,7 +680,8 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 		}
 	} else if len(headPods.Items) == 0 {
 		originatedFrom := utils.GetCRDType(instance.Labels[utils.RayOriginatedFromCRDLabelKey])
-		if originatedFrom == utils.RayJobCRD {
+		if originatedFrom == utils.RayJobCRD &&
+			instance.Labels[utils.RayJobSubmissionModeLabelKey] == string(rayv1.SidecarMode) &&
 			// Recreating the head Pod if the RayCluster created by RayJob is provisioned doesn't help RayJob.
 			//
 			// Case 1: GCS fault tolerance is disabled
@@ -692,13 +693,12 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 			//
 			// In this case, the worker Pods will not be killed by the new head Pod when it is created, but the submission ID has already been
 			// used by the old Ray job, so the new Ray job will fail.
-			if meta.IsStatusConditionTrue(instance.Status.Conditions, string(rayv1.RayClusterProvisioned)) {
-				logger.Info(
-					"reconcilePods: Found 0 head Pods for a RayJob-managed RayCluster; skipping head creation to let RayJob controller handle the failure",
-					"rayCluster", instance.Name,
-				)
-				return nil
-			}
+			meta.IsStatusConditionTrue(instance.Status.Conditions, string(rayv1.RayClusterProvisioned)) {
+			logger.Info(
+				"reconcilePods: Found 0 head Pods for a sidecar-mode RayJob-managed RayCluster; skipping head creation to let RayJob controller handle the failure",
+				"rayCluster", instance.Name,
+			)
+			return nil
 		}
 		// Create head Pod if it does not exist.
 		logger.Info("reconcilePods: Found 0 head Pods; creating a head Pod for the RayCluster.")
