@@ -74,9 +74,7 @@ func TestRayClusterAuthOptions(t *testing.T) {
 					authToken, submissionId),
 			}
 
-			stdout, stderr := ExecPodCmd(test, headPod, headPod.Spec.Containers[utils.RayContainerIndex].Name, submitCmd)
-			LogWithTimestamp(test.T(), "Job submission stdout: %s", stdout.String())
-			LogWithTimestamp(test.T(), "Job submission stderr: %s", stderr.String())
+			stdout, _ := ExecPodCmd(test, headPod, headPod.Spec.Containers[utils.RayContainerIndex].Name, submitCmd)
 
 			// Verify job was submitted successfully
 			g.Expect(stdout.String()).To(ContainSubstring(submissionId), "Job submission should succeed with valid auth token")
@@ -107,12 +105,10 @@ func TestRayClusterAuthOptions(t *testing.T) {
 					incorrectToken, submissionId),
 			}
 
-			stdout, stderr := ExecPodCmd(test, headPod, headPod.Spec.Containers[utils.RayContainerIndex].Name, submitCmd)
-			LogWithTimestamp(test.T(), "Job submission stdout with incorrect auth: %s", stdout.String())
-			LogWithTimestamp(test.T(), "Job submission stderr with incorrect auth: %s", stderr.String())
+			_, stderr := ExecPodCmd(test, headPod, headPod.Spec.Containers[utils.RayContainerIndex].Name, submitCmd, true)
 
 			// Verify response indicates authentication failure
-			g.Expect(stderr.String()).To(ContainSubstring("Unauthorized"), "Job submission should fail with Unauthorized when auth token is incorrect")
+			g.Expect(stderr.String()).To(ContainSubstring("Unauthenticated"), "Job submission should fail with Unauthorized when auth token is incorrect")
 
 			LogWithTimestamp(test.T(), "Job submission correctly rejected with incorrect auth token")
 		})
