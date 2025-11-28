@@ -934,12 +934,13 @@ func (r *RayJobReconciler) getOrCreateRayClusterInstance(ctx context.Context, ra
 }
 
 func (r *RayJobReconciler) constructRayClusterForRayJob(rayJobInstance *rayv1.RayJob, rayClusterName string) (*rayv1.RayCluster, error) {
-	labels := make(map[string]string, len(rayJobInstance.Labels))
+	labels := map[string]string{}
 	for key, value := range rayJobInstance.Labels {
 		labels[key] = value
 	}
 	labels[utils.RayOriginatedFromCRNameLabelKey] = rayJobInstance.Name
 	labels[utils.RayOriginatedFromCRDLabelKey] = utils.RayOriginatedFromCRDLabelValue(utils.RayJobCRD)
+	labels[utils.RayJobSubmissionModeLabelKey] = string(rayJobInstance.Spec.SubmissionMode)
 	if rayJobInstance.Spec.SubmissionMode == rayv1.SidecarMode {
 		labels[utils.RayJobSubmissionModeLabelKey] = string(rayv1.SidecarMode)
 	}
@@ -1023,7 +1024,7 @@ func (r *RayJobReconciler) checkSubmitterAndUpdateStatusIfNeeded(ctx context.Con
 			// If head pod is deleted, mark the RayJob as failed
 			shouldUpdate = true
 			rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusFailed
-			rayJob.Status.Reason = rayv1.AppFailed
+			rayJob.Status.Reason = rayv1.SubmissionFailed
 			rayJob.Status.Message = "Ray head pod not found."
 			return
 		}
