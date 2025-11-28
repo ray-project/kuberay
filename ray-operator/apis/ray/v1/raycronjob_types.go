@@ -15,15 +15,6 @@ type RayCronJobSpec struct {
 	Schedule string `json:"schedule"`
 }
 
-// The overall state of the RayCronJob.
-type ScheduleStatus string
-
-const (
-	StatusNew              ScheduleStatus = ""
-	StatusScheduled        ScheduleStatus = "Scheduled"
-	StatusValidationFailed ScheduleStatus = "ValidationFailed"
-)
-
 // RayCronJobStatus defines the observed state of RayCronJob
 type RayCronJobStatus struct {
 	LastScheduleTime *metav1.Time `json:"lastScheduleTime,omitempty"`
