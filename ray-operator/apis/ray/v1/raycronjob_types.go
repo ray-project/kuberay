@@ -35,12 +35,12 @@ type RayCronJobStatus struct {
 //+kubebuilder:printcolumn:name="last schedule",type=string,JSONPath=".status.lastScheduleTime",priority=0
 //+kubebuilder:printcolumn:name="age",type="date",JSONPath=".metadata.creationTimestamp",priority=0
 
-// RayCronJob is the Schema for the raycronjobs API
+//nolint:govet // RayCronJob is the Schema for the raycronjobs API
 type RayCronJob struct {
 	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
 	Spec              RayCronJobSpec   `json:"spec,omitempty"`
 	Status            RayCronJobStatus `json:"status,omitempty"`
-	metav1.ObjectMeta `json:"metadata,omitempty"`
 }
 
 //+kubebuilder:object:root=true
