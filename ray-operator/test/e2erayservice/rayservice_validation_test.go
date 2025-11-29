@@ -1,6 +1,7 @@
 package e2erayservice
 
 import (
+	"strings"
 	"testing"
 
 	. "github.com/onsi/gomega"
@@ -17,10 +18,9 @@ func TestRayServiceValidation(t *testing.T) {
 
 	// Create a namespace
 	namespace := test.NewTestNamespace()
-	rayServiceName := "rayservice-sample-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 
 	test.T().Run("RayService name too long with 48 characters", func(_ *testing.T) {
-		rayServiceAC := rayv1ac.RayService(rayServiceName, namespace.Name).
+		rayServiceAC := rayv1ac.RayService(strings.Repeat("a", 48), namespace.Name).
 			WithSpec(RayServiceSampleYamlApplyConfiguration())
 
 		rayService, err := test.Client().Ray().RayV1().RayServices(namespace.Name).Apply(test.Ctx(), rayServiceAC, TestApplyOptions)
