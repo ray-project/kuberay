@@ -4,7 +4,10 @@ import (
 	"testing"
 
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
@@ -23,6 +26,29 @@ func TestRayServiceAuthToken(t *testing.T) {
 	rayServiceName := "rayservice-auth"
 	rayServiceSpec := RayServiceSampleYamlApplyConfiguration()
 	rayServiceSpec.RayClusterSpec.WithAuthOptions(rayv1ac.AuthOptions().WithMode(rayv1.AuthModeToken))
+
+	// Add a worker group to verify auth token propagation to workers
+	workerGroupSpec := rayv1ac.WorkerGroupSpec().
+		WithGroupName("small-group").
+		WithReplicas(1).
+		WithMinReplicas(1).
+		WithMaxReplicas(1).
+		WithRayStartParams(map[string]string{"num-cpus": "1"}).
+		WithTemplate(corev1ac.PodTemplateSpec().
+			WithSpec(corev1ac.PodSpec().
+				WithContainers(corev1ac.Container().
+					WithName("ray-worker").
+					WithImage(GetRayImage()).
+					WithResources(corev1ac.ResourceRequirements().
+						WithRequests(corev1.ResourceList{
+							corev1.ResourceCPU:    resource.MustParse("1"),
+							corev1.ResourceMemory: resource.MustParse("1Gi"),
+						}).
+						WithLimits(corev1.ResourceList{
+							corev1.ResourceCPU:    resource.MustParse("1"),
+							corev1.ResourceMemory: resource.MustParse("2Gi"),
+						})))))
+	rayServiceSpec.RayClusterSpec.WithWorkerGroupSpecs(workerGroupSpec)
 
 	rayServiceAC := rayv1ac.RayService(rayServiceName, namespace.Name).WithSpec(rayServiceSpec)
 
