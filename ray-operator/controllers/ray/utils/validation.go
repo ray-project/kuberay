@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/robfig/cron/v3"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -590,6 +591,30 @@ func validateLegacyDeletionPolicies(rayJob *rayv1.RayJob) error {
 
 	if rayJob.Spec.ShutdownAfterJobFinishes && (*onSuccessPolicy.Policy == rayv1.DeleteNone || *onFailurePolicy.Policy == rayv1.DeleteNone) {
 		return fmt.Errorf("The RayJob spec is invalid: shutdownAfterJobFinshes is set to 'true' while deletion policy is 'DeleteNone'")
+	}
+
+	return nil
+}
+
+// ValidateRayCronJobSpec validates the RayCronJob specification
+func ValidateRayCronJobSpec(rayCronJob *rayv1.RayCronJob) error {
+	// Validate cron schedule format
+	if _, err := cron.ParseStandard(rayCronJob.Spec.Schedule); err != nil {
+		return fmt.Errorf("invalid cron schedule: %w", err)
+	}
+
+	// Validate the embedded RayJob spec
+	if rayCronJob.Spec.JobTemplate == nil {
+		return fmt.Errorf("jobTemplate cannot be nil")
+	}
+
+	// Validate the ray job spec
+	rayJob := &rayv1.RayJob{
+		Spec: *rayCronJob.Spec.JobTemplate,
+	}
+
+	if err := ValidateRayJobSpec(rayJob); err != nil {
+		return fmt.Errorf("invalid RayJob template: %w", err)
 	}
 
 	return nil
