@@ -474,4 +474,89 @@ env_vars:
 		g.Expect(err).NotTo(HaveOccurred())
 		LogWithTimestamp(test.T(), "Deleted RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
 	})
+
+	test.T().Run("Successful RayJob in K8s Job mode with auth token", func(_ *testing.T) {
+		rayJobAC := rayv1ac.RayJob("counter-auth", namespace.Name).
+			WithSpec(rayv1ac.RayJobSpec().
+				WithSubmissionMode(rayv1.K8sJobMode).
+				WithEntrypoint("python /home/ray/jobs/counter.py").
+				WithRuntimeEnvYAML(`
+env_vars:
+  counter_name: test_counter
+`).
+				WithShutdownAfterJobFinishes(true).
+				WithSubmitterPodTemplate(JobSubmitterPodTemplateApplyConfiguration()).
+				WithRayClusterSpec(NewRayClusterSpec(
+					MountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](jobs, "/home/ray/jobs")).
+					WithAuthOptions(rayv1ac.AuthOptions().WithMode(rayv1.AuthModeToken))))
+
+		rayJob, err := test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
+		g.Expect(err).NotTo(HaveOccurred())
+		LogWithTimestamp(test.T(), "Created RayJob %s/%s successfully with auth token", rayJob.Namespace, rayJob.Name)
+
+		// Wait for RayCluster name to be populated
+		LogWithTimestamp(test.T(), "Waiting for RayCluster to be created")
+		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
+			Should(WithTransform(RayJobClusterName, Not(BeEmpty())))
+
+		// Get RayCluster name
+		rayJob, err = GetRayJob(test, rayJob.Namespace, rayJob.Name)
+		g.Expect(err).NotTo(HaveOccurred())
+		rayClusterName := rayJob.Status.RayClusterName
+
+		// Wait for RayCluster to become ready
+		LogWithTimestamp(test.T(), "Waiting for RayCluster %s/%s to become ready", namespace.Name, rayClusterName)
+		g.Eventually(RayCluster(test, namespace.Name, rayClusterName), TestTimeoutMedium).
+			Should(WithTransform(RayClusterState, Equal(rayv1.Ready)))
+
+		// Get RayCluster and verify auth token environment variables
+		rayCluster, err := GetRayCluster(test, namespace.Name, rayClusterName)
+		g.Expect(err).NotTo(HaveOccurred())
+
+		headPod, err := GetHeadPod(test, rayCluster)
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(headPod).NotTo(BeNil())
+
+		// Verify Ray container has auth token env vars
+		VerifyContainerAuthTokenEnvVars(test, rayCluster, &headPod.Spec.Containers[utils.RayContainerIndex])
+
+		// Verify worker pods have auth token env vars
+		workerPods, err := GetWorkerPods(test, rayCluster)
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(workerPods).ToNot(BeEmpty())
+		for _, workerPod := range workerPods {
+			VerifyContainerAuthTokenEnvVars(test, rayCluster, &workerPod.Spec.Containers[utils.RayContainerIndex])
+		}
+
+		// Wait for submitter Job to be created
+		LogWithTimestamp(test.T(), "Waiting for submitter Job to be created")
+		g.Eventually(func(g Gomega) {
+			Job(test, namespace.Name, rayJob.Name)(g)
+		}, TestTimeoutShort).Should(Succeed())
+
+		// Wait for submitter Job pod to be created and running
+		LogWithTimestamp(test.T(), "Waiting for submitter Job pod to be created")
+		g.Eventually(Pods(test, namespace.Name, LabelSelector("job-name="+rayJob.Name)), TestTimeoutShort).
+			ShouldNot(BeEmpty())
+
+		submitterPods := Pods(test, namespace.Name, LabelSelector("job-name="+rayJob.Name))(g)
+		submitterPod := &submitterPods[0]
+
+		// Verify submitter Job pod has auth token env vars in its Ray container
+		VerifyContainerAuthTokenEnvVars(test, rayCluster, &submitterPod.Spec.Containers[utils.RayContainerIndex])
+
+		LogWithTimestamp(test.T(), "Waiting for RayJob %s/%s to complete", rayJob.Namespace, rayJob.Name)
+		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
+			Should(WithTransform(RayJobStatus, Satisfy(rayv1.IsJobTerminal)))
+
+		// Assert the RayJob has completed successfully
+		g.Expect(GetRayJob(test, rayJob.Namespace, rayJob.Name)).
+			To(WithTransform(RayJobStatus, Equal(rayv1.JobStatusSucceeded)))
+
+		// And the RayJob deployment status is updated accordingly
+		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name)).
+			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusComplete)))
+
+		LogWithTimestamp(test.T(), "RayJob %s/%s completed successfully with auth token", rayJob.Namespace, rayJob.Name)
+	})
 }

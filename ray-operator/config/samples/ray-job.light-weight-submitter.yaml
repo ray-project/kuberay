@@ -70,7 +70,7 @@ spec:
       restartPolicy: Never
       containers:
       - name: my-custom-rayjob-submitter
-        image: quay.io/kuberay/submitter:v1.5.0
+        image: quay.io/kuberay/submitter:v1.5.1
         command: ["/submitter"]
         args: ["--runtime-env-json", '{"pip":["requests==2.26.0","pendulum==2.1.2"],"env_vars":{"counter_name":"test_counter"}}', "--", "python", "/home/ray/samples/sample_code.py"]
 
