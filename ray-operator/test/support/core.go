@@ -68,7 +68,9 @@ func storeContainerLog(t Test, namespace *corev1.Namespace, podName, containerNa
 	WriteToOutputDir(t, containerLogFileName, Log, bytes)
 }
 
-func ExecPodCmd(t Test, pod *corev1.Pod, containerName string, cmd []string) (bytes.Buffer, bytes.Buffer) {
+func ExecPodCmd(t Test, pod *corev1.Pod, containerName string, cmd []string, allowError ...bool) (bytes.Buffer, bytes.Buffer) {
+	shouldAllowError := len(allowError) > 0 && allowError[0]
+
 	req := t.Client().Core().CoreV1().RESTClient().
 		Post().
 		Resource("pods").
@@ -99,7 +101,11 @@ func ExecPodCmd(t Test, pod *corev1.Pod, containerName string, cmd []string) (by
 	})
 	LogWithTimestamp(t.T(), "Command stdout: %s", stdout.String())
 	LogWithTimestamp(t.T(), "Command stderr: %s", stderr.String())
-	require.NoError(t.T(), err)
+
+	if !shouldAllowError {
+		require.NoError(t.T(), err, "Command failed unexpectedly")
+	}
+
 	return stdout, stderr
 }
 
