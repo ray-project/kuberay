@@ -41,12 +41,12 @@ func TestRayServiceAuthToken(t *testing.T) {
 					WithImage(GetRayImage()).
 					WithResources(corev1ac.ResourceRequirements().
 						WithRequests(corev1.ResourceList{
-							corev1.ResourceCPU:    resource.MustParse("1"),
-							corev1.ResourceMemory: resource.MustParse("1Gi"),
+							corev1.ResourceCPU:    resource.MustParse("300m"),
+							corev1.ResourceMemory: resource.MustParse("1G"),
 						}).
 						WithLimits(corev1.ResourceList{
-							corev1.ResourceCPU:    resource.MustParse("1"),
-							corev1.ResourceMemory: resource.MustParse("2Gi"),
+							corev1.ResourceCPU:    resource.MustParse("500m"),
+							corev1.ResourceMemory: resource.MustParse("1G"),
 						})))))
 	rayServiceSpec.RayClusterSpec.WithWorkerGroupSpecs(workerGroupSpec)
 
