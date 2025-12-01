@@ -115,15 +115,21 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	}
 	originalRayServiceInstance := rayServiceInstance.DeepCopy()
 
-	if err := utils.ValidateRayServiceMetadata(rayServiceInstance.ObjectMeta); err != nil {
-		r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(utils.InvalidRayServiceMetadata),
-			"The RayService metadata is invalid %s/%s: %v", rayServiceInstance.Namespace, rayServiceInstance.Name, err)
-		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
-	}
-	if err := utils.ValidateRayServiceSpec(rayServiceInstance); err != nil {
-		r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(utils.InvalidRayServiceSpec),
-			"The RayService spec is invalid %s/%s: %v", rayServiceInstance.Namespace, rayServiceInstance.Name, err)
-		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
+	// Perform all validations and directly fail the RayService if any of the validation fails
+	errType, err := validateRayService(ctx, rayServiceInstance)
+	// Immediately update the status after validation
+	if err != nil {
+		r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(errType),
+			"%s/%s: %v", rayServiceInstance.Namespace, rayServiceInstance.Name, err)
+
+		setCondition(rayServiceInstance, rayv1.RayServiceReady, metav1.ConditionFalse, rayv1.RayServiceValidationFailed, err.Error())
+		rayServiceInstance.Status.LastUpdateTime = &metav1.Time{Time: time.Now()}
+
+		if updateErr := r.Status().Update(ctx, rayServiceInstance); updateErr != nil {
+			logger.Info("Failed to update RayService status", "error", updateErr)
+			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, updateErr
+		}
+		return ctrl.Result{}, nil
 	}
 
 	r.cleanUpServeConfigCache(ctx, rayServiceInstance)
@@ -263,6 +269,25 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 		}
 	}
 	return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, nil
+}
+
+func validateRayService(ctx context.Context, rayServiceInstance *rayv1.RayService) (utils.K8sEventType, error) {
+	logger := ctrl.LoggerFrom(ctx)
+	validationRules := []struct {
+		validate func() error
+		errType  utils.K8sEventType
+	}{
+		{func() error { return utils.ValidateRayServiceMetadata(rayServiceInstance.ObjectMeta) }, utils.InvalidRayServiceMetadata},
+		{func() error { return utils.ValidateRayServiceSpec(rayServiceInstance) }, utils.InvalidRayServiceSpec},
+	}
+
+	for _, validation := range validationRules {
+		if err := validation.validate(); err != nil {
+			logger.Error(err, err.Error())
+			return validation.errType, err
+		}
+	}
+	return "", nil
 }
 
 func (r *RayServiceReconciler) reconcileServicesToReadyCluster(ctx context.Context, rayServiceInstance *rayv1.RayService, rayClusterInstance *rayv1.RayCluster) (*corev1.Service, *corev1.Service, error) {
@@ -1361,13 +1386,12 @@ func (r *RayServiceReconciler) applyServeTargetCapacity(ctx context.Context, ray
 		return err
 	}
 
-	// Update the status fields and cache new Serve config.
+	// Update the TargetCapacity status fields.
 	if rayClusterInstance.Name == rayServiceInstance.Status.ActiveServiceStatus.RayClusterName {
 		rayServiceInstance.Status.ActiveServiceStatus.TargetCapacity = ptr.To(goalTargetCapacity)
 	} else if rayClusterInstance.Name == rayServiceInstance.Status.PendingServiceStatus.RayClusterName {
 		rayServiceInstance.Status.PendingServiceStatus.TargetCapacity = ptr.To(goalTargetCapacity)
 	}
-	r.cacheServeConfig(rayServiceInstance, rayClusterInstance.Name)
 
 	return nil
 }

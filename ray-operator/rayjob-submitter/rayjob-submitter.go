@@ -31,12 +31,22 @@ func logTailingURL(address, submissionId string) (string, error) {
 	return address, nil
 }
 
-func TailJobLogs(address, submissionId string, out io.Writer) error {
+func TailJobLogs(address, submissionId string, authToken string, out io.Writer) error {
 	wsAddr, err := logTailingURL(address, submissionId)
 	if err != nil {
 		return err
 	}
-	c, _, err := websocket.Dial(context.Background(), wsAddr, nil)
+
+	var dialOptions *websocket.DialOptions
+	if authToken != "" {
+		dialOptions = &websocket.DialOptions{
+			HTTPHeader: map[string][]string{
+				"X-Ray-Authorization": {fmt.Sprintf("Bearer %s", authToken)},
+			},
+		}
+	}
+
+	c, _, err := websocket.Dial(context.Background(), wsAddr, dialOptions)
 	if err != nil {
 		return err
 	}

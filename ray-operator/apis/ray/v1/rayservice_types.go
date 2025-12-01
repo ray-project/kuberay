@@ -206,6 +206,7 @@ const (
 	BothActivePendingClustersExist RayServiceConditionReason = "BothActivePendingClustersExist"
 	NoPendingCluster               RayServiceConditionReason = "NoPendingCluster"
 	NoActiveCluster                RayServiceConditionReason = "NoActiveCluster"
+	RayServiceValidationFailed     RayServiceConditionReason = "ValidationFailed"
 )
 
 // +kubebuilder:object:root=true
