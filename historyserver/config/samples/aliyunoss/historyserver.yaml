@@ -20,13 +20,13 @@ spec:
       - name: historyserver
         env:
         - name: ALIBABA_CLOUD_OIDC_TOKEN_FILE
-          value: 
+          value:
         - name: ALIBABA_CLOUD_OIDC_PROVIDER_ARN
-          value: 
+          value:
         - name: ALIBABA_CLOUD_ROLE_ARN
-          value: 
+          value:
         - name: ALIBABA_CLOUD_STS_REGION
-          value: 
+          value:
         - name: ALIBABA_CLOUD_VPC_ENDPOINT_ENABLED
           value: "true"
         image: registry.cn-hongkong.aliyuncs.com/image-yueming/ray-historyerver:v0.0.1

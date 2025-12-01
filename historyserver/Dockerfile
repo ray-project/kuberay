@@ -3,7 +3,7 @@ ARG TARGETARCH
 
 FROM --platform=$BUILDPLATFORM golang:1.25.1 as builder
 ENV GOPROXY=https://goproxy.cn,direct
-ARG BUILD_RAYSERVER_DASHBOARD 
+ARG BUILD_RAYSERVER_DASHBOARD
 
 RUN if [ "$BUILD_RAYSERVER_DASHBOARD" = "yes" ] ; then \
  curl -o install.sh https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh && chmod +x install.sh && ./install.sh && /bin/bash -c "source $HOME/.nvm/nvm.sh && nvm install 14 && nvm use 14" ;\

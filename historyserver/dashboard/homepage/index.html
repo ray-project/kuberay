@@ -108,11 +108,11 @@
 <body>
     <div class="container">
         <h1>KubeRay HistoryServer Dashboard</h1>
-        
+
         <div class="instructions">
             <p><strong>Instructions:</strong> Select a cluster from the list below, choose a dashboard version, and click "Enter Cluster Dashboard" to view the cluster details.</p>
         </div>
-        
+
         <div id="app">
             <div class="loading">Loading clusters...</div>
         </div>
@@ -151,7 +151,7 @@
 
             render() {
                 const app = document.getElementById('app');
-                
+
                 if (this.clusters.length === 0) {
                     app.innerHTML = '<div class="error">No clusters found.</div>';
                     return;
@@ -165,7 +165,7 @@
                             <div class="cluster-info"><strong>Namespace:</strong> ${cluster.namespace}</div>
                             <div class="cluster-info"><strong>Created:</strong> ${cluster.createTime}</div>
                             <div class="cluster-info"><strong>Session:</strong> ${cluster.sessionName}</div>
-                            
+
                             <div class="dashboard-selector">
                                 <label for="dashboard-${cluster.name}">Dashboard Version:</label>
                                 <select id="dashboard-${cluster.name}">
@@ -173,7 +173,7 @@
                                     <option value="v2.51.0">v2.51.0</option>
                                 </select>
                             </div>
-                            
+
                             <button class="enter-button" id="enter-${cluster.name}-${cluster.namespace}-${cluster.sessionName}" onclick="clusterSelector.enterCluster(event, '${cluster.name}', '${cluster.namespace}', '${cluster.sessionName}')" disabled>
                                 Enter Cluster Dashboard
                             </button>
@@ -194,12 +194,12 @@
                 document.querySelectorAll('.cluster-card').forEach(card => {
                     card.classList.remove('selected');
                 });
-                
+
                 // Add selected class to clicked card
                 event.currentTarget.classList.add('selected');
-                
+
                 this.selectedCluster = { name, namespace, sessionName };
-                
+
                 // Enable the enter button for this cluster
                 const enterButton = document.getElementById(`enter-${name}-${namespace}-${sessionName}`);
                 if (enterButton) {
@@ -209,30 +209,30 @@
 
             async enterCluster(event, name, namespace, sessionName) {
                 event.stopPropagation();
-                
+
                 // Get selected dashboard version
                 const dashboardSelect = document.getElementById(`dashboard-${name}`);
                 const dashboardVersion = dashboardSelect.value;
-                
+
                 // Disable the button and show loading state
                 const enterButton = document.getElementById(`enter-${name}-${namespace}-${sessionName}`);
                 const originalText = enterButton.textContent;
                 enterButton.disabled = true;
                 enterButton.textContent = 'Entering...';
-                
+
                 try {
                     // Call the enter_cluster endpoint
                     const response = await fetch(`/enter_cluster/${namespace}/${name}/${sessionName}`, {
                         method: 'GET'
                     });
-                    
+
                     if (!response.ok) {
                         throw new Error(`Failed to enter cluster: ${response.status}`);
                     }
-                    
+
                     const result = await response.json();
                     console.log('Enter cluster result:', result);
-                    
+
                     // Redirect to the appropriate dashboard version
                     let redirectPath = '/';
                     window.location.href = redirectPath;

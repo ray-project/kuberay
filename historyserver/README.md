@@ -29,10 +29,12 @@ make build
 ```
 
 This will generate two binaries in the `output/bin/` directory:
+
 - `collector`: The collector service that runs alongside Ray nodes
 - `historyserver`: The main history server service
 
 You can also build individual components:
+
 ```bash
 make buildcollector      # Build only the collector
 make buildhistoryserver  # Build only the history server
@@ -49,6 +51,7 @@ make localimage
 This creates a Docker image named `historyserver:laster` with both binaries and necessary assets.
 
 For multi-platform builds, you can use:
+
 ```bash
 docker buildx build -t <image-name>:<tag> --platform linux/amd64,linux/arm64 . --push
 ```

@@ -21,6 +21,7 @@ kubectl apply -f minio.yaml
 ```
 
 This will create:
+
 - A namespace named `minio-dev`
 - A Secret containing MinIO credentials (default username/password: minioadmin/minioadmin)
 - MinIO Deployment
@@ -33,6 +34,7 @@ kubectl apply -f sa.yaml
 ```
 
 This will create:
+
 - ServiceAccount for HistoryServer
 - ClusterRole allowing read access to RayCluster resources
 - Corresponding ClusterRoleBinding
@@ -44,6 +46,7 @@ kubectl apply -f raycluster.yaml
 ```
 
 The RayCluster configuration includes:
+
 - Collector sidecar containers responsible for collecting logs and uploading them to MinIO
 - Environment variables specifying connection information for MinIO
 - PostStart lifecycle hooks to obtain node IDs
@@ -57,6 +60,7 @@ kubectl apply -f historyserver.yaml
 ```
 
 HistoryServer configuration includes:
+
 - Environment variables for connecting to MinIO
 - Specifies `s3` as the runtime class name
 
@@ -85,7 +89,7 @@ After deployment, you can access HistoryServer through port forwarding:
 kubectl port-forward svc/historyserver 8080:30080
 ```
 
-Then visit http://localhost:8080 in your browser to view historical logs and metadata.
+Then visit <http://localhost:8080> in your browser to view historical logs and metadata.
 
 ## Important Notes
 
