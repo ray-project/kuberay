@@ -26,6 +26,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/util/retry"
@@ -119,18 +120,21 @@ func rayServiceTemplate(name string, namespace string, serveAppName string) *ray
 	}
 }
 
-func endpointsTemplate(name string, namespace string) *corev1.Endpoints {
-	return &corev1.Endpoints{
+func endpointSliceTemplate(name string, namespace string) *discoveryv1.EndpointSlice {
+	return &discoveryv1.EndpointSlice{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
+			Labels: map[string]string{
+				discoveryv1.LabelServiceName: name,
+			},
 		},
-		Subsets: []corev1.EndpointSubset{
+		AddressType: discoveryv1.AddressTypeIPv4,
+		Endpoints: []discoveryv1.Endpoint{
 			{
-				Addresses: []corev1.EndpointAddress{
-					{
-						IP: "10.9.8.7",
-					},
+				Addresses: []string{"10.9.8.7"},
+				Conditions: discoveryv1.EndpointConditions{
+					Ready: ptr.To(true),
 				},
 			},
 		},
@@ -275,7 +279,7 @@ var _ = Context("RayService env tests", func() {
 		ctx := context.Background()
 		var rayService *rayv1.RayService
 		var rayCluster *rayv1.RayCluster
-		var endpoints *corev1.Endpoints
+		var endpointSlice *discoveryv1.EndpointSlice
 		serveAppName := "app1"
 		namespace := "default"
 
@@ -363,9 +367,9 @@ var _ = Context("RayService env tests", func() {
 			// TODO: Verify the serve service by checking labels and annotations.
 
 			By("The RayServiceReady condition should be true when the number of endpoints is greater than 0")
-			endpoints = endpointsTemplate(utils.GenerateServeServiceName(rayService.Name), namespace)
-			err = k8sClient.Create(ctx, endpoints)
-			Expect(err).NotTo(HaveOccurred(), "failed to create Endpoints resource")
+			endpointSlice = endpointSliceTemplate(utils.GenerateServeServiceName(rayService.Name), namespace)
+			err = k8sClient.Create(ctx, endpointSlice)
+			Expect(err).NotTo(HaveOccurred(), "failed to create EndpointSlice resource")
 			Eventually(func() int32 {
 				if err := k8sClient.Get(ctx, client.ObjectKey{Name: rayService.Name, Namespace: namespace}, rayService); err != nil {
 					return 0
@@ -379,9 +383,9 @@ var _ = Context("RayService env tests", func() {
 			By(fmt.Sprintf("Delete the RayService custom resource %v", rayService.Name))
 			err := k8sClient.Delete(ctx, rayService)
 			Expect(err).NotTo(HaveOccurred(), "failed to delete the test RayService resource")
-			By(fmt.Sprintf("Delete the Endpoints %v", endpoints.Name))
-			err = k8sClient.Delete(ctx, endpoints)
-			Expect(err).NotTo(HaveOccurred(), "failed to delete the test Endpoints resource")
+			By(fmt.Sprintf("Delete the EndpointSlice %v", endpointSlice.Name))
+			err = k8sClient.Delete(ctx, endpointSlice)
+			Expect(err).NotTo(HaveOccurred(), "failed to delete the test EndpointSlice resource")
 		})
 
 		When("Testing in-place update: updating the serveConfigV2", Ordered, func() {

@@ -59,11 +59,10 @@ func TestRedeployRayServe(t *testing.T) {
 	LogWithTimestamp(test.T(), "Checking that the K8s serve service eventually has 1 endpoint and the endpoint is not the old head Pod")
 	g.Eventually(func(g Gomega) {
 		svcName := utils.GenerateServeServiceName(rayService.Name)
-		endpoints, err := test.Client().Core().CoreV1().Endpoints(namespace.Name).Get(test.Ctx(), svcName, metav1.GetOptions{})
+		readyEndpoints, err := GetReadyEndpointsFromSlices(test.Ctx(), test.Client(), namespace.Name, svcName)
 		g.Expect(err).NotTo(HaveOccurred())
-		g.Expect(endpoints.Subsets).To(HaveLen(1))
-		g.Expect(endpoints.Subsets[0].Addresses).To(HaveLen(1))
-		g.Expect(endpoints.Subsets[0].Addresses[0].TargetRef.UID).NotTo(Equal(oldHeadPod.UID))
+		g.Expect(readyEndpoints).To(HaveLen(1))
+		g.Expect(readyEndpoints[0].TargetRefUID).NotTo(Equal(oldHeadPod.UID))
 	}, TestTimeoutMedium).Should(Succeed())
 
 	LogWithTimestamp(test.T(), "Waiting for RayService %s/%s to be ready", rayService.Namespace, rayService.Name)
