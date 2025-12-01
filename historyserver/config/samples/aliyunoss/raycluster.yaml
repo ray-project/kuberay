@@ -1,0 +1,208 @@
+---
+apiVersion: ray.io/v1
+kind: RayCluster
+metadata:
+  labels:
+    ray.io/cluster: demo
+  name: demo
+  namespace: default
+spec:
+  headGroupSpec:
+    rayStartParams:
+      dashboard-host: 0.0.0.0
+      num-cpus: "0"
+    serviceType: ClusterIP
+    template:
+      metadata:
+        labels:
+          test: demo
+      spec:
+        imagePullSecrets:
+        shareProcessNamespace: true
+        affinity:
+        containers:
+        - env:
+          image: rayproject.io/ray:v2.44.1
+          imagePullPolicy: Always
+          securityContext:
+            allowPrivilegeEscalation: true  
+            privileged: true
+          name: ray-head
+          lifecycle:
+            postStart:
+              exec:
+                command:
+                - /bin/sh
+                - -lc
+                - --
+                - |
+                  GetNodeId(){
+                    while true;
+                    do
+                      nodeid=$(ps -ef | grep raylet | grep node_id | grep -v grep | grep -oP '(?<=--node_id=)[^ ]*')
+                      if [ -n "$nodeid" ]; then
+                        echo "$(date) raylet started: \"$(ps -ef | grep raylet | grep node_id | grep -v grep | grep -oP '(?<=--node_id=)[^ ]*')\" => ${nodeid}" >> /tmp/ray/init.log
+                        echo $nodeid > /tmp/ray/raylet_node_id
+                        break
+                      else
+                        echo "$(date) raylet not start >> /tmp/ray/init.log"
+                        sleep 1
+                      fi
+                    done
+                  }
+                  GetNodeId
+          resources:
+            limits:
+              cpu: "5"
+              memory: 10G
+            requests:
+              cpu: "50m"
+              memory: 1G
+          volumeMounts:
+          - name: historyserver
+            mountPath: /tmp/ray
+        - name: collector
+          image: registry.cn-hongkong.aliyuncs.com/image-yueming/ray-historyerver:v0.0.1
+          imagePullPolicy: Always
+          env:
+          # https://help.aliyun.com/zh/ack/ack-managed-and-ack-dedicated/user-guide/use-rrsa-to-authorize-pods-to-access-different-cloud-services
+          - name: ALIBABA_CLOUD_OIDC_TOKEN_FILE
+            value: 
+          - name: ALIBABA_CLOUD_OIDC_PROVIDER_ARN
+            value: 
+          - name: ALIBABA_CLOUD_ROLE_ARN
+            value: 
+          - name: ALIBABA_CLOUD_STS_REGION
+            value: 
+          - name: ALIBABA_CLOUD_VPC_ENDPOINT_ENABLED
+            value: "true"
+          command:
+          - collector
+          - --role=Head
+          - --runtime-class-name=aliyunoss
+          - --ray-cluster-name=
+          # no way to know cluster id when creating the RayCluster
+          # can be resolved if we inject the sidecar in KubeRay
+          # - --ray-cluster-id=
+          - --ray-root-dir=log
+          volumeMounts:
+          - name: historyserver
+            mountPath: /tmp/ray
+          - name: config-volume
+            mountPath: /var/collector-config
+          - mountPath: /var/run/secrets/ack.alibabacloud.com/rrsa-tokens
+            name: token-file
+            readOnly: true
+        volumes:
+        - name: token-file
+          projected:
+            defaultMode: 420
+            sources:
+            - serviceAccountToken:
+                audience: sts.aliyuncs.com
+                expirationSeconds: 3600
+                path: token
+        - name: config-volume
+          configMap:
+            name: aliyunoss-config
+            items:
+            - key: data
+              path: data
+        - name: historyserver
+          emptyDir: {}
+  workerGroupSpecs:
+  - groupName: cpu
+    maxReplicas: 1000
+    minReplicas: 0
+    numOfHosts: 1
+    rayStartParams: {}
+    replicas: 0
+    template:
+      metadata:
+        labels:
+          test: wukun
+      spec:
+        imagePullSecrets:
+        containers:
+        - env:
+          image: rayproject.io/ray:v2.44.1
+          imagePullPolicy: Always
+          name: ray-worker
+          lifecycle:
+            postStart:
+              exec:
+                command:
+                - /bin/sh
+                - -lc
+                - --
+                - |
+                  GetNodeId(){
+                    while true;
+                    do
+                      nodeid=$(ps -ef | grep raylet | grep node_id | grep -v grep | grep -oP '(?<=--node_id=)[^ ]*')
+                      if [ -n "$nodeid" ]; then
+                        echo "$(date) raylet started: \"$(ps -ef | grep raylet | grep node_id | grep -v grep | grep -oP '(?<=--node_id=)[^ ]*')\" => ${nodeid}" >> /tmp/ray/init.log
+                        echo $nodeid > /tmp/ray/raylet_node_id
+                        break
+                      else
+                        echo "$(date) raylet not start >> /tmp/ray/init.log"
+                        sleep 1
+                      fi
+                    done
+                  }
+                  GetNodeId
+          resources:
+            limits:
+              cpu: "30"
+              memory: 30G
+            requests:
+              cpu: "50m"
+              memory: 1G
+          volumeMounts:
+          - name: historyserver
+            mountPath: /tmp/ray
+        - name: collector
+          image: registry.cn-hongkong.aliyuncs.com/image-yueming/ray-historyerver:v0.0.1
+          imagePullPolicy: Always
+          env:
+          - name: ALIBABA_CLOUD_OIDC_TOKEN_FILE
+            value: 
+          - name: ALIBABA_CLOUD_OIDC_PROVIDER_ARN
+            value: 
+          - name: ALIBABA_CLOUD_ROLE_ARN
+            value: 
+          - name: ALIBABA_CLOUD_STS_REGION
+            value: 
+          - name: ALIBABA_CLOUD_VPC_ENDPOINT_ENABLED
+            value: "true"
+          command:
+          - collector
+          - --role=Worker
+          - --runtime-class-name=aliyunoss
+          - --ray-cluster-name=wukun
+          - --ray-root-dir=log
+          volumeMounts:
+          - name: historyserver
+            mountPath: /tmp/ray
+          - name: config-volume
+            mountPath: /var/collector-config
+          - mountPath: /var/run/secrets/ack.alibabacloud.com/rrsa-tokens
+            name: token-file
+            readOnly: true
+        volumes:
+        - name: token-file
+          projected:
+            defaultMode: 420
+            sources:
+            - serviceAccountToken:
+                audience: sts.aliyuncs.com
+                expirationSeconds: 3600
+                path: token
+        - name: config-volume
+          configMap:
+            name: aliyunoss-config
+            items:
+            - key: data
+              path: data
+        - name: historyserver
+          emptyDir: {}

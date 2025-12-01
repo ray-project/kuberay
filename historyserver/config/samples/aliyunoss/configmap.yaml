@@ -1,0 +1,7 @@
+apiVersion: v1
+data:
+  data: '{"ossBucket":"","ossEndpoint":""}'
+kind: ConfigMap
+metadata:
+  name: aliyunoss-config
+  namespace: default

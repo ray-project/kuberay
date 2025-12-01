@@ -1,0 +1,66 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: historyserver #TODO: to specify your service name
+  labels:
+    app: historyserver
+spec:
+  selector:
+    app: historyserver
+  ports:
+  - protocol: TCP
+    name: http
+    port: 30080
+    targetPort: 8080
+  type: ClusterIP
+---
+apiVersion: apps/v1 # for versions before 1.8.0 use apps/v1beta1
+kind: Deployment
+metadata:
+  name: historyserver-demo
+  labels:
+    app: historyserver
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: historyserver
+  template:
+    metadata:
+      labels:
+        app: historyserver
+    spec:
+      imagePullSecrets:
+      containers:
+      - name: historyserver
+        env:
+          - name: S3DISABLE_SSL
+            value: "true"
+          - name: AWS_S3ID
+            value: minioadmin
+          - name: AWS_S3SECRET
+            value: minioadmin
+          - name: AWS_S3TOKEN
+            value: ""
+          - name: S3_BUCKET
+            value: "ray-historyserver-log"
+          - name: S3_ENDPOINT
+            value: "minio-service.minio-dev:9000"
+          - name: S3_REGION
+            value: "test"
+          - name: S3FORCE_PATH_STYPE
+            value: "true"
+        image: xxx
+        imagePullPolicy: Always
+        command:
+        - historyserver
+        - --runtime-class-name=s3
+        - --ray-root-dir=log
+        ports:
+        - containerPort: 8080
+        resources:
+          limits:
+            cpu: "500m"
+        volumeMounts:
+      volumes:
