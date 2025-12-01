@@ -98,7 +98,9 @@ func curlHeadPodWithRayServicePath(t Test,
 }
 
 func RayServiceSampleYamlApplyConfiguration() *rayv1ac.RayServiceSpecApplyConfiguration {
-	return rayv1ac.RayServiceSpec().WithServeConfigV2(`applications:
+	return rayv1ac.RayServiceSpec().
+		WithRayClusterDeletionDelaySeconds(int32(2)).
+		WithServeConfigV2(`applications:
       - name: fruit_app
         import_path: fruit.deployment_graph
         route_prefix: /fruit
