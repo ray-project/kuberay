@@ -393,10 +393,18 @@ func countEventsInMap(eventsMap map[string][]Event) int {
 	return count
 }
 
+var nodeEventType = []string{"NODE_LIFECYCLE_EVENT", "NODE_DEFINITION_EVENT"}
+
 // isNodeEvent 检查事件是否为节点相关事件
 func (es *EventServer) isNodeEvent(eventData map[string]interface{}) bool {
-	if sourceType, ok := eventData["sourceType"].(string); ok && sourceType == "CORE_WORKER" {
-		return true
+	eventType, ok := eventData["eventType"].(string)
+	if !ok {
+		return false
+	}
+	for _, nodeEvent := range nodeEventType {
+		if eventType == nodeEvent {
+			return true
+		}
 	}
 	return false
 }
