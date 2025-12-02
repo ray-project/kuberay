@@ -11,6 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation"
+	"k8s.io/apimachinery/pkg/util/version"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/dashboardclient"
@@ -189,6 +190,25 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 			}
 		}
 	}
+
+	if IsAuthEnabled(spec) {
+		if spec.RayVersion == "" {
+			return fmt.Errorf("authOptions.mode is 'token' but RayVersion was not specified. Ray version 2.52.0 or later is required")
+		}
+
+		rayVersion, err := version.ParseGeneric(spec.RayVersion)
+		if err != nil {
+			return fmt.Errorf("authOptions.mode is 'token' but RayVersion format is invalid: %s, %w", spec.RayVersion, err)
+		}
+
+		// Require minimum Ray version 2.52.0
+		minVersion := version.MustParseGeneric("2.52.0")
+		if rayVersion.LessThan(minVersion) {
+			return fmt.Errorf("authOptions.mode is 'token' but minimum Ray version is 2.52.0, got %s", spec.RayVersion)
+		}
+
+	}
+
 	return nil
 }
 
@@ -291,15 +311,15 @@ func ValidateRayJobSpec(rayJob *rayv1.RayJob) error {
 
 func ValidateRayServiceMetadata(metadata metav1.ObjectMeta) error {
 	if len(metadata.Name) > MaxRayServiceNameLength {
-		return fmt.Errorf("RayService name should be no more than %d characters", MaxRayServiceNameLength)
+		return fmt.Errorf("The RayService metadata is invalid: RayService name should be no more than %d characters", MaxRayServiceNameLength)
 	}
 	if errs := validation.IsDNS1035Label(metadata.Name); len(errs) > 0 {
-		return fmt.Errorf("RayService name should be a valid DNS1035 label: %v", errs)
+		return fmt.Errorf("The RayService metadata is invalid: RayService name should be a valid DNS1035 label: %v", errs)
 	}
 
 	// Validate initializing timeout annotation if present
 	if err := validateInitializingTimeout(metadata.Annotations); err != nil {
-		return fmt.Errorf("RayService annotations is invalid: %w", err)
+		return fmt.Errorf("The RayService metadata is invalid: RayService annotations is invalid: %w", err)
 	}
 
 	return nil
@@ -339,11 +359,11 @@ func validateInitializingTimeout(annotations map[string]string) error {
 
 func ValidateRayServiceSpec(rayService *rayv1.RayService) error {
 	if err := ValidateRayClusterSpec(&rayService.Spec.RayClusterSpec, rayService.Annotations); err != nil {
-		return err
+		return fmt.Errorf("The RayService spec is invalid: %w", err)
 	}
 
 	if headSvc := rayService.Spec.RayClusterSpec.HeadGroupSpec.HeadService; headSvc != nil && headSvc.Name != "" {
-		return fmt.Errorf("spec.rayClusterConfig.headGroupSpec.headService.metadata.name should not be set")
+		return fmt.Errorf("The RayService spec is invalid: spec.rayClusterConfig.headGroupSpec.headService.metadata.name should not be set")
 	}
 
 	// only NewClusterWithIncrementalUpgrade, NewCluster, and None are valid upgradeType
@@ -352,17 +372,19 @@ func ValidateRayServiceSpec(rayService *rayv1.RayService) error {
 		*rayService.Spec.UpgradeStrategy.Type != rayv1.None &&
 		*rayService.Spec.UpgradeStrategy.Type != rayv1.NewCluster &&
 		*rayService.Spec.UpgradeStrategy.Type != rayv1.NewClusterWithIncrementalUpgrade {
-		return fmt.Errorf("Spec.UpgradeStrategy.Type value %s is invalid, valid options are %s, %s, or %s", *rayService.Spec.UpgradeStrategy.Type, rayv1.NewClusterWithIncrementalUpgrade, rayv1.NewCluster, rayv1.None)
+		return fmt.Errorf("The RayService spec is invalid: Spec.UpgradeStrategy.Type value %s is invalid, valid options are %s, %s, or %s", *rayService.Spec.UpgradeStrategy.Type, rayv1.NewClusterWithIncrementalUpgrade, rayv1.NewCluster, rayv1.None)
 	}
 
 	if rayService.Spec.RayClusterDeletionDelaySeconds != nil &&
 		*rayService.Spec.RayClusterDeletionDelaySeconds < 0 {
-		return fmt.Errorf("Spec.RayClusterDeletionDelaySeconds should be a non-negative integer, got %d", *rayService.Spec.RayClusterDeletionDelaySeconds)
+		return fmt.Errorf("The RayService spec is invalid: Spec.RayClusterDeletionDelaySeconds should be a non-negative integer, got %d", *rayService.Spec.RayClusterDeletionDelaySeconds)
 	}
 
 	// If type is NewClusterWithIncrementalUpgrade, validate the ClusterUpgradeOptions
 	if IsIncrementalUpgradeEnabled(&rayService.Spec) {
-		return ValidateClusterUpgradeOptions(rayService)
+		if err := ValidateClusterUpgradeOptions(rayService); err != nil {
+			return fmt.Errorf("The RayService spec is invalid: %w", err)
+		}
 	}
 
 	return nil
