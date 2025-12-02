@@ -1748,8 +1748,7 @@ func generateHashWithoutReplicasAndWorkersToDelete(rayClusterSpec rayv1.RayClust
 // calculateNumServeEndpointsFromSlices calculates the number of ready serve endpoints
 // from EndpointSlices associated with a given service.
 //
-// This function lists all EndpointSlices for the specified service and counts the number
-// of ready endpoints. An endpoint is considered ready if it has the `Ready` condition
+// An endpoint is considered ready if it has the `Ready` condition
 // set to true. This replaces the legacy Endpoints API approach.
 func (r *RayServiceReconciler) calculateNumServeEndpointsFromSlices(ctx context.Context, serviceName client.ObjectKey) (int, error) {
 	logger := ctrl.LoggerFrom(ctx)
