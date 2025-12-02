@@ -119,6 +119,10 @@ Create a template to ensure consistency for Role and ClusterRole.
 */}}
 {{- define "role.consistentRules" -}}
 rules:
+# TODO: Remove endpoints permission after the next release.
+# The test-sample-yaml.yml workflow tests the latest released operator image, which still uses
+# the deprecated Endpoints API. This permission can be safely removed once a release containing
+# the EndpointSlice migration (this PR) is published and the tests use that new release image.
 - apiGroups:
   - ""
   resources:
