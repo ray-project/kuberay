@@ -1935,6 +1935,15 @@ func TestValidateRayClusterUpgradeOptions(t *testing.T) {
 			expectError:       true,
 			errorMessage:      "upgradeStrategy cannot be set when RayCluster is created by RayService",
 		},
+		{
+			name: "Invalid upgrade strategy value",
+			upgradeStrategy: &rayv1.RayClusterUpgradeStrategy{
+				Type: ptr.To(rayv1.RayClusterUpgradeType("InvalidStrategy")),
+			},
+			originatedFromCRD: string(RayClusterCRD),
+			expectError:       true,
+			errorMessage:      "Spec.UpgradeStrategy.Type value InvalidStrategy is invalid, valid options are Recreate or None",
+		},
 	}
 
 	for _, tt := range tests {
