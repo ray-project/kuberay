@@ -88,6 +88,10 @@ func NewRayServiceReconciler(_ context.Context, mgr manager.Manager, provider ut
 // +kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=pods/status,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=pods/proxy,verbs=get;update;patch
+// TODO: Remove endpoints permission after the next release.
+// The test-sample-yaml.yml workflow tests the latest released operator image, which still uses
+// the deprecated Endpoints API. This permission can be safely removed once a release containing
+// the EndpointSlice migration (this PR) is published and the tests use that new release image.
 // +kubebuilder:rbac:groups=core,resources=endpoints,verbs=get;list;watch
 // +kubebuilder:rbac:groups=discovery.k8s.io,resources=endpointslices,verbs=get;list;watch
 // +kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;patch;delete
