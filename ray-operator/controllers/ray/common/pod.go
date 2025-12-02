@@ -159,8 +159,7 @@ func configureGCSFaultTolerance(podTemplate *corev1.PodTemplateSpec, instance ra
 }
 
 func GeneratePodTemplateHash(template corev1.PodTemplateSpec) (string, error) {
-	originalTemplate := template.DeepCopy()
-	return utils.GenerateJsonHash(*originalTemplate)
+	return utils.GenerateJsonHash(template)
 }
 
 // DefaultHeadPodTemplate sets the config values
