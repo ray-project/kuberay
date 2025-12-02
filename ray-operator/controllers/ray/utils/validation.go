@@ -38,14 +38,19 @@ func ValidateRayClusterMetadata(metadata metav1.ObjectMeta) error {
 }
 
 func ValidateRayClusterUpgradeOptions(instance *rayv1.RayCluster) error {
-	strategy := instance.Spec.UpgradeStrategy
-	if strategy == nil || strategy.Type == nil || *strategy.Type == rayv1.RayClusterUpgradeNone {
-		return nil
+	// only Recreate and None are valid upgradeType
+	if instance.Spec.UpgradeStrategy != nil && instance.Spec.UpgradeStrategy.Type != nil &&
+		*instance.Spec.UpgradeStrategy.Type != rayv1.Recreate &&
+		*instance.Spec.UpgradeStrategy.Type != rayv1.RayClusterUpgradeNone {
+		return fmt.Errorf("The RayCluster spec is invalid: Spec.UpgradeStrategy.Type value %s is invalid, valid options are %s or %s", *instance.Spec.UpgradeStrategy.Type, rayv1.Recreate, rayv1.RayClusterUpgradeNone)
 	}
 
-	creatorCRDType := GetCRDType(instance.Labels[RayOriginatedFromCRDLabelKey])
-	if creatorCRDType == RayJobCRD || creatorCRDType == RayServiceCRD {
-		return fmt.Errorf("upgradeStrategy cannot be set when RayCluster is created by %s", creatorCRDType)
+	// only allow UpgradeStrategy to be set when RayCluster is created directly by user
+	if instance.Spec.UpgradeStrategy != nil && instance.Spec.UpgradeStrategy.Type != nil {
+		creatorCRDType := GetCRDType(instance.Labels[RayOriginatedFromCRDLabelKey])
+		if creatorCRDType == RayJobCRD || creatorCRDType == RayServiceCRD {
+			return fmt.Errorf("upgradeStrategy cannot be set when RayCluster is created by %s", creatorCRDType)
+		}
 	}
 	return nil
 }
