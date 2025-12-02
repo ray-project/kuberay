@@ -43,11 +43,10 @@ const (
 // RayJobReconciler reconciles a RayJob object
 type RayJobReconciler struct {
 	client.Client
-	Recorder               record.EventRecorder
-	options                RayJobReconcilerOptions
-	Scheme                 *runtime.Scheme
-	dashboardClientFunc    func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error)
-	useBackgroundGoroutine bool
+	Recorder            record.EventRecorder
+	options             RayJobReconcilerOptions
+	Scheme              *runtime.Scheme
+	dashboardClientFunc func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error)
 }
 
 type RayJobReconcilerOptions struct {
@@ -59,12 +58,11 @@ type RayJobReconcilerOptions struct {
 func NewRayJobReconciler(_ context.Context, mgr manager.Manager, options RayJobReconcilerOptions, provider utils.ClientProvider) *RayJobReconciler {
 	dashboardClientFunc := provider.GetDashboardClient(mgr)
 	return &RayJobReconciler{
-		Client:                 mgr.GetClient(),
-		Scheme:                 mgr.GetScheme(),
-		Recorder:               mgr.GetEventRecorderFor("rayjob-controller"),
-		dashboardClientFunc:    dashboardClientFunc,
-		useBackgroundGoroutine: provider.DoesUseBackgroundGoroutine(),
-		options:                options,
+		Client:              mgr.GetClient(),
+		Scheme:              mgr.GetScheme(),
+		Recorder:            mgr.GetEventRecorderFor("rayjob-controller"),
+		dashboardClientFunc: dashboardClientFunc,
+		options:             options,
 	}
 }
 
@@ -759,16 +757,6 @@ func (r *RayJobReconciler) deleteClusterResources(ctx context.Context, rayJobIns
 		if !cluster.DeletionTimestamp.IsZero() {
 			logger.Info("The deletion of the associated RayCluster for RayJob is ongoing.", "RayCluster", cluster.Name)
 		} else {
-			if r.useBackgroundGoroutine {
-				rayDashboardClient, err := r.dashboardClientFunc(&cluster, rayJobInstance.Status.DashboardURL)
-				if err != nil {
-					logger.Error(err, "Failed to get dashboard client for RayJob")
-				}
-				// clear cache, and it will remove this job from the cache updating loop.
-				if err := rayDashboardClient.StopJob(ctx, rayJobInstance.Status.JobId); err != nil {
-					logger.Error(err, "Failed to stop job for RayJob")
-				}
-			}
 			if err := r.Delete(ctx, &cluster); err != nil {
 				r.Recorder.Eventf(rayJobInstance, corev1.EventTypeWarning, string(utils.FailedToDeleteRayCluster), "Failed to delete cluster %s/%s: %v", cluster.Namespace, cluster.Name, err)
 				return false, err

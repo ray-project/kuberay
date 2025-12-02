@@ -34,6 +34,7 @@ var (
 	// singleton
 	initCacheStorage sync.Once
 	cacheStorage     *lru.Cache[string, *JobInfoCache]
+	cacheLock        sync.RWMutex
 )
 
 type (
@@ -101,11 +102,13 @@ func (r *RayDashboardCacheClient) InitClient(client RayDashboardClientInterface)
 				keys := cacheStorage.Keys()
 				expiredThreshold := time.Now().Add(-cacheExpiry)
 				for _, key := range keys {
+					cacheLock.Lock()
 					if cached, ok := cacheStorage.Peek(key); ok {
 						if cached.UpdateAt.Before(expiredThreshold) {
 							cacheStorage.Remove(key)
 						}
 					}
+					cacheLock.Unlock()
 				}
 			}
 		}()
@@ -127,32 +130,49 @@ func (r *RayDashboardCacheClient) GetMultiApplicationStatus(ctx context.Context)
 }
 
 func (r *RayDashboardCacheClient) GetJobInfo(ctx context.Context, jobId string) (*utiltypes.RayJobInfo, error) {
+	cacheLock.RLock()
 	if cached, ok := cacheStorage.Get(jobId); ok {
+		cacheLock.RUnlock()
 		return cached.JobInfo, cached.Err
 	}
+	cacheLock.RUnlock()
+
 	currentTime := time.Now()
 	placeholder := &JobInfoCache{Err: ErrAgain, UpdateAt: &currentTime}
 
 	// Put a placeholder in storage. The cache will be updated only if the placeholder exists.
 	// The placeholder will be removed when StopJob or DeleteJob.
+	cacheLock.Lock()
 	if cached, existed, _ := cacheStorage.PeekOrAdd(jobId, placeholder); existed {
+		cacheLock.Unlock()
 		return cached.JobInfo, cached.Err
 	}
+	cacheLock.Unlock()
 
 	task := func() bool {
+		cacheLock.RLock()
 		jobInfoCache, existed := cacheStorage.Get(jobId)
 		if !existed {
+			cacheLock.RUnlock()
 			return false
 		}
+		cacheLock.RUnlock()
 
 		jobInfoCache.JobInfo, jobInfoCache.Err = r.client.GetJobInfo(ctx, jobId)
 		currentTime := time.Now()
 		jobInfoCache.UpdateAt = &currentTime
 
-		if _, existed := cacheStorage.ContainsOrAdd(jobId, jobInfoCache); !existed {
+		cacheLock.Lock()
+		if existed := cacheStorage.Contains(jobId); !existed {
+			cacheLock.Unlock()
 			return false
 		}
+		cacheStorage.Add(jobId, jobInfoCache)
+		cacheLock.Unlock()
 
+		if jobInfoCache.JobInfo == nil {
+			return true
+		}
 		return !rayv1.IsJobTerminal(jobInfoCache.JobInfo.JobStatus)
 	}
 
@@ -178,11 +198,17 @@ func (r *RayDashboardCacheClient) GetJobLog(ctx context.Context, jobName string)
 }
 
 func (r *RayDashboardCacheClient) StopJob(ctx context.Context, jobName string) error {
+	cacheLock.Lock()
+	defer cacheLock.Unlock()
+
 	cacheStorage.Remove(jobName)
 	return r.client.StopJob(ctx, jobName)
 }
 
 func (r *RayDashboardCacheClient) DeleteJob(ctx context.Context, jobName string) error {
+	cacheLock.Lock()
+	defer cacheLock.Unlock()
+
 	cacheStorage.Remove(jobName)
 	return r.client.DeleteJob(ctx, jobName)
 }
