@@ -7,6 +7,7 @@ import (
 	"time"
 
 	lru "github.com/hashicorp/golang-lru/v2"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	utiltypes "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/types"
@@ -158,7 +159,17 @@ func (r *RayDashboardCacheClient) GetJobInfo(ctx context.Context, jobId string) 
 		}
 		cacheLock.RUnlock()
 
-		jobInfoCache.JobInfo, jobInfoCache.Err = r.client.GetJobInfo(ctx, jobId)
+		var statusErr *k8serrors.StatusError
+		jobInfo, err := r.client.GetJobInfo(ctx, jobId)
+		if err != nil && !errors.As(err, &statusErr) {
+			if jobInfoCache.Err != nil && err.Error() == jobInfoCache.Err.Error() {
+				// The error is the same as last time, no need to update, just put the task to execute later.
+				// If the error is not fixed, eventually the cache will be expired and removed.
+				return true
+			}
+		}
+		jobInfoCache.JobInfo = jobInfo
+		jobInfoCache.Err = err
 		currentTime := time.Now()
 		jobInfoCache.UpdateAt = &currentTime
 
