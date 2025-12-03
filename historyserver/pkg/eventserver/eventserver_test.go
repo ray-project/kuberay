@@ -247,13 +247,17 @@ func TestStoreEvent(t *testing.T) {
 					},
 				},
 			},
-			eventMap:          makeTaskEventMap("taskName123", "nodeid123", "taskid1", "cluster1", 0),
+			eventMap:          makeTaskEventMap("taskName123", "nodeid123", "taskid1", "cluster1", 2),
 			wantErr:           false,
 			wantClusterCount:  1,
 			wantTaskInCluster: "cluster1",
 			wantTaskID:        "taskid1",
-			// TODO: currently, task wont be changed.
-			wantTask: &initialTask,
+			wantTask: &types.Task{
+				TaskID:        "taskid1",
+				Name:          "taskName123",
+				NodeID:        "nodeid123",
+				AttemptNumber: 2,
+			},
 		},
 		{
 			name: "task event - missing taskDefinitionEvent",
