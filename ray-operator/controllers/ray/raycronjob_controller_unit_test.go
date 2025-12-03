@@ -20,17 +20,14 @@ import (
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
-func TestRayCronJobReconcile_InvalidSchedule(t *testing.T) {
-	ctx := context.Background()
-
-	// Create RayCronJob with invalid cron schedule
-	rayCronJob := &rayv1.RayCronJob{
+func rayCronJobTemplate(name string, namespace string, schedule string) *rayv1.RayCronJob {
+	return &rayv1.RayCronJob{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "invalid-cronjob",
-			Namespace: "default",
+			Name:      name,
+			Namespace: namespace,
 		},
 		Spec: rayv1.RayCronJobSpec{
-			Schedule: "invalid cron string",
+			Schedule: schedule,
 			JobTemplate: &rayv1.RayJobSpec{
 				Entrypoint: "python test.py",
 				RayClusterSpec: &rayv1.RayClusterSpec{
@@ -50,6 +47,13 @@ func TestRayCronJobReconcile_InvalidSchedule(t *testing.T) {
 			},
 		},
 	}
+}
+
+func TestRayCronJobReconcile_InvalidSchedule(t *testing.T) {
+	ctx := context.Background()
+
+	// Create RayCronJob with invalid cron schedule
+	rayCronJob := rayCronJobTemplate("invalid-cronjob", "default", "invalid cron string")
 
 	// Create scheme and add types
 	scheme := runtime.NewScheme()
@@ -105,32 +109,7 @@ func TestRayCronJobReconcile_FirstSchedule(t *testing.T) {
 	fakeCurrTime := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 
 	// Create valid RayCronJob
-	rayCronJob := &rayv1.RayCronJob{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-cronjob",
-			Namespace: "default",
-		},
-		Spec: rayv1.RayCronJobSpec{
-			Schedule: cronSchedule,
-			JobTemplate: &rayv1.RayJobSpec{
-				Entrypoint: "python test.py",
-				RayClusterSpec: &rayv1.RayClusterSpec{
-					HeadGroupSpec: rayv1.HeadGroupSpec{
-						Template: corev1.PodTemplateSpec{
-							Spec: corev1.PodSpec{
-								Containers: []corev1.Container{
-									{
-										Name:  "ray-head",
-										Image: "rayproject/ray:2.9.0",
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-	}
+	rayCronJob := rayCronJobTemplate("test-cronjob", "default", cronSchedule)
 
 	// Create scheme and add types
 	scheme := runtime.NewScheme()
@@ -200,34 +179,9 @@ func TestRayCronJobReconcile_CreateRayJob(t *testing.T) {
 	fakeCurrTime := time.Date(2024, 1, 1, 0, 10, 0, 0, time.UTC)
 	lastScheduleTime := metav1.NewTime(time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC))
 
-	rayCronJob := &rayv1.RayCronJob{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-cronjob",
-			Namespace: "default",
-		},
-		Spec: rayv1.RayCronJobSpec{
-			Schedule: cronSchedule,
-			JobTemplate: &rayv1.RayJobSpec{
-				Entrypoint: "python test.py",
-				RayClusterSpec: &rayv1.RayClusterSpec{
-					HeadGroupSpec: rayv1.HeadGroupSpec{
-						Template: corev1.PodTemplateSpec{
-							Spec: corev1.PodSpec{
-								Containers: []corev1.Container{
-									{
-										Name:  "ray-head",
-										Image: "rayproject/ray:2.9.0",
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-		Status: rayv1.RayCronJobStatus{
-			LastScheduleTime: &lastScheduleTime,
-		},
+	rayCronJob := rayCronJobTemplate("test-cronjob", "default", cronSchedule)
+	rayCronJob.Status = rayv1.RayCronJobStatus{
+		LastScheduleTime: &lastScheduleTime,
 	}
 
 	// Create scheme and add types
