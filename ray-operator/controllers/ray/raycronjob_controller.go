@@ -78,13 +78,6 @@ func (r *RayCronJobReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	if err := utils.ValidateRayCronJobSpec(rayCronJobInstance); err != nil {
 		r.Recorder.Eventf(rayCronJobInstance, corev1.EventTypeWarning, string(utils.InvalidRayCronJobSpec),
 			"%s/%s: %v", rayCronJobInstance.Namespace, rayCronJobInstance.Name, err)
-
-		// This is the only 2 places where we update the RayCronJob status. This will directly
-		// update the ScheduleStatus to ValidationFailed if there's validation error
-		if err = r.updateRayCronJobStatus(ctx, originalRayCronJobInstance, rayCronJobInstance); err != nil {
-			logger.Info("Failed to update RayCronJob status", "error", err)
-			return ctrl.Result{RequeueAfter: RayCronJobDefaultRequeueDuration}, err
-		}
 		return ctrl.Result{}, nil
 	}
 
