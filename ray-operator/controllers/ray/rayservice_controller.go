@@ -19,6 +19,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/tools/record"
@@ -1750,11 +1751,15 @@ func generateHashWithoutReplicasAndWorkersToDelete(rayClusterSpec rayv1.RayClust
 	return utils.GenerateJsonHash(updatedRayClusterSpec)
 }
 
-// calculateNumServeEndpointsFromSlices calculates the number of ready serve endpoints
+// calculateNumServeEndpointsFromSlices calculates the number of unique ready Pods
 // from EndpointSlices associated with a given service.
 //
-// An endpoint is considered ready if it has the `Ready` condition
-// set to true. This replaces the legacy Endpoints API approach.
+// In dual-stack environments (IPv4 + IPv6), the same Pod may appear in multiple
+// EndpointSlices with different IP addresses. This function deduplicates by TargetRef.UID
+// to ensure each Pod is counted only once, regardless of how many IP families it serves.
+//
+// An endpoint is considered ready if it has the `Ready` condition set to true.
+// This replaces the legacy Endpoints API approach.
 func (r *RayServiceReconciler) calculateNumServeEndpointsFromSlices(ctx context.Context, serviceName client.ObjectKey) (int, error) {
 	logger := ctrl.LoggerFrom(ctx)
 
@@ -1764,9 +1769,7 @@ func (r *RayServiceReconciler) calculateNumServeEndpointsFromSlices(ctx context.
 	endpointSliceList := &discoveryv1.EndpointSliceList{}
 	listOpts := []client.ListOption{
 		client.InNamespace(serviceName.Namespace),
-		client.MatchingLabels{
-			discoveryv1.LabelServiceName: serviceName.Name,
-		},
+		client.MatchingLabels{discoveryv1.LabelServiceName: serviceName.Name},
 	}
 
 	if err := r.List(ctx, endpointSliceList, listOpts...); err != nil {
@@ -1774,23 +1777,27 @@ func (r *RayServiceReconciler) calculateNumServeEndpointsFromSlices(ctx context.
 		return 0, err
 	}
 
-	// Count ready endpoints across all EndpointSlices.
-	numReadyEndpoints := 0
+	uniqueNumReadyPods := make(map[types.UID]struct{})
+
 	for _, endpointSlice := range endpointSliceList.Items {
 		for _, endpoint := range endpointSlice.Endpoints {
-			// Check if the endpoint is ready.
-			if endpoint.Conditions.Ready != nil && *endpoint.Conditions.Ready {
-				numReadyEndpoints++
+			// Only count endpoints that are ready to serve traffic
+			if ptr.Deref(endpoint.Conditions.Ready, false) {
+				if endpoint.TargetRef != nil && endpoint.TargetRef.UID != "" {
+					uniqueNumReadyPods[endpoint.TargetRef.UID] = struct{}{}
+				}
 			}
 		}
 	}
 
-	logger.Info("Calculated serve endpoints from EndpointSlices",
+	numPods := len(uniqueNumReadyPods)
+	logger.Info("Counted serve-ready pods via EndpointSlices",
 		"serviceName", serviceName.Name,
 		"numSlices", len(endpointSliceList.Items),
-		"numReadyEndpoints", numReadyEndpoints)
+		"numReadyPods", numPods,
+	)
 
-	return numReadyEndpoints, nil
+	return numPods, nil
 }
 
 // isHeadPodRunningAndReady checks if the head pod of the RayCluster is running and ready.

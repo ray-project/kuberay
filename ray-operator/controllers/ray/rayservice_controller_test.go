@@ -136,6 +136,14 @@ func endpointSliceTemplate(name string, namespace string) *discoveryv1.EndpointS
 				Conditions: discoveryv1.EndpointConditions{
 					Ready: ptr.To(true),
 				},
+				// TargetRef should always be set in production to identify the backing Pod.
+				// This allows proper deduplication when a Pod appears in multiple EndpointSlices.
+				TargetRef: &corev1.ObjectReference{
+					Kind:      "Pod",
+					Namespace: namespace,
+					Name:      "test-pod-1",
+					UID:       "test-uid-12345",
+				},
 			},
 		},
 	}
