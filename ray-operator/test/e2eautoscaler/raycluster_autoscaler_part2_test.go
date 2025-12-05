@@ -42,6 +42,8 @@ func TestRayClusterAutoscalerV2IdleTimeout(t *testing.T) {
 		rayClusterSpecAC := rayv1ac.RayClusterSpec().
 			WithEnableInTreeAutoscaling(true).
 			WithRayVersion(GetRayVersion()).
+			WithAutoscalerOptions(rayv1ac.AutoscalerOptions().
+				WithVersion(rayv1.AutoscalerVersionV2)).
 			WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
 				WithRayStartParams(map[string]string{"num-cpus": "0"}).
 				WithTemplate(tc.HeadPodTemplateGetter())).

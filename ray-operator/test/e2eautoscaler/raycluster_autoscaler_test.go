@@ -15,7 +15,7 @@ import (
 )
 
 func TestRayClusterAutoscaler(t *testing.T) {
-	for _, tc := range tests {
+	for i, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			test := With(t)
 			g := gomega.NewWithT(t)
@@ -31,7 +31,15 @@ func TestRayClusterAutoscaler(t *testing.T) {
 
 			rayClusterSpecAC := rayv1ac.RayClusterSpec().
 				WithEnableInTreeAutoscaling(true).
-				WithRayVersion(GetRayVersion()).
+				WithRayVersion(GetRayVersion())
+
+			// Add autoscaler version for V2 test (tests[1])
+			if i == 1 {
+				rayClusterSpecAC = rayClusterSpecAC.WithAutoscalerOptions(
+					rayv1ac.AutoscalerOptions().WithVersion(rayv1.AutoscalerVersionV2))
+			}
+
+			rayClusterSpecAC = rayClusterSpecAC.
 				WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
 					WithRayStartParams(map[string]string{"num-cpus": "0"}).
 					WithTemplate(tc.HeadPodTemplateGetter())).
@@ -82,7 +90,7 @@ func TestRayClusterAutoscaler(t *testing.T) {
 }
 
 func TestRayClusterAutoscalerWithFakeGPU(t *testing.T) {
-	for _, tc := range tests {
+	for i, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			test := With(t)
 			g := gomega.NewWithT(t)
@@ -98,7 +106,15 @@ func TestRayClusterAutoscalerWithFakeGPU(t *testing.T) {
 
 			rayClusterSpecAC := rayv1ac.RayClusterSpec().
 				WithEnableInTreeAutoscaling(true).
-				WithRayVersion(GetRayVersion()).
+				WithRayVersion(GetRayVersion())
+
+			// Add autoscaler version for V2 test (tests[1])
+			if i == 1 {
+				rayClusterSpecAC = rayClusterSpecAC.WithAutoscalerOptions(
+					rayv1ac.AutoscalerOptions().WithVersion(rayv1.AutoscalerVersionV2))
+			}
+
+			rayClusterSpecAC = rayClusterSpecAC.
 				WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
 					WithRayStartParams(map[string]string{"num-cpus": "0"}).
 					WithTemplate(tc.HeadPodTemplateGetter())).
@@ -142,7 +158,7 @@ func TestRayClusterAutoscalerWithFakeGPU(t *testing.T) {
 }
 
 func TestRayClusterAutoscalerWithCustomResource(t *testing.T) {
-	for _, tc := range tests {
+	for i, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			test := With(t)
 			g := gomega.NewWithT(t)
@@ -160,7 +176,15 @@ func TestRayClusterAutoscalerWithCustomResource(t *testing.T) {
 
 			rayClusterSpecAC := rayv1ac.RayClusterSpec().
 				WithEnableInTreeAutoscaling(true).
-				WithRayVersion(GetRayVersion()).
+				WithRayVersion(GetRayVersion())
+
+			// Add autoscaler version for V2 test (tests[1])
+			if i == 1 {
+				rayClusterSpecAC = rayClusterSpecAC.WithAutoscalerOptions(
+					rayv1ac.AutoscalerOptions().WithVersion(rayv1.AutoscalerVersionV2))
+			}
+
+			rayClusterSpecAC = rayClusterSpecAC.
 				WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
 					WithRayStartParams(map[string]string{"num-cpus": "0"}).
 					WithTemplate(tc.HeadPodTemplateGetter())).
@@ -201,7 +225,7 @@ func TestRayClusterAutoscalerWithCustomResource(t *testing.T) {
 }
 
 func TestRayClusterAutoscalerWithDesiredState(t *testing.T) {
-	for _, tc := range tests {
+	for i, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			test := With(t)
 			g := gomega.NewWithT(t)
@@ -222,7 +246,15 @@ func TestRayClusterAutoscalerWithDesiredState(t *testing.T) {
 			groupName := "custom-resource-group"
 			rayClusterSpecAC := rayv1ac.RayClusterSpec().
 				WithEnableInTreeAutoscaling(true).
-				WithRayVersion(GetRayVersion()).
+				WithRayVersion(GetRayVersion())
+
+			// Add autoscaler version for V2 test (tests[1])
+			if i == 1 {
+				rayClusterSpecAC = rayClusterSpecAC.WithAutoscalerOptions(
+					rayv1ac.AutoscalerOptions().WithVersion(rayv1.AutoscalerVersionV2))
+			}
+
+			rayClusterSpecAC = rayClusterSpecAC.
 				WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
 					WithRayStartParams(map[string]string{"num-cpus": "0"}).
 					WithTemplate(tc.HeadPodTemplateGetter())).
@@ -263,7 +295,7 @@ func TestRayClusterAutoscalerWithDesiredState(t *testing.T) {
 }
 
 func TestRayClusterAutoscalerMinReplicasUpdate(t *testing.T) {
-	for _, tc := range tests {
+	for i, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			test := With(t)
 			g := gomega.NewWithT(t)
@@ -281,7 +313,15 @@ func TestRayClusterAutoscalerMinReplicasUpdate(t *testing.T) {
 
 			rayClusterSpecAC := rayv1ac.RayClusterSpec().
 				WithEnableInTreeAutoscaling(true).
-				WithRayVersion(GetRayVersion()).
+				WithRayVersion(GetRayVersion())
+
+			// Add autoscaler version for V2 test (tests[1])
+			if i == 1 {
+				rayClusterSpecAC = rayClusterSpecAC.WithAutoscalerOptions(
+					rayv1ac.AutoscalerOptions().WithVersion(rayv1.AutoscalerVersionV2))
+			}
+
+			rayClusterSpecAC = rayClusterSpecAC.
 				WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
 					WithRayStartParams(map[string]string{"num-cpus": "0"}).
 					WithTemplate(tc.HeadPodTemplateGetter())).
@@ -355,7 +395,7 @@ func TestRayClusterAutoscalerMaxReplicasUpdate(t *testing.T) {
 		},
 	}
 
-	for _, tc := range tests {
+	for i, tc := range tests {
 		for _, rtc := range replicaTests {
 			t.Run(fmt.Sprintf("%s(%s)", tc.name, rtc.name), func(t *testing.T) {
 				test := With(t)
@@ -371,7 +411,15 @@ func TestRayClusterAutoscalerMaxReplicasUpdate(t *testing.T) {
 
 				rayClusterSpecAC := rayv1ac.RayClusterSpec().
 					WithEnableInTreeAutoscaling(true).
-					WithRayVersion(GetRayVersion()).
+					WithRayVersion(GetRayVersion())
+
+				// Add autoscaler version for V2 test (tests[1])
+				if i == 1 {
+					rayClusterSpecAC = rayClusterSpecAC.WithAutoscalerOptions(
+						rayv1ac.AutoscalerOptions().WithVersion(rayv1.AutoscalerVersionV2))
+				}
+
+				rayClusterSpecAC = rayClusterSpecAC.
 					WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
 						WithRayStartParams(map[string]string{"num-cpus": "0"}).
 						WithTemplate(tc.HeadPodTemplateGetter())).
