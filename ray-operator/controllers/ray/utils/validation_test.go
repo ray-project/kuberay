@@ -1964,7 +1964,7 @@ func TestValidateWorkerGroupIdleTimeout(t *testing.T) {
 					},
 				},
 			},
-			expectedErr: "worker group worker-group-1 has idleTimeoutSeconds set, but RAY_enable_autoscaler_v2 environment variable is not set to 'true' in the head pod",
+			expectedErr: fmt.Sprintf("worker group worker-group-1 has idleTimeoutSeconds set, but autoscaler v2 is not enabled. Please set .spec.autoscalerOptions.version to 'v2' (or set %s environment variable to 'true' in the head pod if using KubeRay < 1.4.0)", RAY_ENABLE_AUTOSCALER_V2),
 		},
 		"should reject idleTimeoutSeconds when autoscaler version is not set": {
 			spec: rayv1.RayClusterSpec{
@@ -1982,7 +1982,7 @@ func TestValidateWorkerGroupIdleTimeout(t *testing.T) {
 					},
 				},
 			},
-			expectedErr: "worker group worker-group-1 has idleTimeoutSeconds set, but RAY_enable_autoscaler_v2 environment variable is not set to 'true' in the head pod",
+			expectedErr: fmt.Sprintf("worker group worker-group-1 has idleTimeoutSeconds set, but autoscaler v2 is not enabled. Please set .spec.autoscalerOptions.version to 'v2' (or set %s environment variable to 'true' in the head pod if using KubeRay < 1.4.0)", RAY_ENABLE_AUTOSCALER_V2),
 		},
 		"should reject idleTimeoutSeconds when AutoscalerOptions is nil": {
 			spec: rayv1.RayClusterSpec{
@@ -2000,7 +2000,7 @@ func TestValidateWorkerGroupIdleTimeout(t *testing.T) {
 					},
 				},
 			},
-			expectedErr: "worker group worker-group-1 has idleTimeoutSeconds set, but RAY_enable_autoscaler_v2 environment variable is not set to 'true' in the head pod",
+			expectedErr: fmt.Sprintf("worker group worker-group-1 has idleTimeoutSeconds set, but autoscaler v2 is not enabled. Please set .spec.autoscalerOptions.version to 'v2' (or set %s environment variable to 'true' in the head pod if using KubeRay < 1.4.0)", RAY_ENABLE_AUTOSCALER_V2),
 		},
 		"should reject idleTimeoutSeconds when env var is set to invalid value": {
 			spec: rayv1.RayClusterSpec{
@@ -2020,7 +2020,7 @@ func TestValidateWorkerGroupIdleTimeout(t *testing.T) {
 					},
 				},
 			},
-			expectedErr: "worker group worker-group-1 has idleTimeoutSeconds set, but RAY_enable_autoscaler_v2 environment variable is not set to 'true' in the head pod",
+			expectedErr: fmt.Sprintf("worker group worker-group-1 has idleTimeoutSeconds set, but autoscaler v2 is not enabled. Please set .spec.autoscalerOptions.version to 'v2' (or set %s environment variable to 'true' in the head pod if using KubeRay < 1.4.0)", RAY_ENABLE_AUTOSCALER_V2),
 		},
 		"should accept worker group with idleTimeoutSeconds when env var is set to true": {
 			spec: rayv1.RayClusterSpec{
