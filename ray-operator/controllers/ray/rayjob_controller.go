@@ -2,6 +2,7 @@ package ray
 
 import (
 	"context"
+	errs "errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -42,11 +43,10 @@ const (
 // RayJobReconciler reconciles a RayJob object
 type RayJobReconciler struct {
 	client.Client
-	Scheme   *runtime.Scheme
-	Recorder record.EventRecorder
-
-	dashboardClientFunc func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error)
+	Recorder            record.EventRecorder
 	options             RayJobReconcilerOptions
+	Scheme              *runtime.Scheme
+	dashboardClientFunc func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error)
 }
 
 type RayJobReconcilerOptions struct {
@@ -288,6 +288,10 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 
 		jobInfo, err := rayDashboardClient.GetJobInfo(ctx, rayJobInstance.Status.JobId)
 		if err != nil {
+			if errs.Is(err, dashboardclient.ErrAgain) {
+				logger.Info("The Ray job Info was not ready. Try again next iteration.", "JobId", rayJobInstance.Status.JobId)
+				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
+			}
 			// If the Ray job was not found, GetJobInfo returns a BadRequest error.
 			if errors.IsBadRequest(err) {
 				if rayJobInstance.Spec.SubmissionMode == rayv1.HTTPMode {

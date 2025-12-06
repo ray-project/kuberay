@@ -152,6 +152,9 @@ spec:
             {{- $argList = append $argList (printf "--burst=%v" .Values.kubeClient.burst) -}}
             {{- end -}}
             {{- end -}}
+            {{- if hasKey .Values "useBackgroundGoroutine" -}}
+            {{- $argList = append $argList (printf "--use-background-goroutine=%t" .Values.useBackgroundGoroutine) -}}
+            {{- end -}}
             {{- (printf "\n") -}}
             {{- $argList | toYaml | indent 12 }}
           ports:
