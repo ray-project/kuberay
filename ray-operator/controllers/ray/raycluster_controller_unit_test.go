@@ -3643,3 +3643,125 @@ func TestReconcile_PodsWithAuthToken(t *testing.T) {
 		assert.True(t, authModeEnvFound, "Auth mode env vars not found")
 	}
 }
+
+func TestShouldRecreatePodsForUpgrade(t *testing.T) {
+	setupTest(t)
+	ctx := context.Background()
+
+	// Calculate template hashes for matching pods
+	headHash, err := common.GeneratePodTemplateHash(testRayCluster.Spec.HeadGroupSpec.Template)
+	require.NoError(t, err, "Failed to generate head template hash")
+	workerHash, err := common.GeneratePodTemplateHash(testRayCluster.Spec.WorkerGroupSpecs[0].Template)
+	require.NoError(t, err, "Failed to generate worker template hash")
+
+	// Helper function to create a pod with specific template hash
+	createPodWithHash := func(name string, nodeType rayv1.RayNodeType, groupName string, templateHash string) *corev1.Pod {
+		return &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: namespaceStr,
+				Labels: map[string]string{
+					utils.RayNodeLabelKey:      "yes",
+					utils.RayClusterLabelKey:   instanceName,
+					utils.RayNodeTypeLabelKey:  string(nodeType),
+					utils.RayNodeGroupLabelKey: groupName,
+				},
+				Annotations: map[string]string{
+					utils.PodTemplateHashKey: templateHash,
+				},
+			},
+			Spec: corev1.PodSpec{
+				Containers: []corev1.Container{
+					{Name: "ray-head", Image: "rayproject/ray:latest"},
+				},
+			},
+			Status: corev1.PodStatus{Phase: corev1.PodRunning},
+		}
+	}
+
+	tests := []struct {
+		name             string
+		upgradeStrategy  *rayv1.RayClusterUpgradeStrategy
+		pods             []runtime.Object
+		expectedRecreate bool
+	}{
+		{
+			name:             "No upgrade strategy",
+			upgradeStrategy:  nil,
+			pods:             testPods,
+			expectedRecreate: false,
+		},
+		{
+			name:             "Upgrade strategy type is nil",
+			upgradeStrategy:  &rayv1.RayClusterUpgradeStrategy{Type: nil},
+			pods:             testPods,
+			expectedRecreate: false,
+		},
+		{
+			name: "Upgrade strategy type is None",
+			upgradeStrategy: &rayv1.RayClusterUpgradeStrategy{
+				Type: ptr.To(rayv1.RayClusterUpgradeNone),
+			},
+			pods:             testPods,
+			expectedRecreate: false,
+		},
+		{
+			name: "Recreate strategy but no pods exist",
+			upgradeStrategy: &rayv1.RayClusterUpgradeStrategy{
+				Type: ptr.To(rayv1.Recreate),
+			},
+			pods:             []runtime.Object{},
+			expectedRecreate: false,
+		},
+		{
+			name: "Recreate strategy with matching template hash",
+			upgradeStrategy: &rayv1.RayClusterUpgradeStrategy{
+				Type: ptr.To(rayv1.Recreate),
+			},
+			pods: []runtime.Object{
+				createPodWithHash("head-pod", rayv1.HeadNode, headGroupNameStr, headHash),
+				createPodWithHash("worker-pod", rayv1.WorkerNode, groupNameStr, workerHash),
+			},
+			expectedRecreate: false,
+		},
+		{
+			name: "Recreate strategy with mismatched head template hash",
+			upgradeStrategy: &rayv1.RayClusterUpgradeStrategy{
+				Type: ptr.To(rayv1.Recreate),
+			},
+			pods: []runtime.Object{
+				createPodWithHash("head-pod", rayv1.HeadNode, headGroupNameStr, "old-head-hash"),
+				createPodWithHash("worker-pod", rayv1.WorkerNode, groupNameStr, workerHash),
+			},
+			expectedRecreate: true,
+		},
+		{
+			name: "Recreate strategy with mismatched worker template hash",
+			upgradeStrategy: &rayv1.RayClusterUpgradeStrategy{
+				Type: ptr.To(rayv1.Recreate),
+			},
+			pods: []runtime.Object{
+				createPodWithHash("head-pod", rayv1.HeadNode, headGroupNameStr, headHash),
+				createPodWithHash("worker-pod", rayv1.WorkerNode, groupNameStr, "old-worker-hash"),
+			},
+			expectedRecreate: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cluster := testRayCluster.DeepCopy()
+			cluster.Spec.UpgradeStrategy = tc.upgradeStrategy
+
+			fakeClient := clientFake.NewClientBuilder().WithRuntimeObjects(tc.pods...).Build()
+			testRayClusterReconciler := &RayClusterReconciler{
+				Client:   fakeClient,
+				Scheme:   scheme.Scheme,
+				Recorder: &record.FakeRecorder{},
+			}
+
+			result := testRayClusterReconciler.shouldRecreatePodsForUpgrade(ctx, cluster)
+			assert.Equal(t, tc.expectedRecreate, result)
+		})
+	}
+}

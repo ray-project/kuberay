@@ -5,22 +5,31 @@ package v1
 // RayClusterSpecApplyConfiguration represents a declarative configuration of the RayClusterSpec type for use
 // with apply.
 type RayClusterSpecApplyConfiguration struct {
-	AuthOptions              *AuthOptionsApplyConfiguration              `json:"authOptions,omitempty"`
-	Suspend                  *bool                                       `json:"suspend,omitempty"`
-	ManagedBy                *string                                     `json:"managedBy,omitempty"`
-	AutoscalerOptions        *AutoscalerOptionsApplyConfiguration        `json:"autoscalerOptions,omitempty"`
-	HeadServiceAnnotations   map[string]string                           `json:"headServiceAnnotations,omitempty"`
-	EnableInTreeAutoscaling  *bool                                       `json:"enableInTreeAutoscaling,omitempty"`
-	GcsFaultToleranceOptions *GcsFaultToleranceOptionsApplyConfiguration `json:"gcsFaultToleranceOptions,omitempty"`
-	HeadGroupSpec            *HeadGroupSpecApplyConfiguration            `json:"headGroupSpec,omitempty"`
-	RayVersion               *string                                     `json:"rayVersion,omitempty"`
-	WorkerGroupSpecs         []WorkerGroupSpecApplyConfiguration         `json:"workerGroupSpecs,omitempty"`
+	UpgradeStrategy          *RayClusterUpgradeStrategyApplyConfiguration `json:"upgradeStrategy,omitempty"`
+	AuthOptions              *AuthOptionsApplyConfiguration               `json:"authOptions,omitempty"`
+	Suspend                  *bool                                        `json:"suspend,omitempty"`
+	ManagedBy                *string                                      `json:"managedBy,omitempty"`
+	AutoscalerOptions        *AutoscalerOptionsApplyConfiguration         `json:"autoscalerOptions,omitempty"`
+	HeadServiceAnnotations   map[string]string                            `json:"headServiceAnnotations,omitempty"`
+	EnableInTreeAutoscaling  *bool                                        `json:"enableInTreeAutoscaling,omitempty"`
+	GcsFaultToleranceOptions *GcsFaultToleranceOptionsApplyConfiguration  `json:"gcsFaultToleranceOptions,omitempty"`
+	HeadGroupSpec            *HeadGroupSpecApplyConfiguration             `json:"headGroupSpec,omitempty"`
+	RayVersion               *string                                      `json:"rayVersion,omitempty"`
+	WorkerGroupSpecs         []WorkerGroupSpecApplyConfiguration          `json:"workerGroupSpecs,omitempty"`
 }
 
 // RayClusterSpecApplyConfiguration constructs a declarative configuration of the RayClusterSpec type for use with
 // apply.
 func RayClusterSpec() *RayClusterSpecApplyConfiguration {
 	return &RayClusterSpecApplyConfiguration{}
+}
+
+// WithUpgradeStrategy sets the UpgradeStrategy field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the UpgradeStrategy field is set to the value of the last call.
+func (b *RayClusterSpecApplyConfiguration) WithUpgradeStrategy(value *RayClusterUpgradeStrategyApplyConfiguration) *RayClusterSpecApplyConfiguration {
+	b.UpgradeStrategy = value
+	return b
 }
 
 // WithAuthOptions sets the AuthOptions field in the declarative configuration to the given value
