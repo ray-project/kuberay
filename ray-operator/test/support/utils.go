@@ -10,6 +10,7 @@ import (
 	discoveryv1 "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 )
 
 func Ptr[T any](v T) *T {
@@ -48,8 +49,8 @@ func GetReadyEndpointsFromSlices(ctx context.Context, client Client, namespace, 
 	var readyEndpoints []EndpointInfo
 	for _, slice := range endpointSliceList.Items {
 		for _, endpoint := range slice.Endpoints {
-			if endpoint.Conditions.Ready != nil && *endpoint.Conditions.Ready {
-				if endpoint.TargetRef != nil {
+			if ptr.Deref(endpoint.Conditions.Ready, false) {
+				if endpoint.TargetRef != nil && endpoint.TargetRef.UID != "" {
 					readyEndpoints = append(readyEndpoints, EndpointInfo{
 						TargetRefName: endpoint.TargetRef.Name,
 						TargetRefUID:  endpoint.TargetRef.UID,

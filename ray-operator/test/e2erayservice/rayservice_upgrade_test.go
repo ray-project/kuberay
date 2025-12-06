@@ -58,6 +58,7 @@ func TestOldHeadPodFailDuringUpgrade(t *testing.T) {
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(readyEndpoints).To(HaveLen(1))
 	headPodName := readyEndpoints[0].TargetRefName
+	headPodUID := readyEndpoints[0].TargetRefUID
 
 	LogWithTimestamp(test.T(), "Upgrading the RayService to trigger a zero downtime upgrade")
 	rayService, err = GetRayService(test, namespace.Name, rayService.Name)
@@ -121,6 +122,7 @@ func TestOldHeadPodFailDuringUpgrade(t *testing.T) {
 		g.Expect(err).NotTo(HaveOccurred())
 		g.Expect(readyEndpoints).To(HaveLen(1))
 		g.Expect(readyEndpoints[0].TargetRefName).NotTo(Equal(headPodName))
+		g.Expect(readyEndpoints[0].TargetRefUID).NotTo(Equal(headPodUID))
 	}, TestTimeoutMedium).Should(Succeed())
 
 	LogWithTimestamp(test.T(), "Waiting for RayService %s/%s UpgradeInProgress condition to be false", rayService.Namespace, rayService.Name)

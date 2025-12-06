@@ -451,21 +451,21 @@ func (r *RayServiceReconciler) calculateStatus(
 	}
 
 	// Calculate the number of ready serve endpoints for the active cluster.
-	serveServiceName := common.RayServiceServeServiceNamespacedName(rayServiceInstance)
+	serveServiceNamespacedName := common.RayServiceServeServiceNamespacedName(rayServiceInstance)
 	if utils.IsIncrementalUpgradeEnabled(&rayServiceInstance.Spec) && activeCluster != nil {
 		// The Serve service name is based on the unique RayCluster name, since we use the
 		// per-cluster Serve services for traffic routing during an incremental upgrade.
-		serveServiceName.Name = utils.GenerateServeServiceName(activeCluster.Name)
+		serveServiceNamespacedName.Name = utils.GenerateServeServiceName(activeCluster.Name)
 	}
-	numServeEndpoints, err := r.calculateNumServeEndpointsFromSlices(ctx, serveServiceName)
+	numServeEndpoints, err := r.calculateNumServeEndpointsFromSlices(ctx, serveServiceNamespacedName)
 	if err != nil {
 		return err
 	}
 
 	// During NewClusterWithIncrementalUpgrade, the pending RayCluster is also serving.
 	if utils.IsIncrementalUpgradeEnabled(&rayServiceInstance.Spec) && pendingCluster != nil {
-		pendingServeServiceName := common.RayClusterServeServiceNamespacedName(pendingCluster)
-		pendingEndpoints, err := r.calculateNumServeEndpointsFromSlices(ctx, pendingServeServiceName)
+		pendingServeServiceNamespacedName := common.RayClusterServeServiceNamespacedName(pendingCluster)
+		pendingEndpoints, err := r.calculateNumServeEndpointsFromSlices(ctx, pendingServeServiceNamespacedName)
 		if err != nil {
 			return err
 		}
@@ -1760,7 +1760,7 @@ func generateHashWithoutReplicasAndWorkersToDelete(rayClusterSpec rayv1.RayClust
 //
 // An endpoint is considered ready if it has the `Ready` condition set to true.
 // This replaces the legacy Endpoints API approach.
-func (r *RayServiceReconciler) calculateNumServeEndpointsFromSlices(ctx context.Context, serviceName client.ObjectKey) (int, error) {
+func (r *RayServiceReconciler) calculateNumServeEndpointsFromSlices(ctx context.Context, serviceNamespacedName client.ObjectKey) (int, error) {
 	logger := ctrl.LoggerFrom(ctx)
 
 	// List all EndpointSlices for the service.
@@ -1768,12 +1768,12 @@ func (r *RayServiceReconciler) calculateNumServeEndpointsFromSlices(ctx context.
 	// kubernetes.io/service-name to associate them with their parent Service.
 	endpointSliceList := &discoveryv1.EndpointSliceList{}
 	listOpts := []client.ListOption{
-		client.InNamespace(serviceName.Namespace),
-		client.MatchingLabels{discoveryv1.LabelServiceName: serviceName.Name},
+		client.InNamespace(serviceNamespacedName.Namespace),
+		client.MatchingLabels{discoveryv1.LabelServiceName: serviceNamespacedName.Name},
 	}
 
 	if err := r.List(ctx, endpointSliceList, listOpts...); err != nil {
-		logger.Error(err, "Failed to list EndpointSlices", "serviceName", serviceName.Name)
+		logger.Error(err, "Failed to list EndpointSlices", "serviceName", serviceNamespacedName.Name, "serviceNamespace", serviceNamespacedName.Namespace)
 		return 0, err
 	}
 
@@ -1792,7 +1792,8 @@ func (r *RayServiceReconciler) calculateNumServeEndpointsFromSlices(ctx context.
 
 	numPods := len(uniqueNumReadyPods)
 	logger.Info("Counted serve-ready pods via EndpointSlices",
-		"serviceName", serviceName.Name,
+		"serviceName", serviceNamespacedName.Name,
+		"serviceNamespace", serviceNamespacedName.Namespace,
 		"numSlices", len(endpointSliceList.Items),
 		"numReadyPods", numPods,
 	)
