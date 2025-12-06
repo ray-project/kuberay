@@ -39,6 +39,13 @@ const (
 	//
 	// Enabled NewClusterWithIncrementalUpgrade type for RayService zero-downtime upgrades.
 	RayServiceIncrementalUpgrade featuregate.Feature = "RayServiceIncrementalUpgrade"
+
+	// owner: @machichima
+	// rep: N/A
+	// alpha: v1.6
+	//
+	// Enables RayCronJob controller for scheduled RayJob execution.
+	RayCronJob featuregate.Feature = "RayCronJob"
 )
 
 func init() {
@@ -50,6 +57,7 @@ var defaultFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
 	RayJobDeletionPolicy:         {Default: false, PreRelease: featuregate.Alpha},
 	RayMultiHostIndexing:         {Default: false, PreRelease: featuregate.Alpha},
 	RayServiceIncrementalUpgrade: {Default: false, PreRelease: featuregate.Alpha},
+	RayCronJob:                   {Default: false, PreRelease: featuregate.Alpha},
 }
 
 // SetFeatureGateDuringTest is a helper method to override feature gates in tests.
