@@ -323,7 +323,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `type` _[RayClusterUpgradeType](#rayclusterupgradetype)_ | Type represents the strategy used when upgrading the RayCluster Pods. Currently supports `Recreate` and `None`. |  |  |
+| `type` _[RayClusterUpgradeType](#rayclusterupgradetype)_ | Type represents the strategy used when upgrading the RayCluster Pods. Currently supports `Recreate` and `None`. |  | Enum: [Recreate None] <br /> |
 
 
 #### RayClusterUpgradeType
@@ -332,7 +332,8 @@ _Underlying type:_ _string_
 
 
 
-
+_Validation:_
+- Enum: [Recreate None]
 
 _Appears in:_
 - [RayClusterUpgradeStrategy](#rayclusterupgradestrategy)
