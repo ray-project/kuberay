@@ -1,0 +1,883 @@
+package logcollector
+
+import (
+	"bytes"
+	"fmt"
+	"io/fs"
+	"net/http"
+	"os"
+	"os/signal"
+	"path"
+	"path/filepath"
+	"strings"
+	"sync"
+	"syscall"
+	"time"
+
+	"github.com/fsnotify/fsnotify"
+	"github.com/ray-project/kuberay/historyserver/pkg/collector/logcollector/storage"
+	"github.com/ray-project/kuberay/historyserver/pkg/utils"
+	"github.com/sirupsen/logrus"
+)
+
+type RayLogHandler struct {
+	EnableMeta bool
+
+	RootDir    string
+	LogDir     string
+	SessionDir string
+	LogFiles   chan string
+	// fill after start
+	MetaDir string
+
+	RayClusterName string
+	RayClusterID   string
+	RayNodeName    string
+
+	LogBatching  int
+	PushInterval time.Duration
+
+	HttpClient *http.Client
+	Writter    storage.StorageWritter
+
+	// Store file paths to be processed on shutdown
+	logFilePaths map[string]bool
+	filePathMu   sync.Mutex
+
+	// Channel for signaling shutdown
+	ShutdownChan chan struct{}
+
+	// For prev-logs monitoring
+	prevLogsDir string
+}
+
+func (r *RayLogHandler) Start(stop <-chan struct{}) error {
+	go r.Run(stop)
+	return nil
+}
+
+func (r *RayLogHandler) Run(stop <-chan struct{}) error {
+	// watchPath := r.LogDir
+	r.prevLogsDir = "/tmp/ray/prev-logs"
+
+	// Initialize log file paths storage
+	r.logFilePaths = make(map[string]bool)
+
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		logrus.Fatalf("Create fsnotify NewWatcher error %v", err)
+	}
+	defer watcher.Close()
+
+	// Setup signal handling for SIGTERM
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGTERM)
+	go r.WatchPrevLogsLoops()
+	if r.EnableMeta {
+		go r.WatchSessionLatestLoops() // 添加监听session_latest符号链接变化
+	}
+
+	select {
+	case <-sigChan:
+		logrus.Info("Received SIGTERM, processing all logs...")
+		// r.processAllLogs()
+		r.processSessionLatestLogs()
+		// r.processPrevLogsOnShutdown()
+		close(r.ShutdownChan)
+	case <-stop:
+		logrus.Info("Received stop signal, processing all logs...")
+		// r.processAllLogs()
+		r.processSessionLatestLogs()
+		// r.processPrevLogsOnShutdown()
+		close(r.ShutdownChan)
+	}
+	logrus.Warnf("Receive stop single, so stop ray collector ")
+	return nil
+}
+
+func (r *RayLogHandler) WaitForStop() <-chan struct{} {
+	return r.ShutdownChan
+}
+
+func (r *RayLogHandler) AddLogFile(absoluteLogPathName string) {
+	r.LogFiles <- absoluteLogPathName
+}
+
+func (r *RayLogHandler) PushLog(absoluteLogPathName string) error {
+	// Simply store the file path for later processing
+	absoluteLogPathName = strings.TrimSpace(absoluteLogPathName)
+	absoluteLogPathName = filepath.Clean(absoluteLogPathName)
+
+	r.filePathMu.Lock()
+	r.logFilePaths[absoluteLogPathName] = true
+	r.filePathMu.Unlock()
+
+	logrus.Infof("Registered log file for later processing: %s", absoluteLogPathName)
+	return nil
+}
+
+func (r *RayLogHandler) processAllLogs() {
+	logrus.Info("Processing all log files...")
+	r.filePathMu.Lock()
+	defer r.filePathMu.Unlock()
+
+	if err := r.Writter.CreateDirectory(r.RootDir); err != nil {
+		logrus.Errorf("Failed to create root directory %s: %v", r.RootDir, err)
+		return
+	}
+
+	for filePath := range r.logFilePaths {
+		// Process each file now
+		if err := r.processLogFile(filePath); err != nil {
+			logrus.Errorf("Failed to process log file %s: %v", filePath, err)
+		}
+	}
+
+	logrus.Info("Finished processing all log files")
+}
+
+// processSessionLatestLogs processes logs in /tmp/ray/session_latest/logs directory
+// on shutdown, using the real session ID and node ID
+func (r *RayLogHandler) processSessionLatestLogs() {
+	logrus.Info("Processing session_latest logs on shutdown...")
+
+	// Resolve the session_latest symlink to get the real session directory
+	sessionLatestDir := "/tmp/ray/session_latest"
+	sessionRealDir, err := filepath.EvalSymlinks(sessionLatestDir)
+	if err != nil {
+		logrus.Errorf("Failed to resolve session_latest symlink: %v", err)
+		return
+	}
+
+	// Extract the real session ID from the resolved path
+	sessionID := filepath.Base(sessionRealDir)
+	if r.EnableMeta {
+		metadir := path.Clean(r.RootDir + "/" + "metadir")
+		metafile := path.Clean(metadir + "/" + fmt.Sprintf("%s/%v",
+			utils.AppendRayClusterNameID(r.RayClusterName, r.RayClusterID),
+			path.Base(sessionID),
+		))
+		if err := r.Writter.CreateDirectory(path.Dir(metafile)); err != nil {
+			logrus.Errorf("CreateObjectIfNotExist %s error %v", metadir, err)
+			return
+		}
+		if err := r.Writter.WriteFile(metafile, strings.NewReader("")); err != nil {
+			logrus.Errorf("CreateObjectIfNotExist %s error %v", metafile, err)
+			return
+		}
+	}
+
+	// Read node ID from /tmp/ray/raylet_node_id
+	nodeIDBytes, err := os.ReadFile("/tmp/ray/raylet_node_id")
+	if err != nil {
+		logrus.Errorf("Failed to read raylet_node_id: %v", err)
+		return
+	}
+	nodeID := strings.TrimSpace(string(nodeIDBytes))
+
+	// Process logs in session_latest/logs
+	logsDir := filepath.Join(sessionLatestDir, "logs")
+	dirExist := false
+	for i := 0; i < 10; i++ {
+		if _, err := os.Stat(logsDir); os.IsNotExist(err) {
+			logrus.Warnf("Logs directory does not exist: %s", logsDir)
+			time.Sleep(time.Millisecond * 10)
+		} else {
+			dirExist = true
+			break
+		}
+	}
+	if !dirExist {
+		logrus.Errorf("Logs directory does not exist after 10 attempts: %s", logsDir)
+		return
+	}
+
+	// Walk through the logs directory and process all files
+	err = filepath.WalkDir(logsDir, func(path string, info fs.DirEntry, err error) error {
+		if err != nil {
+			logrus.Errorf("Error walking logs path %s: %v", path, err)
+			return nil
+		}
+
+		// Skip directories
+		if info.IsDir() {
+			return nil
+		}
+
+		// Process log file with the real session ID and node ID
+		if err := r.processSessionLatestLogFile(path, sessionID, nodeID); err != nil {
+			logrus.Errorf("Failed to process session_latest log file %s: %v", path, err)
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		logrus.Errorf("Error walking logs directory %s: %v", logsDir, err)
+	}
+
+	logrus.Info("Finished processing session_latest logs")
+}
+
+// processSessionLatestLogFile processes a single log file from session_latest
+func (r *RayLogHandler) processSessionLatestLogFile(absoluteLogPathName, sessionID, nodeID string) error {
+	// Calculate relative path within logs directory
+	// The logsDir is /tmp/ray/session_latest/logs
+	logsDir := filepath.Join("/tmp/ray/session_latest", "logs")
+	relativePath, err := filepath.Rel(logsDir, absoluteLogPathName)
+	if err != nil {
+		return fmt.Errorf("failed to get relative path for %s: %v", absoluteLogPathName, err)
+	}
+
+	// Split relative path into subdirectory and filename
+	subdir, _ := filepath.Split(relativePath)
+
+	// Build the object name using the standard path structure
+	logDir := utils.GetLogDirByNameID(r.RootDir, utils.AppendRayClusterNameID(r.RayClusterName, r.RayClusterID), nodeID, sessionID)
+
+	if subdir != "" && subdir != "." {
+		// Remove trailing separator if present
+		subdir = strings.TrimSuffix(subdir, string(filepath.Separator))
+		dirName := path.Join(logDir, subdir)
+		if err := r.Writter.CreateDirectory(dirName); err != nil {
+			logrus.Errorf("Failed to create directory '%s': %v", dirName, err)
+			return err
+		}
+	}
+
+	objectName := path.Join(logDir, relativePath)
+	logrus.Infof("Processing session_latest log file %s (object: %s)", absoluteLogPathName, objectName)
+
+	// Read the entire file content
+	content, err := os.ReadFile(absoluteLogPathName)
+	if err != nil {
+		logrus.Errorf("Failed to read file %s: %v", absoluteLogPathName, err)
+		return err
+	}
+
+	// Write to storage
+	err = r.Writter.WriteFile(objectName, bytes.NewReader(content))
+	if err != nil {
+		logrus.Errorf("Failed to write object %s: %v", objectName, err)
+		return err
+	}
+
+	logrus.Infof("Successfully wrote object %s, size: %d bytes", objectName, len(content))
+	return nil
+}
+
+func (r *RayLogHandler) processLogFile(absoluteLogPathName string) error {
+	// 计算相对路径
+	relativePath := strings.TrimPrefix(absoluteLogPathName, fmt.Sprintf("%s/", r.LogDir))
+	// 分割相对路径为子目录和文件名
+	subdir, filename := filepath.Split(relativePath)
+	sessionName := path.Base(r.SessionDir)
+	logDir := utils.GetLogDir(r.RootDir, r.RayClusterName, r.RayClusterID, sessionName, r.RayNodeName)
+
+	if len(subdir) != 0 {
+		dirName := path.Join(logDir, subdir)
+		if err := r.Writter.CreateDirectory(dirName); err != nil {
+			logrus.Errorf("Failed to create directory '%s': %v", dirName, err)
+			return err
+		}
+	}
+
+	objectName := path.Join(logDir, subdir, filename)
+	logrus.Infof("Processing log file %s (object: %s)", absoluteLogPathName, objectName)
+
+	// Read the entire file content only when processing
+	content, err := os.ReadFile(absoluteLogPathName)
+	if err != nil {
+		logrus.Errorf("Failed to read file %s: %v", absoluteLogPathName, err)
+		return err
+	}
+
+	// Write to storage
+	err = r.Writter.WriteFile(objectName, bytes.NewReader(content))
+	if err != nil {
+		logrus.Errorf("Failed to write object %s: %v", objectName, err)
+		return err
+	}
+
+	logrus.Infof("Successfully wrote object %s, size: %d bytes", objectName, len(content))
+	return nil
+}
+
+func (r *RayLogHandler) WatchLogsLoops(watcher *fsnotify.Watcher, walkPath string) {
+	// 监听当前目录
+	if err := watcher.Add(walkPath); err != nil {
+		logrus.Fatalf("Watcher rootpath %s error %v", r.LogDir, err)
+	}
+
+	err := filepath.WalkDir(walkPath, func(path string, info fs.DirEntry, err error) error {
+		if err != nil {
+			logrus.Errorf("Walk path %s error %v", walkPath, err)
+			return err // 返回错误
+		}
+		// 检查是否是文件
+		if !info.IsDir() {
+			logrus.Infof("Walk find new file %s", path) // 输出文件路径
+			go r.AddLogFile(path)
+		} else {
+			logrus.Infof("Walk find new dir %s", path) // 输出dir路径
+			if err := watcher.Add(path); err != nil {
+				logrus.Fatalf("Watcher add %s error %v", r.LogDir, err)
+			}
+		}
+		return nil
+	})
+
+	if err != nil {
+		logrus.Errorf("Walk path %s error %++v", walkPath, err)
+		return
+	}
+	logrus.Infof("Walk path %s success", walkPath)
+
+	for {
+		select {
+		case <-r.ShutdownChan:
+			logrus.Warnf("Receive shutdown signal, so return watchFileLoops")
+			return
+		case event, ok := <-watcher.Events:
+			if !ok {
+				logrus.Warnf("Receive watcher events not ok")
+				return
+			}
+			if event.Op == fsnotify.Create {
+				name := event.Name
+				info, _ := os.Stat(name)
+
+				// 判断是文件还是目录
+				if !info.IsDir() {
+					logrus.Infof("Watch find: create a new file %s", name)
+					r.AddLogFile(name)
+				} else {
+					if err := watcher.Add(name); err != nil {
+						logrus.Fatalf("Watch add file %s error %v", name, err)
+					}
+				}
+			}
+		case _, ok := <-watcher.Errors:
+			if !ok {
+				logrus.Warnf("Watcher error, so return watchFileLoops")
+				return
+			}
+		}
+	}
+}
+
+func (r *RayLogHandler) WatchPrevLogsLoops() {
+	watchPath := r.prevLogsDir
+
+	// Check if prev-logs directory exists
+	if _, err := os.Stat(watchPath); os.IsNotExist(err) {
+		logrus.Infof("prev-logs directory does not exist, creating it: %s", watchPath)
+		if err := os.MkdirAll(watchPath, 0777); err != nil {
+			logrus.Errorf("Failed to create prev-logs directory %s: %v", watchPath, err)
+			return
+		}
+		if err := os.Chmod(watchPath, 0777); err != nil {
+			logrus.Errorf("Failed to create prev-logs directory %s: %v", watchPath, err)
+			return
+		}
+	}
+
+	// Also check and create persist-complete-logs directory
+	completeLogsDir := "/tmp/ray/persist-complete-logs"
+	if _, err := os.Stat(completeLogsDir); os.IsNotExist(err) {
+		logrus.Infof("persist-complete-logs directory does not exist, creating it: %s", completeLogsDir)
+		if err := os.MkdirAll(completeLogsDir, 0777); err != nil {
+			logrus.Errorf("Failed to create persist-complete-logs directory %s: %v", completeLogsDir, err)
+			return
+		}
+		if err := os.Chmod(completeLogsDir, 0777); err != nil {
+			logrus.Errorf("Failed to create prev-logs directory %s: %v", completeLogsDir, err)
+			return
+		}
+	}
+
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		logrus.Errorf("Failed to create fsnotify watcher for prev-logs: %v", err)
+		return
+	}
+	defer watcher.Close()
+
+	sessionWatcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		logrus.Errorf("Failed to create fsnotify watcher for prev-logs sessions: %v", err)
+		return
+	}
+	defer sessionWatcher.Close()
+
+	nodeWatcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		logrus.Errorf("Failed to create fsnotify watcher for prev-logs nodeWatcher: %v", err)
+		return
+	}
+	defer nodeWatcher.Close()
+
+	// Add the root prev-logs directory to watcher
+	if err := watcher.Add(watchPath); err != nil {
+		logrus.Errorf("Failed to add %s to watcher: %v", watchPath, err)
+		return
+	}
+
+	// Walk through existing directories and add them to watcher
+	err = filepath.WalkDir(watchPath, func(path string, info fs.DirEntry, err error) error {
+		if err != nil {
+			logrus.Errorf("Error walking path %s: %v", path, err)
+			return nil
+		}
+
+		if info.IsDir() && path != watchPath {
+			// Check if this is a session directory (direct subdirectory of prev-logs)
+			rel, err := filepath.Rel(watchPath, path)
+			if err != nil {
+				logrus.Errorf("Failed to get relative path for %s: %v", path, err)
+				return nil
+			}
+
+			// Split the relative path to check depth
+			parts := strings.Split(filepath.ToSlash(rel), "/")
+
+			switch len(parts) {
+			case 1: // Session directory
+				if err := sessionWatcher.Add(path); err != nil {
+					logrus.Errorf("Failed to add session directory %s to sessionWatcher: %v", path, err)
+				}
+				// Process all existing node directories under this session
+				r.processSessionPrevLogs(path)
+				// case 2: // Node directory
+				// 	if err := nodeWatcher.Add(path); err != nil {
+				// 		logrus.Errorf("Failed to add node directory %s to nodeWatcher: %v", path, err)
+				// 	}
+				// 	// Check if this node directory has a logs subdirectory
+				// 	logsDir := filepath.Join(path, "logs")
+				// 	if _, err := os.Stat(logsDir); err == nil {
+				// 		// This is a session/node directory with logs, process its logs
+				// 		go r.processPrevLogsDir(path)
+				// 	}
+			}
+		}
+		return nil
+	})
+
+	if err != nil {
+		logrus.Errorf("Error walking prev-logs directory: %v", err)
+		return
+	}
+
+	logrus.Infof("Started watching prev-logs directory: %s", watchPath)
+
+	for {
+		select {
+		case <-r.ShutdownChan:
+			logrus.Info("Received shutdown signal, stopping prev-logs watcher")
+			return
+		case event, ok := <-watcher.Events:
+			if !ok {
+				logrus.Warn("Prev-logs watcher events channel closed")
+				return
+			}
+
+			logrus.Infof("File system event in prev-logs: %s %s", event.Op, event.Name)
+
+			// Handle new directories being created
+			if event.Op&fsnotify.Create == fsnotify.Create {
+				info, err := os.Stat(event.Name)
+				if err != nil {
+					logrus.Errorf("Failed to stat %s: %v", event.Name, err)
+					continue
+				}
+
+				if info.IsDir() {
+					// Add new directory to sessionWatcher
+					if err := sessionWatcher.Add(event.Name); err != nil {
+						logrus.Errorf("Failed to add %s to sessionWatcher: %v", event.Name, err)
+					}
+					// Process all existing node directories under this new session
+					r.processSessionPrevLogs(event.Name)
+				}
+			}
+		case event, ok := <-sessionWatcher.Events:
+			if !ok {
+				logrus.Warn("Session watcher events channel closed")
+				return
+			}
+
+			logrus.Infof("File system event in session directory: %s %s", event.Op, event.Name)
+
+			// Handle new directories being created in session directories
+			if event.Op&fsnotify.Create == fsnotify.Create {
+				info, err := os.Stat(event.Name)
+				if err != nil {
+					logrus.Errorf("Failed to stat %s: %v", event.Name, err)
+					continue
+				}
+
+				if info.IsDir() {
+					// Add new directory to nodeWatcher
+					if err := nodeWatcher.Add(event.Name); err != nil {
+						logrus.Errorf("Failed to add %s to nodeWatcher: %v", event.Name, err)
+					}
+
+					// Check if this is a node directory by examining its path
+					rel, err := filepath.Rel(watchPath, event.Name)
+					if err != nil {
+						logrus.Errorf("Failed to get relative path for %s: %v", event.Name, err)
+						continue
+					}
+
+					parts := strings.Split(filepath.ToSlash(rel), "/")
+					if len(parts) == 2 { // This is a node directory
+						// Check if logs subdirectory exists
+						go r.processPrevLogsDir(event.Name)
+					}
+				}
+			}
+		case event, ok := <-nodeWatcher.Events:
+			if !ok {
+				logrus.Warn("Node watcher events channel closed")
+				return
+			}
+
+			logrus.Debugf("File system event in node directory: %s %s", event.Op, event.Name)
+
+			// Handle new directories or files being created in node directories
+			if event.Op&fsnotify.Create == fsnotify.Create {
+				info, err := os.Stat(event.Name)
+				if err != nil {
+					logrus.Errorf("Failed to stat %s: %v", event.Name, err)
+					continue
+				}
+
+				// Check if this is a logs directory being created
+				base := filepath.Base(event.Name)
+				if info.IsDir() && base == "logs" {
+					// This is a logs directory, process its parent (node directory)
+					nodeDir := filepath.Dir(event.Name)
+					logrus.Infof("New logs directory detected: %s", nodeDir)
+					go r.processPrevLogsDir(nodeDir)
+				}
+			}
+		case err, ok := <-watcher.Errors:
+			if !ok {
+				logrus.Warn("Prev-logs watcher errors channel closed")
+				return
+			}
+			logrus.Errorf("Prev-logs watcher error: %v", err)
+		case err, ok := <-sessionWatcher.Errors:
+			if !ok {
+				logrus.Warn("Session watcher errors channel closed")
+				return
+			}
+			logrus.Errorf("Session watcher error: %v", err)
+		case err, ok := <-nodeWatcher.Errors:
+			if !ok {
+				logrus.Warn("Node watcher errors channel closed")
+				return
+			}
+			logrus.Errorf("Node watcher error: %v", err)
+		}
+	}
+}
+
+// processSessionPrevLogs processes all node logs under a session directory
+func (r *RayLogHandler) processSessionPrevLogs(sessionDir string) {
+	// Check if this is actually a session directory (one level deep under prev-logs)
+	watchPath := r.prevLogsDir
+	rel, err := filepath.Rel(watchPath, sessionDir)
+	if err != nil {
+		logrus.Errorf("Failed to get relative path for session directory %s: %v", sessionDir, err)
+		return
+	}
+
+	parts := strings.Split(filepath.ToSlash(rel), "/")
+	if len(parts) != 1 {
+		// Not a session directory, skip
+		return
+	}
+
+	sessionID := parts[0]
+	logrus.Infof("Processing all node logs for session: %s", sessionID)
+	if r.EnableMeta {
+		metadir := path.Clean(r.RootDir + "/" + "metadir")
+		metafile := path.Clean(metadir + "/" + fmt.Sprintf("%s/%v",
+			utils.AppendRayClusterNameID(r.RayClusterName, r.RayClusterID),
+			path.Base(sessionID),
+		))
+		if err := r.Writter.CreateDirectory(path.Dir(metafile)); err != nil {
+			logrus.Errorf("CreateObjectIfNotExist %s error %v", metadir, err)
+			return
+		}
+		if err := r.Writter.WriteFile(metafile, strings.NewReader("")); err != nil {
+			logrus.Errorf("CreateObjectIfNotExist %s error %v", metafile, err)
+			return
+		}
+	}
+
+	// Walk through all node directories under this session
+	err = filepath.WalkDir(sessionDir, func(path string, info fs.DirEntry, err error) error {
+		if err != nil {
+			logrus.Errorf("Error walking path %s: %v", path, err)
+			return nil
+		}
+
+		if info.IsDir() && path != sessionDir {
+			// Check if this is a node directory (two levels deep under prev-logs)
+			logrus.Infof("found node session logs in directory: %v", path)
+			rel, err := filepath.Rel(watchPath, path)
+			if err != nil {
+				logrus.Errorf("Failed to get relative path for node directory %s: %v", path, err)
+				return nil
+			}
+
+			parts := strings.Split(filepath.ToSlash(rel), "/")
+			if len(parts) == 2 {
+				go r.processPrevLogsDir(path)
+			}
+		}
+		return nil
+	})
+
+	if err != nil {
+		logrus.Errorf("Error walking session directory %s: %v", sessionDir, err)
+	}
+}
+
+// processPrevLogsDir processes logs in a /tmp/ray/prev-logs/{sessionid}/{nodeid} directory
+func (r *RayLogHandler) processPrevLogsDir(sessionNodeDir string) {
+	// Extract session ID and node ID from the path
+	// Path format: /tmp/ray/prev-logs/{sessionid}/{nodeid}
+	parts := strings.Split(sessionNodeDir, string(filepath.Separator))
+	if len(parts) < 2 {
+		logrus.Errorf("Invalid path format for sessionNodeDir: %s", sessionNodeDir)
+		return
+	}
+
+	// Extract nodeID and sessionID from the path
+	// Path is like: /tmp/ray/prev-logs/sessionid/nodeid
+	nodeID := parts[len(parts)-1]
+	sessionID := parts[len(parts)-2]
+
+	// Validate that we're not processing the root prev-logs directory
+	if sessionID == "prev-logs" {
+		logrus.Debugf("Skipping root prev-logs directory")
+		return
+	}
+
+	// Check if this directory has already been processed by checking in persist-complete-logs
+	completeDir := filepath.Join("/tmp/ray/persist-complete-logs", sessionID, nodeID, "logs")
+	if _, err := os.Stat(completeDir); err == nil {
+		logrus.Infof("Session %s node %s logs already processed, skipping", sessionID, nodeID)
+		return
+	}
+
+	logrus.Infof("Processing prev-logs for session: %s, node: %s", sessionID, nodeID)
+
+	logsDir := filepath.Join(sessionNodeDir, "logs")
+	dirExist := false
+	for i := 0; i < 10; i++ {
+		if _, err := os.Stat(logsDir); os.IsNotExist(err) {
+			logrus.Warnf("Logs directory does not exist: %s", logsDir)
+			time.Sleep(time.Millisecond * 10)
+		} else {
+			dirExist = true
+			break
+		}
+	}
+	if !dirExist {
+		logrus.Errorf("Logs directory does not exist after 10 attempts: %s", logsDir)
+		return
+	}
+
+	// Walk through the logs directory and process all files
+	err := filepath.WalkDir(logsDir, func(path string, info fs.DirEntry, err error) error {
+		if err != nil {
+			logrus.Errorf("Error walking logs path %s: %v", path, err)
+			return nil
+		}
+
+		// Skip directories
+		if info.IsDir() {
+			return nil
+		}
+
+		// Process log file
+		if err := r.processPrevLogFile(path, logsDir, sessionID, nodeID); err != nil {
+			logrus.Errorf("Failed to process prev-log file %s: %v", path, err)
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		logrus.Errorf("Error walking logs directory %s: %v", logsDir, err)
+		return
+	}
+
+	// After successfully processing all files, remove the node directory
+	logrus.Infof("Finished processing all logs for session: %s, node: %s. Removing node directory.", sessionID, nodeID)
+	if err := os.RemoveAll(sessionNodeDir); err != nil {
+		logrus.Errorf("Failed to remove node directory %s: %v", sessionNodeDir, err)
+	} else {
+		logrus.Infof("Successfully removed node directory: %s", sessionNodeDir)
+	}
+}
+
+// processPrevLogFile processes a single log file from prev-logs
+func (r *RayLogHandler) processPrevLogFile(absoluteLogPathName, localLogDir, sessionID, nodeID string) error {
+	// Calculate relative path within logs directory
+	// The localLogDir is /tmp/ray/prev-logs/{sessionid}/{nodeid}/logs
+	relativePath, err := filepath.Rel(localLogDir, absoluteLogPathName)
+	if err != nil {
+		return fmt.Errorf("failed to get relative path for %s: %v", absoluteLogPathName, err)
+	}
+
+	// Split relative path into subdirectory and filename
+	subdir, _ := filepath.Split(relativePath)
+
+	// Build the object name using the standard path structure
+	logDir := utils.GetLogDirByNameID(r.RootDir, utils.AppendRayClusterNameID(r.RayClusterName, r.RayClusterID), nodeID, sessionID)
+
+	if subdir != "" && subdir != "." {
+		// Remove trailing separator if present
+		subdir = strings.TrimSuffix(subdir, string(filepath.Separator))
+		dirName := path.Join(logDir, subdir)
+		if err := r.Writter.CreateDirectory(dirName); err != nil {
+			logrus.Errorf("Failed to create directory '%s': %v", dirName, err)
+			return err
+		}
+	}
+
+	objectName := path.Join(logDir, relativePath)
+	logrus.Infof("Processing prev-log file %s (object: %s)", absoluteLogPathName, objectName)
+
+	// Read the entire file content
+	content, err := os.ReadFile(absoluteLogPathName)
+	if err != nil {
+		logrus.Errorf("Failed to read file %s: %v", absoluteLogPathName, err)
+		return err
+	}
+
+	// Write to storage
+	err = r.Writter.WriteFile(objectName, bytes.NewReader(content))
+	if err != nil {
+		logrus.Errorf("Failed to write object %s: %v", objectName, err)
+		return err
+	}
+
+	logrus.Infof("Successfully wrote object %s, size: %d bytes", objectName, len(content))
+
+	// Move the processed file to persist-complete-logs directory to avoid re-uploading
+	completeBaseDir := filepath.Join("/tmp/ray/persist-complete-logs", sessionID, nodeID)
+	completeDir := filepath.Join(completeBaseDir, "logs")
+
+	if _, err := os.Stat(completeDir); os.IsNotExist(err) {
+		// Create the target directory if it doesn't exist
+		if err := os.MkdirAll(completeDir, 0777); err != nil {
+			logrus.Errorf("Failed to create complete logs directory %s: %v", completeDir, err)
+			return nil // Don't fail the whole process if we can't move the file
+		}
+		if err := os.Chmod(completeDir, 0777); err != nil {
+			logrus.Errorf("Failed to chmod complete logs directory %s: %v", completeDir, err)
+			return nil // Don't fail the whole process if we can't move the file
+		}
+	}
+
+	// Construct the target file path
+	targetFilePath := filepath.Join(completeDir, relativePath)
+	targetFileDir := filepath.Dir(targetFilePath)
+
+	// Create subdirectory in target location if needed
+	if subdir != "" && subdir != "." {
+		if _, err := os.Stat(targetFileDir); os.IsNotExist(err) {
+			if err := os.MkdirAll(targetFileDir, 0777); err != nil {
+				logrus.Errorf("Failed to create target subdirectory %s: %v", targetFileDir, err)
+				return nil
+			}
+			if err := os.Chmod(targetFileDir, 0777); err != nil {
+				logrus.Errorf("Failed to chmod complete logs directory %s: %v", targetFileDir, err)
+				return nil // Don't fail the whole process if we can't move the file
+			}
+		}
+	}
+
+	// Move the file
+	if err := os.Rename(absoluteLogPathName, targetFilePath); err != nil {
+		logrus.Errorf("Failed to move file from %s to %s: %v", absoluteLogPathName, targetFilePath, err)
+	} else {
+		logrus.Infof("Moved processed file from %s to %s", absoluteLogPathName, targetFilePath)
+	}
+
+	return nil
+}
+
+func (r *RayLogHandler) WatchSessionLatestLoops() {
+	sessionLatestDir := "/tmp/ray"
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		logrus.Errorf("Failed to create fsnotify watcher for session_latest: %v", err)
+		return
+	}
+	defer watcher.Close()
+
+	// Add the session_latest directory to watcher
+	if err := watcher.Add(sessionLatestDir); err != nil {
+		logrus.Errorf("Failed to add %s to watcher: %v", sessionLatestDir, err)
+		return
+	}
+
+	logrus.Infof("Started watching session_latest directory: %s", sessionLatestDir)
+	for {
+		select {
+		case <-r.ShutdownChan:
+			logrus.Info("Received shutdown signal, stopping session_latest watcher")
+			return
+		case event, ok := <-watcher.Events:
+			if !ok {
+				logrus.Warn("Session latest watcher events channel closed")
+				return
+			}
+
+			logrus.Infof("File system event in session_latest: %s %s", event.Op, event.Name)
+			if event.Name == "/tmp/ray/session_latest" {
+				continue
+			}
+			rel, err := filepath.Rel(sessionLatestDir, event.Name)
+			if err != nil {
+				logrus.Errorf("Failed to get relative path for %s: %s", event.Name, err)
+				continue
+			}
+			if !strings.Contains(rel, "session_") {
+				logrus.Infof("Skip to process file: %s", event.Name)
+				continue
+			}
+
+			// Handle changes to the symlink
+			if event.Op&(fsnotify.Create|fsnotify.Write) != 0 {
+				sessionID := filepath.Base(event.Name)
+				metadir := path.Clean(r.RootDir + "/" + "metadir")
+				metafile := path.Clean(metadir + "/" + fmt.Sprintf("%s/%v",
+					utils.AppendRayClusterNameID(r.RayClusterName, r.RayClusterID),
+					path.Base(sessionID),
+				))
+				if err := r.Writter.CreateDirectory(path.Dir(metafile)); err != nil {
+					logrus.Errorf("CreateObjectIfNotExist %s error %v", metadir, err)
+					return
+				}
+				if err := r.Writter.WriteFile(metafile, strings.NewReader("")); err != nil {
+					logrus.Errorf("CreateObjectIfNotExist %s error %v", metafile, err)
+					return
+				}
+			}
+		case err, ok := <-watcher.Errors:
+			if !ok {
+				logrus.Warn("Session latest watcher errors channel closed")
+				return
+			}
+			logrus.Errorf("Session latest watcher error: %v", err)
+		}
+	}
+}
