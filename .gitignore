@@ -53,3 +53,5 @@
 
 # Ignore generated CRD schema files
 schema/
+
+**/node_modules
