@@ -4535,6 +4535,9 @@ spec:
               upgradeStrategy:
                 properties:
                   type:
+                    enum:
+                    - Recreate
+                    - None
                     type: string
                 type: object
               workerGroupSpecs:

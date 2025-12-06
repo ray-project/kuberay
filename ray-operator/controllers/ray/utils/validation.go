@@ -38,7 +38,6 @@ func ValidateRayClusterMetadata(metadata metav1.ObjectMeta) error {
 }
 
 func ValidateRayClusterUpgradeOptions(instance *rayv1.RayCluster) error {
-	// only Recreate and None are valid upgradeType
 	if instance.Spec.UpgradeStrategy != nil && instance.Spec.UpgradeStrategy.Type != nil &&
 		*instance.Spec.UpgradeStrategy.Type != rayv1.Recreate &&
 		*instance.Spec.UpgradeStrategy.Type != rayv1.RayClusterUpgradeNone {

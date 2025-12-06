@@ -52,6 +52,7 @@ type RayClusterSpec struct {
 	WorkerGroupSpecs []WorkerGroupSpec `json:"workerGroupSpecs,omitempty"`
 }
 
+// +kubebuilder:validation:Enum=Recreate;None
 type RayClusterUpgradeType string
 
 const (
