@@ -1245,19 +1245,19 @@ func TestIsZeroDowntimeUpgradeEnabled(t *testing.T) {
 		},
 		{
 			name:                     "upgrade strategy is set to NewCluster",
-			upgradeStrategy:          &rayv1.RayServiceUpgradeStrategy{Type: ptr.To(rayv1.NewCluster)},
+			upgradeStrategy:          &rayv1.RayServiceUpgradeStrategy{Type: ptr.To(rayv1.RayServiceNewCluster)},
 			enableZeroDowntimeEnvVar: "",
 			expected:                 true,
 		},
 		{
 			name:                     "upgrade strategy is set to NewCluster, and env var is not set",
-			upgradeStrategy:          &rayv1.RayServiceUpgradeStrategy{Type: ptr.To(rayv1.NewCluster)},
+			upgradeStrategy:          &rayv1.RayServiceUpgradeStrategy{Type: ptr.To(rayv1.RayServiceNewCluster)},
 			enableZeroDowntimeEnvVar: "true",
 			expected:                 true,
 		},
 		{
 			name:                     "upgrade strategy is set to NewCluster, and env var is set to false",
-			upgradeStrategy:          &rayv1.RayServiceUpgradeStrategy{Type: ptr.To(rayv1.NewCluster)},
+			upgradeStrategy:          &rayv1.RayServiceUpgradeStrategy{Type: ptr.To(rayv1.RayServiceNewCluster)},
 			enableZeroDowntimeEnvVar: "false",
 			expected:                 true,
 		},
@@ -1405,7 +1405,7 @@ func makeIncrementalUpgradeRayService(
 	}
 	if withOptions {
 		spec.UpgradeStrategy = &rayv1.RayServiceUpgradeStrategy{
-			Type: ptr.To(rayv1.NewClusterWithIncrementalUpgrade),
+			Type: ptr.To(rayv1.RayServiceNewClusterWithIncrementalUpgrade),
 			ClusterUpgradeOptions: &rayv1.ClusterUpgradeOptions{
 				GatewayClassName: gatewayClassName,
 				StepSizePercent:  stepSizePercent,
@@ -1520,7 +1520,7 @@ func TestCreateHTTPRoute(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: "test-rayservice", Namespace: namespace},
 		Spec: rayv1.RayServiceSpec{
 			UpgradeStrategy: &rayv1.RayServiceUpgradeStrategy{
-				Type: ptr.To(rayv1.NewClusterWithIncrementalUpgrade),
+				Type: ptr.To(rayv1.RayServiceNewClusterWithIncrementalUpgrade),
 				ClusterUpgradeOptions: &rayv1.ClusterUpgradeOptions{
 					StepSizePercent:  &stepSize,
 					IntervalSeconds:  &interval,
@@ -1685,7 +1685,7 @@ func TestReconcileHTTPRoute(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: "test-rayservice", Namespace: namespace},
 		Spec: rayv1.RayServiceSpec{
 			UpgradeStrategy: &rayv1.RayServiceUpgradeStrategy{
-				Type: ptr.To(rayv1.NewClusterWithIncrementalUpgrade),
+				Type: ptr.To(rayv1.RayServiceNewClusterWithIncrementalUpgrade),
 				ClusterUpgradeOptions: &rayv1.ClusterUpgradeOptions{
 					StepSizePercent:  &stepSize,
 					IntervalSeconds:  &interval,
@@ -1924,7 +1924,7 @@ func TestReconcileServeTargetCapacity(t *testing.T) {
 			rayService := &rayv1.RayService{
 				Spec: rayv1.RayServiceSpec{
 					UpgradeStrategy: &rayv1.RayServiceUpgradeStrategy{
-						Type: ptr.To(rayv1.NewClusterWithIncrementalUpgrade),
+						Type: ptr.To(rayv1.RayServiceNewClusterWithIncrementalUpgrade),
 						ClusterUpgradeOptions: &rayv1.ClusterUpgradeOptions{
 							MaxSurgePercent: ptr.To(tt.maxSurgePercent),
 						},

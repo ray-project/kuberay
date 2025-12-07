@@ -1854,7 +1854,7 @@ func TestValidateClusterUpgradeOptions(t *testing.T) {
 			var upgradeStrategy *rayv1.RayServiceUpgradeStrategy
 			if tt.maxSurgePercent != nil || tt.stepSizePercent != nil || tt.intervalSeconds != nil || tt.gatewayClassName != "" {
 				upgradeStrategy = &rayv1.RayServiceUpgradeStrategy{
-					Type: ptr.To(rayv1.NewClusterWithIncrementalUpgrade),
+					Type: ptr.To(rayv1.RayServiceNewClusterWithIncrementalUpgrade),
 					ClusterUpgradeOptions: &rayv1.ClusterUpgradeOptions{
 						MaxSurgePercent:  tt.maxSurgePercent,
 						StepSizePercent:  tt.stepSizePercent,
@@ -1864,7 +1864,7 @@ func TestValidateClusterUpgradeOptions(t *testing.T) {
 				}
 			} else if tt.expectError {
 				upgradeStrategy = &rayv1.RayServiceUpgradeStrategy{
-					Type: ptr.To(rayv1.NewClusterWithIncrementalUpgrade),
+					Type: ptr.To(rayv1.RayServiceNewClusterWithIncrementalUpgrade),
 				}
 			}
 
@@ -1912,7 +1912,7 @@ func TestValidateRayClusterUpgradeOptions(t *testing.T) {
 		{
 			name: "Upgrade strategy set Recreate for RayCluster",
 			upgradeStrategy: &rayv1.RayClusterUpgradeStrategy{
-				Type: ptr.To(rayv1.Recreate),
+				Type: ptr.To(rayv1.RayClusterRecreate),
 			},
 			originatedFromCRD: string(RayClusterCRD),
 			expectError:       false,
@@ -1920,7 +1920,7 @@ func TestValidateRayClusterUpgradeOptions(t *testing.T) {
 		{
 			name: "Upgrade strategy set Recreate for RayCluster created by RayJob",
 			upgradeStrategy: &rayv1.RayClusterUpgradeStrategy{
-				Type: ptr.To(rayv1.Recreate),
+				Type: ptr.To(rayv1.RayClusterRecreate),
 			},
 			originatedFromCRD: string(RayJobCRD),
 			expectError:       true,
@@ -1929,7 +1929,7 @@ func TestValidateRayClusterUpgradeOptions(t *testing.T) {
 		{
 			name: "Upgrade strategy set Recreate for RayCluster created by RayService",
 			upgradeStrategy: &rayv1.RayClusterUpgradeStrategy{
-				Type: ptr.To(rayv1.Recreate),
+				Type: ptr.To(rayv1.RayClusterRecreate),
 			},
 			originatedFromCRD: string(RayServiceCRD),
 			expectError:       true,

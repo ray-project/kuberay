@@ -3708,7 +3708,7 @@ func TestShouldRecreatePodsForUpgrade(t *testing.T) {
 		{
 			name: "Recreate strategy but no pods exist",
 			upgradeStrategy: &rayv1.RayClusterUpgradeStrategy{
-				Type: ptr.To(rayv1.Recreate),
+				Type: ptr.To(rayv1.RayClusterRecreate),
 			},
 			pods:             []runtime.Object{},
 			expectedRecreate: false,
@@ -3716,7 +3716,7 @@ func TestShouldRecreatePodsForUpgrade(t *testing.T) {
 		{
 			name: "Recreate strategy with matching template hash",
 			upgradeStrategy: &rayv1.RayClusterUpgradeStrategy{
-				Type: ptr.To(rayv1.Recreate),
+				Type: ptr.To(rayv1.RayClusterRecreate),
 			},
 			pods: []runtime.Object{
 				createPodWithHash("head-pod", rayv1.HeadNode, headGroupNameStr, headHash),
@@ -3727,7 +3727,7 @@ func TestShouldRecreatePodsForUpgrade(t *testing.T) {
 		{
 			name: "Recreate strategy with mismatched head template hash",
 			upgradeStrategy: &rayv1.RayClusterUpgradeStrategy{
-				Type: ptr.To(rayv1.Recreate),
+				Type: ptr.To(rayv1.RayClusterRecreate),
 			},
 			pods: []runtime.Object{
 				createPodWithHash("head-pod", rayv1.HeadNode, headGroupNameStr, "old-head-hash"),
@@ -3738,7 +3738,7 @@ func TestShouldRecreatePodsForUpgrade(t *testing.T) {
 		{
 			name: "Recreate strategy with mismatched worker template hash",
 			upgradeStrategy: &rayv1.RayClusterUpgradeStrategy{
-				Type: ptr.To(rayv1.Recreate),
+				Type: ptr.To(rayv1.RayClusterRecreate),
 			},
 			pods: []runtime.Object{
 				createPodWithHash("head-pod", rayv1.HeadNode, headGroupNameStr, headHash),

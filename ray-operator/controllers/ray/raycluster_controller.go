@@ -1123,7 +1123,7 @@ func (r *RayClusterReconciler) shouldRecreatePodsForUpgrade(ctx context.Context,
 	if instance.Spec.UpgradeStrategy == nil || instance.Spec.UpgradeStrategy.Type == nil {
 		return false
 	}
-	if *instance.Spec.UpgradeStrategy.Type != rayv1.Recreate {
+	if *instance.Spec.UpgradeStrategy.Type != rayv1.RayClusterRecreate {
 		return false
 	}
 

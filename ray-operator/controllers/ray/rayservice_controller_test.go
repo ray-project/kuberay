@@ -80,7 +80,7 @@ func rayServiceTemplate(name string, namespace string, serveAppName string) *ray
 		Spec: rayv1.RayServiceSpec{
 			ServeConfigV2: serveConfigV2,
 			UpgradeStrategy: &rayv1.RayServiceUpgradeStrategy{
-				Type: ptr.To(rayv1.NewCluster),
+				Type: ptr.To(rayv1.RayServiceNewCluster),
 			},
 			RayClusterSpec: rayv1.RayClusterSpec{
 				RayVersion: support.GetRayVersion(),

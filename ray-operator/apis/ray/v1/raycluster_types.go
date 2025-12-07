@@ -57,7 +57,7 @@ type RayClusterUpgradeType string
 
 const (
 	// During upgrade, Recreate strategy will delete all existing pods before creating new ones
-	Recreate RayClusterUpgradeType = "Recreate"
+	RayClusterRecreate RayClusterUpgradeType = "Recreate"
 	// No new pod will be created while the strategy is set to None
 	RayClusterUpgradeNone RayClusterUpgradeType = "None"
 )

@@ -39,9 +39,9 @@ func ValidateRayClusterMetadata(metadata metav1.ObjectMeta) error {
 
 func ValidateRayClusterUpgradeOptions(instance *rayv1.RayCluster) error {
 	if instance.Spec.UpgradeStrategy != nil && instance.Spec.UpgradeStrategy.Type != nil &&
-		*instance.Spec.UpgradeStrategy.Type != rayv1.Recreate &&
+		*instance.Spec.UpgradeStrategy.Type != rayv1.RayClusterRecreate &&
 		*instance.Spec.UpgradeStrategy.Type != rayv1.RayClusterUpgradeNone {
-		return fmt.Errorf("The RayCluster spec is invalid: Spec.UpgradeStrategy.Type value %s is invalid, valid options are %s or %s", *instance.Spec.UpgradeStrategy.Type, rayv1.Recreate, rayv1.RayClusterUpgradeNone)
+		return fmt.Errorf("The RayCluster spec is invalid: Spec.UpgradeStrategy.Type value %s is invalid, valid options are %s or %s", *instance.Spec.UpgradeStrategy.Type, rayv1.RayClusterRecreate, rayv1.RayClusterUpgradeNone)
 	}
 
 	// only allow UpgradeStrategy to be set when RayCluster is created directly by user
@@ -387,9 +387,9 @@ func ValidateRayServiceSpec(rayService *rayv1.RayService) error {
 	if rayService.Spec.UpgradeStrategy != nil &&
 		rayService.Spec.UpgradeStrategy.Type != nil &&
 		*rayService.Spec.UpgradeStrategy.Type != rayv1.RayServiceUpgradeNone &&
-		*rayService.Spec.UpgradeStrategy.Type != rayv1.NewCluster &&
-		*rayService.Spec.UpgradeStrategy.Type != rayv1.NewClusterWithIncrementalUpgrade {
-		return fmt.Errorf("Spec.UpgradeStrategy.Type value %s is invalid, valid options are %s, %s, or %s", *rayService.Spec.UpgradeStrategy.Type, rayv1.NewClusterWithIncrementalUpgrade, rayv1.NewCluster, rayv1.RayServiceUpgradeNone)
+		*rayService.Spec.UpgradeStrategy.Type != rayv1.RayServiceNewCluster &&
+		*rayService.Spec.UpgradeStrategy.Type != rayv1.RayServiceNewClusterWithIncrementalUpgrade {
+		return fmt.Errorf("The RayService spec is invalid: Spec.UpgradeStrategy.Type value %s is invalid, valid options are %s, %s, or %s", *rayService.Spec.UpgradeStrategy.Type, rayv1.RayServiceNewClusterWithIncrementalUpgrade, rayv1.RayServiceNewCluster, rayv1.RayServiceUpgradeNone)
 	}
 
 	if rayService.Spec.RayClusterDeletionDelaySeconds != nil &&
