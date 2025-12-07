@@ -1335,7 +1335,7 @@ func TestValidateRayJobSpecWithFeatureGate(t *testing.T) {
 						{
 							Policy: rayv1.DeleteSelf,
 							Condition: rayv1.DeletionCondition{
-								JobStatus:  rayv1.JobStatusSucceeded,
+								JobStatus:  ptr.To(rayv1.JobStatusSucceeded),
 								TTLSeconds: 10,
 							},
 						},
@@ -1354,7 +1354,7 @@ func TestValidateRayJobSpecWithFeatureGate(t *testing.T) {
 						{
 							Policy: rayv1.DeleteSelf,
 							Condition: rayv1.DeletionCondition{
-								JobStatus:  rayv1.JobStatusSucceeded,
+								JobStatus:  ptr.To(rayv1.JobStatusSucceeded),
 								TTLSeconds: 10,
 							},
 						},
@@ -1375,7 +1375,7 @@ func TestValidateRayJobSpecWithFeatureGate(t *testing.T) {
 						{
 							Policy: rayv1.DeleteSelf,
 							Condition: rayv1.DeletionCondition{
-								JobStatus:  rayv1.JobStatusSucceeded,
+								JobStatus:  ptr.To(rayv1.JobStatusSucceeded),
 								TTLSeconds: 10,
 							},
 						},
@@ -1411,14 +1411,14 @@ func TestValidateRayJobSpecWithFeatureGate(t *testing.T) {
 						{
 							Policy: rayv1.DeleteSelf,
 							Condition: rayv1.DeletionCondition{
-								JobStatus:  rayv1.JobStatusSucceeded,
+								JobStatus:  ptr.To(rayv1.JobStatusSucceeded),
 								TTLSeconds: 10,
 							},
 						},
 						{
 							Policy: rayv1.DeleteSelf,
 							Condition: rayv1.DeletionCondition{
-								JobStatus:  rayv1.JobStatusSucceeded,
+								JobStatus:  ptr.To(rayv1.JobStatusSucceeded),
 								TTLSeconds: 20,
 							},
 						},
@@ -1436,7 +1436,7 @@ func TestValidateRayJobSpecWithFeatureGate(t *testing.T) {
 						{
 							Policy: rayv1.DeleteSelf,
 							Condition: rayv1.DeletionCondition{
-								JobStatus:  rayv1.JobStatusSucceeded,
+								JobStatus:  ptr.To(rayv1.JobStatusSucceeded),
 								TTLSeconds: -10,
 							},
 						},
@@ -1455,7 +1455,7 @@ func TestValidateRayJobSpecWithFeatureGate(t *testing.T) {
 						{
 							Policy: rayv1.DeleteWorkers,
 							Condition: rayv1.DeletionCondition{
-								JobStatus:  rayv1.JobStatusSucceeded,
+								JobStatus:  ptr.To(rayv1.JobStatusSucceeded),
 								TTLSeconds: 10,
 							},
 						},
@@ -1473,7 +1473,7 @@ func TestValidateRayJobSpecWithFeatureGate(t *testing.T) {
 						{
 							Policy: rayv1.DeleteCluster,
 							Condition: rayv1.DeletionCondition{
-								JobStatus:  rayv1.JobStatusSucceeded,
+								JobStatus:  ptr.To(rayv1.JobStatusSucceeded),
 								TTLSeconds: 10,
 							},
 						},
@@ -1490,7 +1490,7 @@ func TestValidateRayJobSpecWithFeatureGate(t *testing.T) {
 						{
 							Policy: rayv1.DeleteWorkers,
 							Condition: rayv1.DeletionCondition{
-								JobStatus:  rayv1.JobStatusSucceeded,
+								JobStatus:  ptr.To(rayv1.JobStatusSucceeded),
 								TTLSeconds: 10,
 							},
 						},
@@ -1511,14 +1511,14 @@ func TestValidateRayJobSpecWithFeatureGate(t *testing.T) {
 						{
 							Policy: rayv1.DeleteWorkers,
 							Condition: rayv1.DeletionCondition{
-								JobStatus:  rayv1.JobStatusSucceeded,
+								JobStatus:  ptr.To(rayv1.JobStatusSucceeded),
 								TTLSeconds: 20,
 							},
 						},
 						{
 							Policy: rayv1.DeleteCluster,
 							Condition: rayv1.DeletionCondition{
-								JobStatus:  rayv1.JobStatusSucceeded,
+								JobStatus:  ptr.To(rayv1.JobStatusSucceeded),
 								TTLSeconds: 10,
 							},
 						},
@@ -1536,14 +1536,14 @@ func TestValidateRayJobSpecWithFeatureGate(t *testing.T) {
 						{
 							Policy: rayv1.DeleteCluster,
 							Condition: rayv1.DeletionCondition{
-								JobStatus:  rayv1.JobStatusSucceeded,
+								JobStatus:  ptr.To(rayv1.JobStatusSucceeded),
 								TTLSeconds: 20,
 							},
 						},
 						{
 							Policy: rayv1.DeleteSelf,
 							Condition: rayv1.DeletionCondition{
-								JobStatus:  rayv1.JobStatusSucceeded,
+								JobStatus:  ptr.To(rayv1.JobStatusSucceeded),
 								TTLSeconds: 10,
 							},
 						},
@@ -1561,28 +1561,28 @@ func TestValidateRayJobSpecWithFeatureGate(t *testing.T) {
 						{
 							Policy: rayv1.DeleteWorkers,
 							Condition: rayv1.DeletionCondition{
-								JobStatus:  rayv1.JobStatusSucceeded,
+								JobStatus:  ptr.To(rayv1.JobStatusSucceeded),
 								TTLSeconds: 10,
 							},
 						},
 						{
 							Policy: rayv1.DeleteCluster,
 							Condition: rayv1.DeletionCondition{
-								JobStatus:  rayv1.JobStatusSucceeded,
+								JobStatus:  ptr.To(rayv1.JobStatusSucceeded),
 								TTLSeconds: 20,
 							},
 						},
 						{
 							Policy: rayv1.DeleteSelf,
 							Condition: rayv1.DeletionCondition{
-								JobStatus:  rayv1.JobStatusSucceeded,
+								JobStatus:  ptr.To(rayv1.JobStatusSucceeded),
 								TTLSeconds: 30,
 							},
 						},
 						{
 							Policy: rayv1.DeleteSelf,
 							Condition: rayv1.DeletionCondition{
-								JobStatus:  rayv1.JobStatusFailed,
+								JobStatus:  ptr.To(rayv1.JobStatusFailed),
 								TTLSeconds: 0,
 							},
 						},
