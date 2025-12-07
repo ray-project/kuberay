@@ -4,12 +4,13 @@ import (
 	"testing"
 
 	. "github.com/onsi/gomega"
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	rayv1ac "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/ray/v1"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
+
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 )
 
 func TestRayServiceAuthToken(t *testing.T) {
@@ -60,6 +61,8 @@ func TestRayServiceAuthToken(t *testing.T) {
 
 	// Verify Ray container has auth token env vars
 	VerifyContainerAuthTokenEnvVars(test, rayCluster, &headPod.Spec.Containers[utils.RayContainerIndex])
+	g.Expect(rayService.Status.NumServeEndpoints).To(BeNumerically(">", 0),
+		"RayService should have at least one serve endpoint")
 
 	LogWithTimestamp(test.T(), "RayService %s/%s completed successfully with auth token", rayService.Namespace, rayService.Name)
 }
