@@ -58,15 +58,8 @@ func TestRayServiceAuthToken(t *testing.T) {
 	g.Expect(headPod).NotTo(BeNil())
 	LogWithTimestamp(test.T(), "Found head pod %s/%s", headPod.Namespace, headPod.Name)
 
-	var rayContainer *corev1.Container
-	for i := range headPod.Spec.Containers {
-		if headPod.Spec.Containers[i].Name == "ray-head" {
-			rayContainer = &headPod.Spec.Containers[i]
-			break
-		}
-	}
-	g.Expect(rayContainer).NotTo(BeNil(), "Could not find 'ray-head' container in Head Pod")
+	// Verify Ray container has auth token env vars
+	VerifyContainerAuthTokenEnvVars(test, rayCluster, &headPod.Spec.Containers[utils.RayContainerIndex])
 
-	VerifyContainerAuthTokenEnvVars(test, rayCluster, rayContainer)
-	LogWithTimestamp(test.T(), "Verified auth token env vars in head pod Ray container")
+	LogWithTimestamp(test.T(), "RayService %s/%s completed successfully with auth token", rayService.Namespace, rayService.Name)
 }
