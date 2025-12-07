@@ -108,6 +108,9 @@ _Appears in:_
 
 
 DeletionCondition specifies the trigger conditions for a deletion action.
+Exactly one of JobStatus or JobDeploymentStatus must be specified:
+  - JobStatus (application-level): Match the Ray job execution status.
+  - JobDeploymentStatus (infrastructure-level): Match the RayJob deployment lifecycle status. This is particularly useful for cleaning up resources when Ray jobs fail to be submitted.
 
 
 
