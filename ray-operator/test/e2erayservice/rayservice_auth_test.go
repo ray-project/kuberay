@@ -67,7 +67,6 @@ func TestRayServiceAuthToken(t *testing.T) {
 	}
 	g.Expect(rayContainer).NotTo(BeNil(), "Could not find 'ray-head' container in Head Pod")
 
-	// 8. Verify Authentication Environment Variables
 	VerifyContainerAuthTokenEnvVars(test, rayCluster, rayContainer)
 	LogWithTimestamp(test.T(), "Verified auth token env vars in head pod Ray container")
 }
