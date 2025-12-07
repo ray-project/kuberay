@@ -1592,6 +1592,142 @@ func TestValidateRayJobSpecWithFeatureGate(t *testing.T) {
 			},
 			expectError: false,
 		},
+		{
+			name: "valid deletionRules with JobDeploymentStatus=Failed",
+			spec: rayv1.RayJobSpec{
+				DeletionStrategy: &rayv1.DeletionStrategy{
+					DeletionRules: []rayv1.DeletionRule{
+						{
+							Policy: rayv1.DeleteCluster,
+							Condition: rayv1.DeletionCondition{
+								JobDeploymentStatus: ptr.To(rayv1.JobDeploymentStatusFailed),
+								TTLSeconds:          10,
+							},
+						},
+						{
+							Policy: rayv1.DeleteSelf,
+							Condition: rayv1.DeletionCondition{
+								JobDeploymentStatus: ptr.To(rayv1.JobDeploymentStatusFailed),
+								TTLSeconds:          20,
+							},
+						},
+					},
+				},
+				RayClusterSpec: createBasicRayClusterSpec(),
+			},
+			expectError: false,
+		},
+		{
+			name: "invalid: both JobStatus and JobDeploymentStatus set",
+			spec: rayv1.RayJobSpec{
+				DeletionStrategy: &rayv1.DeletionStrategy{
+					DeletionRules: []rayv1.DeletionRule{
+						{
+							Policy: rayv1.DeleteCluster,
+							Condition: rayv1.DeletionCondition{
+								JobStatus:           ptr.To(rayv1.JobStatusFailed),
+								JobDeploymentStatus: ptr.To(rayv1.JobDeploymentStatusFailed),
+								TTLSeconds:          10,
+							},
+						},
+					},
+				},
+				RayClusterSpec: createBasicRayClusterSpec(),
+			},
+			expectError: true,
+		},
+		{
+			name: "invalid: neither JobStatus nor JobDeploymentStatus set",
+			spec: rayv1.RayJobSpec{
+				DeletionStrategy: &rayv1.DeletionStrategy{
+					DeletionRules: []rayv1.DeletionRule{
+						{
+							Policy: rayv1.DeleteCluster,
+							Condition: rayv1.DeletionCondition{
+								TTLSeconds: 10,
+							},
+						},
+					},
+				},
+				RayClusterSpec: createBasicRayClusterSpec(),
+			},
+			expectError: true,
+		},
+		{
+			name: "duplicate rule with JobDeploymentStatus",
+			spec: rayv1.RayJobSpec{
+				DeletionStrategy: &rayv1.DeletionStrategy{
+					DeletionRules: []rayv1.DeletionRule{
+						{
+							Policy: rayv1.DeleteCluster,
+							Condition: rayv1.DeletionCondition{
+								JobDeploymentStatus: ptr.To(rayv1.JobDeploymentStatusFailed),
+								TTLSeconds:          10,
+							},
+						},
+						{
+							Policy: rayv1.DeleteCluster,
+							Condition: rayv1.DeletionCondition{
+								JobDeploymentStatus: ptr.To(rayv1.JobDeploymentStatusFailed),
+								TTLSeconds:          20,
+							},
+						},
+					},
+				},
+				RayClusterSpec: createBasicRayClusterSpec(),
+			},
+			expectError: true,
+		},
+		{
+			name: "valid: mixed JobStatus and JobDeploymentStatus rules",
+			spec: rayv1.RayJobSpec{
+				DeletionStrategy: &rayv1.DeletionStrategy{
+					DeletionRules: []rayv1.DeletionRule{
+						{
+							Policy: rayv1.DeleteWorkers,
+							Condition: rayv1.DeletionCondition{
+								JobStatus:  ptr.To(rayv1.JobStatusFailed),
+								TTLSeconds: 10,
+							},
+						},
+						{
+							Policy: rayv1.DeleteCluster,
+							Condition: rayv1.DeletionCondition{
+								JobDeploymentStatus: ptr.To(rayv1.JobDeploymentStatusFailed),
+								TTLSeconds:          20,
+							},
+						},
+					},
+				},
+				RayClusterSpec: createBasicRayClusterSpec(),
+			},
+			expectError: false,
+		},
+		{
+			name: "inconsistent TTLs with JobDeploymentStatus (DeleteCluster < DeleteWorkers)",
+			spec: rayv1.RayJobSpec{
+				DeletionStrategy: &rayv1.DeletionStrategy{
+					DeletionRules: []rayv1.DeletionRule{
+						{
+							Policy: rayv1.DeleteWorkers,
+							Condition: rayv1.DeletionCondition{
+								JobDeploymentStatus: ptr.To(rayv1.JobDeploymentStatusFailed),
+								TTLSeconds:          20,
+							},
+						},
+						{
+							Policy: rayv1.DeleteCluster,
+							Condition: rayv1.DeletionCondition{
+								JobDeploymentStatus: ptr.To(rayv1.JobDeploymentStatusFailed),
+								TTLSeconds:          10,
+							},
+						},
+					},
+				},
+				RayClusterSpec: createBasicRayClusterSpec(),
+			},
+			expectError: true,
+		},
 	}
 
 	features.SetFeatureGateDuringTest(t, features.RayJobDeletionPolicy, true)
