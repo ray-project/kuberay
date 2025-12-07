@@ -119,18 +119,6 @@ Create a template to ensure consistency for Role and ClusterRole.
 */}}
 {{- define "role.consistentRules" -}}
 rules:
-# TODO: Remove endpoints permission in a future release.
-# This permission is retained for backward compatibility to support users deploying older operator
-# images with the new Helm chart. Older operator versions still use the deprecated Endpoints API.
-# This can be safely removed once those older versions are no longer supported.
-- apiGroups:
-  - ""
-  resources:
-  - endpoints
-  verbs:
-  - get
-  - list
-  - watch
 - apiGroups:
   - ""
   resources:
