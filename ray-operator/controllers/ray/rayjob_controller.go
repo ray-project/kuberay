@@ -1216,8 +1216,14 @@ func (r *RayJobReconciler) handleDeletionRules(ctx context.Context, rayJob *rayv
 
 	// Categorize all applicable and incomplete rules into "overdue" or "pending".
 	for _, rule := range rayJob.Spec.DeletionStrategy.DeletionRules {
-		// Skip rules that don't match the current job status.
-		if rule.Condition.JobStatus != rayJob.Status.JobStatus {
+		// Skip rules that don't match the current job status or job deployment status.
+		var match bool
+		if rule.Condition.JobStatus != nil {
+			match = *rule.Condition.JobStatus == rayJob.Status.JobStatus
+		} else if rule.Condition.JobDeploymentStatus != nil {
+			match = *rule.Condition.JobDeploymentStatus == rayJob.Status.JobDeploymentStatus
+		}
+		if !match {
 			continue
 		}
 

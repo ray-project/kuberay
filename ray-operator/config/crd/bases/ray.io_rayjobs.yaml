@@ -65,6 +65,10 @@ spec:
                       properties:
                         condition:
                           properties:
+                            jobDeploymentStatus:
+                              enum:
+                              - Failed
+                              type: string
                             jobStatus:
                               enum:
                               - SUCCEEDED
@@ -75,8 +79,6 @@ spec:
                               format: int32
                               minimum: 0
                               type: integer
-                          required:
-                          - jobStatus
                           type: object
                         policy:
                           enum:

@@ -470,12 +470,26 @@ func validateDeletionRules(rayJob *rayv1.RayJob) error {
 	rules := rayJob.Spec.DeletionStrategy.DeletionRules
 	isClusterSelectorMode := len(rayJob.Spec.ClusterSelector) != 0
 
-	// Group TTLs by JobStatus for cross-rule validation and uniqueness checking.
-	rulesByStatus := make(map[rayv1.JobStatus]map[rayv1.DeletionPolicyType]int32)
+	// Group TTLs by condition type for cross-rule validation and uniqueness checking.
+	// We separate JobStatus and JobDeploymentStatus to avoid confusion.
+	rulesByJobStatus := make(map[rayv1.JobStatus]map[rayv1.DeletionPolicyType]int32)
+	rulesByJobDeploymentStatus := make(map[rayv1.JobDeploymentStatus]map[rayv1.DeletionPolicyType]int32)
 	var errs []error
 
 	// Single pass: Validate each rule individually and group for later consistency checks.
 	for i, rule := range rules {
+		// Validate that exactly one of JobStatus and JobDeploymentStatus is specified.
+		hasJobStatus := rule.Condition.JobStatus != nil
+		hasJobDeploymentStatus := rule.Condition.JobDeploymentStatus != nil
+		if hasJobStatus && hasJobDeploymentStatus {
+			errs = append(errs, fmt.Errorf("deletionRules[%d]: cannot set both JobStatus and JobDeploymentStatus at the same time", i))
+			continue
+		}
+		if !hasJobStatus && !hasJobDeploymentStatus {
+			errs = append(errs, fmt.Errorf("deletionRules[%d]: exactly one of JobStatus and JobDeploymentStatus must be set", i))
+			continue
+		}
+
 		// Validate TTL is non-negative.
 		if rule.Condition.TTLSeconds < 0 {
 			errs = append(errs, fmt.Errorf("deletionRules[%d]: TTLSeconds must be non-negative", i))
@@ -494,24 +508,47 @@ func validateDeletionRules(rayJob *rayv1.RayJob) error {
 		}
 
 		// Group valid rule for consistency check.
-		policyTTLs, ok := rulesByStatus[rule.Condition.JobStatus]
-		if !ok {
-			policyTTLs = make(map[rayv1.DeletionPolicyType]int32)
-			rulesByStatus[rule.Condition.JobStatus] = policyTTLs
-		}
+		if hasJobStatus {
+			policyTTLs, ok := rulesByJobStatus[*rule.Condition.JobStatus]
+			if !ok {
+				policyTTLs = make(map[rayv1.DeletionPolicyType]int32)
+				rulesByJobStatus[*rule.Condition.JobStatus] = policyTTLs
+			}
 
-		// Check for uniqueness of (JobStatus, DeletionPolicyType) pair.
-		if _, exists := policyTTLs[rule.Policy]; exists {
-			errs = append(errs, fmt.Errorf("deletionRules[%d]: duplicate rule for DeletionPolicyType '%s' and JobStatus '%s'", i, rule.Policy, rule.Condition.JobStatus))
-			continue
-		}
+			// Check for uniqueness of (JobStatus, DeletionPolicyType) pair.
+			if _, exists := policyTTLs[rule.Policy]; exists {
+				errs = append(errs, fmt.Errorf("deletionRules[%d]: duplicate rule for DeletionPolicyType '%s' and JobStatus '%s'", i, rule.Policy, *rule.Condition.JobStatus))
+				continue
+			}
 
-		policyTTLs[rule.Policy] = rule.Condition.TTLSeconds
+			policyTTLs[rule.Policy] = rule.Condition.TTLSeconds
+		} else {
+			policyTTLs, ok := rulesByJobDeploymentStatus[*rule.Condition.JobDeploymentStatus]
+			if !ok {
+				policyTTLs = make(map[rayv1.DeletionPolicyType]int32)
+				rulesByJobDeploymentStatus[*rule.Condition.JobDeploymentStatus] = policyTTLs
+			}
+
+			// Check for uniqueness of (JobDeploymentStatus, DeletionPolicyType) pair.
+			if _, exists := policyTTLs[rule.Policy]; exists {
+				errs = append(errs, fmt.Errorf("deletionRules[%d]: duplicate rule for DeletionPolicyType '%s' and JobDeploymentStatus '%s'", i, rule.Policy, *rule.Condition.JobDeploymentStatus))
+				continue
+			}
+
+			policyTTLs[rule.Policy] = rule.Condition.TTLSeconds
+		}
 	}
 
-	// Second pass: Validate TTL consistency per JobStatus.
-	for status, policyTTLs := range rulesByStatus {
-		if err := validateTTLConsistency(policyTTLs, status); err != nil {
+	// Second pass: Validate TTL consistency per JobStatus
+	for jobStatus, policyTTLs := range rulesByJobStatus {
+		if err := validateTTLConsistency(policyTTLs, jobStatus); err != nil {
+			errs = append(errs, err)
+		}
+	}
+
+	// Second pass: Validate TTL consistency per JobDeploymentStatus.
+	for jobDeploymentStatus, policyTTLs := range rulesByJobDeploymentStatus {
+		if err := validateTTLConsistency(policyTTLs, jobDeploymentStatus); err != nil {
 			errs = append(errs, err)
 		}
 	}
@@ -521,7 +558,7 @@ func validateDeletionRules(rayJob *rayv1.RayJob) error {
 
 // validateTTLConsistency ensures TTLs follow the deletion hierarchy: Workers <= Cluster <= Self.
 // (Lower TTL means deletes earlier.)
-func validateTTLConsistency(policyTTLs map[rayv1.DeletionPolicyType]int32, status rayv1.JobStatus) error {
+func validateTTLConsistency(policyTTLs map[rayv1.DeletionPolicyType]int32, status interface{}) error {
 	// Define the required deletion order. TTLs must be non-decreasing along this sequence.
 	deletionOrder := []rayv1.DeletionPolicyType{
 		rayv1.DeleteWorkers,
@@ -543,8 +580,8 @@ func validateTTLConsistency(policyTTLs map[rayv1.DeletionPolicyType]int32, statu
 
 		if hasPrev && ttl < prevTTL {
 			errs = append(errs, fmt.Errorf(
-				"for JobStatus '%s': %s TTL (%d) must be >= %s TTL (%d)",
-				status, policy, ttl, prevPolicy, prevTTL,
+				"for %T '%s': %s TTL (%d) must be >= %s TTL (%d)",
+				status, status, policy, ttl, prevPolicy, prevTTL,
 			))
 		}
 
