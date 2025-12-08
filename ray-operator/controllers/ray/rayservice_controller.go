@@ -1787,7 +1787,7 @@ func (r *RayServiceReconciler) calculateNumServeEndpointsFromSlices(ctx context.
 
 	numPods := len(uniqueNumReadyPods)
 
-	logger.Info("Counted serve-ready pods via EndpointSlices",
+	logger.V(1).Info("Counted serve-ready pods via EndpointSlices",
 		"serviceName", serviceNamespacedName.Name,
 		"serviceNamespace", serviceNamespacedName.Namespace,
 		"numSlices", len(endpointSliceList.Items),
