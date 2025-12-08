@@ -172,13 +172,13 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 	// Calculate the pod template hash before any modifications
 	// This ensures the hash reflects the original user-defined template for upgrade detection
 	templateHash := ""
-	if hash, err := GeneratePodTemplateHash(instance.Spec.HeadGroupSpec.Template); err == nil {
+	podTemplate := headSpec.Template
+	if hash, err := GeneratePodTemplateHash(podTemplate); err == nil {
 		templateHash = hash
 	} else {
 		log.Error(err, "Failed to generate pod template hash for head group")
 	}
 
-	podTemplate := headSpec.Template
 	if utils.IsDeterministicHeadPodNameEnabled() {
 		podTemplate.Name = podName
 	} else {
@@ -320,21 +320,16 @@ func getEnableProbesInjection() bool {
 // DefaultWorkerPodTemplate sets the config values
 func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, workerSpec rayv1.WorkerGroupSpec, podName string, fqdnRayIP string, headPort string, replicaGrpName string, replicaIndex int, numHostIndex int) corev1.PodTemplateSpec {
 	log := ctrl.LoggerFrom(ctx)
+
+	podTemplate := workerSpec.Template
 	// Calculate the pod template hash before any modifications
 	// This ensures the hash reflects the original user-defined template for upgrade detection
 	templateHash := ""
-	for _, wg := range instance.Spec.WorkerGroupSpecs {
-		if wg.GroupName == workerSpec.GroupName {
-			if hash, err := GeneratePodTemplateHash(wg.Template); err == nil {
-				templateHash = hash
-			} else {
-				log.Error(err, "Failed to generate pod template hash for worker group", "groupName", workerSpec.GroupName)
-			}
-			break
-		}
+	if hash, err := GeneratePodTemplateHash(podTemplate); err == nil {
+		templateHash = hash
+	} else {
+		log.Error(err, "Failed to generate pod template hash for worker group", "groupName", workerSpec.GroupName)
 	}
-
-	podTemplate := workerSpec.Template
 	podTemplate.GenerateName = podName
 	// Pods created by RayCluster should be restricted to the namespace of the RayCluster.
 	// This ensures privilege of KubeRay users are contained within the namespace of the RayCluster.
