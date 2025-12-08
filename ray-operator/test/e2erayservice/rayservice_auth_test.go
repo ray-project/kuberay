@@ -60,6 +60,14 @@ func TestRayServiceAuthToken(t *testing.T) {
 
 	// Verify Ray container has auth token env vars
 	VerifyContainerAuthTokenEnvVars(test, rayCluster, &headPod.Spec.Containers[utils.RayContainerIndex])
+
+	workerPods, err := GetWorkerPods(test, rayCluster)
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(workerPods).ToNot(BeEmpty())
+	for _, workerPod := range workerPods {
+		VerifyContainerAuthTokenEnvVars(test, rayCluster, &workerPod.Spec.Containers[utils.RayContainerIndex])
+	}
+
 	g.Expect(rayService.Status.NumServeEndpoints).To(BeNumerically(">", 0),
 		"RayService should have at least one serve endpoint")
 
