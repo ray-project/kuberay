@@ -2153,3 +2153,32 @@ tests:
       - equal:
           path: spec.workerGroupSpecs[?(@.groupName=="smallGroup")].template.spec.securityContext.fsGroup
           value: 3000
+
+  - it: Should set head runtimeClassName when `head.runtimeClassName` is set
+    set:
+      head:
+        runtimeClassName: nvidia
+    asserts:
+      - equal:
+          path: spec.headGroupSpec.template.spec.runtimeClassName
+          value: nvidia
+
+  - it: Should set worker runtimeClassName when `worker.runtimeClassName` is set
+    set:
+      worker:
+        runtimeClassName: nvidia
+    asserts:
+      - equal:
+          path: spec.workerGroupSpecs[?(@.groupName=="workergroup")].template.spec.runtimeClassName
+          value: nvidia
+
+  - it: Should set additional worker group runtimeClassName when `additionalWorkerGroups.smallGroup.runtimeClassName` is set
+    set:
+      additionalWorkerGroups:
+        smallGroup:
+          disabled: false
+          runtimeClassName: nvidia
+    asserts:
+      - equal:
+          path: spec.workerGroupSpecs[?(@.groupName=="smallGroup")].template.spec.runtimeClassName
+          value: nvidia
