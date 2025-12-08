@@ -37,10 +37,10 @@ var (
 		# Scale a Ray cluster by setting one of its worker groups to 3 replicas
 		kubectl ray scale cluster my-cluster --worker-group my-group --replicas 3
 
-		# Increase the maximum replicas for a worker group to 10
+		# Scale the maximum replicas for a worker group to 10
 		kubectl ray scale cluster my-cluster --worker-group my-group --max-replicas 10
 
-		# Set both minimum and maximum replicas for a worker group
+		# Scale both minimum and maximum replicas for a worker group
   		kubectl ray scale cluster my-cluster --worker-group my-group --min-replicas 2 --max-replicas 6
 
 		# Scale the worker group to 5 replicas and update its min and max bounds at the same time
@@ -86,8 +86,8 @@ func NewScaleClusterCommand(cmdFactory cmdutil.Factory, streams genericclioption
 	cmd.Flags().StringVarP(&options.workerGroup, "worker-group", "w", "", "worker group")
 	cobra.CheckErr(cmd.MarkFlagRequired("worker-group"))
 	cmd.Flags().Int32VarP(options.replicas, "replicas", "r", -1, "Desired number of replicas in worker group")
-	cmd.Flags().Int32VarP(options.minReplicas, "min-replicas", "", -1, "Minimum number of replicas for worker group")
-	cmd.Flags().Int32VarP(options.maxReplicas, "max-replicas", "", -1, "Maximum number of replicas for worker group")
+	cmd.Flags().Int32VarP(options.minReplicas, "min-replicas", "", -1, "Minimum desired number of replicas for worker group")
+	cmd.Flags().Int32VarP(options.maxReplicas, "max-replicas", "", -1, "Maximum desired number of replicas for worker group")
 	return cmd
 }
 
@@ -191,7 +191,7 @@ func (options *ScaleClusterOptions) Run(ctx context.Context, k8sClient client.Cl
 		finalMinReplicas = *options.minReplicas
 		if finalMinReplicas != currentMinReplicas {
 			cluster.Spec.WorkerGroupSpecs[workerGroupIndex].MinReplicas = &finalMinReplicas
-			changes = append(changes, fmt.Sprintf("Updated minReplicas: %d to %d", currentMinReplicas, *options.minReplicas))
+			changes = append(changes, fmt.Sprintf("Scaled minReplicas: %d to %d", currentMinReplicas, *options.minReplicas))
 			hasChanges = true
 		}
 	}
@@ -199,7 +199,7 @@ func (options *ScaleClusterOptions) Run(ctx context.Context, k8sClient client.Cl
 		finalMaxReplicas = *options.maxReplicas
 		if finalMaxReplicas != currentMaxReplicas {
 			cluster.Spec.WorkerGroupSpecs[workerGroupIndex].MaxReplicas = &finalMaxReplicas
-			changes = append(changes, fmt.Sprintf("Updated maxReplicas: %d to %d", currentMaxReplicas, *options.maxReplicas))
+			changes = append(changes, fmt.Sprintf("Scaled maxReplicas: %d to %d", currentMaxReplicas, *options.maxReplicas))
 			hasChanges = true
 		}
 	}

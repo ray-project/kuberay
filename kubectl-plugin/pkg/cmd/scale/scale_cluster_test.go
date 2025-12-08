@@ -168,14 +168,15 @@ func TestRayScaleClusterRun(t *testing.T) {
 	cmdFactory := cmdutil.NewFactory(genericclioptions.NewConfigFlags(true))
 
 	testNamespace, workerGroup, cluster := "test-context", "worker-group-1", "my-cluster"
-	desiredReplicas := int32(7)
 
 	tests := []struct {
+		replicas       *int32
+		minReplicas    *int32
+		maxReplicas    *int32
 		name           string
 		expectedOutput string
 		expectedError  string
 		rayClusters    []runtime.Object
-		replicas       int32
 	}{
 		{
 			name:          "should error when cluster doesn't exist",
@@ -199,7 +200,7 @@ func TestRayScaleClusterRun(t *testing.T) {
 		},
 		{
 			name:     "should not do anything when the desired replicas is the same as the current replicas",
-			replicas: desiredReplicas,
+			replicas: ptr.To(int32(7)),
 			rayClusters: []runtime.Object{
 				&rayv1.RayCluster{
 					ObjectMeta: metav1.ObjectMeta{
@@ -210,7 +211,7 @@ func TestRayScaleClusterRun(t *testing.T) {
 						WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
 							{
 								GroupName: workerGroup,
-								Replicas:  &desiredReplicas,
+								Replicas:  ptr.To(int32(7)),
 							},
 						},
 					},
@@ -220,8 +221,8 @@ func TestRayScaleClusterRun(t *testing.T) {
 				workerGroup, cluster, testNamespace),
 		},
 		{
-			name:     "should succeed when arguments are valid",
-			replicas: desiredReplicas,
+			name:     "should successfully update only Replicas",
+			replicas: ptr.To(int32(7)),
 			rayClusters: []runtime.Object{
 				&rayv1.RayCluster{
 					ObjectMeta: metav1.ObjectMeta{
@@ -243,8 +244,112 @@ func TestRayScaleClusterRun(t *testing.T) {
 				workerGroup, cluster, testNamespace),
 		},
 		{
-			name:     "should error when replicas greater than max-replicas",
-			replicas: desiredReplicas,
+			name:        "should successfully update only minReplicas",
+			minReplicas: ptr.To(int32(3)),
+			rayClusters: []runtime.Object{
+				&rayv1.RayCluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      cluster,
+						Namespace: testNamespace,
+					},
+					Spec: rayv1.RayClusterSpec{
+						WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+							{
+								GroupName:   workerGroup,
+								Replicas:    ptr.To(int32(5)),
+								MinReplicas: ptr.To(int32(1)),
+								MaxReplicas: ptr.To(int32(10)),
+							},
+						},
+					},
+				},
+			},
+			expectedOutput: fmt.Sprintf(
+				"Updated worker group %s in Ray cluster %s in namespace %s (Scaled minReplicas: 1 to 3)",
+				workerGroup, cluster, testNamespace),
+		},
+		{
+			name:        "should successfully update only maxReplicas",
+			maxReplicas: ptr.To(int32(20)),
+			rayClusters: []runtime.Object{
+				&rayv1.RayCluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      cluster,
+						Namespace: testNamespace,
+					},
+					Spec: rayv1.RayClusterSpec{
+						WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+							{
+								GroupName:   workerGroup,
+								Replicas:    ptr.To(int32(5)),
+								MinReplicas: ptr.To(int32(1)),
+								MaxReplicas: ptr.To(int32(10)),
+							},
+						},
+					},
+				},
+			},
+			expectedOutput: fmt.Sprintf(
+				"Updated worker group %s in Ray cluster %s in namespace %s (Scaled maxReplicas: 10 to 20)",
+				workerGroup, cluster, testNamespace),
+		},
+		{
+			name:        "should successfully update minReplicas and maxReplicas",
+			minReplicas: ptr.To(int32(3)),
+			maxReplicas: ptr.To(int32(8)),
+			rayClusters: []runtime.Object{
+				&rayv1.RayCluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      cluster,
+						Namespace: testNamespace,
+					},
+					Spec: rayv1.RayClusterSpec{
+						WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+							{
+								GroupName:   workerGroup,
+								Replicas:    ptr.To(int32(5)),
+								MinReplicas: ptr.To(int32(1)),
+								MaxReplicas: ptr.To(int32(10)),
+							},
+						},
+					},
+				},
+			},
+			expectedOutput: fmt.Sprintf(
+				"Updated worker group %s in Ray cluster %s in namespace %s (Scaled minReplicas: 1 to 3, Scaled maxReplicas: 10 to 8)",
+				workerGroup, cluster, testNamespace),
+		},
+		{
+			name:        "should update successfully replicas, minReplicas, and maxReplicas",
+			replicas:    ptr.To(int32(7)),
+			minReplicas: ptr.To(int32(3)),
+			maxReplicas: ptr.To(int32(9)),
+			rayClusters: []runtime.Object{
+				&rayv1.RayCluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      cluster,
+						Namespace: testNamespace,
+					},
+					Spec: rayv1.RayClusterSpec{
+						WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+							{
+								GroupName:   workerGroup,
+								Replicas:    ptr.To(int32(2)),
+								MinReplicas: ptr.To(int32(1)),
+								MaxReplicas: ptr.To(int32(5)),
+							},
+						},
+					},
+				},
+			},
+			expectedOutput: fmt.Sprintf(
+				"Updated worker group %s in Ray cluster %s in namespace %s (Scaled minReplicas: 1 to 3, Scaled maxReplicas: 5 to 9, Scaled Replicas: 2 to 7)",
+				workerGroup, cluster, testNamespace),
+		},
+
+		{
+			name:     "should error when scaling replicas greater than max-replicas",
+			replicas: ptr.To(int32(7)),
 			rayClusters: []runtime.Object{
 				&rayv1.RayCluster{
 					ObjectMeta: metav1.ObjectMeta{
@@ -266,8 +371,8 @@ func TestRayScaleClusterRun(t *testing.T) {
 			expectedError: "cannot set --replicas (7) greater than --max-replicas (5)",
 		},
 		{
-			name:     "should error when min-replicas greater than max-replicas",
-			replicas: desiredReplicas,
+			name:        "should error when scaling min-replicas greater than max-replicas",
+			minReplicas: ptr.To(int32(999)),
 			rayClusters: []runtime.Object{
 				&rayv1.RayCluster{
 					ObjectMeta: metav1.ObjectMeta{
@@ -279,18 +384,18 @@ func TestRayScaleClusterRun(t *testing.T) {
 							{
 								GroupName:   workerGroup,
 								Replicas:    ptr.To(int32(3)),
-								MinReplicas: ptr.To(int32(8)),
+								MinReplicas: ptr.To(int32(1)),
 								MaxReplicas: ptr.To(int32(5)),
 							},
 						},
 					},
 				},
 			},
-			expectedError: "cannot set --min-replicas (8) greater than --max-replicas (5)",
+			expectedError: "cannot set --min-replicas (999) greater than --max-replicas (5)",
 		},
 		{
-			name:     "should error when replicas less than min-replicas",
-			replicas: 2,
+			name:     "should error when scaling replicas less than min-replicas",
+			replicas: ptr.To(int32(1)),
 			rayClusters: []runtime.Object{
 				&rayv1.RayCluster{
 					ObjectMeta: metav1.ObjectMeta{
@@ -301,15 +406,15 @@ func TestRayScaleClusterRun(t *testing.T) {
 						WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
 							{
 								GroupName:   workerGroup,
-								Replicas:    ptr.To(int32(2)),
-								MinReplicas: ptr.To(int32(3)),
+								Replicas:    ptr.To(int32(3)),
+								MinReplicas: ptr.To(int32(2)),
 								MaxReplicas: ptr.To(int32(5)),
 							},
 						},
 					},
 				},
 			},
-			expectedError: "cannot set --replicas (2) less than --min-replicas (3)",
+			expectedError: "cannot set --replicas (1) less than --min-replicas (2)",
 		},
 	}
 
@@ -320,7 +425,9 @@ func TestRayScaleClusterRun(t *testing.T) {
 				ioStreams:   &testStreams,
 				namespace:   testNamespace,
 				cluster:     cluster,
-				replicas:    &tc.replicas,
+				replicas:    tc.replicas,
+				minReplicas: tc.minReplicas,
+				maxReplicas: tc.maxReplicas,
 				workerGroup: workerGroup,
 			}
 
