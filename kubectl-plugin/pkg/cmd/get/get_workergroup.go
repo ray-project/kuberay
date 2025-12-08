@@ -227,7 +227,7 @@ func getWorkerGroupDetails(ctx context.Context, enrichedWorkerGroupSpecs []enric
 		workerGroupResources := calculateDesiredResourcesForWorkerGroup(ewgs.spec)
 
 		var (
-			minReplicas int32
+			minReplicas int32 // default: 0
 			maxReplicas int32 = math.MaxInt32
 		)
 
@@ -304,10 +304,7 @@ func printWorkerGroups(workerGroups []workerGroup, allNamespaces bool, output io
 		}
 
 		minStr := fmt.Sprintf("%d", wg.minReplicas)
-		maxStr := "-"
-		if wg.maxReplicas != math.MaxInt32 {
-			maxStr = fmt.Sprintf("%d", wg.maxReplicas)
-		}
+		maxStr := fmt.Sprintf("%d", wg.maxReplicas)
 
 		row.Cells = append(row.Cells, []interface{}{
 			wg.name,

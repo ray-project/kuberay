@@ -272,11 +272,11 @@ func TestRayWorkerGroupsGetRun(t *testing.T) {
 			allNamespaces: true,
 			rayClusters:   rayClusters,
 			pods:          pods,
-			expected: `NAMESPACE     NAME      MIN   MAX   REPLICAS   CPUS   GPUS   TPUS   MEMORY   CLUSTER
-namespace-1   group-1   1     5     1/1        2      1      1      1Gi      cluster-1
-namespace-1   group-2   0     -     1/1        2      1      1      1Gi      cluster-2
-namespace-2   group-1   1     4     1/2        4      2      2      2Gi      cluster-1
-namespace-2   group-4   0     3     0/0        0      0      0      0        cluster-1
+			expected: `NAMESPACE     NAME      MIN   MAX          REPLICAS   CPUS   GPUS   TPUS   MEMORY   CLUSTER
+namespace-1   group-1   1     5            1/1        2      1      1      1Gi      cluster-1
+namespace-1   group-2   0     2147483647   1/1        2      1      1      1Gi      cluster-2
+namespace-2   group-1   1     4            1/2        4      2      2      2Gi      cluster-1
+namespace-2   group-4   0     3            0/0        0      0      0      0        cluster-1
 `,
 		},
 		{
@@ -300,9 +300,9 @@ namespace-2   group-4   0     3     0/0        0      0      0      0        clu
 			allNamespaces: false,
 			rayClusters:   rayClusters,
 			pods:          pods,
-			expected: `NAME      MIN   MAX   REPLICAS   CPUS   GPUS   TPUS   MEMORY   CLUSTER
-group-1   1     5     1/1        2      1      1      1Gi      cluster-1
-group-2   0     -     1/1        2      1      1      1Gi      cluster-2
+			expected: `NAME      MIN   MAX          REPLICAS   CPUS   GPUS   TPUS   MEMORY   CLUSTER
+group-1   1     5            1/1        2      1      1      1Gi      cluster-1
+group-2   0     2147483647   1/1        2      1      1      1Gi      cluster-2
 `,
 		},
 		{
@@ -784,17 +784,17 @@ func TestPrintWorkerGroups(t *testing.T) {
 		{
 			name:          "one namespace",
 			allNamespaces: false,
-			expected: `NAME    MIN   MAX   REPLICAS   CPUS   GPUS   TPUS   MEMORY   CLUSTER
-pod-1   0     -     1/2        1      1      1      1Gi      cluster-1
-pod-2   1     5     3/3        1      1      1      1Gi      cluster-2
+			expected: `NAME    MIN   MAX          REPLICAS   CPUS   GPUS   TPUS   MEMORY   CLUSTER
+pod-1   0     2147483647   1/2        1      1      1      1Gi      cluster-1
+pod-2   1     5            3/3        1      1      1      1Gi      cluster-2
 `,
 		},
 		{
 			name:          "all namespaces",
 			allNamespaces: true,
-			expected: `NAMESPACE     NAME    MIN   MAX   REPLICAS   CPUS   GPUS   TPUS   MEMORY   CLUSTER
-namespace-1   pod-1   0     -     1/2        1      1      1      1Gi      cluster-1
-namespace-2   pod-2   1     5     3/3        1      1      1      1Gi      cluster-2
+			expected: `NAMESPACE     NAME    MIN   MAX          REPLICAS   CPUS   GPUS   TPUS   MEMORY   CLUSTER
+namespace-1   pod-1   0     2147483647   1/2        1      1      1      1Gi      cluster-1
+namespace-2   pod-2   1     5            3/3        1      1      1      1Gi      cluster-2
 `,
 		},
 	}
