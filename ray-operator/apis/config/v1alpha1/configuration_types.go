@@ -1,6 +1,8 @@
 package v1alpha1
 
 import (
+	"context"
+
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -92,14 +94,10 @@ type Configuration struct {
 	UseBackgroundGoroutine bool `json:"useBackgroundGoroutine,omitempty"`
 }
 
-func (config Configuration) GetDashboardClient(mgr manager.Manager) func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error) {
-	return utils.GetRayDashboardClientFunc(mgr, config.UseKubernetesProxy, config.UseBackgroundGoroutine)
+func (config Configuration) GetDashboardClient(ctx context.Context, mgr manager.Manager) func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error) {
+	return utils.GetRayDashboardClientFunc(ctx, mgr, config.UseKubernetesProxy, config.UseBackgroundGoroutine)
 }
 
 func (config Configuration) GetHttpProxyClient(mgr manager.Manager) func(hostIp, podNamespace, podName string, port int) utils.RayHttpProxyClientInterface {
 	return utils.GetRayHttpProxyClientFunc(mgr, config.UseKubernetesProxy)
-}
-
-func (config Configuration) DoesUseBackgroundGoroutine() bool {
-	return config.UseBackgroundGoroutine
 }
