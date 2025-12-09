@@ -145,7 +145,7 @@ func (r *RayCronJobReconciler) constructRayJob(cronJob *rayv1.RayCronJob) (*rayv
 			Name:      fmt.Sprintf("%s-%s", cronJob.Name, rand.String(5)),
 			Namespace: cronJob.Namespace,
 			Labels: map[string]string{
-				"ray.io/cronjob-name": cronJob.Name,
+				utils.RayCronJobNameLabelKey: cronJob.Name,
 			},
 		},
 		Spec: *cronJob.Spec.JobTemplate.DeepCopy(),

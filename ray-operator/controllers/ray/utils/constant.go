@@ -26,6 +26,7 @@ const (
 	HashWithoutReplicasAndWorkersToDeleteKey = "ray.io/hash-without-replicas-and-workers-to-delete"
 	NumWorkerGroupsKey                       = "ray.io/num-worker-groups"
 	KubeRayVersion                           = "ray.io/kuberay-version"
+	RayCronJobNameLabelKey                   = "ray.io/cronjob-name"
 
 	// Labels for feature RayMultihostIndexing
 	//
