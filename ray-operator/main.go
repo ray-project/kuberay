@@ -294,7 +294,7 @@ func main() {
 
 	if features.Enabled(features.RayCronJob) {
 		setupLog.Info("RayCronJob feature gate is enabled, starting RayCronJob controller")
-		exitOnError(ray.NewRayCronJobReconciler(mgr).SetupWithManager(mgr),
+		exitOnError(ray.NewRayCronJobReconciler(mgr).SetupWithManager(mgr, config.ReconcileConcurrency),
 			"unable to create controller", "controller", "RayCronJob")
 	} else {
 		setupLog.Info("RayCronJob feature gate is disabled, skipping RayCronJob controller setup")

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/go-logr/logr"
 	"github.com/robfig/cron/v3"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -15,6 +16,8 @@ import (
 	"k8s.io/utils/clock"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
@@ -160,8 +163,19 @@ func (r *RayCronJobReconciler) constructRayJob(cronJob *rayv1.RayCronJob) (*rayv
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *RayCronJobReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *RayCronJobReconciler) SetupWithManager(mgr ctrl.Manager, reconcileConcurrency int) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&rayv1.RayCronJob{}).
+		Owns(&rayv1.RayJob{}).
+		WithOptions(controller.Options{
+			MaxConcurrentReconciles: reconcileConcurrency,
+			LogConstructor: func(request *reconcile.Request) logr.Logger {
+				logger := ctrl.Log.WithName("controllers").WithName("RayCronJob")
+				if request != nil {
+					logger = logger.WithValues("RayCronJob", request.NamespacedName)
+				}
+				return logger
+			},
+		}).
 		Complete(r)
 }
