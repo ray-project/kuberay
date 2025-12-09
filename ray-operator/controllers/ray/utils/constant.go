@@ -27,6 +27,7 @@ const (
 	NumWorkerGroupsKey                       = "ray.io/num-worker-groups"
 	KubeRayVersion                           = "ray.io/kuberay-version"
 	RayCronJobNameLabelKey                   = "ray.io/cronjob-name"
+	RayCronJobTimestampAnnotationKey         = "ray.io/cronjob-scheduled-timestamp"
 
 	// Labels for feature RayMultihostIndexing
 	//

@@ -105,7 +105,7 @@ func (r *RayCronJobReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 			return ctrl.Result{RequeueAfter: nextScheduleTime.Sub(now)}, nil
 		}
 
-		rayJob, err := r.constructRayJob(rayCronJobInstance)
+		rayJob, err := r.constructRayJob(rayCronJobInstance, nextScheduleTime)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
@@ -142,13 +142,16 @@ func (r *RayCronJobReconciler) updateRayCronJobStatus(ctx context.Context, oldRa
 	return nil
 }
 
-func (r *RayCronJobReconciler) constructRayJob(cronJob *rayv1.RayCronJob) (*rayv1.RayJob, error) {
+func (r *RayCronJobReconciler) constructRayJob(cronJob *rayv1.RayCronJob, expectedTimestamp time.Time) (*rayv1.RayJob, error) {
 	rayJob := &rayv1.RayJob{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("%s-%s", cronJob.Name, rand.String(5)),
 			Namespace: cronJob.Namespace,
 			Labels: map[string]string{
 				utils.RayCronJobNameLabelKey: cronJob.Name,
+			},
+			Annotations: map[string]string{
+				utils.RayCronJobTimestampAnnotationKey: expectedTimestamp.UTC().Format(time.RFC3339),
 			},
 		},
 		Spec: *cronJob.Spec.JobTemplate.DeepCopy(),
