@@ -1899,7 +1899,7 @@ func TestValidateRayCronJobSpec(t *testing.T) {
 				},
 				Spec: rayv1.RayCronJobSpec{
 					Schedule: "*/5 * * * *",
-					JobTemplate: &rayv1.RayJobSpec{
+					JobTemplate: rayv1.RayJobSpec{
 						Entrypoint: "python test.py",
 						RayClusterSpec: &rayv1.RayClusterSpec{
 							HeadGroupSpec: rayv1.HeadGroupSpec{
@@ -1929,7 +1929,7 @@ func TestValidateRayCronJobSpec(t *testing.T) {
 				},
 				Spec: rayv1.RayCronJobSpec{
 					Schedule: "invalid cron",
-					JobTemplate: &rayv1.RayJobSpec{
+					JobTemplate: rayv1.RayJobSpec{
 						Entrypoint: "python test.py",
 						RayClusterSpec: &rayv1.RayClusterSpec{
 							HeadGroupSpec: rayv1.HeadGroupSpec{
@@ -1952,7 +1952,7 @@ func TestValidateRayCronJobSpec(t *testing.T) {
 			errorMsg:    "invalid cron schedule",
 		},
 		{
-			name: "Nil JobTemplate",
+			name: "Empty JobTemplate",
 			cronJob: &rayv1.RayCronJob{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-cronjob",
@@ -1960,11 +1960,12 @@ func TestValidateRayCronJobSpec(t *testing.T) {
 				},
 				Spec: rayv1.RayCronJobSpec{
 					Schedule:    "*/5 * * * *",
-					JobTemplate: nil,
+					JobTemplate: rayv1.RayJobSpec{},
 				},
 			},
 			expectError: true,
-			errorMsg:    "jobTemplate cannot be nil",
+			// We use ValidateRayJobSpec() for validating JobTemplate, which requires either RayClusterSpec or ClusterSelector to be set
+			errorMsg: "one of RayClusterSpec or ClusterSelector must be set",
 		},
 		{
 			name: "Invalid RayJob spec - no containers",
@@ -1975,7 +1976,7 @@ func TestValidateRayCronJobSpec(t *testing.T) {
 				},
 				Spec: rayv1.RayCronJobSpec{
 					Schedule: "*/5 * * * *",
-					JobTemplate: &rayv1.RayJobSpec{
+					JobTemplate: rayv1.RayJobSpec{
 						Entrypoint: "python test.py",
 						RayClusterSpec: &rayv1.RayClusterSpec{
 							HeadGroupSpec: rayv1.HeadGroupSpec{

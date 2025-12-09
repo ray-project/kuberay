@@ -603,14 +603,9 @@ func ValidateRayCronJobSpec(rayCronJob *rayv1.RayCronJob) error {
 		return fmt.Errorf("invalid cron schedule: %w", err)
 	}
 
-	// Validate the embedded RayJob spec
-	if rayCronJob.Spec.JobTemplate == nil {
-		return fmt.Errorf("jobTemplate cannot be nil")
-	}
-
 	// Validate the ray job spec
 	rayJob := &rayv1.RayJob{
-		Spec: *rayCronJob.Spec.JobTemplate,
+		Spec: rayCronJob.Spec.JobTemplate,
 	}
 
 	if err := ValidateRayJobSpec(rayJob); err != nil {

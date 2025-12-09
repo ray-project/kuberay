@@ -7,10 +7,10 @@ import (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
-// RayCronJobSpec defines the desired state of RayCronJob
+//nolint:govet // RayCronJobSpec defines the desired state of RayCronJob
 type RayCronJobSpec struct {
 	// JobTemplate defines the job spec that will be created by cron scheduling
-	JobTemplate *RayJobSpec `json:"jobTemplate"`
+	JobTemplate RayJobSpec `json:"jobTemplate"`
 	// Schedule is the cron schedule string
 	Schedule string `json:"schedule"`
 }

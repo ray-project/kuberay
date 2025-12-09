@@ -28,7 +28,7 @@ func rayCronJobTemplate(name string, namespace string, schedule string) *rayv1.R
 		},
 		Spec: rayv1.RayCronJobSpec{
 			Schedule: schedule,
-			JobTemplate: &rayv1.RayJobSpec{
+			JobTemplate: rayv1.RayJobSpec{
 				Entrypoint: "python test.py",
 				RayClusterSpec: &rayv1.RayClusterSpec{
 					HeadGroupSpec: rayv1.HeadGroupSpec{

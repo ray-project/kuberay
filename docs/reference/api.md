@@ -332,7 +332,7 @@ _Appears in:_
 
 
 
-RayCronJobSpec defines the desired state of RayCronJob
+
 
 
 
