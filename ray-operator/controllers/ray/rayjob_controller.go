@@ -1217,13 +1217,7 @@ func (r *RayJobReconciler) handleDeletionRules(ctx context.Context, rayJob *rayv
 	// Categorize all applicable and incomplete rules into "overdue" or "pending".
 	for _, rule := range rayJob.Spec.DeletionStrategy.DeletionRules {
 		// Skip rules that don't match the current job status or job deployment status.
-		var match bool
-		if rule.Condition.JobStatus != nil {
-			match = *rule.Condition.JobStatus == rayJob.Status.JobStatus
-		} else if rule.Condition.JobDeploymentStatus != nil {
-			match = *rule.Condition.JobDeploymentStatus == rayJob.Status.JobDeploymentStatus
-		}
-		if !match {
+		if !isDeletionRuleMatched(rule, rayJob) {
 			continue
 		}
 
@@ -1386,6 +1380,17 @@ func (r *RayJobReconciler) executeDeletionPolicy(ctx context.Context, rayJob *ra
 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 	}
 	return ctrl.Result{}, nil
+}
+
+// isDeletionRuleMatched checks if the deletion rule matches the current job status or job deployment status.
+func isDeletionRuleMatched(rule rayv1.DeletionRule, rayJob *rayv1.RayJob) bool {
+	if rule.Condition.JobStatus != nil {
+		return *rule.Condition.JobStatus == rayJob.Status.JobStatus
+	}
+	if rule.Condition.JobDeploymentStatus != nil {
+		return *rule.Condition.JobDeploymentStatus == rayJob.Status.JobDeploymentStatus
+	}
+	return false
 }
 
 // isDeletionActionCompleted checks if the state corresponding to a deletion policy is already achieved.
