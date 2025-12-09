@@ -159,7 +159,7 @@ type DeletionCondition struct {
 	// +optional
 	JobDeploymentStatus *JobDeploymentStatus `json:"jobDeploymentStatus,omitempty"`
 
-	// TTLSeconds is the time in seconds from when the JobStatus
+	// TTLSeconds is the time in seconds from when the JobStatus or JobDeploymentStatus
 	// reaches the specified terminal state to when this deletion action should be triggered.
 	// The value must be a non-negative integer.
 	// +kubebuilder:default=0
