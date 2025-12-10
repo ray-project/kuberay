@@ -54,25 +54,29 @@ type (
 )
 
 func (w *workerPool) init(ctx context.Context, taskQueueSize int, workerSize int, queryInterval time.Duration) {
-	logger := ctrl.LoggerFrom(ctx).WithName("WorkerPool")
+	logger := ctrl.LoggerFrom(ctx).WithName("RayDashboardCacheClient").WithName("WorkerPool")
 	w.taskQueue = make(chan Task, taskQueueSize)
 
 	for i := 0; i < workerSize; i++ {
-		// TODO: observability for these goroutine
-		// TODO: should we consider the stop ?
-		go func() {
-			for task := range w.taskQueue {
-				again := task()
+		go func(workerID int) {
+			for {
+				select {
+				case <-ctx.Done():
+					logger.Info("worker exiting...", "workerID", workerID)
+					return
+				case task := <-w.taskQueue:
+					again := task()
 
-				if again {
-					time.AfterFunc(queryInterval, func() {
-						w.taskQueue <- task
-					})
+					if again {
+						time.AfterFunc(queryInterval, func() {
+							w.taskQueue <- task
+						})
+					}
 				}
 			}
-		}()
+		}(i)
 	}
-	logger.Info(fmt.Sprintf("Initialize a worker pool with %d and queryInterval is %v.", workerSize, queryInterval))
+	logger.Info(fmt.Sprintf("Initialize a worker pool with %d goroutine and queryInterval is %v.", workerSize, queryInterval))
 }
 
 func (w *workerPool) PutTask(task Task) {
@@ -95,8 +99,8 @@ func (r *RayDashboardCacheClient) InitClient(ctx context.Context, client RayDash
 	initCacheStorage.Do(func() {
 		if cacheStorage == nil {
 			// the New() returns error only if the size is less or equal than zero.
-			cacheStorage, _ = lru.NewWithEvict[string, *JobInfoCache](cacheSize, func(key string, value *JobInfoCache) {
-				logger.Info(fmt.Sprintf("Evict cache for key %s.", key), "value", value)
+			cacheStorage, _ = lru.NewWithEvict[string, *JobInfoCache](cacheSize, func(key string, _ *JobInfoCache) {
+				logger.WithName("cacheStorage").Info("Evict cache for key.", "key", key)
 			})
 		}
 
@@ -108,25 +112,32 @@ func (r *RayDashboardCacheClient) InitClient(ctx context.Context, client RayDash
 			loggerForGC := logger.WithName("CacheCleanup")
 			loggerForGC.Info(fmt.Sprintf("Initialize a cache cleanup goroutine with interval %v.", queryInterval*10))
 
-			// TODO: observability ?
-			// TODO: should we consider the stop ?
-			for range ticker.C {
-				keys := cacheStorage.Keys()
-				expiredThreshold := time.Now().Add(-cacheExpiry)
-				loggerForGC.Info(fmt.Sprintf("Found %d keys to verify,", len(keys)), "expiredThreshold", expiredThreshold)
+			for {
+				select {
+				case <-ctx.Done():
+					loggerForGC.Info("clean up goroutine exiting...")
+					return
+				case t := <-ticker.C:
+					cacheLock.RLock()
+					keys := cacheStorage.Keys()
+					cacheLock.RUnlock()
 
-				removed := keys[:0]
-				for _, key := range keys {
-					cacheLock.Lock()
-					if cached, ok := cacheStorage.Peek(key); ok {
-						if cached.UpdateAt.Before(expiredThreshold) {
-							cacheStorage.Remove(key)
-							removed = append(removed, key)
+					expiredThreshold := time.Now().Add(-cacheExpiry)
+					loggerForGC.Info(fmt.Sprintf("Found %d keys to verify,", len(keys)), "expiredThreshold", expiredThreshold, "tick at", t)
+
+					removed := keys[:0]
+					for _, key := range keys {
+						cacheLock.Lock()
+						if cached, ok := cacheStorage.Peek(key); ok {
+							if cached.UpdateAt.Before(expiredThreshold) {
+								cacheStorage.Remove(key)
+								removed = append(removed, key)
+							}
 						}
+						cacheLock.Unlock()
 					}
-					cacheLock.Unlock()
+					loggerForGC.Info(fmt.Sprintf("clean up %d cache.", len(removed)), "expiredThreshold", expiredThreshold, "removed keys", removed)
 				}
-				loggerForGC.Info(fmt.Sprintf("clean up %d cache.", len(removed)), "expiredThreshold", expiredThreshold, "removed keys", keys)
 			}
 		}()
 	})
