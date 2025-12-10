@@ -88,13 +88,18 @@ func getWorkerGroupValues(ns, cluster, group string) (minReplicas, maxReplicas, 
 	}
 
 	//nolint:gosec // G204: group parameter is controlled by test code, not user input
-	minOut, _ := exec.Command("kubectl", "get", "raycluster", cluster, "-n", ns,
+	minOut, err := exec.Command("kubectl", "get", "raycluster", cluster, "-n", ns,
 		"-o", "jsonpath={.spec.workerGroupSpecs[?(@.groupName==\""+group+"\")].minReplicas}").Output()
+	Expect(err).ToNot(HaveOccurred())
+
 	//nolint:gosec // G204: group parameter is controlled by test code, not user input
-	maxOut, _ := exec.Command("kubectl", "get", "raycluster", cluster, "-n", ns,
+	maxOut, err := exec.Command("kubectl", "get", "raycluster", cluster, "-n", ns,
 		"-o", "jsonpath={.spec.workerGroupSpecs[?(@.groupName==\""+group+"\")].maxReplicas}").Output()
+	Expect(err).ToNot(HaveOccurred())
+
 	//nolint:gosec // G204: group parameter is controlled by test code, not user input
-	replicasOut, _ := exec.Command("kubectl", "get", "raycluster", cluster, "-n", ns,
+	replicasOut, err := exec.Command("kubectl", "get", "raycluster", cluster, "-n", ns,
 		"-o", "jsonpath={.spec.workerGroupSpecs[?(@.groupName==\""+group+"\")].replicas}").Output()
+	Expect(err).ToNot(HaveOccurred())
 	return clean(string(minOut)), clean(string(maxOut)), clean(string(replicasOut))
 }
