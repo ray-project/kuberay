@@ -485,7 +485,7 @@ func validateDeletionRules(rayJob *rayv1.RayJob) error {
 			errs = append(errs, fmt.Errorf("deletionRules[%d]: cannot set both JobStatus and JobDeploymentStatus at the same time", i))
 			continue
 		}
-		if !hasJobStatus && !hasJobDeploymentStatus {
+		if !(hasJobStatus || hasJobDeploymentStatus) {
 			errs = append(errs, fmt.Errorf("deletionRules[%d]: exactly one of JobStatus and JobDeploymentStatus must be set", i))
 			continue
 		}
