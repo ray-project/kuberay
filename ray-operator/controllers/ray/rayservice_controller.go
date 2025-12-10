@@ -14,10 +14,12 @@ import (
 	"github.com/go-logr/logr"
 	cmap "github.com/orcaman/concurrent-map/v2"
 	corev1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/tools/record"
@@ -87,7 +89,6 @@ func NewRayServiceReconciler(ctx context.Context, mgr manager.Manager, provider 
 // +kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=pods/status,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=pods/proxy,verbs=get;update;patch
-// +kubebuilder:rbac:groups=core,resources=endpoints,verbs=get;list;watch
 // +kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=services/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=core,resources=services/proxy,verbs=get;update;patch
@@ -97,6 +98,7 @@ func NewRayServiceReconciler(ctx context.Context, mgr manager.Manager, provider 
 // +kubebuilder:rbac:groups="gateway.networking.k8s.io",resources=httproutes,verbs=get;list;watch;create;update;
 // +kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=roles,verbs=get;list;watch;create;delete;update
 // +kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=rolebindings,verbs=get;list;watch;create;delete
+// +kubebuilder:rbac:groups=discovery.k8s.io,resources=endpointslices,verbs=get;list;watch
 
 // [WARNING]: There MUST be a newline after kubebuilder markers.
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
@@ -443,33 +445,26 @@ func (r *RayServiceReconciler) calculateStatus(
 		}
 	}
 
-	serveEndPoints := &corev1.Endpoints{}
-	serveServiceName := common.RayServiceServeServiceNamespacedName(rayServiceInstance)
+	// Calculate the number of ready serve endpoints for the active cluster.
+	serveServiceNamespacedName := common.RayServiceServeServiceNamespacedName(rayServiceInstance)
 	if utils.IsIncrementalUpgradeEnabled(&rayServiceInstance.Spec) && activeCluster != nil {
 		// The Serve service name is based on the unique RayCluster name, since we use the
 		// per-cluster Serve services for traffic routing during an incremental upgrade.
-		serveServiceName.Name = utils.GenerateServeServiceName(activeCluster.Name)
+		serveServiceNamespacedName.Name = utils.GenerateServeServiceName(activeCluster.Name)
 	}
-	if err := r.Get(ctx, serveServiceName, serveEndPoints); err != nil && !errors.IsNotFound(err) {
+	numServeEndpoints, err := r.calculateNumServeEndpointsFromSlices(ctx, serveServiceNamespacedName)
+	if err != nil {
 		return err
-	}
-
-	numServeEndpoints := 0
-	// Ray Pod addresses are categorized into subsets based on the IPs they share.
-	// subset.Addresses contains a list of Ray Pod addresses with ready serve port.
-	for _, subset := range serveEndPoints.Subsets {
-		numServeEndpoints += len(subset.Addresses)
 	}
 
 	// During NewClusterWithIncrementalUpgrade, the pending RayCluster is also serving.
 	if utils.IsIncrementalUpgradeEnabled(&rayServiceInstance.Spec) && pendingCluster != nil {
-		pendingServeServiceName := common.RayClusterServeServiceNamespacedName(pendingCluster)
-		if err := r.Get(ctx, pendingServeServiceName, serveEndPoints); err != nil && !errors.IsNotFound(err) {
+		pendingServeServiceNamespacedName := common.RayClusterServeServiceNamespacedName(pendingCluster)
+		pendingEndpoints, err := r.calculateNumServeEndpointsFromSlices(ctx, pendingServeServiceNamespacedName)
+		if err != nil {
 			return err
 		}
-		for _, subset := range serveEndPoints.Subsets {
-			numServeEndpoints += len(subset.Addresses)
-		}
+		numServeEndpoints += pendingEndpoints
 	}
 
 	if numServeEndpoints > math.MaxInt32 {
@@ -1749,6 +1744,57 @@ func generateHashWithoutReplicasAndWorkersToDelete(rayClusterSpec rayv1.RayClust
 
 	// Generate a hash for the RayClusterSpec.
 	return utils.GenerateJsonHash(updatedRayClusterSpec)
+}
+
+// calculateNumServeEndpointsFromSlices calculates the number of unique ready Pods
+// from EndpointSlices associated with a given service.
+//
+// In dual-stack environments (IPv4 + IPv6), the same Pod may appear in multiple
+// EndpointSlices with different IP addresses. This function deduplicates by TargetRef.UID
+// to ensure each Pod is counted only once, regardless of how many IP families it serves.
+//
+// An endpoint is considered ready if it has the `Ready` condition set to true.
+// This replaces the legacy Endpoints API approach.
+func (r *RayServiceReconciler) calculateNumServeEndpointsFromSlices(ctx context.Context, serviceNamespacedName client.ObjectKey) (int, error) {
+	logger := ctrl.LoggerFrom(ctx)
+
+	// List all EndpointSlices for the service.
+	// EndpointSlices are automatically created by Kubernetes and labeled with
+	// kubernetes.io/service-name to associate them with their parent Service.
+	endpointSliceList := &discoveryv1.EndpointSliceList{}
+	listOpts := []client.ListOption{
+		client.InNamespace(serviceNamespacedName.Namespace),
+		client.MatchingLabels{discoveryv1.LabelServiceName: serviceNamespacedName.Name},
+	}
+
+	if err := r.List(ctx, endpointSliceList, listOpts...); err != nil {
+		logger.Error(err, "Failed to list EndpointSlices", "serviceName", serviceNamespacedName.Name, "serviceNamespace", serviceNamespacedName.Namespace)
+		return 0, err
+	}
+
+	uniqueNumReadyPods := make(map[types.UID]struct{})
+
+	for _, endpointSlice := range endpointSliceList.Items {
+		for _, endpoint := range endpointSlice.Endpoints {
+			// Only count endpoints that are ready to serve traffic
+			if ptr.Deref(endpoint.Conditions.Ready, false) {
+				if endpoint.TargetRef != nil && endpoint.TargetRef.UID != "" {
+					uniqueNumReadyPods[endpoint.TargetRef.UID] = struct{}{}
+				}
+			}
+		}
+	}
+
+	numPods := len(uniqueNumReadyPods)
+
+	logger.V(1).Info("Counted serve-ready pods via EndpointSlices",
+		"serviceName", serviceNamespacedName.Name,
+		"serviceNamespace", serviceNamespacedName.Namespace,
+		"numSlices", len(endpointSliceList.Items),
+		"numReadyPods", numPods,
+	)
+
+	return numPods, nil
 }
 
 // isHeadPodRunningAndReady checks if the head pod of the RayCluster is running and ready.
