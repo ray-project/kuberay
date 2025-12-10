@@ -1128,57 +1128,46 @@ func (r *RayClusterReconciler) shouldRecreatePodsForUpgrade(ctx context.Context,
 		return false
 	}
 
-	allPods := corev1.PodList{}
-	if err := r.List(ctx, &allPods, common.RayClusterAllPodsAssociationOptions(instance).ToListOptions()...); err != nil {
-		logger.Error(err, "Failed to list pods for upgrade check")
+	headPods := corev1.PodList{}
+	if err := r.List(ctx, &headPods, common.RayClusterHeadPodsAssociationOptions(instance).ToListOptions()...); err != nil {
+		logger.Error(err, "Failed to list head pods for upgrade check")
 		return false
 	}
 
-	if len(allPods.Items) == 0 {
-		return false
+	if len(headPods.Items) == 1 {
+		expectedHeadHash, err := common.GeneratePodTemplateHash(instance.Spec.HeadGroupSpec.Template)
+		if err != nil {
+			logger.Error(err, "Failed to generate head template hash")
+			return false
+		}
+
+		headPod := headPods.Items[0]
+		actualHash := headPod.Annotations[utils.PodTemplateHashKey]
+		if actualHash != "" && actualHash != expectedHeadHash {
+			logger.Info("Pod template has changed, will recreate all pods", "rayCluster", instance.Name)
+			return true
+		}
 	}
 
-	headHash, err := common.GeneratePodTemplateHash(instance.Spec.HeadGroupSpec.Template)
-	if err != nil {
-		logger.Error(err, "Failed to generate head template hash")
-		return false
-	}
-
-	workerHashMap := make(map[string]string)
 	for _, workerGroup := range instance.Spec.WorkerGroupSpecs {
-		hash, err := common.GeneratePodTemplateHash(workerGroup.Template)
+		workerPods := corev1.PodList{}
+		if err := r.List(ctx, &workerPods, common.RayClusterGroupPodsAssociationOptions(instance, workerGroup.GroupName).ToListOptions()...); err != nil {
+			logger.Error(err, "Failed to list worker pods for upgrade check", "groupName", workerGroup.GroupName)
+			continue
+		}
+
+		expectedWorkerHash, err := common.GeneratePodTemplateHash(workerGroup.Template)
 		if err != nil {
 			logger.Error(err, "Failed to generate worker template hash", "groupName", workerGroup.GroupName)
 			continue
 		}
-		workerHashMap[workerGroup.GroupName] = hash
-	}
 
-	// Check each pod to see if its template hash matches the current spec
-	for _, pod := range allPods.Items {
-		nodeType := pod.Labels[utils.RayNodeTypeLabelKey]
-		actualHash := pod.Annotations[utils.PodTemplateHashKey]
-
-		var expectedHash string
-		switch rayv1.RayNodeType(nodeType) {
-		case rayv1.HeadNode:
-			expectedHash = headHash
-		case rayv1.WorkerNode:
-			groupName := pod.Labels[utils.RayNodeGroupLabelKey]
-			var ok bool
-			expectedHash, ok = workerHashMap[groupName]
-			if !ok {
-				logger.Info("Worker group not found in spec, skipping pod", "pod", pod.Name, "groupName", groupName)
-				continue
+		for _, pod := range workerPods.Items {
+			actualHash := pod.Annotations[utils.PodTemplateHashKey]
+			if actualHash != "" && actualHash != expectedWorkerHash {
+				logger.Info("Pod template has changed, will recreate all pods", "rayCluster", instance.Name)
+				return true
 			}
-		default:
-			continue
-		}
-
-		if actualHash != expectedHash {
-			logger.Info("Pod template has changed, will recreate all pods",
-				"rayCluster", instance.Name)
-			return true
 		}
 	}
 	return false
