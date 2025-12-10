@@ -3668,7 +3668,6 @@ func TestShouldRecreatePodsForUpgrade(t *testing.T) {
 				},
 				Annotations: map[string]string{
 					utils.PodTemplateHashKey: templateHash,
-					utils.KubeRayVersion:     utils.KUBERAY_VERSION,
 				},
 			},
 			Spec: corev1.PodSpec{
@@ -3678,13 +3677,6 @@ func TestShouldRecreatePodsForUpgrade(t *testing.T) {
 			},
 			Status: corev1.PodStatus{Phase: corev1.PodRunning},
 		}
-	}
-
-	// Helper function to create a pod with specific template hash and KubeRay version
-	createPodWithHashAndVersion := func(name string, nodeType rayv1.RayNodeType, groupName string, templateHash string, kuberayVersion string) *corev1.Pod {
-		pod := createPodWithHash(name, nodeType, groupName, templateHash)
-		pod.Annotations[utils.KubeRayVersion] = kuberayVersion
-		return pod
 	}
 
 	tests := []struct {
@@ -3753,17 +3745,6 @@ func TestShouldRecreatePodsForUpgrade(t *testing.T) {
 				createPodWithHash("worker-pod", rayv1.WorkerNode, groupNameStr, "old-worker-hash"),
 			},
 			expectedRecreate: true,
-		},
-		{
-			name: "Recreate strategy with different KubeRay version - should update annotations and not recreate",
-			upgradeStrategy: &rayv1.RayClusterUpgradeStrategy{
-				Type: ptr.To(rayv1.RayClusterRecreate),
-			},
-			pods: []runtime.Object{
-				createPodWithHashAndVersion("head-pod", rayv1.HeadNode, headGroupNameStr, "old-head-hash", "v1.0.0"),
-				createPodWithHashAndVersion("worker-pod", rayv1.WorkerNode, groupNameStr, "old-worker-hash", "v1.0.0"),
-			},
-			expectedRecreate: false,
 		},
 	}
 

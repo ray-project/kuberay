@@ -188,12 +188,10 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 	// This ensures privilege of KubeRay users are contained within the namespace of the RayCluster.
 	podTemplate.ObjectMeta.Namespace = instance.Namespace
 
-	if podTemplate.Annotations == nil {
-		podTemplate.Annotations = make(map[string]string)
-	}
-	// Set the KubeRay version used to create the pod
-	podTemplate.Annotations[utils.KubeRayVersion] = utils.KUBERAY_VERSION
 	if templateHash != "" {
+		if podTemplate.Annotations == nil {
+			podTemplate.Annotations = make(map[string]string)
+		}
 		podTemplate.Annotations[utils.PodTemplateHashKey] = templateHash
 	}
 
@@ -331,16 +329,15 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 		log.Error(err, "Failed to generate pod template hash for worker group", "groupName", workerSpec.GroupName)
 	}
 	podTemplate.GenerateName = podName
+
 	// Pods created by RayCluster should be restricted to the namespace of the RayCluster.
 	// This ensures privilege of KubeRay users are contained within the namespace of the RayCluster.
 	podTemplate.ObjectMeta.Namespace = instance.Namespace
 
-	if podTemplate.Annotations == nil {
-		podTemplate.Annotations = make(map[string]string)
-	}
-	// Set the KubeRay version used to create the pod
-	podTemplate.Annotations[utils.KubeRayVersion] = utils.KUBERAY_VERSION
 	if templateHash != "" {
+		if podTemplate.Annotations == nil {
+			podTemplate.Annotations = make(map[string]string)
+		}
 		podTemplate.Annotations[utils.PodTemplateHashKey] = templateHash
 	}
 	// The Ray worker should only start once the GCS server is ready.

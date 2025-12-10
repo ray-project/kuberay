@@ -1137,21 +1137,6 @@ func (r *RayClusterReconciler) shouldRecreatePodsForUpgrade(ctx context.Context,
 		return false
 	}
 
-	// Case 1: If the KubeRay version has changed, update annotations then check in the next reconciliation
-	for _, pod := range allPods.Items {
-		podVersion := pod.Annotations[utils.KubeRayVersion]
-		if podVersion != "" && podVersion != utils.KUBERAY_VERSION {
-			logger.Info("Pods have different KubeRay version, updating pod annotations",
-				"pod", pod.Name,
-				"podVersion", podVersion,
-				"currentVersion", utils.KUBERAY_VERSION)
-			if err := r.updatePodsAnnotations(ctx, instance, &allPods); err != nil {
-				logger.Error(err, "Failed to update pod annotations for KubeRay version change")
-			}
-			return false
-		}
-	}
-
 	headHash, err := common.GeneratePodTemplateHash(instance.Spec.HeadGroupSpec.Template)
 	if err != nil {
 		logger.Error(err, "Failed to generate head template hash")
@@ -1168,7 +1153,7 @@ func (r *RayClusterReconciler) shouldRecreatePodsForUpgrade(ctx context.Context,
 		workerHashMap[workerGroup.GroupName] = hash
 	}
 
-	// Case 2: If the pod template hash has changed, recreate all pods
+	// Check each pod to see if its template hash matches the current spec
 	for _, pod := range allPods.Items {
 		nodeType := pod.Labels[utils.RayNodeTypeLabelKey]
 		actualHash := pod.Annotations[utils.PodTemplateHashKey]
@@ -1196,61 +1181,6 @@ func (r *RayClusterReconciler) shouldRecreatePodsForUpgrade(ctx context.Context,
 		}
 	}
 	return false
-}
-
-// updatePodsAnnotations updates pod annotations to match the current KubeRay version and PodTemplateHashKey
-func (r *RayClusterReconciler) updatePodsAnnotations(ctx context.Context, instance *rayv1.RayCluster, allPods *corev1.PodList) error {
-	logger := ctrl.LoggerFrom(ctx)
-
-	for i := range allPods.Items {
-		pod := &allPods.Items[i]
-		podVersion := pod.Annotations[utils.KubeRayVersion]
-
-		if podVersion == utils.KUBERAY_VERSION || podVersion == "" {
-			continue
-		}
-
-		newHash, err := r.calculatePodTemplateHash(instance, pod)
-		if err != nil {
-			return err
-		}
-
-		if pod.Annotations == nil {
-			pod.Annotations = make(map[string]string)
-		}
-		pod.Annotations[utils.KubeRayVersion] = utils.KUBERAY_VERSION
-		pod.Annotations[utils.PodTemplateHashKey] = newHash
-
-		if err := r.Update(ctx, pod); err != nil {
-			return err
-		}
-
-		logger.Info("Updated pod annotations", "pod", pod.Name, "version", utils.KUBERAY_VERSION)
-	}
-
-	return nil
-}
-
-// calculatePodTemplateHash calculates the hash for a pod's template based on its node type and group
-func (r *RayClusterReconciler) calculatePodTemplateHash(instance *rayv1.RayCluster, pod *corev1.Pod) (string, error) {
-	nodeType := pod.Labels[utils.RayNodeTypeLabelKey]
-
-	switch rayv1.RayNodeType(nodeType) {
-	case rayv1.HeadNode:
-		return common.GeneratePodTemplateHash(instance.Spec.HeadGroupSpec.Template)
-
-	case rayv1.WorkerNode:
-		groupName := pod.Labels[utils.RayNodeGroupLabelKey]
-		for _, workerGroup := range instance.Spec.WorkerGroupSpecs {
-			if workerGroup.GroupName == groupName {
-				return common.GeneratePodTemplateHash(workerGroup.Template)
-			}
-		}
-		return "", fmt.Errorf("worker group %s not found in RayCluster spec", groupName)
-
-	default:
-		return "", fmt.Errorf("unknown node type: %s", nodeType)
-	}
 }
 
 // shouldDeletePod returns whether the Pod should be deleted and the reason
