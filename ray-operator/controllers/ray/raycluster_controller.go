@@ -653,6 +653,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 				instance.Namespace, instance.Name, err)
 			return errstd.Join(utils.ErrFailedDeleteAllPods, err)
 		}
+		r.rayClusterScaleExpectation.Delete(instance.Name, instance.Namespace)
 		r.Recorder.Eventf(instance, corev1.EventTypeNormal, string(utils.DeletedPod),
 			"Deleted all Pods for RayCluster %s/%s due to spec change with Recreate upgradeStrategy",
 			instance.Namespace, instance.Name)
