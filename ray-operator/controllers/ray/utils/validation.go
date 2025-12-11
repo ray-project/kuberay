@@ -496,33 +496,29 @@ func validateDeletionRules(rayJob *rayv1.RayJob) error {
 
 		// Group valid rule for consistency check.
 		if rule.Condition.JobStatus != nil {
-			policyTTLs, ok := rulesByJobStatus[*rule.Condition.JobStatus]
-			if !ok {
-				policyTTLs = make(map[rayv1.DeletionPolicyType]int32)
-				rulesByJobStatus[*rule.Condition.JobStatus] = policyTTLs
+			if _, exists := rulesByJobStatus[*rule.Condition.JobStatus]; !exists {
+				rulesByJobStatus[*rule.Condition.JobStatus] = make(map[rayv1.DeletionPolicyType]int32)
 			}
 
 			// Check for uniqueness of (JobStatus, DeletionPolicyType) pair.
-			if _, exists := policyTTLs[rule.Policy]; exists {
+			if _, exists := rulesByJobStatus[*rule.Condition.JobStatus][rule.Policy]; exists {
 				errs = append(errs, fmt.Errorf("deletionRules[%d]: duplicate rule for DeletionPolicyType '%s' and JobStatus '%s'", i, rule.Policy, *rule.Condition.JobStatus))
 				continue
 			}
 
-			policyTTLs[rule.Policy] = rule.Condition.TTLSeconds
+			rulesByJobStatus[*rule.Condition.JobStatus][rule.Policy] = rule.Condition.TTLSeconds
 		} else {
-			policyTTLs, ok := rulesByJobDeploymentStatus[*rule.Condition.JobDeploymentStatus]
-			if !ok {
-				policyTTLs = make(map[rayv1.DeletionPolicyType]int32)
-				rulesByJobDeploymentStatus[*rule.Condition.JobDeploymentStatus] = policyTTLs
+			if _, exists := rulesByJobDeploymentStatus[*rule.Condition.JobDeploymentStatus]; !exists {
+				rulesByJobDeploymentStatus[*rule.Condition.JobDeploymentStatus] = make(map[rayv1.DeletionPolicyType]int32)
 			}
 
 			// Check for uniqueness of (JobDeploymentStatus, DeletionPolicyType) pair.
-			if _, exists := policyTTLs[rule.Policy]; exists {
+			if _, exists := rulesByJobDeploymentStatus[*rule.Condition.JobDeploymentStatus][rule.Policy]; exists {
 				errs = append(errs, fmt.Errorf("deletionRules[%d]: duplicate rule for DeletionPolicyType '%s' and JobDeploymentStatus '%s'", i, rule.Policy, *rule.Condition.JobDeploymentStatus))
 				continue
 			}
 
-			policyTTLs[rule.Policy] = rule.Condition.TTLSeconds
+			rulesByJobDeploymentStatus[*rule.Condition.JobDeploymentStatus][rule.Policy] = rule.Condition.TTLSeconds
 		}
 	}
 
