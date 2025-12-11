@@ -478,21 +478,8 @@ func validateDeletionRules(rayJob *rayv1.RayJob) error {
 
 	// Single pass: Validate each rule individually and group for later consistency checks.
 	for i, rule := range rules {
-		// Validate that exactly one of JobStatus and JobDeploymentStatus is specified.
-		hasJobStatus := rule.Condition.JobStatus != nil
-		hasJobDeploymentStatus := rule.Condition.JobDeploymentStatus != nil
-		if hasJobStatus && hasJobDeploymentStatus {
-			errs = append(errs, fmt.Errorf("deletionRules[%d]: cannot set both JobStatus and JobDeploymentStatus at the same time", i))
-			continue
-		}
-		if !(hasJobStatus || hasJobDeploymentStatus) {
-			errs = append(errs, fmt.Errorf("deletionRules[%d]: exactly one of JobStatus and JobDeploymentStatus must be set", i))
-			continue
-		}
-
-		// Validate TTL is non-negative.
-		if rule.Condition.TTLSeconds < 0 {
-			errs = append(errs, fmt.Errorf("deletionRules[%d]: TTLSeconds must be non-negative", i))
+		if err := validateDeletionCondition(&rule.Condition); err != nil {
+			errs = append(errs, fmt.Errorf("deletionRules[%d]: %w", i, err))
 			continue
 		}
 
@@ -508,7 +495,7 @@ func validateDeletionRules(rayJob *rayv1.RayJob) error {
 		}
 
 		// Group valid rule for consistency check.
-		if hasJobStatus {
+		if rule.Condition.JobStatus != nil {
 			policyTTLs, ok := rulesByJobStatus[*rule.Condition.JobStatus]
 			if !ok {
 				policyTTLs = make(map[rayv1.DeletionPolicyType]int32)
@@ -554,6 +541,26 @@ func validateDeletionRules(rayJob *rayv1.RayJob) error {
 	}
 
 	return errstd.Join(errs...)
+}
+
+// validateDeletionCondition ensures exactly one of JobStatus and JobDeploymentStatus is specified and TTLSeconds is non-negative.
+func validateDeletionCondition(deletionCondition *rayv1.DeletionCondition) error {
+	// Validate that exactly one of JobStatus and JobDeploymentStatus is specified.
+	hasJobStatus := deletionCondition.JobStatus != nil
+	hasJobDeploymentStatus := deletionCondition.JobDeploymentStatus != nil
+	if hasJobStatus && hasJobDeploymentStatus {
+		return fmt.Errorf("cannot set both JobStatus and JobDeploymentStatus at the same time")
+	}
+	if !hasJobStatus && !hasJobDeploymentStatus {
+		return fmt.Errorf("exactly one of JobStatus and JobDeploymentStatus must be set")
+	}
+
+	// Validate TTL is non-negative.
+	if deletionCondition.TTLSeconds < 0 {
+		return fmt.Errorf("TTLSeconds must be non-negative")
+	}
+
+	return nil
 }
 
 // validateTTLConsistency ensures TTLs follow the deletion hierarchy: Workers <= Cluster <= Self.
