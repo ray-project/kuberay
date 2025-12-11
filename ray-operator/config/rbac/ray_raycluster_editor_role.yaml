@@ -12,7 +12,7 @@ rules:
   - rayclusters
   verbs:
   - create
-  - update
   - delete
   - patch
+  - update
   - deletecollection
