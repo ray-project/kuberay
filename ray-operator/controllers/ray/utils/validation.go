@@ -524,14 +524,14 @@ func validateDeletionRules(rayJob *rayv1.RayJob) error {
 
 	// Second pass: Validate TTL consistency per JobStatus.
 	for jobStatus, policyTTLs := range rulesByJobStatus {
-		if err := validateTTLConsistency(policyTTLs, jobStatus); err != nil {
+		if err := validateTTLConsistency(policyTTLs, "JobStatus", string(jobStatus)); err != nil {
 			errs = append(errs, err)
 		}
 	}
 
 	// Second pass: Validate TTL consistency per JobDeploymentStatus.
 	for jobDeploymentStatus, policyTTLs := range rulesByJobDeploymentStatus {
-		if err := validateTTLConsistency(policyTTLs, jobDeploymentStatus); err != nil {
+		if err := validateTTLConsistency(policyTTLs, "JobDeploymentStatus", string(jobDeploymentStatus)); err != nil {
 			errs = append(errs, err)
 		}
 	}
@@ -561,7 +561,7 @@ func validateDeletionCondition(deletionCondition *rayv1.DeletionCondition) error
 
 // validateTTLConsistency ensures TTLs follow the deletion hierarchy: Workers <= Cluster <= Self.
 // (Lower TTL means deletes earlier.)
-func validateTTLConsistency(policyTTLs map[rayv1.DeletionPolicyType]int32, status interface{}) error {
+func validateTTLConsistency(policyTTLs map[rayv1.DeletionPolicyType]int32, conditionType string, conditionValue string) error {
 	// Define the required deletion order. TTLs must be non-decreasing along this sequence.
 	deletionOrder := []rayv1.DeletionPolicyType{
 		rayv1.DeleteWorkers,
@@ -583,8 +583,8 @@ func validateTTLConsistency(policyTTLs map[rayv1.DeletionPolicyType]int32, statu
 
 		if hasPrev && ttl < prevTTL {
 			errs = append(errs, fmt.Errorf(
-				"for %T '%s': %s TTL (%d) must be >= %s TTL (%d)",
-				status, status, policy, ttl, prevPolicy, prevTTL,
+				"for %s '%s': %s TTL (%d) must be >= %s TTL (%d)",
+				conditionType, conditionValue, policy, ttl, prevPolicy, prevTTL,
 			))
 		}
 
