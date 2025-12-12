@@ -104,6 +104,9 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 		if err := validateRayGroupLabels(workerGroup.GroupName, workerGroup.RayStartParams, workerGroup.Labels); err != nil {
 			return err
 		}
+		if err := validateWorkerGroupIdleTimeout(workerGroup, spec); err != nil {
+			return err
+		}
 	}
 
 	if annotations[RayFTEnabledAnnotationKey] != "" && spec.GcsFaultToleranceOptions != nil {
@@ -592,6 +595,28 @@ func validateLegacyDeletionPolicies(rayJob *rayv1.RayJob) error {
 
 	if rayJob.Spec.ShutdownAfterJobFinishes && (*onSuccessPolicy.Policy == rayv1.DeleteNone || *onFailurePolicy.Policy == rayv1.DeleteNone) {
 		return fmt.Errorf("The RayJob spec is invalid: shutdownAfterJobFinshes is set to 'true' while deletion policy is 'DeleteNone'")
+	}
+
+	return nil
+}
+
+// validateWorkerGroupIdleTimeout validates the idleTimeoutSeconds field in a worker group spec
+func validateWorkerGroupIdleTimeout(workerGroup rayv1.WorkerGroupSpec, spec *rayv1.RayClusterSpec) error {
+	idleTimeoutSeconds := workerGroup.IdleTimeoutSeconds
+	if idleTimeoutSeconds != nil {
+		if *idleTimeoutSeconds < 0 {
+			return fmt.Errorf("idleTimeoutSeconds must be non-negative, got %d", *idleTimeoutSeconds)
+		}
+
+		// idleTimeoutSeconds only allowed on autoscaler v2
+		if IsAutoscalingV2Enabled(spec) {
+			return nil
+		}
+		envVar, exists := EnvVarByName(RAY_ENABLE_AUTOSCALER_V2, spec.HeadGroupSpec.Template.Spec.Containers[RayContainerIndex].Env)
+		if exists && (envVar.Value == "1" || envVar.Value == "true") {
+			return nil
+		}
+		return fmt.Errorf("worker group %s has idleTimeoutSeconds set, but autoscaler v2 is not enabled. Please set .spec.autoscalerOptions.version to 'v2' (or set %s environment variable to 'true' in the head pod if using KubeRay < 1.4.0)", workerGroup.GroupName, RAY_ENABLE_AUTOSCALER_V2)
 	}
 
 	return nil
