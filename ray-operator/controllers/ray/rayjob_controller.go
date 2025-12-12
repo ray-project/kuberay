@@ -1384,13 +1384,11 @@ func (r *RayJobReconciler) executeDeletionPolicy(ctx context.Context, rayJob *ra
 
 // isDeletionRuleMatched checks if the deletion rule matches the current job status or job deployment status.
 func isDeletionRuleMatched(rule rayv1.DeletionRule, rayJob *rayv1.RayJob) bool {
+	// It's guaranteed that exactly one of JobStatus and JobDeploymentStatus is specified.
 	if rule.Condition.JobStatus != nil {
 		return *rule.Condition.JobStatus == rayJob.Status.JobStatus
 	}
-	if rule.Condition.JobDeploymentStatus != nil {
-		return *rule.Condition.JobDeploymentStatus == rayJob.Status.JobDeploymentStatus
-	}
-	return false
+	return *rule.Condition.JobDeploymentStatus == rayJob.Status.JobDeploymentStatus
 }
 
 // isDeletionActionCompleted checks if the state corresponding to a deletion policy is already achieved.
