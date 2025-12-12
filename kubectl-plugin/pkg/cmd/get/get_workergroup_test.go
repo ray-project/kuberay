@@ -181,6 +181,47 @@ func TestRayWorkerGroupsGetRun(t *testing.T) {
 				},
 			},
 		},
+		&rayv1.RayCluster{
+			ObjectMeta: v1.ObjectMeta{
+				Namespace: "namespace-3",
+				Name:      "autoscaling-cluster-1",
+			},
+			Spec: rayv1.RayClusterSpec{
+				WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+					{
+						GroupName:   "autoscaling-group-1",
+						Replicas:    ptr.To(int32(2)),
+						MinReplicas: ptr.To(int32(1)),
+						MaxReplicas: ptr.To(int32(5)),
+						Template:    podTemplate,
+					},
+					{
+						GroupName:   "autoscaling-group-2",
+						Replicas:    ptr.To(int32(0)),
+						MinReplicas: ptr.To(int32(0)),
+						MaxReplicas: ptr.To(int32(3)),
+						Template:    podTemplate,
+					},
+				},
+			},
+		},
+		&rayv1.RayCluster{
+			ObjectMeta: v1.ObjectMeta{
+				Namespace: "namespace-4",
+				Name:      "autoscaling-cluster-2",
+			},
+			Spec: rayv1.RayClusterSpec{
+				WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+					{
+						GroupName:   "autoscaling-group-single",
+						Replicas:    ptr.To(int32(1)),
+						MinReplicas: ptr.To(int32(1)),
+						MaxReplicas: ptr.To(int32(1)),
+						Template:    podTemplate,
+					},
+				},
+			},
+		},
 	}
 
 	pods := []runtime.Object{
@@ -245,6 +286,45 @@ func TestRayWorkerGroupsGetRun(t *testing.T) {
 			},
 			Status: readyStatus,
 		},
+		&corev1.Pod{
+			ObjectMeta: v1.ObjectMeta{
+				Namespace: "namespace-3",
+				Name:      "auto-pod-1-worker",
+				Labels: map[string]string{
+					util.RayClusterLabelKey:   "autoscaling-cluster-1",
+					util.RayIsRayNodeLabelKey: "yes",
+					util.RayNodeGroupLabelKey: "autoscaling-group-1",
+					util.RayNodeTypeLabelKey:  string(rayv1.WorkerNode),
+				},
+			},
+			Status: readyStatus,
+		},
+		&corev1.Pod{
+			ObjectMeta: v1.ObjectMeta{
+				Namespace: "namespace-3",
+				Name:      "auto-pod-2-worker",
+				Labels: map[string]string{
+					util.RayClusterLabelKey:   "autoscaling-cluster-1",
+					util.RayIsRayNodeLabelKey: "yes",
+					util.RayNodeGroupLabelKey: "autoscaling-group-1",
+					util.RayNodeTypeLabelKey:  string(rayv1.WorkerNode),
+				},
+			},
+			Status: readyStatus,
+		},
+		&corev1.Pod{
+			ObjectMeta: v1.ObjectMeta{
+				Namespace: "namespace-4",
+				Name:      "auto-pod-3-worker",
+				Labels: map[string]string{
+					util.RayClusterLabelKey:   "autoscaling-cluster-2",
+					util.RayIsRayNodeLabelKey: "yes",
+					util.RayNodeGroupLabelKey: "autoscaling-group-single",
+					util.RayNodeTypeLabelKey:  string(rayv1.WorkerNode),
+				},
+			},
+			Status: readyStatus,
+		},
 	}
 
 	tests := []struct {
@@ -263,11 +343,14 @@ func TestRayWorkerGroupsGetRun(t *testing.T) {
 			allNamespaces: true,
 			rayClusters:   rayClusters,
 			pods:          pods,
-			expected: `NAMESPACE     NAME      REPLICAS   CPUS   GPUS   TPUS   MEMORY   CLUSTER
-namespace-1   group-1   1/1        2      1      1      1Gi      cluster-1
-namespace-1   group-2   1/1        2      1      1      1Gi      cluster-2
-namespace-2   group-1   1/2        4      2      2      2Gi      cluster-1
-namespace-2   group-4   0/0        0      0      0      0        cluster-1
+			expected: `NAMESPACE     NAME                       REPLICAS    CPUS   GPUS   TPUS   MEMORY   CLUSTER
+namespace-1   group-1                    1/1         2      1      1      1Gi      cluster-1
+namespace-1   group-2                    1/1         2      1      1      1Gi      cluster-2
+namespace-2   group-1                    1/2         4      2      2      2Gi      cluster-1
+namespace-2   group-4                    0/0         0      0      0      0        cluster-1
+namespace-3   autoscaling-group-1        2/2 (1-5)   4      2      2      2Gi      autoscaling-cluster-1
+namespace-3   autoscaling-group-2        0/0 (0-3)   0      0      0      0        autoscaling-cluster-1
+namespace-4   autoscaling-group-single   1/1 (1-1)   2      1      1      1Gi      autoscaling-cluster-2
 `,
 		},
 		{
@@ -381,6 +464,41 @@ group-1   1/1        2      1      1      1Gi      cluster-1
 			name:     "no worker group set and no Pods returned",
 			pods:     []runtime.Object{},
 			expected: "",
+		},
+		{
+			name:          "autoscaling cluster (namespace-3); all worker groups",
+			namespace:     "namespace-3",
+			allNamespaces: false,
+			rayClusters:   []runtime.Object{rayClusters[3]},
+			pods:          pods,
+			expected: `NAME                  REPLICAS    CPUS   GPUS   TPUS   MEMORY   CLUSTER
+autoscaling-group-1   2/2 (1-5)   4      2      2      2Gi      autoscaling-cluster-1
+autoscaling-group-2   0/0 (0-3)   0      0      0      0        autoscaling-cluster-1
+`,
+		},
+		{
+			name:          "specific autoscaling group (group-1); one ready, one desired",
+			cluster:       "autoscaling-cluster-1",
+			namespace:     "namespace-3",
+			workerGroup:   "autoscaling-group-1",
+			allNamespaces: false,
+			rayClusters:   []runtime.Object{rayClusters[3]},
+			pods:          pods,
+			expected: `NAME                  REPLICAS    CPUS   GPUS   TPUS   MEMORY   CLUSTER
+autoscaling-group-1   2/2 (1-5)   4      2      2      2Gi      autoscaling-cluster-1
+`,
+		},
+		{
+			name:          "specific autoscaling group (group-2); desired 0, min 0, max > 0",
+			cluster:       "autoscaling-cluster-1",
+			namespace:     "namespace-3",
+			workerGroup:   "autoscaling-group-2",
+			allNamespaces: false,
+			rayClusters:   []runtime.Object{rayClusters[3]},
+			pods:          pods,
+			expected: `NAME                  REPLICAS    CPUS   GPUS   TPUS   MEMORY   CLUSTER
+autoscaling-group-2   0/0 (0-3)   0      0      0      0        autoscaling-cluster-1
+`,
 		},
 	}
 
