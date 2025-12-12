@@ -1000,10 +1000,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@next/env@npm:15.4.8":
-  version: 15.4.8
-  resolution: "@next/env@npm:15.4.8"
-  checksum: 10c0/6b0555e30c175a04781a75f0ddc2630bea1af0f31bac0c7875d6063bec9fb2ee50ccf6a3965e532604f40a2c98f1ceb8eb52283b449ba4345ab1b50a0fde8b88
+"@next/env@npm:15.4.9":
+  version: 15.4.9
+  resolution: "@next/env@npm:15.4.9"
+  checksum: 10c0/30a3625115379c209e63f55912c20dfabc6fadd861ec0e16020c8be029916071aa7cdb620b2846b020b14597658925c154221b3be87cbfe4d8cf61778869c70d
   languageName: node
   linkType: hard
 
@@ -4101,11 +4101,11 @@ __metadata:
   languageName: node
   linkType: hard
 
-"next@npm:15.4.8":
-  version: 15.4.8
-  resolution: "next@npm:15.4.8"
+"next@npm:15.4.9":
+  version: 15.4.9
+  resolution: "next@npm:15.4.9"
   dependencies:
-    "@next/env": "npm:15.4.8"
+    "@next/env": "npm:15.4.9"
     "@next/swc-darwin-arm64": "npm:15.4.8"
     "@next/swc-darwin-x64": "npm:15.4.8"
     "@next/swc-linux-arm64-gnu": "npm:15.4.8"
@@ -4156,7 +4156,7 @@ __metadata:
       optional: true
   bin:
     next: dist/bin/next
-  checksum: 10c0/4bbeb66d2db81f7f8580b3db0e14569bf09d71b958a3c65ddfb23015f316f3b85a4bf32349c9d21b03a61cd31b7d4e19829ff625b71dbde6ab0aa8db60bacd90
+  checksum: 10c0/17396d6e8687bd7c65583c913ff2ff6fbe7145e0d6e2ba791e68fe47bbf4c9a698b146da9955628d1f28725f0e0bba29a9fedd919517be79c45d7fbdf3bca29f
   languageName: node
   linkType: hard
 
@@ -4677,7 +4677,7 @@ __metadata:
     dayjs: "npm:^1.11.10"
     eslint: "npm:^9.33.0"
     eslint-config-next: "npm:^15.4.6"
-    next: "npm:15.4.8"
+    next: "npm:15.4.9"
     postcss: "npm:^8"
     prettier: "npm:3.6.2"
     react: "npm:^18"
