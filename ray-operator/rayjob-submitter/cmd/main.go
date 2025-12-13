@@ -64,7 +64,8 @@ func main() {
 	}
 	rayDashboardClient := &dashboardclient.RayDashboardClient{}
 	address = rayjobsubmitter.JobSubmissionURL(address)
-	rayDashboardClient.InitClient(&http.Client{Timeout: time.Second * 10}, address)
+	authToken := os.Getenv("RAY_AUTH_TOKEN")
+	rayDashboardClient.InitClient(&http.Client{Timeout: time.Second * 10}, address, authToken)
 	submissionId, err := rayDashboardClient.SubmitJobReq(context.Background(), &req)
 	if err != nil {
 		if strings.Contains(err.Error(), "Please use a different submission_id") {
@@ -76,7 +77,7 @@ func main() {
 		fmt.Fprintf(os.Stdout, "SUCC -- Job '%s' submitted successfully\n", submissionId)
 	}
 	fmt.Fprintf(os.Stdout, "INFO -- Tailing logs until the job finishes:\n")
-	err = rayjobsubmitter.TailJobLogs(address, submissionId, os.Stdout)
+	err = rayjobsubmitter.TailJobLogs(address, submissionId, authToken, os.Stdout)
 	exitOnError(err)
 }
 

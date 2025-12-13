@@ -1,10 +1,13 @@
 package e2e
 
 import (
+	"fmt"
 	"testing"
+	"time"
 
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
@@ -28,7 +31,7 @@ func TestRayClusterAuthOptions(t *testing.T) {
 		t.Parallel()
 
 		rayClusterAC := rayv1ac.RayCluster("raycluster-auth-token", namespace.Name).
-			WithSpec(NewRayClusterSpecWithAuth(rayv1.AuthModeToken).WithRayVersion("2.51"))
+			WithSpec(NewRayClusterSpecWithAuth(rayv1.AuthModeToken).WithRayVersion("2.52"))
 
 		rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
 		g.Expect(err).NotTo(HaveOccurred())
@@ -41,42 +44,92 @@ func TestRayClusterAuthOptions(t *testing.T) {
 		headPod, err := GetHeadPod(test, rayCluster)
 		g.Expect(err).NotTo(HaveOccurred())
 		g.Expect(headPod).NotTo(BeNil())
-		verifyAuthTokenEnvVars(t, rayCluster, *headPod)
 
+		// Verify Ray container has auth token env vars
+		VerifyContainerAuthTokenEnvVars(test, rayCluster, &headPod.Spec.Containers[utils.RayContainerIndex])
+
+		// Verify worker pods have auth token env vars
 		workerPods, err := GetWorkerPods(test, rayCluster)
 		g.Expect(err).NotTo(HaveOccurred())
 		g.Expect(workerPods).ToNot(BeEmpty())
 		for _, workerPod := range workerPods {
-			verifyAuthTokenEnvVars(t, rayCluster, workerPod)
+			VerifyContainerAuthTokenEnvVars(test, rayCluster, &workerPod.Spec.Containers[utils.RayContainerIndex])
 		}
 
-		// TODO(andrewsykim): add job submission test with and without token once a Ray version with token support is released.
+		// Get auth token for job submission tests
+		authToken := getAuthTokenFromPod(test, rayCluster, headPod)
+		g.Expect(authToken).NotTo(BeEmpty(), "Auth token should be present")
+
+		// Test job submission with auth token using Ray Job CLI
+		test.T().Run("Submit job with auth token should succeed", func(_ *testing.T) {
+			LogWithTimestamp(test.T(), "Testing job submission WITH auth token")
+
+			submissionId := fmt.Sprintf("test-job-with-auth-%d", time.Now().Unix())
+
+			// Submit job via Ray Job CLI with auth token
+			// Set RAY_AUTH_TOKEN environment variable for authentication
+			submitCmd := []string{
+				"bash", "-c",
+				fmt.Sprintf("RAY_AUTH_TOKEN=%s ray job submit --address http://127.0.0.1:8265 --submission-id %s --no-wait -- python -c 'import ray; ray.init(); print(\"Job with auth succeeded\")'",
+					authToken, submissionId),
+			}
+
+			stdout, _ := ExecPodCmd(test, headPod, headPod.Spec.Containers[utils.RayContainerIndex].Name, submitCmd)
+
+			// Verify job was submitted successfully
+			g.Expect(stdout.String()).To(ContainSubstring(submissionId), "Job submission should succeed with valid auth token")
+
+			// Verify job status is queryable with auth token (confirms auth works)
+			g.Eventually(func(g Gomega) {
+				statusCmd := []string{
+					"bash", "-c",
+					fmt.Sprintf("RAY_AUTH_TOKEN=%s ray job status --address http://127.0.0.1:8265 %s", authToken, submissionId),
+				}
+				stdout, _ := ExecPodCmd(test, headPod, headPod.Spec.Containers[utils.RayContainerIndex].Name, statusCmd)
+				g.Expect(stdout.String()).To(ContainSubstring("succeeded"))
+			}, TestTimeoutShort).Should(Succeed())
+
+			LogWithTimestamp(test.T(), "Successfully submitted and verified job with auth token")
+		})
+
+		test.T().Run("Submit job with incorrect auth token should fail", func(_ *testing.T) {
+			LogWithTimestamp(test.T(), "Testing job submission WITH incorrect auth token (should fail)")
+
+			submissionId := fmt.Sprintf("test-job-bad-auth-%d", time.Now().Unix())
+
+			// Submit job via Ray Job CLI with INCORRECT auth token
+			incorrectToken := "incorrect-token-12345"
+			submitCmd := []string{
+				"bash", "-c",
+				fmt.Sprintf("RAY_AUTH_TOKEN=%s ray job submit --address http://127.0.0.1:8265 --submission-id %s --no-wait -- python -c 'print(\"Should not run\")'",
+					incorrectToken, submissionId),
+			}
+
+			_, stderr := ExecPodCmd(test, headPod, headPod.Spec.Containers[utils.RayContainerIndex].Name, submitCmd, true)
+
+			// Verify response indicates authentication failure
+			g.Expect(stderr.String()).To(ContainSubstring("Unauthenticated"), "Job submission should fail with Unauthorized when auth token is incorrect")
+
+			LogWithTimestamp(test.T(), "Job submission correctly rejected with incorrect auth token")
+		})
 	})
 }
 
-func verifyAuthTokenEnvVars(t *testing.T, rayCluster *rayv1.RayCluster, pod corev1.Pod) {
-	g := NewWithT(t)
+// getAuthTokenFromPod extracts the auth token from the pod's environment variables.
+// It reads the token from the secret referenced by the RAY_AUTH_TOKEN environment variable.
+func getAuthTokenFromPod(test Test, rayCluster *rayv1.RayCluster, pod *corev1.Pod) string {
+	test.T().Helper()
+	g := NewWithT(test.T())
 
-	var rayAuthModeEnvVar *corev1.EnvVar
-	for _, envVar := range pod.Spec.Containers[0].Env {
-		if envVar.Name == utils.RAY_AUTH_MODE_ENV_VAR {
-			rayAuthModeEnvVar = &envVar
-			break
-		}
-	}
-	g.Expect(rayAuthModeEnvVar).NotTo(BeNil(), "RAY_AUTH_MODE environment variable should be set")
-	g.Expect(rayAuthModeEnvVar.Value).To(Equal(string(rayv1.AuthModeToken)), "RAY_AUTH_MODE should be %s", rayv1.AuthModeToken)
-
-	var rayAuthTokenEnvVar *corev1.EnvVar
-	for _, envVar := range pod.Spec.Containers[0].Env {
+	for _, envVar := range pod.Spec.Containers[utils.RayContainerIndex].Env {
 		if envVar.Name == utils.RAY_AUTH_TOKEN_ENV_VAR {
-			rayAuthTokenEnvVar = &envVar
-			break
+			if envVar.ValueFrom != nil && envVar.ValueFrom.SecretKeyRef != nil {
+				secret, err := test.Client().Core().CoreV1().Secrets(rayCluster.Namespace).
+					Get(test.Ctx(), envVar.ValueFrom.SecretKeyRef.Name, metav1.GetOptions{})
+				g.Expect(err).NotTo(HaveOccurred())
+				return string(secret.Data[envVar.ValueFrom.SecretKeyRef.Key])
+			}
 		}
 	}
-	g.Expect(rayAuthTokenEnvVar).NotTo(BeNil(), "RAY_AUTH_TOKEN environment variable should be set for AuthModeToken")
-	g.Expect(rayAuthTokenEnvVar.ValueFrom).NotTo(BeNil(), "RAY_AUTH_TOKEN should be populated from a secret")
-	g.Expect(rayAuthTokenEnvVar.ValueFrom.SecretKeyRef).NotTo(BeNil(), "RAY_AUTH_TOKEN should be populated from a secret key ref")
-	g.Expect(rayAuthTokenEnvVar.ValueFrom.SecretKeyRef.Name).To(ContainSubstring(rayCluster.Name), "Secret name should contain RayCluster name")
-	g.Expect(rayAuthTokenEnvVar.ValueFrom.SecretKeyRef.Key).To(Equal(utils.RAY_AUTH_TOKEN_SECRET_KEY), "Secret key should be %s", utils.RAY_AUTH_TOKEN_SECRET_KEY)
+	return ""
 }

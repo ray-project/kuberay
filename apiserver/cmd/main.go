@@ -155,6 +155,11 @@ func startHttpProxy() {
 		klog.Info("Enabling CORS with Access-Control-Allow-Origin:", *corsAllowOrigin)
 		c := cors.New(cors.Options{
 			AllowedOrigins: []string{*corsAllowOrigin},
+			AllowedMethods: []string{
+				http.MethodGet, http.MethodPost,
+				http.MethodPut, http.MethodPatch,
+				http.MethodDelete, http.MethodOptions,
+			},
 		})
 		corsHandler = c.Handler
 	} else {

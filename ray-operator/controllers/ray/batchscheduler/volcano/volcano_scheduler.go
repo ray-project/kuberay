@@ -26,7 +26,6 @@ import (
 )
 
 const (
-	PodGroupName                              = "podgroups.scheduling.volcano.sh"
 	pluginName                                = "volcano"
 	QueueNameLabelKey                         = "volcano.sh/queue-name"
 	NetworkTopologyModeLabelKey               = "volcano.sh/network-topology-mode"
@@ -87,10 +86,11 @@ func (v *VolcanoBatchScheduler) handleRayJob(ctx context.Context, rayJob *rayv1.
 }
 
 func getSubmitterResource(rayJob *rayv1.RayJob) corev1.ResourceList {
-	if rayJob.Spec.SubmissionMode == rayv1.K8sJobMode {
+	switch rayJob.Spec.SubmissionMode {
+	case rayv1.K8sJobMode:
 		submitterTemplate := common.GetSubmitterTemplate(&rayJob.Spec, rayJob.Spec.RayClusterSpec)
 		return utils.CalculatePodResource(submitterTemplate.Spec)
-	} else if rayJob.Spec.SubmissionMode == rayv1.SidecarMode {
+	case rayv1.SidecarMode:
 		submitterContainer := common.GetDefaultSubmitterContainer(rayJob.Spec.RayClusterSpec)
 		containerResource := submitterContainer.Resources.Requests
 		for name, quantity := range submitterContainer.Resources.Limits {
@@ -99,8 +99,9 @@ func getSubmitterResource(rayJob *rayv1.RayJob) corev1.ResourceList {
 			}
 		}
 		return containerResource
+	default:
+		return corev1.ResourceList{}
 	}
-	return corev1.ResourceList{}
 }
 
 func getAppPodGroupName(object metav1.Object) string {

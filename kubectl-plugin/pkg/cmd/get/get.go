@@ -27,6 +27,7 @@ func NewGetCommand(cmdFactory cmdutil.Factory, streams genericclioptions.IOStrea
 	cmd.AddCommand(NewGetClusterCommand(cmdFactory, streams))
 	cmd.AddCommand(NewGetWorkerGroupCommand(cmdFactory, streams))
 	cmd.AddCommand(NewGetNodesCommand(cmdFactory, streams))
+	cmd.AddCommand(NewGetTokenCommand(cmdFactory, streams))
 	return cmd
 }
 
