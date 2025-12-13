@@ -91,34 +91,37 @@ func (r *RayCronJobReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	}
 
 	now := r.clock.Now()
-	scheduledTime := schedule.Next(now)
-	requeueAt := scheduledTime.Sub(now)
-	logger.Info("Schedule timing", "now", now, "nextScheduledTime", scheduledTime, "requeueAfter", requeueAt)
 
-	if rayCronJobInstance.Status.LastScheduleTime == nil {
-		// The new RayCronJob, not yet scheduled
-		rayCronJobInstance.Status.LastScheduleTime = &metav1.Time{Time: now}
-	} else {
-		nextScheduleTime := schedule.Next(rayCronJobInstance.Status.LastScheduleTime.Time)
-		// if nextScheduleTime is after now, requeue it with their time difference
-		if nextScheduleTime.After(now) {
-			return ctrl.Result{RequeueAfter: nextScheduleTime.Sub(now)}, nil
-		}
-
-		rayJob, err := r.constructRayJob(rayCronJobInstance, nextScheduleTime)
-		if err != nil {
-			return ctrl.Result{}, err
-		}
-		if err := r.Create(ctx, rayJob); err != nil {
-			logger.Error(err, "Failed to create RayJob from RayCronJob")
-			return ctrl.Result{}, err
-		}
-
-		logger.Info("Successfully created RayJob", "rayJobName", rayJob.Name, "namespace", rayJob.Namespace)
-		rayCronJobInstance.Status.LastScheduleTime = &metav1.Time{Time: now}
+	// use CreationTimestamp when job not yet scheduled
+	earlistTime := rayCronJobInstance.CreationTimestamp.Time
+	if rayCronJobInstance.Status.LastScheduleTime != nil {
+		earlistTime = rayCronJobInstance.Status.LastScheduleTime.Time
 	}
 
-	// This is the only 2 places where we update the RayCronJob status. This will directly
+	scheduleTime := schedule.Next(earlistTime)
+	// if scheduleTime is after now, requeue it with their time difference
+	if scheduleTime.After(now) {
+		return ctrl.Result{RequeueAfter: scheduleTime.Sub(now)}, nil
+	}
+
+	// create ray job
+	rayJob, err := r.constructRayJob(rayCronJobInstance, scheduleTime)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	if err := r.Create(ctx, rayJob); err != nil {
+		logger.Error(err, "Failed to create RayJob from RayCronJob")
+		return ctrl.Result{}, err
+	}
+	logger.Info("Successfully created RayJob", "rayJobName", rayJob.Name, "namespace", rayJob.Namespace)
+	rayCronJobInstance.Status.LastScheduleTime = &metav1.Time{Time: now}
+
+	// Set next schedule time
+	nextScheduleTime := schedule.Next(now)
+	requeueAt := nextScheduleTime.Sub(now)
+	logger.Info("Schedule timing", "now", now, "nextScheduledTime", nextScheduleTime, "requeueAfter", requeueAt)
+
+	// This is the only place where we update the RayCronJob status. This will directly
 	// update the ScheduleStatus to ValidationFailed if there's validation error
 	if err = r.updateRayCronJobStatus(ctx, originalRayCronJobInstance, rayCronJobInstance); err != nil {
 		logger.Info("Failed to update RayCronJob status", "error", err)
