@@ -1,0 +1,64 @@
+apiVersion: apps/v1 # for versions before 1.8.0 use apps/v1beta1
+kind: Deployment
+metadata:
+  name: historyserver-demo
+  labels:
+    app: historyserver
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: historyserver
+  template:
+    metadata:
+      labels:
+        app: historyserver
+    spec:
+      imagePullSecrets:
+      - name: acr-registry
+      containers:
+      - name: historyserver
+        env:
+        - name: ALIBABA_CLOUD_OIDC_TOKEN_FILE
+          value:
+        - name: ALIBABA_CLOUD_OIDC_PROVIDER_ARN
+          value:
+        - name: ALIBABA_CLOUD_ROLE_ARN
+          value:
+        - name: ALIBABA_CLOUD_STS_REGION
+          value:
+        - name: ALIBABA_CLOUD_VPC_ENDPOINT_ENABLED
+          value: "true"
+        image: registry.cn-hongkong.aliyuncs.com/image-yueming/ray-historyerver:v0.0.1
+        imagePullPolicy: Always
+        command:
+        - historyserver
+        - --runtime-class-name=aliyunoss
+        - --ray-root-dir=log
+        ports:
+        - containerPort: 8080
+        resources:
+          limits:
+            cpu: "500m"
+        volumeMounts:
+        - mountPath: /var/run/secrets/ack.alibabacloud.com/rrsa-tokens
+          name: token-file
+          readOnly: true
+        - mountPath: /var/collector-config
+          name: config-volume
+      volumes:
+      - configMap:
+          defaultMode: 420
+          items:
+          - key: data
+            path: data
+          name: aliyunoss-config
+        name: config-volume
+      - name: token-file
+        projected:
+          defaultMode: 420
+          sources:
+          - serviceAccountToken:
+              audience: sts.aliyuncs.com
+              expirationSeconds: 3600
+              path: token
