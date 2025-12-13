@@ -16,49 +16,12 @@ import (
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
 
-type option[T any] func(t *T) *T
-
-func apply[T any](t *T, options ...option[T]) *T {
-	for _, opt := range options {
-		t = opt(t)
-	}
-	return t
-}
-
-func options[T any](options ...option[T]) option[T] {
-	return func(t *T) *T {
-		for _, opt := range options {
-			t = opt(t)
-		}
-		return t
-	}
-}
-
-func newConfigMap(namespace string, options ...option[corev1ac.ConfigMapApplyConfiguration]) *corev1ac.ConfigMapApplyConfiguration {
+func newConfigMap(namespace string, options ...SupportOption[corev1ac.ConfigMapApplyConfiguration]) *corev1ac.ConfigMapApplyConfiguration {
 	cmAC := corev1ac.ConfigMap("locust-runner-script", namespace).
 		WithBinaryData(map[string][]byte{}).
 		WithImmutable(true)
 
-	return configMapWith(cmAC, options...)
-}
-
-func configMapWith(configMapAC *corev1ac.ConfigMapApplyConfiguration, options ...option[corev1ac.ConfigMapApplyConfiguration]) *corev1ac.ConfigMapApplyConfiguration {
-	return apply(configMapAC, options...)
-}
-
-func file(t Test, fileName string) option[corev1ac.ConfigMapApplyConfiguration] {
-	return func(cmAC *corev1ac.ConfigMapApplyConfiguration) *corev1ac.ConfigMapApplyConfiguration {
-		cmAC.WithBinaryData(map[string][]byte{fileName: ReadFile(t, fileName)})
-		return cmAC
-	}
-}
-
-func files(t Test, fileNames ...string) option[corev1ac.ConfigMapApplyConfiguration] {
-	var files []option[corev1ac.ConfigMapApplyConfiguration]
-	for _, fileName := range fileNames {
-		files = append(files, file(t, fileName))
-	}
-	return options(files...)
+	return ConfigMapWith(cmAC, options...)
 }
 
 func CurlRayServicePod(
