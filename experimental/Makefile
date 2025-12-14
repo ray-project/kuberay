@@ -57,7 +57,7 @@ fumpt: gofumpt ## Run gofmtumpt against code.
 
 .PHONY: lint
 lint: golangci-lint fmt vet fumpt ## Run the linter.
-	$(GOLANGCI_LINT) run  --timeout=3m --no-config
+	$(GOLANGCI_LINT) run  --timeout=3m
 
 build: fmt vet fumpt lint ## Build api server binary.
 	go build  -o ${REPO_ROOT_BIN}/kuberay-apiserver-proxy cmd/main.go
