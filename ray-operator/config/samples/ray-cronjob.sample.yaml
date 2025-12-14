@@ -4,7 +4,7 @@ metadata:
   name: raycronjob-sample
 spec:
   # Schedule in Cron format, see https://en.wikipedia.org/wiki/Cron.
-  # This example runs every minute at minute 0
+  # This example runs every minute
   schedule: "* * * * *"
 
   # JobTemplate defines the RayJob that will be created on each scheduled run
