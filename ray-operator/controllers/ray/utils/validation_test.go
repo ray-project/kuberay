@@ -1883,20 +1883,29 @@ func TestValidateClusterUpgradeOptions(t *testing.T) {
 	}
 }
 
-func TestValidateWorkerGroupIdleTimeout(t *testing.T) {
+func TestValidateRayClusterSpec_IdleTimeoutSeconds(t *testing.T) {
+	// Util function to create a RayCluster spec.
+	createSpec := func() rayv1.RayClusterSpec {
+		return rayv1.RayClusterSpec{
+			EnableInTreeAutoscaling: ptr.To(true),
+			HeadGroupSpec: rayv1.HeadGroupSpec{
+				Template: podTemplateSpec(nil, nil),
+			},
+		}
+	}
+
 	tests := map[string]struct {
 		expectedErr string
 		spec        rayv1.RayClusterSpec
 	}{
-		"should accept worker group with valid idleTimeoutSeconds": {
-			spec: rayv1.RayClusterSpec{
-				EnableInTreeAutoscaling: ptr.To(true),
-				HeadGroupSpec: rayv1.HeadGroupSpec{
-					Template: podTemplateSpec([]corev1.EnvVar{
-						{Name: RAY_ENABLE_AUTOSCALER_V2, Value: "1"},
-					}, nil),
-				},
-				WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+		// Worker group tests
+		"Valid: Worker group with valid idleTimeoutSeconds and v2 spec field": {
+			spec: func() rayv1.RayClusterSpec {
+				s := createSpec()
+				s.AutoscalerOptions = &rayv1.AutoscalerOptions{
+					Version: ptr.To(rayv1.AutoscalerVersionV2),
+				}
+				s.WorkerGroupSpecs = []rayv1.WorkerGroupSpec{
 					{
 						GroupName:          "worker-group-1",
 						Template:           podTemplateSpec(nil, nil),
@@ -1904,39 +1913,37 @@ func TestValidateWorkerGroupIdleTimeout(t *testing.T) {
 						MinReplicas:        ptr.To(int32(0)),
 						MaxReplicas:        ptr.To(int32(10)),
 					},
-				},
-			},
+				}
+				return s
+			}(),
 			expectedErr: "",
 		},
-		"should reject negative idleTimeoutSeconds": {
-			spec: rayv1.RayClusterSpec{
-				EnableInTreeAutoscaling: ptr.To(true),
-				HeadGroupSpec: rayv1.HeadGroupSpec{
-					Template: podTemplateSpec([]corev1.EnvVar{
-						{Name: RAY_ENABLE_AUTOSCALER_V2, Value: "1"},
-					}, nil),
-				},
-				WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+		"Valid: Worker group with idleTimeoutSeconds and v2 env var": {
+			spec: func() rayv1.RayClusterSpec {
+				s := createSpec()
+				s.HeadGroupSpec.Template = podTemplateSpec([]corev1.EnvVar{
+					{Name: RAY_ENABLE_AUTOSCALER_V2, Value: "1"},
+				}, nil)
+				s.WorkerGroupSpecs = []rayv1.WorkerGroupSpec{
 					{
 						GroupName:          "worker-group-1",
 						Template:           podTemplateSpec(nil, nil),
-						IdleTimeoutSeconds: ptr.To(int32(-10)),
+						IdleTimeoutSeconds: ptr.To(int32(60)),
 						MinReplicas:        ptr.To(int32(0)),
 						MaxReplicas:        ptr.To(int32(10)),
 					},
-				},
-			},
-			expectedErr: "idleTimeoutSeconds must be non-negative, got -10",
+				}
+				return s
+			}(),
+			expectedErr: "",
 		},
-		"should accept zero idleTimeoutSeconds": {
-			spec: rayv1.RayClusterSpec{
-				EnableInTreeAutoscaling: ptr.To(true),
-				HeadGroupSpec: rayv1.HeadGroupSpec{
-					Template: podTemplateSpec([]corev1.EnvVar{
-						{Name: RAY_ENABLE_AUTOSCALER_V2, Value: "1"},
-					}, nil),
-				},
-				WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+		"Valid: Worker group with zero idleTimeoutSeconds": {
+			spec: func() rayv1.RayClusterSpec {
+				s := createSpec()
+				s.AutoscalerOptions = &rayv1.AutoscalerOptions{
+					Version: ptr.To(rayv1.AutoscalerVersionV2),
+				}
+				s.WorkerGroupSpecs = []rayv1.WorkerGroupSpec{
 					{
 						GroupName:          "worker-group-1",
 						Template:           podTemplateSpec(nil, nil),
@@ -1944,17 +1951,34 @@ func TestValidateWorkerGroupIdleTimeout(t *testing.T) {
 						MinReplicas:        ptr.To(int32(0)),
 						MaxReplicas:        ptr.To(int32(10)),
 					},
-				},
-			},
+				}
+				return s
+			}(),
 			expectedErr: "",
 		},
-		"should reject idleTimeoutSeconds when autoscaler version is not v2": {
-			spec: rayv1.RayClusterSpec{
-				EnableInTreeAutoscaling: ptr.To(true),
-				HeadGroupSpec: rayv1.HeadGroupSpec{
-					Template: podTemplateSpec(nil, nil),
-				},
-				WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+		"Invalid: Worker group with negative idleTimeoutSeconds": {
+			spec: func() rayv1.RayClusterSpec {
+				s := createSpec()
+				s.AutoscalerOptions = &rayv1.AutoscalerOptions{
+					Version: ptr.To(rayv1.AutoscalerVersionV2),
+				}
+				s.WorkerGroupSpecs = []rayv1.WorkerGroupSpec{
+					{
+						GroupName:          "worker-group-1",
+						Template:           podTemplateSpec(nil, nil),
+						IdleTimeoutSeconds: ptr.To(int32(-10)),
+						MinReplicas:        ptr.To(int32(0)),
+						MaxReplicas:        ptr.To(int32(10)),
+					},
+				}
+				return s
+			}(),
+			expectedErr: "worker group worker-group-1: idleTimeoutSeconds must be non-negative, got -10",
+		},
+		"Invalid: Worker group idleTimeoutSeconds without v2": {
+			spec: func() rayv1.RayClusterSpec {
+				s := createSpec()
+				s.WorkerGroupSpecs = []rayv1.WorkerGroupSpec{
 					{
 						GroupName:          "worker-group-1",
 						Template:           podTemplateSpec(nil, nil),
@@ -1962,17 +1986,18 @@ func TestValidateWorkerGroupIdleTimeout(t *testing.T) {
 						MinReplicas:        ptr.To(int32(0)),
 						MaxReplicas:        ptr.To(int32(10)),
 					},
-				},
-			},
-			expectedErr: fmt.Sprintf("worker group worker-group-1 has idleTimeoutSeconds set, but autoscaler v2 is not enabled. Please set .spec.autoscalerOptions.version to 'v2' (or set %s environment variable to 'true' in the head pod if using KubeRay < 1.4.0)", RAY_ENABLE_AUTOSCALER_V2),
+				}
+				return s
+			}(),
+			expectedErr: fmt.Sprintf("worker group worker-group-1: idleTimeoutSeconds is set, but autoscaler v2 is not enabled. Please set .spec.autoscalerOptions.version to 'v2' (or set %s environment variable to 'true' in the head pod if using KubeRay < 1.4.0)", RAY_ENABLE_AUTOSCALER_V2),
 		},
-		"should reject idleTimeoutSeconds when autoscaler version is not set": {
-			spec: rayv1.RayClusterSpec{
-				EnableInTreeAutoscaling: ptr.To(true),
-				HeadGroupSpec: rayv1.HeadGroupSpec{
-					Template: podTemplateSpec(nil, nil),
-				},
-				WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+		"Invalid: Worker group idleTimeoutSeconds with invalid env var": {
+			spec: func() rayv1.RayClusterSpec {
+				s := createSpec()
+				s.HeadGroupSpec.Template = podTemplateSpec([]corev1.EnvVar{
+					{Name: RAY_ENABLE_AUTOSCALER_V2, Value: "false"},
+				}, nil)
+				s.WorkerGroupSpecs = []rayv1.WorkerGroupSpec{
 					{
 						GroupName:          "worker-group-1",
 						Template:           podTemplateSpec(nil, nil),
@@ -1980,83 +2005,124 @@ func TestValidateWorkerGroupIdleTimeout(t *testing.T) {
 						MinReplicas:        ptr.To(int32(0)),
 						MaxReplicas:        ptr.To(int32(10)),
 					},
-				},
-			},
-			expectedErr: fmt.Sprintf("worker group worker-group-1 has idleTimeoutSeconds set, but autoscaler v2 is not enabled. Please set .spec.autoscalerOptions.version to 'v2' (or set %s environment variable to 'true' in the head pod if using KubeRay < 1.4.0)", RAY_ENABLE_AUTOSCALER_V2),
+				}
+				return s
+			}(),
+			expectedErr: fmt.Sprintf("worker group worker-group-1: idleTimeoutSeconds is set, but autoscaler v2 is not enabled. Please set .spec.autoscalerOptions.version to 'v2' (or set %s environment variable to 'true' in the head pod if using KubeRay < 1.4.0)", RAY_ENABLE_AUTOSCALER_V2),
 		},
-		"should reject idleTimeoutSeconds when AutoscalerOptions is nil": {
-			spec: rayv1.RayClusterSpec{
-				EnableInTreeAutoscaling: ptr.To(true),
-				HeadGroupSpec: rayv1.HeadGroupSpec{
-					Template: podTemplateSpec(nil, nil),
-				},
-				WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
-					{
-						GroupName:          "worker-group-1",
-						Template:           podTemplateSpec(nil, nil),
-						IdleTimeoutSeconds: ptr.To(int32(60)),
-						MinReplicas:        ptr.To(int32(0)),
-						MaxReplicas:        ptr.To(int32(10)),
-					},
-				},
-			},
-			expectedErr: fmt.Sprintf("worker group worker-group-1 has idleTimeoutSeconds set, but autoscaler v2 is not enabled. Please set .spec.autoscalerOptions.version to 'v2' (or set %s environment variable to 'true' in the head pod if using KubeRay < 1.4.0)", RAY_ENABLE_AUTOSCALER_V2),
-		},
-		"should reject idleTimeoutSeconds when env var is set to invalid value": {
-			spec: rayv1.RayClusterSpec{
-				EnableInTreeAutoscaling: ptr.To(true),
-				HeadGroupSpec: rayv1.HeadGroupSpec{
-					Template: podTemplateSpec([]corev1.EnvVar{
-						{Name: RAY_ENABLE_AUTOSCALER_V2, Value: "false"},
-					}, nil),
-				},
-				WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
-					{
-						GroupName:          "worker-group-1",
-						Template:           podTemplateSpec(nil, nil),
-						IdleTimeoutSeconds: ptr.To(int32(60)),
-						MinReplicas:        ptr.To(int32(0)),
-						MaxReplicas:        ptr.To(int32(10)),
-					},
-				},
-			},
-			expectedErr: fmt.Sprintf("worker group worker-group-1 has idleTimeoutSeconds set, but autoscaler v2 is not enabled. Please set .spec.autoscalerOptions.version to 'v2' (or set %s environment variable to 'true' in the head pod if using KubeRay < 1.4.0)", RAY_ENABLE_AUTOSCALER_V2),
-		},
-		"should accept worker group with idleTimeoutSeconds when env var is set to true": {
-			spec: rayv1.RayClusterSpec{
-				EnableInTreeAutoscaling: ptr.To(true),
-				HeadGroupSpec: rayv1.HeadGroupSpec{
-					Template: podTemplateSpec([]corev1.EnvVar{
-						{Name: RAY_ENABLE_AUTOSCALER_V2, Value: "true"},
-					}, nil),
-				},
-				WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
-					{
-						GroupName:          "worker-group-1",
-						Template:           podTemplateSpec(nil, nil),
-						IdleTimeoutSeconds: ptr.To(int32(60)),
-						MinReplicas:        ptr.To(int32(0)),
-						MaxReplicas:        ptr.To(int32(10)),
-					},
-				},
-			},
-			expectedErr: "",
-		},
-		"should accept worker group without idleTimeoutSeconds and without autoscaler v2": {
-			spec: rayv1.RayClusterSpec{
-				EnableInTreeAutoscaling: ptr.To(true),
-				HeadGroupSpec: rayv1.HeadGroupSpec{
-					Template: podTemplateSpec(nil, nil),
-				},
-				WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+		"Valid: Worker group without idleTimeoutSeconds": {
+			spec: func() rayv1.RayClusterSpec {
+				s := createSpec()
+				s.WorkerGroupSpecs = []rayv1.WorkerGroupSpec{
 					{
 						GroupName:   "worker-group-1",
 						Template:    podTemplateSpec(nil, nil),
 						MinReplicas: ptr.To(int32(0)),
 						MaxReplicas: ptr.To(int32(10)),
 					},
-				},
-			},
+				}
+				return s
+			}(),
+			expectedErr: "",
+		},
+
+		// AutoscalerOptions tests
+		"Valid: AutoscalerOptions with valid idleTimeoutSeconds and v2 spec field": {
+			spec: func() rayv1.RayClusterSpec {
+				s := createSpec()
+				s.AutoscalerOptions = &rayv1.AutoscalerOptions{
+					Version:            ptr.To(rayv1.AutoscalerVersionV2),
+					IdleTimeoutSeconds: ptr.To(int32(120)),
+				}
+				return s
+			}(),
+			expectedErr: "",
+		},
+		"Valid: AutoscalerOptions with idleTimeoutSeconds and v2 env var (legacy)": {
+			spec: func() rayv1.RayClusterSpec {
+				s := createSpec()
+				s.HeadGroupSpec.Template = podTemplateSpec([]corev1.EnvVar{
+					{Name: RAY_ENABLE_AUTOSCALER_V2, Value: "1"},
+				}, nil)
+				s.AutoscalerOptions = &rayv1.AutoscalerOptions{
+					IdleTimeoutSeconds: ptr.To(int32(120)),
+				}
+				return s
+			}(),
+			expectedErr: "",
+		},
+		"Valid: AutoscalerOptions with zero idleTimeoutSeconds": {
+			spec: func() rayv1.RayClusterSpec {
+				s := createSpec()
+				s.AutoscalerOptions = &rayv1.AutoscalerOptions{
+					Version:            ptr.To(rayv1.AutoscalerVersionV2),
+					IdleTimeoutSeconds: ptr.To(int32(0)),
+				}
+				return s
+			}(),
+			expectedErr: "",
+		},
+		"Invalid: AutoscalerOptions with negative idleTimeoutSeconds": {
+			spec: func() rayv1.RayClusterSpec {
+				s := createSpec()
+				s.AutoscalerOptions = &rayv1.AutoscalerOptions{
+					Version:            ptr.To(rayv1.AutoscalerVersionV2),
+					IdleTimeoutSeconds: ptr.To(int32(-10)),
+				}
+				return s
+			}(),
+			expectedErr: "autoscalerOptions.idleTimeoutSeconds must be non-negative, got -10",
+		},
+		"Invalid: AutoscalerOptions idleTimeoutSeconds with version v1": {
+			spec: func() rayv1.RayClusterSpec {
+				s := createSpec()
+				s.AutoscalerOptions = &rayv1.AutoscalerOptions{
+					Version:            ptr.To(rayv1.AutoscalerVersionV1),
+					IdleTimeoutSeconds: ptr.To(int32(60)),
+				}
+				return s
+			}(),
+			expectedErr: fmt.Sprintf("autoscalerOptions.idleTimeoutSeconds is set, but autoscaler v2 is not enabled. Please set .spec.autoscalerOptions.version to 'v2' (or set %s environment variable to 'true' in the head pod if using KubeRay < 1.4.0)", RAY_ENABLE_AUTOSCALER_V2),
+		},
+		"Invalid: AutoscalerOptions idleTimeoutSeconds without version": {
+			spec: func() rayv1.RayClusterSpec {
+				s := createSpec()
+				s.AutoscalerOptions = &rayv1.AutoscalerOptions{
+					IdleTimeoutSeconds: ptr.To(int32(60)),
+				}
+				return s
+			}(),
+			expectedErr: fmt.Sprintf("autoscalerOptions.idleTimeoutSeconds is set, but autoscaler v2 is not enabled. Please set .spec.autoscalerOptions.version to 'v2' (or set %s environment variable to 'true' in the head pod if using KubeRay < 1.4.0)", RAY_ENABLE_AUTOSCALER_V2),
+		},
+		"Invalid: AutoscalerOptions idleTimeoutSeconds with invalid env var": {
+			spec: func() rayv1.RayClusterSpec {
+				s := createSpec()
+				s.HeadGroupSpec.Template = podTemplateSpec([]corev1.EnvVar{
+					{Name: RAY_ENABLE_AUTOSCALER_V2, Value: "false"},
+				}, nil)
+				s.AutoscalerOptions = &rayv1.AutoscalerOptions{
+					IdleTimeoutSeconds: ptr.To(int32(60)),
+				}
+				return s
+			}(),
+			expectedErr: fmt.Sprintf("autoscalerOptions.idleTimeoutSeconds is set, but autoscaler v2 is not enabled. Please set .spec.autoscalerOptions.version to 'v2' (or set %s environment variable to 'true' in the head pod if using KubeRay < 1.4.0)", RAY_ENABLE_AUTOSCALER_V2),
+		},
+		"Valid: AutoscalerOptions without idleTimeoutSeconds": {
+			spec: func() rayv1.RayClusterSpec {
+				s := createSpec()
+				s.AutoscalerOptions = &rayv1.AutoscalerOptions{
+					Version: ptr.To(rayv1.AutoscalerVersionV1),
+				}
+				return s
+			}(),
+			expectedErr: "",
+		},
+		"Valid: AutoscalerOptions is nil": {
+			spec: func() rayv1.RayClusterSpec {
+				s := createSpec()
+				s.AutoscalerOptions = nil
+				return s
+			}(),
 			expectedErr: "",
 		},
 	}

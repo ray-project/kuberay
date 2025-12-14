@@ -104,8 +104,10 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 		if err := validateRayGroupLabels(workerGroup.GroupName, workerGroup.RayStartParams, workerGroup.Labels); err != nil {
 			return err
 		}
-		if err := validateWorkerGroupIdleTimeout(workerGroup, spec); err != nil {
-			return err
+		if workerGroup.IdleTimeoutSeconds != nil {
+			if err := validateIdleTimeoutSeconds(*workerGroup.IdleTimeoutSeconds, fmt.Sprintf("worker group %s: idleTimeoutSeconds", workerGroup.GroupName), spec); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -191,6 +193,13 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 					return fmt.Errorf("restartPolicy for worker group %s should be Never or unset when using autoscaler V2", workerGroup.GroupName)
 				}
 			}
+		}
+	}
+
+	// Validate AutoscalerOptions.IdleTimeoutSeconds
+	if spec.AutoscalerOptions != nil && spec.AutoscalerOptions.IdleTimeoutSeconds != nil {
+		if err := validateIdleTimeoutSeconds(*spec.AutoscalerOptions.IdleTimeoutSeconds, "autoscalerOptions.idleTimeoutSeconds", spec); err != nil {
+			return err
 		}
 	}
 
@@ -600,24 +609,22 @@ func validateLegacyDeletionPolicies(rayJob *rayv1.RayJob) error {
 	return nil
 }
 
-// validateWorkerGroupIdleTimeout validates the idleTimeoutSeconds field in a worker group spec
-func validateWorkerGroupIdleTimeout(workerGroup rayv1.WorkerGroupSpec, spec *rayv1.RayClusterSpec) error {
-	idleTimeoutSeconds := workerGroup.IdleTimeoutSeconds
-	if idleTimeoutSeconds != nil {
-		if *idleTimeoutSeconds < 0 {
-			return fmt.Errorf("idleTimeoutSeconds must be non-negative, got %d", *idleTimeoutSeconds)
-		}
-
-		// idleTimeoutSeconds only allowed on autoscaler v2
-		if IsAutoscalingV2Enabled(spec) {
-			return nil
-		}
-		envVar, exists := EnvVarByName(RAY_ENABLE_AUTOSCALER_V2, spec.HeadGroupSpec.Template.Spec.Containers[RayContainerIndex].Env)
-		if exists && (envVar.Value == "1" || envVar.Value == "true") {
-			return nil
-		}
-		return fmt.Errorf("worker group %s has idleTimeoutSeconds set, but autoscaler v2 is not enabled. Please set .spec.autoscalerOptions.version to 'v2' (or set %s environment variable to 'true' in the head pod if using KubeRay < 1.4.0)", workerGroup.GroupName, RAY_ENABLE_AUTOSCALER_V2)
+// validateIdleTimeoutSeconds validates an idleTimeoutSeconds field value
+// fieldPath should be the spec path (e.g., "worker group X: idleTimeoutSeconds" or "autoscalerOptions.idleTimeoutSeconds")
+func validateIdleTimeoutSeconds(value int32, fieldPath string, spec *rayv1.RayClusterSpec) error {
+	if value < 0 {
+		return fmt.Errorf("%s must be non-negative, got %d", fieldPath, value)
 	}
 
-	return nil
+	// idleTimeoutSeconds only allowed on autoscaler v2
+	if IsAutoscalingV2Enabled(spec) {
+		return nil
+	}
+
+	envVar, exists := EnvVarByName(RAY_ENABLE_AUTOSCALER_V2, spec.HeadGroupSpec.Template.Spec.Containers[RayContainerIndex].Env)
+	if exists && (envVar.Value == "1" || envVar.Value == "true") {
+		return nil
+	}
+
+	return fmt.Errorf("%s is set, but autoscaler v2 is not enabled. Please set .spec.autoscalerOptions.version to 'v2' (or set %s environment variable to 'true' in the head pod if using KubeRay < 1.4.0)", fieldPath, RAY_ENABLE_AUTOSCALER_V2)
 }
