@@ -289,7 +289,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		jobInfo, err := rayDashboardClient.GetJobInfo(ctx, rayJobInstance.Status.JobId)
 		if err != nil {
 			if errs.Is(err, dashboardclient.ErrAgain) {
-				logger.Info("The Ray job Info was not ready. Try again next iteration.", "JobId", rayJobInstance.Status.JobId)
+				logger.Info("The Ray job info was not ready. Try again next iteration.", "JobId", rayJobInstance.Status.JobId)
 				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 			}
 			// If the Ray job was not found, GetJobInfo returns a BadRequest error.
