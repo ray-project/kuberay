@@ -180,6 +180,13 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 		return ctrl.Result{}, nil
 	}
 
+	if err := utils.ValidateRayClusterUpgradeOptions(instance); err != nil {
+		logger.Error(err, "The RayCluster UpgradeStrategy is invalid")
+		r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.InvalidRayClusterSpec),
+			"The RayCluster UpgradeStrategy is invalid %s/%s: %v", instance.Namespace, instance.Name, err)
+		return ctrl.Result{}, nil
+	}
+
 	if err := utils.ValidateRayClusterStatus(instance); err != nil {
 		logger.Error(err, "The RayCluster status is invalid")
 		r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.InvalidRayClusterStatus),
@@ -637,6 +644,22 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 		}
 	}
 
+	// Check if pods need to be recreated with Recreate upgradeStrategy
+	if r.shouldRecreatePodsForUpgrade(ctx, instance) {
+		logger.Info("RayCluster spec changed with Recreate upgradeStrategy, deleting all pods")
+		if _, err := r.deleteAllPods(ctx, common.RayClusterAllPodsAssociationOptions(instance)); err != nil {
+			r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.FailedToDeletePodCollection),
+				"Failed deleting Pods due to spec change with Recreate upgradeStrategy for RayCluster %s/%s, %v",
+				instance.Namespace, instance.Name, err)
+			return errstd.Join(utils.ErrFailedDeleteAllPods, err)
+		}
+		r.rayClusterScaleExpectation.Delete(instance.Name, instance.Namespace)
+		r.Recorder.Eventf(instance, corev1.EventTypeNormal, string(utils.DeletedPod),
+			"Deleted all Pods for RayCluster %s/%s due to spec change with Recreate upgradeStrategy",
+			instance.Namespace, instance.Name)
+		return nil
+	}
+
 	// check if all the pods exist
 	headPods := corev1.PodList{}
 	if err := r.List(ctx, &headPods, common.RayClusterHeadPodsAssociationOptions(instance).ToListOptions()...); err != nil {
@@ -1092,6 +1115,62 @@ func (r *RayClusterReconciler) reconcileMultiHostWorkerGroup(ctx context.Context
 	}
 
 	return nil
+}
+
+// shouldRecreatePodsForUpgrade checks if any pods need to be recreated based on PodTemplateSpec changes
+func (r *RayClusterReconciler) shouldRecreatePodsForUpgrade(ctx context.Context, instance *rayv1.RayCluster) bool {
+	logger := ctrl.LoggerFrom(ctx)
+
+	if instance.Spec.UpgradeStrategy == nil || instance.Spec.UpgradeStrategy.Type == nil {
+		return false
+	}
+	if *instance.Spec.UpgradeStrategy.Type != rayv1.RayClusterRecreate {
+		return false
+	}
+
+	headPods := corev1.PodList{}
+	if err := r.List(ctx, &headPods, common.RayClusterHeadPodsAssociationOptions(instance).ToListOptions()...); err != nil {
+		logger.Error(err, "Failed to list head pods for upgrade check")
+		return false
+	}
+
+	if len(headPods.Items) == 1 {
+		expectedHeadHash, err := common.GeneratePodTemplateHash(instance.Spec.HeadGroupSpec.Template)
+		if err != nil {
+			logger.Error(err, "Failed to generate head template hash")
+			return false
+		}
+
+		headPod := headPods.Items[0]
+		actualHash := headPod.Annotations[utils.PodTemplateHashKey]
+		if actualHash != "" && actualHash != expectedHeadHash {
+			logger.Info("Pod template has changed, will recreate all pods", "rayCluster", instance.Name)
+			return true
+		}
+	}
+
+	for _, workerGroup := range instance.Spec.WorkerGroupSpecs {
+		workerPods := corev1.PodList{}
+		if err := r.List(ctx, &workerPods, common.RayClusterGroupPodsAssociationOptions(instance, workerGroup.GroupName).ToListOptions()...); err != nil {
+			logger.Error(err, "Failed to list worker pods for upgrade check", "groupName", workerGroup.GroupName)
+			continue
+		}
+
+		expectedWorkerHash, err := common.GeneratePodTemplateHash(workerGroup.Template)
+		if err != nil {
+			logger.Error(err, "Failed to generate worker template hash", "groupName", workerGroup.GroupName)
+			continue
+		}
+
+		for _, pod := range workerPods.Items {
+			actualHash := pod.Annotations[utils.PodTemplateHashKey]
+			if actualHash != "" && actualHash != expectedWorkerHash {
+				logger.Info("Pod template has changed, will recreate all pods", "rayCluster", instance.Name)
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // shouldDeletePod returns whether the Pod should be deleted and the reason
