@@ -38,7 +38,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v3
         with:
-          go-version: v1.24
+          go-version: v1.25
 
       - name: Check out code into the Go module directory
         uses: actions/checkout@v2
@@ -143,7 +143,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v3
         with:
-          go-version: v1.24
+          go-version: v1.25
 
       - name: Check out code into the Go module directory
         uses: actions/checkout@v2
@@ -172,7 +172,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v3
         with:
-          go-version: v1.24
+          go-version: v1.25
 
       - name: Check out code into the Go module directory
         uses: actions/checkout@v2
@@ -275,7 +275,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v3
       with:
-        go-version: v1.24
+        go-version: v1.25
 
     - name: Check out code into the Go module directory
       uses: actions/checkout@v2
@@ -388,7 +388,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v3
         with:
-          go-version: v1.24
+          go-version: v1.25
 
       - name: Check out code into the Go module directory
         uses: actions/checkout@v2
