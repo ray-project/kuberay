@@ -152,8 +152,8 @@ spec:
             {{- $argList = append $argList (printf "--burst=%v" .Values.kubeClient.burst) -}}
             {{- end -}}
             {{- end -}}
-            {{- if hasKey .Values "useBackgroundGoroutine" -}}
-            {{- $argList = append $argList (printf "--use-background-goroutine=%t" .Values.useBackgroundGoroutine) -}}
+            {{- if hasKey .Values "asyncJobInfoQuery" -}}
+            {{- $argList = append $argList (printf "--async-jobinfo-query=%t" .Values.asyncJobInfoQuery) -}}
             {{- end -}}
             {{- (printf "\n") -}}
             {{- $argList | toYaml | indent 12 }}
