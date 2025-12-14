@@ -1,0 +1,83 @@
+# This sample demonstrates RayCluster with TTL (Time-To-Live) functionality.
+# The cluster will be automatically deleted after the specified TTL period.
+apiVersion: ray.io/v1
+kind: RayCluster
+metadata:
+  name: raycluster-ttl-example
+spec:
+  # TTL in seconds - cluster will be deleted after this time has elapsed since creation
+  # In this example, the cluster will be deleted after 1 hour (3600 seconds)
+  # Set to 0 or omit this field to disable TTL functionality
+  ttlSeconds: 3600
+
+  # Ray version
+  rayVersion: '2.46.0'
+
+  # Enable autoscaling
+  enableInTreeAutoscaling: true
+
+  # Head group specification
+  headGroupSpec:
+    # Head group template
+    template:
+      spec:
+        containers:
+        - name: ray-head
+          image: rayproject/ray:2.46.0
+          ports:
+          - containerPort: 6379
+            name: gcs-server
+          - containerPort: 8265
+            name: dashboard
+          - containerPort: 10001
+            name: client
+          resources:
+            limits:
+              cpu: "2"
+              memory: "4Gi"
+            requests:
+              cpu: "2"
+              memory: "4Gi"
+          volumeMounts:
+          - mountPath: /tmp/ray
+            name: ray-logs
+        volumes:
+        - name: ray-logs
+          emptyDir: {}
+    # Service type for the head group
+    serviceType: ClusterIP
+
+  # Worker group specifications
+  workerGroupSpecs:
+  # the pod replicas in this group typed worker
+  - replicas: 2
+    minReplicas: 1
+    maxReplicas: 5
+    # logical group name, for this called small-group, also can be functional
+    groupName: small-group
+    # The `rayStartParams` are used to configure the `ray start` command.
+    # See https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayStartParams.md for the default settings of KubeRay.
+    rayStartParams: {}
+    #pod template
+    template:
+      spec:
+        containers:
+        - name: ray-worker
+          image: rayproject/ray:2.46.0
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh","-c","ray stop"]
+          resources:
+            limits:
+              cpu: "1"
+              memory: "2Gi"
+            requests:
+              cpu: "1"
+              memory: "2Gi"
+          volumeMounts:
+          - mountPath: /tmp/ray
+            name: ray-logs
+        volumes:
+        - name: ray-logs
+          emptyDir: {}
