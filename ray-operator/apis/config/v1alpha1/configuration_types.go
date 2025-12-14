@@ -1,6 +1,8 @@
 package v1alpha1
 
 import (
+	"context"
+
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -86,10 +88,14 @@ type Configuration struct {
 
 	// EnableMetrics indicates whether KubeRay operator should emit control plane metrics.
 	EnableMetrics bool `json:"enableMetrics,omitempty"`
+
+	// UseBackgroundGoroutine indicates that it wil use goroutine to fetch the job info from ray dashboard and
+	// store the job info in the cache
+	UseBackgroundGoroutine bool `json:"useBackgroundGoroutine,omitempty"`
 }
 
-func (config Configuration) GetDashboardClient(mgr manager.Manager) func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error) {
-	return utils.GetRayDashboardClientFunc(mgr, config.UseKubernetesProxy)
+func (config Configuration) GetDashboardClient(ctx context.Context, mgr manager.Manager) func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error) {
+	return utils.GetRayDashboardClientFunc(ctx, mgr, config.UseKubernetesProxy, config.UseBackgroundGoroutine)
 }
 
 func (config Configuration) GetHttpProxyClient(mgr manager.Manager) func(hostIp, podNamespace, podName string, port int) utils.RayHttpProxyClientInterface {
