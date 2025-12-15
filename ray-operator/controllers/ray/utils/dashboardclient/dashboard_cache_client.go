@@ -41,7 +41,7 @@ var (
 )
 
 type (
-	Task         func() bool
+	Task         func(taskCTX context.Context) bool
 	JobInfoCache struct {
 		JobInfo  *utiltypes.RayJobInfo
 		Err      error
@@ -65,7 +65,7 @@ func (w *workerPool) init(ctx context.Context, taskQueueSize int, workerSize int
 					logger.Info("worker exiting...", "workerID", workerID)
 					return
 				case task := <-w.taskQueue:
-					again := task()
+					again := task(ctx)
 
 					if again {
 						time.AfterFunc(queryInterval, func() {
@@ -177,7 +177,7 @@ func (r *RayDashboardCacheClient) GetJobInfo(ctx context.Context, jobId string) 
 	}
 	cacheLock.Unlock()
 
-	task := func() bool {
+	task := func(taskCTX context.Context) bool {
 		cacheLock.RLock()
 		jobInfoCache, existed := cacheStorage.Get(jobId)
 		if !existed {
@@ -188,7 +188,7 @@ func (r *RayDashboardCacheClient) GetJobInfo(ctx context.Context, jobId string) 
 		cacheLock.RUnlock()
 
 		var statusErr *k8serrors.StatusError
-		jobInfo, err := r.client.GetJobInfo(ctx, jobId)
+		jobInfo, err := r.client.GetJobInfo(taskCTX, jobId)
 		if err != nil && !errors.As(err, &statusErr) {
 			if jobInfoCache.Err != nil && err.Error() == jobInfoCache.Err.Error() {
 				// The error is the same as last time, no need to update, just put the task to execute later.
