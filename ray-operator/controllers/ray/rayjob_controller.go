@@ -109,6 +109,18 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		return ctrl.Result{}, nil
 	}
 
+	if rayJobInstance.Spec.SubmissionMode == rayv1.SidecarMode &&
+		rayJobInstance.ObjectMeta.DeletionTimestamp.IsZero() &&
+		addSidecarDisableHeadRestartLabel(rayJobInstance) {
+		logger.Info("Add label to disable head Pod recreation for sidecar-mode RayJob",
+			"label", utils.RayJobDisableHeadNodeRestartLabelKey)
+		if err := r.Update(ctx, rayJobInstance); err != nil {
+			logger.Error(err, "Failed to update RayJob labels")
+			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+		}
+		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
+	}
+
 	if !rayJobInstance.ObjectMeta.DeletionTimestamp.IsZero() {
 		logger.Info("RayJob is being deleted", "DeletionTimestamp", rayJobInstance.ObjectMeta.DeletionTimestamp)
 		// If the JobStatus is not terminal, it is possible that the Ray job is still running. This includes
@@ -924,6 +936,15 @@ func (r *RayJobReconciler) getOrCreateRayClusterInstance(ctx context.Context, ra
 	}
 	logger.Info("Found the associated RayCluster for RayJob", "RayCluster", rayClusterNamespacedName)
 
+	if rayJobInstance.Spec.SubmissionMode == rayv1.SidecarMode &&
+		len(rayJobInstance.Spec.ClusterSelector) == 0 &&
+		ensureRayClusterHasSidecarDisableHeadRestartLabel(rayClusterInstance) {
+		if err := r.Update(ctx, rayClusterInstance); err != nil {
+			logger.Error(err, "Failed to update RayCluster with sidecar restart label", "RayCluster", rayClusterNamespacedName)
+			return nil, err
+		}
+	}
+
 	// Verify that RayJob is not in cluster selector mode first to avoid nil pointer dereference error during spec comparison.
 	// This is checked by ensuring len(rayJobInstance.Spec.ClusterSelector) equals 0.
 	if len(rayJobInstance.Spec.ClusterSelector) == 0 && !utils.CompareJsonStruct(rayClusterInstance.Spec, *rayJobInstance.Spec.RayClusterSpec) {
@@ -943,6 +964,7 @@ func (r *RayJobReconciler) constructRayClusterForRayJob(rayJobInstance *rayv1.Ra
 	labels[utils.RayJobSubmissionModeLabelKey] = string(rayJobInstance.Spec.SubmissionMode)
 	if rayJobInstance.Spec.SubmissionMode == rayv1.SidecarMode {
 		labels[utils.RayJobSubmissionModeLabelKey] = string(rayv1.SidecarMode)
+		labels[utils.RayJobDisableHeadNodeRestartLabelKey] = "true"
 	}
 	rayCluster := &rayv1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
@@ -975,6 +997,28 @@ func (r *RayJobReconciler) constructRayClusterForRayJob(rayJobInstance *rayv1.Ra
 	}
 
 	return rayCluster, nil
+}
+
+func addSidecarDisableHeadRestartLabel(rayJob *rayv1.RayJob) bool {
+	if rayJob.Labels == nil {
+		rayJob.Labels = map[string]string{}
+	}
+	if _, exists := rayJob.Labels[utils.RayJobDisableHeadNodeRestartLabelKey]; exists {
+		return false
+	}
+	rayJob.Labels[utils.RayJobDisableHeadNodeRestartLabelKey] = "true"
+	return true
+}
+
+func ensureRayClusterHasSidecarDisableHeadRestartLabel(rayCluster *rayv1.RayCluster) bool {
+	if rayCluster.Labels == nil {
+		rayCluster.Labels = map[string]string{}
+	}
+	if _, exists := rayCluster.Labels[utils.RayJobDisableHeadNodeRestartLabelKey]; exists {
+		return false
+	}
+	rayCluster.Labels[utils.RayJobDisableHeadNodeRestartLabelKey] = "true"
+	return true
 }
 
 func updateStatusToSuspendingIfNeeded(ctx context.Context, rayJob *rayv1.RayJob) bool {

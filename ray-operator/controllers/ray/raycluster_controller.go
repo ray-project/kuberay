@@ -679,9 +679,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 			return errstd.New(reason)
 		}
 	} else if len(headPods.Items) == 0 {
-		originatedFrom := utils.GetCRDType(instance.Labels[utils.RayOriginatedFromCRDLabelKey])
-		if originatedFrom == utils.RayJobCRD &&
-			instance.Labels[utils.RayJobSubmissionModeLabelKey] == string(rayv1.SidecarMode) &&
+		if shouldSkipHeadPodRestart(instance) &&
 			// Recreating the head Pod if the RayCluster created by RayJob is provisioned doesn't help RayJob.
 			//
 			// Case 1: GCS fault tolerance is disabled
@@ -1092,6 +1090,16 @@ func (r *RayClusterReconciler) reconcileMultiHostWorkerGroup(ctx context.Context
 	}
 
 	return nil
+}
+
+func shouldSkipHeadPodRestart(cluster *rayv1.RayCluster) bool {
+	if cluster == nil {
+		return false
+	}
+	if utils.GetCRDType(cluster.Labels[utils.RayOriginatedFromCRDLabelKey]) != utils.RayJobCRD {
+		return false
+	}
+	return cluster.Labels[utils.RayJobDisableHeadNodeRestartLabelKey] == "true"
 }
 
 // shouldDeletePod returns whether the Pod should be deleted and the reason

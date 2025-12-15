@@ -27,6 +27,8 @@ const (
 	NumWorkerGroupsKey                       = "ray.io/num-worker-groups"
 	KubeRayVersion                           = "ray.io/kuberay-version"
 	RayJobSubmissionModeLabelKey             = "ray.io/job-submission-mode"
+	// RayJobDisableHeadNodeRestartLabelKey marks RayClusters created for sidecar-mode RayJobs to skip head Pod recreation after provisioning.
+	RayJobDisableHeadNodeRestartLabelKey = "ray.io/disable-provisioned-head-restart"
 
 	// Labels for feature RayMultihostIndexing
 	//

@@ -2,6 +2,7 @@ package e2erayjob
 
 import (
 	"testing"
+	"time"
 
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -10,6 +11,7 @@ import (
 	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	rayv1ac "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/ray/v1"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
@@ -174,16 +176,39 @@ env_vars:
 		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
 			Should(WithTransform(RayJobStatus, Equal(rayv1.JobStatusRunning)))
 
+		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
+			Should(WithTransform(func(job *rayv1.RayJob) string {
+				return job.Labels[utils.RayJobDisableHeadNodeRestartLabelKey]
+			}, Equal("true")))
+
 		// Fetch RayCluster and delete the head Pod
 		rayJob, err = GetRayJob(test, rayJob.Namespace, rayJob.Name)
 		g.Expect(err).NotTo(HaveOccurred())
 		rayCluster, err := GetRayCluster(test, rayJob.Namespace, rayJob.Status.RayClusterName)
 		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(rayCluster.Labels[utils.RayJobDisableHeadNodeRestartLabelKey]).To(Equal("true"))
 		headPod, err := GetHeadPod(test, rayCluster)
 		g.Expect(err).NotTo(HaveOccurred())
 		LogWithTimestamp(test.T(), "Deleting head Pod %s/%s for RayCluster %s", headPod.Namespace, headPod.Name, rayCluster.Name)
 		err = test.Client().Core().CoreV1().Pods(headPod.Namespace).Delete(test.Ctx(), headPod.Name, metav1.DeleteOptions{})
 		g.Expect(err).NotTo(HaveOccurred())
+
+		g.Eventually(func() int {
+			pods, listErr := test.Client().Core().CoreV1().Pods(rayCluster.Namespace).List(
+				test.Ctx(), common.RayClusterHeadPodsAssociationOptions(rayCluster).ToMetaV1ListOptions())
+			if listErr != nil {
+				return -1
+			}
+			return len(pods.Items)
+		}, TestTimeoutMedium, 2*time.Second).Should(Equal(0))
+		g.Consistently(func() int {
+			pods, listErr := test.Client().Core().CoreV1().Pods(rayCluster.Namespace).List(
+				test.Ctx(), common.RayClusterHeadPodsAssociationOptions(rayCluster).ToMetaV1ListOptions())
+			if listErr != nil {
+				return -1
+			}
+			return len(pods.Items)
+		}, TestTimeoutShort, 2*time.Second).Should(Equal(0))
 
 		// After head pod deletion, controller should mark RayJob as Failed with a specific message
 		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
