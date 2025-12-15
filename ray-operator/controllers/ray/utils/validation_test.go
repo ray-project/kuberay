@@ -2026,8 +2026,8 @@ func TestValidateRayClusterSpec_IdleTimeoutSeconds(t *testing.T) {
 			expectedErr: "",
 		},
 
-		// AutoscalerOptions tests
-		"Valid: AutoscalerOptions with valid idleTimeoutSeconds and v2 spec field": {
+		// AutoscalerOptions tests (idleTimeoutSeconds works with both v1 and v2)
+		"Valid: AutoscalerOptions with idleTimeoutSeconds and v2": {
 			spec: func() rayv1.RayClusterSpec {
 				s := createSpec()
 				s.AutoscalerOptions = &rayv1.AutoscalerOptions{
@@ -2038,12 +2038,20 @@ func TestValidateRayClusterSpec_IdleTimeoutSeconds(t *testing.T) {
 			}(),
 			expectedErr: "",
 		},
-		"Valid: AutoscalerOptions with idleTimeoutSeconds and v2 env var (legacy)": {
+		"Valid: AutoscalerOptions with idleTimeoutSeconds and v1": {
 			spec: func() rayv1.RayClusterSpec {
 				s := createSpec()
-				s.HeadGroupSpec.Template = podTemplateSpec([]corev1.EnvVar{
-					{Name: RAY_ENABLE_AUTOSCALER_V2, Value: "1"},
-				}, nil)
+				s.AutoscalerOptions = &rayv1.AutoscalerOptions{
+					Version:            ptr.To(rayv1.AutoscalerVersionV1),
+					IdleTimeoutSeconds: ptr.To(int32(120)),
+				}
+				return s
+			}(),
+			expectedErr: "",
+		},
+		"Valid: AutoscalerOptions with idleTimeoutSeconds and no version": {
+			spec: func() rayv1.RayClusterSpec {
+				s := createSpec()
 				s.AutoscalerOptions = &rayv1.AutoscalerOptions{
 					IdleTimeoutSeconds: ptr.To(int32(120)),
 				}
@@ -2055,7 +2063,6 @@ func TestValidateRayClusterSpec_IdleTimeoutSeconds(t *testing.T) {
 			spec: func() rayv1.RayClusterSpec {
 				s := createSpec()
 				s.AutoscalerOptions = &rayv1.AutoscalerOptions{
-					Version:            ptr.To(rayv1.AutoscalerVersionV2),
 					IdleTimeoutSeconds: ptr.To(int32(0)),
 				}
 				return s
@@ -2066,46 +2073,11 @@ func TestValidateRayClusterSpec_IdleTimeoutSeconds(t *testing.T) {
 			spec: func() rayv1.RayClusterSpec {
 				s := createSpec()
 				s.AutoscalerOptions = &rayv1.AutoscalerOptions{
-					Version:            ptr.To(rayv1.AutoscalerVersionV2),
 					IdleTimeoutSeconds: ptr.To(int32(-10)),
 				}
 				return s
 			}(),
 			expectedErr: "autoscalerOptions.idleTimeoutSeconds must be non-negative, got -10",
-		},
-		"Invalid: AutoscalerOptions idleTimeoutSeconds with version v1": {
-			spec: func() rayv1.RayClusterSpec {
-				s := createSpec()
-				s.AutoscalerOptions = &rayv1.AutoscalerOptions{
-					Version:            ptr.To(rayv1.AutoscalerVersionV1),
-					IdleTimeoutSeconds: ptr.To(int32(60)),
-				}
-				return s
-			}(),
-			expectedErr: fmt.Sprintf("autoscalerOptions.idleTimeoutSeconds is set, but autoscaler v2 is not enabled. Please set .spec.autoscalerOptions.version to 'v2' (or set %s environment variable to 'true' in the head pod if using KubeRay < 1.4.0)", RAY_ENABLE_AUTOSCALER_V2),
-		},
-		"Invalid: AutoscalerOptions idleTimeoutSeconds without version": {
-			spec: func() rayv1.RayClusterSpec {
-				s := createSpec()
-				s.AutoscalerOptions = &rayv1.AutoscalerOptions{
-					IdleTimeoutSeconds: ptr.To(int32(60)),
-				}
-				return s
-			}(),
-			expectedErr: fmt.Sprintf("autoscalerOptions.idleTimeoutSeconds is set, but autoscaler v2 is not enabled. Please set .spec.autoscalerOptions.version to 'v2' (or set %s environment variable to 'true' in the head pod if using KubeRay < 1.4.0)", RAY_ENABLE_AUTOSCALER_V2),
-		},
-		"Invalid: AutoscalerOptions idleTimeoutSeconds with invalid env var": {
-			spec: func() rayv1.RayClusterSpec {
-				s := createSpec()
-				s.HeadGroupSpec.Template = podTemplateSpec([]corev1.EnvVar{
-					{Name: RAY_ENABLE_AUTOSCALER_V2, Value: "false"},
-				}, nil)
-				s.AutoscalerOptions = &rayv1.AutoscalerOptions{
-					IdleTimeoutSeconds: ptr.To(int32(60)),
-				}
-				return s
-			}(),
-			expectedErr: fmt.Sprintf("autoscalerOptions.idleTimeoutSeconds is set, but autoscaler v2 is not enabled. Please set .spec.autoscalerOptions.version to 'v2' (or set %s environment variable to 'true' in the head pod if using KubeRay < 1.4.0)", RAY_ENABLE_AUTOSCALER_V2),
 		},
 		"Valid: AutoscalerOptions without idleTimeoutSeconds": {
 			spec: func() rayv1.RayClusterSpec {
