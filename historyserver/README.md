@@ -3,7 +3,8 @@
 This project is under active development.
 See [#ray-history-server](https://app.slack.com/client/TN4768NRM/C09QLLU8HTL) channel to provide feedback.
 
-Ray History Server is a service for collecting, storing, and viewing historical logs and metadata from Ray clusters. It provides a web interface to explore the history of Ray jobs, tasks, actors, and other cluster activities.
+Ray History Server is a service for collecting, storing, and viewing historical logs and metadata from Ray clusters.
+It provides a web interface to explore the history of Ray jobs, tasks, actors, and other cluster activities.
 
 ## Components
 
@@ -29,10 +30,12 @@ make build
 ```
 
 This will generate two binaries in the `output/bin/` directory:
+
 - `collector`: The collector service that runs alongside Ray nodes
 - `historyserver`: The main history server service
 
 You can also build individual components:
+
 ```bash
 make buildcollector      # Build only the collector
 make buildhistoryserver  # Build only the history server
@@ -49,6 +52,7 @@ make localimage
 This creates a Docker image named `historyserver:laster` with both binaries and necessary assets.
 
 For multi-platform builds, you can use:
+
 ```bash
 docker buildx build -t <image-name>:<tag> --platform linux/amd64,linux/arm64 . --push
 ```
@@ -137,4 +141,5 @@ make alllint
 
 ## Deployment
 
-History Server can be deployed in Kubernetes using the manifests in the `config/samples/` directory. Examples are provided for different storage backends including MinIO and Aliyun OSS.
+History Server can be deployed in Kubernetes using the manifests in the `config/samples/` directory.
+Examples are provided for different storage backends including MinIO and Aliyun OSS.
