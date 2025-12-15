@@ -814,6 +814,17 @@ func (r *RayLogHandler) processPrevLogFile(absoluteLogPathName, localLogDir, ses
 	return nil
 }
 
+// meta-dir only stores metadata indicating which clusters have been saved.
+// As long as worker logs are uploaded normally and head writes the metadata,
+// the cluster can be viewed.
+// Any session change triggers sessiondir updates on all head and worker nodes,
+// so we only need to update from one node.
+// for example:
+// metadir/
+//
+//	my-cluster_abc123/
+//		session_2024-12-15_10-30-45_123456    ← Empty file! The path itself is the information
+//		session_2024-12-15_14-20-10_789012
 func (r *RayLogHandler) WatchSessionLatestLoops() {
 	sessionLatestDir := "/tmp/ray"
 	watcher, err := fsnotify.NewWatcher()
