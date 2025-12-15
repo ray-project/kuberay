@@ -97,12 +97,10 @@ func (r *RayDashboardCacheClient) InitClient(ctx context.Context, client RayDash
 	})
 
 	initCacheStorage.Do(func() {
-		if cacheStorage == nil {
-			// the New() returns error only if the size is less or equal than zero.
-			cacheStorage, _ = lru.NewWithEvict[string, *JobInfoCache](cacheSize, func(key string, _ *JobInfoCache) {
-				logger.WithName("cacheStorage").Info("Evict cache for key.", "key", key)
-			})
-		}
+		// the New() returns error only if the size is less or equal than zero.
+		cacheStorage, _ = lru.NewWithEvict[string, *JobInfoCache](cacheSize, func(key string, _ *JobInfoCache) {
+			logger.WithName("cacheStorage").Info("Evict cache for key.", "key", key)
+		})
 
 		// expiry cache cleanup
 		go func() {
