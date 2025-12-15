@@ -15,7 +15,10 @@ import (
 	utiltypes "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/types"
 )
 
-var ErrAgain = errors.New("EAGAIN")
+var (
+	ErrAgain         = errors.New("EAGAIN")
+	ErrTaskQueueFull = errors.New("task queue is full")
+)
 
 const (
 	// TODO: make queue size and worker size configurable.
@@ -79,8 +82,14 @@ func (w *workerPool) init(ctx context.Context, taskQueueSize int, workerSize int
 	logger.Info(fmt.Sprintf("Initialize a worker pool with %d goroutine and queryInterval is %v.", workerSize, queryInterval))
 }
 
-func (w *workerPool) PutTask(task Task) {
+func (w *workerPool) PutTask(task Task) error {
 	w.taskQueue <- task
+	select {
+	case w.taskQueue <- task:
+		return nil
+	default:
+		return ErrTaskQueueFull
+	}
 }
 
 var _ RayDashboardClientInterface = (*RayDashboardCacheClient)(nil)
@@ -221,7 +230,10 @@ func (r *RayDashboardCacheClient) GetJobInfo(ctx context.Context, jobId string) 
 		return true
 	}
 
-	pool.PutTask(task)
+	if err := pool.PutTask(task); err != nil {
+		logger.Error(err, "Cannot queue more jobInfo fetching tasks.", "jobId", jobId)
+		return nil, err
+	}
 	logger.Info("Put a task to fetch job info in background for jobId ", "jobId", jobId)
 
 	return nil, ErrAgain
