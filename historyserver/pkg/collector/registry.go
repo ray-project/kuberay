@@ -8,7 +8,7 @@ import (
 	"github.com/ray-project/kuberay/historyserver/pkg/collector/types"
 )
 
-type WriterRegistry map[string]func(globalData *types.RayCollectorConfig, data map[string]interface{}) (storage.StorageWritter, error)
+type WriterRegistry map[string]func(globalData *types.RayCollectorConfig, data map[string]interface{}) (storage.StorageWriter, error)
 
 func GetWriterRegistry() WriterRegistry {
 	return writerRegistry

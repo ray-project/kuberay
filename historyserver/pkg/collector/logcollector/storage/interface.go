@@ -7,7 +7,7 @@ import (
 )
 
 // StorageWriter is the interface for storage writer.
-type StorageWritter interface {
+type StorageWriter interface {
 	CreateDirectory(path string) error
 	WriteFile(file string, reader io.ReadSeeker) error
 }

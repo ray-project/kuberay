@@ -30,7 +30,7 @@ type Event struct {
 
 type EventServer struct {
 	events        []Event
-	storageWriter storage.StorageWritter
+	storageWriter storage.StorageWriter
 	root          string
 	sessionDir    string
 	nodeID        string
@@ -48,7 +48,7 @@ type EventServer struct {
 	currentNodeID string
 }
 
-func NewEventServer(writer storage.StorageWritter, rootDir, sessionDir, nodeID, clusterName, clusterID, sessionName string) *EventServer {
+func NewEventServer(writer storage.StorageWriter, rootDir, sessionDir, nodeID, clusterName, clusterID, sessionName string) *EventServer {
 	server := &EventServer{
 		events:             make([]Event, 0),
 		storageWriter:      writer,

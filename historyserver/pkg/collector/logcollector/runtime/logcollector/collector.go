@@ -38,7 +38,7 @@ type RayLogHandler struct {
 	PushInterval time.Duration
 
 	HttpClient *http.Client
-	Writter    storage.StorageWritter
+	Writter    storage.StorageWriter
 
 	// Store file paths to be processed on shutdown
 	logFilePaths map[string]bool

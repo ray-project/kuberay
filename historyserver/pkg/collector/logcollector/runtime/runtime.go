@@ -13,7 +13,7 @@ import (
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
-func NewCollector(config *types.RayCollectorConfig, writter storage.StorageWritter) RayLogCollector {
+func NewCollector(config *types.RayCollectorConfig, writter storage.StorageWriter) RayLogCollector {
 	handler := logcollector.RayLogHandler{
 		EnableMeta: config.Role == "Head",
 		LogFiles:   make(chan string),

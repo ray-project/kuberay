@@ -7,7 +7,7 @@ import (
 	"github.com/ray-project/kuberay/historyserver/pkg/collector/types"
 )
 
-// MockWriter is a mock implementation of the StorageWritter interface
+// MockWriter is a mock implementation of the StorageWriter interface
 type MockWriter struct {
 	directories map[string]bool
 	files       map[string]string // filePath -> content
@@ -49,7 +49,7 @@ func (w *MockWriter) HasDirectory(path string) bool {
 	return w.directories[path]
 }
 
-// NewWriter creates a new StorageWritter
-func NewWriter(c *types.RayHistoryServerConfig, jd map[string]interface{}) (storage.StorageWritter, error) {
+// NewWriter creates a new StorageWriter
+func NewWriter(c *types.RayHistoryServerConfig, jd map[string]interface{}) (storage.StorageWriter, error) {
 	return NewMockWriter(), nil
 }
