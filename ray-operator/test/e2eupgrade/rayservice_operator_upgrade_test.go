@@ -64,11 +64,10 @@ func TestZeroDowntimeUpgradeAfterOperatorUpgrade(t *testing.T) {
 
 	// Validate RayService serve service correctly configured
 	svcName := utils.GenerateServeServiceName(rayService.Name)
-	test.T().Logf("Checking that the K8s serve service %s has exactly one endpoint and two addresses", svcName)
-	endpoints, err := test.Client().Core().CoreV1().Endpoints(namespace.Name).Get(test.Ctx(), svcName, metav1.GetOptions{})
+	test.T().Logf("Checking that the K8s serve service %s has two ready endpoints", svcName)
+	readyEndpoints, err := GetReadyEndpointsFromSlices(test.Ctx(), test.Client(), namespace.Name, svcName)
 	g.Expect(err).NotTo(HaveOccurred())
-	g.Expect(endpoints.Subsets).To(HaveLen(1))
-	g.Expect(endpoints.Subsets[0].Addresses).To(HaveLen(2))
+	g.Expect(readyEndpoints).To(HaveLen(2))
 
 	// Upgrade KubeRay operator to latest version and replace CRDs
 	test.T().Logf("Upgrading the KubeRay operator to %s", upgradeVersion)
