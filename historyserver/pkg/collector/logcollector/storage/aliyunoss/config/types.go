@@ -24,8 +24,8 @@ import (
 type EnterConfig struct {
 	Module             string
 	ModuleExecBinary   string
-	EnterOssExpireHour int
 	WatchLogDir        string
+	EnterOssExpireHour int
 	EnableMeta         bool
 }
 
@@ -44,16 +44,14 @@ type RayMetaHanderConfig struct {
 }
 
 type RayHistoryServerConfig struct {
+	AllowedUID sets.Set[string]
+	AllowedAID sets.Set[string]
 	GlobalConfig
-	DashBoardDir string
-
+	DashBoardDir     string
 	ArmsRegionId     string
 	ACKClusterId     string
 	WebAppId         string
 	WebAppSecret     string
 	LocalServiceName string
-	AllowedUID       sets.Set[string]
-	AllowedAID       sets.Set[string]
-
-	MaxOssListLimit int
+	MaxOssListLimit  int
 }

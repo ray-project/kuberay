@@ -15,40 +15,30 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+	"github.com/sirupsen/logrus"
+
 	"github.com/ray-project/kuberay/historyserver/pkg/collector/logcollector/storage"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
-	"github.com/sirupsen/logrus"
 )
 
 type RayLogHandler struct {
-	EnableMeta bool
-
-	RootDir    string
-	LogDir     string
-	SessionDir string
-	LogFiles   chan string
-	// fill after start
-	MetaDir string
-
+	Writer         storage.StorageWriter
+	LogFiles       chan string
+	HttpClient     *http.Client
+	ShutdownChan   chan struct{}
+	logFilePaths   map[string]bool
+	MetaDir        string
 	RayClusterName string
-	RayClusterID   string
+	LogDir         string
 	RayNodeName    string
-
-	LogBatching  int
-	PushInterval time.Duration
-
-	HttpClient *http.Client
-	Writter    storage.StorageWriter
-
-	// Store file paths to be processed on shutdown
-	logFilePaths map[string]bool
-	filePathMu   sync.Mutex
-
-	// Channel for signaling shutdown
-	ShutdownChan chan struct{}
-
-	// For prev-logs monitoring
-	prevLogsDir string
+	RayClusterID   string
+	RootDir        string
+	SessionDir     string
+	prevLogsDir    string
+	PushInterval   time.Duration
+	LogBatching    int
+	filePathMu     sync.Mutex
+	EnableMeta     bool
 }
 
 func (r *RayLogHandler) Start(stop <-chan struct{}) error {
@@ -121,7 +111,7 @@ func (r *RayLogHandler) processAllLogs() {
 	r.filePathMu.Lock()
 	defer r.filePathMu.Unlock()
 
-	if err := r.Writter.CreateDirectory(r.RootDir); err != nil {
+	if err := r.Writer.CreateDirectory(r.RootDir); err != nil {
 		logrus.Errorf("Failed to create root directory %s: %v", r.RootDir, err)
 		return
 	}
@@ -157,11 +147,11 @@ func (r *RayLogHandler) processSessionLatestLogs() {
 			utils.AppendRayClusterNameID(r.RayClusterName, r.RayClusterID),
 			path.Base(sessionID),
 		))
-		if err := r.Writter.CreateDirectory(path.Dir(metafile)); err != nil {
+		if err := r.Writer.CreateDirectory(path.Dir(metafile)); err != nil {
 			logrus.Errorf("CreateObjectIfNotExist %s error %v", metadir, err)
 			return
 		}
-		if err := r.Writter.WriteFile(metafile, strings.NewReader("")); err != nil {
+		if err := r.Writer.WriteFile(metafile, strings.NewReader("")); err != nil {
 			logrus.Errorf("CreateObjectIfNotExist %s error %v", metafile, err)
 			return
 		}
@@ -211,7 +201,6 @@ func (r *RayLogHandler) processSessionLatestLogs() {
 
 		return nil
 	})
-
 	if err != nil {
 		logrus.Errorf("Error walking logs directory %s: %v", logsDir, err)
 	}
@@ -226,7 +215,7 @@ func (r *RayLogHandler) processSessionLatestLogFile(absoluteLogPathName, session
 	logsDir := filepath.Join("/tmp/ray/session_latest", "logs")
 	relativePath, err := filepath.Rel(logsDir, absoluteLogPathName)
 	if err != nil {
-		return fmt.Errorf("failed to get relative path for %s: %v", absoluteLogPathName, err)
+		return fmt.Errorf("failed to get relative path for %s: %w", absoluteLogPathName, err)
 	}
 
 	// Split relative path into subdirectory and filename
@@ -239,7 +228,7 @@ func (r *RayLogHandler) processSessionLatestLogFile(absoluteLogPathName, session
 		// Remove trailing separator if present
 		subdir = strings.TrimSuffix(subdir, string(filepath.Separator))
 		dirName := path.Join(logDir, subdir)
-		if err := r.Writter.CreateDirectory(dirName); err != nil {
+		if err := r.Writer.CreateDirectory(dirName); err != nil {
 			logrus.Errorf("Failed to create directory '%s': %v", dirName, err)
 			return err
 		}
@@ -256,7 +245,7 @@ func (r *RayLogHandler) processSessionLatestLogFile(absoluteLogPathName, session
 	}
 
 	// Write to storage
-	err = r.Writter.WriteFile(objectName, bytes.NewReader(content))
+	err = r.Writer.WriteFile(objectName, bytes.NewReader(content))
 	if err != nil {
 		logrus.Errorf("Failed to write object %s: %v", objectName, err)
 		return err
@@ -276,7 +265,7 @@ func (r *RayLogHandler) processLogFile(absoluteLogPathName string) error {
 
 	if len(subdir) != 0 {
 		dirName := path.Join(logDir, subdir)
-		if err := r.Writter.CreateDirectory(dirName); err != nil {
+		if err := r.Writer.CreateDirectory(dirName); err != nil {
 			logrus.Errorf("Failed to create directory '%s': %v", dirName, err)
 			return err
 		}
@@ -293,7 +282,7 @@ func (r *RayLogHandler) processLogFile(absoluteLogPathName string) error {
 	}
 
 	// Write to storage
-	err = r.Writter.WriteFile(objectName, bytes.NewReader(content))
+	err = r.Writer.WriteFile(objectName, bytes.NewReader(content))
 	if err != nil {
 		logrus.Errorf("Failed to write object %s: %v", objectName, err)
 		return err
@@ -326,7 +315,6 @@ func (r *RayLogHandler) WatchLogsLoops(watcher *fsnotify.Watcher, walkPath strin
 		}
 		return nil
 	})
-
 	if err != nil {
 		logrus.Errorf("Walk path %s error %++v", walkPath, err)
 		return
@@ -372,11 +360,11 @@ func (r *RayLogHandler) WatchPrevLogsLoops() {
 	// Check if prev-logs directory exists
 	if _, err := os.Stat(watchPath); os.IsNotExist(err) {
 		logrus.Infof("prev-logs directory does not exist, creating it: %s", watchPath)
-		if err := os.MkdirAll(watchPath, 0777); err != nil {
+		if err := os.MkdirAll(watchPath, 0o777); err != nil {
 			logrus.Errorf("Failed to create prev-logs directory %s: %v", watchPath, err)
 			return
 		}
-		if err := os.Chmod(watchPath, 0777); err != nil {
+		if err := os.Chmod(watchPath, 0o777); err != nil {
 			logrus.Errorf("Failed to create prev-logs directory %s: %v", watchPath, err)
 			return
 		}
@@ -386,11 +374,11 @@ func (r *RayLogHandler) WatchPrevLogsLoops() {
 	completeLogsDir := "/tmp/ray/persist-complete-logs"
 	if _, err := os.Stat(completeLogsDir); os.IsNotExist(err) {
 		logrus.Infof("persist-complete-logs directory does not exist, creating it: %s", completeLogsDir)
-		if err := os.MkdirAll(completeLogsDir, 0777); err != nil {
+		if err := os.MkdirAll(completeLogsDir, 0o777); err != nil {
 			logrus.Errorf("Failed to create persist-complete-logs directory %s: %v", completeLogsDir, err)
 			return
 		}
-		if err := os.Chmod(completeLogsDir, 0777); err != nil {
+		if err := os.Chmod(completeLogsDir, 0o777); err != nil {
 			logrus.Errorf("Failed to create prev-logs directory %s: %v", completeLogsDir, err)
 			return
 		}
@@ -462,7 +450,6 @@ func (r *RayLogHandler) WatchPrevLogsLoops() {
 		}
 		return nil
 	})
-
 	if err != nil {
 		logrus.Errorf("Error walking prev-logs directory: %v", err)
 		return
@@ -607,11 +594,11 @@ func (r *RayLogHandler) processSessionPrevLogs(sessionDir string) {
 			utils.AppendRayClusterNameID(r.RayClusterName, r.RayClusterID),
 			path.Base(sessionID),
 		))
-		if err := r.Writter.CreateDirectory(path.Dir(metafile)); err != nil {
+		if err := r.Writer.CreateDirectory(path.Dir(metafile)); err != nil {
 			logrus.Errorf("CreateObjectIfNotExist %s error %v", metadir, err)
 			return
 		}
-		if err := r.Writter.WriteFile(metafile, strings.NewReader("")); err != nil {
+		if err := r.Writer.WriteFile(metafile, strings.NewReader("")); err != nil {
 			logrus.Errorf("CreateObjectIfNotExist %s error %v", metafile, err)
 			return
 		}
@@ -640,7 +627,6 @@ func (r *RayLogHandler) processSessionPrevLogs(sessionDir string) {
 		}
 		return nil
 	})
-
 	if err != nil {
 		logrus.Errorf("Error walking session directory %s: %v", sessionDir, err)
 	}
@@ -711,7 +697,6 @@ func (r *RayLogHandler) processPrevLogsDir(sessionNodeDir string) {
 
 		return nil
 	})
-
 	if err != nil {
 		logrus.Errorf("Error walking logs directory %s: %v", logsDir, err)
 		return
@@ -732,7 +717,7 @@ func (r *RayLogHandler) processPrevLogFile(absoluteLogPathName, localLogDir, ses
 	// The localLogDir is /tmp/ray/prev-logs/{sessionid}/{nodeid}/logs
 	relativePath, err := filepath.Rel(localLogDir, absoluteLogPathName)
 	if err != nil {
-		return fmt.Errorf("failed to get relative path for %s: %v", absoluteLogPathName, err)
+		return fmt.Errorf("failed to get relative path for %s: %w", absoluteLogPathName, err)
 	}
 
 	// Split relative path into subdirectory and filename
@@ -745,7 +730,7 @@ func (r *RayLogHandler) processPrevLogFile(absoluteLogPathName, localLogDir, ses
 		// Remove trailing separator if present
 		subdir = strings.TrimSuffix(subdir, string(filepath.Separator))
 		dirName := path.Join(logDir, subdir)
-		if err := r.Writter.CreateDirectory(dirName); err != nil {
+		if err := r.Writer.CreateDirectory(dirName); err != nil {
 			logrus.Errorf("Failed to create directory '%s': %v", dirName, err)
 			return err
 		}
@@ -762,7 +747,7 @@ func (r *RayLogHandler) processPrevLogFile(absoluteLogPathName, localLogDir, ses
 	}
 
 	// Write to storage
-	err = r.Writter.WriteFile(objectName, bytes.NewReader(content))
+	err = r.Writer.WriteFile(objectName, bytes.NewReader(content))
 	if err != nil {
 		logrus.Errorf("Failed to write object %s: %v", objectName, err)
 		return err
@@ -776,11 +761,11 @@ func (r *RayLogHandler) processPrevLogFile(absoluteLogPathName, localLogDir, ses
 
 	if _, err := os.Stat(completeDir); os.IsNotExist(err) {
 		// Create the target directory if it doesn't exist
-		if err := os.MkdirAll(completeDir, 0777); err != nil {
+		if err := os.MkdirAll(completeDir, 0o777); err != nil {
 			logrus.Errorf("Failed to create complete logs directory %s: %v", completeDir, err)
 			return nil // Don't fail the whole process if we can't move the file
 		}
-		if err := os.Chmod(completeDir, 0777); err != nil {
+		if err := os.Chmod(completeDir, 0o777); err != nil {
 			logrus.Errorf("Failed to chmod complete logs directory %s: %v", completeDir, err)
 			return nil // Don't fail the whole process if we can't move the file
 		}
@@ -793,11 +778,11 @@ func (r *RayLogHandler) processPrevLogFile(absoluteLogPathName, localLogDir, ses
 	// Create subdirectory in target location if needed
 	if subdir != "" && subdir != "." {
 		if _, err := os.Stat(targetFileDir); os.IsNotExist(err) {
-			if err := os.MkdirAll(targetFileDir, 0777); err != nil {
+			if err := os.MkdirAll(targetFileDir, 0o777); err != nil {
 				logrus.Errorf("Failed to create target subdirectory %s: %v", targetFileDir, err)
 				return nil
 			}
-			if err := os.Chmod(targetFileDir, 0777); err != nil {
+			if err := os.Chmod(targetFileDir, 0o777); err != nil {
 				logrus.Errorf("Failed to chmod complete logs directory %s: %v", targetFileDir, err)
 				return nil // Don't fail the whole process if we can't move the file
 			}
@@ -874,11 +859,11 @@ func (r *RayLogHandler) WatchSessionLatestLoops() {
 					utils.AppendRayClusterNameID(r.RayClusterName, r.RayClusterID),
 					path.Base(sessionID),
 				))
-				if err := r.Writter.CreateDirectory(path.Dir(metafile)); err != nil {
+				if err := r.Writer.CreateDirectory(path.Dir(metafile)); err != nil {
 					logrus.Errorf("CreateObjectIfNotExist %s error %v", metadir, err)
 					return
 				}
-				if err := r.Writter.WriteFile(metafile, strings.NewReader("")); err != nil {
+				if err := r.Writer.WriteFile(metafile, strings.NewReader("")); err != nil {
 					logrus.Errorf("CreateObjectIfNotExist %s error %v", metafile, err)
 					return
 				}

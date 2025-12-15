@@ -38,17 +38,16 @@ import (
 
 type RayLogsHandler struct {
 	OssBucket      *oss.Bucket
+	LogFiles       chan string
+	HttpClient     *http.Client
 	SessionDir     string
 	OssRootDir     string
 	LogDir         string
-	LogFiles       chan string
 	RayClusterName string
 	RayClusterID   string
 	RayNodeName    string
-	HttpClient     *http.Client
-
-	LogBatching  int
-	PushInterval time.Duration
+	LogBatching    int
+	PushInterval   time.Duration
 }
 
 func (r *RayLogsHandler) CreateDirectory(d string) error {

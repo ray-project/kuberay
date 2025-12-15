@@ -13,7 +13,7 @@ import (
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
-func NewCollector(config *types.RayCollectorConfig, writter storage.StorageWriter) RayLogCollector {
+func NewCollector(config *types.RayCollectorConfig, writer storage.StorageWriter) RayLogCollector {
 	handler := logcollector.RayLogHandler{
 		EnableMeta: config.Role == "Head",
 		LogFiles:   make(chan string),
@@ -35,7 +35,7 @@ func NewCollector(config *types.RayCollectorConfig, writter storage.StorageWrite
 				IdleConnTimeout:     90 * time.Second, // 空闲连接的超时时间
 			},
 		},
-		Writter:      writter,
+		Writer:       writer,
 		ShutdownChan: make(chan struct{}),
 	}
 	logDir := strings.TrimSpace(path.Join(config.SessionDir, utils.RAY_SESSIONDIR_LOGDIR_NAME))

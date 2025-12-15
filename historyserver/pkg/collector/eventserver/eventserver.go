@@ -16,8 +16,9 @@ import (
 
 	"github.com/emicklei/go-restful/v3"
 	"github.com/fsnotify/fsnotify"
-	"github.com/ray-project/kuberay/historyserver/pkg/collector/logcollector/storage"
 	"github.com/sirupsen/logrus"
+
+	"github.com/ray-project/kuberay/historyserver/pkg/collector/logcollector/storage"
 )
 
 type Event struct {
@@ -29,23 +30,19 @@ type Event struct {
 }
 
 type EventServer struct {
-	events        []Event
-	storageWriter storage.StorageWriter
-	root          string
-	sessionDir    string
-	nodeID        string
-	clusterName   string
-	clusterID     string
-	sessionName   string
-	mutex         sync.Mutex
-	flushInterval time.Duration
-	stopped       chan struct{}
-
-	// 用于跟踪当前sessionName
+	storageWriter      storage.StorageWriter
+	stopped            chan struct{}
+	clusterID          string
+	sessionDir         string
+	nodeID             string
+	clusterName        string
+	sessionName        string
+	root               string
 	currentSessionName string
-
-	// 用于跟踪当前nodeId
-	currentNodeID string
+	currentNodeID      string
+	events             []Event
+	flushInterval      time.Duration
+	mutex              sync.Mutex
 }
 
 func NewEventServer(writer storage.StorageWriter, rootDir, sessionDir, nodeID, clusterName, clusterID, sessionName string) *EventServer {
@@ -427,7 +424,7 @@ func (es *EventServer) flushNodeEventsForHour(hourKey string, events []Event) er
 
 	data, err := json.Marshal(eventsData)
 	if err != nil {
-		return fmt.Errorf("failed to marshal node events: %v", err)
+		return fmt.Errorf("failed to marshal node events: %w", err)
 	}
 
 	reader := bytes.NewReader(data)
@@ -455,12 +452,12 @@ func (es *EventServer) flushNodeEventsForHour(hourKey string, events []Event) er
 	// 确保存储目录存在
 	dir := path.Dir(basePath)
 	if err := es.storageWriter.CreateDirectory(dir); err != nil {
-		return fmt.Errorf("failed to create directory %s: %v", dir, err)
+		return fmt.Errorf("failed to create directory %s: %w", dir, err)
 	}
 
 	// 写入事件文件
 	if err := es.storageWriter.WriteFile(basePath, reader); err != nil {
-		return fmt.Errorf("failed to write node events file %s: %v", basePath, err)
+		return fmt.Errorf("failed to write node events file %s: %w", basePath, err)
 	}
 
 	logrus.Infof("Successfully flushed %d node events for hour %s to %s, context: %s", len(events), hourKey, basePath, string(data))
@@ -477,7 +474,7 @@ func (es *EventServer) flushJobEventsForHour(jobID, hourKey string, events []Eve
 
 	data, err := json.Marshal(eventsData)
 	if err != nil {
-		return fmt.Errorf("failed to marshal job events: %v", err)
+		return fmt.Errorf("failed to marshal job events: %w", err)
 	}
 
 	reader := bytes.NewReader(data)
@@ -506,12 +503,12 @@ func (es *EventServer) flushJobEventsForHour(jobID, hourKey string, events []Eve
 	// 确保存储目录存在
 	dir := path.Dir(basePath)
 	if err := es.storageWriter.CreateDirectory(dir); err != nil {
-		return fmt.Errorf("failed to create directory %s: %v", dir, err)
+		return fmt.Errorf("failed to create directory %s: %w", dir, err)
 	}
 
 	// 写入事件文件
 	if err := es.storageWriter.WriteFile(basePath, reader); err != nil {
-		return fmt.Errorf("failed to write job events file %s: %v", basePath, err)
+		return fmt.Errorf("failed to write job events file %s: %w", basePath, err)
 	}
 
 	logrus.Infof("Successfully flushed %d job events for job %s hour %s to %s", len(events), jobID, hourKey, basePath)

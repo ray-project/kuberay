@@ -7,10 +7,9 @@ import (
 )
 
 type config struct {
-	types.RayCollectorConfig
-
 	OSSEndpoint string
 	OSSBucket   string
+	types.RayCollectorConfig
 }
 
 func (c *config) complete(rcc *types.RayCollectorConfig, jd map[string]interface{}) {

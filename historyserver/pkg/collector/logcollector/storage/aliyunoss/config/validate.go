@@ -50,6 +50,7 @@ func ValidateMetaHanderConfig(c *RayMetaHanderConfig, fldpath *field.Path) field
 	}
 	return allErrs
 }
+
 func ValidatRayHistoryServerConfig(c *RayHistoryServerConfig, fldpath *field.Path) field.ErrorList {
 	var allErrs field.ErrorList
 	if len(c.DashBoardDir) == 0 {

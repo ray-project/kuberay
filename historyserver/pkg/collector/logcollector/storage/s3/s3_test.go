@@ -37,7 +37,7 @@ func TestTrim(t *testing.T) {
 	logdir = filepath.Clean(logdir)
 
 	relativePath := strings.TrimPrefix(absoluteLogPathName, logdir+"/")
-	//relativePath := strings.TrimPrefix(absoluteLogPathName, logdir)
+	// relativePath := strings.TrimPrefix(absoluteLogPathName, logdir)
 	// 分割相对路径为子目录和文件名
 	subdir, filename := filepath.Split(relativePath)
 	test_path_join := path.Join("aa./b/c/d", "e")

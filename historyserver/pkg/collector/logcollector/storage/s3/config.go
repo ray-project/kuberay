@@ -4,22 +4,20 @@ import (
 	"os"
 
 	"github.com/aws/aws-sdk-go/aws"
+
 	"github.com/ray-project/kuberay/historyserver/pkg/collector/types"
 )
 
 type config struct {
-	types.RayCollectorConfig
-
-	S3Endpoint string
-	S3Bucket   string
-	S3Region   string
-
-	S3ID     string
-	S3Secret string
-	S3Token  string
-
 	S3ForcePathStyle *bool
 	DisableSSL       *bool
+	S3Endpoint       string
+	S3Bucket         string
+	S3Region         string
+	S3ID             string
+	S3Secret         string
+	S3Token          string
+	types.RayCollectorConfig
 }
 
 func (c *config) complete(rcc *types.RayCollectorConfig, jd map[string]interface{}) {

@@ -8,12 +8,13 @@ import (
 	"path"
 	"time"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/ray-project/kuberay/historyserver/pkg/collector"
 	"github.com/ray-project/kuberay/historyserver/pkg/collector/eventserver"
 	"github.com/ray-project/kuberay/historyserver/pkg/collector/logcollector/runtime"
 	"github.com/ray-project/kuberay/historyserver/pkg/collector/types"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
-	"github.com/sirupsen/logrus"
 )
 
 const runtimeClassConfigPath = "/var/collector-config/data"
@@ -83,16 +84,16 @@ func main() {
 	}
 	logrus.Info("Using collector config: ", globalConfig)
 
-	writter, err := factory(&globalConfig, jsonData)
+	writer, err := factory(&globalConfig, jsonData)
 	if err != nil {
-		panic("Failed to create writter for runtime class name: " + runtimeClassName + " for role: " + role + ".")
+		panic("Failed to create writer for runtime class name: " + runtimeClassName + " for role: " + role + ".")
 	}
 
 	// 创建并初始化EventServer
-	eventServer := eventserver.NewEventServer(writter, rayRootDir, sessionDir, rayNodeId, rayClusterName, rayClusterId, sessionName)
+	eventServer := eventserver.NewEventServer(writer, rayRootDir, sessionDir, rayNodeId, rayClusterName, rayClusterId, sessionName)
 	eventServer.InitServer(eventsPort)
 
-	collector := runtime.NewCollector(&globalConfig, writter)
+	collector := runtime.NewCollector(&globalConfig, writer)
 	_ = collector.Start(context.TODO().Done())
 
 	eventStop := eventServer.WaitForStop()

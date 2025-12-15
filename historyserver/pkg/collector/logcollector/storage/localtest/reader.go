@@ -11,8 +11,8 @@ import (
 
 // MockReader is a mock implementation of the StorageReader interface
 type MockReader struct {
+	data     map[string]map[string]string
 	clusters []utils.ClusterInfo
-	data     map[string]map[string]string // clusterId -> fileName -> content
 }
 
 // NewMockReader creates a new mock reader

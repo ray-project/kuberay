@@ -40,18 +40,17 @@ import (
 
 type RayLogsHandler struct {
 	S3Client       *s3.S3
+	LogFiles       chan string
+	HttpClient     *http.Client
 	S3Bucket       string
 	SessionDir     string
 	S3RootDir      string
 	LogDir         string
-	LogFiles       chan string
 	RayClusterName string
 	RayClusterID   string
 	RayNodeName    string
-	HttpClient     *http.Client
-
-	LogBatching  int
-	PushInterval time.Duration
+	LogBatching    int
+	PushInterval   time.Duration
 }
 
 func (r *RayLogsHandler) CreateDirectory(d string) error {
@@ -61,7 +60,6 @@ func (r *RayLogsHandler) CreateDirectory(d string) error {
 		Bucket: aws.String(r.S3Bucket),
 		Key:    aws.String(objectDir),
 	})
-
 	if err != nil {
 		// Directory doesn't exist, create it
 		logrus.Infof("Begin to create s3 dir %s ...", objectDir)
@@ -120,7 +118,6 @@ func (r *RayLogsHandler) _listFiles(prefix string, delimiter string, onlyBase bo
 			}
 			return true
 		})
-
 	if err != nil {
 		logrus.Errorf("Failed to list objects from %s: %v", prefix+"/", err)
 		return []string{}
@@ -193,7 +190,6 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 				}
 				return true
 			})
-
 		if err != nil {
 			logrus.Errorf("Failed to list objects from %s: %v", path.Join(r.S3RootDir, "metadir")+"/", err)
 			return
@@ -212,7 +208,6 @@ func (r *RayLogsHandler) GetContent(clusterId string, fileName string) io.Reader
 		Bucket: aws.String(r.S3Bucket),
 		Key:    aws.String(fileName),
 	})
-
 	if err != nil {
 		logrus.Errorf("Failed to get object %s: %v", fileName, err)
 		allFiles := r._listFiles(clusterId+"/"+path.Dir(fileName), "", false)
@@ -278,7 +273,6 @@ func New(c *config) (*RayLogsHandler, error) {
 		DisableSSL:       c.DisableSSL,
 		S3ForcePathStyle: c.S3ForcePathStyle, // IMPORTANT: Required for MinIO
 	})
-
 	if err != nil {
 		logrus.Fatalf("Create aws session error %v", err)
 	}
