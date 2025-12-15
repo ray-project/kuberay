@@ -28,4 +28,4 @@ type ClusterInfoList []ClusterInfo
 
 func (a ClusterInfoList) Len() int           { return len(a) }
 func (a ClusterInfoList) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func (a ClusterInfoList) Less(i, j int) bool { return a[i].CreateTimeStamp > a[j].CreateTimeStamp } // 降序排序
+func (a ClusterInfoList) Less(i, j int) bool { return a[i].CreateTimeStamp > a[j].CreateTimeStamp } // Sort descending

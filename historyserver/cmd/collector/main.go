@@ -89,7 +89,7 @@ func main() {
 		panic("Failed to create writer for runtime class name: " + runtimeClassName + " for role: " + role + ".")
 	}
 
-	// 创建并初始化EventServer
+	// Create and initialize EventServer
 	eventServer := eventserver.NewEventServer(writer, rayRootDir, sessionDir, rayNodeId, rayClusterName, rayClusterId, sessionName)
 	eventServer.InitServer(eventsPort)
 

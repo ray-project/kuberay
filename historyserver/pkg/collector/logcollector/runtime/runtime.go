@@ -30,9 +30,9 @@ func NewCollector(config *types.RayCollectorConfig, writer storage.StorageWriter
 
 		HttpClient: &http.Client{
 			Transport: &http.Transport{
-				MaxIdleConns:        100,              // 最大空闲连接数
-				MaxIdleConnsPerHost: 20,               // 每个主机的最大空闲连接数
-				IdleConnTimeout:     90 * time.Second, // 空闲连接的超时时间
+				MaxIdleConns:        100,              // Max idle connections
+				MaxIdleConnsPerHost: 20,               // Max idle connections per host
+				IdleConnTimeout:     90 * time.Second, // Idle connection timeout
 			},
 		},
 		Writer:       writer,

@@ -89,7 +89,7 @@ func (r *RayLogsHandler) _listFiles(prefix string, delimiter string, onlyBase bo
 			oss.Delimiter(delimiter),
 		}
 
-		// 列举所有文件
+		// List all files
 		lsRes, err := r.OssBucket.ListObjectsV2(options...)
 		if err != nil {
 			logrus.Errorf("Failed to list objects from %s: %v", prefix+"/", err)
@@ -128,7 +128,7 @@ func (r *RayLogsHandler) ListFiles(clusterId string, dir string) []string {
 			fmt.Println("Recovered from panic:", r)
 		}
 	}()
-	// 初始的继续标记
+	// Initial continuation token
 	clusters := make(utils.ClusterInfoList, 0, 10)
 	logrus.Debugf("Prepare to get list clusters info ...")
 	nodes := r._listFiles(prefix, "/", true)
@@ -142,7 +142,7 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 			fmt.Println("Recovered from panic:", r)
 		}
 	}()
-	// 初始的继续标记
+	// Initial continuation token
 	continueToken := ""
 	clusters := make(utils.ClusterInfoList, 0, 10)
 	logrus.Debugf("Prepare to get list clusters info ...")
@@ -156,7 +156,7 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 				oss.Delimiter(""),
 			}
 
-			// 列举所有文件
+			// List all files
 			lsRes, err := r.OssBucket.ListObjectsV2(options...)
 			if err != nil {
 				logrus.Errorf("Failed to list objects from %s: %v", path.Join(r.OssRootDir, "metadir")+"/", err)
@@ -250,7 +250,7 @@ func NewWritter(c *types.RayCollectorConfig, jd map[string]interface{}) (storage
 func New(c *config) (*RayLogsHandler, error) {
 	logrus.Infof("Begin to create oss client ...")
 	httpClient := &http.Client{
-		Timeout: 5 * time.Second, // 设置超时时间
+		Timeout: 5 * time.Second, // Set timeout
 	}
 	provider, err := rrsa.NewOssProvider()
 	if err != nil {
@@ -284,9 +284,9 @@ func New(c *config) (*RayLogsHandler, error) {
 		RayNodeName:    c.RayNodeName,
 		HttpClient: &http.Client{
 			Transport: &http.Transport{
-				MaxIdleConns:        100,              // 最大空闲连接数
-				MaxIdleConnsPerHost: 20,               // 每个主机的最大空闲连接数
-				IdleConnTimeout:     90 * time.Second, // 空闲连接的超时时间
+				MaxIdleConns:        100,              // Max idle connections
+				MaxIdleConnsPerHost: 20,               // Max idle connections per host
+				IdleConnTimeout:     90 * time.Second, // Idle connection timeout
 			},
 		},
 		LogBatching:  c.LogBatching,

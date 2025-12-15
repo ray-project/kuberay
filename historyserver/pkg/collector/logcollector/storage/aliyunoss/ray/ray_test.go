@@ -38,7 +38,7 @@ func TestTrim(t *testing.T) {
 
 	relativePath := strings.TrimPrefix(absoluteLogPathName, logdir+"/")
 	// relativePath := strings.TrimPrefix(absoluteLogPathName, logdir)
-	// 分割相对路径为子目录和文件名
+	// Split relative path into subdir and filename
 	subdir, filename := filepath.Split(relativePath)
 	test_path_join := path.Join("aa./b/c/d", "e")
 	t.Logf("file [%s] logdir [%s] subdir %s filename %s", absoluteLogPathName,
@@ -51,11 +51,11 @@ func TestWalk(t *testing.T) {
 	filepath.Walk(watchPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			logrus.Errorf("Walk path error %v", err)
-			return err // 返回错误
+			return err
 		}
-		// 检查是否是文件
+
 		if !info.IsDir() {
-			logrus.Infof("Find new file %s", path) // 输出文件路径
+			logrus.Infof("Find new file %s", path)
 		}
 		return nil
 	})

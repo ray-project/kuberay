@@ -56,13 +56,13 @@ func NewEventServer(writer storage.StorageWriter, rootDir, sessionDir, nodeID, c
 		clusterID:          clusterID,
 		sessionName:        sessionName,
 		mutex:              sync.Mutex{},
-		flushInterval:      time.Hour, // 默认每小时刷新一次
+		flushInterval:      time.Hour, // Default flush interval: 1 hour
 		stopped:            make(chan struct{}),
-		currentSessionName: sessionName, // 初始化为配置中的sessionName
-		currentNodeID:      nodeID,      // 初始化为配置中的nodeID
+		currentSessionName: sessionName, // Initialize with configured sessionName
+		currentNodeID:      nodeID,      // Initialize with configured nodeID
 	}
 
-	// 启动监听nodeID文件变化的goroutine
+	// Start goroutine to watch nodeID file changes
 	go server.watchNodeIDFile()
 
 	return server
@@ -98,11 +98,11 @@ func (es *EventServer) InitServer(port int) {
 	}()
 }
 
-// watchNodeIDFile 监听 /tmp/ray/raylet_node_id 文件内容变化
+// watchNodeIDFile watches /tmp/ray/raylet_node_id for content changes
 func (es *EventServer) watchNodeIDFile() {
 	nodeIDFilePath := "/tmp/ray/raylet_node_id"
 
-	// 创建一个新的 watcher
+	// Create new watcher
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		logrus.Errorf("Failed to create file watcher: %v", err)
@@ -110,11 +110,11 @@ func (es *EventServer) watchNodeIDFile() {
 	}
 	defer watcher.Close()
 
-	// 添加文件到监控列表
+	// Add file to watch list
 	err = watcher.Add(nodeIDFilePath)
 	if err != nil {
 		logrus.Infof("Failed to add %s to watcher, will watch for file creation: %v", nodeIDFilePath, err)
-		// 如果文件不存在，监控其父目录
+		// If file doesn't exist, watch parent directory
 		err = watcher.Add("/tmp/ray")
 		if err != nil {
 			logrus.Errorf("Failed to watch directory /tmp/ray: %v", err)
@@ -129,31 +129,31 @@ func (es *EventServer) watchNodeIDFile() {
 				return
 			}
 
-			// 检查是否是我们关心的文件
+			// Check if this is the target file
 			if event.Name == nodeIDFilePath && (event.Op&fsnotify.Write == fsnotify.Write || event.Op&fsnotify.Create == fsnotify.Create) {
-				// 读取文件内容
+				// Read file content
 				content, err := os.ReadFile(nodeIDFilePath)
 				if err != nil {
 					logrus.Errorf("Failed to read node ID file %s: %v", nodeIDFilePath, err)
 					continue
 				}
 
-				// 去除空白字符
+				// Trim whitespace
 				newNodeID := strings.TrimSpace(string(content))
 				if newNodeID == "" {
 					continue
 				}
 
-				// 检查nodeID是否发生变化
+				// Check if nodeID changed
 				es.mutex.Lock()
 				if es.currentNodeID != newNodeID {
 					oldNodeID := es.currentNodeID
 					logrus.Infof("Node ID changed from %s to %s, flushing events", oldNodeID, newNodeID)
 
-					// 更新当前nodeID
+					// Update current nodeID
 					es.currentNodeID = newNodeID
 
-					// 收集具有相同节点ID的事件
+					// Collect events with same nodeID
 					var eventsToFlush []Event
 					var remainingEvents []Event
 					for _, event := range es.events {
@@ -166,11 +166,11 @@ func (es *EventServer) watchNodeIDFile() {
 						}
 					}
 
-					// 更新事件列表，只保留不同节点ID的事件
+					// Update event list, keep only events with different nodeID
 					es.events = remainingEvents
 					es.mutex.Unlock()
 
-					// 刷新具有相同节点ID的事件
+					// Flush events with same nodeID
 					if len(eventsToFlush) > 0 {
 						go es.flushEventsInternal(eventsToFlush)
 					}
@@ -206,7 +206,7 @@ func (es *EventServer) PersistEvents(req *restful.Request, resp *restful.Respons
 	}
 
 	for _, eventData := range eventDatas {
-		// 解析时间戳
+		// Parse timestamp
 		timestampStr, ok := eventData["timestamp"].(string)
 		if !ok {
 			logrus.Errorf("Event timestamp not found or not a string")
@@ -214,7 +214,7 @@ func (es *EventServer) PersistEvents(req *restful.Request, resp *restful.Respons
 			return
 		}
 
-		// 获取事件中的sessionName
+		// Get sessionName from event
 		sessionNameStr, ok := eventData["sessionName"].(string)
 		if !ok {
 			logrus.Errorf("Event sessionName not found or not a string")
@@ -234,27 +234,27 @@ func (es *EventServer) PersistEvents(req *restful.Request, resp *restful.Respons
 			Data:        eventData,
 			Timestamp:   timestamp,
 			SessionName: sessionNameStr,
-			NodeID:      es.currentNodeID, // 存储事件到达时的currentNodeID
+			NodeID:      es.currentNodeID, // Store currentNodeID when event arrived
 		}
 		es.events = append(es.events, event)
 
-		// 检查sessionName是否发生变化
+		// Check if sessionName changed
 		if es.currentSessionName != sessionNameStr {
 			logrus.Infof("Session name changed from %s to %s, flushing events", es.currentSessionName, sessionNameStr)
-			// 保存当前事件后再刷新
+			// Save current events before flushing
 			eventsToFlush := make([]Event, len(es.events))
 			copy(eventsToFlush, es.events)
 
-			// 清空事件列表
+			// Clear event list
 			es.events = es.events[:0]
 
-			// 更新当前sessionName
+			// Update current sessionName
 			es.currentSessionName = sessionNameStr
 
-			// 解锁后执行刷新操作
+			// Unlock before flushing
 			es.mutex.Unlock()
 
-			// 刷新之前的事件
+			// Flush previous events
 			es.flushEventsInternal(eventsToFlush)
 			return
 		}
@@ -294,47 +294,47 @@ func (es *EventServer) flushEvents() {
 		return
 	}
 
-	// 复制当前事件列表
+	// Copy current event list
 	eventsToFlush := make([]Event, len(es.events))
 	copy(eventsToFlush, es.events)
 
-	// 清空事件列表
+	// Clear event list
 	es.events = es.events[:0]
 	es.mutex.Unlock()
 
-	// 执行实际的刷新操作
+	// Execute flush operation
 	es.flushEventsInternal(eventsToFlush)
 }
 
-// flushEventsInternal 实际执行事件刷新的操作
+// flushEventsInternal performs the actual event flush
 func (es *EventServer) flushEventsInternal(eventsToFlush []Event) {
-	// 按小时和事件类型分组事件
-	nodeEventsByHour := make(map[string][]Event) // 节点相关事件
-	jobEventsByHour := make(map[string][]Event)  // 作业相关事件
+	// Group events by hour and type
+	nodeEventsByHour := make(map[string][]Event) // Node-related events
+	jobEventsByHour := make(map[string][]Event)  // Job-related events
 
-	// 分类事件
+	// Categorize events
 	for _, event := range eventsToFlush {
 		hourKey := event.Timestamp.Truncate(time.Hour).Format("2006-01-02-15")
 
-		// 检查事件类型
+		// Check event type
 		if es.isNodeEvent(event.Data) {
-			// 节点相关事件
+			// Node-related events
 			nodeEventsByHour[hourKey] = append(nodeEventsByHour[hourKey], event)
 		} else if jobID := es.getJobID(event.Data); jobID != "" {
-			// 作业相关事件，使用 jobID-hour 作为键
+			// Job-related events, use jobID-hour as key
 			jobKey := fmt.Sprintf("%s-%s", jobID, hourKey)
 			jobEventsByHour[jobKey] = append(jobEventsByHour[jobKey], event)
 		} else {
-			// 默认归类为节点事件
+			// Default to node events
 			nodeEventsByHour[hourKey] = append(nodeEventsByHour[hourKey], event)
 		}
 	}
 
-	// 并发上传所有事件
+	// Upload all events concurrently
 	var wg sync.WaitGroup
 	errChan := make(chan error, len(nodeEventsByHour)+len(jobEventsByHour))
 
-	// 上传节点相关事件
+	// Upload node-related events
 	for hour, events := range nodeEventsByHour {
 		wg.Add(1)
 		go func(hourKey string, hourEvents []Event) {
@@ -345,20 +345,20 @@ func (es *EventServer) flushEventsInternal(eventsToFlush []Event) {
 		}(hour, events)
 	}
 
-	// 上传作业相关事件
+	// Upload job-related events
 	for jobHour, events := range jobEventsByHour {
 		wg.Add(1)
 		go func(jobHourKey string, hourEvents []Event) {
 			defer wg.Done()
-			// 分离 jobID 和 hourKey
-			parts := strings.SplitN(jobHourKey, "-", 4) // 日期格式中有3个短横线，所以用4个部分
+			// Split jobID and hourKey
+			parts := strings.SplitN(jobHourKey, "-", 4) // Date format has 3 dashes, so use 4 parts
 			if len(parts) < 4 {
 				errChan <- fmt.Errorf("invalid job hour key: %s", jobHourKey)
 				return
 			}
 
 			jobID := parts[0]
-			hourKey := strings.Join(parts[1:], "-") // 重新组合时间为 hourKey
+			hourKey := strings.Join(parts[1:], "-") // Rejoin time parts as hourKey
 
 			if err := es.flushJobEventsForHour(jobID, hourKey, hourEvents); err != nil {
 				errChan <- err
@@ -369,7 +369,7 @@ func (es *EventServer) flushEventsInternal(eventsToFlush []Event) {
 	wg.Wait()
 	close(errChan)
 
-	// 检查是否有错误
+	// Check for errors
 	for err := range errChan {
 		logrus.Errorf("Error flushing events: %v", err)
 	}
@@ -381,7 +381,7 @@ func (es *EventServer) flushEventsInternal(eventsToFlush []Event) {
 		countEventsInMap(jobEventsByHour))
 }
 
-// countEventsInMap 计算 map 中所有事件的数量
+// countEventsInMap counts total events in map
 func countEventsInMap(eventsMap map[string][]Event) int {
 	count := 0
 	for _, events := range eventsMap {
@@ -392,7 +392,7 @@ func countEventsInMap(eventsMap map[string][]Event) int {
 
 var nodeEventType = []string{"NODE_LIFECYCLE_EVENT", "NODE_DEFINITION_EVENT"}
 
-// isNodeEvent 检查事件是否为节点相关事件
+// isNodeEvent checks if event is node-related
 func (es *EventServer) isNodeEvent(eventData map[string]interface{}) bool {
 	eventType, ok := eventData["eventType"].(string)
 	if !ok {
@@ -406,7 +406,7 @@ func (es *EventServer) isNodeEvent(eventData map[string]interface{}) bool {
 	return false
 }
 
-// getJobID 获取事件关联的作业ID
+// getJobID gets jobID associated with event
 func (es *EventServer) getJobID(eventData map[string]interface{}) string {
 	if jobID, hasJob := eventData["jobId"]; hasJob && jobID != "" {
 		return fmt.Sprintf("%v", jobID)
@@ -414,9 +414,9 @@ func (es *EventServer) getJobID(eventData map[string]interface{}) string {
 	return ""
 }
 
-// flushNodeEventsForHour 刷新节点相关事件到存储
+// flushNodeEventsForHour flushes node events to storage
 func (es *EventServer) flushNodeEventsForHour(hourKey string, events []Event) error {
-	// 创建事件数据
+	// Create event data
 	eventsData := make([]map[string]interface{}, len(events))
 	for i, event := range events {
 		eventsData[i] = event.Data
@@ -429,19 +429,19 @@ func (es *EventServer) flushNodeEventsForHour(hourKey string, events []Event) er
 
 	reader := bytes.NewReader(data)
 
-	// 使用事件中的sessionName而不是配置中的sessionName
-	sessionNameToUse := es.sessionName // 默认使用配置中的sessionName
+	// Use sessionName from event, not config
+	sessionNameToUse := es.sessionName // Default to configured sessionName
 	if len(events) > 0 && events[0].SessionName != "" {
 		sessionNameToUse = events[0].SessionName
 	}
 
-	// 使用事件中的NodeID而不是当前的NodeID
-	nodeIDToUse := es.nodeID // 默认使用配置中的nodeID
+	// Use NodeID from event, not current NodeID
+	nodeIDToUse := es.nodeID // Default to configured nodeID
 	if len(events) > 0 && events[0].NodeID != "" {
 		nodeIDToUse = events[0].NodeID
 	}
 
-	// 构建节点事件存储路径，使用事件中的nodeID
+	// Build node event storage path using event's nodeID
 	basePath := path.Join(
 		es.root,
 		fmt.Sprintf("%s_%s", es.clusterName, es.clusterID),
@@ -449,13 +449,13 @@ func (es *EventServer) flushNodeEventsForHour(hourKey string, events []Event) er
 		"node_events",
 		fmt.Sprintf("%s-%s", nodeIDToUse, hourKey))
 
-	// 确保存储目录存在
+	// Ensure storage directory exists
 	dir := path.Dir(basePath)
 	if err := es.storageWriter.CreateDirectory(dir); err != nil {
 		return fmt.Errorf("failed to create directory %s: %w", dir, err)
 	}
 
-	// 写入事件文件
+	// Write event file
 	if err := es.storageWriter.WriteFile(basePath, reader); err != nil {
 		return fmt.Errorf("failed to write node events file %s: %w", basePath, err)
 	}
@@ -464,9 +464,9 @@ func (es *EventServer) flushNodeEventsForHour(hourKey string, events []Event) er
 	return nil
 }
 
-// flushJobEventsForHour 刷新作业相关事件到存储
+// flushJobEventsForHour flushes job events to storage
 func (es *EventServer) flushJobEventsForHour(jobID, hourKey string, events []Event) error {
-	// 创建事件数据
+	// Create event data
 	eventsData := make([]map[string]interface{}, len(events))
 	for i, event := range events {
 		eventsData[i] = event.Data
@@ -479,19 +479,19 @@ func (es *EventServer) flushJobEventsForHour(jobID, hourKey string, events []Eve
 
 	reader := bytes.NewReader(data)
 
-	// 使用事件中的sessionName而不是配置中的sessionName
-	sessionNameToUse := es.sessionName // 默认使用配置中的sessionName
+	// Use sessionName from event, not config
+	sessionNameToUse := es.sessionName // Default to configured sessionName
 	if len(events) > 0 && events[0].SessionName != "" {
 		sessionNameToUse = events[0].SessionName
 	}
 
-	// 使用事件中的NodeID而不是当前的NodeID
-	nodeIDToUse := es.nodeID // 默认使用配置中的nodeID
+	// Use NodeID from event, not current NodeID
+	nodeIDToUse := es.nodeID // Default to configured nodeID
 	if len(events) > 0 && events[0].NodeID != "" {
 		nodeIDToUse = events[0].NodeID
 	}
 
-	// 构建作业事件存储路径，使用事件中的nodeID
+	// Build job event storage path using event's nodeID
 	basePath := path.Join(
 		es.root,
 		fmt.Sprintf("%s_%s", es.clusterName, es.clusterID),
@@ -500,13 +500,13 @@ func (es *EventServer) flushJobEventsForHour(jobID, hourKey string, events []Eve
 		jobID,
 		fmt.Sprintf("%s-%s", nodeIDToUse, hourKey))
 
-	// 确保存储目录存在
+	// Ensure storage directory exists
 	dir := path.Dir(basePath)
 	if err := es.storageWriter.CreateDirectory(dir); err != nil {
 		return fmt.Errorf("failed to create directory %s: %w", dir, err)
 	}
 
-	// 写入事件文件
+	// Write event file
 	if err := es.storageWriter.WriteFile(basePath, reader); err != nil {
 		return fmt.Errorf("failed to write job events file %s: %w", basePath, err)
 	}

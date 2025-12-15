@@ -64,7 +64,7 @@ func (r *RayLogHandler) Run(stop <-chan struct{}) error {
 	signal.Notify(sigChan, syscall.SIGTERM)
 	go r.WatchPrevLogsLoops()
 	if r.EnableMeta {
-		go r.WatchSessionLatestLoops() // 添加监听session_latest符号链接变化
+		go r.WatchSessionLatestLoops() // Watch session_latest symlink changes
 	}
 
 	select {
@@ -256,9 +256,9 @@ func (r *RayLogHandler) processSessionLatestLogFile(absoluteLogPathName, session
 }
 
 func (r *RayLogHandler) processLogFile(absoluteLogPathName string) error {
-	// 计算相对路径
+	// Calculate relative path
 	relativePath := strings.TrimPrefix(absoluteLogPathName, fmt.Sprintf("%s/", r.LogDir))
-	// 分割相对路径为子目录和文件名
+	// Split relative path into subdir and filename
 	subdir, filename := filepath.Split(relativePath)
 	sessionName := path.Base(r.SessionDir)
 	logDir := utils.GetLogDir(r.RootDir, r.RayClusterName, r.RayClusterID, sessionName, r.RayNodeName)
@@ -293,7 +293,7 @@ func (r *RayLogHandler) processLogFile(absoluteLogPathName string) error {
 }
 
 func (r *RayLogHandler) WatchLogsLoops(watcher *fsnotify.Watcher, walkPath string) {
-	// 监听当前目录
+	// Watch current directory
 	if err := watcher.Add(walkPath); err != nil {
 		logrus.Fatalf("Watcher rootpath %s error %v", r.LogDir, err)
 	}
@@ -301,14 +301,14 @@ func (r *RayLogHandler) WatchLogsLoops(watcher *fsnotify.Watcher, walkPath strin
 	err := filepath.WalkDir(walkPath, func(path string, info fs.DirEntry, err error) error {
 		if err != nil {
 			logrus.Errorf("Walk path %s error %v", walkPath, err)
-			return err // 返回错误
+			return err // Return error
 		}
-		// 检查是否是文件
+		// Check if it's a file
 		if !info.IsDir() {
-			logrus.Infof("Walk find new file %s", path) // 输出文件路径
+			logrus.Infof("Walk find new file %s", path) // Log file path
 			go r.AddLogFile(path)
 		} else {
-			logrus.Infof("Walk find new dir %s", path) // 输出dir路径
+			logrus.Infof("Walk find new dir %s", path) // Log directory path
 			if err := watcher.Add(path); err != nil {
 				logrus.Fatalf("Watcher add %s error %v", r.LogDir, err)
 			}
@@ -335,7 +335,7 @@ func (r *RayLogHandler) WatchLogsLoops(watcher *fsnotify.Watcher, walkPath strin
 				name := event.Name
 				info, _ := os.Stat(name)
 
-				// 判断是文件还是目录
+				// Check if file or directory
 				if !info.IsDir() {
 					logrus.Infof("Watch find: create a new file %s", name)
 					r.AddLogFile(name)
