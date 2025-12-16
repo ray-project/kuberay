@@ -194,6 +194,13 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 		}
 	}
 
+	// Validate AutoscalerOptions.IdleTimeoutSeconds (works with both v1 and v2 autoscaler)
+	if spec.AutoscalerOptions != nil && spec.AutoscalerOptions.IdleTimeoutSeconds != nil {
+		if *spec.AutoscalerOptions.IdleTimeoutSeconds < 0 {
+			return fmt.Errorf("autoscalerOptions.idleTimeoutSeconds must be non-negative, got %d", *spec.AutoscalerOptions.IdleTimeoutSeconds)
+		}
+	}
+
 	if IsAuthEnabled(spec) {
 		if spec.RayVersion == "" {
 			return fmt.Errorf("authOptions.mode is 'token' but RayVersion was not specified. Ray version 2.52.0 or later is required")
@@ -603,21 +610,23 @@ func validateLegacyDeletionPolicies(rayJob *rayv1.RayJob) error {
 // validateWorkerGroupIdleTimeout validates the idleTimeoutSeconds field in a worker group spec
 func validateWorkerGroupIdleTimeout(workerGroup rayv1.WorkerGroupSpec, spec *rayv1.RayClusterSpec) error {
 	idleTimeoutSeconds := workerGroup.IdleTimeoutSeconds
-	if idleTimeoutSeconds != nil {
-		if *idleTimeoutSeconds < 0 {
-			return fmt.Errorf("idleTimeoutSeconds must be non-negative, got %d", *idleTimeoutSeconds)
-		}
-
-		// idleTimeoutSeconds only allowed on autoscaler v2
-		if IsAutoscalingV2Enabled(spec) {
-			return nil
-		}
-		envVar, exists := EnvVarByName(RAY_ENABLE_AUTOSCALER_V2, spec.HeadGroupSpec.Template.Spec.Containers[RayContainerIndex].Env)
-		if exists && (envVar.Value == "1" || envVar.Value == "true") {
-			return nil
-		}
-		return fmt.Errorf("worker group %s has idleTimeoutSeconds set, but autoscaler v2 is not enabled. Please set .spec.autoscalerOptions.version to 'v2' (or set %s environment variable to 'true' in the head pod if using KubeRay < 1.4.0)", workerGroup.GroupName, RAY_ENABLE_AUTOSCALER_V2)
+	if idleTimeoutSeconds == nil {
+		return nil
 	}
 
-	return nil
+	if *idleTimeoutSeconds < 0 {
+		return fmt.Errorf("worker group %s: idleTimeoutSeconds must be non-negative, got %d", workerGroup.GroupName, *idleTimeoutSeconds)
+	}
+
+	// WorkerGroupSpec.idleTimeoutSeconds only allowed on autoscaler v2
+	if IsAutoscalingV2Enabled(spec) {
+		return nil
+	}
+
+	envVar, exists := EnvVarByName(RAY_ENABLE_AUTOSCALER_V2, spec.HeadGroupSpec.Template.Spec.Containers[RayContainerIndex].Env)
+	if exists && (envVar.Value == "1" || envVar.Value == "true") {
+		return nil
+	}
+
+	return fmt.Errorf("worker group %s: idleTimeoutSeconds is set, but autoscaler v2 is not enabled. Please set .spec.autoscalerOptions.version to 'v2' (or set %s environment variable to 'true' in the head pod if using KubeRay < 1.4.0)", workerGroup.GroupName, RAY_ENABLE_AUTOSCALER_V2)
 }
