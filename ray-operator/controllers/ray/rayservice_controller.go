@@ -928,7 +928,7 @@ func (r *RayServiceReconciler) reconcileRayCluster(ctx context.Context, rayServi
 			r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(utils.FailedToUpdateRayCluster), "Failed to update the pending RayCluster %s/%s: %v", pendingRayCluster.Namespace, pendingRayCluster.Name, err)
 		}
 		r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeNormal, string(utils.UpdatedRayCluster), "Updated the pending RayCluster %s/%s", pendingRayCluster.Namespace, pendingRayCluster.Name)
-		return activeRayCluster, pendingRayCluster, nil
+		return activeRayCluster, pendingRayCluster, err
 	}
 
 	return activeRayCluster, pendingRayCluster, nil
