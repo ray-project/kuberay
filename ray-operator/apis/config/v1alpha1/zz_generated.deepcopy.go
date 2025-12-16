@@ -28,6 +28,13 @@ func (in *Configuration) DeepCopyInto(out *Configuration) {
 		*out = new(bool)
 		**out = **in
 	}
+	if in.IngressAnnotations != nil {
+		in, out := &in.IngressAnnotations, &out.IngressAnnotations
+		*out = make(map[string]string, len(*in))
+		for key, val := range *in {
+			(*out)[key] = val
+		}
+	}
 	out.TypeMeta = in.TypeMeta
 	if in.WorkerSidecarContainers != nil {
 		in, out := &in.WorkerSidecarContainers, &out.WorkerSidecarContainers
@@ -43,13 +50,6 @@ func (in *Configuration) DeepCopyInto(out *Configuration) {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
 	}
-	if in.DefaultContainerEnvs != nil {
-		in, out := &in.DefaultContainerEnvs, &out.DefaultContainerEnvs
-		*out = make([]v1.EnvVar, len(*in))
-		for i := range *in {
-			(*in)[i].DeepCopyInto(&(*out)[i])
-		}
-	}
 	if in.IngressTLS != nil {
 		in, out := &in.IngressTLS, &out.IngressTLS
 		*out = make([]networkingv1.IngressTLS, len(*in))
@@ -57,11 +57,11 @@ func (in *Configuration) DeepCopyInto(out *Configuration) {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
 	}
-	if in.IngressAnnotations != nil {
-		in, out := &in.IngressAnnotations, &out.IngressAnnotations
-		*out = make(map[string]string, len(*in))
-		for key, val := range *in {
-			(*out)[key] = val
+	if in.DefaultContainerEnvs != nil {
+		in, out := &in.DefaultContainerEnvs, &out.DefaultContainerEnvs
+		*out = make([]v1.EnvVar, len(*in))
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
 	}
 }
