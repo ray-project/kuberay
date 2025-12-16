@@ -106,7 +106,8 @@ func (r *RayDashboardCacheClient) InitClient(ctx context.Context, client RayDash
 	})
 
 	initCacheStorage.Do(func() {
-		// the New() returns error only if the size is less or equal than zero.
+		// The NewWithEvict() returns error only if the cacheSize is less than or equal to zero.
+		// While we set cacheSize as constant, we can ignore the error here.
 		cacheStorage, _ = lru.NewWithEvict[string, *JobInfoCache](cacheSize, func(key string, _ *JobInfoCache) {
 			logger.WithName("cacheStorage").Info("Evict cache for key.", "key", key)
 		})
