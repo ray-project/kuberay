@@ -27,11 +27,19 @@ type Configuration struct {
 	// there is only one active instance of the operator.
 	EnableLeaderElection *bool `json:"enableLeaderElection,omitempty"`
 
+	// Default annotations for the Ray Dashboard ingresses. Annotations on the `RayCluster` will override
+	// these on a case-by-case basis.
+	IngressAnnotations map[string]string `json:"ingressAnnotations,omitempty"`
+
 	metav1.TypeMeta `json:",inline"`
 
 	// LogStdoutEncoder is the encoder to use when logging to stdout. Valid values are "json" and "console".
 	// Defaults to `json` if empty.
 	LogStdoutEncoder string `json:"logStdoutEncoder,omitempty"`
+
+	// Host used for Ray Dashboard ingresses. The host will be the same for all `RayClusters` and they
+	// will be differentiated by their paths.
+	IngressHost string `json:"ingressHost,omitempty"`
 
 	// ProbeAddr is the address the probe endpoint binds to.
 	ProbeAddr string `json:"probeAddr,omitempty"`
@@ -66,6 +74,9 @@ type Configuration struct {
 	// to inject into every Head pod.
 	HeadSidecarContainers []corev1.Container `json:"headSidecarContainers,omitempty"`
 
+	// TLS configuration for the Ray Dashboard ingresses. Applies to all `RayClusters`.
+	IngressTLS []networkingv1.IngressTLS `json:"ingressTLS,omitempty"`
+
 	// DefaultContainerEnvs specifies default environment variables to inject into all Ray containers
 	DefaultContainerEnvs []corev1.EnvVar `json:"defaultContainerEnvs,omitempty"`
 
@@ -87,17 +98,6 @@ type Configuration struct {
 
 	// EnableMetrics indicates whether KubeRay operator should emit control plane metrics.
 	EnableMetrics bool `json:"enableMetrics,omitempty"`
-
-	// Host used for Ray Dashboard ingresses. The host will be the same for all `RayClusters` and they
-	// will be differentiated by their paths.
-	IngressHost string `json:"ingressHost,omitempty"`
-
-	// TLS configuration for the Ray Dashboard ingresses. Applies to all `RayClusters`.
-	IngressTLS []networkingv1.IngressTLS `json:"ingressTLS,omitempty"`
-
-	// Default annotations for the Ray Dashboard ingresses. Annotations on the `RayCluster` will override
-	// these on a case-by-case basis.
-	IngressAnnotations map[string]string `json:"ingressAnnotations,omitempty"`
 }
 
 func (config Configuration) GetDashboardClient(mgr manager.Manager) func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error) {

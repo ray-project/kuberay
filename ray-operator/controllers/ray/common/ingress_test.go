@@ -115,10 +115,10 @@ func TestBuildIngressForHeadService(t *testing.T) {
 	}
 
 	// check host
-	assert.Equal(t, ingress.Spec.Rules[0].Host, "")
+	assert.Equal(t, "", ingress.Spec.Rules[0].Host)
 
 	// tls count
-	assert.Len(t, ingress.Spec.TLS, 0)
+	assert.Empty(t, ingress.Spec.TLS)
 }
 
 func TestBuildIngressForHeadServiceWithControllerConfigs(t *testing.T) {
@@ -135,9 +135,9 @@ func TestBuildIngressForHeadServiceWithControllerConfigs(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, *ingress.Spec.IngressClassName, ingressClass)
-	assert.Equal(t, ingress.Annotations, map[string]string{
+	assert.Equal(t, map[string]string{
 		"annotation0": "value2", "annotation1": "value2",
-	})
+	}, ingress.Annotations)
 	assert.Equal(t, ingress.Spec.Rules[0].Host, host)
 	assert.Equal(t, ingress.Spec.TLS, tls)
 }
@@ -148,10 +148,10 @@ func TestBuildIngressForHeadServiceClusterSpecificAnnotationsTakePrecedence(t *t
 	require.NoError(t, err)
 
 	delete(annotations, IngressClassAnnotationKey)
-	assert.Equal(t, ingress.Annotations, map[string]string{
+	assert.Equal(t, map[string]string{
 		"annotation0": "value", // Overridden by cluster annotation
 		"annotation1": "value",
 		"annotation2": "value2",
-	})
+	}, ingress.Annotations)
 	assert.Equal(t, instanceWithIngressEnabled.Annotations[IngressClassAnnotationKey], *ingress.Spec.IngressClassName)
 }

@@ -84,13 +84,13 @@ type RayClusterReconciler struct {
 type RayClusterReconcilerOptions struct {
 	RayClusterMetricsManager *metrics.RayClusterMetricsManager
 	BatchSchedulerManager    *batchscheduler.SchedulerManager
+	IngressAnnotations       map[string]string
+	IngressHost              string
 	HeadSidecarContainers    []corev1.Container
 	WorkerSidecarContainers  []corev1.Container
 	DefaultContainerEnvs     []corev1.EnvVar
-	IsOpenShift              bool
-	IngressHost              string
 	IngressTLS               []networkingv1.IngressTLS
-	IngressAnnotations       map[string]string
+	IsOpenShift              bool
 }
 
 // Reconcile reads that state of the cluster for a RayCluster object and makes changes based on it
