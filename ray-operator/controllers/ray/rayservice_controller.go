@@ -911,9 +911,9 @@ func (r *RayServiceReconciler) reconcileRayCluster(ctx context.Context, rayServi
 		modifyRayCluster(ctx, activeRayCluster, goalCluster)
 		if err = r.Update(ctx, activeRayCluster); err != nil {
 			r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(utils.FailedToUpdateRayCluster), "Failed to update the active RayCluster %s/%s: %v", activeRayCluster.Namespace, activeRayCluster.Name, err)
+			return activeRayCluster, pendingRayCluster, err
 		}
 		r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeNormal, string(utils.UpdatedRayCluster), "Updated the active RayCluster %s/%s", activeRayCluster.Namespace, activeRayCluster.Name)
-		return activeRayCluster, pendingRayCluster, err
 	}
 
 	if shouldUpdateCluster(rayServiceInstance, pendingRayCluster, false) {
@@ -926,9 +926,9 @@ func (r *RayServiceReconciler) reconcileRayCluster(ctx context.Context, rayServi
 		modifyRayCluster(ctx, pendingRayCluster, goalCluster)
 		if err = r.Update(ctx, pendingRayCluster); err != nil {
 			r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(utils.FailedToUpdateRayCluster), "Failed to update the pending RayCluster %s/%s: %v", pendingRayCluster.Namespace, pendingRayCluster.Name, err)
+			return activeRayCluster, pendingRayCluster, err
 		}
 		r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeNormal, string(utils.UpdatedRayCluster), "Updated the pending RayCluster %s/%s", pendingRayCluster.Namespace, pendingRayCluster.Name)
-		return activeRayCluster, pendingRayCluster, err
 	}
 
 	return activeRayCluster, pendingRayCluster, nil
