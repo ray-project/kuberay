@@ -90,14 +90,14 @@ type Configuration struct {
 
 	// Host used for Ray Dashboard ingresses. The host will be the same for all `RayClusters` and they
 	// will be differentiated by their paths.
-	IngressHost        string                    `json:"ingressHost,omitempty"`
+	IngressHost string `json:"ingressHost,omitempty"`
 
 	// TLS configuration for the Ray Dashboard ingresses. Applies to all `RayClusters`.
-	IngressTLS         []networkingv1.IngressTLS `json:"ingressTLS,omitempty"`
+	IngressTLS []networkingv1.IngressTLS `json:"ingressTLS,omitempty"`
 
 	// Default annotations for the Ray Dashboard ingresses. Annotations on the `RayCluster` will override
 	// these on a case-by-case basis.
-	IngressAnnotations map[string]string         `json:"ingressAnnotations,omitempty"`
+	IngressAnnotations map[string]string `json:"ingressAnnotations,omitempty"`
 }
 
 func (config Configuration) GetDashboardClient(mgr manager.Manager) func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error) {
