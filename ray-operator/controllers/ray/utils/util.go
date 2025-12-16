@@ -920,7 +920,7 @@ func FetchHeadServiceURL(ctx context.Context, cli client.Client, rayCluster *ray
 	return headServiceURL, nil
 }
 
-func GetRayDashboardClientFunc(ctx context.Context, mgr manager.Manager, useKubernetesProxy bool, useBackgroundGoroutine bool) func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error) {
+func GetRayDashboardClientFunc(ctx context.Context, mgr manager.Manager, useKubernetesProxy bool, asyncJobInfoQuery bool) func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error) {
 	return func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error) {
 		dashboardClient := &dashboardclient.RayDashboardClient{}
 		var authToken string
@@ -963,19 +963,13 @@ func GetRayDashboardClientFunc(ctx context.Context, mgr manager.Manager, useKube
 				fmt.Sprintf("%s/api/v1/namespaces/%s/services/%s:dashboard/proxy", mgr.GetConfig().Host, rayCluster.Namespace, headSvcName),
 				authToken,
 			)
-			if useBackgroundGoroutine {
-				dashboardCachedClient := &dashboardclient.RayDashboardCacheClient{}
-				dashboardCachedClient.InitClient(ctx, dashboardClient)
-				return dashboardCachedClient, nil
-			}
-			return dashboardClient, nil
+		} else {
+			dashboardClient.InitClient(&http.Client{
+				Timeout: 2 * time.Second,
+			}, "http://"+url, authToken)
 		}
 
-		dashboardClient.InitClient(&http.Client{
-			Timeout: 2 * time.Second,
-		}, "http://"+url, authToken)
-
-		if useBackgroundGoroutine {
+		if asyncJobInfoQuery {
 			dashboardCachedClient := &dashboardclient.RayDashboardCacheClient{}
 			dashboardCachedClient.InitClient(ctx, dashboardClient)
 			return dashboardCachedClient, nil
