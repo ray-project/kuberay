@@ -137,6 +137,8 @@ ingressAnnotations:
 					"annotation0": "value0",
 					"annotation1": "value1",
 				},
+				QPS:   ptr.To(configapi.DefaultQPS),
+				Burst: ptr.To(configapi.DefaultBurst),
 			},
 			expectErr: false,
 		},
