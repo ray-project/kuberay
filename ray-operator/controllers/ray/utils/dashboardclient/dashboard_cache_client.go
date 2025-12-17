@@ -232,7 +232,7 @@ func (r *RayDashboardCacheClient) GetJobInfo(ctx context.Context, jobId string) 
 
 	if err := pool.PutTask(task); err != nil {
 		logger.Error(err, "Cannot queue more jobInfo fetching tasks.", "jobId", jobId)
-		return nil, err
+		return nil, ErrAgain
 	}
 	logger.Info("Put a task to fetch job info in background for jobId ", "jobId", jobId)
 
