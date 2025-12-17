@@ -39,9 +39,13 @@ spec:
           protocol: TCP
         name: kuberay-operator
         securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
           seccompProfile:
             type: RuntimeDefault
-          allowPrivilegeEscalation: false
         livenessProbe:
           httpGet:
             path: /metrics

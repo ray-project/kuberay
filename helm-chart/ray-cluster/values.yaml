@@ -9,7 +9,7 @@ image:
   # -- Image repository.
   repository: rayproject/ray
   # -- Image tag.
-  tag: 2.46.0
+  tag: 2.52.0
   # -- Image pull policy.
   pullPolicy: IfNotPresent
 
@@ -59,7 +59,7 @@ common:
 head:
   # rayVersion determines the autoscaler's image version.
   # It should match the Ray version in the image of the containers.
-  # rayVersion: 2.46.0
+  # rayVersion: 2.52.0
 
   # If enableInTreeAutoscaling is true, the autoscaler sidecar will be added to the Ray head pod.
   # Ray autoscaler integration is supported only for Ray versions >= 1.11.0
@@ -97,6 +97,9 @@ head:
   # in the headGroupSpec. See https://github.com/ray-project/kuberay/pull/1128 for more details.
   serviceAccountName: ""
   restartPolicy: ""
+
+  # -- runtimeClassName is the name of the RuntimeClass to use to run the head Pod.
+  runtimeClassName: ""
 
   # containerEnv specifies environment variables for the Ray container,
   # Follows standard K8s container env schema.
@@ -211,6 +214,9 @@ worker:
   serviceAccountName: ""
   restartPolicy: ""
 
+  # -- runtimeClassName is the name of the RuntimeClass to use to run the worker Pods.
+  runtimeClassName: ""
+
   # -- Init containers to add to the worker pod
   initContainers: []
 
@@ -318,6 +324,9 @@ additionalWorkerGroups:
     labels: {}
     serviceAccountName: ""
     restartPolicy: ""
+
+    # -- runtimeClassName for this additional worker group. Empty string means default runtime.
+    runtimeClassName: ""
 
     # containerEnv specifies environment variables for the Ray container,
     # Follows standard K8s container env schema.

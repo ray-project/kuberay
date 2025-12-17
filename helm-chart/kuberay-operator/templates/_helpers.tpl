@@ -122,14 +122,6 @@ rules:
 - apiGroups:
   - ""
   resources:
-  - endpoints
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - ""
-  resources:
   - events
   - pods/status
   - services
@@ -177,8 +169,6 @@ rules:
   - create
   - get
   - list
-  - patch
-  - update
   - watch
 - apiGroups:
   - ""
@@ -220,6 +210,14 @@ rules:
   - get
   - list
   - update
+- apiGroups:
+  - discovery.k8s.io
+  resources:
+  - endpointslices
+  verbs:
+  - get
+  - list
+  - watch
 - apiGroups:
   - extensions
   - networking.k8s.io
