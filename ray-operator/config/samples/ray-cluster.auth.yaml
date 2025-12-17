@@ -16,10 +16,11 @@ spec:
           image: rayproject/ray:2.52.0
           resources:
             limits:
-              memory: 8G
+              cpu: 4
+              memory: 8Gi
             requests:
               cpu: 4
-              memory: 8G
+              memory: 8Gi
           ports:
           - containerPort: 6379
             name: gcs-server
@@ -40,7 +41,8 @@ spec:
           image: rayproject/ray:2.52.0
           resources:
             limits:
-              memory: 8G
+              cpu: 4
+              memory: 8Gi
             requests:
               cpu: 4
-              memory: 8G
+              memory: 8Gi
