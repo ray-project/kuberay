@@ -70,7 +70,7 @@ func (w *workerPool) init(ctx context.Context, taskQueueSize int, workerSize int
 				case task := <-w.taskQueue:
 					again := task(ctx)
 
-					if again {
+					if again && ctx.Err() == nil {
 						time.AfterFunc(queryInterval, func() {
 							w.taskQueue <- task
 						})
