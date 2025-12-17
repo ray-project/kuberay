@@ -1000,10 +1000,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@next/env@npm:15.4.9":
-  version: 15.4.9
-  resolution: "@next/env@npm:15.4.9"
-  checksum: 10c0/30a3625115379c209e63f55912c20dfabc6fadd861ec0e16020c8be029916071aa7cdb620b2846b020b14597658925c154221b3be87cbfe4d8cf61778869c70d
+"@next/env@npm:15.4.10":
+  version: 15.4.10
+  resolution: "@next/env@npm:15.4.10"
+  checksum: 10c0/f455f9630f56691800441333bf1462135f64eba65cc81a34fceedb42fcc62fd22fb2dfaa8de49f65b378fc46c5cf35795c0a32363006b989806223856be221fa
   languageName: node
   linkType: hard
 
@@ -3145,8 +3145,8 @@ __metadata:
   linkType: hard
 
 "glob@npm:^10.2.2, glob@npm:^10.3.10":
-  version: 10.4.5
-  resolution: "glob@npm:10.4.5"
+  version: 10.5.0
+  resolution: "glob@npm:10.5.0"
   dependencies:
     foreground-child: "npm:^3.1.0"
     jackspeak: "npm:^3.1.2"
@@ -3156,7 +3156,7 @@ __metadata:
     path-scurry: "npm:^1.11.1"
   bin:
     glob: dist/esm/bin.mjs
-  checksum: 10c0/19a9759ea77b8e3ca0a43c2f07ecddc2ad46216b786bb8f993c445aee80d345925a21e5280c7b7c6c59e860a0154b84e4b2b60321fea92cd3c56b4a7489f160e
+  checksum: 10c0/100705eddbde6323e7b35e1d1ac28bcb58322095bd8e63a7d0bef1a2cdafe0d0f7922a981b2b48369a4f8c1b077be5c171804534c3509dfe950dde15fbe6d828
   languageName: node
   linkType: hard
 
@@ -4101,11 +4101,11 @@ __metadata:
   languageName: node
   linkType: hard
 
-"next@npm:15.4.9":
-  version: 15.4.9
-  resolution: "next@npm:15.4.9"
+"next@npm:15.4.10":
+  version: 15.4.10
+  resolution: "next@npm:15.4.10"
   dependencies:
-    "@next/env": "npm:15.4.9"
+    "@next/env": "npm:15.4.10"
     "@next/swc-darwin-arm64": "npm:15.4.8"
     "@next/swc-darwin-x64": "npm:15.4.8"
     "@next/swc-linux-arm64-gnu": "npm:15.4.8"
@@ -4156,7 +4156,7 @@ __metadata:
       optional: true
   bin:
     next: dist/bin/next
-  checksum: 10c0/17396d6e8687bd7c65583c913ff2ff6fbe7145e0d6e2ba791e68fe47bbf4c9a698b146da9955628d1f28725f0e0bba29a9fedd919517be79c45d7fbdf3bca29f
+  checksum: 10c0/67101363146d48f6e532b7b4d15df6d6a02601782037e4f9013f620a3cb046231a0db986bd983e1726b95aa30d10d02f673f9f123188582fe7c42d1fe94d74d9
   languageName: node
   linkType: hard
 
@@ -4677,7 +4677,7 @@ __metadata:
     dayjs: "npm:^1.11.10"
     eslint: "npm:^9.33.0"
     eslint-config-next: "npm:^15.4.6"
-    next: "npm:15.4.9"
+    next: "npm:15.4.10"
     postcss: "npm:^8"
     prettier: "npm:3.6.2"
     react: "npm:^18"
