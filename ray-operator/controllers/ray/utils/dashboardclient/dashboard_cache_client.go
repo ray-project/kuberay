@@ -83,7 +83,6 @@ func (w *workerPool) init(ctx context.Context, taskQueueSize int, workerSize int
 }
 
 func (w *workerPool) PutTask(task Task) error {
-	w.taskQueue <- task
 	select {
 	case w.taskQueue <- task:
 		return nil
