@@ -15,6 +15,7 @@ import (
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	rayv1ac "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/ray/v1"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
@@ -279,7 +280,7 @@ env_vars:
 			To(WithTransform(RayJobReason, Equal(rayv1.DeadlineExceeded)))
 	})
 
-	test.T().Run("RayJob fails when head Pod is deleted when job is running", func(_ *testing.T) {
+	test.T().Run("RayJob recreates head Pod when deleted while running", func(_ *testing.T) {
 		rayJobAC := rayv1ac.RayJob("delete-head-after-submit", namespace.Name).
 			WithSpec(rayv1ac.RayJobSpec().
 				WithRayClusterSpec(NewRayClusterSpec()).
@@ -289,6 +290,7 @@ env_vars:
 		rayJob, err := test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
 		g.Expect(err).NotTo(HaveOccurred())
 		LogWithTimestamp(test.T(), "Created RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
+		g.Expect(rayJob.Labels).To(Not(HaveKey(utils.RayJobDisableHeadNodeRestartLabelKey)))
 
 		// Wait until the RayJob's job status transitions to Running
 		LogWithTimestamp(test.T(), "Waiting for RayJob %s/%s to be 'Running'", rayJob.Namespace, rayJob.Name)
@@ -300,20 +302,28 @@ env_vars:
 		g.Expect(err).NotTo(HaveOccurred())
 		rayCluster, err := GetRayCluster(test, rayJob.Namespace, rayJob.Status.RayClusterName)
 		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(rayCluster.Labels).To(Not(HaveKeyWithValue(utils.RayJobDisableHeadNodeRestartLabelKey, "true")))
 		headPod, err := GetHeadPod(test, rayCluster)
 		g.Expect(err).NotTo(HaveOccurred())
 		LogWithTimestamp(test.T(), "Deleting head Pod %s/%s for RayCluster %s", headPod.Namespace, headPod.Name, rayCluster.Name)
 		err = test.Client().Core().CoreV1().Pods(headPod.Namespace).Delete(test.Ctx(), headPod.Name, metav1.DeleteOptions{})
 		g.Expect(err).NotTo(HaveOccurred())
 
-		// After head pod deletion, controller should mark RayJob as Failed with a specific message
+		// Head pod should be recreated for non-sidecar modes and the RayJob should keep running/finish.
+		g.Eventually(func() int {
+			pods, listErr := test.Client().Core().CoreV1().Pods(rayCluster.Namespace).List(
+				test.Ctx(), common.RayClusterHeadPodsAssociationOptions(rayCluster).ToMetaV1ListOptions())
+			if listErr != nil {
+				return -1
+			}
+			return len(pods.Items)
+		}, TestTimeoutMedium, 2*time.Second).Should(Equal(1))
+		g.Consistently(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutShort).
+			ShouldNot(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusFailed)))
 		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
-			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusFailed)))
-		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
-			Should(WithTransform(RayJobReason, Or(
-				Equal(rayv1.JobDeploymentStatusTransitionGracePeriodExceeded),
-				Equal(rayv1.SubmissionFailed),
-			)))
+			Should(WithTransform(func(job *rayv1.RayJob) rayv1.JobDeploymentStatus {
+				return job.Status.JobDeploymentStatus
+			}, Or(Equal(rayv1.JobDeploymentStatusRunning), Equal(rayv1.JobDeploymentStatusComplete))))
 		// Cleanup
 		err = test.Client().Ray().RayV1().RayJobs(namespace.Name).Delete(test.Ctx(), rayJob.Name, metav1.DeleteOptions{})
 		g.Expect(err).NotTo(HaveOccurred())
