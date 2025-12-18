@@ -24,9 +24,10 @@ vet: ## Run go vet against code.
 golangci-lint: ## Download golangci_lint locally if necessary.
 	test -s $(GOLANGCI_LINT) || (curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | bash -s -- -b $(REPO_ROOT_BIN)/ $(GOLANGCI_LINT_VERSION))
 
+# Exclude the SA1019 check which checks the usage of deprecated fields
+# via the linters.settings.staticcheck.checks configuration in .golangci.yaml.
 .PHONY: lint
 lint: golangci-lint fmt vet ## Run the linter.
-	# exclude the SA1019 check which checks the usage of deprecated fields.
 	test -s $(GOLANGCI_LINT) || ($(GOLANGCI_LINT) run --timeout=3m --allow-parallel-runners)
 
 test: WHAT ?= $(shell go list ./... | grep -v /test/)

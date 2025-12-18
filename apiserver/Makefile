@@ -84,9 +84,10 @@ fumpt: gofumpt ## Run gofmtumpt against code.
 imports: goimports ## Run goimports against code.
 	$(GOIMPORTS) -l -w .
 
+# Exclude the SA1019 check which checks the usage of deprecated fields
+# via the linters.settings.staticcheck.checks configuration in .golangci.yaml.
 .PHONY: lint
 lint: golangci-lint fmt vet fumpt imports ## Run the linter.
-	# exclude the SA1019 check which checks the usage of deprecated fields.
 	test -s $(GOLANGCI_LINT) || ($(GOLANGCI_LINT) run --timeout=3m --allow-parallel-runners)
 
 build: fmt vet fumpt imports ## Build api server binary.
