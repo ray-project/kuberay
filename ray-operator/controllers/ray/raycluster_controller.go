@@ -684,10 +684,12 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 			// Recreating the head Pod if the RayCluster created by RayJob is provisioned doesn't help RayJob.
 			//
 			// Case 1: GCS fault tolerance is disabled
+			//
 			// In this case, the worker Pods will be killed by the new head Pod when it is created, so the new Ray job will not be running in
 			// a "provisioned" cluster.
 			//
 			// Case 2: GCS fault tolerance is enabled
+			//
 			// In this case, the worker Pods will not be killed by the new head Pod when it is created, but the submission ID has already been
 			// used by the old Ray job, so the new Ray job will fail.
 			logger.Info(
