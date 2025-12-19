@@ -46,9 +46,9 @@ var (
 type (
 	Task         func(taskCTX context.Context) bool
 	JobInfoCache struct {
-		JobInfo  *utiltypes.RayJobInfo
-		Err      error
-		UpdateAt *time.Time
+		JobInfo   *utiltypes.RayJobInfo
+		Err       error
+		UpdatedAt *time.Time
 	}
 
 	workerPool struct {
@@ -136,7 +136,7 @@ func (r *RayDashboardCacheClient) InitClient(ctx context.Context, client RayDash
 					for _, key := range keys {
 						cacheLock.Lock()
 						if cached, ok := cacheStorage.Peek(key); ok {
-							if cached.UpdateAt.Before(expiredThreshold) {
+							if cached.UpdatedAt.Before(expiredThreshold) {
 								cacheStorage.Remove(key)
 								removed = append(removed, key)
 							}
@@ -175,7 +175,7 @@ func (r *RayDashboardCacheClient) GetJobInfo(ctx context.Context, jobId string) 
 	cacheLock.RUnlock()
 
 	currentTime := time.Now()
-	placeholder := &JobInfoCache{Err: ErrAgain, UpdateAt: &currentTime}
+	placeholder := &JobInfoCache{Err: ErrAgain, UpdatedAt: &currentTime}
 
 	// Put a placeholder in storage. The cache will be updated only if the placeholder exists.
 	// The placeholder will be removed when StopJob or DeleteJob.
@@ -206,10 +206,14 @@ func (r *RayDashboardCacheClient) GetJobInfo(ctx context.Context, jobId string) 
 				return true
 			}
 		}
-		jobInfoCache.JobInfo = jobInfo
-		jobInfoCache.Err = err
 		currentTime := time.Now()
-		jobInfoCache.UpdateAt = &currentTime
+
+		// Make this cache immutable to avoid data race between pointer updates and read operations.
+		newJobInfoCache := &JobInfoCache{
+			JobInfo:   jobInfo,
+			Err:       ErrAgain,
+			UpdatedAt: &currentTime,
+		}
 
 		cacheLock.Lock()
 		if existed := cacheStorage.Contains(jobId); !existed {
@@ -217,14 +221,14 @@ func (r *RayDashboardCacheClient) GetJobInfo(ctx context.Context, jobId string) 
 			logger.Info("The placeholder is removed before updating for jobId", "jobId", jobId)
 			return false
 		}
-		cacheStorage.Add(jobId, jobInfoCache)
+		cacheStorage.Add(jobId, newJobInfoCache)
 		cacheLock.Unlock()
 
-		if jobInfoCache.JobInfo == nil {
+		if newJobInfoCache.JobInfo == nil {
 			return true
 		}
-		if rayv1.IsJobTerminal(jobInfoCache.JobInfo.JobStatus) {
-			logger.Info("The job reaches terminal status for jobId", "jobId", jobId, "status", jobInfoCache.JobInfo.JobStatus)
+		if rayv1.IsJobTerminal(newJobInfoCache.JobInfo.JobStatus) {
+			logger.Info("The job reaches terminal status for jobId", "jobId", jobId, "status", newJobInfoCache.JobInfo.JobStatus)
 			return false
 		}
 		return true
