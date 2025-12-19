@@ -90,8 +90,6 @@ spec:
             {{- $argList = append $argList "/etc/kuberay/config.yaml" -}}
             {{- else -}}
             {{- include "kuberay-operator.validateConfig" . -}}
-            {{- end -}}
-            {{- $argList = append $argList (include "kuberay.featureGates" . | trim) -}}
             {{- if .Values.batchScheduler -}}
             {{- if .Values.batchScheduler.enabled -}}
             {{- $argList = append $argList "--enable-batch-scheduler" -}}
@@ -142,6 +140,8 @@ spec:
             {{- $argList = append $argList (printf "--burst=%v" .Values.kubeClient.burst) -}}
             {{- end -}}
             {{- end -}}
+            {{- end -}}
+            {{- $argList = append $argList (include "kuberay.featureGates" . | trim) -}}
             {{- (printf "\n") -}}
             {{- $argList | toYaml | indent 12 }}
           ports:
