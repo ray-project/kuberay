@@ -291,6 +291,14 @@ func main() {
 		exitOnError(webhooks.SetupRayClusterWebhookWithManager(mgr),
 			"unable to create webhook", "webhook", "RayCluster")
 	}
+
+	if features.Enabled(features.RayCronJob) {
+		setupLog.Info("RayCronJob feature gate is enabled, starting RayCronJob controller")
+		exitOnError(ray.NewRayCronJobReconciler(mgr).SetupWithManager(mgr, config.ReconcileConcurrency),
+			"unable to create controller", "controller", "RayCronJob")
+	} else {
+		setupLog.Info("RayCronJob feature gate is disabled, skipping RayCronJob controller setup")
+	}
 	// +kubebuilder:scaffold:builder
 
 	exitOnError(mgr.AddHealthzCheck("healthz", healthz.Ping), "unable to set up health check")
