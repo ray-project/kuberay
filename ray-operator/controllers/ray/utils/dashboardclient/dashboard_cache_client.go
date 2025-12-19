@@ -235,6 +235,7 @@ func (r *RayDashboardCacheClient) GetJobInfo(ctx context.Context, jobId string) 
 			logger.Info("Failed to fetch job info for jobId", "jobId", jobId, "error", err)
 			return false
 		}
+
 		if newJobInfoCache.JobInfo == nil {
 			return true
 		}
