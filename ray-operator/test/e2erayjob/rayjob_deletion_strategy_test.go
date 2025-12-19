@@ -44,7 +44,7 @@ env_vars:
 							WithPolicy(rayv1.DeleteWorkers).
 							WithCondition(rayv1ac.DeletionCondition().
 								WithJobStatus(rayv1.JobStatusSucceeded).
-								WithTTLSeconds(1)), // 1 second TTL for testing
+								WithTTLSeconds(10)), // 10 second TTL for testing
 					)).
 				WithSubmitterPodTemplate(JobSubmitterPodTemplateApplyConfiguration()))
 
@@ -153,7 +153,7 @@ env_vars:
 							WithPolicy(rayv1.DeleteCluster).
 							WithCondition(rayv1ac.DeletionCondition().
 								WithJobStatus(rayv1.JobStatusSucceeded).
-								WithTTLSeconds(1)),
+								WithTTLSeconds(10)),
 					)).
 				WithSubmitterPodTemplate(JobSubmitterPodTemplateApplyConfiguration()))
 
@@ -214,7 +214,7 @@ env_vars:
 							WithPolicy(rayv1.DeleteSelf).
 							WithCondition(rayv1ac.DeletionCondition().
 								WithJobStatus(rayv1.JobStatusSucceeded).
-								WithTTLSeconds(1)),
+								WithTTLSeconds(10)),
 					)).
 				WithSubmitterPodTemplate(JobSubmitterPodTemplateApplyConfiguration()))
 
@@ -265,7 +265,7 @@ env_vars:
 							WithPolicy(rayv1.DeleteNone).
 							WithCondition(rayv1ac.DeletionCondition().
 								WithJobStatus(rayv1.JobStatusSucceeded).
-								WithTTLSeconds(1)),
+								WithTTLSeconds(5)), // Shorter TTL since we're testing preservation
 					)).
 				WithSubmitterPodTemplate(JobSubmitterPodTemplateApplyConfiguration()))
 
@@ -327,17 +327,17 @@ env_vars:
 							WithPolicy(rayv1.DeleteWorkers).
 							WithCondition(rayv1ac.DeletionCondition().
 								WithJobStatus(rayv1.JobStatusSucceeded).
-								WithTTLSeconds(1)), // Increased spacing for reliability
+								WithTTLSeconds(15)), // Increased spacing for reliability
 						rayv1ac.DeletionRule().
 							WithPolicy(rayv1.DeleteCluster).
 							WithCondition(rayv1ac.DeletionCondition().
 								WithJobStatus(rayv1.JobStatusSucceeded).
-								WithTTLSeconds(21)), // 20s gap between stages
+								WithTTLSeconds(35)), // 20s gap between stages
 						rayv1ac.DeletionRule().
 							WithPolicy(rayv1.DeleteSelf).
 							WithCondition(rayv1ac.DeletionCondition().
 								WithJobStatus(rayv1.JobStatusSucceeded).
-								WithTTLSeconds(41)), // 20s gap between stages
+								WithTTLSeconds(55)), // 20s gap between stages
 					)).
 				WithSubmitterPodTemplate(JobSubmitterPodTemplateApplyConfiguration()))
 
@@ -457,7 +457,7 @@ env_vars:
   counter_name: test_counter
 `).
 				WithShutdownAfterJobFinishes(true).
-				WithTTLSecondsAfterFinished(1). // Legacy TTL for backward compatibility
+				WithTTLSecondsAfterFinished(10). // Legacy TTL for backward compatibility
 				WithDeletionStrategy(rayv1ac.DeletionStrategy().
 					WithOnSuccess(rayv1ac.DeletionPolicy().
 						WithPolicy(rayv1.DeleteCluster)).
@@ -516,7 +516,7 @@ env_vars:
 							WithPolicy(rayv1.DeleteWorkers).
 							WithCondition(rayv1ac.DeletionCondition().
 								WithJobDeploymentStatus(rayv1.JobDeploymentStatusFailed).
-								WithTTLSeconds(1)), // 1 second TTL for testing
+								WithTTLSeconds(10)), // 10 second TTL for testing
 					)).
 				WithSubmitterPodTemplate(JobSubmitterPodTemplateApplyConfiguration()))
 
@@ -627,7 +627,7 @@ env_vars:
 							WithPolicy(rayv1.DeleteCluster).
 							WithCondition(rayv1ac.DeletionCondition().
 								WithJobDeploymentStatus(rayv1.JobDeploymentStatusFailed).
-								WithTTLSeconds(1)), // 1 second TTL for testing
+								WithTTLSeconds(10)), // 10 second TTL for testing
 					)).
 				WithSubmitterPodTemplate(JobSubmitterPodTemplateApplyConfiguration()))
 
@@ -690,7 +690,7 @@ env_vars:
 							WithPolicy(rayv1.DeleteSelf).
 							WithCondition(rayv1ac.DeletionCondition().
 								WithJobDeploymentStatus(rayv1.JobDeploymentStatusFailed).
-								WithTTLSeconds(1)), // 1 second TTL for testing
+								WithTTLSeconds(10)), // 10 second TTL for testing
 					)).
 				WithSubmitterPodTemplate(JobSubmitterPodTemplateApplyConfiguration()))
 
@@ -743,7 +743,7 @@ env_vars:
 							WithPolicy(rayv1.DeleteNone).
 							WithCondition(rayv1ac.DeletionCondition().
 								WithJobDeploymentStatus(rayv1.JobDeploymentStatusFailed).
-								WithTTLSeconds(1)), // 1 second TTL for testing
+								WithTTLSeconds(10)), // 10 second TTL for testing
 					)).
 				WithSubmitterPodTemplate(JobSubmitterPodTemplateApplyConfiguration()))
 
