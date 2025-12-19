@@ -108,6 +108,9 @@ _Appears in:_
 
 
 DeletionCondition specifies the trigger conditions for a deletion action.
+Exactly one of JobStatus or JobDeploymentStatus must be specified:
+  - JobStatus (application-level): Match the Ray job execution status.
+  - JobDeploymentStatus (infrastructure-level): Match the RayJob deployment lifecycle status. This is particularly useful for cleaning up resources when Ray jobs fail to be submitted.
 
 
 
@@ -116,7 +119,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `ttlSeconds` _integer_ | TTLSeconds is the time in seconds from when the JobStatus<br />reaches the specified terminal state to when this deletion action should be triggered.<br />The value must be a non-negative integer. | 0 | Minimum: 0 <br /> |
+| `ttlSeconds` _integer_ | TTLSeconds is the time in seconds from when the JobStatus or JobDeploymentStatus<br />reaches the specified terminal state to when this deletion action should be triggered.<br />The value must be a non-negative integer. | 0 | Minimum: 0 <br /> |
 
 
 #### DeletionPolicy
