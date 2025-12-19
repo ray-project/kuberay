@@ -1,14 +1,17 @@
 package completion
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
 	"github.com/spf13/cobra"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubectl/pkg/util/completion"
 
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
+	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client"
 )
 
 // RayResourceTypeCompletionFunc Returns a completion function that completes the Ray resource type.
@@ -54,6 +57,130 @@ func RayClusterResourceNameCompletionFunc(f cmdutil.Factory) func(*cobra.Command
 		}
 		return comps, directive
 	}
+}
+
+// WorkerGroupCompletionFunc Returns completions of:
+func WorkerGroupCompletionFunc(f cmdutil.Factory) func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
+	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		var comps []string
+		directive := cobra.ShellCompDirectiveNoFileComp
+
+		// completion stops: preventing kubectl ray get workergroup <tab> <tab>...
+		if len(args) != 0 {
+			return comps, directive
+		}
+
+		cluster, _ := cmd.Flags().GetString("ray-cluster")
+		namespace, _ := cmd.Flags().GetString("namespace")
+		allNamespaces, _ := cmd.Flags().GetBool("all-namespaces")
+
+		if namespace == "" && !allNamespaces {
+			namespace = "default"
+		}
+
+		if allNamespaces {
+			namespace = "" // overwrite namespace if all-namespace is specified
+		}
+
+		k8sClient, err := client.NewClient(f)
+		if err != nil {
+			// should we add logs here?
+			return comps, directive
+		}
+
+		rayClusterList, err := k8sClient.RayClient().RayV1().RayClusters(namespace).List(context.Background(), v1.ListOptions{}) // does this context matter?
+		if err != nil {
+			// should we add logs here?
+			// fmt.Printf("unable to list Ray clusters in namespace %s: %w", options.namespace, err)
+			return comps, directive
+		}
+		for _, rayCluster := range rayClusterList.Items {
+			// early guard for unmatched namespaces
+			if namespace != "" && rayCluster.Namespace != namespace {
+				continue
+			}
+			// early guard for unmatched namespaces clusters
+			if cluster != "" && rayCluster.Name != cluster {
+				continue
+			}
+			for _, spec := range rayCluster.Spec.WorkerGroupSpecs {
+				if toComplete == "" || strings.HasPrefix(spec.GroupName, toComplete) {
+					comps = append(comps, spec.GroupName)
+				}
+			}
+		}
+		return comps, directive
+	}
+}
+
+// NodeCompletionFunc Returns completions of:
+func NodeCompletionFunc(f cmdutil.Factory) func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
+	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		var comps []string
+		directive := cobra.ShellCompDirectiveNoFileComp
+
+		// completion stops: preventing kubectl ray get node <tab> <tab>...
+		if len(args) != 0 {
+			return comps, directive
+		}
+
+		cluster, _ := cmd.Flags().GetString("ray-cluster")
+		namespace, _ := cmd.Flags().GetString("namespace")
+		allNamespaces, _ := cmd.Flags().GetBool("all-namespaces")
+
+		if namespace == "" && !allNamespaces {
+			namespace = "default"
+		}
+
+		if allNamespaces {
+			namespace = "" // overwrite namespace if all-namespace is specified
+		}
+
+		k8sClient, err := client.NewClient(f)
+		if err != nil {
+			return comps, directive
+		}
+
+		labelSelectors := createRayNodeLabelSelectors(cluster)
+		pods, err := k8sClient.KubernetesClient().CoreV1().Pods(namespace).List(
+			context.Background(),
+			v1.ListOptions{
+				LabelSelector: joinLabelMap(labelSelectors),
+			},
+		)
+		if err != nil {
+			return comps, directive
+		}
+
+		for _, pod := range pods.Items {
+			if toComplete == "" || strings.HasPrefix(pod.Name, toComplete) {
+				comps = append(comps, pod.Name)
+			}
+		}
+		return comps, directive
+	}
+}
+
+// joinLabelMap joins a map of K8s label key-val entries into a label selector string
+// TODO: duplicated function as in kubectl/pkg/cmd/get/get.go
+func joinLabelMap(labelMap map[string]string) string {
+	var labels []string
+	for k, v := range labelMap {
+		labels = append(labels, fmt.Sprintf("%s=%s", k, v))
+	}
+	return strings.Join(labels, ",")
+}
+
+// createRayNodeLabelSelectors creates a map of K8s label selectors for Ray nodes
+// TODO: duplicated function as in kubectl/pkg/cmd/get/get_nodes.go
+func createRayNodeLabelSelectors(cluster string) map[string]string {
+	labelSelectors := map[string]string{
+		util.RayIsRayNodeLabelKey: "yes",
+	}
+	if cluster != "" {
+		labelSelectors[util.RayClusterLabelKey] = cluster
+	}
+	return labelSelectors
 }
 
 func getAllRayResourceType() []string {

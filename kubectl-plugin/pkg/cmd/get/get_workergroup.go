@@ -82,12 +82,13 @@ func NewGetWorkerGroupCommand(cmdFactory cmdutil.Factory, streams genericcliopti
 	options := NewGetWorkerGroupOptions(cmdFactory, streams)
 
 	cmd := &cobra.Command{
-		Use:          "workergroup [GROUP] [(-c/--ray-cluster) RAYCLUSTER]",
-		Aliases:      []string{"workergroups"},
-		Short:        "Get Ray worker groups",
-		Example:      getWorkerGroupsExample,
-		SilenceUsage: true,
-		Args:         cobra.MaximumNArgs(1),
+		Use:               "workergroup [GROUP] [(-c/--ray-cluster) RAYCLUSTER]",
+		Aliases:           []string{"workergroups"},
+		Short:             "Get Ray worker groups",
+		Example:           getWorkerGroupsExample,
+		SilenceUsage:      true,
+		Args:              cobra.MaximumNArgs(1),
+		ValidArgsFunction: completion.WorkerGroupCompletionFunc(cmdFactory),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := options.Complete(args, cmd); err != nil {
 				return err
