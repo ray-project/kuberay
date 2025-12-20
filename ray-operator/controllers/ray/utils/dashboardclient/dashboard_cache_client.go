@@ -197,7 +197,7 @@ func (r *RayDashboardCacheClient) GetJobInfo(ctx context.Context, jobId string) 
 		// Make this cache immutable to avoid data race between pointer updates and read operations.
 		newJobInfoCache := &JobInfoCache{
 			JobInfo:   jobInfo,
-			Err:       ErrAgain,
+			Err:       err,
 			UpdatedAt: &currentTime,
 		}
 
