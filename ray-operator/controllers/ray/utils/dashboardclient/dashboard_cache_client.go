@@ -40,7 +40,6 @@ var (
 	// singleton
 	initCacheStorage sync.Once
 	cacheStorage     *lru.Cache[string, *JobInfoCache]
-	cacheLock        sync.RWMutex
 )
 
 type (
@@ -125,23 +124,19 @@ func (r *RayDashboardCacheClient) InitClient(ctx context.Context, client RayDash
 					loggerForGC.Info("clean up goroutine exiting...")
 					return
 				case t := <-ticker.C:
-					cacheLock.RLock()
 					keys := cacheStorage.Keys()
-					cacheLock.RUnlock()
 
 					expiredThreshold := time.Now().Add(-cacheExpiry)
 					loggerForGC.Info(fmt.Sprintf("Found %d keys to verify,", len(keys)), "expiredThreshold", expiredThreshold, "tick at", t)
 
 					removed := keys[:0]
 					for _, key := range keys {
-						cacheLock.Lock()
 						if cached, ok := cacheStorage.Peek(key); ok {
 							if cached.UpdatedAt.Before(expiredThreshold) {
 								cacheStorage.Remove(key)
 								removed = append(removed, key)
 							}
 						}
-						cacheLock.Unlock()
 					}
 					loggerForGC.Info(fmt.Sprintf("clean up %d cache.", len(removed)), "expiredThreshold", expiredThreshold, "removed keys", removed)
 				}
@@ -167,34 +162,25 @@ func (r *RayDashboardCacheClient) GetMultiApplicationStatus(ctx context.Context)
 func (r *RayDashboardCacheClient) GetJobInfo(ctx context.Context, jobId string) (*utiltypes.RayJobInfo, error) {
 	logger := ctrl.LoggerFrom(ctx).WithName("RayDashboardCacheClient")
 
-	cacheLock.RLock()
 	if cached, ok := cacheStorage.Get(jobId); ok {
-		cacheLock.RUnlock()
 		return cached.JobInfo, cached.Err
 	}
-	cacheLock.RUnlock()
 
 	currentTime := time.Now()
 	placeholder := &JobInfoCache{Err: ErrAgain, UpdatedAt: &currentTime}
 
 	// Put a placeholder in storage. The cache will be updated only if the placeholder exists.
 	// The placeholder will be removed when StopJob or DeleteJob.
-	cacheLock.Lock()
 	if cached, existed, _ := cacheStorage.PeekOrAdd(jobId, placeholder); existed {
-		cacheLock.Unlock()
 		return cached.JobInfo, cached.Err
 	}
-	cacheLock.Unlock()
 
 	task := func(taskCTX context.Context) bool {
-		cacheLock.RLock()
 		jobInfoCache, existed := cacheStorage.Get(jobId)
 		if !existed {
-			cacheLock.RUnlock()
 			logger.Info("The placeholder is removed for jobId", "jobId", jobId)
 			return false
 		}
-		cacheLock.RUnlock()
 
 		var statusErr *k8serrors.StatusError
 		jobInfo, err := r.client.GetJobInfo(taskCTX, jobId)
@@ -215,14 +201,11 @@ func (r *RayDashboardCacheClient) GetJobInfo(ctx context.Context, jobId string) 
 			UpdatedAt: &currentTime,
 		}
 
-		cacheLock.Lock()
 		if existed := cacheStorage.Contains(jobId); !existed {
-			cacheLock.Unlock()
 			logger.Info("The placeholder is removed before updating for jobId", "jobId", jobId)
 			return false
 		}
 		cacheStorage.Add(jobId, newJobInfoCache)
-		cacheLock.Unlock()
 
 		if newJobInfoCache.JobInfo == nil {
 			return true
@@ -260,17 +243,11 @@ func (r *RayDashboardCacheClient) GetJobLog(ctx context.Context, jobName string)
 }
 
 func (r *RayDashboardCacheClient) StopJob(ctx context.Context, jobName string) error {
-	cacheLock.Lock()
-	defer cacheLock.Unlock()
-
 	cacheStorage.Remove(jobName)
 	return r.client.StopJob(ctx, jobName)
 }
 
 func (r *RayDashboardCacheClient) DeleteJob(ctx context.Context, jobName string) error {
-	cacheLock.Lock()
-	defer cacheLock.Unlock()
-
 	cacheStorage.Remove(jobName)
 	return r.client.DeleteJob(ctx, jobName)
 }
