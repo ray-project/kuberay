@@ -133,6 +133,9 @@ head:
       cpu: "1"
       memory: "2G"
 
+  # -- ResourceClaims to allocate with the head pod
+  resourceClaims: []
+
   # -- Extra annotations for head pod
   annotations: {}
 
@@ -251,6 +254,9 @@ worker:
       cpu: "1"
       memory: "1G"
 
+  # -- ResourceClaims to allocate with the worker pod
+  resourceClaims: []
+
   # -- Extra annotations for worker pod
   annotations: {}
 
@@ -358,6 +364,9 @@ additionalWorkerGroups:
       requests:
         cpu: 1
         memory: "1G"
+
+    # -- ResourceClaims to allocate with the additional worker pod
+    resourceClaims: []
 
     # -- Extra annotations for additional worker pod
     annotations: {}
