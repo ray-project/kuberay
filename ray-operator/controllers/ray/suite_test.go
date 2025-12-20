@@ -65,10 +65,6 @@ func (testProvider TestClientProvider) GetHttpProxyClient(_ manager.Manager) fun
 	}
 }
 
-func (testProvider TestClientProvider) DoesUseBackgroundGoroutine() bool {
-	return false
-}
-
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
 
