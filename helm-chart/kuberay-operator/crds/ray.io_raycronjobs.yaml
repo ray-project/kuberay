@@ -56,6 +56,10 @@ spec:
                           properties:
                             condition:
                               properties:
+                                jobDeploymentStatus:
+                                  enum:
+                                  - Failed
+                                  type: string
                                 jobStatus:
                                   enum:
                                   - SUCCEEDED
@@ -66,9 +70,14 @@ spec:
                                   format: int32
                                   minimum: 0
                                   type: integer
-                              required:
-                              - jobStatus
                               type: object
+                              x-kubernetes-validations:
+                              - message: JobStatus and JobDeploymentStatus cannot
+                                  be used together within the same deletion condition.
+                                rule: '!(has(self.jobStatus) && has(self.jobDeploymentStatus))'
+                              - message: the deletion condition requires either the
+                                  JobStatus or the JobDeploymentStatus field.
+                                rule: has(self.jobStatus) || has(self.jobDeploymentStatus)
                             policy:
                               enum:
                               - DeleteCluster
