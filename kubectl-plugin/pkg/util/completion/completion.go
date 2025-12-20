@@ -74,12 +74,12 @@ func WorkerGroupCompletionFunc(f cmdutil.Factory) func(*cobra.Command, []string,
 		namespace, _ := cmd.Flags().GetString("namespace")
 		allNamespaces, _ := cmd.Flags().GetBool("all-namespaces")
 
-		if namespace == "" && !allNamespaces {
-			namespace = "default"
+		if allNamespaces {
+			return comps, directive
 		}
 
-		if allNamespaces {
-			namespace = "" // overwrite namespace if all-namespace is specified
+		if namespace == "" {
+			namespace = "default"
 		}
 
 		k8sClient, err := client.NewClient(f)
@@ -88,7 +88,7 @@ func WorkerGroupCompletionFunc(f cmdutil.Factory) func(*cobra.Command, []string,
 			return comps, directive
 		}
 
-		rayClusterList, err := k8sClient.RayClient().RayV1().RayClusters(namespace).List(context.Background(), v1.ListOptions{}) // does this context matter?
+		rayClusterList, err := k8sClient.RayClient().RayV1().RayClusters(namespace).List(context.Background(), v1.ListOptions{})
 		if err != nil {
 			// should we add logs here?
 			// fmt.Printf("unable to list Ray clusters in namespace %s: %w", options.namespace, err)
@@ -128,12 +128,12 @@ func NodeCompletionFunc(f cmdutil.Factory) func(*cobra.Command, []string, string
 		namespace, _ := cmd.Flags().GetString("namespace")
 		allNamespaces, _ := cmd.Flags().GetBool("all-namespaces")
 
-		if namespace == "" && !allNamespaces {
-			namespace = "default"
+		if allNamespaces {
+			return comps, directive
 		}
 
-		if allNamespaces {
-			namespace = "" // overwrite namespace if all-namespace is specified
+		if namespace == "" {
+			namespace = "default"
 		}
 
 		k8sClient, err := client.NewClient(f)
