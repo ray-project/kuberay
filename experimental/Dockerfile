@@ -1,5 +1,5 @@
 # Build security proxy
-FROM golang:1.25.0-bookworm AS builder
+FROM golang:1.25-bookworm AS builder
 
 WORKDIR /workspace
 # Copy the Go Modules manifests
