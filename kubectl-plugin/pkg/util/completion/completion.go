@@ -96,7 +96,7 @@ func WorkerGroupCompletionFunc(f cmdutil.Factory) func(*cobra.Command, []string,
 		}
 		for _, rayCluster := range rayClusterList.Items {
 			// early guard for unmatched namespaces
-			if namespace != "" && rayCluster.Namespace != namespace {
+			if rayCluster.Namespace != namespace {
 				continue
 			}
 			// early guard for unmatched namespaces clusters
