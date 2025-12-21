@@ -60,12 +60,13 @@ func RayClusterResourceNameCompletionFunc(f cmdutil.Factory) func(*cobra.Command
 }
 
 // WorkerGroupCompletionFunc Returns completions of:
+// Workergroup names that match the toComplete prefix and respect flag values (--ray-cluster, --namespace, --all-namespaces)
 func WorkerGroupCompletionFunc(f cmdutil.Factory) func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
 	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		var comps []string
 		directive := cobra.ShellCompDirectiveNoFileComp
 
-		// completion stops: preventing kubectl ray get workergroup <tab> <tab>...
+		// Stop completion after first argument to prevent multiple completions
 		if len(args) != 0 {
 			return comps, directive
 		}
@@ -84,25 +85,23 @@ func WorkerGroupCompletionFunc(f cmdutil.Factory) func(*cobra.Command, []string,
 
 		k8sClient, err := client.NewClient(f)
 		if err != nil {
-			// should we add logs here?
 			return comps, directive
 		}
 
 		rayClusterList, err := k8sClient.RayClient().RayV1().RayClusters(namespace).List(context.Background(), v1.ListOptions{})
 		if err != nil {
-			// should we add logs here?
-			// fmt.Printf("unable to list Ray clusters in namespace %s: %w", options.namespace, err)
 			return comps, directive
 		}
+
 		for _, rayCluster := range rayClusterList.Items {
-			// early guard for unmatched namespaces
 			if rayCluster.Namespace != namespace {
 				continue
 			}
-			// early guard for unmatched namespaces clusters
+
 			if cluster != "" && rayCluster.Name != cluster {
 				continue
 			}
+
 			for _, spec := range rayCluster.Spec.WorkerGroupSpecs {
 				if toComplete == "" || strings.HasPrefix(spec.GroupName, toComplete) {
 					comps = append(comps, spec.GroupName)
@@ -114,12 +113,13 @@ func WorkerGroupCompletionFunc(f cmdutil.Factory) func(*cobra.Command, []string,
 }
 
 // NodeCompletionFunc Returns completions of:
+// Node names that match the toComplete prefix and respect flag values (--ray-cluster, --namespace)
 func NodeCompletionFunc(f cmdutil.Factory) func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
 	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		var comps []string
 		directive := cobra.ShellCompDirectiveNoFileComp
 
-		// completion stops: preventing kubectl ray get node <tab> <tab>...
+		// Stop completion after first argument to prevent multiple completions
 		if len(args) != 0 {
 			return comps, directive
 		}
