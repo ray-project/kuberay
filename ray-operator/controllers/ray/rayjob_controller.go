@@ -942,9 +942,13 @@ func (r *RayJobReconciler) constructRayClusterForRayJob(rayJobInstance *rayv1.Ra
 	labels[utils.RayOriginatedFromCRNameLabelKey] = rayJobInstance.Name
 	labels[utils.RayOriginatedFromCRDLabelKey] = utils.RayOriginatedFromCRDLabelValue(utils.RayJobCRD)
 	labels[utils.RayJobSubmissionModeLabelKey] = string(rayJobInstance.Spec.SubmissionMode)
+
 	if rayJobInstance.Spec.SubmissionMode == rayv1.SidecarMode {
 		labels[utils.RayJobDisableProvisionedHeadNodeRestartLabelKey] = "true"
+	} else {
+		labels[utils.RayJobDisableProvisionedHeadNodeRestartLabelKey] = "false"
 	}
+
 	rayCluster := &rayv1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Labels:      labels,
