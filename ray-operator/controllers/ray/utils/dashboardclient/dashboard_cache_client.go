@@ -21,8 +21,7 @@ var (
 
 const (
 	// TODO: make queue size and worker size configurable.
-	taskQueueSize = 128
-	workerSize    = 8
+	workerSize = 8
 
 	queryInterval = 3 * time.Second
 
@@ -50,13 +49,13 @@ type (
 	}
 
 	workerPool struct {
-		taskQueue chan Task
+		taskQueue ExtendableChannel[Task]
 	}
 )
 
-func (w *workerPool) init(ctx context.Context, taskQueueSize int, workerSize int, queryInterval time.Duration) {
+func (w *workerPool) init(ctx context.Context, workerSize int, queryInterval time.Duration) {
 	logger := ctrl.LoggerFrom(ctx).WithName("RayDashboardCacheClient").WithName("WorkerPool")
-	w.taskQueue = make(chan Task, taskQueueSize)
+	w.taskQueue = NewExtendableChannel[Task]()
 
 	for i := 0; i < workerSize; i++ {
 		go func(workerID int) {
@@ -65,12 +64,12 @@ func (w *workerPool) init(ctx context.Context, taskQueueSize int, workerSize int
 				case <-ctx.Done():
 					logger.Info("worker exiting...", "workerID", workerID)
 					return
-				case task := <-w.taskQueue:
+				case task := <-w.taskQueue.Out:
 					again := task(ctx)
 
 					if again && ctx.Err() == nil {
 						time.AfterFunc(queryInterval, func() {
-							w.taskQueue <- task
+							w.taskQueue.In <- task
 						})
 					}
 				}
@@ -82,7 +81,7 @@ func (w *workerPool) init(ctx context.Context, taskQueueSize int, workerSize int
 
 func (w *workerPool) PutTask(task Task) error {
 	select {
-	case w.taskQueue <- task:
+	case w.taskQueue.In <- task:
 		return nil
 	default:
 		return ErrTaskQueueFull
@@ -99,7 +98,7 @@ func (r *RayDashboardCacheClient) InitClient(ctx context.Context, client RayDash
 	logger := ctrl.LoggerFrom(ctx).WithName("RayDashboardCacheClient")
 
 	initWorkPool.Do(func() {
-		pool.init(ctx, taskQueueSize, workerSize, queryInterval)
+		pool.init(ctx, workerSize, queryInterval)
 	})
 
 	initCacheStorage.Do(func() {
@@ -162,7 +161,7 @@ func (r *RayDashboardCacheClient) GetJobInfo(ctx context.Context, jobId string) 
 	logger := ctrl.LoggerFrom(ctx).WithName("RayDashboardCacheClient")
 
 	if cached, ok := cacheStorage.Get(jobId); ok {
-		if cached.Err != nil && errors.Is(cached.Err, ErrAgain) {
+		if cached.Err != nil && !errors.Is(cached.Err, ErrAgain) {
 			// Consume the error.
 			// If the RayJob is still exists, the next Reconcile iteration will put the task back for updating JobInfo
 			cacheStorage.Remove(jobId)
@@ -205,7 +204,7 @@ func (r *RayDashboardCacheClient) GetJobInfo(ctx context.Context, jobId string) 
 		if err != nil {
 			// Exits the updating loop after getting an error.
 			// If the RayJob still exists, Reconcile will consume the error and put the JobId back to updating loop again.
-			logger.Error(err, "Failed to fetch job info for jobId", "jobId", jobId)
+			logger.Info("Failed to fetch job info for jobId", "jobId", jobId, "error", err)
 			return false
 		}
 		if newJobInfoCache.JobInfo == nil {
@@ -251,4 +250,47 @@ func (r *RayDashboardCacheClient) StopJob(ctx context.Context, jobName string) e
 func (r *RayDashboardCacheClient) DeleteJob(ctx context.Context, jobName string) error {
 	cacheStorage.Remove(jobName)
 	return r.client.DeleteJob(ctx, jobName)
+}
+
+type ExtendableChannel[T any] struct {
+	In  chan<- T
+	Out <-chan T
+}
+
+func NewExtendableChannel[T any]() ExtendableChannel[T] {
+	in := make(chan T)
+	out := make(chan T)
+
+	go func() {
+		defer close(out)
+		var buffer []T
+
+		for {
+			if len(buffer) == 0 {
+				v, ok := <-in
+				if !ok {
+					return
+				}
+				buffer = append(buffer, v)
+			}
+
+			select {
+			case v, ok := <-in:
+				if !ok {
+					// Inbound closed; drain the buffer
+					for _, b := range buffer {
+						out <- b
+					}
+					return
+				}
+
+				// TODO: this is not memory efficient.
+				buffer = append(buffer, v)
+			case out <- buffer[0]:
+				buffer = buffer[1:]
+			}
+		}
+	}()
+
+	return ExtendableChannel[T]{In: in, Out: out}
 }
