@@ -22,7 +22,7 @@ Typing `make dev-tools` will download and install all of them. The `make clean-d
 | Software      | Version  |                                                                    Link |
 | :-------      | :------: | -----------------------------------------------------------------------:|
 | kind          | v0.19.0  | [Install](https://kind.sigs.k8s.io/docs/user/quick-start/#installation) |
-| golangci-lint | v1.64.8  | [Install](https://golangci-lint.run/docs/welcome/install/)                     |
+| golangci-lint | v2.7.2  | [Install](https://golangci-lint.run/docs/welcome/install/local/)                     |
 | kustomize     | v3.8.7   | [install](https://kubectl.docs.kubernetes.io/installation/kustomize/)   |
 | gofumpt       | v0.3.1   | To install `go install mvdan.cc/gofumpt@v0.3.1`                         |
 | goimports     | latest   | To install `go install golang.org/x/tools/cmd/goimports@latest`         |

@@ -91,6 +91,7 @@ helm uninstall raycluster
 | head.resources.limits.memory | string | `"2G"` |  |
 | head.resources.requests.cpu | string | `"1"` |  |
 | head.resources.requests.memory | string | `"2G"` |  |
+| head.resourceClaims | list | `[]` | ResourceClaims to allocate with the head pod |
 | head.annotations | object | `{}` | Extra annotations for head pod |
 | head.nodeSelector | object | `{}` | Node labels for head pod assignment |
 | head.tolerations | list | `[]` | Node tolerations for head pod scheduling to nodes with taints |
@@ -122,6 +123,7 @@ helm uninstall raycluster
 | worker.resources.limits.memory | string | `"1G"` |  |
 | worker.resources.requests.cpu | string | `"1"` |  |
 | worker.resources.requests.memory | string | `"1G"` |  |
+| worker.resourceClaims | list | `[]` | ResourceClaims to allocate with the worker pod |
 | worker.annotations | object | `{}` | Extra annotations for worker pod |
 | worker.nodeSelector | object | `{}` | Node labels for worker pod assignment |
 | worker.tolerations | list | `[]` | Node tolerations for worker pod scheduling to nodes with taints |
@@ -151,6 +153,7 @@ helm uninstall raycluster
 | additionalWorkerGroups.smallGroup.resources.limits.memory | string | `"1G"` |  |
 | additionalWorkerGroups.smallGroup.resources.requests.cpu | int | `1` |  |
 | additionalWorkerGroups.smallGroup.resources.requests.memory | string | `"1G"` |  |
+| additionalWorkerGroups.smallGroup.resourceClaims | list | `[]` | ResourceClaims to allocate with the additional worker pod |
 | additionalWorkerGroups.smallGroup.annotations | object | `{}` | Extra annotations for additional worker pod |
 | additionalWorkerGroups.smallGroup.nodeSelector | object | `{}` | Node labels for additional worker pod assignment |
 | additionalWorkerGroups.smallGroup.tolerations | list | `[]` | Node tolerations for additional worker pod scheduling to nodes with taints |

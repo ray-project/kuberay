@@ -165,6 +165,10 @@ spec:
         securityContext:
           {{- toYaml . | nindent 10 }}
         {{- end }}
+        {{- with .Values.head.resourceClaims }}
+        resourceClaims:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
   workerGroupSpecs:
   {{- if not .Values.worker.disabled }}
   - groupName: {{ .Values.worker.groupName }}
@@ -292,6 +296,10 @@ spec:
         {{- end }}
         {{- with .Values.worker.podSecurityContext }}
         securityContext:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        {{- with .Values.worker.resourceClaims }}
+        resourceClaims:
           {{- toYaml . | nindent 10 }}
         {{- end }}
   {{- end }}
@@ -422,6 +430,10 @@ spec:
         {{- end }}
         {{- with $values.podSecurityContext }}
         securityContext:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        {{- with $values.resourceClaims }}
+        resourceClaims:
           {{- toYaml . | nindent 10 }}
         {{- end }}
   {{- end }}
