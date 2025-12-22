@@ -16,8 +16,8 @@ require (
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/spf13/pflag v1.0.7
 	github.com/stretchr/testify v1.11.0
-	go.uber.org/mock v0.5.2
-	go.uber.org/zap v1.27.0
+	go.uber.org/mock v0.6.0
+	go.uber.org/zap v1.27.1
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	k8s.io/api v0.34.1
 	k8s.io/apimachinery v0.34.1
