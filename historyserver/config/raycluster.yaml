@@ -82,7 +82,7 @@ spec:
             value: "true"
           args:
           - --role=Head
-          - --storage-provider=s3
+          - --runtime-class-name=s3
           - --ray-cluster-name=raycluster-log-collector
           - --ray-root-dir=log
           volumeMounts:
@@ -172,7 +172,7 @@ spec:
             value: "true"
           args:
           - --role=Worker
-          - --storage-provider=s3
+          - --runtime-class-name=s3
           - --ray-cluster-name=raycluster-log-collector
           - --ray-root-dir=log
           volumeMounts:

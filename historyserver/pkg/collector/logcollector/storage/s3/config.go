@@ -32,8 +32,8 @@ func (c *config) complete(rcc *types.RayCollectorConfig, jd map[string]interface
 		if os.Getenv("S3FORCE_PATH_STYLE") != "" {
 			c.S3ForcePathStyle = aws.Bool(os.Getenv("S3FORCE_PATH_STYLE") == "true")
 		}
-		if os.Getenv("s3DisableSSL") != "" {
-			c.DisableSSL = aws.Bool(os.Getenv("s3DisableSSL") == "true")
+		if os.Getenv("S3DISABLE_SSL") != "" {
+			c.DisableSSL = aws.Bool(os.Getenv("S3DISABLE_SSL") == "true")
 		}
 	} else {
 		if bucket, ok := jd["s3Bucket"]; ok {
@@ -48,7 +48,7 @@ func (c *config) complete(rcc *types.RayCollectorConfig, jd map[string]interface
 		if forcePathStyle, ok := jd["s3ForcePathStyle"]; ok {
 			c.S3ForcePathStyle = aws.Bool(forcePathStyle.(string) == "true")
 		}
-		if s3disableSSL, ok := jd["s3DisableSSLs3DisableSSL"]; ok {
+		if s3disableSSL, ok := jd["s3DisableSSL"]; ok {
 			c.DisableSSL = aws.Bool(s3disableSSL.(string) == "true")
 		}
 	}
@@ -68,8 +68,8 @@ func (c *config) completeHSConfig(rcc *types.RayHistoryServerConfig, jd map[stri
 		if os.Getenv("S3FORCE_PATH_STYLE") != "" {
 			c.S3ForcePathStyle = aws.Bool(os.Getenv("S3FORCE_PATH_STYLE") == "true")
 		}
-		if os.Getenv("s3DisableSSL") != "" {
-			c.DisableSSL = aws.Bool(os.Getenv("s3DisableSSL") == "true")
+		if os.Getenv("S3DISABLE_SSL") != "" {
+			c.DisableSSL = aws.Bool(os.Getenv("S3DISABLE_SSL") == "true")
 		}
 	} else {
 		if bucket, ok := jd["s3Bucket"]; ok {
