@@ -30,8 +30,8 @@ import (
 	"github.com/aliyun/aliyun-oss-go-sdk/oss"
 	"github.com/sirupsen/logrus"
 
-	"github.com/ray-project/kuberay/historyserver/pkg/collector/logcollector/storage"
-	"github.com/ray-project/kuberay/historyserver/pkg/collector/logcollector/storage/aliyunoss/rrsa"
+	"github.com/ray-project/kuberay/historyserver/pkg/storage"
+	"github.com/ray-project/kuberay/historyserver/pkg/storage/aliyunoss/rrsa"
 	"github.com/ray-project/kuberay/historyserver/pkg/collector/types"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )

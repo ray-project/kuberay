@@ -3,7 +3,7 @@ package localtest
 import (
 	"io"
 
-	"github.com/ray-project/kuberay/historyserver/pkg/collector/logcollector/storage"
+	"github.com/ray-project/kuberay/historyserver/pkg/storage"
 	"github.com/ray-project/kuberay/historyserver/pkg/collector/types"
 )
 
