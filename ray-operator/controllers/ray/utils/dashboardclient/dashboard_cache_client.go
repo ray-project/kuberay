@@ -236,6 +236,12 @@ func (r *RayDashboardCacheClient) GetJobInfo(ctx context.Context, jobId string) 
 			return false
 		}
 
+		if err != nil {
+			// Exits the updating loop after getting an error.
+			// If the RayJob still exists, Reconcile will consume the error and put the JobId back to updating loop again.
+			logger.Error(err, "Failed to fetch job info for jobId", "jobId", jobId)
+			return false
+		}
 		if newJobInfoCache.JobInfo == nil {
 			return true
 		}
