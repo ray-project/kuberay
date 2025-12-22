@@ -1,0 +1,187 @@
+apiVersion: ray.io/v1
+kind: RayCluster
+metadata:
+  labels:
+    ray.io/cluster: raycluster-log-collector
+  name: raycluster-log-collector
+  namespace: default
+spec:
+  headGroupSpec:
+    rayStartParams:
+      dashboard-host: 0.0.0.0
+      num-cpus: "0"
+    serviceType: ClusterIP
+    template:
+      metadata:
+        labels:
+          test: raycluster-log-collector
+      spec:
+        imagePullSecrets:
+        affinity:
+        containers:
+        - name: ray-head
+          image: rayproject/ray:2.52.0
+          imagePullPolicy: IfNotPresent
+          command:
+          - 'echo "=========================================="; [ -d "/tmp/ray/session_latest" ] && dest="/tmp/ray/prev-logs/$(basename $(readlink /tmp/ray/session_latest))/$(cat /tmp/ray/raylet_node_id)" && echo "dst is $dest" && mkdir -p "$dest" && mv /tmp/ray/session_latest/logs "$dest/logs"; echo "========================================="'
+          securityContext:
+            allowPrivilegeEscalation: true
+            privileged: true
+          lifecycle:
+            postStart:
+              exec:
+                command:
+                - /bin/sh
+                - -lc
+                - --
+                - |
+                  GetNodeId(){
+                    while true;
+                    do
+                      nodeid=$(ps -ef | grep raylet | grep node_id | grep -v grep | grep -oP '(?<=--node_id=)[^ ]*')
+                      if [ -n "$nodeid" ]; then
+                        echo "$(date) raylet started: \"$(ps -ef | grep raylet | grep node_id | grep -v grep | grep -oP '(?<=--node_id=)[^ ]*')\" => ${nodeid}" >> /tmp/ray/init.log
+                        echo $nodeid > /tmp/ray/raylet_node_id
+                        break
+                      else
+                        echo "$(date) raylet not start >> /tmp/ray/init.log"
+                        sleep 1
+                      fi
+                    done
+                  }
+                  GetNodeId
+          resources:
+            limits:
+              cpu: "5"
+              memory: 10G
+            requests:
+              cpu: "50m"
+              memory: 1G
+          volumeMounts:
+          - name: historyserver
+            mountPath: /tmp/ray
+        - name: collector
+          image: collector:v0.1.0
+          imagePullPolicy: IfNotPresent
+          env:
+          - name: S3DISABLE_SSL
+            value: "true"
+          - name: AWS_S3ID
+            value: minioadmin
+          - name: AWS_S3SECRET
+            value: minioadmin
+          - name: AWS_S3TOKEN
+            value: ""
+          - name: S3_BUCKET
+            value: "ray-historyserver-log"
+          - name: S3_ENDPOINT
+            value: "minio-service.minio-dev:9000"
+          - name: S3_REGION
+            value: "test"
+          - name: S3FORCE_PATH_STYLE
+            value: "true"
+          args:
+          - --role=Head
+          - --storage-provider=s3
+          - --ray-cluster-name=raycluster-log-collector
+          - --ray-root-dir=log
+          volumeMounts:
+          - name: historyserver
+            mountPath: /tmp/ray
+        tolerations:
+        - key: ray
+          operator: Equal
+          value: cpu
+        volumes:
+        - name: historyserver
+          emptyDir: {}
+  workerGroupSpecs:
+  - groupName: cpu
+    maxReplicas: 1000
+    minReplicas: 0
+    numOfHosts: 1
+    rayStartParams: {}
+    replicas: 0
+    template:
+      metadata:
+        labels:
+          test: raycluster-log-collector
+      spec:
+        imagePullSecrets:
+        containers:
+        - name: ray-worker
+          image: rayproject/ray:2.52.0
+          imagePullPolicy: IfNotPresent
+          command:
+          - 'echo "=========================================="; [ -d "/tmp/ray/session_latest" ] && dest="/tmp/ray/prev-logs/$(basename $(readlink /tmp/ray/session_latest))/$(cat /tmp/ray/raylet_node_id)" && echo "dst is $dest" && mkdir -p "$dest" && mv /tmp/ray/session_latest/logs "$dest/logs"; echo "========================================="'
+          securityContext:
+            allowPrivilegeEscalation: true
+            privileged: true
+          lifecycle:
+            postStart:
+              exec:
+                command:
+                - /bin/sh
+                - -lc
+                - --
+                - |
+                  GetNodeId(){
+                    while true;
+                    do
+                      nodeid=$(ps -ef | grep raylet | grep node_id | grep -v grep | grep -oP '(?<=--node_id=)[^ ]*')
+                      if [ -n "$nodeid" ]; then
+                        echo "$(date) raylet started: \"$(ps -ef | grep raylet | grep node_id | grep -v grep | grep -oP '(?<=--node_id=)[^ ]*')\" => ${nodeid}" >> /tmp/ray/init.log
+                        echo $nodeid > /tmp/ray/raylet_node_id
+                        break
+                      else
+                        echo "$(date) raylet not start >> /tmp/ray/init.log"
+                        sleep 1
+                      fi
+                    done
+                  }
+                  GetNodeId
+          resources:
+            limits:
+              cpu: "30"
+              memory: 30G
+            requests:
+              cpu: "50m"
+              memory: 1G
+          volumeMounts:
+          - name: historyserver
+            mountPath: /tmp/ray
+        - name: collector
+          image: collector:v0.1.0
+          imagePullPolicy: IfNotPresent
+          env:
+          - name: S3DISABLE_SSL
+            value: "true"
+          - name: AWS_S3ID
+            value: minioadmin
+          - name: AWS_S3SECRET
+            value: minioadmin
+          - name: AWS_S3TOKEN
+            value: ""
+          - name: S3_BUCKET
+            value: "ray-historyserver-log"
+          - name: S3_ENDPOINT
+            value: "minio-service.minio-dev:9000"
+          - name: S3_REGION
+            value: "test"
+          - name: S3FORCE_PATH_STYLE
+            value: "true"
+          args:
+          - --role=Worker
+          - --storage-provider=s3
+          - --ray-cluster-name=raycluster-log-collector
+          - --ray-root-dir=log
+          volumeMounts:
+          - name: historyserver
+            mountPath: /tmp/ray
+        tolerations:
+        - key: ray
+          operator: Equal
+          value: cpu
+        volumes:
+        - name: historyserver
+          emptyDir: {}
