@@ -1121,10 +1121,7 @@ func (r *RayClusterReconciler) reconcileMultiHostWorkerGroup(ctx context.Context
 func (r *RayClusterReconciler) shouldRecreatePodsForUpgrade(ctx context.Context, instance *rayv1.RayCluster) bool {
 	logger := ctrl.LoggerFrom(ctx)
 
-	if instance.Spec.UpgradeStrategy == nil || instance.Spec.UpgradeStrategy.Type == nil {
-		return false
-	}
-	if *instance.Spec.UpgradeStrategy.Type != rayv1.RayClusterRecreate {
+	if instance.Spec.UpgradeStrategy == nil || instance.Spec.UpgradeStrategy.Type == nil || *instance.Spec.UpgradeStrategy.Type != rayv1.RayClusterRecreate {
 		return false
 	}
 
