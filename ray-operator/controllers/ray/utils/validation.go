@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/robfig/cron/v3"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -104,6 +105,9 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 		if err := validateRayGroupLabels(workerGroup.GroupName, workerGroup.RayStartParams, workerGroup.Labels); err != nil {
 			return err
 		}
+		if err := validateWorkerGroupIdleTimeout(workerGroup, spec); err != nil {
+			return err
+		}
 	}
 
 	if annotations[RayFTEnabledAnnotationKey] != "" && spec.GcsFaultToleranceOptions != nil {
@@ -188,6 +192,13 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 					return fmt.Errorf("restartPolicy for worker group %s should be Never or unset when using autoscaler V2", workerGroup.GroupName)
 				}
 			}
+		}
+	}
+
+	// Validate AutoscalerOptions.IdleTimeoutSeconds (works with both v1 and v2 autoscaler)
+	if spec.AutoscalerOptions != nil && spec.AutoscalerOptions.IdleTimeoutSeconds != nil {
+		if *spec.AutoscalerOptions.IdleTimeoutSeconds < 0 {
+			return fmt.Errorf("autoscalerOptions.idleTimeoutSeconds must be non-negative, got %d", *spec.AutoscalerOptions.IdleTimeoutSeconds)
 		}
 	}
 
@@ -311,15 +322,15 @@ func ValidateRayJobSpec(rayJob *rayv1.RayJob) error {
 
 func ValidateRayServiceMetadata(metadata metav1.ObjectMeta) error {
 	if len(metadata.Name) > MaxRayServiceNameLength {
-		return fmt.Errorf("RayService name should be no more than %d characters", MaxRayServiceNameLength)
+		return fmt.Errorf("The RayService metadata is invalid: RayService name should be no more than %d characters", MaxRayServiceNameLength)
 	}
 	if errs := validation.IsDNS1035Label(metadata.Name); len(errs) > 0 {
-		return fmt.Errorf("RayService name should be a valid DNS1035 label: %v", errs)
+		return fmt.Errorf("The RayService metadata is invalid: RayService name should be a valid DNS1035 label: %v", errs)
 	}
 
 	// Validate initializing timeout annotation if present
 	if err := validateInitializingTimeout(metadata.Annotations); err != nil {
-		return fmt.Errorf("RayService annotations is invalid: %w", err)
+		return fmt.Errorf("The RayService metadata is invalid: RayService annotations is invalid: %w", err)
 	}
 
 	return nil
@@ -359,11 +370,11 @@ func validateInitializingTimeout(annotations map[string]string) error {
 
 func ValidateRayServiceSpec(rayService *rayv1.RayService) error {
 	if err := ValidateRayClusterSpec(&rayService.Spec.RayClusterSpec, rayService.Annotations); err != nil {
-		return err
+		return fmt.Errorf("The RayService spec is invalid: %w", err)
 	}
 
 	if headSvc := rayService.Spec.RayClusterSpec.HeadGroupSpec.HeadService; headSvc != nil && headSvc.Name != "" {
-		return fmt.Errorf("spec.rayClusterConfig.headGroupSpec.headService.metadata.name should not be set")
+		return fmt.Errorf("The RayService spec is invalid: spec.rayClusterConfig.headGroupSpec.headService.metadata.name should not be set")
 	}
 
 	// only NewClusterWithIncrementalUpgrade, NewCluster, and None are valid upgradeType
@@ -372,17 +383,19 @@ func ValidateRayServiceSpec(rayService *rayv1.RayService) error {
 		*rayService.Spec.UpgradeStrategy.Type != rayv1.None &&
 		*rayService.Spec.UpgradeStrategy.Type != rayv1.NewCluster &&
 		*rayService.Spec.UpgradeStrategy.Type != rayv1.NewClusterWithIncrementalUpgrade {
-		return fmt.Errorf("Spec.UpgradeStrategy.Type value %s is invalid, valid options are %s, %s, or %s", *rayService.Spec.UpgradeStrategy.Type, rayv1.NewClusterWithIncrementalUpgrade, rayv1.NewCluster, rayv1.None)
+		return fmt.Errorf("The RayService spec is invalid: Spec.UpgradeStrategy.Type value %s is invalid, valid options are %s, %s, or %s", *rayService.Spec.UpgradeStrategy.Type, rayv1.NewClusterWithIncrementalUpgrade, rayv1.NewCluster, rayv1.None)
 	}
 
 	if rayService.Spec.RayClusterDeletionDelaySeconds != nil &&
 		*rayService.Spec.RayClusterDeletionDelaySeconds < 0 {
-		return fmt.Errorf("Spec.RayClusterDeletionDelaySeconds should be a non-negative integer, got %d", *rayService.Spec.RayClusterDeletionDelaySeconds)
+		return fmt.Errorf("The RayService spec is invalid: Spec.RayClusterDeletionDelaySeconds should be a non-negative integer, got %d", *rayService.Spec.RayClusterDeletionDelaySeconds)
 	}
 
 	// If type is NewClusterWithIncrementalUpgrade, validate the ClusterUpgradeOptions
 	if IsIncrementalUpgradeEnabled(&rayService.Spec) {
-		return ValidateClusterUpgradeOptions(rayService)
+		if err := ValidateClusterUpgradeOptions(rayService); err != nil {
+			return fmt.Errorf("The RayService spec is invalid: %w", err)
+		}
 	}
 
 	return nil
@@ -468,15 +481,16 @@ func validateDeletionRules(rayJob *rayv1.RayJob) error {
 	rules := rayJob.Spec.DeletionStrategy.DeletionRules
 	isClusterSelectorMode := len(rayJob.Spec.ClusterSelector) != 0
 
-	// Group TTLs by JobStatus for cross-rule validation and uniqueness checking.
-	rulesByStatus := make(map[rayv1.JobStatus]map[rayv1.DeletionPolicyType]int32)
+	// Group TTLs by condition type for cross-rule validation and uniqueness checking.
+	// We separate JobStatus and JobDeploymentStatus to avoid confusion.
+	rulesByJobStatus := make(map[rayv1.JobStatus]map[rayv1.DeletionPolicyType]int32)
+	rulesByJobDeploymentStatus := make(map[rayv1.JobDeploymentStatus]map[rayv1.DeletionPolicyType]int32)
 	var errs []error
 
 	// Single pass: Validate each rule individually and group for later consistency checks.
 	for i, rule := range rules {
-		// Validate TTL is non-negative.
-		if rule.Condition.TTLSeconds < 0 {
-			errs = append(errs, fmt.Errorf("deletionRules[%d]: TTLSeconds must be non-negative", i))
+		if err := validateDeletionCondition(&rule.Condition); err != nil {
+			errs = append(errs, fmt.Errorf("deletionRules[%d]: %w", i, err))
 			continue
 		}
 
@@ -492,24 +506,43 @@ func validateDeletionRules(rayJob *rayv1.RayJob) error {
 		}
 
 		// Group valid rule for consistency check.
-		policyTTLs, ok := rulesByStatus[rule.Condition.JobStatus]
-		if !ok {
-			policyTTLs = make(map[rayv1.DeletionPolicyType]int32)
-			rulesByStatus[rule.Condition.JobStatus] = policyTTLs
-		}
+		if rule.Condition.JobStatus != nil {
+			if _, exists := rulesByJobStatus[*rule.Condition.JobStatus]; !exists {
+				rulesByJobStatus[*rule.Condition.JobStatus] = make(map[rayv1.DeletionPolicyType]int32)
+			}
 
-		// Check for uniqueness of (JobStatus, DeletionPolicyType) pair.
-		if _, exists := policyTTLs[rule.Policy]; exists {
-			errs = append(errs, fmt.Errorf("deletionRules[%d]: duplicate rule for DeletionPolicyType '%s' and JobStatus '%s'", i, rule.Policy, rule.Condition.JobStatus))
-			continue
-		}
+			// Check for uniqueness of the current deletion rule, which can be identified by the (JobStatus, DeletionPolicyType) pair.
+			if _, exists := rulesByJobStatus[*rule.Condition.JobStatus][rule.Policy]; exists {
+				errs = append(errs, fmt.Errorf("deletionRules[%d]: duplicate rule for DeletionPolicyType '%s' and JobStatus '%s'", i, rule.Policy, *rule.Condition.JobStatus))
+				continue
+			}
 
-		policyTTLs[rule.Policy] = rule.Condition.TTLSeconds
+			rulesByJobStatus[*rule.Condition.JobStatus][rule.Policy] = rule.Condition.TTLSeconds
+		} else {
+			if _, exists := rulesByJobDeploymentStatus[*rule.Condition.JobDeploymentStatus]; !exists {
+				rulesByJobDeploymentStatus[*rule.Condition.JobDeploymentStatus] = make(map[rayv1.DeletionPolicyType]int32)
+			}
+
+			// Check for uniqueness of the current deletion rule, which can be identified by the (JobDeploymentStatus, DeletionPolicyType) pair.
+			if _, exists := rulesByJobDeploymentStatus[*rule.Condition.JobDeploymentStatus][rule.Policy]; exists {
+				errs = append(errs, fmt.Errorf("deletionRules[%d]: duplicate rule for DeletionPolicyType '%s' and JobDeploymentStatus '%s'", i, rule.Policy, *rule.Condition.JobDeploymentStatus))
+				continue
+			}
+
+			rulesByJobDeploymentStatus[*rule.Condition.JobDeploymentStatus][rule.Policy] = rule.Condition.TTLSeconds
+		}
 	}
 
 	// Second pass: Validate TTL consistency per JobStatus.
-	for status, policyTTLs := range rulesByStatus {
-		if err := validateTTLConsistency(policyTTLs, status); err != nil {
+	for jobStatus, policyTTLs := range rulesByJobStatus {
+		if err := validateTTLConsistency(policyTTLs, "JobStatus", string(jobStatus)); err != nil {
+			errs = append(errs, err)
+		}
+	}
+
+	// Second pass: Validate TTL consistency per JobDeploymentStatus.
+	for jobDeploymentStatus, policyTTLs := range rulesByJobDeploymentStatus {
+		if err := validateTTLConsistency(policyTTLs, "JobDeploymentStatus", string(jobDeploymentStatus)); err != nil {
 			errs = append(errs, err)
 		}
 	}
@@ -517,9 +550,29 @@ func validateDeletionRules(rayJob *rayv1.RayJob) error {
 	return errstd.Join(errs...)
 }
 
+// validateDeletionCondition ensures exactly one of JobStatus and JobDeploymentStatus is specified and TTLSeconds is non-negative.
+func validateDeletionCondition(deletionCondition *rayv1.DeletionCondition) error {
+	// Validate that exactly one of JobStatus and JobDeploymentStatus is specified.
+	hasJobStatus := deletionCondition.JobStatus != nil
+	hasJobDeploymentStatus := deletionCondition.JobDeploymentStatus != nil
+	if hasJobStatus && hasJobDeploymentStatus {
+		return fmt.Errorf("cannot set both JobStatus and JobDeploymentStatus at the same time")
+	}
+	if !hasJobStatus && !hasJobDeploymentStatus {
+		return fmt.Errorf("exactly one of JobStatus and JobDeploymentStatus must be set")
+	}
+
+	// Validate TTL is non-negative.
+	if deletionCondition.TTLSeconds < 0 {
+		return fmt.Errorf("TTLSeconds must be non-negative")
+	}
+
+	return nil
+}
+
 // validateTTLConsistency ensures TTLs follow the deletion hierarchy: Workers <= Cluster <= Self.
 // (Lower TTL means deletes earlier.)
-func validateTTLConsistency(policyTTLs map[rayv1.DeletionPolicyType]int32, status rayv1.JobStatus) error {
+func validateTTLConsistency(policyTTLs map[rayv1.DeletionPolicyType]int32, conditionType string, conditionValue string) error {
 	// Define the required deletion order. TTLs must be non-decreasing along this sequence.
 	deletionOrder := []rayv1.DeletionPolicyType{
 		rayv1.DeleteWorkers,
@@ -541,8 +594,8 @@ func validateTTLConsistency(policyTTLs map[rayv1.DeletionPolicyType]int32, statu
 
 		if hasPrev && ttl < prevTTL {
 			errs = append(errs, fmt.Errorf(
-				"for JobStatus '%s': %s TTL (%d) must be >= %s TTL (%d)",
-				status, policy, ttl, prevPolicy, prevTTL,
+				"for %s '%s': %s TTL (%d) must be >= %s TTL (%d)",
+				conditionType, conditionValue, policy, ttl, prevPolicy, prevTTL,
 			))
 		}
 
@@ -593,4 +646,47 @@ func validateLegacyDeletionPolicies(rayJob *rayv1.RayJob) error {
 	}
 
 	return nil
+}
+
+// ValidateRayCronJobSpec validates the RayCronJob specification
+func ValidateRayCronJobSpec(rayCronJob *rayv1.RayCronJob) error {
+	// Validate cron schedule format
+	if _, err := cron.ParseStandard(rayCronJob.Spec.Schedule); err != nil {
+		return fmt.Errorf("invalid cron schedule: %w", err)
+	}
+
+	// Validate the ray job spec
+	rayJob := &rayv1.RayJob{
+		Spec: rayCronJob.Spec.JobTemplate,
+	}
+
+	if err := ValidateRayJobSpec(rayJob); err != nil {
+		return fmt.Errorf("invalid RayJob template: %w", err)
+	}
+
+	return nil
+}
+
+// validateWorkerGroupIdleTimeout validates the idleTimeoutSeconds field in a worker group spec
+func validateWorkerGroupIdleTimeout(workerGroup rayv1.WorkerGroupSpec, spec *rayv1.RayClusterSpec) error {
+	idleTimeoutSeconds := workerGroup.IdleTimeoutSeconds
+	if idleTimeoutSeconds == nil {
+		return nil
+	}
+
+	if *idleTimeoutSeconds < 0 {
+		return fmt.Errorf("worker group %s: idleTimeoutSeconds must be non-negative, got %d", workerGroup.GroupName, *idleTimeoutSeconds)
+	}
+
+	// WorkerGroupSpec.idleTimeoutSeconds only allowed on autoscaler v2
+	if IsAutoscalingV2Enabled(spec) {
+		return nil
+	}
+
+	envVar, exists := EnvVarByName(RAY_ENABLE_AUTOSCALER_V2, spec.HeadGroupSpec.Template.Spec.Containers[RayContainerIndex].Env)
+	if exists && (envVar.Value == "1" || envVar.Value == "true") {
+		return nil
+	}
+
+	return fmt.Errorf("worker group %s: idleTimeoutSeconds is set, but autoscaler v2 is not enabled. Please set .spec.autoscalerOptions.version to 'v2' (or set %s environment variable to 'true' in the head pod if using KubeRay < 1.4.0)", workerGroup.GroupName, RAY_ENABLE_AUTOSCALER_V2)
 }

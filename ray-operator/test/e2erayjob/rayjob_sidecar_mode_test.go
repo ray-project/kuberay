@@ -178,7 +178,7 @@ env_vars:
 
 		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
 			Should(WithTransform(func(job *rayv1.RayJob) string {
-				return job.Labels[utils.RayJobDisableHeadNodeRestartLabelKey]
+				return job.Labels[utils.RayJobDisableProvisionedHeadNodeRestartLabelKey]
 			}, Equal("true")))
 
 		// Fetch RayCluster and delete the head Pod
@@ -186,7 +186,7 @@ env_vars:
 		g.Expect(err).NotTo(HaveOccurred())
 		rayCluster, err := GetRayCluster(test, rayJob.Namespace, rayJob.Status.RayClusterName)
 		g.Expect(err).NotTo(HaveOccurred())
-		g.Expect(rayCluster.Labels[utils.RayJobDisableHeadNodeRestartLabelKey]).To(Equal("true"))
+		g.Expect(rayCluster.Labels[utils.RayJobDisableProvisionedHeadNodeRestartLabelKey]).To(Equal("true"))
 		headPod, err := GetHeadPod(test, rayCluster)
 		g.Expect(err).NotTo(HaveOccurred())
 		LogWithTimestamp(test.T(), "Deleting head Pod %s/%s for RayCluster %s", headPod.Namespace, headPod.Name, rayCluster.Name)

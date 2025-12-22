@@ -1099,7 +1099,7 @@ func shouldSkipHeadPodRestart(cluster *rayv1.RayCluster) bool {
 	if utils.GetCRDType(cluster.Labels[utils.RayOriginatedFromCRDLabelKey]) != utils.RayJobCRD {
 		return false
 	}
-	return cluster.Labels[utils.RayJobDisableHeadNodeRestartLabelKey] == "true"
+	return cluster.Labels[utils.RayJobDisableProvisionedHeadNodeRestartLabelKey] == "true"
 }
 
 // shouldDeletePod returns whether the Pod should be deleted and the reason

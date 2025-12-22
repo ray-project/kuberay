@@ -98,6 +98,9 @@ head:
   serviceAccountName: ""
   restartPolicy: ""
 
+  # -- runtimeClassName is the name of the RuntimeClass to use to run the head Pod.
+  runtimeClassName: ""
+
   # containerEnv specifies environment variables for the Ray container,
   # Follows standard K8s container env schema.
   containerEnv: []
@@ -129,6 +132,9 @@ head:
     requests:
       cpu: "1"
       memory: "2G"
+
+  # -- ResourceClaims to allocate with the head pod
+  resourceClaims: []
 
   # -- Extra annotations for head pod
   annotations: {}
@@ -211,6 +217,9 @@ worker:
   serviceAccountName: ""
   restartPolicy: ""
 
+  # -- runtimeClassName is the name of the RuntimeClass to use to run the worker Pods.
+  runtimeClassName: ""
+
   # -- Init containers to add to the worker pod
   initContainers: []
 
@@ -244,6 +253,9 @@ worker:
     requests:
       cpu: "1"
       memory: "1G"
+
+  # -- ResourceClaims to allocate with the worker pod
+  resourceClaims: []
 
   # -- Extra annotations for worker pod
   annotations: {}
@@ -319,6 +331,9 @@ additionalWorkerGroups:
     serviceAccountName: ""
     restartPolicy: ""
 
+    # -- runtimeClassName for this additional worker group. Empty string means default runtime.
+    runtimeClassName: ""
+
     # containerEnv specifies environment variables for the Ray container,
     # Follows standard K8s container env schema.
     containerEnv: []
@@ -349,6 +364,9 @@ additionalWorkerGroups:
       requests:
         cpu: 1
         memory: "1G"
+
+    # -- ResourceClaims to allocate with the additional worker pod
+    resourceClaims: []
 
     # -- Extra annotations for additional worker pod
     annotations: {}

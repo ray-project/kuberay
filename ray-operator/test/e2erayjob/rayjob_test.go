@@ -290,7 +290,7 @@ env_vars:
 		rayJob, err := test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
 		g.Expect(err).NotTo(HaveOccurred())
 		LogWithTimestamp(test.T(), "Created RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
-		g.Expect(rayJob.Labels).To(Not(HaveKey(utils.RayJobDisableHeadNodeRestartLabelKey)))
+		g.Expect(rayJob.Labels).To(Not(HaveKey(utils.RayJobDisableProvisionedHeadNodeRestartLabelKey)))
 
 		// Wait until the RayJob's job status transitions to Running
 		LogWithTimestamp(test.T(), "Waiting for RayJob %s/%s to be 'Running'", rayJob.Namespace, rayJob.Name)
@@ -302,7 +302,7 @@ env_vars:
 		g.Expect(err).NotTo(HaveOccurred())
 		rayCluster, err := GetRayCluster(test, rayJob.Namespace, rayJob.Status.RayClusterName)
 		g.Expect(err).NotTo(HaveOccurred())
-		g.Expect(rayCluster.Labels).To(Not(HaveKeyWithValue(utils.RayJobDisableHeadNodeRestartLabelKey, "true")))
+		g.Expect(rayCluster.Labels).To(Not(HaveKeyWithValue(utils.RayJobDisableProvisionedHeadNodeRestartLabelKey, "true")))
 		headPod, err := GetHeadPod(test, rayCluster)
 		g.Expect(err).NotTo(HaveOccurred())
 		LogWithTimestamp(test.T(), "Deleting head Pod %s/%s for RayCluster %s", headPod.Namespace, headPod.Name, rayCluster.Name)

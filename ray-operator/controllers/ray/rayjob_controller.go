@@ -943,7 +943,7 @@ func (r *RayJobReconciler) constructRayClusterForRayJob(rayJobInstance *rayv1.Ra
 	labels[utils.RayOriginatedFromCRDLabelKey] = utils.RayOriginatedFromCRDLabelValue(utils.RayJobCRD)
 	labels[utils.RayJobSubmissionModeLabelKey] = string(rayJobInstance.Spec.SubmissionMode)
 	if rayJobInstance.Spec.SubmissionMode == rayv1.SidecarMode {
-		labels[utils.RayJobDisableHeadNodeRestartLabelKey] = "true"
+		labels[utils.RayJobDisableProvisionedHeadNodeRestartLabelKey] = "true"
 	}
 	rayCluster := &rayv1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
@@ -1221,8 +1221,8 @@ func (r *RayJobReconciler) handleDeletionRules(ctx context.Context, rayJob *rayv
 
 	// Categorize all applicable and incomplete rules into "overdue" or "pending".
 	for _, rule := range rayJob.Spec.DeletionStrategy.DeletionRules {
-		// Skip rules that don't match the current job status.
-		if rule.Condition.JobStatus != rayJob.Status.JobStatus {
+		// Skip rules that don't match the current job status or job deployment status.
+		if !isDeletionRuleMatched(rule, rayJob) {
 			continue
 		}
 
@@ -1385,6 +1385,15 @@ func (r *RayJobReconciler) executeDeletionPolicy(ctx context.Context, rayJob *ra
 		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 	}
 	return ctrl.Result{}, nil
+}
+
+// isDeletionRuleMatched checks if the deletion rule matches the current job status or job deployment status.
+func isDeletionRuleMatched(rule rayv1.DeletionRule, rayJob *rayv1.RayJob) bool {
+	// It's guaranteed that exactly one of JobStatus and JobDeploymentStatus is specified.
+	if rule.Condition.JobStatus != nil {
+		return *rule.Condition.JobStatus == rayJob.Status.JobStatus
+	}
+	return *rule.Condition.JobDeploymentStatus == rayJob.Status.JobDeploymentStatus
 }
 
 // isDeletionActionCompleted checks if the state corresponding to a deletion policy is already achieved.
