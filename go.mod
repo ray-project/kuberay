@@ -7,7 +7,7 @@ require (
 	github.com/elazarl/go-bindata-assetfs v1.0.1
 	github.com/go-logr/logr v1.4.3
 	github.com/go-logr/zerologr v1.2.3
-	github.com/golang/mock v1.6.0
+	github.com/golang/mock v1.7.0-rc.1
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0
@@ -124,3 +124,5 @@ require (
 )
 
 replace github.com/ray-project/kuberay/ray-operator => ./ray-operator
+
+replace google.golang.org/genproto => google.golang.org/genproto v0.0.0-20250707201910-8d1bb00bc6a7
