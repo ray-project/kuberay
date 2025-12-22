@@ -11,6 +11,7 @@ Package v1 contains API Schema definitions for the ray v1 API group
 
 ### Resource Types
 - [RayCluster](#raycluster)
+- [RayCronJob](#raycronjob)
 - [RayJob](#rayjob)
 - [RayService](#rayservice)
 
@@ -108,6 +109,9 @@ _Appears in:_
 
 
 DeletionCondition specifies the trigger conditions for a deletion action.
+Exactly one of JobStatus or JobDeploymentStatus must be specified:
+  - JobStatus (application-level): Match the Ray job execution status.
+  - JobDeploymentStatus (infrastructure-level): Match the RayJob deployment lifecycle status. This is particularly useful for cleaning up resources when Ray jobs fail to be submitted.
 
 
 
@@ -116,7 +120,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `ttlSeconds` _integer_ | TTLSeconds is the time in seconds from when the JobStatus<br />reaches the specified terminal state to when this deletion action should be triggered.<br />The value must be a non-negative integer. | 0 | Minimum: 0 <br /> |
+| `ttlSeconds` _integer_ | TTLSeconds is the time in seconds from when the JobStatus or JobDeploymentStatus<br />reaches the specified terminal state to when this deletion action should be triggered.<br />The value must be a non-negative integer. | 0 | Minimum: 0 <br /> |
 
 
 #### DeletionPolicy
@@ -310,6 +314,41 @@ _Appears in:_
 | `workerGroupSpecs` _[WorkerGroupSpec](#workergroupspec) array_ | WorkerGroupSpecs are the specs for the worker pods |  |  |
 
 
+#### RayCronJob
+
+
+
+
+
+
+
+
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `apiVersion` _string_ | `ray.io/v1` | | |
+| `kind` _string_ | `RayCronJob` | | |
+| `metadata` _[ObjectMeta](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#objectmeta-v1-meta)_ | Refer to Kubernetes API documentation for fields of `metadata`. |  |  |
+| `spec` _[RayCronJobSpec](#raycronjobspec)_ |  |  |  |
+
+
+#### RayCronJobSpec
+
+
+
+
+
+
+
+_Appears in:_
+- [RayCronJob](#raycronjob)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `jobTemplate` _[RayJobSpec](#rayjobspec)_ | JobTemplate defines the job spec that will be created by cron scheduling |  |  |
+| `schedule` _string_ | Schedule is the cron schedule string |  |  |
+
+
 #### RayClusterUpgradeStrategy
 
 
@@ -367,6 +406,7 @@ RayJobSpec defines the desired state of RayJob
 
 
 _Appears in:_
+- [RayCronJobSpec](#raycronjobspec)
 - [RayJob](#rayjob)
 
 | Field | Description | Default | Validation |

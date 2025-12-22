@@ -26,6 +26,8 @@ const (
 	HashWithoutReplicasAndWorkersToDeleteKey = "ray.io/hash-without-replicas-and-workers-to-delete"
 	NumWorkerGroupsKey                       = "ray.io/num-worker-groups"
 	KubeRayVersion                           = "ray.io/kuberay-version"
+	RayCronJobNameLabelKey                   = "ray.io/cronjob-name"
+	RayCronJobTimestampAnnotationKey         = "ray.io/cronjob-scheduled-timestamp"
 	PodTemplateHashKey                       = "ray.io/pod-template-hash"
 
 	// Labels for feature RayMultihostIndexing
@@ -353,6 +355,9 @@ const (
 	FailedToDeleteRayCluster      K8sEventType = "FailedToDeleteRayCluster"
 	FailedToUpdateRayCluster      K8sEventType = "FailedToUpdateRayCluster"
 	RayClusterNotFound            K8sEventType = "RayClusterNotFound"
+
+	// RayCronJob event list
+	InvalidRayCronJobSpec K8sEventType = "InvalidRayCronJobSpec"
 
 	// RayService event list
 	CreatedGateway                  K8sEventType = "CreatedGateway"

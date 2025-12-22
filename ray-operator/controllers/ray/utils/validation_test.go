@@ -1335,7 +1335,7 @@ func TestValidateRayJobSpecWithFeatureGate(t *testing.T) {
 						{
 							Policy: rayv1.DeleteSelf,
 							Condition: rayv1.DeletionCondition{
-								JobStatus:  rayv1.JobStatusSucceeded,
+								JobStatus:  ptr.To(rayv1.JobStatusSucceeded),
 								TTLSeconds: 10,
 							},
 						},
@@ -1354,7 +1354,7 @@ func TestValidateRayJobSpecWithFeatureGate(t *testing.T) {
 						{
 							Policy: rayv1.DeleteSelf,
 							Condition: rayv1.DeletionCondition{
-								JobStatus:  rayv1.JobStatusSucceeded,
+								JobStatus:  ptr.To(rayv1.JobStatusSucceeded),
 								TTLSeconds: 10,
 							},
 						},
@@ -1375,7 +1375,7 @@ func TestValidateRayJobSpecWithFeatureGate(t *testing.T) {
 						{
 							Policy: rayv1.DeleteSelf,
 							Condition: rayv1.DeletionCondition{
-								JobStatus:  rayv1.JobStatusSucceeded,
+								JobStatus:  ptr.To(rayv1.JobStatusSucceeded),
 								TTLSeconds: 10,
 							},
 						},
@@ -1411,14 +1411,14 @@ func TestValidateRayJobSpecWithFeatureGate(t *testing.T) {
 						{
 							Policy: rayv1.DeleteSelf,
 							Condition: rayv1.DeletionCondition{
-								JobStatus:  rayv1.JobStatusSucceeded,
+								JobStatus:  ptr.To(rayv1.JobStatusSucceeded),
 								TTLSeconds: 10,
 							},
 						},
 						{
 							Policy: rayv1.DeleteSelf,
 							Condition: rayv1.DeletionCondition{
-								JobStatus:  rayv1.JobStatusSucceeded,
+								JobStatus:  ptr.To(rayv1.JobStatusSucceeded),
 								TTLSeconds: 20,
 							},
 						},
@@ -1436,7 +1436,7 @@ func TestValidateRayJobSpecWithFeatureGate(t *testing.T) {
 						{
 							Policy: rayv1.DeleteSelf,
 							Condition: rayv1.DeletionCondition{
-								JobStatus:  rayv1.JobStatusSucceeded,
+								JobStatus:  ptr.To(rayv1.JobStatusSucceeded),
 								TTLSeconds: -10,
 							},
 						},
@@ -1455,7 +1455,7 @@ func TestValidateRayJobSpecWithFeatureGate(t *testing.T) {
 						{
 							Policy: rayv1.DeleteWorkers,
 							Condition: rayv1.DeletionCondition{
-								JobStatus:  rayv1.JobStatusSucceeded,
+								JobStatus:  ptr.To(rayv1.JobStatusSucceeded),
 								TTLSeconds: 10,
 							},
 						},
@@ -1473,7 +1473,7 @@ func TestValidateRayJobSpecWithFeatureGate(t *testing.T) {
 						{
 							Policy: rayv1.DeleteCluster,
 							Condition: rayv1.DeletionCondition{
-								JobStatus:  rayv1.JobStatusSucceeded,
+								JobStatus:  ptr.To(rayv1.JobStatusSucceeded),
 								TTLSeconds: 10,
 							},
 						},
@@ -1490,7 +1490,7 @@ func TestValidateRayJobSpecWithFeatureGate(t *testing.T) {
 						{
 							Policy: rayv1.DeleteWorkers,
 							Condition: rayv1.DeletionCondition{
-								JobStatus:  rayv1.JobStatusSucceeded,
+								JobStatus:  ptr.To(rayv1.JobStatusSucceeded),
 								TTLSeconds: 10,
 							},
 						},
@@ -1511,14 +1511,14 @@ func TestValidateRayJobSpecWithFeatureGate(t *testing.T) {
 						{
 							Policy: rayv1.DeleteWorkers,
 							Condition: rayv1.DeletionCondition{
-								JobStatus:  rayv1.JobStatusSucceeded,
+								JobStatus:  ptr.To(rayv1.JobStatusSucceeded),
 								TTLSeconds: 20,
 							},
 						},
 						{
 							Policy: rayv1.DeleteCluster,
 							Condition: rayv1.DeletionCondition{
-								JobStatus:  rayv1.JobStatusSucceeded,
+								JobStatus:  ptr.To(rayv1.JobStatusSucceeded),
 								TTLSeconds: 10,
 							},
 						},
@@ -1536,14 +1536,14 @@ func TestValidateRayJobSpecWithFeatureGate(t *testing.T) {
 						{
 							Policy: rayv1.DeleteCluster,
 							Condition: rayv1.DeletionCondition{
-								JobStatus:  rayv1.JobStatusSucceeded,
+								JobStatus:  ptr.To(rayv1.JobStatusSucceeded),
 								TTLSeconds: 20,
 							},
 						},
 						{
 							Policy: rayv1.DeleteSelf,
 							Condition: rayv1.DeletionCondition{
-								JobStatus:  rayv1.JobStatusSucceeded,
+								JobStatus:  ptr.To(rayv1.JobStatusSucceeded),
 								TTLSeconds: 10,
 							},
 						},
@@ -1561,28 +1561,28 @@ func TestValidateRayJobSpecWithFeatureGate(t *testing.T) {
 						{
 							Policy: rayv1.DeleteWorkers,
 							Condition: rayv1.DeletionCondition{
-								JobStatus:  rayv1.JobStatusSucceeded,
+								JobStatus:  ptr.To(rayv1.JobStatusSucceeded),
 								TTLSeconds: 10,
 							},
 						},
 						{
 							Policy: rayv1.DeleteCluster,
 							Condition: rayv1.DeletionCondition{
-								JobStatus:  rayv1.JobStatusSucceeded,
+								JobStatus:  ptr.To(rayv1.JobStatusSucceeded),
 								TTLSeconds: 20,
 							},
 						},
 						{
 							Policy: rayv1.DeleteSelf,
 							Condition: rayv1.DeletionCondition{
-								JobStatus:  rayv1.JobStatusSucceeded,
+								JobStatus:  ptr.To(rayv1.JobStatusSucceeded),
 								TTLSeconds: 30,
 							},
 						},
 						{
 							Policy: rayv1.DeleteSelf,
 							Condition: rayv1.DeletionCondition{
-								JobStatus:  rayv1.JobStatusFailed,
+								JobStatus:  ptr.To(rayv1.JobStatusFailed),
 								TTLSeconds: 0,
 							},
 						},
@@ -1591,6 +1591,142 @@ func TestValidateRayJobSpecWithFeatureGate(t *testing.T) {
 				RayClusterSpec: createBasicRayClusterSpec(),
 			},
 			expectError: false,
+		},
+		{
+			name: "valid deletionRules with JobDeploymentStatus=Failed",
+			spec: rayv1.RayJobSpec{
+				DeletionStrategy: &rayv1.DeletionStrategy{
+					DeletionRules: []rayv1.DeletionRule{
+						{
+							Policy: rayv1.DeleteCluster,
+							Condition: rayv1.DeletionCondition{
+								JobDeploymentStatus: ptr.To(rayv1.JobDeploymentStatusFailed),
+								TTLSeconds:          10,
+							},
+						},
+						{
+							Policy: rayv1.DeleteSelf,
+							Condition: rayv1.DeletionCondition{
+								JobDeploymentStatus: ptr.To(rayv1.JobDeploymentStatusFailed),
+								TTLSeconds:          20,
+							},
+						},
+					},
+				},
+				RayClusterSpec: createBasicRayClusterSpec(),
+			},
+			expectError: false,
+		},
+		{
+			name: "invalid: both JobStatus and JobDeploymentStatus set",
+			spec: rayv1.RayJobSpec{
+				DeletionStrategy: &rayv1.DeletionStrategy{
+					DeletionRules: []rayv1.DeletionRule{
+						{
+							Policy: rayv1.DeleteCluster,
+							Condition: rayv1.DeletionCondition{
+								JobStatus:           ptr.To(rayv1.JobStatusFailed),
+								JobDeploymentStatus: ptr.To(rayv1.JobDeploymentStatusFailed),
+								TTLSeconds:          10,
+							},
+						},
+					},
+				},
+				RayClusterSpec: createBasicRayClusterSpec(),
+			},
+			expectError: true,
+		},
+		{
+			name: "invalid: neither JobStatus nor JobDeploymentStatus set",
+			spec: rayv1.RayJobSpec{
+				DeletionStrategy: &rayv1.DeletionStrategy{
+					DeletionRules: []rayv1.DeletionRule{
+						{
+							Policy: rayv1.DeleteCluster,
+							Condition: rayv1.DeletionCondition{
+								TTLSeconds: 10,
+							},
+						},
+					},
+				},
+				RayClusterSpec: createBasicRayClusterSpec(),
+			},
+			expectError: true,
+		},
+		{
+			name: "duplicate rule with JobDeploymentStatus",
+			spec: rayv1.RayJobSpec{
+				DeletionStrategy: &rayv1.DeletionStrategy{
+					DeletionRules: []rayv1.DeletionRule{
+						{
+							Policy: rayv1.DeleteCluster,
+							Condition: rayv1.DeletionCondition{
+								JobDeploymentStatus: ptr.To(rayv1.JobDeploymentStatusFailed),
+								TTLSeconds:          10,
+							},
+						},
+						{
+							Policy: rayv1.DeleteCluster,
+							Condition: rayv1.DeletionCondition{
+								JobDeploymentStatus: ptr.To(rayv1.JobDeploymentStatusFailed),
+								TTLSeconds:          20,
+							},
+						},
+					},
+				},
+				RayClusterSpec: createBasicRayClusterSpec(),
+			},
+			expectError: true,
+		},
+		{
+			name: "valid: mixed JobStatus and JobDeploymentStatus rules",
+			spec: rayv1.RayJobSpec{
+				DeletionStrategy: &rayv1.DeletionStrategy{
+					DeletionRules: []rayv1.DeletionRule{
+						{
+							Policy: rayv1.DeleteWorkers,
+							Condition: rayv1.DeletionCondition{
+								JobStatus:  ptr.To(rayv1.JobStatusFailed),
+								TTLSeconds: 10,
+							},
+						},
+						{
+							Policy: rayv1.DeleteCluster,
+							Condition: rayv1.DeletionCondition{
+								JobDeploymentStatus: ptr.To(rayv1.JobDeploymentStatusFailed),
+								TTLSeconds:          20,
+							},
+						},
+					},
+				},
+				RayClusterSpec: createBasicRayClusterSpec(),
+			},
+			expectError: false,
+		},
+		{
+			name: "inconsistent TTLs with JobDeploymentStatus (DeleteCluster < DeleteWorkers)",
+			spec: rayv1.RayJobSpec{
+				DeletionStrategy: &rayv1.DeletionStrategy{
+					DeletionRules: []rayv1.DeletionRule{
+						{
+							Policy: rayv1.DeleteWorkers,
+							Condition: rayv1.DeletionCondition{
+								JobDeploymentStatus: ptr.To(rayv1.JobDeploymentStatusFailed),
+								TTLSeconds:          20,
+							},
+						},
+						{
+							Policy: rayv1.DeleteCluster,
+							Condition: rayv1.DeletionCondition{
+								JobDeploymentStatus: ptr.To(rayv1.JobDeploymentStatusFailed),
+								TTLSeconds:          10,
+							},
+						},
+					},
+				},
+				RayClusterSpec: createBasicRayClusterSpec(),
+			},
+			expectError: true,
 		},
 	}
 
@@ -2107,6 +2243,134 @@ func TestValidateRayClusterSpec_IdleTimeoutSeconds(t *testing.T) {
 				require.EqualError(t, err, tc.expectedErr)
 			} else {
 				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestValidateRayCronJobSpec(t *testing.T) {
+	tests := []struct {
+		cronJob     *rayv1.RayCronJob
+		name        string
+		errorMsg    string
+		expectError bool
+	}{
+		{
+			name: "Valid cron schedule and RayJob spec",
+			cronJob: &rayv1.RayCronJob{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cronjob",
+					Namespace: "default",
+				},
+				Spec: rayv1.RayCronJobSpec{
+					Schedule: "*/5 * * * *",
+					JobTemplate: rayv1.RayJobSpec{
+						Entrypoint: "python test.py",
+						RayClusterSpec: &rayv1.RayClusterSpec{
+							HeadGroupSpec: rayv1.HeadGroupSpec{
+								Template: corev1.PodTemplateSpec{
+									Spec: corev1.PodSpec{
+										Containers: []corev1.Container{
+											{
+												Name:  "ray-head",
+												Image: "rayproject/ray:2.9.0",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "Invalid cron schedule",
+			cronJob: &rayv1.RayCronJob{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cronjob",
+					Namespace: "default",
+				},
+				Spec: rayv1.RayCronJobSpec{
+					Schedule: "invalid cron",
+					JobTemplate: rayv1.RayJobSpec{
+						Entrypoint: "python test.py",
+						RayClusterSpec: &rayv1.RayClusterSpec{
+							HeadGroupSpec: rayv1.HeadGroupSpec{
+								Template: corev1.PodTemplateSpec{
+									Spec: corev1.PodSpec{
+										Containers: []corev1.Container{
+											{
+												Name:  "ray-head",
+												Image: "rayproject/ray:2.9.0",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectError: true,
+			errorMsg:    "invalid cron schedule",
+		},
+		{
+			name: "Empty JobTemplate",
+			cronJob: &rayv1.RayCronJob{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cronjob",
+					Namespace: "default",
+				},
+				Spec: rayv1.RayCronJobSpec{
+					Schedule:    "*/5 * * * *",
+					JobTemplate: rayv1.RayJobSpec{},
+				},
+			},
+			expectError: true,
+			// We use ValidateRayJobSpec() for validating JobTemplate, which requires either RayClusterSpec or ClusterSelector to be set
+			errorMsg: "one of RayClusterSpec or ClusterSelector must be set",
+		},
+		{
+			name: "Invalid RayJob spec - no containers",
+			cronJob: &rayv1.RayCronJob{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cronjob",
+					Namespace: "default",
+				},
+				Spec: rayv1.RayCronJobSpec{
+					Schedule: "*/5 * * * *",
+					JobTemplate: rayv1.RayJobSpec{
+						Entrypoint: "python test.py",
+						RayClusterSpec: &rayv1.RayClusterSpec{
+							HeadGroupSpec: rayv1.HeadGroupSpec{
+								Template: corev1.PodTemplateSpec{
+									Spec: corev1.PodSpec{
+										Containers: []corev1.Container{},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectError: true,
+			errorMsg:    "invalid RayJob template",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := ValidateRayCronJobSpec(tc.cronJob)
+
+			if tc.expectError {
+				require.Error(t, err)
+				if tc.errorMsg != "" {
+					assert.Contains(t, err.Error(), tc.errorMsg)
+				}
+			} else {
+				assert.NoError(t, err)
 			}
 		})
 	}
