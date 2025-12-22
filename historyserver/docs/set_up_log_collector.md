@@ -62,20 +62,16 @@ kubectl logs deployments/kuberay-operator
 k9s
 ```
 
-### Checkout the Latest Log Collector PR
+### Checkout the Latest Log Collector Setup PR
 
-We've made several changes to KunWu's original PR to make it more focused on the log collector component. Please run
-the following commands to clone the correct repo and checkout the latest PR:
+Please run the following commands to checkout the latest PR and go into the correct working directory:
 
 ```bash
-# Clone KunWu's KubeRay repo. Also, rename the repo to avoid conflicts with the original KubeRay dir.
-git clone https://github.com/KunWuLuan/kuberay.git kuberay_historyserver
+# Checkout the latest PR.
+gh pr checkout 4303
 
 # CD into the history server dir.
-cd kuberay_historyserver/historyserver
-
-# Checkout the latest PR.
-gh pr checkout 2
+cd historyserver
 ```
 
 ### Build the Log Collector Container Image
