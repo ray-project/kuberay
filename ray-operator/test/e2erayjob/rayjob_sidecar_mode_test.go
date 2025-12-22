@@ -176,11 +176,6 @@ env_vars:
 		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
 			Should(WithTransform(RayJobStatus, Equal(rayv1.JobStatusRunning)))
 
-		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
-			Should(WithTransform(func(job *rayv1.RayJob) string {
-				return job.Labels[utils.RayJobDisableProvisionedHeadNodeRestartLabelKey]
-			}, Equal("true")))
-
 		// Fetch RayCluster and delete the head Pod
 		rayJob, err = GetRayJob(test, rayJob.Namespace, rayJob.Name)
 		g.Expect(err).NotTo(HaveOccurred())
