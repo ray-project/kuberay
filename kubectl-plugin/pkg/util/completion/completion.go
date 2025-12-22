@@ -59,106 +59,116 @@ func RayClusterResourceNameCompletionFunc(f cmdutil.Factory) func(*cobra.Command
 	}
 }
 
-// WorkerGroupCompletionFunc Returns completions of:
-// Workergroup names that match the toComplete prefix and respect flag values (--ray-cluster, --namespace, --all-namespaces)
+// Public wrapper for workerGroupCompletionFunc to satisfy ValidArgsFunction
 func WorkerGroupCompletionFunc(f cmdutil.Factory) func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
 	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		var comps []string
-		directive := cobra.ShellCompDirectiveNoFileComp
-
-		// Stop completion after first argument to prevent multiple completions
-		if len(args) != 0 {
-			return comps, directive
-		}
-
-		cluster, _ := cmd.Flags().GetString("ray-cluster")
-		namespace, _ := cmd.Flags().GetString("namespace")
-		allNamespaces, _ := cmd.Flags().GetBool("all-namespaces")
-
-		if allNamespaces {
-			return comps, directive
-		}
-
-		if namespace == "" {
-			namespace = "default"
-		}
-
 		k8sClient, err := client.NewClient(f)
 		if err != nil {
-			return comps, directive
+			return []string{}, cobra.ShellCompDirectiveNoFileComp
 		}
 
-		rayClusterList, err := k8sClient.RayClient().RayV1().RayClusters(namespace).List(context.Background(), v1.ListOptions{})
-		if err != nil {
-			return comps, directive
-		}
-
-		for _, rayCluster := range rayClusterList.Items {
-			if rayCluster.Namespace != namespace {
-				continue
-			}
-
-			if cluster != "" && rayCluster.Name != cluster {
-				continue
-			}
-
-			for _, spec := range rayCluster.Spec.WorkerGroupSpecs {
-				if toComplete == "" || strings.HasPrefix(spec.GroupName, toComplete) {
-					comps = append(comps, spec.GroupName)
-				}
-			}
-		}
-		return comps, directive
+		return workerGroupCompletionFunc(cmd, args, toComplete, k8sClient)
 	}
 }
 
-// NodeCompletionFunc Returns completions of:
-// Node names that match the toComplete prefix and respect flag values (--ray-cluster, --namespace)
-func NodeCompletionFunc(f cmdutil.Factory) func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
-	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		var comps []string
-		directive := cobra.ShellCompDirectiveNoFileComp
+// workerGroupCompletionFunc Returns completions of:
+// Workergroup names that match the toComplete prefix and respect flag values (--ray-cluster, --namespace, --all-namespaces)
+func workerGroupCompletionFunc(cmd *cobra.Command, args []string, toComplete string, k8sClient client.Client) ([]string, cobra.ShellCompDirective) {
+	var comps []string
+	directive := cobra.ShellCompDirectiveNoFileComp
 
-		// Stop completion after first argument to prevent multiple completions
-		if len(args) != 0 {
-			return comps, directive
-		}
-
-		cluster, _ := cmd.Flags().GetString("ray-cluster")
-		namespace, _ := cmd.Flags().GetString("namespace")
-		allNamespaces, _ := cmd.Flags().GetBool("all-namespaces")
-
-		if allNamespaces {
-			return comps, directive
-		}
-
-		if namespace == "" {
-			namespace = "default"
-		}
-
-		k8sClient, err := client.NewClient(f)
-		if err != nil {
-			return comps, directive
-		}
-
-		labelSelectors := createRayNodeLabelSelectors(cluster)
-		pods, err := k8sClient.KubernetesClient().CoreV1().Pods(namespace).List(
-			context.Background(),
-			v1.ListOptions{
-				LabelSelector: joinLabelMap(labelSelectors),
-			},
-		)
-		if err != nil {
-			return comps, directive
-		}
-
-		for _, pod := range pods.Items {
-			if toComplete == "" || strings.HasPrefix(pod.Name, toComplete) {
-				comps = append(comps, pod.Name)
-			}
-		}
+	// Stop completion after first argument to prevent multiple completions
+	if len(args) != 0 {
 		return comps, directive
 	}
+
+	cluster, _ := cmd.Flags().GetString("ray-cluster")
+	namespace, _ := cmd.Flags().GetString("namespace")
+	allNamespaces, _ := cmd.Flags().GetBool("all-namespaces")
+
+	if allNamespaces {
+		return comps, directive
+	}
+
+	if namespace == "" {
+		namespace = "default"
+	}
+
+	rayClusterList, err := k8sClient.RayClient().RayV1().RayClusters(namespace).List(context.Background(), v1.ListOptions{})
+	if err != nil {
+		return comps, directive
+	}
+
+	for _, rayCluster := range rayClusterList.Items {
+		if rayCluster.Namespace != namespace {
+			continue
+		}
+
+		if cluster != "" && rayCluster.Name != cluster {
+			continue
+		}
+
+		for _, spec := range rayCluster.Spec.WorkerGroupSpecs {
+			if toComplete == "" || strings.HasPrefix(spec.GroupName, toComplete) {
+				comps = append(comps, spec.GroupName)
+			}
+		}
+	}
+	return comps, directive
+}
+
+// Public wrapper for nodeCompletionFunc to satisfy ValidArgsFunction
+func NodeCompletionFunc(f cmdutil.Factory) func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
+	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		k8sClient, err := client.NewClient(f)
+		if err != nil {
+			return []string{}, cobra.ShellCompDirectiveNoFileComp
+		}
+
+		return nodeCompletionFunc(cmd, args, toComplete, k8sClient)
+	}
+}
+
+// nodeCompletionFunc Returns completions of:
+// Node names that match the toComplete prefix and respect flag values (--ray-cluster, --namespace)
+func nodeCompletionFunc(cmd *cobra.Command, args []string, toComplete string, k8sClient client.Client) ([]string, cobra.ShellCompDirective) {
+	var comps []string
+	directive := cobra.ShellCompDirectiveNoFileComp
+
+	// Stop completion after first argument to prevent multiple completions
+	if len(args) != 0 {
+		return comps, directive
+	}
+
+	cluster, _ := cmd.Flags().GetString("ray-cluster")
+	namespace, _ := cmd.Flags().GetString("namespace")
+	allNamespaces, _ := cmd.Flags().GetBool("all-namespaces")
+
+	if allNamespaces {
+		return comps, directive
+	}
+
+	if namespace == "" {
+		namespace = "default"
+	}
+
+	labelSelectors := createRayNodeLabelSelectors(cluster)
+	pods, err := k8sClient.KubernetesClient().CoreV1().Pods(namespace).List(
+		context.Background(),
+		v1.ListOptions{
+			LabelSelector: joinLabelMap(labelSelectors),
+		},
+	)
+	if err != nil {
+		return comps, directive
+	}
+
+	for _, pod := range pods.Items {
+		if toComplete == "" || strings.HasPrefix(pod.Name, toComplete) {
+			comps = append(comps, pod.Name)
+		}
+	}
+	return comps, directive
 }
 
 // joinLabelMap joins a map of K8s label key-val entries into a label selector string
