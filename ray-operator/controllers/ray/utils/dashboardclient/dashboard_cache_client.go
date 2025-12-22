@@ -8,7 +8,6 @@ import (
 	"time"
 
 	lru "github.com/hashicorp/golang-lru/v2"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
@@ -163,6 +162,12 @@ func (r *RayDashboardCacheClient) GetJobInfo(ctx context.Context, jobId string) 
 	logger := ctrl.LoggerFrom(ctx).WithName("RayDashboardCacheClient")
 
 	if cached, ok := cacheStorage.Get(jobId); ok {
+		if cached.Err != nil && errors.Is(cached.Err, ErrAgain) {
+			// Consume the error.
+			// If the RayJob is still exists, the next Reconcile iteration will put the task back for updating JobInfo
+			cacheStorage.Remove(jobId)
+			logger.Info("Consume the cached error for jobId", "jobId", jobId, "error", cached.Err)
+		}
 		return cached.JobInfo, cached.Err
 	}
 
@@ -176,22 +181,12 @@ func (r *RayDashboardCacheClient) GetJobInfo(ctx context.Context, jobId string) 
 	}
 
 	task := func(taskCTX context.Context) bool {
-		jobInfoCache, existed := cacheStorage.Get(jobId)
-		if !existed {
+		if _, existed := cacheStorage.Get(jobId); !existed {
 			logger.Info("The placeholder is removed for jobId", "jobId", jobId)
 			return false
 		}
 
-		var statusErr *k8serrors.StatusError
 		jobInfo, err := r.client.GetJobInfo(taskCTX, jobId)
-		if err != nil && !errors.As(err, &statusErr) {
-			if jobInfoCache.Err != nil && err.Error() == jobInfoCache.Err.Error() {
-				// The error is the same as last time, no need to update, just put the task to execute later.
-				// If the error is not fixed, eventually the cache will be expired and removed.
-				logger.Info("The error is the same as last time for jobId", "jobId", jobId, "error", err)
-				return true
-			}
-		}
 		currentTime := time.Now()
 
 		// Make this cache immutable to avoid data race between pointer updates and read operations.
@@ -207,6 +202,12 @@ func (r *RayDashboardCacheClient) GetJobInfo(ctx context.Context, jobId string) 
 		}
 		cacheStorage.Add(jobId, newJobInfoCache)
 
+		if err != nil {
+			// Exits the updating loop after getting an error.
+			// If the RayJob still exists, Reconcile will consume the error and put the JobId back to updating loop again.
+			logger.Error(err, "Failed to fetch job info for jobId", "jobId", jobId)
+			return false
+		}
 		if newJobInfoCache.JobInfo == nil {
 			return true
 		}
@@ -218,7 +219,7 @@ func (r *RayDashboardCacheClient) GetJobInfo(ctx context.Context, jobId string) 
 	}
 
 	if err := pool.PutTask(task); err != nil {
-		logger.Error(err, "Cannot queue more jobInfo fetching tasks.", "jobId", jobId)
+		logger.Error(err, "Cannot queue more job info fetching tasks.", "jobId", jobId)
 		return nil, ErrAgain
 	}
 	logger.Info("Put a task to fetch job info in background for jobId ", "jobId", jobId)
