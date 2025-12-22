@@ -314,6 +314,36 @@ _Appears in:_
 | `workerGroupSpecs` _[WorkerGroupSpec](#workergroupspec) array_ | WorkerGroupSpecs are the specs for the worker pods |  |  |
 
 
+#### RayClusterUpgradeStrategy
+
+
+
+
+
+
+
+_Appears in:_
+- [RayClusterSpec](#rayclusterspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `type` _[RayClusterUpgradeType](#rayclusterupgradetype)_ | Type represents the strategy used when upgrading the RayCluster Pods. Currently supports `Recreate` and `None`. |  | Enum: [Recreate None] <br /> |
+
+
+#### RayClusterUpgradeType
+
+_Underlying type:_ _string_
+
+
+
+_Validation:_
+- Enum: [Recreate None]
+
+_Appears in:_
+- [RayClusterUpgradeStrategy](#rayclusterupgradestrategy)
+
+
+
 #### RayCronJob
 
 
@@ -347,36 +377,6 @@ _Appears in:_
 | --- | --- | --- | --- |
 | `jobTemplate` _[RayJobSpec](#rayjobspec)_ | JobTemplate defines the job spec that will be created by cron scheduling |  |  |
 | `schedule` _string_ | Schedule is the cron schedule string |  |  |
-
-
-#### RayClusterUpgradeStrategy
-
-
-
-
-
-
-
-_Appears in:_
-- [RayClusterSpec](#rayclusterspec)
-
-| Field | Description | Default | Validation |
-| --- | --- | --- | --- |
-| `type` _[RayClusterUpgradeType](#rayclusterupgradetype)_ | Type represents the strategy used when upgrading the RayCluster Pods. Currently supports `Recreate` and `None`. |  | Enum: [Recreate None] <br /> |
-
-
-#### RayClusterUpgradeType
-
-_Underlying type:_ _string_
-
-
-
-_Validation:_
-- Enum: [Recreate None]
-
-_Appears in:_
-- [RayClusterUpgradeStrategy](#rayclusterupgradestrategy)
-
 
 
 #### RayJob
