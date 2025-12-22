@@ -679,8 +679,8 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 			return errstd.New(reason)
 		}
 	} else if len(headPods.Items) == 0 {
-		if shouldSkipHeadPodRestart(instance) &&
-			meta.IsStatusConditionTrue(instance.Status.Conditions, string(rayv1.RayClusterProvisioned)) {
+		if meta.IsStatusConditionTrue(instance.Status.Conditions, string(rayv1.RayClusterProvisioned)) &&
+			shouldSkipHeadPodRestart(instance) {
 			// Recreating the head Pod if the RayCluster created by RayJob is provisioned doesn't help RayJob.
 			//
 			// Case 1: GCS fault tolerance is disabled
@@ -1092,14 +1092,8 @@ func (r *RayClusterReconciler) reconcileMultiHostWorkerGroup(ctx context.Context
 	return nil
 }
 
-func shouldSkipHeadPodRestart(cluster *rayv1.RayCluster) bool {
-	if cluster == nil {
-		return false
-	}
-	if utils.GetCRDType(cluster.Labels[utils.RayOriginatedFromCRDLabelKey]) != utils.RayJobCRD {
-		return false
-	}
-	return cluster.Labels[utils.RayJobDisableProvisionedHeadNodeRestartLabelKey] == "true"
+func shouldSkipHeadPodRestart(instance *rayv1.RayCluster) bool {
+	return getCreatorCRDType(*instance) == utils.RayJobCRD && instance.Labels[utils.RayJobDisableProvisionedHeadNodeRestartLabelKey] == "true"
 }
 
 // shouldDeletePod returns whether the Pod should be deleted and the reason
