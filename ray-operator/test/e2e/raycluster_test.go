@@ -229,16 +229,18 @@ func TestRayClusterUpgradeStrategy(t *testing.T) {
 	headPod, err := GetHeadPod(test, rayCluster)
 	g.Expect(err).NotTo(HaveOccurred())
 	initialHeadPodName := headPod.Name
+	initialHeadPodHash := headPod.Annotations[utils.PodTemplateHashKey]
 
 	workerPods, err := GetWorkerPods(test, rayCluster)
+	initialWorkerPodHash := workerPods[0].Annotations[utils.PodTemplateHashKey]
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(workerPods).To(HaveLen(1))
 
-	LogWithTimestamp(test.T(), "Updating RayCluster %s/%s pod template to trigger upgrade", rayCluster.Namespace, rayCluster.Name)
-	// Update head pod template spec to trigger pod template hash change
-	// Add an annotation to change the pod spec
-	rayClusterAC.Spec.HeadGroupSpec.Template.
-		WithAnnotations(map[string]string{"upgrade-trigger": "test"})
+	LogWithTimestamp(test.T(), "Updating RayCluster %s/%s rayVersion and container image to trigger upgrade", rayCluster.Namespace, rayCluster.Name)
+	// Update rayVersion and container image to trigger Recreate upgrade
+	rayClusterAC.Spec.WithRayVersion("2.51.0")
+	rayClusterAC.Spec.HeadGroupSpec.Template.Spec.Containers[0].WithImage("rayproject/ray:2.51.0")
+	rayClusterAC.Spec.WorkerGroupSpecs[0].Template.Spec.Containers[0].WithImage("rayproject/ray:2.51.0")
 	rayCluster, err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
 	g.Expect(err).NotTo(HaveOccurred())
 	LogWithTimestamp(test.T(), "Updated RayCluster pod template")
@@ -252,16 +254,15 @@ func TestRayClusterUpgradeStrategy(t *testing.T) {
 		return newHeadPod.Name != initialHeadPodName && newHeadPod.Status.Phase == corev1.PodRunning
 	}, TestTimeoutMedium).Should(BeTrue())
 
-	// Wait for cluster to become ready
-	LogWithTimestamp(test.T(), "Waiting for RayCluster %s/%s to become ready again", rayCluster.Namespace, rayCluster.Name)
-	g.Eventually(RayCluster(test, namespace.Name, rayCluster.Name), TestTimeoutMedium).
-		Should(WithTransform(RayClusterState, Equal(rayv1.Ready)))
-
 	newHeadPod, err := GetHeadPod(test, rayCluster)
+	newHeadPodHash := newHeadPod.Annotations[utils.PodTemplateHashKey]
+	g.Expect(newHeadPodHash).NotTo(Equal(initialHeadPodHash))
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(newHeadPod.Name).NotTo(Equal(initialHeadPodName))
 
 	newWorkerPods, err := GetWorkerPods(test, rayCluster)
+	newWorkerPodHash := newWorkerPods[0].Annotations[utils.PodTemplateHashKey]
+	g.Expect(newWorkerPodHash).NotTo(Equal(initialWorkerPodHash))
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(newWorkerPods).To(HaveLen(1))
 }
