@@ -1,12 +1,12 @@
 BUILD_TIME      := $(shell date "+%F %T")
 COMMIT_SHA1     := $(shell git rev-parse HEAD )
 
-# Image URL to use all building/pushing image targets
+# Image reference for building, pushing, and deploying the operator.
 IMG ?= controller:latest
 # Golang forbids converting float from Json to struct. Need allowDangerousTypes=true to unblock build.
 CRD_OPTIONS ?= "crd:maxDescLen=0,generateEmbeddedObjectMeta=true,allowDangerousTypes=true"
 
-# Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
+# Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set).
 ifeq (,$(shell go env GOBIN))
 GOBIN=$(shell go env GOPATH)/bin
 else
@@ -19,7 +19,7 @@ endif
 SHELL = /usr/bin/env bash -o pipefail
 .SHELLFLAGS = -ec
 
-# Container Engine to be used for building images
+# Container Engine for building images.
 ENGINE ?= "docker"
 
 all: build
@@ -49,7 +49,7 @@ generate: manifests api-docs controller-gen ## Generate code containing DeepCopy
 	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
 	./hack/update-codegen.sh
 
-helm: manifests ## Sync the CRDs into the Helm chart
+helm: manifests ## Sync the CRDs into the Helm chart.
 	rm -r ../helm-chart/kuberay-operator/crds/
 	cp -r config/crd/bases/ ../helm-chart/kuberay-operator/crds/
 
@@ -129,10 +129,10 @@ docker-build: build docker-image ## Build image with the manager.
 docker-push: ## Push image with the manager.
 	${ENGINE} push ${IMG}
 
-docker-multi-arch-build: # Build multi arch image, amd64 and arm64 currently
+docker-multi-arch-build: ## Build multi arch image, amd64 and arm64 currently.
 	${ENGINE} buildx build --platform linux/amd64,linux/arm64 -t ${IMG} .
 
-docker-multi-arch-push: ## Build and Push multi arch image, amd64 and arm64 currently
+docker-multi-arch-push: ## Build and push multi arch image, amd64 and arm64 currently.
 	${ENGINE} buildx build --push --platform linux/amd64,linux/arm64 -t ${IMG} .
 
 docker-image-rayjob-submitter:
