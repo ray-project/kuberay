@@ -6,6 +6,21 @@ kind: RayCluster
 metadata:
   name: raycluster-kuberay
 spec:
+  # UpgradeStrategy defines the pod recreation behavior when RayCluster configuration changes
+  # Available since: KubeRay 1.6.0
+  # Type of upgrade strategy to use:
+  # - "None" (default):
+  #   * Configuration changes do not trigger pod recreation
+  #   * Existing pods continue running with old configuration
+  #   * New pods (from scaling) will use new configuration
+  #   * Use this for maximum stability
+  # - "Recreate":
+  #   * All pods are deleted and recreated when configuration changes
+  #   * Ensures all pods run with the latest configuration
+  #   * Useful for GitOps system like ArgoCD
+  #   * May cause temporary service disruption during recreation
+  upgradeStrategy:
+    type: None
   rayVersion: '2.52.0' # should match the Ray version in the image of the containers
   # Ray head pod template
   headGroupSpec:
