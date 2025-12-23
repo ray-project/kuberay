@@ -750,7 +750,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 			continue
 		}
 		// workerReplicas will store the target number of pods for this worker group.
-		numExpectedWorkerPods := int(utils.GetWorkerGroupDesiredReplicas(ctx, worker))
+		numExpectedWorkerPods := int(utils.GetWorkerGroupDesiredReplicas(worker))
 		logger.Info("reconcilePods", "desired workerReplicas (always adhering to minReplicas/maxReplica)", numExpectedWorkerPods, "worker group", worker.GroupName, "maxReplicas", worker.MaxReplicas, "minReplicas", worker.MinReplicas, "replicas", worker.Replicas)
 
 		workerPods := corev1.PodList{}
@@ -1049,7 +1049,7 @@ func (r *RayClusterReconciler) reconcileMultiHostWorkerGroup(ctx context.Context
 		}
 	}
 	numRunningReplicas := len(validReplicaGroups)
-	numExpectedWorkerPods := int(utils.GetWorkerGroupDesiredReplicas(ctx, *worker))
+	numExpectedWorkerPods := int(utils.GetWorkerGroupDesiredReplicas(*worker))
 
 	// Ensure that if numExpectedWorkerPods is not a multiple of NumOfHosts, we log an error.
 	if numExpectedWorkerPods%int(worker.NumOfHosts) != 0 {
@@ -1582,7 +1582,7 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 
 	newInstance.Status.ReadyWorkerReplicas = utils.CalculateReadyReplicas(runtimePods)
 	newInstance.Status.AvailableWorkerReplicas = utils.CalculateAvailableReplicas(runtimePods)
-	newInstance.Status.DesiredWorkerReplicas = utils.CalculateDesiredReplicas(ctx, newInstance)
+	newInstance.Status.DesiredWorkerReplicas = utils.CalculateDesiredReplicas(newInstance)
 	newInstance.Status.MinWorkerReplicas = utils.CalculateMinReplicas(newInstance)
 	newInstance.Status.MaxWorkerReplicas = utils.CalculateMaxReplicas(newInstance)
 

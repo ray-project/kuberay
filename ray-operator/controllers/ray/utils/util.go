@@ -384,23 +384,20 @@ func GenerateIdentifier(clusterName string, nodeType rayv1.RayNodeType) string {
 	return fmt.Sprintf("%s-%s", clusterName, nodeType)
 }
 
-func GetWorkerGroupDesiredReplicas(ctx context.Context, workerGroupSpec rayv1.WorkerGroupSpec) int32 {
-	log := ctrl.LoggerFrom(ctx)
+func GetWorkerGroupDesiredReplicas(workerGroupSpec rayv1.WorkerGroupSpec) int32 {
 	// Always adhere to min/max replicas constraints.
 	var workerReplicas int32
+	minReplicas := ptr.Deref(workerGroupSpec.MinReplicas, int32(0))
+	maxReplicas := ptr.Deref(workerGroupSpec.MaxReplicas, int32(math.MaxInt32))
 	if workerGroupSpec.Suspend != nil && *workerGroupSpec.Suspend {
 		return 0
 	}
-	if *workerGroupSpec.MinReplicas > *workerGroupSpec.MaxReplicas {
-		log.Info("minReplicas is greater than maxReplicas, using maxReplicas as desired replicas. "+
-			"Please fix this to avoid any unexpected behaviors.", "minReplicas", *workerGroupSpec.MinReplicas, "maxReplicas", *workerGroupSpec.MaxReplicas)
-		workerReplicas = *workerGroupSpec.MaxReplicas
-	} else if workerGroupSpec.Replicas == nil || *workerGroupSpec.Replicas < *workerGroupSpec.MinReplicas {
+	if workerGroupSpec.Replicas == nil || *workerGroupSpec.Replicas < minReplicas {
 		// Replicas is impossible to be nil as it has a default value assigned in the CRD.
 		// Add this check to make testing easier.
-		workerReplicas = *workerGroupSpec.MinReplicas
-	} else if *workerGroupSpec.Replicas > *workerGroupSpec.MaxReplicas {
-		workerReplicas = *workerGroupSpec.MaxReplicas
+		workerReplicas = minReplicas
+	} else if *workerGroupSpec.Replicas > maxReplicas {
+		workerReplicas = maxReplicas
 	} else {
 		workerReplicas = *workerGroupSpec.Replicas
 	}
@@ -408,10 +405,10 @@ func GetWorkerGroupDesiredReplicas(ctx context.Context, workerGroupSpec rayv1.Wo
 }
 
 // CalculateDesiredReplicas calculate desired worker replicas at the cluster level
-func CalculateDesiredReplicas(ctx context.Context, cluster *rayv1.RayCluster) int32 {
+func CalculateDesiredReplicas(cluster *rayv1.RayCluster) int32 {
 	count := int32(0)
 	for _, nodeGroup := range cluster.Spec.WorkerGroupSpecs {
-		count += GetWorkerGroupDesiredReplicas(ctx, nodeGroup)
+		count += GetWorkerGroupDesiredReplicas(nodeGroup)
 	}
 
 	return count
@@ -424,7 +421,8 @@ func CalculateMinReplicas(cluster *rayv1.RayCluster) int32 {
 		if nodeGroup.Suspend != nil && *nodeGroup.Suspend {
 			continue
 		}
-		count += (*nodeGroup.MinReplicas * nodeGroup.NumOfHosts)
+		minReplicas := ptr.Deref(nodeGroup.MinReplicas, int32(0))
+		count += (minReplicas * nodeGroup.NumOfHosts)
 	}
 
 	return count
@@ -437,7 +435,8 @@ func CalculateMaxReplicas(cluster *rayv1.RayCluster) int32 {
 		if nodeGroup.Suspend != nil && *nodeGroup.Suspend {
 			continue
 		}
-		count += int64(*nodeGroup.MaxReplicas) * int64(nodeGroup.NumOfHosts)
+		maxReplicas := ptr.Deref(nodeGroup.MaxReplicas, int32(math.MaxInt32))
+		count += int64(maxReplicas) * int64(nodeGroup.NumOfHosts)
 	}
 
 	return SafeInt64ToInt32(count)
@@ -499,7 +498,8 @@ func CalculateMinResources(cluster *rayv1.RayCluster) corev1.ResourceList {
 	for _, nodeGroup := range cluster.Spec.WorkerGroupSpecs {
 		podResource := CalculatePodResource(nodeGroup.Template.Spec)
 		calculateReplicaResource(&podResource, nodeGroup.NumOfHosts)
-		for i := int32(0); i < *nodeGroup.MinReplicas; i++ {
+		minReplicas := ptr.Deref(nodeGroup.MinReplicas, int32(0))
+		for range minReplicas {
 			minResourcesList = append(minResourcesList, podResource)
 		}
 	}
