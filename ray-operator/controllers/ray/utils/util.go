@@ -387,15 +387,23 @@ func GenerateIdentifier(clusterName string, nodeType rayv1.RayNodeType) string {
 func GetWorkerGroupDesiredReplicas(workerGroupSpec rayv1.WorkerGroupSpec) int32 {
 	// Always adhere to min/max replicas constraints.
 	var workerReplicas int32
+	minReplicas := int32(0)
+	maxReplicas := int32(math.MaxInt32)
 	if workerGroupSpec.Suspend != nil && *workerGroupSpec.Suspend {
 		return 0
 	}
-	if workerGroupSpec.Replicas == nil || *workerGroupSpec.Replicas < *workerGroupSpec.MinReplicas {
+	if workerGroupSpec.MinReplicas != nil {
+		minReplicas = *workerGroupSpec.MinReplicas
+	}
+	if workerGroupSpec.MaxReplicas != nil {
+		maxReplicas = *workerGroupSpec.MaxReplicas
+	}
+	if workerGroupSpec.Replicas == nil || *workerGroupSpec.Replicas < minReplicas {
 		// Replicas is impossible to be nil as it has a default value assigned in the CRD.
 		// Add this check to make testing easier.
-		workerReplicas = *workerGroupSpec.MinReplicas
-	} else if *workerGroupSpec.Replicas > *workerGroupSpec.MaxReplicas {
-		workerReplicas = *workerGroupSpec.MaxReplicas
+		workerReplicas = minReplicas
+	} else if *workerGroupSpec.Replicas > maxReplicas {
+		workerReplicas = maxReplicas
 	} else {
 		workerReplicas = *workerGroupSpec.Replicas
 	}
@@ -419,7 +427,11 @@ func CalculateMinReplicas(cluster *rayv1.RayCluster) int32 {
 		if nodeGroup.Suspend != nil && *nodeGroup.Suspend {
 			continue
 		}
-		count += (*nodeGroup.MinReplicas * nodeGroup.NumOfHosts)
+		minReplicas := int32(0)
+		if nodeGroup.MinReplicas != nil {
+			minReplicas = *nodeGroup.MinReplicas
+		}
+		count += (minReplicas * nodeGroup.NumOfHosts)
 	}
 
 	return count
@@ -432,7 +444,11 @@ func CalculateMaxReplicas(cluster *rayv1.RayCluster) int32 {
 		if nodeGroup.Suspend != nil && *nodeGroup.Suspend {
 			continue
 		}
-		count += int64(*nodeGroup.MaxReplicas) * int64(nodeGroup.NumOfHosts)
+		maxReplicas := int32(math.MaxInt32)
+		if nodeGroup.MaxReplicas != nil {
+			maxReplicas = *nodeGroup.MaxReplicas
+		}
+		count += int64(maxReplicas) * int64(nodeGroup.NumOfHosts)
 	}
 
 	return SafeInt64ToInt32(count)
