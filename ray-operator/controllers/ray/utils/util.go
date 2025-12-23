@@ -384,18 +384,13 @@ func GenerateIdentifier(clusterName string, nodeType rayv1.RayNodeType) string {
 	return fmt.Sprintf("%s-%s", clusterName, nodeType)
 }
 
-func GetWorkerGroupDesiredReplicas(ctx context.Context, workerGroupSpec rayv1.WorkerGroupSpec) int32 {
-	log := ctrl.LoggerFrom(ctx)
+func GetWorkerGroupDesiredReplicas(workerGroupSpec rayv1.WorkerGroupSpec) int32 {
 	// Always adhere to min/max replicas constraints.
 	var workerReplicas int32
 	if workerGroupSpec.Suspend != nil && *workerGroupSpec.Suspend {
 		return 0
 	}
-	if *workerGroupSpec.MinReplicas > *workerGroupSpec.MaxReplicas {
-		log.Info("minReplicas is greater than maxReplicas, using maxReplicas as desired replicas. "+
-			"Please fix this to avoid any unexpected behaviors.", "minReplicas", *workerGroupSpec.MinReplicas, "maxReplicas", *workerGroupSpec.MaxReplicas)
-		workerReplicas = *workerGroupSpec.MaxReplicas
-	} else if workerGroupSpec.Replicas == nil || *workerGroupSpec.Replicas < *workerGroupSpec.MinReplicas {
+	if workerGroupSpec.Replicas == nil || *workerGroupSpec.Replicas < *workerGroupSpec.MinReplicas {
 		// Replicas is impossible to be nil as it has a default value assigned in the CRD.
 		// Add this check to make testing easier.
 		workerReplicas = *workerGroupSpec.MinReplicas
@@ -408,10 +403,10 @@ func GetWorkerGroupDesiredReplicas(ctx context.Context, workerGroupSpec rayv1.Wo
 }
 
 // CalculateDesiredReplicas calculate desired worker replicas at the cluster level
-func CalculateDesiredReplicas(ctx context.Context, cluster *rayv1.RayCluster) int32 {
+func CalculateDesiredReplicas(cluster *rayv1.RayCluster) int32 {
 	count := int32(0)
 	for _, nodeGroup := range cluster.Spec.WorkerGroupSpecs {
-		count += GetWorkerGroupDesiredReplicas(ctx, nodeGroup)
+		count += GetWorkerGroupDesiredReplicas(nodeGroup)
 	}
 
 	return count
@@ -499,7 +494,11 @@ func CalculateMinResources(cluster *rayv1.RayCluster) corev1.ResourceList {
 	for _, nodeGroup := range cluster.Spec.WorkerGroupSpecs {
 		podResource := CalculatePodResource(nodeGroup.Template.Spec)
 		calculateReplicaResource(&podResource, nodeGroup.NumOfHosts)
-		for i := int32(0); i < *nodeGroup.MinReplicas; i++ {
+		minReplicas := int32(0)
+		if nodeGroup.MinReplicas != nil {
+			minReplicas = *nodeGroup.MinReplicas
+		}
+		for i := int32(0); i < minReplicas; i++ {
 			minResourcesList = append(minResourcesList, podResource)
 		}
 	}
