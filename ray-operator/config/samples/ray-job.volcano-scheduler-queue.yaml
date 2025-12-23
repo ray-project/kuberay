@@ -13,7 +13,6 @@ kind: RayJob
 metadata:
   name: rayjob-sample-0
   labels:
-    ray.io/scheduler-name: volcano
     volcano.sh/queue-name: kuberay-test-queue
 spec:
   entrypoint: python /home/ray/samples/sample_code.py
