@@ -19,8 +19,8 @@ spec:
   #   * Ensures all pods run with the latest configuration
   #   * Useful for GitOps system like ArgoCD
   #   * May cause temporary service disruption during recreation
-  upgradeStrategy:
-    type: None
+  # upgradeStrategy:
+  #   type: None
   rayVersion: '2.52.0' # should match the Ray version in the image of the containers
   # Ray head pod template
   headGroupSpec:
