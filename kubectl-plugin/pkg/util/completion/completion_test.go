@@ -74,6 +74,262 @@ func TestWorkerGroupCompletionFunc(t *testing.T) {
 			expectedComps:     []string{"group-1", "group-4"},
 			expectedDirective: cobra.ShellCompDirectiveNoFileComp,
 		},
+		{
+			name:          "should return empty when all-namespaces flag is set",
+			namespace:     "",
+			allNamespaces: true,
+			clusterName:   "",
+			args:          []string{},
+			rayClusters: []runtime.Object{
+				&rayv1.RayCluster{
+					ObjectMeta: v1.ObjectMeta{
+						Namespace: "default",
+						Name:      "cluster-1",
+					},
+					Spec: rayv1.RayClusterSpec{
+						WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+							{
+								GroupName: "group-1",
+							},
+						},
+					},
+				},
+			},
+			expectedComps:     []string{},
+			expectedDirective: cobra.ShellCompDirectiveNoFileComp,
+		},
+		{
+			name:          "should return workergroups in specified namespace",
+			namespace:     "my-namespace",
+			allNamespaces: false,
+			clusterName:   "",
+			args:          []string{},
+			rayClusters: []runtime.Object{
+				&rayv1.RayCluster{
+					ObjectMeta: v1.ObjectMeta{
+						Namespace: "my-namespace",
+						Name:      "cluster-1",
+					},
+					Spec: rayv1.RayClusterSpec{
+						WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+							{
+								GroupName: "group-1",
+							},
+							{
+								GroupName: "group-2",
+							},
+						},
+					},
+				},
+				&rayv1.RayCluster{
+					ObjectMeta: v1.ObjectMeta{
+						Namespace: "default",
+						Name:      "cluster-2",
+					},
+					Spec: rayv1.RayClusterSpec{
+						WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+							{
+								GroupName: "group-3",
+							},
+						},
+					},
+				},
+			},
+			expectedComps:     []string{"group-1", "group-2"},
+			expectedDirective: cobra.ShellCompDirectiveNoFileComp,
+		},
+		{
+			name:          "should filter by ray-cluster flag",
+			namespace:     "default",
+			allNamespaces: false,
+			clusterName:   "cluster-1",
+			args:          []string{},
+			rayClusters: []runtime.Object{
+				&rayv1.RayCluster{
+					ObjectMeta: v1.ObjectMeta{
+						Namespace: "default",
+						Name:      "cluster-1",
+					},
+					Spec: rayv1.RayClusterSpec{
+						WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+							{
+								GroupName: "group-1",
+							},
+							{
+								GroupName: "group-2",
+							},
+						},
+					},
+				},
+				&rayv1.RayCluster{
+					ObjectMeta: v1.ObjectMeta{
+						Namespace: "default",
+						Name:      "cluster-2",
+					},
+					Spec: rayv1.RayClusterSpec{
+						WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+							{
+								GroupName: "group-3",
+							},
+						},
+					},
+				},
+			},
+			expectedComps:     []string{"group-1", "group-2"},
+			expectedDirective: cobra.ShellCompDirectiveNoFileComp,
+		},
+		{
+			name:          "should handle prefix matching",
+			namespace:     "default",
+			allNamespaces: false,
+			clusterName:   "",
+			args:          []string{},
+			toComplete:    "small",
+			rayClusters: []runtime.Object{
+				&rayv1.RayCluster{
+					ObjectMeta: v1.ObjectMeta{
+						Namespace: "default",
+						Name:      "cluster-1",
+					},
+					Spec: rayv1.RayClusterSpec{
+						WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+							{
+								GroupName: "small-workers",
+							},
+							{
+								GroupName: "large-workers",
+							},
+							{
+								GroupName: "small-gpu",
+							},
+						},
+					},
+				},
+			},
+			expectedComps:     []string{"small-workers", "small-gpu"},
+			expectedDirective: cobra.ShellCompDirectiveNoFileComp,
+		},
+		{
+			name:          "should return empty after first positional argument",
+			namespace:     "default",
+			allNamespaces: false,
+			clusterName:   "",
+			args:          []string{"group-1"}, // Already has 1 arg
+			rayClusters: []runtime.Object{
+				&rayv1.RayCluster{
+					ObjectMeta: v1.ObjectMeta{
+						Namespace: "default",
+						Name:      "cluster-1",
+					},
+					Spec: rayv1.RayClusterSpec{
+						WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+							{
+								GroupName: "group-1",
+							},
+						},
+					},
+				},
+			},
+			expectedComps:     []string{},
+			expectedDirective: cobra.ShellCompDirectiveNoFileComp,
+		},
+		{
+			name:          "should aggregate workergroups from multiple clusters in same namespace",
+			namespace:     "default",
+			allNamespaces: false,
+			clusterName:   "",
+			args:          []string{},
+			rayClusters: []runtime.Object{
+				&rayv1.RayCluster{
+					ObjectMeta: v1.ObjectMeta{
+						Namespace: "default",
+						Name:      "cluster-1",
+					},
+					Spec: rayv1.RayClusterSpec{
+						WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+							{
+								GroupName: "group-1",
+							},
+						},
+					},
+				},
+				&rayv1.RayCluster{
+					ObjectMeta: v1.ObjectMeta{
+						Namespace: "default",
+						Name:      "cluster-2",
+					},
+					Spec: rayv1.RayClusterSpec{
+						WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+							{
+								GroupName: "group-2",
+							},
+						},
+					},
+				},
+				&rayv1.RayCluster{
+					ObjectMeta: v1.ObjectMeta{
+						Namespace: "default",
+						Name:      "cluster-3",
+					},
+					Spec: rayv1.RayClusterSpec{
+						WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+							{
+								GroupName: "group-3",
+							},
+						},
+					},
+				},
+			},
+			expectedComps:     []string{"group-1", "group-2", "group-3"},
+			expectedDirective: cobra.ShellCompDirectiveNoFileComp,
+		},
+		{
+			name:              "should return empty when no clusters exist",
+			namespace:         "default",
+			allNamespaces:     false,
+			clusterName:       "",
+			args:              []string{},
+			rayClusters:       []runtime.Object{},
+			expectedComps:     []string{},
+			expectedDirective: cobra.ShellCompDirectiveNoFileComp,
+		},
+		{
+			name:          "should handle duplicate workergroup names across clusters",
+			namespace:     "default",
+			allNamespaces: false,
+			clusterName:   "",
+			args:          []string{},
+			rayClusters: []runtime.Object{
+				&rayv1.RayCluster{
+					ObjectMeta: v1.ObjectMeta{
+						Namespace: "default",
+						Name:      "cluster-1",
+					},
+					Spec: rayv1.RayClusterSpec{
+						WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+							{
+								GroupName: "group-1",
+							},
+						},
+					},
+				},
+				&rayv1.RayCluster{
+					ObjectMeta: v1.ObjectMeta{
+						Namespace: "default",
+						Name:      "cluster-2",
+					},
+					Spec: rayv1.RayClusterSpec{
+						WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+							{
+								GroupName: "group-1",
+							},
+						},
+					},
+				},
+			},
+			expectedComps:     []string{"group-1", "group-1"},
+			expectedDirective: cobra.ShellCompDirectiveNoFileComp,
+		},
 	}
 
 	for _, tc := range tests {
@@ -135,6 +391,219 @@ func TestNodeCompletionFunc(t *testing.T) {
 				},
 			},
 			expectedComps:     []string{"pod-1", "pod-2"},
+			expectedDirective: cobra.ShellCompDirectiveNoFileComp,
+		},
+		{
+			name:          "should return empty when --all-namespaces flag is set",
+			namespace:     "",
+			allNamespaces: true,
+			clusterName:   "",
+			args:          []string{},
+			pods: []runtime.Object{
+				&corev1.Pod{
+					ObjectMeta: v1.ObjectMeta{
+						Namespace: "default",
+						Name:      "pod-1",
+						Labels: map[string]string{
+							util.RayClusterLabelKey:   "cluster-1",
+							util.RayIsRayNodeLabelKey: "yes",
+						},
+					},
+				},
+			},
+			expectedComps:     []string{},
+			expectedDirective: cobra.ShellCompDirectiveNoFileComp,
+		},
+		{
+			name:          "should return nodes in specified namespace",
+			namespace:     "my-namespace",
+			allNamespaces: false,
+			clusterName:   "",
+			args:          []string{},
+			pods: []runtime.Object{
+				&corev1.Pod{
+					ObjectMeta: v1.ObjectMeta{
+						Namespace: "my-namespace",
+						Name:      "pod-1",
+						Labels: map[string]string{
+							util.RayClusterLabelKey:   "cluster-1",
+							util.RayIsRayNodeLabelKey: "yes",
+						},
+					},
+				},
+				&corev1.Pod{
+					ObjectMeta: v1.ObjectMeta{
+						Namespace: "my-namespace",
+						Name:      "pod-2",
+						Labels: map[string]string{
+							util.RayClusterLabelKey:   "cluster-1",
+							util.RayIsRayNodeLabelKey: "yes",
+						},
+					},
+				},
+				&corev1.Pod{
+					ObjectMeta: v1.ObjectMeta{
+						Namespace: "default",
+						Name:      "pod-3",
+						Labels: map[string]string{
+							util.RayClusterLabelKey:   "cluster-2",
+							util.RayIsRayNodeLabelKey: "yes",
+						},
+					},
+				},
+			},
+			expectedComps:     []string{"pod-1", "pod-2"},
+			expectedDirective: cobra.ShellCompDirectiveNoFileComp,
+		},
+		{
+			name:          "should filter by --ray-cluster flag",
+			namespace:     "default",
+			allNamespaces: false,
+			clusterName:   "cluster-1",
+			args:          []string{},
+			pods: []runtime.Object{
+				&corev1.Pod{
+					ObjectMeta: v1.ObjectMeta{
+						Namespace: "default",
+						Name:      "pod-1",
+						Labels: map[string]string{
+							util.RayClusterLabelKey:   "cluster-1",
+							util.RayIsRayNodeLabelKey: "yes",
+						},
+					},
+				},
+				&corev1.Pod{
+					ObjectMeta: v1.ObjectMeta{
+						Namespace: "default",
+						Name:      "pod-2",
+						Labels: map[string]string{
+							util.RayClusterLabelKey:   "cluster-1",
+							util.RayIsRayNodeLabelKey: "yes",
+						},
+					},
+				},
+				&corev1.Pod{
+					ObjectMeta: v1.ObjectMeta{
+						Namespace: "default",
+						Name:      "pod-3",
+						Labels: map[string]string{
+							util.RayClusterLabelKey:   "cluster-2",
+							util.RayIsRayNodeLabelKey: "yes",
+						},
+					},
+				},
+			},
+			expectedComps:     []string{"pod-1", "pod-2"},
+			expectedDirective: cobra.ShellCompDirectiveNoFileComp,
+		},
+		{
+			name:          "should handle prefix matching",
+			namespace:     "default",
+			allNamespaces: false,
+			clusterName:   "",
+			args:          []string{},
+			toComplete:    "raycluster-worker",
+			pods: []runtime.Object{
+				&corev1.Pod{
+					ObjectMeta: v1.ObjectMeta{
+						Namespace: "default",
+						Name:      "raycluster-head-abc",
+						Labels: map[string]string{
+							util.RayClusterLabelKey:   "cluster-1",
+							util.RayIsRayNodeLabelKey: "yes",
+						},
+					},
+				},
+				&corev1.Pod{
+					ObjectMeta: v1.ObjectMeta{
+						Namespace: "default",
+						Name:      "raycluster-worker-xyz",
+						Labels: map[string]string{
+							util.RayClusterLabelKey:   "cluster-1",
+							util.RayIsRayNodeLabelKey: "yes",
+						},
+					},
+				},
+				&corev1.Pod{
+					ObjectMeta: v1.ObjectMeta{
+						Namespace: "default",
+						Name:      "raycluster-worker-ijk",
+						Labels: map[string]string{
+							util.RayClusterLabelKey:   "cluster-1",
+							util.RayIsRayNodeLabelKey: "yes",
+						},
+					},
+				},
+			},
+			expectedComps:     []string{"raycluster-worker-xyz", "raycluster-worker-ijk"},
+			expectedDirective: cobra.ShellCompDirectiveNoFileComp,
+		},
+		{
+			name:          "should return empty after first positional argument",
+			namespace:     "default",
+			allNamespaces: false,
+			clusterName:   "",
+			args:          []string{"pod-1"},
+			pods: []runtime.Object{
+				&corev1.Pod{
+					ObjectMeta: v1.ObjectMeta{
+						Namespace: "default",
+						Name:      "pod-1",
+						Labels: map[string]string{
+							util.RayClusterLabelKey:   "cluster-1",
+							util.RayIsRayNodeLabelKey: "yes",
+						},
+					},
+				},
+			},
+			expectedComps:     []string{},
+			expectedDirective: cobra.ShellCompDirectiveNoFileComp,
+		},
+		{
+			name:          "should only return pods with Ray labels",
+			namespace:     "default",
+			allNamespaces: false,
+			clusterName:   "",
+			args:          []string{},
+			pods: []runtime.Object{
+				&corev1.Pod{
+					ObjectMeta: v1.ObjectMeta{
+						Namespace: "default",
+						Name:      "ray-node-1",
+						Labels: map[string]string{
+							util.RayClusterLabelKey:   "cluster-1",
+							util.RayIsRayNodeLabelKey: "yes",
+						},
+					},
+				},
+				&corev1.Pod{
+					ObjectMeta: v1.ObjectMeta{
+						Namespace: "default",
+						Name:      "non-ray-pod", // without ray label
+					},
+				},
+				&corev1.Pod{
+					ObjectMeta: v1.ObjectMeta{
+						Namespace: "default",
+						Name:      "ray-node-2",
+						Labels: map[string]string{
+							util.RayClusterLabelKey:   "cluster-1",
+							util.RayIsRayNodeLabelKey: "yes",
+						},
+					},
+				},
+			},
+			expectedComps:     []string{"ray-node-1", "ray-node-2"},
+			expectedDirective: cobra.ShellCompDirectiveNoFileComp,
+		},
+		{
+			name:              "should return empty when no pods exist",
+			namespace:         "default",
+			allNamespaces:     false,
+			clusterName:       "",
+			args:              []string{},
+			pods:              []runtime.Object{},
+			expectedComps:     []string{},
 			expectedDirective: cobra.ShellCompDirectiveNoFileComp,
 		},
 	}
