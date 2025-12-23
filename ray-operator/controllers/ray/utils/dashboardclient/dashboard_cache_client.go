@@ -28,6 +28,8 @@ const (
 	// TODO: consider a proper size for accommodating the all live job info
 	cacheSize   = 10000
 	cacheExpiry = 10 * time.Minute
+
+	initBufferSize = 128
 )
 
 var (
@@ -218,6 +220,8 @@ func (r *RayDashboardCacheClient) GetJobInfo(ctx context.Context, jobId string) 
 	}
 
 	if err := pool.PutTask(task); err != nil {
+		// remove the placeholder because we cannot queue the task.
+		cacheStorage.Remove(jobId)
 		logger.Error(err, "Cannot queue more job info fetching tasks.", "jobId", jobId)
 		return nil, ErrAgain
 	}
@@ -263,34 +267,91 @@ func NewExtendableChannel[T any]() ExtendableChannel[T] {
 
 	go func() {
 		defer close(out)
-		var buffer []T
+		ringBuffer := *NewRingBuffer[T](initBufferSize)
 
 		for {
-			if len(buffer) == 0 {
+			if ringBuffer.Len() == 0 {
 				v, ok := <-in
 				if !ok {
 					return
 				}
-				buffer = append(buffer, v)
+				ringBuffer.Push(v)
 			}
 
+			// the above if-statement guarantees that ringBuffer.Len() > 0 here.
+			// so Pop() won't return an error.
+			t, _ := ringBuffer.Pop()
 			select {
 			case v, ok := <-in:
 				if !ok {
 					// Inbound closed; drain the buffer
-					for _, b := range buffer {
-						out <- b
+					for ringBuffer.Len() > 0 {
+						item, _ := ringBuffer.Pop()
+						out <- item
 					}
 					return
 				}
 
-				// TODO: this is not memory efficient.
-				buffer = append(buffer, v)
-			case out <- buffer[0]:
-				buffer = buffer[1:]
+				ringBuffer.Push(v)
+			case out <- t:
 			}
 		}
 	}()
 
 	return ExtendableChannel[T]{In: in, Out: out}
+}
+
+type RingBuffer[T any] struct {
+	buffer  []T
+	head    int
+	tail    int
+	size    int // Current number of items
+	maxSize int // Maximum items in buffer
+}
+
+func NewRingBuffer[T any](maxSize int) *RingBuffer[T] {
+	return &RingBuffer[T]{
+		buffer:  make([]T, maxSize),
+		maxSize: maxSize,
+	}
+}
+
+func (r *RingBuffer[T]) Push(item T) {
+	if r.size == r.maxSize {
+		r.resize()
+	}
+
+	r.buffer[r.head] = item
+	r.head = (r.head + 1) % r.maxSize
+	r.size++
+}
+
+func (r *RingBuffer[T]) resize() {
+	newBuffer := make([]T, r.maxSize*2)
+	for i := 0; i < r.size; i++ {
+		newBuffer[i] = r.buffer[(r.tail+i)%r.maxSize]
+	}
+
+	r.buffer = newBuffer
+	r.tail = 0
+	r.head = r.size
+	r.maxSize *= 2
+}
+
+func (r *RingBuffer[T]) Pop() (T, error) {
+	var zero T
+	if r.size == 0 {
+		return zero, errors.New("buffer is empty")
+	}
+
+	item := r.buffer[r.tail]
+	r.buffer[r.tail] = zero
+	r.tail = (r.tail + 1) % r.maxSize
+	r.size--
+
+	return item, nil
+}
+
+func (r *RingBuffer[T]) Len() int {
+	return r.size
 }
