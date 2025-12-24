@@ -36,6 +36,10 @@ buildcollector: mod
 mod:
 	go mod tidy
 
+.PHONY: docker-image
+docker-image: ## Build image without specifying a platform.
+	docker build -t ${IMG} .
+
 .PHONY: localimage
 localimage: dockerbuilder_instance
 	docker buildx build -t $(IMG) --platform linux/arm64 . --load
