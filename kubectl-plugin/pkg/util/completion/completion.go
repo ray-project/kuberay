@@ -100,10 +100,6 @@ func workerGroupCompletionFunc(cmd *cobra.Command, args []string, toComplete str
 	}
 
 	for _, rayCluster := range rayClusterList.Items {
-		if rayCluster.Namespace != namespace {
-			continue
-		}
-
 		if cluster != "" && rayCluster.Name != cluster {
 			continue
 		}
