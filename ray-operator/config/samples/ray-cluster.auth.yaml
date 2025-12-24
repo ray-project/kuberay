@@ -6,14 +6,14 @@ spec:
   enableInTreeAutoscaling: true
   authOptions:
     mode: token
-  rayVersion: '2.52.0'
+  rayVersion: '2.53.0'
   headGroupSpec:
     rayStartParams: {}
     template:
       spec:
         containers:
         - name: ray-head
-          image: rayproject/ray:2.52.0
+          image: rayproject/ray:2.53.0
           resources:
             limits:
               memory: 8G
@@ -37,7 +37,7 @@ spec:
       spec:
         containers:
         - name: ray-worker
-          image: rayproject/ray:2.52.0
+          image: rayproject/ray:2.53.0
           resources:
             limits:
               memory: 8G
