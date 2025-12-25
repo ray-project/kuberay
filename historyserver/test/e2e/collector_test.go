@@ -109,7 +109,7 @@ func ensureS3Client(test Test, g *WithT) (*s3.S3, error) {
 
 	// Check readiness of the minio API endpoint.
 	g.Eventually(func() error {
-		s3Client, err := newMinIOClient(minioAPIEndpoint)
+		s3Client, err := newS3Client(minioAPIEndpoint)
 		if err != nil {
 			return err
 		}
@@ -118,7 +118,7 @@ func ensureS3Client(test Test, g *WithT) (*s3.S3, error) {
 	}, TestTimeoutShort).Should(Succeed(), "MinIO API endpoint should be ready")
 	LogWithTimestamp(test.T(), "Port-forwarded minio API port to localhost:9000 successfully")
 
-	s3Client, err := newMinIOClient(minioAPIEndpoint)
+	s3Client, err := newS3Client(minioAPIEndpoint)
 	g.Expect(err).NotTo(HaveOccurred())
 
 	return s3Client, err
@@ -141,7 +141,7 @@ func applyMinIO(test Test, g *WithT) {
 	}, TestTimeoutMedium).Should(Succeed())
 }
 
-func newMinIOClient(endpoint string) (*s3.S3, error) {
+func newS3Client(endpoint string) (*s3.S3, error) {
 	sess, err := session.NewSession(&aws.Config{
 		Endpoint:         aws.String(endpoint),
 		Region:           aws.String("e2e-test"),
