@@ -81,7 +81,7 @@ func (w *workerPool) init(ctx context.Context, workerSize int, queryInterval tim
 	logger.Info(fmt.Sprintf("Initialize a worker pool with %d goroutine and queryInterval is %v.", workerSize, queryInterval))
 }
 
-func (w *workerPool) PutTask(task Task) error {
+func (w *workerPool) AddTask(task Task) error {
 	select {
 	case w.taskQueue.In <- task:
 		return nil
@@ -129,6 +129,7 @@ func (r *RayDashboardCacheClient) InitClient(ctx context.Context, client RayDash
 					expiredThreshold := time.Now().Add(-cacheExpiry)
 					loggerForGC.Info(fmt.Sprintf("Found %d keys to verify,", len(keys)), "expiredThreshold", expiredThreshold, "tick at", t)
 
+					// zero allocate filtering
 					removed := keys[:0]
 					for _, key := range keys {
 						if cached, ok := cacheStorage.Peek(key); ok {
@@ -219,7 +220,7 @@ func (r *RayDashboardCacheClient) GetJobInfo(ctx context.Context, jobId string) 
 		return true
 	}
 
-	if err := pool.PutTask(task); err != nil {
+	if err := pool.AddTask(task); err != nil {
 		// remove the placeholder because we cannot queue the task.
 		cacheStorage.Remove(jobId)
 		logger.Error(err, "Cannot queue more job info fetching tasks.", "jobId", jobId)
