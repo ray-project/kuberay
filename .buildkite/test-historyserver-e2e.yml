@@ -10,7 +10,8 @@
     - bash ../.buildkite/build-start-operator.sh
     - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
     # Build history server log collector image (wip)
-    - pushd ../historyserver
+    - popd
+    - pushd historyserver
     - bash ../.buildkite/build-historyserver.sh
     # Run e2e tests and print KubeRay operator logs if tests fail
     - echo "--- START:Running History Server Log Collector E2E (nightly operator) tests"
