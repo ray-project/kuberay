@@ -37,8 +37,12 @@ mod:
 	go mod tidy
 
 .PHONY: localimage
-localimage: dockerbuilder_instance
-	docker buildx build -t $(IMG) --platform linux/arm64 . --load
+localimage: ## Build the local log collector image only.
+	docker build -t $(IMG) .
+
+.PHONY: docker-multi-arch-build
+docker-multi-arch-push: ## Build multi-arch images for amd64 and arm64.
+	docker buildx build --platform linux/amd64,linux/arm64 -t ${IMG} .
 
 .PHONY: dockerbuilder_instance
 dockerbuilder_instance:

@@ -1,4 +1,5 @@
-FROM --platform=$BUILDPLATFORM golang:1.25.1 AS builder
+FROM golang:1.25.1 AS builder
+# FROM --platform=$BUILDPLATFORM golang:1.25.1 AS builder
 
 ENV GOPROXY=https://proxy.golang.org,direct
 WORKDIR /historyserver
