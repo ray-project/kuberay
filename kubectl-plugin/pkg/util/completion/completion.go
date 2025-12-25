@@ -59,7 +59,7 @@ func RayClusterResourceNameCompletionFunc(f cmdutil.Factory) func(*cobra.Command
 	}
 }
 
-// Public wrapper for workerGroupCompletionFunc to satisfy ValidArgsFunction
+// WorkerGroupCompletionFunc returns a completion function that completes WorkerGroup resource names.
 func WorkerGroupCompletionFunc(f cmdutil.Factory) func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
 	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		k8sClient, err := client.NewClient(f)
@@ -94,26 +94,34 @@ func workerGroupCompletionFunc(cmd *cobra.Command, args []string, toComplete str
 		namespace = "default"
 	}
 
-	rayClusterList, err := k8sClient.RayClient().RayV1().RayClusters(namespace).List(context.Background(), v1.ListOptions{})
+	listopts := v1.ListOptions{}
+	if cluster != "" {
+		listopts = v1.ListOptions{
+			FieldSelector: fmt.Sprintf("metadata.name=%s", cluster),
+		}
+	}
+
+	rayClusterList, err := k8sClient.RayClient().RayV1().RayClusters(namespace).List(context.Background(), listopts)
 	if err != nil {
 		return comps, directive
 	}
 
+	seen := make(map[string]bool)
 	for _, rayCluster := range rayClusterList.Items {
 		if cluster != "" && rayCluster.Name != cluster {
 			continue
 		}
-
 		for _, spec := range rayCluster.Spec.WorkerGroupSpecs {
-			if toComplete == "" || strings.HasPrefix(spec.GroupName, toComplete) {
+			if !seen[spec.GroupName] && (toComplete == "" || strings.HasPrefix(spec.GroupName, toComplete)) {
 				comps = append(comps, spec.GroupName)
+				seen[spec.GroupName] = true
 			}
 		}
 	}
 	return comps, directive
 }
 
-// Public wrapper for nodeCompletionFunc to satisfy ValidArgsFunction
+// NodeCompletionFunc returns a completion function that completes Node resource names.
 func NodeCompletionFunc(f cmdutil.Factory) func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
 	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		k8sClient, err := client.NewClient(f)

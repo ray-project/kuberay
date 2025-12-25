@@ -327,7 +327,7 @@ func TestWorkerGroupCompletionFunc(t *testing.T) {
 					},
 				},
 			},
-			expectedComps:     []string{"group-1", "group-1"},
+			expectedComps:     []string{"group-1"},
 			expectedDirective: cobra.ShellCompDirectiveNoFileComp,
 		},
 	}
@@ -335,7 +335,7 @@ func TestWorkerGroupCompletionFunc(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			kubeClientSet := kubefake.NewClientset()
-			rayClient := rayClientFake.NewSimpleClientset(tc.rayClusters...)
+			rayClient := rayClientFake.NewClientset(tc.rayClusters...)
 			k8sClient := client.NewClientForTesting(kubeClientSet, rayClient)
 
 			cmd := &cobra.Command{}
@@ -611,7 +611,7 @@ func TestNodeCompletionFunc(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			kubeClientSet := kubefake.NewClientset(tc.pods...)
-			rayClient := rayClientFake.NewSimpleClientset()
+			rayClient := rayClientFake.NewClientset()
 			k8sClient := client.NewClientForTesting(kubeClientSet, rayClient)
 
 			cmd := &cobra.Command{}
