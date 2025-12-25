@@ -19,9 +19,15 @@ import (
 )
 
 const (
-	bucketName = "ray-historyserver-log"
+	// S3 storage provider
+	minioNamespace    = "minio-dev"
+	minioManifestPath = "../../config/minio.yaml"
+	minioUsername     = "minioadmin"
+	minioSecret       = "minioadmin"
+	minioAPIEndpoint  = "http://localhost:9000"
+	s3BucketName      = "ray-historyserver-log"
 
-	minioManifestPath      = "../../config/minio.yaml"
+	// Ray cluster
 	rayClusterManifestPath = "../../config/raycluster.yaml"
 )
 
@@ -41,32 +47,16 @@ func TestLogCollector(t *testing.T) {
 }
 
 func testLogUploadOnDeletion(test Test, g *WithT, namespace *corev1.Namespace) {
-	applyMinIO(test, g)
-
-	// Port-forward the minio API port.
-	ctx, cancel := context.WithCancel(context.Background())
-	test.T().Cleanup(cancel)
-	kubectlCmd := exec.CommandContext(
-		ctx,
-		"kubectl",
-		"-n", "minio-dev",
-		"port-forward",
-		"svc/minio-service",
-		"9000:9000",
-	)
-	err := kubectlCmd.Start()
-	g.Expect(err).NotTo(HaveOccurred())
-	LogWithTimestamp(test.T(), "Port-forwarded minio API port to localhost:9000 successfully")
-
-	s3Client, err := newMinIOClient("http://localhost:9000")
+	s3Client, err := ensureS3Client(test, g)
 	g.Expect(err).NotTo(HaveOccurred())
 
 	// Create a bucket.
 	_, err = s3Client.CreateBucket(&s3.CreateBucketInput{
-		Bucket: aws.String(bucketName),
+		Bucket: aws.String(s3BucketName),
 	})
 	g.Expect(err).NotTo(HaveOccurred())
 
+	// Deploy a Ray cluster with the log collector.
 	rayCluster := applyRayCluster(test, g, namespace)
 
 	// Check the log collector sidecar exists in the head pod.
@@ -89,20 +79,58 @@ func testLogUploadOnDeletion(test Test, g *WithT, namespace *corev1.Namespace) {
 	// Verify logs are successfully uploaded to minio.
 	g.Eventually(func() int64 {
 		objects, _ := s3Client.ListObjectsV2(&s3.ListObjectsV2Input{
-			Bucket: aws.String(bucketName),
+			Bucket: aws.String(s3BucketName),
 		})
+		// TODO(jwj): Add err handling for ListObjectsV2.
 		return aws.Int64Value(objects.KeyCount)
 	}, TestTimeoutMedium).Should(BeNumerically(">", 0))
+
+	// TODO(jwj): Verify existence of specific sessions.
 }
 
 // Define some helpers.
+// Create an S3 client and ensure accessibility.
+func ensureS3Client(test Test, g *WithT) (*s3.S3, error) {
+	applyMinIO(test, g)
+
+	// Port-forward the minio API port.
+	ctx, cancel := context.WithCancel(context.Background())
+	test.T().Cleanup(cancel)
+	kubectlCmd := exec.CommandContext(
+		ctx,
+		"kubectl",
+		"-n", minioNamespace,
+		"port-forward",
+		"svc/minio-service",
+		"9000:9000",
+	)
+	err := kubectlCmd.Start()
+	g.Expect(err).NotTo(HaveOccurred())
+
+	// Check readiness of the minio API endpoint.
+	g.Eventually(func() error {
+		s3Client, err := newMinIOClient(minioAPIEndpoint)
+		if err != nil {
+			return err
+		}
+		_, err = s3Client.ListBuckets(&s3.ListBucketsInput{})
+		return err
+	}, TestTimeoutShort).Should(Succeed(), "MinIO API endpoint should be ready")
+	LogWithTimestamp(test.T(), "Port-forwarded minio API port to localhost:9000 successfully")
+
+	s3Client, err := newMinIOClient(minioAPIEndpoint)
+	g.Expect(err).NotTo(HaveOccurred())
+
+	return s3Client, err
+}
+
 // Deploy minio once per test namespace, making sure it's idempotent.
 func applyMinIO(test Test, g *WithT) {
-	KubectlApplyYAML(test, minioManifestPath, "minio-dev")
+	KubectlApplyYAML(test, minioManifestPath, minioNamespace)
 
 	// Wait for minio pods ready.
 	g.Eventually(func(gg Gomega) {
-		pods, err := test.Client().Core().CoreV1().Pods("minio-dev").List(
+		pods, err := test.Client().Core().CoreV1().Pods(minioNamespace).List(
 			test.Ctx(), metav1.ListOptions{
 				LabelSelector: "app=minio",
 			},
@@ -111,6 +139,20 @@ func applyMinIO(test Test, g *WithT) {
 		gg.Expect(pods.Items).NotTo(BeEmpty())
 		gg.Expect(AllPodsRunningAndReady(pods.Items)).To(BeTrue())
 	}, TestTimeoutMedium).Should(Succeed())
+}
+
+func newMinIOClient(endpoint string) (*s3.S3, error) {
+	sess, err := session.NewSession(&aws.Config{
+		Endpoint:         aws.String(endpoint),
+		Region:           aws.String("e2e-test"),
+		Credentials:      credentials.NewStaticCredentials(minioUsername, minioSecret, ""),
+		DisableSSL:       aws.Bool(true),
+		S3ForcePathStyle: aws.Bool(true),
+	})
+	if err != nil {
+		return nil, err
+	}
+	return s3.New(sess), nil
 }
 
 // Deploy a Ray cluster with the log collector sidecar into the test namespace.
@@ -129,18 +171,4 @@ func applyRayCluster(test Test, g *WithT, namespace *corev1.Namespace) *rayv1.Ra
 		Should(WithTransform(RayClusterState, Equal(rayv1.Ready)))
 
 	return rayCluster
-}
-
-func newMinIOClient(endpoint string) (*s3.S3, error) {
-	sess, err := session.NewSession(&aws.Config{
-		Endpoint:         aws.String(endpoint),
-		Region:           aws.String("e2e-test"),
-		Credentials:      credentials.NewStaticCredentials("minioadmin", "minioadmin", ""),
-		DisableSSL:       aws.Bool(true),
-		S3ForcePathStyle: aws.Bool(true),
-	})
-	if err != nil {
-		return nil, err
-	}
-	return s3.New(sess), nil
 }
