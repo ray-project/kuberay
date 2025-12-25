@@ -2,8 +2,10 @@ package e2e
 
 import (
 	"context"
+	"fmt"
 	"os/exec"
 	"testing"
+	"time"
 
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -15,6 +17,8 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
+	rayv1ac "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/ray/v1"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
 
@@ -38,20 +42,25 @@ func TestLogCollector(t *testing.T) {
 	// Create an isolated Kubernetes namespace.
 	namespace := test.NewTestNamespace()
 
+	// Share a single S3 client among subtests.
+	s3Client, err := ensureS3Client(test, g)
+	g.Expect(err).NotTo(HaveOccurred())
+
 	t.Run("Happy path: Logs should be uploaded to S3 on deletion", func(t *testing.T) {
-		testLogUploadOnDeletion(test, g, namespace)
+		testLogUploadOnDeletion(test, g, namespace, s3Client)
+	})
+
+	t.Run("Single session single node logs should be uploaded to S3 during runtime", func(t *testing.T) {
+		testPrevLogsRuntimeUpload(test, g, namespace, s3Client)
 	})
 
 	// Add other test cases below.
 	//  ...
 }
 
-func testLogUploadOnDeletion(test Test, g *WithT, namespace *corev1.Namespace) {
-	s3Client, err := ensureS3Client(test, g)
-	g.Expect(err).NotTo(HaveOccurred())
-
+func testLogUploadOnDeletion(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
 	// Create a bucket.
-	_, err = s3Client.CreateBucket(&s3.CreateBucketInput{
+	_, err := s3Client.CreateBucket(&s3.CreateBucketInput{
 		Bucket: aws.String(s3BucketName),
 	})
 	g.Expect(err).NotTo(HaveOccurred())
@@ -89,6 +98,89 @@ func testLogUploadOnDeletion(test Test, g *WithT, namespace *corev1.Namespace) {
 
 	// TODO(jwj): Refactor cleanup tasks
 	// Delete S3 bucket to ensure test isolation.
+	deleteS3Bucket(test, g, s3Client)
+}
+
+// testPrevLogsRuntimeUpload verifies logs under /tmp/ray/prev-logs are uploaded during runtime.
+// This makes sure WatchPrevLogsLoops processes logs as they appear.
+//
+// NOTE: For now, logs under /tmp/ray/session_latest are moved to /tmp/ray/prev-logs explicitly.
+func testPrevLogsRuntimeUpload(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+	// TODO(jwj): Refactor preparatory tasks, including creating a new bucket, applying a Ray cluster,
+	// and checking the log collector sidecar container exists in the head pod.
+	_, err := s3Client.CreateBucket(&s3.CreateBucketInput{
+		Bucket: aws.String(s3BucketName),
+	})
+	g.Expect(err).NotTo(HaveOccurred())
+
+	rayCluster := applyRayCluster(test, g, namespace)
+
+	headPod, err := GetHeadPod(test, rayCluster)
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(headPod.Spec.Containers).To(ContainElement(
+		WithTransform(func(c corev1.Container) string { return c.Name }, Equal("collector")),
+	))
+
+	// Submit a Ray job to the existing cluster.
+	jobScript := "import ray; ray.init(); print(ray.cluster_resources())"
+	rayJobAC := rayv1ac.RayJob("ray-job", namespace.Name).
+		WithSpec(rayv1ac.RayJobSpec().
+			WithClusterSelector(map[string]string{utils.RayClusterLabelKey: rayCluster.Name}).
+			WithEntrypoint(fmt.Sprintf("python -c %q", jobScript)).
+			WithShutdownAfterJobFinishes(false). // Keep cluster running.
+			WithSubmitterPodTemplate(JobSubmitterPodTemplateApplyConfiguration()))
+
+	rayJob, err := test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
+	g.Expect(err).NotTo(HaveOccurred())
+	LogWithTimestamp(test.T(), "Created RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
+
+	LogWithTimestamp(test.T(), "Waiting for RayJob %s/%s to complete successfully", rayJob.Namespace, rayJob.Name)
+	g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutShort).
+		Should(WithTransform(RayJobStatus, Equal(rayv1.JobStatusSucceeded)))
+
+	// Explicitly move logs from session_lastest to prev-logs.
+	// NOTE: The command in raycluster.yaml only runs at container startup, not when sessions change.
+	LogWithTimestamp(test.T(), "Moving logs from session_latest to prev-logs")
+	moveLogsCmd := `if [ -d "/tmp/ray/session_latest" ] && [ -f "/tmp/ray/raylet_node_id" ]; then
+session_id=$(basename $(readlink /tmp/ray/session_latest))
+node_id=$(cat /tmp/ray/raylet_node_id)
+dest="/tmp/ray/prev-logs/${session_id}/${node_id}"
+echo "Moving logs from session_latest to ${dest}"
+mkdir -p "${dest}"
+if [ -d "/tmp/ray/session_latest/logs" ]; then
+mv /tmp/ray/session_latest/logs "${dest}/logs"
+echo "Successfully moved logs to ${dest}/logs"
+else
+echo "No logs directory found in session_latest"
+fi
+else
+echo "session_latest or raylet_node_id not found"
+fi`
+	err = execKubectlExec(test, namespace, headPod.Name, []string{"sh", "-c", moveLogsCmd})
+	g.Expect(err).NotTo(HaveOccurred(), "Failed to move logs to prev-logs directory")
+
+	LogWithTimestamp(test.T(), "Waiting for collector to detect and process prev-logs")
+	time.Sleep(3 * time.Second)
+
+	// clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, namespace.Name)
+	g.Eventually(func() int64 {
+		objects, _ := s3Client.ListObjectsV2(&s3.ListObjectsV2Input{
+			Bucket: aws.String(s3BucketName),
+			// Prefix: aws.String(fmt.Sprintf("log/%s/", clusterNameID)),
+		})
+		return aws.Int64Value(objects.KeyCount)
+	}, TestTimeoutMedium).Should(BeNumerically(">", 0))
+	LogWithTimestamp(test.T(), "Verified logs uploaded successfully during runtime")
+
+	err = test.Client().Ray().RayV1().
+		RayClusters(rayCluster.Namespace).
+		Delete(test.Ctx(), rayCluster.Name, metav1.DeleteOptions{})
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Eventually(func() error {
+		_, err := GetRayCluster(test, rayCluster.Namespace, rayCluster.Name)
+		return err
+	}, TestTimeoutMedium).Should(WithTransform(k8serrors.IsNotFound, BeTrue()))
+
 	deleteS3Bucket(test, g, s3Client)
 }
 
@@ -221,4 +313,20 @@ func applyRayCluster(test Test, g *WithT, namespace *corev1.Namespace) *rayv1.Ra
 		Should(WithTransform(RayClusterState, Equal(rayv1.Ready)))
 
 	return rayCluster
+}
+
+func execKubectlExec(test Test, namespace *corev1.Namespace, podName string, command []string) error {
+	args := []string{
+		"exec",
+		"-n", namespace.Name,
+		podName,
+		"--",
+	}
+	args = append(args, command...)
+
+	cmd := exec.CommandContext(test.Ctx(), "kubectl", args...)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("kubectl exec failed: %w, output: %s", err, string(output))
+	}
+	return nil
 }

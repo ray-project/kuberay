@@ -664,10 +664,10 @@ func (r *RayLogHandler) processPrevLogsDir(sessionNodeDir string) {
 
 	logsDir := filepath.Join(sessionNodeDir, "logs")
 	dirExist := false
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 100; i++ {
 		if _, err := os.Stat(logsDir); os.IsNotExist(err) {
 			logrus.Warnf("Logs directory does not exist: %s", logsDir)
-			time.Sleep(time.Millisecond * 10)
+			time.Sleep(time.Second * 1)
 		} else {
 			dirExist = true
 			break
