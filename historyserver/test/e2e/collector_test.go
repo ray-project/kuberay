@@ -86,6 +86,10 @@ func testLogUploadOnDeletion(test Test, g *WithT, namespace *corev1.Namespace) {
 	}, TestTimeoutMedium).Should(BeNumerically(">", 0))
 
 	// TODO(jwj): Verify existence of specific sessions.
+
+	// TODO(jwj): Refactor cleanup tasks
+	// Delete S3 bucket to ensure test isolation.
+	deleteS3Bucket(test, g, s3Client)
 }
 
 // Define some helpers.
@@ -153,6 +157,52 @@ func newS3Client(endpoint string) (*s3.S3, error) {
 		return nil, err
 	}
 	return s3.New(sess), nil
+}
+
+func deleteS3Bucket(test Test, g *WithT, s3Client *s3.S3) {
+	// TODO(jwj): Better err handling during cleanup.
+	LogWithTimestamp(test.T(), "Deleting S3 bucket %s", s3BucketName)
+
+	err := s3Client.ListObjectsV2Pages(&s3.ListObjectsV2Input{
+		Bucket: aws.String(s3BucketName),
+	}, func(page *s3.ListObjectsV2Output, lastPage bool) bool {
+		if len(page.Contents) == 0 {
+			return false
+		}
+
+		var objectsToDelete []*s3.ObjectIdentifier
+		for _, obj := range page.Contents {
+			objectsToDelete = append(objectsToDelete, &s3.ObjectIdentifier{
+				Key: obj.Key,
+			})
+		}
+
+		_, err := s3Client.DeleteObjects(&s3.DeleteObjectsInput{
+			Bucket: aws.String(s3BucketName),
+			Delete: &s3.Delete{
+				Objects: objectsToDelete,
+				Quiet:   aws.Bool(true),
+			},
+		})
+		if err != nil {
+			test.T().Logf("Failed to delete objects: %v", err)
+			return false
+		}
+
+		return true
+	})
+	if err != nil {
+		test.T().Logf("Failed to list/delete objects in bucket: %v", err)
+	}
+
+	_, err = s3Client.DeleteBucket(&s3.DeleteBucketInput{
+		Bucket: aws.String(s3BucketName),
+	})
+	if err != nil {
+		test.T().Logf("Failed to delete bucket %s: %v (this is OK if bucket doesn't exist)", s3BucketName, err)
+	} else {
+		LogWithTimestamp(test.T(), "Deleted S3 bucket %s successfully", s3BucketName)
+	}
 }
 
 // Deploy a Ray cluster with the log collector sidecar into the test namespace.
