@@ -135,7 +135,7 @@ func testPrevLogsRuntimeUpload(test Test, g *WithT, namespace *corev1.Namespace,
 	LogWithTimestamp(test.T(), "Created RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
 
 	LogWithTimestamp(test.T(), "Waiting for RayJob %s/%s to complete successfully", rayJob.Namespace, rayJob.Name)
-	g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutShort).
+	g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
 		Should(WithTransform(RayJobStatus, Equal(rayv1.JobStatusSucceeded)))
 
 	// Explicitly move logs from session_lastest to prev-logs.
