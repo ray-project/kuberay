@@ -20,10 +20,10 @@ spec:
           resources:
             limits:
               cpu: 4
-              memory: 8G
+              memory: 8Gi
             requests:
               cpu: 4
-              memory: 8G
+              memory: 8Gi
           ports:
           - containerPort: 6379
             name: gcs-server
@@ -53,9 +53,9 @@ spec:
           resources:
             limits:
               cpu: 2
-              memory: 8G
+              memory: 8Gi
             requests:
               cpu: 2
-              memory: 8G
+              memory: 8Gi
         nodeSelector:
           node.gke.io/enable-writable-cgroups: "true"

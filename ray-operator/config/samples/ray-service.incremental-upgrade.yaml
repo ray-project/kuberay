@@ -58,12 +58,12 @@ spec:
           - name: ray-head
             image: rayproject/ray:2.51.0
             resources:
-              requests:
-                cpu: "100m"
-                memory: "100Mi"
               limits:
-                cpu: "1"
-                memory: "2Gi"
+                cpu: 1
+                memory: 4Gi
+              requests:
+                cpu: 1
+                memory: 2Gi
             ports:
             - containerPort: 6379
               name: gcs-server
@@ -89,8 +89,8 @@ spec:
                   command: ["/bin/sh", "-c", "ray stop"]
             resources:
               requests:
-                cpu: "500m"
-                memory: "1Gi"
+                cpu: 500m
+                memory: 1Gi
               limits:
-                cpu: "1"
-                memory: "4Gi"
+                cpu: 1
+                memory: 4Gi
