@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubectl/pkg/util/completion"
 
@@ -160,7 +161,7 @@ func nodeCompletionFunc(cmd *cobra.Command, args []string, toComplete string, k8
 	pods, err := k8sClient.KubernetesClient().CoreV1().Pods(namespace).List(
 		context.Background(),
 		v1.ListOptions{
-			LabelSelector: joinLabelMap(labelSelectors),
+			LabelSelector: labels.Set(labelSelectors).String(),
 		},
 	)
 	if err != nil {
@@ -173,16 +174,6 @@ func nodeCompletionFunc(cmd *cobra.Command, args []string, toComplete string, k8
 		}
 	}
 	return comps, directive
-}
-
-// joinLabelMap joins a map of K8s label key-val entries into a label selector string
-// TODO: duplicated function as in kubectl/pkg/cmd/get/get.go
-func joinLabelMap(labelMap map[string]string) string {
-	var labels []string
-	for k, v := range labelMap {
-		labels = append(labels, fmt.Sprintf("%s=%s", k, v))
-	}
-	return strings.Join(labels, ",")
 }
 
 // createRayNodeLabelSelectors creates a map of K8s label selectors for Ray nodes
