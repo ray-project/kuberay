@@ -3,10 +3,12 @@ kind: RayCronJob
 metadata:
   name: raycronjob-sample
 spec:
-  suspend: true
   # Schedule in Cron format, see https://en.wikipedia.org/wiki/Cron.
   # This example runs every minute
   schedule: "* * * * *"
+
+  # Suspend tells the controller to suspend the RayJob scheduling
+  # suspend: false
 
   # JobTemplate defines the RayJob that will be created on each scheduled run
   jobTemplate:
