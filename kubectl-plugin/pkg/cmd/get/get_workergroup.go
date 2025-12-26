@@ -102,7 +102,7 @@ func NewGetWorkerGroupCommand(cmdFactory cmdutil.Factory, streams genericcliopti
 	}
 
 	cmd.Flags().StringVarP(&options.cluster, "ray-cluster", "c", "", "Ray cluster")
-	cmd.Flags().BoolVarP(&options.allNamespaces, "all-namespaces", "A", false, "If present, list nodes across all namespaces. Namespace in current context is ignored even if specified with --namespace.")
+	cmd.Flags().BoolVarP(&options.allNamespaces, "all-namespaces", "A", false, "If present, list workergroups across all namespaces. Namespace in current context is ignored even if specified with --namespace.")
 
 	err := cmd.RegisterFlagCompletionFunc("ray-cluster", completion.RayClusterCompletionFunc(cmdFactory))
 	if err != nil {
