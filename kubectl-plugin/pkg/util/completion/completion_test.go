@@ -39,12 +39,12 @@ func TestWorkerGroupCompletionFunc(t *testing.T) {
 		name              string
 		namespace         string
 		clusterName       string
-		allNamespaces     bool
-		args              []string
 		toComplete        string
+		args              []string
 		rayClusters       []runtime.Object
 		expectedComps     []string
 		expectedDirective cobra.ShellCompDirective
+		allNamespaces     bool
 	}{
 		{
 			name:          "should return workergroup names in default namespace when no flag is set",
@@ -353,13 +353,13 @@ func TestNodeCompletionFunc(t *testing.T) {
 	tests := []struct {
 		name              string
 		namespace         string
-		allNamespaces     bool
 		clusterName       string
-		args              []string
 		toComplete        string
+		args              []string
 		pods              []runtime.Object
 		expectedComps     []string
 		expectedDirective cobra.ShellCompDirective
+		allNamespaces     bool
 	}{
 		{
 			name:          "should return node names in default namespace when no flag is set",
