@@ -70,13 +70,11 @@ func (r *RayLogHandler) Run(stop <-chan struct{}) error {
 	select {
 	case <-sigChan:
 		logrus.Info("Received SIGTERM, processing all logs...")
-		// r.processAllLogs()
 		r.processSessionLatestLogs()
 		// r.processPrevLogsOnShutdown()
 		close(r.ShutdownChan)
 	case <-stop:
 		logrus.Info("Received stop signal, processing all logs...")
-		// r.processAllLogs()
 		r.processSessionLatestLogs()
 		// r.processPrevLogsOnShutdown()
 		close(r.ShutdownChan)
@@ -104,26 +102,6 @@ func (r *RayLogHandler) PushLog(absoluteLogPathName string) error {
 
 	logrus.Infof("Registered log file for later processing: %s", absoluteLogPathName)
 	return nil
-}
-
-func (r *RayLogHandler) processAllLogs() {
-	logrus.Info("Processing all log files...")
-	r.filePathMu.Lock()
-	defer r.filePathMu.Unlock()
-
-	if err := r.Writer.CreateDirectory(r.RootDir); err != nil {
-		logrus.Errorf("Failed to create root directory %s: %v", r.RootDir, err)
-		return
-	}
-
-	for filePath := range r.logFilePaths {
-		// Process each file now
-		if err := r.processLogFile(filePath); err != nil {
-			logrus.Errorf("Failed to process log file %s: %v", filePath, err)
-		}
-	}
-
-	logrus.Info("Finished processing all log files")
 }
 
 // processSessionLatestLogs processes logs in /tmp/ray/session_latest/logs directory
@@ -238,43 +216,6 @@ func (r *RayLogHandler) processSessionLatestLogFile(absoluteLogPathName, session
 	logrus.Infof("Processing session_latest log file %s (object: %s)", absoluteLogPathName, objectName)
 
 	// Read the entire file content
-	content, err := os.ReadFile(absoluteLogPathName)
-	if err != nil {
-		logrus.Errorf("Failed to read file %s: %v", absoluteLogPathName, err)
-		return err
-	}
-
-	// Write to storage
-	err = r.Writer.WriteFile(objectName, bytes.NewReader(content))
-	if err != nil {
-		logrus.Errorf("Failed to write object %s: %v", objectName, err)
-		return err
-	}
-
-	logrus.Infof("Successfully wrote object %s, size: %d bytes", objectName, len(content))
-	return nil
-}
-
-func (r *RayLogHandler) processLogFile(absoluteLogPathName string) error {
-	// Calculate relative path
-	relativePath := strings.TrimPrefix(absoluteLogPathName, fmt.Sprintf("%s/", r.LogDir))
-	// Split relative path into subdir and filename
-	subdir, filename := filepath.Split(relativePath)
-	sessionName := path.Base(r.SessionDir)
-	logDir := utils.GetLogDir(r.RootDir, r.RayClusterName, r.RayClusterID, sessionName, r.RayNodeName)
-
-	if len(subdir) != 0 {
-		dirName := path.Join(logDir, subdir)
-		if err := r.Writer.CreateDirectory(dirName); err != nil {
-			logrus.Errorf("Failed to create directory '%s': %v", dirName, err)
-			return err
-		}
-	}
-
-	objectName := path.Join(logDir, subdir, filename)
-	logrus.Infof("Processing log file %s (object: %s)", absoluteLogPathName, objectName)
-
-	// Read the entire file content only when processing
 	content, err := os.ReadFile(absoluteLogPathName)
 	if err != nil {
 		logrus.Errorf("Failed to read file %s: %v", absoluteLogPathName, err)
