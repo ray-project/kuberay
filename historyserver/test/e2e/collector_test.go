@@ -211,7 +211,7 @@ func ensureS3Client(test Test, g *WithT) (*s3.S3, error) {
 		}
 		_, err = s3Client.ListBuckets(&s3.ListBucketsInput{})
 		return err
-	}, TestTimeoutShort).Should(Succeed(), "MinIO API endpoint should be ready")
+	}, TestTimeoutMedium).Should(Succeed(), "MinIO API endpoint should be ready")
 	LogWithTimestamp(test.T(), "Port-forwarded minio API port to localhost:9000 successfully")
 
 	s3Client, err := newS3Client(minioAPIEndpoint)
@@ -309,8 +309,12 @@ func applyRayCluster(test Test, g *WithT, namespace *corev1.Namespace) *rayv1.Ra
 	LogWithTimestamp(test.T(), "Created RayCluster %s/%s successfully", rayCluster.Namespace, rayCluster.Name)
 
 	LogWithTimestamp(test.T(), "Waiting for RayCluster %s/%s to become ready", rayCluster.Namespace, rayCluster.Name)
-	g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutMedium).
+	g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutLong).
 		Should(WithTransform(RayClusterState, Equal(rayv1.Ready)))
+
+	LogWithTimestamp(test.T(), "Waiting for head pod of RayCluster %s/%s to be running and ready", rayCluster.Namespace, rayCluster.Name)
+	g.Eventually(HeadPod(test, rayCluster), TestTimeoutMedium).
+		Should(WithTransform(IsPodRunningAndReady, BeTrue()))
 
 	return rayCluster
 }
