@@ -8,6 +8,7 @@ import (
 	"time"
 
 	lru "github.com/hashicorp/golang-lru/v2"
+	"github.com/smallnest/chanx"
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
@@ -51,13 +52,13 @@ type (
 	}
 
 	workerPool struct {
-		taskQueue ExtendableChannel[Task]
+		taskQueue *chanx.UnboundedChan[Task]
 	}
 )
 
 func (w *workerPool) init(ctx context.Context, workerSize int, queryInterval time.Duration) {
 	logger := ctrl.LoggerFrom(ctx).WithName("RayDashboardCacheClient").WithName("WorkerPool")
-	w.taskQueue = NewExtendableChannel[Task]()
+	w.taskQueue = chanx.NewUnboundedChanSize[Task](ctx, 0, 0, initBufferSize)
 
 	for i := 0; i < workerSize; i++ {
 		go func(workerID int) {
@@ -255,104 +256,4 @@ func (r *RayDashboardCacheClient) StopJob(ctx context.Context, jobName string) e
 func (r *RayDashboardCacheClient) DeleteJob(ctx context.Context, jobName string) error {
 	cacheStorage.Remove(jobName)
 	return r.client.DeleteJob(ctx, jobName)
-}
-
-type ExtendableChannel[T any] struct {
-	In  chan<- T
-	Out <-chan T
-}
-
-func NewExtendableChannel[T any]() ExtendableChannel[T] {
-	in := make(chan T)
-	out := make(chan T)
-
-	go func() {
-		defer close(out)
-		ringBuffer := *NewRingBuffer[T](initBufferSize)
-
-		for {
-			if ringBuffer.Len() == 0 {
-				v, ok := <-in
-				if !ok {
-					return
-				}
-				ringBuffer.Push(v)
-			}
-
-			// the above if-statement guarantees that ringBuffer.Len() > 0 here.
-			// so Pop() won't return an error.
-			t, _ := ringBuffer.Pop()
-			select {
-			case v, ok := <-in:
-				if !ok {
-					// Inbound closed; drain the buffer
-					for ringBuffer.Len() > 0 {
-						item, _ := ringBuffer.Pop()
-						out <- item
-					}
-					return
-				}
-
-				ringBuffer.Push(v)
-			case out <- t:
-			}
-		}
-	}()
-
-	return ExtendableChannel[T]{In: in, Out: out}
-}
-
-type RingBuffer[T any] struct {
-	buffer  []T
-	head    int
-	tail    int
-	size    int // Current number of items
-	maxSize int // Maximum items in buffer
-}
-
-func NewRingBuffer[T any](maxSize int) *RingBuffer[T] {
-	return &RingBuffer[T]{
-		buffer:  make([]T, maxSize),
-		maxSize: maxSize,
-	}
-}
-
-func (r *RingBuffer[T]) Push(item T) {
-	if r.size == r.maxSize {
-		r.resize()
-	}
-
-	r.buffer[r.head] = item
-	r.head = (r.head + 1) % r.maxSize
-	r.size++
-}
-
-func (r *RingBuffer[T]) resize() {
-	newBuffer := make([]T, r.maxSize*2)
-	for i := 0; i < r.size; i++ {
-		newBuffer[i] = r.buffer[(r.tail+i)%r.maxSize]
-	}
-
-	r.buffer = newBuffer
-	r.tail = 0
-	r.head = r.size
-	r.maxSize *= 2
-}
-
-func (r *RingBuffer[T]) Pop() (T, error) {
-	var zero T
-	if r.size == 0 {
-		return zero, errors.New("buffer is empty")
-	}
-
-	item := r.buffer[r.tail]
-	r.buffer[r.tail] = zero
-	r.tail = (r.tail + 1) % r.maxSize
-	r.size--
-
-	return item, nil
-}
-
-func (r *RingBuffer[T]) Len() int {
-	return r.size
 }
