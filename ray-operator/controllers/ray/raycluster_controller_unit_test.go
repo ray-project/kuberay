@@ -651,7 +651,7 @@ func TestReconcile_RandomDelete_OK(t *testing.T) {
 
 	require.NoError(t, err, "Fail to get pod list")
 
-	assert.Equal(t, len(testPods), len(podList.Items), "Init pod list len is wrong")
+	assert.Len(t, podList.Items, len(testPods), "Init pod list len is wrong")
 	testRayClusterReconciler := &RayClusterReconciler{
 		Client:                     fakeClient,
 		Recorder:                   &record.FakeRecorder{},
@@ -973,7 +973,7 @@ func TestReconcile_PodEvicted_DiffLess0_OK(t *testing.T) {
 			err := fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
 
 			require.NoError(t, err, "Fail to get pod list")
-			assert.Equal(t, len(testPods), len(podList.Items), "Init pod list len is wrong")
+			assert.Len(t, podList.Items, len(testPods), "Init pod list len is wrong")
 
 			// Simulate head pod get evicted.
 			podList.Items[0].Spec.RestartPolicy = tc.restartPolicy
@@ -2494,7 +2494,7 @@ func Test_ShouldDeletePod(t *testing.T) {
 			pod.Status.ContainerStatuses = testCase.containerStatus
 
 			shouldDelete, _ := shouldDeletePod(pod, rayv1.HeadNode)
-			assert.EqualValues(
+			assert.Equal(
 				t, shouldDelete, testCase.shouldDelete,
 				"unexpected value of shouldDelete",
 			)

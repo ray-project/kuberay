@@ -459,7 +459,7 @@ func TestBuildServiceForHeadPodPortsOrder(t *testing.T) {
 	ports2 := svc2.Spec.Ports
 
 	// length should be same
-	assert.Equal(t, len(ports1), len(ports2))
+	assert.Len(t, ports2, len(ports1))
 	for i := 0; i < len(ports1); i++ {
 		// name should be same
 		assert.Equal(t, ports1[i].Name, ports2[i].Name)
