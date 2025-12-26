@@ -44,6 +44,7 @@ var (
 )
 
 type (
+	// Task defines a unit of work for the worker pool and the return value indicate if it should re-queue or not.
 	Task         func(taskCTX context.Context) bool
 	JobInfoCache struct {
 		JobInfo   *utiltypes.RayJobInfo
@@ -183,7 +184,7 @@ func (r *RayDashboardCacheClient) GetJobInfo(ctx context.Context, jobId string) 
 		return cached.JobInfo, cached.Err
 	}
 
-	task := func(taskCTX context.Context) bool {
+	var task Task = func(taskCTX context.Context) bool {
 		if _, existed := cacheStorage.Get(jobId); !existed {
 			logger.Info("The placeholder is removed for jobId", "jobId", jobId)
 			return false
