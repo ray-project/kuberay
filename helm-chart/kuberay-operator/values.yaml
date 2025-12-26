@@ -188,10 +188,6 @@ crNamespacedRbacEnable: true
 #   to resource events within its own namespace.
 singleNamespaceInstall: false
 
-# -- When AsyncJobInfoQuery is set to true:
-#    the KubeRay operator will use background goroutines to fetch the jobInfo from Ray clusters for RayJob status updates.
-asyncJobInfoQuery: false
-
 # The KubeRay operator will watch the custom resources in the namespaces listed in the "watchNamespace" parameter.
 # watchNamespace:
 #   - n1

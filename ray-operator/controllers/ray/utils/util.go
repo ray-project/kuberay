@@ -920,7 +920,7 @@ func FetchHeadServiceURL(ctx context.Context, cli client.Client, rayCluster *ray
 	return headServiceURL, nil
 }
 
-func GetRayDashboardClientFunc(ctx context.Context, mgr manager.Manager, useKubernetesProxy bool, asyncJobInfoQuery bool) func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error) {
+func GetRayDashboardClientFunc(ctx context.Context, mgr manager.Manager, useKubernetesProxy bool) func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error) {
 	return func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error) {
 		dashboardClient := &dashboardclient.RayDashboardClient{}
 		var authToken string
@@ -969,7 +969,7 @@ func GetRayDashboardClientFunc(ctx context.Context, mgr manager.Manager, useKube
 			}, "http://"+url, authToken)
 		}
 
-		if asyncJobInfoQuery {
+		if features.Enabled(features.AsyncJobInfoQuery) {
 			dashboardCachedClient := &dashboardclient.RayDashboardCacheClient{}
 			dashboardCachedClient.InitClient(ctx, dashboardClient)
 			return dashboardCachedClient, nil
