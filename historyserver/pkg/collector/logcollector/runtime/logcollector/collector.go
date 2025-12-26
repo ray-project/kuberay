@@ -70,13 +70,11 @@ func (r *RayLogHandler) Run(stop <-chan struct{}) error {
 	select {
 	case <-sigChan:
 		logrus.Info("Received SIGTERM, processing all logs...")
-		// r.processAllLogs()
 		r.processSessionLatestLogs()
 		// r.processPrevLogsOnShutdown()
 		close(r.ShutdownChan)
 	case <-stop:
 		logrus.Info("Received stop signal, processing all logs...")
-		// r.processAllLogs()
 		r.processSessionLatestLogs()
 		// r.processPrevLogsOnShutdown()
 		close(r.ShutdownChan)
@@ -104,26 +102,6 @@ func (r *RayLogHandler) PushLog(absoluteLogPathName string) error {
 
 	logrus.Infof("Registered log file for later processing: %s", absoluteLogPathName)
 	return nil
-}
-
-func (r *RayLogHandler) processAllLogs() {
-	logrus.Info("Processing all log files...")
-	r.filePathMu.Lock()
-	defer r.filePathMu.Unlock()
-
-	if err := r.Writer.CreateDirectory(r.RootDir); err != nil {
-		logrus.Errorf("Failed to create root directory %s: %v", r.RootDir, err)
-		return
-	}
-
-	for filePath := range r.logFilePaths {
-		// Process each file now
-		if err := r.processLogFile(filePath); err != nil {
-			logrus.Errorf("Failed to process log file %s: %v", filePath, err)
-		}
-	}
-
-	logrus.Info("Finished processing all log files")
 }
 
 // processSessionLatestLogs processes logs in /tmp/ray/session_latest/logs directory
