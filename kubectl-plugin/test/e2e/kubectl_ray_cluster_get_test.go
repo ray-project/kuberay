@@ -55,7 +55,7 @@ var _ = Describe("Calling ray plugin `get` command", func() {
 				"2",
 				"0",
 				"0",
-				"3G",
+				"3Gi",
 				rayv1.RayClusterProvisioned,
 				rayv1.Ready,
 			},
