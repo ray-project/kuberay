@@ -2,8 +2,8 @@ apiVersion: ray.io/v1
 kind: RayCluster
 metadata:
   labels:
-    ray.io/cluster: raycluster-log-collector
-  name: raycluster-log-collector
+    ray.io/cluster: raycluster-historyserver
+  name: raycluster-historyserver
   namespace: default
 spec:
   headGroupSpec:
@@ -14,12 +14,16 @@ spec:
     template:
       metadata:
         labels:
-          test: raycluster-log-collector
+          test: raycluster-historyserver
       spec:
         imagePullSecrets:
         affinity:
         containers:
-        - name: ray-head
+        - env:
+          - name: RAY_enable_core_worker_ray_event_to_aggregator
+            value: "1"
+          - name: RAY_DASHBOARD_AGGREGATOR_AGENT_EVENTS_EXPORT_ADDR
+            value: "http://localhost:8084/v1/events"
           image: rayproject/ray:2.52.0
           imagePullPolicy: IfNotPresent
           command:
@@ -27,6 +31,7 @@ spec:
           securityContext:
             allowPrivilegeEscalation: true
             privileged: true
+          name: ray-head
           lifecycle:
             postStart:
               exec:
@@ -80,11 +85,13 @@ spec:
             value: "test"
           - name: S3FORCE_PATH_STYLE
             value: "true"
-          args:
+          command:
+          - collector
           - --role=Head
           - --runtime-class-name=s3
-          - --ray-cluster-name=raycluster-log-collector
+          - --ray-cluster-name=raycluster-historyserver
           - --ray-root-dir=log
+          - --events-port=8084
           volumeMounts:
           - name: historyserver
             mountPath: /tmp/ray
@@ -105,15 +112,20 @@ spec:
     template:
       metadata:
         labels:
-          test: raycluster-log-collector
+          test: raycluster-historyserver
       spec:
         imagePullSecrets:
         containers:
-        - name: ray-worker
+        - env:
+          - name: RAY_enable_core_worker_ray_event_to_aggregator
+            value: "1"
+          - name: RAY_DASHBOARD_AGGREGATOR_AGENT_EVENTS_EXPORT_ADDR
+            value: "http://localhost:8084/v1/events"
           image: rayproject/ray:2.52.0
-          imagePullPolicy: IfNotPresent
           command:
           - 'echo "=========================================="; [ -d "/tmp/ray/session_latest" ] && dest="/tmp/ray/prev-logs/$(basename $(readlink /tmp/ray/session_latest))/$(cat /tmp/ray/raylet_node_id)" && echo "dst is $dest" && mkdir -p "$dest" && mv /tmp/ray/session_latest/logs "$dest/logs"; echo "========================================="'
+          imagePullPolicy: IfNotPresent
+          name: ray-worker
           securityContext:
             allowPrivilegeEscalation: true
             privileged: true
@@ -154,8 +166,6 @@ spec:
           image: collector:v0.1.0
           imagePullPolicy: IfNotPresent
           env:
-          - name: S3DISABLE_SSL
-            value: "true"
           - name: AWS_S3ID
             value: minioadmin
           - name: AWS_S3SECRET
@@ -170,11 +180,15 @@ spec:
             value: "test"
           - name: S3FORCE_PATH_STYLE
             value: "true"
-          args:
+          - name: S3DISABLE_SSL
+            value: "true"
+          command:
+          - collector
           - --role=Worker
           - --runtime-class-name=s3
-          - --ray-cluster-name=raycluster-log-collector
+          - --ray-cluster-name=raycluster-historyserver
           - --ray-root-dir=log
+          - --events-port=8084
           volumeMounts:
           - name: historyserver
             mountPath: /tmp/ray

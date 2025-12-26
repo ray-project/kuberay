@@ -1,8 +1,8 @@
-# KubeRay History Server - Log Collector
+# KubeRay History Server - Collector
 
 > [!NOTE]
 > The KubeRay History Server is currently under active development. This document aims to provide the step-by-step
-guideline to set up the Log Collector component for local development and testing.
+guideline to set up the Collector component for local development and testing.
 
 ## Table of Contents
 
@@ -21,7 +21,7 @@ TBD...
   * [add the implementation of historyserver collector #4241](https://github.com/ray-project/kuberay/pull/4241)
   * [add the implementation of historyserver #4242](https://github.com/ray-project/kuberay/pull/4242)
 
-## Test the Log Collector on the Kind Cluster
+## Test the Collector on the Kind Cluster
 
 ### Prerequisites
 
@@ -42,13 +42,13 @@ git clone https://github.com/ray-project/kuberay.git
 cd kuberay/ray-operator
 
 # Spin up a kind cluster.
-kind create cluster --image=kindest/node:v1.26.0 --name kuberay
+kind create cluster --image=kindest/node:v1.26.0
 
 # Build the KubeRay operator image.
 IMG=kuberay/operator:latest make docker-build
 
 # Load the custom KubeRay image into the kind cluster.
-kind load docker-image kuberay/operator:latest --name kuberay
+kind load docker-image kuberay/operator:latest
 
 # Install the KubeRay operator with the custom image via local Helm chart.
 helm install kuberay-operator \
@@ -62,23 +62,11 @@ kubectl logs deployments/kuberay-operator
 k9s
 ```
 
-### Checkout the Latest Log Collector Setup PR
-
-Please run the following commands to checkout the latest PR and go into the correct working directory:
-
-```bash
-# Checkout the latest PR.
-gh pr checkout 4303
-
-# CD into the history server dir.
-cd historyserver
-```
-
-### Build the Log Collector Container Image
+### Build the Collector Container Image
 
 ```bash
 # Build the log collector image.
-make localimage
+make -C historyserver localimage
 
 # Check the built image.
 docker images | grep collector
@@ -87,23 +75,23 @@ docker images | grep collector
 You're supposed to see a `collector:v0.1.0` image. If you'd like to change the image reference, please feel free to tag
 it.
 
-### Load the Log Collector Image into the Kind Cluster
+### Load the Collector Image into the Kind Cluster
 
 ```bash
 # Load the image into the kind cluster.
-kind load docker-image collector:v0.1.0 --name kuberay
+kind load docker-image collector:v0.1.0
 
 # Check the loaded image.
-docker exec -it kuberay-control-plane crictl images | grep collector
+docker exec -it kind-control-plane crictl images | grep collector
 ```
 
-### Deploy a Persistence Layer - MinIO
+### Deploy MinIO for Log and Event Storage
 
-As S3 is used as the service provide, you need to deploy minio using the following commands:
+Take s3 as an example, you need to deploy minio using the following commands:
 
 ```bash
 # Apply the minio manifest.
-kubectl apply -f config/minio.yaml
+kubectl apply -f historyserver/config/minio.yaml
 
 # Port-forward the minio UI for sanity check.
 kubectl -n minio-dev port-forward svc/minio-service 9001:9001 --address 0.0.0.0
@@ -132,7 +120,7 @@ interacting with the minio UI.
 
 ```bash
 # Apply the Ray cluster manifest.
-kubectl apply -f config/raycluster.yaml
+kubectl apply -f historyserver/config/raycluster.yaml
 ```
 
 Since the session latest logs will be processed upon the Ray cluster is deleted, you can manully delete the Ray clsuter
@@ -140,7 +128,7 @@ to trigger log file uploading:
 
 ```bash
 # Trigger the session latest log processing upon deletion.
-kubectl delete -f config/raycluster.yaml
+kubectl delete -f historyserver/config/raycluster.yaml
 ```
 
 You're supposed to see the uploaded logs in the minio UI as below:

@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
@@ -257,6 +258,68 @@ func NewWritter(c *types.RayCollectorConfig, jd map[string]interface{}) (storage
 	return New(config)
 }
 
+// TODO: refactor this
+func createBucketIfNotExists(s3Client *s3.S3, bucketName string) error {
+	// Check if bucket exists
+	_, err := s3Client.HeadBucket(&s3.HeadBucketInput{
+		Bucket: aws.String(bucketName),
+	})
+	if err != nil {
+		// Check if the error is because bucket doesn't exist
+		if aerr, ok := err.(awserr.Error); ok {
+			switch aerr.Code() {
+			case s3.ErrCodeNoSuchBucket, "NotFound", "404":
+				// Bucket doesn't exist, create it
+				logrus.Infof("Bucket %s does not exist, creating...", bucketName)
+				_, createErr := s3Client.CreateBucket(&s3.CreateBucketInput{
+					Bucket: aws.String(bucketName),
+				})
+				if createErr != nil {
+					// Check if bucket already exists (race condition)
+					if aerr2, ok := createErr.(awserr.Error); ok {
+						if aerr2.Code() == s3.ErrCodeBucketAlreadyExists ||
+							aerr2.Code() == s3.ErrCodeBucketAlreadyOwnedByYou ||
+							aerr2.Code() == "BucketAlreadyOwnedByYou" {
+							logrus.Infof("Bucket %s already exists", bucketName)
+							return nil
+						}
+					}
+					logrus.Errorf("Failed to create bucket %s: %v", bucketName, createErr)
+					return fmt.Errorf("failed to create bucket %s: %w", bucketName, createErr)
+				}
+				logrus.Infof("Successfully created bucket %s", bucketName)
+				return nil
+			default:
+				// For other AWS errors, try to create anyway
+				logrus.Warnf("HeadBucket error for %s: %v, attempting to create bucket", bucketName, err)
+			}
+		}
+
+		// Try to create the bucket anyway (might be a permission issue for HeadBucket)
+		logrus.Infof("Attempting to create bucket %s...", bucketName)
+		_, createErr := s3Client.CreateBucket(&s3.CreateBucketInput{
+			Bucket: aws.String(bucketName),
+		})
+		if createErr != nil {
+			if aerr, ok := createErr.(awserr.Error); ok {
+				if aerr.Code() == s3.ErrCodeBucketAlreadyExists ||
+					aerr.Code() == s3.ErrCodeBucketAlreadyOwnedByYou ||
+					aerr.Code() == "BucketAlreadyOwnedByYou" {
+					logrus.Infof("Bucket %s already exists", bucketName)
+					return nil
+				}
+			}
+			logrus.Errorf("Failed to create bucket %s: %v", bucketName, createErr)
+			return fmt.Errorf("failed to create bucket %s: %w", bucketName, createErr)
+		}
+		logrus.Infof("Successfully created bucket %s", bucketName)
+		return nil
+	}
+
+	logrus.Infof("Bucket %s already exists", bucketName)
+	return nil
+}
+
 func New(c *config) (*RayLogsHandler, error) {
 	logrus.Infof("Begin to create s3 client ...")
 
@@ -278,6 +341,12 @@ func New(c *config) (*RayLogsHandler, error) {
 	}
 
 	s3Client := s3.New(sess)
+
+	// Ensure bucket exists, create if not
+	logrus.Infof("Checking if bucket %s exists...", c.S3Bucket)
+	if err := createBucketIfNotExists(s3Client, c.S3Bucket); err != nil {
+		return nil, fmt.Errorf("failed to ensure bucket exists: %w", err)
+	}
 
 	sessionDir := strings.TrimSpace(c.SessionDir)
 	sessionDir = filepath.Clean(sessionDir)

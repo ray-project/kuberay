@@ -8,6 +8,8 @@ import (
 	"github.com/ray-project/kuberay/historyserver/pkg/collector/types"
 )
 
+const DefaultS3Bucket = "ray-historyserver"
+
 type config struct {
 	S3ForcePathStyle *bool
 	DisableSSL       *bool
@@ -20,13 +22,21 @@ type config struct {
 	types.RayCollectorConfig
 }
 
+func getS3BucketWithDefault() string {
+	bucket := os.Getenv("S3_BUCKET")
+	if bucket == "" {
+		return DefaultS3Bucket
+	}
+	return bucket
+}
+
 func (c *config) complete(rcc *types.RayCollectorConfig, jd map[string]interface{}) {
 	c.RayCollectorConfig = *rcc
 	c.S3ID = os.Getenv("AWS_S3ID")
 	c.S3Secret = os.Getenv("AWS_S3SECRET")
 	c.S3Token = os.Getenv("AWS_S3TOKEN")
+	c.S3Bucket = getS3BucketWithDefault()
 	if len(jd) == 0 {
-		c.S3Bucket = os.Getenv("S3_BUCKET")
 		c.S3Endpoint = os.Getenv("S3_ENDPOINT")
 		c.S3Region = os.Getenv("S3_REGION")
 		if os.Getenv("S3FORCE_PATH_STYLE") != "" {
@@ -61,8 +71,8 @@ func (c *config) completeHSConfig(rcc *types.RayHistoryServerConfig, jd map[stri
 	c.S3ID = os.Getenv("AWS_S3ID")
 	c.S3Secret = os.Getenv("AWS_S3SECRET")
 	c.S3Token = os.Getenv("AWS_S3TOKEN")
+	c.S3Bucket = getS3BucketWithDefault() // Use default if S3_BUCKET not set
 	if len(jd) == 0 {
-		c.S3Bucket = os.Getenv("S3_BUCKET")
 		c.S3Endpoint = os.Getenv("S3_ENDPOINT")
 		c.S3Region = os.Getenv("S3_REGION")
 		if os.Getenv("S3FORCE_PATH_STYLE") != "" {
