@@ -20,6 +20,7 @@ import (
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
 
+//nolint:unparam // namespace parameter kept for flexibility in future tests
 func rayCronJobTemplate(name string, namespace string, schedule string) *rayv1.RayCronJob {
 	return &rayv1.RayCronJob{
 		ObjectMeta: metav1.ObjectMeta{
@@ -253,6 +254,65 @@ func TestRayCronJobReconcile_CreateRayJob(t *testing.T) {
 	assert.True(t, fakeCurrTime.Equal(updatedCronJob.Status.LastScheduleTime.Time),
 		"LastScheduleTime should be updated to current time after creating job. Expected: %v, Got: %v",
 		fakeCurrTime, updatedCronJob.Status.LastScheduleTime.Time)
+}
+
+func TestRayCronJobReconcile_Suspend(t *testing.T) {
+	ctx := context.Background()
+
+	// Create RayCronJob with suspend=true
+	rayCronJob := rayCronJobTemplate("suspended-cronjob", "default", "*/5 * * * *")
+	rayCronJob.Spec.Suspend = true
+
+	// Create scheme and add types
+	scheme := runtime.NewScheme()
+	err := rayv1.AddToScheme(scheme)
+	require.NoError(t, err)
+	err = corev1.AddToScheme(scheme)
+	require.NoError(t, err)
+
+	// Create fake client
+	fakeClient := clientFake.NewClientBuilder().
+		WithScheme(scheme).
+		WithRuntimeObjects(rayCronJob).
+		Build()
+
+	// Create fake event recorder with a channel to capture events
+	fakeRecorder := record.NewFakeRecorder(10)
+
+	// Create reconciler
+	reconciler := &RayCronJobReconciler{
+		Client:   fakeClient,
+		Scheme:   scheme,
+		Recorder: fakeRecorder,
+		clock:    clocktesting.NewFakeClock(time.Time{}),
+	}
+
+	// Reconcile
+	result, err := reconciler.Reconcile(ctx, ctrl.Request{
+		NamespacedName: types.NamespacedName{
+			Name:      "suspended-cronjob",
+			Namespace: "default",
+		},
+	})
+
+	// Should return no error and no requeue
+	require.NoError(t, err)
+	assert.Equal(t, ctrl.Result{}, result)
+
+	// Verify no RayJob was created
+	rayJobList := &rayv1.RayJobList{}
+	err = fakeClient.List(ctx, rayJobList)
+	require.NoError(t, err)
+	assert.Len(t, rayJobList.Items, 0, "Should not create RayJob when suspended")
+
+	// Verify that a suspend event was recorded
+	select {
+	case event := <-fakeRecorder.Events:
+		assert.Contains(t, event, "Normal")
+		assert.Contains(t, event, "suspended")
+	default:
+		t.Error("Expected a suspend event to be recorded, but none was found")
+	}
 }
 
 func TestUpdateRayCronJobStatus(t *testing.T) {

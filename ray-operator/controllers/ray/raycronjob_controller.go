@@ -82,6 +82,14 @@ func (r *RayCronJobReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 		return ctrl.Result{}, nil
 	}
 
+	// check if the Suspend is set
+	if rayCronJobInstance.Spec.Suspend {
+		logger.Info("RayCronJob suspended, no new RayJobs will be created.")
+		r.Recorder.Eventf(rayCronJobInstance, corev1.EventTypeNormal, string(utils.SuspendRayCronJob),
+			"RayCronJob suspended, no new RayJobs will be created")
+		return ctrl.Result{}, nil
+	}
+
 	// Parse the schedule after validation
 	schedule, err := cron.ParseStandard(rayCronJobInstance.Spec.Schedule)
 	if err != nil {
