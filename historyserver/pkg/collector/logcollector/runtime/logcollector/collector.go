@@ -233,43 +233,6 @@ func (r *RayLogHandler) processSessionLatestLogFile(absoluteLogPathName, session
 	return nil
 }
 
-func (r *RayLogHandler) processLogFile(absoluteLogPathName string) error {
-	// Calculate relative path
-	relativePath := strings.TrimPrefix(absoluteLogPathName, fmt.Sprintf("%s/", r.LogDir))
-	// Split relative path into subdir and filename
-	subdir, filename := filepath.Split(relativePath)
-	sessionName := path.Base(r.SessionDir)
-	logDir := utils.GetLogDir(r.RootDir, r.RayClusterName, r.RayClusterID, sessionName, r.RayNodeName)
-
-	if len(subdir) != 0 {
-		dirName := path.Join(logDir, subdir)
-		if err := r.Writer.CreateDirectory(dirName); err != nil {
-			logrus.Errorf("Failed to create directory '%s': %v", dirName, err)
-			return err
-		}
-	}
-
-	objectName := path.Join(logDir, subdir, filename)
-	logrus.Infof("Processing log file %s (object: %s)", absoluteLogPathName, objectName)
-
-	// Read the entire file content only when processing
-	content, err := os.ReadFile(absoluteLogPathName)
-	if err != nil {
-		logrus.Errorf("Failed to read file %s: %v", absoluteLogPathName, err)
-		return err
-	}
-
-	// Write to storage
-	err = r.Writer.WriteFile(objectName, bytes.NewReader(content))
-	if err != nil {
-		logrus.Errorf("Failed to write object %s: %v", objectName, err)
-		return err
-	}
-
-	logrus.Infof("Successfully wrote object %s, size: %d bytes", objectName, len(content))
-	return nil
-}
-
 func (r *RayLogHandler) WatchLogsLoops(watcher *fsnotify.Watcher, walkPath string) {
 	// Watch current directory
 	if err := watcher.Add(walkPath); err != nil {
