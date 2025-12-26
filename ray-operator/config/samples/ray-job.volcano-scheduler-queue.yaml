@@ -13,7 +13,6 @@ kind: RayJob
 metadata:
   name: rayjob-sample-0
   labels:
-    ray.io/scheduler-name: volcano
     volcano.sh/queue-name: kuberay-test-queue
 spec:
   entrypoint: python /home/ray/samples/sample_code.py
@@ -41,11 +40,11 @@ spec:
               name: client
             resources:
               limits:
-                cpu: "1"
-                memory: "2Gi"
+                cpu: 1
+                memory: 4Gi
               requests:
-                cpu: "1"
-                memory: "2Gi"
+                cpu: 1
+                memory: 2Gi
             volumeMounts:
             - mountPath: /home/ray/samples
               name: code-sample
@@ -69,11 +68,11 @@ spec:
             image: rayproject/ray:2.52.0
             resources:
               limits:
-                cpu: "1"
-                memory: "1Gi"
+                cpu: 1
+                memory: 1Gi
               requests:
-                cpu: "1"
-                memory: "1Gi"
+                cpu: 1
+                memory: 1Gi
 ---
 apiVersion: v1
 kind: ConfigMap
