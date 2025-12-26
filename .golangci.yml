@@ -14,13 +14,13 @@ linters:
     - unparam
     - unused
     - wastedassign
+    - gosec
+    - govet
+    - errcheck
     - testifylint
     # TODO: The following linters are disabled for now to unblock the golangci-lint v2 migration.
     # We will fix the lint errors and re-enable these linters in follow-up PRs.
     # - noctx
-    # - gosec
-    # - govet
-    # - errcheck
     # - errorlint
     # - revive
     # - staticcheck
