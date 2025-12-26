@@ -156,8 +156,13 @@ fi
 else
 echo "session_latest or raylet_node_id not found"
 fi`
-	err = execKubectlExec(test, namespace, headPod.Name, []string{"sh", "-c", moveLogsCmd})
-	g.Expect(err).NotTo(HaveOccurred(), "Failed to move logs to prev-logs directory")
+	g.Eventually(func() error {
+		headPod, err = GetHeadPod(test, rayCluster)
+		if err != nil {
+			return err
+		}
+		return execKubectlExec(test, namespace, headPod.Name, []string{"sh", "-c", moveLogsCmd})
+	}, TestTimeoutMedium).Should(Succeed(), "Failed to move logs to prev-logs directory")
 
 	LogWithTimestamp(test.T(), "Waiting for collector to detect and process prev-logs")
 	time.Sleep(3 * time.Second)
