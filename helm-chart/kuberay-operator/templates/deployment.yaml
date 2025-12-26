@@ -152,9 +152,6 @@ spec:
             {{- $argList = append $argList (printf "--burst=%v" .Values.kubeClient.burst) -}}
             {{- end -}}
             {{- end -}}
-            {{- if hasKey .Values "asyncJobInfoQuery" -}}
-            {{- $argList = append $argList (printf "--async-jobinfo-query=%t" .Values.asyncJobInfoQuery) -}}
-            {{- end -}}
             {{- (printf "\n") -}}
             {{- $argList | toYaml | indent 12 }}
           ports:
