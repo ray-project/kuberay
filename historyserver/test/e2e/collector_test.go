@@ -29,13 +29,13 @@ const (
 	minioUsername     = "minioadmin"
 	minioSecret       = "minioadmin"
 	minioAPIEndpoint  = "http://localhost:9000"
-	s3BucketName      = "ray-historyserver-log"
+	s3BucketName      = "ray-historyserver"
 
 	// Ray cluster
 	rayClusterManifestPath = "../../config/raycluster.yaml"
 )
 
-func TestLogCollector(t *testing.T) {
+func TestCollector(t *testing.T) {
 	test := With(t)
 	g := NewWithT(t)
 
@@ -46,8 +46,8 @@ func TestLogCollector(t *testing.T) {
 	s3Client, err := ensureS3Client(test, g)
 	g.Expect(err).NotTo(HaveOccurred())
 
-	t.Run("Happy path: Logs should be uploaded to S3 on deletion", func(t *testing.T) {
-		testLogUploadOnDeletion(test, g, namespace, s3Client)
+	t.Run("Happy path: Logs and events should be uploaded to S3 on deletion", func(t *testing.T) {
+		testLogAndEventUploadOnDeletion(test, g, namespace, s3Client)
 	})
 
 	t.Run("Single session single node logs should be uploaded to S3 during runtime", func(t *testing.T) {
@@ -58,22 +58,25 @@ func TestLogCollector(t *testing.T) {
 	//  ...
 }
 
-func testLogUploadOnDeletion(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
-	// Create a bucket.
-	_, err := s3Client.CreateBucket(&s3.CreateBucketInput{
-		Bucket: aws.String(s3BucketName),
-	})
-	g.Expect(err).NotTo(HaveOccurred())
-
-	// Deploy a Ray cluster with the log collector.
+func testLogAndEventUploadOnDeletion(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+	// Deploy a Ray cluster with the collector.
 	rayCluster := applyRayCluster(test, g, namespace)
 
-	// Check the log collector sidecar exists in the head pod.
+	// Check the collector sidecar exists in the head pod.
 	headPod, err := GetHeadPod(test, rayCluster)
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(headPod.Spec.Containers).To(ContainElement(
 		WithTransform(func(c corev1.Container) string { return c.Name }, Equal("collector")),
 	))
+
+	// Check an empty S3 bucket is automatically created.
+	_, err = s3Client.HeadBucket(&s3.HeadBucketInput{
+		Bucket: aws.String(s3BucketName),
+	})
+	g.Expect(err).NotTo(HaveOccurred())
+
+	// Submit a Ray job to the existing cluster.
+	_ = applyRayJobToCluster(test, g, namespace, rayCluster)
 
 	// Delete the Ray cluster to trigger log uploading on deletion.
 	err = test.Client().Ray().RayV1().
@@ -106,13 +109,8 @@ func testLogUploadOnDeletion(test Test, g *WithT, namespace *corev1.Namespace, s
 //
 // NOTE: For now, logs under /tmp/ray/session_latest are moved to /tmp/ray/prev-logs explicitly.
 func testPrevLogsRuntimeUpload(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
-	// TODO(jwj): Refactor preparatory tasks, including creating a new bucket, applying a Ray cluster,
-	// and checking the log collector sidecar container exists in the head pod.
-	_, err := s3Client.CreateBucket(&s3.CreateBucketInput{
-		Bucket: aws.String(s3BucketName),
-	})
-	g.Expect(err).NotTo(HaveOccurred())
-
+	// TODO(jwj): Refactor preparatory tasks, including applying a Ray cluster, checking the collector
+	// sidecar container exists in the head pod, and checking an empty S3 bucket exists.
 	rayCluster := applyRayCluster(test, g, namespace)
 
 	headPod, err := GetHeadPod(test, rayCluster)
@@ -121,22 +119,14 @@ func testPrevLogsRuntimeUpload(test Test, g *WithT, namespace *corev1.Namespace,
 		WithTransform(func(c corev1.Container) string { return c.Name }, Equal("collector")),
 	))
 
-	// Submit a Ray job to the existing cluster.
-	jobScript := "import ray; ray.init(); print(ray.cluster_resources())"
-	rayJobAC := rayv1ac.RayJob("ray-job", namespace.Name).
-		WithSpec(rayv1ac.RayJobSpec().
-			WithClusterSelector(map[string]string{utils.RayClusterLabelKey: rayCluster.Name}).
-			WithEntrypoint(fmt.Sprintf("python -c %q", jobScript)).
-			WithShutdownAfterJobFinishes(false). // Keep cluster running.
-			WithSubmitterPodTemplate(JobSubmitterPodTemplateApplyConfiguration()))
-
-	rayJob, err := test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
+	// Check an empty S3 bucket is automatically created.
+	_, err = s3Client.HeadBucket(&s3.HeadBucketInput{
+		Bucket: aws.String(s3BucketName),
+	})
 	g.Expect(err).NotTo(HaveOccurred())
-	LogWithTimestamp(test.T(), "Created RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
 
-	LogWithTimestamp(test.T(), "Waiting for RayJob %s/%s to complete successfully", rayJob.Namespace, rayJob.Name)
-	g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
-		Should(WithTransform(RayJobStatus, Equal(rayv1.JobStatusSucceeded)))
+	// Submit a Ray job to the existing cluster.
+	applyRayJobToCluster(test, g, namespace, rayCluster)
 
 	// Explicitly move logs from session_lastest to prev-logs.
 	// NOTE: The command in raycluster.yaml only runs at container startup, not when sessions change.
@@ -189,7 +179,6 @@ fi`
 	deleteS3Bucket(test, g, s3Client)
 }
 
-// Define some helpers.
 // Create an S3 client and ensure accessibility.
 func ensureS3Client(test Test, g *WithT) (*s3.S3, error) {
 	applyMinIO(test, g)
@@ -226,6 +215,7 @@ func ensureS3Client(test Test, g *WithT) (*s3.S3, error) {
 }
 
 // Deploy minio once per test namespace, making sure it's idempotent.
+// TODO(jwj): Check idempotency.
 func applyMinIO(test Test, g *WithT) {
 	KubectlApplyYAML(test, minioManifestPath, minioNamespace)
 
@@ -302,7 +292,7 @@ func deleteS3Bucket(test Test, g *WithT, s3Client *s3.S3) {
 	}
 }
 
-// Deploy a Ray cluster with the log collector sidecar into the test namespace.
+// Deploy a Ray cluster with the collector sidecar into the test namespace.
 func applyRayCluster(test Test, g *WithT, namespace *corev1.Namespace) *rayv1.RayCluster {
 	rayClusterFromYaml := DeserializeRayClusterYAML(test, rayClusterManifestPath)
 	rayClusterFromYaml.Namespace = namespace.Name
@@ -322,6 +312,26 @@ func applyRayCluster(test Test, g *WithT, namespace *corev1.Namespace) *rayv1.Ra
 		Should(WithTransform(IsPodRunningAndReady, BeTrue()))
 
 	return rayCluster
+}
+
+func applyRayJobToCluster(test Test, g *WithT, namespace *corev1.Namespace, rayCluster *rayv1.RayCluster) *rayv1.RayJob {
+	jobScript := "import ray; ray.init(); print(ray.cluster_resources())"
+	rayJobAC := rayv1ac.RayJob("ray-job", namespace.Name).
+		WithSpec(rayv1ac.RayJobSpec().
+			WithClusterSelector(map[string]string{utils.RayClusterLabelKey: rayCluster.Name}).
+			WithEntrypoint(fmt.Sprintf("python -c %q", jobScript)).
+			WithShutdownAfterJobFinishes(false). // Keep cluster running.
+			WithSubmitterPodTemplate(JobSubmitterPodTemplateApplyConfiguration()))
+
+	rayJob, err := test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
+	g.Expect(err).NotTo(HaveOccurred())
+	LogWithTimestamp(test.T(), "Created RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
+
+	LogWithTimestamp(test.T(), "Waiting for RayJob %s/%s to complete successfully", rayJob.Namespace, rayJob.Name)
+	g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
+		Should(WithTransform(RayJobStatus, Equal(rayv1.JobStatusSucceeded)))
+
+	return rayJob
 }
 
 func execKubectlExec(test Test, namespace *corev1.Namespace, podName string, command []string) error {
