@@ -616,6 +616,12 @@ func (r *RayClusterReconciler) reconcileHeadlessService(ctx context.Context, ins
 func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv1.RayCluster) error {
 	logger := ctrl.LoggerFrom(ctx)
 
+	// Calculate RayCluster spec hash for the UpgradeStrategy
+	clusterHash, err := generateRayClusterSpecHashForUpgrade(instance.Spec)
+	if err != nil {
+		return err
+	}
+
 	// if RayCluster is suspending, delete all pods and skip reconcile
 	suspendStatus := utils.FindRayClusterSuspendStatus(instance)
 	statusConditionGateEnabled := features.Enabled(features.RayClusterStatusConditions)
@@ -725,7 +731,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 		}
 		// Create head Pod if it does not exist.
 		logger.Info("reconcilePods: Found 0 head Pods; creating a head Pod for the RayCluster.")
-		if err := r.createHeadPod(ctx, *instance); err != nil {
+		if err := r.createHeadPod(ctx, *instance, clusterHash); err != nil {
 			return errstd.Join(utils.ErrFailedCreateHeadPod, err)
 		}
 	} else if len(headPods.Items) > 1 { // This should never happen. This protects against the case that users manually create headpod.
@@ -1117,7 +1123,7 @@ func (r *RayClusterReconciler) reconcileMultiHostWorkerGroup(ctx context.Context
 	return nil
 }
 
-// shouldRecreatePodsForUpgrade checks if any pods need to be recreated based on PodTemplateSpec changes
+// shouldRecreatePodsForUpgrade checks if any pods need to be recreated based on RayClusterSpec changes
 func (r *RayClusterReconciler) shouldRecreatePodsForUpgrade(ctx context.Context, instance *rayv1.RayCluster) bool {
 	logger := ctrl.LoggerFrom(ctx)
 
@@ -1131,43 +1137,49 @@ func (r *RayClusterReconciler) shouldRecreatePodsForUpgrade(ctx context.Context,
 		return false
 	}
 
+	// If the KubeRay version has changed, skip recreation to avoid unnecessary pod recreation
 	if len(headPods.Items) == 1 {
-		expectedHeadHash, err := common.GeneratePodTemplateHash(instance.Spec.HeadGroupSpec.Template)
-		if err != nil {
-			logger.Error(err, "Failed to generate head template hash")
+		headPod := headPods.Items[0]
+		podVersion := headPod.Annotations[utils.KubeRayVersion]
+		if podVersion != "" && podVersion != utils.KUBERAY_VERSION {
+			logger.Info("KubeRay version has changed, skipping pod recreation", "rayCluster", instance.Name)
 			return false
 		}
+	}
 
+	expectedClusterHash, err := generateRayClusterSpecHashForUpgrade(instance.Spec)
+	if err != nil {
+		logger.Error(err, "Failed to generate cluster spec hash for Recreate upgradeStrategy, skipping comparison")
+		return false
+	}
+
+	if len(headPods.Items) == 1 {
 		headPod := headPods.Items[0]
-		actualHash := headPod.Annotations[utils.PodTemplateHashKey]
-		if actualHash != "" && actualHash != expectedHeadHash {
-			logger.Info("Pod template has changed, will recreate all pods", "rayCluster", instance.Name)
+		actualHash := headPod.Annotations[utils.RayClusterUpgradeStrategyHashKey]
+		if actualHash != "" && actualHash != expectedClusterHash {
+			logger.Info("RayCluster spec has changed, will recreate all pods", "rayCluster", instance.Name)
 			return true
 		}
 	}
 
-	for _, workerGroup := range instance.Spec.WorkerGroupSpecs {
-		workerPods := corev1.PodList{}
-		if err := r.List(ctx, &workerPods, common.RayClusterGroupPodsAssociationOptions(instance, workerGroup.GroupName).ToListOptions()...); err != nil {
-			logger.Error(err, "Failed to list worker pods for upgrade check", "groupName", workerGroup.GroupName)
-			continue
-		}
-
-		expectedWorkerHash, err := common.GeneratePodTemplateHash(workerGroup.Template)
-		if err != nil {
-			logger.Error(err, "Failed to generate worker template hash", "groupName", workerGroup.GroupName)
-			continue
-		}
-
-		for _, pod := range workerPods.Items {
-			actualHash := pod.Annotations[utils.PodTemplateHashKey]
-			if actualHash != "" && actualHash != expectedWorkerHash {
-				logger.Info("Pod template has changed, will recreate all pods", "rayCluster", instance.Name)
-				return true
-			}
-		}
-	}
 	return false
+}
+
+// generateRayClusterSpecHashForUpgrade generates a hash for RayClusterSpec excluding fields
+// that should not trigger Pod recreation. For example,
+// Autoscaler will update `Replicas` and `WorkersToDelete` when scaling up/down.
+func generateRayClusterSpecHashForUpgrade(spec rayv1.RayClusterSpec) (string, error) {
+	updatedSpec := spec.DeepCopy()
+	for i := 0; i < len(updatedSpec.WorkerGroupSpecs); i++ {
+		updatedSpec.WorkerGroupSpecs[i].Replicas = nil
+		updatedSpec.WorkerGroupSpecs[i].MaxReplicas = nil
+		updatedSpec.WorkerGroupSpecs[i].MinReplicas = nil
+		updatedSpec.WorkerGroupSpecs[i].ScaleStrategy.WorkersToDelete = nil
+		updatedSpec.WorkerGroupSpecs[i].IdleTimeoutSeconds = nil
+		updatedSpec.WorkerGroupSpecs[i].Suspend = nil
+	}
+
+	return utils.GenerateJsonHash(updatedSpec)
 }
 
 // shouldDeletePod returns whether the Pod should be deleted and the reason
@@ -1304,11 +1316,18 @@ func (r *RayClusterReconciler) createService(ctx context.Context, svc *corev1.Se
 	return nil
 }
 
-func (r *RayClusterReconciler) createHeadPod(ctx context.Context, instance rayv1.RayCluster) error {
+func (r *RayClusterReconciler) createHeadPod(ctx context.Context, instance rayv1.RayCluster, clusterHash string) error {
 	logger := ctrl.LoggerFrom(ctx)
 
 	// build the pod then create it
 	pod := r.buildHeadPod(ctx, instance)
+
+	// Set RayClusterUpgradeStrategyHashKey and KubeRayVersion annotations
+	if clusterHash != "" {
+		pod.Annotations[utils.RayClusterUpgradeStrategyHashKey] = clusterHash
+		pod.Annotations[utils.KubeRayVersion] = utils.KUBERAY_VERSION
+	}
+
 	// check if the batch scheduler integration is enabled
 	// call the scheduler plugin if so
 	if r.options.BatchSchedulerManager != nil {

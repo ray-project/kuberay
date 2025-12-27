@@ -3648,14 +3648,10 @@ func TestShouldRecreatePodsForUpgrade(t *testing.T) {
 	setupTest(t)
 	ctx := context.Background()
 
-	// Calculate template hashes for matching pods
-	headHash, err := common.GeneratePodTemplateHash(testRayCluster.Spec.HeadGroupSpec.Template)
-	require.NoError(t, err, "Failed to generate head template hash")
-	workerHash, err := common.GeneratePodTemplateHash(testRayCluster.Spec.WorkerGroupSpecs[0].Template)
-	require.NoError(t, err, "Failed to generate worker template hash")
+	RayClusterHash, err := generateRayClusterSpecHashForUpgrade(testRayCluster.Spec)
+	require.NoError(t, err, "Failed to generate RayCluster spec hash")
 
-	// Helper function to create a pod with specific template hash
-	createPodWithHash := func(name string, nodeType rayv1.RayNodeType, groupName string, templateHash string) *corev1.Pod {
+	createPodWithHash := func(name string, nodeType rayv1.RayNodeType, groupName string, templateHash string, kuberayVersion string) *corev1.Pod {
 		return &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      name,
@@ -3667,7 +3663,8 @@ func TestShouldRecreatePodsForUpgrade(t *testing.T) {
 					utils.RayNodeGroupLabelKey: groupName,
 				},
 				Annotations: map[string]string{
-					utils.PodTemplateHashKey: templateHash,
+					utils.RayClusterUpgradeStrategyHashKey: templateHash,
+					utils.KubeRayVersion:                   kuberayVersion,
 				},
 			},
 			Spec: corev1.PodSpec{
@@ -3714,37 +3711,54 @@ func TestShouldRecreatePodsForUpgrade(t *testing.T) {
 			expectedRecreate: false,
 		},
 		{
-			name: "Recreate strategy with matching template hash",
+			name: "Recreate strategy with matching RayClusterHash",
 			upgradeStrategy: &rayv1.RayClusterUpgradeStrategy{
 				Type: ptr.To(rayv1.RayClusterRecreate),
 			},
 			pods: []runtime.Object{
-				createPodWithHash("head-pod", rayv1.HeadNode, headGroupNameStr, headHash),
-				createPodWithHash("worker-pod", rayv1.WorkerNode, groupNameStr, workerHash),
+				createPodWithHash("head-pod", rayv1.HeadNode, headGroupNameStr, RayClusterHash, utils.KUBERAY_VERSION),
 			},
 			expectedRecreate: false,
 		},
 		{
-			name: "Recreate strategy with mismatched head template hash",
+			name: "Recreate strategy with mismatched RayClusterHash",
 			upgradeStrategy: &rayv1.RayClusterUpgradeStrategy{
 				Type: ptr.To(rayv1.RayClusterRecreate),
 			},
 			pods: []runtime.Object{
-				createPodWithHash("head-pod", rayv1.HeadNode, headGroupNameStr, "old-head-hash"),
-				createPodWithHash("worker-pod", rayv1.WorkerNode, groupNameStr, workerHash),
+				createPodWithHash("head-pod", rayv1.HeadNode, headGroupNameStr, "old-head-hash", utils.KUBERAY_VERSION),
 			},
 			expectedRecreate: true,
 		},
 		{
-			name: "Recreate strategy with mismatched worker template hash",
+			name: "Recreate strategy with different KubeRay version",
 			upgradeStrategy: &rayv1.RayClusterUpgradeStrategy{
 				Type: ptr.To(rayv1.RayClusterRecreate),
 			},
 			pods: []runtime.Object{
-				createPodWithHash("head-pod", rayv1.HeadNode, headGroupNameStr, headHash),
-				createPodWithHash("worker-pod", rayv1.WorkerNode, groupNameStr, "old-worker-hash"),
+				createPodWithHash("head-pod", rayv1.HeadNode, headGroupNameStr, "old-hash", "v1.0.0"),
+			},
+			expectedRecreate: false,
+		},
+		{
+			name: "Recreate strategy with same KubeRay version but different hash",
+			upgradeStrategy: &rayv1.RayClusterUpgradeStrategy{
+				Type: ptr.To(rayv1.RayClusterRecreate),
+			},
+			pods: []runtime.Object{
+				createPodWithHash("head-pod", rayv1.HeadNode, headGroupNameStr, "old-hash", utils.KUBERAY_VERSION),
 			},
 			expectedRecreate: true,
+		},
+		{
+			name: "Recreate strategy with same KubeRay version and same hash",
+			upgradeStrategy: &rayv1.RayClusterUpgradeStrategy{
+				Type: ptr.To(rayv1.RayClusterRecreate),
+			},
+			pods: []runtime.Object{
+				createPodWithHash("head-pod", rayv1.HeadNode, headGroupNameStr, RayClusterHash, utils.KUBERAY_VERSION),
+			},
+			expectedRecreate: false,
 		},
 	}
 

@@ -229,10 +229,9 @@ func TestRayClusterUpgradeStrategy(t *testing.T) {
 	headPod, err := GetHeadPod(test, rayCluster)
 	g.Expect(err).NotTo(HaveOccurred())
 	initialHeadPodName := headPod.Name
-	initialHeadPodHash := headPod.Annotations[utils.PodTemplateHashKey]
+	initialHeadPodHash := headPod.Annotations[utils.RayClusterUpgradeStrategyHashKey]
 
 	workerPods, err := GetWorkerPods(test, rayCluster)
-	initialWorkerPodHash := workerPods[0].Annotations[utils.PodTemplateHashKey]
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(workerPods).To(HaveLen(1))
 
@@ -255,14 +254,13 @@ func TestRayClusterUpgradeStrategy(t *testing.T) {
 	}, TestTimeoutMedium).Should(BeTrue())
 
 	newHeadPod, err := GetHeadPod(test, rayCluster)
-	newHeadPodHash := newHeadPod.Annotations[utils.PodTemplateHashKey]
-	g.Expect(newHeadPodHash).NotTo(Equal(initialHeadPodHash))
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(newHeadPod.Name).NotTo(Equal(initialHeadPodName))
 
+	newHeadPodHash := newHeadPod.Annotations[utils.RayClusterUpgradeStrategyHashKey]
+	g.Expect(newHeadPodHash).NotTo(Equal(initialHeadPodHash))
+
 	newWorkerPods, err := GetWorkerPods(test, rayCluster)
-	newWorkerPodHash := newWorkerPods[0].Annotations[utils.PodTemplateHashKey]
-	g.Expect(newWorkerPodHash).NotTo(Equal(initialWorkerPodHash))
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(newWorkerPods).To(HaveLen(1))
 }
