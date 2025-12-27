@@ -39,13 +39,13 @@ The following environment setup is based on the [ray-operator development guide]
 ```bash
 # Clone the KubeRay repo and cd into the working dir.
 git clone https://github.com/ray-project/kuberay.git
-cd kuberay/ray-operator
+cd kuberay
 
 # Spin up a kind cluster.
 kind create cluster --image=kindest/node:v1.26.0
 
 # Build the KubeRay operator image.
-IMG=kuberay/operator:latest make docker-build
+IMG=kuberay/operator:latest make -C ray-operator docker-build
 
 # Load the custom KubeRay image into the kind cluster.
 kind load docker-image kuberay/operator:latest
@@ -54,7 +54,7 @@ kind load docker-image kuberay/operator:latest
 helm install kuberay-operator \
   --set image.repository=kuberay/operator \
   --set image.tag=latest \
-  ../helm-chart/kuberay-operator
+  ./helm-chart/kuberay-operator
 
 # Check the logs via kubectl or k9s.
 kubectl logs deployments/kuberay-operator
@@ -65,8 +65,8 @@ k9s
 ### Build the Collector Container Image
 
 ```bash
-# Build the log collector image.
-make -C historyserver localimage
+# Build the collector image.
+make -C historyserver localimage-collector
 
 # Check the built image.
 docker images | grep collector
@@ -107,21 +107,20 @@ Username: minioadmin
 Password: minioadmin
 ```
 
-> [!IMPORTANT]
-> Before deploying the Ray cluster, you also need to create a new bucket `ray-historyserver-log` in the minio UI for
-uploaded logs:
-
-![create_bucket](https://github.com/ray-project/kuberay/blob/69f6f0bd2a9e44a533f18a54aa014ae6a0be88ec/historyserver/docs/assets/create_bucket.png)
-
 ### Deploy a Ray Cluster for Checks
 
-Finally, you can check if the log collector works as expected by deploying a Ray cluster with the collector enabled and
+Finally, you can check if the collector works as expected by deploying a Ray cluster with the collector enabled and
 interacting with the minio UI.
 
 ```bash
 # Apply the Ray cluster manifest.
 kubectl apply -f historyserver/config/raycluster.yaml
 ```
+
+> [!IMPORTANT]
+> After deploying the Ray cluster, you will see an automatically created bucket `ray-historyserver-log` in the minio UI:
+
+![create_bucket](https://github.com/ray-project/kuberay/blob/69f6f0bd2a9e44a533f18a54aa014ae6a0be88ec/historyserver/docs/assets/create_bucket.png)
 
 Since the session latest logs will be processed upon the Ray cluster is deleted, you can manully delete the Ray clsuter
 to trigger log file uploading:
