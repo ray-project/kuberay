@@ -140,4 +140,4 @@ kubectl delete -f historyserver/config/raycluster.yaml
 
 You're supposed to see the uploaded logs and events in the minio UI as below:
 
-![write_logs_and_events](https://github.com/ray-project/kuberay/blob/69f6f0bd2a9e44a533f18a54aa014ae6a0be88ec/historyserver/docs/assets/write_logs_and_events.png)
+![write_logs_and_events](https://github.com/ray-project/kuberay/blob/db7cb864061518ed4cfa7bf48cf05cfbfeb49f95/historyserver/docs/assets/write_logs_and_events.png)
