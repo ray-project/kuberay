@@ -34,8 +34,8 @@ type RayCronJobStatus struct {
 //nolint:govet // RayCronJob is the Schema for the raycronjobs API
 type RayCronJob struct {
 	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata"`
-	Spec              RayCronJobSpec   `json:"spec"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	Spec              RayCronJobSpec   `json:"spec,omitempty"`
 	Status            RayCronJobStatus `json:"status,omitempty"`
 }
 
