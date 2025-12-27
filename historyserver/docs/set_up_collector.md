@@ -122,14 +122,22 @@ kubectl apply -f historyserver/config/raycluster.yaml
 
 ![create_bucket](https://github.com/ray-project/kuberay/blob/69f6f0bd2a9e44a533f18a54aa014ae6a0be88ec/historyserver/docs/assets/create_bucket.png)
 
-Since the session latest logs will be processed upon the Ray cluster is deleted, you can manully delete the Ray clsuter
-to trigger log file uploading:
+Then, you need to submit a Ray job to the existing cluster by specifying `clusterSelector` to verify that events can be
+uploaded to the blob storage:
 
 ```bash
-# Trigger the session latest log processing upon deletion.
+# Apply the Ray job manifest.
+kubectl apply -f historyserver/config/rayjob.yaml
+```
+
+Since the session latest logs will be processed and events will be flushed upon the Ray cluster is deleted, you can
+manully delete the Ray clsuter to trigger log file and event uploading:
+
+```bash
+# Trigger the session latest log processing and event flushing upon deletion.
 kubectl delete -f historyserver/config/raycluster.yaml
 ```
 
-You're supposed to see the uploaded logs in the minio UI as below:
+You're supposed to see the uploaded logs and events in the minio UI as below:
 
-![write_logs](https://github.com/ray-project/kuberay/blob/69f6f0bd2a9e44a533f18a54aa014ae6a0be88ec/historyserver/docs/assets/write_logs.png)
+![write_logs_and_events](https://github.com/ray-project/kuberay/blob/69f6f0bd2a9e44a533f18a54aa014ae6a0be88ec/historyserver/docs/assets/write_logs_and_events.png)
