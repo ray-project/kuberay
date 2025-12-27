@@ -175,7 +175,7 @@ pip: ["python-multipart==0.0.6"]
 	require.NoError(t, err)
 
 	// Ensure the slices are the same length.
-	assert.Equal(t, len(expected), len(command))
+	assert.Len(t, command, len(expected))
 
 	for i := 0; i < len(expected); i++ {
 		// For non-JSON elements, compare them directly.

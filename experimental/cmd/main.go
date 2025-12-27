@@ -12,7 +12,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
-
 	"k8s.io/klog/v2"
 
 	"github.com/ray-project/kuberay/experimental/pkg/grpcproxy"
@@ -109,8 +108,14 @@ func main() {
 	token := httpproxy.NewTokenAuth(security_token, proxy, secure_prefix, remote)
 	// Create handler
 	http.HandleFunc("/", token.AuthFunc())
-	// Run HTTP proxy
-	err = http.ListenAndServe(":"+http_local_port, nil)
+	// Run HTTP proxy with timeouts
+	server := &http.Server{
+		Addr:         ":" + http_local_port,
+		ReadTimeout:  0, // No timeout
+		WriteTimeout: 0, // No timeout
+		IdleTimeout:  0, // No timeout
+	}
+	err = server.ListenAndServe()
 	if err != nil {
 		klog.Fatal("HTTP server died unexpectedly, error - ", err)
 	}

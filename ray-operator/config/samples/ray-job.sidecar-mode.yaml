@@ -33,9 +33,11 @@ spec:
               name: client
             resources:
               limits:
-                cpu: "1"
+                cpu: 1
+                memory: 4Gi
               requests:
-                cpu: "200m"
+                cpu: 1
+                memory: 2Gi
             volumeMounts:
             - mountPath: /home/ray/samples
               name: code-sample
@@ -59,9 +61,11 @@ spec:
             image: rayproject/ray:2.52.0
             resources:
               limits:
-                cpu: "1"
+                cpu: 1
+                memory: 1Gi
               requests:
-                cpu: "200m"
+                cpu: 1
+                memory: 1Gi
 
 ---
 apiVersion: v1
