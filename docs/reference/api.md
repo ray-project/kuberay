@@ -359,6 +359,10 @@ _Validation:_
 _Appears in:_
 - [RayClusterUpgradeStrategy](#rayclusterupgradestrategy)
 
+| Field | Description |
+| --- | --- |
+| `Recreate` | During upgrade, Recreate strategy will delete all existing pods before creating new ones<br /> |
+| `None` | No new pod will be created while the strategy is set to None<br /> |
 
 
 #### RayCronJob

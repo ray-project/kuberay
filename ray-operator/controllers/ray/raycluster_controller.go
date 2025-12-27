@@ -1175,8 +1175,6 @@ func generateRayClusterSpecHashForUpgrade(spec rayv1.RayClusterSpec) (string, er
 		updatedSpec.WorkerGroupSpecs[i].MaxReplicas = nil
 		updatedSpec.WorkerGroupSpecs[i].MinReplicas = nil
 		updatedSpec.WorkerGroupSpecs[i].ScaleStrategy.WorkersToDelete = nil
-		updatedSpec.WorkerGroupSpecs[i].IdleTimeoutSeconds = nil
-		updatedSpec.WorkerGroupSpecs[i].Suspend = nil
 	}
 
 	return utils.GenerateJsonHash(updatedSpec)
