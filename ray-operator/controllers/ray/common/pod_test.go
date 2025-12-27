@@ -1115,7 +1115,7 @@ func TestHeadPodTemplate_WithNoServiceAccount(t *testing.T) {
 	podName := strings.ToLower(cluster.Name + utils.DashSymbol + string(rayv1.HeadNode) + utils.DashSymbol + utils.FormatInt32(0))
 	pod := DefaultHeadPodTemplate(context.Background(), *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
 
-	assert.Equal(t, "", pod.Spec.ServiceAccountName)
+	assert.Empty(t, pod.Spec.ServiceAccountName)
 }
 
 // If a service account is specified in the RayCluster and EnableInTreeAutoscaling is set to false,
@@ -1312,7 +1312,7 @@ func TestDefaultInitContainer(t *testing.T) {
 	rayContainer := worker.Template.Spec.Containers[utils.RayContainerIndex]
 
 	assert.NotEmpty(t, rayContainer.Env, "The test only makes sense if the Ray container has environment variables.")
-	assert.Equal(t, len(rayContainer.Env), len(healthCheckContainer.Env))
+	assert.Len(t, healthCheckContainer.Env, len(rayContainer.Env))
 	for _, env := range rayContainer.Env {
 		// env.ValueFrom is the source for the environment variable's value. Cannot be used if value is not empty.
 		if env.Value != "" {

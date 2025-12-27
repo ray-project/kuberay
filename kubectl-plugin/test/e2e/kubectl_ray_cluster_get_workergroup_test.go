@@ -51,7 +51,7 @@ var _ = Describe("Calling ray plugin `get workergroups` command to list worker g
 				"1",
 				"0",
 				"0",
-				"1G",
+				"1Gi",
 				"raycluster-kuberay",
 			},
 		})

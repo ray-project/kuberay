@@ -12,8 +12,8 @@ import (
 
 type authorization struct {
 	proxy    *httputil.ReverseProxy
-	prefix   string
 	upstream *url.URL
+	prefix   string
 }
 
 // Create Unauthorized response
