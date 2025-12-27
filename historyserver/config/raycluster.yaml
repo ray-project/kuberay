@@ -78,7 +78,7 @@ spec:
           - name: AWS_S3TOKEN
             value: ""
           - name: S3_BUCKET
-            value: "ray-historyserver-log"
+            value: "ray-historyserver"
           - name: S3_ENDPOINT
             value: "minio-service.minio-dev:9000"
           - name: S3_REGION
@@ -173,7 +173,7 @@ spec:
           - name: AWS_S3TOKEN
             value: ""
           - name: S3_BUCKET
-            value: "ray-historyserver-log"
+            value: "ray-historyserver"
           - name: S3_ENDPOINT
             value: "minio-service.minio-dev:9000"
           - name: S3_REGION

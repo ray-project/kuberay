@@ -94,7 +94,7 @@ Take s3 as an example, you need to deploy minio using the following commands:
 kubectl apply -f historyserver/config/minio.yaml
 
 # Port-forward the minio UI for sanity check.
-kubectl -n minio-dev port-forward svc/minio-service 9001:9001 --address 0.0.0.0
+kubectl -n minio-dev port-forward svc/minio-service 9001:9001
 
 # Open the minio UI.
 open http://localhost:9001/browser
@@ -118,7 +118,7 @@ kubectl apply -f historyserver/config/raycluster.yaml
 ```
 
 > [!IMPORTANT]
-> After deploying the Ray cluster, you will see an automatically created bucket `ray-historyserver-log` in the minio UI:
+> After deploying the Ray cluster, you will see an automatically created bucket `ray-historyserver` in the minio UI:
 
 ![create_bucket](https://github.com/ray-project/kuberay/blob/69f6f0bd2a9e44a533f18a54aa014ae6a0be88ec/historyserver/docs/assets/create_bucket.png)
 
