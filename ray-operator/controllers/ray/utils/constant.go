@@ -356,7 +356,7 @@ const (
 
 	// RayCronJob event list
 	InvalidRayCronJobSpec K8sEventType = "InvalidRayCronJobSpec"
-	SuspendRayCronJob     K8sEventType = "SuspendRayCronJob"
+	SuspendedRayCronJob   K8sEventType = "SuspendedRayCronJob"
 
 	// RayService event list
 	CreatedGateway                  K8sEventType = "CreatedGateway"
