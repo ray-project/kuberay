@@ -3648,7 +3648,7 @@ func TestShouldRecreatePodsForUpgrade(t *testing.T) {
 	setupTest(t)
 	ctx := context.Background()
 
-	RayClusterHash, err := generateRayClusterSpecHashForUpgrade(testRayCluster.Spec)
+	RayClusterHash, err := utils.GenerateHashWithoutReplicasAndWorkersToDelete(testRayCluster.Spec)
 	require.NoError(t, err, "Failed to generate RayCluster spec hash")
 
 	createPodWithHash := func(name string, nodeType rayv1.RayNodeType, groupName string, templateHash string, kuberayVersion string) *corev1.Pod {
@@ -3663,8 +3663,8 @@ func TestShouldRecreatePodsForUpgrade(t *testing.T) {
 					utils.RayNodeGroupLabelKey: groupName,
 				},
 				Annotations: map[string]string{
-					utils.RayClusterUpgradeStrategyHashKey: templateHash,
-					utils.KubeRayVersion:                   kuberayVersion,
+					utils.HashWithoutReplicasAndWorkersToDeleteKey: templateHash,
+					utils.KubeRayVersion:                           kuberayVersion,
 				},
 			},
 			Spec: corev1.PodSpec{

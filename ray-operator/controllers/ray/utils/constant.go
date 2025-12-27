@@ -28,7 +28,6 @@ const (
 	KubeRayVersion                           = "ray.io/kuberay-version"
 	RayCronJobNameLabelKey                   = "ray.io/cronjob-name"
 	RayCronJobTimestampAnnotationKey         = "ray.io/cronjob-scheduled-timestamp"
-	RayClusterUpgradeStrategyHashKey         = "ray.io/upgrade-strategy-hash"
 
 	// Labels for feature RayMultihostIndexing
 	//

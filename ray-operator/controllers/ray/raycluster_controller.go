@@ -617,7 +617,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 	logger := ctrl.LoggerFrom(ctx)
 
 	// Calculate RayCluster spec hash for the UpgradeStrategy
-	clusterHash, err := generateRayClusterSpecHashForUpgrade(instance.Spec)
+	clusterHash, err := utils.GenerateHashWithoutReplicasAndWorkersToDelete(instance.Spec)
 	if err != nil {
 		return err
 	}
@@ -1147,7 +1147,7 @@ func (r *RayClusterReconciler) shouldRecreatePodsForUpgrade(ctx context.Context,
 		}
 	}
 
-	expectedClusterHash, err := generateRayClusterSpecHashForUpgrade(instance.Spec)
+	expectedClusterHash, err := utils.GenerateHashWithoutReplicasAndWorkersToDelete(instance.Spec)
 	if err != nil {
 		logger.Error(err, "Failed to generate cluster spec hash for Recreate upgradeStrategy, skipping comparison")
 		return false
@@ -1155,7 +1155,7 @@ func (r *RayClusterReconciler) shouldRecreatePodsForUpgrade(ctx context.Context,
 
 	if len(headPods.Items) == 1 {
 		headPod := headPods.Items[0]
-		actualHash := headPod.Annotations[utils.RayClusterUpgradeStrategyHashKey]
+		actualHash := headPod.Annotations[utils.HashWithoutReplicasAndWorkersToDeleteKey]
 		if actualHash != "" && actualHash != expectedClusterHash {
 			logger.Info("RayCluster spec has changed, will recreate all pods", "rayCluster", instance.Name)
 			return true
@@ -1163,21 +1163,6 @@ func (r *RayClusterReconciler) shouldRecreatePodsForUpgrade(ctx context.Context,
 	}
 
 	return false
-}
-
-// generateRayClusterSpecHashForUpgrade generates a hash for RayClusterSpec excluding fields
-// that should not trigger Pod recreation. For example,
-// Autoscaler will update `Replicas` and `WorkersToDelete` when scaling up/down.
-func generateRayClusterSpecHashForUpgrade(spec rayv1.RayClusterSpec) (string, error) {
-	updatedSpec := spec.DeepCopy()
-	for i := 0; i < len(updatedSpec.WorkerGroupSpecs); i++ {
-		updatedSpec.WorkerGroupSpecs[i].Replicas = nil
-		updatedSpec.WorkerGroupSpecs[i].MaxReplicas = nil
-		updatedSpec.WorkerGroupSpecs[i].MinReplicas = nil
-		updatedSpec.WorkerGroupSpecs[i].ScaleStrategy.WorkersToDelete = nil
-	}
-
-	return utils.GenerateJsonHash(updatedSpec)
 }
 
 // shouldDeletePod returns whether the Pod should be deleted and the reason
@@ -1322,7 +1307,7 @@ func (r *RayClusterReconciler) createHeadPod(ctx context.Context, instance rayv1
 
 	// Set RayClusterUpgradeStrategyHashKey and KubeRayVersion annotations
 	if clusterHash != "" {
-		pod.Annotations[utils.RayClusterUpgradeStrategyHashKey] = clusterHash
+		pod.Annotations[utils.HashWithoutReplicasAndWorkersToDeleteKey] = clusterHash
 		pod.Annotations[utils.KubeRayVersion] = utils.KUBERAY_VERSION
 	}
 
