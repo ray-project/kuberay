@@ -303,7 +303,7 @@ func TestRayCronJobReconcile_Suspend(t *testing.T) {
 	rayJobList := &rayv1.RayJobList{}
 	err = fakeClient.List(ctx, rayJobList)
 	require.NoError(t, err)
-	assert.Len(t, rayJobList.Items, 0, "Should not create RayJob when suspended")
+	assert.Empty(t, rayJobList.Items, "Should not create RayJob when suspended")
 
 	// Verify that a suspend event was recorded
 	select {
