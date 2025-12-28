@@ -371,7 +371,9 @@ func applyRayJobToCluster(test Test, g *WithT, namespace *corev1.Namespace, rayC
 // getSessionIDFromHeadPod retrieves the sessionID from the Ray head pod, by reading the symlink
 // /tmp/ray/session_latest and getting its basename.
 func getSessionIDFromHeadPod(test Test, g *WithT, rayCluster *rayv1.RayCluster) string {
-	var sessionID string
+	headPod, err := GetHeadPod(test, rayCluster)
+	g.Expect(err).NotTo(HaveOccurred())
+
 	getSessionIDCmd := `if [ -L "/tmp/ray/session_latest" ]; then
   session_path=$(readlink /tmp/ray/session_latest)
   basename "$session_path"
@@ -379,23 +381,20 @@ else
   echo "session_latest is not a symlink"
   exit 1
 fi`
-	g.Eventually(func(gg Gomega) {
-		headPod, err := GetHeadPod(test, rayCluster)
-		gg.Expect(err).NotTo(HaveOccurred())
+	output, _ := ExecPodCmd(test, headPod, "ray-head", []string{"sh", "-c", getSessionIDCmd})
 
-		output, _ := ExecPodCmd(test, headPod, "ray-head", []string{"sh", "-c", getSessionIDCmd})
-		outputStr := strings.TrimSpace(output.String())
-		lines := strings.Split(outputStr, "\n")
-		for _, line := range lines {
-			line = strings.TrimSpace(line)
-			if strings.HasPrefix(line, "session_") {
-				sessionID = strings.TrimSpace(line)
-				break
-			}
+	// Parse output to extract the sessionID.
+	outputStr := strings.TrimSpace(output.String())
+	lines := strings.Split(outputStr, "\n")
+	var sessionID string
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "session_") {
+			sessionID = line
+			break
 		}
-		gg.Expect(sessionID).NotTo(BeEmpty())
-	}, TestTimeoutMedium).Should(Succeed(), "Failed to get sessionID from head pod")
-	LogWithTimestamp(test.T(), "Got sessionID: %s", sessionID)
+	}
+	g.Expect(sessionID).NotTo(BeEmpty())
 
 	return sessionID
 }
