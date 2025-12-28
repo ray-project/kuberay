@@ -138,7 +138,7 @@ fi
 else
 echo "session_latest or raylet_node_id not found"
 fi`
-	g.Eventually(func(gg Gomega) error {
+	g.Eventually(func(gg Gomega) {
 		headPod, err := GetHeadPod(test, rayCluster)
 		gg.Expect(err).NotTo(HaveOccurred())
 
@@ -163,10 +163,9 @@ fi`
 				currentPodName, currentPodUID, currentRestartCount)
 		}
 
-		// stdout, stderr := ExecPodCmd(test, headPod, "ray-head", []string{"sh", "-c", moveLogsCmd})
-		// gg.Expect(stdout.String()).To(ContainSubstring("Successfully moved logs to /tmp/ray/prev-logs"))
-		// gg.Expect(stderr.String()).To(BeEmpty())
-		return execKubectlExec(test, namespace, headPod.Name, []string{"sh", "-c", moveLogsCmd})
+		stdout, stderr := ExecPodCmd(test, headPod, "ray-head", []string{"sh", "-c", moveLogsCmd})
+		gg.Expect(stdout.String()).To(ContainSubstring("Successfully moved logs to /tmp/ray/prev-logs"))
+		gg.Expect(stderr.String()).To(BeEmpty())
 	}, TestTimeoutMedium).Should(Succeed(), "Failed to move logs to /tmp/ray/prev-logs")
 
 	// Verify logs are successfully uploaded to minio.
@@ -419,20 +418,4 @@ func verifyS3SessionDirs(test Test, g *WithT, s3Client *s3.S3, sessionPrefix str
 			LogWithTimestamp(test.T(), "Verified directory %s under %s has %d objects", dir, sessionPrefix, keyCount)
 		}
 	}, TestTimeoutMedium).Should(Succeed(), "Failed to verify directories %v under %s", dirs, sessionPrefix)
-}
-
-func execKubectlExec(test Test, namespace *corev1.Namespace, podName string, command []string) error {
-	args := []string{
-		"exec",
-		"-n", namespace.Name,
-		podName,
-		"--",
-	}
-	args = append(args, command...)
-
-	cmd := exec.CommandContext(test.Ctx(), "kubectl", args...)
-	if output, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("kubectl exec failed: %w, output: %s", err, string(output))
-	}
-	return nil
 }
