@@ -1,0 +1,9 @@
+apiVersion: ray.io/v1
+kind: RayJob
+metadata:
+  name: rayjob
+spec:
+  entrypoint: python -c "import ray; ray.init(); print(ray.cluster_resources())"
+  # Select the existing Ray cluster running the collector.
+  clusterSelector:
+    ray.io/cluster: raycluster-historyserver
