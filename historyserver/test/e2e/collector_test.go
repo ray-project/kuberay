@@ -56,7 +56,7 @@ func TestCollector(t *testing.T) {
 	})
 
 	// Add other test cases below.
-	//  ...
+	// ...
 }
 
 func testLogAndEventUploadOnDeletion(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
@@ -143,6 +143,8 @@ func testLogAndEventUploadOnDeletion(test Test, g *WithT, namespace *corev1.Name
 // This makes sure WatchPrevLogsLoops processes logs as they appear.
 //
 // NOTE: For now, logs under /tmp/ray/session_latest are moved to /tmp/ray/prev-logs explicitly.
+// The reason is that this data movement serves as the startup command of the Ray container.
+// To trigger the filesystem watcher in WatchPrevLogsLoops during runtime, we have to move logs manually.
 func testPrevLogsRuntimeUpload(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
 	// TODO(jwj): Refactor preparatory tasks, including applying a Ray cluster, checking the collector
 	// sidecar container exists in the head pod, and checking an empty S3 bucket exists.
@@ -214,7 +216,7 @@ fi`
 	deleteS3Bucket(test, g, s3Client)
 }
 
-// Create an S3 client and ensure accessibility.
+// ensureS3Client creates an S3 client and ensures API endpoint accessibility.
 func ensureS3Client(test Test, g *WithT) (*s3.S3, error) {
 	applyMinIO(test, g)
 
@@ -238,7 +240,7 @@ func ensureS3Client(test Test, g *WithT) (*s3.S3, error) {
 		if err != nil {
 			return err
 		}
-		_, err = s3Client.ListBuckets(&s3.ListBucketsInput{})
+		_, err = s3Client.ListBuckets(&s3.ListBucketsInput{}) // Dummy operation to ensure accessibility
 		return err
 	}, TestTimeoutMedium).Should(Succeed(), "MinIO API endpoint should be ready")
 	LogWithTimestamp(test.T(), "Port-forwarded minio API port to localhost:9000 successfully")
@@ -249,8 +251,8 @@ func ensureS3Client(test Test, g *WithT) (*s3.S3, error) {
 	return s3Client, err
 }
 
-// Deploy minio once per test namespace, making sure it's idempotent.
-// TODO(jwj): Check idempotency.
+// applyMinIO deploys minio once per test namespace, making sure it's idempotent.
+// TODO(jwj): Check idempotency (for now, only manual check).
 func applyMinIO(test Test, g *WithT) {
 	KubectlApplyYAML(test, minioManifestPath, minioNamespace)
 
