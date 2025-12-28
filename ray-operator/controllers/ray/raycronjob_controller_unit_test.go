@@ -18,6 +18,7 @@ import (
 	clientFake "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 )
 
 //nolint:unparam // namespace parameter kept for flexibility in future tests
@@ -308,8 +309,9 @@ func TestRayCronJobReconcile_Suspend(t *testing.T) {
 	// Verify that a suspend event was recorded
 	select {
 	case event := <-fakeRecorder.Events:
-		assert.Contains(t, event, "Normal")
-		assert.Contains(t, event, "suspended")
+		assert.Contains(t, event, corev1.EventTypeNormal)
+		assert.Contains(t, event, string(utils.SuspendedRayCronJob))
+		assert.Contains(t, event, "RayCronJob suspended, no new RayJobs will be created")
 	default:
 		t.Error("Expected a suspend event to be recorded, but none was found")
 	}
