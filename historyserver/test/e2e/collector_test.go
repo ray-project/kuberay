@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"strings"
 	"testing"
 	"time"
 
@@ -78,6 +79,11 @@ func testLogAndEventUploadOnDeletion(test Test, g *WithT, namespace *corev1.Name
 	// Submit a Ray job to the existing cluster.
 	_ = applyRayJobToCluster(test, g, namespace, rayCluster)
 
+	// Retrieve sessionID from the head pod.
+	sessionID, err := getSessionIDFromHeadPod(test, namespace, rayCluster)
+	g.Expect(err).NotTo(HaveOccurred(), "Failed to retrieve sessionID from head pod")
+	LogWithTimestamp(test.T(), "Retrieved sessionID: %s", sessionID)
+
 	// Delete the Ray cluster to trigger log uploading on deletion.
 	err = test.Client().Ray().RayV1().
 		RayClusters(rayCluster.Namespace).
@@ -88,16 +94,45 @@ func testLogAndEventUploadOnDeletion(test Test, g *WithT, namespace *corev1.Name
 		return err
 	}, TestTimeoutMedium).Should(WithTransform(k8serrors.IsNotFound, BeTrue()))
 
-	// Verify logs are successfully uploaded to minio.
-	g.Eventually(func() int64 {
-		objects, _ := s3Client.ListObjectsV2(&s3.ListObjectsV2Input{
-			Bucket: aws.String(s3BucketName),
+	// Verify logs and node_events are successfully uploaded to minio.
+	// Expected S3 path structure:
+	//   {s3BucketName}/log/{clusterName}_{clusterID}/{sessionId}/logs/...
+	//   {s3BucketName}/log/{clusterName}_{clusterID}/{sessionId}/node_events/...
+	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, "default") // namespace.Name)
+	sessionPrefix := fmt.Sprintf("log/%s/%s/", clusterNameID, sessionID)
+	g.Eventually(func() error {
+		// Check for logs/ directory.
+		logsPrefix := sessionPrefix + "logs/"
+		logsObjects, err := s3Client.ListObjectsV2(&s3.ListObjectsV2Input{
+			Bucket:  aws.String(s3BucketName),
+			Prefix:  aws.String(logsPrefix),
+			MaxKeys: aws.Int64(1), // Efficiently check if any objects exist
 		})
-		// TODO(jwj): Add err handling for ListObjectsV2.
-		return aws.Int64Value(objects.KeyCount)
-	}, TestTimeoutMedium).Should(BeNumerically(">", 0))
+		if err != nil {
+			return fmt.Errorf("failed to list logs in %s: %w", logsPrefix, err)
+		}
+		if aws.Int64Value(logsObjects.KeyCount) == 0 {
+			return fmt.Errorf("logs directory %s is empty", logsPrefix)
+		}
 
-	// TODO(jwj): Verify existence of specific sessions.
+		// Check for node_events/ directory.
+		nodeEventsPrefix := sessionPrefix + "node_events/"
+		nodeEventsObjects, err := s3Client.ListObjectsV2(&s3.ListObjectsV2Input{
+			Bucket:  aws.String(s3BucketName),
+			Prefix:  aws.String(nodeEventsPrefix),
+			MaxKeys: aws.Int64(1), // Efficiently check if any objects exist
+		})
+		if err != nil {
+			return fmt.Errorf("failed to list node_events in %s: %w", nodeEventsPrefix, err)
+		}
+		if aws.Int64Value(nodeEventsObjects.KeyCount) == 0 {
+			return fmt.Errorf("node_events directory %s is empty", nodeEventsPrefix)
+		}
+
+		LogWithTimestamp(test.T(), "Verified session %s has both logs/ (%d objects) and node_events/ (%d objects)",
+			sessionPrefix, aws.Int64Value(logsObjects.KeyCount), aws.Int64Value(nodeEventsObjects.KeyCount))
+		return nil
+	}, TestTimeoutMedium).Should(Succeed(), "Logs and node_events should be uploaded to S3")
 
 	// TODO(jwj): Refactor cleanup tasks
 	// Delete S3 bucket to ensure test isolation.
@@ -332,6 +367,55 @@ func applyRayJobToCluster(test Test, g *WithT, namespace *corev1.Namespace, rayC
 		Should(WithTransform(RayJobStatus, Equal(rayv1.JobStatusSucceeded)))
 
 	return rayJob
+}
+
+// getSessionIDFromHeadPod retrieves the sessionID from the Ray head pod, by reading the symlink
+// /tmp/ray/session_latest and getting its basename.
+func getSessionIDFromHeadPod(test Test, namespace *corev1.Namespace, rayCluster *rayv1.RayCluster) (string, error) {
+	headPod, err := GetHeadPod(test, rayCluster)
+	if err != nil {
+		return "", fmt.Errorf("failed to get head pod: %w", err)
+	}
+
+	getSessionIDCmd := `if [ -L "/tmp/ray/session_latest" ]; then
+  session_path=$(readlink /tmp/ray/session_latest)
+  basename "$session_path"
+else
+  echo "session_latest is not a symlink"
+  exit 1
+fi`
+	cmd := exec.CommandContext(
+		test.Ctx(),
+		"kubectl",
+		"exec",
+		"-n", namespace.Name,
+		"-c", "ray-head",
+		headPod.Name,
+		"--",
+		"sh", "-c", getSessionIDCmd,
+	)
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("failed to get sessionID: %w, output: %s", err, string(output))
+	}
+
+	// Parse output to extract only the sessionID.
+	outputStr := strings.TrimSpace(string(output))
+	lines := strings.Split(outputStr, "\n")
+	var sessionID string
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "session_") {
+			sessionID = line
+			break
+		}
+	}
+	if sessionID == "" {
+		return "", fmt.Errorf("sessionID not found in output, output: %s", outputStr)
+	}
+
+	return sessionID, nil
 }
 
 func execKubectlExec(test Test, namespace *corev1.Namespace, podName string, command []string) error {
