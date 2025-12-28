@@ -33,6 +33,7 @@ const (
 
 	// Ray cluster
 	rayClusterManifestPath = "../../config/raycluster.yaml"
+	rayClusterID           = "default"
 )
 
 func TestCollector(t *testing.T) {
@@ -81,7 +82,7 @@ func testLogAndEventUploadOnDeletion(test Test, g *WithT, namespace *corev1.Name
 	// Expected S3 path structure:
 	//   {s3BucketName}/log/{clusterName}_{clusterID}/{sessionId}/logs/...
 	//   {s3BucketName}/log/{clusterName}_{clusterID}/{sessionId}/node_events/...
-	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, "default") // namespace.Name)
+	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, rayClusterID)
 	sessionPrefix := fmt.Sprintf("log/%s/%s/", clusterNameID, sessionID)
 	g.Eventually(func(gg Gomega) {
 		// Check for logs/ directory.
@@ -125,6 +126,9 @@ func testPrevLogsRuntimeUpload(test Test, g *WithT, namespace *corev1.Namespace,
 	// Submit a Ray job to the existing cluster.
 	applyRayJobToCluster(test, g, namespace, rayCluster)
 
+	// Retrieve sessionID from the head pod.
+	sessionID := getSessionIDFromHeadPod(test, g, rayCluster)
+
 	// Explicitly move logs from session_lastest to prev-logs.
 	// NOTE: The command in raycluster.yaml only runs at container startup, not when sessions change.
 	LogWithTimestamp(test.T(), "Moving logs from session_latest to prev-logs")
@@ -152,14 +156,25 @@ fi`
 		gg.Expect(stderr.String()).To(BeEmpty())
 	}, TestTimeoutMedium).Should(Succeed(), "Failed to move logs to /tmp/ray/prev-logs")
 
+	// Verify logs are successfully uploaded to minio.
+	// Expected S3 path structure:
+	//   {s3BucketName}/log/{clusterName}_{clusterID}/{sessionId}/logs/...
+	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, rayClusterID)
+	sessionPrefix := fmt.Sprintf("log/%s/%s/", clusterNameID, sessionID)
 	g.Eventually(func(gg Gomega) {
-		// TODO(jwj): Add fine-grained checks as happy path.
-		objects, err := s3Client.ListObjectsV2(&s3.ListObjectsV2Input{
-			Bucket: aws.String(s3BucketName),
+		// Check for logs/ directory.
+		logsPrefix := sessionPrefix + "logs/"
+		logsObjects, err := s3Client.ListObjectsV2(&s3.ListObjectsV2Input{
+			Bucket:  aws.String(s3BucketName),
+			Prefix:  aws.String(logsPrefix),
+			MaxKeys: aws.Int64(1), // Efficiently check if any objects exist
 		})
 		gg.Expect(err).NotTo(HaveOccurred())
-		gg.Expect(aws.Int64Value(objects.KeyCount)).To(BeNumerically(">", 0))
-	}, TestTimeoutMedium).Should(Succeed(), "Failed to upload logs to S3 during runtime")
+		gg.Expect(aws.Int64Value(logsObjects.KeyCount)).To(BeNumerically(">", 0))
+
+		LogWithTimestamp(test.T(), "Verified session %s has logs/ (%d objects)",
+			sessionPrefix, aws.Int64Value(logsObjects.KeyCount))
+	}, TestTimeoutMedium).Should(Succeed(), "Logs should be uploaded to S3")
 
 	err := test.Client().Ray().RayV1().
 		RayClusters(rayCluster.Namespace).
