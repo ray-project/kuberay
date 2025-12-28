@@ -57,6 +57,7 @@ func TestCollector(t *testing.T) {
 	// ...
 }
 
+// testLogAndEventUploadOnDeletion verifies that logs and node_events are successfully uploaded to S3 on cluster deletion.
 func testLogAndEventUploadOnDeletion(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
 	rayCluster := prepareTestEnv(test, g, namespace, s3Client)
 
@@ -66,7 +67,7 @@ func testLogAndEventUploadOnDeletion(test Test, g *WithT, namespace *corev1.Name
 	// Retrieve sessionID from the head pod.
 	sessionID := getSessionIDFromHeadPod(test, g, rayCluster)
 
-	// Delete the Ray cluster to trigger log uploading on deletion.
+	// Delete the Ray cluster to trigger log uploading event flushing on deletion.
 	err := test.Client().Ray().RayV1().
 		RayClusters(rayCluster.Namespace).
 		Delete(test.Ctx(), rayCluster.Name, metav1.DeleteOptions{})
@@ -225,6 +226,7 @@ func applyMinIO(test Test, g *WithT) {
 	}, TestTimeoutMedium).Should(Succeed())
 }
 
+// newS3Client creates a new S3 client.
 func newS3Client(endpoint string) (*s3.S3, error) {
 	sess, err := session.NewSession(&aws.Config{
 		Endpoint:         aws.String(endpoint),
@@ -261,6 +263,7 @@ func prepareTestEnv(test Test, g *WithT, namespace *corev1.Namespace, s3Client *
 	return rayCluster
 }
 
+// deleteS3Bucket deletes the S3 bucket. Note that objects under the bucket should be deleted first.
 func deleteS3Bucket(test Test, g *WithT, s3Client *s3.S3) {
 	// TODO(jwj): Better err handling during cleanup.
 	LogWithTimestamp(test.T(), "Deleting S3 bucket %s", s3BucketName)
@@ -307,7 +310,7 @@ func deleteS3Bucket(test Test, g *WithT, s3Client *s3.S3) {
 	}
 }
 
-// Deploy a Ray cluster with the collector sidecar into the test namespace.
+// applyRayCluster deploys a Ray cluster with the collector sidecar into the test namespace.
 func applyRayCluster(test Test, g *WithT, namespace *corev1.Namespace) *rayv1.RayCluster {
 	rayClusterFromYaml := DeserializeRayClusterYAML(test, rayClusterManifestPath)
 	rayClusterFromYaml.Namespace = namespace.Name
@@ -329,6 +332,7 @@ func applyRayCluster(test Test, g *WithT, namespace *corev1.Namespace) *rayv1.Ra
 	return rayCluster
 }
 
+// applyRayJobToCluster applies a Ray job to the existing Ray cluster.
 func applyRayJobToCluster(test Test, g *WithT, namespace *corev1.Namespace, rayCluster *rayv1.RayCluster) *rayv1.RayJob {
 	jobScript := "import ray; ray.init(); print(ray.cluster_resources())"
 	rayJobAC := rayv1ac.RayJob("ray-job", namespace.Name).
