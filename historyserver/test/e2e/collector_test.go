@@ -66,6 +66,11 @@ func testLogAndEventUploadOnDeletion(test Test, g *WithT, namespace *corev1.Name
 	// Submit a Ray job to the existing cluster.
 	_ = applyRayJobToCluster(test, g, namespace, rayCluster)
 
+	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, rayClusterID)
+	sessionID := getSessionIDFromHeadPod(test, g, rayCluster)
+	nodeID := getNodeIDFromHeadPod(test, g, rayCluster)
+	sessionPrefix := fmt.Sprintf("log/%s/%s/", clusterNameID, sessionID)
+
 	// Delete the Ray cluster to trigger log uploading event flushing on deletion.
 	err := test.Client().Ray().RayV1().
 		RayClusters(rayCluster.Namespace).
@@ -80,7 +85,7 @@ func testLogAndEventUploadOnDeletion(test Test, g *WithT, namespace *corev1.Name
 	// Expected S3 path structure:
 	//   {s3BucketName}/log/{clusterName}_{clusterID}/{sessionId}/logs/...
 	//   {s3BucketName}/log/{clusterName}_{clusterID}/{sessionId}/node_events/...
-	verifyS3SessionDirs(test, g, rayCluster, s3Client, []string{"logs", "node_events"})
+	verifyS3SessionDirs(test, g, s3Client, sessionPrefix, nodeID, []string{"logs", "node_events"})
 
 	// TODO(jwj): Refactor cleanup tasks
 	// Delete S3 bucket to ensure test isolation.
@@ -98,6 +103,11 @@ func testPrevLogsRuntimeUpload(test Test, g *WithT, namespace *corev1.Namespace,
 
 	// Submit a Ray job to the existing cluster.
 	_ = applyRayJobToCluster(test, g, namespace, rayCluster)
+
+	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, rayClusterID)
+	sessionID := getSessionIDFromHeadPod(test, g, rayCluster)
+	nodeID := getNodeIDFromHeadPod(test, g, rayCluster)
+	sessionPrefix := fmt.Sprintf("log/%s/%s/", clusterNameID, sessionID)
 
 	// Explicitly move logs from session_lastest to prev-logs.
 	// NOTE: The command in raycluster.yaml only runs at container startup, not when sessions change.
@@ -129,7 +139,7 @@ fi`
 	// Verify logs are successfully uploaded to minio.
 	// Expected S3 path structure:
 	//   {s3BucketName}/log/{clusterName}_{clusterID}/{sessionId}/logs/...
-	verifyS3SessionDirs(test, g, rayCluster, s3Client, []string{"logs"})
+	verifyS3SessionDirs(test, g, s3Client, sessionPrefix, nodeID, []string{"logs"})
 
 	err := test.Client().Ray().RayV1().
 		RayClusters(rayCluster.Namespace).
@@ -329,12 +339,7 @@ func applyRayJobToCluster(test Test, g *WithT, namespace *corev1.Namespace, rayC
 // Additionally, it verifies that specific files have content:
 // - logs/<nodeID>/raylet.out must exist and have content > 0 bytes
 // - node_events/<nodeID>_<suffix> must exist and have content > 0 bytes (suffix can be ignored for verification)
-func verifyS3SessionDirs(test Test, g *WithT, rayCluster *rayv1.RayCluster, s3Client *s3.S3, dirs []string) {
-	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, rayClusterID)
-	sessionID := getSessionIDFromHeadPod(test, g, rayCluster)
-	nodeID := getNodeIDFromHeadPod(test, g, rayCluster)
-	sessionPrefix := fmt.Sprintf("log/%s/%s/", clusterNameID, sessionID)
-
+func verifyS3SessionDirs(test Test, g *WithT, s3Client *s3.S3, sessionPrefix string, nodeID string, dirs []string) {
 	g.Eventually(func(gg Gomega) {
 		hasLogsDir := false
 		hasNodeEventsDir := false
