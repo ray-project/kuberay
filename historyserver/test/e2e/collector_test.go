@@ -50,7 +50,7 @@ func TestCollector(t *testing.T) {
 		testLogAndEventUploadOnDeletion(test, g, namespace, s3Client)
 	})
 
-	namespace = test.NewTestNamespace()
+	namespace = test.NewTestNamespace() // Separate namespace to prevent resource contention.
 	t.Run("Single session single node logs should be uploaded to S3 during runtime", func(t *testing.T) {
 		testPrevLogsRuntimeUpload(test, g, namespace, s3Client)
 	})
@@ -107,19 +107,6 @@ func testPrevLogsRuntimeUpload(test Test, g *WithT, namespace *corev1.Namespace,
 	// Retrieve sessionID from the head pod.
 	sessionID := getSessionIDFromHeadPod(test, g, rayCluster)
 
-	// Store initial pod state for debugging restarts
-	initialHeadPod, err := GetHeadPod(test, rayCluster)
-	g.Expect(err).NotTo(HaveOccurred())
-	initialPodName := initialHeadPod.Name
-	initialPodUID := initialHeadPod.UID
-	initialPodCreationTime := initialHeadPod.CreationTimestamp
-	var initialRestartCount int32
-	if len(initialHeadPod.Status.ContainerStatuses) > 0 {
-		initialRestartCount = initialHeadPod.Status.ContainerStatuses[0].RestartCount
-	}
-	LogWithTimestamp(test.T(), "[DEBUG] Initial pod state - Name: %s, UID: %s, Created: %s, RestartCount: %d",
-		initialPodName, initialPodUID, initialPodCreationTime.Format("2006-01-02T15:04:05Z"), initialRestartCount)
-
 	// Explicitly move logs from session_lastest to prev-logs.
 	// NOTE: The command in raycluster.yaml only runs at container startup, not when sessions change.
 	LogWithTimestamp(test.T(), "Moving logs from session_latest to prev-logs")
@@ -142,27 +129,6 @@ fi`
 		headPod, err := GetHeadPod(test, rayCluster)
 		gg.Expect(err).NotTo(HaveOccurred())
 
-		// Debug: Log pod state to detect restarts
-		currentPodName := headPod.Name
-		currentPodUID := headPod.UID
-		currentPodCreationTime := headPod.CreationTimestamp
-		var currentRestartCount int32
-		if len(headPod.Status.ContainerStatuses) > 0 {
-			currentRestartCount = headPod.Status.ContainerStatuses[0].RestartCount
-		}
-
-		// Detect pod recreation (entire pod restarted)
-		if currentPodName != initialPodName || currentPodUID != initialPodUID {
-			LogWithTimestamp(test.T(), "[DEBUG] POD RECREATED - Name changed: %s -> %s, UID changed: %s -> %s, Created: %s (emptyDir data LOST)",
-				initialPodName, currentPodName, initialPodUID, currentPodUID, currentPodCreationTime.Format("2006-01-02T15:04:05Z"))
-		} else if currentRestartCount > initialRestartCount {
-			LogWithTimestamp(test.T(), "[DEBUG] CONTAINER RESTARTED - Pod: %s, RestartCount: %d -> %d (emptyDir data preserved)",
-				currentPodName, initialRestartCount, currentRestartCount)
-		} else {
-			LogWithTimestamp(test.T(), "[DEBUG] Pod state unchanged - Name: %s, UID: %s, RestartCount: %d",
-				currentPodName, currentPodUID, currentRestartCount)
-		}
-
 		stdout, stderr := ExecPodCmd(test, headPod, "ray-head", []string{"sh", "-c", moveLogsCmd})
 		gg.Expect(stdout.String()).To(ContainSubstring("Successfully moved logs to /tmp/ray/prev-logs"))
 		gg.Expect(stderr.String()).To(BeEmpty())
@@ -175,12 +141,12 @@ fi`
 	sessionPrefix := fmt.Sprintf("log/%s/%s/", clusterNameID, sessionID)
 	verifyS3SessionDirs(test, g, s3Client, sessionPrefix, []string{"logs"})
 
-	err = test.Client().Ray().RayV1().
+	err := test.Client().Ray().RayV1().
 		RayClusters(rayCluster.Namespace).
 		Delete(test.Ctx(), rayCluster.Name, metav1.DeleteOptions{})
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Eventually(func() error {
-		_, err := GetRayCluster(test, rayCluster.Namespace, rayCluster.Name)
+		_, err = GetRayCluster(test, rayCluster.Namespace, rayCluster.Name)
 		return err
 	}, TestTimeoutMedium).Should(WithTransform(k8serrors.IsNotFound, BeTrue()))
 
