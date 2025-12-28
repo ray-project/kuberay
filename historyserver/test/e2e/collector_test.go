@@ -60,21 +60,7 @@ func TestCollector(t *testing.T) {
 }
 
 func testLogAndEventUploadOnDeletion(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
-	// Deploy a Ray cluster with the collector.
-	rayCluster := applyRayCluster(test, g, namespace)
-
-	// Check the collector sidecar exists in the head pod.
-	headPod, err := GetHeadPod(test, rayCluster)
-	g.Expect(err).NotTo(HaveOccurred())
-	g.Expect(headPod.Spec.Containers).To(ContainElement(
-		WithTransform(func(c corev1.Container) string { return c.Name }, Equal("collector")),
-	))
-
-	// Check an empty S3 bucket is automatically created.
-	_, err = s3Client.HeadBucket(&s3.HeadBucketInput{
-		Bucket: aws.String(s3BucketName),
-	})
-	g.Expect(err).NotTo(HaveOccurred())
+	rayCluster := prepareTestEnv(test, g, namespace, s3Client)
 
 	// Submit a Ray job to the existing cluster.
 	_ = applyRayJobToCluster(test, g, namespace, rayCluster)
@@ -146,21 +132,7 @@ func testLogAndEventUploadOnDeletion(test Test, g *WithT, namespace *corev1.Name
 // The reason is that this data movement serves as the startup command of the Ray container.
 // To trigger the filesystem watcher in WatchPrevLogsLoops during runtime, we have to move logs manually.
 func testPrevLogsRuntimeUpload(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
-	// TODO(jwj): Refactor preparatory tasks, including applying a Ray cluster, checking the collector
-	// sidecar container exists in the head pod, and checking an empty S3 bucket exists.
-	rayCluster := applyRayCluster(test, g, namespace)
-
-	headPod, err := GetHeadPod(test, rayCluster)
-	g.Expect(err).NotTo(HaveOccurred())
-	g.Expect(headPod.Spec.Containers).To(ContainElement(
-		WithTransform(func(c corev1.Container) string { return c.Name }, Equal("collector")),
-	))
-
-	// Check an empty S3 bucket is automatically created.
-	_, err = s3Client.HeadBucket(&s3.HeadBucketInput{
-		Bucket: aws.String(s3BucketName),
-	})
-	g.Expect(err).NotTo(HaveOccurred())
+	rayCluster := prepareTestEnv(test, g, namespace, s3Client)
 
 	// Submit a Ray job to the existing cluster.
 	applyRayJobToCluster(test, g, namespace, rayCluster)
@@ -184,7 +156,7 @@ else
 echo "session_latest or raylet_node_id not found"
 fi`
 	g.Eventually(func() error {
-		headPod, err = GetHeadPod(test, rayCluster)
+		headPod, err := GetHeadPod(test, rayCluster)
 		if err != nil {
 			return err
 		}
@@ -204,7 +176,7 @@ fi`
 	}, TestTimeoutMedium).Should(BeNumerically(">", 0))
 	LogWithTimestamp(test.T(), "Verified logs uploaded successfully during runtime")
 
-	err = test.Client().Ray().RayV1().
+	err := test.Client().Ray().RayV1().
 		RayClusters(rayCluster.Namespace).
 		Delete(test.Ctx(), rayCluster.Name, metav1.DeleteOptions{})
 	g.Expect(err).NotTo(HaveOccurred())
@@ -281,6 +253,28 @@ func newS3Client(endpoint string) (*s3.S3, error) {
 		return nil, err
 	}
 	return s3.New(sess), nil
+}
+
+// prepareTestEnv prepares test environment for each test case, including applying a Ray cluster,
+// checking the collector sidecar container exists in the head pod and an empty S3 bucket exists.
+func prepareTestEnv(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) *rayv1.RayCluster {
+	// Deploy a Ray cluster with the collector.
+	rayCluster := applyRayCluster(test, g, namespace)
+
+	// Check the collector sidecar exists in the head pod.
+	headPod, err := GetHeadPod(test, rayCluster)
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(headPod.Spec.Containers).To(ContainElement(
+		WithTransform(func(c corev1.Container) string { return c.Name }, Equal("collector")),
+	))
+
+	// Check an empty S3 bucket is automatically created.
+	_, err = s3Client.HeadBucket(&s3.HeadBucketInput{
+		Bucket: aws.String(s3BucketName),
+	})
+	g.Expect(err).NotTo(HaveOccurred())
+
+	return rayCluster
 }
 
 func deleteS3Bucket(test Test, g *WithT, s3Client *s3.S3) {
