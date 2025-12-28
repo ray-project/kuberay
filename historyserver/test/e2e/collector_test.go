@@ -6,7 +6,6 @@ import (
 	"os/exec"
 	"strings"
 	"testing"
-	"time"
 
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -163,18 +162,14 @@ fi`
 		return execKubectlExec(test, namespace, headPod.Name, []string{"sh", "-c", moveLogsCmd})
 	}, TestTimeoutMedium).Should(Succeed(), "Failed to move logs to prev-logs directory")
 
-	LogWithTimestamp(test.T(), "Waiting for collector to detect and process prev-logs")
-	time.Sleep(3 * time.Second)
-
-	// clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, namespace.Name)
-	g.Eventually(func() int64 {
-		objects, _ := s3Client.ListObjectsV2(&s3.ListObjectsV2Input{
+	g.Eventually(func(gg Gomega) {
+		// TODO(jwj): Add fine-grained checks as happy path.
+		objects, err := s3Client.ListObjectsV2(&s3.ListObjectsV2Input{
 			Bucket: aws.String(s3BucketName),
-			// Prefix: aws.String(fmt.Sprintf("log/%s/", clusterNameID)),
 		})
-		return aws.Int64Value(objects.KeyCount)
-	}, TestTimeoutMedium).Should(BeNumerically(">", 0))
-	LogWithTimestamp(test.T(), "Verified logs uploaded successfully during runtime")
+		gg.Expect(err).NotTo(HaveOccurred())
+		gg.Expect(aws.Int64Value(objects.KeyCount)).To(BeNumerically(">", 0))
+	}, TestTimeoutMedium).Should(Succeed(), "Failed to upload logs to S3 during runtime")
 
 	err := test.Client().Ray().RayV1().
 		RayClusters(rayCluster.Namespace).
