@@ -85,7 +85,7 @@ func testLogAndEventUploadOnDeletion(test Test, g *WithT, namespace *corev1.Name
 	//   {s3BucketName}/log/{clusterName}_{clusterID}/{sessionId}/node_events/...
 	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, "default") // namespace.Name)
 	sessionPrefix := fmt.Sprintf("log/%s/%s/", clusterNameID, sessionID)
-	g.Eventually(func() error {
+	g.Eventually(func(gg Gomega) {
 		// Check for logs/ directory.
 		logsPrefix := sessionPrefix + "logs/"
 		logsObjects, err := s3Client.ListObjectsV2(&s3.ListObjectsV2Input{
@@ -93,12 +93,8 @@ func testLogAndEventUploadOnDeletion(test Test, g *WithT, namespace *corev1.Name
 			Prefix:  aws.String(logsPrefix),
 			MaxKeys: aws.Int64(1), // Efficiently check if any objects exist
 		})
-		if err != nil {
-			return fmt.Errorf("failed to list logs in %s: %w", logsPrefix, err)
-		}
-		if aws.Int64Value(logsObjects.KeyCount) == 0 {
-			return fmt.Errorf("logs directory %s is empty", logsPrefix)
-		}
+		gg.Expect(err).NotTo(HaveOccurred())
+		gg.Expect(aws.Int64Value(logsObjects.KeyCount)).To(BeNumerically(">", 0))
 
 		// Check for node_events/ directory.
 		nodeEventsPrefix := sessionPrefix + "node_events/"
@@ -107,16 +103,11 @@ func testLogAndEventUploadOnDeletion(test Test, g *WithT, namespace *corev1.Name
 			Prefix:  aws.String(nodeEventsPrefix),
 			MaxKeys: aws.Int64(1), // Efficiently check if any objects exist
 		})
-		if err != nil {
-			return fmt.Errorf("failed to list node_events in %s: %w", nodeEventsPrefix, err)
-		}
-		if aws.Int64Value(nodeEventsObjects.KeyCount) == 0 {
-			return fmt.Errorf("node_events directory %s is empty", nodeEventsPrefix)
-		}
+		gg.Expect(err).NotTo(HaveOccurred())
+		gg.Expect(aws.Int64Value(nodeEventsObjects.KeyCount)).To(BeNumerically(">", 0))
 
 		LogWithTimestamp(test.T(), "Verified session %s has both logs/ (%d objects) and node_events/ (%d objects)",
 			sessionPrefix, aws.Int64Value(logsObjects.KeyCount), aws.Int64Value(nodeEventsObjects.KeyCount))
-		return nil
 	}, TestTimeoutMedium).Should(Succeed(), "Logs and node_events should be uploaded to S3")
 
 	// TODO(jwj): Refactor cleanup tasks
