@@ -50,6 +50,7 @@ func TestCollector(t *testing.T) {
 		testLogAndEventUploadOnDeletion(test, g, namespace, s3Client)
 	})
 
+	namespace = test.NewTestNamespace()
 	t.Run("Single session single node logs should be uploaded to S3 during runtime", func(t *testing.T) {
 		testPrevLogsRuntimeUpload(test, g, namespace, s3Client)
 	})
