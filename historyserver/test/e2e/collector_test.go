@@ -84,30 +84,7 @@ func testLogAndEventUploadOnDeletion(test Test, g *WithT, namespace *corev1.Name
 	//   {s3BucketName}/log/{clusterName}_{clusterID}/{sessionId}/node_events/...
 	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, rayClusterID)
 	sessionPrefix := fmt.Sprintf("log/%s/%s/", clusterNameID, sessionID)
-	g.Eventually(func(gg Gomega) {
-		// Check for logs/ directory.
-		logsPrefix := sessionPrefix + "logs/"
-		logsObjects, err := s3Client.ListObjectsV2(&s3.ListObjectsV2Input{
-			Bucket:  aws.String(s3BucketName),
-			Prefix:  aws.String(logsPrefix),
-			MaxKeys: aws.Int64(1), // Efficiently check if any objects exist
-		})
-		gg.Expect(err).NotTo(HaveOccurred())
-		gg.Expect(aws.Int64Value(logsObjects.KeyCount)).To(BeNumerically(">", 0))
-
-		// Check for node_events/ directory.
-		nodeEventsPrefix := sessionPrefix + "node_events/"
-		nodeEventsObjects, err := s3Client.ListObjectsV2(&s3.ListObjectsV2Input{
-			Bucket:  aws.String(s3BucketName),
-			Prefix:  aws.String(nodeEventsPrefix),
-			MaxKeys: aws.Int64(1), // Efficiently check if any objects exist
-		})
-		gg.Expect(err).NotTo(HaveOccurred())
-		gg.Expect(aws.Int64Value(nodeEventsObjects.KeyCount)).To(BeNumerically(">", 0))
-
-		LogWithTimestamp(test.T(), "Verified session %s has both logs/ (%d objects) and node_events/ (%d objects)",
-			sessionPrefix, aws.Int64Value(logsObjects.KeyCount), aws.Int64Value(nodeEventsObjects.KeyCount))
-	}, TestTimeoutMedium).Should(Succeed(), "Logs and node_events should be uploaded to S3")
+	verifyS3SessionDirs(test, g, s3Client, sessionPrefix, []string{"logs", "node_events"})
 
 	// TODO(jwj): Refactor cleanup tasks
 	// Delete S3 bucket to ensure test isolation.
@@ -161,20 +138,7 @@ fi`
 	//   {s3BucketName}/log/{clusterName}_{clusterID}/{sessionId}/logs/...
 	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, rayClusterID)
 	sessionPrefix := fmt.Sprintf("log/%s/%s/", clusterNameID, sessionID)
-	g.Eventually(func(gg Gomega) {
-		// Check for logs/ directory.
-		logsPrefix := sessionPrefix + "logs/"
-		logsObjects, err := s3Client.ListObjectsV2(&s3.ListObjectsV2Input{
-			Bucket:  aws.String(s3BucketName),
-			Prefix:  aws.String(logsPrefix),
-			MaxKeys: aws.Int64(1), // Efficiently check if any objects exist
-		})
-		gg.Expect(err).NotTo(HaveOccurred())
-		gg.Expect(aws.Int64Value(logsObjects.KeyCount)).To(BeNumerically(">", 0))
-
-		LogWithTimestamp(test.T(), "Verified session %s has logs/ (%d objects)",
-			sessionPrefix, aws.Int64Value(logsObjects.KeyCount))
-	}, TestTimeoutMedium).Should(Succeed(), "Logs should be uploaded to S3")
+	verifyS3SessionDirs(test, g, s3Client, sessionPrefix, []string{"logs"})
 
 	err := test.Client().Ray().RayV1().
 		RayClusters(rayCluster.Namespace).
@@ -397,4 +361,25 @@ fi`
 	g.Expect(sessionID).NotTo(BeEmpty())
 
 	return sessionID
+}
+
+// verifyS3SessionDirs verifies that specified directories exist under a session prefix in S3.
+// This helper function checks that each directory contains at least one object. For example,
+// verifyS3SessionDirs(test, g, s3Client, "log/cluster_session/", []string{"logs", "node_events"})
+// will check for objects under "log/cluster_session/logs/" and "log/cluster_session/node_events/".
+func verifyS3SessionDirs(test Test, g *WithT, s3Client *s3.S3, sessionPrefix string, dirs []string) {
+	g.Eventually(func(gg Gomega) {
+		for _, dir := range dirs {
+			dirPrefix := sessionPrefix + dir + "/"
+			objects, err := s3Client.ListObjectsV2(&s3.ListObjectsV2Input{
+				Bucket:  aws.String(s3BucketName),
+				Prefix:  aws.String(dirPrefix),
+				MaxKeys: aws.Int64(1), // Efficiently check if any objects exist
+			})
+			gg.Expect(err).NotTo(HaveOccurred())
+			keyCount := aws.Int64Value(objects.KeyCount)
+			gg.Expect(keyCount).To(BeNumerically(">", 0))
+			LogWithTimestamp(test.T(), "Verified directory %s under %s has %d objects", dir, sessionPrefix, keyCount)
+		}
+	}, TestTimeoutMedium).Should(Succeed(), "Failed to verify directories %v under %s", dirs, sessionPrefix)
 }
