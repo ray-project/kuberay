@@ -66,9 +66,6 @@ func testLogAndEventUploadOnDeletion(test Test, g *WithT, namespace *corev1.Name
 	// Submit a Ray job to the existing cluster.
 	_ = applyRayJobToCluster(test, g, namespace, rayCluster)
 
-	// Retrieve sessionID from the head pod.
-	sessionID := getSessionIDFromHeadPod(test, g, rayCluster)
-
 	// Delete the Ray cluster to trigger log uploading event flushing on deletion.
 	err := test.Client().Ray().RayV1().
 		RayClusters(rayCluster.Namespace).
@@ -83,9 +80,7 @@ func testLogAndEventUploadOnDeletion(test Test, g *WithT, namespace *corev1.Name
 	// Expected S3 path structure:
 	//   {s3BucketName}/log/{clusterName}_{clusterID}/{sessionId}/logs/...
 	//   {s3BucketName}/log/{clusterName}_{clusterID}/{sessionId}/node_events/...
-	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, rayClusterID)
-	sessionPrefix := fmt.Sprintf("log/%s/%s/", clusterNameID, sessionID)
-	verifyS3SessionDirs(test, g, s3Client, sessionPrefix, []string{"logs", "node_events"})
+	verifyS3SessionDirs(test, g, rayCluster, s3Client, []string{"logs", "node_events"})
 
 	// TODO(jwj): Refactor cleanup tasks
 	// Delete S3 bucket to ensure test isolation.
@@ -103,9 +98,6 @@ func testPrevLogsRuntimeUpload(test Test, g *WithT, namespace *corev1.Namespace,
 
 	// Submit a Ray job to the existing cluster.
 	_ = applyRayJobToCluster(test, g, namespace, rayCluster)
-
-	// Retrieve sessionID from the head pod.
-	sessionID := getSessionIDFromHeadPod(test, g, rayCluster)
 
 	// Explicitly move logs from session_lastest to prev-logs.
 	// NOTE: The command in raycluster.yaml only runs at container startup, not when sessions change.
@@ -137,9 +129,7 @@ fi`
 	// Verify logs are successfully uploaded to minio.
 	// Expected S3 path structure:
 	//   {s3BucketName}/log/{clusterName}_{clusterID}/{sessionId}/logs/...
-	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, rayClusterID)
-	sessionPrefix := fmt.Sprintf("log/%s/%s/", clusterNameID, sessionID)
-	verifyS3SessionDirs(test, g, s3Client, sessionPrefix, []string{"logs"})
+	verifyS3SessionDirs(test, g, rayCluster, s3Client, []string{"logs"})
 
 	err := test.Client().Ray().RayV1().
 		RayClusters(rayCluster.Namespace).
@@ -334,7 +324,74 @@ func applyRayJobToCluster(test Test, g *WithT, namespace *corev1.Namespace, rayC
 	return rayJob
 }
 
-// getSessionIDFromHeadPod retrieves the sessionID from the Ray head pod, by reading the symlink
+// verifyS3SessionDirs verifies that specified directories exist under a session prefix in S3.
+// This helper function checks that each directory contains at least one object.
+// Additionally, it verifies that specific files have content:
+// - logs/<nodeID>/raylet.out must exist and have content > 0 bytes
+// - node_events/<nodeID>_<suffix> must exist and have content > 0 bytes (suffix can be ignored for verification)
+func verifyS3SessionDirs(test Test, g *WithT, rayCluster *rayv1.RayCluster, s3Client *s3.S3, dirs []string) {
+	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, rayClusterID)
+	sessionID := getSessionIDFromHeadPod(test, g, rayCluster)
+	nodeID := getNodeIDFromHeadPod(test, g, rayCluster)
+	sessionPrefix := fmt.Sprintf("log/%s/%s/", clusterNameID, sessionID)
+
+	g.Eventually(func(gg Gomega) {
+		hasLogsDir := false
+		hasNodeEventsDir := false
+		for _, dir := range dirs {
+			switch dir {
+			case "logs":
+				hasLogsDir = true
+			case "node_events":
+				hasNodeEventsDir = true
+			}
+
+			dirPrefix := sessionPrefix + dir + "/"
+			objects, err := s3Client.ListObjectsV2(&s3.ListObjectsV2Input{
+				Bucket:  aws.String(s3BucketName),
+				Prefix:  aws.String(dirPrefix),
+				MaxKeys: aws.Int64(1), // Efficiently check if any objects exist
+			})
+			gg.Expect(err).NotTo(HaveOccurred())
+			keyCount := aws.Int64Value(objects.KeyCount)
+			gg.Expect(keyCount).To(BeNumerically(">", 0))
+			LogWithTimestamp(test.T(), "Verified directory %s under %s has at least one object", dir, sessionPrefix)
+		}
+
+		if hasLogsDir {
+			rayletOutKey := fmt.Sprintf("%slogs/%s/raylet.out", sessionPrefix, nodeID)
+			LogWithTimestamp(test.T(), "Checking raylet.out file: %s", rayletOutKey)
+			obj, err := s3Client.HeadObject(&s3.HeadObjectInput{
+				Bucket: aws.String(s3BucketName),
+				Key:    aws.String(rayletOutKey),
+			})
+			gg.Expect(err).NotTo(HaveOccurred())
+			fileSize := aws.Int64Value(obj.ContentLength)
+			gg.Expect(fileSize).To(BeNumerically(">", 0))
+			LogWithTimestamp(test.T(), "Verified raylet.out file has content: %d bytes", fileSize)
+		}
+
+		if hasNodeEventsDir {
+			nodeEventsPrefix := fmt.Sprintf("%snode_events/%s-", sessionPrefix, nodeID)
+			LogWithTimestamp(test.T(), "Checking node_events file with prefix: %s", nodeEventsPrefix)
+			objs, err := s3Client.ListObjectsV2(&s3.ListObjectsV2Input{
+				Bucket:  aws.String(s3BucketName),
+				Prefix:  aws.String(nodeEventsPrefix),
+				MaxKeys: aws.Int64(10),
+			})
+			gg.Expect(err).NotTo(HaveOccurred())
+			gg.Expect(aws.Int64Value(objs.KeyCount)).To(BeNumerically(">", 0))
+
+			for _, obj := range objs.Contents {
+				fileSize := aws.Int64Value(obj.Size)
+				gg.Expect(fileSize).To(BeNumerically(">", 0))
+				LogWithTimestamp(test.T(), "Verified node_events file %s has content: %d bytes", aws.StringValue(obj.Key), fileSize)
+			}
+		}
+	}, TestTimeoutMedium).Should(Succeed(), "Failed to verify directories %v and file contents under %s", dirs, sessionPrefix)
+}
+
+// getSessionIDFromHeadPod retrieves the sessionID from the Ray head pod by reading the symlink
 // /tmp/ray/session_latest and getting its basename.
 func getSessionIDFromHeadPod(test Test, g *WithT, rayCluster *rayv1.RayCluster) string {
 	headPod, err := GetHeadPod(test, rayCluster)
@@ -360,28 +417,28 @@ fi`
 			break
 		}
 	}
-	g.Expect(sessionID).NotTo(BeEmpty())
+	g.Expect(sessionID).NotTo(BeEmpty(), "sessionID should not be empty")
 
 	return sessionID
 }
 
-// verifyS3SessionDirs verifies that specified directories exist under a session prefix in S3.
-// This helper function checks that each directory contains at least one object. For example,
-// verifyS3SessionDirs(test, g, s3Client, "log/cluster_session/", []string{"logs", "node_events"})
-// will check for objects under "log/cluster_session/logs/" and "log/cluster_session/node_events/".
-func verifyS3SessionDirs(test Test, g *WithT, s3Client *s3.S3, sessionPrefix string, dirs []string) {
-	g.Eventually(func(gg Gomega) {
-		for _, dir := range dirs {
-			dirPrefix := sessionPrefix + dir + "/"
-			objects, err := s3Client.ListObjectsV2(&s3.ListObjectsV2Input{
-				Bucket:  aws.String(s3BucketName),
-				Prefix:  aws.String(dirPrefix),
-				MaxKeys: aws.Int64(1), // Efficiently check if any objects exist
-			})
-			gg.Expect(err).NotTo(HaveOccurred())
-			keyCount := aws.Int64Value(objects.KeyCount)
-			gg.Expect(keyCount).To(BeNumerically(">", 0))
-			LogWithTimestamp(test.T(), "Verified directory %s under %s has %d objects", dir, sessionPrefix, keyCount)
-		}
-	}, TestTimeoutMedium).Should(Succeed(), "Failed to verify directories %v under %s", dirs, sessionPrefix)
+// getNodeIDFromHeadPod retrieves the nodeID from the Ray head pod by reading /tmp/ray/raylet_node_id.
+func getNodeIDFromHeadPod(test Test, g *WithT, rayCluster *rayv1.RayCluster) string {
+	headPod, err := GetHeadPod(test, rayCluster)
+	g.Expect(err).NotTo(HaveOccurred())
+
+	getNodeIDCmd := `if [ -f "/tmp/ray/raylet_node_id" ]; then
+  cat /tmp/ray/raylet_node_id
+else
+  echo "raylet_node_id not found"
+  exit 1
+fi`
+	output, _ := ExecPodCmd(test, headPod, "ray-head", []string{"sh", "-c", getNodeIDCmd})
+
+	// Parse output to extract the nodeID.
+	nodeID := strings.TrimSpace(output.String())
+	LogWithTimestamp(test.T(), "Retrieved nodeID: %s", nodeID)
+	g.Expect(nodeID).NotTo(BeEmpty(), "nodeID should not be empty")
+
+	return nodeID
 }
