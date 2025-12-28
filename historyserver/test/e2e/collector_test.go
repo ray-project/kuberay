@@ -43,8 +43,7 @@ func TestCollector(t *testing.T) {
 	namespace := test.NewTestNamespace()
 
 	// Share a single S3 client among subtests.
-	s3Client, err := ensureS3Client(test, g)
-	g.Expect(err).NotTo(HaveOccurred())
+	s3Client := ensureS3Client(test, g)
 
 	t.Run("Happy path: Logs and events should be uploaded to S3 on deletion", func(t *testing.T) {
 		testLogAndEventUploadOnDeletion(test, g, namespace, s3Client)
@@ -65,12 +64,10 @@ func testLogAndEventUploadOnDeletion(test Test, g *WithT, namespace *corev1.Name
 	_ = applyRayJobToCluster(test, g, namespace, rayCluster)
 
 	// Retrieve sessionID from the head pod.
-	sessionID, err := getSessionIDFromHeadPod(test, namespace, rayCluster)
-	g.Expect(err).NotTo(HaveOccurred(), "Failed to retrieve sessionID from head pod")
-	LogWithTimestamp(test.T(), "Retrieved sessionID: %s", sessionID)
+	sessionID := getSessionIDFromHeadPod(test, g, rayCluster)
 
 	// Delete the Ray cluster to trigger log uploading on deletion.
-	err = test.Client().Ray().RayV1().
+	err := test.Client().Ray().RayV1().
 		RayClusters(rayCluster.Namespace).
 		Delete(test.Ctx(), rayCluster.Name, metav1.DeleteOptions{})
 	g.Expect(err).NotTo(HaveOccurred())
@@ -145,13 +142,14 @@ fi
 else
 echo "session_latest or raylet_node_id not found"
 fi`
-	g.Eventually(func() error {
+	g.Eventually(func(gg Gomega) {
 		headPod, err := GetHeadPod(test, rayCluster)
-		if err != nil {
-			return err
-		}
-		return execKubectlExec(test, namespace, headPod.Name, []string{"sh", "-c", moveLogsCmd})
-	}, TestTimeoutMedium).Should(Succeed(), "Failed to move logs to prev-logs directory")
+		gg.Expect(err).NotTo(HaveOccurred())
+
+		stdout, stderr := ExecPodCmd(test, headPod, "ray-head", []string{"sh", "-c", moveLogsCmd})
+		gg.Expect(stdout.String()).To(ContainSubstring("Successfully moved logs to /tmp/ray/prev-logs"))
+		gg.Expect(stderr.String()).To(BeEmpty())
+	}, TestTimeoutMedium).Should(Succeed(), "Failed to move logs to /tmp/ray/prev-logs")
 
 	g.Eventually(func(gg Gomega) {
 		// TODO(jwj): Add fine-grained checks as happy path.
@@ -175,7 +173,7 @@ fi`
 }
 
 // ensureS3Client creates an S3 client and ensures API endpoint accessibility.
-func ensureS3Client(test Test, g *WithT) (*s3.S3, error) {
+func ensureS3Client(test Test, g *WithT) *s3.S3 {
 	applyMinIO(test, g)
 
 	// Port-forward the minio API port.
@@ -206,7 +204,7 @@ func ensureS3Client(test Test, g *WithT) (*s3.S3, error) {
 	s3Client, err := newS3Client(minioAPIEndpoint)
 	g.Expect(err).NotTo(HaveOccurred())
 
-	return s3Client, err
+	return s3Client
 }
 
 // applyMinIO deploys minio once per test namespace, making sure it's idempotent.
@@ -353,11 +351,9 @@ func applyRayJobToCluster(test Test, g *WithT, namespace *corev1.Namespace, rayC
 
 // getSessionIDFromHeadPod retrieves the sessionID from the Ray head pod, by reading the symlink
 // /tmp/ray/session_latest and getting its basename.
-func getSessionIDFromHeadPod(test Test, namespace *corev1.Namespace, rayCluster *rayv1.RayCluster) (string, error) {
+func getSessionIDFromHeadPod(test Test, g *WithT, rayCluster *rayv1.RayCluster) string {
 	headPod, err := GetHeadPod(test, rayCluster)
-	if err != nil {
-		return "", fmt.Errorf("failed to get head pod: %w", err)
-	}
+	g.Expect(err).NotTo(HaveOccurred())
 
 	getSessionIDCmd := `if [ -L "/tmp/ray/session_latest" ]; then
   session_path=$(readlink /tmp/ray/session_latest)
@@ -366,24 +362,10 @@ else
   echo "session_latest is not a symlink"
   exit 1
 fi`
-	cmd := exec.CommandContext(
-		test.Ctx(),
-		"kubectl",
-		"exec",
-		"-n", namespace.Name,
-		"-c", "ray-head",
-		headPod.Name,
-		"--",
-		"sh", "-c", getSessionIDCmd,
-	)
+	output, _ := ExecPodCmd(test, headPod, "ray-head", []string{"sh", "-c", getSessionIDCmd})
 
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return "", fmt.Errorf("failed to get sessionID: %w, output: %s", err, string(output))
-	}
-
-	// Parse output to extract only the sessionID.
-	outputStr := strings.TrimSpace(string(output))
+	// Parse output to extract the sessionID.
+	outputStr := strings.TrimSpace(output.String())
 	lines := strings.Split(outputStr, "\n")
 	var sessionID string
 	for _, line := range lines {
@@ -393,25 +375,7 @@ fi`
 			break
 		}
 	}
-	if sessionID == "" {
-		return "", fmt.Errorf("sessionID not found in output, output: %s", outputStr)
-	}
+	g.Expect(sessionID).NotTo(BeEmpty())
 
-	return sessionID, nil
-}
-
-func execKubectlExec(test Test, namespace *corev1.Namespace, podName string, command []string) error {
-	args := []string{
-		"exec",
-		"-n", namespace.Name,
-		podName,
-		"--",
-	}
-	args = append(args, command...)
-
-	cmd := exec.CommandContext(test.Ctx(), "kubectl", args...)
-	if output, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("kubectl exec failed: %w, output: %s", err, string(output))
-	}
-	return nil
+	return sessionID
 }
