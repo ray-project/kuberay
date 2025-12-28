@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os/exec"
@@ -8,9 +9,12 @@ import (
 	"testing"
 
 	. "github.com/onsi/gomega"
+	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/tools/remotecommand"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -128,7 +132,7 @@ fi`
 		headPod, err := GetHeadPod(test, rayCluster)
 		gg.Expect(err).NotTo(HaveOccurred())
 
-		stdout, stderr := ExecPodCmd(test, headPod, "ray-head", []string{"sh", "-c", moveLogsCmd})
+		stdout, stderr := execPodCmdWithErr(test, headPod, "ray-head", []string{"sh", "-c", moveLogsCmd}, true)
 		gg.Expect(stdout.String()).To(ContainSubstring("Successfully moved logs to /tmp/ray/prev-logs"))
 		gg.Expect(stderr.String()).To(BeEmpty())
 	}, TestTimeoutMedium).Should(Succeed(), "Failed to move logs to /tmp/ray/prev-logs")
@@ -382,4 +386,45 @@ func verifyS3SessionDirs(test Test, g *WithT, s3Client *s3.S3, sessionPrefix str
 			LogWithTimestamp(test.T(), "Verified directory %s under %s has %d objects", dir, sessionPrefix, keyCount)
 		}
 	}, TestTimeoutMedium).Should(Succeed(), "Failed to verify directories %v under %s", dirs, sessionPrefix)
+}
+
+func execPodCmdWithErr(t Test, pod *corev1.Pod, containerName string, cmd []string, allowError ...bool) (bytes.Buffer, bytes.Buffer) {
+	shouldAllowError := len(allowError) > 0 && allowError[0]
+
+	req := t.Client().Core().CoreV1().RESTClient().
+		Post().
+		Resource("pods").
+		Name(pod.Name).
+		Namespace(pod.Namespace).
+		SubResource("exec").
+		VersionedParams(&corev1.PodExecOptions{
+			Command:   cmd,
+			Container: containerName,
+			Stdin:     false,
+			Stdout:    true,
+			Stderr:    true,
+			TTY:       false,
+		}, clientgoscheme.ParameterCodec)
+
+	LogWithTimestamp(t.T(), "Executing command: %s", cmd)
+	cfg := t.Client().Config()
+	exec, err := remotecommand.NewSPDYExecutor(&cfg, "POST", req.URL())
+	require.NoError(t.T(), err)
+	// Capture the output streams
+	var stdout, stderr bytes.Buffer
+	// Execute the command in the pod
+	err = exec.StreamWithContext(t.Ctx(), remotecommand.StreamOptions{
+		Stdin:  nil,
+		Stdout: &stdout,
+		Stderr: &stderr,
+		Tty:    false,
+	})
+	LogWithTimestamp(t.T(), "Command stdout: %s", stdout.String())
+	LogWithTimestamp(t.T(), "Command stderr: %s", stderr.String())
+
+	if !shouldAllowError {
+		require.NoError(t.T(), err, "Command failed unexpectedly")
+	}
+
+	return stdout, stderr
 }
