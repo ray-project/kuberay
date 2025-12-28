@@ -101,7 +101,7 @@ func testPrevLogsRuntimeUpload(test Test, g *WithT, namespace *corev1.Namespace,
 	rayCluster := prepareTestEnv(test, g, namespace, s3Client)
 
 	// Submit a Ray job to the existing cluster.
-	applyRayJobToCluster(test, g, namespace, rayCluster)
+	_ = applyRayJobToCluster(test, g, namespace, rayCluster)
 
 	// Retrieve sessionID from the head pod.
 	sessionID := getSessionIDFromHeadPod(test, g, rayCluster)
@@ -363,6 +363,7 @@ func applyRayJobToCluster(test Test, g *WithT, namespace *corev1.Namespace, rayC
 	LogWithTimestamp(test.T(), "Waiting for RayJob %s/%s to complete successfully", rayJob.Namespace, rayJob.Name)
 	g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
 		Should(WithTransform(RayJobStatus, Equal(rayv1.JobStatusSucceeded)))
+	LogWithTimestamp(test.T(), "RayJob %s/%s completed successfully", rayJob.Namespace, rayJob.Name)
 
 	return rayJob
 }
