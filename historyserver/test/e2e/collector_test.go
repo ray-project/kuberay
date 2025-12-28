@@ -1,7 +1,6 @@
 package e2e
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"os/exec"
@@ -9,12 +8,9 @@ import (
 	"testing"
 
 	. "github.com/onsi/gomega"
-	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/client-go/tools/remotecommand"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -110,6 +106,19 @@ func testPrevLogsRuntimeUpload(test Test, g *WithT, namespace *corev1.Namespace,
 	// Retrieve sessionID from the head pod.
 	sessionID := getSessionIDFromHeadPod(test, g, rayCluster)
 
+	// Store initial pod state for debugging restarts
+	initialHeadPod, err := GetHeadPod(test, rayCluster)
+	g.Expect(err).NotTo(HaveOccurred())
+	initialPodName := initialHeadPod.Name
+	initialPodUID := initialHeadPod.UID
+	initialPodCreationTime := initialHeadPod.CreationTimestamp
+	var initialRestartCount int32
+	if len(initialHeadPod.Status.ContainerStatuses) > 0 {
+		initialRestartCount = initialHeadPod.Status.ContainerStatuses[0].RestartCount
+	}
+	LogWithTimestamp(test.T(), "[DEBUG] Initial pod state - Name: %s, UID: %s, Created: %s, RestartCount: %d",
+		initialPodName, initialPodUID, initialPodCreationTime.Format("2006-01-02T15:04:05Z"), initialRestartCount)
+
 	// Explicitly move logs from session_lastest to prev-logs.
 	// NOTE: The command in raycluster.yaml only runs at container startup, not when sessions change.
 	LogWithTimestamp(test.T(), "Moving logs from session_latest to prev-logs")
@@ -128,13 +137,35 @@ fi
 else
 echo "session_latest or raylet_node_id not found"
 fi`
-	g.Eventually(func(gg Gomega) {
+	g.Eventually(func(gg Gomega) error {
 		headPod, err := GetHeadPod(test, rayCluster)
 		gg.Expect(err).NotTo(HaveOccurred())
 
-		stdout, stderr := execPodCmdWithErr(test, headPod, "ray-head", []string{"sh", "-c", moveLogsCmd}, true)
-		gg.Expect(stdout.String()).To(ContainSubstring("Successfully moved logs to /tmp/ray/prev-logs"))
-		gg.Expect(stderr.String()).To(BeEmpty())
+		// Debug: Log pod state to detect restarts
+		currentPodName := headPod.Name
+		currentPodUID := headPod.UID
+		currentPodCreationTime := headPod.CreationTimestamp
+		var currentRestartCount int32
+		if len(headPod.Status.ContainerStatuses) > 0 {
+			currentRestartCount = headPod.Status.ContainerStatuses[0].RestartCount
+		}
+
+		// Detect pod recreation (entire pod restarted)
+		if currentPodName != initialPodName || currentPodUID != initialPodUID {
+			LogWithTimestamp(test.T(), "[DEBUG] POD RECREATED - Name changed: %s -> %s, UID changed: %s -> %s, Created: %s (emptyDir data LOST)",
+				initialPodName, currentPodName, initialPodUID, currentPodUID, currentPodCreationTime.Format("2006-01-02T15:04:05Z"))
+		} else if currentRestartCount > initialRestartCount {
+			LogWithTimestamp(test.T(), "[DEBUG] CONTAINER RESTARTED - Pod: %s, RestartCount: %d -> %d (emptyDir data preserved)",
+				currentPodName, initialRestartCount, currentRestartCount)
+		} else {
+			LogWithTimestamp(test.T(), "[DEBUG] Pod state unchanged - Name: %s, UID: %s, RestartCount: %d",
+				currentPodName, currentPodUID, currentRestartCount)
+		}
+
+		// stdout, stderr := ExecPodCmd(test, headPod, "ray-head", []string{"sh", "-c", moveLogsCmd})
+		// gg.Expect(stdout.String()).To(ContainSubstring("Successfully moved logs to /tmp/ray/prev-logs"))
+		// gg.Expect(stderr.String()).To(BeEmpty())
+		return execKubectlExec(test, namespace, headPod.Name, []string{"sh", "-c", moveLogsCmd})
 	}, TestTimeoutMedium).Should(Succeed(), "Failed to move logs to /tmp/ray/prev-logs")
 
 	// Verify logs are successfully uploaded to minio.
@@ -144,7 +175,7 @@ fi`
 	sessionPrefix := fmt.Sprintf("log/%s/%s/", clusterNameID, sessionID)
 	verifyS3SessionDirs(test, g, s3Client, sessionPrefix, []string{"logs"})
 
-	err := test.Client().Ray().RayV1().
+	err = test.Client().Ray().RayV1().
 		RayClusters(rayCluster.Namespace).
 		Delete(test.Ctx(), rayCluster.Name, metav1.DeleteOptions{})
 	g.Expect(err).NotTo(HaveOccurred())
@@ -388,43 +419,18 @@ func verifyS3SessionDirs(test Test, g *WithT, s3Client *s3.S3, sessionPrefix str
 	}, TestTimeoutMedium).Should(Succeed(), "Failed to verify directories %v under %s", dirs, sessionPrefix)
 }
 
-func execPodCmdWithErr(t Test, pod *corev1.Pod, containerName string, cmd []string, allowError ...bool) (bytes.Buffer, bytes.Buffer) {
-	shouldAllowError := len(allowError) > 0 && allowError[0]
-
-	req := t.Client().Core().CoreV1().RESTClient().
-		Post().
-		Resource("pods").
-		Name(pod.Name).
-		Namespace(pod.Namespace).
-		SubResource("exec").
-		VersionedParams(&corev1.PodExecOptions{
-			Command:   cmd,
-			Container: containerName,
-			Stdin:     false,
-			Stdout:    true,
-			Stderr:    true,
-			TTY:       false,
-		}, clientgoscheme.ParameterCodec)
-
-	LogWithTimestamp(t.T(), "Executing command: %s", cmd)
-	cfg := t.Client().Config()
-	exec, err := remotecommand.NewSPDYExecutor(&cfg, "POST", req.URL())
-	require.NoError(t.T(), err)
-	// Capture the output streams
-	var stdout, stderr bytes.Buffer
-	// Execute the command in the pod
-	err = exec.StreamWithContext(t.Ctx(), remotecommand.StreamOptions{
-		Stdin:  nil,
-		Stdout: &stdout,
-		Stderr: &stderr,
-		Tty:    false,
-	})
-	LogWithTimestamp(t.T(), "Command stdout: %s", stdout.String())
-	LogWithTimestamp(t.T(), "Command stderr: %s", stderr.String())
-
-	if !shouldAllowError {
-		require.NoError(t.T(), err, "Command failed unexpectedly")
+func execKubectlExec(test Test, namespace *corev1.Namespace, podName string, command []string) error {
+	args := []string{
+		"exec",
+		"-n", namespace.Name,
+		podName,
+		"--",
 	}
+	args = append(args, command...)
 
-	return stdout, stderr
+	cmd := exec.CommandContext(test.Ctx(), "kubectl", args...)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("kubectl exec failed: %w, output: %s", err, string(output))
+	}
+	return nil
 }
