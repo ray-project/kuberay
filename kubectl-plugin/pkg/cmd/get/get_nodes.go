@@ -231,7 +231,7 @@ func printNodes(nodes []node, allNamespaces bool, output io.Writer) error {
 		if allNamespaces {
 			row.Cells = append(row.Cells, node.namespace)
 		}
-		row.Cells = append(row.Cells, []interface{}{
+		row.Cells = append(row.Cells, []any{
 			node.name,
 			node.cpus.String(),
 			node.gpus.String(),

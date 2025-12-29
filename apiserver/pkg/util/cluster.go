@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"net"
 	"strconv"
 	"strings"
@@ -287,16 +288,12 @@ func buildHeadPodTemplate(imageVersion string, envs *api.EnvironmentVariables, s
 
 	// Add specific annotations
 	if spec.Annotations != nil {
-		for k, v := range spec.Annotations {
-			podTemplateSpec.ObjectMeta.Annotations[k] = v
-		}
+		maps.Copy(podTemplateSpec.ObjectMeta.Annotations, spec.Annotations)
 	}
 
 	// Add specific labels
 	if spec.Labels != nil {
-		for k, v := range spec.Labels {
-			podTemplateSpec.ObjectMeta.Labels[k] = v
-		}
+		maps.Copy(podTemplateSpec.ObjectMeta.Labels, spec.Labels)
 	}
 
 	// Add specific tollerations
@@ -582,16 +579,12 @@ func buildWorkerPodTemplate(imageVersion string, envs *api.EnvironmentVariables,
 
 	// Add specific annotations
 	if spec.Annotations != nil {
-		for k, v := range spec.Annotations {
-			podTemplateSpec.ObjectMeta.Annotations[k] = v
-		}
+		maps.Copy(podTemplateSpec.ObjectMeta.Annotations, spec.Annotations)
 	}
 
 	// Add specific labels
 	if spec.Labels != nil {
-		for k, v := range spec.Labels {
-			podTemplateSpec.ObjectMeta.Labels[k] = v
-		}
+		maps.Copy(podTemplateSpec.ObjectMeta.Labels, spec.Labels)
 	}
 
 	// Add specific tollerations

@@ -306,7 +306,7 @@ func printWorkerGroups(workerGroups []workerGroup, allNamespaces bool, output io
 		minStr := fmt.Sprintf("%d", wg.minReplicas)
 		maxStr := fmt.Sprintf("%d", wg.maxReplicas)
 
-		row.Cells = append(row.Cells, []interface{}{
+		row.Cells = append(row.Cells, []any{
 			wg.name,
 			minStr,
 			maxStr,
