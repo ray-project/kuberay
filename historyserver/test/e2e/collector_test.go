@@ -112,6 +112,8 @@ func testPrevLogsRuntimeUpload(test Test, g *WithT, namespace *corev1.Namespace,
 	// Explicitly move logs from session_lastest to prev-logs.
 	// NOTE: The command in raycluster.yaml only runs at container startup, not when sessions change.
 	LogWithTimestamp(test.T(), "Moving logs from session_latest to prev-logs")
+
+	// todo: delete this
 	moveLogsCmd := `if [ -d "/tmp/ray/session_latest" ] && [ -f "/tmp/ray/raylet_node_id" ]; then
 session_id=$(basename $(readlink /tmp/ray/session_latest))
 node_id=$(cat /tmp/ray/raylet_node_id)
@@ -131,6 +133,8 @@ fi`
 		headPod, err := GetHeadPod(test, rayCluster)
 		gg.Expect(err).NotTo(HaveOccurred())
 
+		// todo: add command to trigger OOM
+		// use this "python3 -c "x = ' ' * (1024**3 * 1000)""
 		stdout, stderr := ExecPodCmd(test, headPod, "ray-head", []string{"sh", "-c", moveLogsCmd})
 		gg.Expect(stdout.String()).To(ContainSubstring("Successfully moved logs to /tmp/ray/prev-logs"))
 		gg.Expect(stderr.String()).To(BeEmpty())
@@ -160,6 +164,7 @@ func ensureS3Client(test Test, g *WithT) *s3.S3 {
 	// Port-forward the minio API port.
 	ctx, cancel := context.WithCancel(context.Background())
 	test.T().Cleanup(cancel)
+	// todo: don't need this
 	kubectlCmd := exec.CommandContext(
 		ctx,
 		"kubectl",
@@ -349,6 +354,7 @@ func verifyS3SessionDirs(test Test, g *WithT, s3Client *s3.S3, sessionPrefix str
 				hasLogsDir = true
 			case "node_events":
 				hasNodeEventsDir = true
+				// other case: panic
 			}
 
 			dirPrefix := sessionPrefix + dir + "/"
@@ -363,6 +369,8 @@ func verifyS3SessionDirs(test Test, g *WithT, s3Client *s3.S3, sessionPrefix str
 			LogWithTimestamp(test.T(), "Verified directory %s under %s has at least one object", dir, sessionPrefix)
 		}
 
+		// assert hasLogsDir == true
+		// assert hasNodeEventsDir == true
 		if hasLogsDir {
 			rayletOutKey := fmt.Sprintf("%slogs/%s/raylet.out", sessionPrefix, nodeID)
 			LogWithTimestamp(test.T(), "Checking raylet.out file: %s", rayletOutKey)
@@ -412,6 +420,7 @@ fi`
 	output, _ := ExecPodCmd(test, headPod, "ray-head", []string{"sh", "-c", getSessionIDCmd})
 
 	// Parse output to extract the sessionID.
+	// TODO: give an example
 	outputStr := strings.TrimSpace(output.String())
 	lines := strings.Split(outputStr, "\n")
 	var sessionID string
