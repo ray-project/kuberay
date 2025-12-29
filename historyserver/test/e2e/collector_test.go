@@ -164,7 +164,6 @@ func ensureS3Client(test Test, g *WithT) *s3.S3 {
 	// Port-forward the minio API port.
 	ctx, cancel := context.WithCancel(context.Background())
 	test.T().Cleanup(cancel)
-	// todo: don't need this
 	kubectlCmd := exec.CommandContext(
 		ctx,
 		"kubectl",
