@@ -419,17 +419,8 @@ fi`
 	output, _ := ExecPodCmd(test, headPod, "ray-head", []string{"sh", "-c", getSessionIDCmd})
 
 	// Parse output to extract the sessionID.
-	// TODO: give an example
-	outputStr := strings.TrimSpace(output.String())
-	lines := strings.Split(outputStr, "\n")
-	var sessionID string
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "session_") {
-			sessionID = line
-			break
-		}
-	}
+	sessionID := strings.TrimSpace(output.String())
+	LogWithTimestamp(test.T(), "Retrieved sessionID: %s", sessionID)
 	g.Expect(sessionID).NotTo(BeEmpty(), "sessionID should not be empty")
 
 	return sessionID
