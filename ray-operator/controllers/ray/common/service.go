@@ -3,6 +3,7 @@ package common
 import (
 	"context"
 	"fmt"
+	"maps"
 	"os"
 	"sort"
 	"strings"
@@ -54,9 +55,7 @@ func BuildServiceForHeadPod(ctx context.Context, cluster rayv1.RayCluster, label
 
 	// Deep copy the selector to avoid modifying the original object
 	labelsForService := make(map[string]string)
-	for k, v := range selector {
-		labelsForService[k] = v
-	}
+	maps.Copy(labelsForService, selector)
 
 	if annotations == nil {
 		annotations = make(map[string]string)
@@ -390,9 +389,7 @@ func setLabelsforUserProvidedService(service *corev1.Service, labels map[string]
 	if service.ObjectMeta.Labels == nil {
 		service.ObjectMeta.Labels = make(map[string]string)
 	}
-	for k, v := range labels {
-		service.ObjectMeta.Labels[k] = v
-	}
+	maps.Copy(service.ObjectMeta.Labels, labels)
 }
 
 // getServicePorts will either user passing ports or default ports to create service.

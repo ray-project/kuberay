@@ -696,7 +696,7 @@ func runtimeEnvHasWorkingDir(runtimePath string) (string, error) {
 		return "", err
 	}
 
-	var runtimeEnvYaml map[string]interface{}
+	var runtimeEnvYaml map[string]any
 	err = yaml.Unmarshal(runtimeEnvFileContent, &runtimeEnvYaml)
 	if err != nil {
 		return "", err

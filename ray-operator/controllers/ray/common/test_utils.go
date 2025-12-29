@@ -12,7 +12,7 @@ import (
 // Generate a string of length 200.
 func longString(t *testing.T) string {
 	var b bytes.Buffer
-	for i := 0; i < 200; i++ {
+	for range 200 {
 		b.WriteString("a")
 	}
 	result := b.String()
