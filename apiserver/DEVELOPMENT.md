@@ -22,7 +22,7 @@ Typing `make dev-tools` will download and install all of them. The `make clean-d
 | Software      | Version  |                                                                    Link |
 | :-------      | :------: | -----------------------------------------------------------------------:|
 | kind          | v0.19.0  | [Install](https://kind.sigs.k8s.io/docs/user/quick-start/#installation) |
-| golangci-lint | v1.64.8  | [Install](https://golangci-lint.run/usage/install/)                     |
+| golangci-lint | v2.7.2  | [Install](https://golangci-lint.run/docs/welcome/install/local/)                     |
 | kustomize     | v3.8.7   | [install](https://kubectl.docs.kubernetes.io/installation/kustomize/)   |
 | gofumpt       | v0.3.1   | To install `go install mvdan.cc/gofumpt@v0.3.1`                         |
 | goimports     | latest   | To install `go install golang.org/x/tools/cmd/goimports@latest`         |
@@ -155,6 +155,46 @@ Access the service at `localhost:8888` for http, and `localhost:8887` for the RP
 #creates an image with the tag kuberay/apiserver:latest
 make docker-image
 ```
+
+#### Build Multi-Architecture Image
+
+The API server supports building multi-architecture images for `linux/amd64` and `linux/arm64` platforms. This is useful for deploying on ARM-based systems like Apple Silicon.
+
+**Prerequisites:**
+
+* Docker Buildx installed and configured
+
+**Build Process:**
+
+The multi-arch build follows a similar pattern to the ray-operator:
+
+**Build binaries for each architecture:**
+
+```bash
+# Build for amd64
+cd apiserver
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o kuberay-apiserver-amd64 cmd/main.go
+
+# Build for arm64
+CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -a -o kuberay-apiserver-arm64 cmd/main.go
+```
+
+**Build and push multi-arch image using Dockerfile.buildx:**
+
+```bash
+# From the project root directory
+docker buildx build --platform linux/amd64,linux/arm64 \
+  -t your-registry/apiserver:your-tag \
+  -f apiserver/Dockerfile.buildx \
+  --push .
+```
+
+**Note:**
+
+* The multi-arch image uses `apiserver/Dockerfile.buildx` which is optimized for copying pre-built binaries.
+* Since the API server is built with `CGO_ENABLED=0`, no cross-compilation tools (like gcc-aarch64-linux-gnu) are needed, making the build process simpler than the operator.
+* The build context must be the project root directory (`.`) because the `proto/` directory needs to be copied for serving swagger files at runtime.
+* Multi-arch images are automatically built and pushed to `quay.io/kuberay/apiserver:nightly` on merges to the `master` branch via the GitHub Actions workflow.
 
 #### Start Kubernetes Deployment
 

@@ -20,7 +20,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v3
       with:
-        go-version: v1.24
+        go-version: v1.25
 
     - name: Check out code into the Go module directory
       uses: actions/checkout@v2
@@ -52,14 +52,6 @@ jobs:
       run: go test ./pkg/... ./cmd/... -race -parallel 4
       working-directory: ${{env.working-directory}}
 
-    - name: Set up Docker
-      uses: docker/setup-docker-action@v4
-
-    - name: Build Docker Image - Apiserver
-      run: |
-        docker build -t kuberay/apiserver:${{ steps.vars.outputs.sha_short }} -f apiserver/Dockerfile .
-        docker save -o /tmp/apiserver.tar kuberay/apiserver:${{ steps.vars.outputs.sha_short }}
-
     - name: Log in to Quay.io
       uses: docker/login-action@v2
       with:
@@ -67,12 +59,43 @@ jobs:
         username: ${{ secrets.QUAY_USERNAME }}
         password: ${{ secrets.QUAY_ROBOT_TOKEN }}
 
-    - name: Push Apiserver to Quay.io
+    # Build apiserver binaries inside the gh runner vm directly and then copy the go binaries to docker images using the Dockerfile.buildx
+    - name: Build linux/amd64 apiserver go binary
+      env:
+        CGO_ENABLED: 0
+        GOOS: linux
+        GOARCH: amd64
       run: |
-        docker image tag kuberay/apiserver:${{ steps.vars.outputs.sha_short }} quay.io/kuberay/apiserver:${{ steps.vars.outputs.sha_short }};
-        docker push quay.io/kuberay/apiserver:${{ steps.vars.outputs.sha_short }};
-        docker image tag kuberay/apiserver:${{ steps.vars.outputs.sha_short }} quay.io/kuberay/apiserver:${{ env.tag }};
-        docker push quay.io/kuberay/apiserver:${{ env.tag }}
+        CGO_ENABLED=$CGO_ENABLED GOOS=$GOOS GOARCH=$GOARCH go build -a -o kuberay-apiserver-$GOARCH cmd/main.go
+      working-directory: ${{env.working-directory}}
+
+    - name: Build linux/arm64 apiserver binary
+      env:
+        CGO_ENABLED: 0
+        GOOS: linux
+        GOARCH: arm64
+      run: |
+        CGO_ENABLED=$CGO_ENABLED GOOS=$GOOS GOARCH=$GOARCH go build -a -o kuberay-apiserver-$GOARCH cmd/main.go
+      working-directory: ${{env.working-directory}}
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build MultiArch Image
+      uses: docker/build-push-action@v5
+      env:
+        PUSH: true
+        REPO_ORG: kuberay
+        REPO_NAME: apiserver
+      with:
+        platforms: linux/amd64,linux/arm64
+        context: .
+        file: ./apiserver/Dockerfile.buildx
+        push: ${{env.PUSH}}
+        provenance: false
+        tags: |
+          quay.io/${{env.REPO_ORG}}/${{env.REPO_NAME}}:${{ steps.vars.outputs.sha_short }}
+          quay.io/${{env.REPO_ORG}}/${{env.REPO_NAME}}:${{ env.tag }}
 
   release_operator_image:
     env:
@@ -90,7 +113,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v3
       with:
-        go-version: v1.24
+        go-version: v1.25
 
     - name: Check out code into the Go module directory
       uses: actions/checkout@v2
@@ -120,14 +143,6 @@ jobs:
 
     - name: Test
       run: make test
-      working-directory: ${{env.working-directory}}
-
-    - name: Set up Docker
-      uses: docker/setup-docker-action@v4
-
-    - name: Build Docker Image - Operator
-      run: |
-        IMG=kuberay/operator:${{ steps.vars.outputs.sha_short }} make docker-image
       working-directory: ${{env.working-directory}}
 
     - name: Log in to Quay.io
@@ -215,10 +230,6 @@ jobs:
       id: vars
       run: echo "::set-output name=sha_short::$(git rev-parse --short HEAD)"
 
-    - name: Set up Docker
-      uses: docker/setup-docker-action@v4
-
-
     - name: Log in to Quay.io
       uses: docker/login-action@v2
       with:
@@ -238,3 +249,82 @@ jobs:
         labels: |
           GIT_COMMIT=${{ steps.vars.outputs.sha_short }}
         provenance: false
+
+  release_submitter_image:
+    env:
+      working-directory: ./ray-operator
+    name: Release Submitter Docker Images
+    runs-on: ubuntu-22.04
+    steps:
+
+    - name: Error if not a tag
+      uses: actions/github-script@v7
+      if: ${{ ! startsWith(github.ref, 'refs/tags/') }}
+      with:
+        script: core.setFailed('This action can only be run on tags')
+
+    - name: Set up Go
+      uses: actions/setup-go@v3
+      with:
+        go-version: v1.25
+
+    - name: Check out code into the Go module directory
+      uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - name: Extract tag
+      id: tag
+      run: echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
+
+    - name: Get revision SHA
+      id: vars
+      run: echo "::set-output name=sha_short::$(git rev-parse --short HEAD)"
+
+    - name: Get dependencies
+      run: go mod download
+      working-directory: ${{env.working-directory}}
+
+    - name: Log in to Quay.io
+      uses: docker/login-action@v2
+      with:
+        registry: quay.io
+        username: ${{ secrets.QUAY_USERNAME }}
+        password: ${{ secrets.QUAY_ROBOT_TOKEN }}
+
+    - name: Build linux/amd64 submitter go binary
+      env:
+        CGO_ENABLED: 0
+        GOOS: linux
+        GOARCH: amd64
+      run: |
+        CGO_ENABLED=$CGO_ENABLED GOOS=$GOOS GOARCH=$GOARCH go build -tags strictfipsruntime -a -o submitter-$GOARCH ./rayjob-submitter/cmd/main.go
+      working-directory: ${{env.working-directory}}
+
+    - name: Build linux/arm64 submitter binary
+      env:
+        CGO_ENABLED: 0
+        GOOS: linux
+        GOARCH: arm64
+      run: |
+        CGO_ENABLED=$CGO_ENABLED GOOS=$GOOS GOARCH=$GOARCH go build -tags strictfipsruntime -a -o submitter-$GOARCH ./rayjob-submitter/cmd/main.go
+      working-directory: ${{env.working-directory}}
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build MultiArch Image
+      uses: docker/build-push-action@v5
+      env:
+        PUSH: true
+        REPO_ORG: kuberay
+        REPO_NAME: submitter
+      with:
+        platforms: linux/amd64,linux/arm64
+        context: ${{env.working-directory}}
+        file: ${{env.working-directory}}/Dockerfile.submitter.buildx
+        push: ${{env.PUSH}}
+        provenance: false
+        tags: |
+          quay.io/${{env.REPO_ORG}}/${{env.REPO_NAME}}:${{ steps.vars.outputs.sha_short }}
+          quay.io/${{env.REPO_ORG}}/${{env.REPO_NAME}}:${{ env.tag }}

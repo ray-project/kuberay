@@ -9,7 +9,7 @@ metadata:
     {{- toYaml . | nindent 4 }}
     {{- end }}
 spec:
-  replicas: 1
+  replicas: {{ .Values.replicas | default 1 }}
   strategy:
     type: Recreate
   selector:
@@ -35,8 +35,9 @@ spec:
         {{- toYaml . | nindent 8 }}
     {{- end }}
       serviceAccountName: {{ include "kuberay-operator.serviceAccount.name" . }}
-      {{- if and (.Values.logging.baseDir) (.Values.logging.fileName) }}
+      {{- if or (and (.Values.logging.baseDir) (.Values.logging.fileName)) .Values.configuration.enabled }}
       volumes:
+      {{- if and (.Values.logging.baseDir) (.Values.logging.fileName) }}
         - name: kuberay-logs
           {{- if .Values.logging.sizeLimit }}
           emptyDir:
@@ -45,9 +46,18 @@ spec:
           emptyDir: {}
           {{- end }}
       {{- end }}
+      {{- if .Values.configuration.enabled }}
+        - name: operator-config
+          configMap:
+            name: {{ include "kuberay-operator.deployment.name" . }}-config
+      {{- end }}
+      {{- end }}
       {{- with .Values.podSecurityContext }}
       securityContext:
         {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.priorityClassName }}
+      priorityClassName: {{ . }}
       {{- end }}
       containers:
         - name: {{ .Chart.Name }}
@@ -59,15 +69,26 @@ spec:
           {{- with .Values.image.pullPolicy }}
           imagePullPolicy: {{ . }}
           {{- end }}
-          {{- if and (.Values.logging.baseDir) (.Values.logging.fileName) }}
+          {{- if or (and (.Values.logging.baseDir) (.Values.logging.fileName)) .Values.configuration.enabled }}
           volumeMounts:
+          {{- if and (.Values.logging.baseDir) (.Values.logging.fileName) }}
             - name: kuberay-logs
               mountPath: "{{ .Values.logging.baseDir }}"
+          {{- end }}
+          {{- if .Values.configuration.enabled }}
+            - name: operator-config
+              mountPath: /etc/kuberay
+              readOnly: true
+          {{- end }}
           {{- end }}
           command:
             - {{ .Values.operatorCommand }}
           args:
             {{- $argList := list -}}
+            {{- if .Values.configuration.enabled -}}
+            {{- $argList = append $argList "--config" -}}
+            {{- $argList = append $argList "/etc/kuberay/config.yaml" -}}
+            {{- end -}}
             {{- $argList = append $argList (include "kuberay.featureGates" . | trim) -}}
             {{- if .Values.batchScheduler -}}
             {{- if .Values.batchScheduler.enabled -}}

@@ -5,7 +5,7 @@ kind: RayCluster
 metadata:
   name: raycluster-head-command
 spec:
-  rayVersion: '2.46.0' # should match the Ray version in the image of the containers
+  rayVersion: '2.52.0' # should match the Ray version in the image of the containers
   # Ray head pod template
   headGroupSpec:
     # The `rayStartParams` are used to configure the `ray start` command.
@@ -17,13 +17,13 @@ spec:
       spec:
         containers:
         - name: ray-head
-          image: rayproject/ray:2.46.0
+          image: rayproject/ray:2.52.0
           resources:
             limits:
               cpu: 1
-              memory: 2Gi
+              memory: 4Gi
             requests:
-              cpu: 500m
+              cpu: 1
               memory: 2Gi
           ports:
           - containerPort: 6379

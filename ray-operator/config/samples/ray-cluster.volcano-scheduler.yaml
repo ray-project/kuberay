@@ -2,22 +2,20 @@ apiVersion: ray.io/v1
 kind: RayCluster
 metadata:
   name: test-cluster-0
-  labels:
-    ray.io/scheduler-name: volcano
 spec:
-  rayVersion: '2.46.0'
+  rayVersion: '2.52.0'
   headGroupSpec:
     rayStartParams: {}
     template:
       spec:
         containers:
         - name: ray-head
-          image: rayproject/ray:2.46.0
+          image: rayproject/ray:2.52.0
           resources:
             limits:
-              cpu: "1"
-              memory: "2Gi"
+              cpu: 1
+              memory: 4Gi
             requests:
-              cpu: "1"
-              memory: "2Gi"
+              cpu: 1
+              memory: 2Gi
   workerGroupSpecs: []

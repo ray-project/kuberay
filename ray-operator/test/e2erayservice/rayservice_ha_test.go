@@ -160,11 +160,8 @@ func TestRayServiceZeroDowntimeUpgrade(t *testing.T) {
 
 	// Start a goroutine to perform zero-downtime upgrade
 	var wg sync.WaitGroup
-	wg.Add(1)
 
-	go func() {
-		defer wg.Done()
-
+	wg.Go(func() {
 		LogWithTimestamp(test.T(), "Waiting several seconds before updating RayService")
 		time.Sleep(30 * time.Second)
 
@@ -179,7 +176,7 @@ func TestRayServiceZeroDowntimeUpgrade(t *testing.T) {
 		g.Expect(err).NotTo(HaveOccurred())
 
 		waitingForRayClusterSwitch(g, test, newRayService, rayClusterName)
-	}()
+	})
 
 	// Run Locust test
 	ExecPodCmd(test, headPod, common.RayHeadContainer, []string{

@@ -130,6 +130,8 @@ message ComputeTemplate {
   repeated PodToleration tolerations = 7;
   // Optional. Name and number of the extended resources
   map<string, uint32> extended_resources = 8;
+  // Optional. The unit of memory, default is "Gi" for memory
+  string memory_unit = 9;
 }
 
 // This service is not implemented.

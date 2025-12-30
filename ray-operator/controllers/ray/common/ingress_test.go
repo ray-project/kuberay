@@ -90,7 +90,7 @@ func TestBuildIngressForHeadService(t *testing.T) {
 	// and `spec.ingressClassName` is a replacement for this annotation. See
 	// kubernetes.io/docs/concepts/services-networking/ingress/#deprecated-annotation
 	// for more details.
-	assert.Equal(t, "", ingress.Annotations[IngressClassAnnotationKey])
+	assert.Empty(t, ingress.Annotations[IngressClassAnnotationKey])
 
 	assert.Equal(t, instanceWithIngressEnabled.Annotations[IngressClassAnnotationKey], *ingress.Spec.IngressClassName)
 

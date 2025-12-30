@@ -882,9 +882,9 @@ type AutoscalerOptions struct {
 	// Aggressive: An alias for Default; upscaling is not rate-limited.
 	// It is not read by the KubeRay operator but by the Ray autoscaler.
 	UpscalingMode string `protobuf:"bytes,2,opt,name=upscalingMode,proto3" json:"upscalingMode,omitempty"`
-	// Image optionally overrides the autoscaler's container image. This override is provided for autoscaler testing and development.
+	// Image optionally overrides the autoscaler's container image. This override is for provided for autoscaler testing and development.
 	Image string `protobuf:"bytes,3,opt,name=image,proto3" json:"image,omitempty"`
-	// ImagePullPolicy optionally overrides the autoscaler container's image pull policy. This override is provided for autoscaler testing and development.
+	// ImagePullPolicy optionally overrides the autoscaler container's image pull policy. This override is for provided for autoscaler testing and development.
 	ImagePullPolicy string `protobuf:"bytes,4,opt,name=imagePullPolicy,proto3" json:"imagePullPolicy,omitempty"`
 	// Optional CPUs requirements for autoscaler - default "500m"
 	Cpu string `protobuf:"bytes,5,opt,name=cpu,proto3" json:"cpu,omitempty"`

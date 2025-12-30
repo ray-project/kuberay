@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"math/rand"
 	"os/exec"
+	"regexp"
+	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -75,4 +77,29 @@ func getAndCheckRayJob(
 	Expect(string(rayJob.Status.JobStatus)).To(Equal(expectedJobStatus))
 	Expect(string(rayJob.Status.JobDeploymentStatus)).To(Equal(expectedJobDeploymentStatus))
 	return rayJob
+}
+
+// Even though sample.yaml only has one workerGroup, we filter by groupName
+// to ensure this helper remains correct if future samples define multiple groups.
+func getWorkerGroupValues(ns, cluster, group string) (minReplicas, maxReplicas, replicas string) {
+	GinkgoHelper()
+	clean := func(s string) string {
+		return regexp.MustCompile(`[^0-9]`).ReplaceAllString(strings.TrimSpace(s), "")
+	}
+
+	//nolint:gosec // G204: group parameter is controlled by test code, not user input
+	minOut, err := exec.Command("kubectl", "get", "raycluster", cluster, "-n", ns,
+		"-o", "jsonpath={.spec.workerGroupSpecs[?(@.groupName==\""+group+"\")].minReplicas}").Output()
+	Expect(err).ToNot(HaveOccurred())
+
+	//nolint:gosec // G204: group parameter is controlled by test code, not user input
+	maxOut, err := exec.Command("kubectl", "get", "raycluster", cluster, "-n", ns,
+		"-o", "jsonpath={.spec.workerGroupSpecs[?(@.groupName==\""+group+"\")].maxReplicas}").Output()
+	Expect(err).ToNot(HaveOccurred())
+
+	//nolint:gosec // G204: group parameter is controlled by test code, not user input
+	replicasOut, err := exec.Command("kubectl", "get", "raycluster", cluster, "-n", ns,
+		"-o", "jsonpath={.spec.workerGroupSpecs[?(@.groupName==\""+group+"\")].replicas}").Output()
+	Expect(err).ToNot(HaveOccurred())
+	return clean(string(minOut)), clean(string(maxOut)), clean(string(replicasOut))
 }

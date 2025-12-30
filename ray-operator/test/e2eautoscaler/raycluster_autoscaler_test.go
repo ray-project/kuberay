@@ -321,7 +321,7 @@ func TestRayClusterAutoscalerMinReplicasUpdate(t *testing.T) {
 			g.Expect(err).NotTo(gomega.HaveOccurred())
 			LogWithTimestamp(test.T(), "Found head pod %s/%s", headPod.Namespace, headPod.Name)
 
-			for i := 0; i < 3; i++ {
+			for i := range 3 {
 				ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "/home/ray/test_scripts/create_detached_actor.py", fmt.Sprintf("actor%d", i)})
 			}
 

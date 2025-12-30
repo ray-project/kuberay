@@ -1,4 +1,4 @@
-package utils
+package dashboardclient
 
 import (
 	"bytes"
@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"strings"
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/util/json"
@@ -18,12 +20,14 @@ import (
 var (
 	// Multi-application URL paths
 	ServeDetailsPath = "/api/serve/applications/"
+	APITypeParam     = "declarative"
 	DeployPathV2     = "/api/serve/applications/"
 	// Job URL paths
 	JobPath = "/api/jobs/"
 )
 
 type RayDashboardClientInterface interface {
+	InitClient(client *http.Client, dashboardURL string, authToken string)
 	UpdateDeployments(ctx context.Context, configJson []byte) error
 	// V2/multi-app Rest API
 	GetServeDetails(ctx context.Context) (*utiltypes.ServeDetails, error)
@@ -40,6 +44,19 @@ type RayDashboardClientInterface interface {
 type RayDashboardClient struct {
 	client       *http.Client
 	dashboardURL string
+	authToken    string
+}
+
+func (r *RayDashboardClient) InitClient(client *http.Client, dashboardURL string, authToken string) {
+	r.client = client
+	r.dashboardURL = dashboardURL
+	r.authToken = authToken
+}
+
+func (r *RayDashboardClient) setAuthHeader(req *http.Request) {
+	if r.authToken != "" {
+		req.Header.Set("x-ray-authorization", fmt.Sprintf("Bearer %s", r.authToken))
+	}
 }
 
 // UpdateDeployments update the deployments in the Ray cluster.
@@ -51,6 +68,7 @@ func (r *RayDashboardClient) UpdateDeployments(ctx context.Context, configJson [
 	}
 
 	req.Header.Set("Content-Type", "application/json")
+	r.setAuthHeader(req)
 
 	resp, err := r.client.Do(req)
 	if err != nil {
@@ -78,12 +96,22 @@ func (r *RayDashboardClient) GetMultiApplicationStatus(ctx context.Context) (map
 	return r.ConvertServeDetailsToApplicationStatuses(serveDetails)
 }
 
-// GetServeDetails gets details on all live applications on the Ray cluster.
+// GetServeDetails gets details on all declarative applications on the Ray cluster.
 func (r *RayDashboardClient) GetServeDetails(ctx context.Context) (*utiltypes.ServeDetails, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, r.dashboardURL+ServeDetailsPath, nil)
+	serveDetailsURL, err := url.Parse(r.dashboardURL + ServeDetailsPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse dashboard URL: %w", err)
+	}
+	q := serveDetailsURL.Query()
+	q.Set("api_type", APITypeParam)
+	serveDetailsURL.RawQuery = q.Encode()
+
+	req, err := http.NewRequestWithContext(ctx, "GET", serveDetailsURL.String(), nil)
 	if err != nil {
 		return nil, err
 	}
+
+	r.setAuthHeader(req)
 
 	resp, err := r.client.Do(req)
 	if err != nil {
@@ -130,6 +158,8 @@ func (r *RayDashboardClient) GetJobInfo(ctx context.Context, jobId string) (*uti
 		return nil, err
 	}
 
+	r.setAuthHeader(req)
+
 	resp, err := r.client.Do(req)
 	if err != nil {
 		return nil, err
@@ -159,6 +189,8 @@ func (r *RayDashboardClient) ListJobs(ctx context.Context) (*[]utiltypes.RayJobI
 	if err != nil {
 		return nil, err
 	}
+
+	r.setAuthHeader(req)
 
 	resp, err := r.client.Do(req)
 	if err != nil {
@@ -204,6 +236,8 @@ func (r *RayDashboardClient) SubmitJobReq(ctx context.Context, request *utiltype
 	}
 
 	req.Header.Set("Content-Type", "application/json")
+	r.setAuthHeader(req)
+
 	resp, err := r.client.Do(req)
 	if err != nil {
 		return
@@ -216,6 +250,10 @@ func (r *RayDashboardClient) SubmitJobReq(ctx context.Context, request *utiltype
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		// If the submission_id is already used, the dashboard will return status code 500; we return the submission_id directly.
+		if resp.StatusCode == http.StatusInternalServerError && strings.Contains(string(body), "Please use a different submission_id") {
+			return request.SubmissionId, fmt.Errorf("submission ID '%s' already used, Please use a different submission_id", request.SubmissionId)
+		}
 		return "", fmt.Errorf("SubmitJob fail: %s %s", resp.Status, string(body))
 	}
 
@@ -234,6 +272,9 @@ func (r *RayDashboardClient) GetJobLog(ctx context.Context, jobName string) (*st
 	if err != nil {
 		return nil, err
 	}
+
+	r.setAuthHeader(req)
+
 	resp, err := r.client.Do(req)
 	if err != nil {
 		return nil, err
@@ -267,6 +308,8 @@ func (r *RayDashboardClient) StopJob(ctx context.Context, jobName string) (err e
 	}
 
 	req.Header.Set("Content-Type", "application/json")
+	r.setAuthHeader(req)
+
 	resp, err := r.client.Do(req)
 	if err != nil {
 		return err
@@ -303,6 +346,8 @@ func (r *RayDashboardClient) DeleteJob(ctx context.Context, jobName string) erro
 	}
 
 	req.Header.Set("Content-Type", "application/json")
+	r.setAuthHeader(req)
+
 	resp, err := r.client.Do(req)
 	if err != nil {
 		return err

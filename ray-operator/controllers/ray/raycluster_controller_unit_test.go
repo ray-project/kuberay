@@ -17,9 +17,11 @@ package ray
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"math"
 	"os"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -649,7 +651,7 @@ func TestReconcile_RandomDelete_OK(t *testing.T) {
 
 	require.NoError(t, err, "Fail to get pod list")
 
-	assert.Equal(t, len(testPods), len(podList.Items), "Init pod list len is wrong")
+	assert.Len(t, podList.Items, len(testPods), "Init pod list len is wrong")
 	testRayClusterReconciler := &RayClusterReconciler{
 		Client:                     fakeClient,
 		Recorder:                   &record.FakeRecorder{},
@@ -971,7 +973,7 @@ func TestReconcile_PodEvicted_DiffLess0_OK(t *testing.T) {
 			err := fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
 
 			require.NoError(t, err, "Fail to get pod list")
-			assert.Equal(t, len(testPods), len(podList.Items), "Init pod list len is wrong")
+			assert.Len(t, podList.Items, len(testPods), "Init pod list len is wrong")
 
 			// Simulate head pod get evicted.
 			podList.Items[0].Spec.RestartPolicy = tc.restartPolicy
@@ -2492,7 +2494,7 @@ func Test_ShouldDeletePod(t *testing.T) {
 			pod.Status.ContainerStatuses = testCase.containerStatus
 
 			shouldDelete, _ := shouldDeletePod(pod, rayv1.HeadNode)
-			assert.EqualValues(
+			assert.Equal(
 				t, shouldDelete, testCase.shouldDelete,
 				"unexpected value of shouldDelete",
 			)
@@ -3437,6 +3439,7 @@ func Test_ReconcileManagedBy(t *testing.T) {
 func TestEmitRayClusterProvisionedDuration(t *testing.T) {
 	clusterName := "test-ray-cluster"
 	clusterNamespace := "default"
+	clusterUID := types.UID("test-cluster-uid")
 
 	// Creation time 5 minutes ago to simulate cluster runtime
 	creationTime := time.Now().Add(-5 * time.Minute)
@@ -3515,6 +3518,7 @@ func TestEmitRayClusterProvisionedDuration(t *testing.T) {
 					ObserveRayClusterProvisionedDuration(
 						clusterName,
 						clusterNamespace,
+						clusterUID,
 						mock.MatchedBy(func(d float64) bool {
 							// Allow some wiggle room in timing
 							return math.Abs(d-tc.expectedDuration) < 1.0
@@ -3526,6 +3530,7 @@ func TestEmitRayClusterProvisionedDuration(t *testing.T) {
 				mockCollector,
 				clusterName,
 				clusterNamespace,
+				clusterUID,
 				tc.oldStatus,
 				tc.newStatus,
 				creationTime,
@@ -3545,5 +3550,96 @@ func TestSetDefaults(t *testing.T) {
 	assert.Equal(t, map[string]string{}, cluster.Spec.HeadGroupSpec.RayStartParams)
 	for i := range cluster.Spec.WorkerGroupSpecs {
 		assert.Equal(t, map[string]string{}, cluster.Spec.WorkerGroupSpecs[i].RayStartParams)
+	}
+}
+
+func TestReconcile_AuthSecret(t *testing.T) {
+	setupTest(t)
+
+	testRayCluster.Spec.AuthOptions = &rayv1.AuthOptions{Mode: rayv1.AuthModeToken}
+
+	fakeClient := clientFake.NewClientBuilder().WithRuntimeObjects(testPods...).Build()
+	ctx := context.Background()
+
+	secretNamespacedName := types.NamespacedName{
+		Name:      instanceName,
+		Namespace: namespaceStr,
+	}
+
+	secret := corev1.Secret{}
+	err := fakeClient.Get(ctx, secretNamespacedName, &secret)
+	assert.True(t, k8serrors.IsNotFound(err), "Secret should not exist yet")
+
+	testRayClusterReconciler := &RayClusterReconciler{
+		Client:                     fakeClient,
+		Recorder:                   &record.FakeRecorder{},
+		Scheme:                     scheme.Scheme,
+		rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
+	}
+
+	err = testRayClusterReconciler.reconcileAuthSecret(ctx, testRayCluster)
+	require.NoError(t, err, "Fail to reconcile auth token secret")
+
+	err = fakeClient.Get(ctx, secretNamespacedName, &secret)
+	require.NoError(t, err, "Fail to get auth Secret after reconciliation")
+
+	decodedBytes, err := base64.StdEncoding.DecodeString(secret.StringData["auth_token"])
+	require.NoError(t, err)
+
+	assert.Len(t, decodedBytes, 32)
+}
+
+func TestReconcile_PodsWithAuthToken(t *testing.T) {
+	setupTest(t)
+
+	testRayCluster.Spec.AuthOptions = &rayv1.AuthOptions{Mode: rayv1.AuthModeToken}
+
+	fakeClient := clientFake.NewClientBuilder().WithRuntimeObjects().Build()
+	ctx := context.Background()
+
+	testRayClusterReconciler := &RayClusterReconciler{
+		Client:                     fakeClient,
+		Recorder:                   &record.FakeRecorder{},
+		Scheme:                     scheme.Scheme,
+		rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
+	}
+
+	err := testRayClusterReconciler.reconcilePods(ctx, testRayCluster)
+	require.NoError(t, err, "Fail to reconcile Pods")
+
+	podList := corev1.PodList{}
+	err = fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
+	require.NoError(t, err, "Fail to get pod list")
+	numAllPods := len(podList.Items)
+	expectedNumPods := int(*testRayCluster.Spec.WorkerGroupSpecs[0].Replicas) + 1
+	assert.Equal(t, expectedNumPods, numAllPods, "unexpected number of pods")
+
+	// Assert that all Pods have RAY_AUTH_MODE and RAY_AUTH_TOKEN environment variables
+	for _, pod := range podList.Items {
+		authTokenEnvFound := false
+		authModeEnvFound := false
+		for _, env := range pod.Spec.Containers[utils.RayContainerIndex].Env {
+			if reflect.DeepEqual(corev1.EnvVar{Name: utils.RAY_AUTH_MODE_ENV_VAR, Value: string(rayv1.AuthModeToken)}, env) {
+				authModeEnvFound = true
+				continue
+			}
+
+			expectedSecretValue := corev1.EnvVar{
+				Name: utils.RAY_AUTH_TOKEN_ENV_VAR,
+				ValueFrom: &corev1.EnvVarSource{
+					SecretKeyRef: &corev1.SecretKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{Name: testRayCluster.Name},
+						Key:                  "auth_token",
+					},
+				},
+			}
+			if reflect.DeepEqual(expectedSecretValue, env) {
+				authTokenEnvFound = true
+				continue
+			}
+		}
+
+		assert.True(t, authTokenEnvFound, "Auth token env vars not found")
+		assert.True(t, authModeEnvFound, "Auth mode env vars not found")
 	}
 }

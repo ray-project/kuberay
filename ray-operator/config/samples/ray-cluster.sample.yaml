@@ -6,7 +6,7 @@ kind: RayCluster
 metadata:
   name: raycluster-kuberay
 spec:
-  rayVersion: '2.46.0' # should match the Ray version in the image of the containers
+  rayVersion: '2.52.0' # should match the Ray version in the image of the containers
   # Ray head pod template
   headGroupSpec:
     # rayStartParams is optional with RayCluster CRD from KubeRay 1.4.0 or later but required in earlier versions.
@@ -15,14 +15,14 @@ spec:
       spec:
         containers:
         - name: ray-head
-          image: rayproject/ray:2.46.0
+          image: rayproject/ray:2.52.0
           resources:
             limits:
               cpu: 1
-              memory: 2G
+              memory: 4Gi
             requests:
               cpu: 1
-              memory: 2G
+              memory: 2Gi
           ports:
           - containerPort: 6379
             name: gcs-server
@@ -43,11 +43,11 @@ spec:
       spec:
         containers:
         - name: ray-worker # must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc'
-          image: rayproject/ray:2.46.0
+          image: rayproject/ray:2.52.0
           resources:
             limits:
               cpu: 1
-              memory: 1G
+              memory: 1Gi
             requests:
               cpu: 1
-              memory: 1G
+              memory: 1Gi

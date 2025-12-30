@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
@@ -46,6 +47,8 @@ type workerGroup struct {
 	cluster         string
 	readyReplicas   int32
 	desiredReplicas int32
+	minReplicas     int32
+	maxReplicas     int32
 }
 
 var getWorkerGroupsExample = templates.Examples(`
@@ -223,6 +226,19 @@ func getWorkerGroupDetails(ctx context.Context, enrichedWorkerGroupSpecs []enric
 
 		workerGroupResources := calculateDesiredResourcesForWorkerGroup(ewgs.spec)
 
+		var (
+			minReplicas int32 // default: 0
+			maxReplicas int32 = math.MaxInt32
+		)
+
+		if ewgs.spec.MinReplicas != nil {
+			minReplicas = *ewgs.spec.MinReplicas
+		}
+
+		if ewgs.spec.MaxReplicas != nil {
+			maxReplicas = *ewgs.spec.MaxReplicas
+		}
+
 		workerGroups = append(workerGroups, workerGroup{
 			namespace:       ewgs.namespace,
 			name:            ewgs.spec.GroupName,
@@ -233,6 +249,8 @@ func getWorkerGroupDetails(ctx context.Context, enrichedWorkerGroupSpecs []enric
 			totalTPU:        workerGroupResources[corev1.ResourceName(util.ResourceGoogleTPU)],
 			totalMemory:     *workerGroupResources.Memory(),
 			cluster:         ewgs.cluster,
+			minReplicas:     minReplicas,
+			maxReplicas:     maxReplicas,
 		})
 	}
 
@@ -267,6 +285,8 @@ func printWorkerGroups(workerGroups []workerGroup, allNamespaces bool, output io
 
 	columns = append(columns, []v1.TableColumnDefinition{
 		{Name: "Name", Type: "string"},
+		{Name: "Min", Type: "string"},
+		{Name: "Max", Type: "string"},
 		{Name: "Replicas", Type: "string"},
 		{Name: "CPUs", Type: "string"},
 		{Name: "GPUs", Type: "string"},
@@ -283,8 +303,13 @@ func printWorkerGroups(workerGroups []workerGroup, allNamespaces bool, output io
 			row.Cells = append(row.Cells, wg.namespace)
 		}
 
-		row.Cells = append(row.Cells, []interface{}{
+		minStr := fmt.Sprintf("%d", wg.minReplicas)
+		maxStr := fmt.Sprintf("%d", wg.maxReplicas)
+
+		row.Cells = append(row.Cells, []any{
 			wg.name,
+			minStr,
+			maxStr,
 			fmt.Sprintf("%d/%d", wg.readyReplicas, wg.desiredReplicas),
 			wg.totalCPU.String(),
 			wg.totalGPU.String(),

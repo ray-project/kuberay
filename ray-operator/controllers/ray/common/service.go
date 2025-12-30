@@ -3,6 +3,7 @@ package common
 import (
 	"context"
 	"fmt"
+	"maps"
 	"os"
 	"sort"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
+	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
@@ -53,9 +55,7 @@ func BuildServiceForHeadPod(ctx context.Context, cluster rayv1.RayCluster, label
 
 	// Deep copy the selector to avoid modifying the original object
 	labelsForService := make(map[string]string)
-	for k, v := range selector {
-		labelsForService[k] = v
-	}
+	maps.Copy(labelsForService, selector)
 
 	if annotations == nil {
 		annotations = make(map[string]string)
@@ -141,7 +141,7 @@ func BuildServiceForHeadPod(ctx context.Context, cluster rayv1.RayCluster, label
 	return headService, nil
 }
 
-// BuildHeadServiceForRayService Builds the service for a pod. Currently, there is only one service that allows
+// BuildHeadServiceForRayService builds the service for a pod. Currently, there is only one service that allows
 // the worker nodes to connect to the head node.
 // RayService controller updates the service whenever a new RayCluster serves the traffic.
 func BuildHeadServiceForRayService(ctx context.Context, rayService rayv1.RayService, rayCluster rayv1.RayCluster) (*corev1.Service, error) {
@@ -150,7 +150,7 @@ func BuildHeadServiceForRayService(ctx context.Context, rayService rayv1.RayServ
 		return nil, err
 	}
 
-	headSvcName, err := utils.GenerateHeadServiceName(utils.RayServiceCRD, rayService.Spec.RayClusterSpec, rayService.Name)
+	headSvcName, err := utils.GenerateHeadServiceName(utils.RayServiceCRD, rayv1.RayClusterSpec{}, rayService.Name)
 	if err != nil {
 		return nil, err
 	}
@@ -184,7 +184,10 @@ func BuildServeService(ctx context.Context, rayService rayv1.RayService, rayClus
 	namespace := rayCluster.Namespace
 	crdType := utils.RayClusterCRD
 	if isRayService {
-		name = rayService.Name
+		// For IncrementalUpgrade, the name is based on the unique RayCluster.
+		if !utils.IsIncrementalUpgradeEnabled(&rayService.Spec) {
+			name = rayService.Name
+		}
 		namespace = rayService.Namespace
 		crdType = utils.RayServiceCRD
 	}
@@ -225,7 +228,7 @@ func BuildServeService(ctx context.Context, rayService rayv1.RayService, rayClus
 				"otherwise, the Kubernetes service for Ray Serve will not be created.")
 		}
 
-		if rayService.Spec.ServeService != nil {
+		if rayService.Spec.ServeService != nil && !utils.IsIncrementalUpgradeEnabled(&rayService.Spec) {
 			// Use the provided "custom" ServeService.
 			// Deep copy the ServeService to avoid modifying the original object
 			serveService := rayService.Spec.ServeService.DeepCopy()
@@ -317,6 +320,26 @@ func BuildHeadlessServiceForRayCluster(rayCluster rayv1.RayCluster) *corev1.Serv
 	return headlessService
 }
 
+// GetServePort finds the container port named "serve" in the RayCluster's head group spec.
+// It returns the default Ray Serve port 8000 if not explicitly defined.
+func GetServePort(cluster *rayv1.RayCluster) gwv1.PortNumber {
+	if cluster == nil || len(cluster.Spec.HeadGroupSpec.Template.Spec.Containers) == 0 {
+		return gwv1.PortNumber(utils.DefaultServingPort)
+	}
+
+	// Get the head container
+	headContainer := &cluster.Spec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex]
+
+	// Find the port named "serve" in the head group's container spec.
+	port := utils.FindContainerPort(
+		headContainer,
+		utils.ServingPortName,
+		utils.DefaultServingPort,
+	)
+
+	return port
+}
+
 func setServiceTypeForUserProvidedService(ctx context.Context, service *corev1.Service, defaultType corev1.ServiceType) {
 	log := ctrl.LoggerFrom(ctx)
 	// If the user has not specified a service type, use the default service type
@@ -366,9 +389,7 @@ func setLabelsforUserProvidedService(service *corev1.Service, labels map[string]
 	if service.ObjectMeta.Labels == nil {
 		service.ObjectMeta.Labels = make(map[string]string)
 	}
-	for k, v := range labels {
-		service.ObjectMeta.Labels[k] = v
-	}
+	maps.Copy(service.ObjectMeta.Labels, labels)
 }
 
 // getServicePorts will either user passing ports or default ports to create service.

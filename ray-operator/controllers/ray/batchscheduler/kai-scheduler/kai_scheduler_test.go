@@ -41,7 +41,7 @@ func createTestPod() *corev1.Pod {
 	}
 }
 
-func TestAddMetadataToPod_WithQueueLabel(t *testing.T) {
+func TestAddMetadataToChildResource_WithQueueLabel(t *testing.T) {
 	a := assert.New(t)
 	scheduler := &KaiScheduler{}
 	ctx := context.Background()
@@ -52,8 +52,8 @@ func TestAddMetadataToPod_WithQueueLabel(t *testing.T) {
 	})
 	pod := createTestPod()
 
-	// Call AddMetadataToPod
-	scheduler.AddMetadataToPod(ctx, rayCluster, "test-group", pod)
+	// Call AddMetadataToChildResource
+	scheduler.AddMetadataToChildResource(ctx, rayCluster, pod, "test-group")
 
 	// Assert scheduler name is set to kai-scheduler
 	a.Equal("kai-scheduler", pod.Spec.SchedulerName)
@@ -63,7 +63,7 @@ func TestAddMetadataToPod_WithQueueLabel(t *testing.T) {
 	a.Equal("test-queue", pod.Labels[QueueLabelName])
 }
 
-func TestAddMetadataToPod_WithoutQueueLabel(t *testing.T) {
+func TestAddMetadataToChildResource_WithoutQueueLabel(t *testing.T) {
 	a := assert.New(t)
 	scheduler := &KaiScheduler{}
 	ctx := context.Background()
@@ -72,8 +72,8 @@ func TestAddMetadataToPod_WithoutQueueLabel(t *testing.T) {
 	rayCluster := createTestRayCluster(map[string]string{})
 	pod := createTestPod()
 
-	// Call AddMetadataToPod
-	scheduler.AddMetadataToPod(ctx, rayCluster, "test-group", pod)
+	// Call AddMetadataToChildResource
+	scheduler.AddMetadataToChildResource(ctx, rayCluster, pod, "test-group")
 
 	// Assert scheduler name is still set (always required)
 	a.Equal("kai-scheduler", pod.Spec.SchedulerName)
@@ -85,7 +85,7 @@ func TestAddMetadataToPod_WithoutQueueLabel(t *testing.T) {
 	}
 }
 
-func TestAddMetadataToPod_WithEmptyQueueLabel(t *testing.T) {
+func TestAddMetadataToChildResource_WithEmptyQueueLabel(t *testing.T) {
 	a := assert.New(t)
 	scheduler := &KaiScheduler{}
 	ctx := context.Background()
@@ -96,8 +96,8 @@ func TestAddMetadataToPod_WithEmptyQueueLabel(t *testing.T) {
 	})
 	pod := createTestPod()
 
-	// Call AddMetadataToPod
-	scheduler.AddMetadataToPod(ctx, rayCluster, "test-group", pod)
+	// Call AddMetadataToChildResource
+	scheduler.AddMetadataToChildResource(ctx, rayCluster, pod, "test-group")
 
 	// Assert scheduler name is still set
 	a.Equal("kai-scheduler", pod.Spec.SchedulerName)
@@ -109,7 +109,7 @@ func TestAddMetadataToPod_WithEmptyQueueLabel(t *testing.T) {
 	}
 }
 
-func TestAddMetadataToPod_PreservesExistingPodLabels(t *testing.T) {
+func TestAddMetadataToChildResource_PreservesExistingPodLabels(t *testing.T) {
 	a := assert.New(t)
 	scheduler := &KaiScheduler{}
 	ctx := context.Background()
@@ -126,8 +126,8 @@ func TestAddMetadataToPod_PreservesExistingPodLabels(t *testing.T) {
 		"app":            "ray",
 	}
 
-	// Call AddMetadataToPod
-	scheduler.AddMetadataToPod(ctx, rayCluster, "test-group", pod)
+	// Call AddMetadataToChildResource
+	scheduler.AddMetadataToChildResource(ctx, rayCluster, pod, "test-group")
 
 	// Assert scheduler name is set
 	a.Equal("kai-scheduler", pod.Spec.SchedulerName)

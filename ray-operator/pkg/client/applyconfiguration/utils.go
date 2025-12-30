@@ -8,7 +8,7 @@ import (
 	rayv1 "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/ray/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
-	testing "k8s.io/client-go/testing"
+	managedfields "k8s.io/apimachinery/pkg/util/managedfields"
 )
 
 // ForKind returns an apply configuration type for the given GroupVersionKind, or nil if no
@@ -18,10 +18,18 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 	// Group=ray.io, Version=v1
 	case v1.SchemeGroupVersion.WithKind("AppStatus"):
 		return &rayv1.AppStatusApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("AuthOptions"):
+		return &rayv1.AuthOptionsApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("AutoscalerOptions"):
 		return &rayv1.AutoscalerOptionsApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("ClusterUpgradeOptions"):
+		return &rayv1.ClusterUpgradeOptionsApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("DeletionCondition"):
+		return &rayv1.DeletionConditionApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("DeletionPolicy"):
 		return &rayv1.DeletionPolicyApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("DeletionRule"):
+		return &rayv1.DeletionRuleApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("DeletionStrategy"):
 		return &rayv1.DeletionStrategyApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("GcsFaultToleranceOptions"):
@@ -69,6 +77,6 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 	return nil
 }
 
-func NewTypeConverter(scheme *runtime.Scheme) *testing.TypeConverter {
-	return &testing.TypeConverter{Scheme: scheme, TypeResolver: internal.Parser()}
+func NewTypeConverter(scheme *runtime.Scheme) managedfields.TypeConverter {
+	return managedfields.NewSchemeTypeConverter(scheme, internal.Parser())
 }

@@ -448,7 +448,6 @@ func TestCreateClusterEndpoint(t *testing.T) {
 	}
 	// Execute tests sequentially
 	for _, tc := range tests {
-		tc := tc // capture range variable
 		t.Run(tc.Name, func(t *testing.T) {
 			actualCluster, actualRPCStatus, err := tCtx.GetRayAPIServerClient().CreateCluster(tc.Input)
 			if tc.ExpectedError == nil {
@@ -520,7 +519,6 @@ func TestDeleteCluster(t *testing.T) {
 	}
 	// Execute tests sequentially
 	for _, tc := range tests {
-		tc := tc // capture range variable
 		t.Run(tc.Name, func(t *testing.T) {
 			actualRPCStatus, err := tCtx.GetRayAPIServerClient().DeleteCluster(tc.Input)
 			if tc.ExpectedError == nil {
@@ -537,7 +535,7 @@ func TestDeleteCluster(t *testing.T) {
 
 func createOneClusterInEachNamespaces(t *testing.T, numberOfNamespaces int, expectedConditions []rayv1api.RayClusterConditionType) []*End2EndTestingContext {
 	tCtxs := make([]*End2EndTestingContext, numberOfNamespaces)
-	for i := 0; i < numberOfNamespaces; i++ {
+	for i := range numberOfNamespaces {
 		tCtx, err := NewEnd2EndTestingContext(t)
 		require.NoError(t, err, "No error expected when creating testing context")
 
@@ -576,14 +574,14 @@ func TestGetAllClusters(t *testing.T) {
 	require.Len(t, response.Clusters, numberOfNamespaces, "Number of clusters returned is not as expected")
 	gotClusters := make([]bool, numberOfNamespaces)
 	for _, cluster := range response.Clusters {
-		for i := 0; i < numberOfNamespaces; i++ {
+		for i := range numberOfNamespaces {
 			if isMatchingCluster(tCtxs[i], cluster) {
 				gotClusters[i] = true
 				break
 			}
 		}
 	}
-	for i := 0; i < numberOfNamespaces; i++ {
+	for i := range numberOfNamespaces {
 		if !gotClusters[i] {
 			t.Errorf("ListAllClusters did not return expected clusters %s", tCtxs[i].GetRayClusterName())
 		}
@@ -597,7 +595,7 @@ func TestGetAllClustersByPagination(t *testing.T) {
 	tCtx := tCtxs[0]
 	gotClusters := make([]bool, numberOfNamespaces)
 	continueToken := ""
-	for i := 0; i < numberOfNamespaces; i++ {
+	for i := range numberOfNamespaces {
 		limit := 1
 		response, actualRPCStatus, err := tCtx.GetRayAPIServerClient().ListAllClusters(&api.ListAllClustersRequest{
 			Limit:    int64(limit),
@@ -614,7 +612,7 @@ func TestGetAllClustersByPagination(t *testing.T) {
 		require.NotEmpty(t, response.Clusters, "A list of clusters is required")
 		require.Len(t, response.Clusters, limit, "Number of clusters returned is not as expected")
 		for _, cluster := range response.Clusters {
-			for i := 0; i < numberOfNamespaces; i++ {
+			for i := range numberOfNamespaces {
 				if isMatchingCluster(tCtxs[i], cluster) {
 					gotClusters[i] = true
 					break
@@ -623,7 +621,7 @@ func TestGetAllClustersByPagination(t *testing.T) {
 		}
 		continueToken = response.Continue
 	}
-	for i := 0; i < numberOfNamespaces; i++ {
+	for i := range numberOfNamespaces {
 		if !gotClusters[i] {
 			t.Errorf("ListAllClusters did not return expected clusters %s", tCtxs[i].GetRayClusterName())
 		}
@@ -646,14 +644,14 @@ func TestGetAllClustersByPaginationWithAllResults(t *testing.T) {
 	require.Len(t, response.Clusters, numberOfNamespaces, "Number of clusters returned is not as expected")
 	gotClusters := make([]bool, numberOfNamespaces)
 	for _, cluster := range response.Clusters {
-		for i := 0; i < numberOfNamespaces; i++ {
+		for i := range numberOfNamespaces {
 			if isMatchingCluster(tCtxs[i], cluster) {
 				gotClusters[i] = true
 				break
 			}
 		}
 	}
-	for i := 0; i < numberOfNamespaces; i++ {
+	for i := range numberOfNamespaces {
 		if !gotClusters[i] {
 			t.Errorf("ListAllClusters did not return expected clusters %s", tCtxs[i].GetRayClusterName())
 		}
@@ -798,7 +796,6 @@ func TestGetClustersByNameInNamespace(t *testing.T) {
 	}
 	// Execute tests sequentially
 	for _, tc := range tests {
-		tc := tc // capture range variable
 		t.Run(tc.Name, func(t *testing.T) {
 			actualCluster, actualRPCStatus, err := tCtx.GetRayAPIServerClient().GetCluster(tc.Input)
 			if tc.ExpectedError == nil {

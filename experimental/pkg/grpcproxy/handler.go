@@ -2,6 +2,7 @@ package grpcproxy
 
 import (
 	"context"
+	"errors"
 	"io"
 	"strings"
 
@@ -24,7 +25,7 @@ func RegisterService(server *grpc.Server, director StreamDirector, serviceName s
 	streamer := &handler{director: director, securityheader: nil}
 	fakeDesc := &grpc.ServiceDesc{
 		ServiceName: serviceName,
-		HandlerType: (*interface{})(nil),
+		HandlerType: (*any)(nil),
 	}
 	for _, m := range methodNames {
 		streamDesc := grpc.StreamDesc{
@@ -60,7 +61,7 @@ func (s *handler) AddSecurityHeaderToHandler(securityheader map[string]string) {
 // handler is where the real magic of proxying happens.
 // It is invoked like any gRPC server stream and uses the emptypb.Empty type server
 // to proxy calls between the input and output streams.
-func (s *handler) handler(srv interface{}, serverStream grpc.ServerStream) error {
+func (s *handler) handler(srv any, serverStream grpc.ServerStream) error {
 	// little bit of gRPC internals never hurt anyone
 	fullMethodName, ok := grpc.MethodFromServerStream(serverStream)
 	if !ok {
@@ -104,10 +105,10 @@ func (s *handler) handler(srv interface{}, serverStream grpc.ServerStream) error
 	s2cErrChan := s.forwardServerToClient(serverStream, clientStream)
 	c2sErrChan := s.forwardClientToServer(clientStream, serverStream)
 	// We don't know which side is going to stop sending first, so we need a select between the two.
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		select {
 		case s2cErr := <-s2cErrChan:
-			if s2cErr == io.EOF {
+			if errors.Is(s2cErr, io.EOF) {
 				// this is the happy case where the sender has encountered io.EOF, and won't be sending anymore./
 				// the clientStream>serverStream may continue pumping though.
 				err := clientStream.CloseSend()
@@ -127,7 +128,7 @@ func (s *handler) handler(srv interface{}, serverStream grpc.ServerStream) error
 			// will be nil.
 			serverStream.SetTrailer(clientStream.Trailer())
 			// c2sErr will contain RPC error from client code. If not io.EOF return the RPC error as server stream error.
-			if c2sErr != io.EOF {
+			if !errors.Is(c2sErr, io.EOF) {
 				return c2sErr
 			}
 			return nil

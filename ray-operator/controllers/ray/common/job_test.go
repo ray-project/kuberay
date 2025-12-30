@@ -57,8 +57,8 @@ pip: ["python-multipart==0.0.6"]
 	jsonOutput, err := getRuntimeEnvJson(rayJobWithYAML)
 	require.NoError(t, err)
 
-	var expectedMap map[string]interface{}
-	var actualMap map[string]interface{}
+	var expectedMap map[string]any
+	var actualMap map[string]any
 
 	// Convert the JSON strings into map types to avoid errors due to ordering
 	require.NoError(t, json.Unmarshal([]byte(expectedJSON), &expectedMap))
@@ -175,14 +175,14 @@ pip: ["python-multipart==0.0.6"]
 	require.NoError(t, err)
 
 	// Ensure the slices are the same length.
-	assert.Equal(t, len(expected), len(command))
+	assert.Len(t, command, len(expected))
 
 	for i := 0; i < len(expected); i++ {
 		// For non-JSON elements, compare them directly.
 		assert.Equal(t, expected[i], command[i])
 		if expected[i] == "--runtime-env-json" {
 			// Decode the JSON string from the next element.
-			var expectedMap, actualMap map[string]interface{}
+			var expectedMap, actualMap map[string]any
 			unquoteExpected, err1 := strconv.Unquote(expected[i+1])
 			require.NoError(t, err1)
 			unquotedCommand, err2 := strconv.Unquote(command[i+1])
@@ -218,7 +218,10 @@ func TestMetadataRaisesErrorBeforeRay26(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestGetDefaultSubmitterTemplate(t *testing.T) {
+func TestGetSubmitterTemplate(t *testing.T) {
+	rayJob := &rayv1.RayJob{
+		Spec: rayv1.RayJobSpec{},
+	}
 	rayCluster := &rayv1.RayCluster{
 		Spec: rayv1.RayClusterSpec{
 			HeadGroupSpec: rayv1.HeadGroupSpec{
@@ -234,6 +237,6 @@ func TestGetDefaultSubmitterTemplate(t *testing.T) {
 			},
 		},
 	}
-	template := GetDefaultSubmitterTemplate(rayCluster)
+	template := GetSubmitterTemplate(&rayJob.Spec, &rayCluster.Spec)
 	assert.Equal(t, template.Spec.Containers[0].Image, rayCluster.Spec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex].Image)
 }
