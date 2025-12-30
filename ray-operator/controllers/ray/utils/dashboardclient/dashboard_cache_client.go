@@ -57,11 +57,11 @@ type (
 	}
 )
 
-func (w *workerPool) init(ctx context.Context, workerSize int, queryInterval time.Duration) {
+func (w *workerPool) start(ctx context.Context, numWorkers int, requeueDelay time.Duration) {
 	logger := ctrl.LoggerFrom(ctx).WithName("RayDashboardCacheClient").WithName("WorkerPool")
 	w.taskQueue = chanx.NewUnboundedChanSize[Task](ctx, 0, 0, initBufferSize)
 
-	for i := 0; i < workerSize; i++ {
+	for i := 0; i < numWorkers; i++ {
 		go func(workerID int) {
 			for {
 				select {
@@ -69,10 +69,10 @@ func (w *workerPool) init(ctx context.Context, workerSize int, queryInterval tim
 					logger.Info("worker exiting...", "workerID", workerID)
 					return
 				case task := <-w.taskQueue.Out:
-					again := task(ctx)
+					shouldRequeue := task(ctx)
 
-					if again && ctx.Err() == nil {
-						time.AfterFunc(queryInterval, func() {
+					if shouldRequeue && ctx.Err() == nil {
+						time.AfterFunc(requeueDelay, func() {
 							w.taskQueue.In <- task
 						})
 					}
@@ -80,7 +80,7 @@ func (w *workerPool) init(ctx context.Context, workerSize int, queryInterval tim
 			}
 		}(i)
 	}
-	logger.Info(fmt.Sprintf("Initialize a worker pool with %d goroutine and queryInterval is %v.", workerSize, queryInterval))
+	logger.Info(fmt.Sprintf("Initialize a worker pool with %d goroutines and requeueDelay is %v.", numWorkers, requeueDelay))
 }
 
 func (w *workerPool) AddTask(task Task) error {
@@ -102,7 +102,7 @@ func (r *RayDashboardCacheClient) InitClient(ctx context.Context, client RayDash
 	logger := ctrl.LoggerFrom(ctx).WithName("RayDashboardCacheClient")
 
 	initWorkPool.Do(func() {
-		pool.init(ctx, workerSize, queryInterval)
+		pool.start(ctx, workerSize, queryInterval)
 	})
 
 	initCacheStorage.Do(func() {
