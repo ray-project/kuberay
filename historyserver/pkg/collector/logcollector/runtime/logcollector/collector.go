@@ -22,24 +22,24 @@ import (
 )
 
 type RayLogHandler struct {
-	Writer         storage.StorageWriter
-	LogFiles       chan string
-	HttpClient     *http.Client
-	ShutdownChan   chan struct{}
-	logFilePaths   map[string]bool
-	MetaDir        string
-	RayClusterName string
-	LogDir         string
-	RayNodeName    string
-	RayClusterID   string
-	RootDir        string
-	SessionDir     string
-	prevLogsDir    string
+	Writer                 storage.StorageWriter
+	LogFiles               chan string
+	HttpClient             *http.Client
+	ShutdownChan           chan struct{}
+	logFilePaths           map[string]bool
+	MetaDir                string
+	RayClusterName         string
+	LogDir                 string
+	RayNodeName            string
+	RayClusterID           string
+	RootDir                string
+	SessionDir             string
+	prevLogsDir            string
 	persistCompleteLogsDir string
-	PushInterval   time.Duration
-	LogBatching    int
-	filePathMu     sync.Mutex
-	EnableMeta     bool
+	PushInterval           time.Duration
+	LogBatching            int
+	filePathMu             sync.Mutex
+	EnableMeta             bool
 }
 
 func (r *RayLogHandler) Start(stop <-chan struct{}) error {
