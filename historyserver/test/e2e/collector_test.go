@@ -51,8 +51,8 @@ func TestCollector(t *testing.T) {
 	})
 
 	namespace = test.NewTestNamespace() // Separate namespace to prevent resource contention.
-	t.Run("Single session single node logs should be uploaded to S3 during runtime", func(t *testing.T) {
-		testPrevLogsRuntimeUpload(test, g, namespace, s3Client)
+	t.Run("Single session single node logs and events should be uploaded to S3 during runtime", func(t *testing.T) {
+		testLogAndEventUploadDuringRuntime(test, g, namespace, s3Client)
 	})
 
 	// Add other test cases below.
@@ -92,11 +92,12 @@ func testLogAndEventUploadOnDeletion(test Test, g *WithT, namespace *corev1.Name
 	deleteS3Bucket(test, g, s3Client)
 }
 
-// testPrevLogsRuntimeUpload verifies logs under /tmp/ray/prev-logs are uploaded during runtime.
-// This makes sure WatchPrevLogsLoops processes logs as they appear.
+// testLogAndEventUploadDuringRuntime verifies that logs and node_events are successfully uploaded to S3 during runtime.
+// This makes sure WatchPrevLogsLoops processes logs as they appear under /tmp/ray/prev-logs.
+// Additionally, it ensures events are flushed when the file watcher detects node ID change.
 //
 // NOTE: Logs under /tmp/ray/session_latest are moved to /tmp/ray/prev-logs by the Ray container startup command.
-func testPrevLogsRuntimeUpload(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testLogAndEventUploadDuringRuntime(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
 	rayCluster := prepareTestEnv(test, g, namespace, s3Client)
 
 	// Submit a Ray job to the existing cluster.
@@ -434,6 +435,10 @@ fi`
 
 }
 
+// getContainerStatusByName retrieves the container status by container name.
+// NOTE: ContainerStatuses order doesn't guarantee to match Spec.Containers order.
+// For more details, please refer to the following link:
+// https://github.com/ray-project/kuberay/blob/7791a8786861818f0cebcce381ef221436a0fa4d/ray-operator/controllers/ray/raycluster_controller.go#L1160C1-L1171C2
 func getContainerStatusByName(pod *corev1.Pod, containerName string) (*corev1.ContainerStatus, error) {
 	for _, containerStatus := range pod.Status.ContainerStatuses {
 		if containerStatus.Name == containerName {
