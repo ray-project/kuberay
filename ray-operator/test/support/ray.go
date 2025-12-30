@@ -92,7 +92,7 @@ type ConditionMatcher struct {
 	expected metav1.Condition
 }
 
-func (c *ConditionMatcher) Match(actual interface{}) (success bool, err error) {
+func (c *ConditionMatcher) Match(actual any) (success bool, err error) {
 	if actual == nil {
 		return false, errors.New("<actual> should be a metav1.Condition but it is nil")
 	}
@@ -107,12 +107,12 @@ func (c *ConditionMatcher) Match(actual interface{}) (success bool, err error) {
 	return a.Reason == c.expected.Reason && a.Status == c.expected.Status && messageMatch, nil
 }
 
-func (c *ConditionMatcher) FailureMessage(actual interface{}) (message string) {
+func (c *ConditionMatcher) FailureMessage(actual any) (message string) {
 	a := actual.(metav1.Condition)
 	return format.Message(a, "to equal", c.expected)
 }
 
-func (c *ConditionMatcher) NegatedFailureMessage(actual interface{}) (message string) {
+func (c *ConditionMatcher) NegatedFailureMessage(actual any) (message string) {
 	a := actual.(metav1.Condition)
 	return format.Message(a, "not to equal", c.expected)
 }

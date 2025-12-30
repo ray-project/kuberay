@@ -57,8 +57,8 @@ pip: ["python-multipart==0.0.6"]
 	jsonOutput, err := getRuntimeEnvJson(rayJobWithYAML)
 	require.NoError(t, err)
 
-	var expectedMap map[string]interface{}
-	var actualMap map[string]interface{}
+	var expectedMap map[string]any
+	var actualMap map[string]any
 
 	// Convert the JSON strings into map types to avoid errors due to ordering
 	require.NoError(t, json.Unmarshal([]byte(expectedJSON), &expectedMap))
@@ -182,7 +182,7 @@ pip: ["python-multipart==0.0.6"]
 		assert.Equal(t, expected[i], command[i])
 		if expected[i] == "--runtime-env-json" {
 			// Decode the JSON string from the next element.
-			var expectedMap, actualMap map[string]interface{}
+			var expectedMap, actualMap map[string]any
 			unquoteExpected, err1 := strconv.Unquote(expected[i+1])
 			require.NoError(t, err1)
 			unquotedCommand, err2 := strconv.Unquote(command[i+1])

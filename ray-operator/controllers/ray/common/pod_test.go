@@ -3,6 +3,7 @@ package common
 import (
 	"context"
 	"fmt"
+	"maps"
 	"os"
 	"reflect"
 	"sort"
@@ -2009,9 +2010,7 @@ func TestUpdateRayStartParamsLabels(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			// copy of rayStartParams for test
 			rayStartParams := make(map[string]string)
-			for k, v := range tc.initialRayStartParams {
-				rayStartParams[k] = v
-			}
+			maps.Copy(rayStartParams, tc.initialRayStartParams)
 
 			updateRayStartParamsLabels(rayStartParams, tc.groupLabels)
 
@@ -2088,9 +2087,7 @@ func TestUpdateRayStartParamsResources(t *testing.T) {
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
 			rayStartParams := make(map[string]string)
-			for k, v := range tc.initialRayStartParams {
-				rayStartParams[k] = v
-			}
+			maps.Copy(rayStartParams, tc.initialRayStartParams)
 
 			updateRayStartParamsResources(ctx, rayStartParams, tc.groupResources)
 

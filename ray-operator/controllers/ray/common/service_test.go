@@ -460,7 +460,7 @@ func TestBuildServiceForHeadPodPortsOrder(t *testing.T) {
 
 	// length should be same
 	assert.Len(t, ports2, len(ports1))
-	for i := 0; i < len(ports1); i++ {
+	for i := range ports1 {
 		// name should be same
 		assert.Equal(t, ports1[i].Name, ports2[i].Name)
 	}

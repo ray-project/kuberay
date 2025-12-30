@@ -320,7 +320,7 @@ func cacheSelectors() (map[client.Object]cache.ByObject, error) {
 	}, nil
 }
 
-func exitOnError(err error, msg string, keysAndValues ...interface{}) {
+func exitOnError(err error, msg string, keysAndValues ...any) {
 	if err != nil {
 		setupLog.Error(err, msg, keysAndValues...)
 		os.Exit(1)
