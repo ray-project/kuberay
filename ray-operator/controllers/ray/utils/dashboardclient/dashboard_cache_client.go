@@ -16,7 +16,9 @@ import (
 )
 
 var (
-	ErrAgain         = errors.New("data is not ready, try again later")
+	// ErrAgain EAGAIN means "there is no data available right now, try again later"
+	// https://stackoverflow.com/questions/4058368/what-does-eagain-mean
+	ErrAgain         = errors.New("EAGAIN")
 	ErrTaskQueueFull = errors.New("task queue is full")
 )
 
