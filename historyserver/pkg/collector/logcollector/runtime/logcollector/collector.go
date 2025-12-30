@@ -35,6 +35,7 @@ type RayLogHandler struct {
 	RootDir        string
 	SessionDir     string
 	prevLogsDir    string
+	persistCompleteLogsDir string
 	PushInterval   time.Duration
 	LogBatching    int
 	filePathMu     sync.Mutex
@@ -49,6 +50,7 @@ func (r *RayLogHandler) Start(stop <-chan struct{}) error {
 func (r *RayLogHandler) Run(stop <-chan struct{}) error {
 	// watchPath := r.LogDir
 	r.prevLogsDir = "/tmp/ray/prev-logs"
+	r.persistCompleteLogsDir = "/tmp/ray/persist-complete-logs"
 
 	// Initialize log file paths storage
 	r.logFilePaths = make(map[string]bool)
@@ -413,7 +415,7 @@ func (r *RayLogHandler) WatchPrevLogsLoops() {
 	}
 
 	// Also check and create persist-complete-logs directory
-	completeLogsDir := "/tmp/ray/persist-complete-logs"
+	completeLogsDir := r.persistCompleteLogsDir
 	if _, err := os.Stat(completeLogsDir); os.IsNotExist(err) {
 		logrus.Infof("persist-complete-logs directory does not exist, creating it: %s", completeLogsDir)
 		if err := os.MkdirAll(completeLogsDir, 0o777); err != nil {
@@ -677,7 +679,7 @@ func (r *RayLogHandler) processSessionPrevLogs(sessionDir string) {
 // isFileAlreadyPersisted checks if a file has already been persisted to persist-complete-logs
 func (r *RayLogHandler) isFileAlreadyPersisted(absoluteLogPath, sessionID, nodeID string) bool {
 	// Calculate the relative path within the logs directory
-	logsDir := filepath.Join("/tmp/ray/prev-logs", sessionID, nodeID, "logs")
+	logsDir := filepath.Join(r.prevLogsDir, sessionID, nodeID, "logs")
 	relativePath, err := filepath.Rel(logsDir, absoluteLogPath)
 	if err != nil {
 		logrus.Errorf("Failed to get relative path for %s: %v", absoluteLogPath, err)
@@ -685,7 +687,7 @@ func (r *RayLogHandler) isFileAlreadyPersisted(absoluteLogPath, sessionID, nodeI
 	}
 
 	// Construct the path in persist-complete-logs
-	persistedPath := filepath.Join("/tmp/ray/persist-complete-logs", sessionID, nodeID, "logs", relativePath)
+	persistedPath := filepath.Join(r.persistCompleteLogsDir, sessionID, nodeID, "logs", relativePath)
 
 	// Check if the file exists
 	if _, err := os.Stat(persistedPath); err == nil {
@@ -817,7 +819,7 @@ func (r *RayLogHandler) processPrevLogFile(absoluteLogPathName, localLogDir, ses
 	logrus.Infof("Successfully wrote object %s, size: %d bytes", objectName, len(content))
 
 	// Move the processed file to persist-complete-logs directory to avoid re-uploading
-	completeBaseDir := filepath.Join("/tmp/ray/persist-complete-logs", sessionID, nodeID)
+	completeBaseDir := filepath.Join(r.persistCompleteLogsDir, sessionID, nodeID)
 	completeDir := filepath.Join(completeBaseDir, "logs")
 
 	if _, err := os.Stat(completeDir); os.IsNotExist(err) {
