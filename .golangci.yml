@@ -19,10 +19,10 @@ linters:
     - unparam
     - unused
     - wastedassign
+    - errorlint
     # TODO: The following linters are disabled for now to unblock the golangci-lint v2 migration.
     # We will fix the lint errors and re-enable these linters in follow-up PRs.
     # - noctx
-    # - errorlint
     # - revive
     # - staticcheck
   settings:
