@@ -95,9 +95,7 @@ func testLogAndEventUploadOnDeletion(test Test, g *WithT, namespace *corev1.Name
 // testPrevLogsRuntimeUpload verifies logs under /tmp/ray/prev-logs are uploaded during runtime.
 // This makes sure WatchPrevLogsLoops processes logs as they appear.
 //
-// NOTE: For now, logs under /tmp/ray/session_latest are moved to /tmp/ray/prev-logs explicitly.
-// The reason is that this data movement serves as the startup command of the Ray container.
-// To trigger the filesystem watcher in WatchPrevLogsLoops during runtime, we have to move logs manually.
+// NOTE: Logs under /tmp/ray/session_latest are moved to /tmp/ray/prev-logs by the Ray container startup command.
 func testPrevLogsRuntimeUpload(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
 	rayCluster := prepareTestEnv(test, g, namespace, s3Client)
 
@@ -109,41 +107,29 @@ func testPrevLogsRuntimeUpload(test Test, g *WithT, namespace *corev1.Namespace,
 	nodeID := getNodeIDFromHeadPod(test, g, rayCluster)
 	sessionPrefix := fmt.Sprintf("log/%s/%s/", clusterNameID, sessionID)
 
-	// Explicitly move logs from session_lastest to prev-logs.
-	// NOTE: The command in raycluster.yaml only runs at container startup, not when sessions change.
-	LogWithTimestamp(test.T(), "Moving logs from session_latest to prev-logs")
-
-	// todo: delete this
-	moveLogsCmd := `if [ -d "/tmp/ray/session_latest" ] && [ -f "/tmp/ray/raylet_node_id" ]; then
-session_id=$(basename $(readlink /tmp/ray/session_latest))
-node_id=$(cat /tmp/ray/raylet_node_id)
-dest="/tmp/ray/prev-logs/${session_id}/${node_id}"
-echo "Moving logs from session_latest to ${dest}"
-mkdir -p "${dest}"
-if [ -d "/tmp/ray/session_latest/logs" ]; then
-mv /tmp/ray/session_latest/logs "${dest}/logs"
-echo "Successfully moved logs to ${dest}/logs"
-else
-echo "No logs directory found in session_latest"
-fi
-else
-echo "session_latest or raylet_node_id not found"
-fi`
+	LogWithTimestamp(test.T(), "Killing main process of ray-head container to trigger a restart")
 	g.Eventually(func(gg Gomega) {
 		headPod, err := GetHeadPod(test, rayCluster)
 		gg.Expect(err).NotTo(HaveOccurred())
-
-		// todo: add command to trigger OOM
-		// use this "python3 -c "x = ' ' * (1024**3 * 1000)""
-		stdout, stderr := ExecPodCmd(test, headPod, "ray-head", []string{"sh", "-c", moveLogsCmd})
-		gg.Expect(stdout.String()).To(ContainSubstring("Successfully moved logs to /tmp/ray/prev-logs"))
+		_, stderr := ExecPodCmd(test, headPod, "ray-head", []string{"kill", "1"})
 		gg.Expect(stderr.String()).To(BeEmpty())
-	}, TestTimeoutMedium).Should(Succeed(), "Failed to move logs to /tmp/ray/prev-logs")
+	}, TestTimeoutMedium).Should(Succeed(), "Failed to kill main process of ray-head container")
 
-	// Verify logs are successfully uploaded to minio.
+	LogWithTimestamp(test.T(), "Waiting for ray-head container to restart and become ready")
+	g.Eventually(func(gg Gomega) {
+		updatedPod, err := GetHeadPod(test, rayCluster)
+		gg.Expect(err).NotTo(HaveOccurred())
+		rayHeadStatus, err := getContainerStatusByName(updatedPod, "ray-head")
+		gg.Expect(err).NotTo(HaveOccurred())
+		gg.Expect(rayHeadStatus.RestartCount).To(BeNumerically(">", 0))
+		gg.Expect(rayHeadStatus.Ready).To(BeTrue())
+	}, TestTimeoutShort).Should(Succeed(), "ray-head container should restart and become ready")
+
+	// Verify logs and node_events are successfully uploaded to minio.
 	// Expected S3 path structure:
 	//   {s3BucketName}/log/{clusterName}_{clusterID}/{sessionId}/logs/...
-	verifyS3SessionDirs(test, g, s3Client, sessionPrefix, nodeID, []string{"logs"})
+	//   {s3BucketName}/log/{clusterName}_{clusterID}/{sessionId}/node_events/...
+	verifyS3SessionDirs(test, g, s3Client, sessionPrefix, nodeID, []string{"logs", "node_events"})
 
 	err := test.Client().Ray().RayV1().
 		RayClusters(rayCluster.Namespace).
@@ -445,4 +431,14 @@ fi`
 	g.Expect(nodeID).NotTo(BeEmpty(), "nodeID should not be empty")
 
 	return nodeID
+
+}
+
+func getContainerStatusByName(pod *corev1.Pod, containerName string) (*corev1.ContainerStatus, error) {
+	for _, containerStatus := range pod.Status.ContainerStatuses {
+		if containerStatus.Name == containerName {
+			return &containerStatus, nil
+		}
+	}
+	return nil, fmt.Errorf("container %s not found in pod %s/%s", containerName, pod.Namespace, pod.Name)
 }
