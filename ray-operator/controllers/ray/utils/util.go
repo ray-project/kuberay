@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -567,12 +568,7 @@ func SumResourceList(list []corev1.ResourceList) corev1.ResourceList {
 }
 
 func Contains(elems []string, searchTerm string) bool {
-	for _, s := range elems {
-		if searchTerm == s {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(elems, searchTerm)
 }
 
 // GetHeadGroupServiceAccountName returns the head group service account if it exists.
@@ -608,7 +604,7 @@ func CheckAllPodsRunning(ctx context.Context, runningPods corev1.PodList) bool {
 }
 
 // CompareJsonStruct This is a way to better compare if two objects are the same when they are json/yaml structs. reflect.DeepEqual will fail in some cases.
-func CompareJsonStruct(objA interface{}, objB interface{}) bool {
+func CompareJsonStruct(objA any, objB any) bool {
 	a, err := json.Marshal(objA)
 	if err != nil {
 		return false
@@ -617,7 +613,7 @@ func CompareJsonStruct(objA interface{}, objB interface{}) bool {
 	if err != nil {
 		return false
 	}
-	var v1, v2 interface{}
+	var v1, v2 any
 	err = json.Unmarshal(a, &v1)
 	if err != nil {
 		return false
@@ -630,7 +626,7 @@ func CompareJsonStruct(objA interface{}, objB interface{}) bool {
 }
 
 // Json-serializes obj and returns its hash string
-func GenerateJsonHash(obj interface{}) (string, error) {
+func GenerateJsonHash(obj any) (string, error) {
 	serialObj, err := json.Marshal(obj)
 	if err != nil {
 		return "", err

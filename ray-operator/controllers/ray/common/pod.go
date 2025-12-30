@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"sort"
 	"strconv"
@@ -1168,11 +1169,7 @@ func updateRayStartParamsResources(ctx context.Context, rayStartParams map[strin
 // with the top-level labels field taking precedence.
 func mergeLabels(templateLabels map[string]string, groupLabels map[string]string) map[string]string {
 	merged := make(map[string]string)
-	for k, v := range templateLabels {
-		merged[k] = v
-	}
-	for k, v := range groupLabels {
-		merged[k] = v
-	}
+	maps.Copy(merged, templateLabels)
+	maps.Copy(merged, groupLabels)
 	return merged
 }

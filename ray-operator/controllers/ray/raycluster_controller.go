@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	errstd "errors"
 	"fmt"
+	"maps"
 	"os"
 	"reflect"
 	"runtime"
@@ -521,9 +522,7 @@ func (r *RayClusterReconciler) reconcileHeadService(ctx context.Context, instanc
 		annotations := make(map[string]string)
 		// TODO (kevin85421): KubeRay has already exposed the entire head service (#1040) to users.
 		// We may consider deprecating this field when we bump the CRD version.
-		for k, v := range instance.Spec.HeadServiceAnnotations {
-			annotations[k] = v
-		}
+		maps.Copy(annotations, instance.Spec.HeadServiceAnnotations)
 		headSvc, err := common.BuildServiceForHeadPod(ctx, *instance, labels, annotations)
 		// TODO (kevin85421): Provide a detailed and actionable error message. For example, which port is missing?
 		if len(headSvc.Spec.Ports) == 0 {
@@ -838,7 +837,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 			if features.Enabled(features.RayMultiHostIndexing) {
 				newReplicaIndex := 0
 				// create all workers of this group
-				for i := 0; i < diff; i++ {
+				for i := range diff {
 					// Find the next available replica index.
 					for validReplicaIndices[newReplicaIndex] {
 						newReplicaIndex++
@@ -851,7 +850,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 				}
 			} else {
 				// create all workers of this group
-				for i := 0; i < diff; i++ {
+				for i := range diff {
 					logger.Info("reconcilePods", "creating worker for group", worker.GroupName, "index", i, "total", diff)
 					if err := r.createWorkerPod(ctx, *instance, *worker.DeepCopy()); err != nil {
 						return errstd.Join(utils.ErrFailedCreateWorkerPod, err)
@@ -883,7 +882,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 				// diff < 0 means that we need to delete some Pods to meet the desired number of replicas.
 				randomlyRemovedWorkers := -diff
 				logger.Info("reconcilePods", "Number workers to delete randomly", randomlyRemovedWorkers, "Worker group", worker.GroupName)
-				for i := 0; i < randomlyRemovedWorkers; i++ {
+				for i := range randomlyRemovedWorkers {
 					randomPodToDelete := runningPods.Items[i]
 					logger.Info("Randomly deleting Pod", "progress", fmt.Sprintf("%d / %d", i+1, randomlyRemovedWorkers), "with name", randomPodToDelete.Name)
 					if err := r.Delete(ctx, &randomPodToDelete); err != nil {
@@ -1049,7 +1048,7 @@ func (r *RayClusterReconciler) reconcileMultiHostWorkerGroup(ctx context.Context
 	if replicasToCreate > 0 {
 		logger.Info("Scaling up multi-host group", "group", worker.GroupName, "replicasToCreate", replicasToCreate)
 		newReplicaIndex := 0 // Find the next available index starting from 0
-		for i := 0; i < replicasToCreate; i++ {
+		for range replicasToCreate {
 			for validReplicaIndices[newReplicaIndex] {
 				newReplicaIndex++
 			}
