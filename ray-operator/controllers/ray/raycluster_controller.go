@@ -1125,8 +1125,13 @@ func (r *RayClusterReconciler) reconcileMultiHostWorkerGroup(ctx context.Context
 // shouldRecreatePodsForUpgrade checks if any pods need to be recreated based on RayClusterSpec changes
 func (r *RayClusterReconciler) shouldRecreatePodsForUpgrade(ctx context.Context, instance *rayv1.RayCluster) bool {
 	logger := ctrl.LoggerFrom(ctx)
-
 	if instance.Spec.UpgradeStrategy == nil || instance.Spec.UpgradeStrategy.Type == nil || *instance.Spec.UpgradeStrategy.Type != rayv1.RayClusterRecreate {
+		return false
+	}
+
+	expectedClusterHash, err := utils.GenerateHashWithoutReplicasAndWorkersToDelete(instance.Spec)
+	if err != nil {
+		logger.Error(err, "Failed to generate cluster spec hash for Recreate upgradeStrategy, skipping comparison")
 		return false
 	}
 
@@ -1137,30 +1142,25 @@ func (r *RayClusterReconciler) shouldRecreatePodsForUpgrade(ctx context.Context,
 	}
 
 	// If the KubeRay version has changed, skip recreation to avoid unnecessary pod recreation
-	if len(headPods.Items) == 1 {
+	if len(headPods.Items) > 0 {
 		headPod := headPods.Items[0]
 		podVersion := headPod.Annotations[utils.KubeRayVersion]
+		// If the KubeRay version has changed, update the head pod to get the cluster hash and new KubeRay version
 		if podVersion != "" && podVersion != utils.KUBERAY_VERSION {
 			logger.Info("KubeRay version has changed, skipping pod recreation", "rayCluster", instance.Name)
+			headPod.Annotations[utils.HashWithoutReplicasAndWorkersToDeleteKey] = expectedClusterHash
+			headPod.Annotations[utils.KubeRayVersion] = utils.KUBERAY_VERSION
+			if err := r.Update(ctx, &headPod); err != nil {
+				logger.Error(err, "Failed to update head pod annotations after KUBERAY_VERSION change", "pod", headPod.Name)
+			}
 			return false
 		}
-	}
-
-	expectedClusterHash, err := utils.GenerateHashWithoutReplicasAndWorkersToDelete(instance.Spec)
-	if err != nil {
-		logger.Error(err, "Failed to generate cluster spec hash for Recreate upgradeStrategy, skipping comparison")
-		return false
-	}
-
-	if len(headPods.Items) == 1 {
-		headPod := headPods.Items[0]
 		actualHash := headPod.Annotations[utils.HashWithoutReplicasAndWorkersToDeleteKey]
 		if actualHash != "" && actualHash != expectedClusterHash {
 			logger.Info("RayCluster spec has changed, will recreate all pods", "rayCluster", instance.Name)
 			return true
 		}
 	}
-
 	return false
 }
 
