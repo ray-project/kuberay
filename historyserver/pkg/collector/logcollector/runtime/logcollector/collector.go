@@ -71,12 +71,10 @@ func (r *RayLogHandler) Run(stop <-chan struct{}) error {
 	case <-sigChan:
 		logrus.Info("Received SIGTERM, processing all logs...")
 		r.processSessionLatestLogs()
-		// r.processPrevLogsOnShutdown()
 		close(r.ShutdownChan)
 	case <-stop:
 		logrus.Info("Received stop signal, processing all logs...")
 		r.processSessionLatestLogs()
-		// r.processPrevLogsOnShutdown()
 		close(r.ShutdownChan)
 	}
 	logrus.Warnf("Receive stop single, so stop ray collector ")
