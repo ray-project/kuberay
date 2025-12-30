@@ -16,7 +16,7 @@ import (
 )
 
 var (
-	ErrAgain         = errors.New("EAGAIN")
+	ErrAgain         = errors.New("data is not ready, try again later")
 	ErrTaskQueueFull = errors.New("task queue is full")
 )
 
