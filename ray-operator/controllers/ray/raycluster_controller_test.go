@@ -1434,17 +1434,12 @@ var _ = Context("Inside the default namespace", func() {
 		rayCluster := rayClusterTemplate(rayClusterName, namespace)
 
 		rayCluster.Spec.HeadGroupSpec.RayStartParams = map[string]string{
-			"dashboard-host":              "0.0.0.0",
 			"dashboard-port":              "8365",
 			"dashboard-agent-listen-port": "8266",
-			"metrics-export-port":         "8080",
-			"block":                       "true",
 		}
 
 		rayCluster.Spec.WorkerGroupSpecs[0].RayStartParams = map[string]string{
 			"dashboard-agent-listen-port": "9000",
-			"metrics-export-port":         "8080",
-			"block":                       "true",
 		}
 
 		rayCluster.Spec.WorkerGroupSpecs[0].Replicas = ptr.To[int32](1)
