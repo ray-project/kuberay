@@ -37,21 +37,22 @@ const (
 )
 
 func TestCollector(t *testing.T) {
-	test := With(t)
-	g := NewWithT(t)
-
-	// Create an isolated Kubernetes namespace.
-	namespace := test.NewTestNamespace()
-
 	// Share a single S3 client among subtests.
-	s3Client := ensureS3Client(test, g)
+	s3Client := ensureS3Client(t)
 
 	t.Run("Happy path: Logs and events should be uploaded to S3 on deletion", func(t *testing.T) {
+		test := With(t)
+		g := NewWithT(t)
+		namespace := test.NewTestNamespace()
+
 		testLogAndEventUploadOnDeletion(test, g, namespace, s3Client)
 	})
 
-	namespace = test.NewTestNamespace() // Separate namespace to prevent resource contention.
 	t.Run("Single session single node logs and events should be uploaded to S3 during runtime", func(t *testing.T) {
+		test := With(t)
+		g := NewWithT(t)
+		namespace := test.NewTestNamespace()
+
 		testLogAndEventUploadDuringRuntime(test, g, namespace, s3Client)
 	})
 
@@ -148,7 +149,9 @@ func testLogAndEventUploadDuringRuntime(test Test, g *WithT, namespace *corev1.N
 }
 
 // ensureS3Client creates an S3 client and ensures API endpoint accessibility.
-func ensureS3Client(test Test, g *WithT) *s3.S3 {
+func ensureS3Client(t *testing.T) *s3.S3 {
+	test := With(t)
+	g := NewWithT(t)
 	applyMinIO(test, g)
 
 	// Port-forward the minio API port.
