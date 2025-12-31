@@ -84,7 +84,7 @@ func (r *RayCronJobReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 
 	// check if the Suspend is set
 	if rayCronJobInstance.Spec.Suspend {
-		logger.Info("RayCronJob suspended, no new RayJobs will be created.")
+		logger.V(1).Info("RayCronJob suspended, no new RayJobs will be created.")
 		r.Recorder.Eventf(rayCronJobInstance, corev1.EventTypeNormal, string(utils.SuspendedRayCronJob),
 			"RayCronJob suspended, no new RayJobs will be created")
 		return ctrl.Result{}, nil
