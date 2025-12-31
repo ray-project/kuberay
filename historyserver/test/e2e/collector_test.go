@@ -60,6 +60,9 @@ func TestCollector(t *testing.T) {
 }
 
 // testLogAndEventUploadOnDeletion verifies that logs and node_events are successfully uploaded to S3 on cluster deletion.
+// When the Ray cluster is deleted, logs and node_events are processed as follows:
+// - logs: Trigger RayLogHandler.processSessionLatestLog to process logs under /tmp/ray/session_latest
+// - node_events: Trigger EventServer.flushEvents to process in-memory events
 func testLogAndEventUploadOnDeletion(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
 	rayCluster := prepareTestEnv(test, g, namespace, s3Client)
 
@@ -71,7 +74,7 @@ func testLogAndEventUploadOnDeletion(test Test, g *WithT, namespace *corev1.Name
 	nodeID := getNodeIDFromHeadPod(test, g, rayCluster)
 	sessionPrefix := fmt.Sprintf("log/%s/%s/", clusterNameID, sessionID)
 
-	// Delete the Ray cluster to trigger log uploading event flushing on deletion.
+	// Delete the Ray cluster to trigger log uploading and event flushing on deletion.
 	err := test.Client().Ray().RayV1().
 		RayClusters(rayCluster.Namespace).
 		Delete(test.Ctx(), rayCluster.Name, metav1.DeleteOptions{})
@@ -93,8 +96,8 @@ func testLogAndEventUploadOnDeletion(test Test, g *WithT, namespace *corev1.Name
 }
 
 // testLogAndEventUploadDuringRuntime verifies that logs and node_events are successfully uploaded to S3 during runtime.
-// This makes sure WatchPrevLogsLoops processes logs as they appear under /tmp/ray/prev-logs.
-// Additionally, it ensures events are flushed when the file watcher detects node ID change.
+// This makes sure RayLogHandler.WatchPrevLogsLoops processes logs as they appear under /tmp/ray/prev-logs.
+// Additionally, it ensures events are flushed when the file watcher EventServer.watchNodeIDFile detects node ID change.
 //
 // NOTE: Logs under /tmp/ray/session_latest are moved to /tmp/ray/prev-logs by the Ray container startup command.
 func testLogAndEventUploadDuringRuntime(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
