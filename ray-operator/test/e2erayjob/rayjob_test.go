@@ -321,9 +321,10 @@ env_vars:
 		g.Consistently(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutShort).
 			ShouldNot(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusFailed)))
 		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
-			Should(WithTransform(func(job *rayv1.RayJob) rayv1.JobDeploymentStatus {
-				return job.Status.JobDeploymentStatus
-			}, Or(Equal(rayv1.JobDeploymentStatusRunning), Equal(rayv1.JobDeploymentStatusComplete))))
+			Should(WithTransform(RayJobReason, Or(
+				Equal(rayv1.JobDeploymentStatusTransitionGracePeriodExceeded),
+				Equal(rayv1.SubmissionFailed),
+			)))
 		// Cleanup
 		err = test.Client().Ray().RayV1().RayJobs(namespace.Name).Delete(test.Ctx(), rayJob.Name, metav1.DeleteOptions{})
 		g.Expect(err).NotTo(HaveOccurred())
