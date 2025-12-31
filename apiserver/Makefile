@@ -84,10 +84,11 @@ fumpt: gofumpt ## Run gofmtumpt against code.
 imports: goimports ## Run goimports against code.
 	$(GOIMPORTS) -l -w .
 
+# Exclude the SA1019 check which checks the usage of deprecated fields
+# via the linters.settings.staticcheck.checks configuration in .golangci.yaml.
 .PHONY: lint
 lint: golangci-lint fmt vet fumpt imports ## Run the linter.
-	# exclude the SA1019 check which checks the usage of deprecated fields.
-	test -s $(GOLANGCI_LINT) || ($(GOLANGCI_LINT) run --timeout=3m --exclude='SA1019' --no-config --allow-parallel-runners)
+	test -s $(GOLANGCI_LINT) || ($(GOLANGCI_LINT) run --timeout=3m --allow-parallel-runners)
 
 build: fmt vet fumpt imports ## Build api server binary.
 	go build -o ${REPO_ROOT_BIN}/kuberay-apiserver cmd/main.go
@@ -188,6 +189,12 @@ docker-image: test ## Build image for the api server.
 docker-push: ## Push image for the api server.
 	$(ENGINE) push ${IMG}
 
+docker-multi-arch-build: test ## Build multi arch image, amd64 and arm64 currently.
+	$(ENGINE) buildx build --platform linux/amd64,linux/arm64 -t ${IMG} -f Dockerfile.buildx ..
+
+docker-multi-arch-push: test ## Build and Push multi arch image, amd64 and arm64 currently.
+	$(ENGINE) buildx build --push --platform linux/amd64,linux/arm64 -t ${IMG} -f Dockerfile.buildx ..
+
 ##@ Deployment
 .PHONY: install
 install: kustomize docker-image load-image  ## Install the kuberay api server without security to the K8s cluster specified in ~/.kube/config.
@@ -248,7 +255,7 @@ MOCKGEN = $(REPO_ROOT_BIN)/mockgen
 KUSTOMIZE_VERSION ?= v5.4.3
 GOFUMPT_VERSION ?= v0.3.1
 GOIMPORTS_VERSION ?= v0.14.0
-GOLANGCI_LINT_VERSION ?= v1.64.8
+GOLANGCI_LINT_VERSION ?= v2.7.2
 KIND_VERSION ?= v0.19.0
 GOBINDATA_VERSION ?= v4.0.2
 MOCKGEN_VERSION ?= v1.6.0

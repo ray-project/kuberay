@@ -115,7 +115,6 @@ func TestCreateTemplate(t *testing.T) {
 	}
 	// Execute tests sequentially
 	for _, tc := range tests {
-		tc := tc // capture range variable
 		t.Run(tc.Name, func(t *testing.T) {
 			actualTemplate, actualRPCStatus, err := tCtx.GetRayAPIServerClient().CreateComputeTemplate(tc.Input)
 			if tc.ExpectedError != nil {
@@ -124,7 +123,26 @@ func TestCreateTemplate(t *testing.T) {
 			} else {
 				require.NoError(t, err, "No error expected")
 				require.Nil(t, actualRPCStatus, "No RPC status expected")
-				require.Truef(t, reflect.DeepEqual(tc.Input.ComputeTemplate, actualTemplate), "Equal templates expected")
+				if tc.Input.ComputeTemplate.MemoryUnit == "" {
+					require.Equal(t, "Gi", actualTemplate.MemoryUnit, "Default MemoryUnit should be Gi")
+					// Copy tc.Input.ComputeTemplate to the expected template with the default MemoryUnit
+					expected := &api.ComputeTemplate{
+						Name:              tc.Input.ComputeTemplate.Name,
+						Cpu:               tc.Input.ComputeTemplate.Cpu,
+						Memory:            tc.Input.ComputeTemplate.Memory,
+						Namespace:         tc.Input.ComputeTemplate.Namespace,
+						Gpu:               tc.Input.ComputeTemplate.Gpu,
+						GpuAccelerator:    tc.Input.ComputeTemplate.GpuAccelerator,
+						Tolerations:       tc.Input.ComputeTemplate.Tolerations,
+						ExtendedResources: tc.Input.ComputeTemplate.ExtendedResources,
+						MemoryUnit:        "Gi",
+					}
+					t.Logf("Expected template: %+v", expected)
+					t.Logf("Actual template: %+v", actualTemplate)
+					require.Truef(t, reflect.DeepEqual(expected, actualTemplate), "Equal templates expected (with default MemoryUnit)")
+				} else {
+					require.Truef(t, reflect.DeepEqual(tc.Input.ComputeTemplate, actualTemplate), "Equal templates expected")
+				}
 			}
 		})
 	}
@@ -178,7 +196,6 @@ func TestDeleteTemplate(t *testing.T) {
 	}
 	// Execute tests sequentially
 	for _, tc := range tests {
-		tc := tc // capture range variable
 		t.Run(tc.Name, func(t *testing.T) {
 			actualRPCStatus, err := tCtx.GetRayAPIServerClient().DeleteComputeTemplate(tc.Input)
 			if tc.ExpectedError != nil {
@@ -295,7 +312,6 @@ func TestGetTemplateByNameInNamespace(t *testing.T) {
 	}
 	// Execute tests sequentially
 	for _, tc := range tests {
-		tc := tc // capture range variable
 		t.Run(tc.Name, func(t *testing.T) {
 			actualTemplate, actualRPCStatus, err := tCtx.GetRayAPIServerClient().GetComputeTemplate(tc.Input)
 			if tc.ExpectedError != nil {

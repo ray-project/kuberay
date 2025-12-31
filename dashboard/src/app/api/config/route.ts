@@ -1,12 +1,7 @@
 import { NextResponse } from "next/server";
+import { getServerConfig } from "@/utils/config-server";
 
 export async function GET() {
-  const config = {
-    apiUrl:
-      process.env.NEXT_PUBLIC_API_URL ||
-      process.env.API_URL ||
-      "http://localhost:31888/apis/v1",
-  };
-
+  const config = getServerConfig();
   return NextResponse.json(config);
 }

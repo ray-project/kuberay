@@ -29,14 +29,14 @@
                 "defaults": {},
                 "overrides": []
             },
-            "fill": 10,
-            "fillGradient": 0,
             "gridPos": {
                 "x": 0,
                 "y": 0,
                 "w": 8,
                 "h": 8
             },
+            "fill": 10,
+            "fillGradient": 0,
             "hiddenSeries": false,
             "id": 1,
             "legend": {
@@ -94,7 +94,7 @@
             "targets": [
                 {
                     "exemplar": true,
-                    "expr": "sum(ray_serve_deployment_replica_healthy{application=~\"$Application\",deployment=~\"$Deployment\",replica=~\"$Replica\",ray_io_cluster=~\"$Cluster\",}) by (application, deployment)",
+                    "expr": "sum(ray_serve_deployment_replica_healthy{application=~\"$Application\",deployment=~\"$Deployment\",replica=~\"$Replica\",ray_io_cluster=~\"$Cluster\"}) by (application, deployment)",
                     "interval": "",
                     "legendFormat": "{{application}}#{{deployment}}#{{replica}}",
                     "queryType": "randomWalk",
@@ -155,14 +155,14 @@
                 "defaults": {},
                 "overrides": []
             },
-            "fill": 10,
-            "fillGradient": 0,
             "gridPos": {
                 "x": 8,
                 "y": 0,
                 "w": 8,
                 "h": 8
             },
+            "fill": 10,
+            "fillGradient": 0,
             "hiddenSeries": false,
             "id": 2,
             "legend": {
@@ -220,7 +220,7 @@
             "targets": [
                 {
                     "exemplar": true,
-                    "expr": "sum(rate(ray_serve_deployment_request_counter_total{route=~\"$Route\",route!~\"/-/.*\",application=~\"$Application\",deployment=~\"$Deployment\",replica=~\"$Replica\",ray_io_cluster=~\"$Cluster\",}[5m])) by (application, deployment, replica)",
+                    "expr": "sum(rate(ray_serve_deployment_request_counter_total{route=~\"$Route\",route!~\"/-/.*\",application=~\"$Application\",deployment=~\"$Deployment\",replica=~\"$Replica\",ray_io_cluster=~\"$Cluster\"}[5m])) by (application, deployment, replica)",
                     "interval": "",
                     "legendFormat": "{{application}}#{{deployment}}#{{replica}}",
                     "queryType": "randomWalk",
@@ -281,14 +281,14 @@
                 "defaults": {},
                 "overrides": []
             },
-            "fill": 10,
-            "fillGradient": 0,
             "gridPos": {
                 "x": 16,
                 "y": 0,
                 "w": 8,
                 "h": 8
             },
+            "fill": 10,
+            "fillGradient": 0,
             "hiddenSeries": false,
             "id": 3,
             "legend": {
@@ -346,7 +346,7 @@
             "targets": [
                 {
                     "exemplar": true,
-                    "expr": "sum(rate(ray_serve_deployment_error_counter_total{route=~\"$Route\",route!~\"/-/.*\",application=~\"$Application\",deployment=~\"$Deployment\",replica=~\"$Replica\",ray_io_cluster=~\"$Cluster\",}[5m])) by (application, deployment, replica)",
+                    "expr": "sum(rate(ray_serve_deployment_error_counter_total{route=~\"$Route\",route!~\"/-/.*\",application=~\"$Application\",deployment=~\"$Deployment\",replica=~\"$Replica\",ray_io_cluster=~\"$Cluster\"}[5m])) by (application, deployment, replica)",
                     "interval": "",
                     "legendFormat": "{{application}}#{{deployment}}#{{replica}}",
                     "queryType": "randomWalk",
@@ -407,14 +407,14 @@
                 "defaults": {},
                 "overrides": []
             },
-            "fill": 0,
-            "fillGradient": 0,
             "gridPos": {
                 "x": 0,
                 "y": 1,
                 "w": 8,
                 "h": 8
             },
+            "fill": 0,
+            "fillGradient": 0,
             "hiddenSeries": false,
             "id": 4,
             "legend": {
@@ -434,7 +434,7 @@
             },
             "lines": true,
             "linewidth": 1,
-            "nullPointMode": "null",
+            "nullPointMode": null,
             "options": {
                 "alertThreshold": true
             },
@@ -472,7 +472,7 @@
             "targets": [
                 {
                     "exemplar": true,
-                    "expr": "histogram_quantile(0.5, sum(rate(ray_serve_deployment_processing_latency_ms_bucket{route=~\"$Route\",route!~\"/-/.*\",application=~\"$Application\",deployment=~\"$Deployment\",replica=~\"$Replica\",ray_io_cluster=~\"$Cluster\",}[5m])) by (application, deployment, replica, le))",
+                    "expr": "histogram_quantile(0.5, sum(rate(ray_serve_deployment_processing_latency_ms_bucket{route=~\"$Route\",route!~\"/-/.*\",application=~\"$Application\",deployment=~\"$Deployment\",replica=~\"$Replica\",ray_io_cluster=~\"$Cluster\"}[5m])) by (application, deployment, replica, le))",
                     "interval": "",
                     "legendFormat": "{{application}}#{{deployment}}#{{replica}}",
                     "queryType": "randomWalk",
@@ -480,7 +480,7 @@
                 },
                 {
                     "exemplar": true,
-                    "expr": "histogram_quantile(0.5, sum(rate(ray_serve_deployment_processing_latency_ms_bucket{route=~\"$Route\",route!~\"/-/.*\",application=~\"$Application\",deployment=~\"$Deployment\",replica=~\"$Replica\",ray_io_cluster=~\"$Cluster\",}[5m])) by (le))",
+                    "expr": "histogram_quantile(0.5, sum(rate(ray_serve_deployment_processing_latency_ms_bucket{route=~\"$Route\",route!~\"/-/.*\",application=~\"$Application\",deployment=~\"$Deployment\",replica=~\"$Replica\",ray_io_cluster=~\"$Cluster\"}[5m])) by (le))",
                     "interval": "",
                     "legendFormat": "Total",
                     "queryType": "randomWalk",
@@ -541,14 +541,14 @@
                 "defaults": {},
                 "overrides": []
             },
-            "fill": 0,
-            "fillGradient": 0,
             "gridPos": {
                 "x": 8,
                 "y": 1,
                 "w": 8,
                 "h": 8
             },
+            "fill": 0,
+            "fillGradient": 0,
             "hiddenSeries": false,
             "id": 5,
             "legend": {
@@ -568,7 +568,7 @@
             },
             "lines": true,
             "linewidth": 1,
-            "nullPointMode": "null",
+            "nullPointMode": null,
             "options": {
                 "alertThreshold": true
             },
@@ -606,7 +606,7 @@
             "targets": [
                 {
                     "exemplar": true,
-                    "expr": "histogram_quantile(0.9, sum(rate(ray_serve_deployment_processing_latency_ms_bucket{route=~\"$Route\",route!~\"/-/.*\",application=~\"$Application\",deployment=~\"$Deployment\",replica=~\"$Replica\",ray_io_cluster=~\"$Cluster\",}[5m])) by (application, deployment, replica, le))",
+                    "expr": "histogram_quantile(0.9, sum(rate(ray_serve_deployment_processing_latency_ms_bucket{route=~\"$Route\",route!~\"/-/.*\",application=~\"$Application\",deployment=~\"$Deployment\",replica=~\"$Replica\",ray_io_cluster=~\"$Cluster\"}[5m])) by (application, deployment, replica, le))",
                     "interval": "",
                     "legendFormat": "{{application}}#{{deployment}}#{{replica}}",
                     "queryType": "randomWalk",
@@ -614,7 +614,7 @@
                 },
                 {
                     "exemplar": true,
-                    "expr": "histogram_quantile(0.9, sum(rate(ray_serve_deployment_processing_latency_ms_bucket{route=~\"$Route\",route!~\"/-/.*\",application=~\"$Application\",deployment=~\"$Deployment\",replica=~\"$Replica\",ray_io_cluster=~\"$Cluster\",}[5m])) by (le))",
+                    "expr": "histogram_quantile(0.9, sum(rate(ray_serve_deployment_processing_latency_ms_bucket{route=~\"$Route\",route!~\"/-/.*\",application=~\"$Application\",deployment=~\"$Deployment\",replica=~\"$Replica\",ray_io_cluster=~\"$Cluster\"}[5m])) by (le))",
                     "interval": "",
                     "legendFormat": "Total",
                     "queryType": "randomWalk",
@@ -675,14 +675,14 @@
                 "defaults": {},
                 "overrides": []
             },
-            "fill": 0,
-            "fillGradient": 0,
             "gridPos": {
                 "x": 16,
                 "y": 1,
                 "w": 8,
                 "h": 8
             },
+            "fill": 0,
+            "fillGradient": 0,
             "hiddenSeries": false,
             "id": 6,
             "legend": {
@@ -702,7 +702,7 @@
             },
             "lines": true,
             "linewidth": 1,
-            "nullPointMode": "null",
+            "nullPointMode": null,
             "options": {
                 "alertThreshold": true
             },
@@ -740,7 +740,7 @@
             "targets": [
                 {
                     "exemplar": true,
-                    "expr": "histogram_quantile(0.99, sum(rate(ray_serve_deployment_processing_latency_ms_bucket{route=~\"$Route\",route!~\"/-/.*\",application=~\"$Application\",deployment=~\"$Deployment\",replica=~\"$Replica\",ray_io_cluster=~\"$Cluster\",}[5m])) by (application, deployment, replica, le))",
+                    "expr": "histogram_quantile(0.99, sum(rate(ray_serve_deployment_processing_latency_ms_bucket{route=~\"$Route\",route!~\"/-/.*\",application=~\"$Application\",deployment=~\"$Deployment\",replica=~\"$Replica\",ray_io_cluster=~\"$Cluster\"}[5m])) by (application, deployment, replica, le))",
                     "interval": "",
                     "legendFormat": "{{application}}#{{deployment}}#{{replica}}",
                     "queryType": "randomWalk",
@@ -748,7 +748,7 @@
                 },
                 {
                     "exemplar": true,
-                    "expr": "histogram_quantile(0.99, sum(rate(ray_serve_deployment_processing_latency_ms_bucket{route=~\"$Route\",application=~\"$Application\",deployment=~\"$Deployment\",replica=~\"$Replica\",ray_io_cluster=~\"$Cluster\",}[5m])) by (le))",
+                    "expr": "histogram_quantile(0.99, sum(rate(ray_serve_deployment_processing_latency_ms_bucket{route=~\"$Route\",application=~\"$Application\",deployment=~\"$Deployment\",replica=~\"$Replica\",ray_io_cluster=~\"$Cluster\"}[5m])) by (le))",
                     "interval": "",
                     "legendFormat": "Total",
                     "queryType": "randomWalk",
@@ -809,14 +809,14 @@
                 "defaults": {},
                 "overrides": []
             },
-            "fill": 0,
-            "fillGradient": 0,
             "gridPos": {
                 "x": 0,
                 "y": 2,
                 "w": 12,
                 "h": 8
             },
+            "fill": 0,
+            "fillGradient": 0,
             "hiddenSeries": false,
             "id": 7,
             "legend": {
@@ -836,7 +836,7 @@
             },
             "lines": true,
             "linewidth": 1,
-            "nullPointMode": "null",
+            "nullPointMode": null,
             "options": {
                 "alertThreshold": true
             },
@@ -874,7 +874,7 @@
             "targets": [
                 {
                     "exemplar": true,
-                    "expr": "sum(ray_serve_deployment_queued_queries{application=~\"$Application\",deployment=~\"$Deployment\",replica=~\"$Replica\",ray_io_cluster=~\"$Cluster\",}) by (application, deployment)",
+                    "expr": "sum(ray_serve_deployment_queued_queries{application=~\"$Application\",deployment=~\"$Deployment\",replica=~\"$Replica\",ray_io_cluster=~\"$Cluster\"}) by (application, deployment)",
                     "interval": "",
                     "legendFormat": "{{application}}#{{deployment}}#{{replica}}",
                     "queryType": "randomWalk",
@@ -935,14 +935,14 @@
                 "defaults": {},
                 "overrides": []
             },
-            "fill": 0,
-            "fillGradient": 0,
             "gridPos": {
                 "x": 12,
                 "y": 2,
                 "w": 12,
                 "h": 8
             },
+            "fill": 0,
+            "fillGradient": 0,
             "hiddenSeries": false,
             "id": 8,
             "legend": {
@@ -962,7 +962,7 @@
             },
             "lines": true,
             "linewidth": 1,
-            "nullPointMode": "null",
+            "nullPointMode": null,
             "options": {
                 "alertThreshold": true
             },
@@ -1000,7 +1000,7 @@
             "targets": [
                 {
                     "exemplar": true,
-                    "expr": "sum(ray_serve_replica_processing_queries{application=~\"$Application\",deployment=~\"$Deployment\",replica=~\"$Replica\",ray_io_cluster=~\"$Cluster\",}) by (application, deployment, replica)",
+                    "expr": "sum(ray_serve_replica_processing_queries{application=~\"$Application\",deployment=~\"$Deployment\",replica=~\"$Replica\",ray_io_cluster=~\"$Cluster\"}) by (application, deployment, replica)",
                     "interval": "",
                     "legendFormat": "{{application}}#{{deployment}}#{{replica}}",
                     "queryType": "randomWalk",
@@ -1061,14 +1061,14 @@
                 "defaults": {},
                 "overrides": []
             },
-            "fill": 0,
-            "fillGradient": 0,
             "gridPos": {
                 "x": 0,
                 "y": 3,
                 "w": 8,
                 "h": 8
             },
+            "fill": 0,
+            "fillGradient": 0,
             "hiddenSeries": false,
             "id": 9,
             "legend": {
@@ -1088,7 +1088,7 @@
             },
             "lines": true,
             "linewidth": 1,
-            "nullPointMode": "null",
+            "nullPointMode": null,
             "options": {
                 "alertThreshold": true
             },
@@ -1126,7 +1126,7 @@
             "targets": [
                 {
                     "exemplar": true,
-                    "expr": "sum(ray_serve_num_multiplexed_models{application=~\"$Application\",deployment=~\"$Deployment\",replica=~\"$Replica\",ray_io_cluster=~\"$Cluster\",}) by (application, deployment, replica)",
+                    "expr": "sum(ray_serve_num_multiplexed_models{application=~\"$Application\",deployment=~\"$Deployment\",replica=~\"$Replica\",ray_io_cluster=~\"$Cluster\"}) by (application, deployment, replica)",
                     "interval": "",
                     "legendFormat": "{{application}}#{{deployment}}#{{replica}}",
                     "queryType": "randomWalk",
@@ -1187,14 +1187,14 @@
                 "defaults": {},
                 "overrides": []
             },
-            "fill": 0,
-            "fillGradient": 0,
             "gridPos": {
                 "x": 8,
                 "y": 3,
                 "w": 8,
                 "h": 8
             },
+            "fill": 0,
+            "fillGradient": 0,
             "hiddenSeries": false,
             "id": 10,
             "legend": {
@@ -1214,7 +1214,7 @@
             },
             "lines": true,
             "linewidth": 1,
-            "nullPointMode": "null",
+            "nullPointMode": null,
             "options": {
                 "alertThreshold": true
             },
@@ -1252,7 +1252,7 @@
             "targets": [
                 {
                     "exemplar": true,
-                    "expr": "sum(ray_serve_multiplexed_models_load_counter_total{application=~\"$Application\",deployment=~\"$Deployment\",replica=~\"$Replica\",ray_io_cluster=~\"$Cluster\",}) by (application, deployment, replica)",
+                    "expr": "sum(ray_serve_multiplexed_models_load_counter_total{application=~\"$Application\",deployment=~\"$Deployment\",replica=~\"$Replica\",ray_io_cluster=~\"$Cluster\"}) by (application, deployment, replica)",
                     "interval": "",
                     "legendFormat": "{{application}}#{{deployment}}#{{replica}}",
                     "queryType": "randomWalk",
@@ -1313,14 +1313,14 @@
                 "defaults": {},
                 "overrides": []
             },
-            "fill": 0,
-            "fillGradient": 0,
             "gridPos": {
                 "x": 16,
                 "y": 3,
                 "w": 8,
                 "h": 8
             },
+            "fill": 0,
+            "fillGradient": 0,
             "hiddenSeries": false,
             "id": 11,
             "legend": {
@@ -1340,7 +1340,7 @@
             },
             "lines": true,
             "linewidth": 1,
-            "nullPointMode": "null",
+            "nullPointMode": null,
             "options": {
                 "alertThreshold": true
             },
@@ -1378,7 +1378,7 @@
             "targets": [
                 {
                     "exemplar": true,
-                    "expr": "sum(ray_serve_multiplexed_models_unload_counter_total{application=~\"$Application\",deployment=~\"$Deployment\",replica=~\"$Replica\",ray_io_cluster=~\"$Cluster\",}) by (application, deployment, replica)",
+                    "expr": "sum(ray_serve_multiplexed_models_unload_counter_total{application=~\"$Application\",deployment=~\"$Deployment\",replica=~\"$Replica\",ray_io_cluster=~\"$Cluster\"}) by (application, deployment, replica)",
                     "interval": "",
                     "legendFormat": "{{application}}#{{deployment}}#{{replica}}",
                     "queryType": "randomWalk",
@@ -1434,19 +1434,19 @@
             "dashLength": 10,
             "dashes": false,
             "datasource": "${datasource}",
-            "description": "P99 latency of mutliplexed model load per replica.",
+            "description": "P99 latency of multiplexed model load per replica.",
             "fieldConfig": {
                 "defaults": {},
                 "overrides": []
             },
-            "fill": 0,
-            "fillGradient": 0,
             "gridPos": {
                 "x": 0,
                 "y": 4,
                 "w": 8,
                 "h": 8
             },
+            "fill": 0,
+            "fillGradient": 0,
             "hiddenSeries": false,
             "id": 12,
             "legend": {
@@ -1466,7 +1466,7 @@
             },
             "lines": true,
             "linewidth": 1,
-            "nullPointMode": "null",
+            "nullPointMode": null,
             "options": {
                 "alertThreshold": true
             },
@@ -1504,7 +1504,7 @@
             "targets": [
                 {
                     "exemplar": true,
-                    "expr": "histogram_quantile(0.99, sum(rate(ray_serve_multiplexed_model_load_latency_ms_bucket{application=~\"$Application\",deployment=~\"$Deployment\",replica=~\"$Replica\",ray_io_cluster=~\"$Cluster\",}[5m])) by (application, deployment, replica, le))",
+                    "expr": "histogram_quantile(0.99, sum(rate(ray_serve_multiplexed_model_load_latency_ms_bucket{application=~\"$Application\",deployment=~\"$Deployment\",replica=~\"$Replica\",ray_io_cluster=~\"$Cluster\"}[5m])) by (application, deployment, replica, le))",
                     "interval": "",
                     "legendFormat": "{{application}}#{{deployment}}#{{replica}}",
                     "queryType": "randomWalk",
@@ -1560,19 +1560,19 @@
             "dashLength": 10,
             "dashes": false,
             "datasource": "${datasource}",
-            "description": "P99 latency of mutliplexed model unload per replica.",
+            "description": "P99 latency of multiplexed model unload per replica.",
             "fieldConfig": {
                 "defaults": {},
                 "overrides": []
             },
-            "fill": 0,
-            "fillGradient": 0,
             "gridPos": {
                 "x": 8,
                 "y": 4,
                 "w": 8,
                 "h": 8
             },
+            "fill": 0,
+            "fillGradient": 0,
             "hiddenSeries": false,
             "id": 13,
             "legend": {
@@ -1592,7 +1592,7 @@
             },
             "lines": true,
             "linewidth": 1,
-            "nullPointMode": "null",
+            "nullPointMode": null,
             "options": {
                 "alertThreshold": true
             },
@@ -1630,7 +1630,7 @@
             "targets": [
                 {
                     "exemplar": true,
-                    "expr": "histogram_quantile(0.99, sum(rate(ray_serve_multiplexed_model_unload_latency_ms_bucket{application=~\"$Application\",deployment=~\"$Deployment\",replica=~\"$Replica\",ray_io_cluster=~\"$Cluster\",}[5m])) by (application, deployment, replica, le))",
+                    "expr": "histogram_quantile(0.99, sum(rate(ray_serve_multiplexed_model_unload_latency_ms_bucket{application=~\"$Application\",deployment=~\"$Deployment\",replica=~\"$Replica\",ray_io_cluster=~\"$Cluster\"}[5m])) by (application, deployment, replica, le))",
                     "interval": "",
                     "legendFormat": "{{application}}#{{deployment}}#{{replica}}",
                     "queryType": "randomWalk",
@@ -1691,14 +1691,14 @@
                 "defaults": {},
                 "overrides": []
             },
-            "fill": 10,
-            "fillGradient": 0,
             "gridPos": {
                 "x": 16,
                 "y": 4,
                 "w": 8,
                 "h": 8
             },
+            "fill": 10,
+            "fillGradient": 0,
             "hiddenSeries": false,
             "id": 14,
             "legend": {
@@ -1718,7 +1718,7 @@
             },
             "lines": true,
             "linewidth": 1,
-            "nullPointMode": "null",
+            "nullPointMode": null,
             "options": {
                 "alertThreshold": true
             },
@@ -1756,7 +1756,7 @@
             "targets": [
                 {
                     "exemplar": true,
-                    "expr": "ray_serve_registered_multiplexed_model_id{application=~\"$Application\",deployment=~\"$Deployment\",replica=~\"$Replica\",ray_io_cluster=~\"$Cluster\",}",
+                    "expr": "ray_serve_registered_multiplexed_model_id{application=~\"$Application\",deployment=~\"$Deployment\",replica=~\"$Replica\",ray_io_cluster=~\"$Cluster\"}",
                     "interval": "",
                     "legendFormat": "{{replica}}:{{model_id}}",
                     "queryType": "randomWalk",
@@ -1817,14 +1817,14 @@
                 "defaults": {},
                 "overrides": []
             },
-            "fill": 10,
-            "fillGradient": 0,
             "gridPos": {
                 "x": 0,
                 "y": 5,
                 "w": 8,
                 "h": 8
             },
+            "fill": 10,
+            "fillGradient": 0,
             "hiddenSeries": false,
             "id": 15,
             "legend": {
@@ -1882,7 +1882,7 @@
             "targets": [
                 {
                     "exemplar": true,
-                    "expr": "(1 - sum(rate(ray_serve_multiplexed_models_load_counter_total{application=~\"$Application\",deployment=~\"$Deployment\",replica=~\"$Replica\",ray_io_cluster=~\"$Cluster\",}[5m]))/sum(rate(ray_serve_multiplexed_get_model_requests_counter_total{application=~\"$Application\",deployment=~\"$Deployment\",replica=~\"$Replica\",ray_io_cluster=~\"$Cluster\",}[5m])))",
+                    "expr": "(1 - sum(rate(ray_serve_multiplexed_models_load_counter_total{application=~\"$Application\",deployment=~\"$Deployment\",replica=~\"$Replica\",ray_io_cluster=~\"$Cluster\"}[5m]))/sum(rate(ray_serve_multiplexed_get_model_requests_counter_total{application=~\"$Application\",deployment=~\"$Deployment\",replica=~\"$Replica\",ray_io_cluster=~\"$Cluster\"}[5m])))",
                     "interval": "",
                     "legendFormat": "{{application}}#{{deployment}}#{{replica}}",
                     "queryType": "randomWalk",
@@ -1937,7 +1937,7 @@
     "schemaVersion": 27,
     "style": "dark",
     "tags": [
-        "rayVersion:2.46.0"
+        "rayVersion:2.49.2"
     ],
     "templating": {
         "list": [
@@ -1982,7 +1982,7 @@
                     "query": "label_values(ray_serve_deployment_replica_healthy{}, application)",
                     "refId": "Prometheus-Instance-Variable-Query"
                 },
-                "refresh": 2,
+                "refresh": 1,
                 "regex": "",
                 "skipUrlSync": false,
                 "sort": 0,
@@ -2017,7 +2017,7 @@
                     "query": "label_values(ray_serve_deployment_replica_healthy{application=~\"$Application\",}, deployment)",
                     "refId": "Prometheus-Instance-Variable-Query"
                 },
-                "refresh": 2,
+                "refresh": 1,
                 "regex": "",
                 "skipUrlSync": false,
                 "sort": 0,
@@ -2052,7 +2052,7 @@
                     "query": "label_values(ray_serve_deployment_replica_healthy{application=~\"$Application\",deployment=~\"$Deployment\",}, replica)",
                     "refId": "Prometheus-Instance-Variable-Query"
                 },
-                "refresh": 2,
+                "refresh": 1,
                 "regex": "",
                 "skipUrlSync": false,
                 "sort": 0,
@@ -2087,7 +2087,7 @@
                     "query": "label_values(ray_serve_deployment_request_counter{deployment=~\"$Deployment\",}, route)",
                     "refId": "Prometheus-Instance-Variable-Query"
                 },
-                "refresh": 2,
+                "refresh": 1,
                 "regex": "",
                 "skipUrlSync": false,
                 "sort": 0,
@@ -2098,6 +2098,7 @@
                 "useTags": false
             },
             {
+                "allValue": ".*",
                 "current": {
                     "selected": false
                 },
@@ -2115,7 +2116,7 @@
                     "query": "label_values(ray_node_network_receive_speed{}, ray_io_cluster)",
                     "refId": "StandardVariableQuery"
                 },
-                "refresh": 2,
+                "refresh": 1,
                 "regex": "",
                 "skipUrlSync": false,
                 "sort": 2,

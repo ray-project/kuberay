@@ -15,6 +15,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
+	"github.com/ray-project/kuberay/apiserver/pkg/manager"
 	apiserversdkutil "github.com/ray-project/kuberay/apiserversdk/util"
 	rayutil "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 )
@@ -24,7 +25,7 @@ type MuxConfig struct {
 	Middleware       func(http.Handler) http.Handler
 }
 
-func NewMux(config MuxConfig) (*http.ServeMux, error) {
+func NewMux(config MuxConfig, clientManager manager.ClientManagerInterface) (*http.ServeMux, error) {
 	u, err := url.Parse(config.KubernetesConfig.Host) // parse the K8s API server URL from the KubernetesConfig.
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse url %s from config: %w", config.KubernetesConfig.Host, err)
@@ -46,6 +47,16 @@ func NewMux(config MuxConfig) (*http.ServeMux, error) {
 	mux.Handle("GET /api/v1/namespaces/{namespace}/events", withFieldSelector(handler, "involvedObject.apiVersion=ray.io/v1")) // allow querying KubeRay CR events.
 
 	k8sClient := kubernetes.NewForConfigOrDie(config.KubernetesConfig)
+
+	// Compute Template middleware
+	ctMiddleware := apiserversdkutil.NewComputeTemplateMiddleware(clientManager)
+	mux.Handle("POST /apis/ray.io/v1/namespaces/{namespace}/rayclusters", ctMiddleware(handler))
+	mux.Handle("PUT /apis/ray.io/v1/namespaces/{namespace}/rayclusters/{name}", ctMiddleware(handler))
+	mux.Handle("POST /apis/ray.io/v1/namespaces/{namespace}/rayjobs", ctMiddleware(handler))
+	mux.Handle("PUT /apis/ray.io/v1/namespaces/{namespace}/rayjobs/{name}", ctMiddleware(handler))
+	mux.Handle("POST /apis/ray.io/v1/namespaces/{namespace}/rayservices", ctMiddleware(handler))
+	mux.Handle("PUT /apis/ray.io/v1/namespaces/{namespace}/rayservices/{name}", ctMiddleware(handler))
+
 	requireKubeRayServiceHandler := requireKubeRayService(handler, k8sClient)
 	// Allow accessing KubeRay dashboards and job submissions.
 	// Note: We also register "/proxy" to avoid the trailing slash redirection
@@ -151,6 +162,17 @@ func (rrt *retryRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 		}
 
 		if apiserversdkutil.IsSuccessfulStatusCode(resp.StatusCode) {
+			if resp.Body != nil {
+				body, err := io.ReadAll(resp.Body)
+				if err != nil {
+					return nil, fmt.Errorf("failed to read response body: %w", err)
+				}
+				err = resp.Body.Close()
+				if err != nil {
+					return nil, fmt.Errorf("failed to close response body: %w", err)
+				}
+				resp.Body = io.NopCloser(bytes.NewReader(body))
+			}
 			return resp, nil
 		}
 

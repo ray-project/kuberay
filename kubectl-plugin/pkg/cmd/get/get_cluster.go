@@ -153,7 +153,7 @@ func printClusters(rayclusterList *rayv1.RayClusterList, output io.Writer) error
 			relevantConditionType = relevantCondition.Type
 		}
 		resTable.Rows = append(resTable.Rows, v1.TableRow{
-			Cells: []interface{}{
+			Cells: []any{
 				raycluster.GetName(),
 				raycluster.GetNamespace(),
 				raycluster.Status.DesiredWorkerReplicas,

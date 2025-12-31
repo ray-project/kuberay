@@ -53,3 +53,30 @@
 
 # Ignore generated CRD schema files
 schema/
+
+**/node_modules
+
+# According to Go official documentation (https://go.dev/ref/mod):
+#
+# "It is generally inadvisable to commit go.work files into version control systems,
+# for two reasons:
+#
+# 1. A checked-in go.work file might override a developer's own go.work file from a
+#    parent directory, causing confusion when their use directives don't apply.
+#
+# 2. A checked-in go.work file may cause a continuous integration (CI) system to
+#    select and thus test the wrong versions of a module's dependencies. CI systems
+#    should generally not be allowed to use the go.work file so that they can test
+#    the behavior of the module as it would be used when required by other modules,
+#    where a go.work file within the module has no effect.
+#
+# That said, there are some cases where committing a go.work file makes sense.
+# For example, when the modules in a repository are developed exclusively with
+# each other but not together with external modules, there may not be a reason
+# the developer would want to use a different combination of modules in a workspace.
+# In that case, the module author should ensure the individual modules are tested
+# and released properly."
+#
+# Source: https://go.dev/ref/mod#workspaces
+# go.work
+# go.work.sum

@@ -20,7 +20,7 @@ spec:
 
   # rayClusterSpec specifies the RayCluster instance to be created by the RayJob controller.
   rayClusterSpec:
-    rayVersion: '2.46.0' # should match the Ray version in the image of the containers
+    rayVersion: '2.52.0' # should match the Ray version in the image of the containers
     # Ray head pod template
     headGroupSpec:
       headService:
@@ -35,7 +35,7 @@ spec:
         spec:
           containers:
           - name: ray-head
-            image: rayproject/ray:2.46.0
+            image: rayproject/ray:2.52.0
             ports:
             - containerPort: 6379
               name: gcs-server
@@ -45,9 +45,11 @@ spec:
               name: client
             resources:
               limits:
-                cpu: "1"
+                cpu: 1
+                memory: 4Gi
               requests:
-                cpu: "1"
+                cpu: 1
+                memory: 2Gi
             volumeMounts:
             - mountPath: /home/ray/samples
               name: code-sample
@@ -74,12 +76,14 @@ spec:
         spec:
           containers:
           - name: ray-worker # must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc'
-            image: rayproject/ray:2.46.0
+            image: rayproject/ray:2.52.0
             resources:
               limits:
-                cpu: "1"
+                cpu: 1
+                memory: 1Gi
               requests:
-                cpu: "1"
+                cpu: 1
+                memory: 1Gi
 ######################Ray code sample#################################
 # this sample is from https://docs.ray.io/en/latest/cluster/job-submission.html#quick-start-example
 # it is mounted into the container and executed to show the Ray job at work

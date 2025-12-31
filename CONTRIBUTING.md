@@ -62,11 +62,11 @@ When you're done making the changes, open a pull request and fill PR template so
 
 Don't forget to link PR to issue if you are solving one.
 
-If you run into any merge issues, checkout this [git tutorial](https://lab.github.com/githubtraining/managing-merge-conflicts) to help you resolve merge conflicts and other issues.
+If you run into any merge issues, checkout this [git tutorial](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/addressing-merge-conflicts/resolving-a-merge-conflict-on-github) to help you resolve merge conflicts and other issues.
 
 ### Release Acknowledgements
 
-Once your PR is merged, your contributions will be acknowledged in every release, see [CHANGELOG](./CHANGELOG.md) for more details.
+Once your PR is merged, your contributions will be acknowledged in every release, see [Release Notes](https://github.com/ray-project/kuberay/releases) for more details.
 
 ## Finding contributions to work on
 

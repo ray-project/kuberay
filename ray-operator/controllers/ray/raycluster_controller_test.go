@@ -19,6 +19,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -47,6 +48,15 @@ func rayClusterTemplate(name string, namespace string) *rayv1.RayCluster {
 		maxReplicas int32 = 4
 		replicas    int32 = 3
 	)
+	sharedMemVolume := corev1.Volume{
+		Name: "shared-mem",
+		VolumeSource: corev1.VolumeSource{
+			EmptyDir: &corev1.EmptyDirVolumeSource{
+				Medium:    corev1.StorageMediumMemory,
+				SizeLimit: ptr.To(resource.MustParse("1Gi")),
+			},
+		},
+	}
 	return &rayv1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -56,6 +66,7 @@ func rayClusterTemplate(name string, namespace string) *rayv1.RayCluster {
 			HeadGroupSpec: rayv1.HeadGroupSpec{
 				Template: corev1.PodTemplateSpec{
 					Spec: corev1.PodSpec{
+						Volumes: []corev1.Volume{sharedMemVolume},
 						Containers: []corev1.Container{
 							{
 								Name:  "ray-head",
@@ -73,6 +84,7 @@ func rayClusterTemplate(name string, namespace string) *rayv1.RayCluster {
 					GroupName:   "small-group",
 					Template: corev1.PodTemplateSpec{
 						Spec: corev1.PodSpec{
+							Volumes: []corev1.Volume{sharedMemVolume},
 							Containers: []corev1.Container{
 								{
 									Name:  "ray-worker",
@@ -929,6 +941,10 @@ var _ = Context("Inside the default namespace", func() {
 		numWorkerPods := 3 * int(numOfHosts)
 		workerFilters := common.RayClusterGroupPodsAssociationOptions(rayCluster, rayCluster.Spec.WorkerGroupSpecs[0].GroupName).ToListOptions()
 
+		BeforeEach(func() {
+			features.SetFeatureGateDuringTest(GinkgoTB(), features.RayMultiHostIndexing, true)
+		})
+
 		It("Verify RayCluster spec", func() {
 			// These test are designed based on the following assumptions:
 			// (1) Ray Autoscaler is enabled.
@@ -970,6 +986,60 @@ var _ = Context("Inside the default namespace", func() {
 
 			Eventually(
 				isAllPodsRunningByFilters).WithContext(ctx).WithArguments(workerPods, workerFilters).WithTimeout(time.Second*3).WithPolling(time.Millisecond*500).Should(BeTrue(), "All worker Pods should be running.")
+		})
+
+		It("All multi-host pods are properly labeled", func() {
+			type ReplicaInfo struct {
+				HostIndices  map[string]bool
+				ReplicaIndex string
+			}
+			replicaGroups := make(map[string]ReplicaInfo)
+			// Track replicas to ensure unique indices are applied.
+			seenReplicaIndices := make(map[string]bool)
+
+			for _, pod := range workerPods.Items {
+				// Get all the labels
+				hostIndex := pod.Labels[utils.RayHostIndexKey]
+				replicaID := pod.Labels[utils.RayWorkerReplicaNameKey]
+				replicaIndex := pod.Labels[utils.RayWorkerReplicaIndexKey]
+
+				Expect(replicaIndex).NotTo(BeEmpty(), "Pod %s is missing label %s", pod.Name, utils.RayWorkerReplicaIndexKey)
+				seenReplicaIndices[replicaIndex] = true
+
+				if info, ok := replicaGroups[replicaID]; ok {
+					// Validate replicaIndex is the same for all pods in this group.
+					Expect(replicaIndex).To(Equal(info.ReplicaIndex), "Pod %s in group %s has replicaIndex %s, but expected %s", pod.Name, replicaID, replicaIndex, info.ReplicaIndex)
+
+					// Ensure hostIndex is unique within this replica group.
+					Expect(info.HostIndices[hostIndex]).To(BeFalse(), "Pod %s in group %s has duplicate hostIndex %s", pod.Name, replicaID, hostIndex)
+					info.HostIndices[hostIndex] = true
+				} else {
+					replicaGroups[replicaID] = ReplicaInfo{
+						ReplicaIndex: replicaIndex,
+						HostIndices:  map[string]bool{hostIndex: true},
+					}
+				}
+
+				// Check hostIndex correctly set in range 0 to numOfHosts-1.
+				hostIndexInt, err := strconv.Atoi(hostIndex)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(hostIndexInt).To(BeNumerically("<", numOfHosts))
+				Expect(hostIndexInt).To(BeNumerically(">=", 0))
+			}
+
+			// Validate we created 'replicas' number of groups.
+			Expect(replicaGroups).To(HaveLen(int(replicas)), "Expected %d replica groups, but found %d", replicas, len(replicaGroups))
+
+			// Validate replica indices are unique and indexed from 0 to replicas-1.
+			Expect(seenReplicaIndices).To(HaveLen(int(replicas)), "Expected %d unique replica indices, but found %d", replicas, len(seenReplicaIndices))
+			Expect(seenReplicaIndices["0"]).To(BeTrue())
+			Expect(seenReplicaIndices["1"]).To(BeTrue())
+			Expect(seenReplicaIndices["2"]).To(BeTrue())
+
+			// Validate each replica group has 'numOfHosts' Pods.
+			for replicaID, info := range replicaGroups {
+				Expect(info.HostIndices).To(HaveLen(int(numOfHosts)), "Replica group %s expected %d hosts, but found %d", replicaID, numOfHosts, len(info.HostIndices))
+			}
 		})
 
 		It("RayCluster's .status.state transitions to 'ready' when all worker Pods are Running and check pod counts are correct", func() {

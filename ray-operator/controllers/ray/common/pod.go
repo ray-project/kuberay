@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"sort"
 	"strconv"
@@ -17,6 +18,7 @@ import (
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
+	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 )
 
 const (
@@ -172,10 +174,16 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 	// This ensures privilege of KubeRay users are contained within the namespace of the RayCluster.
 	podTemplate.ObjectMeta.Namespace = instance.Namespace
 
-	if podTemplate.Labels == nil {
-		podTemplate.Labels = make(map[string]string)
-	}
-	podTemplate.Labels = labelPod(rayv1.HeadNode, instance.Name, utils.RayNodeHeadGroupLabelValue, instance.Spec.HeadGroupSpec.Template.ObjectMeta.Labels)
+	// Update rayStartParams with top-level Resources for head group.
+	updateRayStartParamsResources(ctx, headSpec.RayStartParams, headSpec.Resources)
+
+	// Update --labels` in rayStartParams with top-level Labels for head group.
+	updateRayStartParamsLabels(headSpec.RayStartParams, headSpec.Labels)
+
+	// Merge K8s labels from the Pod template and the top-level `Labels` field.
+	mergedLabels := mergeLabels(headSpec.Template.ObjectMeta.Labels, headSpec.Labels)
+	podTemplate.Labels = labelPod(rayv1.HeadNode, instance.Name, utils.RayNodeHeadGroupLabelValue, mergedLabels)
+
 	headSpec.RayStartParams = setMissingRayStartParams(ctx, headSpec.RayStartParams, rayv1.HeadNode, headPort, "")
 
 	initTemplateAnnotations(instance, &podTemplate)
@@ -192,6 +200,12 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 		autoscalerImage := podTemplate.Spec.Containers[utils.RayContainerIndex].Image
 		// inject autoscaler container into head pod
 		autoscalerContainer := BuildAutoscalerContainer(autoscalerImage)
+
+		// Configure RAY_AUTH_TOKEN and RAY_AUTH_MODE if auth is enabled.
+		if utils.IsAuthEnabled(&instance.Spec) {
+			SetContainerTokenAuthEnvVars(instance.Name, &autoscalerContainer)
+		}
+
 		// Merge the user overrides from autoscalerOptions into the autoscaler container config.
 		mergeAutoscalerOverrides(&autoscalerContainer, instance.Spec.AutoscalerOptions)
 		podTemplate.Spec.Containers = append(podTemplate.Spec.Containers, autoscalerContainer)
@@ -214,6 +228,10 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 		podTemplate.Spec.Containers[utils.RayContainerIndex].Ports = append(podTemplate.Spec.Containers[utils.RayContainerIndex].Ports, metricsPort)
 	}
 
+	if utils.IsAuthEnabled(&instance.Spec) {
+		configureTokenAuth(instance.Name, &podTemplate)
+	}
+
 	return podTemplate
 }
 
@@ -226,6 +244,40 @@ func setAutoscalerV2EnvVars(podTemplate *corev1.PodTemplateSpec) {
 	podTemplate.Spec.Containers[utils.RayContainerIndex].Env = append(podTemplate.Spec.Containers[utils.RayContainerIndex].Env, corev1.EnvVar{
 		Name:  utils.RAY_ENABLE_AUTOSCALER_V2,
 		Value: "true",
+	})
+}
+
+// configureTokenAuth sets environment variables required for Ray token authentication
+func configureTokenAuth(clusterName string, podTemplate *corev1.PodTemplateSpec) {
+	SetContainerTokenAuthEnvVars(clusterName, &podTemplate.Spec.Containers[utils.RayContainerIndex])
+	// For RayJob Sidecar mode, we need to set the auth token for the submitter container.
+
+	// Configure auth token for wait-gcs-ready init container if it exists
+	for i, initContainer := range podTemplate.Spec.InitContainers {
+		if initContainer.Name != "wait-gcs-ready" {
+			continue
+		}
+
+		SetContainerTokenAuthEnvVars(clusterName, &podTemplate.Spec.InitContainers[i])
+	}
+}
+
+// SetContainerTokenAuthEnvVars sets Ray authentication env vars for a container.
+func SetContainerTokenAuthEnvVars(clusterName string, container *corev1.Container) {
+	container.Env = append(container.Env, corev1.EnvVar{
+		Name:  utils.RAY_AUTH_MODE_ENV_VAR,
+		Value: string(rayv1.AuthModeToken),
+	})
+
+	secretName := utils.CheckName(clusterName)
+	container.Env = append(container.Env, corev1.EnvVar{
+		Name: utils.RAY_AUTH_TOKEN_ENV_VAR,
+		ValueFrom: &corev1.EnvVarSource{
+			SecretKeyRef: &corev1.SecretKeySelector{
+				LocalObjectReference: corev1.LocalObjectReference{Name: secretName},
+				Key:                  utils.RAY_AUTH_TOKEN_SECRET_KEY,
+			},
+		},
 	})
 }
 
@@ -244,7 +296,7 @@ func getEnableProbesInjection() bool {
 }
 
 // DefaultWorkerPodTemplate sets the config values
-func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, workerSpec rayv1.WorkerGroupSpec, podName string, fqdnRayIP string, headPort string) corev1.PodTemplateSpec {
+func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, workerSpec rayv1.WorkerGroupSpec, podName string, fqdnRayIP string, headPort string, replicaGrpName string, replicaIndex int, numHostIndex int) corev1.PodTemplateSpec {
 	podTemplate := workerSpec.Template
 	podTemplate.GenerateName = podName
 	// Pods created by RayCluster should be restricted to the namespace of the RayCluster.
@@ -278,7 +330,7 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 								echo "GCS is ready. Any error messages above can be safely ignored."
 								break
 							fi
-							echo "$SECONDS seconds elapsed: Still waiting for GCS to be ready. For troubleshooting, refer to the FAQ at https://github.com/ray-project/kuberay/blob/master/docs/guidance/FAQ.md."
+							echo "$SECONDS seconds elapsed: Still waiting for GCS to be ready. For troubleshooting, refer to the FAQ at https://docs.ray.io/en/master/cluster/kubernetes/troubleshooting.html."
 						fi
 						sleep 5
 					done
@@ -311,10 +363,27 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 	// If the replica of workers is more than 1, `ObjectMeta.Name` may cause name conflict errors.
 	// Hence, we set `ObjectMeta.Name` to an empty string, and use GenerateName to prevent name conflicts.
 	podTemplate.ObjectMeta.Name = ""
-	if podTemplate.Labels == nil {
-		podTemplate.Labels = make(map[string]string)
+
+	// Update rayStartParams with top-level Resources for worker group.
+	updateRayStartParamsResources(ctx, workerSpec.RayStartParams, workerSpec.Resources)
+
+	// Update --labels` in rayStartParams with top-level Labels for worker group.
+	updateRayStartParamsLabels(workerSpec.RayStartParams, workerSpec.Labels)
+
+	// Merge K8s labels from the Pod template and the top-level `Labels` field.
+	mergedLabels := mergeLabels(workerSpec.Template.ObjectMeta.Labels, workerSpec.Labels)
+	podTemplate.Labels = labelPod(rayv1.WorkerNode, instance.Name, workerSpec.GroupName, mergedLabels)
+
+	// Add additional labels when RayMultihostIndexing is enabled.
+	if features.Enabled(features.RayMultiHostIndexing) {
+		// The ordered replica index can be used for the single-host, multi-slice case.
+		podTemplate.Labels[utils.RayWorkerReplicaIndexKey] = strconv.Itoa(replicaIndex)
+		if workerSpec.NumOfHosts > 1 {
+			// These labels are specific to multi-host group setup and reconciliation.
+			podTemplate.Labels[utils.RayWorkerReplicaNameKey] = replicaGrpName
+			podTemplate.Labels[utils.RayHostIndexKey] = strconv.Itoa(numHostIndex)
+		}
 	}
-	podTemplate.Labels = labelPod(rayv1.WorkerNode, instance.Name, workerSpec.GroupName, workerSpec.Template.ObjectMeta.Labels)
 	workerSpec.RayStartParams = setMissingRayStartParams(ctx, workerSpec.RayStartParams, rayv1.WorkerNode, headPort, fqdnRayIP)
 
 	initTemplateAnnotations(instance, &podTemplate)
@@ -332,6 +401,10 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 
 	if utils.IsAutoscalingEnabled(&instance.Spec) && utils.IsAutoscalingV2Enabled(&instance.Spec) {
 		podTemplate.Spec.RestartPolicy = corev1.RestartPolicyNever
+	}
+
+	if utils.IsAuthEnabled(&instance.Spec) {
+		configureTokenAuth(instance.Name, &podTemplate)
 	}
 
 	return podTemplate
@@ -418,7 +491,7 @@ func initLivenessAndReadinessProbe(rayContainer *corev1.Container, rayNodeType r
 }
 
 // BuildPod a pod config
-func BuildPod(ctx context.Context, podTemplateSpec corev1.PodTemplateSpec, rayNodeType rayv1.RayNodeType, rayStartParams map[string]string, headPort string, enableRayAutoscaler bool, creatorCRDType utils.CRDType, fqdnRayIP string) (aPod corev1.Pod) {
+func BuildPod(ctx context.Context, podTemplateSpec corev1.PodTemplateSpec, rayNodeType rayv1.RayNodeType, rayStartParams map[string]string, headPort string, enableRayAutoscaler bool, creatorCRDType utils.CRDType, fqdnRayIP string, defaultContainerEnvs []corev1.EnvVar) (aPod corev1.Pod) {
 	log := ctrl.LoggerFrom(ctx)
 
 	// For Worker Pod: Traffic readiness is determined by the readiness probe.
@@ -492,7 +565,7 @@ func BuildPod(ctx context.Context, podTemplateSpec corev1.PodTemplateSpec, rayNo
 	for index := range pod.Spec.InitContainers {
 		setInitContainerEnvVars(&pod.Spec.InitContainers[index], fqdnRayIP)
 	}
-	setContainerEnvVars(&pod, rayNodeType, fqdnRayIP, headPort, rayStartCmd, creatorCRDType)
+	setContainerEnvVars(&pod, rayNodeType, fqdnRayIP, headPort, rayStartCmd, creatorCRDType, defaultContainerEnvs)
 
 	// Inject probes into the Ray containers if the user has not explicitly disabled them.
 	// The feature flag `ENABLE_PROBES_INJECTION` will be removed if this feature is stable enough.
@@ -651,11 +724,18 @@ func setInitContainerEnvVars(container *corev1.Container, fqdnRayIP string) {
 	)
 }
 
-func setContainerEnvVars(pod *corev1.Pod, rayNodeType rayv1.RayNodeType, fqdnRayIP string, headPort string, rayStartCmd string, creatorCRDType utils.CRDType) {
+func setContainerEnvVars(pod *corev1.Pod, rayNodeType rayv1.RayNodeType, fqdnRayIP string, headPort string, rayStartCmd string, creatorCRDType utils.CRDType, defaultContainerEnvs []corev1.EnvVar) {
 	// TODO: Audit all environment variables to identify which should not be modified by users.
 	container := &pod.Spec.Containers[utils.RayContainerIndex]
 	if len(container.Env) == 0 {
 		container.Env = []corev1.EnvVar{}
+	}
+
+	// Inject default container environment variables from configuration
+	for _, defaultEnv := range defaultContainerEnvs {
+		if !utils.EnvVarExists(defaultEnv.Name, container.Env) {
+			container.Env = append(container.Env, defaultEnv)
+		}
 	}
 
 	// case 1: head   => Use LOCAL_HOST
@@ -1034,4 +1114,71 @@ func findMemoryReqOrLimit(container corev1.Container) (res *resource.Quantity) {
 		return mem
 	}
 	return nil
+}
+
+// updateRayStartParamsLabels reconciles `--labels` in rayStartParams based on group `Labels`.
+func updateRayStartParamsLabels(rayStartParams map[string]string, groupLabels map[string]string) {
+	if len(groupLabels) == 0 {
+		return
+	}
+	var labels []string
+	// Sort label keys for deterministic output.
+	keys := make([]string, 0, len(groupLabels))
+	for k := range groupLabels {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	for _, k := range keys {
+		labels = append(labels, fmt.Sprintf("%s=%s", k, groupLabels[k]))
+	}
+	rayStartParams["labels"] = strings.Join(labels, ",")
+}
+
+// updateRayStartParamsResources reconciles rayStartParams based on the top-level `Resources` field.
+func updateRayStartParamsResources(ctx context.Context, rayStartParams map[string]string, groupResources map[string]string) {
+	log := ctrl.LoggerFrom(ctx)
+
+	if len(groupResources) == 0 {
+		return
+	}
+	// Override relevant rayStartParams fields to ensure consistency.
+	rayResourcesJson := make(map[string]float64)
+	for name, quantity := range groupResources {
+		q, err := resource.ParseQuantity(quantity)
+		if err != nil {
+			log.Info("Skipping resource %s: failed to parse quantity '%s': %v", name, quantity, err)
+			continue
+		}
+
+		// Normalize the resource name to lowercase for all default checks.
+		normalizedName := strings.ToLower(name)
+		if normalizedName == string(corev1.ResourceCPU) {
+			rayStartParams["num-cpus"] = strconv.FormatInt(q.Value(), 10)
+		} else if normalizedName == string(corev1.ResourceMemory) {
+			rayStartParams["memory"] = strconv.FormatInt(q.Value(), 10)
+		} else if utils.IsGPUResourceKey(normalizedName) {
+			rayStartParams["num-gpus"] = strconv.FormatInt(q.Value(), 10)
+		} else {
+			rayResourcesJson[name] = q.AsApproximateFloat64()
+		}
+	}
+
+	if len(rayResourcesJson) > 0 {
+		jsonBytes, err := json.Marshal(rayResourcesJson)
+		if err != nil {
+			log.Error(err, "Failed to marshal Ray Resources JSON for rayStartParams.")
+			return
+		}
+		rayStartParams["resources"] = fmt.Sprintf("'%s'", string(jsonBytes))
+	}
+}
+
+// mergeLabels combines labels from a pod template and a group `labels` spec,
+// with the top-level labels field taking precedence.
+func mergeLabels(templateLabels map[string]string, groupLabels map[string]string) map[string]string {
+	merged := make(map[string]string)
+	maps.Copy(merged, templateLabels)
+	maps.Copy(merged, groupLabels)
+	return merged
 }

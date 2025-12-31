@@ -1,6 +1,7 @@
 package common
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -15,6 +16,32 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	pkgutils "github.com/ray-project/kuberay/ray-operator/pkg/utils"
 )
+
+// BuildHeadServiceForRayJob builds the service for a pod. Currently, there is only one service that allows
+// the worker nodes to connect to the head node.
+// RayJob controller updates the service whenever a new RayCluster serves the traffic.
+func BuildHeadServiceForRayJob(ctx context.Context, rayJob rayv1.RayJob, rayCluster rayv1.RayCluster) (*corev1.Service, error) {
+	service, err := BuildServiceForHeadPod(ctx, rayCluster, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	headSvcName, err := utils.GenerateHeadServiceName(utils.RayJobCRD, rayv1.RayClusterSpec{}, rayJob.Name)
+	if err != nil {
+		return nil, err
+	}
+
+	service.ObjectMeta.Name = headSvcName
+	service.ObjectMeta.Namespace = rayJob.Namespace
+	service.ObjectMeta.Labels = map[string]string{
+		utils.RayOriginatedFromCRNameLabelKey: rayJob.Name,
+		utils.RayOriginatedFromCRDLabelKey:    utils.RayOriginatedFromCRDLabelValue(utils.RayJobCRD),
+		utils.RayNodeTypeLabelKey:             string(rayv1.HeadNode),
+		utils.RayIDLabelKey:                   utils.CheckLabel(utils.GenerateIdentifier(rayJob.Name, rayv1.HeadNode)),
+	}
+
+	return service, nil
+}
 
 // GetRuntimeEnvJson returns the JSON string of the runtime environment for the Ray job.
 func getRuntimeEnvJson(rayJobInstance *rayv1.RayJob) (string, error) {
@@ -64,7 +91,7 @@ func BuildJobSubmitCommand(rayJobInstance *rayv1.RayJob, submissionMode rayv1.Jo
 		// The sidecar submitter shares the same network namespace as the Ray dashboard,
 		// so it uses 127.0.0.1 to connect to the Ray dashboard.
 		rayHeadContainer := rayJobInstance.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex]
-		port = utils.FindContainerPort(&rayHeadContainer, utils.DashboardPortName, utils.DefaultDashboardPort)
+		port = int(utils.FindContainerPort(&rayHeadContainer, utils.DashboardPortName, utils.DefaultDashboardPort))
 		address = "http://127.0.0.1:" + strconv.Itoa(port)
 	case rayv1.K8sJobMode:
 		// Submitter is a separate K8s Job; use cluster dashboard address.
@@ -137,7 +164,7 @@ func BuildJobSubmitCommand(rayJobInstance *rayv1.RayJob, submissionMode rayv1.Jo
 		cmd = append(cmd, "--runtime-env-json", strconv.Quote(runtimeEnvJson))
 	}
 
-	if len(metadata) > 0 {
+	if len(metadata) > 0 && rayJobInstance.Spec.RayClusterSpec != nil {
 		metadataJson, err := GetMetadataJson(metadata, rayJobInstance.Spec.RayClusterSpec.RayVersion)
 		if err != nil {
 			return nil, err
@@ -171,12 +198,15 @@ func BuildJobSubmitCommand(rayJobInstance *rayv1.RayJob, submissionMode rayv1.Jo
 	return cmd, nil
 }
 
-// GetDefaultSubmitterTemplate creates a default submitter template for the Ray job.
-func GetDefaultSubmitterTemplate(rayClusterInstance *rayv1.RayCluster) corev1.PodTemplateSpec {
+// GetSubmitterTemplate creates a default submitter template for the Ray job.
+func GetSubmitterTemplate(rayJobSpec *rayv1.RayJobSpec, rayClusterSpec *rayv1.RayClusterSpec) corev1.PodTemplateSpec {
+	if rayJobSpec.SubmitterPodTemplate != nil {
+		return *rayJobSpec.SubmitterPodTemplate.DeepCopy()
+	}
 	return corev1.PodTemplateSpec{
 		Spec: corev1.PodSpec{
 			Containers: []corev1.Container{
-				GetDefaultSubmitterContainer(rayClusterInstance),
+				GetDefaultSubmitterContainer(rayClusterSpec),
 			},
 			RestartPolicy: corev1.RestartPolicyNever,
 		},
@@ -184,11 +214,11 @@ func GetDefaultSubmitterTemplate(rayClusterInstance *rayv1.RayCluster) corev1.Po
 }
 
 // GetDefaultSubmitterContainer creates a default submitter container for the Ray job.
-func GetDefaultSubmitterContainer(rayClusterInstance *rayv1.RayCluster) corev1.Container {
+func GetDefaultSubmitterContainer(rayClusterSpec *rayv1.RayClusterSpec) corev1.Container {
 	return corev1.Container{
 		Name: utils.SubmitterContainerName,
 		// Use the image of the Ray head to be defensive against version mismatch issues
-		Image: rayClusterInstance.Spec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex].Image,
+		Image: rayClusterSpec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex].Image,
 		Resources: corev1.ResourceRequirements{
 			Limits: corev1.ResourceList{
 				corev1.ResourceCPU:    resource.MustParse("1"),

@@ -3,6 +3,8 @@ package model
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
+	"slices"
 	"strconv"
 
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -79,12 +81,7 @@ func getWorkNodeEnv() []string {
 
 // Check if an array contains string
 func contains(s []string, str string) bool {
-	for _, v := range s {
-		if v == str {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(s, str)
 }
 
 func FromCrdToAPIClusters(clusters []*rayv1api.RayCluster, clusterEventsMap map[string][]corev1.Event) []*api.Cluster {
@@ -132,9 +129,7 @@ func FromCrdToAPICluster(cluster *rayv1api.RayCluster, events []corev1.Event) *a
 	}
 
 	pbCluster.ServiceEndpoint = map[string]string{}
-	for name, port := range cluster.Status.Endpoints {
-		pbCluster.ServiceEndpoint[name] = port
-	}
+	maps.Copy(pbCluster.ServiceEndpoint, cluster.Status.Endpoints)
 	return pbCluster
 }
 
@@ -412,6 +407,7 @@ func FromKubeToAPIComputeTemplate(configMap *corev1.ConfigMap) *api.ComputeTempl
 	runtime.Namespace = configMap.Namespace
 	runtime.Cpu = uint32(cpu)
 	runtime.Memory = uint32(memory)
+	runtime.MemoryUnit = configMap.Data["memory_unit"]
 	runtime.Gpu = uint32(gpu)
 	runtime.GpuAccelerator = configMap.Data["gpu_accelerator"]
 
@@ -590,9 +586,7 @@ func PoplulateRayServiceStatus(
 		ServeApplicationStatus: PopulateServeApplicationStatus(serviceStatus.ActiveServiceStatus.Applications),
 	}
 	status.ServiceEndpoint = map[string]string{}
-	for name, port := range serviceStatus.ActiveServiceStatus.RayClusterStatus.Endpoints {
-		status.ServiceEndpoint[name] = port
-	}
+	maps.Copy(status.ServiceEndpoint, serviceStatus.ActiveServiceStatus.RayClusterStatus.Endpoints)
 	return status
 }
 

@@ -1,15 +1,20 @@
 package e2erayjob
 
 import (
+	"strings"
 	"testing"
 	"time"
 
 	. "github.com/onsi/gomega"
+	"github.com/stretchr/testify/assert"
+	batchv1 "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	rayv1ac "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/ray/v1"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
@@ -44,6 +49,14 @@ env_vars:
 		rayJob, err := test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
 		g.Expect(err).NotTo(HaveOccurred())
 		LogWithTimestamp(test.T(), "Created RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
+
+		rayJobHeadSvcName, err := utils.GenerateHeadServiceName(utils.RayJobCRD, *rayJob.Spec.RayClusterSpec, rayJob.Name)
+		g.Expect(err).NotTo(HaveOccurred(), "Failed to get Head Service Name: %v", rayJobHeadSvcName)
+
+		g.Eventually(func() error {
+			_, err = test.Client().Core().CoreV1().Services(namespace.Name).Get(test.Ctx(), rayJobHeadSvcName, metav1.GetOptions{})
+			return err
+		}).Should(Succeed())
 
 		LogWithTimestamp(test.T(), "Waiting for RayJob %s/%s to complete", rayJob.Namespace, rayJob.Name)
 		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
@@ -224,9 +237,24 @@ env_vars:
 		g.Expect(err).NotTo(HaveOccurred())
 		LogWithTimestamp(test.T(), "Created RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
 
-		// `RuntimeEnvYAML` is not a valid YAML string, so the RayJob controller will not do anything with the CR.
-		g.Consistently(RayJob(test, rayJob.Namespace, rayJob.Name), 5*time.Second).
-			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusNew)))
+		// `RuntimeEnvYAML` is not a valid YAML string, so the RayJob controller should set status to ValidationFailed.
+		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutShort).
+			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusValidationFailed)))
+	})
+
+	test.T().Run("RayJob name too long with 48 characters", func(_ *testing.T) {
+		rayJobAC := rayv1ac.RayJob(strings.Repeat("a", 48), namespace.Name).
+			WithSpec(rayv1ac.RayJobSpec().
+				WithEntrypoint("python /home/ray/jobs/counter.py").
+				WithRayClusterSpec(NewRayClusterSpec(MountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](jobs, "/home/ray/jobs"))))
+
+		rayJob, err := test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
+		g.Expect(err).NotTo(HaveOccurred())
+		LogWithTimestamp(test.T(), "Created RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
+
+		// Rayjob name is too long, so the RayJob controller should set status to ValidationFailed.
+		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutShort).
+			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusValidationFailed)))
 	})
 
 	test.T().Run("RayJob has passed ActiveDeadlineSeconds", func(_ *testing.T) {
@@ -249,6 +277,47 @@ env_vars:
 			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusFailed)))
 		g.Expect(GetRayJob(test, rayJob.Namespace, rayJob.Name)).
 			To(WithTransform(RayJobReason, Equal(rayv1.DeadlineExceeded)))
+	})
+
+	test.T().Run("RayJob fails when head Pod is deleted when job is running", func(_ *testing.T) {
+		rayJobAC := rayv1ac.RayJob("delete-head-after-submit", namespace.Name).
+			WithSpec(rayv1ac.RayJobSpec().
+				WithRayClusterSpec(NewRayClusterSpec()).
+				WithEntrypoint("python -c \"import time; time.sleep(60)\"").
+				WithShutdownAfterJobFinishes(true))
+
+		rayJob, err := test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
+		g.Expect(err).NotTo(HaveOccurred())
+		LogWithTimestamp(test.T(), "Created RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
+
+		// Wait until the RayJob's job status transitions to Running
+		LogWithTimestamp(test.T(), "Waiting for RayJob %s/%s to be 'Running'", rayJob.Namespace, rayJob.Name)
+		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
+			Should(WithTransform(RayJobStatus, Equal(rayv1.JobStatusRunning)))
+
+		// Fetch RayCluster and delete the head Pod
+		rayJob, err = GetRayJob(test, rayJob.Namespace, rayJob.Name)
+		g.Expect(err).NotTo(HaveOccurred())
+		rayCluster, err := GetRayCluster(test, rayJob.Namespace, rayJob.Status.RayClusterName)
+		g.Expect(err).NotTo(HaveOccurred())
+		headPod, err := GetHeadPod(test, rayCluster)
+		g.Expect(err).NotTo(HaveOccurred())
+		LogWithTimestamp(test.T(), "Deleting head Pod %s/%s for RayCluster %s", headPod.Namespace, headPod.Name, rayCluster.Name)
+		err = test.Client().Core().CoreV1().Pods(headPod.Namespace).Delete(test.Ctx(), headPod.Name, metav1.DeleteOptions{})
+		g.Expect(err).NotTo(HaveOccurred())
+
+		// After head pod deletion, controller should mark RayJob as Failed with a specific message
+		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
+			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusFailed)))
+		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
+			Should(WithTransform(RayJobReason, Or(
+				Equal(rayv1.JobDeploymentStatusTransitionGracePeriodExceeded),
+				Equal(rayv1.SubmissionFailed),
+			)))
+		// Cleanup
+		err = test.Client().Ray().RayV1().RayJobs(namespace.Name).Delete(test.Ctx(), rayJob.Name, metav1.DeleteOptions{})
+		g.Expect(err).NotTo(HaveOccurred())
+		LogWithTimestamp(test.T(), "Deleted RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
 	})
 
 	test.T().Run("RayJob should be created, but not updated when managed externally", func(_ *testing.T) {
@@ -294,5 +363,200 @@ env_vars:
 		err = test.Client().Ray().RayV1().RayJobs(namespace.Name).Delete(test.Ctx(), *rayJobAC.Name, metav1.DeleteOptions{})
 		g.Expect(err).NotTo(HaveOccurred())
 		LogWithTimestamp(test.T(), "Deleted RayJob %s/%s successfully", *rayJobAC.Namespace, *rayJobAC.Name)
+	})
+
+	test.T().Run("RayJob has exceed SubmitterFinishedTimeout", func(_ *testing.T) {
+		rayJobAC := rayv1ac.RayJob("submitter-timeout", namespace.Name).
+			WithSpec(rayv1ac.RayJobSpec().
+				WithRayClusterSpec(NewRayClusterSpec(MountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](jobs, "/home/ray/jobs"))).
+				WithEntrypoint("python /home/ray/jobs/long_running.py").
+				WithShutdownAfterJobFinishes(true).
+				WithSubmitterPodTemplate(JobSubmitterPodTemplateApplyConfiguration()))
+
+		rayJob, err := test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
+		g.Expect(err).NotTo(HaveOccurred())
+		LogWithTimestamp(test.T(), "Created RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
+
+		// Wait until RayJob status and deployment status is running
+		LogWithTimestamp(test.T(), "Waiting for RayJob %s/%s deployment status to be 'Running'", rayJob.Namespace, rayJob.Name)
+		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
+			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusRunning)))
+		LogWithTimestamp(test.T(), "Waiting for Ray job %s/%s to be actually running in Ray cluster", rayJob.Namespace, rayJob.Name)
+		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
+			Should(WithTransform(RayJobStatus, Equal(rayv1.JobStatusRunning)))
+
+		// Wait for the submitter job to be created
+		LogWithTimestamp(test.T(), "Waiting for submitter job to be created")
+		g.Eventually(Jobs(test, namespace.Name)).ShouldNot(BeEmpty())
+
+		// Force the submitter job to complete by updating its status
+		// This simulates the submitter finishing but the Ray job still running
+		LogWithTimestamp(test.T(), "Updating submitter job status to complete")
+		job, err := test.Client().Core().BatchV1().Jobs(namespace.Name).Get(test.Ctx(), rayJob.Name, metav1.GetOptions{})
+		g.Expect(err).NotTo(HaveOccurred())
+		now := metav1.Now()
+		job.Status.Conditions = append(job.Status.Conditions, batchv1.JobCondition{
+			Type:               batchv1.JobComplete,
+			Status:             corev1.ConditionTrue,
+			LastProbeTime:      now,
+			LastTransitionTime: now,
+			Reason:             "Completed",
+			Message:            "Job completed successfully for timeout test",
+		})
+		job.Status.CompletionTime = &now
+		job.Status.Succeeded = 1
+
+		_, err = test.Client().Core().BatchV1().Jobs(namespace.Name).UpdateStatus(test.Ctx(), job, metav1.UpdateOptions{})
+		g.Expect(err).NotTo(HaveOccurred())
+		LogWithTimestamp(test.T(), "Successfully marked submitter job as completed at %v", now.Time)
+
+		// Record the start time for timeout measurement
+		timeoutStartTime := time.Now()
+
+		// Wait for the timeout to trigger
+		LogWithTimestamp(test.T(), "Waiting for RayJob %s/%s to exceed SubmitterFinishedTimeout", rayJob.Namespace, rayJob.Name)
+		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutShort).
+			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusFailed)))
+
+		// Measure the actual timeout duration and verify the timeout duration is close to DefaultSubmitterFinishedTimeout
+		actualTimeoutDuration := time.Since(timeoutStartTime)
+		expectedTimeout := ray.DefaultSubmitterFinishedTimeout
+		assert.InDelta(test.T(), expectedTimeout.Seconds(), actualTimeoutDuration.Seconds(), 5.0,
+			"Actual timeout duration should be close to DefaultSubmitterFinishedTimeout")
+
+		// Get the updated rayJob
+		rayJob, err = GetRayJob(test, rayJob.Namespace, rayJob.Name)
+		g.Expect(err).NotTo(HaveOccurred())
+
+		reason := rayJob.Status.Reason
+		message := rayJob.Status.Message
+		g.Expect(reason).To(Equal(rayv1.JobDeploymentStatusTransitionGracePeriodExceeded))
+		g.Expect(message).To(MatchRegexp(`The RayJob submitter finished at .* but the ray job did not reach terminal state within .*`))
+	})
+
+	test.T().Run("RayCluster status update propagates to RayJob", func(_ *testing.T) {
+		rayJobAC := rayv1ac.RayJob("cluster-status-update", namespace.Name).
+			WithSpec(rayv1ac.RayJobSpec().
+				WithRayClusterSpec(NewRayClusterSpec(MountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](jobs, "/home/ray/jobs"))).
+				WithEntrypoint("python /home/ray/jobs/long_running.py").
+				WithShutdownAfterJobFinishes(false).
+				WithSubmitterPodTemplate(JobSubmitterPodTemplateApplyConfiguration()))
+
+		rayJob, err := test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
+		g.Expect(err).NotTo(HaveOccurred())
+		LogWithTimestamp(test.T(), "Created RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
+
+		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
+			Should(WithTransform(RayJobStatus, Equal(rayv1.JobStatusRunning)))
+
+		rayJob, err = GetRayJob(test, rayJob.Namespace, rayJob.Name)
+		g.Expect(err).NotTo(HaveOccurred())
+		rayCluster, err := GetRayCluster(test, namespace.Name, rayJob.Status.RayClusterName)
+		g.Expect(err).NotTo(HaveOccurred())
+
+		originalMaxWorkerReplica := rayCluster.Status.MaxWorkerReplicas
+		g.Expect(rayJob.Status.RayClusterStatus.MaxWorkerReplicas).To(Equal(originalMaxWorkerReplica))
+
+		newMaxWorkerReplica := originalMaxWorkerReplica + 2
+		rayCluster.Status.MaxWorkerReplicas = newMaxWorkerReplica
+		_, err = test.Client().Ray().RayV1().RayClusters(namespace.Name).UpdateStatus(test.Ctx(), rayCluster, metav1.UpdateOptions{})
+		g.Expect(err).NotTo(HaveOccurred())
+
+		g.Eventually(func() int32 {
+			job, err := GetRayJob(test, rayJob.Namespace, rayJob.Name)
+			if err != nil {
+				return originalMaxWorkerReplica
+			}
+			return job.Status.RayClusterStatus.MaxWorkerReplicas
+		}, TestTimeoutShort).Should(Equal(newMaxWorkerReplica))
+
+		err = test.Client().Ray().RayV1().RayJobs(namespace.Name).Delete(test.Ctx(), rayJob.Name, metav1.DeleteOptions{})
+		g.Expect(err).NotTo(HaveOccurred())
+		LogWithTimestamp(test.T(), "Deleted RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
+	})
+
+	test.T().Run("Successful RayJob in K8s Job mode with auth token", func(_ *testing.T) {
+		rayJobAC := rayv1ac.RayJob("counter-auth", namespace.Name).
+			WithSpec(rayv1ac.RayJobSpec().
+				WithSubmissionMode(rayv1.K8sJobMode).
+				WithEntrypoint("python /home/ray/jobs/counter.py").
+				WithRuntimeEnvYAML(`
+env_vars:
+  counter_name: test_counter
+`).
+				WithShutdownAfterJobFinishes(true).
+				WithSubmitterPodTemplate(JobSubmitterPodTemplateApplyConfiguration()).
+				WithRayClusterSpec(NewRayClusterSpec(
+					MountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](jobs, "/home/ray/jobs")).
+					WithAuthOptions(rayv1ac.AuthOptions().WithMode(rayv1.AuthModeToken))))
+
+		rayJob, err := test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
+		g.Expect(err).NotTo(HaveOccurred())
+		LogWithTimestamp(test.T(), "Created RayJob %s/%s successfully with auth token", rayJob.Namespace, rayJob.Name)
+
+		// Wait for RayCluster name to be populated
+		LogWithTimestamp(test.T(), "Waiting for RayCluster to be created")
+		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
+			Should(WithTransform(RayJobClusterName, Not(BeEmpty())))
+
+		// Get RayCluster name
+		rayJob, err = GetRayJob(test, rayJob.Namespace, rayJob.Name)
+		g.Expect(err).NotTo(HaveOccurred())
+		rayClusterName := rayJob.Status.RayClusterName
+
+		// Wait for RayCluster to become ready
+		LogWithTimestamp(test.T(), "Waiting for RayCluster %s/%s to become ready", namespace.Name, rayClusterName)
+		g.Eventually(RayCluster(test, namespace.Name, rayClusterName), TestTimeoutMedium).
+			Should(WithTransform(RayClusterState, Equal(rayv1.Ready)))
+
+		// Get RayCluster and verify auth token environment variables
+		rayCluster, err := GetRayCluster(test, namespace.Name, rayClusterName)
+		g.Expect(err).NotTo(HaveOccurred())
+
+		headPod, err := GetHeadPod(test, rayCluster)
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(headPod).NotTo(BeNil())
+
+		// Verify Ray container has auth token env vars
+		VerifyContainerAuthTokenEnvVars(test, rayCluster, &headPod.Spec.Containers[utils.RayContainerIndex])
+
+		// Verify worker pods have auth token env vars
+		workerPods, err := GetWorkerPods(test, rayCluster)
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(workerPods).ToNot(BeEmpty())
+		for _, workerPod := range workerPods {
+			VerifyContainerAuthTokenEnvVars(test, rayCluster, &workerPod.Spec.Containers[utils.RayContainerIndex])
+		}
+
+		// Wait for submitter Job to be created
+		LogWithTimestamp(test.T(), "Waiting for submitter Job to be created")
+		g.Eventually(func(g Gomega) {
+			Job(test, namespace.Name, rayJob.Name)(g)
+		}, TestTimeoutShort).Should(Succeed())
+
+		// Wait for submitter Job pod to be created and running
+		LogWithTimestamp(test.T(), "Waiting for submitter Job pod to be created")
+		g.Eventually(Pods(test, namespace.Name, LabelSelector("job-name="+rayJob.Name)), TestTimeoutShort).
+			ShouldNot(BeEmpty())
+
+		submitterPods := Pods(test, namespace.Name, LabelSelector("job-name="+rayJob.Name))(g)
+		submitterPod := &submitterPods[0]
+
+		// Verify submitter Job pod has auth token env vars in its Ray container
+		VerifyContainerAuthTokenEnvVars(test, rayCluster, &submitterPod.Spec.Containers[utils.RayContainerIndex])
+
+		LogWithTimestamp(test.T(), "Waiting for RayJob %s/%s to complete", rayJob.Namespace, rayJob.Name)
+		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
+			Should(WithTransform(RayJobStatus, Satisfy(rayv1.IsJobTerminal)))
+
+		// Assert the RayJob has completed successfully
+		g.Expect(GetRayJob(test, rayJob.Namespace, rayJob.Name)).
+			To(WithTransform(RayJobStatus, Equal(rayv1.JobStatusSucceeded)))
+
+		// And the RayJob deployment status is updated accordingly
+		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name)).
+			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusComplete)))
+
+		LogWithTimestamp(test.T(), "RayJob %s/%s completed successfully with auth token", rayJob.Namespace, rayJob.Name)
 	})
 }

@@ -1,6 +1,8 @@
 package common
 
 import (
+	"maps"
+
 	routev1 "github.com/openshift/api/route/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -22,9 +24,7 @@ func BuildRouteForHeadService(cluster rayv1.RayCluster) (*routev1.Route, error) 
 	// Copy other configurations from cluster annotations to provide a generic way
 	// for user to customize their route settings.
 	annotation := map[string]string{}
-	for key, value := range cluster.Annotations {
-		annotation[key] = value
-	}
+	maps.Copy(annotation, cluster.Annotations)
 
 	servicePorts := getServicePorts(cluster)
 	dashboardPort := utils.DefaultDashboardPort

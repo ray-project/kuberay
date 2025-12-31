@@ -5,8 +5,9 @@ package v1
 // DeletionStrategyApplyConfiguration represents a declarative configuration of the DeletionStrategy type for use
 // with apply.
 type DeletionStrategyApplyConfiguration struct {
-	OnSuccess *DeletionPolicyApplyConfiguration `json:"onSuccess,omitempty"`
-	OnFailure *DeletionPolicyApplyConfiguration `json:"onFailure,omitempty"`
+	OnSuccess     *DeletionPolicyApplyConfiguration `json:"onSuccess,omitempty"`
+	OnFailure     *DeletionPolicyApplyConfiguration `json:"onFailure,omitempty"`
+	DeletionRules []DeletionRuleApplyConfiguration  `json:"deletionRules,omitempty"`
 }
 
 // DeletionStrategyApplyConfiguration constructs a declarative configuration of the DeletionStrategy type for use with
@@ -28,5 +29,18 @@ func (b *DeletionStrategyApplyConfiguration) WithOnSuccess(value *DeletionPolicy
 // If called multiple times, the OnFailure field is set to the value of the last call.
 func (b *DeletionStrategyApplyConfiguration) WithOnFailure(value *DeletionPolicyApplyConfiguration) *DeletionStrategyApplyConfiguration {
 	b.OnFailure = value
+	return b
+}
+
+// WithDeletionRules adds the given value to the DeletionRules field in the declarative configuration
+// and returns the receiver, so that objects can be build by chaining "With" function invocations.
+// If called multiple times, values provided by each call will be appended to the DeletionRules field.
+func (b *DeletionStrategyApplyConfiguration) WithDeletionRules(values ...*DeletionRuleApplyConfiguration) *DeletionStrategyApplyConfiguration {
+	for i := range values {
+		if values[i] == nil {
+			panic("nil value passed to WithDeletionRules")
+		}
+		b.DeletionRules = append(b.DeletionRules, *values[i])
+	}
 	return b
 }

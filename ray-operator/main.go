@@ -27,6 +27,7 @@ import (
 	k8szap "sigs.k8s.io/controller-runtime/pkg/log/zap"
 	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
+	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	configapi "github.com/ray-project/kuberay/ray-operator/apis/config/v1alpha1"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
@@ -191,6 +192,10 @@ func main() {
 	}
 	features.LogFeatureGates(setupLog)
 
+	if features.Enabled(features.RayServiceIncrementalUpgrade) {
+		utilruntime.Must(gwv1.AddToScheme(scheme))
+	}
+
 	// Manager options
 	options := ctrl.Options{
 		Cache: cache.Options{
@@ -267,6 +272,7 @@ func main() {
 		IsOpenShift:              utils.GetClusterType(),
 		RayClusterMetricsManager: rayClusterMetricsManager,
 		BatchSchedulerManager:    batchSchedulerManager,
+		DefaultContainerEnvs:     config.DefaultContainerEnvs,
 	}
 	exitOnError(ray.NewReconciler(ctx, mgr, rayClusterOptions).SetupWithManager(mgr, config.ReconcileConcurrency),
 		"unable to create controller", "controller", "RayCluster")
@@ -275,7 +281,8 @@ func main() {
 		"unable to create controller", "controller", "RayService")
 
 	rayJobOptions := ray.RayJobReconcilerOptions{
-		RayJobMetricsManager: rayJobMetricsManager,
+		RayJobMetricsManager:  rayJobMetricsManager,
+		BatchSchedulerManager: batchSchedulerManager,
 	}
 	exitOnError(ray.NewRayJobReconciler(ctx, mgr, rayJobOptions, config).SetupWithManager(mgr, config.ReconcileConcurrency),
 		"unable to create controller", "controller", "RayJob")
@@ -283,6 +290,14 @@ func main() {
 	if os.Getenv("ENABLE_WEBHOOKS") == "true" {
 		exitOnError(webhooks.SetupRayClusterWebhookWithManager(mgr),
 			"unable to create webhook", "webhook", "RayCluster")
+	}
+
+	if features.Enabled(features.RayCronJob) {
+		setupLog.Info("RayCronJob feature gate is enabled, starting RayCronJob controller")
+		exitOnError(ray.NewRayCronJobReconciler(mgr).SetupWithManager(mgr, config.ReconcileConcurrency),
+			"unable to create controller", "controller", "RayCronJob")
+	} else {
+		setupLog.Info("RayCronJob feature gate is disabled, skipping RayCronJob controller setup")
 	}
 	// +kubebuilder:scaffold:builder
 
@@ -305,7 +320,7 @@ func cacheSelectors() (map[client.Object]cache.ByObject, error) {
 	}, nil
 }
 
-func exitOnError(err error, msg string, keysAndValues ...interface{}) {
+func exitOnError(err error, msg string, keysAndValues ...any) {
 	if err != nil {
 		setupLog.Error(err, msg, keysAndValues...)
 		os.Exit(1)

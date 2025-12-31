@@ -155,11 +155,18 @@ spec:
         {{- with .Values.head.restartPolicy }}
         restartPolicy: {{ . }}
         {{- end }}
+        {{- with .Values.head.runtimeClassName }}
+        runtimeClassName: {{ . }}
+        {{- end }}
         {{- with .Values.head.serviceAccountName }}
         serviceAccountName: {{ . }}
         {{- end }}
         {{- with .Values.head.podSecurityContext }}
         securityContext:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        {{- with .Values.head.resourceClaims }}
+        resourceClaims:
           {{- toYaml . | nindent 10 }}
         {{- end }}
   workerGroupSpecs:
@@ -281,11 +288,18 @@ spec:
         {{- with .Values.worker.restartPolicy }}
         restartPolicy: {{ . }}
         {{- end }}
+        {{- with .Values.worker.runtimeClassName }}
+        runtimeClassName: {{ . }}
+        {{- end }}
         {{- with .Values.worker.serviceAccountName }}
         serviceAccountName: {{ . }}
         {{- end }}
         {{- with .Values.worker.podSecurityContext }}
         securityContext:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        {{- with .Values.worker.resourceClaims }}
+        resourceClaims:
           {{- toYaml . | nindent 10 }}
         {{- end }}
   {{- end }}
@@ -408,11 +422,18 @@ spec:
         {{- with $values.restartPolicy }}
         restartPolicy: {{ . }}
         {{- end }}
+        {{- with $values.runtimeClassName }}
+        runtimeClassName: {{ . }}
+        {{- end }}
         {{- with $values.serviceAccountName }}
         serviceAccountName: {{ . }}
         {{- end }}
         {{- with $values.podSecurityContext }}
         securityContext:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        {{- with $values.resourceClaims }}
+        resourceClaims:
           {{- toYaml . | nindent 10 }}
         {{- end }}
   {{- end }}

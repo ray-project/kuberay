@@ -3,7 +3,7 @@ kind: RayCluster
 metadata:
   name: raycluster-py-spy
 spec:
-  rayVersion: '2.46.0' # should match the Ray version in the image of the containers
+  rayVersion: '2.52.0' # should match the Ray version in the image of the containers
   # Ray head pod template
   headGroupSpec:
     rayStartParams: {}
@@ -12,13 +12,13 @@ spec:
       spec:
         containers:
         - name: ray-head
-          image: rayproject/ray:2.46.0
+          image: rayproject/ray:2.52.0
           resources:
             limits:
               cpu: 1
-              memory: 2Gi
+              memory: 4Gi
             requests:
-              cpu: 500m
+              cpu: 1
               memory: 2Gi
           # `py-spy` is a sampling profiler that requires `SYS_PTRACE` to read process memory effectively.
           # Once enabled, you can profile Ray worker processes through Ray Dashboard.

@@ -4,14 +4,17 @@ import (
 	"errors"
 	"strings"
 
+	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/format"
 	"github.com/onsi/gomega/types"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 )
 
 func RayJob(t Test, namespace, name string) func() (*rayv1.RayJob, error) {
@@ -89,7 +92,7 @@ type ConditionMatcher struct {
 	expected metav1.Condition
 }
 
-func (c *ConditionMatcher) Match(actual interface{}) (success bool, err error) {
+func (c *ConditionMatcher) Match(actual any) (success bool, err error) {
 	if actual == nil {
 		return false, errors.New("<actual> should be a metav1.Condition but it is nil")
 	}
@@ -104,12 +107,12 @@ func (c *ConditionMatcher) Match(actual interface{}) (success bool, err error) {
 	return a.Reason == c.expected.Reason && a.Status == c.expected.Status && messageMatch, nil
 }
 
-func (c *ConditionMatcher) FailureMessage(actual interface{}) (message string) {
+func (c *ConditionMatcher) FailureMessage(actual any) (message string) {
 	a := actual.(metav1.Condition)
 	return format.Message(a, "to equal", c.expected)
 }
 
-func (c *ConditionMatcher) NegatedFailureMessage(actual interface{}) (message string) {
+func (c *ConditionMatcher) NegatedFailureMessage(actual any) (message string) {
 	a := actual.(metav1.Condition)
 	return format.Message(a, "not to equal", c.expected)
 }
@@ -225,4 +228,63 @@ func GetRayClusterWorkerGroupReplicaSum(cluster *rayv1.RayCluster) int32 {
 		replicas += *workerGroup.Replicas
 	}
 	return replicas
+}
+
+func GetHTTPRoute(t Test, namespace, name string) (*gwv1.HTTPRoute, error) {
+	return t.Client().Gateway().GatewayV1().HTTPRoutes(namespace).Get(t.Ctx(), name, metav1.GetOptions{})
+}
+
+func HTTPRoute(t Test, namespace, name string) func() (*gwv1.HTTPRoute, error) {
+	return func() (*gwv1.HTTPRoute, error) {
+		return GetHTTPRoute(t, namespace, name)
+	}
+}
+
+func GetGateway(t Test, namespace, name string) (*gwv1.Gateway, error) {
+	return t.Client().Gateway().GatewayV1().Gateways(namespace).Get(t.Ctx(), name, metav1.GetOptions{})
+}
+
+func Gateway(t Test, namespace, name string) func() (*gwv1.Gateway, error) {
+	return func() (*gwv1.Gateway, error) {
+		return GetGateway(t, namespace, name)
+	}
+}
+
+// VerifyContainerAuthTokenEnvVars verifies that the specified container has the correct auth token environment variables.
+// This is a common helper function used across all auth-related E2E tests.
+func VerifyContainerAuthTokenEnvVars(t Test, rayCluster *rayv1.RayCluster, container *corev1.Container) {
+	t.T().Helper()
+	g := NewWithT(t.T())
+
+	// Verify RAY_AUTH_MODE environment variable
+	var rayAuthModeEnvVar *corev1.EnvVar
+	for _, envVar := range container.Env {
+		if envVar.Name == utils.RAY_AUTH_MODE_ENV_VAR {
+			rayAuthModeEnvVar = &envVar
+			break
+		}
+	}
+	g.Expect(rayAuthModeEnvVar).NotTo(BeNil(),
+		"RAY_AUTH_MODE environment variable should be set in container %s", container.Name)
+	g.Expect(rayAuthModeEnvVar.Value).To(Equal(string(rayv1.AuthModeToken)),
+		"RAY_AUTH_MODE should be %s in container %s", rayv1.AuthModeToken, container.Name)
+
+	// Verify RAY_AUTH_TOKEN environment variable
+	var rayAuthTokenEnvVar *corev1.EnvVar
+	for _, envVar := range container.Env {
+		if envVar.Name == utils.RAY_AUTH_TOKEN_ENV_VAR {
+			rayAuthTokenEnvVar = &envVar
+			break
+		}
+	}
+	g.Expect(rayAuthTokenEnvVar).NotTo(BeNil(),
+		"RAY_AUTH_TOKEN environment variable should be set for AuthModeToken in container %s", container.Name)
+	g.Expect(rayAuthTokenEnvVar.ValueFrom).NotTo(BeNil(),
+		"RAY_AUTH_TOKEN should be populated from a secret in container %s", container.Name)
+	g.Expect(rayAuthTokenEnvVar.ValueFrom.SecretKeyRef).NotTo(BeNil(),
+		"RAY_AUTH_TOKEN should be populated from a secret key ref in container %s", container.Name)
+	g.Expect(rayAuthTokenEnvVar.ValueFrom.SecretKeyRef.Name).To(ContainSubstring(rayCluster.Name),
+		"Secret name should contain RayCluster name in container %s", container.Name)
+	g.Expect(rayAuthTokenEnvVar.ValueFrom.SecretKeyRef.Key).To(Equal(utils.RAY_AUTH_TOKEN_SECRET_KEY),
+		"Secret key should be %s in container %s", utils.RAY_AUTH_TOKEN_SECRET_KEY, container.Name)
 }

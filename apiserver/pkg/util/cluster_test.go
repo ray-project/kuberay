@@ -270,6 +270,7 @@ var templateWorker = api.ComputeTemplate{
 			Effect:   "NoExecute",
 		},
 	},
+	MemoryUnit: "Gi",
 }
 
 var expectedToleration = corev1.Toleration{
@@ -608,8 +609,8 @@ func TestNewComputeTemplate(t *testing.T) {
 		t.Errorf("failed to build compute template: %v", err)
 	}
 
-	assert.Equal(t, "", configMap.Data["name"])
-	assert.Equal(t, "", configMap.Data["namespace"])
+	assert.Empty(t, configMap.Data["name"])
+	assert.Empty(t, configMap.Data["namespace"])
 	assert.Equal(t, "2", configMap.Data["cpu"])
 	assert.Equal(t, "8", configMap.Data["memory"])
 	assert.Equal(t, "4", configMap.Data["gpu"])

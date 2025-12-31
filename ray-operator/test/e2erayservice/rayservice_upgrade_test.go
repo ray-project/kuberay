@@ -54,11 +54,11 @@ func TestOldHeadPodFailDuringUpgrade(t *testing.T) {
 
 	svcName := utils.GenerateServeServiceName(rayService.Name)
 	LogWithTimestamp(test.T(), "Checking that the K8s serve service %s has exactly one endpoint because the cluster only has a head Pod", svcName)
-	endpoints, err := test.Client().Core().CoreV1().Endpoints(namespace.Name).Get(test.Ctx(), svcName, metav1.GetOptions{})
+	readyEndpoints, err := GetReadyEndpointsFromSlices(test.Ctx(), test.Client(), namespace.Name, svcName)
 	g.Expect(err).NotTo(HaveOccurred())
-	g.Expect(endpoints.Subsets).To(HaveLen(1))
-	g.Expect(endpoints.Subsets[0].Addresses).To(HaveLen(1))
-	headPodName := endpoints.Subsets[0].Addresses[0].TargetRef.Name
+	g.Expect(readyEndpoints).To(HaveLen(1))
+	headPodName := readyEndpoints[0].TargetRefName
+	headPodUID := readyEndpoints[0].TargetRefUID
 
 	LogWithTimestamp(test.T(), "Upgrading the RayService to trigger a zero downtime upgrade")
 	rayService, err = GetRayService(test, namespace.Name, rayService.Name)
@@ -78,8 +78,8 @@ func TestOldHeadPodFailDuringUpgrade(t *testing.T) {
 	g.Expect(err).NotTo(HaveOccurred())
 
 	LogWithTimestamp(test.T(), "Using iptables to make the ProxyActor(8000 port) fail to receive requests on the old head Pod")
-	headPodPatch := map[string]interface{}{
-		"spec": map[string]interface{}{
+	headPodPatch := map[string]any{
+		"spec": map[string]any{
 			"ephemeralContainers": []corev1.EphemeralContainer{
 				{
 					EphemeralContainerCommon: corev1.EphemeralContainerCommon{
@@ -118,11 +118,11 @@ func TestOldHeadPodFailDuringUpgrade(t *testing.T) {
 
 	LogWithTimestamp(test.T(), "Checking that the K8s serve service eventually has 1 endpoint and the endpoint is not the old head Pod")
 	g.Eventually(func(g Gomega) {
-		endpoints, err = test.Client().Core().CoreV1().Endpoints(namespace.Name).Get(test.Ctx(), svcName, metav1.GetOptions{})
+		readyEndpoints, err := GetReadyEndpointsFromSlices(test.Ctx(), test.Client(), namespace.Name, svcName)
 		g.Expect(err).NotTo(HaveOccurred())
-		g.Expect(endpoints.Subsets).To(HaveLen(1))
-		g.Expect(endpoints.Subsets[0].Addresses).To(HaveLen(1))
-		g.Expect(endpoints.Subsets[0].Addresses[0].TargetRef.Name).NotTo(Equal(headPodName))
+		g.Expect(readyEndpoints).To(HaveLen(1))
+		g.Expect(readyEndpoints[0].TargetRefName).NotTo(Equal(headPodName))
+		g.Expect(readyEndpoints[0].TargetRefUID).NotTo(Equal(headPodUID))
 	}, TestTimeoutMedium).Should(Succeed())
 
 	LogWithTimestamp(test.T(), "Waiting for RayService %s/%s UpgradeInProgress condition to be false", rayService.Namespace, rayService.Name)

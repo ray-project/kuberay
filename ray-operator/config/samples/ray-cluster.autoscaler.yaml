@@ -4,7 +4,7 @@ metadata:
   name: raycluster-autoscaler
 spec:
   # The version of Ray you are using. Make sure all Ray containers are running this version of Ray.
-  rayVersion: '2.46.0'
+  rayVersion: '2.52.0'
   # If `enableInTreeAutoscaling` is true, the Autoscaler sidecar will be added to the Ray head pod.
   # Ray Autoscaler integration is Beta with KubeRay >= 0.3.0 and Ray >= 2.0.0.
   enableInTreeAutoscaling: true
@@ -30,6 +30,9 @@ spec:
     # and decides whether to request scaling the cluster up or down. The default value is 5 seconds.
     # - name: AUTOSCALER_UPDATE_INTERVAL_S
     #   value: "5"
+    # RAY_LOGGER_LEVEL is used to control ray and autoscaler logging verbosity (info|debug|warning|error|critical). The default value is "info".
+    # - name: RAY_LOGGER_LEVEL
+    #   value: "debug"
     envFrom: []
     # resources specifies optional resource request and limit overrides for the Autoscaler container.
     # The default Autoscaler resource limits and requests should be sufficient for production use-cases.
@@ -59,7 +62,7 @@ spec:
         containers:
         # The Ray head container
         - name: ray-head
-          image: rayproject/ray:2.46.0
+          image: rayproject/ray:2.52.0
           ports:
           - containerPort: 6379
             name: gcs
@@ -69,11 +72,11 @@ spec:
             name: client
           resources:
             limits:
-              cpu: "1"
-              memory: "2G"
+              cpu: 1
+              memory: 4Gi
             requests:
-              cpu: "1"
-              memory: "2G"
+              cpu: 1
+              memory: 2Gi
           volumeMounts:
           - mountPath: /home/ray/samples
             name: ray-example-configmap
@@ -108,14 +111,14 @@ spec:
       spec:
         containers:
         - name: ray-worker
-          image: rayproject/ray:2.46.0
+          image: rayproject/ray:2.52.0
           resources:
             limits:
-              cpu: "1"
-              memory: "1G"
+              cpu: 1
+              memory: 1Gi
             requests:
-              cpu: "1"
-              memory: "1G"
+              cpu: 1
+              memory: 1Gi
 ---
 apiVersion: v1
 kind: ConfigMap

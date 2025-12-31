@@ -8,7 +8,7 @@ This section walks through how to build and test the operator in a running Kuber
 | software | version  |                                                                link |
 |:---------|:--------:|--------------------------------------------------------------------:|
 | kubectl  | v1.23.0+ | [download](https://kubernetes.io/docs/tasks/tools/install-kubectl/) |
-| go       |  v1.24   |                                  [download](https://golang.org/dl/) |
+| go       |  v1.25   |                                  [download](https://golang.org/dl/) |
 | docker   |  19.03+  |                        [download](https://docs.docker.com/install/) |
 
 Alternatively, you can use podman (version 4.5+) instead of docker. See [podman.io](https://podman.io/getting-started/installation) for installation instructions. The Makefile allows you to specify the container engine to use via the `ENGINE` variable. For example, to use podman, you can run `ENGINE=podman make docker-build`.
@@ -19,14 +19,14 @@ The instructions assume you have access to a running Kubernetes cluster via `kub
 
 For local development, we recommend using [Kind](https://kind.sigs.k8s.io/) to create a Kubernetes cluster.
 
-### Use go v1.24
+### Use go v1.25
 
-Currently, KubeRay uses go v1.24 for development.
+Currently, KubeRay uses go v1.25 for development.
 
 ```bash
-go install golang.org/dl/go1.24.0@latest
-go1.24.0 download
-export GOROOT=$(go1.24.0 env GOROOT)
+go install golang.org/dl/go1.25.0@latest
+go1.25.0 download
+export GOROOT=$(go1.25.0 env GOROOT)
 export PATH="$GOROOT/bin:$PATH"
 ```
 
@@ -62,7 +62,7 @@ make clean
 
 ```bash
 # Step 1: Create a Kind cluster
-kind create cluster --image=kindest/node:v1.24.0
+kind create cluster --image=kindest/node:v1.26.0
 
 # Step 2: Modify KubeRay source code
 # For example, add a log by adding setupLog.Info("Hello KubeRay") in the function `main` in `main.go`.
@@ -106,7 +106,7 @@ There are configuable variables in the script, the defaults are shown below:
 ```bash
 IMAGE_TAG="kuberay-dev"
 KIND_CLUSTER_NAME="kuberay-dev"
-KIND_NODE_IMAGE="kindest/node:v1.24.0"
+KIND_NODE_IMAGE="kindest/node:v1.26.0"
 ```
 
 Additionally, you can run the script with a `-l` or `--logs` to stream the logs of the ray operator to the terminal after installation.
@@ -124,7 +124,7 @@ cd ..
 
 ```bash
 # Step 1: Create a Kind cluster
-kind create cluster --image=kindest/node:v1.25.0
+kind create cluster --image=kindest/node:v1.26.0
 
 # Step 2: Install CRDs
 make -C ray-operator install
@@ -243,7 +243,7 @@ See [main development documentation][main-dev-doc].
 
 ### Helm chart linter
 
-We have [chart lint tests](https://github.com/ray-project/kuberay/blob/master/.github/workflows/helm-lint.yaml) with Helm v3.4.1 and Helm v3.9.4 on GitHub Actions. We also provide a script to execute the lint tests on your laptop. If you cannot reproduce the errors on GitHub Actions, the possible reason is the different version of Helm. Issue [#537](https://github.com/ray-project/kuberay/issues/537) is an example that some errors only happen in old helm versions.
+We have [chart lint tests](https://github.com/ray-project/kuberay/blob/master/.github/workflows/helm.yaml) with Helm v3.4.1 and Helm v3.9.4 on GitHub Actions. We also provide a script to execute the lint tests on your laptop. If you cannot reproduce the errors on GitHub Actions, the possible reason is the different version of Helm. Issue [#537](https://github.com/ray-project/kuberay/issues/537) is an example that some errors only happen in old helm versions.
 
 Run tests with docker
 

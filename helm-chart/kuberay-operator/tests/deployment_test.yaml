@@ -268,6 +268,22 @@ tests:
               operator: Exists
               effect: NoSchedule
 
+  - it: Should add priorityClassName if `priorityClassName` is set
+    set:
+      priorityClassName: high-priority
+    asserts:
+      - equal:
+          path: spec.template.spec.priorityClassName
+          value: high-priority
+
+  - it: Should set replicas when `replicas` is set
+    set:
+      replicas: 3
+    asserts:
+      - equal:
+          path: spec.replicas
+          value: 3
+
   - it: Should use custom reconcile concurrency when set
     set:
       reconcileConcurrency: 5
@@ -288,3 +304,46 @@ tests:
     - contains:
         path: spec.template.spec.containers[?(@.name=="kuberay-operator")].args
         content: "--burst=150"
+
+  - it: Should add config volume and volumeMount when configuration is enabled
+    set:
+      configuration:
+        enabled: true
+        defaultContainerEnvs:
+          - name: RAY_enable_open_telemetry
+            value: "true"
+          - name: RAY_metric_cardinality_level
+            value: "recommended"
+    asserts:
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: operator-config
+            configMap:
+              name: kuberay-operator-config
+      - contains:
+          path: spec.template.spec.containers[?(@.name=="kuberay-operator")].volumeMounts
+          content:
+            name: operator-config
+            mountPath: /etc/kuberay
+            readOnly: true
+
+  - it: Should add --config arg when configuration is enabled
+    set:
+      configuration:
+        enabled: true
+        defaultContainerEnvs:
+          - name: RAY_enable_open_telemetry
+            value: "true"
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[?(@.name=="kuberay-operator")].args
+          content: "--config"
+      - contains:
+          path: spec.template.spec.containers[?(@.name=="kuberay-operator")].args
+          content: "/etc/kuberay/config.yaml"
+
+  - it: Should not add config volume when configuration is not enabled
+    asserts:
+      - notExists:
+          path: spec.template.spec.volumes[?(@.name=="operator-config")]

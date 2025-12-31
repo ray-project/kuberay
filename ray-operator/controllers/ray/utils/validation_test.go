@@ -683,6 +683,233 @@ func TestValidateRayClusterSpecAutoscaler(t *testing.T) {
 	}
 }
 
+func TestValidateRayClusterSpec_Resources(t *testing.T) {
+	// Util function to create a RayCluster spec.
+	createSpec := func() rayv1.RayClusterSpec {
+		return rayv1.RayClusterSpec{
+			HeadGroupSpec: rayv1.HeadGroupSpec{
+				Template: podTemplateSpec(nil, nil),
+			},
+			WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+				{
+					GroupName: "worker-group",
+					Template:  podTemplateSpec(nil, nil),
+				},
+			},
+		}
+	}
+
+	tests := []struct {
+		name         string
+		errorMessage string
+		spec         rayv1.RayClusterSpec
+		expectError  bool
+	}{
+		{
+			name: "Invalid: Head group has resources in both rayStartParams and top-level Resources",
+			spec: func() rayv1.RayClusterSpec {
+				s := createSpec()
+				s.HeadGroupSpec.RayStartParams = map[string]string{"num-cpus": "1"}
+				s.HeadGroupSpec.Resources = map[string]string{"CPU": "1"}
+				return s
+			}(),
+			expectError:  true,
+			errorMessage: "resource fields should not be set in both rayStartParams and Resources for Head group; please use only one",
+		},
+		{
+			name: "Invalid: Worker group has resources in both rayStartParams and .Resources",
+			spec: func() rayv1.RayClusterSpec {
+				s := createSpec()
+				s.WorkerGroupSpecs[0].RayStartParams = map[string]string{"num-gpus": "1"}
+				s.WorkerGroupSpecs[0].Resources = map[string]string{"GPU": "1"}
+				return s
+			}(),
+			expectError:  true,
+			errorMessage: "resource fields should not be set in both rayStartParams and Resources for worker-group group; please use only one",
+		},
+		{
+			name: "Valid: Only rayStartParams resources are set for head",
+			spec: func() rayv1.RayClusterSpec {
+				s := createSpec()
+				s.HeadGroupSpec.RayStartParams = map[string]string{
+					"num-cpus":  "2",
+					"memory":    "4G",
+					"resources": "{\"TPU\": \"8\"}",
+				}
+				return s
+			}(),
+			expectError: false,
+		},
+		{
+			name: "Valid: Only .Resources field is set for worker",
+			spec: func() rayv1.RayClusterSpec {
+				s := createSpec()
+				s.WorkerGroupSpecs[0].Resources = map[string]string{"CPU": "2", "memory": "4G", "TPU": "8"}
+				return s
+			}(),
+			expectError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateRayClusterSpec(&tt.spec, nil)
+			if tt.expectError {
+				require.Error(t, err)
+				assert.EqualError(t, err, tt.errorMessage)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestValidateRayClusterSpec_Labels(t *testing.T) {
+	// Util function to create a RayCluster spec.
+	createSpec := func() rayv1.RayClusterSpec {
+		return rayv1.RayClusterSpec{
+			HeadGroupSpec: rayv1.HeadGroupSpec{
+				Template: podTemplateSpec(nil, nil),
+			},
+			WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+				{
+					GroupName: "worker-group",
+					Template:  podTemplateSpec(nil, nil),
+				},
+			},
+		}
+	}
+
+	tests := []struct {
+		name         string
+		errorMessage string
+		spec         rayv1.RayClusterSpec
+		expectError  bool
+	}{
+		{
+			name: "Invalid: Head group has 'labels' in rayStartParams",
+			spec: func() rayv1.RayClusterSpec {
+				s := createSpec()
+				s.HeadGroupSpec.RayStartParams = map[string]string{"labels": "ray.io/node-group=worker-group-1"}
+				return s
+			}(),
+			expectError:  true,
+			errorMessage: "rayStartParams['labels'] is not supported for Head group; please use the top-level Labels field instead",
+		},
+		{
+			name: "Invalid: Worker group has 'labels' in rayStartParams",
+			spec: func() rayv1.RayClusterSpec {
+				s := createSpec()
+				s.WorkerGroupSpecs[0].RayStartParams = map[string]string{"labels": "ray.io/node-group=worker-group-1"}
+				return s
+			}(),
+			expectError:  true,
+			errorMessage: "rayStartParams['labels'] is not supported for worker-group group; please use the top-level Labels field instead",
+		},
+		{
+			name: "Valid: Only .Labels field is set",
+			spec: func() rayv1.RayClusterSpec {
+				s := createSpec()
+				s.HeadGroupSpec.Labels = map[string]string{"ray.io/market-type": "on-demand"}
+				s.WorkerGroupSpecs[0].Labels = map[string]string{"ray.io/accelerator-type": "TPU-V6E"}
+				return s
+			}(),
+			expectError: false,
+		},
+		{
+			name: "Invalid: Label key does not follow Kubernetes syntax",
+			spec: func() rayv1.RayClusterSpec {
+				s := createSpec()
+				s.WorkerGroupSpecs[0].Labels = map[string]string{"invalid_key!": "value"}
+				return s
+			}(),
+			expectError:  true,
+			errorMessage: "invalid label key for worker-group group: 'invalid_key!', error: name part must consist of alphanumeric characters, '-', '_' or '.', and must start and end with an alphanumeric character",
+		},
+		{
+			name: "Invalid: Label value does not follow Kubernetes syntax",
+			spec: func() rayv1.RayClusterSpec {
+				s := createSpec()
+				s.HeadGroupSpec.Labels = map[string]string{"valid-key": "invalid/value"}
+				return s
+			}(),
+			expectError:  true,
+			errorMessage: "invalid label value for key 'valid-key' in Head group: 'invalid/value', error: a valid label must be an empty string or consist of alphanumeric characters, '-', '_' or '.', and must start and end with an alphanumeric character",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateRayClusterSpec(&tt.spec, nil)
+			if tt.expectError {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errorMessage)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestValidateRayClusterSpecRayVersionForAuth(t *testing.T) {
+	tests := []struct {
+		name         string
+		rayVersion   string
+		errorMessage string
+		expectError  bool
+	}{
+		{
+			name:        "Valid Ray version 2.52.0",
+			rayVersion:  "2.52.0",
+			expectError: false,
+		},
+		{
+			name:        "Valid Ray version 3.0.0",
+			rayVersion:  "3.0.0",
+			expectError: false,
+		},
+		{
+			name:         "Invalid Ray version 2.50.0",
+			rayVersion:   "2.50.0",
+			expectError:  true,
+			errorMessage: "authOptions.mode is 'token' but minimum Ray version is 2.52.0, got 2.50.0",
+		},
+		{
+			name:         "Invalid Ray version format",
+			rayVersion:   "invalid-version",
+			expectError:  true,
+			errorMessage: "authOptions.mode is 'token' but RayVersion format is invalid: invalid-version, could not parse \"invalid-version\" as version",
+		},
+		{
+			name:         "Empty Ray version",
+			rayVersion:   "",
+			expectError:  true,
+			errorMessage: "authOptions.mode is 'token' but RayVersion was not specified. Ray version 2.52.0 or later is required",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			spec := &rayv1.RayClusterSpec{
+				RayVersion: tt.rayVersion,
+				HeadGroupSpec: rayv1.HeadGroupSpec{
+					Template: podTemplateSpec(nil, nil),
+				},
+				AuthOptions: &rayv1.AuthOptions{
+					Mode: rayv1.AuthModeToken,
+				},
+			}
+			err := ValidateRayClusterSpec(spec, nil)
+			if tt.expectError {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errorMessage)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
 func TestValidateRayJobStatus(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -795,10 +1022,10 @@ func TestValidateRayJobSpec(t *testing.T) {
 			name: "RayJobDeletionPolicy feature gate must be enabled to use the DeletionStrategy feature",
 			spec: rayv1.RayJobSpec{
 				DeletionStrategy: &rayv1.DeletionStrategy{
-					OnSuccess: rayv1.DeletionPolicy{
+					OnSuccess: &rayv1.DeletionPolicy{
 						Policy: ptr.To(rayv1.DeleteCluster),
 					},
-					OnFailure: rayv1.DeletionPolicy{
+					OnFailure: &rayv1.DeletionPolicy{
 						Policy: ptr.To(rayv1.DeleteCluster),
 					},
 				},
@@ -901,6 +1128,35 @@ func TestValidateRayJobSpec(t *testing.T) {
 			},
 			expectError: true,
 		},
+		{
+			name: "SidecarMode doesn't support ClusterSelector",
+			spec: rayv1.RayJobSpec{
+				SubmissionMode:  rayv1.SidecarMode,
+				ClusterSelector: map[string]string{"ray.io/cluster": "ray-cluster"},
+			},
+			expectError: true,
+		},
+		{
+			name: "failed to get cluster name in ClusterSelector map",
+			spec: rayv1.RayJobSpec{
+				ClusterSelector: map[string]string{},
+			},
+			expectError: true,
+		},
+		{
+			name: "cluster name in ClusterSelector is empty",
+			spec: rayv1.RayJobSpec{
+				ClusterSelector: map[string]string{"ray.io/cluster": ""},
+			},
+			expectError: true,
+		},
+		{
+			name: "cluster name in ClusterSelector is not empty",
+			spec: rayv1.RayJobSpec{
+				ClusterSelector: map[string]string{"ray.io/cluster": "ray-cluster"},
+			},
+			expectError: false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -927,14 +1183,15 @@ func TestValidateRayJobSpecWithFeatureGate(t *testing.T) {
 		spec        rayv1.RayJobSpec
 		expectError bool
 	}{
+		// Legacy DeletionStrategy tests
 		{
 			name: "the ClusterSelector mode doesn't support DeletionStrategy=DeleteCluster",
 			spec: rayv1.RayJobSpec{
 				DeletionStrategy: &rayv1.DeletionStrategy{
-					OnSuccess: rayv1.DeletionPolicy{
+					OnSuccess: &rayv1.DeletionPolicy{
 						Policy: ptr.To(rayv1.DeleteCluster),
 					},
-					OnFailure: rayv1.DeletionPolicy{
+					OnFailure: &rayv1.DeletionPolicy{
 						Policy: ptr.To(rayv1.DeleteCluster),
 					},
 				}, ClusterSelector: map[string]string{"key": "value"},
@@ -945,10 +1202,10 @@ func TestValidateRayJobSpecWithFeatureGate(t *testing.T) {
 			name: "the ClusterSelector mode doesn't support DeletionStrategy=DeleteWorkers",
 			spec: rayv1.RayJobSpec{
 				DeletionStrategy: &rayv1.DeletionStrategy{
-					OnSuccess: rayv1.DeletionPolicy{
+					OnSuccess: &rayv1.DeletionPolicy{
 						Policy: ptr.To(rayv1.DeleteWorkers),
 					},
-					OnFailure: rayv1.DeletionPolicy{
+					OnFailure: &rayv1.DeletionPolicy{
 						Policy: ptr.To(rayv1.DeleteWorkers),
 					},
 				}, ClusterSelector: map[string]string{"key": "value"},
@@ -959,10 +1216,10 @@ func TestValidateRayJobSpecWithFeatureGate(t *testing.T) {
 			name: "DeletionStrategy=DeleteWorkers currently does not support RayCluster with autoscaling enabled",
 			spec: rayv1.RayJobSpec{
 				DeletionStrategy: &rayv1.DeletionStrategy{
-					OnSuccess: rayv1.DeletionPolicy{
+					OnSuccess: &rayv1.DeletionPolicy{
 						Policy: ptr.To(rayv1.DeleteWorkers),
 					},
-					OnFailure: rayv1.DeletionPolicy{
+					OnFailure: &rayv1.DeletionPolicy{
 						Policy: ptr.To(rayv1.DeleteWorkers),
 					},
 				}, RayClusterSpec: &rayv1.RayClusterSpec{
@@ -976,10 +1233,10 @@ func TestValidateRayJobSpecWithFeatureGate(t *testing.T) {
 			name: "valid RayJob with DeletionStrategy=DeleteCluster",
 			spec: rayv1.RayJobSpec{
 				DeletionStrategy: &rayv1.DeletionStrategy{
-					OnSuccess: rayv1.DeletionPolicy{
+					OnSuccess: &rayv1.DeletionPolicy{
 						Policy: ptr.To(rayv1.DeleteCluster),
 					},
-					OnFailure: rayv1.DeletionPolicy{
+					OnFailure: &rayv1.DeletionPolicy{
 						Policy: ptr.To(rayv1.DeleteCluster),
 					},
 				}, ShutdownAfterJobFinishes: true,
@@ -1000,10 +1257,10 @@ func TestValidateRayJobSpecWithFeatureGate(t *testing.T) {
 			name: "shutdownAfterJobFinshes is set to 'true' while deletion policy is 'DeleteNone'",
 			spec: rayv1.RayJobSpec{
 				DeletionStrategy: &rayv1.DeletionStrategy{
-					OnSuccess: rayv1.DeletionPolicy{
+					OnSuccess: &rayv1.DeletionPolicy{
 						Policy: ptr.To(rayv1.DeleteNone),
 					},
-					OnFailure: rayv1.DeletionPolicy{
+					OnFailure: &rayv1.DeletionPolicy{
 						Policy: ptr.To(rayv1.DeleteNone),
 					},
 				}, ShutdownAfterJobFinishes: true,
@@ -1015,7 +1272,7 @@ func TestValidateRayJobSpecWithFeatureGate(t *testing.T) {
 			name: "OnSuccess unset",
 			spec: rayv1.RayJobSpec{
 				DeletionStrategy: &rayv1.DeletionStrategy{
-					OnFailure: rayv1.DeletionPolicy{
+					OnFailure: &rayv1.DeletionPolicy{
 						Policy: ptr.To(rayv1.DeleteNone),
 					},
 				}, ShutdownAfterJobFinishes: true,
@@ -1027,7 +1284,7 @@ func TestValidateRayJobSpecWithFeatureGate(t *testing.T) {
 			name: "OnSuccess.DeletionPolicyType unset",
 			spec: rayv1.RayJobSpec{
 				DeletionStrategy: &rayv1.DeletionStrategy{
-					OnFailure: rayv1.DeletionPolicy{
+					OnFailure: &rayv1.DeletionPolicy{
 						Policy: ptr.To(rayv1.DeleteNone),
 					},
 				}, ShutdownAfterJobFinishes: true,
@@ -1039,7 +1296,7 @@ func TestValidateRayJobSpecWithFeatureGate(t *testing.T) {
 			name: "OnFailure unset",
 			spec: rayv1.RayJobSpec{
 				DeletionStrategy: &rayv1.DeletionStrategy{
-					OnSuccess: rayv1.DeletionPolicy{
+					OnSuccess: &rayv1.DeletionPolicy{
 						Policy: ptr.To(rayv1.DeleteNone),
 					},
 				}, ShutdownAfterJobFinishes: true,
@@ -1051,10 +1308,10 @@ func TestValidateRayJobSpecWithFeatureGate(t *testing.T) {
 			name: "OnFailure.DeletionPolicyType unset",
 			spec: rayv1.RayJobSpec{
 				DeletionStrategy: &rayv1.DeletionStrategy{
-					OnSuccess: rayv1.DeletionPolicy{
+					OnSuccess: &rayv1.DeletionPolicy{
 						Policy: ptr.To(rayv1.DeleteNone),
 					},
-					OnFailure: rayv1.DeletionPolicy{},
+					OnFailure: &rayv1.DeletionPolicy{},
 				}, ShutdownAfterJobFinishes: true,
 				RayClusterSpec: createBasicRayClusterSpec(),
 			},
@@ -1066,6 +1323,408 @@ func TestValidateRayJobSpecWithFeatureGate(t *testing.T) {
 				RayClusterSpec: &rayv1.RayClusterSpec{
 					HeadGroupSpec: rayv1.HeadGroupSpec{},
 				},
+			},
+			expectError: true,
+		},
+		// New Deletion Rules tests
+		{
+			name: "valid deletionRules",
+			spec: rayv1.RayJobSpec{
+				DeletionStrategy: &rayv1.DeletionStrategy{
+					DeletionRules: []rayv1.DeletionRule{
+						{
+							Policy: rayv1.DeleteSelf,
+							Condition: rayv1.DeletionCondition{
+								JobStatus:  ptr.To(rayv1.JobStatusSucceeded),
+								TTLSeconds: 10,
+							},
+						},
+					},
+				},
+				RayClusterSpec: createBasicRayClusterSpec(),
+			},
+			expectError: false,
+		},
+		{
+			name: "deletionRules and ShutdownAfterJobFinishes both set",
+			spec: rayv1.RayJobSpec{
+				ShutdownAfterJobFinishes: true,
+				DeletionStrategy: &rayv1.DeletionStrategy{
+					DeletionRules: []rayv1.DeletionRule{
+						{
+							Policy: rayv1.DeleteSelf,
+							Condition: rayv1.DeletionCondition{
+								JobStatus:  ptr.To(rayv1.JobStatusSucceeded),
+								TTLSeconds: 10,
+							},
+						},
+					},
+				},
+				RayClusterSpec: createBasicRayClusterSpec(),
+			},
+			expectError: true,
+		},
+		{
+			name: "deletionRules and legacy onSuccess both set",
+			spec: rayv1.RayJobSpec{
+				DeletionStrategy: &rayv1.DeletionStrategy{
+					OnSuccess: &rayv1.DeletionPolicy{
+						Policy: ptr.To(rayv1.DeleteCluster),
+					},
+					DeletionRules: []rayv1.DeletionRule{
+						{
+							Policy: rayv1.DeleteSelf,
+							Condition: rayv1.DeletionCondition{
+								JobStatus:  ptr.To(rayv1.JobStatusSucceeded),
+								TTLSeconds: 10,
+							},
+						},
+					},
+				},
+				RayClusterSpec: createBasicRayClusterSpec(),
+			},
+			expectError: true,
+		},
+		{
+			name: "nil DeletionStrategy",
+			spec: rayv1.RayJobSpec{
+				DeletionStrategy: &rayv1.DeletionStrategy{},
+				RayClusterSpec:   createBasicRayClusterSpec(),
+			},
+			expectError: true,
+		},
+		{
+			name: "empty DeletionStrategy",
+			spec: rayv1.RayJobSpec{
+				DeletionStrategy: &rayv1.DeletionStrategy{
+					DeletionRules: []rayv1.DeletionRule{},
+				},
+				RayClusterSpec: createBasicRayClusterSpec(),
+			},
+			expectError: true,
+		},
+		{
+			name: "duplicate rule in deletionRules",
+			spec: rayv1.RayJobSpec{
+				DeletionStrategy: &rayv1.DeletionStrategy{
+					DeletionRules: []rayv1.DeletionRule{
+						{
+							Policy: rayv1.DeleteSelf,
+							Condition: rayv1.DeletionCondition{
+								JobStatus:  ptr.To(rayv1.JobStatusSucceeded),
+								TTLSeconds: 10,
+							},
+						},
+						{
+							Policy: rayv1.DeleteSelf,
+							Condition: rayv1.DeletionCondition{
+								JobStatus:  ptr.To(rayv1.JobStatusSucceeded),
+								TTLSeconds: 20,
+							},
+						},
+					},
+				},
+				RayClusterSpec: createBasicRayClusterSpec(),
+			},
+			expectError: true,
+		},
+		{
+			name: "negative TTLSeconds in deletionRules",
+			spec: rayv1.RayJobSpec{
+				DeletionStrategy: &rayv1.DeletionStrategy{
+					DeletionRules: []rayv1.DeletionRule{
+						{
+							Policy: rayv1.DeleteSelf,
+							Condition: rayv1.DeletionCondition{
+								JobStatus:  ptr.To(rayv1.JobStatusSucceeded),
+								TTLSeconds: -10,
+							},
+						},
+					},
+				},
+				RayClusterSpec: createBasicRayClusterSpec(),
+			},
+			expectError: true,
+		},
+		{
+			name: "deletionRules with ClusterSelector and DeleteWorkers policy",
+			spec: rayv1.RayJobSpec{
+				ClusterSelector: map[string]string{"key": "value"},
+				DeletionStrategy: &rayv1.DeletionStrategy{
+					DeletionRules: []rayv1.DeletionRule{
+						{
+							Policy: rayv1.DeleteWorkers,
+							Condition: rayv1.DeletionCondition{
+								JobStatus:  ptr.To(rayv1.JobStatusSucceeded),
+								TTLSeconds: 10,
+							},
+						},
+					},
+				},
+			},
+			expectError: true,
+		},
+		{
+			name: "deletionRules with ClusterSelector and DeleteCluster policy",
+			spec: rayv1.RayJobSpec{
+				ClusterSelector: map[string]string{"key": "value"},
+				DeletionStrategy: &rayv1.DeletionStrategy{
+					DeletionRules: []rayv1.DeletionRule{
+						{
+							Policy: rayv1.DeleteCluster,
+							Condition: rayv1.DeletionCondition{
+								JobStatus:  ptr.To(rayv1.JobStatusSucceeded),
+								TTLSeconds: 10,
+							},
+						},
+					},
+				},
+			},
+			expectError: true,
+		},
+		{
+			name: "deletionRules with autoscaling and DeleteWorkers policy",
+			spec: rayv1.RayJobSpec{
+				DeletionStrategy: &rayv1.DeletionStrategy{
+					DeletionRules: []rayv1.DeletionRule{
+						{
+							Policy: rayv1.DeleteWorkers,
+							Condition: rayv1.DeletionCondition{
+								JobStatus:  ptr.To(rayv1.JobStatusSucceeded),
+								TTLSeconds: 10,
+							},
+						},
+					},
+				},
+				RayClusterSpec: &rayv1.RayClusterSpec{
+					EnableInTreeAutoscaling: ptr.To(true),
+					HeadGroupSpec:           headGroupSpecWithOneContainer,
+				},
+			},
+			expectError: true,
+		},
+		{
+			name: "inconsistent TTLs in deletionRules (DeleteCluster < DeleteWorkers)",
+			spec: rayv1.RayJobSpec{
+				DeletionStrategy: &rayv1.DeletionStrategy{
+					DeletionRules: []rayv1.DeletionRule{
+						{
+							Policy: rayv1.DeleteWorkers,
+							Condition: rayv1.DeletionCondition{
+								JobStatus:  ptr.To(rayv1.JobStatusSucceeded),
+								TTLSeconds: 20,
+							},
+						},
+						{
+							Policy: rayv1.DeleteCluster,
+							Condition: rayv1.DeletionCondition{
+								JobStatus:  ptr.To(rayv1.JobStatusSucceeded),
+								TTLSeconds: 10,
+							},
+						},
+					},
+				},
+				RayClusterSpec: createBasicRayClusterSpec(),
+			},
+			expectError: true,
+		},
+		{
+			name: "inconsistent TTLs in deletionRules (DeleteSelf < DeleteCluster)",
+			spec: rayv1.RayJobSpec{
+				DeletionStrategy: &rayv1.DeletionStrategy{
+					DeletionRules: []rayv1.DeletionRule{
+						{
+							Policy: rayv1.DeleteCluster,
+							Condition: rayv1.DeletionCondition{
+								JobStatus:  ptr.To(rayv1.JobStatusSucceeded),
+								TTLSeconds: 20,
+							},
+						},
+						{
+							Policy: rayv1.DeleteSelf,
+							Condition: rayv1.DeletionCondition{
+								JobStatus:  ptr.To(rayv1.JobStatusSucceeded),
+								TTLSeconds: 10,
+							},
+						},
+					},
+				},
+				RayClusterSpec: createBasicRayClusterSpec(),
+			},
+			expectError: true,
+		},
+		{
+			name: "valid complex deletionRules",
+			spec: rayv1.RayJobSpec{
+				DeletionStrategy: &rayv1.DeletionStrategy{
+					DeletionRules: []rayv1.DeletionRule{
+						{
+							Policy: rayv1.DeleteWorkers,
+							Condition: rayv1.DeletionCondition{
+								JobStatus:  ptr.To(rayv1.JobStatusSucceeded),
+								TTLSeconds: 10,
+							},
+						},
+						{
+							Policy: rayv1.DeleteCluster,
+							Condition: rayv1.DeletionCondition{
+								JobStatus:  ptr.To(rayv1.JobStatusSucceeded),
+								TTLSeconds: 20,
+							},
+						},
+						{
+							Policy: rayv1.DeleteSelf,
+							Condition: rayv1.DeletionCondition{
+								JobStatus:  ptr.To(rayv1.JobStatusSucceeded),
+								TTLSeconds: 30,
+							},
+						},
+						{
+							Policy: rayv1.DeleteSelf,
+							Condition: rayv1.DeletionCondition{
+								JobStatus:  ptr.To(rayv1.JobStatusFailed),
+								TTLSeconds: 0,
+							},
+						},
+					},
+				},
+				RayClusterSpec: createBasicRayClusterSpec(),
+			},
+			expectError: false,
+		},
+		{
+			name: "valid deletionRules with JobDeploymentStatus=Failed",
+			spec: rayv1.RayJobSpec{
+				DeletionStrategy: &rayv1.DeletionStrategy{
+					DeletionRules: []rayv1.DeletionRule{
+						{
+							Policy: rayv1.DeleteCluster,
+							Condition: rayv1.DeletionCondition{
+								JobDeploymentStatus: ptr.To(rayv1.JobDeploymentStatusFailed),
+								TTLSeconds:          10,
+							},
+						},
+						{
+							Policy: rayv1.DeleteSelf,
+							Condition: rayv1.DeletionCondition{
+								JobDeploymentStatus: ptr.To(rayv1.JobDeploymentStatusFailed),
+								TTLSeconds:          20,
+							},
+						},
+					},
+				},
+				RayClusterSpec: createBasicRayClusterSpec(),
+			},
+			expectError: false,
+		},
+		{
+			name: "invalid: both JobStatus and JobDeploymentStatus set",
+			spec: rayv1.RayJobSpec{
+				DeletionStrategy: &rayv1.DeletionStrategy{
+					DeletionRules: []rayv1.DeletionRule{
+						{
+							Policy: rayv1.DeleteCluster,
+							Condition: rayv1.DeletionCondition{
+								JobStatus:           ptr.To(rayv1.JobStatusFailed),
+								JobDeploymentStatus: ptr.To(rayv1.JobDeploymentStatusFailed),
+								TTLSeconds:          10,
+							},
+						},
+					},
+				},
+				RayClusterSpec: createBasicRayClusterSpec(),
+			},
+			expectError: true,
+		},
+		{
+			name: "invalid: neither JobStatus nor JobDeploymentStatus set",
+			spec: rayv1.RayJobSpec{
+				DeletionStrategy: &rayv1.DeletionStrategy{
+					DeletionRules: []rayv1.DeletionRule{
+						{
+							Policy: rayv1.DeleteCluster,
+							Condition: rayv1.DeletionCondition{
+								TTLSeconds: 10,
+							},
+						},
+					},
+				},
+				RayClusterSpec: createBasicRayClusterSpec(),
+			},
+			expectError: true,
+		},
+		{
+			name: "duplicate rule with JobDeploymentStatus",
+			spec: rayv1.RayJobSpec{
+				DeletionStrategy: &rayv1.DeletionStrategy{
+					DeletionRules: []rayv1.DeletionRule{
+						{
+							Policy: rayv1.DeleteCluster,
+							Condition: rayv1.DeletionCondition{
+								JobDeploymentStatus: ptr.To(rayv1.JobDeploymentStatusFailed),
+								TTLSeconds:          10,
+							},
+						},
+						{
+							Policy: rayv1.DeleteCluster,
+							Condition: rayv1.DeletionCondition{
+								JobDeploymentStatus: ptr.To(rayv1.JobDeploymentStatusFailed),
+								TTLSeconds:          20,
+							},
+						},
+					},
+				},
+				RayClusterSpec: createBasicRayClusterSpec(),
+			},
+			expectError: true,
+		},
+		{
+			name: "valid: mixed JobStatus and JobDeploymentStatus rules",
+			spec: rayv1.RayJobSpec{
+				DeletionStrategy: &rayv1.DeletionStrategy{
+					DeletionRules: []rayv1.DeletionRule{
+						{
+							Policy: rayv1.DeleteWorkers,
+							Condition: rayv1.DeletionCondition{
+								JobStatus:  ptr.To(rayv1.JobStatusFailed),
+								TTLSeconds: 10,
+							},
+						},
+						{
+							Policy: rayv1.DeleteCluster,
+							Condition: rayv1.DeletionCondition{
+								JobDeploymentStatus: ptr.To(rayv1.JobDeploymentStatusFailed),
+								TTLSeconds:          20,
+							},
+						},
+					},
+				},
+				RayClusterSpec: createBasicRayClusterSpec(),
+			},
+			expectError: false,
+		},
+		{
+			name: "inconsistent TTLs with JobDeploymentStatus (DeleteCluster < DeleteWorkers)",
+			spec: rayv1.RayJobSpec{
+				DeletionStrategy: &rayv1.DeletionStrategy{
+					DeletionRules: []rayv1.DeletionRule{
+						{
+							Policy: rayv1.DeleteWorkers,
+							Condition: rayv1.DeletionCondition{
+								JobDeploymentStatus: ptr.To(rayv1.JobDeploymentStatusFailed),
+								TTLSeconds:          20,
+							},
+						},
+						{
+							Policy: rayv1.DeleteCluster,
+							Condition: rayv1.DeletionCondition{
+								JobDeploymentStatus: ptr.To(rayv1.JobDeploymentStatusFailed),
+								TTLSeconds:          10,
+							},
+						},
+					},
+				},
+				RayClusterSpec: createBasicRayClusterSpec(),
 			},
 			expectError: true,
 		},
@@ -1191,6 +1850,56 @@ func TestValidateRayServiceMetadata(t *testing.T) {
 		Name: strings.Repeat("j", MaxRayServiceNameLength),
 	})
 	require.NoError(t, err)
+
+	// Test valid initializing timeout annotations
+	err = ValidateRayServiceMetadata(metav1.ObjectMeta{
+		Name: "valid-service",
+		Annotations: map[string]string{
+			RayServiceInitializingTimeoutAnnotation: "5m",
+		},
+	})
+	require.NoError(t, err)
+
+	err = ValidateRayServiceMetadata(metav1.ObjectMeta{
+		Name: "valid-service",
+		Annotations: map[string]string{
+			RayServiceInitializingTimeoutAnnotation: "300",
+		},
+	})
+	require.NoError(t, err)
+
+	// Test invalid initializing timeout annotations
+	err = ValidateRayServiceMetadata(metav1.ObjectMeta{
+		Name: "invalid-service",
+		Annotations: map[string]string{
+			RayServiceInitializingTimeoutAnnotation: "0",
+		},
+	})
+	require.ErrorContains(t, err, "must be a positive")
+
+	err = ValidateRayServiceMetadata(metav1.ObjectMeta{
+		Name: "invalid-service",
+		Annotations: map[string]string{
+			RayServiceInitializingTimeoutAnnotation: "-100",
+		},
+	})
+	require.ErrorContains(t, err, "must be a positive")
+
+	err = ValidateRayServiceMetadata(metav1.ObjectMeta{
+		Name: "invalid-service",
+		Annotations: map[string]string{
+			RayServiceInitializingTimeoutAnnotation: "-5m",
+		},
+	})
+	require.ErrorContains(t, err, "must be a positive duration")
+
+	err = ValidateRayServiceMetadata(metav1.ObjectMeta{
+		Name: "invalid-service",
+		Annotations: map[string]string{
+			RayServiceInitializingTimeoutAnnotation: "invalid",
+		},
+	})
+	require.ErrorContains(t, err, "invalid format")
 }
 
 func createBasicRayClusterSpec() *rayv1.RayClusterSpec {
@@ -1198,5 +1907,471 @@ func createBasicRayClusterSpec() *rayv1.RayClusterSpec {
 		HeadGroupSpec: rayv1.HeadGroupSpec{
 			Template: podTemplateSpec(nil, nil),
 		},
+	}
+}
+
+func TestValidateClusterUpgradeOptions(t *testing.T) {
+	tests := []struct {
+		maxSurgePercent   *int32
+		stepSizePercent   *int32
+		intervalSeconds   *int32
+		name              string
+		gatewayClassName  string
+		spec              rayv1.RayServiceSpec
+		enableAutoscaling bool
+		expectError       bool
+	}{
+		{
+			name:              "valid config",
+			maxSurgePercent:   ptr.To(int32(50)),
+			stepSizePercent:   ptr.To(int32(50)),
+			intervalSeconds:   ptr.To(int32(10)),
+			gatewayClassName:  "istio",
+			enableAutoscaling: true,
+			expectError:       false,
+		},
+		{
+			name:              "missing autoscaler",
+			maxSurgePercent:   ptr.To(int32(50)),
+			stepSizePercent:   ptr.To(int32(50)),
+			intervalSeconds:   ptr.To(int32(10)),
+			gatewayClassName:  "istio",
+			enableAutoscaling: false,
+			expectError:       true,
+		},
+		{
+			name:              "missing options",
+			enableAutoscaling: true,
+			expectError:       true,
+		},
+		{
+			name:              "invalid MaxSurgePercent",
+			maxSurgePercent:   ptr.To(int32(200)),
+			stepSizePercent:   ptr.To(int32(50)),
+			intervalSeconds:   ptr.To(int32(10)),
+			gatewayClassName:  "istio",
+			enableAutoscaling: true,
+			expectError:       true,
+		},
+		{
+			name:              "missing StepSizePercent",
+			maxSurgePercent:   ptr.To(int32(50)),
+			intervalSeconds:   ptr.To(int32(10)),
+			gatewayClassName:  "istio",
+			enableAutoscaling: true,
+			expectError:       true,
+		},
+		{
+			name:              "invalid IntervalSeconds",
+			maxSurgePercent:   ptr.To(int32(50)),
+			stepSizePercent:   ptr.To(int32(50)),
+			intervalSeconds:   ptr.To(int32(0)),
+			gatewayClassName:  "istio",
+			enableAutoscaling: true,
+			expectError:       true,
+		},
+		{
+			name:              "missing GatewayClassName",
+			maxSurgePercent:   ptr.To(int32(50)),
+			stepSizePercent:   ptr.To(int32(50)),
+			intervalSeconds:   ptr.To(int32(10)),
+			enableAutoscaling: true,
+			expectError:       true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var upgradeStrategy *rayv1.RayServiceUpgradeStrategy
+			if tt.maxSurgePercent != nil || tt.stepSizePercent != nil || tt.intervalSeconds != nil || tt.gatewayClassName != "" {
+				upgradeStrategy = &rayv1.RayServiceUpgradeStrategy{
+					Type: ptr.To(rayv1.NewClusterWithIncrementalUpgrade),
+					ClusterUpgradeOptions: &rayv1.ClusterUpgradeOptions{
+						MaxSurgePercent:  tt.maxSurgePercent,
+						StepSizePercent:  tt.stepSizePercent,
+						IntervalSeconds:  tt.intervalSeconds,
+						GatewayClassName: tt.gatewayClassName,
+					},
+				}
+			} else if tt.expectError {
+				upgradeStrategy = &rayv1.RayServiceUpgradeStrategy{
+					Type: ptr.To(rayv1.NewClusterWithIncrementalUpgrade),
+				}
+			}
+
+			rayClusterSpec := *createBasicRayClusterSpec()
+			rayClusterSpec.EnableInTreeAutoscaling = ptr.To(tt.enableAutoscaling)
+
+			rayService := &rayv1.RayService{
+				Spec: rayv1.RayServiceSpec{
+					RayClusterSpec:  rayClusterSpec,
+					UpgradeStrategy: upgradeStrategy,
+				},
+			}
+
+			err := ValidateClusterUpgradeOptions(rayService)
+			if tt.expectError {
+				require.Error(t, err, tt.name)
+			} else {
+				require.NoError(t, err, tt.name)
+			}
+		})
+	}
+}
+
+func TestValidateRayClusterSpec_IdleTimeoutSeconds(t *testing.T) {
+	// Util function to create a RayCluster spec.
+	createSpec := func() rayv1.RayClusterSpec {
+		return rayv1.RayClusterSpec{
+			EnableInTreeAutoscaling: ptr.To(true),
+			HeadGroupSpec: rayv1.HeadGroupSpec{
+				Template: podTemplateSpec(nil, nil),
+			},
+		}
+	}
+
+	tests := map[string]struct {
+		expectedErr string
+		spec        rayv1.RayClusterSpec
+	}{
+		// Worker group tests
+		"Valid: Worker group with valid idleTimeoutSeconds and v2 spec field": {
+			spec: func() rayv1.RayClusterSpec {
+				s := createSpec()
+				s.AutoscalerOptions = &rayv1.AutoscalerOptions{
+					Version: ptr.To(rayv1.AutoscalerVersionV2),
+				}
+				s.WorkerGroupSpecs = []rayv1.WorkerGroupSpec{
+					{
+						GroupName:          "worker-group-1",
+						Template:           podTemplateSpec(nil, nil),
+						IdleTimeoutSeconds: ptr.To(int32(60)),
+						MinReplicas:        ptr.To(int32(0)),
+						MaxReplicas:        ptr.To(int32(10)),
+					},
+				}
+				return s
+			}(),
+			expectedErr: "",
+		},
+		"Valid: Worker group with idleTimeoutSeconds and v2 env var": {
+			spec: func() rayv1.RayClusterSpec {
+				s := createSpec()
+				s.HeadGroupSpec.Template = podTemplateSpec([]corev1.EnvVar{
+					{Name: RAY_ENABLE_AUTOSCALER_V2, Value: "1"},
+				}, nil)
+				s.WorkerGroupSpecs = []rayv1.WorkerGroupSpec{
+					{
+						GroupName:          "worker-group-1",
+						Template:           podTemplateSpec(nil, nil),
+						IdleTimeoutSeconds: ptr.To(int32(60)),
+						MinReplicas:        ptr.To(int32(0)),
+						MaxReplicas:        ptr.To(int32(10)),
+					},
+				}
+				return s
+			}(),
+			expectedErr: "",
+		},
+		"Valid: Worker group with zero idleTimeoutSeconds": {
+			spec: func() rayv1.RayClusterSpec {
+				s := createSpec()
+				s.AutoscalerOptions = &rayv1.AutoscalerOptions{
+					Version: ptr.To(rayv1.AutoscalerVersionV2),
+				}
+				s.WorkerGroupSpecs = []rayv1.WorkerGroupSpec{
+					{
+						GroupName:          "worker-group-1",
+						Template:           podTemplateSpec(nil, nil),
+						IdleTimeoutSeconds: ptr.To(int32(0)),
+						MinReplicas:        ptr.To(int32(0)),
+						MaxReplicas:        ptr.To(int32(10)),
+					},
+				}
+				return s
+			}(),
+			expectedErr: "",
+		},
+		"Invalid: Worker group with negative idleTimeoutSeconds": {
+			spec: func() rayv1.RayClusterSpec {
+				s := createSpec()
+				s.AutoscalerOptions = &rayv1.AutoscalerOptions{
+					Version: ptr.To(rayv1.AutoscalerVersionV2),
+				}
+				s.WorkerGroupSpecs = []rayv1.WorkerGroupSpec{
+					{
+						GroupName:          "worker-group-1",
+						Template:           podTemplateSpec(nil, nil),
+						IdleTimeoutSeconds: ptr.To(int32(-10)),
+						MinReplicas:        ptr.To(int32(0)),
+						MaxReplicas:        ptr.To(int32(10)),
+					},
+				}
+				return s
+			}(),
+			expectedErr: "worker group worker-group-1: idleTimeoutSeconds must be non-negative, got -10",
+		},
+		"Invalid: Worker group idleTimeoutSeconds without v2": {
+			spec: func() rayv1.RayClusterSpec {
+				s := createSpec()
+				s.WorkerGroupSpecs = []rayv1.WorkerGroupSpec{
+					{
+						GroupName:          "worker-group-1",
+						Template:           podTemplateSpec(nil, nil),
+						IdleTimeoutSeconds: ptr.To(int32(60)),
+						MinReplicas:        ptr.To(int32(0)),
+						MaxReplicas:        ptr.To(int32(10)),
+					},
+				}
+				return s
+			}(),
+			expectedErr: fmt.Sprintf("worker group worker-group-1: idleTimeoutSeconds is set, but autoscaler v2 is not enabled. Please set .spec.autoscalerOptions.version to 'v2' (or set %s environment variable to 'true' in the head pod if using KubeRay < 1.4.0)", RAY_ENABLE_AUTOSCALER_V2),
+		},
+		"Invalid: Worker group idleTimeoutSeconds with invalid env var": {
+			spec: func() rayv1.RayClusterSpec {
+				s := createSpec()
+				s.HeadGroupSpec.Template = podTemplateSpec([]corev1.EnvVar{
+					{Name: RAY_ENABLE_AUTOSCALER_V2, Value: "false"},
+				}, nil)
+				s.WorkerGroupSpecs = []rayv1.WorkerGroupSpec{
+					{
+						GroupName:          "worker-group-1",
+						Template:           podTemplateSpec(nil, nil),
+						IdleTimeoutSeconds: ptr.To(int32(60)),
+						MinReplicas:        ptr.To(int32(0)),
+						MaxReplicas:        ptr.To(int32(10)),
+					},
+				}
+				return s
+			}(),
+			expectedErr: fmt.Sprintf("worker group worker-group-1: idleTimeoutSeconds is set, but autoscaler v2 is not enabled. Please set .spec.autoscalerOptions.version to 'v2' (or set %s environment variable to 'true' in the head pod if using KubeRay < 1.4.0)", RAY_ENABLE_AUTOSCALER_V2),
+		},
+		"Valid: Worker group without idleTimeoutSeconds": {
+			spec: func() rayv1.RayClusterSpec {
+				s := createSpec()
+				s.WorkerGroupSpecs = []rayv1.WorkerGroupSpec{
+					{
+						GroupName:   "worker-group-1",
+						Template:    podTemplateSpec(nil, nil),
+						MinReplicas: ptr.To(int32(0)),
+						MaxReplicas: ptr.To(int32(10)),
+					},
+				}
+				return s
+			}(),
+			expectedErr: "",
+		},
+
+		// AutoscalerOptions tests (idleTimeoutSeconds works with both v1 and v2)
+		"Valid: AutoscalerOptions with idleTimeoutSeconds and v2": {
+			spec: func() rayv1.RayClusterSpec {
+				s := createSpec()
+				s.AutoscalerOptions = &rayv1.AutoscalerOptions{
+					Version:            ptr.To(rayv1.AutoscalerVersionV2),
+					IdleTimeoutSeconds: ptr.To(int32(120)),
+				}
+				return s
+			}(),
+			expectedErr: "",
+		},
+		"Valid: AutoscalerOptions with idleTimeoutSeconds and v1": {
+			spec: func() rayv1.RayClusterSpec {
+				s := createSpec()
+				s.AutoscalerOptions = &rayv1.AutoscalerOptions{
+					Version:            ptr.To(rayv1.AutoscalerVersionV1),
+					IdleTimeoutSeconds: ptr.To(int32(120)),
+				}
+				return s
+			}(),
+			expectedErr: "",
+		},
+		"Valid: AutoscalerOptions with idleTimeoutSeconds and no version": {
+			spec: func() rayv1.RayClusterSpec {
+				s := createSpec()
+				s.AutoscalerOptions = &rayv1.AutoscalerOptions{
+					IdleTimeoutSeconds: ptr.To(int32(120)),
+				}
+				return s
+			}(),
+			expectedErr: "",
+		},
+		"Valid: AutoscalerOptions with zero idleTimeoutSeconds": {
+			spec: func() rayv1.RayClusterSpec {
+				s := createSpec()
+				s.AutoscalerOptions = &rayv1.AutoscalerOptions{
+					IdleTimeoutSeconds: ptr.To(int32(0)),
+				}
+				return s
+			}(),
+			expectedErr: "",
+		},
+		"Invalid: AutoscalerOptions with negative idleTimeoutSeconds": {
+			spec: func() rayv1.RayClusterSpec {
+				s := createSpec()
+				s.AutoscalerOptions = &rayv1.AutoscalerOptions{
+					IdleTimeoutSeconds: ptr.To(int32(-10)),
+				}
+				return s
+			}(),
+			expectedErr: "autoscalerOptions.idleTimeoutSeconds must be non-negative, got -10",
+		},
+		"Valid: AutoscalerOptions without idleTimeoutSeconds": {
+			spec: func() rayv1.RayClusterSpec {
+				s := createSpec()
+				s.AutoscalerOptions = &rayv1.AutoscalerOptions{
+					Version: ptr.To(rayv1.AutoscalerVersionV1),
+				}
+				return s
+			}(),
+			expectedErr: "",
+		},
+		"Valid: AutoscalerOptions is nil": {
+			spec: func() rayv1.RayClusterSpec {
+				s := createSpec()
+				s.AutoscalerOptions = nil
+				return s
+			}(),
+			expectedErr: "",
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			err := ValidateRayClusterSpec(&tc.spec, nil)
+			if tc.expectedErr != "" {
+				require.Error(t, err)
+				require.EqualError(t, err, tc.expectedErr)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestValidateRayCronJobSpec(t *testing.T) {
+	tests := []struct {
+		cronJob     *rayv1.RayCronJob
+		name        string
+		errorMsg    string
+		expectError bool
+	}{
+		{
+			name: "Valid cron schedule and RayJob spec",
+			cronJob: &rayv1.RayCronJob{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cronjob",
+					Namespace: "default",
+				},
+				Spec: rayv1.RayCronJobSpec{
+					Schedule: "*/5 * * * *",
+					JobTemplate: rayv1.RayJobSpec{
+						Entrypoint: "python test.py",
+						RayClusterSpec: &rayv1.RayClusterSpec{
+							HeadGroupSpec: rayv1.HeadGroupSpec{
+								Template: corev1.PodTemplateSpec{
+									Spec: corev1.PodSpec{
+										Containers: []corev1.Container{
+											{
+												Name:  "ray-head",
+												Image: "rayproject/ray:2.9.0",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "Invalid cron schedule",
+			cronJob: &rayv1.RayCronJob{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cronjob",
+					Namespace: "default",
+				},
+				Spec: rayv1.RayCronJobSpec{
+					Schedule: "invalid cron",
+					JobTemplate: rayv1.RayJobSpec{
+						Entrypoint: "python test.py",
+						RayClusterSpec: &rayv1.RayClusterSpec{
+							HeadGroupSpec: rayv1.HeadGroupSpec{
+								Template: corev1.PodTemplateSpec{
+									Spec: corev1.PodSpec{
+										Containers: []corev1.Container{
+											{
+												Name:  "ray-head",
+												Image: "rayproject/ray:2.9.0",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectError: true,
+			errorMsg:    "invalid cron schedule",
+		},
+		{
+			name: "Empty JobTemplate",
+			cronJob: &rayv1.RayCronJob{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cronjob",
+					Namespace: "default",
+				},
+				Spec: rayv1.RayCronJobSpec{
+					Schedule:    "*/5 * * * *",
+					JobTemplate: rayv1.RayJobSpec{},
+				},
+			},
+			expectError: true,
+			// We use ValidateRayJobSpec() for validating JobTemplate, which requires either RayClusterSpec or ClusterSelector to be set
+			errorMsg: "one of RayClusterSpec or ClusterSelector must be set",
+		},
+		{
+			name: "Invalid RayJob spec - no containers",
+			cronJob: &rayv1.RayCronJob{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cronjob",
+					Namespace: "default",
+				},
+				Spec: rayv1.RayCronJobSpec{
+					Schedule: "*/5 * * * *",
+					JobTemplate: rayv1.RayJobSpec{
+						Entrypoint: "python test.py",
+						RayClusterSpec: &rayv1.RayClusterSpec{
+							HeadGroupSpec: rayv1.HeadGroupSpec{
+								Template: corev1.PodTemplateSpec{
+									Spec: corev1.PodSpec{
+										Containers: []corev1.Container{},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectError: true,
+			errorMsg:    "invalid RayJob template",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := ValidateRayCronJobSpec(tc.cronJob)
+
+			if tc.expectError {
+				require.Error(t, err)
+				if tc.errorMsg != "" {
+					assert.Contains(t, err.Error(), tc.errorMsg)
+				}
+			} else {
+				assert.NoError(t, err)
+			}
+		})
 	}
 }
