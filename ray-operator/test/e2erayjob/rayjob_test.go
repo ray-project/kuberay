@@ -302,7 +302,8 @@ env_vars:
 		g.Expect(err).NotTo(HaveOccurred())
 		rayCluster, err := GetRayCluster(test, rayJob.Namespace, rayJob.Status.RayClusterName)
 		g.Expect(err).NotTo(HaveOccurred())
-		g.Expect(rayCluster.Labels).To(Not(HaveKeyWithValue(utils.RayJobDisableProvisionedHeadNodeRestartLabelKey, "true")))
+		
+g.Expect(rayCluster.Labels[utils.RayJobDisableProvisionedHeadNodeRestartLabelKey]).To(Equal("false"))
 		headPod, err := GetHeadPod(test, rayCluster)
 		g.Expect(err).NotTo(HaveOccurred())
 		LogWithTimestamp(test.T(), "Deleting head Pod %s/%s for RayCluster %s", headPod.Namespace, headPod.Name, rayCluster.Name)
