@@ -3663,8 +3663,8 @@ func TestShouldRecreatePodsForUpgrade(t *testing.T) {
 					utils.RayNodeGroupLabelKey: groupName,
 				},
 				Annotations: map[string]string{
-					utils.HashWithoutReplicasAndWorkersToDeleteKey: templateHash,
-					utils.KubeRayVersion:                           kuberayVersion,
+					utils.UpgradeStrategyRecreateHashKey: templateHash,
+					utils.KubeRayVersion:                 kuberayVersion,
 				},
 			},
 			Spec: corev1.PodSpec{

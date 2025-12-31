@@ -1148,14 +1148,14 @@ func (r *RayClusterReconciler) shouldRecreatePodsForUpgrade(ctx context.Context,
 		// If the KubeRay version has changed, update the head pod to get the cluster hash and new KubeRay version
 		if podVersion != "" && podVersion != utils.KUBERAY_VERSION {
 			logger.Info("KubeRay version has changed, skipping pod recreation", "rayCluster", instance.Name)
-			headPod.Annotations[utils.HashWithoutReplicasAndWorkersToDeleteKey] = expectedClusterHash
+			headPod.Annotations[utils.UpgradeStrategyRecreateHashKey] = expectedClusterHash
 			headPod.Annotations[utils.KubeRayVersion] = utils.KUBERAY_VERSION
 			if err := r.Update(ctx, &headPod); err != nil {
 				logger.Error(err, "Failed to update head pod annotations after KUBERAY_VERSION change", "pod", headPod.Name)
 			}
 			return false
 		}
-		actualHash := headPod.Annotations[utils.HashWithoutReplicasAndWorkersToDeleteKey]
+		actualHash := headPod.Annotations[utils.UpgradeStrategyRecreateHashKey]
 		if actualHash != "" && actualHash != expectedClusterHash {
 			logger.Info("RayCluster spec has changed, will recreate all pods", "rayCluster", instance.Name)
 			return true
@@ -1306,7 +1306,7 @@ func (r *RayClusterReconciler) createHeadPod(ctx context.Context, instance rayv1
 
 	// Set RayClusterUpgradeStrategyHashKey and KubeRayVersion annotations
 	if clusterHash != "" {
-		pod.Annotations[utils.HashWithoutReplicasAndWorkersToDeleteKey] = clusterHash
+		pod.Annotations[utils.UpgradeStrategyRecreateHashKey] = clusterHash
 		pod.Annotations[utils.KubeRayVersion] = utils.KUBERAY_VERSION
 	}
 

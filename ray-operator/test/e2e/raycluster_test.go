@@ -229,7 +229,7 @@ func TestRayClusterUpgradeStrategy(t *testing.T) {
 	headPod, err := GetHeadPod(test, rayCluster)
 	g.Expect(err).NotTo(HaveOccurred())
 	initialHeadPodName := headPod.Name
-	initialHeadPodHash := headPod.Annotations[utils.HashWithoutReplicasAndWorkersToDeleteKey]
+	initialHeadPodHash := headPod.Annotations[utils.UpgradeStrategyRecreateHashKey]
 
 	workerPods, err := GetWorkerPods(test, rayCluster)
 	g.Expect(err).NotTo(HaveOccurred())
@@ -257,7 +257,7 @@ func TestRayClusterUpgradeStrategy(t *testing.T) {
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(newHeadPod.Name).NotTo(Equal(initialHeadPodName))
 
-	newHeadPodHash := newHeadPod.Annotations[utils.HashWithoutReplicasAndWorkersToDeleteKey]
+	newHeadPodHash := newHeadPod.Annotations[utils.UpgradeStrategyRecreateHashKey]
 	g.Expect(newHeadPodHash).NotTo(Equal(initialHeadPodHash))
 
 	newWorkerPods, err := GetWorkerPods(test, rayCluster)
