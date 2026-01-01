@@ -43,6 +43,7 @@ var (
 	// singleton
 	initCacheStorage sync.Once
 	cacheStorage     *lru.Cache[string, *JobInfoCache]
+	rwLock           sync.RWMutex
 )
 
 type (
@@ -128,7 +129,9 @@ func (r *RayDashboardCacheClient) InitClient(ctx context.Context, client RayDash
 					loggerForGC.Info("clean up goroutine exiting...")
 					return
 				case t := <-ticker.C:
+					rwLock.RLock()
 					keys := cacheStorage.Keys()
+					rwLock.RUnlock()
 
 					expiredThreshold := time.Now().Add(-cacheExpiry)
 					loggerForGC.Info(fmt.Sprintf("Found %d keys to verify,", len(keys)), "expiredThreshold", expiredThreshold, "tick at", t)
@@ -136,12 +139,14 @@ func (r *RayDashboardCacheClient) InitClient(ctx context.Context, client RayDash
 					// zero allocate filtering
 					removed := keys[:0]
 					for _, key := range keys {
+						rwLock.Lock()
 						if cached, ok := cacheStorage.Peek(key); ok {
 							if cached.UpdatedAt.Before(expiredThreshold) {
 								cacheStorage.Remove(key)
 								removed = append(removed, key)
 							}
 						}
+						rwLock.Unlock()
 					}
 					loggerForGC.Info(fmt.Sprintf("clean up %d cache.", len(removed)), "expiredThreshold", expiredThreshold, "removed keys", removed)
 				}
@@ -167,6 +172,7 @@ func (r *RayDashboardCacheClient) GetMultiApplicationStatus(ctx context.Context)
 func (r *RayDashboardCacheClient) GetJobInfo(ctx context.Context, jobId string) (*utiltypes.RayJobInfo, error) {
 	logger := ctrl.LoggerFrom(ctx).WithName("RayDashboardCacheClient")
 
+	rwLock.Lock()
 	if cached, ok := cacheStorage.Get(jobId); ok {
 		if cached.Err != nil && !errors.Is(cached.Err, ErrAgain) {
 			// Consume the error.
@@ -174,23 +180,31 @@ func (r *RayDashboardCacheClient) GetJobInfo(ctx context.Context, jobId string) 
 			cacheStorage.Remove(jobId)
 			logger.Info("Consume the cached error for jobId", "jobId", jobId, "error", cached.Err)
 		}
+		rwLock.Unlock()
 		return cached.JobInfo, cached.Err
 	}
+	rwLock.Unlock()
 
 	currentTime := time.Now()
 	placeholder := &JobInfoCache{Err: ErrAgain, UpdatedAt: &currentTime}
 
 	// Put a placeholder in storage. The cache will be updated only if the placeholder exists.
 	// The placeholder will be removed when StopJob or DeleteJob.
+	rwLock.Lock()
 	if cached, existed, _ := cacheStorage.PeekOrAdd(jobId, placeholder); existed {
+		rwLock.Unlock()
 		return cached.JobInfo, cached.Err
 	}
+	rwLock.Unlock()
 
 	var task Task = func(taskCTX context.Context) bool {
+		rwLock.RLock()
 		if _, existed := cacheStorage.Get(jobId); !existed {
 			logger.Info("The placeholder is removed for jobId", "jobId", jobId)
+			rwLock.RUnlock()
 			return false
 		}
+		rwLock.RUnlock()
 
 		jobInfo, err := r.client.GetJobInfo(taskCTX, jobId)
 		currentTime := time.Now()
@@ -202,11 +216,14 @@ func (r *RayDashboardCacheClient) GetJobInfo(ctx context.Context, jobId string) 
 			UpdatedAt: &currentTime,
 		}
 
+		rwLock.Lock()
 		if existed := cacheStorage.Contains(jobId); !existed {
 			logger.Info("The placeholder is removed before updating for jobId", "jobId", jobId)
+			rwLock.Unlock()
 			return false
 		}
 		cacheStorage.Add(jobId, newJobInfoCache)
+		rwLock.Unlock()
 
 		if err != nil {
 			// Exits the updating loop after getting an error.
@@ -226,7 +243,9 @@ func (r *RayDashboardCacheClient) GetJobInfo(ctx context.Context, jobId string) 
 
 	if err := pool.AddTask(task); err != nil {
 		// remove the placeholder because we cannot queue the task.
+		rwLock.Lock()
 		cacheStorage.Remove(jobId)
+		rwLock.Unlock()
 		logger.Error(err, "Cannot queue more job info fetching tasks.", "jobId", jobId)
 		return nil, ErrAgain
 	}
@@ -252,11 +271,17 @@ func (r *RayDashboardCacheClient) GetJobLog(ctx context.Context, jobName string)
 }
 
 func (r *RayDashboardCacheClient) StopJob(ctx context.Context, jobName string) error {
+	rwLock.Lock()
 	cacheStorage.Remove(jobName)
+	rwLock.Unlock()
+
 	return r.client.StopJob(ctx, jobName)
 }
 
 func (r *RayDashboardCacheClient) DeleteJob(ctx context.Context, jobName string) error {
+	rwLock.Lock()
 	cacheStorage.Remove(jobName)
+	rwLock.Unlock()
+
 	return r.client.DeleteJob(ctx, jobName)
 }
