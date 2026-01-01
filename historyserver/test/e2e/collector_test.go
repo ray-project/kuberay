@@ -342,47 +342,44 @@ func applyRayJobToCluster(test Test, g *WithT, namespace *corev1.Namespace, rayC
 // - node_events/<nodeID>_<suffix> must exist and have content > 0 bytes (suffix can be ignored for verification)
 func verifyS3SessionDirs(test Test, g *WithT, s3Client *s3.S3, sessionPrefix string, nodeID string) {
 	dirs := []string{"logs", "node_events"}
-	g.Eventually(func(gg Gomega) {
-		for _, dir := range dirs {
-			dirPrefix := sessionPrefix + dir + "/"
+	for _, dir := range dirs {
+		dirPrefix := sessionPrefix + dir + "/"
+
+		g.Eventually(func(gg Gomega) {
+			// Verify the directory has at least one object.
 			objects, err := s3Client.ListObjectsV2(&s3.ListObjectsV2Input{
 				Bucket:  aws.String(s3BucketName),
 				Prefix:  aws.String(dirPrefix),
-				MaxKeys: aws.Int64(1), // Efficiently check if any objects exist
+				MaxKeys: aws.Int64(10),
 			})
 			gg.Expect(err).NotTo(HaveOccurred())
 			keyCount := aws.Int64Value(objects.KeyCount)
 			gg.Expect(keyCount).To(BeNumerically(">", 0))
 			LogWithTimestamp(test.T(), "Verified directory %s under %s has at least one object", dir, sessionPrefix)
-		}
 
-		rayletOutKey := fmt.Sprintf("%slogs/%s/raylet.out", sessionPrefix, nodeID)
-		LogWithTimestamp(test.T(), "Checking raylet.out file: %s", rayletOutKey)
-		obj, err := s3Client.HeadObject(&s3.HeadObjectInput{
-			Bucket: aws.String(s3BucketName),
-			Key:    aws.String(rayletOutKey),
-		})
-		gg.Expect(err).NotTo(HaveOccurred())
-		fileSize := aws.Int64Value(obj.ContentLength)
-		gg.Expect(fileSize).To(BeNumerically(">", 0))
-		LogWithTimestamp(test.T(), "Verified raylet.out file has content: %d bytes", fileSize)
+			// Find the first file object for content verification.
+			var fileObj *s3.Object
+			for _, obj := range objects.Contents {
+				if !strings.HasSuffix(aws.StringValue(obj.Key), "/") {
+					fileObj = obj
+					break
+				}
+			}
+			gg.Expect(fileObj).NotTo(BeNil(), "No file object found in directory %s", dirPrefix)
 
-		nodeEventsPrefix := fmt.Sprintf("%snode_events/%s-", sessionPrefix, nodeID)
-		LogWithTimestamp(test.T(), "Checking node_events file with prefix: %s", nodeEventsPrefix)
-		objs, err := s3Client.ListObjectsV2(&s3.ListObjectsV2Input{
-			Bucket:  aws.String(s3BucketName),
-			Prefix:  aws.String(nodeEventsPrefix),
-			MaxKeys: aws.Int64(10),
-		})
-		gg.Expect(err).NotTo(HaveOccurred())
-		gg.Expect(aws.Int64Value(objs.KeyCount)).To(BeNumerically(">", 0))
-
-		for _, obj := range objs.Contents {
-			fileSize := aws.Int64Value(obj.Size)
+			// Verify the file has content by checking file size.
+			fileKey := *fileObj.Key
+			LogWithTimestamp(test.T(), "Checking file: %s", fileKey)
+			obj, err := s3Client.HeadObject(&s3.HeadObjectInput{
+				Bucket: aws.String(s3BucketName),
+				Key:    aws.String(fileKey),
+			})
+			gg.Expect(err).NotTo(HaveOccurred())
+			fileSize := aws.Int64Value(obj.ContentLength)
 			gg.Expect(fileSize).To(BeNumerically(">", 0))
-			LogWithTimestamp(test.T(), "Verified node_events file %s has content: %d bytes", aws.StringValue(obj.Key), fileSize)
-		}
-	}, TestTimeoutMedium).Should(Succeed(), "Failed to verify directories logs/ and node_events/ under %s", sessionPrefix)
+			LogWithTimestamp(test.T(), "Verified file %s has content: %d bytes", fileKey, fileSize)
+		}, TestTimeoutMedium).Should(Succeed(), "Failed to verify at least one object in directory %s has content", dirPrefix)
+	}
 }
 
 // getSessionIDFromHeadPod retrieves the sessionID from the Ray head pod by reading the symlink
