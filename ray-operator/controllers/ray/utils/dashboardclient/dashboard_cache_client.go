@@ -23,7 +23,7 @@ var (
 )
 
 const (
-	// TODO: make queue size and worker size configurable.
+	// TODO: make worker size configurable.
 	workerSize = 8
 
 	queryInterval = 3 * time.Second
