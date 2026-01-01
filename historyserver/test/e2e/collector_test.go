@@ -40,24 +40,29 @@ func TestCollector(t *testing.T) {
 	// Share a single S3 client among subtests.
 	s3Client := ensureS3Client(t)
 
-	t.Run("Happy path: Logs and events should be uploaded to S3 on deletion", func(t *testing.T) {
-		test := With(t)
-		g := NewWithT(t)
-		namespace := test.NewTestNamespace()
+	tests := []struct {
+		name     string
+		testFunc func(Test, *WithT, *corev1.Namespace, *s3.S3)
+	}{
+		{
+			name:     "Happy path: Logs and events should be uploaded to S3 on deletion",
+			testFunc: testLogAndEventUploadOnDeletion,
+		},
+		{
+			name:     "Single session single node logs and events should be uploaded to S3 during runtime",
+			testFunc: testLogAndEventUploadDuringRuntime,
+		},
+	}
 
-		testLogAndEventUploadOnDeletion(test, g, namespace, s3Client)
-	})
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			test := With(t)
+			g := NewWithT(t)
+			namespace := test.NewTestNamespace()
 
-	t.Run("Single session single node logs and events should be uploaded to S3 during runtime", func(t *testing.T) {
-		test := With(t)
-		g := NewWithT(t)
-		namespace := test.NewTestNamespace()
-
-		testLogAndEventUploadDuringRuntime(test, g, namespace, s3Client)
-	})
-
-	// Add other test cases below.
-	// ...
+			tt.testFunc(test, g, namespace, s3Client)
+		})
+	}
 }
 
 // testLogAndEventUploadOnDeletion verifies that logs and node_events are successfully uploaded to S3 on cluster deletion.
