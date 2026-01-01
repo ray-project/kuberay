@@ -17,8 +17,6 @@ import (
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
-const runtimeClassConfigPath = "/var/collector-config/data"
-
 func main() {
 	role := ""
 	runtimeClassName := ""
