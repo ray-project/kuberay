@@ -19,23 +19,23 @@ import (
 
 func main() {
 	var role string
-	var runtimeClassName string
+	var storageProvider string
 	var rayClusterName string
 	var rayClusterId string
 	var rayRootDir string
 	var logBatching int
 	var eventsPort int
 	var pushInterval time.Duration
-	var runtimeClassConfigPath string
+	var storageProviderConfigPath string
 
 	flag.StringVar(&role, "role", "Worker", "")
-	flag.StringVar(&runtimeClassName, "runtime-class-name", "", "")
+	flag.StringVar(&storageProvider, "storage-provider", "", "")
 	flag.StringVar(&rayClusterName, "ray-cluster-name", "", "")
 	flag.StringVar(&rayClusterId, "ray-cluster-id", "default", "")
 	flag.StringVar(&rayRootDir, "ray-root-dir", "", "")
 	flag.IntVar(&logBatching, "log-batching", 1000, "")
 	flag.IntVar(&eventsPort, "events-port", 8080, "")
-	flag.StringVar(&runtimeClassConfigPath, "runtime-class-config-path", "", "") //"/var/collector-config/data"
+	flag.StringVar(&storageProviderConfigPath, "storage-provider-config-path", "", "") //"/var/collector-config/data"
 	flag.DurationVar(&pushInterval, "push-interval", time.Minute, "")
 
 	flag.Parse()
@@ -53,21 +53,21 @@ func main() {
 	sessionName := path.Base(sessionDir)
 
 	jsonData := make(map[string]interface{})
-	if runtimeClassConfigPath != "" {
-		data, err := os.ReadFile(runtimeClassConfigPath)
+	if storageProviderConfigPath != "" {
+		data, err := os.ReadFile(storageProviderConfigPath)
 		if err != nil {
-			panic("Failed to read runtime class config " + err.Error())
+			panic("Failed to read storage provider config " + err.Error())
 		}
 		err = json.Unmarshal(data, &jsonData)
 		if err != nil {
-			panic("Failed to parse runtime class config: " + err.Error())
+			panic("Failed to parse storage provider config: " + err.Error())
 		}
 	}
 
 	registry := collector.GetWriterRegistry()
-	factory, ok := registry[runtimeClassName]
+	factory, ok := registry[storageProvider]
 	if !ok {
-		panic("Not supported runtime class name: " + runtimeClassName + " for role: " + role + ".")
+		panic("Not supported storage provider: " + storageProvider + " for role: " + role + ".")
 	}
 
 	globalConfig := types.RayCollectorConfig{
@@ -84,7 +84,7 @@ func main() {
 
 	writer, err := factory(&globalConfig, jsonData)
 	if err != nil {
-		panic("Failed to create writer for runtime class name: " + runtimeClassName + " for role: " + role + ".")
+		panic("Failed to create writer for storage provider: " + storageProvider + " for role: " + role + ".")
 	}
 
 	// Create and initialize EventServer

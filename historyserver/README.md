@@ -63,25 +63,25 @@ docker buildx build -t <image-name>:<tag> --platform linux/amd64,linux/arm64 . -
 
 The history server can be configured using command-line flags:
 
-- `--runtime-class-name`: Storage backend type (e.g., "s3", "aliyunoss", "localtest")
+- `--storage-provider`: Storage backend type (e.g., "s3", "aliyunoss", "localtest")
 - `--ray-root-dir`: Root directory for Ray logs
 - `--kubeconfigs`: Path to kubeconfig file(s) for accessing Kubernetes clusters
 - `--dashboard-dir`: Directory containing dashboard assets (default: "/dashboard")
-- `--runtime-class-config-path`: Path to runtime class configuration file
+- `--storage-provider-config-path`: Path to storage provider configuration file
 
 ### Collector Configuration
 
 The collector can be configured using command-line flags:
 
 - `--role`: Node role ("Head" or "Worker")
-- `--runtime-class-name`: Storage backend type (e.g., "s3", "aliyunoss")
+- `--storage-provider`: Storage backend type (e.g., "s3", "aliyunoss", "localtest")
 - `--ray-cluster-name`: Name of the Ray cluster
 - `--ray-cluster-id`: ID of the Ray cluster
 - `--ray-root-dir`: Root directory for Ray logs
 - `--log-batching`: Number of log entries to batch before writing
 - `--events-port`: Port for the events server
 - `--push-interval`: Interval between pushes to storage
-- `--runtime-class-config-path`: Path to runtime class configuration file
+- `--storage-provider-config-path`: Path to storage provider configuration file
 
 ## Supported Storage Backends
 
@@ -99,7 +99,7 @@ Each backend requires specific configuration parameters passed through environme
 
 ```bash
 ./output/bin/historyserver \
-  --runtime-class-name=s3 \
+  --storage-provider=s3 \
   --ray-root-dir=/path/to/logs
 ```
 
@@ -108,7 +108,7 @@ Each backend requires specific configuration parameters passed through environme
 ```bash
 ./output/bin/collector \
   --role=Head \
-  --runtime-class-name=s3 \
+  --storage-provider=s3 \
   --ray-cluster-name=my-cluster \
   --ray-root-dir=/path/to/logs
 ```
