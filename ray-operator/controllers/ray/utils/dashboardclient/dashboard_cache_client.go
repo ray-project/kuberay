@@ -18,8 +18,8 @@ import (
 var (
 	// ErrAgain EAGAIN means "there is no data available right now, try again later"
 	// https://stackoverflow.com/questions/4058368/what-does-eagain-mean
-	ErrAgain         = errors.New("EAGAIN")
-	ErrTaskQueueFull = errors.New("task queue is full")
+	ErrAgain                           = errors.New("EAGAIN")
+	ErrTaskQueueTemporarilyUnavailable = errors.New("task queue is temporarily unavailable")
 )
 
 const (
@@ -90,7 +90,7 @@ func (w *workerPool) AddTask(task Task) error {
 	case w.taskQueue.In <- task:
 		return nil
 	default:
-		return ErrTaskQueueFull
+		return ErrTaskQueueTemporarilyUnavailable
 	}
 }
 
