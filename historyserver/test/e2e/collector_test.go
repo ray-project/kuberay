@@ -121,7 +121,7 @@ func testCollectorSeparatesLogsBySession(test Test, g *WithT, namespace *corev1.
 	// Before Kubernetes 1.28 (cgroups v1), if one process in a multi-process container exceeded its memory limit,
 	// the Linux OOM killer might kill only that process, leaving the container running and making OOM events hard to detect.
 	// Since Kubernetes 1.28 (with cgroups v2 enabled), `memory.oom.group` is enabled by default: when any process in a cgroup
-	// hits the memory limit, all processes in the container are killed together.
+	// hits the memory limit, all processes in the container are killed together, thereby triggering container restart.
 	// For more details, please refer to https://github.com/kubernetes/kubernetes/pull/117793
 	LogWithTimestamp(test.T(), "Killing main process of ray-head container to trigger a restart")
 	g.Eventually(func(gg Gomega) {
