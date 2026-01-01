@@ -188,22 +188,13 @@ env_vars:
 		err = test.Client().Core().CoreV1().Pods(headPod.Namespace).Delete(test.Ctx(), headPod.Name, metav1.DeleteOptions{})
 		g.Expect(err).NotTo(HaveOccurred())
 
-		g.Eventually(func() int {
-			pods, listErr := test.Client().Core().CoreV1().Pods(rayCluster.Namespace).List(
+		getNumOfHeadPods := func() (int, error) {
+			pods, err := test.Client().Core().CoreV1().Pods(rayCluster.Namespace).List(
 				test.Ctx(), common.RayClusterHeadPodsAssociationOptions(rayCluster).ToMetaV1ListOptions())
-			if listErr != nil {
-				return -1
-			}
-			return len(pods.Items)
-		}, TestTimeoutMedium, 2*time.Second).Should(Equal(0))
-		g.Consistently(func() int {
-			pods, listErr := test.Client().Core().CoreV1().Pods(rayCluster.Namespace).List(
-				test.Ctx(), common.RayClusterHeadPodsAssociationOptions(rayCluster).ToMetaV1ListOptions())
-			if listErr != nil {
-				return -1
-			}
-			return len(pods.Items)
-		}, TestTimeoutShort, 2*time.Second).Should(Equal(0))
+			return len(pods.Items), err
+		}
+		g.Eventually(getNumOfHeadPods, TestTimeoutMedium, 2*time.Second).Should(BeZero())
+		g.Consistently(getNumOfHeadPods, TestTimeoutShort, 2*time.Second).Should(BeZero())
 
 		// After head pod deletion, controller should mark RayJob as Failed with a specific message
 		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
