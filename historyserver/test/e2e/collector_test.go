@@ -37,6 +37,7 @@ const (
 )
 
 func TestCollector(t *testing.T) {
+	// TODO: use for loop to run the test cases multiple times.
 	// Share a single S3 client among subtests.
 	s3Client := ensureS3Client(t)
 
@@ -46,11 +47,11 @@ func TestCollector(t *testing.T) {
 	}{
 		{
 			name:     "Happy path: Logs and events should be uploaded to S3 on deletion",
-			testFunc: testLogAndEventUploadOnDeletion,
+			testFunc: testCollectorUploadOnGracefulShutdown,
 		},
 		{
 			name:     "Single session single node logs and events should be uploaded to S3 during runtime",
-			testFunc: testLogAndEventUploadDuringRuntime,
+			testFunc: testCollectorSeparatesLogsBySession,
 		},
 	}
 
@@ -65,11 +66,11 @@ func TestCollector(t *testing.T) {
 	}
 }
 
-// testLogAndEventUploadOnDeletion verifies that logs and node_events are successfully uploaded to S3 on cluster deletion.
+// testCollectorUploadOnGracefulShutdown verifies that logs and node_events are successfully uploaded to S3 on cluster deletion.
 // When the Ray cluster is deleted, logs and node_events are processed as follows:
 // - logs: Trigger RayLogHandler.processSessionLatestLog to process logs under /tmp/ray/session_latest
 // - node_events: Trigger EventServer.flushEvents to process in-memory events
-func testLogAndEventUploadOnDeletion(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testCollectorUploadOnGracefulShutdown(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
 	rayCluster := prepareTestEnv(test, g, namespace, s3Client)
 
 	// Submit a Ray job to the existing cluster.
@@ -101,12 +102,12 @@ func testLogAndEventUploadOnDeletion(test Test, g *WithT, namespace *corev1.Name
 	deleteS3Bucket(test, g, s3Client)
 }
 
-// testLogAndEventUploadDuringRuntime verifies that logs and node_events are successfully uploaded to S3 during runtime.
+// testCollectorSeparatesLogsBySession verifies that logs and node_events are successfully uploaded to S3 during runtime.
 // This makes sure RayLogHandler.WatchPrevLogsLoops processes logs as they appear under /tmp/ray/prev-logs.
 // Additionally, it ensures events are flushed when the file watcher EventServer.watchNodeIDFile detects node ID change.
 //
 // NOTE: Logs under /tmp/ray/session_latest are moved to /tmp/ray/prev-logs by the Ray container startup command.
-func testLogAndEventUploadDuringRuntime(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testCollectorSeparatesLogsBySession(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
 	rayCluster := prepareTestEnv(test, g, namespace, s3Client)
 
 	// Submit a Ray job to the existing cluster.
@@ -321,7 +322,6 @@ func applyRayJobToCluster(test Test, g *WithT, namespace *corev1.Namespace, rayC
 		WithSpec(rayv1ac.RayJobSpec().
 			WithClusterSelector(map[string]string{utils.RayClusterLabelKey: rayCluster.Name}).
 			WithEntrypoint(fmt.Sprintf("python -c %q", jobScript)).
-			WithShutdownAfterJobFinishes(false). // Keep cluster running.
 			WithSubmitterPodTemplate(JobSubmitterPodTemplateApplyConfiguration()))
 
 	rayJob, err := test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
@@ -330,7 +330,10 @@ func applyRayJobToCluster(test Test, g *WithT, namespace *corev1.Namespace, rayC
 
 	LogWithTimestamp(test.T(), "Waiting for RayJob %s/%s to complete successfully", rayJob.Namespace, rayJob.Name)
 	g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
-		Should(WithTransform(RayJobStatus, Equal(rayv1.JobStatusSucceeded)))
+		Should(SatisfyAll(
+			WithTransform(RayJobStatus, Equal(rayv1.JobStatusSucceeded)),
+			WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusComplete)),
+		))
 	LogWithTimestamp(test.T(), "RayJob %s/%s completed successfully", rayJob.Namespace, rayJob.Name)
 
 	return rayJob
