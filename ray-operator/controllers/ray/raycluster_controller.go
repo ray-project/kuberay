@@ -1122,6 +1122,8 @@ func (r *RayClusterReconciler) reconcileMultiHostWorkerGroup(ctx context.Context
 
 func shouldSkipHeadPodRestart(instance *rayv1.RayCluster) bool {
 	return getCreatorCRDType(*instance) == utils.RayJobCRD && instance.Labels[utils.RayJobDisableProvisionedHeadNodeRestartLabelKey] == "true"
+}
+
 // shouldRecreatePodsForUpgrade checks if any pods need to be recreated based on RayClusterSpec changes
 func (r *RayClusterReconciler) shouldRecreatePodsForUpgrade(ctx context.Context, instance *rayv1.RayCluster) bool {
 	logger := ctrl.LoggerFrom(ctx)
