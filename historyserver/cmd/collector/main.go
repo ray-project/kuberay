@@ -91,11 +91,11 @@ func main() {
 	eventServer := eventserver.NewEventServer(writer, rayRootDir, sessionDir, rayNodeId, rayClusterName, rayClusterId, sessionName)
 	eventServer.InitServer(eventsPort)
 
-	collector := runtime.NewCollector(&globalConfig, writer)
-	_ = collector.Start(context.TODO().Done())
+	logCollector := runtime.NewCollector(&globalConfig, writer)
+	_ = logCollector.Start(context.TODO().Done())
 
 	eventStop := eventServer.WaitForStop()
-	logStop := collector.WaitForStop()
+	logStop := logCollector.WaitForStop()
 	<-eventStop
 	logrus.Info("Event server shutdown")
 	<-logStop
