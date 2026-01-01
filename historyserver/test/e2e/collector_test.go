@@ -51,7 +51,7 @@ func TestCollector(t *testing.T) {
 		},
 		{
 			name:     "Simulate OOMKilled behavior: Single session single node logs and events should be uploaded to S3 after the ray-head container is restarted",
-			testFunc: testCollectorSeparatesLogsBySession,
+			testFunc: testCollectorSeparatesFilesBySession,
 		},
 	}
 
@@ -110,7 +110,7 @@ func testCollectorUploadOnGracefulShutdown(test Test, g *WithT, namespace *corev
 	deleteS3Bucket(test, g, s3Client)
 }
 
-// testCollectorSeparatesLogsBySession verifies that logs and node_events are successfully uploaded to S3 after the ray-head container is restarted.
+// testCollectorSeparatesFilesBySession verifies that logs and node_events are successfully uploaded to S3 after the ray-head container is restarted.
 //
 // The test case follows these steps:
 // 1. Prepare test environment by applying a Ray cluster with the collector
@@ -128,7 +128,7 @@ func testCollectorUploadOnGracefulShutdown(test Test, g *WithT, namespace *corev
 //   - {s3BucketName}/log/{clusterName}_{clusterID}/{sessionID}/node_events/...
 //
 // 7. Delete S3 bucket to ensure test isolation
-func testCollectorSeparatesLogsBySession(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testCollectorSeparatesFilesBySession(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
 	rayCluster := prepareTestEnv(test, g, namespace, s3Client)
 
 	// Submit a Ray job to the existing cluster.
