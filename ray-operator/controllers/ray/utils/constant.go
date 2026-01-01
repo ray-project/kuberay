@@ -51,7 +51,6 @@ const (
 
 	// Batch scheduling labels
 	// TODO(tgaddair): consider making these part of the CRD
-	RaySchedulerName         = "ray.io/scheduler-name"
 	RayPriorityClassName     = "ray.io/priority-class-name"
 	RayGangSchedulingEnabled = "ray.io/gang-scheduling-enabled"
 
@@ -360,6 +359,7 @@ const (
 
 	// RayCronJob event list
 	InvalidRayCronJobSpec K8sEventType = "InvalidRayCronJobSpec"
+	SuspendedRayCronJob   K8sEventType = "SuspendedRayCronJob"
 
 	// RayService event list
 	CreatedGateway                  K8sEventType = "CreatedGateway"

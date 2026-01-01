@@ -11,7 +11,7 @@ import (
 // APIServerInterceptor implements UnaryServerInterceptor that provides the common wrapping logic
 // to be executed before and after all API handler calls, e.g. Logging, error handling.
 // For more details, see https://github.com/grpc/grpc-go/blob/master/interceptor.go
-func APIServerInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
+func APIServerInterceptor(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp any, err error) {
 	klog.Infof("%v handler starting", info.FullMethod)
 	resp, err = handler(ctx, req)
 	if err != nil {
@@ -25,10 +25,10 @@ func APIServerInterceptor(ctx context.Context, req interface{}, info *grpc.Unary
 func TimeoutInterceptor(timeout time.Duration) grpc.UnaryServerInterceptor {
 	return func(
 		ctx context.Context,
-		req interface{},
+		req any,
 		_ *grpc.UnaryServerInfo,
 		handler grpc.UnaryHandler,
-	) (interface{}, error) {
+	) (any, error) {
 		ctx, cancel := context.WithTimeout(ctx, timeout)
 		defer cancel()
 		return handler(ctx, req)

@@ -3,27 +3,28 @@ linters:
   default: none
   enable:
     - asciicheck
+    - errcheck
     - ginkgolinter
+    - gosec
+    - govet
     - ineffassign
     - makezero
     - misspell
+    - modernize
     - nilerr
     - nolintlint
     - predeclared
+    - testifylint
     - unconvert
     - unparam
     - unused
     - wastedassign
+    - errorlint
     # TODO: The following linters are disabled for now to unblock the golangci-lint v2 migration.
     # We will fix the lint errors and re-enable these linters in follow-up PRs.
     # - noctx
-    # - gosec
-    # - govet
-    # - errcheck
-    # - errorlint
     # - revive
     # - staticcheck
-    # - testifylint
   settings:
     staticcheck:
       checks:
@@ -81,6 +82,9 @@ linters:
             - '**/ray-operator/apis/config/v1alpha1/*.go'
             - '**/ray-operator/apis/ray/v1alpha1/*.go'
             - '**/ray-operator/apis/ray/v1/*.go'
+    modernize:
+      disable:
+        - omitzero
   exclusions:
     generated: strict
     presets:
@@ -98,9 +102,7 @@ issues:
   max-same-issues: 0
 formatters:
   enable:
-    # TODO: The following formatter is disabled for now to unblock the golangci-lint v2 migration.
-    # We will fix the lint errors and re-enable the formatter in follow-up PRs.
-    # - gci
+    - gci
     - gofmt
     - gofumpt
     - goimports

@@ -15,7 +15,7 @@ const (
 )
 
 func addDefaultingFuncs(scheme *runtime.Scheme) error {
-	scheme.AddTypeDefaultingFunc(&Configuration{}, func(obj interface{}) {
+	scheme.AddTypeDefaultingFunc(&Configuration{}, func(obj any) {
 		SetDefaults_Configuration(obj.(*Configuration))
 	})
 	return nil

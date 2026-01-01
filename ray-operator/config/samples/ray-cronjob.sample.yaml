@@ -7,6 +7,9 @@ spec:
   # This example runs every minute
   schedule: "* * * * *"
 
+  # Suspend tells the controller to suspend the RayJob scheduling
+  # suspend: false
+
   # JobTemplate defines the RayJob that will be created on each scheduled run
   jobTemplate:
     # submissionMode specifies how RayJob submits the Ray job to the RayCluster.

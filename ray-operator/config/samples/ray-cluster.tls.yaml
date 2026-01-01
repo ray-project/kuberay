@@ -86,11 +86,11 @@ spec:
             name: ray-tls
           resources:
             limits:
-              cpu: "1"
-              memory: "2G"
+              cpu: 1
+              memory: 4Gi
             requests:
-              cpu: "500m"
-              memory: "2G"
+              cpu: 1
+              memory: 2Gi
           env:
           # Environment variables for Ray TLS authentication.
           # See https://docs.ray.io/en/latest/ray-core/configure.html#tls-authentication for more details.
@@ -165,11 +165,11 @@ spec:
             name: ray-tls
           resources:
             limits:
-              cpu: "1"
-              memory: "1G"
+              cpu: 1
+              memory: 1Gi
             requests:
-              cpu: "500m"
-              memory: "1G"
+              cpu: 1
+              memory: 1Gi
           env:
           # Environment variables for Ray TLS authentication.
           # See https://docs.ray.io/en/latest/ray-core/configure.html#tls-authentication for more details.

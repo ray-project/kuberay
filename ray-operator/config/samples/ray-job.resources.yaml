@@ -43,8 +43,12 @@ spec:
             - containerPort: 10001
               name: client
             resources:
+              limits:
+                cpu: 1
+                memory: 4Gi
               requests:
-                cpu: "200m"
+                cpu: 1
+                memory: 2Gi
             volumeMounts:
             - mountPath: /home/ray/samples
               name: code-sample
@@ -76,8 +80,12 @@ spec:
           - name: ray-worker # must consist of lower case alphanumeric characters or '-', and must start and end with an alphanumeric character (e.g. 'my-name',  or '123-abc'
             image: rayproject/ray:2.52.0
             resources:
+              limits:
+                cpu: 1
+                memory: 1Gi
               requests:
-                cpu: "200m"
+                cpu: 1
+                memory: 1Gi
 
 
 ######################Ray code sample#################################

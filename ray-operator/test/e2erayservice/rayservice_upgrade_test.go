@@ -78,8 +78,8 @@ func TestOldHeadPodFailDuringUpgrade(t *testing.T) {
 	g.Expect(err).NotTo(HaveOccurred())
 
 	LogWithTimestamp(test.T(), "Using iptables to make the ProxyActor(8000 port) fail to receive requests on the old head Pod")
-	headPodPatch := map[string]interface{}{
-		"spec": map[string]interface{}{
+	headPodPatch := map[string]any{
+		"spec": map[string]any{
 			"ephemeralContainers": []corev1.EphemeralContainer{
 				{
 					EphemeralContainerCommon: corev1.EphemeralContainerCommon{

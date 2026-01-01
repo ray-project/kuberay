@@ -131,7 +131,7 @@ func (r *ResourceManager) ListClusters(ctx context.Context, namespace string, co
 
 	var result []*rayv1api.RayCluster
 	length := len(rayClusterList.Items)
-	for i := 0; i < length; i++ {
+	for i := range length {
 		result = append(result, &rayClusterList.Items[i])
 	}
 
@@ -202,7 +202,7 @@ func (r *ResourceManager) ListJobs(ctx context.Context, namespace string, contin
 
 	var result []*rayv1api.RayJob
 	length := len(rayJobList.Items)
-	for i := 0; i < length; i++ {
+	for i := range length {
 		result = append(result, &rayJobList.Items[i])
 	}
 
@@ -346,7 +346,7 @@ func (r *ResourceManager) ListComputeTemplates(ctx context.Context, namespace st
 
 	var result []*corev1.ConfigMap
 	length := len(configMapList.Items)
-	for i := 0; i < length; i++ {
+	for i := range length {
 		result = append(result, &configMapList.Items[i])
 	}
 
@@ -368,7 +368,7 @@ func (r *ResourceManager) ListAllComputeTemplates(ctx context.Context) ([]*corev
 		}
 
 		length := len(configMapList.Items)
-		for i := 0; i < length; i++ {
+		for i := range length {
 			result = append(result, &configMapList.Items[i])
 		}
 	}

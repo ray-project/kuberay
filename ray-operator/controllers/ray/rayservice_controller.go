@@ -4,6 +4,7 @@ import (
 	"context"
 	errstd "errors"
 	"fmt"
+	"maps"
 	"math"
 	"os"
 	"reflect"
@@ -911,9 +912,9 @@ func (r *RayServiceReconciler) reconcileRayCluster(ctx context.Context, rayServi
 		modifyRayCluster(ctx, activeRayCluster, goalCluster)
 		if err = r.Update(ctx, activeRayCluster); err != nil {
 			r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(utils.FailedToUpdateRayCluster), "Failed to update the active RayCluster %s/%s: %v", activeRayCluster.Namespace, activeRayCluster.Name, err)
+			return activeRayCluster, pendingRayCluster, err
 		}
 		r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeNormal, string(utils.UpdatedRayCluster), "Updated the active RayCluster %s/%s", activeRayCluster.Namespace, activeRayCluster.Name)
-		return activeRayCluster, pendingRayCluster, err
 	}
 
 	if shouldUpdateCluster(rayServiceInstance, pendingRayCluster, false) {
@@ -926,9 +927,9 @@ func (r *RayServiceReconciler) reconcileRayCluster(ctx context.Context, rayServi
 		modifyRayCluster(ctx, pendingRayCluster, goalCluster)
 		if err = r.Update(ctx, pendingRayCluster); err != nil {
 			r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(utils.FailedToUpdateRayCluster), "Failed to update the pending RayCluster %s/%s: %v", pendingRayCluster.Namespace, pendingRayCluster.Name, err)
+			return activeRayCluster, pendingRayCluster, err
 		}
 		r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeNormal, string(utils.UpdatedRayCluster), "Updated the pending RayCluster %s/%s", pendingRayCluster.Namespace, pendingRayCluster.Name)
-		return activeRayCluster, pendingRayCluster, nil
 	}
 
 	return activeRayCluster, pendingRayCluster, nil
@@ -1156,16 +1157,12 @@ func (r *RayServiceReconciler) createRayClusterInstance(ctx context.Context, ray
 func constructRayClusterForRayService(rayService *rayv1.RayService, rayClusterName string, scheme *runtime.Scheme) (*rayv1.RayCluster, error) {
 	var err error
 	rayClusterLabel := make(map[string]string)
-	for k, v := range rayService.Labels {
-		rayClusterLabel[k] = v
-	}
+	maps.Copy(rayClusterLabel, rayService.Labels)
 	rayClusterLabel[utils.RayOriginatedFromCRNameLabelKey] = rayService.Name
 	rayClusterLabel[utils.RayOriginatedFromCRDLabelKey] = utils.RayOriginatedFromCRDLabelValue(utils.RayServiceCRD)
 
 	rayClusterAnnotations := make(map[string]string)
-	for k, v := range rayService.Annotations {
-		rayClusterAnnotations[k] = v
-	}
+	maps.Copy(rayClusterAnnotations, rayService.Annotations)
 	rayClusterAnnotations[utils.HashWithoutReplicasAndWorkersToDeleteKey], err = generateHashWithoutReplicasAndWorkersToDelete(rayService.Spec.RayClusterSpec)
 	if err != nil {
 		return nil, err
@@ -1229,7 +1226,7 @@ func (r *RayServiceReconciler) updateServeDeployment(ctx context.Context, raySer
 	logger := ctrl.LoggerFrom(ctx)
 	logger.Info("updateServeDeployment", "V2 config", rayServiceInstance.Spec.ServeConfigV2)
 
-	serveConfig := make(map[string]interface{})
+	serveConfig := make(map[string]any)
 	if err := yaml.Unmarshal([]byte(rayServiceInstance.Spec.ServeConfigV2), &serveConfig); err != nil {
 		return err
 	}
@@ -1351,7 +1348,7 @@ func (r *RayServiceReconciler) applyServeTargetCapacity(ctx context.Context, ray
 		cachedConfig = rayServiceInstance.Spec.ServeConfigV2
 	}
 
-	serveConfig := make(map[string]interface{})
+	serveConfig := make(map[string]any)
 	if err := yaml.Unmarshal([]byte(cachedConfig), &serveConfig); err != nil {
 		return err
 	}
