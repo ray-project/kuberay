@@ -110,6 +110,10 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 		}
 	}
 
+	if spec.TTLSeconds != nil && *spec.TTLSeconds < 0 {
+		return fmt.Errorf("ttlSeconds must be a non-negative integer")
+	}
+
 	if annotations[RayFTEnabledAnnotationKey] != "" && spec.GcsFaultToleranceOptions != nil {
 		return fmt.Errorf("%s annotation and GcsFaultToleranceOptions are both set. "+
 			"Please use only GcsFaultToleranceOptions to configure GCS fault tolerance", RayFTEnabledAnnotationKey)
