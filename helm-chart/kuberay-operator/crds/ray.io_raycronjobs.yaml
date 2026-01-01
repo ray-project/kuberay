@@ -4617,6 +4617,14 @@ spec:
                         type: string
                       suspend:
                         type: boolean
+                      upgradeStrategy:
+                        properties:
+                          type:
+                            enum:
+                            - Recreate
+                            - None
+                            type: string
+                        type: object
                       workerGroupSpecs:
                         items:
                           properties:

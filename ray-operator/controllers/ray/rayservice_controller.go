@@ -580,11 +580,11 @@ func isZeroDowntimeUpgradeEnabled(ctx context.Context, upgradeStrategy *rayv1.Ra
 		upgradeType := upgradeStrategy.Type
 		if upgradeType != nil {
 			if features.Enabled(features.RayServiceIncrementalUpgrade) {
-				if *upgradeType != rayv1.NewCluster && *upgradeType != rayv1.NewClusterWithIncrementalUpgrade {
-					logger.Info("Zero-downtime upgrade is disabled because UpgradeStrategy.Type is not set to %s or %s.", string(rayv1.NewCluster), string(rayv1.NewClusterWithIncrementalUpgrade))
+				if *upgradeType != rayv1.RayServiceNewCluster && *upgradeType != rayv1.RayServiceNewClusterWithIncrementalUpgrade {
+					logger.Info("Zero-downtime upgrade is disabled because UpgradeStrategy.Type is not set to %s or %s.", string(rayv1.RayServiceNewCluster), string(rayv1.RayServiceNewClusterWithIncrementalUpgrade))
 					return false
 				}
-			} else if *upgradeType != rayv1.NewCluster {
+			} else if *upgradeType != rayv1.RayServiceNewCluster {
 				logger.Info("Zero-downtime upgrade is disabled because UpgradeStrategy.Type is not set to NewCluster.")
 				return false
 			}
@@ -1060,7 +1060,7 @@ func isClusterSpecHashEqual(rayServiceInstance *rayv1.RayService, cluster *rayv1
 	clusterHash := cluster.ObjectMeta.Annotations[utils.HashWithoutReplicasAndWorkersToDeleteKey]
 	goalClusterHash := ""
 	if !partial {
-		goalClusterHash, _ = generateHashWithoutReplicasAndWorkersToDelete(rayServiceInstance.Spec.RayClusterSpec)
+		goalClusterHash, _ = utils.GenerateHashWithoutReplicasAndWorkersToDelete(rayServiceInstance.Spec.RayClusterSpec)
 	} else {
 		// If everything is identical except for the Replicas and WorkersToDelete of
 		// the existing workergroups, and one or more new workergroups are added at the end, then update the cluster.
@@ -1076,7 +1076,7 @@ func isClusterSpecHashEqual(rayServiceInstance *rayv1.RayService, cluster *rayv1
 			goalClusterSpec.WorkerGroupSpecs = goalClusterSpec.WorkerGroupSpecs[:clusterNumWorkerGroups]
 
 			// Generate the hash of the old worker group specs.
-			goalClusterHash, err = generateHashWithoutReplicasAndWorkersToDelete(*goalClusterSpec)
+			goalClusterHash, err = utils.GenerateHashWithoutReplicasAndWorkersToDelete(*goalClusterSpec)
 			if err != nil {
 				return true
 			}
@@ -1163,7 +1163,7 @@ func constructRayClusterForRayService(rayService *rayv1.RayService, rayClusterNa
 
 	rayClusterAnnotations := make(map[string]string)
 	maps.Copy(rayClusterAnnotations, rayService.Annotations)
-	rayClusterAnnotations[utils.HashWithoutReplicasAndWorkersToDeleteKey], err = generateHashWithoutReplicasAndWorkersToDelete(rayService.Spec.RayClusterSpec)
+	rayClusterAnnotations[utils.HashWithoutReplicasAndWorkersToDeleteKey], err = utils.GenerateHashWithoutReplicasAndWorkersToDelete(rayService.Spec.RayClusterSpec)
 	if err != nil {
 		return nil, err
 	}
@@ -1726,21 +1726,6 @@ func (r *RayServiceReconciler) updateHeadPodServeLabel(ctx context.Context, rayS
 	}
 
 	return nil
-}
-
-func generateHashWithoutReplicasAndWorkersToDelete(rayClusterSpec rayv1.RayClusterSpec) (string, error) {
-	// Mute certain fields that will not trigger new RayCluster preparation. For example,
-	// Autoscaler will update `Replicas` and `WorkersToDelete` when scaling up/down.
-	updatedRayClusterSpec := rayClusterSpec.DeepCopy()
-	for i := 0; i < len(updatedRayClusterSpec.WorkerGroupSpecs); i++ {
-		updatedRayClusterSpec.WorkerGroupSpecs[i].Replicas = nil
-		updatedRayClusterSpec.WorkerGroupSpecs[i].MaxReplicas = nil
-		updatedRayClusterSpec.WorkerGroupSpecs[i].MinReplicas = nil
-		updatedRayClusterSpec.WorkerGroupSpecs[i].ScaleStrategy.WorkersToDelete = nil
-	}
-
-	// Generate a hash for the RayClusterSpec.
-	return utils.GenerateJsonHash(updatedRayClusterSpec)
 }
 
 // calculateNumServeEndpointsFromSlices calculates the number of unique ready Pods

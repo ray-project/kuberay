@@ -43,7 +43,7 @@ func IncrementalUpgradeRayServiceApplyConfiguration(
 ) *rayv1ac.RayServiceSpecApplyConfiguration {
 	return rayv1ac.RayServiceSpec().
 		WithUpgradeStrategy(rayv1ac.RayServiceUpgradeStrategy().
-			WithType(rayv1.NewClusterWithIncrementalUpgrade).
+			WithType(rayv1.RayServiceNewClusterWithIncrementalUpgrade).
 			WithClusterUpgradeOptions(
 				rayv1ac.ClusterUpgradeOptions().
 					WithGatewayClassName("istio").
