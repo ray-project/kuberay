@@ -18,15 +18,15 @@ import (
 )
 
 func main() {
-	role := ""
-	runtimeClassName := ""
-	rayClusterName := ""
-	rayClusterId := ""
-	rayRootDir := ""
-	logBatching := 1000
-	eventsPort := 8080
-	pushInterval := time.Minute
-	runtimeClassConfigPath := "/var/collector-config/data"
+	var role string
+	var runtimeClassName string
+	var rayClusterName string
+	var rayClusterId string
+	var rayRootDir string
+	var logBatching int
+	var eventsPort int
+	var pushInterval time.Duration
+	var runtimeClassConfigPath string
 
 	flag.StringVar(&role, "role", "Worker", "")
 	flag.StringVar(&runtimeClassName, "runtime-class-name", "", "")
