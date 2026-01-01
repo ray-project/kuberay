@@ -24,6 +24,7 @@ const (
 	RayClusterServingServiceLabelKey         = "ray.io/serve"
 	RayClusterHeadlessServiceLabelKey        = "ray.io/headless-worker-svc"
 	HashWithoutReplicasAndWorkersToDeleteKey = "ray.io/hash-without-replicas-and-workers-to-delete"
+	UpgradeStrategyRecreateHashKey           = "ray.io/upgrade-strategy-recreate-hash"
 	NumWorkerGroupsKey                       = "ray.io/num-worker-groups"
 	KubeRayVersion                           = "ray.io/kuberay-version"
 	RayCronJobNameLabelKey                   = "ray.io/cronjob-name"

@@ -11,6 +11,9 @@ import (
 
 // RayClusterSpec defines the desired state of RayCluster
 type RayClusterSpec struct {
+	// UpgradeStrategy defines the scaling policy used when upgrading the RayCluster
+	// +optional
+	UpgradeStrategy *RayClusterUpgradeStrategy `json:"upgradeStrategy,omitempty"`
 	// AuthOptions specifies the authentication options for the RayCluster.
 	// +optional
 	AuthOptions *AuthOptions `json:"authOptions,omitempty"`
@@ -47,6 +50,22 @@ type RayClusterSpec struct {
 	// WorkerGroupSpecs are the specs for the worker pods
 	// +optional
 	WorkerGroupSpecs []WorkerGroupSpec `json:"workerGroupSpecs,omitempty"`
+}
+
+// +kubebuilder:validation:Enum=Recreate;None
+type RayClusterUpgradeType string
+
+const (
+	// During upgrade, Recreate strategy will delete all existing pods before creating new ones
+	RayClusterRecreate RayClusterUpgradeType = "Recreate"
+	// No new pod will be created while the strategy is set to None
+	RayClusterUpgradeNone RayClusterUpgradeType = "None"
+)
+
+type RayClusterUpgradeStrategy struct {
+	// Type represents the strategy used when upgrading the RayCluster Pods. Currently supports `Recreate` and `None`.
+	// +optional
+	Type *RayClusterUpgradeType `json:"type,omitempty"`
 }
 
 // AuthMode describes the authentication mode for the Ray cluster.
