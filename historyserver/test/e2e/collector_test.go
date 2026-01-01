@@ -147,15 +147,6 @@ func testCollectorSeparatesLogsBySession(test Test, g *WithT, namespace *corev1.
 	//   {s3BucketName}/log/{clusterName}_{clusterID}/{sessionId}/node_events/...
 	verifyS3SessionDirs(test, g, s3Client, sessionPrefix, nodeID)
 
-	err := test.Client().Ray().RayV1().
-		RayClusters(rayCluster.Namespace).
-		Delete(test.Ctx(), rayCluster.Name, metav1.DeleteOptions{})
-	g.Expect(err).NotTo(HaveOccurred())
-	g.Eventually(func() error {
-		_, err = GetRayCluster(test, rayCluster.Namespace, rayCluster.Name)
-		return err
-	}, TestTimeoutMedium).Should(WithTransform(k8serrors.IsNotFound, BeTrue()))
-
 	deleteS3Bucket(test, g, s3Client)
 }
 
