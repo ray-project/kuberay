@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -141,10 +142,27 @@ func testCollectorSeparatesLogsBySession(test Test, g *WithT, namespace *corev1.
 		gg.Expect(rayHeadStatus.Ready).To(BeTrue())
 	}, TestTimeoutShort).Should(Succeed(), "ray-head container should restart and become ready")
 
+	// Verify the old session logs have been processed on disk:
+	// 1. Session directory with sessionID has been moved from session_latest to prev-logs.
+	// 2. Session directory with sessionID has been moved from prev-logs to persist-complete-logs.
+	dirs := []string{"prev-logs", "persist-complete-logs"}
+	for _, dir := range dirs {
+		dirPath := filepath.Join("/tmp/ray", dir, sessionID)
+		LogWithTimestamp(test.T(), "Checking if session directory %s exists in %s", sessionID, dirPath)
+		g.Eventually(func(gg Gomega) {
+			headPod, err := GetHeadPod(test, rayCluster)
+			gg.Expect(err).NotTo(HaveOccurred())
+			checkDirExistsCmd := fmt.Sprintf("test -d %s && echo 'exists' || echo 'not found'", dirPath)
+			stdout, stderr := ExecPodCmd(test, headPod, "ray-head", []string{"sh", "-c", checkDirExistsCmd})
+			gg.Expect(stderr.String()).To(BeEmpty())
+			gg.Expect(strings.TrimSpace(stdout.String())).To(Equal("exists"), "Session directory %s should exist in %s", sessionID, dirPath)
+		}, TestTimeoutMedium).Should(Succeed(), "Session directory %s should exist in %s", sessionID, dirPath)
+	}
+
 	// Verify logs and node_events are successfully uploaded to minio.
 	// Expected S3 path structure:
-	//   {s3BucketName}/log/{clusterName}_{clusterID}/{sessionId}/logs/...
-	//   {s3BucketName}/log/{clusterName}_{clusterID}/{sessionId}/node_events/...
+	//   {s3BucketName}/log/{clusterName}_{clusterID}/{sessionID}/logs/...
+	//   {s3BucketName}/log/{clusterName}_{clusterID}/{sessionID}/node_events/...
 	verifyS3SessionDirs(test, g, s3Client, sessionPrefix, nodeID)
 
 	deleteS3Bucket(test, g, s3Client)
