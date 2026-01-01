@@ -50,7 +50,7 @@ func TestCollector(t *testing.T) {
 			testFunc: testCollectorUploadOnGracefulShutdown,
 		},
 		{
-			name:     "Single session single node logs and events should be uploaded to S3 during runtime",
+			name:     "Simulate OOMKilled behavior: Single session single node logs and events should be uploaded to S3 after the ray-head container is restarted",
 			testFunc: testCollectorSeparatesLogsBySession,
 		},
 	}
@@ -67,9 +67,21 @@ func TestCollector(t *testing.T) {
 }
 
 // testCollectorUploadOnGracefulShutdown verifies that logs and node_events are successfully uploaded to S3 on cluster deletion.
-// When the Ray cluster is deleted, logs and node_events are processed as follows:
-// - logs: Trigger RayLogHandler.processSessionLatestLog to process logs under /tmp/ray/session_latest
-// - node_events: Trigger EventServer.flushEvents to process in-memory events
+//
+// The test case follows these steps:
+// 1. Prepare test environment by applying a Ray cluster with the collector
+// 2. Submit a Ray job to the existing Ray cluster
+// 3. Get the sessionID and nodeID for further verification
+// 4. Delete the Ray cluster to trigger log uploading and event flushing on deletion. When the Ray cluster is deleted,
+// logs and node_events are processed as follows:
+//   - logs: Trigger RayLogHandler.processSessionLatestLog to process logs under /tmp/ray/session_latest
+//   - node_events: Trigger EventServer.flushEvents to process in-memory events
+//
+// 5. Verify logs and node_events are successfully uploaded to S3. Expected S3 path structure:
+//   - {s3BucketName}/log/{clusterName}_{clusterID}/{sessionID}/logs/...
+//   - {s3BucketName}/log/{clusterName}_{clusterID}/{sessionID}/node_events/...
+//
+// 6. Delete S3 bucket to ensure test isolation
 func testCollectorUploadOnGracefulShutdown(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
 	rayCluster := prepareTestEnv(test, g, namespace, s3Client)
 
@@ -91,22 +103,31 @@ func testCollectorUploadOnGracefulShutdown(test Test, g *WithT, namespace *corev
 		return err
 	}, TestTimeoutMedium).Should(WithTransform(k8serrors.IsNotFound, BeTrue()))
 
-	// Verify logs and node_events are successfully uploaded to minio.
-	// Expected S3 path structure:
-	//   {s3BucketName}/log/{clusterName}_{clusterID}/{sessionId}/logs/...
-	//   {s3BucketName}/log/{clusterName}_{clusterID}/{sessionId}/node_events/...
+	// Verify logs and node_events are successfully uploaded to S3.
 	verifyS3SessionDirs(test, g, s3Client, sessionPrefix, nodeID)
 
-	// TODO(jwj): Refactor cleanup tasks
 	// Delete S3 bucket to ensure test isolation.
 	deleteS3Bucket(test, g, s3Client)
 }
 
-// testCollectorSeparatesLogsBySession verifies that logs and node_events are successfully uploaded to S3 during runtime.
-// This makes sure RayLogHandler.WatchPrevLogsLoops processes logs as they appear under /tmp/ray/prev-logs.
-// Additionally, it ensures events are flushed when the file watcher EventServer.watchNodeIDFile detects node ID change.
+// testCollectorSeparatesLogsBySession verifies that logs and node_events are successfully uploaded to S3 after the ray-head container is restarted.
+//
+// The test case follows these steps:
+// 1. Prepare test environment by applying a Ray cluster with the collector
+// 2. Submit a Ray job to the existing cluster
+// 3. Get the sessionID and nodeID for further verification
+// 4. Kill the main process of ray-head container to trigger a container restart
+// 5. Verify the old session logs have been processed on disk by checking existence of old session directories:
+//   - /tmp/ray/prev-logs/{sessionID}
+//   - /tmp/ray/persist-complete-logs/{sessionID}
 //
 // NOTE: Logs under /tmp/ray/session_latest are moved to /tmp/ray/prev-logs by the Ray container startup command.
+//
+// 6. Verify logs and node_events are successfully uploaded to S3. Expected S3 path structure:
+//   - {s3BucketName}/log/{clusterName}_{clusterID}/{sessionID}/logs/...
+//   - {s3BucketName}/log/{clusterName}_{clusterID}/{sessionID}/node_events/...
+//
+// 7. Delete S3 bucket to ensure test isolation
 func testCollectorSeparatesLogsBySession(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
 	rayCluster := prepareTestEnv(test, g, namespace, s3Client)
 
@@ -142,9 +163,7 @@ func testCollectorSeparatesLogsBySession(test Test, g *WithT, namespace *corev1.
 		gg.Expect(rayHeadStatus.Ready).To(BeTrue())
 	}, TestTimeoutShort).Should(Succeed(), "ray-head container should restart and become ready")
 
-	// Verify the old session logs have been processed on disk:
-	// 1. Session directory with sessionID has been moved from session_latest to prev-logs.
-	// 2. Session directory with sessionID has been moved from prev-logs to persist-complete-logs.
+	// Verify the old session logs have been processed on disk.
 	dirs := []string{"prev-logs", "persist-complete-logs"}
 	for _, dir := range dirs {
 		dirPath := filepath.Join("/tmp/ray", dir, sessionID)
@@ -159,10 +178,7 @@ func testCollectorSeparatesLogsBySession(test Test, g *WithT, namespace *corev1.
 		}, TestTimeoutMedium).Should(Succeed(), "Session directory %s should exist in %s", sessionID, dirPath)
 	}
 
-	// Verify logs and node_events are successfully uploaded to minio.
-	// Expected S3 path structure:
-	//   {s3BucketName}/log/{clusterName}_{clusterID}/{sessionID}/logs/...
-	//   {s3BucketName}/log/{clusterName}_{clusterID}/{sessionID}/node_events/...
+	// Verify logs and node_events are successfully uploaded to S3.
 	verifyS3SessionDirs(test, g, s3Client, sessionPrefix, nodeID)
 
 	deleteS3Bucket(test, g, s3Client)
