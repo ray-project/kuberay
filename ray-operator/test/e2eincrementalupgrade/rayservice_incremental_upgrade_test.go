@@ -109,8 +109,8 @@ func TestRayServiceIncrementalUpgrade(t *testing.T) {
 		}
 		latestRayService.Spec.RayClusterSpec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests[corev1.ResourceCPU] = resource.MustParse("500m")
 		serveConfig := latestRayService.Spec.ServeConfigV2
-		serveConfig = strings.Replace(serveConfig, "price: 3", "price: 4", -1)
-		serveConfig = strings.Replace(serveConfig, "factor: 5", "factor: 3", -1)
+		serveConfig = strings.ReplaceAll(serveConfig, "price: 3", "price: 4")
+		serveConfig = strings.ReplaceAll(serveConfig, "factor: 5", "factor: 3")
 		latestRayService.Spec.ServeConfigV2 = serveConfig
 
 		_, err = test.Client().Ray().RayV1().RayServices(namespace.Name).Update(

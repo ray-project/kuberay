@@ -337,7 +337,7 @@ func calculateDesiredResourcesForWorkerGroup(workerGroupSpec rayv1.WorkerGroupSp
 	for range *workerGroupSpec.Replicas {
 		for name, quantity := range podResource {
 			totalResource[name] = quantity.DeepCopy()
-			var quantity resource.Quantity = totalResource[name]
+			quantity := totalResource[name]
 			(&quantity).Mul(int64(*workerGroupSpec.Replicas))
 			// Mul() doesn't recalculate the "s" field. Call String() to do it.
 			_ = quantity.String()
