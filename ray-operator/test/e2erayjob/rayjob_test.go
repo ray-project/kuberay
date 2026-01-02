@@ -311,6 +311,11 @@ env_vars:
 		g.Eventually(HeadPod(test, rayCluster), TestTimeoutMedium, 2*time.Second).ShouldNot(BeNil())
 		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
 			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusFailed)))
+		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
+			Should(WithTransform(RayJobReason, Or(
+				Equal(rayv1.JobDeploymentStatusTransitionGracePeriodExceeded),
+				Equal(rayv1.SubmissionFailed),
+			)))
 		// Cleanup
 		err = test.Client().Ray().RayV1().RayJobs(namespace.Name).Delete(test.Ctx(), rayJob.Name, metav1.DeleteOptions{})
 		g.Expect(err).NotTo(HaveOccurred())
