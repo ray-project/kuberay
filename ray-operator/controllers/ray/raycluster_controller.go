@@ -1637,7 +1637,8 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 			}
 		}
 
-		if suspendStatus == rayv1.RayClusterSuspending {
+		switch suspendStatus {
+		case rayv1.RayClusterSuspending:
 			if len(runtimePods.Items) == 0 {
 				meta.SetStatusCondition(&newInstance.Status.Conditions, metav1.Condition{
 					Type:    string(rayv1.RayClusterProvisioned),
@@ -1656,7 +1657,7 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 					Status: metav1.ConditionTrue,
 				})
 			}
-		} else if suspendStatus == rayv1.RayClusterSuspended {
+		case rayv1.RayClusterSuspended:
 			if instance.Spec.Suspend != nil && !*instance.Spec.Suspend {
 				meta.SetStatusCondition(&newInstance.Status.Conditions, metav1.Condition{
 					Type:   string(rayv1.RayClusterSuspended),
@@ -1664,7 +1665,7 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 					Status: metav1.ConditionFalse,
 				})
 			}
-		} else {
+		default:
 			meta.SetStatusCondition(&newInstance.Status.Conditions, metav1.Condition{
 				Type:   string(rayv1.RayClusterSuspended),
 				Reason: string(rayv1.RayClusterSuspended),
