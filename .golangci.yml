@@ -77,6 +77,15 @@ linters:
             - '**/ray-operator/apis/config/v1alpha1/*.go'
             - '**/ray-operator/apis/ray/v1alpha1/*.go'
             - '**/ray-operator/apis/ray/v1/*.go'
+            - '**/ray-operator/controllers/ray/batchscheduler/utils/*.go'
+            - '**/ray-operator/controllers/ray/common/*.go'
+            - '**/ray-operator/controllers/ray/utils/*.go'
+            - '**/ray-operator/pkg/utils/*.go'
+            - '**/ray-operator/controllers/ray/utils/types/*.go'
+            - '**/apiserver/pkg/http/*.go'
+            - '**/apiserver/pkg/util/*.go'
+            - '**/apiserversdk/util/*.go'
+            - '**/kubectl-plugin/pkg/util/*.go'
     modernize:
       disable:
         - omitzero

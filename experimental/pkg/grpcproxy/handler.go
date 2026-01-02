@@ -61,7 +61,7 @@ func (s *handler) AddSecurityHeaderToHandler(securityheader map[string]string) {
 // handler is where the real magic of proxying happens.
 // It is invoked like any gRPC server stream and uses the emptypb.Empty type server
 // to proxy calls between the input and output streams.
-func (s *handler) handler(srv any, serverStream grpc.ServerStream) error {
+func (s *handler) handler(_ any, serverStream grpc.ServerStream) error {
 	// little bit of gRPC internals never hurt anyone
 	fullMethodName, ok := grpc.MethodFromServerStream(serverStream)
 	if !ok {
@@ -72,11 +72,11 @@ func (s *handler) handler(srv any, serverStream grpc.ServerStream) error {
 		if !ok {
 			return status.Errorf(codes.Internal, "lowLevelServerStream not exists in context")
 		}
-		for header_name, header_value := range s.securityheader {
-			h_name := strings.ToLower(header_name)
-			if v, exists := header[h_name]; exists {
+		for headerName, headerValue := range s.securityheader {
+			hName := strings.ToLower(headerName)
+			if v, exists := header[hName]; exists {
 				// Authentication header exists
-				if v[0] != strings.ToLower(header_value) {
+				if v[0] != strings.ToLower(headerValue) {
 					return status.Error(codes.Unauthenticated, "Request unauthorized")
 				}
 			} else {
