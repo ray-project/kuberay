@@ -82,12 +82,13 @@ func NewGetWorkerGroupCommand(cmdFactory cmdutil.Factory, streams genericcliopti
 	options := NewGetWorkerGroupOptions(cmdFactory, streams)
 
 	cmd := &cobra.Command{
-		Use:          "workergroup [GROUP] [(-c/--ray-cluster) RAYCLUSTER]",
-		Aliases:      []string{"workergroups"},
-		Short:        "Get Ray worker groups",
-		Example:      getWorkerGroupsExample,
-		SilenceUsage: true,
-		Args:         cobra.MaximumNArgs(1),
+		Use:               "workergroup [GROUP] [(-c/--ray-cluster) RAYCLUSTER]",
+		Aliases:           []string{"workergroups"},
+		Short:             "Get Ray worker groups",
+		Example:           getWorkerGroupsExample,
+		SilenceUsage:      true,
+		Args:              cobra.MaximumNArgs(1),
+		ValidArgsFunction: completion.WorkerGroupCompletionFunc(cmdFactory),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := options.Complete(args, cmd); err != nil {
 				return err
@@ -101,7 +102,7 @@ func NewGetWorkerGroupCommand(cmdFactory cmdutil.Factory, streams genericcliopti
 	}
 
 	cmd.Flags().StringVarP(&options.cluster, "ray-cluster", "c", "", "Ray cluster")
-	cmd.Flags().BoolVarP(&options.allNamespaces, "all-namespaces", "A", false, "If present, list nodes across all namespaces. Namespace in current context is ignored even if specified with --namespace.")
+	cmd.Flags().BoolVarP(&options.allNamespaces, "all-namespaces", "A", false, "If present, list workergroups across all namespaces. Namespace in current context is ignored even if specified with --namespace.")
 
 	err := cmd.RegisterFlagCompletionFunc("ray-cluster", completion.RayClusterCompletionFunc(cmdFactory))
 	if err != nil {
