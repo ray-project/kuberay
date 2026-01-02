@@ -21,10 +21,8 @@ linters:
     - wastedassign
     - errorlint
     - staticcheck
-    # TODO: The following linters are disabled for now to unblock the golangci-lint v2 migration.
-    # We will fix the lint errors and re-enable these linters in follow-up PRs.
-    # - noctx
-    # - revive
+    - noctx
+    - revive
   settings:
     staticcheck:
       checks: ["all", "-SA1019", "-ST1001", "-ST1003", "-ST1005", "-QF1008"]

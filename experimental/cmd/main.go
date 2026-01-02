@@ -66,7 +66,8 @@ func main() {
 			klog.Info("connecting to GRPC server ", cc.Target())
 
 			// set up listener
-			lis, err := net.Listen("tcp", "localhost:"+grpc_local_port)
+			lc := net.ListenConfig{}
+			lis, err := lc.Listen(context.Background(), "tcp", "localhost:"+grpc_local_port)
 			if err != nil {
 				klog.Fatal("failed to listen: ", err)
 			}
