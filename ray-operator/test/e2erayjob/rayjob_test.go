@@ -15,7 +15,6 @@ import (
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	rayv1ac "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/ray/v1"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
@@ -309,14 +308,7 @@ env_vars:
 		g.Expect(err).NotTo(HaveOccurred())
 
 		// Head pod should be recreated for non-sidecar modes.
-		g.Eventually(func() int {
-			pods, listErr := test.Client().Core().CoreV1().Pods(rayCluster.Namespace).List(
-				test.Ctx(), common.RayClusterHeadPodsAssociationOptions(rayCluster).ToMetaV1ListOptions())
-			if listErr != nil {
-				return -1
-			}
-			return len(pods.Items)
-		}, TestTimeoutMedium, 2*time.Second).Should(Equal(1))
+		g.Eventually(HeadPod(test, rayCluster), TestTimeoutMedium, 2*time.Second).ShouldNot(BeNil())
 		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
 			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusFailed)))
 		// Cleanup

@@ -11,7 +11,6 @@ import (
 	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	rayv1ac "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/ray/v1"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
@@ -188,13 +187,8 @@ env_vars:
 		err = test.Client().Core().CoreV1().Pods(headPod.Namespace).Delete(test.Ctx(), headPod.Name, metav1.DeleteOptions{})
 		g.Expect(err).NotTo(HaveOccurred())
 
-		getNumOfHeadPods := func() (int, error) {
-			pods, err := test.Client().Core().CoreV1().Pods(rayCluster.Namespace).List(
-				test.Ctx(), common.RayClusterHeadPodsAssociationOptions(rayCluster).ToMetaV1ListOptions())
-			return len(pods.Items), err
-		}
-		g.Eventually(getNumOfHeadPods, TestTimeoutMedium, 2*time.Second).Should(BeZero())
-		g.Consistently(getNumOfHeadPods, TestTimeoutShort, 2*time.Second).Should(BeZero())
+		g.Eventually(HeadPodOrNil(test, rayCluster), TestTimeoutMedium, 2*time.Second).Should(BeNil())
+		g.Consistently(HeadPodOrNil(test, rayCluster), TestTimeoutShort, 2*time.Second).Should(BeNil())
 
 		// After head pod deletion, controller should mark RayJob as Failed with a specific message
 		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
