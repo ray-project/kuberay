@@ -8,7 +8,7 @@ import (
 )
 
 // NewProxy sets up a simple proxy that forwards all requests to dst.
-func NewProxy(dst *grpc.ClientConn, opts ...grpc.ServerOption) (*grpc.Server, *handler) {
+func NewProxy(dst *grpc.ClientConn, opts ...grpc.ServerOption) (*grpc.Server, *Handler) {
 	option, h := DefaultProxyOpt(dst)
 	opts = append(opts, option)
 	// Set up the proxy server and then serve from it like in step one.
@@ -16,7 +16,7 @@ func NewProxy(dst *grpc.ClientConn, opts ...grpc.ServerOption) (*grpc.Server, *h
 }
 
 // DefaultProxyOpt returns an grpc.UnknownServiceHandler with a DefaultDirector.
-func DefaultProxyOpt(cc *grpc.ClientConn) (grpc.ServerOption, *handler) {
+func DefaultProxyOpt(cc *grpc.ClientConn) (grpc.ServerOption, *Handler) {
 	sh, h := TransparentHandler(DefaultDirector(cc))
 	return grpc.UnknownServiceHandler(sh), h
 }
