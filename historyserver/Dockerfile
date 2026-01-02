@@ -28,6 +28,5 @@ FROM ubuntu:22.04
 RUN apt-get update && apt-get upgrade -y && rm -rf /var/cache/apt/ && apt-get install -y ca-certificates
 
 COPY --from=builder /historyserver/output/bin/historyserver /usr/local/bin/historyserver
-COPY --from=builder /historyserver/output/bin/collector /usr/local/bin/collector
-COPY --from=builder /historyserver/dashboard/v2.51.0/client/build /dashboard/v2.51.0/client/build
-COPY --from=builder /historyserver/dashboard/homepage /dashboard/homepage
+# COPY --from=builder /historyserver/dashboard/v2.51.0/client/build /dashboard/v2.51.0/client/build
+# COPY --from=builder /historyserver/dashboard/homepage /dashboard/homepage

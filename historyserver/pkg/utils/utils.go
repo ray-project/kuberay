@@ -75,9 +75,9 @@ func RecreateObjectDir(bucket *oss.Bucket, dir string, options ...oss.Option) er
 		}
 		logrus.Infof("ObjectDir %s has delete success...", objectDir)
 
-		// List and delete all files with specified prefix
+		// 列举所有包含指定前缀的文件并删除。
 		marker := oss.Marker("")
-		// To delete only src/ and its contents, set prefix to src/
+		// 如果您仅需要删除src目录及目录下的所有文件，则prefix设置为src/。
 		prefix := oss.Prefix(objectDir)
 		var totalDeleted int
 
@@ -93,7 +93,7 @@ func RecreateObjectDir(bucket *oss.Bucket, dir string, options ...oss.Option) er
 				objects[i] = object.Key
 			}
 
-			// Delete objects
+			// 删除对象
 			delRes, err := bucket.DeleteObjects(objects, oss.DeleteObjectsQuiet(true))
 			if err != nil {
 				logrus.Errorf("Failed to delete allobjects in dir %s : %v", objectDir, err)
@@ -107,7 +107,7 @@ func RecreateObjectDir(bucket *oss.Bucket, dir string, options ...oss.Option) er
 
 			totalDeleted += len(objects)
 
-			// Update marker
+			// 更新marker
 			marker = oss.Marker(lor.NextMarker)
 			if !lor.IsTruncated {
 				break
@@ -171,7 +171,7 @@ func DeleteObject(bucket *oss.Bucket, objectName string) error {
 	}
 
 	if isExist {
-		// Delete single file
+		// 删除单个文件。
 		err = bucket.DeleteObject(objectName)
 		if err != nil {
 			logrus.Warnf("Failed to delete object '%s': %v", objectName, err)
