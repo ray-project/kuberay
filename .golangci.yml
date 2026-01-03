@@ -20,17 +20,14 @@ linters:
     - unused
     - wastedassign
     - errorlint
+    - staticcheck
     # TODO: The following linters are disabled for now to unblock the golangci-lint v2 migration.
     # We will fix the lint errors and re-enable these linters in follow-up PRs.
     # - noctx
     # - revive
-    # - staticcheck
   settings:
     staticcheck:
-      checks:
-        - all
-        # Exclude the SA1019 check which checks the usage of deprecated fields.
-        - "-SA1019"
+      checks: ["all", "-SA1019", "-ST1001", "-ST1003", "-ST1005", "-QF1008"]
     ginkgolinter:
       forbid-focus-container: true
     gocyclo:

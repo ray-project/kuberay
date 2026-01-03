@@ -410,17 +410,26 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 	return podTemplate
 }
 
-func initLivenessAndReadinessProbe(rayContainer *corev1.Container, rayNodeType rayv1.RayNodeType, creatorCRDType utils.CRDType) {
+func initLivenessAndReadinessProbe(rayContainer *corev1.Container, rayNodeType rayv1.RayNodeType, creatorCRDType utils.CRDType, rayStartParams map[string]string) {
+	getPort := func(key string, defaultVal int) int {
+		if portStr, ok := rayStartParams[key]; ok {
+			if port, err := strconv.Atoi(portStr); err == nil {
+				return port
+			}
+		}
+		return defaultVal
+	}
+
 	rayAgentRayletHealthCommand := fmt.Sprintf(
 		utils.BaseWgetHealthCommand,
 		utils.DefaultReadinessProbeTimeoutSeconds,
-		utils.DefaultDashboardAgentListenPort,
+		getPort("dashboard-agent-listen-port", utils.DefaultDashboardAgentListenPort),
 		utils.RayAgentRayletHealthPath,
 	)
 	rayDashboardGCSHealthCommand := fmt.Sprintf(
 		utils.BaseWgetHealthCommand,
 		utils.DefaultReadinessProbeFailureThreshold,
-		utils.DefaultDashboardPort,
+		getPort("dashboard-port", utils.DefaultDashboardPort),
 		utils.RayDashboardGCSHealthPath,
 	)
 
@@ -566,7 +575,7 @@ func BuildPod(ctx context.Context, podTemplateSpec corev1.PodTemplateSpec, rayNo
 		// Configure the readiness and liveness probes for the Ray container. These probes
 		// play a crucial role in KubeRay health checks. Without them, certain failures,
 		// such as the Raylet process crashing, may go undetected.
-		initLivenessAndReadinessProbe(&pod.Spec.Containers[utils.RayContainerIndex], rayNodeType, creatorCRDType)
+		initLivenessAndReadinessProbe(&pod.Spec.Containers[utils.RayContainerIndex], rayNodeType, creatorCRDType, rayStartParams)
 	}
 
 	return pod

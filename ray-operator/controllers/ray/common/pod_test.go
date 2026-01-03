@@ -1672,6 +1672,7 @@ func TestInitLivenessAndReadinessProbe(t *testing.T) {
 	podName := strings.ToLower(cluster.Name + utils.DashSymbol + string(rayv1.HeadNode) + utils.DashSymbol + utils.FormatInt32(0))
 	podTemplateSpec := DefaultHeadPodTemplate(context.Background(), *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
 	rayContainer := &podTemplateSpec.Spec.Containers[utils.RayContainerIndex]
+	rayStartParams := make(map[string]string)
 
 	// Test 1: User defines a custom HTTPGet probe.
 	httpGetProbe := corev1.Probe{
@@ -1686,7 +1687,7 @@ func TestInitLivenessAndReadinessProbe(t *testing.T) {
 
 	rayContainer.LivenessProbe = &httpGetProbe
 	rayContainer.ReadinessProbe = &httpGetProbe
-	initLivenessAndReadinessProbe(rayContainer, rayv1.HeadNode, "")
+	initLivenessAndReadinessProbe(rayContainer, rayv1.HeadNode, "", rayStartParams)
 	assert.NotNil(t, rayContainer.LivenessProbe.HTTPGet)
 	assert.NotNil(t, rayContainer.ReadinessProbe.HTTPGet)
 	assert.Nil(t, rayContainer.LivenessProbe.Exec)
@@ -1697,7 +1698,7 @@ func TestInitLivenessAndReadinessProbe(t *testing.T) {
 	// implying that an additional serve health check will be added to the readiness probe.
 	rayContainer.LivenessProbe = nil
 	rayContainer.ReadinessProbe = nil
-	initLivenessAndReadinessProbe(rayContainer, rayv1.WorkerNode, utils.RayServiceCRD)
+	initLivenessAndReadinessProbe(rayContainer, rayv1.WorkerNode, utils.RayServiceCRD, rayStartParams)
 	assert.NotNil(t, rayContainer.LivenessProbe.Exec)
 	assert.NotNil(t, rayContainer.ReadinessProbe.Exec)
 	assert.NotContains(t, strings.Join(rayContainer.LivenessProbe.Exec.Command, " "), utils.RayServeProxyHealthPath)
@@ -1710,7 +1711,7 @@ func TestInitLivenessAndReadinessProbe(t *testing.T) {
 	// implying that an additional serve health check will be added to the readiness probe.
 	rayContainer.LivenessProbe = nil
 	rayContainer.ReadinessProbe = nil
-	initLivenessAndReadinessProbe(rayContainer, rayv1.HeadNode, utils.RayServiceCRD)
+	initLivenessAndReadinessProbe(rayContainer, rayv1.HeadNode, utils.RayServiceCRD, rayStartParams)
 	assert.NotNil(t, rayContainer.LivenessProbe.Exec)
 	assert.NotNil(t, rayContainer.ReadinessProbe.Exec)
 	// head pod should not have Ray Serve proxy health probes
@@ -1718,6 +1719,76 @@ func TestInitLivenessAndReadinessProbe(t *testing.T) {
 	assert.NotContains(t, strings.Join(rayContainer.ReadinessProbe.Exec.Command, " "), utils.RayServeProxyHealthPath)
 	assert.Equal(t, int32(5), rayContainer.LivenessProbe.TimeoutSeconds)
 	assert.Equal(t, int32(5), rayContainer.ReadinessProbe.TimeoutSeconds)
+
+	// Test 4: Test custom ports in rayStartParams for head node.
+	rayContainer.LivenessProbe = nil
+	rayContainer.ReadinessProbe = nil
+	customRayStartParams := map[string]string{
+		"dashboard-agent-listen-port": "8266",
+		"dashboard-port":              "8365",
+	}
+	initLivenessAndReadinessProbe(rayContainer, rayv1.HeadNode, utils.RayClusterCRD, customRayStartParams)
+	assert.NotNil(t, rayContainer.LivenessProbe.Exec)
+	assert.NotNil(t, rayContainer.ReadinessProbe.Exec)
+
+	livenessCommand := strings.Join(rayContainer.LivenessProbe.Exec.Command, " ")
+	readinessCommand := strings.Join(rayContainer.ReadinessProbe.Exec.Command, " ")
+
+	assert.Contains(t, livenessCommand, ":8266", "Head pod liveness probe should use custom dashboard-agent-listen-port")
+	assert.Contains(t, livenessCommand, ":8365", "Head pod liveness probe should use custom dashboard-port")
+	assert.Contains(t, readinessCommand, ":8266", "Head pod readiness probe should use custom dashboard-agent-listen-port")
+	assert.Contains(t, readinessCommand, ":8365", "Head pod readiness probe should use custom dashboard-port")
+
+	// Test 5: Test custom ports in rayStartParams for worker node
+	rayContainer.LivenessProbe = nil
+	rayContainer.ReadinessProbe = nil
+	workerRayStartParams := map[string]string{
+		"dashboard-agent-listen-port": "9000",
+	}
+	initLivenessAndReadinessProbe(rayContainer, rayv1.WorkerNode, utils.RayClusterCRD, workerRayStartParams)
+	assert.NotNil(t, rayContainer.LivenessProbe.Exec)
+	assert.NotNil(t, rayContainer.ReadinessProbe.Exec)
+
+	workerLivenessCommand := strings.Join(rayContainer.LivenessProbe.Exec.Command, " ")
+	workerReadinessCommand := strings.Join(rayContainer.ReadinessProbe.Exec.Command, " ")
+
+	assert.Contains(t, workerLivenessCommand, ":9000", "Worker pod should use custom dashboard-agent-listen-port")
+	assert.Contains(t, workerReadinessCommand, ":9000", "Worker pod should use custom dashboard-agent-listen-port")
+	assert.NotContains(t, workerLivenessCommand, fmt.Sprintf(":%d", utils.DefaultDashboardPort), "Worker pod should not check dashboard-port")
+	assert.NotContains(t, workerReadinessCommand, fmt.Sprintf(":%d", utils.DefaultDashboardPort), "Worker pod should not check dashboard-port")
+
+	// Test 6: Test RayService worker with custom ports and serve proxy health check
+	rayContainer.LivenessProbe = nil
+	rayContainer.ReadinessProbe = nil
+	rayContainer.Ports = []corev1.ContainerPort{
+		{
+			Name:          utils.ServingPortName,
+			ContainerPort: int32(utils.DefaultServingPort),
+		},
+	}
+	rayServiceWorkerParams := map[string]string{
+		"dashboard-agent-listen-port": "8500",
+	}
+	initLivenessAndReadinessProbe(rayContainer, rayv1.WorkerNode, utils.RayServiceCRD, rayServiceWorkerParams)
+	rayServiceReadinessCommand := strings.Join(rayContainer.ReadinessProbe.Exec.Command, " ")
+	assert.Contains(t, rayServiceReadinessCommand, ":8500", "RayService worker should use custom dashboard-agent-listen-port")
+	assert.Contains(t, rayServiceReadinessCommand, utils.RayServeProxyHealthPath, "RayService worker should include serve proxy health check")
+	assert.Equal(t, int32(utils.ServeReadinessProbeFailureThreshold), rayContainer.ReadinessProbe.FailureThreshold, "RayService worker should have correct failure threshold")
+
+	// Test 8: Test invalid port values (should fall back to defaults)
+	rayContainer.LivenessProbe = nil
+	rayContainer.ReadinessProbe = nil
+	invalidPortParams := map[string]string{
+		"dashboard-agent-listen-port": "invalid-port",
+		"dashboard-port":              "not-a-number",
+	}
+	initLivenessAndReadinessProbe(rayContainer, rayv1.HeadNode, utils.RayClusterCRD, invalidPortParams)
+
+	invalidPortLivenessCommand := strings.Join(rayContainer.LivenessProbe.Exec.Command, " ")
+
+	// Should fall back to default ports when invalid values are provided
+	assert.Contains(t, invalidPortLivenessCommand, fmt.Sprintf(":%d", utils.DefaultDashboardAgentListenPort), "Should fall back to default dashboard-agent-listen-port for invalid input")
+	assert.Contains(t, invalidPortLivenessCommand, fmt.Sprintf(":%d", utils.DefaultDashboardPort), "Should fall back to default dashboard-port for invalid input")
 }
 
 func TestGenerateRayStartCommand(t *testing.T) {

@@ -21,7 +21,6 @@ import (
 	"k8s.io/cli-runtime/pkg/genericiooptions"
 	"k8s.io/cli-runtime/pkg/resource"
 	"k8s.io/client-go/rest"
-	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/rest/fake"
 	"k8s.io/client-go/tools/remotecommand"
 	cmdtesting "k8s.io/kubectl/pkg/cmd/testing"
@@ -374,8 +373,8 @@ func TestRayClusterLogRun(t *testing.T) {
 		}),
 	}
 
-	tf.ClientConfigVal = &restclient.Config{
-		ContentConfig: restclient.ContentConfig{GroupVersion: &v1.SchemeGroupVersion},
+	tf.ClientConfigVal = &rest.Config{
+		ContentConfig: rest.ContentConfig{GroupVersion: &v1.SchemeGroupVersion},
 	}
 
 	err = fakeClusterLogOptions.Run(context.Background(), tf)
