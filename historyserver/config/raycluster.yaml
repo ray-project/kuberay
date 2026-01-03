@@ -108,7 +108,7 @@ spec:
     minReplicas: 1
     numOfHosts: 1
     rayStartParams: {}
-    replicas: 0
+    replicas: 1
     template:
       metadata:
         labels:
