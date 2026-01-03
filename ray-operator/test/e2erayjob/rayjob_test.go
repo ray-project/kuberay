@@ -308,7 +308,9 @@ env_vars:
 		g.Expect(err).NotTo(HaveOccurred())
 
 		// Head pod should be recreated for non-sidecar modes.
-		g.Eventually(HeadPod(test, rayCluster), TestTimeoutMedium, 2*time.Second).ShouldNot(BeNil())
+		g.Eventually(func() (*corev1.Pod, error) {
+			return GetHeadPod(test, rayCluster)
+		}, TestTimeoutMedium, 2*time.Second).ShouldNot(BeNil())
 		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
 			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusFailed)))
 		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
