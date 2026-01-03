@@ -105,10 +105,10 @@ spec:
   workerGroupSpecs:
   - groupName: cpu
     maxReplicas: 1000
-    minReplicas: 0
+    minReplicas: 1
     numOfHosts: 1
     rayStartParams: {}
-    replicas: 0
+    replicas: 1
     template:
       metadata:
         labels:
@@ -154,8 +154,8 @@ spec:
                   GetNodeId
           resources:
             limits:
-              cpu: "30"
-              memory: 30G
+              cpu: "2"
+              memory: 2G
             requests:
               cpu: "50m"
               memory: 1G
