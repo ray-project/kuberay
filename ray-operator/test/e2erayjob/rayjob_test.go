@@ -313,6 +313,7 @@ env_vars:
 			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusFailed)))
 		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
 			Should(WithTransform(RayJobReason, Or(
+				Equal(rayv1.AppFailed),
 				Equal(rayv1.JobDeploymentStatusTransitionGracePeriodExceeded),
 				Equal(rayv1.SubmissionFailed),
 			)))
