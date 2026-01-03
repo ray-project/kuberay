@@ -8,23 +8,23 @@ import (
 )
 
 const (
-	token_header = "Authorization"
+	tokenHeader = "Authorization"
 )
 
-type tokenAuth struct {
+type TokenAuth struct {
 	authorization
 	token string
 }
 
-func NewTokenAuth(token string, proxy *httputil.ReverseProxy, prefix string, upstream *url.URL) tokenAuth {
+func NewTokenAuth(token string, proxy *httputil.ReverseProxy, prefix string, upstream *url.URL) TokenAuth {
 	auth := authorization{proxy: proxy, prefix: prefix, upstream: upstream}
-	return tokenAuth{token: token, authorization: auth}
+	return TokenAuth{token: token, authorization: auth}
 }
 
-func (ta tokenAuth) AuthFunc() func(http.ResponseWriter, *http.Request) {
+func (ta TokenAuth) AuthFunc() func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.String(), ta.prefix) {
-			auth := r.Header.Get(token_header)
+			auth := r.Header.Get(tokenHeader)
 			if auth != ta.token {
 				// Wrong token
 				WriteUnauthorisedResponse(w)

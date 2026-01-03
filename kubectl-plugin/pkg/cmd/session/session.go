@@ -196,7 +196,7 @@ func (options *SessionOptions) Run(ctx context.Context, factory cmdutil.Factory)
 	var wg sync.WaitGroup
 	wg.Go(func() {
 		for {
-			portforwardCmd := exec.Command("kubectl", kubectlArgs...)
+			portforwardCmd := exec.CommandContext(ctx, "kubectl", kubectlArgs...)
 			portforwardCmd.Stdout = options.ioStreams.Out
 			portforwardCmd.Stderr = options.ioStreams.ErrOut
 
