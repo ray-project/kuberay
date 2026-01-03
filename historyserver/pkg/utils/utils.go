@@ -173,7 +173,7 @@ func AppendRayClusterNameID(rayClusterName, rayClusterID string) string {
 	return fmt.Sprintf("%s%s%s", rayClusterName, connector, rayClusterID)
 }
 
-func GetRarClusterNameAndID(rayClusterNameID string) (string, string) {
+func GetRayClusterNameAndID(rayClusterNameID string) (string, string) {
 	nameID := strings.Split(rayClusterNameID, connector)
 	if len(nameID) < 2 {
 		logrus.Fatalf("rayClusterNameID %s must match name%sid pattern", rayClusterNameID, connector)

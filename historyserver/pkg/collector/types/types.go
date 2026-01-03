@@ -22,8 +22,8 @@ type RayCollectorConfig struct {
 	PushInterval   time.Duration
 }
 
-// ValidateRayHanderConfig is
-func ValidateRayHanderConfig(c *RayCollectorConfig, fldpath *field.Path) field.ErrorList {
+// ValidateRayHandlerConfig is
+func ValidateRayHandlerConfig(c *RayCollectorConfig, fldpath *field.Path) field.ErrorList {
 	var allErrs field.ErrorList
 	if len(c.SessionDir) == 0 {
 		allErrs = append(allErrs, field.Invalid(fldpath, c.SessionDir, "session-dir must be set"))
