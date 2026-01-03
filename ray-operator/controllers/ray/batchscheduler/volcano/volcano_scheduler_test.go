@@ -160,7 +160,7 @@ func TestCreatePodGroupForRayCluster(t *testing.T) {
 
 	cluster := createTestRayCluster(1)
 
-	minMember := utils.CalculateDesiredReplicas(context.Background(), &cluster) + 1
+	minMember := utils.CalculateDesiredReplicas(&cluster) + 1
 	totalResource := utils.CalculateDesiredResources(&cluster)
 	pg, err := createPodGroup(&cluster, getAppPodGroupName(&cluster), minMember, totalResource)
 	require.NoError(t, err)
@@ -185,7 +185,7 @@ func TestCreatePodGroupForRayCluster_NumOfHosts2(t *testing.T) {
 
 	cluster := createTestRayCluster(2)
 
-	minMember := utils.CalculateDesiredReplicas(context.Background(), &cluster) + 1
+	minMember := utils.CalculateDesiredReplicas(&cluster) + 1
 	totalResource := utils.CalculateDesiredResources(&cluster)
 	pg, err := createPodGroup(&cluster, getAppPodGroupName(&cluster), minMember, totalResource)
 	require.NoError(t, err)
@@ -227,7 +227,7 @@ func TestCreatePodGroup_NetworkTopologyBothLabels(t *testing.T) {
 		NetworkTopologyHighestTierAllowedLabelKey: "3",
 	})
 
-	minMember := utils.CalculateDesiredReplicas(context.Background(), &cluster) + 1
+	minMember := utils.CalculateDesiredReplicas(&cluster) + 1
 	totalResource := utils.CalculateDesiredResources(&cluster)
 	pg, err := createPodGroup(&cluster, getAppPodGroupName(&cluster), minMember, totalResource)
 	require.NoError(t, err)
@@ -246,7 +246,7 @@ func TestCreatePodGroup_NetworkTopologyOnlyModeLabel(t *testing.T) {
 		NetworkTopologyModeLabelKey: "hard",
 	})
 
-	minMember := utils.CalculateDesiredReplicas(context.Background(), &cluster) + 1
+	minMember := utils.CalculateDesiredReplicas(&cluster) + 1
 	totalResource := utils.CalculateDesiredResources(&cluster)
 	pg, err := createPodGroup(&cluster, getAppPodGroupName(&cluster), minMember, totalResource)
 	require.NoError(t, err)
@@ -266,7 +266,7 @@ func TestCreatePodGroup_NetworkTopologyHighestTierAllowedNotInt(t *testing.T) {
 		NetworkTopologyHighestTierAllowedLabelKey: "not-an-int",
 	})
 
-	minMember := utils.CalculateDesiredReplicas(context.Background(), &cluster) + 1
+	minMember := utils.CalculateDesiredReplicas(&cluster) + 1
 	totalResource := utils.CalculateDesiredResources(&cluster)
 	pg, err := createPodGroup(&cluster, getAppPodGroupName(&cluster), minMember, totalResource)
 
@@ -474,7 +474,7 @@ func TestCalculatePodGroupParams(t *testing.T) {
 	t.Run("Autoscaling disabled", func(_ *testing.T) {
 		cluster := createTestRayCluster(1)
 
-		minMember, totalResource := scheduler.calculatePodGroupParams(context.Background(), &cluster.Spec)
+		minMember, totalResource := scheduler.calculatePodGroupParams(&cluster.Spec)
 
 		// 1 head + 2 workers (desired replicas)
 		a.Equal(int32(3), minMember)
@@ -490,7 +490,7 @@ func TestCalculatePodGroupParams(t *testing.T) {
 		cluster := createTestRayCluster(1)
 		cluster.Spec.EnableInTreeAutoscaling = ptr.To(true)
 
-		minMember, totalResource := scheduler.calculatePodGroupParams(context.Background(), &cluster.Spec)
+		minMember, totalResource := scheduler.calculatePodGroupParams(&cluster.Spec)
 
 		// 1 head + 1 worker (min replicas)
 		a.Equal(int32(2), minMember)
