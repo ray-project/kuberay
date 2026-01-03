@@ -180,13 +180,13 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 					sessionInfo := strings.Split(metas[1], "_")
 					date := sessionInfo[1]
 					dataTime := sessionInfo[2]
-					createTime, err := time.Parse("2006-01-02_15-04-05", date+"_"+dataTime)
+					creationTime, err := time.Parse("2006-01-02_15-04-05", date+"_"+dataTime)
 					if err != nil {
 						logrus.Errorf("Failed to parse time %s: %v", date+"_"+dataTime, err)
 						continue
 					}
-					c.CreateTimeStamp = createTime.Unix()
-					c.CreateTime = createTime.UTC().Format(("2006-01-02T15:04:05Z"))
+					c.CreationTimestamp = creationTime.Unix()
+					c.CreationTime = creationTime.UTC().Format(("2006-01-02T15:04:05Z"))
 					clusters = append(clusters, *c)
 				}
 				return true
@@ -251,7 +251,7 @@ func NewReader(c *types.RayHistoryServerConfig, jd map[string]interface{}) (stor
 	return New(config)
 }
 
-func NewWritter(c *types.RayCollectorConfig, jd map[string]interface{}) (storage.StorageWriter, error) {
+func NewWriter(c *types.RayCollectorConfig, jd map[string]interface{}) (storage.StorageWriter, error) {
 	config := &config{}
 	config.complete(c, jd)
 

@@ -36,7 +36,7 @@ type GlobalConfig struct {
 	OSSHistoryServerDir string
 }
 
-type RayMetaHanderConfig struct {
+type RayMetaHandlerConfig struct {
 	GlobalConfig
 	RayClusterName string
 	RayClusterID   string

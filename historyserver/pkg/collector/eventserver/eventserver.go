@@ -314,7 +314,7 @@ func (es *EventServer) flushEventsInternal(eventsToFlush []Event) {
 
 	// Categorize events
 	for _, event := range eventsToFlush {
-		hourKey := event.Timestamp.Truncate(time.Hour).Format("2006-01-02-15")
+		hourKey := event.Timestamp.Truncate(time.Hour).Format("2006010215")
 
 		// Check event type
 		if es.isNodeEvent(event.Data) {

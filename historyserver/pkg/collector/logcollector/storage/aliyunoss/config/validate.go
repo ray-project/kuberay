@@ -39,8 +39,8 @@ func ValidateGlobalConfig(c *GlobalConfig, fldpath *field.Path) field.ErrorList 
 	return allErrs
 }
 
-// ValidateMetaHanderConfig is
-func ValidateMetaHanderConfig(c *RayMetaHanderConfig, fldpath *field.Path) field.ErrorList {
+// ValidateMetaHandlerConfig is
+func ValidateMetaHandlerConfig(c *RayMetaHandlerConfig, fldpath *field.Path) field.ErrorList {
 	var allErrs field.ErrorList
 	if len(c.RayClusterName) == 0 {
 		allErrs = append(allErrs, field.Invalid(fldpath, c.RayClusterName, "ray_cluster_name must be set"))
@@ -51,7 +51,7 @@ func ValidateMetaHanderConfig(c *RayMetaHanderConfig, fldpath *field.Path) field
 	return allErrs
 }
 
-func ValidatRayHistoryServerConfig(c *RayHistoryServerConfig, fldpath *field.Path) field.ErrorList {
+func ValidateRayHistoryServerConfig(c *RayHistoryServerConfig, fldpath *field.Path) field.ErrorList {
 	var allErrs field.ErrorList
 	if len(c.DashBoardDir) == 0 {
 		allErrs = append(allErrs, field.Invalid(fldpath, c.DashBoardDir, "dashboard-dir must be set"))
