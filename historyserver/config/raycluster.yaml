@@ -88,7 +88,7 @@ spec:
           command:
           - collector
           - --role=Head
-          - --runtime-class-name=s3
+          - --storage-provider=s3
           - --ray-cluster-name=raycluster-historyserver
           - --ray-root-dir=log
           - --events-port=8084
@@ -185,7 +185,7 @@ spec:
           command:
           - collector
           - --role=Worker
-          - --runtime-class-name=s3
+          - --storage-provider=s3
           - --ray-cluster-name=raycluster-historyserver
           - --ray-root-dir=log
           - --events-port=8084
