@@ -180,6 +180,7 @@ env_vars:
 		g.Expect(err).NotTo(HaveOccurred())
 		rayCluster, err := GetRayCluster(test, rayJob.Namespace, rayJob.Status.RayClusterName)
 		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(rayCluster.Labels[utils.RayJobSubmissionModeLabelKey]).To(Equal(string(rayv1.SidecarMode)))
 		g.Expect(rayCluster.Labels[utils.RayJobDisableProvisionedHeadNodeRestartLabelKey]).To(Equal("true"))
 		headPod, err := GetHeadPod(test, rayCluster)
 		g.Expect(err).NotTo(HaveOccurred())
@@ -187,8 +188,15 @@ env_vars:
 		err = test.Client().Core().CoreV1().Pods(headPod.Namespace).Delete(test.Ctx(), headPod.Name, metav1.DeleteOptions{})
 		g.Expect(err).NotTo(HaveOccurred())
 
-		g.Eventually(HeadPodOrNil(test, rayCluster), TestTimeoutMedium, 2*time.Second).Should(BeNil())
-		g.Consistently(HeadPodOrNil(test, rayCluster), TestTimeoutShort, 2*time.Second).Should(BeNil())
+		// Head pod should NOT be recreated for sidecar modes.
+		// 1. use GetHeadPod function, I want to delete GetHeadPodOrNil function, and check the
+
+		g.Eventually(func() (*corev1.Pod, error) {
+			return GetHeadPodOrNil(test, rayCluster)
+		}, TestTimeoutMedium, 2*time.Second).Should(BeNil())
+		g.Consistently(func() (*corev1.Pod, error) {
+			return GetHeadPodOrNil(test, rayCluster)
+		}, TestTimeoutShort, 2*time.Second).Should(BeNil())
 
 		// After head pod deletion, controller should mark RayJob as Failed with a specific message
 		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
