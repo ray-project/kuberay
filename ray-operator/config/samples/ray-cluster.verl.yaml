@@ -13,12 +13,12 @@ spec:
           image: hiyouga/verl:ngc-th2.6.0-cu126-vllm0.8.4-flashinfer0.2.2-cxx11abi0
           resources:
             limits:
-              cpu: 48
-              memory: 192G
+              cpu: "48"
+              memory: "192G"
               nvidia.com/gpu: "4"
             requests:
-              cpu: 36
-              memory: 144G
+              cpu: "36"
+              memory: "144G"
               nvidia.com/gpu: "4"
           ports:
           - containerPort: 6379

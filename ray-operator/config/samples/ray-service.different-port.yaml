@@ -55,11 +55,11 @@ spec:
             image: rayproject/ray:2.52.0
             resources:
               limits:
-                cpu: 1
-                memory: 5Gi
+                cpu: "1"
+                memory: "5Gi"
               requests:
-                cpu: 1
-                memory: 2Gi
+                cpu: "1"
+                memory: "2Gi"
             ports:
             - containerPort: 6379
               name: gcs-server
@@ -85,11 +85,11 @@ spec:
             image: rayproject/ray:2.52.0
             resources:
               limits:
-                cpu: 1
-                memory: 2Gi
+                cpu: "1"
+                memory: "2Gi"
               requests:
-                cpu: 500m
-                memory: 2Gi
+                cpu: "500m"
+                memory: "2Gi"
             ports:
             - containerPort: 9000
               name: serve
