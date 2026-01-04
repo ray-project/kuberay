@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/ray-project/kuberay/historyserver/pkg/collector/logcollector/runtime/logcollector"
-	"github.com/ray-project/kuberay/historyserver/pkg/collector/logcollector/storage"
 	"github.com/ray-project/kuberay/historyserver/pkg/collector/types"
+	"github.com/ray-project/kuberay/historyserver/pkg/storage"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
