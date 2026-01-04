@@ -176,7 +176,7 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	// 3. If there is no pending cluster, reconcile serve applications for the active cluster.
 	// 4. During NewClusterWithIncrementalUpgrade, reconcileServe will reconcile either the pending or active cluster
 	// based on total TargetCapacity.
-	var isActiveClusterReady, isPendingClusterReady bool = false, false
+	isActiveClusterReady, isPendingClusterReady := false, false
 	var activeClusterServeApplications, pendingClusterServeApplications map[string]rayv1.AppStatus = nil, nil
 	if pendingRayClusterInstance != nil {
 		logger.Info("Reconciling the Serve applications for pending cluster", "clusterName", pendingRayClusterInstance.Name)
@@ -712,9 +712,9 @@ func (r *RayServiceReconciler) calculateTrafficRoutedPercent(ctx context.Context
 
 		// If IntervalSeconds has passed since LastTrafficMigratedTime, migrate StepSizePercent traffic
 		// from the active RayCluster to the pending RayCluster.
-		intervalSeconds := time.Duration(*options.IntervalSeconds) * time.Second
+		interval := time.Duration(*options.IntervalSeconds) * time.Second
 		lastTrafficMigratedTime := pendingServiceStatus.LastTrafficMigratedTime
-		if lastTrafficMigratedTime == nil || time.Since(lastTrafficMigratedTime.Time) >= intervalSeconds {
+		if lastTrafficMigratedTime == nil || time.Since(lastTrafficMigratedTime.Time) >= interval {
 			// Gradually shift traffic from the active to the pending cluster.
 			logger.Info("Upgrade in progress. Migrating traffic by StepSizePercent.", "stepSize", *options.StepSizePercent)
 			proposedPendingWeight := pendingClusterWeight + *options.StepSizePercent
@@ -1379,9 +1379,10 @@ func (r *RayServiceReconciler) applyServeTargetCapacity(ctx context.Context, ray
 	}
 
 	// Update the TargetCapacity status fields.
-	if rayClusterInstance.Name == rayServiceInstance.Status.ActiveServiceStatus.RayClusterName {
+	switch rayClusterInstance.Name {
+	case rayServiceInstance.Status.ActiveServiceStatus.RayClusterName:
 		rayServiceInstance.Status.ActiveServiceStatus.TargetCapacity = ptr.To(goalTargetCapacity)
-	} else if rayClusterInstance.Name == rayServiceInstance.Status.PendingServiceStatus.RayClusterName {
+	case rayServiceInstance.Status.PendingServiceStatus.RayClusterName:
 		rayServiceInstance.Status.PendingServiceStatus.TargetCapacity = ptr.To(goalTargetCapacity)
 	}
 
@@ -1432,14 +1433,15 @@ func (r *RayServiceReconciler) reconcileServeTargetCapacity(ctx context.Context,
 	// on the above conditions, we return without doing anything.
 	var goalTargetCapacity int32
 	shouldUpdate := false
-	if rayClusterInstance.Name == activeRayServiceStatus.RayClusterName {
+	switch rayClusterInstance.Name {
+	case activeRayServiceStatus.RayClusterName:
 		if activeTargetCapacity+pendingTargetCapacity > 100 {
 			// Scale down the Active RayCluster TargetCapacity on this iteration.
 			goalTargetCapacity = max(int32(0), activeTargetCapacity-maxSurgePercent)
 			shouldUpdate = true
 			logger.Info("Setting target_capacity for active Raycluster", "Raycluster", rayClusterInstance.Name, "target_capacity", goalTargetCapacity)
 		}
-	} else if rayClusterInstance.Name == pendingRayServiceStatus.RayClusterName {
+	case pendingRayServiceStatus.RayClusterName:
 		if activeTargetCapacity+pendingTargetCapacity <= 100 {
 			// Scale up the Pending RayCluster TargetCapacity on this iteration.
 			goalTargetCapacity = min(int32(100), pendingTargetCapacity+maxSurgePercent)
