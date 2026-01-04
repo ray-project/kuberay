@@ -46,8 +46,8 @@ build: buildcollector buildhistoryserver
 #build: mod alllint test
 buildcollector: mod
 	@echo ""
-	@echo "go build ..."
-	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -v $(GO_BUILD_FLAGS) -o $(BIN_DIR)/$(BINARY_NAME_COLLECTOR) ./cmd/collector/main.go
+	@echo "go build with race detector (dynamic linking)..."
+	CGO_ENABLED=1 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -race -v -ldflags '-X $(PACKAGE)/pkg.Version=$(VERSION) -X $(PACKAGE)/pkg.CommitID=$(COMMIT_SHORT) -X $(PACKAGE)/pkg.BuildDate=$(BUILD_TIMESTAMP) -X $(PACKAGE)/pkg.Branch=$(BRANCH)' -o $(BIN_DIR)/$(BINARY_NAME_COLLECTOR) ./cmd/collector/main.go
 
 .PHONY: buildhistoryserver
 #build: mod alllint test
@@ -68,7 +68,7 @@ mod:
 
 .PHONY: localimage-collector
 localimage-collector:
-	docker build -t $(COLLECTOR_IMG) -f Dockerfile.collector .
+	docker build --no-cache -t $(COLLECTOR_IMG) -f Dockerfile.collector .
 
 .PHONY: localimage
 localimage: dockerbuilder_instance
