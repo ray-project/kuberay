@@ -22,23 +22,24 @@ import (
 )
 
 type RayLogHandler struct {
-	Writer         storage.StorageWriter
-	LogFiles       chan string
-	HttpClient     *http.Client
-	ShutdownChan   chan struct{}
-	logFilePaths   map[string]bool
-	MetaDir        string
-	RayClusterName string
-	LogDir         string
-	RayNodeName    string
-	RayClusterID   string
-	RootDir        string
-	SessionDir     string
-	prevLogsDir    string
-	PushInterval   time.Duration
-	LogBatching    int
-	filePathMu     sync.Mutex
-	EnableMeta     bool
+	Writer                 storage.StorageWriter
+	LogFiles               chan string
+	HttpClient             *http.Client
+	ShutdownChan           chan struct{}
+	logFilePaths           map[string]bool
+	MetaDir                string
+	RayClusterName         string
+	LogDir                 string
+	RayNodeName            string
+	RayClusterID           string
+	RootDir                string
+	SessionDir             string
+	prevLogsDir            string
+	persistCompleteLogsDir string
+	PushInterval           time.Duration
+	LogBatching            int
+	filePathMu             sync.Mutex
+	EnableMeta             bool
 }
 
 func (r *RayLogHandler) Start(stop <-chan struct{}) error {
@@ -49,6 +50,7 @@ func (r *RayLogHandler) Start(stop <-chan struct{}) error {
 func (r *RayLogHandler) Run(stop <-chan struct{}) error {
 	// watchPath := r.LogDir
 	r.prevLogsDir = "/tmp/ray/prev-logs"
+	r.persistCompleteLogsDir = "/tmp/ray/persist-complete-logs"
 
 	// Initialize log file paths storage
 	r.logFilePaths = make(map[string]bool)
@@ -62,6 +64,11 @@ func (r *RayLogHandler) Run(stop <-chan struct{}) error {
 	// Setup signal handling for SIGTERM
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGTERM)
+
+	// On startup, scan and process all existing prev-logs
+	// This ensures that any incomplete uploads from previous runs are resumed
+	go r.scanAndProcessExistingPrevLogs()
+
 	go r.WatchPrevLogsLoops()
 	if r.EnableMeta {
 		go r.WatchSessionLatestLoops() // Watch session_latest symlink changes
@@ -293,6 +300,43 @@ func (r *RayLogHandler) WatchLogsLoops(watcher *fsnotify.Watcher, walkPath strin
 	}
 }
 
+// scanAndProcessExistingPrevLogs scans the prev-logs directory on startup
+// and processes any existing sessions/nodes that may have been left from previous runs.
+// This ensures resumption of incomplete uploads after collector restart.
+func (r *RayLogHandler) scanAndProcessExistingPrevLogs() {
+	watchPath := r.prevLogsDir
+
+	logrus.Infof("Starting initial scan of prev-logs directory: %s", watchPath)
+
+	// Check if prev-logs directory exists
+	if _, err := os.Stat(watchPath); os.IsNotExist(err) {
+		logrus.Infof("prev-logs directory does not exist on startup, nothing to process")
+		return
+	}
+
+	// Read all session directories (first level only)
+	sessionEntries, err := os.ReadDir(watchPath)
+	if err != nil {
+		logrus.Errorf("Failed to read prev-logs directory %s: %v", watchPath, err)
+		return
+	}
+
+	for _, sessionEntry := range sessionEntries {
+		if !sessionEntry.IsDir() {
+			continue
+		}
+
+		sessionID := sessionEntry.Name()
+		sessionPath := filepath.Join(watchPath, sessionID)
+		logrus.Infof("Found existing session directory on startup: %s", sessionID)
+
+		// Process all node directories under this session
+		r.processSessionPrevLogs(sessionPath)
+	}
+
+	logrus.Infof("Completed initial scan of prev-logs directory")
+}
+
 func (r *RayLogHandler) WatchPrevLogsLoops() {
 	watchPath := r.prevLogsDir
 
@@ -310,7 +354,7 @@ func (r *RayLogHandler) WatchPrevLogsLoops() {
 	}
 
 	// Also check and create persist-complete-logs directory
-	completeLogsDir := "/tmp/ray/persist-complete-logs"
+	completeLogsDir := r.persistCompleteLogsDir
 	if _, err := os.Stat(completeLogsDir); os.IsNotExist(err) {
 		logrus.Infof("persist-complete-logs directory does not exist, creating it: %s", completeLogsDir)
 		if err := os.MkdirAll(completeLogsDir, 0o777); err != nil {
@@ -571,6 +615,26 @@ func (r *RayLogHandler) processSessionPrevLogs(sessionDir string) {
 	}
 }
 
+// isFileAlreadyPersisted checks if a file has already been persisted to persist-complete-logs
+func (r *RayLogHandler) isFileAlreadyPersisted(absoluteLogPath, sessionID, nodeID string) bool {
+	// Calculate the relative path within the logs directory
+	logsDir := filepath.Join(r.prevLogsDir, sessionID, nodeID, "logs")
+	relativePath, err := filepath.Rel(logsDir, absoluteLogPath)
+	if err != nil {
+		logrus.Errorf("Failed to get relative path for %s: %v", absoluteLogPath, err)
+		return false
+	}
+
+	// Construct the path in persist-complete-logs
+	persistedPath := filepath.Join(r.persistCompleteLogsDir, sessionID, nodeID, "logs", relativePath)
+
+	// Check if the file exists
+	if _, err := os.Stat(persistedPath); err == nil {
+		return true
+	}
+	return false
+}
+
 // processPrevLogsDir processes logs in a /tmp/ray/prev-logs/{sessionid}/{nodeid} directory
 func (r *RayLogHandler) processPrevLogsDir(sessionNodeDir string) {
 	// Extract session ID and node ID from the path
@@ -589,13 +653,6 @@ func (r *RayLogHandler) processPrevLogsDir(sessionNodeDir string) {
 	// Validate that we're not processing the root prev-logs directory
 	if sessionID == "prev-logs" {
 		logrus.Debugf("Skipping root prev-logs directory")
-		return
-	}
-
-	// Check if this directory has already been processed by checking in persist-complete-logs
-	completeDir := filepath.Join("/tmp/ray/persist-complete-logs", sessionID, nodeID, "logs")
-	if _, err := os.Stat(completeDir); err == nil {
-		logrus.Infof("Session %s node %s logs already processed, skipping", sessionID, nodeID)
 		return
 	}
 
@@ -626,6 +683,12 @@ func (r *RayLogHandler) processPrevLogsDir(sessionNodeDir string) {
 
 		// Skip directories
 		if info.IsDir() {
+			return nil
+		}
+
+		// Check if this file has already been persisted
+		if r.isFileAlreadyPersisted(path, sessionID, nodeID) {
+			logrus.Debugf("File %s already persisted, skipping", path)
 			return nil
 		}
 
@@ -695,7 +758,7 @@ func (r *RayLogHandler) processPrevLogFile(absoluteLogPathName, localLogDir, ses
 	logrus.Infof("Successfully wrote object %s, size: %d bytes", objectName, len(content))
 
 	// Move the processed file to persist-complete-logs directory to avoid re-uploading
-	completeBaseDir := filepath.Join("/tmp/ray/persist-complete-logs", sessionID, nodeID)
+	completeBaseDir := filepath.Join(r.persistCompleteLogsDir, sessionID, nodeID)
 	completeDir := filepath.Join(completeBaseDir, "logs")
 
 	if _, err := os.Stat(completeDir); os.IsNotExist(err) {
