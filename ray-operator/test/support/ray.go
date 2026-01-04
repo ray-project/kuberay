@@ -135,6 +135,12 @@ func HeadPod(t Test, rayCluster *rayv1.RayCluster) func() (*corev1.Pod, error) {
 	}
 }
 
+func HeadPodOrNil(t Test, rayCluster *rayv1.RayCluster) func() (*corev1.Pod, error) {
+	return func() (*corev1.Pod, error) {
+		return GetHeadPodOrNil(t, rayCluster)
+	}
+}
+
 func GetHeadPod(t Test, rayCluster *rayv1.RayCluster) (*corev1.Pod, error) {
 	pods, err := t.Client().Core().CoreV1().Pods(rayCluster.Namespace).List(
 		t.Ctx(),
@@ -142,6 +148,23 @@ func GetHeadPod(t Test, rayCluster *rayv1.RayCluster) (*corev1.Pod, error) {
 	)
 	if err != nil {
 		return nil, err
+	}
+	if len(pods.Items) != 1 {
+		return nil, errors.New("number of head pods is not 1")
+	}
+	return &pods.Items[0], nil
+}
+
+func GetHeadPodOrNil(t Test, rayCluster *rayv1.RayCluster) (*corev1.Pod, error) {
+	pods, err := t.Client().Core().CoreV1().Pods(rayCluster.Namespace).List(
+		t.Ctx(),
+		common.RayClusterHeadPodsAssociationOptions(rayCluster).ToMetaV1ListOptions(),
+	)
+	if err != nil {
+		return nil, err
+	}
+	if len(pods.Items) == 0 {
+		return nil, nil
 	}
 	if len(pods.Items) != 1 {
 		return nil, errors.New("number of head pods is not 1")
