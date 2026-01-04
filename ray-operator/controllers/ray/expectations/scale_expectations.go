@@ -149,17 +149,17 @@ func (p *rayPod) ClusterKey() string {
 }
 
 // rayPodKey is used only for getting rayPod.Key(). The type of obj must be rayPod.
-func rayPodKey(obj interface{}) (string, error) {
+func rayPodKey(obj any) (string, error) {
 	return obj.(*rayPod).Key(), nil
 }
 
 // groupIndexFunc is used only for getting rayPod.GroupKey(). The type of obj must be rayPod.
-func groupIndexFunc(obj interface{}) ([]string, error) {
+func groupIndexFunc(obj any) ([]string, error) {
 	return []string{obj.(*rayPod).GroupKey()}, nil
 }
 
 // rayClusterIndexFunc is used only for getting rayPod.ClusterKey(). The type of obj must be rayPod.
-func rayClusterIndexFunc(obj interface{}) ([]string, error) {
+func rayClusterIndexFunc(obj any) ([]string, error) {
 	return []string{obj.(*rayPod).ClusterKey()}, nil
 }
 

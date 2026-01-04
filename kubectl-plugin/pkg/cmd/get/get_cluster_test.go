@@ -183,7 +183,7 @@ func TestRayClusterGetRun(t *testing.T) {
 			}
 
 			testResTable.Rows = append(testResTable.Rows, v1.TableRow{
-				Cells: []interface{}{
+				Cells: []any{
 					"raycluster-kuberay",
 					"test",
 					"2",
@@ -329,7 +329,7 @@ func TestGetRayClusters(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			assert.Equal(t, len(tc.expectedRayClusters), len(rayClusters.Items))
+			assert.Len(t, rayClusters.Items, len(tc.expectedRayClusters))
 		})
 	}
 }
@@ -411,7 +411,7 @@ func TestPrintClusters(t *testing.T) {
 
 	testResTable.Rows = append(testResTable.Rows,
 		v1.TableRow{
-			Cells: []interface{}{
+			Cells: []any{
 				"barista",
 				"cafe",
 				"2",
@@ -426,7 +426,7 @@ func TestPrintClusters(t *testing.T) {
 			},
 		},
 		v1.TableRow{
-			Cells: []interface{}{
+			Cells: []any{
 				"bartender",
 				"speakeasy",
 				"3",

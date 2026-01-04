@@ -44,7 +44,7 @@ spec:
             resources:
               limits:
                 cpu: 2
-                memory: 2Gi
+                memory: 5Gi
               requests:
                 cpu: 2
                 memory: 2Gi
@@ -64,8 +64,8 @@ spec:
             image: rayproject/ray:2.52.0
             resources:
               limits:
-                cpu: "1"
-                memory: "2Gi"
+                cpu: 1
+                memory: 2Gi
               requests:
-                cpu: "500m"
-                memory: "2Gi"
+                cpu: 500m
+                memory: 2Gi

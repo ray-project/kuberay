@@ -24,6 +24,7 @@ const (
 	RayClusterServingServiceLabelKey         = "ray.io/serve"
 	RayClusterHeadlessServiceLabelKey        = "ray.io/headless-worker-svc"
 	HashWithoutReplicasAndWorkersToDeleteKey = "ray.io/hash-without-replicas-and-workers-to-delete"
+	UpgradeStrategyRecreateHashKey           = "ray.io/upgrade-strategy-recreate-hash"
 	NumWorkerGroupsKey                       = "ray.io/num-worker-groups"
 	KubeRayVersion                           = "ray.io/kuberay-version"
 	RayCronJobNameLabelKey                   = "ray.io/cronjob-name"
@@ -48,7 +49,6 @@ const (
 
 	// Batch scheduling labels
 	// TODO(tgaddair): consider making these part of the CRD
-	RaySchedulerName         = "ray.io/scheduler-name"
 	RayPriorityClassName     = "ray.io/priority-class-name"
 	RayGangSchedulingEnabled = "ray.io/gang-scheduling-enabled"
 
@@ -357,6 +357,7 @@ const (
 
 	// RayCronJob event list
 	InvalidRayCronJobSpec K8sEventType = "InvalidRayCronJobSpec"
+	SuspendedRayCronJob   K8sEventType = "SuspendedRayCronJob"
 
 	// RayService event list
 	CreatedGateway                  K8sEventType = "CreatedGateway"

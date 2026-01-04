@@ -30,11 +30,11 @@ spec:
             name: ray-logs
           resources:
             limits:
-              cpu: "1"
-              memory: "2G"
+              cpu: 1
+              memory: 5Gi
             requests:
-              cpu: "1"
-              memory: "2G"
+              cpu: 1
+              memory: 2Gi
           env:
           - name: RAY_GRAFANA_IFRAME_HOST
             value: http://127.0.0.1:3000
@@ -63,11 +63,11 @@ spec:
             name: ray-logs
           resources:
             limits:
-              cpu: "1"
-              memory: "1G"
+              cpu: 1
+              memory: 1Gi
             requests:
-              cpu: "1"
-              memory: "1G"
+              cpu: 1
+              memory: 1Gi
         # use volumes
         # Refer to https://kubernetes.io/docs/concepts/storage/volumes/
         volumes:

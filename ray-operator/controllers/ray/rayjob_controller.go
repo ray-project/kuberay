@@ -3,6 +3,7 @@ package ray
 import (
 	"context"
 	"fmt"
+	"maps"
 	"os"
 	"strconv"
 	"strings"
@@ -568,7 +569,7 @@ func getSubmitterTemplate(rayJobInstance *rayv1.RayJob, rayClusterInstance *rayv
 
 // getSubmitterContainer builds the submitter container for the Ray job Sidecar mode.
 func getSubmitterContainer(rayJobInstance *rayv1.RayJob, rayClusterInstance *rayv1.RayCluster) (corev1.Container, error) {
-	var submitterContainer corev1.Container = common.GetDefaultSubmitterContainer(&rayClusterInstance.Spec)
+	submitterContainer := common.GetDefaultSubmitterContainer(&rayClusterInstance.Spec)
 
 	if err := configureSubmitterContainer(&submitterContainer, rayJobInstance, rayClusterInstance, rayv1.SidecarMode); err != nil {
 		return corev1.Container{}, err
@@ -935,9 +936,7 @@ func (r *RayJobReconciler) getOrCreateRayClusterInstance(ctx context.Context, ra
 
 func (r *RayJobReconciler) constructRayClusterForRayJob(rayJobInstance *rayv1.RayJob, rayClusterName string) (*rayv1.RayCluster, error) {
 	labels := make(map[string]string, len(rayJobInstance.Labels))
-	for key, value := range rayJobInstance.Labels {
-		labels[key] = value
-	}
+	maps.Copy(labels, rayJobInstance.Labels)
 	labels[utils.RayOriginatedFromCRNameLabelKey] = rayJobInstance.Name
 	labels[utils.RayOriginatedFromCRDLabelKey] = utils.RayOriginatedFromCRDLabelValue(utils.RayJobCRD)
 	rayCluster := &rayv1.RayCluster{

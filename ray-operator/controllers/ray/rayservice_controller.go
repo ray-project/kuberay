@@ -4,6 +4,7 @@ import (
 	"context"
 	errstd "errors"
 	"fmt"
+	"maps"
 	"math"
 	"os"
 	"reflect"
@@ -175,7 +176,7 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	// 3. If there is no pending cluster, reconcile serve applications for the active cluster.
 	// 4. During NewClusterWithIncrementalUpgrade, reconcileServe will reconcile either the pending or active cluster
 	// based on total TargetCapacity.
-	var isActiveClusterReady, isPendingClusterReady bool = false, false
+	isActiveClusterReady, isPendingClusterReady := false, false
 	var activeClusterServeApplications, pendingClusterServeApplications map[string]rayv1.AppStatus = nil, nil
 	if pendingRayClusterInstance != nil {
 		logger.Info("Reconciling the Serve applications for pending cluster", "clusterName", pendingRayClusterInstance.Name)
@@ -579,11 +580,11 @@ func isZeroDowntimeUpgradeEnabled(ctx context.Context, upgradeStrategy *rayv1.Ra
 		upgradeType := upgradeStrategy.Type
 		if upgradeType != nil {
 			if features.Enabled(features.RayServiceIncrementalUpgrade) {
-				if *upgradeType != rayv1.NewCluster && *upgradeType != rayv1.NewClusterWithIncrementalUpgrade {
-					logger.Info("Zero-downtime upgrade is disabled because UpgradeStrategy.Type is not set to %s or %s.", string(rayv1.NewCluster), string(rayv1.NewClusterWithIncrementalUpgrade))
+				if *upgradeType != rayv1.RayServiceNewCluster && *upgradeType != rayv1.RayServiceNewClusterWithIncrementalUpgrade {
+					logger.Info("Zero-downtime upgrade is disabled because UpgradeStrategy.Type is not set to %s or %s.", string(rayv1.RayServiceNewCluster), string(rayv1.RayServiceNewClusterWithIncrementalUpgrade))
 					return false
 				}
-			} else if *upgradeType != rayv1.NewCluster {
+			} else if *upgradeType != rayv1.RayServiceNewCluster {
 				logger.Info("Zero-downtime upgrade is disabled because UpgradeStrategy.Type is not set to NewCluster.")
 				return false
 			}
@@ -711,9 +712,9 @@ func (r *RayServiceReconciler) calculateTrafficRoutedPercent(ctx context.Context
 
 		// If IntervalSeconds has passed since LastTrafficMigratedTime, migrate StepSizePercent traffic
 		// from the active RayCluster to the pending RayCluster.
-		intervalSeconds := time.Duration(*options.IntervalSeconds) * time.Second
+		interval := time.Duration(*options.IntervalSeconds) * time.Second
 		lastTrafficMigratedTime := pendingServiceStatus.LastTrafficMigratedTime
-		if lastTrafficMigratedTime == nil || time.Since(lastTrafficMigratedTime.Time) >= intervalSeconds {
+		if lastTrafficMigratedTime == nil || time.Since(lastTrafficMigratedTime.Time) >= interval {
 			// Gradually shift traffic from the active to the pending cluster.
 			logger.Info("Upgrade in progress. Migrating traffic by StepSizePercent.", "stepSize", *options.StepSizePercent)
 			proposedPendingWeight := pendingClusterWeight + *options.StepSizePercent
@@ -911,9 +912,9 @@ func (r *RayServiceReconciler) reconcileRayCluster(ctx context.Context, rayServi
 		modifyRayCluster(ctx, activeRayCluster, goalCluster)
 		if err = r.Update(ctx, activeRayCluster); err != nil {
 			r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(utils.FailedToUpdateRayCluster), "Failed to update the active RayCluster %s/%s: %v", activeRayCluster.Namespace, activeRayCluster.Name, err)
+			return activeRayCluster, pendingRayCluster, err
 		}
 		r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeNormal, string(utils.UpdatedRayCluster), "Updated the active RayCluster %s/%s", activeRayCluster.Namespace, activeRayCluster.Name)
-		return activeRayCluster, pendingRayCluster, err
 	}
 
 	if shouldUpdateCluster(rayServiceInstance, pendingRayCluster, false) {
@@ -926,9 +927,9 @@ func (r *RayServiceReconciler) reconcileRayCluster(ctx context.Context, rayServi
 		modifyRayCluster(ctx, pendingRayCluster, goalCluster)
 		if err = r.Update(ctx, pendingRayCluster); err != nil {
 			r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(utils.FailedToUpdateRayCluster), "Failed to update the pending RayCluster %s/%s: %v", pendingRayCluster.Namespace, pendingRayCluster.Name, err)
+			return activeRayCluster, pendingRayCluster, err
 		}
 		r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeNormal, string(utils.UpdatedRayCluster), "Updated the pending RayCluster %s/%s", pendingRayCluster.Namespace, pendingRayCluster.Name)
-		return activeRayCluster, pendingRayCluster, nil
 	}
 
 	return activeRayCluster, pendingRayCluster, nil
@@ -1059,7 +1060,7 @@ func isClusterSpecHashEqual(rayServiceInstance *rayv1.RayService, cluster *rayv1
 	clusterHash := cluster.ObjectMeta.Annotations[utils.HashWithoutReplicasAndWorkersToDeleteKey]
 	goalClusterHash := ""
 	if !partial {
-		goalClusterHash, _ = generateHashWithoutReplicasAndWorkersToDelete(rayServiceInstance.Spec.RayClusterSpec)
+		goalClusterHash, _ = utils.GenerateHashWithoutReplicasAndWorkersToDelete(rayServiceInstance.Spec.RayClusterSpec)
 	} else {
 		// If everything is identical except for the Replicas and WorkersToDelete of
 		// the existing workergroups, and one or more new workergroups are added at the end, then update the cluster.
@@ -1075,7 +1076,7 @@ func isClusterSpecHashEqual(rayServiceInstance *rayv1.RayService, cluster *rayv1
 			goalClusterSpec.WorkerGroupSpecs = goalClusterSpec.WorkerGroupSpecs[:clusterNumWorkerGroups]
 
 			// Generate the hash of the old worker group specs.
-			goalClusterHash, err = generateHashWithoutReplicasAndWorkersToDelete(*goalClusterSpec)
+			goalClusterHash, err = utils.GenerateHashWithoutReplicasAndWorkersToDelete(*goalClusterSpec)
 			if err != nil {
 				return true
 			}
@@ -1156,17 +1157,13 @@ func (r *RayServiceReconciler) createRayClusterInstance(ctx context.Context, ray
 func constructRayClusterForRayService(rayService *rayv1.RayService, rayClusterName string, scheme *runtime.Scheme) (*rayv1.RayCluster, error) {
 	var err error
 	rayClusterLabel := make(map[string]string)
-	for k, v := range rayService.Labels {
-		rayClusterLabel[k] = v
-	}
+	maps.Copy(rayClusterLabel, rayService.Labels)
 	rayClusterLabel[utils.RayOriginatedFromCRNameLabelKey] = rayService.Name
 	rayClusterLabel[utils.RayOriginatedFromCRDLabelKey] = utils.RayOriginatedFromCRDLabelValue(utils.RayServiceCRD)
 
 	rayClusterAnnotations := make(map[string]string)
-	for k, v := range rayService.Annotations {
-		rayClusterAnnotations[k] = v
-	}
-	rayClusterAnnotations[utils.HashWithoutReplicasAndWorkersToDeleteKey], err = generateHashWithoutReplicasAndWorkersToDelete(rayService.Spec.RayClusterSpec)
+	maps.Copy(rayClusterAnnotations, rayService.Annotations)
+	rayClusterAnnotations[utils.HashWithoutReplicasAndWorkersToDeleteKey], err = utils.GenerateHashWithoutReplicasAndWorkersToDelete(rayService.Spec.RayClusterSpec)
 	if err != nil {
 		return nil, err
 	}
@@ -1229,7 +1226,7 @@ func (r *RayServiceReconciler) updateServeDeployment(ctx context.Context, raySer
 	logger := ctrl.LoggerFrom(ctx)
 	logger.Info("updateServeDeployment", "V2 config", rayServiceInstance.Spec.ServeConfigV2)
 
-	serveConfig := make(map[string]interface{})
+	serveConfig := make(map[string]any)
 	if err := yaml.Unmarshal([]byte(rayServiceInstance.Spec.ServeConfigV2), &serveConfig); err != nil {
 		return err
 	}
@@ -1351,7 +1348,7 @@ func (r *RayServiceReconciler) applyServeTargetCapacity(ctx context.Context, ray
 		cachedConfig = rayServiceInstance.Spec.ServeConfigV2
 	}
 
-	serveConfig := make(map[string]interface{})
+	serveConfig := make(map[string]any)
 	if err := yaml.Unmarshal([]byte(cachedConfig), &serveConfig); err != nil {
 		return err
 	}
@@ -1382,9 +1379,10 @@ func (r *RayServiceReconciler) applyServeTargetCapacity(ctx context.Context, ray
 	}
 
 	// Update the TargetCapacity status fields.
-	if rayClusterInstance.Name == rayServiceInstance.Status.ActiveServiceStatus.RayClusterName {
+	switch rayClusterInstance.Name {
+	case rayServiceInstance.Status.ActiveServiceStatus.RayClusterName:
 		rayServiceInstance.Status.ActiveServiceStatus.TargetCapacity = ptr.To(goalTargetCapacity)
-	} else if rayClusterInstance.Name == rayServiceInstance.Status.PendingServiceStatus.RayClusterName {
+	case rayServiceInstance.Status.PendingServiceStatus.RayClusterName:
 		rayServiceInstance.Status.PendingServiceStatus.TargetCapacity = ptr.To(goalTargetCapacity)
 	}
 
@@ -1435,14 +1433,15 @@ func (r *RayServiceReconciler) reconcileServeTargetCapacity(ctx context.Context,
 	// on the above conditions, we return without doing anything.
 	var goalTargetCapacity int32
 	shouldUpdate := false
-	if rayClusterInstance.Name == activeRayServiceStatus.RayClusterName {
+	switch rayClusterInstance.Name {
+	case activeRayServiceStatus.RayClusterName:
 		if activeTargetCapacity+pendingTargetCapacity > 100 {
 			// Scale down the Active RayCluster TargetCapacity on this iteration.
 			goalTargetCapacity = max(int32(0), activeTargetCapacity-maxSurgePercent)
 			shouldUpdate = true
 			logger.Info("Setting target_capacity for active Raycluster", "Raycluster", rayClusterInstance.Name, "target_capacity", goalTargetCapacity)
 		}
-	} else if rayClusterInstance.Name == pendingRayServiceStatus.RayClusterName {
+	case pendingRayServiceStatus.RayClusterName:
 		if activeTargetCapacity+pendingTargetCapacity <= 100 {
 			// Scale up the Pending RayCluster TargetCapacity on this iteration.
 			goalTargetCapacity = min(int32(100), pendingTargetCapacity+maxSurgePercent)
@@ -1729,21 +1728,6 @@ func (r *RayServiceReconciler) updateHeadPodServeLabel(ctx context.Context, rayS
 	}
 
 	return nil
-}
-
-func generateHashWithoutReplicasAndWorkersToDelete(rayClusterSpec rayv1.RayClusterSpec) (string, error) {
-	// Mute certain fields that will not trigger new RayCluster preparation. For example,
-	// Autoscaler will update `Replicas` and `WorkersToDelete` when scaling up/down.
-	updatedRayClusterSpec := rayClusterSpec.DeepCopy()
-	for i := 0; i < len(updatedRayClusterSpec.WorkerGroupSpecs); i++ {
-		updatedRayClusterSpec.WorkerGroupSpecs[i].Replicas = nil
-		updatedRayClusterSpec.WorkerGroupSpecs[i].MaxReplicas = nil
-		updatedRayClusterSpec.WorkerGroupSpecs[i].MinReplicas = nil
-		updatedRayClusterSpec.WorkerGroupSpecs[i].ScaleStrategy.WorkersToDelete = nil
-	}
-
-	// Generate a hash for the RayClusterSpec.
-	return utils.GenerateJsonHash(updatedRayClusterSpec)
 }
 
 // calculateNumServeEndpointsFromSlices calculates the number of unique ready Pods

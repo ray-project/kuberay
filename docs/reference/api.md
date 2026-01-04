@@ -28,6 +28,10 @@ AuthMode describes the authentication mode for the Ray cluster.
 _Appears in:_
 - [AuthOptions](#authoptions)
 
+| Field | Description |
+| --- | --- |
+| `disabled` | AuthModeDisabled disables authentication.<br /> |
+| `token` | AuthModeToken enables token-based authentication.<br /> |
 
 
 #### AuthOptions
@@ -83,6 +87,10 @@ _Validation:_
 _Appears in:_
 - [AutoscalerOptions](#autoscaleroptions)
 
+| Field | Description |
+| --- | --- |
+| `v1` |  |
+| `v2` |  |
 
 
 #### ClusterUpgradeOptions
@@ -152,6 +160,12 @@ _Appears in:_
 - [DeletionPolicy](#deletionpolicy)
 - [DeletionRule](#deletionrule)
 
+| Field | Description |
+| --- | --- |
+| `DeleteCluster` |  |
+| `DeleteWorkers` |  |
+| `DeleteSelf` |  |
+| `DeleteNone` |  |
 
 
 #### DeletionRule
@@ -179,17 +193,14 @@ _Appears in:_
 DeletionStrategy configures automated cleanup after the RayJob reaches a terminal state.
 Two mutually exclusive styles are supported:
 
-
 	Legacy: provide both onSuccess and onFailure (deprecated; removal planned for 1.6.0). May be combined with shutdownAfterJobFinishes and (optionally) global TTLSecondsAfterFinished.
 	Rules: provide deletionRules (non-empty list). Rules mode is incompatible with shutdownAfterJobFinishes, legacy fields, and the global TTLSecondsAfterFinished (use per‑rule condition.ttlSeconds instead).
-
 
 Semantics:
   - A non-empty deletionRules selects rules mode; empty lists are treated as unset.
   - Legacy requires both onSuccess and onFailure; specifying only one is invalid.
   - Global TTLSecondsAfterFinished > 0 requires shutdownAfterJobFinishes=true; therefore it cannot be used with rules mode or with legacy alone (no shutdown).
   - Feature gate RayJobDeletionPolicy must be enabled when this block is present.
-
 
 Validation:
   - CRD XValidations prevent mixing legacy fields with deletionRules and enforce legacy completeness.
@@ -264,6 +275,12 @@ _Underlying type:_ _string_
 _Appears in:_
 - [RayJobSpec](#rayjobspec)
 
+| Field | Description |
+| --- | --- |
+| `K8sJobMode` |  |
+| `HTTPMode` |  |
+| `InteractiveMode` |  |
+| `SidecarMode` |  |
 
 
 #### RayCluster
@@ -301,6 +318,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
+| `upgradeStrategy` _[RayClusterUpgradeStrategy](#rayclusterupgradestrategy)_ | UpgradeStrategy defines the scaling policy used when upgrading the RayCluster |  |  |
 | `authOptions` _[AuthOptions](#authoptions)_ | AuthOptions specifies the authentication options for the RayCluster. |  |  |
 | `suspend` _boolean_ | Suspend indicates whether a RayCluster should be suspended.<br />A suspended RayCluster will have head pods and worker pods deleted. |  |  |
 | `managedBy` _string_ | ManagedBy is an optional configuration for the controller or entity that manages a RayCluster.<br />The value must be either 'ray.io/kuberay-operator' or 'kueue.x-k8s.io/multikueue'.<br />The kuberay-operator reconciles a RayCluster which doesn't have this field at all or<br />the field value is the reserved string 'ray.io/kuberay-operator',<br />but delegates reconciling the RayCluster with 'kueue.x-k8s.io/multikueue' to the Kueue.<br />The field is immutable. |  |  |
@@ -311,6 +329,40 @@ _Appears in:_
 | `headGroupSpec` _[HeadGroupSpec](#headgroupspec)_ | HeadGroupSpec is the spec for the head pod |  |  |
 | `rayVersion` _string_ | RayVersion is used to determine the command for the Kubernetes Job managed by RayJob |  |  |
 | `workerGroupSpecs` _[WorkerGroupSpec](#workergroupspec) array_ | WorkerGroupSpecs are the specs for the worker pods |  |  |
+
+
+#### RayClusterUpgradeStrategy
+
+
+
+
+
+
+
+_Appears in:_
+- [RayClusterSpec](#rayclusterspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `type` _[RayClusterUpgradeType](#rayclusterupgradetype)_ | Type represents the strategy used when upgrading the RayCluster Pods. Currently supports `Recreate` and `None`. |  | Enum: [Recreate None] <br /> |
+
+
+#### RayClusterUpgradeType
+
+_Underlying type:_ _string_
+
+
+
+_Validation:_
+- Enum: [Recreate None]
+
+_Appears in:_
+- [RayClusterUpgradeStrategy](#rayclusterupgradestrategy)
+
+| Field | Description |
+| --- | --- |
+| `Recreate` | During upgrade, Recreate strategy will delete all existing pods before creating new ones<br /> |
+| `None` | No new pod will be created while the strategy is set to None<br /> |
 
 
 #### RayCronJob
@@ -346,6 +398,7 @@ _Appears in:_
 | --- | --- | --- | --- |
 | `jobTemplate` _[RayJobSpec](#rayjobspec)_ | JobTemplate defines the job spec that will be created by cron scheduling |  |  |
 | `schedule` _string_ | Schedule is the cron schedule string |  |  |
+| `suspend` _boolean_ | Suspend tells the controller to suspend the scheduling, it does not apply to<br />scheduled RayJob. |  |  |
 
 
 #### RayJob
@@ -465,7 +518,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `type` _[RayServiceUpgradeType](#rayserviceupgradetype)_ | Type represents the strategy used when upgrading the RayService. Currently supports `NewCluster` and `None`. |  |  |
+| `type` _[RayServiceUpgradeType](#rayserviceupgradetype)_ | Type represents the strategy used when upgrading the RayService. Currently supports `NewCluster`, `NewClusterWithIncrementalUpgrade` and `None`. |  |  |
 | `clusterUpgradeOptions` _[ClusterUpgradeOptions](#clusterupgradeoptions)_ | ClusterUpgradeOptions defines the behavior of a NewClusterWithIncrementalUpgrade type.<br />RayServiceIncrementalUpgrade feature gate must be enabled to set ClusterUpgradeOptions. |  |  |
 
 
@@ -480,6 +533,11 @@ _Underlying type:_ _string_
 _Appears in:_
 - [RayServiceUpgradeStrategy](#rayserviceupgradestrategy)
 
+| Field | Description |
+| --- | --- |
+| `NewClusterWithIncrementalUpgrade` | During upgrade, NewClusterWithIncrementalUpgrade strategy will create an upgraded cluster to gradually scale<br />and migrate traffic to using Gateway API.<br /> |
+| `NewCluster` | During upgrade, NewCluster strategy will create new upgraded cluster and switch to it when it becomes ready<br /> |
+| `None` | No new cluster will be created while the strategy is set to None<br /> |
 
 
 #### RedisCredential

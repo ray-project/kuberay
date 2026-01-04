@@ -68,7 +68,7 @@ func (s *RayJobSubmissionServiceServer) SubmitRayJob(ctx context.Context, req *a
 		if err != nil {
 			return nil, err
 		}
-		re := make(map[string]interface{})
+		re := make(map[string]any)
 		err = json.Unmarshal(jsonData, &re)
 		if err != nil {
 			return nil, err

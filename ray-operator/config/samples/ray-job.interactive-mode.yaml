@@ -28,11 +28,11 @@ spec:
               name: client
             resources:
               limits:
-                cpu: "2"
-                memory: 4Gi
+                cpu: 1
+                memory: 5Gi
               requests:
-                cpu: "2"
-                memory: 4Gi
+                cpu: 1
+                memory: 2Gi
     rayVersion: 2.52.0
     workerGroupSpecs:
     - groupName: default-group
@@ -45,8 +45,8 @@ spec:
             name: ray-worker
             resources:
               limits:
-                cpu: "2"
-                memory: 4Gi
+                cpu: 1
+                memory: 1Gi
               requests:
-                cpu: "2"
-                memory: 4Gi
+                cpu: 1
+                memory: 1Gi
