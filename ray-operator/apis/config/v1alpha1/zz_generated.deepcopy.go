@@ -6,6 +6,7 @@ package v1alpha1
 
 import (
 	"k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -27,6 +28,13 @@ func (in *Configuration) DeepCopyInto(out *Configuration) {
 		*out = new(bool)
 		**out = **in
 	}
+	if in.IngressAnnotations != nil {
+		in, out := &in.IngressAnnotations, &out.IngressAnnotations
+		*out = make(map[string]string, len(*in))
+		for key, val := range *in {
+			(*out)[key] = val
+		}
+	}
 	out.TypeMeta = in.TypeMeta
 	if in.WorkerSidecarContainers != nil {
 		in, out := &in.WorkerSidecarContainers, &out.WorkerSidecarContainers
@@ -38,6 +46,13 @@ func (in *Configuration) DeepCopyInto(out *Configuration) {
 	if in.HeadSidecarContainers != nil {
 		in, out := &in.HeadSidecarContainers, &out.HeadSidecarContainers
 		*out = make([]v1.Container, len(*in))
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
+	}
+	if in.IngressTLS != nil {
+		in, out := &in.IngressTLS, &out.IngressTLS
+		*out = make([]networkingv1.IngressTLS, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}

@@ -85,9 +85,12 @@ type RayClusterReconciler struct {
 type RayClusterReconcilerOptions struct {
 	RayClusterMetricsManager *metrics.RayClusterMetricsManager
 	BatchSchedulerManager    *batchscheduler.SchedulerManager
+	IngressAnnotations       map[string]string
+	IngressHost              string
 	HeadSidecarContainers    []corev1.Container
 	WorkerSidecarContainers  []corev1.Container
 	DefaultContainerEnvs     []corev1.EnvVar
+	IngressTLS               []networkingv1.IngressTLS
 	IsOpenShift              bool
 }
 
@@ -482,7 +485,7 @@ func (r *RayClusterReconciler) reconcileIngressKubernetes(ctx context.Context, i
 	}
 
 	if len(headIngresses.Items) == 0 {
-		ingress, err := common.BuildIngressForHeadService(ctx, *instance)
+		ingress, err := common.BuildIngressForHeadService(ctx, *instance, r.options.IngressHost, r.options.IngressTLS, r.options.IngressAnnotations)
 		if err != nil {
 			return err
 		}
