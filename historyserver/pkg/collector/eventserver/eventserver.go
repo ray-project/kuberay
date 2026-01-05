@@ -408,8 +408,17 @@ func (es *EventServer) isNodeEvent(eventData map[string]interface{}) bool {
 
 // getJobID gets jobID associated with event
 func (es *EventServer) getJobID(eventData map[string]interface{}) string {
-	for _, value := range eventData {
-		if nestedEvent, ok := value.(map[string]interface{}); ok {
+	eventTypesWithJobID := []string{
+		"driverJobDefinitionEvent",
+		"driverJobLifecycleEvent",
+		"taskDefinitionEvent",
+		"taskLifecycleEvent",
+		"actorTaskDefinitionEvent",
+		"actorDefinitionEvent",
+	}
+
+	for _, eventType := range eventTypesWithJobID {
+		if nestedEvent, ok := eventData[eventType].(map[string]interface{}); ok {
 			if jobID, hasJob := nestedEvent["jobId"]; hasJob && jobID != "" {
 				return fmt.Sprintf("%v", jobID)
 			}
