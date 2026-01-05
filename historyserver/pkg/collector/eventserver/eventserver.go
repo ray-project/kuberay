@@ -409,10 +409,16 @@ func (es *EventServer) isNodeEvent(eventData map[string]interface{}) bool {
 // getJobID gets jobID associated with event
 func (es *EventServer) getJobID(eventData map[string]interface{}) string {
 	eventTypesWithJobID := []string{
+		// Job Events (Driver Job)
 		"driverJobDefinitionEvent",
 		"driverJobLifecycleEvent",
+
+		// Task Events (Normal Task)
 		"taskDefinitionEvent",
 		"taskLifecycleEvent",
+		"taskProfileEvents",
+
+		// Actor Events (Actor Task + Actor Definition)
 		"actorTaskDefinitionEvent",
 		"actorDefinitionEvent",
 	}
