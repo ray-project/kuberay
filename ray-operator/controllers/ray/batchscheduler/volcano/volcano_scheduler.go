@@ -3,6 +3,7 @@ package volcano
 import (
 	"context"
 	"fmt"
+	"maps"
 	"strconv"
 
 	corev1 "k8s.io/api/core/v1"
@@ -205,9 +206,7 @@ func createPodGroup(owner metav1.Object, podGroupName string, size int32, totalR
 	}
 
 	annotations := make(map[string]string, len(owner.GetAnnotations()))
-	for key, value := range owner.GetAnnotations() {
-		annotations[key] = value
-	}
+	maps.Copy(annotations, owner.GetAnnotations())
 
 	podGroup := volcanoschedulingv1beta1.PodGroup{
 		ObjectMeta: metav1.ObjectMeta{
