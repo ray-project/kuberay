@@ -858,7 +858,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 					}
 				}
 			}
-			logger.Info("reconcilePods", "found existing replica indices", "group", worker.GroupName, "indices", validReplicaIndices)
+			logger.Info("reconcilePods: found existing replica indices", "group", worker.GroupName, "indices", validReplicaIndices)
 		}
 		if diff > 0 {
 			// pods need to be added
