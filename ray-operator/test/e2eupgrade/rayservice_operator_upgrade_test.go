@@ -79,7 +79,7 @@ func TestZeroDowntimeUpgradeAfterOperatorUpgrade(t *testing.T) {
 	}
 
 	if useLocalHelmChart {
-		cmd := exec.Command("kubectl", "replace", "-k", "../../config/crd")
+		cmd := exec.CommandContext(test.Ctx(), "kubectl", "replace", "-k", "../../config/crd")
 		output, err := cmd.CombinedOutput()
 		if err != nil {
 			test.T().Logf("Error upgrading KubeRay operator: %v\nCommand output:\n%s", err, string(output))
@@ -88,16 +88,16 @@ func TestZeroDowntimeUpgradeAfterOperatorUpgrade(t *testing.T) {
 		g.Eventually(cmd, TestTimeoutShort).Should(WithTransform(ProcessStateSuccess, BeTrue()))
 
 		t.Logf("Upgrading operator deployment using local helm image version: %s", upgradeVersion)
-		cmd = exec.Command("helm", "upgrade", "kuberay-operator", "../../../helm-chart/kuberay-operator", "--set", fmt.Sprintf("image.repository=kuberay/kuberay-operator,image.tag=%s", upgradeVersion)) //nolint:gosec // required for upgrade
+		cmd = exec.CommandContext(test.Ctx(), "helm", "upgrade", "kuberay-operator", "../../../helm-chart/kuberay-operator", "--set", fmt.Sprintf("image.repository=kuberay/kuberay-operator,image.tag=%s", upgradeVersion)) //nolint:gosec // required for upgrade
 		err = cmd.Run()
 		g.Expect(err).NotTo(HaveOccurred())
 		g.Eventually(cmd, TestTimeoutShort).Should(WithTransform(ProcessStateSuccess, BeTrue()))
 	} else {
-		cmd := exec.Command("kubectl", "replace", "-k", fmt.Sprintf("github.com/ray-project/kuberay/ray-operator/config/crd?ref=%s", upgradeVersion)) //nolint:gosec // required for upgrade
+		cmd := exec.CommandContext(test.Ctx(), "kubectl", "replace", "-k", fmt.Sprintf("github.com/ray-project/kuberay/ray-operator/config/crd?ref=%s", upgradeVersion)) //nolint:gosec // required for upgrade
 		err = cmd.Run()
 		g.Expect(err).NotTo(HaveOccurred())
 		g.Eventually(cmd, TestTimeoutShort).Should(WithTransform(ProcessStateSuccess, BeTrue()))
-		cmd = exec.Command("helm", "upgrade", "kuberay-operator", "kuberay/kuberay-operator", "--version", upgradeVersion)
+		cmd = exec.CommandContext(test.Ctx(), "helm", "upgrade", "kuberay-operator", "kuberay/kuberay-operator", "--version", upgradeVersion)
 		err = cmd.Run()
 		g.Expect(err).NotTo(HaveOccurred())
 		g.Eventually(cmd, TestTimeoutShort).Should(WithTransform(ProcessStateSuccess, BeTrue()))

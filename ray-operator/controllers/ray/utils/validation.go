@@ -38,6 +38,23 @@ func ValidateRayClusterMetadata(metadata metav1.ObjectMeta) error {
 	return nil
 }
 
+func ValidateRayClusterUpgradeOptions(instance *rayv1.RayCluster) error {
+	if instance.Spec.UpgradeStrategy != nil && instance.Spec.UpgradeStrategy.Type != nil &&
+		*instance.Spec.UpgradeStrategy.Type != rayv1.RayClusterRecreate &&
+		*instance.Spec.UpgradeStrategy.Type != rayv1.RayClusterUpgradeNone {
+		return fmt.Errorf("The RayCluster spec is invalid: Spec.UpgradeStrategy.Type value %s is invalid, valid options are %s or %s", *instance.Spec.UpgradeStrategy.Type, rayv1.RayClusterRecreate, rayv1.RayClusterUpgradeNone)
+	}
+
+	// only allow UpgradeStrategy to be set when RayCluster is created directly by user
+	if instance.Spec.UpgradeStrategy != nil && instance.Spec.UpgradeStrategy.Type != nil {
+		creatorCRDType := GetCRDType(instance.Labels[RayOriginatedFromCRDLabelKey])
+		if creatorCRDType == RayJobCRD || creatorCRDType == RayServiceCRD {
+			return fmt.Errorf("upgradeStrategy cannot be set when RayCluster is created by %s", creatorCRDType)
+		}
+	}
+	return nil
+}
+
 // validateRayGroupResources checks for conflicting resource definitions.
 func validateRayGroupResources(groupName string, rayStartParams, resources map[string]string) error {
 	hasRayStartResources := rayStartParams["num-cpus"] != "" ||
@@ -380,10 +397,10 @@ func ValidateRayServiceSpec(rayService *rayv1.RayService) error {
 	// only NewClusterWithIncrementalUpgrade, NewCluster, and None are valid upgradeType
 	if rayService.Spec.UpgradeStrategy != nil &&
 		rayService.Spec.UpgradeStrategy.Type != nil &&
-		*rayService.Spec.UpgradeStrategy.Type != rayv1.None &&
-		*rayService.Spec.UpgradeStrategy.Type != rayv1.NewCluster &&
-		*rayService.Spec.UpgradeStrategy.Type != rayv1.NewClusterWithIncrementalUpgrade {
-		return fmt.Errorf("The RayService spec is invalid: Spec.UpgradeStrategy.Type value %s is invalid, valid options are %s, %s, or %s", *rayService.Spec.UpgradeStrategy.Type, rayv1.NewClusterWithIncrementalUpgrade, rayv1.NewCluster, rayv1.None)
+		*rayService.Spec.UpgradeStrategy.Type != rayv1.RayServiceUpgradeNone &&
+		*rayService.Spec.UpgradeStrategy.Type != rayv1.RayServiceNewCluster &&
+		*rayService.Spec.UpgradeStrategy.Type != rayv1.RayServiceNewClusterWithIncrementalUpgrade {
+		return fmt.Errorf("The RayService spec is invalid: Spec.UpgradeStrategy.Type value %s is invalid, valid options are %s, %s, or %s", *rayService.Spec.UpgradeStrategy.Type, rayv1.RayServiceNewClusterWithIncrementalUpgrade, rayv1.RayServiceNewCluster, rayv1.RayServiceUpgradeNone)
 	}
 
 	if rayService.Spec.RayClusterDeletionDelaySeconds != nil &&

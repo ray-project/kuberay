@@ -47,7 +47,7 @@ spec:
           resources:
             limits:
               cpu: 1
-              memory: 4Gi
+              memory: 5Gi
             requests:
               # For production use-cases, we recommend specifying integer CPU requests and limits.
               # We also recommend setting requests equal to limits for both CPU and memory.

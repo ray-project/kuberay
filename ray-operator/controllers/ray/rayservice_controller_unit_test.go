@@ -54,17 +54,17 @@ func TestGenerateHashWithoutReplicasAndWorkersToDelete(t *testing.T) {
 		},
 	}
 
-	hash1, err := generateHashWithoutReplicasAndWorkersToDelete(cluster.Spec)
+	hash1, err := utils.GenerateHashWithoutReplicasAndWorkersToDelete(cluster.Spec)
 	require.NoError(t, err)
 
 	*cluster.Spec.WorkerGroupSpecs[0].Replicas++
-	hash2, err := generateHashWithoutReplicasAndWorkersToDelete(cluster.Spec)
+	hash2, err := utils.GenerateHashWithoutReplicasAndWorkersToDelete(cluster.Spec)
 	require.NoError(t, err)
 	assert.Equal(t, hash1, hash2)
 
 	// RayVersion will not be muted, so `hash3` should not be equal to `hash1`.
 	cluster.Spec.RayVersion = "2.100.0"
-	hash3, err := generateHashWithoutReplicasAndWorkersToDelete(cluster.Spec)
+	hash3, err := utils.GenerateHashWithoutReplicasAndWorkersToDelete(cluster.Spec)
 	require.NoError(t, err)
 	assert.NotEqual(t, hash1, hash3)
 }
@@ -472,7 +472,7 @@ func TestReconcileRayCluster_UpdateActiveCluster(t *testing.T) {
 		},
 	}
 
-	hash, err := generateHashWithoutReplicasAndWorkersToDelete(rayServiceTemplate.Spec.RayClusterSpec)
+	hash, err := utils.GenerateHashWithoutReplicasAndWorkersToDelete(rayServiceTemplate.Spec.RayClusterSpec)
 	require.NoError(t, err)
 	activeClusterTemplate := rayv1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
@@ -556,7 +556,7 @@ func TestReconcileRayCluster_UpdatePendingCluster(t *testing.T) {
 		},
 	}
 
-	hash, err := generateHashWithoutReplicasAndWorkersToDelete(rayServiceTemplate.Spec.RayClusterSpec)
+	hash, err := utils.GenerateHashWithoutReplicasAndWorkersToDelete(rayServiceTemplate.Spec.RayClusterSpec)
 	require.NoError(t, err)
 	cluster := rayv1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
@@ -1090,7 +1090,7 @@ func TestIsClusterSpecHashEqual(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			service := rayService.DeepCopy()
-			hash, err := generateHashWithoutReplicasAndWorkersToDelete(service.Spec.RayClusterSpec)
+			hash, err := utils.GenerateHashWithoutReplicasAndWorkersToDelete(service.Spec.RayClusterSpec)
 			require.NoError(t, err)
 			cluster := rayv1.RayCluster{
 				ObjectMeta: metav1.ObjectMeta{
@@ -1153,7 +1153,7 @@ func TestShouldPrepareNewCluster_ZeroDowntimeUpgrade(t *testing.T) {
 		},
 	}
 
-	hash, err := generateHashWithoutReplicasAndWorkersToDelete(rayService.Spec.RayClusterSpec)
+	hash, err := utils.GenerateHashWithoutReplicasAndWorkersToDelete(rayService.Spec.RayClusterSpec)
 	require.NoError(t, err)
 	activeCluster := &rayv1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
@@ -1191,7 +1191,7 @@ func TestShouldPrepareNewCluster_PendingCluster(t *testing.T) {
 		},
 	}
 
-	hash, err := generateHashWithoutReplicasAndWorkersToDelete(rayService.Spec.RayClusterSpec)
+	hash, err := utils.GenerateHashWithoutReplicasAndWorkersToDelete(rayService.Spec.RayClusterSpec)
 	require.NoError(t, err)
 	pendingCluster := &rayv1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
@@ -1245,37 +1245,37 @@ func TestIsZeroDowntimeUpgradeEnabled(t *testing.T) {
 		},
 		{
 			name:                     "upgrade strategy is set to NewCluster",
-			upgradeStrategy:          &rayv1.RayServiceUpgradeStrategy{Type: ptr.To(rayv1.NewCluster)},
+			upgradeStrategy:          &rayv1.RayServiceUpgradeStrategy{Type: ptr.To(rayv1.RayServiceNewCluster)},
 			enableZeroDowntimeEnvVar: "",
 			expected:                 true,
 		},
 		{
 			name:                     "upgrade strategy is set to NewCluster, and env var is not set",
-			upgradeStrategy:          &rayv1.RayServiceUpgradeStrategy{Type: ptr.To(rayv1.NewCluster)},
+			upgradeStrategy:          &rayv1.RayServiceUpgradeStrategy{Type: ptr.To(rayv1.RayServiceNewCluster)},
 			enableZeroDowntimeEnvVar: "true",
 			expected:                 true,
 		},
 		{
 			name:                     "upgrade strategy is set to NewCluster, and env var is set to false",
-			upgradeStrategy:          &rayv1.RayServiceUpgradeStrategy{Type: ptr.To(rayv1.NewCluster)},
+			upgradeStrategy:          &rayv1.RayServiceUpgradeStrategy{Type: ptr.To(rayv1.RayServiceNewCluster)},
 			enableZeroDowntimeEnvVar: "false",
 			expected:                 true,
 		},
 		{
-			name:                     "upgrade strategy is set to None, and env var is not set",
-			upgradeStrategy:          &rayv1.RayServiceUpgradeStrategy{Type: ptr.To(rayv1.None)},
+			name:                     "upgrade strategy is set to RayServiceUpgradeNone, and env var is not set",
+			upgradeStrategy:          &rayv1.RayServiceUpgradeStrategy{Type: ptr.To(rayv1.RayServiceUpgradeNone)},
 			enableZeroDowntimeEnvVar: "",
 			expected:                 false,
 		},
 		{
-			name:                     "upgrade strategy is set to None, and env var is set to true",
-			upgradeStrategy:          &rayv1.RayServiceUpgradeStrategy{Type: ptr.To(rayv1.None)},
+			name:                     "upgrade strategy is set to RayServiceUpgradeNone, and env var is set to true",
+			upgradeStrategy:          &rayv1.RayServiceUpgradeStrategy{Type: ptr.To(rayv1.RayServiceUpgradeNone)},
 			enableZeroDowntimeEnvVar: "true",
 			expected:                 false,
 		},
 		{
-			name:                     "upgrade strategy is set to None, and env var is set to false",
-			upgradeStrategy:          &rayv1.RayServiceUpgradeStrategy{Type: ptr.To(rayv1.None)},
+			name:                     "upgrade strategy is set to RayServiceUpgradeNone, and env var is set to false",
+			upgradeStrategy:          &rayv1.RayServiceUpgradeStrategy{Type: ptr.To(rayv1.RayServiceUpgradeNone)},
 			enableZeroDowntimeEnvVar: "false",
 			expected:                 false,
 		},
@@ -1405,7 +1405,7 @@ func makeIncrementalUpgradeRayService(
 	}
 	if withOptions {
 		spec.UpgradeStrategy = &rayv1.RayServiceUpgradeStrategy{
-			Type: ptr.To(rayv1.NewClusterWithIncrementalUpgrade),
+			Type: ptr.To(rayv1.RayServiceNewClusterWithIncrementalUpgrade),
 			ClusterUpgradeOptions: &rayv1.ClusterUpgradeOptions{
 				GatewayClassName: gatewayClassName,
 				StepSizePercent:  stepSizePercent,
@@ -1520,7 +1520,7 @@ func TestCreateHTTPRoute(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: "test-rayservice", Namespace: namespace},
 		Spec: rayv1.RayServiceSpec{
 			UpgradeStrategy: &rayv1.RayServiceUpgradeStrategy{
-				Type: ptr.To(rayv1.NewClusterWithIncrementalUpgrade),
+				Type: ptr.To(rayv1.RayServiceNewClusterWithIncrementalUpgrade),
 				ClusterUpgradeOptions: &rayv1.ClusterUpgradeOptions{
 					StepSizePercent:  &stepSize,
 					IntervalSeconds:  &interval,
@@ -1685,7 +1685,7 @@ func TestReconcileHTTPRoute(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: "test-rayservice", Namespace: namespace},
 		Spec: rayv1.RayServiceSpec{
 			UpgradeStrategy: &rayv1.RayServiceUpgradeStrategy{
-				Type: ptr.To(rayv1.NewClusterWithIncrementalUpgrade),
+				Type: ptr.To(rayv1.RayServiceNewClusterWithIncrementalUpgrade),
 				ClusterUpgradeOptions: &rayv1.ClusterUpgradeOptions{
 					StepSizePercent:  &stepSize,
 					IntervalSeconds:  &interval,
@@ -1924,7 +1924,7 @@ func TestReconcileServeTargetCapacity(t *testing.T) {
 			rayService := &rayv1.RayService{
 				Spec: rayv1.RayServiceSpec{
 					UpgradeStrategy: &rayv1.RayServiceUpgradeStrategy{
-						Type: ptr.To(rayv1.NewClusterWithIncrementalUpgrade),
+						Type: ptr.To(rayv1.RayServiceNewClusterWithIncrementalUpgrade),
 						ClusterUpgradeOptions: &rayv1.ClusterUpgradeOptions{
 							MaxSurgePercent: ptr.To(tt.maxSurgePercent),
 						},
