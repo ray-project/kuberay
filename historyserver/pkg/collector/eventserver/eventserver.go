@@ -408,10 +408,6 @@ func (es *EventServer) isNodeEvent(eventData map[string]interface{}) bool {
 
 // getJobID gets jobID associated with event
 func (es *EventServer) getJobID(eventData map[string]interface{}) string {
-	if jobID, hasJob := eventData["jobId"]; hasJob && jobID != "" {
-		return fmt.Sprintf("%v", jobID)
-	}
-
 	eventTypesWithJobID := []string{
 		"driverJobDefinitionEvent",
 		"driverJobLifecycleEvent",
