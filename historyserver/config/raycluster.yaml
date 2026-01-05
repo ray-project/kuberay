@@ -20,6 +20,8 @@ spec:
         affinity:
         containers:
         - env:
+          - name: RAY_enable_ray_event
+            value: "true"
           - name: RAY_enable_core_worker_ray_event_to_aggregator
             value: "1"
           - name: RAY_DASHBOARD_AGGREGATOR_AGENT_EVENTS_EXPORT_ADDR
@@ -105,10 +107,10 @@ spec:
   workerGroupSpecs:
   - groupName: cpu
     maxReplicas: 1000
-    minReplicas: 0
+    minReplicas: 1
     numOfHosts: 1
     rayStartParams: {}
-    replicas: 0
+    replicas: 1
     template:
       metadata:
         labels:
@@ -117,6 +119,8 @@ spec:
         imagePullSecrets:
         containers:
         - env:
+          - name: RAY_enable_ray_event
+            value: "true"
           - name: RAY_enable_core_worker_ray_event_to_aggregator
             value: "1"
           - name: RAY_DASHBOARD_AGGREGATOR_AGENT_EVENTS_EXPORT_ADDR

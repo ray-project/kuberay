@@ -411,6 +411,24 @@ func (es *EventServer) getJobID(eventData map[string]interface{}) string {
 	if jobID, hasJob := eventData["jobId"]; hasJob && jobID != "" {
 		return fmt.Sprintf("%v", jobID)
 	}
+
+	eventTypesWithJobID := []string{
+		"driverJobDefinitionEvent",
+		"driverJobLifecycleEvent",
+		"taskDefinitionEvent",
+		"taskLifecycleEvent",
+		"actorTaskDefinitionEvent",
+		"actorDefinitionEvent",
+	}
+
+	for _, eventType := range eventTypesWithJobID {
+		if nestedEvent, ok := eventData[eventType].(map[string]interface{}); ok {
+			if jobID, hasJob := nestedEvent["jobId"]; hasJob && jobID != "" {
+				return fmt.Sprintf("%v", jobID)
+			}
+		}
+	}
+
 	return ""
 }
 
