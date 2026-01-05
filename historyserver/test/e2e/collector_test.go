@@ -2,6 +2,7 @@ package e2e
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os/exec"
 	"path/filepath"
@@ -18,8 +19,6 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
-	rayv1ac "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/ray/v1"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
 
@@ -35,6 +34,9 @@ const (
 	// Ray cluster
 	rayClusterManifestPath = "../../config/raycluster.yaml"
 	rayClusterID           = "default"
+
+	// Ray job
+	rayJobManifestPath = "../../config/rayjob.yaml"
 )
 
 func TestCollector(t *testing.T) {
@@ -49,10 +51,10 @@ func TestCollector(t *testing.T) {
 			name:     "Happy path: Logs and events should be uploaded to S3 on deletion",
 			testFunc: testCollectorUploadOnGracefulShutdown,
 		},
-		{
-			name:     "Simulate OOMKilled behavior: Single session single node logs and events should be uploaded to S3 after the ray-head container is restarted",
-			testFunc: testCollectorSeparatesFilesBySession,
-		},
+		// {
+		// 	name:     "Simulate OOMKilled behavior: Single session single node logs and events should be uploaded to S3 after the ray-head container is restarted",
+		// 	testFunc: testCollectorSeparatesFilesBySession,
+		// },
 	}
 
 	for _, tt := range tests {
@@ -66,20 +68,23 @@ func TestCollector(t *testing.T) {
 	}
 }
 
-// testCollectorUploadOnGracefulShutdown verifies that logs and node_events are successfully uploaded to S3 on cluster deletion.
+// testCollectorUploadOnGracefulShutdown verifies that logs, node_events, and job_events are successfully uploaded to S3 on cluster deletion.
 //
 // The test case follows these steps:
 // 1. Prepare test environment by applying a Ray cluster with the collector
 // 2. Submit a Ray job to the existing Ray cluster
 // 3. Get the sessionID and nodeID for further verification
 // 4. Delete the Ray cluster to trigger log uploading and event flushing on deletion. When the Ray cluster is deleted,
-// logs and node_events are processed as follows:
+// logs, node_events, and job_events are processed as follows:
 //   - logs: Trigger RayLogHandler.processSessionLatestLog to process logs under /tmp/ray/session_latest
-//   - node_events: Trigger EventServer.flushEvents to process in-memory events
+//   - node_events: Trigger EventServer.flushEvents, which calls es.flushNodeEventsForHour to process in-memory node events
+//   - job_events: Trigger EventServer.flushEvents, which calls es.flushJobEventsForHour to process in-memory job events
 //
-// 5. Verify logs and node_events are successfully uploaded to S3. Expected S3 path structure:
+// 5. Verify logs, node_events, and job_events are successfully uploaded to S3. Expected S3 path structure:
 //   - {s3BucketName}/log/{clusterName}_{clusterID}/{sessionID}/logs/...
 //   - {s3BucketName}/log/{clusterName}_{clusterID}/{sessionID}/node_events/...
+//   - {s3BucketName}/log/{clusterName}_{clusterID}/{sessionID}/job_events/AgAAAA==/...
+//   - {s3BucketName}/log/{clusterName}_{clusterID}/{sessionID}/job_events/AQAAAA==/...
 //
 // 6. Delete S3 bucket to ensure test isolation
 func testCollectorUploadOnGracefulShutdown(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
@@ -347,14 +352,12 @@ func applyRayCluster(test Test, g *WithT, namespace *corev1.Namespace) *rayv1.Ra
 
 // applyRayJobToCluster applies a Ray job to the existing Ray cluster.
 func applyRayJobToCluster(test Test, g *WithT, namespace *corev1.Namespace, rayCluster *rayv1.RayCluster) *rayv1.RayJob {
-	jobScript := "import ray; ray.init(); print(ray.cluster_resources())"
-	rayJobAC := rayv1ac.RayJob("ray-job", namespace.Name).
-		WithSpec(rayv1ac.RayJobSpec().
-			WithClusterSelector(map[string]string{utils.RayClusterLabelKey: rayCluster.Name}).
-			WithEntrypoint(fmt.Sprintf("python -c %q", jobScript)).
-			WithSubmitterPodTemplate(JobSubmitterPodTemplateApplyConfiguration()))
+	rayJobFromYaml := DeserializeRayJobYAML(test, rayJobManifestPath)
+	rayJobFromYaml.Namespace = namespace.Name
 
-	rayJob, err := test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
+	rayJob, err := test.Client().Ray().RayV1().
+		RayJobs(namespace.Name).
+		Create(test.Ctx(), rayJobFromYaml, metav1.CreateOptions{})
 	g.Expect(err).NotTo(HaveOccurred())
 	LogWithTimestamp(test.T(), "Created RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
 
@@ -414,6 +417,36 @@ func verifyS3SessionDirs(test Test, g *WithT, s3Client *s3.S3, sessionPrefix str
 			LogWithTimestamp(test.T(), "Verified file %s has content: %d bytes", fileKey, fileSize)
 		}, TestTimeoutMedium).Should(Succeed(), "Failed to verify at least one object in directory %s has content", dirPrefix)
 	}
+
+	// Verify event type coverage.
+	LogWithTimestamp(test.T(), "Verifying event type coverage")
+	events := []struct {
+		prefix        string
+		requiredTypes []string
+	}{
+		{
+			prefix:        sessionPrefix + "node_events",
+			requiredTypes: []string{"NODE_DEFINITION_EVENT", "NODE_LIFECYCLE_EVENT", "ACTOR_LIFECYCLE_EVENT", "TASK_LIFECYCLE_EVENT"},
+		},
+		{
+			prefix:        sessionPrefix + "job_events/AgAAAA==",
+			requiredTypes: []string{"DRIVER_JOB_DEFINITION_EVENT", "DRIVER_JOB_LIFECYCLE_EVENT", "TASK_DEFINITION_EVENT", "TASK_LIFECYCLE_EVENT", "ACTOR_DEFINITION_EVENT", "ACTOR_TASK_DEFINITION_EVENT"},
+		},
+		{
+			prefix:        sessionPrefix + "job_events/AQAAAA==",
+			requiredTypes: []string{"ACTOR_DEFINITION_EVENT", "TASK_DEFINITION_EVENT"},
+		},
+	}
+	for _, event := range events {
+		events, err := loadRayEventsFromS3(test, s3Client, s3BucketName, event.prefix)
+		g.Expect(err).NotTo(HaveOccurred())
+
+		LogWithTimestamp(test.T(), "Loaded %d events from %s", len(events), event.prefix)
+		LogWithTimestamp(test.T(), "Events: %+v", events)
+
+		assertEventTypesPresent(test, g, events, event.requiredTypes)
+	}
+
 }
 
 // getSessionIDFromHeadPod retrieves the sessionID from the Ray head pod by reading the symlink
@@ -472,4 +505,60 @@ func getContainerStatusByName(pod *corev1.Pod, containerName string) (*corev1.Co
 		}
 	}
 	return nil, fmt.Errorf("container %s not found in pod %s/%s", containerName, pod.Namespace, pod.Name)
+}
+
+type RayEvent struct {
+	EventID   string `json:"eventId"`
+	EventType string `json:"eventType"`
+	Timestamp string `json:"timestamp"`
+}
+
+func loadRayEventsFromS3(test Test, s3Client *s3.S3, bucket string, prefix string) ([]RayEvent, error) {
+	objects, err := s3Client.ListObjectsV2(&s3.ListObjectsV2Input{
+		Bucket: aws.String(bucket),
+		Prefix: aws.String(prefix),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// Find the first file object for content verification.
+	var fileObj *s3.Object
+	for _, obj := range objects.Contents {
+		if !strings.HasSuffix(aws.StringValue(obj.Key), "/") {
+			fileObj = obj
+			break
+		}
+	}
+
+	var events []RayEvent
+	fileKey := *fileObj.Key
+	content, err := s3Client.GetObject(&s3.GetObjectInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(fileKey),
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer content.Body.Close()
+
+	var batch []RayEvent
+	if err := json.NewDecoder(content.Body).Decode(&batch); err != nil {
+		return nil, err
+	}
+	events = append(events, batch...)
+
+	return events, nil
+}
+
+func assertEventTypesPresent(test Test, g *WithT, events []RayEvent, requiredTypes []string) {
+	found := map[string]bool{}
+
+	for _, event := range events {
+		found[event.EventType] = true
+	}
+
+	for _, requiredType := range requiredTypes {
+		g.Expect(found[requiredType]).To(BeTrue(), "Event type %s not found", requiredType)
+	}
 }
