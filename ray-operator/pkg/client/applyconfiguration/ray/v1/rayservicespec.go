@@ -8,15 +8,27 @@ import (
 
 // RayServiceSpecApplyConfiguration represents a declarative configuration of the RayServiceSpec type for use
 // with apply.
+//
+// RayServiceSpec defines the desired state of RayService
 type RayServiceSpecApplyConfiguration struct {
-	RayClusterDeletionDelaySeconds     *int32                                       `json:"rayClusterDeletionDelaySeconds,omitempty"`
-	ServiceUnhealthySecondThreshold    *int32                                       `json:"serviceUnhealthySecondThreshold,omitempty"`
-	DeploymentUnhealthySecondThreshold *int32                                       `json:"deploymentUnhealthySecondThreshold,omitempty"`
-	ServeService                       *corev1.Service                              `json:"serveService,omitempty"`
-	UpgradeStrategy                    *RayServiceUpgradeStrategyApplyConfiguration `json:"upgradeStrategy,omitempty"`
-	ServeConfigV2                      *string                                      `json:"serveConfigV2,omitempty"`
-	RayClusterSpec                     *RayClusterSpecApplyConfiguration            `json:"rayClusterConfig,omitempty"`
-	ExcludeHeadPodFromServeSvc         *bool                                        `json:"excludeHeadPodFromServeSvc,omitempty"`
+	// RayClusterDeletionDelaySeconds specifies the delay, in seconds, before deleting old RayClusters.
+	// The default value is 60 seconds.
+	RayClusterDeletionDelaySeconds *int32 `json:"rayClusterDeletionDelaySeconds,omitempty"`
+	// Deprecated: This field is not used anymore. ref: https://github.com/ray-project/kuberay/issues/1685
+	ServiceUnhealthySecondThreshold *int32 `json:"serviceUnhealthySecondThreshold,omitempty"`
+	// Deprecated: This field is not used anymore. ref: https://github.com/ray-project/kuberay/issues/1685
+	DeploymentUnhealthySecondThreshold *int32 `json:"deploymentUnhealthySecondThreshold,omitempty"`
+	// ServeService is the Kubernetes service for head node and worker nodes who have healthy http proxy to serve traffics.
+	ServeService *corev1.Service `json:"serveService,omitempty"`
+	// UpgradeStrategy defines the scaling policy used when upgrading the RayService.
+	UpgradeStrategy *RayServiceUpgradeStrategyApplyConfiguration `json:"upgradeStrategy,omitempty"`
+	// Important: Run "make" to regenerate code after modifying this file
+	// Defines the applications and deployments to deploy, should be a YAML multi-line scalar string.
+	ServeConfigV2  *string                           `json:"serveConfigV2,omitempty"`
+	RayClusterSpec *RayClusterSpecApplyConfiguration `json:"rayClusterConfig,omitempty"`
+	// If the field is set to true, the value of the label `ray.io/serve` on the head Pod should always be false.
+	// Therefore, the head Pod's endpoint will not be added to the Kubernetes Serve service.
+	ExcludeHeadPodFromServeSvc *bool `json:"excludeHeadPodFromServeSvc,omitempty"`
 }
 
 // RayServiceSpecApplyConfiguration constructs a declarative configuration of the RayServiceSpec type for use with
