@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/emicklei/go-restful/v3"
+	eventtypes "github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/sirupsen/logrus"
@@ -484,9 +485,55 @@ func (s *ServerHandler) getLogicalActors(req *restful.Request, resp *restful.Res
 		s.redirectRequest(req, resp)
 		return
 	}
-	return
-	data := s.MetaKeyInfo(clusterNameID, utils.OssMetaFile_LOGICAL_ACTORS)
-	resp.Write(data)
+
+	// Get actors from EventHandler's in-memory map
+	actorsMap := s.eventHandler.GetActorsMap(clusterNameID)
+
+	// Format response to match Ray Dashboard API format
+	formattedActors := make(map[string]interface{})
+	for actorID, actor := range actorsMap {
+		formattedActors[actorID] = formatActorForResponse(actor)
+	}
+
+	response := map[string]interface{}{
+		"result": true,
+		"msg":    "All actors fetched.",
+		"data": map[string]interface{}{
+			"actors": formattedActors,
+		},
+	}
+
+	respData, err := json.Marshal(response)
+	if err != nil {
+		logrus.Errorf("Failed to marshal actors response: %v", err)
+		resp.WriteErrorString(http.StatusInternalServerError, err.Error())
+		return
+	}
+	resp.Write(respData)
+}
+
+// formatActorForResponse converts an eventtypes.Actor to the format expected by Ray Dashboard
+func formatActorForResponse(actor eventtypes.Actor) map[string]interface{} {
+	return map[string]interface{}{
+		"actor_id":           actor.ActorID,
+		"job_id":             actor.JobID,
+		"placement_group_id": actor.PlacementGroupID,
+		"state":              string(actor.State),
+		"pid":                actor.PID,
+		"address": map[string]interface{}{
+			"node_id":    actor.Address.NodeID,
+			"ip_address": actor.Address.IPAddress,
+			"port":       actor.Address.Port,
+			"worker_id":  actor.Address.WorkerID,
+		},
+		"name":               actor.Name,
+		"num_restarts":       actor.NumRestarts,
+		"actor_class":        actor.ActorClass,
+		"required_resources": actor.RequiredResources,
+		"exit_details":       actor.ExitDetails,
+		"repr_name":          actor.ReprName,
+		"call_site":          actor.CallSite,
+	}
 }
 
 func (s *ServerHandler) getLogicalActor(req *restful.Request, resp *restful.Response) {
@@ -496,31 +543,25 @@ func (s *ServerHandler) getLogicalActor(req *restful.Request, resp *restful.Resp
 		s.redirectRequest(req, resp)
 		return
 	}
-	return
-	nodeId := req.PathParameter("single_actor")
-	data := s.MetaKeyInfo(clusterNameID, utils.OssMetaFile_LOGICAL_ACTORS)
-	var allActors = map[string]interface{}{}
+
+	actorID := req.PathParameter("single_actor")
+
+	// Get actor from EventHandler's in-memory map
+	actor, found := s.eventHandler.GetActorByID(clusterNameID, actorID)
+
 	replyActorInfo := ReplyActorInfo{
 		Result: true,
-		Msg:    "All actors fetched.",
+		Msg:    "Actor fetched.",
 		Data:   ActorInfoData{},
 	}
-	if err := json.Unmarshal(data, &allActors); err != nil {
-		logrus.Errorf("Ummarshal allTask error %v", err)
-		resp.WriteErrorString(http.StatusInternalServerError, err.Error())
-		return
+
+	if found {
+		replyActorInfo.Data.Detail = formatActorForResponse(actor)
 	}
-	allActorsData := allActors["data"].(map[string]interface{})
-	actors := allActorsData["actors"].(map[string]interface{})
-	for k, actor := range actors {
-		a := actor.(map[string]interface{})
-		if k == nodeId {
-			replyActorInfo.Data.Detail = a
-			break
-		}
-	}
+
 	actData, err := json.MarshalIndent(&replyActorInfo, "", "  ")
 	if err != nil {
+		logrus.Errorf("Failed to marshal actor response: %v", err)
 		resp.WriteErrorString(http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -600,7 +641,7 @@ func (s *ServerHandler) getTaskSummarize(req *restful.Request, resp *restful.Res
 		s.redirectRequest(req, resp)
 		return
 	}
-	return
+	// return
 	// limit := req.QueryParameter("limit")
 	filter_keys := req.QueryParameter("filter_keys")
 	summary_by := req.QueryParameter("summary_by")
@@ -625,37 +666,148 @@ func (s *ServerHandler) getTaskSummarize(req *restful.Request, resp *restful.Res
 }
 
 func (s *ServerHandler) getTaskDetail(req *restful.Request, resp *restful.Response) {
-	clusterNameID := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
+	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
+	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
 	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
+
+	// 組合成內部使用的 key
+	clusterNameID := clusterName + "_" + clusterNamespace
+
 	if sessionName == "live" {
 		s.redirectRequest(req, resp)
 		return
 	}
-	return
-	// limit := req.QueryParameter("limit")
+
+	// Get tasks from EventHandler's in-memory map
 	filter_keys := req.QueryParameter("filter_keys")
-	//filter_predicates := req.QueryParameter("filter_predicates")
 	filter_values := req.QueryParameter("filter_values")
+
+	var tasks []eventtypes.Task
 
 	switch filter_keys {
 	case "job_id":
-		data := s.MetaKeyInfo(clusterNameID, fmt.Sprintf("%s%s", utils.OssMetaFile_JOBTASK_DETAIL_Prefix, filter_values))
-		resp.Write(data)
+		// Get tasks filtered by job_id
+		tasks = s.eventHandler.GetTasksByJobID(clusterNameID, filter_values)
 	case "task_id":
-		data := s.MetaKeyInfo(clusterNameID, utils.OssMetaFile_ALLTASKS_DETAIL)
-		taskData, err := getTaskInfo(data, filter_values)
-		if err != nil {
-			logrus.Errorf("get task info error %v", err)
-			resp.WriteErrorString(http.StatusInternalServerError, "Wrong task info")
-			return
+		// Get specific task by task_id
+		task, found := s.eventHandler.GetTaskByID(clusterNameID, filter_values)
+		if found {
+			tasks = []eventtypes.Task{task}
+		} else {
+			tasks = []eventtypes.Task{}
 		}
-		resp.Write(taskData)
-
 	default:
-		logrus.Errorf("Wrong filter keys %s", filter_keys)
-		resp.WriteErrorString(http.StatusInternalServerError, "Wrong filter keys")
+		// Get all tasks for the cluster
+		tasks = s.eventHandler.GetTasks(clusterNameID)
 	}
 
+	// Format response to match Ray Dashboard API format
+	taskResults := make([]interface{}, 0, len(tasks))
+	for _, task := range tasks {
+		taskResults = append(taskResults, formatTaskForResponse(task))
+	}
+
+	response := ReplyTaskInfo{
+		Result: true,
+		Msg:    "Tasks fetched.",
+		Data: TaskInfoData{
+			Result: TaskInfoDataResult{
+				Result:             taskResults,
+				Total:              len(taskResults),
+				NumFiltered:        len(taskResults),
+				NumAfterTruncation: len(taskResults),
+			},
+		},
+	}
+
+	respData, err := json.Marshal(response)
+	if err != nil {
+		logrus.Errorf("Failed to marshal task response: %v", err)
+		resp.WriteErrorString(http.StatusInternalServerError, err.Error())
+		return
+	}
+	resp.Write(respData)
+}
+
+// func (s *ServerHandler) getTaskDetail(req *restful.Request, resp *restful.Response) {
+// 	clusterNameID := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
+// 	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
+// 	if sessionName == "live" {
+// 		s.redirectRequest(req, resp)
+// 		return
+// 	}
+
+// 	// Get tasks from EventHandler's in-memory map
+// 	filter_keys := req.QueryParameter("filter_keys")
+// 	filter_values := req.QueryParameter("filter_values")
+
+// 	var tasks []eventtypes.Task
+
+// 	switch filter_keys {
+// 	case "job_id":
+// 		// Get tasks filtered by job_id
+// 		tasks = s.eventHandler.GetTasksByJobID(clusterNameID, filter_values)
+// 	case "task_id":
+// 		// Get specific task by task_id
+// 		task, found := s.eventHandler.GetTaskByID(clusterNameID, filter_values)
+// 		if found {
+// 			tasks = []eventtypes.Task{task}
+// 		} else {
+// 			tasks = []eventtypes.Task{}
+// 		}
+// 	default:
+// 		// Get all tasks for the cluster
+// 		tasks = s.eventHandler.GetTasks(clusterNameID)
+// 	}
+
+// 	// Format response to match Ray Dashboard API format
+// 	taskResults := make([]interface{}, 0, len(tasks))
+// 	for _, task := range tasks {
+// 		taskResults = append(taskResults, formatTaskForResponse(task))
+// 	}
+
+// 	response := ReplyTaskInfo{
+// 		Result: true,
+// 		Msg:    "Tasks fetched.",
+// 		Data: TaskInfoData{
+// 			Result: TaskInfoDataResult{
+// 				Result:             taskResults,
+// 				Total:              len(taskResults),
+// 				NumFiltered:        len(taskResults),
+// 				NumAfterTruncation: len(taskResults),
+// 			},
+// 		},
+// 	}
+
+// 	respData, err := json.Marshal(response)
+// 	if err != nil {
+// 		logrus.Errorf("Failed to marshal task response: %v", err)
+// 		resp.WriteErrorString(http.StatusInternalServerError, err.Error())
+// 		return
+// 	}
+// 	resp.Write(respData)
+// }
+
+// formatTaskForResponse converts an eventtypes.Task to the format expected by Ray Dashboard
+func formatTaskForResponse(task eventtypes.Task) map[string]interface{} {
+	return map[string]interface{}{
+		"task_id":            task.TaskID,
+		"name":               task.Name,
+		"attempt_number":     task.AttemptNumber,
+		"state":              string(task.State),
+		"job_id":             task.JobID,
+		"node_id":            task.NodeID,
+		"actor_id":           task.ActorID,
+		"placement_group_id": task.PlacementGroupID,
+		"type":               string(task.Type),
+		"func_or_class_name": task.FuncOrClassName,
+		"language":           task.Language,
+		"required_resources": task.RequiredResources,
+		"worker_id":          task.WorkerID,
+		"error_type":         task.ErrorType,
+		"error_message":      task.ErrorMessage,
+		"call_site":          task.CallSite,
+	}
 }
 
 // CookieHandle 是一个示例的预处理函数

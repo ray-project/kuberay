@@ -9,6 +9,7 @@ import (
 
 	"github.com/ray-project/kuberay/historyserver/pkg/collector/logcollector/storage"
 	"github.com/ray-project/kuberay/historyserver/pkg/collector/types"
+	"github.com/ray-project/kuberay/historyserver/pkg/eventserver"
 	"github.com/sirupsen/logrus"
 )
 
@@ -19,12 +20,14 @@ type ServerHandler struct {
 
 	reader        storage.StorageReader
 	clientManager *ClientManager
+	eventHandler  *eventserver.EventHandler
 }
 
-func NewServerHandler(c *types.RayHistoryServerConfig, dashboardDir string, reader storage.StorageReader, clientManager *ClientManager) *ServerHandler {
+func NewServerHandler(c *types.RayHistoryServerConfig, dashboardDir string, reader storage.StorageReader, clientManager *ClientManager, eventHandler *eventserver.EventHandler) *ServerHandler {
 	return &ServerHandler{
 		reader:        reader,
 		clientManager: clientManager,
+		eventHandler:  eventHandler,
 
 		rootDir:      c.RootDir,
 		dashboardDir: dashboardDir,

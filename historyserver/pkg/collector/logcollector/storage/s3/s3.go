@@ -203,18 +203,20 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 }
 
 func (r *RayLogsHandler) GetContent(clusterId string, fileName string) io.Reader {
-	logrus.Infof("Prepare to get object %s info ...", fileName)
+	fullPath := path.Join(r.S3RootDir, clusterId, fileName)
+	logrus.Infof("Prepare to get object %s info ...", fullPath)
 
 	result, err := r.S3Client.GetObject(&s3.GetObjectInput{
 		Bucket: aws.String(r.S3Bucket),
-		Key:    aws.String(fileName),
+		Key:    aws.String(fullPath),
 	})
 	if err != nil {
-		logrus.Errorf("Failed to get object %s: %v", fileName, err)
-		allFiles := r._listFiles(clusterId+"/"+path.Dir(fileName), "", false)
+		logrus.Errorf("Failed to get object %s: %v", fullPath, err)
+		dirPath := path.Dir(fullPath)
+		allFiles := r._listFiles(dirPath, "", false)
 		found := false
 		for _, f := range allFiles {
-			if path.Base(f) == fileName {
+			if path.Base(f) == path.Base(fullPath) {
 				logrus.Infof("Get object %s info success", f)
 				result, err = r.S3Client.GetObject(&s3.GetObjectInput{
 					Bucket: aws.String(r.S3Bucket),

@@ -1,4 +1,4 @@
-// Package utils is
+// Package utils provides utility functions for the history server.
 /*
 Copyright 2024 by the zhangjie bingyu.zj@alibaba-inc.com Authors.
 

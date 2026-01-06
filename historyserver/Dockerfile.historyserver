@@ -18,6 +18,7 @@ COPY pkg/collector/ pkg/collector/
 COPY pkg/historyserver/ pkg/historyserver/
 COPY pkg/storage/ pkg/storage/
 COPY pkg/utils/ pkg/utils/
+COPY pkg/eventserver/ pkg/eventserver/
 
 # Build the historyserver binary.
 COPY Makefile Makefile

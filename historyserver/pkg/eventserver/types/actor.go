@@ -64,4 +64,21 @@ func NewActorMap() *ActorMap {
 // ClusterActorMap uses the cluster name as the key
 type ClusterActorMap struct {
 	ClusterActorMap map[string]*ActorMap
+	Mu              sync.RWMutex
+}
+
+func (c *ClusterActorMap) RLock() {
+	c.Mu.RLock()
+}
+
+func (c *ClusterActorMap) RUnlock() {
+	c.Mu.RUnlock()
+}
+
+func (c *ClusterActorMap) Lock() {
+	c.Mu.Lock()
+}
+
+func (c *ClusterActorMap) Unlock() {
+	c.Mu.Unlock()
 }

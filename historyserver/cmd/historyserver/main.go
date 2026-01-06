@@ -9,7 +9,9 @@ import (
 
 	"github.com/ray-project/kuberay/historyserver/pkg/collector"
 	"github.com/ray-project/kuberay/historyserver/pkg/collector/types"
+	"github.com/ray-project/kuberay/historyserver/pkg/eventserver"
 	"github.com/ray-project/kuberay/historyserver/pkg/historyserver"
+	"github.com/sirupsen/logrus"
 )
 
 func main() {
@@ -54,12 +56,26 @@ func main() {
 		panic("Failed to create reader for runtime class name: " + runtimeClassName + ".")
 	}
 
-	handler := historyserver.NewServerHandler(&globalConfig, dashboardDir, reader, cliMgr)
+	// Create EventHandler with storage reader
+	eventHandler := eventserver.NewEventHandler(reader)
+
+	// Start EventHandler in background goroutine
+	eventStop := make(chan struct{}, 1)
+	go func() {
+		logrus.Info("Starting EventHandler in background...")
+		if err := eventHandler.Run(eventStop, 2); err != nil {
+			logrus.Errorf("EventHandler stopped with error: %v", err)
+		}
+	}()
+
+	handler := historyserver.NewServerHandler(&globalConfig, dashboardDir, reader, cliMgr, eventHandler)
 
 	sigChan := make(chan os.Signal, 1)
 	stop := make(chan struct{}, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM, syscall.SIGKILL)
 	go handler.Run(stop)
 	<-sigChan
+	// Stop both the server and the event handler
 	stop <- struct{}{}
+	eventStop <- struct{}{}
 }

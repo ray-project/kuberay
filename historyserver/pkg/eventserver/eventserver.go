@@ -5,11 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"regexp"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/ray-project/kuberay/historyserver/pkg/collector/logcollector/storage"
 	"github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
-	"github.com/ray-project/kuberay/historyserver/pkg/storage"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 	"github.com/sirupsen/logrus"
 )
@@ -19,6 +21,17 @@ type EventHandler struct {
 
 	ClusterTaskMap  *types.ClusterTaskMap
 	ClusterActorMap *types.ClusterActorMap
+}
+
+var eventFilePattern = regexp.MustCompile(`-\d{4}-\d{2}-\d{2}-\d{2}$`)
+
+func isValidEventFile(fileName string) bool {
+	// 跳過目錄
+	if strings.HasSuffix(fileName, "/") {
+		return false
+	}
+	// 只有符合 {nodeId}-{YYYY-MM-DD-HH} 格式的才是真正的 event 文件
+	return eventFilePattern.MatchString(fileName)
 }
 
 func NewEventHandler(reader storage.StorageReader) *EventHandler {
@@ -105,8 +118,9 @@ func (h *EventHandler) Run(stop chan struct{}, numOfEventProcessors int) error {
 				return
 			default:
 				// S3, minio, and GCS are flat structures, object names are whole paths
-				clusterList := h.reader.ListClusters()
+				clusterList := h.reader.List()
 				for _, clusterInfo := range clusterList {
+					clusterNameNamespace := clusterInfo.Name + "_" + clusterInfo.Namespace
 					eventFileList := append(h.getAllJobEventFiles(clusterInfo), h.getAllNodeEventFiles(clusterInfo)...)
 
 					logrus.Infof("current eventFileList for cluster %s is: %v", clusterInfo.Name, eventFileList)
@@ -114,7 +128,11 @@ func (h *EventHandler) Run(stop chan struct{}, numOfEventProcessors int) error {
 						// TODO: Filter out ones that have already been read
 						logrus.Infof("Reading event file: %s", eventFileList[i])
 
-						eventioReader := h.reader.GetContent(clusterInfo.Name, eventFileList[i])
+						eventioReader := h.reader.GetContent(clusterNameNamespace, eventFileList[i])
+						if eventioReader == nil {
+							logrus.Errorf("Failed to get content for event file: %s, skipping", eventFileList[i])
+							continue
+						}
 						eventbytes, err := io.ReadAll(eventioReader)
 						if err != nil {
 							logrus.Fatal(err)
@@ -131,7 +149,7 @@ func (h *EventHandler) Run(stop chan struct{}, numOfEventProcessors int) error {
 						// Evenly distribute event to each channel
 						for i, curr := range eventList {
 							// current index % number of event processors dictates which channel it goes to
-							curr["clusterName"] = clusterInfo.Name
+							curr["clusterName"] = clusterInfo.Name + "_" + clusterInfo.Namespace
 							eventProcessorChannels[i%numOfEventProcessors] <- curr
 						}
 					}
@@ -172,12 +190,14 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 			return err
 		}
 
+		h.ClusterTaskMap.Lock()
 		clusterTaskMapObject, ok := h.ClusterTaskMap.ClusterTaskMap[currentClusterName]
 		if !ok {
 			// Does not exist, create a new list
 			clusterTaskMapObject = types.NewTaskMap()
 			h.ClusterTaskMap.ClusterTaskMap[currentClusterName] = clusterTaskMapObject
 		}
+		h.ClusterTaskMap.Unlock()
 
 		taskId := currTask.TaskID
 		clusterTaskMapObject.Lock()
@@ -193,12 +213,49 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 		}
 		clusterTaskMapObject.Unlock()
 	case types.TASK_LIFECYCLE_EVENT:
+		// TODO: Update task state based on lifecycle event
+		logrus.Debugf("TASK_LIFECYCLE_EVENT received, not yet implemented")
 
 	case types.ACTOR_DEFINITION_EVENT:
+		var currActor types.Actor
+		actorDef, ok := eventMap["actorDefinitionEvent"]
+		if !ok {
+			return fmt.Errorf("event does not have 'actorDefinitionEvent'")
+		}
+		jsonActorDefinition, err := json.Marshal(actorDef)
+		if err != nil {
+			return err
+		}
+
+		err = json.Unmarshal(jsonActorDefinition, &currActor)
+		if err != nil {
+			return err
+		}
+
+		h.ClusterActorMap.Lock()
+		clusterActorMapObject, ok := h.ClusterActorMap.ClusterActorMap[currentClusterName]
+		if !ok {
+			// Does not exist, create a new map
+			clusterActorMapObject = types.NewActorMap()
+			h.ClusterActorMap.ClusterActorMap[currentClusterName] = clusterActorMapObject
+		}
+		h.ClusterActorMap.Unlock()
+
+		actorId := currActor.ActorID
+		clusterActorMapObject.Lock()
+		_, ok = clusterActorMapObject.ActorMap[actorId]
+		if !ok {
+			clusterActorMapObject.ActorMap[actorId] = currActor
+		}
+		clusterActorMapObject.Unlock()
 
 	case types.ACTOR_LIFECYCLE_EVENT:
+		// TODO: Update actor state based on lifecycle event
+		logrus.Debugf("ACTOR_LIFECYCLE_EVENT received, not yet implemented")
 
 	case types.ACTOR_TASK_DEFINITION_EVENT:
+		// TODO: Handle actor task definition event
+		logrus.Debugf("ACTOR_TASK_DEFINITION_EVENT received, not yet implemented")
 	default:
 		logrus.Infof("Event not supported, skipping: %v", eventMap)
 	}
@@ -210,19 +267,198 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 // Assuming that the events file object follow the format root/clustername/sessionid/job_events/{job-*}/*
 func (h *EventHandler) getAllJobEventFiles(clusterInfo utils.ClusterInfo) []string {
 	var allJobFiles []string
-	jobEventDirPrefix := clusterInfo.Name + "/" + clusterInfo.SessionName + "/job_events/"
-	jobDirList := h.reader.ListFiles(clusterInfo.Name, jobEventDirPrefix)
-	for _, currJobDir := range jobDirList {
-		allJobFiles = append(allJobFiles, h.reader.ListFiles(clusterInfo.Name, currJobDir)...)
-	}
+	clusterNameID := clusterInfo.Name + "_" + clusterInfo.Namespace
+	jobEventDirPrefix := clusterInfo.SessionName + "/job_events/"
+	jobDirList := h.reader.ListFiles(clusterNameID, jobEventDirPrefix)
 
+	for _, jobDir := range jobDirList {
+		// 跳過非目錄項目
+		if !strings.HasSuffix(jobDir, "/") {
+			continue
+		}
+		jobDirPath := jobEventDirPrefix + jobDir
+		jobFiles := h.reader.ListFiles(clusterNameID, jobDirPath)
+		for _, jobFile := range jobFiles {
+			if isValidEventFile(jobFile) {
+				allJobFiles = append(allJobFiles, jobDirPath+jobFile)
+			}
+		}
+	}
 	return allJobFiles
 }
 
+// func (h *EventHandler) getAllJobEventFiles(clusterInfo utils.ClusterInfo) []string {
+// 	var allJobFiles []string
+
+// 	clusterNameID := clusterInfo.Name + "_" + clusterInfo.Namespace
+// 	jobEventDirPrefix := clusterInfo.SessionName + "/job_events/"
+// 	jobDirList := h.reader.ListFiles(clusterNameID, jobEventDirPrefix)
+// 	for _, currJobDir := range jobDirList {
+// 		allJobFiles = append(allJobFiles, h.reader.ListFiles(clusterNameID, currJobDir)...)
+// 	}
+
+// 	return allJobFiles
+
+// 	// jobEventDirPrefix := clusterInfo.Name + "/" + clusterInfo.SessionName + "/job_events/"
+// 	// jobDirList := h.reader.ListFiles(clusterInfo.Name, jobEventDirPrefix)
+// 	// for _, currJobDir := range jobDirList {
+// 	// 	allJobFiles = append(allJobFiles, h.reader.ListFiles(clusterInfo.Name, currJobDir)...)
+// 	// }
+
+// 	// return allJobFiles
+// }
+
 // getAllNodeEventFiles get all the node event files for the given cluster.
 // Assuming that the events file object follow the format root/clustername/sessionid/node_events/*
+// func (h *EventHandler) getAllNodeEventFiles(clusterInfo utils.ClusterInfo) []string {
+// 	clusterNameID := clusterInfo.Name + "_" + clusterInfo.Namespace
+// 	nodeEventDirPrefix := clusterInfo.SessionName + "/node_events/"
+// 	nodeEventFiles := h.reader.ListFiles(clusterNameID, nodeEventDirPrefix)
+// 	return nodeEventFiles
+// }
+
+// 修復後的 getAllNodeEventFiles
 func (h *EventHandler) getAllNodeEventFiles(clusterInfo utils.ClusterInfo) []string {
-	nodeEventDirPrefix := clusterInfo.Name + "/" + clusterInfo.SessionName + "/node_events/"
-	nodeEventFiles := h.reader.ListFiles(clusterInfo.Name, nodeEventDirPrefix)
+	clusterNameID := clusterInfo.Name + "_" + clusterInfo.Namespace
+	nodeEventDirPrefix := clusterInfo.SessionName + "/node_events/"
+	nodeEventFileNames := h.reader.ListFiles(clusterNameID, nodeEventDirPrefix)
+
+	// 過濾掉目錄（末尾有 / 的項目），並構建完整路徑
+	var nodeEventFiles []string
+	for _, fileName := range nodeEventFileNames {
+		// 跳過目錄
+		if isValidEventFile(fileName) {
+			fullPath := nodeEventDirPrefix + fileName
+			nodeEventFiles = append(nodeEventFiles, fullPath)
+		}
+		// if strings.HasSuffix(fileName, "/") {
+		// 	continue
+		// }
+		// // 構建完整路徑
+		// fullPath := nodeEventDirPrefix + fileName
+		// nodeEventFiles = append(nodeEventFiles, fullPath)
+	}
 	return nodeEventFiles
+}
+
+// func (h *EventHandler) getAllNodeEventFiles(clusterInfo utils.ClusterInfo) []string {
+// 	nodeEventDirPrefix := clusterInfo.Name + "/" + clusterInfo.SessionName + "/node_events/"
+// 	nodeEventFiles := h.reader.ListFiles(clusterInfo.Name, nodeEventDirPrefix)
+// 	return nodeEventFiles
+// }
+
+// GetTasks returns a thread-safe copy of all tasks for a given cluster
+func (h *EventHandler) GetTasks(clusterName string) []types.Task {
+	h.ClusterTaskMap.RLock()
+	defer h.ClusterTaskMap.RUnlock()
+
+	taskMap, ok := h.ClusterTaskMap.ClusterTaskMap[clusterName]
+	if !ok {
+		return []types.Task{}
+	}
+
+	taskMap.Lock()
+	defer taskMap.Unlock()
+
+	tasks := make([]types.Task, 0, len(taskMap.TaskMap))
+	for _, task := range taskMap.TaskMap {
+		tasks = append(tasks, task)
+	}
+	return tasks
+}
+
+// GetTaskByID returns a specific task by ID for a given cluster
+func (h *EventHandler) GetTaskByID(clusterName, taskID string) (types.Task, bool) {
+	h.ClusterTaskMap.RLock()
+	defer h.ClusterTaskMap.RUnlock()
+
+	taskMap, ok := h.ClusterTaskMap.ClusterTaskMap[clusterName]
+	if !ok {
+		return types.Task{}, false
+	}
+
+	taskMap.Lock()
+	defer taskMap.Unlock()
+
+	task, ok := taskMap.TaskMap[taskID]
+	return task, ok
+}
+
+// GetTasksByJobID returns all tasks for a given job ID in a cluster
+func (h *EventHandler) GetTasksByJobID(clusterName, jobID string) []types.Task {
+	h.ClusterTaskMap.RLock()
+	defer h.ClusterTaskMap.RUnlock()
+
+	taskMap, ok := h.ClusterTaskMap.ClusterTaskMap[clusterName]
+	if !ok {
+		return []types.Task{}
+	}
+
+	taskMap.Lock()
+	defer taskMap.Unlock()
+
+	tasks := make([]types.Task, 0)
+	for _, task := range taskMap.TaskMap {
+		if task.JobID == jobID {
+			tasks = append(tasks, task)
+		}
+	}
+	return tasks
+}
+
+// GetActors returns a thread-safe copy of all actors for a given cluster
+func (h *EventHandler) GetActors(clusterName string) []types.Actor {
+	h.ClusterActorMap.RLock()
+	defer h.ClusterActorMap.RUnlock()
+
+	actorMap, ok := h.ClusterActorMap.ClusterActorMap[clusterName]
+	if !ok {
+		return []types.Actor{}
+	}
+
+	actorMap.Lock()
+	defer actorMap.Unlock()
+
+	actors := make([]types.Actor, 0, len(actorMap.ActorMap))
+	for _, actor := range actorMap.ActorMap {
+		actors = append(actors, actor)
+	}
+	return actors
+}
+
+// GetActorByID returns a specific actor by ID for a given cluster
+func (h *EventHandler) GetActorByID(clusterName, actorID string) (types.Actor, bool) {
+	h.ClusterActorMap.RLock()
+	defer h.ClusterActorMap.RUnlock()
+
+	actorMap, ok := h.ClusterActorMap.ClusterActorMap[clusterName]
+	if !ok {
+		return types.Actor{}, false
+	}
+
+	actorMap.Lock()
+	defer actorMap.Unlock()
+
+	actor, ok := actorMap.ActorMap[actorID]
+	return actor, ok
+}
+
+// GetActorsMap returns a thread-safe copy of all actors as a map for a given cluster
+func (h *EventHandler) GetActorsMap(clusterName string) map[string]types.Actor {
+	h.ClusterActorMap.RLock()
+	defer h.ClusterActorMap.RUnlock()
+
+	actorMap, ok := h.ClusterActorMap.ClusterActorMap[clusterName]
+	if !ok {
+		return map[string]types.Actor{}
+	}
+
+	actorMap.Lock()
+	defer actorMap.Unlock()
+
+	actors := make(map[string]types.Actor, len(actorMap.ActorMap))
+	for id, actor := range actorMap.ActorMap {
+		actors[id] = actor
+	}
+	return actors
 }

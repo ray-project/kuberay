@@ -79,4 +79,21 @@ func NewTaskMap() *TaskMap {
 // ClusterTaskMap uses the cluster name as the key
 type ClusterTaskMap struct {
 	ClusterTaskMap map[string]*TaskMap
+	Mu             sync.RWMutex
+}
+
+func (c *ClusterTaskMap) RLock() {
+	c.Mu.RLock()
+}
+
+func (c *ClusterTaskMap) RUnlock() {
+	c.Mu.RUnlock()
+}
+
+func (c *ClusterTaskMap) Lock() {
+	c.Mu.Lock()
+}
+
+func (c *ClusterTaskMap) Unlock() {
+	c.Mu.Unlock()
 }
