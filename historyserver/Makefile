@@ -9,6 +9,7 @@ BIN_DIR=$(OUT_DIR)/bin
 BINARY_NAME=historyserver
 BINARY_NAME_COLLECTOR=collector
 COLLECTOR_IMG ?= collector:v0.1.0
+HISTORYSERVER_IMG ?= historyserver:v0.1.0
 
 # Setting SHELL to bash allows bash commands to be executed by recipes.
 # Options are set to exit when a recipe line exits non-zero or a piped command fails.
@@ -70,9 +71,9 @@ mod:
 localimage-collector:
 	docker build -t $(COLLECTOR_IMG) -f Dockerfile.collector .
 
-.PHONY: localimage
-localimage: dockerbuilder_instance
-	docker buildx build -t historyserver:laster --platform linux/amd64 . --load
+.PHONY: localimage-historyserver
+localimage-historyserver: dockerbuilder_instance
+	docker build -t $(HISTORYSERVER_IMG) -f Dockerfile.historyserver . --load
 
 .PHONY: dockerbuilder_instance
 dockerbuilder_instance:
