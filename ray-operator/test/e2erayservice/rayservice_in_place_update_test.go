@@ -55,8 +55,8 @@ func TestRayServiceInPlaceUpdate(t *testing.T) {
 	g.Expect(err).NotTo(HaveOccurred())
 
 	serveConfig := rayService.Spec.ServeConfigV2
-	serveConfig = strings.Replace(serveConfig, "price: 3", "price: 4", -1)
-	serveConfig = strings.Replace(serveConfig, "factor: 5", "factor: 3", -1)
+	serveConfig = strings.ReplaceAll(serveConfig, "price: 3", "price: 4")
+	serveConfig = strings.ReplaceAll(serveConfig, "factor: 5", "factor: 3")
 
 	rayService.Spec.ServeConfigV2 = serveConfig
 	rayService, err = test.Client().Ray().RayV1().RayServices(namespace.Name).Update(
@@ -121,7 +121,7 @@ func TestUpdateServeConfigAndRayClusterSpec(t *testing.T) {
 	g.Expect(err).NotTo(HaveOccurred())
 
 	serveConfig := rayService.Spec.ServeConfigV2
-	serveConfig = strings.Replace(serveConfig, "price: 3", "price: 456", -1)
+	serveConfig = strings.ReplaceAll(serveConfig, "price: 3", "price: 456")
 	rayService.Spec.ServeConfigV2 = serveConfig
 
 	rayService.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].Env = []corev1.EnvVar{{Name: "FOO", Value: "BAR"}}
@@ -217,7 +217,7 @@ func TestUpdateServeConfigAndRayClusterSpecWithUpgradeDisabled(t *testing.T) {
 	g.Expect(err).NotTo(HaveOccurred())
 
 	serveConfig := rayService.Spec.ServeConfigV2
-	serveConfig = strings.Replace(serveConfig, "price: 3", "price: 456", -1)
+	serveConfig = strings.ReplaceAll(serveConfig, "price: 3", "price: 456")
 	rayService.Spec.ServeConfigV2 = serveConfig
 
 	rayService.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers[0].Env = []corev1.EnvVar{{Name: "FOO", Value: "BAR"}}

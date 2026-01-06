@@ -70,15 +70,11 @@ func (r *RayLogHandler) Run(stop <-chan struct{}) error {
 	select {
 	case <-sigChan:
 		logrus.Info("Received SIGTERM, processing all logs...")
-		// r.processAllLogs()
 		r.processSessionLatestLogs()
-		// r.processPrevLogsOnShutdown()
 		close(r.ShutdownChan)
 	case <-stop:
 		logrus.Info("Received stop signal, processing all logs...")
-		// r.processAllLogs()
 		r.processSessionLatestLogs()
-		// r.processPrevLogsOnShutdown()
 		close(r.ShutdownChan)
 	}
 	logrus.Warnf("Receive stop single, so stop ray collector ")
@@ -87,43 +83,6 @@ func (r *RayLogHandler) Run(stop <-chan struct{}) error {
 
 func (r *RayLogHandler) WaitForStop() <-chan struct{} {
 	return r.ShutdownChan
-}
-
-func (r *RayLogHandler) AddLogFile(absoluteLogPathName string) {
-	r.LogFiles <- absoluteLogPathName
-}
-
-func (r *RayLogHandler) PushLog(absoluteLogPathName string) error {
-	// Simply store the file path for later processing
-	absoluteLogPathName = strings.TrimSpace(absoluteLogPathName)
-	absoluteLogPathName = filepath.Clean(absoluteLogPathName)
-
-	r.filePathMu.Lock()
-	r.logFilePaths[absoluteLogPathName] = true
-	r.filePathMu.Unlock()
-
-	logrus.Infof("Registered log file for later processing: %s", absoluteLogPathName)
-	return nil
-}
-
-func (r *RayLogHandler) processAllLogs() {
-	logrus.Info("Processing all log files...")
-	r.filePathMu.Lock()
-	defer r.filePathMu.Unlock()
-
-	if err := r.Writer.CreateDirectory(r.RootDir); err != nil {
-		logrus.Errorf("Failed to create root directory %s: %v", r.RootDir, err)
-		return
-	}
-
-	for filePath := range r.logFilePaths {
-		// Process each file now
-		if err := r.processLogFile(filePath); err != nil {
-			logrus.Errorf("Failed to process log file %s: %v", filePath, err)
-		}
-	}
-
-	logrus.Info("Finished processing all log files")
 }
 
 // processSessionLatestLogs processes logs in /tmp/ray/session_latest/logs directory
@@ -253,105 +212,6 @@ func (r *RayLogHandler) processSessionLatestLogFile(absoluteLogPathName, session
 
 	logrus.Infof("Successfully wrote object %s, size: %d bytes", objectName, len(content))
 	return nil
-}
-
-func (r *RayLogHandler) processLogFile(absoluteLogPathName string) error {
-	// Calculate relative path
-	relativePath := strings.TrimPrefix(absoluteLogPathName, fmt.Sprintf("%s/", r.LogDir))
-	// Split relative path into subdir and filename
-	subdir, filename := filepath.Split(relativePath)
-	sessionName := path.Base(r.SessionDir)
-	logDir := utils.GetLogDir(r.RootDir, r.RayClusterName, r.RayClusterID, sessionName, r.RayNodeName)
-
-	if len(subdir) != 0 {
-		dirName := path.Join(logDir, subdir)
-		if err := r.Writer.CreateDirectory(dirName); err != nil {
-			logrus.Errorf("Failed to create directory '%s': %v", dirName, err)
-			return err
-		}
-	}
-
-	objectName := path.Join(logDir, subdir, filename)
-	logrus.Infof("Processing log file %s (object: %s)", absoluteLogPathName, objectName)
-
-	// Read the entire file content only when processing
-	content, err := os.ReadFile(absoluteLogPathName)
-	if err != nil {
-		logrus.Errorf("Failed to read file %s: %v", absoluteLogPathName, err)
-		return err
-	}
-
-	// Write to storage
-	err = r.Writer.WriteFile(objectName, bytes.NewReader(content))
-	if err != nil {
-		logrus.Errorf("Failed to write object %s: %v", objectName, err)
-		return err
-	}
-
-	logrus.Infof("Successfully wrote object %s, size: %d bytes", objectName, len(content))
-	return nil
-}
-
-func (r *RayLogHandler) WatchLogsLoops(watcher *fsnotify.Watcher, walkPath string) {
-	// Watch current directory
-	if err := watcher.Add(walkPath); err != nil {
-		logrus.Fatalf("Watcher rootpath %s error %v", r.LogDir, err)
-	}
-
-	err := filepath.WalkDir(walkPath, func(path string, info fs.DirEntry, err error) error {
-		if err != nil {
-			logrus.Errorf("Walk path %s error %v", walkPath, err)
-			return err // Return error
-		}
-		// Check if it's a file
-		if !info.IsDir() {
-			logrus.Infof("Walk find new file %s", path) // Log file path
-			go r.AddLogFile(path)
-		} else {
-			logrus.Infof("Walk find new dir %s", path) // Log directory path
-			if err := watcher.Add(path); err != nil {
-				logrus.Fatalf("Watcher add %s error %v", r.LogDir, err)
-			}
-		}
-		return nil
-	})
-	if err != nil {
-		logrus.Errorf("Walk path %s error %++v", walkPath, err)
-		return
-	}
-	logrus.Infof("Walk path %s success", walkPath)
-
-	for {
-		select {
-		case <-r.ShutdownChan:
-			logrus.Warnf("Receive shutdown signal, so return watchFileLoops")
-			return
-		case event, ok := <-watcher.Events:
-			if !ok {
-				logrus.Warnf("Receive watcher events not ok")
-				return
-			}
-			if event.Op == fsnotify.Create {
-				name := event.Name
-				info, _ := os.Stat(name)
-
-				// Check if file or directory
-				if !info.IsDir() {
-					logrus.Infof("Watch find: create a new file %s", name)
-					r.AddLogFile(name)
-				} else {
-					if err := watcher.Add(name); err != nil {
-						logrus.Fatalf("Watch add file %s error %v", name, err)
-					}
-				}
-			}
-		case _, ok := <-watcher.Errors:
-			if !ok {
-				logrus.Warnf("Watcher error, so return watchFileLoops")
-				return
-			}
-		}
-	}
 }
 
 func (r *RayLogHandler) WatchPrevLogsLoops() {

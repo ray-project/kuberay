@@ -20,17 +20,12 @@ linters:
     - unused
     - wastedassign
     - errorlint
-    # TODO: The following linters are disabled for now to unblock the golangci-lint v2 migration.
-    # We will fix the lint errors and re-enable these linters in follow-up PRs.
-    # - noctx
-    # - revive
-    # - staticcheck
+    - staticcheck
+    - noctx
+    - revive
   settings:
     staticcheck:
-      checks:
-        - all
-        # Exclude the SA1019 check which checks the usage of deprecated fields.
-        - "-SA1019"
+      checks: ["all", "-SA1019", "-ST1001", "-ST1003", "-ST1005", "-QF1008"]
     ginkgolinter:
       forbid-focus-container: true
     gocyclo:
@@ -82,6 +77,15 @@ linters:
             - '**/ray-operator/apis/config/v1alpha1/*.go'
             - '**/ray-operator/apis/ray/v1alpha1/*.go'
             - '**/ray-operator/apis/ray/v1/*.go'
+            - '**/ray-operator/controllers/ray/batchscheduler/utils/*.go'
+            - '**/ray-operator/controllers/ray/common/*.go'
+            - '**/ray-operator/controllers/ray/utils/*.go'
+            - '**/ray-operator/pkg/utils/*.go'
+            - '**/ray-operator/controllers/ray/utils/types/*.go'
+            - '**/apiserver/pkg/http/*.go'
+            - '**/apiserver/pkg/util/*.go'
+            - '**/apiserversdk/util/*.go'
+            - '**/kubectl-plugin/pkg/util/*.go'
     modernize:
       disable:
         - omitzero
