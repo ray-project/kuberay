@@ -943,9 +943,7 @@ func (r *RayJobReconciler) constructRayClusterForRayJob(rayJobInstance *rayv1.Ra
 	labels[utils.RayJobSubmissionModeLabelKey] = string(rayJobInstance.Spec.SubmissionMode)
 
 	if rayJobInstance.Spec.SubmissionMode == rayv1.SidecarMode {
-		labels[utils.RayJobDisableProvisionedHeadNodeRestartLabelKey] = "true"
-	} else {
-		labels[utils.RayJobDisableProvisionedHeadNodeRestartLabelKey] = "false"
+		annotations[utils.DisableProvisionedHeadRestartAnnotationKey] = "true"
 	}
 
 	rayCluster := &rayv1.RayCluster{
