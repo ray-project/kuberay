@@ -721,7 +721,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 			// In this case, the worker Pods will not be killed by the new head Pod when it is created, but the submission ID has already been
 			// used by the old Ray job, so the new Ray job will fail.
 			logger.Info(
-				"reconcilePods: Found 0 head Pods for a sidecar-mode RayJob-managed RayCluster; skipping head creation to let RayJob controller handle the failure",
+				"reconcilePods: Found 0 head Pods for the RayCluster; Skipped head recreation due to ray.io/disable-provisioned-head-restart",
 				"rayCluster", instance.Name,
 			)
 			return nil
