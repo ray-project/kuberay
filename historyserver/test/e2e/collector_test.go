@@ -73,10 +73,10 @@ func TestCollector(t *testing.T) {
 			name:     "Happy path: Logs and events should be uploaded to S3 on deletion",
 			testFunc: testCollectorUploadOnGracefulShutdown,
 		},
-		// {
-		// 	name:     "Simulate OOMKilled behavior: Single session single node logs and events should be uploaded to S3 after the ray-head container is restarted",
-		// 	testFunc: testCollectorSeparatesFilesBySession,
-		// },
+		{
+			name:     "Simulate OOMKilled behavior: Single session single node logs and events should be uploaded to S3 after the ray-head container is restarted",
+			testFunc: testCollectorSeparatesFilesBySession,
+		},
 	}
 
 	for _, tt := range tests {
@@ -174,24 +174,21 @@ func testCollectorSeparatesFilesBySession(test Test, g *WithT, namespace *corev1
 	// Since Kubernetes 1.28 (with cgroups v2 enabled), `memory.oom.group` is enabled by default: when any process in a cgroup
 	// hits the memory limit, all processes in the container are killed together, thereby triggering container restart.
 	// For more details, please refer to https://github.com/kubernetes/kubernetes/pull/117793
-	// TODO(jwj): Force delete workers.
-	LogWithTimestamp(test.T(), "Killing main process of ray-head container to trigger a restart")
-	g.Eventually(func(gg Gomega) {
-		headPod, err := GetHeadPod(test, rayCluster)
-		gg.Expect(err).NotTo(HaveOccurred())
-		_, stderr := ExecPodCmd(test, headPod, "ray-head", []string{"kill", "1"})
-		gg.Expect(stderr.String()).To(BeEmpty())
-	}, TestTimeoutMedium).Should(Succeed(), "Failed to kill main process of ray-head container")
-
-	LogWithTimestamp(test.T(), "Waiting for ray-head container to restart and become ready")
-	g.Eventually(func(gg Gomega) {
-		updatedPod, err := GetHeadPod(test, rayCluster)
-		gg.Expect(err).NotTo(HaveOccurred())
-		rayHeadStatus, err := getContainerStatusByName(updatedPod, "ray-head")
-		gg.Expect(err).NotTo(HaveOccurred())
-		gg.Expect(rayHeadStatus.RestartCount).To(BeNumerically(">", 0))
-		gg.Expect(rayHeadStatus.Ready).To(BeTrue())
-	}, TestTimeoutShort).Should(Succeed(), "ray-head container should restart and become ready")
+	killContainerAndWaitForRestart(test, g, rayCluster, "ray-head", func() (*corev1.Pod, error) {
+		return GetHeadPod(test, rayCluster)
+	})
+	// TODO(jwj): Clarify the automatic restart mechanism.
+	// Force kill the ray-worker container before automatic restart.
+	killContainerAndWaitForRestart(test, g, rayCluster, "ray-worker", func() (*corev1.Pod, error) {
+		workerPods, err := GetWorkerPods(test, rayCluster)
+		if err != nil {
+			return nil, err
+		}
+		if len(workerPods) == 0 {
+			return nil, fmt.Errorf("no worker pods found")
+		}
+		return &workerPods[0], nil
+	})
 
 	// Verify the old session logs have been processed on disk.
 	dirs := []string{"prev-logs", "persist-complete-logs"}
@@ -208,7 +205,7 @@ func testCollectorSeparatesFilesBySession(test Test, g *WithT, namespace *corev1
 		}, TestTimeoutMedium).Should(Succeed(), "Session directory %s should exist in %s", sessionID, dirPath)
 	}
 
-	// Verify logs and node_events are successfully uploaded to S3.
+	// Verify logs, node_events, and job_events are successfully uploaded to S3.
 	verifyS3SessionDirs(test, g, s3Client, sessionPrefix, nodeID)
 
 	deleteS3Bucket(test, g, s3Client)
@@ -504,6 +501,27 @@ fi`
 
 	return nodeID
 
+}
+
+// killContainerAndWaitForRestart kills the main process of a container and waits for the container to restart and become ready.
+func killContainerAndWaitForRestart(test Test, g *WithT, rayCluster *rayv1.RayCluster, containerName string, getPod func() (*corev1.Pod, error)) {
+	LogWithTimestamp(test.T(), "Killing main process of %s container to trigger a restart", containerName)
+	g.Eventually(func(gg Gomega) {
+		pod, err := getPod()
+		gg.Expect(err).NotTo(HaveOccurred())
+		_, stderr := ExecPodCmd(test, pod, containerName, []string{"kill", "1"})
+		gg.Expect(stderr.String()).To(BeEmpty())
+	}, TestTimeoutMedium).Should(Succeed(), "Failed to kill main process of %s container", containerName)
+
+	LogWithTimestamp(test.T(), "Waiting for %s container to restart and become ready", containerName)
+	g.Eventually(func(gg Gomega) {
+		pod, err := getPod()
+		gg.Expect(err).NotTo(HaveOccurred())
+		containerStatus, err := getContainerStatusByName(pod, containerName)
+		gg.Expect(err).NotTo(HaveOccurred())
+		gg.Expect(containerStatus.RestartCount).To(BeNumerically(">", 0))
+		gg.Expect(containerStatus.Ready).To(BeTrue())
+	}, TestTimeoutShort).Should(Succeed(), "%s container should restart and become ready", containerName)
 }
 
 // getContainerStatusByName retrieves the container status by container name.
