@@ -45,6 +45,21 @@ type EventServer struct {
 	mutex              sync.Mutex
 }
 
+var eventTypesWithJobID = []string{
+	// Job Events (Driver Job)
+	"driverJobDefinitionEvent",
+	"driverJobLifecycleEvent",
+
+	// Task Events (Normal Task)
+	"taskDefinitionEvent",
+	"taskLifecycleEvent",
+	"taskProfileEvents",
+
+	// Actor Events (Actor Task + Actor Definition)
+	"actorTaskDefinitionEvent",
+	"actorDefinitionEvent",
+}
+
 func NewEventServer(writer storage.StorageWriter, rootDir, sessionDir, nodeID, clusterName, clusterID, sessionName string) *EventServer {
 	server := &EventServer{
 		events:             make([]Event, 0),
