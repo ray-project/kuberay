@@ -3,7 +3,39 @@ kind: RayJob
 metadata:
   name: rayjob
 spec:
-  entrypoint: python -c "import ray; ray.init(); print(ray.cluster_resources())"
+  entrypoint: |
+    python -c "
+    import ray
+    ray.init()
+
+    @ray.remote
+    def my_task(x):
+        return x * 2
+
+    @ray.remote
+    class Counter:
+        def __init__(self):
+            self.count = 0
+
+        def increment(self):
+            self.count += 1
+            return self.count
+
+        def get_count(self):
+            return self.count
+
+    task_result = ray.get(my_task.remote(1))
+    print(f'Task result: {task_result}')
+
+    counter = Counter.remote()
+    for i in range(1):
+        count = ray.get(counter.increment.remote())
+        print(f'Counter: {count}')
+
+    final_count = ray.get(counter.get_count.remote())
+    print(f'Final count: {final_count}')
+    print(f'Cluster resources: {ray.cluster_resources()}')
+    "
   # Select the existing Ray cluster running the collector.
   clusterSelector:
     ray.io/cluster: raycluster-historyserver
