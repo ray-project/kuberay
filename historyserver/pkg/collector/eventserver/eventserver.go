@@ -45,6 +45,21 @@ type EventServer struct {
 	mutex              sync.Mutex
 }
 
+var eventTypesWithJobID = []string{
+	// Job Events (Driver Job)
+	"driverJobDefinitionEvent",
+	"driverJobLifecycleEvent",
+
+	// Task Events (Normal Task)
+	"taskDefinitionEvent",
+	"taskLifecycleEvent",
+	"taskProfileEvents",
+
+	// Actor Events (Actor Task + Actor Definition)
+	"actorTaskDefinitionEvent",
+	"actorDefinitionEvent",
+}
+
 func NewEventServer(writer storage.StorageWriter, rootDir, sessionDir, nodeID, clusterName, clusterID, sessionName string) *EventServer {
 	server := &EventServer{
 		events:             make([]Event, 0),
@@ -408,21 +423,6 @@ func (es *EventServer) isNodeEvent(eventData map[string]interface{}) bool {
 
 // getJobID gets jobID associated with event
 func (es *EventServer) getJobID(eventData map[string]interface{}) string {
-	eventTypesWithJobID := []string{
-		// Job Events (Driver Job)
-		"driverJobDefinitionEvent",
-		"driverJobLifecycleEvent",
-
-		// Task Events (Normal Task)
-		"taskDefinitionEvent",
-		"taskLifecycleEvent",
-		"taskProfileEvents",
-
-		// Actor Events (Actor Task + Actor Definition)
-		"actorTaskDefinitionEvent",
-		"actorDefinitionEvent",
-	}
-
 	for _, eventType := range eventTypesWithJobID {
 		if nestedEvent, ok := eventData[eventType].(map[string]interface{}); ok {
 			if jobID, hasJob := nestedEvent["jobId"]; hasJob && jobID != "" {
