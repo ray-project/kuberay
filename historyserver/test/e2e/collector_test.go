@@ -39,6 +39,28 @@ const (
 	rayJobManifestPath = "../../config/rayjob.yaml"
 )
 
+// rayEventTypes includes all potential event types defined in Ray:
+// https://github.com/ray-project/ray/blob/3b41c97fa90c58b0b72c0026f57005b92310160d/src/ray/protobuf/public/events_base_event.proto#L49-L61
+var rayEventTypes = []string{
+	"ACTOR_DEFINITION_EVENT",
+	"ACTOR_LIFECYCLE_EVENT",
+	"ACTOR_TASK_DEFINITION_EVENT",
+	"DRIVER_JOB_DEFINITION_EVENT",
+	"DRIVER_JOB_LIFECYCLE_EVENT",
+	"TASK_DEFINITION_EVENT",
+	"TASK_LIFECYCLE_EVENT",
+	"TASK_PROFILE_EVENT",
+	"NODE_DEFINITION_EVENT",
+	"NODE_LIFECYCLE_EVENT",
+}
+
+// rayEvent contains specific fields in the Ray event JSON schema. For now, we keep only two fields,
+// eventId and eventType while ensuring future extensibility (e.g., sessionName, timestamp, sourceType, etc.).
+type rayEvent struct {
+	EventID   string `json:"eventId"`
+	EventType string `json:"eventType"`
+}
+
 func TestCollector(t *testing.T) {
 	// Share a single S3 client among subtests.
 	s3Client := ensureS3Client(t)
@@ -86,6 +108,8 @@ func TestCollector(t *testing.T) {
 //   - {s3BucketName}/log/{clusterName}_{clusterID}/{sessionID}/job_events/AgAAAA==/...
 //   - {s3BucketName}/log/{clusterName}_{clusterID}/{sessionID}/job_events/AQAAAA==/...
 //
+// For detailed verification logic, please refer to verifyS3SessionDirs.
+//
 // 6. Delete S3 bucket to ensure test isolation
 func testCollectorUploadOnGracefulShutdown(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
 	rayCluster := prepareTestEnv(test, g, namespace, s3Client)
@@ -108,7 +132,7 @@ func testCollectorUploadOnGracefulShutdown(test Test, g *WithT, namespace *corev
 		return err
 	}, TestTimeoutMedium).Should(WithTransform(k8serrors.IsNotFound, BeTrue()))
 
-	// Verify logs and node_events are successfully uploaded to S3.
+	// Verify logs, node_events, and job_events are successfully uploaded to S3.
 	verifyS3SessionDirs(test, g, s3Client, sessionPrefix, nodeID)
 
 	// Delete S3 bucket to ensure test isolation.
@@ -150,6 +174,7 @@ func testCollectorSeparatesFilesBySession(test Test, g *WithT, namespace *corev1
 	// Since Kubernetes 1.28 (with cgroups v2 enabled), `memory.oom.group` is enabled by default: when any process in a cgroup
 	// hits the memory limit, all processes in the container are killed together, thereby triggering container restart.
 	// For more details, please refer to https://github.com/kubernetes/kubernetes/pull/117793
+	// TODO(jwj): Force delete workers.
 	LogWithTimestamp(test.T(), "Killing main process of ray-head container to trigger a restart")
 	g.Eventually(func(gg Gomega) {
 		headPod, err := GetHeadPod(test, rayCluster)
@@ -372,13 +397,20 @@ func applyRayJobToCluster(test Test, g *WithT, namespace *corev1.Namespace, rayC
 	return rayJob
 }
 
-// verifyS3SessionDirs verifies that directories logs/ and node_events/ exist under a session prefix in S3.
-// This helper function checks that each directory contains at least one object.
-// Additionally, it verifies that specific files have content:
-// - logs/<nodeID>/raylet.out must exist and have content > 0 bytes
-// - node_events/<nodeID>_<suffix> must exist and have content > 0 bytes (suffix can be ignored for verification)
+// verifyS3SessionDirs verifies file contents in logs/, node_events/, and job_events/ directories under a session prefix in S3.
+// There are two phases of verification:
+// 1. Verify file contents in logs/ directory
+//   - logs/<nodeID>/raylet.out must exist and have content > 0 bytes
+//   - TODO(jwj): Complete docs.
+//
+// 2. Verify event type coverage in node_events/ and job_events/ directories
+//   - Aggregate all events from node_events/ and job_events/ directories
+//   - Verify that all potential event types are present in the aggregated events
+//
+// NOTE: Since flushed node and job events are nondeterministic, we need to aggregate them first before verifying event type coverage.
 func verifyS3SessionDirs(test Test, g *WithT, s3Client *s3.S3, sessionPrefix string, nodeID string) {
-	dirs := []string{"logs", "node_events"}
+	// TODO(jwj): Separate verification for logs and events.
+	dirs := []string{"logs"}
 	for _, dir := range dirs {
 		dirPrefix := sessionPrefix + dir + "/"
 
@@ -418,35 +450,15 @@ func verifyS3SessionDirs(test Test, g *WithT, s3Client *s3.S3, sessionPrefix str
 		}, TestTimeoutMedium).Should(Succeed(), "Failed to verify at least one object in directory %s has content", dirPrefix)
 	}
 
-	// Verify event type coverage.
-	LogWithTimestamp(test.T(), "Verifying event type coverage")
-	events := []struct {
-		prefix        string
-		requiredTypes []string
-	}{
-		{
-			prefix:        sessionPrefix + "node_events",
-			requiredTypes: []string{"NODE_DEFINITION_EVENT", "NODE_LIFECYCLE_EVENT", "ACTOR_LIFECYCLE_EVENT", "TASK_LIFECYCLE_EVENT"},
-		},
-		{
-			prefix:        sessionPrefix + "job_events/AgAAAA==",
-			requiredTypes: []string{"DRIVER_JOB_DEFINITION_EVENT", "DRIVER_JOB_LIFECYCLE_EVENT", "TASK_DEFINITION_EVENT", "TASK_LIFECYCLE_EVENT", "ACTOR_DEFINITION_EVENT", "ACTOR_TASK_DEFINITION_EVENT"},
-		},
-		{
-			prefix:        sessionPrefix + "job_events/AQAAAA==",
-			requiredTypes: []string{"ACTOR_DEFINITION_EVENT", "TASK_DEFINITION_EVENT"},
-		},
-	}
-	for _, event := range events {
-		events, err := loadRayEventsFromS3(test, s3Client, s3BucketName, event.prefix)
+	LogWithTimestamp(test.T(), "Verifying all %d event types are covered: %v", len(rayEventTypes), rayEventTypes)
+	uploadedEvents := []rayEvent{}
+	for _, dir := range []string{"node_events", "job_events/AgAAAA==", "job_events/AQAAAA=="} {
+		dirPrefix := sessionPrefix + dir + "/"
+		events, err := loadRayEventsFromS3(s3Client, s3BucketName, dirPrefix)
 		g.Expect(err).NotTo(HaveOccurred())
-
-		LogWithTimestamp(test.T(), "Loaded %d events from %s", len(events), event.prefix)
-		LogWithTimestamp(test.T(), "Events: %+v", events)
-
-		assertEventTypesPresent(test, g, events, event.requiredTypes)
+		uploadedEvents = append(uploadedEvents, events...)
 	}
-
+	assertAllEventTypesCovered(test, g, uploadedEvents)
 }
 
 // getSessionIDFromHeadPod retrieves the sessionID from the Ray head pod by reading the symlink
@@ -507,13 +519,8 @@ func getContainerStatusByName(pod *corev1.Pod, containerName string) (*corev1.Co
 	return nil, fmt.Errorf("container %s not found in pod %s/%s", containerName, pod.Namespace, pod.Name)
 }
 
-type RayEvent struct {
-	EventID   string `json:"eventId"`
-	EventType string `json:"eventType"`
-	Timestamp string `json:"timestamp"`
-}
-
-func loadRayEventsFromS3(test Test, s3Client *s3.S3, bucket string, prefix string) ([]RayEvent, error) {
+// loadRayEventsFromS3 loads Ray events from S3.
+func loadRayEventsFromS3(s3Client *s3.S3, bucket string, prefix string) ([]rayEvent, error) {
 	objects, err := s3Client.ListObjectsV2(&s3.ListObjectsV2Input{
 		Bucket: aws.String(bucket),
 		Prefix: aws.String(prefix),
@@ -522,17 +529,19 @@ func loadRayEventsFromS3(test Test, s3Client *s3.S3, bucket string, prefix strin
 		return nil, err
 	}
 
-	// Find the first file object for content verification.
-	var fileObj *s3.Object
+	// Find the first file object for loading Ray events.
+	var fileKey string
 	for _, obj := range objects.Contents {
-		if !strings.HasSuffix(aws.StringValue(obj.Key), "/") {
-			fileObj = obj
+		if key := aws.StringValue(obj.Key); !strings.HasSuffix(key, "/") {
+			fileKey = key
 			break
 		}
 	}
+	if fileKey == "" {
+		return nil, fmt.Errorf("no file object found in directory %s", prefix)
+	}
 
-	var events []RayEvent
-	fileKey := *fileObj.Key
+	// Get and decode the file object content into Ray events.
 	content, err := s3Client.GetObject(&s3.GetObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(fileKey),
@@ -542,23 +551,21 @@ func loadRayEventsFromS3(test Test, s3Client *s3.S3, bucket string, prefix strin
 	}
 	defer content.Body.Close()
 
-	var batch []RayEvent
-	if err := json.NewDecoder(content.Body).Decode(&batch); err != nil {
+	var events []rayEvent
+	if err := json.NewDecoder(content.Body).Decode(&events); err != nil {
 		return nil, err
 	}
-	events = append(events, batch...)
-
 	return events, nil
 }
 
-func assertEventTypesPresent(test Test, g *WithT, events []RayEvent, requiredTypes []string) {
-	found := map[string]bool{}
-
+// assertAllEventTypesCovered verifies that all potential event types are present in the events uploaded to S3.
+func assertAllEventTypesCovered(test Test, g *WithT, events []rayEvent) {
+	foundEventTypes := map[string]bool{}
 	for _, event := range events {
-		found[event.EventType] = true
+		foundEventTypes[event.EventType] = true
 	}
 
-	for _, requiredType := range requiredTypes {
-		g.Expect(found[requiredType]).To(BeTrue(), "Event type %s not found", requiredType)
+	for _, eventType := range rayEventTypes {
+		g.Expect(foundEventTypes[eventType]).To(BeTrue(), "Event type %s not found", eventType)
 	}
 }
