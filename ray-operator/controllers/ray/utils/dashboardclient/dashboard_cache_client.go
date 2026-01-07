@@ -9,6 +9,7 @@ import (
 
 	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/smallnest/chanx"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
@@ -101,11 +102,14 @@ func (w *workerPool) AddTask(task Task) error {
 var _ RayDashboardClientInterface = (*RayDashboardCacheClient)(nil)
 
 type RayDashboardCacheClient struct {
-	client RayDashboardClientInterface
+	client         RayDashboardClientInterface
+	namespacedName types.NamespacedName
 }
 
-func (r *RayDashboardCacheClient) InitClient(ctx context.Context, client RayDashboardClientInterface) {
+func (r *RayDashboardCacheClient) InitClient(ctx context.Context, namespacedName types.NamespacedName, client RayDashboardClientInterface) {
 	logger := ctrl.LoggerFrom(ctx).WithName("RayDashboardCacheClient")
+
+	r.namespacedName = namespacedName
 
 	initWorkPool.Do(func() {
 		pool.start(ctx, workerSize, queryInterval)
@@ -176,12 +180,12 @@ func (r *RayDashboardCacheClient) GetJobInfo(ctx context.Context, jobId string) 
 	logger := ctrl.LoggerFrom(ctx).WithName("RayDashboardCacheClient")
 
 	rwLock.Lock()
-	if cached, ok := cacheStorage.Get(jobId); ok {
+	if cached, ok := cacheStorage.Get(cacheKey(r.namespacedName, jobId)); ok {
 		if cached.Err != nil && !errors.Is(cached.Err, ErrAgain) {
 			// Consume the error.
 			// If the RayJob is still exists, the next Reconcile iteration will put the task back for updating JobInfo
-			cacheStorage.Remove(jobId)
-			logger.Info("Consume the cached error for jobId", "jobId", jobId, "error", cached.Err)
+			cacheStorage.Remove(cacheKey(r.namespacedName, jobId))
+			logger.Info("Consume the cached error for jobId", "jobId", jobId, "error", cached.Err, "cacheKey", cacheKey(r.namespacedName, jobId))
 		}
 		rwLock.Unlock()
 		return cached.JobInfo, cached.Err
@@ -194,7 +198,7 @@ func (r *RayDashboardCacheClient) GetJobInfo(ctx context.Context, jobId string) 
 	// Put a placeholder in storage. The cache will be updated only if the placeholder exists.
 	// The placeholder will be removed when StopJob or DeleteJob.
 	rwLock.Lock()
-	if cached, existed, _ := cacheStorage.PeekOrAdd(jobId, placeholder); existed {
+	if cached, existed, _ := cacheStorage.PeekOrAdd(cacheKey(r.namespacedName, jobId), placeholder); existed {
 		rwLock.Unlock()
 		return cached.JobInfo, cached.Err
 	}
@@ -202,8 +206,8 @@ func (r *RayDashboardCacheClient) GetJobInfo(ctx context.Context, jobId string) 
 
 	var task Task = func(taskCTX context.Context) bool {
 		rwLock.RLock()
-		if _, existed := cacheStorage.Get(jobId); !existed {
-			logger.Info("The placeholder is removed for jobId", "jobId", jobId)
+		if _, existed := cacheStorage.Get(cacheKey(r.namespacedName, jobId)); !existed {
+			logger.Info("The placeholder is removed for jobId", "jobId", jobId, "cacheKey", cacheKey(r.namespacedName, jobId))
 			rwLock.RUnlock()
 			return false
 		}
@@ -220,12 +224,12 @@ func (r *RayDashboardCacheClient) GetJobInfo(ctx context.Context, jobId string) 
 		}
 
 		rwLock.Lock()
-		if existed := cacheStorage.Contains(jobId); !existed {
-			logger.Info("The placeholder is removed before updating for jobId", "jobId", jobId)
+		if existed := cacheStorage.Contains(cacheKey(r.namespacedName, jobId)); !existed {
+			logger.Info("The placeholder is removed before updating for jobId", "jobId", jobId, "cacheKey", cacheKey(r.namespacedName, jobId))
 			rwLock.Unlock()
 			return false
 		}
-		cacheStorage.Add(jobId, newJobInfoCache)
+		cacheStorage.Add(cacheKey(r.namespacedName, jobId), newJobInfoCache)
 		rwLock.Unlock()
 
 		if err != nil {
@@ -238,7 +242,9 @@ func (r *RayDashboardCacheClient) GetJobInfo(ctx context.Context, jobId string) 
 			return true
 		}
 		if rayv1.IsJobTerminal(newJobInfoCache.JobInfo.JobStatus) {
-			logger.Info("The job reaches terminal status for jobId", "jobId", jobId, "status", newJobInfoCache.JobInfo.JobStatus)
+			logger.Info("The job reaches terminal status for jobId", "jobId", jobId,
+				"cacheKey", cacheKey(r.namespacedName, jobId),
+				"status", newJobInfoCache.JobInfo.JobStatus)
 			return false
 		}
 		return true
@@ -247,12 +253,12 @@ func (r *RayDashboardCacheClient) GetJobInfo(ctx context.Context, jobId string) 
 	if err := pool.AddTask(task); err != nil {
 		// remove the placeholder because we cannot queue the task.
 		rwLock.Lock()
-		cacheStorage.Remove(jobId)
+		cacheStorage.Remove(cacheKey(r.namespacedName, jobId))
 		rwLock.Unlock()
-		logger.Error(err, "Cannot queue more job info fetching tasks.", "jobId", jobId)
+		logger.Error(err, "Cannot queue more job info fetching tasks.", "jobId", jobId, "cacheKey", cacheKey(r.namespacedName, jobId))
 		return nil, ErrAgain
 	}
-	logger.Info("Put a task to fetch job info in background for jobId ", "jobId", jobId)
+	logger.Info("Put a task to fetch job info in background for jobId ", "jobId", jobId, "cacheKey", cacheKey(r.namespacedName, jobId))
 
 	return nil, ErrAgain
 }
@@ -275,7 +281,7 @@ func (r *RayDashboardCacheClient) GetJobLog(ctx context.Context, jobName string)
 
 func (r *RayDashboardCacheClient) StopJob(ctx context.Context, jobName string) error {
 	rwLock.Lock()
-	cacheStorage.Remove(jobName)
+	cacheStorage.Remove(cacheKey(r.namespacedName, jobName))
 	rwLock.Unlock()
 
 	return r.client.StopJob(ctx, jobName)
@@ -283,8 +289,12 @@ func (r *RayDashboardCacheClient) StopJob(ctx context.Context, jobName string) e
 
 func (r *RayDashboardCacheClient) DeleteJob(ctx context.Context, jobName string) error {
 	rwLock.Lock()
-	cacheStorage.Remove(jobName)
+	cacheStorage.Remove(cacheKey(r.namespacedName, jobName))
 	rwLock.Unlock()
 
 	return r.client.DeleteJob(ctx, jobName)
+}
+
+func cacheKey(namespacedName types.NamespacedName, jobId string) string {
+	return namespacedName.String() + string(types.Separator) + jobId
 }
