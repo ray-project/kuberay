@@ -64,6 +64,14 @@ func TestCollector(t *testing.T) {
 			test := With(t)
 			g := NewWithT(t)
 			namespace := test.NewTestNamespace()
+			test.T().Cleanup(func() {
+				err := test.Client().Core().CoreV1().Namespaces().Delete(test.Ctx(), namespace.Name, metav1.DeleteOptions{})
+				if err != nil && !k8serrors.IsNotFound(err) {
+					test.T().Logf("Failed to delete namespace %s: %v", namespace.Name, err)
+				} else {
+					LogWithTimestamp(test.T(), "Deleted test namespace %s successfully", namespace.Name)
+				}
+			})
 
 			tt.testFunc(test, g, namespace, s3Client)
 		})
@@ -108,7 +116,7 @@ func testCollectorUploadOnGracefulShutdown(test Test, g *WithT, namespace *corev
 	}, TestTimeoutMedium).Should(WithTransform(k8serrors.IsNotFound, BeTrue()))
 
 	// Verify logs and node_events are successfully uploaded to S3.
-	verifyS3SessionDirs(test, g, s3Client, sessionPrefix, nodeID)
+	verifyS3SessionDirs(test, g, s3Client, sessionPrefix, nodeID, false)
 
 	// Delete S3 bucket to ensure test isolation.
 	deleteS3Bucket(test, g, s3Client)
@@ -183,7 +191,7 @@ func testCollectorSeparatesFilesBySession(test Test, g *WithT, namespace *corev1
 	}
 
 	// Verify logs and node_events are successfully uploaded to S3.
-	verifyS3SessionDirs(test, g, s3Client, sessionPrefix, nodeID)
+	verifyS3SessionDirs(test, g, s3Client, sessionPrefix, nodeID, false)
 
 	deleteS3Bucket(test, g, s3Client)
 }
@@ -378,8 +386,12 @@ func applyRayJobToCluster(test Test, g *WithT, namespace *corev1.Namespace, rayC
 // Additionally, it verifies that specific files have content:
 // - logs/<nodeID>/raylet.out must exist and have content > 0 bytes
 // - node_events/<nodeID>_<suffix> must exist and have content > 0 bytes (suffix can be ignored for verification)
-func verifyS3SessionDirs(test Test, g *WithT, s3Client *s3.S3, sessionPrefix string, nodeID string) {
-	dirs := []string{"logs", "node_events"}
+// If skipNodeEvents is true, node_events directory verification will be skipped.
+func verifyS3SessionDirs(test Test, g *WithT, s3Client *s3.S3, sessionPrefix string, nodeID string, skipNodeEvents bool) {
+	dirs := []string{"logs"}
+	if !skipNodeEvents {
+		dirs = append(dirs, "node_events")
+	}
 	for _, dir := range dirs {
 		dirPrefix := sessionPrefix + dir + "/"
 
@@ -497,12 +509,14 @@ func testCollectorResumesUploadsOnRestart(test Test, g *WithT, namespace *corev1
 	LogWithTimestamp(test.T(), "Killing collector container to test startup scanning of prev-logs")
 	_, _ = ExecPodCmd(test, headPod, "collector", []string{"kill", "1"})
 
-	// 2. Inject "leftover" logs and events into prev-logs via the ray-head container while collector is down.
-	LogWithTimestamp(test.T(), "Injecting logs and events into %s while collector is down", prevLogsBaseDir)
+	// 2. Inject "leftover" logs into prev-logs via the ray-head container while collector is down.
+	// Note: We only inject logs, not node_events, because the collector's prev-logs processing
+	// currently only handles the logs directory. node_events are handled by the EventServer separately.
+	LogWithTimestamp(test.T(), "Injecting logs into %s while collector is down", prevLogsBaseDir)
 	sessionDir := filepath.Join(prevLogsBaseDir, dummySessionID, dummyNodeID)
 	injectCmd := fmt.Sprintf(
-		"mkdir -p %s/logs && echo 'dummy log' > %s/logs/test.log && mkdir -p %s/node_events && echo '{\"event\":\"test\"}' > %s/node_events/test.json",
-		sessionDir, sessionDir, sessionDir, sessionDir,
+		"mkdir -p %s/logs && echo 'dummy log' > %s/logs/test.log",
+		sessionDir, sessionDir,
 	)
 	_, stderr := ExecPodCmd(test, headPod, "ray-head", []string{"sh", "-c", injectCmd})
 	g.Expect(stderr.String()).To(BeEmpty())
@@ -519,25 +533,26 @@ func testCollectorResumesUploadsOnRestart(test Test, g *WithT, namespace *corev1
 	}, TestTimeoutMedium).Should(Succeed())
 
 	// 4. Verify S3 uploads using the existing verifyS3SessionDirs helper.
+	// Skip node_events verification since prev-logs processing only handles logs directory.
 	LogWithTimestamp(test.T(), "Verifying scanning logic: checking S3 for recovered files")
-	verifyS3SessionDirs(test, g, s3Client, sessionPrefix, dummyNodeID)
+	verifyS3SessionDirs(test, g, s3Client, sessionPrefix, dummyNodeID, true)
 
-	// 5. Verify local state: the session should be moved from prev-logs to persist-complete-logs.
-	LogWithTimestamp(test.T(), "Verifying local state: session should be moved to %s", persistCompleteBaseDir)
+	// 5. Verify local state: the node directory should be moved from prev-logs to persist-complete-logs.
+	LogWithTimestamp(test.T(), "Verifying local state: node directory should be moved to %s", persistCompleteBaseDir)
 	g.Eventually(func(gg Gomega) {
 		currentHeadPod, err := GetHeadPod(test, rayCluster)
 		gg.Expect(err).NotTo(HaveOccurred())
-		// Check that the session directory exists in persist-complete-logs
-		persistPath := filepath.Join(persistCompleteBaseDir, dummySessionID)
+		// Check that the node directory exists in persist-complete-logs
+		persistPath := filepath.Join(persistCompleteBaseDir, dummySessionID, dummyNodeID)
 		checkCmd := fmt.Sprintf("test -d %s && echo 'exists'", persistPath)
 		stdout, _ := ExecPodCmd(test, currentHeadPod, "ray-head", []string{"sh", "-c", checkCmd})
-		gg.Expect(strings.TrimSpace(stdout.String())).To(Equal("exists"), "Session directory should be in persist-complete-logs")
+		gg.Expect(strings.TrimSpace(stdout.String())).To(Equal("exists"), "Node directory should be in persist-complete-logs")
 
-		// Check that the session directory is gone from prev-logs
-		prevPath := filepath.Join(prevLogsBaseDir, dummySessionID)
+		// Check that the node directory is gone from prev-logs
+		prevPath := filepath.Join(prevLogsBaseDir, dummySessionID, dummyNodeID)
 		checkGoneCmd := fmt.Sprintf("test ! -d %s && echo 'gone'", prevPath)
 		stdoutGone, _ := ExecPodCmd(test, currentHeadPod, "ray-head", []string{"sh", "-c", checkGoneCmd})
-		gg.Expect(strings.TrimSpace(stdoutGone.String())).To(Equal("gone"), "Session directory should be cleaned from prev-logs")
+		gg.Expect(strings.TrimSpace(stdoutGone.String())).To(Equal("gone"), "Node directory should be cleaned from prev-logs")
 	}, TestTimeoutMedium).Should(Succeed())
 
 	deleteS3Bucket(test, g, s3Client)
