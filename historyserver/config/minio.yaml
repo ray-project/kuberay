@@ -3,7 +3,7 @@ kind: Namespace
 metadata:
   name: minio-dev
 ---
-# 1. Secrets for Login
+# 1. Secrets for Login xxx
 apiVersion: v1
 kind: Secret
 metadata:
