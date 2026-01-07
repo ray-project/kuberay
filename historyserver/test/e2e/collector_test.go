@@ -174,21 +174,10 @@ func testCollectorSeparatesFilesBySession(test Test, g *WithT, namespace *corev1
 	// Since Kubernetes 1.28 (with cgroups v2 enabled), `memory.oom.group` is enabled by default: when any process in a cgroup
 	// hits the memory limit, all processes in the container are killed together, thereby triggering container restart.
 	// For more details, please refer to https://github.com/kubernetes/kubernetes/pull/117793
-	killContainerAndWaitForRestart(test, g, rayCluster, "ray-head", func() (*corev1.Pod, error) {
-		return GetHeadPod(test, rayCluster)
-	})
+	killContainerAndWaitForRestart(test, g, HeadPod(test, rayCluster), "ray-head")
 	// TODO(jwj): Clarify the automatic restart mechanism.
 	// Force kill the ray-worker container before automatic restart.
-	killContainerAndWaitForRestart(test, g, rayCluster, "ray-worker", func() (*corev1.Pod, error) {
-		workerPods, err := GetWorkerPods(test, rayCluster)
-		if err != nil {
-			return nil, err
-		}
-		if len(workerPods) == 0 {
-			return nil, fmt.Errorf("no worker pods found")
-		}
-		return &workerPods[0], nil
-	})
+	killContainerAndWaitForRestart(test, g, FirstWorkerPod(test, rayCluster), "ray-worker")
 
 	// Verify the old session logs have been processed on disk.
 	dirs := []string{"prev-logs", "persist-complete-logs"}
@@ -503,8 +492,23 @@ fi`
 
 }
 
+// FirstWorkerPod returns a function that gets the first worker pod from the Ray cluster.
+// It adapts the WorkerPods function to be used with functions expecting a single pod.
+func FirstWorkerPod(test Test, rayCluster *rayv1.RayCluster) func() (*corev1.Pod, error) {
+	return func() (*corev1.Pod, error) {
+		workerPods, err := GetWorkerPods(test, rayCluster)
+		if err != nil {
+			return nil, err
+		}
+		if len(workerPods) == 0 {
+			return nil, fmt.Errorf("no worker pods found")
+		}
+		return &workerPods[0], nil
+	}
+}
+
 // killContainerAndWaitForRestart kills the main process of a container and waits for the container to restart and become ready.
-func killContainerAndWaitForRestart(test Test, g *WithT, rayCluster *rayv1.RayCluster, containerName string, getPod func() (*corev1.Pod, error)) {
+func killContainerAndWaitForRestart(test Test, g *WithT, getPod func() (*corev1.Pod, error), containerName string) {
 	LogWithTimestamp(test.T(), "Killing main process of %s container to trigger a restart", containerName)
 	g.Eventually(func(gg Gomega) {
 		pod, err := getPod()
