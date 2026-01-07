@@ -301,7 +301,7 @@ env_vars:
 		rayCluster, err := GetRayCluster(test, rayJob.Namespace, rayJob.Status.RayClusterName)
 		g.Expect(err).NotTo(HaveOccurred())
 		g.Expect(rayCluster.Labels).To(HaveKeyWithValue(utils.RayJobSubmissionModeLabelKey, string(rayv1.K8sJobMode)))
-		g.Expect(rayCluster.Labels).To(HaveKeyWithValue(utils.RayJobDisableProvisionedHeadNodeRestartLabelKey, "false"))
+		g.Expect(rayCluster.Annotations[utils.DisableProvisionedHeadRestartAnnotationKey]).To(Equal(""))
 		headPod, err := GetHeadPod(test, rayCluster)
 		g.Expect(err).NotTo(HaveOccurred())
 		LogWithTimestamp(test.T(), "Deleting head Pod %s/%s for RayCluster %s", headPod.Namespace, headPod.Name, rayCluster.Name)
