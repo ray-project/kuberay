@@ -940,8 +940,6 @@ func (r *RayJobReconciler) constructRayClusterForRayJob(rayJobInstance *rayv1.Ra
 	maps.Copy(labels, rayJobInstance.Labels)
 	labels[utils.RayOriginatedFromCRNameLabelKey] = rayJobInstance.Name
 	labels[utils.RayOriginatedFromCRDLabelKey] = utils.RayOriginatedFromCRDLabelValue(utils.RayJobCRD)
-	labels[utils.RayJobSubmissionModeLabelKey] = string(rayJobInstance.Spec.SubmissionMode)
-
 	if rayJobInstance.Spec.SubmissionMode == rayv1.SidecarMode {
 		annotations[utils.DisableProvisionedHeadRestartAnnotationKey] = "true"
 	}
