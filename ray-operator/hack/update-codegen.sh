@@ -11,12 +11,12 @@ export GOPATH
 
 SCRIPT_ROOT=$(dirname "${BASH_SOURCE[0]}")/..
 ROOT_PKG=github.com/ray-project/kuberay/ray-operator
-CODEGEN_PKG=${CODEGEN_PKG:-$(cd "${SCRIPT_ROOT}"; ls -d -1 ./vendor/k8s.io/code-generator 2>/dev/null || echo ../code-generator)}
+CODEGEN_PKG=$(go list -m -f "{{.Dir}}" k8s.io/code-generator)
 
 if [[ ! -d ${CODEGEN_PKG} ]]; then
     echo "${CODEGEN_PKG} is missing. Running 'go mod download'."
     go mod download
-    CODEGEN_PKG=${CODEGEN_PKG:-$(cd "${SCRIPT_ROOT}"; ls -d -1 ./vendor/k8s.io/code-generator 2>/dev/null || echo ../code-generator)}
+    CODEGEN_PKG=$(go list -m -f "{{.Dir}}" k8s.io/code-generator)
 fi
 
 echo ">> Using ${CODEGEN_PKG}"
