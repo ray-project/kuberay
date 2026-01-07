@@ -117,9 +117,11 @@ func testCollectorUploadOnGracefulShutdown(test Test, g *WithT, namespace *corev
 	// Submit a Ray job to the existing cluster.
 	_ = applyRayJobToCluster(test, g, namespace, rayCluster)
 
+	// Define variables for constructing S3 object prefix.
 	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, rayClusterID)
 	sessionID := getSessionIDFromHeadPod(test, g, rayCluster)
-	nodeID := getNodeIDFromHeadPod(test, g, rayCluster)
+	headNodeID := getNodeIDFromPod(test, g, HeadPod(test, rayCluster), "ray-head")
+	workerNodeID := getNodeIDFromPod(test, g, FirstWorkerPod(test, rayCluster), "ray-worker")
 	sessionPrefix := fmt.Sprintf("log/%s/%s/", clusterNameID, sessionID)
 
 	// Delete the Ray cluster to trigger log uploading and event flushing on deletion.
@@ -133,7 +135,7 @@ func testCollectorUploadOnGracefulShutdown(test Test, g *WithT, namespace *corev
 	}, TestTimeoutMedium).Should(WithTransform(k8serrors.IsNotFound, BeTrue()))
 
 	// Verify logs, node_events, and job_events are successfully uploaded to S3.
-	verifyS3SessionDirs(test, g, s3Client, sessionPrefix, nodeID)
+	verifyS3SessionDirs(test, g, s3Client, sessionPrefix, headNodeID, workerNodeID)
 
 	// Delete S3 bucket to ensure test isolation.
 	deleteS3Bucket(test, g, s3Client)
@@ -165,7 +167,8 @@ func testCollectorSeparatesFilesBySession(test Test, g *WithT, namespace *corev1
 
 	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, rayClusterID)
 	sessionID := getSessionIDFromHeadPod(test, g, rayCluster)
-	nodeID := getNodeIDFromHeadPod(test, g, rayCluster)
+	headNodeID := getNodeIDFromPod(test, g, HeadPod(test, rayCluster), "ray-head")
+	workerNodeID := getNodeIDFromPod(test, g, FirstWorkerPod(test, rayCluster), "ray-worker")
 	sessionPrefix := fmt.Sprintf("log/%s/%s/", clusterNameID, sessionID)
 
 	// NOTE: We use `kill 1` to simulate Kubernetes OOMKilled behavior.
@@ -195,7 +198,7 @@ func testCollectorSeparatesFilesBySession(test Test, g *WithT, namespace *corev1
 	}
 
 	// Verify logs, node_events, and job_events are successfully uploaded to S3.
-	verifyS3SessionDirs(test, g, s3Client, sessionPrefix, nodeID)
+	verifyS3SessionDirs(test, g, s3Client, sessionPrefix, headNodeID, workerNodeID)
 
 	deleteS3Bucket(test, g, s3Client)
 }
@@ -386,7 +389,8 @@ func applyRayJobToCluster(test Test, g *WithT, namespace *corev1.Namespace, rayC
 // verifyS3SessionDirs verifies file contents in logs/, node_events/, and job_events/ directories under a session prefix in S3.
 // There are two phases of verification:
 // 1. Verify file contents in logs/ directory
-//   - logs/<nodeID>/raylet.out must exist and have content > 0 bytes
+//   - logs/<headNodeID>/<fileObj> must exist and have content > 0 bytes
+//   - logs/<workerNodeID>/<fileObj> must exist and have content > 0 bytes
 //   - TODO(jwj): Complete docs.
 //
 // 2. Verify event type coverage in node_events/ and job_events/ directories
@@ -394,11 +398,10 @@ func applyRayJobToCluster(test Test, g *WithT, namespace *corev1.Namespace, rayC
 //   - Verify that all potential event types are present in the aggregated events
 //
 // NOTE: Since flushed node and job events are nondeterministic, we need to aggregate them first before verifying event type coverage.
-func verifyS3SessionDirs(test Test, g *WithT, s3Client *s3.S3, sessionPrefix string, nodeID string) {
-	// TODO(jwj): Separate verification for logs and events.
-	dirs := []string{"logs"}
-	for _, dir := range dirs {
-		dirPrefix := sessionPrefix + dir + "/"
+func verifyS3SessionDirs(test Test, g *WithT, s3Client *s3.S3, sessionPrefix string, headNodeID string, workerNodeID string) {
+	LogWithTimestamp(test.T(), "Verifying there's at least one non-empty object in both head and worker logs/ directories under %s", sessionPrefix)
+	for _, nodeID := range []string{headNodeID, workerNodeID} {
+		dirPrefix := fmt.Sprintf("%slogs/%s/", sessionPrefix, nodeID)
 
 		g.Eventually(func(gg Gomega) {
 			// Verify the directory has at least one object.
@@ -410,21 +413,20 @@ func verifyS3SessionDirs(test Test, g *WithT, s3Client *s3.S3, sessionPrefix str
 			gg.Expect(err).NotTo(HaveOccurred())
 			keyCount := aws.Int64Value(objects.KeyCount)
 			gg.Expect(keyCount).To(BeNumerically(">", 0))
-			LogWithTimestamp(test.T(), "Verified directory %s under %s has at least one object", dir, sessionPrefix)
+			LogWithTimestamp(test.T(), "Verified directory %s has at least one object", dirPrefix)
 
 			// Find the first file object for content verification.
-			var fileObj *s3.Object
+			var fileKey string
 			for _, obj := range objects.Contents {
-				if !strings.HasSuffix(aws.StringValue(obj.Key), "/") {
-					fileObj = obj
+				if key := aws.StringValue(obj.Key); !strings.HasSuffix(key, "/") {
+					fileKey = key
 					break
 				}
 			}
-			gg.Expect(fileObj).NotTo(BeNil(), "No file object found in directory %s", dirPrefix)
+			gg.Expect(fileKey).NotTo(BeEmpty(), "No file object found in directory %s", dirPrefix)
 
 			// Verify the file has content by checking file size.
-			fileKey := *fileObj.Key
-			LogWithTimestamp(test.T(), "Checking file: %s", fileKey)
+			LogWithTimestamp(test.T(), "Verifying file %s has content (> 0 bytes)", fileKey)
 			obj, err := s3Client.HeadObject(&s3.HeadObjectInput{
 				Bucket: aws.String(s3BucketName),
 				Key:    aws.String(fileKey),
@@ -470,9 +472,9 @@ fi`
 	return sessionID
 }
 
-// getNodeIDFromHeadPod retrieves the nodeID from the Ray head pod by reading /tmp/ray/raylet_node_id.
-func getNodeIDFromHeadPod(test Test, g *WithT, rayCluster *rayv1.RayCluster) string {
-	headPod, err := GetHeadPod(test, rayCluster)
+// getNodeIDFromPod retrieves the nodeID from the Ray head or worker pod by reading /tmp/ray/raylet_node_id.
+func getNodeIDFromPod(test Test, g *WithT, getPod func() (*corev1.Pod, error), containerName string) string {
+	pod, err := getPod()
 	g.Expect(err).NotTo(HaveOccurred())
 
 	getNodeIDCmd := `if [ -f "/tmp/ray/raylet_node_id" ]; then
@@ -481,7 +483,7 @@ else
   echo "raylet_node_id not found"
   exit 1
 fi`
-	output, _ := ExecPodCmd(test, headPod, "ray-head", []string{"sh", "-c", getNodeIDCmd})
+	output, _ := ExecPodCmd(test, pod, containerName, []string{"sh", "-c", getNodeIDCmd})
 
 	// Parse output to extract the nodeID.
 	nodeID := strings.TrimSpace(output.String())
