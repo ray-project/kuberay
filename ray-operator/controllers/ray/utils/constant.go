@@ -30,7 +30,7 @@ const (
 	RayCronJobNameLabelKey                   = "ray.io/cronjob-name"
 	RayCronJobTimestampAnnotationKey         = "ray.io/cronjob-scheduled-timestamp"
 	RayJobSubmissionModeLabelKey             = "ray.io/job-submission-mode"
-	// RayJobDisableProvisionedHeadNodeRestartLabelKey marks RayClusters created for sidecar-mode RayJobs to skip head Pod recreation after provisioning.
+	// DisableProvisionedHeadRestartAnnotationKey marks RayClusters created for sidecar-mode RayJobs to skip head Pod recreation after provisioning.
 	DisableProvisionedHeadRestartAnnotationKey = "ray.io/disable-provisioned-head-restart"
 
 	// Labels for feature RayMultihostIndexing
