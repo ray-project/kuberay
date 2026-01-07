@@ -207,7 +207,7 @@ func (r *RayDashboardCacheClient) GetJobInfo(ctx context.Context, jobId string) 
 
 	var task Task = func(taskCTX context.Context) bool {
 		rwLock.RLock()
-		if _, existed := cacheStorage.Get(cacheKey(r.namespacedName, jobId)); !existed {
+		if existed := cacheStorage.Contains(cacheKey(r.namespacedName, jobId)); !existed {
 			logger.Info("The placeholder is removed for jobId", "jobId", jobId, "cacheKey", cacheKey(r.namespacedName, jobId))
 			rwLock.RUnlock()
 			return false
