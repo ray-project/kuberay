@@ -76,7 +76,10 @@ func (w *workerPool) start(ctx context.Context, numWorkers int, requeueDelay tim
 
 					if shouldRequeue && ctx.Err() == nil {
 						time.AfterFunc(requeueDelay, func() {
-							w.taskQueue.In <- task
+							if ctx.Err() == nil {
+								// Make sure the context is still valid before re-queuing the task.
+								w.taskQueue.In <- task
+							}
 						})
 					}
 				}
