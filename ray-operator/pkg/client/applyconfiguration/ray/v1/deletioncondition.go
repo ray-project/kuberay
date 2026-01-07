@@ -8,10 +8,22 @@ import (
 
 // DeletionConditionApplyConfiguration represents a declarative configuration of the DeletionCondition type for use
 // with apply.
+//
+// DeletionCondition specifies the trigger conditions for a deletion action.
+// Exactly one of JobStatus or JobDeploymentStatus must be specified:
+// - JobStatus (application-level): Match the Ray job execution status.
+// - JobDeploymentStatus (infrastructure-level): Match the RayJob deployment lifecycle status. This is particularly useful for cleaning up resources when Ray jobs fail to be submitted.
 type DeletionConditionApplyConfiguration struct {
-	JobStatus           *rayv1.JobStatus           `json:"jobStatus,omitempty"`
+	// JobStatus is the terminal status of the RayJob that triggers this condition.
+	// For the initial implementation, only "SUCCEEDED" and "FAILED" are supported.
+	JobStatus *rayv1.JobStatus `json:"jobStatus,omitempty"`
+	// JobDeploymentStatus is the terminal status of the RayJob deployment that triggers this condition.
+	// For the initial implementation, only "Failed" is supported.
 	JobDeploymentStatus *rayv1.JobDeploymentStatus `json:"jobDeploymentStatus,omitempty"`
-	TTLSeconds          *int32                     `json:"ttlSeconds,omitempty"`
+	// TTLSeconds is the time in seconds from when the JobStatus or JobDeploymentStatus
+	// reaches the specified terminal state to when this deletion action should be triggered.
+	// The value must be a non-negative integer.
+	TTLSeconds *int32 `json:"ttlSeconds,omitempty"`
 }
 
 // DeletionConditionApplyConfiguration constructs a declarative configuration of the DeletionCondition type for use with

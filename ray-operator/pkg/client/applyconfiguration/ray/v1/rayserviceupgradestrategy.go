@@ -9,7 +9,10 @@ import (
 // RayServiceUpgradeStrategyApplyConfiguration represents a declarative configuration of the RayServiceUpgradeStrategy type for use
 // with apply.
 type RayServiceUpgradeStrategyApplyConfiguration struct {
-	Type                  *rayv1.RayServiceUpgradeType             `json:"type,omitempty"`
+	// Type represents the strategy used when upgrading the RayService. Currently supports `NewCluster`, `NewClusterWithIncrementalUpgrade` and `None`.
+	Type *rayv1.RayServiceUpgradeType `json:"type,omitempty"`
+	// ClusterUpgradeOptions defines the behavior of a NewClusterWithIncrementalUpgrade type.
+	// RayServiceIncrementalUpgrade feature gate must be enabled to set ClusterUpgradeOptions.
 	ClusterUpgradeOptions *ClusterUpgradeOptionsApplyConfiguration `json:"clusterUpgradeOptions,omitempty"`
 }
 
