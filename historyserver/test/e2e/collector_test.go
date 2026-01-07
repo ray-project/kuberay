@@ -53,6 +53,10 @@ func TestCollector(t *testing.T) {
 			name:     "Simulate OOMKilled behavior: Single session single node logs and events should be uploaded to S3 after the ray-head container is restarted",
 			testFunc: testCollectorSeparatesFilesBySession,
 		},
+		{
+			name:     "Collector restart: should scan prev-logs and resume uploads left by a crash",
+			testFunc: testCollectorResumesUploadsOnRestart,
+		},
 	}
 
 	for _, tt := range tests {
@@ -472,4 +476,69 @@ func getContainerStatusByName(pod *corev1.Pod, containerName string) (*corev1.Co
 		}
 	}
 	return nil, fmt.Errorf("container %s not found in pod %s/%s", containerName, pod.Namespace, pod.Name)
+}
+
+// testCollectorResumesUploadsOnRestart verifies that the Collector scans and resumes uploads from the prev-logs directory on startup.
+func testCollectorResumesUploadsOnRestart(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+	rayCluster := prepareTestEnv(test, g, namespace, s3Client)
+
+	// Directory variables for easier maintenance
+	prevLogsBaseDir := "/tmp/ray/prev-logs"
+	persistCompleteBaseDir := "/tmp/ray/persist-complete-logs"
+
+	dummySessionID := "test-recovery-session"
+	dummyNodeID := "head-node"
+	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, rayClusterID)
+	sessionPrefix := fmt.Sprintf("log/%s/%s/", clusterNameID, dummySessionID)
+
+	// 1. Kill the collector container to trigger a restart.
+	headPod, err := GetHeadPod(test, rayCluster)
+	g.Expect(err).NotTo(HaveOccurred())
+	LogWithTimestamp(test.T(), "Killing collector container to test startup scanning of prev-logs")
+	_, _ = ExecPodCmd(test, headPod, "collector", []string{"kill", "1"})
+
+	// 2. Inject "leftover" logs and events into prev-logs via the ray-head container while collector is down.
+	LogWithTimestamp(test.T(), "Injecting logs and events into %s while collector is down", prevLogsBaseDir)
+	sessionDir := filepath.Join(prevLogsBaseDir, dummySessionID, dummyNodeID)
+	injectCmd := fmt.Sprintf(
+		"mkdir -p %s/logs && echo 'dummy log' > %s/logs/test.log && mkdir -p %s/node_events && echo '{\"event\":\"test\"}' > %s/node_events/test.json",
+		sessionDir, sessionDir, sessionDir, sessionDir,
+	)
+	_, stderr := ExecPodCmd(test, headPod, "ray-head", []string{"sh", "-c", injectCmd})
+	g.Expect(stderr.String()).To(BeEmpty())
+
+	// 3. Wait for collector container to restart and become ready.
+	LogWithTimestamp(test.T(), "Waiting for collector container to restart and become ready")
+	g.Eventually(func(gg Gomega) {
+		updatedPod, err := GetHeadPod(test, rayCluster)
+		gg.Expect(err).NotTo(HaveOccurred())
+		cs, err := getContainerStatusByName(updatedPod, "collector")
+		gg.Expect(err).NotTo(HaveOccurred())
+		gg.Expect(cs.RestartCount).To(BeNumerically(">", 0))
+		gg.Expect(cs.Ready).To(BeTrue())
+	}, TestTimeoutMedium).Should(Succeed())
+
+	// 4. Verify S3 uploads using the existing verifyS3SessionDirs helper.
+	LogWithTimestamp(test.T(), "Verifying scanning logic: checking S3 for recovered files")
+	verifyS3SessionDirs(test, g, s3Client, sessionPrefix, dummyNodeID)
+
+	// 5. Verify local state: the session should be moved from prev-logs to persist-complete-logs.
+	LogWithTimestamp(test.T(), "Verifying local state: session should be moved to %s", persistCompleteBaseDir)
+	g.Eventually(func(gg Gomega) {
+		currentHeadPod, err := GetHeadPod(test, rayCluster)
+		gg.Expect(err).NotTo(HaveOccurred())
+		// Check that the session directory exists in persist-complete-logs
+		persistPath := filepath.Join(persistCompleteBaseDir, dummySessionID)
+		checkCmd := fmt.Sprintf("test -d %s && echo 'exists'", persistPath)
+		stdout, _ := ExecPodCmd(test, currentHeadPod, "ray-head", []string{"sh", "-c", checkCmd})
+		gg.Expect(strings.TrimSpace(stdout.String())).To(Equal("exists"), "Session directory should be in persist-complete-logs")
+
+		// Check that the session directory is gone from prev-logs
+		prevPath := filepath.Join(prevLogsBaseDir, dummySessionID)
+		checkGoneCmd := fmt.Sprintf("test ! -d %s && echo 'gone'", prevPath)
+		stdoutGone, _ := ExecPodCmd(test, currentHeadPod, "ray-head", []string{"sh", "-c", checkGoneCmd})
+		gg.Expect(strings.TrimSpace(stdoutGone.String())).To(Equal("gone"), "Session directory should be cleaned from prev-logs")
+	}, TestTimeoutMedium).Should(Succeed())
+
+	deleteS3Bucket(test, g, s3Client)
 }
