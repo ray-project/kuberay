@@ -965,11 +965,10 @@ func GetRayDashboardClientFunc(ctx context.Context, mgr manager.Manager, useKube
 			}, "http://"+url, authToken)
 		}
 
-		if features.Enabled(features.AsyncJobInfoQuery) {
-			var namespacedName types.NamespacedName
-			if rayCluster != nil {
-				namespacedName.Name = CheckName(rayCluster.Name)
-				namespacedName.Namespace = rayCluster.Namespace
+		if features.Enabled(features.AsyncJobInfoQuery) && rayCluster != nil {
+			namespacedName := types.NamespacedName{
+				Name:      CheckName(rayCluster.Name),
+				Namespace: rayCluster.Namespace,
 			}
 			dashboardCachedClient := &dashboardclient.RayDashboardCacheClient{}
 			dashboardCachedClient.InitClient(ctx, namespacedName, dashboardClient)
