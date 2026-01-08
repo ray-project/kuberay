@@ -38,7 +38,7 @@ func (s *ServerHandler) listClusters(limit int) []utils.ClusterInfo {
 	logrus.Infof("live clusters: %v", liveClusterNames)
 	clusters := s.reader.List()
 	sort.Sort(utils.ClusterInfoList(clusters))
-	if limit > 0 {
+	if limit > 0 && limit < len(clusters) {
 		clusters = clusters[:limit]
 	}
 	clusters = append(liveClusterInfos, clusters...)
@@ -90,7 +90,7 @@ func (s *ServerHandler) ClusterInfo(rayClusterNameID string) []byte {
     "result": true,
     "msg": "Got formatted cluster status.",
     "data": {
-        "clusterStatus": "======== Autoscaler status: %f ========\nNode status\n---------------------------------------------------------------\nActive:\n (no active nodes)\nIdle:\n 0 headgroup\nPending:\n (no pending nodes)\nRecent failures:\n (no failures)\n\nResources\n---------------------------------------------------------------\nTotal Usage:\n 0B/0B memory\n 0B/0B object_store_memory\n\nFrom request_resources:\n (none)\nPending Demands:\n (no resource demands)"
+        "clusterStatus": "======== Autoscaler status: %s ========\nNode status\n---------------------------------------------------------------\nActive:\n (no active nodes)\nIdle:\n 0 headgroup\nPending:\n (no pending nodes)\nRecent failures:\n (no failures)\n\nResources\n---------------------------------------------------------------\nTotal Usage:\n 0B/0B memory\n 0B/0B object_store_memory\n\nFrom request_resources:\n (none)\nPending Demands:\n (no resource demands)"
     }
 }`
 	afterRender := fmt.Sprintf(templ, time.Now().Format("2006-01-02 15:04:05.000000"))
@@ -101,11 +101,16 @@ func (s *ServerHandler) MetaKeyInfo(rayClusterNameID, key string) []byte {
 	baseObject := path.Join(utils.GetMetaDirByNameID(s.rootDir, rayClusterNameID), key)
 	logrus.Infof("Prepare to get object %s info ...", baseObject)
 	body := s.reader.GetContent(rayClusterNameID, baseObject)
+	if body == nil {
+		logrus.Errorf("Failed to get content for object %s", baseObject)
+		return nil
+	}
 	data, err := io.ReadAll(body)
 	if err != nil {
 		logrus.Errorf("Failed to read all data from object %s : %v", baseObject, err)
 		return nil
 	}
+
 	return data
 }
 
@@ -113,6 +118,10 @@ func (s *ServerHandler) LogKeyInfo(rayClusterNameID, nodeID, sessionId, key stri
 	baseObject := path.Join(utils.GetLogDirByNameID(s.rootDir, rayClusterNameID, nodeID, sessionId), key)
 	logrus.Infof("Prepare to get object %s info ...", baseObject)
 	body := s.reader.GetContent(rayClusterNameID, baseObject)
+	if body == nil {
+		logrus.Errorf("Failed to get content for object %s", baseObject)
+		return nil
+	}
 	data, err := io.ReadAll(body)
 	if err != nil {
 		logrus.Errorf("Failed to read all data from object %s : %v", baseObject, err)
@@ -191,33 +200,7 @@ type grafanaData struct {
 	DashboardUids       map[string]string `json:"dashboardUids"`
 }
 
+// TODO: implement this
 func (h *ServerHandler) getGrafanaHealth(req *restful.Request, resp *restful.Response) {
-	data := grafanaData{
-		GrafanaHost:         "https://g.console.aliyun.com",
-		SessionName:         req.Attribute(COOKIE_SESSION_NAME_KEY).(string),
-		DashboardDatasource: "Prometheus",
-		DashboardUids: map[string]string{
-			"default":                     "ray_cluster",
-			"default_params":              "orgId=1",
-			"serve":                       "ray_serve",
-			"serve_params":                "orgId=1",
-			"data":                        "ray_data",
-			"data_params":                 "orgId=1",
-			"ray_serve_deployment":        "ray_serve_deployment",
-			"ray_serve_deployment_params": "orgId=1",
-		},
-	}
-	ret := grafanaHealthReturnMsg{
-		Result: true,
-		Msg:    "Grafana is Running",
-		Data:   data,
-	}
-	retStr, err := json.Marshal(ret)
-	if err != nil {
-		logrus.Errorf("Error: %v, Value: %v", err, ret)
-		resp.WriteErrorString(400, err.Error())
-		return
-	}
-	logrus.Info(string(retStr))
-	resp.Write([]byte(retStr))
+	resp.WriteErrorString(http.StatusNotImplemented, "Grafana health not yet supported")
 }

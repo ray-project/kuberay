@@ -30,7 +30,6 @@ spec:
       labels:
         app: historyserver
     spec:
-      imagePullSecrets:
       containers:
       - name: historyserver
         env:

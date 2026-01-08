@@ -220,7 +220,12 @@ func routerLogical(s *ServerHandler) {
 	ws.Route(ws.GET("/actors").To(s.getLogicalActors).Filter(s.CookieHandle).
 		Doc("get logical actors").
 		Writes("")) // Placeholder for specific return type
-	ws.Route(ws.GET("/actors/{single_actor}").To(s.getLogicalActor).Filter(s.CookieHandle).
+
+	// TODO: discuss with Ray Core team about this
+	// I noticed that IDs (`actor_id`, `job_id`, `node_id`, etc.) in Ray Base Events
+	// are encoded as Base64, while the Dashboard/State APIs use Hex.
+	// Problem: Base64 can contain `/` characters, which breaks URL routing:
+	ws.Route(ws.GET("/actors/{single_actor:*}").To(s.getLogicalActor).Filter(s.CookieHandle).
 		Doc("get logical single actor").
 		Param(ws.PathParameter("single_actor", "single_actor")).
 		Writes("")) // Placeholder for specific return type
@@ -271,7 +276,7 @@ func (s *ServerHandler) redirectRequest(req *restful.Request, resp *restful.Resp
 	remoteResp, err := http.Get("http://" + svcName + req.Request.URL.String())
 	if err != nil {
 		logrus.Errorf("Error: %v", err)
-		resp.WriteError(remoteResp.StatusCode, err)
+		resp.WriteError(http.StatusBadGateway, err)
 		return
 	}
 	defer remoteResp.Body.Close()
@@ -308,6 +313,11 @@ func (s *ServerHandler) getNodes(req *restful.Request, resp *restful.Response) {
 	clusterNameID := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
 	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
 	data, err := s.GetNodes(clusterNameID+"_"+clusterNamespace, sessionName)
+	if data == nil {
+		logrus.Errorf("Failed to get nodes for cluster %s", clusterNameID+"_"+clusterNamespace)
+		resp.WriteError(http.StatusInternalServerError, errors.New("failed to get nodes"))
+		return
+	}
 	if err != nil {
 		logrus.Errorf("Error: %v", err)
 		resp.WriteError(400, err)
@@ -317,15 +327,13 @@ func (s *ServerHandler) getNodes(req *restful.Request, resp *restful.Response) {
 }
 
 func (s *ServerHandler) getEvents(req *restful.Request, resp *restful.Response) {
-	clusterNameID := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
 	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
 	if sessionName == "live" {
 		s.redirectRequest(req, resp)
 		return
 	}
-	return
-	data := s.MetaKeyInfo(clusterNameID, utils.OssMetaFile_Events)
-	resp.Write(data)
+	// Return "not yet supported" for historical data
+	resp.WriteErrorString(http.StatusNotImplemented, "Historical events not yet supported")
 }
 
 func (s *ServerHandler) getPrometheusHealth(req *restful.Request, resp *restful.Response) {
@@ -334,123 +342,83 @@ func (s *ServerHandler) getPrometheusHealth(req *restful.Request, resp *restful.
 		s.redirectRequest(req, resp)
 		return
 	}
-	return
-	data := `{"result": true, "msg": "prometheus running", "data": {}}`
-	resp.Write([]byte(data))
+	// Return "not yet supported" for prometheus health
+	resp.WriteErrorString(http.StatusNotImplemented, "Prometheus health not yet supported")
 }
 
 func (s *ServerHandler) getJobs(req *restful.Request, resp *restful.Response) {
-	clusterNameID := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
 	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
 	if sessionName == "live" {
 		s.redirectRequest(req, resp)
 		return
 	}
-	return
-	data := s.MetaKeyInfo(clusterNameID, utils.OssMetaFile_Jobs)
-	resp.Write(data)
+	// Return "not yet supported" for jobs
+	resp.WriteErrorString(http.StatusNotImplemented, "Jobs not yet supported")
 }
 
 func (s *ServerHandler) getNode(req *restful.Request, resp *restful.Response) {
-	clusterNameID := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
 	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
 	if sessionName == "live" {
 		s.redirectRequest(req, resp)
 		return
 	}
-	return
-	node_id := req.PathParameter("node_id")
-	data := s.MetaKeyInfo(clusterNameID, fmt.Sprintf("%s%s", utils.OssMetaFile_Node_Prefix, node_id))
-	resp.Write(data)
+	// Return "not yet supported" for node
+	resp.WriteErrorString(http.StatusNotImplemented, "Node not yet supported")
 }
 
 func (s *ServerHandler) getJob(req *restful.Request, resp *restful.Response) {
-	clusterNameID := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
 	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
 	if sessionName == "live" {
 		s.redirectRequest(req, resp)
 		return
 	}
-	return
-	job_id := req.PathParameter("job_id")
-	logrus.Debugf("job_id is %s", job_id)
 
-	data := s.MetaKeyInfo(clusterNameID, utils.OssMetaFile_Jobs)
-	allData := []map[string]interface{}{}
-	if err := json.Unmarshal(data, &allData); err != nil {
-		logrus.Errorf("Ummarshal alljobs error%v", err)
-		resp.WriteErrorString(http.StatusInternalServerError, err.Error())
-		return
-	}
-	var job map[string]interface{}
-	var find bool
-	for _, singleData := range allData {
-		id, ok := singleData["job_id"].(string)
-		if ok && id == job_id {
-			job = singleData
-			find = true
-			break
-		}
-	}
-	if !find {
-		logrus.Warnf("Can not find jobid %s from alljobs", job_id)
-	} else {
-		logrus.Infof("Find jobid %s from alljobs", job_id)
-	}
-	jobData, err := json.MarshalIndent(job, "", "  ")
-	if err != nil {
-		resp.WriteErrorString(http.StatusInternalServerError, err.Error())
-		return
-	}
-	resp.Write(jobData)
+	// Return "not yet supported" for job
+	resp.WriteErrorString(http.StatusNotImplemented, "Job not yet supported")
 }
 
 func (s *ServerHandler) getDatasets(req *restful.Request, resp *restful.Response) {
-	clusterNameID := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
 	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
 	if sessionName == "live" {
 		s.redirectRequest(req, resp)
 		return
 	}
-	return
-	job_id := req.PathParameter("job_id")
-	data := s.MetaKeyInfo(clusterNameID, fmt.Sprintf("%s%s", utils.OssMetaFile_JOBDATASETS_Prefix, job_id))
-	resp.Write(data)
+
+	// Return "not yet supported" for datasets
+	resp.WriteErrorString(http.StatusNotImplemented, "Datasets not yet supported")
 }
 
 func (s *ServerHandler) getServeApplications(req *restful.Request, resp *restful.Response) {
-	clusterNameID := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
 	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
 	if sessionName == "live" {
 		s.redirectRequest(req, resp)
 		return
 	}
-	return
-	data := s.MetaKeyInfo(clusterNameID, utils.OssMetaFile_Applications)
-	resp.Write(data)
+
+	// Return "not yet supported" for serve applications
+	resp.WriteErrorString(http.StatusNotImplemented, "Serve applications not yet supported")
 }
 
 func (s *ServerHandler) getPlacementGroups(req *restful.Request, resp *restful.Response) {
-	clusterNameID := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
 	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
 	if sessionName == "live" {
 		s.redirectRequest(req, resp)
 		return
 	}
-	return
-	data := s.MetaKeyInfo(clusterNameID, utils.OssMetaFile_PlacementGroups)
-	resp.Write(data)
+
+	// Return "not yet supported" for placement groups
+	resp.WriteErrorString(http.StatusNotImplemented, "Placement groups not yet supported")
 }
 
 func (s *ServerHandler) getClusterStatus(req *restful.Request, resp *restful.Response) {
-	clusterNameID := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
 	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
 	if sessionName == "live" {
 		s.redirectRequest(req, resp)
 		return
 	}
-	data := s.ClusterInfo(clusterNameID)
-	resp.Write(data)
+
+	// Return "not yet supported" for cluster status
+	resp.WriteErrorString(http.StatusNotImplemented, "Cluster status not yet supported")
 }
 
 func (s *ServerHandler) getNodeLogs(req *restful.Request, resp *restful.Response) {
@@ -479,8 +447,11 @@ func (s *ServerHandler) getNodeLogs(req *restful.Request, resp *restful.Response
 }
 
 func (s *ServerHandler) getLogicalActors(req *restful.Request, resp *restful.Response) {
-	clusterNameID := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
+	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
+	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
+	clusterNameID := clusterName + "_" + clusterNamespace
 	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
+
 	if sessionName == "live" {
 		s.redirectRequest(req, resp)
 		return
@@ -537,7 +508,9 @@ func formatActorForResponse(actor eventtypes.Actor) map[string]interface{} {
 }
 
 func (s *ServerHandler) getLogicalActor(req *restful.Request, resp *restful.Response) {
-	clusterNameID := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
+	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
+	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
+	clusterNameID := clusterName + "_" + clusterNamespace
 	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
 	if sessionName == "live" {
 		s.redirectRequest(req, resp)

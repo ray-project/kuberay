@@ -135,15 +135,15 @@ func (h *EventHandler) Run(stop chan struct{}, numOfEventProcessors int) error {
 						}
 						eventbytes, err := io.ReadAll(eventioReader)
 						if err != nil {
-							logrus.Fatal(err)
-							return
+							logrus.Errorf("Failed to read event file: %v", err)
+							continue
 						}
 
 						// Unmarshal the list of events
 						var eventList []map[string]any
 						if err := json.Unmarshal(eventbytes, &eventList); err != nil {
-							logrus.Fatalf("Failed to unmarshal event: %v", err)
-							return
+							logrus.Errorf("Failed to unmarshal event: %v", err)
+							continue
 						}
 
 						// Evenly distribute event to each channel
@@ -168,8 +168,25 @@ func (h *EventHandler) Run(stop chan struct{}, numOfEventProcessors int) error {
 
 // storeEvent unmarshals the event map into the correct actor/task struct and then stores it into the corresonding list
 func (h *EventHandler) storeEvent(eventMap map[string]any) error {
-	eventType := types.EventType(eventMap["eventType"].(string))
-	currentClusterName := eventMap["clusterName"].(string)
+	eventTypeVal, ok := eventMap["eventType"]
+	if !ok {
+		return fmt.Errorf("event missing 'eventType' field")
+	}
+	eventTypeStr, ok := eventTypeVal.(string)
+	if !ok {
+		return fmt.Errorf("eventType is not a string, got %T", eventTypeVal)
+	}
+	eventType := types.EventType(eventTypeStr)
+
+	clusterNameVal, ok := eventMap["clusterName"]
+	if !ok {
+		return fmt.Errorf("event missing 'clusterName' field")
+	}
+	currentClusterName, ok := clusterNameVal.(string)
+	if !ok {
+		return fmt.Errorf("clusterName is not a string, got %T", clusterNameVal)
+	}
+
 	logrus.Infof("current eventType: %v", eventType)
 	switch eventType {
 	case types.TASK_DEFINITION_EVENT:

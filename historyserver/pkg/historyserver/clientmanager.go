@@ -61,13 +61,13 @@ func NewClientManager(kubeconfigs string) *ClientManager {
 		}
 	} else {
 		c, err := rest.InClusterConfig()
-		c.QPS = 50
-		c.Burst = 100
-		if err == nil {
+		if err != nil {
+			logrus.Errorf("Failed to build config from kubeconfig: %v", err)
+		} else {
+			c.QPS = 50
+			c.Burst = 100
 			kubeconfigList = append(kubeconfigList, c)
 			logrus.Infof("add config from in cluster config")
-		} else {
-			logrus.Errorf("Failed to build config from kubeconfig: %v", err)
 		}
 	}
 	scheme := runtime.NewScheme()
