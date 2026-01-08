@@ -104,7 +104,7 @@ data:
     available = ray.available_resources()
     total = ray.cluster_resources()
 
-    assert total["CPU"] - available["CPU"] == 2, "Incorrect CPU assignment"
-    assert total["GPU"] - available["GPU"] == 0.5, "Incorrect GPU assignment"
-    assert total["resource1"] - available["resource1"] == 1.0, "Incorrect Resource1 assignment"
-    assert total["resource2"] - available["resource2"] == 2.0, "Incorrect Resource2 assignment"
+    assert total['CPU'] - available['CPU'] == 2, "Incorrect CPU assignment"
+    assert total['GPU'] - available['GPU'] == 0.5, "Incorrect GPU assignment"
+    assert total['resource1'] - available['resource1'] == 1.0, "Incorrect Resource1 assignment"
+    assert total['resource2'] - available['resource2'] == 2.0, "Incorrect Resource2 assignment"

@@ -13,7 +13,7 @@ spec:
     import ray
     ray.init()
     for i in range(600):
-        print(f"iter: {i}, ray.cluster_resources(): {ray.cluster_resources()}")
+        print(f'iter: {i}, ray.cluster_resources(): {ray.cluster_resources()}')
         time.sleep(1)
     "
   # shutdownAfterJobFinishes specifies whether the RayCluster should be deleted after the RayJob finishes. Default is false.

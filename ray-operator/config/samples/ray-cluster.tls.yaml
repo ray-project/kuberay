@@ -49,7 +49,7 @@ spec:
         labels: {}
       spec:
         initContainers:
-        # Generate head"s private key and certificate before `ray start`.
+        # Generate head's private key and certificate before `ray start`.
         - name: ray-head-tls
           image: rayproject/ray:2.52.0
           command: ["/bin/sh", "-c", "cp -R /etc/ca/tls /etc/ray && /etc/gen/tls/gencert_head.sh"]
@@ -105,13 +105,13 @@ spec:
         volumes:
         - name: ray-logs
           emptyDir: {}
-        # Secret `ca-tls` has the information of CA"s private key and certificate.
+        # Secret `ca-tls` has the information of CA's private key and certificate.
         - name: ca-tls
           secret:
             secretName: ca-tls
         - name: ray-tls
           emptyDir: {}
-        # `gencert_head.sh` is a script to generate head Pod"s private key and head"s certificate.
+        # `gencert_head.sh` is a script to generate head Pod's private key and head's certificate.
         - name: gen-tls-script
           configMap:
             name: tls
@@ -133,7 +133,7 @@ spec:
     template:
       spec:
         initContainers:
-        # Generate worker"s private key and certificate before `ray start`.
+        # Generate worker's private key and certificate before `ray start`.
         - name: ray-worker-tls
           image: rayproject/ray:2.52.0
           command: ["/bin/sh", "-c", "cp -R /etc/ca/tls /etc/ray && /etc/gen/tls/gencert_worker.sh"]
@@ -184,13 +184,13 @@ spec:
         volumes:
         - name: ray-logs
           emptyDir: {}
-        # Secret `ca-tls` has the information of CA"s private key and certificate.
+        # Secret `ca-tls` has the information of CA's private key and certificate.
         - name: ca-tls
           secret:
             secretName: ca-tls
         - name: ray-tls
           emptyDir: {}
-        # `gencert_worker.sh` is a script to generate worker Pod"s private key and worker"s certificate.
+        # `gencert_worker.sh` is a script to generate worker Pod's private key and worker's certificate.
         - name: gen-tls-script
           configMap:
             name: tls
