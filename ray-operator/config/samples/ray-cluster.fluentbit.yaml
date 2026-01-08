@@ -33,7 +33,7 @@ spec:
           - name: POD_LABELS
             valueFrom:
               fieldRef:
-                fieldPath: metadata.labels["ray.io/cluster"]
+                fieldPath: metadata.labels['ray.io/cluster']
           # These resource requests for Fluent Bit should be sufficient in production.
           resources:
             requests:
