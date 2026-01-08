@@ -7,7 +7,7 @@ spec:
     python -c "
     import ray
     ray.init()
-    print(f"ray.cluster_resources(): {ray.cluster_resources()}")
+    print(f'ray.cluster_resources(): {ray.cluster_resources()}')
     "
   # DeletionStrategy defines the deletion policies for a RayJob.
   # It allows for fine-grained control over resource cleanup after a job finishes.

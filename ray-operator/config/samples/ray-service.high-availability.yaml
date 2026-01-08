@@ -103,7 +103,7 @@ data:
     import requests
 
     url = "http://rayservice-ha-serve-svc:8000/fruit/"
-    data = "["PEAR", 12]"
+    data = '["PEAR", 12]'
 
     req_index = 0
     num_fail = 0
