@@ -67,6 +67,9 @@ simplebuild:
 mod:
 	go mod tidy
 
+.PHONY: localimage-build
+localimage-build: localimage-collector localimage-historyserver
+
 .PHONY: localimage-collector
 localimage-collector:
 	docker build -t $(COLLECTOR_IMG) -f Dockerfile.collector .
