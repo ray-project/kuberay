@@ -16,17 +16,17 @@ spec:
       - transformers>=4.19.1
     working_dir: "https://github.com/ray-project/kuberay/archive/master.zip"
   rayClusterSpec:
-    rayVersion: '2.46.0'
+    rayVersion: "2.46.0"
     headGroupSpec:
       rayStartParams:
-        dashboard-host: '0.0.0.0'
+        dashboard-host: "0.0.0.0"
       template:
         metadata:
           annotations:
             gke-gcsfuse/volumes: "true"
             gke-gcsfuse/cpu-limit: "0"
-            gke-gcsfuse/memory-limit: 5Gi
-            gke-gcsfuse/ephemeral-storage-limit: 10Gi
+            gke-gcsfuse/memory-limit: "5Gi"
+            gke-gcsfuse/ephemeral-storage-limit: "10Gi"
         spec:
           serviceAccountName: pytorch-distributed-training
           containers:
@@ -69,14 +69,14 @@ spec:
       maxReplicas: 4
       groupName: gpu-group
       rayStartParams:
-        dashboard-host: '0.0.0.0'
+        dashboard-host: "0.0.0.0"
       template:
         metadata:
           annotations:
             gke-gcsfuse/volumes: "true"
             gke-gcsfuse/cpu-limit: "0"
-            gke-gcsfuse/memory-limit: 5Gi
-            gke-gcsfuse/ephemeral-storage-limit: 10Gi
+            gke-gcsfuse/memory-limit: "5Gi"
+            gke-gcsfuse/ephemeral-storage-limit: "10Gi"
         spec:
           serviceAccountName: pytorch-distributed-training
           tolerations:

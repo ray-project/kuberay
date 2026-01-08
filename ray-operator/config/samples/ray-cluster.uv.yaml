@@ -3,7 +3,7 @@ kind: RayCluster
 metadata:
   name: raycluster-uv
 spec:
-  rayVersion: '2.52.0' # should match the Ray version in the image of the containers
+  rayVersion: "2.52.0" # should match the Ray version in the image of the containers
   headGroupSpec:
     rayStartParams: {}
     template:

@@ -3,7 +3,7 @@ kind: RayCluster
 metadata:
   name: raycluster-tls
 spec:
-  rayVersion: '2.52.0'
+  rayVersion: "2.52.0"
   # Note: Uncomment the `enableInTreeAutoscaling` and `autoscalerOptions`
   # if you wish to configure TLS for the autoscaler.
 
