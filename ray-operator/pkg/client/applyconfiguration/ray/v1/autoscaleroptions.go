@@ -9,17 +9,41 @@ import (
 
 // AutoscalerOptionsApplyConfiguration represents a declarative configuration of the AutoscalerOptions type for use
 // with apply.
+//
+// AutoscalerOptions specifies optional configuration for the Ray autoscaler.
 type AutoscalerOptionsApplyConfiguration struct {
-	Resources          *corev1.ResourceRequirements `json:"resources,omitempty"`
-	Image              *string                      `json:"image,omitempty"`
-	ImagePullPolicy    *corev1.PullPolicy           `json:"imagePullPolicy,omitempty"`
-	SecurityContext    *corev1.SecurityContext      `json:"securityContext,omitempty"`
-	IdleTimeoutSeconds *int32                       `json:"idleTimeoutSeconds,omitempty"`
-	UpscalingMode      *rayv1.UpscalingMode         `json:"upscalingMode,omitempty"`
-	Version            *rayv1.AutoscalerVersion     `json:"version,omitempty"`
-	Env                []corev1.EnvVar              `json:"env,omitempty"`
-	EnvFrom            []corev1.EnvFromSource       `json:"envFrom,omitempty"`
-	VolumeMounts       []corev1.VolumeMount         `json:"volumeMounts,omitempty"`
+	// Resources specifies optional resource request and limit overrides for the autoscaler container.
+	// Default values: 500m CPU request and limit. 512Mi memory request and limit.
+	Resources *corev1.ResourceRequirements `json:"resources,omitempty"`
+	// Image optionally overrides the autoscaler's container image. This override is provided for autoscaler testing and development.
+	Image *string `json:"image,omitempty"`
+	// ImagePullPolicy optionally overrides the autoscaler container's image pull policy. This override is provided for autoscaler testing and development.
+	ImagePullPolicy *corev1.PullPolicy `json:"imagePullPolicy,omitempty"`
+	// SecurityContext defines the security options the container should be run with.
+	// If set, the fields of SecurityContext override the equivalent fields of PodSecurityContext.
+	// More info: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/
+	SecurityContext *corev1.SecurityContext `json:"securityContext,omitempty"`
+	// IdleTimeoutSeconds is the number of seconds to wait before scaling down a worker pod which is not using Ray resources.
+	// Defaults to 60 (one minute). It is not read by the KubeRay operator but by the Ray autoscaler.
+	IdleTimeoutSeconds *int32 `json:"idleTimeoutSeconds,omitempty"`
+	// UpscalingMode is "Conservative", "Default", or "Aggressive."
+	// Conservative: Upscaling is rate-limited; the number of pending worker pods is at most the size of the Ray cluster.
+	// Default: Upscaling is not rate-limited.
+	// Aggressive: An alias for Default; upscaling is not rate-limited.
+	// It is not read by the KubeRay operator but by the Ray autoscaler.
+	UpscalingMode *rayv1.UpscalingMode `json:"upscalingMode,omitempty"`
+	// Version is the version of the Ray autoscaler.
+	// Setting this to v1 will explicitly use autoscaler v1.
+	// Setting this to v2 will explicitly use autoscaler v2.
+	// If this isn't set, the Ray version determines the autoscaler version.
+	// In Ray 2.47.0 and later, the default autoscaler version is v2. It's v1 before that.
+	Version *rayv1.AutoscalerVersion `json:"version,omitempty"`
+	// Optional list of environment variables to set in the autoscaler container.
+	Env []corev1.EnvVar `json:"env,omitempty"`
+	// Optional list of sources to populate environment variables in the autoscaler container.
+	EnvFrom []corev1.EnvFromSource `json:"envFrom,omitempty"`
+	// Optional list of volumeMounts.  This is needed for enabling TLS for the autoscaler container.
+	VolumeMounts []corev1.VolumeMount `json:"volumeMounts,omitempty"`
 }
 
 // AutoscalerOptionsApplyConfiguration constructs a declarative configuration of the AutoscalerOptions type for use with
