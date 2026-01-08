@@ -26,11 +26,11 @@ type EventHandler struct {
 var eventFilePattern = regexp.MustCompile(`-\d{4}-\d{2}-\d{2}-\d{2}$`)
 
 func isValidEventFile(fileName string) bool {
-	// 跳過目錄
+	// Skip directories
 	if strings.HasSuffix(fileName, "/") {
 		return false
 	}
-	// 只有符合 {nodeId}-{YYYY-MM-DD-HH} 格式的才是真正的 event 文件
+	// Only files matching {nodeId}-{YYYY-MM-DD-HH} format are valid event files
 	return eventFilePattern.MatchString(fileName)
 }
 
@@ -272,7 +272,7 @@ func (h *EventHandler) getAllJobEventFiles(clusterInfo utils.ClusterInfo) []stri
 	jobDirList := h.reader.ListFiles(clusterNameID, jobEventDirPrefix)
 
 	for _, jobDir := range jobDirList {
-		// 跳過非目錄項目
+		// Skip non-directory entries
 		if !strings.HasSuffix(jobDir, "/") {
 			continue
 		}
@@ -317,16 +317,16 @@ func (h *EventHandler) getAllJobEventFiles(clusterInfo utils.ClusterInfo) []stri
 // 	return nodeEventFiles
 // }
 
-// 修復後的 getAllNodeEventFiles
+// getAllNodeEventFiles retrieves all node event files for the given cluster
 func (h *EventHandler) getAllNodeEventFiles(clusterInfo utils.ClusterInfo) []string {
 	clusterNameID := clusterInfo.Name + "_" + clusterInfo.Namespace
 	nodeEventDirPrefix := clusterInfo.SessionName + "/node_events/"
 	nodeEventFileNames := h.reader.ListFiles(clusterNameID, nodeEventDirPrefix)
 
-	// 過濾掉目錄（末尾有 / 的項目），並構建完整路徑
+	// Filter out directories (items ending with /) and build full paths
 	var nodeEventFiles []string
 	for _, fileName := range nodeEventFileNames {
-		// 跳過目錄
+		// Skip directories
 		if isValidEventFile(fileName) {
 			fullPath := nodeEventDirPrefix + fileName
 			nodeEventFiles = append(nodeEventFiles, fullPath)
@@ -334,7 +334,7 @@ func (h *EventHandler) getAllNodeEventFiles(clusterInfo utils.ClusterInfo) []str
 		// if strings.HasSuffix(fileName, "/") {
 		// 	continue
 		// }
-		// // 構建完整路徑
+		// // Build full path
 		// fullPath := nodeEventDirPrefix + fileName
 		// nodeEventFiles = append(nodeEventFiles, fullPath)
 	}

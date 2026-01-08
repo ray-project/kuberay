@@ -18,7 +18,7 @@ import (
 )
 
 func (s *ServerHandler) listClusters(limit int) []utils.ClusterInfo {
-	// 初始的继续标记
+	// Initial continuation marker
 	logrus.Debugf("Prepare to get list clusters info ...")
 	ctx := context.Background()
 	liveClusters, _ := s.clientManager.ListRayClusters(ctx)

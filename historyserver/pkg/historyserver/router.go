@@ -73,52 +73,52 @@ func routerAPI(s *ServerHandler) {
 	ws.Path("/api").Consumes(restful.MIME_JSON).Produces(restful.MIME_JSON).Filter(RequestLogFilter) //.Filter(s.loginWrapper)
 	ws.Route(ws.GET("/cluster_status").To(s.getClusterStatus).Filter(s.CookieHandle).
 		Doc("get clusters status").Param(ws.QueryParameter("format", "such as 1")).
-		Writes("")) // 这里你可以替换为具体的返回类型
+		Writes("")) // Placeholder for specific return type
 	ws.Route(ws.GET("/grafana_health").To(s.getGrafanaHealth).Filter(s.CookieHandle).
 		Doc("get grafana_health").
-		Writes("")) // 这里你可以替换为具体的返回类型
+		Writes("")) // Placeholder for specific return type
 	ws.Route(ws.GET("/prometheus_health").To(s.getPrometheusHealth).Filter(s.CookieHandle).
 		Doc("get prometheus_health").
-		Writes("")) // 这里你可以替换为具体的返回类型
+		Writes("")) // Placeholder for specific return type
 
 	ws.Route(ws.GET("/jobs").To(s.getJobs).Filter(s.CookieHandle).
 		Doc("get jobs").
-		Writes("")) // 这里你可以替换为具体的返回类型
+		Writes("")) // Placeholder for specific return type
 
 	ws.Route(ws.GET("/jobs/{job_id}").To(s.getJob).Filter(s.CookieHandle).
 		Doc("get single job").
 		Param(ws.PathParameter("job_id", "job_id")).
-		Writes("")) // 这里你可以替换为具体的返回类型
+		Writes("")) // Placeholder for specific return type
 
 	ws.Route(ws.GET("/data/datasets/{job_id}").To(s.getDatasets).Filter(s.CookieHandle).
 		Doc("get datasets").
 		Param(ws.PathParameter("job_id", "job_id")).
-		Writes("")) // 这里你可以替换为具体的返回类型
+		Writes("")) // Placeholder for specific return type
 
 	ws.Route(ws.GET("/serve/applications/").To(s.getServeApplications).Filter(s.CookieHandle).
 		Doc("get appliations").
-		Writes("")) // 这里你可以替换为具体的返回类型
+		Writes("")) // Placeholder for specific return type
 
 	ws.Route(ws.GET("/v0/placement_groups/").To(s.getPlacementGroups).Filter(s.CookieHandle).
 		Doc("get placement_groups").
-		Writes("")) // 这里你可以替换为具体的返回类型
+		Writes("")) // Placeholder for specific return type
 
 	ws.Route(ws.GET("/v0/logs").To(s.getNodeLogs).Filter(s.CookieHandle).
 		Doc("get appliations").Param(ws.QueryParameter("node_id", "node_id")).
-		Writes("")) // 这里你可以替换为具体的返回类型
+		Writes("")) // Placeholder for specific return type
 	ws.Route(ws.GET("/v0/logs/file").To(s.getNodeLogFile).Filter(s.CookieHandle).
 		Doc("get logfile").Param(ws.QueryParameter("node_id", "node_id")).
 		Param(ws.QueryParameter("filename", "filename")).
 		Param(ws.QueryParameter("lines", "lines")).
 		Param(ws.QueryParameter("format", "format")).
-		Writes("")) // 这里你可以替换为具体的返回类型
+		Writes("")) // Placeholder for specific return type
 
 	ws.Route(ws.GET("/v0/tasks").To(s.getTaskDetail).Filter(s.CookieHandle).
 		Doc("get task detail ").Param(ws.QueryParameter("limit", "limit")).
 		Param(ws.QueryParameter("filter_keys", "filter_keys")).
 		Param(ws.QueryParameter("filter_predicates", "filter_predicates")).
 		Param(ws.QueryParameter("filter_values", "filter_values")).
-		Writes("")) // 这里你可以替换为具体的返回类型
+		Writes("")) // Placeholder for specific return type
 
 	ws.Route(ws.GET("/v0/tasks/summarize").To(s.getTaskSummarize).Filter(s.CookieHandle).
 		Doc("get summarize").
@@ -126,7 +126,7 @@ func routerAPI(s *ServerHandler) {
 		Param(ws.QueryParameter("filter_predicates", "filter_predicates")).
 		Param(ws.QueryParameter("filter_values", "filter_values")).
 		Param(ws.QueryParameter("summary_by", "summary_by")).
-		Writes("")) // 这里你可以替换为具体的返回类型
+		Writes("")) // Placeholder for specific return type
 }
 
 func routerRoot(s *ServerHandler) {
@@ -147,7 +147,7 @@ func routerRoot(s *ServerHandler) {
 			}
 			prefix = version + "/client/build"
 		}
-		// 检查是否有homepage文件，如果有则使用，否则使用默认的index.html
+		// Check if homepage file exists; if so use it, otherwise use default index.html
 		homepagePath := path.Join(s.dashboardDir, prefix, "index.html")
 
 		var data []byte
@@ -219,11 +219,11 @@ func routerLogical(s *ServerHandler) {
 	ws.Path("/logical").Consumes(restful.MIME_JSON).Produces(restful.MIME_JSON).Filter(RequestLogFilter) //.Filter(s.loginWrapper)
 	ws.Route(ws.GET("/actors").To(s.getLogicalActors).Filter(s.CookieHandle).
 		Doc("get logical actors").
-		Writes("")) // 这里你可以替换为具体的返回类型
+		Writes("")) // Placeholder for specific return type
 	ws.Route(ws.GET("/actors/{single_actor}").To(s.getLogicalActor).Filter(s.CookieHandle).
 		Doc("get logical single actor").
 		Param(ws.PathParameter("single_actor", "single_actor")).
-		Writes("")) // 这里你可以替换为具体的返回类型
+		Writes("")) // Placeholder for specific return type
 
 }
 
@@ -250,7 +250,7 @@ func routerRayClusterSet(s *ServerHandler) {
 		Param(ws.PathParameter("namespace", "namespace")).
 		Param(ws.PathParameter("name", "name")).
 		Param(ws.PathParameter("session", "session")).
-		Writes("")) // 这里你可以替换为具体的返回类型
+		Writes("")) // Placeholder for specific return type
 }
 
 func (s *ServerHandler) RegisterRouter() {
@@ -298,7 +298,7 @@ func (s *ServerHandler) getClusters(req *restful.Request, resp *restful.Response
 	resp.WriteAsJson(clusters)
 }
 
-// getNodes 返回指定集群的节点
+// getNodes returns nodes for the specified cluster
 func (s *ServerHandler) getNodes(req *restful.Request, resp *restful.Response) {
 	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
 	if sessionName == "live" {
@@ -670,7 +670,7 @@ func (s *ServerHandler) getTaskDetail(req *restful.Request, resp *restful.Respon
 	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
 	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
 
-	// 組合成內部使用的 key
+	// Combine into internal key format
 	clusterNameID := clusterName + "_" + clusterNamespace
 
 	if sessionName == "live" {
@@ -810,9 +810,9 @@ func formatTaskForResponse(task eventtypes.Task) map[string]interface{} {
 	}
 }
 
-// CookieHandle 是一个示例的预处理函数
+// CookieHandle is a preprocessing filter function
 func (s *ServerHandler) CookieHandle(req *restful.Request, resp *restful.Response, chain *restful.FilterChain) {
-	// 从请求中获取 Cookie
+	// Get cookie from request
 	clusterName, err := req.Request.Cookie(COOKIE_CLUSTER_NAME_KEY)
 	if err != nil {
 		resp.WriteHeaderAndEntity(http.StatusBadRequest, "Cluster Cookie not found")
@@ -835,24 +835,24 @@ func (s *ServerHandler) CookieHandle(req *restful.Request, resp *restful.Respons
 	if sessionName.Value == "live" {
 		var svcName string
 		var err error
-		// 检查是否有svc cookie
+		// Check if svc cookie exists
 		svcCookie, err := req.Request.Cookie(ATTRIBUTE_SERVICE_NAME)
 		if err == nil && svcCookie != nil {
-			// 如果存在svc cookie，则直接使用
+			// If svc cookie exists, use it directly
 			svcName = svcCookie.Value
 		} else {
-			// 否则获取svcName并设置cookie
+			// Otherwise get svcName and set cookie
 			svcName, err = getClusterSvcName(s.clientManager.clients, clusterName.Value, clusterNamespace.Value)
 			if err != nil {
 				resp.WriteHeaderAndEntity(http.StatusBadRequest, err.Error())
 				return
 			}
 
-			// 设置有效期为1分钟的cookie
+			// Set cookie with 1 minute expiration
 			cookie := &http.Cookie{
 				Name:   ATTRIBUTE_SERVICE_NAME,
 				Value:  svcName,
-				MaxAge: 60, // 1分钟
+				MaxAge: 60, // 1 minute
 			}
 			http.SetCookie(resp, cookie)
 		}
