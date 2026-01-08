@@ -46,6 +46,12 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &rayv1.RayClusterStatusApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("RayClusterUpgradeStrategy"):
 		return &rayv1.RayClusterUpgradeStrategyApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("RayCronJob"):
+		return &rayv1.RayCronJobApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("RayCronJobSpec"):
+		return &rayv1.RayCronJobSpecApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("RayCronJobStatus"):
+		return &rayv1.RayCronJobStatusApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("RayJob"):
 		return &rayv1.RayJobApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("RayJobSpec"):
