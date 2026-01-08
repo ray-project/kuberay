@@ -10,7 +10,7 @@ spec:
       - jax[tpu]==0.6.1
       - -f https://storage.googleapis.com/jax-releases/libtpu_releases.html
   rayClusterSpec:
-    rayVersion: '2.52.0'
+    rayVersion: "2.52.0"
     headGroupSpec:
       rayStartParams: {}
       template:

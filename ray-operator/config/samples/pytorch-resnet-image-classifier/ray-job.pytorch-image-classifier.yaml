@@ -16,10 +16,10 @@ spec:
       - transformers>=4.19.1
     working_dir: "https://github.com/ray-project/kuberay/archive/master.zip"
   rayClusterSpec:
-    rayVersion: '2.46.0'
+    rayVersion: "2.46.0"
     headGroupSpec:
       rayStartParams:
-        dashboard-host: '0.0.0.0'
+        dashboard-host: "0.0.0.0"
       template:
         metadata:
           annotations:
@@ -69,7 +69,7 @@ spec:
       maxReplicas: 4
       groupName: gpu-group
       rayStartParams:
-        dashboard-host: '0.0.0.0'
+        dashboard-host: "0.0.0.0"
       template:
         metadata:
           annotations:

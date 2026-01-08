@@ -15,7 +15,7 @@ spec:
     env_vars:
       counter_name: "test_counter"
   rayClusterSpec:
-    rayVersion: '2.52.0'
+    rayVersion: "2.52.0"
     headGroupSpec:
       rayStartParams: {}
       template:
