@@ -167,8 +167,10 @@ spec:
 | logging.sizeLimit | string | `""` | EmptyDir volume size limit for kuberay-operator log file. |
 | batchScheduler.enabled | bool | `false` |  |
 | batchScheduler.name | string | `""` |  |
-| configuration.enabled | bool | `false` | Whether to enable the configuration feature. If enabled, a ConfigMap will be created and mounted to the operator. |
+| configuration.enabled | bool | `false` | Whether to enable the configuration feature. If enabled, a ConfigMap will be created and mounted to the operator. When enabled, flag-based configuration values (leaderElectionEnabled, metrics.enabled, kubeClient.qps, etc.) will be injected into the ConfigMap. The operator will use the ConfigMap instead of command-line flags. |
 | configuration.defaultContainerEnvs | list | `[]` | Default environment variables to inject into all Ray containers in all RayCluster CRs. This allows user to set feature flags across all Ray pods. Example: defaultContainerEnvs: - name: RAY_enable_open_telemetry   value: "true" - name: RAY_metric_cardinality_level   value: "recommended" |
+| configuration.headSidecarContainers | list | `[]` | Sidecar containers to inject into every Ray head pod. Example: headSidecarContainers: - name: fluentbit   image: fluent/fluent-bit:1.9 |
+| configuration.workerSidecarContainers | list | `[]` | Sidecar containers to inject into every Ray worker pod. Example: workerSidecarContainers: - name: fluentbit   image: fluent/fluent-bit:1.9 |
 | featureGates[0].name | string | `"RayClusterStatusConditions"` |  |
 | featureGates[0].enabled | bool | `true` |  |
 | featureGates[1].name | string | `"RayJobDeletionPolicy"` |  |
