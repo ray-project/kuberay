@@ -23,17 +23,17 @@ spec:
     # overQuotaWeight: How surplus resources are shared among queues
     # Note: Using -1 (unlimited) for demo purposes
     cpu:
-      quota: -1
-      limit: -1
-      overQuotaWeight: 1
+      quota: "-1"
+      limit: "-1"
+      overQuotaWeight: "1"
     gpu:
-      quota: -1
-      limit: -1
-      overQuotaWeight: 1
+      quota: "-1"
+      limit: "-1"
+      overQuotaWeight: "1"
     memory:
-      quota: -1
-      limit: -1
-      overQuotaWeight: 1
+      quota: "-1"
+      limit: "-1"
+      overQuotaWeight: "1"
 ---
 # Child queue: Represents a team within the department-1
 apiVersion: scheduling.run.ai/v2
@@ -77,11 +77,11 @@ spec:
           image: rayproject/ray:2.52.0
           resources:
             limits:
-              cpu: 1
-              memory: 5Gi
+              cpu: "1"
+              memory: "5Gi"
             requests:
-              cpu: 1
-              memory: 2Gi
+              cpu: "1"
+              memory: "2Gi"
   # ---- Two workers share one GPU (0.5 each) ----
   workerGroupSpecs:
   - groupName: shared-gpu
@@ -97,8 +97,8 @@ spec:
           image: rayproject/ray:2.52.0
           resources:
             limits:
-              cpu: 1
-              memory: 1Gi
+              cpu: "1"
+              memory: "1Gi"
             requests:
-              cpu: 1
-              memory: 1Gi
+              cpu: "1"
+              memory: "1Gi"
