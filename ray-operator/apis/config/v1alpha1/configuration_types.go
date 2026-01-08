@@ -2,6 +2,7 @@ package v1alpha1
 
 import (
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
@@ -26,11 +27,19 @@ type Configuration struct {
 	// there is only one active instance of the operator.
 	EnableLeaderElection *bool `json:"enableLeaderElection,omitempty"`
 
+	// Default annotations for the Ray Dashboard ingresses. Annotations on the `RayCluster` will override
+	// these on a case-by-case basis.
+	IngressAnnotations map[string]string `json:"ingressAnnotations,omitempty"`
+
 	metav1.TypeMeta `json:",inline"`
 
 	// LogStdoutEncoder is the encoder to use when logging to stdout. Valid values are "json" and "console".
 	// Defaults to `json` if empty.
 	LogStdoutEncoder string `json:"logStdoutEncoder,omitempty"`
+
+	// Host used for Ray Dashboard ingresses. The host will be the same for all `RayClusters` and they
+	// will be differentiated by their paths.
+	IngressHost string `json:"ingressHost,omitempty"`
 
 	// ProbeAddr is the address the probe endpoint binds to.
 	ProbeAddr string `json:"probeAddr,omitempty"`
@@ -64,6 +73,9 @@ type Configuration struct {
 	// HeadSidecarContainers includes specification for a sidecar container
 	// to inject into every Head pod.
 	HeadSidecarContainers []corev1.Container `json:"headSidecarContainers,omitempty"`
+
+	// TLS configuration for the Ray Dashboard ingresses. Applies to all `RayClusters`.
+	IngressTLS []networkingv1.IngressTLS `json:"ingressTLS,omitempty"`
 
 	// DefaultContainerEnvs specifies default environment variables to inject into all Ray containers
 	DefaultContainerEnvs []corev1.EnvVar `json:"defaultContainerEnvs,omitempty"`
