@@ -72,7 +72,11 @@ func (w *workerPool) start(ctx context.Context, numWorkers int, requeueDelay tim
 				case <-ctx.Done():
 					logger.Info("worker exiting...", "workerID", workerID)
 					return
-				case task := <-w.taskQueue.Out:
+				case task, ok := <-w.taskQueue.Out:
+					if ok {
+						logger.Info("worker exiting from a closed channel", "workerID", workerID)
+						return
+					}
 					shouldRequeue := task(ctx)
 
 					if shouldRequeue && ctx.Err() == nil {
