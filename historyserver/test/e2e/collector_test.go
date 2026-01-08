@@ -64,14 +64,6 @@ func TestCollector(t *testing.T) {
 			test := With(t)
 			g := NewWithT(t)
 			namespace := test.NewTestNamespace()
-			test.T().Cleanup(func() {
-				err := test.Client().Core().CoreV1().Namespaces().Delete(test.Ctx(), namespace.Name, metav1.DeleteOptions{})
-				if err != nil && !k8serrors.IsNotFound(err) {
-					test.T().Logf("Failed to delete namespace %s: %v", namespace.Name, err)
-				} else {
-					LogWithTimestamp(test.T(), "Deleted test namespace %s successfully", namespace.Name)
-				}
-			})
 
 			tt.testFunc(test, g, namespace, s3Client)
 		})
