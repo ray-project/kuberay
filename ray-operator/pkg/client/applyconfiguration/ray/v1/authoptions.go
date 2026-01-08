@@ -8,7 +8,12 @@ import (
 
 // AuthOptionsApplyConfiguration represents a declarative configuration of the AuthOptions type for use
 // with apply.
+//
+// AuthOptions defines the authentication options for a RayCluster.
 type AuthOptionsApplyConfiguration struct {
+	// Mode specifies the authentication mode.
+	// Supported values are "disabled" and "token".
+	// Defaults to "token".
 	Mode *rayv1.AuthMode `json:"mode,omitempty"`
 }
 

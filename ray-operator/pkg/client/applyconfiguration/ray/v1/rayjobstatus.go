@@ -9,7 +9,12 @@ import (
 
 // RayJobStatusApplyConfiguration represents a declarative configuration of the RayJobStatus type for use
 // with apply.
+//
+// RayJobStatus defines the observed state of RayJob
 type RayJobStatusApplyConfiguration struct {
+	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
+	// Important: Run "make" to regenerate code after modifying this file
+	// RayJobStatusInfo contains information about the Ray job retrieved from the Ray dashboard.
 	RayJobStatusInfo    *RayJobStatusInfoApplyConfiguration `json:"rayJobInfo,omitempty"`
 	JobId               *string                             `json:"jobId,omitempty"`
 	RayClusterName      *string                             `json:"rayClusterName,omitempty"`
@@ -18,12 +23,21 @@ type RayJobStatusApplyConfiguration struct {
 	JobDeploymentStatus *rayv1.JobDeploymentStatus          `json:"jobDeploymentStatus,omitempty"`
 	Reason              *rayv1.JobFailedReason              `json:"reason,omitempty"`
 	Message             *string                             `json:"message,omitempty"`
-	StartTime           *metav1.Time                        `json:"startTime,omitempty"`
-	EndTime             *metav1.Time                        `json:"endTime,omitempty"`
-	Succeeded           *int32                              `json:"succeeded,omitempty"`
-	Failed              *int32                              `json:"failed,omitempty"`
-	RayClusterStatus    *RayClusterStatusApplyConfiguration `json:"rayClusterStatus,omitempty"`
-	ObservedGeneration  *int64                              `json:"observedGeneration,omitempty"`
+	// StartTime is the time when JobDeploymentStatus transitioned from 'New' to 'Initializing'.
+	StartTime *metav1.Time `json:"startTime,omitempty"`
+	// EndTime is the time when JobDeploymentStatus transitioned to 'Complete' status.
+	// This occurs when the Ray job reaches a terminal state (SUCCEEDED, FAILED, STOPPED)
+	// or the submitter Job has failed.
+	EndTime *metav1.Time `json:"endTime,omitempty"`
+	// Succeeded is the number of times this job succeeded.
+	Succeeded *int32 `json:"succeeded,omitempty"`
+	// Failed is the number of times this job failed.
+	Failed *int32 `json:"failed,omitempty"`
+	// RayClusterStatus is the status of the RayCluster running the job.
+	RayClusterStatus *RayClusterStatusApplyConfiguration `json:"rayClusterStatus,omitempty"`
+	// observedGeneration is the most recent generation observed for this RayJob. It corresponds to the
+	// RayJob's generation, which is updated on mutation by the API Server.
+	ObservedGeneration *int64 `json:"observedGeneration,omitempty"`
 }
 
 // RayJobStatusApplyConfiguration constructs a declarative configuration of the RayJobStatus type for use with

@@ -10,14 +10,26 @@ import (
 
 // RayServiceStatusesApplyConfiguration represents a declarative configuration of the RayServiceStatuses type for use
 // with apply.
+//
+// RayServiceStatuses defines the observed state of RayService
 type RayServiceStatusesApplyConfiguration struct {
-	Conditions           []metav1.ConditionApplyConfiguration `json:"conditions,omitempty"`
-	LastUpdateTime       *apismetav1.Time                     `json:"lastUpdateTime,omitempty"`
-	ServiceStatus        *rayv1.ServiceStatus                 `json:"serviceStatus,omitempty"`
-	ActiveServiceStatus  *RayServiceStatusApplyConfiguration  `json:"activeServiceStatus,omitempty"`
-	PendingServiceStatus *RayServiceStatusApplyConfiguration  `json:"pendingServiceStatus,omitempty"`
-	NumServeEndpoints    *int32                               `json:"numServeEndpoints,omitempty"`
-	ObservedGeneration   *int64                               `json:"observedGeneration,omitempty"`
+	// Represents the latest available observations of a RayService's current state.
+	Conditions []metav1.ConditionApplyConfiguration `json:"conditions,omitempty"`
+	// LastUpdateTime represents the timestamp when the RayService status was last updated.
+	LastUpdateTime *apismetav1.Time `json:"lastUpdateTime,omitempty"`
+	// Deprecated: `ServiceStatus` is deprecated - use `Conditions` instead. `Running` means the RayService is ready to
+	// serve requests. An empty `ServiceStatus` means the RayService is not ready to serve requests. The definition of
+	// `ServiceStatus` is equivalent to the `RayServiceReady` condition.
+	ServiceStatus       *rayv1.ServiceStatus                `json:"serviceStatus,omitempty"`
+	ActiveServiceStatus *RayServiceStatusApplyConfiguration `json:"activeServiceStatus,omitempty"`
+	// Pending Service Status indicates a RayCluster will be created or is being created.
+	PendingServiceStatus *RayServiceStatusApplyConfiguration `json:"pendingServiceStatus,omitempty"`
+	// NumServeEndpoints indicates the number of Ray Pods that are actively serving or have been selected by the serve service.
+	// Ray Pods without a proxy actor or those that are unhealthy will not be counted.
+	NumServeEndpoints *int32 `json:"numServeEndpoints,omitempty"`
+	// observedGeneration is the most recent generation observed for this RayService. It corresponds to the
+	// RayService's generation, which is updated on mutation by the API Server.
+	ObservedGeneration *int64 `json:"observedGeneration,omitempty"`
 }
 
 // RayServiceStatusesApplyConfiguration constructs a declarative configuration of the RayServiceStatuses type for use with
