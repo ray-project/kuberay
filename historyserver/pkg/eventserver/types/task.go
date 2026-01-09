@@ -98,3 +98,32 @@ func (c *ClusterTaskMap) Lock() {
 func (c *ClusterTaskMap) Unlock() {
 	c.Mu.Unlock()
 }
+
+func GetTaskFieldValue(task Task, filterKey string) string {
+	switch filterKey {
+	case "task_id":
+		return task.TaskID
+	case "job_id":
+		return task.JobID
+	case "state":
+		return string(task.State)
+	case "name", "task_name":
+		return task.Name
+	case "func_name", "function_name":
+		return task.FuncOrClassName
+	case "node_id":
+		return task.NodeID
+	case "actor_id":
+		return task.ActorID
+	case "type", "task_type":
+		return string(task.Type)
+	case "worker_id":
+		return task.WorkerID
+	case "language":
+		return task.Language
+	case "error_type":
+		return task.ErrorType
+	default:
+		return ""
+	}
+}

@@ -82,3 +82,26 @@ func (c *ClusterActorMap) Lock() {
 func (c *ClusterActorMap) Unlock() {
 	c.Mu.Unlock()
 }
+
+func GetActorFieldValue(actor Actor, filterKey string) string {
+	switch filterKey {
+	case "actor_id":
+		return actor.ActorID
+	case "job_id":
+		return actor.JobID
+	case "state":
+		return string(actor.State)
+	case "name", "actor_name":
+		return actor.Name
+	case "class_name", "actor_class":
+		return actor.ActorClass
+	case "node_id":
+		return actor.Address.NodeID
+	case "pid":
+		return actor.PID
+	case "placement_group_id":
+		return actor.PlacementGroupID
+	default:
+		return ""
+	}
+}

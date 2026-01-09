@@ -304,36 +304,6 @@ func (h *EventHandler) getAllJobEventFiles(clusterInfo utils.ClusterInfo) []stri
 	return allJobFiles
 }
 
-// func (h *EventHandler) getAllJobEventFiles(clusterInfo utils.ClusterInfo) []string {
-// 	var allJobFiles []string
-
-// 	clusterNameID := clusterInfo.Name + "_" + clusterInfo.Namespace
-// 	jobEventDirPrefix := clusterInfo.SessionName + "/job_events/"
-// 	jobDirList := h.reader.ListFiles(clusterNameID, jobEventDirPrefix)
-// 	for _, currJobDir := range jobDirList {
-// 		allJobFiles = append(allJobFiles, h.reader.ListFiles(clusterNameID, currJobDir)...)
-// 	}
-
-// 	return allJobFiles
-
-// 	// jobEventDirPrefix := clusterInfo.Name + "/" + clusterInfo.SessionName + "/job_events/"
-// 	// jobDirList := h.reader.ListFiles(clusterInfo.Name, jobEventDirPrefix)
-// 	// for _, currJobDir := range jobDirList {
-// 	// 	allJobFiles = append(allJobFiles, h.reader.ListFiles(clusterInfo.Name, currJobDir)...)
-// 	// }
-
-// 	// return allJobFiles
-// }
-
-// getAllNodeEventFiles get all the node event files for the given cluster.
-// Assuming that the events file object follow the format root/clustername/sessionid/node_events/*
-// func (h *EventHandler) getAllNodeEventFiles(clusterInfo utils.ClusterInfo) []string {
-// 	clusterNameID := clusterInfo.Name + "_" + clusterInfo.Namespace
-// 	nodeEventDirPrefix := clusterInfo.SessionName + "/node_events/"
-// 	nodeEventFiles := h.reader.ListFiles(clusterNameID, nodeEventDirPrefix)
-// 	return nodeEventFiles
-// }
-
 // getAllNodeEventFiles retrieves all node event files for the given cluster
 func (h *EventHandler) getAllNodeEventFiles(clusterInfo utils.ClusterInfo) []string {
 	clusterNameID := clusterInfo.Name + "_" + clusterInfo.Namespace
@@ -348,21 +318,9 @@ func (h *EventHandler) getAllNodeEventFiles(clusterInfo utils.ClusterInfo) []str
 			fullPath := nodeEventDirPrefix + fileName
 			nodeEventFiles = append(nodeEventFiles, fullPath)
 		}
-		// if strings.HasSuffix(fileName, "/") {
-		// 	continue
-		// }
-		// // Build full path
-		// fullPath := nodeEventDirPrefix + fileName
-		// nodeEventFiles = append(nodeEventFiles, fullPath)
 	}
 	return nodeEventFiles
 }
-
-// func (h *EventHandler) getAllNodeEventFiles(clusterInfo utils.ClusterInfo) []string {
-// 	nodeEventDirPrefix := clusterInfo.Name + "/" + clusterInfo.SessionName + "/node_events/"
-// 	nodeEventFiles := h.reader.ListFiles(clusterInfo.Name, nodeEventDirPrefix)
-// 	return nodeEventFiles
-// }
 
 // GetTasks returns a thread-safe copy of all tasks for a given cluster
 func (h *EventHandler) GetTasks(clusterName string) []types.Task {

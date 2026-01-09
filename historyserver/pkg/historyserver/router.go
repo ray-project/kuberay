@@ -13,6 +13,7 @@ import (
 
 	"github.com/emicklei/go-restful/v3"
 	eventtypes "github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
+	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/types"
@@ -217,6 +218,9 @@ func routerLogical(s *ServerHandler) {
 	ws.Path("/logical").Consumes(restful.MIME_JSON).Produces(restful.MIME_JSON).Filter(RequestLogFilter) //.Filter(s.loginWrapper)
 	ws.Route(ws.GET("/actors").To(s.getLogicalActors).Filter(s.CookieHandle).
 		Doc("get logical actors").
+		Param(ws.QueryParameter("filter_keys", "filter_keys")).
+		Param(ws.QueryParameter("filter_predicates", "filter_predicates")).
+		Param(ws.QueryParameter("filter_values", "filter_values")).
 		Writes("")) // Placeholder for specific return type
 
 	// TODO: discuss with Ray Core team about this
@@ -455,13 +459,29 @@ func (s *ServerHandler) getLogicalActors(req *restful.Request, resp *restful.Res
 		return
 	}
 
+	filterKey := req.QueryParameter("filter_keys")
+	filterValue := req.QueryParameter("filter_values")
+	filterPredicate := req.QueryParameter("filter_predicates")
+
 	// Get actors from EventHandler's in-memory map
 	actorsMap := s.eventHandler.GetActorsMap(clusterNameID)
 
+	// Convert map to slice for filtering
+	actors := make([]eventtypes.Actor, 0, len(actorsMap))
+	for _, actor := range actorsMap {
+		actors = append(actors, actor)
+	}
+
+	// Apply generic filtering
+	actors = utils.ApplyFilter(actors, filterKey, filterPredicate, filterValue,
+		func(a eventtypes.Actor, key string) string {
+			return eventtypes.GetActorFieldValue(a, key)
+		})
+
 	// Format response to match Ray Dashboard API format
 	formattedActors := make(map[string]interface{})
-	for actorID, actor := range actorsMap {
-		formattedActors[actorID] = formatActorForResponse(actor)
+	for _, actor := range actors {
+		formattedActors[actor.ActorID] = formatActorForResponse(actor)
 	}
 
 	response := map[string]interface{}{
@@ -610,26 +630,30 @@ func (s *ServerHandler) getTaskSummarize(req *restful.Request, resp *restful.Res
 	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
 	clusterNameID := clusterName + "_" + clusterNamespace
 	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
+
 	if sessionName == "live" {
 		s.redirectRequest(req, resp)
 		return
 	}
-	filter_keys := req.QueryParameter("filter_keys")
-	filter_values := req.QueryParameter("filter_values")
-	summary_by := req.QueryParameter("summary_by")
 
-	var tasks []eventtypes.Task
+	// Parse filter parameters
+	filterKey := req.QueryParameter("filter_keys")
+	filterValue := req.QueryParameter("filter_values")
+	filterPredicate := req.QueryParameter("filter_predicates")
+	summaryBy := req.QueryParameter("summary_by")
 
-	switch filter_keys {
-	case "job_id":
-		tasks = s.eventHandler.GetTasksByJobID(clusterNameID, filter_values)
-	default:
-		tasks = s.eventHandler.GetTasks(clusterNameID)
-	}
+	// Get all tasks
+	tasks := s.eventHandler.GetTasks(clusterNameID)
+
+	// Apply generic filtering using utils.ApplyFilter
+	tasks = utils.ApplyFilter(tasks, filterKey, filterPredicate, filterValue,
+		func(t eventtypes.Task, key string) string {
+			return eventtypes.GetTaskFieldValue(t, key)
+		})
 
 	// Summarize tasks based on summary_by parameter
 	var summary map[string]interface{}
-	if summary_by == "lineage" {
+	if summaryBy == "lineage" {
 		summary = summarizeTasksByLineage(tasks)
 	} else {
 		// Default to func_name
@@ -678,7 +702,12 @@ func summarizeTasksByFuncName(tasks []eventtypes.Task) map[string]interface{} {
 	}
 }
 
-// summarizeTasksByLineage groups tasks by their lineage (parent task relationships)
+// TODO(Han-Ju Chen): This function has a bug - using JobID instead of actual lineage.
+// Real lineage requires:
+// 1. Add ParentTaskID field to Task struct (types/task.go)
+// 2. Parse parent_task_id from Ray events (eventserver.go)
+// 3. Build task tree structure based on ParentTaskID
+// 4. Update rayjob example to generate nested tasks for testing
 func summarizeTasksByLineage(tasks []eventtypes.Task) map[string]interface{} {
 	summary := make(map[string]map[string]int)
 
@@ -717,30 +746,16 @@ func (s *ServerHandler) getTaskDetail(req *restful.Request, resp *restful.Respon
 		return
 	}
 
-	// Get tasks from EventHandler's in-memory map
-	filter_keys := req.QueryParameter("filter_keys")
-	filter_values := req.QueryParameter("filter_values")
+	filterKey := req.QueryParameter("filter_keys")
+	filterValue := req.QueryParameter("filter_values")
+	filterPredicate := req.QueryParameter("filter_predicates")
 
-	var tasks []eventtypes.Task
+	tasks := s.eventHandler.GetTasks(clusterNameID)
+	tasks = utils.ApplyFilter(tasks, filterKey, filterPredicate, filterValue,
+		func(t eventtypes.Task, key string) string {
+			return eventtypes.GetTaskFieldValue(t, key)
+		})
 
-	switch filter_keys {
-	case "job_id":
-		// Get tasks filtered by job_id
-		tasks = s.eventHandler.GetTasksByJobID(clusterNameID, filter_values)
-	case "task_id":
-		// Get specific task by task_id
-		task, found := s.eventHandler.GetTaskByID(clusterNameID, filter_values)
-		if found {
-			tasks = []eventtypes.Task{task}
-		} else {
-			tasks = []eventtypes.Task{}
-		}
-	default:
-		// Get all tasks for the cluster
-		tasks = s.eventHandler.GetTasks(clusterNameID)
-	}
-
-	// Format response to match Ray Dashboard API format
 	taskResults := make([]interface{}, 0, len(tasks))
 	for _, task := range tasks {
 		taskResults = append(taskResults, formatTaskForResponse(task))
@@ -767,65 +782,6 @@ func (s *ServerHandler) getTaskDetail(req *restful.Request, resp *restful.Respon
 	}
 	resp.Write(respData)
 }
-
-// func (s *ServerHandler) getTaskDetail(req *restful.Request, resp *restful.Response) {
-// 	clusterNameID := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
-// 	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
-// 	if sessionName == "live" {
-// 		s.redirectRequest(req, resp)
-// 		return
-// 	}
-
-// 	// Get tasks from EventHandler's in-memory map
-// 	filter_keys := req.QueryParameter("filter_keys")
-// 	filter_values := req.QueryParameter("filter_values")
-
-// 	var tasks []eventtypes.Task
-
-// 	switch filter_keys {
-// 	case "job_id":
-// 		// Get tasks filtered by job_id
-// 		tasks = s.eventHandler.GetTasksByJobID(clusterNameID, filter_values)
-// 	case "task_id":
-// 		// Get specific task by task_id
-// 		task, found := s.eventHandler.GetTaskByID(clusterNameID, filter_values)
-// 		if found {
-// 			tasks = []eventtypes.Task{task}
-// 		} else {
-// 			tasks = []eventtypes.Task{}
-// 		}
-// 	default:
-// 		// Get all tasks for the cluster
-// 		tasks = s.eventHandler.GetTasks(clusterNameID)
-// 	}
-
-// 	// Format response to match Ray Dashboard API format
-// 	taskResults := make([]interface{}, 0, len(tasks))
-// 	for _, task := range tasks {
-// 		taskResults = append(taskResults, formatTaskForResponse(task))
-// 	}
-
-// 	response := ReplyTaskInfo{
-// 		Result: true,
-// 		Msg:    "Tasks fetched.",
-// 		Data: TaskInfoData{
-// 			Result: TaskInfoDataResult{
-// 				Result:             taskResults,
-// 				Total:              len(taskResults),
-// 				NumFiltered:        len(taskResults),
-// 				NumAfterTruncation: len(taskResults),
-// 			},
-// 		},
-// 	}
-
-// 	respData, err := json.Marshal(response)
-// 	if err != nil {
-// 		logrus.Errorf("Failed to marshal task response: %v", err)
-// 		resp.WriteErrorString(http.StatusInternalServerError, err.Error())
-// 		return
-// 	}
-// 	resp.Write(respData)
-// }
 
 // formatTaskForResponse converts an eventtypes.Task to the format expected by Ray Dashboard
 func formatTaskForResponse(task eventtypes.Task) map[string]interface{} {
