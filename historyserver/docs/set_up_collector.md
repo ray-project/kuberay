@@ -145,7 +145,9 @@ You're supposed to see the uploaded logs and events in the minio UI as below:
 ## Troubleshooting
 
 ### "too many open files" error
-If you encounter `level=fatal msg="Create fsnotify NewWatcher error too many open files"` in the collector logs, it is likely due to the inotify limits on the Kubernetes nodes.
+
+If you encounter `level=fatal msg="Create fsnotify NewWatcher error too many open files"` in the collector logs,
+it is likely due to the inotify limits on the Kubernetes nodes.
 
 To fix this, increase the limits on the **host nodes** (not inside the container):
 
@@ -162,4 +164,3 @@ echo "fs.inotify.max_user_instances=8192" | sudo tee -a /etc/sysctl.conf
 echo "fs.inotify.max_user_watches=524288" | sudo tee -a /etc/sysctl.conf
 sudo sysctl -p
 ```
-
