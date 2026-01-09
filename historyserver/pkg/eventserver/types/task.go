@@ -21,6 +21,7 @@ const (
 	RUNNING_IN_RAY_WAIT                        TaskStatus = "RUNNING_IN_RAY_WAIT"
 	FINISHED                                   TaskStatus = "FINISHED"
 	FAILED                                     TaskStatus = "FAILED"
+	GETTING_AND_PINNING_ARGS                   TaskStatus = "GETTING_AND_PINNING_ARGS"
 )
 
 type TaskType string

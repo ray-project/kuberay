@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -14,7 +13,6 @@ import (
 
 	"github.com/emicklei/go-restful/v3"
 	eventtypes "github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
-	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/types"
@@ -608,34 +606,102 @@ func getTaskInfo(allTaskData []byte, findTaskID string) ([]byte, error) {
 }
 
 func (s *ServerHandler) getTaskSummarize(req *restful.Request, resp *restful.Response) {
-	clusterNameID := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
+	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
+	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
+	clusterNameID := clusterName + "_" + clusterNamespace
 	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
 	if sessionName == "live" {
 		s.redirectRequest(req, resp)
 		return
 	}
-	// return
-	// limit := req.QueryParameter("limit")
 	filter_keys := req.QueryParameter("filter_keys")
-	summary_by := req.QueryParameter("summary_by")
-	//filter_predicates := req.QueryParameter("filter_predicates")
 	filter_values := req.QueryParameter("filter_values")
+	summary_by := req.QueryParameter("summary_by")
+
+	var tasks []eventtypes.Task
 
 	switch filter_keys {
 	case "job_id":
-		var data []byte
-		if summary_by == "" || summary_by == "func_name" {
-			data = s.MetaKeyInfo(clusterNameID, fmt.Sprintf("%s%s", utils.OssMetaFile_JOBTASK_SUMMARIZE_BY_FUNC_NAME_Prefix, filter_values))
-		} else if summary_by == "lineage" {
-			data = s.MetaKeyInfo(clusterNameID, fmt.Sprintf("%s%s", utils.OssMetaFile_JOBTASK_SUMMARIZE_BY_LINEAGE_Prefix, filter_values))
-		}
-		//OssMetaFile_JOBTASK_SUMMARIZE_BY_LINEAGE_Prefix
-		resp.Write(data)
+		tasks = s.eventHandler.GetTasksByJobID(clusterNameID, filter_values)
 	default:
-		logrus.Errorf("Wrong filter keys %s", filter_keys)
-		resp.WriteErrorString(http.StatusInternalServerError, "Wrong filter keys")
+		tasks = s.eventHandler.GetTasks(clusterNameID)
 	}
 
+	// Summarize tasks based on summary_by parameter
+	var summary map[string]interface{}
+	if summary_by == "lineage" {
+		summary = summarizeTasksByLineage(tasks)
+	} else {
+		// Default to func_name
+		summary = summarizeTasksByFuncName(tasks)
+	}
+
+	response := map[string]interface{}{
+		"result": true,
+		"msg":    "Tasks summarized.",
+		"data": map[string]interface{}{
+			"result": summary,
+		},
+	}
+
+	respData, err := json.Marshal(response)
+	if err != nil {
+		logrus.Errorf("Failed to marshal task summarize response: %v", err)
+		resp.WriteErrorString(http.StatusInternalServerError, err.Error())
+		return
+	}
+	resp.Write(respData)
+}
+
+// summarizeTasksByFuncName groups tasks by function name and counts by state
+func summarizeTasksByFuncName(tasks []eventtypes.Task) map[string]interface{} {
+	summary := make(map[string]map[string]int)
+
+	for _, task := range tasks {
+		funcName := task.FuncOrClassName
+		if funcName == "" {
+			funcName = "unknown"
+		}
+		if _, ok := summary[funcName]; !ok {
+			summary[funcName] = make(map[string]int)
+		}
+		state := string(task.State)
+		if state == "" {
+			state = "UNKNOWN"
+		}
+		summary[funcName][state]++
+	}
+
+	return map[string]interface{}{
+		"summary": summary,
+		"total":   len(tasks),
+	}
+}
+
+// summarizeTasksByLineage groups tasks by their lineage (parent task relationships)
+func summarizeTasksByLineage(tasks []eventtypes.Task) map[string]interface{} {
+	summary := make(map[string]map[string]int)
+
+	for _, task := range tasks {
+		// Use JobID as a simple lineage grouping for now
+		lineageKey := task.JobID
+		if lineageKey == "" {
+			lineageKey = "unknown"
+		}
+		if _, ok := summary[lineageKey]; !ok {
+			summary[lineageKey] = make(map[string]int)
+		}
+		state := string(task.State)
+		if state == "" {
+			state = "UNKNOWN"
+		}
+		summary[lineageKey][state]++
+	}
+
+	return map[string]interface{}{
+		"summary": summary,
+		"total":   len(tasks),
+	}
 }
 
 func (s *ServerHandler) getTaskDetail(req *restful.Request, resp *restful.Response) {

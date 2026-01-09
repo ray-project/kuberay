@@ -30,6 +30,7 @@ spec:
       labels:
         app: historyserver
     spec:
+      serviceAccountName: historyserver
       containers:
       - name: historyserver
         env:
