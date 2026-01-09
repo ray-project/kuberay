@@ -62,7 +62,7 @@ type (
 )
 
 func (w *workerPool) start(ctx context.Context, numWorkers int, requeueDelay time.Duration) {
-	logger := ctrl.LoggerFrom(ctx).WithName("RayDashboardCacheClient").WithName("WorkerPool")
+	logger := ctrl.LoggerFrom(ctx).WithName("WorkerPool")
 	w.taskQueue = chanx.NewUnboundedChanSize[Task](ctx, 0, 0, initBufferSize)
 
 	for i := range numWorkers {
