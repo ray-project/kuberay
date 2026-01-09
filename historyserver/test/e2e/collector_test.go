@@ -437,14 +437,24 @@ func verifyS3SessionDirs(test Test, g *WithT, s3Client *s3.S3, sessionPrefix str
 	}
 
 	LogWithTimestamp(test.T(), "Verifying all %d event types are covered: %v", len(rayEventTypes), rayEventTypes)
-	uploadedEvents := []rayEvent{}
-	for _, dir := range []string{"node_events", "job_events/AgAAAA==", "job_events/AQAAAA=="} {
-		dirPrefix := sessionPrefix + dir + "/"
-		events, err := loadRayEventsFromS3(s3Client, s3BucketName, dirPrefix)
-		g.Expect(err).NotTo(HaveOccurred())
-		uploadedEvents = append(uploadedEvents, events...)
-	}
-	assertAllEventTypesCovered(test, g, uploadedEvents)
+	g.Eventually(func(gg Gomega) {
+		uploadedEvents := []rayEvent{}
+		for _, dir := range []string{"node_events", "job_events/AgAAAA==", "job_events/AQAAAA=="} {
+			dirPrefix := sessionPrefix + dir + "/"
+			events, err := loadRayEventsFromS3(s3Client, s3BucketName, dirPrefix)
+			gg.Expect(err).NotTo(HaveOccurred())
+			uploadedEvents = append(uploadedEvents, events...)
+		}
+
+		// Verify that all potential event types are present in the events uploaded to S3.
+		foundEventTypes := map[string]bool{}
+		for _, event := range uploadedEvents {
+			foundEventTypes[event.EventType] = true
+		}
+		for _, eventType := range rayEventTypes {
+			gg.Expect(foundEventTypes[eventType]).To(BeTrue(), "Event type %s not found", eventType)
+		}
+	}, TestTimeoutShort).Should(Succeed(), "Failed to verify all event types are covered")
 }
 
 // getSessionIDFromHeadPod retrieves the sessionID from the Ray head pod by reading the symlink
@@ -578,16 +588,4 @@ func loadRayEventsFromS3(s3Client *s3.S3, bucket string, prefix string) ([]rayEv
 		return nil, err
 	}
 	return events, nil
-}
-
-// assertAllEventTypesCovered verifies that all potential event types are present in the events uploaded to S3.
-func assertAllEventTypesCovered(test Test, g *WithT, events []rayEvent) {
-	foundEventTypes := map[string]bool{}
-	for _, event := range events {
-		foundEventTypes[event.EventType] = true
-	}
-
-	for _, eventType := range rayEventTypes {
-		g.Expect(foundEventTypes[eventType]).To(BeTrue(), "Event type %s not found", eventType)
-	}
 }
