@@ -154,11 +154,11 @@ func TestScanAndProcess(t *testing.T) {
 	// Manually restore file1 to prev-logs to simulate a crash right after upload but before/during rename
 	createTestLogFile(t, f1, "content1")
 
-	// --- Step 2: Run startup scan ---
-	handler.WatchPrevLogsLoops()
+	// --- Step 2: Run startup scan in background ---
+	go handler.WatchPrevLogsLoops()
 
-	// Wait for async processing
-	time.Sleep(200 * time.Millisecond)
+	// Wait for async processing - give more time for file2.log to be processed
+	time.Sleep(1000 * time.Millisecond)
 
 	// --- Step 3: Final Verification ---
 	// 1. Storage should have 2 unique files (file1 should NOT be re-uploaded)
@@ -171,4 +171,8 @@ func TestScanAndProcess(t *testing.T) {
 	if _, err := os.Stat(sessionNodeDir); !os.IsNotExist(err) {
 		t.Error("Node directory should be removed after all files are processed and moved")
 	}
+
+	// Ensure background goroutine exits
+	close(handler.ShutdownChan)
+	time.Sleep(100 * time.Millisecond)
 }
