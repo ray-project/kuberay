@@ -490,8 +490,9 @@ func testCollectorResumesUploadsOnRestart(test Test, g *WithT, namespace *corev1
 	prevLogsBaseDir := "/tmp/ray/prev-logs"
 	persistCompleteBaseDir := "/tmp/ray/persist-complete-logs"
 
-	dummySessionID := "test-recovery-session"
-	dummyNodeID := "head-node"
+	// Use namespace name to ensure test isolation (avoid conflicts from previous test runs)
+	dummySessionID := fmt.Sprintf("test-recovery-session-%s", namespace.Name)
+	dummyNodeID := fmt.Sprintf("head-node-%s", namespace.Name)
 	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, rayClusterID)
 	sessionPrefix := fmt.Sprintf("log/%s/%s/", clusterNameID, dummySessionID)
 
@@ -506,9 +507,20 @@ func testCollectorResumesUploadsOnRestart(test Test, g *WithT, namespace *corev1
 	// currently only handles the logs directory. node_events are handled by the EventServer separately.
 	LogWithTimestamp(test.T(), "Injecting logs into %s while collector is down", prevLogsBaseDir)
 	sessionDir := filepath.Join(prevLogsBaseDir, dummySessionID, dummyNodeID)
+	persistDir := filepath.Join(persistCompleteBaseDir, dummySessionID, dummyNodeID)
+	// Inject 2 files and simulate partial processing: move file1 to persist-complete-logs
 	injectCmd := fmt.Sprintf(
-		"mkdir -p %s/logs && echo 'dummy log' > %s/logs/test.log",
-		sessionDir, sessionDir,
+		"mkdir -p %s/logs && "+
+			"echo 'file1 content' > %s/logs/file1.log && "+
+			"echo 'file2 content' > %s/logs/file2.log && "+
+			"mkdir -p %s/logs && "+
+			"mv %s/logs/file1.log %s/logs/file1.log",
+		sessionDir,
+		sessionDir,
+		sessionDir,
+		persistDir,
+		sessionDir,
+		persistDir,
 	)
 	_, stderr := ExecPodCmd(test, headPod, "ray-head", []string{"sh", "-c", injectCmd})
 	g.Expect(stderr.String()).To(BeEmpty())
