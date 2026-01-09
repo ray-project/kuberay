@@ -155,7 +155,7 @@ func TestScanAndProcess(t *testing.T) {
 	createTestLogFile(t, f1, "content1")
 
 	// --- Step 2: Run startup scan ---
-	handler.scanAndProcessExistingPrevLogs()
+	handler.WatchPrevLogsLoops()
 
 	// Wait for async processing
 	time.Sleep(200 * time.Millisecond)

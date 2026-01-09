@@ -65,10 +65,8 @@ func (r *RayLogHandler) Run(stop <-chan struct{}) error {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGTERM)
 
-	// On startup, scan and process all existing prev-logs
-	// This ensures that any incomplete uploads from previous runs are resumed
-	go r.scanAndProcessExistingPrevLogs()
-
+	// WatchPrevLogsLoops will scan and process all existing prev-logs on startup,
+	// then watch for new files. This ensures incomplete uploads from previous runs are resumed.
 	go r.WatchPrevLogsLoops()
 	if r.EnableMeta {
 		go r.WatchSessionLatestLoops() // Watch session_latest symlink changes
@@ -298,43 +296,6 @@ func (r *RayLogHandler) WatchLogsLoops(watcher *fsnotify.Watcher, walkPath strin
 			}
 		}
 	}
-}
-
-// scanAndProcessExistingPrevLogs scans the prev-logs directory on startup
-// and processes any existing sessions/nodes that may have been left from previous runs.
-// This ensures resumption of incomplete uploads after collector restart.
-func (r *RayLogHandler) scanAndProcessExistingPrevLogs() {
-	watchPath := r.prevLogsDir
-
-	logrus.Infof("Starting initial scan of prev-logs directory: %s", watchPath)
-
-	// Check if prev-logs directory exists
-	if _, err := os.Stat(watchPath); os.IsNotExist(err) {
-		logrus.Infof("prev-logs directory does not exist on startup, nothing to process")
-		return
-	}
-
-	// Read all session directories (first level only)
-	sessionEntries, err := os.ReadDir(watchPath)
-	if err != nil {
-		logrus.Errorf("Failed to read prev-logs directory %s: %v", watchPath, err)
-		return
-	}
-
-	for _, sessionEntry := range sessionEntries {
-		if !sessionEntry.IsDir() {
-			continue
-		}
-
-		sessionID := sessionEntry.Name()
-		sessionPath := filepath.Join(watchPath, sessionID)
-		logrus.Infof("Found existing session directory on startup: %s", sessionID)
-
-		// Process all node directories under this session
-		r.processSessionPrevLogs(sessionPath)
-	}
-
-	logrus.Infof("Completed initial scan of prev-logs directory")
 }
 
 func (r *RayLogHandler) WatchPrevLogsLoops() {
