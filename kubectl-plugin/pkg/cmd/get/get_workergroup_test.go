@@ -407,7 +407,7 @@ group-1   1     5     1/1        2      1      1      1Gi      cluster-1
 			}
 
 			kubeClientSet := kubefake.NewClientset(tc.pods...)
-			rayClient := rayClientFake.NewSimpleClientset(tc.rayClusters...)
+			rayClient := rayClientFake.NewClientset(tc.rayClusters...)
 			k8sClients := client.NewClientForTesting(kubeClientSet, rayClient)
 
 			err := fakeGetWorkerGroupsOptions.Run(context.Background(), k8sClients)
@@ -679,7 +679,7 @@ func TestGetWorkerGroupDetails(t *testing.T) {
 				})
 			}
 
-			rayClient := rayClientFake.NewSimpleClientset()
+			rayClient := rayClientFake.NewClientset()
 			k8sClients := client.NewClientForTesting(kubeClientSet, rayClient)
 
 			workerGroups, err := getWorkerGroupDetails(context.Background(), tc.enrichedWorkerGroupSpecs, k8sClients)

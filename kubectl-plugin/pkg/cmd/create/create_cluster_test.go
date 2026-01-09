@@ -226,7 +226,7 @@ func TestRayClusterCreateClusterRun(t *testing.T) {
 			},
 		}
 
-		rayClient := rayClientFake.NewSimpleClientset(rayClusters...)
+		rayClient := rayClientFake.NewClientset(rayClusters...)
 		k8sClients := client.NewClientForTesting(kubefake.NewClientset(), rayClient)
 
 		err := options.Run(context.Background(), k8sClients)

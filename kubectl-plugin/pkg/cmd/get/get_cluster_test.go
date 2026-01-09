@@ -159,7 +159,7 @@ func TestRayClusterGetRun(t *testing.T) {
 			}
 
 			kubeClientSet := kubefake.NewClientset()
-			rayClient := rayClientFake.NewSimpleClientset(rayCluster)
+			rayClient := rayClientFake.NewClientset(rayCluster)
 			k8sClients := client.NewClientForTesting(kubeClientSet, rayClient)
 
 			// Initialize the printer with an empty print options since we are setting the column definition later
@@ -318,7 +318,7 @@ func TestGetRayClusters(t *testing.T) {
 			}
 
 			kubeClientSet := kubefake.NewClientset()
-			rayClient := rayClientFake.NewSimpleClientset(tc.allFakeRayClusters...)
+			rayClient := rayClientFake.NewClientset(tc.allFakeRayClusters...)
 			k8sClients := client.NewClientForTesting(kubeClientSet, rayClient)
 
 			rayClusters, err := getRayClusters(context.Background(), &fakeClusterGetOptions, k8sClients)

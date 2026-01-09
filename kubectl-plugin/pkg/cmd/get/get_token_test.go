@@ -47,7 +47,7 @@ func TestTokenGetRun(t *testing.T) {
 	}
 
 	kubeClientSet := kubefake.NewClientset(secret)
-	rayClient := rayClientFake.NewSimpleClientset(rayCluster)
+	rayClient := rayClientFake.NewClientset(rayCluster)
 	k8sClients := client.NewClientForTesting(kubeClientSet, rayClient)
 
 	cmd := &cobra.Command{}
