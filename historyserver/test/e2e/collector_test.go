@@ -508,19 +508,18 @@ func testCollectorResumesUploadsOnRestart(test Test, g *WithT, namespace *corev1
 	LogWithTimestamp(test.T(), "Injecting logs into %s while collector is down", prevLogsBaseDir)
 	sessionDir := filepath.Join(prevLogsBaseDir, dummySessionID, dummyNodeID)
 	persistDir := filepath.Join(persistCompleteBaseDir, dummySessionID, dummyNodeID)
-	// Inject 2 files and simulate partial processing: move file1 to persist-complete-logs
+	// Inject 2 files to simulate partial processing:
+	// - file1.log in persist-complete-logs (already processed and uploaded)
+	// - file2.log in prev-logs (pending processing)
 	injectCmd := fmt.Sprintf(
 		"mkdir -p %s/logs && "+
 			"echo 'file1 content' > %s/logs/file1.log && "+
-			"echo 'file2 content' > %s/logs/file2.log && "+
 			"mkdir -p %s/logs && "+
-			"mv %s/logs/file1.log %s/logs/file1.log",
-		sessionDir,
-		sessionDir,
-		sessionDir,
+			"echo 'file2 content' > %s/logs/file2.log",
+		persistDir,
 		persistDir,
 		sessionDir,
-		persistDir,
+		sessionDir,
 	)
 	_, stderr := ExecPodCmd(test, headPod, "ray-head", []string{"sh", "-c", injectCmd})
 	g.Expect(stderr.String()).To(BeEmpty())
