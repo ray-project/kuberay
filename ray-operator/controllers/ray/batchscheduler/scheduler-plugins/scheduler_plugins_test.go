@@ -82,7 +82,7 @@ func TestCreatePodGroup(t *testing.T) {
 
 	cluster := createTestRayCluster(1)
 
-	podGroup := createPodGroup(context.TODO(), &cluster)
+	podGroup := createPodGroup(&cluster)
 
 	// 256m * 3 (requests, not limits)
 	a.Equal("768m", podGroup.Spec.MinResources.Cpu().String())
@@ -102,7 +102,7 @@ func TestCreatePodGroupWithMultipleHosts(t *testing.T) {
 
 	cluster := createTestRayCluster(2) // 2 hosts
 
-	podGroup := createPodGroup(context.TODO(), &cluster)
+	podGroup := createPodGroup(&cluster)
 
 	// 256m * 5 (requests, not limits)
 	a.Equal("1280m", podGroup.Spec.MinResources.Cpu().String())

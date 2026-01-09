@@ -111,11 +111,30 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 		return err
 	}
 
+	// Check if autoscaling is enabled once to avoid repeated calls
+	isAutoscalingEnabled := IsAutoscalingEnabled(spec)
+
 	for _, workerGroup := range spec.WorkerGroupSpecs {
 		if len(workerGroup.Template.Spec.Containers) == 0 {
 			return fmt.Errorf("workerGroupSpec should have at least one container")
 		}
 
+		// When autoscaling is enabled, MinReplicas and MaxReplicas are optional
+		// as users can manually update them and the autoscaler will handle the adjustment.
+		if !isAutoscalingEnabled && (workerGroup.MinReplicas == nil || workerGroup.MaxReplicas == nil) {
+			return fmt.Errorf("worker group %s must set both minReplicas and maxReplicas when autoscaling is disabled", workerGroup.GroupName)
+		}
+		if workerGroup.MinReplicas != nil && *workerGroup.MinReplicas < 0 {
+			return fmt.Errorf("worker group %s has negative minReplicas %d", workerGroup.GroupName, *workerGroup.MinReplicas)
+		}
+		if workerGroup.MaxReplicas != nil && *workerGroup.MaxReplicas < 0 {
+			return fmt.Errorf("worker group %s has negative maxReplicas %d", workerGroup.GroupName, *workerGroup.MaxReplicas)
+		}
+		if workerGroup.MinReplicas != nil && workerGroup.MaxReplicas != nil {
+			if *workerGroup.MinReplicas > *workerGroup.MaxReplicas {
+				return fmt.Errorf("worker group %s has minReplicas %d greater than maxReplicas %d", workerGroup.GroupName, *workerGroup.MinReplicas, *workerGroup.MaxReplicas)
+			}
+		}
 		if err := validateRayGroupResources(workerGroup.GroupName, workerGroup.RayStartParams, workerGroup.Resources); err != nil {
 			return err
 		}
@@ -174,9 +193,6 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 			}
 		}
 	}
-
-	// Check if autoscaling is enabled once to avoid repeated calls
-	isAutoscalingEnabled := IsAutoscalingEnabled(spec)
 
 	// Validate that RAY_enable_autoscaler_v2 environment variable is not set to "1" or "true" when autoscaler is disabled
 	if !isAutoscalingEnabled {
