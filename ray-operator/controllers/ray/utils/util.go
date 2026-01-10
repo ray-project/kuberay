@@ -967,7 +967,7 @@ func GetRayDashboardClientFunc(ctx context.Context, mgr manager.Manager, useKube
 
 		if features.Enabled(features.AsyncJobInfoQuery) && rayCluster != nil {
 			namespacedName := types.NamespacedName{
-				Name:      CheckName(rayCluster.Name),
+				Name:      rayCluster.Name,
 				Namespace: rayCluster.Namespace,
 			}
 			dashboardCachedClient := &dashboardclient.RayDashboardCacheClient{}
