@@ -65,8 +65,10 @@ func (r *RayLogHandler) Run(stop <-chan struct{}) error {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGTERM)
 
-	// WatchPrevLogsLoops will scan and process all existing prev-logs on startup,
-	// then watch for new files. This ensures incomplete uploads from previous runs are resumed.
+    // WatchPrevLogsLoops performs an initial scan of the prev-logs directory on startup
+    // to process leftover log files in prev-logs/{sessionID}/{nodeID}/logs/ directories.
+    // After scanning, it watches for new directories and files. This ensures incomplete
+    // uploads from previous runs are resumed.
 	go r.WatchPrevLogsLoops()
 	if r.EnableMeta {
 		go r.WatchSessionLatestLoops() // Watch session_latest symlink changes
