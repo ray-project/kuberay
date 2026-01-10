@@ -4,11 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"path"
-	"path/filepath"
 	"sort"
 	"time"
 
@@ -95,88 +93,6 @@ func (s *ServerHandler) ClusterInfo(rayClusterNameID string) []byte {
 }`
 	afterRender := fmt.Sprintf(templ, time.Now().Format("2006-01-02 15:04:05.000000"))
 	return []byte(afterRender)
-}
-
-func (s *ServerHandler) MetaKeyInfo(rayClusterNameID, key string) []byte {
-	baseObject := path.Join(utils.GetMetaDirByNameID(s.rootDir, rayClusterNameID), key)
-	logrus.Infof("Prepare to get object %s info ...", baseObject)
-	body := s.reader.GetContent(rayClusterNameID, baseObject)
-	if body == nil {
-		logrus.Errorf("Failed to get content for object %s", baseObject)
-		return nil
-	}
-	data, err := io.ReadAll(body)
-	if err != nil {
-		logrus.Errorf("Failed to read all data from object %s : %v", baseObject, err)
-		return nil
-	}
-
-	return data
-}
-
-func (s *ServerHandler) LogKeyInfo(rayClusterNameID, nodeID, sessionId, key string, lines int64) []byte {
-	baseObject := path.Join(utils.GetLogDirByNameID(s.rootDir, rayClusterNameID, nodeID, sessionId), key)
-	logrus.Infof("Prepare to get object %s info ...", baseObject)
-	body := s.reader.GetContent(rayClusterNameID, baseObject)
-	if body == nil {
-		logrus.Errorf("Failed to get content for object %s", baseObject)
-		return nil
-	}
-	data, err := io.ReadAll(body)
-	if err != nil {
-		logrus.Errorf("Failed to read all data from object %s : %v", baseObject, err)
-		return nil
-	}
-	return data
-}
-
-func (s *ServerHandler) staticFileHandler(req *restful.Request, resp *restful.Response) {
-	logrus.Infof("static parameters %++v", req.PathParameters())
-	logrus.Infof("static request %++v", *req.Request)
-	//	logrus.Infof("static query %++v", req.)
-	// Get the path parameter
-	path := req.PathParameter("path")
-
-	isHomePage := true
-	_, err := req.Request.Cookie(COOKIE_CLUSTER_NAME_KEY)
-	isHomePage = err != nil
-	prefix := ""
-	if isHomePage {
-		prefix = "homepage"
-	} else {
-		version := "v2.51.0"
-		if versionCookie, err := req.Request.Cookie(COOKIE_DASHBOARD_VERSION_KEY); err == nil {
-			version = versionCookie.Value
-		}
-		prefix = version + "/client/build"
-	}
-
-	// Construct the full path to the static directory
-	fullPath := filepath.Join(s.dashboardDir, prefix, "static", path)
-	logrus.Infof("staticFileHandler fullpath %s", fullPath)
-
-	// Check if the full path exists
-	if _, err := os.Stat(fullPath); os.IsNotExist(err) {
-		resp.WriteErrorString(http.StatusNotFound, "File or directory not found")
-		logrus.Errorf("File or directory %s not found", fullPath)
-		return
-	}
-
-	// Serve the file or directory
-	if isDir(fullPath) {
-		// List files in the directory
-		files, err := os.ReadDir(fullPath)
-		if err != nil {
-			resp.WriteErrorString(http.StatusInternalServerError, "Error reading directory")
-			logrus.Errorf("Error reading directory %s %s", fullPath, err)
-			return
-		}
-		resp.WriteAsJson(files)
-	} else {
-		// Serve the file
-		http.ServeFile(resp.ResponseWriter, req.Request, fullPath)
-		logrus.Infof("ServerFile %s", fullPath)
-	}
 }
 
 func isDir(path string) bool {

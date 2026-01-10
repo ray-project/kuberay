@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"os"
 	"path"
-	"strconv"
 	"strings"
 
 	"github.com/emicklei/go-restful/v3"
@@ -169,6 +168,7 @@ func routerRoot(s *ServerHandler) {
 	}).Writes(""))
 }
 
+// TODO: this is the frontend's entry.
 func routerHomepage(s *ServerHandler) {
 	ws := new(restful.WebService)
 	defer restful.Add(ws)
@@ -199,16 +199,6 @@ func routerHealthz(s *ServerHandler) {
 		w.Write([]byte("ok"))
 		logrus.Debugf("request /livez")
 	})
-
-}
-
-func routerStatic(s *ServerHandler) {
-	ws := new(restful.WebService)
-	defer restful.Add(ws)
-	ws.Path("/static").Consumes("*/*").Produces("*/*").Filter(RequestLogFilter)
-	ws.Route(ws.GET("/{path:*}").To(s.staticFileHandler).
-		Doc("Get static file or directory").
-		Param(ws.PathParameter("path", "path of the static file").DataType("string")))
 
 }
 
@@ -269,7 +259,6 @@ func (s *ServerHandler) RegisterRouter() {
 	routerRoot(s)
 	routerHomepage(s)
 	routerHealthz(s)
-	routerStatic(s)
 	routerLogical(s)
 }
 
@@ -566,33 +555,9 @@ func (s *ServerHandler) getNodeLogFile(req *restful.Request, resp *restful.Respo
 		s.redirectRequest(req, resp)
 		return
 	}
-	resp.Header().Set("Content-Type", "text/plain")
-	clusterNameID := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
-	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
-	sessionId := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
-	nodeId := req.QueryParameter("node_id")
-	filename := req.QueryParameter("filename")
-	lines := req.QueryParameter("lines")
-	logrus.Infof("get logfile lines %s", lines)
-	format := req.QueryParameter("format")
-	logrus.Infof("format is %s", format)
-	limit, err := strconv.ParseInt(lines, 10, 64)
-	if err != nil {
-		logrus.Errorf("ParseInt error ")
-		limit = 0
-	}
-	data := make([]byte, 0, 1000)
-	if format == "leading_1" {
-		rawData := s.LogKeyInfo(clusterNameID+"_"+clusterNamespace, nodeId, sessionId, filename, limit)
-		if len(rawData) > 0 {
-			data = append(data, byte('1'))
-			data = append(data, rawData...)
-		}
-	} else {
-		data = append(data, s.LogKeyInfo(clusterNameID+"_"+clusterNamespace, nodeId, sessionId, filename, limit)...)
-	}
 
-	resp.Write(data)
+	// Not yet supported
+	resp.WriteErrorString(http.StatusNotImplemented, "Node log file not yet supported")
 }
 
 func getTaskInfo(allTaskData []byte, findTaskID string) ([]byte, error) {
