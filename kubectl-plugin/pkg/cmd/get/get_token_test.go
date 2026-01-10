@@ -13,8 +13,8 @@ import (
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client"
+	clienttesting "github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client/testing"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-	rayClientFake "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/fake"
 )
 
 // Tests the Run() step of the command and ensure that the output is as expected.
@@ -47,7 +47,7 @@ func TestTokenGetRun(t *testing.T) {
 	}
 
 	kubeClientSet := kubefake.NewClientset(secret)
-	rayClient := rayClientFake.NewClientset(rayCluster)
+	rayClient := clienttesting.NewRayClientset(rayCluster)
 	k8sClients := client.NewClientForTesting(kubeClientSet, rayClient)
 
 	cmd := &cobra.Command{}

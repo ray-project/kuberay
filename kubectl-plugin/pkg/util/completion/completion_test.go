@@ -336,8 +336,7 @@ func TestWorkerGroupCompletionFunc(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			kubeClientSet := kubefake.NewClientset()
-			rayClient := rayClientFake.NewClientset(tc.rayClusters...)
-			clienttesting.AddRayClusterFieldSelectorReactor(rayClient)
+			rayClient := clienttesting.NewRayClientset(tc.rayClusters...)
 			k8sClient := client.NewClientForTesting(kubeClientSet, rayClient)
 
 			cmd := &cobra.Command{}

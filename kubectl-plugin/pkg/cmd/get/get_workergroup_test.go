@@ -23,8 +23,8 @@ import (
 
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client"
+	clienttesting "github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client/testing"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-	rayClientFake "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/fake"
 )
 
 func TestRayWorkerGroupGetComplete(t *testing.T) {
@@ -407,7 +407,7 @@ group-1   1     5     1/1        2      1      1      1Gi      cluster-1
 			}
 
 			kubeClientSet := kubefake.NewClientset(tc.pods...)
-			rayClient := rayClientFake.NewClientset(tc.rayClusters...)
+			rayClient := clienttesting.NewRayClientset(tc.rayClusters...)
 			k8sClients := client.NewClientForTesting(kubeClientSet, rayClient)
 
 			err := fakeGetWorkerGroupsOptions.Run(context.Background(), k8sClients)
@@ -679,7 +679,7 @@ func TestGetWorkerGroupDetails(t *testing.T) {
 				})
 			}
 
-			rayClient := rayClientFake.NewClientset()
+			rayClient := clienttesting.NewRayClientset()
 			k8sClients := client.NewClientForTesting(kubeClientSet, rayClient)
 
 			workerGroups, err := getWorkerGroupDetails(context.Background(), tc.enrichedWorkerGroupSpecs, k8sClients)

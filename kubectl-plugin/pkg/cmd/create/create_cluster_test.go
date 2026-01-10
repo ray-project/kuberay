@@ -18,9 +18,9 @@ import (
 
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client"
+	clienttesting "github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client/testing"
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/generation"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-	rayClientFake "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/fake"
 )
 
 func TestRayCreateClusterComplete(t *testing.T) {
@@ -226,7 +226,7 @@ func TestRayClusterCreateClusterRun(t *testing.T) {
 			},
 		}
 
-		rayClient := rayClientFake.NewClientset(rayClusters...)
+		rayClient := clienttesting.NewRayClientset(rayClusters...)
 		k8sClients := client.NewClientForTesting(kubefake.NewClientset(), rayClient)
 
 		err := options.Run(context.Background(), k8sClients)
