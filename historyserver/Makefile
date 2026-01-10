@@ -19,7 +19,7 @@ COMMIT_SHORT ?= $(shell git rev-parse --short HEAD)
 BRANCH ?= $(shell git branch --show-current)
 VERSION ?= $(shell git describe --tags --long|awk -F '-' '{print $$1"."$$2"-"$$3""}')
 
-PACKAGE = gitlab.alibaba-inc.com/eml/historyserver
+PACKAGE = github.com/ray-project/kuberay/historyserver
 
 GO_LDFLAGS := -extldflags "-static"
 # GO_LDFLAGS += -w -s # Drop debugging symbols.
