@@ -12,7 +12,7 @@ import (
 // AddRayClusterFieldSelectorReactor adds a reactor to the fake Ray client that
 // simulates server-side FieldSelector filtering for RayCluster List operations.
 // This allows tests to verify FieldSelector behavior without manual name checks.
-func AddRayClusterFieldSelectorReactor(client *rayClientFake.Clientset) {
+func AddRayClusterListFieldSelectorReactor(client *rayClientFake.Clientset) {
 	client.PrependReactor("list", "rayclusters", func(action kubetesting.Action) (bool, runtime.Object, error) {
 		listAction, ok := action.(kubetesting.ListAction)
 		if !ok {
