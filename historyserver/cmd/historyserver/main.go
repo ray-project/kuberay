@@ -72,7 +72,7 @@ func main() {
 
 	sigChan := make(chan os.Signal, 1)
 	stop := make(chan struct{}, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM, syscall.SIGKILL)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	go handler.Run(stop)
 	<-sigChan
 	// Stop both the server and the event handler

@@ -106,59 +106,68 @@ func (h *EventHandler) Run(stop chan struct{}, numOfEventProcessors int) error {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		fmt.Printf("Starting this loop of event processing\n")
+		logrus.Info("Starting event file reader loop")
+
+		// Helper function to process all events
+		processAllEvents := func() {
+			clusterList := h.reader.List()
+			for _, clusterInfo := range clusterList {
+				clusterNameNamespace := clusterInfo.Name + "_" + clusterInfo.Namespace
+				eventFileList := append(h.getAllJobEventFiles(clusterInfo), h.getAllNodeEventFiles(clusterInfo)...)
+
+				logrus.Infof("current eventFileList for cluster %s is: %v", clusterInfo.Name, eventFileList)
+				for _, eventFile := range eventFileList {
+					// TODO: Filter out ones that have already been read
+					logrus.Infof("Reading event file: %s", eventFile)
+
+					eventioReader := h.reader.GetContent(clusterNameNamespace, eventFile)
+					if eventioReader == nil {
+						logrus.Errorf("Failed to get content for event file: %s, skipping", eventFile)
+						continue
+					}
+					eventbytes, err := io.ReadAll(eventioReader)
+					if err != nil {
+						logrus.Errorf("Failed to read event file: %v", err)
+						continue
+					}
+
+					var eventList []map[string]any
+					if err := json.Unmarshal(eventbytes, &eventList); err != nil {
+						logrus.Errorf("Failed to unmarshal event: %v", err)
+						continue
+					}
+
+					// Evenly distribute events to each channel
+					for i, curr := range eventList {
+						curr["clusterName"] = clusterInfo.Name + "_" + clusterInfo.Namespace
+						eventProcessorChannels[i%numOfEventProcessors] <- curr
+					}
+				}
+			}
+		}
+
+		// Process events immediately on startup
+		processAllEvents()
+
+		// Create a ticker for hourly processing
+		ticker := time.NewTicker(1 * time.Hour)
+		defer ticker.Stop()
+
 		for {
+			logrus.Info("Finished reading files, waiting for next cycle...")
 			select {
 			case <-stop:
+				// Received stop signal, clean up and exit
 				for i, currChan := range eventProcessorChannels {
 					close(currChan)
 					cctx[i]()
 				}
-				logrus.Infof("Event processor received stop signal, exiting.")
+				logrus.Info("Event processor received stop signal, exiting.")
 				return
-			default:
-				// S3, minio, and GCS are flat structures, object names are whole paths
-				clusterList := h.reader.List()
-				for _, clusterInfo := range clusterList {
-					clusterNameNamespace := clusterInfo.Name + "_" + clusterInfo.Namespace
-					eventFileList := append(h.getAllJobEventFiles(clusterInfo), h.getAllNodeEventFiles(clusterInfo)...)
-
-					logrus.Infof("current eventFileList for cluster %s is: %v", clusterInfo.Name, eventFileList)
-					for i := range eventFileList {
-						// TODO: Filter out ones that have already been read
-						logrus.Infof("Reading event file: %s", eventFileList[i])
-
-						eventioReader := h.reader.GetContent(clusterNameNamespace, eventFileList[i])
-						if eventioReader == nil {
-							logrus.Errorf("Failed to get content for event file: %s, skipping", eventFileList[i])
-							continue
-						}
-						eventbytes, err := io.ReadAll(eventioReader)
-						if err != nil {
-							logrus.Errorf("Failed to read event file: %v", err)
-							continue
-						}
-
-						// Unmarshal the list of events
-						var eventList []map[string]any
-						if err := json.Unmarshal(eventbytes, &eventList); err != nil {
-							logrus.Errorf("Failed to unmarshal event: %v", err)
-							continue
-						}
-
-						// Evenly distribute event to each channel
-						for i, curr := range eventList {
-							// current index % number of event processors dictates which channel it goes to
-							curr["clusterName"] = clusterInfo.Name + "_" + clusterInfo.Namespace
-							eventProcessorChannels[i%numOfEventProcessors] <- curr
-						}
-					}
-				}
+			case <-ticker.C:
+				// Process events every hour
+				processAllEvents()
 			}
-
-			// Sleep 1 hr since thats how often it flushes
-			logrus.Infof("Finished reading files, going to sleep...")
-			time.Sleep(1 * time.Hour)
 		}
 	}()
 
