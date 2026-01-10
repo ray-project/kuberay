@@ -12,7 +12,7 @@ import (
 	rayClientFake "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/fake"
 )
 
-func TestAddRayClusterFieldSelectorReactor(t *testing.T) {
+func TestAddRayClusterListFieldSelectorReactor(t *testing.T) {
 	cluster1 := &rayv1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "cluster-1",
@@ -33,10 +33,10 @@ func TestAddRayClusterFieldSelectorReactor(t *testing.T) {
 	}
 
 	tests := []struct {
-		expectedNames []string
 		name          string
 		namespace     string
 		fieldSelector string
+		expectedNames []string
 		expectedCount int
 	}{
 		{
@@ -72,7 +72,7 @@ func TestAddRayClusterFieldSelectorReactor(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			rayClient := rayClientFake.NewClientset(cluster1, cluster2, cluster3)
-			AddRayClusterFieldSelectorReactor(rayClient)
+			AddRayClusterListFieldSelectorReactor(rayClient)
 
 			listOpts := metav1.ListOptions{}
 			if tc.fieldSelector != "" {

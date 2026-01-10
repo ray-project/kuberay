@@ -11,6 +11,6 @@ import (
 // FieldSelector reactor, so tests don't need to set it up manually.
 func NewRayClientset(objects ...runtime.Object) *rayClientFake.Clientset {
 	client := rayClientFake.NewClientset(objects...)
-	AddRayClusterFieldSelectorReactor(client)
+	AddRayClusterListFieldSelectorReactor(client)
 	return client
 }
