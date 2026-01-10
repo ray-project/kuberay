@@ -4,7 +4,6 @@ import (
 	"context"
 	"log"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/ray-project/kuberay/historyserver/pkg/collector/types"
@@ -46,11 +45,10 @@ func (s *ServerHandler) Run(stop chan struct{}) error {
 	go func() {
 		logrus.Infof("Starting server on %s", port)
 		err := server.ListenAndServe()
-		if err != nil {
+		if err != nil && err != http.ErrServerClosed {
 			logrus.Fatalf("Error starting server: %v", err)
-			os.Exit(1)
 		}
-		logrus.Errorf("Start server succssful, but end ...")
+		logrus.Infof("Server stopped gracefully")
 	}()
 
 	<-stop
