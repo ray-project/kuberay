@@ -65,10 +65,10 @@ func (r *RayLogHandler) Run(stop <-chan struct{}) error {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGTERM)
 
-    // WatchPrevLogsLoops performs an initial scan of the prev-logs directory on startup
-    // to process leftover log files in prev-logs/{sessionID}/{nodeID}/logs/ directories.
-    // After scanning, it watches for new directories and files. This ensures incomplete
-    // uploads from previous runs are resumed.
+	// WatchPrevLogsLoops performs an initial scan of the prev-logs directory on startup
+	// to process leftover log files in prev-logs/{sessionID}/{nodeID}/logs/ directories.
+	// After scanning, it watches for new directories and files. This ensures incomplete
+	// uploads from previous runs are resumed.
 	go r.WatchPrevLogsLoops()
 	if r.EnableMeta {
 		go r.WatchSessionLatestLoops() // Watch session_latest symlink changes
@@ -578,18 +578,30 @@ func (r *RayLogHandler) processSessionPrevLogs(sessionDir string) {
 	}
 }
 
-// isFileAlreadyPersisted checks if a file has already been persisted to persist-complete-logs
+// isFileAlreadyPersisted checks if a log file has already been uploaded to storage and moved to
+// the persist-complete-logs directory. This prevents duplicate uploads during collector restarts.
+//
+// When a log file is successfully uploaded, it is moved from prev-logs to persist-complete-logs
+// to mark it as processed. This function checks if the equivalent file path exists in the
+// persist-complete-logs directory.
+//
+// Example:
+//
+//	Given absoluteLogPath = "/tmp/ray/prev-logs/session_123/node_456/logs/raylet.out"
+//	This function checks if "/tmp/ray/persist-complete-logs/session_123/node_456/logs/raylet.out" exists
+//	- If exists: returns true (file was already uploaded, skip it)
+//	- If not exists: returns false (file needs to be uploaded)
 func (r *RayLogHandler) isFileAlreadyPersisted(absoluteLogPath, sessionID, nodeID string) bool {
 	// Calculate the relative path within the logs directory
 	logsDir := filepath.Join(r.prevLogsDir, sessionID, nodeID, "logs")
-	relativePath, err := filepath.Rel(logsDir, absoluteLogPath)
+	relativeLogPath, err := filepath.Rel(logsDir, absoluteLogPath)
 	if err != nil {
 		logrus.Errorf("Failed to get relative path for %s: %v", absoluteLogPath, err)
 		return false
 	}
 
 	// Construct the path in persist-complete-logs
-	persistedPath := filepath.Join(r.persistCompleteLogsDir, sessionID, nodeID, "logs", relativePath)
+	persistedPath := filepath.Join(r.persistCompleteLogsDir, sessionID, nodeID, "logs", relativeLogPath)
 
 	// Check if the file exists
 	if _, err := os.Stat(persistedPath); err == nil {
