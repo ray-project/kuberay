@@ -95,13 +95,8 @@ func (w *workerPool) start(ctx context.Context, numWorkers int, requeueDelay tim
 	logger.Info(fmt.Sprintf("Initialize a worker pool with %d goroutines and requeueDelay is %v.", numWorkers, requeueDelay))
 }
 
-func (w *workerPool) AddTask(task Task) error {
-	select {
-	case w.taskQueue.In <- task:
-		return nil
-	default:
-		return ErrTaskQueueTemporarilyUnavailable
-	}
+func (w *workerPool) AddTask(task Task) {
+	w.taskQueue.In <- task
 }
 
 var _ RayDashboardClientInterface = (*RayDashboardCacheClient)(nil)
@@ -255,14 +250,8 @@ func (r *RayDashboardCacheClient) GetJobInfo(ctx context.Context, jobId string) 
 		return true
 	}
 
-	if err := pool.AddTask(task); err != nil {
-		// remove the placeholder because we cannot queue the task.
-		rwLock.Lock()
-		cacheStorage.Remove(cacheKey(r.namespacedName, jobId))
-		rwLock.Unlock()
-		logger.Error(err, "Cannot queue more job info fetching tasks.", "jobId", jobId, "cacheKey", cacheKey(r.namespacedName, jobId))
-		return nil, ErrAgain
-	}
+	pool.AddTask(task)
+
 	logger.Info("Put a task to fetch job info in background for jobId ", "jobId", jobId, "cacheKey", cacheKey(r.namespacedName, jobId))
 
 	return nil, ErrAgain
