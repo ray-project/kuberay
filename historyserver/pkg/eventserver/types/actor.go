@@ -30,7 +30,7 @@ type Actor struct {
 	PID               string
 	Address           Address
 	Name              string
-	NumRestarts       string
+	NumRestarts       int
 	ActorClass        string
 	StartTime         time.Time
 	EndTime           time.Time

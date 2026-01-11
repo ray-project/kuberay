@@ -57,9 +57,10 @@ type Task struct {
 	LabelSelector map[string]string
 }
 
-// TaskMap is a struct that uses TaskID as key and the Task struct as value
+// TaskMap is a struct that uses TaskID as key and stores a list of Task attempts.
+// Each TaskID maps to a slice of Tasks, where each element represents a different attempt.
 type TaskMap struct {
-	TaskMap map[string]Task
+	TaskMap map[string][]Task
 	Mu      sync.Mutex
 }
 
@@ -73,7 +74,7 @@ func (t *TaskMap) Unlock() {
 
 func NewTaskMap() *TaskMap {
 	return &TaskMap{
-		TaskMap: make(map[string]Task),
+		TaskMap: make(map[string][]Task),
 	}
 }
 

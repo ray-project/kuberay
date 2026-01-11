@@ -34,7 +34,7 @@ func TestEventProcessor(t *testing.T) {
 		// Expectations
 		wantErr          bool
 		expectedErrType  error // Specific error type to check (e.g., context.Canceled)
-		wantStoredEvents map[string]types.Task
+		wantStoredEvents map[string][]types.Task
 	}{
 		{
 			name: "process multiple events then close channel",
@@ -61,18 +61,22 @@ func TestEventProcessor(t *testing.T) {
 				},
 			},
 			closeChan: true,
-			wantStoredEvents: map[string]types.Task{
+			wantStoredEvents: map[string][]types.Task{
 				"ID_12345": {
-					TaskID:        "ID_12345",
-					Name:          "Name_12345",
-					NodeID:        "Nodeid_12345",
-					AttemptNumber: 2,
+					{
+						TaskID:        "ID_12345",
+						Name:          "Name_12345",
+						NodeID:        "Nodeid_12345",
+						AttemptNumber: 2,
+					},
 				},
 				"ID_54321": {
-					TaskID:        "ID_54321",
-					Name:          "Name_54321",
-					NodeID:        "Nodeid_54321",
-					AttemptNumber: 1,
+					{
+						TaskID:        "ID_54321",
+						Name:          "Name_54321",
+						NodeID:        "Nodeid_54321",
+						AttemptNumber: 1,
+					},
 				},
 			},
 		},
@@ -99,12 +103,14 @@ func TestEventProcessor(t *testing.T) {
 			wantErr:         true,
 			expectedErrType: context.Canceled,
 			// Event might be processed before cancellation is detected
-			wantStoredEvents: map[string]types.Task{
+			wantStoredEvents: map[string][]types.Task{
 				"ID_12345": {
-					TaskID:        "ID_12345",
-					Name:          "Name_12345",
-					NodeID:        "Nodeid_12345",
-					AttemptNumber: 2,
+					{
+						TaskID:        "ID_12345",
+						Name:          "Name_12345",
+						NodeID:        "Nodeid_12345",
+						AttemptNumber: 2,
+					},
 				},
 			},
 		},
@@ -184,9 +190,9 @@ func TestStoreEvent(t *testing.T) {
 		eventMap          map[string]any
 		wantErr           bool
 		wantClusterCount  int
-		wantTaskInCluster string      // Cluster to check for the task
-		wantTaskID        string      // TaskID to check
-		wantTask          *types.Task // Expected task, nil if not applicable
+		wantTaskInCluster string       // Cluster to check for the task
+		wantTaskID        string       // TaskID to check
+		wantTasks         []types.Task // Expected tasks (all attempts), nil if not applicable
 	}{
 		{
 			name: "unsupported event type",
@@ -210,11 +216,13 @@ func TestStoreEvent(t *testing.T) {
 			wantClusterCount:  1,
 			wantTaskInCluster: "cluster1",
 			wantTaskID:        "taskid1",
-			wantTask: &types.Task{
-				TaskID:        "taskid1",
-				Name:          "taskName123",
-				NodeID:        "nodeid1234",
-				AttemptNumber: 0,
+			wantTasks: []types.Task{
+				{
+					TaskID:        "taskid1",
+					Name:          "taskName123",
+					NodeID:        "nodeid1234",
+					AttemptNumber: 0,
+				},
 			},
 		},
 		{
@@ -229,20 +237,22 @@ func TestStoreEvent(t *testing.T) {
 			wantClusterCount:  1,
 			wantTaskInCluster: "cluster1",
 			wantTaskID:        "taskid2",
-			wantTask: &types.Task{
-				TaskID:        "taskid2",
-				Name:          "taskName123",
-				NodeID:        "nodeid1234",
-				AttemptNumber: 1,
+			wantTasks: []types.Task{
+				{
+					TaskID:        "taskid2",
+					Name:          "taskName123",
+					NodeID:        "nodeid1234",
+					AttemptNumber: 1,
+				},
 			},
 		},
 		{
-			name: "task event - existing cluster and existing task",
+			name: "task event - existing cluster and existing task with new attempt",
 			initialState: &types.ClusterTaskMap{
 				ClusterTaskMap: map[string]*types.TaskMap{
 					"cluster1": {
-						TaskMap: map[string]types.Task{
-							"taskid1": initialTask,
+						TaskMap: map[string][]types.Task{
+							"taskid1": {initialTask},
 						},
 					},
 				},
@@ -252,11 +262,20 @@ func TestStoreEvent(t *testing.T) {
 			wantClusterCount:  1,
 			wantTaskInCluster: "cluster1",
 			wantTaskID:        "taskid1",
-			wantTask: &types.Task{
-				TaskID:        "taskid1",
-				Name:          "taskName123",
-				NodeID:        "nodeid123",
-				AttemptNumber: 2,
+			// Now expects BOTH attempts to be stored
+			wantTasks: []types.Task{
+				{
+					TaskID:        "taskid1",
+					Name:          "taskName123",
+					NodeID:        "nodeid123",
+					AttemptNumber: 0,
+				},
+				{
+					TaskID:        "taskid1",
+					Name:          "taskName123",
+					NodeID:        "nodeid123",
+					AttemptNumber: 2,
+				},
 			},
 		},
 		{
@@ -325,7 +344,7 @@ func TestStoreEvent(t *testing.T) {
 				t.Errorf("storeEvent() resulted in %d clusters, want %d", gotClusterCount, tt.wantClusterCount)
 			}
 
-			if tt.wantTask != nil {
+			if tt.wantTasks != nil {
 				clusterObj, clusterExists := h.ClusterTaskMap.ClusterTaskMap[tt.wantTaskInCluster]
 
 				if !clusterExists {
@@ -334,13 +353,13 @@ func TestStoreEvent(t *testing.T) {
 
 				clusterObj.Lock()
 				defer clusterObj.Unlock()
-				gotTask, taskExists := clusterObj.TaskMap[tt.wantTaskID]
+				gotTasks, taskExists := clusterObj.TaskMap[tt.wantTaskID]
 				if !taskExists {
 					t.Fatalf("storeEvent() task %s not found in cluster %s", tt.wantTaskID, tt.wantTaskInCluster)
 				}
 
-				if diff := cmp.Diff(*tt.wantTask, gotTask); diff != "" {
-					t.Errorf("storeEvent() task mismatch (-want +got):\n%s", diff)
+				if diff := cmp.Diff(tt.wantTasks, gotTasks); diff != "" {
+					t.Errorf("storeEvent() tasks mismatch (-want +got):\n%s", diff)
 				}
 			}
 		})

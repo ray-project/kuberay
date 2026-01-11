@@ -228,12 +228,21 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 
 		taskId := currTask.TaskID
 		clusterTaskMapObject.Lock()
-		storedTask, ok := clusterTaskMapObject.TaskMap[taskId]
+		existingAttempts, ok := clusterTaskMapObject.TaskMap[taskId]
 		if !ok {
-			clusterTaskMapObject.TaskMap[taskId] = currTask
+			// First attempt for this task, create new slice
+			clusterTaskMapObject.TaskMap[taskId] = []types.Task{currTask}
 		} else {
-			if storedTask.AttemptNumber < currTask.AttemptNumber {
-				clusterTaskMapObject.TaskMap[taskId] = currTask
+			// Check if this attempt already exists (avoid duplicates)
+			alreadyExists := false
+			for _, existingTask := range existingAttempts {
+				if existingTask.AttemptNumber == currTask.AttemptNumber {
+					alreadyExists = true
+					break
+				}
+			}
+			if !alreadyExists {
+				clusterTaskMapObject.TaskMap[taskId] = append(existingAttempts, currTask)
 			}
 		}
 		clusterTaskMapObject.Unlock()
@@ -268,9 +277,14 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 
 		actorId := currActor.ActorID
 		clusterActorMapObject.Lock()
-		_, ok = clusterActorMapObject.ActorMap[actorId]
-		if !ok {
+		existingActor, exists := clusterActorMapObject.ActorMap[actorId]
+		if !exists {
 			clusterActorMapObject.ActorMap[actorId] = currActor
+		} else {
+			// Compare NumRestarts to keep the latest state
+			if currActor.NumRestarts > existingActor.NumRestarts {
+				clusterActorMapObject.ActorMap[actorId] = currActor
+			}
 		}
 		clusterActorMapObject.Unlock()
 
@@ -331,7 +345,8 @@ func (h *EventHandler) getAllNodeEventFiles(clusterInfo utils.ClusterInfo) []str
 	return nodeEventFiles
 }
 
-// GetTasks returns a thread-safe copy of all tasks for a given cluster
+// GetTasks returns a thread-safe copy of all tasks (including all attempts) for a given cluster.
+// Each task attempt is returned as a separate element in the slice.
 func (h *EventHandler) GetTasks(clusterName string) []types.Task {
 	h.ClusterTaskMap.RLock()
 	defer h.ClusterTaskMap.RUnlock()
@@ -344,31 +359,39 @@ func (h *EventHandler) GetTasks(clusterName string) []types.Task {
 	taskMap.Lock()
 	defer taskMap.Unlock()
 
-	tasks := make([]types.Task, 0, len(taskMap.TaskMap))
-	for _, task := range taskMap.TaskMap {
-		tasks = append(tasks, task)
+	// Flatten all attempts into a single slice
+	var tasks []types.Task
+	for _, attempts := range taskMap.TaskMap {
+		tasks = append(tasks, attempts...)
 	}
 	return tasks
 }
 
-// GetTaskByID returns a specific task by ID for a given cluster
-func (h *EventHandler) GetTaskByID(clusterName, taskID string) (types.Task, bool) {
+// GetTaskByID returns all attempts for a specific task ID in a given cluster.
+// Returns a slice of tasks representing all attempts, sorted by attempt number is not guaranteed.
+func (h *EventHandler) GetTaskByID(clusterName, taskID string) ([]types.Task, bool) {
 	h.ClusterTaskMap.RLock()
 	defer h.ClusterTaskMap.RUnlock()
 
 	taskMap, ok := h.ClusterTaskMap.ClusterTaskMap[clusterName]
 	if !ok {
-		return types.Task{}, false
+		return nil, false
 	}
 
 	taskMap.Lock()
 	defer taskMap.Unlock()
 
-	task, ok := taskMap.TaskMap[taskID]
-	return task, ok
+	attempts, ok := taskMap.TaskMap[taskID]
+	if !ok || len(attempts) == 0 {
+		return nil, false
+	}
+	// Return a copy to avoid data race
+	result := make([]types.Task, len(attempts))
+	copy(result, attempts)
+	return result, true
 }
 
-// GetTasksByJobID returns all tasks for a given job ID in a cluster
+// GetTasksByJobID returns all tasks (including all attempts) for a given job ID in a cluster.
 func (h *EventHandler) GetTasksByJobID(clusterName, jobID string) []types.Task {
 	h.ClusterTaskMap.RLock()
 	defer h.ClusterTaskMap.RUnlock()
@@ -381,10 +404,12 @@ func (h *EventHandler) GetTasksByJobID(clusterName, jobID string) []types.Task {
 	taskMap.Lock()
 	defer taskMap.Unlock()
 
-	tasks := make([]types.Task, 0)
-	for _, task := range taskMap.TaskMap {
-		if task.JobID == jobID {
-			tasks = append(tasks, task)
+	var tasks []types.Task
+	for _, attempts := range taskMap.TaskMap {
+		for _, task := range attempts {
+			if task.JobID == jobID {
+				tasks = append(tasks, task)
+			}
 		}
 	}
 	return tasks
