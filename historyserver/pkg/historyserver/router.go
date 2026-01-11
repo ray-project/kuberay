@@ -816,29 +816,13 @@ func (s *ServerHandler) CookieHandle(req *restful.Request, resp *restful.Respons
 	http.SetCookie(resp, &http.Cookie{MaxAge: 600, Path: "/", Name: COOKIE_SESSION_NAME_KEY, Value: sessionName.Value})
 
 	if sessionName.Value == "live" {
-		var svcName string
-		var err error
-		// Check if svc cookie exists
-		svcCookie, err := req.Request.Cookie(ATTRIBUTE_SERVICE_NAME)
-		if err == nil && svcCookie != nil {
-			// If svc cookie exists, use it directly
-			svcName = svcCookie.Value
-		} else {
-			// Otherwise get svcName and set cookie
-			svcName, err = getClusterSvcName(s.clientManager.clients, clusterName.Value, clusterNamespace.Value)
-			if err != nil {
-				resp.WriteHeaderAndEntity(http.StatusBadRequest, err.Error())
-				return
-			}
-
-			// Set cookie with 1 minute expiration
-			cookie := &http.Cookie{
-				Name:   ATTRIBUTE_SERVICE_NAME,
-				Value:  svcName,
-				MaxAge: 60, // 1 minute
-				Path:   "/",
-			}
-			http.SetCookie(resp, cookie)
+		// Always query K8s to get the service name to prevent SSRF attacks.
+		// Do not trust user-provided cookies for service name.
+		// TODO: here might be a bottleneck if there are many requests in the future.
+		svcName, err := getClusterSvcName(s.clientManager.clients, clusterName.Value, clusterNamespace.Value)
+		if err != nil {
+			resp.WriteHeaderAndEntity(http.StatusBadRequest, err.Error())
+			return
 		}
 		req.SetAttribute(ATTRIBUTE_SERVICE_NAME, svcName)
 	}
