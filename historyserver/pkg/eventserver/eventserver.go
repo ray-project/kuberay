@@ -215,7 +215,7 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 		}
 
 		taskMap := h.ClusterTaskMap.GetOrCreateTaskMap(currentClusterName)
-		taskMap.UpsertAttempt(currTask.TaskID, currTask.AttemptNumber, func(t *types.Task) {
+		taskMap.CreateOrMergeAttempt(currTask.TaskID, currTask.AttemptNumber, func(t *types.Task) {
 			// Merge definition fields (preserve existing Events if any)
 			existingEvents := t.Events
 			*t = currTask
@@ -265,7 +265,7 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 		}
 
 		taskMap := h.ClusterTaskMap.GetOrCreateTaskMap(currentClusterName)
-		taskMap.UpsertAttempt(taskId, int(taskAttempt), func(t *types.Task) {
+		taskMap.CreateOrMergeAttempt(taskId, int(taskAttempt), func(t *types.Task) {
 			t.Events = append(t.Events, stateEvents...)
 			t.State = stateEvents[len(stateEvents)-1].State
 		})

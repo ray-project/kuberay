@@ -1,6 +1,7 @@
 package types
 
 import (
+	"sort"
 	"sync"
 	"time"
 )
@@ -123,9 +124,12 @@ func (c *ClusterTaskMap) GetOrCreateTaskMap(clusterName string) *TaskMap {
 	return taskMap
 }
 
-// UpsertAttempt finds or creates a task attempt and applies the update function.
+// CreateOrMergeAttempt finds or creates a task attempt and applies the merge function.
+// Uses binary search for O(log n) lookup. Maintains sorted order by AttemptNumber.
 // This handles the case where LIFECYCLE events arrive before DEFINITION events.
-func (t *TaskMap) UpsertAttempt(taskId string, attemptNum int, updateFn func(*Task)) {
+// - If the attempt doesn't exist, creates a new one at the correct position
+// - If the attempt exists, applies mergeFn to merge new data into existing
+func (t *TaskMap) CreateOrMergeAttempt(taskId string, attemptNum int, mergeFn func(*Task)) {
 	t.Lock()
 	defer t.Unlock()
 
@@ -133,23 +137,32 @@ func (t *TaskMap) UpsertAttempt(taskId string, attemptNum int, updateFn func(*Ta
 	if !exists {
 		// Task doesn't exist, create new
 		newTask := Task{TaskID: taskId, AttemptNumber: attemptNum}
-		updateFn(&newTask)
+		mergeFn(&newTask)
 		t.TaskMap[taskId] = []Task{newTask}
 		return
 	}
 
-	// Find existing attempt
-	for i := range attempts {
-		if attempts[i].AttemptNumber == attemptNum {
-			updateFn(&attempts[i])
-			return
-		}
+	// Binary search: find the first index where AttemptNumber >= attemptNum
+	idx := sort.Search(len(attempts), func(i int) bool {
+		return attempts[i].AttemptNumber >= attemptNum
+	})
+
+	// Check if attempt already exists at this position
+	if idx < len(attempts) && attempts[idx].AttemptNumber == attemptNum {
+		// Exists: merge into existing
+		mergeFn(&attempts[idx])
+		return
 	}
 
-	// Attempt doesn't exist, create new
+	// Doesn't exist: insert at correct position to maintain sorted order
 	newTask := Task{TaskID: taskId, AttemptNumber: attemptNum}
-	updateFn(&newTask)
-	t.TaskMap[taskId] = append(attempts, newTask)
+	mergeFn(&newTask)
+
+	// Insert at idx position
+	attempts = append(attempts, Task{})    // Extend slice by 1
+	copy(attempts[idx+1:], attempts[idx:]) // Shift elements right
+	attempts[idx] = newTask                // Insert at correct position
+	t.TaskMap[taskId] = attempts
 }
 
 func GetTaskFieldValue(task Task, filterKey string) string {
