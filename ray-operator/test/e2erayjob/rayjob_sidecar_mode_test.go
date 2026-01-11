@@ -2,6 +2,7 @@ package e2erayjob
 
 import (
 	"testing"
+	"time"
 
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -179,11 +180,23 @@ env_vars:
 		g.Expect(err).NotTo(HaveOccurred())
 		rayCluster, err := GetRayCluster(test, rayJob.Namespace, rayJob.Status.RayClusterName)
 		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(rayCluster.Labels[utils.RayJobSubmissionModeLabelKey]).To(Equal(string(rayv1.SidecarMode)))
+		g.Expect(rayCluster.Annotations[utils.DisableProvisionedHeadRestartAnnotationKey]).To(Equal("true"))
 		headPod, err := GetHeadPod(test, rayCluster)
 		g.Expect(err).NotTo(HaveOccurred())
 		LogWithTimestamp(test.T(), "Deleting head Pod %s/%s for RayCluster %s", headPod.Namespace, headPod.Name, rayCluster.Name)
 		err = test.Client().Core().CoreV1().Pods(headPod.Namespace).Delete(test.Ctx(), headPod.Name, metav1.DeleteOptions{})
 		g.Expect(err).NotTo(HaveOccurred())
+
+		// Head pod should NOT be recreated for sidecar modes.
+		g.Eventually(func() error {
+			_, err := GetHeadPod(test, rayCluster)
+			return err
+		}, TestTimeoutMedium, 2*time.Second).Should(HaveOccurred())
+		g.Consistently(func() error {
+			_, err := GetHeadPod(test, rayCluster)
+			return err
+		}, TestTimeoutShort, 2*time.Second).Should(HaveOccurred())
 
 		// After head pod deletion, controller should mark RayJob as Failed with a specific message
 		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
