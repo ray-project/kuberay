@@ -188,6 +188,99 @@ func testCollectorSeparatesFilesBySession(test Test, g *WithT, namespace *corev1
 	deleteS3Bucket(test, g, s3Client)
 }
 
+// testCollectorResumesUploadsOnRestart verifies that the Collector scans and resumes uploads from
+// the prev-logs directory on startup.
+//
+// The test case follows these steps:
+// 1. Prepare test environment by applying a Ray cluster with the collector and ensuring an empty S3 bucket.
+// 2. Kill the collector sidecar container to trigger a container restart.
+// 3. Inject leftover logs while the collector is down:
+//   - file1.log -> /tmp/ray/persist-complete-logs/{sessionID}/{nodeID}/logs/ (already uploaded)
+//   - file2.log -> /tmp/ray/prev-logs/{sessionID}/{nodeID}/logs/ (pending upload)
+//     Note: node_events are not injected or verified here; they are handled by the EventServer via a separate path,
+//     and prev-logs processing only covers the logs directory.
+//
+// 4. Wait for the collector container to restart and become Ready.
+// 5. Verify S3 uploads: recovered log objects exist under log/{clusterName}_{clusterID}/{sessionID}/logs/ and have content.
+// 6. Verify local state: the node directory is present under persist-complete-logs and removed from prev-logs.
+// 7. Clean up the S3 bucket to ensure test isolation.
+func testCollectorResumesUploadsOnRestart(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+	rayCluster := prepareTestEnv(test, g, namespace, s3Client)
+
+	// Directory variables for easier maintenance
+	prevLogsBaseDir := "/tmp/ray/prev-logs"
+	persistCompleteBaseDir := "/tmp/ray/persist-complete-logs"
+
+	// Use namespace name to ensure test isolation (avoid conflicts from previous test runs)
+	dummySessionID := fmt.Sprintf("test-recovery-session-%s", namespace.Name)
+	dummyNodeID := fmt.Sprintf("head-node-%s", namespace.Name)
+	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, rayClusterID)
+	sessionPrefix := fmt.Sprintf("log/%s/%s/", clusterNameID, dummySessionID)
+
+	// Kill the collector container to trigger a restart.
+	headPod, err := GetHeadPod(test, rayCluster)
+	g.Expect(err).NotTo(HaveOccurred())
+	LogWithTimestamp(test.T(), "Killing collector container to test startup scanning of prev-logs")
+	_, stderrKill := ExecPodCmd(test, headPod, "collector", []string{"kill", "1"})
+	g.Expect(stderrKill.String()).To(BeEmpty())
+
+	// Inject "leftover" logs into prev-logs via the ray-head container while collector is down.
+	LogWithTimestamp(test.T(), "Injecting logs into %s while collector is down", prevLogsBaseDir)
+	sessionDir := filepath.Join(prevLogsBaseDir, dummySessionID, dummyNodeID)
+	persistDir := filepath.Join(persistCompleteBaseDir, dummySessionID, dummyNodeID)
+	// Inject 2 files to simulate partial processing:
+	injectCmd := fmt.Sprintf(
+		"mkdir -p %s/logs && "+
+			"echo 'file1 content' > %s/logs/file1.log && "+
+			"mkdir -p %s/logs && "+
+			"echo 'file2 content' > %s/logs/file2.log",
+		persistDir,
+		persistDir,
+		sessionDir,
+		sessionDir,
+	)
+	_, stderr := ExecPodCmd(test, headPod, "ray-head", []string{"sh", "-c", injectCmd})
+	g.Expect(stderr.String()).To(BeEmpty())
+
+	// Wait for collector container to restart and become ready.
+	LogWithTimestamp(test.T(), "Waiting for collector container to restart and become ready")
+	g.Eventually(func(gg Gomega) {
+		updatedPod, err := GetHeadPod(test, rayCluster)
+		gg.Expect(err).NotTo(HaveOccurred())
+		cs, err := getContainerStatusByName(updatedPod, "collector")
+		gg.Expect(err).NotTo(HaveOccurred())
+		gg.Expect(cs.RestartCount).To(BeNumerically(">", 0))
+		gg.Expect(cs.Ready).To(BeTrue())
+	}, TestTimeoutMedium).Should(Succeed())
+
+	// Verify S3 uploads using the existing verifyS3SessionDirs helper.
+	// Skip node_events verification since prev-logs processing only handles logs directory.
+	LogWithTimestamp(test.T(), "Verifying scanning logic: checking S3 for recovered files")
+	verifyS3SessionDirs(test, g, s3Client, sessionPrefix, dummyNodeID, true)
+
+	// Verify local state: the node directory should be moved from prev-logs to persist-complete-logs.
+	LogWithTimestamp(test.T(), "Verifying local state: node directory should be moved to %s", persistCompleteBaseDir)
+	g.Eventually(func(gg Gomega) {
+		currentHeadPod, err := GetHeadPod(test, rayCluster)
+		gg.Expect(err).NotTo(HaveOccurred())
+		// Check that the node directory exists in persist-complete-logs
+		persistPath := filepath.Join(persistCompleteBaseDir, dummySessionID, dummyNodeID)
+		checkCmd := fmt.Sprintf("test -d %s && echo 'exists'", persistPath)
+		stdout, stderrCheck := ExecPodCmd(test, currentHeadPod, "ray-head", []string{"sh", "-c", checkCmd})
+		gg.Expect(stderrCheck.String()).To(BeEmpty())
+		gg.Expect(strings.TrimSpace(stdout.String())).To(Equal("exists"), "Node directory should be in persist-complete-logs")
+
+		// Check that the node directory is gone from prev-logs
+		prevPath := filepath.Join(prevLogsBaseDir, dummySessionID, dummyNodeID)
+		checkGoneCmd := fmt.Sprintf("test ! -d %s && echo 'gone'", prevPath)
+		stdoutGone, stderrGone := ExecPodCmd(test, currentHeadPod, "ray-head", []string{"sh", "-c", checkGoneCmd})
+		gg.Expect(stderrGone.String()).To(BeEmpty())
+		gg.Expect(strings.TrimSpace(stdoutGone.String())).To(Equal("gone"), "Node directory should be cleaned from prev-logs")
+	}, TestTimeoutMedium).Should(Succeed())
+
+	deleteS3Bucket(test, g, s3Client)
+}
+
 // ensureS3Client creates an S3 client and ensures API endpoint accessibility.
 func ensureS3Client(t *testing.T) *s3.S3 {
 	test := With(t)
@@ -480,83 +573,4 @@ func getContainerStatusByName(pod *corev1.Pod, containerName string) (*corev1.Co
 		}
 	}
 	return nil, fmt.Errorf("container %s not found in pod %s/%s", containerName, pod.Namespace, pod.Name)
-}
-
-// testCollectorResumesUploadsOnRestart verifies that the Collector scans and resumes uploads from the prev-logs directory on startup.
-func testCollectorResumesUploadsOnRestart(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
-	rayCluster := prepareTestEnv(test, g, namespace, s3Client)
-
-	// Directory variables for easier maintenance
-	prevLogsBaseDir := "/tmp/ray/prev-logs"
-	persistCompleteBaseDir := "/tmp/ray/persist-complete-logs"
-
-	// Use namespace name to ensure test isolation (avoid conflicts from previous test runs)
-	dummySessionID := fmt.Sprintf("test-recovery-session-%s", namespace.Name)
-	dummyNodeID := fmt.Sprintf("head-node-%s", namespace.Name)
-	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, rayClusterID)
-	sessionPrefix := fmt.Sprintf("log/%s/%s/", clusterNameID, dummySessionID)
-
-	// 1. Kill the collector container to trigger a restart.
-	headPod, err := GetHeadPod(test, rayCluster)
-	g.Expect(err).NotTo(HaveOccurred())
-	LogWithTimestamp(test.T(), "Killing collector container to test startup scanning of prev-logs")
-	_, _ = ExecPodCmd(test, headPod, "collector", []string{"kill", "1"})
-
-	// 2. Inject "leftover" logs into prev-logs via the ray-head container while collector is down.
-	// Note: We only inject logs, not node_events, because the collector's prev-logs processing
-	// currently only handles the logs directory. node_events are handled by the EventServer separately.
-	LogWithTimestamp(test.T(), "Injecting logs into %s while collector is down", prevLogsBaseDir)
-	sessionDir := filepath.Join(prevLogsBaseDir, dummySessionID, dummyNodeID)
-	persistDir := filepath.Join(persistCompleteBaseDir, dummySessionID, dummyNodeID)
-	// Inject 2 files to simulate partial processing:
-	// - file1.log in persist-complete-logs (already processed and uploaded)
-	// - file2.log in prev-logs (pending processing)
-	injectCmd := fmt.Sprintf(
-		"mkdir -p %s/logs && "+
-			"echo 'file1 content' > %s/logs/file1.log && "+
-			"mkdir -p %s/logs && "+
-			"echo 'file2 content' > %s/logs/file2.log",
-		persistDir,
-		persistDir,
-		sessionDir,
-		sessionDir,
-	)
-	_, stderr := ExecPodCmd(test, headPod, "ray-head", []string{"sh", "-c", injectCmd})
-	g.Expect(stderr.String()).To(BeEmpty())
-
-	// 3. Wait for collector container to restart and become ready.
-	LogWithTimestamp(test.T(), "Waiting for collector container to restart and become ready")
-	g.Eventually(func(gg Gomega) {
-		updatedPod, err := GetHeadPod(test, rayCluster)
-		gg.Expect(err).NotTo(HaveOccurred())
-		cs, err := getContainerStatusByName(updatedPod, "collector")
-		gg.Expect(err).NotTo(HaveOccurred())
-		gg.Expect(cs.RestartCount).To(BeNumerically(">", 0))
-		gg.Expect(cs.Ready).To(BeTrue())
-	}, TestTimeoutMedium).Should(Succeed())
-
-	// 4. Verify S3 uploads using the existing verifyS3SessionDirs helper.
-	// Skip node_events verification since prev-logs processing only handles logs directory.
-	LogWithTimestamp(test.T(), "Verifying scanning logic: checking S3 for recovered files")
-	verifyS3SessionDirs(test, g, s3Client, sessionPrefix, dummyNodeID, true)
-
-	// 5. Verify local state: the node directory should be moved from prev-logs to persist-complete-logs.
-	LogWithTimestamp(test.T(), "Verifying local state: node directory should be moved to %s", persistCompleteBaseDir)
-	g.Eventually(func(gg Gomega) {
-		currentHeadPod, err := GetHeadPod(test, rayCluster)
-		gg.Expect(err).NotTo(HaveOccurred())
-		// Check that the node directory exists in persist-complete-logs
-		persistPath := filepath.Join(persistCompleteBaseDir, dummySessionID, dummyNodeID)
-		checkCmd := fmt.Sprintf("test -d %s && echo 'exists'", persistPath)
-		stdout, _ := ExecPodCmd(test, currentHeadPod, "ray-head", []string{"sh", "-c", checkCmd})
-		gg.Expect(strings.TrimSpace(stdout.String())).To(Equal("exists"), "Node directory should be in persist-complete-logs")
-
-		// Check that the node directory is gone from prev-logs
-		prevPath := filepath.Join(prevLogsBaseDir, dummySessionID, dummyNodeID)
-		checkGoneCmd := fmt.Sprintf("test ! -d %s && echo 'gone'", prevPath)
-		stdoutGone, _ := ExecPodCmd(test, currentHeadPod, "ray-head", []string{"sh", "-c", checkGoneCmd})
-		gg.Expect(strings.TrimSpace(stdoutGone.String())).To(Equal("gone"), "Node directory should be cleaned from prev-logs")
-	}, TestTimeoutMedium).Should(Succeed())
-
-	deleteS3Bucket(test, g, s3Client)
 }
