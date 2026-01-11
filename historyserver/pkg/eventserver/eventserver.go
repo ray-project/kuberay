@@ -200,9 +200,6 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 	logrus.Infof("current eventType: %v", eventType)
 	switch eventType {
 	case types.TASK_DEFINITION_EVENT:
-		// We take out the taskDefinitionEvent from the event, marshal it into json so we can
-		// unmarshal it into a Task object.
-		var currTask types.Task
 		taskDef, ok := eventMap["taskDefinitionEvent"]
 		if !ok {
 			return fmt.Errorf("event does not have 'taskDefinitionEvent'")
@@ -212,43 +209,66 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 			return err
 		}
 
-		err = json.Unmarshal(jsonTaskDefinition, &currTask)
-		if err != nil {
+		var currTask types.Task
+		if err := json.Unmarshal(jsonTaskDefinition, &currTask); err != nil {
 			return err
 		}
 
-		h.ClusterTaskMap.Lock()
-		clusterTaskMapObject, ok := h.ClusterTaskMap.ClusterTaskMap[currentClusterName]
-		if !ok {
-			// Does not exist, create a new list
-			clusterTaskMapObject = types.NewTaskMap()
-			h.ClusterTaskMap.ClusterTaskMap[currentClusterName] = clusterTaskMapObject
-		}
-		h.ClusterTaskMap.Unlock()
+		taskMap := h.ClusterTaskMap.GetOrCreateTaskMap(currentClusterName)
+		taskMap.UpsertAttempt(currTask.TaskID, currTask.AttemptNumber, func(t *types.Task) {
+			// Merge definition fields (preserve existing Events if any)
+			existingEvents := t.Events
+			*t = currTask
+			if len(existingEvents) > 0 {
+				t.Events = existingEvents
+				t.State = existingEvents[len(existingEvents)-1].State
+			}
+		})
 
-		taskId := currTask.TaskID
-		clusterTaskMapObject.Lock()
-		existingAttempts, ok := clusterTaskMapObject.TaskMap[taskId]
-		if !ok {
-			// First attempt for this task, create new slice
-			clusterTaskMapObject.TaskMap[taskId] = []types.Task{currTask}
-		} else {
-			// Check if this attempt already exists (avoid duplicates)
-			alreadyExists := false
-			for _, existingTask := range existingAttempts {
-				if existingTask.AttemptNumber == currTask.AttemptNumber {
-					alreadyExists = true
-					break
-				}
-			}
-			if !alreadyExists {
-				clusterTaskMapObject.TaskMap[taskId] = append(existingAttempts, currTask)
-			}
-		}
-		clusterTaskMapObject.Unlock()
 	case types.TASK_LIFECYCLE_EVENT:
-		// TODO: Update task state based on lifecycle event
-		logrus.Debugf("TASK_LIFECYCLE_EVENT received, not yet implemented")
+		lifecycleEvent, ok := eventMap["taskLifecycleEvent"].(map[string]any)
+		if !ok {
+			return fmt.Errorf("invalid taskLifecycleEvent format")
+		}
+
+		taskId, _ := lifecycleEvent["taskId"].(string)
+		taskAttempt, _ := lifecycleEvent["taskAttempt"].(float64)
+		transitions, _ := lifecycleEvent["stateTransitions"].([]any)
+
+		if len(transitions) == 0 || taskId == "" {
+			return nil
+		}
+
+		// Parse state transitions
+		var stateEvents []types.StateEvent
+		for _, transition := range transitions {
+			tr, ok := transition.(map[string]any)
+			if !ok {
+				continue
+			}
+			state, _ := tr["state"].(string)
+			timestampStr, _ := tr["timestamp"].(string)
+
+			var timestamp time.Time
+			if timestampStr != "" {
+				timestamp, _ = time.Parse(time.RFC3339Nano, timestampStr)
+			}
+
+			stateEvents = append(stateEvents, types.StateEvent{
+				State:     types.TaskStatus(state),
+				Timestamp: timestamp,
+			})
+		}
+
+		if len(stateEvents) == 0 {
+			return nil
+		}
+
+		taskMap := h.ClusterTaskMap.GetOrCreateTaskMap(currentClusterName)
+		taskMap.UpsertAttempt(taskId, int(taskAttempt), func(t *types.Task) {
+			t.Events = append(t.Events, stateEvents...)
+			t.State = stateEvents[len(stateEvents)-1].State
+		})
 
 	case types.ACTOR_DEFINITION_EVENT:
 		var currActor types.Actor

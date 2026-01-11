@@ -33,6 +33,13 @@ const (
 	DRIVER_TASK         TaskType = "DRIVER_TASK"
 )
 
+// StateEvent represents a single state transition event with its timestamp.
+// This mirrors the stateTransitions format from Ray's event export API.
+type StateEvent struct {
+	State     TaskStatus `json:"state"`
+	Timestamp time.Time  `json:"timestamp"`
+}
+
 type Task struct {
 	TaskID            string `json:"taskId"`
 	Name              string `json:"taskName"`
@@ -48,6 +55,9 @@ type Task struct {
 	RequiredResources map[string]int `json:"requiredResources"`
 	StartTime         time.Time
 	EndTime           time.Time
+	// Events stores the complete state transition history.
+	// Each element represents a state change with its timestamp.
+	Events []StateEvent `json:"events,omitempty"`
 	// ProfilingData ProfilingData
 	WorkerID      string `json:"workerId"`
 	ErrorType     string `json:"errorType"`
@@ -98,6 +108,48 @@ func (c *ClusterTaskMap) Lock() {
 
 func (c *ClusterTaskMap) Unlock() {
 	c.Mu.Unlock()
+}
+
+// GetOrCreateTaskMap returns the TaskMap for the given cluster, creating it if it doesn't exist.
+func (c *ClusterTaskMap) GetOrCreateTaskMap(clusterName string) *TaskMap {
+	c.Lock()
+	defer c.Unlock()
+
+	taskMap, exists := c.ClusterTaskMap[clusterName]
+	if !exists {
+		taskMap = NewTaskMap()
+		c.ClusterTaskMap[clusterName] = taskMap
+	}
+	return taskMap
+}
+
+// UpsertAttempt finds or creates a task attempt and applies the update function.
+// This handles the case where LIFECYCLE events arrive before DEFINITION events.
+func (t *TaskMap) UpsertAttempt(taskId string, attemptNum int, updateFn func(*Task)) {
+	t.Lock()
+	defer t.Unlock()
+
+	attempts, exists := t.TaskMap[taskId]
+	if !exists {
+		// Task doesn't exist, create new
+		newTask := Task{TaskID: taskId, AttemptNumber: attemptNum}
+		updateFn(&newTask)
+		t.TaskMap[taskId] = []Task{newTask}
+		return
+	}
+
+	// Find existing attempt
+	for i := range attempts {
+		if attempts[i].AttemptNumber == attemptNum {
+			updateFn(&attempts[i])
+			return
+		}
+	}
+
+	// Attempt doesn't exist, create new
+	newTask := Task{TaskID: taskId, AttemptNumber: attemptNum}
+	updateFn(&newTask)
+	t.TaskMap[taskId] = append(attempts, newTask)
 }
 
 func GetTaskFieldValue(task Task, filterKey string) string {
