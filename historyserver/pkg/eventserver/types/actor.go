@@ -23,22 +23,22 @@ type Address struct {
 }
 
 type Actor struct {
-	ActorID           string
-	JobID             string
-	PlacementGroupID  string
+	ActorID           string `json:"actorId"`
+	JobID             string `json:"jobId"`
+	PlacementGroupID  string `json:"placementGroupId"`
 	State             StateType
-	PID               string
-	Address           Address
-	Name              string
-	NumRestarts       int
-	ActorClass        string
-	StartTime         time.Time
-	EndTime           time.Time
-	RequiredResources map[string]int
-	ExitDetails       string
-	ReprName          string
-	CallSite          string
-	LabelSelector     map[string]string
+	PID               string            `json:"pid"`
+	Address           Address           `json:"address"`
+	Name              string            `json:"name"`
+	NumRestarts       int               `json:"numRestarts"`
+	ActorClass        string            `json:"className"`
+	StartTime         time.Time         `json:"startTime"`
+	EndTime           time.Time         `json:"endTime"`
+	RequiredResources map[string]int    `json:"requiredResources"`
+	ExitDetails       string            `json:"exitDetails"`
+	ReprName          string            `json:"reprName"`
+	CallSite          string            `json:"callSite"`
+	LabelSelector     map[string]string `json:"labelSelector"`
 }
 
 // ActorMap is a struct that uses ActorID as key and the Actor struct as value
