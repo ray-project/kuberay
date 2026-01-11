@@ -30,6 +30,8 @@ func NewServerHandler(c *types.RayHistoryServerConfig, dashboardDir string, read
 
 		rootDir:      c.RootDir,
 		dashboardDir: dashboardDir,
+		// TODO: make this configurable
+		maxClusters: 100,
 	}
 }
 
