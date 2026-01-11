@@ -280,6 +280,7 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 
 	case types.ACTOR_TASK_DEFINITION_EVENT:
 		// TODO: Handle actor task definition event
+		// This is related to GET /api/v0/tasks (type=ACTOR_TASK)
 		logrus.Debugf("ACTOR_TASK_DEFINITION_EVENT received, not yet implemented")
 	default:
 		logrus.Infof("Event not supported, skipping: %v", eventMap)

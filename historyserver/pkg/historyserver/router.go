@@ -813,6 +813,7 @@ func (s *ServerHandler) CookieHandle(req *restful.Request, resp *restful.Respons
 				Name:   ATTRIBUTE_SERVICE_NAME,
 				Value:  svcName,
 				MaxAge: 60, // 1 minute
+				Path:   "/",
 			}
 			http.SetCookie(resp, cookie)
 		}
