@@ -62,7 +62,8 @@ func (h *EventHandler) ProcessEvents(ctx context.Context, ch <-chan map[string]a
 				return nil
 			}
 			if err := h.storeEvent(currEventData); err != nil {
-				return err
+				logrus.Errorf("Failed to store event: %v", err)
+				continue
 			}
 		}
 	}
@@ -74,13 +75,13 @@ func (h *EventHandler) Run(stop chan struct{}, numOfEventProcessors int) error {
 	var wg sync.WaitGroup
 
 	if numOfEventProcessors == 0 {
-		numOfEventProcessors = 2
+		numOfEventProcessors = 5
 	}
 	eventProcessorChannels := make([]chan map[string]any, numOfEventProcessors)
 	cctx := make([]context.CancelFunc, numOfEventProcessors)
 
 	for i := range numOfEventProcessors {
-		eventProcessorChannels[i] = make(chan map[string]any, 20)
+		eventProcessorChannels[i] = make(chan map[string]any, 100)
 	}
 
 	for i, currEventChannel := range eventProcessorChannels {
