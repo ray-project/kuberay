@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -269,8 +270,37 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 
 		taskMap := h.ClusterTaskMap.GetOrCreateTaskMap(currentClusterName)
 		taskMap.CreateOrMergeAttempt(taskId, int(taskAttempt), func(t *types.Task) {
-			t.Events = append(t.Events, stateEvents...)
-			t.State = stateEvents[len(stateEvents)-1].State
+			// --- DEDUPLICATION using (State + Timestamp) as unique key ---
+			// Build a set of existing event keys to detect duplicates
+			type eventKey struct {
+				State     string
+				Timestamp int64
+			}
+			existingKeys := make(map[eventKey]bool)
+			for _, e := range t.Events {
+				existingKeys[eventKey{string(e.State), e.Timestamp.UnixNano()}] = true
+			}
+
+			// Only append events that haven't been seen before
+			for _, e := range stateEvents {
+				key := eventKey{string(e.State), e.Timestamp.UnixNano()}
+				if !existingKeys[key] {
+					t.Events = append(t.Events, e)
+					existingKeys[key] = true
+				}
+			}
+
+			// Sort events by timestamp to ensure correct order
+			sort.Slice(t.Events, func(i, j int) bool {
+				return t.Events[i].Timestamp.Before(t.Events[j].Timestamp)
+			})
+
+			if len(t.Events) == 0 {
+				return
+			}
+
+			t.State = t.Events[len(t.Events)-1].State
+
 			if nodeId != "" {
 				t.NodeID = nodeId
 			}
@@ -392,18 +422,30 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 			// Ensure ActorID is set (in case LIFECYCLE arrives before DEFINITION)
 			a.ActorID = actorId
 
-			// --- DEDUPLICATION ---
-			// Only append events with timestamp after the last known event
-			// This handles the case when files are re-read
-			var lastTimestamp time.Time
-			if len(a.Events) > 0 {
-				lastTimestamp = a.Events[len(a.Events)-1].Timestamp
+			// --- DEDUPLICATION using (State + Timestamp) as unique key ---
+			// Build a set of existing event keys to detect duplicates
+			type eventKey struct {
+				State     string
+				Timestamp int64
 			}
+			existingKeys := make(map[eventKey]bool)
+			for _, e := range a.Events {
+				existingKeys[eventKey{string(e.State), e.Timestamp.UnixNano()}] = true
+			}
+
+			// Only append events that haven't been seen before
 			for _, e := range stateEvents {
-				if e.Timestamp.After(lastTimestamp) {
+				key := eventKey{string(e.State), e.Timestamp.UnixNano()}
+				if !existingKeys[key] {
 					a.Events = append(a.Events, e)
+					existingKeys[key] = true
 				}
 			}
+
+			// Sort events by timestamp to ensure correct order
+			sort.Slice(a.Events, func(i, j int) bool {
+				return a.Events[i].Timestamp.Before(a.Events[j].Timestamp)
+			})
 
 			if len(a.Events) == 0 {
 				return
@@ -465,7 +507,7 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 				}
 			}
 
-			// --- CALCULATE NumRestarts ---
+			// --- COUNT RESTARTS ---
 			restartCount := 0
 			for _, e := range a.Events {
 				if e.State == types.RESTARTING {
