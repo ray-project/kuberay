@@ -235,6 +235,9 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 		taskAttempt, _ := lifecycleEvent["taskAttempt"].(float64)
 		transitions, _ := lifecycleEvent["stateTransitions"].([]any)
 
+		nodeId, _ := lifecycleEvent["nodeId"].(string)
+		workerId, _ := lifecycleEvent["workerId"].(string)
+
 		if len(transitions) == 0 || taskId == "" {
 			return nil
 		}
@@ -268,10 +271,27 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 		taskMap.CreateOrMergeAttempt(taskId, int(taskAttempt), func(t *types.Task) {
 			t.Events = append(t.Events, stateEvents...)
 			t.State = stateEvents[len(stateEvents)-1].State
+			if nodeId != "" {
+				t.NodeID = nodeId
+			}
+			if workerId != "" {
+				t.WorkerID = workerId
+			}
+			if t.StartTime.IsZero() {
+				for _, e := range t.Events {
+					if e.State == types.RUNNING {
+						t.StartTime = e.Timestamp
+						break
+					}
+				}
+			}
+			lastEvent := t.Events[len(t.Events)-1]
+			if lastEvent.State == types.FINISHED || lastEvent.State == types.FAILED {
+				t.EndTime = lastEvent.Timestamp
+			}
 		})
 
 	case types.ACTOR_DEFINITION_EVENT:
-		var currActor types.Actor
 		actorDef, ok := eventMap["actorDefinitionEvent"]
 		if !ok {
 			return fmt.Errorf("event does not have 'actorDefinitionEvent'")
@@ -281,36 +301,179 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 			return err
 		}
 
-		err = json.Unmarshal(jsonActorDefinition, &currActor)
-		if err != nil {
+		var currActor types.Actor
+		if err := json.Unmarshal(jsonActorDefinition, &currActor); err != nil {
 			return err
 		}
 
-		h.ClusterActorMap.Lock()
-		clusterActorMapObject, ok := h.ClusterActorMap.ClusterActorMap[currentClusterName]
-		if !ok {
-			// Does not exist, create a new map
-			clusterActorMapObject = types.NewActorMap()
-			h.ClusterActorMap.ClusterActorMap[currentClusterName] = clusterActorMapObject
-		}
-		h.ClusterActorMap.Unlock()
+		// Use CreateOrMergeActor pattern (same as Task)
+		actorMap := h.ClusterActorMap.GetOrCreateActorMap(currentClusterName)
+		actorMap.CreateOrMergeActor(currActor.ActorID, func(a *types.Actor) {
+			// Preserve lifecycle-derived fields that may have arrived first
+			existingEvents := a.Events
+			existingState := a.State
+			existingStartTime := a.StartTime
+			existingEndTime := a.EndTime
+			existingNumRestarts := a.NumRestarts
+			existingPID := a.PID
+			existingExitDetails := a.ExitDetails
+			existingAddress := a.Address
 
-		actorId := currActor.ActorID
-		clusterActorMapObject.Lock()
-		existingActor, exists := clusterActorMapObject.ActorMap[actorId]
-		if !exists {
-			clusterActorMapObject.ActorMap[actorId] = currActor
-		} else {
-			// Compare NumRestarts to keep the latest state
-			if currActor.NumRestarts > existingActor.NumRestarts {
-				clusterActorMapObject.ActorMap[actorId] = currActor
+			// Overwrite with definition fields
+			*a = currActor
+
+			// Restore lifecycle-derived fields if they existed
+			if len(existingEvents) > 0 {
+				a.Events = existingEvents
+				a.State = existingState
+				a.StartTime = existingStartTime
+				a.EndTime = existingEndTime
+				a.NumRestarts = existingNumRestarts
+				a.PID = existingPID
+				a.ExitDetails = existingExitDetails
+				a.Address = existingAddress
 			}
-		}
-		clusterActorMapObject.Unlock()
-
+		})
 	case types.ACTOR_LIFECYCLE_EVENT:
-		// TODO: Update actor state based on lifecycle event
-		logrus.Debugf("ACTOR_LIFECYCLE_EVENT received, not yet implemented")
+		lifecycleEvent, ok := eventMap["actorLifecycleEvent"].(map[string]any)
+		if !ok {
+			return fmt.Errorf("invalid actorLifecycleEvent format")
+		}
+
+		actorId, _ := lifecycleEvent["actorId"].(string)
+		transitions, _ := lifecycleEvent["stateTransitions"].([]any)
+
+		if len(transitions) == 0 || actorId == "" {
+			return nil
+		}
+
+		// Parse state transitions into ActorStateEvent slice
+		var stateEvents []types.ActorStateEvent
+		for _, transition := range transitions {
+			tr, ok := transition.(map[string]any)
+			if !ok {
+				continue
+			}
+			state, _ := tr["state"].(string)
+			timestampStr, _ := tr["timestamp"].(string)
+			nodeId, _ := tr["nodeId"].(string)
+			workerId, _ := tr["workerId"].(string)
+			reprName, _ := tr["reprName"].(string)
+
+			var timestamp time.Time
+			if timestampStr != "" {
+				timestamp, _ = time.Parse(time.RFC3339Nano, timestampStr)
+			}
+
+			// DeathCause is a complex object, store as JSON string
+			var deathCause string
+			if dc, ok := tr["deathCause"]; ok {
+				if dcBytes, err := json.Marshal(dc); err == nil {
+					deathCause = string(dcBytes)
+				}
+			}
+
+			stateEvents = append(stateEvents, types.ActorStateEvent{
+				State:      types.StateType(state),
+				Timestamp:  timestamp,
+				NodeID:     nodeId,
+				WorkerID:   workerId,
+				ReprName:   reprName,
+				DeathCause: deathCause,
+			})
+		}
+
+		if len(stateEvents) == 0 {
+			return nil
+		}
+
+		actorMap := h.ClusterActorMap.GetOrCreateActorMap(currentClusterName)
+		actorMap.CreateOrMergeActor(actorId, func(a *types.Actor) {
+			// Ensure ActorID is set (in case LIFECYCLE arrives before DEFINITION)
+			a.ActorID = actorId
+
+			// --- DEDUPLICATION ---
+			// Only append events with timestamp after the last known event
+			// This handles the case when files are re-read
+			var lastTimestamp time.Time
+			if len(a.Events) > 0 {
+				lastTimestamp = a.Events[len(a.Events)-1].Timestamp
+			}
+			for _, e := range stateEvents {
+				if e.Timestamp.After(lastTimestamp) {
+					a.Events = append(a.Events, e)
+				}
+			}
+
+			if len(a.Events) == 0 {
+				return
+			}
+
+			lastEvent := a.Events[len(a.Events)-1]
+
+			// --- UPDATE STATE ---
+			a.State = lastEvent.State
+
+			// --- UPDATE ADDRESS from ALIVE state ---
+			// NodeID and WorkerID are only populated in ALIVE state
+			for i := len(a.Events) - 1; i >= 0; i-- {
+				if a.Events[i].State == types.ALIVE && a.Events[i].NodeID != "" {
+					a.Address.NodeID = a.Events[i].NodeID
+					a.Address.WorkerID = a.Events[i].WorkerID
+					break
+				}
+			}
+
+			// --- UPDATE ReprName from latest ---
+			if lastEvent.ReprName != "" {
+				a.ReprName = lastEvent.ReprName
+			}
+
+			// --- CALCULATE StartTime (first ALIVE timestamp) ---
+			if a.StartTime.IsZero() {
+				for _, e := range a.Events {
+					if e.State == types.ALIVE {
+						a.StartTime = e.Timestamp
+						break
+					}
+				}
+			}
+
+			// --- HANDLE DEAD state ---
+			if lastEvent.State == types.DEAD {
+				a.EndTime = lastEvent.Timestamp
+
+				// Parse deathCause to extract PID, IP, errorMessage
+				if lastEvent.DeathCause != "" {
+					var deathCauseMap map[string]any
+					if err := json.Unmarshal([]byte(lastEvent.DeathCause), &deathCauseMap); err == nil {
+						if ctx, ok := deathCauseMap["actorDiedErrorContext"].(map[string]any); ok {
+							// Extract PID
+							if pid, ok := ctx["pid"].(float64); ok {
+								a.PID = int(pid)
+							}
+							// Extract IP address
+							if ip, ok := ctx["nodeIpAddress"].(string); ok {
+								a.Address.IPAddress = ip
+							}
+							// Extract error message as ExitDetails
+							if errMsg, ok := ctx["errorMessage"].(string); ok {
+								a.ExitDetails = errMsg
+							}
+						}
+					}
+				}
+			}
+
+			// --- CALCULATE NumRestarts ---
+			restartCount := 0
+			for _, e := range a.Events {
+				if e.State == types.RESTARTING {
+					restartCount++
+				}
+			}
+			a.NumRestarts = restartCount
+		})
 
 	case types.ACTOR_TASK_DEFINITION_EVENT:
 		// TODO: Handle actor task definition event

@@ -492,7 +492,7 @@ func (s *ServerHandler) getLogicalActors(req *restful.Request, resp *restful.Res
 
 // formatActorForResponse converts an eventtypes.Actor to the format expected by Ray Dashboard
 func formatActorForResponse(actor eventtypes.Actor) map[string]interface{} {
-	return map[string]interface{}{
+	result := map[string]interface{}{
 		"actor_id":           actor.ActorID,
 		"job_id":             actor.JobID,
 		"placement_group_id": actor.PlacementGroupID,
@@ -511,9 +511,22 @@ func formatActorForResponse(actor eventtypes.Actor) map[string]interface{} {
 		"exit_details":       actor.ExitDetails,
 		"repr_name":          actor.ReprName,
 		"call_site":          actor.CallSite,
+		"is_detached":        actor.IsDetached,
+		"ray_namespace":      actor.RayNamespace,
 	}
-}
 
+	// Only include start_time if it's set (non-zero)
+	if !actor.StartTime.IsZero() {
+		result["start_time"] = actor.StartTime.UnixMilli()
+	}
+
+	// Only include end_time if it's set (non-zero)
+	if !actor.EndTime.IsZero() {
+		result["end_time"] = actor.EndTime.UnixMilli()
+	}
+
+	return result
+}
 func (s *ServerHandler) getLogicalActor(req *restful.Request, resp *restful.Response) {
 	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
 	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
@@ -750,7 +763,7 @@ func (s *ServerHandler) getTaskDetail(req *restful.Request, resp *restful.Respon
 
 // formatTaskForResponse converts an eventtypes.Task to the format expected by Ray Dashboard
 func formatTaskForResponse(task eventtypes.Task) map[string]interface{} {
-	return map[string]interface{}{
+	result := map[string]interface{}{
 		"task_id":            task.TaskID,
 		"name":               task.Name,
 		"attempt_number":     task.AttemptNumber,
@@ -768,6 +781,16 @@ func formatTaskForResponse(task eventtypes.Task) map[string]interface{} {
 		"error_message":      task.ErrorMessage,
 		"call_site":          task.CallSite,
 	}
+
+	if !task.StartTime.IsZero() {
+		result["start_time"] = task.StartTime.UnixMilli()
+	}
+
+	if !task.EndTime.IsZero() {
+		result["end_time"] = task.EndTime.UnixMilli()
+	}
+
+	return result
 }
 
 // CookieHandle is a preprocessing filter function
