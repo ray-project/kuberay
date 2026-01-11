@@ -232,11 +232,9 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 		if !ok {
 			clusterTaskMapObject.TaskMap[taskId] = currTask
 		} else {
-			// TODO: see if there are any fields that needs to be added. Or updated i.e. taskAttempt
 			if storedTask.AttemptNumber < currTask.AttemptNumber {
-				storedTask.AttemptNumber = currTask.AttemptNumber
+				clusterTaskMapObject.TaskMap[taskId] = currTask
 			}
-			clusterTaskMapObject.TaskMap[taskId] = storedTask
 		}
 		clusterTaskMapObject.Unlock()
 	case types.TASK_LIFECYCLE_EVENT:
