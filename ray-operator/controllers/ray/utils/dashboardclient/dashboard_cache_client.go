@@ -16,12 +16,9 @@ import (
 	utiltypes "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/types"
 )
 
-var (
-	// ErrAgain EAGAIN means "there is no data available right now, try again later"
-	// https://stackoverflow.com/questions/4058368/what-does-eagain-mean
-	ErrAgain                           = errors.New("EAGAIN")
-	ErrTaskQueueTemporarilyUnavailable = errors.New("task queue is temporarily unavailable")
-)
+// ErrAgain EAGAIN means "there is no data available right now, try again later"
+// https://stackoverflow.com/questions/4058368/what-does-eagain-mean
+var ErrAgain = errors.New("EAGAIN")
 
 const (
 	// TODO: make worker size configurable.
