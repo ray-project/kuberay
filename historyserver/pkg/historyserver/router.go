@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"path"
 	"strings"
 
 	"github.com/emicklei/go-restful/v3"
@@ -112,7 +111,9 @@ func routerAPI(s *ServerHandler) {
 		Writes("")) // Placeholder for specific return type
 
 	ws.Route(ws.GET("/v0/tasks").To(s.getTaskDetail).Filter(s.CookieHandle).
-		Doc("get task detail ").Param(ws.QueryParameter("limit", "limit")).
+		Doc("get task detail ").
+		// TODO: support limit
+		// Param(ws.QueryParameter("limit", "limit")).
 		Param(ws.QueryParameter("filter_keys", "filter_keys")).
 		Param(ws.QueryParameter("filter_predicates", "filter_predicates")).
 		Param(ws.QueryParameter("filter_values", "filter_values")).
@@ -127,63 +128,63 @@ func routerAPI(s *ServerHandler) {
 		Writes("")) // Placeholder for specific return type
 }
 
-func routerRoot(s *ServerHandler) {
-	ws := new(restful.WebService)
-	defer restful.Add(ws)
-	ws.Filter(RequestLogFilter)
-	ws.Route(ws.GET("/").To(func(req *restful.Request, w *restful.Response) {
-		isHomePage := true
-		_, err := req.Request.Cookie(COOKIE_CLUSTER_NAME_KEY)
-		isHomePage = err != nil
-		prefix := ""
-		if isHomePage {
-			prefix = "homepage"
-		} else {
-			version := "v2.51.0"
-			if versionCookie, err := req.Request.Cookie(COOKIE_DASHBOARD_VERSION_KEY); err == nil {
-				version = versionCookie.Value
-			}
-			prefix = version + "/client/build"
-		}
-		// Check if homepage file exists; if so use it, otherwise use default index.html
-		homepagePath := path.Join(s.dashboardDir, prefix, "index.html")
+// func routerRoot(s *ServerHandler) {
+// 	ws := new(restful.WebService)
+// 	defer restful.Add(ws)
+// 	ws.Filter(RequestLogFilter)
+// 	ws.Route(ws.GET("/").To(func(req *restful.Request, w *restful.Response) {
+// 		isHomePage := true
+// 		_, err := req.Request.Cookie(COOKIE_CLUSTER_NAME_KEY)
+// 		isHomePage = err != nil
+// 		prefix := ""
+// 		if isHomePage {
+// 			prefix = "homepage"
+// 		} else {
+// 			version := "v2.51.0"
+// 			if versionCookie, err := req.Request.Cookie(COOKIE_DASHBOARD_VERSION_KEY); err == nil {
+// 				version = versionCookie.Value
+// 			}
+// 			prefix = version + "/client/build"
+// 		}
+// 		// Check if homepage file exists; if so use it, otherwise use default index.html
+// 		homepagePath := path.Join(s.dashboardDir, prefix, "index.html")
 
-		var data []byte
+// 		var data []byte
 
-		if _, statErr := os.Stat(homepagePath); !os.IsNotExist(statErr) {
-			data, err = os.ReadFile(homepagePath)
-		} else {
-			http.Error(w, "could not read HTML file", http.StatusInternalServerError)
-			logrus.Errorf("could not read HTML file: %v", statErr)
-			return
-		}
+// 		if _, statErr := os.Stat(homepagePath); !os.IsNotExist(statErr) {
+// 			data, err = os.ReadFile(homepagePath)
+// 		} else {
+// 			http.Error(w, "could not read HTML file", http.StatusInternalServerError)
+// 			logrus.Errorf("could not read HTML file: %v", statErr)
+// 			return
+// 		}
 
-		if err != nil {
-			http.Error(w, "could not read HTML file", http.StatusInternalServerError)
-			logrus.Errorf("could not read HTML file: %v", err)
-			return
-		}
-		w.Header().Set("Content-Type", "text/html")
-		w.Write(data)
-	}).Writes(""))
-}
+// 		if err != nil {
+// 			http.Error(w, "could not read HTML file", http.StatusInternalServerError)
+// 			logrus.Errorf("could not read HTML file: %v", err)
+// 			return
+// 		}
+// 		w.Header().Set("Content-Type", "text/html")
+// 		w.Write(data)
+// 	}).Writes(""))
+// }
 
 // TODO: this is the frontend's entry.
-func routerHomepage(s *ServerHandler) {
-	ws := new(restful.WebService)
-	defer restful.Add(ws)
-	ws.Path("/homepage").Consumes("*/*").Produces("*/*").Filter(RequestLogFilter)
-	ws.Route(ws.GET("/").To(func(_ *restful.Request, w *restful.Response) {
-		data, err := os.ReadFile(path.Join(s.dashboardDir, "homepage/index.html"))
-		if err != nil {
-			// Fallback to root path
-			routerRoot(s)
-			return
-		}
-		w.Header().Set("Content-Type", "text/html")
-		w.Write(data)
-	}).Writes(""))
-}
+// func routerHomepage(s *ServerHandler) {
+// 	ws := new(restful.WebService)
+// 	defer restful.Add(ws)
+// 	ws.Path("/homepage").Consumes("*/*").Produces("*/*").Filter(RequestLogFilter)
+// 	ws.Route(ws.GET("/").To(func(_ *restful.Request, w *restful.Response) {
+// 		data, err := os.ReadFile(path.Join(s.dashboardDir, "homepage/index.html"))
+// 		if err != nil {
+// 			// Fallback to root path
+// 			routerRoot(s)
+// 			return
+// 		}
+// 		w.Header().Set("Content-Type", "text/html")
+// 		w.Write(data)
+// 	}).Writes(""))
+// }
 
 func routerHealthz(s *ServerHandler) {
 
@@ -256,8 +257,8 @@ func (s *ServerHandler) RegisterRouter() {
 	routerNodes(s)
 	routerEvents(s)
 	routerAPI(s)
-	routerRoot(s)
-	routerHomepage(s)
+	// routerRoot(s)
+	// routerHomepage(s)
 	routerHealthz(s)
 	routerLogical(s)
 }
@@ -834,7 +835,6 @@ func (s *ServerHandler) CookieHandle(req *restful.Request, resp *restful.Respons
 }
 
 var getClusterSvcName = func(clis []client.Client, name, namespace string) (string, error) {
-	svcName := ""
 	if len(clis) == 0 {
 		return "", errors.New("No available kubernetes config found")
 	}
@@ -844,7 +844,10 @@ var getClusterSvcName = func(clis []client.Client, name, namespace string) (stri
 	if err != nil {
 		return "", errors.New("RayCluster not found")
 	}
-	svcName = rc.Status.Head.ServiceName
+	svcName := rc.Status.Head.ServiceName
+	if svcName == "" {
+		return "", errors.New("RayCluster head service not ready")
+	}
 	return svcName + ":8265", nil
 }
 
