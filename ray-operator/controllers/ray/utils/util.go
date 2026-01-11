@@ -701,7 +701,7 @@ func EnvVarByName(envName string, envVars []corev1.EnvVar) (corev1.EnvVar, bool)
 }
 
 type ClientProvider interface {
-	GetDashboardClient(mgr manager.Manager) func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error)
+	GetDashboardClient(ctx context.Context, mgr manager.Manager) func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error)
 	GetHttpProxyClient(mgr manager.Manager) func(hostIp, podNamespace, podName string, port int) RayHttpProxyClientInterface
 }
 
@@ -932,7 +932,7 @@ func FetchHeadServiceURL(ctx context.Context, cli client.Client, rayCluster *ray
 	return headServiceURL, nil
 }
 
-func GetRayDashboardClientFunc(mgr manager.Manager, useKubernetesProxy bool) func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error) {
+func GetRayDashboardClientFunc(ctx context.Context, mgr manager.Manager, useKubernetesProxy bool) func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error) {
 	return func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error) {
 		dashboardClient := &dashboardclient.RayDashboardClient{}
 		var authToken string
@@ -975,17 +975,21 @@ func GetRayDashboardClientFunc(mgr manager.Manager, useKubernetesProxy bool) fun
 				fmt.Sprintf("%s/api/v1/namespaces/%s/services/%s:dashboard/proxy", mgr.GetConfig().Host, rayCluster.Namespace, headSvcName),
 				authToken,
 			)
-			return dashboardClient, nil
+		} else {
+			dashboardClient.InitClient(&http.Client{
+				Timeout: 2 * time.Second,
+			}, "http://"+url, authToken)
 		}
 
-		dashboardClient.InitClient(
-			&http.Client{
-				Timeout: 2 * time.Second,
-			},
-			"http://"+url,
-			authToken,
-		)
-
+		if features.Enabled(features.AsyncJobInfoQuery) && rayCluster != nil {
+			namespacedName := types.NamespacedName{
+				Name:      rayCluster.Name,
+				Namespace: rayCluster.Namespace,
+			}
+			dashboardCachedClient := &dashboardclient.RayDashboardCacheClient{}
+			dashboardCachedClient.InitClient(ctx, namespacedName, dashboardClient)
+			return dashboardCachedClient, nil
+		}
 		return dashboardClient, nil
 	}
 }

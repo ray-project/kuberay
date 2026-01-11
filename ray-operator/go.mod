@@ -7,6 +7,7 @@ require (
 	github.com/coder/websocket v1.8.14
 	github.com/go-logr/logr v1.4.3
 	github.com/go-logr/zapr v1.3.0
+	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/jarcoal/httpmock v1.4.1
 	github.com/onsi/ginkgo/v2 v2.27.3
 	github.com/onsi/gomega v1.38.3
@@ -14,6 +15,7 @@ require (
 	github.com/orcaman/concurrent-map/v2 v2.0.1
 	github.com/prometheus/client_golang v1.23.2
 	github.com/robfig/cron/v3 v3.0.1
+	github.com/smallnest/chanx v1.2.0
 	github.com/spf13/pflag v1.0.10
 	github.com/stretchr/testify v1.11.1
 	go.uber.org/mock v0.6.0
