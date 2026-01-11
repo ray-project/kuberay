@@ -119,6 +119,13 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			rayClusterInstance := &rayv1.RayCluster{}
 			if err := r.Get(ctx, rayClusterNamespacedName, rayClusterInstance); err != nil {
 				logger.Error(err, "Failed to get RayCluster")
+
+				if features.Enabled(features.AsyncJobInfoQuery) {
+					// If the RayCluster is already deleted, we provide the name and namespace to the RayClusterInstance
+					// for the dashboard client to remove cache correctly.
+					rayClusterInstance.Name = rayClusterNamespacedName.Name
+					rayClusterInstance.Namespace = rayClusterNamespacedName.Namespace
+				}
 			}
 
 			rayDashboardClient, err := r.dashboardClientFunc(rayClusterInstance, rayJobInstance.Status.DashboardURL)
