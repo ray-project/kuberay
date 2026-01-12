@@ -543,13 +543,16 @@ func (s *ServerHandler) getLogicalActor(req *restful.Request, resp *restful.Resp
 	actor, found := s.eventHandler.GetActorByID(clusterNameID, actorID)
 
 	replyActorInfo := ReplyActorInfo{
-		Result: true,
-		Msg:    "Actor fetched.",
-		Data:   ActorInfoData{},
+		Data: ActorInfoData{},
 	}
 
 	if found {
+		replyActorInfo.Result = true
+		replyActorInfo.Msg = "Actor fetched."
 		replyActorInfo.Data.Detail = formatActorForResponse(actor)
+	} else {
+		replyActorInfo.Result = false
+		replyActorInfo.Msg = "Actor not found."
 	}
 
 	actData, err := json.MarshalIndent(&replyActorInfo, "", "  ")
@@ -571,55 +574,6 @@ func (s *ServerHandler) getNodeLogFile(req *restful.Request, resp *restful.Respo
 
 	// Not yet supported
 	resp.WriteErrorString(http.StatusNotImplemented, "Node log file not yet supported")
-}
-
-func getTaskInfo(allTaskData []byte, findTaskID string) ([]byte, error) {
-	var allTasks = map[string]interface{}{}
-	var findTaskInfo = &ReplyTaskInfo{
-		Msg:    "",
-		Result: false,
-	}
-
-	if err := json.Unmarshal(allTaskData, &allTasks); err != nil {
-		logrus.Errorf("Unmarshal allTask error %v", err)
-		return nil, err
-	}
-
-	data, ok := allTasks["data"].(map[string]interface{})
-	if !ok {
-		data = map[string]interface{}{}
-	}
-
-	result, ok := data["result"].(map[string]interface{})
-	if !ok {
-		result = map[string]interface{}{}
-	}
-
-	secondResults, ok := result["result"].([]interface{})
-	if !ok {
-		secondResults = []interface{}{}
-	}
-
-	for _, single := range secondResults {
-		r, ok := single.(map[string]interface{})
-		if !ok {
-			continue
-		}
-		taskID, ok := r["task_id"].(string)
-		if !ok {
-			taskID = ""
-		}
-		if taskID == findTaskID {
-			findTaskInfo.Result = true
-			findTaskInfo.Data.Result.Result = make([]interface{}, 0)
-			findTaskInfo.Data.Result.Result = append(findTaskInfo.Data.Result.Result, r)
-			findTaskInfo.Data.Result.NumFiltered = 1
-			findTaskInfo.Data.Result.NumAfterTruncation = 1
-			findTaskInfo.Data.Result.Total = 1
-			break
-		}
-	}
-	return json.MarshalIndent(findTaskInfo, "", "  ")
 }
 
 func (s *ServerHandler) getTaskSummarize(req *restful.Request, resp *restful.Response) {
