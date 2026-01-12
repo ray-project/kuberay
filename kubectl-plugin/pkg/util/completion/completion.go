@@ -109,9 +109,6 @@ func workerGroupCompletionFunc(cmd *cobra.Command, args []string, toComplete str
 
 	seen := make(map[string]bool)
 	for _, rayCluster := range rayClusterList.Items {
-		if cluster != "" && rayCluster.Name != cluster {
-			continue
-		}
 		for _, spec := range rayCluster.Spec.WorkerGroupSpecs {
 			if !seen[spec.GroupName] && (toComplete == "" || strings.HasPrefix(spec.GroupName, toComplete)) {
 				comps = append(comps, spec.GroupName)
