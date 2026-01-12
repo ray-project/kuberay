@@ -61,10 +61,11 @@ func TestRayCreateClusterComplete(t *testing.T) {
 
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			cmdFactory := cmdutil.NewFactory(genericclioptions.NewConfigFlags(true))
+			configFlags := genericclioptions.NewConfigFlags(true)
+			cmdFactory := cmdutil.NewFactory(configFlags)
 			fakeCreateClusterOptions := NewCreateClusterOptions(cmdFactory, testStreams)
 			cmd := &cobra.Command{Use: "cluster"}
-			cmd.Flags().StringVarP(&fakeCreateClusterOptions.namespace, "namespace", "n", "", "")
+			configFlags.AddFlags(cmd.Flags())
 			fakeCreateClusterOptions.rayVersion = tc.rayVersion
 
 			if tc.image != "" {
