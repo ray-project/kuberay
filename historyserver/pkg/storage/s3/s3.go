@@ -18,6 +18,8 @@ package s3
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -27,11 +29,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/smithy-go"
 	"github.com/sirupsen/logrus"
 
 	"github.com/ray-project/kuberay/historyserver/pkg/collector/types"
@@ -40,7 +42,7 @@ import (
 )
 
 type RayLogsHandler struct {
-	S3Client       *s3.S3
+	S3Client       *s3.Client
 	LogFiles       chan string
 	HttpClient     *http.Client
 	S3Bucket       string
@@ -55,16 +57,17 @@ type RayLogsHandler struct {
 }
 
 func (r *RayLogsHandler) CreateDirectory(d string) error {
+	ctx := context.Background()
 	objectDir := fmt.Sprintf("%s/", path.Clean(d))
 
-	_, err := r.S3Client.HeadObject(&s3.HeadObjectInput{
+	_, err := r.S3Client.HeadObject(ctx, &s3.HeadObjectInput{
 		Bucket: aws.String(r.S3Bucket),
 		Key:    aws.String(objectDir),
 	})
 	if err != nil {
 		// Directory doesn't exist, create it
 		logrus.Infof("Begin to create s3 dir %s ...", objectDir)
-		_, err = r.S3Client.PutObject(&s3.PutObjectInput{
+		_, err = r.S3Client.PutObject(ctx, &s3.PutObjectInput{
 			Bucket: aws.String(r.S3Bucket),
 			Key:    aws.String(objectDir),
 			Body:   bytes.NewReader([]byte("")),
@@ -79,7 +82,8 @@ func (r *RayLogsHandler) CreateDirectory(d string) error {
 }
 
 func (r *RayLogsHandler) WriteFile(file string, reader io.ReadSeeker) error {
-	_, err := r.S3Client.PutObject(&s3.PutObjectInput{
+	ctx := context.Background()
+	_, err := r.S3Client.PutObject(ctx, &s3.PutObjectInput{
 		Bucket: aws.String(r.S3Bucket),
 		Key:    aws.String(file),
 		Body:   reader,
@@ -88,40 +92,40 @@ func (r *RayLogsHandler) WriteFile(file string, reader io.ReadSeeker) error {
 }
 
 func (r *RayLogsHandler) _listFiles(prefix string, delimiter string, onlyBase bool) []string {
+	ctx := context.Background()
 	files := []string{}
 
-	listInput := &s3.ListObjectsV2Input{
+	paginator := s3.NewListObjectsV2Paginator(r.S3Client, &s3.ListObjectsV2Input{
 		Bucket:    aws.String(r.S3Bucket),
 		Prefix:    aws.String(prefix + "/"),
-		MaxKeys:   aws.Int64(100),
+		MaxKeys:   100,
 		Delimiter: aws.String(delimiter),
-	}
+	})
 
-	err := r.S3Client.ListObjectsV2Pages(listInput,
-		func(page *s3.ListObjectsV2Output, lastPage bool) bool {
-			logrus.Infof("[ListFiles]Returned objects in %v. length of page.Contents: %v, length of page.CommonPrefixes: %v",
-				prefix+"/", len(page.Contents), len(page.CommonPrefixes))
+	for paginator.HasMorePages() {
+		page, err := paginator.NextPage(ctx)
+		if err != nil {
+			logrus.Errorf("Failed to list objects from %s: %v", prefix+"/", err)
+			return []string{}
+		}
+		logrus.Infof("[ListFiles]Returned objects in %v. length of page.Contents: %v, length of page.CommonPrefixes: %v",
+			prefix+"/", len(page.Contents), len(page.CommonPrefixes))
 
-			for _, object := range page.Contents {
-				objName := *object.Key
-				if onlyBase {
-					objName = path.Base(*object.Key)
-				}
-				files = append(files, objName)
+		for _, object := range page.Contents {
+			objName := aws.ToString(object.Key)
+			if onlyBase {
+				objName = path.Base(objName)
 			}
+			files = append(files, objName)
+		}
 
-			for _, object := range page.CommonPrefixes {
-				objName := *object.Prefix
-				if onlyBase {
-					objName = path.Base(*object.Prefix)
-				}
-				files = append(files, objName+"/")
+		for _, object := range page.CommonPrefixes {
+			objName := aws.ToString(object.Prefix)
+			if onlyBase {
+				objName = path.Base(objName)
 			}
-			return true
-		})
-	if err != nil {
-		logrus.Errorf("Failed to list objects from %s: %v", prefix+"/", err)
-		return []string{}
+			files = append(files, objName+"/")
+		}
 	}
 
 	return files
@@ -143,6 +147,7 @@ func (r *RayLogsHandler) ListFiles(clusterId string, dir string) []string {
 }
 
 func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
+	ctx := context.Background()
 	defer func() {
 		if recover := recover(); recover != nil {
 			fmt.Println("Recovered from panic:", recover)
@@ -153,47 +158,47 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 	logrus.Debugf("Prepare to get list clusters info ...")
 
 	getClusters := func() {
-		listInput := &s3.ListObjectsV2Input{
+		listPrefix := path.Join(r.S3RootDir, "metadir") + "/"
+		paginator := s3.NewListObjectsV2Paginator(r.S3Client, &s3.ListObjectsV2Input{
 			Bucket:    aws.String(r.S3Bucket),
-			Prefix:    aws.String(path.Join(r.S3RootDir, "metadir") + "/"),
-			MaxKeys:   aws.Int64(100),
+			Prefix:    aws.String(listPrefix),
+			MaxKeys:   100,
 			Delimiter: aws.String(""),
-		}
+		})
 
-		err := r.S3Client.ListObjectsV2Pages(listInput,
-			func(page *s3.ListObjectsV2Output, lastPage bool) bool {
-				logrus.Infof("[List]Returned objects in %v. length of page.Contents: %v, length of page.CommonPrefixes: %v",
-					path.Join(r.S3RootDir, "metadir")+"/", len(page.Contents), len(page.CommonPrefixes))
+		for paginator.HasMorePages() {
+			page, err := paginator.NextPage(ctx)
+			if err != nil {
+				logrus.Errorf("Failed to list objects from %s: %v", listPrefix, err)
+				return
+			}
+			logrus.Infof("[List]Returned objects in %v. length of page.Contents: %v, length of page.CommonPrefixes: %v",
+				listPrefix, len(page.Contents), len(page.CommonPrefixes))
 
-				for _, object := range page.Contents {
-					c := &utils.ClusterInfo{}
-					metaInfo := strings.Trim(strings.TrimPrefix(*object.Key, path.Join(r.S3RootDir, "metadir/")), "/")
-					metas := strings.Split(metaInfo, "/")
-					if len(metas) < 2 {
-						continue
-					}
-					logrus.Infof("Process %++v", metas)
-					namespaceName := strings.Split(metas[0], "_")
-					c.Name = namespaceName[0]
-					c.Namespace = namespaceName[1]
-					c.SessionName = metas[1]
-					sessionInfo := strings.Split(metas[1], "_")
-					date := sessionInfo[1]
-					dataTime := sessionInfo[2]
-					createTime, err := time.Parse("2006-01-02_15-04-05", date+"_"+dataTime)
-					if err != nil {
-						logrus.Errorf("Failed to parse time %s: %v", date+"_"+dataTime, err)
-						continue
-					}
-					c.CreateTimeStamp = createTime.Unix()
-					c.CreateTime = createTime.UTC().Format(("2006-01-02T15:04:05Z"))
-					clusters = append(clusters, *c)
+			for _, object := range page.Contents {
+				c := &utils.ClusterInfo{}
+				metaInfo := strings.Trim(strings.TrimPrefix(aws.ToString(object.Key), listPrefix), "/")
+				metas := strings.Split(metaInfo, "/")
+				if len(metas) < 2 {
+					continue
 				}
-				return true
-			})
-		if err != nil {
-			logrus.Errorf("Failed to list objects from %s: %v", path.Join(r.S3RootDir, "metadir")+"/", err)
-			return
+				logrus.Infof("Process %++v", metas)
+				namespaceName := strings.Split(metas[0], "_")
+				c.Name = namespaceName[0]
+				c.Namespace = namespaceName[1]
+				c.SessionName = metas[1]
+				sessionInfo := strings.Split(metas[1], "_")
+				date := sessionInfo[1]
+				dataTime := sessionInfo[2]
+				createTime, err := time.Parse("2006-01-02_15-04-05", date+"_"+dataTime)
+				if err != nil {
+					logrus.Errorf("Failed to parse time %s: %v", date+"_"+dataTime, err)
+					continue
+				}
+				c.CreateTimeStamp = createTime.Unix()
+				c.CreateTime = createTime.UTC().Format(("2006-01-02T15:04:05Z"))
+				clusters = append(clusters, *c)
+			}
 		}
 	}
 
@@ -203,9 +208,10 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 }
 
 func (r *RayLogsHandler) GetContent(clusterId string, fileName string) io.Reader {
+	ctx := context.Background()
 	logrus.Infof("Prepare to get object %s info ...", fileName)
 
-	result, err := r.S3Client.GetObject(&s3.GetObjectInput{
+	result, err := r.S3Client.GetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(r.S3Bucket),
 		Key:    aws.String(fileName),
 	})
@@ -216,7 +222,7 @@ func (r *RayLogsHandler) GetContent(clusterId string, fileName string) io.Reader
 		for _, f := range allFiles {
 			if path.Base(f) == fileName {
 				logrus.Infof("Get object %s info success", f)
-				result, err = r.S3Client.GetObject(&s3.GetObjectInput{
+				result, err = r.S3Client.GetObject(ctx, &s3.GetObjectInput{
 					Bucket: aws.String(r.S3Bucket),
 					Key:    aws.String(f),
 				})
@@ -259,92 +265,116 @@ func NewWritter(c *types.RayCollectorConfig, jd map[string]interface{}) (storage
 }
 
 // TODO: refactor this
-func createBucketIfNotExists(s3Client *s3.S3, bucketName string) error {
-	// Check if bucket exists
-	_, err := s3Client.HeadBucket(&s3.HeadBucketInput{
+func createBucketIfNotExists(ctx context.Context, s3Client *s3.Client, bucketName string) error {
+	_, err := s3Client.HeadBucket(ctx, &s3.HeadBucketInput{
 		Bucket: aws.String(bucketName),
 	})
-	if err != nil {
-		// Check if the error is because bucket doesn't exist
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			case s3.ErrCodeNoSuchBucket, "NotFound", "404":
-				// Bucket doesn't exist, create it
-				logrus.Infof("Bucket %s does not exist, creating...", bucketName)
-				_, createErr := s3Client.CreateBucket(&s3.CreateBucketInput{
-					Bucket: aws.String(bucketName),
-				})
-				if createErr != nil {
-					// Check if bucket already exists (race condition)
-					if aerr2, ok := createErr.(awserr.Error); ok {
-						if aerr2.Code() == s3.ErrCodeBucketAlreadyExists ||
-							aerr2.Code() == s3.ErrCodeBucketAlreadyOwnedByYou ||
-							aerr2.Code() == "BucketAlreadyOwnedByYou" {
-							logrus.Infof("Bucket %s already exists", bucketName)
-							return nil
-						}
-					}
-					logrus.Errorf("Failed to create bucket %s: %v", bucketName, createErr)
-					return fmt.Errorf("failed to create bucket %s: %w", bucketName, createErr)
-				}
-				logrus.Infof("Successfully created bucket %s", bucketName)
-				return nil
-			default:
-				// For other AWS errors, try to create anyway
-				logrus.Warnf("HeadBucket error for %s: %v, attempting to create bucket", bucketName, err)
-			}
-		}
+	if err == nil {
+		logrus.Infof("Bucket %s already exists", bucketName)
+		return nil
+	}
 
-		// Try to create the bucket anyway (might be a permission issue for HeadBucket)
-		logrus.Infof("Attempting to create bucket %s...", bucketName)
-		_, createErr := s3Client.CreateBucket(&s3.CreateBucketInput{
-			Bucket: aws.String(bucketName),
-		})
-		if createErr != nil {
-			if aerr, ok := createErr.(awserr.Error); ok {
-				if aerr.Code() == s3.ErrCodeBucketAlreadyExists ||
-					aerr.Code() == s3.ErrCodeBucketAlreadyOwnedByYou ||
-					aerr.Code() == "BucketAlreadyOwnedByYou" {
-					logrus.Infof("Bucket %s already exists", bucketName)
-					return nil
-				}
-			}
-			logrus.Errorf("Failed to create bucket %s: %v", bucketName, createErr)
-			return fmt.Errorf("failed to create bucket %s: %w", bucketName, createErr)
+	if isBucketNotFound(err) {
+		logrus.Infof("Bucket %s does not exist, creating...", bucketName)
+		if err := createBucket(ctx, s3Client, bucketName); err != nil {
+			return err
 		}
 		logrus.Infof("Successfully created bucket %s", bucketName)
 		return nil
 	}
 
-	logrus.Infof("Bucket %s already exists", bucketName)
+	logrus.Warnf("HeadBucket error for %s: %v, attempting to create bucket", bucketName, err)
+	if err := createBucket(ctx, s3Client, bucketName); err != nil {
+		return err
+	}
+	logrus.Infof("Successfully created bucket %s", bucketName)
 	return nil
+}
+
+func isBucketNotFound(err error) bool {
+	var apiErr smithy.APIError
+	if errors.As(err, &apiErr) {
+		switch apiErr.ErrorCode() {
+		case "NoSuchBucket", "NotFound", "404":
+			return true
+		}
+	}
+	return false
+}
+
+func createBucket(ctx context.Context, s3Client *s3.Client, bucketName string) error {
+	_, err := s3Client.CreateBucket(ctx, &s3.CreateBucketInput{
+		Bucket: aws.String(bucketName),
+	})
+	if err == nil {
+		return nil
+	}
+	if isBucketAlreadyExists(err) {
+		logrus.Infof("Bucket %s already exists", bucketName)
+		return nil
+	}
+	logrus.Errorf("Failed to create bucket %s: %v", bucketName, err)
+	return fmt.Errorf("failed to create bucket %s: %w", bucketName, err)
+}
+
+func isBucketAlreadyExists(err error) bool {
+	var apiErr smithy.APIError
+	if errors.As(err, &apiErr) {
+		return apiErr.ErrorCode() == "BucketAlreadyExists" ||
+			apiErr.ErrorCode() == "BucketAlreadyOwnedByYou"
+	}
+	return false
 }
 
 func New(c *config) (*RayLogsHandler, error) {
 	logrus.Infof("Begin to create s3 client ...")
+	ctx := context.Background()
 
 	httpClient := &http.Client{
 		Timeout: 5 * time.Second,
 	}
 
-	// Create AWS session
-	sess, err := session.NewSession(&aws.Config{
-		Credentials:      credentials.NewStaticCredentials(c.S3ID, c.S3Secret, c.S3Token),
-		Endpoint:         aws.String(c.S3Endpoint),
-		Region:           aws.String(c.S3Region),
-		HTTPClient:       httpClient,
-		DisableSSL:       c.DisableSSL,
-		S3ForcePathStyle: c.S3ForcePathStyle, // IMPORTANT: Required for MinIO
-	})
+	credsProvider := credentials.NewStaticCredentialsProvider(c.S3ID, c.S3Secret, c.S3Token)
+	endpoint := normalizeEndpoint(strings.TrimSpace(c.S3Endpoint), c.DisableSSL)
+
+	var awsCfg aws.Config
+	var err error
+	if endpoint != "" {
+		resolver := aws.EndpointResolverWithOptionsFunc(func(service, region string, options ...interface{}) (aws.Endpoint, error) {
+			if service != s3.ServiceID {
+				return aws.Endpoint{}, &aws.EndpointNotFoundError{}
+			}
+			return aws.Endpoint{
+				PartitionID:       "aws",
+				URL:               endpoint,
+				SigningRegion:     c.S3Region,
+				HostnameImmutable: true,
+			}, nil
+		})
+		awsCfg, err = config.LoadDefaultConfig(ctx,
+			config.WithRegion(c.S3Region),
+			config.WithCredentialsProvider(credsProvider),
+			config.WithEndpointResolverWithOptions(resolver),
+			config.WithHTTPClient(httpClient),
+		)
+	} else {
+		awsCfg, err = config.LoadDefaultConfig(ctx,
+			config.WithRegion(c.S3Region),
+			config.WithCredentialsProvider(credsProvider),
+			config.WithHTTPClient(httpClient),
+		)
+	}
 	if err != nil {
-		logrus.Fatalf("Create aws session error %v", err)
+		return nil, fmt.Errorf("failed to load AWS configuration: %w", err)
 	}
 
-	s3Client := s3.New(sess)
+	s3Client := s3.NewFromConfig(awsCfg, func(o *s3.Options) {
+		o.UsePathStyle = c.S3ForcePathStyle
+	})
 
 	// Ensure bucket exists, create if not
 	logrus.Infof("Checking if bucket %s exists...", c.S3Bucket)
-	if err := createBucketIfNotExists(s3Client, c.S3Bucket); err != nil {
+	if err := createBucketIfNotExists(ctx, s3Client, c.S3Bucket); err != nil {
 		return nil, fmt.Errorf("failed to ensure bucket exists: %w", err)
 	}
 
@@ -375,4 +405,26 @@ func New(c *config) (*RayLogsHandler, error) {
 		LogBatching:  c.LogBatching,
 		PushInterval: c.PushInterval,
 	}, nil
+}
+
+func normalizeEndpoint(endpoint string, disableSSL bool) string {
+	if endpoint == "" {
+		return ""
+	}
+
+	if strings.HasPrefix(endpoint, "http://") {
+		return endpoint
+	}
+	if strings.HasPrefix(endpoint, "https://") {
+		if disableSSL {
+			return "http://" + strings.TrimPrefix(endpoint, "https://")
+		}
+		return endpoint
+	}
+
+	scheme := "https"
+	if disableSSL {
+		scheme = "http"
+	}
+	return scheme + "://" + endpoint
 }

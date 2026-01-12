@@ -8,19 +8,19 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
 	. "github.com/onsi/gomega"
-	corev1 "k8s.io/api/core/v1"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/s3"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	rayv1ac "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/ray/v1"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
+	corev1 "k8s.io/api/core/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
@@ -43,7 +43,7 @@ func TestCollector(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		testFunc func(Test, *WithT, *corev1.Namespace, *s3.S3)
+		testFunc func(Test, *WithT, *corev1.Namespace, *s3.Client)
 	}{
 		{
 			name:     "Happy path: Logs and events should be uploaded to S3 on deletion",
@@ -82,7 +82,7 @@ func TestCollector(t *testing.T) {
 //   - {s3BucketName}/log/{clusterName}_{clusterID}/{sessionID}/node_events/...
 //
 // 6. Delete S3 bucket to ensure test isolation
-func testCollectorUploadOnGracefulShutdown(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testCollectorUploadOnGracefulShutdown(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) {
 	rayCluster := prepareTestEnv(test, g, namespace, s3Client)
 
 	// Submit a Ray job to the existing cluster.
@@ -128,7 +128,7 @@ func testCollectorUploadOnGracefulShutdown(test Test, g *WithT, namespace *corev
 //   - {s3BucketName}/log/{clusterName}_{clusterID}/{sessionID}/node_events/...
 //
 // 7. Delete S3 bucket to ensure test isolation
-func testCollectorSeparatesFilesBySession(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testCollectorSeparatesFilesBySession(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) {
 	rayCluster := prepareTestEnv(test, g, namespace, s3Client)
 
 	// Submit a Ray job to the existing cluster.
@@ -185,7 +185,7 @@ func testCollectorSeparatesFilesBySession(test Test, g *WithT, namespace *corev1
 }
 
 // ensureS3Client creates an S3 client and ensures API endpoint accessibility.
-func ensureS3Client(t *testing.T) *s3.S3 {
+func ensureS3Client(t *testing.T) *s3.Client {
 	test := With(t)
 	g := NewWithT(t)
 	applyMinIO(test, g)
@@ -210,7 +210,7 @@ func ensureS3Client(t *testing.T) *s3.S3 {
 		if err != nil {
 			return err
 		}
-		_, err = s3Client.ListBuckets(&s3.ListBucketsInput{}) // Dummy operation to ensure accessibility
+		_, err = s3Client.ListBuckets(test.Ctx(), &s3.ListBucketsInput{}) // Dummy operation to ensure accessibility
 		return err
 	}, TestTimeoutMedium).Should(Succeed(), "MinIO API endpoint should be ready")
 	LogWithTimestamp(test.T(), "Port-forwarded minio API port to localhost:9000 successfully")
@@ -240,23 +240,36 @@ func applyMinIO(test Test, g *WithT) {
 }
 
 // newS3Client creates a new S3 client.
-func newS3Client(endpoint string) (*s3.S3, error) {
-	sess, err := session.NewSession(&aws.Config{
-		Endpoint:         aws.String(endpoint),
-		Region:           aws.String("e2e-test"),
-		Credentials:      credentials.NewStaticCredentials(minioUsername, minioSecret, ""),
-		DisableSSL:       aws.Bool(true),
-		S3ForcePathStyle: aws.Bool(true),
+func newS3Client(endpoint string) (*s3.Client, error) {
+	ctx := context.Background()
+	resolver := aws.EndpointResolverWithOptionsFunc(func(service, region string, options ...interface{}) (aws.Endpoint, error) {
+		if service != s3.ServiceID {
+			return aws.Endpoint{}, &aws.EndpointNotFoundError{}
+		}
+		return aws.Endpoint{
+			PartitionID:       "aws",
+			URL:               endpoint,
+			SigningRegion:     "e2e-test",
+			HostnameImmutable: true,
+		}, nil
 	})
+
+	awsCfg, err := config.LoadDefaultConfig(ctx,
+		config.WithRegion("e2e-test"),
+		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(minioUsername, minioSecret, "")),
+		config.WithEndpointResolverWithOptions(resolver),
+	)
 	if err != nil {
 		return nil, err
 	}
-	return s3.New(sess), nil
+	return s3.NewFromConfig(awsCfg, func(o *s3.Options) {
+		o.UsePathStyle = true
+	}), nil
 }
 
 // prepareTestEnv prepares test environment for each test case, including applying a Ray cluster,
 // checking the collector sidecar container exists in the head pod and an empty S3 bucket exists.
-func prepareTestEnv(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) *rayv1.RayCluster {
+func prepareTestEnv(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) *rayv1.RayCluster {
 	// Deploy a Ray cluster with the collector.
 	rayCluster := applyRayCluster(test, g, namespace)
 
@@ -268,7 +281,7 @@ func prepareTestEnv(test Test, g *WithT, namespace *corev1.Namespace, s3Client *
 	))
 
 	// Check an empty S3 bucket is automatically created.
-	_, err = s3Client.HeadBucket(&s3.HeadBucketInput{
+	_, err = s3Client.HeadBucket(test.Ctx(), &s3.HeadBucketInput{
 		Bucket: aws.String(s3BucketName),
 	})
 	g.Expect(err).NotTo(HaveOccurred())
@@ -277,43 +290,43 @@ func prepareTestEnv(test Test, g *WithT, namespace *corev1.Namespace, s3Client *
 }
 
 // deleteS3Bucket deletes the S3 bucket. Note that objects under the bucket should be deleted first.
-func deleteS3Bucket(test Test, g *WithT, s3Client *s3.S3) {
+func deleteS3Bucket(test Test, g *WithT, s3Client *s3.Client) {
 	// TODO(jwj): Better err handling during cleanup.
 	LogWithTimestamp(test.T(), "Deleting S3 bucket %s", s3BucketName)
 
-	err := s3Client.ListObjectsV2Pages(&s3.ListObjectsV2Input{
+	paginator := s3.NewListObjectsV2Paginator(s3Client, &s3.ListObjectsV2Input{
 		Bucket: aws.String(s3BucketName),
-	}, func(page *s3.ListObjectsV2Output, lastPage bool) bool {
+	})
+
+	for paginator.HasMorePages() {
+		page, err := paginator.NextPage(test.Ctx())
+		if err != nil {
+			test.T().Logf("Failed to list/delete objects in bucket: %v", err)
+			break
+		}
 		if len(page.Contents) == 0 {
-			return false
+			break
 		}
 
-		var objectsToDelete []*s3.ObjectIdentifier
+		objectsToDelete := make([]s3types.ObjectIdentifier, 0, len(page.Contents))
 		for _, obj := range page.Contents {
-			objectsToDelete = append(objectsToDelete, &s3.ObjectIdentifier{
-				Key: obj.Key,
-			})
+			objectsToDelete = append(objectsToDelete, s3types.ObjectIdentifier{Key: obj.Key})
 		}
 
-		_, err := s3Client.DeleteObjects(&s3.DeleteObjectsInput{
+		_, err = s3Client.DeleteObjects(test.Ctx(), &s3.DeleteObjectsInput{
 			Bucket: aws.String(s3BucketName),
-			Delete: &s3.Delete{
+			Delete: &s3types.Delete{
 				Objects: objectsToDelete,
-				Quiet:   aws.Bool(true),
+				Quiet:   true,
 			},
 		})
 		if err != nil {
 			test.T().Logf("Failed to delete objects: %v", err)
-			return false
+			break
 		}
-
-		return true
-	})
-	if err != nil {
-		test.T().Logf("Failed to list/delete objects in bucket: %v", err)
 	}
 
-	_, err = s3Client.DeleteBucket(&s3.DeleteBucketInput{
+	_, err := s3Client.DeleteBucket(test.Ctx(), &s3.DeleteBucketInput{
 		Bucket: aws.String(s3BucketName),
 	})
 	if err != nil {
@@ -374,42 +387,42 @@ func applyRayJobToCluster(test Test, g *WithT, namespace *corev1.Namespace, rayC
 // Additionally, it verifies that specific files have content:
 // - logs/<nodeID>/raylet.out must exist and have content > 0 bytes
 // - node_events/<nodeID>_<suffix> must exist and have content > 0 bytes (suffix can be ignored for verification)
-func verifyS3SessionDirs(test Test, g *WithT, s3Client *s3.S3, sessionPrefix string, nodeID string) {
+func verifyS3SessionDirs(test Test, g *WithT, s3Client *s3.Client, sessionPrefix string, nodeID string) {
 	dirs := []string{"logs", "node_events"}
 	for _, dir := range dirs {
 		dirPrefix := sessionPrefix + dir + "/"
 
 		g.Eventually(func(gg Gomega) {
 			// Verify the directory has at least one object.
-			objects, err := s3Client.ListObjectsV2(&s3.ListObjectsV2Input{
+			objects, err := s3Client.ListObjectsV2(test.Ctx(), &s3.ListObjectsV2Input{
 				Bucket:  aws.String(s3BucketName),
 				Prefix:  aws.String(dirPrefix),
-				MaxKeys: aws.Int64(10),
+				MaxKeys: 10,
 			})
 			gg.Expect(err).NotTo(HaveOccurred())
-			keyCount := aws.Int64Value(objects.KeyCount)
+			keyCount := int(objects.KeyCount)
 			gg.Expect(keyCount).To(BeNumerically(">", 0))
 			LogWithTimestamp(test.T(), "Verified directory %s under %s has at least one object", dir, sessionPrefix)
 
 			// Find the first file object for content verification.
-			var fileObj *s3.Object
+			var fileKey string
 			for _, obj := range objects.Contents {
-				if !strings.HasSuffix(aws.StringValue(obj.Key), "/") {
-					fileObj = obj
+				key := aws.ToString(obj.Key)
+				if !strings.HasSuffix(key, "/") {
+					fileKey = key
 					break
 				}
 			}
-			gg.Expect(fileObj).NotTo(BeNil(), "No file object found in directory %s", dirPrefix)
+			gg.Expect(fileKey).NotTo(BeEmpty(), "No file object found in directory %s", dirPrefix)
 
 			// Verify the file has content by checking file size.
-			fileKey := *fileObj.Key
 			LogWithTimestamp(test.T(), "Checking file: %s", fileKey)
-			obj, err := s3Client.HeadObject(&s3.HeadObjectInput{
+			obj, err := s3Client.HeadObject(test.Ctx(), &s3.HeadObjectInput{
 				Bucket: aws.String(s3BucketName),
 				Key:    aws.String(fileKey),
 			})
 			gg.Expect(err).NotTo(HaveOccurred())
-			fileSize := aws.Int64Value(obj.ContentLength)
+			fileSize := obj.ContentLength
 			gg.Expect(fileSize).To(BeNumerically(">", 0))
 			LogWithTimestamp(test.T(), "Verified file %s has content: %d bytes", fileKey, fileSize)
 		}, TestTimeoutMedium).Should(Succeed(), "Failed to verify at least one object in directory %s has content", dirPrefix)
