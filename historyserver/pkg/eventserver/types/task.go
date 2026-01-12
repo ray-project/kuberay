@@ -49,11 +49,11 @@ type Task struct {
 	JobID             string `json:"jobId"`
 	NodeID            string `json:"nodeId"`
 	ActorID           string
-	PlacementGroupID  string         `json:"placementGroupId"`
-	Type              TaskType       `json:"taskType"`
-	FuncOrClassName   string         `json:"functionName"`
-	Language          string         `json:"language"`
-	RequiredResources map[string]int `json:"requiredResources"`
+	PlacementGroupID  string             `json:"placementGroupId"`
+	Type              TaskType           `json:"taskType"`
+	FuncOrClassName   string             `json:"functionName"`
+	Language          string             `json:"language"`
+	RequiredResources map[string]float64 `json:"requiredResources"` // float64 to match Ray protobuf (e.g., {"CPU": 0.5})
 	StartTime         time.Time
 	EndTime           time.Time
 	// Events stores the complete state transition history.

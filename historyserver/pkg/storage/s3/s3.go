@@ -211,6 +211,10 @@ func (r *RayLogsHandler) GetContent(clusterId string, fileName string) io.Reader
 		Key:    aws.String(fullPath),
 	})
 	if err != nil {
+		// Close the first result's Body if it exists to prevent connection leak
+		if result != nil && result.Body != nil {
+			result.Body.Close()
+		}
 		logrus.Errorf("Failed to get object %s: %v", fullPath, err)
 		dirPath := path.Dir(fullPath)
 		allFiles := r._listFiles(dirPath, "", false)
@@ -223,6 +227,9 @@ func (r *RayLogsHandler) GetContent(clusterId string, fileName string) io.Reader
 					Key:    aws.String(f),
 				})
 				if err != nil {
+					if result != nil && result.Body != nil {
+						result.Body.Close()
+					}
 					logrus.Errorf("Failed to get object %s: %v", f, err)
 					return nil
 				}

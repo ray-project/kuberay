@@ -43,10 +43,10 @@ func (s *ServerHandler) Run(stop chan struct{}) error {
 	s.RegisterRouter()
 	port := ":8080"
 	server := &http.Server{
-		Addr:         port,            // Listen address
-		ReadTimeout:  2 * time.Second, // Read timeout
-		WriteTimeout: 5 * time.Second, // Write response timeout
-		IdleTimeout:  5 * time.Second, // Idle timeout
+		Addr:         port,             // Listen address
+		ReadTimeout:  5 * time.Second,  // Read timeout
+		WriteTimeout: 35 * time.Second, // Write response timeout (must be >= httpClient.Timeout for proxy requests)
+		IdleTimeout:  60 * time.Second, // Idle timeout
 	}
 	go func() {
 		logrus.Infof("Starting server on %s", port)
