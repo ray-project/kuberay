@@ -192,3 +192,26 @@ func GetActorFieldValue(actor Actor, filterKey string) string {
 		return ""
 	}
 }
+
+// DeepCopy returns a deep copy of the Actor, including slices and maps.
+// This prevents race conditions when the returned Actor is used after locks are released.
+func (a Actor) DeepCopy() Actor {
+	cp := a
+	if len(a.Events) > 0 {
+		cp.Events = make([]ActorStateEvent, len(a.Events))
+		copy(cp.Events, a.Events)
+	}
+	if len(a.RequiredResources) > 0 {
+		cp.RequiredResources = make(map[string]float64, len(a.RequiredResources))
+		for k, v := range a.RequiredResources {
+			cp.RequiredResources[k] = v
+		}
+	}
+	if len(a.LabelSelector) > 0 {
+		cp.LabelSelector = make(map[string]string, len(a.LabelSelector))
+		for k, v := range a.LabelSelector {
+			cp.LabelSelector[k] = v
+		}
+	}
+	return cp
+}

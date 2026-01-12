@@ -193,3 +193,32 @@ func GetTaskFieldValue(task Task, filterKey string) string {
 		return ""
 	}
 }
+
+// DeepCopy returns a deep copy of the Task, including slices and maps.
+// This prevents race conditions when the returned Task is used after locks are released.
+func (t Task) DeepCopy() Task {
+	cp := t
+	if len(t.Events) > 0 {
+		cp.Events = make([]StateEvent, len(t.Events))
+		copy(cp.Events, t.Events)
+	}
+	if len(t.RequiredResources) > 0 {
+		cp.RequiredResources = make(map[string]float64, len(t.RequiredResources))
+		for k, v := range t.RequiredResources {
+			cp.RequiredResources[k] = v
+		}
+	}
+	if len(t.TaskLogInfo) > 0 {
+		cp.TaskLogInfo = make(map[string]string, len(t.TaskLogInfo))
+		for k, v := range t.TaskLogInfo {
+			cp.TaskLogInfo[k] = v
+		}
+	}
+	if len(t.LabelSelector) > 0 {
+		cp.LabelSelector = make(map[string]string, len(t.LabelSelector))
+		for k, v := range t.LabelSelector {
+			cp.LabelSelector[k] = v
+		}
+	}
+	return cp
+}

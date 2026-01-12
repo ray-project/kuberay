@@ -574,8 +574,9 @@ func (h *EventHandler) getAllNodeEventFiles(clusterInfo utils.ClusterInfo) []str
 	return nodeEventFiles
 }
 
-// GetTasks returns a thread-safe copy of all tasks (including all attempts) for a given cluster.
+// GetTasks returns a thread-safe deep copy of all tasks (including all attempts) for a given cluster.
 // Each task attempt is returned as a separate element in the slice.
+// Deep copy ensures the returned data is safe to use after the lock is released.
 func (h *EventHandler) GetTasks(clusterName string) []types.Task {
 	h.ClusterTaskMap.RLock()
 	defer h.ClusterTaskMap.RUnlock()
@@ -588,10 +589,12 @@ func (h *EventHandler) GetTasks(clusterName string) []types.Task {
 	taskMap.Lock()
 	defer taskMap.Unlock()
 
-	// Flatten all attempts into a single slice
+	// Flatten all attempts into a single slice with deep copy
 	var tasks []types.Task
 	for _, attempts := range taskMap.TaskMap {
-		tasks = append(tasks, attempts...)
+		for _, task := range attempts {
+			tasks = append(tasks, task.DeepCopy())
+		}
 	}
 	return tasks
 }
@@ -614,9 +617,11 @@ func (h *EventHandler) GetTaskByID(clusterName, taskID string) ([]types.Task, bo
 	if !ok || len(attempts) == 0 {
 		return nil, false
 	}
-	// Return a copy to avoid data race
+	// Return a deep copy to avoid data race
 	result := make([]types.Task, len(attempts))
-	copy(result, attempts)
+	for i, task := range attempts {
+		result[i] = task.DeepCopy()
+	}
 	return result, true
 }
 
@@ -637,14 +642,14 @@ func (h *EventHandler) GetTasksByJobID(clusterName, jobID string) []types.Task {
 	for _, attempts := range taskMap.TaskMap {
 		for _, task := range attempts {
 			if task.JobID == jobID {
-				tasks = append(tasks, task)
+				tasks = append(tasks, task.DeepCopy())
 			}
 		}
 	}
 	return tasks
 }
 
-// GetActors returns a thread-safe copy of all actors for a given cluster
+// GetActors returns a thread-safe deep copy of all actors for a given cluster
 func (h *EventHandler) GetActors(clusterName string) []types.Actor {
 	h.ClusterActorMap.RLock()
 	defer h.ClusterActorMap.RUnlock()
@@ -659,7 +664,7 @@ func (h *EventHandler) GetActors(clusterName string) []types.Actor {
 
 	actors := make([]types.Actor, 0, len(actorMap.ActorMap))
 	for _, actor := range actorMap.ActorMap {
-		actors = append(actors, actor)
+		actors = append(actors, actor.DeepCopy())
 	}
 	return actors
 }
@@ -678,10 +683,13 @@ func (h *EventHandler) GetActorByID(clusterName, actorID string) (types.Actor, b
 	defer actorMap.Unlock()
 
 	actor, ok := actorMap.ActorMap[actorID]
-	return actor, ok
+	if !ok {
+		return types.Actor{}, false
+	}
+	return actor.DeepCopy(), true
 }
 
-// GetActorsMap returns a thread-safe copy of all actors as a map for a given cluster
+// GetActorsMap returns a thread-safe deep copy of all actors as a map for a given cluster
 func (h *EventHandler) GetActorsMap(clusterName string) map[string]types.Actor {
 	h.ClusterActorMap.RLock()
 	defer h.ClusterActorMap.RUnlock()
@@ -696,7 +704,7 @@ func (h *EventHandler) GetActorsMap(clusterName string) map[string]types.Actor {
 
 	actors := make(map[string]types.Actor, len(actorMap.ActorMap))
 	for id, actor := range actorMap.ActorMap {
-		actors[id] = actor
+		actors[id] = actor.DeepCopy()
 	}
 	return actors
 }
