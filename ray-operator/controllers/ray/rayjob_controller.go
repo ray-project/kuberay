@@ -936,13 +936,13 @@ func (r *RayJobReconciler) getOrCreateRayClusterInstance(ctx context.Context, ra
 }
 
 func (r *RayJobReconciler) constructRayClusterForRayJob(rayJobInstance *rayv1.RayJob, rayClusterName string) (*rayv1.RayCluster, error) {
-	labels := make(map[string]string, len(rayJobInstance.Labels)+3)
+	labels := make(map[string]string, len(rayJobInstance.Labels))
 	maps.Copy(labels, rayJobInstance.Labels)
 	labels[utils.RayOriginatedFromCRNameLabelKey] = rayJobInstance.Name
 	labels[utils.RayOriginatedFromCRDLabelKey] = utils.RayOriginatedFromCRDLabelValue(utils.RayJobCRD)
 	labels[utils.RayJobSubmissionModeLabelKey] = string(rayJobInstance.Spec.SubmissionMode)
 
-	annotations := make(map[string]string, len(rayJobInstance.Annotations)+1)
+	annotations := make(map[string]string, len(rayJobInstance.Annotations))
 	maps.Copy(annotations, rayJobInstance.Annotations)
 	if rayJobInstance.Spec.SubmissionMode == rayv1.SidecarMode {
 		annotations[utils.DisableProvisionedHeadRestartAnnotationKey] = "true"
