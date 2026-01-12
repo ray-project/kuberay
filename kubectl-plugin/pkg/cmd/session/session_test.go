@@ -21,9 +21,6 @@ func TestCompleteFoo(t *testing.T) {
 	require.NoError(t, err)
 
 	testStreams, _, _, _ := genericiooptions.NewTestIOStreams()
-	cmdFactory := cmdutil.NewFactory(&genericclioptions.ConfigFlags{
-		KubeConfig: &kubeConfigWithCurrentContext,
-	})
 
 	tests := []struct {
 		name                 string
@@ -116,12 +113,23 @@ func TestCompleteFoo(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
+			configFlags := &genericclioptions.ConfigFlags{KubeConfig: &kubeConfigWithCurrentContext}
+			cmdFactory := cmdutil.NewFactory(configFlags)
 			fakeSessionOptions := NewSessionOptions(cmdFactory, testStreams)
 			cmd := &cobra.Command{}
-			cmd.Flags().StringVarP(&fakeSessionOptions.namespace, "namespace", "n", tc.namespace, "")
-			cmd.Flags().StringVarP(&fakeSessionOptions.currentContext, "context", "c", tc.context, "")
+			configFlags.AddFlags(cmd.Flags())
 
-			err := fakeSessionOptions.Complete(cmd, tc.args)
+			err := cmd.Flags().Set("namespace", tc.namespace)
+			if err != nil {
+				require.NoError(t, err)
+			}
+
+			err = cmd.Flags().Set("context", tc.context)
+			if err != nil {
+				require.NoError(t, err)
+			}
+
+			err = fakeSessionOptions.Complete(cmd, tc.args)
 
 			if tc.hasErr {
 				require.Error(t, err)

@@ -19,7 +19,8 @@ import (
 
 // Tests the Run() step of the command and ensure that the output is as expected.
 func TestTokenGetRun(t *testing.T) {
-	cmdFactory := cmdutil.NewFactory(genericclioptions.NewConfigFlags(true))
+	configFlags := genericclioptions.NewConfigFlags(true)
+	cmdFactory := cmdutil.NewFactory(configFlags)
 
 	testStreams, _, resBuf, _ := genericclioptions.NewTestIOStreams()
 	fakeTokenGetOptions := NewGetTokenOptions(cmdFactory, testStreams)
@@ -51,8 +52,12 @@ func TestTokenGetRun(t *testing.T) {
 	k8sClients := client.NewClientForTesting(kubeClientSet, rayClient)
 
 	cmd := &cobra.Command{}
-	cmd.Flags().StringVarP(&fakeTokenGetOptions.namespace, "namespace", "n", secret.Namespace, "")
-	err := fakeTokenGetOptions.Complete([]string{rayCluster.Name}, cmd)
+	configFlags.AddFlags(cmd.Flags())
+	err := cmd.Flags().Set("namespace", secret.Namespace)
+	if err != nil {
+		require.NoError(t, err)
+	}
+	err = fakeTokenGetOptions.Complete([]string{rayCluster.Name})
 	require.NoError(t, err)
 	err = fakeTokenGetOptions.Run(t.Context(), k8sClients)
 	require.NoError(t, err)

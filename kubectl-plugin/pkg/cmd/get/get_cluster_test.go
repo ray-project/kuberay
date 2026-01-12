@@ -74,7 +74,7 @@ func TestRayClusterGetComplete(t *testing.T) {
 
 			cmd := &cobra.Command{}
 			cmd.Flags().StringVarP(&fakeClusterGetOptions.namespace, "namespace", "n", tc.namespace, "")
-			err := fakeClusterGetOptions.Complete(tc.args, cmd)
+			err := fakeClusterGetOptions.Complete(tc.args)
 			require.NoError(t, err)
 
 			assert.Equal(t, tc.expectedAllNamespaces, fakeClusterGetOptions.allNamespaces)

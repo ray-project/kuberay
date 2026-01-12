@@ -26,7 +26,7 @@ func TestRayJobSubmitComplete(t *testing.T) {
 	cmd := &cobra.Command{}
 	cmd.Flags().StringVarP(&fakeSubmitJobOptions.namespace, "namespace", "n", "", "")
 
-	err := fakeSubmitJobOptions.Complete(cmd)
+	err := fakeSubmitJobOptions.Complete()
 	require.NoError(t, err)
 	assert.Equal(t, "default", fakeSubmitJobOptions.namespace)
 	assert.Equal(t, "fake/path/to/env/yaml", fakeSubmitJobOptions.runtimeEnv)
