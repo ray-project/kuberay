@@ -1,10 +1,7 @@
 package support
 
 import (
-	"fmt"
 	"os"
-	"runtime"
-	"strings"
 )
 
 const (
@@ -25,15 +22,7 @@ func GetRayVersion() string {
 }
 
 func GetRayImage() string {
-	rayImage := lookupEnvOrDefault(KuberayTestRayImage, RayImage)
-	// detect if we are running on arm64 machine, most likely apple silicon
-	// the os name is not checked as it also possible that it might be linux
-	// also check if the image does not have the `-aarch64` suffix
-	if runtime.GOARCH == "arm64" && !strings.HasSuffix(rayImage, "-aarch64") {
-		rayImage = rayImage + "-aarch64"
-		fmt.Printf("Modified Ray Image to: %s for ARM chips\n", rayImage)
-	}
-	return rayImage
+	return lookupEnvOrDefault(KuberayTestRayImage, RayImage)
 }
 
 func GetKubeRayUpgradeVersion() string {
