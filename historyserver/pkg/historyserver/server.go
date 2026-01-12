@@ -20,6 +20,7 @@ type ServerHandler struct {
 	reader        storage.StorageReader
 	clientManager *ClientManager
 	eventHandler  *eventserver.EventHandler
+	httpClient    *http.Client
 }
 
 func NewServerHandler(c *types.RayHistoryServerConfig, dashboardDir string, reader storage.StorageReader, clientManager *ClientManager, eventHandler *eventserver.EventHandler) *ServerHandler {
@@ -32,6 +33,9 @@ func NewServerHandler(c *types.RayHistoryServerConfig, dashboardDir string, read
 		dashboardDir: dashboardDir,
 		// TODO: make this configurable
 		maxClusters: 100,
+		httpClient: &http.Client{
+			Timeout: 30 * time.Second,
+		},
 	}
 }
 

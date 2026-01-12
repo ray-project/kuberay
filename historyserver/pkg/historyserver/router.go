@@ -265,7 +265,7 @@ func (s *ServerHandler) RegisterRouter() {
 
 func (s *ServerHandler) redirectRequest(req *restful.Request, resp *restful.Response) {
 	svcName := req.Attribute(ATTRIBUTE_SERVICE_NAME).(string)
-	remoteResp, err := http.Get("http://" + svcName + req.Request.URL.String())
+	remoteResp, err := s.httpClient.Get("http://" + svcName + req.Request.URL.String())
 	if err != nil {
 		logrus.Errorf("Error: %v", err)
 		resp.WriteError(http.StatusBadGateway, err)
