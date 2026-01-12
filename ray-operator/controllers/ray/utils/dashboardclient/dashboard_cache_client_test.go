@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"k8s.io/apimachinery/pkg/types"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/dashboardclient/mocks"
@@ -25,8 +26,12 @@ func TestAsyncJobInfoQuery(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		ctx := logr.NewContext(t.Context(), logr.Discard())
 
+		clusterName := types.NamespacedName{
+			Namespace: "test-namespace",
+			Name:      "raycluster-async-job-info-query",
+		}
 		asyncJobInfoQueryClient := RayDashboardCacheClient{}
-		asyncJobInfoQueryClient.InitClient(ctx, mockClient)
+		asyncJobInfoQueryClient.InitClient(ctx, clusterName, mockClient)
 		synctest.Wait()
 
 		jobId := "test-job-id"
@@ -122,15 +127,15 @@ func TestAsyncJobInfoQuery(t *testing.T) {
 		assert.Nil(t, jobInfo)
 		assert.Equal(t, ErrAgain, err)
 
-		time.Sleep(cacheExpiry / 2)
+		time.Sleep(queryInterval + time.Millisecond)
 		synctest.Wait()
 
+		// Get the same error again without continuing to requeue the task.
 		jobInfo, err = asyncJobInfoQueryClient.GetJobInfo(ctx, nonExistedJobId)
 		assert.Nil(t, jobInfo)
 		assert.Equal(t, expectedError, err)
 
-		time.Sleep(cacheExpiry/2 + 10*queryInterval)
-		synctest.Wait()
+		// The cache should be removed after previous GetJobInfo.
 		cached, ok = cacheStorage.Get(nonExistedJobId)
 		assert.Nil(t, cached)
 		assert.False(t, ok)
