@@ -694,7 +694,7 @@ func applyRayJobAndWaitForCompletion(test Test, g *WithT, namespace *corev1.Name
 	g.Expect(err).NotTo(HaveOccurred())
 	LogWithTimestamp(test.T(), "Created RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
 
-	// Wait for job to complete successfully
+	LogWithTimestamp(test.T(), "Waiting for RayJob %s/%s to complete successfully", rayJob.Namespace, rayJob.Name)
 	g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
 		Should(SatisfyAll(
 			WithTransform(RayJobStatus, Equal(rayv1.JobStatusSucceeded)),
