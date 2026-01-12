@@ -3,12 +3,9 @@ package historyserver
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
-	"os"
 	"path"
 	"sort"
-	"time"
 
 	"github.com/emicklei/go-restful/v3"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
@@ -81,39 +78,6 @@ func (s *ServerHandler) GetNodes(rayClusterNameID, sessionId string) ([]byte, er
 	}
 	templ["data"].(map[string]interface{})["summary"] = nodeSummary
 	return json.Marshal(templ)
-}
-
-func (s *ServerHandler) ClusterInfo(rayClusterNameID string) []byte {
-	templ := `{
-    "result": true,
-    "msg": "Got formatted cluster status.",
-    "data": {
-        "clusterStatus": "======== Autoscaler status: %s ========\nNode status\n---------------------------------------------------------------\nActive:\n (no active nodes)\nIdle:\n 0 headgroup\nPending:\n (no pending nodes)\nRecent failures:\n (no failures)\n\nResources\n---------------------------------------------------------------\nTotal Usage:\n 0B/0B memory\n 0B/0B object_store_memory\n\nFrom request_resources:\n (none)\nPending Demands:\n (no resource demands)"
-    }
-}`
-	afterRender := fmt.Sprintf(templ, time.Now().Format("2006-01-02 15:04:05.000000"))
-	return []byte(afterRender)
-}
-
-func isDir(path string) bool {
-	fileInfo, err := os.Stat(path)
-	if err != nil {
-		return false
-	}
-	return fileInfo.IsDir()
-}
-
-type grafanaHealthReturnMsg struct {
-	Result bool        `json:"result"`
-	Msg    string      `json:"msg"`
-	Data   grafanaData `json:"data"`
-}
-
-type grafanaData struct {
-	GrafanaHost         string            `json:"grafanaHost"`
-	SessionName         string            `json:"sessionName"`
-	DashboardDatasource string            `json:"dashboardDatasource"`
-	DashboardUids       map[string]string `json:"dashboardUids"`
 }
 
 // TODO: implement this
