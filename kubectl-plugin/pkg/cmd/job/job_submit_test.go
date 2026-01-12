@@ -18,15 +18,15 @@ import (
 
 func TestRayJobSubmitComplete(t *testing.T) {
 	testStreams, _, _, _ := genericclioptions.NewTestIOStreams()
-	cmdFactory := cmdutil.NewFactory(genericclioptions.NewConfigFlags(true))
+	configFlags := genericclioptions.NewConfigFlags(true)
+	cmdFactory := cmdutil.NewFactory(configFlags)
 	fakeSubmitJobOptions := NewJobSubmitOptions(cmdFactory, testStreams)
 	fakeSubmitJobOptions.runtimeEnv = "././fake/path/to/env/yaml"
 	fakeSubmitJobOptions.fileName = "fake/path/to/rayjob.yaml"
 
 	cmd := &cobra.Command{}
-	cmd.Flags().StringVarP(&fakeSubmitJobOptions.namespace, "namespace", "n", "", "")
-
-	err := fakeSubmitJobOptions.Complete(cmd)
+	configFlags.AddFlags(cmd.Flags())
+	err := fakeSubmitJobOptions.Complete()
 	require.NoError(t, err)
 	assert.Equal(t, "default", fakeSubmitJobOptions.namespace)
 	assert.Equal(t, "fake/path/to/env/yaml", fakeSubmitJobOptions.runtimeEnv)
