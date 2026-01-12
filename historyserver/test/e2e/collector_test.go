@@ -556,9 +556,9 @@ func loadRayEventsFromS3(s3Client *s3.S3, bucket string, prefix string) ([]rayEv
 }
 
 // assertNonEmptyFileExist verifies that a file exists and has content (> 0 bytes).
-// For a Ray cluster with one head node and one worker node, there are two logs/ directories to verify:
-//   - logs/<headNodeID>/...
-//   - logs/<workerNodeID>/...
+// For a Ray cluster with one head node and one worker node, there are two log directories to verify:
+//   - logs/<headNodeID>/
+//   - logs/<workerNodeID>/
 func assertNonEmptyFileExist(test Test, g *WithT, s3Client *s3.S3, nodeLogDirPrefix string, fileName string) {
 	fileKey := fmt.Sprintf("%s/%s", nodeLogDirPrefix, fileName)
 	LogWithTimestamp(test.T(), "Verifying file %s has content (> 0 bytes)", fileKey)
