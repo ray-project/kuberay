@@ -150,7 +150,7 @@ func NewCreateClusterCommand(cmdFactory cmdutil.Factory, streams genericclioptio
 }
 
 func (options *CreateClusterOptions) Complete(cmd *cobra.Command, args []string) error {
-	namespace, err := cmd.Flags().GetString("namespace")
+	namespace, _, err := options.cmdFactory.ToRawKubeConfigLoader().Namespace()
 	if err != nil {
 		return fmt.Errorf("failed to get namespace: %w", err)
 	}
@@ -241,15 +241,17 @@ func (options *CreateClusterOptions) resolveClusterName() (string, error) {
 
 // resolveNamespace resolves the namespace from the CLI flag and the config file
 func (options *CreateClusterOptions) resolveNamespace() (string, error) {
-	namespace := "default"
-
-	if options.rayClusterConfig.Namespace != nil && *options.rayClusterConfig.Namespace != "" && options.namespace != "" && options.namespace != *options.rayClusterConfig.Namespace {
-		return "", fmt.Errorf("the namespace in the config file %q does not match the namespace %q. You must pass --namespace=%s to perform this operation", *options.rayClusterConfig.Namespace, options.namespace, *options.rayClusterConfig.Namespace)
+	namespace, cliNamespace, err := options.cmdFactory.ToRawKubeConfigLoader().Namespace()
+	if err != nil {
+		return "", fmt.Errorf("failed to get current namespace: %w", err)
 	}
 
-	if options.namespace != "" {
-		namespace = options.namespace
-	} else if options.rayClusterConfig.Namespace != nil && *options.rayClusterConfig.Namespace != "" {
+	if cliNamespace && options.rayClusterConfig.Namespace != nil && *options.rayClusterConfig.Namespace != "" && namespace != *options.rayClusterConfig.Namespace {
+		return "", fmt.Errorf("the namespace in the config file %q does not match the namespace %q. You must pass --namespace=%s to perform this operation", *options.rayClusterConfig.Namespace, namespace, *options.rayClusterConfig.Namespace)
+	}
+
+	if options.rayClusterConfig.Namespace != nil && *options.rayClusterConfig.Namespace != "" {
+		options.namespace = *options.rayClusterConfig.Namespace
 		namespace = *options.rayClusterConfig.Namespace
 	}
 
@@ -274,10 +276,6 @@ func (options *CreateClusterOptions) Run(ctx context.Context, k8sClient client.C
 		}
 		options.rayClusterConfig.Namespace = &namespace
 	} else {
-		if options.namespace == "" {
-			options.namespace = "default"
-		}
-
 		options.rayClusterConfig = &generation.RayClusterConfig{
 			Namespace:   &options.namespace,
 			Name:        &options.clusterName,
