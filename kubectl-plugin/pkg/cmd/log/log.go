@@ -153,15 +153,11 @@ func NewClusterLogCommand(cmdFactory cmdutil.Factory, streams genericclioptions.
 }
 
 func (options *ClusterLogOptions) Complete(cmd *cobra.Command, args []string) error {
-	namespace, err := cmd.Flags().GetString("namespace")
+	namespace, _, err := options.cmdFactory.ToRawKubeConfigLoader().Namespace()
 	if err != nil {
 		return fmt.Errorf("failed to get namespace: %w", err)
 	}
 	options.namespace = namespace
-
-	if options.namespace == "" {
-		options.namespace = "default"
-	}
 
 	typeAndName := strings.Split(args[0], "/")
 	if len(typeAndName) == 1 {
