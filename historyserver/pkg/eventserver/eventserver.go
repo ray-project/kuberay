@@ -141,6 +141,10 @@ func (h *EventHandler) Run(stop chan struct{}, numOfEventProcessors int) error {
 
 					// Evenly distribute events to each channel
 					for i, curr := range eventList {
+						// Skip nil events (can occur with corrupted event files containing null elements)
+						if curr == nil {
+							continue
+						}
 						curr["clusterName"] = clusterInfo.Name + "_" + clusterInfo.Namespace
 						eventProcessorChannels[i%numOfEventProcessors] <- curr
 					}
