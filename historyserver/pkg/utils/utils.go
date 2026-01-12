@@ -178,7 +178,23 @@ func GetLogDir(ossHistorySeverDir, rayClusterName, rayClusterID, sessionId, rayN
 }
 
 const (
-	// do not change
+	// connector is the separator for creating flat storage keys.
+	//
+	// Design Philosophy:
+	// - Format: "{clusterName}_{namespace}" for router/historyserver
+	//           "{clusterName}_{clusterID}" for collector
+	//
+	// Why "_" instead of "/"?
+	// 1. Performance: Flat key reduces S3/OSS ListObjects prefix matching overhead
+	// 2. Atomicity: Single-level key allows direct lookup without hierarchical traversal
+	//
+	// Why this is SAFE:
+	// - Kubernetes namespace follows DNS-1123 label spec
+	// - DNS-1123 only allows: lowercase letters, digits, and hyphens (-)
+	// - Namespace CANNOT contain "_", so parsing is unambiguous
+	// - We can safely split from the LAST "_" to separate name/namespace or name/id
+	//
+	// DO NOT CHANGE: Would break existing stored data paths
 	connector = "_"
 )
 
