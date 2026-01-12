@@ -389,9 +389,8 @@ func applyRayJobToCluster(test Test, g *WithT, namespace *corev1.Namespace, rayC
 // verifyS3SessionDirs verifies file contents in logs/, node_events/, and job_events/ directories under a session prefix in S3.
 // There are two phases of verification:
 // 1. Verify file contents in logs/ directory
-//   - logs/<headNodeID>/<fileObj> must exist and have content > 0 bytes
-//   - logs/<workerNodeID>/<fileObj> must exist and have content > 0 bytes
-//   - TODO(jwj): Complete docs.
+//   - For the head node, verify raylet.out and gcs_server.out exist and have content > 0 bytes
+//   - For the worker node, verify raylet.out exists and have content > 0 bytes
 //
 // 2. Verify event type coverage in node_events/ and job_events/ directories
 //   - Aggregate all events from node_events/ and job_events/ directories
@@ -399,45 +398,19 @@ func applyRayJobToCluster(test Test, g *WithT, namespace *corev1.Namespace, rayC
 //
 // NOTE: Since flushed node and job events are nondeterministic, we need to aggregate them first before verifying event type coverage.
 func verifyS3SessionDirs(test Test, g *WithT, s3Client *s3.S3, sessionPrefix string, headNodeID string, workerNodeID string) {
-	LogWithTimestamp(test.T(), "Verifying there's at least one non-empty object in both head and worker logs/ directories under %s", sessionPrefix)
-	for _, nodeID := range []string{headNodeID, workerNodeID} {
-		dirPrefix := fmt.Sprintf("%slogs/%s/", sessionPrefix, nodeID)
+	// Verify file contents in logs/ directory.
+	headLogDirPrefix := fmt.Sprintf("%slogs/%s/", sessionPrefix, headNodeID)
+	workerLogDirPrefix := fmt.Sprintf("%slogs/%s/", sessionPrefix, workerNodeID)
 
-		g.Eventually(func(gg Gomega) {
-			// Verify the directory has at least one object.
-			objects, err := s3Client.ListObjectsV2(&s3.ListObjectsV2Input{
-				Bucket:  aws.String(s3BucketName),
-				Prefix:  aws.String(dirPrefix),
-				MaxKeys: aws.Int64(10),
-			})
-			gg.Expect(err).NotTo(HaveOccurred())
-			keyCount := aws.Int64Value(objects.KeyCount)
-			gg.Expect(keyCount).To(BeNumerically(">", 0))
-			LogWithTimestamp(test.T(), "Verified directory %s has at least one object", dirPrefix)
-
-			// Find the first file object for content verification.
-			var fileKey string
-			for _, obj := range objects.Contents {
-				if key := aws.StringValue(obj.Key); !strings.HasSuffix(key, "/") {
-					fileKey = key
-					break
-				}
-			}
-			gg.Expect(fileKey).NotTo(BeEmpty(), "No file object found in directory %s", dirPrefix)
-
-			// Verify the file has content by checking file size.
-			LogWithTimestamp(test.T(), "Verifying file %s has content (> 0 bytes)", fileKey)
-			obj, err := s3Client.HeadObject(&s3.HeadObjectInput{
-				Bucket: aws.String(s3BucketName),
-				Key:    aws.String(fileKey),
-			})
-			gg.Expect(err).NotTo(HaveOccurred())
-			fileSize := aws.Int64Value(obj.ContentLength)
-			gg.Expect(fileSize).To(BeNumerically(">", 0))
-			LogWithTimestamp(test.T(), "Verified file %s has content: %d bytes", fileKey, fileSize)
-		}, TestTimeoutMedium).Should(Succeed(), "Failed to verify at least one object in directory %s has content", dirPrefix)
+	LogWithTimestamp(test.T(), "Verifying raylet.out and gcs_server.out exist in head log directory %s", headLogDirPrefix)
+	for _, fileName := range []string{"raylet.out", "gcs_server.out"} {
+		assertNonEmptyFileExist(test, g, s3Client, headLogDirPrefix, fileName)
 	}
 
+	LogWithTimestamp(test.T(), "Verifying raylet.out exists in worker log directory %s", workerLogDirPrefix)
+	assertNonEmptyFileExist(test, g, s3Client, workerLogDirPrefix, "raylet.out")
+
+	// Verify event type coverage in node_events/ and job_events/ directories.
 	LogWithTimestamp(test.T(), "Verifying all %d event types are covered: %v", len(rayEventTypes), rayEventTypes)
 	uploadedEvents := []rayEvent{}
 	for _, dir := range []string{"node_events", "job_events/AgAAAA==", "job_events/AQAAAA=="} {
@@ -580,6 +553,26 @@ func loadRayEventsFromS3(s3Client *s3.S3, bucket string, prefix string) ([]rayEv
 		return nil, err
 	}
 	return events, nil
+}
+
+// assertNonEmptyFileExist verifies that a file exists and has content (> 0 bytes).
+// For a Ray cluster with one head node and one worker node, there are two logs/ directories to verify:
+//   - logs/<headNodeID>/...
+//   - logs/<workerNodeID>/...
+func assertNonEmptyFileExist(test Test, g *WithT, s3Client *s3.S3, nodeLogDirPrefix string, fileName string) {
+	fileKey := fmt.Sprintf("%s/%s", nodeLogDirPrefix, fileName)
+	LogWithTimestamp(test.T(), "Verifying file %s has content (> 0 bytes)", fileKey)
+	g.Eventually(func(gg Gomega) {
+		// Verify the file has content by checking file size.
+		obj, err := s3Client.HeadObject(&s3.HeadObjectInput{
+			Bucket: aws.String(s3BucketName),
+			Key:    aws.String(fileKey),
+		})
+		gg.Expect(err).NotTo(HaveOccurred())
+		fileSize := aws.Int64Value(obj.ContentLength)
+		gg.Expect(fileSize).To(BeNumerically(">", 0))
+		LogWithTimestamp(test.T(), "Verified file %s has content: %d bytes", fileKey, fileSize)
+	}, TestTimeoutMedium).Should(Succeed(), "Failed to verify file %s has content (> 0 bytes)", fileKey)
 }
 
 // assertAllEventTypesCovered verifies that all potential event types are present in the events uploaded to S3.
