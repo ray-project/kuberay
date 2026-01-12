@@ -221,6 +221,12 @@ func (es *EventServer) PersistEvents(req *restful.Request, resp *restful.Respons
 	}
 
 	for _, eventData := range eventDatas {
+		// Skip nil entries that can occur from corrupted JSON (e.g., [null, {...}])
+		if eventData == nil {
+			logrus.Warnf("Skipping nil event entry in request")
+			continue
+		}
+
 		// Parse timestamp
 		timestampStr, ok := eventData["timestamp"].(string)
 		if !ok {
