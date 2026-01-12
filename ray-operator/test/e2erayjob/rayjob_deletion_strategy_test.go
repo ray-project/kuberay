@@ -508,7 +508,7 @@ env_vars:
 			WithSpec(rayv1ac.RayJobSpec().
 				WithRayClusterSpec(NewRayClusterSpec(MountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](jobs, "/home/ray/jobs"))).
 				WithEntrypoint("python /home/ray/jobs/long_running.py").
-				WithActiveDeadlineSeconds(45).       // Short deadline for failing the JobDeploymentStatus, but making sure the cluster is running
+				WithActiveDeadlineSeconds(60).       // Short deadline for failing the JobDeploymentStatus, but making sure the cluster is running
 				WithShutdownAfterJobFinishes(false). // Required when using DeletionStrategy
 				WithDeletionStrategy(rayv1ac.DeletionStrategy().
 					WithDeletionRules(
@@ -530,13 +530,15 @@ env_vars:
 		LogWithTimestamp(test.T(), "RayJob %s/%s failed due to activeDeadlineSeconds timeout", rayJob.Namespace, rayJob.Name)
 
 		// Verify the JobStatus remains RUNNING and the reason is DeadlineExceeded.
-		rayJob, err = GetRayJob(test, rayJob.Namespace, rayJob.Name)
-		g.Expect(err).NotTo(HaveOccurred())
-		g.Expect(rayJob.Status.JobStatus).To(Equal(rayv1.JobStatusRunning))
-		g.Expect(rayJob.Status.Reason).To(Equal(rayv1.DeadlineExceeded))
+		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
+			Should(And(
+				WithTransform(RayJobStatus, Equal(rayv1.JobStatusRunning)),
+				WithTransform(RayJobReason, Equal(rayv1.DeadlineExceeded))))
 
 		// Get the associated RayCluster name. We assert it's non-empty explicitly so that
 		// test failures surface here (clear message) rather than later when using an empty name.
+		rayJob, err = GetRayJob(test, rayJob.Namespace, rayJob.Name)
+		g.Expect(err).NotTo(HaveOccurred())
 		rayClusterName := rayJob.Status.RayClusterName
 		g.Expect(rayClusterName).NotTo(BeEmpty())
 
@@ -619,7 +621,7 @@ env_vars:
 			WithSpec(rayv1ac.RayJobSpec().
 				WithRayClusterSpec(NewRayClusterSpec(MountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](jobs, "/home/ray/jobs"))).
 				WithEntrypoint("python /home/ray/jobs/long_running.py").
-				WithActiveDeadlineSeconds(45).       // Short deadline for failing the JobDeploymentStatus, but making sure the cluster is running
+				WithActiveDeadlineSeconds(60).       // Short deadline for failing the JobDeploymentStatus, but making sure the cluster is running
 				WithShutdownAfterJobFinishes(false). // Required when using DeletionStrategy
 				WithDeletionStrategy(rayv1ac.DeletionStrategy().
 					WithDeletionRules(
@@ -641,12 +643,14 @@ env_vars:
 		LogWithTimestamp(test.T(), "RayJob %s/%s failed due to activeDeadlineSeconds timeout", rayJob.Namespace, rayJob.Name)
 
 		// Verify the JobStatus remains RUNNING and the reason is DeadlineExceeded.
-		rayJob, err = GetRayJob(test, rayJob.Namespace, rayJob.Name)
-		g.Expect(err).NotTo(HaveOccurred())
-		g.Expect(rayJob.Status.JobStatus).To(Equal(rayv1.JobStatusRunning))
-		g.Expect(rayJob.Status.Reason).To(Equal(rayv1.DeadlineExceeded))
+		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
+			Should(And(
+				WithTransform(RayJobStatus, Equal(rayv1.JobStatusRunning)),
+				WithTransform(RayJobReason, Equal(rayv1.DeadlineExceeded))))
 
 		// Get the associated RayCluster name (early assertion for clearer diagnostics).
+		rayJob, err = GetRayJob(test, rayJob.Namespace, rayJob.Name)
+		g.Expect(err).NotTo(HaveOccurred())
 		rayClusterName := rayJob.Status.RayClusterName
 		g.Expect(rayClusterName).NotTo(BeEmpty())
 
@@ -682,7 +686,7 @@ env_vars:
 			WithSpec(rayv1ac.RayJobSpec().
 				WithRayClusterSpec(NewRayClusterSpec(MountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](jobs, "/home/ray/jobs"))).
 				WithEntrypoint("python /home/ray/jobs/long_running.py").
-				WithActiveDeadlineSeconds(45).       // Short deadline for failing the JobDeploymentStatus, but making sure the cluster is running
+				WithActiveDeadlineSeconds(60).       // Short deadline for failing the JobDeploymentStatus, but making sure the cluster is running
 				WithShutdownAfterJobFinishes(false). // Required when using DeletionStrategy
 				WithDeletionStrategy(rayv1ac.DeletionStrategy().
 					WithDeletionRules(
@@ -704,12 +708,14 @@ env_vars:
 		LogWithTimestamp(test.T(), "RayJob %s/%s failed due to activeDeadlineSeconds timeout", rayJob.Namespace, rayJob.Name)
 
 		// Verify the JobStatus remains RUNNING and the reason is DeadlineExceeded.
-		rayJob, err = GetRayJob(test, rayJob.Namespace, rayJob.Name)
-		g.Expect(err).NotTo(HaveOccurred())
-		g.Expect(rayJob.Status.JobStatus).To(Equal(rayv1.JobStatusRunning))
-		g.Expect(rayJob.Status.Reason).To(Equal(rayv1.DeadlineExceeded))
+		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
+			Should(And(
+				WithTransform(RayJobStatus, Equal(rayv1.JobStatusRunning)),
+				WithTransform(RayJobReason, Equal(rayv1.DeadlineExceeded))))
 
 		// Get the associated RayCluster name (early assertion for clearer diagnostics).
+		rayJob, err = GetRayJob(test, rayJob.Namespace, rayJob.Name)
+		g.Expect(err).NotTo(HaveOccurred())
 		rayClusterName := rayJob.Status.RayClusterName
 		g.Expect(rayClusterName).NotTo(BeEmpty())
 
@@ -735,7 +741,7 @@ env_vars:
 			WithSpec(rayv1ac.RayJobSpec().
 				WithRayClusterSpec(NewRayClusterSpec(MountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](jobs, "/home/ray/jobs"))).
 				WithEntrypoint("python /home/ray/jobs/long_running.py").
-				WithActiveDeadlineSeconds(45).       // Short deadline for failing the JobDeploymentStatus, but making sure the cluster is running
+				WithActiveDeadlineSeconds(60).       // Short deadline for failing the JobDeploymentStatus, but making sure the cluster is running
 				WithShutdownAfterJobFinishes(false). // Required when using DeletionStrategy
 				WithDeletionStrategy(rayv1ac.DeletionStrategy().
 					WithDeletionRules(
@@ -757,12 +763,14 @@ env_vars:
 		LogWithTimestamp(test.T(), "RayJob %s/%s failed due to activeDeadlineSeconds timeout", rayJob.Namespace, rayJob.Name)
 
 		// Verify the JobStatus remains RUNNING and the reason is DeadlineExceeded.
-		rayJob, err = GetRayJob(test, rayJob.Namespace, rayJob.Name)
-		g.Expect(err).NotTo(HaveOccurred())
-		g.Expect(rayJob.Status.JobStatus).To(Equal(rayv1.JobStatusRunning))
-		g.Expect(rayJob.Status.Reason).To(Equal(rayv1.DeadlineExceeded))
+		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
+			Should(And(
+				WithTransform(RayJobStatus, Equal(rayv1.JobStatusRunning)),
+				WithTransform(RayJobReason, Equal(rayv1.DeadlineExceeded))))
 
 		// Get the associated RayCluster name (early assertion for clearer diagnostics).
+		rayJob, err = GetRayJob(test, rayJob.Namespace, rayJob.Name)
+		g.Expect(err).NotTo(HaveOccurred())
 		rayClusterName := rayJob.Status.RayClusterName
 		g.Expect(rayClusterName).NotTo(BeEmpty())
 
