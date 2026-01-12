@@ -1,10 +1,7 @@
 package support
 
 import (
-	"fmt"
 	"os"
-	"runtime"
-	"strings"
 )
 
 const (
@@ -17,8 +14,6 @@ const (
 	// KuberayTestRayImage is the Ray image to use for testing.
 	KuberayTestRayImage = "KUBERAY_TEST_RAY_IMAGE"
 
-	KuberayTestArch = "KUBERAY_TEST_ARCH"
-
 	KuberayTestUpgradeImage = "KUBERAY_TEST_UPGRADE_IMAGE"
 )
 
@@ -27,19 +22,7 @@ func GetRayVersion() string {
 }
 
 func GetRayImage() string {
-	rayImage := lookupEnvOrDefault(KuberayTestRayImage, RayImage)
-	// detect if we are running on arm64 machine, most likely apple silicon
-	// the os name is not checked as it also possible that it might be linux
-	// also check if the image does not have the `-aarch64` suffix
-	arch := runtime.GOARCH
-	if archFromEnv := lookupEnvOrDefault(KuberayTestArch, ""); archFromEnv != "" {
-		arch = archFromEnv
-	}
-	if arch == "arm64" && !strings.HasSuffix(rayImage, "-aarch64") {
-		rayImage = rayImage + "-aarch64"
-		fmt.Printf("Modified Ray Image to: %s for ARM chips\n", rayImage)
-	}
-	return rayImage
+	return lookupEnvOrDefault(KuberayTestRayImage, RayImage)
 }
 
 func GetKubeRayUpgradeVersion() string {
