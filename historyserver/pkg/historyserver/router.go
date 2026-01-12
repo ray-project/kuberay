@@ -582,16 +582,35 @@ func getTaskInfo(allTaskData []byte, findTaskID string) ([]byte, error) {
 	}
 
 	if err := json.Unmarshal(allTaskData, &allTasks); err != nil {
-		logrus.Errorf("Ummarshal allTask error %v", err)
+		logrus.Errorf("Unmarshal allTask error %v", err)
 		return nil, err
 	}
-	data := allTasks["data"].(map[string]interface{})
-	result := data["result"].(map[string]interface{})
-	secondResults := result["result"].([]interface{})
+
+	data, ok := allTasks["data"].(map[string]interface{})
+	if !ok {
+		data = map[string]interface{}{}
+	}
+
+	result, ok := data["result"].(map[string]interface{})
+	if !ok {
+		result = map[string]interface{}{}
+	}
+
+	secondResults, ok := result["result"].([]interface{})
+	if !ok {
+		secondResults = []interface{}{}
+	}
+
 	for _, single := range secondResults {
-		r := single.(map[string]interface{})
-		taskid := r["task_id"].(string)
-		if taskid == findTaskID {
+		r, ok := single.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		taskID, ok := r["task_id"].(string)
+		if !ok {
+			taskID = ""
+		}
+		if taskID == findTaskID {
 			findTaskInfo.Result = true
 			findTaskInfo.Data.Result.Result = make([]interface{}, 0)
 			findTaskInfo.Data.Result.Result = append(findTaskInfo.Data.Result.Result, r)
