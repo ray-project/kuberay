@@ -6,7 +6,6 @@ import (
 	"errors"
 	"io"
 	"net/http"
-	"os"
 	"strings"
 
 	"github.com/emicklei/go-restful/v3"
@@ -853,7 +852,7 @@ func (s *ServerHandler) CookieHandle(req *restful.Request, resp *restful.Respons
 	chain.ProcessFilter(req, resp)
 }
 
-var getClusterSvcName = func(clis []client.Client, name, namespace string) (string, error) {
+func getClusterSvcName(clis []client.Client, name, namespace string) (string, error) {
 	if len(clis) == 0 {
 		return "", errors.New("No available kubernetes config found")
 	}
@@ -868,12 +867,4 @@ var getClusterSvcName = func(clis []client.Client, name, namespace string) (stri
 		return "", errors.New("RayCluster head service not ready")
 	}
 	return svcName + ":8265", nil
-}
-
-func init() {
-	if proxy := os.Getenv("LOCAL_TEST_PROXY"); proxy != "" {
-		getClusterSvcName = func(clis []client.Client, name, namespace string) (string, error) {
-			return proxy, nil
-		}
-	}
 }
