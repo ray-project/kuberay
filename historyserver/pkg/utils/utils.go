@@ -185,14 +185,18 @@ const (
 	//           "{clusterName}_{clusterID}" for collector
 	//
 	// Why "_" instead of "/"?
-	// 1. Performance: Flat key reduces S3/OSS ListObjects prefix matching overhead
-	// 2. Atomicity: Single-level key allows direct lookup without hierarchical traversal
+	// Using "/" would create a hierarchical path like "namespace/cluster/session/..."
+	// which requires multiple ListObjects API calls to traverse:
+	//   1. First list all clusters under a namespace
+	//   2. Then list contents of the target cluster
 	//
-	// Why this is SAFE:
+	// Using "_" creates a flat path like "namespace_cluster/session/..."
+	// which allows direct access with a single ListObjects call.
+	//
+	// Why this is SAFE for parsing:
 	// - Kubernetes namespace follows DNS-1123 label spec
 	// - DNS-1123 only allows: lowercase letters, digits, and hyphens (-)
-	// - Namespace CANNOT contain "_", so parsing is unambiguous
-	// - We can safely split from the LAST "_" to separate name/namespace or name/id
+	// - Namespace CANNOT contain "_", so we can unambiguously split from the LAST "_"
 	//
 	// DO NOT CHANGE: Would break existing stored data paths
 	connector = "_"
