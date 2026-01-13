@@ -437,11 +437,20 @@ func verifyS3SessionDirs(test Test, g *WithT, s3Client *s3.S3, sessionPrefix str
 	}
 
 	LogWithTimestamp(test.T(), "Verifying all %d event types are covered: %v", len(rayEventTypes), rayEventTypes)
+	nodeEventDirPrefix := fmt.Sprintf("%snode_events/", sessionPrefix)
+	jobEventDirPrefix := fmt.Sprintf("%sjob_events/", sessionPrefix)
+
+	// Enumerate all event directories to be aggregated for verification.
+	eventDirPrefixes := []string{nodeEventDirPrefix}
+	jobEventDirPrefixes, err := listS3SubdirPrefixes(s3Client, s3BucketName, jobEventDirPrefix)
+	g.Expect(err).NotTo(HaveOccurred())
+	LogWithTimestamp(test.T(), "Found %d job event subdir prefixes: %v", len(jobEventDirPrefixes), jobEventDirPrefixes)
+	eventDirPrefixes = append(eventDirPrefixes, jobEventDirPrefixes...)
+
 	g.Eventually(func(gg Gomega) {
 		uploadedEvents := []rayEvent{}
-		for _, dir := range []string{"node_events", "job_events/AgAAAA==", "job_events/AQAAAA=="} {
-			dirPrefix := sessionPrefix + dir + "/"
-			events, err := loadRayEventsFromS3(s3Client, s3BucketName, dirPrefix)
+		for _, eventDirPrefix := range eventDirPrefixes {
+			events, err := loadRayEventsFromS3(s3Client, s3BucketName, eventDirPrefix)
 			gg.Expect(err).NotTo(HaveOccurred())
 			uploadedEvents = append(uploadedEvents, events...)
 		}
@@ -499,7 +508,6 @@ fi`
 	g.Expect(nodeID).NotTo(BeEmpty(), "nodeID should not be empty")
 
 	return nodeID
-
 }
 
 // FirstWorkerPod returns a function that gets the first worker pod from the Ray cluster.
@@ -549,6 +557,24 @@ func getContainerStatusByName(pod *corev1.Pod, containerName string) (*corev1.Co
 		}
 	}
 	return nil, fmt.Errorf("container %s not found in pod %s/%s", containerName, pod.Namespace, pod.Name)
+}
+
+// listS3SubdirPrefixes lists all subdirectory prefixes in the S3 bucket under the given prefix.
+func listS3SubdirPrefixes(s3Client *s3.S3, bucket string, prefix string) ([]string, error) {
+	objects, err := s3Client.ListObjectsV2(&s3.ListObjectsV2Input{
+		Bucket:    aws.String(bucket),
+		Prefix:    aws.String(prefix),
+		Delimiter: aws.String("/"),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	subdirPrefixes := []string{}
+	for _, subdirPrefix := range objects.CommonPrefixes {
+		subdirPrefixes = append(subdirPrefixes, *subdirPrefix.Prefix)
+	}
+	return subdirPrefixes, nil
 }
 
 // loadRayEventsFromS3 loads Ray events from S3.
