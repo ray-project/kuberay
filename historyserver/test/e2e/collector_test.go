@@ -439,19 +439,20 @@ func verifyS3SessionDirs(test Test, g *WithT, s3Client *s3.S3, sessionPrefix str
 	LogWithTimestamp(test.T(), "Verifying all %d event types are covered: %v", len(rayEventTypes), rayEventTypes)
 	nodeEventDirPrefix := fmt.Sprintf("%snode_events/", sessionPrefix)
 	jobEventDirPrefix := fmt.Sprintf("%sjob_events/", sessionPrefix)
-
-	// Enumerate all event directories to be aggregated for verification.
 	eventDirPrefixes := []string{nodeEventDirPrefix}
-	jobEventDirPrefixes, err := listS3SubdirPrefixes(s3Client, s3BucketName, jobEventDirPrefix)
-	g.Expect(err).NotTo(HaveOccurred())
-	LogWithTimestamp(test.T(), "Found %d job event subdir prefixes: %v", len(jobEventDirPrefixes), jobEventDirPrefixes)
-	eventDirPrefixes = append(eventDirPrefixes, jobEventDirPrefixes...)
-
 	g.Eventually(func(gg Gomega) {
+		// Enumerate all job event directories to be aggregated for verification.
+		jobEventDirPrefixes, err := listS3SubdirPrefixes(s3Client, s3BucketName, jobEventDirPrefix)
+		gg.Expect(err).NotTo(HaveOccurred())
+		gg.Expect(jobEventDirPrefixes).NotTo(BeEmpty())
+		LogWithTimestamp(test.T(), "Found %d job event subdir prefixes: %v", len(jobEventDirPrefixes), jobEventDirPrefixes)
+		eventDirPrefixes = append(eventDirPrefixes, jobEventDirPrefixes...)
+
 		uploadedEvents := []rayEvent{}
 		for _, eventDirPrefix := range eventDirPrefixes {
 			events, err := loadRayEventsFromS3(s3Client, s3BucketName, eventDirPrefix)
 			gg.Expect(err).NotTo(HaveOccurred())
+			gg.Expect(events).NotTo(BeEmpty())
 			uploadedEvents = append(uploadedEvents, events...)
 		}
 
