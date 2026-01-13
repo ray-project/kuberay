@@ -103,6 +103,7 @@ env_vars:
 	g.Expect(rayClusterName).NotTo(BeEmpty())
 
 	// Verify cluster and workers exist initially
+	LogWithTimestamp(test.T(), "Verifying cluster and workers exist initially...")
 	g.Eventually(RayCluster(test, namespace.Name, rayClusterName), TestTimeoutShort).
 		Should(WithTransform(RayClusterState, Equal(rayv1.Ready)))
 
@@ -145,6 +146,7 @@ env_vars:
 	LogWithTimestamp(test.T(), "Worker pods deleted successfully")
 
 	// Verify cluster still exists (head pod should remain)
+	LogWithTimestamp(test.T(), "Verifying cluster still exists (head pod should remain)...")
 	g.Consistently(RayCluster(test, namespace.Name, rayClusterName), 10*time.Second).
 		Should(WithTransform(RayClusterState, Equal(rayv1.Ready)))
 
@@ -191,6 +193,7 @@ env_vars:
 	g.Expect(rayClusterName).NotTo(BeEmpty())
 
 	// Verify cluster exists initially
+	LogWithTimestamp(test.T(), "Verifying cluster exists initially...")
 	g.Eventually(RayCluster(test, namespace.Name, rayClusterName), TestTimeoutShort).
 		Should(WithTransform(RayClusterState, Equal(rayv1.Ready)))
 
@@ -245,6 +248,7 @@ env_vars:
 	LogWithTimestamp(test.T(), "RayJob deleted successfully")
 
 	// Verify associated cluster is also deleted
+	LogWithTimestamp(test.T(), "Verifying associated cluster is also deleted...")
 	g.Eventually(func() error {
 		_, err := GetRayCluster(test, namespace.Name, rayClusterName)
 		return err
@@ -333,6 +337,7 @@ env_vars:
 	g.Expect(rayClusterName).NotTo(BeEmpty())
 
 	// Verify cluster is ready initially
+	LogWithTimestamp(test.T(), "Verifying cluster is ready initially...")
 	g.Eventually(RayCluster(test, namespace.Name, rayClusterName), TestTimeoutShort).
 		Should(WithTransform(RayClusterState, Equal(rayv1.Ready)))
 
@@ -490,6 +495,7 @@ func testDeletionRulesWithJobDeploymentStatusFailedAndDeleteWorkersPolicy(test T
 	g.Expect(rayClusterName).NotTo(BeEmpty())
 
 	// Verify cluster and workers exist initially.
+	LogWithTimestamp(test.T(), "Verifying cluster and workers exist initially...")
 	g.Eventually(RayCluster(test, namespace.Name, rayClusterName), TestTimeoutShort).
 		Should(WithTransform(RayClusterState, Equal(rayv1.Ready)))
 
@@ -532,6 +538,7 @@ func testDeletionRulesWithJobDeploymentStatusFailedAndDeleteWorkersPolicy(test T
 	LogWithTimestamp(test.T(), "Worker pods deleted successfully")
 
 	// Verify cluster still exists (head pod should remain).
+	LogWithTimestamp(test.T(), "Verifying cluster still exists (head pod should remain)...")
 	g.Consistently(RayCluster(test, namespace.Name, rayClusterName), 10*time.Second).
 		Should(WithTransform(RayClusterState, Equal(rayv1.Ready)))
 
@@ -576,6 +583,7 @@ func testDeletionRulesWithJobDeploymentStatusFailedAndDeleteClusterPolicy(test T
 	g.Expect(rayClusterName).NotTo(BeEmpty())
 
 	// Verify cluster exists initially.
+	LogWithTimestamp(test.T(), "Verifying cluster exists initially...")
 	g.Eventually(RayCluster(test, namespace.Name, rayClusterName), TestTimeoutShort).
 		Should(WithTransform(RayClusterState, Equal(rayv1.Ready)))
 
@@ -628,6 +636,7 @@ func testDeletionRulesWithJobDeploymentStatusFailedAndDeleteSelfPolicy(test Test
 	LogWithTimestamp(test.T(), "RayJob deleted successfully")
 
 	// Verify associated cluster is also deleted.
+	LogWithTimestamp(test.T(), "Verifying associated cluster is also deleted...")
 	g.Eventually(func() error {
 		_, err := GetRayCluster(test, namespace.Name, rayClusterName)
 		return err
