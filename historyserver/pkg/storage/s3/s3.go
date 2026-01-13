@@ -30,7 +30,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/config"
+	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/smithy-go"
@@ -360,17 +360,17 @@ func New(c *config) (*RayLogsHandler, error) {
 				HostnameImmutable: true,
 			}, nil
 		})
-		awsCfg, err = config.LoadDefaultConfig(ctx,
-			config.WithRegion(c.S3Region),
-			config.WithCredentialsProvider(credsProvider),
-			config.WithEndpointResolverWithOptions(resolver),
-			config.WithHTTPClient(httpClient),
+		awsCfg, err = awsconfig.LoadDefaultConfig(ctx,
+			awsconfig.WithRegion(c.S3Region),
+			awsconfig.WithCredentialsProvider(credsProvider),
+			awsconfig.WithEndpointResolverWithOptions(resolver),
+			awsconfig.WithHTTPClient(httpClient),
 		)
 	} else {
-		awsCfg, err = config.LoadDefaultConfig(ctx,
-			config.WithRegion(c.S3Region),
-			config.WithCredentialsProvider(credsProvider),
-			config.WithHTTPClient(httpClient),
+		awsCfg, err = awsconfig.LoadDefaultConfig(ctx,
+			awsconfig.WithRegion(c.S3Region),
+			awsconfig.WithCredentialsProvider(credsProvider),
+			awsconfig.WithHTTPClient(httpClient),
 		)
 	}
 	if err != nil {
