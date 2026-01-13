@@ -580,6 +580,9 @@ func listS3SubdirPrefixes(s3Client *s3.S3, bucket string, prefix string) ([]stri
 
 // loadRayEventsFromS3 loads Ray events from S3.
 func loadRayEventsFromS3(s3Client *s3.S3, bucket string, prefix string) ([]rayEvent, error) {
+	var events []rayEvent
+
+	// List all file objects in the directory.
 	objects, err := s3Client.ListObjectsV2(&s3.ListObjectsV2Input{
 		Bucket: aws.String(bucket),
 		Prefix: aws.String(prefix),
@@ -588,31 +591,28 @@ func loadRayEventsFromS3(s3Client *s3.S3, bucket string, prefix string) ([]rayEv
 		return nil, err
 	}
 
-	// Find the first file object for loading Ray events.
-	var fileKey string
 	for _, obj := range objects.Contents {
-		if key := aws.StringValue(obj.Key); !strings.HasSuffix(key, "/") {
-			fileKey = key
-			break
+		fileKey := aws.StringValue(obj.Key)
+		if strings.HasSuffix(fileKey, "/") {
+			continue
 		}
-	}
-	if fileKey == "" {
-		return nil, fmt.Errorf("no file object found in directory %s", prefix)
+
+		// Get the file object content and decode it into Ray events.
+		content, err := s3Client.GetObject(&s3.GetObjectInput{
+			Bucket: aws.String(bucket),
+			Key:    aws.String(fileKey),
+		})
+		if err != nil {
+			return nil, err
+		}
+		defer content.Body.Close()
+
+		var fileEvents []rayEvent
+		if err := json.NewDecoder(content.Body).Decode(&fileEvents); err != nil {
+			return nil, err
+		}
+		events = append(events, fileEvents...)
 	}
 
-	// Get and decode the file object content into Ray events.
-	content, err := s3Client.GetObject(&s3.GetObjectInput{
-		Bucket: aws.String(bucket),
-		Key:    aws.String(fileKey),
-	})
-	if err != nil {
-		return nil, err
-	}
-	defer content.Body.Close()
-
-	var events []rayEvent
-	if err := json.NewDecoder(content.Body).Decode(&events); err != nil {
-		return nil, err
-	}
 	return events, nil
 }
