@@ -100,7 +100,7 @@ func TestAsyncJobInfoQuery(t *testing.T) {
 		time.Sleep(cacheExpiry + 10*queryInterval)
 		synctest.Wait()
 
-		cached, ok := cacheStorage.Get(jobId)
+		cached, ok := cacheStorage.Get(cacheKey(clusterName, jobId))
 		assert.Nil(t, cached)
 		assert.False(t, ok)
 
@@ -136,7 +136,7 @@ func TestAsyncJobInfoQuery(t *testing.T) {
 		assert.Equal(t, expectedError, err)
 
 		// The cache should be removed after previous GetJobInfo.
-		cached, ok = cacheStorage.Get(nonExistedJobId)
+		cached, ok = cacheStorage.Get(cacheKey(clusterName, nonExistedJobId))
 		assert.Nil(t, cached)
 		assert.False(t, ok)
 	})
