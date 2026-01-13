@@ -17,5 +17,4 @@ else
     kind load docker-image kuberay/operator:nightly &&
     echo "Deploying operator with test overrides (feature gates via test-overrides overlay)"
     IMG=kuberay/operator:nightly make deploy-with-override
-    KUBERAY_TEST_RAY_IMAGE="rayproject/ray:nightly-extra-py310-cpu" && export KUBERAY_TEST_RAY_IMAGE
 fi
