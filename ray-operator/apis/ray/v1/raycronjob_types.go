@@ -32,6 +32,8 @@ type RayCronJobStatus struct {
 //+kubebuilder:printcolumn:name="suspend",type=boolean,JSONPath=".spec.suspend",priority=0
 
 // +genclient
+// +kubebuilder:resource:categories=all
+// +kubebuilder:storageversion
 //
 //nolint:govet // RayCronJob is the Schema for the raycronjobs API
 type RayCronJob struct {

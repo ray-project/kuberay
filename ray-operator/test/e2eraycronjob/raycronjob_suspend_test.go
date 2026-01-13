@@ -6,12 +6,10 @@ import (
 	"time"
 
 	. "github.com/onsi/gomega"
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
 
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	rayv1ac "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/ray/v1"
 	rayclientset "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
@@ -25,30 +23,7 @@ func rayCronJobACTemplate(name, namespace, schedule string) *rayv1ac.RayCronJobA
 				WithJobTemplate(
 					rayv1ac.RayJobSpec().
 						WithEntrypoint("sleep 1").
-						WithRayClusterSpec(
-							rayv1ac.RayClusterSpec().
-								WithHeadGroupSpec(
-									rayv1ac.HeadGroupSpec().
-										WithTemplate(
-											corev1ac.PodTemplateSpec().
-												WithSpec(
-													corev1ac.PodSpec().
-														WithContainers(
-															corev1ac.Container().
-																WithName("ray-head").
-																WithImage(GetRayImage()).
-																WithResources(
-																	corev1ac.ResourceRequirements().
-																		WithRequests(corev1.ResourceList{
-																			corev1.ResourceCPU:    resource.MustParse("500m"),
-																			corev1.ResourceMemory: resource.MustParse("500Mi"),
-																		}),
-																),
-														),
-												),
-										),
-								),
-						),
+						WithRayClusterSpec(NewRayClusterSpec()),
 				),
 		)
 }
@@ -66,49 +41,34 @@ func TestRayCronJobSuspend(t *testing.T) {
 		g.Expect(err).NotTo(HaveOccurred())
 		LogWithTimestamp(test.T(), "Created RayCronJob %s/%s successfully", rayCronJob.Namespace, rayCronJob.Name)
 
-		// Spec.suspend should be true
-		g.Eventually(func() bool {
-			job, err := test.Client().
-				Ray().
-				RayV1().
-				RayCronJobs(namespace.Name).
-				Get(test.Ctx(), rayCronJob.Name, metav1.GetOptions{})
-			if err != nil {
-				return false
-			}
-			return job.Spec.Suspend
-		}, TestTimeoutShort).Should(BeTrue())
-
-		rcj, err := test.Client().Ray().RayV1().RayCronJobs(namespace.Name).Get(test.Ctx(), rayCronJob.Name, metav1.GetOptions{})
+		rayCronJob, err = GetRayCronJob(test, rayCronJob.Namespace, rayCronJob.Name)
 		g.Expect(err).NotTo(HaveOccurred())
-		ownerUID := rcj.UID
+		ownerUID := rayCronJob.UID
 
 		// No RayJob should be created
+		LogWithTimestamp(test.T(), "Waiting to ensure no RayJobs are created while suspended")
 		g.Consistently(func() int {
 			n, err := countRayJobsOwnedByUID(test.Ctx(), test.Client().Ray(), namespace.Name, ownerUID)
-			if err != nil {
-				return -1
-			}
+			g.Expect(err).NotTo(HaveOccurred())
 			return n
-		}, 130*time.Second, 5*time.Second).Should(Equal(0))
+		}, 130*time.Second, 5*time.Second).Should(BeZero())
 
 		// Resume
+		LogWithTimestamp(test.T(), "Resuming RayCronJob %s/%s", rayCronJob.Namespace, rayCronJob.Name)
 		patch := []byte(`{"spec":{"suspend":false}}`)
 		_, err = test.Client().Ray().RayV1().RayCronJobs(namespace.Name).Patch(test.Ctx(), rayCronJob.Name, types.MergePatchType, patch, metav1.PatchOptions{})
 		g.Expect(err).NotTo(HaveOccurred())
 
 		// Spec.suspend should be false
-		g.Eventually(func() bool {
-			rcj, err := test.Client().Ray().RayV1().RayCronJobs(namespace.Name).Get(test.Ctx(), rayCronJob.Name, metav1.GetOptions{})
-			return err == nil && !rcj.Spec.Suspend
-		}, TestTimeoutShort).Should(BeTrue())
+		g.Eventually(RayCronJob(test, namespace.Name, rayCronJob.Name), TestTimeoutShort).
+			Should(WithTransform(func(rayCronJob *rayv1.RayCronJob) bool {
+				return !rayCronJob.Spec.Suspend
+			}, BeTrue()))
 
 		// Jobs must start appearing now
 		g.Eventually(func() int {
 			n, err := countRayJobsOwnedByUID(test.Ctx(), test.Client().Ray(), namespace.Name, ownerUID)
-			if err != nil {
-				return -1
-			}
+			g.Expect(err).NotTo(HaveOccurred())
 			return n
 		}, TestTimeoutMedium).Should(BeNumerically(">", 0))
 
