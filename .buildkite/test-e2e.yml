@@ -144,7 +144,6 @@
   instance_size: large
   image: golang:1.25-bookworm
   commands:
-    - export IS_FROM_RAY_RELEASE_AUTOMATION=1
     - source .buildkite/setup-env.sh
     - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
     - kubectl config set clusters.kind-kind.server https://docker:6443
