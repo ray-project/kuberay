@@ -439,9 +439,9 @@ func verifyS3SessionDirs(test Test, g *WithT, s3Client *s3.S3, sessionPrefix str
 	LogWithTimestamp(test.T(), "Verifying all %d event types are covered: %v", len(rayEventTypes), rayEventTypes)
 	nodeEventDirPrefix := fmt.Sprintf("%snode_events/", sessionPrefix)
 	jobEventDirPrefix := fmt.Sprintf("%sjob_events/", sessionPrefix)
-	eventDirPrefixes := []string{nodeEventDirPrefix}
 	g.Eventually(func(gg Gomega) {
-		// Enumerate all job event directories to be aggregated for verification.
+		// Enumerate all event directories to be aggregated for verification.
+		eventDirPrefixes := []string{nodeEventDirPrefix}
 		jobEventDirPrefixes, err := listS3SubdirPrefixes(s3Client, s3BucketName, jobEventDirPrefix)
 		gg.Expect(err).NotTo(HaveOccurred())
 		gg.Expect(jobEventDirPrefixes).NotTo(BeEmpty())
