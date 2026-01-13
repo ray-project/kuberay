@@ -5,6 +5,7 @@ package v1
 // SubmitterConfigApplyConfiguration represents a declarative configuration of the SubmitterConfig type for use
 // with apply.
 type SubmitterConfigApplyConfiguration struct {
+	// BackoffLimit of the submitter k8s job.
 	BackoffLimit *int32 `json:"backoffLimit,omitempty"`
 }
 

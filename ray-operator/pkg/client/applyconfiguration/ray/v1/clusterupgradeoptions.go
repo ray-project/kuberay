@@ -4,10 +4,17 @@ package v1
 
 // ClusterUpgradeOptionsApplyConfiguration represents a declarative configuration of the ClusterUpgradeOptions type for use
 // with apply.
+//
+// These options are currently only supported for the IncrementalUpgrade type.
 type ClusterUpgradeOptionsApplyConfiguration struct {
-	MaxSurgePercent  *int32  `json:"maxSurgePercent,omitempty"`
-	StepSizePercent  *int32  `json:"stepSizePercent,omitempty"`
-	IntervalSeconds  *int32  `json:"intervalSeconds,omitempty"`
+	// The capacity of serve requests the upgraded cluster should scale to handle each interval.
+	// Defaults to 100%.
+	MaxSurgePercent *int32 `json:"maxSurgePercent,omitempty"`
+	// The percentage of traffic to switch to the upgraded RayCluster at a set interval after scaling by MaxSurgePercent.
+	StepSizePercent *int32 `json:"stepSizePercent,omitempty"`
+	// The interval in seconds between transferring StepSize traffic from the old to new RayCluster.
+	IntervalSeconds *int32 `json:"intervalSeconds,omitempty"`
+	// The name of the Gateway Class installed by the Kubernetes Cluster admin.
 	GatewayClassName *string `json:"gatewayClassName,omitempty"`
 }
 

@@ -9,6 +9,7 @@ import (
 // RayClusterUpgradeStrategyApplyConfiguration represents a declarative configuration of the RayClusterUpgradeStrategy type for use
 // with apply.
 type RayClusterUpgradeStrategyApplyConfiguration struct {
+	// Type represents the strategy used when upgrading the RayCluster Pods. Currently supports `Recreate` and `None`.
 	Type *rayv1.RayClusterUpgradeType `json:"type,omitempty"`
 }
 

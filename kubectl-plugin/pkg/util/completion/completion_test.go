@@ -13,6 +13,7 @@ import (
 
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client"
+	clienttesting "github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client/testing"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	rayClientFake "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/fake"
 )
@@ -335,7 +336,7 @@ func TestWorkerGroupCompletionFunc(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			kubeClientSet := kubefake.NewClientset()
-			rayClient := rayClientFake.NewClientset(tc.rayClusters...)
+			rayClient := clienttesting.NewRayClientset(tc.rayClusters...)
 			k8sClient := client.NewClientForTesting(kubeClientSet, rayClient)
 
 			cmd := &cobra.Command{}
