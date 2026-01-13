@@ -7,7 +7,7 @@
     - kubectl config set clusters.kind-kind.server https://docker:6443
     # Build nightly KubeRay operator image
     - pushd ray-operator
-    - bash ../.buildkite/build-start-operator.sh
+    - source ../.buildkite/build-start-operator.sh
     - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
     # Run e2e tests and print KubeRay operator logs if tests fail
     - echo "--- START:Running RayCluster and GCS E2E (nightly operator) tests"
@@ -27,7 +27,7 @@
     - kubectl config set clusters.kind-kind.server https://docker:6443
     # Build nightly KubeRay operator image
     - pushd ray-operator
-    - bash ../.buildkite/build-start-operator.sh
+    - source ../.buildkite/build-start-operator.sh
     - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
     # Run e2e tests and print KubeRay operator logs if tests fail
     - echo "--- START:Running e2e (nightly operator) RayJob tests"
@@ -47,7 +47,7 @@
     - kubectl config set clusters.kind-kind.server https://docker:6443
     # Build nightly KubeRay operator image
     - pushd ray-operator
-    - bash ../.buildkite/build-start-operator.sh
+    - source ../.buildkite/build-start-operator.sh
     - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
     # Run e2e tests and print KubeRay operator logs if tests fail
     - echo "--- START:Running e2e rayservice (nightly operator) tests"
@@ -67,7 +67,7 @@
     - kubectl config set clusters.kind-kind.server https://docker:6443
     # Build nightly KubeRay operator image
     - pushd ray-operator
-    - bash ../.buildkite/build-start-operator.sh
+    - source ../.buildkite/build-start-operator.sh
     - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
     # Run e2e tests and print KubeRay operator logs if tests fail
     - echo "--- START:Running Autoscaler E2E Part 1 (nightly operator) tests"
@@ -87,7 +87,7 @@
     - kubectl config set clusters.kind-kind.server https://docker:6443
     # Build nightly KubeRay operator image
     - pushd ray-operator
-    - bash ../.buildkite/build-start-operator.sh
+    - source ../.buildkite/build-start-operator.sh
     - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
     # Run e2e tests and print KubeRay operator logs if tests fail
     - echo "--- START:Running Autoscaler E2E Part 2 (nightly operator) tests"
@@ -126,7 +126,7 @@
     - kubectl config set clusters.kind-kind.server https://docker:6443
     # Build nightly KubeRay operator image
     - pushd ray-operator
-    - bash ../.buildkite/build-start-operator.sh
+    - source ../.buildkite/build-start-operator.sh
     - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
     # Build and start apiserver
     - pushd ../apiserver
@@ -149,7 +149,7 @@
     - kubectl config set clusters.kind-kind.server https://docker:6443
     # Build nightly KubeRay operator image
     - pushd ray-operator
-    - bash ../.buildkite/build-start-operator.sh
+    - source ../.buildkite/build-start-operator.sh
     - bash ../.buildkite/build-load-light-weight-submitter.sh
     - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
     # Run e2e tests and print KubeRay api server logs if tests fail
