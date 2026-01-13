@@ -727,5 +727,9 @@ func applyRayJobAndWaitForJobDeploymentStatusFailed(test Test, g *WithT, namespa
 			WithTransform(RayJobReason, Equal(rayv1.DeadlineExceeded)),
 		))
 
+	LogWithTimestamp(test.T(), "Verifying JobStatus is Running...")
+	g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
+		Should(WithTransform(RayJobStatus, Equal(rayv1.JobStatusRunning)))
+
 	return rayJob
 }
