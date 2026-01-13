@@ -70,7 +70,7 @@ func (h *EventHandler) ProcessEvents(ctx context.Context, ch <-chan map[string]a
 	}
 }
 
-// Run will start numOfEventProcessors (default to 2) processing functions and the event reader. The event reader will run once an hr,
+// Run will start numOfEventProcessors (default to 5) processing functions and the event reader. The event reader will run once an hr,
 // which is currently how often the collector flushes.
 func (h *EventHandler) Run(stop chan struct{}, numOfEventProcessors int) error {
 	var wg sync.WaitGroup
