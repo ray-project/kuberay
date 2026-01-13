@@ -8,19 +8,40 @@ import (
 
 // WorkerGroupSpecApplyConfiguration represents a declarative configuration of the WorkerGroupSpec type for use
 // with apply.
+//
+// WorkerGroupSpec are the specs for the worker pods
 type WorkerGroupSpecApplyConfiguration struct {
-	Suspend            *bool                                     `json:"suspend,omitempty"`
-	GroupName          *string                                   `json:"groupName,omitempty"`
-	Replicas           *int32                                    `json:"replicas,omitempty"`
-	MinReplicas        *int32                                    `json:"minReplicas,omitempty"`
-	MaxReplicas        *int32                                    `json:"maxReplicas,omitempty"`
-	IdleTimeoutSeconds *int32                                    `json:"idleTimeoutSeconds,omitempty"`
-	Resources          map[string]string                         `json:"resources,omitempty"`
-	Labels             map[string]string                         `json:"labels,omitempty"`
-	RayStartParams     map[string]string                         `json:"rayStartParams,omitempty"`
-	Template           *corev1.PodTemplateSpecApplyConfiguration `json:"template,omitempty"`
-	ScaleStrategy      *ScaleStrategyApplyConfiguration          `json:"scaleStrategy,omitempty"`
-	NumOfHosts         *int32                                    `json:"numOfHosts,omitempty"`
+	// Suspend indicates whether a worker group should be suspended.
+	// A suspended worker group will have all pods deleted.
+	// This is not a user-facing API and is only used by RayJob DeletionStrategy.
+	Suspend *bool `json:"suspend,omitempty"`
+	// we can have multiple worker groups, we distinguish them by name
+	GroupName *string `json:"groupName,omitempty"`
+	// Replicas is the number of desired Pods for this worker group. See https://github.com/ray-project/kuberay/pull/1443 for more details about the reason for making this field optional.
+	Replicas *int32 `json:"replicas,omitempty"`
+	// MinReplicas denotes the minimum number of desired Pods for this worker group.
+	MinReplicas *int32 `json:"minReplicas,omitempty"`
+	// MaxReplicas denotes the maximum number of desired Pods for this worker group, and the default value is maxInt32.
+	MaxReplicas *int32 `json:"maxReplicas,omitempty"`
+	// IdleTimeoutSeconds denotes the number of seconds to wait before the v2 autoscaler terminates an idle worker pod of this type.
+	// This value is only used with the Ray Autoscaler enabled and defaults to the value set by the AutoscalingConfig if not specified for this worker group.
+	IdleTimeoutSeconds *int32 `json:"idleTimeoutSeconds,omitempty"`
+	// Resources specifies the resource quantities for this worker group.
+	// These values override the resources passed to `rayStartParams` for the group, but
+	// have no effect on the resources set at the K8s Pod container level.
+	Resources map[string]string `json:"resources,omitempty"`
+	// Labels specifies the Ray node labels for this worker group.
+	// These labels will also be added to the Pods of this worker group and override the `--labels`
+	// argument passed to `rayStartParams`.
+	Labels map[string]string `json:"labels,omitempty"`
+	// RayStartParams are the params of the start command: address, object-store-memory, ...
+	RayStartParams map[string]string `json:"rayStartParams,omitempty"`
+	// Template is a pod template for the worker
+	Template *corev1.PodTemplateSpecApplyConfiguration `json:"template,omitempty"`
+	// ScaleStrategy defines which pods to remove
+	ScaleStrategy *ScaleStrategyApplyConfiguration `json:"scaleStrategy,omitempty"`
+	// NumOfHosts denotes the number of hosts to create per replica. The default value is 1.
+	NumOfHosts *int32 `json:"numOfHosts,omitempty"`
 }
 
 // WorkerGroupSpecApplyConfiguration constructs a declarative configuration of the WorkerGroupSpec type for use with
