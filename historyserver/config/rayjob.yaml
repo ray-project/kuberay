@@ -6,6 +6,7 @@ spec:
   entrypoint: |
     python -c "
     import ray
+    import time
     ray.init()
 
     @ray.remote
@@ -35,6 +36,8 @@ spec:
     final_count = ray.get(counter.get_count.remote())
     print(f'Final count: {final_count}')
     print(f'Cluster resources: {ray.cluster_resources()}')
+
+    time.sleep(5)
     "
   # Select the existing Ray cluster running the collector.
   clusterSelector:
