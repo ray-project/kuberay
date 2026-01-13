@@ -1,6 +1,7 @@
 package support
 
 import (
+	"fmt"
 	"os"
 )
 
@@ -22,6 +23,7 @@ func GetRayVersion() string {
 }
 
 func GetRayImage() string {
+	fmt.Printf("@@@ KUBERAY_TEST_RAY_IMAGE: %s\n", lookupEnvOrDefault(KuberayTestRayImage, RayImage))
 	return lookupEnvOrDefault(KuberayTestRayImage, RayImage)
 }
 
