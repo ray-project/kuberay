@@ -434,35 +434,33 @@ func verifyS3SessionDirs(test Test, g *WithT, s3Client *s3.S3, sessionPrefix str
 		}, TestTimeoutMedium).Should(Succeed(), "Failed to verify at least one object in directory %s has content", dirPrefix)
 	}
 
+	// Verify event type coverage in node_events/ and job_events/ directories.
 	LogWithTimestamp(test.T(), "Verifying all %d event types are covered: %v", len(rayEventTypes), rayEventTypes)
-	nodeEventDirPrefix := fmt.Sprintf("%snode_events/", sessionPrefix)
-	jobEventDirPrefix := fmt.Sprintf("%sjob_events/", sessionPrefix)
-	g.Eventually(func(gg Gomega) {
-		// Enumerate all event directories to be aggregated for verification.
-		eventDirPrefixes := []string{nodeEventDirPrefix}
-		jobEventDirPrefixes, err := listS3SubdirPrefixes(s3Client, s3BucketName, jobEventDirPrefix)
-		gg.Expect(err).NotTo(HaveOccurred())
-		gg.Expect(jobEventDirPrefixes).NotTo(BeEmpty())
-		LogWithTimestamp(test.T(), "Found %d job event subdir prefixes: %v", len(jobEventDirPrefixes), jobEventDirPrefixes)
-		eventDirPrefixes = append(eventDirPrefixes, jobEventDirPrefixes...)
+	uploadedEvents := []rayEvent{}
 
-		uploadedEvents := []rayEvent{}
-		for _, eventDirPrefix := range eventDirPrefixes {
-			events, err := loadRayEventsFromS3(s3Client, s3BucketName, eventDirPrefix)
-			gg.Expect(err).NotTo(HaveOccurred())
-			gg.Expect(events).NotTo(BeEmpty())
-			uploadedEvents = append(uploadedEvents, events...)
-		}
+	// Load events from node_events directory.
+	nodeEventsPrefix := sessionPrefix + "node_events/"
+	nodeEvents, err := loadRayEventsFromS3(s3Client, s3BucketName, nodeEventsPrefix)
+	g.Expect(err).NotTo(HaveOccurred())
+	uploadedEvents = append(uploadedEvents, nodeEvents...)
+	LogWithTimestamp(test.T(), "Loaded %d events from node_events", len(nodeEvents))
 
-		// Verify that all potential event types are present in the events uploaded to S3.
-		foundEventTypes := map[string]bool{}
-		for _, event := range uploadedEvents {
-			foundEventTypes[event.EventType] = true
-		}
-		for _, eventType := range rayEventTypes {
-			gg.Expect(foundEventTypes[eventType]).To(BeTrue(), "Event type %s not found", eventType)
-		}
-	}, TestTimeoutShort).Should(Succeed(), "Failed to verify all event types are covered")
+	// Dynamically discover and load events from job_events directories.
+	jobEventsPrefix := sessionPrefix + "job_events/"
+	jobDirs, err := listS3Directories(s3Client, s3BucketName, jobEventsPrefix)
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(jobDirs).NotTo(BeEmpty())
+	LogWithTimestamp(test.T(), "Found %d job directories: %v", len(jobDirs), jobDirs)
+
+	for _, jobDir := range jobDirs {
+		jobDirPrefix := jobEventsPrefix + jobDir + "/"
+		jobEvents, err := loadRayEventsFromS3(s3Client, s3BucketName, jobDirPrefix)
+		g.Expect(err).NotTo(HaveOccurred())
+		uploadedEvents = append(uploadedEvents, jobEvents...)
+		LogWithTimestamp(test.T(), "Loaded %d events from job_events/%s", len(jobEvents), jobDir)
+	}
+
+	assertAllEventTypesCovered(test, g, uploadedEvents)
 }
 
 // getSessionIDFromHeadPod retrieves the sessionID from the Ray head pod by reading the symlink
@@ -558,22 +556,34 @@ func getContainerStatusByName(pod *corev1.Pod, containerName string) (*corev1.Co
 	return nil, fmt.Errorf("container %s not found in pod %s/%s", containerName, pod.Namespace, pod.Name)
 }
 
-// listS3SubdirPrefixes lists all subdirectory prefixes in the S3 bucket under the given prefix.
-func listS3SubdirPrefixes(s3Client *s3.S3, bucket string, prefix string) ([]string, error) {
-	objects, err := s3Client.ListObjectsV2(&s3.ListObjectsV2Input{
+// listS3Directories lists all directories (prefixes) under the given S3 prefix.
+// In S3, directories are simulated using prefixes and delimiters.
+// For example, given prefix "log/cluster/session/job_events/", this function returns ["AgAAAA==", "AQAAAA=="]
+// which are the jobID directories under job_events/.
+func listS3Directories(s3Client *s3.S3, bucket string, prefix string) ([]string, error) {
+	result, err := s3Client.ListObjectsV2(&s3.ListObjectsV2Input{
 		Bucket:    aws.String(bucket),
 		Prefix:    aws.String(prefix),
 		Delimiter: aws.String("/"),
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to list S3 directories under %s: %w", prefix, err)
 	}
 
-	subdirPrefixes := []string{}
-	for _, subdirPrefix := range objects.CommonPrefixes {
-		subdirPrefixes = append(subdirPrefixes, *subdirPrefix.Prefix)
+	// Extract directory names from CommonPrefixes.
+	var directories []string
+	for _, commonPrefix := range result.CommonPrefixes {
+		fullPrefix := aws.StringValue(commonPrefix.Prefix)
+		// Extract the directory name by removing the parent prefix and trailing slash.
+		// Example: "log/cluster/session/job_events/AgAAAA==/" -> "AgAAAA=="
+		dirName := strings.TrimPrefix(fullPrefix, prefix)
+		dirName = strings.TrimSuffix(dirName, "/")
+		if dirName != "" {
+			directories = append(directories, dirName)
+		}
 	}
-	return subdirPrefixes, nil
+
+	return directories, nil
 }
 
 // loadRayEventsFromS3 loads Ray events from S3.
@@ -606,11 +616,25 @@ func loadRayEventsFromS3(s3Client *s3.S3, bucket string, prefix string) ([]rayEv
 
 		var fileEvents []rayEvent
 		if err := json.NewDecoder(content.Body).Decode(&fileEvents); err != nil {
-			return nil, err
+			content.Body.Close()
+			return nil, fmt.Errorf("failed to decode Ray events from %s: %w", fileKey, err)
 		}
-		events = append(events, fileEvents...)
 		content.Body.Close()
+
+		events = append(events, fileEvents...)
 	}
 
 	return events, nil
+}
+
+// assertAllEventTypesCovered verifies that all potential event types are present in the events uploaded to S3.
+func assertAllEventTypesCovered(test Test, g *WithT, events []rayEvent) {
+	foundEventTypes := map[string]bool{}
+	for _, event := range events {
+		foundEventTypes[event.EventType] = true
+	}
+
+	for _, eventType := range rayEventTypes {
+		g.Expect(foundEventTypes[eventType]).To(BeTrue(), "Event type %s not found", eventType)
+	}
 }
