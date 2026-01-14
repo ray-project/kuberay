@@ -175,8 +175,6 @@ func testCollectorSeparatesFilesBySession(test Test, g *WithT, namespace *corev1
 	// hits the memory limit, all processes in the container are killed together, thereby triggering container restart.
 	// For more details, please refer to https://github.com/kubernetes/kubernetes/pull/117793
 	killContainerAndWaitForRestart(test, g, HeadPod(test, rayCluster), "ray-head")
-	// TODO(jwj): Clarify the automatic restart mechanism.
-	// Force kill the ray-worker container before automatic restart.
 	killContainerAndWaitForRestart(test, g, FirstWorkerPod(test, rayCluster), "ray-worker")
 
 	// Verify the old session logs have been processed on disk.
