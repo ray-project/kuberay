@@ -18,7 +18,7 @@ export const useHistoryClusters = (refreshInterval: number = 5000) => {
     const proxyEndpoint = (await config.getHistoryServerUrl()).proxyEndpoint;
     await fetch(
       `${proxyEndpoint}/enter_cluster/${encodeURIComponent(namespace)}/${encodeURIComponent(cluster)}/${encodeURIComponent(sessionName)}`,
-      { method: "GET" },
+      { method: "GET", credentials: "include" },
     );
   };
 

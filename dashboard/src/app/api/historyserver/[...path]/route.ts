@@ -26,6 +26,10 @@ async function proxyRequest(
     if (request.headers.get("content-type")) {
       headers["Content-Type"] = request.headers.get("content-type")!;
     }
+    // Forward cookies to history server
+    if (request.headers.get("cookie")) {
+      headers["Cookie"] = request.headers.get("cookie")!;
+    }
 
     const fetchOptions: RequestInit = {
       method: request.method,
@@ -51,7 +55,17 @@ async function proxyRequest(
       responseData = data;
     }
 
-    return NextResponse.json(responseData, { status: response.status });
+    const nextResponse = NextResponse.json(responseData, {
+      status: response.status,
+    });
+
+    // Forward Set-Cookie headers from history server to browser
+    const setCookieHeaders = response.headers.getSetCookie();
+    for (const cookie of setCookieHeaders) {
+      nextResponse.headers.append("Set-Cookie", cookie);
+    }
+
+    return nextResponse;
   } catch (error) {
     console.error("History server proxy error:", error);
     return NextResponse.json(
