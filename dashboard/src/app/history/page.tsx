@@ -8,6 +8,7 @@ import { FrontendTable } from "@/components/FrontendTable/FrontendTable";
 import type { HeadCell } from "@/components/FrontendTable/FrontendTableHead";
 import { FrontendTableToolbar } from "@/components/FrontendTable/FrontendTableToolbar";
 import { useHistoryClusters } from "@/hooks/api/useHistoryClusters";
+import { useSnackBar } from "@/components/SnackBarProvider";
 import type { HistoryClusterInfo } from "@/types/historyserver";
 
 type ClusterRow = {
@@ -48,6 +49,7 @@ export default function HistoryClustersPage() {
   const [search, setSearch] = React.useState("");
   const [statusFilter, setStatusFilter] = React.useState<string | null>(null);
   const [refreshInterval, setRefreshInterval] = React.useState(5000);
+  const { showSnackBar } = useSnackBar();
 
   const { clusters, isLoading, error, enterCluster } =
     useHistoryClusters(refreshInterval);
@@ -84,8 +86,13 @@ export default function HistoryClustersPage() {
   }, [rows, search, statusFilter]);
 
   const handleViewTasks = async (row: ClusterRow) => {
-    await enterCluster(row.namespace, row.tasks, row.sessionName);
-    router.push("/history/tasks");
+    try {
+      await enterCluster(row.namespace, row.tasks, row.sessionName);
+      router.push("/history/tasks");
+    } catch (e) {
+      console.error("Failed to enter cluster", e);
+      showSnackBar("Error", `Failed to enter cluster: ${e}`, "danger");
+    }
   };
 
   const renderRow = (row: ClusterRow) => {

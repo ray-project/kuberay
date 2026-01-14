@@ -16,10 +16,16 @@ export const useHistoryClusters = (refreshInterval: number = 5000) => {
     sessionName: string,
   ) => {
     const proxyEndpoint = (await config.getHistoryServerUrl()).proxyEndpoint;
-    await fetch(
+    const res = await fetch(
       `${proxyEndpoint}/enter_cluster/${encodeURIComponent(namespace)}/${encodeURIComponent(cluster)}/${encodeURIComponent(sessionName)}`,
       { method: "GET", credentials: "include" },
     );
+
+    if (!res.ok) {
+      throw new Error(
+        `Failed to enter cluster: ${res.status} ${res.statusText}`,
+      );
+    }
   };
 
   return {
