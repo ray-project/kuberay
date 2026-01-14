@@ -9,11 +9,11 @@ spec:
     import time
     ray.init()
 
-    @ray.remote
+    @ray.remote(num_cpus=0.5)
     def my_task(x):
         return x * 2
 
-    @ray.remote
+    @ray.remote(num_cpus=0.5)
     class Counter:
         def __init__(self):
             self.count = 0

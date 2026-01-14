@@ -16,11 +16,11 @@ spec:
             value: ray._private.runtime_env.uv_runtime_env_hook.hook
           resources:
             limits:
-              cpu: 1
-              memory: 5Gi
+              cpu: "1"
+              memory: "5Gi"
             requests:
-              cpu: 1
-              memory: 2Gi
+              cpu: "1"
+              memory: "2Gi"
           ports:
           - containerPort: 6379
             name: gcs-server

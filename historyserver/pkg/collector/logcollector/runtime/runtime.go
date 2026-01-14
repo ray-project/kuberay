@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/ray-project/kuberay/historyserver/pkg/collector/logcollector/runtime/logcollector"
-	"github.com/ray-project/kuberay/historyserver/pkg/collector/logcollector/storage"
 	"github.com/ray-project/kuberay/historyserver/pkg/collector/types"
+	"github.com/ray-project/kuberay/historyserver/pkg/storage"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
@@ -40,6 +40,8 @@ func NewCollector(config *types.RayCollectorConfig, writer storage.StorageWriter
 	}
 	logDir := strings.TrimSpace(path.Join(config.SessionDir, utils.RAY_SESSIONDIR_LOGDIR_NAME))
 	handler.LogDir = logDir
+	// rootMetaDir uses flat key format (name_id) for S3/OSS performance optimization.
+	// See utils.connector for the design rationale.
 	rootMetaDir := fmt.Sprintf("%s/", path.Clean(path.Join(handler.RootDir, handler.RayClusterName+"_"+handler.RayClusterID, "meta")))
 	handler.MetaDir = rootMetaDir
 

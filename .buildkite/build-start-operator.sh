@@ -11,7 +11,7 @@ if [ "$IS_FROM_RAY_RELEASE_AUTOMATION" = 1 ]; then
     echo "Installing helm chart with test override values (feature gates enabled as needed)"
     # NOTE: The override file is CI/test-only. It is NOT part of the released chart defaults.
     helm install kuberay-operator kuberay/kuberay-operator -f ../.buildkite/values-kuberay-operator-override.yaml
-    KUBERAY_TEST_RAY_IMAGE="rayproject/ray:nightly.$(date +'%y%m%d').${RAY_NIGHTLY_COMMIT:0:6}-py39" && export KUBERAY_TEST_RAY_IMAGE
+    KUBERAY_TEST_RAY_IMAGE="rayproject/ray:nightly-extra-py310-cpu" && export KUBERAY_TEST_RAY_IMAGE
 else
     IMG=kuberay/operator:nightly make docker-image &&
     kind load docker-image kuberay/operator:nightly &&
