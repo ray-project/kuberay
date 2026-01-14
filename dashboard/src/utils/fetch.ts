@@ -39,10 +39,11 @@ export async function historyServerFetcher(
     const error = new FetchError(
       "An error occurred while fetching history data",
     );
+    const text = await res.text();
     try {
-      error.info = await res.json();
+      error.info = JSON.parse(text);
     } catch {
-      error.info = await res.text();
+      error.info = text;
     }
     error.status = res.status;
     throw error;

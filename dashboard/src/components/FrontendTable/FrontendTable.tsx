@@ -50,7 +50,7 @@ function getComparator<T extends { name: string }>(
     const aMissing =
       a[orderBy] === "" || a[orderBy] === null || a[orderBy] === undefined;
     const bMissing =
-      a[orderBy] === "" || b[orderBy] === null || b[orderBy] === undefined;
+      b[orderBy] === "" || b[orderBy] === null || b[orderBy] === undefined;
     if (aMissing && bMissing) return 0;
     if (aMissing) return 1;
     if (bMissing) return -1;
