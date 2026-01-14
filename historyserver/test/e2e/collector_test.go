@@ -605,13 +605,13 @@ func loadRayEventsFromS3(s3Client *s3.S3, bucket string, prefix string) ([]rayEv
 		if err != nil {
 			return nil, err
 		}
-		defer content.Body.Close()
 
 		var fileEvents []rayEvent
 		if err := json.NewDecoder(content.Body).Decode(&fileEvents); err != nil {
 			return nil, err
 		}
 		events = append(events, fileEvents...)
+		content.Body.Close()
 	}
 
 	return events, nil
