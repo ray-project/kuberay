@@ -25,25 +25,46 @@ interface IFrontendTableProps<T extends { name: string }> {
 }
 
 function descendingComparator<T>(a: T, b: T, orderBy: keyof T) {
-  if (b[orderBy] < a[orderBy]) {
-    return -1;
+  const aValue = a[orderBy];
+  const bValue = b[orderBy];
+
+  // Ensure deterministic ordering when values are missing.
+  // Missing values are always sorted last.
+  const aMissing = !aValue;
+  const bMissing = !bValue;
+  if (aMissing && bMissing) return 0;
+  if (aMissing) return 1;
+  if (bMissing) return -1;
+
+  // Numeric compare when both are numbers; otherwise compare as strings.
+  if (typeof aValue === "number" && typeof bValue === "number") {
+    if (bValue < aValue) return -1;
+    if (bValue > aValue) return 1;
+    return 0;
   }
-  if (b[orderBy] > a[orderBy]) {
-    return 1;
-  }
-  return 0;
+
+  const aStr = String(aValue);
+  const bStr = String(bValue);
+  return bStr.localeCompare(aStr);
 }
 
-function getComparator<Key extends keyof any>(
+function getComparator<T extends { name: string }>(
   order: Order,
-  orderBy: Key,
-): (
-  a: { [key in Key]: number | string },
-  b: { [key in Key]: number | string },
-) => number {
-  return order === "desc"
-    ? (a, b) => descendingComparator(a, b, orderBy)
-    : (a, b) => -descendingComparator(a, b, orderBy);
+  orderBy: keyof T,
+): (a: T, b: T) => number {
+  return (a, b) => {
+    const primary =
+      order === "desc"
+        ? descendingComparator(a, b, orderBy)
+        : -descendingComparator(a, b, orderBy);
+    if (primary !== 0) {
+      return primary;
+    }
+
+    // Deterministic tie-breaker so polling doesn't reshuffle rows
+    // when many items share the same sortable value.
+    return descendingComparator(a, b, "name");
+  };
 }
 
 // T is the data format for each row, S is the sortable keys
@@ -80,7 +101,6 @@ export const FrontendTable = <T extends { name: string }>(
   const sortedPaginatedData = React.useMemo(() => {
     const result = data
       .slice() // make a copy
-      //@ts-ignore
       .sort(getComparator(order, orderBy))
       .slice((page - 1) * rowsPerPage, (page - 1) * rowsPerPage + rowsPerPage);
     // If you are deleting every job on the page, go back a page
