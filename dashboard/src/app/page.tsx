@@ -16,21 +16,15 @@ import LanIcon from "@mui/icons-material/Lan";
 import HistoryIcon from "@mui/icons-material/History";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useFirstVisit } from "@/components/FirstVisitContext";
 import { roblox } from "@/utils/constants";
 import { fetchRuntimeConfig } from "@/utils/constants";
 
 const HomePage = () => {
   const router = useRouter();
-  const { firstVisit } = useFirstVisit();
 
   useEffect(() => {
     fetchRuntimeConfig();
-
-    if (firstVisit) {
-      router.push("/");
-    }
-  }, [firstVisit, router]);
+  }, []);
 
   return (
     <>
