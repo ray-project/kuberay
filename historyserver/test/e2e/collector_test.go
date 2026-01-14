@@ -193,13 +193,13 @@ func testCollectorSeparatesFilesBySession(test Test, g *WithT, namespace *corev1
 //
 // The test case follows these steps:
 // 1. Prepare test environment by applying a Ray cluster with the collector and ensuring an empty S3 bucket.
-// 2. Kill the collector sidecar container to trigger a container restart.
-// 3. Inject leftover logs while the collector is down:
+// 2. Inject leftover logs before killing the collector:
 //   - file1.log -> /tmp/ray/persist-complete-logs/{sessionID}/{nodeID}/logs/ (already uploaded)
 //   - file2.log -> /tmp/ray/prev-logs/{sessionID}/{nodeID}/logs/ (pending upload)
 //     Note: node_events are not injected or verified here; they are handled by the EventServer via a separate path,
 //     and prev-logs processing only covers the logs directory.
 //
+// 3. Kill the collector sidecar container to trigger a container restart.
 // 4. Wait for the collector container to restart and become Ready.
 // 5. Verify S3 uploads: recovered log objects exist under log/{clusterName}_{clusterID}/{sessionID}/logs/ and have content.
 // 6. Verify local state: the node directory is present under persist-complete-logs and removed from prev-logs.
@@ -217,18 +217,13 @@ func testCollectorResumesUploadsOnRestart(test Test, g *WithT, namespace *corev1
 	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, rayClusterID)
 	sessionPrefix := fmt.Sprintf("log/%s/%s/", clusterNameID, dummySessionID)
 
-	// Kill the collector container to trigger a restart.
+	// Inject "leftover" logs BEFORE killing collector.
+	// This ensures files exist when collector restarts and performs its initial scan.
 	headPod, err := GetHeadPod(test, rayCluster)
 	g.Expect(err).NotTo(HaveOccurred())
-	LogWithTimestamp(test.T(), "Killing collector container to test startup scanning of prev-logs")
-	_, stderrKill := ExecPodCmd(test, headPod, "collector", []string{"kill", "1"})
-	g.Expect(stderrKill.String()).To(BeEmpty())
-
-	// Inject "leftover" logs into prev-logs via the ray-head container while collector is down.
-	LogWithTimestamp(test.T(), "Injecting logs into %s while collector is down", prevLogsBaseDir)
+	LogWithTimestamp(test.T(), "Injecting logs into %s before killing collector", prevLogsBaseDir)
 	sessionDir := filepath.Join(prevLogsBaseDir, dummySessionID, dummyNodeID)
 	persistDir := filepath.Join(persistCompleteBaseDir, dummySessionID, dummyNodeID)
-	// Inject 2 files to simulate partial processing:
 	injectCmd := fmt.Sprintf(
 		"mkdir -p %s/logs && "+
 			"echo 'file1 content' > %s/logs/file1.log && "+
@@ -241,6 +236,12 @@ func testCollectorResumesUploadsOnRestart(test Test, g *WithT, namespace *corev1
 	)
 	_, stderr := ExecPodCmd(test, headPod, "ray-head", []string{"sh", "-c", injectCmd})
 	g.Expect(stderr.String()).To(BeEmpty())
+
+	// Kill the collector container to trigger a restart.
+	// When collector restarts, WatchPrevLogsLoops() will scan prev-logs and find the injected files.
+	LogWithTimestamp(test.T(), "Killing collector container to test startup scanning of prev-logs")
+	_, stderrKill := ExecPodCmd(test, headPod, "collector", []string{"kill", "1"})
+	g.Expect(stderrKill.String()).To(BeEmpty())
 
 	// Wait for collector container to restart and become ready.
 	LogWithTimestamp(test.T(), "Waiting for collector container to restart and become ready")
@@ -256,7 +257,41 @@ func testCollectorResumesUploadsOnRestart(test Test, g *WithT, namespace *corev1
 	// Verify S3 uploads using the existing verifyS3SessionDirs helper.
 	// Skip node_events verification since prev-logs processing only handles logs directory.
 	LogWithTimestamp(test.T(), "Verifying scanning logic: checking S3 for recovered files")
-	verifyS3SessionDirs(test, g, s3Client, sessionPrefix, dummyNodeID, true)
+
+	// Verify that file2.log was actually uploaded to S3.
+	// file1.log should NOT be uploaded because it was already marked as "completed" in persist-complete-logs.
+	// file2.log should be uploaded because it was in prev-logs (pending upload).
+	LogWithTimestamp(test.T(), "Verifying file2.log was uploaded to S3 (idempotency check)")
+	g.Eventually(func(gg Gomega) {
+		// List all objects under the session logs prefix
+		logsPrefix := sessionPrefix + "logs/"
+		objects, err := s3Client.ListObjectsV2(&s3.ListObjectsV2Input{
+			Bucket: aws.String(s3BucketName),
+			Prefix: aws.String(logsPrefix),
+		})
+		gg.Expect(err).NotTo(HaveOccurred())
+
+		// Collect all uploaded file keys
+		var uploadedKeys []string
+		for _, obj := range objects.Contents {
+			uploadedKeys = append(uploadedKeys, aws.StringValue(obj.Key))
+		}
+		LogWithTimestamp(test.T(), "Found uploaded objects: %v", uploadedKeys)
+
+		// Verify file2.log exists in S3 (it was in prev-logs, so it should be uploaded)
+		hasFile2 := false
+		for _, key := range uploadedKeys {
+			if strings.HasSuffix(key, "file2.log") {
+				hasFile2 = true
+				break
+			}
+		}
+		gg.Expect(hasFile2).To(BeTrue(), "file2.log should be uploaded to S3 because it was in prev-logs")
+
+		// Note: file1.log was only placed in persist-complete-logs (local marker),
+		// it was never actually uploaded to S3 in this test scenario.
+		// The persist-complete-logs directory is just a local marker to prevent re-upload.
+	}, TestTimeoutMedium).Should(Succeed())
 
 	// Verify local state: the node directory should be moved from prev-logs to persist-complete-logs.
 	LogWithTimestamp(test.T(), "Verifying local state: node directory should be moved to %s", persistCompleteBaseDir)

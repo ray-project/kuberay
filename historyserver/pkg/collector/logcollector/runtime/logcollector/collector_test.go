@@ -7,6 +7,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	. "github.com/onsi/gomega"
 )
 
 // MockStorageWriter is a mock implementation of storage.StorageWriter for testing
@@ -114,8 +116,18 @@ func TestIsFileAlreadyPersisted(t *testing.T) {
 	}
 }
 
-// TestScanAndProcess tests the full lifecycle: partial upload, interruption, and resumption via scan
+// TestScanAndProcess tests the full lifecycle: partial upload, interruption, and resumption via scan.
+//
+// This test simulates a crash recovery scenario:
+// 1. Two log files exist in prev-logs
+// 2. Only file1 is processed (simulating partial success before crash)
+// 3. File1 is restored to prev-logs (simulating incomplete rename during crash)
+// 4. WatchPrevLogsLoops is started (simulating collector restart)
+// 5. Verify that file1 is NOT re-uploaded (idempotency) and file2 is uploaded
+// 6. Verify that the node directory is cleaned up after all files are processed
 func TestScanAndProcess(t *testing.T) {
+	g := NewWithT(t)
+
 	baseDir, cleanup := setupRayTestEnvironment(t)
 	defer cleanup()
 
@@ -134,45 +146,52 @@ func TestScanAndProcess(t *testing.T) {
 	nodeID := "node-1"
 	logsDir := filepath.Join(handler.prevLogsDir, sessionID, nodeID, "logs")
 
-	// Prepare two files
+	// Prepare two log files in prev-logs directory
 	f1 := filepath.Join(logsDir, "file1.log")
 	f2 := filepath.Join(logsDir, "file2.log")
 	createTestLogFile(t, f1, "content1")
 	createTestLogFile(t, f2, "content2")
 
-	// --- Step 1: Process file1 only (simulating partial success) ---
+	// --- Step 1: Process file1 only (simulating partial success before crash) ---
 	err := handler.processPrevLogFile(f1, logsDir, sessionID, nodeID)
 	if err != nil {
 		t.Fatalf("Failed to process file1: %v", err)
 	}
 
-	// Verify file1 is in storage
+	// Verify file1 is uploaded to storage
 	if len(mockWriter.writtenFiles) != 1 {
 		t.Errorf("Expected 1 file in storage, got %d", len(mockWriter.writtenFiles))
 	}
 
-	// Manually restore file1 to prev-logs to simulate a crash right after upload but before/during rename
+	// Manually restore file1 to prev-logs to simulate a crash right after upload
+	// but before the rename operation completed
 	createTestLogFile(t, f1, "content1")
 
-	// --- Step 2: Run startup scan in background ---
+	// --- Step 2: Start the startup scan in background (simulating collector restart) ---
 	go handler.WatchPrevLogsLoops()
 
-	// Wait for async processing - give more time for file2.log to be processed
-	time.Sleep(1000 * time.Millisecond)
-
-	// --- Step 3: Final Verification ---
-	// 1. Storage should have 2 unique files (file1 should NOT be re-uploaded)
-	if len(mockWriter.writtenFiles) != 2 {
-		t.Errorf("Expected 2 unique files in storage, got %d", len(mockWriter.writtenFiles))
-	}
-
-	// 2. The node directory in prev-logs should be removed now that all files are processed
+	// --- Step 3: Use Eventually to wait for async processing ---
 	sessionNodeDir := filepath.Join(handler.prevLogsDir, sessionID, nodeID)
-	if _, err := os.Stat(sessionNodeDir); !os.IsNotExist(err) {
-		t.Error("Node directory should be removed after all files are processed and moved")
-	}
 
-	// Ensure background goroutine exits
+	// Wait until storage has exactly 2 files.
+	// file1 should NOT be re-uploaded because it already exists in persist-complete-logs.
+	// Only file2 should be newly uploaded.
+	g.Eventually(func() int {
+		mockWriter.mu.Lock()
+		defer mockWriter.mu.Unlock()
+		return len(mockWriter.writtenFiles)
+	}, 5*time.Second, 100*time.Millisecond).Should(Equal(2),
+		"Storage should have 2 unique files (file1 should NOT be re-uploaded due to idempotency check)")
+
+	// Wait until the node directory in prev-logs is removed.
+	// After all files are processed and moved to persist-complete-logs,
+	// the node directory should be cleaned up.
+	g.Eventually(func() bool {
+		_, err := os.Stat(sessionNodeDir)
+		return os.IsNotExist(err)
+	}, 5*time.Second, 100*time.Millisecond).Should(BeTrue(),
+		"Node directory should be removed after all files are processed and moved to persist-complete-logs")
+
+	// Signal the background goroutine to exit gracefully
 	close(handler.ShutdownChan)
-	time.Sleep(100 * time.Millisecond)
 }
