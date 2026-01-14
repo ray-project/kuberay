@@ -252,7 +252,7 @@ func newS3Client(endpoint string) (*s3.Client, error) {
 	}
 	return s3.NewFromConfig(awsCfg, func(o *s3.Options) {
 		o.UsePathStyle = true
-		o.EndpointResolver = s3.EndpointResolverFromURL(endpoint)
+		o.BaseEndpoint = aws.String(endpoint)
 	}), nil
 }
 

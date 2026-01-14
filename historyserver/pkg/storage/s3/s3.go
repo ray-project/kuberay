@@ -346,39 +346,20 @@ func New(c *config) (*RayLogsHandler, error) {
 	credsProvider := credentials.NewStaticCredentialsProvider(c.S3ID, c.S3Secret, c.S3Token)
 	endpoint := normalizeEndpoint(strings.TrimSpace(c.S3Endpoint), c.DisableSSL)
 
-	var awsCfg aws.Config
-	var err error
-	if endpoint != "" {
-		resolver := aws.EndpointResolverWithOptionsFunc(func(service, region string, options ...interface{}) (aws.Endpoint, error) {
-			if service != s3.ServiceID {
-				return aws.Endpoint{}, &aws.EndpointNotFoundError{}
-			}
-			return aws.Endpoint{
-				PartitionID:       "aws",
-				URL:               endpoint,
-				SigningRegion:     c.S3Region,
-				HostnameImmutable: true,
-			}, nil
-		})
-		awsCfg, err = awsconfig.LoadDefaultConfig(ctx,
-			awsconfig.WithRegion(c.S3Region),
-			awsconfig.WithCredentialsProvider(credsProvider),
-			awsconfig.WithEndpointResolverWithOptions(resolver),
-			awsconfig.WithHTTPClient(httpClient),
-		)
-	} else {
-		awsCfg, err = awsconfig.LoadDefaultConfig(ctx,
-			awsconfig.WithRegion(c.S3Region),
-			awsconfig.WithCredentialsProvider(credsProvider),
-			awsconfig.WithHTTPClient(httpClient),
-		)
-	}
+	awsCfg, err := awsconfig.LoadDefaultConfig(ctx,
+		awsconfig.WithRegion(c.S3Region),
+		awsconfig.WithCredentialsProvider(credsProvider),
+		awsconfig.WithHTTPClient(httpClient),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load AWS configuration: %w", err)
 	}
 
 	s3Client := s3.NewFromConfig(awsCfg, func(o *s3.Options) {
 		o.UsePathStyle = c.S3ForcePathStyle
+		if endpoint != "" {
+			o.BaseEndpoint = aws.String(endpoint)
+		}
 	})
 
 	// Ensure bucket exists, create if not
