@@ -115,7 +115,7 @@ func testCollectorUploadOnGracefulShutdown(test Test, g *WithT, namespace *corev
 	rayCluster := prepareTestEnv(test, g, namespace, s3Client)
 
 	// Submit a Ray job to the existing cluster.
-	_ = applyRayJobToCluster(test, g, namespace, rayCluster)
+	_ = applyRayJobAndWaitForCompletion(test, g, namespace)
 
 	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, rayClusterID)
 	sessionID := getSessionIDFromHeadPod(test, g, rayCluster)
@@ -161,7 +161,7 @@ func testCollectorSeparatesFilesBySession(test Test, g *WithT, namespace *corev1
 	rayCluster := prepareTestEnv(test, g, namespace, s3Client)
 
 	// Submit a Ray job to the existing cluster.
-	_ = applyRayJobToCluster(test, g, namespace, rayCluster)
+	_ = applyRayJobAndWaitForCompletion(test, g, namespace)
 
 	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, rayClusterID)
 	sessionID := getSessionIDFromHeadPod(test, g, rayCluster)
@@ -359,8 +359,9 @@ func applyRayCluster(test Test, g *WithT, namespace *corev1.Namespace) *rayv1.Ra
 	return rayCluster
 }
 
-// applyRayJobToCluster applies a Ray job to the existing Ray cluster.
-func applyRayJobToCluster(test Test, g *WithT, namespace *corev1.Namespace, rayCluster *rayv1.RayCluster) *rayv1.RayJob {
+// applyRayJobAndWaitForCompletion applies a Ray job to the existing Ray cluster and waits for it to complete successfully.
+// In the RayJob manifest, the clusterSelector is set to the existing Ray cluster, raycluster-historyserver.
+func applyRayJobAndWaitForCompletion(test Test, g *WithT, namespace *corev1.Namespace) *rayv1.RayJob {
 	rayJobFromYaml := DeserializeRayJobYAML(test, rayJobManifestPath)
 	rayJobFromYaml.Namespace = namespace.Name
 
