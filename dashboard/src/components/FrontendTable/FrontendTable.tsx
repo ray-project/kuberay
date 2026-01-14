@@ -28,14 +28,6 @@ function descendingComparator<T>(a: T, b: T, orderBy: keyof T) {
   const aValue = a[orderBy];
   const bValue = b[orderBy];
 
-  // Ensure deterministic ordering when values are missing.
-  // Missing values are always sorted last.
-  const aMissing = !aValue;
-  const bMissing = !bValue;
-  if (aMissing && bMissing) return 0;
-  if (aMissing) return 1;
-  if (bMissing) return -1;
-
   // Numeric compare when both are numbers; otherwise compare as strings.
   if (typeof aValue === "number" && typeof bValue === "number") {
     if (bValue < aValue) return -1;
@@ -53,6 +45,14 @@ function getComparator<T extends { name: string }>(
   orderBy: keyof T,
 ): (a: T, b: T) => number {
   return (a, b) => {
+    // Ensure deterministic ordering when values are missing.
+    // Missing values are always sorted last.
+    const aMissing = !a[orderBy];
+    const bMissing = !b[orderBy];
+    if (aMissing && bMissing) return 0;
+    if (aMissing) return 1;
+    if (bMissing) return -1;
+
     const primary =
       order === "desc"
         ? descendingComparator(a, b, orderBy)
