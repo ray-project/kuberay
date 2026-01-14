@@ -30,8 +30,12 @@ function descendingComparator<T>(a: T, b: T, orderBy: keyof T) {
 
   // Numeric compare when both are numbers; otherwise compare as strings.
   if (typeof aValue === "number" && typeof bValue === "number") {
-    if (bValue < aValue) return -1;
-    if (bValue > aValue) return 1;
+    if (bValue < aValue) {
+      return -1;
+    }
+    if (bValue > aValue) {
+      return 1;
+    }
     return 0;
   }
 
@@ -51,21 +55,30 @@ function getComparator<T extends { name: string }>(
       a[orderBy] === "" || a[orderBy] === null || a[orderBy] === undefined;
     const bMissing =
       b[orderBy] === "" || b[orderBy] === null || b[orderBy] === undefined;
-    if (aMissing && bMissing) return 0;
-    if (aMissing) return 1;
-    if (bMissing) return -1;
 
-    const primary =
-      order === "desc"
-        ? descendingComparator(a, b, orderBy)
-        : -descendingComparator(a, b, orderBy);
-    if (primary !== 0) {
-      return primary;
+    if (aMissing && !bMissing) {
+      return 1;
+    }
+    if (!aMissing && bMissing) {
+      return -1;
     }
 
-    // Deterministic tie-breaker so polling doesn't reshuffle rows
-    // when many items share the same sortable value.
-    return descendingComparator(a, b, "name");
+    // Compare values if both exist
+    if (!aMissing && !bMissing) {
+      const primary =
+        order === "desc"
+          ? descendingComparator(a, b, orderBy)
+          : -descendingComparator(a, b, orderBy);
+      if (primary !== 0) {
+        return primary;
+      }
+    }
+
+    // Deterministic tie-breaker (used when values satisfy equality or both are missing)
+    // so polling doesn't reshuffle rows.
+    return order === "desc"
+      ? descendingComparator(a, b, "name")
+      : -descendingComparator(a, b, "name");
   };
 }
 
