@@ -10,11 +10,15 @@ import (
 
 // RayClusterApplyConfiguration represents a declarative configuration of the RayCluster type for use
 // with apply.
+//
+// RayCluster is the Schema for the RayClusters API
 type RayClusterApplyConfiguration struct {
+	// Standard object metadata.
 	metav1.TypeMetaApplyConfiguration    `json:",inline"`
 	*metav1.ObjectMetaApplyConfiguration `json:"metadata,omitempty"`
-	Spec                                 *RayClusterSpecApplyConfiguration   `json:"spec,omitempty"`
-	Status                               *RayClusterStatusApplyConfiguration `json:"status,omitempty"`
+	// Specification of the desired behavior of the RayCluster.
+	Spec   *RayClusterSpecApplyConfiguration   `json:"spec,omitempty"`
+	Status *RayClusterStatusApplyConfiguration `json:"status,omitempty"`
 }
 
 // RayCluster constructs a declarative configuration of the RayCluster type for use with
@@ -27,6 +31,7 @@ func RayCluster(name, namespace string) *RayClusterApplyConfiguration {
 	b.WithAPIVersion("ray.io/v1")
 	return b
 }
+
 func (b RayClusterApplyConfiguration) IsApplyConfiguration() {}
 
 // WithKind sets the Kind field in the declarative configuration to the given value

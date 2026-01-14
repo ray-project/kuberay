@@ -1,11 +1,11 @@
 package collector
 
 import (
-	"github.com/ray-project/kuberay/historyserver/pkg/collector/logcollector/storage"
-	"github.com/ray-project/kuberay/historyserver/pkg/collector/logcollector/storage/aliyunoss/ray"
-	"github.com/ray-project/kuberay/historyserver/pkg/collector/logcollector/storage/localtest"
-	"github.com/ray-project/kuberay/historyserver/pkg/collector/logcollector/storage/s3"
 	"github.com/ray-project/kuberay/historyserver/pkg/collector/types"
+	"github.com/ray-project/kuberay/historyserver/pkg/storage"
+	"github.com/ray-project/kuberay/historyserver/pkg/storage/aliyunoss/ray"
+	"github.com/ray-project/kuberay/historyserver/pkg/storage/localtest"
+	"github.com/ray-project/kuberay/historyserver/pkg/storage/s3"
 )
 
 type WriterRegistry map[string]func(globalData *types.RayCollectorConfig, data map[string]interface{}) (storage.StorageWriter, error)
@@ -15,8 +15,8 @@ func GetWriterRegistry() WriterRegistry {
 }
 
 var writerRegistry = WriterRegistry{
-	"aliyunoss": ray.NewWritter,
-	"s3":        s3.NewWritter,
+	"aliyunoss": ray.NewWriter,
+	"s3":        s3.NewWriter,
 }
 
 type ReaderRegistry map[string]func(globalData *types.RayHistoryServerConfig, data map[string]interface{}) (storage.StorageReader, error)

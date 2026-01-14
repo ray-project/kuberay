@@ -194,7 +194,7 @@ func TestGetRayHeadSvcNameByRayCluster(t *testing.T) {
 	}
 
 	kubeClientSet := kubeFake.NewClientset(kubeObjects...)
-	rayClient := rayClientFake.NewSimpleClientset(rayObjects...)
+	rayClient := rayClientFake.NewClientset(rayObjects...)
 	client := NewClientForTesting(kubeClientSet, rayClient)
 
 	tests := []struct {
@@ -269,7 +269,7 @@ func TestGetRayHeadSvcNameByRayJob(t *testing.T) {
 	}
 
 	kubeClientSet := kubeFake.NewClientset(kubeObjects...)
-	rayClient := rayClientFake.NewSimpleClientset(rayObjects...)
+	rayClient := rayClientFake.NewClientset(rayObjects...)
 	client := NewClientForTesting(kubeClientSet, rayClient)
 
 	tests := []struct {
@@ -348,7 +348,7 @@ func TestGetRayHeadSvcNameByRayService(t *testing.T) {
 	}
 
 	kubeClientSet := kubeFake.NewClientset(kubeObjects...)
-	rayClient := rayClientFake.NewSimpleClientset(rayObjects...)
+	rayClient := rayClientFake.NewClientset(rayObjects...)
 	client := NewClientForTesting(kubeClientSet, rayClient)
 
 	tests := []struct {
@@ -436,8 +436,8 @@ func TestWaitRayClusterProvisioned(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			kubeClientSet := kubeFake.NewSimpleClientset()
-			rayClient := rayClientFake.NewSimpleClientset()
+			kubeClientSet := kubeFake.NewClientset()
+			rayClient := rayClientFake.NewClientset()
 
 			fakeWatcher := watch.NewFake()
 			go func() {
