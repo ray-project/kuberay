@@ -178,8 +178,6 @@ func testCollectorSeparatesFilesBySession(test Test, g *WithT, namespace *corev1
 	// hits the memory limit, all processes in the container are killed together, thereby triggering container restart.
 	// For more details, please refer to https://github.com/kubernetes/kubernetes/pull/117793
 	killContainerAndWaitForRestart(test, g, HeadPod(test, rayCluster), "ray-head")
-	// TODO(jwj): Clarify the automatic restart mechanism.
-	// Force kill the ray-worker container before automatic restart.
 	killContainerAndWaitForRestart(test, g, FirstWorkerPod(test, rayCluster), "ray-worker")
 
 	// Verify the old session logs have been processed on disk.
@@ -389,7 +387,7 @@ func applyRayJobToCluster(test Test, g *WithT, namespace *corev1.Namespace, rayC
 // verifyS3SessionDirs verifies file contents in logs/, node_events/, and job_events/ directories under a session prefix in S3.
 // There are two phases of verification:
 // 1. Verify file contents in logs/ directory
-//   - For the head node, verify raylet.out and gcs_server.out exist and have content > 0 bytes
+//   - For the head node, verify raylet.out, gcs_server.out, and monitor.out exist and have content > 0 bytes
 //   - For the worker node, verify raylet.out exists and have content > 0 bytes
 //
 // 2. Verify event type coverage in node_events/ and job_events/ directories
@@ -402,8 +400,8 @@ func verifyS3SessionDirs(test Test, g *WithT, s3Client *s3.S3, sessionPrefix str
 	headLogDirPrefix := fmt.Sprintf("%slogs/%s/", sessionPrefix, headNodeID)
 	workerLogDirPrefix := fmt.Sprintf("%slogs/%s/", sessionPrefix, workerNodeID)
 
-	LogWithTimestamp(test.T(), "Verifying raylet.out and gcs_server.out exist in head log directory %s", headLogDirPrefix)
-	for _, fileName := range []string{"raylet.out", "gcs_server.out"} {
+	LogWithTimestamp(test.T(), "Verifying raylet.out, gcs_server.out, and monitor.out exist in head log directory %s", headLogDirPrefix)
+	for _, fileName := range []string{"raylet.out", "gcs_server.out", "monitor.out"} {
 		assertNonEmptyFileExist(test, g, s3Client, headLogDirPrefix, fileName)
 	}
 
@@ -413,12 +411,28 @@ func verifyS3SessionDirs(test Test, g *WithT, s3Client *s3.S3, sessionPrefix str
 	// Verify event type coverage in node_events/ and job_events/ directories.
 	LogWithTimestamp(test.T(), "Verifying all %d event types are covered: %v", len(rayEventTypes), rayEventTypes)
 	uploadedEvents := []rayEvent{}
-	for _, dir := range []string{"node_events", "job_events/AgAAAA==", "job_events/AQAAAA=="} {
-		dirPrefix := sessionPrefix + dir + "/"
-		events, err := loadRayEventsFromS3(s3Client, s3BucketName, dirPrefix)
+
+	// Load events from node_events directory.
+	nodeEventsPrefix := sessionPrefix + "node_events/"
+	nodeEvents, err := loadRayEventsFromS3(s3Client, s3BucketName, nodeEventsPrefix)
+	g.Expect(err).NotTo(HaveOccurred())
+	uploadedEvents = append(uploadedEvents, nodeEvents...)
+	LogWithTimestamp(test.T(), "Loaded %d events from node_events", len(nodeEvents))
+
+	// Dynamically discover and load events from job_events directories.
+	jobEventsPrefix := sessionPrefix + "job_events/"
+	jobDirs, err := listS3Directories(s3Client, s3BucketName, jobEventsPrefix)
+	g.Expect(err).NotTo(HaveOccurred())
+	LogWithTimestamp(test.T(), "Found %d job directories: %v", len(jobDirs), jobDirs)
+
+	for _, jobDir := range jobDirs {
+		jobDirPrefix := jobEventsPrefix + jobDir + "/"
+		jobEvents, err := loadRayEventsFromS3(s3Client, s3BucketName, jobDirPrefix)
 		g.Expect(err).NotTo(HaveOccurred())
-		uploadedEvents = append(uploadedEvents, events...)
+		uploadedEvents = append(uploadedEvents, jobEvents...)
+		LogWithTimestamp(test.T(), "Loaded %d events from job_events/%s", len(jobEvents), jobDir)
 	}
+
 	assertAllEventTypesCovered(test, g, uploadedEvents)
 }
 
@@ -585,4 +599,34 @@ func assertAllEventTypesCovered(test Test, g *WithT, events []rayEvent) {
 	for _, eventType := range rayEventTypes {
 		g.Expect(foundEventTypes[eventType]).To(BeTrue(), "Event type %s not found", eventType)
 	}
+}
+
+// listS3Directories lists all directories (prefixes) under the given S3 prefix.
+// In S3, directories are simulated using prefixes and delimiters.
+// For example, given prefix "log/cluster/session/job_events/", this function returns ["AgAAAA==", "AQAAAA=="]
+// which are the jobID directories under job_events/.
+func listS3Directories(s3Client *s3.S3, bucket string, prefix string) ([]string, error) {
+	result, err := s3Client.ListObjectsV2(&s3.ListObjectsV2Input{
+		Bucket:    aws.String(bucket),
+		Prefix:    aws.String(prefix),
+		Delimiter: aws.String("/"),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list S3 directories under %s: %w", prefix, err)
+	}
+
+	// Extract directory names from CommonPrefixes.
+	var directories []string
+	for _, commonPrefix := range result.CommonPrefixes {
+		fullPrefix := aws.StringValue(commonPrefix.Prefix)
+		// Extract the directory name by removing the parent prefix and trailing slash.
+		// Example: "log/cluster/session/job_events/AgAAAA==/" -> "AgAAAA=="
+		dirName := strings.TrimPrefix(fullPrefix, prefix)
+		dirName = strings.TrimSuffix(dirName, "/")
+		if dirName != "" {
+			directories = append(directories, dirName)
+		}
+	}
+
+	return directories, nil
 }
