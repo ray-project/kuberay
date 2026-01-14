@@ -21,6 +21,7 @@ interface IFrontendTableProps<T extends { name: string }> {
   renderRow: (row: T) => React.ReactNode;
   defaultOrderBy: keyof T & string;
   name: string;
+  disableSelection?: boolean;
 }
 
 function descendingComparator<T>(a: T, b: T, orderBy: keyof T) {
@@ -59,6 +60,7 @@ export const FrontendTable = <T extends { name: string }>(
     renderRow,
     defaultOrderBy,
     name,
+    disableSelection = false,
   } = props;
   const [order, setOrder] = React.useState<Order>("desc");
   const [orderBy, setOrderBy] = React.useState<keyof T & string>(
@@ -242,6 +244,7 @@ export const FrontendTable = <T extends { name: string }>(
             orderBy={orderBy}
             rowCount={sortedPaginatedData.length}
             headCells={headCells}
+            disableSelection={disableSelection}
           />
           <tbody>
             {error ? (
@@ -256,10 +259,12 @@ export const FrontendTable = <T extends { name: string }>(
               [...Array(rowsPerPage)].map((e, i) => (
                 <tr style={{ height: "40px" }} key={i}>
                   <td colSpan={1} style={{ textAlign: "center" }}>
-                    <Skeleton
-                      variant="text"
-                      sx={{ width: 16, margin: "auto" }}
-                    />
+                    {!disableSelection && (
+                      <Skeleton
+                        variant="text"
+                        sx={{ width: 16, margin: "auto" }}
+                      />
+                    )}
                   </td>
                   <td colSpan={numColumns} style={{ textAlign: "center" }}>
                     <Skeleton animation="wave" variant="text" width="95%" />
@@ -282,15 +287,17 @@ export const FrontendTable = <T extends { name: string }>(
                   return (
                     <tr key={row.name}>
                       <td style={{ textAlign: "center" }}>
-                        <Checkbox
-                          size="sm"
-                          checked={isItemSelected}
-                          slotProps={{
-                            checkbox: { sx: { textAlign: "left" } },
-                          }}
-                          sx={{ verticalAlign: "text-bottom" }}
-                          onClick={(event) => handleClick(event, row.name)}
-                        />
+                        {!disableSelection && (
+                          <Checkbox
+                            size="sm"
+                            checked={isItemSelected}
+                            slotProps={{
+                              checkbox: { sx: { textAlign: "left" } },
+                            }}
+                            sx={{ verticalAlign: "text-bottom" }}
+                            onClick={(event) => handleClick(event, row.name)}
+                          />
+                        )}
                       </td>
                       <td className="truncate">
                         <Tooltip variant="outlined" title={row.name}>

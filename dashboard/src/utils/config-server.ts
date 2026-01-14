@@ -4,7 +4,11 @@ import {
   type RuntimeConfig,
 } from "./config-defaults";
 
-export function getHistoryServerConfig(): { domain: string; apiPath: string } {
+export function getHistoryServerConfig(): {
+  domain: string;
+  apiPath: string;
+  proxyEndpoint: string;
+} {
   return {
     domain:
       process.env.NEXT_PUBLIC_HISTORYSERVER_DOMAIN ||
@@ -14,6 +18,10 @@ export function getHistoryServerConfig(): { domain: string; apiPath: string } {
       process.env.NEXT_PUBLIC_HISTORYSERVER_API_PATH ||
       process.env.HISTORYSERVER_API_PATH ||
       defaultConfig.historyserver.apiPath,
+    proxyEndpoint:
+      process.env.NEXT_PUBLIC_HISTORYSERVER_PROXY_ENDPOINT ||
+      process.env.HISTORYSERVER_PROXY_ENDPOINT ||
+      defaultConfig.historyserver.proxyEndpoint,
   };
 }
 

@@ -32,8 +32,9 @@ export async function historyServerFetcher(
   endpoint: string,
   ...args: RequestInit[]
 ) {
-  const { domain } = await config.getHistoryServerUrl();
-  const res = await fetch(`${domain}${endpoint}`, ...args);
+  // Use the Next.js API proxy to avoid CORS issues
+  const proxyUrl = `${(await config.getHistoryServerUrl()).proxyEndpoint}${endpoint}`;
+  const res = await fetch(proxyUrl, ...args);
   if (!res.ok) {
     const error = new FetchError(
       "An error occurred while fetching history data",

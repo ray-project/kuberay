@@ -7,6 +7,7 @@ export interface RuntimeConfig {
   historyserver: {
     domain: string;
     apiPath: string;
+    proxyEndpoint: string;
   };
 }
 
@@ -20,6 +21,7 @@ export const v2CoreApiPath = "/api/v1";
 // history server config defaults
 export const historyServerApiPath = "/api/v0";
 export const historyServerDomain = "http://localhost:8080";
+export const proxyEndpoint = "/api/historyserver";
 export const defaultConfig: RuntimeConfig = {
   apiserver: {
     domain: defaultDomain,
@@ -29,6 +31,7 @@ export const defaultConfig: RuntimeConfig = {
   historyserver: {
     domain: historyServerDomain,
     apiPath: historyServerApiPath,
+    proxyEndpoint,
   },
 };
 

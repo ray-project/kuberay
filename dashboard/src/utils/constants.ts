@@ -29,6 +29,9 @@ export async function fetchRuntimeConfig(): Promise<RuntimeConfig> {
             data.historyserver?.domain || defaultConfig.historyserver.domain,
           apiPath:
             data.historyserver?.apiPath || defaultConfig.historyserver.apiPath,
+          proxyEndpoint:
+            data.historyserver?.proxyEndpoint ||
+            defaultConfig.historyserver.proxyEndpoint,
         },
       };
     }
@@ -57,6 +60,7 @@ export const config = {
     return {
       domain: cfg.historyserver.domain,
       apiPath: cfg.historyserver.apiPath,
+      proxyEndpoint: cfg.historyserver.proxyEndpoint,
     };
   },
 
