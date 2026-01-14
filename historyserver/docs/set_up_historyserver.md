@@ -53,13 +53,19 @@ kubectl apply -f historyserver/config/rayjob.yaml
 kubectl delete -f historyserver/config/raycluster.yaml
 ```
 
-### 8. Deploy History Server
+### 8. Create Service Account
+
+```bash
+kubectl apply -f config/service_account.yaml
+```
+
+### 9. Deploy History Server
 
 ```bash
 kubectl apply -f config/historyserver.yaml
 ```
 
-### 9. Access History Server
+### 10. Access History Server
 
 ```bash
 kubectl port-forward svc/historyserver 8080:30080
