@@ -397,8 +397,8 @@ func applyRayJobToCluster(test Test, g *WithT, namespace *corev1.Namespace, rayC
 // NOTE: Since flushed node and job events are nondeterministic, we need to aggregate them first before verifying event type coverage.
 func verifyS3SessionDirs(test Test, g *WithT, s3Client *s3.S3, sessionPrefix string, headNodeID string, workerNodeID string) {
 	// Verify file contents in logs/ directory.
-	headLogDirPrefix := fmt.Sprintf("%slogs/%s/", sessionPrefix, headNodeID)
-	workerLogDirPrefix := fmt.Sprintf("%slogs/%s/", sessionPrefix, workerNodeID)
+	headLogDirPrefix := fmt.Sprintf("%slogs/%s", sessionPrefix, headNodeID)
+	workerLogDirPrefix := fmt.Sprintf("%slogs/%s", sessionPrefix, workerNodeID)
 
 	LogWithTimestamp(test.T(), "Verifying raylet.out, gcs_server.out, and monitor.out exist in head log directory %s", headLogDirPrefix)
 	for _, fileName := range []string{"raylet.out", "gcs_server.out", "monitor.out"} {
