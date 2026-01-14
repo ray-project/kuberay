@@ -14,7 +14,7 @@ export async function fetchRuntimeConfig(): Promise<RuntimeConfig> {
     const response = await fetch("/api/config");
     if (response.ok) {
       const data: RuntimeConfig = await response.json();
-      return {
+      runtimeConfig = {
         apiserver: {
           domain: data.apiserver?.domain || defaultConfig.apiserver.domain,
           rayApiPath:
@@ -34,6 +34,7 @@ export async function fetchRuntimeConfig(): Promise<RuntimeConfig> {
             defaultConfig.historyserver.proxyEndpoint,
         },
       };
+      return runtimeConfig;
     }
   } catch (error) {
     console.warn("Failed to fetch runtime config, using default:", error);
