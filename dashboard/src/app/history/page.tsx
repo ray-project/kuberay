@@ -33,14 +33,13 @@ function toRow(c: HistoryClusterInfo): ClusterRow {
   const createTime = c.createTime
     ? dayjs(c.createTime).format("YYYY-MM-DD HH:mm:ss")
     : "N/A";
-  const createTimeStamp = c.createTimeStamp ?? 0;
   return {
-    name: `${c.name}-${createTimeStamp}`,
+    name: `${c.name}-${c.namespace}-${createTime}`,
     tasks: c.name,
     namespace: c.namespace,
     sessionName: c.sessionName,
     createTime,
-    createTimeStamp,
+    createTimeStamp: c.createTimeStamp,
   };
 }
 

@@ -47,8 +47,10 @@ function getComparator<T extends { name: string }>(
   return (a, b) => {
     // Ensure deterministic ordering when values are missing.
     // Missing values are always sorted last.
-    const aMissing = !a[orderBy];
-    const bMissing = !b[orderBy];
+    const aMissing =
+      a[orderBy] === "" || a[orderBy] === null || a[orderBy] === undefined;
+    const bMissing =
+      a[orderBy] === "" || b[orderBy] === null || b[orderBy] === undefined;
     if (aMissing && bMissing) return 0;
     if (aMissing) return 1;
     if (bMissing) return -1;
