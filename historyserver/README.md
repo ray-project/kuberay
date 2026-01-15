@@ -118,9 +118,9 @@ Each backend requires specific configuration parameters passed through environme
 ### Code Structure
 
 - `cmd/`: Main applications (collector and historyserver)
-- `backend/`: Core logic for storage backends and collection
-- `backend/collector/`: Collector-specific code
-- `backend/historyserver/`: History server implementation
+- `pkg/`: Core logic for storage backends and collection
+- `pkg/collector/`: Collector-specific code
+- `pkg/storage/`: Storage backend implementations
 - `dashboard/`: Web UI files
 
 ### Testing

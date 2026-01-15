@@ -8,6 +8,12 @@ import (
 
 // RayJobStatusInfoApplyConfiguration represents a declarative configuration of the RayJobStatusInfo type for use
 // with apply.
+//
+// `RayJobStatusInfo` is a subset of `RayJobInfo` from `dashboard_httpclient.py`.
+// This subset is used to store information in the CR status.
+//
+// TODO(kevin85421): We can consider exposing the whole `RayJobInfo` in the CR status
+// after careful consideration. In that case, we can remove `RayJobStatusInfo`.
 type RayJobStatusInfoApplyConfiguration struct {
 	StartTime *metav1.Time `json:"startTime,omitempty"`
 	EndTime   *metav1.Time `json:"endTime,omitempty"`

@@ -4,6 +4,8 @@ package v1
 
 // HeadInfoApplyConfiguration represents a declarative configuration of the HeadInfo type for use
 // with apply.
+//
+// HeadInfo gives info about head
 type HeadInfoApplyConfiguration struct {
 	PodIP       *string `json:"podIP,omitempty"`
 	ServiceIP   *string `json:"serviceIP,omitempty"`

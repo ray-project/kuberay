@@ -5,8 +5,8 @@ metadata:
 spec:
   weight: 1
   capability:
-    cpu: 4
-    memory: 6Gi
+    cpu: "4"
+    memory: "6Gi"
 ---
 apiVersion: ray.io/v1
 kind: RayCluster
@@ -25,11 +25,11 @@ spec:
           image: rayproject/ray:2.52.0
           resources:
             limits:
-              cpu: 1
-              memory: 5Gi
+              cpu: "1"
+              memory: "5Gi"
             requests:
-              cpu: 1
-              memory: 2Gi
+              cpu: "1"
+              memory: "2Gi"
   workerGroupSpecs:
   - groupName: worker
     replicas: 2
@@ -43,8 +43,8 @@ spec:
           image: rayproject/ray:2.52.0
           resources:
             limits:
-              cpu: 1
-              memory: 1Gi
+              cpu: "1"
+              memory: "1Gi"
             requests:
-              cpu: 1
-              memory: 1Gi
+              cpu: "1"
+              memory: "1Gi"

@@ -115,7 +115,7 @@ func testCollectorUploadOnGracefulShutdown(test Test, g *WithT, namespace *corev
 	rayCluster := prepareTestEnv(test, g, namespace, s3Client)
 
 	// Submit a Ray job to the existing cluster.
-	_ = applyRayJobToCluster(test, g, namespace, rayCluster)
+	_ = applyRayJobAndWaitForCompletion(test, g, namespace)
 
 	// Define variables for constructing S3 object prefix.
 	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, rayClusterID)
@@ -163,7 +163,7 @@ func testCollectorSeparatesFilesBySession(test Test, g *WithT, namespace *corev1
 	rayCluster := prepareTestEnv(test, g, namespace, s3Client)
 
 	// Submit a Ray job to the existing cluster.
-	_ = applyRayJobToCluster(test, g, namespace, rayCluster)
+	_ = applyRayJobAndWaitForCompletion(test, g, namespace)
 
 	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, rayClusterID)
 	sessionID := getSessionIDFromHeadPod(test, g, rayCluster)
@@ -362,8 +362,9 @@ func applyRayCluster(test Test, g *WithT, namespace *corev1.Namespace) *rayv1.Ra
 	return rayCluster
 }
 
-// applyRayJobToCluster applies a Ray job to the existing Ray cluster.
-func applyRayJobToCluster(test Test, g *WithT, namespace *corev1.Namespace, rayCluster *rayv1.RayCluster) *rayv1.RayJob {
+// applyRayJobAndWaitForCompletion applies a Ray job to the existing Ray cluster and waits for it to complete successfully.
+// In the RayJob manifest, the clusterSelector is set to the existing Ray cluster, raycluster-historyserver.
+func applyRayJobAndWaitForCompletion(test Test, g *WithT, namespace *corev1.Namespace) *rayv1.RayJob {
 	rayJobFromYaml := DeserializeRayJobYAML(test, rayJobManifestPath)
 	rayJobFromYaml.Namespace = namespace.Name
 
@@ -423,6 +424,7 @@ func verifyS3SessionDirs(test Test, g *WithT, s3Client *s3.S3, sessionPrefix str
 	jobEventsPrefix := sessionPrefix + "job_events/"
 	jobDirs, err := listS3Directories(s3Client, s3BucketName, jobEventsPrefix)
 	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(jobDirs).NotTo(BeEmpty())
 	LogWithTimestamp(test.T(), "Found %d job directories: %v", len(jobDirs), jobDirs)
 
 	for _, jobDir := range jobDirs {
@@ -478,7 +480,6 @@ fi`
 	g.Expect(nodeID).NotTo(BeEmpty(), "nodeID should not be empty")
 
 	return nodeID
-
 }
 
 // FirstWorkerPod returns a function that gets the first worker pod from the Ray cluster.
@@ -530,8 +531,41 @@ func getContainerStatusByName(pod *corev1.Pod, containerName string) (*corev1.Co
 	return nil, fmt.Errorf("container %s not found in pod %s/%s", containerName, pod.Namespace, pod.Name)
 }
 
+// listS3Directories lists all directories (prefixes) under the given S3 prefix.
+// In S3, directories are simulated using prefixes and delimiters.
+// For example, given prefix "log/cluster/session/job_events/", this function returns ["AgAAAA==", "AQAAAA=="]
+// which are the jobID directories under job_events/.
+func listS3Directories(s3Client *s3.S3, bucket string, prefix string) ([]string, error) {
+	result, err := s3Client.ListObjectsV2(&s3.ListObjectsV2Input{
+		Bucket:    aws.String(bucket),
+		Prefix:    aws.String(prefix),
+		Delimiter: aws.String("/"),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list S3 directories under %s: %w", prefix, err)
+	}
+
+	// Extract directory names from CommonPrefixes.
+	var directories []string
+	for _, commonPrefix := range result.CommonPrefixes {
+		fullPrefix := aws.StringValue(commonPrefix.Prefix)
+		// Extract the directory name by removing the parent prefix and trailing slash.
+		// Example: "log/cluster/session/job_events/AgAAAA==/" -> "AgAAAA=="
+		dirName := strings.TrimPrefix(fullPrefix, prefix)
+		dirName = strings.TrimSuffix(dirName, "/")
+		if dirName != "" {
+			directories = append(directories, dirName)
+		}
+	}
+
+	return directories, nil
+}
+
 // loadRayEventsFromS3 loads Ray events from S3.
 func loadRayEventsFromS3(s3Client *s3.S3, bucket string, prefix string) ([]rayEvent, error) {
+	var events []rayEvent
+
+	// List all file objects in the directory.
 	objects, err := s3Client.ListObjectsV2(&s3.ListObjectsV2Input{
 		Bucket: aws.String(bucket),
 		Prefix: aws.String(prefix),
@@ -540,32 +574,31 @@ func loadRayEventsFromS3(s3Client *s3.S3, bucket string, prefix string) ([]rayEv
 		return nil, err
 	}
 
-	// Find the first file object for loading Ray events.
-	var fileKey string
 	for _, obj := range objects.Contents {
-		if key := aws.StringValue(obj.Key); !strings.HasSuffix(key, "/") {
-			fileKey = key
-			break
+		fileKey := aws.StringValue(obj.Key)
+		if strings.HasSuffix(fileKey, "/") {
+			continue
 		}
-	}
-	if fileKey == "" {
-		return nil, fmt.Errorf("no file object found in directory %s", prefix)
+
+		// Get the file object content and decode it into Ray events.
+		content, err := s3Client.GetObject(&s3.GetObjectInput{
+			Bucket: aws.String(bucket),
+			Key:    aws.String(fileKey),
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		var fileEvents []rayEvent
+		if err := json.NewDecoder(content.Body).Decode(&fileEvents); err != nil {
+			content.Body.Close()
+			return nil, fmt.Errorf("failed to decode Ray events from %s: %w", fileKey, err)
+		}
+		content.Body.Close()
+
+		events = append(events, fileEvents...)
 	}
 
-	// Get and decode the file object content into Ray events.
-	content, err := s3Client.GetObject(&s3.GetObjectInput{
-		Bucket: aws.String(bucket),
-		Key:    aws.String(fileKey),
-	})
-	if err != nil {
-		return nil, err
-	}
-	defer content.Body.Close()
-
-	var events []rayEvent
-	if err := json.NewDecoder(content.Body).Decode(&events); err != nil {
-		return nil, err
-	}
 	return events, nil
 }
 
@@ -596,34 +629,4 @@ func assertAllEventTypesCovered(test Test, g *WithT, events []rayEvent) {
 	for _, eventType := range rayEventTypes {
 		g.Expect(foundEventTypes[eventType]).To(BeTrue(), "Event type %s not found", eventType)
 	}
-}
-
-// listS3Directories lists all directories (prefixes) under the given S3 prefix.
-// In S3, directories are simulated using prefixes and delimiters.
-// For example, given prefix "log/cluster/session/job_events/", this function returns ["AgAAAA==", "AQAAAA=="]
-// which are the jobID directories under job_events/.
-func listS3Directories(s3Client *s3.S3, bucket string, prefix string) ([]string, error) {
-	result, err := s3Client.ListObjectsV2(&s3.ListObjectsV2Input{
-		Bucket:    aws.String(bucket),
-		Prefix:    aws.String(prefix),
-		Delimiter: aws.String("/"),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to list S3 directories under %s: %w", prefix, err)
-	}
-
-	// Extract directory names from CommonPrefixes.
-	var directories []string
-	for _, commonPrefix := range result.CommonPrefixes {
-		fullPrefix := aws.StringValue(commonPrefix.Prefix)
-		// Extract the directory name by removing the parent prefix and trailing slash.
-		// Example: "log/cluster/session/job_events/AgAAAA==/" -> "AgAAAA=="
-		dirName := strings.TrimPrefix(fullPrefix, prefix)
-		dirName = strings.TrimSuffix(dirName, "/")
-		if dirName != "" {
-			directories = append(directories, dirName)
-		}
-	}
-
-	return directories, nil
 }

@@ -53,11 +53,11 @@ spec:
               protocol: TCP
             resources:
               limits:
-                cpu: 2
-                memory: 5Gi
+                cpu: "2"
+                memory: "5Gi"
               requests:
-                cpu: 2
-                memory: 4Gi
+                cpu: "2"
+                memory: "4Gi"
     workerGroupSpecs:
     - replicas: 1
       minReplicas: 1
@@ -79,12 +79,12 @@ spec:
                   key: hf_token
             resources:
               limits:
-                cpu: 32
-                memory: 32Gi
+                cpu: "32"
+                memory: "32Gi"
                 nvidia.com/gpu: "4"
               requests:
-                cpu: 32
-                memory: 32Gi
+                cpu: "32"
+                memory: "32Gi"
                 nvidia.com/gpu: "4"
 
 ---

@@ -19,8 +19,8 @@ import (
 
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client"
+	clienttesting "github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client/testing"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-	rayClientFake "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/fake"
 )
 
 func TestRayNodesGetComplete(t *testing.T) {
@@ -278,7 +278,7 @@ pod-2   1      1      1      1Gi      cluster-1   worker   group-2        120m
 			}
 
 			kubeClientSet := kubefake.NewClientset(tc.pods...)
-			rayClient := rayClientFake.NewSimpleClientset()
+			rayClient := clienttesting.NewRayClientset()
 			k8sClients := client.NewClientForTesting(kubeClientSet, rayClient)
 
 			err := fakeGetNodesOptions.Run(context.Background(), k8sClients)

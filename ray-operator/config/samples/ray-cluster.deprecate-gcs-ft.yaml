@@ -29,11 +29,11 @@ spec:
           image: rayproject/ray:2.52.0
           resources:
             limits:
-              cpu: 1
-              memory: 5Gi
+              cpu: "1"
+              memory: "5Gi"
             requests:
-              cpu: 1
-              memory: 2Gi
+              cpu: "1"
+              memory: "2Gi"
           env:
           # Ray will read the RAY_REDIS_ADDRESS environment variable to establish
           # a connection with the Redis server. In this instance, we use the "redis"
@@ -92,11 +92,11 @@ spec:
             name: ray-logs
           resources:
             limits:
-              cpu: 1
-              memory: 1Gi
+              cpu: "1"
+              memory: "1Gi"
             requests:
-              cpu: 1
-              memory: 1Gi
+              cpu: "1"
+              memory: "1Gi"
         volumes:
         - name: ray-logs
           emptyDir: {}
