@@ -159,6 +159,10 @@ deploy-with-override: manifests kustomize ## Deploy controller with test-only fe
 	cd config/default && $(KUSTOMIZE) edit set image kuberay/operator=${IMG}
 	$(KUSTOMIZE) build config/overlays/test-overrides | kubectl apply --server-side=true -f -
 
+deploy-with-override-without-async-job-info-query: manifests kustomize ## Deploy controller with test-only feature gate overrides without async job info query (does NOT affect default chart).
+	cd config/default && $(KUSTOMIZE) edit set image kuberay/operator=${IMG}
+	$(KUSTOMIZE) build config/overlays/test-overrides-without-async-job-info-query | kubectl apply --server-side=true -f -
+
 undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/config.
 	$(KUSTOMIZE) build config/default | kubectl delete -f -
 
