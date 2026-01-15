@@ -306,7 +306,7 @@ func deleteS3Bucket(test Test, g *WithT, s3Client *s3.Client) {
 			Bucket: aws.String(s3BucketName),
 			Delete: &s3types.Delete{
 				Objects: objectsToDelete,
-				Quiet:   true,
+				Quiet:   aws.Bool(true),
 			},
 		})
 		if err != nil {
@@ -386,10 +386,10 @@ func verifyS3SessionDirs(test Test, g *WithT, s3Client *s3.Client, sessionPrefix
 			objects, err := s3Client.ListObjectsV2(test.Ctx(), &s3.ListObjectsV2Input{
 				Bucket:  aws.String(s3BucketName),
 				Prefix:  aws.String(dirPrefix),
-				MaxKeys: 10,
+				MaxKeys: aws.Int32(10),
 			})
 			gg.Expect(err).NotTo(HaveOccurred())
-			keyCount := int(objects.KeyCount)
+			keyCount := int(aws.ToInt32(objects.KeyCount))
 			gg.Expect(keyCount).To(BeNumerically(">", 0))
 			LogWithTimestamp(test.T(), "Verified directory %s under %s has at least one object", dir, sessionPrefix)
 
@@ -411,7 +411,7 @@ func verifyS3SessionDirs(test Test, g *WithT, s3Client *s3.Client, sessionPrefix
 				Key:    aws.String(fileKey),
 			})
 			gg.Expect(err).NotTo(HaveOccurred())
-			fileSize := obj.ContentLength
+			fileSize := aws.ToInt64(obj.ContentLength)
 			gg.Expect(fileSize).To(BeNumerically(">", 0))
 			LogWithTimestamp(test.T(), "Verified file %s has content: %d bytes", fileKey, fileSize)
 		}, TestTimeoutMedium).Should(Succeed(), "Failed to verify at least one object in directory %s has content", dirPrefix)
