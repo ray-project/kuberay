@@ -106,3 +106,11 @@ export async function DELETE(
   const resolvedParams = await params;
   return proxyRequest(request, resolvedParams);
 }
+
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ path: string[] }> },
+) {
+  const resolvedParams = await params;
+  return proxyRequest(request, resolvedParams);
+}
