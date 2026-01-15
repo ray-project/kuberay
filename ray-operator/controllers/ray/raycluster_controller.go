@@ -824,8 +824,8 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 			return errstd.New(reason)
 		}
 	} else if len(headPods.Items) == 0 {
-		originatedFrom := utils.GetCRDType(instance.Labels[utils.RayOriginatedFromCRDLabelKey])
-		if originatedFrom == utils.RayJobCRD {
+		if meta.IsStatusConditionTrue(instance.Status.Conditions, string(rayv1.RayClusterProvisioned)) &&
+			shouldSkipHeadPodRestart(instance) {
 			// Recreating the head Pod if the RayCluster created by RayJob is provisioned doesn't help RayJob.
 			//
 			// Case 1: GCS fault tolerance is disabled
@@ -837,13 +837,11 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 			//
 			// In this case, the worker Pods will not be killed by the new head Pod when it is created, but the submission ID has already been
 			// used by the old Ray job, so the new Ray job will fail.
-			if meta.IsStatusConditionTrue(instance.Status.Conditions, string(rayv1.RayClusterProvisioned)) {
-				logger.Info(
-					"reconcilePods: Found 0 head Pods for a RayJob-managed RayCluster; skipping head creation to let RayJob controller handle the failure",
-					"rayCluster", instance.Name,
-				)
-				return nil
-			}
+			logger.Info(
+				"reconcilePods: Found 0 head Pods for the RayCluster; Skipped head recreation due to ray.io/disable-provisioned-head-restart",
+				"rayCluster", instance.Name,
+			)
+			return nil
 		}
 		// Create head Pod if it does not exist.
 		logger.Info("reconcilePods: Found 0 head Pods; creating a head Pod for the RayCluster.")
@@ -975,7 +973,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 					}
 				}
 			}
-			logger.Info("reconcilePods", "found existing replica indices", "group", worker.GroupName, "indices", validReplicaIndices)
+			logger.Info("reconcilePods: found existing replica indices", "group", worker.GroupName, "indices", validReplicaIndices)
 		}
 		if diff > 0 {
 			// pods need to be added
@@ -1237,6 +1235,10 @@ func (r *RayClusterReconciler) reconcileMultiHostWorkerGroup(ctx context.Context
 	}
 
 	return nil
+}
+
+func shouldSkipHeadPodRestart(instance *rayv1.RayCluster) bool {
+	return instance.Annotations[utils.DisableProvisionedHeadRestartAnnotationKey] == "true"
 }
 
 // shouldRecreatePodsForUpgrade checks if any pods need to be recreated based on RayClusterSpec changes

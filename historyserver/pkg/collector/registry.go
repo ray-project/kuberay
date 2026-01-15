@@ -15,8 +15,8 @@ func GetWriterRegistry() WriterRegistry {
 }
 
 var writerRegistry = WriterRegistry{
-	"aliyunoss": ray.NewWritter,
-	"s3":        s3.NewWritter,
+	"aliyunoss": ray.NewWriter,
+	"s3":        s3.NewWriter,
 }
 
 type ReaderRegistry map[string]func(globalData *types.RayHistoryServerConfig, data map[string]interface{}) (storage.StorageReader, error)

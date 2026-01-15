@@ -4,19 +4,45 @@ package v1
 
 // RayClusterSpecApplyConfiguration represents a declarative configuration of the RayClusterSpec type for use
 // with apply.
+//
+// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
+// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
+// RayClusterSpec defines the desired state of RayCluster
 type RayClusterSpecApplyConfiguration struct {
-	TTLSecondsAfterIdle      *int32                                       `json:"ttlSecondsAfterIdle,omitempty"`
-	UpgradeStrategy          *RayClusterUpgradeStrategyApplyConfiguration `json:"upgradeStrategy,omitempty"`
-	AuthOptions              *AuthOptionsApplyConfiguration               `json:"authOptions,omitempty"`
-	Suspend                  *bool                                        `json:"suspend,omitempty"`
-	ManagedBy                *string                                      `json:"managedBy,omitempty"`
-	AutoscalerOptions        *AutoscalerOptionsApplyConfiguration         `json:"autoscalerOptions,omitempty"`
-	HeadServiceAnnotations   map[string]string                            `json:"headServiceAnnotations,omitempty"`
-	EnableInTreeAutoscaling  *bool                                        `json:"enableInTreeAutoscaling,omitempty"`
-	GcsFaultToleranceOptions *GcsFaultToleranceOptionsApplyConfiguration  `json:"gcsFaultToleranceOptions,omitempty"`
-	HeadGroupSpec            *HeadGroupSpecApplyConfiguration             `json:"headGroupSpec,omitempty"`
-	RayVersion               *string                                      `json:"rayVersion,omitempty"`
-	WorkerGroupSpecs         []WorkerGroupSpecApplyConfiguration          `json:"workerGroupSpecs,omitempty"`
+	// TTLSecondsAfterIdle specifies the time-to-live (TTL) in seconds for the RayCluster
+	// after it becomes idle. A cluster is considered idle when all Ray components report
+	// inactive status via the /api/component_activities endpoint.
+	// When set, the operator periodically checks the cluster's activity status and deletes
+	// the cluster if it has been idle for longer than the specified duration.
+	// If not set (nil), idle termination is disabled.
+	TTLSecondsAfterIdle *int32 `json:"ttlSecondsAfterIdle,omitempty"`
+	// UpgradeStrategy defines the scaling policy used when upgrading the RayCluster
+	UpgradeStrategy *RayClusterUpgradeStrategyApplyConfiguration `json:"upgradeStrategy,omitempty"`
+	// AuthOptions specifies the authentication options for the RayCluster.
+	AuthOptions *AuthOptionsApplyConfiguration `json:"authOptions,omitempty"`
+	// Suspend indicates whether a RayCluster should be suspended.
+	// A suspended RayCluster will have head pods and worker pods deleted.
+	Suspend *bool `json:"suspend,omitempty"`
+	// ManagedBy is an optional configuration for the controller or entity that manages a RayCluster.
+	// The value must be either 'ray.io/kuberay-operator' or 'kueue.x-k8s.io/multikueue'.
+	// The kuberay-operator reconciles a RayCluster which doesn't have this field at all or
+	// the field value is the reserved string 'ray.io/kuberay-operator',
+	// but delegates reconciling the RayCluster with 'kueue.x-k8s.io/multikueue' to the Kueue.
+	// The field is immutable.
+	ManagedBy *string `json:"managedBy,omitempty"`
+	// AutoscalerOptions specifies optional configuration for the Ray autoscaler.
+	AutoscalerOptions      *AutoscalerOptionsApplyConfiguration `json:"autoscalerOptions,omitempty"`
+	HeadServiceAnnotations map[string]string                    `json:"headServiceAnnotations,omitempty"`
+	// EnableInTreeAutoscaling indicates whether operator should create in tree autoscaling configs
+	EnableInTreeAutoscaling *bool `json:"enableInTreeAutoscaling,omitempty"`
+	// GcsFaultToleranceOptions for enabling GCS FT
+	GcsFaultToleranceOptions *GcsFaultToleranceOptionsApplyConfiguration `json:"gcsFaultToleranceOptions,omitempty"`
+	// HeadGroupSpec is the spec for the head pod
+	HeadGroupSpec *HeadGroupSpecApplyConfiguration `json:"headGroupSpec,omitempty"`
+	// RayVersion is used to determine the command for the Kubernetes Job managed by RayJob
+	RayVersion *string `json:"rayVersion,omitempty"`
+	// WorkerGroupSpecs are the specs for the worker pods
+	WorkerGroupSpecs []WorkerGroupSpecApplyConfiguration `json:"workerGroupSpecs,omitempty"`
 }
 
 // RayClusterSpecApplyConfiguration constructs a declarative configuration of the RayClusterSpec type for use with
