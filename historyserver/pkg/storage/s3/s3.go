@@ -98,7 +98,7 @@ func (r *RayLogsHandler) _listFiles(prefix string, delimiter string, onlyBase bo
 	paginator := s3.NewListObjectsV2Paginator(r.S3Client, &s3.ListObjectsV2Input{
 		Bucket:    aws.String(r.S3Bucket),
 		Prefix:    aws.String(prefix + "/"),
-		MaxKeys:   100,
+		MaxKeys:   aws.Int32(100),
 		Delimiter: aws.String(delimiter),
 	})
 
@@ -162,7 +162,7 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 		paginator := s3.NewListObjectsV2Paginator(r.S3Client, &s3.ListObjectsV2Input{
 			Bucket:    aws.String(r.S3Bucket),
 			Prefix:    aws.String(listPrefix),
-			MaxKeys:   100,
+			MaxKeys:   aws.Int32(100),
 			Delimiter: aws.String(""),
 		})
 
