@@ -1,4 +1,4 @@
-import useSWR from "swr";
+import useSWR, { mutate } from "swr";
 import { historyServerFetcher } from "@/utils/fetch";
 import type { HistoryClusterInfoList } from "@/types/historyserver";
 import { config } from "@/utils/constants";
@@ -26,6 +26,8 @@ export const useHistoryClusters = (refreshInterval: number = 5000) => {
         `Failed to enter cluster: ${res.status} ${res.statusText}`,
       );
     }
+    // Clean and refresh tasks cache
+    mutate("/api/v0/tasks", undefined, { revalidate: false });
   };
 
   return {
