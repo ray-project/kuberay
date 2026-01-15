@@ -37,6 +37,8 @@ spec:
     print(f'Final count: {final_count}')
     print(f'Cluster resources: {ray.cluster_resources()}')
 
+    # For now, events on the worker nodes aren't sent to the collector when calling ray.shutdown().
+    # As a workaround, we explicitly wait for 5 seconds to ensure events are sent.
     time.sleep(5)
     "
   # Select the existing Ray cluster running the collector.
