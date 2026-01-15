@@ -5,6 +5,7 @@ package v1
 // RayClusterSpecApplyConfiguration represents a declarative configuration of the RayClusterSpec type for use
 // with apply.
 type RayClusterSpecApplyConfiguration struct {
+	TTLSecondsAfterIdle      *int32                                       `json:"ttlSecondsAfterIdle,omitempty"`
 	UpgradeStrategy          *RayClusterUpgradeStrategyApplyConfiguration `json:"upgradeStrategy,omitempty"`
 	AuthOptions              *AuthOptionsApplyConfiguration               `json:"authOptions,omitempty"`
 	Suspend                  *bool                                        `json:"suspend,omitempty"`
@@ -22,6 +23,14 @@ type RayClusterSpecApplyConfiguration struct {
 // apply.
 func RayClusterSpec() *RayClusterSpecApplyConfiguration {
 	return &RayClusterSpecApplyConfiguration{}
+}
+
+// WithTTLSecondsAfterIdle sets the TTLSecondsAfterIdle field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the TTLSecondsAfterIdle field is set to the value of the last call.
+func (b *RayClusterSpecApplyConfiguration) WithTTLSecondsAfterIdle(value int32) *RayClusterSpecApplyConfiguration {
+	b.TTLSecondsAfterIdle = &value
+	return b
 }
 
 // WithUpgradeStrategy sets the UpgradeStrategy field in the declarative configuration to the given value

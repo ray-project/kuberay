@@ -319,9 +319,12 @@ type K8sEventType string
 
 const (
 	// RayCluster event list
-	InvalidRayClusterStatus   K8sEventType = "InvalidRayClusterStatus"
-	InvalidRayClusterSpec     K8sEventType = "InvalidRayClusterSpec"
-	InvalidRayClusterMetadata K8sEventType = "InvalidRayClusterMetadata"
+	InvalidRayClusterStatus      K8sEventType = "InvalidRayClusterStatus"
+	InvalidRayClusterSpec        K8sEventType = "InvalidRayClusterSpec"
+	InvalidRayClusterMetadata    K8sEventType = "InvalidRayClusterMetadata"
+	DeletedIdleRayCluster        K8sEventType = "DeletedIdleRayCluster"
+	FailedToDeleteIdleRayCluster K8sEventType = "FailedToDeleteIdleRayCluster"
+
 	// Head Pod event list
 	CreatedHeadPod        K8sEventType = "CreatedHeadPod"
 	FailedToCreateHeadPod K8sEventType = "FailedToCreateHeadPod"

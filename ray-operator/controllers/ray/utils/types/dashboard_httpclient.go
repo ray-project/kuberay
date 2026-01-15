@@ -46,3 +46,19 @@ type RayJobStopResponse struct {
 type RayJobLogsResponse struct {
 	Logs string `json:"logs,omitempty"`
 }
+
+// RayActivityResponse is the response for each component from "/api/component_activities".
+// Reference to https://github.com/ray-project/ray/blob/f182131f846c8de5eef21ad6a0621aa30b6005cb/python/ray/dashboard/modules/job/job_head.py#L68-L107
+// Reference to https://github.com/ray-project/ray/blob/master/python/ray/dashboard/modules/job/component_activities_schema.json
+type RayActivityResponse struct {
+	Reason         *string  `json:"reason,omitempty"`
+	LastActivityAt *float64 `json:"last_activity_at,omitempty"`
+	IsActive       string   `json:"is_active"`
+	Timestamp      float64  `json:"timestamp,omitempty"`
+}
+
+const (
+	RayActivityStatusActive   = "ACTIVE"
+	RayActivityStatusInactive = "INACTIVE"
+	RayActivityStatusError    = "ERROR"
+)
