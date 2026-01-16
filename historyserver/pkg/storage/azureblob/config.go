@@ -18,14 +18,29 @@ package azureblob
 
 import (
 	"os"
+	"strings"
 
 	"github.com/ray-project/kuberay/historyserver/pkg/collector/types"
 )
 
 const DefaultContainerName = "ray-historyserver"
 
+// AuthMode specifies the authentication method for Azure Blob Storage
+type AuthMode string
+
+const (
+	// AuthModeConnectionString uses a connection string for authentication
+	AuthModeConnectionString AuthMode = "connection_string"
+	// AuthModeWorkloadIdentity uses Azure Workload Identity (for AKS)
+	AuthModeWorkloadIdentity AuthMode = "workload_identity"
+	// AuthModeDefault uses DefaultAzureCredential which tries multiple methods
+	AuthModeDefault AuthMode = "default"
+)
+
 type config struct {
+	AuthMode         AuthMode
 	ConnectionString string
+	AccountURL       string
 	ContainerName    string
 	Endpoint         string
 	types.RayCollectorConfig
@@ -39,10 +54,27 @@ func getContainerNameWithDefault() string {
 	return container
 }
 
+func getAuthMode() AuthMode {
+	mode := strings.ToLower(os.Getenv("AZURE_STORAGE_AUTH_MODE"))
+	switch mode {
+	case "connection_string":
+		return AuthModeConnectionString
+	case "workload_identity":
+		return AuthModeWorkloadIdentity
+	case "default":
+		return AuthModeDefault
+	default:
+		// Auto-detect based on available credentials
+		return ""
+	}
+}
+
 func (c *config) complete(rcc *types.RayCollectorConfig, jd map[string]interface{}) {
 	c.RayCollectorConfig = *rcc
 	c.ConnectionString = os.Getenv("AZURE_STORAGE_CONNECTION_STRING")
+	c.AccountURL = os.Getenv("AZURE_STORAGE_ACCOUNT_URL")
 	c.ContainerName = getContainerNameWithDefault()
+	c.AuthMode = getAuthMode()
 
 	if len(jd) == 0 {
 		c.Endpoint = os.Getenv("AZURE_STORAGE_ENDPOINT")
@@ -55,6 +87,12 @@ func (c *config) complete(rcc *types.RayCollectorConfig, jd map[string]interface
 		}
 		if connStr, ok := jd["azureConnectionString"]; ok {
 			c.ConnectionString = connStr.(string)
+		}
+		if accountURL, ok := jd["azureAccountURL"]; ok {
+			c.AccountURL = accountURL.(string)
+		}
+		if authMode, ok := jd["azureAuthMode"]; ok {
+			c.AuthMode = AuthMode(authMode.(string))
 		}
 	}
 }
@@ -64,7 +102,9 @@ func (c *config) completeHSConfig(rcc *types.RayHistoryServerConfig, jd map[stri
 		RootDir: rcc.RootDir,
 	}
 	c.ConnectionString = os.Getenv("AZURE_STORAGE_CONNECTION_STRING")
+	c.AccountURL = os.Getenv("AZURE_STORAGE_ACCOUNT_URL")
 	c.ContainerName = getContainerNameWithDefault()
+	c.AuthMode = getAuthMode()
 
 	if len(jd) == 0 {
 		c.Endpoint = os.Getenv("AZURE_STORAGE_ENDPOINT")
@@ -77,6 +117,12 @@ func (c *config) completeHSConfig(rcc *types.RayHistoryServerConfig, jd map[stri
 		}
 		if connStr, ok := jd["azureConnectionString"]; ok {
 			c.ConnectionString = connStr.(string)
+		}
+		if accountURL, ok := jd["azureAccountURL"]; ok {
+			c.AccountURL = accountURL.(string)
+		}
+		if authMode, ok := jd["azureAuthMode"]; ok {
+			c.AuthMode = AuthMode(authMode.(string))
 		}
 	}
 }

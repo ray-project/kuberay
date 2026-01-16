@@ -28,6 +28,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/container"
 	"github.com/sirupsen/logrus"
@@ -303,6 +304,46 @@ func NewWriter(c *types.RayCollectorConfig, jd map[string]interface{}) (storage.
 	return New(cfg)
 }
 
+func createAzureBlobClient(c *config) (*azblob.Client, error) {
+	switch c.AuthMode {
+	case AuthModeConnectionString:
+		logrus.Info("Using connection string authentication")
+		return azblob.NewClientFromConnectionString(c.ConnectionString, nil)
+
+	case AuthModeWorkloadIdentity:
+		logrus.Info("Using workload identity authentication")
+		cred, err := azidentity.NewWorkloadIdentityCredential(nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create workload identity credential: %w", err)
+		}
+		return azblob.NewClient(c.AccountURL, cred, nil)
+
+	case AuthModeDefault:
+		logrus.Info("Using default Azure credential chain")
+		cred, err := azidentity.NewDefaultAzureCredential(nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create default credential: %w", err)
+		}
+		return azblob.NewClient(c.AccountURL, cred, nil)
+
+	default:
+		// Auto-detect: use connection string if present, otherwise default credential
+		if c.ConnectionString != "" {
+			logrus.Info("Auto-detected connection string authentication")
+			return azblob.NewClientFromConnectionString(c.ConnectionString, nil)
+		}
+		if c.AccountURL != "" {
+			logrus.Info("Auto-detected token-based authentication (using DefaultAzureCredential)")
+			cred, err := azidentity.NewDefaultAzureCredential(nil)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create default credential: %w", err)
+			}
+			return azblob.NewClient(c.AccountURL, cred, nil)
+		}
+		return nil, fmt.Errorf("either AZURE_STORAGE_CONNECTION_STRING or AZURE_STORAGE_ACCOUNT_URL must be set")
+	}
+}
+
 func ensureContainerExists(ctx context.Context, client *azblob.Client, containerName string) error {
 	containerClient := client.ServiceClient().NewContainerClient(containerName)
 
@@ -334,19 +375,9 @@ func New(c *config) (*RayLogsHandler, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	var client *azblob.Client
-	var err error
-
-	if c.Endpoint != "" {
-		// Use custom endpoint (for Azurite testing)
-		client, err = azblob.NewClientFromConnectionString(c.ConnectionString, nil)
-	} else {
-		// Use connection string
-		client, err = azblob.NewClientFromConnectionString(c.ConnectionString, nil)
-	}
-
+	client, err := createAzureBlobClient(c)
 	if err != nil {
-		logrus.Fatalf("Failed to create azure blob client: %v", err)
+		logrus.Errorf("Failed to create azure blob client: %v", err)
 		return nil, err
 	}
 
