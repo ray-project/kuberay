@@ -916,6 +916,7 @@ func (r *RayJobReconciler) getOrCreateRayClusterInstance(ctx context.Context, ra
 			if err != nil {
 				return nil, err
 			}
+
 			if r.options.BatchSchedulerManager != nil && rayJobInstance.Spec.SubmissionMode == rayv1.K8sJobMode {
 				if scheduler, err := r.options.BatchSchedulerManager.GetScheduler(); err == nil {
 					// Group name is only used for individual pods to specify their task group ("headgroup", "worker-group-1", etc.).
@@ -950,10 +951,18 @@ func (r *RayJobReconciler) constructRayClusterForRayJob(rayJobInstance *rayv1.Ra
 	maps.Copy(labels, rayJobInstance.Labels)
 	labels[utils.RayOriginatedFromCRNameLabelKey] = rayJobInstance.Name
 	labels[utils.RayOriginatedFromCRDLabelKey] = utils.RayOriginatedFromCRDLabelValue(utils.RayJobCRD)
+	labels[utils.RayJobSubmissionModeLabelKey] = string(rayJobInstance.Spec.SubmissionMode)
+
+	annotations := make(map[string]string, len(rayJobInstance.Annotations))
+	maps.Copy(annotations, rayJobInstance.Annotations)
+	if rayJobInstance.Spec.SubmissionMode == rayv1.SidecarMode {
+		annotations[utils.DisableProvisionedHeadRestartAnnotationKey] = "true"
+	}
+
 	rayCluster := &rayv1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Labels:      labels,
-			Annotations: rayJobInstance.Annotations,
+			Annotations: annotations,
 			Name:        rayClusterName,
 			Namespace:   rayJobInstance.Namespace,
 		},

@@ -94,7 +94,7 @@ Join [Ray's Slack workspace](https://docs.google.com/forms/d/e/1FAIpQLSfAcoiLCHO
 
 KubeRay contributors are welcome to join the bi-weekly KubeRay community meetings.
 
-* Add the [Ray/KubeRay Google calendar](https://calendar.google.com/calendar/u/1?cid=Y19iZWIwYTUxZDQyZTczMTFmZWFmYTY5YjZiOTY1NjAxMTQ3ZTEzOTAxZWE0ZGU5YzA1NjFlZWQ5OTljY2FiOWM4QGdyb3VwLmNhbGVuZGFyLmdvb2dsZS5jb20) to your calendar.
+* Add the [Ray/KubeRay Google calendar](https://calendar.google.com/calendar/u/0?cid=Y184NmVlNzE0NjM2YzVjZTA5YzJjOGYzOGMzYTYyYzY5YjRmMDY0MDRlMWU2MjNlZGYxN2FiM2JlMDg5MDY4ZTdkQGdyb3VwLmNhbGVuZGFyLmdvb2dsZS5jb20) to your calendar.
 
 ## Security
 
