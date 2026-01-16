@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -25,6 +26,12 @@ const (
 
 	ATTRIBUTE_SERVICE_NAME = "cluster_service_name"
 )
+
+type ServiceInfo struct {
+	ServiceName string
+	Namespace   string
+	Port        int
+}
 
 func RequestLogFilter(req *restful.Request, resp *restful.Response, chain *restful.FilterChain) {
 	logrus.Infof("Received request: %s %s", req.Request.Method, req.Request.URL.String())
@@ -263,10 +270,47 @@ func (s *ServerHandler) RegisterRouter() {
 }
 
 func (s *ServerHandler) redirectRequest(req *restful.Request, resp *restful.Response) {
-	svcName := req.Attribute(ATTRIBUTE_SERVICE_NAME).(string)
-	remoteResp, err := s.httpClient.Get("http://" + svcName + req.Request.URL.String())
+	svcInfo := req.Attribute(ATTRIBUTE_SERVICE_NAME).(ServiceInfo)
+
+	var targetURL string
+	var clientToUse *http.Client
+
+	if s.useK8sProxy && s.k8sRestConfig != nil && s.k8sHTTPClient != nil {
+		targetURL = fmt.Sprintf("%s/api/v1/namespaces/%s/services/%s:dashboard/proxy%s",
+			s.k8sRestConfig.Host,
+			svcInfo.Namespace,
+			svcInfo.ServiceName,
+			req.Request.URL.String())
+
+		clientToUse = s.k8sHTTPClient
+		logrus.Debugf("Using Kubernetes proxy to access service %s/%s: %s",
+			svcInfo.Namespace, svcInfo.ServiceName, req.Request.URL.String())
+	} else {
+		// Connect through in-cluster service discovery.
+		targetURL = fmt.Sprintf("http://%s:%d%s", svcInfo.ServiceName, svcInfo.Port, req.Request.URL.String())
+		clientToUse = s.httpClient
+		logrus.Debugf("Using direct connection to access service %s/%s: %s",
+			svcInfo.Namespace, svcInfo.ServiceName, req.Request.URL.String())
+	}
+
+	proxyReq, err := http.NewRequest(req.Request.Method, targetURL, req.Request.Body)
 	if err != nil {
-		logrus.Errorf("Error: %v", err)
+		logrus.Errorf("Failed to create proxy request: %v", err)
+		resp.WriteError(http.StatusInternalServerError, err)
+		return
+	}
+
+	for key, values := range req.Request.Header {
+		if strings.ToLower(key) != "host" {
+			for _, value := range values {
+				proxyReq.Header.Set(key, value)
+			}
+		}
+	}
+
+	remoteResp, err := clientToUse.Do(proxyReq)
+	if err != nil {
+		logrus.Errorf("Failed to proxy request to %s: %v", targetURL, err)
 		resp.WriteError(http.StatusBadGateway, err)
 		return
 	}
@@ -792,12 +836,12 @@ func (s *ServerHandler) CookieHandle(req *restful.Request, resp *restful.Respons
 		// Always query K8s to get the service name to prevent SSRF attacks.
 		// Do not trust user-provided cookies for service name.
 		// TODO: here might be a bottleneck if there are many requests in the future.
-		svcName, err := getClusterSvcName(s.clientManager.clients, clusterName.Value, clusterNamespace.Value)
+		svcInfo, err := getClusterSvcInfo(s.clientManager.clients, clusterName.Value, clusterNamespace.Value)
 		if err != nil {
 			resp.WriteHeaderAndEntity(http.StatusBadRequest, err.Error())
 			return
 		}
-		req.SetAttribute(ATTRIBUTE_SERVICE_NAME, svcName)
+		req.SetAttribute(ATTRIBUTE_SERVICE_NAME, svcInfo)
 	}
 	req.SetAttribute(COOKIE_CLUSTER_NAME_KEY, clusterName.Value)
 	req.SetAttribute(COOKIE_SESSION_NAME_KEY, sessionName.Value)
@@ -806,19 +850,19 @@ func (s *ServerHandler) CookieHandle(req *restful.Request, resp *restful.Respons
 	chain.ProcessFilter(req, resp)
 }
 
-func getClusterSvcName(clis []client.Client, name, namespace string) (string, error) {
+func getClusterSvcInfo(clis []client.Client, name, namespace string) (ServiceInfo, error) {
 	if len(clis) == 0 {
-		return "", errors.New("No available kubernetes config found")
+		return ServiceInfo{}, errors.New("No available kubernetes config found")
 	}
 	cli := clis[0]
 	rc := rayv1.RayCluster{}
 	err := cli.Get(context.Background(), types.NamespacedName{Namespace: namespace, Name: name}, &rc)
 	if err != nil {
-		return "", errors.New("RayCluster not found")
+		return ServiceInfo{}, errors.New("RayCluster not found")
 	}
 	svcName := rc.Status.Head.ServiceName
 	if svcName == "" {
-		return "", errors.New("RayCluster head service not ready")
+		return ServiceInfo{}, errors.New("RayCluster head service not ready")
 	}
-	return svcName + ":8265", nil
+	return ServiceInfo{ServiceName: svcName, Namespace: namespace, Port: 8265}, nil
 }

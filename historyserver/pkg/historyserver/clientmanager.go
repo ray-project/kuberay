@@ -60,14 +60,27 @@ func NewClientManager(kubeconfigs string) *ClientManager {
 			}
 		}
 	} else {
-		c, err := rest.InClusterConfig()
+		loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
+		configOverrides := &clientcmd.ConfigOverrides{}
+		clientConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, configOverrides)
+
+		c, err := clientConfig.ClientConfig()
 		if err != nil {
-			logrus.Errorf("Failed to build config from kubeconfig: %v", err)
+			logrus.Errorf("Failed to load default kubeconfig, trying in-cluster config: %v", err)
+			c, err := rest.InClusterConfig()
+			if err != nil {
+				logrus.Errorf("Failed to build config from both default kubeconfig and in-cluster config: %v", err)
+			} else {
+				c.QPS = 50
+				c.Burst = 100
+				kubeconfigList = append(kubeconfigList, c)
+				logrus.Infof("add config from in cluster config")
+			}
 		} else {
 			c.QPS = 50
 			c.Burst = 100
 			kubeconfigList = append(kubeconfigList, c)
-			logrus.Infof("add config from in cluster config")
+			logrus.Infof("[LOCAL DEV MODE] add config from default kubeconfig")
 		}
 	}
 	scheme := runtime.NewScheme()
