@@ -279,7 +279,7 @@ env_vars:
 			To(WithTransform(RayJobReason, Equal(rayv1.DeadlineExceeded)))
 	})
 
-	test.T().Run("RayJob fails when head Pod is deleted when job is running", func(_ *testing.T) {
+	test.T().Run("RayJob controller recreates the head Pod if it is deleted while the job is running", func(_ *testing.T) {
 		rayJobAC := rayv1ac.RayJob("delete-head-after-submit", namespace.Name).
 			WithSpec(rayv1ac.RayJobSpec().
 				WithRayClusterSpec(NewRayClusterSpec()).
@@ -300,17 +300,23 @@ env_vars:
 		g.Expect(err).NotTo(HaveOccurred())
 		rayCluster, err := GetRayCluster(test, rayJob.Namespace, rayJob.Status.RayClusterName)
 		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(rayCluster.Labels[utils.RayJobSubmissionModeLabelKey]).To(Equal(string(rayv1.K8sJobMode)))
+		g.Expect(rayCluster.Annotations[utils.DisableProvisionedHeadRestartAnnotationKey]).To(Equal(""))
 		headPod, err := GetHeadPod(test, rayCluster)
 		g.Expect(err).NotTo(HaveOccurred())
 		LogWithTimestamp(test.T(), "Deleting head Pod %s/%s for RayCluster %s", headPod.Namespace, headPod.Name, rayCluster.Name)
 		err = test.Client().Core().CoreV1().Pods(headPod.Namespace).Delete(test.Ctx(), headPod.Name, metav1.DeleteOptions{})
 		g.Expect(err).NotTo(HaveOccurred())
 
-		// After head pod deletion, controller should mark RayJob as Failed with a specific message
+		// Head pod should be recreated for non-sidecar modes.
+		g.Eventually(func() (*corev1.Pod, error) {
+			return GetHeadPod(test, rayCluster)
+		}, TestTimeoutMedium, 2*time.Second).ShouldNot(BeNil())
 		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
 			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusFailed)))
 		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
 			Should(WithTransform(RayJobReason, Or(
+				Equal(rayv1.AppFailed),
 				Equal(rayv1.JobDeploymentStatusTransitionGracePeriodExceeded),
 				Equal(rayv1.SubmissionFailed),
 			)))
