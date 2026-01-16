@@ -9,19 +9,26 @@ set -o pipefail
 GOPATH=$(go env GOPATH)
 export GOPATH
 
-SCRIPT_ROOT=$(dirname "${BASH_SOURCE[0]}")/..
-ROOT_PKG=github.com/ray-project/kuberay/ray-operator
-CODEGEN_PKG=$(go list -m -f "{{.Dir}}" k8s.io/code-generator)
+SCRIPT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+ROOT_PKG="github.com/ray-project/kuberay/ray-operator"
 
-if [[ ! -d ${CODEGEN_PKG} ]]; then
-    echo "${CODEGEN_PKG} is missing. Running 'go mod download'."
-    go mod download
-    CODEGEN_PKG=$(go list -m -f "{{.Dir}}" k8s.io/code-generator)
+cd "${SCRIPT_ROOT}"
+
+# Fallback to vendored location if go list cannot resolve code-generator
+CODEGEN_PKG="$(go list -m -f '{{.Dir}}' k8s.io/code-generator 2>/dev/null || true)"
+CODEGEN_PKG=${CODEGEN_PKG:-$(
+  if [[ -d "${SCRIPT_ROOT}/vendor/k8s.io/code-generator" ]]; then
+    echo "${SCRIPT_ROOT}/vendor/k8s.io/code-generator"
+  fi
+)}
+
+if [[ ! -d "${CODEGEN_PKG}" ]]; then
+  echo "${CODEGEN_PKG} is missing. Running 'go mod download'..."
+  go mod download
+  CODEGEN_PKG=$(go list -m -f "{{.Dir}}" k8s.io/code-generator)
 fi
 
 echo ">> Using ${CODEGEN_PKG}"
-
-cd "${SCRIPT_ROOT}"
 
 # shellcheck source=/dev/null
 source "${CODEGEN_PKG}/kube_codegen.sh"
