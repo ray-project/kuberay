@@ -204,7 +204,7 @@ func testCollectorSeparatesFilesBySession(test Test, g *WithT, namespace *corev1
 // 5. Verify S3 uploads: recovered log objects exist under log/{clusterName}_{clusterID}/{sessionID}/logs/ and have content.
 // 6. Verify local state: the node directory is present under persist-complete-logs and removed from prev-logs.
 // 7. Clean up the S3 bucket to ensure test isolation.
-func testCollectorResumesUploadsOnRestart(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testCollectorResumesUploadsOnRestart(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) {
 	rayCluster := prepareTestEnv(test, g, namespace, s3Client)
 
 	// Directory variables for easier maintenance
@@ -521,7 +521,7 @@ func applyRayJobToCluster(test Test, g *WithT, namespace *corev1.Namespace, rayC
 // - logs/<nodeID>/raylet.out must exist and have content > 0 bytes
 // - node_events/<nodeID>_<suffix> must exist and have content > 0 bytes (suffix can be ignored for verification)
 // If skipNodeEvents is true, node_events directory verification will be skipped.
-func verifyS3SessionDirs(test Test, g *WithT, s3Client *s3.S3, sessionPrefix string, nodeID string, skipNodeEvents bool) {
+func verifyS3SessionDirs(test Test, g *WithT, s3Client *s3.Client, sessionPrefix string, nodeID string, skipNodeEvents bool) {
 	dirs := []string{"logs"}
 	if !skipNodeEvents {
 		dirs = append(dirs, "node_events")
