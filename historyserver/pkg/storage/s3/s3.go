@@ -33,6 +33,7 @@ import (
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/aws/smithy-go"
 	"github.com/sirupsen/logrus"
 
@@ -184,10 +185,18 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 				}
 				logrus.Infof("Process %++v", metas)
 				namespaceName := strings.Split(metas[0], "_")
+				if len(namespaceName) < 2 {
+					logrus.Warnf("Skip invalid namespace name %q in %s", metas[0], metaInfo)
+					continue
+				}
 				c.Name = namespaceName[0]
 				c.Namespace = namespaceName[1]
 				c.SessionName = metas[1]
 				sessionInfo := strings.Split(metas[1], "_")
+				if len(sessionInfo) < 3 {
+					logrus.Warnf("Skip invalid session info %q in %s", metas[1], metaInfo)
+					continue
+				}
 				date := sessionInfo[1]
 				dataTime := sessionInfo[2]
 				createTime, err := time.Parse("2006-01-02_15-04-05", date+"_"+dataTime)
@@ -274,7 +283,7 @@ func NewWriter(c *types.RayCollectorConfig, jd map[string]interface{}) (storage.
 }
 
 // TODO: refactor this
-func createBucketIfNotExists(ctx context.Context, s3Client *s3.Client, bucketName string) error {
+func createBucketIfNotExists(ctx context.Context, s3Client *s3.Client, bucketName, region string) error {
 	_, err := s3Client.HeadBucket(ctx, &s3.HeadBucketInput{
 		Bucket: aws.String(bucketName),
 	})
@@ -285,7 +294,7 @@ func createBucketIfNotExists(ctx context.Context, s3Client *s3.Client, bucketNam
 
 	if isBucketNotFound(err) {
 		logrus.Infof("Bucket %s does not exist, creating...", bucketName)
-		if err := createBucket(ctx, s3Client, bucketName); err != nil {
+		if err := createBucket(ctx, s3Client, bucketName, region); err != nil {
 			return err
 		}
 		logrus.Infof("Successfully created bucket %s", bucketName)
@@ -293,7 +302,7 @@ func createBucketIfNotExists(ctx context.Context, s3Client *s3.Client, bucketNam
 	}
 
 	logrus.Warnf("HeadBucket error for %s: %v, attempting to create bucket", bucketName, err)
-	if err := createBucket(ctx, s3Client, bucketName); err != nil {
+	if err := createBucket(ctx, s3Client, bucketName, region); err != nil {
 		return err
 	}
 	logrus.Infof("Successfully created bucket %s", bucketName)
@@ -311,10 +320,16 @@ func isBucketNotFound(err error) bool {
 	return false
 }
 
-func createBucket(ctx context.Context, s3Client *s3.Client, bucketName string) error {
-	_, err := s3Client.CreateBucket(ctx, &s3.CreateBucketInput{
+func createBucket(ctx context.Context, s3Client *s3.Client, bucketName, region string) error {
+	input := &s3.CreateBucketInput{
 		Bucket: aws.String(bucketName),
-	})
+	}
+	if region != "" && region != "us-east-1" {
+		input.CreateBucketConfiguration = &s3types.CreateBucketConfiguration{
+			LocationConstraint: s3types.BucketLocationConstraint(region),
+		}
+	}
+	_, err := s3Client.CreateBucket(ctx, input)
 	if err == nil {
 		return nil
 	}
@@ -339,12 +354,18 @@ func New(c *config) (*RayLogsHandler, error) {
 	logrus.Infof("Begin to create s3 client ...")
 	ctx := context.Background()
 
+	httpTimeout := 30 * time.Second
+	httpClient := &http.Client{
+		Timeout: httpTimeout,
+	}
+
 	credsProvider := credentials.NewStaticCredentialsProvider(c.S3ID, c.S3Secret, c.S3Token)
 	endpoint := normalizeEndpoint(strings.TrimSpace(c.S3Endpoint), c.DisableSSL)
 
 	loadOptions := []func(*awsconfig.LoadOptions) error{
 		awsconfig.WithRegion(c.S3Region),
 		awsconfig.WithCredentialsProvider(credsProvider),
+		awsconfig.WithHTTPClient(httpClient),
 	}
 	if endpoint != "" {
 		resolver := aws.EndpointResolverWithOptionsFunc(
@@ -372,7 +393,7 @@ func New(c *config) (*RayLogsHandler, error) {
 
 	// Ensure bucket exists, create if not
 	logrus.Infof("Checking if bucket %s exists...", c.S3Bucket)
-	if err := createBucketIfNotExists(ctx, s3Client, c.S3Bucket); err != nil {
+	if err := createBucketIfNotExists(ctx, s3Client, c.S3Bucket, c.S3Region); err != nil {
 		return nil, fmt.Errorf("failed to ensure bucket exists: %w", err)
 	}
 
@@ -394,6 +415,7 @@ func New(c *config) (*RayLogsHandler, error) {
 		RayClusterID:   c.RayClusterID,
 		RayNodeName:    c.RayNodeName,
 		HttpClient: &http.Client{
+			Timeout: httpTimeout,
 			Transport: &http.Transport{
 				MaxIdleConns:        100,
 				MaxIdleConnsPerHost: 20,

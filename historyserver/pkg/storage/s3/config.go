@@ -4,6 +4,8 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/ray-project/kuberay/historyserver/pkg/collector/types"
 )
 
@@ -51,10 +53,10 @@ func (c *config) complete(rcc *types.RayCollectorConfig, jd map[string]interface
 			c.S3Region = region.(string)
 		}
 		if forcePathStyle, ok := jd["s3ForcePathStyle"]; ok {
-			setBoolFromValue(forcePathStyle, &c.S3ForcePathStyle)
+			setBoolFromValue("s3ForcePathStyle", forcePathStyle, &c.S3ForcePathStyle)
 		}
 		if s3disableSSL, ok := jd["s3DisableSSL"]; ok {
-			setBoolFromValue(s3disableSSL, &c.DisableSSL)
+			setBoolFromValue("s3DisableSSL", s3disableSSL, &c.DisableSSL)
 		}
 	}
 }
@@ -83,10 +85,10 @@ func (c *config) completeHSConfig(rcc *types.RayHistoryServerConfig, jd map[stri
 			c.S3Region = region.(string)
 		}
 		if forcePathStyle, ok := jd["s3ForcePathStyle"]; ok {
-			setBoolFromValue(forcePathStyle, &c.S3ForcePathStyle)
+			setBoolFromValue("s3ForcePathStyle", forcePathStyle, &c.S3ForcePathStyle)
 		}
 		if s3disableSSL, ok := jd["s3DisableSSL"]; ok {
-			setBoolFromValue(s3disableSSL, &c.DisableSSL)
+			setBoolFromValue("s3DisableSSL", s3disableSSL, &c.DisableSSL)
 		}
 	}
 }
@@ -97,19 +99,25 @@ func setBoolFromEnv(envKey string, target *bool) {
 		return
 	}
 	parsed, err := strconv.ParseBool(value)
-	if err == nil {
-		*target = parsed
+	if err != nil {
+		logrus.Warnf("Invalid boolean value %q for %s", value, envKey)
+		return
 	}
+	*target = parsed
 }
 
-func setBoolFromValue(value interface{}, target *bool) {
+func setBoolFromValue(name string, value interface{}, target *bool) {
 	switch v := value.(type) {
 	case bool:
 		*target = v
 	case string:
 		parsed, err := strconv.ParseBool(v)
-		if err == nil {
-			*target = parsed
+		if err != nil {
+			logrus.Warnf("Invalid boolean value %q for %s", v, name)
+			return
 		}
+		*target = parsed
+	default:
+		logrus.Warnf("Invalid boolean type %T for %s", value, name)
 	}
 }
