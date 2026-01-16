@@ -242,17 +242,29 @@ func applyMinIO(test Test, g *WithT) {
 // newS3Client creates a new S3 client.
 func newS3Client(endpoint string) (*s3.Client, error) {
 	ctx := context.Background()
+	resolver := aws.EndpointResolverWithOptionsFunc(
+		func(service, region string, options ...interface{}) (aws.Endpoint, error) {
+			if service != s3.ServiceID {
+				return aws.Endpoint{}, &aws.EndpointNotFoundError{}
+			}
+			return aws.Endpoint{
+				PartitionID:       "aws",
+				URL:               endpoint,
+				SigningRegion:     "us-east-1",
+				HostnameImmutable: true,
+			}, nil
+		})
 
 	awsCfg, err := config.LoadDefaultConfig(ctx,
 		config.WithRegion("us-east-1"),
 		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(minioUsername, minioSecret, "")),
+		config.WithEndpointResolverWithOptions(resolver),
 	)
 	if err != nil {
 		return nil, err
 	}
 	return s3.NewFromConfig(awsCfg, func(o *s3.Options) {
 		o.UsePathStyle = true
-		o.BaseEndpoint = aws.String(endpoint)
 	}), nil
 }
 

@@ -339,27 +339,35 @@ func New(c *config) (*RayLogsHandler, error) {
 	logrus.Infof("Begin to create s3 client ...")
 	ctx := context.Background()
 
-	httpClient := &http.Client{
-		Timeout: 5 * time.Second,
-	}
-
 	credsProvider := credentials.NewStaticCredentialsProvider(c.S3ID, c.S3Secret, c.S3Token)
 	endpoint := normalizeEndpoint(strings.TrimSpace(c.S3Endpoint), c.DisableSSL)
 
-	awsCfg, err := awsconfig.LoadDefaultConfig(ctx,
+	loadOptions := []func(*awsconfig.LoadOptions) error{
 		awsconfig.WithRegion(c.S3Region),
 		awsconfig.WithCredentialsProvider(credsProvider),
-		awsconfig.WithHTTPClient(httpClient),
-	)
+	}
+	if endpoint != "" {
+		resolver := aws.EndpointResolverWithOptionsFunc(
+			func(service, region string, options ...interface{}) (aws.Endpoint, error) {
+				if service != s3.ServiceID {
+					return aws.Endpoint{}, &aws.EndpointNotFoundError{}
+				}
+				return aws.Endpoint{
+					PartitionID:       "aws",
+					URL:               endpoint,
+					SigningRegion:     c.S3Region,
+					HostnameImmutable: true,
+				}, nil
+			})
+		loadOptions = append(loadOptions, awsconfig.WithEndpointResolverWithOptions(resolver))
+	}
+	awsCfg, err := awsconfig.LoadDefaultConfig(ctx, loadOptions...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load AWS configuration: %w", err)
 	}
 
 	s3Client := s3.NewFromConfig(awsCfg, func(o *s3.Options) {
 		o.UsePathStyle = c.S3ForcePathStyle
-		if endpoint != "" {
-			o.BaseEndpoint = aws.String(endpoint)
-		}
 	})
 
 	// Ensure bucket exists, create if not
