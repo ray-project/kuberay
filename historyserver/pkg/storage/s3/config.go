@@ -9,6 +9,7 @@ import (
 )
 
 const DefaultS3Bucket = "ray-historyserver"
+const DefaultS3Region = "us-east-1"
 
 type config struct {
 	S3ForcePathStyle *bool
@@ -55,6 +56,11 @@ func (c *config) complete(rcc *types.RayCollectorConfig, jd map[string]interface
 		if region, ok := jd["s3Region"]; ok {
 			c.S3Region = region.(string)
 		}
+
+		if c.S3Region == "" {
+			c.S3Region = DefaultS3Region
+		}
+
 		if forcePathStyle, ok := jd["s3ForcePathStyle"]; ok {
 			c.S3ForcePathStyle = aws.Bool(forcePathStyle.(string) == "true")
 		}
@@ -75,6 +81,9 @@ func (c *config) completeHSConfig(rcc *types.RayHistoryServerConfig, jd map[stri
 	if len(jd) == 0 {
 		c.S3Endpoint = os.Getenv("S3_ENDPOINT")
 		c.S3Region = os.Getenv("S3_REGION")
+		if c.S3Region == "" {
+			c.S3Region = DefaultS3Region
+		}
 		if os.Getenv("S3FORCE_PATH_STYLE") != "" {
 			c.S3ForcePathStyle = aws.Bool(os.Getenv("S3FORCE_PATH_STYLE") == "true")
 		}
@@ -90,6 +99,9 @@ func (c *config) completeHSConfig(rcc *types.RayHistoryServerConfig, jd map[stri
 		}
 		if region, ok := jd["s3Region"]; ok {
 			c.S3Region = region.(string)
+		}
+		if c.S3Region == "" {
+			c.S3Region = DefaultS3Region
 		}
 		if forcePathStyle, ok := jd["s3ForcePathStyle"]; ok {
 			c.S3ForcePathStyle = aws.Bool(forcePathStyle.(string) == "true")

@@ -10,6 +10,8 @@ import (
 	"github.com/ray-project/kuberay/historyserver/pkg/eventserver"
 	"github.com/ray-project/kuberay/historyserver/pkg/storage"
 	"github.com/sirupsen/logrus"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/transport"
 )
 
 type ServerHandler struct {
@@ -21,10 +23,14 @@ type ServerHandler struct {
 	clientManager *ClientManager
 	eventHandler  *eventserver.EventHandler
 	httpClient    *http.Client
+
+	k8sRestConfig *rest.Config
+	k8sHTTPClient *http.Client
+	useK8sProxy   bool
 }
 
 func NewServerHandler(c *types.RayHistoryServerConfig, dashboardDir string, reader storage.StorageReader, clientManager *ClientManager, eventHandler *eventserver.EventHandler) *ServerHandler {
-	return &ServerHandler{
+	handler := &ServerHandler{
 		reader:        reader,
 		clientManager: clientManager,
 		eventHandler:  eventHandler,
@@ -37,6 +43,27 @@ func NewServerHandler(c *types.RayHistoryServerConfig, dashboardDir string, read
 			Timeout: 30 * time.Second,
 		},
 	}
+
+	if len(clientManager.configs) > 0 {
+		handler.k8sRestConfig = clientManager.configs[0]
+		transportConfig, err := handler.k8sRestConfig.TransportConfig()
+		if err == nil {
+			rt, err := transport.New(transportConfig)
+			if err == nil {
+				handler.k8sHTTPClient = &http.Client{
+					Timeout:   30 * time.Second,
+					Transport: rt,
+				}
+				handler.useK8sProxy = true
+				logrus.Infof("K8s proxy support enabled for accessing live clusters")
+			} else {
+				logrus.Warnf("Failed to create Kubernetes transport, will use direct connection: %v", err)
+			}
+		} else {
+			logrus.Warnf("Failed to get transport config, will use direct connection: %v", err)
+		}
+	}
+	return handler
 }
 
 func (s *ServerHandler) Run(stop chan struct{}) error {
