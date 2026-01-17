@@ -12,10 +12,11 @@ import (
 )
 
 type FakeRayDashboardClient struct {
-	multiAppStatuses  map[string]*utiltypes.ServeApplicationStatus
-	GetJobInfoMock    atomic.Pointer[func(context.Context, string) (*utiltypes.RayJobInfo, error)]
-	serveDetails      utiltypes.ServeDetails
-	LastUpdatedConfig []byte
+	multiAppStatuses           map[string]*utiltypes.ServeApplicationStatus
+	GetJobInfoMock             atomic.Pointer[func(context.Context, string) (*utiltypes.RayJobInfo, error)]
+	GetComponentActivitiesMock atomic.Pointer[func(context.Context) (map[string]*utiltypes.RayActivityResponse, error)]
+	serveDetails               utiltypes.ServeDetails
+	LastUpdatedConfig          []byte
 }
 
 var _ dashboardclient.RayDashboardClientInterface = (*FakeRayDashboardClient)(nil)
@@ -78,4 +79,16 @@ func (r *FakeRayDashboardClient) StopJob(_ context.Context, _ string) (err error
 
 func (r *FakeRayDashboardClient) DeleteJob(_ context.Context, _ string) error {
 	return nil
+}
+
+func (r *FakeRayDashboardClient) GetComponentActivities(ctx context.Context) (map[string]*utiltypes.RayActivityResponse, error) {
+	if mock := r.GetComponentActivitiesMock.Load(); mock != nil {
+		return (*mock)(ctx)
+	}
+	// Default: return inactive status for all components
+	return map[string]*utiltypes.RayActivityResponse{
+		"ray_activity": {
+			IsActive: utiltypes.RayActivityStatusInactive,
+		},
+	}, nil
 }
