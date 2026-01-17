@@ -265,7 +265,7 @@ func testCollectorResumesUploadsOnRestart(test Test, g *WithT, namespace *corev1
 	g.Eventually(func(gg Gomega) {
 		// List all objects under the session logs prefix
 		logsPrefix := sessionPrefix + "logs/"
-		objects, err := s3Client.ListObjectsV2(&s3.ListObjectsV2Input{
+		objects, err := s3Client.ListObjectsV2(test.Ctx(), &s3.ListObjectsV2Input{
 			Bucket: aws.String(s3BucketName),
 			Prefix: aws.String(logsPrefix),
 		})
@@ -274,7 +274,7 @@ func testCollectorResumesUploadsOnRestart(test Test, g *WithT, namespace *corev1
 		// Collect all uploaded file keys
 		var uploadedKeys []string
 		for _, obj := range objects.Contents {
-			uploadedKeys = append(uploadedKeys, aws.StringValue(obj.Key))
+			uploadedKeys = append(uploadedKeys, aws.ToString(obj.Key))
 		}
 		LogWithTimestamp(test.T(), "Found uploaded objects: %v", uploadedKeys)
 
