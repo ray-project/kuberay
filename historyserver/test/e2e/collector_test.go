@@ -18,6 +18,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
@@ -38,21 +39,6 @@ const (
 	// Ray job
 	rayJobManifestPath = "../../config/rayjob.yaml"
 )
-
-// rayEventTypes includes all potential event types defined in Ray:
-// https://github.com/ray-project/ray/blob/3b41c97fa90c58b0b72c0026f57005b92310160d/src/ray/protobuf/public/events_base_event.proto#L49-L61
-var rayEventTypes = []string{
-	"ACTOR_DEFINITION_EVENT",
-	"ACTOR_LIFECYCLE_EVENT",
-	"ACTOR_TASK_DEFINITION_EVENT",
-	"DRIVER_JOB_DEFINITION_EVENT",
-	"DRIVER_JOB_LIFECYCLE_EVENT",
-	"TASK_DEFINITION_EVENT",
-	"TASK_LIFECYCLE_EVENT",
-	"TASK_PROFILE_EVENT",
-	"NODE_DEFINITION_EVENT",
-	"NODE_LIFECYCLE_EVENT",
-}
 
 // rayEvent contains specific fields in the Ray event JSON schema. For now, we keep only two fields,
 // eventId and eventType while ensuring future extensibility (e.g., sessionName, timestamp, sourceType, etc.).
@@ -564,7 +550,7 @@ func verifyS3SessionDirs(test Test, g *WithT, s3Client *s3.S3, sessionPrefix str
 	}
 
 	// Verify event type coverage in node_events/ and job_events/ directories.
-	LogWithTimestamp(test.T(), "Verifying all %d event types are covered: %v", len(rayEventTypes), rayEventTypes)
+	LogWithTimestamp(test.T(), "Verifying all %d event types are covered, except for EVENT_TYPE_UNSPECIFIED: %v", len(types.AllEventTypes)-1, types.AllEventTypes)
 	uploadedEvents := []rayEvent{}
 
 	// Load events from node_events directory.
@@ -757,13 +743,17 @@ func loadRayEventsFromS3(s3Client *s3.S3, bucket string, prefix string) ([]rayEv
 }
 
 // assertAllEventTypesCovered verifies that all potential event types are present in the events uploaded to S3.
+// NOTE: EVENT_TYPE_UNSPECIFIED is excluded from verification.
 func assertAllEventTypesCovered(test Test, g *WithT, events []rayEvent) {
 	foundEventTypes := map[string]bool{}
 	for _, event := range events {
 		foundEventTypes[event.EventType] = true
 	}
 
-	for _, eventType := range rayEventTypes {
-		g.Expect(foundEventTypes[eventType]).To(BeTrue(), "Event type %s not found", eventType)
+	for _, eventType := range types.AllEventTypes {
+		if eventType == types.EVENT_TYPE_UNSPECIFIED {
+			continue
+		}
+		g.Expect(foundEventTypes[string(eventType)]).To(BeTrue(), "Event type %s not found", eventType)
 	}
 }
