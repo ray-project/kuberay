@@ -126,6 +126,21 @@ SESSION="live"
 curl -c ~/cookies.txt "http://localhost:8080/enter_cluster/default/raycluster-historyserver/$SESSION"
 ```
 
+If the command returns a "RayCluster not found" error, you need to deploy the cluster before connecting:
+
+```bash
+kubectl apply -f historyserver/config/raycluster.yaml
+```
+
+Then submit a new RayJob:
+
+```sh
+kubectl apply -f historyserver/config/rayjob.yaml
+
+# If rayjob already exists, please delete it first and re-apply
+# kubectl delete -f historyserver/config/rayjob.yaml
+```
+
 ### Live Cluster Endpoints
 
 Switch to live session first, then:
