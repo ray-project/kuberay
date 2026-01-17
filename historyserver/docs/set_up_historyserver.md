@@ -126,7 +126,7 @@ SESSION="live"
 curl -c ~/cookies.txt "http://localhost:8080/enter_cluster/default/raycluster-historyserver/$SESSION"
 ```
 
-If the command returns a "RayCluster not found" error, you need to deploy the cluster before connecting:
+If the command returns a "RayCluster not found" error, you need to deploy a new, live cluster before connecting:
 
 ```bash
 kubectl apply -f historyserver/config/raycluster.yaml
