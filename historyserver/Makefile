@@ -75,7 +75,7 @@ localimage-collector:
 	docker build -t $(COLLECTOR_IMG) -f Dockerfile.collector .
 
 .PHONY: localimage-historyserver
-localimage-historyserver: dockerbuilder_instance
+localimage-historyserver:
 	docker build -t $(HISTORYSERVER_IMG) -f Dockerfile.historyserver .
 
 .PHONY: dockerbuilder_instance
