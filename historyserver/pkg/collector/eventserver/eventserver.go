@@ -7,11 +7,9 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"os/signal"
 	"path"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/emicklei/go-restful/v3"
@@ -83,7 +81,7 @@ func NewEventServer(writer storage.StorageWriter, rootDir, sessionDir, nodeID, c
 	return server
 }
 
-func (es *EventServer) InitServer(port int) {
+func (es *EventServer) InitServer(stop chan struct{}, port int) {
 	ws := new(restful.WebService)
 	ws.Path("/v1")
 	ws.Consumes(restful.MIME_JSON)
@@ -101,16 +99,10 @@ func (es *EventServer) InitServer(port int) {
 		es.periodicFlush()
 	}()
 
-	// Handle SIGTERM signal
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGTERM, syscall.SIGINT)
-
-	go func() {
-		<-sigChan
-		logrus.Info("Received SIGTERM, flushing events to storage")
-		es.flushEvents()
-		close(es.stopped)
-	}()
+	<-stop
+	logrus.Info("Received SIGTERM, flushing events to storage")
+	es.flushEvents()
+	close(es.stopped)
 }
 
 // watchNodeIDFile watches /tmp/ray/raylet_node_id for content changes
