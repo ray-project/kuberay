@@ -28,10 +28,8 @@ kubectl apply -f historyserver/config/minio.yaml
 ### 4. Build and Load Collector & History Server Images
 
 ```bash
-cd historyserver
-make localimage-historyserver
+make -C historyserver localimage-build
 kind load docker-image historyserver:v0.1.0
-make localimage-collector
 kind load docker-image collector:v0.1.0
 ```
 
@@ -53,13 +51,19 @@ kubectl apply -f historyserver/config/rayjob.yaml
 kubectl delete -f historyserver/config/raycluster.yaml
 ```
 
-### 8. Deploy History Server
+### 8. Create Service Account
 
 ```bash
-kubectl apply -f config/historyserver.yaml
+kubectl apply -f historyserver/config/service_account.yaml
 ```
 
-### 9. Access History Server
+### 9. Deploy History Server
+
+```bash
+kubectl apply -f historyserver/config/historyserver.yaml
+```
+
+### 10. Access History Server
 
 ```bash
 kubectl port-forward svc/historyserver 8080:30080
