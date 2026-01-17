@@ -1,11 +1,15 @@
 package historyserver
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
 	"path"
 	"sort"
+	"strings"
 
 	"github.com/emicklei/go-restful/v3"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
@@ -54,6 +58,38 @@ func (s *ServerHandler) _getNodeLogs(rayClusterNameID, sessionId, nodeId, dir st
 		},
 	}
 	return json.Marshal(ret)
+}
+
+func (s *ServerHandler) _getNodeLogFile(rayClusterNameID, sessionId, nodeId, filename string, maxLines int) ([]byte, error) {
+	logPath := path.Join(sessionId, "logs", nodeId, filename)
+	reader := s.reader.GetContent(rayClusterNameID, logPath)
+
+	// Check if reader is nil
+	if reader == nil {
+		return nil, fmt.Errorf("log file not found: %s", logPath)
+	}
+
+	// If maxLines <= 0, read all lines
+	if maxLines <= 0 {
+		return io.ReadAll(reader)
+	}
+
+	// Read up to maxLines
+	scanner := bufio.NewScanner(reader)
+	lines := []string{}
+	count := 0
+
+	for scanner.Scan() && count < maxLines {
+		lines = append(lines, scanner.Text())
+		count++
+	}
+
+	// Check for errors (scanner.Err() returns nil for normal EOF)
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+
+	return []byte(strings.Join(lines, "\n")), nil
 }
 
 func (s *ServerHandler) GetNodes(rayClusterNameID, sessionId string) ([]byte, error) {
