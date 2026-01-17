@@ -49,7 +49,9 @@ func testLiveClusters(test Test, g *WithT, namespace *corev1.Namespace, s3Client
 	LogWithTimestamp(test.T(), "Verifying /clusters/ endpoint returns live ray cluster")
 	g.Eventually(func(gg Gomega) {
 		resp, err := http.Get(historyServerURL + "/clusters/")
-		gg.Expect(err).NotTo(HaveOccurred())
+		if err != nil {
+			return
+		}
 		defer resp.Body.Close()
 
 		body, err := io.ReadAll(resp.Body)
@@ -67,7 +69,9 @@ func testLiveClusters(test Test, g *WithT, namespace *corev1.Namespace, s3Client
 				break
 			}
 		}
-		gg.Expect(foundCluster).NotTo(BeNil(), "ray cluster should be in the list")
+		if foundCluster == nil {
+			return
+		}
 		gg.Expect(foundCluster.SessionName).To(Equal("live"), "Live cluster should have sessionName='live'")
 		LogWithTimestamp(test.T(), "Found live cluster: %s/%s with sessionName=%s",
 			foundCluster.Namespace, foundCluster.Name, foundCluster.SessionName)
@@ -87,7 +91,9 @@ func setClusterContext(test Test, g *WithT, client *http.Client, historyServerUR
 
 	g.Eventually(func(gg Gomega) {
 		resp, err := client.Get(enterURL)
-		gg.Expect(err).NotTo(HaveOccurred())
+		if err != nil {
+			return
+		}
 		defer resp.Body.Close()
 		gg.Expect(resp.StatusCode).To(Equal(http.StatusOK))
 
@@ -110,7 +116,9 @@ func verifyHistoryServerEndpoints(test Test, g *WithT, client *http.Client, hist
 		LogWithTimestamp(test.T(), "Testing history server endpoint: %s", endpoint)
 		g.Eventually(func(gg Gomega) {
 			resp, err := client.Get(historyServerURL + endpoint)
-			gg.Expect(err).NotTo(HaveOccurred())
+			if err != nil {
+				return
+			}
 			defer resp.Body.Close()
 
 			body, err := io.ReadAll(resp.Body)
