@@ -17,6 +17,16 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 )
 
+func RayCronJob(t Test, namespace, name string) func() (*rayv1.RayCronJob, error) {
+	return func() (*rayv1.RayCronJob, error) {
+		return GetRayCronJob(t, namespace, name)
+	}
+}
+
+func GetRayCronJob(t Test, namespace, name string) (*rayv1.RayCronJob, error) {
+	return t.Client().Ray().RayV1().RayCronJobs(namespace).Get(t.Ctx(), name, metav1.GetOptions{})
+}
+
 func RayJob(t Test, namespace, name string) func() (*rayv1.RayJob, error) {
 	return func() (*rayv1.RayJob, error) {
 		return GetRayJob(t, namespace, name)

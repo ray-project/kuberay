@@ -8,6 +8,8 @@ metadata:
 spec:
   group: ray.io
   names:
+    categories:
+    - all
     kind: RayCronJob
     listKind: RayCronJobList
     plural: raycronjobs

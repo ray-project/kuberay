@@ -31,6 +31,10 @@ type RayCronJobStatus struct {
 //+kubebuilder:printcolumn:name="age",type="date",JSONPath=".metadata.creationTimestamp",priority=0
 //+kubebuilder:printcolumn:name="suspend",type=boolean,JSONPath=".spec.suspend",priority=0
 
+// +genclient
+// +kubebuilder:resource:categories=all
+// +kubebuilder:storageversion
+//
 //nolint:govet // RayCronJob is the Schema for the raycronjobs API
 type RayCronJob struct {
 	metav1.TypeMeta   `json:",inline"`
