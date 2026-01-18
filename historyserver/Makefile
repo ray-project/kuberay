@@ -15,7 +15,7 @@ HISTORYSERVER_IMG ?= historyserver:v0.1.0
 GOPROXY ?= https://proxy.golang.org,direct
 
 # Container Engine for building images.
-ENGINE ?= "docker"
+ENGINE ?= docker
 
 # Setting SHELL to bash allows bash commands to be executed by recipes.
 # Options are set to exit when a recipe line exits non-zero or a piped command fails.
