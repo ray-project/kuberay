@@ -69,60 +69,38 @@ func getAuthMode() AuthMode {
 	}
 }
 
-func (c *config) complete(rcc *types.RayCollectorConfig, jd map[string]interface{}) {
-	c.RayCollectorConfig = *rcc
+func (c *config) populateFromEnvAndJSON(jd map[string]interface{}) {
 	c.ConnectionString = os.Getenv("AZURE_STORAGE_CONNECTION_STRING")
 	c.AccountURL = os.Getenv("AZURE_STORAGE_ACCOUNT_URL")
 	c.ContainerName = getContainerNameWithDefault()
 	c.AuthMode = getAuthMode()
+	c.Endpoint = os.Getenv("AZURE_STORAGE_ENDPOINT")
 
-	if len(jd) == 0 {
-		c.Endpoint = os.Getenv("AZURE_STORAGE_ENDPOINT")
-	} else {
-		if container, ok := jd["azureContainer"]; ok {
-			c.ContainerName = container.(string)
+	if len(jd) > 0 {
+		if v, ok := jd["azureContainer"]; ok {
+			c.ContainerName = v.(string)
 		}
-		if endpoint, ok := jd["azureEndpoint"]; ok {
-			c.Endpoint = endpoint.(string)
+		if v, ok := jd["azureEndpoint"]; ok {
+			c.Endpoint = v.(string)
 		}
-		if connStr, ok := jd["azureConnectionString"]; ok {
-			c.ConnectionString = connStr.(string)
+		if v, ok := jd["azureConnectionString"]; ok {
+			c.ConnectionString = v.(string)
 		}
-		if accountURL, ok := jd["azureAccountURL"]; ok {
-			c.AccountURL = accountURL.(string)
+		if v, ok := jd["azureAccountURL"]; ok {
+			c.AccountURL = v.(string)
 		}
-		if authMode, ok := jd["azureAuthMode"]; ok {
-			c.AuthMode = AuthMode(authMode.(string))
+		if v, ok := jd["azureAuthMode"]; ok {
+			c.AuthMode = AuthMode(v.(string))
 		}
 	}
 }
 
-func (c *config) completeHSConfig(rcc *types.RayHistoryServerConfig, jd map[string]interface{}) {
-	c.RayCollectorConfig = types.RayCollectorConfig{
-		RootDir: rcc.RootDir,
-	}
-	c.ConnectionString = os.Getenv("AZURE_STORAGE_CONNECTION_STRING")
-	c.AccountURL = os.Getenv("AZURE_STORAGE_ACCOUNT_URL")
-	c.ContainerName = getContainerNameWithDefault()
-	c.AuthMode = getAuthMode()
+func (c *config) complete(rcc *types.RayCollectorConfig, jd map[string]interface{}) {
+	c.RayCollectorConfig = *rcc
+	c.populateFromEnvAndJSON(jd)
+}
 
-	if len(jd) == 0 {
-		c.Endpoint = os.Getenv("AZURE_STORAGE_ENDPOINT")
-	} else {
-		if container, ok := jd["azureContainer"]; ok {
-			c.ContainerName = container.(string)
-		}
-		if endpoint, ok := jd["azureEndpoint"]; ok {
-			c.Endpoint = endpoint.(string)
-		}
-		if connStr, ok := jd["azureConnectionString"]; ok {
-			c.ConnectionString = connStr.(string)
-		}
-		if accountURL, ok := jd["azureAccountURL"]; ok {
-			c.AccountURL = accountURL.(string)
-		}
-		if authMode, ok := jd["azureAuthMode"]; ok {
-			c.AuthMode = AuthMode(authMode.(string))
-		}
-	}
+func (c *config) completeHSConfig(rcc *types.RayHistoryServerConfig, jd map[string]interface{}) {
+	c.RayCollectorConfig = types.RayCollectorConfig{RootDir: rcc.RootDir}
+	c.populateFromEnvAndJSON(jd)
 }

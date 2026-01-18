@@ -40,6 +40,8 @@ import (
 
 type RayLogsHandler struct {
 	ContainerClient *container.Client
+	LogFiles        chan string
+	HttpClient      *http.Client
 	ContainerName   string
 	SessionDir      string
 	RootDir         string
@@ -49,7 +51,6 @@ type RayLogsHandler struct {
 	RayNodeName     string
 	LogBatching     int
 	PushInterval    time.Duration
-	HttpClient      *http.Client
 }
 
 func (r *RayLogsHandler) CreateDirectory(d string) error {
@@ -169,25 +170,11 @@ func (r *RayLogsHandler) listBlobs(prefix string, delimiter string, onlyBase boo
 
 func (r *RayLogsHandler) ListFiles(clusterId string, dir string) []string {
 	prefix := path.Join(r.RootDir, clusterId, dir)
-
-	defer func() {
-		if recover := recover(); recover != nil {
-			fmt.Println("Recovered from panic:", recover)
-		}
-	}()
-
 	logrus.Debugf("Prepare to list files ...")
-	nodes := r.listBlobs(prefix, "/", true)
-	return nodes
+	return r.listBlobs(prefix, "/", true)
 }
 
 func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
-	defer func() {
-		if recover := recover(); recover != nil {
-			fmt.Println("Recovered from panic:", recover)
-		}
-	}()
-
 	clusters := make(utils.ClusterInfoList, 0, 10)
 	logrus.Debugf("Prepare to get list clusters info ...")
 
@@ -305,43 +292,41 @@ func NewWriter(c *types.RayCollectorConfig, jd map[string]interface{}) (storage.
 }
 
 func createAzureBlobClient(c *config) (*azblob.Client, error) {
-	switch c.AuthMode {
-	case AuthModeConnectionString:
+	// Auto-detect auth mode if not specified
+	authMode := c.AuthMode
+	if authMode == "" {
+		if c.ConnectionString != "" {
+			authMode = AuthModeConnectionString
+		} else if c.AccountURL != "" {
+			authMode = AuthModeDefault
+		} else {
+			return nil, fmt.Errorf("either AZURE_STORAGE_CONNECTION_STRING or AZURE_STORAGE_ACCOUNT_URL must be set")
+		}
+	}
+
+	if authMode == AuthModeConnectionString {
 		logrus.Info("Using connection string authentication")
 		return azblob.NewClientFromConnectionString(c.ConnectionString, nil)
+	}
 
-	case AuthModeWorkloadIdentity:
+	// Token-based authentication
+	var cred *azidentity.DefaultAzureCredential
+	var err error
+	if authMode == AuthModeWorkloadIdentity {
 		logrus.Info("Using workload identity authentication")
-		cred, err := azidentity.NewWorkloadIdentityCredential(nil)
+		wiCred, err := azidentity.NewWorkloadIdentityCredential(nil)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create workload identity credential: %w", err)
 		}
-		return azblob.NewClient(c.AccountURL, cred, nil)
-
-	case AuthModeDefault:
-		logrus.Info("Using default Azure credential chain")
-		cred, err := azidentity.NewDefaultAzureCredential(nil)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create default credential: %w", err)
-		}
-		return azblob.NewClient(c.AccountURL, cred, nil)
-
-	default:
-		// Auto-detect: use connection string if present, otherwise default credential
-		if c.ConnectionString != "" {
-			logrus.Info("Auto-detected connection string authentication")
-			return azblob.NewClientFromConnectionString(c.ConnectionString, nil)
-		}
-		if c.AccountURL != "" {
-			logrus.Info("Auto-detected token-based authentication (using DefaultAzureCredential)")
-			cred, err := azidentity.NewDefaultAzureCredential(nil)
-			if err != nil {
-				return nil, fmt.Errorf("failed to create default credential: %w", err)
-			}
-			return azblob.NewClient(c.AccountURL, cred, nil)
-		}
-		return nil, fmt.Errorf("either AZURE_STORAGE_CONNECTION_STRING or AZURE_STORAGE_ACCOUNT_URL must be set")
+		return azblob.NewClient(c.AccountURL, wiCred, nil)
 	}
+
+	logrus.Info("Using default Azure credential chain")
+	cred, err = azidentity.NewDefaultAzureCredential(nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create default credential: %w", err)
+	}
+	return azblob.NewClient(c.AccountURL, cred, nil)
 }
 
 func ensureContainerExists(ctx context.Context, client *azblob.Client, containerName string) error {
@@ -397,13 +382,7 @@ func New(c *config) (*RayLogsHandler, error) {
 
 	return &RayLogsHandler{
 		ContainerClient: containerClient,
-		ContainerName:   c.ContainerName,
-		SessionDir:      sessionDir,
-		RootDir:         c.RootDir,
-		LogDir:          logdir,
-		RayClusterName:  c.RayClusterName,
-		RayClusterID:    c.RayClusterID,
-		RayNodeName:     c.RayNodeName,
+		LogFiles:        make(chan string, 100),
 		HttpClient: &http.Client{
 			Transport: &http.Transport{
 				MaxIdleConns:        100,
@@ -411,8 +390,15 @@ func New(c *config) (*RayLogsHandler, error) {
 				IdleConnTimeout:     90 * time.Second,
 			},
 		},
-		LogBatching:  c.LogBatching,
-		PushInterval: c.PushInterval,
+		ContainerName:  c.ContainerName,
+		SessionDir:     sessionDir,
+		RootDir:        c.RootDir,
+		LogDir:         logdir,
+		RayClusterName: c.RayClusterName,
+		RayClusterID:   c.RayClusterID,
+		RayNodeName:    c.RayNodeName,
+		LogBatching:    c.LogBatching,
+		PushInterval:   c.PushInterval,
 	}, nil
 }
 
