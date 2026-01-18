@@ -83,9 +83,14 @@ func TestRayNodesGetComplete(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
+			configFlags := genericclioptions.NewConfigFlags(true)
+			tc.opts.cmdFactory = cmdutil.NewFactory(configFlags)
+			cmd := &cobra.Command{}
+			flags := cmd.Flags()
+			configFlags.AddFlags(flags)
 			err := flags.Set("namespace", tc.namespace)
 			require.NoError(t, err)
-			err = tc.opts.Complete(tc.args, cmd)
+			err = tc.opts.Complete(tc.args)
 			require.NoError(t, err)
 			assert.Equal(t, tc.expectedNamespace, tc.opts.namespace)
 			assert.Equal(t, tc.expectedNode, tc.opts.node)
