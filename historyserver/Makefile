@@ -86,8 +86,10 @@ localimage-historyserver: dockerbuilder_instance
 
 .PHONY: dockerbuilder_instance
 dockerbuilder_instance:
+ifeq ($(ENGINE),docker)
 	${ENGINE} buildx use $(DOCKERBUILDER_INSTANCE) || ${ENGINE} buildx create --name $(DOCKERBUILDER_INSTANCE)
 	${ENGINE} buildx use $(DOCKERBUILDER_INSTANCE)
+endif
 
 # Run tests
 .PHONY: test
