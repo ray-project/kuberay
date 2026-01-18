@@ -119,7 +119,7 @@ It should be called early in the deployment to ensure invalid values are caught.
 {{- if hasKey .Values "kubeClient" }}
 {{- if hasKey .Values.kubeClient "qps" }}
 {{- $qps := toString .Values.kubeClient.qps }}
-{{- if not (regexMatch "^[+-]?[0-9]+(\\.[0-9]+)?$" $qps) }}
+{{- if not (regexMatch "^[0-9]+(\\.[0-9]+)?$" $qps) }}
 {{- fail (printf "values.kubeClient.qps must be a valid float number, got %q" $qps) }}
 {{- end }}
 {{- end }}

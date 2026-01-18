@@ -105,7 +105,7 @@ batchScheduler:
 configuration:
   # -- Whether to enable the configuration feature. If enabled, a ConfigMap will be created and mounted to the operator.
   # When enabled, flag-based configuration values (leaderElectionEnabled, metrics.enabled, kubeClient.qps, etc.)
-  # will be injected into the ConfigMap. The operator will use the ConfigMap instead of command-line flags.
+  # will be injected into the ConfigMap. The operator will use the ConfigMap and ignore command-line flags.
   enabled: false
   # -- Default environment variables to inject into all Ray containers in all RayCluster CRs.
   # This allows user to set feature flags across all Ray pods.
