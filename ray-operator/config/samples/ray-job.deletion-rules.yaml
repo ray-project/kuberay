@@ -53,7 +53,7 @@ spec:
       policy: DeleteSelf
   # rayClusterSpec specifies the RayCluster instance to be created by the RayJob controller.
   rayClusterSpec:
-    rayVersion: '2.52.0'
+    rayVersion: "2.52.0"
     headGroupSpec:
       rayStartParams: {}
       template:
