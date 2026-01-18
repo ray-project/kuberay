@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/emicklei/go-restful/v3"
@@ -106,7 +108,6 @@ func routerAPI(s *ServerHandler) {
 		Doc("get logfile").Param(ws.QueryParameter("node_id", "node_id")).
 		Param(ws.QueryParameter("filename", "filename")).
 		Param(ws.QueryParameter("lines", "lines")).
-		Param(ws.QueryParameter("format", "format")).
 		Writes("")) // Placeholder for specific return type
 
 	ws.Route(ws.GET("/v0/tasks").To(s.getTaskDetail).Filter(s.CookieHandle).
@@ -566,14 +567,51 @@ func (s *ServerHandler) getLogicalActor(req *restful.Request, resp *restful.Resp
 }
 
 func (s *ServerHandler) getNodeLogFile(req *restful.Request, resp *restful.Response) {
+	clusterNameID := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
+	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
 	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
+
+	// Parse query parameters
+	nodeID := req.QueryParameter("node_id")
+	filename := req.QueryParameter("filename")
+	lines := req.QueryParameter("lines")
+
+	// Validate required parameters
+	if nodeID == "" {
+		resp.WriteErrorString(http.StatusBadRequest, "Missing required parameter: node_id")
+		return
+	}
+	if filename == "" {
+		resp.WriteErrorString(http.StatusBadRequest, "Missing required parameter: filename")
+		return
+	}
+
+	// Prevent path traversal attacks (e.g., ../../etc/passwd)
+	if strings.Contains(nodeID, "..") || strings.Contains(filename, "..") {
+		resp.WriteErrorString(http.StatusBadRequest, fmt.Sprintf("invalid path: ../ not allowed in the path (node_id=%s, filename=%s)", nodeID, filename))
+		return
+	}
+
 	if sessionName == "live" {
 		s.redirectRequest(req, resp)
 		return
 	}
 
-	// Not yet supported
-	resp.WriteErrorString(http.StatusNotImplemented, "Node log file not yet supported")
+	// Convert lines parameter to int
+	maxLines := 0
+	if lines != "" {
+		if parsedLines, err := strconv.Atoi(lines); err == nil {
+			maxLines = parsedLines
+		}
+	}
+
+	content, err := s._getNodeLogFile(clusterNameID+"_"+clusterNamespace, sessionName, nodeID, filename, maxLines)
+	if err != nil {
+		logrus.Errorf("Error getting node log file: %v", err)
+		resp.WriteError(400, err)
+		return
+	}
+	resp.Write(content)
 }
 
 func (s *ServerHandler) getTaskSummarize(req *restful.Request, resp *restful.Response) {
