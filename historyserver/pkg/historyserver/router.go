@@ -298,6 +298,13 @@ func (s *ServerHandler) getClusters(req *restful.Request, resp *restful.Response
 func (s *ServerHandler) getNodes(req *restful.Request, resp *restful.Response) {
 	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
 	if sessionName == "live" {
+		// Ray Dashboard requires view parameter, default to "summary" if not provided
+		// ref: https://github.com/ray-project/ray/blob/d2b55a4b13ffe4670b9415ef2e7e11fbcc20e11a/python/ray/dashboard/client/src/service/node.ts#L4-L6
+		if req.QueryParameter("view") == "" {
+			q := req.Request.URL.Query()
+			q.Set("view", "summary")
+			req.Request.URL.RawQuery = q.Encode()
+		}
 		s.redirectRequest(req, resp)
 		return
 	}
