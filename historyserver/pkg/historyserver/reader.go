@@ -60,8 +60,8 @@ func (s *ServerHandler) _getNodeLogs(rayClusterNameID, sessionId, nodeId, dir st
 	return json.Marshal(ret)
 }
 
-func (s *ServerHandler) _getNodeLogFile(rayClusterNameID, sessionId, nodeId, filename string, maxLines int) ([]byte, error) {
-	logPath := path.Join(sessionId, "logs", nodeId, filename)
+func (s *ServerHandler) _getNodeLogFile(rayClusterNameID, sessionID, nodeID, filename string, maxLines int) ([]byte, error) {
+	logPath := path.Join(sessionID, "logs", nodeID, filename)
 	reader := s.reader.GetContent(rayClusterNameID, logPath)
 
 	// Check if reader is nil
@@ -74,19 +74,39 @@ func (s *ServerHandler) _getNodeLogFile(rayClusterNameID, sessionId, nodeId, fil
 		return io.ReadAll(reader)
 	}
 
-	// Read up to maxLines
 	scanner := bufio.NewScanner(reader)
-	lines := []string{}
-	count := 0
+	buffer := make([]string, maxLines)
+	index := 0
+	totalLines := 0
 
-	for scanner.Scan() && count < maxLines {
-		lines = append(lines, scanner.Text())
-		count++
+	// Get the last N lines following Ray Dashboard API behavior with circular buffer
+	// Example with maxLines=3, file has 5 lines:
+	// 	Line 1: buffer[0], Line 2: buffer[1], Line 3: buffer[2]
+	// 	Line 4: buffer[0] (overwrites Line 1), Line 5: buffer[1] (overwrites Line 2)
+	// 	Final buffer: ["Line 4", "Line 5", "Line 3"]
+	for scanner.Scan() {
+		buffer[index%maxLines] = scanner.Text()
+		index++
+		totalLines++
 	}
 
-	// Check for errors (scanner.Err() returns nil for normal EOF)
 	if err := scanner.Err(); err != nil {
 		return nil, err
+	}
+
+	// Reconstruct lines in correct order
+	var lines []string
+	if totalLines <= maxLines {
+		// File has fewer lines than requested, return all
+		lines = buffer[:totalLines]
+	} else {
+		// Construct response with correct log line order from the circular buffer
+		// Example: buffer=["Line 4", "Line 5", "Line 3"], start=2
+		//   buffer[2:] = ["Line 3"] (oldest)
+		//   buffer[:2] = ["Line 4", "Line 5"] (newest)
+		//   Result: ["Line 3", "Line 4", "Line 5"]
+		start := index % maxLines
+		lines = append(buffer[start:], buffer[:start]...)
 	}
 
 	return []byte(strings.Join(lines, "\n")), nil
