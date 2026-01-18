@@ -575,18 +575,16 @@ func (s *ServerHandler) getNodeLogFile(req *restful.Request, resp *restful.Respo
 	}
 
 	// Parse query parameters
-	nodeId := req.QueryParameter("node_id")
+	nodeID := req.QueryParameter("node_id")
 	filename := req.QueryParameter("filename")
 	lines := req.QueryParameter("lines")
 
 	// Validate required parameters
-	if nodeId == "" {
-		logrus.Errorf("Missing required parameter: node_id")
+	if nodeID == "" {
 		resp.WriteErrorString(http.StatusBadRequest, "Missing required parameter: node_id")
 		return
 	}
 	if filename == "" {
-		logrus.Errorf("Missing required parameter: folder (filename)")
 		resp.WriteErrorString(http.StatusBadRequest, "Missing required parameter: folder")
 		return
 	}
@@ -599,7 +597,7 @@ func (s *ServerHandler) getNodeLogFile(req *restful.Request, resp *restful.Respo
 		}
 	}
 
-	content, err := s._getNodeLogFile(clusterNameID+"_"+clusterNamespace, sessionName, nodeId, filename, maxLines)
+	content, err := s._getNodeLogFile(clusterNameID+"_"+clusterNamespace, sessionName, nodeID, filename, maxLines)
 	if err != nil {
 		logrus.Errorf("Error getting node log file: %v", err)
 		resp.WriteError(400, err)
