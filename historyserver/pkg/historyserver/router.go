@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strconv"
@@ -569,10 +570,6 @@ func (s *ServerHandler) getNodeLogFile(req *restful.Request, resp *restful.Respo
 	clusterNameID := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
 	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
 	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
-	if sessionName == "live" {
-		s.redirectRequest(req, resp)
-		return
-	}
 
 	// Parse query parameters
 	nodeID := req.QueryParameter("node_id")
@@ -586,6 +583,17 @@ func (s *ServerHandler) getNodeLogFile(req *restful.Request, resp *restful.Respo
 	}
 	if filename == "" {
 		resp.WriteErrorString(http.StatusBadRequest, "Missing required parameter: filename")
+		return
+	}
+
+	// Prevent path traversal attacks (e.g., ../../etc/passwd)
+	if strings.Contains(nodeID, "..") || strings.Contains(filename, "..") {
+		resp.WriteErrorString(http.StatusBadRequest, fmt.Sprintf("invalid path: ../ not allowed in the path (node_id=%s, filename=%s)", nodeID, filename))
+		return
+	}
+
+	if sessionName == "live" {
+		s.redirectRequest(req, resp)
 		return
 	}
 

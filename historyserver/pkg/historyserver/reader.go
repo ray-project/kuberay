@@ -8,7 +8,6 @@ import (
 	"io"
 	"net/http"
 	"path"
-	"path/filepath"
 	"sort"
 	"strings"
 
@@ -73,14 +72,6 @@ func (s *ServerHandler) _getNodeLogs(rayClusterNameID, sessionId, nodeId, dir st
 
 func (s *ServerHandler) _getNodeLogFile(rayClusterNameID, sessionID, nodeID, filename string, maxLines int) ([]byte, error) {
 	logPath := path.Join(sessionID, "logs", nodeID, filename)
-
-	// Prevent path traversal attacks (e.g., ../../etc/passwd)
-	// filepath.Clean() removes ../ and other traversal sequences
-	// If the cleaned path differs from original, it contained traversal attempts
-	cleanPath := filepath.Clean(logPath)
-	if cleanPath != logPath {
-		return nil, fmt.Errorf("invalid path: ../ not allowed in the path")
-	}
 
 	reader := s.reader.GetContent(rayClusterNameID, logPath)
 
