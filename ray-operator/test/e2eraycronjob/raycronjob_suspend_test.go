@@ -47,10 +47,8 @@ func TestRayCronJobSuspend(t *testing.T) {
 
 		// No RayJob should be created
 		LogWithTimestamp(test.T(), "Waiting to ensure no RayJobs are created while suspended")
-		g.Consistently(func() int {
-			n, err := countRayJobsOwnedByUID(test.Ctx(), test.Client().Ray(), namespace.Name, ownerUID)
-			g.Expect(err).NotTo(HaveOccurred())
-			return n
+		g.Consistently(func() (int, error) {
+			return countRayJobsOwnedByUID(test.Ctx(), test.Client().Ray(), namespace.Name, ownerUID)
 		}, 130*time.Second, 5*time.Second).Should(BeZero())
 
 		// Resume
@@ -66,10 +64,8 @@ func TestRayCronJobSuspend(t *testing.T) {
 			}, BeTrue()))
 
 		// Jobs must start appearing now
-		g.Eventually(func() int {
-			n, err := countRayJobsOwnedByUID(test.Ctx(), test.Client().Ray(), namespace.Name, ownerUID)
-			g.Expect(err).NotTo(HaveOccurred())
-			return n
+		g.Eventually(func() (int, error) {
+			return countRayJobsOwnedByUID(test.Ctx(), test.Client().Ray(), namespace.Name, ownerUID)
 		}, TestTimeoutMedium).Should(BeNumerically(">", 0))
 
 		// Delete the RayCronJob
