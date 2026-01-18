@@ -16,6 +16,16 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+const (
+	// DEFAULT_LOG_LIMIT is the default number of lines to return when lines parameter is not specified or is 0.
+	// This matches Ray Dashboard API default behavior.
+	DEFAULT_LOG_LIMIT = 1000
+
+	// MAX_LOG_LIMIT is the maximum number of lines that can be requested.
+	// Requests exceeding this limit will be capped to this value.
+	MAX_LOG_LIMIT = 10000
+)
+
 func (s *ServerHandler) listClusters(limit int) []utils.ClusterInfo {
 	// Initial continuation marker
 	logrus.Debugf("Prepare to get list clusters info ...")
@@ -68,9 +78,18 @@ func (s *ServerHandler) _getNodeLogFile(rayClusterNameID, sessionID, nodeID, fil
 		return nil, fmt.Errorf("log file not found: %s", logPath)
 	}
 
-	// If maxLines <= 0, read all lines
-	if maxLines <= 0 {
+	if maxLines < 0 {
+		// -1 means read all lines, match Ray Dashboard API behavior
 		return io.ReadAll(reader)
+	}
+
+	if maxLines == 0 {
+		maxLines = DEFAULT_LOG_LIMIT
+	}
+
+	if maxLines > MAX_LOG_LIMIT {
+		logrus.Warnf("Requested lines (%d) exceeds max limit (%d), capping to max", maxLines, MAX_LOG_LIMIT)
+		maxLines = MAX_LOG_LIMIT
 	}
 
 	scanner := bufio.NewScanner(reader)
