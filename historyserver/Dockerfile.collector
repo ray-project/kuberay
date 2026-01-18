@@ -1,6 +1,7 @@
 FROM golang:1.25.1 AS builder
 
-ENV GOPROXY=https://proxy.golang.org,direct
+ARG GOPROXY=https://proxy.golang.org,direct
+ENV GOPROXY=${GOPROXY}
 WORKDIR /historyserver
 
 # Copy the go modules and manifests.
