@@ -27,6 +27,7 @@ func RayCronJob(name, namespace string) *RayCronJobApplyConfiguration {
 	b.WithAPIVersion("ray.io/v1")
 	return b
 }
+
 func (b RayCronJobApplyConfiguration) IsApplyConfiguration() {}
 
 // WithKind sets the Kind field in the declarative configuration to the given value

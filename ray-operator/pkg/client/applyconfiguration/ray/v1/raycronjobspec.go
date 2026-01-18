@@ -4,10 +4,17 @@ package v1
 
 // RayCronJobSpecApplyConfiguration represents a declarative configuration of the RayCronJobSpec type for use
 // with apply.
+//
+// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
+// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 type RayCronJobSpecApplyConfiguration struct {
+	// JobTemplate defines the job spec that will be created by cron scheduling
 	JobTemplate *RayJobSpecApplyConfiguration `json:"jobTemplate,omitempty"`
-	Schedule    *string                       `json:"schedule,omitempty"`
-	Suspend     *bool                         `json:"suspend,omitempty"`
+	// Schedule is the cron schedule string
+	Schedule *string `json:"schedule,omitempty"`
+	// Suspend tells the controller to suspend the scheduling, it does not apply to
+	// scheduled RayJob.
+	Suspend *bool `json:"suspend,omitempty"`
 }
 
 // RayCronJobSpecApplyConfiguration constructs a declarative configuration of the RayCronJobSpec type for use with

@@ -41,7 +41,7 @@ func NewRayCronJobInformer(client versioned.Interface, namespace string, resyncP
 // one. This reduces memory footprint and number of connections to the server.
 func NewFilteredRayCronJobInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
 	return cache.NewSharedIndexInformer(
-		&cache.ListWatch{
+		cache.ToListWatcherWithWatchListSemantics(&cache.ListWatch{
 			ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
@@ -66,7 +66,7 @@ func NewFilteredRayCronJobInformer(client versioned.Interface, namespace string,
 				}
 				return client.RayV1().RayCronJobs(namespace).Watch(ctx, options)
 			},
-		},
+		}, client),
 		&apisrayv1.RayCronJob{},
 		resyncPeriod,
 		indexers,

@@ -8,6 +8,8 @@ import (
 
 // RayCronJobStatusApplyConfiguration represents a declarative configuration of the RayCronJobStatus type for use
 // with apply.
+//
+// RayCronJobStatus defines the observed state of RayCronJob
 type RayCronJobStatusApplyConfiguration struct {
 	LastScheduleTime *metav1.Time `json:"lastScheduleTime,omitempty"`
 }
