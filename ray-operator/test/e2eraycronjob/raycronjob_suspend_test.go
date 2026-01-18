@@ -59,7 +59,7 @@ func TestRayCronJobSuspend(t *testing.T) {
 		_, err = test.Client().Ray().RayV1().RayCronJobs(namespace.Name).Patch(test.Ctx(), rayCronJob.Name, types.MergePatchType, patch, metav1.PatchOptions{})
 		g.Expect(err).NotTo(HaveOccurred())
 
-		// Spec.suspend should be false
+		// Spec.Suspend should be false
 		g.Eventually(RayCronJob(test, namespace.Name, rayCronJob.Name), TestTimeoutShort).
 			Should(WithTransform(func(rayCronJob *rayv1.RayCronJob) bool {
 				return !rayCronJob.Spec.Suspend
