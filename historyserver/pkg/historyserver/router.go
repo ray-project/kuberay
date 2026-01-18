@@ -585,7 +585,7 @@ func (s *ServerHandler) getNodeLogFile(req *restful.Request, resp *restful.Respo
 		return
 	}
 	if filename == "" {
-		resp.WriteErrorString(http.StatusBadRequest, "Missing required parameter: folder")
+		resp.WriteErrorString(http.StatusBadRequest, "Missing required parameter: filename")
 		return
 	}
 

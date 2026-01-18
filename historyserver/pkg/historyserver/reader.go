@@ -64,7 +64,6 @@ func (s *ServerHandler) _getNodeLogFile(rayClusterNameID, sessionID, nodeID, fil
 	logPath := path.Join(sessionID, "logs", nodeID, filename)
 	reader := s.reader.GetContent(rayClusterNameID, logPath)
 
-	// Check if reader is nil
 	if reader == nil {
 		return nil, fmt.Errorf("log file not found: %s", logPath)
 	}
