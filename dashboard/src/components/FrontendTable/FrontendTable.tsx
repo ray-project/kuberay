@@ -21,28 +21,65 @@ interface IFrontendTableProps<T extends { name: string }> {
   renderRow: (row: T) => React.ReactNode;
   defaultOrderBy: keyof T & string;
   name: string;
+  disableSelection?: boolean;
 }
 
 function descendingComparator<T>(a: T, b: T, orderBy: keyof T) {
-  if (b[orderBy] < a[orderBy]) {
-    return -1;
+  const aValue = a[orderBy];
+  const bValue = b[orderBy];
+
+  // Numeric compare when both are numbers; otherwise compare as strings.
+  if (typeof aValue === "number" && typeof bValue === "number") {
+    if (bValue < aValue) {
+      return -1;
+    }
+    if (bValue > aValue) {
+      return 1;
+    }
+    return 0;
   }
-  if (b[orderBy] > a[orderBy]) {
-    return 1;
-  }
-  return 0;
+
+  const aStr = String(aValue);
+  const bStr = String(bValue);
+  return bStr.localeCompare(aStr);
 }
 
-function getComparator<Key extends keyof any>(
+function getComparator<T extends { name: string }>(
   order: Order,
-  orderBy: Key,
-): (
-  a: { [key in Key]: number | string },
-  b: { [key in Key]: number | string },
-) => number {
-  return order === "desc"
-    ? (a, b) => descendingComparator(a, b, orderBy)
-    : (a, b) => -descendingComparator(a, b, orderBy);
+  orderBy: keyof T,
+): (a: T, b: T) => number {
+  return (a, b) => {
+    // Ensure deterministic ordering when values are missing.
+    // Missing values are always sorted last.
+    const aMissing =
+      a[orderBy] === "" || a[orderBy] === null || a[orderBy] === undefined;
+    const bMissing =
+      b[orderBy] === "" || b[orderBy] === null || b[orderBy] === undefined;
+
+    if (aMissing && !bMissing) {
+      return 1;
+    }
+    if (!aMissing && bMissing) {
+      return -1;
+    }
+
+    // Compare values if both exist
+    if (!aMissing && !bMissing) {
+      const primary =
+        order === "desc"
+          ? descendingComparator(a, b, orderBy)
+          : -descendingComparator(a, b, orderBy);
+      if (primary !== 0) {
+        return primary;
+      }
+    }
+
+    // Deterministic tie-breaker (used when values satisfy equality or both are missing)
+    // so polling doesn't reshuffle rows.
+    return order === "desc"
+      ? descendingComparator(a, b, "name")
+      : -descendingComparator(a, b, "name");
+  };
 }
 
 // T is the data format for each row, S is the sortable keys
@@ -59,6 +96,7 @@ export const FrontendTable = <T extends { name: string }>(
     renderRow,
     defaultOrderBy,
     name,
+    disableSelection = false,
   } = props;
   const [order, setOrder] = React.useState<Order>("desc");
   const [orderBy, setOrderBy] = React.useState<keyof T & string>(
@@ -78,7 +116,6 @@ export const FrontendTable = <T extends { name: string }>(
   const sortedPaginatedData = React.useMemo(() => {
     const result = data
       .slice() // make a copy
-      //@ts-ignore
       .sort(getComparator(order, orderBy))
       .slice((page - 1) * rowsPerPage, (page - 1) * rowsPerPage + rowsPerPage);
     // If you are deleting every job on the page, go back a page
@@ -242,6 +279,7 @@ export const FrontendTable = <T extends { name: string }>(
             orderBy={orderBy}
             rowCount={sortedPaginatedData.length}
             headCells={headCells}
+            disableSelection={disableSelection}
           />
           <tbody>
             {error ? (
@@ -256,10 +294,12 @@ export const FrontendTable = <T extends { name: string }>(
               [...Array(rowsPerPage)].map((e, i) => (
                 <tr style={{ height: "40px" }} key={i}>
                   <td colSpan={1} style={{ textAlign: "center" }}>
-                    <Skeleton
-                      variant="text"
-                      sx={{ width: 16, margin: "auto" }}
-                    />
+                    {!disableSelection && (
+                      <Skeleton
+                        variant="text"
+                        sx={{ width: 16, margin: "auto" }}
+                      />
+                    )}
                   </td>
                   <td colSpan={numColumns} style={{ textAlign: "center" }}>
                     <Skeleton animation="wave" variant="text" width="95%" />
@@ -282,15 +322,17 @@ export const FrontendTable = <T extends { name: string }>(
                   return (
                     <tr key={row.name}>
                       <td style={{ textAlign: "center" }}>
-                        <Checkbox
-                          size="sm"
-                          checked={isItemSelected}
-                          slotProps={{
-                            checkbox: { sx: { textAlign: "left" } },
-                          }}
-                          sx={{ verticalAlign: "text-bottom" }}
-                          onClick={(event) => handleClick(event, row.name)}
-                        />
+                        {!disableSelection && (
+                          <Checkbox
+                            size="sm"
+                            checked={isItemSelected}
+                            slotProps={{
+                              checkbox: { sx: { textAlign: "left" } },
+                            }}
+                            sx={{ verticalAlign: "text-bottom" }}
+                            onClick={(event) => handleClick(event, row.name)}
+                          />
+                        )}
                       </td>
                       <td className="truncate">
                         <Tooltip variant="outlined" title={row.name}>

@@ -1,5 +1,5 @@
 import { useNamespace } from "@/components/NamespaceProvider";
-import fetcher from "@/utils/fetch";
+import { apiServerFetcher } from "@/utils/fetch";
 import useSWR from "swr";
 import { RayJobListResponse, RayJobItem } from "@/types/v2/api/rayjob";
 import { JobRow } from "@/types/table";
@@ -21,7 +21,7 @@ export const useListJobs = (
     namespace
       ? `${namespace == ALL_NAMESPACES ? `` : `/namespaces/${namespace}`}/rayjobs`
       : null,
-    fetcher,
+    apiServerFetcher,
     {
       refreshInterval,
     },
