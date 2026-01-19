@@ -5,15 +5,14 @@ metadata:
 spec:
   weight: 1
   capability:
-    cpu: 4
-    memory: 6Gi
+    cpu: "4"
+    memory: "6Gi"
 ---
 apiVersion: ray.io/v1
 kind: RayCluster
 metadata:
   name: test-cluster-0
   labels:
-    ray.io/scheduler-name: volcano
     volcano.sh/queue-name: kuberay-test-queue
 spec:
   rayVersion: '2.52.0'
@@ -27,7 +26,7 @@ spec:
           resources:
             limits:
               cpu: "1"
-              memory: "2Gi"
+              memory: "5Gi"
             requests:
               cpu: "1"
               memory: "2Gi"

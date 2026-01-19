@@ -1,14 +1,18 @@
 package completion
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
 	"github.com/spf13/cobra"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubectl/pkg/util/completion"
 
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
+	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client"
 )
 
 // RayResourceTypeCompletionFunc Returns a completion function that completes the Ray resource type.
@@ -54,6 +58,131 @@ func RayClusterResourceNameCompletionFunc(f cmdutil.Factory) func(*cobra.Command
 		}
 		return comps, directive
 	}
+}
+
+// WorkerGroupCompletionFunc returns a completion function that completes WorkerGroup resource names.
+func WorkerGroupCompletionFunc(f cmdutil.Factory) func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
+	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		k8sClient, err := client.NewClient(f)
+		if err != nil {
+			return []string{}, cobra.ShellCompDirectiveNoFileComp
+		}
+
+		return workerGroupCompletionFunc(cmd, args, toComplete, k8sClient)
+	}
+}
+
+// workerGroupCompletionFunc Returns completions of:
+// Workergroup names that match the toComplete prefix and respect flag values (--ray-cluster, --namespace, --all-namespaces)
+func workerGroupCompletionFunc(cmd *cobra.Command, args []string, toComplete string, k8sClient client.Client) ([]string, cobra.ShellCompDirective) {
+	var comps []string
+	directive := cobra.ShellCompDirectiveNoFileComp
+
+	// Stop completion after first argument to prevent multiple completions
+	if len(args) != 0 {
+		return comps, directive
+	}
+
+	cluster, _ := cmd.Flags().GetString("ray-cluster")
+	namespace, _ := cmd.Flags().GetString("namespace")
+	allNamespaces, _ := cmd.Flags().GetBool("all-namespaces")
+
+	if allNamespaces {
+		return comps, directive
+	}
+
+	if namespace == "" {
+		namespace = "default"
+	}
+
+	listopts := v1.ListOptions{}
+	if cluster != "" {
+		listopts = v1.ListOptions{
+			FieldSelector: fmt.Sprintf("metadata.name=%s", cluster),
+		}
+	}
+
+	rayClusterList, err := k8sClient.RayClient().RayV1().RayClusters(namespace).List(context.Background(), listopts)
+	if err != nil {
+		return comps, directive
+	}
+
+	seen := make(map[string]bool)
+	for _, rayCluster := range rayClusterList.Items {
+		for _, spec := range rayCluster.Spec.WorkerGroupSpecs {
+			if !seen[spec.GroupName] && (toComplete == "" || strings.HasPrefix(spec.GroupName, toComplete)) {
+				comps = append(comps, spec.GroupName)
+				seen[spec.GroupName] = true
+			}
+		}
+	}
+	return comps, directive
+}
+
+// NodeCompletionFunc returns a completion function that completes Node resource names.
+func NodeCompletionFunc(f cmdutil.Factory) func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
+	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		k8sClient, err := client.NewClient(f)
+		if err != nil {
+			return []string{}, cobra.ShellCompDirectiveNoFileComp
+		}
+
+		return nodeCompletionFunc(cmd, args, toComplete, k8sClient)
+	}
+}
+
+// nodeCompletionFunc Returns completions of:
+// Node names that match the toComplete prefix and respect flag values (--ray-cluster, --namespace)
+func nodeCompletionFunc(cmd *cobra.Command, args []string, toComplete string, k8sClient client.Client) ([]string, cobra.ShellCompDirective) {
+	var comps []string
+	directive := cobra.ShellCompDirectiveNoFileComp
+
+	// Stop completion after first argument to prevent multiple completions
+	if len(args) != 0 {
+		return comps, directive
+	}
+
+	cluster, _ := cmd.Flags().GetString("ray-cluster")
+	namespace, _ := cmd.Flags().GetString("namespace")
+	allNamespaces, _ := cmd.Flags().GetBool("all-namespaces")
+
+	if allNamespaces {
+		return comps, directive
+	}
+
+	if namespace == "" {
+		namespace = "default"
+	}
+
+	labelSelectors := createRayNodeLabelSelectors(cluster)
+	pods, err := k8sClient.KubernetesClient().CoreV1().Pods(namespace).List(
+		context.Background(),
+		v1.ListOptions{
+			LabelSelector: labels.Set(labelSelectors).String(),
+		},
+	)
+	if err != nil {
+		return comps, directive
+	}
+
+	for _, pod := range pods.Items {
+		if toComplete == "" || strings.HasPrefix(pod.Name, toComplete) {
+			comps = append(comps, pod.Name)
+		}
+	}
+	return comps, directive
+}
+
+// createRayNodeLabelSelectors creates a map of K8s label selectors for Ray nodes
+// TODO: duplicated function as in kubectl/pkg/cmd/get/get_nodes.go
+func createRayNodeLabelSelectors(cluster string) map[string]string {
+	labelSelectors := map[string]string{
+		util.RayIsRayNodeLabelKey: "yes",
+	}
+	if cluster != "" {
+		labelSelectors[util.RayClusterLabelKey] = cluster
+	}
+	return labelSelectors
 }
 
 func getAllRayResourceType() []string {

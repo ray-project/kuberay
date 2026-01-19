@@ -71,8 +71,10 @@ spec:
             resources:
               limits:
                 cpu: "1"
+                memory: "5Gi"
               requests:
-                cpu: "200m"
+                cpu: "1"
+                memory: "2Gi"
     workerGroupSpecs:
     - replicas: 1
       minReplicas: 1
@@ -87,5 +89,7 @@ spec:
             resources:
               limits:
                 cpu: "1"
+                memory: "1Gi"
               requests:
-                cpu: "200m"
+                cpu: "1"
+                memory: "1Gi"

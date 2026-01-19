@@ -4,23 +4,52 @@ package v1
 
 // RayClusterSpecApplyConfiguration represents a declarative configuration of the RayClusterSpec type for use
 // with apply.
+//
+// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
+// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
+// RayClusterSpec defines the desired state of RayCluster
 type RayClusterSpecApplyConfiguration struct {
-	AuthOptions              *AuthOptionsApplyConfiguration              `json:"authOptions,omitempty"`
-	Suspend                  *bool                                       `json:"suspend,omitempty"`
-	ManagedBy                *string                                     `json:"managedBy,omitempty"`
-	AutoscalerOptions        *AutoscalerOptionsApplyConfiguration        `json:"autoscalerOptions,omitempty"`
-	HeadServiceAnnotations   map[string]string                           `json:"headServiceAnnotations,omitempty"`
-	EnableInTreeAutoscaling  *bool                                       `json:"enableInTreeAutoscaling,omitempty"`
+	// UpgradeStrategy defines the scaling policy used when upgrading the RayCluster
+	UpgradeStrategy *RayClusterUpgradeStrategyApplyConfiguration `json:"upgradeStrategy,omitempty"`
+	// AuthOptions specifies the authentication options for the RayCluster.
+	AuthOptions *AuthOptionsApplyConfiguration `json:"authOptions,omitempty"`
+	// Suspend indicates whether a RayCluster should be suspended.
+	// A suspended RayCluster will have head pods and worker pods deleted.
+	Suspend *bool `json:"suspend,omitempty"`
+	// ManagedBy is an optional configuration for the controller or entity that manages a RayCluster.
+	// The value must be either 'ray.io/kuberay-operator' or 'kueue.x-k8s.io/multikueue'.
+	// The kuberay-operator reconciles a RayCluster which doesn't have this field at all or
+	// the field value is the reserved string 'ray.io/kuberay-operator',
+	// but delegates reconciling the RayCluster with 'kueue.x-k8s.io/multikueue' to the Kueue.
+	// The field is immutable.
+	ManagedBy *string `json:"managedBy,omitempty"`
+	// AutoscalerOptions specifies optional configuration for the Ray autoscaler.
+	AutoscalerOptions      *AutoscalerOptionsApplyConfiguration `json:"autoscalerOptions,omitempty"`
+	HeadServiceAnnotations map[string]string                    `json:"headServiceAnnotations,omitempty"`
+	// EnableInTreeAutoscaling indicates whether operator should create in tree autoscaling configs
+	EnableInTreeAutoscaling *bool `json:"enableInTreeAutoscaling,omitempty"`
+	// GcsFaultToleranceOptions for enabling GCS FT
 	GcsFaultToleranceOptions *GcsFaultToleranceOptionsApplyConfiguration `json:"gcsFaultToleranceOptions,omitempty"`
-	HeadGroupSpec            *HeadGroupSpecApplyConfiguration            `json:"headGroupSpec,omitempty"`
-	RayVersion               *string                                     `json:"rayVersion,omitempty"`
-	WorkerGroupSpecs         []WorkerGroupSpecApplyConfiguration         `json:"workerGroupSpecs,omitempty"`
+	// HeadGroupSpec is the spec for the head pod
+	HeadGroupSpec *HeadGroupSpecApplyConfiguration `json:"headGroupSpec,omitempty"`
+	// RayVersion is used to determine the command for the Kubernetes Job managed by RayJob
+	RayVersion *string `json:"rayVersion,omitempty"`
+	// WorkerGroupSpecs are the specs for the worker pods
+	WorkerGroupSpecs []WorkerGroupSpecApplyConfiguration `json:"workerGroupSpecs,omitempty"`
 }
 
 // RayClusterSpecApplyConfiguration constructs a declarative configuration of the RayClusterSpec type for use with
 // apply.
 func RayClusterSpec() *RayClusterSpecApplyConfiguration {
 	return &RayClusterSpecApplyConfiguration{}
+}
+
+// WithUpgradeStrategy sets the UpgradeStrategy field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the UpgradeStrategy field is set to the value of the last call.
+func (b *RayClusterSpecApplyConfiguration) WithUpgradeStrategy(value *RayClusterUpgradeStrategyApplyConfiguration) *RayClusterSpecApplyConfiguration {
+	b.UpgradeStrategy = value
+	return b
 }
 
 // WithAuthOptions sets the AuthOptions field in the declarative configuration to the given value

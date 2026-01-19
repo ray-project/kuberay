@@ -46,8 +46,10 @@ spec:
             resources:
               limits:
                 cpu: "1"
+                memory: "5Gi"
               requests:
                 cpu: "1"
+                memory: "2Gi"
             volumeMounts:
             - mountPath: /home/ray/samples
               name: code-sample
@@ -78,8 +80,10 @@ spec:
             resources:
               limits:
                 cpu: "1"
+                memory: "1Gi"
               requests:
                 cpu: "1"
+                memory: "1Gi"
 ######################Ray code sample#################################
 # this sample is from https://docs.ray.io/en/latest/cluster/job-submission.html#quick-start-example
 # it is mounted into the container and executed to show the Ray job at work

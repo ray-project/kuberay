@@ -32,8 +32,10 @@ spec:
           resources:
             limits:
               cpu: "1"
+              memory: "5Gi"
             requests:
               cpu: "1"
+              memory: "2Gi"
           ports:
           - containerPort: 6379
             name: redis
@@ -80,8 +82,10 @@ spec:
           resources:
             limits:
               cpu: "1"
+              memory: "1Gi"
             requests:
               cpu: "1"
+              memory: "1Gi"
         volumes:
         - name: ray-logs
           emptyDir: {}

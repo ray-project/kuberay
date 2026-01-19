@@ -32,10 +32,10 @@ spec:
             resources:
               limits:
                 cpu: "2"
-                memory: "8G"
+                memory: "8Gi"
               requests:
                 cpu: "2"
-                memory: "8G"
+                memory: "8Gi"
     workerGroupSpecs:
     - replicas: 1
       minReplicas: 1
@@ -52,14 +52,14 @@ spec:
               limits:
                 # ct4p-hightpu-4t (v4) TPUs have 240 vCPUs, adjust this value based on your resource needs
                 cpu: "100"
-                ephemeral-storage: 20Gi
+                ephemeral-storage: "20Gi"
                 google.com/tpu: "4"
-                memory: 200G
+                memory: "200Gi"
               requests:
                 cpu: "100"
-                ephemeral-storage: 20Gi
+                ephemeral-storage: "20Gi"
                 google.com/tpu: "4"
-                memory: 200G
+                memory: "200Gi"
           nodeSelector:
             # https://cloud.google.com/kubernetes-engine/docs/concepts/tpus
             cloud.google.com/gke-tpu-accelerator: tpu-v4-podslice

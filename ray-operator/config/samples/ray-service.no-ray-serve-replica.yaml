@@ -28,11 +28,11 @@ spec:
             image: rayproject/ray:2.52.0
             resources:
               limits:
-                cpu: 1
-                memory: 2Gi
+                cpu: "1"
+                memory: "5Gi"
               requests:
-                cpu: 1
-                memory: 2Gi
+                cpu: "1"
+                memory: "2Gi"
     workerGroupSpecs:
     - replicas: 2
       minReplicas: 1

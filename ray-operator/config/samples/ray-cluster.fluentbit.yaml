@@ -16,11 +16,11 @@ spec:
           # Use larger Ray containers in production!
           resources:
             limits:
-              cpu: 1
-              memory: 2Gi
+              cpu: "1"
+              memory: "5Gi"
             requests:
-              cpu: 500m
-              memory: 1Gi
+              cpu: "1"
+              memory: "2Gi"
           # Share logs with Fluent Bit
           volumeMounts:
           - mountPath: /tmp/ray
@@ -37,11 +37,11 @@ spec:
           # These resource requests for Fluent Bit should be sufficient in production.
           resources:
             requests:
-              cpu: 100m
-              memory: 128Mi
+              cpu: "100m"
+              memory: "128Mi"
             limits:
-              cpu: 100m
-              memory: 128Mi
+              cpu: "100m"
+              memory: "128Mi"
           volumeMounts:
           - mountPath: /tmp/ray
             name: ray-logs

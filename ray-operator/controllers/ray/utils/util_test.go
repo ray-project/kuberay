@@ -489,11 +489,11 @@ func TestFindContainerPort(t *testing.T) {
 		},
 	}
 	port := FindContainerPort(&container, "port1", -1)
-	assert.NotEqual(t, port, int32(-1), "expect port1 found")
+	assert.NotEqual(t, int32(-1), port, "expect port1 found")
 	port = FindContainerPort(&container, "port2", -1)
-	assert.NotEqual(t, port, int32(-1), "expect port2 found")
+	assert.NotEqual(t, int32(-1), port, "expect port2 found")
 	port = FindContainerPort(&container, "port3", -1)
-	assert.Equal(t, port, int32(-1), "expect port3 not found")
+	assert.Equal(t, int32(-1), port, "expect port3 not found")
 }
 
 func TestGenerateHeadServiceName(t *testing.T) {
@@ -1593,7 +1593,7 @@ func TestIsIncrementalUpgradeEnabled(t *testing.T) {
 			name: "UpgradeStrategy Type is NewClusterWithIncrementalUpgrade but feature disabled",
 			spec: &rayv1.RayServiceSpec{
 				UpgradeStrategy: &rayv1.RayServiceUpgradeStrategy{
-					Type: ptr.To(rayv1.NewClusterWithIncrementalUpgrade),
+					Type: ptr.To(rayv1.RayServiceNewClusterWithIncrementalUpgrade),
 				},
 			},
 			featureEnabled: false,
@@ -1603,7 +1603,7 @@ func TestIsIncrementalUpgradeEnabled(t *testing.T) {
 			name: "UpgradeStrategy Type is NewClusterWithIncrementalUpgrade and feature enabled",
 			spec: &rayv1.RayServiceSpec{
 				UpgradeStrategy: &rayv1.RayServiceUpgradeStrategy{
-					Type: ptr.To(rayv1.NewClusterWithIncrementalUpgrade),
+					Type: ptr.To(rayv1.RayServiceNewClusterWithIncrementalUpgrade),
 				},
 			},
 			featureEnabled: true,

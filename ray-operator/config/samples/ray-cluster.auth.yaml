@@ -6,20 +6,21 @@ spec:
   enableInTreeAutoscaling: true
   authOptions:
     mode: token
-  rayVersion: '2.52.0'
+  rayVersion: '2.53.0'
   headGroupSpec:
     rayStartParams: {}
     template:
       spec:
         containers:
         - name: ray-head
-          image: rayproject/ray:2.52.0
+          image: rayproject/ray:2.53.0
           resources:
             limits:
-              memory: 8G
+              cpu: "4"
+              memory: "8Gi"
             requests:
-              cpu: 4
-              memory: 8G
+              cpu: "4"
+              memory: "8Gi"
           ports:
           - containerPort: 6379
             name: gcs-server
@@ -37,10 +38,11 @@ spec:
       spec:
         containers:
         - name: ray-worker
-          image: rayproject/ray:2.52.0
+          image: rayproject/ray:2.53.0
           resources:
             limits:
-              memory: 8G
+              cpu: "4"
+              memory: "8Gi"
             requests:
-              cpu: 4
-              memory: 8G
+              cpu: "4"
+              memory: "8Gi"

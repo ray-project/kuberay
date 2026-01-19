@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	errstd "errors"
 	"fmt"
+	"maps"
 	"os"
 	"reflect"
 	"runtime"
@@ -177,6 +178,13 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 		logger.Error(err, "The RayCluster spec is invalid")
 		r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.InvalidRayClusterSpec),
 			"The RayCluster spec is invalid %s/%s: %v", instance.Namespace, instance.Name, err)
+		return ctrl.Result{}, nil
+	}
+
+	if err := utils.ValidateRayClusterUpgradeOptions(instance); err != nil {
+		logger.Error(err, "The RayCluster UpgradeStrategy is invalid")
+		r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.InvalidRayClusterSpec),
+			"The RayCluster UpgradeStrategy is invalid %s/%s: %v", instance.Namespace, instance.Name, err)
 		return ctrl.Result{}, nil
 	}
 
@@ -521,9 +529,7 @@ func (r *RayClusterReconciler) reconcileHeadService(ctx context.Context, instanc
 		annotations := make(map[string]string)
 		// TODO (kevin85421): KubeRay has already exposed the entire head service (#1040) to users.
 		// We may consider deprecating this field when we bump the CRD version.
-		for k, v := range instance.Spec.HeadServiceAnnotations {
-			annotations[k] = v
-		}
+		maps.Copy(annotations, instance.Spec.HeadServiceAnnotations)
 		headSvc, err := common.BuildServiceForHeadPod(ctx, *instance, labels, annotations)
 		// TODO (kevin85421): Provide a detailed and actionable error message. For example, which port is missing?
 		if len(headSvc.Spec.Ports) == 0 {
@@ -609,6 +615,12 @@ func (r *RayClusterReconciler) reconcileHeadlessService(ctx context.Context, ins
 func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv1.RayCluster) error {
 	logger := ctrl.LoggerFrom(ctx)
 
+	// Calculate RayCluster spec hash for the UpgradeStrategy
+	clusterHash, err := utils.GenerateHashWithoutReplicasAndWorkersToDelete(instance.Spec)
+	if err != nil {
+		return err
+	}
+
 	// if RayCluster is suspending, delete all pods and skip reconcile
 	suspendStatus := utils.FindRayClusterSuspendStatus(instance)
 	statusConditionGateEnabled := features.Enabled(features.RayClusterStatusConditions)
@@ -635,6 +647,22 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 		if instance.Spec.Suspend != nil && *instance.Spec.Suspend {
 			return nil // stop reconcilePods because the cluster is going to suspend.
 		}
+	}
+
+	// Check if pods need to be recreated with Recreate upgradeStrategy
+	if r.shouldRecreatePodsForUpgrade(ctx, instance) {
+		logger.Info("RayCluster spec changed with Recreate upgradeStrategy, deleting all pods")
+		if _, err := r.deleteAllPods(ctx, common.RayClusterAllPodsAssociationOptions(instance)); err != nil {
+			r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.FailedToDeletePodCollection),
+				"Failed deleting Pods due to spec change with Recreate upgradeStrategy for RayCluster %s/%s, %v",
+				instance.Namespace, instance.Name, err)
+			return errstd.Join(utils.ErrFailedDeleteAllPods, err)
+		}
+		r.rayClusterScaleExpectation.Delete(instance.Name, instance.Namespace)
+		r.Recorder.Eventf(instance, corev1.EventTypeNormal, string(utils.DeletedPod),
+			"Deleted all Pods for RayCluster %s/%s due to spec change with Recreate upgradeStrategy",
+			instance.Namespace, instance.Name)
+		return nil
 	}
 
 	// check if all the pods exist
@@ -679,8 +707,8 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 			return errstd.New(reason)
 		}
 	} else if len(headPods.Items) == 0 {
-		originatedFrom := utils.GetCRDType(instance.Labels[utils.RayOriginatedFromCRDLabelKey])
-		if originatedFrom == utils.RayJobCRD {
+		if meta.IsStatusConditionTrue(instance.Status.Conditions, string(rayv1.RayClusterProvisioned)) &&
+			shouldSkipHeadPodRestart(instance) {
 			// Recreating the head Pod if the RayCluster created by RayJob is provisioned doesn't help RayJob.
 			//
 			// Case 1: GCS fault tolerance is disabled
@@ -692,17 +720,15 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 			//
 			// In this case, the worker Pods will not be killed by the new head Pod when it is created, but the submission ID has already been
 			// used by the old Ray job, so the new Ray job will fail.
-			if meta.IsStatusConditionTrue(instance.Status.Conditions, string(rayv1.RayClusterProvisioned)) {
-				logger.Info(
-					"reconcilePods: Found 0 head Pods for a RayJob-managed RayCluster; skipping head creation to let RayJob controller handle the failure",
-					"rayCluster", instance.Name,
-				)
-				return nil
-			}
+			logger.Info(
+				"reconcilePods: Found 0 head Pods for the RayCluster; Skipped head recreation due to ray.io/disable-provisioned-head-restart",
+				"rayCluster", instance.Name,
+			)
+			return nil
 		}
 		// Create head Pod if it does not exist.
 		logger.Info("reconcilePods: Found 0 head Pods; creating a head Pod for the RayCluster.")
-		if err := r.createHeadPod(ctx, *instance); err != nil {
+		if err := r.createHeadPod(ctx, *instance, clusterHash); err != nil {
 			return errstd.Join(utils.ErrFailedCreateHeadPod, err)
 		}
 	} else if len(headPods.Items) > 1 { // This should never happen. This protects against the case that users manually create headpod.
@@ -830,7 +856,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 					}
 				}
 			}
-			logger.Info("reconcilePods", "found existing replica indices", "group", worker.GroupName, "indices", validReplicaIndices)
+			logger.Info("reconcilePods: found existing replica indices", "group", worker.GroupName, "indices", validReplicaIndices)
 		}
 		if diff > 0 {
 			// pods need to be added
@@ -838,7 +864,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 			if features.Enabled(features.RayMultiHostIndexing) {
 				newReplicaIndex := 0
 				// create all workers of this group
-				for i := 0; i < diff; i++ {
+				for i := range diff {
 					// Find the next available replica index.
 					for validReplicaIndices[newReplicaIndex] {
 						newReplicaIndex++
@@ -851,7 +877,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 				}
 			} else {
 				// create all workers of this group
-				for i := 0; i < diff; i++ {
+				for i := range diff {
 					logger.Info("reconcilePods", "creating worker for group", worker.GroupName, "index", i, "total", diff)
 					if err := r.createWorkerPod(ctx, *instance, *worker.DeepCopy()); err != nil {
 						return errstd.Join(utils.ErrFailedCreateWorkerPod, err)
@@ -883,7 +909,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 				// diff < 0 means that we need to delete some Pods to meet the desired number of replicas.
 				randomlyRemovedWorkers := -diff
 				logger.Info("reconcilePods", "Number workers to delete randomly", randomlyRemovedWorkers, "Worker group", worker.GroupName)
-				for i := 0; i < randomlyRemovedWorkers; i++ {
+				for i := range randomlyRemovedWorkers {
 					randomPodToDelete := runningPods.Items[i]
 					logger.Info("Randomly deleting Pod", "progress", fmt.Sprintf("%d / %d", i+1, randomlyRemovedWorkers), "with name", randomPodToDelete.Name)
 					if err := r.Delete(ctx, &randomPodToDelete); err != nil {
@@ -1049,7 +1075,7 @@ func (r *RayClusterReconciler) reconcileMultiHostWorkerGroup(ctx context.Context
 	if replicasToCreate > 0 {
 		logger.Info("Scaling up multi-host group", "group", worker.GroupName, "replicasToCreate", replicasToCreate)
 		newReplicaIndex := 0 // Find the next available index starting from 0
-		for i := 0; i < replicasToCreate; i++ {
+		for range replicasToCreate {
 			for validReplicaIndices[newReplicaIndex] {
 				newReplicaIndex++
 			}
@@ -1092,6 +1118,52 @@ func (r *RayClusterReconciler) reconcileMultiHostWorkerGroup(ctx context.Context
 	}
 
 	return nil
+}
+
+func shouldSkipHeadPodRestart(instance *rayv1.RayCluster) bool {
+	return instance.Annotations[utils.DisableProvisionedHeadRestartAnnotationKey] == "true"
+}
+
+// shouldRecreatePodsForUpgrade checks if any pods need to be recreated based on RayClusterSpec changes
+func (r *RayClusterReconciler) shouldRecreatePodsForUpgrade(ctx context.Context, instance *rayv1.RayCluster) bool {
+	logger := ctrl.LoggerFrom(ctx)
+	if instance.Spec.UpgradeStrategy == nil || instance.Spec.UpgradeStrategy.Type == nil || *instance.Spec.UpgradeStrategy.Type != rayv1.RayClusterRecreate {
+		return false
+	}
+
+	expectedClusterHash, err := utils.GenerateHashWithoutReplicasAndWorkersToDelete(instance.Spec)
+	if err != nil {
+		logger.Error(err, "Failed to generate cluster spec hash for Recreate upgradeStrategy, skipping comparison")
+		return false
+	}
+
+	headPods := corev1.PodList{}
+	if err := r.List(ctx, &headPods, common.RayClusterHeadPodsAssociationOptions(instance).ToListOptions()...); err != nil {
+		logger.Error(err, "Failed to list head pods for upgrade check")
+		return false
+	}
+
+	// If the KubeRay version has changed, skip recreation to avoid unnecessary pod recreation
+	if len(headPods.Items) > 0 {
+		headPod := headPods.Items[0]
+		podVersion := headPod.Annotations[utils.KubeRayVersion]
+		// If the KubeRay version has changed, update the head pod to get the cluster hash and new KubeRay version
+		if podVersion != "" && podVersion != utils.KUBERAY_VERSION {
+			logger.Info("KubeRay version has changed, skipping pod recreation", "rayCluster", instance.Name)
+			headPod.Annotations[utils.UpgradeStrategyRecreateHashKey] = expectedClusterHash
+			headPod.Annotations[utils.KubeRayVersion] = utils.KUBERAY_VERSION
+			if err := r.Update(ctx, &headPod); err != nil {
+				logger.Error(err, "Failed to update head pod annotations after KUBERAY_VERSION change", "pod", headPod.Name)
+			}
+			return false
+		}
+		actualHash := headPod.Annotations[utils.UpgradeStrategyRecreateHashKey]
+		if actualHash != "" && actualHash != expectedClusterHash {
+			logger.Info("RayCluster spec has changed, will recreate all pods", "rayCluster", instance.Name)
+			return true
+		}
+	}
+	return false
 }
 
 // shouldDeletePod returns whether the Pod should be deleted and the reason
@@ -1228,11 +1300,18 @@ func (r *RayClusterReconciler) createService(ctx context.Context, svc *corev1.Se
 	return nil
 }
 
-func (r *RayClusterReconciler) createHeadPod(ctx context.Context, instance rayv1.RayCluster) error {
+func (r *RayClusterReconciler) createHeadPod(ctx context.Context, instance rayv1.RayCluster, clusterHash string) error {
 	logger := ctrl.LoggerFrom(ctx)
 
 	// build the pod then create it
 	pod := r.buildHeadPod(ctx, instance)
+
+	// Set RayClusterUpgradeStrategyHashKey and KubeRayVersion annotations
+	if clusterHash != "" {
+		pod.Annotations[utils.UpgradeStrategyRecreateHashKey] = clusterHash
+		pod.Annotations[utils.KubeRayVersion] = utils.KUBERAY_VERSION
+	}
+
 	// check if the batch scheduler integration is enabled
 	// call the scheduler plugin if so
 	if r.options.BatchSchedulerManager != nil {
@@ -1560,7 +1639,8 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 			}
 		}
 
-		if suspendStatus == rayv1.RayClusterSuspending {
+		switch suspendStatus {
+		case rayv1.RayClusterSuspending:
 			if len(runtimePods.Items) == 0 {
 				meta.SetStatusCondition(&newInstance.Status.Conditions, metav1.Condition{
 					Type:    string(rayv1.RayClusterProvisioned),
@@ -1579,7 +1659,7 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 					Status: metav1.ConditionTrue,
 				})
 			}
-		} else if suspendStatus == rayv1.RayClusterSuspended {
+		case rayv1.RayClusterSuspended:
 			if instance.Spec.Suspend != nil && !*instance.Spec.Suspend {
 				meta.SetStatusCondition(&newInstance.Status.Conditions, metav1.Condition{
 					Type:   string(rayv1.RayClusterSuspended),
@@ -1587,7 +1667,7 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 					Status: metav1.ConditionFalse,
 				})
 			}
-		} else {
+		default:
 			meta.SetStatusCondition(&newInstance.Status.Conditions, metav1.Condition{
 				Type:   string(rayv1.RayClusterSuspended),
 				Reason: string(rayv1.RayClusterSuspended),

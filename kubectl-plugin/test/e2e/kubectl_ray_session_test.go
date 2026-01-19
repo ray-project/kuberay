@@ -145,6 +145,6 @@ func cleanUpCmdProcessAndCheckPortForwarding(cmd *exec.Cmd) {
 	// prevent zombie process
 	_ = cmd.Wait()
 	// Check if the port-forwarding process is still running
-	_, err := exec.Command("lsof", "-i", ":8265").CombinedOutput()
+	_, err := exec.CommandContext(context.Background(), "lsof", "-i", ":8265").CombinedOutput()
 	Expect(err).To(HaveOccurred())
 }

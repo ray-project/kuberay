@@ -43,7 +43,7 @@ var _ = Describe("Calling ray plugin `get workergroups` command to list worker g
 		}
 
 		expectedTestResultTable.Rows = append(expectedTestResultTable.Rows, v1.TableRow{
-			Cells: []interface{}{
+			Cells: []any{
 				"workergroup",
 				"1",
 				"5",
@@ -51,7 +51,7 @@ var _ = Describe("Calling ray plugin `get workergroups` command to list worker g
 				"1",
 				"0",
 				"0",
-				"1G",
+				"1Gi",
 				"raycluster-kuberay",
 			},
 		})

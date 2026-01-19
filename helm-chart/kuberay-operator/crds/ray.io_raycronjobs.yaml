@@ -24,6 +24,9 @@ spec:
     - jsonPath: .metadata.creationTimestamp
       name: age
       type: date
+    - jsonPath: .spec.suspend
+      name: suspend
+      type: boolean
     name: v1
     schema:
       openAPIV3Schema:
@@ -4397,6 +4400,10 @@ spec:
                                                         type: integer
                                                       signerName:
                                                         type: string
+                                                      userAnnotations:
+                                                        additionalProperties:
+                                                          type: string
+                                                        type: object
                                                     required:
                                                     - keyType
                                                     - signerName
@@ -4591,6 +4598,18 @@ spec:
                                     x-kubernetes-list-map-keys:
                                     - name
                                     x-kubernetes-list-type: map
+                                  workloadRef:
+                                    properties:
+                                      name:
+                                        type: string
+                                      podGroup:
+                                        type: string
+                                      podGroupReplicaKey:
+                                        type: string
+                                    required:
+                                    - name
+                                    - podGroup
+                                    type: object
                                 required:
                                 - containers
                                 type: object
@@ -4614,6 +4633,14 @@ spec:
                         type: string
                       suspend:
                         type: boolean
+                      upgradeStrategy:
+                        properties:
+                          type:
+                            enum:
+                            - Recreate
+                            - None
+                            type: string
+                        type: object
                       workerGroupSpecs:
                         items:
                           properties:
@@ -8270,6 +8297,10 @@ spec:
                                                           type: integer
                                                         signerName:
                                                           type: string
+                                                        userAnnotations:
+                                                          additionalProperties:
+                                                            type: string
+                                                          type: object
                                                       required:
                                                       - keyType
                                                       - signerName
@@ -8464,6 +8495,18 @@ spec:
                                       x-kubernetes-list-map-keys:
                                       - name
                                       x-kubernetes-list-type: map
+                                    workloadRef:
+                                      properties:
+                                        name:
+                                          type: string
+                                        podGroup:
+                                          type: string
+                                        podGroupReplicaKey:
+                                          type: string
+                                      required:
+                                      - name
+                                      - podGroup
+                                      type: object
                                   required:
                                   - containers
                                   type: object
@@ -12102,6 +12145,10 @@ spec:
                                                 type: integer
                                               signerName:
                                                 type: string
+                                              userAnnotations:
+                                                additionalProperties:
+                                                  type: string
+                                                type: object
                                             required:
                                             - keyType
                                             - signerName
@@ -12296,6 +12343,18 @@ spec:
                             x-kubernetes-list-map-keys:
                             - name
                             x-kubernetes-list-type: map
+                          workloadRef:
+                            properties:
+                              name:
+                                type: string
+                              podGroup:
+                                type: string
+                              podGroupReplicaKey:
+                                type: string
+                            required:
+                            - name
+                            - podGroup
+                            type: object
                         required:
                         - containers
                         type: object
@@ -12309,6 +12368,8 @@ spec:
                 type: object
               schedule:
                 type: string
+              suspend:
+                type: boolean
             required:
             - jobTemplate
             - schedule

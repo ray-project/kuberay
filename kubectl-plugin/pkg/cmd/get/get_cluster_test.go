@@ -20,8 +20,8 @@ import (
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client"
+	clienttesting "github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client/testing"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-	rayClientFake "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/fake"
 )
 
 // This is to test Complete() and ensure that it is setting the namespace and cluster correctly
@@ -159,7 +159,7 @@ func TestRayClusterGetRun(t *testing.T) {
 			}
 
 			kubeClientSet := kubefake.NewClientset()
-			rayClient := rayClientFake.NewSimpleClientset(rayCluster)
+			rayClient := clienttesting.NewRayClientset(rayCluster)
 			k8sClients := client.NewClientForTesting(kubeClientSet, rayClient)
 
 			// Initialize the printer with an empty print options since we are setting the column definition later
@@ -183,7 +183,7 @@ func TestRayClusterGetRun(t *testing.T) {
 			}
 
 			testResTable.Rows = append(testResTable.Rows, v1.TableRow{
-				Cells: []interface{}{
+				Cells: []any{
 					"raycluster-kuberay",
 					"test",
 					"2",
@@ -273,7 +273,7 @@ func TestGetRayClusters(t *testing.T) {
 		},
 		{
 			name:                "should not error if a cluster name is provided, searching all namespaces, and clusters are found",
-			cluster:             "my-cluster",
+			cluster:             "raycluster-kuberay",
 			namespace:           nil,
 			allFakeRayClusters:  []runtime.Object{rayCluster},
 			expectedRayClusters: []runtime.Object{rayCluster},
@@ -286,7 +286,7 @@ func TestGetRayClusters(t *testing.T) {
 		},
 		{
 			name:                "should not error if a cluster name is provided, searching one namespace, and clusters are found",
-			cluster:             "my-cluster",
+			cluster:             "raycluster-kuberay",
 			namespace:           &namespace,
 			allFakeRayClusters:  []runtime.Object{rayCluster},
 			expectedRayClusters: []runtime.Object{rayCluster},
@@ -318,7 +318,7 @@ func TestGetRayClusters(t *testing.T) {
 			}
 
 			kubeClientSet := kubefake.NewClientset()
-			rayClient := rayClientFake.NewSimpleClientset(tc.allFakeRayClusters...)
+			rayClient := clienttesting.NewRayClientset(tc.allFakeRayClusters...)
 			k8sClients := client.NewClientForTesting(kubeClientSet, rayClient)
 
 			rayClusters, err := getRayClusters(context.Background(), &fakeClusterGetOptions, k8sClients)
@@ -329,7 +329,7 @@ func TestGetRayClusters(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			assert.Equal(t, len(tc.expectedRayClusters), len(rayClusters.Items))
+			assert.Len(t, rayClusters.Items, len(tc.expectedRayClusters))
 		})
 	}
 }
@@ -411,7 +411,7 @@ func TestPrintClusters(t *testing.T) {
 
 	testResTable.Rows = append(testResTable.Rows,
 		v1.TableRow{
-			Cells: []interface{}{
+			Cells: []any{
 				"barista",
 				"cafe",
 				"2",
@@ -426,7 +426,7 @@ func TestPrintClusters(t *testing.T) {
 			},
 		},
 		v1.TableRow{
-			Cells: []interface{}{
+			Cells: []any{
 				"bartender",
 				"speakeasy",
 				"3",

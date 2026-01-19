@@ -504,7 +504,7 @@ func (options *SubmitJobOptions) Run(ctx context.Context, factory cmdutil.Factor
 		return fmt.Errorf("failed to create Ray submit command with error: %w", err)
 	}
 	fmt.Printf("Ray command: %v\n", raySubmitCmd)
-	cmd := exec.Command(raySubmitCmd[0], raySubmitCmd[1:]...) //nolint:gosec // command is sanitized in raySubmitCmd() and file paths are cleaned in Complete()
+	cmd := exec.CommandContext(ctx, raySubmitCmd[0], raySubmitCmd[1:]...) //nolint:gosec // command is sanitized in raySubmitCmd() and file paths are cleaned in Complete()
 
 	// Get the outputs/pipes for `ray job submit` outputs
 	rayCmdStdOut, err := cmd.StdoutPipe()
@@ -696,7 +696,7 @@ func runtimeEnvHasWorkingDir(runtimePath string) (string, error) {
 		return "", err
 	}
 
-	var runtimeEnvYaml map[string]interface{}
+	var runtimeEnvYaml map[string]any
 	err = yaml.Unmarshal(runtimeEnvFileContent, &runtimeEnvYaml)
 	if err != nil {
 		return "", err

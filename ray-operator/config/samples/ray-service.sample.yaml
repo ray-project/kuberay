@@ -76,11 +76,11 @@ spec:
             image: rayproject/ray:2.52.0
             resources:
               limits:
-                cpu: 2
-                memory: 5Gi
+                cpu: "2"
+                memory: "5Gi"
               requests:
-                cpu: 2
-                memory: 2Gi
+                cpu: "2"
+                memory: "2Gi"
     workerGroupSpecs:
     # the pod replicas in this group typed worker
     - replicas: 1

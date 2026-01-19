@@ -23,10 +23,11 @@ spec:
                 name: ray-cluster-with-auth # change this to match your Secret name
           resources:
             limits:
-              memory: 8G
+              cpu: "4"
+              memory: "8Gi"
             requests:
-              cpu: 4
-              memory: 8G
+              cpu: "4"
+              memory: "8Gi"
           ports:
           - containerPort: 6379
             name: gcs-server
@@ -55,7 +56,8 @@ spec:
                 name: ray-cluster-with-auth # change this to match your Secret name
           resources:
             limits:
-              memory: 8G
+              cpu: "4"
+              memory: "8Gi"
             requests:
-              cpu: 4
-              memory: 8G
+              cpu: "4"
+              memory: "8Gi"

@@ -64,11 +64,11 @@ spec:
             image: rayproject/ray:2.52.0
             resources:
               limits:
-                cpu: 1
-                memory: 2Gi
+                cpu: "1"
+                memory: "5Gi"
               requests:
-                cpu: 1
-                memory: 2Gi
+                cpu: "1"
+                memory: "2Gi"
     workerGroupSpecs:
     # the pod replicas in this group typed worker
     - replicas: 2
@@ -88,11 +88,11 @@ spec:
             image: rayproject/ray:2.52.0
             resources:
               limits:
-                cpu: 1
-                memory: 2Gi
+                cpu: "1"
+                memory: "2Gi"
               requests:
-                cpu: 1
-                memory: 2Gi
+                cpu: "1"
+                memory: "2Gi"
 ---
 kind: ConfigMap
 apiVersion: v1

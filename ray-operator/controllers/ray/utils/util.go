@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -567,12 +568,7 @@ func SumResourceList(list []corev1.ResourceList) corev1.ResourceList {
 }
 
 func Contains(elems []string, searchTerm string) bool {
-	for _, s := range elems {
-		if searchTerm == s {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(elems, searchTerm)
 }
 
 // GetHeadGroupServiceAccountName returns the head group service account if it exists.
@@ -608,7 +604,7 @@ func CheckAllPodsRunning(ctx context.Context, runningPods corev1.PodList) bool {
 }
 
 // CompareJsonStruct This is a way to better compare if two objects are the same when they are json/yaml structs. reflect.DeepEqual will fail in some cases.
-func CompareJsonStruct(objA interface{}, objB interface{}) bool {
+func CompareJsonStruct(objA any, objB any) bool {
 	a, err := json.Marshal(objA)
 	if err != nil {
 		return false
@@ -617,7 +613,7 @@ func CompareJsonStruct(objA interface{}, objB interface{}) bool {
 	if err != nil {
 		return false
 	}
-	var v1, v2 interface{}
+	var v1, v2 any
 	err = json.Unmarshal(a, &v1)
 	if err != nil {
 		return false
@@ -630,7 +626,7 @@ func CompareJsonStruct(objA interface{}, objB interface{}) bool {
 }
 
 // Json-serializes obj and returns its hash string
-func GenerateJsonHash(obj interface{}) (string, error) {
+func GenerateJsonHash(obj any) (string, error) {
 	serialObj, err := json.Marshal(obj)
 	if err != nil {
 		return "", err
@@ -642,6 +638,22 @@ func GenerateJsonHash(obj interface{}) (string, error) {
 	hashStr := base32.HexEncoding.EncodeToString(hashBytes[:])
 
 	return hashStr, nil
+}
+
+func GenerateHashWithoutReplicasAndWorkersToDelete(rayClusterSpec rayv1.RayClusterSpec) (string, error) {
+	// Mute certain fields that will not trigger new RayCluster preparation. For example,
+	// Autoscaler will update `Replicas` and `WorkersToDelete` when scaling up/down.
+	updatedRayClusterSpec := rayClusterSpec.DeepCopy()
+	for i := 0; i < len(updatedRayClusterSpec.WorkerGroupSpecs); i++ {
+		updatedRayClusterSpec.WorkerGroupSpecs[i].Replicas = nil
+		updatedRayClusterSpec.WorkerGroupSpecs[i].MaxReplicas = nil
+		updatedRayClusterSpec.WorkerGroupSpecs[i].MinReplicas = nil
+		updatedRayClusterSpec.WorkerGroupSpecs[i].ScaleStrategy.WorkersToDelete = nil
+	}
+	updatedRayClusterSpec.UpgradeStrategy = nil
+
+	// Generate a hash for the RayClusterSpec.
+	return GenerateJsonHash(updatedRayClusterSpec)
 }
 
 // FindContainerPort searches for a specific port $portName in the container.
@@ -689,7 +701,7 @@ func EnvVarByName(envName string, envVars []corev1.EnvVar) (corev1.EnvVar, bool)
 }
 
 type ClientProvider interface {
-	GetDashboardClient(mgr manager.Manager) func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error)
+	GetDashboardClient(ctx context.Context, mgr manager.Manager) func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error)
 	GetHttpProxyClient(mgr manager.Manager) func(hostIp, podNamespace, podName string, port int) RayHttpProxyClientInterface
 }
 
@@ -787,7 +799,7 @@ func IsIncrementalUpgradeEnabled(spec *rayv1.RayServiceSpec) bool {
 		return false
 	}
 	return spec != nil && spec.UpgradeStrategy != nil &&
-		*spec.UpgradeStrategy.Type == rayv1.NewClusterWithIncrementalUpgrade
+		*spec.UpgradeStrategy.Type == rayv1.RayServiceNewClusterWithIncrementalUpgrade
 }
 
 func GetRayServiceClusterUpgradeOptions(spec *rayv1.RayServiceSpec) *rayv1.ClusterUpgradeOptions {
@@ -920,7 +932,7 @@ func FetchHeadServiceURL(ctx context.Context, cli client.Client, rayCluster *ray
 	return headServiceURL, nil
 }
 
-func GetRayDashboardClientFunc(mgr manager.Manager, useKubernetesProxy bool) func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error) {
+func GetRayDashboardClientFunc(ctx context.Context, mgr manager.Manager, useKubernetesProxy bool) func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error) {
 	return func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error) {
 		dashboardClient := &dashboardclient.RayDashboardClient{}
 		var authToken string
@@ -963,17 +975,21 @@ func GetRayDashboardClientFunc(mgr manager.Manager, useKubernetesProxy bool) fun
 				fmt.Sprintf("%s/api/v1/namespaces/%s/services/%s:dashboard/proxy", mgr.GetConfig().Host, rayCluster.Namespace, headSvcName),
 				authToken,
 			)
-			return dashboardClient, nil
+		} else {
+			dashboardClient.InitClient(&http.Client{
+				Timeout: 2 * time.Second,
+			}, "http://"+url, authToken)
 		}
 
-		dashboardClient.InitClient(
-			&http.Client{
-				Timeout: 2 * time.Second,
-			},
-			"http://"+url,
-			authToken,
-		)
-
+		if features.Enabled(features.AsyncJobInfoQuery) && rayCluster != nil {
+			namespacedName := types.NamespacedName{
+				Name:      rayCluster.Name,
+				Namespace: rayCluster.Namespace,
+			}
+			dashboardCachedClient := &dashboardclient.RayDashboardCacheClient{}
+			dashboardCachedClient.InitClient(ctx, namespacedName, dashboardClient)
+			return dashboardCachedClient, nil
+		}
 		return dashboardClient, nil
 	}
 }

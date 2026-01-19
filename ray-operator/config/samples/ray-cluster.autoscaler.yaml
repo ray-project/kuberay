@@ -73,10 +73,10 @@ spec:
           resources:
             limits:
               cpu: "1"
-              memory: "2G"
+              memory: "5Gi"
             requests:
               cpu: "1"
-              memory: "2G"
+              memory: "2Gi"
           volumeMounts:
           - mountPath: /home/ray/samples
             name: ray-example-configmap
@@ -115,10 +115,10 @@ spec:
           resources:
             limits:
               cpu: "1"
-              memory: "1G"
+              memory: "1Gi"
             requests:
               cpu: "1"
-              memory: "1G"
+              memory: "1Gi"
 ---
 apiVersion: v1
 kind: ConfigMap

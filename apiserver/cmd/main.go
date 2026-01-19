@@ -82,7 +82,8 @@ type RegisterHttpHandlerFromEndpoint func(ctx context.Context, mux *runtime.Serv
 func startRPCServer(resourceManager *manager.ResourceManager, grpcTimeout time.Duration) {
 	klog.Infof("Starting gRPC server at port %s", *rpcPortFlag)
 
-	listener, err := net.Listen("tcp", *rpcPortFlag)
+	lc := net.ListenConfig{}
+	listener, err := lc.Listen(context.Background(), "tcp", *rpcPortFlag)
 	if err != nil {
 		klog.Fatalf("Failed to start GPRC server: %v", err)
 	}

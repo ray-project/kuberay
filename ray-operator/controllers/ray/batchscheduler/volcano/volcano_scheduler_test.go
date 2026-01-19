@@ -2,6 +2,7 @@ package volcano
 
 import (
 	"context"
+	"maps"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -213,9 +214,7 @@ func createTestRayClusterWithLabels(labels map[string]string) rayv1.RayCluster {
 	if cluster.ObjectMeta.Labels == nil {
 		cluster.ObjectMeta.Labels = make(map[string]string)
 	}
-	for k, v := range labels {
-		cluster.ObjectMeta.Labels[k] = v
-	}
+	maps.Copy(cluster.ObjectMeta.Labels, labels)
 	return cluster
 }
 

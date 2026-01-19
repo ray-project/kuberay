@@ -2,7 +2,9 @@ package ray
 
 import (
 	"context"
+	errs "errors"
 	"fmt"
+	"maps"
 	"os"
 	"strconv"
 	"strings"
@@ -42,11 +44,10 @@ const (
 // RayJobReconciler reconciles a RayJob object
 type RayJobReconciler struct {
 	client.Client
-	Scheme   *runtime.Scheme
-	Recorder record.EventRecorder
-
-	dashboardClientFunc func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error)
+	Recorder            record.EventRecorder
 	options             RayJobReconcilerOptions
+	Scheme              *runtime.Scheme
+	dashboardClientFunc func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error)
 }
 
 type RayJobReconcilerOptions struct {
@@ -55,8 +56,8 @@ type RayJobReconcilerOptions struct {
 }
 
 // NewRayJobReconciler returns a new reconcile.Reconciler
-func NewRayJobReconciler(_ context.Context, mgr manager.Manager, options RayJobReconcilerOptions, provider utils.ClientProvider) *RayJobReconciler {
-	dashboardClientFunc := provider.GetDashboardClient(mgr)
+func NewRayJobReconciler(ctx context.Context, mgr manager.Manager, options RayJobReconcilerOptions, provider utils.ClientProvider) *RayJobReconciler {
+	dashboardClientFunc := provider.GetDashboardClient(ctx, mgr)
 	return &RayJobReconciler{
 		Client:              mgr.GetClient(),
 		Scheme:              mgr.GetScheme(),
@@ -118,6 +119,13 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			rayClusterInstance := &rayv1.RayCluster{}
 			if err := r.Get(ctx, rayClusterNamespacedName, rayClusterInstance); err != nil {
 				logger.Error(err, "Failed to get RayCluster")
+
+				if features.Enabled(features.AsyncJobInfoQuery) {
+					// If the RayCluster is already deleted, we provide the name and namespace to the RayClusterInstance
+					// for the dashboard client to remove cache correctly.
+					rayClusterInstance.Name = rayClusterNamespacedName.Name
+					rayClusterInstance.Namespace = rayClusterNamespacedName.Namespace
+				}
 			}
 
 			rayDashboardClient, err := r.dashboardClientFunc(rayClusterInstance, rayJobInstance.Status.DashboardURL)
@@ -288,6 +296,10 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 
 		jobInfo, err := rayDashboardClient.GetJobInfo(ctx, rayJobInstance.Status.JobId)
 		if err != nil {
+			if errs.Is(err, dashboardclient.ErrAgain) {
+				logger.Info("The Ray job info was not ready. Try again next iteration.", "JobId", rayJobInstance.Status.JobId)
+				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
+			}
 			// If the Ray job was not found, GetJobInfo returns a BadRequest error.
 			if errors.IsBadRequest(err) {
 				if rayJobInstance.Spec.SubmissionMode == rayv1.HTTPMode {
@@ -568,7 +580,7 @@ func getSubmitterTemplate(rayJobInstance *rayv1.RayJob, rayClusterInstance *rayv
 
 // getSubmitterContainer builds the submitter container for the Ray job Sidecar mode.
 func getSubmitterContainer(rayJobInstance *rayv1.RayJob, rayClusterInstance *rayv1.RayCluster) (corev1.Container, error) {
-	var submitterContainer corev1.Container = common.GetDefaultSubmitterContainer(&rayClusterInstance.Spec)
+	submitterContainer := common.GetDefaultSubmitterContainer(&rayClusterInstance.Spec)
 
 	if err := configureSubmitterContainer(&submitterContainer, rayJobInstance, rayClusterInstance, rayv1.SidecarMode); err != nil {
 		return corev1.Container{}, err
@@ -904,6 +916,7 @@ func (r *RayJobReconciler) getOrCreateRayClusterInstance(ctx context.Context, ra
 			if err != nil {
 				return nil, err
 			}
+
 			if r.options.BatchSchedulerManager != nil && rayJobInstance.Spec.SubmissionMode == rayv1.K8sJobMode {
 				if scheduler, err := r.options.BatchSchedulerManager.GetScheduler(); err == nil {
 					// Group name is only used for individual pods to specify their task group ("headgroup", "worker-group-1", etc.).
@@ -935,15 +948,21 @@ func (r *RayJobReconciler) getOrCreateRayClusterInstance(ctx context.Context, ra
 
 func (r *RayJobReconciler) constructRayClusterForRayJob(rayJobInstance *rayv1.RayJob, rayClusterName string) (*rayv1.RayCluster, error) {
 	labels := make(map[string]string, len(rayJobInstance.Labels))
-	for key, value := range rayJobInstance.Labels {
-		labels[key] = value
-	}
+	maps.Copy(labels, rayJobInstance.Labels)
 	labels[utils.RayOriginatedFromCRNameLabelKey] = rayJobInstance.Name
 	labels[utils.RayOriginatedFromCRDLabelKey] = utils.RayOriginatedFromCRDLabelValue(utils.RayJobCRD)
+	labels[utils.RayJobSubmissionModeLabelKey] = string(rayJobInstance.Spec.SubmissionMode)
+
+	annotations := make(map[string]string, len(rayJobInstance.Annotations))
+	maps.Copy(annotations, rayJobInstance.Annotations)
+	if rayJobInstance.Spec.SubmissionMode == rayv1.SidecarMode {
+		annotations[utils.DisableProvisionedHeadRestartAnnotationKey] = "true"
+	}
+
 	rayCluster := &rayv1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Labels:      labels,
-			Annotations: rayJobInstance.Annotations,
+			Annotations: annotations,
 			Name:        rayClusterName,
 			Namespace:   rayJobInstance.Namespace,
 		},

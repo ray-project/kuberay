@@ -24,10 +24,14 @@ const (
 	RayClusterServingServiceLabelKey         = "ray.io/serve"
 	RayClusterHeadlessServiceLabelKey        = "ray.io/headless-worker-svc"
 	HashWithoutReplicasAndWorkersToDeleteKey = "ray.io/hash-without-replicas-and-workers-to-delete"
+	UpgradeStrategyRecreateHashKey           = "ray.io/upgrade-strategy-recreate-hash"
 	NumWorkerGroupsKey                       = "ray.io/num-worker-groups"
 	KubeRayVersion                           = "ray.io/kuberay-version"
 	RayCronJobNameLabelKey                   = "ray.io/cronjob-name"
 	RayCronJobTimestampAnnotationKey         = "ray.io/cronjob-scheduled-timestamp"
+	RayJobSubmissionModeLabelKey             = "ray.io/job-submission-mode"
+	// DisableProvisionedHeadRestartAnnotationKey marks RayClusters created for sidecar-mode RayJobs to skip head Pod recreation after provisioning.
+	DisableProvisionedHeadRestartAnnotationKey = "ray.io/disable-provisioned-head-restart"
 
 	// Labels for feature RayMultihostIndexing
 	//
@@ -48,7 +52,6 @@ const (
 
 	// Batch scheduling labels
 	// TODO(tgaddair): consider making these part of the CRD
-	RaySchedulerName         = "ray.io/scheduler-name"
 	RayPriorityClassName     = "ray.io/priority-class-name"
 	RayGangSchedulingEnabled = "ray.io/gang-scheduling-enabled"
 
@@ -357,6 +360,7 @@ const (
 
 	// RayCronJob event list
 	InvalidRayCronJobSpec K8sEventType = "InvalidRayCronJobSpec"
+	SuspendedRayCronJob   K8sEventType = "SuspendedRayCronJob"
 
 	// RayService event list
 	CreatedGateway                  K8sEventType = "CreatedGateway"

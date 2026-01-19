@@ -41,7 +41,7 @@ type RayJobSubmissionServiceServer struct {
 // Create RayJobSubmissionServiceServer
 func NewRayJobSubmissionServiceServer(clusterServer *ClusterServer, options *RayJobSubmissionServiceServerOptions) *RayJobSubmissionServiceServer {
 	zl := zerolog.New(os.Stdout).Level(zerolog.DebugLevel)
-	return &RayJobSubmissionServiceServer{clusterServer: clusterServer, options: options, log: zerologr.New(&zl).WithName("jobsubmissionservice"), dashboardClientFunc: utils.GetRayDashboardClientFunc(nil, false)}
+	return &RayJobSubmissionServiceServer{clusterServer: clusterServer, options: options, log: zerologr.New(&zl).WithName("jobsubmissionservice"), dashboardClientFunc: utils.GetRayDashboardClientFunc(context.Background(), nil, false)}
 }
 
 // Submit Ray job
@@ -68,7 +68,7 @@ func (s *RayJobSubmissionServiceServer) SubmitRayJob(ctx context.Context, req *a
 		if err != nil {
 			return nil, err
 		}
-		re := make(map[string]interface{})
+		re := make(map[string]any)
 		err = json.Unmarshal(jsonData, &re)
 		if err != nil {
 			return nil, err

@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"context"
 	"encoding/json"
 	"math/rand"
 	"os/exec"
@@ -28,11 +29,11 @@ func createTestNamespace() string {
 	GinkgoHelper()
 	suffix := randStringBytes(5)
 	ns := "test-ns-" + suffix
-	cmd := exec.Command("kubectl", "create", "namespace", ns)
+	cmd := exec.CommandContext(context.Background(), "kubectl", "create", "namespace", ns)
 	err := cmd.Run()
 	Expect(err).NotTo(HaveOccurred())
 	nsWithPrefix := "namespace/" + ns
-	cmd = exec.Command("kubectl", "wait", "--timeout=20s", "--for", "jsonpath={.status.phase}=Active", nsWithPrefix)
+	cmd = exec.CommandContext(context.Background(), "kubectl", "wait", "--timeout=20s", "--for", "jsonpath={.status.phase}=Active", nsWithPrefix)
 	err = cmd.Run()
 	Expect(err).NotTo(HaveOccurred())
 	return ns
@@ -40,7 +41,7 @@ func createTestNamespace() string {
 
 func deleteTestNamespace(ns string) {
 	GinkgoHelper()
-	cmd := exec.Command("kubectl", "delete", "namespace", ns)
+	cmd := exec.CommandContext(context.Background(), "kubectl", "delete", "namespace", ns)
 	err := cmd.Run()
 	Expect(err).NotTo(HaveOccurred())
 }
@@ -48,10 +49,10 @@ func deleteTestNamespace(ns string) {
 func deployTestRayCluster(ns string) {
 	GinkgoHelper()
 	// Print current working directory
-	cmd := exec.Command("kubectl", "apply", "-f", "../../../ray-operator/config/samples/ray-cluster.sample.yaml", "-n", ns)
+	cmd := exec.CommandContext(context.Background(), "kubectl", "apply", "-f", "../../../ray-operator/config/samples/ray-cluster.sample.yaml", "-n", ns)
 	err := cmd.Run()
 	Expect(err).NotTo(HaveOccurred())
-	cmd = exec.Command("kubectl", "wait", "--timeout=300s", "--for", "jsonpath={.status.state}=ready", "raycluster/raycluster-kuberay", "-n", ns)
+	cmd = exec.CommandContext(context.Background(), "kubectl", "wait", "--timeout=300s", "--for", "jsonpath={.status.state}=ready", "raycluster/raycluster-kuberay", "-n", ns)
 	err = cmd.Run()
 	Expect(err).NotTo(HaveOccurred())
 }
@@ -65,7 +66,7 @@ func getAndCheckRayJob(
 	expectedJobDeploymentStatus string,
 ) (rayjob rayv1.RayJob) {
 	GinkgoHelper()
-	cmd := exec.Command("kubectl", "get", "--namespace", namespace, "rayjob", name, "-o", "json")
+	cmd := exec.CommandContext(context.Background(), "kubectl", "get", "--namespace", namespace, "rayjob", name, "-o", "json")
 	output, err := cmd.CombinedOutput()
 	Expect(err).ToNot(HaveOccurred())
 
@@ -88,17 +89,17 @@ func getWorkerGroupValues(ns, cluster, group string) (minReplicas, maxReplicas, 
 	}
 
 	//nolint:gosec // G204: group parameter is controlled by test code, not user input
-	minOut, err := exec.Command("kubectl", "get", "raycluster", cluster, "-n", ns,
+	minOut, err := exec.CommandContext(context.Background(), "kubectl", "get", "raycluster", cluster, "-n", ns,
 		"-o", "jsonpath={.spec.workerGroupSpecs[?(@.groupName==\""+group+"\")].minReplicas}").Output()
 	Expect(err).ToNot(HaveOccurred())
 
 	//nolint:gosec // G204: group parameter is controlled by test code, not user input
-	maxOut, err := exec.Command("kubectl", "get", "raycluster", cluster, "-n", ns,
+	maxOut, err := exec.CommandContext(context.Background(), "kubectl", "get", "raycluster", cluster, "-n", ns,
 		"-o", "jsonpath={.spec.workerGroupSpecs[?(@.groupName==\""+group+"\")].maxReplicas}").Output()
 	Expect(err).ToNot(HaveOccurred())
 
 	//nolint:gosec // G204: group parameter is controlled by test code, not user input
-	replicasOut, err := exec.Command("kubectl", "get", "raycluster", cluster, "-n", ns,
+	replicasOut, err := exec.CommandContext(context.Background(), "kubectl", "get", "raycluster", cluster, "-n", ns,
 		"-o", "jsonpath={.spec.workerGroupSpecs[?(@.groupName==\""+group+"\")].replicas}").Output()
 	Expect(err).ToNot(HaveOccurred())
 	return clean(string(minOut)), clean(string(maxOut)), clean(string(replicasOut))

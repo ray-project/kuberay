@@ -28,10 +28,10 @@ spec:
             resources:
               limits:
                 cpu: "2"
-                memory: "8G"
+                memory: "8Gi"
               requests:
                 cpu: "2"
-                memory: "8G"
+                memory: "8Gi"
           volumes:
           - name: ray-logs
             emptyDir: {}
@@ -50,13 +50,13 @@ spec:
             image: rayproject/ray-ml:2.46.0.0e19ea-py39-gpu
             resources:
               limits:
-                cpu: 4
-                memory: "16G"
-                nvidia.com/gpu: 1
+                cpu: "4"
+                memory: "16Gi"
+                nvidia.com/gpu: "1"
               requests:
-                cpu: 3
-                memory: "12G"
-                nvidia.com/gpu: 1
+                cpu: "3"
+                memory: "12Gi"
+                nvidia.com/gpu: "1"
           # Please add the following taints to the GPU node.
           tolerations:
           - key: "ray.io/node-type"

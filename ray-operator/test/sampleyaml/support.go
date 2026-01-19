@@ -2,6 +2,7 @@ package sampleyaml
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -43,9 +44,7 @@ func SubmitJobsToAllPods(t Test, rayCluster *rayv1.RayCluster) func(Gomega) {
 
 func getApps(rayService *rayv1.RayService) map[string]rayv1.AppStatus {
 	apps := make(map[string]rayv1.AppStatus)
-	for k, v := range rayService.Status.ActiveServiceStatus.Applications {
-		apps[k] = v
-	}
+	maps.Copy(apps, rayService.Status.ActiveServiceStatus.Applications)
 	return apps
 }
 
@@ -75,7 +74,7 @@ func QueryDashboardGetAppStatus(t Test, rayCluster *rayv1.RayCluster) func(Gomeg
 
 		g.Expect(err).ToNot(HaveOccurred())
 		url := fmt.Sprintf("127.0.0.1:%d", localPort)
-		rayDashboardClientFunc := utils.GetRayDashboardClientFunc(nil, false)
+		rayDashboardClientFunc := utils.GetRayDashboardClientFunc(t.Ctx(), nil, false)
 		rayDashboardClient, err := rayDashboardClientFunc(rayCluster, url)
 		g.Expect(err).ToNot(HaveOccurred())
 		serveDetails, err := rayDashboardClient.GetServeDetails(t.Ctx())
