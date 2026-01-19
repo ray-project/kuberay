@@ -408,8 +408,69 @@ func (s *ServerHandler) getClusterStatus(req *restful.Request, resp *restful.Res
 		return
 	}
 
-	// Return "not yet supported" for cluster status
-	resp.WriteErrorString(http.StatusNotImplemented, "Cluster status not yet supported")
+	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
+	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
+	clusterNameID := clusterName + "_" + clusterNamespace
+
+	tasks := s.eventHandler.GetTasks(clusterNameID)
+	actors := s.eventHandler.GetActors(clusterNameID)
+	nodes := s.eventHandler.GetNodes(clusterNameID)
+
+	activeNodes, failedNodes, totalResources, latestNodeTimestamp := CalculateNodeStats(nodes)
+	usedResources := CalculateUsedResources(tasks, actors)
+	availableResources := CalculateAvailableResources(totalResources, usedResources)
+
+	resourceDemands := CalculateResourceDemands(tasks, actors)
+
+	autoscalingStatus := FormatAutoscalingStatus(
+		activeNodes,
+		failedNodes,
+		usedResources,
+		totalResources,
+		resourceDemands,
+		latestNodeTimestamp,
+	)
+
+	autoscalingError := s.eventHandler.GetAutoscalerErrors(clusterNameID, sessionName)
+
+	// Convert resource demands to interface slice for JSON response
+	resourceDemandList := make([]interface{}, 0, len(resourceDemands))
+	for _, demand := range resourceDemands {
+		resourceDemandList = append(resourceDemandList, map[string]interface{}{
+			"resources": demand.Resources,
+			"count":     demand.Count,
+		})
+	}
+
+	response := ClusterStatusResponse{
+		Result: true,
+		Msg:    "Got cluster status.", // TODO Hardcoded
+		Data: ClusterStatusData{
+			AutoscalingStatus: &autoscalingStatus,
+			AutoscalingError:  autoscalingError,
+			ClusterStatus: &ClusterStatus{
+				ActiveNodes:  activeNodes,
+				PendingNodes: []string{}, // TODO Node events don't have pending state
+				FailedNodes:  failedNodes,
+				LoadMetricsReport: LoadMetricsReport{
+					UsedResources:               usedResources,
+					TotalResources:              totalResources,
+					AvailableResources:          availableResources,
+					ResourceDemand:              resourceDemandList,
+					ResourceDemandSummary:       resourceDemandList, // TODO Same as ResourceDemand for now
+					PlacementGroupDemandSummary: []interface{}{},    // TODO
+				},
+			},
+		},
+	}
+
+	respData, err := json.Marshal(response)
+	if err != nil {
+		logrus.Errorf("Failed to marshal cluster status response: %v", err)
+		resp.WriteErrorString(http.StatusInternalServerError, err.Error())
+		return
+	}
+	resp.Write(respData)
 }
 
 func (s *ServerHandler) getNodeLogs(req *restful.Request, resp *restful.Response) {

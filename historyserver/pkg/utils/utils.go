@@ -240,3 +240,17 @@ func GetRayNodeID() (string, error) {
 	}
 	return "", fmt.Errorf("timeout --node_id= not found")
 }
+
+// FormatBytes formats bytes to human readable string
+func FormatBytes(bytes float64) string {
+	const unit = 1024
+	if bytes < unit {
+		return fmt.Sprintf("%.0fB", bytes)
+	}
+	div, exp := float64(unit), 0
+	for n := bytes / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.2f%ciB", bytes/div, "KMGTPE"[exp])
+}
