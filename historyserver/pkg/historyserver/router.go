@@ -24,7 +24,22 @@ const (
 	COOKIE_DASHBOARD_VERSION_KEY = "dashboard_version"
 
 	ATTRIBUTE_SERVICE_NAME = "cluster_service_name"
+
+	// DEFAULT_NODES_VIEW is the default value for the view query parameter in the nodes endpoint.
+	// The Ray Dashboard requires this parameter and defaults to "summary" if not provided.
+	// Ref: https://github.com/ray-project/ray/blob/d2b55a4b13ffe4670b9415ef2e7e11fbcc20e11a/python/ray/dashboard/client/src/service/node.ts#L4-L6
+	DEFAULT_NODES_VIEW = "summary"
 )
+
+func defaultViewParam(req *restful.Request, resp *restful.Response, chain *restful.FilterChain) {
+	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
+	if sessionName == "live" && req.QueryParameter("view") == "" {
+		q := req.Request.URL.Query()
+		q.Set("view", DEFAULT_NODES_VIEW)
+		req.Request.URL.RawQuery = q.Encode()
+	}
+	chain.ProcessFilter(req, resp)
+}
 
 func RequestLogFilter(req *restful.Request, resp *restful.Response, chain *restful.FilterChain) {
 	logrus.Infof("Received request: %s %s", req.Request.Method, req.Request.URL.String())
@@ -45,7 +60,7 @@ func routerNodes(s *ServerHandler) {
 	ws := new(restful.WebService)
 	defer restful.Add(ws)
 	ws.Path("/nodes").Consumes(restful.MIME_JSON).Produces(restful.MIME_JSON) //.Filter(s.loginWrapper)
-	ws.Route(ws.GET("/").To(s.getNodes).Filter(s.CookieHandle).
+	ws.Route(ws.GET("/").To(s.getNodes).Filter(s.CookieHandle).Filter(defaultViewParam).
 		Doc("get nodes for a given clusters").Param(ws.QueryParameter("view", "such as summary")).
 		Writes(""))
 	ws.Route(ws.GET("/{node_id}").To(s.getNode).Filter(s.CookieHandle).
@@ -298,13 +313,6 @@ func (s *ServerHandler) getClusters(req *restful.Request, resp *restful.Response
 func (s *ServerHandler) getNodes(req *restful.Request, resp *restful.Response) {
 	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
 	if sessionName == "live" {
-		// Ray Dashboard requires view parameter, default to "summary" if not provided
-		// ref: https://github.com/ray-project/ray/blob/d2b55a4b13ffe4670b9415ef2e7e11fbcc20e11a/python/ray/dashboard/client/src/service/node.ts#L4-L6
-		if req.QueryParameter("view") == "" {
-			q := req.Request.URL.Query()
-			q.Set("view", "summary")
-			req.Request.URL.RawQuery = q.Encode()
-		}
 		s.redirectRequest(req, resp)
 		return
 	}
