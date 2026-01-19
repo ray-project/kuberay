@@ -230,6 +230,10 @@ func (r *RayLogsHandler) GetContent(clusterId string, fileName string) io.Reader
 
 	resp, err := blobClient.DownloadStream(ctx, nil)
 	if err != nil {
+		// Close the response body if it exists to prevent connection leak
+		if resp.Body != nil {
+			resp.Body.Close()
+		}
 		logrus.Errorf("Failed to get blob %s: %v", fullPath, err)
 
 		// Try to find the file by listing
@@ -242,6 +246,9 @@ func (r *RayLogsHandler) GetContent(clusterId string, fileName string) io.Reader
 				blobClient = r.ContainerClient.NewBlobClient(f)
 				resp, err = blobClient.DownloadStream(ctx, nil)
 				if err != nil {
+					if resp.Body != nil {
+						resp.Body.Close()
+					}
 					logrus.Errorf("Failed to get blob %s: %v", f, err)
 					return nil
 				}
@@ -254,9 +261,9 @@ func (r *RayLogsHandler) GetContent(clusterId string, fileName string) io.Reader
 			return nil
 		}
 	}
+	defer resp.Body.Close()
 
 	data, err := io.ReadAll(resp.Body)
-	resp.Body.Close()
 	if err != nil {
 		logrus.Errorf("Failed to read all data from blob %s: %v", fileName, err)
 		return nil
