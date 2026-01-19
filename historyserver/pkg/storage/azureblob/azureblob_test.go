@@ -119,35 +119,17 @@ func TestCreateDirectory(t *testing.T) {
 
 	handler := setupTestHandler(t, containerName)
 
-	tests := []struct {
-		name    string
-		dirPath string
-		wantErr bool
-	}{
-		{
-			name:    "create simple directory",
-			dirPath: "testdir",
-			wantErr: false,
-		},
-		{
-			name:    "create nested directory",
-			dirPath: "parent/child/grandchild",
-			wantErr: false,
-		},
-		{
-			name:    "create directory with trailing slash",
-			dirPath: "anotherdir/",
-			wantErr: false,
-		},
+	// CreateDirectory is a no-op for Azure Blob Storage.
+	// Azure automatically handles virtual directories based on blob paths.
+	// We just verify it doesn't error.
+	err := handler.CreateDirectory("testdir")
+	if err != nil {
+		t.Errorf("CreateDirectory() should be a no-op but got error: %v", err)
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := handler.CreateDirectory(tt.dirPath)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("CreateDirectory() error = %v, wantErr %v", err, tt.wantErr)
-			}
-		})
+	err = handler.CreateDirectory("parent/child/grandchild")
+	if err != nil {
+		t.Errorf("CreateDirectory() should be a no-op but got error: %v", err)
 	}
 }
 

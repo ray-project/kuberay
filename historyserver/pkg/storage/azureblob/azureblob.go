@@ -54,25 +54,10 @@ type RayLogsHandler struct {
 }
 
 func (r *RayLogsHandler) CreateDirectory(d string) error {
-	objectDir := fmt.Sprintf("%s/", path.Clean(d))
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	blobClient := r.ContainerClient.NewBlockBlobClient(objectDir)
-
-	// Check if directory marker exists
-	_, err := blobClient.GetProperties(ctx, nil)
-	if err != nil {
-		// Directory doesn't exist, create it
-		logrus.Infof("Begin to create azure blob dir %s ...", objectDir)
-		_, err = blobClient.UploadBuffer(ctx, []byte{}, nil)
-		if err != nil {
-			logrus.Errorf("Failed to create directory '%s': %v", objectDir, err)
-			return err
-		}
-		logrus.Infof("Create azure blob dir %s success", objectDir)
-	}
+	// Azure Blob Storage doesn't require explicit directory markers.
+	// Virtual directories are automatically inferred from blob paths.
+	// Creating empty marker blobs causes "<no name>" display issues
+	// in Azure Storage Explorer.
 	return nil
 }
 
