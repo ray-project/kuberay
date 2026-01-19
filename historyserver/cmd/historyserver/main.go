@@ -21,14 +21,16 @@ func main() {
 	kubeconfigs := ""
 	runtimeClassConfigPath := "/var/collector-config/data"
 	dashboardDir := ""
+	useKubernetesProxy := false
 	flag.StringVar(&runtimeClassName, "runtime-class-name", "", "")
 	flag.StringVar(&rayRootDir, "ray-root-dir", "", "")
 	flag.StringVar(&kubeconfigs, "kubeconfigs", "", "")
 	flag.StringVar(&dashboardDir, "dashboard-dir", "/dashboard", "")
 	flag.StringVar(&runtimeClassConfigPath, "runtime-class-config-path", "", "") //"/var/collector-config/data"
+	flag.BoolVar(&useKubernetesProxy, "use-kubernetes-proxy", false, "")
 	flag.Parse()
 
-	cliMgr := historyserver.NewClientManager(kubeconfigs)
+	cliMgr := historyserver.NewClientManager(kubeconfigs, useKubernetesProxy)
 
 	jsonData := make(map[string]interface{})
 	if runtimeClassConfigPath != "" {
@@ -75,7 +77,7 @@ func main() {
 		logrus.Info("EventHandler shutdown complete")
 	}()
 
-	handler := historyserver.NewServerHandler(&globalConfig, dashboardDir, reader, cliMgr, eventHandler)
+	handler := historyserver.NewServerHandler(&globalConfig, dashboardDir, reader, cliMgr, eventHandler, useKubernetesProxy)
 
 	sigChan := make(chan os.Signal, 1)
 	stop := make(chan struct{}, 1)

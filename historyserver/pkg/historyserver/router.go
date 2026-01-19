@@ -273,26 +273,23 @@ func (s *ServerHandler) redirectRequest(req *restful.Request, resp *restful.Resp
 	svcInfo := req.Attribute(ATTRIBUTE_SERVICE_NAME).(ServiceInfo)
 
 	var targetURL string
-	var clientToUse *http.Client
-
-	if s.useK8sProxy && s.k8sRestConfig != nil && s.k8sHTTPClient != nil {
+	if s.useKubernetesProxy {
+		// Use Kubernetes API server proxy to access the in-cluster RayDashboard services.
 		targetURL = fmt.Sprintf("%s/api/v1/namespaces/%s/services/%s:dashboard/proxy%s",
-			s.k8sRestConfig.Host,
+			s.clientManager.configs[0].Host,
 			svcInfo.Namespace,
 			svcInfo.ServiceName,
 			req.Request.URL.String())
-
-		clientToUse = s.k8sHTTPClient
-		logrus.Debugf("Using Kubernetes proxy to access service %s/%s: %s",
+		logrus.Infof("Using Kubernetes API server proxy to access service %s/%s: %s",
 			svcInfo.Namespace, svcInfo.ServiceName, req.Request.URL.String())
 	} else {
 		// Connect through in-cluster service discovery.
 		targetURL = fmt.Sprintf("http://%s:%d%s", svcInfo.ServiceName, svcInfo.Port, req.Request.URL.String())
-		clientToUse = s.httpClient
-		logrus.Debugf("Using direct connection to access service %s/%s: %s",
+		logrus.Infof("Using in-cluster service discovery to access service %s/%s: %s",
 			svcInfo.Namespace, svcInfo.ServiceName, req.Request.URL.String())
 	}
 
+	// Create a new request to the target URL.
 	proxyReq, err := http.NewRequest(req.Request.Method, targetURL, req.Request.Body)
 	if err != nil {
 		logrus.Errorf("Failed to create proxy request: %v", err)
@@ -300,15 +297,18 @@ func (s *ServerHandler) redirectRequest(req *restful.Request, resp *restful.Resp
 		return
 	}
 
+	// Copy headers from original request to proxy request.
 	for key, values := range req.Request.Header {
 		if strings.ToLower(key) != "host" {
 			for _, value := range values {
-				proxyReq.Header.Set(key, value)
+				// Use Add() to preserve multiple values for the same header key.
+				proxyReq.Header.Add(key, value)
 			}
 		}
 	}
 
-	remoteResp, err := clientToUse.Do(proxyReq)
+	// Send the proxy request to the target URL.
+	remoteResp, err := s.httpClient.Do(proxyReq)
 	if err != nil {
 		logrus.Errorf("Failed to proxy request to %s: %v", targetURL, err)
 		resp.WriteError(http.StatusBadGateway, err)
@@ -316,17 +316,17 @@ func (s *ServerHandler) redirectRequest(req *restful.Request, resp *restful.Resp
 	}
 	defer remoteResp.Body.Close()
 
-	// Copy headers from remote response
+	// Copy headers from remote response.
 	for key, values := range remoteResp.Header {
 		for _, value := range values {
 			resp.Header().Add(key, value)
 		}
 	}
 
-	// Set status code
+	// Set status code.
 	resp.WriteHeader(remoteResp.StatusCode)
 
-	// Copy response body
+	// Copy response body.
 	_, err = io.Copy(resp, remoteResp.Body)
 	if err != nil {
 		logrus.Errorf("Failed to copy response body: %v", err)

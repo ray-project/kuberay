@@ -36,7 +36,7 @@ func (c *ClientManager) ListRayClusters(ctx context.Context) ([]*rayv1.RayCluste
 	return list, nil
 }
 
-func NewClientManager(kubeconfigs string) *ClientManager {
+func NewClientManager(kubeconfigs string, useKubernetesProxy bool) *ClientManager {
 	kubeconfigList := []*rest.Config{}
 	if len(kubeconfigs) > 0 {
 		stringList := strings.Split(kubeconfigs, ",")
@@ -60,28 +60,27 @@ func NewClientManager(kubeconfigs string) *ClientManager {
 			}
 		}
 	} else {
-		loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
-		configOverrides := &clientcmd.ConfigOverrides{}
-		clientConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, configOverrides)
-
-		c, err := clientConfig.ClientConfig()
-		if err != nil {
-			logrus.Errorf("Failed to load default kubeconfig, trying in-cluster config: %v", err)
-			c, err := rest.InClusterConfig()
+		var c *rest.Config
+		var err error
+		if useKubernetesProxy {
+			// Load Kubernetes REST config from default kubeconfig locations (KUBECONFIG environment variable or ~/.kube/config)
+			// without interactive prompts.
+			loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
+			configOverrides := &clientcmd.ConfigOverrides{}
+			clientConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, configOverrides)
+			c, err = clientConfig.ClientConfig()
 			if err != nil {
-				logrus.Errorf("Failed to build config from both default kubeconfig and in-cluster config: %v", err)
-			} else {
-				c.QPS = 50
-				c.Burst = 100
-				kubeconfigList = append(kubeconfigList, c)
-				logrus.Infof("add config from in cluster config")
+				logrus.Errorf("Failed to load default kubeconfig in Kubernetes proxy mode: %v", err)
 			}
 		} else {
-			c.QPS = 50
-			c.Burst = 100
-			kubeconfigList = append(kubeconfigList, c)
-			logrus.Infof("[LOCAL DEV MODE] add config from default kubeconfig")
+			c, err = rest.InClusterConfig()
+			if err != nil {
+				logrus.Errorf("Failed to build config from in-cluster kubeconfig: %v", err)
+			}
 		}
+		c.QPS = 50
+		c.Burst = 100
+		kubeconfigList = append(kubeconfigList, c)
 	}
 	scheme := runtime.NewScheme()
 	utilruntime.Must(rayv1.AddToScheme(scheme))
