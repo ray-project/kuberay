@@ -20,24 +20,31 @@ kind create cluster --image=kindest/node:v1.27.0
 Build and deploy the KubeRay operator (binary or deployment). For details, please refer to the
 [ray-operator development guide](https://github.com/ray-project/kuberay/blob/master/ray-operator/DEVELOPMENT.md#run-the-operator-inside-the-cluster).
 
-### 3. Deploy MinIO
+### 3. Deploy & Access MinIO
 
 ```bash
 kubectl apply -f historyserver/config/minio.yaml
 ```
+
+Use the following command to port-forward the console and API ports. The API port is required only when running the
+history server outside the kind cluster.
+
+```bash
+kubectl --namespace minio-dev port-forward svc/minio-service 9001:9001 9000:9000
+```
+
+> [!NOTE]
+> Get the correct session directory from MinIO console.
+> Login: `minioadmin` / `minioadmin`
+> See: [MinIO Setup Guide](./set_up_collector.md#deploy-minio-for-log-and-event-storage)
 
 ### 4. Build and Load Collector & History Server Images
 
 If you'd like to run the history server outside the Kind cluster, you don't need to build the history server image.
 
 ```bash
-cd historyserver
-
-# (Optional) Build the hisotry server image if you want to deploy it in the Kind cluster.
-make localimage-historyserver
+make -C historyserver localimage-build
 kind load docker-image historyserver:v0.1.0
-
-make localimage-collector
 kind load docker-image collector:v0.1.0
 ```
 
@@ -59,7 +66,13 @@ kubectl apply -f historyserver/config/rayjob.yaml
 kubectl delete -f historyserver/config/raycluster.yaml
 ```
 
-### 8. Run and Access History Server
+### 8. Create Service Account
+
+```bash
+kubectl apply -f historyserver/config/service_account.yaml
+```
+
+### 9. Run and Access History Server
 
 #### Deploy In-Cluster History Server
 
@@ -107,19 +120,6 @@ debugging in your own IDE. For example, you can set up `.vscode/launch.json` as 
 
 For setting up the `args` and `env` fields, please refer to `spec.template.spec.containers.command` and
 `spec.template.spec.containers.env` in `historyserver/config/historyserver.yaml`.
-
-### 9. Access MinIO
-
-Use the following command to port-forward the console and API ports. The API port is required only when running the
-history server outside the kind cluster.
-
-```bash
-kubectl --namespace minio-dev port-forward svc/minio-service 9001:9001 9000:9000
-```
-
-> **Note**: Get the correct session directory from MinIO console.
-> Login: `minioadmin` / `minioadmin`
-> See: [MinIO Setup Guide](./set_up_collector.md#deploy-minio-for-log-and-event-storage)
 
 ---
 
@@ -172,6 +172,21 @@ curl -b ~/cookies.txt "http://localhost:8080/nodes?view=summary"
 ```bash
 SESSION="live"
 curl -c ~/cookies.txt "http://localhost:8080/enter_cluster/default/raycluster-historyserver/$SESSION"
+```
+
+If the command returns a "RayCluster not found" error, you need to deploy a new, live cluster before connecting:
+
+```bash
+kubectl apply -f historyserver/config/raycluster.yaml
+```
+
+Then submit a new RayJob:
+
+```sh
+kubectl apply -f historyserver/config/rayjob.yaml
+
+# If rayjob already exists, please delete it first and re-apply
+# kubectl delete -f historyserver/config/rayjob.yaml
 ```
 
 ### Live Cluster Endpoints
