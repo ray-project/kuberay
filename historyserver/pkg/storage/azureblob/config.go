@@ -42,7 +42,6 @@ type config struct {
 	ConnectionString string
 	AccountURL       string
 	ContainerName    string
-	Endpoint         string
 	types.RayCollectorConfig
 }
 
@@ -74,14 +73,10 @@ func (c *config) populateFromEnvAndJSON(jd map[string]interface{}) {
 	c.AccountURL = os.Getenv("AZURE_STORAGE_ACCOUNT_URL")
 	c.ContainerName = getContainerNameWithDefault()
 	c.AuthMode = getAuthMode()
-	c.Endpoint = os.Getenv("AZURE_STORAGE_ENDPOINT")
 
 	if len(jd) > 0 {
 		if v, ok := jd["azureContainer"]; ok {
 			c.ContainerName = v.(string)
-		}
-		if v, ok := jd["azureEndpoint"]; ok {
-			c.Endpoint = v.(string)
 		}
 		if v, ok := jd["azureConnectionString"]; ok {
 			c.ConnectionString = v.(string)
