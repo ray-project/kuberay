@@ -112,6 +112,54 @@ Password: minioadmin
 Finally, you can check if the collector works as expected by deploying a Ray cluster with the collector enabled and
 interacting with the minio UI.
 
+> [!IMPORTANT]
+> The collector sidecar must share the `/tmp/ray` directory with the Ray container using an `emptyDir` volume. This
+> allows the collector to read session logs and events from the Ray process. Without this shared volume, the collector
+> will fail with errors like `read session_latest file error`. See the example manifest for the required volume
+> configuration:
+
+```yaml
+spec:
+  containers:
+  - name: ray-head
+    volumeMounts:
+    - name: ray-logs
+      mountPath: /tmp/ray
+  - name: collector
+    volumeMounts:
+    - name: ray-logs
+      mountPath: /tmp/ray
+  volumes:
+  - name: ray-logs
+    emptyDir: {}
+```
+
+> [!IMPORTANT]
+> The Ray container must also include a `postStart` lifecycle hook to write the raylet node ID to a file. The collector
+> reads this file to identify the node. Without this hook, the collector will fail with errors like
+> `read nodeid file error`. Add the following lifecycle configuration to the Ray container:
+
+```yaml
+lifecycle:
+  postStart:
+    exec:
+      command:
+      - /bin/sh
+      - -c
+      - |
+        while true; do
+          nodeid=$(ps -ef | grep 'raylet.*--node_id' | grep -v grep | sed -n 's/.*--node_id=\([^ ]*\).*/\1/p' | head -1)
+          if [ -n "$nodeid" ]; then
+            echo "$nodeid" > /tmp/ray/raylet_node_id
+            break
+          fi
+          sleep 1
+        done
+```
+
+> Note: The example manifest at `config/raycluster.yaml` uses `grep -oP` (Perl regex) which may not be available in all
+> containers. The `sed` command above is more portable.
+
 ```bash
 # Apply the Ray cluster manifest.
 kubectl apply -f historyserver/config/raycluster.yaml
