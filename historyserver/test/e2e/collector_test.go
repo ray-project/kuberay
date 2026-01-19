@@ -525,31 +525,33 @@ func verifyS3SessionDirs(test Test, g *WithT, s3Client *s3.S3, sessionPrefix str
 
 	// Verify event type coverage in node_events/ and job_events/ directories.
 	LogWithTimestamp(test.T(), "Verifying all %d event types are covered, except for EVENT_TYPE_UNSPECIFIED: %v", len(types.AllEventTypes)-1, types.AllEventTypes)
-	uploadedEvents := []rayEvent{}
+	g.Eventually(func(gg Gomega) {
+		uploadedEvents := []rayEvent{}
 
-	// Load events from node_events directory.
-	nodeEventsPrefix := sessionPrefix + "node_events/"
-	nodeEvents, err := loadRayEventsFromS3(s3Client, s3BucketName, nodeEventsPrefix)
-	g.Expect(err).NotTo(HaveOccurred())
-	uploadedEvents = append(uploadedEvents, nodeEvents...)
-	LogWithTimestamp(test.T(), "Loaded %d events from node_events", len(nodeEvents))
+		// Load events from node_events directory.
+		nodeEventsPrefix := sessionPrefix + "node_events/"
+		nodeEvents, err := loadRayEventsFromS3(s3Client, s3BucketName, nodeEventsPrefix)
+		gg.Expect(err).NotTo(HaveOccurred())
+		uploadedEvents = append(uploadedEvents, nodeEvents...)
+		LogWithTimestamp(test.T(), "Loaded %d events from node_events", len(nodeEvents))
 
-	// Dynamically discover and load events from job_events directories.
-	jobEventsPrefix := sessionPrefix + "job_events/"
-	jobDirs, err := listS3Directories(s3Client, s3BucketName, jobEventsPrefix)
-	g.Expect(err).NotTo(HaveOccurred())
-	g.Expect(jobDirs).NotTo(BeEmpty())
-	LogWithTimestamp(test.T(), "Found %d job directories: %v", len(jobDirs), jobDirs)
+		// Dynamically discover and load events from job_events directories.
+		jobEventsPrefix := sessionPrefix + "job_events/"
+		jobDirs, err := listS3Directories(s3Client, s3BucketName, jobEventsPrefix)
+		gg.Expect(err).NotTo(HaveOccurred())
+		gg.Expect(jobDirs).NotTo(BeEmpty())
+		LogWithTimestamp(test.T(), "Found %d job directories: %v", len(jobDirs), jobDirs)
 
-	for _, jobDir := range jobDirs {
-		jobDirPrefix := jobEventsPrefix + jobDir + "/"
-		jobEvents, err := loadRayEventsFromS3(s3Client, s3BucketName, jobDirPrefix)
-		g.Expect(err).NotTo(HaveOccurred())
-		uploadedEvents = append(uploadedEvents, jobEvents...)
-		LogWithTimestamp(test.T(), "Loaded %d events from job_events/%s", len(jobEvents), jobDir)
-	}
+		for _, jobDir := range jobDirs {
+			jobDirPrefix := jobEventsPrefix + jobDir + "/"
+			jobEvents, err := loadRayEventsFromS3(s3Client, s3BucketName, jobDirPrefix)
+			gg.Expect(err).NotTo(HaveOccurred())
+			uploadedEvents = append(uploadedEvents, jobEvents...)
+			LogWithTimestamp(test.T(), "Loaded %d events from job_events/%s", len(jobEvents), jobDir)
+		}
 
-	assertAllEventTypesCovered(test, g, uploadedEvents)
+		assertAllEventTypesCovered(test, gg, uploadedEvents)
+	}, TestTimeoutMedium).Should(Succeed())
 }
 
 // getSessionIDFromHeadPod retrieves the sessionID from the Ray head pod by reading the symlink
@@ -735,7 +737,10 @@ func assertFileExist(test Test, g *WithT, s3Client *s3.S3, nodeLogDirPrefix stri
 
 // assertAllEventTypesCovered verifies that all potential event types are present in the events uploaded to S3.
 // NOTE: EVENT_TYPE_UNSPECIFIED is excluded from verification.
-func assertAllEventTypesCovered(test Test, g *WithT, events []rayEvent) {
+//
+// This function accepts Gomega (not *WithT) because it's called from within g.Eventually() callbacks,
+// which provide a nested Gomega instance for assertions.
+func assertAllEventTypesCovered(test Test, g Gomega, events []rayEvent) {
 	foundEventTypes := map[string]bool{}
 	for _, event := range events {
 		foundEventTypes[event.EventType] = true
@@ -743,6 +748,7 @@ func assertAllEventTypesCovered(test Test, g *WithT, events []rayEvent) {
 
 	for _, eventType := range types.AllEventTypes {
 		if eventType == types.EVENT_TYPE_UNSPECIFIED {
+			LogWithTimestamp(test.T(), "Skipping verification for EVENT_TYPE_UNSPECIFIED")
 			continue
 		}
 		g.Expect(foundEventTypes[string(eventType)]).To(BeTrue(), "Event type %s not found", eventType)
