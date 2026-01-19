@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"strings"
 	"testing"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -141,4 +142,34 @@ func DeleteS3Bucket(test Test, g *WithT, s3Client *s3.S3) {
 	} else {
 		LogWithTimestamp(test.T(), "Deleted S3 bucket %s successfully", S3BucketName)
 	}
+}
+
+// ListS3Directories lists all directories (prefixes) under the given S3 prefix.
+// In S3, directories are simulated using prefixes and delimiters.
+// For example, given prefix "log/cluster/session/job_events/", this function returns ["AgAAAA==", "AQAAAA=="]
+// which are the jobID directories under job_events/.
+func ListS3Directories(s3Client *s3.S3, bucket string, prefix string) ([]string, error) {
+	result, err := s3Client.ListObjectsV2(&s3.ListObjectsV2Input{
+		Bucket:    aws.String(bucket),
+		Prefix:    aws.String(prefix),
+		Delimiter: aws.String("/"),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list S3 directories under %s: %w", prefix, err)
+	}
+
+	// Extract directory names from CommonPrefixes.
+	var directories []string
+	for _, commonPrefix := range result.CommonPrefixes {
+		fullPrefix := aws.StringValue(commonPrefix.Prefix)
+		// Extract the directory name by removing the parent prefix and trailing slash.
+		// Example: "log/cluster/session/job_events/AgAAAA==/" -> "AgAAAA=="
+		dirName := strings.TrimPrefix(fullPrefix, prefix)
+		dirName = strings.TrimSuffix(dirName, "/")
+		if dirName != "" {
+			directories = append(directories, dirName)
+		}
+	}
+
+	return directories, nil
 }

@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -13,9 +14,17 @@ import (
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
 	. "github.com/ray-project/kuberay/historyserver/test/support"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
+
+// rayEvent contains specific fields in the Ray event JSON schema. For now, we keep only two fields,
+// eventId and eventType while ensuring future extensibility (e.g., sessionName, timestamp, sourceType, etc.).
+type rayEvent struct {
+	EventID   string `json:"eventId"`
+	EventType string `json:"eventType"`
+}
 
 func TestCollector(t *testing.T) {
 	// Share a single S3 client among subtests.
@@ -50,27 +59,32 @@ func TestCollector(t *testing.T) {
 	}
 }
 
-// testCollectorUploadOnGracefulShutdown verifies that logs and node_events are successfully uploaded to S3 on cluster deletion.
+// testCollectorUploadOnGracefulShutdown verifies that logs, node_events, and job_events are successfully uploaded to S3 on cluster deletion.
 //
 // The test case follows these steps:
 // 1. Prepare test environment by applying a Ray cluster with the collector
 // 2. Submit a Ray job to the existing Ray cluster
 // 3. Get the sessionID and nodeID for further verification
 // 4. Delete the Ray cluster to trigger log uploading and event flushing on deletion. When the Ray cluster is deleted,
-// logs and node_events are processed as follows:
+// logs, node_events, and job_events are processed as follows:
 //   - logs: Trigger RayLogHandler.processSessionLatestLog to process logs under /tmp/ray/session_latest
-//   - node_events: Trigger EventServer.flushEvents to process in-memory events
+//   - node_events: Trigger EventServer.flushEvents, which calls es.flushNodeEventsForHour to process in-memory node events
+//   - job_events: Trigger EventServer.flushEvents, which calls es.flushJobEventsForHour to process in-memory job events
 //
-// 5. Verify logs and node_events are successfully uploaded to S3. Expected S3 path structure:
-//   - {s3BucketName}/log/{clusterName}_{clusterID}/{sessionID}/logs/...
-//   - {s3BucketName}/log/{clusterName}_{clusterID}/{sessionID}/node_events/...
+// 5. Verify logs, node_events, and job_events are successfully uploaded to S3. Expected S3 path structure:
+//   - {S3BucketName}/log/{clusterName}_{clusterID}/{sessionID}/logs/...
+//   - {S3BucketName}/log/{clusterName}_{clusterID}/{sessionID}/node_events/...
+//   - {S3BucketName}/log/{clusterName}_{clusterID}/{sessionID}/job_events/AgAAAA==/...
+//   - {S3BucketName}/log/{clusterName}_{clusterID}/{sessionID}/job_events/AQAAAA==/...
+//
+// For detailed verification logic, please refer to verifyS3SessionDirs.
 //
 // 6. Delete S3 bucket to ensure test isolation
 func testCollectorUploadOnGracefulShutdown(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 
 	// Submit a Ray job to the existing cluster.
-	_ = ApplyRayJobToCluster(test, g, namespace, rayCluster)
+	_ = ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 
 	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, RayClusterID)
 	sessionID := GetSessionIDFromHeadPod(test, g, rayCluster)
@@ -87,8 +101,8 @@ func testCollectorUploadOnGracefulShutdown(test Test, g *WithT, namespace *corev
 		return err
 	}, TestTimeoutMedium).Should(WithTransform(k8serrors.IsNotFound, BeTrue()))
 
-	// Verify logs and node_events are successfully uploaded to S3.
-	verifyS3SessionDirs(test, g, s3Client, sessionPrefix, nodeID, false)
+	// Verify logs, node_events, and job_events are successfully uploaded to S3.
+	verifyS3SessionDirs(test, g, s3Client, sessionPrefix, nodeID)
 
 	// Delete S3 bucket to ensure test isolation.
 	DeleteS3Bucket(test, g, s3Client)
@@ -108,15 +122,15 @@ func testCollectorUploadOnGracefulShutdown(test Test, g *WithT, namespace *corev
 // NOTE: Logs under /tmp/ray/session_latest are moved to /tmp/ray/prev-logs by the Ray container startup command.
 //
 // 6. Verify logs and node_events are successfully uploaded to S3. Expected S3 path structure:
-//   - {s3BucketName}/log/{clusterName}_{clusterID}/{sessionID}/logs/...
-//   - {s3BucketName}/log/{clusterName}_{clusterID}/{sessionID}/node_events/...
+//   - {S3BucketName}/log/{clusterName}_{clusterID}/{sessionID}/logs/...
+//   - {S3BucketName}/log/{clusterName}_{clusterID}/{sessionID}/node_events/...
 //
 // 7. Delete S3 bucket to ensure test isolation
 func testCollectorSeparatesFilesBySession(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 
 	// Submit a Ray job to the existing cluster.
-	_ = ApplyRayJobToCluster(test, g, namespace, rayCluster)
+	_ = ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 
 	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, RayClusterID)
 	sessionID := GetSessionIDFromHeadPod(test, g, rayCluster)
@@ -129,23 +143,8 @@ func testCollectorSeparatesFilesBySession(test Test, g *WithT, namespace *corev1
 	// Since Kubernetes 1.28 (with cgroups v2 enabled), `memory.oom.group` is enabled by default: when any process in a cgroup
 	// hits the memory limit, all processes in the container are killed together, thereby triggering container restart.
 	// For more details, please refer to https://github.com/kubernetes/kubernetes/pull/117793
-	LogWithTimestamp(test.T(), "Killing main process of ray-head container to trigger a restart")
-	g.Eventually(func(gg Gomega) {
-		headPod, err := GetHeadPod(test, rayCluster)
-		gg.Expect(err).NotTo(HaveOccurred())
-		_, stderr := ExecPodCmd(test, headPod, "ray-head", []string{"kill", "1"})
-		gg.Expect(stderr.String()).To(BeEmpty())
-	}, TestTimeoutMedium).Should(Succeed(), "Failed to kill main process of ray-head container")
-
-	LogWithTimestamp(test.T(), "Waiting for ray-head container to restart and become ready")
-	g.Eventually(func(gg Gomega) {
-		updatedPod, err := GetHeadPod(test, rayCluster)
-		gg.Expect(err).NotTo(HaveOccurred())
-		rayHeadStatus, err := GetContainerStatusByName(updatedPod, "ray-head")
-		gg.Expect(err).NotTo(HaveOccurred())
-		gg.Expect(rayHeadStatus.RestartCount).To(BeNumerically(">", 0))
-		gg.Expect(rayHeadStatus.Ready).To(BeTrue())
-	}, TestTimeoutShort).Should(Succeed(), "ray-head container should restart and become ready")
+	killContainerAndWaitForRestart(test, g, HeadPod(test, rayCluster), "ray-head")
+	killContainerAndWaitForRestart(test, g, FirstWorkerPod(test, rayCluster), "ray-worker")
 
 	// Verify the old session logs have been processed on disk.
 	dirs := []string{"prev-logs", "persist-complete-logs"}
@@ -162,8 +161,8 @@ func testCollectorSeparatesFilesBySession(test Test, g *WithT, namespace *corev1
 		}, TestTimeoutMedium).Should(Succeed(), "Session directory %s should exist in %s", sessionID, dirPath)
 	}
 
-	// Verify logs and node_events are successfully uploaded to S3.
-	verifyS3SessionDirs(test, g, s3Client, sessionPrefix, nodeID, false)
+	// Verify logs, node_events, and job_events are successfully uploaded to S3.
+	verifyS3SessionDirs(test, g, s3Client, sessionPrefix, nodeID)
 
 	DeleteS3Bucket(test, g, s3Client)
 }
@@ -234,10 +233,6 @@ func testCollectorResumesUploadsOnRestart(test Test, g *WithT, namespace *corev1
 		gg.Expect(cs.Ready).To(BeTrue())
 	}, TestTimeoutMedium).Should(Succeed())
 
-	// Verify S3 uploads using the existing verifyS3SessionDirs helper.
-	// Skip node_events verification since prev-logs processing only handles logs directory.
-	LogWithTimestamp(test.T(), "Verifying scanning logic: checking S3 for recovered files")
-
 	// Verify that file2.log was actually uploaded to S3.
 	// file1.log should NOT be uploaded because it was already marked as "completed" in persist-complete-logs.
 	// file2.log should be uploaded because it was in prev-logs (pending upload).
@@ -296,17 +291,20 @@ func testCollectorResumesUploadsOnRestart(test Test, g *WithT, namespace *corev1
 	DeleteS3Bucket(test, g, s3Client)
 }
 
-// verifyS3SessionDirs verifies that directories logs/ and node_events/ exist under a session prefix in S3.
-// This helper function checks that each directory contains at least one object.
-// Additionally, it verifies that specific files have content:
-// - logs/<nodeID>/raylet.out must exist and have content > 0 bytes
-// - node_events/<nodeID>_<suffix> must exist and have content > 0 bytes (suffix can be ignored for verification)
-// If skipNodeEvents is true, node_events directory verification will be skipped.
-func verifyS3SessionDirs(test Test, g *WithT, s3Client *s3.S3, sessionPrefix string, nodeID string, skipNodeEvents bool) {
+// verifyS3SessionDirs verifies file contents in logs/, node_events/, and job_events/ directories under a session prefix in S3.
+// There are two phases of verification:
+// 1. Verify file contents in logs/ directory
+//   - logs/<nodeID>/raylet.out must exist and have content > 0 bytes
+//   - TODO(jwj): Complete docs.
+//
+// 2. Verify event type coverage in node_events/ and job_events/ directories
+//   - Aggregate all events from node_events/ and job_events/ directories
+//   - Verify that all potential event types are present in the aggregated events
+//
+// NOTE: Since flushed node and job events are nondeterministic, we need to aggregate them first before verifying event type coverage.
+func verifyS3SessionDirs(test Test, g *WithT, s3Client *s3.S3, sessionPrefix string, nodeID string) {
+	// TODO(jwj): Separate verification for logs and events.
 	dirs := []string{"logs"}
-	if !skipNodeEvents {
-		dirs = append(dirs, "node_events")
-	}
 	for _, dir := range dirs {
 		dirPrefix := sessionPrefix + dir + "/"
 
@@ -344,5 +342,111 @@ func verifyS3SessionDirs(test Test, g *WithT, s3Client *s3.S3, sessionPrefix str
 			gg.Expect(fileSize).To(BeNumerically(">", 0))
 			LogWithTimestamp(test.T(), "Verified file %s has content: %d bytes", fileKey, fileSize)
 		}, TestTimeoutMedium).Should(Succeed(), "Failed to verify at least one object in directory %s has content", dirPrefix)
+	}
+
+	// Verify event type coverage in node_events/ and job_events/ directories.
+	LogWithTimestamp(test.T(), "Verifying all %d event types are covered, except for EVENT_TYPE_UNSPECIFIED: %v", len(types.AllEventTypes)-1, types.AllEventTypes)
+	uploadedEvents := []rayEvent{}
+
+	// Load events from node_events directory.
+	nodeEventsPrefix := sessionPrefix + "node_events/"
+	nodeEvents, err := loadRayEventsFromS3(s3Client, S3BucketName, nodeEventsPrefix)
+	g.Expect(err).NotTo(HaveOccurred())
+	uploadedEvents = append(uploadedEvents, nodeEvents...)
+	LogWithTimestamp(test.T(), "Loaded %d events from node_events", len(nodeEvents))
+
+	// Dynamically discover and load events from job_events directories.
+	jobEventsPrefix := sessionPrefix + "job_events/"
+	jobDirs, err := ListS3Directories(s3Client, S3BucketName, jobEventsPrefix)
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(jobDirs).NotTo(BeEmpty())
+	LogWithTimestamp(test.T(), "Found %d job directories: %v", len(jobDirs), jobDirs)
+
+	for _, jobDir := range jobDirs {
+		jobDirPrefix := jobEventsPrefix + jobDir + "/"
+		jobEvents, err := loadRayEventsFromS3(s3Client, S3BucketName, jobDirPrefix)
+		g.Expect(err).NotTo(HaveOccurred())
+		uploadedEvents = append(uploadedEvents, jobEvents...)
+		LogWithTimestamp(test.T(), "Loaded %d events from job_events/%s", len(jobEvents), jobDir)
+	}
+
+	assertAllEventTypesCovered(test, g, uploadedEvents)
+}
+
+// killContainerAndWaitForRestart kills the main process of a container and waits for the container to restart and become ready.
+func killContainerAndWaitForRestart(test Test, g *WithT, getPod func() (*corev1.Pod, error), containerName string) {
+	LogWithTimestamp(test.T(), "Killing main process of %s container to trigger a restart", containerName)
+	g.Eventually(func(gg Gomega) {
+		pod, err := getPod()
+		gg.Expect(err).NotTo(HaveOccurred())
+		_, stderr := ExecPodCmd(test, pod, containerName, []string{"kill", "1"})
+		gg.Expect(stderr.String()).To(BeEmpty())
+	}, TestTimeoutMedium).Should(Succeed(), "Failed to kill main process of %s container", containerName)
+
+	LogWithTimestamp(test.T(), "Waiting for %s container to restart and become ready", containerName)
+	g.Eventually(func(gg Gomega) {
+		pod, err := getPod()
+		gg.Expect(err).NotTo(HaveOccurred())
+		containerStatus, err := GetContainerStatusByName(pod, containerName)
+		gg.Expect(err).NotTo(HaveOccurred())
+		gg.Expect(containerStatus.RestartCount).To(BeNumerically(">", 0))
+		gg.Expect(containerStatus.Ready).To(BeTrue())
+	}, TestTimeoutShort).Should(Succeed(), "%s container should restart and become ready", containerName)
+}
+
+// loadRayEventsFromS3 loads Ray events from S3.
+func loadRayEventsFromS3(s3Client *s3.S3, bucket string, prefix string) ([]rayEvent, error) {
+	var events []rayEvent
+
+	// List all file objects in the directory.
+	objects, err := s3Client.ListObjectsV2(&s3.ListObjectsV2Input{
+		Bucket: aws.String(bucket),
+		Prefix: aws.String(prefix),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	for _, obj := range objects.Contents {
+		fileKey := aws.StringValue(obj.Key)
+		if strings.HasSuffix(fileKey, "/") {
+			continue
+		}
+
+		// Get the file object content and decode it into Ray events.
+		content, err := s3Client.GetObject(&s3.GetObjectInput{
+			Bucket: aws.String(bucket),
+			Key:    aws.String(fileKey),
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		var fileEvents []rayEvent
+		if err := json.NewDecoder(content.Body).Decode(&fileEvents); err != nil {
+			content.Body.Close()
+			return nil, fmt.Errorf("failed to decode Ray events from %s: %w", fileKey, err)
+		}
+		content.Body.Close()
+
+		events = append(events, fileEvents...)
+	}
+
+	return events, nil
+}
+
+// assertAllEventTypesCovered verifies that all potential event types are present in the events uploaded to S3.
+// NOTE: EVENT_TYPE_UNSPECIFIED is excluded from verification.
+func assertAllEventTypesCovered(test Test, g *WithT, events []rayEvent) {
+	foundEventTypes := map[string]bool{}
+	for _, event := range events {
+		foundEventTypes[event.EventType] = true
+	}
+
+	for _, eventType := range types.AllEventTypes {
+		if eventType == types.EVENT_TYPE_UNSPECIFIED {
+			continue
+		}
+		g.Expect(foundEventTypes[string(eventType)]).To(BeTrue(), "Event type %s not found", eventType)
 	}
 }
