@@ -19,15 +19,16 @@ package azureblob
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
-	"net/http"
 	"path"
 	"path/filepath"
 	"sort"
 	"strings"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/container"
@@ -41,7 +42,6 @@ import (
 type RayLogsHandler struct {
 	ContainerClient *container.Client
 	LogFiles        chan string
-	HttpClient      *http.Client
 	ContainerName   string
 	SessionDir      string
 	RootDir         string
@@ -340,7 +340,8 @@ func ensureContainerExists(ctx context.Context, client *azblob.Client, container
 		_, err = containerClient.Create(ctx, nil)
 		if err != nil {
 			// Check if container already exists (race condition)
-			if strings.Contains(err.Error(), "ContainerAlreadyExists") {
+			var respErr *azcore.ResponseError
+			if errors.As(err, &respErr) && respErr.ErrorCode == "ContainerAlreadyExists" {
 				logrus.Infof("Container %s already exists", containerName)
 				return nil
 			}
@@ -384,14 +385,7 @@ func New(c *config) (*RayLogsHandler, error) {
 	return &RayLogsHandler{
 		ContainerClient: containerClient,
 		LogFiles:        make(chan string, 100),
-		HttpClient: &http.Client{
-			Transport: &http.Transport{
-				MaxIdleConns:        100,
-				MaxIdleConnsPerHost: 20,
-				IdleConnTimeout:     90 * time.Second,
-			},
-		},
-		ContainerName:  c.ContainerName,
+		ContainerName:   c.ContainerName,
 		SessionDir:     sessionDir,
 		RootDir:        c.RootDir,
 		LogDir:         logdir,
