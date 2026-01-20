@@ -260,9 +260,15 @@ func (r *RayLogsHandler) GetContent(clusterId string, fileName string) io.Reader
 					logrus.Errorf("Failed to get blob %s: %v", f, err)
 					return nil
 				}
-				retryCancel()
-				found = true
-				break
+				// Read body before cancelling context to avoid incomplete stream
+				defer retryCancel()
+				defer resp.Body.Close()
+				data, err := io.ReadAll(resp.Body)
+				if err != nil {
+					logrus.Errorf("Failed to read all data from blob %s: %v", fileName, err)
+					return nil
+				}
+				return bytes.NewReader(data)
 			}
 		}
 		if !found {
