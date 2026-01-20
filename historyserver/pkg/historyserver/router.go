@@ -611,7 +611,7 @@ func (s *ServerHandler) getNodeLogFile(req *restful.Request, resp *restful.Respo
 	content, err := s._getNodeLogFile(clusterNameID+"_"+clusterNamespace, sessionName, nodeID, filename, maxLines)
 	if err != nil {
 		logrus.Errorf("Error getting node log file: %v", err)
-		resp.WriteError(400, err)
+		resp.WriteError(http.StatusInternalServerError, err)
 		return
 	}
 	resp.Header().Set("Content-Type", "text/plain")
