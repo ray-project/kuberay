@@ -614,6 +614,7 @@ func (s *ServerHandler) getNodeLogFile(req *restful.Request, resp *restful.Respo
 		resp.WriteError(400, err)
 		return
 	}
+	resp.Header().Set("Content-Type", "text/plain")
 	resp.Write(content)
 }
 
