@@ -76,16 +76,24 @@ func (c *config) populateFromEnvAndJSON(jd map[string]interface{}) {
 
 	if len(jd) > 0 {
 		if v, ok := jd["azureContainer"]; ok {
-			c.ContainerName = v.(string)
+			if s, ok := v.(string); ok {
+				c.ContainerName = s
+			}
 		}
 		if v, ok := jd["azureConnectionString"]; ok {
-			c.ConnectionString = v.(string)
+			if s, ok := v.(string); ok {
+				c.ConnectionString = s
+			}
 		}
 		if v, ok := jd["azureAccountURL"]; ok {
-			c.AccountURL = v.(string)
+			if s, ok := v.(string); ok {
+				c.AccountURL = s
+			}
 		}
 		if v, ok := jd["azureAuthMode"]; ok {
-			c.AuthMode = AuthMode(v.(string))
+			if s, ok := v.(string); ok {
+				c.AuthMode = AuthMode(s)
+			}
 		}
 	}
 }

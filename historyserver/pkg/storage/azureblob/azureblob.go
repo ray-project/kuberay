@@ -147,12 +147,24 @@ func (r *RayLogsHandler) listBlobs(prefix string, delimiter string, onlyBase boo
 }
 
 func (r *RayLogsHandler) ListFiles(clusterId string, dir string) []string {
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Println("Recovered from panic:", r)
+		}
+	}()
+
 	prefix := path.Join(r.RootDir, clusterId, dir)
 	logrus.Debugf("Prepare to list files ...")
 	return r.listBlobs(prefix, "/", true)
 }
 
 func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Println("Recovered from panic:", r)
+		}
+	}()
+
 	clusters := make(utils.ClusterInfoList, 0, 10)
 	logrus.Debugf("Prepare to get list clusters info ...")
 
