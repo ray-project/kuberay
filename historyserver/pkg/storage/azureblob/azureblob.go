@@ -67,14 +67,7 @@ func (r *RayLogsHandler) WriteFile(file string, reader io.ReadSeeker) error {
 
 	blobClient := r.ContainerClient.NewBlockBlobClient(file)
 
-	// Read all content from reader
-	data, err := io.ReadAll(reader)
-	if err != nil {
-		logrus.Errorf("Failed to read data for file %s: %v", file, err)
-		return err
-	}
-
-	_, err = blobClient.UploadBuffer(ctx, data, nil)
+	_, err := blobClient.UploadStream(ctx, reader, nil)
 	if err != nil {
 		logrus.Errorf("Failed to upload file %s: %v", file, err)
 		return err
