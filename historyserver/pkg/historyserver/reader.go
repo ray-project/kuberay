@@ -88,7 +88,6 @@ func (s *ServerHandler) GetNodes(rayClusterNameID, sessionId string) ([]byte, er
 func (s *ServerHandler) getGrafanaHealth(req *restful.Request, resp *restful.Response) {
 	grafanaHost := utils.GetEnvWithDefault(utils.GrafanaHost, utils.DefaultGrafanaHost)
 
-	// If disabled, return disabled status
 	if grafanaHost == utils.GrafanaDisabledValue {
 		result := map[string]interface{}{
 			"result": true,
@@ -101,14 +100,12 @@ func (s *ServerHandler) getGrafanaHealth(req *restful.Request, resp *restful.Res
 		return
 	}
 
-	// Construct the health check URL
 	healthURL := grafanaHost
 	if !strings.HasSuffix(healthURL, "/") {
 		healthURL += "/"
 	}
 	healthURL += utils.GrafanaHealthcheckPath
 
-	// Make the health check request
 	httpReq, err := http.NewRequestWithContext(req.Request.Context(), http.MethodGet, healthURL, nil)
 	if err != nil {
 		result := map[string]interface{}{
@@ -138,7 +135,6 @@ func (s *ServerHandler) getGrafanaHealth(req *restful.Request, resp *restful.Res
 	}
 	defer httpResp.Body.Close()
 
-	// Check if status is not 200
 	if httpResp.StatusCode != http.StatusOK {
 		body, errRead := io.ReadAll(httpResp.Body)
 		if errRead != nil {
@@ -156,7 +152,6 @@ func (s *ServerHandler) getGrafanaHealth(req *restful.Request, resp *restful.Res
 		return
 	}
 
-	// Parse the response JSON
 	var healthData map[string]interface{}
 	if err := json.NewDecoder(httpResp.Body).Decode(&healthData); err != nil {
 		result := map[string]interface{}{
@@ -170,7 +165,6 @@ func (s *ServerHandler) getGrafanaHealth(req *restful.Request, resp *restful.Res
 		return
 	}
 
-	// Check if the required Grafana services are running
 	if database, ok := healthData["database"].(string); !ok || database != "ok" {
 		result := map[string]interface{}{
 			"result": false,
@@ -189,7 +183,6 @@ func (s *ServerHandler) getGrafanaHealth(req *restful.Request, resp *restful.Res
 	grafanaOrgID := utils.GetEnvWithDefault(utils.GrafanaOrgID, utils.DefaultGrafanaOrgID)
 	grafanaClusterFilter := os.Getenv(utils.GrafanaClusterFilterEnv)
 
-	// Success - return Grafana configuration
 	result := map[string]interface{}{
 		"result": true,
 		"msg":    "Grafana running",
