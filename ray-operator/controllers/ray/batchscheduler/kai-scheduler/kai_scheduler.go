@@ -9,7 +9,6 @@ package kaischeduler
 
 import (
 	"context"
-	"fmt"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -18,7 +17,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	schedulerinterface "github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/interface"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/utils"
 )
@@ -36,10 +34,6 @@ func GetPluginName() string { return "kai-scheduler" }
 func (k *KaiScheduler) Name() string { return GetPluginName() }
 
 func (k *KaiScheduler) DoBatchSchedulingOnSubmission(_ context.Context, object metav1.Object) error {
-	_, ok := object.(*rayv1.RayCluster)
-	if !ok {
-		return fmt.Errorf("currently only RayCluster is supported, got %T", object)
-	}
 	return nil
 }
 
