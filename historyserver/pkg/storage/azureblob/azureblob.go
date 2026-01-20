@@ -39,6 +39,15 @@ import (
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
+const (
+	// Timeout for upload operations
+	uploadTimeout = 5 * time.Minute
+	// Timeout for listing operations
+	listTimeout = 2 * time.Minute
+	// Timeout for download operations (longer to handle large files)
+	downloadTimeout = 10 * time.Minute
+)
+
 type RayLogsHandler struct {
 	ContainerClient *container.Client
 	LogFiles        chan string
@@ -62,7 +71,7 @@ func (r *RayLogsHandler) CreateDirectory(d string) error {
 }
 
 func (r *RayLogsHandler) WriteFile(file string, reader io.ReadSeeker) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), uploadTimeout)
 	defer cancel()
 
 	blobClient := r.ContainerClient.NewBlockBlobClient(file)
@@ -77,7 +86,7 @@ func (r *RayLogsHandler) WriteFile(file string, reader io.ReadSeeker) error {
 }
 
 func (r *RayLogsHandler) listBlobs(prefix string, delimiter string, onlyBase bool) []string {
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), listTimeout)
 	defer cancel()
 
 	files := []string{}
@@ -168,7 +177,7 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 	clusters := make(utils.ClusterInfoList, 0, 10)
 	logrus.Debugf("Prepare to get list clusters info ...")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), listTimeout)
 	defer cancel()
 
 	metadirPrefix := path.Join(r.RootDir, "metadir") + "/"
@@ -228,7 +237,7 @@ func (r *RayLogsHandler) GetContent(clusterId string, fileName string) io.Reader
 	fullPath := path.Join(r.RootDir, clusterId, fileName)
 	logrus.Infof("Prepare to get blob %s info ...", fullPath)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), downloadTimeout)
 	defer cancel()
 
 	blobClient := r.ContainerClient.NewBlobClient(fullPath)
@@ -241,16 +250,17 @@ func (r *RayLogsHandler) GetContent(clusterId string, fileName string) io.Reader
 		}
 		logrus.Errorf("Failed to get blob %s: %v", fullPath, err)
 
-		// Try to find the file by listing
+		// Try to find the file by listing direct children only (use delimiter)
 		dirPath := path.Dir(fullPath)
-		allFiles := r.listBlobs(dirPath, "", false)
+		allFiles := r.listBlobs(dirPath, "/", false)
 		found := false
 		for _, f := range allFiles {
-			if path.Base(f) == path.Base(fullPath) {
+			// Match full path to avoid returning wrong content from nested directories
+			if f == fullPath {
 				logrus.Infof("Get blob %s info success", f)
 				blobClient = r.ContainerClient.NewBlobClient(f)
 				// Create fresh context for retry to avoid timeout from listing operation
-				retryCtx, retryCancel := context.WithTimeout(context.Background(), 2*time.Minute)
+				retryCtx, retryCancel := context.WithTimeout(context.Background(), downloadTimeout)
 				resp, err = blobClient.DownloadStream(retryCtx, nil)
 				if err != nil {
 					retryCancel()

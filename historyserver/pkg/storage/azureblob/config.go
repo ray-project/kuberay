@@ -53,9 +53,10 @@ func getContainerNameWithDefault() string {
 	return container
 }
 
-func getAuthMode() AuthMode {
-	mode := strings.ToLower(os.Getenv("AZURE_STORAGE_AUTH_MODE"))
-	switch mode {
+// parseAuthMode normalizes and validates an auth mode string.
+// Returns empty string for auto-detection if invalid.
+func parseAuthMode(mode string) AuthMode {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
 	case "connection_string":
 		return AuthModeConnectionString
 	case "workload_identity":
@@ -66,6 +67,10 @@ func getAuthMode() AuthMode {
 		// Auto-detect based on available credentials
 		return ""
 	}
+}
+
+func getAuthMode() AuthMode {
+	return parseAuthMode(os.Getenv("AZURE_STORAGE_AUTH_MODE"))
 }
 
 func (c *config) populateFromEnvAndJSON(jd map[string]interface{}) {
@@ -92,7 +97,7 @@ func (c *config) populateFromEnvAndJSON(jd map[string]interface{}) {
 		}
 		if v, ok := jd["azureAuthMode"]; ok {
 			if s, ok := v.(string); ok {
-				c.AuthMode = AuthMode(s)
+				c.AuthMode = parseAuthMode(s)
 			}
 		}
 	}
