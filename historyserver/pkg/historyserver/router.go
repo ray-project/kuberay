@@ -600,9 +600,12 @@ func (s *ServerHandler) getNodeLogFile(req *restful.Request, resp *restful.Respo
 	// Convert lines parameter to int
 	maxLines := 0
 	if lines != "" {
-		if parsedLines, err := strconv.Atoi(lines); err == nil {
-			maxLines = parsedLines
+		parsedLines, err := strconv.Atoi(lines)
+		if err != nil {
+			resp.WriteErrorString(http.StatusBadRequest, fmt.Sprintf("invalid lines parameter: %s", lines))
+			return
 		}
+		maxLines = parsedLines
 	}
 
 	content, err := s._getNodeLogFile(clusterNameID+"_"+clusterNamespace, sessionName, nodeID, filename, maxLines)
