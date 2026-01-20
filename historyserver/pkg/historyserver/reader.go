@@ -3,6 +3,7 @@ package historyserver
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"os"
 	"path"
@@ -139,11 +140,16 @@ func (s *ServerHandler) getGrafanaHealth(req *restful.Request, resp *restful.Res
 
 	// Check if status is not 200
 	if httpResp.StatusCode != http.StatusOK {
+		body, errRead := io.ReadAll(httpResp.Body)
+		if errRead != nil {
+			logrus.Warnf("Error on reading grafana health response body: %v", errRead)
+		}
 		result := map[string]interface{}{
 			"result": false,
 			"msg":    "Grafana healthcheck failed",
 			"data": map[string]interface{}{
 				"status": httpResp.StatusCode,
+				"body":   string(body),
 			},
 		}
 		resp.WriteHeaderAndEntity(http.StatusInternalServerError, result)
