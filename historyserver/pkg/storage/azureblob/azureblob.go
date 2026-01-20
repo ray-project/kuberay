@@ -237,14 +237,18 @@ func (r *RayLogsHandler) GetContent(clusterId string, fileName string) io.Reader
 			if path.Base(f) == path.Base(fullPath) {
 				logrus.Infof("Get blob %s info success", f)
 				blobClient = r.ContainerClient.NewBlobClient(f)
-				resp, err = blobClient.DownloadStream(ctx, nil)
+				// Create fresh context for retry to avoid timeout from listing operation
+				retryCtx, retryCancel := context.WithTimeout(context.Background(), 2*time.Minute)
+				resp, err = blobClient.DownloadStream(retryCtx, nil)
 				if err != nil {
+					retryCancel()
 					if resp.Body != nil {
 						resp.Body.Close()
 					}
 					logrus.Errorf("Failed to get blob %s: %v", f, err)
 					return nil
 				}
+				retryCancel()
 				found = true
 				break
 			}
