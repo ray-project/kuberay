@@ -15,6 +15,17 @@ import (
 const (
 	RAY_SESSIONDIR_LOGDIR_NAME  = "logs"
 	RAY_SESSIONDIR_METADIR_NAME = "meta"
+
+	GrafanaDisabledValue    = "DISABLED"
+	GrafanaHealthcheckPath  = "api/health"
+	GrafanaIframeHost       = "RAY_GRAFANA_IFRAME_HOST"
+	DefaultPrometheusName   = "Prometheus"
+	PrometheusName          = "RAY_PROMETHEUS_NAME"
+	GrafanaClusterFilterEnv = "RAY_GRAFANA_CLUSTER_FILTER"
+	GrafanaOrgID            = "RAY_GRAFANA_ORG_ID"
+	DefaultGrafanaOrgID     = "1"
+	DefaultGrafanaHost      = "http://localhost:3000"
+	GrafanaHost             = "RAY_GRAFANA_HOST"
 )
 
 const (
@@ -239,4 +250,11 @@ func GetRayNodeID() (string, error) {
 		return strings.Trim(string(nodeidBytes), "\n"), nil
 	}
 	return "", fmt.Errorf("timeout --node_id= not found")
+}
+
+func GetEnvWithDefault(key, defaultValue string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return defaultValue
 }

@@ -4,12 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"os"
 	"path"
 	"sort"
+	"strings"
 
 	"github.com/emicklei/go-restful/v3"
-	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 	"github.com/sirupsen/logrus"
+
+	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
 func (s *ServerHandler) listClusters(limit int) []utils.ClusterInfo {
@@ -80,7 +83,129 @@ func (s *ServerHandler) GetNodes(rayClusterNameID, sessionId string) ([]byte, er
 	return json.Marshal(templ)
 }
 
-// TODO: implement this
-func (h *ServerHandler) getGrafanaHealth(req *restful.Request, resp *restful.Response) {
-	resp.WriteErrorString(http.StatusNotImplemented, "Grafana health not yet supported")
+// getGrafanaHealth checks if Grafana is running and returns Grafana configuration
+func (s *ServerHandler) getGrafanaHealth(req *restful.Request, resp *restful.Response) {
+	grafanaHost := utils.GetEnvWithDefault(utils.GrafanaHost, utils.DefaultGrafanaHost)
+
+	// If disabled, return disabled status
+	if grafanaHost == utils.GrafanaDisabledValue {
+		result := map[string]interface{}{
+			"result": true,
+			"msg":    "Grafana disabled",
+			"data": map[string]interface{}{
+				"grafanaHost": utils.GrafanaDisabledValue,
+			},
+		}
+		resp.WriteAsJson(result)
+		return
+	}
+
+	// Construct the health check URL
+	healthURL := grafanaHost
+	if !strings.HasSuffix(healthURL, "/") {
+		healthURL += "/"
+	}
+	healthURL += utils.GrafanaHealthcheckPath
+
+	// Make the health check request
+	httpReq, err := http.NewRequestWithContext(req.Request.Context(), http.MethodGet, healthURL, nil)
+	if err != nil {
+		result := map[string]interface{}{
+			"result": false,
+			"msg":    "Grafana healthcheck failed",
+			"data": map[string]interface{}{
+				"exception": err.Error(),
+			},
+		}
+		logrus.Infof("Error on creating grafana health request: %v", err)
+		resp.WriteHeaderAndEntity(http.StatusInternalServerError, result)
+		return
+	}
+
+	httpResp, err := s.httpClient.Do(httpReq)
+	if err != nil {
+		result := map[string]interface{}{
+			"result": false,
+			"msg":    "Grafana healthcheck failed",
+			"data": map[string]interface{}{
+				"exception": err.Error(),
+			},
+		}
+		logrus.Infof("Error on fetching grafana endpoint. Is grafana running? %v", err)
+		resp.WriteHeaderAndEntity(http.StatusInternalServerError, result)
+		return
+	}
+	defer httpResp.Body.Close()
+
+	// Check if status is not 200
+	if httpResp.StatusCode != http.StatusOK {
+		result := map[string]interface{}{
+			"result": false,
+			"msg":    "Grafana healthcheck failed",
+			"data": map[string]interface{}{
+				"status": httpResp.StatusCode,
+			},
+		}
+		resp.WriteHeaderAndEntity(http.StatusInternalServerError, result)
+		return
+	}
+
+	// Parse the response JSON
+	var healthData map[string]interface{}
+	if err := json.NewDecoder(httpResp.Body).Decode(&healthData); err != nil {
+		result := map[string]interface{}{
+			"result": false,
+			"msg":    "Grafana healthcheck failed",
+			"data": map[string]interface{}{
+				"exception": "Failed to parse grafana health response: " + err.Error(),
+			},
+		}
+		resp.WriteHeaderAndEntity(http.StatusInternalServerError, result)
+		return
+	}
+
+	// Check if the required Grafana services are running
+	if database, ok := healthData["database"].(string); !ok || database != "ok" {
+		result := map[string]interface{}{
+			"result": false,
+			"msg":    "Grafana healthcheck failed. Database not ok.",
+			"data": map[string]interface{}{
+				"status": httpResp.StatusCode,
+				"json":   healthData,
+			},
+		}
+		resp.WriteHeaderAndEntity(http.StatusInternalServerError, result)
+		return
+	}
+
+	grafanaIframeHost := utils.GetEnvWithDefault(utils.GrafanaIframeHost, grafanaHost)
+	prometheusName := utils.GetEnvWithDefault(utils.PrometheusName, utils.DefaultPrometheusName)
+	grafanaOrgID := utils.GetEnvWithDefault(utils.GrafanaOrgID, utils.DefaultGrafanaOrgID)
+	grafanaClusterFilter := os.Getenv(utils.GrafanaClusterFilterEnv)
+
+	// Success - return Grafana configuration
+	result := map[string]interface{}{
+		"result": true,
+		"msg":    "Grafana running",
+		"data": map[string]interface{}{
+			"grafanaHost":          grafanaIframeHost,
+			"grafanaOrgId":         grafanaOrgID,
+			"sessionName":          req.Attribute(COOKIE_SESSION_NAME_KEY),
+			"dashboardUids":        getDashboardUIDs(),
+			"dashboardDatasource":  prometheusName,
+			"grafanaClusterFilter": grafanaClusterFilter,
+		},
+	}
+	resp.WriteAsJson(result)
+}
+
+func getDashboardUIDs() map[string]string {
+	return map[string]string{
+		"default":         "rayDefaultDashboard",
+		"serve":           "rayServeDashboard",
+		"serveDeployment": "rayServeDeploymentDashboard",
+		"serveLlm":        "rayServeLlmDashboard",
+		"data":            "rayDataDashboard",
+		"train":           "rayTrainDashboard",
+	}
 }
