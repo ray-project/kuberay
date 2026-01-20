@@ -22,7 +22,6 @@ type EventHandler struct {
 
 	ClusterTaskMap  *types.ClusterTaskMap
 	ClusterActorMap *types.ClusterActorMap
-	ClusterNodeMap  *types.ClusterNodeMap
 }
 
 var eventFilePattern = regexp.MustCompile(`-\d{4}-\d{2}-\d{2}-\d{2}$`)
@@ -44,9 +43,6 @@ func NewEventHandler(reader storage.StorageReader) *EventHandler {
 		},
 		ClusterActorMap: &types.ClusterActorMap{
 			ClusterActorMap: make(map[string]*types.ActorMap),
-		},
-		ClusterNodeMap: &types.ClusterNodeMap{
-			ClusterNodeMap: make(map[string]*types.NodeMap),
 		},
 	}
 }
@@ -529,116 +525,6 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 		// TODO: Handle actor task definition event
 		// This is related to GET /api/v0/tasks (type=ACTOR_TASK)
 		logrus.Debugf("ACTOR_TASK_DEFINITION_EVENT received, not yet implemented")
-
-	case types.NODE_DEFINITION_EVENT:
-		nodeDef, ok := eventMap["nodeDefinitionEvent"].(map[string]any)
-		if !ok {
-			return fmt.Errorf("event does not have valid 'nodeDefinitionEvent'")
-		}
-
-		// Extract labels to get nodeId and nodeGroup
-		labels, _ := nodeDef["labels"].(map[string]any)
-		nodeId, _ := labels["ray.io/node-id"].(string)
-		nodeGroup, _ := labels["ray.io/node-group"].(string)
-		nodeIP, _ := nodeDef["nodeIpAddress"].(string)
-		startTimestampStr, _ := nodeDef["startTimestamp"].(string)
-
-		if nodeIP == "" {
-			return fmt.Errorf("NODE_DEFINITION_EVENT missing nodeIpAddress")
-		}
-
-		var startTimestamp time.Time
-		if startTimestampStr != "" {
-			startTimestamp, _ = time.Parse(time.RFC3339Nano, startTimestampStr)
-		}
-
-		// Convert labels to map[string]string
-		labelsMap := make(map[string]string)
-		for k, v := range labels {
-			if vs, ok := v.(string); ok {
-				labelsMap[k] = vs
-			}
-		}
-
-		// Use IP as map key (available in both DEFINITION and LIFECYCLE events)
-		nodeMap := h.ClusterNodeMap.GetOrCreateNodeMap(currentClusterName)
-		nodeMap.CreateOrMergeNode(nodeIP, func(n *types.Node) {
-			n.NodeID = nodeId // hex nodeId from labels
-			n.NodeIPAddress = nodeIP
-			n.NodeGroup = nodeGroup
-			n.Labels = labelsMap
-			n.StartTimestamp = startTimestamp
-		})
-
-	case types.NODE_LIFECYCLE_EVENT:
-		lifecycleEvent, ok := eventMap["nodeLifecycleEvent"].(map[string]any)
-		if !ok {
-			return fmt.Errorf("invalid nodeLifecycleEvent format")
-		}
-
-		transitions, _ := lifecycleEvent["stateTransitions"].([]any)
-		if len(transitions) == 0 {
-			return nil
-		}
-
-		// Process each transition
-		for _, transition := range transitions {
-			tr, ok := transition.(map[string]any)
-			if !ok {
-				continue
-			}
-
-			state, _ := tr["state"].(string)
-			timestampStr, _ := tr["timestamp"].(string)
-			resources, _ := tr["resources"].(map[string]any)
-
-			var timestamp time.Time
-			if timestampStr != "" {
-				timestamp, _ = time.Parse(time.RFC3339Nano, timestampStr)
-			}
-
-			// Convert resources to map[string]float64 and extract IP from node:IP key
-			resourcesMap := make(map[string]float64)
-			var nodeIP string
-			isHead := false
-
-			for k, v := range resources {
-				if num, ok := v.(float64); ok {
-					resourcesMap[k] = num
-				}
-				// Extract IP from node:IP key pattern (but not node:__internal_head__)
-				if strings.HasPrefix(k, "node:") && k != "node:__internal_head__" {
-					nodeIP = strings.TrimPrefix(k, "node:")
-				}
-				if k == "node:__internal_head__" {
-					isHead = true
-				}
-			}
-
-			if nodeIP == "" {
-				logrus.Debugf("NODE_LIFECYCLE_EVENT: could not extract IP from resources, skipping")
-				continue
-			}
-
-			// Use IP as map key - CreateOrMergeNode will create if doesn't exist
-			// This handles the case where LIFECYCLE arrives before DEFINITION
-			nodeMap := h.ClusterNodeMap.GetOrCreateNodeMap(currentClusterName)
-			nodeMap.CreateOrMergeNode(nodeIP, func(n *types.Node) {
-				n.NodeIPAddress = nodeIP // Set IP in case LIFECYCLE arrives first
-				n.State = types.NodeState(state)
-				n.IsHead = isHead
-
-				if state == string(types.NODE_ALIVE) {
-					n.Resources = resourcesMap
-					if n.StartTimestamp.IsZero() {
-						n.StartTimestamp = timestamp
-					}
-				} else if state == string(types.NODE_DEAD) {
-					n.DeadTimestamp = timestamp
-				}
-			})
-		}
-
 	default:
 		logrus.Infof("Event not supported, skipping: %v", eventMap)
 	}
@@ -821,85 +707,4 @@ func (h *EventHandler) GetActorsMap(clusterName string) map[string]types.Actor {
 		actors[id] = actor.DeepCopy()
 	}
 	return actors
-}
-
-// GetNodes returns a thread-safe deep copy of all nodes for a given cluster
-func (h *EventHandler) GetNodes(clusterName string) []types.Node {
-	h.ClusterNodeMap.RLock()
-	defer h.ClusterNodeMap.RUnlock()
-
-	nodeMap, ok := h.ClusterNodeMap.ClusterNodeMap[clusterName]
-	if !ok {
-		return []types.Node{}
-	}
-
-	nodeMap.Lock()
-	defer nodeMap.Unlock()
-
-	nodes := make([]types.Node, 0, len(nodeMap.NodeMap))
-	for _, node := range nodeMap.NodeMap {
-		nodes = append(nodes, node.DeepCopy())
-	}
-	return nodes
-}
-
-// GetAutoscalerErrors reads monitor.log files and extracts ERROR level messages.
-// Returns nil if no errors found, otherwise returns a concatenated error string.
-// This is an approximation since the real autoscaling_error is stored in GCS internal KV.
-func (h *EventHandler) GetAutoscalerErrors(clusterNameID string, sessionName string) *string {
-	// List log directories: session_xxx/logs/
-	logsDirPrefix := sessionName + "/logs/"
-	nodeDirs := h.reader.ListFiles(clusterNameID, logsDirPrefix)
-
-	var errors []string
-
-	for _, nodeDir := range nodeDirs {
-		// Skip non-directory entries
-		if !strings.HasSuffix(nodeDir, "/") {
-			continue
-		}
-
-		// Read monitor.log for this node
-		monitorLogPath := logsDirPrefix + nodeDir + "monitor.log"
-		reader := h.reader.GetContent(clusterNameID, monitorLogPath)
-		if reader == nil {
-			continue
-		}
-
-		content, err := io.ReadAll(reader)
-		if err != nil {
-			logrus.Debugf("Failed to read monitor.log at %s: %v", monitorLogPath, err)
-			continue
-		}
-
-		// Parse for ERROR level logs
-		nodeErrors := parseMonitorLogErrors(string(content))
-		errors = append(errors, nodeErrors...)
-	}
-
-	if len(errors) == 0 {
-		return nil
-	}
-
-	// Concatenate all errors, limit to avoid huge responses
-	result := strings.Join(errors, "\n")
-	if len(result) > 4096 {
-		result = result[:4096] + "\n... (truncated)"
-	}
-	return &result
-}
-
-// parseMonitorLogErrors extracts ERROR level log lines from monitor.log content
-func parseMonitorLogErrors(content string) []string {
-	var errors []string
-	lines := strings.Split(content, "\n")
-
-	for _, line := range lines {
-		// Monitor log format: "2026-01-18 23:00:43,237 ERROR module.py:123 -- message"
-		if strings.Contains(line, "\tERROR\t") || strings.Contains(line, " ERROR ") {
-			errors = append(errors, strings.TrimSpace(line))
-		}
-	}
-
-	return errors
 }

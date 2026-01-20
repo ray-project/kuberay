@@ -408,59 +408,19 @@ func (s *ServerHandler) getClusterStatus(req *restful.Request, resp *restful.Res
 		return
 	}
 
-	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
-	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
-	clusterNameID := clusterName + "_" + clusterNamespace
-
-	tasks := s.eventHandler.GetTasks(clusterNameID)
-	actors := s.eventHandler.GetActors(clusterNameID)
-	nodes := s.eventHandler.GetNodes(clusterNameID)
-
-	activeNodes, failedNodes, totalResources, latestNodeTimestamp := CalculateNodeStats(nodes)
-	usedResources := CalculateUsedResources(tasks, actors)
-	availableResources := CalculateAvailableResources(totalResources, usedResources)
-
-	resourceDemands := CalculateResourceDemands(tasks, actors)
-
-	autoscalingStatus := FormatAutoscalingStatus(
-		activeNodes,
-		failedNodes,
-		usedResources,
-		totalResources,
-		resourceDemands,
-		latestNodeTimestamp,
-	)
-
-	autoscalingError := s.eventHandler.GetAutoscalerErrors(clusterNameID, sessionName)
-
-	// Convert resource demands to interface slice for JSON response
-	resourceDemandList := make([]interface{}, 0, len(resourceDemands))
-	for _, demand := range resourceDemands {
-		resourceDemandList = append(resourceDemandList, map[string]interface{}{
-			"resources": demand.Resources,
-			"count":     demand.Count,
-		})
-	}
-
+	// Dead cluster: return null to match live Ray dashboard behavior with KubeRay autoscaler.
+	// The live dashboard's /api/cluster_status returns null for autoscaling fields because
+	// KubeRay's in-tree autoscaler doesn't write to the GCS internal KV keys that the
+	// dashboard API reads from. See: https://github.com/ray-project/kuberay/issues/4381
+	//
+	// TODO: Update when Ray dashboard supports autoscaler V2 which uses GcsClient.get_cluster_status()
 	response := ClusterStatusResponse{
 		Result: true,
-		Msg:    "Got cluster status.", // TODO Hardcoded
+		Msg:    "Got cluster status.",
 		Data: ClusterStatusData{
-			AutoscalingStatus: &autoscalingStatus,
-			AutoscalingError:  autoscalingError,
-			ClusterStatus: &ClusterStatus{
-				ActiveNodes:  activeNodes,
-				PendingNodes: []string{}, // TODO Node events don't have pending state
-				FailedNodes:  failedNodes,
-				LoadMetricsReport: LoadMetricsReport{
-					UsedResources:               usedResources,
-					TotalResources:              totalResources,
-					AvailableResources:          availableResources,
-					ResourceDemand:              resourceDemandList,
-					ResourceDemandSummary:       resourceDemandList, // TODO Same as ResourceDemand for now
-					PlacementGroupDemandSummary: []interface{}{},    // TODO
-				},
-			},
+			AutoscalingStatus: nil,
+			AutoscalingError:  nil,
+			ClusterStatus:     nil,
 		},
 	}
 
