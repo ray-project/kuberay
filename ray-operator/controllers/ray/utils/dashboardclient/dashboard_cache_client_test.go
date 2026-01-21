@@ -66,16 +66,17 @@ func TestAsyncJobInfoQuery(t *testing.T) {
 		assert.Nil(t, jobInfo)
 		assert.Equal(t, expectedError, err)
 
-		// After error has been consumed previously, the job info is not in cache so it should return ErrAgain.
-		jobInfo, err = asyncJobInfoQueryClient.GetJobInfo(ctx, jobId)
-		assert.Nil(t, jobInfo)
-		assert.Equal(t, ErrAgain, err)
-
+		// set up the mock expectation for the fourth call.
 		mockJobInfo = &utiltypes.RayJobInfo{
 			JobId:     jobId,
 			JobStatus: rayv1.JobStatusSucceeded,
 		}
 		mockClient.EXPECT().GetJobInfo(ctx, jobId).Return(mockJobInfo, nil)
+
+		// After error has been consumed previously, the job info is not in cache so it should return ErrAgain.
+		jobInfo, err = asyncJobInfoQueryClient.GetJobInfo(ctx, jobId)
+		assert.Nil(t, jobInfo)
+		assert.Equal(t, ErrAgain, err)
 
 		// Wait for longer than queryInterval to ensure the task has been re-queued and executed.
 		time.Sleep(queryInterval + time.Millisecond)
