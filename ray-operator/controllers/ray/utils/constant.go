@@ -152,8 +152,9 @@ const (
 
 	// Environment variables for RayJob submitter Kubernetes Job.
 	// Example: ray job submit --address=http://$RAY_DASHBOARD_ADDRESS --submission-id=$RAY_JOB_SUBMISSION_ID ...
-	RAY_DASHBOARD_ADDRESS = "RAY_DASHBOARD_ADDRESS"
-	RAY_JOB_SUBMISSION_ID = "RAY_JOB_SUBMISSION_ID"
+	RAY_DASHBOARD_ADDRESS    = "RAY_DASHBOARD_ADDRESS"
+	RAY_EXPECTED_MIN_WORKERS = "RAY_EXPECTED_MIN_WORKERS"
+	RAY_JOB_SUBMISSION_ID    = "RAY_JOB_SUBMISSION_ID"
 
 	// Environment variables for Ray Autoscaler V2.
 	// The value of RAY_CLOUD_INSTANCE_ID is the Pod name for Autoscaler V2 alpha. This may change in the future.
