@@ -22,6 +22,7 @@ type EventHandler struct {
 
 	ClusterTaskMap  *types.ClusterTaskMap
 	ClusterActorMap *types.ClusterActorMap
+	ClusterJobMap   *types.ClusterJobMap
 }
 
 var eventFilePattern = regexp.MustCompile(`-\d{4}-\d{2}-\d{2}-\d{2}$`)
@@ -43,6 +44,9 @@ func NewEventHandler(reader storage.StorageReader) *EventHandler {
 		},
 		ClusterActorMap: &types.ClusterActorMap{
 			ClusterActorMap: make(map[string]*types.ActorMap),
+		},
+		ClusterJobMap: &types.ClusterJobMap{
+			ClusterJobMap: make(map[string]*types.JobMap),
 		},
 	}
 }
@@ -525,6 +529,137 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 		// TODO: Handle actor task definition event
 		// This is related to GET /api/v0/tasks (type=ACTOR_TASK)
 		logrus.Debugf("ACTOR_TASK_DEFINITION_EVENT received, not yet implemented")
+
+	case types.DRIVER_JOB_DEFINITION_EVENT:
+		jobDef, ok := eventMap["driverJobDefinitionEvent"]
+		if !ok {
+			return fmt.Errorf("event does not have 'driverJobDefinitionEvent'")
+		}
+
+		jsonDriverJobDefinition, err := json.Marshal(jobDef)
+		if err != nil {
+			return err
+		}
+
+		var currJob types.Job
+		if err := json.Unmarshal(jsonDriverJobDefinition, &currJob); err != nil {
+			return err
+		}
+
+		jobMap := h.ClusterJobMap.GetOrCreateJobMap(currentClusterName)
+		jobMap.CreateOrMergeJob(currJob.JobID, func(j *types.Job) {
+			// Merge job by temp storing fields that the current job cannot fill in,
+			// and then replace the job with current job and then fill in the stored fields
+			existingStateTransitions := j.StateTransitions
+			existingStatusTransitions := j.StatusTransitions
+			existingStatus := j.Status
+			existingStartTime := j.StartTime
+			existingEndTime := j.EndTime
+			existingMessage := j.Message
+			existingDriverExitCode := j.DriverExitCode
+
+			*j = currJob
+
+			if len(existingStateTransitions) > 0 {
+				j.StateTransitions = existingStateTransitions
+				j.StatusTransitions = existingStatusTransitions
+				j.Status = existingStatus
+				j.StartTime = existingStartTime
+				j.EndTime = existingEndTime
+				j.Message = existingMessage
+				j.DriverExitCode = existingDriverExitCode
+			}
+		})
+	case types.DRIVER_JOB_LIFECYCLE_EVENT:
+		jobLifecycleEvent, ok := eventMap["driverJobLifecycleEvent"].(map[string]any)
+		if !ok {
+			return fmt.Errorf("invalid driverJobLifecycleEvent format")
+		}
+
+		jobId, _ := jobLifecycleEvent["jobId"].(string)
+		stateTransitionUnstructed, _ := jobLifecycleEvent["stateTransitions"].([]any)
+
+		if len(stateTransitionUnstructed) == 0 || jobId == "" {
+			return nil
+		}
+
+		// TODO(chiayi): Will need to convert status timeline once it is added as well
+		// Following fields are related to status transition:
+		//  - status
+		//  - message
+		//  - errorType
+		//  - driverExitCode
+		var stateTransitions []types.JobStateTransition
+		for _, transition := range stateTransitionUnstructed {
+			tr, ok := transition.(map[string]any)
+			if !ok {
+				continue
+			}
+			state, _ := tr["state"].(string)
+			timestampStr, _ := tr["timestamp"].(string)
+
+			var timestamp time.Time
+			if timestampStr != "" {
+				timestamp, _ = time.Parse(time.RFC3339Nano, timestampStr)
+			}
+
+			stateTransitions = append(stateTransitions, types.JobStateTransition{
+				State:     types.JobState(state),
+				Timestamp: timestamp,
+			})
+		}
+
+		if len(stateTransitions) == 0 {
+			return nil
+		}
+
+		jobMap := h.ClusterJobMap.GetOrCreateJobMap(currentClusterName)
+		jobMap.CreateOrMergeJob(jobId, func(j *types.Job) {
+			// TODO(chiayi): take care of status (job progress) state if part of DriverJobLifecycleEvent
+			j.JobID = jobId
+
+			type stateTransitionKey struct {
+				State     string
+				Timestamp int64
+			}
+
+			existingStateKeys := make(map[stateTransitionKey]bool)
+			for _, t := range j.StateTransitions {
+				existingStateKeys[stateTransitionKey{string(t.State), t.Timestamp.UnixNano()}] = true
+			}
+
+			for _, t := range stateTransitions {
+				key := stateTransitionKey{string(t.State), t.Timestamp.UnixNano()}
+				if !existingStateKeys[key] {
+					j.StateTransitions = append(j.StateTransitions, t)
+					existingStateKeys[key] = true
+				}
+			}
+
+			sort.Slice(j.StateTransitions, func(i, k int) bool {
+				return j.StateTransitions[i].Timestamp.Before(j.StateTransitions[k].Timestamp)
+			})
+
+			if len(j.StateTransitions) == 0 {
+				return
+			}
+
+			lastStateTransition := j.StateTransitions[len(j.StateTransitions)-1]
+			j.State = lastStateTransition.State
+
+			if j.StartTime.IsZero() {
+				for _, t := range j.StateTransitions {
+					if t.State == types.CREATED {
+						j.StartTime = t.Timestamp
+						break
+					}
+				}
+			}
+
+			if lastStateTransition.State == types.JOBFINISHED {
+				j.EndTime = lastStateTransition.Timestamp
+			}
+		})
 	default:
 		logrus.Infof("Event not supported, skipping: %v", eventMap)
 	}
@@ -707,4 +842,42 @@ func (h *EventHandler) GetActorsMap(clusterName string) map[string]types.Actor {
 		actors[id] = actor.DeepCopy()
 	}
 	return actors
+}
+
+func (h *EventHandler) GetJobsMap(clusterName string) map[string]types.Job {
+	h.ClusterJobMap.RLock()
+	defer h.ClusterJobMap.RUnlock()
+
+	jobMap, ok := h.ClusterJobMap.ClusterJobMap[clusterName]
+	if !ok {
+		return map[string]types.Job{}
+	}
+
+	jobMap.Lock()
+	defer jobMap.UnLock()
+
+	jobs := make(map[string]types.Job, len(jobMap.JobMap))
+	for id, job := range jobMap.JobMap {
+		jobs[id] = job.DeepCopy()
+	}
+	return jobs
+}
+
+func (h *EventHandler) GetJobByJobID(clusterName, jobID string) (types.Job, bool) {
+	h.ClusterJobMap.RLock()
+	defer h.ClusterJobMap.Unlock()
+
+	jobMap, ok := h.ClusterJobMap.ClusterJobMap[clusterName]
+	if !ok {
+		return types.Job{}, false
+	}
+
+	jobMap.Lock()
+	defer jobMap.UnLock()
+
+	job, ok := jobMap.JobMap[jobID]
+	if !ok {
+		return types.Job{}, false
+	}
+	return job.DeepCopy(), true
 }
