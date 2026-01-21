@@ -48,7 +48,6 @@ func testLiveClusters(test Test, g *WithT, namespace *corev1.Namespace, s3Client
 	ApplyHistoryServer(test, g, namespace)
 	historyServerURL := PortForwardHistoryServer(test, g, namespace)
 
-	// Verify cluster appears in /clusters/ with session="live"
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
 	g.Expect(clusterInfo.SessionName).To(Equal(LiveSessionName), "Live cluster should have sessionName='live'")
 
@@ -66,9 +65,7 @@ func setClusterContext(test Test, g *WithT, client *http.Client, historyServerUR
 
 	g.Eventually(func(gg Gomega) {
 		resp, err := client.Get(enterURL)
-		if err != nil {
-			return
-		}
+		gg.Expect(err).NotTo(HaveOccurred())
 		defer resp.Body.Close()
 		gg.Expect(resp.StatusCode).To(Equal(http.StatusOK))
 
@@ -91,9 +88,7 @@ func verifyHistoryServerEndpoints(test Test, g *WithT, client *http.Client, hist
 		LogWithTimestamp(test.T(), "Testing history server endpoint: %s", endpoint)
 		g.Eventually(func(gg Gomega) {
 			resp, err := client.Get(historyServerURL + endpoint)
-			if err != nil {
-				return
-			}
+			gg.Expect(err).NotTo(HaveOccurred())
 			defer resp.Body.Close()
 
 			body, err := io.ReadAll(resp.Body)
@@ -117,9 +112,7 @@ func getClusterFromList(test Test, g *WithT, historyServerURL, clusterName, name
 	var result *utils.ClusterInfo
 	g.Eventually(func(gg Gomega) {
 		resp, err := http.Get(historyServerURL + "/clusters/")
-		if err != nil {
-			return
-		}
+		gg.Expect(err).NotTo(HaveOccurred())
 		defer resp.Body.Close()
 
 		body, err := io.ReadAll(resp.Body)

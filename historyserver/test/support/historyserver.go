@@ -43,7 +43,7 @@ const (
 //   - /api/v0/placement_groups
 //   - /api/v0/logs/file
 var HistoryServerEndpoints = []string{
-	"/nodes",
+	"/nodes?view=summary",
 	"/api/v0/tasks",
 	"/api/v0/tasks/summarize",
 	"/logical/actors",
@@ -72,7 +72,7 @@ func ApplyHistoryServer(test Test, g *WithT, namespace *corev1.Namespace) {
 	}
 	clusterRoleBinding := &rbacv1.ClusterRoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: fmt.Sprintf("historyserver-%s", namespace.Name),
+			Name: "historyserver",
 		},
 		Subjects: []rbacv1.Subject{
 			{

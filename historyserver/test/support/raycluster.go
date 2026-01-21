@@ -39,7 +39,7 @@ func ApplyRayClusterWithCollector(test Test, g *WithT, namespace *corev1.Namespa
 	return rayCluster
 }
 
-// GetSessionIDFromHeadPod retrieves the sessionID from the Ray head pod by reading the symlink
+// getSessionIDFromHeadPod retrieves the sessionID from the Ray head pod by reading the symlink
 // /tmp/ray/session_latest and getting its basename.
 func GetSessionIDFromHeadPod(test Test, g *WithT, rayCluster *rayv1.RayCluster) string {
 	headPod, err := GetHeadPod(test, rayCluster)
@@ -54,6 +54,7 @@ else
 fi`
 	output, _ := ExecPodCmd(test, headPod, "ray-head", []string{"sh", "-c", getSessionIDCmd})
 
+	// Parse output to extract the sessionID.
 	sessionID := strings.TrimSpace(output.String())
 	LogWithTimestamp(test.T(), "Retrieved sessionID: %s", sessionID)
 	g.Expect(sessionID).NotTo(BeEmpty(), "sessionID should not be empty")
@@ -74,6 +75,27 @@ else
 fi`
 	output, _ := ExecPodCmd(test, headPod, "ray-head", []string{"sh", "-c", getNodeIDCmd})
 
+	nodeID := strings.TrimSpace(output.String())
+	LogWithTimestamp(test.T(), "Retrieved nodeID: %s", nodeID)
+	g.Expect(nodeID).NotTo(BeEmpty(), "nodeID should not be empty")
+
+	return nodeID
+}
+
+// GetNodeIDFromPod retrieves the nodeID from the Ray head or worker pod by reading /tmp/ray/raylet_node_id.
+func GetNodeIDFromPod(test Test, g *WithT, getPod func() (*corev1.Pod, error), containerName string) string {
+	pod, err := getPod()
+	g.Expect(err).NotTo(HaveOccurred())
+
+	getNodeIDCmd := `if [ -f "/tmp/ray/raylet_node_id" ]; then
+  cat /tmp/ray/raylet_node_id
+else
+  echo "raylet_node_id not found"
+  exit 1
+fi`
+	output, _ := ExecPodCmd(test, pod, containerName, []string{"sh", "-c", getNodeIDCmd})
+
+	// Parse output to extract the nodeID.
 	nodeID := strings.TrimSpace(output.String())
 	LogWithTimestamp(test.T(), "Retrieved nodeID: %s", nodeID)
 	g.Expect(nodeID).NotTo(BeEmpty(), "nodeID should not be empty")

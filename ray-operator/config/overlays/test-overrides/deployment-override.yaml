@@ -9,4 +9,4 @@ spec:
       containers:
       - name: kuberay-operator
         args:
-        - --feature-gates=RayClusterStatusConditions=true,RayJobDeletionPolicy=true,RayMultiHostIndexing=true
+        - --feature-gates=RayClusterStatusConditions=true,RayJobDeletionPolicy=true,RayMultiHostIndexing=true,AsyncJobInfoQuery=true
