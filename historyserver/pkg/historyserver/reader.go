@@ -8,8 +8,9 @@ import (
 	"sort"
 
 	"github.com/emicklei/go-restful/v3"
-	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 	"github.com/sirupsen/logrus"
+
+	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
 func (s *ServerHandler) listClusters(limit int) []utils.ClusterInfo {
@@ -80,7 +81,12 @@ func (s *ServerHandler) GetNodes(rayClusterNameID, sessionId string) ([]byte, er
 	return json.Marshal(templ)
 }
 
-// TODO: implement this
-func (h *ServerHandler) getGrafanaHealth(req *restful.Request, resp *restful.Response) {
-	resp.WriteErrorString(http.StatusNotImplemented, "Grafana health not yet supported")
+func (s *ServerHandler) getGrafanaHealth(req *restful.Request, resp *restful.Response) {
+	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
+	if sessionName == "live" {
+		s.redirectRequest(req, resp)
+		return
+	}
+
+	resp.WriteErrorString(http.StatusNotImplemented, "Grafana health is not yet supported for historical sessions.")
 }
