@@ -6,12 +6,10 @@ import (
 	"io/fs"
 	"net/http"
 	"os"
-	"os/signal"
 	"path"
 	"path/filepath"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
@@ -59,25 +57,16 @@ func (r *RayLogHandler) Run(stop <-chan struct{}) error {
 	}
 	defer watcher.Close()
 
-	// Setup signal handling for SIGTERM
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGTERM)
 	go r.WatchPrevLogsLoops()
 	if r.EnableMeta {
 		go r.WatchSessionLatestLoops() // Watch session_latest symlink changes
 	}
 
-	select {
-	case <-sigChan:
-		logrus.Info("Received SIGTERM, processing all logs...")
-		r.processSessionLatestLogs()
-		close(r.ShutdownChan)
-	case <-stop:
-		logrus.Info("Received stop signal, processing all logs...")
-		r.processSessionLatestLogs()
-		close(r.ShutdownChan)
-	}
-	logrus.Warnf("Receive stop single, so stop ray collector ")
+	<-stop
+	logrus.Info("Received stop signal, processing all logs...")
+	r.processSessionLatestLogs()
+	close(r.ShutdownChan)
+
 	return nil
 }
 
