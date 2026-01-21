@@ -351,8 +351,6 @@ func (s *ServerHandler) getJobs(req *restful.Request, resp *restful.Response) {
 		return
 	}
 
-	// TODO(chiayi): Check for filters used in this endpoint
-
 	jobsMap := s.eventHandler.GetJobsMap(clusterNameID)
 
 	jobs := make([]eventtypes.Job, 0, len(jobsMap))

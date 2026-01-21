@@ -724,6 +724,166 @@ func TestActorLifecycleEventDeduplication(t *testing.T) {
 	}
 }
 
+// TestDriverJobLifeCycleEventDuplication tests that duplicate events are properly filtered and sorted
+// TODO(chiayi): Update once more fields are added to driver job event
+func TestDriverJobLifecycleEventDuplication(t *testing.T) {
+	makeDriverJobStateTransitionEvent := func(state types.JobState, timestampNano int64) types.JobStateTransition {
+		return types.JobStateTransition{
+			State:     state,
+			Timestamp: time.Unix(0, timestampNano),
+		}
+	}
+
+	makeDriverJobLifecycleEvent := func(jobID string, transitions []map[string]any) map[string]any {
+		transitionsAny := make([]any, len(transitions))
+		for i, t := range transitions {
+			transitionsAny[i] = t
+		}
+		return map[string]any{
+			"eventType":   string(types.DRIVER_JOB_LIFECYCLE_EVENT),
+			"clusterName": "test-cluster",
+			"driverJobLifecycleEvent": map[string]any{
+				"jobId":            jobID,
+				"stateTransitions": transitions,
+			},
+		}
+	}
+
+	makeTransition := func(state string, timestampNano int64) map[string]any {
+		return map[string]any{
+			"state":     state,
+			"timestamp": time.Unix(0, timestampNano).Format(time.RFC3339Nano),
+		}
+	}
+
+	tests := []struct {
+		name string
+		// Available Job States are UNSPECIFIED, CREATED, JOBFINISHED
+		existingTransitions []types.JobStateTransition
+		newTransitions      []map[string]any
+		wantTransitions     []types.JobStateTransition
+		wantState           types.JobState
+	}{
+		{
+			name: "Driver Job: Same event is processed twice",
+			existingTransitions: []types.JobStateTransition{
+				makeDriverJobStateTransitionEvent(types.UNSPECIFIED, 1000),
+				makeDriverJobStateTransitionEvent(types.CREATED, 2000),
+			},
+			newTransitions: []map[string]any{
+				makeTransition("UNSPECIFIED", 1000),
+				makeTransition("CREATED", 2000),
+			},
+			wantTransitions: []types.JobStateTransition{
+				makeDriverJobStateTransitionEvent(types.UNSPECIFIED, 1000),
+				makeDriverJobStateTransitionEvent(types.CREATED, 2000),
+			},
+			wantState: types.CREATED,
+		},
+		{
+			name:                "Driver Job: Empty existing transitions",
+			existingTransitions: []types.JobStateTransition{},
+			newTransitions: []map[string]any{
+				makeTransition("UNSPECIFIED", 1000),
+				makeTransition("CREATED", 2000),
+				makeTransition("FINISHED", 3000),
+			},
+			wantTransitions: []types.JobStateTransition{
+				makeDriverJobStateTransitionEvent(types.UNSPECIFIED, 1000),
+				makeDriverJobStateTransitionEvent(types.CREATED, 2000),
+				makeDriverJobStateTransitionEvent(types.JOBFINISHED, 3000),
+			},
+			wantState: types.JOBFINISHED,
+		},
+		{
+			name: "Driver Job: Out of order transition event",
+			existingTransitions: []types.JobStateTransition{
+				makeDriverJobStateTransitionEvent(types.UNSPECIFIED, 1000),
+				makeDriverJobStateTransitionEvent(types.JOBFINISHED, 3000),
+			},
+			newTransitions: []map[string]any{
+				makeTransition("CREATED", 2000),
+			},
+			wantTransitions: []types.JobStateTransition{
+				makeDriverJobStateTransitionEvent(types.UNSPECIFIED, 1000),
+				makeDriverJobStateTransitionEvent(types.CREATED, 2000),
+				makeDriverJobStateTransitionEvent(types.JOBFINISHED, 3000),
+			},
+			wantState: types.JOBFINISHED,
+		},
+		{
+			name: "Driver Job: Multiple duplicate of same transition event",
+			existingTransitions: []types.JobStateTransition{
+				makeDriverJobStateTransitionEvent(types.CREATED, 2000),
+			},
+			newTransitions: []map[string]any{
+				makeTransition("CREATED", 2000),
+				makeTransition("CREATED", 2000),
+				makeTransition("CREATED", 2000),
+				makeTransition("CREATED", 2000),
+			},
+			wantTransitions: []types.JobStateTransition{
+				makeDriverJobStateTransitionEvent(types.CREATED, 2000),
+			},
+			wantState: types.CREATED,
+		},
+		{
+			name: "Driver Job: Different transition events with same time stamp, all be kept",
+			existingTransitions: []types.JobStateTransition{
+				makeDriverJobStateTransitionEvent(types.UNSPECIFIED, 1000),
+			},
+			newTransitions: []map[string]any{
+				makeTransition("CREATED", 1000),
+				makeTransition("CREATED", 2000),
+				makeTransition("FINISHED", 2000),
+			},
+			wantTransitions: []types.JobStateTransition{
+				makeDriverJobStateTransitionEvent(types.UNSPECIFIED, 1000),
+				makeDriverJobStateTransitionEvent(types.CREATED, 1000),
+				makeDriverJobStateTransitionEvent(types.CREATED, 2000),
+				makeDriverJobStateTransitionEvent(types.JOBFINISHED, 1000),
+			},
+			wantState: types.JOBFINISHED,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := NewEventHandler(nil)
+
+			if len(tt.existingTransitions) > 0 {
+				jobMap := h.ClusterJobMap.GetOrCreateJobMap("test-cluster")
+				jobMap.CreateOrMergeJob("job-1", func(job *types.Job) {
+					job.JobID = "job-1"
+					job.StateTransitions = tt.existingTransitions
+					if len(tt.existingTransitions) > 0 {
+						job.State = tt.existingTransitions[len(tt.existingTransitions)-1].State
+					}
+				})
+			}
+
+			eventMap := makeDriverJobLifecycleEvent("job-1", tt.newTransitions)
+			err := h.storeEvent(eventMap)
+			if err != nil {
+				t.Fatalf("storeEvent() unexpected error: %v", err)
+			}
+
+			job, exists := h.GetJobByJobID("test-cluster", "job-1")
+			if !exists {
+				t.Fatal("Job not found after processing")
+			}
+
+			if len(job.StateTransitions) != len(tt.wantTransitions) {
+				t.Errorf("Actual transition count %d but expected %d", len(job.StateTransitions), len(tt.wantTransitions))
+			}
+
+			if job.State != tt.wantState {
+				t.Errorf("Actual State %v but expected %v", job.State, tt.wantState)
+			}
+		})
+	}
+}
+
 // TestMultipleReprocessingCycles simulates hourly reprocessing and verifies no memory growth
 func TestMultipleReprocessingCycles(t *testing.T) {
 	h := NewEventHandler(nil)
