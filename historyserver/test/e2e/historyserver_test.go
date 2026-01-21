@@ -16,6 +16,8 @@ import (
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
 
+const LiveSessionName = "live"
+
 func TestHistoryServer(t *testing.T) {
 	// Share a single S3 client among subtests.
 	s3Client := EnsureS3Client(t)
@@ -46,39 +48,12 @@ func testLiveClusters(test Test, g *WithT, namespace *corev1.Namespace, s3Client
 	ApplyHistoryServer(test, g, namespace)
 	historyServerURL := PortForwardHistoryServer(test, g, namespace)
 
-	LogWithTimestamp(test.T(), "Verifying /clusters/ endpoint returns live ray cluster")
-	g.Eventually(func(gg Gomega) {
-		resp, err := http.Get(historyServerURL + "/clusters/")
-		if err != nil {
-			return
-		}
-		defer resp.Body.Close()
-
-		body, err := io.ReadAll(resp.Body)
-		gg.Expect(err).NotTo(HaveOccurred())
-
-		var clusters []utils.ClusterInfo
-		err = json.Unmarshal(body, &clusters)
-		gg.Expect(err).NotTo(HaveOccurred())
-
-		// Verify ray cluster is in the list
-		var foundCluster *utils.ClusterInfo
-		for i, c := range clusters {
-			if c.Name == rayCluster.Name && c.Namespace == namespace.Name {
-				foundCluster = &clusters[i]
-				break
-			}
-		}
-		if foundCluster == nil {
-			return
-		}
-		gg.Expect(foundCluster.SessionName).To(Equal("live"), "Live cluster should have sessionName='live'")
-		LogWithTimestamp(test.T(), "Found live cluster: %s/%s with sessionName=%s",
-			foundCluster.Namespace, foundCluster.Name, foundCluster.SessionName)
-	}, TestTimeoutMedium).Should(Succeed())
+	// Verify cluster appears in /clusters/ with session="live"
+	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
+	g.Expect(clusterInfo.SessionName).To(Equal(LiveSessionName), "Live cluster should have sessionName='live'")
 
 	client := CreateHTTPClientWithCookieJar(g)
-	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, "live")
+	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 	verifyHistoryServerEndpoints(test, g, client, historyServerURL)
 	DeleteS3Bucket(test, g, s3Client)
 	LogWithTimestamp(test.T(), "Live clusters E2E test completed successfully")
@@ -133,4 +108,37 @@ func verifyHistoryServerEndpoints(test Test, g *WithT, client *http.Client, hist
 			LogWithTimestamp(test.T(), "Endpoint %s returned status %d", endpoint, resp.StatusCode)
 		}, TestTimeoutShort).Should(Succeed())
 	}
+}
+
+// getClusterFromList retrieves a cluster from the /clusters/ endpoint by name and namespace.
+func getClusterFromList(test Test, g *WithT, historyServerURL, clusterName, namespace string) *utils.ClusterInfo {
+	LogWithTimestamp(test.T(), "Getting cluster %s/%s from /clusters/ endpoint", namespace, clusterName)
+
+	var result *utils.ClusterInfo
+	g.Eventually(func(gg Gomega) {
+		resp, err := http.Get(historyServerURL + "/clusters/")
+		if err != nil {
+			return
+		}
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		gg.Expect(err).NotTo(HaveOccurred())
+
+		var clusters []utils.ClusterInfo
+		err = json.Unmarshal(body, &clusters)
+		gg.Expect(err).NotTo(HaveOccurred())
+
+		for i, c := range clusters {
+			if c.Name == clusterName && c.Namespace == namespace {
+				result = &clusters[i]
+				break
+			}
+		}
+		gg.Expect(result).NotTo(BeNil(), "Cluster %s/%s should be in the list", namespace, clusterName)
+		LogWithTimestamp(test.T(), "Found cluster: %s/%s with sessionName=%s",
+			result.Namespace, result.Name, result.SessionName)
+	}, TestTimeoutMedium).Should(Succeed())
+
+	return result
 }
