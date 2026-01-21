@@ -72,7 +72,7 @@ func ApplyHistoryServer(test Test, g *WithT, namespace *corev1.Namespace) {
 	}
 	clusterRoleBinding := &rbacv1.ClusterRoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "historyserver",
+			Name: fmt.Sprintf("historyserver-%s", namespace.Name),
 		},
 		Subjects: []rbacv1.Subject{
 			{
@@ -101,6 +101,13 @@ func ApplyHistoryServer(test Test, g *WithT, namespace *corev1.Namespace) {
 	if err != nil && !k8serrors.IsAlreadyExists(err) {
 		g.Expect(err).NotTo(HaveOccurred())
 	}
+
+	// ClusterRoleBinding is cluster-scoped and won't be deleted when the namespace is cleaned up.
+	// Register cleanup to prevent accumulation across test runs.
+	test.T().Cleanup(func() {
+		_ = test.Client().Core().RbacV1().ClusterRoleBindings().Delete(
+			context.Background(), clusterRoleBinding.Name, metav1.DeleteOptions{})
+	})
 
 	KubectlApplyYAML(test, HistoryServerManifestPath, namespace.Name)
 
