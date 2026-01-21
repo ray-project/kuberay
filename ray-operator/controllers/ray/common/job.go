@@ -81,6 +81,30 @@ func GetMetadataJson(metadata map[string]string, rayVersion string) (string, err
 	return pkgutils.ConvertByteSliceToString(metadataBytes), nil
 }
 
+// GetMinReplicasFromSpec calculates the minimum expected worker replicas from the RayClusterSpec.
+// This is used in SidecarMode to determine how many workers should be registered before submitting the job.
+func GetMinReplicasFromSpec(rayClusterSpec *rayv1.RayClusterSpec) int32 {
+	if rayClusterSpec == nil {
+		return 0
+	}
+	count := int32(0)
+	for _, nodeGroup := range rayClusterSpec.WorkerGroupSpecs {
+		if nodeGroup.Suspend != nil && *nodeGroup.Suspend {
+			continue
+		}
+		minReplicas := int32(0)
+		if nodeGroup.MinReplicas != nil && *nodeGroup.MinReplicas > 0 {
+			minReplicas = *nodeGroup.MinReplicas
+		} else if nodeGroup.Replicas != nil && *nodeGroup.Replicas > 0 {
+			// Fall back to Replicas when MinReplicas is not set or is 0.
+			// This handles static clusters where users only set Replicas.
+			minReplicas = *nodeGroup.Replicas
+		}
+		count += minReplicas * nodeGroup.NumOfHosts
+	}
+	return count
+}
+
 // BuildJobSubmitCommand builds the `ray job submit` command based on submission mode.
 func BuildJobSubmitCommand(rayJobInstance *rayv1.RayJob, submissionMode rayv1.JobSubmissionMode) ([]string, error) {
 	var address string
@@ -139,6 +163,33 @@ func BuildJobSubmitCommand(rayJobInstance *rayv1.RayJob, submissionMode rayv1.Jo
 			"do", "echo", strconv.Quote("Waiting for Ray Dashboard GCS to become healthy at " + address + " ..."), ";", "sleep", "2", ";", "done", ";",
 		}
 		cmd = append(cmd, waitLoop...)
+
+		// Wait for the expected number of worker nodes to register for the Ray cluster.
+		// RAY_EXPECTED_MIN_WORKERS is set by the controller based on the MinReplicas in the RayClusterSpec.
+		// The loop queries the Ray Dashboard API to get the number of alive nodes and
+		// continues until the number of alive nodes is equal to (expected_workers + 1) for head node.
+		// This ensures that worker pods are connected before the job is submitted otherwise
+		// the jobs may run on the Head node.
+		//
+		// Note: This loop will never timeout and will wait indefinitely if workers never register.
+		// This can be mitigated by setting the RayJob's `activeDeadlineSeconds` field
+		// to enforce a maximum job execution time.
+		//
+		// The wget command includes the x-ray-authorization header if RAY_AUTH_TOKEN is set.
+		// This is required when Ray auth token mode is enabled, otherwise the request will fail with 401.
+		wgetAuthHeader := "${" + utils.RAY_AUTH_TOKEN_ENV_VAR + ":+--header \"x-ray-authorization: Bearer $" + utils.RAY_AUTH_TOKEN_ENV_VAR + "\"}"
+		waitForNodesLoop := []string{
+			"if", "[", "-n", "\"$" + utils.RAY_EXPECTED_MIN_WORKERS + "\"", "]", "&&", "[", "\"$" + utils.RAY_EXPECTED_MIN_WORKERS + "\"", "-gt", "\"0\"", "]", ";", "then",
+			"EXPECTED_NODES=$(($" + utils.RAY_EXPECTED_MIN_WORKERS + " + 1))", ";",
+			"echo", strconv.Quote("Waiting for $EXPECTED_NODES nodes (1 head + $" + utils.RAY_EXPECTED_MIN_WORKERS + " workers) to register..."), ";",
+			"until", "[",
+			"\"$(wget " + wgetAuthHeader + " -q -O- " + address + "/nodes?view=summary 2>/dev/null | python3 -c \"import sys,json; d=json.load(sys.stdin); print(len([n for n in d.get('data',{}).get('summary',[]) if n.get('raylet',{}).get('state','')=='ALIVE']))\" 2>/dev/null || echo 0)\"",
+			"-ge", "\"$EXPECTED_NODES\"", "]", ";",
+			"do", "echo", strconv.Quote("Waiting for Ray nodes to register. Expected: $EXPECTED_NODES ..."), ";", "sleep", "2", ";", "done", ";",
+			"echo", strconv.Quote("All expected nodes are registered."), ";",
+			"fi", ";",
+		}
+		cmd = append(cmd, waitForNodesLoop...)
 	}
 
 	// In Sidecar mode, we only support RayJob level retry, which means that the submitter retry won't happen,
