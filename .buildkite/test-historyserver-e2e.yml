@@ -1,4 +1,4 @@
-- label: 'Test History Server Collector E2E (nightly operator)'
+- label: 'Test History Server E2E (nightly operator)'
   instance_size: large
   image: golang:1.25-bookworm
   commands:
