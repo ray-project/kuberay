@@ -93,11 +93,7 @@ func verifyHistoryServerEndpoints(test Test, g *WithT, client *http.Client, hist
 
 			body, err := io.ReadAll(resp.Body)
 			gg.Expect(err).NotTo(HaveOccurred())
-
-			// Proxy should not return server errors (5xx)
-			// Some endpoints may return 4xx if Ray Dashboard doesn't support them,
-			// but 5xx indicates a proxy failure.
-			gg.Expect(resp.StatusCode).To(BeNumerically("<", 500),
+			gg.Expect(resp.StatusCode).To(BeNumerically("=", 200),
 				"Endpoint %s should not return server error, got %d: %s", endpoint, resp.StatusCode, string(body))
 
 			LogWithTimestamp(test.T(), "Endpoint %s returned status %d", endpoint, resp.StatusCode)
