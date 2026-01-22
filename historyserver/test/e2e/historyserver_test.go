@@ -95,7 +95,7 @@ func verifyHistoryServerEndpoints(test Test, g *WithT, client *http.Client, hist
 			body, err := io.ReadAll(resp.Body)
 			gg.Expect(err).NotTo(HaveOccurred())
 			gg.Expect(resp.StatusCode).To(BeNumerically("=", 200),
-				"Endpoint %s should not return server error, got %d: %s", endpoint, resp.StatusCode, string(body))
+				"Endpoint %s should return 200, got %d: %s", endpoint, resp.StatusCode, string(body))
 
 			LogWithTimestamp(test.T(), "Endpoint %s returned status %d", endpoint, resp.StatusCode)
 		}, TestTimeoutShort).Should(Succeed())
