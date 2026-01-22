@@ -3,6 +3,7 @@ package support
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"os/exec"
 
@@ -149,7 +150,10 @@ func PortForwardHistoryServer(test Test, g *WithT, namespace *corev1.Namespace) 
 		if err != nil {
 			return err
 		}
-		defer resp.Body.Close()
+		defer func() {
+			io.Copy(io.Discard, resp.Body)
+			resp.Body.Close()
+		}()
 		if resp.StatusCode != http.StatusOK {
 			return fmt.Errorf("health check failed with status: %d", resp.StatusCode)
 		}
