@@ -45,6 +45,7 @@ func TestHistoryServer(t *testing.T) {
 
 func testLiveClusters(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
+	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 	ApplyHistoryServer(test, g, namespace)
 	historyServerURL := PortForwardHistoryServer(test, g, namespace)
 
