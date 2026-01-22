@@ -24,7 +24,7 @@ const (
 )
 
 // HistoryServerEndpoints defines endpoints that should be proxied to Ray Dashboard
-// Ref: https://github.com/ray-project/kuberay/blob/master/historyserver/pkg/historyserver/router.go
+// Ref: https://github.com/ray-project/kuberay/blob/8fc4e2a0e644db392534927b7c03d15e3ab7bdbc/historyserver/pkg/historyserver/router.go#L66-L128
 //
 // Excluded endpoints that require parameters:
 //   - /nodes/{node_id}
