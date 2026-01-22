@@ -5,12 +5,6 @@ import (
 	"time"
 )
 
-type JobType string
-
-const (
-	SUBMISSION JobType = "SUBMISSION"
-)
-
 // JobStatus represents the job submission progress and execution status
 type JobStatus string
 
@@ -54,7 +48,7 @@ type JobStateTransition struct {
 type Job struct {
 	JobID                  string            `json:"jobId"`
 	SubmissionID           string            `json:"submissionId"`
-	JobType                JobType           `json:"type"`
+	JobType                string            `json:"type"`
 	Status                 JobStatus         `json:"status"`
 	State                  JobState          `json:"state"`
 	EntryPoint             string            `json:"entrypoint"`
