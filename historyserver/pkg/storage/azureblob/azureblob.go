@@ -158,7 +158,7 @@ func (r *RayLogsHandler) listBlobs(prefix string, delimiter string, onlyBase boo
 func (r *RayLogsHandler) ListFiles(clusterId string, dir string) []string {
 	defer func() {
 		if r := recover(); r != nil {
-			fmt.Println("Recovered from panic:", r)
+			logrus.Errorf("Recovered from panic: %v", r)
 		}
 	}()
 
@@ -170,7 +170,7 @@ func (r *RayLogsHandler) ListFiles(clusterId string, dir string) []string {
 func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 	defer func() {
 		if r := recover(); r != nil {
-			fmt.Println("Recovered from panic:", r)
+			logrus.Errorf("Recovered from panic: %v", r)
 		}
 	}()
 
@@ -253,7 +253,6 @@ func (r *RayLogsHandler) GetContent(clusterId string, fileName string) io.Reader
 		// Try to find the file by listing direct children only (use delimiter)
 		dirPath := path.Dir(fullPath)
 		allFiles := r.listBlobs(dirPath, "/", false)
-		found := false
 		for _, f := range allFiles {
 			// Match full path to avoid returning wrong content from nested directories
 			if f == fullPath {
@@ -281,10 +280,8 @@ func (r *RayLogsHandler) GetContent(clusterId string, fileName string) io.Reader
 				return bytes.NewReader(data)
 			}
 		}
-		if !found {
-			logrus.Errorf("Failed to get blob by listing all files %s", fileName)
-			return nil
-		}
+		logrus.Errorf("Failed to get blob by listing all files %s", fileName)
+		return nil
 	}
 	defer resp.Body.Close()
 
