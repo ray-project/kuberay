@@ -36,5 +36,15 @@ type ClusterStatusResponse struct {
 type ClusterStatusData struct {
 	AutoscalingStatus *string `json:"autoscalingStatus"`
 	AutoscalingError  *string `json:"autoscalingError"`
-	ClusterStatus     any     `json:"clusterStatus"` // TODO will need an update when the ray dashboard API supports autoscaler V2 directly
+	ClusterStatus     any     `json:"clusterStatus"` // TODO: update it once ray dashboard api /api/cluster_status supports autoscaler info
+}
+
+type FormattedClusterStatusResponse struct {
+	Result bool                       `json:"result"`
+	Msg    string                     `json:"msg"`
+	Data   FormattedClusterStatusData `json:"data"`
+}
+
+type FormattedClusterStatusData struct {
+	ClusterStatus string `json:"clusterStatus"`
 }

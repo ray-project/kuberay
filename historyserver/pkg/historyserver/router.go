@@ -408,29 +408,84 @@ func (s *ServerHandler) getClusterStatus(req *restful.Request, resp *restful.Res
 		return
 	}
 
-	// Dead cluster: return null to match live Ray dashboard behavior with KubeRay autoscaler.
-	// The live dashboard's /api/cluster_status returns null for autoscaling fields because
-	// KubeRay's in-tree autoscaler doesn't write to the GCS internal KV keys that the
-	// dashboard API reads from. See: https://github.com/ray-project/kuberay/issues/4381
-	//
-	// TODO: Update when Ray dashboard supports autoscaler V2 which uses GcsClient.get_cluster_status()
-	response := ClusterStatusResponse{
-		Result: true,
-		Msg:    "Got cluster status.",
-		Data: ClusterStatusData{
-			AutoscalingStatus: nil,
-			AutoscalingError:  nil,
-			ClusterStatus:     nil,
-		},
-	}
+	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
+	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
+	clusterNameID := clusterName + "_" + clusterNamespace
 
-	respData, err := json.Marshal(response)
+	format := req.QueryParameter("format")
+
+	var respData []byte
+	var err error
+
+	if format == "1" {
+		// Build cluster status from debug_state.txt and task/actor data
+		statusString := s.buildFormattedClusterStatus(clusterNameID, sessionName)
+
+		response := FormattedClusterStatusResponse{
+			Result: true,
+			Msg:    "Got formatted cluster status.",
+			Data: FormattedClusterStatusData{
+				ClusterStatus: statusString,
+			},
+		}
+		respData, err = json.Marshal(response)
+	} else {
+		// TODO Update when Ray dashboard api supports autoscaler V2 which uses GcsClient.get_cluster_status() for /api/cluster_status
+		response := ClusterStatusResponse{
+			Result: true,
+			Msg:    "Got cluster status.",
+			Data:   ClusterStatusData{},
+		}
+		respData, err = json.Marshal(response)
+	}
 	if err != nil {
 		logrus.Errorf("Failed to marshal cluster status response: %v", err)
 		resp.WriteErrorString(http.StatusInternalServerError, err.Error())
 		return
 	}
 	resp.Write(respData)
+}
+
+// buildFormattedClusterStatus reconstructs the cluster status from debug_state.txt and pending tasks and actors
+func (s *ServerHandler) buildFormattedClusterStatus(clusterNameID, sessionName string) string {
+	builder := NewClusterStatusBuilder()
+	if ts, ok := ParseSessionTimestamp(sessionName); ok {
+		builder.Timestamp = ts
+	}
+
+	logsPath := sessionName + "/logs"
+	nodeIDs := s.reader.ListFiles(clusterNameID, logsPath)
+
+	for _, nodeID := range nodeIDs {
+		debugStatePath := logsPath + "/" + nodeID + "/debug_state.txt"
+		reader := s.reader.GetContent(clusterNameID, debugStatePath)
+		if reader == nil {
+			logrus.Debugf("No debug_state.txt found for node %s", nodeID)
+			continue
+		}
+
+		content, err := io.ReadAll(reader)
+		if err != nil {
+			logrus.Debugf("Failed to read debug_state.txt for node %s: %v", nodeID, err)
+			continue
+		}
+
+		debugState, err := ParseDebugState(string(content))
+		if err != nil {
+			logrus.Debugf("Failed to parse debug_state.txt for node %s: %v", nodeID, err)
+			continue
+		}
+
+		builder.AddNodeFromDebugState(debugState)
+	}
+
+	tasks := s.eventHandler.GetTasks(clusterNameID)   // TODO Use session-scoped tasks once event handler supports session-based maps.
+	actors := s.eventHandler.GetActors(clusterNameID) // TODO Use session-scoped actors once event handler supports session-based maps.
+
+	builder.AddPendingDemandsFromTasks(tasks)
+	builder.AddPendingDemandsFromActors(actors)
+
+	return builder.FormatStatus()
 }
 
 func (s *ServerHandler) getNodeLogs(req *restful.Request, resp *restful.Response) {
