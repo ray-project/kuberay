@@ -10,7 +10,6 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -50,57 +49,23 @@ var HistoryServerEndpoints = []string{
 }
 
 // ApplyHistoryServer deploys the HistoryServer and RBAC resources.
-// EnsureClusterRole must be called before this function.
 func ApplyHistoryServer(test Test, g *WithT, namespace *corev1.Namespace) {
-	sa := &corev1.ServiceAccount{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "historyserver",
-			Namespace: namespace.Name,
-		},
-	}
-	clusterRole := &rbacv1.ClusterRole{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "raycluster-reader",
-		},
-		Rules: []rbacv1.PolicyRule{
-			{
-				APIGroups: []string{"ray.io"},
-				Resources: []string{"rayclusters"},
-				Verbs:     []string{"list", "get"},
-			},
-		},
-	}
-	clusterRoleBinding := &rbacv1.ClusterRoleBinding{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: fmt.Sprintf("historyserver-%s", namespace.Name),
-		},
-		Subjects: []rbacv1.Subject{
-			{
-				Kind:      "ServiceAccount",
-				Name:      "historyserver",
-				Namespace: namespace.Name, // Use the test namespace
-			},
-		},
-		RoleRef: rbacv1.RoleRef{
-			APIGroup: "rbac.authorization.k8s.io",
-			Kind:     "ClusterRole",
-			Name:     "raycluster-reader",
-		},
-	}
+	// Read RBAC resources from YAML and modify namespace fields.
+	sa, clusterRole, clusterRoleBinding := DeserializeRBACFromYAML(test, ServiceAccountManifestPath)
+	sa.Namespace = namespace.Name
+	clusterRoleBinding.Name = fmt.Sprintf("historyserver-%s", namespace.Name)
+	clusterRoleBinding.Subjects[0].Namespace = namespace.Name
 
 	// Create RBAC resources
 	_, err := test.Client().Core().CoreV1().ServiceAccounts(namespace.Name).Create(test.Ctx(), sa, metav1.CreateOptions{})
-	if err != nil && !k8serrors.IsAlreadyExists(err) {
-		g.Expect(err).NotTo(HaveOccurred())
-	}
+	g.Expect(err).NotTo(HaveOccurred())
+	// ClusterRole is shared across tests, ignore if already exists.
 	_, err = test.Client().Core().RbacV1().ClusterRoles().Create(test.Ctx(), clusterRole, metav1.CreateOptions{})
-	if err != nil && !k8serrors.IsAlreadyExists(err) {
+	if !k8serrors.IsAlreadyExists(err) {
 		g.Expect(err).NotTo(HaveOccurred())
 	}
 	_, err = test.Client().Core().RbacV1().ClusterRoleBindings().Create(test.Ctx(), clusterRoleBinding, metav1.CreateOptions{})
-	if err != nil && !k8serrors.IsAlreadyExists(err) {
-		g.Expect(err).NotTo(HaveOccurred())
-	}
+	g.Expect(err).NotTo(HaveOccurred())
 
 	// ClusterRoleBinding is cluster-scoped and won't be deleted when the namespace is cleaned up.
 	// Register cleanup to prevent accumulation across test runs.

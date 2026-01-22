@@ -94,7 +94,7 @@ func verifyHistoryServerEndpoints(test Test, g *WithT, client *http.Client, hist
 
 			body, err := io.ReadAll(resp.Body)
 			gg.Expect(err).NotTo(HaveOccurred())
-			gg.Expect(resp.StatusCode).To(BeNumerically("=", 200),
+			gg.Expect(resp.StatusCode).To(Equal(200),
 				"Endpoint %s should return 200, got %d: %s", endpoint, resp.StatusCode, string(body))
 
 			LogWithTimestamp(test.T(), "Endpoint %s returned status %d", endpoint, resp.StatusCode)
