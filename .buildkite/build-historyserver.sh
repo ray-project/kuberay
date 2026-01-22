@@ -4,6 +4,6 @@
 # the buildkite test-historyserver-e2e step.
 
 # TODO(jwj): Skip building if starting from ray ci release automation.
-make localimage-build && make localimage-collector &&
+make localimage-build &&
 kind load docker-image collector:v0.1.0 &&
 kind load docker-image historyserver:v0.1.0
