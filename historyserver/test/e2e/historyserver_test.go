@@ -47,7 +47,7 @@ func testLiveClusters(test Test, g *WithT, namespace *corev1.Namespace, s3Client
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 	ApplyHistoryServer(test, g, namespace)
-	historyServerURL := PortForwardHistoryServer(test, g, namespace)
+	historyServerURL := GetHistoryServerURL(test, g, namespace)
 
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
 	g.Expect(clusterInfo.SessionName).To(Equal(LiveSessionName), "Live cluster should have sessionName='live'")

@@ -1,13 +1,17 @@
 package support
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/http/cookiejar"
+	"os/exec"
 	"time"
 
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+
+	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
 
 // CreateHTTPClientWithCookieJar creates an HTTP client with cookie jar to maintain session.
@@ -31,4 +35,20 @@ func GetContainerStatusByName(pod *corev1.Pod, containerName string) (*corev1.Co
 		}
 	}
 	return nil, fmt.Errorf("container %s not found in pod %s/%s", containerName, pod.Namespace, pod.Name)
+}
+
+func PortForwardService(test Test, g *WithT, namespace, serviceName string, port int) {
+	ctx, cancel := context.WithCancel(context.Background())
+	test.T().Cleanup(cancel)
+
+	kubectlCmd := exec.CommandContext(
+		ctx,
+		"kubectl",
+		"-n", namespace,
+		"port-forward",
+		fmt.Sprintf("svc/%s", serviceName),
+		fmt.Sprintf("%d:%d", port, port),
+	)
+	err := kubectlCmd.Start()
+	g.Expect(err).NotTo(HaveOccurred())
 }

@@ -1,9 +1,7 @@
 package support
 
 import (
-	"context"
 	"fmt"
-	"os/exec"
 	"strings"
 	"testing"
 
@@ -52,19 +50,7 @@ func EnsureS3Client(t *testing.T) *s3.S3 {
 	g := NewWithT(t)
 	ApplyMinIO(test, g)
 
-	// Port-forward the MinIO API port.
-	ctx, cancel := context.WithCancel(context.Background())
-	test.T().Cleanup(cancel)
-	kubectlCmd := exec.CommandContext(
-		ctx,
-		"kubectl",
-		"-n", MinioNamespace,
-		"port-forward",
-		"svc/minio-service",
-		fmt.Sprintf("%d:%d", MinioAPIPort, MinioAPIPort),
-	)
-	err := kubectlCmd.Start()
-	g.Expect(err).NotTo(HaveOccurred())
+	PortForwardService(test, g, MinioNamespace, "minio-service", MinioAPIPort)
 
 	// Check readiness of the MinIO API endpoint.
 	g.Eventually(func() error {

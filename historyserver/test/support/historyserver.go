@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os/exec"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/s3"
@@ -126,22 +125,9 @@ func ApplyHistoryServer(test Test, g *WithT, namespace *corev1.Namespace) {
 	LogWithTimestamp(test.T(), "HistoryServer is ready")
 }
 
-// PortForwardHistoryServer sets up port-forwarding to the history server and waits for it to be ready.
-// Returns the history server URL for API calls.
-func PortForwardHistoryServer(test Test, g *WithT, namespace *corev1.Namespace) string {
-	ctx, cancel := context.WithCancel(context.Background())
-	test.T().Cleanup(cancel)
-
-	kubectlCmd := exec.CommandContext(
-		ctx,
-		"kubectl",
-		"-n", namespace.Name,
-		"port-forward",
-		"svc/historyserver",
-		fmt.Sprintf("%d:%d", HistoryServerPort, HistoryServerPort),
-	)
-	err := kubectlCmd.Start()
-	g.Expect(err).NotTo(HaveOccurred())
+// GetHistoryServerURL sets up port-forwarding to the history server and waits for it to be ready.
+func GetHistoryServerURL(test Test, g *WithT, namespace *corev1.Namespace) string {
+	PortForwardService(test, g, namespace.Name, "historyserver", HistoryServerPort)
 
 	// Wait for port-forward to be ready
 	historyServerURL := fmt.Sprintf("http://localhost:%d", HistoryServerPort)
