@@ -68,6 +68,9 @@ k9s
 # Build the collector image.
 make -C historyserver localimage-collector
 
+# Or to build the collector image with race detector
+# make -C historyserver localimage-collector-race
+
 # Check the built image.
 docker images | grep collector
 ```
