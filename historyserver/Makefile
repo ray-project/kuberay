@@ -76,6 +76,10 @@ mod:
 localimage-collector:
 	docker build -t $(COLLECTOR_IMG) -f Dockerfile.collector .
 
+.PHONY: localimage-collector-race
+localimage-collector-race:
+	docker build -t $(COLLECTOR_IMG) -f Dockerfile.collector.race .
+
 .PHONY: localimage
 localimage: dockerbuilder_instance
 	docker buildx build -t historyserver:laster --platform linux/amd64 . --load

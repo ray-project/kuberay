@@ -17,8 +17,12 @@ COPY pkg/utils/ pkg/utils/
 
 # Build the collector binary.
 COPY Makefile Makefile
-RUN make buildcollector
+RUN make buildcollector-race
+
 
 FROM ubuntu:22.04
-RUN apt-get update && apt-get upgrade -y && rm -rf /var/cache/apt/ && apt-get install -y ca-certificates
+# Install necessary libraries for race detector (libc, libpthread, etc.)
+RUN apt-get update && apt-get upgrade -y && \
+    apt-get install -y ca-certificates libc6 && \
+    rm -rf /var/lib/apt/lists/*
 COPY --from=builder /historyserver/output/bin/collector /usr/local/bin/collector
