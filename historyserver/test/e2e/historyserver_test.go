@@ -108,6 +108,7 @@ func getClusterFromList(test Test, g *WithT, historyServerURL, clusterName, name
 
 	var result *utils.ClusterInfo
 	g.Eventually(func(gg Gomega) {
+		result = nil // Reset to avoid stale value from previous iteration
 		resp, err := http.Get(historyServerURL + "/clusters/")
 		gg.Expect(err).NotTo(HaveOccurred())
 		defer resp.Body.Close()
