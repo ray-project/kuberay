@@ -3,7 +3,44 @@ kind: RayJob
 metadata:
   name: rayjob
 spec:
-  entrypoint: python -c "import ray; ray.init(); print(ray.cluster_resources())"
+  entrypoint: |
+    python -c "
+    import ray
+    import time
+    ray.init()
+
+    @ray.remote(num_cpus=0.5)
+    def my_task(x):
+        return x * 2
+
+    @ray.remote(num_cpus=0.5)
+    class Counter:
+        def __init__(self):
+            self.count = 0
+
+        def increment(self):
+            self.count += 1
+            return self.count
+
+        def get_count(self):
+            return self.count
+
+    task_result = ray.get(my_task.remote(1))
+    print(f'Task result: {task_result}')
+
+    counter = Counter.remote()
+    for i in range(1):
+        count = ray.get(counter.increment.remote())
+        print(f'Counter: {count}')
+
+    final_count = ray.get(counter.get_count.remote())
+    print(f'Final count: {final_count}')
+    print(f'Cluster resources: {ray.cluster_resources()}')
+
+    # For now, events on the worker nodes aren't sent to the collector when calling ray.shutdown().
+    # As a workaround, we explicitly wait for 5 seconds to ensure events are sent.
+    time.sleep(5)
+    "
   # Select the existing Ray cluster running the collector.
   clusterSelector:
     ray.io/cluster: raycluster-historyserver

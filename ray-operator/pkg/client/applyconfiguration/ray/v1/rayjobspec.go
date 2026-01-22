@@ -9,26 +9,70 @@ import (
 
 // RayJobSpecApplyConfiguration represents a declarative configuration of the RayJobSpec type for use
 // with apply.
+//
+// RayJobSpec defines the desired state of RayJob
 type RayJobSpecApplyConfiguration struct {
-	ActiveDeadlineSeconds    *int32                                    `json:"activeDeadlineSeconds,omitempty"`
-	BackoffLimit             *int32                                    `json:"backoffLimit,omitempty"`
-	RayClusterSpec           *RayClusterSpecApplyConfiguration         `json:"rayClusterSpec,omitempty"`
-	SubmitterPodTemplate     *corev1.PodTemplateSpecApplyConfiguration `json:"submitterPodTemplate,omitempty"`
-	Metadata                 map[string]string                         `json:"metadata,omitempty"`
-	ClusterSelector          map[string]string                         `json:"clusterSelector,omitempty"`
-	SubmitterConfig          *SubmitterConfigApplyConfiguration        `json:"submitterConfig,omitempty"`
-	ManagedBy                *string                                   `json:"managedBy,omitempty"`
-	DeletionStrategy         *DeletionStrategyApplyConfiguration       `json:"deletionStrategy,omitempty"`
-	Entrypoint               *string                                   `json:"entrypoint,omitempty"`
-	RuntimeEnvYAML           *string                                   `json:"runtimeEnvYAML,omitempty"`
-	JobId                    *string                                   `json:"jobId,omitempty"`
-	SubmissionMode           *rayv1.JobSubmissionMode                  `json:"submissionMode,omitempty"`
-	EntrypointResources      *string                                   `json:"entrypointResources,omitempty"`
-	EntrypointNumCpus        *float32                                  `json:"entrypointNumCpus,omitempty"`
-	EntrypointNumGpus        *float32                                  `json:"entrypointNumGpus,omitempty"`
-	TTLSecondsAfterFinished  *int32                                    `json:"ttlSecondsAfterFinished,omitempty"`
-	ShutdownAfterJobFinishes *bool                                     `json:"shutdownAfterJobFinishes,omitempty"`
-	Suspend                  *bool                                     `json:"suspend,omitempty"`
+	// ActiveDeadlineSeconds is the duration in seconds that the RayJob may be active before
+	// KubeRay actively tries to terminate the RayJob; value must be positive integer.
+	ActiveDeadlineSeconds *int32 `json:"activeDeadlineSeconds,omitempty"`
+	// Specifies the number of retries before marking this job failed.
+	// Each retry creates a new RayCluster.
+	BackoffLimit *int32 `json:"backoffLimit,omitempty"`
+	// RayClusterSpec is the cluster template to run the job
+	RayClusterSpec *RayClusterSpecApplyConfiguration `json:"rayClusterSpec,omitempty"`
+	// SubmitterPodTemplate is the template for the pod that will run `ray job submit`.
+	SubmitterPodTemplate *corev1.PodTemplateSpecApplyConfiguration `json:"submitterPodTemplate,omitempty"`
+	// Metadata is data to store along with this job.
+	Metadata map[string]string `json:"metadata,omitempty"`
+	// clusterSelector is used to select running rayclusters by labels
+	ClusterSelector map[string]string `json:"clusterSelector,omitempty"`
+	// Configurations of submitter k8s job.
+	SubmitterConfig *SubmitterConfigApplyConfiguration `json:"submitterConfig,omitempty"`
+	// ManagedBy is an optional configuration for the controller or entity that manages a RayJob.
+	// The value must be either 'ray.io/kuberay-operator' or 'kueue.x-k8s.io/multikueue'.
+	// The kuberay-operator reconciles a RayJob which doesn't have this field at all or
+	// the field value is the reserved string 'ray.io/kuberay-operator',
+	// but delegates reconciling the RayJob with 'kueue.x-k8s.io/multikueue' to the Kueue.
+	// The field is immutable.
+	ManagedBy *string `json:"managedBy,omitempty"`
+	// DeletionStrategy automates post-completion cleanup.
+	// Choose one style or omit:
+	// - Legacy: both onSuccess & onFailure (deprecated; may combine with shutdownAfterJobFinishes and TTLSecondsAfterFinished).
+	// - Rules: deletionRules (non-empty) — incompatible with shutdownAfterJobFinishes, legacy fields, and global TTLSecondsAfterFinished (use per-rule condition.ttlSeconds).
+	// Global TTLSecondsAfterFinished > 0 requires shutdownAfterJobFinishes=true.
+	// Feature gate RayJobDeletionPolicy must be enabled when this field is set.
+	DeletionStrategy *DeletionStrategyApplyConfiguration `json:"deletionStrategy,omitempty"`
+	// Entrypoint represents the command to start execution.
+	Entrypoint *string `json:"entrypoint,omitempty"`
+	// RuntimeEnvYAML represents the runtime environment configuration
+	// provided as a multi-line YAML string.
+	RuntimeEnvYAML *string `json:"runtimeEnvYAML,omitempty"`
+	// If jobId is not set, a new jobId will be auto-generated.
+	JobId *string `json:"jobId,omitempty"`
+	// SubmissionMode specifies how RayJob submits the Ray job to the RayCluster.
+	// In "K8sJobMode", the KubeRay operator creates a submitter Kubernetes Job to submit the Ray job.
+	// In "HTTPMode", the KubeRay operator sends a request to the RayCluster to create a Ray job.
+	// In "InteractiveMode", the KubeRay operator waits for a user to submit a job to the Ray cluster.
+	// In "SidecarMode", the KubeRay operator injects a container into the Ray head Pod that acts as the job submitter to submit the Ray job.
+	SubmissionMode *rayv1.JobSubmissionMode `json:"submissionMode,omitempty"`
+	// EntrypointResources specifies the custom resources and quantities to reserve for the
+	// entrypoint command.
+	EntrypointResources *string `json:"entrypointResources,omitempty"`
+	// EntrypointNumCpus specifies the number of cpus to reserve for the entrypoint command.
+	EntrypointNumCpus *float32 `json:"entrypointNumCpus,omitempty"`
+	// EntrypointNumGpus specifies the number of gpus to reserve for the entrypoint command.
+	EntrypointNumGpus *float32 `json:"entrypointNumGpus,omitempty"`
+	// TTLSecondsAfterFinished is the TTL to clean up RayCluster.
+	// It's only working when ShutdownAfterJobFinishes set to true.
+	TTLSecondsAfterFinished *int32 `json:"ttlSecondsAfterFinished,omitempty"`
+	// ShutdownAfterJobFinishes will determine whether to delete the ray cluster once rayJob succeed or failed.
+	ShutdownAfterJobFinishes *bool `json:"shutdownAfterJobFinishes,omitempty"`
+	// suspend specifies whether the RayJob controller should create a RayCluster instance
+	// If a job is applied with the suspend field set to true,
+	// the RayCluster will not be created and will wait for the transition to false.
+	// If the RayCluster is already created, it will be deleted.
+	// In case of transition to false a new RayCluster will be created.
+	Suspend *bool `json:"suspend,omitempty"`
 }
 
 // RayJobSpecApplyConfiguration constructs a declarative configuration of the RayJobSpec type for use with

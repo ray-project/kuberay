@@ -9,6 +9,7 @@ BIN_DIR=$(OUT_DIR)/bin
 BINARY_NAME=historyserver
 BINARY_NAME_COLLECTOR=collector
 COLLECTOR_IMG ?= collector:v0.1.0
+HISTORYSERVER_IMG ?= historyserver:v0.1.0
 
 # Setting SHELL to bash allows bash commands to be executed by recipes.
 # Options are set to exit when a recipe line exits non-zero or a piped command fails.
@@ -18,7 +19,7 @@ COMMIT_SHORT ?= $(shell git rev-parse --short HEAD)
 BRANCH ?= $(shell git branch --show-current)
 VERSION ?= $(shell git describe --tags --long|awk -F '-' '{print $$1"."$$2"-"$$3""}')
 
-PACKAGE = gitlab.alibaba-inc.com/eml/historyserver
+PACKAGE = github.com/ray-project/kuberay/historyserver
 
 GO_LDFLAGS := -extldflags "-static"
 # GO_LDFLAGS += -w -s # Drop debugging symbols.
@@ -72,6 +73,9 @@ simplebuild:
 mod:
 	go mod tidy
 
+.PHONY: localimage-build
+localimage-build: localimage-collector localimage-historyserver
+
 .PHONY: localimage-collector
 localimage-collector:
 	docker build -t $(COLLECTOR_IMG) -f Dockerfile.collector .
@@ -80,9 +84,9 @@ localimage-collector:
 localimage-collector-race:
 	docker build -t $(COLLECTOR_IMG) -f Dockerfile.collector.race .
 
-.PHONY: localimage
-localimage: dockerbuilder_instance
-	docker buildx build -t historyserver:laster --platform linux/amd64 . --load
+.PHONY: localimage-historyserver
+localimage-historyserver: dockerbuilder_instance
+	docker build -t $(HISTORYSERVER_IMG) -f Dockerfile.historyserver .
 
 .PHONY: dockerbuilder_instance
 dockerbuilder_instance:

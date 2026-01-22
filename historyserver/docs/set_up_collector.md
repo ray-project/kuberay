@@ -141,3 +141,26 @@ kubectl delete -f historyserver/config/raycluster.yaml
 You're supposed to see the uploaded logs and events in the minio UI as below:
 
 ![write_logs_and_events](https://github.com/ray-project/kuberay/blob/db7cb864061518ed4cfa7bf48cf05cfbfeb49f95/historyserver/docs/assets/write_logs_and_events.png)
+
+## Troubleshooting
+
+### "too many open files" error
+
+If you encounter `level=fatal msg="Create fsnotify NewWatcher error too many open files"` in the collector logs,
+it is likely due to the inotify limits on the Kubernetes nodes.
+
+To fix this, increase the limits on the **host nodes** (not inside the container):
+
+```bash
+# Apply changes immediately
+sudo sysctl -w fs.inotify.max_user_instances=8192
+sudo sysctl -w fs.inotify.max_user_watches=524288
+```
+
+To make these changes persistent across reboots, use the following lines:
+
+```text
+echo "fs.inotify.max_user_instances=8192" | sudo tee -a /etc/sysctl.conf
+echo "fs.inotify.max_user_watches=524288" | sudo tee -a /etc/sysctl.conf
+sudo sysctl -p
+```

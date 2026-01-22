@@ -18,7 +18,7 @@ import (
 	"github.com/fsnotify/fsnotify"
 	"github.com/sirupsen/logrus"
 
-	"github.com/ray-project/kuberay/historyserver/pkg/collector/logcollector/storage"
+	"github.com/ray-project/kuberay/historyserver/pkg/storage"
 )
 
 type Event struct {
@@ -43,6 +43,21 @@ type EventServer struct {
 	events             []Event
 	flushInterval      time.Duration
 	mutex              sync.Mutex
+}
+
+var eventTypesWithJobID = []string{
+	// Job Events (Driver Job)
+	"driverJobDefinitionEvent",
+	"driverJobLifecycleEvent",
+
+	// Task Events (Normal Task)
+	"taskDefinitionEvent",
+	"taskLifecycleEvent",
+	"taskProfileEvents",
+
+	// Actor Events (Actor Task + Actor Definition)
+	"actorTaskDefinitionEvent",
+	"actorDefinitionEvent",
 }
 
 func NewEventServer(writer storage.StorageWriter, rootDir, sessionDir, nodeID, clusterName, clusterID, sessionName string) *EventServer {
@@ -408,9 +423,14 @@ func (es *EventServer) isNodeEvent(eventData map[string]interface{}) bool {
 
 // getJobID gets jobID associated with event
 func (es *EventServer) getJobID(eventData map[string]interface{}) string {
-	if jobID, hasJob := eventData["jobId"]; hasJob && jobID != "" {
-		return fmt.Sprintf("%v", jobID)
+	for _, eventType := range eventTypesWithJobID {
+		if nestedEvent, ok := eventData[eventType].(map[string]interface{}); ok {
+			if jobID, hasJob := nestedEvent["jobId"]; hasJob && jobID != "" {
+				return fmt.Sprintf("%v", jobID)
+			}
+		}
 	}
+
 	return ""
 }
 

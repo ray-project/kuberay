@@ -25,11 +25,11 @@ spec:
               name: client
             resources:
               limits:
-                cpu: 1
-                memory: 5Gi
+                cpu: "1"
+                memory: "5Gi"
               requests:
-                cpu: 1
-                memory: 2Gi
+                cpu: "1"
+                memory: "2Gi"
             volumeMounts:
             - mountPath: /home/ray/samples
               name: code-sample

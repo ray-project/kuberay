@@ -26,8 +26,8 @@ var (
 	JobPath = "/api/jobs/"
 )
 
+//go:generate mockgen -destination=mocks/dashboard_client_mock.go -package=mocks github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/dashboardclient RayDashboardClientInterface
 type RayDashboardClientInterface interface {
-	InitClient(client *http.Client, dashboardURL string, authToken string)
 	UpdateDeployments(ctx context.Context, configJson []byte) error
 	// V2/multi-app Rest API
 	GetServeDetails(ctx context.Context) (*utiltypes.ServeDetails, error)
