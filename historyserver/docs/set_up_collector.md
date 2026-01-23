@@ -84,6 +84,9 @@ it.
 # Load the image into the kind cluster.
 kind load docker-image collector:v0.1.0
 
+# Or to load the collector image with race detector
+# kind load docker-image collector:v0.1.0-race
+
 # Check the loaded image.
 docker exec -it kind-control-plane crictl images | grep collector
 ```

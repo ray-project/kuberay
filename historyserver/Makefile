@@ -82,7 +82,7 @@ localimage-collector:
 
 .PHONY: localimage-collector-race
 localimage-collector-race:
-	docker build -t $(COLLECTOR_IMG) -f Dockerfile.collector.race .
+	docker build -t $(COLLECTOR_IMG)-race -f Dockerfile.collector.race .
 
 .PHONY: localimage-historyserver
 localimage-historyserver: dockerbuilder_instance
