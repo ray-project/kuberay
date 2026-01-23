@@ -24,7 +24,7 @@ func CreateHTTPClientWithCookieJar(g *WithT) *http.Client {
 	}
 }
 
-// getContainerStatusByName retrieves the container status by container name.
+// GetContainerStatusByName retrieves the container status by container name.
 // NOTE: ContainerStatuses order doesn't guarantee to match Spec.Containers order.
 // For more details, please refer to the following link:
 // https://github.com/ray-project/kuberay/blob/7791a8786861818f0cebcce381ef221436a0fa4d/ray-operator/controllers/ray/raycluster_controller.go#L1160C1-L1171C2

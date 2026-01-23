@@ -61,7 +61,7 @@ func ApplyHistoryServer(test Test, g *WithT, namespace *corev1.Namespace) {
 	g.Expect(err).NotTo(HaveOccurred())
 	// ClusterRole is shared across tests, ignore if already exists.
 	_, err = test.Client().Core().RbacV1().ClusterRoles().Create(test.Ctx(), clusterRole, metav1.CreateOptions{})
-	if !k8serrors.IsAlreadyExists(err) {
+	if err != nil && !k8serrors.IsAlreadyExists(err) {
 		g.Expect(err).NotTo(HaveOccurred())
 	}
 	_, err = test.Client().Core().RbacV1().ClusterRoleBindings().Create(test.Ctx(), clusterRoleBinding, metav1.CreateOptions{})
@@ -115,7 +115,7 @@ func GetHistoryServerURL(test Test, g *WithT, namespace *corev1.Namespace) strin
 	return historyServerURL
 }
 
-// prepareTestEnv prepares test environment for each test case, including applying a Ray cluster,
+// PrepareTestEnv prepares test environment for each test case, including applying a Ray cluster,
 // checking the collector sidecar container exists in the head pod and an empty S3 bucket exists.
 func PrepareTestEnv(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) *rayv1.RayCluster {
 	// Deploy a Ray cluster with the collector.

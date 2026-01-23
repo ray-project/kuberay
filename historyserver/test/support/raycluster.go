@@ -39,7 +39,7 @@ func ApplyRayClusterWithCollector(test Test, g *WithT, namespace *corev1.Namespa
 	return rayCluster
 }
 
-// getSessionIDFromHeadPod retrieves the sessionID from the Ray head pod by reading the symlink
+// GetSessionIDFromHeadPod retrieves the sessionID from the Ray head pod by reading the symlink
 // /tmp/ray/session_latest and getting its basename.
 func GetSessionIDFromHeadPod(test Test, g *WithT, rayCluster *rayv1.RayCluster) string {
 	headPod, err := GetHeadPod(test, rayCluster)
