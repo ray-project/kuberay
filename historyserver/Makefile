@@ -48,13 +48,13 @@ build: buildcollector buildhistoryserver
 buildcollector: mod
 	@echo ""
 	@echo "go build ..."
-	CGO_ENABLED=0 go build -v $(GO_BUILD_FLAGS) -o $(BIN_DIR)/$(BINARY_NAME_COLLECTOR) ./cmd/collector/main.go
+	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -v $(GO_BUILD_FLAGS) -o $(BIN_DIR)/$(BINARY_NAME_COLLECTOR) ./cmd/collector/main.go
 
 .PHONY: buildcollector-race
 buildcollector-race: mod
 	@echo ""
 	@echo "go build with race detector..."
-	CGO_ENABLED=1 go build -race -v $(GO_BUILD_FLAGS) -o $(BIN_DIR)/$(BINARY_NAME_COLLECTOR) ./cmd/collector/main.go
+	CGO_ENABLED=1 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -race -v $(GO_BUILD_FLAGS) -o $(BIN_DIR)/$(BINARY_NAME_COLLECTOR) ./cmd/collector/main.go
 
 .PHONY: buildhistoryserver
 #build: mod alllint test
