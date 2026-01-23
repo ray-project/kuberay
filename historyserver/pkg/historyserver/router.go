@@ -359,9 +359,9 @@ func (s *ServerHandler) getJobs(req *restful.Request, resp *restful.Response) {
 	}
 
 	// Formate response to match Ray Dashboard API format
-	formattedJobs := make(map[string]interface{})
+	formattedJobs := make([]interface{}, 0)
 	for _, job := range jobs {
-		formattedJobs[job.JobID] = formatJobForResponse(job)
+		formattedJobs = append(formattedJobs, formatJobForResponse(job))
 	}
 
 	response := formattedJobs
@@ -378,22 +378,22 @@ func (s *ServerHandler) getJobs(req *restful.Request, resp *restful.Response) {
 // formatJobForResponse will convert eventtypes.Job to the format expected by Ray Dashboard
 func formatJobForResponse(job eventtypes.Job) map[string]interface{} {
 	result := map[string]interface{}{
-		"type":   string(job.JobType),
-		"job_id": job.JobID,
-		"driver_info": map[string]interface{}{
-			"id":              job.DriverInfo.ID,
-			"node_ip_address": job.DriverInfo.NodeIPAddress,
-			"pid":             job.DriverInfo.PID,
-		},
-		"status":                    string(job.Status),
-		"entrypoint":                job.EntryPoint,
-		"message":                   job.Message,
-		"error_type":                job.ErrorType,
-		"metadata":                  job.Metadata,
-		"runtime_env":               job.RuntimeEnv,
-		"driver_agent_http_address": job.DriverAgentHttpAddress,
-		"driver_node_id":            job.DriverNodeID,
 		"drier_exit_code":           job.DriverExitCode,
+		"driver_node_id":            job.DriverNodeID,
+		"driver_agent_http_address": job.DriverAgentHttpAddress,
+		"runtime_env":               job.RuntimeEnv,
+		"metadata":                  job.Config.Metadata,
+		"error_type":                job.ErrorType,
+		"message":                   job.Message,
+		"entrypoint":                job.EntryPoint,
+		"status":                    string(job.Status),
+		"driver_info": map[string]interface{}{
+			"id":              job.JobID,
+			"node_ip_address": job.DriverNodeIPAddress,
+			"pid":             job.DriverPID,
+		},
+		"job_id": job.JobID,
+		"type":   string(job.JobType),
 	}
 
 	if !job.StartTime.IsZero() {

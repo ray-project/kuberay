@@ -531,6 +531,7 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 		logrus.Debugf("ACTOR_TASK_DEFINITION_EVENT received, not yet implemented")
 
 	case types.DRIVER_JOB_DEFINITION_EVENT:
+		// NOTE: When event comes in, JobID will be in base64, processing will convert it to Hex
 		jobDef, ok := eventMap["driverJobDefinitionEvent"]
 		if !ok {
 			return fmt.Errorf("event does not have 'driverJobDefinitionEvent'")
@@ -544,6 +545,12 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 		var currJob types.Job
 		if err := json.Unmarshal(jsonDriverJobDefinition, &currJob); err != nil {
 			return err
+		}
+
+		// Convert JobID from base64 to hex
+		currJob.JobID, err = utils.ConvertBase64ToHex(currJob.JobID)
+		if err != nil {
+			logrus.Errorf("Failed to convert JobID from base64 to Hex, will keep JobID in base64.")
 		}
 
 		jobMap := h.ClusterJobMap.GetOrCreateJobMap(currentClusterName)
@@ -571,12 +578,14 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 			}
 		})
 	case types.DRIVER_JOB_LIFECYCLE_EVENT:
+		// NOTE: When event comes in, JobID will be in base64, processing will convert it to Hex
 		jobLifecycleEvent, ok := eventMap["driverJobLifecycleEvent"].(map[string]any)
 		if !ok {
 			return fmt.Errorf("invalid driverJobLifecycleEvent format")
 		}
 
-		jobId, _ := jobLifecycleEvent["jobId"].(string)
+		// Get JobID and also convert JobID to hex from base64
+		jobId, _ := utils.ConvertBase64ToHex(jobLifecycleEvent["jobId"].(string))
 		stateTransitionUnstructed, _ := jobLifecycleEvent["stateTransitions"].([]any)
 
 		if len(stateTransitionUnstructed) == 0 || jobId == "" {
@@ -865,7 +874,7 @@ func (h *EventHandler) GetJobsMap(clusterName string) map[string]types.Job {
 
 func (h *EventHandler) GetJobByJobID(clusterName, jobID string) (types.Job, bool) {
 	h.ClusterJobMap.RLock()
-	defer h.ClusterJobMap.Unlock()
+	defer h.ClusterJobMap.RUnlock()
 
 	jobMap, ok := h.ClusterJobMap.ClusterJobMap[clusterName]
 	if !ok {

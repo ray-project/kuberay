@@ -23,13 +23,6 @@ type JobStatusTransition struct {
 	Timestamp time.Time
 }
 
-type DriverInfo struct {
-	ID            string `json:"id"`
-	NodeIPAddress string `json:"nodeIpAddress"`
-	NodeID        string `json:"nodeId"`
-	PID           string `json:"pid"`
-}
-
 // JobState represents the literal job driver process and connectivity
 type JobState string
 
@@ -45,7 +38,13 @@ type JobStateTransition struct {
 	Timestamp time.Time
 }
 
+type DriverJobConfig struct {
+	Metadata             map[string]string `json:"metadata"`
+	SerializedRuntimeEnv string            `json:"serializedRuntimeEnv"`
+}
+
 type Job struct {
+	// JobID will be in Hex, as that is the output format when calling /api/jobs/
 	JobID                  string            `json:"jobId"`
 	SubmissionID           string            `json:"submissionId"`
 	JobType                string            `json:"type"`
@@ -56,12 +55,13 @@ type Job struct {
 	ErrorType              string            `json:"errorType"`
 	StartTime              time.Time         `json:"startTime"`
 	EndTime                time.Time         `json:"endTime"`
-	Metadata               map[string]string `json:"metadata"`
+	Config                 DriverJobConfig   `json:"config"`
 	RuntimeEnv             map[string]string `json:"runtimeEnv"`
-	DriverInfo             DriverInfo        `json:"driverInfo"`
 	DriverAgentHttpAddress string            `json:"driverAgentHttpAddress"`
-	DriverNodeID           string            `json:"drivernodeId"`
+	DriverNodeID           string            `json:"driverNodeId"`
+	DriverNodeIPAddress    string            `json:"driverNodeIpAddress"`
 	DriverExitCode         int               `json:"driverExitCode"`
+	DriverPID              string            `json:"driverPid"`
 
 	// StateTransitions is the state (connectivity of the driver) job timeline
 	StateTransitions []JobStateTransition
@@ -155,10 +155,10 @@ func (j Job) DeepCopy() Job {
 		cp.StatusTransitions = make([]JobStatusTransition, len(j.StatusTransitions))
 		copy(cp.StatusTransitions, j.StatusTransitions)
 	}
-	if len(j.Metadata) > 0 {
-		cp.Metadata = make(map[string]string, len(j.Metadata))
-		for k, v := range j.Metadata {
-			cp.Metadata[k] = v
+	if len(j.Config.Metadata) > 0 {
+		cp.Config.Metadata = make(map[string]string, len(j.Config.Metadata))
+		for k, v := range j.Config.Metadata {
+			cp.Config.Metadata[k] = v
 		}
 	}
 	if len(j.RuntimeEnv) > 0 {
