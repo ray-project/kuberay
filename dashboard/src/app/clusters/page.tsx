@@ -1,21 +1,8 @@
 "use client";
 import { ClustersTable } from "@/components/ClustersTable/ClustersTable";
-import { AddRounded } from "@mui/icons-material";
-import { Box, Button, Typography } from "@mui/joy";
-import NextLink from "next/link";
-import Tabs from "@mui/joy/Tabs";
-import TabList from "@mui/joy/TabList";
-import Tab, { tabClasses } from "@mui/joy/Tab";
-import { useEffect } from "react";
-import { useFirstVisit } from "@/components/FirstVisitContext";
+import { Box, Typography } from "@mui/joy";
 
 export default function ClustersPage() {
-  const { firstVisit, setFirstVisit } = useFirstVisit();
-  useEffect(() => {
-    if (firstVisit) {
-      setFirstVisit(false);
-    }
-  }, [firstVisit, setFirstVisit]);
   return (
     <>
       <Box
