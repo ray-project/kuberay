@@ -97,7 +97,7 @@ func GetHistoryServerURL(test Test, g *WithT, namespace *corev1.Namespace) strin
 	// Wait for port-forward to be ready
 	historyServerURL := fmt.Sprintf("http://localhost:%d", HistoryServerPort)
 	g.Eventually(func() error {
-		resp, err := http.Get(historyServerURL + "/livez")
+		resp, err := http.Get(historyServerURL + "/readz")
 		if err != nil {
 			return err
 		}
