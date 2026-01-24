@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	. "github.com/onsi/gomega"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -17,10 +18,24 @@ const (
 	RayClusterID           = "default"
 )
 
-// ApplyRayClusterWithCollector deploys a Ray cluster with the collector sidecar into the test namespace.
-func ApplyRayClusterWithCollector(test Test, g *WithT, namespace *corev1.Namespace) *rayv1.RayCluster {
+// ApplyRayClusterWithCollectorWithEnvs deploys a Ray cluster with the collector sidecar into the test namespace,
+// adding the specified environment variables to the head pod.
+func ApplyRayClusterWithCollectorWithEnvs(test Test, g *WithT, namespace *corev1.Namespace, envs map[string]string) *rayv1.RayCluster {
 	rayClusterFromYaml := DeserializeRayClusterYAML(test, RayClusterManifestPath)
 	rayClusterFromYaml.Namespace = namespace.Name
+
+	headContainer := &rayClusterFromYaml.Spec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex]
+	if len(headContainer.Env) == 0 {
+		headContainer.Env = []corev1.EnvVar{}
+	}
+
+	for key, value := range envs {
+		env := corev1.EnvVar{
+			Name:  key,
+			Value: value,
+		}
+		headContainer.Env = append(headContainer.Env, env)
+	}
 
 	rayCluster, err := test.Client().Ray().RayV1().
 		RayClusters(namespace.Name).

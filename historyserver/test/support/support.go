@@ -52,3 +52,22 @@ func PortForwardService(test Test, g *WithT, namespace, serviceName string, port
 	err := kubectlCmd.Start()
 	g.Expect(err).NotTo(HaveOccurred())
 }
+
+// InstallGrafanaAndPrometheus installs Grafana and Prometheus in the cluster for testing.
+func InstallGrafanaAndPrometheus(test Test, g *WithT) {
+	test.T().Cleanup(func() {
+		cleanCMD := exec.Command("kubectl", "delete", "ns", "prometheus-system")
+		err := cleanCMD.Start()
+		g.Expect(err).NotTo(HaveOccurred())
+	})
+
+	installGrafanaCMD := exec.CommandContext(
+		test.Ctx(),
+		"../../../install/prometheus/install.sh",
+		"--auto-load-dashboard",
+		"true",
+	)
+	output, err := installGrafanaCMD.CombinedOutput()
+	g.Expect(err).NotTo(HaveOccurred(), "fail to install because %s", string(output))
+	LogWithTimestamp(test.T(), "Install Grafana and Prometheus successfully.")
+}

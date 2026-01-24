@@ -30,6 +30,10 @@ func TestHistoryServer(t *testing.T) {
 			name:     "Live cluster: historyserver endpoints should be accessible",
 			testFunc: testLiveClusters,
 		},
+		{
+			name:     "Live cluster: grafana health only",
+			testFunc: testLiveGrafanaHealth,
+		},
 	}
 
 	for _, tt := range tests {
@@ -54,9 +58,25 @@ func testLiveClusters(test Test, g *WithT, namespace *corev1.Namespace, s3Client
 
 	client := CreateHTTPClientWithCookieJar(g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
-	verifyHistoryServerEndpoints(test, g, client, historyServerURL)
+	verifyHistoryServerEndpoints(test, g, client, historyServerURL, HistoryServerEndpoints)
 	DeleteS3Bucket(test, g, s3Client)
 	LogWithTimestamp(test.T(), "Live clusters E2E test completed successfully")
+}
+
+func testLiveGrafanaHealth(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+	rayCluster := PrepareTestEnvWithGrafana(test, g, namespace, s3Client)
+	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
+	ApplyHistoryServer(test, g, namespace)
+	historyServerURL := GetHistoryServerURL(test, g, namespace)
+
+	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
+	g.Expect(clusterInfo.SessionName).To(Equal(LiveSessionName), "Live cluster should have sessionName='live'")
+
+	client := CreateHTTPClientWithCookieJar(g)
+	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
+	verifyHistoryServerEndpoints(test, g, client, historyServerURL, []string{HistoryServerEndpointGrafanaHealth})
+	DeleteS3Bucket(test, g, s3Client)
+	LogWithTimestamp(test.T(), "Live clusters grafana health E2E test completed successfully")
 }
 
 // setClusterContext sets the cluster context via /enter_cluster/ endpoint and verifies the response.
@@ -84,8 +104,8 @@ func setClusterContext(test Test, g *WithT, client *http.Client, historyServerUR
 }
 
 // verifyHistoryServerEndpoints tests all history server endpoints
-func verifyHistoryServerEndpoints(test Test, g *WithT, client *http.Client, historyServerURL string) {
-	for _, endpoint := range HistoryServerEndpoints {
+func verifyHistoryServerEndpoints(test Test, g *WithT, client *http.Client, historyServerURL string, endpoints []string) {
+	for _, endpoint := range endpoints {
 		LogWithTimestamp(test.T(), "Testing history server endpoint: %s", endpoint)
 		g.Eventually(func(gg Gomega) {
 			resp, err := client.Get(historyServerURL + endpoint)

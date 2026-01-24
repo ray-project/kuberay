@@ -34,7 +34,6 @@ const (
 // Excluded endpoints that are not yet implemented:
 //   - /events
 //   - /api/cluster_status
-//   - /api/grafana_health
 //   - /api/prometheus_health
 //   - /api/data/datasets/{job_id}
 //   - /api/jobs
@@ -47,6 +46,10 @@ var HistoryServerEndpoints = []string{
 	"/api/v0/tasks/summarize",
 	"/logical/actors",
 }
+
+// HistoryServerEndpointGrafanaHealth is a standalone constant
+// because it requires some additional dependencies.
+const HistoryServerEndpointGrafanaHealth = "/api/grafana_health"
 
 // ApplyHistoryServer deploys the HistoryServer and RBAC resources.
 func ApplyHistoryServer(test Test, g *WithT, namespace *corev1.Namespace) {
@@ -119,7 +122,37 @@ func GetHistoryServerURL(test Test, g *WithT, namespace *corev1.Namespace) strin
 // checking the collector sidecar container exists in the head pod and an empty S3 bucket exists.
 func PrepareTestEnv(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) *rayv1.RayCluster {
 	// Deploy a Ray cluster with the collector.
-	rayCluster := ApplyRayClusterWithCollector(test, g, namespace)
+	rayCluster := ApplyRayClusterWithCollectorWithEnvs(test, g, namespace, map[string]string{})
+
+	// Check the collector sidecar exists in the head pod.
+	headPod, err := GetHeadPod(test, rayCluster)
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(headPod.Spec.Containers).To(ContainElement(
+		WithTransform(func(c corev1.Container) string { return c.Name }, Equal("collector")),
+	))
+
+	// Check an empty S3 bucket is automatically created.
+	_, err = s3Client.HeadBucket(&s3.HeadBucketInput{
+		Bucket: aws.String(S3BucketName),
+	})
+	g.Expect(err).NotTo(HaveOccurred())
+
+	return rayCluster
+}
+
+// PrepareTestEnvWithGrafana prepares test environment with Grafana for each test case, including applying a Ray cluster,
+// checking the collector sidecar container exists in the head pod and an empty S3 bucket exists.
+func PrepareTestEnvWithGrafana(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) *rayv1.RayCluster {
+
+	InstallGrafanaAndPrometheus(test, g)
+
+	additionalEnvs := map[string]string{
+		"RAY_GRAFANA_IFRAME_HOST": "http://127.0.0.1:3000",
+		"RAY_GRAFANA_HOST":        "http://prometheus-grafana.prometheus-system.svc:80",
+	}
+
+	// Deploy a Ray cluster with the collector.
+	rayCluster := ApplyRayClusterWithCollectorWithEnvs(test, g, namespace, additionalEnvs)
 
 	// Check the collector sidecar exists in the head pod.
 	headPod, err := GetHeadPod(test, rayCluster)
