@@ -22,6 +22,7 @@ type EventHandler struct {
 
 	ClusterTaskMap  *types.ClusterTaskMap
 	ClusterActorMap *types.ClusterActorMap
+	ClusterNodeMap  *types.ClusterNodeMap
 }
 
 var eventFilePattern = regexp.MustCompile(`-\d{4}-\d{2}-\d{2}-\d{2}$`)
@@ -43,6 +44,9 @@ func NewEventHandler(reader storage.StorageReader) *EventHandler {
 		},
 		ClusterActorMap: &types.ClusterActorMap{
 			ClusterActorMap: make(map[string]*types.ActorMap),
+		},
+		ClusterNodeMap: &types.ClusterNodeMap{
+			ClusterNodeMap: make(map[string]*types.NodeMap),
 		},
 	}
 }
@@ -229,7 +233,6 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 				t.State = existingEvents[len(existingEvents)-1].State
 			}
 		})
-
 	case types.TASK_LIFECYCLE_EVENT:
 		lifecycleEvent, ok := eventMap["taskLifecycleEvent"].(map[string]any)
 		if !ok {
@@ -324,7 +327,6 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 				t.EndTime = lastEvent.Timestamp
 			}
 		})
-
 	case types.ACTOR_DEFINITION_EVENT:
 		actorDef, ok := eventMap["actorDefinitionEvent"]
 		if !ok {
@@ -520,11 +522,97 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 			}
 			a.NumRestarts = restartCount
 		})
-
 	case types.ACTOR_TASK_DEFINITION_EVENT:
 		// TODO: Handle actor task definition event
 		// This is related to GET /api/v0/tasks (type=ACTOR_TASK)
 		logrus.Debugf("ACTOR_TASK_DEFINITION_EVENT received, not yet implemented")
+	case types.NODE_DEFINITION_EVENT:
+		nodeDef, ok := eventMap["nodeDefinitionEvent"]
+		if !ok {
+			return fmt.Errorf("event does not have 'nodeDefinitionEvent'")
+		}
+		jsonNodeDefinition, err := json.Marshal(nodeDef)
+		if err != nil {
+			return fmt.Errorf("failed to marshal node definition event: %v", err)
+		}
+
+		var currNode types.Node
+		if err := json.Unmarshal(jsonNodeDefinition, &currNode); err != nil {
+			return fmt.Errorf("failed to unmarshal node definition event: %v", err)
+		}
+
+		nodeMap := h.ClusterNodeMap.GetOrCreateNodeMap(currentClusterName)
+		nodeMap.CreateOrMergeNode(currNode.NodeID, func(n *types.Node) {
+			// TODO(jwj): Handle merging of node definition event.
+			*n = currNode
+		})
+	case types.NODE_LIFECYCLE_EVENT:
+		nodeLifecycleEvent, ok := eventMap["nodeLifecycleEvent"].(map[string]any)
+		if !ok {
+			return fmt.Errorf("invalid nodeLifecycleEvent format")
+		}
+
+		nodeId, _ := nodeLifecycleEvent["nodeId"].(string)
+		stateTransitions, _ := nodeLifecycleEvent["stateTransitions"].([]any)
+
+		if len(stateTransitions) == 0 || nodeId == "" {
+			return nil
+		}
+
+		var nodeStateTransitions []types.NodeStateTransition
+		for _, stateTransition := range stateTransitions {
+			tr, ok := stateTransition.(map[string]any)
+			if !ok {
+				// TODO(jwj): Handle type assertion error.
+				continue
+			}
+			state, _ := tr["state"].(string)
+			timestampStr, _ := tr["timestamp"].(string)
+
+			var timestamp time.Time
+			if timestampStr != "" {
+				timestamp, _ = time.Parse(time.RFC3339Nano, timestampStr)
+			}
+
+			nodeStateTransitions = append(nodeStateTransitions, types.NodeStateTransition{
+				State:     types.NodeState(state),
+				Timestamp: timestamp,
+			})
+		}
+
+		// TODO(jwj): Handle empty node state transitions.
+		if len(nodeStateTransitions) == 0 {
+			return nil
+		}
+
+		nodeMap := h.ClusterNodeMap.GetOrCreateNodeMap(currentClusterName)
+		nodeMap.CreateOrMergeNode(nodeId, func(n *types.Node) {
+			n.NodeID = nodeId
+
+			type stateTransitionKey struct {
+				State     string
+				Timestamp int64
+			}
+			existingKeys := make(map[stateTransitionKey]bool)
+			for _, tr := range n.StateTransitions {
+				existingKeys[stateTransitionKey{string(tr.State), tr.Timestamp.UnixNano()}] = true
+			}
+			for _, tr := range nodeStateTransitions {
+				key := stateTransitionKey{string(tr.State), tr.Timestamp.UnixNano()}
+				if !existingKeys[key] {
+					n.StateTransitions = append(n.StateTransitions, tr)
+					existingKeys[key] = true
+				}
+			}
+
+			sort.Slice(n.StateTransitions, func(i, j int) bool {
+				return n.StateTransitions[i].Timestamp.Before(n.StateTransitions[j].Timestamp)
+			})
+
+			if len(n.StateTransitions) == 0 {
+				return
+			}
+		})
 	default:
 		logrus.Infof("Event not supported, skipping: %v", eventMap)
 	}
@@ -707,4 +795,23 @@ func (h *EventHandler) GetActorsMap(clusterName string) map[string]types.Actor {
 		actors[id] = actor.DeepCopy()
 	}
 	return actors
+}
+
+func (h *EventHandler) GetNodeMap(clusterName string) map[string]types.Node {
+	h.ClusterNodeMap.RLock()
+	defer h.ClusterNodeMap.RUnlock()
+
+	nodeMap, ok := h.ClusterNodeMap.ClusterNodeMap[clusterName]
+	if !ok {
+		return map[string]types.Node{}
+	}
+
+	nodeMap.Lock()
+	defer nodeMap.Unlock()
+
+	nodes := make(map[string]types.Node, len(nodeMap.NodeMap))
+	for id, node := range nodeMap.NodeMap {
+		nodes[id] = node.DeepCopy()
+	}
+	return nodes
 }

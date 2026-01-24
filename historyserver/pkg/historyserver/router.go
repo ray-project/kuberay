@@ -296,24 +296,36 @@ func (s *ServerHandler) getClusters(req *restful.Request, resp *restful.Response
 
 // getNodes returns nodes for the specified cluster
 func (s *ServerHandler) getNodes(req *restful.Request, resp *restful.Response) {
+	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
+	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
+	clusterNameID := clusterName + "_" + clusterNamespace
 	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
+
 	if sessionName == "live" {
 		s.redirectRequest(req, resp)
 		return
 	}
-	clusterNameID := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
-	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
-	data, err := s.GetNodes(clusterNameID+"_"+clusterNamespace, sessionName)
-	if data == nil {
-		logrus.Errorf("Failed to get nodes for cluster %s", clusterNameID+"_"+clusterNamespace)
-		resp.WriteError(http.StatusInternalServerError, errors.New("failed to get nodes"))
-		return
+
+	nodeMap := s.eventHandler.GetNodeMap(clusterNameID)
+	nodes := make([]eventtypes.Node, 0, len(nodeMap))
+	for _, node := range nodeMap {
+		nodes = append(nodes, node)
 	}
+
+	rawResp := make([]interface{}, 0)
+	for _, node := range nodes {
+		rawResp = append(rawResp, map[string]interface{}{
+			"node_id": node.NodeID,
+		})
+	}
+
+	data, err := json.Marshal(rawResp)
 	if err != nil {
-		logrus.Errorf("Error: %v", err)
-		resp.WriteError(400, err)
+		logrus.Errorf("Failed to marshal nodes response: %v", err)
+		resp.WriteErrorString(http.StatusInternalServerError, err.Error())
 		return
 	}
+
 	resp.Write(data)
 }
 
