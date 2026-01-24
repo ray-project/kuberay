@@ -104,7 +104,7 @@ endif
 # Run tests
 .PHONY: test
 test:
-	go test -v ./pkg/... ./cmd/...
+	go test -race -v ./pkg/... ./cmd/...
 
 .PHONY: alllint
 alllint: todolist issuelint ## Run go lint against code.
