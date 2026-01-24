@@ -81,8 +81,8 @@ localimage-collector:
 	${ENGINE} build -t $(COLLECTOR_IMG) --build-arg GOPROXY=$(GOPROXY) -f Dockerfile.collector .
 
 .PHONY: localimage-historyserver
-localimage-historyserver: dockerbuilder_instance
-	${ENGINE} build -t $(HISTORYSERVER_IMG) --build-arg GOPROXY=$(GOPROXY) -f Dockerfile.historyserver .
+localimage-historyserver:
+	${ENGINE} build -t $(HISTORYSERVER_IMG)  --build-arg GOPROXY=$(GOPROXY) -f Dockerfile.historyserver .
 
 .PHONY: dockerbuilder_instance
 dockerbuilder_instance:
