@@ -2,6 +2,7 @@ package support
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -135,4 +136,49 @@ func PrepareTestEnv(test Test, g *WithT, namespace *corev1.Namespace, s3Client *
 	g.Expect(err).NotTo(HaveOccurred())
 
 	return rayCluster
+}
+
+// GetNodeID retrieves a node ID from the /nodes endpoint.
+func GetNodeID(g *WithT, client *http.Client, historyServerURL string) string {
+	resp, err := client.Get(historyServerURL + "/nodes?view=summary")
+	g.Expect(err).NotTo(HaveOccurred())
+	defer resp.Body.Close()
+	g.Expect(resp.StatusCode).To(Equal(http.StatusOK))
+
+	body, err := io.ReadAll(resp.Body)
+	g.Expect(err).NotTo(HaveOccurred())
+
+	var result map[string]any
+	err = json.Unmarshal(body, &result)
+	g.Expect(err).NotTo(HaveOccurred())
+
+	data := result["data"].(map[string]any)
+	summary := data["summary"].([]any)
+	g.Expect(len(summary)).To(BeNumerically(">", 0))
+
+	nodeInfo := summary[0].(map[string]any)
+	return nodeInfo["raylet"].(map[string]any)["nodeId"].(string)
+}
+
+// GetLogFilename retrieves the first log filename from the /api/v0/logs endpoint.
+func GetLogFilename(g *WithT, client *http.Client, historyServerURL, nodeID string) string {
+	resp, err := client.Get(fmt.Sprintf("%s/api/v0/logs?node_id=%s", historyServerURL, nodeID))
+	g.Expect(err).NotTo(HaveOccurred())
+	defer resp.Body.Close()
+	g.Expect(resp.StatusCode).To(Equal(http.StatusOK))
+
+	body, err := io.ReadAll(resp.Body)
+	g.Expect(err).NotTo(HaveOccurred())
+
+	var logs map[string]any
+	err = json.Unmarshal(body, &logs)
+	g.Expect(err).NotTo(HaveOccurred())
+
+	logFiles := logs[nodeID].(map[string]any)
+	g.Expect(len(logFiles)).To(BeNumerically(">", 0))
+
+	for filename := range logFiles {
+		return filename
+	}
+	return ""
 }

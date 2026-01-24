@@ -30,6 +30,10 @@ func TestHistoryServer(t *testing.T) {
 			name:     "Live cluster: historyserver endpoints should be accessible",
 			testFunc: testLiveClusters,
 		},
+		{
+			name:     "/v0/logs/file endpoint",
+			testFunc: testLogFileEndpoint,
+		},
 	}
 
 	for _, tt := range tests {
@@ -132,4 +136,51 @@ func getClusterFromList(test Test, g *WithT, historyServerURL, clusterName, name
 	}, TestTimeoutMedium).Should(Succeed())
 
 	return result
+}
+
+func testLogFileEndpoint(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
+	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
+	ApplyHistoryServer(test, g, namespace)
+	historyServerURL := GetHistoryServerURL(test, g, namespace)
+
+	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
+	client := CreateHTTPClientWithCookieJar(g)
+	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
+
+	nodeID := GetNodeID(g, client, historyServerURL)
+	filename := GetLogFilename(g, client, historyServerURL, nodeID)
+
+	test.T().Run("should return log content", func(t *testing.T) {
+		g := NewWithT(t)
+		g.Eventually(func(gg Gomega) {
+			logFileURL := fmt.Sprintf("%s/api/v0/logs/file?node_id=%s&filename=%s&lines=100", historyServerURL, nodeID, filename)
+			resp, err := client.Get(logFileURL)
+			gg.Expect(err).NotTo(HaveOccurred())
+			defer resp.Body.Close()
+			gg.Expect(resp.StatusCode).To(Equal(http.StatusOK))
+
+			body, err := io.ReadAll(resp.Body)
+			gg.Expect(err).NotTo(HaveOccurred())
+			gg.Expect(len(body)).To(BeNumerically(">", 0))
+		}, TestTimeoutShort).Should(Succeed())
+	})
+
+	test.T().Run("should reject path traversal", func(t *testing.T) {
+		g := NewWithT(t)
+		maliciousPaths := []string{"../etc/passwd", "..", "/etc/passwd", "../../secret"}
+
+		g.Eventually(func(gg Gomega) {
+			for _, malicious := range maliciousPaths {
+				url := fmt.Sprintf("%s/api/v0/logs/file?node_id=%s&filename=%s", historyServerURL, nodeID, malicious)
+				resp, err := client.Get(url)
+				gg.Expect(err).NotTo(HaveOccurred())
+				defer resp.Body.Close()
+				gg.Expect(resp.StatusCode).To(Equal(http.StatusBadRequest))
+			}
+		}, TestTimeoutShort).Should(Succeed())
+	})
+
+	DeleteS3Bucket(test, g, s3Client)
+	LogWithTimestamp(test.T(), "Log file endpoint tests completed")
 }
