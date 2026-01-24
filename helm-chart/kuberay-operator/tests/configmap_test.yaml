@@ -98,3 +98,197 @@ tests:
       - notMatchRegex:
           path: data["config.yaml"]
           pattern: "defaultContainerEnvs:"
+
+  - it: Should include enableLeaderElection from values.leaderElectionEnabled
+    set:
+      configuration:
+        enabled: true
+      leaderElectionEnabled: false
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "enableLeaderElection: false"
+
+  - it: Should include enableMetrics from values.metrics.enabled
+    set:
+      configuration:
+        enabled: true
+      metrics:
+        enabled: false
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "enableMetrics: false"
+
+  - it: Should include reconcileConcurrency from values
+    set:
+      configuration:
+        enabled: true
+      reconcileConcurrency: 5
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "reconcileConcurrency: 5"
+
+  - it: Should include qps and burst from values.kubeClient
+    set:
+      configuration:
+        enabled: true
+      kubeClient:
+        qps: 200
+        burst: 400
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "qps: 200"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "burst: 400"
+
+  - it: Should include useKubernetesProxy from values
+    set:
+      configuration:
+        enabled: true
+      useKubernetesProxy: true
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "useKubernetesProxy: true"
+
+  - it: Should include watchNamespace from values
+    set:
+      configuration:
+        enabled: true
+      watchNamespace:
+        - namespace1
+        - namespace2
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'watchNamespace: "namespace1,namespace2"'
+
+  - it: Should include batchScheduler configuration
+    set:
+      configuration:
+        enabled: true
+      batchScheduler:
+        enabled: true
+        name: volcano
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "enableBatchScheduler: true"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'batchScheduler: "volcano"'
+
+  - it: Should include logging configuration
+    set:
+      configuration:
+        enabled: true
+      logging:
+        baseDir: /var/log
+        fileName: operator.log
+        stdoutEncoder: console
+        fileEncoder: json
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'logFile: "/var/log/operator.log"'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'logStdoutEncoder: "console"'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'logFileEncoder: "json"'
+
+  - it: Should include headSidecarContainers when set
+    set:
+      configuration:
+        enabled: true
+        headSidecarContainers:
+          - name: fluentbit
+            image: fluent/fluent-bit:1.9
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "headSidecarContainers:"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "name: fluentbit"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "image: fluent/fluent-bit:1.9"
+
+  - it: Should include workerSidecarContainers when set
+    set:
+      configuration:
+        enabled: true
+        workerSidecarContainers:
+          - name: monitoring
+            image: prometheus/node-exporter:latest
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "workerSidecarContainers:"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "name: monitoring"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "image: prometheus/node-exporter:latest"
+
+  - it: Should not include headSidecarContainers when not set
+    set:
+      configuration:
+        enabled: true
+    asserts:
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: "headSidecarContainers:"
+
+  - it: Should not include workerSidecarContainers when not set
+    set:
+      configuration:
+        enabled: true
+    asserts:
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: "workerSidecarContainers:"
+
+  - it: Should include all configurations from values when configuration.enabled is true
+    set:
+      configuration:
+        enabled: true
+        defaultContainerEnvs:
+          - name: RAY_TEST
+            value: "test"
+      leaderElectionEnabled: false
+      metrics:
+        enabled: false
+      reconcileConcurrency: 3
+      kubeClient:
+        qps: 150
+        burst: 300
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "enableLeaderElection: false"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "enableMetrics: false"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "reconcileConcurrency: 3"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "qps: 150"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "burst: 300"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "defaultContainerEnvs:"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "name: RAY_TEST"

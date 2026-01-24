@@ -347,3 +347,59 @@ tests:
     asserts:
       - notExists:
           path: spec.template.spec.volumes[?(@.name=="operator-config")]
+
+  - it: Should not include command-line flags when configuration is enabled (ConfigMap mode)
+    set:
+      configuration:
+        enabled: true
+      reconcileConcurrency: 5
+      kubeClient:
+        qps: 100
+        burst: 200
+      leaderElectionEnabled: false
+      metrics:
+        enabled: false
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[?(@.name=="kuberay-operator")].args
+          content: "--config"
+      - contains:
+          path: spec.template.spec.containers[?(@.name=="kuberay-operator")].args
+          content: "/etc/kuberay/config.yaml"
+      - notContains:
+          path: spec.template.spec.containers[?(@.name=="kuberay-operator")].args
+          content: "--reconcile-concurrency=5"
+      - notContains:
+          path: spec.template.spec.containers[?(@.name=="kuberay-operator")].args
+          content: "--qps=100"
+      - notContains:
+          path: spec.template.spec.containers[?(@.name=="kuberay-operator")].args
+          content: "--burst=200"
+      - notContains:
+          path: spec.template.spec.containers[?(@.name=="kuberay-operator")].args
+          content: "--enable-leader-election=false"
+      - notContains:
+          path: spec.template.spec.containers[?(@.name=="kuberay-operator")].args
+          content: "--enable-metrics=false"
+
+  - it: Should include command-line flags when configuration is disabled (command-line mode)
+    set:
+      configuration:
+        enabled: false
+      reconcileConcurrency: 5
+      kubeClient:
+        qps: 100
+        burst: 200
+    asserts:
+      - notContains:
+          path: spec.template.spec.containers[?(@.name=="kuberay-operator")].args
+          content: "--config"
+      - contains:
+          path: spec.template.spec.containers[?(@.name=="kuberay-operator")].args
+          content: "--reconcile-concurrency=5"
+      - contains:
+          path: spec.template.spec.containers[?(@.name=="kuberay-operator")].args
+          content: "--qps=100"
+      - contains:
+          path: spec.template.spec.containers[?(@.name=="kuberay-operator")].args
+          content: "--burst=200"

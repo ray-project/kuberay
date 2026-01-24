@@ -1,4 +1,5 @@
 {{- if .Values.configuration.enabled }}
+{{- include "kuberay-operator.validateConfig" . -}}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -13,6 +14,56 @@ data:
   config.yaml: |
     apiVersion: config.ray.io/v1alpha1
     kind: Configuration
+    {{- if hasKey .Values "leaderElectionEnabled" }}
+    enableLeaderElection: {{ .Values.leaderElectionEnabled }}
+    {{- end }}
+    {{- if and (hasKey .Values "metrics") (hasKey .Values.metrics "enabled") }}
+    enableMetrics: {{ .Values.metrics.enabled }}
+    {{- end }}
+    {{- if hasKey .Values "reconcileConcurrency" }}
+    reconcileConcurrency: {{ .Values.reconcileConcurrency }}
+    {{- end }}
+    {{- if hasKey .Values "useKubernetesProxy" }}
+    useKubernetesProxy: {{ .Values.useKubernetesProxy }}
+    {{- end }}
+    {{- if hasKey .Values "kubeClient" }}
+    {{- if hasKey .Values.kubeClient "qps" }}
+    qps: {{ .Values.kubeClient.qps }}
+    {{- end }}
+    {{- if hasKey .Values.kubeClient "burst" }}
+    burst: {{ .Values.kubeClient.burst }}
+    {{- end }}
+    {{- end }}
+    {{- if .Values.watchNamespace }}
+    watchNamespace: {{ join "," .Values.watchNamespace | quote }}
+    {{- else if .Values.singleNamespaceInstall }}
+    watchNamespace: {{ .Release.Namespace | quote }}
+    {{- end }}
+    {{- if and (.Values.logging.baseDir) (.Values.logging.fileName) }}
+    logFile: {{ printf "%s/%s" .Values.logging.baseDir .Values.logging.fileName | quote }}
+    {{- end }}
+    {{- if .Values.logging.stdoutEncoder }}
+    logStdoutEncoder: {{ .Values.logging.stdoutEncoder | quote }}
+    {{- end }}
+    {{- if .Values.logging.fileEncoder }}
+    logFileEncoder: {{ .Values.logging.fileEncoder | quote }}
+    {{- end }}
+    {{- if .Values.batchScheduler }}
+    {{- if .Values.batchScheduler.enabled }}
+    enableBatchScheduler: true
+    {{- end }}
+    {{- if .Values.batchScheduler.name }}
+    batchScheduler: {{ .Values.batchScheduler.name | quote }}
+    {{- end }}
+    {{- end }}
+    {{- if .Values.configuration.headSidecarContainers }}
+    headSidecarContainers:
+    {{- toYaml .Values.configuration.headSidecarContainers | nindent 4 }}
+    {{- end }}
+    {{- if .Values.configuration.workerSidecarContainers }}
+    workerSidecarContainers:
+    {{- toYaml .Values.configuration.workerSidecarContainers | nindent 4 }}
+    {{- end }}
     {{- if .Values.configuration.defaultContainerEnvs }}
     defaultContainerEnvs:
     {{- toYaml .Values.configuration.defaultContainerEnvs | nindent 4 }}
