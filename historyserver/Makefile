@@ -88,7 +88,7 @@ localimage-collector:
 
 .PHONY: localimage-collector-race
 localimage-collector-race:
-	docker build -t $(COLLECTOR_IMG)-race -f Dockerfile.collector.race .
+	${ENGINE} build -t $(COLLECTOR_IMG)-race --build-arg GOPROXY=$(GOPROXY) --build-arg ENABLE_RACE=true -f Dockerfile.collector .
 
 .PHONY: localimage-historyserver
 localimage-historyserver:
