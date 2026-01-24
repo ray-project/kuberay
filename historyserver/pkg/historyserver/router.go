@@ -41,16 +41,30 @@ func routerClusters(s *ServerHandler) {
 		Writes([]string{}))
 }
 
+// routerNodes registers RESTful routers for node-related endpoints.
+// It sets up two routes:
+//   - GET /nodes: retrieves all node summaries for a given cluster, supporting an optional "view" query parameter
+//   - GET /nodes/{node_id}: retrieves node summary for a specific node by its ID
 func routerNodes(s *ServerHandler) {
 	ws := new(restful.WebService)
 	defer restful.Add(ws)
-	ws.Path("/nodes").Consumes(restful.MIME_JSON).Produces(restful.MIME_JSON) //.Filter(s.loginWrapper)
-	ws.Route(ws.GET("/").To(s.getNodes).Filter(s.CookieHandle).
-		Doc("get nodes for a given clusters").Param(ws.QueryParameter("view", "such as summary")).
+
+	// TODO(jwj): Clarify why not handling cookie in the WebService level.
+	ws.Path("/nodes").
+		Consumes(restful.MIME_JSON).
+		Produces(restful.MIME_JSON) //.Filter(s.LoginWrapper)
+
+	// TODO(jwj): Explicitly set the return types for both routes.
+	ws.Route(ws.GET("/").To(s.getNodes).
+		Filter(s.CookieHandle).
+		Doc("Get all node summaries for a given cluster").
+		Param(ws.QueryParameter("view", "Optional view type (e.g., 'summary') to filter node information")).
 		Writes(""))
-	ws.Route(ws.GET("/{node_id}").To(s.getNode).Filter(s.CookieHandle).
-		Doc("get specifical nodes  ").
-		Param(ws.PathParameter("node_id", "node_id")).
+
+	ws.Route(ws.GET("/{node_id}").To(s.getNode).
+		Filter(s.CookieHandle).
+		Doc("Get node summary for a specific node by its ID").
+		Param(ws.PathParameter("node_id", "The unique identifier of the node")).
 		Writes(""))
 }
 
