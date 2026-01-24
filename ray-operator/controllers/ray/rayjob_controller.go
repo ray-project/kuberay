@@ -616,6 +616,28 @@ func getSubmitterContainer(rayJobInstance *rayv1.RayJob, rayClusterInstance *ray
 		return corev1.Container{}, err
 	}
 
+	// When SidecarSubmitterRestart feature gate is enabled, configure per-container restart rules.
+	// This requires Kubernetes 1.34+ with ContainerRestartRules feature gate enabled.
+	// TODO: This will failed if Kubernetes < 1.34
+	// Pod creation will fail with validation error
+	// K8s API server rejects unknown fields (restartPolicyRules)
+	// Need to explicitly tells user about needing Kubernetes 1.34+
+	// Add documentation as well
+	if features.Enabled(features.SidecarSubmitterRestart) {
+		submitterContainer.RestartPolicy = ptr.To(corev1.ContainerRestartPolicyNever)
+		submitterContainer.RestartPolicyRules = []corev1.ContainerRestartRule{
+			{
+				Action: corev1.ContainerRestartRuleActionRestart,
+				ExitCodes: &corev1.ContainerRestartRuleOnExitCodes{
+					// Restart on any non-zero exit code (transient failures)
+					// TODO check if it is non-zero or a specific error code again
+					Operator: corev1.ContainerRestartRuleOnExitCodesOpNotIn,
+					Values:   []int32{0},
+				},
+			},
+		}
+	}
+
 	return submitterContainer, nil
 }
 
