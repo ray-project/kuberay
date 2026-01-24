@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"strconv"
 	"strings"
@@ -587,8 +588,8 @@ func (s *ServerHandler) getNodeLogFile(req *restful.Request, resp *restful.Respo
 	}
 
 	// Prevent path traversal attacks (e.g., ../../etc/passwd)
-	if strings.Contains(nodeID, "..") || strings.Contains(filename, "..") {
-		resp.WriteErrorString(http.StatusBadRequest, fmt.Sprintf("invalid path: ../ not allowed in the path (node_id=%s, filename=%s)", nodeID, filename))
+	if !fs.ValidPath(nodeID) || !fs.ValidPath(filename) {
+		resp.WriteErrorString(http.StatusBadRequest, fmt.Sprintf("invalid path: path traversal not allowed (node_id=%s, filename=%s)", nodeID, filename))
 		return
 	}
 
