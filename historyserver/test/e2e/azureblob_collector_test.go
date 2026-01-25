@@ -313,4 +313,3 @@ func assertAzureBlobFileExist(test Test, g *WithT, containerClient *container.Cl
 		LogWithTimestamp(test.T(), "Verified file %s exists", fileKey)
 	}, TestTimeoutMedium).Should(Succeed(), "Failed to verify file %s exists", fileKey)
 }
-
