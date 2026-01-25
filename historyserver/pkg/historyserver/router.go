@@ -599,6 +599,12 @@ func (s *ServerHandler) getNodeLogFile(req *restful.Request, resp *restful.Respo
 		return
 	}
 
+	// Validate sessionName to prevent path traversal via cookie manipulation
+	if !fs.ValidPath(sessionName) {
+		resp.WriteErrorString(http.StatusBadRequest, fmt.Sprintf("invalid session name: path traversal not allowed (session_name=%s)", sessionName))
+		return
+	}
+
 	// Convert lines parameter to int
 	maxLines := 0
 	if lines != "" {
