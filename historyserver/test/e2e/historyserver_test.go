@@ -34,7 +34,7 @@ func TestHistoryServer(t *testing.T) {
 		},
 		{
 			name:     "/v0/logs/file endpoint (live cluster)",
-			testFunc: testLogFileEndpoint,
+			testFunc: testLogFileEndpointLiveCluster,
 		},
 		{
 			name:     "/v0/logs/file endpoint (dead cluster)",
@@ -144,7 +144,17 @@ func getClusterFromList(test Test, g *WithT, historyServerURL, clusterName, name
 	return result
 }
 
-func testLogFileEndpoint(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+// testLogFileEndpointLiveCluster verifies that the history server can fetch log files from a live cluster.
+//
+// The test case follows these steps:
+// 1. Prepare test environment by applying a Ray cluster
+// 2. Submit a Ray job to the existing cluster
+// 3. Apply History Server and get its URL
+// 4. Get the cluster info from the list
+// 5. Verify that the history server can fetch log content (raylet.out)
+// 6. Verify that the history server rejects path traversal attempts
+// 7. Delete S3 bucket to ensure test isolation
+func testLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 	ApplyHistoryServer(test, g, namespace)
@@ -192,6 +202,16 @@ func testLogFileEndpoint(test Test, g *WithT, namespace *corev1.Namespace, s3Cli
 	LogWithTimestamp(test.T(), "Log file endpoint tests completed")
 }
 
+// testLogFileEndpointDeadCluster verifies that the history server can fetch log files from S3 after a cluster is deleted.
+//
+// The test case follows these steps:
+// 1. Prepare test environment by applying a Ray cluster
+// 2. Submit a Ray job to the existing cluster
+// 3. Delete RayCluster to trigger log upload to S3
+// 4. Apply History Server and get its URL
+// 5. Verify that the history server can fetch log content from S3 (raylet.out)
+// 6. Verify that the history server rejects path traversal attempts from S3
+// 7. Delete S3 bucket to ensure test isolation
 func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
