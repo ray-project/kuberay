@@ -55,7 +55,7 @@ func (s *ServerHandler) listClusters(limit int) []utils.ClusterInfo {
 }
 
 func (s *ServerHandler) _getNodeLogs(rayClusterNameID, sessionId, nodeId, dir string) ([]byte, error) {
-	// TODO: make logs/ response same for live and dead cluster
+	// TODO(nary): make logs/ response the same for live and dead cluster
 	// Live cluster: {"result": true, "msg": "", "data": {"result": {"agent": ["file1"], ...}}}
 	// Dead cluster: {"data": {"result": {"padding": ["file1", "file2", ...]}}}
 	logPath := path.Join(sessionId, "logs", nodeId)
@@ -101,6 +101,7 @@ func (s *ServerHandler) _getNodeLogFile(rayClusterNameID, sessionID, nodeID, fil
 	index := 0
 	totalLines := 0
 
+	// TODO(nary): Optimize this to prevent scanning through the whole log file to get last n lines
 	// Get the last N lines following Ray Dashboard API behavior with circular buffer
 	// Example with maxLines=3, file has 5 lines:
 	// 	Line 1: buffer[0], Line 2: buffer[1], Line 3: buffer[2]
