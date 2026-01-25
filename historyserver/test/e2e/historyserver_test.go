@@ -155,7 +155,8 @@ func testLogFileEndpoint(test Test, g *WithT, namespace *corev1.Namespace, s3Cli
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 
 	nodeID := GetNodeID(g, client, historyServerURL)
-	filename := GetFirstLogFilename(g, client, historyServerURL, nodeID)
+	// Hardcode "raylet.out" for deterministic testing.
+	filename := "raylet.out"
 
 	test.T().Run("should return log content", func(t *testing.T) {
 		g := NewWithT(t)
@@ -216,7 +217,8 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 
 	nodeID := GetNodeID(g, client, historyServerURL)
-	filename := GetFirstLogFilename(g, client, historyServerURL, nodeID)
+	// Hardcode "raylet.out" for deterministic testing.
+	filename := "raylet.out"
 
 	test.T().Run("should return log content from S3", func(t *testing.T) {
 		g := NewWithT(t)
