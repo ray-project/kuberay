@@ -128,6 +128,11 @@ func routerAPI(s *ServerHandler) {
 		Param(ws.QueryParameter("filter_values", "filter_values")).
 		Param(ws.QueryParameter("summary_by", "summary_by")).
 		Writes("")) // Placeholder for specific return type
+
+	ws.Route(ws.GET("/v0/tasks/timeline").To(s.getTasksTimeline).Filter(s.CookieHandle).
+		Doc("get tasks timeline").
+		Param(ws.QueryParameter("job_id", "filter by job_id")).
+		Writes("")) // Placeholder for specific return type
 }
 
 // func routerRoot(s *ServerHandler) {
@@ -877,4 +882,29 @@ func getClusterSvcName(clis []client.Client, name, namespace string) (string, er
 		return "", errors.New("RayCluster head service not ready")
 	}
 	return svcName + ":8265", nil
+}
+
+func (s *ServerHandler) getTasksTimeline(req *restful.Request, resp *restful.Response) {
+	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
+	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
+	clusterNameID := clusterName + "_" + clusterNamespace
+	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
+
+	if sessionName == "live" {
+		s.redirectRequest(req, resp)
+		return
+	}
+
+	jobID := req.QueryParameter("job_id")
+
+	timeline := s.eventHandler.GetTasksTimeline(clusterNameID, jobID)
+
+	respData, err := json.Marshal(timeline)
+	if err != nil {
+		logrus.Errorf("Failed to marshal timeline response: %v", err)
+		resp.WriteErrorString(http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	resp.Write(respData)
 }
