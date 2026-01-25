@@ -79,7 +79,7 @@ func (s *ServerHandler) _getNodeLogFile(rayClusterNameID, sessionID, nodeID, fil
 	reader := s.reader.GetContent(rayClusterNameID, logPath)
 
 	if reader == nil {
-		return nil, fmt.Errorf("log file not found: %s", logPath)
+		return nil, utils.NewHTTPError(fmt.Errorf("log file not found: %s", logPath), http.StatusNotFound)
 	}
 
 	if maxLines < 0 {

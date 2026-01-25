@@ -618,8 +618,14 @@ func (s *ServerHandler) getNodeLogFile(req *restful.Request, resp *restful.Respo
 
 	content, err := s._getNodeLogFile(clusterNameID+"_"+clusterNamespace, sessionName, nodeID, filename, maxLines)
 	if err != nil {
-		logrus.Errorf("Error getting node log file: %v", err)
-		resp.WriteError(http.StatusInternalServerError, err)
+		var httpErr *utils.HTTPError
+		if errors.As(err, &httpErr) {
+			logrus.Errorf("Error getting node log file: %v", httpErr.Unwrap())
+			resp.WriteError(httpErr.StatusCode(), httpErr)
+		} else {
+			logrus.Errorf("Error getting node log file: %v", err)
+			resp.WriteError(http.StatusInternalServerError, err)
+		}
 		return
 	}
 	resp.Write(content)
