@@ -111,8 +111,7 @@ func main() {
 	go func() {
 		defer wg.Done()
 		collector := runtime.NewCollector(&globalConfig, writer)
-		collector.Start(stop)
-		<-collector.WaitForStop()
+		collector.Run(stop)
 		logrus.Info("Log server shutdown")
 	}()
 
