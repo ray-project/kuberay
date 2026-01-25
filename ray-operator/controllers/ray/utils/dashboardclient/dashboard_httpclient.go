@@ -413,12 +413,12 @@ func (r *RayDashboardClient) GetComponentActivities(ctx context.Context) (map[st
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return nil, fmt.Errorf("GetComponentActivities fail: %s %s", resp.Status, string(body))
+		return nil, fmt.Errorf("failed to get component activities: %s %s", resp.Status, string(body))
 	}
 
 	var activities map[string]*utiltypes.RayActivityResponse
 	if err = json.Unmarshal(body, &activities); err != nil {
-		return nil, fmt.Errorf("GetComponentActivities fail: failed to unmarshal response: %s", string(body))
+		return nil, fmt.Errorf("failed to unmarshal component activities response: %s", string(body))
 	}
 
 	return activities, nil

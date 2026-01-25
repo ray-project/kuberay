@@ -85,9 +85,8 @@ func (r *FakeRayDashboardClient) GetComponentActivities(ctx context.Context) (ma
 	if mock := r.GetComponentActivitiesMock.Load(); mock != nil {
 		return (*mock)(ctx)
 	}
-	// Default: return inactive status for all components
 	return map[string]*utiltypes.RayActivityResponse{
-		"ray_activity": {
+		"driver": {
 			IsActive: utiltypes.RayActivityStatusInactive,
 		},
 	}, nil

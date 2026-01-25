@@ -354,7 +354,7 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 	}
 
 	// Handle idle cluster termination based on TTLSecondsAfterIdle.
-	if instance.Spec.TTLSecondsAfterIdle != nil {
+	if features.Enabled(features.RayClusterIdleTermination) && instance.Spec.TTLSecondsAfterIdle != nil {
 		return r.handleIdleClusterTermination(ctx, instance)
 	}
 
@@ -424,7 +424,7 @@ func (r *RayClusterReconciler) handleIdleClusterTermination(ctx context.Context,
 	activities, err := dashboardClient.GetComponentActivities(ctx)
 	if err != nil {
 		logger.Error(err, "Failed to get component activities from Ray Dashboard")
-		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, nil
+		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 	}
 
 	// Parse RayActivityResponse and find the most recent activity timestamp.
@@ -460,16 +460,17 @@ func (r *RayClusterReconciler) handleIdleClusterTermination(ctx context.Context,
 
 	// Calculate idle duration and check if TTL has been exceeded.
 	ttlDuration := time.Duration(*instance.Spec.TTLSecondsAfterIdle) * time.Second
-	idleDuration := time.Since(*lastActivityTime)
+	now := time.Now()
+	idleDuration := now.Sub(*lastActivityTime)
 	terminationTime := lastActivityTime.Add(ttlDuration)
 
-	if time.Now().Before(terminationTime) {
-		requeueAfter := time.Until(terminationTime)
+	if now.Before(terminationTime) {
+		requeueAfter := terminationTime.Sub(now)
 		logger.Info("TTL has not been reached for idle cluster termination. Requeuing.", "terminationTime", terminationTime, "requeueAfter", requeueAfter)
 		return ctrl.Result{RequeueAfter: requeueAfter}, nil
 	}
 
-	logger.Info("Deleting idle cluster", "idleDuration", idleDuration, "ttl", ttlDuration)
+	logger.Info("Deleting idle cluster.", "idleDuration", idleDuration, "ttl", ttlDuration)
 
 	if err := r.Delete(ctx, instance); err != nil {
 		r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.FailedToDeleteIdleRayCluster),
