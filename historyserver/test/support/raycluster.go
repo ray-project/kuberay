@@ -34,10 +34,10 @@ func ApplyRayClusterWithCollector(test Test, g *WithT, namespace *corev1.Namespa
 	rayClusterFromYaml := DeserializeRayClusterYAML(test, RayClusterManifestPath)
 	rayClusterFromYaml.Namespace = namespace.Name
 
-	// Inject namespace as ray-cluster-id for head group collector
+	// Inject namespace name as ray-cluster-id for head group collector
 	injectCollectorRayClusterID(rayClusterFromYaml.Spec.HeadGroupSpec.Template.Spec.Containers, namespace.Name)
 
-	// Inject namespace as ray-cluster-id for worker group collectors
+	// Inject namespace name as ray-cluster-id for worker group collectors
 	for wg := range rayClusterFromYaml.Spec.WorkerGroupSpecs {
 		injectCollectorRayClusterID(rayClusterFromYaml.Spec.WorkerGroupSpecs[wg].Template.Spec.Containers, namespace.Name)
 	}
