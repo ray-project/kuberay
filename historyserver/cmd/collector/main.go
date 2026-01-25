@@ -119,8 +119,8 @@ func main() {
 	logrus.Info("Received shutdown signal, initiating graceful shutdown...")
 
 	// Stop both the event server and the collector
-	stop <- struct{}{}
-	eventStop <- struct{}{}
+	close(stop)
+	close(eventStop)
 
 	// Wait for both goroutines to complete
 	wg.Wait()

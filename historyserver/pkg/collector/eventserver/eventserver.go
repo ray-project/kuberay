@@ -100,7 +100,7 @@ func (es *EventServer) InitServer(stop <-chan struct{}, port int) {
 	}()
 
 	<-stop
-	logrus.Info("Received SIGTERM, flushing events to storage")
+	logrus.Info("Received stop signal, flushing events to storage")
 	es.flushEvents()
 	close(es.stopped)
 }
