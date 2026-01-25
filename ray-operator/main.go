@@ -196,6 +196,17 @@ func main() {
 		utilruntime.Must(gwv1.AddToScheme(scheme))
 	}
 
+	// Fail if SidecarSubmitterRestart is enabled but K8s < 1.34
+	if features.Enabled(features.SidecarSubmitterRestart) {
+		serverVersion, err := utils.GetKubernetesVersion()
+		if err != nil {
+			exitOnError(err, "SidecarSubmitterRestart feature gate enabled but unable to detect K8s version. Feature requires K8s 1.34+.")
+		} else if !utils.IsK8sVersionAtLeast(serverVersion, 1, 34) {
+			exitOnError(fmt.Errorf("current version %s is below 1.34", serverVersion.GitVersion),
+				"SidecarSubmitterRestart feature gate requires K8s 1.34+")
+		}
+	}
+
 	// Manager options
 	options := ctrl.Options{
 		Cache: cache.Options{
