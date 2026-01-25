@@ -526,10 +526,6 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 		// This is related to GET /api/v0/tasks (type=ACTOR_TASK)
 		logrus.Debugf("ACTOR_TASK_DEFINITION_EVENT received, not yet implemented")
 	case types.TASK_PROFILE_EVENT:
-		// CHANGED: 不要每次都 dump raw，太吵；改成 debug 或只印重點
-		logrus.Infof("TASK_PROFILE_EVENT: session=%v eventId=%v nodeId=%v",
-			eventMap["sessionName"], eventMap["eventId"], eventMap["nodeId"])
-
 		taskProfileEvent, ok := eventMap["taskProfileEvents"]
 		if !ok {
 			return fmt.Errorf("event does not have 'taskProfileEvents'")
