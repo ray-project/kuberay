@@ -41,7 +41,6 @@ const (
 //   - /api/jobs
 //   - /api/serve/applications
 //   - /api/v0/placement_groups
-//   - /api/v0/logs/file
 var HistoryServerEndpoints = []string{
 	"/nodes?view=summary",
 	"/api/v0/tasks",
