@@ -20,6 +20,27 @@ import (
 const (
 	HistoryServerManifestPath = "../../config/historyserver.yaml"
 	HistoryServerPort         = 30080
+
+	RayGrafanaIframeHost               = "http://127.0.0.1:3000"
+	HistoryServerGrafanaHealthResponse = `{
+  "result": true,
+  "msg": "Grafana running",
+  "data": {
+    "grafanaHost": "%s",
+    "grafanaOrgId": "1",
+    "sessionName": "%s",
+    "dashboardUids": {
+      "default": "rayDefaultDashboard",
+      "serve": "rayServeDashboard",
+      "serveDeployment": "rayServeDeploymentDashboard",
+      "serveLlm": "rayServeLlmDashboard",
+      "data": "rayDataDashboard",
+      "train": "rayTrainDashboard"
+    },
+    "dashboardDatasource": "Prometheus",
+    "grafanaClusterFilter": null
+  }
+}`
 )
 
 // HistoryServerEndpoints defines endpoints that should be proxied to Ray Dashboard
@@ -147,7 +168,7 @@ func PrepareTestEnvWithGrafana(test Test, g *WithT, namespace *corev1.Namespace,
 	InstallGrafanaAndPrometheus(test, g)
 
 	additionalEnvs := map[string]string{
-		"RAY_GRAFANA_IFRAME_HOST": "http://127.0.0.1:3000",
+		"RAY_GRAFANA_IFRAME_HOST": RayGrafanaIframeHost,
 		"RAY_GRAFANA_HOST":        "http://prometheus-grafana.prometheus-system.svc:80",
 	}
 

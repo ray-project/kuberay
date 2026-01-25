@@ -11,9 +11,10 @@ import (
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 
+	. "github.com/ray-project/kuberay/ray-operator/test/support"
+
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 	. "github.com/ray-project/kuberay/historyserver/test/support"
-	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
 
 const LiveSessionName = "live"
@@ -58,7 +59,7 @@ func testLiveClusters(test Test, g *WithT, namespace *corev1.Namespace, s3Client
 
 	client := CreateHTTPClientWithCookieJar(g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
-	verifyHistoryServerEndpoints(test, g, client, historyServerURL, HistoryServerEndpoints)
+	verifyHistoryServerEndpoints(test, g, client, historyServerURL)
 	DeleteS3Bucket(test, g, s3Client)
 	LogWithTimestamp(test.T(), "Live clusters E2E test completed successfully")
 }
@@ -72,9 +73,11 @@ func testLiveGrafanaHealth(test Test, g *WithT, namespace *corev1.Namespace, s3C
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
 	g.Expect(clusterInfo.SessionName).To(Equal(LiveSessionName), "Live cluster should have sessionName='live'")
 
+	sessionID := GetSessionIDFromHeadPod(test, g, rayCluster)
+
 	client := CreateHTTPClientWithCookieJar(g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
-	verifyHistoryServerEndpoints(test, g, client, historyServerURL, []string{HistoryServerEndpointGrafanaHealth})
+	verifyHistoryServerGrafanaHealthEndpoint(test, g, client, historyServerURL, sessionID)
 	DeleteS3Bucket(test, g, s3Client)
 	LogWithTimestamp(test.T(), "Live clusters grafana health E2E test completed successfully")
 }
@@ -104,8 +107,8 @@ func setClusterContext(test Test, g *WithT, client *http.Client, historyServerUR
 }
 
 // verifyHistoryServerEndpoints tests all history server endpoints
-func verifyHistoryServerEndpoints(test Test, g *WithT, client *http.Client, historyServerURL string, endpoints []string) {
-	for _, endpoint := range endpoints {
+func verifyHistoryServerEndpoints(test Test, g *WithT, client *http.Client, historyServerURL string) {
+	for _, endpoint := range HistoryServerEndpoints {
 		LogWithTimestamp(test.T(), "Testing history server endpoint: %s", endpoint)
 		g.Eventually(func(gg Gomega) {
 			resp, err := client.Get(historyServerURL + endpoint)
@@ -120,6 +123,27 @@ func verifyHistoryServerEndpoints(test Test, g *WithT, client *http.Client, hist
 			LogWithTimestamp(test.T(), "Endpoint %s returned status %d", endpoint, resp.StatusCode)
 		}, TestTimeoutShort).Should(Succeed())
 	}
+}
+
+// verifyHistoryServerGrafanaHealthEndpoint tests the /api/grafana_health endpoint
+func verifyHistoryServerGrafanaHealthEndpoint(test Test, g *WithT, client *http.Client, historyServerURL string, sessionID string) {
+	endpoint := HistoryServerEndpointGrafanaHealth
+	LogWithTimestamp(test.T(), "Testing history server endpoint: %s", endpoint)
+
+	g.Eventually(func(gg Gomega) {
+		resp, err := client.Get(historyServerURL + endpoint)
+		gg.Expect(err).NotTo(HaveOccurred())
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		gg.Expect(err).NotTo(HaveOccurred())
+		gg.Expect(resp.StatusCode).To(Equal(200),
+			"Endpoint %s should return 200, got %d: %s", endpoint, resp.StatusCode, string(body))
+
+		gg.Expect(body).To(MatchJSON(fmt.Sprintf(HistoryServerGrafanaHealthResponse, RayGrafanaIframeHost, sessionID)))
+		LogWithTimestamp(test.T(), "Endpoint %s returned status %d", endpoint, resp.StatusCode)
+	}, TestTimeoutShort).Should(Succeed())
+
 }
 
 // getClusterFromList retrieves a cluster from the /clusters/ endpoint by name and namespace.
