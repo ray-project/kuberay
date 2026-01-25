@@ -308,7 +308,11 @@ func (s *ServerHandler) getClusters(req *restful.Request, resp *restful.Response
 	resp.WriteAsJson(clusters)
 }
 
-// getNodes returns nodes for the specified cluster
+// TODO(jwj): Make this doc clearer.
+// getNodes retrieves all node summaries and resource usage information for a specific session of a specific cluster.
+// The API schema of live and dead clusters are different:
+//   - Live clusters: returns the current snapshot
+//   - Dead clusters: returns the historical replay
 func (s *ServerHandler) getNodes(req *restful.Request, resp *restful.Response) {
 	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
 	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
@@ -320,20 +324,60 @@ func (s *ServerHandler) getNodes(req *restful.Request, resp *restful.Response) {
 		return
 	}
 
-	nodeMap := s.eventHandler.GetNodeMap(clusterNameID)
-	nodes := make([]eventtypes.Node, 0, len(nodeMap))
+	// A cluster lifecycle is identified by a cluster session.
+	clusterSessionID := clusterNameID + "_" + sessionName
+	clusterSessionID = clusterNameID
+	nodeMap := s.eventHandler.GetNodeMap(clusterSessionID)
+
+	// Build node summary. Each node has an array of summary snapshots with timestamps.
+	summary := make([][]map[string]interface{}, 0, len(nodeMap))
+	// Build node logical resources. Each node has an array of resource snapshots with timestamps.
+	nodeLogicalResources := make(map[string][]map[string]interface{})
+
+	// Process each node to build the historical replay.
 	for _, node := range nodeMap {
-		nodes = append(nodes, node)
+		// TODO(jwj): All the other static fields can be processed outside transition loop.
+		nodeId := node.NodeID
+
+		nodeSummaryReplay := make([]map[string]interface{}, 0)
+		nodeResourceReplay := make([]map[string]interface{}, 0)
+		for _, tr := range node.StateTransitions {
+			transitionTimestamp := tr.Timestamp.UnixMilli()
+
+			// Create a summary snapshot.
+			nodeSummarySnapshot := map[string]interface{}{
+				"t": transitionTimestamp, // TODO(jwj): Should we just populate "now".
+				"raylet": map[string]interface{}{
+					"nodeId": nodeId, // TODO(jwj): Should be hex.
+					"state":  string(tr.State),
+				},
+			}
+			nodeSummaryReplay = append(nodeSummaryReplay, nodeSummarySnapshot)
+
+			// Create a resource snapshot.
+			resourceSnapshot := map[string]interface{}{
+				"t":              transitionTimestamp,
+				"resourceString": "dummy",
+			}
+
+			nodeResourceReplay = append(nodeResourceReplay, resourceSnapshot)
+		}
+
+		summary = append(summary, nodeSummaryReplay)
+		nodeLogicalResources[nodeId] = nodeResourceReplay
 	}
 
-	rawResp := make([]interface{}, 0)
-	for _, node := range nodes {
-		rawResp = append(rawResp, map[string]interface{}{
-			"node_id": node.NodeID,
-		})
+	// Build dashboard API-compatible response.
+	response := map[string]interface{}{
+		"result": true,
+		"msg":    "Node summary fetched.",
+		"data": map[string]interface{}{
+			"summary":              summary,
+			"nodeLogicalResources": nodeLogicalResources,
+		},
 	}
 
-	data, err := json.Marshal(rawResp)
+	data, err := json.Marshal(response)
 	if err != nil {
 		logrus.Errorf("Failed to marshal nodes response: %v", err)
 		resp.WriteErrorString(http.StatusInternalServerError, err.Error())

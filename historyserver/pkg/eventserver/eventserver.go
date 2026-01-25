@@ -543,8 +543,14 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 
 		nodeMap := h.ClusterNodeMap.GetOrCreateNodeMap(currentClusterName)
 		nodeMap.CreateOrMergeNode(currNode.NodeID, func(n *types.Node) {
-			// TODO(jwj): Handle merging of node definition event.
+			// TODO(jwj): Handle merging of node definition event to prevent overwriting lifecycle-derived fields.
+			existingStateTransitions := n.StateTransitions
+
 			*n = currNode
+
+			if len(existingStateTransitions) > 0 {
+				n.StateTransitions = existingStateTransitions
+			}
 		})
 	case types.NODE_LIFECYCLE_EVENT:
 		nodeLifecycleEvent, ok := eventMap["nodeLifecycleEvent"].(map[string]any)
@@ -797,11 +803,11 @@ func (h *EventHandler) GetActorsMap(clusterName string) map[string]types.Actor {
 	return actors
 }
 
-func (h *EventHandler) GetNodeMap(clusterName string) map[string]types.Node {
+func (h *EventHandler) GetNodeMap(clusterSessionID string) map[string]types.Node {
 	h.ClusterNodeMap.RLock()
 	defer h.ClusterNodeMap.RUnlock()
 
-	nodeMap, ok := h.ClusterNodeMap.ClusterNodeMap[clusterName]
+	nodeMap, ok := h.ClusterNodeMap.ClusterNodeMap[clusterSessionID]
 	if !ok {
 		return map[string]types.Node{}
 	}
