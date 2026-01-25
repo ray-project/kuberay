@@ -58,6 +58,14 @@ type NodeStateTransition struct {
 	AliveSubState NodeAliveSubState `json:"aliveSubState,omitempty"`
 }
 
+func (n NodeStateTransition) GetState() string {
+	return string(n.State)
+}
+
+func (n NodeStateTransition) GetTimestamp() time.Time {
+	return n.Timestamp
+}
+
 type Node struct {
 	NodeID string `json:"nodeId"`
 

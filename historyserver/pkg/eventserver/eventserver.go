@@ -775,29 +775,14 @@ func (h *EventHandler) handleNodeLifecycleEvent(eventMap map[string]any, cluster
 
 	nodeMap := h.ClusterNodeMap.GetOrCreateNodeMap(clusterSessionID)
 	nodeMap.CreateOrMergeNode(currNode.NodeID, func(n *types.Node) {
-		type stateTransitionKey struct {
-			State     string
-			Timestamp int64
-		}
-		existingKeys := make(map[stateTransitionKey]bool)
-		for _, tr := range n.StateTransitions {
-			existingKeys[stateTransitionKey{string(tr.State), tr.Timestamp.UnixNano()}] = true
-		}
-		for _, tr := range currNode.StateTransitions {
-			key := stateTransitionKey{string(tr.State), tr.Timestamp.UnixNano()}
-			if !existingKeys[key] {
-				n.StateTransitions = append(n.StateTransitions, tr)
-				existingKeys[key] = true
-			}
-		}
+		// Seems redundant.
+		n.NodeID = currNode.NodeID
 
-		sort.Slice(n.StateTransitions, func(i, j int) bool {
-			return n.StateTransitions[i].Timestamp.Before(n.StateTransitions[j].Timestamp)
-		})
-
-		if len(n.StateTransitions) == 0 {
-			return
-		}
+		// Merge state transitions.
+		n.StateTransitions = MergeStateTransitions[types.NodeStateTransition](
+			n.StateTransitions,
+			currNode.StateTransitions,
+		)
 	})
 
 	return nil
