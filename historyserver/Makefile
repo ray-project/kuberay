@@ -76,13 +76,24 @@ mod:
 .PHONY: localimage-build
 localimage-build: localimage-collector localimage-historyserver
 
+# Platform for cross-compilation (e.g., linux/amd64, linux/arm64)
+PLATFORM ?=
+
 .PHONY: localimage-collector
 localimage-collector:
+ifdef PLATFORM
+	${ENGINE} build --platform $(PLATFORM) -t $(COLLECTOR_IMG) --build-arg GOPROXY=$(GOPROXY) -f Dockerfile.collector .
+else
 	${ENGINE} build -t $(COLLECTOR_IMG) --build-arg GOPROXY=$(GOPROXY) -f Dockerfile.collector .
+endif
 
 .PHONY: localimage-historyserver
 localimage-historyserver:
-	${ENGINE} build -t $(HISTORYSERVER_IMG)  --build-arg GOPROXY=$(GOPROXY) -f Dockerfile.historyserver .
+ifdef PLATFORM
+	${ENGINE} build --platform $(PLATFORM) -t $(HISTORYSERVER_IMG) --build-arg GOPROXY=$(GOPROXY) -f Dockerfile.historyserver .
+else
+	${ENGINE} build -t $(HISTORYSERVER_IMG) --build-arg GOPROXY=$(GOPROXY) -f Dockerfile.historyserver .
+endif
 
 .PHONY: dockerbuilder_instance
 dockerbuilder_instance:
