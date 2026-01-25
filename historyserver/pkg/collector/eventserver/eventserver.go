@@ -289,10 +289,6 @@ func (es *EventServer) periodicFlush() {
 	}
 }
 
-func (es *EventServer) WaitForStop() <-chan struct{} {
-	return es.stopped
-}
-
 func (es *EventServer) flushEvents() {
 	es.mutex.Lock()
 	if len(es.events) == 0 {

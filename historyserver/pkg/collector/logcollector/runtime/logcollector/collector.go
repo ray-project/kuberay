@@ -40,11 +40,6 @@ type RayLogHandler struct {
 	EnableMeta             bool
 }
 
-func (r *RayLogHandler) Start(stop <-chan struct{}) error {
-	go r.Run(stop)
-	return nil
-}
-
 func (r *RayLogHandler) Run(stop <-chan struct{}) error {
 	// watchPath := r.LogDir
 	r.prevLogsDir = "/tmp/ray/prev-logs"
@@ -74,10 +69,6 @@ func (r *RayLogHandler) Run(stop <-chan struct{}) error {
 	close(r.ShutdownChan)
 
 	return nil
-}
-
-func (r *RayLogHandler) WaitForStop() <-chan struct{} {
-	return r.ShutdownChan
 }
 
 // processSessionLatestLogs processes logs in /tmp/ray/session_latest/logs directory
