@@ -81,7 +81,7 @@ func NewEventServer(writer storage.StorageWriter, rootDir, sessionDir, nodeID, c
 	return server
 }
 
-func (es *EventServer) InitServer(stop chan struct{}, port int) {
+func (es *EventServer) InitServer(stop <-chan struct{}, port int) {
 	ws := new(restful.WebService)
 	ws.Path("/v1")
 	ws.Consumes(restful.MIME_JSON)
