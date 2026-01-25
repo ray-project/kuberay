@@ -109,6 +109,7 @@ func routerAPI(s *ServerHandler) {
 		Doc("get logfile").Param(ws.QueryParameter("node_id", "node_id")).
 		Param(ws.QueryParameter("filename", "filename")).
 		Param(ws.QueryParameter("lines", "lines")).
+		Produces("text/plain").
 		Writes("")) // Placeholder for specific return type
 
 	ws.Route(ws.GET("/v0/tasks").To(s.getTaskDetail).Filter(s.CookieHandle).
@@ -615,7 +616,6 @@ func (s *ServerHandler) getNodeLogFile(req *restful.Request, resp *restful.Respo
 		resp.WriteError(http.StatusInternalServerError, err)
 		return
 	}
-	resp.Header().Set("Content-Type", "text/plain")
 	resp.Write(content)
 }
 
