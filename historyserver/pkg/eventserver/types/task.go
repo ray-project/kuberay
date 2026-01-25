@@ -58,14 +58,28 @@ type Task struct {
 	EndTime           time.Time
 	// Events stores the complete state transition history.
 	// Each element represents a state change with its timestamp.
-	Events []StateEvent `json:"events,omitempty"`
-	// ProfilingData ProfilingData
-	WorkerID      string `json:"workerId"`
-	ErrorType     string `json:"errorType"`
-	ErrorMessage  string `json:"errorMessage"`
+	Events        []StateEvent `json:"events,omitempty"`
+	ProfileData   *ProfileData `json:"profile_data,omitempty"`
+	WorkerID      string       `json:"workerId"`
+	ErrorType     string       `json:"errorType"`
+	ErrorMessage  string       `json:"errorMessage"`
 	TaskLogInfo   map[string]string
 	CallSite      string
 	LabelSelector map[string]string
+}
+
+type ProfileData struct {
+	ComponentID   string            `json:"component_id"`
+	ComponentType string            `json:"component_type"`
+	NodeIPAddress string            `json:"node_ip_address"`
+	Events        []ProfileEventRaw `json:"events"`
+}
+
+type ProfileEventRaw struct {
+	EventName string `json:"event_name"`
+	StartTime int64  `json:"start_time"` // nanoseconds
+	EndTime   int64  `json:"end_time"`   // nanoseconds
+	ExtraData string `json:"extra_data"`
 }
 
 // TaskMap is a struct that uses TaskID as key and stores a list of Task attempts.
@@ -218,6 +232,17 @@ func (t Task) DeepCopy() Task {
 		cp.LabelSelector = make(map[string]string, len(t.LabelSelector))
 		for k, v := range t.LabelSelector {
 			cp.LabelSelector[k] = v
+		}
+	}
+	if t.ProfileData != nil {
+		cp.ProfileData = &ProfileData{
+			ComponentID:   t.ProfileData.ComponentID,
+			ComponentType: t.ProfileData.ComponentType,
+			NodeIPAddress: t.ProfileData.NodeIPAddress,
+		}
+		if len(t.ProfileData.Events) > 0 {
+			cp.ProfileData.Events = make([]ProfileEventRaw, len(t.ProfileData.Events))
+			copy(cp.ProfileData.Events, t.ProfileData.Events)
 		}
 	}
 	return cp
