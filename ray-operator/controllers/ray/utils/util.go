@@ -23,6 +23,8 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/apimachinery/pkg/util/rand"
+	"k8s.io/apimachinery/pkg/version"
+	"k8s.io/client-go/discovery"
 	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -879,6 +881,34 @@ func GetWeightsFromHTTPRoute(httpRoute *gwv1.HTTPRoute, rayServiceInstance *rayv
 	}
 
 	return
+}
+
+func GetKubernetesVersion() (*version.Info, error) {
+	config, err := ctrl.GetConfig()
+	if err != nil || config == nil {
+		return nil, err
+	}
+
+	discoveryClient, err := discovery.NewDiscoveryClientForConfig(config)
+	if err != nil || discoveryClient == nil {
+		return nil, err
+	}
+
+	serverVersion, err := discoveryClient.ServerVersion()
+	if err != nil {
+		return nil, err
+	}
+	return serverVersion, nil
+}
+
+func IsK8sVersionAtLeast(serverVersion *version.Info, major, minor int) bool {
+	majorVersion, _ := strconv.Atoi(serverVersion.Major)
+	// Minor can have "+" suffix (e.g., "34+"), need to trim it
+	minorVersion, _ := strconv.Atoi(strings.TrimSuffix(serverVersion.Minor, "+"))
+	if majorVersion < major || (majorVersion == major && minorVersion < minor) {
+		return false
+	}
+	return true
 }
 
 func GetContainerCommand(additionalOptions []string) []string {
