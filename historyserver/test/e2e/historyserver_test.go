@@ -18,7 +18,10 @@ import (
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
 
-const LiveSessionName = "live"
+const (
+	LiveSessionName = "live"
+	EndpointLogFile = "/api/v0/logs/file"
+)
 
 func TestHistoryServer(t *testing.T) {
 	// Share a single S3 client among subtests.
@@ -171,7 +174,7 @@ func testLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Names
 	test.T().Run("should return log content", func(t *testing.T) {
 		g := NewWithT(t)
 		g.Eventually(func(gg Gomega) {
-			logFileURL := fmt.Sprintf("%s/api/v0/logs/file?node_id=%s&filename=%s&lines=100", historyServerURL, nodeID, filename)
+			logFileURL := fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=100", historyServerURL, EndpointLogFile, nodeID, filename)
 			resp, err := client.Get(logFileURL)
 			gg.Expect(err).NotTo(HaveOccurred())
 			defer resp.Body.Close()
@@ -189,7 +192,7 @@ func testLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Names
 
 		g.Eventually(func(gg Gomega) {
 			for _, malicious := range maliciousPaths {
-				url := fmt.Sprintf("%s/api/v0/logs/file?node_id=%s&filename=%s", historyServerURL, nodeID, malicious)
+				url := fmt.Sprintf("%s%s?node_id=%s&filename=%s", historyServerURL, EndpointLogFile, nodeID, malicious)
 				resp, err := client.Get(url)
 				gg.Expect(err).NotTo(HaveOccurred())
 				defer resp.Body.Close()
@@ -243,7 +246,7 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 	test.T().Run("should return log content from S3", func(t *testing.T) {
 		g := NewWithT(t)
 		g.Eventually(func(gg Gomega) {
-			logFileURL := fmt.Sprintf("%s/api/v0/logs/file?node_id=%s&filename=%s&lines=100", historyServerURL, nodeID, filename)
+			logFileURL := fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=100", historyServerURL, EndpointLogFile, nodeID, filename)
 			resp, err := client.Get(logFileURL)
 			gg.Expect(err).NotTo(HaveOccurred())
 			defer resp.Body.Close()
@@ -261,7 +264,7 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 
 		g.Eventually(func(gg Gomega) {
 			for _, malicious := range maliciousPaths {
-				url := fmt.Sprintf("%s/api/v0/logs/file?node_id=%s&filename=%s", historyServerURL, nodeID, malicious)
+				url := fmt.Sprintf("%s%s?node_id=%s&filename=%s", historyServerURL, EndpointLogFile, nodeID, malicious)
 				resp, err := client.Get(url)
 				gg.Expect(err).NotTo(HaveOccurred())
 				defer resp.Body.Close()
