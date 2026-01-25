@@ -10,6 +10,8 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 	. "github.com/ray-project/kuberay/historyserver/test/support"
@@ -31,8 +33,12 @@ func TestHistoryServer(t *testing.T) {
 			testFunc: testLiveClusters,
 		},
 		{
-			name:     "/v0/logs/file endpoint",
+			name:     "/v0/logs/file endpoint (live cluster)",
 			testFunc: testLogFileEndpoint,
+		},
+		{
+			name:     "/v0/logs/file endpoint (dead cluster)",
+			testFunc: testLogFileEndpointDeadCluster,
 		},
 	}
 
@@ -149,7 +155,7 @@ func testLogFileEndpoint(test Test, g *WithT, namespace *corev1.Namespace, s3Cli
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 
 	nodeID := GetNodeID(g, client, historyServerURL)
-	filename := GetLogFilename(g, client, historyServerURL, nodeID)
+	filename := GetFirstLogFilename(g, client, historyServerURL, nodeID)
 
 	test.T().Run("should return log content", func(t *testing.T) {
 		g := NewWithT(t)
@@ -183,4 +189,65 @@ func testLogFileEndpoint(test Test, g *WithT, namespace *corev1.Namespace, s3Cli
 
 	DeleteS3Bucket(test, g, s3Client)
 	LogWithTimestamp(test.T(), "Log file endpoint tests completed")
+}
+
+func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
+	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
+
+	// Delete RayCluster to trigger log upload
+	err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Delete(test.Ctx(), rayCluster.Name, metav1.DeleteOptions{})
+	g.Expect(err).NotTo(HaveOccurred())
+	LogWithTimestamp(test.T(), "Deleted RayCluster %s/%s", namespace.Name, rayCluster.Name)
+
+	// Wait for cluster to be fully deleted (ensures logs are uploaded to S3)
+	g.Eventually(func() error {
+		_, err := GetRayCluster(test, namespace.Name, rayCluster.Name)
+		return err
+	}, TestTimeoutMedium).Should(WithTransform(k8serrors.IsNotFound, BeTrue()))
+
+	ApplyHistoryServer(test, g, namespace)
+	historyServerURL := GetHistoryServerURL(test, g, namespace)
+
+	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
+	g.Expect(clusterInfo.SessionName).NotTo(Equal(LiveSessionName))
+
+	client := CreateHTTPClientWithCookieJar(g)
+	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
+
+	nodeID := GetNodeID(g, client, historyServerURL)
+	filename := GetFirstLogFilename(g, client, historyServerURL, nodeID)
+
+	test.T().Run("should return log content from S3", func(t *testing.T) {
+		g := NewWithT(t)
+		g.Eventually(func(gg Gomega) {
+			logFileURL := fmt.Sprintf("%s/api/v0/logs/file?node_id=%s&filename=%s&lines=100", historyServerURL, nodeID, filename)
+			resp, err := client.Get(logFileURL)
+			gg.Expect(err).NotTo(HaveOccurred())
+			defer resp.Body.Close()
+			gg.Expect(resp.StatusCode).To(Equal(http.StatusOK))
+
+			body, err := io.ReadAll(resp.Body)
+			gg.Expect(err).NotTo(HaveOccurred())
+			gg.Expect(len(body)).To(BeNumerically(">", 0))
+		}, TestTimeoutShort).Should(Succeed())
+	})
+
+	test.T().Run("should reject path traversal from S3", func(t *testing.T) {
+		g := NewWithT(t)
+		maliciousPaths := []string{"../etc/passwd", "..", "/etc/passwd", "../../secret"}
+
+		g.Eventually(func(gg Gomega) {
+			for _, malicious := range maliciousPaths {
+				url := fmt.Sprintf("%s/api/v0/logs/file?node_id=%s&filename=%s", historyServerURL, nodeID, malicious)
+				resp, err := client.Get(url)
+				gg.Expect(err).NotTo(HaveOccurred())
+				defer resp.Body.Close()
+				gg.Expect(resp.StatusCode).To(Equal(http.StatusBadRequest))
+			}
+		}, TestTimeoutShort).Should(Succeed())
+	})
+
+	DeleteS3Bucket(test, g, s3Client)
+	LogWithTimestamp(test.T(), "Dead cluster log file endpoint tests completed")
 }
