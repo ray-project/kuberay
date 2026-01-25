@@ -48,19 +48,22 @@ type NodeStateTransition struct {
 	Timestamp time.Time `json:"timestamp"`
 
 	// Resources available on a node (cpu, gpu, etc.), available only in the ALIVE state.
-	// Resources map[string]float64 `json:"resources,omitempty"`
+	Resources map[string]float64 `json:"resources,omitempty"`
 
 	// Reason why a node died (UNSPECIFIED, EXPECTED_TERMINATION, UNEXPECTED_TERMINATION, AUTOSCALER_DRAIN_PREEMPTED, AUTOSCALER_DRAIN_IDLE),
 	// available only in the DEAD state
-	// DeathInfo *NodeDeathInfo `json:"deathInfo,omitempty"`
+	DeathInfo *NodeDeathInfo `json:"deathInfo,omitempty"`
 
 	// Sub-state of a node in the ALIVE state (UNSPECIFIED, DRAINING), available only in the ALIVE state.
-	// AliveSubState NodeAliveSubState `json:"aliveSubState,omitempty"`
+	AliveSubState NodeAliveSubState `json:"aliveSubState,omitempty"`
 }
 
 type Node struct {
-	NodeID           string                `json:"nodeId"`
-	StateTransitions []NodeStateTransition `json:"stateTransitions"`
+	NodeID string `json:"nodeId"`
+
+	// TODO(jwj): Make it clearer.
+	// Available only when there's at least one NODE_LIFECYCLE_EVENT.
+	StateTransitions []NodeStateTransition `json:"stateTransitions,omitempty"`
 }
 
 type NodeMap struct {
@@ -103,18 +106,20 @@ func (c *ClusterNodeMap) Unlock() {
 	c.Mu.Unlock()
 }
 
-func (c *ClusterNodeMap) GetOrCreateNodeMap(clusterName string) *NodeMap {
+// GetOrCreateNodeMap retrieves the NodeMap for the given cluster session, creating it if it doesn't exist.
+func (c *ClusterNodeMap) GetOrCreateNodeMap(clusterSessionID string) *NodeMap {
 	c.Lock()
 	defer c.Unlock()
 
-	nodeMap, exists := c.ClusterNodeMap[clusterName]
+	nodeMap, exists := c.ClusterNodeMap[clusterSessionID]
 	if !exists {
 		nodeMap = NewNodeMap()
-		c.ClusterNodeMap[clusterName] = nodeMap
+		c.ClusterNodeMap[clusterSessionID] = nodeMap
 	}
 	return nodeMap
 }
 
+// CreateOrMergeNode retrieves or creates a Node and applies the merge function.
 func (n *NodeMap) CreateOrMergeNode(nodeId string, mergeFn func(*Node)) {
 	n.Lock()
 	defer n.Unlock()

@@ -206,6 +206,16 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 		return fmt.Errorf("clusterName is not a string, got %T", clusterNameVal)
 	}
 
+	sessionNameVal, ok := eventMap["sessionName"]
+	if !ok {
+		return fmt.Errorf("event missing 'sessionName' field")
+	}
+	sessionName, ok := sessionNameVal.(string)
+	if !ok {
+		return fmt.Errorf("sessionName is not a string, got %T", sessionNameVal)
+	}
+	clusterSessionID := currentClusterName + "_" + sessionName
+
 	logrus.Infof("current eventType: %v", eventType)
 	switch eventType {
 	case types.TASK_DEFINITION_EVENT:
@@ -527,98 +537,9 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 		// This is related to GET /api/v0/tasks (type=ACTOR_TASK)
 		logrus.Debugf("ACTOR_TASK_DEFINITION_EVENT received, not yet implemented")
 	case types.NODE_DEFINITION_EVENT:
-		nodeDef, ok := eventMap["nodeDefinitionEvent"]
-		if !ok {
-			return fmt.Errorf("event does not have 'nodeDefinitionEvent'")
-		}
-		jsonNodeDefinition, err := json.Marshal(nodeDef)
-		if err != nil {
-			return fmt.Errorf("failed to marshal node definition event: %v", err)
-		}
-
-		var currNode types.Node
-		if err := json.Unmarshal(jsonNodeDefinition, &currNode); err != nil {
-			return fmt.Errorf("failed to unmarshal node definition event: %v", err)
-		}
-
-		nodeMap := h.ClusterNodeMap.GetOrCreateNodeMap(currentClusterName)
-		nodeMap.CreateOrMergeNode(currNode.NodeID, func(n *types.Node) {
-			// TODO(jwj): Handle merging of node definition event to prevent overwriting lifecycle-derived fields.
-			existingStateTransitions := n.StateTransitions
-
-			*n = currNode
-
-			if len(existingStateTransitions) > 0 {
-				n.StateTransitions = existingStateTransitions
-			}
-		})
+		return h.handleNodeDefinitionEvent(eventMap, clusterSessionID)
 	case types.NODE_LIFECYCLE_EVENT:
-		nodeLifecycleEvent, ok := eventMap["nodeLifecycleEvent"].(map[string]any)
-		if !ok {
-			return fmt.Errorf("invalid nodeLifecycleEvent format")
-		}
-
-		nodeId, _ := nodeLifecycleEvent["nodeId"].(string)
-		stateTransitions, _ := nodeLifecycleEvent["stateTransitions"].([]any)
-
-		if len(stateTransitions) == 0 || nodeId == "" {
-			return nil
-		}
-
-		var nodeStateTransitions []types.NodeStateTransition
-		for _, stateTransition := range stateTransitions {
-			tr, ok := stateTransition.(map[string]any)
-			if !ok {
-				// TODO(jwj): Handle type assertion error.
-				continue
-			}
-			state, _ := tr["state"].(string)
-			timestampStr, _ := tr["timestamp"].(string)
-
-			var timestamp time.Time
-			if timestampStr != "" {
-				timestamp, _ = time.Parse(time.RFC3339Nano, timestampStr)
-			}
-
-			nodeStateTransitions = append(nodeStateTransitions, types.NodeStateTransition{
-				State:     types.NodeState(state),
-				Timestamp: timestamp,
-			})
-		}
-
-		// TODO(jwj): Handle empty node state transitions.
-		if len(nodeStateTransitions) == 0 {
-			return nil
-		}
-
-		nodeMap := h.ClusterNodeMap.GetOrCreateNodeMap(currentClusterName)
-		nodeMap.CreateOrMergeNode(nodeId, func(n *types.Node) {
-			n.NodeID = nodeId
-
-			type stateTransitionKey struct {
-				State     string
-				Timestamp int64
-			}
-			existingKeys := make(map[stateTransitionKey]bool)
-			for _, tr := range n.StateTransitions {
-				existingKeys[stateTransitionKey{string(tr.State), tr.Timestamp.UnixNano()}] = true
-			}
-			for _, tr := range nodeStateTransitions {
-				key := stateTransitionKey{string(tr.State), tr.Timestamp.UnixNano()}
-				if !existingKeys[key] {
-					n.StateTransitions = append(n.StateTransitions, tr)
-					existingKeys[key] = true
-				}
-			}
-
-			sort.Slice(n.StateTransitions, func(i, j int) bool {
-				return n.StateTransitions[i].Timestamp.Before(n.StateTransitions[j].Timestamp)
-			})
-
-			if len(n.StateTransitions) == 0 {
-				return
-			}
-		})
+		return h.handleNodeLifecycleEvent(eventMap, clusterSessionID)
 	default:
 		logrus.Infof("Event not supported, skipping: %v", eventMap)
 	}
@@ -801,6 +722,85 @@ func (h *EventHandler) GetActorsMap(clusterName string) map[string]types.Actor {
 		actors[id] = actor.DeepCopy()
 	}
 	return actors
+}
+
+// handleNodeDefinitionEvent processes NODE_DEFINITION_EVENT and merges it with the existing node map for a given cluster session.
+func (h *EventHandler) handleNodeDefinitionEvent(eventMap map[string]any, clusterSessionID string) error {
+	nodeDef, exists := eventMap["nodeDefinitionEvent"]
+	if !exists {
+		return fmt.Errorf("event does not have 'nodeDefinitionEvent' field")
+	}
+
+	jsonNodeDefinition, err := json.Marshal(nodeDef)
+	if err != nil {
+		return fmt.Errorf("failed to marshal node definition event: %w", err)
+	}
+
+	var currNode types.Node
+	if err := json.Unmarshal(jsonNodeDefinition, &currNode); err != nil {
+		return fmt.Errorf("failed to unmarshal node definition event: %w", err)
+	}
+
+	nodeMap := h.ClusterNodeMap.GetOrCreateNodeMap(clusterSessionID)
+	nodeMap.CreateOrMergeNode(currNode.NodeID, func(n *types.Node) {
+		// TODO(jwj): Handle merging of node definition event to prevent overwriting lifecycle-derived fields.
+		existingStateTransitions := n.StateTransitions
+
+		*n = currNode
+
+		if len(existingStateTransitions) > 0 {
+			n.StateTransitions = existingStateTransitions
+		}
+	})
+
+	return nil
+}
+
+// handleNodeLifecycleEvent processes NODE_LIFECYCLE_EVENT and merges state transitions.
+func (h *EventHandler) handleNodeLifecycleEvent(eventMap map[string]any, clusterSessionID string) error {
+	nodeLifecycle, exists := eventMap["nodeLifecycleEvent"]
+	if !exists {
+		return fmt.Errorf("event does not have 'nodeLifecycleEvent' field")
+	}
+
+	jsonNodeLifecycle, err := json.Marshal(nodeLifecycle)
+	if err != nil {
+		return fmt.Errorf("failed to marshal node lifecycle event: %w", err)
+	}
+
+	var currNode types.Node
+	if err := json.Unmarshal(jsonNodeLifecycle, &currNode); err != nil {
+		return fmt.Errorf("failed to unmarshal node lifecycle event: %w", err)
+	}
+
+	nodeMap := h.ClusterNodeMap.GetOrCreateNodeMap(clusterSessionID)
+	nodeMap.CreateOrMergeNode(currNode.NodeID, func(n *types.Node) {
+		type stateTransitionKey struct {
+			State     string
+			Timestamp int64
+		}
+		existingKeys := make(map[stateTransitionKey]bool)
+		for _, tr := range n.StateTransitions {
+			existingKeys[stateTransitionKey{string(tr.State), tr.Timestamp.UnixNano()}] = true
+		}
+		for _, tr := range currNode.StateTransitions {
+			key := stateTransitionKey{string(tr.State), tr.Timestamp.UnixNano()}
+			if !existingKeys[key] {
+				n.StateTransitions = append(n.StateTransitions, tr)
+				existingKeys[key] = true
+			}
+		}
+
+		sort.Slice(n.StateTransitions, func(i, j int) bool {
+			return n.StateTransitions[i].Timestamp.Before(n.StateTransitions[j].Timestamp)
+		})
+
+		if len(n.StateTransitions) == 0 {
+			return
+		}
+	})
+
+	return nil
 }
 
 func (h *EventHandler) GetNodeMap(clusterSessionID string) map[string]types.Node {

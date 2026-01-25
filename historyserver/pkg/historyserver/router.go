@@ -326,8 +326,8 @@ func (s *ServerHandler) getNodes(req *restful.Request, resp *restful.Response) {
 
 	// A cluster lifecycle is identified by a cluster session.
 	clusterSessionID := clusterNameID + "_" + sessionName
-	clusterSessionID = clusterNameID
 	nodeMap := s.eventHandler.GetNodeMap(clusterSessionID)
+	// logrus.Infof("clusterSessionID: %s, nodeMap: %v", clusterSessionID, nodeMap)
 
 	// Build node summary. Each node has an array of summary snapshots with timestamps.
 	summary := make([][]map[string]interface{}, 0, len(nodeMap))
