@@ -354,7 +354,7 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 	}
 
 	// Handle idle cluster termination based on TTLSecondsAfterIdle.
-	if instance.Spec.TTLSecondsAfterIdle != nil {
+	if features.Enabled(features.RayClusterIdleTermination) && instance.Spec.TTLSecondsAfterIdle != nil {
 		return r.handleIdleClusterTermination(ctx, instance)
 	}
 
