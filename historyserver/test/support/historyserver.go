@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/s3"
@@ -160,8 +161,8 @@ func GetNodeID(g *WithT, client *http.Client, historyServerURL string) string {
 	return nodeInfo["raylet"].(map[string]any)["nodeId"].(string)
 }
 
-// GetLogFilename retrieves the first log filename from the /api/v0/logs endpoint.
-func GetLogFilename(g *WithT, client *http.Client, historyServerURL, nodeID string) string {
+// GetFirstLogFilename retrieves the first log filename from the /api/v0/logs endpoint.
+func GetFirstLogFilename(g *WithT, client *http.Client, historyServerURL, nodeID string) string {
 	resp, err := client.Get(fmt.Sprintf("%s/api/v0/logs?node_id=%s", historyServerURL, nodeID))
 	g.Expect(err).NotTo(HaveOccurred())
 	defer resp.Body.Close()
@@ -170,15 +171,38 @@ func GetLogFilename(g *WithT, client *http.Client, historyServerURL, nodeID stri
 	body, err := io.ReadAll(resp.Body)
 	g.Expect(err).NotTo(HaveOccurred())
 
-	var logs map[string]any
-	err = json.Unmarshal(body, &logs)
+	var result map[string]any
+	err = json.Unmarshal(body, &result)
 	g.Expect(err).NotTo(HaveOccurred())
 
-	logFiles := logs[nodeID].(map[string]any)
-	g.Expect(len(logFiles)).To(BeNumerically(">", 0))
+	// TODO: make logs/ response same for live and dead cluster
+	// Handle both response formats:
+	// Live cluster: {"result": true, "msg": "", "data": {"result": {"agent": ["file1"], ...}}}
+	// Dead cluster: {"data": {"result": {"padding": ["file1", "file2", ...]}}}
 
-	for filename := range logFiles {
-		return filename
+	data := result["data"].(map[string]any)
+	resultData := data["result"].(map[string]any)
+
+	// The dead cluster logs/ response format
+	if padding, ok := resultData["padding"].([]any); ok && len(padding) > 0 {
+		for _, file := range padding {
+			if fileStr, ok := file.(string); ok && !strings.HasSuffix(fileStr, "/") {
+				return fileStr
+			}
+		}
 	}
+
+	// The live cluster logs/ response format
+	for _, files := range resultData {
+		if fileList, ok := files.([]any); ok && len(fileList) > 0 {
+			for _, file := range fileList {
+				if fileStr, ok := file.(string); ok && !strings.HasSuffix(fileStr, "/") {
+					return fileStr
+				}
+			}
+		}
+	}
+
+	g.Fail("No log files found in response")
 	return ""
 }

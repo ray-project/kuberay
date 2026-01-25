@@ -55,6 +55,9 @@ func (s *ServerHandler) listClusters(limit int) []utils.ClusterInfo {
 }
 
 func (s *ServerHandler) _getNodeLogs(rayClusterNameID, sessionId, nodeId, dir string) ([]byte, error) {
+	// TODO: make logs/ response same for live and dead cluster
+	// Live cluster: {"result": true, "msg": "", "data": {"result": {"agent": ["file1"], ...}}}
+	// Dead cluster: {"data": {"result": {"padding": ["file1", "file2", ...]}}}
 	logPath := path.Join(sessionId, "logs", nodeId)
 	if dir != "" {
 		logPath = path.Join(logPath, dir)
