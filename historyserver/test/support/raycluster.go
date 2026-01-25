@@ -17,10 +17,30 @@ const (
 	RayClusterID           = "default"
 )
 
+// injectCollectorRayClusterID injects the ray-cluster-id argument into all collector containers.
+func injectCollectorRayClusterID(containers []corev1.Container, rayClusterID string) {
+	for i := range containers {
+		if containers[i].Name == "collector" {
+			containers[i].Command = append(
+				containers[i].Command,
+				fmt.Sprintf("--ray-cluster-id=%s", rayClusterID),
+			)
+		}
+	}
+}
+
 // ApplyRayClusterWithCollector deploys a Ray cluster with the collector sidecar into the test namespace.
 func ApplyRayClusterWithCollector(test Test, g *WithT, namespace *corev1.Namespace) *rayv1.RayCluster {
 	rayClusterFromYaml := DeserializeRayClusterYAML(test, RayClusterManifestPath)
 	rayClusterFromYaml.Namespace = namespace.Name
+
+	// Inject namespace name as ray-cluster-id for head group collector
+	injectCollectorRayClusterID(rayClusterFromYaml.Spec.HeadGroupSpec.Template.Spec.Containers, namespace.Name)
+
+	// Inject namespace name as ray-cluster-id for worker group collectors
+	for wg := range rayClusterFromYaml.Spec.WorkerGroupSpecs {
+		injectCollectorRayClusterID(rayClusterFromYaml.Spec.WorkerGroupSpecs[wg].Template.Spec.Containers, namespace.Name)
+	}
 
 	rayCluster, err := test.Client().Ray().RayV1().
 		RayClusters(namespace.Name).
