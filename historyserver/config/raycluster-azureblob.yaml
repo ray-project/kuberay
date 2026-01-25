@@ -73,7 +73,7 @@ spec:
             mountPath: /tmp/ray
         - name: collector
           image: collector:v0.1.0
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
           env:
           - name: AZURE_STORAGE_CONNECTION_STRING
             value: "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite-service.azurite-dev.svc.cluster.local:10000/devstoreaccount1;"
@@ -158,7 +158,7 @@ spec:
             mountPath: /tmp/ray
         - name: collector
           image: collector:v0.1.0
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
           env:
           - name: AZURE_STORAGE_CONNECTION_STRING
             value: "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite-service.azurite-dev.svc.cluster.local:10000/devstoreaccount1;"
