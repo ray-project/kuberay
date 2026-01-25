@@ -57,8 +57,13 @@ func PortForwardService(test Test, g *WithT, namespace, serviceName string, port
 func InstallGrafanaAndPrometheus(test Test, g *WithT) {
 	test.T().Cleanup(func() {
 		cleanCMD := exec.Command("kubectl", "delete", "ns", "prometheus-system")
-		err := cleanCMD.Start()
-		g.Expect(err).NotTo(HaveOccurred())
+		output, err := cleanCMD.CombinedOutput()
+		if err != nil {
+			LogWithTimestamp(test.T(), "Failed to clean up Prometheus and Grafana installation with %v because %s",
+				err, string(output))
+			return
+		}
+		LogWithTimestamp(test.T(), "Clean up Prometheus and Grafana installation.")
 	})
 
 	installGrafanaCMD := exec.CommandContext(
