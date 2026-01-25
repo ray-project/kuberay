@@ -67,7 +67,10 @@ func (n NodeStateTransition) GetTimestamp() time.Time {
 }
 
 type Node struct {
-	NodeID string `json:"nodeId"`
+	NodeID         string            `json:"nodeId"`
+	NodeIPAddress  string            `json:"nodeIpAddress,omitempty"`
+	StartTimestamp time.Time         `json:"startTimestamp,omitempty"`
+	Labels         map[string]string `json:"labels,omitempty"`
 
 	// TODO(jwj): Make it clearer.
 	// Available only when there's at least one NODE_LIFECYCLE_EVENT.

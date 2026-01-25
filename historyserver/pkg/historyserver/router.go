@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -337,26 +338,47 @@ func (s *ServerHandler) getNodes(req *restful.Request, resp *restful.Response) {
 	// Process each node to build the historical replay.
 	for _, node := range nodeMap {
 		// TODO(jwj): All the other static fields can be processed outside transition loop.
-		nodeId := node.NodeID
+		// nodeId := node.NodeID
+		nodeIpAddress := node.NodeIPAddress
+		startTimestamp := node.StartTimestamp.UnixMilli()
+		labels := node.Labels
+		nodeIdHex := labels["ray.io/node-id"]
+		nodeTypeName := labels["ray.io/node-group"]
+		isHeadNode := nodeTypeName == "headgroup"
+		rayletSocketName := fmt.Sprintf("/tmp/ray/%s/sockets/raylet", sessionName)
+		objectStoreSocketName := fmt.Sprintf("/tmp/ray/%s/sockets/plasma_store", sessionName)
 
 		nodeSummaryReplay := make([]map[string]interface{}, 0)
 		nodeResourceReplay := make([]map[string]interface{}, 0)
 		for _, tr := range node.StateTransitions {
 			transitionTimestamp := tr.Timestamp.UnixMilli()
+			resourcesTotal := convertResourcesToAPISchema(tr.Resources)
 
 			// Create a summary snapshot.
 			nodeSummarySnapshot := map[string]interface{}{
-				"t": transitionTimestamp, // TODO(jwj): Should we just populate "now".
+				"t":        transitionTimestamp, // TODO(jwj): Should we just populate "now".
+				"now":      transitionTimestamp,
+				"hostname": "",
+				"ip":       nodeIpAddress,
 				"raylet": map[string]interface{}{
-					"nodeId": nodeId, // TODO(jwj): Should be hex.
-					"state":  string(tr.State),
+					"nodeId":                nodeIdHex,
+					"nodeManagerAddress":    nodeIpAddress,
+					"rayletSocketName":      rayletSocketName,
+					"objectStoreSocketName": objectStoreSocketName,
+					"resourcesTotal":        resourcesTotal,
+					"nodeTypeName":          nodeTypeName,
+					"startTimeMs":           startTimestamp,
+					"isHeadNode":            isHeadNode,
+					"labels":                labels,
+					"state":                 string(tr.State),
 				},
 			}
 			nodeSummaryReplay = append(nodeSummaryReplay, nodeSummarySnapshot)
 
 			// Create a resource snapshot.
 			resourceSnapshot := map[string]interface{}{
-				"t":              transitionTimestamp,
+				"t": transitionTimestamp,
+				// TODO(jwj): Convert to ray resource string.
 				"resourceString": "dummy",
 			}
 
@@ -364,7 +386,7 @@ func (s *ServerHandler) getNodes(req *restful.Request, resp *restful.Response) {
 		}
 
 		summary = append(summary, nodeSummaryReplay)
-		nodeLogicalResources[nodeId] = nodeResourceReplay
+		nodeLogicalResources[nodeIdHex] = nodeResourceReplay
 	}
 
 	// Build dashboard API-compatible response.
@@ -891,4 +913,28 @@ func getClusterSvcName(clis []client.Client, name, namespace string) (string, er
 		return "", errors.New("RayCluster head service not ready")
 	}
 	return svcName + ":8265", nil
+}
+
+// convertResourcesToAPISchema converts Ray's resource format to Dashboard API schema.
+// Conversion rules:
+//   - "object_store_memory" is converted to "objectStoreMemory"
+//   - "node:__internal_head__" is converted to "node:InternalHead"
+//   - Other fields remain unchanged (e.g., "memory", "CPU", "node:<node-ip>")
+func convertResourcesToAPISchema(resources map[string]float64) map[string]float64 {
+	if len(resources) == 0 {
+		return map[string]float64{}
+	}
+
+	convertedResources := make(map[string]float64, len(resources))
+	for k, v := range resources {
+		convertedKey := k
+		if k == "object_store_memory" {
+			convertedKey = "objectStoreMemory"
+		} else if k == "node:__internal_head__" {
+			convertedKey = "node:InternalHead"
+		}
+		convertedResources[convertedKey] = v
+	}
+
+	return convertedResources
 }
