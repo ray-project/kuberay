@@ -583,10 +583,6 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 	case types.NODE_LIFECYCLE_EVENT:
 		return h.handleNodeLifecycleEvent(eventMap, currentClusterName)
 	case types.TASK_PROFILE_EVENT:
-		// CHANGED: 不要每次都 dump raw，太吵；改成 debug 或只印重點
-		logrus.Infof("TASK_PROFILE_EVENT: session=%v eventId=%v nodeId=%v",
-			eventMap["sessionName"], eventMap["eventId"], eventMap["nodeId"])
-
 		taskProfileEvent, ok := eventMap["taskProfileEvents"]
 		if !ok {
 			return fmt.Errorf("event does not have 'taskProfileEvents'")
