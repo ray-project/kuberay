@@ -8,12 +8,12 @@ kind: RayCluster
 metadata:
   name: custom-head-svc
 spec:
-  rayVersion: '2.52.0' # should match the Ray version in the image of the containers
+  rayVersion: "2.52.0" # should match the Ray version in the image of the containers
   # Ray head pod template
   headGroupSpec:
     # the following params are used to complete the ray start: ray start --head --block --redis-port=6379 ...
     rayStartParams:
-      num-cpus: '1' # can be auto-completed from the limits
+      num-cpus: "1" # can be auto-completed from the limits
     headService:
       metadata:
         name: custom-ray-head-service-name
