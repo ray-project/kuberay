@@ -143,9 +143,11 @@ type Task struct {
 	// Ref: https://github.com/ray-project/ray/blob/36be009ae360788550e541d81806493f52963730/src/ray/core_worker/task_event_buffer.cc#L263-L265.
 	RayErrorInfo *RayErrorInfo `json:"rayErrorInfo,omitempty"`
 
-	NodeID    string `json:"nodeId,omitempty"`
-	WorkerID  string `json:"workerId,omitempty"`
-	WorkerPID int    `json:"workerPid,omitempty"`
+	ProfileData     *ProfileData `json:"profile_data,omitempty"`
+	FuncOrClassName string       `json:"functionName"`
+	NodeID          string       `json:"nodeId,omitempty"`
+	WorkerID        string       `json:"workerId,omitempty"`
+	WorkerPID       int          `json:"workerPid,omitempty"`
 	// Whether the task is paused by the debugger.
 	IsDebuggerPaused *bool `json:"isDebuggerPaused,omitempty"`
 	// Actor task repr name, if applicable.
@@ -161,8 +163,22 @@ type Task struct {
 	EndTime      time.Time
 }
 
-// TaskMap is a struct that uses TaskID as the key and stores a list of Task attempts.
-// Each TaskID maps to a slice of Tasks, where each element represents a different task attempt.
+type ProfileData struct {
+	ComponentID   string            `json:"component_id"`
+	ComponentType string            `json:"component_type"`
+	NodeIPAddress string            `json:"node_ip_address"`
+	Events        []ProfileEventRaw `json:"events"`
+}
+
+type ProfileEventRaw struct {
+	EventName string `json:"event_name"`
+	StartTime int64  `json:"start_time"` // nanoseconds
+	EndTime   int64  `json:"end_time"`   // nanoseconds
+	ExtraData string `json:"extra_data"`
+}
+
+// TaskMap is a struct that uses TaskID as key and stores a list of Task attempts.
+// Each TaskID maps to a slice of Tasks, where each element represents a different attempt.
 type TaskMap struct {
 	TaskMap map[string][]Task
 	Mu      sync.Mutex
@@ -370,6 +386,17 @@ func (t Task) DeepCopy() Task {
 		cp.TaskLogInfo = &taskLogInfo
 	}
 
+	if t.ProfileData != nil {
+		cp.ProfileData = &ProfileData{
+			ComponentID:   t.ProfileData.ComponentID,
+			ComponentType: t.ProfileData.ComponentType,
+			NodeIPAddress: t.ProfileData.NodeIPAddress,
+		}
+		if len(t.ProfileData.Events) > 0 {
+			cp.ProfileData.Events = make([]ProfileEventRaw, len(t.ProfileData.Events))
+			copy(cp.ProfileData.Events, t.ProfileData.Events)
+		}
+	}
 	return cp
 }
 

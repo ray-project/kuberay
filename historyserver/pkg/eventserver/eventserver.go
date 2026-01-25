@@ -582,6 +582,114 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 		return h.handleNodeDefinitionEvent(eventMap, currentClusterName)
 	case types.NODE_LIFECYCLE_EVENT:
 		return h.handleNodeLifecycleEvent(eventMap, currentClusterName)
+	case types.TASK_PROFILE_EVENT:
+		// CHANGED: 不要每次都 dump raw，太吵；改成 debug 或只印重點
+		logrus.Infof("TASK_PROFILE_EVENT: session=%v eventId=%v nodeId=%v",
+			eventMap["sessionName"], eventMap["eventId"], eventMap["nodeId"])
+
+		taskProfileEvent, ok := eventMap["taskProfileEvents"]
+		if !ok {
+			return fmt.Errorf("event does not have 'taskProfileEvents'")
+		}
+
+		var profileData struct {
+			TaskID        string `json:"taskId"`
+			AttemptNumber int    `json:"attemptNumber"`
+			JobID         string `json:"jobId"`
+			ProfileEvents struct {
+				ComponentID   string `json:"componentId"`
+				ComponentType string `json:"componentType"`
+				NodeIPAddress string `json:"nodeIpAddress"`
+				Events        []struct {
+					EventName string `json:"eventName"`
+					StartTime string `json:"startTime"`
+					EndTime   string `json:"endTime"`
+					ExtraData string `json:"extraData"`
+				} `json:"events"`
+			} `json:"profileEvents"`
+		}
+
+		jsonBytes, _ := json.Marshal(taskProfileEvent)
+		if err := json.Unmarshal(jsonBytes, &profileData); err != nil {
+			logrus.Errorf("Failed to unmarshal TASK_PROFILE_EVENT: %v", err)
+			return err
+		}
+
+		if profileData.TaskID == "" || len(profileData.ProfileEvents.Events) == 0 {
+			logrus.Debugf("TASK_PROFILE_EVENT has no taskId or events, skipping")
+			return nil
+		}
+
+		// Convert events to ProfileEventRaw format
+		var rawEvents []types.ProfileEventRaw
+		for _, e := range profileData.ProfileEvents.Events {
+			var startTime, endTime int64
+			fmt.Sscanf(e.StartTime, "%d", &startTime)
+			fmt.Sscanf(e.EndTime, "%d", &endTime)
+
+			rawEvents = append(rawEvents, types.ProfileEventRaw{
+				EventName: e.EventName,
+				StartTime: startTime,
+				EndTime:   endTime,
+				ExtraData: e.ExtraData,
+			})
+		}
+
+		taskMap := h.ClusterTaskMap.GetOrCreateTaskMap(currentClusterName)
+		taskMap.CreateOrMergeAttempt(profileData.TaskID, profileData.AttemptNumber, func(t *types.Task) {
+			// Ensure core identifiers are set
+			if t.TaskID == "" {
+				t.TaskID = profileData.TaskID
+			}
+			if t.JobID == "" {
+				t.JobID = profileData.JobID
+			}
+
+			// Initialize ProfileData if not exists
+			if t.ProfileData == nil {
+				t.ProfileData = &types.ProfileData{
+					ComponentID:   profileData.ProfileEvents.ComponentID,
+					ComponentType: profileData.ProfileEvents.ComponentType,
+					NodeIPAddress: profileData.ProfileEvents.NodeIPAddress,
+				}
+			}
+
+			// Merge events with deduplication based on (eventName, startTime, endTime)
+			type eventKey struct {
+				EventName string
+				StartTime int64
+				EndTime   int64
+			}
+			existingKeys := make(map[eventKey]bool)
+			for _, e := range t.ProfileData.Events {
+				existingKeys[eventKey{e.EventName, e.StartTime, e.EndTime}] = true
+			}
+
+			for _, e := range rawEvents {
+				key := eventKey{e.EventName, e.StartTime, e.EndTime}
+				if !existingKeys[key] {
+					t.ProfileData.Events = append(t.ProfileData.Events, e)
+					existingKeys[key] = true
+				}
+			}
+
+			// Extract func_or_class_name from extraData if available
+			for _, e := range rawEvents {
+				if strings.HasPrefix(e.EventName, "task::") && e.ExtraData != "" {
+					var extra map[string]interface{}
+					if err := json.Unmarshal([]byte(e.ExtraData), &extra); err == nil {
+						if name, ok := extra["name"].(string); ok && name != "" {
+							// For actor methods, name might be just "increment" or "get_count"
+							// But eventName has the full form like "task::Counter.increment"
+							// Use eventName to get the full func_or_class_name
+							t.FuncOrClassName = strings.TrimPrefix(e.EventName, "task::")
+							t.TaskName = name
+						}
+					}
+				}
+			}
+		})
+
 	default:
 		logrus.Infof("Event not supported, skipping: %v", eventMap)
 	}
@@ -1117,4 +1225,226 @@ func (h *EventHandler) GetNodeByNodeID(clusterSessionID, nodeID string) (types.N
 		return types.Node{}, false
 	}
 	return node.DeepCopy(), true
+}
+
+// GetTasksTimeline returns timeline data in Chrome Tracing Format
+// Output format matches Ray Dashboard's /api/v0/tasks/timeline endpoint
+func (h *EventHandler) GetTasksTimeline(clusterName string, jobID string) []types.ChromeTraceEvent {
+	var tasks []types.Task
+	if jobID != "" {
+		tasks = h.GetTasksByJobID(clusterName, jobID)
+	} else {
+		tasks = h.GetTasks(clusterName)
+	}
+
+	if len(tasks) == 0 {
+		return []types.ChromeTraceEvent{}
+	}
+
+	var events []types.ChromeTraceEvent
+
+	// Build PID/TID mappings
+	// PID: Node IP -> numeric ID
+	// TID: Worker ID -> numeric ID per node
+	nodeIPToPID := make(map[string]int)
+	workerToTID := make(map[string]map[string]int) // nodeIP -> workerID -> tid
+	pidCounter := 0
+	tidCounters := make(map[string]int) // per-node tid counter
+
+	// First pass: collect all unique nodes and workers
+	for _, task := range tasks {
+		if task.ProfileData == nil {
+			continue
+		}
+		nodeIP := task.ProfileData.NodeIPAddress
+		workerID := task.ProfileData.ComponentID
+
+		if nodeIP == "" {
+			continue
+		}
+
+		if _, exists := nodeIPToPID[nodeIP]; !exists {
+			nodeIPToPID[nodeIP] = pidCounter
+			pidCounter++
+			workerToTID[nodeIP] = make(map[string]int)
+			tidCounters[nodeIP] = 0
+		}
+
+		if workerID != "" {
+			if _, exists := workerToTID[nodeIP][workerID]; !exists {
+				workerToTID[nodeIP][workerID] = tidCounters[nodeIP]
+				tidCounters[nodeIP]++
+			}
+		}
+	}
+
+	// Generate process_name and thread_name metadata events
+	for nodeIP, pid := range nodeIPToPID {
+		events = append(events, types.ChromeTraceEvent{
+			Name:  "process_name",
+			PID:   pid,
+			TID:   nil,
+			Phase: "M",
+			Args: map[string]interface{}{
+				"name": "Node " + nodeIP,
+			},
+		})
+
+		for workerID, tid := range workerToTID[nodeIP] {
+			tidVal := tid
+			events = append(events, types.ChromeTraceEvent{
+				Name:  "thread_name",
+				PID:   pid,
+				TID:   &tidVal,
+				Phase: "M",
+				Args: map[string]interface{}{
+					"name": "worker:" + workerID,
+				},
+			})
+		}
+	}
+
+	// Generate trace events from ProfileData
+	for _, task := range tasks {
+		if task.ProfileData == nil || len(task.ProfileData.Events) == 0 {
+			continue
+		}
+
+		nodeIP := task.ProfileData.NodeIPAddress
+		workerID := task.ProfileData.ComponentID
+
+		pid, ok := nodeIPToPID[nodeIP]
+		if !ok {
+			continue
+		}
+
+		var tidPtr *int
+		if tid, ok := workerToTID[nodeIP][workerID]; ok {
+			tidPtr = &tid
+		}
+
+		for _, profEvent := range task.ProfileData.Events {
+			// Convert nanoseconds to microseconds
+			startTimeUs := float64(profEvent.StartTime) / 1000.0
+			durationUs := float64(profEvent.EndTime-profEvent.StartTime) / 1000.0
+
+			// Parse extraData for additional fields
+			var extraData map[string]interface{}
+			if profEvent.ExtraData != "" {
+				json.Unmarshal([]byte(profEvent.ExtraData), &extraData)
+			}
+
+			// Determine task_id and func_or_class_name
+			taskIDForArgs := task.TaskID
+			funcOrClassName := task.FuncOrClassName
+
+			// Try to get from extraData if available (for hex format task_id)
+			if extraData != nil {
+				if tid, ok := extraData["task_id"].(string); ok && tid != "" {
+					taskIDForArgs = tid
+				}
+			}
+
+			// Build args
+			actorID := extractActorIDFromTaskID(taskIDForArgs)
+			args := map[string]interface{}{
+				"task_id":            taskIDForArgs,
+				"job_id":             task.JobID,
+				"attempt_number":     task.TaskAttempt,
+				"func_or_class_name": funcOrClassName,
+				"actor_id":           nil,
+			}
+
+			if actorID != "" {
+				args["actor_id"] = actorID
+			}
+
+			// Add "name" field for overall task events (task::xxx)
+			if strings.HasPrefix(profEvent.EventName, "task::") {
+				if extraData != nil {
+					if name, ok := extraData["name"].(string); ok {
+						args["name"] = name
+					}
+				}
+			}
+
+			// Determine event name for display
+			eventName := profEvent.EventName
+			displayName := profEvent.EventName
+
+			// For overall task events like "task::slow_task", use the full name from extraData
+			if strings.HasPrefix(profEvent.EventName, "task::") && extraData != nil {
+				if name, ok := extraData["name"].(string); ok {
+					displayName = name
+				}
+			}
+
+			traceEvent := types.ChromeTraceEvent{
+				Category:  eventName,
+				Name:      displayName,
+				PID:       pid,
+				TID:       tidPtr,
+				Timestamp: &startTimeUs,
+				Duration:  &durationUs,
+				Color:     getChromeTraceColor(eventName),
+				Args:      args,
+				Phase:     "X",
+			}
+
+			events = append(events, traceEvent)
+		}
+	}
+
+	return events
+}
+
+// getChromeTraceColor maps event names to Chrome trace colors
+// Based on Ray's _default_color_mapping in profiling.py
+func getChromeTraceColor(eventName string) string {
+	// Handle task::xxx pattern (overall task event)
+	if strings.HasPrefix(eventName, "task::") {
+		return "generic_work"
+	}
+
+	// Direct mapping for known event names
+	switch eventName {
+	case "task:deserialize_arguments":
+		return "rail_load"
+	case "task:execute":
+		return "rail_animation"
+	case "task:store_outputs":
+		return "rail_idle"
+	case "task:submit_task", "task":
+		return "rail_response"
+	case "worker_idle":
+		return "cq_build_abandoned"
+	case "ray.get":
+		return "good"
+	case "ray.put":
+		return "terrible"
+	case "ray.wait":
+		return "vsync_highlight_color"
+	case "submit_task":
+		return "background_memory_dump"
+	case "wait_for_function", "fetch_and_run_function", "register_remote_function":
+		return "detailed_memory_dump"
+	default:
+		return "generic_work"
+	}
+}
+
+func extractActorIDFromTaskID(taskIDHex string) string {
+	if len(taskIDHex) != 48 {
+		return "" // can't process if encoded in base64
+	}
+
+	actorPortion := taskIDHex[16:40] // 24 chars for actor id (12 bytes)
+	jobPortion := taskIDHex[40:48]   // 8 chars for job id (4 bytes)
+
+	// Check if all Fs (no actor)
+	if actorPortion == "ffffffffffffffffffffffff" {
+		return ""
+	}
+
+	return actorPortion + jobPortion
 }
