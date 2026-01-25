@@ -190,15 +190,15 @@ func testLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Names
 		g := NewWithT(t)
 		maliciousPaths := []string{"../etc/passwd", "..", "/etc/passwd", "../../secret"}
 
-		g.Eventually(func(gg Gomega) {
-			for _, malicious := range maliciousPaths {
+		for _, malicious := range maliciousPaths {
+			g.Eventually(func(gg Gomega) {
 				url := fmt.Sprintf("%s%s?node_id=%s&filename=%s", historyServerURL, EndpointLogFile, nodeID, malicious)
 				resp, err := client.Get(url)
 				gg.Expect(err).NotTo(HaveOccurred())
 				defer resp.Body.Close()
 				gg.Expect(resp.StatusCode).To(Equal(http.StatusBadRequest))
-			}
-		}, TestTimeoutShort).Should(Succeed())
+			}, TestTimeoutShort).Should(Succeed())
+		}
 	})
 
 	DeleteS3Bucket(test, g, s3Client)
@@ -262,15 +262,15 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 		g := NewWithT(t)
 		maliciousPaths := []string{"../etc/passwd", "..", "/etc/passwd", "../../secret"}
 
-		g.Eventually(func(gg Gomega) {
-			for _, malicious := range maliciousPaths {
+		for _, malicious := range maliciousPaths {
+			g.Eventually(func(gg Gomega) {
 				url := fmt.Sprintf("%s%s?node_id=%s&filename=%s", historyServerURL, EndpointLogFile, nodeID, malicious)
 				resp, err := client.Get(url)
 				gg.Expect(err).NotTo(HaveOccurred())
 				defer resp.Body.Close()
 				gg.Expect(resp.StatusCode).To(Equal(http.StatusBadRequest))
-			}
-		}, TestTimeoutShort).Should(Succeed())
+			}, TestTimeoutShort).Should(Succeed())
+		}
 	})
 
 	DeleteS3Bucket(test, g, s3Client)
