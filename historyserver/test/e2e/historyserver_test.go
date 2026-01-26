@@ -46,6 +46,12 @@ func TestHistoryServer(t *testing.T) {
 		{
 			name:     "/v0/logs/file endpoint (dead cluster)",
 			testFunc: testLogFileEndpointDeadCluster,
+			name:     "/api/v0/tasks/timeline endpoint (live cluster)",
+			testFunc: testTimelineEndpointLiveCluster,
+		},
+		{
+			name:     "/api/v0/tasks/timeline endpoint (dead cluster)",
+			testFunc: testTimelineEndpointDeadCluster,
 		},
 		{
 			name:     "Live cluster: /api/v0/tasks?detail=1 should return the detailed task information of all task attempts",
@@ -187,6 +193,139 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 
 	DeleteS3Bucket(test, g, s3Client)
 	LogWithTimestamp(test.T(), "Dead cluster log file endpoint tests completed")
+	test.T().Run("should return timeline data from S3", func(t *testing.T) {
+		g := NewWithT(t)
+		verifyTimelineResponse(g, client, historyServerURL)
+	})
+
+	DeleteS3Bucket(test, g, s3Client)
+	LogWithTimestamp(test.T(), "Dead cluster timeline endpoint test completed")
+}
+
+// testTimelineEndpointLiveCluster verifies that the history server can return timeline data from a live cluster.
+//
+// The test case follows these steps:
+// 1. Prepare test environment by applying a Ray cluster
+// 2. Submit a Ray job to the existing cluster
+// 3. Apply History Server and get its URL
+// 4. Verify that the timeline endpoint returns valid Chrome Tracing format
+func testTimelineEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
+	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
+	ApplyHistoryServer(test, g, namespace)
+	historyServerURL := GetHistoryServerURL(test, g, namespace)
+
+	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
+	g.Expect(clusterInfo.SessionName).To(Equal(LiveSessionName), "Live cluster should have sessionName='live'")
+
+	client := CreateHTTPClientWithCookieJar(g)
+	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
+	test.T().Run("should return valid timeline data", func(t *testing.T) {
+		g := NewWithT(t)
+		verifyTimelineResponse(g, client, historyServerURL)
+	})
+
+	DeleteS3Bucket(test, g, s3Client)
+	LogWithTimestamp(test.T(), "Live cluster timeline endpoint test completed")
+}
+
+// testTimelineEndpointDeadCluster verifies that the history server can return timeline data from S3 after a cluster is deleted.
+//
+// The test case follows these steps:
+// 1. Prepare test environment by applying a Ray cluster
+// 2. Submit a Ray job to the existing cluster
+// 3. Delete RayCluster to trigger event upload to S3
+// 4. Apply History Server and get its URL
+// 5. Verify that the timeline endpoint returns valid Chrome Tracing format from S3 data
+func testTimelineEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
+	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
+
+	// Delete RayCluster to trigger event upload
+	err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Delete(test.Ctx(), rayCluster.Name, metav1.DeleteOptions{})
+	g.Expect(err).NotTo(HaveOccurred())
+	LogWithTimestamp(test.T(), "Deleted RayCluster %s/%s", namespace.Name, rayCluster.Name)
+
+	// Wait for cluster to be fully deleted (ensures events are uploaded to S3)
+	g.Eventually(func() error {
+		_, err := GetRayCluster(test, namespace.Name, rayCluster.Name)
+		return err
+	}, TestTimeoutMedium).Should(WithTransform(k8serrors.IsNotFound, BeTrue()))
+
+	ApplyHistoryServer(test, g, namespace)
+	historyServerURL := GetHistoryServerURL(test, g, namespace)
+
+	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
+	g.Expect(clusterInfo.SessionName).NotTo(Equal(LiveSessionName))
+
+	client := CreateHTTPClientWithCookieJar(g)
+	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
+
+	test.T().Run("should return timeline data from S3", func(t *testing.T) {
+		g := NewWithT(t)
+		verifyTimelineResponse(g, client, historyServerURL)
+	})
+
+	DeleteS3Bucket(test, g, s3Client)
+	LogWithTimestamp(test.T(), "Dead cluster timeline endpoint test completed")
+}
+
+// verifyTimelineResponse verifies the timeline endpoint returns valid Chrome Tracing format
+func verifyTimelineResponse(g *WithT, client *http.Client, historyServerURL string) {
+	g.Eventually(func(gg Gomega) {
+		resp, err := client.Get(historyServerURL + "/api/v0/tasks/timeline")
+		gg.Expect(err).NotTo(HaveOccurred())
+		defer resp.Body.Close()
+		gg.Expect(resp.StatusCode).To(Equal(http.StatusOK))
+
+		body, err := io.ReadAll(resp.Body)
+		gg.Expect(err).NotTo(HaveOccurred())
+
+		var events []map[string]any
+		err = json.Unmarshal(body, &events)
+		gg.Expect(err).NotTo(HaveOccurred())
+
+		// Should have at least some events
+		gg.Expect(len(events)).To(BeNumerically(">", 0), "Timeline should have at least one event")
+
+		// Verify metadata and trace events exist
+		hasProcessName := false
+		hasThreadName := false
+		hasTraceEvent := false
+
+		for _, event := range events {
+			name, _ := event["name"].(string)
+			ph, _ := event["ph"].(string)
+
+			if name == "process_name" && ph == "M" {
+				hasProcessName = true
+				args, ok := event["args"].(map[string]any)
+				gg.Expect(ok).To(BeTrue(), "process_name should have args")
+				gg.Expect(args["name"]).NotTo(BeNil(), "process_name args should have 'name'")
+			}
+			if name == "thread_name" && ph == "M" {
+				hasThreadName = true
+			}
+			if ph == "X" {
+				hasTraceEvent = true
+				// Verify trace event has required fields
+				gg.Expect(event["cat"]).NotTo(BeNil(), "Trace event should have 'cat'")
+				gg.Expect(event["ts"]).NotTo(BeNil(), "Trace event should have 'ts'")
+				gg.Expect(event["dur"]).NotTo(BeNil(), "Trace event should have 'dur'")
+				gg.Expect(event["args"]).NotTo(BeNil(), "Trace event should have 'args'")
+
+				// Verify args structure
+				args, ok := event["args"].(map[string]any)
+				gg.Expect(ok).To(BeTrue())
+				gg.Expect(args["task_id"]).NotTo(BeNil(), "args should have 'task_id'")
+				gg.Expect(args["job_id"]).NotTo(BeNil(), "args should have 'job_id'")
+			}
+		}
+
+		gg.Expect(hasProcessName).To(BeTrue(), "Should have process_name metadata event")
+		gg.Expect(hasThreadName).To(BeTrue(), "Should have thread_name metadata event")
+		gg.Expect(hasTraceEvent).To(BeTrue(), "Should have at least one trace event")
+	}, TestTimeoutShort).Should(Succeed())
 }
 
 // testLiveClusterTasks verifies that the /v0/tasks?detail=1 endpoint for a live cluster will return the
