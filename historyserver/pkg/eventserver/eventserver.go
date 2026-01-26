@@ -555,11 +555,17 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 
 		jobMap := h.ClusterJobMap.GetOrCreateJobMap(currentClusterName)
 		jobMap.CreateOrMergeJob(currJob.JobID, func(j *types.Job) {
+			// If for some reason jobID is empty, we will keep whatever is in 'j'
+			var existingJobID string
+			if currJob.JobID == "" {
+				existingJobID = j.JobID
+			}
 			// Merge job by temp storing fields that the current job cannot fill in,
 			// and then replace the job with current job and then fill in the stored fields
 			existingStateTransitions := j.StateTransitions
 			existingStatusTransitions := j.StatusTransitions
 			existingStatus := j.Status
+			existingState := j.State
 			existingStartTime := j.StartTime
 			existingEndTime := j.EndTime
 			existingMessage := j.Message
@@ -568,9 +574,14 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 			*j = currJob
 
 			if len(existingStateTransitions) > 0 {
+				if existingJobID != "" {
+					// This means that jobID was somehow empty.
+					j.JobID = existingJobID
+				}
 				j.StateTransitions = existingStateTransitions
 				j.StatusTransitions = existingStatusTransitions
 				j.Status = existingStatus
+				j.State = existingState
 				j.StartTime = existingStartTime
 				j.EndTime = existingEndTime
 				j.Message = existingMessage
@@ -585,7 +596,13 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 		}
 
 		// Get JobID and also convert JobID to hex from base64
-		jobId, _ := utils.ConvertBase64ToHex(jobLifecycleEvent["jobId"].(string))
+		// Will leave it as it if it's empty or somehow not a string
+		jobId, ok := jobLifecycleEvent["jobId"].(string)
+		if !ok {
+			logrus.Errorf("jobID is missing or is not a string, leaving it as is")
+		} else {
+			jobId, _ = utils.ConvertBase64ToHex(jobId)
+		}
 		stateTransitionUnstructed, _ := jobLifecycleEvent["stateTransitions"].([]any)
 
 		if len(stateTransitionUnstructed) == 0 || jobId == "" {

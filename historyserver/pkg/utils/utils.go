@@ -246,7 +246,7 @@ func GetRayNodeID() (string, error) {
 func ConvertBase64ToHex(input string) (string, error) {
 	bytes, err := base64.StdEncoding.DecodeString(input)
 	if err != nil {
-		return "", err
+		return input, err
 	}
 
 	hexStr := hex.EncodeToString(bytes)

@@ -744,7 +744,7 @@ func TestDriverJobLifecycleEventDuplication(t *testing.T) {
 			"clusterName": "test-cluster",
 			"driverJobLifecycleEvent": map[string]any{
 				"jobId":            jobID,
-				"stateTransitions": transitions,
+				"stateTransitions": transitionsAny,
 			},
 		}
 	}
@@ -841,7 +841,7 @@ func TestDriverJobLifecycleEventDuplication(t *testing.T) {
 				makeDriverJobStateTransitionEvent(types.UNSPECIFIED, 1000),
 				makeDriverJobStateTransitionEvent(types.CREATED, 1000),
 				makeDriverJobStateTransitionEvent(types.CREATED, 2000),
-				makeDriverJobStateTransitionEvent(types.JOBFINISHED, 1000),
+				makeDriverJobStateTransitionEvent(types.JOBFINISHED, 2000),
 			},
 			wantState: types.JOBFINISHED,
 		},

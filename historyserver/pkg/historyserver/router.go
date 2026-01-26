@@ -378,7 +378,7 @@ func (s *ServerHandler) getJobs(req *restful.Request, resp *restful.Response) {
 // formatJobForResponse will convert eventtypes.Job to the format expected by Ray Dashboard
 func formatJobForResponse(job eventtypes.Job) map[string]interface{} {
 	result := map[string]interface{}{
-		"drier_exit_code":           job.DriverExitCode,
+		"driver_exit_code":          job.DriverExitCode,
 		"driver_node_id":            job.DriverNodeID,
 		"driver_agent_http_address": job.DriverAgentHttpAddress,
 		"runtime_env":               job.RuntimeEnv,

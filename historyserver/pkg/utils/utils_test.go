@@ -37,7 +37,7 @@ func TestConvertBase64ToHex(t *testing.T) {
 		{
 			scenario:       "Failed convertion from base64 to hex - contains '_'",
 			base64Str:      "AQAAAA_==",
-			expectedHexStr: "",
+			expectedHexStr: "AQAAAA_==",
 			expectError:    true,
 		},
 	}
