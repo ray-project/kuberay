@@ -145,11 +145,37 @@ func (n *NodeMap) CreateOrMergeNode(nodeId string, mergeFn func(*Node)) {
 	n.NodeMap[nodeId] = node
 }
 
+// DeepCopy returns a deep copy of the Node, which prevents race conditions.
 func (n Node) DeepCopy() Node {
 	cp := n
+
+	if len(n.Labels) > 0 {
+		cp.Labels = make(map[string]string, len(n.Labels))
+		for k, v := range n.Labels {
+			cp.Labels[k] = v
+		}
+	}
+
 	if len(n.StateTransitions) > 0 {
 		cp.StateTransitions = make([]NodeStateTransition, len(n.StateTransitions))
-		copy(cp.StateTransitions, n.StateTransitions)
+		for i, tr := range n.StateTransitions {
+			cp.StateTransitions[i] = tr
+
+			if len(tr.Resources) > 0 {
+				cp.StateTransitions[i].Resources = make(map[string]float64, len(tr.Resources))
+				for k, v := range tr.Resources {
+					cp.StateTransitions[i].Resources[k] = v
+				}
+			}
+
+			if tr.DeathInfo != nil {
+				cp.StateTransitions[i].DeathInfo = &NodeDeathInfo{
+					Reason:        tr.DeathInfo.Reason,
+					ReasonMessage: tr.DeathInfo.ReasonMessage,
+				}
+			}
+		}
 	}
+
 	return cp
 }
