@@ -371,7 +371,6 @@ func (s *ServerHandler) getNodes(req *restful.Request, resp *restful.Response) {
 	// A cluster lifecycle is identified by a cluster session.
 	clusterSessionID := clusterNameID + "_" + sessionName
 	nodeMap := s.eventHandler.GetNodeMap(clusterSessionID)
-	// logrus.Infof("clusterSessionID: %s, nodeMap: %v", clusterSessionID, nodeMap)
 
 	// Build node summary. Each node has an array of summary snapshots with timestamps.
 	summary := make([][]map[string]interface{}, 0, len(nodeMap))
@@ -381,11 +380,10 @@ func (s *ServerHandler) getNodes(req *restful.Request, resp *restful.Response) {
 	// Process each node to build the historical replay.
 	for _, node := range nodeMap {
 		// TODO(jwj): All the other static fields can be processed outside transition loop.
-		// nodeId := node.NodeID
+		nodeId := node.NodeID
 		nodeIpAddress := node.NodeIPAddress
 		startTimestamp := node.StartTimestamp.UnixMilli()
 		labels := node.Labels
-		nodeIdHex := labels["ray.io/node-id"]
 		nodeTypeName := labels["ray.io/node-group"]
 		isHeadNode := nodeTypeName == "headgroup"
 		rayletSocketName := fmt.Sprintf("/tmp/ray/%s/sockets/raylet", sessionName)
@@ -404,7 +402,7 @@ func (s *ServerHandler) getNodes(req *restful.Request, resp *restful.Response) {
 				"hostname": "",
 				"ip":       nodeIpAddress,
 				"raylet": map[string]interface{}{
-					"nodeId":                nodeIdHex,
+					"nodeId":                nodeId,
 					"nodeManagerAddress":    nodeIpAddress,
 					"rayletSocketName":      rayletSocketName,
 					"objectStoreSocketName": objectStoreSocketName,
@@ -429,7 +427,7 @@ func (s *ServerHandler) getNodes(req *restful.Request, resp *restful.Response) {
 		}
 
 		summary = append(summary, nodeSummaryReplay)
-		nodeLogicalResources[nodeIdHex] = nodeResourceReplay
+		nodeLogicalResources[nodeId] = nodeResourceReplay
 	}
 
 	// Build dashboard API-compatible response.

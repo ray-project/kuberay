@@ -741,6 +741,11 @@ func (h *EventHandler) handleNodeDefinitionEvent(eventMap map[string]any, cluste
 		return fmt.Errorf("failed to unmarshal node definition event: %w", err)
 	}
 
+	currNode.NodeID, err = utils.ConvertBase64ToHex(currNode.NodeID)
+	if err != nil {
+		return fmt.Errorf("failed to convert node ID from base64 to hex: %w", err)
+	}
+
 	nodeMap := h.ClusterNodeMap.GetOrCreateNodeMap(clusterSessionID)
 	nodeMap.CreateOrMergeNode(currNode.NodeID, func(n *types.Node) {
 		// TODO(jwj): Handle merging of node definition event to prevent overwriting lifecycle-derived fields.
@@ -773,11 +778,13 @@ func (h *EventHandler) handleNodeLifecycleEvent(eventMap map[string]any, cluster
 		return fmt.Errorf("failed to unmarshal node lifecycle event: %w", err)
 	}
 
+	currNode.NodeID, err = utils.ConvertBase64ToHex(currNode.NodeID)
+	if err != nil {
+		return fmt.Errorf("failed to convert node ID from base64 to hex: %w", err)
+	}
+
 	nodeMap := h.ClusterNodeMap.GetOrCreateNodeMap(clusterSessionID)
 	nodeMap.CreateOrMergeNode(currNode.NodeID, func(n *types.Node) {
-		// Seems redundant.
-		n.NodeID = currNode.NodeID
-
 		// Merge state transitions.
 		n.StateTransitions = MergeStateTransitions[types.NodeStateTransition](
 			n.StateTransitions,

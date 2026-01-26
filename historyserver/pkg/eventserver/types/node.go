@@ -67,6 +67,7 @@ func (n NodeStateTransition) GetTimestamp() time.Time {
 }
 
 type Node struct {
+	// NodeID is the hexadecimal representation of the node ID.
 	NodeID         string            `json:"nodeId"`
 	NodeIPAddress  string            `json:"nodeIpAddress,omitempty"`
 	StartTimestamp time.Time         `json:"startTimestamp,omitempty"`
