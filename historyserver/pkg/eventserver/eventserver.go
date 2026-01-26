@@ -740,6 +740,9 @@ func (h *EventHandler) handleNodeDefinitionEvent(eventMap map[string]any, cluste
 	if err := json.Unmarshal(jsonNodeDefinition, &currNode); err != nil {
 		return fmt.Errorf("failed to unmarshal node definition event: %w", err)
 	}
+	if currNode.NodeID == "" {
+		return fmt.Errorf("node ID is empty")
+	}
 
 	currNode.NodeID, err = utils.ConvertBase64ToHex(currNode.NodeID)
 	if err != nil {
@@ -776,6 +779,9 @@ func (h *EventHandler) handleNodeLifecycleEvent(eventMap map[string]any, cluster
 	var currNode types.Node
 	if err := json.Unmarshal(jsonNodeLifecycle, &currNode); err != nil {
 		return fmt.Errorf("failed to unmarshal node lifecycle event: %w", err)
+	}
+	if currNode.NodeID == "" {
+		return fmt.Errorf("node ID is empty")
 	}
 
 	currNode.NodeID, err = utils.ConvertBase64ToHex(currNode.NodeID)
