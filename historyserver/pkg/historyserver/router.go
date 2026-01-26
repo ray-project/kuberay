@@ -445,8 +445,6 @@ func (s *ServerHandler) getNode(req *restful.Request, resp *restful.Response) {
 		return
 	}
 
-	// Separate to two utils build node summary for a single node and build node resource for a single node
-	// Then reuse in getNodes
 	nodeSummaryReplay := formatNodeSummaryReplayForResp(*targetNode, sessionName)
 
 	// Build dashboard API-compatible response.
