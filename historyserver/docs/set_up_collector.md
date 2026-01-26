@@ -4,22 +4,30 @@
 > The KubeRay History Server is currently under active development. This document aims to provide the step-by-step
 guideline to set up the Collector component for local development and testing.
 
-## Table of Contents
+## Table of contents
 
-TBD...
+- [Materials for learning KubeRay History Server](#materials-for-learning-kuberay-history-server)
+- [Test the Collector on the Kind cluster](#test-the-collector-on-the-kind-cluster)
+  - [Prerequisites](#prerequisites)
+  - [Spin up a Kind cluster and run KubeRay Operator](#spin-up-a-kind-cluster-and-run-kuberay-operator)
+  - [Build the Collector container image](#build-the-collector-container-image)
+  - [Load the Collector image into the Kind cluster](#load-the-collector-image-into-the-kind-cluster)
+  - [Deploy storage backend](#deploy-storage-backend)
+  - [Deploy a Ray cluster for checks](#deploy-a-ray-cluster-for-checks)
+- [Troubleshooting](#troubleshooting)
 
 ## Materials for Learning KubeRay History Server
 
-* [REP: Ray History Server #62](https://github.com/ray-project/enhancements/pull/62)
-* [Design doc](https://docs.google.com/document/d/15Y2bW4uzeUJe84FxRNUnHozoQPqYdLB2yLmgrdF2ZmI/edit?pli=1&tab=t.0#heading=h.xrvvvqarib6g)
-* Related issues
-  * [\[Epic\]\[Feature\] history server collector #4274](https://github.com/ray-project/kuberay/issues/4274)
-  * [\[Epic\]\[Feature\] Support History Server #3966](https://github.com/ray-project/kuberay/issues/3966)
-  * [\[Feature\] Ray History Server #3884](https://github.com/ray-project/kuberay/issues/3884)
-* Related PRs
-  * [Historyserver beta version #4187](https://github.com/ray-project/kuberay/pull/4187)
-  * [add the implementation of historyserver collector #4241](https://github.com/ray-project/kuberay/pull/4241)
-  * [add the implementation of historyserver #4242](https://github.com/ray-project/kuberay/pull/4242)
+- [REP: Ray History Server #62](https://github.com/ray-project/enhancements/pull/62)
+- [Design doc](https://docs.google.com/document/d/15Y2bW4uzeUJe84FxRNUnHozoQPqYdLB2yLmgrdF2ZmI/edit?pli=1&tab=t.0#heading=h.xrvvvqarib6g)
+- Related issues
+  - [\[Epic\]\[Feature\] history server collector #4274](https://github.com/ray-project/kuberay/issues/4274)
+  - [\[Epic\]\[Feature\] Support History Server #3966](https://github.com/ray-project/kuberay/issues/3966)
+  - [\[Feature\] Ray History Server #3884](https://github.com/ray-project/kuberay/issues/3884)
+- Related PRs
+  - [Historyserver beta version #4187](https://github.com/ray-project/kuberay/pull/4187)
+  - [add the implementation of historyserver collector #4241](https://github.com/ray-project/kuberay/pull/4241)
+  - [add the implementation of historyserver #4242](https://github.com/ray-project/kuberay/pull/4242)
 
 ## Test the Collector on the Kind Cluster
 
@@ -27,10 +35,10 @@ TBD...
 
 Please ensure your environment matches the version requirements specified in the [ray-operator development guide](https://github.com/ray-project/kuberay/blob/2959d7d8a4174eedbf7b4a71a79219547f62cc82/ray-operator/DEVELOPMENT.md):
 
-* Go v1.24+
-* Docker: Engine for building the container image
-* GNU Make
-* K9s (optional)
+- Go v1.24+
+- Docker: Engine for building the container image
+- GNU Make
+- K9s (optional)
 
 ### Spin Up a Kind Cluster and Run KubeRay Operator
 
@@ -85,9 +93,16 @@ kind load docker-image collector:v0.1.0
 docker exec -it kind-control-plane crictl images | grep collector
 ```
 
-### Deploy MinIO for Log and Event Storage
+### Deploy storage backend
 
-Take s3 as an example, you need to deploy minio using the following commands:
+Choose one of the following storage backends for log and event storage:
+
+- [Option A: MinIO (S3-compatible)](#option-a-minio-s3-compatible) - recommended for most users
+- [Option B: Azure Blob Storage (Azurite)](#option-b-azure-blob-storage-azurite)
+
+#### Option A: MinIO (S3-compatible)
+
+Deploy MinIO as an S3-compatible storage backend:
 
 ```bash
 # Apply the minio manifest.
@@ -100,45 +115,128 @@ kubectl -n minio-dev port-forward svc/minio-service 9001:9001
 open http://localhost:9001/browser
 ```
 
-Then, you can login with:
+Login with:
 
 ```text
 Username: minioadmin
 Password: minioadmin
 ```
 
-### Deploy a Ray Cluster for Checks
+#### Option B: Azure Blob Storage (Azurite)
 
-Finally, you can check if the collector works as expected by deploying a Ray cluster with the collector enabled and
-interacting with the minio UI.
+Deploy Azurite as an Azure Blob Storage emulator for local development:
 
 ```bash
-# Apply the Ray cluster manifest.
-kubectl apply -f historyserver/config/raycluster.yaml
+# Apply the azurite manifest.
+kubectl apply -f historyserver/config/azurite.yaml
+
+# Verify the azurite pod is running.
+kubectl get pods -n azurite-dev
+```
+
+Azurite uses the well-known development storage account credentials:
+
+```text
+Account name: devstoreaccount1
+Account key:  Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==
+```
+
+The collector connects to Azurite using a connection string configured in the Ray cluster
+manifest. See `config/raycluster-azureblob.yaml` for the full configuration.
+
+### Deploy a Ray cluster for checks
+
+You can check if the collector works as expected by deploying a Ray cluster with the collector
+enabled and interacting with the storage backend.
+
+> [!IMPORTANT]
+> The collector sidecar must share the `/tmp/ray` directory with the Ray container using an
+> `emptyDir` volume. This allows the collector to read session logs and events from the Ray
+> process. Without this shared volume, the collector will fail with errors like
+> `read session_latest file error`. See the example manifest for the required volume
+> configuration:
+
+```yaml
+spec:
+  containers:
+  - name: ray-head
+    volumeMounts:
+    - name: ray-logs
+      mountPath: /tmp/ray
+  - name: collector
+    volumeMounts:
+    - name: ray-logs
+      mountPath: /tmp/ray
+  volumes:
+  - name: ray-logs
+    emptyDir: {}
 ```
 
 > [!IMPORTANT]
-> After deploying the Ray cluster, you will see an automatically created bucket `ray-historyserver` in the minio UI:
+> The Ray container must also include a `postStart` lifecycle hook to write the raylet node ID
+> to a file. The collector reads this file to identify the node. Without this hook, the
+> collector will fail with errors like `read nodeid file error`. Add the following lifecycle
+> configuration to the Ray container:
+
+```yaml
+lifecycle:
+  postStart:
+    exec:
+      command:
+      - /bin/sh
+      - -c
+      - |
+        while true; do
+          nodeid=$(ps -ef | grep 'raylet.*--node_id' | grep -v grep | sed -n 's/.*--node_id=\([^ ]*\).*/\1/p' | head -1)
+          if [ -n "$nodeid" ]; then
+            echo "$nodeid" > /tmp/ray/raylet_node_id
+            break
+          fi
+          sleep 1
+        done
+```
+
+> Note: The example manifest at `config/raycluster.yaml` uses `grep -oP` (Perl regex) which may
+> not be available in all containers. The `sed` command above is more portable.
+
+Deploy the Ray cluster using the manifest that matches your storage backend:
+
+```bash
+# For MinIO (S3-compatible):
+kubectl apply -f historyserver/config/raycluster.yaml
+
+# For Azure Blob Storage (Azurite):
+kubectl apply -f historyserver/config/raycluster-azureblob.yaml
+```
+
+> [!IMPORTANT]
+> After deploying the Ray cluster, the collector automatically creates a container/bucket named
+> `ray-historyserver` in your storage backend. For MinIO, you can verify this in the MinIO UI.
 
 ![create_bucket](https://github.com/ray-project/kuberay/blob/69f6f0bd2a9e44a533f18a54aa014ae6a0be88ec/historyserver/docs/assets/create_bucket.png)
 
-Then, you need to submit a Ray job to the existing cluster by specifying `clusterSelector` to verify that events can be
-uploaded to the blob storage:
+Submit a Ray job to the existing cluster to verify that events can be uploaded to blob storage:
 
 ```bash
 # Apply the Ray job manifest.
 kubectl apply -f historyserver/config/rayjob.yaml
 ```
 
-Since the session latest logs will be processed and events will be flushed upon the Ray cluster is deleted, you can
-manully delete the Ray clsuter to trigger log file and event uploading:
+Since the session logs are processed and events are flushed when the Ray cluster is deleted,
+you can manually delete the Ray cluster to trigger log file and event uploading:
 
 ```bash
-# Trigger the session latest log processing and event flushing upon deletion.
+# Trigger the session log processing and event flushing upon deletion.
+# Use the manifest that matches your storage backend.
+
+# For MinIO:
 kubectl delete -f historyserver/config/raycluster.yaml
+
+# For Azure Blob Storage:
+kubectl delete -f historyserver/config/raycluster-azureblob.yaml
 ```
 
-You're supposed to see the uploaded logs and events in the minio UI as below:
+You should see the uploaded logs and events in the storage backend UI. For MinIO:
 
 ![write_logs_and_events](https://github.com/ray-project/kuberay/blob/db7cb864061518ed4cfa7bf48cf05cfbfeb49f95/historyserver/docs/assets/write_logs_and_events.png)
 
