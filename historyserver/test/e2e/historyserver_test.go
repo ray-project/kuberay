@@ -195,7 +195,10 @@ func testLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Names
 				url := fmt.Sprintf("%s%s?node_id=%s&filename=%s", historyServerURL, EndpointLogFile, nodeID, malicious)
 				resp, err := client.Get(url)
 				gg.Expect(err).NotTo(HaveOccurred())
-				defer resp.Body.Close()
+				defer func() {
+					io.Copy(io.Discard, resp.Body)
+					resp.Body.Close()
+				}()
 				gg.Expect(resp.StatusCode).To(Equal(http.StatusBadRequest))
 			}, TestTimeoutShort).Should(Succeed())
 		}
@@ -267,7 +270,10 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 				url := fmt.Sprintf("%s%s?node_id=%s&filename=%s", historyServerURL, EndpointLogFile, nodeID, malicious)
 				resp, err := client.Get(url)
 				gg.Expect(err).NotTo(HaveOccurred())
-				defer resp.Body.Close()
+				defer func() {
+					io.Copy(io.Discard, resp.Body)
+					resp.Body.Close()
+				}()
 				gg.Expect(resp.StatusCode).To(Equal(http.StatusBadRequest))
 			}, TestTimeoutShort).Should(Succeed())
 		}
