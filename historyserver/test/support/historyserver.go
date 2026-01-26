@@ -137,8 +137,8 @@ func PrepareTestEnv(test Test, g *WithT, namespace *corev1.Namespace, s3Client *
 	return rayCluster
 }
 
-// GetNodeID retrieves a node ID from the /nodes endpoint.
-func GetNodeID(g *WithT, client *http.Client, historyServerURL string) string {
+// GetOneOfNodeID retrieves a node ID from the /nodes endpoint.
+func GetOneOfNodeID(g *WithT, client *http.Client, historyServerURL string) string {
 	resp, err := client.Get(historyServerURL + "/nodes?view=summary")
 	g.Expect(err).NotTo(HaveOccurred())
 	defer resp.Body.Close()
