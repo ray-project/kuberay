@@ -1,6 +1,7 @@
 package historyserver
 
 import (
+	"bufio"
 	"regexp"
 	"strconv"
 	"strings"
@@ -19,75 +20,72 @@ type NodeDebugState struct {
 	Available  map[string]float64
 }
 
+var (
+	reNodeGroup  = regexp.MustCompile(`"ray\.io/node-group"\s*:\s*"([^"]+)"`)
+	reTotal      = regexp.MustCompile(`"total"\s*:\s*\{([^}]+)\}`)
+	reAvailable  = regexp.MustCompile(`"available"\s*:\s*\{([^}]+)\}`)
+	reResourceKV = regexp.MustCompile(`([a-zA-Z0-9_:./\-_]+):\s*\[([0-9.e+\-]+)\]`)
+)
+
+const rayResourceScale = 10000.0
+
 // ParseDebugState parses the content of a debug_state.txt file
 // and extracts cluster resource scheduler state information.
+// It rebuilds the Resources section exactly, and Idle section most of the time
 func ParseDebugState(content string) (*NodeDebugState, error) {
 	state := &NodeDebugState{
 		Total:     make(map[string]float64),
 		Available: make(map[string]float64),
 	}
 
-	lines := strings.Split(content, "\n")
+	scanner := bufio.NewScanner(strings.NewReader(content))
+	for scanner.Scan() {
+		line := scanner.Text()
 
-	// Parse Node ID and Node name from the first few lines
-	for _, line := range lines {
+		// Parse Node ID and Node name from the first few lines
 		if after, ok := strings.CutPrefix(line, "Node ID:"); ok {
 			state.NodeID = strings.TrimSpace(after)
+			continue
 		}
 		if after, ok := strings.CutPrefix(line, "Node name:"); ok {
 			state.NodeName = strings.TrimSpace(after)
+			continue
 		}
-	}
 
-	// Find the line containing cluster_resource_scheduler state
-	for i, line := range lines {
 		if strings.Contains(line, "cluster_resource_scheduler state:") {
 			// The actual data is on the next line
-			if i+1 < len(lines) {
-				dataLine := lines[i+1]
-				parseClusterResourceSchedulerLine(dataLine, state)
+			if scanner.Scan() {
+				parseClusterResourceSchedulerLine(scanner.Text(), state)
 			}
 			break
 		}
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, err
 	}
 
 	return state, nil
 }
 
 // parseClusterResourceSchedulerLine parses the complex line containing resource info
-// Example format:
-// Local id: -123 Local resources: {"total":{memory: [100], ...}}, "available": {...}}, "labels":{...} is_draining: 0 is_idle: 1
 func parseClusterResourceSchedulerLine(line string, state *NodeDebugState) {
 	// Extract is_idle
-	isIdleRegex := regexp.MustCompile(`is_idle:\s*(\d+)`)
-	if match := isIdleRegex.FindStringSubmatch(line); len(match) > 1 {
-		state.IsIdle = match[1] == "1"
-	}
+	state.IsIdle = strings.Contains(line, "is_idle: 1")
 
 	// Extract is_draining
-	isDrainingRegex := regexp.MustCompile(`is_draining:\s*(\d+)`)
-	if match := isDrainingRegex.FindStringSubmatch(line); len(match) > 1 {
-		state.IsDraining = match[1] == "1"
-	}
+	state.IsDraining = strings.Contains(line, "is_draining: 1")
 
 	// Extract node group from labels
-	// Format: "labels":{"ray.io/node-group":"headgroup",...}
-	nodeGroupRegex := regexp.MustCompile(`"ray\.io/node-group"\s*:\s*"([^"]+)"`)
-	if match := nodeGroupRegex.FindStringSubmatch(line); len(match) > 1 {
-		state.NodeGroup = match[1]
+	if m := reNodeGroup.FindStringSubmatch(line); len(m) > 1 {
+		state.NodeGroup = m[1]
 	}
-
 	// Extract total resources
-	// Format: "total":{memory: [100000000000000], object_store_memory: [14396805120000], ...}
-	totalRegex := regexp.MustCompile(`"total"\s*:\s*\{([^}]+)\}`)
-	if match := totalRegex.FindStringSubmatch(line); len(match) > 1 {
-		state.Total = parseResourceMap(match[1])
+	if m := reTotal.FindStringSubmatch(line); len(m) > 1 {
+		state.Total = parseResourceMap(m[1])
 	}
-
 	// Extract available resources
-	availableRegex := regexp.MustCompile(`"available"\s*:\s*\{([^}]+)\}`)
-	if match := availableRegex.FindStringSubmatch(line); len(match) > 1 {
-		state.Available = parseResourceMap(match[1])
+	if m := reAvailable.FindStringSubmatch(line); len(m) > 1 {
+		state.Available = parseResourceMap(m[1])
 	}
 }
 
@@ -98,9 +96,7 @@ func parseResourceMap(resourceStr string) map[string]float64 {
 
 	// Match patterns like "memory: [100000000000000]" or "CPU: [10000]"
 	// Also handles "node:10.244.0.9: [10000]" and "object_store_memory: [14396805120000]"
-	resourceRegex := regexp.MustCompile(`([a-zA-Z0-9_:./\-_]+):\s*\[([0-9.e+\-]+)\]`)
-	matches := resourceRegex.FindAllStringSubmatch(resourceStr, -1)
-
+	matches := reResourceKV.FindAllStringSubmatch(resourceStr, -1)
 	for _, match := range matches {
 		if len(match) > 2 {
 			key := strings.TrimSpace(match[1])
@@ -120,7 +116,7 @@ func parseResourceMap(resourceStr string) map[string]float64 {
 
 			// Ray scales resources by 10000 internally
 			// Divide to get actual values
-			resources[key] = value / 10000.0
+			resources[key] = value / rayResourceScale
 		}
 	}
 
