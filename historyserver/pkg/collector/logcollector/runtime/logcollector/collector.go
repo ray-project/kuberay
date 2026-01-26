@@ -72,6 +72,7 @@ func (r *RayLogHandler) Run(stop <-chan struct{}) error {
 	go r.WatchPrevLogsLoops()
 	if r.EnableMeta {
 		go r.WatchSessionLatestLoops() // Watch session_latest symlink changes
+		go r.PersistMetaLoop(stop)     //Todo(alex): This should be removed when Ray core implemented events for placement groups, applications, and datasets
 	}
 
 	select {

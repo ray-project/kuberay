@@ -22,6 +22,14 @@ type RayCollectorConfig struct {
 	PushInterval   time.Duration
 }
 
+type UrlInfo struct {
+	Key  string
+	Url  string
+	Hash string
+	Path string
+	Type string
+}
+
 // ValidateRayHanderConfig is
 func ValidateRayHanderConfig(c *RayCollectorConfig, fldpath *field.Path) field.ErrorList {
 	var allErrs field.ErrorList
