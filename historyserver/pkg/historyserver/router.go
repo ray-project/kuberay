@@ -599,12 +599,6 @@ func (s *ServerHandler) getNodeLogFile(req *restful.Request, resp *restful.Respo
 		return
 	}
 
-	// Validate sessionName to prevent path traversal via cookie manipulation
-	if !fs.ValidPath(sessionName) {
-		resp.WriteErrorString(http.StatusBadRequest, fmt.Sprintf("invalid session name: path traversal not allowed (session_name=%s)", sessionName))
-		return
-	}
-
 	// Convert lines parameter to int
 	maxLines := 0
 	if lines != "" {
@@ -839,6 +833,13 @@ func (s *ServerHandler) CookieHandle(req *restful.Request, resp *restful.Respons
 		resp.WriteHeaderAndEntity(http.StatusBadRequest, "Cluster Namespace Cookie not found")
 		return
 	}
+
+	// Validate cookie values to prevent path traversal attacks
+	if !fs.ValidPath(clusterName.Value) || !fs.ValidPath(clusterNamespace.Value) || !fs.ValidPath(sessionName.Value) {
+		resp.WriteHeaderAndEntity(http.StatusBadRequest, fmt.Sprintf("invalid cookie values: path traversal not allowed (cluster_name=%s, cluster_namespace=%s, session_name=%s)", clusterName.Value, clusterNamespace.Value, sessionName.Value))
+		return
+	}
+
 	http.SetCookie(resp, &http.Cookie{MaxAge: 600, Path: "/", Name: COOKIE_CLUSTER_NAME_KEY, Value: clusterName.Value})
 	http.SetCookie(resp, &http.Cookie{MaxAge: 600, Path: "/", Name: COOKIE_CLUSTER_NAMESPACE_KEY, Value: clusterNamespace.Value})
 	http.SetCookie(resp, &http.Cookie{MaxAge: 600, Path: "/", Name: COOKIE_SESSION_NAME_KEY, Value: sessionName.Value})
