@@ -167,7 +167,7 @@ func testLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Names
 	client := CreateHTTPClientWithCookieJar(g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 
-	nodeID := GetNodeID(g, client, historyServerURL)
+	nodeID := GetOneOfNodeID(g, client, historyServerURL)
 	// Hardcode "raylet.out" for deterministic testing.
 	filename := "raylet.out"
 
@@ -242,7 +242,7 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 	client := CreateHTTPClientWithCookieJar(g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 
-	nodeID := GetNodeID(g, client, historyServerURL)
+	nodeID := GetOneOfNodeID(g, client, historyServerURL)
 	// Hardcode "raylet.out" for deterministic testing.
 	filename := "raylet.out"
 
