@@ -401,14 +401,26 @@ env_vars:
 		job, err := test.Client().Core().BatchV1().Jobs(namespace.Name).Get(test.Ctx(), rayJob.Name, metav1.GetOptions{})
 		g.Expect(err).NotTo(HaveOccurred())
 		now := metav1.Now()
-		job.Status.Conditions = append(job.Status.Conditions, batchv1.JobCondition{
-			Type:               batchv1.JobComplete,
-			Status:             corev1.ConditionTrue,
-			LastProbeTime:      now,
-			LastTransitionTime: now,
-			Reason:             "Completed",
-			Message:            "Job completed successfully for timeout test",
-		})
+		job.Status.Active = 0
+		job.Status.Ready = nil
+		job.Status.Conditions = append(job.Status.Conditions,
+			batchv1.JobCondition{
+				Type:               batchv1.JobSuccessCriteriaMet,
+				Status:             corev1.ConditionTrue,
+				LastProbeTime:      now,
+				LastTransitionTime: now,
+				Reason:             "SuccessCriteriaMet",
+				Message:            "Job success criteria met for timeout test",
+			},
+			batchv1.JobCondition{
+				Type:               batchv1.JobComplete,
+				Status:             corev1.ConditionTrue,
+				LastProbeTime:      now,
+				LastTransitionTime: now,
+				Reason:             "Completed",
+				Message:            "Job completed successfully for timeout test",
+			},
+		)
 		job.Status.CompletionTime = &now
 		job.Status.Succeeded = 1
 
