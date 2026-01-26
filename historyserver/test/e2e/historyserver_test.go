@@ -40,6 +40,14 @@ func TestHistoryServer(t *testing.T) {
 			name:     "Dead cluster: /nodes should return the historical replay containing node summary and resource usage snapshots of a cluster session",
 			testFunc: testDeadClusterNodes,
 		},
+		{
+			name:     "Live cluster: /nodes/{node_id} should return the current snapshot containing node summary of the specified node",
+			testFunc: testLiveClusterNode,
+		},
+		{
+			name:     "Dead cluster: /nodes/{node_id} should return the historical replay containing node summary snapshots of the specified node in a cluster session",
+			testFunc: testDeadClusterNode,
+		},
 	}
 
 	for _, tt := range tests {
@@ -187,6 +195,134 @@ func testDeadClusterNodes(test Test, g *WithT, namespace *corev1.Namespace, s3Cl
 	LogWithTimestamp(test.T(), "Dead cluster /nodes tests completed successfully")
 }
 
+// testLiveClusterNode verifies that the /nodes/{node_id} endpoint for a live cluster will return the current snapshot
+// containing node summary of the specified node.
+//
+// The test case follows these steps:
+// 1. Prepare test environment by applying a Ray cluster with the collector
+// 2. Submit a Ray job to the existing cluster and wait for completion
+// 3. Get the head and worker node IDs
+// 4. Apply History Server and get its URL
+// 5. Get the cluster information and set the cluster context with the session name 'live'
+// 6. Hit /nodes/{node_id} for both the head node and the worker node:
+//   - Get the node details of the specified node
+//   - Verify the response status code is 200
+//   - Verify the response API schema
+//
+// 7. Delete S3 bucket to ensure test isolation
+func testLiveClusterNode(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
+	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
+	headNodeID := GetNodeIDFromPod(test, g, HeadPod(test, rayCluster), "ray-head")
+	workerNodeID := GetNodeIDFromPod(test, g, FirstWorkerPod(test, rayCluster), "ray-worker")
+
+	ApplyHistoryServer(test, g, namespace)
+	historyServerURL := GetHistoryServerURL(test, g, namespace)
+
+	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
+	g.Expect(clusterInfo.SessionName).To(Equal(LiveSessionName), "Live cluster should have sessionName='live'")
+
+	client := CreateHTTPClientWithCookieJar(g)
+	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
+
+	for _, nodeId := range []string{headNodeID, workerNodeID} {
+		endpoint := fmt.Sprintf("/nodes/%s", nodeId)
+		endpointURL := historyServerURL + endpoint
+		LogWithTimestamp(test.T(), "Testing %s endpoint for live cluster: %s", endpoint, endpointURL)
+
+		var nodeResp map[string]any
+		g.Eventually(func(gg Gomega) {
+			resp, err := client.Get(endpointURL)
+			gg.Expect(err).NotTo(HaveOccurred())
+			defer resp.Body.Close()
+
+			body, err := io.ReadAll(resp.Body)
+			gg.Expect(err).NotTo(HaveOccurred())
+			gg.Expect(resp.StatusCode).To(Equal(http.StatusOK),
+				"[GET] %s should return 200, got %d: %s", endpointURL, resp.StatusCode, string(body))
+
+			err = json.Unmarshal(body, &nodeResp)
+			gg.Expect(err).NotTo(HaveOccurred())
+		}, TestTimeoutShort).Should(Succeed())
+
+		LogWithTimestamp(test.T(), "Verifying /nodes/%s response schema for live cluster (isLive=true)", nodeId)
+		verifyNodeRespSchema(test, g, nodeResp, true)
+	}
+
+	DeleteS3Bucket(test, g, s3Client)
+	LogWithTimestamp(test.T(), "Live cluster /nodes/{node_id} tests completed successfully")
+}
+
+// testDeadClusterNode verifies that the /nodes/{node_id} endpoint for a dead cluster will return the historical replay
+// containing node summary snapshots of the specified node in a cluster session.
+//
+// The test case follows these steps:
+// 1. Prepare test environment by applying a Ray cluster with the collector
+// 2. Submit a Ray job to the existing cluster and wait for completion
+// 3. Get the head and worker node IDs
+// 4. Delete the Ray cluster to trigger event flushing and wait for cluster deletion to complete
+// 5. Apply History Server and get its URL
+// 6. Get the cluster information and set the cluster context with the session name of the dead cluster
+// 7. Hit /nodes/{node_id} for both the head node and the worker node:
+//   - Get the node details of the specified node
+//   - Verify the response status code is 200
+//   - Verify the response API schema
+//
+// 8. Delete S3 bucket to ensure test isolation
+func testDeadClusterNode(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
+	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
+	headNodeID := GetNodeIDFromPod(test, g, HeadPod(test, rayCluster), "ray-head")
+	workerNodeID := GetNodeIDFromPod(test, g, FirstWorkerPod(test, rayCluster), "ray-worker")
+
+	// Delete the Ray cluster to trigger event flushing.
+	LogWithTimestamp(test.T(), "Deleting RayCluster %s/%s to trigger event flushing", rayCluster.Namespace, rayCluster.Name)
+	err := test.Client().Ray().RayV1().
+		RayClusters(rayCluster.Namespace).
+		Delete(test.Ctx(), rayCluster.Name, metav1.DeleteOptions{})
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Eventually(func() error {
+		_, err := GetRayCluster(test, rayCluster.Namespace, rayCluster.Name)
+		return err
+	}, TestTimeoutMedium).Should(WithTransform(k8serrors.IsNotFound, BeTrue()))
+
+	ApplyHistoryServer(test, g, namespace)
+	historyServerURL := GetHistoryServerURL(test, g, namespace)
+
+	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
+	g.Expect(clusterInfo.SessionName).To(SatisfyAll(Not(BeEmpty()), Not(Equal(LiveSessionName))))
+
+	client := CreateHTTPClientWithCookieJar(g)
+	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
+
+	for _, nodeId := range []string{headNodeID, workerNodeID} {
+		endpoint := fmt.Sprintf("/nodes/%s", nodeId)
+		endpointURL := historyServerURL + endpoint
+		LogWithTimestamp(test.T(), "Testing %s endpoint for dead cluster: %s", endpoint, endpointURL)
+
+		var nodeResp map[string]any
+		g.Eventually(func(gg Gomega) {
+			resp, err := client.Get(endpointURL)
+			gg.Expect(err).NotTo(HaveOccurred())
+			defer resp.Body.Close()
+
+			body, err := io.ReadAll(resp.Body)
+			gg.Expect(err).NotTo(HaveOccurred())
+			gg.Expect(resp.StatusCode).To(Equal(http.StatusOK),
+				"[GET] %s should return 200, got %d: %s", endpointURL, resp.StatusCode, string(body))
+
+			err = json.Unmarshal(body, &nodeResp)
+			gg.Expect(err).NotTo(HaveOccurred())
+		}, TestTimeoutShort).Should(Succeed())
+
+		LogWithTimestamp(test.T(), "Verifying /nodes/%s response schema for dead cluster (isLive=false)", nodeId)
+		verifyNodeRespSchema(test, g, nodeResp, false)
+	}
+
+	DeleteS3Bucket(test, g, s3Client)
+	LogWithTimestamp(test.T(), "Dead cluster /nodes/{node_id} tests completed successfully")
+}
+
 // setClusterContext sets the cluster context via /enter_cluster/ endpoint and verifies the response.
 func setClusterContext(test Test, g *WithT, client *http.Client, historyServerURL, namespace, clusterName, session string) {
 	enterURL := fmt.Sprintf("%s/enter_cluster/%s/%s/%s", historyServerURL, namespace, clusterName, session)
@@ -262,7 +398,7 @@ func getClusterFromList(test Test, g *WithT, historyServerURL, clusterName, name
 	return result
 }
 
-// TODO(jwj): Make verification more robust.
+// TODO(jwj): Make verification for node-related endpoints more robust.
 // verifyNodesRespSchema verifies that the /nodes response is valid according to the API schema.
 // isLive indicates whether the response is from a live cluster or a dead cluster:
 //   - isLive: true for a live cluster (current snapshot)
@@ -338,6 +474,38 @@ func verifyNodesRespSchema(test Test, g *WithT, nodesResp map[string]any, isLive
 	}
 
 	LogWithTimestamp(test.T(), "/nodes response schema verification completed")
+}
+
+// verifyNodeRespSchema verifies that the /nodes/{node_id} response is valid according to the API schema.
+// isLive indicates whether the response is from a live cluster or a dead cluster:
+//   - isLive: true for a live cluster (current snapshot)
+//   - isLive: false for a dead cluster (historical replay)
+func verifyNodeRespSchema(test Test, g *WithT, nodeResp map[string]any, isLive bool) {
+	// Verify top-level fields.
+	g.Expect(nodeResp).To(HaveKeyWithValue("result", BeTrue()))
+	g.Expect(nodeResp).To(HaveKeyWithValue("msg", Equal("Node details fetched.")))
+	g.Expect(nodeResp).To(HaveKey("data"))
+
+	data, ok := nodeResp["data"].(map[string]any)
+	g.Expect(ok).To(BeTrue(), "'data' should be a map")
+	g.Expect(data).To(HaveKey("detail"))
+
+	if isLive {
+		// Live cluster: detail contains node summary snapshot of the specified node.
+		nodeSummarySnapshot, ok := data["detail"].(map[string]any)
+		g.Expect(ok).To(BeTrue(), "'detail' should be a map")
+		verifyNodeSummarySchema(test, g, nodeSummarySnapshot)
+	} else {
+		// Dead cluster: detail contains node summary replay (array of snapshots) of the specified node.
+		// The node summary replay should follow the chronological order of the node state transitions.
+		nodeSummarySnapshots, ok := data["detail"].([]any)
+		g.Expect(ok).To(BeTrue(), "'detail' should be an array")
+		for _, nodeSummarySnapshot := range nodeSummarySnapshots {
+			nodeSummarySnapshotMap, ok := nodeSummarySnapshot.(map[string]any)
+			g.Expect(ok).To(BeTrue(), "nodeSummarySnapshot should be a map")
+			verifyNodeSummarySchema(test, g, nodeSummarySnapshotMap)
+		}
+	}
 }
 
 // verifyNodeSummarySchema verifies that the node summary contains key fields.
