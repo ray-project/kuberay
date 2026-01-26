@@ -75,6 +75,7 @@ spec:
           image: collector:v0.1.0
           imagePullPolicy: IfNotPresent
           env:
+          # reference: https://learn.microsoft.com/en-us/azure/storage/common/storage-use-azurite#connect-to-the-emulator-by-using-the-azure-storage-explorer
           - name: AZURE_STORAGE_CONNECTION_STRING
             value: "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite-service.azurite-dev.svc.cluster.local:10000/devstoreaccount1;"
           - name: AZURE_STORAGE_CONTAINER
@@ -160,6 +161,7 @@ spec:
           image: collector:v0.1.0
           imagePullPolicy: IfNotPresent
           env:
+          # reference: https://learn.microsoft.com/en-us/azure/storage/common/storage-use-azurite#connect-to-the-emulator-by-using-the-azure-storage-explorer
           - name: AZURE_STORAGE_CONNECTION_STRING
             value: "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite-service.azurite-dev.svc.cluster.local:10000/devstoreaccount1;"
           - name: AZURE_STORAGE_CONTAINER

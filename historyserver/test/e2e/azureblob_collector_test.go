@@ -153,7 +153,7 @@ func testAzureBlobResumesUploadsOnRestart(test Test, g *WithT, namespace *corev1
 
 		var uploadedKeys []string
 		for pager.More() {
-			resp, err := pager.NextPage(context.Background())
+			resp, err := pager.NextPage(test.Ctx())
 			gg.Expect(err).NotTo(HaveOccurred())
 			for _, blob := range resp.Segment.BlobItems {
 				if blob.Name == nil {
@@ -172,6 +172,10 @@ func testAzureBlobResumesUploadsOnRestart(test Test, g *WithT, namespace *corev1
 			}
 		}
 		gg.Expect(hasFile2).To(BeTrue(), "file2.log should be uploaded to Azure Blob because it was in prev-logs")
+
+		// Note: file1.log was only placed in persist-complete-logs (local marker),
+		// it was never actually uploaded to Azure Blob in this test scenario.
+		// The persist-complete-logs directory is just a local marker to prevent re-upload.
 	}, TestTimeoutMedium).Should(Succeed())
 
 	LogWithTimestamp(test.T(), "Verifying local state: node directory should be moved to %s", persistCompleteBaseDir)
@@ -211,7 +215,7 @@ func verifyAzureBlobSessionDirs(test Test, g *WithT, azureClient *azblob.Client,
 
 	LogWithTimestamp(test.T(), "Verifying all %d event types are covered, except for EVENT_TYPE_UNSPECIFIED: %v", len(types.AllEventTypes)-1, types.AllEventTypes)
 	g.Eventually(func(gg Gomega) {
-		uploadedEvents := []rayEvent{}
+		var uploadedEvents []rayEvent
 
 		nodeEventsPrefix := sessionPrefix + "node_events/"
 		nodeEvents, err := loadRayEventsFromAzureBlob(containerClient, nodeEventsPrefix)

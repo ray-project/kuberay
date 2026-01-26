@@ -383,14 +383,14 @@ func New(c *config) (*RayLogsHandler, error) {
 		ContainerClient: containerClient,
 		LogFiles:        make(chan string, 100),
 		ContainerName:   c.ContainerName,
-		SessionDir:     sessionDir,
-		RootDir:        c.RootDir,
-		LogDir:         logdir,
-		RayClusterName: c.RayClusterName,
-		RayClusterID:   c.RayClusterID,
-		RayNodeName:    c.RayNodeName,
-		LogBatching:    c.LogBatching,
-		PushInterval:   c.PushInterval,
+		SessionDir:      sessionDir,
+		RootDir:         c.RootDir,
+		LogDir:          logdir,
+		RayClusterName:  c.RayClusterName,
+		RayClusterID:    c.RayClusterID,
+		RayNodeName:     c.RayNodeName,
+		LogBatching:     c.LogBatching,
+		PushInterval:    c.PushInterval,
 	}, nil
 }
 
