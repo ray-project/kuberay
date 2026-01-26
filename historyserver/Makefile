@@ -10,6 +10,12 @@ BINARY_NAME=historyserver
 BINARY_NAME_COLLECTOR=collector
 COLLECTOR_IMG ?= collector:v0.1.0
 HISTORYSERVER_IMG ?= historyserver:v0.1.0
+# Set GOPROXY to address of your preferred Go module proxy server.
+# For example: GOPROXY=https://goproxy.cn,direct make localimage-build
+GOPROXY ?= https://proxy.golang.org,direct
+
+# Container Engine for building images.
+ENGINE ?= docker
 
 # Setting SHELL to bash allows bash commands to be executed by recipes.
 # Options are set to exit when a recipe line exits non-zero or a piped command fails.
@@ -72,16 +78,18 @@ localimage-build: localimage-collector localimage-historyserver
 
 .PHONY: localimage-collector
 localimage-collector:
-	docker build -t $(COLLECTOR_IMG) -f Dockerfile.collector .
+	${ENGINE} build -t $(COLLECTOR_IMG) --build-arg GOPROXY=$(GOPROXY) -f Dockerfile.collector .
 
 .PHONY: localimage-historyserver
-localimage-historyserver: dockerbuilder_instance
-	docker build -t $(HISTORYSERVER_IMG) -f Dockerfile.historyserver .
+localimage-historyserver:
+	${ENGINE} build -t $(HISTORYSERVER_IMG)  --build-arg GOPROXY=$(GOPROXY) -f Dockerfile.historyserver .
 
 .PHONY: dockerbuilder_instance
 dockerbuilder_instance:
-	@docker buildx use $(DOCKERBUILDER_INSTANCE) || docker buildx create --name $(DOCKERBUILDER_INSTANCE)
-	docker buildx use $(DOCKERBUILDER_INSTANCE)
+ifeq ($(ENGINE),docker)
+	${ENGINE} buildx use $(DOCKERBUILDER_INSTANCE) || ${ENGINE} buildx create --name $(DOCKERBUILDER_INSTANCE)
+	${ENGINE} buildx use $(DOCKERBUILDER_INSTANCE)
+endif
 
 # Run tests
 .PHONY: test
