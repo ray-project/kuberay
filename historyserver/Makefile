@@ -56,6 +56,12 @@ buildcollector: mod
 	@echo "go build ..."
 	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -v $(GO_BUILD_FLAGS) -o $(BIN_DIR)/$(BINARY_NAME_COLLECTOR) ./cmd/collector/main.go
 
+.PHONY: buildcollector-race
+buildcollector-race: mod
+	@echo ""
+	@echo "go build with race detector..."
+	CGO_ENABLED=1 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -race -v $(GO_BUILD_FLAGS) -o $(BIN_DIR)/$(BINARY_NAME_COLLECTOR) ./cmd/collector/main.go
+
 .PHONY: buildhistoryserver
 #build: mod alllint test
 buildhistoryserver: mod
@@ -87,6 +93,10 @@ else
 	${ENGINE} build -t $(COLLECTOR_IMG) --build-arg GOPROXY=$(GOPROXY) -f Dockerfile.collector .
 endif
 
+.PHONY: localimage-collector-race
+localimage-collector-race:
+	${ENGINE} build --platform linux/amd64 -t $(COLLECTOR_IMG)-race --build-arg GOPROXY=$(GOPROXY) --build-arg ENABLE_RACE=true -f Dockerfile.collector .
+
 .PHONY: localimage-historyserver
 localimage-historyserver:
 ifdef PLATFORM
@@ -105,7 +115,7 @@ endif
 # Run tests
 .PHONY: test
 test:
-	go test -v ./pkg/... ./cmd/...
+	go test -race -v ./pkg/... ./cmd/...
 
 .PHONY: alllint
 alllint: todolist issuelint ## Run go lint against code.

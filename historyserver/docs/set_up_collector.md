@@ -76,6 +76,9 @@ k9s
 # Build the collector image.
 make -C historyserver localimage-collector
 
+# Or to build the collector image with race detector
+# make -C historyserver localimage-collector-race
+
 # Check the built image.
 docker images | grep collector
 ```
@@ -88,6 +91,9 @@ it.
 ```bash
 # Load the image into the kind cluster.
 kind load docker-image collector:v0.1.0
+
+# Or to load the collector image with race detector
+# kind load docker-image collector:v0.1.0-race
 
 # Check the loaded image.
 docker exec -it kind-control-plane crictl images | grep collector
