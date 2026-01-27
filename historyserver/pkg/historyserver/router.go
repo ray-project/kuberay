@@ -480,8 +480,8 @@ func (s *ServerHandler) buildFormattedClusterStatus(clusterNameID, sessionName s
 		builder.AddNodeFromDebugState(debugState)
 	}
 
-	tasks := s.eventHandler.GetTasks(clusterNameID)   // TODO Use session-scoped tasks once event handler supports session-based maps.
-	actors := s.eventHandler.GetActors(clusterNameID) // TODO Use session-scoped actors once event handler supports session-based maps.
+	tasks := s.eventHandler.GetTasksBySessionName(clusterNameID, sessionName)
+	actors := s.eventHandler.GetActorsBySessionName(clusterNameID, sessionName)
 
 	builder.AddPendingDemandsFromTasks(tasks)
 	builder.AddPendingDemandsFromActors(actors)
