@@ -550,7 +550,13 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 		// Convert JobID from base64 to hex
 		currJob.JobID, err = utils.ConvertBase64ToHex(currJob.JobID)
 		if err != nil {
-			logrus.Errorf("Failed to convert JobID from base64 to Hex, will keep JobID in base64.")
+			logrus.Errorf("Failed to convert JobID from base64 to Hex, will keep JobID in base64: %v", err)
+		}
+
+		// Convert DriverNodeID from base64 to hex
+		currJob.DriverNodeID, err = utils.ConvertBase64ToHex(currJob.DriverNodeID)
+		if err != nil {
+			logrus.Errorf("Failed to convert DriverNodeID from base64 to hex, will keep DriverNodeID in base64: %v", err)
 		}
 
 		jobMap := h.ClusterJobMap.GetOrCreateJobMap(currentClusterName)
