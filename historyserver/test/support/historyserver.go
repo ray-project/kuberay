@@ -2,6 +2,7 @@ package support
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -40,7 +41,6 @@ const (
 //   - /api/jobs
 //   - /api/serve/applications
 //   - /api/v0/placement_groups
-//   - /api/v0/logs/file
 var HistoryServerEndpoints = []string{
 	"/nodes?view=summary",
 	"/api/v0/tasks",
@@ -135,4 +135,26 @@ func PrepareTestEnv(test Test, g *WithT, namespace *corev1.Namespace, s3Client *
 	g.Expect(err).NotTo(HaveOccurred())
 
 	return rayCluster
+}
+
+// GetOneOfNodeID retrieves a node ID from the /nodes endpoint.
+func GetOneOfNodeID(g *WithT, client *http.Client, historyServerURL string) string {
+	resp, err := client.Get(historyServerURL + "/nodes?view=summary")
+	g.Expect(err).NotTo(HaveOccurred())
+	defer resp.Body.Close()
+	g.Expect(resp.StatusCode).To(Equal(http.StatusOK))
+
+	body, err := io.ReadAll(resp.Body)
+	g.Expect(err).NotTo(HaveOccurred())
+
+	var result map[string]any
+	err = json.Unmarshal(body, &result)
+	g.Expect(err).NotTo(HaveOccurred())
+
+	data := result["data"].(map[string]any)
+	summary := data["summary"].([]any)
+	g.Expect(len(summary)).To(BeNumerically(">", 0))
+
+	nodeInfo := summary[0].(map[string]any)
+	return nodeInfo["raylet"].(map[string]any)["nodeId"].(string)
 }

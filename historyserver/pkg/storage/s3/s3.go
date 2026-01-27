@@ -174,6 +174,9 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 					}
 					logrus.Infof("Process %++v", metas)
 					namespaceName := strings.Split(metas[0], "_")
+					if len(namespaceName) < 2 {
+						continue
+					}
 					c.Name = namespaceName[0]
 					c.Namespace = namespaceName[1]
 					c.SessionName = metas[1]
