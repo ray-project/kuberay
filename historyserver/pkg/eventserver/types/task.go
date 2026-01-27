@@ -165,6 +165,8 @@ type Task struct {
 
 // TaskProfileEventDTO represents the structure of TASK_PROFILE_EVENT from Ray Event Export API
 // DTO (Data Transfer Object)
+// Note: Ray API uses "attemptNumber" for TASK_PROFILE_EVENT, but "taskAttempt"
+// for TASK_LIFECYCLE_EVENT and TASK_DEFINITION_EVENT
 type TaskProfileEventDTO struct {
 	TaskID        string           `json:"taskId"`
 	AttemptNumber int              `json:"attemptNumber"`
