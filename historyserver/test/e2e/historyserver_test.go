@@ -13,14 +13,16 @@ import (
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/ray-project/kuberay/historyserver/pkg/historyserver"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 	. "github.com/ray-project/kuberay/historyserver/test/support"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
 
 const (
-	LiveSessionName = "live"
-	EndpointLogFile = "/api/v0/logs/file"
+	LiveSessionName       = "live"
+	EndpointLogFile       = "/api/v0/logs/file"
+	EndpointClusterStatus = "/api/cluster_status"
 )
 
 func TestHistoryServer(t *testing.T) {
@@ -42,6 +44,14 @@ func TestHistoryServer(t *testing.T) {
 		{
 			name:     "/v0/logs/file endpoint (dead cluster)",
 			testFunc: testLogFileEndpointDeadCluster,
+		},
+		{
+			name:     "/api/cluster_status endpoint (live cluster)",
+			testFunc: testLiveClusterStatus,
+		},
+		{
+			name:     "/api/cluster_status endpoint (dead cluster)",
+			testFunc: testDeadClusterStatus,
 		},
 	}
 
@@ -281,4 +291,137 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 
 	DeleteS3Bucket(test, g, s3Client)
 	LogWithTimestamp(test.T(), "Dead cluster log file endpoint tests completed")
+}
+
+func testLiveClusterStatus(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
+	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
+	ApplyHistoryServer(test, g, namespace)
+	historyServerURL := GetHistoryServerURL(test, g, namespace)
+
+	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
+	g.Expect(clusterInfo.SessionName).To(Equal(LiveSessionName), "Live cluster should have sessionName='live'")
+
+	client := CreateHTTPClientWithCookieJar(g)
+	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
+
+	test.T().Run("should proxy /api/cluster_status to live clusters", func(t *testing.T) {
+		g := NewWithT(t)
+		g.Eventually(func(gg Gomega) {
+			clusterStatusURL := fmt.Sprintf("%s%s", historyServerURL, EndpointClusterStatus)
+			resp, err := client.Get(clusterStatusURL)
+			gg.Expect(err).NotTo(HaveOccurred())
+			defer resp.Body.Close()
+			gg.Expect(resp.StatusCode).To(Equal(http.StatusOK))
+
+			body, err := io.ReadAll(resp.Body)
+			gg.Expect(err).NotTo(HaveOccurred())
+			gg.Expect(len(body)).To(BeNumerically(">", 0))
+
+			var response historyserver.ClusterStatusResponse
+			err = json.Unmarshal(body, &response)
+			gg.Expect(err).NotTo(HaveOccurred())
+			gg.Expect(response.Result).To(BeTrue())
+			gg.Expect(response.Msg).To(Equal("Got cluster status."))
+			gg.Expect(response.Data.AutoscalingError).To(BeNil())
+		}, TestTimeoutShort).Should(Succeed())
+	})
+
+	test.T().Run("should proxy for /api/cluster_status?format=1", func(t *testing.T) {
+		g := NewWithT(t)
+		g.Eventually(func(gg Gomega) {
+			clusterStatusURL := fmt.Sprintf("%s%s?format=1", historyServerURL, EndpointClusterStatus)
+			resp, err := client.Get(clusterStatusURL)
+			gg.Expect(err).NotTo(HaveOccurred())
+			defer resp.Body.Close()
+			gg.Expect(resp.StatusCode).To(Equal(http.StatusOK))
+
+			body, err := io.ReadAll(resp.Body)
+			gg.Expect(err).NotTo(HaveOccurred())
+			gg.Expect(len(body)).To(BeNumerically(">", 0))
+
+			var response historyserver.FormattedClusterStatusResponse
+			err = json.Unmarshal(body, &response)
+			gg.Expect(err).NotTo(HaveOccurred())
+			gg.Expect(response.Result).To(BeTrue())
+			gg.Expect(response.Msg).To(Equal("Got formatted cluster status."))
+			gg.Expect(response.Data.ClusterStatus).To(ContainSubstring("Autoscaler status"))
+		}, TestTimeoutShort).Should(Succeed())
+	})
+
+	DeleteS3Bucket(test, g, s3Client)
+	LogWithTimestamp(test.T(), "Live cluster status E2E test completed successfully")
+}
+
+func testDeadClusterStatus(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
+	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
+
+	// Delete RayCluster to trigger log upload
+	err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Delete(test.Ctx(), rayCluster.Name, metav1.DeleteOptions{})
+	g.Expect(err).NotTo(HaveOccurred())
+	LogWithTimestamp(test.T(), "Deleted RayCluster %s/%s", namespace.Name, rayCluster.Name)
+
+	// Wait for cluster to be fully deleted (ensures logs are uploaded to S3)
+	g.Eventually(func() error {
+		_, err := GetRayCluster(test, namespace.Name, rayCluster.Name)
+		return err
+	}, TestTimeoutMedium).Should(WithTransform(k8serrors.IsNotFound, BeTrue()))
+
+	ApplyHistoryServer(test, g, namespace)
+	historyServerURL := GetHistoryServerURL(test, g, namespace)
+
+	// TODO
+	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
+	g.Expect(clusterInfo.SessionName).NotTo(Equal(LiveSessionName))
+
+	client := CreateHTTPClientWithCookieJar(g)
+	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
+
+	test.T().Run("should return cluster status with /api/cluster_status", func(t *testing.T) {
+		g := NewWithT(t)
+		g.Eventually(func(gg Gomega) {
+			clusterStatusURL := fmt.Sprintf("%s%s", historyServerURL, EndpointClusterStatus)
+			resp, err := client.Get(clusterStatusURL)
+			gg.Expect(err).NotTo(HaveOccurred())
+			defer resp.Body.Close()
+			gg.Expect(resp.StatusCode).To(Equal(http.StatusOK))
+
+			body, err := io.ReadAll(resp.Body)
+			gg.Expect(err).NotTo(HaveOccurred())
+			gg.Expect(len(body)).To(BeNumerically(">", 0))
+
+			var response historyserver.ClusterStatusResponse
+			err = json.Unmarshal(body, &response)
+			gg.Expect(err).NotTo(HaveOccurred())
+			gg.Expect(response.Result).To(BeTrue())
+			gg.Expect(response.Msg).To(Equal("Got cluster status."))
+			gg.Expect(response.Data.AutoscalingError).To(BeNil())
+		}, TestTimeoutShort).Should(Succeed())
+	})
+
+	test.T().Run("should return formatted cluster status with /api/cluster_status?format=1", func(t *testing.T) {
+		g := NewWithT(t)
+		g.Eventually(func(gg Gomega) {
+			clusterStatusURL := fmt.Sprintf("%s%s?format=1", historyServerURL, EndpointClusterStatus)
+			resp, err := client.Get(clusterStatusURL)
+			gg.Expect(err).NotTo(HaveOccurred())
+			defer resp.Body.Close()
+			gg.Expect(resp.StatusCode).To(Equal(http.StatusOK))
+
+			body, err := io.ReadAll(resp.Body)
+			gg.Expect(err).NotTo(HaveOccurred())
+			gg.Expect(len(body)).To(BeNumerically(">", 0))
+
+			var response historyserver.FormattedClusterStatusResponse
+			err = json.Unmarshal(body, &response)
+			gg.Expect(err).NotTo(HaveOccurred())
+			gg.Expect(response.Result).To(BeTrue())
+			gg.Expect(response.Msg).To(Equal("Got formatted cluster status."))
+			gg.Expect(response.Data.ClusterStatus).To(ContainSubstring("Autoscaler status"))
+		}, TestTimeoutShort).Should(Succeed())
+	})
+
+	DeleteS3Bucket(test, g, s3Client)
+	LogWithTimestamp(test.T(), "Dead cluster status E2E test completed successfully")
 }
