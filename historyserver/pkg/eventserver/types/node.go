@@ -69,9 +69,16 @@ func (n NodeStateTransition) GetTimestamp() time.Time {
 type Node struct {
 	// NodeID is the hexadecimal representation of the node ID.
 	NodeID         string            `json:"nodeId"`
-	NodeIPAddress  string            `json:"nodeIpAddress,omitempty"`
-	StartTimestamp time.Time         `json:"startTimestamp,omitempty"`
-	Labels         map[string]string `json:"labels,omitempty"`
+	NodeIPAddress  string            `json:"nodeIpAddress"`
+	StartTimestamp time.Time         `json:"startTimestamp"`
+	Labels         map[string]string `json:"labels"`
+
+	// Wait for Ray to export the following fields.
+	// Ref: https://github.com/ray-project/ray/issues/60129
+	Hostname         string `json:"hostname,omitempty"`
+	NodeName         string `json:"nodeName,omitempty"`
+	InstanceID       string `json:"instanceId,omitempty"`
+	InstanceTypeName string `json:"instanceTypeName,omitempty"`
 
 	// TODO(jwj): Make it clearer.
 	// Available only when there's at least one NODE_LIFECYCLE_EVENT.

@@ -1021,35 +1021,72 @@ func getClusterSvcInfo(clis []client.Client, name, namespace string) (ServiceInf
 func formatNodeSummaryReplayForResp(node eventtypes.Node, sessionName string) []map[string]interface{} {
 	nodeId := node.NodeID
 	nodeIpAddress := node.NodeIPAddress
-	startTimestamp := node.StartTimestamp.UnixMilli()
 	labels := node.Labels
 	nodeTypeName := labels["ray.io/node-group"]
 	isHeadNode := nodeTypeName == "headgroup"
 	rayletSocketName := fmt.Sprintf("/tmp/ray/%s/sockets/raylet", sessionName)
 	objectStoreSocketName := fmt.Sprintf("/tmp/ray/%s/sockets/plasma_store", sessionName)
 
+	// Handle the start timestamp of the node.
+	// Ref: https://github.com/ray-project/ray/blob/f953f199b5d68d47c07c865c5ebcd2333d49f365/src/ray/protobuf/gcs.proto#L345-L346.
+	var startTimestamp int64
+	if !node.StartTimestamp.IsZero() {
+		startTimestamp = node.StartTimestamp.UnixMilli()
+	}
+
+	// Wait for Ray to export the following fields.
+	// Ref: https://github.com/ray-project/ray/issues/60129
+	hostname := node.Hostname
+	nodeName := node.NodeName
+	instanceID := node.InstanceID
+	instanceTypeName := node.InstanceTypeName
+
 	nodeSummaryReplay := make([]map[string]interface{}, 0)
 	for _, tr := range node.StateTransitions {
 		transitionTimestamp := tr.Timestamp.UnixMilli()
 		resourcesTotal := convertResourcesToAPISchema(tr.Resources)
 
+		// Handle DEAD state-specific fields.
+		var endTimestamp int64
+		var stateMessage string
+		if tr.State == eventtypes.NODE_DEAD {
+			endTimestamp = tr.Timestamp.UnixMilli()
+			if tr.DeathInfo != nil {
+				stateMessage = composeStateMessage(string(tr.DeathInfo.Reason), tr.DeathInfo.ReasonMessage)
+			}
+		}
+
 		// Create a summary snapshot.
 		nodeSummarySnapshot := map[string]interface{}{
 			"t":        transitionTimestamp, // TODO(jwj): Should we just populate "now".
 			"now":      transitionTimestamp,
-			"hostname": "",
+			"hostname": hostname,
 			"ip":       nodeIpAddress,
+			"cpus":     []int{0, 0},
+			"mem":      []int{0, 0, 0, 0},
+			"shm":      0,
+			"bootTime": 0,
+			"disk":     []int{0, 0, 0, 0},
+			"gpus":     []int{0},
+			"tpus":     []int{0},
 			"raylet": map[string]interface{}{
 				"nodeId":                nodeId,
 				"nodeManagerAddress":    nodeIpAddress,
+				"nodeManagerHostname":   hostname,
 				"rayletSocketName":      rayletSocketName,
 				"objectStoreSocketName": objectStoreSocketName,
+				"metricsExportPort":     "8080",
 				"resourcesTotal":        resourcesTotal,
+				"nodeName":              nodeName,
+				"instanceId":            instanceID,
 				"nodeTypeName":          nodeTypeName,
+				"instanceTypeName":      instanceTypeName,
 				"startTimeMs":           startTimestamp,
 				"isHeadNode":            isHeadNode,
 				"labels":                labels,
 				"state":                 string(tr.State),
+				"endTimeMs":             endTimestamp,
+				"stateMessage":          stateMessage,
 			},
 		}
 		nodeSummaryReplay = append(nodeSummaryReplay, nodeSummarySnapshot)
@@ -1099,4 +1136,30 @@ func convertResourcesToAPISchema(resources map[string]float64) map[string]float6
 	}
 
 	return convertedResources
+}
+
+// composeStateMessage composes a state message based on the death reason and message for a node state transition in DEAD state.
+// Ref: https://github.com/ray-project/ray/blob/f953f199b5d68d47c07c865c5ebcd2333d49f365/python/ray/dashboard/utils.py#L738-L765.
+func composeStateMessage(deathReason string, deathReasonMessage string) string {
+	var stateMessage string
+	if deathReason == string(eventtypes.EXPECTED_TERMINATION) {
+		stateMessage = "Expected termination"
+	} else if deathReason == string(eventtypes.UNEXPECTED_TERMINATION) {
+		stateMessage = "Unexpected termination"
+	} else if deathReason == string(eventtypes.AUTOSCALER_DRAIN_PREEMPTED) {
+		stateMessage = "Terminated due to preemption"
+	} else if deathReason == string(eventtypes.AUTOSCALER_DRAIN_IDLE) {
+		stateMessage = "Terminated due to idle (no Ray activity)"
+	} else {
+		stateMessage = ""
+	}
+
+	if deathReasonMessage != "" {
+		if stateMessage != "" {
+			stateMessage = fmt.Sprintf("%s: %s", stateMessage, deathReasonMessage)
+		} else {
+			stateMessage = deathReasonMessage
+		}
+	}
+	return stateMessage
 }
