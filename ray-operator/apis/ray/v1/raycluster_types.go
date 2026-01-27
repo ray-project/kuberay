@@ -11,6 +11,15 @@ import (
 
 // RayClusterSpec defines the desired state of RayCluster
 type RayClusterSpec struct {
+	// TTLSecondsAfterIdle specifies the time-to-live (TTL) in seconds for the RayCluster
+	// after it becomes idle. A cluster is considered idle when all Ray components report
+	// inactive status via the /api/component_activities endpoint.
+	// When set, the operator periodically checks the cluster's activity status and deletes
+	// the cluster if it has been idle for longer than the specified duration.
+	// If not set (nil), idle termination is disabled.
+	// +kubebuilder:validation:Minimum=0
+	// +optional
+	TTLSecondsAfterIdle *int32 `json:"ttlSecondsAfterIdle,omitempty"`
 	// UpgradeStrategy defines the scaling policy used when upgrading the RayCluster
 	// +optional
 	UpgradeStrategy *RayClusterUpgradeStrategy `json:"upgradeStrategy,omitempty"`
