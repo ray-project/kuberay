@@ -1147,16 +1147,20 @@ func constructResourceString(resources map[string]float64) string {
 
 // formatMemory formats a memory value to a human-readable string.
 func formatMemory(memBytes float64) string {
-	memorySuffixes := map[string]float64{
-		"TiB": math.Pow(2, 40),
-		"GiB": math.Pow(2, 30),
-		"MiB": math.Pow(2, 20),
-		"KiB": math.Pow(2, 10),
+	type unit struct {
+		suffix       string
+		bytesPerUnit float64
 	}
-	for memSuffix, memBytesPerUnit := range memorySuffixes {
-		if memBytes >= memBytesPerUnit {
-			memInUnit := memBytes / memBytesPerUnit
-			return fmt.Sprintf("%.2f%s", memInUnit, memSuffix)
+	units := []unit{
+		{suffix: "TiB", bytesPerUnit: math.Pow(2, 40)},
+		{suffix: "GiB", bytesPerUnit: math.Pow(2, 30)},
+		{suffix: "MiB", bytesPerUnit: math.Pow(2, 20)},
+		{suffix: "KiB", bytesPerUnit: math.Pow(2, 10)},
+	}
+	for _, unit := range units {
+		if memBytes >= unit.bytesPerUnit {
+			memInUnit := memBytes / unit.bytesPerUnit
+			return fmt.Sprintf("%.2f%s", memInUnit, unit.suffix)
 		}
 	}
 	return fmt.Sprintf("%dB", int(memBytes))
