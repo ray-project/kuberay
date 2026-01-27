@@ -588,9 +588,12 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 		if !ok {
 			return fmt.Errorf("event does not have 'taskProfileEvents'")
 		}
+		jsonBytes, err := json.Marshal(taskProfileEvent)
+		if err != nil {
+			return err
+		}
 
 		var profileData types.TaskProfileEventDTO
-		jsonBytes, _ := json.Marshal(taskProfileEvent)
 		if err := json.Unmarshal(jsonBytes, &profileData); err != nil {
 			logrus.Errorf("Failed to unmarshal TASK_PROFILE_EVENT: %v", err)
 			return err
@@ -946,6 +949,12 @@ func (h *EventHandler) handleTaskDefinitionEvent(eventMap map[string]any, cluste
 		existingActorReprName := task.ActorReprName
 		existingTaskLogInfo := task.TaskLogInfo
 
+		existingProfileData := task.ProfileData
+		existingFuncOrClassName := task.FuncOrClassName
+		existingName := task.TaskName
+		existingStartTime := task.StartTime
+		existingEndTime := task.EndTime
+
 		*task = currTask
 
 		if len(existingStateTransitions) > 0 {
@@ -958,6 +967,20 @@ func (h *EventHandler) handleTaskDefinitionEvent(eventMap map[string]any, cluste
 			task.ActorReprName = existingActorReprName
 			task.TaskLogInfo = existingTaskLogInfo
 			task.State = task.GetLastState()
+			task.StartTime = existingStartTime
+			task.EndTime = existingEndTime
+		}
+
+		// Restore profile-derived fields (from TASK_PROFILE_EVENT)
+		// All three come from the same event, so check together
+		if existingProfileData != nil {
+			task.ProfileData = existingProfileData
+			if existingFuncOrClassName != "" {
+				task.FuncOrClassName = existingFuncOrClassName
+			}
+			if existingName != "" {
+				task.TaskName = existingName
+			}
 		}
 	})
 
