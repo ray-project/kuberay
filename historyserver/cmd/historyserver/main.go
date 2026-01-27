@@ -81,7 +81,11 @@ func main() {
 		logrus.Info("EventHandler shutdown complete")
 	}()
 
-	handler := historyserver.NewServerHandler(&globalConfig, dashboardDir, reader, cliMgr, eventHandler, useKubernetesProxy)
+	handler, err := historyserver.NewServerHandler(&globalConfig, dashboardDir, reader, cliMgr, eventHandler, useKubernetesProxy)
+	if err != nil {
+		logrus.Errorf("Failed to create server handler: %v", err)
+		os.Exit(1)
+	}
 
 	sigChan := make(chan os.Signal, 1)
 	stop := make(chan struct{}, 1)

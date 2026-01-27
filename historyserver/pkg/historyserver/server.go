@@ -2,6 +2,7 @@ package historyserver
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -26,7 +27,7 @@ type ServerHandler struct {
 	useKubernetesProxy bool
 }
 
-func NewServerHandler(c *types.RayHistoryServerConfig, dashboardDir string, reader storage.StorageReader, clientManager *ClientManager, eventHandler *eventserver.EventHandler, useKubernetesProxy bool) *ServerHandler {
+func NewServerHandler(c *types.RayHistoryServerConfig, dashboardDir string, reader storage.StorageReader, clientManager *ClientManager, eventHandler *eventserver.EventHandler, useKubernetesProxy bool) (*ServerHandler, error) {
 	handler := &ServerHandler{
 		reader:        reader,
 		clientManager: clientManager,
@@ -43,20 +44,20 @@ func NewServerHandler(c *types.RayHistoryServerConfig, dashboardDir string, read
 		if useKubernetesProxy {
 			transportConfig, err := k8sRestConfig.TransportConfig()
 			if err != nil {
-				logrus.Errorf("Failed to get transport config: %v", err)
-			} else {
-				// Create a Kubernetes-aware round tripper that can handle authentication and transport security.
-				rt, err := transport.New(transportConfig)
-				if err != nil {
-					logrus.Errorf("Failed to create Kubernetes-aware round tripper: %v", err)
-				} else {
-					handler.httpClient = &http.Client{
-						Timeout:   30 * time.Second,
-						Transport: rt,
-					}
-					handler.useKubernetesProxy = true
-				}
+				return nil, fmt.Errorf("failed to get transport config: %w", err)
 			}
+
+			// Create a Kubernetes-aware round tripper that can handle authentication and transport security.
+			rt, err := transport.New(transportConfig)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create Kubernetes-aware round tripper: %w", err)
+			}
+
+			handler.httpClient = &http.Client{
+				Timeout:   30 * time.Second,
+				Transport: rt,
+			}
+			handler.useKubernetesProxy = true
 		} else {
 			// Create a simple HTTP client that doesn't use Kubernetes API server proxy.
 			handler.httpClient = &http.Client{
@@ -65,7 +66,7 @@ func NewServerHandler(c *types.RayHistoryServerConfig, dashboardDir string, read
 			handler.useKubernetesProxy = false
 		}
 	}
-	return handler
+	return handler, nil
 }
 
 func (s *ServerHandler) Run(stop chan struct{}) error {
