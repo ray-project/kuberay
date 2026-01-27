@@ -163,6 +163,31 @@ type Task struct {
 	EndTime      time.Time
 }
 
+// TaskProfileEventDTO represents the structure of TASK_PROFILE_EVENT from Ray Event Export API
+// DTO (Data Transfer Object)
+type TaskProfileEventDTO struct {
+	TaskID        string           `json:"taskId"`
+	AttemptNumber int              `json:"attemptNumber"`
+	JobID         string           `json:"jobId"`
+	ProfileEvents ProfileEventsDTO `json:"profileEvents"`
+}
+
+// ProfileEventsDTO contains component and event information
+type ProfileEventsDTO struct {
+	ComponentID   string            `json:"componentId"`
+	ComponentType string            `json:"componentType"`
+	NodeIPAddress string            `json:"nodeIpAddress"`
+	Events        []ProfileEventDTO `json:"events"`
+}
+
+// ProfileEventDTO represents a single profile event within ProfileEvents
+type ProfileEventDTO struct {
+	EventName string `json:"eventName"`
+	StartTime string `json:"startTime"`
+	EndTime   string `json:"endTime"`
+	ExtraData string `json:"extraData"`
+}
+
 type ProfileData struct {
 	ComponentID   string            `json:"component_id"`
 	ComponentType string            `json:"component_type"`

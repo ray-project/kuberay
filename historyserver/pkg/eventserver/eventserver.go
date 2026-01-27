@@ -589,23 +589,7 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 			return fmt.Errorf("event does not have 'taskProfileEvents'")
 		}
 
-		var profileData struct {
-			TaskID        string `json:"taskId"`
-			AttemptNumber int    `json:"attemptNumber"`
-			JobID         string `json:"jobId"`
-			ProfileEvents struct {
-				ComponentID   string `json:"componentId"`
-				ComponentType string `json:"componentType"`
-				NodeIPAddress string `json:"nodeIpAddress"`
-				Events        []struct {
-					EventName string `json:"eventName"`
-					StartTime string `json:"startTime"`
-					EndTime   string `json:"endTime"`
-					ExtraData string `json:"extraData"`
-				} `json:"events"`
-			} `json:"profileEvents"`
-		}
-
+		var profileData types.TaskProfileEventDTO
 		jsonBytes, _ := json.Marshal(taskProfileEvent)
 		if err := json.Unmarshal(jsonBytes, &profileData); err != nil {
 			logrus.Errorf("Failed to unmarshal TASK_PROFILE_EVENT: %v", err)
@@ -618,7 +602,7 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 		}
 
 		// Convert events to ProfileEventRaw format
-		var rawEvents []types.ProfileEventRaw
+		var rawEvents = make([]types.ProfileEventRaw, 0, len(profileData.ProfileEvents.Events))
 		for _, e := range profileData.ProfileEvents.Events {
 			startTime, err := strconv.ParseInt(e.StartTime, 10, 64)
 			if err != nil {
@@ -664,16 +648,15 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 				StartTime int64
 				EndTime   int64
 			}
-			existingKeys := make(map[eventKey]bool)
+			existingKeys := make(map[eventKey]struct{})
 			for _, e := range t.ProfileData.Events {
-				existingKeys[eventKey{e.EventName, e.StartTime, e.EndTime}] = true
+				existingKeys[eventKey{e.EventName, e.StartTime, e.EndTime}] = struct{}{}
 			}
-
 			for _, e := range rawEvents {
 				key := eventKey{e.EventName, e.StartTime, e.EndTime}
-				if !existingKeys[key] {
+				if _, ok := existingKeys[key]; !ok {
 					t.ProfileData.Events = append(t.ProfileData.Events, e)
-					existingKeys[key] = true
+					existingKeys[key] = struct{}{}
 				}
 			}
 
