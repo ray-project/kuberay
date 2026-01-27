@@ -233,10 +233,22 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 		taskMap.CreateOrMergeAttempt(currTask.TaskID, currTask.AttemptNumber, func(t *types.Task) {
 			// Merge definition fields (preserve existing Events if any)
 			existingEvents := t.Events
+			existingProfileData := t.ProfileData
+			existingNodeID := t.NodeID
+			existingWorkerID := t.WorkerID
 			*t = currTask
 			if len(existingEvents) > 0 {
 				t.Events = existingEvents
 				t.State = existingEvents[len(existingEvents)-1].State
+			}
+			if existingProfileData != nil {
+				t.ProfileData = existingProfileData
+			}
+			if existingNodeID != "" {
+				t.NodeID = existingNodeID
+			}
+			if existingWorkerID != "" {
+				t.WorkerID = existingWorkerID
 			}
 		})
 	case types.TASK_LIFECYCLE_EVENT:
@@ -705,9 +717,12 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 		if !ok {
 			return fmt.Errorf("event does not have 'taskProfileEvents'")
 		}
+		jsonBytes, err := json.Marshal(taskProfileEvent)
+		if err != nil {
+			return err
+		}
 
 		var profileData types.TaskProfileEventDTO
-		jsonBytes, _ := json.Marshal(taskProfileEvent)
 		if err := json.Unmarshal(jsonBytes, &profileData); err != nil {
 			logrus.Errorf("Failed to unmarshal TASK_PROFILE_EVENT: %v", err)
 			return err
