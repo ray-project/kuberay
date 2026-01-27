@@ -566,33 +566,34 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 			if currJob.JobID == "" {
 				existingJobID = j.JobID
 			}
-			// Merge job by temp storing fields that the current job cannot fill in,
-			// and then replace the job with current job and then fill in the stored fields
+
+			// ========== Lifecycle-derived fields ==========
+			// These fields are set by DRIVER_JOB_LIFECYCLE_EVENT
+			// We need to preserve them if lifecycle event arrived before definition event
 			existingStateTransitions := j.StateTransitions
-			existingStatusTransitions := j.StatusTransitions
-			existingStatus := j.Status
 			existingState := j.State
 			existingStartTime := j.StartTime
 			existingEndTime := j.EndTime
-			existingMessage := j.Message
-			existingDriverExitCode := j.DriverExitCode
 
+			// Overwrite with definition fields
 			*j = currJob
 
+			// Restore lifecycle-derived fields if they existed
 			if len(existingStateTransitions) > 0 {
 				if existingJobID != "" {
 					// This means that jobID was somehow empty.
 					j.JobID = existingJobID
 				}
 				j.StateTransitions = existingStateTransitions
-				j.StatusTransitions = existingStatusTransitions
-				j.Status = existingStatus
 				j.State = existingState
 				j.StartTime = existingStartTime
 				j.EndTime = existingEndTime
-				j.Message = existingMessage
-				j.DriverExitCode = existingDriverExitCode
 			}
+
+			// ========== Definition-only fields ==========
+			// Status, StatusTransitions, Message, DriverExitCode
+			// are ONLY set by DRIVER_JOB_DEFINITION_EVENT
+			// They are already in currJob, no need to restore
 		})
 	case types.DRIVER_JOB_LIFECYCLE_EVENT:
 		// NOTE: When event comes in, JobID will be in base64, processing will convert it to Hex
