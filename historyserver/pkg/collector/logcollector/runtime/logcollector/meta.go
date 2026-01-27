@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"crypto/md5"
 	"encoding/hex"
+	"encoding/json"
+	"fmt"
 	"github.com/ray-project/kuberay/historyserver/pkg/collector/types"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 	"io"
@@ -12,6 +14,9 @@ import (
 
 	"github.com/sirupsen/logrus"
 )
+
+// TODO(alex): This file is just a work around because some ray resource events are not implemented yet.
+// We should delete this file after history server can get the resources by ray events
 
 var metaCommonUrlInfo = []*types.UrlInfo{
 	&types.UrlInfo{Key: utils.OssMetaFile_Applications,
@@ -25,6 +30,14 @@ var metaCommonUrlInfo = []*types.UrlInfo{
 		Type: "URL",
 	},
 }
+
+var JobsUrlInfo = &types.UrlInfo{
+	Key:  utils.OssMetaFile_Jobs,
+	Url:  "http://localhost:8265/api/jobs/",
+	Type: "URL",
+}
+
+var JobResourcesUrlInfo = map[string]*types.JobUrlInfo{}
 
 func (r *RayLogHandler) PersistMetaLoop(stop <-chan struct{}) {
 	// create meta directory
@@ -56,6 +69,8 @@ func (r *RayLogHandler) PersistMeta() error {
 			// no need break or return
 		}
 	}
+	// Datasets API is called by job ID, so we should handle it in a separate function
+	r.PersisMetaDatasetsSummary()
 
 	return nil
 }
@@ -96,4 +111,60 @@ func (r *RayLogHandler) PersistUrlInfo(urlinfo *types.UrlInfo) ([]byte, error) {
 	}
 	logrus.Debugf("Successfully created object %s", objectName)
 	return body, nil
+}
+
+func (r *RayLogHandler) PersisMetaDatasetsSummary() {
+
+	body, err := r.PersistUrlInfo(JobsUrlInfo)
+	if err != nil {
+		logrus.Errorf("Failed to persist meta url %s: %v", JobsUrlInfo.Url, err)
+		return
+	}
+	var jobsData = []interface{}{}
+	if err := json.Unmarshal(body, &jobsData); err != nil {
+		logrus.Errorf("Ummarshal resp body error %v. key %s repons body %s", err, JobsUrlInfo.Key, jobsData)
+		return
+	}
+	currentJobIDs := make(map[string]string, 0)
+	for _, jobinfo := range jobsData {
+		job := jobinfo.(map[string]interface{})
+		jobid, ok := job["job_id"].(string)
+		if !ok {
+			continue
+		}
+		status, ok := job["status"].(string)
+		if !ok {
+			continue
+		}
+		currentJobIDs[jobid] = status
+	}
+
+	for jobID, status := range currentJobIDs {
+		if _, ok := JobResourcesUrlInfo[jobID]; !ok {
+			JobResourcesUrlInfo[jobID] = &types.JobUrlInfo{
+				Url: &types.UrlInfo{
+					Key: fmt.Sprintf("%s%s", utils.OssMetaFile_JOBDATASETS_Prefix, jobID),
+					Url: fmt.Sprintf("http://localhost:8265/api/data/datasets/%s", jobID),
+				},
+				Status: status,
+			}
+		}
+	}
+
+	for _, urlInfo := range JobResourcesUrlInfo {
+		if urlInfo.StopPersist {
+			continue
+		}
+
+		if _, err := r.PersistUrlInfo(urlInfo.Url); err != nil {
+			logrus.Errorf("Persis task UrlInfo %s failed, error %v", urlInfo.Url.Url, err)
+			// no need break
+		}
+
+		if urlInfo.Status == types.JOBSTATUS_FAILED ||
+			urlInfo.Status == types.JOBSTATUS_STOPPED ||
+			urlInfo.Status == types.JOBSTATUS_SUCCEEDED {
+			urlInfo.StopPersist = true
+		}
+	}
 }
