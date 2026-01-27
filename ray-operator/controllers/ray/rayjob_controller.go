@@ -272,7 +272,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		}
 
 		var finishedAt *time.Time
-		if rayJobInstance.Spec.SubmissionMode == rayv1.K8sJobMode || rayJobInstance.Spec.SubmissionMode == rayv1.SidecarMode {
+		if rayJobInstance.Spec.SubmissionMode == rayv1.K8sJobMode {
 			var shouldUpdate bool
 			shouldUpdate, finishedAt, err = r.checkSubmitterAndUpdateStatusIfNeeded(ctx, rayJobInstance)
 			if err != nil {
@@ -286,6 +286,23 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			if shouldUpdate {
 				break
 			}
+		}
+
+		if rayJobInstance.Spec.SubmissionMode == rayv1.SidecarMode {
+			// check head pod
+			headPod, err := common.GetRayClusterHeadPod(ctx, r.Client, rayClusterInstance)
+			if err != nil {
+				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+			}
+			if headPod == nil {
+				rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusFailed
+				rayJobInstance.Status.Reason = rayv1.AppFailed
+				rayJobInstance.Status.Message = "Ray head pod not found."
+				break
+			}
+
+			// Get finishedAt for timeout fallback when dashboard is unreachable
+			finishedAt = getSubmitterContainerFinishedTime(headPod)
 		}
 
 		// Check the current status of ray jobs
@@ -318,6 +335,13 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 					break
 				}
 			}
+			// If in Sidecar mode, apply timeout as fallback if dashboard is unreachable and submitter has finished
+			if rayJobInstance.Spec.SubmissionMode == rayv1.SidecarMode {
+				if checkSubmitterFinishedTimeoutAndUpdateStatusIfNeeded(ctx, rayJobInstance, finishedAt) {
+					// rayJobInstance.Status marked to Failed
+					break
+				}
+			}
 
 			logger.Error(err, "Failed to get job info", "JobId", rayJobInstance.Status.JobId)
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
@@ -333,6 +357,12 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		// See https://github.com/ray-project/kuberay/pull/1919 for reasons.
 		if utils.HasSubmitter(rayJobInstance) {
 			isJobTerminal = isJobTerminal && finishedAt != nil
+		}
+
+		// inform the user when submitter exited but job is still running.
+		if rayJobInstance.Spec.SubmissionMode == rayv1.SidecarMode && finishedAt != nil && !isJobTerminal {
+			logger.Info("Submitter container exited but Ray job is still running.",
+				"JobId", rayJobInstance.Status.JobId, "JobStatus", jobInfo.JobStatus)
 		}
 
 		if isJobTerminal {
@@ -584,6 +614,23 @@ func getSubmitterContainer(rayJobInstance *rayv1.RayJob, rayClusterInstance *ray
 
 	if err := configureSubmitterContainer(&submitterContainer, rayJobInstance, rayClusterInstance, rayv1.SidecarMode); err != nil {
 		return corev1.Container{}, err
+	}
+
+	// When SidecarSubmitterRestart feature gate is enabled, configure per-container restart rules.
+	// This requires Kubernetes 1.34+ with ContainerRestartRules feature gate enabled.
+	if features.Enabled(features.SidecarSubmitterRestart) {
+		submitterContainer.RestartPolicy = ptr.To(corev1.ContainerRestartPolicyNever)
+		submitterContainer.RestartPolicyRules = []corev1.ContainerRestartRule{
+			{
+				Action: corev1.ContainerRestartRuleActionRestart,
+				ExitCodes: &corev1.ContainerRestartRuleOnExitCodes{
+					// Restart on any non-zero exit code (transient failures)
+					// TODO check if it is non-zero or a specific error code again
+					Operator: corev1.ContainerRestartRuleOnExitCodesOpNotIn,
+					Values:   []int32{0},
+				},
+			},
+		}
 	}
 
 	return submitterContainer, nil
