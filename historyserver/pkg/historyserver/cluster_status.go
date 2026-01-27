@@ -12,7 +12,6 @@ import (
 
 const (
 	timestampDisplayFormat = "2006-01-02 15:04:05.000000"
-	sessionTimestampFormat = "2006-01-02_15-04-05"
 )
 
 // ResourceDemand represents a pending resource request with count
@@ -25,7 +24,6 @@ type ResourceDemand struct {
 type ClusterStatusBuilder struct {
 	ActiveNodes map[string]int
 	IdleNodes   map[string]int
-	// We don't have pending node info from debug_state.txt
 	// TODO FailedNodes would need node_events
 	TotalResources map[string]float64
 	UsedResources  map[string]float64
@@ -41,25 +39,29 @@ func NewClusterStatusBuilder() *ClusterStatusBuilder {
 		TotalResources: make(map[string]float64),
 		UsedResources:  make(map[string]float64),
 		PendingDemands: []ResourceDemand{},
-		// TODO: Use debug_state timestamp or storage metadata instead of session start time.
-		Timestamp: time.Now(), // a fallback when parsing fails.
+		Timestamp:      time.Now(), // a fallback when no tasks and no actors have EndTime.
 	}
 }
 
-// ParseSessionTimestamp returns the session timestamp encoded in sessionName.
-// Expected format: "session_2006-01-02_15-04-05_123456"
-func ParseSessionTimestamp(sessionName string) (time.Time, bool) {
-	after, found := strings.CutPrefix(sessionName, "session_")
-	if !found || len(after) < len(sessionTimestampFormat) {
-		return time.Time{}, false
+// GetLastTimestamp returns the latest EndTime from tasks and actors.
+// This represents when the cluster was last active.
+// Returns zero time if no timestamps are available.
+func GetLastTimestamp(tasks []types.Task, actors []types.Actor) time.Time {
+	var latest time.Time
+
+	for _, task := range tasks {
+		if task.EndTime.After(latest) {
+			latest = task.EndTime
+		}
 	}
 
-	ts, err := time.Parse(sessionTimestampFormat, after[:len(sessionTimestampFormat)])
-	if err != nil {
-		return time.Time{}, false
+	for _, actor := range actors {
+		if actor.EndTime.After(latest) {
+			latest = actor.EndTime
+		}
 	}
 
-	return ts, true
+	return latest
 }
 
 // AddNodeFromDebugState adds node information from a parsed debug_state.txt

@@ -453,9 +453,6 @@ func (s *ServerHandler) getClusterStatus(req *restful.Request, resp *restful.Res
 // buildFormattedClusterStatus reconstructs the cluster status from debug_state.txt and pending tasks and actors
 func (s *ServerHandler) buildFormattedClusterStatus(clusterNameID, sessionName string) string {
 	builder := NewClusterStatusBuilder()
-	if ts, ok := ParseSessionTimestamp(sessionName); ok {
-		builder.Timestamp = ts
-	}
 
 	logsPath := sessionName + "/logs"
 	nodeIDs := s.reader.ListFiles(clusterNameID, logsPath)
@@ -485,6 +482,12 @@ func (s *ServerHandler) buildFormattedClusterStatus(clusterNameID, sessionName s
 
 	tasks := s.eventHandler.GetTasksBySessionName(clusterNameID, sessionName)
 	actors := s.eventHandler.GetActorsBySessionName(clusterNameID, sessionName)
+
+	// Use the last timestamp from tasks/actors to represent when the cluster was last active
+	// Other options are reading raylet.out or gcs_server.out but the files have 100k+ lines, which is inefficient
+	if ts := GetLastTimestamp(tasks, actors); !ts.IsZero() {
+		builder.Timestamp = ts
+	}
 
 	builder.AddPendingDemandsFromTasks(tasks)
 	builder.AddPendingDemandsFromActors(actors)
