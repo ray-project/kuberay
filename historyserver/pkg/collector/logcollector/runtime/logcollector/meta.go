@@ -70,7 +70,7 @@ func (r *RayLogHandler) PersistMeta() error {
 		}
 	}
 	// Datasets API is called by job ID, so we should handle it in a separate function
-	r.PersisMetaDatasetsSummary()
+	r.PersisDatasetsMeta()
 
 	return nil
 }
@@ -113,7 +113,7 @@ func (r *RayLogHandler) PersistUrlInfo(urlinfo *types.UrlInfo) ([]byte, error) {
 	return body, nil
 }
 
-func (r *RayLogHandler) PersisMetaDatasetsSummary() {
+func (r *RayLogHandler) PersisDatasetsMeta() {
 
 	body, err := r.PersistUrlInfo(JobsUrlInfo)
 	if err != nil {
@@ -122,7 +122,7 @@ func (r *RayLogHandler) PersisMetaDatasetsSummary() {
 	}
 	var jobsData = []interface{}{}
 	if err := json.Unmarshal(body, &jobsData); err != nil {
-		logrus.Errorf("Ummarshal resp body error %v. key %s repons body %s", err, JobsUrlInfo.Key, jobsData)
+		logrus.Errorf("Ummarshal resp body error %v. key: %s response body: %v", err, JobsUrlInfo.Key, jobsData)
 		return
 	}
 	currentJobIDs := make(map[string]string, 0)
