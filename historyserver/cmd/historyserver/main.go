@@ -30,7 +30,11 @@ func main() {
 	flag.BoolVar(&useKubernetesProxy, "use-kubernetes-proxy", false, "")
 	flag.Parse()
 
-	cliMgr := historyserver.NewClientManager(kubeconfigs, useKubernetesProxy)
+	cliMgr, err := historyserver.NewClientManager(kubeconfigs, useKubernetesProxy)
+	if err != nil {
+		logrus.Errorf("Failed to create client manager: %v", err)
+		os.Exit(1)
+	}
 
 	jsonData := make(map[string]interface{})
 	if runtimeClassConfigPath != "" {

@@ -2,6 +2,7 @@ package historyserver
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
@@ -36,29 +37,27 @@ func (c *ClientManager) ListRayClusters(ctx context.Context) ([]*rayv1.RayCluste
 	return list, nil
 }
 
-func NewClientManager(kubeconfigs string, useKubernetesProxy bool) *ClientManager {
+func NewClientManager(kubeconfigs string, useKubernetesProxy bool) (*ClientManager, error) {
 	kubeconfigList := []*rest.Config{}
 	if len(kubeconfigs) > 0 {
 		stringList := strings.Split(kubeconfigs, ",")
 		if len(stringList) > 1 {
 			// historyserver is able to get query from live gcs, which is not safe.
 			// we hope to replace these apis with one events.
-			logrus.Errorf("Only one kubeconfig is supported.")
+			return nil, fmt.Errorf("only one kubeconfig is supported")
 		}
-		for _, kubeconfig := range stringList {
-			if kubeconfig != "" {
-				c, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
-				if err != nil {
-					logrus.Errorf("Failed to build config from kubeconfig: %v", err)
-					continue
-				}
-				c.QPS = 50
-				c.Burst = 100
-				kubeconfigList = append(kubeconfigList, c)
-				logrus.Infof("add config from path: %v", kubeconfig)
-				break
-			}
+
+		if stringList[0] == "" {
+			return nil, fmt.Errorf("kubeconfig is empty")
 		}
+
+		c, err := clientcmd.BuildConfigFromFlags("", stringList[0])
+		if err != nil {
+			return nil, fmt.Errorf("failed to build config from kubeconfig: %w", err)
+		}
+		c.QPS = 50
+		c.Burst = 100
+		kubeconfigList = append(kubeconfigList, c)
 	} else {
 		var c *rest.Config
 		var err error
@@ -70,12 +69,12 @@ func NewClientManager(kubeconfigs string, useKubernetesProxy bool) *ClientManage
 			clientConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, configOverrides)
 			c, err = clientConfig.ClientConfig()
 			if err != nil {
-				logrus.Errorf("Failed to load default kubeconfig in Kubernetes proxy mode: %v", err)
+				return nil, fmt.Errorf("failed to load default kubeconfig in Kubernetes proxy mode: %w", err)
 			}
 		} else {
 			c, err = rest.InClusterConfig()
 			if err != nil {
-				logrus.Errorf("Failed to build config from in-cluster kubeconfig: %v", err)
+				return nil, fmt.Errorf("failed to build config from in-cluster kubeconfig: %w", err)
 			}
 		}
 		c.QPS = 50
@@ -95,9 +94,15 @@ func NewClientManager(kubeconfigs string, useKubernetesProxy bool) *ClientManage
 		}
 		clientList = append(clientList, c)
 	}
+
+	if len(clientList) == 0 {
+		return nil, fmt.Errorf("failed to create any client")
+	}
+
 	logrus.Infof("create client manager successfully, clients: %v", len(clientList))
-	return &ClientManager{
+	clientManager := &ClientManager{
 		configs: kubeconfigList,
 		clients: clientList,
 	}
+	return clientManager, nil
 }
