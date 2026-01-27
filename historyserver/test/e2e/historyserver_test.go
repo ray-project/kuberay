@@ -664,6 +664,7 @@ func verifyNodeSummarySchema(test Test, g *WithT, nodeSummary map[string]any) {
 	// Verify raylet field.
 	raylet, ok := nodeSummary["raylet"].(map[string]any)
 	g.Expect(ok).To(BeTrue(), "'raylet' should be a map")
+	g.Expect(raylet).To(HaveKey("storeStats"))
 	g.Expect(raylet).To(HaveKey("nodeId"))
 	g.Expect(raylet).To(HaveKey("nodeManagerAddress"))
 	g.Expect(raylet).To(HaveKey("nodeManagerHostname"))

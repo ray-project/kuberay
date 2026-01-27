@@ -1070,6 +1070,9 @@ func formatNodeSummaryReplayForResp(node eventtypes.Node, sessionName string) []
 			"gpus":     []int{0},
 			"tpus":     []int{0},
 			"raylet": map[string]interface{}{
+				"storeStats": map[string]interface{}{
+					"objectStoreBytesAvail": resourcesTotal["objectStoreMemory"],
+				},
 				"nodeId":                nodeId,
 				"nodeManagerAddress":    nodeIpAddress,
 				"nodeManagerHostname":   hostname,
