@@ -446,7 +446,7 @@ func (s *ServerHandler) getClusterStatus(req *restful.Request, resp *restful.Res
 		resp.WriteErrorString(http.StatusInternalServerError, err.Error())
 		return
 	}
-	resp.Header().Set("Content-Type", " application/json")
+	resp.Header().Set("Content-Type", "application/json")
 	resp.Write(respData)
 }
 
