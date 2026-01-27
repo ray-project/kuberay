@@ -1,14 +1,29 @@
 package historyserver
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
 	"path"
 	"sort"
+	"strings"
 
 	"github.com/sirupsen/logrus"
 
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
+)
+
+const (
+	// DEFAULT_LOG_LIMIT is the default number of lines to return when lines parameter is not specified or is 0.
+	// This matches Ray Dashboard API default behavior.
+	DEFAULT_LOG_LIMIT = 1000
+
+	// MAX_LOG_LIMIT is the maximum number of lines that can be requested.
+	// Requests exceeding this limit will be capped to this value.
+	MAX_LOG_LIMIT = 10000
 )
 
 func (s *ServerHandler) listClusters(limit int) []utils.ClusterInfo {
@@ -40,6 +55,9 @@ func (s *ServerHandler) listClusters(limit int) []utils.ClusterInfo {
 }
 
 func (s *ServerHandler) _getNodeLogs(rayClusterNameID, sessionId, nodeId, dir string) ([]byte, error) {
+	// TODO(nary): make logs/ response the same for live and dead cluster
+	// Live cluster: {"result": true, "msg": "", "data": {"result": {"agent": ["file1"], ...}}}
+	// Dead cluster: {"data": {"result": {"padding": ["file1", "file2", ...]}}}
 	logPath := path.Join(sessionId, "logs", nodeId)
 	if dir != "" {
 		logPath = path.Join(logPath, dir)
@@ -53,6 +71,68 @@ func (s *ServerHandler) _getNodeLogs(rayClusterNameID, sessionId, nodeId, dir st
 		},
 	}
 	return json.Marshal(ret)
+}
+
+func (s *ServerHandler) _getNodeLogFile(rayClusterNameID, sessionID, nodeID, filename string, maxLines int) ([]byte, error) {
+	logPath := path.Join(sessionID, "logs", nodeID, filename)
+
+	reader := s.reader.GetContent(rayClusterNameID, logPath)
+
+	if reader == nil {
+		return nil, utils.NewHTTPError(fmt.Errorf("log file not found: %s", logPath), http.StatusNotFound)
+	}
+
+	if maxLines < 0 {
+		// -1 means read all lines, match Ray Dashboard API behavior
+		return io.ReadAll(reader)
+	}
+
+	if maxLines == 0 {
+		maxLines = DEFAULT_LOG_LIMIT
+	}
+
+	if maxLines > MAX_LOG_LIMIT {
+		logrus.Warnf("Requested lines (%d) exceeds max limit (%d), capping to max", maxLines, MAX_LOG_LIMIT)
+		maxLines = MAX_LOG_LIMIT
+	}
+
+	scanner := bufio.NewScanner(reader)
+	buffer := make([]string, maxLines)
+	index := 0
+	totalLines := 0
+
+	// TODO(nary): Optimize this to prevent scanning through the whole log file to get last n lines
+	// Get the last N lines following Ray Dashboard API behavior with circular buffer
+	// Example with maxLines=3, file has 5 lines:
+	// 	Line 1: buffer[0], Line 2: buffer[1], Line 3: buffer[2]
+	// 	Line 4: buffer[0] (overwrites Line 1), Line 5: buffer[1] (overwrites Line 2)
+	// 	Final buffer: ["Line 4", "Line 5", "Line 3"]
+	for scanner.Scan() {
+		buffer[index%maxLines] = scanner.Text()
+		index++
+		totalLines++
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+
+	// Reconstruct lines in correct order
+	var lines []string
+	if totalLines <= maxLines {
+		// File has fewer lines than requested, return all
+		lines = buffer[:totalLines]
+	} else {
+		// Construct response with correct log line order from the circular buffer
+		// Example: buffer=["Line 4", "Line 5", "Line 3"], start=2
+		//   buffer[2:] = ["Line 3"] (oldest)
+		//   buffer[:2] = ["Line 4", "Line 5"] (newest)
+		//   Result: ["Line 3", "Line 4", "Line 5"]
+		start := index % maxLines
+		lines = append(buffer[start:], buffer[:start]...)
+	}
+
+	return []byte(strings.Join(lines, "\n")), nil
 }
 
 func (s *ServerHandler) GetNodes(rayClusterNameID, sessionId string) ([]byte, error) {

@@ -54,6 +54,18 @@ func ApplyRayClusterWithCollectorWithEnvs(test Test, g *WithT, namespace *corev1
 	return rayCluster
 }
 
+// injectCollectorRayClusterID injects the ray-cluster-id argument into all collector containers.
+func injectCollectorRayClusterID(containers []corev1.Container, rayClusterID string) {
+	for i := range containers {
+		if containers[i].Name == "collector" {
+			containers[i].Command = append(
+				containers[i].Command,
+				fmt.Sprintf("--ray-cluster-id=%s", rayClusterID),
+			)
+		}
+	}
+}
+
 // GetSessionIDFromHeadPod retrieves the sessionID from the Ray head pod by reading the symlink
 // /tmp/ray/session_latest and getting its basename.
 func GetSessionIDFromHeadPod(test Test, g *WithT, rayCluster *rayv1.RayCluster) string {

@@ -14,6 +14,8 @@ import (
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+
 	"github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
 	. "github.com/ray-project/kuberay/historyserver/test/support"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
@@ -87,7 +89,7 @@ func testCollectorUploadOnGracefulShutdown(test Test, g *WithT, namespace *corev
 	_ = ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 
 	// Define variables for constructing S3 object prefix.
-	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, RayClusterID)
+	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, namespace.Name)
 	sessionID := GetSessionIDFromHeadPod(test, g, rayCluster)
 	headNodeID := GetNodeIDFromPod(test, g, HeadPod(test, rayCluster), "ray-head")
 	workerNodeID := GetNodeIDFromPod(test, g, FirstWorkerPod(test, rayCluster), "ray-worker")
@@ -134,7 +136,7 @@ func testCollectorSeparatesFilesBySession(test Test, g *WithT, namespace *corev1
 	// Submit a Ray job to the existing cluster.
 	_ = ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 
-	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, RayClusterID)
+	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, namespace.Name)
 	sessionID := GetSessionIDFromHeadPod(test, g, rayCluster)
 	headNodeID := GetNodeIDFromPod(test, g, HeadPod(test, rayCluster), "ray-head")
 	workerNodeID := GetNodeIDFromPod(test, g, FirstWorkerPod(test, rayCluster), "ray-worker")
@@ -149,22 +151,7 @@ func testCollectorSeparatesFilesBySession(test Test, g *WithT, namespace *corev1
 	killContainerAndWaitForRestart(test, g, HeadPod(test, rayCluster), "ray-head")
 	killContainerAndWaitForRestart(test, g, FirstWorkerPod(test, rayCluster), "ray-worker")
 
-	// Verify the old session logs have been processed on disk.
-	dirs := []string{"prev-logs", "persist-complete-logs"}
-	for _, dir := range dirs {
-		dirPath := filepath.Join("/tmp/ray", dir, sessionID)
-		LogWithTimestamp(test.T(), "Checking if session directory %s exists in %s", sessionID, dirPath)
-		g.Eventually(func(gg Gomega) {
-			headPod, err := GetHeadPod(test, rayCluster)
-			gg.Expect(err).NotTo(HaveOccurred())
-			checkDirExistsCmd := fmt.Sprintf("test -d %s && echo 'exists' || echo 'not found'", dirPath)
-			stdout, stderr := ExecPodCmd(test, headPod, "ray-head", []string{"sh", "-c", checkDirExistsCmd})
-			gg.Expect(stderr.String()).To(BeEmpty())
-			gg.Expect(strings.TrimSpace(stdout.String())).To(Equal("exists"), "Session directory %s should exist in %s", sessionID, dirPath)
-		}, TestTimeoutMedium).Should(Succeed(), "Session directory %s should exist in %s", sessionID, dirPath)
-	}
-
-	// Verify logs, node_events, and job_events are successfully uploaded to S3.
+	verifySessionDirectoriesExist(test, g, rayCluster, sessionID)
 	verifyS3SessionDirs(test, g, s3Client, sessionPrefix, headNodeID, workerNodeID)
 
 	DeleteS3Bucket(test, g, s3Client)
@@ -196,7 +183,7 @@ func testCollectorResumesUploadsOnRestart(test Test, g *WithT, namespace *corev1
 	// Use namespace name to ensure test isolation (avoid conflicts from previous test runs)
 	dummySessionID := fmt.Sprintf("test-recovery-session-%s", namespace.Name)
 	dummyNodeID := fmt.Sprintf("head-node-%s", namespace.Name)
-	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, RayClusterID)
+	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, namespace.Name)
 	sessionPrefix := fmt.Sprintf("log/%s/%s/", clusterNameID, dummySessionID)
 
 	// Inject "leftover" logs BEFORE killing collector.
@@ -292,6 +279,20 @@ func testCollectorResumesUploadsOnRestart(test Test, g *WithT, namespace *corev1
 	}, TestTimeoutMedium).Should(Succeed())
 
 	DeleteS3Bucket(test, g, s3Client)
+}
+
+func verifySessionDirectoriesExist(test Test, g *WithT, rayCluster *rayv1.RayCluster, sessionID string) {
+	for _, dir := range []string{"prev-logs", "persist-complete-logs"} {
+		dirPath := filepath.Join("/tmp/ray", dir, sessionID)
+		LogWithTimestamp(test.T(), "Checking if session directory %s exists in %s", sessionID, dirPath)
+		g.Eventually(func(gg Gomega) {
+			headPod, err := GetHeadPod(test, rayCluster)
+			gg.Expect(err).NotTo(HaveOccurred())
+			stdout, stderr := ExecPodCmd(test, headPod, "ray-head", []string{"sh", "-c", fmt.Sprintf("test -d %s && echo 'exists' || echo 'not found'", dirPath)})
+			gg.Expect(stderr.String()).To(BeEmpty())
+			gg.Expect(strings.TrimSpace(stdout.String())).To(Equal("exists"), "Session directory %s should exist in %s", sessionID, dirPath)
+		}, TestTimeoutMedium).Should(Succeed(), "Session directory %s should exist in %s", sessionID, dirPath)
+	}
 }
 
 // verifyS3SessionDirs verifies file contents in logs/, node_events/, and job_events/ directories under a session prefix in S3.
