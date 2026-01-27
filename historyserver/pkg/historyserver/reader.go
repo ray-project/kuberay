@@ -3,6 +3,7 @@ package historyserver
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"path"
 	"sort"
@@ -83,4 +84,16 @@ func (s *ServerHandler) GetNodes(rayClusterNameID, sessionId string) ([]byte, er
 // TODO: implement this
 func (h *ServerHandler) getGrafanaHealth(req *restful.Request, resp *restful.Response) {
 	resp.WriteErrorString(http.StatusNotImplemented, "Grafana health not yet supported")
+}
+
+func (s *ServerHandler) MetaKeyInfo(rayClusterNameID, key string) []byte {
+	baseObject := path.Join(utils.GetMetaDirByNameID(s.rootDir, rayClusterNameID), key)
+	logrus.Infof("Prepare to get object %s info ...", baseObject)
+	body := s.reader.GetContent(rayClusterNameID, baseObject)
+	data, err := io.ReadAll(body)
+	if err != nil {
+		logrus.Errorf("Failed to read all data from object %s : %v", baseObject, err)
+		return nil
+	}
+	return data
 }
