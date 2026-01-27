@@ -46,6 +46,8 @@ func TestHistoryServer(t *testing.T) {
 		{
 			name:     "/v0/logs/file endpoint (dead cluster)",
 			testFunc: testLogFileEndpointDeadCluster,
+		},
+		{
 			name:     "/api/v0/tasks/timeline endpoint (live cluster)",
 			testFunc: testTimelineEndpointLiveCluster,
 		},
@@ -193,13 +195,6 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 
 	DeleteS3Bucket(test, g, s3Client)
 	LogWithTimestamp(test.T(), "Dead cluster log file endpoint tests completed")
-	test.T().Run("should return timeline data from S3", func(t *testing.T) {
-		g := NewWithT(t)
-		verifyTimelineResponse(g, client, historyServerURL)
-	})
-
-	DeleteS3Bucket(test, g, s3Client)
-	LogWithTimestamp(test.T(), "Dead cluster timeline endpoint test completed")
 }
 
 // testTimelineEndpointLiveCluster verifies that the history server can return timeline data from a live cluster.

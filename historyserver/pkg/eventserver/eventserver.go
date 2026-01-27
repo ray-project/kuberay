@@ -7,6 +7,7 @@ import (
 	"io"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -619,9 +620,16 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 		// Convert events to ProfileEventRaw format
 		var rawEvents []types.ProfileEventRaw
 		for _, e := range profileData.ProfileEvents.Events {
-			var startTime, endTime int64
-			fmt.Sscanf(e.StartTime, "%d", &startTime)
-			fmt.Sscanf(e.EndTime, "%d", &endTime)
+			startTime, err := strconv.ParseInt(e.StartTime, 10, 64)
+			if err != nil {
+				logrus.Warnf("Failed to parse StartTime '%s': %v", e.StartTime, err)
+				continue
+			}
+			endTime, err := strconv.ParseInt(e.EndTime, 10, 64)
+			if err != nil {
+				logrus.Warnf("Failed to parse EndTime '%s': %v", e.EndTime, err)
+				continue
+			}
 
 			rawEvents = append(rawEvents, types.ProfileEventRaw{
 				EventName: e.EventName,
@@ -1237,7 +1245,7 @@ func (h *EventHandler) GetTasksTimeline(clusterName string, jobID string) []type
 		return []types.ChromeTraceEvent{}
 	}
 
-	var events []types.ChromeTraceEvent
+	events := []types.ChromeTraceEvent{}
 
 	// Build PID/TID mappings
 	// PID: Node IP -> numeric ID
