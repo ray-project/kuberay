@@ -880,7 +880,7 @@ func (h *EventHandler) GetJobsMap(clusterName string) map[string]types.Job {
 	}
 
 	jobMap.Lock()
-	defer jobMap.UnLock()
+	defer jobMap.Unlock()
 
 	jobs := make(map[string]types.Job, len(jobMap.JobMap))
 	for id, job := range jobMap.JobMap {
@@ -899,7 +899,7 @@ func (h *EventHandler) GetJobByJobID(clusterName, jobID string) (types.Job, bool
 	}
 
 	jobMap.Lock()
-	defer jobMap.UnLock()
+	defer jobMap.Unlock()
 
 	job, ok := jobMap.JobMap[jobID]
 	if !ok {

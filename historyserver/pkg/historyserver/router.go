@@ -80,7 +80,7 @@ func routerAPI(s *ServerHandler) {
 		Doc("get prometheus_health").
 		Writes("")) // Placeholder for specific return type
 
-	ws.Route(ws.GET("/jobs").To(s.getJobs).Filter(s.CookieHandle).
+	ws.Route(ws.GET("/jobs/").To(s.getJobs).Filter(s.CookieHandle).
 		Doc("get driver jobs").
 		Writes("")) // Placeholder for specific return type
 

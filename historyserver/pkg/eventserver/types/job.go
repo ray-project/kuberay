@@ -79,7 +79,7 @@ func (j *JobMap) Lock() {
 	j.Mu.Lock()
 }
 
-func (j *JobMap) UnLock() {
+func (j *JobMap) Unlock() {
 	j.Mu.Unlock()
 }
 
@@ -129,7 +129,7 @@ func (c *ClusterJobMap) GetOrCreateJobMap(clusterName string) *JobMap {
 // represents the status of the progress of the job.
 func (j *JobMap) CreateOrMergeJob(jobId string, mergeFn func(*Job)) {
 	j.Lock()
-	defer j.UnLock()
+	defer j.Unlock()
 
 	job, exist := j.JobMap[jobId]
 	if !exist {
