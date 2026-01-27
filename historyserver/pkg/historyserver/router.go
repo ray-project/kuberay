@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -1103,13 +1104,11 @@ func formatNodeResourceReplayForResp(node eventtypes.Node) []map[string]interfac
 	nodeResourceReplay := make([]map[string]interface{}, 0)
 	for _, tr := range node.StateTransitions {
 		transitionTimestamp := tr.Timestamp.UnixMilli()
-		// resourcesTotal := convertResourcesToAPISchema(tr.Resources)
 
 		// Create a resource snapshot.
 		nodeResourceSnapshot := map[string]interface{}{
-			"t": transitionTimestamp,
-			// TODO(jwj): Convert to ray resource string.
-			"resourceString": "dummy",
+			"t":              transitionTimestamp,
+			"resourceString": constructResourceString(tr.Resources),
 		}
 		nodeResourceReplay = append(nodeResourceReplay, nodeResourceSnapshot)
 	}
@@ -1165,4 +1164,43 @@ func composeStateMessage(deathReason string, deathReasonMessage string) string {
 		}
 	}
 	return stateMessage
+}
+
+// constructResourceString constructs a resource string based on the resources in state transition.
+// Ref: https://github.com/ray-project/ray/blob/f953f199b5d68d47c07c865c5ebcd2333d49f365/python/ray/autoscaler/_private/util.py#L643-L665.
+func constructResourceString(resources map[string]float64) string {
+	resourceString := ""
+	for k, v := range resources {
+		if k == "memory" || k == "object_store_memory" {
+			formattedUsed := "0B"
+			formattedTotal := formatMemory(v)
+			resourceString += fmt.Sprintf("%s/%s %s", formattedUsed, formattedTotal, k)
+		} else if k == "CPU" {
+			resourceString += fmt.Sprintf("%.1f/%.1f %s", 0.0, v, k)
+		} else {
+			continue
+		}
+
+		resourceString += "\n"
+	}
+	resourceString = strings.TrimSuffix(resourceString, "\n")
+
+	return resourceString
+}
+
+// formatMemory formats a memory value to a human-readable string.
+func formatMemory(memBytes float64) string {
+	memorySuffixes := map[string]float64{
+		"TiB": math.Pow(2, 40),
+		"GiB": math.Pow(2, 30),
+		"MiB": math.Pow(2, 20),
+		"KiB": math.Pow(2, 10),
+	}
+	for memSuffix, memBytesPerUnit := range memorySuffixes {
+		if memBytes >= memBytesPerUnit {
+			memInUnit := memBytes / memBytesPerUnit
+			return fmt.Sprintf("%.2f%s", memInUnit, memSuffix)
+		}
+	}
+	return fmt.Sprintf("%dB", int(memBytes))
 }
