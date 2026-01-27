@@ -12,6 +12,7 @@ import (
 
 const (
 	timestampDisplayFormat = "2006-01-02 15:04:05.000000"
+	sessionTimestampFormat = "2006-01-02_15-04-05"
 )
 
 // ResourceDemand represents a pending resource request with count
@@ -41,6 +42,29 @@ func NewClusterStatusBuilder() *ClusterStatusBuilder {
 		PendingDemands: []ResourceDemand{},
 		Timestamp:      time.Now(), // a fallback when no tasks and no actors have EndTime.
 	}
+}
+
+// ParseSessionTimestamp parses the session timestamp from sessionName.
+// Expected format: "session_2006-01-02_15-04-05_123456" or "session_2006-01-02_15-04-05_123456_1"
+// Returns zero time if parsing fails.
+func ParseSessionTimestamp(sessionName string) time.Time {
+	rest, ok := strings.CutPrefix(sessionName, "session_")
+	if !ok {
+		return time.Time{}
+	}
+
+	parts := strings.Split(rest, "_")
+	if len(parts) < 2 {
+		return time.Time{}
+	}
+
+	tsStr := parts[0] + "_" + parts[1]
+	ts, err := time.Parse(sessionTimestampFormat, tsStr)
+	if err != nil {
+		return time.Time{}
+	}
+
+	return ts
 }
 
 // GetLastTimestamp returns the latest EndTime from tasks and actors.

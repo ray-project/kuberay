@@ -483,9 +483,12 @@ func (s *ServerHandler) buildFormattedClusterStatus(clusterNameID, sessionName s
 	tasks := s.eventHandler.GetTasksBySessionName(clusterNameID, sessionName)
 	actors := s.eventHandler.GetActorsBySessionName(clusterNameID, sessionName)
 
-	// Use the last timestamp from tasks/actors to represent when the cluster was last active
-	// Other options are reading raylet.out or gcs_server.out but the files have 100k+ lines, which is inefficient
+	// Use the last timestamp from tasks/actors to represent when the cluster was last active.
+	// Fallback to session timestamp if no task/actor timestamps are available.
+	// Other options are reading raylet.out or gcs_server.out but the files have 100k+ lines, which is inefficient.
 	if ts := GetLastTimestamp(tasks, actors); !ts.IsZero() {
+		builder.Timestamp = ts
+	} else if ts := ParseSessionTimestamp(sessionName); !ts.IsZero() {
 		builder.Timestamp = ts
 	}
 
