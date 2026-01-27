@@ -22,8 +22,14 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	batchv1 "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
+	ctrl "sigs.k8s.io/controller-runtime"
+	clientFake "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
@@ -189,6 +195,98 @@ var _ = Context("RayJob with suspend operation", func() {
 			Eventually(
 				getRayJobDeploymentStatus(ctx, rayJob),
 				time.Second*3, time.Millisecond*500).Should(Equal(rayv1.JobDeploymentStatusSuspended), "JobDeploymentStatus = %v", rayJob.Status.JobDeploymentStatus)
+		})
+	})
+
+	Describe("When RayJob is suspended and should not requeue", Ordered, func() {
+		var reconciler *RayJobReconciler
+		var rayJob *rayv1.RayJob
+		namespace := "default"
+
+		BeforeAll(func() {
+			newScheme := runtime.NewScheme()
+			_ = rayv1.AddToScheme(newScheme)
+			_ = corev1.AddToScheme(newScheme)
+
+			rayJob = rayJobTemplate("test-suspended-rayjob", namespace)
+			rayJob.Spec.Suspend = true
+			rayJob.Status = rayv1.RayJobStatus{
+				JobDeploymentStatus: rayv1.JobDeploymentStatusSuspended,
+				JobStatus:           rayv1.JobStatusNew,
+			}
+
+			fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(rayJob).WithStatusSubresource(rayJob).Build()
+			recorder := record.NewFakeRecorder(100)
+
+			reconciler = &RayJobReconciler{
+				Client:   fakeClient,
+				Recorder: recorder,
+				Scheme:   newScheme,
+			}
+		})
+
+		It("should reconcile without error", func() {
+			result, err := reconciler.Reconcile(context.Background(), ctrl.Request{
+				NamespacedName: types.NamespacedName{
+					Name:      rayJob.Name,
+					Namespace: rayJob.Namespace,
+				},
+			})
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.RequeueAfter).To(Equal(time.Duration(0)), "Expected no requeue delay when RayJob is suspended")
+		})
+	})
+
+	Describe("When suspended RayJob transitions to New status", Ordered, func() {
+		var reconciler *RayJobReconciler
+		var rayJob *rayv1.RayJob
+		namespace := "default"
+
+		BeforeAll(func() {
+			newScheme := runtime.NewScheme()
+			_ = rayv1.AddToScheme(newScheme)
+			_ = corev1.AddToScheme(newScheme)
+
+			rayJob = rayJobTemplate("test-suspended-transition-rayjob", namespace)
+			rayJob.Spec.Suspend = false
+			rayJob.Status = rayv1.RayJobStatus{
+				JobDeploymentStatus: rayv1.JobDeploymentStatusSuspended,
+				JobStatus:           rayv1.JobStatusNew,
+			}
+
+			client := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(rayJob).WithStatusSubresource(rayJob).Build()
+			recorder := record.NewFakeRecorder(100)
+
+			reconciler = &RayJobReconciler{
+				Client:   client,
+				Recorder: recorder,
+				Scheme:   newScheme,
+			}
+		})
+
+		It("should reconcile without error and trigger requeue", func() {
+			result, err := reconciler.Reconcile(context.Background(), ctrl.Request{
+				NamespacedName: types.NamespacedName{
+					Name:      rayJob.Name,
+					Namespace: rayJob.Namespace,
+				},
+			})
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.RequeueAfter).To(BeNumerically(">", 0), "Expected to requeue after transitioning from Suspended to New")
+		})
+
+		It("should transition to New status", func() {
+			updatedRayJob := &rayv1.RayJob{}
+			err := reconciler.Client.Get(context.Background(), types.NamespacedName{
+				Name:      rayJob.Name,
+				Namespace: rayJob.Namespace,
+			}, updatedRayJob)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(updatedRayJob.Status.JobDeploymentStatus).To(Equal(rayv1.JobDeploymentStatusNew), "Expected JobDeploymentStatus to transition to New")
+			Expect(updatedRayJob.Status.JobStatus).To(Equal(rayv1.JobStatusNew), "Expected JobStatus to transition to New")
 		})
 	})
 })
