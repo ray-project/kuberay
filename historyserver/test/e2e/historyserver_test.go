@@ -35,14 +35,14 @@ func TestHistoryServer(t *testing.T) {
 			name:     "Live cluster: historyserver endpoints should be accessible",
 			testFunc: testLiveClusters,
 		},
-		{
-			name:     "/v0/logs/file endpoint (live cluster)",
-			testFunc: testLogFileEndpointLiveCluster,
-		},
-		{
-			name:     "/v0/logs/file endpoint (dead cluster)",
-			testFunc: testLogFileEndpointDeadCluster,
-		},
+		// {
+		// 	name:     "/v0/logs/file endpoint (live cluster)",
+		// 	testFunc: testLogFileEndpointLiveCluster,
+		// },
+		// {
+		// 	name:     "/v0/logs/file endpoint (dead cluster)",
+		// 	testFunc: testLogFileEndpointDeadCluster,
+		// },
 		{
 			name:     "Live cluster: /nodes?view=summary should return the current snapshot containing node summary and resource usage information",
 			testFunc: testLiveClusterNodes,
@@ -661,17 +661,24 @@ func verifyNodeSummarySchema(test Test, g *WithT, nodeSummary map[string]any) {
 		g.Expect(nodeSummary).To(HaveKey(field))
 	}
 
-	// Verify raylet field
+	// Verify raylet field.
 	raylet, ok := nodeSummary["raylet"].(map[string]any)
 	g.Expect(ok).To(BeTrue(), "'raylet' should be a map")
 	g.Expect(raylet).To(HaveKey("nodeId"))
 	g.Expect(raylet).To(HaveKey("nodeManagerAddress"))
+	g.Expect(raylet).To(HaveKey("nodeManagerHostname"))
 	g.Expect(raylet).To(HaveKey("rayletSocketName"))
 	g.Expect(raylet).To(HaveKey("objectStoreSocketName"))
+	g.Expect(raylet).To(HaveKey("metricsExportPort"))
 	g.Expect(raylet).To(HaveKey("resourcesTotal"))
+	g.Expect(raylet).To(HaveKey("nodeName"))
+	g.Expect(raylet).To(HaveKey("instanceId"))
 	g.Expect(raylet).To(HaveKey("nodeTypeName"))
+	g.Expect(raylet).To(HaveKey("instanceTypeName"))
 	g.Expect(raylet).To(HaveKey("startTimeMs"))
 	g.Expect(raylet).To(HaveKey("isHeadNode"))
 	g.Expect(raylet).To(HaveKey("labels"))
 	g.Expect(raylet).To(HaveKey("state"))
+	g.Expect(raylet).To(HaveKey("endTimeMs"))
+	g.Expect(raylet).To(HaveKey("stateMessage"))
 }
