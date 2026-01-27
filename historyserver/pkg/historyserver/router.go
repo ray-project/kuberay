@@ -6,7 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/emicklei/go-restful/v3"
@@ -113,7 +115,7 @@ func routerAPI(s *ServerHandler) {
 		Doc("get logfile").Param(ws.QueryParameter("node_id", "node_id")).
 		Param(ws.QueryParameter("filename", "filename")).
 		Param(ws.QueryParameter("lines", "lines")).
-		Param(ws.QueryParameter("format", "format")).
+		Produces("text/plain").
 		Writes("")) // Placeholder for specific return type
 
 	ws.Route(ws.GET("/v0/tasks").To(s.getTaskDetail).Filter(s.CookieHandle).
@@ -610,14 +612,60 @@ func (s *ServerHandler) getLogicalActor(req *restful.Request, resp *restful.Resp
 }
 
 func (s *ServerHandler) getNodeLogFile(req *restful.Request, resp *restful.Response) {
+	clusterNameID := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
+	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
 	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
+
+	// Parse query parameters
+	nodeID := req.QueryParameter("node_id")
+	filename := req.QueryParameter("filename")
+	lines := req.QueryParameter("lines")
+
+	// Validate required parameters
+	if nodeID == "" {
+		resp.WriteErrorString(http.StatusBadRequest, "Missing required parameter: node_id")
+		return
+	}
+	if filename == "" {
+		resp.WriteErrorString(http.StatusBadRequest, "Missing required parameter: filename")
+		return
+	}
+
+	// Prevent path traversal attacks (e.g., ../../etc/passwd)
+	if !fs.ValidPath(nodeID) || !fs.ValidPath(filename) {
+		resp.WriteErrorString(http.StatusBadRequest, fmt.Sprintf("invalid path: path traversal not allowed (node_id=%s, filename=%s)", nodeID, filename))
+		return
+	}
+
 	if sessionName == "live" {
 		s.redirectRequest(req, resp)
 		return
 	}
 
-	// Not yet supported
-	resp.WriteErrorString(http.StatusNotImplemented, "Node log file not yet supported")
+	// Convert lines parameter to int
+	maxLines := 0
+	if lines != "" {
+		parsedLines, err := strconv.Atoi(lines)
+		if err != nil {
+			resp.WriteErrorString(http.StatusBadRequest, fmt.Sprintf("invalid lines parameter: %s", lines))
+			return
+		}
+		maxLines = parsedLines
+	}
+
+	content, err := s._getNodeLogFile(clusterNameID+"_"+clusterNamespace, sessionName, nodeID, filename, maxLines)
+	if err != nil {
+		var httpErr *utils.HTTPError
+		if errors.As(err, &httpErr) {
+			logrus.Errorf("Error getting node log file: %v", httpErr.Unwrap())
+			resp.WriteError(httpErr.StatusCode(), httpErr)
+		} else {
+			logrus.Errorf("Error getting node log file: %v", err)
+			resp.WriteError(http.StatusInternalServerError, err)
+		}
+		return
+	}
+	resp.Write(content)
 }
 
 func (s *ServerHandler) getTaskSummarize(req *restful.Request, resp *restful.Response) {
@@ -828,6 +876,13 @@ func (s *ServerHandler) CookieHandle(req *restful.Request, resp *restful.Respons
 		resp.WriteHeaderAndEntity(http.StatusBadRequest, "Cluster Namespace Cookie not found")
 		return
 	}
+
+	// Validate cookie values to prevent path traversal attacks
+	if !fs.ValidPath(clusterName.Value) || !fs.ValidPath(clusterNamespace.Value) || !fs.ValidPath(sessionName.Value) {
+		resp.WriteHeaderAndEntity(http.StatusBadRequest, fmt.Sprintf("invalid cookie values: path traversal not allowed (cluster_name=%s, cluster_namespace=%s, session_name=%s)", clusterName.Value, clusterNamespace.Value, sessionName.Value))
+		return
+	}
+
 	http.SetCookie(resp, &http.Cookie{MaxAge: 600, Path: "/", Name: COOKIE_CLUSTER_NAME_KEY, Value: clusterName.Value})
 	http.SetCookie(resp, &http.Cookie{MaxAge: 600, Path: "/", Name: COOKIE_CLUSTER_NAMESPACE_KEY, Value: clusterNamespace.Value})
 	http.SetCookie(resp, &http.Cookie{MaxAge: 600, Path: "/", Name: COOKIE_SESSION_NAME_KEY, Value: sessionName.Value})
