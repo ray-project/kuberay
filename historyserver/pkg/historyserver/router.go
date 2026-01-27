@@ -377,6 +377,14 @@ func (s *ServerHandler) getJobs(req *restful.Request, resp *restful.Response) {
 
 // formatJobForResponse will convert eventtypes.Job to the format expected by Ray Dashboard
 func formatJobForResponse(job eventtypes.Job) map[string]interface{} {
+	// If SubmissionID is empty, try to get it from metadata
+	submissionID := job.SubmissionID
+	if submissionID == "" && job.Config.Metadata != nil {
+		if metaSubmissionID, ok := job.Config.Metadata["job_submission_id"]; ok {
+			submissionID = metaSubmissionID
+		}
+	}
+
 	result := map[string]interface{}{
 		"driver_exit_code":          job.DriverExitCode,
 		"driver_node_id":            job.DriverNodeID,
@@ -392,8 +400,9 @@ func formatJobForResponse(job eventtypes.Job) map[string]interface{} {
 			"node_ip_address": job.DriverNodeIPAddress,
 			"pid":             job.DriverPID,
 		},
-		"job_id": job.JobID,
-		"type":   string(job.JobType),
+		"job_id":        job.JobID,
+		"submission_id": submissionID,
+		"type":          string(job.JobType),
 	}
 
 	if !job.StartTime.IsZero() {
