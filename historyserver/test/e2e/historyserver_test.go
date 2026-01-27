@@ -294,8 +294,11 @@ func verifyTimelineResponse(g *WithT, client *http.Client, historyServerURL stri
 
 			if name == "process_name" && ph == "M" {
 				hasProcessName = true
-				args, ok := event["args"].(map[string]any)
-				gg.Expect(ok).To(BeTrue(), "process_name should have args")
+				argsAny, exists := event["args"]
+				gg.Expect(exists).To(BeTrue(), "process_name should have 'args' field")
+
+				args, ok := argsAny.(map[string]any)
+				gg.Expect(ok).To(BeTrue(), "process_name args should be a map[string]any")
 				gg.Expect(args["name"]).NotTo(BeNil(), "process_name args should have 'name'")
 			}
 			if name == "thread_name" && ph == "M" {
@@ -310,8 +313,11 @@ func verifyTimelineResponse(g *WithT, client *http.Client, historyServerURL stri
 				gg.Expect(event["args"]).NotTo(BeNil(), "Trace event should have 'args'")
 
 				// Verify args structure
-				args, ok := event["args"].(map[string]any)
-				gg.Expect(ok).To(BeTrue())
+				argsAny, exists := event["args"]
+				gg.Expect(exists).To(BeTrue(), "Trace event should have 'args' field")
+
+				args, ok := argsAny.(map[string]any)
+				gg.Expect(ok).To(BeTrue(), "Trace event args should be a map[string]any")
 				gg.Expect(args["task_id"]).NotTo(BeNil(), "args should have 'task_id'")
 				gg.Expect(args["job_id"]).NotTo(BeNil(), "args should have 'job_id'")
 			}
