@@ -1327,10 +1327,18 @@ func (h *EventHandler) GetTasksTimeline(clusterName string, jobID string) []type
 		if !ok {
 			continue
 		}
+		// Skip if workerID is empty (consistent with first pass)
+		if workerID == "" {
+			continue
+		}
 
 		var tidPtr *int
 		if tid, ok := workerToTID[nodeIP][workerID]; ok {
 			tidPtr = &tid
+		} else {
+			// This shouldn't happen if first pass worked correctly,
+			// but skip to avoid null TID
+			continue
 		}
 
 		for _, profEvent := range task.ProfileData.Events {
