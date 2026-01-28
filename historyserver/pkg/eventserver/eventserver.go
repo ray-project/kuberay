@@ -791,6 +791,12 @@ func (h *EventHandler) handleNodeLifecycleEvent(eventMap map[string]any, cluster
 		return fmt.Errorf("failed to convert node ID from base64 to hex: %w", err)
 	}
 
+	// A NODE_LIFECYCLE_EVENT must have at least one state transition.
+	// Ref: https://github.com/ray-project/ray/blob/221a19395a836fada12ebb2bac7bff00a666faa5/src/ray/protobuf/public/events_node_lifecycle_event.proto#L58-L61.
+	if len(currNode.StateTransitions) == 0 {
+		return fmt.Errorf("node lifecycle event does not have any state transitions")
+	}
+
 	nodeMap := h.ClusterNodeMap.GetOrCreateNodeMap(clusterSessionID)
 	nodeMap.CreateOrMergeNode(currNode.NodeID, func(n *types.Node) {
 		// Merge state transitions.
