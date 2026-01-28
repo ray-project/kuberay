@@ -51,21 +51,25 @@ type NodeStateTransition struct {
 	Resources map[string]float64 `json:"resources,omitempty"`
 
 	// Reason why a node died (UNSPECIFIED, EXPECTED_TERMINATION, UNEXPECTED_TERMINATION, AUTOSCALER_DRAIN_PREEMPTED, AUTOSCALER_DRAIN_IDLE),
-	// available only in the DEAD state
+	// available only in the DEAD state.
 	DeathInfo *NodeDeathInfo `json:"deathInfo,omitempty"`
 
 	// Sub-state of a node in the ALIVE state (UNSPECIFIED, DRAINING), available only in the ALIVE state.
 	AliveSubState NodeAliveSubState `json:"aliveSubState,omitempty"`
 }
 
+// GetState returns the state of the node.
 func (n NodeStateTransition) GetState() string {
 	return string(n.State)
 }
 
+// GetTimestamp returns the timestamp of the node state transition.
 func (n NodeStateTransition) GetTimestamp() time.Time {
 	return n.Timestamp
 }
 
+// Node represents a Ray node in a cluster session. The fields are populated from both
+// the NODE_DEAD_EVENT and the NODE_LIFECYCLE_EVENT.
 type Node struct {
 	// NodeID is the hexadecimal representation of the node ID.
 	NodeID         string            `json:"nodeId"`
@@ -105,6 +109,7 @@ func NewNodeMap() *NodeMap {
 }
 
 type ClusterNodeMap struct {
+	// ClusterNodeMap is a map of cluster session ID to NodeMap.
 	ClusterNodeMap map[string]*NodeMap
 	Mu             sync.RWMutex
 }

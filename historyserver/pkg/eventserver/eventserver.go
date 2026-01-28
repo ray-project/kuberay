@@ -206,6 +206,8 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 		return fmt.Errorf("clusterName is not a string, got %T", clusterNameVal)
 	}
 
+	// Since a cluster session corresponds to an unique Ray cluster lifecycle,
+	// we use the combined cluster name and session name for identification.
 	sessionNameVal, ok := eventMap["sessionName"]
 	if !ok {
 		return fmt.Errorf("event missing 'sessionName' field")
@@ -801,6 +803,7 @@ func (h *EventHandler) handleNodeLifecycleEvent(eventMap map[string]any, cluster
 	return nil
 }
 
+// GetNodeMap returns a thread-safe deep copy of all nodes for a given cluster session.
 func (h *EventHandler) GetNodeMap(clusterSessionID string) map[string]types.Node {
 	h.ClusterNodeMap.RLock()
 	defer h.ClusterNodeMap.RUnlock()
