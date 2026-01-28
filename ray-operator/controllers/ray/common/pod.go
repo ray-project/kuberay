@@ -943,7 +943,7 @@ func addWellKnownAcceleratorResources(rayStartParams map[string]string, resource
 		// Scan for resource keys of gpus
 		if _, ok := rayStartParams["num-gpus"]; !ok {
 			if utils.IsGPUResourceKey(resourceKeyString) && !resourceValue.IsZero() {
-				rayStartParams["num-gpus"] = strconv.FormatInt(resourceValue.Value(), 10)
+				rayStartParams["num-gpus"] = strconv.FormatFloat(resourceValue.AsApproximateFloat64(), 'f', -1, 64)
 			}
 		}
 
