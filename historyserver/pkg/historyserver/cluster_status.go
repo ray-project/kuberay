@@ -243,18 +243,22 @@ func formatResourceValue(resource string, value float64) string {
 
 // formatBytes formats bytes as a human-readable string (e.g., "1.50GiB")
 func formatBytes(bytes float64) string {
-	const unit = 1024
+	const unit = 1024.0
 	if bytes < unit {
 		return fmt.Sprintf("%.0fB", bytes)
 	}
 
-	div, exp := float64(unit), 0
-	for n := bytes / unit; n >= unit; n /= unit {
-		div *= unit
+	units := []string{"KiB", "MiB", "GiB", "TiB", "PiB", "EiB"}
+	n := len(units)
+
+	value := bytes / unit // turn into KiB first
+	exp := 0
+	for value >= unit && exp < n-1 {
+		value /= unit
 		exp++
 	}
 
-	return fmt.Sprintf("%.2f%ciB", bytes/div, "KMGTPE"[exp])
+	return fmt.Sprintf("%.2f%s", value, units[exp])
 }
 
 func formatResourceMapForDisplay(resources map[string]float64) string {

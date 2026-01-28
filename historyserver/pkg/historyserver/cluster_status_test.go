@@ -45,3 +45,25 @@ func TestFormatStatus(t *testing.T) {
 
 	t.Logf("Generated status:\n%s", status)
 }
+
+func TestFormatBytes(t *testing.T) {
+	testcases := []struct {
+		name     string
+		bytes    float64
+		expected string
+	}{
+		{"bytes", 512, "512B"},
+		{"KiB", 1024, "1.00KiB"},
+		{"MiB", 1024 * 1024, "1.00MiB"},
+		{"GiB", 1.5 * 1024 * 1024 * 1024, "1.50GiB"},
+		{"Zero", 0, "0B"},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := formatBytes(tc.bytes)
+			if got != tc.expected {
+				t.Fatalf("formatBytes(%f) = %q, want %q", tc.bytes, got, tc.expected)
+			}
+		})
+	}
+}
