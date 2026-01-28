@@ -236,6 +236,17 @@ var _ = Context("RayJob with suspend operation", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result.RequeueAfter).To(Equal(time.Duration(0)), "Expected no requeue delay when RayJob is suspended")
 		})
+
+		It("should not modify the status", func() {
+			updatedRayJob := &rayv1.RayJob{}
+			err := reconciler.Client.Get(context.Background(), types.NamespacedName{
+				Name:      rayJob.Name,
+				Namespace: rayJob.Namespace,
+			}, updatedRayJob)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(updatedRayJob.Status.JobDeploymentStatus).To(Equal(rayv1.JobDeploymentStatusSuspended), "Expected JobDeploymentStatus to remain Suspended")
+		})
 	})
 
 	Describe("When suspended RayJob transitions to New status", Ordered, func() {
