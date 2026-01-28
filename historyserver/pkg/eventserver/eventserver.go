@@ -1334,9 +1334,9 @@ func (h *EventHandler) GetTasksTimeline(clusterName string, jobID string) []type
 		}
 
 		for _, profEvent := range task.ProfileData.Events {
-			// Convert nanoseconds to microseconds
-			startTimeUs := float64(profEvent.StartTime) / 1000.0
-			durationUs := float64(profEvent.EndTime-profEvent.StartTime) / 1000.0
+			// Convert nanoseconds to millisecond
+			startTimeUs := float64(profEvent.StartTime) / 1000000.0
+			durationUs := float64(profEvent.EndTime-profEvent.StartTime) / 1000000.0
 
 			// Parse extraData for additional fields
 			var extraData map[string]interface{}
@@ -1417,6 +1417,8 @@ func getChromeTraceColor(eventName string) string {
 	}
 
 	// Direct mapping for known event names
+	// This logic follows Ray's profiling implementation:
+	// https://github.com/ray-project/ray/blob/68d01c4c48a59c7768ec9c2359a1859966c446b6/python/ray/_private/profiling.py#L25
 	switch eventName {
 	case "task:deserialize_arguments":
 		return "rail_load"
