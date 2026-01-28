@@ -1158,7 +1158,9 @@ func updateRayStartParamsResources(ctx context.Context, rayStartParams map[strin
 		} else if normalizedName == string(corev1.ResourceMemory) {
 			rayStartParams["memory"] = strconv.FormatInt(q.Value(), 10)
 		} else if utils.IsGPUResourceKey(normalizedName) {
-			rayStartParams["num-gpus"] = strconv.FormatInt(q.Value(), 10)
+			// Support fractional GPU values (e.g., 0.4 GPU per replica for multi-model serving)
+			// Convert to float to preserve decimal values for Ray autoscaler
+			rayStartParams["num-gpus"] = strconv.FormatFloat(q.AsApproximateFloat64(), 'f', -1, 64)
 		} else {
 			rayResourcesJson[name] = q.AsApproximateFloat64()
 		}
