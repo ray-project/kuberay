@@ -424,10 +424,10 @@ func supportsUnifiedHealthCheck(rayVersion string) bool {
 }
 
 func initLivenessAndReadinessProbe(rayContainer *corev1.Container, rayNodeType rayv1.RayNodeType, creatorCRDType utils.CRDType, rayStartParams map[string]string, rayVersion string) {
-	getPort := func(key string, defaultVal int) int {
+	getPort := func(key string, defaultVal int32) int32 {
 		if portStr, ok := rayStartParams[key]; ok {
 			if port, err := strconv.Atoi(portStr); err == nil {
-				return port
+				return int32(port)
 			}
 		}
 		return defaultVal
@@ -438,7 +438,7 @@ func initLivenessAndReadinessProbe(rayContainer *corev1.Container, rayNodeType r
 		Path: utils.RayAgentUnifiedHealthPath,
 		Port: intstr.IntOrString{
 			Type:   intstr.Int,
-			IntVal: int32(getPort("dashboard-agent-listen-port", utils.DefaultDashboardAgentListenPort)),
+			IntVal: getPort("dashboard-agent-listen-port", utils.DefaultDashboardAgentListenPort),
 		},
 	}
 
