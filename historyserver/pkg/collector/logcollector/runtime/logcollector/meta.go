@@ -97,9 +97,6 @@ func (r *RayLogHandler) PersistUrlInfo(urlinfo *types.UrlInfo) ([]byte, error) {
 	if md5Hex == urlinfo.Hash {
 		logrus.Debugf("Meta URL %s response data has not changed, no need to persist", urlinfo.Url)
 		return body, nil
-	} else {
-		logrus.Debugf("Meta URL %s response data has changed, old hash is %s, new hash is %s", urlinfo.Url, urlinfo.Hash, md5Hex)
-		urlinfo.Hash = md5Hex
 	}
 
 	objectName := path.Join(r.MetaDir, urlinfo.Key)
@@ -109,6 +106,9 @@ func (r *RayLogHandler) PersistUrlInfo(urlinfo *types.UrlInfo) ([]byte, error) {
 		logrus.Errorf("Failed to create object '%s': %v", objectName, err)
 		return body, err
 	}
+	// Write hash after object store persisted to prevent data inconsistency
+	urlinfo.Hash = md5Hex
+
 	logrus.Debugf("Successfully created object %s", objectName)
 	return body, nil
 }
@@ -148,6 +148,9 @@ func (r *RayLogHandler) PersistDatasetsMeta() {
 				},
 				Status: status,
 			}
+		} else {
+			// Update status for existing jobs
+			JobResourcesUrlInfo[jobID].Status = status
 		}
 	}
 

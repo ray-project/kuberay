@@ -26,7 +26,6 @@ type UrlInfo struct {
 	Key  string
 	Url  string
 	Hash string
-	Path string
 	Type string
 }
 
