@@ -121,6 +121,29 @@ debugging in your own IDE. For example, you can set up `.vscode/launch.json` as 
 For setting up the `args` and `env` fields, please refer to `spec.template.spec.containers.command` and
 `spec.template.spec.containers.env` in `historyserver/config/historyserver.yaml`.
 
+You can also build and run the history server binary directly from the command line:
+
+```bash
+# Build the history server binary.
+make buildhistoryserver
+
+# Configure S3 connection via environment variables.
+export S3_REGION=test
+export S3_ENDPOINT=localhost:9000
+export S3_BUCKET=ray-historyserver
+export AWS_S3ID=minioadmin
+export AWS_S3SECRET=minioadmin
+export AWS_S3TOKEN=
+export S3FORCE_PATH_STYLE=true
+export S3DISABLE_SSL=true
+
+# Run the history server.
+./output/bin/historyserver \
+  --runtime-class-name=s3 \
+  --ray-root-dir=log \
+  --use-kubernetes-proxy=true
+```
+
 ---
 
 ## API Endpoints
