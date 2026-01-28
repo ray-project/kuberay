@@ -19,12 +19,12 @@ import (
 // We should delete this file after history server can get the resources by ray events
 
 var metaCommonUrlInfo = []*types.UrlInfo{
-	&types.UrlInfo{Key: utils.OssMetaFile_Applications,
+	{
+		Key:  utils.OssMetaFile_Applications,
 		Url:  "http://localhost:8265/api/serve/applications/",
 		Type: "URL",
 	},
-
-	&types.UrlInfo{
+	{
 		Key:  utils.OssMetaFile_PlacementGroups,
 		Url:  "http://localhost:8265/api/v0/placement_groups",
 		Type: "URL",
@@ -70,7 +70,7 @@ func (r *RayLogHandler) PersistMeta() error {
 		}
 	}
 	// Datasets API is called by job ID, so we should handle it in a separate function
-	r.PersisDatasetsMeta()
+	r.PersistDatasetsMeta()
 
 	return nil
 }
@@ -113,7 +113,7 @@ func (r *RayLogHandler) PersistUrlInfo(urlinfo *types.UrlInfo) ([]byte, error) {
 	return body, nil
 }
 
-func (r *RayLogHandler) PersisDatasetsMeta() {
+func (r *RayLogHandler) PersistDatasetsMeta() {
 
 	body, err := r.PersistUrlInfo(JobsUrlInfo)
 	if err != nil {
