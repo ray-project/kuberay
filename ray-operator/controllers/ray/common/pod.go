@@ -435,7 +435,7 @@ func initLivenessAndReadinessProbe(rayContainer *corev1.Container, rayNodeType r
 
 	httpHealthCheck := supportsUnifiedHealthCheck(rayVersion)
 	httpHealthCheckAction := &corev1.HTTPGetAction{
-		Path: utils.RayAgentUnifiedHealthPath,
+		Path: utils.RayNodeHealthPath,
 		Port: intstr.IntOrString{
 			Type:   intstr.Int,
 			IntVal: getPort("dashboard-agent-listen-port", utils.DefaultDashboardAgentListenPort),
