@@ -274,10 +274,8 @@ func TestRayClusterUpgradeStrategy(t *testing.T) {
 // The fix is in pod.go which converts GPU resources from pod.Resources.Requests using float instead of int.
 // Reference: https://github.com/ray-project/kuberay/issues/4447
 //
-// NOTE: This test validates that KubeRay correctly generates "num-gpus: 0.4" for Ray startup.
-// It does NOT test actual GPU scheduling (which requires nvidia.com/gpu resources to be available).
-// The primary validation of the fix is in unit test TestUpdateRayStartParamsResources_WithFractionalGPU
-// in pod_test.go which already PASSED and proves the conversion works correctly.
+// NOTE: This test validates that KubeRay correctly generates Ray start parameters with fractional GPU values.
+// The test won't schedule actual GPUs (nvidia.com/gpu resource) but validates the configuration generation.
 func TestRayClusterWithFractionalGPU(t *testing.T) {
 	test := With(t)
 	g := NewWithT(t)
@@ -285,19 +283,16 @@ func TestRayClusterWithFractionalGPU(t *testing.T) {
 	// Create a namespace
 	namespace := test.NewTestNamespace()
 
-	// Define a simple RayCluster without GPU requirements
-	// This allows the test to run without actual GPU hardware
-	// The key is that when KubeRay generates the pod, it should create the correct ray start command
-	rayClusterAC := rayv1ac.RayCluster("ray-fractional-gpu-simple", namespace.Name).
+	// Define a RayCluster with fractional GPU resource request (0.4 GPU)
+	// This tests the conversion from pod resources to Ray start parameters
+	rayClusterAC := rayv1ac.RayCluster("ray-fractional-gpu", namespace.Name).
 		WithSpec(rayv1ac.RayClusterSpec().
 			WithRayVersion(GetRayVersion()).
 			WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
 				WithRayStartParams(map[string]string{"num-cpus": "2"}).
 				WithTemplate(HeadPodTemplateApplyConfiguration())).
-			// Worker group without GPU (testing infrastructure constraint)
-			// In production with GPU hardware, this would have GPU resources and num-gpus would be set automatically
 			WithWorkerGroupSpecs(rayv1ac.WorkerGroupSpec().
-				WithGroupName("workers").
+				WithGroupName("gpu-workers").
 				WithReplicas(1).
 				WithMinReplicas(0).
 				WithMaxReplicas(2).
@@ -305,6 +300,10 @@ func TestRayClusterWithFractionalGPU(t *testing.T) {
 					"num-cpus": "1",
 				}).
 				WithTemplate(func() *corev1ac.PodTemplateSpecApplyConfiguration {
+					// Create a fractional GPU quantity (0.4 GPU)
+					// Using milliGPU representation: 400m = 0.4 GPU
+					fractionalGPU := resource.MustParse("400m")
+					
 					return corev1ac.PodTemplateSpec().
 						WithSpec(corev1ac.PodSpec().
 							WithContainers(corev1ac.Container().
@@ -314,55 +313,60 @@ func TestRayClusterWithFractionalGPU(t *testing.T) {
 									WithRequests(corev1.ResourceList{
 										corev1.ResourceCPU:    ptr.Deref(resource.NewQuantity(1, resource.DecimalSI), resource.Quantity{}),
 										corev1.ResourceMemory: ptr.Deref(resource.NewQuantity(1*1024*1024*1024, resource.BinarySI), resource.Quantity{}),
+										// Request 0.4 GPU - this should be converted to "num-gpus: 0.4" in Ray start params
+										"nvidia.com/gpu": fractionalGPU,
 									}).
 									WithLimits(corev1.ResourceList{
 										corev1.ResourceCPU:    ptr.Deref(resource.NewQuantity(1, resource.DecimalSI), resource.Quantity{}),
 										corev1.ResourceMemory: ptr.Deref(resource.NewQuantity(1*1024*1024*1024, resource.BinarySI), resource.Quantity{}),
+										"nvidia.com/gpu":     fractionalGPU,
 									}))))
 				}())))
 
 	// Create the RayCluster
 	rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
 	g.Expect(err).NotTo(HaveOccurred(), "Failed to create RayCluster")
-	LogWithTimestamp(t, "Created RayCluster %s/%s for testing fractional GPU conversion", rayCluster.Namespace, rayCluster.Name)
+	LogWithTimestamp(t, "Created RayCluster %s/%s with fractional GPU (0.4) specification", rayCluster.Namespace, rayCluster.Name)
 
-	// Check if pods are created (don't wait for them to be fully ready since the test
-	// is about config generation, not Ray cluster startup)
+	// Get the worker pods to verify the GPU resource specification
 	g.Eventually(func() int {
 		pods, err := test.Client().Core().CoreV1().Pods(namespace.Name).List(test.Ctx(), metav1.ListOptions{
-			LabelSelector: "ray.io/cluster=" + rayCluster.Name,
+			LabelSelector: "ray.io/cluster=" + rayCluster.Name + ",ray.io/node-type=worker",
 		})
 		if err != nil {
-			LogWithTimestamp(t, "Error listing pods: %v", err)
 			return 0
 		}
-		LogWithTimestamp(t, "Found %d pods for RayCluster", len(pods.Items))
 		return len(pods.Items)
-	}, TestTimeoutMedium).
-		Should(BeNumerically(">=", 2)) // At least head and worker pods
-	LogWithTimestamp(t, "RayCluster %s/%s pods created successfully", rayCluster.Namespace, rayCluster.Name)
+	}, TestTimeoutMedium).Should(BeNumerically(">=", 1), "Worker pod should be created")
 
-	// Verify that the head pod exists
-	headPod, err := GetHeadPod(test, rayCluster)
-	g.Expect(err).NotTo(HaveOccurred())
-	LogWithTimestamp(t, "Found head pod: %s/%s", headPod.Namespace, headPod.Name)
-
-	// Verify that worker pods have been created
+	// Verify that worker pods have been created with correct GPU specification
 	workerPods, err := GetWorkerPods(test, rayCluster)
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(workerPods).To(HaveLen(1), "Expected 1 worker pod")
-	LogWithTimestamp(t, "Found %d worker pod(s)", len(workerPods))
-
-	// Verify that the worker pod container has correct resources
+	
+	// Verify the worker pod has the fractional GPU resource request
 	workerPod := workerPods[0]
 	container := workerPod.Spec.Containers[0]
-	cpuQuantity := container.Resources.Requests[corev1.ResourceCPU]
-	memQuantity := container.Resources.Requests[corev1.ResourceMemory]
-	g.Expect(cpuQuantity.String()).To(Equal("1"), "Worker pod should request 1 CPU")
-	g.Expect(memQuantity.String()).To(Equal("1Gi"), "Worker pod should request 1Gi memory")
-	LogWithTimestamp(t, "Worker pod has correct resource requests - CPU: %s, Memory: %s", cpuQuantity.String(), memQuantity.String())
-
-	// Test completed successfully
-	LogWithTimestamp(t, "✓ Test passed: RayCluster with fractional GPU configuration created successfully")
-	LogWithTimestamp(t, "✓ The unit test TestUpdateRayStartParamsResources_WithFractionalGPU in pod_test.go validates the actual GPU conversion logic")
+	gpuQuantity := container.Resources.Requests["nvidia.com/gpu"]
+	
+	// The GPU quantity should be 400m (0.4 GPU)
+	g.Expect(gpuQuantity.IsZero()).To(BeFalse(), "Worker pod should have GPU request")
+	g.Expect(gpuQuantity.String()).To(Equal("400m"), "Worker pod should request 0.4 GPU (400m)")
+	
+	// Verify the Ray start command includes the fractional num-gpus parameter
+	// The operator should have added "num-gpus": "0.4" to the environment variable
+	envVars := container.Env
+	var rayStartCmd string
+	for _, env := range envVars {
+		if env.Name == "KUBERAY_GEN_RAY_START_CMD" {
+			rayStartCmd = env.Value
+			break
+		}
+	}
+	g.Expect(rayStartCmd).NotTo(BeEmpty(), "Ray start command should be generated")
+	g.Expect(rayStartCmd).To(ContainSubstring("--num-gpus=0.4"), "Ray start command should contain fractional GPU parameter '--num-gpus=0.4'")
+	
+	LogWithTimestamp(t, "✓ Worker pod GPU request: %s", gpuQuantity.String())
+	LogWithTimestamp(t, "✓ Ray start command contains: --num-gpus=0.4")
+	LogWithTimestamp(t, "✓ Test passed: Fractional GPU (0.4) correctly converted to Ray start parameter")
 }
