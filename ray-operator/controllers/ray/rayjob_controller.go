@@ -1105,6 +1105,13 @@ func (r *RayJobReconciler) checkSubmitterAndUpdateStatusIfNeeded(ctx context.Con
 			finishedAt = &jobFinishedCondition.LastTransitionTime.Time
 		}
 
+		if features.Enabled(features.AsyncJobInfoQuery) && finishedAt != nil && !rayv1.IsJobTerminal(rayJob.Status.JobStatus) {
+			// If AsyncJobInfoQuery is enabled and the Job has finished, but the JobStatus is not terminal,
+			// The JobStatus might be inconsistent with the actual job status because of cache.
+			// Make shouldUpdate false to get the newer JobStatus again.
+			shouldUpdate = false
+		}
+
 		return
 	default:
 		// This means that the KubeRay logic is wrong, and it's better to panic as a system error than to allow the operator to
