@@ -571,14 +571,24 @@ func TestGetWorkerGroupDesiredReplicas(t *testing.T) {
 	workerGroupSpec.Replicas = &replicas
 	assert.Equal(t, GetWorkerGroupDesiredReplicas(workerGroupSpec), replicas)
 
-	// Test 3: `WorkerGroupSpec.Suspend` is true.
+	// Test 3: `WorkerGroupSpec.Replicas` is not nil but is more than maxReplicas.
+	replicas = int32(6)
+	workerGroupSpec.Replicas = &replicas
+	assert.Equal(t, GetWorkerGroupDesiredReplicas(workerGroupSpec), maxReplicas)
+
+	// Test 4: `WorkerGroupSpec.Replicas` is not nil but is less than minReplicas.
+	replicas = int32(0)
+	workerGroupSpec.Replicas = &replicas
+	assert.Equal(t, GetWorkerGroupDesiredReplicas(workerGroupSpec), minReplicas)
+
+	// Test 5: `WorkerGroupSpec.Suspend` is true.
 	suspend := true
 	workerGroupSpec.MinReplicas = &maxReplicas
 	workerGroupSpec.MaxReplicas = &minReplicas
 	workerGroupSpec.Suspend = &suspend
 	assert.Zero(t, GetWorkerGroupDesiredReplicas(workerGroupSpec))
 
-	// Test 4: `WorkerGroupSpec.NumOfHosts` is 4.
+	// Test 6: `WorkerGroupSpec.NumOfHosts` is 4.
 	numOfHosts = int32(4)
 	replicas = int32(5)
 	suspend = false
