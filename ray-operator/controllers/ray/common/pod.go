@@ -420,11 +420,7 @@ func supportsUnifiedHealthCheck(rayVersion string) bool {
 
 	// Ray version 2.53.0 supports a single HTTP health check endpoint.
 	minVersion := version.MustParseGeneric("2.53.0")
-	if v.LessThan(minVersion) {
-		return false
-	}
-
-	return true
+	return v.AtLeast(minVersion)
 }
 
 func initLivenessAndReadinessProbe(rayContainer *corev1.Container, rayNodeType rayv1.RayNodeType, creatorCRDType utils.CRDType, rayStartParams map[string]string, rayVersion string) {
