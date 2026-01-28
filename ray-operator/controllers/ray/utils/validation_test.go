@@ -2537,7 +2537,6 @@ func TestValidateRayClusterSpec_WorkerGroupReplicaValidation(t *testing.T) {
 			name: "minReplicas are nil when autoscaling disabled",
 			spec: func() rayv1.RayClusterSpec {
 				s := createSpec()
-				s.EnableInTreeAutoscaling = ptr.To(false)
 				s.WorkerGroupSpecs = []rayv1.WorkerGroupSpec{
 					{
 						GroupName:   "worker-group-3",
@@ -2555,7 +2554,6 @@ func TestValidateRayClusterSpec_WorkerGroupReplicaValidation(t *testing.T) {
 			name: "maxReplicas are nil when autoscaling disabled",
 			spec: func() rayv1.RayClusterSpec {
 				s := createSpec()
-				s.EnableInTreeAutoscaling = ptr.To(false)
 				s.WorkerGroupSpecs = []rayv1.WorkerGroupSpec{
 					{
 						GroupName:   "worker-group-3",
@@ -2573,7 +2571,6 @@ func TestValidateRayClusterSpec_WorkerGroupReplicaValidation(t *testing.T) {
 			name: "minReplicas and maxReplicas both are nil when autoscaling disabled",
 			spec: func() rayv1.RayClusterSpec {
 				s := createSpec()
-				s.EnableInTreeAutoscaling = ptr.To(false)
 				s.WorkerGroupSpecs = []rayv1.WorkerGroupSpec{
 					{
 						GroupName:   "worker-group-3",
