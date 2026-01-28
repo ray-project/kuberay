@@ -5,6 +5,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/utils/ptr"
 
 	v1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
@@ -53,7 +54,8 @@ func newTaskGroupsFromRayClusterSpec(rayClusterSpec *v1.RayClusterSpec) *TaskGro
 	// worker groups
 	for _, workerGroupSpec := range rayClusterSpec.WorkerGroupSpecs {
 		workerMinResource := utils.CalculatePodResource(workerGroupSpec.Template.Spec)
-		minWorkers := (*workerGroupSpec.MinReplicas) * workerGroupSpec.NumOfHosts
+		minReplicas := ptr.Deref(workerGroupSpec.MinReplicas, int32(0))
+		minWorkers := minReplicas * workerGroupSpec.NumOfHosts
 		taskGroups.addTaskGroup(
 			TaskGroup{
 				Name:         workerGroupSpec.GroupName,

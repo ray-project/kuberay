@@ -395,7 +395,9 @@ func TestValidateRayClusterSpecEmptyContainers(t *testing.T) {
 		Template: podTemplateSpec(nil, nil),
 	}
 	workerGroupSpecWithOneContainer := rayv1.WorkerGroupSpec{
-		Template: podTemplateSpec(nil, nil),
+		Template:    podTemplateSpec(nil, nil),
+		MinReplicas: ptr.To(int32(0)),
+		MaxReplicas: ptr.To(int32(5)),
 	}
 	headGroupSpecWithNoContainers := *headGroupSpecWithOneContainer.DeepCopy()
 	headGroupSpecWithNoContainers.Template.Spec.Containers = []corev1.Container{}
@@ -459,8 +461,10 @@ func TestValidateRayClusterSpecSuspendingWorkerGroup(t *testing.T) {
 		Template: podTemplateSpec(nil, nil),
 	}
 	workerGroupSpecSuspended := rayv1.WorkerGroupSpec{
-		GroupName: "worker-group-1",
-		Template:  podTemplateSpec(nil, nil),
+		GroupName:   "worker-group-1",
+		Template:    podTemplateSpec(nil, nil),
+		MinReplicas: ptr.To(int32(0)),
+		MaxReplicas: ptr.To(int32(5)),
 	}
 	workerGroupSpecSuspended.Suspend = ptr.To(true)
 
@@ -692,8 +696,10 @@ func TestValidateRayClusterSpec_Resources(t *testing.T) {
 			},
 			WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
 				{
-					GroupName: "worker-group",
-					Template:  podTemplateSpec(nil, nil),
+					GroupName:   "worker-group",
+					Template:    podTemplateSpec(nil, nil),
+					MinReplicas: ptr.To(int32(0)),
+					MaxReplicas: ptr.To(int32(5)),
 				},
 			},
 		}
@@ -773,8 +779,10 @@ func TestValidateRayClusterSpec_Labels(t *testing.T) {
 			},
 			WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
 				{
-					GroupName: "worker-group",
-					Template:  podTemplateSpec(nil, nil),
+					GroupName:   "worker-group",
+					Template:    podTemplateSpec(nil, nil),
+					MinReplicas: ptr.To(int32(0)),
+					MaxReplicas: ptr.To(int32(5)),
 				},
 			},
 		}
@@ -2469,6 +2477,172 @@ func TestValidateRayClusterUpgradeOptions(t *testing.T) {
 				}
 			} else {
 				require.NoError(t, err, "Unexpected error for test case: %s", tt.name)
+			}
+		})
+	}
+}
+
+func TestValidateRayClusterSpec_WorkerGroupReplicaValidation(t *testing.T) {
+	createSpec := func() rayv1.RayClusterSpec {
+		return rayv1.RayClusterSpec{
+			EnableInTreeAutoscaling: ptr.To(false),
+			HeadGroupSpec: rayv1.HeadGroupSpec{
+				Template: podTemplateSpec(nil, nil),
+			},
+		}
+	}
+
+	tests := []struct {
+		name        string
+		errorMsg    string
+		spec        rayv1.RayClusterSpec
+		expectError bool
+	}{
+		{
+			name: "minReplicas greater than maxReplicas",
+			spec: func() rayv1.RayClusterSpec {
+				s := createSpec()
+				s.WorkerGroupSpecs = []rayv1.WorkerGroupSpec{
+					{
+						GroupName:   "worker-group-3",
+						Template:    podTemplateSpec(nil, nil),
+						MinReplicas: ptr.To(int32(5)),
+						MaxReplicas: ptr.To(int32(3)),
+					},
+				}
+				return s
+			}(),
+			expectError: true,
+			errorMsg:    "worker group worker-group-3 has minReplicas 5 greater than maxReplicas 3",
+		},
+		{
+			// This test always passes since we have clamped the replicas to minReplicas in GetWorkerGroupDesiredReplicas.
+			name: "replicas smaller than minReplicas when autoscaling disabled",
+			spec: func() rayv1.RayClusterSpec {
+				s := createSpec()
+				s.WorkerGroupSpecs = []rayv1.WorkerGroupSpec{
+					{
+						GroupName:   "worker-group-3",
+						Template:    podTemplateSpec(nil, nil),
+						Replicas:    ptr.To(int32(1)),
+						MinReplicas: ptr.To(int32(2)),
+						MaxReplicas: ptr.To(int32(5)),
+					},
+				}
+				return s
+			}(),
+			expectError: false,
+		},
+		{
+			name: "minReplicas are nil when autoscaling disabled",
+			spec: func() rayv1.RayClusterSpec {
+				s := createSpec()
+				s.WorkerGroupSpecs = []rayv1.WorkerGroupSpec{
+					{
+						GroupName:   "worker-group-3",
+						Template:    podTemplateSpec(nil, nil),
+						MinReplicas: nil,
+						MaxReplicas: ptr.To(int32(5)),
+					},
+				}
+				return s
+			}(),
+			expectError: true,
+			errorMsg:    "worker group worker-group-3 must set both minReplicas and maxReplicas when autoscaling is disabled",
+		},
+		{
+			name: "maxReplicas are nil when autoscaling disabled",
+			spec: func() rayv1.RayClusterSpec {
+				s := createSpec()
+				s.WorkerGroupSpecs = []rayv1.WorkerGroupSpec{
+					{
+						GroupName:   "worker-group-3",
+						Template:    podTemplateSpec(nil, nil),
+						MinReplicas: ptr.To(int32(1)),
+						MaxReplicas: nil,
+					},
+				}
+				return s
+			}(),
+			expectError: true,
+			errorMsg:    "worker group worker-group-3 must set both minReplicas and maxReplicas when autoscaling is disabled",
+		},
+		{
+			name: "minReplicas and maxReplicas both are nil when autoscaling disabled",
+			spec: func() rayv1.RayClusterSpec {
+				s := createSpec()
+				s.WorkerGroupSpecs = []rayv1.WorkerGroupSpec{
+					{
+						GroupName:   "worker-group-3",
+						Template:    podTemplateSpec(nil, nil),
+						MinReplicas: nil,
+						MaxReplicas: nil,
+					},
+				}
+				return s
+			}(),
+			expectError: true,
+			errorMsg:    "worker group worker-group-3 must set both minReplicas and maxReplicas when autoscaling is disabled",
+		},
+		{
+			name: "minReplicas is negative",
+			spec: func() rayv1.RayClusterSpec {
+				s := createSpec()
+				s.EnableInTreeAutoscaling = ptr.To(true)
+				s.WorkerGroupSpecs = []rayv1.WorkerGroupSpec{
+					{
+						GroupName:   "worker-group-3",
+						Template:    podTemplateSpec(nil, nil),
+						MinReplicas: ptr.To(int32(-1)),
+					},
+				}
+				return s
+			}(),
+			expectError: true,
+			errorMsg:    "worker group worker-group-3 has negative minReplicas -1",
+		},
+		{
+			name: "maxReplicas is negative",
+			spec: func() rayv1.RayClusterSpec {
+				s := createSpec()
+				s.EnableInTreeAutoscaling = ptr.To(true)
+				s.WorkerGroupSpecs = []rayv1.WorkerGroupSpec{
+					{
+						GroupName:   "worker-group-3",
+						Template:    podTemplateSpec(nil, nil),
+						MaxReplicas: ptr.To(int32(-1)),
+					},
+				}
+				return s
+			}(),
+			expectError: true,
+			errorMsg:    "worker group worker-group-3 has negative maxReplicas -1",
+		},
+		{
+			name: "valid when autoscaling enabled",
+			spec: func() rayv1.RayClusterSpec {
+				s := createSpec()
+				s.EnableInTreeAutoscaling = ptr.To(true)
+				s.WorkerGroupSpecs = []rayv1.WorkerGroupSpec{
+					{
+						GroupName: "worker-group-3",
+						Template:  podTemplateSpec(nil, nil),
+					},
+				}
+				return s
+			}(),
+			expectError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateRayClusterSpec(&tt.spec, nil)
+			if tt.expectError {
+				require.Error(t, err)
+				require.EqualError(t, err, tt.errorMsg)
+			} else {
+				require.NoError(t, err)
 			}
 		})
 	}
