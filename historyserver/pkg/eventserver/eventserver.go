@@ -1334,9 +1334,9 @@ func (h *EventHandler) GetTasksTimeline(clusterName string, jobID string) []type
 		}
 
 		for _, profEvent := range task.ProfileData.Events {
-			// Convert nanoseconds to millisecond
-			startTimeUs := float64(profEvent.StartTime) / 1000000.0
-			durationUs := float64(profEvent.EndTime-profEvent.StartTime) / 1000000.0
+			// Convert nanoseconds to microseconds
+			startTimeUs := float64(profEvent.StartTime) / 1000.0
+			durationUs := float64(profEvent.EndTime-profEvent.StartTime) / 1000.0
 
 			// Parse extraData for additional fields
 			var extraData map[string]interface{}
