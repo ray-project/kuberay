@@ -35,14 +35,14 @@ func TestHistoryServer(t *testing.T) {
 			name:     "Live cluster: historyserver endpoints should be accessible",
 			testFunc: testLiveClusters,
 		},
-		// {
-		// 	name:     "/v0/logs/file endpoint (live cluster)",
-		// 	testFunc: testLogFileEndpointLiveCluster,
-		// },
-		// {
-		// 	name:     "/v0/logs/file endpoint (dead cluster)",
-		// 	testFunc: testLogFileEndpointDeadCluster,
-		// },
+		{
+			name:     "/v0/logs/file endpoint (live cluster)",
+			testFunc: testLogFileEndpointLiveCluster,
+		},
+		{
+			name:     "/v0/logs/file endpoint (dead cluster)",
+			testFunc: testLogFileEndpointDeadCluster,
+		},
 		{
 			name:     "Live cluster: /nodes?view=summary should return the current snapshot containing node summary and resource usage information",
 			testFunc: testLiveClusterNodes,
