@@ -1062,6 +1062,12 @@ func (r *RayJobReconciler) checkSubmitterAndUpdateStatusIfNeeded(ctx context.Con
 		}
 
 		finishedAt = getSubmitterContainerFinishedTime(headPod)
+		if features.Enabled(features.AsyncJobInfoQuery) && finishedAt != nil && !rayv1.IsJobTerminal(rayJob.Status.JobStatus) {
+			// If AsyncJobInfoQuery is enabled and the submitter container has finished, but the JobStatus is not terminal,
+			// The JobStatus might be inconsistent with the actual job status because of cache.
+			// Make shouldUpdate false to get the newer JobStatus again.
+			shouldUpdate = false
+		}
 		return
 	case rayv1.K8sJobMode:
 		job := &batchv1.Job{}
