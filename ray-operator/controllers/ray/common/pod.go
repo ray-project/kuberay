@@ -14,6 +14,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/apimachinery/pkg/util/version"
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
@@ -410,7 +412,22 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 	return podTemplate
 }
 
-func initLivenessAndReadinessProbe(rayContainer *corev1.Container, rayNodeType rayv1.RayNodeType, creatorCRDType utils.CRDType, rayStartParams map[string]string) {
+func supportsUnifiedHealthCheck(rayVersion string) bool {
+	v, err := version.ParseGeneric(rayVersion)
+	if err != nil {
+		return false
+	}
+
+	// Ray version 2.53.0 supports a single HTTP health check endpoint.
+	minVersion := version.MustParseGeneric("2.53.0")
+	if v.LessThan(minVersion) {
+		return false
+	}
+
+	return true
+}
+
+func initLivenessAndReadinessProbe(rayContainer *corev1.Container, rayNodeType rayv1.RayNodeType, creatorCRDType utils.CRDType, rayStartParams map[string]string, rayVersion string) {
 	getPort := func(key string, defaultVal int) int {
 		if portStr, ok := rayStartParams[key]; ok {
 			if port, err := strconv.Atoi(portStr); err == nil {
@@ -418,6 +435,15 @@ func initLivenessAndReadinessProbe(rayContainer *corev1.Container, rayNodeType r
 			}
 		}
 		return defaultVal
+	}
+
+	httpHealthCheck := supportsUnifiedHealthCheck(rayVersion)
+	httpHealthCheckAction := &corev1.HTTPGetAction{
+		Path: utils.RayAgentUnifiedHealthPath,
+		Port: intstr.IntOrString{
+			Type:   intstr.Int,
+			IntVal: int32(getPort("dashboard-agent-listen-port", utils.DefaultDashboardAgentListenPort)),
+		},
 	}
 
 	rayAgentRayletHealthCommand := fmt.Sprintf(
@@ -456,7 +482,11 @@ func initLivenessAndReadinessProbe(rayContainer *corev1.Container, rayNodeType r
 			SuccessThreshold:    utils.DefaultLivenessProbeSuccessThreshold,
 			FailureThreshold:    utils.DefaultLivenessProbeFailureThreshold,
 		}
-		rayContainer.LivenessProbe.Exec = &corev1.ExecAction{Command: []string{"bash", "-c", strings.Join(commands, " && ")}}
+		if httpHealthCheck {
+			rayContainer.LivenessProbe.HTTPGet = httpHealthCheckAction
+		} else {
+			rayContainer.LivenessProbe.Exec = &corev1.ExecAction{Command: []string{"bash", "-c", strings.Join(commands, " && ")}}
+		}
 	}
 
 	if rayContainer.ReadinessProbe == nil {
@@ -471,7 +501,11 @@ func initLivenessAndReadinessProbe(rayContainer *corev1.Container, rayNodeType r
 			SuccessThreshold:    utils.DefaultReadinessProbeSuccessThreshold,
 			FailureThreshold:    utils.DefaultReadinessProbeFailureThreshold,
 		}
-		rayContainer.ReadinessProbe.Exec = &corev1.ExecAction{Command: []string{"bash", "-c", strings.Join(commands, " && ")}}
+		if httpHealthCheck {
+			rayContainer.ReadinessProbe.HTTPGet = httpHealthCheckAction
+		} else {
+			rayContainer.ReadinessProbe.Exec = &corev1.ExecAction{Command: []string{"bash", "-c", strings.Join(commands, " && ")}}
+		}
 
 		// For worker Pods serving traffic, we need to add an additional HTTP proxy health check for the readiness probe.
 		// Note: head Pod checks the HTTP proxy's health at every rayservice controller reconcile instaed of using readiness probe.
@@ -485,13 +519,14 @@ func initLivenessAndReadinessProbe(rayContainer *corev1.Container, rayNodeType r
 				utils.RayServeProxyHealthPath,
 			)
 			commands = append(commands, rayServeProxyHealthCommand)
+			rayContainer.ReadinessProbe.HTTPGet = nil
 			rayContainer.ReadinessProbe.Exec = &corev1.ExecAction{Command: []string{"bash", "-c", strings.Join(commands, " && ")}}
 		}
 	}
 }
 
 // BuildPod a pod config
-func BuildPod(ctx context.Context, podTemplateSpec corev1.PodTemplateSpec, rayNodeType rayv1.RayNodeType, rayStartParams map[string]string, headPort string, enableRayAutoscaler bool, creatorCRDType utils.CRDType, fqdnRayIP string, defaultContainerEnvs []corev1.EnvVar) (aPod corev1.Pod) {
+func BuildPod(ctx context.Context, podTemplateSpec corev1.PodTemplateSpec, rayNodeType rayv1.RayNodeType, rayStartParams map[string]string, headPort string, enableRayAutoscaler bool, creatorCRDType utils.CRDType, fqdnRayIP string, defaultContainerEnvs []corev1.EnvVar, rayVersion string) (aPod corev1.Pod) {
 	log := ctrl.LoggerFrom(ctx)
 
 	// For Worker Pod: Traffic readiness is determined by the readiness probe.
@@ -575,7 +610,7 @@ func BuildPod(ctx context.Context, podTemplateSpec corev1.PodTemplateSpec, rayNo
 		// Configure the readiness and liveness probes for the Ray container. These probes
 		// play a crucial role in KubeRay health checks. Without them, certain failures,
 		// such as the Raylet process crashing, may go undetected.
-		initLivenessAndReadinessProbe(&pod.Spec.Containers[utils.RayContainerIndex], rayNodeType, creatorCRDType, rayStartParams)
+		initLivenessAndReadinessProbe(&pod.Spec.Containers[utils.RayContainerIndex], rayNodeType, creatorCRDType, rayStartParams, rayVersion)
 	}
 
 	return pod
