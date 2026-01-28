@@ -109,7 +109,7 @@ func (r *RayLogHandler) processSessionLatestLogs() {
 	// Extract the real session ID from the resolved path
 	sessionID := filepath.Base(sessionRealDir)
 	if r.EnableMeta {
-		metadir := path.Clean(r.RootDir + "/" + "metadir")
+		metadir := path.Join(r.RootDir, "metadir")
 		metafile := path.Clean(metadir + "/" + fmt.Sprintf("%s/%v",
 			utils.AppendRayClusterNameID(r.RayClusterName, r.RayClusterID),
 			path.Base(sessionID),
@@ -457,7 +457,7 @@ func (r *RayLogHandler) processSessionPrevLogs(sessionDir string) {
 	sessionID := parts[0]
 	logrus.Infof("Processing all node logs for session: %s", sessionID)
 	if r.EnableMeta {
-		metadir := path.Clean(r.RootDir + "/" + "metadir")
+		metadir := path.Join(r.RootDir, "metadir")
 		metafile := path.Clean(metadir + "/" + fmt.Sprintf("%s/%v",
 			utils.AppendRayClusterNameID(r.RayClusterName, r.RayClusterID),
 			path.Base(sessionID),
@@ -753,7 +753,7 @@ func (r *RayLogHandler) WatchSessionLatestLoops() {
 			// Handle changes to the symlink
 			if event.Op&(fsnotify.Create|fsnotify.Write) != 0 {
 				sessionID := filepath.Base(event.Name)
-				metadir := path.Clean(r.RootDir + "/" + "metadir")
+				metadir := path.Join(r.RootDir, "metadir")
 				metafile := path.Clean(metadir + "/" + fmt.Sprintf("%s/%v",
 					utils.AppendRayClusterNameID(r.RayClusterName, r.RayClusterID),
 					path.Base(sessionID),
