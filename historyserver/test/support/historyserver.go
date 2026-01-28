@@ -23,6 +23,7 @@ const (
 	HistoryServerPort         = 30080
 
 	RayGrafanaIframeHost               = "http://127.0.0.1:3000"
+	RayPrometheusHost                  = "http://prometheus-kube-prometheus-prometheus.prometheus-system.svc:9090"
 	HistoryServerGrafanaHealthResponse = `{
   "result": true,
   "msg": "Grafana running",
@@ -56,7 +57,6 @@ const (
 // Excluded endpoints that are not yet implemented:
 //   - /events
 //   - /api/cluster_status
-//   - /api/prometheus_health
 //   - /api/data/datasets/{job_id}
 //   - /api/jobs
 //   - /api/serve/applications
@@ -71,6 +71,10 @@ var HistoryServerEndpoints = []string{
 // HistoryServerEndpointGrafanaHealth is a standalone constant
 // because it requires some additional dependencies.
 const HistoryServerEndpointGrafanaHealth = "/api/grafana_health"
+
+// HistoryServerEndpointPrometheusHealth is a standalone constant
+// because it requires additional dependencies.
+const HistoryServerEndpointPrometheusHealth = "/api/prometheus_health"
 
 // ApplyHistoryServer deploys the HistoryServer and RBAC resources.
 func ApplyHistoryServer(test Test, g *WithT, namespace *corev1.Namespace) {
@@ -170,6 +174,35 @@ func PrepareTestEnvWithGrafana(test Test, g *WithT, namespace *corev1.Namespace,
 	additionalEnvs := map[string]string{
 		"RAY_GRAFANA_IFRAME_HOST": RayGrafanaIframeHost,
 		"RAY_GRAFANA_HOST":        "http://prometheus-grafana.prometheus-system.svc:80",
+	}
+
+	// Deploy a Ray cluster with the collector.
+	rayCluster := ApplyRayClusterWithCollectorWithEnvs(test, g, namespace, additionalEnvs)
+
+	// Check the collector sidecar exists in the head pod.
+	headPod, err := GetHeadPod(test, rayCluster)
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(headPod.Spec.Containers).To(ContainElement(
+		WithTransform(func(c corev1.Container) string { return c.Name }, Equal("collector")),
+	))
+
+	// Check an empty S3 bucket is automatically created.
+	_, err = s3Client.HeadBucket(&s3.HeadBucketInput{
+		Bucket: aws.String(S3BucketName),
+	})
+	g.Expect(err).NotTo(HaveOccurred())
+
+	return rayCluster
+}
+
+// PrepareTestEnvWithPrometheus prepares test environment with Prometheus for each test case, including applying a Ray cluster,
+// checking the collector sidecar container exists in the head pod and an empty S3 bucket exists.
+func PrepareTestEnvWithPrometheus(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) *rayv1.RayCluster {
+
+	InstallGrafanaAndPrometheus(test, g)
+
+	additionalEnvs := map[string]string{
+		"RAY_PROMETHEUS_HOST": RayPrometheusHost,
 	}
 
 	// Deploy a Ray cluster with the collector.

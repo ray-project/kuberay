@@ -41,6 +41,10 @@ func TestHistoryServer(t *testing.T) {
 			testFunc: testLiveGrafanaHealth,
 		},
 		{
+			name:     "Live cluster: prometheus health only",
+			testFunc: testLivePrometheusHealth,
+		},
+		{
 			name:     "/v0/logs/file endpoint (live cluster)",
 			testFunc: testLogFileEndpointLiveCluster,
 		},
@@ -93,6 +97,22 @@ func testLiveGrafanaHealth(test Test, g *WithT, namespace *corev1.Namespace, s3C
 	verifyHistoryServerGrafanaHealthEndpoint(test, g, client, historyServerURL, sessionID)
 	DeleteS3Bucket(test, g, s3Client)
 	LogWithTimestamp(test.T(), "Live clusters grafana health E2E test completed successfully")
+}
+
+func testLivePrometheusHealth(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+	rayCluster := PrepareTestEnvWithPrometheus(test, g, namespace, s3Client)
+	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
+	ApplyHistoryServer(test, g, namespace)
+	historyServerURL := GetHistoryServerURL(test, g, namespace)
+
+	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
+	g.Expect(clusterInfo.SessionName).To(Equal(LiveSessionName), "Live cluster should have sessionName='live'")
+
+	client := CreateHTTPClientWithCookieJar(g)
+	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
+	verifyHistoryServerPrometheusHealthEndpoint(test, g, client, historyServerURL)
+	DeleteS3Bucket(test, g, s3Client)
+	LogWithTimestamp(test.T(), "Live clusters prometheus health E2E test completed successfully")
 }
 
 // setClusterContext sets the cluster context via /enter_cluster/ endpoint and verifies the response.
@@ -157,6 +177,30 @@ func verifyHistoryServerGrafanaHealthEndpoint(test Test, g *WithT, client *http.
 		LogWithTimestamp(test.T(), "Endpoint %s returned status %d", endpoint, resp.StatusCode)
 	}, TestTimeoutShort).Should(Succeed())
 
+}
+
+// verifyHistoryServerPrometheusHealthEndpoint tests the /api/prometheus_health endpoint
+func verifyHistoryServerPrometheusHealthEndpoint(test Test, g *WithT, client *http.Client, historyServerURL string) {
+	endpoint := HistoryServerEndpointPrometheusHealth
+	LogWithTimestamp(test.T(), "Testing history server endpoint: %s", endpoint)
+
+	g.Eventually(func(gg Gomega) {
+		resp, err := client.Get(historyServerURL + endpoint)
+		gg.Expect(err).NotTo(HaveOccurred())
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		gg.Expect(err).NotTo(HaveOccurred())
+		gg.Expect(resp.StatusCode).To(Equal(200),
+			"Endpoint %s should return 200, got %d: %s", endpoint, resp.StatusCode, string(body))
+
+		var result map[string]any
+		err = json.Unmarshal(body, &result)
+		gg.Expect(err).NotTo(HaveOccurred())
+		gg.Expect(result["result"]).To(Equal(true), "Response should have result=true")
+		gg.Expect(result["msg"]).To(ContainSubstring("prometheus running"), "Response message should contain 'prometheus running'")
+		LogWithTimestamp(test.T(), "Endpoint %s returned status %d with valid response", endpoint, resp.StatusCode)
+	}, TestTimeoutShort).Should(Succeed())
 }
 
 // getClusterFromList retrieves a cluster from the /clusters/ endpoint by name and namespace.
