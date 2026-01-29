@@ -9,11 +9,25 @@ import (
 	"strings"
 	"testing"
 
+<<<<<<< HEAD
+=======
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
+>>>>>>> 76c417f7 (Migrate to new AWS S3 SDK version)
 	. "github.com/onsi/gomega"
+	eventtypes "github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
+	hssupport "github.com/ray-project/kuberay/historyserver/test/support"
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	. "github.com/ray-project/kuberay/ray-operator/test/support"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+)
 
+<<<<<<< HEAD
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -21,6 +35,24 @@ import (
 	"github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
+=======
+const (
+	// S3 storage provider
+	minioNamespace    = "minio-dev"
+	minioManifestPath = "../../config/minio.yaml"
+	minioUsername     = "minioadmin"
+	minioSecret       = "minioadmin"
+	minioAPIEndpoint  = "http://localhost:9000"
+	s3BucketName      = "ray-historyserver"
+	s3Region          = "us-east-1"
+
+	// Ray cluster
+	rayClusterManifestPath = "../../config/raycluster.yaml"
+	rayClusterID           = "default"
+
+	// Ray job
+	rayJobManifestPath = "../../config/rayjob.yaml"
+>>>>>>> 76c417f7 (Migrate to new AWS S3 SDK version)
 )
 
 const (
@@ -53,7 +85,7 @@ func TestCollector(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		testFunc func(Test, *WithT, *corev1.Namespace, *s3.S3)
+		testFunc func(Test, *WithT, *corev1.Namespace, *s3.Client)
 	}{
 		{
 			name:     "Happy path: Logs and events should be uploaded to S3 on deletion",
@@ -101,7 +133,11 @@ func TestCollector(t *testing.T) {
 // For detailed verification logic, please refer to verifyS3SessionDirs.
 //
 // 6. Delete S3 bucket to ensure test isolation
+<<<<<<< HEAD
 func testCollectorUploadOnGracefulShutdown(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+=======
+func testCollectorUploadOnGracefulShutdown(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) {
+>>>>>>> 76c417f7 (Migrate to new AWS S3 SDK version)
 	rayCluster := prepareTestEnv(test, g, namespace, s3Client)
 
 	// Submit a Ray job to the existing cluster.
@@ -109,9 +145,15 @@ func testCollectorUploadOnGracefulShutdown(test Test, g *WithT, namespace *corev
 
 	// Define variables for constructing S3 object prefix.
 	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, rayClusterID)
+<<<<<<< HEAD
 	sessionID := getSessionIDFromHeadPod(test, g, rayCluster)
 	headNodeID := getNodeIDFromPod(test, g, HeadPod(test, rayCluster), "ray-head")
 	workerNodeID := getNodeIDFromPod(test, g, FirstWorkerPod(test, rayCluster), "ray-worker")
+=======
+	sessionID := hssupport.GetSessionIDFromHeadPod(test, g, rayCluster)
+	headNodeID := hssupport.GetNodeIDFromPod(test, g, HeadPod(test, rayCluster), "ray-head")
+	workerNodeID := hssupport.GetNodeIDFromPod(test, g, hssupport.FirstWorkerPod(test, rayCluster), "ray-worker")
+>>>>>>> 76c417f7 (Migrate to new AWS S3 SDK version)
 	sessionPrefix := fmt.Sprintf("log/%s/%s/", clusterNameID, sessionID)
 
 	// Delete the Ray cluster to trigger log uploading and event flushing on deletion.
@@ -125,7 +167,7 @@ func testCollectorUploadOnGracefulShutdown(test Test, g *WithT, namespace *corev
 	}, TestTimeoutMedium).Should(WithTransform(k8serrors.IsNotFound, BeTrue()))
 
 	// Verify logs, node_events, and job_events are successfully uploaded to S3.
-	verifyS3SessionDirs(test, g, s3Client, sessionPrefix, headNodeID, workerNodeID)
+	verifyS3SessionDirs(test, g, s3Client, sessionPrefix, headNodeID, workerNodeID, false)
 
 	// Delete S3 bucket to ensure test isolation.
 	deleteS3Bucket(test, g, s3Client)
@@ -149,16 +191,26 @@ func testCollectorUploadOnGracefulShutdown(test Test, g *WithT, namespace *corev
 //   - {s3BucketName}/log/{clusterName}_{clusterID}/{sessionID}/node_events/...
 //
 // 7. Delete S3 bucket to ensure test isolation
+<<<<<<< HEAD
 func testCollectorSeparatesFilesBySession(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+=======
+func testCollectorSeparatesFilesBySession(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) {
+>>>>>>> 76c417f7 (Migrate to new AWS S3 SDK version)
 	rayCluster := prepareTestEnv(test, g, namespace, s3Client)
 
 	// Submit a Ray job to the existing cluster.
 	_ = applyRayJobAndWaitForCompletion(test, g, namespace)
 
 	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, rayClusterID)
+<<<<<<< HEAD
 	sessionID := getSessionIDFromHeadPod(test, g, rayCluster)
 	headNodeID := getNodeIDFromPod(test, g, HeadPod(test, rayCluster), "ray-head")
 	workerNodeID := getNodeIDFromPod(test, g, FirstWorkerPod(test, rayCluster), "ray-worker")
+=======
+	sessionID := hssupport.GetSessionIDFromHeadPod(test, g, rayCluster)
+	headNodeID := hssupport.GetNodeIDFromPod(test, g, HeadPod(test, rayCluster), "ray-head")
+	workerNodeID := hssupport.GetNodeIDFromPod(test, g, hssupport.FirstWorkerPod(test, rayCluster), "ray-worker")
+>>>>>>> 76c417f7 (Migrate to new AWS S3 SDK version)
 	sessionPrefix := fmt.Sprintf("log/%s/%s/", clusterNameID, sessionID)
 
 	// NOTE: We use `kill 1` to simulate Kubernetes OOMKilled behavior.
@@ -168,7 +220,7 @@ func testCollectorSeparatesFilesBySession(test Test, g *WithT, namespace *corev1
 	// hits the memory limit, all processes in the container are killed together, thereby triggering container restart.
 	// For more details, please refer to https://github.com/kubernetes/kubernetes/pull/117793
 	killContainerAndWaitForRestart(test, g, HeadPod(test, rayCluster), "ray-head")
-	killContainerAndWaitForRestart(test, g, FirstWorkerPod(test, rayCluster), "ray-worker")
+	killContainerAndWaitForRestart(test, g, hssupport.FirstWorkerPod(test, rayCluster), "ray-worker")
 
 	// Verify the old session logs have been processed on disk.
 	dirs := []string{"prev-logs", "persist-complete-logs"}
@@ -184,10 +236,17 @@ func testCollectorSeparatesFilesBySession(test Test, g *WithT, namespace *corev1
 			gg.Expect(strings.TrimSpace(stdout.String())).To(Equal("exists"), "Session directory %s should exist in %s", sessionID, dirPath)
 		}, TestTimeoutMedium).Should(Succeed(), "Session directory %s should exist in %s", sessionID, dirPath)
 	}
+<<<<<<< HEAD
 
 	// Verify logs, node_events, and job_events are successfully uploaded to S3.
 	verifyS3SessionDirs(test, g, s3Client, sessionPrefix, headNodeID, workerNodeID)
 
+=======
+
+	// Verify logs, node_events, and job_events are successfully uploaded to S3.
+	verifyS3SessionDirs(test, g, s3Client, sessionPrefix, headNodeID, workerNodeID, false)
+
+>>>>>>> 76c417f7 (Migrate to new AWS S3 SDK version)
 	deleteS3Bucket(test, g, s3Client)
 }
 
@@ -207,7 +266,11 @@ func testCollectorSeparatesFilesBySession(test Test, g *WithT, namespace *corev1
 // 5. Verify S3 uploads: recovered log objects exist under log/{clusterName}_{clusterID}/{sessionID}/logs/ and have content.
 // 6. Verify local state: the node directory is present under persist-complete-logs and removed from prev-logs.
 // 7. Clean up the S3 bucket to ensure test isolation.
+<<<<<<< HEAD
 func testCollectorResumesUploadsOnRestart(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+=======
+func testCollectorResumesUploadsOnRestart(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) {
+>>>>>>> 76c417f7 (Migrate to new AWS S3 SDK version)
 	rayCluster := prepareTestEnv(test, g, namespace, s3Client)
 
 	// Directory variables for easier maintenance
@@ -264,7 +327,11 @@ func testCollectorResumesUploadsOnRestart(test Test, g *WithT, namespace *corev1
 	g.Eventually(func(gg Gomega) {
 		// List all objects under the session logs prefix
 		logsPrefix := sessionPrefix + "logs/"
+<<<<<<< HEAD
 		objects, err := s3Client.ListObjectsV2(&s3.ListObjectsV2Input{
+=======
+		objects, err := s3Client.ListObjectsV2(test.Ctx(), &s3.ListObjectsV2Input{
+>>>>>>> 76c417f7 (Migrate to new AWS S3 SDK version)
 			Bucket: aws.String(s3BucketName),
 			Prefix: aws.String(logsPrefix),
 		})
@@ -273,7 +340,7 @@ func testCollectorResumesUploadsOnRestart(test Test, g *WithT, namespace *corev1
 		// Collect all uploaded file keys
 		var uploadedKeys []string
 		for _, obj := range objects.Contents {
-			uploadedKeys = append(uploadedKeys, aws.StringValue(obj.Key))
+			uploadedKeys = append(uploadedKeys, aws.ToString(obj.Key))
 		}
 		LogWithTimestamp(test.T(), "Found uploaded objects: %v", uploadedKeys)
 
@@ -316,7 +383,11 @@ func testCollectorResumesUploadsOnRestart(test Test, g *WithT, namespace *corev1
 }
 
 // ensureS3Client creates an S3 client and ensures API endpoint accessibility.
+<<<<<<< HEAD
 func ensureS3Client(t *testing.T) *s3.S3 {
+=======
+func ensureS3Client(t *testing.T) *s3.Client {
+>>>>>>> 76c417f7 (Migrate to new AWS S3 SDK version)
 	test := With(t)
 	g := NewWithT(t)
 	applyMinIO(test, g)
@@ -341,7 +412,11 @@ func ensureS3Client(t *testing.T) *s3.S3 {
 		if err != nil {
 			return err
 		}
+<<<<<<< HEAD
 		_, err = s3Client.ListBuckets(&s3.ListBucketsInput{}) // Dummy operation to ensure accessibility
+=======
+		_, err = s3Client.ListBuckets(test.Ctx(), &s3.ListBucketsInput{}) // Dummy operation to ensure accessibility
+>>>>>>> 76c417f7 (Migrate to new AWS S3 SDK version)
 		return err
 	}, TestTimeoutMedium).Should(Succeed(), "MinIO API endpoint should be ready")
 	LogWithTimestamp(test.T(), "Port-forwarded minio API port to localhost:9000 successfully")
@@ -371,6 +446,7 @@ func applyMinIO(test Test, g *WithT) {
 }
 
 // newS3Client creates a new S3 client.
+<<<<<<< HEAD
 func newS3Client(endpoint string) (*s3.S3, error) {
 	sess, err := session.NewSession(&aws.Config{
 		Endpoint:         aws.String(endpoint),
@@ -381,6 +457,90 @@ func newS3Client(endpoint string) (*s3.S3, error) {
 	})
 	if err != nil {
 		return nil, err
+=======
+func newS3Client(endpoint string) (*s3.Client, error) {
+	ctx := context.Background()
+
+	awsCfg, err := config.LoadDefaultConfig(ctx,
+		config.WithRegion(s3Region),
+		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(minioUsername, minioSecret, "")),
+	)
+	if err != nil {
+		return nil, err
+	}
+	return s3.NewFromConfig(awsCfg, func(o *s3.Options) {
+		o.UsePathStyle = true
+		o.BaseEndpoint = aws.String(endpoint)
+	}), nil
+}
+
+// prepareTestEnv prepares test environment for each test case, including applying a Ray cluster,
+// checking the collector sidecar container exists in the head pod and an empty S3 bucket exists.
+func prepareTestEnv(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) *rayv1.RayCluster {
+	// Deploy a Ray cluster with the collector.
+	rayCluster := applyRayCluster(test, g, namespace)
+
+	// Check the collector sidecar exists in the head pod.
+	headPod, err := GetHeadPod(test, rayCluster)
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(headPod.Spec.Containers).To(ContainElement(
+		WithTransform(func(c corev1.Container) string { return c.Name }, Equal("collector")),
+	))
+
+	// Check an empty S3 bucket is automatically created.
+	_, err = s3Client.HeadBucket(test.Ctx(), &s3.HeadBucketInput{
+		Bucket: aws.String(s3BucketName),
+	})
+	g.Expect(err).NotTo(HaveOccurred())
+
+	return rayCluster
+}
+
+// deleteS3Bucket deletes the S3 bucket. Note that objects under the bucket should be deleted first.
+func deleteS3Bucket(test Test, g *WithT, s3Client *s3.Client) {
+	// TODO(jwj): Better err handling during cleanup.
+	LogWithTimestamp(test.T(), "Deleting S3 bucket %s", s3BucketName)
+
+	paginator := s3.NewListObjectsV2Paginator(s3Client, &s3.ListObjectsV2Input{
+		Bucket: aws.String(s3BucketName),
+	})
+
+	for paginator.HasMorePages() {
+		page, err := paginator.NextPage(test.Ctx())
+		if err != nil {
+			test.T().Logf("Failed to list/delete objects in bucket: %v", err)
+			break
+		}
+		if len(page.Contents) == 0 {
+			break
+		}
+
+		objectsToDelete := make([]s3types.ObjectIdentifier, 0, len(page.Contents))
+		for _, obj := range page.Contents {
+			objectsToDelete = append(objectsToDelete, s3types.ObjectIdentifier{Key: obj.Key})
+		}
+
+		_, err = s3Client.DeleteObjects(test.Ctx(), &s3.DeleteObjectsInput{
+			Bucket: aws.String(s3BucketName),
+			Delete: &s3types.Delete{
+				Objects: objectsToDelete,
+				Quiet:   aws.Bool(true),
+			},
+		})
+		if err != nil {
+			test.T().Logf("Failed to delete objects: %v", err)
+			break
+		}
+	}
+
+	_, err := s3Client.DeleteBucket(test.Ctx(), &s3.DeleteBucketInput{
+		Bucket: aws.String(s3BucketName),
+	})
+	if err != nil {
+		test.T().Logf("Failed to delete bucket %s: %v (this is OK if bucket doesn't exist)", s3BucketName, err)
+	} else {
+		LogWithTimestamp(test.T(), "Deleted S3 bucket %s successfully", s3BucketName)
+>>>>>>> 76c417f7 (Migrate to new AWS S3 SDK version)
 	}
 	return s3.New(sess), nil
 }
@@ -499,52 +659,122 @@ func applyRayJobAndWaitForCompletion(test Test, g *WithT, namespace *corev1.Name
 	return rayJob
 }
 
-// verifyS3SessionDirs verifies file contents in logs/, node_events/, and job_events/ directories under a session prefix in S3.
-// There are two phases of verification:
-// 1. Verify file contents in logs/ directory
-//   - For the head node, verify raylet.out, gcs_server.out, and monitor.out exist
-//   - For the worker node, verify raylet.out exists
-//
-// 2. Verify event type coverage in node_events/ and job_events/ directories
-//   - Aggregate all events from node_events/ and job_events/ directories
-//   - Verify that all potential event types are present in the aggregated events
-//
-// NOTE: Since flushed node and job events are nondeterministic, we need to aggregate them first before verifying event type coverage.
-func verifyS3SessionDirs(test Test, g *WithT, s3Client *s3.S3, sessionPrefix string, headNodeID string, workerNodeID string) {
-	// Verify file contents in logs/ directory.
+// applyRayCluster deploys a Ray cluster with the collector sidecar into the test namespace.
+func applyRayCluster(test Test, g *WithT, namespace *corev1.Namespace) *rayv1.RayCluster {
+	rayClusterFromYaml := DeserializeRayClusterYAML(test, rayClusterManifestPath)
+	rayClusterFromYaml.Namespace = namespace.Name
+
+	rayCluster, err := test.Client().Ray().RayV1().
+		RayClusters(namespace.Name).
+		Create(test.Ctx(), rayClusterFromYaml, metav1.CreateOptions{})
+	g.Expect(err).NotTo(HaveOccurred())
+	LogWithTimestamp(test.T(), "Created RayCluster %s/%s successfully", rayCluster.Namespace, rayCluster.Name)
+
+	LogWithTimestamp(test.T(), "Waiting for RayCluster %s/%s to become ready", rayCluster.Namespace, rayCluster.Name)
+	g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutLong).
+		Should(WithTransform(RayClusterState, Equal(rayv1.Ready)))
+
+	LogWithTimestamp(test.T(), "Waiting for head pod of RayCluster %s/%s to be running and ready", rayCluster.Namespace, rayCluster.Name)
+	g.Eventually(HeadPod(test, rayCluster), TestTimeoutMedium).
+		Should(WithTransform(IsPodRunningAndReady, BeTrue()))
+
+	return rayCluster
+}
+
+// applyRayJobAndWaitForCompletion applies a Ray job to the existing Ray cluster and waits for it to complete successfully.
+// In the RayJob manifest, the clusterSelector is set to the existing Ray cluster, raycluster-historyserver.
+func applyRayJobAndWaitForCompletion(test Test, g *WithT, namespace *corev1.Namespace) *rayv1.RayJob {
+	rayJobFromYaml := DeserializeRayJobYAML(test, rayJobManifestPath)
+	rayJobFromYaml.Namespace = namespace.Name
+
+	rayJob, err := test.Client().Ray().RayV1().
+		RayJobs(namespace.Name).
+		Create(test.Ctx(), rayJobFromYaml, metav1.CreateOptions{})
+	g.Expect(err).NotTo(HaveOccurred())
+	LogWithTimestamp(test.T(), "Created RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
+
+	LogWithTimestamp(test.T(), "Waiting for RayJob %s/%s to complete successfully", rayJob.Namespace, rayJob.Name)
+	g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
+		Should(SatisfyAll(
+			WithTransform(RayJobStatus, Equal(rayv1.JobStatusSucceeded)),
+			WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusComplete)),
+		))
+	LogWithTimestamp(test.T(), "RayJob %s/%s completed successfully", rayJob.Namespace, rayJob.Name)
+
+	return rayJob
+}
+
+// verifyS3SessionDirs verifies that directories logs/<headNodeID>/, logs/<workerNodeID>/, and node_events/ exist under a session prefix in S3.
+// This helper function checks that required log files have content:
+// - head logs: raylet.out, gcs_server.out, monitor.out
+// - worker logs: raylet.out
+// If skipNodeEvents is true, node_events directory verification will be skipped.
+func verifyS3SessionDirs(test Test, g *WithT, s3Client *s3.Client, sessionPrefix string, headNodeID string, workerNodeID string, skipNodeEvents bool) {
 	headLogDirPrefix := fmt.Sprintf("%slogs/%s", sessionPrefix, headNodeID)
 	workerLogDirPrefix := fmt.Sprintf("%slogs/%s", sessionPrefix, workerNodeID)
 
-	LogWithTimestamp(test.T(), "Verifying raylet.out, gcs_server.out, and monitor.out exist in head log directory %s", headLogDirPrefix)
-	for _, fileName := range []string{"raylet.out", "gcs_server.out", "monitor.out"} {
-		assertFileExist(test, g, s3Client, headLogDirPrefix, fileName)
+	g.Eventually(func(gg Gomega) {
+		for _, fileName := range []string{"raylet.out", "gcs_server.out", "monitor.out"} {
+			fileKey := fmt.Sprintf("%s/%s", headLogDirPrefix, fileName)
+			LogWithTimestamp(test.T(), "Verifying head log file %s exists", fileKey)
+			obj, err := s3Client.HeadObject(test.Ctx(), &s3.HeadObjectInput{
+				Bucket: aws.String(s3BucketName),
+				Key:    aws.String(fileKey),
+			})
+			gg.Expect(err).NotTo(HaveOccurred())
+			fileSize := aws.ToInt64(obj.ContentLength)
+			gg.Expect(fileSize).To(BeNumerically(">", 0))
+		}
+
+		workerFileKey := fmt.Sprintf("%s/%s", workerLogDirPrefix, "raylet.out")
+		LogWithTimestamp(test.T(), "Verifying worker log file %s exists", workerFileKey)
+		obj, err := s3Client.HeadObject(test.Ctx(), &s3.HeadObjectInput{
+			Bucket: aws.String(s3BucketName),
+			Key:    aws.String(workerFileKey),
+		})
+		gg.Expect(err).NotTo(HaveOccurred())
+		fileSize := aws.ToInt64(obj.ContentLength)
+		gg.Expect(fileSize).To(BeNumerically(">", 0))
+	}, TestTimeoutMedium).Should(Succeed(), "Failed to verify required log files under %s", sessionPrefix+"logs/")
+
+	if skipNodeEvents {
+		return
 	}
 
-	LogWithTimestamp(test.T(), "Verifying raylet.out exists in worker log directory %s", workerLogDirPrefix)
-	assertFileExist(test, g, s3Client, workerLogDirPrefix, "raylet.out")
-
 	// Verify event type coverage in node_events/ and job_events/ directories.
-	LogWithTimestamp(test.T(), "Verifying all %d event types are covered, except for EVENT_TYPE_UNSPECIFIED: %v", len(types.AllEventTypes)-1, types.AllEventTypes)
+	LogWithTimestamp(test.T(), "Verifying all %d event types are covered, except for EVENT_TYPE_UNSPECIFIED: %v", len(eventtypes.AllEventTypes)-1, eventtypes.AllEventTypes)
 	g.Eventually(func(gg Gomega) {
 		uploadedEvents := []rayEvent{}
 
 		// Load events from node_events directory.
 		nodeEventsPrefix := sessionPrefix + "node_events/"
+<<<<<<< HEAD
 		nodeEvents, err := loadRayEventsFromS3(s3Client, s3BucketName, nodeEventsPrefix)
+=======
+		nodeEvents, err := loadRayEventsFromS3(test.Ctx(), s3Client, s3BucketName, nodeEventsPrefix)
+>>>>>>> 76c417f7 (Migrate to new AWS S3 SDK version)
 		gg.Expect(err).NotTo(HaveOccurred())
 		uploadedEvents = append(uploadedEvents, nodeEvents...)
 		LogWithTimestamp(test.T(), "Loaded %d events from node_events", len(nodeEvents))
 
 		// Dynamically discover and load events from job_events directories.
 		jobEventsPrefix := sessionPrefix + "job_events/"
+<<<<<<< HEAD
 		jobDirs, err := listS3Directories(s3Client, s3BucketName, jobEventsPrefix)
+=======
+		jobDirs, err := listS3Directories(test.Ctx(), s3Client, s3BucketName, jobEventsPrefix)
+>>>>>>> 76c417f7 (Migrate to new AWS S3 SDK version)
 		gg.Expect(err).NotTo(HaveOccurred())
 		gg.Expect(jobDirs).NotTo(BeEmpty())
 		LogWithTimestamp(test.T(), "Found %d job directories: %v", len(jobDirs), jobDirs)
 
 		for _, jobDir := range jobDirs {
 			jobDirPrefix := jobEventsPrefix + jobDir + "/"
+<<<<<<< HEAD
 			jobEvents, err := loadRayEventsFromS3(s3Client, s3BucketName, jobDirPrefix)
+=======
+			jobEvents, err := loadRayEventsFromS3(test.Ctx(), s3Client, s3BucketName, jobDirPrefix)
+>>>>>>> 76c417f7 (Migrate to new AWS S3 SDK version)
 			gg.Expect(err).NotTo(HaveOccurred())
 			uploadedEvents = append(uploadedEvents, jobEvents...)
 			LogWithTimestamp(test.T(), "Loaded %d events from job_events/%s", len(jobEvents), jobDir)
@@ -651,8 +881,13 @@ func getContainerStatusByName(pod *corev1.Pod, containerName string) (*corev1.Co
 // In S3, directories are simulated using prefixes and delimiters.
 // For example, given prefix "log/cluster/session/job_events/", this function returns ["AgAAAA==", "AQAAAA=="]
 // which are the jobID directories under job_events/.
+<<<<<<< HEAD
 func listS3Directories(s3Client *s3.S3, bucket string, prefix string) ([]string, error) {
 	result, err := s3Client.ListObjectsV2(&s3.ListObjectsV2Input{
+=======
+func listS3Directories(ctx context.Context, s3Client *s3.Client, bucket string, prefix string) ([]string, error) {
+	result, err := s3Client.ListObjectsV2(ctx, &s3.ListObjectsV2Input{
+>>>>>>> 76c417f7 (Migrate to new AWS S3 SDK version)
 		Bucket:    aws.String(bucket),
 		Prefix:    aws.String(prefix),
 		Delimiter: aws.String("/"),
@@ -664,7 +899,11 @@ func listS3Directories(s3Client *s3.S3, bucket string, prefix string) ([]string,
 	// Extract directory names from CommonPrefixes.
 	var directories []string
 	for _, commonPrefix := range result.CommonPrefixes {
+<<<<<<< HEAD
 		fullPrefix := aws.StringValue(commonPrefix.Prefix)
+=======
+		fullPrefix := aws.ToString(commonPrefix.Prefix)
+>>>>>>> 76c417f7 (Migrate to new AWS S3 SDK version)
 		// Extract the directory name by removing the parent prefix and trailing slash.
 		// Example: "log/cluster/session/job_events/AgAAAA==/" -> "AgAAAA=="
 		dirName := strings.TrimPrefix(fullPrefix, prefix)
@@ -678,11 +917,11 @@ func listS3Directories(s3Client *s3.S3, bucket string, prefix string) ([]string,
 }
 
 // loadRayEventsFromS3 loads Ray events from S3.
-func loadRayEventsFromS3(s3Client *s3.S3, bucket string, prefix string) ([]rayEvent, error) {
+func loadRayEventsFromS3(ctx context.Context, s3Client *s3.Client, bucket string, prefix string) ([]rayEvent, error) {
 	var events []rayEvent
 
 	// List all file objects in the directory.
-	objects, err := s3Client.ListObjectsV2(&s3.ListObjectsV2Input{
+	objects, err := s3Client.ListObjectsV2(ctx, &s3.ListObjectsV2Input{
 		Bucket: aws.String(bucket),
 		Prefix: aws.String(prefix),
 	})
@@ -691,13 +930,13 @@ func loadRayEventsFromS3(s3Client *s3.S3, bucket string, prefix string) ([]rayEv
 	}
 
 	for _, obj := range objects.Contents {
-		fileKey := aws.StringValue(obj.Key)
+		fileKey := aws.ToString(obj.Key)
 		if strings.HasSuffix(fileKey, "/") {
 			continue
 		}
 
 		// Get the file object content and decode it into Ray events.
-		content, err := s3Client.GetObject(&s3.GetObjectInput{
+		content, err := s3Client.GetObject(ctx, &s3.GetObjectInput{
 			Bucket: aws.String(bucket),
 			Key:    aws.String(fileKey),
 		})
@@ -718,6 +957,7 @@ func loadRayEventsFromS3(s3Client *s3.S3, bucket string, prefix string) ([]rayEv
 	return events, nil
 }
 
+<<<<<<< HEAD
 // assertFileExist verifies that a file object exists under the given log directory prefix.
 // For a Ray cluster with one head node and one worker node, there are two log directories to verify:
 //   - logs/<headNodeID>/
@@ -735,6 +975,8 @@ func assertFileExist(test Test, g *WithT, s3Client *s3.S3, nodeLogDirPrefix stri
 	}, TestTimeoutMedium).Should(Succeed(), "Failed to verify file %s exists", fileKey)
 }
 
+=======
+>>>>>>> 76c417f7 (Migrate to new AWS S3 SDK version)
 // assertAllEventTypesCovered verifies that all potential event types are present in the events uploaded to S3.
 // NOTE: EVENT_TYPE_UNSPECIFIED is excluded from verification.
 //
@@ -746,9 +988,8 @@ func assertAllEventTypesCovered(test Test, g Gomega, events []rayEvent) {
 		foundEventTypes[event.EventType] = true
 	}
 
-	for _, eventType := range types.AllEventTypes {
-		if eventType == types.EVENT_TYPE_UNSPECIFIED {
-			LogWithTimestamp(test.T(), "Skipping verification for EVENT_TYPE_UNSPECIFIED")
+	for _, eventType := range eventtypes.AllEventTypes {
+		if eventType == eventtypes.EVENT_TYPE_UNSPECIFIED {
 			continue
 		}
 		g.Expect(foundEventTypes[string(eventType)]).To(BeTrue(), "Event type %s not found", eventType)
