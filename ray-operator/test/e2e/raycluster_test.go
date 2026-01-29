@@ -145,6 +145,9 @@ func TestRayClusterWithResourceQuota(t *testing.T) {
 	LogWithTimestamp(test.T(), "Waiting for RayCluster %s/%s to have ReplicaFailure condition", rayCluster.Namespace, rayCluster.Name)
 	g.Eventually(RayCluster(test, namespace.Name, rayCluster.Name), TestTimeoutShort).
 		Should(WithTransform(StatusCondition(rayv1.RayClusterReplicaFailure), MatchConditionContainsMessage(metav1.ConditionTrue, utils.ErrFailedCreateHeadPod.Error(), "forbidden: exceeded quota")))
+	
+	// Give operator time to gracefully clean up resources before namespace deletion
+	time.Sleep(2 * time.Second)
 }
 
 func TestRayClusterScalingDown(t *testing.T) {
