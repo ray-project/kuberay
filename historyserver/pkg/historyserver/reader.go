@@ -11,9 +11,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/emicklei/go-restful/v3"
-	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 	"github.com/sirupsen/logrus"
+
+	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
 const (
@@ -157,9 +157,4 @@ func (s *ServerHandler) GetNodes(rayClusterNameID, sessionId string) ([]byte, er
 	}
 	templ["data"].(map[string]interface{})["summary"] = nodeSummary
 	return json.Marshal(templ)
-}
-
-// TODO: implement this
-func (h *ServerHandler) getGrafanaHealth(req *restful.Request, resp *restful.Response) {
-	resp.WriteErrorString(http.StatusNotImplemented, "Grafana health not yet supported")
 }
