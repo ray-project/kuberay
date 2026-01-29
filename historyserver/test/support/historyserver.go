@@ -68,13 +68,10 @@ var HistoryServerEndpoints = []string{
 	"/logical/actors",
 }
 
-// HistoryServerEndpointGrafanaHealth is a standalone constant
+// HistoryServerEndpointPrometheusHealth and HistoryServerEndpointGrafanaHealth are standalone constants
 // because it requires some additional dependencies.
-const HistoryServerEndpointGrafanaHealth = "/api/grafana_health"
-
-// HistoryServerEndpointPrometheusHealth is a standalone constant
-// because it requires additional dependencies.
 const HistoryServerEndpointPrometheusHealth = "/api/prometheus_health"
+const HistoryServerEndpointGrafanaHealth = "/api/grafana_health"
 
 // ApplyHistoryServer deploys the HistoryServer and RBAC resources.
 func ApplyHistoryServer(test Test, g *WithT, namespace *corev1.Namespace) {
