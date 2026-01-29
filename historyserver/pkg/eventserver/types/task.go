@@ -271,12 +271,6 @@ type ClusterSessionTaskMap struct {
 	Mu                    sync.RWMutex
 }
 
-func NewClusterSessionTaskMap() *ClusterSessionTaskMap {
-	return &ClusterSessionTaskMap{
-		ClusterSessionTaskMap: make(map[string]*SessionTaskMap),
-	}
-}
-
 func (c *ClusterSessionTaskMap) RLock() {
 	c.Mu.RLock()
 }

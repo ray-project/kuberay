@@ -234,28 +234,14 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 		}
 
 		taskMap := h.ClusterTaskMap.GetOrCreateTaskMap(currentClusterName)
-		taskMap.CreateOrMergeAttempt(currTask.TaskID, currTask.AttemptNumber, func(t *types.Task) {
-			// Merge definition fields (preserve existing Events if any)
-			existingEvents := t.Events
-			*t = currTask
-			if len(existingEvents) > 0 {
-				t.Events = existingEvents
-				t.State = existingEvents[len(existingEvents)-1].State
-			}
-		})
+		mergeTaskDefinitionIntoTaskMap(taskMap, currTask)
 
+		// session-level task map
 		// guarded here to prevent backward compatibility issue
 		if currentSessionName != "" && h.ClusterSessionTaskMap != nil {
 			sessionTaskMap := h.ClusterSessionTaskMap.GetOrCreateSessionTaskMap(currentClusterName)
 			sessionTaskMapInner := sessionTaskMap.GetOrCreateTaskMap(currentSessionName)
-			sessionTaskMapInner.CreateOrMergeAttempt(currTask.TaskID, currTask.AttemptNumber, func(t *types.Task) {
-				existingEvents := t.Events
-				*t = currTask
-				if len(existingEvents) > 0 {
-					t.Events = existingEvents
-					t.State = existingEvents[len(existingEvents)-1].State
-				}
-			})
+			mergeTaskDefinitionIntoTaskMap(sessionTaskMapInner, currTask)
 		}
 
 	case types.TASK_LIFECYCLE_EVENT:
@@ -301,104 +287,14 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 		}
 
 		taskMap := h.ClusterTaskMap.GetOrCreateTaskMap(currentClusterName)
-		taskMap.CreateOrMergeAttempt(taskId, int(taskAttempt), func(t *types.Task) {
-			// --- DEDUPLICATION using (State + Timestamp) as unique key ---
-			// Build a set of existing event keys to detect duplicates
-			type eventKey struct {
-				State     string
-				Timestamp int64
-			}
-			existingKeys := make(map[eventKey]bool)
-			for _, e := range t.Events {
-				existingKeys[eventKey{string(e.State), e.Timestamp.UnixNano()}] = true
-			}
+		mergeTaskLifecycleIntoTaskMap(taskMap, stateEvents, int(taskAttempt), taskId, nodeId, workerId)
 
-			// Only append events that haven't been seen before
-			for _, e := range stateEvents {
-				key := eventKey{string(e.State), e.Timestamp.UnixNano()}
-				if !existingKeys[key] {
-					t.Events = append(t.Events, e)
-					existingKeys[key] = true
-				}
-			}
-
-			// Sort events by timestamp to ensure correct order
-			sort.Slice(t.Events, func(i, j int) bool {
-				return t.Events[i].Timestamp.Before(t.Events[j].Timestamp)
-			})
-
-			if len(t.Events) == 0 {
-				return
-			}
-
-			t.State = t.Events[len(t.Events)-1].State
-
-			if nodeId != "" {
-				t.NodeID = nodeId
-			}
-			if workerId != "" {
-				t.WorkerID = workerId
-			}
-			if t.StartTime.IsZero() {
-				for _, e := range t.Events {
-					if e.State == types.RUNNING {
-						t.StartTime = e.Timestamp
-						break
-					}
-				}
-			}
-			lastEvent := t.Events[len(t.Events)-1]
-			if lastEvent.State == types.FINISHED || lastEvent.State == types.FAILED {
-				t.EndTime = lastEvent.Timestamp
-			}
-		})
-
+		// session-level task map
 		// guarded here to prevent backward compatibility issue
 		if currentSessionName != "" && h.ClusterSessionTaskMap != nil {
 			sessionTaskMap := h.ClusterSessionTaskMap.GetOrCreateSessionTaskMap(currentClusterName)
 			sessionTaskMapInner := sessionTaskMap.GetOrCreateTaskMap(currentSessionName)
-			sessionTaskMapInner.CreateOrMergeAttempt(taskId, int(taskAttempt), func(t *types.Task) {
-				type eventKey struct {
-					State     string
-					Timestamp int64
-				}
-				existingKeys := make(map[eventKey]bool)
-				for _, e := range t.Events {
-					existingKeys[eventKey{string(e.State), e.Timestamp.UnixNano()}] = true
-				}
-				for _, e := range stateEvents {
-					key := eventKey{string(e.State), e.Timestamp.UnixNano()}
-					if !existingKeys[key] {
-						t.Events = append(t.Events, e)
-						existingKeys[key] = true
-					}
-				}
-				sort.Slice(t.Events, func(i, j int) bool {
-					return t.Events[i].Timestamp.Before(t.Events[j].Timestamp)
-				})
-				if len(t.Events) == 0 {
-					return
-				}
-				t.State = t.Events[len(t.Events)-1].State
-				if nodeId != "" {
-					t.NodeID = nodeId
-				}
-				if workerId != "" {
-					t.WorkerID = workerId
-				}
-				if t.StartTime.IsZero() {
-					for _, e := range t.Events {
-						if e.State == types.RUNNING {
-							t.StartTime = e.Timestamp
-							break
-						}
-					}
-				}
-				lastEvent := t.Events[len(t.Events)-1]
-				if lastEvent.State == types.FINISHED || lastEvent.State == types.FAILED {
-					t.EndTime = lastEvent.Timestamp
-				}
-			})
+			mergeTaskLifecycleIntoTaskMap(sessionTaskMapInner, stateEvents, int(taskAttempt), taskId, nodeId, workerId)
 		}
 
 	case types.ACTOR_DEFINITION_EVENT:
@@ -418,58 +314,14 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 
 		// Use CreateOrMergeActor pattern (same as Task)
 		actorMap := h.ClusterActorMap.GetOrCreateActorMap(currentClusterName)
-		actorMap.CreateOrMergeActor(currActor.ActorID, func(a *types.Actor) {
-			// Preserve lifecycle-derived fields that may have arrived first
-			existingEvents := a.Events
-			existingState := a.State
-			existingStartTime := a.StartTime
-			existingEndTime := a.EndTime
-			existingNumRestarts := a.NumRestarts
-			existingPID := a.PID
-			existingExitDetails := a.ExitDetails
-			existingAddress := a.Address
+		mergeActorDefinitionIntoActorMap(actorMap, currActor)
 
-			// Overwrite with definition fields
-			*a = currActor
-
-			// Restore lifecycle-derived fields if they existed
-			if len(existingEvents) > 0 {
-				a.Events = existingEvents
-				a.State = existingState
-				a.StartTime = existingStartTime
-				a.EndTime = existingEndTime
-				a.NumRestarts = existingNumRestarts
-				a.PID = existingPID
-				a.ExitDetails = existingExitDetails
-				a.Address = existingAddress
-			}
-		})
-
+		// session-level actor map
 		// guarded here to prevent backward compatibility issue
 		if currentSessionName != "" && h.ClusterSessionActorMap != nil {
 			sessionActorMap := h.ClusterSessionActorMap.GetOrCreateSessionActorMap(currentClusterName)
 			sessionActorMapInner := sessionActorMap.GetOrCreateActorMap(currentSessionName)
-			sessionActorMapInner.CreateOrMergeActor(currActor.ActorID, func(a *types.Actor) {
-				existingEvents := a.Events
-				existingState := a.State
-				existingStartTime := a.StartTime
-				existingEndTime := a.EndTime
-				existingNumRestarts := a.NumRestarts
-				existingPID := a.PID
-				existingExitDetails := a.ExitDetails
-				existingAddress := a.Address
-				*a = currActor
-				if len(existingEvents) > 0 {
-					a.Events = existingEvents
-					a.State = existingState
-					a.StartTime = existingStartTime
-					a.EndTime = existingEndTime
-					a.NumRestarts = existingNumRestarts
-					a.PID = existingPID
-					a.ExitDetails = existingExitDetails
-					a.Address = existingAddress
-				}
-			})
+			mergeActorDefinitionIntoActorMap(sessionActorMapInner, currActor)
 		}
 
 	case types.ACTOR_LIFECYCLE_EVENT:
@@ -526,180 +378,14 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 		}
 
 		actorMap := h.ClusterActorMap.GetOrCreateActorMap(currentClusterName)
-		actorMap.CreateOrMergeActor(actorId, func(a *types.Actor) {
-			// Ensure ActorID is set (in case LIFECYCLE arrives before DEFINITION)
-			a.ActorID = actorId
+		mergeActorLifecycleIntoActorMap(actorMap, stateEvents, actorId)
 
-			// --- DEDUPLICATION using (State + Timestamp) as unique key ---
-			// Build a set of existing event keys to detect duplicates
-			type eventKey struct {
-				State     string
-				Timestamp int64
-			}
-			existingKeys := make(map[eventKey]bool)
-			for _, e := range a.Events {
-				existingKeys[eventKey{string(e.State), e.Timestamp.UnixNano()}] = true
-			}
-
-			// Only append events that haven't been seen before
-			for _, e := range stateEvents {
-				key := eventKey{string(e.State), e.Timestamp.UnixNano()}
-				if !existingKeys[key] {
-					a.Events = append(a.Events, e)
-					existingKeys[key] = true
-				}
-			}
-
-			// Sort events by timestamp to ensure correct order
-			sort.Slice(a.Events, func(i, j int) bool {
-				return a.Events[i].Timestamp.Before(a.Events[j].Timestamp)
-			})
-
-			if len(a.Events) == 0 {
-				return
-			}
-
-			lastEvent := a.Events[len(a.Events)-1]
-
-			// --- UPDATE STATE ---
-			a.State = lastEvent.State
-
-			// --- UPDATE ADDRESS from ALIVE state ---
-			// NodeID and WorkerID are only populated in ALIVE state
-			for i := len(a.Events) - 1; i >= 0; i-- {
-				if a.Events[i].State == types.ALIVE && a.Events[i].NodeID != "" {
-					a.Address.NodeID = a.Events[i].NodeID
-					a.Address.WorkerID = a.Events[i].WorkerID
-					break
-				}
-			}
-
-			// --- UPDATE ReprName from latest ---
-			if lastEvent.ReprName != "" {
-				a.ReprName = lastEvent.ReprName
-			}
-
-			// --- CALCULATE StartTime (first ALIVE timestamp) ---
-			if a.StartTime.IsZero() {
-				for _, e := range a.Events {
-					if e.State == types.ALIVE {
-						a.StartTime = e.Timestamp
-						break
-					}
-				}
-			}
-
-			// --- HANDLE DEAD state ---
-			if lastEvent.State == types.DEAD {
-				a.EndTime = lastEvent.Timestamp
-
-				// Parse deathCause to extract PID, IP, errorMessage
-				if lastEvent.DeathCause != "" {
-					var deathCauseMap map[string]any
-					if err := json.Unmarshal([]byte(lastEvent.DeathCause), &deathCauseMap); err == nil {
-						if ctx, ok := deathCauseMap["actorDiedErrorContext"].(map[string]any); ok {
-							// Extract PID
-							if pid, ok := ctx["pid"].(float64); ok {
-								a.PID = int(pid)
-							}
-							// Extract IP address
-							if ip, ok := ctx["nodeIpAddress"].(string); ok {
-								a.Address.IPAddress = ip
-							}
-							// Extract error message as ExitDetails
-							if errMsg, ok := ctx["errorMessage"].(string); ok {
-								a.ExitDetails = errMsg
-							}
-						}
-					}
-				}
-			}
-
-			// --- COUNT RESTARTS ---
-			restartCount := 0
-			for _, e := range a.Events {
-				if e.State == types.RESTARTING {
-					restartCount++
-				}
-			}
-			a.NumRestarts = restartCount
-		})
-
+		// session-level actor map
 		// guarded here to prevent backward compatibility issue
 		if currentSessionName != "" && h.ClusterSessionActorMap != nil {
 			sessionActorMap := h.ClusterSessionActorMap.GetOrCreateSessionActorMap(currentClusterName)
 			sessionActorMapInner := sessionActorMap.GetOrCreateActorMap(currentSessionName)
-			sessionActorMapInner.CreateOrMergeActor(actorId, func(a *types.Actor) {
-				a.ActorID = actorId
-				type eventKey struct {
-					State     string
-					Timestamp int64
-				}
-				existingKeys := make(map[eventKey]bool)
-				for _, e := range a.Events {
-					existingKeys[eventKey{string(e.State), e.Timestamp.UnixNano()}] = true
-				}
-				for _, e := range stateEvents {
-					key := eventKey{string(e.State), e.Timestamp.UnixNano()}
-					if !existingKeys[key] {
-						a.Events = append(a.Events, e)
-						existingKeys[key] = true
-					}
-				}
-				sort.Slice(a.Events, func(i, j int) bool {
-					return a.Events[i].Timestamp.Before(a.Events[j].Timestamp)
-				})
-				if len(a.Events) == 0 {
-					return
-				}
-				lastEvent := a.Events[len(a.Events)-1]
-				a.State = lastEvent.State
-				for i := len(a.Events) - 1; i >= 0; i-- {
-					if a.Events[i].State == types.ALIVE && a.Events[i].NodeID != "" {
-						a.Address.NodeID = a.Events[i].NodeID
-						a.Address.WorkerID = a.Events[i].WorkerID
-						break
-					}
-				}
-				if lastEvent.ReprName != "" {
-					a.ReprName = lastEvent.ReprName
-				}
-				if a.StartTime.IsZero() {
-					for _, e := range a.Events {
-						if e.State == types.ALIVE {
-							a.StartTime = e.Timestamp
-							break
-						}
-					}
-				}
-				if lastEvent.State == types.DEAD {
-					a.EndTime = lastEvent.Timestamp
-
-					if lastEvent.DeathCause != "" {
-						var deathCauseMap map[string]any
-						if err := json.Unmarshal([]byte(lastEvent.DeathCause), &deathCauseMap); err == nil {
-							if ctx, ok := deathCauseMap["actorDiedErrorContext"].(map[string]any); ok {
-								if pid, ok := ctx["pid"].(float64); ok {
-									a.PID = int(pid)
-								}
-								if ip, ok := ctx["nodeIpAddress"].(string); ok {
-									a.Address.IPAddress = ip
-								}
-								if errMsg, ok := ctx["errorMessage"].(string); ok {
-									a.ExitDetails = errMsg
-								}
-							}
-						}
-					}
-				}
-				restartCount := 0
-				for _, e := range a.Events {
-					if e.State == types.RESTARTING {
-						restartCount++
-					}
-				}
-				a.NumRestarts = restartCount
-			})
+			mergeActorLifecycleIntoActorMap(sessionActorMapInner, stateEvents, actorId)
 		}
 
 	case types.ACTOR_TASK_DEFINITION_EVENT:
@@ -711,6 +397,203 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 	}
 
 	return nil
+}
+
+func mergeTaskDefinitionIntoTaskMap(taskMap *types.TaskMap, currTask types.Task) {
+	taskMap.CreateOrMergeAttempt(currTask.TaskID, currTask.AttemptNumber, func(t *types.Task) {
+		// Merge definition fields (preserve existing Events if any)
+		existingEvents := t.Events
+		*t = currTask
+		if len(existingEvents) > 0 {
+			t.Events = existingEvents
+			t.State = existingEvents[len(existingEvents)-1].State
+		}
+	})
+}
+
+func mergeTaskLifecycleIntoTaskMap(taskMap *types.TaskMap, stateEvents []types.StateEvent, taskAttempt int, taskId, nodeId, workerId string) {
+	taskMap.CreateOrMergeAttempt(taskId, taskAttempt, func(t *types.Task) {
+		// --- DEDUPLICATION using (State + Timestamp) as unique key ---
+		// Build a set of existing event keys to detect duplicates
+		type eventKey struct {
+			State     string
+			Timestamp int64
+		}
+
+		existingKeys := make(map[eventKey]bool)
+		for _, e := range t.Events {
+			existingKeys[eventKey{string(e.State), e.Timestamp.UnixNano()}] = true
+		}
+
+		// Only append events that haven't been seen before
+		for _, e := range stateEvents {
+			key := eventKey{string(e.State), e.Timestamp.UnixNano()}
+			if !existingKeys[key] {
+				t.Events = append(t.Events, e)
+				existingKeys[key] = true
+			}
+		}
+
+		// Sort events by timestamp to ensure correct order
+		sort.Slice(t.Events, func(i, j int) bool {
+			return t.Events[i].Timestamp.Before(t.Events[j].Timestamp)
+		})
+
+		if len(t.Events) == 0 {
+			return
+		}
+
+		t.State = t.Events[len(t.Events)-1].State
+
+		if nodeId != "" {
+			t.NodeID = nodeId
+		}
+		if workerId != "" {
+			t.WorkerID = workerId
+		}
+		if t.StartTime.IsZero() {
+			for _, e := range t.Events {
+				if e.State == types.RUNNING {
+					t.StartTime = e.Timestamp
+					break
+				}
+			}
+		}
+		lastEvent := t.Events[len(t.Events)-1]
+		if lastEvent.State == types.FINISHED || lastEvent.State == types.FAILED {
+			t.EndTime = lastEvent.Timestamp
+		}
+	})
+}
+
+func mergeActorDefinitionIntoActorMap(actorMap *types.ActorMap, currActor types.Actor) {
+	actorMap.CreateOrMergeActor(currActor.ActorID, func(a *types.Actor) {
+		// Preserve lifecycle-derived fields that may have arrived first
+		existingEvents := a.Events
+		existingState := a.State
+		existingStartTime := a.StartTime
+		existingEndTime := a.EndTime
+		existingNumRestarts := a.NumRestarts
+		existingPID := a.PID
+		existingExitDetails := a.ExitDetails
+		existingAddress := a.Address
+
+		// Overwrite with definition fields
+		*a = currActor
+
+		// Restore lifecycle-derived fields if they existed
+		if len(existingEvents) > 0 {
+			a.Events = existingEvents
+			a.State = existingState
+			a.StartTime = existingStartTime
+			a.EndTime = existingEndTime
+			a.NumRestarts = existingNumRestarts
+			a.PID = existingPID
+			a.ExitDetails = existingExitDetails
+			a.Address = existingAddress
+		}
+	})
+}
+
+func mergeActorLifecycleIntoActorMap(actorMap *types.ActorMap, stateEvents []types.ActorStateEvent, actorId string) {
+	actorMap.CreateOrMergeActor(actorId, func(a *types.Actor) {
+		// Ensure ActorID is set (in case LIFECYCLE arrives before DEFINITION)
+		a.ActorID = actorId
+
+		// --- DEDUPLICATION using (State + Timestamp) as unique key ---
+		// Build a set of existing event keys to detect duplicates
+		type eventKey struct {
+			State     string
+			Timestamp int64
+		}
+		existingKeys := make(map[eventKey]bool)
+		for _, e := range a.Events {
+			existingKeys[eventKey{string(e.State), e.Timestamp.UnixNano()}] = true
+		}
+
+		// Only append events that haven't been seen before
+		for _, e := range stateEvents {
+			key := eventKey{string(e.State), e.Timestamp.UnixNano()}
+			if !existingKeys[key] {
+				a.Events = append(a.Events, e)
+				existingKeys[key] = true
+			}
+		}
+
+		// Sort events by timestamp to ensure correct order
+		sort.Slice(a.Events, func(i, j int) bool {
+			return a.Events[i].Timestamp.Before(a.Events[j].Timestamp)
+		})
+
+		if len(a.Events) == 0 {
+			return
+		}
+
+		lastEvent := a.Events[len(a.Events)-1]
+
+		// --- UPDATE STATE ---
+		a.State = lastEvent.State
+
+		// --- UPDATE ADDRESS from ALIVE state ---
+		// NodeID and WorkerID are only populated in ALIVE state
+		for i := len(a.Events) - 1; i >= 0; i-- {
+			if a.Events[i].State == types.ALIVE && a.Events[i].NodeID != "" {
+				a.Address.NodeID = a.Events[i].NodeID
+				a.Address.WorkerID = a.Events[i].WorkerID
+				break
+			}
+		}
+
+		// --- UPDATE ReprName from latest ---
+		if lastEvent.ReprName != "" {
+			a.ReprName = lastEvent.ReprName
+		}
+
+		// --- CALCULATE StartTime (first ALIVE timestamp) ---
+		if a.StartTime.IsZero() {
+			for _, e := range a.Events {
+				if e.State == types.ALIVE {
+					a.StartTime = e.Timestamp
+					break
+				}
+			}
+		}
+
+		// --- HANDLE DEAD state ---
+		if lastEvent.State == types.DEAD {
+			a.EndTime = lastEvent.Timestamp
+
+			// Parse deathCause to extract PID, IP, errorMessage
+			if lastEvent.DeathCause != "" {
+				var deathCauseMap map[string]any
+				if err := json.Unmarshal([]byte(lastEvent.DeathCause), &deathCauseMap); err == nil {
+					if ctx, ok := deathCauseMap["actorDiedErrorContext"].(map[string]any); ok {
+						// Extract PID
+						if pid, ok := ctx["pid"].(float64); ok {
+							a.PID = int(pid)
+						}
+						// Extract IP address
+						if ip, ok := ctx["nodeIpAddress"].(string); ok {
+							a.Address.IPAddress = ip
+						}
+						// Extract error message as ExitDetails
+						if errMsg, ok := ctx["errorMessage"].(string); ok {
+							a.ExitDetails = errMsg
+						}
+					}
+				}
+			}
+		}
+
+		// --- COUNT RESTARTS ---
+		restartCount := 0
+		for _, e := range a.Events {
+			if e.State == types.RESTARTING {
+				restartCount++
+			}
+		}
+		a.NumRestarts = restartCount
+	})
 }
 
 // getAllJobEventFiles get all the job event files for the given cluster.

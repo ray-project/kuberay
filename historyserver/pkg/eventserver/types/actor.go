@@ -264,12 +264,6 @@ type ClusterSessionActorMap struct {
 	Mu                     sync.RWMutex
 }
 
-func NewClusterSessionActorMap() *ClusterSessionActorMap {
-	return &ClusterSessionActorMap{
-		ClusterSessionActorMap: make(map[string]*SessionActorMap),
-	}
-}
-
 func (c *ClusterSessionActorMap) RLock() {
 	c.Mu.RLock()
 }
