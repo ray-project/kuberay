@@ -398,18 +398,13 @@ func New(c *config) (*RayLogsHandler, error) {
 		awsconfig.WithHTTPClient(httpClient),
 	}
 
-	// Extract hostname from endpoint URL for WithBaseEndpoint
-	// WithBaseEndpoint expects just the hostname (host:port), not a full URL
-	var baseEndpoint string
+	// Use full endpoint URL (including scheme) for WithBaseEndpoint so that
+	// custom endpoints (e.g. MinIO at http://minio-service:9000) use the correct scheme.
 	if endpoint != "" {
-		parsedURL, err := url.Parse(endpoint)
-		if err != nil {
+		if _, err := url.Parse(endpoint); err != nil {
 			return nil, fmt.Errorf("failed to parse endpoint URL %s: %w", endpoint, err)
 		}
-		// Extract hostname:port (e.g., "minio:9000" or "s3.amazonaws.com")
-		// parsedURL.Host already contains hostname:port if port is specified
-		baseEndpoint = parsedURL.Host
-		loadOptions = append(loadOptions, awsconfig.WithBaseEndpoint(baseEndpoint))
+		loadOptions = append(loadOptions, awsconfig.WithBaseEndpoint(endpoint))
 	}
 
 	awsCfg, err := awsconfig.LoadDefaultConfig(ctx, loadOptions...)
