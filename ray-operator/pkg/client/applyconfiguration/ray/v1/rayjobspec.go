@@ -4,6 +4,7 @@ package v1
 
 import (
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	apicorev1 "k8s.io/api/core/v1"
 	corev1 "k8s.io/client-go/applyconfigurations/core/v1"
 )
 
@@ -21,7 +22,12 @@ type RayJobSpecApplyConfiguration struct {
 	// RayClusterSpec is the cluster template to run the job
 	RayClusterSpec *RayClusterSpecApplyConfiguration `json:"rayClusterSpec,omitempty"`
 	// SubmitterPodTemplate is the template for the pod that will run `ray job submit`.
+	// This is used when SubmissionMode is `K8sJobMode`.
 	SubmitterPodTemplate *corev1.PodTemplateSpecApplyConfiguration `json:"submitterPodTemplate,omitempty"`
+	// SubmitterContainerTemplate is the template for the sidecar submitter container
+	// injected into the Ray head Pod to run `ray job submit`
+	// This is used when SubmissionMode is `SidecarMode`.
+	SubmitterContainerTemplate *apicorev1.Container `json:"submitterContainerTemplate,omitempty"`
 	// Metadata is data to store along with this job.
 	Metadata map[string]string `json:"metadata,omitempty"`
 	// clusterSelector is used to select running rayclusters by labels
@@ -110,6 +116,14 @@ func (b *RayJobSpecApplyConfiguration) WithRayClusterSpec(value *RayClusterSpecA
 // If called multiple times, the SubmitterPodTemplate field is set to the value of the last call.
 func (b *RayJobSpecApplyConfiguration) WithSubmitterPodTemplate(value *corev1.PodTemplateSpecApplyConfiguration) *RayJobSpecApplyConfiguration {
 	b.SubmitterPodTemplate = value
+	return b
+}
+
+// WithSubmitterContainerTemplate sets the SubmitterContainerTemplate field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the SubmitterContainerTemplate field is set to the value of the last call.
+func (b *RayJobSpecApplyConfiguration) WithSubmitterContainerTemplate(value apicorev1.Container) *RayJobSpecApplyConfiguration {
+	b.SubmitterContainerTemplate = &value
 	return b
 }
 
