@@ -78,14 +78,11 @@ func NewDeleteCommand(cmdFactory cmdutil.Factory, streams genericclioptions.IOSt
 }
 
 func (options *DeleteOptions) Complete(cmd *cobra.Command, args []string) error {
-	namespace, err := cmd.Flags().GetString("namespace")
+	namespace, _, err := options.cmdFactory.ToRawKubeConfigLoader().Namespace()
 	if err != nil {
 		return fmt.Errorf("failed to get namespace: %w", err)
 	}
 	options.namespace = namespace
-	if options.namespace == "" {
-		options.namespace = "default"
-	}
 
 	if options.resources == nil {
 		options.resources = map[util.ResourceType][]string{}

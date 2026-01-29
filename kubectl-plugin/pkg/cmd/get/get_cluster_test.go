@@ -29,7 +29,6 @@ import (
 func TestRayClusterGetComplete(t *testing.T) {
 	// Initialize members of the cluster get option struct and the struct itself
 	testStreams, _, _, _ := genericclioptions.NewTestIOStreams()
-	cmdFactory := cmdutil.NewFactory(genericclioptions.NewConfigFlags(true))
 
 	tests := []struct {
 		name                  string
@@ -70,11 +69,16 @@ func TestRayClusterGetComplete(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
+			configFlags := genericclioptions.NewConfigFlags(true)
+			cmdFactory := cmdutil.NewFactory(configFlags)
 			fakeClusterGetOptions := NewGetClusterOptions(cmdFactory, testStreams)
 
+			if tc.namespace != "" {
+				configFlags.Namespace = &tc.namespace
+			}
 			cmd := &cobra.Command{}
-			cmd.Flags().StringVarP(&fakeClusterGetOptions.namespace, "namespace", "n", tc.namespace, "")
-			err := fakeClusterGetOptions.Complete(tc.args, cmd)
+			configFlags.AddFlags(cmd.Flags())
+			err := fakeClusterGetOptions.Complete(tc.args)
 			require.NoError(t, err)
 
 			assert.Equal(t, tc.expectedAllNamespaces, fakeClusterGetOptions.allNamespaces)
