@@ -6,17 +6,70 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/ray-project/kuberay/historyserver/pkg/collector/types"
-	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 	"io"
 	"path"
+	"sync"
 	"time"
 
+	"github.com/ray-project/kuberay/historyserver/pkg/collector/types"
+	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 	"github.com/sirupsen/logrus"
 )
 
 // TODO(alex): This file is just a work around because some ray resource events are not implemented yet.
 // We should delete this file after history server can get the resources by ray events
+
+// JobResourcesUrlInfoMap is a thread-safe map for storing job resource URL information
+// TODO(alex): consider to use lru cache if needed in order to prevent memory leak
+type JobResourcesUrlInfoMap struct {
+	data map[string]*types.JobUrlInfo
+	mu   sync.RWMutex
+}
+
+func (j *JobResourcesUrlInfoMap) RLock() {
+	j.mu.RLock()
+}
+
+func (j *JobResourcesUrlInfoMap) RUnlock() {
+	j.mu.RUnlock()
+}
+
+func (j *JobResourcesUrlInfoMap) Lock() {
+	j.mu.Lock()
+}
+
+func (j *JobResourcesUrlInfoMap) Unlock() {
+	j.mu.Unlock()
+}
+
+func (j *JobResourcesUrlInfoMap) Get(key string) (*types.JobUrlInfo, bool) {
+	j.RLock()
+	defer j.RUnlock()
+	val, ok := j.data[key]
+	return val, ok
+}
+
+func (j *JobResourcesUrlInfoMap) Set(key string, val *types.JobUrlInfo) {
+	j.Lock()
+	defer j.Unlock()
+	j.data[key] = val
+}
+
+func (j *JobResourcesUrlInfoMap) Delete(key string) {
+	j.Lock()
+	defer j.Unlock()
+	delete(j.data, key)
+}
+
+func (j *JobResourcesUrlInfoMap) Keys() []string {
+	j.RLock()
+	defer j.RUnlock()
+	keys := make([]string, 0, len(j.data))
+	for k := range j.data {
+		keys = append(keys, k)
+	}
+	return keys
+}
 
 var metaCommonUrlInfo = []*types.UrlInfo{
 	{
@@ -37,7 +90,9 @@ var jobsUrlInfo = &types.UrlInfo{
 	Type: "URL",
 }
 
-var jobResourcesUrlInfo = map[string]*types.JobUrlInfo{}
+var jobResourcesUrlInfo = &JobResourcesUrlInfoMap{
+	data: make(map[string]*types.JobUrlInfo),
+}
 
 func (r *RayLogHandler) PersistMetaLoop(stop <-chan struct{}) {
 	// create meta directory
@@ -140,21 +195,29 @@ func (r *RayLogHandler) PersistDatasetsMeta() {
 	}
 
 	for jobID, status := range currentJobIDs {
-		if _, ok := jobResourcesUrlInfo[jobID]; !ok {
-			jobResourcesUrlInfo[jobID] = &types.JobUrlInfo{
+		if existingJob, ok := jobResourcesUrlInfo.Get(jobID); !ok {
+			// Add new job
+			jobResourcesUrlInfo.Set(jobID, &types.JobUrlInfo{
 				Url: &types.UrlInfo{
 					Key: fmt.Sprintf("%s%s", utils.OssMetaFile_JOBDATASETS_Prefix, jobID),
 					Url: fmt.Sprintf("http://localhost:8265/api/data/datasets/%s", jobID),
 				},
 				Status: status,
-			}
-		} else {
-			// Update status for existing jobs
-			jobResourcesUrlInfo[jobID].Status = status
+			})
+		} else if !existingJob.StopPersist {
+			// Update status for existing jobs only if not already stopped persisting
+			existingJob.Status = status
 		}
 	}
 
-	for _, urlInfo := range jobResourcesUrlInfo {
+	// Process each job individually to avoid holding lock for too long
+	allJobIDs := jobResourcesUrlInfo.Keys()
+	for _, jobID := range allJobIDs {
+		urlInfo, ok := jobResourcesUrlInfo.Get(jobID)
+		if !ok {
+			continue
+		}
+
 		if urlInfo.StopPersist {
 			continue
 		}
