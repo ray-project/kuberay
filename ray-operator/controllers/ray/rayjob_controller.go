@@ -323,6 +323,26 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 		}
 
+		// It is safe to convert uint64 to int64 here because Ray Core uses `int64_t` under the hood,
+		// even though the type defined in `message JobTableData` (gcs.proto) is `uint64`.
+		// See `gcs_job_manager.cc` and the function `current_sys_time_ms` for more details.
+		if jobInfo.StartTime != 0 {
+			rayJobInstance.Status.RayJobStatusInfo.StartTime = &metav1.Time{Time: time.UnixMilli(utils.SafeUint64ToInt64(jobInfo.StartTime))}
+		}
+		if jobInfo.EndTime != 0 {
+			rayJobInstance.Status.RayJobStatusInfo.EndTime = &metav1.Time{Time: time.UnixMilli(utils.SafeUint64ToInt64(jobInfo.EndTime))}
+		}
+
+		// If the AsyncJobInfoQuery feature is enabled, the RayJob has a submitter and the JobDeploymentStatus is Failed already,
+		// It might be judged as Failed due to the submitter failure. In this case, it only updates the JobStatus according to the newer status.
+		if features.Enabled(features.AsyncJobInfoQuery) && utils.HasSubmitter(rayJobInstance) && rayJobInstance.Status.JobDeploymentStatus == rayv1.JobDeploymentStatusFailed {
+			rayJobInstance.Status.JobStatus = jobInfo.JobStatus
+			if jobInfo.JobStatus == rayv1.JobStatusFailed {
+				rayJobInstance.Status.Reason = rayv1.AppFailed
+			}
+			break
+		}
+
 		// If the JobStatus is in a terminal status, such as SUCCEEDED, FAILED, or STOPPED, it is impossible for the Ray job
 		// to transition to any other. Additionally, RayJob does not currently support retries. Hence, we can mark the RayJob
 		// as "Complete" or "Failed" to avoid unnecessary reconciliation.
@@ -349,15 +369,6 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		rayJobInstance.Status.JobDeploymentStatus = jobDeploymentStatus
 		rayJobInstance.Status.Reason = reason
 		rayJobInstance.Status.Message = jobInfo.Message
-		// It is safe to convert uint64 to int64 here because Ray Core uses `int64_t` under the hood,
-		// even though the type defined in `message JobTableData` (gcs.proto) is `uint64`.
-		// See `gcs_job_manager.cc` and the function `current_sys_time_ms` for more details.
-		if jobInfo.StartTime != 0 {
-			rayJobInstance.Status.RayJobStatusInfo.StartTime = &metav1.Time{Time: time.UnixMilli(utils.SafeUint64ToInt64(jobInfo.StartTime))}
-		}
-		if jobInfo.EndTime != 0 {
-			rayJobInstance.Status.RayJobStatusInfo.EndTime = &metav1.Time{Time: time.UnixMilli(utils.SafeUint64ToInt64(jobInfo.EndTime))}
-		}
 	case rayv1.JobDeploymentStatusSuspending, rayv1.JobDeploymentStatusRetrying:
 		// The `suspend` operation should be atomic. In other words, if users set the `suspend` flag to true and then immediately
 		// set it back to false, either all of the RayJob's associated resources should be cleaned up, or no resources should be
@@ -1062,13 +1073,6 @@ func (r *RayJobReconciler) checkSubmitterAndUpdateStatusIfNeeded(ctx context.Con
 		}
 
 		finishedAt = getSubmitterContainerFinishedTime(headPod)
-		if features.Enabled(features.AsyncJobInfoQuery) && finishedAt != nil && !rayv1.IsJobTerminal(rayJob.Status.JobStatus) {
-			// If AsyncJobInfoQuery is enabled and the submitter container has finished, but the JobStatus is not terminal,
-			// The JobStatus might be inconsistent with the actual job status because of cache.
-			// Make shouldUpdate false to get the newer JobStatus again.
-			shouldUpdate = false
-		}
-		return
 	case rayv1.K8sJobMode:
 		job := &batchv1.Job{}
 		// If the submitting Kubernetes Job reaches the backoff limit, transition the status to `Complete` or `Failed`.
@@ -1105,20 +1109,20 @@ func (r *RayJobReconciler) checkSubmitterAndUpdateStatusIfNeeded(ctx context.Con
 			finishedAt = &jobFinishedCondition.LastTransitionTime.Time
 		}
 
-		if features.Enabled(features.AsyncJobInfoQuery) && finishedAt != nil && !rayv1.IsJobTerminal(rayJob.Status.JobStatus) {
-			// If AsyncJobInfoQuery is enabled and the Job has finished, but the JobStatus is not terminal,
-			// The JobStatus might be inconsistent with the actual job status because of cache.
-			// Make shouldUpdate false to get the newer JobStatus again.
-			shouldUpdate = false
-		}
-
-		return
 	default:
 		// This means that the KubeRay logic is wrong, and it's better to panic as a system error than to allow the operator to
 		// continue reconciling in a wrong state as an application error.
 		// https://github.com/ray-project/kuberay/pull/3971#discussion_r2292808734
 		panic("You can only call checkSubmitterAndUpdateStatusIfNeeded when using K8sJobMode and SidecarMode.")
 	}
+
+	if features.Enabled(features.AsyncJobInfoQuery) && finishedAt != nil && rayJob.Status.JobStatus != rayv1.JobStatusNew && !rayv1.IsJobTerminal(rayJob.Status.JobStatus) {
+		// If AsyncJobInfoQuery is enabled and the submitter container has finished, but the JobStatus is not terminal,
+		// The JobStatus might be inconsistent with the actual job status because of cache.
+		// Make shouldUpdate false to get the newer JobStatus again.
+		shouldUpdate = false
+	}
+	return
 }
 
 func checkK8sJobStatus(job *batchv1.Job) (bool, *batchv1.JobCondition) {
