@@ -3,60 +3,85 @@ package gcs
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"path"
 	"strings"
 	"time"
 
 	gstorage "cloud.google.com/go/storage"
+	"github.com/ray-project/kuberay/historyserver/pkg/collector/types"
 	"github.com/ray-project/kuberay/historyserver/pkg/storage"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 	"github.com/sirupsen/logrus"
-	giterator "google.golang.org/api/iterator"
+	gIterator "google.golang.org/api/iterator"
+	"google.golang.org/api/option"
 )
 
-type GCSBucketHandler struct {
+type RayLogsHandler struct {
 	GCSBucket      string
+	LogFiles       chan string
+	RootDir        string
+	SessionDir     string
+	HttpClient     *http.Client
 	RayClusterName string
 	RayClusterID   string
 	RayNodeName    string
+	LogBatching    int
 
 	StorageClient *gstorage.Client
-	FlushInterval time.Duration
+	PushInterval  time.Duration
 }
 
 // CreateDirectory creates a new "directory" under GCS. Since GCS is a "flat" namespace,
 // we simulate a directory by using forward slash and immediately closing the writer.
-func (h *GCSBucketHandler) CreateDirectory(directoryPath string) error {
+// Closing the writer will "finalize" the directory creation
+func (h *RayLogsHandler) CreateDirectory(directoryPath string) error {
 	ctx := context.Background()
 
 	// make sure the path ends with a / so a directory is "created"
 	objectPath := fmt.Sprintf("%s/", path.Clean(directoryPath))
-	writer := h.StorageClient.Bucket(h.GCSBucket).Object(objectPath).NewWriter(ctx)
-	if err := writer.Close(); err != nil {
-		logrus.Errorf("Failed to create directory: %s, error: %v", objectPath, err)
+	// Check if directory exists
+	_, err := h.StorageClient.Bucket(h.GCSBucket).Object(objectPath).Attrs(ctx)
+	if errors.Is(err, gstorage.ErrObjectNotExist) {
+		writer := h.StorageClient.Bucket(h.GCSBucket).Object(objectPath).NewWriter(ctx)
+		if createErr := writer.Close(); err != nil {
+			logrus.Errorf("Failed to create directory: %s, error: %v", objectPath, createErr)
+			return createErr
+		}
+
+		logrus.Infof("Successfully created GCS directory: %s", objectPath)
+		return nil
+	} else if err != nil {
+		logrus.Errorf("Failed to check if GCS directory already exist: %s, error: %v", objectPath, err)
 		return err
 	}
 
-	logrus.Infof("Successfully created GCS directory: %s", objectPath)
+	logrus.Infof("Directory already exists: %s", objectPath)
 	return nil
 }
 
-func (h *GCSBucketHandler) WriteFile(file string, reader io.ReadSeeker) error {
+func (h *RayLogsHandler) WriteFile(file string, reader io.ReadSeeker) error {
 	ctx := context.Background()
 
 	writer := h.StorageClient.Bucket(h.GCSBucket).Object(file).NewWriter(ctx)
-	defer writer.Close()
 	_, err := io.Copy(writer, reader)
 	if err != nil {
+		logrus.Error("GCS Client failed to Copy from source.")
 		return err
 	}
 
+	// We don't defer close here since the close function acts as finalizing the write.
+	if err := writer.Close(); err != nil {
+		logrus.Error("GCS Client failed to finalize write.")
+		return err
+	}
 	return nil
 }
 
-func (h *GCSBucketHandler) ListFiles(clusterId string, directory string) []string {
+func (h *RayLogsHandler) ListFiles(clusterId string, directory string) []string {
 	// TODO(chiayi): Look into potential timeout issues
 	ctx := context.Background()
 
@@ -72,16 +97,16 @@ func (h *GCSBucketHandler) ListFiles(clusterId string, directory string) []strin
 	var fileList []string
 	for {
 		attrs, err := fileIterator.Next()
-		if err == giterator.Done {
+		if err == gIterator.Done {
 			break
 		}
 		if err != nil {
 			logrus.Error("Failed to read bucket")
 			if err == gstorage.ErrObjectNotExist {
-				logrus.Errorf("object does not exist. Bucket(%q).Objects() with query %+v: %w", h.GCSBucket, query, err)
+				logrus.Errorf("object does not exist. Bucket(%q).Objects() with query %+v: %v", h.GCSBucket, query, err)
 				return nil
 			} else {
-				logrus.Errorf("Bucket(%q).Objects() with query %+v: %w", h.GCSBucket, query, err)
+				logrus.Errorf("Bucket(%q).Objects() with query %+v: %v", h.GCSBucket, query, err)
 				return nil
 			}
 		}
@@ -102,42 +127,83 @@ func (h *GCSBucketHandler) ListFiles(clusterId string, directory string) []strin
 }
 
 // List will return a list of ClusterInfo
-func (h *GCSBucketHandler) List() []utils.ClusterInfo {
+func (h *RayLogsHandler) List() []utils.ClusterInfo {
 	ctx := context.Background()
 
 	clusterList := make(utils.ClusterInfoList, 0, 20)
 	bucket := h.StorageClient.Bucket(h.GCSBucket)
-	objectIterator := bucket.Objects(ctx, nil)
+	pathPrefix := path.Join(h.RootDir, "metadir") + "/"
+	query := &gstorage.Query{
+		// Match with only non-directory objects
+		MatchGlob: pathPrefix + "**/*[!/]",
+	}
+	objectIterator := bucket.Objects(ctx, query)
 	for {
+		cluster := &utils.ClusterInfo{}
 		objectAttr, err := objectIterator.Next()
-		if err == giterator.Done {
+		if err == gIterator.Done {
 			break
 		}
 		if err != nil {
 			logrus.Fatalf("Failed to get attribute of ray clusters: %v", err)
 		}
 
-		// TODO(chaiyi): Split the name into the RayCluster info
-		// TODO(chiayi): Remove potential "sub" files
-		cluster := &utils.ClusterInfo{}
-		cluster.Name = objectAttr.Name
+		fullObjectPath := objectAttr.Name
+		metaInfo := strings.Split(strings.Trim(fullObjectPath, pathPrefix), "/")
+		if len(metaInfo) != 2 {
+			logrus.Errorf("Unable to properly parse cluster metadir path with fullpath: %s", fullObjectPath)
+			return nil
+		}
+		clusterMeta := strings.Split(metaInfo[0], "_")
+		if len(clusterMeta) != 2 {
+			logrus.Errorf("Unable to get cluster name and namespace from directory: %s", metaInfo[0])
+			return nil
+		}
+		cluster.Name = clusterMeta[0]
+		cluster.Namespace = clusterMeta[1]
 
+		cluster.SessionName = metaInfo[1]
+		time, err := utils.GetDateTimeFromSessionID(metaInfo[1])
+		if err != nil {
+			logrus.Errorf("Failed to get date time from the given sessionID: %s, error: %v", metaInfo[1], err)
+		}
+		cluster.CreateTimeStamp = time.Unix()
+		cluster.CreateTime = time.UTC().Format(("2006-01-02T15:04:05Z"))
+
+		logrus.Infof("Parsed cluster %s for session %s to list", cluster.Name, cluster.SessionName)
 		clusterList = append(clusterList, *cluster)
 	}
 
 	return clusterList
 }
 
-func (h *GCSBucketHandler) GetContent(clusterId string, fileName string) io.Reader {
+func (h *RayLogsHandler) GetContent(clusterId string, fileName string) io.Reader {
 	ctx := context.Background()
 
 	// TODO(chiayi): Find filePath. Use MatchGlob to find file with fileName
-	reader, err := h.StorageClient.Bucket(h.GCSBucket).Object(fileName).NewReader(ctx)
+	bucket := h.StorageClient.Bucket(h.GCSBucket)
+	query := &gstorage.Query{
+		MatchGlob: "**/" + clusterId + "*/**/" + fileName,
+	}
+
+	objectIterator := bucket.Objects(ctx, query)
+	// fileName should be unique with clusterId so will get the first one
+	fileAttrs, err := objectIterator.Next()
+	if err != gIterator.Done {
+		logrus.Errorf("File %s was not found in bucket for cluster %s", fileName, clusterId)
+		return nil
+	}
 	if err != nil {
-		logrus.Fatalf("Failed to initialize file reader: %v", err)
+		logrus.Errorf("Failed when searching for file %v", err)
+		return nil
+	}
+
+	reader, err := h.StorageClient.Bucket(h.GCSBucket).Object(fileAttrs.Name).NewReader(ctx)
+	if err != nil {
+		logrus.Errorf("Failed to create reader for file: %s in cluster: %s", fileName, clusterId)
+		return nil
 	}
 	defer reader.Close()
-
 	// TODO(chiayi): ReadAll can potentially cause OOM error depending on the size of the file.
 	// Change into bufio.Scanner if needed or limit the size of the read
 	data, err := io.ReadAll(reader)
@@ -147,24 +213,51 @@ func (h *GCSBucketHandler) GetContent(clusterId string, fileName string) io.Read
 	return bytes.NewReader(data)
 }
 
-func NewReader(bucketName string) (storage.StorageReader, error) {
-	return NewGCSBucketHandler(bucketName, "")
+func NewReader(c *types.RayHistoryServerConfig, jd map[string]interface{}) (storage.StorageReader, error) {
+	config := &config{}
+	config.completeHistoryServerConfig(c, jd)
+	return New(config)
 }
 
-func NewWriter(bucketName string, rayClusterName string) (storage.StorageWriter, error) {
-	return NewGCSBucketHandler(bucketName, rayClusterName)
+func NewWriter(c *types.RayCollectorConfig, jd map[string]interface{}) (storage.StorageWriter, error) {
+	config := &config{}
+	config.completeCollectorConfig(c, jd)
+	return New(config)
 }
 
-func NewGCSBucketHandler(bucketName string, rayCluster string) (*GCSBucketHandler, error) {
+// New will create a RayLogsHandler for reading and writing to GCS
+// Currently, workload identity is required for using this client.
+// If workload identity is not set, default behavior will also search GOOGLE_APPLICATION_CREDENTIALS env var
+func New(c *config) (*RayLogsHandler, error) {
+	logrus.Infof("Starting GCS client ...")
+
+	// TODO(chiayi): Add timeout for all contexts, close client?
 	ctx := context.Background()
-	storageClient, err := gstorage.NewClient(ctx)
+
+	GCSHttpClient := &http.Client{
+		Transport: &http.Transport{
+			MaxIdleConns:        100,
+			MaxIdleConnsPerHost: 20,
+			IdleConnTimeout:     90 * time.Second,
+		},
+	}
+
+	storageClient, err := gstorage.NewClient(ctx, option.WithHTTPClient(GCSHttpClient))
 	if err != nil {
+		logrus.Errorf("Failed to create google cloud storage client")
 		return nil, err
 	}
 
-	return &GCSBucketHandler{
-		GCSBucket:      bucketName,
-		RayClusterName: rayCluster,
+	return &RayLogsHandler{
 		StorageClient:  storageClient,
+		GCSBucket:      c.Bucket,
+		RayClusterName: c.RayClusterName,
+		RayClusterID:   c.RayClusterID,
+		RootDir:        c.RootDir,
+		LogFiles:       make(chan string, 100),
+		LogBatching:    c.LogBatching,
+		RayNodeName:    c.RayNodeName,
+		SessionDir:     c.SessionDir,
+		PushInterval:   c.PushInterval,
 	}, nil
 }

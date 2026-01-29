@@ -54,3 +54,7 @@ func TestConvertBase64ToHex(t *testing.T) {
 		})
 	}
 }
+
+func TestGetDateTimeFromSessionID(t *testing.T) {
+	//TODO(chiayi): Add Test
+}
