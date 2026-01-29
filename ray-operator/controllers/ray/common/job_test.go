@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/utils/ptr"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
@@ -112,7 +113,9 @@ func TestBuildJobSubmitCommandWithSidecarMode(t *testing.T) {
 		},
 	}
 
+	address := "http://127.0.0.1:8265"
 	expected := []string{
+		// Wait for Dashboard GCS health
 		"until",
 		fmt.Sprintf(
 			utils.BaseWgetHealthCommand,
@@ -121,8 +124,19 @@ func TestBuildJobSubmitCommandWithSidecarMode(t *testing.T) {
 			utils.RayDashboardGCSHealthPath,
 		),
 		">/dev/null", "2>&1", ";",
-		"do", "echo", strconv.Quote("Waiting for Ray Dashboard GCS to become healthy at http://127.0.0.1:8265 ..."), ";", "sleep", "2", ";", "done", ";",
-		"ray", "job", "submit", "--address", "http://127.0.0.1:8265",
+		"do", "echo", strconv.Quote("Waiting for Ray Dashboard GCS to become healthy at " + address + " ..."), ";", "sleep", "2", ";", "done", ";",
+		// Wait for expected nodes to register
+		"if", "[", "-n", "\"$" + utils.RAY_EXPECTED_MIN_WORKERS + "\"", "]", "&&", "[", "\"$" + utils.RAY_EXPECTED_MIN_WORKERS + "\"", "-gt", "\"0\"", "]", ";", "then",
+		"EXPECTED_NODES=$(($" + utils.RAY_EXPECTED_MIN_WORKERS + " + 1))", ";",
+		"echo", strconv.Quote("Waiting for $EXPECTED_NODES nodes (1 head + $" + utils.RAY_EXPECTED_MIN_WORKERS + " workers) to register..."), ";",
+		"until", "[",
+		"\"$(wget ${" + utils.RAY_AUTH_TOKEN_ENV_VAR + ":+--header \"x-ray-authorization: Bearer $" + utils.RAY_AUTH_TOKEN_ENV_VAR + "\"} -q -O- " + address + "/nodes?view=summary 2>/dev/null | python3 -c \"import sys,json; d=json.load(sys.stdin); print(len([n for n in d.get('data',{}).get('summary',[]) if n.get('raylet',{}).get('state','')=='ALIVE']))\" 2>/dev/null || echo 0)\"",
+		"-ge", "\"$EXPECTED_NODES\"", "]", ";",
+		"do", "echo", strconv.Quote("Waiting for Ray nodes to register. Expected: $EXPECTED_NODES ..."), ";", "sleep", "2", ";", "done", ";",
+		"echo", strconv.Quote("All expected nodes are registered."), ";",
+		"fi", ";",
+		// Job submit command
+		"ray", "job", "submit", "--address", address,
 		"--runtime-env-json", strconv.Quote(`{"test":"test"}`),
 		"--metadata-json", strconv.Quote(`{"testKey":"testValue"}`),
 		"--submission-id", "testJobId",
@@ -239,4 +253,213 @@ func TestGetSubmitterTemplate(t *testing.T) {
 	}
 	template := GetSubmitterTemplate(&rayJob.Spec, &rayCluster.Spec)
 	assert.Equal(t, template.Spec.Containers[0].Image, rayCluster.Spec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex].Image)
+}
+
+func TestGetMinReplicasFromSpec(t *testing.T) {
+	tests := []struct {
+		spec     *rayv1.RayClusterSpec
+		name     string
+		expected int32
+	}{
+		{
+			name:     "nil spec returns 0",
+			spec:     nil,
+			expected: 0,
+		},
+		{
+			name: "no worker groups returns 0",
+			spec: &rayv1.RayClusterSpec{
+				WorkerGroupSpecs: []rayv1.WorkerGroupSpec{},
+			},
+			expected: 0,
+		},
+		{
+			name: "single worker group with minReplicas",
+			spec: &rayv1.RayClusterSpec{
+				WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+					{
+						MinReplicas: ptr.To[int32](2),
+						NumOfHosts:  1,
+					},
+				},
+			},
+			expected: 2,
+		},
+		{
+			name: "multiple worker groups",
+			spec: &rayv1.RayClusterSpec{
+				WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+					{
+						MinReplicas: ptr.To[int32](2),
+						NumOfHosts:  1,
+					},
+					{
+						MinReplicas: ptr.To[int32](3),
+						NumOfHosts:  1,
+					},
+				},
+			},
+			expected: 5,
+		},
+		{
+			name: "worker group with NumOfHosts > 1",
+			spec: &rayv1.RayClusterSpec{
+				WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+					{
+						MinReplicas: ptr.To[int32](2),
+						NumOfHosts:  2,
+					},
+				},
+			},
+			expected: 4,
+		},
+		{
+			name: "suspended worker group is skipped",
+			spec: &rayv1.RayClusterSpec{
+				WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+					{
+						MinReplicas: ptr.To[int32](2),
+						NumOfHosts:  1,
+						Suspend:     ptr.To(true),
+					},
+					{
+						MinReplicas: ptr.To[int32](3),
+						NumOfHosts:  1,
+					},
+				},
+			},
+			expected: 3,
+		},
+		{
+			name: "nil minReplicas defaults to 0",
+			spec: &rayv1.RayClusterSpec{
+				WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+					{
+						MinReplicas: nil,
+						NumOfHosts:  1,
+					},
+				},
+			},
+			expected: 0,
+		},
+		{
+			name: "NumOfHosts 0 results in 0 workers for that group",
+			spec: &rayv1.RayClusterSpec{
+				WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+					{
+						MinReplicas: ptr.To[int32](2),
+						NumOfHosts:  0,
+					},
+				},
+			},
+			expected: 0,
+		},
+		{
+			name: "falls back to Replicas when MinReplicas is nil",
+			spec: &rayv1.RayClusterSpec{
+				WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+					{
+						Replicas:    ptr.To[int32](3),
+						MinReplicas: nil,
+						NumOfHosts:  1,
+					},
+				},
+			},
+			expected: 3,
+		},
+		{
+			name: "falls back to Replicas when MinReplicas is 0",
+			spec: &rayv1.RayClusterSpec{
+				WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+					{
+						Replicas:    ptr.To[int32](5),
+						MinReplicas: ptr.To[int32](0),
+						NumOfHosts:  1,
+					},
+				},
+			},
+			expected: 5,
+		},
+		{
+			name: "uses MinReplicas when both are set and MinReplicas > 0",
+			spec: &rayv1.RayClusterSpec{
+				WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+					{
+						Replicas:    ptr.To[int32](5),
+						MinReplicas: ptr.To[int32](2),
+						NumOfHosts:  1,
+					},
+				},
+			},
+			expected: 2,
+		},
+		{
+			name: "both MinReplicas and Replicas are nil",
+			spec: &rayv1.RayClusterSpec{
+				WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+					{
+						Replicas:    nil,
+						MinReplicas: nil,
+						NumOfHosts:  1,
+					},
+				},
+			},
+			expected: 0,
+		},
+		{
+			name: "both MinReplicas and Replicas are 0",
+			spec: &rayv1.RayClusterSpec{
+				WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+					{
+						Replicas:    ptr.To[int32](0),
+						MinReplicas: ptr.To[int32](0),
+						NumOfHosts:  1,
+					},
+				},
+			},
+			expected: 0,
+		},
+		{
+			name: "mixed worker groups - some with MinReplicas some with only Replicas",
+			spec: &rayv1.RayClusterSpec{
+				WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+					{
+						MinReplicas: ptr.To[int32](2),
+						NumOfHosts:  1,
+					},
+					{
+						Replicas:    ptr.To[int32](3),
+						MinReplicas: nil,
+						NumOfHosts:  1,
+					},
+					{
+						Replicas:    ptr.To[int32](4),
+						MinReplicas: ptr.To[int32](0),
+						NumOfHosts:  1,
+					},
+				},
+			},
+			expected: 9, // 2 + 3 + 4
+		},
+		{
+			name: "NumOfHosts > 1 with Replicas fallback",
+			spec: &rayv1.RayClusterSpec{
+				WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+					{
+						Replicas:    ptr.To[int32](3),
+						MinReplicas: nil,
+						NumOfHosts:  2,
+					},
+				},
+			},
+			expected: 6, // 3 * 2
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := GetMinReplicasFromSpec(tt.spec)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
 }
