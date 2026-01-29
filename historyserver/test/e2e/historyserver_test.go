@@ -1,6 +1,3 @@
-<<<<<<< HEAD
-package e2e_test
-=======
 package e2e
 
 import (
@@ -285,4 +282,3 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 	DeleteS3Bucket(test, g, s3Client)
 	LogWithTimestamp(test.T(), "Dead cluster log file endpoint tests completed")
 }
->>>>>>> 76c417f7 (Migrate to new AWS S3 SDK version)

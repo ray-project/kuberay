@@ -188,6 +188,7 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 				if len(metas) < 2 {
 					continue
 				}
+
 				logrus.Infof("Process %++v", metas)
 				namespaceName := strings.Split(metas[0], "_")
 				if len(namespaceName) < 2 {
@@ -197,6 +198,7 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 				c.Name = namespaceName[0]
 				c.Namespace = namespaceName[1]
 				c.SessionName = metas[1]
+
 				sessionInfo := strings.Split(metas[1], "_")
 				if len(sessionInfo) < 3 {
 					logrus.Warnf("Skip invalid session info %q in %s", metas[1], metaInfo)
@@ -204,6 +206,7 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 				}
 				date := sessionInfo[1]
 				dataTime := sessionInfo[2]
+
 				createTime, err := time.Parse("2006-01-02_15-04-05", date+"_"+dataTime)
 				if err != nil {
 					logrus.Errorf("Failed to parse time %s: %v", date+"_"+dataTime, err)
@@ -394,7 +397,7 @@ func New(c *config) (*RayLogsHandler, error) {
 		awsconfig.WithCredentialsProvider(credsProvider),
 		awsconfig.WithHTTPClient(httpClient),
 	}
-	
+
 	// Extract hostname from endpoint URL for WithBaseEndpoint
 	// WithBaseEndpoint expects just the hostname (host:port), not a full URL
 	var baseEndpoint string
@@ -408,7 +411,7 @@ func New(c *config) (*RayLogsHandler, error) {
 		baseEndpoint = parsedURL.Host
 		loadOptions = append(loadOptions, awsconfig.WithBaseEndpoint(baseEndpoint))
 	}
-	
+
 	awsCfg, err := awsconfig.LoadDefaultConfig(ctx, loadOptions...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load AWS configuration: %w", err)
