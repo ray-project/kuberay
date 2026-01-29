@@ -21,6 +21,19 @@ func createTestRayCluster(labels map[string]string) *rayv1.RayCluster {
 	}
 }
 
+func createTestRayJob(labels map[string]string) *rayv1.RayJob {
+	return &rayv1.RayJob{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-job",
+			Namespace: "default",
+			Labels:    labels,
+		},
+		Spec: rayv1.RayJobSpec{
+			RayClusterSpec: &rayv1.RayClusterSpec{},
+		},
+	}
+}
+
 func createTestPod() *corev1.Pod {
 	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -138,4 +151,40 @@ func TestAddMetadataToChildResource_PreservesExistingPodLabels(t *testing.T) {
 	// Assert existing labels are preserved
 	a.Equal("existing-value", pod.Labels["existing-label"])
 	a.Equal("ray", pod.Labels["app"])
+}
+
+func TestAddMetadataToChildResource_WithRayJob(t *testing.T) {
+	a := assert.New(t)
+	scheduler := &KaiScheduler{}
+	ctx := context.Background()
+
+	rayJob := createTestRayJob(map[string]string{
+		QueueLabelName: "test-queue",
+	})
+	pod := createTestPod()
+
+	scheduler.AddMetadataToChildResource(ctx, rayJob, pod, "test-group")
+
+	a.Equal("kai-scheduler", pod.Spec.SchedulerName)
+
+	a.NotNil(pod.Labels)
+	a.Equal("test-queue", pod.Labels[QueueLabelName])
+}
+
+func TestAddMetadataToChildResource_WithRayJob_WithoutQueueLabel(t *testing.T) {
+	a := assert.New(t)
+	scheduler := &KaiScheduler{}
+	ctx := context.Background()
+
+	rayJob := createTestRayJob(map[string]string{})
+	pod := createTestPod()
+
+	scheduler.AddMetadataToChildResource(ctx, rayJob, pod, "test-group")
+
+	a.Equal("kai-scheduler", pod.Spec.SchedulerName)
+
+	if pod.Labels != nil {
+		_, exists := pod.Labels[QueueLabelName]
+		a.False(exists)
+	}
 }
