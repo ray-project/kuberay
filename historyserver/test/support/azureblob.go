@@ -8,7 +8,6 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
@@ -153,62 +152,6 @@ func ApplyAzureRayClusterWithCollector(test Test, g *WithT, namespace *corev1.Na
 	LogWithTimestamp(test.T(), "Waiting for head pod of RayCluster %s/%s to be running and ready", rayCluster.Namespace, rayCluster.Name)
 	g.Eventually(HeadPod(test, rayCluster), TestTimeoutMedium).
 		Should(WithTransform(IsPodRunningAndReady, BeTrue()))
-
-	return rayCluster
-}
-
-// ApplyAzureHistoryServer deploys the HistoryServer configured for Azure Blob Storage.
-func ApplyAzureHistoryServer(test Test, g *WithT, namespace *corev1.Namespace) {
-	sa, clusterRole, clusterRoleBinding := DeserializeRBACFromYAML(test, ServiceAccountManifestPath)
-	sa.Namespace = namespace.Name
-	clusterRoleBinding.Name = fmt.Sprintf("historyserver-%s", namespace.Name)
-	clusterRoleBinding.Subjects[0].Namespace = namespace.Name
-
-	_, err := test.Client().Core().CoreV1().ServiceAccounts(namespace.Name).Create(test.Ctx(), sa, metav1.CreateOptions{})
-	g.Expect(err).NotTo(HaveOccurred())
-
-	_, err = test.Client().Core().RbacV1().ClusterRoles().Create(test.Ctx(), clusterRole, metav1.CreateOptions{})
-	if err != nil && !k8serrors.IsAlreadyExists(err) {
-		g.Expect(err).NotTo(HaveOccurred())
-	}
-
-	_, err = test.Client().Core().RbacV1().ClusterRoleBindings().Create(test.Ctx(), clusterRoleBinding, metav1.CreateOptions{})
-	g.Expect(err).NotTo(HaveOccurred())
-
-	test.T().Cleanup(func() {
-		_ = test.Client().Core().RbacV1().ClusterRoleBindings().Delete(
-			context.Background(), clusterRoleBinding.Name, metav1.DeleteOptions{})
-	})
-
-	KubectlApplyYAML(test, AzureHistoryServerManifestPath, namespace.Name)
-
-	LogWithTimestamp(test.T(), "Waiting for Azure HistoryServer to be ready")
-	g.Eventually(func(gg Gomega) {
-		pods, err := test.Client().Core().CoreV1().Pods(namespace.Name).List(
-			test.Ctx(), metav1.ListOptions{
-				LabelSelector: "app=historyserver",
-			},
-		)
-		gg.Expect(err).NotTo(HaveOccurred())
-		gg.Expect(pods.Items).NotTo(BeEmpty())
-		gg.Expect(AllPodsRunningAndReady(pods.Items)).To(BeTrue())
-	}, TestTimeoutMedium).Should(Succeed())
-	LogWithTimestamp(test.T(), "Azure HistoryServer is ready")
-}
-
-// PrepareAzureHistoryServerTestEnv prepares test environment for Azure History Server tests.
-func PrepareAzureHistoryServerTestEnv(test Test, g *WithT, namespace *corev1.Namespace, azureClient *azblob.Client) *rayv1.RayCluster {
-	rayCluster := ApplyAzureRayClusterWithCollector(test, g, namespace)
-
-	headPod, err := GetHeadPod(test, rayCluster)
-	g.Expect(err).NotTo(HaveOccurred())
-	g.Expect(headPod.Spec.Containers).To(ContainElement(
-		WithTransform(func(c corev1.Container) string { return c.Name }, Equal("collector")),
-	))
-
-	containerClient := azureClient.ServiceClient().NewContainerClient(AzureContainerName)
-	_, err = containerClient.GetProperties(context.Background(), nil)
-	g.Expect(err).NotTo(HaveOccurred())
 
 	return rayCluster
 }

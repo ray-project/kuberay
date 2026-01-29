@@ -36,9 +36,9 @@ func TestAzureHistoryServer(t *testing.T) {
 }
 
 func testAzureLiveClusters(test Test, g *WithT, namespace *corev1.Namespace, azureClient *azblob.Client) {
-	rayCluster := PrepareAzureHistoryServerTestEnv(test, g, namespace, azureClient)
+	rayCluster := PrepareAzureBlobTestEnv(test, g, namespace, azureClient)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
-	ApplyAzureHistoryServer(test, g, namespace)
+	ApplyHistoryServer(test, g, namespace, AzureHistoryServerManifestPath)
 	historyServerURL := GetHistoryServerURL(test, g, namespace)
 
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)

@@ -46,7 +46,7 @@ func TestHistoryServer(t *testing.T) {
 func testLiveClusters(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
-	ApplyHistoryServer(test, g, namespace)
+	ApplyHistoryServer(test, g, namespace, "")
 	historyServerURL := GetHistoryServerURL(test, g, namespace)
 
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
