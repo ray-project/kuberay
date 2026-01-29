@@ -85,14 +85,19 @@ func (r *RayLogsHandler) CreateDirectory(d string) error {
 
 func (r *RayLogsHandler) WriteFile(file string, reader io.ReadSeeker) error {
 	ctx := context.Background()
-	// Reset reader to the beginning to ensure we read from the start
+	// Get size by seeking to end; MinIO requires ContentLength to be set.
+	size, err := reader.Seek(0, io.SeekEnd)
+	if err != nil {
+		return fmt.Errorf("failed to seek to end of reader: %w", err)
+	}
 	if _, err := reader.Seek(0, io.SeekStart); err != nil {
 		return fmt.Errorf("failed to seek to start of reader: %w", err)
 	}
-	_, err := r.S3Client.PutObject(ctx, &s3.PutObjectInput{
-		Bucket: aws.String(r.S3Bucket),
-		Key:    aws.String(file),
-		Body:   reader,
+	_, err = r.S3Client.PutObject(ctx, &s3.PutObjectInput{
+		Bucket:        aws.String(r.S3Bucket),
+		Key:           aws.String(file),
+		Body:          reader,
+		ContentLength: aws.Int64(size),
 	})
 	return err
 }
