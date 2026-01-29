@@ -411,8 +411,91 @@ func (s *ServerHandler) getClusterStatus(req *restful.Request, resp *restful.Res
 		return
 	}
 
-	// Return "not yet supported" for cluster status
-	resp.WriteErrorString(http.StatusNotImplemented, "Cluster status not yet supported")
+	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
+	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
+	clusterNameID := clusterName + "_" + clusterNamespace
+
+	format := req.QueryParameter("format")
+
+	var respData []byte
+	var err error
+
+	if format == "1" {
+		// Build cluster status from debug_state.txt and task/actor data
+		statusString := s.buildFormattedClusterStatus(clusterNameID, sessionName)
+
+		response := FormattedClusterStatusResponse{
+			Result: true,
+			Msg:    "Got formatted cluster status.",
+			Data: FormattedClusterStatusData{
+				ClusterStatus: statusString,
+			},
+		}
+		respData, err = json.Marshal(response)
+	} else {
+		// TODO Update when Ray dashboard api supports autoscaler V2 which uses GcsClient.get_cluster_status() for /api/cluster_status
+		response := ClusterStatusResponse{
+			Result: true,
+			Msg:    "Got cluster status.",
+			Data:   ClusterStatusData{},
+		}
+		respData, err = json.Marshal(response)
+	}
+	if err != nil {
+		logrus.Errorf("Failed to marshal cluster status response: %v", err)
+		resp.WriteErrorString(http.StatusInternalServerError, err.Error())
+		return
+	}
+	resp.Header().Set("Content-Type", "application/json")
+	resp.Write(respData)
+}
+
+// buildFormattedClusterStatus reconstructs the cluster status from debug_state.txt and pending tasks and actors
+func (s *ServerHandler) buildFormattedClusterStatus(clusterNameID, sessionName string) string {
+	builder := NewClusterStatusBuilder()
+
+	logsPath := sessionName + "/logs"
+	nodeIDs := s.reader.ListFiles(clusterNameID, logsPath)
+
+	for _, nodeID := range nodeIDs {
+		debugStatePath := logsPath + "/" + nodeID + "/debug_state.txt"
+		reader := s.reader.GetContent(clusterNameID, debugStatePath)
+		if reader == nil {
+			logrus.Debugf("No debug_state.txt found for node %s", nodeID)
+			continue
+		}
+
+		content, err := io.ReadAll(reader)
+		if err != nil {
+			logrus.Debugf("Failed to read debug_state.txt for node %s: %v", nodeID, err)
+			continue
+		}
+
+		debugState, err := ParseDebugState(string(content))
+		if err != nil {
+			logrus.Debugf("Failed to parse debug_state.txt for node %s: %v", nodeID, err)
+			continue
+		}
+
+		builder.AddNodeFromDebugState(debugState)
+	}
+
+	tasks := s.eventHandler.GetTasksBySessionName(clusterNameID, sessionName)
+	actors := s.eventHandler.GetActorsBySessionName(clusterNameID, sessionName)
+
+	// Use the last timestamp from tasks/actors to represent when the cluster was last active.
+	// Fallback to session timestamp if no task/actor timestamps are available.
+	// Other options are reading raylet.out or gcs_server.out but the files have 100k+ lines, which is inefficient.
+	if ts := GetLastTimestamp(tasks, actors); !ts.IsZero() {
+		builder.Timestamp = ts
+	} else if ts := ParseSessionTimestamp(sessionName); !ts.IsZero() {
+		builder.Timestamp = ts
+	}
+
+	builder.AddPendingDemandsFromTasks(tasks)
+	builder.AddPendingDemandsFromActors(actors)
+
+	return builder.FormatStatus()
 }
 
 func (s *ServerHandler) getNodeLogs(req *restful.Request, resp *restful.Response) {

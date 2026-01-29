@@ -22,6 +22,10 @@ type EventHandler struct {
 
 	ClusterTaskMap  *types.ClusterTaskMap
 	ClusterActorMap *types.ClusterActorMap
+
+	// Session-scoped maps for session-based queries.
+	ClusterSessionTaskMap  *types.ClusterSessionTaskMap
+	ClusterSessionActorMap *types.ClusterSessionActorMap
 }
 
 var eventFilePattern = regexp.MustCompile(`-\d{4}-\d{2}-\d{2}-\d{2}$`)
@@ -43,6 +47,12 @@ func NewEventHandler(reader storage.StorageReader) *EventHandler {
 		},
 		ClusterActorMap: &types.ClusterActorMap{
 			ClusterActorMap: make(map[string]*types.ActorMap),
+		},
+		ClusterSessionTaskMap: &types.ClusterSessionTaskMap{
+			ClusterSessionTaskMap: make(map[string]*types.SessionTaskMap),
+		},
+		ClusterSessionActorMap: &types.ClusterSessionActorMap{
+			ClusterSessionActorMap: make(map[string]*types.SessionActorMap),
 		},
 	}
 }
@@ -146,6 +156,7 @@ func (h *EventHandler) Run(stop chan struct{}, numOfEventProcessors int) error {
 							continue
 						}
 						curr["clusterName"] = clusterInfo.Name + "_" + clusterInfo.Namespace
+						curr["sessionName"] = clusterInfo.SessionName
 						eventProcessorChannels[i%numOfEventProcessors] <- curr
 					}
 				}
@@ -202,6 +213,9 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 		return fmt.Errorf("clusterName is not a string, got %T", clusterNameVal)
 	}
 
+	// for backward compatibility, it is ok if event missing 'sessionName' field
+	currentSessionName, _ := eventMap["sessionName"].(string)
+
 	logrus.Infof("current eventType: %v", eventType)
 	switch eventType {
 	case types.TASK_DEFINITION_EVENT:
@@ -229,6 +243,20 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 				t.State = existingEvents[len(existingEvents)-1].State
 			}
 		})
+
+		// guarded here to prevent backward compatibility issue
+		if currentSessionName != "" && h.ClusterSessionTaskMap != nil {
+			sessionTaskMap := h.ClusterSessionTaskMap.GetOrCreateSessionTaskMap(currentClusterName)
+			sessionTaskMapInner := sessionTaskMap.GetOrCreateTaskMap(currentSessionName)
+			sessionTaskMapInner.CreateOrMergeAttempt(currTask.TaskID, currTask.AttemptNumber, func(t *types.Task) {
+				existingEvents := t.Events
+				*t = currTask
+				if len(existingEvents) > 0 {
+					t.Events = existingEvents
+					t.State = existingEvents[len(existingEvents)-1].State
+				}
+			})
+		}
 
 	case types.TASK_LIFECYCLE_EVENT:
 		lifecycleEvent, ok := eventMap["taskLifecycleEvent"].(map[string]any)
@@ -325,6 +353,54 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 			}
 		})
 
+		// guarded here to prevent backward compatibility issue
+		if currentSessionName != "" && h.ClusterSessionTaskMap != nil {
+			sessionTaskMap := h.ClusterSessionTaskMap.GetOrCreateSessionTaskMap(currentClusterName)
+			sessionTaskMapInner := sessionTaskMap.GetOrCreateTaskMap(currentSessionName)
+			sessionTaskMapInner.CreateOrMergeAttempt(taskId, int(taskAttempt), func(t *types.Task) {
+				type eventKey struct {
+					State     string
+					Timestamp int64
+				}
+				existingKeys := make(map[eventKey]bool)
+				for _, e := range t.Events {
+					existingKeys[eventKey{string(e.State), e.Timestamp.UnixNano()}] = true
+				}
+				for _, e := range stateEvents {
+					key := eventKey{string(e.State), e.Timestamp.UnixNano()}
+					if !existingKeys[key] {
+						t.Events = append(t.Events, e)
+						existingKeys[key] = true
+					}
+				}
+				sort.Slice(t.Events, func(i, j int) bool {
+					return t.Events[i].Timestamp.Before(t.Events[j].Timestamp)
+				})
+				if len(t.Events) == 0 {
+					return
+				}
+				t.State = t.Events[len(t.Events)-1].State
+				if nodeId != "" {
+					t.NodeID = nodeId
+				}
+				if workerId != "" {
+					t.WorkerID = workerId
+				}
+				if t.StartTime.IsZero() {
+					for _, e := range t.Events {
+						if e.State == types.RUNNING {
+							t.StartTime = e.Timestamp
+							break
+						}
+					}
+				}
+				lastEvent := t.Events[len(t.Events)-1]
+				if lastEvent.State == types.FINISHED || lastEvent.State == types.FAILED {
+					t.EndTime = lastEvent.Timestamp
+				}
+			})
+		}
+
 	case types.ACTOR_DEFINITION_EVENT:
 		actorDef, ok := eventMap["actorDefinitionEvent"]
 		if !ok {
@@ -368,6 +444,34 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 				a.Address = existingAddress
 			}
 		})
+
+		// guarded here to prevent backward compatibility issue
+		if currentSessionName != "" && h.ClusterSessionActorMap != nil {
+			sessionActorMap := h.ClusterSessionActorMap.GetOrCreateSessionActorMap(currentClusterName)
+			sessionActorMapInner := sessionActorMap.GetOrCreateActorMap(currentSessionName)
+			sessionActorMapInner.CreateOrMergeActor(currActor.ActorID, func(a *types.Actor) {
+				existingEvents := a.Events
+				existingState := a.State
+				existingStartTime := a.StartTime
+				existingEndTime := a.EndTime
+				existingNumRestarts := a.NumRestarts
+				existingPID := a.PID
+				existingExitDetails := a.ExitDetails
+				existingAddress := a.Address
+				*a = currActor
+				if len(existingEvents) > 0 {
+					a.Events = existingEvents
+					a.State = existingState
+					a.StartTime = existingStartTime
+					a.EndTime = existingEndTime
+					a.NumRestarts = existingNumRestarts
+					a.PID = existingPID
+					a.ExitDetails = existingExitDetails
+					a.Address = existingAddress
+				}
+			})
+		}
+
 	case types.ACTOR_LIFECYCLE_EVENT:
 		lifecycleEvent, ok := eventMap["actorLifecycleEvent"].(map[string]any)
 		if !ok {
@@ -521,6 +625,83 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 			a.NumRestarts = restartCount
 		})
 
+		// guarded here to prevent backward compatibility issue
+		if currentSessionName != "" && h.ClusterSessionActorMap != nil {
+			sessionActorMap := h.ClusterSessionActorMap.GetOrCreateSessionActorMap(currentClusterName)
+			sessionActorMapInner := sessionActorMap.GetOrCreateActorMap(currentSessionName)
+			sessionActorMapInner.CreateOrMergeActor(actorId, func(a *types.Actor) {
+				a.ActorID = actorId
+				type eventKey struct {
+					State     string
+					Timestamp int64
+				}
+				existingKeys := make(map[eventKey]bool)
+				for _, e := range a.Events {
+					existingKeys[eventKey{string(e.State), e.Timestamp.UnixNano()}] = true
+				}
+				for _, e := range stateEvents {
+					key := eventKey{string(e.State), e.Timestamp.UnixNano()}
+					if !existingKeys[key] {
+						a.Events = append(a.Events, e)
+						existingKeys[key] = true
+					}
+				}
+				sort.Slice(a.Events, func(i, j int) bool {
+					return a.Events[i].Timestamp.Before(a.Events[j].Timestamp)
+				})
+				if len(a.Events) == 0 {
+					return
+				}
+				lastEvent := a.Events[len(a.Events)-1]
+				a.State = lastEvent.State
+				for i := len(a.Events) - 1; i >= 0; i-- {
+					if a.Events[i].State == types.ALIVE && a.Events[i].NodeID != "" {
+						a.Address.NodeID = a.Events[i].NodeID
+						a.Address.WorkerID = a.Events[i].WorkerID
+						break
+					}
+				}
+				if lastEvent.ReprName != "" {
+					a.ReprName = lastEvent.ReprName
+				}
+				if a.StartTime.IsZero() {
+					for _, e := range a.Events {
+						if e.State == types.ALIVE {
+							a.StartTime = e.Timestamp
+							break
+						}
+					}
+				}
+				if lastEvent.State == types.DEAD {
+					a.EndTime = lastEvent.Timestamp
+
+					if lastEvent.DeathCause != "" {
+						var deathCauseMap map[string]any
+						if err := json.Unmarshal([]byte(lastEvent.DeathCause), &deathCauseMap); err == nil {
+							if ctx, ok := deathCauseMap["actorDiedErrorContext"].(map[string]any); ok {
+								if pid, ok := ctx["pid"].(float64); ok {
+									a.PID = int(pid)
+								}
+								if ip, ok := ctx["nodeIpAddress"].(string); ok {
+									a.Address.IPAddress = ip
+								}
+								if errMsg, ok := ctx["errorMessage"].(string); ok {
+									a.ExitDetails = errMsg
+								}
+							}
+						}
+					}
+				}
+				restartCount := 0
+				for _, e := range a.Events {
+					if e.State == types.RESTARTING {
+						restartCount++
+					}
+				}
+				a.NumRestarts = restartCount
+			})
+		}
+
 	case types.ACTOR_TASK_DEFINITION_EVENT:
 		// TODO: Handle actor task definition event
 		// This is related to GET /api/v0/tasks (type=ACTOR_TASK)
@@ -649,6 +830,36 @@ func (h *EventHandler) GetTasksByJobID(clusterName, jobID string) []types.Task {
 	return tasks
 }
 
+// GetTasksBySessionName returns all tasks for a given session using the session-scoped map.
+func (h *EventHandler) GetTasksBySessionName(clusterName, sessionName string) []types.Task {
+	h.ClusterSessionTaskMap.RLock()
+	sessionTaskMap, ok := h.ClusterSessionTaskMap.ClusterSessionTaskMap[clusterName]
+	h.ClusterSessionTaskMap.RUnlock()
+
+	if !ok {
+		return []types.Task{}
+	}
+
+	sessionTaskMap.RLock()
+	taskMap, ok := sessionTaskMap.SessionTaskMap[sessionName]
+	sessionTaskMap.RUnlock()
+
+	if !ok {
+		return []types.Task{}
+	}
+
+	taskMap.Lock()
+	defer taskMap.Unlock()
+
+	var tasks []types.Task
+	for _, attempts := range taskMap.TaskMap {
+		for _, task := range attempts {
+			tasks = append(tasks, task.DeepCopy())
+		}
+	}
+	return tasks
+}
+
 // GetActors returns a thread-safe deep copy of all actors for a given cluster
 func (h *EventHandler) GetActors(clusterName string) []types.Actor {
 	h.ClusterActorMap.RLock()
@@ -687,6 +898,34 @@ func (h *EventHandler) GetActorByID(clusterName, actorID string) (types.Actor, b
 		return types.Actor{}, false
 	}
 	return actor.DeepCopy(), true
+}
+
+// GetActorsBySessionName returns all actors for a given session using the session-scoped map.
+func (h *EventHandler) GetActorsBySessionName(clusterName, sessionName string) []types.Actor {
+	h.ClusterSessionActorMap.RLock()
+	sessionActorMap, ok := h.ClusterSessionActorMap.ClusterSessionActorMap[clusterName]
+	h.ClusterSessionActorMap.RUnlock()
+
+	if !ok {
+		return []types.Actor{}
+	}
+
+	sessionActorMap.RLock()
+	actorMap, ok := sessionActorMap.SessionActorMap[sessionName]
+	sessionActorMap.RUnlock()
+
+	if !ok {
+		return []types.Actor{}
+	}
+
+	actorMap.Lock()
+	defer actorMap.Unlock()
+
+	actors := make([]types.Actor, 0, len(actorMap.ActorMap))
+	for _, actor := range actorMap.ActorMap {
+		actors = append(actors, actor.DeepCopy())
+	}
+	return actors
 }
 
 // GetActorsMap returns a thread-safe deep copy of all actors as a map for a given cluster
