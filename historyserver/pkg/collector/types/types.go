@@ -22,6 +22,27 @@ type RayCollectorConfig struct {
 	PushInterval   time.Duration
 }
 
+type UrlInfo struct {
+	Key  string
+	Url  string
+	Hash string
+	Type string
+}
+
+const (
+	JOBSTATUS_PENDING   = "PENDING"
+	JOBSTATUS_RUNNING   = "RUNNING"
+	JOBSTATUS_STOPPED   = "STOPPED"
+	JOBSTATUS_SUCCEEDED = "SUCCEEDED"
+	JOBSTATUS_FAILED    = "FAILED"
+)
+
+type JobUrlInfo struct {
+	Url         *UrlInfo
+	Status      string
+	StopPersist bool
+}
+
 // ValidateRayHanderConfig is
 func ValidateRayHanderConfig(c *RayCollectorConfig, fldpath *field.Path) field.ErrorList {
 	var allErrs field.ErrorList
