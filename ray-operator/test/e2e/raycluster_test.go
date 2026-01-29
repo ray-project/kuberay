@@ -298,12 +298,11 @@ func TestRayClusterWithFractionalGPU(t *testing.T) {
 				WithMaxReplicas(2).
 				// Specify fractional GPU in the group resource spec
 				// This is what gets converted to Ray's --num-gpus parameter
-				WithResources(rayv1ac.GroupResource().
-					WithRequestedResources(map[string]string{
-						"CPU":           "1",
-						"memory":        "1Gi",
-						"nvidia.com/gpu": "0.4",  // Fractional GPU for ray autoscaler
-					})).
+				WithResources(map[string]string{
+					"CPU":           "1",
+					"memory":        "1Gi",
+					"nvidia.com/gpu": "0.4", // Fractional GPU for ray autoscaler
+				}).
 				WithRayStartParams(map[string]string{
 					"num-cpus": "1",
 				}).
