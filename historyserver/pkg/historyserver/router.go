@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -44,16 +45,30 @@ func routerClusters(s *ServerHandler) {
 		Writes([]string{}))
 }
 
+// routerNodes registers RESTful routers for node-related endpoints.
+// It sets up two routes:
+//   - GET /nodes: retrieves all node summaries for a given cluster, supporting an optional "view" query parameter
+//   - GET /nodes/{node_id}: retrieves node summary for a specific node by its ID
 func routerNodes(s *ServerHandler) {
 	ws := new(restful.WebService)
 	defer restful.Add(ws)
-	ws.Path("/nodes").Consumes(restful.MIME_JSON).Produces(restful.MIME_JSON) //.Filter(s.loginWrapper)
-	ws.Route(ws.GET("/").To(s.getNodes).Filter(s.CookieHandle).
-		Doc("get nodes for a given clusters").Param(ws.QueryParameter("view", "such as summary")).
+
+	// TODO(jwj): Clarify why not handling cookie in the WebService level.
+	ws.Path("/nodes").
+		Consumes(restful.MIME_JSON).
+		Produces(restful.MIME_JSON) //.Filter(s.LoginWrapper)
+
+	// TODO(jwj): Explicitly set the return types for both routes.
+	ws.Route(ws.GET("/").To(s.getNodes).
+		Filter(s.CookieHandle).
+		Doc("Get all node summaries for a given cluster").
+		Param(ws.QueryParameter("view", "Optional view type (e.g., 'summary') to filter node information")).
 		Writes(""))
-	ws.Route(ws.GET("/{node_id}").To(s.getNode).Filter(s.CookieHandle).
-		Doc("get specifical nodes  ").
-		Param(ws.PathParameter("node_id", "node_id")).
+
+	ws.Route(ws.GET("/{node_id}").To(s.getNode).
+		Filter(s.CookieHandle).
+		Doc("Get node summary for a specific node by its ID").
+		Param(ws.PathParameter("node_id", "The unique identifier of the node")).
 		Writes(""))
 }
 
@@ -297,26 +312,117 @@ func (s *ServerHandler) getClusters(req *restful.Request, resp *restful.Response
 	resp.WriteAsJson(clusters)
 }
 
-// getNodes returns nodes for the specified cluster
+// TODO(jwj): Make this doc clearer.
+// getNodes retrieves all node summaries and resource usage information for a specific cluster session.
+// The API schema of live and dead clusters are different:
+//   - Live clusters: returns the current snapshot
+//   - Dead clusters: returns the historical replay
 func (s *ServerHandler) getNodes(req *restful.Request, resp *restful.Response) {
 	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
 	if sessionName == "live" {
 		s.redirectRequest(req, resp)
 		return
 	}
-	clusterNameID := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
+
+	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
 	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
-	data, err := s.GetNodes(clusterNameID+"_"+clusterNamespace, sessionName)
-	if data == nil {
-		logrus.Errorf("Failed to get nodes for cluster %s", clusterNameID+"_"+clusterNamespace)
-		resp.WriteError(http.StatusInternalServerError, errors.New("failed to get nodes"))
-		return
+	clusterNameID := clusterName + "_" + clusterNamespace
+
+	// A cluster lifecycle is identified by a cluster session.
+	clusterSessionID := clusterNameID + "_" + sessionName
+	nodeMap := s.eventHandler.GetNodeMap(clusterSessionID)
+
+	// Build node summary. Each node has an array of summary snapshots with timestamps.
+	summary := make([][]map[string]interface{}, 0, len(nodeMap))
+	// Build node logical resources. Each node has an array of resource snapshots with timestamps.
+	nodeLogicalResources := make(map[string][]map[string]interface{})
+
+	// Process each node to build the historical replay.
+	for _, node := range nodeMap {
+		nodeSummaryReplay := formatNodeSummaryReplayForResp(node, sessionName)
+		summary = append(summary, nodeSummaryReplay)
+
+		nodeResourceReplay := formatNodeResourceReplayForResp(node)
+		nodeLogicalResources[node.NodeID] = nodeResourceReplay
 	}
+
+	// Build dashboard API-compatible response.
+	response := map[string]interface{}{
+		"result": true,
+		"msg":    "Node summary fetched.",
+		"data": map[string]interface{}{
+			"summary":              summary,
+			"nodeLogicalResources": nodeLogicalResources,
+		},
+	}
+
+	data, err := json.Marshal(response)
 	if err != nil {
-		logrus.Errorf("Error: %v", err)
-		resp.WriteError(400, err)
+		logrus.Errorf("Failed to marshal nodes response: %v", err)
+		resp.WriteErrorString(http.StatusInternalServerError, err.Error())
 		return
 	}
+
+	resp.Write(data)
+}
+
+// TODO(jwj): Make this doc clearer.
+// getNode retrieves node details for a specific node in a specific cluster session.
+// The API schema of live and dead clusters are different:
+//   - Live clusters: returns the current snapshot
+//   - Dead clusters: returns the historical replay
+func (s *ServerHandler) getNode(req *restful.Request, resp *restful.Response) {
+	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
+	if sessionName == "live" {
+		s.redirectRequest(req, resp)
+		return
+	}
+
+	// Get the target node ID from the path parameter.
+	targetNodeId := req.PathParameter("node_id")
+	if targetNodeId == "" {
+		resp.WriteErrorString(http.StatusBadRequest, "node_id is required")
+		return
+	}
+
+	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
+	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
+	clusterNameID := clusterName + "_" + clusterNamespace
+
+	// A cluster lifecycle is identified by a cluster session.
+	clusterSessionID := clusterNameID + "_" + sessionName
+	nodeMap := s.eventHandler.GetNodeMap(clusterSessionID)
+
+	var targetNode *eventtypes.Node
+	for nodeId, node := range nodeMap {
+		if nodeId == targetNodeId {
+			targetNode = &node
+			break
+		}
+	}
+	if targetNode == nil {
+		resp.WriteErrorString(http.StatusNotFound, fmt.Sprintf("node %s not found", targetNodeId))
+		return
+	}
+
+	nodeSummaryReplay := formatNodeSummaryReplayForResp(*targetNode, sessionName)
+
+	// Build dashboard API-compatible response.
+	response := map[string]interface{}{
+		"result": true,
+		"msg":    "Node details fetched.",
+		"data": map[string]interface{}{
+			"detail": nodeSummaryReplay,
+		},
+	}
+
+	data, err := json.Marshal(response)
+	if err != nil {
+		logrus.Errorf("Failed to marshal nodes response: %v", err)
+		resp.WriteErrorString(http.StatusInternalServerError, err.Error())
+		return
+	}
+
 	resp.Write(data)
 }
 
@@ -348,16 +454,6 @@ func (s *ServerHandler) getJobs(req *restful.Request, resp *restful.Response) {
 	}
 	// Return "not yet supported" for jobs
 	resp.WriteErrorString(http.StatusNotImplemented, "Jobs not yet supported")
-}
-
-func (s *ServerHandler) getNode(req *restful.Request, resp *restful.Response) {
-	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
-	if sessionName == "live" {
-		s.redirectRequest(req, resp)
-		return
-	}
-	// Return "not yet supported" for node
-	resp.WriteErrorString(http.StatusNotImplemented, "Node not yet supported")
 }
 
 func (s *ServerHandler) getJob(req *restful.Request, resp *restful.Response) {
@@ -877,4 +973,195 @@ func getClusterSvcName(clis []client.Client, name, namespace string) (string, er
 		return "", errors.New("RayCluster head service not ready")
 	}
 	return svcName + ":8265", nil
+}
+
+// formatNodeSummaryReplayForResp formats a node summary replay of a single node for the response.
+func formatNodeSummaryReplayForResp(node eventtypes.Node, sessionName string) []map[string]interface{} {
+	nodeId := node.NodeID
+	nodeIpAddress := node.NodeIPAddress
+	labels := node.Labels
+	nodeTypeName := labels["ray.io/node-group"]
+	isHeadNode := nodeTypeName == "headgroup"
+	rayletSocketName := fmt.Sprintf("/tmp/ray/%s/sockets/raylet", sessionName)
+	objectStoreSocketName := fmt.Sprintf("/tmp/ray/%s/sockets/plasma_store", sessionName)
+
+	// Handle the start timestamp of the node.
+	// Ref: https://github.com/ray-project/ray/blob/f953f199b5d68d47c07c865c5ebcd2333d49f365/src/ray/protobuf/gcs.proto#L345-L346.
+	var startTimestamp int64
+	if !node.StartTimestamp.IsZero() {
+		startTimestamp = node.StartTimestamp.UnixMilli()
+	}
+
+	// Wait for Ray to export the following fields.
+	// Ref: https://github.com/ray-project/ray/issues/60129
+	hostname := node.Hostname
+	nodeName := node.NodeName
+	instanceID := node.InstanceID
+	instanceTypeName := node.InstanceTypeName
+
+	nodeSummaryReplay := make([]map[string]interface{}, 0)
+	for _, tr := range node.StateTransitions {
+		transitionTimestamp := tr.Timestamp.UnixMilli()
+		resourcesTotal := convertResourcesToAPISchema(tr.Resources)
+
+		// Handle DEAD state-specific fields.
+		var endTimestamp int64
+		var stateMessage string
+		if tr.State == eventtypes.NODE_DEAD {
+			endTimestamp = tr.Timestamp.UnixMilli()
+			if tr.DeathInfo != nil {
+				stateMessage = composeStateMessage(string(tr.DeathInfo.Reason), tr.DeathInfo.ReasonMessage)
+			}
+		}
+
+		// Create a summary snapshot.
+		nodeSummarySnapshot := map[string]interface{}{
+			"t":        transitionTimestamp, // TODO(jwj): Should we just populate "now".
+			"now":      transitionTimestamp,
+			"hostname": hostname,
+			"ip":       nodeIpAddress,
+			"cpus":     []int{0, 0},
+			"mem":      []int{0, 0, 0, 0},
+			"shm":      0,
+			"bootTime": 0,
+			"disk":     []int{0, 0, 0, 0},
+			"gpus":     []int{0},
+			"tpus":     []int{0},
+			"raylet": map[string]interface{}{
+				"storeStats": map[string]interface{}{
+					"objectStoreBytesAvail": resourcesTotal["objectStoreMemory"],
+				},
+				"nodeId":                nodeId,
+				"nodeManagerAddress":    nodeIpAddress,
+				"nodeManagerHostname":   hostname,
+				"rayletSocketName":      rayletSocketName,
+				"objectStoreSocketName": objectStoreSocketName,
+				"metricsExportPort":     "8080",
+				"resourcesTotal":        resourcesTotal,
+				"nodeName":              nodeName,
+				"instanceId":            instanceID,
+				"nodeTypeName":          nodeTypeName,
+				"instanceTypeName":      instanceTypeName,
+				"startTimeMs":           startTimestamp,
+				"isHeadNode":            isHeadNode,
+				"labels":                labels,
+				"state":                 string(tr.State),
+				"endTimeMs":             endTimestamp,
+				"stateMessage":          stateMessage,
+			},
+		}
+		nodeSummaryReplay = append(nodeSummaryReplay, nodeSummarySnapshot)
+	}
+
+	return nodeSummaryReplay
+}
+
+// formatNodeResourceReplayForResp formats a node resource replay of a single node for the response.
+func formatNodeResourceReplayForResp(node eventtypes.Node) []map[string]interface{} {
+	nodeResourceReplay := make([]map[string]interface{}, 0)
+	for _, tr := range node.StateTransitions {
+		transitionTimestamp := tr.Timestamp.UnixMilli()
+
+		// Create a resource snapshot.
+		nodeResourceSnapshot := map[string]interface{}{
+			"t":              transitionTimestamp,
+			"resourceString": constructResourceString(tr.Resources),
+		}
+		nodeResourceReplay = append(nodeResourceReplay, nodeResourceSnapshot)
+	}
+
+	return nodeResourceReplay
+}
+
+// convertResourcesToAPISchema converts Ray's resource format to Dashboard API schema.
+// Conversion rules:
+//   - "object_store_memory" is converted to "objectStoreMemory"
+//   - "node:__internal_head__" is converted to "node:InternalHead"
+//   - Other fields remain unchanged (e.g., "memory", "CPU", "node:<node-ip>")
+func convertResourcesToAPISchema(resources map[string]float64) map[string]float64 {
+	if len(resources) == 0 {
+		return map[string]float64{}
+	}
+
+	convertedResources := make(map[string]float64, len(resources))
+	for k, v := range resources {
+		convertedKey := k
+		if k == "object_store_memory" {
+			convertedKey = "objectStoreMemory"
+		} else if k == "node:__internal_head__" {
+			convertedKey = "node:InternalHead"
+		}
+		convertedResources[convertedKey] = v
+	}
+
+	return convertedResources
+}
+
+// composeStateMessage composes a state message based on the death reason and message for a node state transition in DEAD state.
+// Ref: https://github.com/ray-project/ray/blob/f953f199b5d68d47c07c865c5ebcd2333d49f365/python/ray/dashboard/utils.py#L738-L765.
+func composeStateMessage(deathReason string, deathReasonMessage string) string {
+	var stateMessage string
+	if deathReason == string(eventtypes.EXPECTED_TERMINATION) {
+		stateMessage = "Expected termination"
+	} else if deathReason == string(eventtypes.UNEXPECTED_TERMINATION) {
+		stateMessage = "Unexpected termination"
+	} else if deathReason == string(eventtypes.AUTOSCALER_DRAIN_PREEMPTED) {
+		stateMessage = "Terminated due to preemption"
+	} else if deathReason == string(eventtypes.AUTOSCALER_DRAIN_IDLE) {
+		stateMessage = "Terminated due to idle (no Ray activity)"
+	} else {
+		stateMessage = ""
+	}
+
+	if deathReasonMessage != "" {
+		if stateMessage != "" {
+			stateMessage = fmt.Sprintf("%s: %s", stateMessage, deathReasonMessage)
+		} else {
+			stateMessage = deathReasonMessage
+		}
+	}
+	return stateMessage
+}
+
+// constructResourceString constructs a resource string based on the resources in state transition.
+// Ref: https://github.com/ray-project/ray/blob/f953f199b5d68d47c07c865c5ebcd2333d49f365/python/ray/autoscaler/_private/util.py#L643-L665.
+func constructResourceString(resources map[string]float64) string {
+	resourceString := ""
+	for k, v := range resources {
+		if k == "memory" || k == "object_store_memory" {
+			formattedUsed := "0B"
+			formattedTotal := formatMemory(v)
+			resourceString += fmt.Sprintf("%s/%s %s", formattedUsed, formattedTotal, k)
+		} else if k == "CPU" {
+			resourceString += fmt.Sprintf("%.1f/%.1f %s", 0.0, v, k)
+		} else {
+			continue
+		}
+
+		resourceString += "\n"
+	}
+	resourceString = strings.TrimSuffix(resourceString, "\n")
+
+	return resourceString
+}
+
+// formatMemory formats a memory value to a human-readable string.
+func formatMemory(memBytes float64) string {
+	type unit struct {
+		suffix       string
+		bytesPerUnit float64
+	}
+	units := []unit{
+		{suffix: "TiB", bytesPerUnit: math.Pow(2, 40)},
+		{suffix: "GiB", bytesPerUnit: math.Pow(2, 30)},
+		{suffix: "MiB", bytesPerUnit: math.Pow(2, 20)},
+		{suffix: "KiB", bytesPerUnit: math.Pow(2, 10)},
+	}
+	for _, unit := range units {
+		if memBytes >= unit.bytesPerUnit {
+			memInUnit := memBytes / unit.bytesPerUnit
+			return fmt.Sprintf("%.2f%s", memInUnit, unit.suffix)
+		}
+	}
+	return fmt.Sprintf("%dB", int(memBytes))
 }

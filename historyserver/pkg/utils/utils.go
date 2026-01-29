@@ -2,6 +2,8 @@ package utils
 
 import (
 	"bytes"
+	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path"
@@ -239,4 +241,15 @@ func GetRayNodeID() (string, error) {
 		return strings.Trim(string(nodeidBytes), "\n"), nil
 	}
 	return "", fmt.Errorf("timeout --node_id= not found")
+}
+
+func ConvertBase64ToHex(input string) (string, error) {
+	bytes, err := base64.StdEncoding.DecodeString(input)
+	if err != nil {
+		return "", err
+	}
+
+	hexStr := hex.EncodeToString(bytes)
+
+	return hexStr, nil
 }

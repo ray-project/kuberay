@@ -22,6 +22,7 @@ type EventHandler struct {
 
 	ClusterTaskMap  *types.ClusterTaskMap
 	ClusterActorMap *types.ClusterActorMap
+	ClusterNodeMap  *types.ClusterNodeMap
 }
 
 var eventFilePattern = regexp.MustCompile(`-\d{4}-\d{2}-\d{2}-\d{2}$`)
@@ -43,6 +44,9 @@ func NewEventHandler(reader storage.StorageReader) *EventHandler {
 		},
 		ClusterActorMap: &types.ClusterActorMap{
 			ClusterActorMap: make(map[string]*types.ActorMap),
+		},
+		ClusterNodeMap: &types.ClusterNodeMap{
+			ClusterNodeMap: make(map[string]*types.NodeMap),
 		},
 	}
 }
@@ -202,6 +206,18 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 		return fmt.Errorf("clusterName is not a string, got %T", clusterNameVal)
 	}
 
+	// Since a cluster session corresponds to an unique Ray cluster lifecycle,
+	// we use the combined cluster name and session name for identification.
+	sessionNameVal, ok := eventMap["sessionName"]
+	if !ok {
+		return fmt.Errorf("event missing 'sessionName' field")
+	}
+	sessionName, ok := sessionNameVal.(string)
+	if !ok {
+		return fmt.Errorf("sessionName is not a string, got %T", sessionNameVal)
+	}
+	clusterSessionID := currentClusterName + "_" + sessionName
+
 	logrus.Infof("current eventType: %v", eventType)
 	switch eventType {
 	case types.TASK_DEFINITION_EVENT:
@@ -229,7 +245,6 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 				t.State = existingEvents[len(existingEvents)-1].State
 			}
 		})
-
 	case types.TASK_LIFECYCLE_EVENT:
 		lifecycleEvent, ok := eventMap["taskLifecycleEvent"].(map[string]any)
 		if !ok {
@@ -324,7 +339,6 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 				t.EndTime = lastEvent.Timestamp
 			}
 		})
-
 	case types.ACTOR_DEFINITION_EVENT:
 		actorDef, ok := eventMap["actorDefinitionEvent"]
 		if !ok {
@@ -520,11 +534,14 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 			}
 			a.NumRestarts = restartCount
 		})
-
 	case types.ACTOR_TASK_DEFINITION_EVENT:
 		// TODO: Handle actor task definition event
 		// This is related to GET /api/v0/tasks (type=ACTOR_TASK)
 		logrus.Debugf("ACTOR_TASK_DEFINITION_EVENT received, not yet implemented")
+	case types.NODE_DEFINITION_EVENT:
+		return h.handleNodeDefinitionEvent(eventMap, clusterSessionID)
+	case types.NODE_LIFECYCLE_EVENT:
+		return h.handleNodeLifecycleEvent(eventMap, clusterSessionID)
 	default:
 		logrus.Infof("Event not supported, skipping: %v", eventMap)
 	}
@@ -707,4 +724,107 @@ func (h *EventHandler) GetActorsMap(clusterName string) map[string]types.Actor {
 		actors[id] = actor.DeepCopy()
 	}
 	return actors
+}
+
+// handleNodeDefinitionEvent processes NODE_DEFINITION_EVENT and merges it with the existing node map for a given cluster session.
+func (h *EventHandler) handleNodeDefinitionEvent(eventMap map[string]any, clusterSessionID string) error {
+	nodeDef, exists := eventMap["nodeDefinitionEvent"]
+	if !exists {
+		return fmt.Errorf("event does not have 'nodeDefinitionEvent' field")
+	}
+
+	jsonNodeDefinition, err := json.Marshal(nodeDef)
+	if err != nil {
+		return fmt.Errorf("failed to marshal node definition event: %w", err)
+	}
+
+	var currNode types.Node
+	if err := json.Unmarshal(jsonNodeDefinition, &currNode); err != nil {
+		return fmt.Errorf("failed to unmarshal node definition event: %w", err)
+	}
+	if currNode.NodeID == "" {
+		return fmt.Errorf("node ID is empty")
+	}
+
+	currNode.NodeID, err = utils.ConvertBase64ToHex(currNode.NodeID)
+	if err != nil {
+		return fmt.Errorf("failed to convert node ID from base64 to hex: %w", err)
+	}
+
+	nodeMap := h.ClusterNodeMap.GetOrCreateNodeMap(clusterSessionID)
+	nodeMap.CreateOrMergeNode(currNode.NodeID, func(n *types.Node) {
+		// TODO(jwj): Handle merging of node definition event to prevent overwriting lifecycle-derived fields.
+		existingStateTransitions := n.StateTransitions
+
+		*n = currNode
+
+		if len(existingStateTransitions) > 0 {
+			n.StateTransitions = existingStateTransitions
+		}
+	})
+
+	return nil
+}
+
+// handleNodeLifecycleEvent processes NODE_LIFECYCLE_EVENT and merges state transitions.
+func (h *EventHandler) handleNodeLifecycleEvent(eventMap map[string]any, clusterSessionID string) error {
+	nodeLifecycle, exists := eventMap["nodeLifecycleEvent"]
+	if !exists {
+		return fmt.Errorf("event does not have 'nodeLifecycleEvent' field")
+	}
+
+	jsonNodeLifecycle, err := json.Marshal(nodeLifecycle)
+	if err != nil {
+		return fmt.Errorf("failed to marshal node lifecycle event: %w", err)
+	}
+
+	var currNode types.Node
+	if err := json.Unmarshal(jsonNodeLifecycle, &currNode); err != nil {
+		return fmt.Errorf("failed to unmarshal node lifecycle event: %w", err)
+	}
+	if currNode.NodeID == "" {
+		return fmt.Errorf("node ID is empty")
+	}
+
+	currNode.NodeID, err = utils.ConvertBase64ToHex(currNode.NodeID)
+	if err != nil {
+		return fmt.Errorf("failed to convert node ID from base64 to hex: %w", err)
+	}
+
+	// A NODE_LIFECYCLE_EVENT must have at least one state transition.
+	// Ref: https://github.com/ray-project/ray/blob/221a19395a836fada12ebb2bac7bff00a666faa5/src/ray/protobuf/public/events_node_lifecycle_event.proto#L58-L61.
+	if len(currNode.StateTransitions) == 0 {
+		return fmt.Errorf("node lifecycle event does not have any state transitions")
+	}
+
+	nodeMap := h.ClusterNodeMap.GetOrCreateNodeMap(clusterSessionID)
+	nodeMap.CreateOrMergeNode(currNode.NodeID, func(n *types.Node) {
+		// Merge state transitions.
+		n.StateTransitions = MergeStateTransitions[types.NodeStateTransition](
+			n.StateTransitions,
+			currNode.StateTransitions,
+		)
+	})
+
+	return nil
+}
+
+// GetNodeMap returns a thread-safe deep copy of all nodes for a given cluster session.
+func (h *EventHandler) GetNodeMap(clusterSessionID string) map[string]types.Node {
+	h.ClusterNodeMap.RLock()
+	defer h.ClusterNodeMap.RUnlock()
+
+	nodeMap, ok := h.ClusterNodeMap.ClusterNodeMap[clusterSessionID]
+	if !ok {
+		return map[string]types.Node{}
+	}
+
+	nodeMap.Lock()
+	defer nodeMap.Unlock()
+
+	nodes := make(map[string]types.Node, len(nodeMap.NodeMap))
+	for id, node := range nodeMap.NodeMap {
+		nodes[id] = node.DeepCopy()
+	}
+	return nodes
 }
