@@ -361,4 +361,7 @@ func TestRayClusterWithFractionalGPU(t *testing.T) {
 	LogWithTimestamp(t, "✓ Worker pod created successfully")
 	LogWithTimestamp(t, "✓ Ray start command contains: --num-gpus=0.4")
 	LogWithTimestamp(t, "✓ Test passed: Fractional GPU (0.4) correctly converted from group resources to Ray start parameter")
+	
+	// Give operator time to gracefully clean up resources before namespace deletion
+	time.Sleep(2 * time.Second)
 }
