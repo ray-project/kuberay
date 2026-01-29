@@ -39,7 +39,7 @@ func NewServerHandler(c *types.RayHistoryServerConfig, dashboardDir string, read
 	}
 }
 
-func (s *ServerHandler) Run(stop chan struct{}) error {
+func (s *ServerHandler) Run(stop <-chan struct{}) error {
 	s.RegisterRouter()
 	port := ":8080"
 	server := &http.Server{
