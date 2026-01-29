@@ -171,38 +171,80 @@ func testLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Names
 	// Hardcode "raylet.out" for deterministic testing.
 	filename := "raylet.out"
 
-	test.T().Run("should return log content", func(t *testing.T) {
-		g := NewWithT(t)
-		g.Eventually(func(gg Gomega) {
-			logFileURL := fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=100", historyServerURL, EndpointLogFile, nodeID, filename)
-			resp, err := client.Get(logFileURL)
-			gg.Expect(err).NotTo(HaveOccurred())
-			defer resp.Body.Close()
-			gg.Expect(resp.StatusCode).To(Equal(http.StatusOK))
+	// Define test cases covering different parameters
+	logFileTestCases := []struct {
+		name           string
+		buildURL       func(baseURL, nodeID string) string
+		expectedStatus int
+	}{
+		// lines parameter
+		{"lines=100", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=100", u, EndpointLogFile, n, filename) }, http.StatusOK},
+		{"lines=0 (default 1000)", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s", u, EndpointLogFile, n, filename) }, http.StatusOK},
+		{"lines=-1 (all)", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=-1", u, EndpointLogFile, n, filename) }, http.StatusOK},
 
-			body, err := io.ReadAll(resp.Body)
-			gg.Expect(err).NotTo(HaveOccurred())
-			gg.Expect(len(body)).To(BeNumerically(">", 0))
-		}, TestTimeoutShort).Should(Succeed())
-	})
+		// timeout parameter
+		{"timeout=5", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&timeout=5", u, EndpointLogFile, n, filename) }, http.StatusOK},
+		{"timeout=30", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&timeout=30", u, EndpointLogFile, n, filename) }, http.StatusOK},
 
-	test.T().Run("should reject path traversal", func(t *testing.T) {
-		g := NewWithT(t)
-		maliciousPaths := []string{"../etc/passwd", "..", "/etc/passwd", "../../secret"}
+		// attempt_number parameter
+		{"attempt_number=0", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&attempt_number=0", u, EndpointLogFile, n, filename) }, http.StatusOK},
+		{"attempt_number=1", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&attempt_number=1", u, EndpointLogFile, n, filename) }, http.StatusOK},
 
-		for _, malicious := range maliciousPaths {
+		// download_filename parameter
+		{"download_filename=custom.log", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&download_filename=custom.log", u, EndpointLogFile, n, filename) }, http.StatusOK},
+
+		// filter_ansi_code parameter
+		{"filter_ansi_code=true", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&filter_ansi_code=true", u, EndpointLogFile, n, filename) }, http.StatusOK},
+		{"filter_ansi_code=false", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&filter_ansi_code=false", u, EndpointLogFile, n, filename) }, http.StatusOK},
+
+		// Combined parameters
+		{"lines+timeout+filter", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=50&timeout=10&filter_ansi_code=true", u, EndpointLogFile, n, filename) }, http.StatusOK},
+
+		// Missing mandatory parameters
+		{"missing node_id", func(u, n string) string { return fmt.Sprintf("%s%s?filename=%s", u, EndpointLogFile, filename) }, http.StatusBadRequest},
+		{"missing filename", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s", u, EndpointLogFile, n) }, http.StatusBadRequest},
+		{"missing both", func(u, n string) string { return fmt.Sprintf("%s%s", u, EndpointLogFile) }, http.StatusBadRequest},
+
+		// Invalid parameters
+		// NOTE: Ray Dashboard will only return 500 (Internal Server Error) for the exceptions (including file not found and invalid parameter)
+		// ref: https://github.com/ray-project/ray/blob/68d01c4c48a59c7768ec9c2359a1859966c446b6/python/ray/dashboard/modules/state/state_head.py#L282-L284
+		{"invalid lines (string)", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=abc", u, EndpointLogFile, n, filename) }, http.StatusInternalServerError},
+		{"invalid timeout (string)", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&timeout=invalid", u, EndpointLogFile, n, filename) }, http.StatusInternalServerError},
+		{"invalid attempt_number (string)", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&attempt_number=xyz", u, EndpointLogFile, n, filename) }, http.StatusInternalServerError},
+		{"file not found", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=nonexistent.log", u, EndpointLogFile, n) }, http.StatusInternalServerError},
+
+		// Path traversal attacks
+		{"traversal ../etc/passwd", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=../etc/passwd", u, EndpointLogFile, n) }, http.StatusBadRequest},
+		{"traversal ..", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=..", u, EndpointLogFile, n) }, http.StatusBadRequest},
+		{"traversal /etc/passwd", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=/etc/passwd", u, EndpointLogFile, n) }, http.StatusBadRequest},
+		{"traversal ../../secret", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=../../secret", u, EndpointLogFile, n) }, http.StatusBadRequest},
+		{"traversal in node_id", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=../evil&filename=%s", u, EndpointLogFile, filename) }, http.StatusBadRequest},
+	}
+
+	for _, tc := range logFileTestCases {
+		test.T().Run(tc.name, func(t *testing.T) {
+			g := NewWithT(t)
 			g.Eventually(func(gg Gomega) {
-				url := fmt.Sprintf("%s%s?node_id=%s&filename=%s", historyServerURL, EndpointLogFile, nodeID, malicious)
+				url := tc.buildURL(historyServerURL, nodeID)
 				resp, err := client.Get(url)
 				gg.Expect(err).NotTo(HaveOccurred())
 				defer func() {
 					io.Copy(io.Discard, resp.Body)
 					resp.Body.Close()
 				}()
-				gg.Expect(resp.StatusCode).To(Equal(http.StatusBadRequest))
+
+				gg.Expect(resp.StatusCode).To(Equal(tc.expectedStatus),
+					"Test case '%s' failed: expected status %d, got %d", tc.name, tc.expectedStatus, resp.StatusCode)
+
+				if tc.expectedStatus == http.StatusOK {
+					body, err := io.ReadAll(resp.Body)
+					gg.Expect(err).NotTo(HaveOccurred())
+					gg.Expect(len(body)).To(BeNumerically(">", 0),
+						"Test case '%s' should return non-empty body", tc.name)
+				}
 			}, TestTimeoutShort).Should(Succeed())
-		}
-	})
+		})
+	}
 
 	DeleteS3Bucket(test, g, s3Client)
 	LogWithTimestamp(test.T(), "Log file endpoint tests completed")
