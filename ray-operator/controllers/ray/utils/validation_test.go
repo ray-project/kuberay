@@ -1115,6 +1115,42 @@ func TestValidateRayJobSpec(t *testing.T) {
 			expectError: true,
 		},
 		{
+			name: "SidecarMode supports SubmitterContainerTemplate",
+			spec: rayv1.RayJobSpec{
+				SubmissionMode:             rayv1.SidecarMode,
+				SubmitterContainerTemplate: createBasicSubmitterContainerTemplate(),
+				RayClusterSpec:             createBasicRayClusterSpec(),
+			},
+			expectError: false,
+		},
+		{
+			name: "K8sJobMode doesn't support SubmitterContainerTemplate",
+			spec: rayv1.RayJobSpec{
+				SubmissionMode:             rayv1.K8sJobMode,
+				SubmitterContainerTemplate: createBasicSubmitterContainerTemplate(),
+				RayClusterSpec:             createBasicRayClusterSpec(),
+			},
+			expectError: true,
+		},
+		{
+			name: "HTTPMode doesn't support SubmitterContainerTemplate",
+			spec: rayv1.RayJobSpec{
+				SubmissionMode:             rayv1.HTTPMode,
+				SubmitterContainerTemplate: createBasicSubmitterContainerTemplate(),
+				RayClusterSpec:             createBasicRayClusterSpec(),
+			},
+			expectError: true,
+		},
+		{
+			name: "InteractiveMode doesn't support SubmitterContainerTemplate",
+			spec: rayv1.RayJobSpec{
+				SubmissionMode:             rayv1.InteractiveMode,
+				SubmitterContainerTemplate: createBasicSubmitterContainerTemplate(),
+				RayClusterSpec:             createBasicRayClusterSpec(),
+			},
+			expectError: true,
+		},
+		{
 			name: "SidecarMode doesn't support SubmitterConfig",
 			spec: rayv1.RayJobSpec{
 				SubmissionMode: rayv1.SidecarMode,
@@ -1915,6 +1951,12 @@ func createBasicRayClusterSpec() *rayv1.RayClusterSpec {
 		HeadGroupSpec: rayv1.HeadGroupSpec{
 			Template: podTemplateSpec(nil, nil),
 		},
+	}
+}
+
+func createBasicSubmitterContainerTemplate() *corev1.Container {
+	return &corev1.Container{
+		Image: "rayproject/ray:2.52.0",
 	}
 }
 
