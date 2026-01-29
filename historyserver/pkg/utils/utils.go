@@ -299,3 +299,23 @@ func IsHexNil(hexStr string) (bool, error) {
 func BuildClusterSessionKey(clusterName, namespace, sessionName string) string {
 	return clusterName + connector + namespace + connector + sessionName
 }
+
+// GetDateTimeFromSessionID will convert sessionID string i.e. `session_2026-01-27_10-52-59_373533_1` to time.Time
+func GetDateTimeFromSessionID(sessionID string) (time.Time, error) {
+	regex := regexp.MustCompile(`session_(\d{4}-\d{2}-\d{2})_(\d{2}-\d{2}-\d{2})_(\d{6})`)
+	matches := regex.FindStringSubmatch(sessionID)
+
+	if len(matches) < 4 {
+		return time.Time{}, fmt.Errorf("Invalid session string format, expected `session_YYYY-MM-DD_HH-MM-SS_MICROSECOND` got: %s", sessionID)
+	}
+
+	layout := "2006-01-02_15-04-05.000000"
+	timeStr := fmt.Sprintf("%s_%s.%s", matches[1], matches[2], matches[3])
+
+	t, err := time.Parse(layout, timeStr)
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	return t, nil
+}
