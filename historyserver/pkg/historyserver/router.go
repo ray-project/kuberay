@@ -80,12 +80,12 @@ func routerAPI(s *ServerHandler) {
 		Doc("get prometheus_health").
 		Writes("")) // Placeholder for specific return type
 
-	ws.Route(ws.GET("/jobs").To(s.getJobs).Filter(s.CookieHandle).
-		Doc("get jobs").
+	ws.Route(ws.GET("/jobs/").To(s.getJobs).Filter(s.CookieHandle).
+		Doc("get driver jobs").
 		Writes("")) // Placeholder for specific return type
 
 	ws.Route(ws.GET("/jobs/{job_id}").To(s.getJob).Filter(s.CookieHandle).
-		Doc("get single job").
+		Doc("get single driver job").
 		Param(ws.PathParameter("job_id", "job_id")).
 		Writes("")) // Placeholder for specific return type
 
@@ -341,13 +341,78 @@ func (s *ServerHandler) getPrometheusHealth(req *restful.Request, resp *restful.
 }
 
 func (s *ServerHandler) getJobs(req *restful.Request, resp *restful.Response) {
+	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
+	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
+	clusterNameID := clusterName + "_" + clusterNamespace
 	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
+
 	if sessionName == "live" {
 		s.redirectRequest(req, resp)
 		return
 	}
-	// Return "not yet supported" for jobs
-	resp.WriteErrorString(http.StatusNotImplemented, "Jobs not yet supported")
+
+	jobsMap := s.eventHandler.GetJobsMap(clusterNameID)
+
+	jobs := make([]eventtypes.Job, 0, len(jobsMap))
+	for _, job := range jobsMap {
+		jobs = append(jobs, job)
+	}
+
+	// Formate response to match Ray Dashboard API format
+	formattedJobs := make([]interface{}, 0)
+	for _, job := range jobs {
+		formattedJobs = append(formattedJobs, formatJobForResponse(job))
+	}
+
+	response := formattedJobs
+
+	respData, err := json.Marshal(response)
+	if err != nil {
+		logrus.Errorf("Failed to marshal jobs response: %v", err)
+		resp.WriteErrorString(http.StatusInternalServerError, err.Error())
+		return
+	}
+	resp.Write(respData)
+}
+
+// formatJobForResponse will convert eventtypes.Job to the format expected by Ray Dashboard
+func formatJobForResponse(job eventtypes.Job) map[string]interface{} {
+	// If SubmissionID is empty, try to get it from metadata
+	submissionID := job.SubmissionID
+	if submissionID == "" && job.Config.Metadata != nil {
+		if metaSubmissionID, ok := job.Config.Metadata["job_submission_id"]; ok {
+			submissionID = metaSubmissionID
+		}
+	}
+
+	result := map[string]interface{}{
+		"driver_exit_code":          job.DriverExitCode,
+		"driver_node_id":            job.DriverNodeID,
+		"driver_agent_http_address": job.DriverAgentHttpAddress,
+		"runtime_env":               job.RuntimeEnv,
+		"metadata":                  job.Config.Metadata,
+		"error_type":                job.ErrorType,
+		"message":                   job.Message,
+		"entrypoint":                job.EntryPoint,
+		"status":                    string(job.Status),
+		"driver_info": map[string]interface{}{
+			"id":              job.JobID,
+			"node_ip_address": job.DriverNodeIPAddress,
+			"pid":             job.DriverPID,
+		},
+		"job_id":        job.JobID,
+		"submission_id": submissionID,
+		"type":          string(job.JobType),
+	}
+
+	if !job.StartTime.IsZero() {
+		result["start_time"] = job.StartTime.UnixMilli()
+	}
+
+	if !job.EndTime.IsZero() {
+		result["end_time"] = job.EndTime.UnixMilli()
+	}
+	return result
 }
 
 func (s *ServerHandler) getNode(req *restful.Request, resp *restful.Response) {
@@ -361,14 +426,33 @@ func (s *ServerHandler) getNode(req *restful.Request, resp *restful.Response) {
 }
 
 func (s *ServerHandler) getJob(req *restful.Request, resp *restful.Response) {
+	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
+	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
+	clusterNameID := clusterName + "_" + clusterNamespace
 	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
 	if sessionName == "live" {
 		s.redirectRequest(req, resp)
 		return
 	}
 
-	// Return "not yet supported" for job
-	resp.WriteErrorString(http.StatusNotImplemented, "Job not yet supported")
+	jobID := req.PathParameter("job_id")
+
+	job, found := s.eventHandler.GetJobByJobID(clusterNameID, jobID)
+
+	if !found {
+		responseString := fmt.Sprintf("Job %s does not exist", jobID)
+		resp.Write([]byte(responseString))
+		return
+	}
+
+	respData, err := json.Marshal(formatJobForResponse(job))
+	if err != nil {
+		logrus.Errorf("Failed to marshal jobs response: %v", err)
+		resp.WriteErrorString(http.StatusInternalServerError, err.Error())
+		return
+	}
+	resp.Write(respData)
+
 }
 
 func (s *ServerHandler) getDatasets(req *restful.Request, resp *restful.Response) {
