@@ -257,9 +257,10 @@ func testLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Names
 // 2. Submit a Ray job to the existing cluster
 // 3. Delete RayCluster to trigger log upload to S3
 // 4. Apply History Server and get its URL
-// 5. Verify that the history server can fetch log content from S3 (raylet.out)
-// 6. Verify that the history server rejects path traversal attempts from S3
-// 7. Delete S3 bucket to ensure test isolation
+// 5. Verify that the history server can fetch log content from S3
+// 6. Verify parameter validation for dead cluster
+// 7. Verify security (path traversal) protection
+// 8. Delete S3 bucket to ensure test isolation
 func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
@@ -288,38 +289,61 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 	// Hardcode "raylet.out" for deterministic testing.
 	filename := "raylet.out"
 
-	test.T().Run("should return log content from S3", func(t *testing.T) {
-		g := NewWithT(t)
-		g.Eventually(func(gg Gomega) {
-			logFileURL := fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=100", historyServerURL, EndpointLogFile, nodeID, filename)
-			resp, err := client.Get(logFileURL)
-			gg.Expect(err).NotTo(HaveOccurred())
-			defer resp.Body.Close()
-			gg.Expect(resp.StatusCode).To(Equal(http.StatusOK))
+	// Define test cases for dead cluster (S3 storage)
+	// Note: Dead cluster only supports basic parameters (node_id, filename, lines)
+	// Advanced features like timeout, attempt_number, download_filename, filter_ansi_code
+	// are only available for live clusters
+	logFileTestCases := []struct {
+		name           string
+		buildURL       func(baseURL, nodeID string) string
+		expectedStatus int
+	}{
+		// Supported parameters
+		{"lines=100", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=100", u, EndpointLogFile, n, filename) }, http.StatusOK},
+		{"lines=0 (default 1000)", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s", u, EndpointLogFile, n, filename) }, http.StatusOK},
+		{"lines=-1 (all)", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=-1", u, EndpointLogFile, n, filename) }, http.StatusOK},
 
-			body, err := io.ReadAll(resp.Body)
-			gg.Expect(err).NotTo(HaveOccurred())
-			gg.Expect(len(body)).To(BeNumerically(">", 0))
-		}, TestTimeoutShort).Should(Succeed())
-	})
+		// Missing mandatory parameters
+		{"missing node_id", func(u, n string) string { return fmt.Sprintf("%s%s?filename=%s", u, EndpointLogFile, filename) }, http.StatusBadRequest},
+		{"missing filename", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s", u, EndpointLogFile, n) }, http.StatusBadRequest},
+		{"missing both", func(u, n string) string { return fmt.Sprintf("%s%s", u, EndpointLogFile) }, http.StatusBadRequest},
 
-	test.T().Run("should reject path traversal from S3", func(t *testing.T) {
-		g := NewWithT(t)
-		maliciousPaths := []string{"../etc/passwd", "..", "/etc/passwd", "../../secret"}
+		// Invalid parameters
+		{"invalid lines (string)", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=abc", u, EndpointLogFile, n, filename) }, http.StatusBadRequest},
+		{"file not found", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=nonexistent.log", u, EndpointLogFile, n) }, http.StatusNotFound},
 
-		for _, malicious := range maliciousPaths {
+		// Path traversal attacks
+		{"traversal ../etc/passwd", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=../etc/passwd", u, EndpointLogFile, n) }, http.StatusBadRequest},
+		{"traversal ..", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=..", u, EndpointLogFile, n) }, http.StatusBadRequest},
+		{"traversal /etc/passwd", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=/etc/passwd", u, EndpointLogFile, n) }, http.StatusBadRequest},
+		{"traversal ../../secret", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=../../secret", u, EndpointLogFile, n) }, http.StatusBadRequest},
+		{"traversal in node_id", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=../evil&filename=%s", u, EndpointLogFile, filename) }, http.StatusBadRequest},
+	}
+
+	for _, tc := range logFileTestCases {
+		test.T().Run(tc.name, func(t *testing.T) {
+			g := NewWithT(t)
 			g.Eventually(func(gg Gomega) {
-				url := fmt.Sprintf("%s%s?node_id=%s&filename=%s", historyServerURL, EndpointLogFile, nodeID, malicious)
+				url := tc.buildURL(historyServerURL, nodeID)
 				resp, err := client.Get(url)
 				gg.Expect(err).NotTo(HaveOccurred())
 				defer func() {
 					io.Copy(io.Discard, resp.Body)
 					resp.Body.Close()
 				}()
-				gg.Expect(resp.StatusCode).To(Equal(http.StatusBadRequest))
+
+				gg.Expect(resp.StatusCode).To(Equal(tc.expectedStatus),
+					"Test case '%s' failed: expected status %d, got %d", tc.name, tc.expectedStatus, resp.StatusCode)
+
+				if tc.expectedStatus == http.StatusOK {
+					body, err := io.ReadAll(resp.Body)
+					gg.Expect(err).NotTo(HaveOccurred())
+					gg.Expect(len(body)).To(BeNumerically(">", 0),
+						"Test case '%s' should return non-empty body", tc.name)
+				}
 			}, TestTimeoutShort).Should(Succeed())
-		}
-	})
+		})
+	}
 
 	DeleteS3Bucket(test, g, s3Client)
 	LogWithTimestamp(test.T(), "Dead cluster log file endpoint tests completed")
