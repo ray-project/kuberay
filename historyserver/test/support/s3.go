@@ -85,6 +85,8 @@ func NewS3Client(endpoint string) (*s3.Client, error) {
 	return s3.NewFromConfig(awsCfg, func(o *s3.Options) {
 		o.UsePathStyle = true
 		o.BaseEndpoint = aws.String(endpoint)
+		// MinIO uses HTTP; tell the SDK to use the endpoint's scheme.
+		o.EndpointOptions.DisableHTTPS = strings.HasPrefix(endpoint, "http://")
 	}), nil
 }
 

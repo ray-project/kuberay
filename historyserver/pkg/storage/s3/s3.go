@@ -415,6 +415,11 @@ func New(c *config) (*RayLogsHandler, error) {
 	s3Client := s3.NewFromConfig(awsCfg, func(o *s3.Options) {
 		o.UsePathStyle = c.S3ForcePathStyle
 		o.EndpointOptions.DisableHTTPS = c.DisableSSL
+		// S3 client uses its own Options.BaseEndpoint for resolution; without this,
+		// custom endpoints (e.g. MinIO) would be ignored and the client would target AWS.
+		if endpoint != "" {
+			o.BaseEndpoint = aws.String(endpoint)
+		}
 	})
 
 	// Ensure bucket exists, create if not
