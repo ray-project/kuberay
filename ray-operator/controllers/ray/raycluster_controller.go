@@ -89,6 +89,7 @@ type RayClusterReconcilerOptions struct {
 	WorkerSidecarContainers  []corev1.Container
 	DefaultContainerEnvs     []corev1.EnvVar
 	IsOpenShift              bool
+	UseIngressOnOpenShift    bool
 }
 
 // Reconcile reads that state of the cluster for a RayCluster object and makes changes based on it
@@ -422,6 +423,12 @@ func generateRandomToken(length int) (string, error) {
 	return base64.StdEncoding.EncodeToString(bytes), nil
 }
 
+// shouldCreateRoute determines if a Route should be created based on cluster type and configuration.
+// Uses the stored values from reconciler options (no function calls during reconciliation).
+func (r *RayClusterReconciler) shouldCreateRoute() bool {
+	return r.options.IsOpenShift && !r.options.UseIngressOnOpenShift
+}
+
 func (r *RayClusterReconciler) reconcileIngress(ctx context.Context, instance *rayv1.RayCluster) error {
 	logger := ctrl.LoggerFrom(ctx)
 	logger.Info("Reconciling Ingress")
@@ -429,11 +436,11 @@ func (r *RayClusterReconciler) reconcileIngress(ctx context.Context, instance *r
 		return nil
 	}
 
-	if r.options.IsOpenShift {
-		// This is open shift - create route
+	if r.shouldCreateRoute() {
+		// Create OpenShift Route
 		return r.reconcileRouteOpenShift(ctx, instance)
 	}
-	// plain vanilla kubernetes - create ingress
+	// Create Kubernetes Ingress (also used on OpenShift when USE_INGRESS_ON_OPENSHIFT=true)
 	return r.reconcileIngressKubernetes(ctx, instance)
 }
 
