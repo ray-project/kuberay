@@ -165,9 +165,13 @@ func (h *ServerHandler) getGrafanaHealth(req *restful.Request, resp *restful.Res
 }
 
 func (s *ServerHandler) MetaKeyInfo(rayClusterNameID, key string) []byte {
-	baseObject := path.Join(utils.GetMetaDirByNameID(s.rootDir, rayClusterNameID), key)
+	baseObject := path.Join(utils.RAY_SESSIONDIR_METADIR_NAME, key)
 	logrus.Infof("Prepare to get object %s info ...", baseObject)
 	body := s.reader.GetContent(rayClusterNameID, baseObject)
+	if body == nil {
+		logrus.Warnf("Failed to get content from object %s : body is nil", baseObject)
+		return nil
+	}
 	data, err := io.ReadAll(body)
 	if err != nil {
 		logrus.Errorf("Failed to read all data from object %s : %v", baseObject, err)
