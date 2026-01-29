@@ -1799,7 +1799,7 @@ func TestInitLivenessAndReadinessProbe(t *testing.T) {
 	assert.NotNil(t, rayContainer.ReadinessProbe.HTTPGet)
 	assert.Nil(t, rayContainer.LivenessProbe.Exec)
 	assert.Nil(t, rayContainer.ReadinessProbe.Exec)
-	assert.Equal(t, utils.RayAgentUnifiedHealthPath, rayContainer.LivenessProbe.HTTPGet.Path)
+	assert.Equal(t, utils.RayNodeHealthPath, rayContainer.LivenessProbe.HTTPGet.Path)
 	assert.Equal(t, int32(utils.DefaultDashboardAgentListenPort), rayContainer.LivenessProbe.HTTPGet.Port.IntVal)
 
 	// Worker nodes also should have only http probes.

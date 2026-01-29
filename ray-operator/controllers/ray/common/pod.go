@@ -426,7 +426,8 @@ func supportsUnifiedHealthCheck(rayVersion string) bool {
 func initLivenessAndReadinessProbe(rayContainer *corev1.Container, rayNodeType rayv1.RayNodeType, creatorCRDType utils.CRDType, rayStartParams map[string]string, rayVersion string) {
 	getPort := func(key string, defaultVal int32) int32 {
 		if portStr, ok := rayStartParams[key]; ok {
-			if port, err := strconv.Atoi(portStr); err == nil {
+			// ParseInt with bitSize=32 ensures the value fits in int32
+			if port, err := strconv.ParseInt(portStr, 10, 32); err == nil {
 				return int32(port)
 			}
 		}
