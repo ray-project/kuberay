@@ -31,13 +31,13 @@ var metaCommonUrlInfo = []*types.UrlInfo{
 	},
 }
 
-var JobsUrlInfo = &types.UrlInfo{
+var jobsUrlInfo = &types.UrlInfo{
 	Key:  utils.OssMetaFile_Jobs,
 	Url:  "http://localhost:8265/api/jobs/",
 	Type: "URL",
 }
 
-var JobResourcesUrlInfo = map[string]*types.JobUrlInfo{}
+var jobResourcesUrlInfo = map[string]*types.JobUrlInfo{}
 
 func (r *RayLogHandler) PersistMetaLoop(stop <-chan struct{}) {
 	// create meta directory
@@ -115,14 +115,14 @@ func (r *RayLogHandler) PersistUrlInfo(urlinfo *types.UrlInfo) ([]byte, error) {
 
 func (r *RayLogHandler) PersistDatasetsMeta() {
 
-	body, err := r.PersistUrlInfo(JobsUrlInfo)
+	body, err := r.PersistUrlInfo(jobsUrlInfo)
 	if err != nil {
-		logrus.Errorf("Failed to persist meta url %s: %v", JobsUrlInfo.Url, err)
+		logrus.Errorf("Failed to persist meta url %s: %v", jobsUrlInfo.Url, err)
 		return
 	}
 	var jobsData = []interface{}{}
 	if err := json.Unmarshal(body, &jobsData); err != nil {
-		logrus.Errorf("Ummarshal resp body error %v. key: %s response body: %v", err, JobsUrlInfo.Key, jobsData)
+		logrus.Errorf("Ummarshal resp body error %v. key: %s response body: %v", err, jobsUrlInfo.Key, jobsData)
 		return
 	}
 	currentJobIDs := make(map[string]string, 0)
@@ -140,8 +140,8 @@ func (r *RayLogHandler) PersistDatasetsMeta() {
 	}
 
 	for jobID, status := range currentJobIDs {
-		if _, ok := JobResourcesUrlInfo[jobID]; !ok {
-			JobResourcesUrlInfo[jobID] = &types.JobUrlInfo{
+		if _, ok := jobResourcesUrlInfo[jobID]; !ok {
+			jobResourcesUrlInfo[jobID] = &types.JobUrlInfo{
 				Url: &types.UrlInfo{
 					Key: fmt.Sprintf("%s%s", utils.OssMetaFile_JOBDATASETS_Prefix, jobID),
 					Url: fmt.Sprintf("http://localhost:8265/api/data/datasets/%s", jobID),
@@ -150,24 +150,28 @@ func (r *RayLogHandler) PersistDatasetsMeta() {
 			}
 		} else {
 			// Update status for existing jobs
-			JobResourcesUrlInfo[jobID].Status = status
+			jobResourcesUrlInfo[jobID].Status = status
 		}
 	}
 
-	for _, urlInfo := range JobResourcesUrlInfo {
+	for _, urlInfo := range jobResourcesUrlInfo {
 		if urlInfo.StopPersist {
 			continue
 		}
 
+		var isPersistentSuccess = true
 		if _, err := r.PersistUrlInfo(urlInfo.Url); err != nil {
 			logrus.Errorf("Persis task UrlInfo %s failed, error %v", urlInfo.Url.Url, err)
-			// no need break
+			isPersistentSuccess = false
 		}
 
 		if urlInfo.Status == types.JOBSTATUS_FAILED ||
 			urlInfo.Status == types.JOBSTATUS_STOPPED ||
 			urlInfo.Status == types.JOBSTATUS_SUCCEEDED {
-			urlInfo.StopPersist = true
+			// Only mark StopPersist when persistent success in order to prevent data inconsistency
+			if isPersistentSuccess {
+				urlInfo.StopPersist = true
+			}
 		}
 	}
 }
