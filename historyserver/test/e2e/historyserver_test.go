@@ -171,7 +171,6 @@ func testLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Names
 	// Hardcode "raylet.out" for deterministic testing.
 	filename := "raylet.out"
 
-	// Define test cases covering different parameters
 	logFileTestCases := []struct {
 		name           string
 		buildURL       func(baseURL, nodeID string) string
@@ -289,10 +288,9 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 	// Hardcode "raylet.out" for deterministic testing.
 	filename := "raylet.out"
 
-	// Define test cases for dead cluster (S3 storage)
-	// Note: Dead cluster only supports basic parameters (node_id, filename, lines)
-	// Advanced features like timeout, attempt_number, download_filename, filter_ansi_code
-	// are only available for live clusters
+	// NOTE: Dead clusters only support basic parameters (node_id, filename, lines).
+	// Advanced features like timeout, attempt_number, download_filename, and filter_ansi_code
+	// are currently available only for live clusters; they will be supported for dead clusters in the future.
 	logFileTestCases := []struct {
 		name           string
 		buildURL       func(baseURL, nodeID string) string
