@@ -24,7 +24,8 @@ const (
 	AzureContainerName  = "ray-historyserver"
 
 	// Azure-specific RayCluster config
-	AzureRayClusterManifestPath = "../../config/raycluster-azureblob.yaml"
+	AzureRayClusterManifestPath      = "../../config/raycluster-azureblob.yaml"
+	AzureHistoryServerManifestPath   = "../../config/historyserver-azureblob.yaml"
 )
 
 // ApplyAzurite deploys Azurite once per test namespace.

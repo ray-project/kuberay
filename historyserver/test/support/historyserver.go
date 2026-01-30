@@ -49,8 +49,12 @@ var HistoryServerEndpoints = []string{
 }
 
 // ApplyHistoryServer deploys the HistoryServer and RBAC resources.
-func ApplyHistoryServer(test Test, g *WithT, namespace *corev1.Namespace) {
-	// Read RBAC resources from YAML and modify namespace fields.
+// If manifestPath is empty, the default HistoryServerManifestPath is used.
+func ApplyHistoryServer(test Test, g *WithT, namespace *corev1.Namespace, manifestPath string) {
+	if manifestPath == "" {
+		manifestPath = HistoryServerManifestPath
+	}
+
 	sa, clusterRole, clusterRoleBinding := DeserializeRBACFromYAML(test, ServiceAccountManifestPath)
 	sa.Namespace = namespace.Name
 	clusterRoleBinding.Name = fmt.Sprintf("historyserver-%s", namespace.Name)
@@ -64,6 +68,7 @@ func ApplyHistoryServer(test Test, g *WithT, namespace *corev1.Namespace) {
 	if err != nil && !k8serrors.IsAlreadyExists(err) {
 		g.Expect(err).NotTo(HaveOccurred())
 	}
+
 	_, err = test.Client().Core().RbacV1().ClusterRoleBindings().Create(test.Ctx(), clusterRoleBinding, metav1.CreateOptions{})
 	g.Expect(err).NotTo(HaveOccurred())
 
@@ -74,7 +79,7 @@ func ApplyHistoryServer(test Test, g *WithT, namespace *corev1.Namespace) {
 			context.Background(), clusterRoleBinding.Name, metav1.DeleteOptions{})
 	})
 
-	KubectlApplyYAML(test, HistoryServerManifestPath, namespace.Name)
+	KubectlApplyYAML(test, manifestPath, namespace.Name)
 
 	LogWithTimestamp(test.T(), "Waiting for HistoryServer to be ready")
 	g.Eventually(func(gg Gomega) {
