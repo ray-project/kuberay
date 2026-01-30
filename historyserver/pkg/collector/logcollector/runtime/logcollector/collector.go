@@ -210,6 +210,12 @@ func (r *RayLogHandler) processSessionLatestLogFile(absoluteLogPathName, session
 		return err
 	}
 
+	// Skip uploading empty log files so S3 never gets 0-byte objects (e.g. CI expects ContentLength > 0)
+	if len(content) == 0 {
+		logrus.Debugf("Skipping upload of empty log file %s", objectName)
+		return nil
+	}
+
 	// Write to storage
 	err = r.Writer.WriteFile(objectName, bytes.NewReader(content))
 	if err != nil {
@@ -644,14 +650,21 @@ func (r *RayLogHandler) processPrevLogFile(absoluteLogPathName, localLogDir, ses
 		return err
 	}
 
-	// Write to storage
-	err = r.Writer.WriteFile(objectName, bytes.NewReader(content))
-	if err != nil {
-		logrus.Errorf("Failed to write object %s: %v", objectName, err)
-		return err
+	// Skip uploading empty log files so S3 never gets 0-byte objects (e.g. CI expects ContentLength > 0)
+	if len(content) == 0 {
+		logrus.Debugf("Skipping upload of empty prev-log file %s", objectName)
+		// Still move to persist-complete-logs below so we don't re-process this file
 	}
 
-	logrus.Infof("Successfully wrote object %s, size: %d bytes", objectName, len(content))
+	// Write to storage (only when non-empty)
+	if len(content) > 0 {
+		err = r.Writer.WriteFile(objectName, bytes.NewReader(content))
+		if err != nil {
+			logrus.Errorf("Failed to write object %s: %v", objectName, err)
+			return err
+		}
+		logrus.Infof("Successfully wrote object %s, size: %d bytes", objectName, len(content))
+	}
 
 	// Move the processed file to persist-complete-logs directory to avoid re-uploading
 	completeBaseDir := filepath.Join(r.persistCompleteLogsDir, sessionID, nodeID)
