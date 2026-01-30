@@ -587,7 +587,7 @@ func BuildAutoscalerContainer(autoscalerImage string) corev1.Container {
 				},
 			},
 			{
-				Name: "RAY_CLUSTER_NAMESPACE",
+				Name: utils.RAY_CLUSTER_NAMESPACE,
 				ValueFrom: &corev1.EnvVarSource{
 					FieldRef: &corev1.ObjectFieldSelector{
 						FieldPath: "metadata.namespace",
@@ -750,6 +750,17 @@ func setContainerEnvVars(pod *corev1.Pod, rayNodeType rayv1.RayNodeType, fqdnRay
 		},
 	}
 	container.Env = append(container.Env, clusterNameEnv)
+
+	// The RAY_CLUSTER_NAMESPACE environment variable is managed by KubeRay and should not be set by the user.
+	clusterNamespaceEnv := corev1.EnvVar{
+		Name: utils.RAY_CLUSTER_NAMESPACE,
+		ValueFrom: &corev1.EnvVarSource{
+			FieldRef: &corev1.ObjectFieldSelector{
+				FieldPath: "metadata.namespace",
+			},
+		},
+	}
+	container.Env = append(container.Env, clusterNamespaceEnv)
 
 	// RAY_CLOUD_INSTANCE_ID is used by Ray Autoscaler V2 (alpha). See https://github.com/ray-project/kuberay/issues/1751 for more details.
 	rayCloudInstanceID := corev1.EnvVar{
