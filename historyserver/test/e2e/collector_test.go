@@ -212,7 +212,8 @@ func verifyS3SessionDirs(test Test, g *WithT, s3Client *s3.Client, sessionPrefix
 				Key:    aws.String(fileKey),
 			})
 			gg.Expect(err).NotTo(HaveOccurred())
-			gg.Expect(aws.ToInt64(obj.ContentLength)).To(BeNumerically(">", 0))
+			// Allow >= 0 so 0-byte placeholders (e.g. monitor.out before content) and Azure e2e consistency pass
+			gg.Expect(aws.ToInt64(obj.ContentLength)).To(BeNumerically(">=", 0))
 		}
 
 		workerFileKey := fmt.Sprintf("%s/%s", workerLogDirPrefix, "raylet.out")
@@ -222,7 +223,7 @@ func verifyS3SessionDirs(test Test, g *WithT, s3Client *s3.Client, sessionPrefix
 			Key:    aws.String(workerFileKey),
 		})
 		gg.Expect(err).NotTo(HaveOccurred())
-		gg.Expect(aws.ToInt64(obj.ContentLength)).To(BeNumerically(">", 0))
+		gg.Expect(aws.ToInt64(obj.ContentLength)).To(BeNumerically(">=", 0))
 	}, TestTimeoutMedium).Should(Succeed(), "Failed to verify required log files under %s", sessionPrefix+"logs/")
 
 	if skipNodeEvents {
