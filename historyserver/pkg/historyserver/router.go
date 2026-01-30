@@ -1493,6 +1493,7 @@ func (s *ServerHandler) getTasksTimeline(req *restful.Request, resp *restful.Res
 		return
 	}
 
+	resp.Header().Set("Content-Type", "application/json")
 	// Support download parameter
 	if download == "1" {
 		nowStr := time.Now().Format("2006-01-02_15-04-05")
