@@ -70,9 +70,10 @@ func (r *RayLogsHandler) CreateDirectory(d string) error {
 		// Directory doesn't exist, create it
 		logrus.Infof("Begin to create s3 dir %s ...", objectDir)
 		_, err = r.S3Client.PutObject(ctx, &s3.PutObjectInput{
-			Bucket: aws.String(r.S3Bucket),
-			Key:    aws.String(objectDir),
-			Body:   bytes.NewReader([]byte("")),
+			Bucket:        aws.String(r.S3Bucket),
+			Key:           aws.String(objectDir),
+			Body:          bytes.NewReader([]byte("")),
+			ContentLength: aws.Int64(0),
 		})
 		if err != nil {
 			logrus.Errorf("Failed to create directory '%s': %v", objectDir, err)
@@ -296,7 +297,7 @@ func NewWriter(c *types.RayCollectorConfig, jd map[string]interface{}) (storage.
 }
 
 // TODO: refactor this
-func createBucketIfNotExists(ctx context.Context, s3Client *s3.Client, bucketName, region string) error {
+func createBucketIfNotExists(ctx context.Context, s3Client *s3.Client, bucketName, region string, useLocationConstraint bool) error {
 	_, err := s3Client.HeadBucket(ctx, &s3.HeadBucketInput{
 		Bucket: aws.String(bucketName),
 	})
@@ -307,7 +308,7 @@ func createBucketIfNotExists(ctx context.Context, s3Client *s3.Client, bucketNam
 
 	if isBucketNotFound(err) {
 		logrus.Infof("Bucket %s does not exist, creating...", bucketName)
-		if err := createBucket(ctx, s3Client, bucketName, region); err != nil {
+		if err := createBucket(ctx, s3Client, bucketName, region, useLocationConstraint); err != nil {
 			return err
 		}
 		logrus.Infof("Successfully created bucket %s", bucketName)
@@ -315,7 +316,7 @@ func createBucketIfNotExists(ctx context.Context, s3Client *s3.Client, bucketNam
 	}
 
 	logrus.Warnf("HeadBucket error for %s: %v, attempting to create bucket", bucketName, err)
-	if err := createBucket(ctx, s3Client, bucketName, region); err != nil {
+	if err := createBucket(ctx, s3Client, bucketName, region, useLocationConstraint); err != nil {
 		return err
 	}
 	logrus.Infof("Successfully created bucket %s", bucketName)
@@ -333,11 +334,11 @@ func isBucketNotFound(err error) bool {
 	return false
 }
 
-func createBucket(ctx context.Context, s3Client *s3.Client, bucketName, region string) error {
+func createBucket(ctx context.Context, s3Client *s3.Client, bucketName, region string, useLocationConstraint bool) error {
 	input := &s3.CreateBucketInput{
 		Bucket: aws.String(bucketName),
 	}
-	useLocation := region != "" && region != "us-east-1"
+	useLocation := useLocationConstraint && region != "" && region != "us-east-1"
 	if useLocation {
 		input.CreateBucketConfiguration = &s3types.CreateBucketConfiguration{
 			LocationConstraint: s3types.BucketLocationConstraint(region),
@@ -429,7 +430,8 @@ func New(c *config) (*RayLogsHandler, error) {
 
 	// Ensure bucket exists, create if not
 	logrus.Infof("Checking if bucket %s exists...", c.S3Bucket)
-	if err := createBucketIfNotExists(ctx, s3Client, c.S3Bucket, c.S3Region); err != nil {
+	useLocationConstraint := endpoint == ""
+	if err := createBucketIfNotExists(ctx, s3Client, c.S3Bucket, c.S3Region, useLocationConstraint); err != nil {
 		return nil, fmt.Errorf("failed to ensure bucket exists: %w", err)
 	}
 
