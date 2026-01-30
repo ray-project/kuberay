@@ -1139,9 +1139,14 @@ func formatNodeResourceReplayForResp(node eventtypes.Node) []map[string]interfac
 		transitionTimestamp := tr.Timestamp.UnixMilli()
 
 		// Create a resource snapshot.
+		var resourceString string
+		if tr.State == eventtypes.NODE_ALIVE {
+			// TODO(jwj): Handle the case in which tr.Resources is nil if it's possible.
+			resourceString = constructResourceString(tr.Resources)
+		}
 		nodeResourceSnapshot := map[string]interface{}{
 			"t":              transitionTimestamp,
-			"resourceString": constructResourceString(tr.Resources),
+			"resourceString": resourceString,
 		}
 		nodeResourceReplay = append(nodeResourceReplay, nodeResourceSnapshot)
 	}
