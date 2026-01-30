@@ -47,8 +47,12 @@ func routerClusters(s *ServerHandler) {
 
 // routerNodes registers RESTful routers for node-related endpoints.
 // It sets up two routes:
-//   - GET /nodes: retrieves all node summaries for a given cluster, supporting an optional "view" query parameter
-//   - GET /nodes/{node_id}: retrieves node summary for a specific node by its ID
+//   - GET /nodes: retrieves all node information for a given cluster
+//   - GET /nodes/{node_id}: retrieves node details for a specific node by its ID
+//
+// Supported view parameters for GET /nodes:
+//   - ?view=summary: returns node summary and resource usage information (default)
+//   - ?view=hostNameList: returns a list of hostnames for all alive nodes
 func routerNodes(s *ServerHandler) {
 	ws := new(restful.WebService)
 	defer restful.Add(ws)
@@ -61,8 +65,8 @@ func routerNodes(s *ServerHandler) {
 	// TODO(jwj): Explicitly set the return types for both routes.
 	ws.Route(ws.GET("/").To(s.getNodes).
 		Filter(s.CookieHandle).
-		Doc("Get all node summaries for a given cluster").
-		Param(ws.QueryParameter("view", "Optional view type (e.g., 'summary') to filter node information")).
+		Doc("Get all node information for a given cluster").
+		Param(ws.QueryParameter("view", "View type: 'summary' (default) for node summary and resources, 'hostNameList' for alive node hostnames")).
 		Writes(""))
 
 	ws.Route(ws.GET("/{node_id}").To(s.getNode).
@@ -282,7 +286,13 @@ func (s *ServerHandler) RegisterRouter() {
 
 func (s *ServerHandler) redirectRequest(req *restful.Request, resp *restful.Response) {
 	svcName := req.Attribute(ATTRIBUTE_SERVICE_NAME).(string)
-	remoteResp, err := s.httpClient.Get("http://" + svcName + req.Request.URL.String())
+	urlPath := req.Request.URL.String()
+
+	// Remove trailing slash before query string to match Ray Dashboard's expected path format.
+	// Ray Dashboard expects "/nodes?view=summary" not "/nodes/?view=summary".
+	urlPath = strings.Replace(urlPath, "/?", "?", 1)
+
+	remoteResp, err := s.httpClient.Get("http://" + svcName + urlPath)
 	if err != nil {
 		logrus.Errorf("Error: %v", err)
 		resp.WriteError(http.StatusBadGateway, err)
@@ -317,12 +327,18 @@ func (s *ServerHandler) getClusters(req *restful.Request, resp *restful.Response
 // The API schema of live and dead clusters are different:
 //   - Live clusters: returns the current snapshot
 //   - Dead clusters: returns the historical replay
+//
+// Supported view parameters:
+//   - ?view=summary: returns node summary and resource usage information
+//   - ?view=hostNameList: returns a list of hostnames for all alive nodes
 func (s *ServerHandler) getNodes(req *restful.Request, resp *restful.Response) {
 	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
 	if sessionName == "live" {
 		s.redirectRequest(req, resp)
 		return
 	}
+
+	viewParam := req.QueryParameter("view")
 
 	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
 	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
@@ -332,6 +348,20 @@ func (s *ServerHandler) getNodes(req *restful.Request, resp *restful.Response) {
 	clusterSessionID := clusterNameID + "_" + sessionName
 	nodeMap := s.eventHandler.GetNodeMap(clusterSessionID)
 
+	// Handle different view types
+	switch viewParam {
+	case "hostNameList":
+		s.getNodesHostNameList(nodeMap, resp)
+	case "summary", "":
+		// Default to summary view
+		s.getNodesSummary(nodeMap, sessionName, resp)
+	default:
+		resp.WriteErrorString(http.StatusBadRequest, fmt.Sprintf("unsupported view parameter: %s", viewParam))
+	}
+}
+
+// getNodesSummary returns node summary and resource usage information for historical clusters.
+func (s *ServerHandler) getNodesSummary(nodeMap map[string]eventtypes.Node, sessionName string, resp *restful.Response) {
 	// Build node summary. Each node has an array of summary snapshots with timestamps.
 	summary := make([][]map[string]interface{}, 0, len(nodeMap))
 	// Build node logical resources. Each node has an array of resource snapshots with timestamps.
@@ -359,6 +389,48 @@ func (s *ServerHandler) getNodes(req *restful.Request, resp *restful.Response) {
 	data, err := json.Marshal(response)
 	if err != nil {
 		logrus.Errorf("Failed to marshal nodes response: %v", err)
+		resp.WriteErrorString(http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	resp.Write(data)
+}
+
+// getNodesHostNameList returns a list of hostnames for all alive nodes in historical clusters.
+func (s *ServerHandler) getNodesHostNameList(nodeMap map[string]eventtypes.Node, resp *restful.Response) {
+	hostNameList := make([]string, 0)
+
+	for _, node := range nodeMap {
+		// Only include nodes that are ALIVE (check the latest state transition)
+		if len(node.StateTransitions) > 0 {
+			lastState := node.StateTransitions[len(node.StateTransitions)-1].State
+			if lastState == eventtypes.NODE_ALIVE {
+				// Use Hostname if available, otherwise use NodeName or NodeID
+				hostname := node.Hostname
+				if hostname == "" {
+					hostname = node.NodeName
+				}
+				if hostname == "" {
+					// Fallback to node ID if no hostname is available
+					hostname = node.NodeID
+				}
+				hostNameList = append(hostNameList, hostname)
+			}
+		}
+	}
+
+	// Build dashboard API-compatible response.
+	response := map[string]interface{}{
+		"result": true,
+		"msg":    "Node hostname list fetched.",
+		"data": map[string]interface{}{
+			"hostNameList": hostNameList,
+		},
+	}
+
+	data, err := json.Marshal(response)
+	if err != nil {
+		logrus.Errorf("Failed to marshal nodes hostname list response: %v", err)
 		resp.WriteErrorString(http.StatusInternalServerError, err.Error())
 		return
 	}
