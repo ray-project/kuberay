@@ -405,13 +405,16 @@ func (s *ServerHandler) getNodesHostNameList(nodeMap map[string]eventtypes.Node,
 		if len(node.StateTransitions) > 0 {
 			lastState := node.StateTransitions[len(node.StateTransitions)-1].State
 			if lastState == eventtypes.NODE_ALIVE {
-				// Use Hostname if available, otherwise use NodeName or NodeID
+				// Use Hostname if available, otherwise use NodeName or NodeID.
+				// TODO: Ray does not export Hostname/NodeName in base events yet.
+				// Ref: https://github.com/ray-project/ray/issues/60129
+				// Once Ray exports these fields, the hostname will be available.
+				// For now, we fallback to NodeID.
 				hostname := node.Hostname
 				if hostname == "" {
 					hostname = node.NodeName
 				}
 				if hostname == "" {
-					// Fallback to node ID if no hostname is available
 					hostname = node.NodeID
 				}
 				hostNameList = append(hostNameList, hostname)
