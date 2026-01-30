@@ -57,12 +57,10 @@ func routerNodes(s *ServerHandler) {
 	ws := new(restful.WebService)
 	defer restful.Add(ws)
 
-	// TODO(jwj): Clarify why not handling cookie in the WebService level.
 	ws.Path("/nodes").
 		Consumes(restful.MIME_JSON).
 		Produces(restful.MIME_JSON) //.Filter(s.LoginWrapper)
 
-	// TODO(jwj): Explicitly set the return types for both routes.
 	ws.Route(ws.GET("/").To(s.getNodes).
 		Filter(s.CookieHandle).
 		Doc("Get all node information for a given cluster").

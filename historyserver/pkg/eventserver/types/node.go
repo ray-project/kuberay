@@ -8,8 +8,6 @@ import (
 // NodeState is the state of a node.
 type NodeState string
 
-// TODO(jwj): Handle redeclaration of states with the actor type.
-// actor.go also defines ALIVE and DEAD.
 const (
 	NODE_ALIVE NodeState = "ALIVE"
 	NODE_DEAD  NodeState = "DEAD"
@@ -84,7 +82,7 @@ type Node struct {
 	InstanceID       string `json:"instanceId,omitempty"`
 	InstanceTypeName string `json:"instanceTypeName,omitempty"`
 
-	// TODO(jwj): Make it clearer.
+	// TODO(jwj): better comments
 	// Available only when there's at least one NODE_LIFECYCLE_EVENT.
 	StateTransitions []NodeStateTransition `json:"stateTransitions,omitempty"`
 }

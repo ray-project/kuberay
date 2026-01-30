@@ -947,14 +947,13 @@ func (h *EventHandler) handleNodeDefinitionEvent(eventMap map[string]any, cluste
 	}
 
 	nodeMap := h.ClusterNodeMap.GetOrCreateNodeMap(clusterSessionID)
-	nodeMap.CreateOrMergeNode(currNode.NodeID, func(n *types.Node) {
-		// TODO(jwj): Handle merging of node definition event to prevent overwriting lifecycle-derived fields.
-		existingStateTransitions := n.StateTransitions
+	nodeMap.CreateOrMergeNode(currNode.NodeID, func(node *types.Node) {
+		existingStateTransitions := node.StateTransitions
 
-		*n = currNode
+		*node = currNode
 
 		if len(existingStateTransitions) > 0 {
-			n.StateTransitions = existingStateTransitions
+			node.StateTransitions = existingStateTransitions
 		}
 	})
 
