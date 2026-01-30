@@ -211,18 +211,6 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 		return fmt.Errorf("clusterName is not a string, got %T", clusterNameVal)
 	}
 
-	// Since a cluster session corresponds to an unique Ray cluster lifecycle,
-	// we use the combined cluster name and session name for identification.
-	sessionNameVal, ok := eventMap["sessionName"]
-	if !ok {
-		return fmt.Errorf("event missing 'sessionName' field")
-	}
-	sessionName, ok := sessionNameVal.(string)
-	if !ok {
-		return fmt.Errorf("sessionName is not a string, got %T", sessionNameVal)
-	}
-	clusterSessionID := currentClusterName + "_" + sessionName
-
 	logrus.Infof("current eventType: %v", eventType)
 	switch eventType {
 	case types.TASK_DEFINITION_EVENT:
@@ -708,9 +696,9 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 			}
 		})
 	case types.NODE_DEFINITION_EVENT:
-		return h.handleNodeDefinitionEvent(eventMap, clusterSessionID)
+		return h.handleNodeDefinitionEvent(eventMap, currentClusterName)
 	case types.NODE_LIFECYCLE_EVENT:
-		return h.handleNodeLifecycleEvent(eventMap, clusterSessionID)
+		return h.handleNodeLifecycleEvent(eventMap, currentClusterName)
 	default:
 		logrus.Infof("Event not supported, skipping: %v", eventMap)
 	}
