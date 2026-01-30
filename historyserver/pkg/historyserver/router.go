@@ -8,6 +8,7 @@ import (
 	"io"
 	"io/fs"
 	"net/http"
+	"path"
 	"strconv"
 	"strings"
 
@@ -538,11 +539,11 @@ func (s *ServerHandler) getClusterStatus(req *restful.Request, resp *restful.Res
 func (s *ServerHandler) buildFormattedClusterStatus(clusterNameID, sessionName string) string {
 	builder := NewClusterStatusBuilder()
 
-	logsPath := sessionName + "/logs"
+	logsPath := path.Join(sessionName, "logs")
 	nodeIDs := s.reader.ListFiles(clusterNameID, logsPath)
 
 	for _, nodeID := range nodeIDs {
-		debugStatePath := logsPath + "/" + nodeID + "/debug_state.txt"
+		debugStatePath := path.Join(logsPath, nodeID, "debug_state.txt")
 		reader := s.reader.GetContent(clusterNameID, debugStatePath)
 		if reader == nil {
 			logrus.Debugf("No debug_state.txt found for node %s", nodeID)
