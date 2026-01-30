@@ -617,6 +617,12 @@ func (s *ServerHandler) getNodeLogFile(req *restful.Request, resp *restful.Respo
 		}
 		return
 	}
+
+	// Set Content-Disposition header if download_file is requested
+	if options.DownloadFile {
+		resp.AddHeader("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", options.Filename))
+	}
+
 	resp.Write(content)
 }
 

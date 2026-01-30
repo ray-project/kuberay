@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"path"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -25,6 +26,15 @@ const (
 	// Requests exceeding this limit will be capped to this value.
 	MAX_LOG_LIMIT = 10000
 )
+
+// ANSI escape code pattern for filtering colored output from logs
+// Matches patterns like: \x1b[31m (red color), \x1b[0m (reset), etc.
+var ansiEscapePattern = regexp.MustCompile(`\x1b\[[0-9;]+m`)
+
+// filterAnsiEscapeCodes removes ANSI escape sequences from log content
+func filterAnsiEscapeCodes(content []byte) []byte {
+	return ansiEscapePattern.ReplaceAll(content, []byte(""))
+}
 
 func (s *ServerHandler) listClusters(limit int) []utils.ClusterInfo {
 	// Initial continuation marker
@@ -76,6 +86,10 @@ func (s *ServerHandler) _getNodeLogs(rayClusterNameID, sessionId, nodeId, dir st
 func (s *ServerHandler) _getNodeLogFile(rayClusterNameID, sessionID string, options GetLogFileOptions) ([]byte, error) {
 	// Build log path with attempt_number if specified
 	logPath := path.Join(sessionID, "logs", options.NodeID, options.Filename)
+	if options.AttemptNumber > 0 {
+		// Append attempt number to filename (e.g., worker.log.1)
+		logPath = fmt.Sprintf("%s.%d", logPath, options.AttemptNumber)
+	}
 
 	reader := s.reader.GetContent(rayClusterNameID, logPath)
 
@@ -86,7 +100,14 @@ func (s *ServerHandler) _getNodeLogFile(rayClusterNameID, sessionID string, opti
 	maxLines := options.Lines
 	if maxLines < 0 {
 		// -1 means read all lines
-		return io.ReadAll(reader)
+		content, err := io.ReadAll(reader)
+		if err != nil {
+			return nil, err
+		}
+		if options.FilterAnsiCode {
+			content = filterAnsiEscapeCodes(content)
+		}
+		return content, nil
 	}
 
 	if maxLines == 0 {
@@ -134,7 +155,12 @@ func (s *ServerHandler) _getNodeLogFile(rayClusterNameID, sessionID string, opti
 		lines = append(buffer[start:], buffer[:start]...)
 	}
 
-	return []byte(strings.Join(lines, "\n")), nil
+	result := []byte(strings.Join(lines, "\n"))
+	if options.FilterAnsiCode {
+		result = filterAnsiEscapeCodes(result)
+	}
+
+	return result, nil
 }
 
 func (s *ServerHandler) GetNodes(rayClusterNameID, sessionId string) ([]byte, error) {
