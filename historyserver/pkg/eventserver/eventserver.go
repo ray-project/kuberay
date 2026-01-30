@@ -1034,3 +1034,23 @@ func (h *EventHandler) GetNodeMap(clusterSessionID string) map[string]types.Node
 	}
 	return nodes
 }
+
+// GetNodeByNodeID returns a node by node ID for a given cluster session.
+func (h *EventHandler) GetNodeByNodeID(clusterSessionID, nodeID string) (types.Node, bool) {
+	h.ClusterNodeMap.RLock()
+	defer h.ClusterNodeMap.RUnlock()
+
+	nodeMap, ok := h.ClusterNodeMap.ClusterNodeMap[clusterSessionID]
+	if !ok {
+		return types.Node{}, false
+	}
+
+	nodeMap.Lock()
+	defer nodeMap.Unlock()
+
+	node, ok := nodeMap.NodeMap[nodeID]
+	if !ok {
+		return types.Node{}, false
+	}
+	return node.DeepCopy(), true
+}

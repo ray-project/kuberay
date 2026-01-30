@@ -391,21 +391,13 @@ func (s *ServerHandler) getNode(req *restful.Request, resp *restful.Response) {
 
 	// A cluster lifecycle is identified by a cluster session.
 	clusterSessionID := clusterNameID + "_" + sessionName
-	nodeMap := s.eventHandler.GetNodeMap(clusterSessionID)
-
-	var targetNode *eventtypes.Node
-	for nodeId, node := range nodeMap {
-		if nodeId == targetNodeId {
-			targetNode = &node
-			break
-		}
-	}
-	if targetNode == nil {
+	targetNode, found := s.eventHandler.GetNodeByNodeID(clusterSessionID, targetNodeId)
+	if !found {
 		resp.WriteErrorString(http.StatusNotFound, fmt.Sprintf("node %s not found", targetNodeId))
 		return
 	}
 
-	nodeSummaryReplay := formatNodeSummaryReplayForResp(*targetNode, sessionName)
+	nodeSummaryReplay := formatNodeSummaryReplayForResp(targetNode, sessionName)
 
 	// Build dashboard API-compatible response.
 	response := map[string]interface{}{
