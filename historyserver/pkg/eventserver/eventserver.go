@@ -1202,11 +1202,9 @@ func (h *EventHandler) GetTasksTimeline(clusterName string, jobID string) []type
 			tidCounters[nodeIP] = 0
 		}
 
-		if clusterID != "" {
-			if _, exists := nodeIPToClusterIDToTID[nodeIP][clusterID]; !exists {
-				nodeIPToClusterIDToTID[nodeIP][clusterID] = tidCounters[nodeIP]
-				tidCounters[nodeIP]++
-			}
+		if _, exists := nodeIPToClusterIDToTID[nodeIP][clusterID]; !exists {
+			nodeIPToClusterIDToTID[nodeIP][clusterID] = tidCounters[nodeIP]
+			tidCounters[nodeIP]++
 		}
 	}
 
@@ -1252,10 +1250,6 @@ func (h *EventHandler) GetTasksTimeline(clusterName string, jobID string) []type
 
 		pid, ok := nodeIPToPID[nodeIP]
 		if !ok {
-			continue
-		}
-		// Skip if clusterID is empty (consistent with first pass)
-		if clusterID == "" {
 			continue
 		}
 
@@ -1310,7 +1304,7 @@ func (h *EventHandler) GetTasksTimeline(clusterName string, jobID string) []type
 
 			// For overall task events like "task::slow_task", use the full name from extraData
 			if strings.HasPrefix(profEvent.EventName, "task::") && extraData != nil {
-				if name, ok := extraData["name"].(string); ok {
+				if name, ok := extraData["name"].(string); ok && name != "" {
 					displayName = name
 					args["name"] = name
 				}
