@@ -579,8 +579,20 @@ func getSubmitterTemplate(rayJobInstance *rayv1.RayJob, rayClusterInstance *rayv
 }
 
 // getSubmitterContainer builds the submitter container for the Ray job Sidecar mode.
+// If the user provides a SubmitterContainerTemplate, it is used as the base container.
+// Otherwise, a default container is created using GetDefaultSubmitterContainer.
 func getSubmitterContainer(rayJobInstance *rayv1.RayJob, rayClusterInstance *rayv1.RayCluster) (corev1.Container, error) {
-	submitterContainer := common.GetDefaultSubmitterContainer(&rayClusterInstance.Spec)
+	if rayClusterInstance == nil {
+		return corev1.Container{}, fmt.Errorf("rayClusterInstance must not be nil for SidecarMode")
+	}
+
+	var submitterContainer corev1.Container
+
+	if rayJobInstance.Spec.SubmitterContainerTemplate != nil {
+		submitterContainer = *rayJobInstance.Spec.SubmitterContainerTemplate.DeepCopy()
+	} else {
+		submitterContainer = common.GetDefaultSubmitterContainer(&rayClusterInstance.Spec)
+	}
 
 	if err := configureSubmitterContainer(&submitterContainer, rayJobInstance, rayClusterInstance, rayv1.SidecarMode); err != nil {
 		return corev1.Container{}, err
@@ -591,6 +603,24 @@ func getSubmitterContainer(rayJobInstance *rayv1.RayJob, rayClusterInstance *ray
 
 // pass the RayCluster instance for cluster selector case
 func configureSubmitterContainer(container *corev1.Container, rayJobInstance *rayv1.RayJob, rayClusterInstance *rayv1.RayCluster, submissionMode rayv1.JobSubmissionMode) error {
+	// For SidecarMode, the container name must be set to the expected submitter container name
+	// because the controller looks for this specific name to check the container status.
+	// For K8sJobMode, preserve any custom container name from the user's SubmitterPodTemplate.
+	if submissionMode == rayv1.SidecarMode {
+		container.Name = utils.SubmitterContainerName
+	}
+
+	// If the image is not specified, use the image of the Ray head container
+	if container.Image == "" && rayClusterInstance != nil {
+		container.Image = rayClusterInstance.Spec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex].Image
+	}
+
+	// If resources are not specified, use default resources
+	if container.Resources.Limits == nil && container.Resources.Requests == nil && rayClusterInstance != nil {
+		defaultContainer := common.GetDefaultSubmitterContainer(&rayClusterInstance.Spec)
+		container.Resources = defaultContainer.Resources
+	}
+
 	// If the command in the submitter container manifest isn't set, use the default command.
 	jobCmd, err := common.BuildJobSubmitCommand(rayJobInstance, submissionMode)
 	if err != nil {
@@ -598,7 +628,7 @@ func configureSubmitterContainer(container *corev1.Container, rayJobInstance *ra
 	}
 
 	// K8sJobMode: If the user doesn't specify the command, use the default command.
-	// SidecarMode: Use the default command.
+	// SidecarMode: Always use the default command (command is overwritten).
 	if len(container.Command) == 0 || submissionMode == rayv1.SidecarMode {
 		// Without the -e option, the Bash script will continue executing even if a command returns a non-zero exit code.
 		container.Command = utils.GetContainerCommand([]string{"e"})
