@@ -20,9 +20,10 @@ import (
 type EventHandler struct {
 	reader storage.StorageReader
 
-	ClusterTaskMap  *types.ClusterTaskMap
-	ClusterActorMap *types.ClusterActorMap
-	ClusterJobMap   *types.ClusterJobMap
+	ClusterTaskMap      *types.ClusterTaskMap
+	ClusterActorMap     *types.ClusterActorMap
+	ClusterJobMap       *types.ClusterJobMap
+	ClusterActorTaskMap *types.ClusterActorTaskMap
 }
 
 var eventFilePattern = regexp.MustCompile(`-\d{4}-\d{2}-\d{2}-\d{2}$`)
@@ -47,6 +48,9 @@ func NewEventHandler(reader storage.StorageReader) *EventHandler {
 		},
 		ClusterJobMap: &types.ClusterJobMap{
 			ClusterJobMap: make(map[string]*types.JobMap),
+		},
+		ClusterActorTaskMap: &types.ClusterActorTaskMap{
+			ClusterActorTaskMap: make(map[string]*types.ActorTaskMap),
 		},
 	}
 }
@@ -205,6 +209,18 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 	if !ok {
 		return fmt.Errorf("clusterName is not a string, got %T", clusterNameVal)
 	}
+
+	// Since a cluster session corresponds to an unique Ray cluster lifecycle,
+	// we use the combined cluster name and session name for identification.
+	sessionNameVal, ok := eventMap["sessionName"]
+	if !ok {
+		return fmt.Errorf("event missing 'sessionName' field")
+	}
+	sessionName, ok := sessionNameVal.(string)
+	if !ok {
+		return fmt.Errorf("sessionName is not a string, got %T", sessionNameVal)
+	}
+	clusterSessionID := currentClusterName + "_" + sessionName
 
 	logrus.Infof("current eventType: %v", eventType)
 	switch eventType {
@@ -526,10 +542,31 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 		})
 
 	case types.ACTOR_TASK_DEFINITION_EVENT:
-		// TODO: Handle actor task definition event
-		// This is related to GET /api/v0/tasks (type=ACTOR_TASK)
-		logrus.Debugf("ACTOR_TASK_DEFINITION_EVENT received, not yet implemented")
+		actorTaskDef, ok := eventMap["actorTaskDefinitionEvent"]
+		if !ok {
+			return fmt.Errorf("event does not have 'actorTaskDefinitionEvent' field")
+		}
 
+		jsonActorTaskDefinition, err := json.Marshal(actorTaskDef)
+		if err != nil {
+			return fmt.Errorf("failed to marshal actor task definition event: %w", err)
+		}
+
+		var currActorTask types.ActorTask
+		if err := json.Unmarshal(jsonActorTaskDefinition, &currActorTask); err != nil {
+			return fmt.Errorf("failed to unmarshal actor task definition event: %w", err)
+		}
+		if currActorTask.TaskID == "" {
+			return fmt.Errorf("actor task ID is empty")
+		}
+
+		actorTaskMap := h.ClusterActorTaskMap.GetOrCreateActorTaskMap(clusterSessionID)
+		actorTaskMap.CreateOrMergeActorTask(currActorTask.TaskID, currActorTask.TaskAttempt, func(a *types.ActorTask) {
+			*a = currActorTask
+		})
+
+		logrus.Infof("Created or merged actor task: %+v", currActorTask)
+		logrus.Infof("Actor task map: %+v", actorTaskMap.ActorTaskMap)
 	case types.DRIVER_JOB_DEFINITION_EVENT:
 		// NOTE: When event comes in, JobID will be in base64, processing will convert it to Hex
 		jobDef, ok := eventMap["driverJobDefinitionEvent"]
