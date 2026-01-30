@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"testing"
 
 	"github.com/aws/aws-sdk-go/service/s3"
@@ -22,6 +23,10 @@ const (
 	LiveSessionName = "live"
 	EndpointLogFile = "/api/v0/logs/file"
 )
+
+// ansiEscapePattern matches ANSI escape sequences (same pattern as in reader.go)
+// Pattern: \x1b\[[0-9;]+m
+var ansiEscapePattern = regexp.MustCompile(`\x1b\[[0-9;]+m`)
 
 func TestHistoryServer(t *testing.T) {
 	// Share a single S3 client among subtests.
@@ -288,18 +293,36 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 	// Hardcode "raylet.out" for deterministic testing.
 	filename := "raylet.out"
 
-	// NOTE: Dead clusters only support basic parameters (node_id, filename, lines).
-	// Advanced features like timeout, attempt_number, download_filename, and filter_ansi_code
-	// are currently available only for live clusters; they will be supported for dead clusters in the future.
 	logFileTestCases := []struct {
 		name           string
 		buildURL       func(baseURL, nodeID string) string
 		expectedStatus int
 	}{
-		// Supported parameters
+		// Basic parameters
 		{"lines=100", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=100", u, EndpointLogFile, n, filename) }, http.StatusOK},
 		{"lines=0 (default 1000)", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s", u, EndpointLogFile, n, filename) }, http.StatusOK},
 		{"lines=-1 (all)", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=-1", u, EndpointLogFile, n, filename) }, http.StatusOK},
+
+		// timeout parameter
+		// NOTE: timeout feature is not yet implemented, we just accept and validate the timeout parameter
+		{"timeout=5", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&timeout=5", u, EndpointLogFile, n, filename) }, http.StatusOK},
+		{"timeout=30", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&timeout=30", u, EndpointLogFile, n, filename) }, http.StatusOK},
+
+		// attempt_number parameter
+		{"attempt_number=0", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&attempt_number=0", u, EndpointLogFile, n, filename) }, http.StatusOK},
+		{"attempt_number=1 (not found)", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&attempt_number=1", u, EndpointLogFile, n, filename) }, http.StatusNotFound},
+
+		// download_file parameter
+		{"download_file=true", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&download_file=true", u, EndpointLogFile, n, filename) }, http.StatusOK},
+		{"download_file=false", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&download_file=false", u, EndpointLogFile, n, filename) }, http.StatusOK},
+
+		// filter_ansi_code parameter
+		{"filter_ansi_code=true", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&filter_ansi_code=true", u, EndpointLogFile, n, filename) }, http.StatusOK},
+		{"filter_ansi_code=false", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&filter_ansi_code=false", u, EndpointLogFile, n, filename) }, http.StatusOK},
+
+		// Combined parameters
+		{"lines+timeout+filter", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=50&timeout=10&filter_ansi_code=true", u, EndpointLogFile, n, filename) }, http.StatusOK},
+		{"all parameters", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=100&timeout=15&attempt_number=0&download_file=true&filter_ansi_code=true", u, EndpointLogFile, n, filename) }, http.StatusOK},
 
 		// Missing mandatory parameters
 		{"missing node_id", func(u, n string) string { return fmt.Sprintf("%s%s?filename=%s", u, EndpointLogFile, filename) }, http.StatusBadRequest},
@@ -308,6 +331,8 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 
 		// Invalid parameters
 		{"invalid lines (string)", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=abc", u, EndpointLogFile, n, filename) }, http.StatusBadRequest},
+		{"invalid timeout (string)", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&timeout=invalid", u, EndpointLogFile, n, filename) }, http.StatusBadRequest},
+		{"invalid attempt_number (string)", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&attempt_number=xyz", u, EndpointLogFile, n, filename) }, http.StatusBadRequest},
 		{"file not found", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=nonexistent.log", u, EndpointLogFile, n) }, http.StatusNotFound},
 
 		// Path traversal attacks
@@ -342,6 +367,98 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 			}, TestTimeoutShort).Should(Succeed())
 		})
 	}
+
+	// Sub-tests for specific parameter behaviors
+	test.T().Run("download_file header validation", func(t *testing.T) {
+		g := NewWithT(t)
+		g.Eventually(func(gg Gomega) {
+			// Test with download_file=true
+			urlWithDownload := fmt.Sprintf("%s%s?node_id=%s&filename=%s&download_file=true", historyServerURL, EndpointLogFile, nodeID, filename)
+			resp, err := client.Get(urlWithDownload)
+			gg.Expect(err).NotTo(HaveOccurred())
+			defer resp.Body.Close()
+
+			gg.Expect(resp.StatusCode).To(Equal(http.StatusOK))
+			contentDisposition := resp.Header.Get("Content-Disposition")
+			gg.Expect(contentDisposition).To(ContainSubstring("attachment"))
+			gg.Expect(contentDisposition).To(ContainSubstring(fmt.Sprintf("filename=\"%s\"", filename)))
+			LogWithTimestamp(test.T(), "download_file=true sets Content-Disposition header: %s", contentDisposition)
+
+			// Test with download_file=false, should not have Content-Disposition header
+			urlWithoutDownload := fmt.Sprintf("%s%s?node_id=%s&filename=%s&download_file=false", historyServerURL, EndpointLogFile, nodeID, filename)
+			resp2, err := client.Get(urlWithoutDownload)
+			gg.Expect(err).NotTo(HaveOccurred())
+			defer resp2.Body.Close()
+
+			gg.Expect(resp2.StatusCode).To(Equal(http.StatusOK))
+			contentDisposition2 := resp2.Header.Get("Content-Disposition")
+			gg.Expect(contentDisposition2).To(BeEmpty(), "Content-Disposition should not be set when download_file=false")
+		}, TestTimeoutShort).Should(Succeed())
+	})
+
+	test.T().Run("filter_ansi_code behavior", func(t *testing.T) {
+		g := NewWithT(t)
+		g.Eventually(func(gg Gomega) {
+			// Fetch with filter_ansi_code=false (original content with ANSI codes)
+			urlWithoutFilter := fmt.Sprintf("%s%s?node_id=%s&filename=%s&filter_ansi_code=false&lines=100", historyServerURL, EndpointLogFile, nodeID, filename)
+			resp, err := client.Get(urlWithoutFilter)
+			gg.Expect(err).NotTo(HaveOccurred())
+			defer resp.Body.Close()
+
+			gg.Expect(resp.StatusCode).To(Equal(http.StatusOK))
+			bodyWithoutFilter, err := io.ReadAll(resp.Body)
+			gg.Expect(err).NotTo(HaveOccurred())
+
+			// Fetch with filter_ansi_code=true (ANSI codes should be removed)
+			urlWithFilter := fmt.Sprintf("%s%s?node_id=%s&filename=%s&filter_ansi_code=true&lines=100", historyServerURL, EndpointLogFile, nodeID, filename)
+			resp2, err := client.Get(urlWithFilter)
+			gg.Expect(err).NotTo(HaveOccurred())
+			defer resp2.Body.Close()
+
+			gg.Expect(resp2.StatusCode).To(Equal(http.StatusOK))
+			bodyWithFilter, err := io.ReadAll(resp2.Body)
+			gg.Expect(err).NotTo(HaveOccurred())
+
+			// Check if original content contains ANSI codes using the same pattern as reader.go
+			hasAnsiInOriginal := ansiEscapePattern.Match(bodyWithoutFilter)
+
+			if hasAnsiInOriginal {
+				LogWithTimestamp(test.T(), "Original log contains ANSI codes, verifying they are filtered")
+				// Filtered content should NOT contain ANSI escape sequences
+				hasAnsiInFiltered := ansiEscapePattern.Match(bodyWithFilter)
+				gg.Expect(hasAnsiInFiltered).To(BeFalse(), "Filtered content should not contain ANSI escape sequences")
+			} else {
+				LogWithTimestamp(test.T(), "Log doesn't contain ANSI codes, check is skipped...")
+			}
+		}, TestTimeoutShort).Should(Succeed())
+	})
+
+	test.T().Run("attempt_number behavior", func(t *testing.T) {
+		g := NewWithT(t)
+		g.Eventually(func(gg Gomega) {
+			// Test with attempt_number=0
+			urlAttempt0 := fmt.Sprintf("%s%s?node_id=%s&filename=%s&attempt_number=0", historyServerURL, EndpointLogFile, nodeID, filename)
+			resp, err := client.Get(urlAttempt0)
+			gg.Expect(err).NotTo(HaveOccurred())
+			defer resp.Body.Close()
+
+			gg.Expect(resp.StatusCode).To(Equal(http.StatusOK))
+			body, err := io.ReadAll(resp.Body)
+			gg.Expect(err).NotTo(HaveOccurred())
+			gg.Expect(len(body)).To(BeNumerically(">", 0))
+			LogWithTimestamp(test.T(), "attempt_number=0 returned %d bytes", len(body))
+
+			// attempt_number=1 should fail as retry log doesn't exist for normal execution
+			urlAttempt1 := fmt.Sprintf("%s%s?node_id=%s&filename=%s&attempt_number=1", historyServerURL, EndpointLogFile, nodeID, filename)
+			resp2, err := client.Get(urlAttempt1)
+			gg.Expect(err).NotTo(HaveOccurred())
+			defer resp2.Body.Close()
+
+			gg.Expect(resp2.StatusCode).To(Equal(http.StatusNotFound),
+				"attempt_number=1 should return 404 when retry log doesn't exist")
+			LogWithTimestamp(test.T(), "attempt_number=1 correctly returns 404 (file not found)")
+		}, TestTimeoutShort).Should(Succeed())
+	})
 
 	DeleteS3Bucket(test, g, s3Client)
 	LogWithTimestamp(test.T(), "Dead cluster log file endpoint tests completed")
