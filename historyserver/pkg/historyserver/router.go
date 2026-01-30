@@ -109,6 +109,10 @@ func routerAPI(s *ServerHandler) {
 		Doc("get logfile").Param(ws.QueryParameter("node_id", "node_id")).
 		Param(ws.QueryParameter("filename", "filename")).
 		Param(ws.QueryParameter("lines", "lines")).
+		Param(ws.QueryParameter("timeout", "timeout")).
+		Param(ws.QueryParameter("attempt_number", "attempt_number")).
+		Param(ws.QueryParameter("download_file", "download_file")).
+		Param(ws.QueryParameter("filter_ansi_code", "filter_ansi_code")).
 		Produces("text/plain").
 		Writes("")) // Placeholder for specific return type
 
@@ -573,24 +577,26 @@ func (s *ServerHandler) getNodeLogFile(req *restful.Request, resp *restful.Respo
 	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
 	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
 
-	// Parse query parameters
-	nodeID := req.QueryParameter("node_id")
-	filename := req.QueryParameter("filename")
-	lines := req.QueryParameter("lines")
+	// Parse query parameters into GetLogFileOptions struct
+	options, err := parseGetLogFileOptions(req)
+	if err != nil {
+		resp.WriteErrorString(http.StatusBadRequest, err.Error())
+		return
+	}
 
 	// Validate required parameters
-	if nodeID == "" {
+	if options.NodeID == "" {
 		resp.WriteErrorString(http.StatusBadRequest, "Missing required parameter: node_id")
 		return
 	}
-	if filename == "" {
+	if options.Filename == "" {
 		resp.WriteErrorString(http.StatusBadRequest, "Missing required parameter: filename")
 		return
 	}
 
 	// Prevent path traversal attacks (e.g., ../../etc/passwd)
-	if !fs.ValidPath(nodeID) || !fs.ValidPath(filename) {
-		resp.WriteErrorString(http.StatusBadRequest, fmt.Sprintf("invalid path: path traversal not allowed (node_id=%s, filename=%s)", nodeID, filename))
+	if !fs.ValidPath(options.NodeID) || !fs.ValidPath(options.Filename) {
+		resp.WriteErrorString(http.StatusBadRequest, fmt.Sprintf("invalid path: path traversal not allowed (node_id=%s, filename=%s)", options.NodeID, options.Filename))
 		return
 	}
 
@@ -599,18 +605,7 @@ func (s *ServerHandler) getNodeLogFile(req *restful.Request, resp *restful.Respo
 		return
 	}
 
-	// Convert lines parameter to int
-	maxLines := 0
-	if lines != "" {
-		parsedLines, err := strconv.Atoi(lines)
-		if err != nil {
-			resp.WriteErrorString(http.StatusBadRequest, fmt.Sprintf("invalid lines parameter: %s", lines))
-			return
-		}
-		maxLines = parsedLines
-	}
-
-	content, err := s._getNodeLogFile(clusterNameID+"_"+clusterNamespace, sessionName, nodeID, filename, maxLines)
+	content, err := s._getNodeLogFile(clusterNameID+"_"+clusterNamespace, sessionName, options)
 	if err != nil {
 		var httpErr *utils.HTTPError
 		if errors.As(err, &httpErr) {
@@ -623,6 +618,53 @@ func (s *ServerHandler) getNodeLogFile(req *restful.Request, resp *restful.Respo
 		return
 	}
 	resp.Write(content)
+}
+
+// parseGetLogFileOptions parses query parameters into GetLogFileOptions struct
+func parseGetLogFileOptions(req *restful.Request) (GetLogFileOptions, error) {
+	options := GetLogFileOptions{
+		NodeID:   req.QueryParameter("node_id"),
+		Filename: req.QueryParameter("filename"),
+	}
+
+	// Parse lines parameter
+	if linesStr := req.QueryParameter("lines"); linesStr != "" {
+		lines, err := strconv.Atoi(linesStr)
+		if err != nil {
+			return options, fmt.Errorf("invalid lines parameter: %s", linesStr)
+		}
+		options.Lines = lines
+	}
+
+	// Parse timeout parameter
+	if timeoutStr := req.QueryParameter("timeout"); timeoutStr != "" {
+		timeout, err := strconv.Atoi(timeoutStr)
+		if err != nil {
+			return options, fmt.Errorf("invalid timeout parameter: %s", timeoutStr)
+		}
+		options.Timeout = timeout
+	}
+
+	// Parse attempt_number parameter
+	if attemptStr := req.QueryParameter("attempt_number"); attemptStr != "" {
+		attemptNumber, err := strconv.Atoi(attemptStr)
+		if err != nil {
+			return options, fmt.Errorf("invalid attempt_number parameter: %s", attemptStr)
+		}
+		options.AttemptNumber = attemptNumber
+	}
+
+	// Parse filter_ansi_code parameter (boolean)
+	if filterStr := req.QueryParameter("filter_ansi_code"); filterStr != "" {
+		options.FilterAnsiCode = strings.ToLower(filterStr) == "true"
+	}
+
+	// Parse download_file parameter (boolean)
+	if downloadStr := req.QueryParameter("download_file"); downloadStr != "" {
+		options.DownloadFile = strings.ToLower(downloadStr) == "true"
+	}
+
+	return options, nil
 }
 
 func (s *ServerHandler) getTaskSummarize(req *restful.Request, resp *restful.Response) {

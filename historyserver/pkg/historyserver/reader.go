@@ -73,8 +73,9 @@ func (s *ServerHandler) _getNodeLogs(rayClusterNameID, sessionId, nodeId, dir st
 	return json.Marshal(ret)
 }
 
-func (s *ServerHandler) _getNodeLogFile(rayClusterNameID, sessionID, nodeID, filename string, maxLines int) ([]byte, error) {
-	logPath := path.Join(sessionID, "logs", nodeID, filename)
+func (s *ServerHandler) _getNodeLogFile(rayClusterNameID, sessionID string, options GetLogFileOptions) ([]byte, error) {
+	// Build log path with attempt_number if specified
+	logPath := path.Join(sessionID, "logs", options.NodeID, options.Filename)
 
 	reader := s.reader.GetContent(rayClusterNameID, logPath)
 
@@ -82,8 +83,9 @@ func (s *ServerHandler) _getNodeLogFile(rayClusterNameID, sessionID, nodeID, fil
 		return nil, utils.NewHTTPError(fmt.Errorf("log file not found: %s", logPath), http.StatusNotFound)
 	}
 
+	maxLines := options.Lines
 	if maxLines < 0 {
-		// -1 means read all lines, match Ray Dashboard API behavior
+		// -1 means read all lines
 		return io.ReadAll(reader)
 	}
 
