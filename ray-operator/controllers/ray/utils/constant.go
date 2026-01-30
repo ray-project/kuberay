@@ -130,6 +130,7 @@ const (
 
 	// Use as container env variable
 	RAY_CLUSTER_NAME                        = "RAY_CLUSTER_NAME"
+	RAY_CLUSTER_NAMESPACE                   = "RAY_CLUSTER_NAMESPACE"
 	RAY_IP                                  = "RAY_IP"
 	FQ_RAY_IP                               = "FQ_RAY_IP"
 	RAY_PORT                                = "RAY_PORT"
