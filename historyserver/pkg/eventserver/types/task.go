@@ -197,6 +197,8 @@ type ProfileData struct {
 	Events        []ProfileEventRaw `json:"events"`
 }
 
+// StartTime and EndTime are in nanoseconds,
+// matching Ray's implementation in profile_event.cc which uses absl::GetCurrentTimeNanos()).
 type ProfileEventRaw struct {
 	EventName string `json:"event_name"`
 	StartTime int64  `json:"start_time"` // nanoseconds
