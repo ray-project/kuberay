@@ -19,8 +19,8 @@ const (
 type NodeAliveSubState string
 
 const (
-	UNSPECIFIED NodeAliveSubState = "UNSPECIFIED"
-	DRAINING    NodeAliveSubState = "DRAINING"
+	NODE_ALIVE_UNSPECIFIED NodeAliveSubState = "UNSPECIFIED"
+	NODE_ALIVE_DRAINING    NodeAliveSubState = "DRAINING"
 )
 
 // NodeDeathInfoReason specifies the reason why a node died.

@@ -1033,3 +1033,4 @@ func (h *EventHandler) GetNodeMap(clusterSessionID string) map[string]types.Node
 		nodes[id] = node.DeepCopy()
 	}
 	return nodes
+}
