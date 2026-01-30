@@ -236,19 +236,33 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 			existingProfileData := t.ProfileData
 			existingNodeID := t.NodeID
 			existingWorkerID := t.WorkerID
+			existingFuncOrClassName := t.FuncOrClassName
+			existingName := t.Name
+
 			*t = currTask
+
+			// Restore lifecycle-derived fields (from TASK_LIFECYCLE_EVENT)
 			if len(existingEvents) > 0 {
 				t.Events = existingEvents
 				t.State = existingEvents[len(existingEvents)-1].State
+				if existingNodeID != "" {
+					t.NodeID = existingNodeID
+				}
+				if existingWorkerID != "" {
+					t.WorkerID = existingWorkerID
+				}
 			}
+
+			// Restore profile-derived fields (from TASK_PROFILE_EVENT)
+			// All three come from the same event, so check together
 			if existingProfileData != nil {
 				t.ProfileData = existingProfileData
-			}
-			if existingNodeID != "" {
-				t.NodeID = existingNodeID
-			}
-			if existingWorkerID != "" {
-				t.WorkerID = existingWorkerID
+				if existingFuncOrClassName != "" {
+					t.FuncOrClassName = existingFuncOrClassName
+				}
+				if existingName != "" {
+					t.Name = existingName
+				}
 			}
 		})
 	case types.TASK_LIFECYCLE_EVENT:
@@ -1194,7 +1208,10 @@ func (h *EventHandler) GetTasksTimeline(clusterName string, jobID string) []type
 		if nodeIP == "" {
 			continue
 		}
-
+		// Skip if clusterID is empty
+		if clusterID == ":" {
+			continue
+		}
 		if _, exists := nodeIPToPID[nodeIP]; !exists {
 			nodeIPToPID[nodeIP] = pidCounter
 			pidCounter++
@@ -1250,6 +1267,10 @@ func (h *EventHandler) GetTasksTimeline(clusterName string, jobID string) []type
 
 		pid, ok := nodeIPToPID[nodeIP]
 		if !ok {
+			continue
+		}
+		// Skip if clusterID is empty
+		if clusterID == ":" {
 			continue
 		}
 
