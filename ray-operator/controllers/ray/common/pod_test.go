@@ -1701,7 +1701,9 @@ func TestInitLivenessAndReadinessProbe(t *testing.T) {
 	initLivenessAndReadinessProbe(rayContainer, rayv1.WorkerNode, utils.RayServiceCRD, rayStartParams, "")
 	assert.NotNil(t, rayContainer.LivenessProbe.Exec)
 	assert.NotNil(t, rayContainer.ReadinessProbe.Exec)
+	assert.Contains(t, strings.Join(rayContainer.LivenessProbe.Exec.Command, " "), "python3", "Health check should use Python (kuberay#3837)")
 	assert.NotContains(t, strings.Join(rayContainer.LivenessProbe.Exec.Command, " "), utils.RayServeProxyHealthPath)
+	assert.Contains(t, strings.Join(rayContainer.ReadinessProbe.Exec.Command, " "), "python3", "RayService worker readiness should use Python (kuberay#3837)")
 	assert.Contains(t, strings.Join(rayContainer.ReadinessProbe.Exec.Command, " "), utils.RayServeProxyHealthPath)
 	assert.Equal(t, int32(2), rayContainer.LivenessProbe.TimeoutSeconds)
 	assert.Equal(t, int32(2), rayContainer.ReadinessProbe.TimeoutSeconds)
@@ -1734,6 +1736,8 @@ func TestInitLivenessAndReadinessProbe(t *testing.T) {
 	livenessCommand := strings.Join(rayContainer.LivenessProbe.Exec.Command, " ")
 	readinessCommand := strings.Join(rayContainer.ReadinessProbe.Exec.Command, " ")
 
+	assert.Contains(t, livenessCommand, "python3", "Health check should use Python (no wget; kuberay#3837)")
+	assert.NotContains(t, livenessCommand, "wget", "Health check should not use wget (kuberay#3837)")
 	assert.Contains(t, livenessCommand, ":8266", "Head pod liveness probe should use custom dashboard-agent-listen-port")
 	assert.Contains(t, livenessCommand, ":8365", "Head pod liveness probe should use custom dashboard-port")
 	assert.Contains(t, readinessCommand, ":8266", "Head pod readiness probe should use custom dashboard-agent-listen-port")
@@ -1771,6 +1775,8 @@ func TestInitLivenessAndReadinessProbe(t *testing.T) {
 	}
 	initLivenessAndReadinessProbe(rayContainer, rayv1.WorkerNode, utils.RayServiceCRD, rayServiceWorkerParams, "")
 	rayServiceReadinessCommand := strings.Join(rayContainer.ReadinessProbe.Exec.Command, " ")
+	assert.Contains(t, rayServiceReadinessCommand, "python3", "RayService worker readiness should use Python (no wget; kuberay#3837)")
+	assert.NotContains(t, rayServiceReadinessCommand, "wget", "RayService worker readiness should not use wget (kuberay#3837)")
 	assert.Contains(t, rayServiceReadinessCommand, ":8500", "RayService worker should use custom dashboard-agent-listen-port")
 	assert.Contains(t, rayServiceReadinessCommand, utils.RayServeProxyHealthPath, "RayService worker should include serve proxy health check")
 	assert.Equal(t, int32(utils.ServeReadinessProbeFailureThreshold), rayContainer.ReadinessProbe.FailureThreshold, "RayService worker should have correct failure threshold")
@@ -1786,6 +1792,7 @@ func TestInitLivenessAndReadinessProbe(t *testing.T) {
 
 	invalidPortLivenessCommand := strings.Join(rayContainer.LivenessProbe.Exec.Command, " ")
 
+	assert.Contains(t, invalidPortLivenessCommand, "python3", "Health check should use Python (kuberay#3837)")
 	// Should fall back to default ports when invalid values are provided
 	assert.Contains(t, invalidPortLivenessCommand, fmt.Sprintf(":%d", utils.DefaultDashboardAgentListenPort), "Should fall back to default dashboard-agent-listen-port for invalid input")
 	assert.Contains(t, invalidPortLivenessCommand, fmt.Sprintf(":%d", utils.DefaultDashboardPort), "Should fall back to default dashboard-port for invalid input")
@@ -1819,6 +1826,7 @@ func TestInitLivenessAndReadinessProbe(t *testing.T) {
 	assert.Nil(t, rayContainer.LivenessProbe.Exec)
 	assert.Nil(t, rayContainer.ReadinessProbe.HTTPGet)
 	assert.NotNil(t, rayContainer.ReadinessProbe.Exec)
+	assert.Contains(t, strings.Join(rayContainer.ReadinessProbe.Exec.Command, " "), "python3", "RayService worker readiness should use Python (kuberay#3837)")
 	assert.Contains(t, strings.Join(rayContainer.ReadinessProbe.Exec.Command, " "), utils.RayServeProxyHealthPath)
 
 	// Versions parsed below 2.53 must use exec probes.

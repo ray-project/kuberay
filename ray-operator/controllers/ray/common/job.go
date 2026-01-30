@@ -126,17 +126,17 @@ func BuildJobSubmitCommand(rayJobInstance *rayv1.RayJob, submissionMode rayv1.Jo
 
 	if submissionMode == rayv1.SidecarMode {
 		// Wait until Ray Dashboard GCS is healthy before proceeding.
-		// Use the same Ray Dashboard GCS health check command as the readiness probe
+		// Use Python-based health check (no wget; see kuberay#3837).
 		rayDashboardGCSHealthCommand := fmt.Sprintf(
-			utils.BaseWgetHealthCommand,
-			utils.DefaultReadinessProbeFailureThreshold,
+			utils.BasePythonHealthCommand,
 			port,
 			utils.RayDashboardGCSHealthPath,
+			utils.DefaultReadinessProbeFailureThreshold,
 		)
 
 		waitLoop := []string{
 			"until", rayDashboardGCSHealthCommand, ">/dev/null", "2>&1", ";",
-			"do", "echo", strconv.Quote("Waiting for Ray Dashboard GCS to become healthy at " + address + " ..."), ";", "sleep", "2", ";", "done", ";",
+			"do", "echo", strconv.Quote("Waiting for Ray Dashboard GCS to become healthy at "+address+" ..."), ";", "sleep", "2", ";", "done", ";",
 		}
 		cmd = append(cmd, waitLoop...)
 	}
