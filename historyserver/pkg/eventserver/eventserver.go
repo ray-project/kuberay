@@ -1278,7 +1278,10 @@ func (h *EventHandler) GetTasksTimeline(clusterName string, jobID string) []type
 		if nodeIP == "" {
 			continue
 		}
-
+		// Skip if clusterID is empty
+		if clusterID == ":" {
+			continue
+		}
 		if _, exists := nodeIPToPID[nodeIP]; !exists {
 			nodeIPToPID[nodeIP] = pidCounter
 			pidCounter++
@@ -1334,6 +1337,10 @@ func (h *EventHandler) GetTasksTimeline(clusterName string, jobID string) []type
 
 		pid, ok := nodeIPToPID[nodeIP]
 		if !ok {
+			continue
+		}
+		// Skip if clusterID is empty
+		if clusterID == ":" {
 			continue
 		}
 
