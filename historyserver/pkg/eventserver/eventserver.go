@@ -1255,9 +1255,9 @@ func (h *EventHandler) GetTasksTimeline(clusterName string, jobID string) []type
 
 	// Build PID/TID mappings
 	// PID: Node IP -> numeric ID
-	// TID: Worker ID -> numeric ID per node
+	// TID: clusterID (componentType:componentId) -> numeric ID per node
 	nodeIPToPID := make(map[string]int)
-	workerToTID := make(map[string]map[string]int) // nodeIP -> workerID -> tid
+	nodeIPToClusterIDToTID := make(map[string]map[string]int) // nodeIP -> clusterID (componentType:componentId) -> tid
 	pidCounter := 0
 	tidCounters := make(map[string]int) // per-node tid counter
 
@@ -1266,8 +1266,14 @@ func (h *EventHandler) GetTasksTimeline(clusterName string, jobID string) []type
 		if task.ProfileData == nil {
 			continue
 		}
+		// Only include worker and driver components (consistent with Ray's profiling implementation in profiling.py)
+		componentType := task.ProfileData.ComponentType
+		if componentType != "worker" && componentType != "driver" {
+			continue
+		}
+
 		nodeIP := task.ProfileData.NodeIPAddress
-		workerID := task.ProfileData.ComponentID
+		clusterID := task.ProfileData.ComponentType + ":" + task.ProfileData.ComponentID
 
 		if nodeIP == "" {
 			continue
@@ -1276,13 +1282,13 @@ func (h *EventHandler) GetTasksTimeline(clusterName string, jobID string) []type
 		if _, exists := nodeIPToPID[nodeIP]; !exists {
 			nodeIPToPID[nodeIP] = pidCounter
 			pidCounter++
-			workerToTID[nodeIP] = make(map[string]int)
+			nodeIPToClusterIDToTID[nodeIP] = make(map[string]int)
 			tidCounters[nodeIP] = 0
 		}
 
-		if workerID != "" {
-			if _, exists := workerToTID[nodeIP][workerID]; !exists {
-				workerToTID[nodeIP][workerID] = tidCounters[nodeIP]
+		if clusterID != "" {
+			if _, exists := nodeIPToClusterIDToTID[nodeIP][clusterID]; !exists {
+				nodeIPToClusterIDToTID[nodeIP][clusterID] = tidCounters[nodeIP]
 				tidCounters[nodeIP]++
 			}
 		}
@@ -1300,7 +1306,7 @@ func (h *EventHandler) GetTasksTimeline(clusterName string, jobID string) []type
 			},
 		})
 
-		for workerID, tid := range workerToTID[nodeIP] {
+		for clusterID, tid := range nodeIPToClusterIDToTID[nodeIP] {
 			tidVal := tid
 			events = append(events, types.ChromeTraceEvent{
 				Name:  "thread_name",
@@ -1308,7 +1314,7 @@ func (h *EventHandler) GetTasksTimeline(clusterName string, jobID string) []type
 				TID:   &tidVal,
 				Phase: "M",
 				Args: map[string]interface{}{
-					"name": "worker:" + workerID,
+					"name": clusterID,
 				},
 			})
 		}
@@ -1319,21 +1325,26 @@ func (h *EventHandler) GetTasksTimeline(clusterName string, jobID string) []type
 		if task.ProfileData == nil || len(task.ProfileData.Events) == 0 {
 			continue
 		}
+		// Only include worker and driver components (consistent with Ray's profiling implementation in profiling.py)
+		componentType := task.ProfileData.ComponentType
+		if componentType != "worker" && componentType != "driver" {
+			continue
+		}
 
 		nodeIP := task.ProfileData.NodeIPAddress
-		workerID := task.ProfileData.ComponentID
+		clusterID := task.ProfileData.ComponentType + ":" + task.ProfileData.ComponentID
 
 		pid, ok := nodeIPToPID[nodeIP]
 		if !ok {
 			continue
 		}
-		// Skip if workerID is empty (consistent with first pass)
-		if workerID == "" {
+		// Skip if clusterID is empty (consistent with first pass)
+		if clusterID == "" {
 			continue
 		}
 
 		var tidPtr *int
-		if tid, ok := workerToTID[nodeIP][workerID]; ok {
+		if tid, ok := nodeIPToClusterIDToTID[nodeIP][clusterID]; ok {
 			tidPtr = &tid
 		} else {
 			// This shouldn't happen if first pass worked correctly,
@@ -1377,15 +1388,6 @@ func (h *EventHandler) GetTasksTimeline(clusterName string, jobID string) []type
 				args["actor_id"] = actorID
 			}
 
-			// Add "name" field for overall task events (task::xxx)
-			if strings.HasPrefix(profEvent.EventName, "task::") {
-				if extraData != nil {
-					if name, ok := extraData["name"].(string); ok {
-						args["name"] = name
-					}
-				}
-			}
-
 			// Determine event name for display
 			eventName := profEvent.EventName
 			displayName := profEvent.EventName
@@ -1394,6 +1396,7 @@ func (h *EventHandler) GetTasksTimeline(clusterName string, jobID string) []type
 			if strings.HasPrefix(profEvent.EventName, "task::") && extraData != nil {
 				if name, ok := extraData["name"].(string); ok {
 					displayName = name
+					args["name"] = name
 				}
 			}
 
