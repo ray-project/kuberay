@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/emicklei/go-restful/v3"
 	eventtypes "github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
@@ -896,6 +897,7 @@ func (s *ServerHandler) getTasksTimeline(req *restful.Request, resp *restful.Res
 	}
 
 	jobID := req.QueryParameter("job_id")
+	download := req.QueryParameter("download")
 
 	timeline := s.eventHandler.GetTasksTimeline(clusterNameID, jobID)
 
@@ -906,5 +908,14 @@ func (s *ServerHandler) getTasksTimeline(req *restful.Request, resp *restful.Res
 		return
 	}
 
+	// Support download parameter
+	if download == "1" {
+		nowStr := time.Now().Format("2006-01-02_15-04-05")
+		filename := fmt.Sprintf("timeline-%s-%s.json", jobID, nowStr)
+		if jobID == "" {
+			filename = fmt.Sprintf("timeline-%s.json", nowStr)
+		}
+		resp.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+	}
 	resp.Write(respData)
 }
