@@ -435,8 +435,8 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusNew
 			break
 		}
-		// TODO (kevin85421): We may not need to requeue the RayJob if it has already been suspended.
-		return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
+		// The RayJob is already suspended, we should not requeue it.
+		return ctrl.Result{}, nil
 	case rayv1.JobDeploymentStatusComplete, rayv1.JobDeploymentStatusFailed:
 		// The RayJob has reached a terminal state. Handle the cleanup and deletion logic.
 		// If the RayJob uses an existing RayCluster, we must not delete it.

@@ -104,6 +104,8 @@ batchScheduler:
 # Configuration for the KubeRay operator.
 configuration:
   # -- Whether to enable the configuration feature. If enabled, a ConfigMap will be created and mounted to the operator.
+  # When enabled, flag-based configuration values (leaderElectionEnabled, metrics.enabled, kubeClient.qps, etc.)
+  # will be injected into the ConfigMap. The operator will use the ConfigMap and ignore command-line flags.
   enabled: false
   # -- Default environment variables to inject into all Ray containers in all RayCluster CRs.
   # This allows user to set feature flags across all Ray pods.
@@ -114,6 +116,20 @@ configuration:
   # - name: RAY_metric_cardinality_level
   #   value: "recommended"
   defaultContainerEnvs: []
+
+  # -- Sidecar containers to inject into every Ray head pod.
+  # Example:
+  # headSidecarContainers:
+  # - name: fluentbit
+  #   image: fluent/fluent-bit:1.9
+  headSidecarContainers: []
+
+  # -- Sidecar containers to inject into every Ray worker pod.
+  # Example:
+  # workerSidecarContainers:
+  # - name: fluentbit
+  #   image: fluent/fluent-bit:1.9
+  workerSidecarContainers: []
 
 featureGates:
 - name: RayClusterStatusConditions
