@@ -942,7 +942,6 @@ func formatTaskForResponse(task eventtypes.Task) map[string]interface{} {
 		// TODO(jwj): Support profiling_data after TASK_PROFILE_EVENT is supported.
 		// Ref: https://github.com/ray-project/ray/blob/d0b1d151d8ea964a711e451d0ae736f8bf95b629/python/ray/util/state/common.py#L1616-L1622.
 		// "profiling_data":     task.ProfilingData,
-		//
 		"task_log_info":      task.TaskLogInfo,
 		"error_message":      task.RayErrorInfo.ErrorMessage,
 		"is_debugger_paused": task.IsDebuggerPaused,
