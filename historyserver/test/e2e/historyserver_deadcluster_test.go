@@ -476,9 +476,9 @@ func testActoryByActorIdEndpoint(test Test, g *WithT, namespace *corev1.Namespac
 			gg.Expect(err).NotTo(HaveOccurred())
 			gg.Expect(resp.StatusCode).To(Equal(http.StatusOK))
 
-			defer resp.Body.Close()
 			body, err := io.ReadAll(resp.Body)
 			gg.Expect(err).NotTo(HaveOccurred())
+			Expect(resp.Body.Close()).To(Succeed())
 			actorResponses[actorId] = string(body)
 			actorIDs = append(actorIDs, actorId)
 		}
