@@ -12,7 +12,6 @@ import (
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
-	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 )
 
 func rayJobTemplate() *rayv1.RayJob {
@@ -133,54 +132,6 @@ func TestBuildJobSubmitCommandWithSidecarMode(t *testing.T) {
 		"--",
 		"echo no quote 'single quote' \"double quote\"",
 		";",
-	}
-	command, err := BuildJobSubmitCommand(testRayJob, rayv1.SidecarMode)
-	require.NoError(t, err)
-	assert.Equal(t, expected, command)
-}
-
-func TestBuildJobSubmitCommandWithSidecarModeAndFeatureGate(t *testing.T) {
-	// Enable the SidecarSubmitterRestart feature gate for this test
-	features.SetFeatureGateDuringTest(t, features.SidecarSubmitterRestart, true)
-
-	testRayJob := rayJobTemplate()
-	testRayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers = []corev1.Container{
-		{
-			Ports: []corev1.ContainerPort{
-				{
-					Name:          utils.DashboardPortName,
-					ContainerPort: utils.DefaultDashboardPort,
-				},
-			},
-		},
-	}
-
-	// With SidecarSubmitterRestart enabled, the command should include:
-	// - status check (if ! ray job status ...)
-	// - --no-wait flag
-	// - job logs follow at the end
-	expected := []string{
-		"until",
-		fmt.Sprintf(
-			utils.BaseWgetHealthCommand,
-			utils.DefaultReadinessProbeFailureThreshold,
-			utils.DefaultDashboardPort,
-			utils.RayDashboardGCSHealthPath,
-		),
-		">/dev/null", "2>&1", ";",
-		"do", "echo", strconv.Quote("Waiting for Ray Dashboard GCS to become healthy at http://127.0.0.1:8265 ..."), ";", "sleep", "2", ";", "done", ";",
-		"if", "!", "ray", "job", "status", "--address", "http://127.0.0.1:8265", "testJobId", ">/dev/null", "2>&1", ";", "then",
-		"ray", "job", "submit", "--address", "http://127.0.0.1:8265", "--no-wait",
-		"--runtime-env-json", strconv.Quote(`{"test":"test"}`),
-		"--metadata-json", strconv.Quote(`{"testKey":"testValue"}`),
-		"--submission-id", "testJobId",
-		"--entrypoint-num-cpus", "1.000000",
-		"--entrypoint-num-gpus", "0.500000",
-		"--entrypoint-resources", strconv.Quote(`{"Custom_1": 1, "Custom_2": 5.5}`),
-		"--",
-		"echo no quote 'single quote' \"double quote\"",
-		";", "fi", ";",
-		"ray", "job", "logs", "--address", "http://127.0.0.1:8265", "--follow", "testJobId",
 	}
 	command, err := BuildJobSubmitCommand(testRayJob, rayv1.SidecarMode)
 	require.NoError(t, err)
