@@ -359,7 +359,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			isJobTerminal = isJobTerminal && finishedAt != nil
 		}
 
-		// inform the user when submitter exited but job is still running.
+		// inform the user when submitter exited (finishedAt != nil) but job is still running (!isJobTerminal).
 		if rayJobInstance.Spec.SubmissionMode == rayv1.SidecarMode && finishedAt != nil && !isJobTerminal {
 			logger.Info("Submitter container exited but Ray job is still running.",
 				"JobId", rayJobInstance.Status.JobId, "JobStatus", jobInfo.JobStatus)
