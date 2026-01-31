@@ -498,7 +498,6 @@ func (s *ServerHandler) getClusterStatus(req *restful.Request, resp *restful.Res
 
 	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
 	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
-	clusterNameID := clusterName + "_" + clusterNamespace
 
 	format := req.QueryParameter("format")
 
@@ -507,7 +506,7 @@ func (s *ServerHandler) getClusterStatus(req *restful.Request, resp *restful.Res
 
 	if format == "1" {
 		// Build cluster status from debug_state.txt and task/actor data
-		statusString := s.buildFormattedClusterStatus(clusterNameID, sessionName)
+		statusString := s.buildFormattedClusterStatus(clusterName, clusterNamespace, sessionName)
 
 		response := FormattedClusterStatusResponse{
 			Result: true,
@@ -536,9 +535,9 @@ func (s *ServerHandler) getClusterStatus(req *restful.Request, resp *restful.Res
 }
 
 // buildFormattedClusterStatus reconstructs the cluster status from debug_state.txt and pending tasks and actors
-func (s *ServerHandler) buildFormattedClusterStatus(clusterNameID, sessionName string) string {
+func (s *ServerHandler) buildFormattedClusterStatus(clusterName, clusterNamespace, sessionName string) string {
 	builder := NewClusterStatusBuilder()
-
+	clusterNameID := clusterName + "_" + clusterNamespace
 	logsPath := path.Join(sessionName, "logs")
 	nodeIDs := s.reader.ListFiles(clusterNameID, logsPath)
 
@@ -565,8 +564,9 @@ func (s *ServerHandler) buildFormattedClusterStatus(clusterNameID, sessionName s
 		builder.AddNodeFromDebugState(debugState)
 	}
 
-	tasks := s.eventHandler.GetTasks(clusterNameID + "_" + sessionName)
-	actors := s.eventHandler.GetActors(clusterNameID + "_" + sessionName)
+	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
+	tasks := s.eventHandler.GetTasks(clusterSessionKey)
+	actors := s.eventHandler.GetActors(clusterSessionKey)
 
 	// Use the last timestamp from tasks/actors to represent when the cluster was last active.
 	// Fallback to session timestamp if no task/actor timestamps are available.
