@@ -121,6 +121,7 @@ func routerAPI(s *ServerHandler) {
 	ws.Route(ws.GET("/v0/tasks").To(s.getTaskDetail).Filter(s.CookieHandle).
 		Doc("get task detail").
 		// TODO: support limit
+		// Param(ws.QueryParameter("detail", "detail")).
 		// Param(ws.QueryParameter("limit", "limit")).
 		Param(ws.QueryParameter("filter_keys", "filter_keys")).
 		Param(ws.QueryParameter("filter_predicates", "filter_predicates")).
@@ -894,7 +895,7 @@ func (s *ServerHandler) getTaskDetail(req *restful.Request, resp *restful.Respon
 
 	response := RespTaksInfo{
 		Result: true,
-		Msg:    "Tasks fetched.",
+		Msg:    "",
 		Data: TaskData{
 			Result: TaskDataResult{
 				Total:  len(formattedTasks),
@@ -947,6 +948,9 @@ func formatTaskForResponse(task eventtypes.Task) map[string]interface{} {
 		"is_debugger_paused": task.IsDebuggerPaused,
 		"call_site":          task.CallSite,
 		"label_selector":     task.LabelSelector,
+		"creation_time_ms":   0,
+		"start_time_ms":      0,
+		"end_time_ms":        0,
 	}
 
 	if task.TaskType == eventtypes.ACTOR_TASK {
