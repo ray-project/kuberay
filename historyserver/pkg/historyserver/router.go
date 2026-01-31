@@ -565,8 +565,8 @@ func (s *ServerHandler) buildFormattedClusterStatus(clusterNameID, sessionName s
 		builder.AddNodeFromDebugState(debugState)
 	}
 
-	tasks := s.eventHandler.GetTasksBySessionName(clusterNameID, sessionName)
-	actors := s.eventHandler.GetActorsBySessionName(clusterNameID, sessionName)
+	tasks := s.eventHandler.GetTasks(clusterNameID + "_" + sessionName)
+	actors := s.eventHandler.GetActors(clusterNameID + "_" + sessionName)
 
 	// Use the last timestamp from tasks/actors to represent when the cluster was last active.
 	// Fallback to session timestamp if no task/actor timestamps are available.
