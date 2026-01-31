@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -89,6 +90,11 @@ func (s *ServerHandler) _getNodeLogFile(rayClusterNameID, sessionID string, opti
 	// Resolve node_id and filename based on options
 	nodeID, filename, err := s.resolveLogFilename(rayClusterNameID, sessionID, options)
 	if err != nil {
+		// Preserve HTTPError status code if already set, otherwise use BadRequest
+		var httpErr *utils.HTTPError
+		if errors.As(err, &httpErr) {
+			return nil, err
+		}
 		return nil, utils.NewHTTPError(err, http.StatusBadRequest)
 	}
 
@@ -201,12 +207,43 @@ func (s *ServerHandler) resolveLogFilename(clusterNameID, sessionID string, opti
 	}
 
 	// If pid is provided, resolve worker log file
-	// TODO: not implemented
 	if options.PID > 0 {
-		return "", "", fmt.Errorf("pid resolution not yet implemented")
+		return s.resolvePidLogFilename(clusterNameID, sessionID, options.NodeID, options.PID, options.Suffix)
 	}
 
 	return "", "", fmt.Errorf("must provide one of: filename, task_id, actor_id, or pid")
+}
+
+// resolvePidLogFilename resolves a log file by PID.
+// It requires a nodeID and searches for a log file with a name ending in "-{pid}.{suffix}".
+func (s *ServerHandler) resolvePidLogFilename(clusterNameID, sessionID, nodeID string, pid int, suffix string) (string, string, error) {
+	if nodeID == "" {
+		return "", "", fmt.Errorf("node_id is required for pid resolution")
+	}
+
+	// The nodeID from actors/tasks is base64, but the path on storage uses hex.
+	nodeIDBytes, err := base64.RawURLEncoding.DecodeString(nodeID)
+	if err != nil {
+		// Try standard Base64 if URL-safe fails
+		nodeIDBytes, err = base64.StdEncoding.DecodeString(nodeID)
+		if err != nil {
+			return "", "", fmt.Errorf("failed to decode node_id: %w", err)
+		}
+	}
+	nodeIDHex := fmt.Sprintf("%x", nodeIDBytes)
+
+	logPath := path.Join(sessionID, "logs", nodeIDHex)
+	files := s.reader.ListFiles(clusterNameID, logPath)
+
+	pidSuffix := fmt.Sprintf("-%d.%s", pid, suffix)
+
+	for _, file := range files {
+		if strings.HasSuffix(file, pidSuffix) {
+			return nodeIDHex, file, nil
+		}
+	}
+
+	return "", "", utils.NewHTTPError(fmt.Errorf("log file not found for pid %d in path %s", pid, logPath), http.StatusNotFound)
 }
 
 // resolveTaskLogFilename resolves log file for a task by querying task events.

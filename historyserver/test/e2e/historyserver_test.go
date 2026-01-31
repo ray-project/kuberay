@@ -338,6 +338,47 @@ func testLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Names
 			"At least one actor_id should succeed. Last error: %s", lastError)
 	})
 
+	// Sub-test for pid parameter (live cluster)
+	test.T().Run("pid parameter", func(t *testing.T) {
+		g := NewWithT(t)
+
+		// Get an eligible worker PID and its node ID
+		pid, nodeID := getEligibleWorkerPID(g, client, historyServerURL)
+		LogWithTimestamp(t, "Found eligible worker PID %d on node %s for testing", pid, nodeID)
+
+		// Test successful case
+		url := fmt.Sprintf("%s%s?pid=%d&node_id=%s", historyServerURL, EndpointLogFile, pid, nodeID)
+		resp, err := client.Get(url)
+		g.Expect(err).NotTo(HaveOccurred())
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		g.Expect(resp.StatusCode).To(Equal(http.StatusOK), "Expected OK for valid pid and node_id, got %d: %s", resp.StatusCode, string(body))
+		g.Expect(len(body)).To(BeNumerically(">", 0))
+
+		// Test missing node_id
+		url = fmt.Sprintf("%s%s?pid=%d", historyServerURL, EndpointLogFile, pid)
+		resp, err = client.Get(url)
+		g.Expect(err).NotTo(HaveOccurred())
+		resp.Body.Close()
+		g.Expect(resp.StatusCode).To(Equal(http.StatusBadRequest))
+
+		// Test invalid pid
+		url = fmt.Sprintf("%s%s?pid=abc&node_id=%s", historyServerURL, EndpointLogFile, nodeID)
+		resp, err = client.Get(url)
+		g.Expect(err).NotTo(HaveOccurred())
+		resp.Body.Close()
+		g.Expect(resp.StatusCode).To(Equal(http.StatusBadRequest))
+
+		// Test non-existent pid
+		url = fmt.Sprintf("%s%s?pid=999999&node_id=%s", historyServerURL, EndpointLogFile, nodeID)
+		resp, err = client.Get(url)
+		g.Expect(err).NotTo(HaveOccurred())
+		body, _ = io.ReadAll(resp.Body)
+		resp.Body.Close()
+		// For a live cluster, this is proxied to the dashboard. The dashboard returns 500 for file not found.
+		g.Expect(resp.StatusCode).To(Equal(http.StatusInternalServerError), "Expected 500 for non-existent pid, got %d: %s", resp.StatusCode, string(body))
+	})
+
 	DeleteS3Bucket(test, g, s3Client)
 	LogWithTimestamp(test.T(), "Log file endpoint tests completed")
 }
@@ -428,6 +469,7 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 		{"file not found", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=nonexistent.log", u, EndpointLogFile, n) }, http.StatusNotFound},
 		{"invalid suffix", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&suffix=invalid", u, EndpointLogFile, n, filename) }, http.StatusBadRequest},
 		{"task_id invalid (not found)", func(u, n string) string { return fmt.Sprintf("%s%s?task_id=nonexistent-task-id", u, EndpointLogFile) }, http.StatusBadRequest},
+		{"non-existent pid", func(u, n string) string { return fmt.Sprintf("%s%s?pid=999999&node_id=%s", u, EndpointLogFile, n) }, http.StatusNotFound},
 
 		// Path traversal attacks
 		{"traversal ../etc/passwd", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=../etc/passwd", u, EndpointLogFile, n) }, http.StatusBadRequest},
@@ -636,6 +678,15 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 			"At least one actor_id should succeed. Last error: %s", lastError)
 	})
 
+	// Sub-test for pid parameter (dead cluster)
+	// NOTE: This test is skipped because Ray export events don't include worker_pid.
+	// See: https://github.com/ray-project/ray/issues/60129
+	// Worker lifecycle events are not yet exported, so we cannot obtain worker PIDs
+	// from historical data for dead clusters.
+	test.T().Run("pid parameter", func(t *testing.T) {
+		t.Skip("Skipping pid parameter test for dead cluster: worker_pid not available in Ray export events (see https://github.com/ray-project/ray/issues/60129)")
+	})
+
 	DeleteS3Bucket(test, g, s3Client)
 	LogWithTimestamp(test.T(), "Dead cluster log file endpoint tests completed")
 }
@@ -742,4 +793,61 @@ func getAllEligibleActorIDs(g *WithT, client *http.Client, historyServerURL stri
 	g.Expect(len(actorIDs)).To(BeNumerically(">", 0), "should have at least one eligible actor")
 
 	return actorIDs
+}
+
+// getEligibleWorkerPID retrieves an eligible worker PID and its node ID for log testing.
+// It queries the /api/v0/tasks endpoint to find any task with a valid worker_pid and node_id.
+func getEligibleWorkerPID(g *WithT, client *http.Client, historyServerURL string) (pid int, nodeID string) {
+	resp, err := client.Get(historyServerURL + "/api/v0/tasks")
+	g.Expect(err).NotTo(HaveOccurred())
+	defer resp.Body.Close()
+
+	g.Expect(resp.StatusCode).To(Equal(http.StatusOK))
+
+	body, err := io.ReadAll(resp.Body)
+	g.Expect(err).NotTo(HaveOccurred())
+
+	var result map[string]interface{}
+	err = json.Unmarshal(body, &result)
+	g.Expect(err).NotTo(HaveOccurred())
+
+	// Response format: {"result": true, "msg": "...", "data": {"result": {"result": [tasks...], ...}}}
+	data, ok := result["data"].(map[string]interface{})
+	g.Expect(ok).To(BeTrue(), "response should have 'data' field")
+
+	dataResult, ok := data["result"].(map[string]interface{})
+	g.Expect(ok).To(BeTrue(), "data should have 'result' field")
+
+	tasks, ok := dataResult["result"].([]interface{})
+	g.Expect(ok).To(BeTrue(), "result should have 'result' array")
+	g.Expect(len(tasks)).To(BeNumerically(">", 0), "should have at least one task")
+
+	fmt.Printf("Tasks: %+v", tasks)
+
+	// Find a task with valid worker_pid and node_id
+	for _, t := range tasks {
+		task, ok := t.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		// Check for worker_pid (must be non-zero)
+		workerPidFloat, pidOk := task["worker_pid"].(float64)
+		if !pidOk || workerPidFloat == 0 {
+			continue
+		}
+
+		// Check for node_id (must be non-empty)
+		taskNodeID, nodeOk := task["node_id"].(string)
+		if !nodeOk || taskNodeID == "" {
+			continue
+		}
+
+		// Found an eligible task with worker PID
+		return int(workerPidFloat), taskNodeID
+	}
+
+	// If we get here, no eligible task was found
+	g.Fail("should find at least one task with valid worker_pid and node_id")
+	return 0, ""
 }
