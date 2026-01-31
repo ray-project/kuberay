@@ -213,99 +213,7 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 	case types.TASK_DEFINITION_EVENT:
 		return h.handleTaskDefinitionEvent(eventMap, currentClusterName, false)
 	case types.TASK_LIFECYCLE_EVENT:
-		lifecycleEvent, ok := eventMap["taskLifecycleEvent"].(map[string]any)
-		if !ok {
-			return fmt.Errorf("invalid taskLifecycleEvent format")
-		}
-
-		taskId, _ := lifecycleEvent["taskId"].(string)
-		taskAttempt, _ := lifecycleEvent["taskAttempt"].(float64)
-		transitions, _ := lifecycleEvent["stateTransitions"].([]any)
-
-		nodeId, _ := lifecycleEvent["nodeId"].(string)
-		workerId, _ := lifecycleEvent["workerId"].(string)
-
-		if len(transitions) == 0 || taskId == "" {
-			return nil
-		}
-
-		// Parse state transitions
-		var stateEvents []types.TaskStateTransition
-		for _, transition := range transitions {
-			tr, ok := transition.(map[string]any)
-			if !ok {
-				continue
-			}
-			state, _ := tr["state"].(string)
-			timestampStr, _ := tr["timestamp"].(string)
-
-			var timestamp time.Time
-			if timestampStr != "" {
-				timestamp, _ = time.Parse(time.RFC3339Nano, timestampStr)
-			}
-
-			stateEvents = append(stateEvents, types.TaskStateTransition{
-				State:     types.TaskStatus(state),
-				Timestamp: timestamp,
-			})
-		}
-
-		if len(stateEvents) == 0 {
-			return nil
-		}
-
-		taskMap := h.ClusterTaskMap.GetOrCreateTaskMap(currentClusterName)
-		taskMap.CreateOrMergeAttempt(taskId, int(taskAttempt), func(t *types.Task) {
-			// --- DEDUPLICATION using (State + Timestamp) as unique key ---
-			// Build a set of existing event keys to detect duplicates
-			type eventKey struct {
-				State     string
-				Timestamp int64
-			}
-			existingKeys := make(map[eventKey]bool)
-			for _, e := range t.StateTransitions {
-				existingKeys[eventKey{string(e.State), e.Timestamp.UnixNano()}] = true
-			}
-
-			// Only append events that haven't been seen before
-			for _, e := range stateEvents {
-				key := eventKey{string(e.State), e.Timestamp.UnixNano()}
-				if !existingKeys[key] {
-					t.StateTransitions = append(t.StateTransitions, e)
-					existingKeys[key] = true
-				}
-			}
-
-			// Sort events by timestamp to ensure correct order
-			sort.Slice(t.StateTransitions, func(i, j int) bool {
-				return t.StateTransitions[i].Timestamp.Before(t.StateTransitions[j].Timestamp)
-			})
-
-			if len(t.StateTransitions) == 0 {
-				return
-			}
-
-			t.State = t.StateTransitions[len(t.StateTransitions)-1].State
-
-			if nodeId != "" {
-				t.NodeID = nodeId
-			}
-			if workerId != "" {
-				t.WorkerID = workerId
-			}
-			if t.StartTime.IsZero() {
-				for _, e := range t.StateTransitions {
-					if e.State == types.RUNNING {
-						t.StartTime = e.Timestamp
-						break
-					}
-				}
-			}
-			lastStateTransition := t.StateTransitions[len(t.StateTransitions)-1]
-			if lastStateTransition.State == types.FINISHED || lastStateTransition.State == types.FAILED {
-				t.EndTime = lastStateTransition.Timestamp
-			}
-		})
+		return h.handleTaskLifecycleEvent(eventMap, currentClusterName)
 	case types.ACTOR_DEFINITION_EVENT:
 		actorDef, ok := eventMap["actorDefinitionEvent"]
 		if !ok {
@@ -928,6 +836,90 @@ func (h *EventHandler) handleTaskDefinitionEvent(eventMap map[string]any, cluste
 	logrus.Infof("Task definition event processed: %v", currTask)
 	logrus.Infof("Is actor task: %t", isActorTask)
 	logrus.Infof("Task map: %v", taskMap.TaskMap[currTask.TaskID])
+
+	return nil
+}
+
+// handleTaskLifecycleEvent processes TASK_LIFECYCLE_EVENT and merges state transitions for a given task attempt.
+func (h *EventHandler) handleTaskLifecycleEvent(eventMap map[string]any, clusterSessionKey string) error {
+	taskLifecycle, ok := eventMap["taskLifecycleEvent"]
+	if !ok {
+		return fmt.Errorf("event does not have 'taskLifecycleEvent' field")
+	}
+
+	jsonTaskLifecycle, err := json.Marshal(taskLifecycle)
+	if err != nil {
+		return fmt.Errorf("failed to marshal task lifecycle event: %w", err)
+	}
+
+	var currTask types.Task
+	if err := json.Unmarshal(jsonTaskLifecycle, &currTask); err != nil {
+		return fmt.Errorf("failed to unmarshal task lifecycle event: %w", err)
+	}
+	if currTask.TaskID == "" {
+		return fmt.Errorf("task ID is empty")
+	}
+
+	// TODO(jwj): Clarify if there must be at least one state transition.
+	if len(currTask.StateTransitions) == 0 {
+		return fmt.Errorf("TASK_LIFECYCLE_EVENT must have at least one state transition")
+	}
+
+	taskMap := h.ClusterTaskMap.GetOrCreateTaskMap(clusterSessionKey)
+	taskMap.CreateOrMergeAttempt(currTask.TaskID, currTask.TaskAttempt, func(task *types.Task) {
+		// --- DEDUPLICATION using (State + Timestamp) as unique key ---
+		// Build a set of existing event keys to detect duplicates
+		type eventKey struct {
+			State     string
+			Timestamp int64
+		}
+		existingKeys := make(map[eventKey]bool)
+		for _, e := range task.StateTransitions {
+			existingKeys[eventKey{string(e.State), e.Timestamp.UnixNano()}] = true
+		}
+
+		// Only append events that haven't been seen before
+		for _, e := range currTask.StateTransitions {
+			key := eventKey{string(e.State), e.Timestamp.UnixNano()}
+			if !existingKeys[key] {
+				task.StateTransitions = append(task.StateTransitions, e)
+				existingKeys[key] = true
+			}
+		}
+
+		// Sort events by timestamp to ensure correct order
+		sort.Slice(task.StateTransitions, func(i, j int) bool {
+			return task.StateTransitions[i].Timestamp.Before(task.StateTransitions[j].Timestamp)
+		})
+
+		if len(task.StateTransitions) == 0 {
+			return
+		}
+
+		task.State = task.StateTransitions[len(task.StateTransitions)-1].State
+
+		if currTask.NodeID != "" {
+			task.NodeID = currTask.NodeID
+		}
+		if currTask.WorkerID != "" {
+			task.WorkerID = currTask.WorkerID
+		}
+		if task.StartTime.IsZero() {
+			for _, e := range task.StateTransitions {
+				if e.State == types.RUNNING {
+					task.StartTime = e.Timestamp
+					break
+				}
+			}
+		}
+		lastStateTransition := task.StateTransitions[len(task.StateTransitions)-1]
+		if lastStateTransition.State == types.FINISHED || lastStateTransition.State == types.FAILED {
+			task.EndTime = lastStateTransition.Timestamp
+		}
+	})
+
+	logrus.Infof("Task lifecycle event processed: %v", currTask)
+	logrus.Infof("Task map: %v", taskMap.TaskMap)
 
 	return nil
 }

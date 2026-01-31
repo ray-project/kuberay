@@ -65,6 +65,7 @@ type TaskStatus string
 // The following statuses follow a rough chronological order of transition.
 // For typical order of states, please refer to:
 // https://github.com/ray-project/ray/blob/d0b1d151d8ea964a711e451d0ae736f8bf95b629/src/ray/protobuf/common.proto#L884-L899.
+// TODO(jwj): Each entity (actor, task, job, node) should have its own const def with entity name prepended to avoid conflicts.
 const (
 	NIL                                        TaskStatus = "NIL"
 	PENDING_ARGS_AVAIL                         TaskStatus = "PENDING_ARGS_AVAIL"
