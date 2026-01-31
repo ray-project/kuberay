@@ -506,26 +506,17 @@ func initLivenessAndReadinessProbe(rayContainer *corev1.Container, rayNodeType r
 			rayContainer.ReadinessProbe.Exec = &corev1.ExecAction{Command: []string{"bash", "-c", strings.Join(commands, " && ")}}
 		}
 
-		// For worker Pods serving traffic, we need to add an additional HTTP proxy health check for the readiness probe.
-		// Note: head Pod checks the HTTP proxy's health at every rayservice controller reconcile instaed of using readiness probe.
+		// For worker Pods serving traffic, readiness checks Ray Serve proxy health only (liveness covers node health).
+		// Note: head Pod checks the HTTP proxy's health at every rayservice controller reconcile instead of using readiness probe.
 		// See https://github.com/ray-project/kuberay/pull/1808 for reasons.
-		// RayService worker readiness uses a single exec that runs Python to GET both /api/healthz and /-/healthz;
-		// both must return body containing "success". No wget required.
 		if creatorCRDType == utils.RayServiceCRD && rayNodeType == rayv1.WorkerNode {
 			rayContainer.ReadinessProbe.FailureThreshold = utils.ServeReadinessProbeFailureThreshold
 			servingPort := utils.FindContainerPort(rayContainer, utils.ServingPortName, utils.DefaultServingPort)
-			serveProxyTimeout := int32(utils.DefaultReadinessProbeInitialDelaySeconds)
-			rayServiceWorkerReadinessCommand := fmt.Sprintf(
-				utils.BasePythonTwoURLHealthCommand,
-				dashboardAgentPort,
-				strings.TrimPrefix(utils.RayNodeHealthPath, "/"),
-				utils.DefaultReadinessProbeTimeoutSeconds,
-				servingPort,
-				utils.RayServeProxyHealthPath,
-				serveProxyTimeout,
-			)
-			rayContainer.ReadinessProbe.HTTPGet = nil
-			rayContainer.ReadinessProbe.Exec = &corev1.ExecAction{Command: []string{"bash", "-c", rayServiceWorkerReadinessCommand}}
+			rayContainer.ReadinessProbe.HTTPGet = &corev1.HTTPGetAction{
+				Path: "/" + utils.RayServeProxyHealthPath,
+				Port: intstr.IntOrString{Type: intstr.Int, IntVal: servingPort},
+			}
+			rayContainer.ReadinessProbe.Exec = nil
 		}
 	}
 }
