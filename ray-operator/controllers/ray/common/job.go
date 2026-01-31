@@ -126,7 +126,7 @@ func BuildJobSubmitCommand(rayJobInstance *rayv1.RayJob, submissionMode rayv1.Jo
 
 	if submissionMode == rayv1.SidecarMode {
 		// Wait until Ray Dashboard GCS is healthy before proceeding.
-		// Use Python-based health check (no wget; see kuberay#3837).
+		// Use Python-based health check (no wget).
 		rayDashboardGCSHealthCommand := fmt.Sprintf(
 			utils.BasePythonHealthCommand,
 			port,

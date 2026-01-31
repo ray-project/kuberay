@@ -244,7 +244,7 @@ const (
 	RayAgentRayletHealthPath  = "api/local_raylet_healthz"
 	RayDashboardGCSHealthPath = "api/gcs_healthz"
 	RayServeProxyHealthPath   = "-/healthz"
-	// BasePythonHealthCommand checks a single health URL; args: port, path (no leading slash), timeout_sec. Used instead of wget for slim Ray images (see kuberay#3837).
+	// BasePythonHealthCommand checks a single health URL; args: port, path (no leading slash), timeout_sec. Used instead of wget for slim Ray images.
 	BasePythonHealthCommand = `python3 -c "import urllib.request; r=urllib.request.urlopen('http://localhost:%d/%s', timeout=%d); exit(0 if b'success' in r.read() else 1)"`
 	// BasePythonTwoURLHealthCommand checks two health URLs; args: port1, path1, timeout1, port2, path2, timeout2. Exit 0 only if both responses contain 'success'. Used for RayService worker readiness (node health + Serve proxy).
 	BasePythonTwoURLHealthCommand = `python3 -c "import urllib.request; r1=urllib.request.urlopen('http://localhost:%d/%s', timeout=%d); r2=urllib.request.urlopen('http://localhost:%d/%s', timeout=%d); exit(0 if (b'success' in r1.read() and b'success' in r2.read()) else 1)"`

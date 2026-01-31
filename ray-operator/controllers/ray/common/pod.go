@@ -510,7 +510,7 @@ func initLivenessAndReadinessProbe(rayContainer *corev1.Container, rayNodeType r
 		// Note: head Pod checks the HTTP proxy's health at every rayservice controller reconcile instaed of using readiness probe.
 		// See https://github.com/ray-project/kuberay/pull/1808 for reasons.
 		// RayService worker readiness uses a single exec that runs Python to GET both /api/healthz and /-/healthz;
-		// both must return body containing "success". No wget required (kuberay#3837).
+		// both must return body containing "success". No wget required.
 		if creatorCRDType == utils.RayServiceCRD && rayNodeType == rayv1.WorkerNode {
 			rayContainer.ReadinessProbe.FailureThreshold = utils.ServeReadinessProbeFailureThreshold
 			servingPort := utils.FindContainerPort(rayContainer, utils.ServingPortName, utils.DefaultServingPort)
