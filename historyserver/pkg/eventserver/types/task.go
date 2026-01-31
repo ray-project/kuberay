@@ -1,6 +1,7 @@
 package types
 
 import (
+	"fmt"
 	"sort"
 	"sync"
 	"time"
@@ -323,7 +324,7 @@ func (t Task) DeepCopy() Task {
 	return cp
 }
 
-// FunctionDescriptor's DeepCopy returns a deep copy of the FunctionDescriptor.
+// FunctionDescriptor.DeepCopy returns a deep copy of the FunctionDescriptor.
 func (f *FunctionDescriptor) DeepCopy() *FunctionDescriptor {
 	if f == nil {
 		return nil
@@ -344,4 +345,28 @@ func (f *FunctionDescriptor) DeepCopy() *FunctionDescriptor {
 	}
 
 	return cp
+}
+
+// FunctionDescriptor.CallString returns the function name of the FunctionDescriptor.
+// Ref: https://github.com/ray-project/ray/blob/d0b1d151d8ea964a711e451d0ae736f8bf95b629/src/ray/common/function_descriptor.h#L203-L212.
+func (f *FunctionDescriptor) CallString() string {
+	var className string
+	var functionName string
+	if f.JavaFunctionDescriptor != nil {
+		className = f.JavaFunctionDescriptor.ClassName
+		functionName = f.JavaFunctionDescriptor.FunctionName
+	}
+	if f.PythonFunctionDescriptor != nil {
+		className = f.PythonFunctionDescriptor.ClassName
+		functionName = f.PythonFunctionDescriptor.FunctionName
+	}
+	if f.CppFunctionDescriptor != nil {
+		className = f.CppFunctionDescriptor.ClassName
+		functionName = f.CppFunctionDescriptor.FunctionName
+	}
+
+	if className == "" {
+		return functionName
+	}
+	return fmt.Sprintf("%s.%s", className, functionName)
 }

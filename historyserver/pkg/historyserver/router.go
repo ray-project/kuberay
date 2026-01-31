@@ -119,7 +119,7 @@ func routerAPI(s *ServerHandler) {
 		Writes("")) // Placeholder for specific return type
 
 	ws.Route(ws.GET("/v0/tasks").To(s.getTaskDetail).Filter(s.CookieHandle).
-		Doc("get task detail ").
+		Doc("get task detail").
 		// TODO: support limit
 		// Param(ws.QueryParameter("limit", "limit")).
 		Param(ws.QueryParameter("filter_keys", "filter_keys")).
@@ -861,41 +861,49 @@ func summarizeTasksByLineage(tasks []eventtypes.Task) map[string]interface{} {
 	}
 }
 
+// getTaskDetail
 func (s *ServerHandler) getTaskDetail(req *restful.Request, resp *restful.Response) {
-	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
-	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
 	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
-
 	if sessionName == "live" {
 		s.redirectRequest(req, resp)
 		return
 	}
 
+	// Parse query parameters.
+	// limit := req.QueryParameter("limit")
 	filterKey := req.QueryParameter("filter_keys")
 	filterValue := req.QueryParameter("filter_values")
 	filterPredicate := req.QueryParameter("filter_predicates")
 
+	// Build cluster session key for accessing in-memory task map.
+	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
+	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
 	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
+
 	tasks := s.eventHandler.GetTasks(clusterSessionKey)
+	// TODO(jwj): Check filters later.
 	tasks = utils.ApplyFilter(tasks, filterKey, filterPredicate, filterValue,
 		func(t eventtypes.Task, key string) string {
 			return eventtypes.GetTaskFieldValue(t, key)
 		})
 
-	taskResults := make([]interface{}, 0, len(tasks))
+	formattedTasks := make([]map[string]interface{}, 0, len(tasks))
 	for _, task := range tasks {
-		taskResults = append(taskResults, formatTaskForResponse(task))
+		formattedTasks = append(formattedTasks, formatTaskForResponse(task))
 	}
 
-	response := ReplyTaskInfo{
+	response := RespTaksInfo{
 		Result: true,
 		Msg:    "Tasks fetched.",
-		Data: TaskInfoData{
-			Result: TaskInfoDataResult{
-				Result:             taskResults,
-				Total:              len(taskResults),
-				NumFiltered:        len(taskResults),
-				NumAfterTruncation: len(taskResults),
+		Data: TaskData{
+			Result: TaskDataResult{
+				Total:  len(formattedTasks),
+				Result: formattedTasks,
+				// TODO(jwj): Derive the following fields later.
+				NumAfterTruncation:    len(formattedTasks),
+				NumFiltered:           len(formattedTasks),
+				PartialFailureWarning: "",
+				Warnings:              nil,
 			},
 		},
 	}
@@ -906,36 +914,53 @@ func (s *ServerHandler) getTaskDetail(req *restful.Request, resp *restful.Respon
 		resp.WriteErrorString(http.StatusInternalServerError, err.Error())
 		return
 	}
+
 	resp.Write(respData)
 }
 
-// formatTaskForResponse converts an eventtypes.Task to the format expected by Ray Dashboard
+// formatTaskForResponse formats a task data result of a single task attempt for the response.
+// The schema aligns with the Ray Dashboard API.
 func formatTaskForResponse(task eventtypes.Task) map[string]interface{} {
 	result := map[string]interface{}{
-		"task_id": task.TaskID,
-		// "name":               task.Name,
-		// "attempt_number":     task.AttemptNumber,
-		"state":              string(task.State),
-		"job_id":             task.JobID,
-		"node_id":            task.NodeID,
-		"actor_id":           task.ActorID,
-		"placement_group_id": task.PlacementGroupID,
-		// "type":               string(task.Type),
-		// "func_or_class_name": task.FuncOrClassName,
-		"language":           task.Language,
+		"task_id":        task.TaskID,
+		"attempt_number": task.TaskAttempt,
+		// NOTE: state is the task state of the last state transition.
+		"state":          string(task.State),
+		"job_id":         task.JobID,
+		"actor_id":       task.ActorID,
+		"type":           string(task.TaskType),
+		"parent_task_id": task.ParentTaskID,
+		"node_id":        task.NodeID,
+		"worker_id":      task.WorkerID,
+		"worker_pid":     task.WorkerPID,
+		//   "error_type": Optional[str],       # Error type if failed
+		"language":           string(task.Language),
 		"required_resources": task.RequiredResources,
-		"worker_id":          task.WorkerID,
-		// "error_type":         task.ErrorType,
-		// "error_message":      task.ErrorMessage,
-		"call_site": task.CallSite,
+		"runtime_env_info":   task.SerializedRuntimeEnv,
+		"placement_group_id": task.PlacementGroupID,
+		"events":             task.StateTransitions,
+		//   "profiling_data": Optional[dict],  # Performance profiling data
+		//   "creation_time_ms": Optional[int], # Creation timestamp
+		//   "task_log_info": Optional[dict],   # Log file information
+		//   "error_message": Optional[str],    # Detailed error message
+		"is_debugger_paused": task.IsDebuggerPaused,
+		"call_site":          task.CallSite,
+		"label_selector":     task.LabelSelector,
+	}
+
+	if task.TaskType == eventtypes.ACTOR_TASK {
+		result["name"] = task.ActorTaskName
+		result["func_or_class_name"] = task.ActorFunc.CallString()
+	} else {
+		result["name"] = task.TaskName
+		result["func_or_class_name"] = task.TaskFunc.CallString()
 	}
 
 	if !task.StartTime.IsZero() {
-		result["start_time"] = task.StartTime.UnixMilli()
+		result["start_time_ms"] = task.StartTime.UnixMilli()
 	}
-
 	if !task.EndTime.IsZero() {
-		result["end_time"] = task.EndTime.UnixMilli()
+		result["end_time_ms"] = task.EndTime.UnixMilli()
 	}
 
 	return result

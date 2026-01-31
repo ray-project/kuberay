@@ -822,6 +822,11 @@ func (h *EventHandler) handleTaskDefinitionEvent(eventMap map[string]any, cluste
 		return fmt.Errorf("failed to unmarshal %s event: %w", taskDefField, err)
 	}
 
+	// Manually set the task type for an actor task.
+	if isActorTask {
+		currTask.TaskType = types.ACTOR_TASK
+	}
+
 	taskMap := h.ClusterTaskMap.GetOrCreateTaskMap(clusterSessionKey)
 	taskMap.CreateOrMergeAttempt(currTask.TaskID, currTask.TaskAttempt, func(task *types.Task) {
 		// Preserve existing state transitions.
@@ -898,14 +903,18 @@ func (h *EventHandler) handleTaskLifecycleEvent(eventMap map[string]any, cluster
 			return
 		}
 
-		task.State = task.StateTransitions[len(task.StateTransitions)-1].State
+		// TODO(jwj): Before beta, the lifecycle-related fields are overwritten.
+		// In beta, the complete historical replay will be supported.
+		task.JobID = currTask.JobID
+		task.NodeID = currTask.NodeID
+		task.WorkerID = currTask.WorkerID
+		task.WorkerPID = currTask.WorkerPID
+		task.IsDebuggerPaused = currTask.IsDebuggerPaused
+		task.ActorReprName = currTask.ActorReprName
+		task.State = task.GetLastState()
 
-		if currTask.NodeID != "" {
-			task.NodeID = currTask.NodeID
-		}
-		if currTask.WorkerID != "" {
-			task.WorkerID = currTask.WorkerID
-		}
+		// Derive start time and end time from state transitions.
+		// TODO(jwj): Make it accurate.
 		if task.StartTime.IsZero() {
 			for _, e := range task.StateTransitions {
 				if e.State == types.RUNNING {
