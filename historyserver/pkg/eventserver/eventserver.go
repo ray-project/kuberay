@@ -840,10 +840,6 @@ func (h *EventHandler) handleTaskDefinitionEvent(eventMap map[string]any, cluste
 		}
 	})
 
-	logrus.Infof("Task definition event processed: %v", currTask)
-	logrus.Infof("Is actor task: %t", isActorTask)
-	logrus.Infof("Task map: %v", taskMap.TaskMap[currTask.TaskID])
-
 	return nil
 }
 
@@ -931,9 +927,6 @@ func (h *EventHandler) handleTaskLifecycleEvent(eventMap map[string]any, cluster
 			}
 		}
 	})
-
-	logrus.Infof("Task lifecycle event processed: %v", currTask)
-	logrus.Infof("Task map: %v", taskMap.TaskMap)
 
 	return nil
 }
