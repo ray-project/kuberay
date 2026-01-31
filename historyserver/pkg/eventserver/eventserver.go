@@ -20,10 +20,9 @@ import (
 type EventHandler struct {
 	reader storage.StorageReader
 
-	ClusterTaskMap      *types.ClusterTaskMap
-	ClusterActorMap     *types.ClusterActorMap
-	ClusterJobMap       *types.ClusterJobMap
-	ClusterActorTaskMap *types.ClusterActorTaskMap
+	ClusterTaskMap  *types.ClusterTaskMap
+	ClusterActorMap *types.ClusterActorMap
+	ClusterJobMap   *types.ClusterJobMap
 }
 
 var eventFilePattern = regexp.MustCompile(`-\d{4}-\d{2}-\d{2}-\d{2}$`)
@@ -48,9 +47,6 @@ func NewEventHandler(reader storage.StorageReader) *EventHandler {
 		},
 		ClusterJobMap: &types.ClusterJobMap{
 			ClusterJobMap: make(map[string]*types.JobMap),
-		},
-		ClusterActorTaskMap: &types.ClusterActorTaskMap{
-			ClusterActorTaskMap: make(map[string]*types.ActorTaskMap),
 		},
 	}
 }
@@ -215,30 +211,7 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 	logrus.Infof("current eventType: %v", eventType)
 	switch eventType {
 	case types.TASK_DEFINITION_EVENT:
-		taskDef, ok := eventMap["taskDefinitionEvent"]
-		if !ok {
-			return fmt.Errorf("event does not have 'taskDefinitionEvent'")
-		}
-		jsonTaskDefinition, err := json.Marshal(taskDef)
-		if err != nil {
-			return err
-		}
-
-		var currTask types.Task
-		if err := json.Unmarshal(jsonTaskDefinition, &currTask); err != nil {
-			return err
-		}
-
-		taskMap := h.ClusterTaskMap.GetOrCreateTaskMap(currentClusterName)
-		taskMap.CreateOrMergeAttempt(currTask.TaskID, currTask.AttemptNumber, func(t *types.Task) {
-			// Merge definition fields (preserve existing Events if any)
-			existingEvents := t.Events
-			*t = currTask
-			if len(existingEvents) > 0 {
-				t.Events = existingEvents
-				t.State = existingEvents[len(existingEvents)-1].State
-			}
-		})
+		return h.handleTaskDefinitionEvent(eventMap, currentClusterName, false)
 	case types.TASK_LIFECYCLE_EVENT:
 		lifecycleEvent, ok := eventMap["taskLifecycleEvent"].(map[string]any)
 		if !ok {
@@ -257,7 +230,7 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 		}
 
 		// Parse state transitions
-		var stateEvents []types.StateEvent
+		var stateEvents []types.TaskStateTransition
 		for _, transition := range transitions {
 			tr, ok := transition.(map[string]any)
 			if !ok {
@@ -271,7 +244,7 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 				timestamp, _ = time.Parse(time.RFC3339Nano, timestampStr)
 			}
 
-			stateEvents = append(stateEvents, types.StateEvent{
+			stateEvents = append(stateEvents, types.TaskStateTransition{
 				State:     types.TaskStatus(state),
 				Timestamp: timestamp,
 			})
@@ -290,7 +263,7 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 				Timestamp int64
 			}
 			existingKeys := make(map[eventKey]bool)
-			for _, e := range t.Events {
+			for _, e := range t.StateTransitions {
 				existingKeys[eventKey{string(e.State), e.Timestamp.UnixNano()}] = true
 			}
 
@@ -298,21 +271,21 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 			for _, e := range stateEvents {
 				key := eventKey{string(e.State), e.Timestamp.UnixNano()}
 				if !existingKeys[key] {
-					t.Events = append(t.Events, e)
+					t.StateTransitions = append(t.StateTransitions, e)
 					existingKeys[key] = true
 				}
 			}
 
 			// Sort events by timestamp to ensure correct order
-			sort.Slice(t.Events, func(i, j int) bool {
-				return t.Events[i].Timestamp.Before(t.Events[j].Timestamp)
+			sort.Slice(t.StateTransitions, func(i, j int) bool {
+				return t.StateTransitions[i].Timestamp.Before(t.StateTransitions[j].Timestamp)
 			})
 
-			if len(t.Events) == 0 {
+			if len(t.StateTransitions) == 0 {
 				return
 			}
 
-			t.State = t.Events[len(t.Events)-1].State
+			t.State = t.StateTransitions[len(t.StateTransitions)-1].State
 
 			if nodeId != "" {
 				t.NodeID = nodeId
@@ -321,16 +294,16 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 				t.WorkerID = workerId
 			}
 			if t.StartTime.IsZero() {
-				for _, e := range t.Events {
+				for _, e := range t.StateTransitions {
 					if e.State == types.RUNNING {
 						t.StartTime = e.Timestamp
 						break
 					}
 				}
 			}
-			lastEvent := t.Events[len(t.Events)-1]
-			if lastEvent.State == types.FINISHED || lastEvent.State == types.FAILED {
-				t.EndTime = lastEvent.Timestamp
+			lastStateTransition := t.StateTransitions[len(t.StateTransitions)-1]
+			if lastStateTransition.State == types.FINISHED || lastStateTransition.State == types.FAILED {
+				t.EndTime = lastStateTransition.Timestamp
 			}
 		})
 	case types.ACTOR_DEFINITION_EVENT:
@@ -529,7 +502,7 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 			a.NumRestarts = restartCount
 		})
 	case types.ACTOR_TASK_DEFINITION_EVENT:
-		return h.handleActorTaskDefinitionEvent(eventMap, currentClusterName)
+		return h.handleTaskDefinitionEvent(eventMap, currentClusterName, true)
 	case types.DRIVER_JOB_DEFINITION_EVENT:
 		// NOTE: When event comes in, JobID will be in base64, processing will convert it to Hex
 		jobDef, ok := eventMap["driverJobDefinitionEvent"]
@@ -915,31 +888,46 @@ func (h *EventHandler) GetJobByJobID(clusterName, jobID string) (types.Job, bool
 	return job.DeepCopy(), true
 }
 
-// handleActorTaskDefinitionEvent processes ACTOR_TASK_DEFINITION_EVENT and preserves actor task attempt ordering.
-func (h *EventHandler) handleActorTaskDefinitionEvent(eventMap map[string]any, clusterSessionKey string) error {
-	actorTaskDef, ok := eventMap["actorTaskDefinitionEvent"]
+// handleTaskDefinitionEvent processes TASK_DEFINITION_EVENT or ACTOR_TASK_DEFINITION_EVENT and preserves the task attempt ordering.
+func (h *EventHandler) handleTaskDefinitionEvent(eventMap map[string]any, clusterSessionKey string, isActorTask bool) error {
+	var taskDefField string
+	if isActorTask {
+		taskDefField = "actorTaskDefinitionEvent"
+	} else {
+		taskDefField = "taskDefinitionEvent"
+	}
+
+	taskDef, ok := eventMap[taskDefField]
 	if !ok {
-		return fmt.Errorf("event does not have 'actorTaskDefinitionEvent' field")
+		return fmt.Errorf("event does not have '%s' field", taskDefField)
 	}
 
-	jsonActorTaskDefinition, err := json.Marshal(actorTaskDef)
+	jsonTaskDefinition, err := json.Marshal(taskDef)
 	if err != nil {
-		return fmt.Errorf("failed to marshal actor task definition event: %w", err)
+		return fmt.Errorf("failed to marshal %s event: %w", taskDefField, err)
 	}
 
-	var currActorTask types.ActorTask
-	if err := json.Unmarshal(jsonActorTaskDefinition, &currActorTask); err != nil {
-		return fmt.Errorf("failed to unmarshal actor task definition event: %w", err)
-	}
-	if currActorTask.TaskID == "" {
-		return fmt.Errorf("actor task ID is empty")
+	var currTask types.Task
+	if err := json.Unmarshal(jsonTaskDefinition, &currTask); err != nil {
+		return fmt.Errorf("failed to unmarshal %s event: %w", taskDefField, err)
 	}
 
-	actorTaskMap := h.ClusterActorTaskMap.GetOrCreateActorTaskMap(clusterSessionKey)
-	actorTaskMap.CreateOrMergeActorTask(currActorTask.TaskID, currActorTask.TaskAttempt, func(actorTask *types.ActorTask) {
-		// For now, this merge function is a dummy function.
-		*actorTask = currActorTask
+	taskMap := h.ClusterTaskMap.GetOrCreateTaskMap(clusterSessionKey)
+	taskMap.CreateOrMergeAttempt(currTask.TaskID, currTask.TaskAttempt, func(task *types.Task) {
+		// Preserve existing state transitions.
+		existingStateTransitions := task.StateTransitions
+
+		*task = currTask
+
+		if len(existingStateTransitions) > 0 {
+			task.StateTransitions = existingStateTransitions
+			task.State = task.GetLastState()
+		}
 	})
+
+	logrus.Infof("Task definition event processed: %v", currTask)
+	logrus.Infof("Is actor task: %t", isActorTask)
+	logrus.Infof("Task map: %v", taskMap.TaskMap[currTask.TaskID])
 
 	return nil
 }

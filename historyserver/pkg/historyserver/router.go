@@ -809,7 +809,8 @@ func summarizeTasksByFuncName(tasks []eventtypes.Task) map[string]interface{} {
 	summary := make(map[string]map[string]int)
 
 	for _, task := range tasks {
-		funcName := task.FuncOrClassName
+		// funcName := task.FuncOrClassName
+		funcName := ""
 		if funcName == "" {
 			funcName = "unknown"
 		}
@@ -911,22 +912,22 @@ func (s *ServerHandler) getTaskDetail(req *restful.Request, resp *restful.Respon
 // formatTaskForResponse converts an eventtypes.Task to the format expected by Ray Dashboard
 func formatTaskForResponse(task eventtypes.Task) map[string]interface{} {
 	result := map[string]interface{}{
-		"task_id":            task.TaskID,
-		"name":               task.Name,
-		"attempt_number":     task.AttemptNumber,
+		"task_id": task.TaskID,
+		// "name":               task.Name,
+		// "attempt_number":     task.AttemptNumber,
 		"state":              string(task.State),
 		"job_id":             task.JobID,
 		"node_id":            task.NodeID,
 		"actor_id":           task.ActorID,
 		"placement_group_id": task.PlacementGroupID,
-		"type":               string(task.Type),
-		"func_or_class_name": task.FuncOrClassName,
+		// "type":               string(task.Type),
+		// "func_or_class_name": task.FuncOrClassName,
 		"language":           task.Language,
 		"required_resources": task.RequiredResources,
 		"worker_id":          task.WorkerID,
-		"error_type":         task.ErrorType,
-		"error_message":      task.ErrorMessage,
-		"call_site":          task.CallSite,
+		// "error_type":         task.ErrorType,
+		// "error_message":      task.ErrorMessage,
+		"call_site": task.CallSite,
 	}
 
 	if !task.StartTime.IsZero() {
