@@ -149,9 +149,10 @@ type Task struct {
 
 	TaskLogInfo TaskLogInfo `json:"taskLogInfo,omitempty"`
 
-	State     TaskStatus
-	StartTime time.Time
-	EndTime   time.Time
+	State        TaskStatus
+	CreationTime time.Time
+	StartTime    time.Time
+	EndTime      time.Time
 }
 
 // TaskMap is a struct that uses TaskID as the key and stores a list of Task attempts.

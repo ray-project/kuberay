@@ -867,7 +867,7 @@ func (h *EventHandler) handleTaskLifecycleEvent(eventMap map[string]any, cluster
 		return fmt.Errorf("task ID is empty")
 	}
 
-	// TODO(jwj): Clarify if there must be at least one state transition.
+	// TODO(jwj): Clarify if there must be at least one state transition. Can one task have more than one state transition?
 	if len(currTask.StateTransitions) == 0 {
 		return fmt.Errorf("TASK_LIFECYCLE_EVENT must have at least one state transition")
 	}
@@ -913,19 +913,22 @@ func (h *EventHandler) handleTaskLifecycleEvent(eventMap map[string]any, cluster
 		task.ActorReprName = currTask.ActorReprName
 		task.State = task.GetLastState()
 
-		// Derive start time and end time from state transitions.
-		// TODO(jwj): Make it accurate.
-		if task.StartTime.IsZero() {
-			for _, e := range task.StateTransitions {
-				if e.State == types.RUNNING {
-					task.StartTime = e.Timestamp
-					break
+		// Derive creation time, start time and end time from state transitions.
+		// Ref: https://github.com/ray-project/ray/blob/d0b1d151d8ea964a711e451d0ae736f8bf95b629/python/ray/util/state/common.py#L1660-L1685
+		for _, tr := range task.StateTransitions {
+			switch tr.State {
+			case types.PENDING_ARGS_AVAIL:
+				if task.CreationTime.IsZero() {
+					task.CreationTime = tr.Timestamp
 				}
+			case types.RUNNING:
+				if task.StartTime.IsZero() {
+					task.StartTime = tr.Timestamp
+				}
+			case types.FINISHED, types.FAILED:
+				// Take the latest timestamp as the end time.
+				task.EndTime = tr.Timestamp
 			}
-		}
-		lastStateTransition := task.StateTransitions[len(task.StateTransitions)-1]
-		if lastStateTransition.State == types.FINISHED || lastStateTransition.State == types.FAILED {
-			task.EndTime = lastStateTransition.Timestamp
 		}
 	})
 
