@@ -202,6 +202,7 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 	}
 	eventType := types.EventType(eventTypeStr)
 
+	// clusterNameVal is actually the cluster session key.
 	clusterNameVal, ok := eventMap["clusterName"]
 	if !ok {
 		return fmt.Errorf("event missing 'clusterName' field")
@@ -210,18 +211,6 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 	if !ok {
 		return fmt.Errorf("clusterName is not a string, got %T", clusterNameVal)
 	}
-
-	// Since a cluster session corresponds to an unique Ray cluster lifecycle,
-	// we use the combined cluster name and session name for identification.
-	sessionNameVal, ok := eventMap["sessionName"]
-	if !ok {
-		return fmt.Errorf("event missing 'sessionName' field")
-	}
-	sessionName, ok := sessionNameVal.(string)
-	if !ok {
-		return fmt.Errorf("sessionName is not a string, got %T", sessionNameVal)
-	}
-	clusterSessionID := currentClusterName + "_" + sessionName
 
 	logrus.Infof("current eventType: %v", eventType)
 	switch eventType {
@@ -250,7 +239,6 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 				t.State = existingEvents[len(existingEvents)-1].State
 			}
 		})
-
 	case types.TASK_LIFECYCLE_EVENT:
 		lifecycleEvent, ok := eventMap["taskLifecycleEvent"].(map[string]any)
 		if !ok {
@@ -345,7 +333,6 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 				t.EndTime = lastEvent.Timestamp
 			}
 		})
-
 	case types.ACTOR_DEFINITION_EVENT:
 		actorDef, ok := eventMap["actorDefinitionEvent"]
 		if !ok {
@@ -541,33 +528,8 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 			}
 			a.NumRestarts = restartCount
 		})
-
 	case types.ACTOR_TASK_DEFINITION_EVENT:
-		actorTaskDef, ok := eventMap["actorTaskDefinitionEvent"]
-		if !ok {
-			return fmt.Errorf("event does not have 'actorTaskDefinitionEvent' field")
-		}
-
-		jsonActorTaskDefinition, err := json.Marshal(actorTaskDef)
-		if err != nil {
-			return fmt.Errorf("failed to marshal actor task definition event: %w", err)
-		}
-
-		var currActorTask types.ActorTask
-		if err := json.Unmarshal(jsonActorTaskDefinition, &currActorTask); err != nil {
-			return fmt.Errorf("failed to unmarshal actor task definition event: %w", err)
-		}
-		if currActorTask.TaskID == "" {
-			return fmt.Errorf("actor task ID is empty")
-		}
-
-		actorTaskMap := h.ClusterActorTaskMap.GetOrCreateActorTaskMap(clusterSessionID)
-		actorTaskMap.CreateOrMergeActorTask(currActorTask.TaskID, currActorTask.TaskAttempt, func(a *types.ActorTask) {
-			*a = currActorTask
-		})
-
-		logrus.Infof("Created or merged actor task: %+v", currActorTask)
-		logrus.Infof("Actor task map: %+v", actorTaskMap.ActorTaskMap)
+		return h.handleActorTaskDefinitionEvent(eventMap, currentClusterName)
 	case types.DRIVER_JOB_DEFINITION_EVENT:
 		// NOTE: When event comes in, JobID will be in base64, processing will convert it to Hex
 		jobDef, ok := eventMap["driverJobDefinitionEvent"]
@@ -951,4 +913,33 @@ func (h *EventHandler) GetJobByJobID(clusterName, jobID string) (types.Job, bool
 		return types.Job{}, false
 	}
 	return job.DeepCopy(), true
+}
+
+// handleActorTaskDefinitionEvent processes ACTOR_TASK_DEFINITION_EVENT and preserves actor task attempt ordering.
+func (h *EventHandler) handleActorTaskDefinitionEvent(eventMap map[string]any, clusterSessionKey string) error {
+	actorTaskDef, ok := eventMap["actorTaskDefinitionEvent"]
+	if !ok {
+		return fmt.Errorf("event does not have 'actorTaskDefinitionEvent' field")
+	}
+
+	jsonActorTaskDefinition, err := json.Marshal(actorTaskDef)
+	if err != nil {
+		return fmt.Errorf("failed to marshal actor task definition event: %w", err)
+	}
+
+	var currActorTask types.ActorTask
+	if err := json.Unmarshal(jsonActorTaskDefinition, &currActorTask); err != nil {
+		return fmt.Errorf("failed to unmarshal actor task definition event: %w", err)
+	}
+	if currActorTask.TaskID == "" {
+		return fmt.Errorf("actor task ID is empty")
+	}
+
+	actorTaskMap := h.ClusterActorTaskMap.GetOrCreateActorTaskMap(clusterSessionKey)
+	actorTaskMap.CreateOrMergeActorTask(currActorTask.TaskID, currActorTask.TaskAttempt, func(actorTask *types.ActorTask) {
+		// For now, this merge function is a dummy function.
+		*actorTask = currActorTask
+	})
+
+	return nil
 }

@@ -1,6 +1,9 @@
 package types
 
-import "sync"
+import (
+	"sort"
+	"sync"
+)
 
 // For common proto definitions, please refer to:
 // https://github.com/ray-project/ray/blob/master/src/ray/protobuf/common.proto.
@@ -130,16 +133,42 @@ func (c *ClusterActorTaskMap) GetOrCreateActorTaskMap(clusterSessionID string) *
 	return actorTaskMap
 }
 
-// TODO(jw): Complete this function. The input is a single actor task attempt.
+// CreateOrMergeActorTask creates a new slice of ActorTask attempts or insert the current attempt at the correct position for the given taskId.
+// For now, only ACTOR_TASK_DEFINITION_EVENT is handled, so the merge function is a dummy function.
 func (a *ActorTaskMap) CreateOrMergeActorTask(taskId string, taskAttempt int, mergeFn func(*ActorTask)) {
 	a.Lock()
 	defer a.Unlock()
 
-	// actorTasks is a slice of ActorTask attempts for the given taskId.
-	_, exists := a.ActorTaskMap[taskId]
+	// Case 1: actorTasks doesn't exist.
+	// Create a new slice of ActorTask attempts with the current attempt.
+	actorTasks, exists := a.ActorTaskMap[taskId]
 	if !exists {
 		newActorTask := ActorTask{TaskID: taskId, TaskAttempt: taskAttempt}
-		mergeFn(&newActorTask)
+		mergeFn(&newActorTask) // For now, this is a dummy function.
 		a.ActorTaskMap[taskId] = []ActorTask{newActorTask}
+		return
 	}
+
+	// Case 2: actorTasks exists and the current attempt already exists.
+	// Run binary search to find the first index where TaskAttempt >= taskAttempt.
+	idx := sort.Search(len(actorTasks), func(i int) bool {
+		return actorTasks[i].TaskAttempt >= taskAttempt
+	})
+
+	// Apply the merge function to the existing attempt.
+	if idx < len(actorTasks) && actorTasks[idx].TaskAttempt == taskAttempt {
+		mergeFn(&actorTasks[idx]) // For now, this is a dummy function.
+		return
+	}
+
+	// Case 3: actorTasks exists and the current attempt doesn't exist.
+	// Create a new ActorTask attempt and apply the merge function.
+	newActorTask := ActorTask{TaskID: taskId, TaskAttempt: taskAttempt}
+	mergeFn(&newActorTask)
+
+	// Insert the current attempt at the correct position.
+	actorTasks = append(actorTasks, ActorTask{})
+	copy(actorTasks[idx+1:], actorTasks[idx:])
+	actorTasks[idx] = newActorTask
+	a.ActorTaskMap[taskId] = actorTasks
 }
