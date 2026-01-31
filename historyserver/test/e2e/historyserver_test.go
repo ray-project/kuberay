@@ -201,6 +201,10 @@ func testLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Names
 		{"filter_ansi_code=true", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&filter_ansi_code=true", u, EndpointLogFile, n, filename) }, http.StatusOK},
 		{"filter_ansi_code=false", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&filter_ansi_code=false", u, EndpointLogFile, n, filename) }, http.StatusOK},
 
+		// suffix parameter
+		{"suffix=out (default)", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&suffix=out", u, EndpointLogFile, n, filename) }, http.StatusOK},
+		{"suffix=err", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&suffix=err", u, EndpointLogFile, n, filename) }, http.StatusOK},
+
 		// Combined parameters
 		{"lines+timeout+filter", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=50&timeout=10&filter_ansi_code=true", u, EndpointLogFile, n, filename) }, http.StatusOK},
 
@@ -213,9 +217,11 @@ func testLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Names
 		{"invalid lines (string)", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=abc", u, EndpointLogFile, n, filename) }, http.StatusBadRequest},
 		{"invalid timeout (string)", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&timeout=invalid", u, EndpointLogFile, n, filename) }, http.StatusBadRequest},
 		{"invalid attempt_number (string)", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&attempt_number=xyz", u, EndpointLogFile, n, filename) }, http.StatusBadRequest},
+		{"invalid suffix", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&suffix=invalid", u, EndpointLogFile, n, filename) }, http.StatusBadRequest},
 		// NOTE: Ray Dashboard will return 500 (Internal Server Error) for the file not found error
 		// ref: https://github.com/ray-project/ray/blob/68d01c4c48a59c7768ec9c2359a1859966c446b6/python/ray/dashboard/modules/state/state_head.py#L282-L284
 		{"file not found", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=nonexistent.log", u, EndpointLogFile, n) }, http.StatusInternalServerError},
+		{"task_id invalid (not found)", func(u, n string) string { return fmt.Sprintf("%s%s?task_id=nonexistent-task-id", u, EndpointLogFile) }, http.StatusInternalServerError},
 
 		// Path traversal attacks
 		{"traversal ../etc/passwd", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=../etc/passwd", u, EndpointLogFile, n) }, http.StatusBadRequest},
@@ -253,6 +259,45 @@ func testLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Names
 			}
 		})
 	}
+
+	// Sub-test for task_id parameter (live cluster)
+	test.T().Run("task_id parameter", func(t *testing.T) {
+		g := NewWithT(t)
+
+		// Get all eligible task IDs
+		taskIDs := getAllEligibleTaskIDs(g, client, historyServerURL)
+		LogWithTimestamp(t, "Found %d eligible task IDs for testing", len(taskIDs))
+
+		var successCount int
+		var lastError string
+
+		// Try each task ID until one succeeds
+		for _, taskID := range taskIDs {
+			LogWithTimestamp(t, "Testing task_id: %s", taskID)
+
+			url := fmt.Sprintf("%s%s?task_id=%s", historyServerURL, EndpointLogFile, taskID)
+			resp, err := client.Get(url)
+			if err != nil {
+				lastError = fmt.Sprintf("HTTP error for task %s: %v", taskID, err)
+				continue
+			}
+
+			body, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
+
+			if resp.StatusCode == http.StatusOK {
+				successCount++
+				LogWithTimestamp(t, "✓ Task %s succeeded, returned %d bytes", taskID, len(body))
+				break
+			} else {
+				lastError = fmt.Sprintf("task %s returned %d: %s", taskID, resp.StatusCode, string(body))
+				LogWithTimestamp(t, "✗ Task %s failed: %s", taskID, lastError)
+			}
+		}
+
+		g.Expect(successCount).To(BeNumerically(">", 0),
+			"At least one task_id should succeed. Last error: %s", lastError)
+	})
 
 	DeleteS3Bucket(test, g, s3Client)
 	LogWithTimestamp(test.T(), "Log file endpoint tests completed")
@@ -324,6 +369,10 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 		{"filter_ansi_code=true", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&filter_ansi_code=true", u, EndpointLogFile, n, filename) }, http.StatusOK},
 		{"filter_ansi_code=false", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&filter_ansi_code=false", u, EndpointLogFile, n, filename) }, http.StatusOK},
 
+		// suffix parameter
+		{"suffix=out (default)", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&suffix=out", u, EndpointLogFile, n, filename) }, http.StatusOK},
+		{"suffix=err", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&suffix=err", u, EndpointLogFile, n, filename) }, http.StatusOK},
+
 		// Combined parameters
 		{"lines+timeout+filter", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=50&timeout=10&filter_ansi_code=true", u, EndpointLogFile, n, filename) }, http.StatusOK},
 		{"all parameters", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=100&timeout=15&attempt_number=0&download_file=true&filter_ansi_code=true", u, EndpointLogFile, n, filename) }, http.StatusOK},
@@ -338,6 +387,8 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 		{"invalid timeout (string)", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&timeout=invalid", u, EndpointLogFile, n, filename) }, http.StatusBadRequest},
 		{"invalid attempt_number (string)", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&attempt_number=xyz", u, EndpointLogFile, n, filename) }, http.StatusBadRequest},
 		{"file not found", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=nonexistent.log", u, EndpointLogFile, n) }, http.StatusNotFound},
+		{"invalid suffix", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&suffix=invalid", u, EndpointLogFile, n, filename) }, http.StatusBadRequest},
+		{"task_id invalid (not found)", func(u, n string) string { return fmt.Sprintf("%s%s?task_id=nonexistent-task-id", u, EndpointLogFile) }, http.StatusBadRequest},
 
 		// Path traversal attacks
 		{"traversal ../etc/passwd", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=../etc/passwd", u, EndpointLogFile, n) }, http.StatusBadRequest},
@@ -468,6 +519,113 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 		}, TestTimeoutShort).Should(Succeed())
 	})
 
+	// Sub-test for task_id parameter
+	test.T().Run("task_id parameter", func(t *testing.T) {
+		g := NewWithT(t)
+
+		// Get all eligible task IDs
+		taskIDs := getAllEligibleTaskIDs(g, client, historyServerURL)
+		LogWithTimestamp(t, "Found %d eligible task IDs for testing", len(taskIDs))
+
+		var successCount int
+		var lastError string
+
+		// Try each task ID until one succeeds
+		for _, taskID := range taskIDs {
+			LogWithTimestamp(t, "Testing task_id: %s", taskID)
+
+			url := fmt.Sprintf("%s%s?task_id=%s", historyServerURL, EndpointLogFile, taskID)
+			resp, err := client.Get(url)
+			if err != nil {
+				lastError = fmt.Sprintf("HTTP error for task %s: %v", taskID, err)
+				continue
+			}
+
+			body, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
+
+			if resp.StatusCode == http.StatusOK {
+				successCount++
+				LogWithTimestamp(t, "✓ Task %s succeeded, returned %d bytes", taskID, len(body))
+				break
+			} else {
+				lastError = fmt.Sprintf("task %s returned %d: %s", taskID, resp.StatusCode, string(body))
+				LogWithTimestamp(t, "✗ Task %s failed: %s", taskID, lastError)
+			}
+		}
+
+		g.Expect(successCount).To(BeNumerically(">", 0),
+			"At least one task_id should succeed. Last error: %s", lastError)
+	})
+
 	DeleteS3Bucket(test, g, s3Client)
 	LogWithTimestamp(test.T(), "Dead cluster log file endpoint tests completed")
+}
+
+// getAllEligibleTaskIDs retrieves all non-actor task IDs with node_id from the /api/v0/tasks endpoint.
+// Returns a list of task IDs that are eligible for log file testing.
+// Note: We filter out actor tasks because they don't have task_log_info by default
+// (unless RAY_ENABLE_RECORD_ACTOR_TASK_LOGGING=1 is set).
+func getAllEligibleTaskIDs(g *WithT, client *http.Client, historyServerURL string) []string {
+	var taskIDs []string
+	g.Eventually(func(gg Gomega) {
+		resp, err := client.Get(historyServerURL + "/api/v0/tasks")
+		gg.Expect(err).NotTo(HaveOccurred())
+		defer resp.Body.Close()
+
+		gg.Expect(resp.StatusCode).To(Equal(http.StatusOK))
+
+		body, err := io.ReadAll(resp.Body)
+		gg.Expect(err).NotTo(HaveOccurred())
+
+		var result map[string]interface{}
+		err = json.Unmarshal(body, &result)
+		gg.Expect(err).NotTo(HaveOccurred())
+
+		// Extract task_id from response
+		// Response format: {"result": true, "msg": "...", "data": {"result": {"result": [tasks...], ...}}}
+		data, ok := result["data"].(map[string]interface{})
+		gg.Expect(ok).To(BeTrue(), "response should have 'data' field")
+
+		dataResult, ok := data["result"].(map[string]interface{})
+		gg.Expect(ok).To(BeTrue(), "data should have 'result' field")
+
+		tasks, ok := dataResult["result"].([]interface{})
+		gg.Expect(ok).To(BeTrue(), "result should have 'result' array")
+		gg.Expect(len(tasks)).To(BeNumerically(">", 0), "should have at least one task")
+
+		// Find all non-actor tasks with node_id
+		for _, t := range tasks {
+			task, ok := t.(map[string]interface{})
+			if !ok {
+				continue
+			}
+
+			// Check if this is an actor task
+			actorID, _ := task["actor_id"].(string)
+			if actorID != "" {
+				// Skip actor tasks - they don't have task_log_info unless
+				// RAY_ENABLE_RECORD_ACTOR_TASK_LOGGING=1 is set
+				continue
+			}
+
+			// Check if it has node_id
+			nodeID, _ := task["node_id"].(string)
+			if nodeID == "" {
+				// If nodeID is empty, it means the task is not scheduled yet. Skip it
+				// as it will not have logs
+				continue
+			}
+
+			// Found a non-actor task with logs
+			taskID, ok := task["task_id"].(string)
+			if ok && taskID != "" {
+				taskIDs = append(taskIDs, taskID)
+			}
+		}
+
+		gg.Expect(len(taskIDs)).To(BeNumerically(">", 0), "should have at least one eligible task")
+	}, TestTimeoutShort).Should(Succeed())
+
+	return taskIDs
 }
