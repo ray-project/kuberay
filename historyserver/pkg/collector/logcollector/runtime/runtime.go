@@ -36,8 +36,8 @@ func NewCollector(config *types.RayCollectorConfig, writer storage.StorageWriter
 				IdleConnTimeout:     90 * time.Second, // Idle connection timeout
 			},
 		},
-	Writer:       writer,
-	ShutdownChan: make(chan struct{}),
+		Writer:       writer,
+		ShutdownChan: make(chan struct{}),
 	}
 	logDir := strings.TrimSpace(filepath.Join(config.SessionDir, utils.RAY_SESSIONDIR_LOGDIR_NAME))
 	handler.LogDir = logDir
