@@ -3,6 +3,7 @@ package historyserver
 import (
 	"bufio"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -86,7 +87,7 @@ func (s *ServerHandler) _getNodeLogs(rayClusterNameID, sessionId, nodeId, dir st
 
 func (s *ServerHandler) _getNodeLogFile(rayClusterNameID, sessionID string, options GetLogFileOptions) ([]byte, error) {
 	// Resolve node_id and filename based on options
-	nodeID, filename, err := s.resolveLogFilename(rayClusterNameID, options)
+	nodeID, filename, err := s.resolveLogFilename(rayClusterNameID, sessionID, options)
 	if err != nil {
 		return nil, utils.NewHTTPError(err, http.StatusBadRequest)
 	}
@@ -174,7 +175,8 @@ func (s *ServerHandler) _getNodeLogFile(rayClusterNameID, sessionID string, opti
 
 // resolveLogFilename resolves the log file node_id and filename based on the provided options.
 // This mirrors Ray Dashboard's resolve_filename logic.
-func (s *ServerHandler) resolveLogFilename(clusterNameID string, options GetLogFileOptions) (nodeID, filename string, err error) {
+// The sessionID parameter is required for task_id resolution to search worker log files.
+func (s *ServerHandler) resolveLogFilename(clusterNameID, sessionID string, options GetLogFileOptions) (nodeID, filename string, err error) {
 	// Validate suffix
 	if options.Suffix != "out" && options.Suffix != "err" {
 		return "", "", fmt.Errorf("invalid suffix: %s (must be 'out' or 'err')", options.Suffix)
@@ -190,7 +192,7 @@ func (s *ServerHandler) resolveLogFilename(clusterNameID string, options GetLogF
 
 	// If task_id is provided, resolve from task events
 	if options.TaskID != "" {
-		return s.resolveTaskLogFilename(clusterNameID, options.TaskID, options.AttemptNumber, options.Suffix)
+		return s.resolveTaskLogFilename(clusterNameID, sessionID, options.TaskID, options.AttemptNumber, options.Suffix)
 	}
 
 	// If actor_id is provided, resolve from actor events
@@ -210,7 +212,8 @@ func (s *ServerHandler) resolveLogFilename(clusterNameID string, options GetLogF
 
 // resolveTaskLogFilename resolves log file for a task by querying task events.
 // This mirrors Ray Dashboard's _resolve_task_filename logic.
-func (s *ServerHandler) resolveTaskLogFilename(clusterNameID, taskID string, attemptNumber int, suffix string) (nodeID, filename string, err error) {
+// The sessionID parameter is required for searching worker log files when task_log_info is not available.
+func (s *ServerHandler) resolveTaskLogFilename(clusterNameID, sessionID, taskID string, attemptNumber int, suffix string) (nodeID, filename string, err error) {
 	// Get task attempts by task ID
 	taskAttempts, found := s.eventHandler.GetTaskByID(clusterNameID, taskID)
 	if !found {
@@ -235,36 +238,99 @@ func (s *ServerHandler) resolveTaskLogFilename(clusterNameID, taskID string, att
 		return "", "", fmt.Errorf("task %s (attempt %d) has no node_id (task not scheduled yet)", taskID, attemptNumber)
 	}
 
-	// Check if task has TaskLogInfo
-	if foundTask.TaskLogInfo == nil {
-		// Check if this is an actor task
-		if foundTask.ActorID != "" {
-			return "", "", fmt.Errorf(
-				"for actor task, please query actor log for actor(%s) by providing actor_id query parameter",
-				foundTask.ActorID,
-			)
+	// Check if this is an actor task
+	if foundTask.ActorID != "" {
+		return "", "", fmt.Errorf(
+			"for actor task, please query actor log for actor(%s) by providing actor_id query parameter",
+			foundTask.ActorID,
+		)
+	}
+
+	// Check if task has worker_id
+	if foundTask.WorkerID == "" {
+		return "", "", fmt.Errorf(
+			"task %s (attempt %d) has no worker_id",
+			taskID, attemptNumber,
+		)
+	}
+
+	// Try to use task_log_info if available
+	// NOTE: task_log_info is currently not supported in ray export event, so we will always
+	// fallback to following logic.
+	if foundTask.TaskLogInfo != nil && len(foundTask.TaskLogInfo) > 0 {
+		filenameKey := "stdout_file"
+		if suffix == "err" {
+			filenameKey = "stderr_file"
 		}
+
+		if logFilename, ok := foundTask.TaskLogInfo[filenameKey]; ok && logFilename != "" {
+			return foundTask.NodeID, logFilename, nil
+		}
+	}
+
+	// Fallback: Find worker log file by worker_id
+	// Worker log files follow the pattern: worker-{worker_id_hex}-{pid}-{worker_startup_token}.{suffix}
+	// We need to search for files matching this pattern
+	if sessionID == "" {
 		return "", "", fmt.Errorf(
-			"task %s (attempt %d) has no task_log_info (worker_id=%s, node_id=%s)",
-			taskID, attemptNumber, foundTask.WorkerID, foundTask.NodeID,
+			"task %s (attempt %d) has no task_log_info and sessionID is required to search for worker log files",
+			taskID, attemptNumber,
 		)
 	}
 
-	// Get the log filename from task_log_info based on suffix
-	filenameKey := "stdout_file"
-	if suffix == "err" {
-		filenameKey = "stderr_file"
-	}
-
-	logFilename, ok := foundTask.TaskLogInfo[filenameKey]
-	if !ok || logFilename == "" {
+	nodeIDHex, logFilename, err := s.findWorkerLogFile(clusterNameID, sessionID, foundTask.NodeID, foundTask.WorkerID, suffix)
+	if err != nil {
 		return "", "", fmt.Errorf(
-			"missing log filename info (%s) in task_log_info for task %s (attempt %d)",
-			filenameKey, taskID, attemptNumber,
+			"failed to find worker log file for task %s (attempt %d, worker_id=%s, node_id=%s): %w",
+			taskID, attemptNumber, foundTask.WorkerID, foundTask.NodeID, err,
 		)
 	}
 
-	return foundTask.NodeID, logFilename, nil
+	return nodeIDHex, logFilename, nil
+}
+
+// findWorkerLogFile searches for a worker log file by worker_id.
+// Worker log files follow the pattern: worker-{worker_id_hex}-{pid}-{worker_startup_token}.{suffix}
+// Returns (nodeIDHex, filename, error).
+func (s *ServerHandler) findWorkerLogFile(clusterNameID, sessionID, nodeID, workerID, suffix string) (string, string, error) {
+	// Convert Base64 node_id to hex for the file path
+	// Ray stores IDs in Base64 (URL-safe) in events, but uses hex in log directory structure
+	nodeIDBytes, err := base64.RawURLEncoding.DecodeString(nodeID)
+	if err != nil {
+		// Try standard Base64 if URL-safe fails
+		nodeIDBytes, err = base64.StdEncoding.DecodeString(nodeID)
+		if err != nil {
+			return "", "", fmt.Errorf("failed to decode node_id: %w", err)
+		}
+	}
+	nodeIDHex := fmt.Sprintf("%x", nodeIDBytes)
+
+	// Convert Base64 worker_id to hex
+	workerIDBytes, err := base64.RawURLEncoding.DecodeString(workerID)
+	if err != nil {
+		// Try standard Base64 if URL-safe fails
+		workerIDBytes, err = base64.StdEncoding.DecodeString(workerID)
+		if err != nil {
+			return "", "", fmt.Errorf("failed to decode worker_id: %w", err)
+		}
+	}
+	workerIDHex := fmt.Sprintf("%x", workerIDBytes)
+
+	// List all files in the node's log directory
+	logPath := path.Join(sessionID, "logs", nodeIDHex)
+	files := s.reader.ListFiles(clusterNameID, logPath)
+
+	// Search for files matching pattern: worker-{worker_id_hex}-*.{suffix}
+	workerPrefix := fmt.Sprintf("worker-%s-", workerIDHex)
+	workerSuffix := fmt.Sprintf(".%s", suffix)
+
+	for _, file := range files {
+		if strings.HasPrefix(file, workerPrefix) && strings.HasSuffix(file, workerSuffix) {
+			return nodeIDHex, file, nil
+		}
+	}
+
+	return "", "", fmt.Errorf("worker log file not found: worker_id=%s (hex=%s), suffix=%s, searched in %s", workerID, workerIDHex, suffix, logPath)
 }
 
 func (s *ServerHandler) GetNodes(rayClusterNameID, sessionId string) ([]byte, error) {
