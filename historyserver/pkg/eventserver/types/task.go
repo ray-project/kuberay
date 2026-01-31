@@ -90,9 +90,14 @@ type TaskStateTransition struct {
 	Timestamp time.Time  `json:"timestamp"`
 }
 
-// TODO(jwj): Add the task log info and ray error info.
-type TaskLogInfo struct{}
-type RayErrorInfo struct{}
+type TaskLogInfo struct {
+	StdoutFile  string `json:"stdoutFile"`
+	StderrFile  string `json:"stderrFile"`
+	StdoutStart int64  `json:"stdoutStart"`
+	StdoutEnd   int64  `json:"stdoutEnd"`
+	StderrStart int64  `json:"stderrStart"`
+	StderrEnd   int64  `json:"stderrEnd"`
+}
 
 // Task's fields are populated from the TASK_DEFINITION_EVENT, ACTOR_TASK_DEFINITION_EVENT, and TASK_LIFECYCLE_EVENT.
 // A TASK_DEFINITION_EVENT or an ACTOR_TASK_DEFINITION_EVENT is expected to be emitted once per task attempt,
@@ -132,7 +137,7 @@ type Task struct {
 
 	// The task execution information, populated from TASK_LIFECYCLE_EVENT.
 	StateTransitions []TaskStateTransition `json:"stateTransitions,omitempty"`
-	// RayErrorInfo     RayErrorInfo         `json:"rayErrorInfo,omitempty"`
+	RayErrorInfo     RayErrorInfo          `json:"rayErrorInfo,omitempty"`
 
 	NodeID    string `json:"nodeId,omitempty"`
 	WorkerID  string `json:"workerId,omitempty"`
@@ -142,7 +147,7 @@ type Task struct {
 	// Actor task repr name, if applicable.
 	ActorReprName string `json:"actorReprName,omitempty"`
 
-	// TaskLogInfo  TaskLogInfo `json:"taskLogInfo,omitempty"`
+	TaskLogInfo TaskLogInfo `json:"taskLogInfo,omitempty"`
 
 	State     TaskStatus
 	StartTime time.Time

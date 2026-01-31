@@ -920,20 +920,20 @@ func (s *ServerHandler) getTaskDetail(req *restful.Request, resp *restful.Respon
 
 // formatTaskForResponse formats a task data result of a single task attempt for the response.
 // The schema aligns with the Ray Dashboard API.
+// Ref: https://github.com/ray-project/ray/blob/d0b1d151d8ea964a711e451d0ae736f8bf95b629/python/ray/util/state/common.py#L730-L819.
 func formatTaskForResponse(task eventtypes.Task) map[string]interface{} {
 	result := map[string]interface{}{
-		"task_id":        task.TaskID,
-		"attempt_number": task.TaskAttempt,
-		// NOTE: state is the task state of the last state transition.
-		"state":          string(task.State),
-		"job_id":         task.JobID,
-		"actor_id":       task.ActorID,
-		"type":           string(task.TaskType),
-		"parent_task_id": task.ParentTaskID,
-		"node_id":        task.NodeID,
-		"worker_id":      task.WorkerID,
-		"worker_pid":     task.WorkerPID,
-		//   "error_type": Optional[str],       # Error type if failed
+		"task_id":            task.TaskID,
+		"attempt_number":     task.TaskAttempt,
+		"state":              string(task.State),
+		"job_id":             task.JobID,
+		"actor_id":           task.ActorID,
+		"type":               string(task.TaskType),
+		"parent_task_id":     task.ParentTaskID,
+		"node_id":            task.NodeID,
+		"worker_id":          task.WorkerID,
+		"worker_pid":         task.WorkerPID,
+		"error_type":         string(task.RayErrorInfo.ErrorType),
 		"language":           string(task.Language),
 		"required_resources": task.RequiredResources,
 		"runtime_env_info":   task.SerializedRuntimeEnv,
@@ -941,8 +941,8 @@ func formatTaskForResponse(task eventtypes.Task) map[string]interface{} {
 		"events":             task.StateTransitions,
 		//   "profiling_data": Optional[dict],  # Performance profiling data
 		//   "creation_time_ms": Optional[int], # Creation timestamp
-		//   "task_log_info": Optional[dict],   # Log file information
-		//   "error_message": Optional[str],    # Detailed error message
+		"task_log_info":      task.TaskLogInfo,
+		"error_message":      task.RayErrorInfo.ErrorMessage,
 		"is_debugger_paused": task.IsDebuggerPaused,
 		"call_site":          task.CallSite,
 		"label_selector":     task.LabelSelector,
