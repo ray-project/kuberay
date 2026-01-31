@@ -623,29 +623,31 @@ func (h *EventHandler) getAllNodeEventFiles(clusterInfo utils.ClusterInfo) []str
 	return nodeEventFiles
 }
 
-// GetTasks returns a thread-safe deep copy of all tasks (including all attempts) for a given cluster.
-// Each task attempt is returned as a separate element in the slice.
+// GetTasks returns a slice of thread-safe deep copies of all task attempts for a given cluster session.
 // Deep copy ensures the returned data is safe to use after the lock is released.
-func (h *EventHandler) GetTasks(clusterName string) []types.Task {
+func (h *EventHandler) GetTasks(clusterSessionKey string) []types.Task {
 	h.ClusterTaskMap.RLock()
 	defer h.ClusterTaskMap.RUnlock()
 
-	taskMap, ok := h.ClusterTaskMap.ClusterTaskMap[clusterName]
+	taskMap, ok := h.ClusterTaskMap.ClusterTaskMap[clusterSessionKey]
 	if !ok {
+		// TODO(jwj): Add error handling.
+		logrus.Errorf("Task map not found for cluster session: %s", clusterSessionKey)
 		return []types.Task{}
 	}
 
 	taskMap.Lock()
 	defer taskMap.Unlock()
 
-	// Flatten all attempts into a single slice with deep copy
-	var tasks []types.Task
-	for _, attempts := range taskMap.TaskMap {
-		for _, task := range attempts {
-			tasks = append(tasks, task.DeepCopy())
+	// Flatten all task attempts into a single slice with deep copy.
+	allTasks := make([]types.Task, 0)
+	for _, taskAttempts := range taskMap.TaskMap {
+		for _, taskAttempt := range taskAttempts {
+			allTasks = append(allTasks, taskAttempt.DeepCopy())
 		}
 	}
-	return tasks
+
+	return allTasks
 }
 
 // GetTaskByID returns all attempts for a specific task ID in a given cluster.

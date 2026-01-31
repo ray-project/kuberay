@@ -286,31 +286,62 @@ func GetTaskFieldValue(task Task, filterKey string) string {
 	}
 }
 
-// DeepCopy returns a deep copy of the Task, including slices and maps.
+// DeepCopy returns a deep copy of the Task, including fields of type slice, map, and pointer.
 // This prevents race conditions when the returned Task is used after locks are released.
 func (t Task) DeepCopy() Task {
 	cp := t
-	// if len(t.Events) > 0 {
-	// 	cp.Events = make([]StateEvent, len(t.Events))
-	// 	copy(cp.Events, t.Events)
-	// }
-	// if len(t.RequiredResources) > 0 {
-	// 	cp.RequiredResources = make(map[string]float64, len(t.RequiredResources))
-	// 	for k, v := range t.RequiredResources {
-	// 		cp.RequiredResources[k] = v
-	// 	}
-	// }
-	// if len(t.TaskLogInfo) > 0 {
-	// 	cp.TaskLogInfo = make(map[string]string, len(t.TaskLogInfo))
-	// 	for k, v := range t.TaskLogInfo {
-	// 		cp.TaskLogInfo[k] = v
-	// 	}
-	// }
+
+	cp.TaskFunc = t.TaskFunc.DeepCopy()
+	cp.ActorFunc = t.ActorFunc.DeepCopy()
+
+	if len(t.RequiredResources) > 0 {
+		cp.RequiredResources = make(map[string]float64, len(t.RequiredResources))
+		for k, v := range t.RequiredResources {
+			cp.RequiredResources[k] = v
+		}
+	}
+
+	if len(t.RefIDs) > 0 {
+		cp.RefIDs = make(map[string]string, len(t.RefIDs))
+		for k, v := range t.RefIDs {
+			cp.RefIDs[k] = v
+		}
+	}
+
 	if len(t.LabelSelector) > 0 {
 		cp.LabelSelector = make(map[string]string, len(t.LabelSelector))
 		for k, v := range t.LabelSelector {
 			cp.LabelSelector[k] = v
 		}
 	}
+
+	if len(t.StateTransitions) > 0 {
+		cp.StateTransitions = make([]TaskStateTransition, len(t.StateTransitions))
+		copy(cp.StateTransitions, t.StateTransitions)
+	}
+
+	return cp
+}
+
+// FunctionDescriptor's DeepCopy returns a deep copy of the FunctionDescriptor.
+func (f *FunctionDescriptor) DeepCopy() *FunctionDescriptor {
+	if f == nil {
+		return nil
+	}
+
+	cp := &FunctionDescriptor{}
+	if f.PythonFunctionDescriptor != nil {
+		pythonFunctionDescriptor := *f.PythonFunctionDescriptor
+		cp.PythonFunctionDescriptor = &pythonFunctionDescriptor
+	}
+	if f.JavaFunctionDescriptor != nil {
+		javaFunctionDescriptor := *f.JavaFunctionDescriptor
+		cp.JavaFunctionDescriptor = &javaFunctionDescriptor
+	}
+	if f.CppFunctionDescriptor != nil {
+		cppFunctionDescriptor := *f.CppFunctionDescriptor
+		cp.CppFunctionDescriptor = &cppFunctionDescriptor
+	}
+
 	return cp
 }
