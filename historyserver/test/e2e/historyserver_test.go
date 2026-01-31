@@ -287,16 +287,55 @@ func testLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Names
 
 			if resp.StatusCode == http.StatusOK {
 				successCount++
-				LogWithTimestamp(t, "✓ Task %s succeeded, returned %d bytes", taskID, len(body))
+				LogWithTimestamp(t, "Task %s succeeded, returned %d bytes", taskID, len(body))
 				break
 			} else {
 				lastError = fmt.Sprintf("task %s returned %d: %s", taskID, resp.StatusCode, string(body))
-				LogWithTimestamp(t, "✗ Task %s failed: %s", taskID, lastError)
+				LogWithTimestamp(t, "Task %s failed: %s", taskID, lastError)
 			}
 		}
 
 		g.Expect(successCount).To(BeNumerically(">", 0),
 			"At least one task_id should succeed. Last error: %s", lastError)
+	})
+
+	// Sub-test for actor_id parameter (live cluster)
+	test.T().Run("actor_id parameter", func(t *testing.T) {
+		g := NewWithT(t)
+
+		// Get all eligible actor IDs
+		actorIDs := getAllEligibleActorIDs(g, client, historyServerURL)
+		LogWithTimestamp(t, "Found %d eligible actor IDs for testing", len(actorIDs))
+
+		var successCount int
+		var lastError string
+
+		// Try each actor ID until one succeeds
+		for _, actorID := range actorIDs {
+			LogWithTimestamp(t, "Testing actor_id: %s", actorID)
+
+			url := fmt.Sprintf("%s%s?actor_id=%s", historyServerURL, EndpointLogFile, actorID)
+			resp, err := client.Get(url)
+			if err != nil {
+				lastError = fmt.Sprintf("HTTP error for actor %s: %v", actorID, err)
+				continue
+			}
+
+			body, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
+
+			if resp.StatusCode == http.StatusOK {
+				successCount++
+				LogWithTimestamp(t, "Actor %s succeeded, returned %d bytes", actorID, len(body))
+				break
+			} else {
+				lastError = fmt.Sprintf("actor %s returned %d: %s", actorID, resp.StatusCode, string(body))
+				LogWithTimestamp(t, "Actor %s failed: %s", actorID, lastError)
+			}
+		}
+
+		g.Expect(successCount).To(BeNumerically(">", 0),
+			"At least one actor_id should succeed. Last error: %s", lastError)
 	})
 
 	DeleteS3Bucket(test, g, s3Client)
@@ -546,16 +585,55 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 
 			if resp.StatusCode == http.StatusOK {
 				successCount++
-				LogWithTimestamp(t, "✓ Task %s succeeded, returned %d bytes", taskID, len(body))
+				LogWithTimestamp(t, "Task %s succeeded, returned %d bytes", taskID, len(body))
 				break
 			} else {
 				lastError = fmt.Sprintf("task %s returned %d: %s", taskID, resp.StatusCode, string(body))
-				LogWithTimestamp(t, "✗ Task %s failed: %s", taskID, lastError)
+				LogWithTimestamp(t, "Task %s failed: %s", taskID, lastError)
 			}
 		}
 
 		g.Expect(successCount).To(BeNumerically(">", 0),
 			"At least one task_id should succeed. Last error: %s", lastError)
+	})
+
+	// Sub-test for actor_id parameter (dead cluster)
+	test.T().Run("actor_id parameter", func(t *testing.T) {
+		g := NewWithT(t)
+
+		// Get all eligible actor IDs
+		actorIDs := getAllEligibleActorIDs(g, client, historyServerURL)
+		LogWithTimestamp(t, "Found %d eligible actor IDs for testing", len(actorIDs))
+
+		var successCount int
+		var lastError string
+
+		// Try each actor ID until one succeeds
+		for _, actorID := range actorIDs {
+			LogWithTimestamp(t, "Testing actor_id: %s", actorID)
+
+			url := fmt.Sprintf("%s%s?actor_id=%s", historyServerURL, EndpointLogFile, actorID)
+			resp, err := client.Get(url)
+			if err != nil {
+				lastError = fmt.Sprintf("HTTP error for actor %s: %v", actorID, err)
+				continue
+			}
+
+			body, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
+
+			if resp.StatusCode == http.StatusOK {
+				successCount++
+				LogWithTimestamp(t, "Actor %s succeeded, returned %d bytes", actorID, len(body))
+				break
+			} else {
+				lastError = fmt.Sprintf("actor %s returned %d: %s", actorID, resp.StatusCode, string(body))
+				LogWithTimestamp(t, "Actor %s failed: %s", actorID, lastError)
+			}
+		}
+
+		g.Expect(successCount).To(BeNumerically(">", 0),
+			"At least one actor_id should succeed. Last error: %s", lastError)
 	})
 
 	DeleteS3Bucket(test, g, s3Client)
@@ -568,64 +646,100 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 // (unless RAY_ENABLE_RECORD_ACTOR_TASK_LOGGING=1 is set).
 func getAllEligibleTaskIDs(g *WithT, client *http.Client, historyServerURL string) []string {
 	var taskIDs []string
-	g.Eventually(func(gg Gomega) {
-		resp, err := client.Get(historyServerURL + "/api/v0/tasks")
-		gg.Expect(err).NotTo(HaveOccurred())
-		defer resp.Body.Close()
+	resp, err := client.Get(historyServerURL + "/api/v0/tasks")
+	g.Expect(err).NotTo(HaveOccurred())
+	defer resp.Body.Close()
 
-		gg.Expect(resp.StatusCode).To(Equal(http.StatusOK))
+	g.Expect(resp.StatusCode).To(Equal(http.StatusOK))
 
-		body, err := io.ReadAll(resp.Body)
-		gg.Expect(err).NotTo(HaveOccurred())
+	body, err := io.ReadAll(resp.Body)
+	g.Expect(err).NotTo(HaveOccurred())
 
-		var result map[string]interface{}
-		err = json.Unmarshal(body, &result)
-		gg.Expect(err).NotTo(HaveOccurred())
+	var result map[string]interface{}
+	err = json.Unmarshal(body, &result)
+	g.Expect(err).NotTo(HaveOccurred())
 
-		// Extract task_id from response
-		// Response format: {"result": true, "msg": "...", "data": {"result": {"result": [tasks...], ...}}}
-		data, ok := result["data"].(map[string]interface{})
-		gg.Expect(ok).To(BeTrue(), "response should have 'data' field")
+	// Extract task_id from response
+	// Response format: {"result": true, "msg": "...", "data": {"result": {"result": [tasks...], ...}}}
+	data, ok := result["data"].(map[string]interface{})
+	g.Expect(ok).To(BeTrue(), "response should have 'data' field")
 
-		dataResult, ok := data["result"].(map[string]interface{})
-		gg.Expect(ok).To(BeTrue(), "data should have 'result' field")
+	dataResult, ok := data["result"].(map[string]interface{})
+	g.Expect(ok).To(BeTrue(), "data should have 'result' field")
 
-		tasks, ok := dataResult["result"].([]interface{})
-		gg.Expect(ok).To(BeTrue(), "result should have 'result' array")
-		gg.Expect(len(tasks)).To(BeNumerically(">", 0), "should have at least one task")
+	tasks, ok := dataResult["result"].([]interface{})
+	g.Expect(ok).To(BeTrue(), "result should have 'result' array")
+	g.Expect(len(tasks)).To(BeNumerically(">", 0), "should have at least one task")
 
-		// Find all non-actor tasks with node_id
-		for _, t := range tasks {
-			task, ok := t.(map[string]interface{})
-			if !ok {
-				continue
-			}
-
-			// Check if this is an actor task
-			actorID, _ := task["actor_id"].(string)
-			if actorID != "" {
-				// Skip actor tasks - they don't have task_log_info unless
-				// RAY_ENABLE_RECORD_ACTOR_TASK_LOGGING=1 is set
-				continue
-			}
-
-			// Check if it has node_id
-			nodeID, _ := task["node_id"].(string)
-			if nodeID == "" {
-				// If nodeID is empty, it means the task is not scheduled yet. Skip it
-				// as it will not have logs
-				continue
-			}
-
-			// Found a non-actor task with logs
-			taskID, ok := task["task_id"].(string)
-			if ok && taskID != "" {
-				taskIDs = append(taskIDs, taskID)
-			}
+	// Find all non-actor tasks with node_id
+	for _, t := range tasks {
+		task, ok := t.(map[string]interface{})
+		if !ok {
+			continue
 		}
 
-		gg.Expect(len(taskIDs)).To(BeNumerically(">", 0), "should have at least one eligible task")
-	}, TestTimeoutShort).Should(Succeed())
+		// Check if this is an actor task
+		actorID, _ := task["actor_id"].(string)
+		if actorID != "" {
+			// Skip actor tasks - they don't have task_log_info unless
+			// RAY_ENABLE_RECORD_ACTOR_TASK_LOGGING=1 is set
+			continue
+		}
+
+		// Check if it has node_id
+		nodeID, _ := task["node_id"].(string)
+		if nodeID == "" {
+			// If nodeID is empty, it means the task is not scheduled yet. Skip it
+			// as it will not have logs
+			continue
+		}
+
+		// Found a non-actor task with logs
+		taskID, ok := task["task_id"].(string)
+		if ok && taskID != "" {
+			taskIDs = append(taskIDs, taskID)
+		}
+	}
+
+	g.Expect(len(taskIDs)).To(BeNumerically(">", 0), "should have at least one eligible task")
 
 	return taskIDs
+}
+
+// getAllEligibleActorIDs retrieves all actor IDs with node_id and worker_id from the /logical/actors endpoint.
+// Returns a list of actor IDs that are eligible for log file testing (actors that have been scheduled and are running).
+func getAllEligibleActorIDs(g *WithT, client *http.Client, historyServerURL string) []string {
+	var actorIDs []string
+	resp, err := client.Get(historyServerURL + "/logical/actors")
+	g.Expect(err).NotTo(HaveOccurred())
+	defer resp.Body.Close()
+
+	g.Expect(resp.StatusCode).To(Equal(http.StatusOK))
+
+	body, err := io.ReadAll(resp.Body)
+	g.Expect(err).NotTo(HaveOccurred())
+
+	var result map[string]interface{}
+	err = json.Unmarshal(body, &result)
+	g.Expect(err).NotTo(HaveOccurred())
+
+	// Extract actor_id from response
+	// Response format: {"result": true, "msg": "...", "data": {"actors": {actor_id: {...}, ...}}}
+	data, ok := result["data"].(map[string]interface{})
+	g.Expect(ok).To(BeTrue(), "response should have 'data' field")
+
+	actors, ok := data["actors"].(map[string]interface{})
+	g.Expect(ok).To(BeTrue(), "data should have 'actors' field")
+	g.Expect(len(actors)).To(BeNumerically(">", 0), "should have at least one actor")
+
+	// Find all actors with node_id and worker_id (scheduled actors)
+	for actorID := range actors {
+		actorIDs = append(actorIDs, actorID)
+	}
+
+	fmt.Printf("Actor IDs: %+v", actorIDs)
+
+	g.Expect(len(actorIDs)).To(BeNumerically(">", 0), "should have at least one eligible actor")
+
+	return actorIDs
 }

@@ -107,10 +107,10 @@ func routerAPI(s *ServerHandler) {
 		Writes("")) // Placeholder for specific return type
 	ws.Route(ws.GET("/v0/logs/file").To(s.getNodeLogFile).Filter(s.CookieHandle).
 		Doc("get logfile").
-		Param(ws.QueryParameter("node_id", "node_id (optional if task_id is provided)")).
+		Param(ws.QueryParameter("node_id", "node_id (optional if task_id or actor_id is provided)")).
 		Param(ws.QueryParameter("filename", "filename (explicit log file path)")).
 		Param(ws.QueryParameter("task_id", "task_id (resolve log file from task)")).
-		Param(ws.QueryParameter("actor_id", "actor_id (resolve log file from actor, not yet implemented)")).
+		Param(ws.QueryParameter("actor_id", "actor_id (resolve log file from actor)")).
 		Param(ws.QueryParameter("pid", "pid (resolve log file from process id, not yet implemented)")).
 		Param(ws.QueryParameter("suffix", "suffix (out or err, default: out, used with task_id/actor_id/pid)")).
 		Param(ws.QueryParameter("lines", "lines (number of lines to return, default: 1000)")).

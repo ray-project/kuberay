@@ -196,9 +196,8 @@ func (s *ServerHandler) resolveLogFilename(clusterNameID, sessionID string, opti
 	}
 
 	// If actor_id is provided, resolve from actor events
-	// TODO: not implemented
 	if options.ActorID != "" {
-		return "", "", fmt.Errorf("actor_id resolution not yet implemented")
+		return s.resolveActorLogFilename(clusterNameID, sessionID, options.ActorID, options.Suffix)
 	}
 
 	// If pid is provided, resolve worker log file
@@ -283,6 +282,50 @@ func (s *ServerHandler) resolveTaskLogFilename(clusterNameID, sessionID, taskID 
 		return "", "", fmt.Errorf(
 			"failed to find worker log file for task %s (attempt %d, worker_id=%s, node_id=%s): %w",
 			taskID, attemptNumber, foundTask.WorkerID, foundTask.NodeID, err,
+		)
+	}
+
+	return nodeIDHex, logFilename, nil
+}
+
+// resolveActorLogFilename resolves log file for an actor by querying actor events.
+// This mirrors Ray Dashboard's _resolve_actor_filename logic.
+func (s *ServerHandler) resolveActorLogFilename(clusterNameID, sessionID, actorID, suffix string) (nodeID, filename string, err error) {
+	// Get actor by actor ID
+	actor, found := s.eventHandler.GetActorByID(clusterNameID, actorID)
+	if !found {
+		return "", "", fmt.Errorf("actor not found: actor_id=%s", actorID)
+	}
+
+	// Check if actor has node_id (means it was scheduled)
+	if actor.Address.NodeID == "" {
+		return "", "", fmt.Errorf(
+			"actor %s has no node_id (actor not scheduled yet)",
+			actorID,
+		)
+	}
+
+	// Check if actor has worker_id
+	if actor.Address.WorkerID == "" {
+		return "", "", fmt.Errorf(
+			"actor %s has no worker_id (actor not scheduled yet)",
+			actorID,
+		)
+	}
+
+	// Find worker log file by worker_id
+	// Worker log files follow the pattern: worker-{worker_id_hex}-{pid}-{worker_startup_token}.{suffix}
+	nodeIDHex, logFilename, err := s.findWorkerLogFile(
+		clusterNameID,
+		sessionID,
+		actor.Address.NodeID,
+		actor.Address.WorkerID,
+		suffix,
+	)
+	if err != nil {
+		return "", "", fmt.Errorf(
+			"failed to find worker log file for actor %s (worker_id=%s, node_id=%s): %w",
+			actorID, actor.Address.WorkerID, actor.Address.NodeID, err,
 		)
 	}
 
