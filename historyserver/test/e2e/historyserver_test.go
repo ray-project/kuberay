@@ -228,25 +228,29 @@ func testLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Names
 	for _, tc := range logFileTestCases {
 		test.T().Run(tc.name, func(t *testing.T) {
 			g := NewWithT(t)
-			g.Eventually(func(gg Gomega) {
-				url := tc.buildURL(historyServerURL, nodeID)
-				resp, err := client.Get(url)
-				gg.Expect(err).NotTo(HaveOccurred())
-				defer func() {
-					io.Copy(io.Discard, resp.Body)
-					resp.Body.Close()
-				}()
 
-				gg.Expect(resp.StatusCode).To(Equal(tc.expectedStatus),
-					"Test case '%s' failed: expected status %d, got %d", tc.name, tc.expectedStatus, resp.StatusCode)
+			url := tc.buildURL(historyServerURL, nodeID)
+			resp, err := client.Get(url)
+			g.Expect(err).NotTo(HaveOccurred())
+			defer func() {
+				io.Copy(io.Discard, resp.Body)
+				resp.Body.Close()
+			}()
 
-				if tc.expectedStatus == http.StatusOK {
-					body, err := io.ReadAll(resp.Body)
-					gg.Expect(err).NotTo(HaveOccurred())
-					gg.Expect(len(body)).To(BeNumerically(">", 0),
-						"Test case '%s' should return non-empty body", tc.name)
-				}
-			}, TestTimeoutShort).Should(Succeed())
+			body, err := io.ReadAll(resp.Body)
+			g.Expect(err).NotTo(HaveOccurred())
+
+			if resp.StatusCode != tc.expectedStatus {
+				LogWithTimestamp(t, "Test case '%s' failed: expected %d, got %d, body: %s",
+					tc.name, tc.expectedStatus, resp.StatusCode, string(body))
+			}
+
+			g.Expect(resp.StatusCode).To(Equal(tc.expectedStatus),
+				"Test case '%s' failed: expected %d, got %d", tc.name, tc.expectedStatus, resp.StatusCode)
+
+			if tc.expectedStatus == http.StatusOK {
+				g.Expect(len(body)).To(BeNumerically(">", 0))
+			}
 		})
 	}
 
@@ -346,25 +350,29 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 	for _, tc := range logFileTestCases {
 		test.T().Run(tc.name, func(t *testing.T) {
 			g := NewWithT(t)
-			g.Eventually(func(gg Gomega) {
-				url := tc.buildURL(historyServerURL, nodeID)
-				resp, err := client.Get(url)
-				gg.Expect(err).NotTo(HaveOccurred())
-				defer func() {
-					io.Copy(io.Discard, resp.Body)
-					resp.Body.Close()
-				}()
 
-				gg.Expect(resp.StatusCode).To(Equal(tc.expectedStatus),
-					"Test case '%s' failed: expected status %d, got %d", tc.name, tc.expectedStatus, resp.StatusCode)
+			url := tc.buildURL(historyServerURL, nodeID)
+			resp, err := client.Get(url)
+			g.Expect(err).NotTo(HaveOccurred())
+			defer func() {
+				io.Copy(io.Discard, resp.Body)
+				resp.Body.Close()
+			}()
 
-				if tc.expectedStatus == http.StatusOK {
-					body, err := io.ReadAll(resp.Body)
-					gg.Expect(err).NotTo(HaveOccurred())
-					gg.Expect(len(body)).To(BeNumerically(">", 0),
-						"Test case '%s' should return non-empty body", tc.name)
-				}
-			}, TestTimeoutShort).Should(Succeed())
+			body, err := io.ReadAll(resp.Body)
+			g.Expect(err).NotTo(HaveOccurred())
+
+			if resp.StatusCode != tc.expectedStatus {
+				LogWithTimestamp(t, "Test case '%s' failed: expected %d, got %d, body: %s",
+					tc.name, tc.expectedStatus, resp.StatusCode, string(body))
+			}
+
+			g.Expect(resp.StatusCode).To(Equal(tc.expectedStatus),
+				"Test case '%s' failed: expected %d, got %d", tc.name, tc.expectedStatus, resp.StatusCode)
+
+			if tc.expectedStatus == http.StatusOK {
+				g.Expect(len(body)).To(BeNumerically(">", 0))
+			}
 		})
 	}
 
