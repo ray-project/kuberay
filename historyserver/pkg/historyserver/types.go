@@ -2,9 +2,14 @@ package historyserver
 
 // GetLogFileOptions contains all options for fetching log files
 type GetLogFileOptions struct {
-	// Required parameters
+	// Node identification (one of these is required if not using task_id/actor_id)
 	NodeID   string // The node id where the log file is located
-	Filename string // The log file name
+
+	// Log file identification (provide one of: Filename, TaskID, ActorID, PID)
+	Filename string // The log file name (explicit path)
+	TaskID   string // Task ID to resolve log file
+	ActorID  string // Actor ID to resolve log file (not yet implemented)
+	PID      int    // Process ID to resolve log file (not yet implemented)
 
 	// Optional parameters with defaults
 	// Number of lines to return, default to DEFAULT_LOG_LIMIT (1000)
@@ -18,6 +23,9 @@ type GetLogFileOptions struct {
 	FilterAnsiCode bool
 	// Whether to set Content-Disposition header for file download, default to false
 	DownloadFile bool
+	// The suffix of the log file ("out" or "err"), default to "out"
+	// Used when resolving by TaskID, ActorID, or PID
+	Suffix string
 }
 
 type ReplyTaskInfo struct {

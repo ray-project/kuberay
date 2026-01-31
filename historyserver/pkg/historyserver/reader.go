@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/emicklei/go-restful/v3"
+	eventtypes "github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 	"github.com/sirupsen/logrus"
 )
@@ -84,10 +85,18 @@ func (s *ServerHandler) _getNodeLogs(rayClusterNameID, sessionId, nodeId, dir st
 }
 
 func (s *ServerHandler) _getNodeLogFile(rayClusterNameID, sessionID string, options GetLogFileOptions) ([]byte, error) {
-	// Build log path with attempt_number if specified
-	logPath := path.Join(sessionID, "logs", options.NodeID, options.Filename)
-	if options.AttemptNumber > 0 {
-		// Append attempt number to filename (e.g., worker.log.1)
+	// Resolve node_id and filename based on options
+	nodeID, filename, err := s.resolveLogFilename(rayClusterNameID, options)
+	if err != nil {
+		return nil, utils.NewHTTPError(err, http.StatusBadRequest)
+	}
+
+	// Build log path
+	logPath := path.Join(sessionID, "logs", nodeID, filename)
+
+	// Append attempt_number if specified and not using task_id
+	// (task_id already includes attempt_number in resolution)
+	if options.AttemptNumber > 0 && options.TaskID == "" {
 		logPath = fmt.Sprintf("%s.%d", logPath, options.AttemptNumber)
 	}
 
@@ -161,6 +170,101 @@ func (s *ServerHandler) _getNodeLogFile(rayClusterNameID, sessionID string, opti
 	}
 
 	return result, nil
+}
+
+// resolveLogFilename resolves the log file node_id and filename based on the provided options.
+// This mirrors Ray Dashboard's resolve_filename logic.
+func (s *ServerHandler) resolveLogFilename(clusterNameID string, options GetLogFileOptions) (nodeID, filename string, err error) {
+	// Validate suffix
+	if options.Suffix != "out" && options.Suffix != "err" {
+		return "", "", fmt.Errorf("invalid suffix: %s (must be 'out' or 'err')", options.Suffix)
+	}
+
+	// If filename is explicitly provided, use it and ignore suffix
+	if options.Filename != "" {
+		if options.NodeID == "" {
+			return "", "", fmt.Errorf("node_id is required when filename is provided")
+		}
+		return options.NodeID, options.Filename, nil
+	}
+
+	// If task_id is provided, resolve from task events
+	if options.TaskID != "" {
+		return s.resolveTaskLogFilename(clusterNameID, options.TaskID, options.AttemptNumber, options.Suffix)
+	}
+
+	// If actor_id is provided, resolve from actor events
+	// TODO: not implemented
+	if options.ActorID != "" {
+		return "", "", fmt.Errorf("actor_id resolution not yet implemented")
+	}
+
+	// If pid is provided, resolve worker log file
+	// TODO: not implemented
+	if options.PID > 0 {
+		return "", "", fmt.Errorf("pid resolution not yet implemented")
+	}
+
+	return "", "", fmt.Errorf("must provide one of: filename, task_id, actor_id, or pid")
+}
+
+// resolveTaskLogFilename resolves log file for a task by querying task events.
+// This mirrors Ray Dashboard's _resolve_task_filename logic.
+func (s *ServerHandler) resolveTaskLogFilename(clusterNameID, taskID string, attemptNumber int, suffix string) (nodeID, filename string, err error) {
+	// Get task attempts by task ID
+	taskAttempts, found := s.eventHandler.GetTaskByID(clusterNameID, taskID)
+	if !found {
+		return "", "", fmt.Errorf("task not found: task_id=%s", taskID)
+	}
+
+	// Find the specific attempt
+	var foundTask *eventtypes.Task
+	for i, task := range taskAttempts {
+		if task.AttemptNumber == attemptNumber {
+			foundTask = &taskAttempts[i]
+			break
+		}
+	}
+
+	if foundTask == nil {
+		return "", "", fmt.Errorf("task attempt not found: task_id=%s, attempt_number=%d", taskID, attemptNumber)
+	}
+
+	// Check if task has node_id
+	if foundTask.NodeID == "" {
+		return "", "", fmt.Errorf("task %s (attempt %d) has no node_id (task not scheduled yet)", taskID, attemptNumber)
+	}
+
+	// Check if task has TaskLogInfo
+	if foundTask.TaskLogInfo == nil {
+		// Check if this is an actor task
+		if foundTask.ActorID != "" {
+			return "", "", fmt.Errorf(
+				"for actor task, please query actor log for actor(%s) by providing actor_id query parameter",
+				foundTask.ActorID,
+			)
+		}
+		return "", "", fmt.Errorf(
+			"task %s (attempt %d) has no task_log_info (worker_id=%s, node_id=%s)",
+			taskID, attemptNumber, foundTask.WorkerID, foundTask.NodeID,
+		)
+	}
+
+	// Get the log filename from task_log_info based on suffix
+	filenameKey := "stdout_file"
+	if suffix == "err" {
+		filenameKey = "stderr_file"
+	}
+
+	logFilename, ok := foundTask.TaskLogInfo[filenameKey]
+	if !ok || logFilename == "" {
+		return "", "", fmt.Errorf(
+			"missing log filename info (%s) in task_log_info for task %s (attempt %d)",
+			filenameKey, taskID, attemptNumber,
+		)
+	}
+
+	return foundTask.NodeID, logFilename, nil
 }
 
 func (s *ServerHandler) GetNodes(rayClusterNameID, sessionId string) ([]byte, error) {

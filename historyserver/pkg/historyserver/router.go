@@ -106,13 +106,18 @@ func routerAPI(s *ServerHandler) {
 		Doc("get appliations").Param(ws.QueryParameter("node_id", "node_id")).
 		Writes("")) // Placeholder for specific return type
 	ws.Route(ws.GET("/v0/logs/file").To(s.getNodeLogFile).Filter(s.CookieHandle).
-		Doc("get logfile").Param(ws.QueryParameter("node_id", "node_id")).
-		Param(ws.QueryParameter("filename", "filename")).
-		Param(ws.QueryParameter("lines", "lines")).
+		Doc("get logfile").
+		Param(ws.QueryParameter("node_id", "node_id (optional if task_id is provided)")).
+		Param(ws.QueryParameter("filename", "filename (explicit log file path)")).
+		Param(ws.QueryParameter("task_id", "task_id (resolve log file from task)")).
+		Param(ws.QueryParameter("actor_id", "actor_id (resolve log file from actor, not yet implemented)")).
+		Param(ws.QueryParameter("pid", "pid (resolve log file from process id, not yet implemented)")).
+		Param(ws.QueryParameter("suffix", "suffix (out or err, default: out, used with task_id/actor_id/pid)")).
+		Param(ws.QueryParameter("lines", "lines (number of lines to return, default: 1000)")).
 		Param(ws.QueryParameter("timeout", "timeout")).
-		Param(ws.QueryParameter("attempt_number", "attempt_number")).
-		Param(ws.QueryParameter("download_file", "download_file")).
-		Param(ws.QueryParameter("filter_ansi_code", "filter_ansi_code")).
+		Param(ws.QueryParameter("attempt_number", "attempt_number (task retry attempt number, default: 0)")).
+		Param(ws.QueryParameter("download_file", "download_file (true/false)")).
+		Param(ws.QueryParameter("filter_ansi_code", "filter_ansi_code (true/false)")).
 		Produces("text/plain").
 		Writes("")) // Placeholder for specific return type
 
@@ -584,19 +589,26 @@ func (s *ServerHandler) getNodeLogFile(req *restful.Request, resp *restful.Respo
 		return
 	}
 
-	// Validate required parameters
-	if options.NodeID == "" {
-		resp.WriteErrorString(http.StatusBadRequest, "Missing required parameter: node_id")
+	// Validate required parameters following Ray Dashboard logic
+	// At least one of: actor_id, task_id, pid, filename, submission_id must be provided
+	if options.ActorID == "" && options.TaskID == "" && options.PID == 0 && options.Filename == "" {
+		resp.WriteErrorString(http.StatusBadRequest, "At least one of actor_id, task_id, pid, or filename is required")
 		return
 	}
-	if options.Filename == "" {
-		resp.WriteErrorString(http.StatusBadRequest, "Missing required parameter: filename")
+
+	// node_id is required when not using actor_id or task_id (they can auto-resolve node_id)
+	if options.NodeID == "" && options.ActorID == "" && options.TaskID == "" {
+		resp.WriteErrorString(http.StatusBadRequest, "node_id is required when actor_id or task_id is not provided")
 		return
 	}
 
 	// Prevent path traversal attacks (e.g., ../../etc/passwd)
-	if !fs.ValidPath(options.NodeID) || !fs.ValidPath(options.Filename) {
-		resp.WriteErrorString(http.StatusBadRequest, fmt.Sprintf("invalid path: path traversal not allowed (node_id=%s, filename=%s)", options.NodeID, options.Filename))
+	if options.NodeID != "" && !fs.ValidPath(options.NodeID) {
+		resp.WriteErrorString(http.StatusBadRequest, fmt.Sprintf("invalid path: path traversal not allowed (node_id=%s)", options.NodeID))
+		return
+	}
+	if options.Filename != "" && !fs.ValidPath(options.Filename) {
+		resp.WriteErrorString(http.StatusBadRequest, fmt.Sprintf("invalid path: path traversal not allowed (filename=%s)", options.Filename))
 		return
 	}
 
@@ -631,6 +643,28 @@ func parseGetLogFileOptions(req *restful.Request) (GetLogFileOptions, error) {
 	options := GetLogFileOptions{
 		NodeID:   req.QueryParameter("node_id"),
 		Filename: req.QueryParameter("filename"),
+		TaskID:   req.QueryParameter("task_id"),
+		ActorID:  req.QueryParameter("actor_id"),
+		Suffix:   req.QueryParameter("suffix"),
+	}
+
+	// Parse PID parameter
+	if pidStr := req.QueryParameter("pid"); pidStr != "" {
+		pid, err := strconv.Atoi(pidStr)
+		if err != nil {
+			return options, fmt.Errorf("invalid pid parameter: %s", pidStr)
+		}
+		options.PID = pid
+	}
+
+	// Default suffix to "out" if not specified
+	if options.Suffix == "" {
+		options.Suffix = "out"
+	}
+
+	// Validate suffix parameter
+	if options.Suffix != "out" && options.Suffix != "err" {
+		return options, fmt.Errorf("invalid suffix parameter: %s (must be 'out' or 'err')", options.Suffix)
 	}
 
 	// Parse lines parameter
