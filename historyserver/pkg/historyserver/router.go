@@ -736,20 +736,42 @@ func (s *ServerHandler) getTaskSummarize(req *restful.Request, resp *restful.Res
 		})
 
 	// Summarize tasks based on summary_by parameter
-	var summary map[string]interface{}
+	var response interface{}
+
 	if summaryBy == "lineage" {
-		summary = summarizeTasksByLineage(tasks)
+		// Lineage mode: also fetch actors
+		// Ref: https://github.com/ray-project/ray/blob/d0b1d151d8ea964a711e451d0ae736f8bf95b629/python/ray/dashboard/state_aggregator.py#L586-L599
+		actors := s.eventHandler.GetActors(clusterSessionKey)
+		lineageSummary := BuildLineageSummary(tasks, actors)
+
+		response = map[string]interface{}{
+			"result": true,
+			"msg":    "",
+			"data": map[string]interface{}{
+				"result": map[string]interface{}{
+					"total":                 len(tasks),
+					"num_after_truncation":  len(tasks),
+					"num_filtered":          len(tasks),
+					"result": map[string]interface{}{
+						"node_id_to_summary": map[string]*TaskSummaries{
+							"cluster": lineageSummary,
+						},
+					},
+					"partial_failure_warning": "",
+					"warnings":                nil,
+				},
+			},
+		}
 	} else {
 		// Default to func_name
-		summary = summarizeTasksByFuncName(tasks)
-	}
-
-	response := map[string]interface{}{
-		"result": true,
-		"msg":    "Tasks summarized.",
-		"data": map[string]interface{}{
-			"result": summary,
-		},
+		summary := summarizeTasksByFuncName(tasks)
+		response = map[string]interface{}{
+			"result": true,
+			"msg":    "Tasks summarized.",
+			"data": map[string]interface{}{
+				"result": summary,
+			},
+		}
 	}
 
 	respData, err := json.Marshal(response)
@@ -783,102 +805,6 @@ func summarizeTasksByFuncName(tasks []eventtypes.Task) map[string]interface{} {
 	return map[string]interface{}{
 		"summary": summary,
 		"total":   len(tasks),
-	}
-}
-
-// summarizeTasksByLineage builds a nested parent-child tree structure with recursive state counts.
-// Each parent task includes statistics for itself and all descendants in the tree.
-func summarizeTasksByLineage(tasks []eventtypes.Task) map[string]interface{} {
-	logrus.Infof("Building lineage tree for %d tasks", len(tasks))
-
-	taskMap := make(map[string]eventtypes.Task)
-	childrenMap := make(map[string][]string) // map parent_id to its []child_ids
-
-	for _, task := range tasks {
-		taskMap[task.TaskID] = task
-
-		if task.ParentTaskID != "" {
-			childrenMap[task.ParentTaskID] = append(childrenMap[task.ParentTaskID], task.TaskID)
-		}
-	}
-
-	// Find root tasks
-	rootTasks := []eventtypes.Task{}
-	for _, task := range tasks {
-		// Skip incomplete tasks (actor tasks without definition events)
-		// These tasks only have lifecycle events but missing name/type information
-		if task.Name == "" && task.Type == "" {
-			logrus.Debugf("Skipping incomplete task %s (missing name and type, likely actor task without definition event)", task.TaskID)
-			continue
-		}
-
-		// If parent doesn't exist in our task map, this is a root
-		if task.ParentTaskID == "" {
-			rootTasks = append(rootTasks, task)
-		} else if _, parentExists := taskMap[task.ParentTaskID]; !parentExists {
-			rootTasks = append(rootTasks, task)
-		}
-	}
-
-	// Build lineage tree for each root task
-	summary := make(map[string]interface{})
-
-	for _, rootTask := range rootTasks {
-		lineageStats := buildLineageTree(rootTask.TaskID, rootTask, taskMap, childrenMap)
-		summary[rootTask.TaskID] = lineageStats
-	}
-
-	result := map[string]interface{}{
-		"summary": summary,
-		"total":   len(tasks),
-	}
-
-	logrus.Infof("Lineage tree built with %d root tasks", len(rootTasks))
-
-	return result
-}
-
-// buildLineageTree recursively builds a tree structure with state counts for a task and all descendants
-func buildLineageTree(taskID string, task eventtypes.Task, taskMap map[string]eventtypes.Task, childrenMap map[string][]string) map[string]interface{} {
-	// Initialize state counts for this task
-	stateCounts := make(map[string]int)
-	state := string(task.State)
-	if state == "" {
-		state = "UNKNOWN"
-	}
-	stateCounts[state] = 1
-
-	// Build children recursively
-	children := []map[string]interface{}{}
-	childIDs := childrenMap[taskID]
-
-	for _, childID := range childIDs {
-		childTask, exists := taskMap[childID]
-		if !exists {
-			logrus.Warnf("Child task %s not found in task map", childID)
-			continue
-		}
-
-		// Recursively build child's tree
-		childTree := buildLineageTree(childID, childTask, taskMap, childrenMap)
-		children = append(children, childTree)
-
-		// Merge child state counts into parent's counts
-		if childStateCounts, ok := childTree["state_counts"].(map[string]int); ok {
-			for s, count := range childStateCounts {
-				stateCounts[s] += count
-			}
-		}
-	}
-
-	return map[string]interface{}{
-		"task_id":      taskID,
-		"task_name":    task.Name,
-		"task_type":    string(task.Type),
-		"state":        state,
-		"state_counts": stateCounts,  // Includes this task + all descendants
-		"num_children": len(childIDs),
-		"children":     children,      // Nested children with their own trees
 	}
 }
 

@@ -224,6 +224,24 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 			return err
 		}
 
+		// Convert IDs from base64 to hex (Ray events use base64, but API returns hex)
+		currTask.TaskID, err = utils.ConvertBase64ToHex(currTask.TaskID)
+		if err != nil {
+			logrus.Errorf("Failed to convert TaskID from base64 to hex, will keep TaskID in base64: %v", err)
+		}
+		currTask.ParentTaskID, err = utils.ConvertBase64ToHex(currTask.ParentTaskID)
+		if err != nil {
+			logrus.Errorf("Failed to convert ParentTaskID from base64 to hex, will keep ParentTaskID in base64: %v", err)
+		}
+		currTask.JobID, err = utils.ConvertBase64ToHex(currTask.JobID)
+		if err != nil {
+			logrus.Errorf("Failed to convert JobID from base64 to hex, will keep JobID in base64: %v", err)
+		}
+		currTask.ActorID, err = utils.ConvertBase64ToHex(currTask.ActorID)
+		if err != nil {
+			logrus.Errorf("Failed to convert ActorID from base64 to hex, will keep ActorID in base64: %v", err)
+		}
+
 		taskMap := h.ClusterTaskMap.GetOrCreateTaskMap(currentClusterName)
 		taskMap.CreateOrMergeAttempt(currTask.TaskID, currTask.AttemptNumber, func(t *types.Task) {
 			// Merge definition fields (preserve existing Events if any)
@@ -250,6 +268,13 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 
 		if len(transitions) == 0 || taskId == "" {
 			return nil
+		}
+
+		// Convert taskId from base64 to hex
+		var err error
+		taskId, err = utils.ConvertBase64ToHex(taskId)
+		if err != nil {
+			logrus.Errorf("Failed to convert taskId from base64 to hex, will keep taskId in base64: %v", err)
 		}
 
 		// Parse state transitions
