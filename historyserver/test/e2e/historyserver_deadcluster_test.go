@@ -478,7 +478,7 @@ func testActoryByActorIdEndpoint(test Test, g *WithT, namespace *corev1.Namespac
 
 			body, err := io.ReadAll(resp.Body)
 			gg.Expect(err).NotTo(HaveOccurred())
-			Expect(resp.Body.Close()).To(Succeed())
+			gg.Expect(resp.Body.Close()).To(Succeed())
 			actorResponses[actorId] = string(body)
 			actorIDs = append(actorIDs, actorId)
 		}
