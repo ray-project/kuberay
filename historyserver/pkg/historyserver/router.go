@@ -386,7 +386,6 @@ func (s *ServerHandler) getPrometheusHealth(req *restful.Request, resp *restful.
 func (s *ServerHandler) getJobs(req *restful.Request, resp *restful.Response) {
 	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
 	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
-	clusterNameID := clusterName + "_" + clusterNamespace
 	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
 
 	if sessionName == "live" {
@@ -394,7 +393,8 @@ func (s *ServerHandler) getJobs(req *restful.Request, resp *restful.Response) {
 		return
 	}
 
-	jobsMap := s.eventHandler.GetJobsMap(clusterNameID)
+	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
+	jobsMap := s.eventHandler.GetJobsMap(clusterSessionKey)
 
 	jobs := make([]eventtypes.Job, 0, len(jobsMap))
 	for _, job := range jobsMap {
@@ -471,7 +471,6 @@ func (s *ServerHandler) getNode(req *restful.Request, resp *restful.Response) {
 func (s *ServerHandler) getJob(req *restful.Request, resp *restful.Response) {
 	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
 	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
-	clusterNameID := clusterName + "_" + clusterNamespace
 	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
 	if sessionName == "live" {
 		s.redirectRequest(req, resp)
@@ -480,7 +479,8 @@ func (s *ServerHandler) getJob(req *restful.Request, resp *restful.Response) {
 
 	jobID := req.PathParameter("job_id")
 
-	job, found := s.eventHandler.GetJobByJobID(clusterNameID, jobID)
+	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
+	job, found := s.eventHandler.GetJobByJobID(clusterSessionKey, jobID)
 
 	if !found {
 		responseString := fmt.Sprintf("Job %s does not exist", jobID)
@@ -570,7 +570,6 @@ func (s *ServerHandler) getNodeLogs(req *restful.Request, resp *restful.Response
 func (s *ServerHandler) getLogicalActors(req *restful.Request, resp *restful.Response) {
 	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
 	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
-	clusterNameID := clusterName + "_" + clusterNamespace
 	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
 
 	if sessionName == "live" {
@@ -583,7 +582,8 @@ func (s *ServerHandler) getLogicalActors(req *restful.Request, resp *restful.Res
 	filterPredicate := req.QueryParameter("filter_predicates")
 
 	// Get actors from EventHandler's in-memory map
-	actorsMap := s.eventHandler.GetActorsMap(clusterNameID)
+	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
+	actorsMap := s.eventHandler.GetActorsMap(clusterSessionKey)
 
 	// Convert map to slice for filtering
 	actors := make([]eventtypes.Actor, 0, len(actorsMap))
@@ -660,7 +660,6 @@ func formatActorForResponse(actor eventtypes.Actor) map[string]interface{} {
 func (s *ServerHandler) getLogicalActor(req *restful.Request, resp *restful.Response) {
 	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
 	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
-	clusterNameID := clusterName + "_" + clusterNamespace
 	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
 	if sessionName == "live" {
 		s.redirectRequest(req, resp)
@@ -670,7 +669,8 @@ func (s *ServerHandler) getLogicalActor(req *restful.Request, resp *restful.Resp
 	actorID := req.PathParameter("single_actor")
 
 	// Get actor from EventHandler's in-memory map
-	actor, found := s.eventHandler.GetActorByID(clusterNameID, actorID)
+	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
+	actor, found := s.eventHandler.GetActorByID(clusterSessionKey, actorID)
 
 	replyActorInfo := ReplyActorInfo{
 		Data: ActorInfoData{},
@@ -755,7 +755,6 @@ func (s *ServerHandler) getNodeLogFile(req *restful.Request, resp *restful.Respo
 func (s *ServerHandler) getTaskSummarize(req *restful.Request, resp *restful.Response) {
 	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
 	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
-	clusterNameID := clusterName + "_" + clusterNamespace
 	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
 
 	if sessionName == "live" {
@@ -770,7 +769,8 @@ func (s *ServerHandler) getTaskSummarize(req *restful.Request, resp *restful.Res
 	summaryBy := req.QueryParameter("summary_by")
 
 	// Get all tasks
-	tasks := s.eventHandler.GetTasks(clusterNameID)
+	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
+	tasks := s.eventHandler.GetTasks(clusterSessionKey)
 
 	// Apply generic filtering using utils.ApplyFilter
 	tasks = utils.ApplyFilter(tasks, filterKey, filterPredicate, filterValue,
@@ -865,9 +865,6 @@ func (s *ServerHandler) getTaskDetail(req *restful.Request, resp *restful.Respon
 	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
 	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
 
-	// Combine into internal key format
-	clusterNameID := clusterName + "_" + clusterNamespace
-
 	if sessionName == "live" {
 		s.redirectRequest(req, resp)
 		return
@@ -877,7 +874,8 @@ func (s *ServerHandler) getTaskDetail(req *restful.Request, resp *restful.Respon
 	filterValue := req.QueryParameter("filter_values")
 	filterPredicate := req.QueryParameter("filter_predicates")
 
-	tasks := s.eventHandler.GetTasks(clusterNameID)
+	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
+	tasks := s.eventHandler.GetTasks(clusterSessionKey)
 	tasks = utils.ApplyFilter(tasks, filterKey, filterPredicate, filterValue,
 		func(t eventtypes.Task, key string) string {
 			return eventtypes.GetTaskFieldValue(t, key)

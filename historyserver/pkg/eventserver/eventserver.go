@@ -123,6 +123,7 @@ func (h *EventHandler) Run(stop chan struct{}, numOfEventProcessors int) error {
 			clusterList := h.reader.List()
 			for _, clusterInfo := range clusterList {
 				clusterNameNamespace := clusterInfo.Name + "_" + clusterInfo.Namespace
+				clusterSessionKey := utils.BuildClusterSessionKey(clusterInfo.Name, clusterInfo.Namespace, clusterInfo.SessionName)
 				eventFileList := append(h.getAllJobEventFiles(clusterInfo), h.getAllNodeEventFiles(clusterInfo)...)
 
 				logrus.Infof("current eventFileList for cluster %s is: %v", clusterInfo.Name, eventFileList)
@@ -153,7 +154,7 @@ func (h *EventHandler) Run(stop chan struct{}, numOfEventProcessors int) error {
 						if curr == nil {
 							continue
 						}
-						curr["clusterName"] = clusterInfo.Name + "_" + clusterInfo.Namespace
+						curr["clusterName"] = clusterSessionKey
 						eventProcessorChannels[i%numOfEventProcessors] <- curr
 					}
 				}
