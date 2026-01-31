@@ -191,7 +191,7 @@ func testJsonEndpoint(test Test, g *WithT, namespace *corev1.Namespace, s3Client
 			body, err := io.ReadAll(resp.Body)
 			gg.Expect(err).NotTo(HaveOccurred())
 			gg.Expect(len(body)).To(BeNumerically(">", 0))
-			val := compareJsons(test, g, string(requiredBody), string(body))
+			val := compareJsons(test, gg, string(requiredBody), string(body))
 			if dataValidation {
 				gg.Expect(val).To(BeTrue())
 			}
@@ -476,6 +476,8 @@ func testActoryByActorIdEndpoint(test Test, g *WithT, namespace *corev1.Namespac
 			actorResponses[actorId] = string(body)
 			actorIDs = append(actorIDs, actorId)
 		}
+
+		gg.Expect(len(actorIDs)).To(BeNumerically(">", 0))
 	}, TestTimeoutMedium).Should(Succeed())
 
 	err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Delete(test.Ctx(), rayCluster.Name, metav1.DeleteOptions{})
