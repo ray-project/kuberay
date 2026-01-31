@@ -252,6 +252,10 @@ func testTasksByJobIDEndpoint(test Test, g *WithT, namespace *corev1.Namespace, 
 
 		gg.Expect(len(jobs)).To(BeNumerically("==", 2))
 
+		if len(jobs) != 2 {
+			return
+		}
+
 		// find the job_id for first job.
 		j1, ok := jobs[0].(map[string]interface{})
 		gg.Expect(ok).To(BeTrue())
@@ -459,6 +463,8 @@ func testActoryByActorIdEndpoint(test Test, g *WithT, namespace *corev1.Namespac
 
 		actorJsons, ok := actors_data["actors"].(map[string]interface{})
 		gg.Expect(ok).To(BeTrue())
+
+		actorIDs = make([]string, 0)
 
 		for actorId := range actorJsons {
 			resp, err := client.Get(liveDashboardURL + strings.Replace(
