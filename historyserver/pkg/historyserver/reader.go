@@ -43,9 +43,18 @@ func filterAnsiEscapeCodes(content []byte) []byte {
 	return ansiEscapePattern.ReplaceAll(content, []byte(""))
 }
 
-// decodeBase64ToHex decodes a Base64-encoded ID and returns its hex representation.
+// decodeBase64ToHex converts an ID to hex format.
+// Handles both cases:
+// 1. Already hex format - returns as-is
+// 2. Base64-encoded - decodes to hex
 // It tries RawURLEncoding first (Ray's default), falling back to StdEncoding if that fails.
 func decodeBase64ToHex(id string) (string, error) {
+	// Check if already hex (only [0-9a-f])
+	if matched, _ := regexp.MatchString("^[0-9a-f]+$", id); matched {
+		return id, nil
+	}
+
+	// Try base64 decode
 	idBytes, err := base64.RawURLEncoding.DecodeString(id)
 	if err != nil {
 		// Try standard Base64 if URL-safe fails
@@ -239,7 +248,7 @@ func (s *ServerHandler) resolvePidLogFilename(clusterNameID, sessionID, nodeID s
 		return "", "", fmt.Errorf("node_id is required for pid resolution")
 	}
 
-	// The nodeID from actors/tasks is base64, but the path on storage uses hex.
+	// Convert to hex if not already is
 	nodeIDHex, err := decodeBase64ToHex(nodeID)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to decode node_id: %w", err)
@@ -386,8 +395,7 @@ func (s *ServerHandler) resolveActorLogFilename(clusterNameID, sessionID, actorI
 // Worker log files follow the pattern: worker-{worker_id_hex}-{pid}-{worker_startup_token}.{suffix}
 // Returns (nodeIDHex, filename, error).
 func (s *ServerHandler) findWorkerLogFile(clusterNameID, sessionID, nodeID, workerID, suffix string) (string, string, error) {
-	// Convert Base64 node_id to hex for the file path
-	// Ray stores IDs in Base64 (URL-safe) in events, but uses hex in log directory structure
+	// Convert to hex if not already is
 	nodeIDHex, err := decodeBase64ToHex(nodeID)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to decode node_id: %w", err)
@@ -495,7 +503,7 @@ func (s *ServerHandler) ipToNodeId(rayClusterNameID, sessionID, nodeIP string) (
 				continue
 			}
 
-			// Convert base64 node_id to hex (Ray stores node_id as base64 in events)
+			// Convert to hex if not already is
 			nodeIDHex, err := decodeBase64ToHex(nodeIDBytes)
 			if err != nil {
 				logrus.Warnf("Failed to decode node_id %s: %v", nodeIDBytes, err)
