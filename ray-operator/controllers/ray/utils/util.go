@@ -885,12 +885,12 @@ func GetWeightsFromHTTPRoute(httpRoute *gwv1.HTTPRoute, rayServiceInstance *rayv
 
 func GetKubernetesVersion() (*version.Info, error) {
 	config, err := ctrl.GetConfig()
-	if err != nil || config == nil {
+	if err != nil {
 		return nil, err
 	}
 
 	discoveryClient, err := discovery.NewDiscoveryClientForConfig(config)
-	if err != nil || discoveryClient == nil {
+	if err != nil {
 		return nil, err
 	}
 
