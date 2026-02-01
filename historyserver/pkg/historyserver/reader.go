@@ -26,6 +26,9 @@ const (
 	// This matches Ray Dashboard API default behavior.
 	DEFAULT_LOG_LIMIT = 1000
 
+	// DEFAULT_DOWNLOAD_FILENAME is the default filename when download_filename is not specified
+	DEFAULT_DOWNLOAD_FILENAME = "file.txt"
+
 	// MAX_LOG_LIMIT is the maximum number of lines that can be requested.
 	// Requests exceeding this limit will be capped to this value.
 	MAX_LOG_LIMIT = 10000

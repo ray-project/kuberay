@@ -117,7 +117,7 @@ func routerAPI(s *ServerHandler) {
 		Param(ws.QueryParameter("lines", "lines (number of lines to return, default: 1000)")).
 		Param(ws.QueryParameter("timeout", "timeout")).
 		Param(ws.QueryParameter("attempt_number", "attempt_number (task retry attempt number, default: 0)")).
-		Param(ws.QueryParameter("download_file", "download_file (true/false)")).
+		Param(ws.QueryParameter("download_filename", "download_filename (if set, triggers download with this filename)")).
 		Param(ws.QueryParameter("filter_ansi_code", "filter_ansi_code (true/false)")).
 		// TODO: submission_id parameter is not currently supported.
 		// To support it, we need to:
@@ -653,10 +653,12 @@ func (s *ServerHandler) getNodeLogFile(req *restful.Request, resp *restful.Respo
 		return
 	}
 
-	// Set Content-Disposition header if download_file is requested
-	if options.DownloadFile {
-		resp.AddHeader("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", options.Filename))
+	// Use provided download_filename or default to DEFAULT_DOWNLOAD_FILENAME
+	downloadFilename := options.DownloadFilename
+	if downloadFilename == "" {
+		downloadFilename = DEFAULT_DOWNLOAD_FILENAME
 	}
+	resp.AddHeader("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", downloadFilename))
 
 	resp.Write(content)
 }
@@ -723,9 +725,10 @@ func parseGetLogFileOptions(req *restful.Request) (GetLogFileOptions, error) {
 		options.FilterAnsiCode = strings.ToLower(filterStr) == "true"
 	}
 
-	// Parse download_file parameter (boolean)
-	if downloadStr := req.QueryParameter("download_file"); downloadStr != "" {
-		options.DownloadFile = strings.ToLower(downloadStr) == "true"
+	// Parse download_filename parameter
+	// If provided, download with the specified filename
+	if downloadFilename := req.QueryParameter("download_filename"); downloadFilename != "" {
+		options.DownloadFilename = downloadFilename
 	}
 
 	return options, nil
