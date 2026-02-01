@@ -15,7 +15,6 @@ import (
 	"strings"
 
 	"github.com/emicklei/go-restful/v3"
-	"github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
 	eventtypes "github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 	"github.com/sirupsen/logrus"
@@ -487,7 +486,7 @@ func (s *ServerHandler) ipToNodeId(rayClusterNameID, sessionID, nodeIP string) (
 		// Search for NODE_DEFINITION_EVENT with matching node_ip
 		for _, event := range events {
 			eventType, ok := event["eventType"].(string)
-			if !ok || eventType != string(types.NODE_DEFINITION_EVENT) {
+			if !ok || eventType != string(eventtypes.NODE_DEFINITION_EVENT) {
 				continue
 			}
 
