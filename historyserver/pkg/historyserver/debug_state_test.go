@@ -78,7 +78,6 @@ func TestParseDebugState(t *testing.T) {
 	}
 
 	for _, tc := range testcases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			state, err := ParseDebugState(tc.content)
 			if err != nil {

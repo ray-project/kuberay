@@ -371,7 +371,6 @@ func testDeadClusterStatus(test Test, g *WithT, namespace *corev1.Namespace, s3C
 	ApplyHistoryServer(test, g, namespace)
 	historyServerURL := GetHistoryServerURL(test, g, namespace)
 
-	// TODO
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
 	g.Expect(clusterInfo.SessionName).NotTo(Equal(LiveSessionName))
 
