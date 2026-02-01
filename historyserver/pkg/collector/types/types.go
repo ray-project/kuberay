@@ -20,6 +20,9 @@ type RayCollectorConfig struct {
 	RayClusterID   string
 	LogBatching    int
 	PushInterval   time.Duration
+
+	DashboardAddress             string
+	SupportRayEventUnSupportData bool
 }
 
 type UrlInfo struct {

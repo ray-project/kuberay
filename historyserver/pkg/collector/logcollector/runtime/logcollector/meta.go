@@ -71,23 +71,27 @@ func (j *JobResourcesUrlInfoMap) Keys() []string {
 	return keys
 }
 
-var metaCommonUrlInfo = []*types.UrlInfo{
-	{
-		Key:  utils.OssMetaFile_Applications,
-		Url:  "http://localhost:8265/api/serve/applications/",
-		Type: "URL",
-	},
-	{
-		Key:  utils.OssMetaFile_PlacementGroups,
-		Url:  "http://localhost:8265/api/v0/placement_groups",
-		Type: "URL",
-	},
+func (r *RayLogHandler) getMetaCommonUrlInfo() []*types.UrlInfo {
+	return []*types.UrlInfo{
+		{
+			Key:  utils.OssMetaFile_Applications,
+			Url:  fmt.Sprintf("%s/api/serve/applications/", r.DashboardAddress),
+			Type: "URL",
+		},
+		{
+			Key:  utils.OssMetaFile_PlacementGroups,
+			Url:  fmt.Sprintf("%s/api/v0/placement_groups", r.DashboardAddress),
+			Type: "URL",
+		},
+	}
 }
 
-var jobsUrlInfo = &types.UrlInfo{
-	Key:  utils.OssMetaFile_Jobs,
-	Url:  "http://localhost:8265/api/jobs/",
-	Type: "URL",
+func (r *RayLogHandler) getJobsUrlInfo() *types.UrlInfo {
+	return &types.UrlInfo{
+		Key:  utils.OssMetaFile_Jobs,
+		Url:  fmt.Sprintf("%s/api/jobs/", r.DashboardAddress),
+		Type: "URL",
+	}
 }
 
 var jobResourcesUrlInfo = &JobResourcesUrlInfoMap{
@@ -118,7 +122,7 @@ func (r *RayLogHandler) PersistMetaLoop(stop <-chan struct{}) {
 }
 
 func (r *RayLogHandler) PersistMeta() error {
-	for _, metaurl := range metaCommonUrlInfo {
+	for _, metaurl := range r.getMetaCommonUrlInfo() {
 		if _, err := r.PersistUrlInfo(metaurl); err != nil {
 			logrus.Errorf("Failed to persist URL info for %s: %v", metaurl.Url, err)
 			// no need break or return
@@ -169,7 +173,7 @@ func (r *RayLogHandler) PersistUrlInfo(urlinfo *types.UrlInfo) ([]byte, error) {
 }
 
 func (r *RayLogHandler) PersistDatasetsMeta() {
-
+	jobsUrlInfo := r.getJobsUrlInfo()
 	body, err := r.PersistUrlInfo(jobsUrlInfo)
 	if err != nil {
 		logrus.Errorf("Failed to persist meta url %s: %v", jobsUrlInfo.Url, err)
@@ -200,7 +204,7 @@ func (r *RayLogHandler) PersistDatasetsMeta() {
 			jobResourcesUrlInfo.Set(jobID, &types.JobUrlInfo{
 				Url: &types.UrlInfo{
 					Key: fmt.Sprintf("%s%s", utils.OssMetaFile_JOBDATASETS_Prefix, jobID),
-					Url: fmt.Sprintf("http://localhost:8265/api/data/datasets/%s", jobID),
+					Url: fmt.Sprintf("%s/api/data/datasets/%s", r.DashboardAddress, jobID),
 				},
 				Status: status,
 			})
