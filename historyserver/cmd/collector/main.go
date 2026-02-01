@@ -30,7 +30,7 @@ func main() {
 	logBatching := 1000
 	eventsPort := 8080
 	pushInterval := time.Minute
-	supportUnsupportedData := true
+	supportUnsupportedData := false
 	runtimeClassConfigPath := "/var/collector-config/data"
 
 	flag.StringVar(&role, "role", "Worker", "")
@@ -45,8 +45,8 @@ func main() {
 
 	flag.Parse()
 
-	// Read SUPPORT_RAY_EVENT_UNSUPPORTED_DATA environment variable
-	if envValue := os.Getenv("SUPPORT_RAY_EVENT_UNSUPPORTED_DATA"); envValue != "" {
+	// Read SUPPORT_RAY_EVENT_UNSUPPORTED_DATA environment variable if collector runs in head node
+	if envValue := os.Getenv("SUPPORT_RAY_EVENT_UNSUPPORTED_DATA"); role == "Head" && envValue != "" {
 		if parsed, err := strconv.ParseBool(envValue); err == nil {
 			supportUnsupportedData = parsed
 		} else {
