@@ -127,12 +127,6 @@ func (s *ServerHandler) _getNodeLogFile(rayClusterNameID, sessionID string, opti
 	// Build log path
 	logPath := path.Join(sessionID, "logs", nodeID, filename)
 
-	// Append attempt_number if specified and not using task_id
-	// (task_id already includes attempt_number in resolution)
-	if options.AttemptNumber > 0 && options.TaskID == "" {
-		logPath = fmt.Sprintf("%s.%d", logPath, options.AttemptNumber)
-	}
-
 	reader := s.reader.GetContent(rayClusterNameID, logPath)
 
 	if reader == nil {
@@ -219,7 +213,12 @@ func (s *ServerHandler) resolveLogFilename(clusterNameID, sessionID string, opti
 		if options.NodeID == "" {
 			return "", "", fmt.Errorf("node_id is required when filename is provided")
 		}
-		return options.NodeID, options.Filename, nil
+		filename := options.Filename
+		// Append attempt_number if specified for explicit filenames
+		if options.AttemptNumber > 0 {
+			filename = fmt.Sprintf("%s.%d", filename, options.AttemptNumber)
+		}
+		return options.NodeID, filename, nil
 	}
 
 	// If task_id is provided, resolve from task events
