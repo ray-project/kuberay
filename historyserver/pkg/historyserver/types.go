@@ -9,8 +9,8 @@ type GetLogFileOptions struct {
 	// Log file identification (provide one of: Filename, TaskID, ActorID, PID)
 	Filename string // The log file name (explicit path)
 	TaskID   string // Task ID to resolve log file
-	ActorID  string // Actor ID to resolve log file (not yet implemented)
-	PID      int    // Process ID to resolve log file (not yet implemented)
+	ActorID  string // Actor ID to resolve log file
+	PID      int    // Process ID to resolve log file
 
 	// Optional parameters with defaults
 	// Number of lines to return, default to DEFAULT_LOG_LIMIT (1000)
