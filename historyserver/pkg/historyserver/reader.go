@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/emicklei/go-restful/v3"
+	"github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
 	eventtypes "github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 	"github.com/sirupsen/logrus"
@@ -435,6 +436,81 @@ func (s *ServerHandler) GetNodes(rayClusterNameID, sessionId string) ([]byte, er
 	}
 	templ["data"].(map[string]interface{})["summary"] = nodeSummary
 	return json.Marshal(templ)
+}
+
+// ipToNodeId resolves node_id from node_ip by querying node_events from storage.
+// This mirrors Ray Dashboard's ip_to_node_id logic.
+// Returns node_id in hex format if found, error otherwise.
+func (s *ServerHandler) ipToNodeId(rayClusterNameID, sessionID, nodeIP string) (string, error) {
+	if nodeIP == "" {
+		return "", fmt.Errorf("node_ip is empty")
+	}
+
+	// List all node_events files
+	nodeEventsPath := path.Join(sessionID, "node_events")
+	files := s.reader.ListFiles(rayClusterNameID, nodeEventsPath)
+
+	// Parse each node event file to find matching node_ip
+	for _, file := range files {
+		filePath := path.Join(nodeEventsPath, file)
+		reader := s.reader.GetContent(rayClusterNameID, filePath)
+		if reader == nil {
+			continue
+		}
+
+		data, err := io.ReadAll(reader)
+		if err != nil {
+			logrus.Warnf("Failed to read node event file %s: %v", filePath, err)
+			continue
+		}
+
+		var events []map[string]interface{}
+		if err := json.Unmarshal(data, &events); err != nil {
+			logrus.Warnf("Failed to unmarshal node events from %s: %v", filePath, err)
+			continue
+		}
+
+		// Search for NODE_DEFINITION_EVENT with matching node_ip
+		for _, event := range events {
+			eventType, ok := event["eventType"].(string)
+			if !ok || eventType != string(types.NODE_DEFINITION_EVENT) {
+				continue
+			}
+
+			nodeDefEvent, ok := event["nodeDefinitionEvent"].(map[string]interface{})
+			if !ok {
+				continue
+			}
+
+			ipAddr, ok := nodeDefEvent["nodeIpAddress"].(string)
+			if !ok || ipAddr != nodeIP {
+				continue
+			}
+
+			// Found matching node, extract node_id
+			nodeIDBytes, ok := nodeDefEvent["nodeId"].(string)
+			if !ok {
+				continue
+			}
+
+			// Convert base64 node_id to hex (Ray stores node_id as base64 in events)
+			decoded, err := base64.StdEncoding.DecodeString(nodeIDBytes)
+			if err != nil {
+				// Try URL-safe base64 encoding
+				decoded, err = base64.RawURLEncoding.DecodeString(nodeIDBytes)
+				if err != nil {
+					logrus.Warnf("Failed to decode node_id %s: %v", nodeIDBytes, err)
+					continue
+				}
+			}
+
+			nodeIDHex := fmt.Sprintf("%x", decoded)
+			logrus.Infof("Resolved node_ip %s to node_id %s", nodeIP, nodeIDHex)
+			return nodeIDHex, nil
+		}
+	}
+
+	return "", fmt.Errorf("node_id not found for node_ip=%s", nodeIP)
 }
 
 // TODO: implement this

@@ -209,7 +209,7 @@ func testLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Names
 		{"lines+timeout+filter", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=50&timeout=10&filter_ansi_code=true", u, EndpointLogFile, n, filename) }, http.StatusOK},
 
 		// Missing mandatory parameters
-		{"missing node_id", func(u, n string) string { return fmt.Sprintf("%s%s?filename=%s", u, EndpointLogFile, filename) }, http.StatusBadRequest},
+		{"missing node_id and node_ip", func(u, n string) string { return fmt.Sprintf("%s%s?filename=%s", u, EndpointLogFile, filename) }, http.StatusBadRequest},
 		{"missing filename", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s", u, EndpointLogFile, n) }, http.StatusBadRequest},
 		{"missing both", func(u, n string) string { return fmt.Sprintf("%s%s", u, EndpointLogFile) }, http.StatusBadRequest},
 
@@ -222,6 +222,9 @@ func testLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Names
 		// ref: https://github.com/ray-project/ray/blob/68d01c4c48a59c7768ec9c2359a1859966c446b6/python/ray/dashboard/modules/state/state_head.py#L282-L284
 		{"file not found", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=nonexistent.log", u, EndpointLogFile, n) }, http.StatusInternalServerError},
 		{"task_id invalid (not found)", func(u, n string) string { return fmt.Sprintf("%s%s?task_id=nonexistent-task-id", u, EndpointLogFile) }, http.StatusInternalServerError},
+
+		// node_ip parameter tests
+		{"node_ip invalid (non-existent)", func(u, n string) string { return fmt.Sprintf("%s%s?node_ip=192.168.255.255&filename=%s", u, EndpointLogFile, filename) }, http.StatusInternalServerError},
 
 		// Path traversal attacks
 		{"traversal ../etc/passwd", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=../etc/passwd", u, EndpointLogFile, n) }, http.StatusBadRequest},
@@ -379,6 +382,30 @@ func testLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Names
 		g.Expect(resp.StatusCode).To(Equal(http.StatusInternalServerError), "Expected 500 for non-existent pid, got %d: %s", resp.StatusCode, string(body))
 	})
 
+	// Sub-test for node_ip parameter (live cluster)
+	test.T().Run("node_ip parameter", func(t *testing.T) {
+		g := NewWithT(t)
+
+		// Get node IP from head pod (use Pod IP, not Host IP)
+		// Ray registers nodes with Pod IP (--node-ip-address flag)
+		headPod, err := GetHeadPod(test, rayCluster)
+		g.Expect(err).NotTo(HaveOccurred())
+		nodeIP := headPod.Status.PodIP
+		g.Expect(nodeIP).NotTo(BeEmpty(), "Head pod should have a pod IP")
+		LogWithTimestamp(t, "Found head pod with IP: %s", nodeIP)
+
+		// Test successful case: node_ip + filename
+		url := fmt.Sprintf("%s%s?node_ip=%s&filename=%s", historyServerURL, EndpointLogFile, nodeIP, filename)
+		resp, err := client.Get(url)
+		g.Expect(err).NotTo(HaveOccurred())
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		// For live cluster, the request is proxied to Ray Dashboard
+		// The dashboard should be able to resolve node_ip to node_id
+		g.Expect(resp.StatusCode).To(Equal(http.StatusOK), "Expected OK for valid node_ip, got %d: %s", resp.StatusCode, string(body))
+		g.Expect(len(body)).To(BeNumerically(">", 0))
+	})
+
 	DeleteS3Bucket(test, g, s3Client)
 	LogWithTimestamp(test.T(), "Log file endpoint tests completed")
 }
@@ -398,8 +425,15 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 
+	// Capture node IP and ID before deleting cluster (for node_ip tests later)
+	headPod, err := GetHeadPod(test, rayCluster)
+	g.Expect(err).NotTo(HaveOccurred())
+	savedNodeIP := headPod.Status.PodIP
+	savedNodeID := GetNodeIDFromHeadPod(test, g, rayCluster)
+	LogWithTimestamp(test.T(), "Captured node IP %s and node ID %s before cluster deletion", savedNodeIP, savedNodeID)
+
 	// Delete RayCluster to trigger log upload
-	err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Delete(test.Ctx(), rayCluster.Name, metav1.DeleteOptions{})
+	err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Delete(test.Ctx(), rayCluster.Name, metav1.DeleteOptions{})
 	g.Expect(err).NotTo(HaveOccurred())
 	LogWithTimestamp(test.T(), "Deleted RayCluster %s/%s", namespace.Name, rayCluster.Name)
 
@@ -458,7 +492,7 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 		{"all parameters", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=100&timeout=15&attempt_number=0&download_file=true&filter_ansi_code=true", u, EndpointLogFile, n, filename) }, http.StatusOK},
 
 		// Missing mandatory parameters
-		{"missing node_id", func(u, n string) string { return fmt.Sprintf("%s%s?filename=%s", u, EndpointLogFile, filename) }, http.StatusBadRequest},
+		{"missing node_id and node_ip", func(u, n string) string { return fmt.Sprintf("%s%s?filename=%s", u, EndpointLogFile, filename) }, http.StatusBadRequest},
 		{"missing filename", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s", u, EndpointLogFile, n) }, http.StatusBadRequest},
 		{"missing both", func(u, n string) string { return fmt.Sprintf("%s%s", u, EndpointLogFile) }, http.StatusBadRequest},
 
@@ -470,6 +504,9 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 		{"invalid suffix", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&suffix=invalid", u, EndpointLogFile, n, filename) }, http.StatusBadRequest},
 		{"task_id invalid (not found)", func(u, n string) string { return fmt.Sprintf("%s%s?task_id=nonexistent-task-id", u, EndpointLogFile) }, http.StatusBadRequest},
 		{"non-existent pid", func(u, n string) string { return fmt.Sprintf("%s%s?pid=999999&node_id=%s", u, EndpointLogFile, n) }, http.StatusNotFound},
+
+		// node_ip parameter tests
+		{"node_ip invalid (non-existent)", func(u, n string) string { return fmt.Sprintf("%s%s?node_ip=192.168.255.255&filename=%s", u, EndpointLogFile, filename) }, http.StatusNotFound},
 
 		// Path traversal attacks
 		{"traversal ../etc/passwd", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=../etc/passwd", u, EndpointLogFile, n) }, http.StatusBadRequest},
@@ -685,6 +722,32 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 	// from historical data for dead clusters.
 	test.T().Run("pid parameter", func(t *testing.T) {
 		t.Skip("Skipping pid parameter test for dead cluster: worker_pid not available in Ray export events (see https://github.com/ray-project/ray/issues/60129)")
+	})
+
+	// Sub-test for node_ip parameter (dead cluster)
+	test.T().Run("node_ip parameter", func(t *testing.T) {
+		g := NewWithT(t)
+
+		// Use the captured node IP and ID from before cluster deletion
+		LogWithTimestamp(t, "Testing node_ip parameter with IP: %s, ID: %s", savedNodeIP, savedNodeID)
+
+		// Test successful case: node_ip + filename
+		url := fmt.Sprintf("%s%s?node_ip=%s&filename=%s", historyServerURL, EndpointLogFile, savedNodeIP, filename)
+		resp, err := client.Get(url)
+		g.Expect(err).NotTo(HaveOccurred())
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		g.Expect(resp.StatusCode).To(Equal(http.StatusOK), "Expected OK for valid node_ip, got %d: %s", resp.StatusCode, string(body))
+		g.Expect(len(body)).To(BeNumerically(">", 0))
+
+		// Test that node_ip and node_id point to the same node (should return same content)
+		urlWithNodeID := fmt.Sprintf("%s%s?node_id=%s&filename=%s", historyServerURL, EndpointLogFile, savedNodeID, filename)
+		resp2, err := client.Get(urlWithNodeID)
+		g.Expect(err).NotTo(HaveOccurred())
+		bodyWithNodeID, _ := io.ReadAll(resp2.Body)
+		resp2.Body.Close()
+		g.Expect(resp2.StatusCode).To(Equal(http.StatusOK))
+		g.Expect(len(body)).To(Equal(len(bodyWithNodeID)), "node_ip and node_id should return same content")
 	})
 
 	DeleteS3Bucket(test, g, s3Client)

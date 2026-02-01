@@ -107,7 +107,8 @@ func routerAPI(s *ServerHandler) {
 		Writes("")) // Placeholder for specific return type
 	ws.Route(ws.GET("/v0/logs/file").To(s.getNodeLogFile).Filter(s.CookieHandle).
 		Doc("get logfile").
-		Param(ws.QueryParameter("node_id", "node_id (optional if task_id or actor_id is provided)")).
+		Param(ws.QueryParameter("node_id", "node_id (optional if node_ip/task_id/actor_id is provided)")).
+		Param(ws.QueryParameter("node_ip", "node_ip (optional, resolve to node_id)")).
 		Param(ws.QueryParameter("filename", "filename (explicit log file path)")).
 		Param(ws.QueryParameter("task_id", "task_id (resolve log file from task)")).
 		Param(ws.QueryParameter("actor_id", "actor_id (resolve log file from actor)")).
@@ -599,16 +600,16 @@ func (s *ServerHandler) getNodeLogFile(req *restful.Request, resp *restful.Respo
 		return
 	}
 
+	// node_id or node_ip is required when not using actor_id or task_id (they can auto-resolve node_id)
+	if options.NodeID == "" && options.NodeIP == "" && options.ActorID == "" && options.TaskID == "" {
+		resp.WriteErrorString(http.StatusBadRequest, "node_id or node_ip is required when actor_id or task_id is not provided")
+		return
+	}
+
 	// Validate required parameters following Ray Dashboard logic
 	// At least one of: actor_id, task_id, pid, filename, submission_id must be provided
 	if options.ActorID == "" && options.TaskID == "" && options.PID == 0 && options.Filename == "" {
 		resp.WriteErrorString(http.StatusBadRequest, "At least one of actor_id, task_id, pid, or filename is required")
-		return
-	}
-
-	// node_id is required when not using actor_id or task_id (they can auto-resolve node_id)
-	if options.NodeID == "" && options.ActorID == "" && options.TaskID == "" {
-		resp.WriteErrorString(http.StatusBadRequest, "node_id is required when actor_id or task_id is not provided")
 		return
 	}
 
@@ -622,9 +623,21 @@ func (s *ServerHandler) getNodeLogFile(req *restful.Request, resp *restful.Respo
 		return
 	}
 
+	// For live cluster, proxy the request directly to Ray Dashboard without any processing
 	if sessionName == "live" {
 		s.redirectRequest(req, resp)
 		return
+	}
+
+	// Only resolve node_ip to node_id from stored events for dead cluster
+	if options.NodeID == "" && options.NodeIP != "" {
+		nodeID, err := s.ipToNodeId(clusterNameID+"_"+clusterNamespace, sessionName, options.NodeIP)
+		if err != nil {
+			resp.WriteErrorString(http.StatusNotFound,
+				fmt.Sprintf("Cannot find matching node_id for a given node ip %s", options.NodeIP))
+			return
+		}
+		options.NodeID = nodeID
 	}
 
 	content, err := s._getNodeLogFile(clusterNameID+"_"+clusterNamespace, sessionName, options)
@@ -652,6 +665,7 @@ func (s *ServerHandler) getNodeLogFile(req *restful.Request, resp *restful.Respo
 func parseGetLogFileOptions(req *restful.Request) (GetLogFileOptions, error) {
 	options := GetLogFileOptions{
 		NodeID:   req.QueryParameter("node_id"),
+		NodeIP:   req.QueryParameter("node_ip"),
 		Filename: req.QueryParameter("filename"),
 		TaskID:   req.QueryParameter("task_id"),
 		ActorID:  req.QueryParameter("actor_id"),
