@@ -272,37 +272,23 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		}
 
 		var finishedAt *time.Time
-		if rayJobInstance.Spec.SubmissionMode == rayv1.K8sJobMode {
+		if rayJobInstance.Spec.SubmissionMode == rayv1.K8sJobMode ||
+			rayJobInstance.Spec.SubmissionMode == rayv1.SidecarMode {
 			var shouldUpdate bool
 			shouldUpdate, finishedAt, err = r.checkSubmitterAndUpdateStatusIfNeeded(ctx, rayJobInstance)
 			if err != nil {
 				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 			}
 
-			if checkSubmitterFinishedTimeoutAndUpdateStatusIfNeeded(ctx, rayJobInstance, finishedAt) {
+			// For K8sJobMode, check timeout before dashboard check
+			if rayJobInstance.Spec.SubmissionMode == rayv1.K8sJobMode &&
+				checkSubmitterFinishedTimeoutAndUpdateStatusIfNeeded(ctx, rayJobInstance, finishedAt) {
 				break
 			}
 
 			if shouldUpdate {
 				break
 			}
-		}
-
-		if rayJobInstance.Spec.SubmissionMode == rayv1.SidecarMode {
-			// check head pod
-			headPod, err := common.GetRayClusterHeadPod(ctx, r.Client, rayClusterInstance)
-			if err != nil {
-				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
-			}
-			if headPod == nil {
-				rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusFailed
-				rayJobInstance.Status.Reason = rayv1.AppFailed
-				rayJobInstance.Status.Message = "Ray head pod not found."
-				break
-			}
-
-			// Get finishedAt for timeout fallback when dashboard is unreachable
-			finishedAt = getSubmitterContainerFinishedTime(headPod)
 		}
 
 		// Check the current status of ray jobs
@@ -1062,7 +1048,6 @@ func (r *RayJobReconciler) checkSubmitterAndUpdateStatusIfNeeded(ctx context.Con
 	logger := ctrl.LoggerFrom(ctx)
 	shouldUpdate = false
 	finishedAt = nil
-	var submitterContainerStatus *corev1.ContainerStatus
 	var condition *batchv1.JobCondition
 
 	switch rayJob.Spec.SubmissionMode {
@@ -1089,23 +1074,6 @@ func (r *RayJobReconciler) checkSubmitterAndUpdateStatusIfNeeded(ctx context.Con
 			rayJob.Status.Reason = rayv1.AppFailed
 			rayJob.Status.Message = "Ray head pod not found."
 			return
-		}
-
-		shouldUpdate, submitterContainerStatus = checkSidecarContainerStatus(headPod)
-		if shouldUpdate {
-			logger.Info("The submitter sidecar container has failed. Attempting to transition the status to `Failed`.",
-				"Submitter sidecar container", submitterContainerStatus.Name, "Reason", submitterContainerStatus.State.Terminated.Reason, "Message", submitterContainerStatus.State.Terminated.Message)
-			rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusFailed
-			// The submitter sidecar container needs to wait for the user code to finish and retrieve its logs.
-			// Therefore, a failed Submitter sidecar container indicates that the submission itself has failed or the user code has thrown an error.
-			// If the failure is due to user code, the JobStatus and Job message will be updated accordingly from the previous reconciliation.
-			if rayJob.Status.JobStatus == rayv1.JobStatusFailed {
-				rayJob.Status.Reason = rayv1.AppFailed
-			} else {
-				rayJob.Status.Reason = rayv1.SubmissionFailed
-				rayJob.Status.Message = fmt.Sprintf("Ray head pod container %s terminated with exit code %d: %s",
-					submitterContainerStatus.Name, submitterContainerStatus.State.Terminated.ExitCode, submitterContainerStatus.State.Terminated.Reason)
-			}
 		}
 
 		finishedAt = getSubmitterContainerFinishedTime(headPod)
@@ -1171,21 +1139,6 @@ func getJobFinishedCondition(job *batchv1.Job) *batchv1.JobCondition {
 		}
 	}
 	return nil
-}
-
-func checkSidecarContainerStatus(headPod *corev1.Pod) (bool, *corev1.ContainerStatus) {
-	for _, containerStatus := range headPod.Status.ContainerStatuses {
-		if containerStatus.Name == utils.SubmitterContainerName {
-			// Check for terminated containers with error exit codes
-			// Based on the document, "ray job submit" will exit with 0 if the job succeeded, or exit with 1 if it failed.
-			// https://docs.ray.io/en/latest/cluster/running-applications/job-submission/cli.html#ray-job-submit
-			if containerStatus.State.Terminated != nil && containerStatus.State.Terminated.ExitCode != 0 {
-				return true, &containerStatus
-			}
-			break
-		}
-	}
-	return false, nil
 }
 
 func checkActiveDeadlineAndUpdateStatusIfNeeded(ctx context.Context, rayJob *rayv1.RayJob) bool {
