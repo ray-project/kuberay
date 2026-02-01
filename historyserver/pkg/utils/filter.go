@@ -7,7 +7,6 @@ import (
 
 	"github.com/emicklei/go-restful/v3"
 	eventtypes "github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
-	"github.com/sirupsen/logrus"
 )
 
 const RayMaxLimitFromDataSource = 10000
@@ -160,7 +159,6 @@ func ApplyTaskFilters(tasks []eventtypes.Task, listAPIOptions ListAPIOptions) []
 
 // applyFilter applies a filter to the tasks and returns the filtered tasks.
 func applyFilter(tasks []eventtypes.Task, filter Filter) []eventtypes.Task {
-	logrus.Infof("applyFilter: filter: %+v", filter)
 	filteredTasks := make([]eventtypes.Task, 0)
 	for _, task := range tasks {
 		fieldValue := task.GetFilterableFieldValue(filter.FilterKey)
@@ -181,4 +179,30 @@ func applyFilter(tasks []eventtypes.Task, filter Filter) []eventtypes.Task {
 
 // TODO(jwj): ApplyFilters and helpers like sortByIdAndAttempt and limitByLimit should be shared among different objects, e.g., actors, nodes.
 // The following functions are for compatibility for other endpoints other than tasks.
-// restore hanJu's impl.
+type PredicateFunc func(fieldValue, filterValue string) bool
+
+var PredicateMap = map[PredicateType]PredicateFunc{
+	PredicateEqual:    func(field, value string) bool { return field == value },
+	PredicateNotEqual: func(field, value string) bool { return field != value },
+}
+
+func ApplyFilter[T any](items []T, filterKey, filterPredicate, filterValue string, fieldGetter func(T, string) string) []T {
+	if filterKey == "" || filterValue == "" {
+		return items
+	}
+
+	predicate := parsePredicate(filterPredicate)
+	predicateFunc, ok := PredicateMap[predicate]
+	if !ok {
+		predicateFunc = PredicateMap[PredicateEqual]
+	}
+
+	var result []T
+	for _, item := range items {
+		fieldValue := fieldGetter(item, filterKey)
+		if predicateFunc(fieldValue, filterValue) {
+			result = append(result, item)
+		}
+	}
+	return result
+}

@@ -579,9 +579,9 @@ func (s *ServerHandler) getLogicalActors(req *restful.Request, resp *restful.Res
 		return
 	}
 
-	// filterKey := req.QueryParameter("filter_keys")
-	// filterValue := req.QueryParameter("filter_values")
-	// filterPredicate := req.QueryParameter("filter_predicates")
+	filterKey := req.QueryParameter("filter_keys")
+	filterValue := req.QueryParameter("filter_values")
+	filterPredicate := req.QueryParameter("filter_predicates")
 
 	// Get actors from EventHandler's in-memory map
 	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
@@ -594,10 +594,10 @@ func (s *ServerHandler) getLogicalActors(req *restful.Request, resp *restful.Res
 	}
 
 	// Apply generic filtering
-	// actors = utils.ApplyFilter(actors, filterKey, filterPredicate, filterValue,
-	// 	func(a eventtypes.Actor, key string) string {
-	// 		return eventtypes.GetActorFieldValue(a, key)
-	// 	})
+	actors = utils.ApplyFilter(actors, filterKey, filterPredicate, filterValue,
+		func(a eventtypes.Actor, key string) string {
+			return eventtypes.GetActorFieldValue(a, key)
+		})
 
 	// Format response to match Ray Dashboard API format
 	formattedActors := make(map[string]interface{})
@@ -765,9 +765,9 @@ func (s *ServerHandler) getTaskSummarize(req *restful.Request, resp *restful.Res
 	}
 
 	// Parse filter parameters
-	// filterKey := req.QueryParameter("filter_keys")
-	// filterValue := req.QueryParameter("filter_values")
-	// filterPredicate := req.QueryParameter("filter_predicates")
+	filterKey := req.QueryParameter("filter_keys")
+	filterValue := req.QueryParameter("filter_values")
+	filterPredicate := req.QueryParameter("filter_predicates")
 	summaryBy := req.QueryParameter("summary_by")
 
 	// Get all tasks
@@ -775,10 +775,10 @@ func (s *ServerHandler) getTaskSummarize(req *restful.Request, resp *restful.Res
 	tasks := s.eventHandler.GetTasks(clusterSessionKey)
 
 	// Apply generic filtering using utils.ApplyFilter
-	// tasks = utils.ApplyFilter(tasks, filterKey, filterPredicate, filterValue,
-	// 	func(t eventtypes.Task, key string) string {
-	// 		return eventtypes.GetTaskFieldValue(t, key)
-	// 	})
+	tasks = utils.ApplyFilter(tasks, filterKey, filterPredicate, filterValue,
+		func(t eventtypes.Task, key string) string {
+			return t.GetFilterableFieldValue(key)
+		})
 
 	// Summarize tasks based on summary_by parameter
 	var summary map[string]interface{}
