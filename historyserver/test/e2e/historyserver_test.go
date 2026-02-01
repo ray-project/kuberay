@@ -20,8 +20,9 @@ import (
 )
 
 const (
-	LiveSessionName = "live"
-	EndpointLogFile = "/api/v0/logs/file"
+	LiveSessionName   = "live"
+	EndpointLogFile   = "/api/v0/logs/file"
+	EndpointLogStream = "/api/v0/logs/stream"
 )
 
 // ansiEscapePattern matches ANSI escape sequences (same pattern as in reader.go)
@@ -47,6 +48,10 @@ func TestHistoryServer(t *testing.T) {
 		{
 			name:     "/v0/logs/file endpoint (dead cluster)",
 			testFunc: testLogFileEndpointDeadCluster,
+		},
+		{
+			name:     "/v0/logs/stream endpoint",
+			testFunc: testLogStreamEndpoint,
 		},
 	}
 
@@ -876,4 +881,78 @@ func getEligibleWorkerPID(g *WithT, client *http.Client, historyServerURL string
 	// If we get here, no eligible task was found
 	g.Fail("should find at least one task with valid worker_pid and node_id")
 	return 0, ""
+}
+
+// testLogStreamEndpoint verifies the /v0/logs/stream endpoint behavior for both live and dead clusters.
+//
+// The test case follows these steps:
+// 1. Prepare test environment by applying a Ray cluster
+// 2. Submit a Ray job to the existing cluster
+// 3. Apply History Server and get its URL
+// 4. Test live cluster: streaming should work (return 200)
+// 5. Delete cluster to test dead cluster behavior
+// 6. Test dead cluster: streaming should return 501 Not Implemented
+// 7. Delete S3 bucket to ensure test isolation
+func testLogStreamEndpoint(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
+	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
+	ApplyHistoryServer(test, g, namespace)
+	historyServerURL := GetHistoryServerURL(test, g, namespace)
+
+	// Test 1: Live cluster - streaming should work
+	LogWithTimestamp(test.T(), "Testing /v0/logs/stream for live cluster")
+	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
+	g.Expect(clusterInfo.SessionName).To(Equal(LiveSessionName))
+
+	client := CreateHTTPClientWithCookieJar(g)
+	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
+
+	nodeID := GetOneOfNodeID(g, client, historyServerURL)
+	filename := "raylet.out"
+	streamURL := fmt.Sprintf("%s%s?node_id=%s&filename=%s", historyServerURL, EndpointLogStream, nodeID, filename)
+
+	// Test live cluster streaming endpoint
+	test.T().Run("live cluster", func(t *testing.T) {
+		g := NewWithT(t)
+
+		resp, err := client.Get(streamURL)
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(resp.StatusCode).To(Equal(http.StatusOK), "Live cluster should support log streaming")
+
+		resp.Body.Close()
+	})
+
+	// Delete RayCluster to test dead cluster behavior
+	err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Delete(test.Ctx(), rayCluster.Name, metav1.DeleteOptions{})
+	g.Expect(err).NotTo(HaveOccurred())
+	LogWithTimestamp(test.T(), "Deleted RayCluster %s/%s", namespace.Name, rayCluster.Name)
+
+	// Wait for cluster to be fully deleted
+	g.Eventually(func() error {
+		_, err := GetRayCluster(test, namespace.Name, rayCluster.Name)
+		return err
+	}, TestTimeoutMedium).Should(WithTransform(k8serrors.IsNotFound, BeTrue()))
+
+	// Get the new cluster info
+	deadClusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
+	g.Expect(deadClusterInfo.SessionName).NotTo(Equal(LiveSessionName))
+
+	// Set context for dead cluster
+	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, deadClusterInfo.SessionName)
+
+	// Test dead cluster streaming endpoint - should return 501
+	test.T().Run("dead cluster", func(t *testing.T) {
+		g := NewWithT(t)
+		resp2, err := client.Get(streamURL)
+		g.Expect(err).NotTo(HaveOccurred())
+		defer resp2.Body.Close()
+
+		g.Expect(resp2.StatusCode).To(Equal(http.StatusNotImplemented), "Dead cluster should return 501 for log streaming")
+		body, _ := io.ReadAll(resp2.Body)
+		g.Expect(string(body)).To(ContainSubstring("Log streaming only available for live clusters"))
+		LogWithTimestamp(test.T(), "Dead cluster correctly returns 501 Not Implemented")
+	})
+
+	DeleteS3Bucket(test, g, s3Client)
+	LogWithTimestamp(test.T(), "Log stream endpoint tests completed")
 }

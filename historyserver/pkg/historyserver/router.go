@@ -131,6 +131,18 @@ func routerAPI(s *ServerHandler) {
 		//    - Return filename as "job-driver-{submission_id}.log"
 		Produces("text/plain").
 		Writes("")) // Placeholder for specific return type
+	ws.Route(ws.GET("/v0/logs/stream").To(s.getNodeLogStream).Filter(s.CookieHandle).
+		Doc("stream logs in real-time").
+		Param(ws.QueryParameter("node_id", "node_id (optional if node_ip/task_id/actor_id is provided)")).
+		Param(ws.QueryParameter("node_ip", "node_ip (optional, resolve to node_id)")).
+		Param(ws.QueryParameter("filename", "filename (explicit log file path)")).
+		Param(ws.QueryParameter("task_id", "task_id (resolve log file from task)")).
+		Param(ws.QueryParameter("actor_id", "actor_id (resolve log file from actor)")).
+		Param(ws.QueryParameter("pid", "pid (resolve log file from process id)")).
+		Param(ws.QueryParameter("suffix", "suffix (out or err, default: out, used with task_id/actor_id/pid)")).
+		Param(ws.QueryParameter("interval", "interval (polling interval in seconds)")).
+		Produces("text/event-stream").
+		Writes("")) // Placeholder for specific return type
 
 	ws.Route(ws.GET("/v0/tasks").To(s.getTaskDetail).Filter(s.CookieHandle).
 		Doc("get task detail ").
@@ -732,6 +744,19 @@ func parseGetLogFileOptions(req *restful.Request) (GetLogFileOptions, error) {
 	}
 
 	return options, nil
+}
+
+func (s *ServerHandler) getNodeLogStream(req *restful.Request, resp *restful.Response) {
+	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
+
+	// Streaming only available for live clusters
+	if sessionName != "live" {
+		resp.WriteErrorString(http.StatusNotImplemented, "Log streaming only available for live clusters")
+		return
+	}
+
+	// Forward to Ray Dashboard
+	s.redirectRequest(req, resp)
 }
 
 func (s *ServerHandler) getTaskSummarize(req *restful.Request, resp *restful.Response) {
