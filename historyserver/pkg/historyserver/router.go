@@ -118,11 +118,12 @@ func routerAPI(s *ServerHandler) {
 		Produces("text/plain").
 		Writes("")) // Placeholder for specific return type
 
-	ws.Route(ws.GET("/v0/tasks").To(s.getTaskDetail).Filter(s.CookieHandle).
+	ws.Route(ws.GET("/v0/tasks").To(s.getTasks).Filter(s.CookieHandle).
 		Doc("get task detail").
-		// TODO: support limit
-		// Param(ws.QueryParameter("detail", "detail")).
-		// Param(ws.QueryParameter("limit", "limit")).
+		Param(ws.QueryParameter("limit", "limit")).
+		Param(ws.QueryParameter("timeout", "timeout")).
+		Param(ws.QueryParameter("detail", "detail")).
+		Param(ws.QueryParameter("exclude_driver", "exclude_driver")).
 		Param(ws.QueryParameter("filter_keys", "filter_keys")).
 		Param(ws.QueryParameter("filter_predicates", "filter_predicates")).
 		Param(ws.QueryParameter("filter_values", "filter_values")).
@@ -578,9 +579,9 @@ func (s *ServerHandler) getLogicalActors(req *restful.Request, resp *restful.Res
 		return
 	}
 
-	filterKey := req.QueryParameter("filter_keys")
-	filterValue := req.QueryParameter("filter_values")
-	filterPredicate := req.QueryParameter("filter_predicates")
+	// filterKey := req.QueryParameter("filter_keys")
+	// filterValue := req.QueryParameter("filter_values")
+	// filterPredicate := req.QueryParameter("filter_predicates")
 
 	// Get actors from EventHandler's in-memory map
 	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
@@ -593,10 +594,10 @@ func (s *ServerHandler) getLogicalActors(req *restful.Request, resp *restful.Res
 	}
 
 	// Apply generic filtering
-	actors = utils.ApplyFilter(actors, filterKey, filterPredicate, filterValue,
-		func(a eventtypes.Actor, key string) string {
-			return eventtypes.GetActorFieldValue(a, key)
-		})
+	// actors = utils.ApplyFilter(actors, filterKey, filterPredicate, filterValue,
+	// 	func(a eventtypes.Actor, key string) string {
+	// 		return eventtypes.GetActorFieldValue(a, key)
+	// 	})
 
 	// Format response to match Ray Dashboard API format
 	formattedActors := make(map[string]interface{})
@@ -764,9 +765,9 @@ func (s *ServerHandler) getTaskSummarize(req *restful.Request, resp *restful.Res
 	}
 
 	// Parse filter parameters
-	filterKey := req.QueryParameter("filter_keys")
-	filterValue := req.QueryParameter("filter_values")
-	filterPredicate := req.QueryParameter("filter_predicates")
+	// filterKey := req.QueryParameter("filter_keys")
+	// filterValue := req.QueryParameter("filter_values")
+	// filterPredicate := req.QueryParameter("filter_predicates")
 	summaryBy := req.QueryParameter("summary_by")
 
 	// Get all tasks
@@ -774,10 +775,10 @@ func (s *ServerHandler) getTaskSummarize(req *restful.Request, resp *restful.Res
 	tasks := s.eventHandler.GetTasks(clusterSessionKey)
 
 	// Apply generic filtering using utils.ApplyFilter
-	tasks = utils.ApplyFilter(tasks, filterKey, filterPredicate, filterValue,
-		func(t eventtypes.Task, key string) string {
-			return eventtypes.GetTaskFieldValue(t, key)
-		})
+	// tasks = utils.ApplyFilter(tasks, filterKey, filterPredicate, filterValue,
+	// 	func(t eventtypes.Task, key string) string {
+	// 		return eventtypes.GetTaskFieldValue(t, key)
+	// 	})
 
 	// Summarize tasks based on summary_by parameter
 	var summary map[string]interface{}
@@ -862,8 +863,8 @@ func summarizeTasksByLineage(tasks []eventtypes.Task) map[string]interface{} {
 	}
 }
 
-// getTaskDetail
-func (s *ServerHandler) getTaskDetail(req *restful.Request, resp *restful.Response) {
+// getTasks
+func (s *ServerHandler) getTasks(req *restful.Request, resp *restful.Response) {
 	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
 	if sessionName == "live" {
 		s.redirectRequest(req, resp)
@@ -871,26 +872,25 @@ func (s *ServerHandler) getTaskDetail(req *restful.Request, resp *restful.Respon
 	}
 
 	// Parse query parameters.
-	// limit := req.QueryParameter("limit")
-	filterKey := req.QueryParameter("filter_keys")
-	filterValue := req.QueryParameter("filter_values")
-	filterPredicate := req.QueryParameter("filter_predicates")
+	listAPIOptions, err := utils.ParseOptionsFromReq(req)
+	if err != nil {
+		resp.WriteErrorString(http.StatusBadRequest, err.Error())
+		return
+	}
 
-	// Build cluster session key for accessing in-memory task map.
+	// Get tasks from the cluster session.
 	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
 	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
 	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
-
 	tasks := s.eventHandler.GetTasks(clusterSessionKey)
-	// TODO(jwj): Check filters later.
-	tasks = utils.ApplyFilter(tasks, filterKey, filterPredicate, filterValue,
-		func(t eventtypes.Task, key string) string {
-			return eventtypes.GetTaskFieldValue(t, key)
-		})
 
+	// Filter tasks.
+	tasks = utils.ApplyTaskFilters(tasks, listAPIOptions)
+
+	// Format tasks for response.
 	formattedTasks := make([]map[string]interface{}, 0, len(tasks))
 	for _, task := range tasks {
-		formattedTasks = append(formattedTasks, formatTaskForResponse(task))
+		formattedTasks = append(formattedTasks, formatTaskForResponse(task, listAPIOptions.Detail))
 	}
 
 	response := RespTaksInfo{
@@ -922,37 +922,20 @@ func (s *ServerHandler) getTaskDetail(req *restful.Request, resp *restful.Respon
 // formatTaskForResponse formats a task data result of a single task attempt for the response.
 // The schema aligns with the Ray Dashboard API.
 // Ref: https://github.com/ray-project/ray/blob/d0b1d151d8ea964a711e451d0ae736f8bf95b629/python/ray/util/state/common.py#L730-L819.
-func formatTaskForResponse(task eventtypes.Task) map[string]interface{} {
+func formatTaskForResponse(task eventtypes.Task, detail bool) map[string]interface{} {
 	result := map[string]interface{}{
-		"task_id":            task.TaskID,
-		"attempt_number":     task.TaskAttempt,
-		"state":              string(task.State),
-		"job_id":             task.JobID,
-		"actor_id":           task.ActorID,
-		"type":               string(task.TaskType),
-		"parent_task_id":     task.ParentTaskID,
-		"node_id":            task.NodeID,
-		"worker_id":          task.WorkerID,
-		"worker_pid":         task.WorkerPID,
-		"error_type":         string(task.RayErrorInfo.ErrorType),
-		"language":           string(task.Language),
-		"required_resources": task.RequiredResources,
-		"runtime_env_info":   task.SerializedRuntimeEnv,
-		"placement_group_id": task.PlacementGroupID,
-		"events":             task.StateTransitions,
-		// TODO(jwj): Support profiling_data after TASK_PROFILE_EVENT is supported.
-		// Ref: https://github.com/ray-project/ray/blob/d0b1d151d8ea964a711e451d0ae736f8bf95b629/python/ray/util/state/common.py#L1616-L1622.
-		// "profiling_data":     task.ProfilingData,
-		"task_log_info":      task.TaskLogInfo,
-		"error_message":      task.RayErrorInfo.ErrorMessage,
-		"is_debugger_paused": task.IsDebuggerPaused,
-		"call_site":          task.CallSite,
-		"label_selector":     task.LabelSelector,
-		"creation_time_ms":   0,
-		"start_time_ms":      0,
-		"end_time_ms":        0,
+		"task_id":        task.TaskID,
+		"attempt_number": task.TaskAttempt,
+		"state":          string(task.State),
+		"job_id":         task.JobID,
+		"actor_id":       task.ActorID,
+		"type":           string(task.TaskType),
+		"parent_task_id": task.ParentTaskID,
+		"node_id":        task.NodeID,
+		"worker_id":      task.WorkerID,
+		"worker_pid":     task.WorkerPID,
+		"error_type":     string(task.RayErrorInfo.ErrorType),
 	}
-
 	if task.TaskType == eventtypes.ACTOR_TASK {
 		result["name"] = task.ActorTaskName
 		result["func_or_class_name"] = task.ActorFunc.CallString()
@@ -961,14 +944,30 @@ func formatTaskForResponse(task eventtypes.Task) map[string]interface{} {
 		result["func_or_class_name"] = task.TaskFunc.CallString()
 	}
 
-	if !task.CreationTime.IsZero() {
-		result["creation_time_ms"] = task.CreationTime.UnixMilli()
-	}
-	if !task.StartTime.IsZero() {
-		result["start_time_ms"] = task.StartTime.UnixMilli()
-	}
-	if !task.EndTime.IsZero() {
-		result["end_time_ms"] = task.EndTime.UnixMilli()
+	if detail {
+		result["language"] = task.Language
+		result["required_resources"] = task.RequiredResources
+		result["runtime_env_info"] = task.SerializedRuntimeEnv
+		result["placement_group_id"] = task.PlacementGroupID
+		result["events"] = task.StateTransitions
+		// TODO(jwj): Support profiling_data after TASK_PROFILE_EVENT is supported.
+		// Ref: https://github.com/ray-project/ray/blob/d0b1d151d8ea964a711e451d0ae736f8bf95b629/python/ray/util/state/common.py#L1616-L1622.
+		// result["profiling_data"] = task.ProfilingData
+		result["task_log_info"] = task.TaskLogInfo
+		result["error_message"] = task.RayErrorInfo.ErrorMessage
+		result["is_debugger_paused"] = task.IsDebuggerPaused
+		result["call_site"] = task.CallSite
+		result["label_selector"] = task.LabelSelector
+
+		if !task.CreationTime.IsZero() {
+			result["creation_time_ms"] = task.CreationTime.UnixMilli()
+		}
+		if !task.StartTime.IsZero() {
+			result["start_time_ms"] = task.StartTime.UnixMilli()
+		}
+		if !task.EndTime.IsZero() {
+			result["end_time_ms"] = task.EndTime.UnixMilli()
+		}
 	}
 
 	return result

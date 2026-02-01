@@ -262,32 +262,28 @@ func (t *Task) GetLastState() TaskStatus {
 	return t.StateTransitions[len(t.StateTransitions)-1].State
 }
 
-func GetTaskFieldValue(task Task, filterKey string) string {
+// GetFilterableFieldValue returns the filterable field value. For now, we only consider those strongly related to task filtering.
+// Ref: https://github.com/ray-project/ray/blob/d0b1d151d8ea964a711e451d0ae736f8bf95b629/src/ray/protobuf/gcs_service.proto#L795-L859.
+// For all filterable fields, please refer to:
+// Ref: https://github.com/ray-project/ray/blob/d0b1d151d8ea964a711e451d0ae736f8bf95b629/python/ray/util/state/common.py#L730-L819.
+// TODO(jwj): Define object-specific filterable fields (e.g., Actor, Node).
+func (t *Task) GetFilterableFieldValue(filterKey string) string {
 	switch filterKey {
-	case "task_id":
-		return task.TaskID
-	case "parent_task_id":
-		return task.ParentTaskID
+	case "task_type":
+		return string(t.TaskType)
 	case "job_id":
-		return task.JobID
-	case "state":
-		return string(task.State)
-	// case "name", "task_name":
-	// 	return task.Name
-	// case "func_name", "function_name":
-	// 	return task.FuncOrClassName
-	case "node_id":
-		return task.NodeID
+		return t.JobID
+	case "task_id":
+		return t.TaskID
 	case "actor_id":
-		return task.ActorID
-	case "type", "task_type":
-		return string(task.TaskType)
-	case "worker_id":
-		return task.WorkerID
-	case "language":
-		return task.Language
-	// case "error_type":
-	// 	return task.ErrorType
+		return t.ActorID
+	case "task_name":
+		if t.TaskType == ACTOR_TASK {
+			return t.ActorTaskName
+		}
+		return t.TaskName
+	case "state":
+		return string(t.State)
 	default:
 		return ""
 	}
