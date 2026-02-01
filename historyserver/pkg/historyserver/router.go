@@ -118,6 +118,16 @@ func routerAPI(s *ServerHandler) {
 		Param(ws.QueryParameter("attempt_number", "attempt_number (task retry attempt number, default: 0)")).
 		Param(ws.QueryParameter("download_file", "download_file (true/false)")).
 		Param(ws.QueryParameter("filter_ansi_code", "filter_ansi_code (true/false)")).
+		// TODO: submission_id parameter is not currently supported.
+		// To support it, we need to:
+		// 1. Implement DRIVER_JOB_DEFINITION_EVENT processing in eventserver to store driver job info
+		//    (including driver_node_id from the export event)
+		// 2. Add submission_id field to DriverJobDefinitionEvent in Ray (currently missing, tracked in
+		//    https://github.com/ray-project/ray/issues/60129)
+		// 3. Create resolveSubmissionLogFilename() method to:
+		//    - Look up driver job by submission_id
+		//    - Get driver_node_id from stored event
+		//    - Return filename as "job-driver-{submission_id}.log"
 		Produces("text/plain").
 		Writes("")) // Placeholder for specific return type
 
