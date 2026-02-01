@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"path"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -40,10 +41,9 @@ func NewCollector(config *types.RayCollectorConfig, writer storage.StorageWriter
 		DashboardAddress:             config.DashboardAddress,
 		SupportRayEventUnSupportData: config.SupportRayEventUnSupportData,
 	}
+	logDir := strings.TrimSpace(filepath.Join(config.SessionDir, utils.RAY_SESSIONDIR_LOGDIR_NAME))
 	// Initialize meta URL info
 	handler.InitMetaUrlInfo()
-
-	logDir := strings.TrimSpace(path.Join(config.SessionDir, utils.RAY_SESSIONDIR_LOGDIR_NAME))
 	handler.LogDir = logDir
 	// rootMetaDir uses flat key format (name_id) for S3/OSS performance optimization.
 	// See utils.connector for the design rationale.

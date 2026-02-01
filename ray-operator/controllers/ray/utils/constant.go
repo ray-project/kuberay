@@ -245,6 +245,7 @@ const (
 	RayDashboardGCSHealthPath = "api/gcs_healthz"
 	RayServeProxyHealthPath   = "-/healthz"
 	BaseWgetHealthCommand     = "wget --tries 1 -T %d -q -O- http://localhost:%d/%s | grep success"
+	RayNodeHealthPath         = "/api/healthz"
 
 	// Finalizers for RayJob
 	RayJobStopJobFinalizer = "ray.io/rayjob-finalizer"
