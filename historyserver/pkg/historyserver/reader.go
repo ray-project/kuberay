@@ -203,11 +203,6 @@ func (s *ServerHandler) _getNodeLogFile(rayClusterNameID, sessionID string, opti
 // This mirrors Ray Dashboard's resolve_filename logic.
 // The sessionID parameter is required for task_id resolution to search worker log files.
 func (s *ServerHandler) resolveLogFilename(clusterNameID, sessionID string, options GetLogFileOptions) (nodeID, filename string, err error) {
-	// Validate suffix
-	if options.Suffix != "out" && options.Suffix != "err" {
-		return "", "", fmt.Errorf("invalid suffix: %s (must be 'out' or 'err')", options.Suffix)
-	}
-
 	// If filename is explicitly provided, use it and ignore suffix
 	if options.Filename != "" {
 		if options.NodeID == "" {
