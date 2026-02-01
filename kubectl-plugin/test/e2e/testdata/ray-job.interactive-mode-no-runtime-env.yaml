@@ -3,9 +3,9 @@ kind: RayJob
 metadata:
   name: rayjob-sample
 spec:
-  submissionMode: 'InteractiveMode'
+  submissionMode: "InteractiveMode"
   rayClusterSpec:
-    rayVersion: '2.52.0'
+    rayVersion: "2.52.0"
     headGroupSpec:
       template:
         spec:
