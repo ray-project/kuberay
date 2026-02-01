@@ -459,9 +459,8 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 		{"attempt_number=0", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&attempt_number=0", u, EndpointLogFile, n, filename) }, http.StatusOK},
 		{"attempt_number=1 (not found)", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&attempt_number=1", u, EndpointLogFile, n, filename) }, http.StatusNotFound},
 
-		// download_file parameter
-		{"download_file=true", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&download_file=true", u, EndpointLogFile, n, filename) }, http.StatusOK},
-		{"download_file=false", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&download_file=false", u, EndpointLogFile, n, filename) }, http.StatusOK},
+		// download_filename parameter
+		{"download_filename=custom.log", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&download_filename=custom.log", u, EndpointLogFile, n, filename) }, http.StatusOK},
 
 		// filter_ansi_code parameter
 		{"filter_ansi_code=true", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&filter_ansi_code=true", u, EndpointLogFile, n, filename) }, http.StatusOK},
@@ -473,7 +472,7 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 
 		// Combined parameters
 		{"lines+timeout+filter", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=50&timeout=10&filter_ansi_code=true", u, EndpointLogFile, n, filename) }, http.StatusOK},
-		{"all parameters", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=100&timeout=15&attempt_number=0&download_file=true&filter_ansi_code=true", u, EndpointLogFile, n, filename) }, http.StatusOK},
+		{"all parameters", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=100&timeout=15&attempt_number=0&download_filename=custom.log&filter_ansi_code=true", u, EndpointLogFile, n, filename) }, http.StatusOK},
 
 		// Missing mandatory parameters
 		{"missing node_id and node_ip", func(u, n string) string { return fmt.Sprintf("%s%s?filename=%s", u, EndpointLogFile, filename) }, http.StatusBadRequest},
@@ -530,95 +529,79 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 	}
 
 	// Sub-tests for specific parameter behaviors
-	test.T().Run("download_file header validation", func(t *testing.T) {
+	test.T().Run("download_filename header validation", func(t *testing.T) {
 		g := NewWithT(t)
-		g.Eventually(func(gg Gomega) {
-			// Test with download_file=true
-			urlWithDownload := fmt.Sprintf("%s%s?node_id=%s&filename=%s&download_file=true", historyServerURL, EndpointLogFile, nodeID, filename)
-			resp, err := client.Get(urlWithDownload)
-			gg.Expect(err).NotTo(HaveOccurred())
-			defer resp.Body.Close()
+		// Test with download_filename parameter set
+		customFilename := "custom_download.log"
+		urlWithDownload := fmt.Sprintf("%s%s?node_id=%s&filename=%s&download_filename=%s", historyServerURL, EndpointLogFile, nodeID, filename, customFilename)
+		resp, err := client.Get(urlWithDownload)
+		g.Expect(err).NotTo(HaveOccurred())
+		defer resp.Body.Close()
 
-			gg.Expect(resp.StatusCode).To(Equal(http.StatusOK))
-			contentDisposition := resp.Header.Get("Content-Disposition")
-			gg.Expect(contentDisposition).To(ContainSubstring("attachment"))
-			gg.Expect(contentDisposition).To(ContainSubstring(fmt.Sprintf("filename=\"%s\"", filename)))
-			LogWithTimestamp(test.T(), "download_file=true sets Content-Disposition header: %s", contentDisposition)
-
-			// Test with download_file=false, should not have Content-Disposition header
-			urlWithoutDownload := fmt.Sprintf("%s%s?node_id=%s&filename=%s&download_file=false", historyServerURL, EndpointLogFile, nodeID, filename)
-			resp2, err := client.Get(urlWithoutDownload)
-			gg.Expect(err).NotTo(HaveOccurred())
-			defer resp2.Body.Close()
-
-			gg.Expect(resp2.StatusCode).To(Equal(http.StatusOK))
-			contentDisposition2 := resp2.Header.Get("Content-Disposition")
-			gg.Expect(contentDisposition2).To(BeEmpty(), "Content-Disposition should not be set when download_file=false")
-		}, TestTimeoutShort).Should(Succeed())
+		g.Expect(resp.StatusCode).To(Equal(http.StatusOK))
+		contentDisposition := resp.Header.Get("Content-Disposition")
+		g.Expect(contentDisposition).To(ContainSubstring("attachment"))
+		g.Expect(contentDisposition).To(ContainSubstring(fmt.Sprintf("filename=\"%s\"", customFilename)))
 	})
 
 	test.T().Run("filter_ansi_code behavior", func(t *testing.T) {
 		g := NewWithT(t)
-		g.Eventually(func(gg Gomega) {
-			// Fetch with filter_ansi_code=false (original content with ANSI codes)
-			urlWithoutFilter := fmt.Sprintf("%s%s?node_id=%s&filename=%s&filter_ansi_code=false&lines=100", historyServerURL, EndpointLogFile, nodeID, filename)
-			resp, err := client.Get(urlWithoutFilter)
-			gg.Expect(err).NotTo(HaveOccurred())
-			defer resp.Body.Close()
+		// Fetch with filter_ansi_code=false (original content with ANSI codes)
+		urlWithoutFilter := fmt.Sprintf("%s%s?node_id=%s&filename=%s&filter_ansi_code=false&lines=100", historyServerURL, EndpointLogFile, nodeID, filename)
+		resp, err := client.Get(urlWithoutFilter)
+		g.Expect(err).NotTo(HaveOccurred())
+		defer resp.Body.Close()
 
-			gg.Expect(resp.StatusCode).To(Equal(http.StatusOK))
-			bodyWithoutFilter, err := io.ReadAll(resp.Body)
-			gg.Expect(err).NotTo(HaveOccurred())
+		g.Expect(resp.StatusCode).To(Equal(http.StatusOK))
+		bodyWithoutFilter, err := io.ReadAll(resp.Body)
+		g.Expect(err).NotTo(HaveOccurred())
 
-			// Fetch with filter_ansi_code=true (ANSI codes should be removed)
-			urlWithFilter := fmt.Sprintf("%s%s?node_id=%s&filename=%s&filter_ansi_code=true&lines=100", historyServerURL, EndpointLogFile, nodeID, filename)
-			resp2, err := client.Get(urlWithFilter)
-			gg.Expect(err).NotTo(HaveOccurred())
-			defer resp2.Body.Close()
+		// Fetch with filter_ansi_code=true (ANSI codes should be removed)
+		urlWithFilter := fmt.Sprintf("%s%s?node_id=%s&filename=%s&filter_ansi_code=true&lines=100", historyServerURL, EndpointLogFile, nodeID, filename)
+		resp2, err := client.Get(urlWithFilter)
+		g.Expect(err).NotTo(HaveOccurred())
+		defer resp2.Body.Close()
 
-			gg.Expect(resp2.StatusCode).To(Equal(http.StatusOK))
-			bodyWithFilter, err := io.ReadAll(resp2.Body)
-			gg.Expect(err).NotTo(HaveOccurred())
+		g.Expect(resp2.StatusCode).To(Equal(http.StatusOK))
+		bodyWithFilter, err := io.ReadAll(resp2.Body)
+		g.Expect(err).NotTo(HaveOccurred())
 
-			// Check if original content contains ANSI codes using the same pattern as reader.go
-			hasAnsiInOriginal := ansiEscapePattern.Match(bodyWithoutFilter)
+		// Check if original content contains ANSI codes using the same pattern as reader.go
+		hasAnsiInOriginal := ansiEscapePattern.Match(bodyWithoutFilter)
 
-			if hasAnsiInOriginal {
-				LogWithTimestamp(test.T(), "Original log contains ANSI codes, verifying they are filtered")
-				// Filtered content should NOT contain ANSI escape sequences
-				hasAnsiInFiltered := ansiEscapePattern.Match(bodyWithFilter)
-				gg.Expect(hasAnsiInFiltered).To(BeFalse(), "Filtered content should not contain ANSI escape sequences")
-			} else {
-				LogWithTimestamp(test.T(), "Log doesn't contain ANSI codes, check is skipped...")
-			}
-		}, TestTimeoutShort).Should(Succeed())
+		if hasAnsiInOriginal {
+			LogWithTimestamp(test.T(), "Original log contains ANSI codes, verifying they are filtered")
+			// Filtered content should NOT contain ANSI escape sequences
+			hasAnsiInFiltered := ansiEscapePattern.Match(bodyWithFilter)
+			g.Expect(hasAnsiInFiltered).To(BeFalse(), "Filtered content should not contain ANSI escape sequences")
+		} else {
+			LogWithTimestamp(test.T(), "Log doesn't contain ANSI codes, check is skipped...")
+		}
 	})
 
 	test.T().Run("attempt_number behavior", func(t *testing.T) {
 		g := NewWithT(t)
-		g.Eventually(func(gg Gomega) {
-			// Test with attempt_number=0
-			urlAttempt0 := fmt.Sprintf("%s%s?node_id=%s&filename=%s&attempt_number=0", historyServerURL, EndpointLogFile, nodeID, filename)
-			resp, err := client.Get(urlAttempt0)
-			gg.Expect(err).NotTo(HaveOccurred())
-			defer resp.Body.Close()
+		// Test with attempt_number=0
+		urlAttempt0 := fmt.Sprintf("%s%s?node_id=%s&filename=%s&attempt_number=0", historyServerURL, EndpointLogFile, nodeID, filename)
+		resp, err := client.Get(urlAttempt0)
+		g.Expect(err).NotTo(HaveOccurred())
+		defer resp.Body.Close()
 
-			gg.Expect(resp.StatusCode).To(Equal(http.StatusOK))
-			body, err := io.ReadAll(resp.Body)
-			gg.Expect(err).NotTo(HaveOccurred())
-			gg.Expect(len(body)).To(BeNumerically(">", 0))
-			LogWithTimestamp(test.T(), "attempt_number=0 returned %d bytes", len(body))
+		g.Expect(resp.StatusCode).To(Equal(http.StatusOK))
+		body, err := io.ReadAll(resp.Body)
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(len(body)).To(BeNumerically(">", 0))
+		LogWithTimestamp(test.T(), "attempt_number=0 returned %d bytes", len(body))
 
-			// attempt_number=1 should fail as retry log doesn't exist for normal execution
-			urlAttempt1 := fmt.Sprintf("%s%s?node_id=%s&filename=%s&attempt_number=1", historyServerURL, EndpointLogFile, nodeID, filename)
-			resp2, err := client.Get(urlAttempt1)
-			gg.Expect(err).NotTo(HaveOccurred())
-			defer resp2.Body.Close()
+		// attempt_number=1 should fail as retry log doesn't exist for normal execution
+		urlAttempt1 := fmt.Sprintf("%s%s?node_id=%s&filename=%s&attempt_number=1", historyServerURL, EndpointLogFile, nodeID, filename)
+		resp2, err := client.Get(urlAttempt1)
+		g.Expect(err).NotTo(HaveOccurred())
+		defer resp2.Body.Close()
 
-			gg.Expect(resp2.StatusCode).To(Equal(http.StatusNotFound),
-				"attempt_number=1 should return 404 when retry log doesn't exist")
-			LogWithTimestamp(test.T(), "attempt_number=1 correctly returns 404 (file not found)")
-		}, TestTimeoutShort).Should(Succeed())
+		g.Expect(resp2.StatusCode).To(Equal(http.StatusNotFound),
+			"attempt_number=1 should return 404 when retry log doesn't exist")
+		LogWithTimestamp(test.T(), "attempt_number=1 correctly returns 404 (file not found)")
 	})
 
 	// Sub-test for task_id parameter
@@ -835,8 +818,6 @@ func getAllEligibleActorIDs(g *WithT, client *http.Client, historyServerURL stri
 		actorIDs = append(actorIDs, actorID)
 	}
 
-	fmt.Printf("Actor IDs: %+v", actorIDs)
-
 	g.Expect(len(actorIDs)).To(BeNumerically(">", 0), "should have at least one eligible actor")
 
 	return actorIDs
@@ -868,8 +849,6 @@ func getEligibleWorkerPID(g *WithT, client *http.Client, historyServerURL string
 	tasks, ok := dataResult["result"].([]interface{})
 	g.Expect(ok).To(BeTrue(), "result should have 'result' array")
 	g.Expect(len(tasks)).To(BeNumerically(">", 0), "should have at least one task")
-
-	fmt.Printf("Tasks: %+v", tasks)
 
 	// Find a task with valid worker_pid and node_id
 	for _, t := range tasks {
