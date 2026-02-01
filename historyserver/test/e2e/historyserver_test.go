@@ -222,9 +222,9 @@ func testLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Names
 		// ref: https://github.com/ray-project/ray/blob/68d01c4c48a59c7768ec9c2359a1859966c446b6/python/ray/dashboard/modules/state/state_head.py#L282-L284
 		{"file not found", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=nonexistent.log", u, EndpointLogFile, n) }, http.StatusInternalServerError},
 		{"task_id invalid (not found)", func(u, n string) string { return fmt.Sprintf("%s%s?task_id=nonexistent-task-id", u, EndpointLogFile) }, http.StatusInternalServerError},
-
-		// node_ip parameter tests
 		{"node_ip invalid (non-existent)", func(u, n string) string { return fmt.Sprintf("%s%s?node_ip=192.168.255.255&filename=%s", u, EndpointLogFile, filename) }, http.StatusInternalServerError},
+		{"pid invalid (string)", func(u, n string) string { return fmt.Sprintf("%s%s?pid=abc&node_id=%s", u, EndpointLogFile, n) }, http.StatusBadRequest},
+		{"pid non-existent", func(u, n string) string { return fmt.Sprintf("%s%s?pid=999999&node_id=%s", u, EndpointLogFile, n) }, http.StatusInternalServerError},
 
 		// Path traversal attacks
 		{"traversal ../etc/passwd", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=../etc/passwd", u, EndpointLogFile, n) }, http.StatusBadRequest},
@@ -364,22 +364,6 @@ func testLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Names
 		g.Expect(err).NotTo(HaveOccurred())
 		resp.Body.Close()
 		g.Expect(resp.StatusCode).To(Equal(http.StatusBadRequest))
-
-		// Test invalid pid
-		url = fmt.Sprintf("%s%s?pid=abc&node_id=%s", historyServerURL, EndpointLogFile, nodeID)
-		resp, err = client.Get(url)
-		g.Expect(err).NotTo(HaveOccurred())
-		resp.Body.Close()
-		g.Expect(resp.StatusCode).To(Equal(http.StatusBadRequest))
-
-		// Test non-existent pid
-		url = fmt.Sprintf("%s%s?pid=999999&node_id=%s", historyServerURL, EndpointLogFile, nodeID)
-		resp, err = client.Get(url)
-		g.Expect(err).NotTo(HaveOccurred())
-		body, _ = io.ReadAll(resp.Body)
-		resp.Body.Close()
-		// For a live cluster, this is proxied to the dashboard. The dashboard returns 500 for file not found.
-		g.Expect(resp.StatusCode).To(Equal(http.StatusInternalServerError), "Expected 500 for non-existent pid, got %d: %s", resp.StatusCode, string(body))
 	})
 
 	// Sub-test for node_ip parameter (live cluster)
