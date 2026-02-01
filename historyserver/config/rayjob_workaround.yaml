@@ -1,0 +1,57 @@
+# RayJob that demonstrates endpoints used by the "persist metadata" workaround:
+# - Placement groups (api/v0/placement_groups)
+# - Serve applications (api/serve/applications/)
+# - Datasets (api/jobs/ + api/data/datasets/{job_id})
+#
+# Use this with the History Server setup guide (Step 6). Ensure the collector
+# has SUPPORT_RAY_EVENT_UNSUPPORTED_DATA enabled so it persists these to blob storage.
+# After the job runs, you can view the data in Ray Dashboard, and after cluster
+# teardown, via History Server (from persisted meta).
+#
+apiVersion: ray.io/v1
+kind: RayJob
+metadata:
+  name: rayjob-workaround
+spec:
+  entrypoint: |
+    python -c "
+    import ray
+    import time
+
+    ray.init()
+
+    # --- 1. Placement group (visible under api/v0/placement_groups) ---
+    pg = ray.util.placement_group(
+        name='workaround_pg',
+        strategy='PACK',
+        bundles=[{'CPU': 0.2}]
+    )
+    ray.get(pg.ready())
+    print('Placement group created:', pg.id.hex())
+
+    # --- 2. Serve application (visible under api/serve/applications/) ---
+    from ray import serve
+
+    @serve.deployment(num_replicas=1)
+    def hello(request):
+        return {'message': 'hello from workaround'}
+
+    serve.run(hello.bind(), name='workaround_app')
+    print('Serve application deployed: workaround_app')
+
+    # --- 3. Dataset (creates job + dataset; visible under api/jobs/ and api/data/datasets/) ---
+    ds = ray.data.range(10)
+    n = ds.count()
+    print('Dataset created, count:', n)
+
+    # Keep running so the collector can poll Dashboard API and persist meta (e.g. every 5s).
+    # Wait long enough for at least one full persist cycle.
+    print('Waiting 15s for collector to persist metadata...')
+    time.sleep(15)
+
+    # Align with existing guide: allow events to be sent before shutdown.
+    time.sleep(5)
+    print('Done.')
+    "
+  clusterSelector:
+    ray.io/cluster: raycluster-historyserver
