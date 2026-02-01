@@ -29,6 +29,12 @@ const (
 	ATTRIBUTE_SERVICE_NAME = "cluster_service_name"
 )
 
+type ServiceInfo struct {
+	ServiceName string
+	Namespace   string
+	Port        int
+}
+
 func RequestLogFilter(req *restful.Request, resp *restful.Response, chain *restful.FilterChain) {
 	logrus.Infof("Received request: %s %s", req.Request.Method, req.Request.URL.String())
 	chain.ProcessFilter(req, resp)
@@ -113,8 +119,9 @@ func routerAPI(s *ServerHandler) {
 		Writes("")) // Placeholder for specific return type
 
 	ws.Route(ws.GET("/v0/tasks").To(s.getTaskDetail).Filter(s.CookieHandle).
-		Doc("get task detail ").
+		Doc("get task detail").
 		// TODO: support limit
+		// Param(ws.QueryParameter("detail", "detail")).
 		// Param(ws.QueryParameter("limit", "limit")).
 		Param(ws.QueryParameter("filter_keys", "filter_keys")).
 		Param(ws.QueryParameter("filter_predicates", "filter_predicates")).
@@ -266,26 +273,63 @@ func (s *ServerHandler) RegisterRouter() {
 }
 
 func (s *ServerHandler) redirectRequest(req *restful.Request, resp *restful.Response) {
-	svcName := req.Attribute(ATTRIBUTE_SERVICE_NAME).(string)
-	remoteResp, err := s.httpClient.Get("http://" + svcName + req.Request.URL.String())
+	svcInfo := req.Attribute(ATTRIBUTE_SERVICE_NAME).(ServiceInfo)
+
+	var targetURL string
+	if s.useKubernetesProxy {
+		// Use Kubernetes API server proxy to access the in-cluster RayDashboard services.
+		targetURL = fmt.Sprintf("%s/api/v1/namespaces/%s/services/%s:dashboard/proxy%s",
+			s.clientManager.configs[0].Host,
+			svcInfo.Namespace,
+			svcInfo.ServiceName,
+			req.Request.URL.String())
+		logrus.Infof("Using Kubernetes API server proxy to access service %s/%s: %s",
+			svcInfo.Namespace, svcInfo.ServiceName, req.Request.URL.String())
+	} else {
+		// Connect through in-cluster service discovery.
+		targetURL = fmt.Sprintf("http://%s:%d%s", svcInfo.ServiceName, svcInfo.Port, req.Request.URL.String())
+		logrus.Infof("Using in-cluster service discovery to access service %s/%s: %s",
+			svcInfo.Namespace, svcInfo.ServiceName, req.Request.URL.String())
+	}
+
+	// Create a new request to the target URL.
+	proxyReq, err := http.NewRequest(req.Request.Method, targetURL, req.Request.Body)
 	if err != nil {
-		logrus.Errorf("Error: %v", err)
+		logrus.Errorf("Failed to create proxy request: %v", err)
+		resp.WriteError(http.StatusInternalServerError, err)
+		return
+	}
+
+	// Copy headers from original request to proxy request.
+	for key, values := range req.Request.Header {
+		if strings.ToLower(key) != "host" {
+			for _, value := range values {
+				// Use Add() to preserve multiple values for the same header key.
+				proxyReq.Header.Add(key, value)
+			}
+		}
+	}
+
+	// Send the proxy request to the target URL.
+	remoteResp, err := s.httpClient.Do(proxyReq)
+	if err != nil {
+		logrus.Errorf("Failed to proxy request to %s: %v", targetURL, err)
 		resp.WriteError(http.StatusBadGateway, err)
 		return
 	}
 	defer remoteResp.Body.Close()
 
-	// Copy headers from remote response
+	// Copy headers from remote response.
 	for key, values := range remoteResp.Header {
 		for _, value := range values {
 			resp.Header().Add(key, value)
 		}
 	}
 
-	// Set status code
+	// Set status code.
 	resp.WriteHeader(remoteResp.StatusCode)
 
-	// Copy response body
+	// Copy response body.
 	_, err = io.Copy(resp, remoteResp.Body)
 	if err != nil {
 		logrus.Errorf("Failed to copy response body: %v", err)
@@ -766,7 +810,8 @@ func summarizeTasksByFuncName(tasks []eventtypes.Task) map[string]interface{} {
 	summary := make(map[string]map[string]int)
 
 	for _, task := range tasks {
-		funcName := task.FuncOrClassName
+		// funcName := task.FuncOrClassName
+		funcName := ""
 		if funcName == "" {
 			funcName = "unknown"
 		}
@@ -817,41 +862,49 @@ func summarizeTasksByLineage(tasks []eventtypes.Task) map[string]interface{} {
 	}
 }
 
+// getTaskDetail
 func (s *ServerHandler) getTaskDetail(req *restful.Request, resp *restful.Response) {
-	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
-	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
 	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
-
 	if sessionName == "live" {
 		s.redirectRequest(req, resp)
 		return
 	}
 
+	// Parse query parameters.
+	// limit := req.QueryParameter("limit")
 	filterKey := req.QueryParameter("filter_keys")
 	filterValue := req.QueryParameter("filter_values")
 	filterPredicate := req.QueryParameter("filter_predicates")
 
+	// Build cluster session key for accessing in-memory task map.
+	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
+	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
 	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
+
 	tasks := s.eventHandler.GetTasks(clusterSessionKey)
+	// TODO(jwj): Check filters later.
 	tasks = utils.ApplyFilter(tasks, filterKey, filterPredicate, filterValue,
 		func(t eventtypes.Task, key string) string {
 			return eventtypes.GetTaskFieldValue(t, key)
 		})
 
-	taskResults := make([]interface{}, 0, len(tasks))
+	formattedTasks := make([]map[string]interface{}, 0, len(tasks))
 	for _, task := range tasks {
-		taskResults = append(taskResults, formatTaskForResponse(task))
+		formattedTasks = append(formattedTasks, formatTaskForResponse(task))
 	}
 
-	response := ReplyTaskInfo{
+	response := RespTaksInfo{
 		Result: true,
-		Msg:    "Tasks fetched.",
-		Data: TaskInfoData{
-			Result: TaskInfoDataResult{
-				Result:             taskResults,
-				Total:              len(taskResults),
-				NumFiltered:        len(taskResults),
-				NumAfterTruncation: len(taskResults),
+		Msg:    "",
+		Data: TaskData{
+			Result: TaskDataResult{
+				Total:  len(formattedTasks),
+				Result: formattedTasks,
+				// TODO(jwj): Derive the following fields later.
+				NumAfterTruncation:    len(formattedTasks),
+				NumFiltered:           len(formattedTasks),
+				PartialFailureWarning: "",
+				Warnings:              nil,
 			},
 		},
 	}
@@ -862,36 +915,60 @@ func (s *ServerHandler) getTaskDetail(req *restful.Request, resp *restful.Respon
 		resp.WriteErrorString(http.StatusInternalServerError, err.Error())
 		return
 	}
+
 	resp.Write(respData)
 }
 
-// formatTaskForResponse converts an eventtypes.Task to the format expected by Ray Dashboard
+// formatTaskForResponse formats a task data result of a single task attempt for the response.
+// The schema aligns with the Ray Dashboard API.
+// Ref: https://github.com/ray-project/ray/blob/d0b1d151d8ea964a711e451d0ae736f8bf95b629/python/ray/util/state/common.py#L730-L819.
 func formatTaskForResponse(task eventtypes.Task) map[string]interface{} {
 	result := map[string]interface{}{
 		"task_id":            task.TaskID,
-		"name":               task.Name,
-		"attempt_number":     task.AttemptNumber,
+		"attempt_number":     task.TaskAttempt,
 		"state":              string(task.State),
 		"job_id":             task.JobID,
-		"node_id":            task.NodeID,
 		"actor_id":           task.ActorID,
-		"placement_group_id": task.PlacementGroupID,
-		"type":               string(task.Type),
-		"func_or_class_name": task.FuncOrClassName,
-		"language":           task.Language,
-		"required_resources": task.RequiredResources,
+		"type":               string(task.TaskType),
+		"parent_task_id":     task.ParentTaskID,
+		"node_id":            task.NodeID,
 		"worker_id":          task.WorkerID,
-		"error_type":         task.ErrorType,
-		"error_message":      task.ErrorMessage,
+		"worker_pid":         task.WorkerPID,
+		"error_type":         string(task.RayErrorInfo.ErrorType),
+		"language":           string(task.Language),
+		"required_resources": task.RequiredResources,
+		"runtime_env_info":   task.SerializedRuntimeEnv,
+		"placement_group_id": task.PlacementGroupID,
+		"events":             task.StateTransitions,
+		// TODO(jwj): Support profiling_data after TASK_PROFILE_EVENT is supported.
+		// Ref: https://github.com/ray-project/ray/blob/d0b1d151d8ea964a711e451d0ae736f8bf95b629/python/ray/util/state/common.py#L1616-L1622.
+		// "profiling_data":     task.ProfilingData,
+		"task_log_info":      task.TaskLogInfo,
+		"error_message":      task.RayErrorInfo.ErrorMessage,
+		"is_debugger_paused": task.IsDebuggerPaused,
 		"call_site":          task.CallSite,
+		"label_selector":     task.LabelSelector,
+		"creation_time_ms":   0,
+		"start_time_ms":      0,
+		"end_time_ms":        0,
 	}
 
+	if task.TaskType == eventtypes.ACTOR_TASK {
+		result["name"] = task.ActorTaskName
+		result["func_or_class_name"] = task.ActorFunc.CallString()
+	} else {
+		result["name"] = task.TaskName
+		result["func_or_class_name"] = task.TaskFunc.CallString()
+	}
+
+	if !task.CreationTime.IsZero() {
+		result["creation_time_ms"] = task.CreationTime.UnixMilli()
+	}
 	if !task.StartTime.IsZero() {
-		result["start_time"] = task.StartTime.UnixMilli()
+		result["start_time_ms"] = task.StartTime.UnixMilli()
 	}
-
 	if !task.EndTime.IsZero() {
-		result["end_time"] = task.EndTime.UnixMilli()
+		result["end_time_ms"] = task.EndTime.UnixMilli()
 	}
 
 	return result
@@ -930,12 +1007,12 @@ func (s *ServerHandler) CookieHandle(req *restful.Request, resp *restful.Respons
 		// Always query K8s to get the service name to prevent SSRF attacks.
 		// Do not trust user-provided cookies for service name.
 		// TODO: here might be a bottleneck if there are many requests in the future.
-		svcName, err := getClusterSvcName(s.clientManager.clients, clusterName.Value, clusterNamespace.Value)
+		svcInfo, err := getClusterSvcInfo(s.clientManager.clients, clusterName.Value, clusterNamespace.Value)
 		if err != nil {
 			resp.WriteHeaderAndEntity(http.StatusBadRequest, err.Error())
 			return
 		}
-		req.SetAttribute(ATTRIBUTE_SERVICE_NAME, svcName)
+		req.SetAttribute(ATTRIBUTE_SERVICE_NAME, svcInfo)
 	}
 	req.SetAttribute(COOKIE_CLUSTER_NAME_KEY, clusterName.Value)
 	req.SetAttribute(COOKIE_SESSION_NAME_KEY, sessionName.Value)
@@ -944,19 +1021,19 @@ func (s *ServerHandler) CookieHandle(req *restful.Request, resp *restful.Respons
 	chain.ProcessFilter(req, resp)
 }
 
-func getClusterSvcName(clis []client.Client, name, namespace string) (string, error) {
+func getClusterSvcInfo(clis []client.Client, name, namespace string) (ServiceInfo, error) {
 	if len(clis) == 0 {
-		return "", errors.New("No available kubernetes config found")
+		return ServiceInfo{}, errors.New("No available kubernetes config found")
 	}
 	cli := clis[0]
 	rc := rayv1.RayCluster{}
 	err := cli.Get(context.Background(), types.NamespacedName{Namespace: namespace, Name: name}, &rc)
 	if err != nil {
-		return "", errors.New("RayCluster not found")
+		return ServiceInfo{}, errors.New("RayCluster not found")
 	}
 	svcName := rc.Status.Head.ServiceName
 	if svcName == "" {
-		return "", errors.New("RayCluster head service not ready")
+		return ServiceInfo{}, errors.New("RayCluster head service not ready")
 	}
-	return svcName + ":8265", nil
+	return ServiceInfo{ServiceName: svcName, Namespace: namespace, Port: 8265}, nil
 }
