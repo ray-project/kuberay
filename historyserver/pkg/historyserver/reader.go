@@ -43,6 +43,20 @@ func filterAnsiEscapeCodes(content []byte) []byte {
 	return ansiEscapePattern.ReplaceAll(content, []byte(""))
 }
 
+// decodeBase64ToHex decodes a Base64-encoded ID and returns its hex representation.
+// It tries RawURLEncoding first (Ray's default), falling back to StdEncoding if that fails.
+func decodeBase64ToHex(id string) (string, error) {
+	idBytes, err := base64.RawURLEncoding.DecodeString(id)
+	if err != nil {
+		// Try standard Base64 if URL-safe fails
+		idBytes, err = base64.StdEncoding.DecodeString(id)
+		if err != nil {
+			return "", fmt.Errorf("failed to decode Base64 ID: %w", err)
+		}
+	}
+	return fmt.Sprintf("%x", idBytes), nil
+}
+
 func (s *ServerHandler) listClusters(limit int) []utils.ClusterInfo {
 	// Initial continuation marker
 	logrus.Debugf("Prepare to get list clusters info ...")
@@ -226,15 +240,10 @@ func (s *ServerHandler) resolvePidLogFilename(clusterNameID, sessionID, nodeID s
 	}
 
 	// The nodeID from actors/tasks is base64, but the path on storage uses hex.
-	nodeIDBytes, err := base64.RawURLEncoding.DecodeString(nodeID)
+	nodeIDHex, err := decodeBase64ToHex(nodeID)
 	if err != nil {
-		// Try standard Base64 if URL-safe fails
-		nodeIDBytes, err = base64.StdEncoding.DecodeString(nodeID)
-		if err != nil {
-			return "", "", fmt.Errorf("failed to decode node_id: %w", err)
-		}
+		return "", "", fmt.Errorf("failed to decode node_id: %w", err)
 	}
-	nodeIDHex := fmt.Sprintf("%x", nodeIDBytes)
 
 	logPath := path.Join(sessionID, "logs", nodeIDHex)
 	files := s.reader.ListFiles(clusterNameID, logPath)
@@ -379,26 +388,16 @@ func (s *ServerHandler) resolveActorLogFilename(clusterNameID, sessionID, actorI
 func (s *ServerHandler) findWorkerLogFile(clusterNameID, sessionID, nodeID, workerID, suffix string) (string, string, error) {
 	// Convert Base64 node_id to hex for the file path
 	// Ray stores IDs in Base64 (URL-safe) in events, but uses hex in log directory structure
-	nodeIDBytes, err := base64.RawURLEncoding.DecodeString(nodeID)
+	nodeIDHex, err := decodeBase64ToHex(nodeID)
 	if err != nil {
-		// Try standard Base64 if URL-safe fails
-		nodeIDBytes, err = base64.StdEncoding.DecodeString(nodeID)
-		if err != nil {
-			return "", "", fmt.Errorf("failed to decode node_id: %w", err)
-		}
+		return "", "", fmt.Errorf("failed to decode node_id: %w", err)
 	}
-	nodeIDHex := fmt.Sprintf("%x", nodeIDBytes)
 
 	// Convert Base64 worker_id to hex
-	workerIDBytes, err := base64.RawURLEncoding.DecodeString(workerID)
+	workerIDHex, err := decodeBase64ToHex(workerID)
 	if err != nil {
-		// Try standard Base64 if URL-safe fails
-		workerIDBytes, err = base64.StdEncoding.DecodeString(workerID)
-		if err != nil {
-			return "", "", fmt.Errorf("failed to decode worker_id: %w", err)
-		}
+		return "", "", fmt.Errorf("failed to decode worker_id: %w", err)
 	}
-	workerIDHex := fmt.Sprintf("%x", workerIDBytes)
 
 	// List all files in the node's log directory
 	logPath := path.Join(sessionID, "logs", nodeIDHex)
@@ -497,17 +496,11 @@ func (s *ServerHandler) ipToNodeId(rayClusterNameID, sessionID, nodeIP string) (
 			}
 
 			// Convert base64 node_id to hex (Ray stores node_id as base64 in events)
-			decoded, err := base64.StdEncoding.DecodeString(nodeIDBytes)
+			nodeIDHex, err := decodeBase64ToHex(nodeIDBytes)
 			if err != nil {
-				// Try URL-safe base64 encoding
-				decoded, err = base64.RawURLEncoding.DecodeString(nodeIDBytes)
-				if err != nil {
-					logrus.Warnf("Failed to decode node_id %s: %v", nodeIDBytes, err)
-					continue
-				}
+				logrus.Warnf("Failed to decode node_id %s: %v", nodeIDBytes, err)
+				continue
 			}
-
-			nodeIDHex := fmt.Sprintf("%x", decoded)
 			logrus.Infof("Resolved node_ip %s to node_id %s", nodeIP, nodeIDHex)
 			return nodeIDHex, nil
 		}
