@@ -40,6 +40,9 @@ func NewCollector(config *types.RayCollectorConfig, writer storage.StorageWriter
 		DashboardAddress:             config.DashboardAddress,
 		SupportRayEventUnSupportData: config.SupportRayEventUnSupportData,
 	}
+	// Initialize meta URL info
+	handler.InitMetaUrlInfo()
+	
 	logDir := strings.TrimSpace(path.Join(config.SessionDir, utils.RAY_SESSIONDIR_LOGDIR_NAME))
 	handler.LogDir = logDir
 	// rootMetaDir uses flat key format (name_id) for S3/OSS performance optimization.

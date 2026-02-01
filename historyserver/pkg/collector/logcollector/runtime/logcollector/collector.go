@@ -17,6 +17,7 @@ import (
 	"github.com/fsnotify/fsnotify"
 	"github.com/sirupsen/logrus"
 
+	"github.com/ray-project/kuberay/historyserver/pkg/collector/types"
 	"github.com/ray-project/kuberay/historyserver/pkg/storage"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
@@ -42,6 +43,8 @@ type RayLogHandler struct {
 	EnableMeta                   bool
 	DashboardAddress             string
 	SupportRayEventUnSupportData bool
+	MetaCommonUrlInfo            []*types.UrlInfo
+	JobsUrlInfo                  *types.UrlInfo
 }
 
 func (r *RayLogHandler) Start(stop <-chan struct{}) error {

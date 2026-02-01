@@ -71,8 +71,13 @@ func (j *JobResourcesUrlInfoMap) Keys() []string {
 	return keys
 }
 
-func (r *RayLogHandler) getMetaCommonUrlInfo() []*types.UrlInfo {
-	return []*types.UrlInfo{
+var jobResourcesUrlInfo = &JobResourcesUrlInfoMap{
+	data: make(map[string]*types.JobUrlInfo),
+}
+
+// InitMetaUrlInfo initializes the meta URL info with dashboard address
+func (r *RayLogHandler) InitMetaUrlInfo() {
+	r.MetaCommonUrlInfo = []*types.UrlInfo{
 		{
 			Key:  utils.OssMetaFile_Applications,
 			Url:  fmt.Sprintf("%s/api/serve/applications/", r.DashboardAddress),
@@ -84,18 +89,11 @@ func (r *RayLogHandler) getMetaCommonUrlInfo() []*types.UrlInfo {
 			Type: "URL",
 		},
 	}
-}
-
-func (r *RayLogHandler) getJobsUrlInfo() *types.UrlInfo {
-	return &types.UrlInfo{
+	r.JobsUrlInfo = &types.UrlInfo{
 		Key:  utils.OssMetaFile_Jobs,
 		Url:  fmt.Sprintf("%s/api/jobs/", r.DashboardAddress),
 		Type: "URL",
 	}
-}
-
-var jobResourcesUrlInfo = &JobResourcesUrlInfoMap{
-	data: make(map[string]*types.JobUrlInfo),
 }
 
 func (r *RayLogHandler) PersistMetaLoop(stop <-chan struct{}) {
@@ -122,7 +120,7 @@ func (r *RayLogHandler) PersistMetaLoop(stop <-chan struct{}) {
 }
 
 func (r *RayLogHandler) PersistMeta() error {
-	for _, metaurl := range r.getMetaCommonUrlInfo() {
+	for _, metaurl := range r.MetaCommonUrlInfo {
 		if _, err := r.PersistUrlInfo(metaurl); err != nil {
 			logrus.Errorf("Failed to persist URL info for %s: %v", metaurl.Url, err)
 			// no need break or return
@@ -173,15 +171,14 @@ func (r *RayLogHandler) PersistUrlInfo(urlinfo *types.UrlInfo) ([]byte, error) {
 }
 
 func (r *RayLogHandler) PersistDatasetsMeta() {
-	jobsUrlInfo := r.getJobsUrlInfo()
-	body, err := r.PersistUrlInfo(jobsUrlInfo)
+	body, err := r.PersistUrlInfo(r.JobsUrlInfo)
 	if err != nil {
-		logrus.Errorf("Failed to persist meta url %s: %v", jobsUrlInfo.Url, err)
+		logrus.Errorf("Failed to persist meta url %s: %v", r.JobsUrlInfo.Url, err)
 		return
 	}
 	var jobsData = []interface{}{}
 	if err := json.Unmarshal(body, &jobsData); err != nil {
-		logrus.Errorf("Ummarshal resp body error %v. key: %s response body: %v", err, jobsUrlInfo.Key, jobsData)
+		logrus.Errorf("Ummarshal resp body error %v. key: %s response body: %v", err, r.JobsUrlInfo.Key, jobsData)
 		return
 	}
 	currentJobIDs := make(map[string]string, 0)
