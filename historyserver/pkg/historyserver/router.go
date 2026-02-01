@@ -736,20 +736,42 @@ func (s *ServerHandler) getTaskSummarize(req *restful.Request, resp *restful.Res
 		})
 
 	// Summarize tasks based on summary_by parameter
-	var summary map[string]interface{}
+	var response interface{}
+
 	if summaryBy == "lineage" {
-		summary = summarizeTasksByLineage(tasks)
+		// Lineage mode: also fetch actors
+		// Ref: https://github.com/ray-project/ray/blob/d0b1d151d8ea964a711e451d0ae736f8bf95b629/python/ray/dashboard/state_aggregator.py#L586-L599
+		actors := s.eventHandler.GetActors(clusterSessionKey)
+		lineageSummary := BuildLineageSummary(tasks, actors)
+
+		response = map[string]interface{}{
+			"result": true,
+			"msg":    "",
+			"data": map[string]interface{}{
+				"result": map[string]interface{}{
+					"total":                 len(tasks),
+					"num_after_truncation":  len(tasks),
+					"num_filtered":          len(tasks),
+					"result": map[string]interface{}{
+						"node_id_to_summary": map[string]*TaskSummaries{
+							"cluster": lineageSummary,
+						},
+					},
+					"partial_failure_warning": "",
+					"warnings":                nil,
+				},
+			},
+		}
 	} else {
 		// Default to func_name
-		summary = summarizeTasksByFuncName(tasks)
-	}
-
-	response := map[string]interface{}{
-		"result": true,
-		"msg":    "Tasks summarized.",
-		"data": map[string]interface{}{
-			"result": summary,
-		},
+		summary := summarizeTasksByFuncName(tasks)
+		response = map[string]interface{}{
+			"result": true,
+			"msg":    "Tasks summarized.",
+			"data": map[string]interface{}{
+				"result": summary,
+			},
+		}
 	}
 
 	respData, err := json.Marshal(response)
@@ -778,37 +800,6 @@ func summarizeTasksByFuncName(tasks []eventtypes.Task) map[string]interface{} {
 			state = "UNKNOWN"
 		}
 		summary[funcName][state]++
-	}
-
-	return map[string]interface{}{
-		"summary": summary,
-		"total":   len(tasks),
-	}
-}
-
-// TODO(Han-Ju Chen): This function has a bug - using JobID instead of actual lineage.
-// Real lineage requires:
-// 1. Add ParentTaskID field to Task struct (types/task.go)
-// 2. Parse parent_task_id from Ray events (eventserver.go)
-// 3. Build task tree structure based on ParentTaskID
-// 4. Update rayjob example to generate nested tasks for testing
-func summarizeTasksByLineage(tasks []eventtypes.Task) map[string]interface{} {
-	summary := make(map[string]map[string]int)
-
-	for _, task := range tasks {
-		// Use JobID as a simple lineage grouping for now
-		lineageKey := task.JobID
-		if lineageKey == "" {
-			lineageKey = "unknown"
-		}
-		if _, ok := summary[lineageKey]; !ok {
-			summary[lineageKey] = make(map[string]int)
-		}
-		state := string(task.State)
-		if state == "" {
-			state = "UNKNOWN"
-		}
-		summary[lineageKey][state]++
 	}
 
 	return map[string]interface{}{
@@ -869,6 +860,7 @@ func (s *ServerHandler) getTaskDetail(req *restful.Request, resp *restful.Respon
 func formatTaskForResponse(task eventtypes.Task) map[string]interface{} {
 	result := map[string]interface{}{
 		"task_id":            task.TaskID,
+		"parent_task_id":     task.ParentTaskID,
 		"name":               task.Name,
 		"attempt_number":     task.AttemptNumber,
 		"state":              string(task.State),
