@@ -82,6 +82,8 @@ spec:
             value: "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite-service.azurite-dev.svc.cluster.local:10000/devstoreaccount1;"
           - name: AZURE_STORAGE_CONTAINER
             value: ray-historyserver
+          - name: SUPPORT_RAY_EVENT_UNSUPPORTED_DATA
+            value: "true"
           command: [collector, --role=Head, --runtime-class-name=azureblob, --ray-cluster-name=raycluster-historyserver, --ray-root-dir=log, --events-port=8084]
           volumeMounts:
           - name: historyserver

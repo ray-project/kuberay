@@ -95,6 +95,8 @@ spec:
             value: "test"
           - name: S3FORCE_PATH_STYLE
             value: "true"
+          - name: SUPPORT_RAY_EVENT_UNSUPPORTED_DATA
+            value: "true"
           command:
           - collector
           - --role=Head
