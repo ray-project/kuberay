@@ -288,7 +288,6 @@ func main() {
 		"unable to create controller", "controller", "RayService")
 
 	if features.Enabled(features.AsyncJobInfoQuery) {
-		// TODO: init async job info query and pass dashboardClientFunc into it.
 		clusterConfig, clusterConfigErr := rest.InClusterConfig()
 		exitOnError(clusterConfigErr, "unable to get in-cluster config for dashboard client")
 
@@ -297,11 +296,15 @@ func main() {
 
 		informerFactory := rayinformers.NewSharedInformerFactory(rayClientset, time.Second)
 		rayJobInformer := informerFactory.Ray().V1().RayJobs()
+		exitOnError(rayJobInformer.Informer().SetWatchErrorHandlerWithContext(clientcache.DefaultWatchErrorHandler),
+			"unable to set watch error handler for RayJob informer")
 		rayClusterInformer := informerFactory.Ray().V1().RayClusters()
+		exitOnError(rayClusterInformer.Informer().SetWatchErrorHandlerWithContext(clientcache.DefaultWatchErrorHandler),
+			"unable to set watch error handler for RayCluster informer")
 
 		informerFactory.Start(ctx.Done())
-		if !clientcache.WaitForCacheSync(ctx.Done(), rayJobInformer.Informer().HasSynced) {
-			exitOnError(fmt.Errorf("timed out waiting for caches to sync"), "failed to sync informer cache for RayJob")
+		if !clientcache.WaitForCacheSync(ctx.Done(), rayJobInformer.Informer().HasSynced, rayClusterInformer.Informer().HasSynced) {
+			exitOnError(fmt.Errorf("timed out waiting for caches to sync"), "failed to sync informer cache for RayJob and RayCluster")
 		}
 
 		queryInterval, parseErr := time.ParseDuration(utils.GetEnvOrDefault(utils.ASYNC_JOB_INFO_QUERY_INTERVAL, utils.DEFAULT_ASYNC_JOB_INFO_QUERY_INTERVAL))
