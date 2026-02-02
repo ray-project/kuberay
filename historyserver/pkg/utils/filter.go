@@ -125,7 +125,7 @@ func parsePredicate(predicate string) PredicateType {
 //
 // NOTE: Excluding fields not shown in non-detailed mode is implemented in formatTaskForResponse right before sending back the resp.
 // TODO(jwj): Add Ray counterparts here.
-func ApplyTaskFilters(tasks []eventtypes.Task, listAPIOptions ListAPIOptions) []eventtypes.Task {
+func ApplyTaskFilters(tasks []eventtypes.Task, listAPIOptions ListAPIOptions) ([]eventtypes.Task, int) {
 	// Exclude driver tasks.
 	if listAPIOptions.ExcludeDriver {
 		tasks = applyFilter(tasks, Filter{
@@ -140,8 +140,9 @@ func ApplyTaskFilters(tasks []eventtypes.Task, listAPIOptions ListAPIOptions) []
 		tasks = applyFilter(tasks, filter)
 	}
 
-	if len(tasks) == 0 {
-		return []eventtypes.Task{}
+	numFiltered := len(tasks)
+	if numFiltered == 0 {
+		return []eventtypes.Task{}, 0
 	}
 
 	// Sort tasks by task_id and task_attempt.
@@ -154,7 +155,7 @@ func ApplyTaskFilters(tasks []eventtypes.Task, listAPIOptions ListAPIOptions) []
 		tasks = tasks[:listAPIOptions.Limit]
 	}
 
-	return tasks
+	return tasks, numFiltered
 }
 
 // applyFilter applies a filter to the tasks and returns the filtered tasks.

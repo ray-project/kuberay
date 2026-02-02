@@ -884,8 +884,15 @@ func (s *ServerHandler) getTasks(req *restful.Request, resp *restful.Response) {
 	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
 	tasks := s.eventHandler.GetTasks(clusterSessionKey)
 
+	// Calculate the number of tasks after GCS source truncation.
+	// Since we can't access the GCS and num_status_task_events_dropped, we use num_after_truncation to approximate the total number of tasks.
+	// Ref: https://github.com/ray-project/ray/blob/d0b1d151d8ea964a711e451d0ae736f8bf95b629/python/ray/dashboard/state_aggregator.py#L314-L342
+	numAfterTruncation := len(tasks)
+	numTotal := numAfterTruncation
+
 	// Filter tasks.
-	tasks = utils.ApplyTaskFilters(tasks, listAPIOptions)
+	// numFiltered is the number of tasks after filtering but before limit truncation.
+	tasks, numFiltered := utils.ApplyTaskFilters(tasks, listAPIOptions)
 
 	// Format tasks for response.
 	formattedTasks := make([]map[string]interface{}, 0, len(tasks))
@@ -898,11 +905,10 @@ func (s *ServerHandler) getTasks(req *restful.Request, resp *restful.Response) {
 		Msg:    "",
 		Data: TaskData{
 			Result: TaskDataResult{
-				Total:  len(formattedTasks),
-				Result: formattedTasks,
-				// TODO(jwj): Derive the following fields later.
-				NumAfterTruncation:    len(formattedTasks),
-				NumFiltered:           len(formattedTasks),
+				Total:                 numTotal,
+				Result:                formattedTasks,
+				NumAfterTruncation:    numAfterTruncation,
+				NumFiltered:           numFiltered,
 				PartialFailureWarning: "",
 				Warnings:              nil,
 			},
@@ -923,6 +929,7 @@ func (s *ServerHandler) getTasks(req *restful.Request, resp *restful.Response) {
 // The schema aligns with the Ray Dashboard API.
 // Ref: https://github.com/ray-project/ray/blob/d0b1d151d8ea964a711e451d0ae736f8bf95b629/python/ray/util/state/common.py#L730-L819.
 func formatTaskForResponse(task eventtypes.Task, detail bool) map[string]interface{} {
+	// TODO(jwj): Maybe define result schema in types.go.
 	result := map[string]interface{}{
 		"task_id":        task.TaskID,
 		"attempt_number": task.TaskAttempt,
