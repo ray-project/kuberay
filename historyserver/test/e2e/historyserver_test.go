@@ -259,9 +259,6 @@ func testLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Names
 					tc.name, tc.expectedStatus, resp.StatusCode, string(body))
 			}
 
-			g.Expect(resp.StatusCode).To(Equal(tc.expectedStatus),
-				"Test case '%s' failed: expected %d, got %d", tc.name, tc.expectedStatus, resp.StatusCode)
-
 			if tc.expectedStatus == http.StatusOK {
 				g.Expect(len(body)).To(BeNumerically(">", 0))
 			}
