@@ -23,6 +23,11 @@ type BatchScheduler interface {
 	// AddMetadataToChildResource enriches the child resource (batchv1.Job, rayv1.RayCluster) with metadata necessary to tie it to the scheduler.
 	// For example, setting labels for queues / priority, and setting schedulerName.
 	AddMetadataToChildResource(ctx context.Context, parent metav1.Object, child metav1.Object, groupName string)
+
+	// CleanupOnCompletion handles cleanup when the RayJob reaches terminal state (Complete/Failed).
+	// For batch schedulers like Volcano, this deletes the PodGroup to release queue resources.
+	// This is a no-op for schedulers that don't need cleanup.
+	CleanupOnCompletion(ctx context.Context, object metav1.Object) error
 }
 
 // BatchSchedulerFactory handles initial setup of the scheduler plugin by registering the
@@ -56,6 +61,10 @@ func (d *DefaultBatchScheduler) DoBatchSchedulingOnSubmission(_ context.Context,
 }
 
 func (d *DefaultBatchScheduler) AddMetadataToChildResource(_ context.Context, _ metav1.Object, _ metav1.Object, _ string) {
+}
+
+func (d *DefaultBatchScheduler) CleanupOnCompletion(_ context.Context, _ metav1.Object) error {
+	return nil
 }
 
 func (df *DefaultBatchSchedulerFactory) New(_ context.Context, _ *rest.Config, _ client.Client) (BatchScheduler, error) {

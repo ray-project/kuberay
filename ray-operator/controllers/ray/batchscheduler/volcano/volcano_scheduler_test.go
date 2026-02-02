@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -511,4 +512,173 @@ func TestGetAppPodGroupName(t *testing.T) {
 
 	rayJob := createTestRayJob(1)
 	a.Equal("ray-rayjob-sample-pg", getAppPodGroupName(&rayJob))
+}
+
+func TestCleanupOnCompletion(t *testing.T) {
+	a := assert.New(t)
+	require := require.New(t)
+
+	t.Run("RayJob - delete PodGroup", func(_ *testing.T) {
+		rayJob := createTestRayJob(1)
+		scheme := runtime.NewScheme()
+		a.NoError(rayv1.AddToScheme(scheme))
+		a.NoError(volcanoschedulingv1beta1.AddToScheme(scheme))
+		fakeCli := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(&volcanoschedulingv1beta1.PodGroup{}).Build()
+		scheduler := &VolcanoBatchScheduler{cli: fakeCli}
+
+		ctx := context.Background()
+
+		// Manually create a PodGroup in Pending state to simulate the real scenario
+		podGroupName := getAppPodGroupName(&rayJob)
+		pg := &volcanoschedulingv1beta1.PodGroup{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      podGroupName,
+				Namespace: rayJob.Namespace,
+			},
+			Spec: volcanoschedulingv1beta1.PodGroupSpec{
+				MinMember: 3,
+			},
+			Status: volcanoschedulingv1beta1.PodGroupStatus{
+				Phase:   volcanoschedulingv1beta1.PodGroupPending,
+				Running: 1,
+			},
+		}
+		err := fakeCli.Create(ctx, pg)
+		require.NoError(err)
+
+		// Verify PodGroup was created in Pending state
+		var retrievedPg volcanoschedulingv1beta1.PodGroup
+		err = fakeCli.Get(ctx, client.ObjectKey{Namespace: rayJob.Namespace, Name: podGroupName}, &retrievedPg)
+		require.NoError(err)
+		a.Equal(volcanoschedulingv1beta1.PodGroupPending, retrievedPg.Status.Phase)
+
+		// Now call CleanupOnCompletion to simulate RayJob finishing
+		err = scheduler.CleanupOnCompletion(ctx, &rayJob)
+		require.NoError(err)
+
+		// Verify PodGroup was deleted
+		err = fakeCli.Get(ctx, client.ObjectKey{Namespace: rayJob.Namespace, Name: podGroupName}, &retrievedPg)
+		require.Error(err)
+		a.True(errors.IsNotFound(err))
+	})
+
+	t.Run("RayJob - PodGroup not found (already deleted)", func(_ *testing.T) {
+		rayJob := createTestRayJob(1)
+		scheme := runtime.NewScheme()
+		a.NoError(rayv1.AddToScheme(scheme))
+		a.NoError(volcanoschedulingv1beta1.AddToScheme(scheme))
+		fakeCli := fake.NewClientBuilder().WithScheme(scheme).Build()
+		scheduler := &VolcanoBatchScheduler{cli: fakeCli}
+
+		ctx := context.Background()
+
+		// Don't create a PodGroup, just call CleanupOnCompletion
+		err := scheduler.CleanupOnCompletion(ctx, &rayJob)
+		// Should not return an error, just log that PodGroup was not found
+		require.NoError(err)
+	})
+
+	t.Run("RayCluster - should be no-op", func(_ *testing.T) {
+		rayCluster := createTestRayCluster(1)
+		scheme := runtime.NewScheme()
+		a.NoError(rayv1.AddToScheme(scheme))
+		a.NoError(volcanoschedulingv1beta1.AddToScheme(scheme))
+		fakeCli := fake.NewClientBuilder().WithScheme(scheme).Build()
+		scheduler := &VolcanoBatchScheduler{cli: fakeCli}
+
+		ctx := context.Background()
+
+		// Call CleanupOnCompletion with RayCluster - should be no-op
+		err := scheduler.CleanupOnCompletion(ctx, &rayCluster)
+		require.NoError(err)
+
+		// Verify no PodGroup was created (RayCluster PodGroups are not managed by this method)
+		var pg volcanoschedulingv1beta1.PodGroup
+		err = fakeCli.Get(ctx, client.ObjectKey{Namespace: rayCluster.Namespace, Name: getAppPodGroupName(&rayCluster)}, &pg)
+		require.Error(err) // Should not be found
+		a.True(errors.IsNotFound(err))
+	})
+
+	t.Run("RayJob - PodGroup in Inqueue state (bug scenario)", func(_ *testing.T) {
+		rayJob := createTestRayJob(1)
+		scheme := runtime.NewScheme()
+		a.NoError(rayv1.AddToScheme(scheme))
+		a.NoError(volcanoschedulingv1beta1.AddToScheme(scheme))
+		fakeCli := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(&volcanoschedulingv1beta1.PodGroup{}).Build()
+		scheduler := &VolcanoBatchScheduler{cli: fakeCli}
+
+		ctx := context.Background()
+
+		// Create a PodGroup in Inqueue state to simulate the bug scenario
+		podGroupName := getAppPodGroupName(&rayJob)
+		pg := &volcanoschedulingv1beta1.PodGroup{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      podGroupName,
+				Namespace: rayJob.Namespace,
+			},
+			Spec: volcanoschedulingv1beta1.PodGroupSpec{
+				MinMember: 31,
+			},
+			Status: volcanoschedulingv1beta1.PodGroupStatus{
+				Phase:     volcanoschedulingv1beta1.PodGroupInqueue,
+				Running:   0,
+				Succeeded: 1,
+			},
+		}
+		err := fakeCli.Create(ctx, pg)
+		require.NoError(err)
+
+		// Call CleanupOnCompletion
+		err = scheduler.CleanupOnCompletion(ctx, &rayJob)
+		require.NoError(err)
+
+		// Verify PodGroup was deleted
+		var retrievedPg volcanoschedulingv1beta1.PodGroup
+		err = fakeCli.Get(ctx, client.ObjectKey{Namespace: rayJob.Namespace, Name: podGroupName}, &retrievedPg)
+		require.Error(err)
+		a.True(errors.IsNotFound(err))
+	})
+
+	t.Run("RayJob - idempotent (can call multiple times)", func(_ *testing.T) {
+		rayJob := createTestRayJob(1)
+		scheme := runtime.NewScheme()
+		a.NoError(rayv1.AddToScheme(scheme))
+		a.NoError(volcanoschedulingv1beta1.AddToScheme(scheme))
+		fakeCli := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(&volcanoschedulingv1beta1.PodGroup{}).Build()
+		scheduler := &VolcanoBatchScheduler{cli: fakeCli}
+
+		ctx := context.Background()
+
+		// Create a PodGroup
+		podGroupName := getAppPodGroupName(&rayJob)
+		pg := &volcanoschedulingv1beta1.PodGroup{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      podGroupName,
+				Namespace: rayJob.Namespace,
+			},
+			Spec: volcanoschedulingv1beta1.PodGroupSpec{
+				MinMember: 3,
+			},
+			Status: volcanoschedulingv1beta1.PodGroupStatus{
+				Phase:   volcanoschedulingv1beta1.PodGroupPending,
+				Running: 1,
+			},
+		}
+		err := fakeCli.Create(ctx, pg)
+		require.NoError(err)
+
+		// Call CleanupOnCompletion first time
+		err = scheduler.CleanupOnCompletion(ctx, &rayJob)
+		require.NoError(err)
+
+		// Verify PodGroup was deleted
+		var retrievedPg volcanoschedulingv1beta1.PodGroup
+		err = fakeCli.Get(ctx, client.ObjectKey{Namespace: rayJob.Namespace, Name: podGroupName}, &retrievedPg)
+		require.Error(err)
+		a.True(errors.IsNotFound(err))
+
+		// Call CleanupOnCompletion second time - should not error
+		err = scheduler.CleanupOnCompletion(ctx, &rayJob)
+		require.NoError(err)
+	})
 }
