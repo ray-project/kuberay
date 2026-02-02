@@ -7,13 +7,16 @@ import (
 	"sync"
 	"time"
 
+	"github.com/go-logr/logr"
 	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/smallnest/chanx"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	utiltypes "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/types"
+	rayinformersv1 "github.com/ray-project/kuberay/ray-operator/pkg/client/informers/externalversions/ray/v1"
 )
 
 // ErrAgain EAGAIN means "there is no data available right now, try again later"
@@ -21,27 +24,14 @@ import (
 var ErrAgain = errors.New("EAGAIN")
 
 const (
-	// TODO: make worker size configurable.
-	workerSize = 8
-
-	queryInterval = 3 * time.Second
-
-	// TODO: consider a proper size for accommodating the all live job info
-	cacheSize   = 10000
-	cacheExpiry = 10 * time.Minute
-
 	initBufferSize = 128
 )
 
 var (
-	// singleton
+	// The singleton worker pool instance.
+	// Use the singleton to avoid changing the other function signatures.
 	initWorkPool sync.Once
-	pool         workerPool
-
-	// singleton
-	initCacheStorage sync.Once
-	cacheStorage     *lru.Cache[string, *JobInfoCache]
-	rwLock           sync.RWMutex
+	pool         *WorkerPool
 )
 
 type (
@@ -53,112 +43,206 @@ type (
 		UpdatedAt *time.Time
 	}
 
-	workerPool struct {
-		taskQueue *chanx.UnboundedChan[Task]
+	WorkerPool struct {
+		rayJobInformer      rayinformersv1.RayJobInformer
+		rayClusterInformer  rayinformersv1.RayClusterInformer
+		taskQueue           *chanx.UnboundedChan[*rayv1.RayJob]
+		dashboardClientFunc func(rayCluster *rayv1.RayCluster, url string) (RayDashboardClientInterface, error)
+		cacheStorage        *lru.Cache[string, *JobInfoCache]
+		logger              logr.Logger
+		numWorkers          int
+		queryInterval       time.Duration
+		cacheSize           int
+		cacheExpiry         time.Duration
+		cleanupInterval     time.Duration
 	}
 )
 
-func (w *workerPool) start(ctx context.Context, numWorkers int, requeueDelay time.Duration) {
-	logger := ctrl.LoggerFrom(ctx).WithName("WorkerPool")
-	w.taskQueue = chanx.NewUnboundedChanSize[Task](ctx, 0, 0, initBufferSize)
+func NewWorkerPool(ctx context.Context,
+	rayJobInformer rayinformersv1.RayJobInformer,
+	rayClusterInformer rayinformersv1.RayClusterInformer,
+	numWorkers int,
+	queryInterval time.Duration,
+	cacheSize int,
+	cacheExpiry time.Duration,
+	cleanupInterval time.Duration,
+	dashboardClientFunc func(rayCluster *rayv1.RayCluster, url string) (RayDashboardClientInterface, error),
+) (*WorkerPool, error) {
+	initWorkPool.Do(func() {
+		logger := ctrl.LoggerFrom(ctx).WithName("WorkerPool")
 
-	for i := range numWorkers {
+		// It should be better to give a channel capacity because there are many RayJobs in a batch.
+		// Using zero capacity channel would be a bit of inefficient because each send operation would block.
+		taskQueue := chanx.NewUnboundedChanSize[*rayv1.RayJob](ctx, initBufferSize, initBufferSize, initBufferSize)
+
+		cacheStorage, _ := lru.NewWithEvict[string, *JobInfoCache](cacheSize, func(key string, _ *JobInfoCache) {
+			logger.WithName("cacheStorage").Info("Evict cache for key.", "key", key)
+		})
+
+		pool = &WorkerPool{
+			taskQueue:           taskQueue,
+			rayJobInformer:      rayJobInformer,
+			rayClusterInformer:  rayClusterInformer,
+			dashboardClientFunc: dashboardClientFunc,
+			cacheStorage:        cacheStorage,
+			numWorkers:          numWorkers,
+			queryInterval:       queryInterval,
+			cacheSize:           cacheSize,
+			cacheExpiry:         cacheExpiry,
+			cleanupInterval:     cleanupInterval,
+			logger:              logger,
+		}
+	})
+
+	return pool, nil
+}
+
+func (w *WorkerPool) Start(ctx context.Context) {
+	logger := w.logger
+	go func() {
+		ticker := time.NewTicker(w.queryInterval)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				logger.Info("RayJob listing goroutine exiting...")
+				return
+			case <-ticker.C:
+				rayJobs, err := w.rayJobInformer.Lister().List(labels.Everything())
+				if err != nil {
+					logger.Error(err, "Error listing RayJobs from cache")
+					continue
+				}
+
+				logger.Info("Listing RayJobs from cache", "total", len(rayJobs))
+
+				for _, rayJob := range rayJobs {
+					if rayv1.IsJobTerminal(rayJob.Status.JobStatus) {
+						logger.Info("RayJob is in terminal status, skip querying job info", "rayJob", rayJob.Name, "status", rayJob.Status.JobStatus)
+						continue
+					}
+
+					// TODO: avoid duplicate entries in the queue
+					w.taskQueue.In <- rayJob
+				}
+			}
+		}
+	}()
+
+	for i := range w.numWorkers {
 		go func(workerID int) {
 			for {
 				select {
 				case <-ctx.Done():
 					logger.Info("worker exiting...", "workerID", workerID)
 					return
-				case task, ok := <-w.taskQueue.Out:
+				case rayJobInstance, ok := <-w.taskQueue.Out:
 					if !ok {
 						logger.Info("worker exiting from a closed channel", "workerID", workerID)
 						return
 					}
-					shouldRequeue := task(ctx)
 
-					if shouldRequeue && ctx.Err() == nil {
-						time.AfterFunc(requeueDelay, func() {
-							select {
-							case <-ctx.Done():
-								return
-							case w.taskQueue.In <- task:
-							}
-						})
+					// not use common.RayJobRayClusterNamespacedName to avoid import cycle
+					rayClusterNamespacedName := types.NamespacedName{
+						Name:      rayJobInstance.Status.RayClusterName,
+						Namespace: rayJobInstance.Namespace,
 					}
+					logger.Info("try to find existing RayCluster instance", "name", rayClusterNamespacedName.Name)
+
+					// get RayCluster instance from informer cache
+					rayClusterInstance, err := w.rayClusterInformer.Lister().RayClusters(rayClusterNamespacedName.Namespace).Get(rayClusterNamespacedName.Name)
+					if err != nil {
+						logger.Error(err, "failed to get RayCluster instance from informer cache", "name", rayClusterNamespacedName.Name)
+						continue
+					}
+
+					rayDashboardClient, err := w.dashboardClientFunc(rayClusterInstance, rayJobInstance.Status.DashboardURL)
+					if err != nil {
+						logger.Error(err, "failed to get dashboard client", "rayCluster", rayClusterNamespacedName.Name, "dashboardURL", rayJobInstance.Status.DashboardURL)
+						continue
+					}
+
+					jobInfo, err := rayDashboardClient.GetJobInfo(ctx, rayJobInstance.Status.JobId)
+
+					currentTime := time.Now()
+					w.cacheStorage.Add(cacheKey(rayClusterNamespacedName, rayJobInstance.Status.JobId), &JobInfoCache{
+						JobInfo:   jobInfo,
+						Err:       err,
+						UpdatedAt: &currentTime,
+					})
 				}
 			}
 		}(i)
 	}
-	logger.Info(fmt.Sprintf("Initialize a worker pool with %d goroutines and requeueDelay is %v.", numWorkers, requeueDelay))
+	logger.Info(fmt.Sprintf("Initialize a worker pool with %d goroutines and query interval is %v.", w.numWorkers, w.queryInterval))
+
+	go func() {
+		ticker := time.NewTicker(w.cleanupInterval)
+		defer ticker.Stop()
+
+		loggerForGC := logger.WithName("CacheCleanup")
+		loggerForGC.Info(fmt.Sprintf("Initialize a cache cleanup goroutine with interval %v.", w.cleanupInterval))
+
+		for {
+			select {
+			case <-ctx.Done():
+				loggerForGC.Info("clean up goroutine exiting...")
+				return
+			case t := <-ticker.C:
+				keys := w.cacheStorage.Keys()
+
+				expiredThreshold := time.Now().Add(-w.cacheExpiry)
+				loggerForGC.Info(fmt.Sprintf("Found %d keys to verify,", len(keys)), "expiredThreshold", expiredThreshold, "tick at", t)
+
+				// zero allocate filtering
+				removed := keys[:0]
+				for _, key := range keys {
+					if cached, ok := w.cacheStorage.Peek(key); ok {
+						if cached.UpdatedAt.Before(expiredThreshold) {
+							w.cacheStorage.Remove(key)
+							removed = append(removed, key)
+						}
+					}
+				}
+				loggerForGC.Info(fmt.Sprintf("clean up %d cache.", len(removed)), "expiredThreshold", expiredThreshold, "removed keys", removed)
+			}
+		}
+	}()
 }
 
-func (w *workerPool) AddTask(task Task) {
-	w.taskQueue.In <- task
+// GetCachedDashboardClientFunc returns a function that creates a RayDashboardCacheClient.
+// This should be called after NewWorkerPool to ensure the worker pool is initialized.
+func GetCachedDashboardClientFunc() func(rayCluster *rayv1.RayCluster, url string) (RayDashboardClientInterface, error) {
+	if pool == nil {
+		panic("WorkerPool is not initialized. Please call NewWorkerPool first.")
+	}
+	return func(rayCluster *rayv1.RayCluster, url string) (RayDashboardClientInterface, error) {
+		rayDashboardClient, err := pool.dashboardClientFunc(rayCluster, url)
+		if err != nil {
+			return nil, err
+		}
+
+		// not use common.RayJobRayClusterNamespacedName to avoid import cycle
+		rayClusterNamespacedName := types.NamespacedName{
+			Name:      rayCluster.Name,
+			Namespace: rayCluster.Namespace,
+		}
+
+		return &RayDashboardCacheClient{
+			client:         rayDashboardClient,
+			cacheStorage:   pool.cacheStorage,
+			namespacedName: rayClusterNamespacedName,
+		}, nil
+	}
 }
 
 var _ RayDashboardClientInterface = (*RayDashboardCacheClient)(nil)
 
 type RayDashboardCacheClient struct {
 	client         RayDashboardClientInterface
+	cacheStorage   *lru.Cache[string, *JobInfoCache]
 	namespacedName types.NamespacedName
-}
-
-func (r *RayDashboardCacheClient) InitClient(ctx context.Context, namespacedName types.NamespacedName, client RayDashboardClientInterface) {
-	logger := ctrl.LoggerFrom(ctx).WithName("RayDashboardCacheClient")
-
-	r.namespacedName = namespacedName
-
-	initWorkPool.Do(func() {
-		pool.start(ctx, workerSize, queryInterval)
-	})
-
-	initCacheStorage.Do(func() {
-		// The NewWithEvict() returns error only if the cacheSize is less than or equal to zero.
-		// While we set cacheSize as constant, we can ignore the error here.
-		cacheStorage, _ = lru.NewWithEvict[string, *JobInfoCache](cacheSize, func(key string, _ *JobInfoCache) {
-			logger.WithName("cacheStorage").Info("Evict cache for key.", "key", key)
-		})
-
-		// expiry cache cleanup
-		go func() {
-			ticker := time.NewTicker(queryInterval * 10)
-			defer ticker.Stop()
-
-			loggerForGC := logger.WithName("CacheCleanup")
-			loggerForGC.Info(fmt.Sprintf("Initialize a cache cleanup goroutine with interval %v.", queryInterval*10))
-
-			for {
-				select {
-				case <-ctx.Done():
-					loggerForGC.Info("clean up goroutine exiting...")
-					return
-				case t := <-ticker.C:
-					rwLock.RLock()
-					keys := cacheStorage.Keys()
-					rwLock.RUnlock()
-
-					expiredThreshold := time.Now().Add(-cacheExpiry)
-					loggerForGC.Info(fmt.Sprintf("Found %d keys to verify,", len(keys)), "expiredThreshold", expiredThreshold, "tick at", t)
-
-					// zero allocate filtering
-					removed := keys[:0]
-					for _, key := range keys {
-						rwLock.Lock()
-						if cached, ok := cacheStorage.Peek(key); ok {
-							if cached.UpdatedAt.Before(expiredThreshold) {
-								cacheStorage.Remove(key)
-								removed = append(removed, key)
-							}
-						}
-						rwLock.Unlock()
-					}
-					loggerForGC.Info(fmt.Sprintf("clean up %d cache.", len(removed)), "expiredThreshold", expiredThreshold, "removed keys", removed)
-				}
-			}
-		}()
-	})
-
-	r.client = client
 }
 
 func (r *RayDashboardCacheClient) UpdateDeployments(ctx context.Context, configJson []byte) error {
@@ -176,81 +260,11 @@ func (r *RayDashboardCacheClient) GetMultiApplicationStatus(ctx context.Context)
 func (r *RayDashboardCacheClient) GetJobInfo(ctx context.Context, jobId string) (*utiltypes.RayJobInfo, error) {
 	logger := ctrl.LoggerFrom(ctx).WithName("RayDashboardCacheClient")
 
-	rwLock.Lock()
-	if cached, ok := cacheStorage.Get(cacheKey(r.namespacedName, jobId)); ok {
-		if cached.Err != nil && !errors.Is(cached.Err, ErrAgain) {
-			// Consume the error.
-			// If the RayJob is still exists, the next Reconcile iteration will put the task back for updating JobInfo
-			cacheStorage.Remove(cacheKey(r.namespacedName, jobId))
-			logger.Info("Consume the cached error for jobId", "jobId", jobId, "error", cached.Err, "cacheKey", cacheKey(r.namespacedName, jobId))
-		}
-		rwLock.Unlock()
+	if cached, ok := r.cacheStorage.Get(cacheKey(r.namespacedName, jobId)); ok {
 		return cached.JobInfo, cached.Err
 	}
-	rwLock.Unlock()
 
-	currentTime := time.Now()
-	placeholder := &JobInfoCache{Err: ErrAgain, UpdatedAt: &currentTime}
-
-	// Put a placeholder in storage. The cache will be updated only if the placeholder exists.
-	// The placeholder will be removed when StopJob or DeleteJob.
-	rwLock.Lock()
-	if cached, existed, _ := cacheStorage.PeekOrAdd(cacheKey(r.namespacedName, jobId), placeholder); existed {
-		rwLock.Unlock()
-		return cached.JobInfo, cached.Err
-	}
-	rwLock.Unlock()
-
-	var task Task = func(taskCTX context.Context) bool {
-		rwLock.RLock()
-		if existed := cacheStorage.Contains(cacheKey(r.namespacedName, jobId)); !existed {
-			logger.Info("The placeholder is removed for jobId", "jobId", jobId, "cacheKey", cacheKey(r.namespacedName, jobId))
-			rwLock.RUnlock()
-			return false
-		}
-		rwLock.RUnlock()
-
-		jobInfo, err := r.client.GetJobInfo(taskCTX, jobId)
-		currentTime := time.Now()
-
-		// Make this cache immutable to avoid data race between pointer updates and read operations.
-		newJobInfoCache := &JobInfoCache{
-			JobInfo:   jobInfo,
-			Err:       err,
-			UpdatedAt: &currentTime,
-		}
-
-		rwLock.Lock()
-		if existed := cacheStorage.Contains(cacheKey(r.namespacedName, jobId)); !existed {
-			logger.Info("The placeholder is removed before updating for jobId", "jobId", jobId, "cacheKey", cacheKey(r.namespacedName, jobId))
-			rwLock.Unlock()
-			return false
-		}
-		cacheStorage.Add(cacheKey(r.namespacedName, jobId), newJobInfoCache)
-		rwLock.Unlock()
-
-		if err != nil {
-			// Exits the updating loop after getting an error.
-			// If the RayJob still exists, Reconcile will consume the error and put the JobId back to updating loop again.
-			logger.Info("Failed to fetch job info for jobId", "jobId", jobId, "error", err)
-			return false
-		}
-		if newJobInfoCache.JobInfo == nil {
-			return true
-		}
-		if rayv1.IsJobTerminal(newJobInfoCache.JobInfo.JobStatus) {
-			logger.Info("The job reaches terminal status for jobId", "jobId", jobId,
-				"cacheKey", cacheKey(r.namespacedName, jobId),
-				"status", newJobInfoCache.JobInfo.JobStatus)
-			return false
-		}
-		return true
-	}
-
-	pool.AddTask(task)
-
-	logger.Info("Put a task to fetch job info in background for jobId ", "jobId", jobId, "cacheKey", cacheKey(r.namespacedName, jobId))
-
+	logger.Info("Cache miss for jobId", "jobId", jobId, "cacheKey", cacheKey(r.namespacedName, jobId))
 	return nil, ErrAgain
 }
 
@@ -271,18 +285,10 @@ func (r *RayDashboardCacheClient) GetJobLog(ctx context.Context, jobName string)
 }
 
 func (r *RayDashboardCacheClient) StopJob(ctx context.Context, jobName string) error {
-	rwLock.Lock()
-	cacheStorage.Remove(cacheKey(r.namespacedName, jobName))
-	rwLock.Unlock()
-
 	return r.client.StopJob(ctx, jobName)
 }
 
 func (r *RayDashboardCacheClient) DeleteJob(ctx context.Context, jobName string) error {
-	rwLock.Lock()
-	cacheStorage.Remove(cacheKey(r.namespacedName, jobName))
-	rwLock.Unlock()
-
 	return r.client.DeleteJob(ctx, jobName)
 }
 

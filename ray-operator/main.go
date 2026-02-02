@@ -4,7 +4,9 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-logr/zapr"
 	routev1 "github.com/openshift/api/route/v1"
@@ -19,6 +21,8 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
+	clientcache "k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
@@ -35,6 +39,9 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/metrics"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/dashboardclient"
+	rayclientset "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned"
+	rayinformers "github.com/ray-project/kuberay/ray-operator/pkg/client/informers/externalversions"
 	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 	webhooks "github.com/ray-project/kuberay/ray-operator/pkg/webhooks/v1"
 )
@@ -277,14 +284,62 @@ func main() {
 	exitOnError(ray.NewReconciler(ctx, mgr, rayClusterOptions).SetupWithManager(mgr, config.ReconcileConcurrency),
 		"unable to create controller", "controller", "RayCluster")
 
-	exitOnError(ray.NewRayServiceReconciler(ctx, mgr, config).SetupWithManager(mgr, config.ReconcileConcurrency),
+	exitOnError(ray.NewRayServiceReconciler(mgr, config).SetupWithManager(mgr, config.ReconcileConcurrency),
 		"unable to create controller", "controller", "RayService")
+
+	if features.Enabled(features.AsyncJobInfoQuery) {
+		// TODO: init async job info query and pass dashboardClientFunc into it.
+		clusterConfig, clusterConfigErr := rest.InClusterConfig()
+		exitOnError(clusterConfigErr, "unable to get in-cluster config for dashboard client")
+
+		rayClientset, clientSetErr := rayclientset.NewForConfig(clusterConfig)
+		exitOnError(clientSetErr, "unable to create ray clientset for dashboard client")
+
+		informerFactory := rayinformers.NewSharedInformerFactory(rayClientset, time.Second)
+		rayJobInformer := informerFactory.Ray().V1().RayJobs()
+		rayClusterInformer := informerFactory.Ray().V1().RayClusters()
+
+		informerFactory.Start(ctx.Done())
+		if !clientcache.WaitForCacheSync(ctx.Done(), rayJobInformer.Informer().HasSynced) {
+			exitOnError(fmt.Errorf("timed out waiting for caches to sync"), "failed to sync informer cache for RayJob")
+		}
+
+		queryInterval, parseErr := time.ParseDuration(utils.GetEnvOrDefault(utils.ASYNC_JOB_INFO_QUERY_INTERVAL, utils.DEFAULT_ASYNC_JOB_INFO_QUERY_INTERVAL))
+		exitOnError(parseErr, "unable to parse async job info query interval")
+
+		numWorkers, parseErr := strconv.Atoi(utils.GetEnvOrDefault(utils.ASYNC_JOB_INFO_QUERY_WORKER_SIZE, utils.DEFAULT_ASYNC_JOB_INFO_QUERY_WORKER_SIZE))
+		exitOnError(parseErr, "unable to parse async job info query worker size")
+
+		cacheSize, parseErr := strconv.Atoi(utils.GetEnvOrDefault(utils.ASYNC_JOB_INFO_QUERY_CACHE_SIZE, utils.DEFAULT_ASYNC_JOB_INFO_QUERY_CACHE_SIZE))
+		exitOnError(parseErr, "unable to parse async job info query cache size")
+
+		cacheExpiry, parseErr := time.ParseDuration(utils.GetEnvOrDefault(utils.ASYNC_JOB_INFO_QUERY_CACHE_EXPIRY, utils.DEFAULT_ASYNC_JOB_INFO_QUERY_CACHE_EXPIRY))
+		exitOnError(parseErr, "unable to parse async job info query cache expiry")
+
+		cleanupInterval, parseErr := time.ParseDuration(utils.GetEnvOrDefault(utils.ASYNC_JOB_INFO_QUERY_CACHE_CLEANUP_INTERVAL, utils.DEFAULT_ASYNC_JOB_INFO_QUERY_CACHE_CLEANUP_INTERVAL))
+		exitOnError(parseErr, "unable to parse async job info query cache cleanup interval")
+
+		workerPool, WorkerPoolErr := dashboardclient.NewWorkerPool(
+			ctx,
+			rayJobInformer,
+			rayClusterInformer,
+			numWorkers,
+			queryInterval,
+			cacheSize,
+			cacheExpiry,
+			cleanupInterval,
+			config.GetDashboardClient(mgr),
+		)
+		exitOnError(WorkerPoolErr, "unable to create worker pool for async job info query")
+
+		workerPool.Start(ctx)
+	}
 
 	rayJobOptions := ray.RayJobReconcilerOptions{
 		RayJobMetricsManager:  rayJobMetricsManager,
 		BatchSchedulerManager: batchSchedulerManager,
 	}
-	exitOnError(ray.NewRayJobReconciler(ctx, mgr, rayJobOptions, config).SetupWithManager(mgr, config.ReconcileConcurrency),
+	exitOnError(ray.NewRayJobReconciler(mgr, rayJobOptions, config).SetupWithManager(mgr, config.ReconcileConcurrency),
 		"unable to create controller", "controller", "RayJob")
 
 	if os.Getenv("ENABLE_WEBHOOKS") == "true" {
