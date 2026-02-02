@@ -411,7 +411,11 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		// Clean up batch scheduler resources (e.g., delete Volcano PodGroup)
 		// This should be done before other deletion logic to ensure proper resource cleanup
 		if r.options.BatchSchedulerManager != nil {
-			if scheduler, err := r.options.BatchSchedulerManager.GetScheduler(); err == nil {
+			scheduler, err := r.options.BatchSchedulerManager.GetScheduler()
+			if err != nil {
+				logger.Error(err, "Failed to get batch scheduler")
+				// Don't block the reconciliation on scheduler errors, just log the error
+			} else {
 				if err := scheduler.CleanupOnCompletion(ctx, rayJobInstance); err != nil {
 					logger.Error(err, "Failed to cleanup batch scheduler resources")
 					// Don't block the reconciliation on cleanup failures, just log the error
