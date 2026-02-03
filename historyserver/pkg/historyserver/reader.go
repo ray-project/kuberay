@@ -338,6 +338,13 @@ func (s *ServerHandler) resolveActorLogFilename(clusterNameID, sessionID, actorI
 		)
 	}
 
+	if sessionID == "" {
+		return "", "", fmt.Errorf(
+			"sessionID is required to search for worker log files for actor %s",
+			actorID,
+		)
+	}
+
 	// Find worker log file by worker_id
 	nodeIDHex, logFilename, err := s.findWorkerLogFile(
 		clusterNameID,
