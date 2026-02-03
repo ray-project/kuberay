@@ -241,8 +241,13 @@ func (s *ServerHandler) resolvePidLogFilename(clusterNameID, sessionID, nodeID s
 // This mirrors Ray Dashboard's _resolve_task_filename logic.
 // The sessionID parameter is required for searching worker log files when task_log_info is not available.
 func (s *ServerHandler) resolveTaskLogFilename(clusterNameID, sessionID, taskID string, attemptNumber int, suffix string) (nodeID, filename string, err error) {
+	// Construct full cluster session key for event lookup
+	// We append the sessionID to the clusterNameID (which is "name_namespace")
+	// to match the key format used by utils.BuildClusterSessionKey.
+	fullKey := fmt.Sprintf("%s_%s", clusterNameID, sessionID)
+
 	// Get task attempts by task ID
-	taskAttempts, found := s.eventHandler.GetTaskByID(clusterNameID, taskID)
+	taskAttempts, found := s.eventHandler.GetTaskByID(fullKey, taskID)
 	if !found {
 		return "", "", fmt.Errorf("task not found: task_id=%s", taskID)
 	}
@@ -316,8 +321,13 @@ func (s *ServerHandler) resolveTaskLogFilename(clusterNameID, sessionID, taskID 
 // resolveActorLogFilename resolves log file for an actor by querying actor events.
 // This mirrors Ray Dashboard's _resolve_actor_filename logic.
 func (s *ServerHandler) resolveActorLogFilename(clusterNameID, sessionID, actorID, suffix string) (nodeID, filename string, err error) {
+	// Construct full cluster session key for event lookup
+	// We append the sessionID to the clusterNameID (which is "name_namespace")
+	// to match the key format used by utils.BuildClusterSessionKey.
+	fullKey := fmt.Sprintf("%s_%s", clusterNameID, sessionID)
+
 	// Get actor by actor ID
-	actor, found := s.eventHandler.GetActorByID(clusterNameID, actorID)
+	actor, found := s.eventHandler.GetActorByID(fullKey, actorID)
 	if !found {
 		return "", "", fmt.Errorf("actor not found: actor_id=%s", actorID)
 	}
