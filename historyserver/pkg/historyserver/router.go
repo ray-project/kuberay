@@ -984,12 +984,18 @@ func formatTaskForResponse(task eventtypes.Task, detail bool) map[string]interfa
 
 		if !task.CreationTime.IsZero() {
 			result["creation_time_ms"] = task.CreationTime.UnixMilli()
+		} else {
+			result["creation_time_ms"] = nil
 		}
 		if !task.StartTime.IsZero() {
 			result["start_time_ms"] = task.StartTime.UnixMilli()
+		} else {
+			result["start_time_ms"] = nil
 		}
 		if !task.EndTime.IsZero() {
 			result["end_time_ms"] = task.EndTime.UnixMilli()
+		} else {
+			result["end_time_ms"] = nil
 		}
 	}
 

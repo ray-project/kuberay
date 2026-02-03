@@ -251,7 +251,7 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 // 7. Verify the response API schema
 // 8. Delete S3 bucket to ensure test isolation
 func testLiveClusterTasks(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
-	endpoint := "/api/v0/tasks?detail=1"
+	endpoint := EndpointTasks + "?detail=1"
 
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
@@ -329,93 +329,98 @@ func testDeadClusterTasks(test Test, g *WithT, namespace *corev1.Namespace, s3Cl
 
 	jobIDs := getAllEligibleJobIDs(g, client, historyServerURL)
 	jobIDForFilter := jobIDs[0]
-	tasksTestCases := []struct {
+
+	verifyTasksEndpoint := func(
+		t *testing.T,
+		tcName,
+		queryParams string,
+		detail bool,
+		expectedStatus int,
+	) {
+		g := NewWithT(t)
+
+		url := historyServerURL + EndpointTasks + "?" + queryParams
+		resp, err := client.Get(url)
+		g.Expect(err).NotTo(HaveOccurred())
+		defer func() {
+			io.Copy(io.Discard, resp.Body)
+			resp.Body.Close()
+		}()
+
+		body, err := io.ReadAll(resp.Body)
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(resp.StatusCode).To(Equal(expectedStatus),
+			"Test case '%s' failed: expected %d, got %d", tcName, expectedStatus, resp.StatusCode)
+
+		if resp.StatusCode == http.StatusOK {
+			var tasksResp map[string]any
+			err = json.Unmarshal(body, &tasksResp)
+			g.Expect(err).NotTo(HaveOccurred())
+
+			LogWithTimestamp(test.T(), "Verifying %s response schema for dead cluster", url)
+			verifyTasksRespSchema(test, g, tasksResp, detail)
+		}
+	}
+
+	filterTestCases := []struct {
 		name           string
-		buildURL       func(baseURL, jobID string) string
+		queryParams    string
 		expectedStatus int
 	}{
 		// Basic / default
-		{"no params (default)", func(u, _ string) string { return u + EndpointTasks }, http.StatusOK},
+		{"no params (default)", "", http.StatusOK},
 
 		// limit
-		{"limit=1", func(u, _ string) string { return u + EndpointTasks + "?limit=1" }, http.StatusOK},
-		{"limit=100", func(u, _ string) string { return u + EndpointTasks + "?limit=100" }, http.StatusOK},
-		{"limit=10000", func(u, _ string) string { return u + EndpointTasks + "?limit=10000" }, http.StatusOK},
-		{"limit=0", func(u, _ string) string { return u + EndpointTasks + "?limit=0" }, http.StatusOK},
-		{"invalid limit (string)", func(u, _ string) string { return u + EndpointTasks + "?limit=abc" }, http.StatusBadRequest},
-
-		// detail
-		{"detail=true", func(u, _ string) string { return u + EndpointTasks + "?detail=true" }, http.StatusOK},
-		{"detail=false", func(u, _ string) string { return u + EndpointTasks + "?detail=false" }, http.StatusOK},
-		{"detail=1", func(u, _ string) string { return u + EndpointTasks + "?detail=1" }, http.StatusOK},
-		{"invalid detail (string)", func(u, _ string) string { return u + EndpointTasks + "?detail=invalid" }, http.StatusBadRequest},
+		{"limit=1", "limit=1", http.StatusOK},
+		{"limit=100", "limit=100", http.StatusOK},
+		{"limit=10000", "limit=10000", http.StatusOK},
+		{"limit=0", "limit=0", http.StatusOK},
+		{"invalid limit (string)", "limit=abc", http.StatusBadRequest},
 
 		// exclude_driver
-		{"exclude_driver=true", func(u, _ string) string { return u + EndpointTasks + "?exclude_driver=true" }, http.StatusOK},
-		{"exclude_driver=false", func(u, _ string) string { return u + EndpointTasks + "?exclude_driver=false" }, http.StatusOK},
-		{"invalid exclude_driver (string)", func(u, _ string) string { return u + EndpointTasks + "?exclude_driver=invalid" }, http.StatusBadRequest},
+		{"exclude_driver=true", "exclude_driver=true", http.StatusOK},
+		{"exclude_driver=false", "exclude_driver=false", http.StatusOK},
+		{"invalid exclude_driver (string)", "exclude_driver=invalid", http.StatusBadRequest},
 
 		// Single filter
-		{"state=FINISHED", func(u, _ string) string {
-			return u + EndpointTasks + "?filter_keys=state&filter_predicates==&filter_values=FINISHED"
-		}, http.StatusOK},
-		{"state!=PENDING_ARGS_AVAIL", func(u, _ string) string {
-			return u + EndpointTasks + "?filter_keys=state&filter_predicates=!=&filter_values=PENDING_ARGS_AVAIL"
-		}, http.StatusOK},
-		{fmt.Sprintf("job_id=%s", jobIDForFilter), func(u, j string) string {
-			return u + EndpointTasks + "?filter_keys=job_id&filter_predicates==&filter_values=" + j
-		}, http.StatusOK},
+		{"state=FINISHED", "filter_keys=state&filter_predicates==&filter_values=FINISHED", http.StatusOK},
+		{"state!=PENDING_ARGS_AVAIL", "filter_keys=state&filter_predicates=!=&filter_values=PENDING_ARGS_AVAIL", http.StatusOK},
+		{fmt.Sprintf("job_id=%s", jobIDForFilter), "filter_keys=job_id&filter_predicates==&filter_values=" + jobIDForFilter, http.StatusOK},
 
 		// Multiple filters
-		{"statte=FINISHED & type=ACTOR_TASK", func(u, _ string) string {
-			return u + EndpointTasks + "?filter_keys=state&filter_keys=task_type&filter_predicates==&filter_predicates==&filter_values=FINISHED&filter_values=ACTOR_TASK"
-		}, http.StatusOK},
+		{"statte=FINISHED & type=ACTOR_TASK", "filter_keys=state&filter_keys=task_type&filter_predicates==&filter_predicates==&filter_values=FINISHED&filter_values=ACTOR_TASK", http.StatusOK},
 
 		// Invalid filters
-		{"len(filter_keys) != len(filter_values)", func(u, _ string) string {
-			return u + EndpointTasks + "?filter_keys=state&filter_keys=job_id&filter_predicates==&filter_values=FINISHED"
-		}, http.StatusBadRequest},
-		{"filter_keys only (missing predicates and values)", func(u, _ string) string {
-			return u + EndpointTasks + "?filter_keys=state"
-		}, http.StatusBadRequest},
+		{"len(filter_keys) != len(filter_values)", "filter_keys=state&filter_keys=job_id&filter_predicates==&filter_values=FINISHED", http.StatusBadRequest},
+		{"filter_keys only (missing predicates and values)", "filter_keys=state", http.StatusBadRequest},
 
 		// Combined
-		{"limit=5 & detail=true", func(u, _ string) string { return u + EndpointTasks + "?limit=5&detail=true" }, http.StatusOK},
-		{"limit=5 & exclude_driver=true", func(u, _ string) string { return u + EndpointTasks + "?limit=5&exclude_driver=true" }, http.StatusOK},
-		{"limit=5 & detail=true & exclude_driver=false", func(u, _ string) string { return u + EndpointTasks + "?limit=5&detail=true&exclude_driver=false" }, http.StatusOK},
-		{"limit=10 & state=FINISHED", func(u, _ string) string {
-			return u + EndpointTasks + "?limit=10&filter_keys=state&filter_predicates==&filter_values=FINISHED"
-		}, http.StatusOK},
-		{"limit=10 & detail=true & exclude_driver=false & state=FINISHED", func(u, _ string) string {
-			return u + EndpointTasks + "?limit=10&detail=true&exclude_driver=false&filter_keys=state&filter_predicates==&filter_values=FINISHED"
-		}, http.StatusOK},
+		{"limit=5 & detail=true", "limit=5&detail=true", http.StatusOK},
+		{"limit=5 & exclude_driver=true", "limit=5&exclude_driver=true", http.StatusOK},
+		{"limit=5 & detail=true & exclude_driver=false", "limit=5&detail=true&exclude_driver=false", http.StatusOK},
+		{"limit=10 & state=FINISHED", "limit=10&filter_keys=state&filter_predicates==&filter_values=FINISHED", http.StatusOK},
+		{"limit=10 & detail=true & exclude_driver=false & state=FINISHED", "limit=10&detail=true&exclude_driver=false&filter_keys=state&filter_predicates==&filter_values=FINISHED", http.StatusOK},
+	}
+	for _, tc := range filterTestCases {
+		test.T().Run(tc.name, func(t *testing.T) {
+			verifyTasksEndpoint(t, tc.name, tc.queryParams, false, tc.expectedStatus)
+		})
 	}
 
-	for _, tc := range tasksTestCases {
+	detailTestCases := []struct {
+		name           string
+		queryParams    string
+		detail         bool
+		expectedStatus int
+	}{
+		{"detail=true", "detail=true", true, http.StatusOK},
+		{"detail=false", "detail=false", false, http.StatusOK},
+		{"detail=1", "detail=1", true, http.StatusOK},
+		{"invalid detail (string)", "detail=invalid", false, http.StatusBadRequest},
+	}
+	for _, tc := range detailTestCases {
 		test.T().Run(tc.name, func(t *testing.T) {
-			g := NewWithT(t)
-			url := tc.buildURL(historyServerURL, jobIDForFilter)
-			resp, err := client.Get(url)
-			g.Expect(err).NotTo(HaveOccurred())
-			defer func() {
-				io.Copy(io.Discard, resp.Body)
-				resp.Body.Close()
-			}()
-
-			body, err := io.ReadAll(resp.Body)
-			g.Expect(err).NotTo(HaveOccurred())
-			g.Expect(resp.StatusCode).To(Equal(tc.expectedStatus),
-				"Test case '%s' failed: expected %d, got %d", tc.name, tc.expectedStatus, resp.StatusCode)
-
-			if resp.StatusCode == http.StatusOK {
-				var tasksResp map[string]any
-				err = json.Unmarshal(body, &tasksResp)
-				g.Expect(err).NotTo(HaveOccurred())
-
-				LogWithTimestamp(test.T(), "Verifying /api/v0/tasks response schema for dead cluster")
-				// TODO(jwj): Support detailed mode
-				verifyTasksRespSchema(test, g, tasksResp, false)
-			}
+			verifyTasksEndpoint(t, tc.name, tc.queryParams, tc.detail, tc.expectedStatus)
 		})
 	}
 
@@ -597,16 +602,16 @@ func verifyTasksRespSchema(test Test, g *WithT, tasksResp map[string]any, detail
 		g.Expect(formattedTaskMap).To(HaveKey("worker_id"))
 		g.Expect(formattedTaskMap).To(HaveKey("worker_pid"))
 		g.Expect(formattedTaskMap).To(HaveKey("error_type"))
-		// g.Expect(formattedTaskMap).To(HaveKey("profiling_data"))
-		// g.Expect(formattedTaskMap).To(HaveKey("creation_time_ms"))
-		// g.Expect(formattedTaskMap).To(HaveKey("start_time_ms"))
-		// g.Expect(formattedTaskMap).To(HaveKey("end_time_ms"))
 		if detail {
 			g.Expect(formattedTaskMap).To(HaveKey("language"))
 			g.Expect(formattedTaskMap).To(HaveKey("required_resources"))
 			g.Expect(formattedTaskMap).To(HaveKey("runtime_env_info"))
 			g.Expect(formattedTaskMap).To(HaveKey("placement_group_id"))
 			g.Expect(formattedTaskMap).To(HaveKey("events"))
+			// g.Expect(formattedTaskMap).To(HaveKey("profiling_data"))
+			g.Expect(formattedTaskMap).To(HaveKey("creation_time_ms"))
+			g.Expect(formattedTaskMap).To(HaveKey("start_time_ms"))
+			g.Expect(formattedTaskMap).To(HaveKey("end_time_ms"))
 			g.Expect(formattedTaskMap).To(HaveKey("task_log_info"))
 			g.Expect(formattedTaskMap).To(HaveKey("error_message"))
 			g.Expect(formattedTaskMap).To(HaveKey("is_debugger_paused"))
