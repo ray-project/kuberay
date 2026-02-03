@@ -587,7 +587,7 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 		g.Expect(resp.StatusCode).To(Equal(http.StatusOK))
 		contentDisposition := resp.Header.Get("Content-Disposition")
 		g.Expect(contentDisposition).To(ContainSubstring("attachment"))
-		g.Expect(contentDisposition).To(ContainSubstring(fmt.Sprintf("filename=\"%s\"", customFilename)))
+		g.Expect(contentDisposition).To(ContainSubstring(fmt.Sprintf("filename=%s", customFilename)))
 	})
 
 	test.T().Run("filter_ansi_code behavior", func(t *testing.T) {
