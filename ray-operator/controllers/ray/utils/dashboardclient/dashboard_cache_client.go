@@ -47,6 +47,7 @@ type (
 		rayJobInformer      rayinformersv1.RayJobInformer
 		rayClusterInformer  rayinformersv1.RayClusterInformer
 		taskQueue           *chanx.UnboundedChan[*rayv1.RayJob]
+		existInQueue        sync.Map
 		dashboardClientFunc func(rayCluster *rayv1.RayCluster, url string) (RayDashboardClientInterface, error)
 		cacheStorage        *lru.Cache[string, *JobInfoCache]
 		logger              logr.Logger
@@ -102,6 +103,7 @@ func (w *WorkerPool) Start(ctx context.Context) {
 	go func() {
 		ticker := time.NewTicker(w.queryInterval)
 		defer ticker.Stop()
+		defer close(w.taskQueue.In)
 
 		for {
 			select {
@@ -118,12 +120,17 @@ func (w *WorkerPool) Start(ctx context.Context) {
 				logger.Info("Listing RayJobs from cache", "total", len(rayJobs))
 
 				for _, rayJob := range rayJobs {
-					if rayv1.IsJobTerminal(rayJob.Status.JobStatus) {
-						logger.Info("RayJob is in terminal status, skip querying job info", "rayJob", rayJob.Name, "status", rayJob.Status.JobStatus)
+					if rayv1.IsJobTerminal(rayJob.Status.JobStatus) || rayv1.IsJobDeploymentTerminal(rayJob.Status.JobDeploymentStatus) {
 						continue
 					}
 
-					// TODO: avoid duplicate entries in the queue
+					// In the worst case of the current implementation, we could have the number of worker working on getting JobInfo and
+					// the all of RayJobs in the cluster waiting in the task queue. It would not be unbounded.
+					if _, ok := w.existInQueue.LoadOrStore(cacheKey(namespacedNameFromRayJob(rayJob), rayJob.Status.JobId), struct{}{}); ok {
+						continue
+					}
+
+					// The task queue is unbounded, so the send operation will never block.
 					w.taskQueue.In <- rayJob
 				}
 			}
@@ -144,11 +151,9 @@ func (w *WorkerPool) Start(ctx context.Context) {
 					}
 
 					// not use common.RayJobRayClusterNamespacedName to avoid import cycle
-					rayClusterNamespacedName := types.NamespacedName{
-						Name:      rayJobInstance.Status.RayClusterName,
-						Namespace: rayJobInstance.Namespace,
-					}
-					logger.Info("try to find existing RayCluster instance", "name", rayClusterNamespacedName.Name)
+					rayClusterNamespacedName := namespacedNameFromRayJob(rayJobInstance)
+
+					w.existInQueue.Delete(cacheKey(rayClusterNamespacedName, rayJobInstance.Status.JobId))
 
 					// get RayCluster instance from informer cache
 					rayClusterInstance, err := w.rayClusterInformer.Lister().RayClusters(rayClusterNamespacedName.Namespace).Get(rayClusterNamespacedName.Name)
@@ -294,4 +299,12 @@ func (r *RayDashboardCacheClient) DeleteJob(ctx context.Context, jobName string)
 
 func cacheKey(namespacedName types.NamespacedName, jobId string) string {
 	return namespacedName.String() + string(types.Separator) + jobId
+}
+
+// namespacedNameFromRayJob is duplicated from common.RayJobRayClusterNamespacedName to avoid import cycle
+func namespacedNameFromRayJob(rayJob *rayv1.RayJob) types.NamespacedName {
+	return types.NamespacedName{
+		Name:      rayJob.Status.RayClusterName,
+		Namespace: rayJob.Namespace,
+	}
 }
