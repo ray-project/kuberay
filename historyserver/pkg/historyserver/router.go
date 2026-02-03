@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"mime"
 	"net/http"
 	"strconv"
 	"strings"
@@ -765,7 +766,19 @@ func (s *ServerHandler) getNodeLogFile(req *restful.Request, resp *restful.Respo
 	if downloadFilename == "" {
 		downloadFilename = DEFAULT_DOWNLOAD_FILENAME
 	}
-	resp.AddHeader("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", downloadFilename))
+	// Format filename correct to escape " or \
+	disposition := mime.FormatMediaType("attachment", map[string]string{
+		"filename": downloadFilename,
+	})
+
+	if disposition == "" {
+		logrus.Errorf("Failed to format Content-Disposition header for filename %q: %v", downloadFilename, err)
+
+		// Fallback to the default filename
+		disposition = fmt.Sprintf("attachment; filename=\"%s\"", DEFAULT_DOWNLOAD_FILENAME)
+	}
+
+	resp.AddHeader("Content-Disposition", disposition)
 
 	resp.Write(content)
 }
