@@ -170,6 +170,10 @@ const (
 	RAY_AUTH_TOKEN_SECRET_KEY = "auth_token"
 	// RAY_ENABLE_K8S_TOKEN_AUTH is the Ray environment variable for enabling K8s token authentication.
 	RAY_ENABLE_K8S_TOKEN_AUTH = "RAY_ENABLE_K8S_TOKEN_AUTH"
+	// RayTokenVolumeName is the name of the projected volume for Kubernetes token authentication.
+	RayTokenVolumeName = "ray-token"
+	// RayTokenMountPath is the mount path for the projected volume for Kubernetes token authentication.
+	RayTokenMountPath = "/var/run/secrets/ray.io/serviceaccount"
 
 	// This KubeRay operator environment variable is used to determine if random Pod
 	// deletion should be enabled. Note that this only takes effect when autoscaling

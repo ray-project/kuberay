@@ -16,6 +16,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/version"
+	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
@@ -253,6 +254,11 @@ func setAutoscalerV2EnvVars(podTemplate *corev1.PodTemplateSpec) {
 // configureTokenAuth sets environment variables required for Ray token authentication
 func configureTokenAuth(clusterName string, podTemplate *corev1.PodTemplateSpec, authOptions *rayv1.AuthOptions) {
 	SetContainerTokenAuthEnvVars(clusterName, &podTemplate.Spec.Containers[utils.RayContainerIndex], authOptions)
+
+	if authOptions != nil && ptr.Deref(authOptions.EnableK8sTokenAuth, false) {
+		AddRayTokenVolume(&podTemplate.Spec)
+	}
+
 	// For RayJob Sidecar mode, we need to set the auth token for the submitter container.
 
 	// Configure auth token for wait-gcs-ready init container if it exists
@@ -265,7 +271,28 @@ func configureTokenAuth(clusterName string, podTemplate *corev1.PodTemplateSpec,
 	}
 }
 
+// AddRayTokenVolume adds a projected service account token volume to the pod spec.
+func AddRayTokenVolume(podSpec *corev1.PodSpec) {
+	podSpec.Volumes = append(podSpec.Volumes, corev1.Volume{
+		Name: utils.RayTokenVolumeName,
+		VolumeSource: corev1.VolumeSource{
+			Projected: &corev1.ProjectedVolumeSource{
+				Sources: []corev1.VolumeProjection{
+					{
+						ServiceAccountToken: &corev1.ServiceAccountTokenProjection{
+							ExpirationSeconds: ptr.To[int64](3600),
+							Path:              "token",
+						},
+					},
+				},
+			},
+		},
+	})
+
+}
+
 // SetContainerTokenAuthEnvVars sets Ray authentication env vars for a container.
+
 func SetContainerTokenAuthEnvVars(clusterName string, container *corev1.Container, authOptions *rayv1.AuthOptions) {
 	container.Env = append(container.Env, corev1.EnvVar{
 		Name:  utils.RAY_AUTH_MODE_ENV_VAR,
@@ -287,6 +314,11 @@ func SetContainerTokenAuthEnvVars(clusterName string, container *corev1.Containe
 		container.Env = append(container.Env, corev1.EnvVar{
 			Name:  utils.RAY_ENABLE_K8S_TOKEN_AUTH,
 			Value: "true",
+		})
+		container.VolumeMounts = append(container.VolumeMounts, corev1.VolumeMount{
+			Name:      utils.RayTokenVolumeName,
+			MountPath: utils.RayTokenMountPath,
+			ReadOnly:  true,
 		})
 	}
 }
