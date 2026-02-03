@@ -920,12 +920,14 @@ func (h *EventHandler) handleTaskLifecycleEvent(eventMap map[string]any, cluster
 
 		// TODO(jwj): Before beta, the lifecycle-related fields are overwritten.
 		// In beta, the complete historical replay will be supported.
+		task.RayErrorInfo = currTask.RayErrorInfo
 		task.JobID = currTask.JobID
 		task.NodeID = currTask.NodeID
 		task.WorkerID = currTask.WorkerID
 		task.WorkerPID = currTask.WorkerPID
 		task.IsDebuggerPaused = currTask.IsDebuggerPaused
 		task.ActorReprName = currTask.ActorReprName
+		task.TaskLogInfo = currTask.TaskLogInfo
 		task.State = task.GetLastState()
 
 		// Derive creation time, start time and end time from state transitions.
