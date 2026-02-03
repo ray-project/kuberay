@@ -260,7 +260,7 @@ func ConvertBase64ToHex(id string) (string, error) {
 		// Try standard Base64 if URL-safe fails
 		idBytes, err = base64.StdEncoding.DecodeString(id)
 		if err != nil {
-			return "", fmt.Errorf("failed to decode Base64 ID: %w", err)
+			return id, fmt.Errorf("failed to decode Base64 ID: %w", err)
 		}
 	}
 	return fmt.Sprintf("%x", idBytes), nil
