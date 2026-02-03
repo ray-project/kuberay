@@ -15,6 +15,9 @@ type AuthOptionsApplyConfiguration struct {
 	// Supported values are "disabled" and "token".
 	// Defaults to "token".
 	Mode *rayv1.AuthMode `json:"mode,omitempty"`
+	// EnableK8sTokenAuth specifies whether to enable K8s token authentication.
+	// When set to true, all Ray Pods will set the environment variable RAY_ENABLE_K8S_TOKEN_AUTH to "true".
+	EnableK8sTokenAuth *bool `json:"enableK8sTokenAuth,omitempty"`
 }
 
 // AuthOptionsApplyConfiguration constructs a declarative configuration of the AuthOptions type for use with
@@ -28,5 +31,13 @@ func AuthOptions() *AuthOptionsApplyConfiguration {
 // If called multiple times, the Mode field is set to the value of the last call.
 func (b *AuthOptionsApplyConfiguration) WithMode(value rayv1.AuthMode) *AuthOptionsApplyConfiguration {
 	b.Mode = &value
+	return b
+}
+
+// WithEnableK8sTokenAuth sets the EnableK8sTokenAuth field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the EnableK8sTokenAuth field is set to the value of the last call.
+func (b *AuthOptionsApplyConfiguration) WithEnableK8sTokenAuth(value bool) *AuthOptionsApplyConfiguration {
+	b.EnableK8sTokenAuth = &value
 	return b
 }
