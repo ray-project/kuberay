@@ -822,8 +822,13 @@ func summarizeTasksByFuncName(tasks []eventtypes.Task) map[string]interface{} {
 	summary := make(map[string]map[string]int)
 
 	for _, task := range tasks {
-		// funcName := task.FuncOrClassName
-		funcName := ""
+		var funcName string
+		if task.TaskType == eventtypes.ACTOR_TASK {
+			funcName = task.ActorFunc.CallString()
+		} else {
+			funcName = task.TaskFunc.CallString()
+		}
+
 		if funcName == "" {
 			funcName = "unknown"
 		}
