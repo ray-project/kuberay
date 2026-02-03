@@ -968,7 +968,7 @@ func formatTaskForResponse(task eventtypes.Task, detail bool) map[string]interfa
 	}
 
 	if detail {
-		result["language"] = task.Language
+		result["language"] = string(task.Language)
 		result["required_resources"] = task.RequiredResources
 		result["runtime_env_info"] = task.SerializedRuntimeEnv
 		result["placement_group_id"] = task.PlacementGroupID

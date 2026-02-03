@@ -111,7 +111,7 @@ type Task struct {
 	// For ACTOR_TASK_DEFINITION_EVENT, the TaskType is populated as ACTOR_TASK manually.
 	// TODO(jwj): Can ACTOR_TASK be populated automatically?
 	TaskType TaskType `json:"taskType,omitempty"`
-	Language string   `json:"language,omitempty"`
+	Language Language `json:"language,omitempty"`
 	// For TASK_DEFINITION_EVENT, only TaskFunc and TaskName are populated.
 	// For ACTOR_TASK_DEFINITION_EVENT, only ActorFunc and ActorTaskName are populated.
 	// TODO(jwj): Need a validation function to make the "oneof" relationship more explicit.
