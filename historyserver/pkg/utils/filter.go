@@ -33,7 +33,6 @@ type ListAPIOptions struct {
 }
 
 // ParseOptionsFromReq parses the query parameters from the request and returns the API options for list methods.
-// TODO(jwj): All query parameters should be validated in this function before applying any filters.
 func ParseOptionsFromReq(req *restful.Request) (ListAPIOptions, error) {
 	opts := ListAPIOptions{
 		Limit: RayMaxLimitFromDataSource,
@@ -45,15 +44,24 @@ func ParseOptionsFromReq(req *restful.Request) (ListAPIOptions, error) {
 			return nil
 		}
 
-		var err error
 		switch t := opt.(type) {
 		case *int:
-			*t, err = strconv.Atoi(val)
+			intVal, err := strconv.Atoi(val)
+			if err != nil {
+				return fmt.Errorf("invalid %s: %w", key, err)
+			}
+			if intVal < 0 {
+				return fmt.Errorf("invalid %s: cannot be negative", key)
+			}
+			*t = intVal
 		case *bool:
-			*t, err = strconv.ParseBool(val)
-		}
-		if err != nil {
-			return fmt.Errorf("invalid %s: %w", key, err)
+			boolVal, err := strconv.ParseBool(val)
+			if err != nil {
+				return fmt.Errorf("invalid %s: %w", key, err)
+			}
+			*t = boolVal
+		default:
+			return fmt.Errorf("unsupported type %T for %s", t, key)
 		}
 		return nil
 	}
