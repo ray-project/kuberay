@@ -3,7 +3,6 @@ package historyserver
 import (
 	"bufio"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,9 +13,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/emicklei/go-restful/v3"
 	eventtypes "github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
-	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 	"github.com/sirupsen/logrus"
 
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
@@ -42,29 +39,6 @@ var ansiEscapePattern = regexp.MustCompile(`\x1b\[[0-9;]+m`)
 // filterAnsiEscapeCodes removes ANSI escape sequences from log content
 func filterAnsiEscapeCodes(content []byte) []byte {
 	return ansiEscapePattern.ReplaceAll(content, []byte(""))
-}
-
-// decodeBase64ToHex converts an ID to hex format.
-// Handles both cases:
-// 1. Already hex format - returns as-is
-// 2. Base64-encoded - decodes to hex
-// It tries RawURLEncoding first (Ray's default), falling back to StdEncoding if that fails.
-func decodeBase64ToHex(id string) (string, error) {
-	// Check if already hex (only [0-9a-f])
-	if matched, _ := regexp.MatchString("^[0-9a-f]+$", id); matched {
-		return id, nil
-	}
-
-	// Try base64 decode
-	idBytes, err := base64.RawURLEncoding.DecodeString(id)
-	if err != nil {
-		// Try standard Base64 if URL-safe fails
-		idBytes, err = base64.StdEncoding.DecodeString(id)
-		if err != nil {
-			return "", fmt.Errorf("failed to decode Base64 ID: %w", err)
-		}
-	}
-	return fmt.Sprintf("%x", idBytes), nil
 }
 
 func (s *ServerHandler) listClusters(limit int) []utils.ClusterInfo {
@@ -244,7 +218,7 @@ func (s *ServerHandler) resolvePidLogFilename(clusterNameID, sessionID, nodeID s
 	}
 
 	// Convert to hex if not already is
-	nodeIDHex, err := decodeBase64ToHex(nodeID)
+	nodeIDHex, err := utils.ConvertBase64ToHex(nodeID)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to decode node_id: %w", err)
 	}
@@ -388,13 +362,13 @@ func (s *ServerHandler) resolveActorLogFilename(clusterNameID, sessionID, actorI
 // Returns (nodeIDHex, filename, error).
 func (s *ServerHandler) findWorkerLogFile(clusterNameID, sessionID, nodeID, workerID, suffix string) (string, string, error) {
 	// Convert to hex if not already is
-	nodeIDHex, err := decodeBase64ToHex(nodeID)
+	nodeIDHex, err := utils.ConvertBase64ToHex(nodeID)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to decode node_id: %w", err)
 	}
 
 	// Convert Base64 worker_id to hex
-	workerIDHex, err := decodeBase64ToHex(workerID)
+	workerIDHex, err := utils.ConvertBase64ToHex(workerID)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to decode worker_id: %w", err)
 	}
@@ -500,7 +474,7 @@ func (s *ServerHandler) ipToNodeId(rayClusterNameID, sessionID, nodeIP string) (
 			}
 
 			// Convert to hex if not already is
-			nodeIDHex, err := decodeBase64ToHex(nodeIDBytes)
+			nodeIDHex, err := utils.ConvertBase64ToHex(nodeIDBytes)
 			if err != nil {
 				logrus.Warnf("Failed to decode node_id %s: %v", nodeIDBytes, err)
 				continue
