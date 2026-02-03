@@ -352,6 +352,10 @@ func (f *FunctionDescriptor) DeepCopy() *FunctionDescriptor {
 // FunctionDescriptor.CallString returns the function name of the FunctionDescriptor.
 // Ref: https://github.com/ray-project/ray/blob/d0b1d151d8ea964a711e451d0ae736f8bf95b629/src/ray/common/function_descriptor.h#L203-L212.
 func (f *FunctionDescriptor) CallString() string {
+	if f == nil {
+		return ""
+	}
+
 	var className string
 	var functionName string
 	if f.JavaFunctionDescriptor != nil {
