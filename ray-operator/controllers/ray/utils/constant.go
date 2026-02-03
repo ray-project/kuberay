@@ -168,6 +168,8 @@ const (
 	RAY_AUTH_TOKEN_ENV_VAR = "RAY_AUTH_TOKEN" // #nosec G101
 	// RAY_AUTH_TOKEN_SECRET_KEY is the key used in the Secret containing Ray auth token
 	RAY_AUTH_TOKEN_SECRET_KEY = "auth_token"
+	// RAY_ENABLE_K8S_TOKEN_AUTH is the Ray environment variable for enabling K8s token authentication.
+	RAY_ENABLE_K8S_TOKEN_AUTH = "RAY_ENABLE_K8S_TOKEN_AUTH"
 
 	// This KubeRay operator environment variable is used to determine if random Pod
 	// deletion should be enabled. Note that this only takes effect when autoscaling
