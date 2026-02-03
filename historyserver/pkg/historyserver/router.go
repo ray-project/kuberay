@@ -873,7 +873,7 @@ func summarizeTasksByLineage(tasks []eventtypes.Task) map[string]interface{} {
 	}
 }
 
-// getTasks
+// getTasks handles the /api/v0/tasks endpoint with the task filtering logic by query parameters.
 func (s *ServerHandler) getTasks(req *restful.Request, resp *restful.Response) {
 	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
 	if sessionName == "live" {
