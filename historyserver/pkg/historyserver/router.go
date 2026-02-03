@@ -772,7 +772,7 @@ func (s *ServerHandler) getNodeLogFile(req *restful.Request, resp *restful.Respo
 	})
 
 	if disposition == "" {
-		logrus.Errorf("Failed to format Content-Disposition header for filename %q: %v", downloadFilename, err)
+		logrus.Errorf("Failed to format Content-Disposition header for filename %q", downloadFilename)
 
 		// Fallback to the default filename
 		disposition = fmt.Sprintf("attachment; filename=\"%s\"", DEFAULT_DOWNLOAD_FILENAME)

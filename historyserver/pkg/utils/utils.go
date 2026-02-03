@@ -250,7 +250,7 @@ func GetRayNodeID() (string, error) {
 // It tries RawURLEncoding first (Ray's default), falling back to StdEncoding if that fails.
 func ConvertBase64ToHex(id string) (string, error) {
 	// Check if already hex (only [0-9a-f])
-	if matched, _ := regexp.MatchString("^[0-9a-f]+$", id); matched {
+	if matched, _ := regexp.MatchString("^[0-9a-fA-F]+$", id); matched {
 		return id, nil
 	}
 
