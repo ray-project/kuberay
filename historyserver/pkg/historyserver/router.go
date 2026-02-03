@@ -13,12 +13,13 @@ import (
 	"strings"
 
 	"github.com/emicklei/go-restful/v3"
-	eventtypes "github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
-	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	eventtypes "github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
+	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
 const (
@@ -509,6 +510,16 @@ func (s *ServerHandler) getPrometheusHealth(req *restful.Request, resp *restful.
 	}
 	// Return "not yet supported" for prometheus health
 	resp.WriteErrorString(http.StatusNotImplemented, "Prometheus health not yet supported")
+}
+
+func (s *ServerHandler) getGrafanaHealth(req *restful.Request, resp *restful.Response) {
+	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
+	if sessionName == "live" {
+		s.redirectRequest(req, resp)
+		return
+	}
+
+	resp.WriteErrorString(http.StatusNotImplemented, "Grafana health is not yet supported for historical sessions.")
 }
 
 func (s *ServerHandler) getJobs(req *restful.Request, resp *restful.Response) {
