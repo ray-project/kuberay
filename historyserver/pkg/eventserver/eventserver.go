@@ -821,6 +821,10 @@ func (h *EventHandler) handleTaskDefinitionEvent(eventMap map[string]any, cluste
 	if err := json.Unmarshal(jsonTaskDefinition, &currTask); err != nil {
 		return fmt.Errorf("failed to unmarshal %s event: %w", taskDefField, err)
 	}
+	if currTask.TaskID == "" {
+		return fmt.Errorf("task ID is empty")
+	}
+	normalizeTaskIDsToHex(&currTask)
 
 	// Manually set the task type for an actor task.
 	if isActorTask {
@@ -862,6 +866,7 @@ func (h *EventHandler) handleTaskLifecycleEvent(eventMap map[string]any, cluster
 	if currTask.TaskID == "" {
 		return fmt.Errorf("task ID is empty")
 	}
+	normalizeTaskIDsToHex(&currTask)
 
 	// TODO(jwj): Clarify if there must be at least one state transition. Can one task have more than one state transition?
 	if len(currTask.StateTransitions) == 0 {
@@ -929,4 +934,31 @@ func (h *EventHandler) handleTaskLifecycleEvent(eventMap map[string]any, cluster
 	})
 
 	return nil
+}
+
+// normalizeTaskIDsToHex converts base64-encoded Ray IDs in task-related events:
+//   - TASK_DEFINITION_EVENT
+//   - ACTOR_TASK_DEFINITION_EVENT
+//   - TASK_LIFECYCLE_EVENT
+//
+// to hex so stored tasks match the live cluster API schema.
+func normalizeTaskIDsToHex(task *types.Task) {
+	normalize := func(base64Str string) string {
+		if base64Str == "" {
+			return ""
+		}
+		hexStr, err := utils.ConvertBase64ToHex(base64Str)
+		if err != nil {
+			logrus.Errorf("Failed to convert ID from base64 to hex, keeping original: %v", err)
+			return base64Str
+		}
+		return hexStr
+	}
+
+	task.TaskID = normalize(task.TaskID)
+	task.ActorID = normalize(task.ActorID)
+	task.JobID = normalize(task.JobID)
+	task.ParentTaskID = normalize(task.ParentTaskID)
+	task.NodeID = normalize(task.NodeID)
+	task.WorkerID = normalize(task.WorkerID)
 }
