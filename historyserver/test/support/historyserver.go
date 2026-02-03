@@ -23,7 +23,6 @@ const (
 	HistoryServerPort         = 30080
 
 	RayGrafanaIframeHost               = "http://127.0.0.1:3000"
-	RayPrometheusHost                  = "http://prometheus-kube-prometheus-prometheus.prometheus-system.svc:9090"
 	HistoryServerGrafanaHealthResponse = `{
   "result": true,
   "msg": "Grafana running",
@@ -199,7 +198,7 @@ func PrepareTestEnvWithPrometheus(test Test, g *WithT, namespace *corev1.Namespa
 	InstallGrafanaAndPrometheus(test, g)
 
 	additionalEnvs := map[string]string{
-		"RAY_PROMETHEUS_HOST": RayPrometheusHost,
+		"RAY_PROMETHEUS_HOST": "http://prometheus-kube-prometheus-prometheus.prometheus-system.svc:9090",
 	}
 
 	// Deploy a Ray cluster with the collector.

@@ -2,6 +2,8 @@ package utils
 
 import (
 	"bytes"
+	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path"
@@ -239,4 +241,22 @@ func GetRayNodeID() (string, error) {
 		return strings.Trim(string(nodeidBytes), "\n"), nil
 	}
 	return "", fmt.Errorf("timeout --node_id= not found")
+}
+
+func ConvertBase64ToHex(input string) (string, error) {
+	bytes, err := base64.StdEncoding.DecodeString(input)
+	if err != nil {
+		return input, err
+	}
+
+	hexStr := hex.EncodeToString(bytes)
+
+	return hexStr, nil
+}
+
+// BuildClusterSessionKey constructs the key used to identify a specific cluster session.
+// Format: "{clusterName}_{namespace}_{sessionName}"
+// Example: "raycluster-historyserver_default_session_2026-01-11_19-38-40"
+func BuildClusterSessionKey(clusterName, namespace, sessionName string) string {
+	return clusterName + connector + namespace + connector + sessionName
 }
