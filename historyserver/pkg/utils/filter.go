@@ -13,9 +13,11 @@ const (
 	// Ref: https://github.com/ray-project/ray/blob/ac76c16ebf081bad2bc9b73e952d855dba3fc021/python/ray/util/state/common.py#L48.
 	DefaultLimit = 100
 
+	// Ray performs two-stage filtering: the GCS source-side filtering and the API server-side filtering.
+	// For the history server, we only mimic the API server-side filtering. So, RayMaxLimitFromDataSource is not used.
 	// Ref: https://github.com/ray-project/ray/blob/ac76c16ebf081bad2bc9b73e952d855dba3fc021/python/ray/util/state/common.py#L52-L61.
-	RayMaxLimitFromAPIServer  = 10000
 	RayMaxLimitFromDataSource = 10000
+	RayMaxLimitFromAPIServer  = 10000
 )
 
 type PredicateType string
@@ -31,6 +33,8 @@ type Filter struct {
 	FilterValue     string
 }
 
+// ListAPIOptions is the legal query parameters for the list API.
+// Since the state entities are stored in memory, we don't consider the timeout at this stage.
 type ListAPIOptions struct {
 	Limit         int
 	Timeout       int
