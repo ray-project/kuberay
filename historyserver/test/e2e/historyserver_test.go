@@ -82,7 +82,7 @@ func testLiveClusters(test Test, g *WithT, namespace *corev1.Namespace, s3Client
 }
 
 func testLiveGrafanaHealth(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
-	rayCluster := PrepareTestEnvWithGrafana(test, g, namespace, s3Client)
+	rayCluster := PrepareTestEnvWithPrometheusAndGrafana(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 	ApplyHistoryServer(test, g, namespace)
 	historyServerURL := GetHistoryServerURL(test, g, namespace)
@@ -100,7 +100,7 @@ func testLiveGrafanaHealth(test Test, g *WithT, namespace *corev1.Namespace, s3C
 }
 
 func testLivePrometheusHealth(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
-	rayCluster := PrepareTestEnvWithPrometheus(test, g, namespace, s3Client)
+	rayCluster := PrepareTestEnvWithPrometheusAndGrafana(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 	ApplyHistoryServer(test, g, namespace)
 	historyServerURL := GetHistoryServerURL(test, g, namespace)

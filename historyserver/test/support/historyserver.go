@@ -161,44 +161,16 @@ func PrepareTestEnv(test Test, g *WithT, namespace *corev1.Namespace, s3Client *
 	return rayCluster
 }
 
-// PrepareTestEnvWithGrafana prepares test environment with Grafana for each test case, including applying a Ray cluster,
+// PrepareTestEnvWithPrometheusAndGrafana prepares test environment with Prometheus and Grafana for each test case, including applying a Ray cluster,
 // checking the collector sidecar container exists in the head pod and an empty S3 bucket exists.
-func PrepareTestEnvWithGrafana(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) *rayv1.RayCluster {
+func PrepareTestEnvWithPrometheusAndGrafana(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) *rayv1.RayCluster {
 
 	InstallGrafanaAndPrometheus(test, g)
 
 	additionalEnvs := map[string]string{
 		"RAY_GRAFANA_IFRAME_HOST": RayGrafanaIframeHost,
 		"RAY_GRAFANA_HOST":        "http://prometheus-grafana.prometheus-system.svc:80",
-	}
-
-	// Deploy a Ray cluster with the collector.
-	rayCluster := ApplyRayClusterWithCollectorWithEnvs(test, g, namespace, additionalEnvs)
-
-	// Check the collector sidecar exists in the head pod.
-	headPod, err := GetHeadPod(test, rayCluster)
-	g.Expect(err).NotTo(HaveOccurred())
-	g.Expect(headPod.Spec.Containers).To(ContainElement(
-		WithTransform(func(c corev1.Container) string { return c.Name }, Equal("collector")),
-	))
-
-	// Check an empty S3 bucket is automatically created.
-	_, err = s3Client.HeadBucket(&s3.HeadBucketInput{
-		Bucket: aws.String(S3BucketName),
-	})
-	g.Expect(err).NotTo(HaveOccurred())
-
-	return rayCluster
-}
-
-// PrepareTestEnvWithPrometheus prepares test environment with Prometheus for each test case, including applying a Ray cluster,
-// checking the collector sidecar container exists in the head pod and an empty S3 bucket exists.
-func PrepareTestEnvWithPrometheus(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) *rayv1.RayCluster {
-
-	InstallGrafanaAndPrometheus(test, g)
-
-	additionalEnvs := map[string]string{
-		"RAY_PROMETHEUS_HOST": "http://prometheus-kube-prometheus-prometheus.prometheus-system.svc:9090",
+		"RAY_PROMETHEUS_HOST":     "http://prometheus-kube-prometheus-prometheus.prometheus-system.svc:9090",
 	}
 
 	// Deploy a Ray cluster with the collector.
