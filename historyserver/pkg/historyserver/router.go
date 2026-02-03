@@ -900,7 +900,7 @@ func (s *ServerHandler) getTasks(req *restful.Request, resp *restful.Response) {
 		formattedTasks = append(formattedTasks, formatTaskForResponse(task, listAPIOptions.Detail))
 	}
 
-	response := RespTaksInfo{
+	response := RespTasksInfo{
 		Result: true,
 		Msg:    "",
 		Data: TaskData{
