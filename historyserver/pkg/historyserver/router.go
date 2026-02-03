@@ -822,13 +822,7 @@ func summarizeTasksByFuncName(tasks []eventtypes.Task) map[string]interface{} {
 	summary := make(map[string]map[string]int)
 
 	for _, task := range tasks {
-		var funcName string
-		if task.TaskType == eventtypes.ACTOR_TASK {
-			funcName = task.ActorFunc.CallString()
-		} else {
-			funcName = task.TaskFunc.CallString()
-		}
-
+		funcName := task.GetFuncName()
 		if funcName == "" {
 			funcName = "unknown"
 		}
@@ -947,24 +941,19 @@ func (s *ServerHandler) getTasks(req *restful.Request, resp *restful.Response) {
 func formatTaskForResponse(task eventtypes.Task, detail bool) map[string]interface{} {
 	// TODO(jwj): Maybe define result schema in types.go.
 	result := map[string]interface{}{
-		"task_id":        task.TaskID,
-		"attempt_number": task.TaskAttempt,
-		"state":          string(task.State),
-		"job_id":         task.JobID,
-		"actor_id":       task.ActorID,
-		"type":           string(task.TaskType),
-		"parent_task_id": task.ParentTaskID,
-		"node_id":        task.NodeID,
-		"worker_id":      task.WorkerID,
-		"worker_pid":     task.WorkerPID,
-		"error_type":     string(task.RayErrorInfo.ErrorType),
-	}
-	if task.TaskType == eventtypes.ACTOR_TASK {
-		result["name"] = task.ActorTaskName
-		result["func_or_class_name"] = task.ActorFunc.CallString()
-	} else {
-		result["name"] = task.TaskName
-		result["func_or_class_name"] = task.TaskFunc.CallString()
+		"task_id":            task.TaskID,
+		"attempt_number":     task.TaskAttempt,
+		"name":               task.GetTaskName(),
+		"state":              string(task.State),
+		"job_id":             task.JobID,
+		"actor_id":           task.ActorID,
+		"type":               string(task.TaskType),
+		"func_or_class_name": task.GetFuncName(),
+		"parent_task_id":     task.ParentTaskID,
+		"node_id":            task.NodeID,
+		"worker_id":          task.WorkerID,
+		"worker_pid":         task.WorkerPID,
+		"error_type":         string(task.RayErrorInfo.ErrorType),
 	}
 
 	if detail {

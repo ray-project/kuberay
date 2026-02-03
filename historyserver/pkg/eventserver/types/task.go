@@ -253,6 +253,22 @@ func (t *TaskMap) CreateOrMergeAttempt(taskId string, taskAttempt int, mergeFn f
 	t.TaskMap[taskId] = tasks
 }
 
+// GetTaskName returns the task name of the task.
+func (t *Task) GetTaskName() string {
+	if t.TaskType == ACTOR_TASK {
+		return t.ActorTaskName
+	}
+	return t.TaskName
+}
+
+// GetFuncName returns the function name of the task.
+func (t *Task) GetFuncName() string {
+	if t.TaskType == ACTOR_TASK {
+		return t.ActorFunc.CallString()
+	}
+	return t.TaskFunc.CallString()
+}
+
 // GetLastState returns the last state of the task.
 func (t *Task) GetLastState() TaskStatus {
 	if len(t.StateTransitions) == 0 {
