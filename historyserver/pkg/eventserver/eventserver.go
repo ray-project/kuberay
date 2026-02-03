@@ -975,6 +975,7 @@ func normalizeTaskIDsToHex(task *types.Task) {
 	task.ActorID = normalize(task.ActorID)
 	task.JobID = normalize(task.JobID)
 	task.ParentTaskID = normalize(task.ParentTaskID)
+	task.PlacementGroupID = normalize(task.PlacementGroupID)
 	task.NodeID = normalize(task.NodeID)
 	task.WorkerID = normalize(task.WorkerID)
 }
