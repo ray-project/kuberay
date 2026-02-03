@@ -130,7 +130,7 @@ func TestBuildJobSubmitCommandWithSidecarMode(t *testing.T) {
 		"EXPECTED_NODES=$(($" + utils.RAY_EXPECTED_MIN_WORKERS + " + 1))", ";",
 		"echo", strconv.Quote("Waiting for $EXPECTED_NODES nodes (1 head + $" + utils.RAY_EXPECTED_MIN_WORKERS + " workers) to register..."), ";",
 		"until", "[",
-		"\"$(wget ${" + utils.RAY_AUTH_TOKEN_ENV_VAR + ":+--header \"x-ray-authorization: Bearer $" + utils.RAY_AUTH_TOKEN_ENV_VAR + "\"} -q -O- " + address + "/nodes?view=summary 2>/dev/null | python3 -c \"import sys,json; d=json.load(sys.stdin); print(len([n for n in d.get('data',{}).get('summary',[]) if n.get('raylet',{}).get('state','')=='ALIVE']))\" 2>/dev/null || echo 0)\"",
+		"\"$(python3 -c \"import urllib.request,json,os; req=urllib.request.Request('" + address + "/nodes?view=summary'); t=os.environ.get('" + utils.RAY_AUTH_TOKEN_ENV_VAR + "',''); t and req.add_header('x-ray-authorization','Bearer '+t); d=json.loads(urllib.request.urlopen(req,timeout=5).read()); print(len([n for n in d.get('data',{}).get('summary',[]) if n.get('raylet',{}).get('state')=='ALIVE']))\" 2>/dev/null || echo 0)\"",
 		"-ge", "\"$EXPECTED_NODES\"", "]", ";",
 		"do", "echo", strconv.Quote("Waiting for Ray nodes to register. Expected: $EXPECTED_NODES ..."), ";", "sleep", "2", ";", "done", ";",
 		"echo", strconv.Quote("All expected nodes are registered."), ";",
