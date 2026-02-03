@@ -206,7 +206,7 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 
 		// Configure RAY_AUTH_TOKEN and RAY_AUTH_MODE if auth is enabled.
 		if utils.IsAuthEnabled(&instance.Spec) {
-			SetContainerTokenAuthEnvVars(instance.Name, &autoscalerContainer)
+			SetContainerTokenAuthEnvVars(instance.Name, &autoscalerContainer, instance.Spec.AuthOptions)
 		}
 
 		// Merge the user overrides from autoscalerOptions into the autoscaler container config.
@@ -232,7 +232,7 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 	}
 
 	if utils.IsAuthEnabled(&instance.Spec) {
-		configureTokenAuth(instance.Name, &podTemplate)
+		configureTokenAuth(instance.Name, &podTemplate, instance.Spec.AuthOptions)
 	}
 
 	return podTemplate
@@ -251,8 +251,8 @@ func setAutoscalerV2EnvVars(podTemplate *corev1.PodTemplateSpec) {
 }
 
 // configureTokenAuth sets environment variables required for Ray token authentication
-func configureTokenAuth(clusterName string, podTemplate *corev1.PodTemplateSpec) {
-	SetContainerTokenAuthEnvVars(clusterName, &podTemplate.Spec.Containers[utils.RayContainerIndex])
+func configureTokenAuth(clusterName string, podTemplate *corev1.PodTemplateSpec, authOptions *rayv1.AuthOptions) {
+	SetContainerTokenAuthEnvVars(clusterName, &podTemplate.Spec.Containers[utils.RayContainerIndex], authOptions)
 	// For RayJob Sidecar mode, we need to set the auth token for the submitter container.
 
 	// Configure auth token for wait-gcs-ready init container if it exists
@@ -261,12 +261,12 @@ func configureTokenAuth(clusterName string, podTemplate *corev1.PodTemplateSpec)
 			continue
 		}
 
-		SetContainerTokenAuthEnvVars(clusterName, &podTemplate.Spec.InitContainers[i])
+		SetContainerTokenAuthEnvVars(clusterName, &podTemplate.Spec.InitContainers[i], authOptions)
 	}
 }
 
 // SetContainerTokenAuthEnvVars sets Ray authentication env vars for a container.
-func SetContainerTokenAuthEnvVars(clusterName string, container *corev1.Container) {
+func SetContainerTokenAuthEnvVars(clusterName string, container *corev1.Container, authOptions *rayv1.AuthOptions) {
 	container.Env = append(container.Env, corev1.EnvVar{
 		Name:  utils.RAY_AUTH_MODE_ENV_VAR,
 		Value: string(rayv1.AuthModeToken),
@@ -282,6 +282,13 @@ func SetContainerTokenAuthEnvVars(clusterName string, container *corev1.Containe
 			},
 		},
 	})
+
+	if authOptions != nil && authOptions.EnableK8sTokenAuth != nil && *authOptions.EnableK8sTokenAuth {
+		container.Env = append(container.Env, corev1.EnvVar{
+			Name:  utils.RAY_ENABLE_K8S_TOKEN_AUTH,
+			Value: "true",
+		})
+	}
 }
 
 func getEnableInitContainerInjection() bool {
@@ -407,7 +414,7 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 	}
 
 	if utils.IsAuthEnabled(&instance.Spec) {
-		configureTokenAuth(instance.Name, &podTemplate)
+		configureTokenAuth(instance.Name, &podTemplate, instance.Spec.AuthOptions)
 	}
 
 	return podTemplate

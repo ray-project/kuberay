@@ -776,6 +776,51 @@ func TestBuildPod_WithPlasmaDirectory(t *testing.T) {
 	}
 }
 
+func TestBuildPod_WithEnableK8sTokenAuth(t *testing.T) {
+	ctx := context.Background()
+
+	cluster := instance.DeepCopy()
+	cluster.Spec.AuthOptions = &rayv1.AuthOptions{
+		Mode:               rayv1.AuthModeToken,
+		EnableK8sTokenAuth: ptr.To(true),
+	}
+
+	podName := strings.ToLower(cluster.Name + utils.DashSymbol + string(rayv1.HeadNode) + utils.DashSymbol + utils.FormatInt32(0))
+	podTemplateSpec := DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
+	pod := BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", false, utils.GetCRDType(""), "", nil, "")
+
+	rayContainer := pod.Spec.Containers[utils.RayContainerIndex]
+	checkContainerEnv(t, rayContainer, utils.RAY_ENABLE_K8S_TOKEN_AUTH, "true")
+
+	cluster = instance.DeepCopy()
+	cluster.Spec.AuthOptions = &rayv1.AuthOptions{
+		Mode:               rayv1.AuthModeToken,
+		EnableK8sTokenAuth: ptr.To(false),
+	}
+	podTemplateSpec = DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
+	pod = BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", false, utils.GetCRDType(""), "", nil, "")
+	rayContainer = pod.Spec.Containers[utils.RayContainerIndex]
+	for _, env := range rayContainer.Env {
+		if env.Name == utils.RAY_ENABLE_K8S_TOKEN_AUTH {
+			t.Errorf("RAY_ENABLE_K8S_TOKEN_AUTH should not be set")
+		}
+	}
+
+	cluster = instance.DeepCopy()
+	cluster.Spec.AuthOptions = &rayv1.AuthOptions{
+		Mode:               rayv1.AuthModeToken,
+		EnableK8sTokenAuth: nil,
+	}
+	podTemplateSpec = DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
+	pod = BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", false, utils.GetCRDType(""), "", nil, "")
+	rayContainer = pod.Spec.Containers[utils.RayContainerIndex]
+	for _, env := range rayContainer.Env {
+		if env.Name == utils.RAY_ENABLE_K8S_TOKEN_AUTH {
+			t.Errorf("RAY_ENABLE_K8S_TOKEN_AUTH should not be set")
+		}
+	}
+}
+
 func TestBuildPod_WithNoCPULimits(t *testing.T) {
 	cluster := instance.DeepCopy()
 	ctx := context.Background()

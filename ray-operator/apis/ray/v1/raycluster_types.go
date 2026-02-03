@@ -86,6 +86,10 @@ type AuthOptions struct {
 	// +kubebuilder:validation:Enum=disabled;token
 	// +optional
 	Mode AuthMode `json:"mode,omitempty"`
+	// EnableK8sTokenAuth specifies whether to enable K8s token authentication.
+	// When set to true, all Ray Pods will set the environment variable RAY_ENABLE_K8S_TOKEN_AUTH to "true".
+	// +optional
+	EnableK8sTokenAuth *bool `json:"enableK8sTokenAuth,omitempty"`
 }
 
 // GcsFaultToleranceOptions contains configs for GCS FT
