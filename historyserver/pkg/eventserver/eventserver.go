@@ -833,13 +833,27 @@ func (h *EventHandler) handleTaskDefinitionEvent(eventMap map[string]any, cluste
 
 	taskMap := h.ClusterTaskMap.GetOrCreateTaskMap(clusterSessionKey)
 	taskMap.CreateOrMergeAttempt(currTask.TaskID, currTask.TaskAttempt, func(task *types.Task) {
-		// Preserve existing state transitions.
+		// Preserve existing lifecycle-derived fields to avoid overwriting.
 		existingStateTransitions := task.StateTransitions
+		existingRayErrorInfo := task.RayErrorInfo
+		existingNodeID := task.NodeID
+		existingWorkerID := task.WorkerID
+		existingWorkerPID := task.WorkerPID
+		existingIsDebuggerPaused := task.IsDebuggerPaused
+		existingActorReprName := task.ActorReprName
+		existingTaskLogInfo := task.TaskLogInfo
 
 		*task = currTask
 
 		if len(existingStateTransitions) > 0 {
 			task.StateTransitions = existingStateTransitions
+			task.RayErrorInfo = existingRayErrorInfo
+			task.NodeID = existingNodeID
+			task.WorkerID = existingWorkerID
+			task.WorkerPID = existingWorkerPID
+			task.IsDebuggerPaused = existingIsDebuggerPaused
+			task.ActorReprName = existingActorReprName
+			task.TaskLogInfo = existingTaskLogInfo
 			task.State = task.GetLastState()
 		}
 	})
