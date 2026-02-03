@@ -356,17 +356,8 @@ rules:
   - delete
   - get
   - list
-  - patch
   - update
   - watch
-- apiGroups:
-  - scheduling.volcano.sh
-  resources:
-  - podgroups/status
-  verbs:
-  - get
-  - patch
-  - update
 {{- end -}}
 {{- if or .batchSchedulerEnabled (eq .batchSchedulerName "scheduler-plugins") }}
 - apiGroups:
