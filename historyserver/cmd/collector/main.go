@@ -95,7 +95,6 @@ func main() {
 
 	sigChan := make(chan os.Signal, 1)
 	stop := make(chan struct{}, 1)
-	eventStop := make(chan struct{}, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
 	wg.Add(1)
@@ -103,7 +102,7 @@ func main() {
 	go func() {
 		defer wg.Done()
 		eventServer := eventserver.NewEventServer(writer, rayRootDir, sessionDir, rayNodeId, rayClusterName, rayClusterId, sessionName)
-		eventServer.InitServer(eventStop, eventsPort)
+		eventServer.InitServer(stop, eventsPort)
 		logrus.Info("Event server shutdown")
 	}()
 
@@ -120,7 +119,6 @@ func main() {
 
 	// Stop both the event server and the collector
 	close(stop)
-	close(eventStop)
 
 	// Wait for both goroutines to complete
 	wg.Wait()
