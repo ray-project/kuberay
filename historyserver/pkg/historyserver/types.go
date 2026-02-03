@@ -14,7 +14,7 @@ type TaskData struct {
 	Result TaskDataResult `json:"result"`
 }
 
-type RespTaksInfo struct {
+type RespTasksInfo struct {
 	Result bool     `json:"result"`
 	Msg    string   `json:"msg"`
 	Data   TaskData `json:"data"`
