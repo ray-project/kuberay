@@ -149,7 +149,7 @@ func parsePredicate(predicate string) PredicateType {
 func ApplyTaskFilters(tasks []eventtypes.Task, listAPIOptions ListAPIOptions) ([]eventtypes.Task, int) {
 	// Exclude driver tasks.
 	if listAPIOptions.ExcludeDriver {
-		tasks = applyFilter(tasks, Filter{
+		tasks = filterTasks(tasks, Filter{
 			FilterKey:       "task_type",
 			FilterPredicate: PredicateNotEqual,
 			FilterValue:     string(eventtypes.DRIVER_TASK),
@@ -158,7 +158,7 @@ func ApplyTaskFilters(tasks []eventtypes.Task, listAPIOptions ListAPIOptions) ([
 
 	// Apply field-specific filters, including job_id, task_id, actor_id, task_name, and state.
 	for _, filter := range listAPIOptions.Filters {
-		tasks = applyFilter(tasks, filter)
+		tasks = filterTasks(tasks, filter)
 	}
 
 	numFiltered := len(tasks)
@@ -179,8 +179,8 @@ func ApplyTaskFilters(tasks []eventtypes.Task, listAPIOptions ListAPIOptions) ([
 	return tasks, numFiltered
 }
 
-// applyFilter applies a filter to the tasks and returns the filtered tasks.
-func applyFilter(tasks []eventtypes.Task, filter Filter) []eventtypes.Task {
+// filterTasks applies a filter to the tasks and returns the filtered tasks.
+func filterTasks(tasks []eventtypes.Task, filter Filter) []eventtypes.Task {
 	filteredTasks := make([]eventtypes.Task, 0)
 	for _, task := range tasks {
 		fieldValue := task.GetFilterableFieldValue(filter.FilterKey)
