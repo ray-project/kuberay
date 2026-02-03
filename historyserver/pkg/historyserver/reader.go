@@ -320,15 +320,12 @@ func (s *ServerHandler) resolveTaskLogFilename(clusterNameID, sessionID, taskID 
 	}
 
 	// Fallback: Find worker log file by worker_id
-	// Worker log files follow the pattern: worker-{worker_id_hex}-{pid}-{worker_startup_token}.{suffix}
-	// We need to search for files matching this pattern
 	if sessionID == "" {
 		return "", "", fmt.Errorf(
 			"task %s (attempt %d) has no task_log_info and sessionID is required to search for worker log files",
 			taskID, attemptNumber,
 		)
 	}
-
 	nodeIDHex, logFilename, err := s.findWorkerLogFile(clusterNameID, sessionID, foundTask.NodeID, foundTask.WorkerID, suffix)
 	if err != nil {
 		return "", "", fmt.Errorf(
@@ -366,7 +363,6 @@ func (s *ServerHandler) resolveActorLogFilename(clusterNameID, sessionID, actorI
 	}
 
 	// Find worker log file by worker_id
-	// Worker log files follow the pattern: worker-{worker_id_hex}-{pid}-{worker_startup_token}.{suffix}
 	nodeIDHex, logFilename, err := s.findWorkerLogFile(
 		clusterNameID,
 		sessionID,
@@ -385,7 +381,8 @@ func (s *ServerHandler) resolveActorLogFilename(clusterNameID, sessionID, actorI
 }
 
 // findWorkerLogFile searches for a worker log file by worker_id.
-// Worker log files follow the pattern: worker-{worker_id_hex}-{pid}-{worker_startup_token}.{suffix}
+// Worker log files follow the pattern: worker-{worker_id_hex}-{job_id_hex}-{pid}.{suffix}
+// Ref: https://github.com/ray-project/ray/blob/219ee7037bbdc02f66b58a814c9ad2618309c19e/src/ray/core_worker/core_worker_process.cc#L80-L80
 // Returns (nodeIDHex, filename, error).
 func (s *ServerHandler) findWorkerLogFile(clusterNameID, sessionID, nodeID, workerID, suffix string) (string, string, error) {
 	// Convert to hex if not already is
