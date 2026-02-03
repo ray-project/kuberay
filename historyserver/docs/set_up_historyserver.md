@@ -170,3 +170,19 @@ curl -b ~/cookies.txt "http://localhost:8080/api/jobs/"
 # Cluster Status
 curl -b ~/cookies.txt "http://localhost:8080/api/cluster_status"
 ```
+
+### Live Cluster with grafana
+
+```bash
+# Install grafana. ref: https://docs.ray.io/en/latest/cluster/kubernetes/k8s-ecosystem/prometheus-grafana.html#step-2-install-kubernetes-prometheus-stack-via-helm-chart
+./install/prometheus/install.sh --auto-load-dashboard true
+
+# Apply RayCluster with Grafana setting
+kubectl apply -f ray-operator/config/samples/ray-cluster.embed-grafana.yaml
+
+# Get live session cookie. (Port-forward is required)
+curl -c ~/cookies.txt "http://localhost:8080/enter_cluster/default/raycluster-embed-grafana/live"
+
+# Request to grafana health endpoint
+curl -b ~/cookies.txt http://localhost:8080/api/grafana_health
+```
