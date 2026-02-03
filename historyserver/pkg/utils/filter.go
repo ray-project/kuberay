@@ -120,10 +120,15 @@ func getFiltersFromReq(req *restful.Request) ([]Filter, error) {
 
 	filters := make([]Filter, len(filterKeys))
 	for i := range filterKeys {
-		// TODO(jwj): Add error handling for invalid filterkeys and predicates.
+		// TODO(jwj): Add error handling for invalid filter keys.
+		predicate, err := parsePredicate(string(filterPredicates[i]))
+		if err != nil {
+			return nil, fmt.Errorf("invalid predicate: %w", err)
+		}
+
 		filters[i] = Filter{
 			FilterKey:       string(filterKeys[i]),
-			FilterPredicate: parsePredicate(string(filterPredicates[i])),
+			FilterPredicate: predicate,
 			FilterValue:     string(filterValues[i]),
 		}
 	}
@@ -132,12 +137,14 @@ func getFiltersFromReq(req *restful.Request) ([]Filter, error) {
 }
 
 // parsePredicate converts a string predicate to a PredicateType.
-func parsePredicate(predicate string) PredicateType {
+func parsePredicate(predicate string) (PredicateType, error) {
 	switch predicate {
+	case "=":
+		return PredicateEqual, nil
 	case "!=":
-		return PredicateNotEqual
+		return PredicateNotEqual, nil
 	default:
-		return PredicateEqual
+		return "", fmt.Errorf("invalid predicate: %s", predicate)
 	}
 }
 
@@ -188,16 +195,11 @@ func ApplyTaskFilters(tasks []eventtypes.Task, listAPIOptions ListAPIOptions) ([
 func filterTasks(tasks []eventtypes.Task, filter Filter) []eventtypes.Task {
 	filteredTasks := make([]eventtypes.Task, 0)
 	for _, task := range tasks {
+		predicateFunc, _ := PredicateMap[filter.FilterPredicate]
+
 		fieldValue := task.GetFilterableFieldValue(filter.FilterKey)
-		switch filter.FilterPredicate {
-		case PredicateEqual:
-			if fieldValue == filter.FilterValue {
-				filteredTasks = append(filteredTasks, task)
-			}
-		case PredicateNotEqual:
-			if fieldValue != filter.FilterValue {
-				filteredTasks = append(filteredTasks, task)
-			}
+		if predicateFunc(fieldValue, filter.FilterValue) {
+			filteredTasks = append(filteredTasks, task)
 		}
 	}
 
@@ -218,7 +220,7 @@ func ApplyFilter[T any](items []T, filterKey, filterPredicate, filterValue strin
 		return items
 	}
 
-	predicate := parsePredicate(filterPredicate)
+	predicate, _ := parsePredicate(filterPredicate)
 	predicateFunc, ok := PredicateMap[predicate]
 	if !ok {
 		predicateFunc = PredicateMap[PredicateEqual]
