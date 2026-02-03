@@ -109,7 +109,6 @@ type Task struct {
 	// The task definition information.
 	// TaskType is the type of a task, only available for TASK_DEFINITION_EVENT.
 	// For ACTOR_TASK_DEFINITION_EVENT, the TaskType is populated as ACTOR_TASK manually.
-	// TODO(jwj): Can ACTOR_TASK be populated automatically?
 	TaskType TaskType `json:"taskType,omitempty"`
 	Language Language `json:"language,omitempty"`
 	// For TASK_DEFINITION_EVENT, only TaskFunc and TaskName are populated.

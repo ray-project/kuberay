@@ -149,7 +149,8 @@ func parsePredicate(predicate string) PredicateType {
 // 4. Limit the number of tasks
 //
 // NOTE: Excluding fields not shown in non-detailed mode is implemented in formatTaskForResponse right before sending back the resp.
-// TODO(jwj): Add Ray counterparts here.
+// For filtering logic in Ray Dashboard, please refer to:
+// https://github.com/ray-project/ray/blob/01ac7c99b900a882c3109ba4d99209bef817ceea/python/ray/util/state/state_manager.py#L231-L294.
 func ApplyTaskFilters(tasks []eventtypes.Task, listAPIOptions ListAPIOptions) ([]eventtypes.Task, int) {
 	// Exclude driver tasks.
 	if listAPIOptions.ExcludeDriver {
