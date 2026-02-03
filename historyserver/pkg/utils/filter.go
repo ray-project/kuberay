@@ -9,7 +9,14 @@ import (
 	eventtypes "github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
 )
 
-const RayMaxLimitFromDataSource = 10000
+const (
+	// Ref: https://github.com/ray-project/ray/blob/ac76c16ebf081bad2bc9b73e952d855dba3fc021/python/ray/util/state/common.py#L48.
+	DefaultLimit = 100
+
+	// Ref: https://github.com/ray-project/ray/blob/ac76c16ebf081bad2bc9b73e952d855dba3fc021/python/ray/util/state/common.py#L52-L61.
+	RayMaxLimitFromAPIServer  = 10000
+	RayMaxLimitFromDataSource = 10000
+)
 
 type PredicateType string
 
@@ -33,9 +40,11 @@ type ListAPIOptions struct {
 }
 
 // ParseOptionsFromReq parses the query parameters from the request and returns the API options for list methods.
+// Ref: https://github.com/ray-project/ray/blob/01ac7c99b900a882c3109ba4d99209bef817ceea/python/ray/dashboard/state_api_utils.py#L76-L101.
 func ParseOptionsFromReq(req *restful.Request) (ListAPIOptions, error) {
 	opts := ListAPIOptions{
-		Limit: RayMaxLimitFromDataSource,
+		Limit:         DefaultLimit,
+		ExcludeDriver: true,
 	}
 
 	parse := func(key string, opt interface{}) error {
@@ -69,6 +78,10 @@ func ParseOptionsFromReq(req *restful.Request) (ListAPIOptions, error) {
 	if err := parse("limit", &opts.Limit); err != nil {
 		return opts, err
 	}
+	if opts.Limit > RayMaxLimitFromAPIServer {
+		return opts, fmt.Errorf("limit cannot be greater than %d, please use a lower limit", RayMaxLimitFromAPIServer)
+	}
+
 	if err := parse("timeout", &opts.Timeout); err != nil {
 		return opts, err
 	}
