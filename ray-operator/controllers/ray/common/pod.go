@@ -14,6 +14,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/apimachinery/pkg/util/version"
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
@@ -410,14 +412,35 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 	return podTemplate
 }
 
-func initLivenessAndReadinessProbe(rayContainer *corev1.Container, rayNodeType rayv1.RayNodeType, creatorCRDType utils.CRDType, rayStartParams map[string]string) {
-	getPort := func(key string, defaultVal int) int {
+func supportsUnifiedHealthCheck(rayVersion string) bool {
+	v, err := version.ParseGeneric(rayVersion)
+	if err != nil {
+		return false
+	}
+
+	// Ray version 2.53.0 supports a single HTTP health check endpoint.
+	minVersion := version.MustParseGeneric("2.53.0")
+	return v.AtLeast(minVersion)
+}
+
+func initLivenessAndReadinessProbe(rayContainer *corev1.Container, rayNodeType rayv1.RayNodeType, creatorCRDType utils.CRDType, rayStartParams map[string]string, rayVersion string) {
+	getPort := func(key string, defaultVal int32) int32 {
 		if portStr, ok := rayStartParams[key]; ok {
-			if port, err := strconv.Atoi(portStr); err == nil {
-				return port
+			// ParseInt with bitSize=32 ensures the value fits in int32
+			if port, err := strconv.ParseInt(portStr, 10, 32); err == nil {
+				return int32(port)
 			}
 		}
 		return defaultVal
+	}
+
+	httpHealthCheck := supportsUnifiedHealthCheck(rayVersion)
+	httpHealthCheckAction := &corev1.HTTPGetAction{
+		Path: utils.RayNodeHealthPath,
+		Port: intstr.IntOrString{
+			Type:   intstr.Int,
+			IntVal: getPort("dashboard-agent-listen-port", utils.DefaultDashboardAgentListenPort),
+		},
 	}
 
 	rayAgentRayletHealthCommand := fmt.Sprintf(
@@ -456,7 +479,11 @@ func initLivenessAndReadinessProbe(rayContainer *corev1.Container, rayNodeType r
 			SuccessThreshold:    utils.DefaultLivenessProbeSuccessThreshold,
 			FailureThreshold:    utils.DefaultLivenessProbeFailureThreshold,
 		}
-		rayContainer.LivenessProbe.Exec = &corev1.ExecAction{Command: []string{"bash", "-c", strings.Join(commands, " && ")}}
+		if httpHealthCheck {
+			rayContainer.LivenessProbe.HTTPGet = httpHealthCheckAction
+		} else {
+			rayContainer.LivenessProbe.Exec = &corev1.ExecAction{Command: []string{"bash", "-c", strings.Join(commands, " && ")}}
+		}
 	}
 
 	if rayContainer.ReadinessProbe == nil {
@@ -471,7 +498,11 @@ func initLivenessAndReadinessProbe(rayContainer *corev1.Container, rayNodeType r
 			SuccessThreshold:    utils.DefaultReadinessProbeSuccessThreshold,
 			FailureThreshold:    utils.DefaultReadinessProbeFailureThreshold,
 		}
-		rayContainer.ReadinessProbe.Exec = &corev1.ExecAction{Command: []string{"bash", "-c", strings.Join(commands, " && ")}}
+		if httpHealthCheck {
+			rayContainer.ReadinessProbe.HTTPGet = httpHealthCheckAction
+		} else {
+			rayContainer.ReadinessProbe.Exec = &corev1.ExecAction{Command: []string{"bash", "-c", strings.Join(commands, " && ")}}
+		}
 
 		// For worker Pods serving traffic, we need to add an additional HTTP proxy health check for the readiness probe.
 		// Note: head Pod checks the HTTP proxy's health at every rayservice controller reconcile instaed of using readiness probe.
@@ -485,13 +516,14 @@ func initLivenessAndReadinessProbe(rayContainer *corev1.Container, rayNodeType r
 				utils.RayServeProxyHealthPath,
 			)
 			commands = append(commands, rayServeProxyHealthCommand)
+			rayContainer.ReadinessProbe.HTTPGet = nil
 			rayContainer.ReadinessProbe.Exec = &corev1.ExecAction{Command: []string{"bash", "-c", strings.Join(commands, " && ")}}
 		}
 	}
 }
 
 // BuildPod a pod config
-func BuildPod(ctx context.Context, podTemplateSpec corev1.PodTemplateSpec, rayNodeType rayv1.RayNodeType, rayStartParams map[string]string, headPort string, enableRayAutoscaler bool, creatorCRDType utils.CRDType, fqdnRayIP string, defaultContainerEnvs []corev1.EnvVar) (aPod corev1.Pod) {
+func BuildPod(ctx context.Context, podTemplateSpec corev1.PodTemplateSpec, rayNodeType rayv1.RayNodeType, rayStartParams map[string]string, headPort string, enableRayAutoscaler bool, creatorCRDType utils.CRDType, fqdnRayIP string, defaultContainerEnvs []corev1.EnvVar, rayVersion string) (aPod corev1.Pod) {
 	log := ctrl.LoggerFrom(ctx)
 
 	// For Worker Pod: Traffic readiness is determined by the readiness probe.
@@ -575,7 +607,7 @@ func BuildPod(ctx context.Context, podTemplateSpec corev1.PodTemplateSpec, rayNo
 		// Configure the readiness and liveness probes for the Ray container. These probes
 		// play a crucial role in KubeRay health checks. Without them, certain failures,
 		// such as the Raylet process crashing, may go undetected.
-		initLivenessAndReadinessProbe(&pod.Spec.Containers[utils.RayContainerIndex], rayNodeType, creatorCRDType, rayStartParams)
+		initLivenessAndReadinessProbe(&pod.Spec.Containers[utils.RayContainerIndex], rayNodeType, creatorCRDType, rayStartParams, rayVersion)
 	}
 
 	return pod
@@ -597,7 +629,7 @@ func BuildAutoscalerContainer(autoscalerImage string) corev1.Container {
 				},
 			},
 			{
-				Name: "RAY_CLUSTER_NAMESPACE",
+				Name: utils.RAY_CLUSTER_NAMESPACE,
 				ValueFrom: &corev1.EnvVarSource{
 					FieldRef: &corev1.ObjectFieldSelector{
 						FieldPath: "metadata.namespace",
@@ -760,6 +792,17 @@ func setContainerEnvVars(pod *corev1.Pod, rayNodeType rayv1.RayNodeType, fqdnRay
 		},
 	}
 	container.Env = append(container.Env, clusterNameEnv)
+
+	// The RAY_CLUSTER_NAMESPACE environment variable is managed by KubeRay and should not be set by the user.
+	clusterNamespaceEnv := corev1.EnvVar{
+		Name: utils.RAY_CLUSTER_NAMESPACE,
+		ValueFrom: &corev1.EnvVarSource{
+			FieldRef: &corev1.ObjectFieldSelector{
+				FieldPath: "metadata.namespace",
+			},
+		},
+	}
+	container.Env = append(container.Env, clusterNamespaceEnv)
 
 	// RAY_CLOUD_INSTANCE_ID is used by Ray Autoscaler V2 (alpha). See https://github.com/ray-project/kuberay/issues/1751 for more details.
 	rayCloudInstanceID := corev1.EnvVar{

@@ -18,6 +18,8 @@ import (
 	eventtypes "github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 	"github.com/sirupsen/logrus"
+
+	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
 const (
@@ -509,9 +511,4 @@ func (s *ServerHandler) ipToNodeId(rayClusterNameID, sessionID, nodeIP string) (
 	}
 
 	return "", fmt.Errorf("node_id not found for node_ip=%s", nodeIP)
-}
-
-// TODO: implement this
-func (h *ServerHandler) getGrafanaHealth(req *restful.Request, resp *restful.Response) {
-	resp.WriteErrorString(http.StatusNotImplemented, "Grafana health not yet supported")
 }
