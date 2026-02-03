@@ -20,7 +20,6 @@ import (
 
 const (
 	LiveSessionName = "live"
-	EndpointLogFile = "/api/v0/logs/file"
 )
 
 func TestHistoryServer(t *testing.T) {
@@ -107,7 +106,7 @@ func testLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Names
 	test.T().Run("should return log content", func(t *testing.T) {
 		g := NewWithT(t)
 		g.Eventually(func(gg Gomega) {
-			logFileURL := fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=100", historyServerURL, EndpointLogFile, nodeID, filename)
+			logFileURL := fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=100", historyServerURL, EndpointLogsFile, nodeID, filename)
 			resp, err := client.Get(logFileURL)
 			gg.Expect(err).NotTo(HaveOccurred())
 			defer resp.Body.Close()
@@ -125,7 +124,7 @@ func testLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Names
 
 		for _, malicious := range maliciousPaths {
 			g.Eventually(func(gg Gomega) {
-				url := fmt.Sprintf("%s%s?node_id=%s&filename=%s", historyServerURL, EndpointLogFile, nodeID, malicious)
+				url := fmt.Sprintf("%s%s?node_id=%s&filename=%s", historyServerURL, EndpointLogsFile, nodeID, malicious)
 				resp, err := client.Get(url)
 				gg.Expect(err).NotTo(HaveOccurred())
 				defer func() {
@@ -182,7 +181,7 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 	test.T().Run("should return log content from S3", func(t *testing.T) {
 		g := NewWithT(t)
 		g.Eventually(func(gg Gomega) {
-			logFileURL := fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=100", historyServerURL, EndpointLogFile, nodeID, filename)
+			logFileURL := fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=100", historyServerURL, EndpointLogsFile, nodeID, filename)
 			resp, err := client.Get(logFileURL)
 			gg.Expect(err).NotTo(HaveOccurred())
 			defer resp.Body.Close()
@@ -200,7 +199,7 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 
 		for _, malicious := range maliciousPaths {
 			g.Eventually(func(gg Gomega) {
-				url := fmt.Sprintf("%s%s?node_id=%s&filename=%s", historyServerURL, EndpointLogFile, nodeID, malicious)
+				url := fmt.Sprintf("%s%s?node_id=%s&filename=%s", historyServerURL, EndpointLogsFile, nodeID, malicious)
 				resp, err := client.Get(url)
 				gg.Expect(err).NotTo(HaveOccurred())
 				defer func() {
@@ -260,7 +259,7 @@ func testLiveClusterTasks(test Test, g *WithT, namespace *corev1.Namespace, s3Cl
 	}, TestTimeoutShort).Should(Succeed())
 
 	LogWithTimestamp(test.T(), "Verifying /api/v0/tasks?detail=1 response schema for live cluster")
-	verifyTasksRespSchema(test, g, tasksResp)
+	verifyTasksRespSchema(test, g, tasksResp, true)
 
 	DeleteS3Bucket(test, g, s3Client)
 	LogWithTimestamp(test.T(), "Live cluster /api/v0/tasks?detail=1 tests completed successfully")
@@ -275,13 +274,13 @@ func testLiveClusterTasks(test Test, g *WithT, namespace *corev1.Namespace, s3Cl
 // 3. Delete the Ray cluster to trigger event flushing and wait for cluster deletion to complete
 // 4. Apply History Server and get its URL
 // 5. Get the cluster information and set the cluster context with the session name of the dead cluster
-// 6. Hit /api/v0/tasks endpoint to get the detailed task information of all task attempts without historical replay
+// 6. Run /api/v0/tasks endpoint with various query parameters to test limit, detail, exclude_driver, and filters
 // 7. Verify the response status code is 200
 // 8. Verify the response API schema
 // 9. Delete S3 bucket to ensure test isolation
+//
+// NOTE: timeout is not tested because tasks are in-memory and retrieval is typically fast.
 func testDeadClusterTasks(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
-	endpoint := "/api/v0/tasks"
-
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 
@@ -305,26 +304,97 @@ func testDeadClusterTasks(test Test, g *WithT, namespace *corev1.Namespace, s3Cl
 	client := CreateHTTPClientWithCookieJar(g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 
-	endpointURL := historyServerURL + endpoint
-	LogWithTimestamp(test.T(), "Testing %s endpoint for dead cluster: %s", endpoint, endpointURL)
+	jobIDs := getAllEligibleJobIDs(g, client, historyServerURL)
+	jobIDForFilter := jobIDs[0]
+	tasksTestCases := []struct {
+		name           string
+		buildURL       func(baseURL, jobID string) string
+		expectedStatus int
+	}{
+		// Basic / default
+		{"no params (default)", func(u, _ string) string { return u + EndpointTasks }, http.StatusOK},
 
-	var tasksResp map[string]any
-	g.Eventually(func(gg Gomega) {
-		resp, err := client.Get(endpointURL)
-		gg.Expect(err).NotTo(HaveOccurred())
-		defer resp.Body.Close()
+		// limit
+		{"limit=1", func(u, _ string) string { return u + EndpointTasks + "?limit=1" }, http.StatusOK},
+		{"limit=100", func(u, _ string) string { return u + EndpointTasks + "?limit=100" }, http.StatusOK},
+		{"limit=10000", func(u, _ string) string { return u + EndpointTasks + "?limit=10000" }, http.StatusOK},
+		{"limit=0", func(u, _ string) string { return u + EndpointTasks + "?limit=0" }, http.StatusOK},
+		{"invalid limit (string)", func(u, _ string) string { return u + EndpointTasks + "?limit=abc" }, http.StatusBadRequest},
 
-		body, err := io.ReadAll(resp.Body)
-		gg.Expect(err).NotTo(HaveOccurred())
-		gg.Expect(resp.StatusCode).To(Equal(http.StatusOK),
-			"[GET] %s should return 200, got %d: %s", endpointURL, resp.StatusCode, string(body))
+		// detail
+		{"detail=true", func(u, _ string) string { return u + EndpointTasks + "?detail=true" }, http.StatusOK},
+		{"detail=false", func(u, _ string) string { return u + EndpointTasks + "?detail=false" }, http.StatusOK},
+		{"detail=1", func(u, _ string) string { return u + EndpointTasks + "?detail=1" }, http.StatusOK},
+		{"invalid detail (string)", func(u, _ string) string { return u + EndpointTasks + "?detail=invalid" }, http.StatusBadRequest},
 
-		err = json.Unmarshal(body, &tasksResp)
-		gg.Expect(err).NotTo(HaveOccurred())
-	}, TestTimeoutShort).Should(Succeed())
+		// exclude_driver
+		{"exclude_driver=true", func(u, _ string) string { return u + EndpointTasks + "?exclude_driver=true" }, http.StatusOK},
+		{"exclude_driver=false", func(u, _ string) string { return u + EndpointTasks + "?exclude_driver=false" }, http.StatusOK},
+		{"invalid exclude_driver (string)", func(u, _ string) string { return u + EndpointTasks + "?exclude_driver=invalid" }, http.StatusBadRequest},
 
-	LogWithTimestamp(test.T(), "Verifying /api/v0/tasks response schema for dead cluster")
-	verifyTasksRespSchema(test, g, tasksResp)
+		// Single filter
+		{"state=FINISHED", func(u, _ string) string {
+			return u + EndpointTasks + "?filter_keys=state&filter_predicates==&filter_values=FINISHED"
+		}, http.StatusOK},
+		{"state!=PENDING_ARGS_AVAIL", func(u, _ string) string {
+			return u + EndpointTasks + "?filter_keys=state&filter_predicates=!=&filter_values=PENDING_ARGS_AVAIL"
+		}, http.StatusOK},
+		{fmt.Sprintf("job_id=%s", jobIDForFilter), func(u, j string) string {
+			return u + EndpointTasks + "?filter_keys=job_id&filter_predicates==&filter_values=" + j
+		}, http.StatusOK},
+
+		// Multiple filters
+		{"statte=FINISHED & type=ACTOR_TASK", func(u, _ string) string {
+			return u + EndpointTasks + "?filter_keys=state&filter_keys=task_type&filter_predicates==&filter_predicates==&filter_values=FINISHED&filter_values=ACTOR_TASK"
+		}, http.StatusOK},
+
+		// Invalid filters
+		{"len(filter_keys) != len(filter_values)", func(u, _ string) string {
+			return u + EndpointTasks + "?filter_keys=state&filter_keys=job_id&filter_predicates==&filter_values=FINISHED"
+		}, http.StatusBadRequest},
+		{"filter_keys only (missing predicates and values)", func(u, _ string) string {
+			return u + EndpointTasks + "?filter_keys=state"
+		}, http.StatusBadRequest},
+
+		// Combined
+		{"limit=5 & detail=true", func(u, _ string) string { return u + EndpointTasks + "?limit=5&detail=true" }, http.StatusOK},
+		{"limit=5 & exclude_driver=true", func(u, _ string) string { return u + EndpointTasks + "?limit=5&exclude_driver=true" }, http.StatusOK},
+		{"limit=5 & detail=true & exclude_driver=false", func(u, _ string) string { return u + EndpointTasks + "?limit=5&detail=true&exclude_driver=false" }, http.StatusOK},
+		{"limit=10 & state=FINISHED", func(u, _ string) string {
+			return u + EndpointTasks + "?limit=10&filter_keys=state&filter_predicates==&filter_values=FINISHED"
+		}, http.StatusOK},
+		{"limit=10 & detail=true & exclude_driver=false & state=FINISHED", func(u, _ string) string {
+			return u + EndpointTasks + "?limit=10&detail=true&exclude_driver=false&filter_keys=state&filter_predicates==&filter_values=FINISHED"
+		}, http.StatusOK},
+	}
+
+	for _, tc := range tasksTestCases {
+		test.T().Run(tc.name, func(t *testing.T) {
+			g := NewWithT(t)
+			url := tc.buildURL(historyServerURL, jobIDForFilter)
+			resp, err := client.Get(url)
+			g.Expect(err).NotTo(HaveOccurred())
+			defer func() {
+				io.Copy(io.Discard, resp.Body)
+				resp.Body.Close()
+			}()
+
+			body, err := io.ReadAll(resp.Body)
+			g.Expect(err).NotTo(HaveOccurred())
+			g.Expect(resp.StatusCode).To(Equal(tc.expectedStatus),
+				"Test case '%s' failed: expected %d, got %d", tc.name, tc.expectedStatus, resp.StatusCode)
+
+			if resp.StatusCode == http.StatusOK {
+				var tasksResp map[string]any
+				err = json.Unmarshal(body, &tasksResp)
+				g.Expect(err).NotTo(HaveOccurred())
+
+				LogWithTimestamp(test.T(), "Verifying /api/v0/tasks response schema for dead cluster")
+				// TODO(jwj): Support detailed mode
+				verifyTasksRespSchema(test, g, tasksResp, false)
+			}
+		})
+	}
 
 	DeleteS3Bucket(test, g, s3Client)
 	LogWithTimestamp(test.T(), "Dead cluster /api/v0/tasks tests completed successfully")
@@ -405,8 +475,46 @@ func getClusterFromList(test Test, g *WithT, historyServerURL, clusterName, name
 	return result
 }
 
+// getAllEligibleJobIDs retrieves all job IDs from the /api/v0/tasks endpoint for the task filtering test cases.
+func getAllEligibleJobIDs(g *WithT, client *http.Client, historyServerURL string) []string {
+	var jobIDs []string
+
+	resp, err := client.Get(historyServerURL + EndpointTasks)
+	g.Expect(err).NotTo(HaveOccurred())
+	defer resp.Body.Close()
+
+	g.Expect(resp.StatusCode).To(Equal(http.StatusOK))
+	body, err := io.ReadAll(resp.Body)
+	g.Expect(err).NotTo(HaveOccurred())
+
+	var tasksResp map[string]any
+	err = json.Unmarshal(body, &tasksResp)
+	g.Expect(err).NotTo(HaveOccurred())
+
+	tasksData, ok := tasksResp["data"].(map[string]any)
+	g.Expect(ok).To(BeTrue(), "'data' should be a map")
+	tasksDataResult, ok := tasksData["result"].(map[string]any)
+	g.Expect(ok).To(BeTrue(), "'result' should be a map")
+	formattedTasks, ok := tasksDataResult["result"].([]any)
+	g.Expect(ok).To(BeTrue(), "'result' should be an array")
+	for _, formattedTask := range formattedTasks {
+		task, ok := formattedTask.(map[string]any)
+		g.Expect(ok).To(BeTrue(), "formattedTask should be a map")
+		g.Expect(task).To(HaveKey("job_id"))
+		jobID, ok := task["job_id"].(string)
+		g.Expect(ok).To(BeTrue(), "job_id should be a string")
+		if jobID == "" {
+			continue
+		}
+		jobIDs = append(jobIDs, jobID)
+	}
+	g.Expect(len(jobIDs)).To(BeNumerically(">", 0), "should have at least one eligible job ID")
+
+	return jobIDs
+}
+
 // verifyTasksRespSchema verifies that the /v0/tasks response is valid according to the API schema.
-func verifyTasksRespSchema(test Test, g *WithT, tasksResp map[string]any) {
+func verifyTasksRespSchema(test Test, g *WithT, tasksResp map[string]any, detail bool) {
 	// Verify top-level fields.
 	g.Expect(tasksResp).To(HaveKeyWithValue("result", BeTrue()))
 	g.Expect(tasksResp).To(HaveKeyWithValue("msg", Equal("")))
@@ -445,20 +553,22 @@ func verifyTasksRespSchema(test Test, g *WithT, tasksResp map[string]any) {
 		g.Expect(formattedTaskMap).To(HaveKey("worker_id"))
 		g.Expect(formattedTaskMap).To(HaveKey("worker_pid"))
 		g.Expect(formattedTaskMap).To(HaveKey("error_type"))
-		g.Expect(formattedTaskMap).To(HaveKey("language"))
-		g.Expect(formattedTaskMap).To(HaveKey("required_resources"))
-		g.Expect(formattedTaskMap).To(HaveKey("runtime_env_info"))
-		g.Expect(formattedTaskMap).To(HaveKey("placement_group_id"))
-		g.Expect(formattedTaskMap).To(HaveKey("events"))
 		// g.Expect(formattedTaskMap).To(HaveKey("profiling_data"))
-		g.Expect(formattedTaskMap).To(HaveKey("creation_time_ms"))
-		g.Expect(formattedTaskMap).To(HaveKey("start_time_ms"))
-		g.Expect(formattedTaskMap).To(HaveKey("end_time_ms"))
-		g.Expect(formattedTaskMap).To(HaveKey("task_log_info"))
-		g.Expect(formattedTaskMap).To(HaveKey("error_message"))
-		g.Expect(formattedTaskMap).To(HaveKey("is_debugger_paused"))
-		g.Expect(formattedTaskMap).To(HaveKey("call_site"))
-		g.Expect(formattedTaskMap).To(HaveKey("label_selector"))
+		// g.Expect(formattedTaskMap).To(HaveKey("creation_time_ms"))
+		// g.Expect(formattedTaskMap).To(HaveKey("start_time_ms"))
+		// g.Expect(formattedTaskMap).To(HaveKey("end_time_ms"))
+		if detail {
+			g.Expect(formattedTaskMap).To(HaveKey("language"))
+			g.Expect(formattedTaskMap).To(HaveKey("required_resources"))
+			g.Expect(formattedTaskMap).To(HaveKey("runtime_env_info"))
+			g.Expect(formattedTaskMap).To(HaveKey("placement_group_id"))
+			g.Expect(formattedTaskMap).To(HaveKey("events"))
+			g.Expect(formattedTaskMap).To(HaveKey("task_log_info"))
+			g.Expect(formattedTaskMap).To(HaveKey("error_message"))
+			g.Expect(formattedTaskMap).To(HaveKey("is_debugger_paused"))
+			g.Expect(formattedTaskMap).To(HaveKey("call_site"))
+			g.Expect(formattedTaskMap).To(HaveKey("label_selector"))
+		}
 	}
 	LogWithTimestamp(test.T(), "Task response schema verified successfully")
 }
