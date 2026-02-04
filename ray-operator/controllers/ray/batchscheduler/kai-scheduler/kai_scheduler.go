@@ -36,11 +36,11 @@ func GetPluginName() string { return "kai-scheduler" }
 func (k *KaiScheduler) Name() string { return GetPluginName() }
 
 func (k *KaiScheduler) DoBatchSchedulingOnSubmission(_ context.Context, object metav1.Object) error {
-	// KAI-Scheduler's built-in PodGrouper creates PodGroups based on existing pods at runtime.
-	// It cannot reserve resources for pods that don't exist yet.
-	// In K8sJobMode and InteractiveMode, the submitter pod is created after the RayCluster is ready,
-	// which means proper gang scheduling cannot be guaranteed.
-	// for more details, see https://github.com/ray-project/kuberay/pull/4418#pullrequestreview-3751609041
+	// In K8sJobMode and InteractiveMode, RayJob first creates a RayCluster,
+	// and then creates the submitter pod after the RayCluster is ready.
+	// KAI-Scheduler does not handle this two-phase creation pattern.
+	// Other schedulers like Yunikorn and Volcano support this by pre-creating PodGroups.
+	// For more details, see https://github.com/ray-project/kuberay/pull/4418#pullrequestreview-3751609041
 	if rayJob, ok := object.(*rayv1.RayJob); ok {
 		switch rayJob.Spec.SubmissionMode {
 		case rayv1.K8sJobMode:
