@@ -254,6 +254,25 @@ func ConvertBase64ToHex(input string) (string, error) {
 	return hexStr, nil
 }
 
+func IsBase64Nil(base64Str string) (bool, error) {
+	bytes, err := base64.StdEncoding.DecodeString(base64Str)
+	if err != nil {
+		return false, err
+	}
+
+	if len(bytes) == 0 {
+		return false, nil
+	}
+
+	for i := range bytes {
+		if bytes[i] != 0xff {
+			return false, nil
+		}
+	}
+
+	return true, nil
+}
+
 // BuildClusterSessionKey constructs the key used to identify a specific cluster session.
 // Format: "{clusterName}_{namespace}_{sessionName}"
 // Example: "raycluster-historyserver_default_session_2026-01-11_19-38-40"

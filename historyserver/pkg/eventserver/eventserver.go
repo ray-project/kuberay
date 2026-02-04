@@ -965,16 +965,28 @@ func (h *EventHandler) handleTaskLifecycleEvent(eventMap map[string]any, cluster
 //
 // to hex so stored tasks match the live cluster API schema.
 func normalizeTaskIDsToHex(task *types.Task) {
-	normalize := func(base64Str string) string {
-		if base64Str == "" {
+	normalize := func(base64ID string) string {
+		if base64ID == "" {
 			return ""
 		}
-		hexStr, err := utils.ConvertBase64ToHex(base64Str)
+
+		// Check if the Ray ID is nil.
+		isNil, err := utils.IsBase64Nil(base64ID)
+		if err != nil {
+			logrus.Errorf("Failed to check if Ray ID is nil: %v", err)
+			return base64ID
+		}
+		if isNil {
+			logrus.Infof("Ray ID is nil, keeping original base64 ID: %s", base64ID)
+			return base64ID
+		}
+
+		hexID, err := utils.ConvertBase64ToHex(base64ID)
 		if err != nil {
 			logrus.Errorf("Failed to convert ID from base64 to hex, keeping original: %v", err)
-			return base64Str
+			return base64ID
 		}
-		return hexStr
+		return hexID
 	}
 
 	task.TaskID = normalize(task.TaskID)

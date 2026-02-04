@@ -961,7 +961,15 @@ func formatTaskForResponse(task eventtypes.Task, detail bool) map[string]interfa
 		result["required_resources"] = task.RequiredResources
 		result["runtime_env_info"] = task.SerializedRuntimeEnv
 		result["placement_group_id"] = task.PlacementGroupID
-		result["events"] = task.StateTransitions
+
+		events := make([]map[string]interface{}, 0, len(task.StateTransitions))
+		for _, event := range task.StateTransitions {
+			events = append(events, map[string]interface{}{
+				"state":      string(event.State),
+				"created_ms": event.Timestamp.UnixMilli(),
+			})
+		}
+		result["events"] = events
 		// TODO(jwj): Support profiling_data after TASK_PROFILE_EVENT is supported.
 		// Ref: https://github.com/ray-project/ray/blob/d0b1d151d8ea964a711e451d0ae736f8bf95b629/python/ray/util/state/common.py#L1616-L1622.
 		// result["profiling_data"] = task.ProfilingData
