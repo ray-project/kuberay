@@ -313,14 +313,8 @@ func main() {
 		numWorkers, parseErr := strconv.Atoi(utils.GetEnvOrDefault(utils.ASYNC_JOB_INFO_QUERY_WORKER_SIZE, utils.DEFAULT_ASYNC_JOB_INFO_QUERY_WORKER_SIZE))
 		exitOnError(parseErr, "unable to parse async job info query worker size")
 
-		cacheSize, parseErr := strconv.Atoi(utils.GetEnvOrDefault(utils.ASYNC_JOB_INFO_QUERY_CACHE_SIZE, utils.DEFAULT_ASYNC_JOB_INFO_QUERY_CACHE_SIZE))
-		exitOnError(parseErr, "unable to parse async job info query cache size")
-
 		cacheExpiry, parseErr := time.ParseDuration(utils.GetEnvOrDefault(utils.ASYNC_JOB_INFO_QUERY_CACHE_EXPIRY, utils.DEFAULT_ASYNC_JOB_INFO_QUERY_CACHE_EXPIRY))
 		exitOnError(parseErr, "unable to parse async job info query cache expiry")
-
-		cleanupInterval, parseErr := time.ParseDuration(utils.GetEnvOrDefault(utils.ASYNC_JOB_INFO_QUERY_CACHE_CLEANUP_INTERVAL, utils.DEFAULT_ASYNC_JOB_INFO_QUERY_CACHE_CLEANUP_INTERVAL))
-		exitOnError(parseErr, "unable to parse async job info query cache cleanup interval")
 
 		workerPool, WorkerPoolErr := dashboardclient.NewWorkerPool(
 			ctx,
@@ -328,9 +322,7 @@ func main() {
 			rayClusterInformer,
 			numWorkers,
 			queryInterval,
-			cacheSize,
 			cacheExpiry,
-			cleanupInterval,
 			config.GetDashboardClient(mgr),
 		)
 		exitOnError(WorkerPoolErr, "unable to create worker pool for async job info query")
