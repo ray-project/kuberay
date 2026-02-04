@@ -14,9 +14,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/ray-project/kuberay/historyserver/pkg/historyserver"
+	. "github.com/ray-project/kuberay/ray-operator/test/support"
+
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 	. "github.com/ray-project/kuberay/historyserver/test/support"
-	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
 
 const (
@@ -36,6 +37,10 @@ func TestHistoryServer(t *testing.T) {
 		{
 			name:     "Live cluster: historyserver endpoints should be accessible",
 			testFunc: testLiveClusters,
+		},
+		{
+			name:     "Live cluster: grafana health only",
+			testFunc: testLiveGrafanaHealth,
 		},
 		{
 			name:     "/v0/logs/file endpoint (live cluster)",
@@ -82,6 +87,24 @@ func testLiveClusters(test Test, g *WithT, namespace *corev1.Namespace, s3Client
 	LogWithTimestamp(test.T(), "Live clusters E2E test completed successfully")
 }
 
+func testLiveGrafanaHealth(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+	rayCluster := PrepareTestEnvWithGrafana(test, g, namespace, s3Client)
+	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
+	ApplyHistoryServer(test, g, namespace)
+	historyServerURL := GetHistoryServerURL(test, g, namespace)
+
+	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
+	g.Expect(clusterInfo.SessionName).To(Equal(LiveSessionName), "Live cluster should have sessionName='live'")
+
+	sessionID := GetSessionIDFromHeadPod(test, g, rayCluster)
+
+	client := CreateHTTPClientWithCookieJar(g)
+	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
+	verifyHistoryServerGrafanaHealthEndpoint(test, g, client, historyServerURL, sessionID)
+	DeleteS3Bucket(test, g, s3Client)
+	LogWithTimestamp(test.T(), "Live clusters grafana health E2E test completed successfully")
+}
+
 // setClusterContext sets the cluster context via /enter_cluster/ endpoint and verifies the response.
 func setClusterContext(test Test, g *WithT, client *http.Client, historyServerURL, namespace, clusterName, session string) {
 	enterURL := fmt.Sprintf("%s/enter_cluster/%s/%s/%s", historyServerURL, namespace, clusterName, session)
@@ -123,6 +146,27 @@ func verifyHistoryServerEndpoints(test Test, g *WithT, client *http.Client, hist
 			LogWithTimestamp(test.T(), "Endpoint %s returned status %d", endpoint, resp.StatusCode)
 		}, TestTimeoutShort).Should(Succeed())
 	}
+}
+
+// verifyHistoryServerGrafanaHealthEndpoint tests the /api/grafana_health endpoint
+func verifyHistoryServerGrafanaHealthEndpoint(test Test, g *WithT, client *http.Client, historyServerURL string, sessionID string) {
+	endpoint := HistoryServerEndpointGrafanaHealth
+	LogWithTimestamp(test.T(), "Testing history server endpoint: %s", endpoint)
+
+	g.Eventually(func(gg Gomega) {
+		resp, err := client.Get(historyServerURL + endpoint)
+		gg.Expect(err).NotTo(HaveOccurred())
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		gg.Expect(err).NotTo(HaveOccurred())
+		gg.Expect(resp.StatusCode).To(Equal(200),
+			"Endpoint %s should return 200, got %d: %s", endpoint, resp.StatusCode, string(body))
+
+		gg.Expect(body).To(MatchJSON(fmt.Sprintf(HistoryServerGrafanaHealthResponse, RayGrafanaIframeHost, sessionID)))
+		LogWithTimestamp(test.T(), "Endpoint %s returned status %d", endpoint, resp.StatusCode)
+	}, TestTimeoutShort).Should(Succeed())
+
 }
 
 // getClusterFromList retrieves a cluster from the /clusters/ endpoint by name and namespace.
