@@ -1466,7 +1466,7 @@ func extractActorIDFromTaskID(taskIDHex string) string {
 	jobPortion := taskIDHex[40:48]   // 8 chars for job id (4 bytes)
 
 	// Check if all Fs (no actor)
-	if actorPortion == "ffffffffffffffffffffffff" {
+	if strings.ToLower(actorPortion) == "ffffffffffffffffffffffff" {
 		return ""
 	}
 
