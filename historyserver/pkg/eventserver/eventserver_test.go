@@ -928,3 +928,34 @@ func TestMultipleReprocessingCycles(t *testing.T) {
 		}
 	}
 }
+
+func TestTransformToEventTimestamp(t *testing.T) {
+	// Test that transformToEvent correctly converts timestamp format
+	eventMap := map[string]any{
+		"eventId":    "test-event-id",
+		"eventType":  "TASK_DEFINITION_EVENT",
+		"sourceType": "CORE_WORKER",
+		"timestamp":  "2026-01-16T19:22:49.414579427Z",
+		"severity":   "INFO",
+		"taskDefinitionEvent": map[string]any{
+			"taskId": "task-123",
+			"jobId":  "AQAAAA==",
+		},
+	}
+
+	event := transformToEvent(eventMap)
+
+	// Verify timestamp is converted to Unix milliseconds
+	expectedTimestamp := "1768591369414"
+	if event.Timestamp != expectedTimestamp {
+		t.Errorf("transformToEvent timestamp = %q, want %q", event.Timestamp, expectedTimestamp)
+	}
+
+	// Verify other fields are preserved
+	if event.EventID != "test-event-id" {
+		t.Errorf("EventID = %q, want %q", event.EventID, "test-event-id")
+	}
+	if event.SourceType != "CORE_WORKER" {
+		t.Errorf("SourceType = %q, want %q", event.SourceType, "CORE_WORKER")
+	}
+}

@@ -204,8 +204,13 @@ func transformToEvent(eventMap map[string]any) *types.Event {
 	if v, ok := eventMap["sourceType"].(string); ok {
 		event.SourceType = v
 	}
+	// Convert ISO 8601 timestamp to Unix milliseconds to match Ray Dashboard format
 	if v, ok := eventMap["timestamp"].(string); ok {
-		event.Timestamp = v
+		if t, err := time.Parse(time.RFC3339Nano, v); err == nil {
+			event.Timestamp = fmt.Sprintf("%d", t.UnixMilli())
+		} else {
+			event.Timestamp = v // Keep original if parsing fails
+		}
 	}
 	if v, ok := eventMap["severity"].(string); ok {
 		event.Severity = v
