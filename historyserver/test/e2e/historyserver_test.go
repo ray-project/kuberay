@@ -288,26 +288,34 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 	LogWithTimestamp(test.T(), "Dead cluster log file endpoint tests completed")
 }
 
-// testLogicalActorsEndpointDeadCluster verifies that the history server can fetch actors from S3 after a cluster is deleted.
+// testLogicalActorsEndpointDeadCluster verifies that the history server can return actors from the
+// in-memory ClusterActorMap after a cluster is deleted.
+//
+// Data flow explanation:
+// The history server does not fetch actors directly from S3. Instead:
+// 1. Collector pushes events to S3 on cluster deletion
+// 2. Storage Reader reads event files from S3
+// 3. Event Handler processes events and populates ClusterActorMap
+// 4. The /logical/actors endpoint returns actors from the in-memory ClusterActorMap
 //
 // The test case follows these steps:
 // 1. Prepare test environment by applying a Ray cluster
 // 2. Submit a Ray job to the existing cluster (generates actor events)
-// 3. Delete RayCluster to trigger log upload to S3
+// 3. Delete RayCluster to trigger log upload to S3 (and event processing)
 // 4. Apply History Server and get its URL
-// 5. Verify that the history server can fetch actors from S3 via /logical/actors endpoint
-// 6. Verify that the history server can fetch a single actor via /logical/actors/{actor_id} endpoint
+// 5. Verify that the history server returns actors via /logical/actors endpoint
+// 6. Verify that the history server returns a single actor via /logical/actors/{actor_id} endpoint
 // 7. Delete S3 bucket to ensure test isolation
 func testLogicalActorsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 
-	// Delete RayCluster to trigger log upload
+	// Delete RayCluster to trigger log upload to S3
 	err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Delete(test.Ctx(), rayCluster.Name, metav1.DeleteOptions{})
 	g.Expect(err).NotTo(HaveOccurred())
 	LogWithTimestamp(test.T(), "Deleted RayCluster %s/%s", namespace.Name, rayCluster.Name)
 
-	// Wait for cluster to be fully deleted (ensures logs are uploaded to S3)
+	// Wait for cluster to be fully deleted (ensures logs are uploaded to S3 and events are processed)
 	g.Eventually(func() error {
 		_, err := GetRayCluster(test, namespace.Name, rayCluster.Name)
 		return err
@@ -322,7 +330,7 @@ func testLogicalActorsEndpointDeadCluster(test Test, g *WithT, namespace *corev1
 	client := CreateHTTPClientWithCookieJar(g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 
-	test.T().Run("should return actors from S3", func(t *testing.T) {
+	test.T().Run("should return actors from history server", func(t *testing.T) {
 		g := NewWithT(t)
 		g.Eventually(func(gg Gomega) {
 			resp, err := client.Get(historyServerURL + EndpointLogicalActors)
@@ -344,38 +352,31 @@ func testLogicalActorsEndpointDeadCluster(test Test, g *WithT, namespace *corev1
 			gg.Expect(ok).To(BeTrue())
 			actors, ok := data["actors"].(map[string]any)
 			gg.Expect(ok).To(BeTrue())
+			gg.Expect(len(actors)).To(BeNumerically(">", 0), "should have at least one actor")
 
-			LogWithTimestamp(test.T(), "Found %d actors in dead cluster", len(actors))
+			// Verify actor schema matches formatActorForResponse format (for the first actor)
+			// Required fields from router.go:formatActorForResponse
+			for _, actorData := range actors {
+				actor, ok := actorData.(map[string]any)
+				gg.Expect(ok).To(BeTrue(), "actor should be a map")
+				gg.Expect(actor["actor_id"]).NotTo(BeNil(), "actor should have actor_id")
+				gg.Expect(actor["job_id"]).NotTo(BeNil(), "actor should have job_id")
+				gg.Expect(actor["state"]).NotTo(BeNil(), "actor should have state")
+				gg.Expect(actor["address"]).NotTo(BeNil(), "actor should have address")
+				address := actor["address"].(map[string]any)
+				gg.Expect(address["node_id"]).NotTo(BeNil(), "address should have node_id")
+				gg.Expect(address["ip_address"]).NotTo(BeNil(), "address should have ip_address")
+				break // Only verify the first actor
+			}
+
+			LogWithTimestamp(test.T(), "Found %d actors from history server", len(actors))
 		}, TestTimeoutShort).Should(Succeed())
 	})
 
-	test.T().Run("should return single actor from S3", func(t *testing.T) {
+	test.T().Run("should return single actor from history server", func(t *testing.T) {
 		g := NewWithT(t)
 
-		// First, get an actor ID from the actors list
-		var actorID string
-		g.Eventually(func(gg Gomega) {
-			resp, err := client.Get(historyServerURL + EndpointLogicalActors)
-			gg.Expect(err).NotTo(HaveOccurred())
-			defer resp.Body.Close()
-
-			body, err := io.ReadAll(resp.Body)
-			gg.Expect(err).NotTo(HaveOccurred())
-
-			var result map[string]any
-			err = json.Unmarshal(body, &result)
-			gg.Expect(err).NotTo(HaveOccurred())
-
-			data := result["data"].(map[string]any)
-			actors := data["actors"].(map[string]any)
-
-			// Get the first actor ID from the map
-			for id := range actors {
-				actorID = id
-				break
-			}
-			gg.Expect(actorID).NotTo(BeEmpty(), "At least one actor should exist")
-		}, TestTimeoutShort).Should(Succeed())
+		actorID := GetOneOfActorID(g, client, historyServerURL)
 
 		// Now test the single actor endpoint
 		g.Eventually(func(gg Gomega) {
@@ -399,9 +400,18 @@ func testLogicalActorsEndpointDeadCluster(test Test, g *WithT, namespace *corev1
 			gg.Expect(ok).To(BeTrue())
 			detail, ok := data["detail"].(map[string]any)
 			gg.Expect(ok).To(BeTrue())
-			gg.Expect(detail["actor_id"]).To(Equal(actorID))
 
-			LogWithTimestamp(test.T(), "Successfully fetched actor %s from dead cluster", actorID)
+			// Verify actor schema matches formatActorForResponse format
+			// Required fields from router.go:formatActorForResponse
+			gg.Expect(detail["actor_id"]).To(Equal(actorID))
+			gg.Expect(detail["job_id"]).NotTo(BeNil())
+			gg.Expect(detail["state"]).NotTo(BeNil())
+			gg.Expect(detail["address"]).NotTo(BeNil())
+			address := detail["address"].(map[string]any)
+			gg.Expect(address["node_id"]).NotTo(BeNil())
+			gg.Expect(address["ip_address"]).NotTo(BeNil())
+
+			LogWithTimestamp(test.T(), "Successfully fetched actor %s from history server", actorID)
 		}, TestTimeoutShort).Should(Succeed())
 	})
 
