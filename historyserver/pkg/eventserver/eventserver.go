@@ -242,9 +242,7 @@ func transformToEvent(eventMap map[string]any) *types.Event {
 
 	if dataField, ok := eventDataFields[eventType]; ok {
 		if data, ok := eventMap[dataField].(map[string]any); ok {
-			// Use shorter key name in customFields (remove "Event" suffix)
-			customKey := strings.TrimSuffix(dataField, "Event")
-			event.CustomFields[customKey] = data
+			event.CustomFields[dataField] = data
 
 			// Extract sourceHostname and sourcePid from nested events where available
 			extractHostnameAndPid(event, eventType, data)
