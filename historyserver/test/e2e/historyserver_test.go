@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"regexp"
 	"testing"
 
@@ -324,7 +325,7 @@ func testLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Names
 		for _, taskID := range taskIDs {
 			LogWithTimestamp(t, "Testing task_id: %s", taskID)
 
-			url := fmt.Sprintf("%s%s?task_id=%s", historyServerURL, EndpointLogFile, taskID)
+			url := fmt.Sprintf("%s%s?task_id=%s", historyServerURL, EndpointLogFile, url.QueryEscape(taskID))
 			resp, err := client.Get(url)
 			if err != nil {
 				lastError = fmt.Sprintf("HTTP error for task %s: %v", taskID, err)
@@ -363,7 +364,7 @@ func testLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Names
 		for _, actorID := range actorIDs {
 			LogWithTimestamp(t, "Testing actor_id: %s", actorID)
 
-			url := fmt.Sprintf("%s%s?actor_id=%s", historyServerURL, EndpointLogFile, actorID)
+			url := fmt.Sprintf("%s%s?actor_id=%s", historyServerURL, EndpointLogFile, url.QueryEscape(actorID))
 			resp, err := client.Get(url)
 			if err != nil {
 				lastError = fmt.Sprintf("HTTP error for actor %s: %v", actorID, err)
@@ -665,7 +666,7 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 		for _, taskID := range taskIDs {
 			LogWithTimestamp(t, "Testing task_id: %s", taskID)
 
-			url := fmt.Sprintf("%s%s?task_id=%s", historyServerURL, EndpointLogFile, taskID)
+			url := fmt.Sprintf("%s%s?task_id=%s", historyServerURL, EndpointLogFile, url.QueryEscape(taskID))
 			resp, err := client.Get(url)
 			if err != nil {
 				lastError = fmt.Sprintf("HTTP error for task %s: %v", taskID, err)
@@ -704,7 +705,7 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 		for _, actorID := range actorIDs {
 			LogWithTimestamp(t, "Testing actor_id: %s", actorID)
 
-			url := fmt.Sprintf("%s%s?actor_id=%s", historyServerURL, EndpointLogFile, actorID)
+			url := fmt.Sprintf("%s%s?actor_id=%s", historyServerURL, EndpointLogFile, url.QueryEscape(actorID))
 			resp, err := client.Get(url)
 			if err != nil {
 				lastError = fmt.Sprintf("HTTP error for actor %s: %v", actorID, err)
