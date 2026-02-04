@@ -9,6 +9,7 @@ package kaischeduler
 
 import (
 	"context"
+	"fmt"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -17,6 +18,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	schedulerinterface "github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/interface"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/utils"
 )
@@ -33,7 +35,20 @@ func GetPluginName() string { return "kai-scheduler" }
 
 func (k *KaiScheduler) Name() string { return GetPluginName() }
 
-func (k *KaiScheduler) DoBatchSchedulingOnSubmission(_ context.Context, _ metav1.Object) error {
+func (k *KaiScheduler) DoBatchSchedulingOnSubmission(_ context.Context, object metav1.Object) error {
+	// KAI-Scheduler's built-in PodGrouper creates PodGroups based on existing pods at runtime.
+	// It cannot reserve resources for pods that don't exist yet.
+	// In K8sJobMode and InteractiveMode, the submitter pod is created after the RayCluster is ready,
+	// which means proper gang scheduling cannot be guaranteed.
+	// for more details, see https://github.com/ray-project/kuberay/pull/4418#pullrequestreview-3751609041
+	if rayJob, ok := object.(*rayv1.RayJob); ok {
+		switch rayJob.Spec.SubmissionMode {
+		case rayv1.K8sJobMode:
+			return fmt.Errorf("KAI-Scheduler does not support RayJob with K8sJobMode: the submitter pod is created after RayCluster is ready, preventing proper gang scheduling")
+		case rayv1.InteractiveMode:
+			return fmt.Errorf("KAI-Scheduler does not support RayJob with InteractiveMode: the user-provided submitter runs after RayCluster is ready, preventing proper gang scheduling")
+		}
+	}
 	return nil
 }
 
