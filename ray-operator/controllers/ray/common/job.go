@@ -136,7 +136,7 @@ func BuildJobSubmitCommand(rayJobInstance *rayv1.RayJob, submissionMode rayv1.Jo
 
 		waitLoop := []string{
 			"until", rayDashboardGCSHealthCommand, ">/dev/null", "2>&1", ";",
-			"do", "echo", strconv.Quote("Waiting for Ray Dashboard GCS to become healthy at "+address+" ..."), ";", "sleep", "2", ";", "done", ";",
+			"do", "echo", strconv.Quote("Waiting for Ray Dashboard GCS to become healthy at " + address + " ..."), ";", "sleep", "2", ";", "done", ";",
 		}
 		cmd = append(cmd, waitLoop...)
 	}

@@ -246,7 +246,7 @@ const (
 	RayServeProxyHealthPath   = "-/healthz"
 	// BasePythonHealthCommand checks a single health URL; args: port, path (no leading slash), timeout_sec. Used instead of wget for slim Ray images.
 	BasePythonHealthCommand = `python3 -c "import urllib.request; r=urllib.request.urlopen('http://localhost:%d/%s', timeout=%d); exit(0 if b'success' in r.read() else 1)"`
-	RayNodeHealthPath = "/api/healthz"
+	RayNodeHealthPath       = "/api/healthz"
 
 	// Finalizers for RayJob
 	RayJobStopJobFinalizer = "ray.io/rayjob-finalizer"
