@@ -1473,7 +1473,6 @@ func formatMemory(memBytes float64) string {
 func (s *ServerHandler) getTasksTimeline(req *restful.Request, resp *restful.Response) {
 	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
 	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
-	clusterNameID := clusterName + "_" + clusterNamespace
 	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
 
 	if sessionName == "live" {
@@ -1484,7 +1483,8 @@ func (s *ServerHandler) getTasksTimeline(req *restful.Request, resp *restful.Res
 	jobID := req.QueryParameter("job_id")
 	download := req.QueryParameter("download")
 
-	timeline := s.eventHandler.GetTasksTimeline(clusterNameID, jobID)
+	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
+	timeline := s.eventHandler.GetTasksTimeline(clusterSessionKey, jobID)
 
 	respData, err := json.Marshal(timeline)
 	if err != nil {
