@@ -922,9 +922,15 @@ func (h *EventHandler) handleTaskLifecycleEvent(eventMap map[string]any, cluster
 		// In beta, the complete historical replay will be supported.
 		task.RayErrorInfo = currTask.RayErrorInfo
 		task.JobID = currTask.JobID
-		task.NodeID = currTask.NodeID
-		task.WorkerID = currTask.WorkerID
-		task.WorkerPID = currTask.WorkerPID
+		if currTask.NodeID != "" {
+			task.NodeID = currTask.NodeID
+		}
+		if currTask.WorkerID != "" {
+			task.WorkerID = currTask.WorkerID
+		}
+		if currTask.WorkerPID != 0 {
+			task.WorkerPID = currTask.WorkerPID
+		}
 		task.IsDebuggerPaused = currTask.IsDebuggerPaused
 		task.ActorReprName = currTask.ActorReprName
 		task.TaskLogInfo = currTask.TaskLogInfo
