@@ -228,16 +228,16 @@ func transformToEvent(eventMap map[string]any) *types.Event {
 
 	// Map eventType to its corresponding nested data field
 	eventDataFields := map[string]string{
-		"TASK_DEFINITION_EVENT":       "taskDefinitionEvent",
-		"TASK_LIFECYCLE_EVENT":        "taskLifecycleEvent",
-		"TASK_PROFILE_EVENT":          "taskProfileEvents",
-		"ACTOR_DEFINITION_EVENT":      "actorDefinitionEvent",
-		"ACTOR_LIFECYCLE_EVENT":       "actorLifecycleEvent",
-		"ACTOR_TASK_DEFINITION_EVENT": "actorTaskDefinitionEvent",
-		"NODE_DEFINITION_EVENT":       "nodeDefinitionEvent",
-		"NODE_LIFECYCLE_EVENT":        "nodeLifecycleEvent",
-		"DRIVER_JOB_DEFINITION_EVENT": "driverJobDefinitionEvent",
-		"DRIVER_JOB_LIFECYCLE_EVENT":  "driverJobLifecycleEvent",
+		string(types.TASK_DEFINITION_EVENT):       "taskDefinitionEvent",
+		string(types.TASK_LIFECYCLE_EVENT):        "taskLifecycleEvent",
+		string(types.TASK_PROFILE_EVENT):          "taskProfileEvents",
+		string(types.ACTOR_DEFINITION_EVENT):      "actorDefinitionEvent",
+		string(types.ACTOR_LIFECYCLE_EVENT):       "actorLifecycleEvent",
+		string(types.ACTOR_TASK_DEFINITION_EVENT): "actorTaskDefinitionEvent",
+		string(types.NODE_DEFINITION_EVENT):       "nodeDefinitionEvent",
+		string(types.NODE_LIFECYCLE_EVENT):        "nodeLifecycleEvent",
+		string(types.DRIVER_JOB_DEFINITION_EVENT): "driverJobDefinitionEvent",
+		string(types.DRIVER_JOB_LIFECYCLE_EVENT):  "driverJobLifecycleEvent",
 	}
 
 	if dataField, ok := eventDataFields[eventType]; ok {
@@ -258,17 +258,17 @@ func transformToEvent(eventMap map[string]any) *types.Event {
 // These fields are available in specific event types as discovered from Ray protos.
 func extractHostnameAndPid(event *types.Event, eventType string, data map[string]any) {
 	switch eventType {
-	case "NODE_DEFINITION_EVENT":
+	case string(types.NODE_DEFINITION_EVENT):
 		// NodeDefinitionEvent has: hostname, node_name, node_ip_address
 		if hostname, ok := data["hostname"].(string); ok && hostname != "" {
 			event.SourceHostname = hostname
 		}
-	case "TASK_LIFECYCLE_EVENT":
+	case string(types.TASK_LIFECYCLE_EVENT):
 		// TaskLifecycleEvent has: worker_pid, worker_id, node_id
 		if pid, ok := data["workerPid"].(float64); ok {
 			event.SourcePid = int(pid)
 		}
-	case "ACTOR_LIFECYCLE_EVENT":
+	case string(types.ACTOR_LIFECYCLE_EVENT):
 		// ActorLifecycleEvent has pid in StateTransition when ALIVE
 		if transitions, ok := data["stateTransitions"].([]any); ok && len(transitions) > 0 {
 			// Get the latest transition
@@ -278,7 +278,7 @@ func extractHostnameAndPid(event *types.Event, eventType string, data map[string
 				}
 			}
 		}
-	case "DRIVER_JOB_DEFINITION_EVENT":
+	case string(types.DRIVER_JOB_DEFINITION_EVENT):
 		// DriverJobDefinitionEvent has: driver_pid, driver_node_id
 		if pid, ok := data["driverPid"].(float64); ok {
 			event.SourcePid = int(pid)

@@ -332,13 +332,13 @@ func (s *ServerHandler) getEvents(req *restful.Request, resp *restful.Response) 
 		return
 	}
 
-	clusterKey := clusterName + "_" + clusterNamespace
+	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
 	jobID := req.QueryParameter("job_id")
 
 	var response map[string]any
 
 	if jobID != "" {
-		events := s.eventHandler.ClusterEventMap.GetByJobID(clusterKey, jobID)
+		events := s.eventHandler.ClusterEventMap.GetByJobID(clusterSessionKey, jobID)
 		response = map[string]any{
 			"result": true,
 			"msg":    "Job events fetched.",
@@ -348,7 +348,7 @@ func (s *ServerHandler) getEvents(req *restful.Request, resp *restful.Response) 
 			},
 		}
 	} else {
-		events := s.eventHandler.ClusterEventMap.GetAll(clusterKey)
+		events := s.eventHandler.ClusterEventMap.GetAll(clusterSessionKey)
 		response = map[string]any{
 			"result": true,
 			"msg":    "All events fetched.",
