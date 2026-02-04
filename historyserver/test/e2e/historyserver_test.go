@@ -363,7 +363,8 @@ func testLogicalActorsEndpointDeadCluster(test Test, g *WithT, namespace *corev1
 				gg.Expect(actor["job_id"]).NotTo(BeNil(), "actor should have job_id")
 				gg.Expect(actor["state"]).NotTo(BeNil(), "actor should have state")
 				gg.Expect(actor["address"]).NotTo(BeNil(), "actor should have address")
-				address := actor["address"].(map[string]any)
+				address, ok := actor["address"].(map[string]any)
+				gg.Expect(ok).To(BeTrue(), "address should be a map")
 				gg.Expect(address["node_id"]).NotTo(BeNil(), "address should have node_id")
 				gg.Expect(address["ip_address"]).NotTo(BeNil(), "address should have ip_address")
 				break // Only verify the first actor
@@ -407,7 +408,8 @@ func testLogicalActorsEndpointDeadCluster(test Test, g *WithT, namespace *corev1
 			gg.Expect(detail["job_id"]).NotTo(BeNil())
 			gg.Expect(detail["state"]).NotTo(BeNil())
 			gg.Expect(detail["address"]).NotTo(BeNil())
-			address := detail["address"].(map[string]any)
+			address, ok := detail["address"].(map[string]any)
+			gg.Expect(ok).To(BeTrue(), "address should be a map")
 			gg.Expect(address["node_id"]).NotTo(BeNil())
 			gg.Expect(address["ip_address"]).NotTo(BeNil())
 
