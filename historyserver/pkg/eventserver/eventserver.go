@@ -1263,7 +1263,7 @@ func (h *EventHandler) GetTasksTimeline(clusterName string, jobID string) []type
 
 	// First pass: collect all unique nodes and workers
 	for _, task := range tasks {
-		if task.ProfileData == nil {
+		if task.ProfileData == nil || len(task.ProfileData.Events) == 0 {
 			continue
 		}
 		// Only include worker and driver components (consistent with Ray's profiling implementation in profiling.py)
