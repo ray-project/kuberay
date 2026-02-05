@@ -1,12 +1,13 @@
 # RayJob that demonstrates endpoints used by the "persist metadata" workaround:
 # - Placement groups (api/v0/placement_groups)
-# - Serve applications (api/serve/applications/)
 # - Datasets (api/jobs/ + api/data/datasets/{job_id})
 #
 # Use this with the History Server setup guide (Step 6). Ensure the collector
 # has SUPPORT_RAY_EVENT_UNSUPPORTED_DATA enabled so it persists these to blob storage.
 # After the job runs, you can view the data in Ray Dashboard, and after cluster
 # teardown, via History Server (from persisted meta).
+#
+# Note: RayJob connects to the RayCluster created by RayService above via clusterSelector
 #
 apiVersion: ray.io/v1
 kind: RayJob
@@ -29,17 +30,7 @@ spec:
     ray.get(pg.ready())
     print('Placement group created:', pg.id.hex())
 
-    # --- 2. Serve application (visible under api/serve/applications/) ---
-    from ray import serve
-
-    @serve.deployment(num_replicas=1)
-    def hello(request):
-        return {'message': 'hello from workaround'}
-
-    serve.run(hello.bind(), name='workaround_app')
-    print('Serve application deployed: workaround_app')
-
-    # --- 3. Dataset (creates job + dataset; visible under api/jobs/ and api/data/datasets/) ---
+    # --- 2. Dataset (creates job + dataset; visible under api/jobs/ and api/data/datasets/) ---
     ds = ray.data.range(10)
     n = ds.count()
     print('Dataset created, count:', n)
