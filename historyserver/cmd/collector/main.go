@@ -1,11 +1,11 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
+	"os/signal"
 	"path"
 	"strconv"
 	"time"
@@ -108,18 +108,36 @@ func main() {
 		panic("Failed to create writer for runtime class name: " + runtimeClassName + " for role: " + role + ".")
 	}
 
+	var wg sync.WaitGroup
+
+	sigChan := make(chan os.Signal, 1)
+	stop := make(chan struct{}, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
+	wg.Add(1)
 	// Create and initialize EventServer
-	eventServer := eventserver.NewEventServer(writer, rayRootDir, sessionDir, rayNodeId, rayClusterName, rayClusterId, sessionName)
-	eventServer.InitServer(eventsPort)
+	go func() {
+		defer wg.Done()
+		eventServer := eventserver.NewEventServer(writer, rayRootDir, sessionDir, rayNodeId, rayClusterName, rayClusterId, sessionName)
+		eventServer.InitServer(stop, eventsPort)
+		logrus.Info("Event server shutdown")
+	}()
 
-	collector := runtime.NewCollector(&globalConfig, writer)
-	_ = collector.Start(context.TODO().Done())
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		collector := runtime.NewCollector(&globalConfig, writer)
+		collector.Run(stop)
+		logrus.Info("Log server shutdown")
+	}()
 
-	eventStop := eventServer.WaitForStop()
-	logStop := collector.WaitForStop()
-	<-eventStop
-	logrus.Info("Event server shutdown")
-	<-logStop
-	logrus.Info("Log server shutdown")
-	logrus.Info("All servers shutdown")
+	<-sigChan
+	logrus.Info("Received shutdown signal, initiating graceful shutdown...")
+
+	// Stop both the event server and the collector
+	close(stop)
+
+	// Wait for both goroutines to complete
+	wg.Wait()
+	logrus.Info("Graceful shutdown complete")
 }
