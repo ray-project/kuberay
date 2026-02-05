@@ -1,5 +1,8 @@
 package types
 
+// For runtime environment proto definitions, please refer to:
+// https://github.com/ray-project/ray/blob/91dbbcfb37522e86e8fa24003c9bb3e0d110863b/src/ray/protobuf/public/runtime_environment.proto.
+
 type RuntimeEnvUris struct {
 	// Working dir uri.
 	WorkingDirURI string `json:"workingDirURI"`
