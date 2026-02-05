@@ -13,10 +13,7 @@ import (
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
 
-const (
-	RayClusterManifestPath = "../../config/raycluster.yaml"
-	RayClusterID           = "default"
-)
+const RayClusterManifestPath = "../../config/raycluster.yaml"
 
 // ApplyRayClusterWithCollectorWithEnvs deploys a Ray cluster with the collector sidecar into the test namespace,
 // adding the specified environment variables to the head pod.
