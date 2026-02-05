@@ -101,6 +101,10 @@ type TaskLogInfo struct {
 
 // Task's fields are populated from the TASK_DEFINITION_EVENT, ACTOR_TASK_DEFINITION_EVENT, and TASK_LIFECYCLE_EVENT.
 // A TASK_DEFINITION_EVENT or an ACTOR_TASK_DEFINITION_EVENT is expected to be emitted once per task attempt,
+// For proto definitions, please refer to:
+// https://github.com/ray-project/ray/tree/master/src/ray/protobuf/public.
+// For field population, please refer to:
+// https://github.com/ray-project/ray/blob/36be009ae360788550e541d81806493f52963730/src/ray/core_worker/task_event_buffer.cc#L189-L295.
 type Task struct {
 	// TaskID and TaskAttempt form the unique identifier for a task.
 	TaskID      string `json:"taskId"`
@@ -130,21 +134,23 @@ type Task struct {
 	RefIDs               map[string]string `json:"refIds,omitempty"`
 	SerializedRuntimeEnv string            `json:"serializedRuntimeEnv,omitempty"`
 	// CallSite is the human readable stacktrace of the actor task invocation.
-	CallSite string `json:"callSite,omitempty"`
+	CallSite *string `json:"callSite,omitempty"`
 	// LabelSelector is the key-value label constraints of the node to schedule this actor task on.
 	LabelSelector map[string]string `json:"labelSelector,omitempty"`
 
 	// The task execution information, populated from TASK_LIFECYCLE_EVENT.
 	StateTransitions []TaskStateTransition `json:"stateTransitions,omitempty"`
-	RayErrorInfo     RayErrorInfo          `json:"rayErrorInfo,omitempty"`
+	// RayErrorInfo is only populated when the state error info has any values.
+	// Ref: https://github.com/ray-project/ray/blob/36be009ae360788550e541d81806493f52963730/src/ray/core_worker/task_event_buffer.cc#L263-L265.
+	RayErrorInfo *RayErrorInfo `json:"rayErrorInfo,omitempty"`
 
 	NodeID    string `json:"nodeId,omitempty"`
 	WorkerID  string `json:"workerId,omitempty"`
 	WorkerPID int    `json:"workerPid,omitempty"`
 	// Whether the task is paused by the debugger.
-	IsDebuggerPaused bool `json:"isDebuggerPaused,omitempty"`
+	IsDebuggerPaused *bool `json:"isDebuggerPaused,omitempty"`
 	// Actor task repr name, if applicable.
-	ActorReprName string `json:"actorReprName,omitempty"`
+	ActorReprName *string `json:"actorReprName,omitempty"`
 
 	// TaskLogInfo is just added at https://github.com/ray-project/ray/pull/60287.
 	// TODO(jwj): Add support for TaskLogInfo.
@@ -338,6 +344,21 @@ func (t Task) DeepCopy() Task {
 	if len(t.StateTransitions) > 0 {
 		cp.StateTransitions = make([]TaskStateTransition, len(t.StateTransitions))
 		copy(cp.StateTransitions, t.StateTransitions)
+	}
+
+	if t.RayErrorInfo != nil {
+		rayErrorInfo := *t.RayErrorInfo
+		cp.RayErrorInfo = &rayErrorInfo
+	}
+
+	if t.IsDebuggerPaused != nil {
+		cp.IsDebuggerPaused = new(bool)
+		*cp.IsDebuggerPaused = *t.IsDebuggerPaused
+	}
+
+	if t.ActorReprName != nil {
+		actorReprName := *t.ActorReprName
+		cp.ActorReprName = &actorReprName
 	}
 
 	if t.TaskLogInfo != nil {

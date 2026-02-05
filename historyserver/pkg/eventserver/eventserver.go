@@ -972,17 +972,6 @@ func normalizeTaskIDsToHex(task *types.Task) {
 			return ""
 		}
 
-		// Check if the Ray ID is nil.
-		isNil, err := utils.IsBase64Nil(base64ID)
-		if err != nil {
-			logrus.Errorf("Failed to check if Ray ID is nil: %v", err)
-			return base64ID
-		}
-		if isNil {
-			logrus.Infof("Ray ID is nil, keeping original base64 ID: %s", base64ID)
-			return base64ID
-		}
-
 		hexID, err := utils.ConvertBase64ToHex(base64ID)
 		if err != nil {
 			logrus.Errorf("Failed to convert ID from base64 to hex, keeping original: %v", err)

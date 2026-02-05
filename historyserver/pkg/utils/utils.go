@@ -254,22 +254,29 @@ func ConvertBase64ToHex(input string) (string, error) {
 	return hexStr, nil
 }
 
-func IsBase64Nil(base64Str string) (bool, error) {
-	bytes, err := base64.StdEncoding.DecodeString(base64Str)
+// IsHexNil returns true if hexStr decodes to a non-empty byte slice where every byte is 0xff.
+func IsHexNil(hexStr string) (bool, error) {
+	s := strings.TrimSpace(hexStr)
+
+	if len(s) == 0 {
+		return false, nil
+	}
+
+	// Hex string must have even length.
+	if len(s)%2 != 0 {
+		return false, hex.ErrLength
+	}
+
+	bytes, err := hex.DecodeString(s)
 	if err != nil {
 		return false, err
 	}
 
-	if len(bytes) == 0 {
-		return false, nil
-	}
-
-	for i := range bytes {
-		if bytes[i] != 0xff {
+	for _, v := range bytes {
+		if v != 0xff {
 			return false, nil
 		}
 	}
-
 	return true, nil
 }
 

@@ -939,6 +939,14 @@ func (s *ServerHandler) getTasks(req *restful.Request, resp *restful.Response) {
 // The schema aligns with the Ray Dashboard API.
 // Ref: https://github.com/ray-project/ray/blob/d0b1d151d8ea964a711e451d0ae736f8bf95b629/python/ray/util/state/common.py#L730-L819.
 func formatTaskForResponse(task eventtypes.Task, detail bool) map[string]interface{} {
+	setNullableField := func(result map[string]interface{}, key string, value interface{}) {
+		if value != nil {
+			result[key] = value
+		} else {
+			result[key] = nil
+		}
+	}
+
 	// TODO(jwj): Maybe define result schema in types.go.
 	result := map[string]interface{}{
 		"task_id":            task.TaskID,
@@ -953,7 +961,11 @@ func formatTaskForResponse(task eventtypes.Task, detail bool) map[string]interfa
 		"node_id":            task.NodeID,
 		"worker_id":          task.WorkerID,
 		"worker_pid":         task.WorkerPID,
-		"error_type":         string(task.RayErrorInfo.ErrorType),
+	}
+	if task.RayErrorInfo != nil {
+		result["error_type"] = string(task.RayErrorInfo.ErrorType)
+	} else {
+		result["error_type"] = nil
 	}
 
 	if detail {
@@ -969,7 +981,12 @@ func formatTaskForResponse(task eventtypes.Task, detail bool) map[string]interfa
 				"log_files":             []string{},
 			},
 		}
-		result["placement_group_id"] = task.PlacementGroupID
+		isNil, err := utils.IsHexNil(task.PlacementGroupID)
+		if isNil || err != nil {
+			result["placement_group_id"] = nil
+		} else {
+			result["placement_group_id"] = task.PlacementGroupID
+		}
 
 		events := make([]map[string]interface{}, 0, len(task.StateTransitions))
 		for _, event := range task.StateTransitions {
@@ -983,9 +1000,13 @@ func formatTaskForResponse(task eventtypes.Task, detail bool) map[string]interfa
 		// Ref: https://github.com/ray-project/ray/blob/d0b1d151d8ea964a711e451d0ae736f8bf95b629/python/ray/util/state/common.py#L1616-L1622.
 		// result["profiling_data"] = task.ProfilingData
 		result["task_log_info"] = task.TaskLogInfo
-		result["error_message"] = task.RayErrorInfo.ErrorMessage
-		result["is_debugger_paused"] = task.IsDebuggerPaused
-		result["call_site"] = task.CallSite
+		if task.RayErrorInfo != nil {
+			result["error_message"] = task.RayErrorInfo.ErrorMessage
+		} else {
+			result["error_message"] = nil
+		}
+		setNullableField(result, "is_debugger_paused", task.IsDebuggerPaused)
+		setNullableField(result, "call_site", task.CallSite)
 		if task.LabelSelector != nil {
 			result["label_selector"] = task.LabelSelector
 		} else {
