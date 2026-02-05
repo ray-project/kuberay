@@ -139,6 +139,14 @@ func ApplyAzureRayClusterWithCollector(test Test, g *WithT, namespace *corev1.Na
 	rayClusterFromYaml := DeserializeRayClusterYAML(test, AzureRayClusterManifestPath)
 	rayClusterFromYaml.Namespace = namespace.Name
 
+	// Inject namespace name as ray-cluster-id for head group collector
+	injectCollectorRayClusterID(rayClusterFromYaml.Spec.HeadGroupSpec.Template.Spec.Containers, namespace.Name)
+
+	// Inject namespace name as ray-cluster-id for worker group collectors
+	for wg := range rayClusterFromYaml.Spec.WorkerGroupSpecs {
+		injectCollectorRayClusterID(rayClusterFromYaml.Spec.WorkerGroupSpecs[wg].Template.Spec.Containers, namespace.Name)
+	}
+
 	rayCluster, err := test.Client().Ray().RayV1().
 		RayClusters(namespace.Name).
 		Create(test.Ctx(), rayClusterFromYaml, metav1.CreateOptions{})
