@@ -183,7 +183,7 @@ kubectl apply -f ray-operator/config/samples/ray-cluster.embed-grafana.yaml
 # Get live session cookie. (Port-forward is required)
 curl -c ~/cookies.txt "http://localhost:8080/enter_cluster/default/raycluster-embed-grafana/live"
 
-# Request to grafana health endpoint
+# Request to prometheus health endpoint
 curl -b ~/cookies.txt http://localhost:8080/api/prometheus_health
 
 # Request to grafana health endpoint

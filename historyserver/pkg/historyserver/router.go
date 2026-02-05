@@ -337,8 +337,8 @@ func (s *ServerHandler) getPrometheusHealth(req *restful.Request, resp *restful.
 		s.redirectRequest(req, resp)
 		return
 	}
-	// Return "not yet supported" for prometheus health
-	resp.WriteErrorString(http.StatusNotImplemented, "Prometheus health not yet supported")
+
+	resp.WriteErrorString(http.StatusNotImplemented, "Prometheus health is not yet supported for historical sessions.")
 }
 
 func (s *ServerHandler) getGrafanaHealth(req *restful.Request, resp *restful.Response) {
