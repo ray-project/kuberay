@@ -340,6 +340,11 @@ func (t Task) DeepCopy() Task {
 		copy(cp.StateTransitions, t.StateTransitions)
 	}
 
+	if t.TaskLogInfo != nil {
+		taskLogInfo := *t.TaskLogInfo
+		cp.TaskLogInfo = &taskLogInfo
+	}
+
 	return cp
 }
 
