@@ -4,6 +4,7 @@ import (
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/uuid"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
@@ -18,6 +19,7 @@ const (
 func ApplyRayJobAndWaitForCompletion(test Test, g *WithT, namespace *corev1.Namespace, rayCluster *rayv1.RayCluster) *rayv1.RayJob {
 	rayJobFromYaml := DeserializeRayJobYAML(test, rayJobManifestPath)
 	rayJobFromYaml.Namespace = namespace.Name
+	rayJobFromYaml.Name = rayJobFromYaml.Name + string(uuid.NewUUID())
 
 	rayJob, err := test.Client().Ray().RayV1().
 		RayJobs(namespace.Name).
