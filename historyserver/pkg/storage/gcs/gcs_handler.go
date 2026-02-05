@@ -12,12 +12,14 @@ import (
 	"time"
 
 	gstorage "cloud.google.com/go/storage"
+	"github.com/google/martian/v3/log"
 	"github.com/ray-project/kuberay/historyserver/pkg/collector/types"
 	"github.com/ray-project/kuberay/historyserver/pkg/storage"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 	"github.com/sirupsen/logrus"
 	gIterator "google.golang.org/api/iterator"
 	"google.golang.org/api/option"
+	gTransport "google.golang.org/api/transport/http"
 )
 
 type RayLogsHandler struct {
@@ -26,6 +28,7 @@ type RayLogsHandler struct {
 	RootDir        string
 	SessionDir     string
 	HttpClient     *http.Client
+	GCSEndpoint    string
 	RayClusterName string
 	RayClusterID   string
 	RayNodeName    string
@@ -85,7 +88,7 @@ func (h *RayLogsHandler) ListFiles(clusterId string, directory string) []string 
 	// TODO(chiayi): Look into potential timeout issues
 	ctx := context.Background()
 
-	pathPrefix := path.Join(h.GCSBucket, clusterId, directory)
+	pathPrefix := path.Join(h.RootDir, clusterId, directory)
 
 	query := &gstorage.Query{
 		Prefix: pathPrefix,
@@ -142,6 +145,7 @@ func (h *RayLogsHandler) List() []utils.ClusterInfo {
 		cluster := &utils.ClusterInfo{}
 		objectAttr, err := objectIterator.Next()
 		if err == gIterator.Done {
+			logrus.Infof("Finished iterating through gcs objects")
 			break
 		}
 		if err != nil {
@@ -149,7 +153,7 @@ func (h *RayLogsHandler) List() []utils.ClusterInfo {
 		}
 
 		fullObjectPath := objectAttr.Name
-		metaInfo := strings.Split(strings.Trim(fullObjectPath, pathPrefix), "/")
+		metaInfo := strings.Split(strings.TrimPrefix(fullObjectPath, pathPrefix), "/")
 		if len(metaInfo) != 2 {
 			logrus.Errorf("Unable to properly parse cluster metadir path with fullpath: %s", fullObjectPath)
 			return nil
@@ -180,16 +184,14 @@ func (h *RayLogsHandler) List() []utils.ClusterInfo {
 func (h *RayLogsHandler) GetContent(clusterId string, fileName string) io.Reader {
 	ctx := context.Background()
 
-	// TODO(chiayi): Find filePath. Use MatchGlob to find file with fileName
+	// TODO(chiayi): If we consider filename and cluster combination is unique then this is fine
 	bucket := h.StorageClient.Bucket(h.GCSBucket)
 	query := &gstorage.Query{
 		MatchGlob: "**/" + clusterId + "*/**/" + fileName,
 	}
-
 	objectIterator := bucket.Objects(ctx, query)
-	// fileName should be unique with clusterId so will get the first one
 	fileAttrs, err := objectIterator.Next()
-	if err != gIterator.Done {
+	if err == gIterator.Done {
 		logrus.Errorf("File %s was not found in bucket for cluster %s", fileName, clusterId)
 		return nil
 	}
@@ -213,6 +215,19 @@ func (h *RayLogsHandler) GetContent(clusterId string, fileName string) io.Reader
 	return bytes.NewReader(data)
 }
 
+func createGCSBucket(gcsClient *gstorage.Client, projectID, bucketName string) error {
+	ctx := context.Background()
+
+	bucket := gcsClient.Bucket(bucketName)
+	if err := bucket.Create(ctx, projectID, nil); err != nil {
+		log.Errorf("Failed to create GCS bucket: %s", bucketName)
+		return err
+	}
+
+	logrus.Infof("Created GCS Bucket: %s", bucketName)
+	return nil
+}
+
 func NewReader(c *types.RayHistoryServerConfig, jd map[string]interface{}) (storage.StorageReader, error) {
 	config := &config{}
 	config.completeHistoryServerConfig(c, jd)
@@ -234,17 +249,45 @@ func New(c *config) (*RayLogsHandler, error) {
 	// TODO(chiayi): Add timeout for all contexts, close client?
 	ctx := context.Background()
 
-	GCSHttpClient := &http.Client{
-		Transport: &http.Transport{
-			MaxIdleConns:        100,
-			MaxIdleConnsPerHost: 20,
-			IdleConnTimeout:     90 * time.Second,
-		},
+	baseTransport := &http.Transport{
+		MaxIdleConns:        100,
+		MaxIdleConnsPerHost: 20,
+		IdleConnTimeout:     90 * time.Second,
 	}
 
-	storageClient, err := gstorage.NewClient(ctx, option.WithHTTPClient(GCSHttpClient))
+	// The gTransport is the base transport that is wrapped with the Google authenticator
+	// using option.WithHTTPClient() seems to completely override the client which causes
+	// the final storageClient to not use Google auth, so this adds it
+	authTransport, err := gTransport.NewTransport(ctx,
+		baseTransport,
+		option.WithScopes(gstorage.ScopeFullControl),
+	)
+
+	// Create a custom client with the authenticated transport
+	customHttpTransportClient := &http.Client{
+		Transport: authTransport,
+		Timeout:   90 * time.Second,
+	}
+
+	// Finally create the storage client with the custom http client
+	storageClient, err := gstorage.NewClient(ctx,
+		option.WithHTTPClient(customHttpTransportClient),
+	)
 	if err != nil {
 		logrus.Errorf("Failed to create google cloud storage client")
+		return nil, err
+	}
+
+	// Check if bucket exists
+	_, err = storageClient.Bucket(c.Bucket).Attrs(ctx)
+	if err == gstorage.ErrBucketNotExist {
+		logrus.Warn("Bucket %s does not exist, will attempt to create bucket", c.Bucket)
+		err = createGCSBucket(storageClient, c.GCPProjectID, c.Bucket)
+		if err != nil {
+			return nil, err
+		}
+	} else if err != nil {
+		logrus.Error("Failed to check if bucket exist or not")
 		return nil, err
 	}
 

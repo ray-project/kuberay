@@ -9,7 +9,8 @@ import (
 const DefaultGCSBucket = "ray-historyserver"
 
 type config struct {
-	Bucket string
+	Bucket       string
+	GCPProjectID string // Only required if bucket does not exist. Used in GCS Bucket Creation
 	types.RayCollectorConfig
 }
 
@@ -28,6 +29,7 @@ func (c *config) completeCollectorConfig(rcc *types.RayCollectorConfig, jd map[s
 		if bucket, ok := jd["gcsBucket"]; ok {
 			c.Bucket = bucket.(string)
 		}
+		c.GCPProjectID = os.Getenv("GCP_PROJECT_ID")
 	}
 }
 
@@ -40,5 +42,6 @@ func (c *config) completeHistoryServerConfig(rcc *types.RayHistoryServerConfig, 
 		if bucket, ok := jd["gcsBucket"]; ok {
 			c.Bucket = bucket.(string)
 		}
+		c.GCPProjectID = os.Getenv("GCP_PROJECT_ID")
 	}
 }
