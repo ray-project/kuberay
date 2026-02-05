@@ -3,7 +3,7 @@ kind: RayCluster
 metadata:
   name: test-cluster-0
 spec:
-  rayVersion: '2.52.0'
+  rayVersion: "2.52.0"
   headGroupSpec:
     rayStartParams: {}
     template:

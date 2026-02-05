@@ -5,12 +5,12 @@ metadata:
   labels:
     perf-test: ray-cluster
 spec:
-  rayVersion: '2.52.0'
+  rayVersion: "2.52.0"
   headGroupSpec:
     serviceType: ClusterIP
     rayStartParams:
-      dashboard-host: '0.0.0.0'
-      disable-usage-stats: 'true'
+      dashboard-host: "0.0.0.0"
+      disable-usage-stats: "true"
     template:
       spec:
         containers:
