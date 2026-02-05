@@ -1138,7 +1138,10 @@ func formatNodeSummaryReplayForResp(node eventtypes.Node, sessionName string) []
 	nodeId := node.NodeID
 	nodeIpAddress := node.NodeIPAddress
 	labels := node.Labels
-	nodeTypeName := labels["ray.io/node-group"]
+	var nodeTypeName string
+	if nodeGroup, exists := labels["ray.io/node-group"]; exists {
+		nodeTypeName = nodeGroup
+	}
 	isHeadNode := nodeTypeName == "headgroup"
 	rayletSocketName := fmt.Sprintf("/tmp/ray/%s/sockets/raylet", sessionName)
 	objectStoreSocketName := fmt.Sprintf("/tmp/ray/%s/sockets/plasma_store", sessionName)
