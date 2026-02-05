@@ -316,7 +316,7 @@ func main() {
 		cacheExpiry, parseErr := time.ParseDuration(utils.GetEnvOrDefault(utils.ASYNC_JOB_INFO_QUERY_CACHE_EXPIRY, utils.DEFAULT_ASYNC_JOB_INFO_QUERY_CACHE_EXPIRY))
 		exitOnError(parseErr, "unable to parse async job info query cache expiry")
 
-		workerPool, WorkerPoolErr := dashboardclient.NewWorkerPool(
+		workerPool, WorkerPoolErr := dashboardclient.InitWorkerPool(
 			ctx,
 			rayJobInformer,
 			rayClusterInformer,

@@ -57,7 +57,7 @@ type (
 	}
 )
 
-func NewWorkerPool(ctx context.Context,
+func InitWorkerPool(ctx context.Context,
 	rayJobInformer rayinformersv1.RayJobInformer,
 	rayClusterInformer rayinformersv1.RayClusterInformer,
 	numWorkers int,
@@ -119,7 +119,9 @@ func (w *WorkerPool) Start(ctx context.Context) {
 				logger.Info("Listing RayJobs from cache", "total", len(rayJobs))
 
 				for _, rayJob := range rayJobs {
-					if rayv1.IsJobTerminal(rayJob.Status.JobStatus) || rayv1.IsJobDeploymentTerminal(rayJob.Status.JobDeploymentStatus) {
+					if len(rayJob.Status.DashboardURL) == 0 ||
+						rayv1.IsJobTerminal(rayJob.Status.JobStatus) ||
+						rayv1.IsJobDeploymentTerminal(rayJob.Status.JobDeploymentStatus) {
 						continue
 					}
 
@@ -155,10 +157,6 @@ func (w *WorkerPool) Start(ctx context.Context) {
 
 					w.existInQueue.Delete(cacheKey(rayClusterNamespacedName, rayJobInstance.Status.JobId))
 
-					if len(rayJobInstance.Status.DashboardURL) == 0 {
-						continue
-					}
-
 					// get RayCluster instance from informer cache
 					rayClusterInstance, err := w.rayClusterInformer.Lister().RayClusters(rayClusterNamespacedName.Namespace).Get(rayClusterNamespacedName.Name)
 					if err != nil {
@@ -186,10 +184,10 @@ func (w *WorkerPool) Start(ctx context.Context) {
 }
 
 // GetCachedDashboardClientFunc returns a function that creates a RayDashboardCacheClient.
-// This should be called after NewWorkerPool to ensure the worker pool is initialized.
+// This should be called after InitWorkerPool to ensure the worker pool is initialized.
 func GetCachedDashboardClientFunc() func(rayCluster *rayv1.RayCluster, url string) (RayDashboardClientInterface, error) {
 	if pool == nil {
-		panic("WorkerPool is not initialized. Please call NewWorkerPool first.")
+		panic("WorkerPool is not initialized. Please call InitWorkerPool first.")
 	}
 	return func(rayCluster *rayv1.RayCluster, url string) (RayDashboardClientInterface, error) {
 		rayDashboardClient, err := pool.dashboardClientFunc(rayCluster, url)
