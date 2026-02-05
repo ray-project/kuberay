@@ -69,13 +69,16 @@ func main() {
 	// WaitGroup to track goroutine completion
 	var wg sync.WaitGroup
 
+	sigChan := make(chan os.Signal, 1)
+	stop := make(chan struct{}, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
 	// Start EventHandler in background goroutine
-	eventStop := make(chan struct{}, 1)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		logrus.Info("Starting EventHandler in background...")
-		if err := eventHandler.Run(eventStop, 2); err != nil {
+		if err := eventHandler.Run(stop, 2); err != nil {
 			logrus.Errorf("EventHandler stopped with error: %v", err)
 		}
 		logrus.Info("EventHandler shutdown complete")
@@ -86,10 +89,6 @@ func main() {
 		logrus.Errorf("Failed to create server handler: %v", err)
 		os.Exit(1)
 	}
-
-	sigChan := make(chan os.Signal, 1)
-	stop := make(chan struct{}, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
 	wg.Add(1)
 	go func() {
@@ -102,8 +101,7 @@ func main() {
 	logrus.Info("Received shutdown signal, initiating graceful shutdown...")
 
 	// Stop both the server and the event handler
-	stop <- struct{}{}
-	eventStop <- struct{}{}
+	close(stop)
 
 	// Wait for both goroutines to complete
 	wg.Wait()
