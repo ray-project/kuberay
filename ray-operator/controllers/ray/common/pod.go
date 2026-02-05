@@ -443,29 +443,33 @@ func initLivenessAndReadinessProbe(rayContainer *corev1.Container, rayNodeType r
 		},
 	}
 
-	dashboardAgentPort := getPort("dashboard-agent-listen-port", utils.DefaultDashboardAgentListenPort)
-	dashboardPort := getPort("dashboard-port", utils.DefaultDashboardPort)
-	rayAgentRayletHealthCommand := fmt.Sprintf(
-		utils.BasePythonHealthCommand,
-		dashboardAgentPort,
-		utils.RayAgentRayletHealthPath,
-		utils.DefaultReadinessProbeTimeoutSeconds,
-	)
-	rayDashboardGCSHealthCommand := fmt.Sprintf(
-		utils.BasePythonHealthCommand,
-		dashboardPort,
-		utils.RayDashboardGCSHealthPath,
-		utils.DefaultReadinessProbeFailureThreshold,
-	)
-
+	// For Ray < 2.53, liveness/readiness use exec probes (bash) and rely on CLI tools.
 	// Generally, the liveness and readiness probes perform the same checks.
 	// For head node => Check GCS and Raylet status.
 	// For worker node => Check Raylet status.
 	commands := []string{}
-	if rayNodeType == rayv1.HeadNode {
-		commands = append(commands, rayAgentRayletHealthCommand, rayDashboardGCSHealthCommand)
-	} else {
-		commands = append(commands, rayAgentRayletHealthCommand)
+	if !httpHealthCheck {
+		dashboardAgentPort := getPort("dashboard-agent-listen-port", utils.DefaultDashboardAgentListenPort)
+		dashboardPort := getPort("dashboard-port", utils.DefaultDashboardPort)
+
+		rayAgentRayletHealthCommand := fmt.Sprintf(
+			utils.BaseWgetHealthCommand,
+			utils.DefaultReadinessProbeTimeoutSeconds,
+			dashboardAgentPort,
+			utils.RayAgentRayletHealthPath,
+		)
+		rayDashboardGCSHealthCommand := fmt.Sprintf(
+			utils.BaseWgetHealthCommand,
+			utils.DefaultReadinessProbeFailureThreshold,
+			dashboardPort,
+			utils.RayDashboardGCSHealthPath,
+		)
+
+		if rayNodeType == rayv1.HeadNode {
+			commands = append(commands, rayAgentRayletHealthCommand, rayDashboardGCSHealthCommand)
+		} else {
+			commands = append(commands, rayAgentRayletHealthCommand)
+		}
 	}
 
 	if rayContainer.LivenessProbe == nil {

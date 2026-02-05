@@ -1699,8 +1699,8 @@ func TestInitLivenessAndReadinessProbe(t *testing.T) {
 	initLivenessAndReadinessProbe(rayContainer, rayv1.WorkerNode, utils.RayServiceCRD, rayStartParams, "")
 	assert.NotNil(t, rayContainer.LivenessProbe.Exec)
 	livenessCmd := strings.Join(rayContainer.LivenessProbe.Exec.Command, " ")
-	assert.Contains(t, livenessCmd, "python3", "exec probe should use Python for health check")
-	assert.NotContains(t, livenessCmd, "wget", "exec probe should not use wget")
+	assert.Contains(t, livenessCmd, "wget", "exec probe should use wget for Ray < 2.53")
+	assert.NotContains(t, livenessCmd, "python3", "exec probe should not require Python for Ray < 2.53")
 	assert.NotContains(t, livenessCmd, utils.RayServeProxyHealthPath)
 	assert.NotNil(t, rayContainer.ReadinessProbe.HTTPGet, "RayService worker readiness should use HTTP probe for Serve proxy")
 	assert.Nil(t, rayContainer.ReadinessProbe.Exec)
@@ -1736,8 +1736,8 @@ func TestInitLivenessAndReadinessProbe(t *testing.T) {
 	livenessCommand := strings.Join(rayContainer.LivenessProbe.Exec.Command, " ")
 	readinessCommand := strings.Join(rayContainer.ReadinessProbe.Exec.Command, " ")
 
-	assert.Contains(t, livenessCommand, "python3", "exec probe should use Python")
-	assert.NotContains(t, livenessCommand, "wget", "exec probe should not use wget")
+	assert.Contains(t, livenessCommand, "wget", "exec probe should use wget for Ray < 2.53")
+	assert.NotContains(t, livenessCommand, "python3")
 	assert.Contains(t, livenessCommand, ":8266", "Head pod liveness probe should use custom dashboard-agent-listen-port")
 	assert.Contains(t, livenessCommand, ":8365", "Head pod liveness probe should use custom dashboard-port")
 	assert.Contains(t, readinessCommand, ":8266", "Head pod readiness probe should use custom dashboard-agent-listen-port")
@@ -1791,7 +1791,8 @@ func TestInitLivenessAndReadinessProbe(t *testing.T) {
 
 	invalidPortLivenessCommand := strings.Join(rayContainer.LivenessProbe.Exec.Command, " ")
 
-	assert.Contains(t, invalidPortLivenessCommand, "python3", "exec probe should use Python")
+	assert.Contains(t, invalidPortLivenessCommand, "wget", "exec probe should use wget for Ray < 2.53")
+	assert.NotContains(t, invalidPortLivenessCommand, "python3")
 	// Should fall back to default ports when invalid values are provided
 	assert.Contains(t, invalidPortLivenessCommand, fmt.Sprintf(":%d", utils.DefaultDashboardAgentListenPort), "Should fall back to default dashboard-agent-listen-port for invalid input")
 	assert.Contains(t, invalidPortLivenessCommand, fmt.Sprintf(":%d", utils.DefaultDashboardPort), "Should fall back to default dashboard-port for invalid input")
