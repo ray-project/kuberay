@@ -651,7 +651,7 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 				StartTime int64
 				EndTime   int64
 			}
-			existingKeys := make(map[eventKey]struct{})
+			existingKeys := make(map[eventKey]struct{}, len(t.ProfileData.Events)+len(rawEvents))
 			for _, e := range t.ProfileData.Events {
 				existingKeys[eventKey{e.EventName, e.StartTime, e.EndTime}] = struct{}{}
 			}
@@ -1457,6 +1457,16 @@ func getChromeTraceColor(eventName string) string {
 	}
 }
 
+// extractActorIDFromTaskID extracts the ActorID from a TaskID following Ray's ID specification.
+//
+// Design doc: src/ray/design_docs/id_specification.md
+// - TaskID: 8B unique + 16B ActorID (total 24 bytes = 48 hex chars)
+// - ActorID: 12B unique + 4B JobID (total 16 bytes = 32 hex chars)
+//
+// For a 48-character hex TaskID, the last 32 hex characters (bytes 16–48)
+// correspond to the ActorID. This function further checks the "unique" portion
+// of the ActorID (first 24 hex chars) and returns an empty string if it is all Fs,
+// which indicates normal/driver tasks with no associated actor.
 func extractActorIDFromTaskID(taskIDHex string) string {
 	if len(taskIDHex) != 48 {
 		return "" // can't process if encoded in base64
