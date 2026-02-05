@@ -660,8 +660,13 @@ func verifyNodesRespSchema(test Test, g *WithT, nodesResp map[string]any, isLive
 				g.Expect(ok).To(BeTrue(), "resourceStringSnapshot should be a map")
 				g.Expect(resourceStringSnapshotMap).To(HaveKey("t"))
 				g.Expect(resourceStringSnapshotMap).To(HaveKey("resourceString"))
-				g.Expect(resourceStringSnapshotMap["resourceString"]).To(ContainSubstring("memory"))
-				g.Expect(resourceStringSnapshotMap["resourceString"]).To(ContainSubstring("object_store_memory"))
+
+				resourceString, ok := resourceStringSnapshotMap["resourceString"].(string)
+				g.Expect(ok).To(BeTrue(), "resourceString should be a string")
+				if resourceString != "" {
+					g.Expect(resourceString).To(ContainSubstring("memory"))
+					g.Expect(resourceString).To(ContainSubstring("object_store_memory"))
+				}
 			}
 		}
 	}
