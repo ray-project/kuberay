@@ -146,7 +146,9 @@ type Task struct {
 	// Actor task repr name, if applicable.
 	ActorReprName string `json:"actorReprName,omitempty"`
 
-	TaskLogInfo TaskLogInfo `json:"taskLogInfo,omitempty"`
+	// TaskLogInfo is just added at https://github.com/ray-project/ray/pull/60287.
+	// TODO(jwj): Add support for TaskLogInfo.
+	TaskLogInfo *TaskLogInfo `json:"taskLogInfo,omitempty"`
 
 	State        TaskStatus
 	CreationTime time.Time
