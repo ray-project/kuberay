@@ -959,12 +959,12 @@ func formatTaskForResponse(task eventtypes.Task, detail bool) map[string]interfa
 	if detail {
 		result["language"] = string(task.Language)
 		result["required_resources"] = task.RequiredResources
-		result["runtime_env_info"] = eventtypes.RuntimeEnvInfo{
-			SerializedRuntimeEnv: task.SerializedRuntimeEnv,
-			RuntimeEnvConfig: eventtypes.RuntimeEnvConfig{
-				SetupTimeoutSeconds: 600,
-				EagerInstall:        true,
-				LogFiles:            []string{},
+		result["runtime_env_info"] = map[string]interface{}{
+			"serialized_runtime_env": task.SerializedRuntimeEnv,
+			"runtime_env_config": map[string]interface{}{
+				"setup_timeout_seconds": 600,
+				"eager_install":         true,
+				"log_files":             []string{},
 			},
 		}
 		result["placement_group_id"] = task.PlacementGroupID
@@ -984,7 +984,11 @@ func formatTaskForResponse(task eventtypes.Task, detail bool) map[string]interfa
 		result["error_message"] = task.RayErrorInfo.ErrorMessage
 		result["is_debugger_paused"] = task.IsDebuggerPaused
 		result["call_site"] = task.CallSite
-		result["label_selector"] = task.LabelSelector
+		if task.LabelSelector != nil {
+			result["label_selector"] = task.LabelSelector
+		} else {
+			result["label_selector"] = map[string]string{}
+		}
 
 		if !task.CreationTime.IsZero() {
 			result["creation_time_ms"] = task.CreationTime.UnixMilli()
