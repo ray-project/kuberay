@@ -50,7 +50,7 @@ type Event struct {
 	EventID        string         `json:"eventId"`
 	EventType      string         `json:"eventType"`                // e.g., TASK_DEFINITION_EVENT
 	SourceType     string         `json:"sourceType"`               // e.g., GCS, CORE_WORKER
-	Timestamp      string         `json:"timestamp"`                // ISO 8601 format
+	Timestamp      string         `json:"timestamp"`                // Unix milliseconds (e.g., "1768591369414")
 	Severity       string         `json:"severity"`                 // INFO, WARNING, ERROR
 	Message        string         `json:"message,omitempty"`        // Usually empty in RayEvents
 	Label          string         `json:"label,omitempty"`          // Same as EventType for filtering
@@ -124,7 +124,8 @@ func (e *EventMap) GetByJobID(jobID string) []Event {
 	return sorted
 }
 
-// sortEventsByTimestamp sorts events in ascending order by timestamp (ISO 8601 string comparison).
+// sortEventsByTimestamp sorts events in ascending order by timestamp.
+// Timestamps are Unix milliseconds strings (e.g., "1768591369414").
 func sortEventsByTimestamp(events []Event) {
 	sort.Slice(events, func(i, j int) bool {
 		return events[i].Timestamp < events[j].Timestamp

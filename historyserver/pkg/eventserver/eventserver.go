@@ -209,7 +209,7 @@ func transformToEvent(eventMap map[string]any) *types.Event {
 		if t, err := time.Parse(time.RFC3339Nano, v); err == nil {
 			event.Timestamp = fmt.Sprintf("%d", t.UnixMilli())
 		} else {
-			event.Timestamp = v // Keep original if parsing fails
+			logrus.Warnf("failed to parse timestamp %q: %v", v, err)
 		}
 	}
 	if v, ok := eventMap["severity"].(string); ok {

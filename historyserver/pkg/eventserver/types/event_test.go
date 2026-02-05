@@ -17,8 +17,8 @@ func TestEventMap(t *testing.T) {
 
 	t.Run("AddEvent stores events by jobID", func(t *testing.T) {
 		em := NewEventMap()
-		em.AddEvent("job1", Event{EventID: "1", Timestamp: "2026-01-16T19:16:15Z"})
-		em.AddEvent("job2", Event{EventID: "2", Timestamp: "2026-01-16T19:16:16Z"})
+		em.AddEvent("job1", Event{EventID: "1", Timestamp: "1768591375000"})
+		em.AddEvent("job2", Event{EventID: "2", Timestamp: "1768591376000"})
 
 		all := em.GetAll()
 		assert.Len(t, all, 2)
@@ -51,14 +51,14 @@ func TestEventMap(t *testing.T) {
 
 	t.Run("GetByJobID returns sorted events", func(t *testing.T) {
 		em := NewEventMap()
-		em.AddEvent("job1", Event{EventID: "1", Timestamp: "2026-01-16T19:16:30Z"})
-		em.AddEvent("job1", Event{EventID: "2", Timestamp: "2026-01-16T19:16:10Z"})
-		em.AddEvent("job1", Event{EventID: "3", Timestamp: "2026-01-16T19:16:20Z"})
+		em.AddEvent("job1", Event{EventID: "1", Timestamp: "1768591390000"}) // 30s
+		em.AddEvent("job1", Event{EventID: "2", Timestamp: "1768591370000"}) // 10s
+		em.AddEvent("job1", Event{EventID: "3", Timestamp: "1768591380000"}) // 20s
 
 		events := em.GetByJobID("job1")
-		assert.Equal(t, "2026-01-16T19:16:10Z", events[0].Timestamp)
-		assert.Equal(t, "2026-01-16T19:16:20Z", events[1].Timestamp)
-		assert.Equal(t, "2026-01-16T19:16:30Z", events[2].Timestamp)
+		assert.Equal(t, "1768591370000", events[0].Timestamp)
+		assert.Equal(t, "1768591380000", events[1].Timestamp)
+		assert.Equal(t, "1768591390000", events[2].Timestamp)
 	})
 
 	t.Run("GetByJobID returns empty slice for nonexistent job", func(t *testing.T) {
@@ -70,8 +70,8 @@ func TestEventMap(t *testing.T) {
 
 	t.Run("GetAll returns sorted events for each job", func(t *testing.T) {
 		em := NewEventMap()
-		em.AddEvent("job1", Event{EventID: "1", Timestamp: "2026-01-16T19:16:20Z"})
-		em.AddEvent("job1", Event{EventID: "2", Timestamp: "2026-01-16T19:16:10Z"})
+		em.AddEvent("job1", Event{EventID: "1", Timestamp: "1768591380000"}) // 20s
+		em.AddEvent("job1", Event{EventID: "2", Timestamp: "1768591370000"}) // 10s
 
 		all := em.GetAll()
 		assert.Equal(t, "2", all["job1"][0].EventID)
@@ -102,8 +102,8 @@ func TestClusterEventMap(t *testing.T) {
 	t.Run("GetAll returns events for cluster", func(t *testing.T) {
 		cm := NewClusterEventMap()
 		em := cm.GetOrCreateEventMap("cluster1")
-		em.AddEvent("job1", Event{EventID: "1", Timestamp: "2026-01-16T19:16:15Z"})
-		em.AddEvent("", Event{EventID: "2", Timestamp: "2026-01-16T19:16:10Z"})
+		em.AddEvent("job1", Event{EventID: "1", Timestamp: "1768591375000"})
+		em.AddEvent("", Event{EventID: "2", Timestamp: "1768591370000"})
 
 		all := cm.GetAll("cluster1")
 		assert.Len(t, all, 2)
@@ -121,8 +121,8 @@ func TestClusterEventMap(t *testing.T) {
 	t.Run("GetByJobID returns events for cluster and job", func(t *testing.T) {
 		cm := NewClusterEventMap()
 		em := cm.GetOrCreateEventMap("cluster1")
-		em.AddEvent("job1", Event{EventID: "1", Timestamp: "2026-01-16T19:16:15Z"})
-		em.AddEvent("job1", Event{EventID: "2", Timestamp: "2026-01-16T19:16:10Z"})
+		em.AddEvent("job1", Event{EventID: "1", Timestamp: "1768591375000"}) // 15s
+		em.AddEvent("job1", Event{EventID: "2", Timestamp: "1768591370000"}) // 10s
 
 		events := cm.GetByJobID("cluster1", "job1")
 		assert.Len(t, events, 2)
@@ -169,9 +169,9 @@ func TestEvent(t *testing.T) {
 
 func TestSortEventsByTimestamp(t *testing.T) {
 	events := []Event{
-		{EventID: "3", Timestamp: "2026-01-16T19:16:30Z"},
-		{EventID: "1", Timestamp: "2026-01-16T19:16:10Z"},
-		{EventID: "2", Timestamp: "2026-01-16T19:16:20Z"},
+		{EventID: "3", Timestamp: "1768591390000"}, // 30s
+		{EventID: "1", Timestamp: "1768591370000"}, // 10s
+		{EventID: "2", Timestamp: "1768591380000"}, // 20s
 	}
 
 	sortEventsByTimestamp(events)
