@@ -982,7 +982,7 @@ func formatTaskForResponse(task eventtypes.Task, detail bool) map[string]interfa
 			},
 		}
 		isNil, err := utils.IsHexNil(task.PlacementGroupID)
-		if isNil || err != nil {
+		if isNil || task.PlacementGroupID == "" || err != nil {
 			result["placement_group_id"] = nil
 		} else {
 			result["placement_group_id"] = task.PlacementGroupID
