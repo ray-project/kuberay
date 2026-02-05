@@ -217,3 +217,58 @@ func GetOneOfNodeID(g *WithT, client *http.Client, historyServerURL string) stri
 	nodeInfo := summary[0].(map[string]any)
 	return nodeInfo["raylet"].(map[string]any)["nodeId"].(string)
 }
+
+// VerifyLogFileEndpointReturnsContent verifies that the log file endpoint returns content.
+func VerifyLogFileEndpointReturnsContent(test Test, g *WithT, client *http.Client, historyServerURL, nodeID string) {
+	filename := "raylet.out"
+	endpointLogFile := "/api/v0/logs/file"
+
+	g.Eventually(func(gg Gomega) {
+		logFileURL := fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=100", historyServerURL, endpointLogFile, nodeID, filename)
+		resp, err := client.Get(logFileURL)
+		gg.Expect(err).NotTo(HaveOccurred())
+		defer resp.Body.Close()
+		gg.Expect(resp.StatusCode).To(Equal(http.StatusOK))
+
+		body, err := io.ReadAll(resp.Body)
+		gg.Expect(err).NotTo(HaveOccurred())
+		gg.Expect(len(body)).To(BeNumerically(">", 0))
+	}, TestTimeoutShort).Should(Succeed())
+
+	LogWithTimestamp(test.T(), "Log file endpoint returned content successfully")
+}
+
+// VerifyLogFileEndpointRejectsPathTraversal verifies that the log file endpoint rejects path traversal attempts.
+func VerifyLogFileEndpointRejectsPathTraversal(test Test, g *WithT, client *http.Client, historyServerURL, nodeID string) {
+	endpointLogFile := "/api/v0/logs/file"
+	maliciousPaths := []string{"../etc/passwd", "..", "/etc/passwd", "../../secret"}
+
+	for _, malicious := range maliciousPaths {
+		g.Eventually(func(gg Gomega) {
+			url := fmt.Sprintf("%s%s?node_id=%s&filename=%s", historyServerURL, endpointLogFile, nodeID, malicious)
+			resp, err := client.Get(url)
+			gg.Expect(err).NotTo(HaveOccurred())
+			defer func() {
+				io.Copy(io.Discard, resp.Body)
+				resp.Body.Close()
+			}()
+			gg.Expect(resp.StatusCode).To(Equal(http.StatusBadRequest))
+		}, TestTimeoutShort).Should(Succeed())
+	}
+
+	LogWithTimestamp(test.T(), "Log file endpoint correctly rejected path traversal attempts")
+}
+
+// DeleteRayClusterAndWait deletes a RayCluster and waits for it to be fully deleted.
+func DeleteRayClusterAndWait(test Test, g *WithT, namespace string, clusterName string) {
+	err := test.Client().Ray().RayV1().RayClusters(namespace).Delete(test.Ctx(), clusterName, metav1.DeleteOptions{})
+	g.Expect(err).NotTo(HaveOccurred())
+	LogWithTimestamp(test.T(), "Deleted RayCluster %s/%s", namespace, clusterName)
+
+	g.Eventually(func() error {
+		_, err := GetRayCluster(test, namespace, clusterName)
+		return err
+	}, TestTimeoutMedium).Should(WithTransform(k8serrors.IsNotFound, BeTrue()))
+
+	LogWithTimestamp(test.T(), "RayCluster %s/%s fully deleted", namespace, clusterName)
+}
