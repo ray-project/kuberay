@@ -6,12 +6,10 @@ import (
 	"io/fs"
 	"net/http"
 	"os"
-	"os/signal"
 	"path"
 	"path/filepath"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
@@ -42,11 +40,6 @@ type RayLogHandler struct {
 	EnableMeta             bool
 }
 
-func (r *RayLogHandler) Start(stop <-chan struct{}) error {
-	go r.Run(stop)
-	return nil
-}
-
 func (r *RayLogHandler) Run(stop <-chan struct{}) error {
 	// watchPath := r.LogDir
 	r.prevLogsDir = filepath.Join("/tmp", "ray", "prev-logs")
@@ -61,10 +54,6 @@ func (r *RayLogHandler) Run(stop <-chan struct{}) error {
 	}
 	defer watcher.Close()
 
-	// Setup signal handling for SIGTERM
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGTERM)
-
 	// WatchPrevLogsLoops performs an initial scan of the prev-logs directory on startup
 	// to process leftover log files in prev-logs/{sessionID}/{nodeID}/logs/ directories.
 	// After scanning, it watches for new directories and files. This ensures incomplete
@@ -74,22 +63,12 @@ func (r *RayLogHandler) Run(stop <-chan struct{}) error {
 		go r.WatchSessionLatestLoops() // Watch session_latest symlink changes
 	}
 
-	select {
-	case <-sigChan:
-		logrus.Info("Received SIGTERM, processing all logs...")
-		r.processSessionLatestLogs()
-		close(r.ShutdownChan)
-	case <-stop:
-		logrus.Info("Received stop signal, processing all logs...")
-		r.processSessionLatestLogs()
-		close(r.ShutdownChan)
-	}
-	logrus.Warnf("Receive stop single, so stop ray collector ")
-	return nil
-}
+	<-stop
+	logrus.Info("Received stop signal, processing all logs...")
+	r.processSessionLatestLogs()
+	close(r.ShutdownChan)
 
-func (r *RayLogHandler) WaitForStop() <-chan struct{} {
-	return r.ShutdownChan
+	return nil
 }
 
 // processSessionLatestLogs processes logs in /tmp/ray/session_latest/logs directory
