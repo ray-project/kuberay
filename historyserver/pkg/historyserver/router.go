@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"math"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -1292,8 +1293,16 @@ func composeStateMessage(deathReason string, deathReasonMessage string) string {
 // constructResourceString constructs a resource string based on the resources in state transition.
 // Ref: https://github.com/ray-project/ray/blob/f953f199b5d68d47c07c865c5ebcd2333d49f365/python/ray/autoscaler/_private/util.py#L643-L665.
 func constructResourceString(resources map[string]float64) string {
+	resourceKeys := make([]string, 0, len(resources))
+	for k := range resources {
+		resourceKeys = append(resourceKeys, k)
+	}
+	sort.Strings(resourceKeys)
+
 	resourceString := ""
-	for k, v := range resources {
+	for _, k := range resourceKeys {
+		v := resources[k]
+
 		if k == "memory" || k == "object_store_memory" {
 			formattedUsed := "0B"
 			formattedTotal := formatMemory(v)
