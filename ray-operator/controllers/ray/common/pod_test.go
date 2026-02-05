@@ -1823,6 +1823,7 @@ func TestInitLivenessAndReadinessProbe(t *testing.T) {
 	assert.Nil(t, rayContainer.ReadinessProbe.Exec)
 	assert.NotNil(t, rayContainer.ReadinessProbe.HTTPGet)
 	assert.Equal(t, int32(utils.DefaultServingPort), rayContainer.ReadinessProbe.HTTPGet.Port.IntVal)
+	assert.Equal(t, utils.RayServeProxyHealthPath, rayContainer.ReadinessProbe.HTTPGet.Path)
 
 	// Versions parsed below 2.53 must use exec probes.
 	rayContainer.LivenessProbe = nil
