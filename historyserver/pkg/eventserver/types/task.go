@@ -52,8 +52,8 @@ type PythonFunctionDescriptor struct {
 }
 
 // FunctionDescriptor is a union wrapper for various function descriptor types.
-//
-// TODO(jwj): Add validation for the "oneof" logic in eventserver.go if necessary.
+// Ray's proto guarantees that the following three function descriptors hold an "oneof" relationship.
+// Ref: https://github.com/ray-project/ray/blob/36be009ae360788550e541d81806493f52963730/src/ray/protobuf/common.proto#L157-L164.
 type FunctionDescriptor struct {
 	JavaFunctionDescriptor   *JavaFunctionDescriptor   `json:"javaFunctionDescriptor,omitempty"`
 	PythonFunctionDescriptor *PythonFunctionDescriptor `json:"pythonFunctionDescriptor,omitempty"`
@@ -117,7 +117,6 @@ type Task struct {
 	Language Language `json:"language,omitempty"`
 	// For TASK_DEFINITION_EVENT, only TaskFunc and TaskName are populated.
 	// For ACTOR_TASK_DEFINITION_EVENT, only ActorFunc and ActorTaskName are populated.
-	// TODO(jwj): Need a validation function to make the "oneof" relationship more explicit.
 	// It might be better to define separate structs or TaskDefinition interface with custom JSON marshal/unmarshal logic.
 	TaskFunc          *FunctionDescriptor `json:"taskFunc,omitempty"`
 	ActorFunc         *FunctionDescriptor `json:"actorFunc,omitempty"`
@@ -334,6 +333,11 @@ func (t Task) DeepCopy() Task {
 		}
 	}
 
+	if t.CallSite != nil {
+		callSite := *t.CallSite
+		cp.CallSite = &callSite
+	}
+
 	if len(t.LabelSelector) > 0 {
 		cp.LabelSelector = make(map[string]string, len(t.LabelSelector))
 		for k, v := range t.LabelSelector {
@@ -352,8 +356,8 @@ func (t Task) DeepCopy() Task {
 	}
 
 	if t.IsDebuggerPaused != nil {
-		cp.IsDebuggerPaused = new(bool)
-		*cp.IsDebuggerPaused = *t.IsDebuggerPaused
+		isDebuggerPaused := *t.IsDebuggerPaused
+		cp.IsDebuggerPaused = &isDebuggerPaused
 	}
 
 	if t.ActorReprName != nil {

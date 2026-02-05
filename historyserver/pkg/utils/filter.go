@@ -120,7 +120,7 @@ func getFiltersFromReq(req *restful.Request) ([]Filter, error) {
 
 	filters := make([]Filter, len(filterKeys))
 	for i := range filterKeys {
-		// TODO(jwj): Add error handling for invalid filter keys.
+		// TODO(jwj): Add error handling for invalid filter keys based on filterable fields.
 		predicate, err := parsePredicate(string(filterPredicates[i]))
 		if err != nil {
 			return nil, fmt.Errorf("invalid predicate: %w", err)
