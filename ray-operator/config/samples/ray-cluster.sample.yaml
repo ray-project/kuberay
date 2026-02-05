@@ -22,6 +22,12 @@ spec:
   # upgradeStrategy:
   #   type: None
   rayVersion: '2.52.0' # should match the Ray version in the image of the containers
+
+  # ttlSecondsAfterIdle specifies the duration (in seconds) the cluster must remain idle
+  # before it is automatically deleted. The cluster is considered idle when no active ray jobs,
+  # are running. If not set, the cluster will not be automatically deleted due to idleness.
+  # ttlSecondsAfterIdle: 10
+
   # Ray head pod template
   headGroupSpec:
     # rayStartParams is optional with RayCluster CRD from KubeRay 1.4.0 or later but required in earlier versions.

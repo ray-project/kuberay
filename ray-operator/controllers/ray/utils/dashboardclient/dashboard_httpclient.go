@@ -24,6 +24,8 @@ var (
 	DeployPathV2     = "/api/serve/applications/"
 	// Job URL paths
 	JobPath = "/api/jobs/"
+	// Component activities path - for idle cluster detection
+	ComponentActivitiesPath = "/api/component_activities"
 )
 
 type RayDashboardClientInterface interface {
@@ -38,6 +40,8 @@ type RayDashboardClientInterface interface {
 	GetJobLog(ctx context.Context, jobName string) (*string, error)
 	StopJob(ctx context.Context, jobName string) error
 	DeleteJob(ctx context.Context, jobName string) error
+	// GetComponentActivities returns the activity status of cluster components for idle detection.
+	GetComponentActivities(ctx context.Context) (map[string]*utiltypes.RayActivityResponse, error)
 }
 
 type RayDashboardClient struct {
@@ -385,4 +389,37 @@ func UnmarshalRuntimeEnvYAML(runtimeEnvYAML string) (utiltypes.RuntimeEnvType, e
 		return nil, fmt.Errorf("failed to unmarshal RuntimeEnvYAML: %v: %w", runtimeEnvYAML, err)
 	}
 	return runtimeEnv, nil
+}
+
+// GetComponentActivities returns the activity status of cluster components.
+// Reference to https://github.com/ray-project/ray/blob/master/python/ray/dashboard/modules/job/job_head.py
+func (r *RayDashboardClient) GetComponentActivities(ctx context.Context) (map[string]*utiltypes.RayActivityResponse, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, r.dashboardURL+ComponentActivitiesPath, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	r.setAuthHeader(req)
+
+	resp, err := r.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response when getting component activities: %w", err)
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		return nil, fmt.Errorf("GetComponentActivities fail: %s %s", resp.Status, string(body))
+	}
+
+	var activities map[string]*utiltypes.RayActivityResponse
+	if err = json.Unmarshal(body, &activities); err != nil {
+		return nil, fmt.Errorf("GetComponentActivities fail: failed to unmarshal response: %s", string(body))
+	}
+
+	return activities, nil
 }
