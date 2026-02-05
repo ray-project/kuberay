@@ -21,10 +21,10 @@ spec:
       template:
         metadata:
           annotations:
-            gke-gcsfuse/cpu-limit: '0'
-            gke-gcsfuse/ephemeral-storage-limit: '0'
-            gke-gcsfuse/memory-limit: '0'
-            gke-gcsfuse/volumes: 'true'
+            gke-gcsfuse/cpu-limit: "0"
+            gke-gcsfuse/ephemeral-storage-limit: "0"
+            gke-gcsfuse/memory-limit: "0"
+            gke-gcsfuse/volumes: "true"
         spec:
           containers:
           - image: rayproject/ray:2.52.0
@@ -38,11 +38,11 @@ spec:
               name: client
             resources:
               limits:
-                cpu: '1'
-                memory: '5Gi'
+                cpu: "1"
+                memory: "5Gi"
               requests:
-                cpu: '1'
-                memory: '4Gi'
+                cpu: "1"
+                memory: "4Gi"
             volumeMounts:
             - mountPath: /tmp/ray
               name: ray-logs
@@ -84,8 +84,8 @@ spec:
             name: ray-worker
             resources:
               requests:
-                cpu: '1'
-                memory: 4Gi
+                cpu: "1"
+                memory: "4Gi"
             volumeMounts:
             - mountPath: /tmp/ray
               name: ray-logs

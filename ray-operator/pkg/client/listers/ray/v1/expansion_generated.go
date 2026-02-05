@@ -10,6 +10,14 @@ type RayClusterListerExpansion interface{}
 // RayClusterNamespaceLister.
 type RayClusterNamespaceListerExpansion interface{}
 
+// RayCronJobListerExpansion allows custom methods to be added to
+// RayCronJobLister.
+type RayCronJobListerExpansion interface{}
+
+// RayCronJobNamespaceListerExpansion allows custom methods to be added to
+// RayCronJobNamespaceLister.
+type RayCronJobNamespaceListerExpansion interface{}
+
 // RayJobListerExpansion allows custom methods to be added to
 // RayJobLister.
 type RayJobListerExpansion interface{}

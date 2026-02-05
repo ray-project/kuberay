@@ -7,18 +7,16 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"os/signal"
 	"path"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/emicklei/go-restful/v3"
 	"github.com/fsnotify/fsnotify"
 	"github.com/sirupsen/logrus"
 
-	"github.com/ray-project/kuberay/historyserver/pkg/collector/logcollector/storage"
+	"github.com/ray-project/kuberay/historyserver/pkg/storage"
 )
 
 type Event struct {
@@ -45,6 +43,21 @@ type EventServer struct {
 	mutex              sync.Mutex
 }
 
+var eventTypesWithJobID = []string{
+	// Job Events (Driver Job)
+	"driverJobDefinitionEvent",
+	"driverJobLifecycleEvent",
+
+	// Task Events (Normal Task)
+	"taskDefinitionEvent",
+	"taskLifecycleEvent",
+	"taskProfileEvents",
+
+	// Actor Events (Actor Task + Actor Definition)
+	"actorTaskDefinitionEvent",
+	"actorDefinitionEvent",
+}
+
 func NewEventServer(writer storage.StorageWriter, rootDir, sessionDir, nodeID, clusterName, clusterID, sessionName string) *EventServer {
 	server := &EventServer{
 		events:             make([]Event, 0),
@@ -68,7 +81,7 @@ func NewEventServer(writer storage.StorageWriter, rootDir, sessionDir, nodeID, c
 	return server
 }
 
-func (es *EventServer) InitServer(port int) {
+func (es *EventServer) InitServer(stop <-chan struct{}, port int) {
 	ws := new(restful.WebService)
 	ws.Path("/v1")
 	ws.Consumes(restful.MIME_JSON)
@@ -86,16 +99,10 @@ func (es *EventServer) InitServer(port int) {
 		es.periodicFlush()
 	}()
 
-	// Handle SIGTERM signal
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGTERM, syscall.SIGINT)
-
-	go func() {
-		<-sigChan
-		logrus.Info("Received SIGTERM, flushing events to storage")
-		es.flushEvents()
-		close(es.stopped)
-	}()
+	<-stop
+	logrus.Info("Received stop signal, flushing events to storage")
+	es.flushEvents()
+	close(es.stopped)
 }
 
 // watchNodeIDFile watches /tmp/ray/raylet_node_id for content changes
@@ -282,10 +289,6 @@ func (es *EventServer) periodicFlush() {
 	}
 }
 
-func (es *EventServer) WaitForStop() <-chan struct{} {
-	return es.stopped
-}
-
 func (es *EventServer) flushEvents() {
 	es.mutex.Lock()
 	if len(es.events) == 0 {
@@ -408,9 +411,14 @@ func (es *EventServer) isNodeEvent(eventData map[string]interface{}) bool {
 
 // getJobID gets jobID associated with event
 func (es *EventServer) getJobID(eventData map[string]interface{}) string {
-	if jobID, hasJob := eventData["jobId"]; hasJob && jobID != "" {
-		return fmt.Sprintf("%v", jobID)
+	for _, eventType := range eventTypesWithJobID {
+		if nestedEvent, ok := eventData[eventType].(map[string]interface{}); ok {
+			if jobID, hasJob := nestedEvent["jobId"]; hasJob && jobID != "" {
+				return fmt.Sprintf("%v", jobID)
+			}
+		}
 	}
+
 	return ""
 }
 

@@ -18,3 +18,5 @@ featureGates:
     enabled: true
   - name: RayMultiHostIndexing
     enabled: true
+  - name: RayCronJob
+    enabled: true

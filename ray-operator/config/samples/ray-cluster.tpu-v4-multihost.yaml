@@ -18,12 +18,12 @@ spec:
           resources:
             limits:
               cpu: "8"
-              ephemeral-storage: 20Gi
-              memory: 40G
+              ephemeral-storage: "20Gi"
+              memory: "40G"
             requests:
               cpu: "8"
-              ephemeral-storage: 10Gi
-              memory: 40G
+              ephemeral-storage: "10Gi"
+              memory: "40G"
           env:
           - name: RAY_memory_monitor_refresh_ms
             value: "0"
@@ -62,14 +62,14 @@ spec:
           resources:
             limits:
               cpu: "1"
-              ephemeral-storage: 20Gi
+              ephemeral-storage: "20Gi"
               google.com/tpu: "4"
-              memory: 40G
+              memory: "40G"
             requests:
               cpu: "1"
-              ephemeral-storage: 10Gi
+              ephemeral-storage: "10Gi"
               google.com/tpu: "4"
-              memory: 40G
+              memory: "40G"
         nodeSelector:
           cloud.google.com/gke-tpu-accelerator: tpu-v4-podslice
           cloud.google.com/gke-tpu-topology: 2x2x2

@@ -1,6 +1,5 @@
 package runtime
 
 type RayLogCollector interface {
-	Start(stop <-chan struct{}) error
-	WaitForStop() <-chan struct{}
+	Run(stop <-chan struct{}) error
 }

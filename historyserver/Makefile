@@ -9,6 +9,13 @@ BIN_DIR=$(OUT_DIR)/bin
 BINARY_NAME=historyserver
 BINARY_NAME_COLLECTOR=collector
 COLLECTOR_IMG ?= collector:v0.1.0
+HISTORYSERVER_IMG ?= historyserver:v0.1.0
+# Set GOPROXY to address of your preferred Go module proxy server.
+# For example: GOPROXY=https://goproxy.cn,direct make localimage-build
+GOPROXY ?= https://proxy.golang.org,direct
+
+# Container Engine for building images.
+ENGINE ?= docker
 
 # Setting SHELL to bash allows bash commands to be executed by recipes.
 # Options are set to exit when a recipe line exits non-zero or a piped command fails.
@@ -18,7 +25,7 @@ COMMIT_SHORT ?= $(shell git rev-parse --short HEAD)
 BRANCH ?= $(shell git branch --show-current)
 VERSION ?= $(shell git describe --tags --long|awk -F '-' '{print $$1"."$$2"-"$$3""}')
 
-PACKAGE = gitlab.alibaba-inc.com/eml/historyserver
+PACKAGE = github.com/ray-project/kuberay/historyserver
 
 GO_LDFLAGS := -extldflags "-static"
 # GO_LDFLAGS += -w -s # Drop debugging symbols.
@@ -49,6 +56,12 @@ buildcollector: mod
 	@echo "go build ..."
 	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -v $(GO_BUILD_FLAGS) -o $(BIN_DIR)/$(BINARY_NAME_COLLECTOR) ./cmd/collector/main.go
 
+.PHONY: buildcollector-race
+buildcollector-race: mod
+	@echo ""
+	@echo "go build with race detector..."
+	CGO_ENABLED=1 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -race -v $(GO_BUILD_FLAGS) -o $(BIN_DIR)/$(BINARY_NAME_COLLECTOR) ./cmd/collector/main.go
+
 .PHONY: buildhistoryserver
 #build: mod alllint test
 buildhistoryserver: mod
@@ -66,23 +79,43 @@ simplebuild:
 mod:
 	go mod tidy
 
+.PHONY: localimage-build
+localimage-build: localimage-collector localimage-historyserver
+
+# Platform for cross-compilation (e.g., linux/amd64, linux/arm64)
+PLATFORM ?=
+
 .PHONY: localimage-collector
 localimage-collector:
-	docker build -t $(COLLECTOR_IMG) -f Dockerfile.collector .
+ifdef PLATFORM
+	${ENGINE} build --platform $(PLATFORM) -t $(COLLECTOR_IMG) --build-arg GOPROXY=$(GOPROXY) -f Dockerfile.collector .
+else
+	${ENGINE} build -t $(COLLECTOR_IMG) --build-arg GOPROXY=$(GOPROXY) -f Dockerfile.collector .
+endif
 
-.PHONY: localimage
-localimage: dockerbuilder_instance
-	docker buildx build -t historyserver:laster --platform linux/amd64 . --load
+.PHONY: localimage-collector-race
+localimage-collector-race:
+	${ENGINE} build --platform linux/amd64 -t $(COLLECTOR_IMG)-race --build-arg GOPROXY=$(GOPROXY) --build-arg ENABLE_RACE=true -f Dockerfile.collector .
+
+.PHONY: localimage-historyserver
+localimage-historyserver:
+ifdef PLATFORM
+	${ENGINE} build --platform $(PLATFORM) -t $(HISTORYSERVER_IMG) --build-arg GOPROXY=$(GOPROXY) -f Dockerfile.historyserver .
+else
+	${ENGINE} build -t $(HISTORYSERVER_IMG) --build-arg GOPROXY=$(GOPROXY) -f Dockerfile.historyserver .
+endif
 
 .PHONY: dockerbuilder_instance
 dockerbuilder_instance:
-	@docker buildx use $(DOCKERBUILDER_INSTANCE) || docker buildx create --name $(DOCKERBUILDER_INSTANCE)
-	docker buildx use $(DOCKERBUILDER_INSTANCE)
+ifeq ($(ENGINE),docker)
+	${ENGINE} buildx use $(DOCKERBUILDER_INSTANCE) || ${ENGINE} buildx create --name $(DOCKERBUILDER_INSTANCE)
+	${ENGINE} buildx use $(DOCKERBUILDER_INSTANCE)
+endif
 
 # Run tests
 .PHONY: test
 test:
-	go test -v ./pkg/... ./cmd/...
+	go test -race -v ./pkg/... ./cmd/...
 
 .PHONY: alllint
 alllint: todolist issuelint ## Run go lint against code.

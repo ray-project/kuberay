@@ -1,23 +1,9 @@
-// Package utils is
-/*
-Copyright 2024 by the zhangjie bingyu.zj@alibaba-inc.com Authors.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
 package utils
 
 import (
 	"bytes"
+	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path"
@@ -75,9 +61,9 @@ func RecreateObjectDir(bucket *oss.Bucket, dir string, options ...oss.Option) er
 		}
 		logrus.Infof("ObjectDir %s has delete success...", objectDir)
 
-		// List and delete all files with specified prefix
+		// List all files with the specified prefix and delete them
 		marker := oss.Marker("")
-		// To delete only src/ and its contents, set prefix to src/
+		// To delete only the src directory and all files within it, set prefix to "src/"
 		prefix := oss.Prefix(objectDir)
 		var totalDeleted int
 
@@ -171,7 +157,7 @@ func DeleteObject(bucket *oss.Bucket, objectName string) error {
 	}
 
 	if isExist {
-		// Delete single file
+		// Delete a single file
 		err = bucket.DeleteObject(objectName)
 		if err != nil {
 			logrus.Warnf("Failed to delete object '%s': %v", objectName, err)
@@ -194,7 +180,27 @@ func GetLogDir(ossHistorySeverDir, rayClusterName, rayClusterID, sessionId, rayN
 }
 
 const (
-	// do not change
+	// connector is the separator for creating flat storage keys.
+	//
+	// Design Philosophy:
+	// - Format: "{clusterName}_{namespace}" for router/historyserver
+	//           "{clusterName}_{clusterID}" for collector
+	//
+	// Why "_" instead of "/"?
+	// Using "/" would create a hierarchical path like "namespace/cluster/session/..."
+	// which requires multiple ListObjects API calls to traverse:
+	//   1. First list all clusters under a namespace
+	//   2. Then list contents of the target cluster
+	//
+	// Using "_" creates a flat path like "namespace_cluster/session/..."
+	// which allows direct access with a single ListObjects call.
+	//
+	// Why this is SAFE for parsing:
+	// - Kubernetes namespace follows DNS-1123 label spec
+	// - DNS-1123 only allows: lowercase letters, digits, and hyphens (-)
+	// - Namespace CANNOT contain "_", so we can unambiguously split from the LAST "_"
+	//
+	// DO NOT CHANGE: Would break existing stored data paths
 	connector = "_"
 )
 
@@ -235,4 +241,22 @@ func GetRayNodeID() (string, error) {
 		return strings.Trim(string(nodeidBytes), "\n"), nil
 	}
 	return "", fmt.Errorf("timeout --node_id= not found")
+}
+
+func ConvertBase64ToHex(input string) (string, error) {
+	bytes, err := base64.StdEncoding.DecodeString(input)
+	if err != nil {
+		return input, err
+	}
+
+	hexStr := hex.EncodeToString(bytes)
+
+	return hexStr, nil
+}
+
+// BuildClusterSessionKey constructs the key used to identify a specific cluster session.
+// Format: "{clusterName}_{namespace}_{sessionName}"
+// Example: "raycluster-historyserver_default_session_2026-01-11_19-38-40"
+func BuildClusterSessionKey(clusterName, namespace, sessionName string) string {
+	return clusterName + connector + namespace + connector + sessionName
 }

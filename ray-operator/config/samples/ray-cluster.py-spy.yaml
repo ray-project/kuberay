@@ -15,11 +15,11 @@ spec:
           image: rayproject/ray:2.52.0
           resources:
             limits:
-              cpu: 1
-              memory: 5Gi
+              cpu: "1"
+              memory: "5Gi"
             requests:
-              cpu: 1
-              memory: 2Gi
+              cpu: "1"
+              memory: "2Gi"
           # `py-spy` is a sampling profiler that requires `SYS_PTRACE` to read process memory effectively.
           # Once enabled, you can profile Ray worker processes through Ray Dashboard.
           # For more details, refer to:
