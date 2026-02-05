@@ -921,7 +921,9 @@ func (h *EventHandler) handleTaskLifecycleEvent(eventMap map[string]any, cluster
 		// TODO(jwj): Before beta, the lifecycle-related fields are overwritten.
 		// In beta, the complete historical replay will be supported.
 		task.RayErrorInfo = currTask.RayErrorInfo
-		task.JobID = currTask.JobID
+		if currTask.JobID != "" {
+			task.JobID = currTask.JobID
+		}
 		if currTask.NodeID != "" {
 			task.NodeID = currTask.NodeID
 		}
