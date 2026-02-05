@@ -22,6 +22,7 @@ import (
 const (
 	LiveSessionName = "live"
 	EndpointLogFile = "/api/v0/logs/file"
+	EndpointNodes   = "/nodes"
 )
 
 func TestHistoryServer(t *testing.T) {
@@ -297,26 +298,12 @@ func testLiveClusterNodes(test Test, g *WithT, namespace *corev1.Namespace, s3Cl
 
 	client := CreateHTTPClientWithCookieJar(g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
-	endpointURL := historyServerURL + endpoint
-	LogWithTimestamp(test.T(), "Testing %s endpoint for live cluster: %s", endpoint, endpointURL)
-
-	var nodesResp map[string]any
-	g.Eventually(func(gg Gomega) {
-		resp, err := client.Get(endpointURL)
-		gg.Expect(err).NotTo(HaveOccurred())
-		defer resp.Body.Close()
-
-		body, err := io.ReadAll(resp.Body)
-		gg.Expect(err).NotTo(HaveOccurred())
-		gg.Expect(resp.StatusCode).To(Equal(http.StatusOK),
-			"[GET] %s should return 200, got %d: %s", endpointURL, resp.StatusCode, string(body))
-
-		err = json.Unmarshal(body, &nodesResp)
-		gg.Expect(err).NotTo(HaveOccurred())
-	}, TestTimeoutShort).Should(Succeed())
 
 	LogWithTimestamp(test.T(), "Verifying /nodes response schema for live cluster (isLive=true)")
-	verifyNodesRespSchema(test, g, nodesResp, true)
+	endpointURL := historyServerURL + endpoint
+	verifySingleEndpoint(test, g, client, endpointURL, func(test Test, g *WithT, data map[string]any) {
+		verifyNodesRespSchema(test, g, data, true)
+	})
 
 	DeleteS3Bucket(test, g, s3Client)
 	LogWithTimestamp(test.T(), "Live cluster /nodes?view=summary tests completed successfully")
@@ -336,8 +323,6 @@ func testLiveClusterNodes(test Test, g *WithT, namespace *corev1.Namespace, s3Cl
 // 8. Verify the response API schema
 // 9. Delete S3 bucket to ensure test isolation
 func testDeadClusterNodes(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
-	endpoint := "/nodes"
-
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 
@@ -361,26 +346,18 @@ func testDeadClusterNodes(test Test, g *WithT, namespace *corev1.Namespace, s3Cl
 	client := CreateHTTPClientWithCookieJar(g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 
-	endpointURL := historyServerURL + endpoint
-	LogWithTimestamp(test.T(), "Testing %s endpoint for dead cluster: %s", endpoint, endpointURL)
+	endpointURL := historyServerURL + EndpointNodes
+	LogWithTimestamp(test.T(), "Testing %s endpoint for dead cluster: %s", EndpointNodes, endpointURL)
 
-	var nodesResp map[string]any
-	g.Eventually(func(gg Gomega) {
-		resp, err := client.Get(endpointURL)
-		gg.Expect(err).NotTo(HaveOccurred())
-		defer resp.Body.Close()
+	LogWithTimestamp(test.T(), "Verifying /nodes?view=summary response schema for dead cluster (isLive=false)")
+	verifySingleEndpoint(test, g, client, endpointURL+"?view=summary", func(test Test, g *WithT, data map[string]any) {
+		verifyNodesRespSchema(test, g, data, false)
+	})
 
-		body, err := io.ReadAll(resp.Body)
-		gg.Expect(err).NotTo(HaveOccurred())
-		gg.Expect(resp.StatusCode).To(Equal(http.StatusOK),
-			"[GET] %s should return 200, got %d: %s", endpointURL, resp.StatusCode, string(body))
-
-		err = json.Unmarshal(body, &nodesResp)
-		gg.Expect(err).NotTo(HaveOccurred())
-	}, TestTimeoutShort).Should(Succeed())
-
-	LogWithTimestamp(test.T(), "Verifying /nodes response schema for dead cluster (isLive=false)")
-	verifyNodesRespSchema(test, g, nodesResp, false)
+	LogWithTimestamp(test.T(), "Verifying /nodes?view=hostNameList response schema for dead cluster (isLive=false)")
+	verifySingleEndpoint(test, g, client, endpointURL+"?view=hostNameList", func(test Test, g *WithT, data map[string]any) {
+		verifyNodesHostNameListSchema(test, g, data, false)
+	})
 
 	DeleteS3Bucket(test, g, s3Client)
 	LogWithTimestamp(test.T(), "Dead cluster /nodes tests completed successfully")
@@ -417,27 +394,13 @@ func testLiveClusterNode(test Test, g *WithT, namespace *corev1.Namespace, s3Cli
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 
 	for _, nodeId := range []string{headNodeID, workerNodeID} {
-		endpoint := fmt.Sprintf("/nodes/%s", nodeId)
-		endpointURL := historyServerURL + endpoint
-		LogWithTimestamp(test.T(), "Testing %s endpoint for live cluster: %s", endpoint, endpointURL)
-
-		var nodeResp map[string]any
-		g.Eventually(func(gg Gomega) {
-			resp, err := client.Get(endpointURL)
-			gg.Expect(err).NotTo(HaveOccurred())
-			defer resp.Body.Close()
-
-			body, err := io.ReadAll(resp.Body)
-			gg.Expect(err).NotTo(HaveOccurred())
-			gg.Expect(resp.StatusCode).To(Equal(http.StatusOK),
-				"[GET] %s should return 200, got %d: %s", endpointURL, resp.StatusCode, string(body))
-
-			err = json.Unmarshal(body, &nodeResp)
-			gg.Expect(err).NotTo(HaveOccurred())
-		}, TestTimeoutShort).Should(Succeed())
-
 		LogWithTimestamp(test.T(), "Verifying /nodes/%s response schema for live cluster (isLive=true)", nodeId)
-		verifyNodeRespSchema(test, g, nodeResp, true)
+
+		endpoint := fmt.Sprintf("%s/%s", EndpointNodes, nodeId)
+		endpointURL := historyServerURL + endpoint
+		verifySingleEndpoint(test, g, client, endpointURL, func(test Test, g *WithT, data map[string]any) {
+			verifyNodeRespSchema(test, g, data, true)
+		})
 	}
 
 	DeleteS3Bucket(test, g, s3Client)
@@ -487,27 +450,13 @@ func testDeadClusterNode(test Test, g *WithT, namespace *corev1.Namespace, s3Cli
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 
 	for _, nodeId := range []string{headNodeID, workerNodeID} {
-		endpoint := fmt.Sprintf("/nodes/%s", nodeId)
-		endpointURL := historyServerURL + endpoint
-		LogWithTimestamp(test.T(), "Testing %s endpoint for dead cluster: %s", endpoint, endpointURL)
-
-		var nodeResp map[string]any
-		g.Eventually(func(gg Gomega) {
-			resp, err := client.Get(endpointURL)
-			gg.Expect(err).NotTo(HaveOccurred())
-			defer resp.Body.Close()
-
-			body, err := io.ReadAll(resp.Body)
-			gg.Expect(err).NotTo(HaveOccurred())
-			gg.Expect(resp.StatusCode).To(Equal(http.StatusOK),
-				"[GET] %s should return 200, got %d: %s", endpointURL, resp.StatusCode, string(body))
-
-			err = json.Unmarshal(body, &nodeResp)
-			gg.Expect(err).NotTo(HaveOccurred())
-		}, TestTimeoutShort).Should(Succeed())
-
 		LogWithTimestamp(test.T(), "Verifying /nodes/%s response schema for dead cluster (isLive=false)", nodeId)
-		verifyNodeRespSchema(test, g, nodeResp, false)
+
+		endpoint := fmt.Sprintf("%s/%s", EndpointNodes, nodeId)
+		endpointURL := historyServerURL + endpoint
+		verifySingleEndpoint(test, g, client, endpointURL, func(test Test, g *WithT, data map[string]any) {
+			verifyNodeRespSchema(test, g, data, false)
+		})
 	}
 
 	DeleteS3Bucket(test, g, s3Client)
@@ -587,6 +536,25 @@ func getClusterFromList(test Test, g *WithT, historyServerURL, clusterName, name
 	}, TestTimeoutMedium).Should(Succeed())
 
 	return result
+}
+
+// verifySingleEndpoint verifies the response schema of a single endpoint.
+func verifySingleEndpoint(test Test, g *WithT, client *http.Client, endpointURL string, verifySchema func(test Test, g *WithT, data map[string]any)) {
+	var respData map[string]any
+	g.Eventually(func(gg Gomega) {
+		resp, err := client.Get(endpointURL)
+		gg.Expect(err).NotTo(HaveOccurred())
+		defer resp.Body.Close()
+		gg.Expect(resp.StatusCode).To(Equal(http.StatusOK))
+
+		body, err := io.ReadAll(resp.Body)
+		gg.Expect(err).NotTo(HaveOccurred())
+
+		err = json.Unmarshal(body, &respData)
+		gg.Expect(err).NotTo(HaveOccurred())
+	}, TestTimeoutShort).Should(Succeed())
+
+	verifySchema(test, g, respData)
 }
 
 // TODO(jwj): Make verification for node-related endpoints more robust.
@@ -733,4 +701,14 @@ func verifyNodeSummarySchema(test Test, g *WithT, nodeSummary map[string]any) {
 	g.Expect(raylet).To(HaveKey("state"))
 	g.Expect(raylet).To(HaveKey("endTimeMs"))
 	g.Expect(raylet).To(HaveKey("stateMessage"))
+}
+
+// verifyNodesHostNameListSchema verifies that the /nodes?view=hostNameList response is valid according to the API schema.
+func verifyNodesHostNameListSchema(test Test, g *WithT, nodesResp map[string]any, isLive bool) {
+	g.Expect(nodesResp).To(HaveKeyWithValue("result", BeTrue()))
+	g.Expect(nodesResp).To(HaveKeyWithValue("msg", Equal("Node hostname list fetched.")))
+	g.Expect(nodesResp).To(HaveKey("data"))
+	data, ok := nodesResp["data"].(map[string]any)
+	g.Expect(ok).To(BeTrue(), "'data' should be a map")
+	g.Expect(data).To(HaveKey("hostNameList"))
 }
