@@ -160,6 +160,8 @@ func routerAPI(s *ServerHandler) {
 	ws.Route(ws.GET("/v0/tasks/timeline").To(s.getTasksTimeline).Filter(s.CookieHandle).
 		Doc("get tasks timeline").
 		Param(ws.QueryParameter("job_id", "filter by job_id")).
+		Param(ws.QueryParameter("download", "set to 1 to return response as attachment (timeline JSON file)")).
+		Produces(restful.MIME_JSON).
 		Writes("")) // Placeholder for specific return type
 }
 
@@ -1493,7 +1495,6 @@ func (s *ServerHandler) getTasksTimeline(req *restful.Request, resp *restful.Res
 		return
 	}
 
-	resp.Header().Set("Content-Type", "application/json")
 	// Support download parameter
 	if download == "1" {
 		nowStr := time.Now().Format("2006-01-02_15-04-05")
