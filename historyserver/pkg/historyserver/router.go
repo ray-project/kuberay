@@ -961,6 +961,8 @@ func formatTaskForResponse(task eventtypes.Task, detail bool) map[string]interfa
 		result["required_resources"] = task.RequiredResources
 		result["runtime_env_info"] = map[string]interface{}{
 			"serialized_runtime_env": task.SerializedRuntimeEnv,
+			// RuntimeEnvUris and RuntimeEnvConfig are never populated on the Ray side.
+			// Ref: https://github.com/ray-project/ray/blob/50c715e79c5ca93118e1280f3842a1946b2cddac/src/ray/core_worker/task_event_buffer.cc#L189-L237.
 			"runtime_env_config": map[string]interface{}{
 				"setup_timeout_seconds": 600,
 				"eager_install":         true,
