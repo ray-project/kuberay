@@ -959,7 +959,14 @@ func formatTaskForResponse(task eventtypes.Task, detail bool) map[string]interfa
 	if detail {
 		result["language"] = string(task.Language)
 		result["required_resources"] = task.RequiredResources
-		result["runtime_env_info"] = task.SerializedRuntimeEnv
+		result["runtime_env_info"] = eventtypes.RuntimeEnvInfo{
+			SerializedRuntimeEnv: task.SerializedRuntimeEnv,
+			RuntimeEnvConfig: eventtypes.RuntimeEnvConfig{
+				SetupTimeoutSeconds: 600,
+				EagerInstall:        true,
+				LogFiles:            []string{},
+			},
+		}
 		result["placement_group_id"] = task.PlacementGroupID
 
 		events := make([]map[string]interface{}, 0, len(task.StateTransitions))
