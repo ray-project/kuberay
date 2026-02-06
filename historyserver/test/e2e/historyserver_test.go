@@ -1,10 +1,13 @@
 package e2e
 
 import (
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"testing"
 
 	"github.com/aws/aws-sdk-go/service/s3"
@@ -199,11 +202,17 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 
 // testTimelineEndpointLiveCluster verifies that the history server can return timeline data from a live cluster.
 //
-// The test case follows these steps:
-// 1. Prepare test environment by applying a Ray cluster
-// 2. Submit a Ray job to the existing cluster
-// 3. Apply History Server and get its URL
-// 4. Verify that the timeline endpoint returns valid Chrome Tracing format
+// The test follows these steps:
+// 1. Create a RayCluster and submit a Ray job.
+// 2. Deploy the History Server and ensure the cluster is listed as a live session.
+// 3. Verify the /api/v0/tasks/timeline endpoint behavior for a live cluster:
+//   - Without params: returns a non-empty Chrome Tracing JSON array with required metadata
+//     and trace events.
+//   - With job_id=<id>: returns only events for the specified job.
+//   - With download=1: sets Content-Disposition to attachment and includes a filename.
+//   - With download=1&job_id=<id>: filename includes the job_id.
+//
+// 4. Cleanup test resources.
 func testTimelineEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
@@ -215,23 +224,46 @@ func testTimelineEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Name
 
 	client := CreateHTTPClientWithCookieJar(g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
+	jobID := GetOneOfJobID(g, client, historyServerURL)
+
 	test.T().Run("should return valid timeline data", func(t *testing.T) {
 		g := NewWithT(t)
-		verifyTimelineResponse(g, client, historyServerURL)
+		verifyTimelineResponse(g, client, historyServerURL, "", false)
+	})
+	test.T().Run("with valid job_id returns filtered events", func(t *testing.T) {
+		g := NewWithT(t)
+		verifyTimelineResponse(g, client, historyServerURL, jobID, false)
+	})
+
+	test.T().Run("download=1 sets Content-Disposition and filename", func(t *testing.T) {
+		g := NewWithT(t)
+		verifyTimelineResponse(g, client, historyServerURL, "", true)
+	})
+
+	test.T().Run("download=1 with job_id sets filename with job_id", func(t *testing.T) {
+		g := NewWithT(t)
+		verifyTimelineResponse(g, client, historyServerURL, jobID, true)
 	})
 
 	DeleteS3Bucket(test, g, s3Client)
 	LogWithTimestamp(test.T(), "Live cluster timeline endpoint test completed")
 }
 
-// testTimelineEndpointDeadCluster verifies that the history server can return timeline data from S3 after a cluster is deleted.
+// testTimelineEndpointDeadCluster verifies that the history server can serve task timeline data from S3
+// after a Ray cluster is deleted, and that the timeline endpoint supports query parameters.
 //
-// The test case follows these steps:
-// 1. Prepare test environment by applying a Ray cluster
-// 2. Submit a Ray job to the existing cluster
-// 3. Delete RayCluster to trigger event upload to S3
-// 4. Apply History Server and get its URL
-// 5. Verify that the timeline endpoint returns valid Chrome Tracing format from S3 data
+// The test follows these steps:
+// 1. Create a RayCluster and submit a Ray job.
+// 2. Delete the RayCluster to trigger event export/upload to S3 and wait until deletion completes.
+// 3. Deploy the History Server and switch the client context to a non-live (archived) session.
+// 4. Verify the /api/v0/tasks/timeline endpoint behavior:
+//   - Without params: returns a non-empty Chrome Tracing JSON array with required metadata + trace events.
+//   - With job_id=<id>: returns only events for the specified job (job_id may require hex->base64 normalization
+//     depending on the source endpoint/session).
+//   - With download=1: sets Content-Disposition to attachment and includes a filename.
+//   - With download=1&job_id=<id>: filename includes the job_id.
+//
+// 5. Cleanup S3 bucket.
 func testTimelineEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
@@ -255,23 +287,67 @@ func testTimelineEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Name
 
 	client := CreateHTTPClientWithCookieJar(g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
+	jobID := GetOneOfJobID(g, client, historyServerURL)
 
+	// NOTE:
+	// The job_id returned by /api/jobs may be hex-encoded (e.g. from live cluster APIs),
+	// while archived timeline events store job_id in base64.
+	// The timeline endpoint currently filters by string equality against the base64 job_id
+	// in trace events, so we intentionally normalize the job_id to base64 here to make
+	// filtering work for dead-cluster timelines.
+	base64JobID, _ := hexToBase64(jobID)
 	test.T().Run("should return timeline data from S3", func(t *testing.T) {
 		g := NewWithT(t)
-		verifyTimelineResponse(g, client, historyServerURL)
+		verifyTimelineResponse(g, client, historyServerURL, "", false)
+	})
+	test.T().Run("with valid job_id returns filtered events", func(t *testing.T) {
+		g := NewWithT(t)
+		verifyTimelineResponse(g, client, historyServerURL, base64JobID, false)
 	})
 
+	test.T().Run("download=1 sets Content-Disposition and filename", func(t *testing.T) {
+		g := NewWithT(t)
+		verifyTimelineResponse(g, client, historyServerURL, "", true)
+	})
+
+	test.T().Run("download=1 with job_id sets filename with job_id", func(t *testing.T) {
+		g := NewWithT(t)
+		verifyTimelineResponse(g, client, historyServerURL, base64JobID, true)
+	})
 	DeleteS3Bucket(test, g, s3Client)
 	LogWithTimestamp(test.T(), "Dead cluster timeline endpoint test completed")
 }
 
-// verifyTimelineResponse verifies the timeline endpoint returns valid Chrome Tracing format
-func verifyTimelineResponse(g *WithT, client *http.Client, historyServerURL string) {
+// verifyTimelineResponse verifies the timeline endpoint returns valid Chrome Tracing format.
+// jobID: optional filter; empty means no job_id query param.
+// download: if true, adds download=1 and asserts Content-Disposition header and filename.
+func verifyTimelineResponse(g *WithT, client *http.Client, historyServerURL string, jobID string, download bool) {
+	baseURL := historyServerURL + "/api/v0/tasks/timeline"
+	if jobID != "" || download {
+		params := url.Values{}
+		if jobID != "" {
+			params.Set("job_id", jobID)
+		}
+		if download {
+			params.Set("download", "1")
+		}
+		baseURL += "?" + params.Encode()
+	}
+
 	g.Eventually(func(gg Gomega) {
-		resp, err := client.Get(historyServerURL + "/api/v0/tasks/timeline")
+		resp, err := client.Get(baseURL)
 		gg.Expect(err).NotTo(HaveOccurred())
 		defer resp.Body.Close()
 		gg.Expect(resp.StatusCode).To(Equal(http.StatusOK))
+
+		if download {
+			cd := resp.Header.Get("Content-Disposition")
+			gg.Expect(cd).To(ContainSubstring("attachment"), "Content-Disposition should contain attachment")
+			gg.Expect(cd).To(ContainSubstring("filename="), "Content-Disposition should contain filename")
+			if jobID != "" {
+				gg.Expect(cd).To(ContainSubstring(jobID), "filename should contain job_id when job_id filter is set")
+			}
+		}
 
 		body, err := io.ReadAll(resp.Body)
 		gg.Expect(err).NotTo(HaveOccurred())
@@ -282,6 +358,22 @@ func verifyTimelineResponse(g *WithT, client *http.Client, historyServerURL stri
 
 		// Should have at least some events
 		gg.Expect(len(events)).To(BeNumerically(">", 0), "Timeline should have at least one event")
+
+		// Verify all the job_id are same
+		if jobID != "" {
+			for _, event := range events {
+				ph, _ := event["ph"].(string)
+				if ph != "X" {
+					continue
+				}
+				args, ok := event["args"].(map[string]any)
+				gg.Expect(ok).To(BeTrue(), "trace event should have args")
+				jid, ok := args["job_id"]
+				gg.Expect(ok).To(BeTrue(), "trace event args should have job_id")
+				gg.Expect(jid).To(Equal(jobID),
+					"when job_id filter is %q, every trace event's args.job_id must be the same, got %v", jobID, jid)
+			}
+		}
 
 		// Verify metadata and trace events exist
 		hasProcessName := false
@@ -1104,4 +1196,12 @@ func verifyNodesHostNameListSchema(test Test, g *WithT, nodesResp map[string]any
 	data, ok := nodesResp["data"].(map[string]any)
 	g.Expect(ok).To(BeTrue(), "'data' should be a map")
 	g.Expect(data).To(HaveKey("hostNameList"))
+}
+
+func hexToBase64(hexStr string) (string, error) {
+	b, err := hex.DecodeString(hexStr)
+	if err != nil {
+		return "", err
+	}
+	return base64.StdEncoding.EncodeToString(b), nil
 }

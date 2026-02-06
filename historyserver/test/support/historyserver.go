@@ -279,3 +279,17 @@ func DeleteRayClusterAndWait(test Test, g *WithT, namespace string, clusterName 
 
 	LogWithTimestamp(test.T(), "RayCluster %s/%s fully deleted", namespace, clusterName)
 }
+
+// GetOneOfJobID retrieves a job_id from the /api/jobs endpoint.
+func GetOneOfJobID(g *WithT, client *http.Client, historyServerURL string) string {
+	resp, err := client.Get(historyServerURL + "/api/jobs/")
+	g.Expect(err).NotTo(HaveOccurred())
+	defer resp.Body.Close()
+	g.Expect(resp.StatusCode).To(Equal(http.StatusOK))
+	body, _ := io.ReadAll(resp.Body)
+	var jobs []map[string]any
+	err = json.Unmarshal(body, &jobs)
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(len(jobs)).To(BeNumerically(">", 0), "expected at least one job from /api/jobs/")
+	return jobs[0]["job_id"].(string)
+}
