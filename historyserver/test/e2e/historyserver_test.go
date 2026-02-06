@@ -48,6 +48,10 @@ func TestHistoryServer(t *testing.T) {
 			name:     "/v0/logs/file endpoint (dead cluster)",
 			testFunc: testLogFileEndpointDeadCluster,
 		},
+		{
+			name:     "/api/serve/applications endpoint (dead cluster)",
+			testFunc: testServeApplicationsEndpointDeadCluster,
+		},
 	}
 
 	for _, tt := range tests {
@@ -325,4 +329,65 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 
 	DeleteS3Bucket(test, g, s3Client)
 	LogWithTimestamp(test.T(), "Dead cluster log file endpoint tests completed")
+}
+
+// testServeApplicationsEndpointDeadCluster verifies that the history server can
+// serve the /api/serve/applications endpoint from object storage after a
+// cluster is deleted.
+//
+// The test case follows these steps:
+// 1. Prepare test environment by applying a Ray cluster
+// 2. Submit a Ray job to the existing cluster
+// 3. Delete RayCluster to trigger meta upload to storage
+// 4. Apply History Server and get its URL
+// 5. Verify that the history server can serve /api/serve/applications
+//    (status 200 and JSON body with an "applications" field)
+// 6. Delete S3 bucket to ensure test isolation
+func testServeApplicationsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
+	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
+
+	// Delete RayCluster to trigger meta upload
+	err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Delete(test.Ctx(), rayCluster.Name, metav1.DeleteOptions{})
+	g.Expect(err).NotTo(HaveOccurred())
+	LogWithTimestamp(test.T(), "Deleted RayCluster %s/%s for serve applications test", namespace.Name, rayCluster.Name)
+
+	// Wait for cluster to be fully deleted to ensure data has been uploaded.
+	g.Eventually(func() error {
+		_, err := GetRayCluster(test, namespace.Name, rayCluster.Name)
+		return err
+	}, TestTimeoutMedium).Should(WithTransform(k8serrors.IsNotFound, BeTrue()))
+
+	ApplyHistoryServer(test, g, namespace)
+	historyServerURL := GetHistoryServerURL(test, g, namespace)
+
+	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
+	g.Expect(clusterInfo.SessionName).NotTo(Equal(LiveSessionName), "Deleted cluster should not have sessionName='live'")
+
+	client := CreateHTTPClientWithCookieJar(g)
+	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
+
+	test.T().Run("should return serve applications from storage", func(t *testing.T) {
+		g := NewWithT(t)
+		g.Eventually(func(gg Gomega) {
+			url := fmt.Sprintf("%s/api/serve/applications/", historyServerURL)
+			resp, err := client.Get(url)
+			gg.Expect(err).NotTo(HaveOccurred())
+			defer resp.Body.Close()
+
+			body, err := io.ReadAll(resp.Body)
+			gg.Expect(err).NotTo(HaveOccurred())
+			gg.Expect(resp.StatusCode).To(Equal(http.StatusOK),
+				"Endpoint %s should return 200, got %d: %s", url, resp.StatusCode, string(body))
+
+			var payload map[string]any
+			err = json.Unmarshal(body, &payload)
+			gg.Expect(err).NotTo(HaveOccurred())
+			_, ok := payload["applications"]
+			gg.Expect(ok).To(BeTrue(), "response should contain 'applications' field")
+		}, TestTimeoutShort).Should(Succeed())
+	})
+
+	DeleteS3Bucket(test, g, s3Client)
+	LogWithTimestamp(test.T(), "Serve applications endpoint (dead cluster) test completed")
 }
