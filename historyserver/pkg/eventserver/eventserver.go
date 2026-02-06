@@ -635,6 +635,8 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 			if t.JobID == "" {
 				t.JobID = profileData.JobID
 			}
+			// Set AttemptNumber to match the attempt we're merging into
+			t.AttemptNumber = profileData.AttemptNumber
 
 			// Initialize ProfileData if not exists
 			if t.ProfileData == nil {
@@ -1278,10 +1280,6 @@ func (h *EventHandler) GetTasksTimeline(clusterName string, jobID string) []type
 		if nodeIP == "" {
 			continue
 		}
-		// Skip if clusterID is empty
-		if clusterID == ":" {
-			continue
-		}
 		if _, exists := nodeIPToPID[nodeIP]; !exists {
 			nodeIPToPID[nodeIP] = pidCounter
 			pidCounter++
@@ -1339,14 +1337,10 @@ func (h *EventHandler) GetTasksTimeline(clusterName string, jobID string) []type
 		if !ok {
 			continue
 		}
-		// Skip if clusterID is empty
-		if clusterID == ":" {
-			continue
-		}
-
 		var tidPtr *int
 		if tid, ok := nodeIPToClusterIDToTID[nodeIP][clusterID]; ok {
-			tidPtr = &tid
+			tidVal := tid
+			tidPtr = &tidVal
 		} else {
 			// This shouldn't happen if first pass worked correctly,
 			// but skip to avoid null TID
