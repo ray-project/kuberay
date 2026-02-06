@@ -8,6 +8,8 @@ import (
 	"os/signal"
 	"path"
 	"strconv"
+	"sync"
+	"syscall"
 	"time"
 
 	"github.com/sirupsen/logrus"
