@@ -212,7 +212,7 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 //   - With download=1: sets Content-Disposition to attachment and includes a filename.
 //   - With download=1&job_id=<id>: filename includes the job_id.
 //
-// 4. Cleanup test resources.
+// 4. Delete S3 bucket to ensure test isolation
 func testTimelineEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
@@ -263,7 +263,7 @@ func testTimelineEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Name
 //   - With download=1: sets Content-Disposition to attachment and includes a filename.
 //   - With download=1&job_id=<id>: filename includes the job_id.
 //
-// 5. Cleanup S3 bucket.
+// 5. Delete S3 bucket to ensure test isolation
 func testTimelineEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
