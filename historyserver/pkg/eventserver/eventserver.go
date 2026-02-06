@@ -915,3 +915,32 @@ func (h *EventHandler) GetJobByJobID(clusterName, jobID string) (types.Job, bool
 	}
 	return job.DeepCopy(), true
 }
+
+func (h *EventHandler) GetJobLogByJobID(clusterName, jobID string) (io.Reader, error) {
+	h.ClusterJobMap.RLock()
+	h.ClusterJobMap.RLock()
+	defer h.ClusterJobMap.RUnlock()
+
+	jobMap, ok := h.ClusterJobMap.ClusterJobMap[clusterName]
+	if !ok {
+		return nil, fmt.Errorf("Cluster %s does not exist and could not be found", clusterName)
+	}
+
+	jobMap.Lock()
+	defer jobMap.Unlock()
+
+	job, ok := jobMap.JobMap[jobID]
+	if !ok {
+		return nil, fmt.Errorf("Job %s does not exist and could not be found", jobID)
+	}
+
+	// construct the job log filename
+	jobLogFileName := fmt.Sprintf("job-driver-%s.log", job.SubmissionID)
+
+	reader := h.reader.GetContent(clusterName, jobLogFileName)
+	if reader == nil {
+		return nil, fmt.Errorf("Failed to get content of job %s with filename %s", jobID, jobLogFileName)
+	}
+
+	return reader, nil
+}
