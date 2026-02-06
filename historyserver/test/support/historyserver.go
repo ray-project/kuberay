@@ -59,10 +59,10 @@ const (
 //   - /api/prometheus_health
 //   - /api/data/datasets/{job_id}
 //   - /api/jobs
-//   - /api/serve/applications
 //   - /api/v0/placement_groups
 var HistoryServerEndpoints = []string{
 	"/nodes?view=summary",
+	"/api/serve/applications",
 	"/api/v0/tasks",
 	"/api/v0/tasks/summarize",
 	"/logical/actors",

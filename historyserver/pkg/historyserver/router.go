@@ -478,14 +478,40 @@ func (s *ServerHandler) getDatasets(req *restful.Request, resp *restful.Response
 }
 
 func (s *ServerHandler) getServeApplications(req *restful.Request, resp *restful.Response) {
+	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
+	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
 	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
+
 	if sessionName == "live" {
 		s.redirectRequest(req, resp)
 		return
 	}
 
-	// Return "not yet supported" for serve applications
-	resp.WriteErrorString(http.StatusNotImplemented, "Serve applications not yet supported")
+	// Dead (historical) cluster:
+	// Collector has already periodically persisted the live Ray Dashboard
+	// /api/serve/applications/ response into the meta directory under the
+	// OssMetaFile_Applications key. Here we simply read that snapshot and
+	// return it so that live and historical clusters share the same response
+	// format.
+	rayClusterNameID := fmt.Sprintf("%s_%s", clusterName, clusterNamespace)
+	data := s.MetaKeyInfo(rayClusterNameID, utils.OssMetaFile_Applications)
+
+	// If no metadata has been persisted yet, return an empty applications
+	// payload matching Ray's ServeDetails schema.
+	if len(data) == 0 {
+		empty := map[string]interface{}{
+			"applications": map[string]interface{}{},
+		}
+		var err error
+		data, err = json.Marshal(empty)
+		if err != nil {
+			logrus.Errorf("Failed to marshal empty serve applications response: %v", err)
+			resp.WriteErrorString(http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+
+	resp.Write(data)
 }
 
 func (s *ServerHandler) getPlacementGroups(req *restful.Request, resp *restful.Response) {
