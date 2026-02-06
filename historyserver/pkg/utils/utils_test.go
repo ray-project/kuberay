@@ -21,7 +21,6 @@ func TestSlice(t *testing.T) {
 }
 
 func TestConvertBase64ToHex(t *testing.T) {
-	//TODO(chiayi): use real base64 strings from job ids as tests ex: AgAAAA==
 	tests := []struct {
 		scenario       string
 		base64Str      string

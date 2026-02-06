@@ -1494,3 +1494,49 @@ func extractActorIDFromTaskID(taskIDHex string) string {
 
 	return actorPortion + jobPortion
 }
+
+func (h *EventHandler) GetJobLogByJobID(clusterSessionKey, clusterName, clusterNamespace, jobID string) (io.Reader, error) {
+	h.ClusterJobMap.RLock()
+
+	jobMap, ok := h.ClusterJobMap.ClusterJobMap[clusterSessionKey]
+	if !ok {
+		// We are manually releasing lock since we want to not have it lock during the read
+		h.ClusterJobMap.RUnlock()
+		return nil, fmt.Errorf("Cluster %s does not exist and could not be found", clusterSessionKey)
+	}
+
+	jobMap.Lock()
+
+	job, ok := jobMap.JobMap[jobID]
+	if !ok {
+		// We are manually releasing lock since we want to not have it lock during the read
+		h.ClusterJobMap.RUnlock()
+		jobMap.Unlock()
+		return nil, fmt.Errorf("Job %s does not exist and could not be found", jobID)
+	}
+
+	submissionID := job.SubmissionID
+	if submissionID == "" && job.Config.Metadata != nil {
+		if metaSubmissionID, ok := job.Config.Metadata["job_submission_id"]; ok {
+			submissionID = metaSubmissionID
+		}
+	}
+
+	// Unlock so that long calls of GetContent() doesn't block
+	h.ClusterJobMap.RUnlock()
+	jobMap.Unlock()
+
+	// construct the job log filename
+	if submissionID == "" {
+		return nil, fmt.Errorf("Submission ID is empty and thus failed to retrive log")
+	}
+	jobLogFileName := fmt.Sprintf("job-driver-%s.log", submissionID)
+
+	clusterKey := fmt.Sprintf("%s_%s", clusterName, clusterNamespace)
+	reader := h.reader.GetContent(clusterKey, jobLogFileName)
+	if reader == nil {
+		return nil, fmt.Errorf("Failed to get content of job %s with filename %s", jobID, jobLogFileName)
+	}
+
+	return reader, nil
+}
