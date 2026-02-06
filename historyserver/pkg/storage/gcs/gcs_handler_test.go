@@ -1,10 +1,7 @@
 package gcs
 
 import (
-	"context"
 	"io"
-	"net/http"
-	"path"
 	"sort"
 	"strings"
 	"testing"
@@ -14,7 +11,6 @@ import (
 	"github.com/fsouza/fake-gcs-server/fakestorage"
 	"github.com/google/go-cmp/cmp"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
-	gIterator "google.golang.org/api/iterator"
 )
 
 // setupFakeGCS creates a fake GCS server and a client connected to it.
@@ -53,7 +49,6 @@ func createRayLogsHandler(client *gstorage.Client, bucketName string) *RayLogsHa
 		StorageClient: client,
 		GCSBucket:     bucketName,
 		RootDir:       "ray_historyserver",
-		HttpClient:    &http.Client{}, // Not used by fake, but required by struct
 	}
 }
 
@@ -125,42 +120,42 @@ func TestListFiles(t *testing.T) {
 		{
 			ObjectAttrs: fakestorage.ObjectAttrs{
 				BucketName: "test-bucket",
-				Name:       "cluster1/logs/file1.txt",
+				Name:       "ray_historyserver/cluster1/logs/file1.txt",
 			},
 			Content: []byte("a"),
 		},
 		{
 			ObjectAttrs: fakestorage.ObjectAttrs{
 				BucketName: "test-bucket",
-				Name:       "cluster1/logs/file2.log",
+				Name:       "ray_historyserver/cluster1/logs/file2.log",
 			},
 			Content: []byte("b"),
 		},
 		{
 			ObjectAttrs: fakestorage.ObjectAttrs{
 				BucketName: "test-bucket",
-				Name:       "cluster1/logs/subdir/",
+				Name:       "ray_historyserver/cluster1/logs/subdir/",
 			},
 			Content: []byte(""),
 		},
 		{
 			ObjectAttrs: fakestorage.ObjectAttrs{
 				BucketName: "test-bucket",
-				Name:       "cluster1/logs/subdir/file3.txt",
+				Name:       "ray_historyserver/cluster1/logs/subdir/file3.txt",
 			},
 			Content: []byte("c"),
 		},
 		{
 			ObjectAttrs: fakestorage.ObjectAttrs{
 				BucketName: "test-bucket",
-				Name:       "cluster1/other/file4.txt",
+				Name:       "ray_historyserver/cluster1/other/file4.txt",
 			},
 			Content: []byte("d"),
 		},
 		{
 			ObjectAttrs: fakestorage.ObjectAttrs{
 				BucketName: "test-bucket",
-				Name:       "cluster2/logs/file5.txt",
+				Name:       "ray_historyserver/cluster2/logs/file5.txt",
 			},
 			Content: []byte("e"),
 		},
@@ -178,13 +173,13 @@ func TestListFiles(t *testing.T) {
 			name:      "list_logs",
 			clusterID: "cluster1",
 			directory: "logs",
-			expected:  []string{"cluster1/logs/file1.txt", "cluster1/logs/file2.log"},
+			expected:  []string{"ray_historyserver/cluster1/logs/file1.txt", "ray_historyserver/cluster1/logs/file2.log"},
 		},
 		{
 			name:      "list_other",
 			clusterID: "cluster1",
 			directory: "other",
-			expected:  []string{"cluster1/other/file4.txt"},
+			expected:  []string{"ray_historyserver/cluster1/other/file4.txt"},
 		},
 		{
 			name:      "list_nonexistent",
@@ -196,32 +191,13 @@ func TestListFiles(t *testing.T) {
 			name:      "list_cluster2",
 			clusterID: "cluster2",
 			directory: "logs",
-			expected:  []string{"cluster2/logs/file5.txt"},
+			expected:  []string{"ray_historyserver/cluster2/logs/file5.txt"},
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			ctx := context.Background()
-			pathPrefix := strings.TrimPrefix(path.Join(tc.clusterID, tc.directory), "/") + "/"
-			query := &gstorage.Query{
-				Prefix:    pathPrefix,
-				Delimiter: "/",
-			}
-			fileIterator := handler.StorageClient.Bucket(handler.GCSBucket).Objects(ctx, query)
-			var files []string
-			for {
-				attrs, err := fileIterator.Next()
-				if err == gIterator.Done {
-					break
-				}
-				if err != nil {
-					t.Fatalf("Iterator error: %v", err)
-				}
-				if attrs.Name != "" && !strings.HasSuffix(attrs.Name, "/") {
-					files = append(files, attrs.Name)
-				}
-			}
+			files := handler.ListFiles(tc.clusterID, tc.directory)
 			sort.Strings(files)
 			sort.Strings(tc.expected)
 			if diff := cmp.Diff(tc.expected, files); diff != "" {
@@ -234,7 +210,7 @@ func TestListFiles(t *testing.T) {
 func TestList(t *testing.T) {
 	// RootDir is "ray_historyserver"
 	// Path format: {RootDir}/metadir/{ClusterName}_{Namespace}/{SessionName}
-	ts := time.Now()
+	ts := time.Now().UTC()
 	sessionID := "session_" + ts.Format("2006-01-02_15-04-05_000000")
 
 	initialObjects := []fakestorage.Object{
