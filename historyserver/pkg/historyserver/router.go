@@ -338,17 +338,16 @@ func (s *ServerHandler) getNodes(req *restful.Request, resp *restful.Response) {
 		return
 	}
 
+	// Parse query parameters.
 	viewParam := req.QueryParameter("view")
 
+	// Get nodes from the cluster session.
 	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
 	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
-	clusterNameID := clusterName + "_" + clusterNamespace
+	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
+	nodeMap := s.eventHandler.GetNodeMap(clusterSessionKey)
 
-	// A cluster lifecycle is identified by a cluster session.
-	clusterSessionID := clusterNameID + "_" + sessionName
-	nodeMap := s.eventHandler.GetNodeMap(clusterSessionID)
-
-	// Handle different view types
+	// Handle different view types.
 	switch viewParam {
 	case "hostNameList":
 		s.getNodesHostNameList(nodeMap, resp)
