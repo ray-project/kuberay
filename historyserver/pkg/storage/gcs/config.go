@@ -29,7 +29,13 @@ func (c *config) completeCollectorConfig(rcc *types.RayCollectorConfig, jd map[s
 		if bucket, ok := jd["gcsBucket"]; ok {
 			c.Bucket = bucket.(string)
 		}
-		c.GCPProjectID = os.Getenv("GCP_PROJECT_ID")
+		if gcpProjectID, ok := jd["gcpProkectID"]; ok {
+			c.GCPProjectID = gcpProjectID.(string)
+		}
+	} else {
+		if os.Getenv("GCP_PROJECT_ID") != "" {
+			c.GCPProjectID = os.Getenv("GCP_PROJECT_ID")
+		}
 	}
 }
 
@@ -42,6 +48,12 @@ func (c *config) completeHistoryServerConfig(rcc *types.RayHistoryServerConfig, 
 		if bucket, ok := jd["gcsBucket"]; ok {
 			c.Bucket = bucket.(string)
 		}
-		c.GCPProjectID = os.Getenv("GCP_PROJECT_ID")
+		if gcpProjectID, ok := jd["gcpProjectID"]; ok {
+			c.GCPProjectID = gcpProjectID.(string)
+		}
+	} else {
+		if os.Getenv("GCP_PROJECT_ID") != "" {
+			c.GCPProjectID = os.Getenv("GCP_PROJECT_ID")
+		}
 	}
 }
