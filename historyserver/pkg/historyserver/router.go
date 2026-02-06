@@ -459,13 +459,12 @@ func (s *ServerHandler) getNode(req *restful.Request, resp *restful.Response) {
 		return
 	}
 
+	// Get the specified node from the cluster session.
+	// A cluster lifecycle is identified by a cluster session.
 	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
 	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
-	clusterNameID := clusterName + "_" + clusterNamespace
-
-	// A cluster lifecycle is identified by a cluster session.
-	clusterSessionID := clusterNameID + "_" + sessionName
-	targetNode, found := s.eventHandler.GetNodeByNodeID(clusterSessionID, targetNodeId)
+	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
+	targetNode, found := s.eventHandler.GetNodeByNodeID(clusterSessionKey, targetNodeId)
 	if !found {
 		resp.WriteErrorString(http.StatusNotFound, fmt.Sprintf("node %s not found", targetNodeId))
 		return
