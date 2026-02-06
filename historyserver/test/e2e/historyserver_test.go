@@ -289,20 +289,13 @@ func testTimelineEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Name
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 	jobID := GetOneOfJobID(g, client, historyServerURL)
 
-	// NOTE:
-	// The job_id returned by /api/jobs may be hex-encoded (e.g. from live cluster APIs),
-	// while archived timeline events store job_id in base64.
-	// The timeline endpoint currently filters by string equality against the base64 job_id
-	// in trace events, so we intentionally normalize the job_id to base64 here to make
-	// filtering work for dead-cluster timelines.
-	base64JobID, _ := hexToBase64(jobID)
 	test.T().Run("should return timeline data from S3", func(t *testing.T) {
 		g := NewWithT(t)
 		verifyTimelineResponse(g, client, historyServerURL, "", false)
 	})
 	test.T().Run("with valid job_id returns filtered events", func(t *testing.T) {
 		g := NewWithT(t)
-		verifyTimelineResponse(g, client, historyServerURL, base64JobID, false)
+		verifyTimelineResponse(g, client, historyServerURL, jobID, false)
 	})
 
 	test.T().Run("download=1 sets Content-Disposition and filename", func(t *testing.T) {
@@ -312,7 +305,7 @@ func testTimelineEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Name
 
 	test.T().Run("download=1 with job_id sets filename with job_id", func(t *testing.T) {
 		g := NewWithT(t)
-		verifyTimelineResponse(g, client, historyServerURL, base64JobID, true)
+		verifyTimelineResponse(g, client, historyServerURL, jobID, true)
 	})
 	DeleteS3Bucket(test, g, s3Client)
 	LogWithTimestamp(test.T(), "Dead cluster timeline endpoint test completed")
