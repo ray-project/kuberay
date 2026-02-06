@@ -8,6 +8,14 @@ the actual pods are taken from one of the pod pools specified by the users and e
 * resource scheduling time
 * image pulling time
 * volume preparation time
-because those pods are already active and waiting in pools.
+  because those pods are already active and waiting in pools.
 
 <!-- TODO: Add docs for local development -->
+
+## controller
+
+pod pool controller
+
+## manager
+
+watch pod which scheduled by kubernetes, pick and sync pod status from pod pool to kubernetes
