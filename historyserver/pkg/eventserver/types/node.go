@@ -13,19 +13,10 @@ const (
 	NODE_DEAD  NodeState = "DEAD"
 )
 
-// NodeAliveSubState provides more granular state information for nodes in the ALIVE state.
-type NodeAliveSubState string
-
-const (
-	NODE_ALIVE_UNSPECIFIED NodeAliveSubState = "UNSPECIFIED"
-	NODE_ALIVE_DRAINING    NodeAliveSubState = "DRAINING"
-)
-
 // NodeDeathInfoReason specifies the reason why a node died.
 type NodeDeathInfoReason string
 
 const (
-	DEATH_REASON_UNSPECIFIED   NodeDeathInfoReason = "UNSPECIFIED"
 	EXPECTED_TERMINATION       NodeDeathInfoReason = "EXPECTED_TERMINATION"
 	UNEXPECTED_TERMINATION     NodeDeathInfoReason = "UNEXPECTED_TERMINATION"
 	AUTOSCALER_DRAIN_PREEMPTED NodeDeathInfoReason = "AUTOSCALER_DRAIN_PREEMPTED"
@@ -48,12 +39,9 @@ type NodeStateTransition struct {
 	// Resources available on a node (cpu, gpu, etc.), available only in the ALIVE state.
 	Resources map[string]float64 `json:"resources,omitempty"`
 
-	// Reason why a node died (UNSPECIFIED, EXPECTED_TERMINATION, UNEXPECTED_TERMINATION, AUTOSCALER_DRAIN_PREEMPTED, AUTOSCALER_DRAIN_IDLE),
+	// Reason why a node died (EXPECTED_TERMINATION, UNEXPECTED_TERMINATION, AUTOSCALER_DRAIN_PREEMPTED, AUTOSCALER_DRAIN_IDLE),
 	// available only in the DEAD state.
 	DeathInfo *NodeDeathInfo `json:"deathInfo,omitempty"`
-
-	// Sub-state of a node in the ALIVE state (UNSPECIFIED, DRAINING), available only in the ALIVE state.
-	AliveSubState NodeAliveSubState `json:"aliveSubState,omitempty"`
 }
 
 // GetState returns the state of the node.
