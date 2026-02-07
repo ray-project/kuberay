@@ -943,7 +943,7 @@ func (h *EventHandler) handleNodeDefinitionEvent(eventMap map[string]any, cluste
 
 	currNode.NodeID, err = utils.ConvertBase64ToHex(currNode.NodeID)
 	if err != nil {
-		logrus.Errorf("failed to convert node ID from base64 to hex: %v", err)
+		logrus.Errorf("Failed to convert node ID from base64 to hex, will keep node ID in base64: %v", err)
 	}
 
 	nodeMap := h.ClusterNodeMap.GetOrCreateNodeMap(clusterSessionID)
