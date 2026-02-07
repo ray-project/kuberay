@@ -625,11 +625,20 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 				ExtraData: e.ExtraData,
 			})
 		}
-		// Convert TaskID from base64 to hex before using as key
+		// Convert IDs from base64 to hex before merge (consistent with JOB_DEFINITION_EVENT pattern)
 		profileData.TaskID, err = utils.ConvertBase64ToHex(profileData.TaskID)
 		if err != nil {
-			logrus.Errorf("Failed to convert TaskID from base64 to Hex for key lookup, will use base64: %v", err)
+			logrus.Errorf("Failed to convert TaskID from base64 to Hex, will use base64: %v", err)
 		}
+		profileData.JobID, err = utils.ConvertBase64ToHex(profileData.JobID)
+		if err != nil {
+			logrus.Errorf("Failed to convert JobID from base64 to Hex, will use base64: %v", err)
+		}
+		profileData.ProfileEvents.ComponentID, err = utils.ConvertBase64ToHex(profileData.ProfileEvents.ComponentID)
+		if err != nil {
+			logrus.Errorf("Failed to convert ComponentID from base64 to Hex, will use base64: %v", err)
+		}
+
 		taskMap := h.ClusterTaskMap.GetOrCreateTaskMap(currentClusterName)
 		taskMap.CreateOrMergeAttempt(profileData.TaskID, profileData.AttemptNumber, func(t *types.Task) {
 			// Ensure core identifiers are set
@@ -637,11 +646,6 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 				t.TaskID = profileData.TaskID
 			}
 			if t.JobID == "" {
-				// Convert JobID from base64 to hex
-				profileData.JobID, err = utils.ConvertBase64ToHex(profileData.JobID)
-				if err != nil {
-					logrus.Errorf("Failed to convert JobID from base64 to Hex, will keep JobID in base64: %v", err)
-				}
 				t.JobID = profileData.JobID
 			}
 
@@ -650,11 +654,6 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 
 			// Initialize ProfileData if not exists
 			if t.ProfileData == nil {
-				// Convert ComponentID from base64 to hex
-				profileData.ProfileEvents.ComponentID, err = utils.ConvertBase64ToHex(profileData.ProfileEvents.ComponentID)
-				if err != nil {
-					logrus.Errorf("Failed to convert ComponentID from base64 to Hex, will keep in base64: %v", err)
-				}
 				t.ProfileData = &types.ProfileData{
 					ComponentID:   profileData.ProfileEvents.ComponentID,
 					ComponentType: profileData.ProfileEvents.ComponentType,
