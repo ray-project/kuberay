@@ -943,7 +943,7 @@ func (h *EventHandler) handleNodeDefinitionEvent(eventMap map[string]any, cluste
 
 	currNode.NodeID, err = utils.ConvertBase64ToHex(currNode.NodeID)
 	if err != nil {
-		return fmt.Errorf("failed to convert node ID from base64 to hex: %w", err)
+		logrus.Errorf("failed to convert node ID from base64 to hex: %v", err)
 	}
 
 	nodeMap := h.ClusterNodeMap.GetOrCreateNodeMap(clusterSessionID)
@@ -982,7 +982,7 @@ func (h *EventHandler) handleNodeLifecycleEvent(eventMap map[string]any, cluster
 
 	currNode.NodeID, err = utils.ConvertBase64ToHex(currNode.NodeID)
 	if err != nil {
-		return fmt.Errorf("failed to convert node ID from base64 to hex: %w", err)
+		logrus.Errorf("Failed to convert node ID from base64 to hex, will keep node ID in base64: %v", err)
 	}
 
 	// A NODE_LIFECYCLE_EVENT must have at least one state transition.

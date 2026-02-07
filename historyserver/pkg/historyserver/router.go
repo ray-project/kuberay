@@ -63,7 +63,7 @@ func routerNodes(s *ServerHandler) {
 		Consumes(restful.MIME_JSON).
 		Produces(restful.MIME_JSON) //.Filter(s.LoginWrapper)
 
-	ws.Route(ws.GET("/").To(s.getNodes).
+	ws.Route(ws.GET("").To(s.getNodes).
 		Filter(s.CookieHandle).
 		Doc("Get all node information for a given cluster").
 		Param(ws.QueryParameter("view", "View type: 'summary' (default) for node summary and resources, 'hostNameList' for alive node hostnames")).
@@ -287,10 +287,6 @@ func (s *ServerHandler) RegisterRouter() {
 func (s *ServerHandler) redirectRequest(req *restful.Request, resp *restful.Response) {
 	svcName := req.Attribute(ATTRIBUTE_SERVICE_NAME).(string)
 	urlPath := req.Request.URL.String()
-
-	// Remove trailing slash before query string to match Ray Dashboard's expected path format.
-	// Ray Dashboard expects "/nodes?view=summary" not "/nodes/?view=summary".
-	urlPath = strings.Replace(urlPath, "/?", "?", 1)
 
 	remoteResp, err := s.httpClient.Get("http://" + svcName + urlPath)
 	if err != nil {
@@ -1174,7 +1170,9 @@ func formatNodeSummaryReplayForResp(node eventtypes.Node, sessionName string) []
 			}
 		}
 
-		// Create a summary snapshot.
+		// Host-level metrics (cpus, mem, shm, bootTime, disk, gpus, tpus) are not available
+		// from Ray Base Events. These metrics can be obtained from Prometheus/Grafana when
+		// Ray metrics are enabled. For historical replay, we use placeholder values.
 		nodeSummarySnapshot := map[string]interface{}{
 			"t":        transitionTimestamp, // TODO(jwj): Should we just populate "now".
 			"now":      transitionTimestamp,
