@@ -43,6 +43,7 @@ type StateEvent struct {
 
 type Task struct {
 	TaskID            string `json:"taskId"`
+	ParentTaskID      string `json:"parentTaskId"`
 	Name              string `json:"taskName"`
 	AttemptNumber     int    `json:"taskAttempt"`
 	State             TaskStatus
