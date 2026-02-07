@@ -1289,6 +1289,7 @@ func composeStateMessage(deathReason string, deathReasonMessage string) string {
 }
 
 // constructResourceString constructs a resource string based on the resources in state transition.
+// Note that we skip processing the placement group.
 // Ref: https://github.com/ray-project/ray/blob/f953f199b5d68d47c07c865c5ebcd2333d49f365/python/ray/autoscaler/_private/util.py#L643-L665.
 func constructResourceString(resources map[string]float64) string {
 	resourceKeys := make([]string, 0, len(resources))
@@ -1305,10 +1306,16 @@ func constructResourceString(resources map[string]float64) string {
 			formattedUsed := "0B"
 			formattedTotal := formatMemory(v)
 			resourceString += fmt.Sprintf("%s/%s %s", formattedUsed, formattedTotal, k)
-		} else if k == "CPU" {
-			resourceString += fmt.Sprintf("%.1f/%.1f %s", 0.0, v, k)
-		} else {
+		} else if strings.HasPrefix(k, "node:") {
+			// Skip per-node resources
 			continue
+		} else if strings.HasPrefix(k, "accelerator_type:") {
+			// Skip accelerator_type
+			// Ref: https://github.com/ray-project/ray/issues/33272
+			continue
+		} else {
+			// Handle CPU, GPU, TPU, and other resources
+			resourceString += fmt.Sprintf("%.1f/%.1f %s", 0.0, v, k)
 		}
 
 		resourceString += "\n"
