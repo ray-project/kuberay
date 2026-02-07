@@ -510,24 +510,13 @@ func initLivenessAndReadinessProbe(rayContainer *corev1.Container, rayNodeType r
 		// See https://github.com/ray-project/kuberay/pull/1808 for reasons.
 		if creatorCRDType == utils.RayServiceCRD && rayNodeType == rayv1.WorkerNode {
 			rayContainer.ReadinessProbe.FailureThreshold = utils.ServeReadinessProbeFailureThreshold
-			if httpHealthCheck {
-				rayContainer.ReadinessProbe.Exec = nil
-				rayContainer.ReadinessProbe.HTTPGet = &corev1.HTTPGetAction{
-					Path: utils.RayServeProxyHealthPath,
-					Port: intstr.IntOrString{
-						Type:   intstr.Int,
-						IntVal: utils.FindContainerPort(rayContainer, utils.ServingPortName, utils.DefaultServingPort),
-					},
-				}
-			} else {
-				rayServeProxyHealthCommand := fmt.Sprintf(
-					utils.BaseWgetHealthCommand,
-					utils.DefaultReadinessProbeInitialDelaySeconds,
-					utils.FindContainerPort(rayContainer, utils.ServingPortName, utils.DefaultServingPort),
-					utils.RayServeProxyHealthPath,
-				)
-				rayContainer.ReadinessProbe.HTTPGet = nil
-				rayContainer.ReadinessProbe.Exec = &corev1.ExecAction{Command: []string{"bash", "-c", rayServeProxyHealthCommand}}
+			rayContainer.ReadinessProbe.Exec = nil
+			rayContainer.ReadinessProbe.HTTPGet = &corev1.HTTPGetAction{
+				Path: utils.RayServeProxyHealthPath,
+				Port: intstr.IntOrString{
+					Type:   intstr.Int,
+					IntVal: utils.FindContainerPort(rayContainer, utils.ServingPortName, utils.DefaultServingPort),
+				},
 			}
 		}
 	}
