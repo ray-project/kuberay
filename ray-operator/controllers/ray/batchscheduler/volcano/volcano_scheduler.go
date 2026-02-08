@@ -252,6 +252,83 @@ func (v *VolcanoBatchScheduler) AddMetadataToChildResource(_ context.Context, pa
 	addSchedulerName(child, v.Name())
 }
 
+// CleanupOnCompletion deletes the PodGroup when RayJob finishes.
+// This is called when the RayJob reaches terminal state (Complete/Failed).
+//
+// Why delete instead of marking as Completed?
+//
+// The Volcano scheduler runs a continuous control loop that recalculates and updates
+// PodGroup status in every scheduling cycle (see volcano/pkg/scheduler/framework/job_updater.go:116).
+// The status calculation logic (getPodGroupPhase in session.go:614) works as follows:
+//
+//  1. If scheduled pods < MinMember → return Pending
+//  2. If scheduled pods >= MinMember and all completed → return Completed
+//  3. If scheduled pods >= MinMember and some running → return Running
+//  4. If current status is Inqueue → return Inqueue (preserve it)
+//  5. Otherwise → return Pending
+//
+// When RayJob finishes and RayCluster is deleted:
+// - All pods are deleted, so scheduled = 0
+// - Since scheduled (0) < MinMember (e.g., 3), condition #1 applies
+// - The function returns Pending
+// - The enqueue action then changes Pending to Inqueue (enqueue.go:97)
+//
+// Therefore, marking the PodGroup as Completed doesn't work because:
+// 1. We set status to Completed
+// 2. Volcano scheduler runs its next cycle
+// 3. jobStatus() recalculates: "scheduled < MinMember, so status = Pending"
+// 4. enqueue action sees Pending and changes it to Inqueue
+// 5. User sees PodGroup stuck in Inqueue state, queue resources NOT released
+//
+// By deleting the PodGroup entirely:
+// - Volcano scheduler can't find the PodGroup (NotFound)
+// - Skips all status updates for this PodGroup
+// - Queue resources are immediately and permanently released
+//
+// See: https://github.com/volcano-sh/volcano/blob/master/pkg/scheduler/framework/job_updater.go
+//
+//	https://github.com/volcano-sh/volcano/blob/master/pkg/scheduler/framework/session.go
+func (v *VolcanoBatchScheduler) CleanupOnCompletion(ctx context.Context, object metav1.Object) error {
+	logger := ctrl.LoggerFrom(ctx).WithName(pluginName)
+
+	// Only handle RayJob. RayCluster PodGroups will be cleaned up via OwnerReference
+	rayJob, ok := object.(*rayv1.RayJob)
+	if !ok {
+		return nil
+	}
+
+	podGroupName := getAppPodGroupName(rayJob)
+	podGroup := volcanoschedulingv1beta1.PodGroup{}
+
+	if err := v.cli.Get(ctx, types.NamespacedName{
+		Namespace: rayJob.Namespace,
+		Name:      podGroupName,
+	}, &podGroup); err != nil {
+		if errors.IsNotFound(err) {
+			logger.Info("PodGroup not found, already deleted", "podGroupName", podGroupName)
+			return nil
+		}
+		logger.Error(err, "failed to get PodGroup", "podGroupName", podGroupName)
+		return err
+	}
+
+	// Delete the PodGroup to immediately release queue resources
+	// We use client.Delete (not background) to ensure proper cleanup
+	if err := v.cli.Delete(ctx, &podGroup); err != nil {
+		// If already deleted, that's fine
+		if errors.IsNotFound(err) {
+			logger.Info("PodGroup already deleted", "podGroupName", podGroupName)
+			return nil
+		}
+		logger.Error(err, "failed to delete PodGroup", "podGroupName", podGroupName)
+		return err
+	}
+
+	logger.Info("PodGroup deleted to release queue resources", "podGroupName", podGroupName,
+		"minMember", podGroup.Spec.MinMember)
+	return nil
+}
+
 func (vf *VolcanoBatchSchedulerFactory) New(_ context.Context, _ *rest.Config, cli client.Client) (schedulerinterface.BatchScheduler, error) {
 	if err := volcanoschedulingv1beta1.AddToScheme(cli.Scheme()); err != nil {
 		return nil, fmt.Errorf("failed to add volcano to scheme with error %w", err)
