@@ -217,3 +217,23 @@ func GetOneOfNodeID(g *WithT, client *http.Client, historyServerURL string, isLi
 	}
 	return nodeInfo["raylet"].(map[string]any)["nodeId"].(string)
 }
+
+// GetOneOfJobID retrieves a job_id from the /api/jobs endpoint.
+func GetOneOfJobID(g *WithT, client *http.Client, historyServerURL string) string {
+	resp, err := client.Get(historyServerURL + "/api/jobs/")
+	g.Expect(err).NotTo(HaveOccurred())
+	defer resp.Body.Close()
+	g.Expect(resp.StatusCode).To(Equal(http.StatusOK))
+	body, _ := io.ReadAll(resp.Body)
+	var jobs []map[string]any
+	err = json.Unmarshal(body, &jobs)
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(len(jobs)).To(BeNumerically(">", 0), "expected at least one job from /api/jobs/")
+	for _, j := range jobs {
+		if jid, ok := j["job_id"].(string); ok && jid != "" {
+			return jid
+		}
+	}
+	g.Expect(false).To(BeTrue(), "no job with non-empty job_id in /api/jobs/ response")
+	return ""
+}
