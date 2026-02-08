@@ -546,7 +546,7 @@ func (r *RayJobReconciler) createK8sJobIfNeed(ctx context.Context, rayJobInstanc
 	namespacedName := common.RayJobK8sJobNamespacedName(rayJobInstance)
 	if err := r.Client.Get(ctx, namespacedName, job); err != nil {
 		if errors.IsNotFound(err) {
-			submitterTemplate, err := getSubmitterTemplate(rayJobInstance, rayClusterInstance)
+			submitterTemplate, err := getSubmitterTemplate(ctx, rayJobInstance, rayClusterInstance)
 			if err != nil {
 				return err
 			}
@@ -567,11 +567,11 @@ func (r *RayJobReconciler) createK8sJobIfNeed(ctx context.Context, rayJobInstanc
 }
 
 // getSubmitterTemplate builds the submitter pod template for the Ray job.
-func getSubmitterTemplate(rayJobInstance *rayv1.RayJob, rayClusterInstance *rayv1.RayCluster) (corev1.PodTemplateSpec, error) {
+func getSubmitterTemplate(ctx context.Context, rayJobInstance *rayv1.RayJob, rayClusterInstance *rayv1.RayCluster) (corev1.PodTemplateSpec, error) {
 	// Set the default value for the optional field SubmitterPodTemplate if not provided.
 	submitterTemplate := common.GetSubmitterTemplate(&rayJobInstance.Spec, &rayClusterInstance.Spec)
 
-	if err := configureSubmitterContainer(&submitterTemplate.Spec.Containers[utils.RayContainerIndex], rayJobInstance, rayClusterInstance, rayv1.K8sJobMode); err != nil {
+	if err := configureSubmitterContainer(ctx, &submitterTemplate.Spec.Containers[utils.RayContainerIndex], rayJobInstance, rayClusterInstance, rayv1.K8sJobMode); err != nil {
 		return corev1.PodTemplateSpec{}, err
 	}
 
@@ -579,10 +579,10 @@ func getSubmitterTemplate(rayJobInstance *rayv1.RayJob, rayClusterInstance *rayv
 }
 
 // getSubmitterContainer builds the submitter container for the Ray job Sidecar mode.
-func getSubmitterContainer(rayJobInstance *rayv1.RayJob, rayClusterInstance *rayv1.RayCluster) (corev1.Container, error) {
+func getSubmitterContainer(ctx context.Context, rayJobInstance *rayv1.RayJob, rayClusterInstance *rayv1.RayCluster) (corev1.Container, error) {
 	submitterContainer := common.GetDefaultSubmitterContainer(&rayClusterInstance.Spec)
 
-	if err := configureSubmitterContainer(&submitterContainer, rayJobInstance, rayClusterInstance, rayv1.SidecarMode); err != nil {
+	if err := configureSubmitterContainer(ctx, &submitterContainer, rayJobInstance, rayClusterInstance, rayv1.SidecarMode); err != nil {
 		return corev1.Container{}, err
 	}
 
@@ -590,7 +590,7 @@ func getSubmitterContainer(rayJobInstance *rayv1.RayJob, rayClusterInstance *ray
 }
 
 // pass the RayCluster instance for cluster selector case
-func configureSubmitterContainer(container *corev1.Container, rayJobInstance *rayv1.RayJob, rayClusterInstance *rayv1.RayCluster, submissionMode rayv1.JobSubmissionMode) error {
+func configureSubmitterContainer(ctx context.Context, container *corev1.Container, rayJobInstance *rayv1.RayJob, rayClusterInstance *rayv1.RayCluster, submissionMode rayv1.JobSubmissionMode) error {
 	// If the command in the submitter container manifest isn't set, use the default command.
 	jobCmd, err := common.BuildJobSubmitCommand(rayJobInstance, submissionMode)
 	if err != nil {
@@ -613,6 +613,13 @@ func configureSubmitterContainer(container *corev1.Container, rayJobInstance *ra
 	// ray job submit --address=http://$RAY_DASHBOARD_ADDRESS --submission-id=$RAY_JOB_SUBMISSION_ID ...
 	container.Env = append(container.Env, corev1.EnvVar{Name: utils.RAY_DASHBOARD_ADDRESS, Value: rayJobInstance.Status.DashboardURL})
 	container.Env = append(container.Env, corev1.EnvVar{Name: utils.RAY_JOB_SUBMISSION_ID, Value: rayJobInstance.Status.JobId})
+
+	// In SidecarMode, pass the expected worker count so the submitter can wait for workers to register
+	if submissionMode == rayv1.SidecarMode && rayClusterInstance != nil {
+		expectedWorkers := utils.CalculateDesiredReplicas(ctx, rayClusterInstance)
+		container.Env = append(container.Env, corev1.EnvVar{Name: utils.RAY_EXPECTED_WORKERS, Value: strconv.Itoa(int(expectedWorkers))})
+	}
+
 	if rayClusterInstance != nil && utils.IsAuthEnabled(&rayClusterInstance.Spec) {
 		common.SetContainerTokenAuthEnvVars(rayClusterInstance.Name, container)
 	}
@@ -912,7 +919,7 @@ func (r *RayJobReconciler) getOrCreateRayClusterInstance(ctx context.Context, ra
 			}
 
 			logger.Info("RayCluster not found, creating RayCluster!", "RayCluster", rayClusterNamespacedName)
-			rayClusterInstance, err = r.constructRayClusterForRayJob(rayJobInstance, rayClusterNamespacedName.Name)
+			rayClusterInstance, err = r.constructRayClusterForRayJob(ctx, rayJobInstance, rayClusterNamespacedName.Name)
 			if err != nil {
 				return nil, err
 			}
@@ -946,7 +953,7 @@ func (r *RayJobReconciler) getOrCreateRayClusterInstance(ctx context.Context, ra
 	return rayClusterInstance, nil
 }
 
-func (r *RayJobReconciler) constructRayClusterForRayJob(rayJobInstance *rayv1.RayJob, rayClusterName string) (*rayv1.RayCluster, error) {
+func (r *RayJobReconciler) constructRayClusterForRayJob(ctx context.Context, rayJobInstance *rayv1.RayJob, rayClusterName string) (*rayv1.RayCluster, error) {
 	labels := make(map[string]string, len(rayJobInstance.Labels))
 	maps.Copy(labels, rayJobInstance.Labels)
 	labels[utils.RayOriginatedFromCRNameLabelKey] = rayJobInstance.Name
@@ -976,7 +983,7 @@ func (r *RayJobReconciler) constructRayClusterForRayJob(rayJobInstance *rayv1.Ra
 
 	// Inject a submitter container into the head Pod in SidecarMode.
 	if rayJobInstance.Spec.SubmissionMode == rayv1.SidecarMode {
-		sidecar, err := getSubmitterContainer(rayJobInstance, rayCluster)
+		sidecar, err := getSubmitterContainer(ctx, rayJobInstance, rayCluster)
 		if err != nil {
 			return nil, err
 		}
