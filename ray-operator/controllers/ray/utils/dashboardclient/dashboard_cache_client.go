@@ -36,8 +36,6 @@ var (
 )
 
 type (
-	// Task defines a unit of work for the worker pool and the return value indicate if it should re-queue or not.
-	Task         func(taskCTX context.Context) bool
 	JobInfoCache struct {
 		JobInfo *utiltypes.RayJobInfo
 		Err     error
