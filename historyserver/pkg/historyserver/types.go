@@ -23,7 +23,7 @@ type GetLogFileOptions struct {
 	// Whether to filter ANSI escape codes from logs, default to False
 	FilterAnsiCode bool
 	// If set, triggers download with Content-Disposition header using this filename.
-	// Otherwise, using the default filename DEFAULT_DOWNLOAD_FILENAME
+	// If empty, no Content-Disposition header is set and the log content is displayed inline.
 	DownloadFilename string
 	// The suffix of the log file ("out" or "err"), default to "out"
 	// Used when resolving by TaskID, ActorID, or PID

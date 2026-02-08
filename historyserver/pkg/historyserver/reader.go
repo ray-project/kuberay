@@ -461,60 +461,71 @@ func (s *ServerHandler) ipToNodeId(rayClusterNameID, sessionID, nodeIP string) (
 	// Parse each node event file to find matching node_ip
 	for _, file := range files {
 		filePath := path.Join(nodeEventsPath, file)
-		reader := s.reader.GetContent(rayClusterNameID, filePath)
-		if reader == nil {
-			continue
-		}
-
-		if closer, ok := reader.(io.Closer); ok {
-			defer closer.Close()
-		}
-
-		data, err := io.ReadAll(reader)
-		if err != nil {
-			logrus.Warnf("Failed to read node event file %s: %v", filePath, err)
-			continue
-		}
-
-		var events []map[string]interface{}
-		if err := json.Unmarshal(data, &events); err != nil {
-			logrus.Warnf("Failed to unmarshal node events from %s: %v", filePath, err)
-			continue
-		}
-
-		// Search for NODE_DEFINITION_EVENT with matching node_ip
-		for _, event := range events {
-			eventType, ok := event["eventType"].(string)
-			if !ok || eventType != string(eventtypes.NODE_DEFINITION_EVENT) {
-				continue
-			}
-
-			nodeDefEvent, ok := event["nodeDefinitionEvent"].(map[string]interface{})
-			if !ok {
-				continue
-			}
-
-			ipAddr, ok := nodeDefEvent["nodeIpAddress"].(string)
-			if !ok || ipAddr != nodeIP {
-				continue
-			}
-
-			// Found matching node, extract node_id
-			nodeIDBytes, ok := nodeDefEvent["nodeId"].(string)
-			if !ok {
-				continue
-			}
-
-			// Convert to hex if not already is
-			nodeIDHex, err := utils.ConvertBase64ToHex(nodeIDBytes)
-			if err != nil {
-				logrus.Warnf("Failed to decode node_id %s: %v", nodeIDBytes, err)
-				continue
-			}
+		nodeIDHex, found := s.searchNodeIDHexInEventFile(rayClusterNameID, filePath, nodeIP)
+		if found {
 			logrus.Infof("Resolved node_ip %s to node_id %s", nodeIP, nodeIDHex)
 			return nodeIDHex, nil
 		}
 	}
 
 	return "", fmt.Errorf("node_id not found for node_ip=%s", nodeIP)
+}
+
+// searchNodeIDHexInEventFile searches for a node with the given IP in a single event file.
+// Returns (nodeIDHex, true) if found, ("", false) otherwise.
+func (s *ServerHandler) searchNodeIDHexInEventFile(rayClusterNameID, filePath, nodeIP string) (string, bool) {
+	reader := s.reader.GetContent(rayClusterNameID, filePath)
+	if reader == nil {
+		return "", false
+	}
+
+	if closer, ok := reader.(io.Closer); ok {
+		defer closer.Close()
+	}
+
+	data, err := io.ReadAll(reader)
+	if err != nil {
+		logrus.Warnf("Failed to read node event file %s: %v", filePath, err)
+		return "", false
+	}
+
+	var events []map[string]interface{}
+	if err := json.Unmarshal(data, &events); err != nil {
+		logrus.Warnf("Failed to unmarshal node events from %s: %v", filePath, err)
+		return "", false
+	}
+
+	// Search for NODE_DEFINITION_EVENT with matching node_ip
+	for _, event := range events {
+		eventType, ok := event["eventType"].(string)
+		if !ok || eventType != string(eventtypes.NODE_DEFINITION_EVENT) {
+			continue
+		}
+
+		nodeDefEvent, ok := event["nodeDefinitionEvent"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		ipAddr, ok := nodeDefEvent["nodeIpAddress"].(string)
+		if !ok || ipAddr != nodeIP {
+			continue
+		}
+
+		// Found matching node, extract node_id
+		nodeIDBytes, ok := nodeDefEvent["nodeId"].(string)
+		if !ok {
+			continue
+		}
+
+		// Convert to hex if not already is
+		nodeIDHex, err := utils.ConvertBase64ToHex(nodeIDBytes)
+		if err != nil {
+			logrus.Warnf("Failed to decode node_id %s: %v", nodeIDBytes, err)
+			continue
+		}
+		return nodeIDHex, true
+	}
+
+	return "", false
 }
