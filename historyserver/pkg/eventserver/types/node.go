@@ -55,7 +55,7 @@ func (n NodeStateTransition) GetTimestamp() time.Time {
 }
 
 // Node represents a Ray node in a cluster session. The fields are populated from both
-// the NODE_DEAD_EVENT and the NODE_LIFECYCLE_EVENT.
+// the NODE_DEFINITION_EVENT and the NODE_LIFECYCLE_EVENT.
 type Node struct {
 	// NodeID is the hexadecimal representation of the node ID.
 	NodeID         string            `json:"nodeId"`

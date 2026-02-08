@@ -359,7 +359,6 @@ func (s *ServerHandler) getClusters(req *restful.Request, resp *restful.Response
 	resp.WriteAsJson(clusters)
 }
 
-// TODO(jwj): Make this doc clearer.
 // getNodes retrieves all node summaries and resource usage information for a specific cluster session.
 // The API schema of live and dead clusters are different:
 //   - Live clusters: returns the current snapshot
@@ -477,7 +476,6 @@ func (s *ServerHandler) getNodesHostNameList(nodeMap map[string]eventtypes.Node,
 	resp.Write(data)
 }
 
-// TODO(jwj): Make this doc clearer.
 // getNode retrieves node details for a specific node in a specific cluster session.
 // The API schema of live and dead clusters are different:
 //   - Live clusters: returns the current snapshot
@@ -1215,7 +1213,7 @@ func formatNodeSummaryReplayForResp(node eventtypes.Node, sessionName string) []
 		// from Ray Base Events. These metrics can be obtained from Prometheus/Grafana when
 		// Ray metrics are enabled. For historical replay, we use placeholder values.
 		nodeSummarySnapshot := map[string]interface{}{
-			"t":        transitionTimestamp, // TODO(jwj): Should we just populate "now".
+			"t":        transitionTimestamp,
 			"now":      transitionTimestamp,
 			"hostname": hostname,
 			"ip":       nodeIpAddress,
@@ -1264,7 +1262,6 @@ func formatNodeResourceReplayForResp(node eventtypes.Node) []map[string]interfac
 		// Create a resource snapshot.
 		var resourceString string
 		if tr.State == eventtypes.NODE_ALIVE {
-			// TODO(jwj): Handle the case in which tr.Resources is nil if it's possible.
 			resourceString = constructResourceString(tr.Resources)
 		}
 		nodeResourceSnapshot := map[string]interface{}{
