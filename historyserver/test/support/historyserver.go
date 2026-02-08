@@ -291,5 +291,11 @@ func GetOneOfJobID(g *WithT, client *http.Client, historyServerURL string) strin
 	err = json.Unmarshal(body, &jobs)
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(len(jobs)).To(BeNumerically(">", 0), "expected at least one job from /api/jobs/")
-	return jobs[0]["job_id"].(string)
+	for _, j := range jobs {
+		if jid, ok := j["job_id"].(string); ok && jid != "" {
+			return jid
+		}
+	}
+	g.Expect(false).To(BeTrue(), "no job with non-empty job_id in /api/jobs/ response")
+	return ""
 }
