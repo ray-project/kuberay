@@ -10,13 +10,12 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/maypok86/otter/v2"
 	"github.com/smallnest/chanx"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	utiltypes "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/types"
-	rayinformersv1 "github.com/ray-project/kuberay/ray-operator/pkg/client/informers/externalversions/ray/v1"
 )
 
 // ErrAgain EAGAIN means "there is no data available right now, try again later"
@@ -45,8 +44,7 @@ type (
 	}
 
 	WorkerPool struct {
-		rayJobInformer      rayinformersv1.RayJobInformer
-		rayClusterInformer  rayinformersv1.RayClusterInformer
+		cacheReader         client.Reader
 		taskQueue           *chanx.UnboundedChan[*rayv1.RayJob]
 		existInQueue        sync.Map
 		dashboardClientFunc func(rayCluster *rayv1.RayCluster, url string) (RayDashboardClientInterface, error)
@@ -58,8 +56,7 @@ type (
 )
 
 func InitWorkerPool(ctx context.Context,
-	rayJobInformer rayinformersv1.RayJobInformer,
-	rayClusterInformer rayinformersv1.RayClusterInformer,
+	cacheReader client.Reader,
 	numWorkers int,
 	queryInterval time.Duration,
 	cacheExpiry time.Duration,
@@ -84,8 +81,7 @@ func InitWorkerPool(ctx context.Context,
 
 		pool = &WorkerPool{
 			taskQueue:           taskQueue,
-			rayJobInformer:      rayJobInformer,
-			rayClusterInformer:  rayClusterInformer,
+			cacheReader:         cacheReader,
 			dashboardClientFunc: dashboardClientFunc,
 			cacheStorage:        cacheStorage,
 			numWorkers:          numWorkers,
@@ -110,15 +106,16 @@ func (w *WorkerPool) Start(ctx context.Context) {
 				logger.Info("RayJob listing goroutine exiting...")
 				return
 			case <-ticker.C:
-				rayJobs, err := w.rayJobInformer.Lister().List(labels.Everything())
+				var rayJobs rayv1.RayJobList
+				err := w.cacheReader.List(ctx, &rayJobs, client.InNamespace("")) // List all namespaces
 				if err != nil {
 					logger.Error(err, "Error listing RayJobs from cache")
 					continue
 				}
 
-				logger.Info("Listing RayJobs from cache", "total", len(rayJobs))
+				logger.Info("Listing RayJobs from cache", "total", len(rayJobs.Items))
 
-				for _, rayJob := range rayJobs {
+				for _, rayJob := range rayJobs.Items {
 					if len(rayJob.Status.DashboardURL) == 0 ||
 						rayv1.IsJobTerminal(rayJob.Status.JobStatus) ||
 						rayv1.IsJobDeploymentTerminal(rayJob.Status.JobDeploymentStatus) {
@@ -128,12 +125,12 @@ func (w *WorkerPool) Start(ctx context.Context) {
 					// If the RayJob is in the channel, skip to enqueue.
 					// In the worst case of the current implementation, we could have the number of worker working on getting JobInfo and
 					// the number of all of RayJobs in the cluster waiting in the task queue. It would not be unbounded.
-					if _, ok := w.existInQueue.LoadOrStore(cacheKey(namespacedNameFromRayJob(rayJob), rayJob.Status.JobId), struct{}{}); ok {
+					if _, ok := w.existInQueue.LoadOrStore(cacheKey(namespacedNameFromRayJob(&rayJob), rayJob.Status.JobId), struct{}{}); ok {
 						continue
 					}
 
 					// The task queue is unbounded, so the send operation will never block.
-					w.taskQueue.In <- rayJob
+					w.taskQueue.In <- &rayJob
 				}
 			}
 		}
@@ -158,13 +155,17 @@ func (w *WorkerPool) Start(ctx context.Context) {
 					w.existInQueue.Delete(cacheKey(rayClusterNamespacedName, rayJobInstance.Status.JobId))
 
 					// get RayCluster instance from informer cache
-					rayClusterInstance, err := w.rayClusterInformer.Lister().RayClusters(rayClusterNamespacedName.Namespace).Get(rayClusterNamespacedName.Name)
+					var rayClusterInstance rayv1.RayCluster
+					err := w.cacheReader.Get(
+						ctx,
+						rayClusterNamespacedName,
+						&rayClusterInstance)
 					if err != nil {
 						logger.Error(err, "failed to get RayCluster instance from informer cache", "name", rayClusterNamespacedName.Name)
 						continue
 					}
 
-					rayDashboardClient, err := w.dashboardClientFunc(rayClusterInstance, rayJobInstance.Status.DashboardURL)
+					rayDashboardClient, err := w.dashboardClientFunc(&rayClusterInstance, rayJobInstance.Status.DashboardURL)
 					if err != nil {
 						logger.Error(err, "failed to get dashboard client", "rayCluster", rayClusterNamespacedName.Name, "dashboardURL", rayJobInstance.Status.DashboardURL)
 						continue
