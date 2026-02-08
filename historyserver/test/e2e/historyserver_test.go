@@ -1,8 +1,6 @@
 package e2e
 
 import (
-	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -1189,12 +1187,4 @@ func verifyNodesHostNameListSchema(test Test, g *WithT, nodesResp map[string]any
 	data, ok := nodesResp["data"].(map[string]any)
 	g.Expect(ok).To(BeTrue(), "'data' should be a map")
 	g.Expect(data).To(HaveKey("hostNameList"))
-}
-
-func hexToBase64(hexStr string) (string, error) {
-	b, err := hex.DecodeString(hexStr)
-	if err != nil {
-		return "", err
-	}
-	return base64.StdEncoding.EncodeToString(b), nil
 }
