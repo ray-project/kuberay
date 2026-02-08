@@ -96,6 +96,11 @@ func routerAPI(s *ServerHandler) {
 		Param(ws.PathParameter("job_id", "job_id")).
 		Writes("")) // Placeholder for specific return type
 
+	ws.Route(ws.GET("/jobs/{job_id}/logs").To(s.getJobLog).Filter(s.CookieHandle).
+		Doc("get log for job").
+		Param(ws.PathParameter("job_id", "job_id")).
+		Writes("")) // Placeholder for specific return type
+
 	ws.Route(ws.GET("/data/datasets/{job_id}").To(s.getDatasets).Filter(s.CookieHandle).
 		Doc("get datasets").
 		Param(ws.PathParameter("job_id", "job_id")).
@@ -418,9 +423,7 @@ func (s *ServerHandler) getJobs(req *restful.Request, resp *restful.Response) {
 		formattedJobs = append(formattedJobs, formatJobForResponse(job))
 	}
 
-	response := formattedJobs
-
-	respData, err := json.Marshal(response)
+	respData, err := json.Marshal(formattedJobs)
 	if err != nil {
 		logrus.Errorf("Failed to marshal jobs response: %v", err)
 		resp.WriteErrorString(http.StatusInternalServerError, err.Error())
@@ -489,10 +492,8 @@ func (s *ServerHandler) getJob(req *restful.Request, resp *restful.Response) {
 	}
 
 	jobID := req.PathParameter("job_id")
-
 	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
 	job, found := s.eventHandler.GetJobByJobID(clusterSessionKey, jobID)
-
 	if !found {
 		responseString := fmt.Sprintf("Job %s does not exist", jobID)
 		resp.Write([]byte(responseString))
@@ -507,6 +508,46 @@ func (s *ServerHandler) getJob(req *restful.Request, resp *restful.Response) {
 	}
 	resp.Write(respData)
 
+}
+
+func (s *ServerHandler) getJobLog(req *restful.Request, resp *restful.Response) {
+	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
+	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
+	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
+	if sessionName == "live" {
+		s.redirectRequest(req, resp)
+		return
+	}
+
+	jobID := req.PathParameter("job_id")
+	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
+
+	reader, err := s.eventHandler.GetJobLogByJobID(clusterSessionKey, jobID)
+	if err != nil {
+		responseString := fmt.Sprintf("Failed to get log for Job %s, error: %v", jobID, err)
+		resp.Write([]byte(responseString))
+		return
+	}
+
+	logContent, err := io.ReadAll(reader)
+	if err != nil {
+		responseString := fmt.Sprintf("Failed to read file content for Job %s, error: %q", jobID, err)
+		resp.Write([]byte(responseString))
+		return
+	}
+
+	response := map[string]interface{}{
+		"logs": logContent,
+	}
+
+	respData, err := json.Marshal(response)
+	if err != nil {
+		logrus.Errorf("Failed to marshal jobs response: %v", err)
+		resp.WriteErrorString(http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	resp.Write(respData)
 }
 
 func (s *ServerHandler) getDatasets(req *restful.Request, resp *restful.Response) {
