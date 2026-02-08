@@ -298,6 +298,21 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 			return nil
 		}
 
+		// Convert IDs from base64 to hex (consistent with TASK_DEFINITION_EVENT and TASK_PROFILE_EVENT)
+		var err error
+		taskId, err = utils.ConvertBase64ToHex(taskId)
+		if err != nil {
+			logrus.Errorf("Failed to convert TaskID from base64 to Hex, will keep TaskID in base64: %v", err)
+		}
+		nodeId, err = utils.ConvertBase64ToHex(nodeId)
+		if err != nil {
+			logrus.Errorf("Failed to convert NodeID from base64 to Hex, will keep NodeID in base64: %v", err)
+		}
+		workerId, err = utils.ConvertBase64ToHex(workerId)
+		if err != nil {
+			logrus.Errorf("Failed to convert WorkerID from base64 to Hex, will keep WorkerID in base64: %v", err)
+		}
+
 		// Parse state transitions
 		var stateEvents []types.StateEvent
 		for _, transition := range transitions {
@@ -390,6 +405,12 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 			return err
 		}
 
+		// Convert ActorID from base64 to hex
+		currActor.ActorID, err = utils.ConvertBase64ToHex(currActor.ActorID)
+		if err != nil {
+			logrus.Errorf("Failed to convert ActorID from base64 to Hex, will keep ActorID in base64: %v", err)
+		}
+
 		// Use CreateOrMergeActor pattern (same as Task)
 		actorMap := h.ClusterActorMap.GetOrCreateActorMap(currentClusterName)
 		actorMap.CreateOrMergeActor(currActor.ActorID, func(a *types.Actor) {
@@ -431,6 +452,13 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 			return nil
 		}
 
+		// Convert ActorID from base64 to hex
+		var err error
+		actorId, err = utils.ConvertBase64ToHex(actorId)
+		if err != nil {
+			logrus.Errorf("Failed to convert ActorID from base64 to Hex, will keep ActorID in base64: %v", err)
+		}
+
 		// Parse state transitions into ActorStateEvent slice
 		var stateEvents []types.ActorStateEvent
 		for _, transition := range transitions {
@@ -443,6 +471,10 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 			nodeId, _ := tr["nodeId"].(string)
 			workerId, _ := tr["workerId"].(string)
 			reprName, _ := tr["reprName"].(string)
+
+			// Convert NodeID and WorkerID from base64 to hex
+			nodeId, _ = utils.ConvertBase64ToHex(nodeId)
+			workerId, _ = utils.ConvertBase64ToHex(workerId)
 
 			var timestamp time.Time
 			if timestampStr != "" {
