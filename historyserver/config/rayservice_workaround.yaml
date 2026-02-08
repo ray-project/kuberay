@@ -1,0 +1,260 @@
+# RayService that deploys a simple serve application and creates a RayCluster
+# The RayCluster created by this RayService will have the label ray.io/cluster: raycluster-historyserver
+# so that RayJob can connect to it via clusterSelector
+apiVersion: ray.io/v1
+kind: RayService
+metadata:
+  name: rayservice-workaround
+  labels:
+    ray.io/cluster: raycluster-historyserver
+spec:
+  serviceUnhealthySecondThreshold: 300
+  deploymentUnhealthySecondThreshold: 300
+  serveConfigV2: |
+    applications:
+      - name: fruit_app
+        import_path: fruit.deployment_graph
+        route_prefix: /fruit
+        runtime_env:
+          working_dir: "https://github.com/ray-project/test_dag/archive/78b4a5da38796123d9f9ffff59bab2792a043e95.zip"
+        deployments:
+          - name: MangoStand
+            num_replicas: 1
+            user_config:
+              price: 3
+            ray_actor_options:
+              num_cpus: 0.1
+          - name: OrangeStand
+            num_replicas: 1
+            user_config:
+              price: 2
+            ray_actor_options:
+              num_cpus: 0.1
+          - name: PearStand
+            num_replicas: 1
+            user_config:
+              price: 1
+            ray_actor_options:
+              num_cpus: 0.1
+          - name: FruitMarket
+            num_replicas: 1
+            ray_actor_options:
+              num_cpus: 0.1
+  rayClusterConfig:
+    rayVersion: '2.52.0'
+    headGroupSpec:
+      rayStartParams:
+        dashboard-host: 0.0.0.0
+        num-cpus: "0"
+      serviceType: ClusterIP
+      template:
+        metadata:
+          labels:
+            test: rayservice-workaround
+            ray.io/cluster: raycluster-historyserver
+        spec:
+          imagePullSecrets:
+          affinity:
+          containers:
+            - env:
+                - name: RAY_enable_ray_event
+                  value: "true"
+                - name: RAY_enable_core_worker_ray_event_to_aggregator
+                  value: "true"
+                - name: RAY_DASHBOARD_AGGREGATOR_AGENT_EVENTS_EXPORT_ADDR
+                  value: "http://localhost:8084/v1/events"
+                - name: RAY_DASHBOARD_AGGREGATOR_AGENT_EXPOSABLE_EVENT_TYPES
+                  value: "TASK_DEFINITION_EVENT,TASK_LIFECYCLE_EVENT,ACTOR_TASK_DEFINITION_EVENT,
+                      TASK_PROFILE_EVENT,DRIVER_JOB_DEFINITION_EVENT,DRIVER_JOB_LIFECYCLE_EVENT,
+                      ACTOR_DEFINITION_EVENT,ACTOR_LIFECYCLE_EVENT,NODE_DEFINITION_EVENT,NODE_LIFECYCLE_EVENT"
+              image: rayproject/ray:2.52.0
+              imagePullPolicy: IfNotPresent
+              command:
+                - 'echo "=========================================="; [ -d "/tmp/ray/session_latest" ] && dest="/tmp/ray/prev-logs/$(basename $(readlink /tmp/ray/session_latest))/$(cat /tmp/ray/raylet_node_id)" && echo "dst is $dest" && mkdir -p "$dest" && mv /tmp/ray/session_latest/logs "$dest/logs"; echo "========================================="'
+              securityContext:
+                allowPrivilegeEscalation: true
+                privileged: true
+              name: ray-head
+              lifecycle:
+                postStart:
+                  exec:
+                    command:
+                      - /bin/sh
+                      - -lc
+                      - --
+                      - |
+                        GetNodeId(){
+                          while true;
+                          do
+                            nodeid=$(ps -ef | grep raylet | grep node_id | grep -v grep | grep -oP '(?<=--node_id=)[^ ]*')
+                            if [ -n "$nodeid" ]; then
+                              echo "$(date) raylet started: \"$(ps -ef | grep raylet | grep node_id | grep -v grep | grep -oP '(?<=--node_id=)[^ ]*')\" => ${nodeid}" >> /tmp/ray/init.log
+                              echo $nodeid > /tmp/ray/raylet_node_id
+                              break
+                            else
+                              echo "$(date) raylet not start >> /tmp/ray/init.log"
+                              sleep 1
+                            fi
+                          done
+                        }
+                        GetNodeId
+              resources:
+                limits:
+                  cpu: "5"
+                  memory: 10G
+                requests:
+                  cpu: "50m"
+                  memory: 1G
+              volumeMounts:
+                - name: historyserver
+                  mountPath: /tmp/ray
+            - name: collector
+              image: collector:v0.1.0
+              imagePullPolicy: IfNotPresent
+              env:
+                - name: RAY_DASHBOARD_ADDRESS
+                  value: "http://localhost:8265"
+                - name: S3DISABLE_SSL
+                  value: "true"
+                - name: AWS_S3ID
+                  value: minioadmin
+                - name: AWS_S3SECRET
+                  value: minioadmin
+                - name: AWS_S3TOKEN
+                  value: ""
+                - name: S3_BUCKET
+                  value: "ray-historyserver"
+                - name: S3_ENDPOINT
+                  value: "minio-service.minio-dev:9000"
+                - name: S3_REGION
+                  value: "test"
+                - name: S3FORCE_PATH_STYLE
+                  value: "true"
+                - name: SUPPORT_RAY_EVENT_UNSUPPORTED_DATA
+                  value: "true"
+              command:
+                - collector
+                - --role=Head
+                - --runtime-class-name=s3
+                - --ray-cluster-name=rayservice-workaround
+                - --ray-root-dir=log
+                - --events-port=8084
+              volumeMounts:
+                - name: historyserver
+                  mountPath: /tmp/ray
+          tolerations:
+            - key: ray
+              operator: Equal
+              value: cpu
+          volumes:
+            - name: historyserver
+              emptyDir: {}
+            - name: serve-code
+              configMap:
+                name: workaround-serve-code
+    workerGroupSpecs:
+      - groupName: cpu
+        maxReplicas: 1000
+        minReplicas: 1
+        numOfHosts: 1
+        rayStartParams: {}
+        replicas: 1
+        template:
+          metadata:
+            labels:
+              test: rayservice-workaround
+              ray.io/cluster: raycluster-historyserver
+          spec:
+            imagePullSecrets:
+            containers:
+              - env:
+                  - name: RAY_enable_ray_event
+                    value: "true"
+                  - name: RAY_enable_core_worker_ray_event_to_aggregator
+                    value: "true"
+                  - name: RAY_DASHBOARD_AGGREGATOR_AGENT_EVENTS_EXPORT_ADDR
+                    value: "http://localhost:8084/v1/events"
+                  - name: RAY_DASHBOARD_AGGREGATOR_AGENT_EXPOSABLE_EVENT_TYPES
+                    value: "TASK_DEFINITION_EVENT,TASK_LIFECYCLE_EVENT,ACTOR_TASK_DEFINITION_EVENT,
+                      TASK_PROFILE_EVENT,DRIVER_JOB_DEFINITION_EVENT,DRIVER_JOB_LIFECYCLE_EVENT,
+                      ACTOR_DEFINITION_EVENT,ACTOR_LIFECYCLE_EVENT,NODE_DEFINITION_EVENT,NODE_LIFECYCLE_EVENT"
+                image: rayproject/ray:2.52.0
+                command:
+                  - 'echo "=========================================="; [ -d "/tmp/ray/session_latest" ] && dest="/tmp/ray/prev-logs/$(basename $(readlink /tmp/ray/session_latest))/$(cat /tmp/ray/raylet_node_id)" && echo "dst is $dest" && mkdir -p "$dest" && mv /tmp/ray/session_latest/logs "$dest/logs"; echo "========================================="'
+                imagePullPolicy: IfNotPresent
+                name: ray-worker
+                securityContext:
+                  allowPrivilegeEscalation: true
+                  privileged: true
+                lifecycle:
+                  postStart:
+                    exec:
+                      command:
+                        - /bin/sh
+                        - -lc
+                        - --
+                        - |
+                          GetNodeId(){
+                            while true;
+                            do
+                              nodeid=$(ps -ef | grep raylet | grep node_id | grep -v grep | grep -oP '(?<=--node_id=)[^ ]*')
+                              if [ -n "$nodeid" ]; then
+                                echo "$(date) raylet started: \"$(ps -ef | grep raylet | grep node_id | grep -v grep | grep -oP '(?<=--node_id=)[^ ]*')\" => ${nodeid}" >> /tmp/ray/init.log
+                                echo $nodeid > /tmp/ray/raylet_node_id
+                                break
+                              else
+                                echo "$(date) raylet not start >> /tmp/ray/init.log"
+                                sleep 1
+                              fi
+                            done
+                          }
+                          GetNodeId
+                resources:
+                  limits:
+                    cpu: "2"
+                    memory: 2G
+                  requests:
+                    cpu: "50m"
+                    memory: 1G
+                volumeMounts:
+                  - name: historyserver
+                    mountPath: /tmp/ray
+              - name: collector
+                image: collector:v0.1.0
+                imagePullPolicy: IfNotPresent
+                env:
+                  - name: RAY_DASHBOARD_ADDRESS
+                    value: "http://rayservice-workaround-head-svc:8265"
+                  - name: AWS_S3ID
+                    value: minioadmin
+                  - name: AWS_S3SECRET
+                    value: minioadmin
+                  - name: AWS_S3TOKEN
+                    value: ""
+                  - name: S3_BUCKET
+                    value: "ray-historyserver"
+                  - name: S3_ENDPOINT
+                    value: "minio-service.minio-dev:9000"
+                  - name: S3_REGION
+                    value: "test"
+                  - name: S3FORCE_PATH_STYLE
+                    value: "true"
+                  - name: S3DISABLE_SSL
+                    value: "true"
+                command:
+                  - collector
+                  - --role=Worker
+                  - --runtime-class-name=s3
+                  - --ray-cluster-name=rayservice-workaround
+                  - --ray-root-dir=log
+                  - --events-port=8084
+                volumeMounts:
+                  - name: historyserver
+                    mountPath: /tmp/ray
+            tolerations:
+              - key: ray
+                operator: Equal
+                value: cpu
+            volumes:
+              - name: historyserver
+                emptyDir: {}

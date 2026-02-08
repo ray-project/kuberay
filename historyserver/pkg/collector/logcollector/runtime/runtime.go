@@ -36,10 +36,14 @@ func NewCollector(config *types.RayCollectorConfig, writer storage.StorageWriter
 				IdleConnTimeout:     90 * time.Second, // Idle connection timeout
 			},
 		},
-		Writer:       writer,
-		ShutdownChan: make(chan struct{}),
+		Writer:                       writer,
+		ShutdownChan:                 make(chan struct{}),
+		DashboardAddress:             config.DashboardAddress,
+		SupportRayEventUnSupportData: config.SupportRayEventUnSupportData,
 	}
 	logDir := strings.TrimSpace(filepath.Join(config.SessionDir, utils.RAY_SESSIONDIR_LOGDIR_NAME))
+	// Initialize meta URL info
+	handler.InitMetaUrlInfo()
 	handler.LogDir = logDir
 	// rootMetaDir uses flat key format (name_id) for S3/OSS performance optimization.
 	// See utils.connector for the design rationale.

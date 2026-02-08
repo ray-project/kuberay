@@ -15,29 +15,34 @@ import (
 	"github.com/fsnotify/fsnotify"
 	"github.com/sirupsen/logrus"
 
+	"github.com/ray-project/kuberay/historyserver/pkg/collector/types"
 	"github.com/ray-project/kuberay/historyserver/pkg/storage"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
 type RayLogHandler struct {
-	Writer                 storage.StorageWriter
-	LogFiles               chan string
-	HttpClient             *http.Client
-	ShutdownChan           chan struct{}
-	logFilePaths           map[string]bool
-	MetaDir                string
-	RayClusterName         string
-	LogDir                 string
-	RayNodeName            string
-	RayClusterID           string
-	RootDir                string
-	SessionDir             string
-	prevLogsDir            string
-	persistCompleteLogsDir string
-	PushInterval           time.Duration
-	LogBatching            int
-	filePathMu             sync.Mutex
-	EnableMeta             bool
+	Writer                       storage.StorageWriter
+	LogFiles                     chan string
+	HttpClient                   *http.Client
+	ShutdownChan                 chan struct{}
+	logFilePaths                 map[string]bool
+	MetaDir                      string
+	RayClusterName               string
+	LogDir                       string
+	RayNodeName                  string
+	RayClusterID                 string
+	RootDir                      string
+	SessionDir                   string
+	prevLogsDir                  string
+	persistCompleteLogsDir       string
+	PushInterval                 time.Duration
+	LogBatching                  int
+	filePathMu                   sync.Mutex
+	EnableMeta                   bool
+	DashboardAddress             string
+	SupportRayEventUnSupportData bool
+	MetaCommonUrlInfo            []*types.UrlInfo
+	JobsUrlInfo                  *types.UrlInfo
 }
 
 func (r *RayLogHandler) Run(stop <-chan struct{}) error {
@@ -61,6 +66,10 @@ func (r *RayLogHandler) Run(stop <-chan struct{}) error {
 	go r.WatchPrevLogsLoops()
 	if r.EnableMeta {
 		go r.WatchSessionLatestLoops() // Watch session_latest symlink changes
+	}
+	//Todo(alex): This should be removed when Ray core implemented events for placement groups, applications, and datasets
+	if r.SupportRayEventUnSupportData {
+		go r.PersistMetaLoop(stop)
 	}
 
 	<-stop
