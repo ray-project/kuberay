@@ -21,14 +21,20 @@ func main() {
 	kubeconfigs := ""
 	runtimeClassConfigPath := "/var/collector-config/data"
 	dashboardDir := ""
+	useKubernetesProxy := false
 	flag.StringVar(&runtimeClassName, "runtime-class-name", "", "")
 	flag.StringVar(&rayRootDir, "ray-root-dir", "", "")
 	flag.StringVar(&kubeconfigs, "kubeconfigs", "", "")
 	flag.StringVar(&dashboardDir, "dashboard-dir", "/dashboard", "")
 	flag.StringVar(&runtimeClassConfigPath, "runtime-class-config-path", "", "") //"/var/collector-config/data"
+	flag.BoolVar(&useKubernetesProxy, "use-kubernetes-proxy", false, "")
 	flag.Parse()
 
-	cliMgr := historyserver.NewClientManager(kubeconfigs)
+	cliMgr, err := historyserver.NewClientManager(kubeconfigs, useKubernetesProxy)
+	if err != nil {
+		logrus.Errorf("Failed to create client manager: %v", err)
+		os.Exit(1)
+	}
 
 	jsonData := make(map[string]interface{})
 	if runtimeClassConfigPath != "" {
@@ -63,23 +69,26 @@ func main() {
 	// WaitGroup to track goroutine completion
 	var wg sync.WaitGroup
 
+	sigChan := make(chan os.Signal, 1)
+	stop := make(chan struct{}, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
 	// Start EventHandler in background goroutine
-	eventStop := make(chan struct{}, 1)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		logrus.Info("Starting EventHandler in background...")
-		if err := eventHandler.Run(eventStop, 2); err != nil {
+		if err := eventHandler.Run(stop, 2); err != nil {
 			logrus.Errorf("EventHandler stopped with error: %v", err)
 		}
 		logrus.Info("EventHandler shutdown complete")
 	}()
 
-	handler := historyserver.NewServerHandler(&globalConfig, dashboardDir, reader, cliMgr, eventHandler)
-
-	sigChan := make(chan os.Signal, 1)
-	stop := make(chan struct{}, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	handler, err := historyserver.NewServerHandler(&globalConfig, dashboardDir, reader, cliMgr, eventHandler, useKubernetesProxy)
+	if err != nil {
+		logrus.Errorf("Failed to create server handler: %v", err)
+		os.Exit(1)
+	}
 
 	wg.Add(1)
 	go func() {
@@ -92,8 +101,7 @@ func main() {
 	logrus.Info("Received shutdown signal, initiating graceful shutdown...")
 
 	// Stop both the server and the event handler
-	stop <- struct{}{}
-	eventStop <- struct{}{}
+	close(stop)
 
 	// Wait for both goroutines to complete
 	wg.Wait()
