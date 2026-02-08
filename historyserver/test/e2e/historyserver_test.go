@@ -19,10 +19,6 @@ import (
 	. "github.com/ray-project/kuberay/historyserver/test/support"
 )
 
-const (
-	LiveSessionName = "live"
-	EndpointNodes   = "/nodes"
-)
 
 func TestHistoryServer(t *testing.T) {
 	// Share a single S3 client among subtests.

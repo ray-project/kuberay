@@ -21,7 +21,13 @@ import (
 const (
 	HistoryServerManifestPath = "../../config/historyserver.yaml"
 	HistoryServerPort         = 30080
-	EndpointLogFile           = "/api/v0/logs/file"
+
+	// API endpoint constants
+	EndpointLogFile = "/api/v0/logs/file"
+	EndpointNodes   = "/nodes"
+
+	// Session name constants
+	LiveSessionName = "live"
 
 	RayGrafanaIframeHost               = "http://127.0.0.1:3000"
 	HistoryServerGrafanaHealthResponse = `{
