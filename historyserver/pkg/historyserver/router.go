@@ -538,11 +538,18 @@ func (s *ServerHandler) getEvents(req *restful.Request, resp *restful.Response) 
 	}
 
 	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
+
+	// Check if job_id parameter exists in query string (even if empty)
+	// This aligns with Ray Dashboard behavior:
+	// - /events (no job_id param) → return all events
+	// - /events?job_id= (empty job_id) → filter by empty string (return empty)
+	// - /events?job_id=abc → filter by "abc"
+	_, jobIDExists := req.Request.URL.Query()["job_id"]
 	jobID := req.QueryParameter("job_id")
 
 	var response map[string]any
 
-	if jobID != "" {
+	if jobIDExists {
 		events := s.eventHandler.ClusterEventMap.GetEventsByJobID(clusterSessionKey, jobID)
 		response = map[string]any{
 			"result": true,

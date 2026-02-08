@@ -783,8 +783,9 @@ func testEventsEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Namesp
 // 5. Get the cluster info from the list and verify sessionName != 'live'
 // 6. Set cluster context via /enter_cluster/ endpoint
 // 7. Verify that the /events endpoint returns events from storage with proper structure
-// 8. Verify that the /events endpoint supports job_id filter
-// 9. Delete S3 bucket to ensure test isolation
+// 8. Verify that the /events endpoint supports job_id filter (non-existent job_id)
+// 9. Verify that the /events endpoint handles empty job_id parameter correctly
+// 10. Delete S3 bucket to ensure test isolation
 func testEventsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
@@ -872,6 +873,34 @@ func testEventsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namesp
 			events, ok := data["events"].([]any)
 			gg.Expect(ok).To(BeTrue())
 			gg.Expect(events).To(BeEmpty()) // No events for non-existent job
+		}, TestTimeoutShort).Should(Succeed())
+	})
+
+	test.T().Run("should return empty for empty job_id parameter", func(t *testing.T) {
+		// This test verifies the behavior when job_id is provided but empty (/events?job_id=)
+		// It should align with Ray Dashboard behavior: filter by empty string (return empty)
+		g := NewWithT(t)
+		g.Eventually(func(gg Gomega) {
+			resp, err := client.Get(historyServerURL + "/events?job_id=")
+			gg.Expect(err).NotTo(HaveOccurred())
+			defer resp.Body.Close()
+			gg.Expect(resp.StatusCode).To(Equal(http.StatusOK))
+
+			body, err := io.ReadAll(resp.Body)
+			gg.Expect(err).NotTo(HaveOccurred())
+
+			var result map[string]any
+			err = json.Unmarshal(body, &result)
+			gg.Expect(err).NotTo(HaveOccurred())
+			gg.Expect(result["result"]).To(Equal(true))
+			gg.Expect(result["msg"]).To(Equal("Job events fetched."))
+
+			data, ok := result["data"].(map[string]any)
+			gg.Expect(ok).To(BeTrue())
+			gg.Expect(data["jobId"]).To(Equal(""))
+			events, ok := data["events"].([]any)
+			gg.Expect(ok).To(BeTrue())
+			gg.Expect(events).To(BeEmpty()) // Empty job_id filters by empty string
 		}, TestTimeoutShort).Should(Succeed())
 	})
 

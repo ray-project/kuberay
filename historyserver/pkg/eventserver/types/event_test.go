@@ -147,6 +147,21 @@ func TestClusterEventMap(t *testing.T) {
 		events = cm.GetEventsByJobID(clusterSessionKey, "nonexistent")
 		assert.Empty(t, events)
 	})
+
+	t.Run("GetEventsByJobID with empty string returns empty slice", func(t *testing.T) {
+		// This test verifies the behavior when job_id parameter is provided but empty
+		// (e.g., /events?job_id=), which should return empty results.
+		cm := NewClusterEventMap()
+		clusterSessionKey := "my-cluster_default_session_2026-01-16"
+		em := cm.GetOrCreateEventMap(clusterSessionKey)
+		em.AddEvent("job1", Event{EventID: "1", Timestamp: "1768591375000"})
+		em.AddEvent("", Event{EventID: "2", Timestamp: "1768591370000"}) // stored under "global"
+
+		// Query with empty string should NOT match "global" - it should return empty
+		// because the API distinguishes between "no parameter" and "empty parameter"
+		events := cm.GetEventsByJobID(clusterSessionKey, "")
+		assert.Empty(t, events, "empty string jobID should return empty slice, not global events")
+	})
 }
 
 func TestEvent(t *testing.T) {
