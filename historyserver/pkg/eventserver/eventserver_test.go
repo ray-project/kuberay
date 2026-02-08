@@ -928,3 +928,60 @@ func TestMultipleReprocessingCycles(t *testing.T) {
 		}
 	}
 }
+
+func TestTransformToEventTimestamp(t *testing.T) {
+	// Test that transformToEvent correctly converts timestamp format
+	eventMap := map[string]any{
+		"eventId":     "test-event-id",
+		"eventType":   "TASK_DEFINITION_EVENT",
+		"sourceType":  "CORE_WORKER",
+		"timestamp":   "2026-01-16T19:22:49.414579427Z",
+		"severity":    "INFO",
+		"sessionName": "session_2026-01-16_11-06-54_467309_1",
+		"taskDefinitionEvent": map[string]any{
+			"taskId": "task-123",
+			"jobId":  "AQAAAA==",
+		},
+	}
+
+	event := transformToEvent(eventMap)
+
+	// Verify timestamp is converted to Unix milliseconds
+	expectedTimestamp := "1768591369414"
+	if event.Timestamp != expectedTimestamp {
+		t.Errorf("transformToEvent timestamp = %q, want %q", event.Timestamp, expectedTimestamp)
+	}
+
+	// Verify sessionName is extracted to top-level field
+	if event.SessionName != "session_2026-01-16_11-06-54_467309_1" {
+		t.Errorf("SessionName = %q, want %q", event.SessionName, "session_2026-01-16_11-06-54_467309_1")
+	}
+
+	// Verify other fields are preserved
+	if event.EventID != "test-event-id" {
+		t.Errorf("EventID = %q, want %q", event.EventID, "test-event-id")
+	}
+	if event.SourceType != "CORE_WORKER" {
+		t.Errorf("SourceType = %q, want %q", event.SourceType, "CORE_WORKER")
+	}
+}
+
+func TestTransformToEventInvalidTimestamp(t *testing.T) {
+	// Test that transformToEvent handles invalid timestamp gracefully (consistent with Task/Actor/Job handling)
+	eventMap := map[string]any{
+		"eventId":   "test-event-id",
+		"eventType": "TASK_DEFINITION_EVENT",
+		"timestamp": "invalid-timestamp",
+	}
+
+	event := transformToEvent(eventMap)
+
+	// Invalid timestamp should result in empty string (not an error)
+	if event.Timestamp != "" {
+		t.Errorf("transformToEvent with invalid timestamp should have empty Timestamp, got %q", event.Timestamp)
+	}
+	// Other fields should still be populated
+	if event.EventID != "test-event-id" {
+		t.Errorf("EventID = %q, want %q", event.EventID, "test-event-id")
+	}
+}

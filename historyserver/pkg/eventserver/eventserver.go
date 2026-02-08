@@ -23,6 +23,7 @@ type EventHandler struct {
 	ClusterTaskMap  *types.ClusterTaskMap
 	ClusterActorMap *types.ClusterActorMap
 	ClusterJobMap   *types.ClusterJobMap
+	ClusterEventMap *types.ClusterEventMap // For /events API
 	ClusterNodeMap  *types.ClusterNodeMap
 }
 
@@ -49,6 +50,7 @@ func NewEventHandler(reader storage.StorageReader) *EventHandler {
 		ClusterJobMap: &types.ClusterJobMap{
 			ClusterJobMap: make(map[string]*types.JobMap),
 		},
+		ClusterEventMap: types.NewClusterEventMap(),
 		ClusterNodeMap: &types.ClusterNodeMap{
 			ClusterNodeMap: make(map[string]*types.NodeMap),
 		},
@@ -190,6 +192,133 @@ func (h *EventHandler) Run(stop chan struct{}, numOfEventProcessors int) error {
 	return nil
 }
 
+// transformToEvent converts a RayEvent map to the API response Event format.
+// This extracts common fields and puts event-type-specific data into customFields.
+// It also extracts sourceHostname and sourcePid from nested events where available.
+func transformToEvent(eventMap map[string]any) *types.Event {
+	event := &types.Event{
+		Severity:     "INFO",
+		CustomFields: make(map[string]any),
+	}
+
+	// Extract common fields (already camelCase)
+	if v, ok := eventMap["eventId"].(string); ok {
+		event.EventID = v
+	}
+	if v, ok := eventMap["sourceType"].(string); ok {
+		event.SourceType = v
+	}
+	// Convert ISO 8601 timestamp to Unix milliseconds to match Ray Dashboard format
+	if v, ok := eventMap["timestamp"].(string); ok {
+		if t, err := time.Parse(time.RFC3339Nano, v); err == nil {
+			event.Timestamp = fmt.Sprintf("%d", t.UnixMilli())
+		} else {
+			logrus.Warnf("failed to parse timestamp %q: %v", v, err)
+		}
+	}
+	if v, ok := eventMap["severity"].(string); ok {
+		event.Severity = v
+	}
+	if v, ok := eventMap["message"].(string); ok {
+		event.Message = v
+	}
+	if v, ok := eventMap["sessionName"].(string); ok {
+		event.SessionName = v
+	}
+	// Extract nodeId from base RayEvent (field #18)
+	if v, ok := eventMap["nodeId"].(string); ok {
+		event.NodeID = v
+	}
+
+	// Extract eventType and set as Label for filtering
+	eventType, _ := eventMap["eventType"].(string)
+	event.EventType = eventType
+	event.Label = eventType // Use eventType as label for Dashboard compatibility
+
+	// Map eventType to its corresponding nested data field
+	eventDataFields := map[string]string{
+		string(types.TASK_DEFINITION_EVENT):       "taskDefinitionEvent",
+		string(types.TASK_LIFECYCLE_EVENT):        "taskLifecycleEvent",
+		string(types.TASK_PROFILE_EVENT):          "taskProfileEvents",
+		string(types.ACTOR_DEFINITION_EVENT):      "actorDefinitionEvent",
+		string(types.ACTOR_LIFECYCLE_EVENT):       "actorLifecycleEvent",
+		string(types.ACTOR_TASK_DEFINITION_EVENT): "actorTaskDefinitionEvent",
+		string(types.NODE_DEFINITION_EVENT):       "nodeDefinitionEvent",
+		string(types.NODE_LIFECYCLE_EVENT):        "nodeLifecycleEvent",
+		string(types.DRIVER_JOB_DEFINITION_EVENT): "driverJobDefinitionEvent",
+		string(types.DRIVER_JOB_LIFECYCLE_EVENT):  "driverJobLifecycleEvent",
+	}
+
+	if dataField, ok := eventDataFields[eventType]; ok {
+		if data, ok := eventMap[dataField].(map[string]any); ok {
+			event.CustomFields[dataField] = data
+
+			// Extract sourceHostname and sourcePid from nested events where available
+			extractHostnameAndPid(event, eventType, data)
+		}
+	}
+
+	return event
+}
+
+// extractHostnameAndPid extracts sourceHostname and sourcePid from nested event data.
+// These fields are available in specific event types as discovered from Ray protos.
+func extractHostnameAndPid(event *types.Event, eventType string, data map[string]any) {
+	switch eventType {
+	case string(types.NODE_DEFINITION_EVENT):
+		// NodeDefinitionEvent has: hostname, node_name, node_ip_address
+		if hostname, ok := data["hostname"].(string); ok && hostname != "" {
+			event.SourceHostname = hostname
+		}
+	case string(types.TASK_LIFECYCLE_EVENT):
+		// TaskLifecycleEvent has: worker_pid, worker_id, node_id
+		if pid, ok := data["workerPid"].(float64); ok {
+			event.SourcePid = int(pid)
+		}
+	case string(types.ACTOR_LIFECYCLE_EVENT):
+		// ActorLifecycleEvent has pid in StateTransition when ALIVE
+		if transitions, ok := data["stateTransitions"].([]any); ok && len(transitions) > 0 {
+			// Get the latest transition
+			if lastTransition, ok := transitions[len(transitions)-1].(map[string]any); ok {
+				if pid, ok := lastTransition["pid"].(float64); ok {
+					event.SourcePid = int(pid)
+				}
+			}
+		}
+	case string(types.DRIVER_JOB_DEFINITION_EVENT):
+		// DriverJobDefinitionEvent has: driver_pid, driver_node_id
+		if pid, ok := data["driverPid"].(float64); ok {
+			event.SourcePid = int(pid)
+		} else if pidStr, ok := data["driverPid"].(string); ok && pidStr != "" {
+			// Sometimes stored as string
+			var pidInt int
+			if _, err := fmt.Sscanf(pidStr, "%d", &pidInt); err == nil {
+				event.SourcePid = pidInt
+			}
+		}
+	}
+}
+
+// extractJobIDFromEvent extracts jobId from various event type payloads
+func extractJobIDFromEvent(eventMap map[string]any) string {
+	// Check common nested structures for jobId
+	nestedFields := []string{
+		"taskDefinitionEvent", "taskLifecycleEvent",
+		"actorDefinitionEvent", "actorLifecycleEvent",
+		"driverJobDefinitionEvent", "driverJobLifecycleEvent",
+		"taskProfileEvents", "actorTaskDefinitionEvent",
+	}
+
+	for _, field := range nestedFields {
+		if nested, ok := eventMap[field].(map[string]any); ok {
+			if jobID, ok := nested["jobId"].(string); ok && jobID != "" {
+				return jobID
+			}
+		}
+	}
+	return "" // Will be grouped under "global"
+}
+
 // storeEvent unmarshals the event map into the correct actor/task struct and then stores it into the corresonding list
 func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 	eventTypeVal, ok := eventMap["eventType"]
@@ -202,14 +331,25 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 	}
 	eventType := types.EventType(eventTypeStr)
 
-	clusterNameVal, ok := eventMap["clusterName"]
+	// clusterSessionKey is injected during event reading (Run function) and contains
+	// the full key: "{clusterName}_{namespace}_{sessionName}"
+	// This matches the key format used in router.go for retrieval.
+	clusterSessionKeyVal, ok := eventMap["clusterName"]
 	if !ok {
-		return fmt.Errorf("event missing 'clusterName' field")
+		return fmt.Errorf("event missing 'clusterName' field (clusterSessionKey)")
 	}
-	currentClusterName, ok := clusterNameVal.(string)
+	clusterSessionKey, ok := clusterSessionKeyVal.(string)
 	if !ok {
-		return fmt.Errorf("clusterName is not a string, got %T", clusterNameVal)
+		return fmt.Errorf("clusterName is not a string, got %T", clusterSessionKeyVal)
 	}
+
+	// ========== Store RayEvent for /events API ==========
+	if event := transformToEvent(eventMap); event != nil && event.EventID != "" {
+		jobID := extractJobIDFromEvent(eventMap)
+		clusterEventMap := h.ClusterEventMap.GetOrCreateEventMap(clusterSessionKey)
+		clusterEventMap.AddEvent(jobID, *event)
+	}
+	// ====================================================
 
 	logrus.Infof("current eventType: %v", eventType)
 	switch eventType {
@@ -228,7 +368,7 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 			return err
 		}
 
-		taskMap := h.ClusterTaskMap.GetOrCreateTaskMap(currentClusterName)
+		taskMap := h.ClusterTaskMap.GetOrCreateTaskMap(clusterSessionKey)
 		taskMap.CreateOrMergeAttempt(currTask.TaskID, currTask.AttemptNumber, func(t *types.Task) {
 			// Merge definition fields (preserve existing Events if any)
 			existingEvents := t.Events
@@ -280,7 +420,7 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 			return nil
 		}
 
-		taskMap := h.ClusterTaskMap.GetOrCreateTaskMap(currentClusterName)
+		taskMap := h.ClusterTaskMap.GetOrCreateTaskMap(clusterSessionKey)
 		taskMap.CreateOrMergeAttempt(taskId, int(taskAttempt), func(t *types.Task) {
 			// --- DEDUPLICATION using (State + Timestamp) as unique key ---
 			// Build a set of existing event keys to detect duplicates
@@ -348,7 +488,7 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 		}
 
 		// Use CreateOrMergeActor pattern (same as Task)
-		actorMap := h.ClusterActorMap.GetOrCreateActorMap(currentClusterName)
+		actorMap := h.ClusterActorMap.GetOrCreateActorMap(clusterSessionKey)
 		actorMap.CreateOrMergeActor(currActor.ActorID, func(a *types.Actor) {
 			// Preserve lifecycle-derived fields that may have arrived first
 			existingEvents := a.Events
@@ -428,7 +568,7 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 			return nil
 		}
 
-		actorMap := h.ClusterActorMap.GetOrCreateActorMap(currentClusterName)
+		actorMap := h.ClusterActorMap.GetOrCreateActorMap(clusterSessionKey)
 		actorMap.CreateOrMergeActor(actorId, func(a *types.Actor) {
 			// Ensure ActorID is set (in case LIFECYCLE arrives before DEFINITION)
 			a.ActorID = actorId
@@ -561,7 +701,7 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 			logrus.Errorf("Failed to convert DriverNodeID from base64 to hex, will keep DriverNodeID in base64: %v", err)
 		}
 
-		jobMap := h.ClusterJobMap.GetOrCreateJobMap(currentClusterName)
+		jobMap := h.ClusterJobMap.GetOrCreateJobMap(clusterSessionKey)
 		jobMap.CreateOrMergeJob(currJob.JobID, func(j *types.Job) {
 			// If for some reason jobID is empty, we will keep whatever is in 'j'
 			var existingJobID string
@@ -648,7 +788,7 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 			return nil
 		}
 
-		jobMap := h.ClusterJobMap.GetOrCreateJobMap(currentClusterName)
+		jobMap := h.ClusterJobMap.GetOrCreateJobMap(clusterSessionKey)
 		jobMap.CreateOrMergeJob(jobId, func(j *types.Job) {
 			// TODO(chiayi): take care of status (job progress) state if part of DriverJobLifecycleEvent
 			j.JobID = jobId
@@ -696,9 +836,9 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 			}
 		})
 	case types.NODE_DEFINITION_EVENT:
-		return h.handleNodeDefinitionEvent(eventMap, currentClusterName)
+		return h.handleNodeDefinitionEvent(eventMap, clusterSessionKey)
 	case types.NODE_LIFECYCLE_EVENT:
-		return h.handleNodeLifecycleEvent(eventMap, currentClusterName)
+		return h.handleNodeLifecycleEvent(eventMap, clusterSessionKey)
 	default:
 		logrus.Infof("Event not supported, skipping: %v", eventMap)
 	}
