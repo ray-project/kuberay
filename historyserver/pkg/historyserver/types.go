@@ -3,8 +3,8 @@ package historyserver
 // GetLogFileOptions contains all options for fetching log files
 type GetLogFileOptions struct {
 	// Node identification (one of these is required if not using task_id/actor_id)
-	NodeID   string // The node id where the log file is located
-	NodeIP   string // The node ip address (will be resolved to node_id)
+	NodeID string // The node id where the log file is located
+	NodeIP string // The node ip address (will be resolved to node_id)
 
 	// Log file identification (provide one of: Filename, TaskID, ActorID, PID)
 	Filename string // The log file name (explicit path)
