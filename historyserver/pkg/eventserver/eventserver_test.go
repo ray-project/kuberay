@@ -944,7 +944,7 @@ func TestTransformToEventTimestamp(t *testing.T) {
 		},
 	}
 
-	event := transformToEvent(eventMap)
+	event, jobID := transformToEvent(eventMap)
 
 	// Verify timestamp is converted to Unix milliseconds
 	expectedTimestamp := "1768591369414"
@@ -952,17 +952,31 @@ func TestTransformToEventTimestamp(t *testing.T) {
 		t.Errorf("transformToEvent timestamp = %q, want %q", event.Timestamp, expectedTimestamp)
 	}
 
-	// Verify sessionName is extracted to top-level field
+	// Verify Ray Dashboard compatible fields
+	if event.EventID != "test-event-id" {
+		t.Errorf("EventID = %q, want %q", event.EventID, "test-event-id")
+	}
+	if event.SourceType != types.CORE_WORKER {
+		t.Errorf("SourceType = %q, want %q", event.SourceType, types.CORE_WORKER)
+	}
+	if event.Severity != types.INFO {
+		t.Errorf("Severity = %q, want %q", event.Severity, types.INFO)
+	}
+	if event.Label != "TASK_DEFINITION_EVENT" {
+		t.Errorf("Label = %q, want %q", event.Label, "TASK_DEFINITION_EVENT")
+	}
+
+	// Verify History Server specific fields
+	if event.EventType != types.TASK_DEFINITION_EVENT {
+		t.Errorf("EventType = %q, want %q", event.EventType, types.TASK_DEFINITION_EVENT)
+	}
 	if event.SessionName != "session_2026-01-16_11-06-54_467309_1" {
 		t.Errorf("SessionName = %q, want %q", event.SessionName, "session_2026-01-16_11-06-54_467309_1")
 	}
 
-	// Verify other fields are preserved
-	if event.EventID != "test-event-id" {
-		t.Errorf("EventID = %q, want %q", event.EventID, "test-event-id")
-	}
-	if event.SourceType != "CORE_WORKER" {
-		t.Errorf("SourceType = %q, want %q", event.SourceType, "CORE_WORKER")
+	// Verify JobID is extracted for grouping
+	if jobID != "AQAAAA==" {
+		t.Errorf("JobID = %q, want %q", jobID, "AQAAAA==")
 	}
 }
 
@@ -974,7 +988,7 @@ func TestTransformToEventInvalidTimestamp(t *testing.T) {
 		"timestamp": "invalid-timestamp",
 	}
 
-	event := transformToEvent(eventMap)
+	event, _ := transformToEvent(eventMap)
 
 	// Invalid timestamp should result in empty string (not an error)
 	if event.Timestamp != "" {
@@ -983,5 +997,120 @@ func TestTransformToEventInvalidTimestamp(t *testing.T) {
 	// Other fields should still be populated
 	if event.EventID != "test-event-id" {
 		t.Errorf("EventID = %q, want %q", event.EventID, "test-event-id")
+	}
+}
+
+func TestTransformToEventCustomFields(t *testing.T) {
+	// Test that transformToEvent correctly extracts jobId, taskId, actorId, nodeId to customFields
+	// This matches Ray Dashboard's custom_fields format
+	eventMap := map[string]any{
+		"eventId":    "test-event-id",
+		"eventType":  "TASK_DEFINITION_EVENT",
+		"sourceType": "CORE_WORKER",
+		"timestamp":  "2026-01-16T19:22:49.414579427Z",
+		"severity":   "INFO",
+		"nodeId":     "node-123",
+		"taskDefinitionEvent": map[string]any{
+			"taskId": "task-456",
+			"jobId":  "job-789",
+		},
+	}
+
+	event, jobID := transformToEvent(eventMap)
+
+	// Verify customFields contains nodeId, jobId, taskId
+	if event.CustomFields["nodeId"] != "node-123" {
+		t.Errorf("customFields[nodeId] = %v, want %v", event.CustomFields["nodeId"], "node-123")
+	}
+	if event.CustomFields["jobId"] != "job-789" {
+		t.Errorf("customFields[jobId] = %v, want %v", event.CustomFields["jobId"], "job-789")
+	}
+	if event.CustomFields["taskId"] != "task-456" {
+		t.Errorf("customFields[taskId] = %v, want %v", event.CustomFields["taskId"], "task-456")
+	}
+
+	// Verify JobID is extracted for grouping
+	if jobID != "job-789" {
+		t.Errorf("JobID = %q, want %q", jobID, "job-789")
+	}
+
+	// Verify nested event data is also in customFields
+	nestedData, ok := event.CustomFields["taskDefinitionEvent"].(map[string]any)
+	if !ok {
+		t.Errorf("customFields[taskDefinitionEvent] should be a map")
+	} else {
+		if nestedData["taskId"] != "task-456" {
+			t.Errorf("nestedData[taskId] = %v, want %v", nestedData["taskId"], "task-456")
+		}
+	}
+}
+
+func TestTransformToEventActorCustomFields(t *testing.T) {
+	// Test actor event customFields extraction
+	eventMap := map[string]any{
+		"eventId":    "actor-event-id",
+		"eventType":  "ACTOR_DEFINITION_EVENT",
+		"sourceType": "GCS",
+		"timestamp":  "2026-01-16T19:22:49.414579427Z",
+		"severity":   "INFO",
+		"nodeId":     "node-abc",
+		"actorDefinitionEvent": map[string]any{
+			"actorId": "actor-xyz",
+			"jobId":   "job-def",
+		},
+	}
+
+	event, jobID := transformToEvent(eventMap)
+
+	// Verify customFields contains nodeId, jobId, actorId
+	if event.CustomFields["nodeId"] != "node-abc" {
+		t.Errorf("customFields[nodeId] = %v, want %v", event.CustomFields["nodeId"], "node-abc")
+	}
+	if event.CustomFields["jobId"] != "job-def" {
+		t.Errorf("customFields[jobId] = %v, want %v", event.CustomFields["jobId"], "job-def")
+	}
+	if event.CustomFields["actorId"] != "actor-xyz" {
+		t.Errorf("customFields[actorId] = %v, want %v", event.CustomFields["actorId"], "actor-xyz")
+	}
+
+	// Verify JobID is extracted for grouping
+	if jobID != "job-def" {
+		t.Errorf("JobID = %q, want %q", jobID, "job-def")
+	}
+}
+
+func TestTransformToEventNoJobID(t *testing.T) {
+	// Test that transformToEvent returns empty JobID for events without jobId.
+	// These events should be grouped under "global".
+	eventMap := map[string]any{
+		"eventId":    "node-event-id",
+		"eventType":  "NODE_DEFINITION_EVENT",
+		"sourceType": "GCS",
+		"timestamp":  "2026-01-16T19:22:49.414579427Z",
+		"severity":   "INFO",
+		"nodeId":     "node-123",
+		"nodeDefinitionEvent": map[string]any{
+			"hostname":      "ray-head-0",
+			"nodeName":      "ray-head",
+			"nodeIpAddress": "10.0.0.1",
+		},
+	}
+
+	event, jobID := transformToEvent(eventMap)
+
+	// Verify JobID is empty for node events (no jobId in nested data)
+	if jobID != "" {
+		t.Errorf("JobID = %q, want empty string for global grouping", jobID)
+	}
+
+	// Verify Event is still properly populated
+	if event.EventID != "node-event-id" {
+		t.Errorf("EventID = %q, want %q", event.EventID, "node-event-id")
+	}
+	if event.SourceHostname != "ray-head-0" {
+		t.Errorf("SourceHostname = %q, want %q", event.SourceHostname, "ray-head-0")
+	}
+	if event.CustomFields["nodeId"] != "node-123" {
+		t.Errorf("customFields[nodeId] = %v, want %v", event.CustomFields["nodeId"], "node-123")
 	}
 }

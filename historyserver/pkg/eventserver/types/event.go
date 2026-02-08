@@ -76,17 +76,18 @@ const MaxEventsPerJob = 10000
 // This struct is derived from RayEvents stored in object storage.
 type Event struct {
 	EventID        string         `json:"eventId"`
-	EventType      string         `json:"eventType"`                // e.g., TASK_DEFINITION_EVENT
-	SourceType     string         `json:"sourceType"`               // e.g., GCS, CORE_WORKER
-	Timestamp      string         `json:"timestamp"`                // Unix milliseconds (e.g., "1768591369414")
-	Severity       string         `json:"severity"`                 // INFO, WARNING, ERROR
+	SourceType     SourceType     `json:"sourceType"`               // e.g., GCS, CORE_WORKER
+	SourceHostname string         `json:"sourceHostname,omitempty"` // Hostname where event originated
+	SourcePid      int            `json:"sourcePid,omitempty"`      // Process ID
+	Label          string         `json:"label,omitempty"`          // Event type label for filtering
 	Message        string         `json:"message,omitempty"`        // Usually empty in RayEvents
-	SessionName    string         `json:"sessionName,omitempty"`    // Ray session name (e.g., "session_2026-01-16_11-06-54_467309_1")
-	Label          string         `json:"label,omitempty"`          // Same as EventType for filtering
-	NodeID         string         `json:"nodeId,omitempty"`         // Node where event originated
-	SourceHostname string         `json:"sourceHostname,omitempty"` // Extracted from NodeDefinitionEvent
-	SourcePid      int            `json:"sourcePid,omitempty"`      // Extracted from lifecycle events
-	CustomFields   map[string]any `json:"customFields,omitempty"`   // Event-specific nested data
+	Timestamp      string         `json:"timestamp"`                // Unix milliseconds (e.g., "1768591369414")
+	Severity       Severity       `json:"severity"`                 // INFO, WARNING, ERROR
+	CustomFields   map[string]any `json:"customFields,omitempty"`   // Event-specific nested data (includes nodeId, jobId, taskId)
+
+	// History Server specific fields (not in Ray Dashboard format, for future extension)
+	EventType   EventType `json:"eventType,omitempty"`   // e.g., TASK_DEFINITION_EVENT, ACTOR_LIFECYCLE_EVENT
+	SessionName string    `json:"sessionName,omitempty"` // Ray session name (e.g., "session_2026-01-16_11-06-54_467309_1")
 }
 
 // EventMap stores events grouped by jobId with FIFO eviction.

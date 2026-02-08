@@ -167,28 +167,38 @@ func TestClusterEventMap(t *testing.T) {
 func TestEvent(t *testing.T) {
 	event := Event{
 		EventID:        "LrBbQwLLTK2+SSsBX+AG4EDK02CAVnvtVMD2MA==",
-		EventType:      "ACTOR_DEFINITION_EVENT",
-		SourceType:     "GCS",
-		Timestamp:      "1737055775210",
-		Severity:       "INFO",
-		SessionName:    "session_2026-01-16_11-06-54_467309_1",
-		Label:          "ACTOR_DEFINITION_EVENT",
-		NodeID:         "531134a446a4f1b4d07301c0ee09b0ca32593dbb",
+		SourceType:     GCS,
 		SourceHostname: "ray-head-node-0",
 		SourcePid:      12345,
+		Label:          "ACTOR_DEFINITION_EVENT",
+		Message:        "Test",
+		Timestamp:      "1737055775210",
+		Severity:       INFO,
 		CustomFields: map[string]any{
 			"actorId": "abc123",
+			"nodeId":  "531134a446a4f1b4d07301c0ee09b0ca32593dbb",
+			"jobId":   "01000000",
 		},
+		// History Server specific fields
+		EventType:   ACTOR_DEFINITION_EVENT,
+		SessionName: "session_2026-01-16_11-06-54_467309_1",
 	}
 
+	// Ray Dashboard compatible fields
 	assert.Equal(t, "LrBbQwLLTK2+SSsBX+AG4EDK02CAVnvtVMD2MA==", event.EventID)
-	assert.Equal(t, "ACTOR_DEFINITION_EVENT", event.EventType)
-	assert.Equal(t, "GCS", event.SourceType)
-	assert.Equal(t, "INFO", event.Severity)
-	assert.Equal(t, "session_2026-01-16_11-06-54_467309_1", event.SessionName)
+	assert.Equal(t, GCS, event.SourceType)
 	assert.Equal(t, "ray-head-node-0", event.SourceHostname)
 	assert.Equal(t, 12345, event.SourcePid)
+	assert.Equal(t, "ACTOR_DEFINITION_EVENT", event.Label)
+	assert.Equal(t, INFO, event.Severity)
 	assert.NotNil(t, event.CustomFields["actorId"])
+	assert.Equal(t, "531134a446a4f1b4d07301c0ee09b0ca32593dbb", event.CustomFields["nodeId"])
+	assert.Equal(t, "1737055775210", event.Timestamp)
+	assert.Equal(t, "Test", event.Message)
+
+	// History Server specific fields
+	assert.Equal(t, ACTOR_DEFINITION_EVENT, event.EventType)
+	assert.Equal(t, "session_2026-01-16_11-06-54_467309_1", event.SessionName)
 }
 
 func TestSortEventsByTimestamp(t *testing.T) {
