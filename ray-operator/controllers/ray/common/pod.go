@@ -443,27 +443,33 @@ func initLivenessAndReadinessProbe(rayContainer *corev1.Container, rayNodeType r
 		},
 	}
 
-	rayAgentRayletHealthCommand := fmt.Sprintf(
-		utils.BaseWgetHealthCommand,
-		utils.DefaultReadinessProbeTimeoutSeconds,
-		getPort("dashboard-agent-listen-port", utils.DefaultDashboardAgentListenPort),
-		utils.RayAgentRayletHealthPath,
-	)
-	rayDashboardGCSHealthCommand := fmt.Sprintf(
-		utils.BaseWgetHealthCommand,
-		utils.DefaultReadinessProbeFailureThreshold,
-		getPort("dashboard-port", utils.DefaultDashboardPort),
-		utils.RayDashboardGCSHealthPath,
-	)
-
+	// For Ray < 2.53, liveness/readiness use exec probes (bash) and rely on CLI tools.
 	// Generally, the liveness and readiness probes perform the same checks.
 	// For head node => Check GCS and Raylet status.
 	// For worker node => Check Raylet status.
 	commands := []string{}
-	if rayNodeType == rayv1.HeadNode {
-		commands = append(commands, rayAgentRayletHealthCommand, rayDashboardGCSHealthCommand)
-	} else {
-		commands = append(commands, rayAgentRayletHealthCommand)
+	if !httpHealthCheck {
+		dashboardAgentPort := getPort("dashboard-agent-listen-port", utils.DefaultDashboardAgentListenPort)
+		dashboardPort := getPort("dashboard-port", utils.DefaultDashboardPort)
+
+		rayAgentRayletHealthCommand := fmt.Sprintf(
+			utils.BaseWgetHealthCommand,
+			utils.DefaultReadinessProbeTimeoutSeconds,
+			dashboardAgentPort,
+			utils.RayAgentRayletHealthPath,
+		)
+		rayDashboardGCSHealthCommand := fmt.Sprintf(
+			utils.BaseWgetHealthCommand,
+			utils.DefaultReadinessProbeFailureThreshold,
+			dashboardPort,
+			utils.RayDashboardGCSHealthPath,
+		)
+
+		if rayNodeType == rayv1.HeadNode {
+			commands = append(commands, rayAgentRayletHealthCommand, rayDashboardGCSHealthCommand)
+		} else {
+			commands = append(commands, rayAgentRayletHealthCommand)
+		}
 	}
 
 	if rayContainer.LivenessProbe == nil {
@@ -504,20 +510,17 @@ func initLivenessAndReadinessProbe(rayContainer *corev1.Container, rayNodeType r
 			rayContainer.ReadinessProbe.Exec = &corev1.ExecAction{Command: []string{"bash", "-c", strings.Join(commands, " && ")}}
 		}
 
-		// For worker Pods serving traffic, we need to add an additional HTTP proxy health check for the readiness probe.
-		// Note: head Pod checks the HTTP proxy's health at every rayservice controller reconcile instaed of using readiness probe.
+		// For worker Pods serving traffic, readiness checks Ray Serve proxy health only (liveness covers node health).
+		// Note: head Pod checks the HTTP proxy's health at every rayservice controller reconcile instead of using readiness probe.
 		// See https://github.com/ray-project/kuberay/pull/1808 for reasons.
 		if creatorCRDType == utils.RayServiceCRD && rayNodeType == rayv1.WorkerNode {
 			rayContainer.ReadinessProbe.FailureThreshold = utils.ServeReadinessProbeFailureThreshold
-			rayServeProxyHealthCommand := fmt.Sprintf(
-				utils.BaseWgetHealthCommand,
-				utils.DefaultReadinessProbeInitialDelaySeconds,
-				utils.FindContainerPort(rayContainer, utils.ServingPortName, utils.DefaultServingPort),
-				utils.RayServeProxyHealthPath,
-			)
-			commands = append(commands, rayServeProxyHealthCommand)
-			rayContainer.ReadinessProbe.HTTPGet = nil
-			rayContainer.ReadinessProbe.Exec = &corev1.ExecAction{Command: []string{"bash", "-c", strings.Join(commands, " && ")}}
+			servingPort := utils.FindContainerPort(rayContainer, utils.ServingPortName, utils.DefaultServingPort)
+			rayContainer.ReadinessProbe.HTTPGet = &corev1.HTTPGetAction{
+				Path: "/" + utils.RayServeProxyHealthPath,
+				Port: intstr.IntOrString{Type: intstr.Int, IntVal: servingPort},
+			}
+			rayContainer.ReadinessProbe.Exec = nil
 		}
 	}
 }
