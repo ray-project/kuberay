@@ -250,6 +250,8 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 			existingWorkerID := t.WorkerID
 			existingFuncOrClassName := t.FuncOrClassName
 			existingName := t.Name
+			existingStartTime := t.StartTime
+			existingEndTime := t.EndTime
 
 			*t = currTask
 
@@ -257,6 +259,8 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 			if len(existingEvents) > 0 {
 				t.Events = existingEvents
 				t.State = existingEvents[len(existingEvents)-1].State
+				t.StartTime = existingStartTime
+				t.EndTime = existingEndTime
 				if existingNodeID != "" {
 					t.NodeID = existingNodeID
 				}
