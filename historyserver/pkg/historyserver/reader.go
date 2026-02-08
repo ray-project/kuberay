@@ -443,7 +443,10 @@ func (s *ServerHandler) findWorkerLogFile(clusterNameID, sessionID, nodeID, work
 		}
 	}
 
-	return "", "", fmt.Errorf("worker log file not found: worker_id=%s (hex=%s), suffix=%s, searched in %s", workerID, workerIDHex, suffix, logPath)
+	return "", "", utils.NewHTTPError(
+		fmt.Errorf("worker log file not found: worker_id=%s (hex=%s), suffix=%s, searched in %s", workerID, workerIDHex, suffix, logPath),
+		http.StatusNotFound,
+	)
 }
 
 // ipToNodeId resolves node_id from node_ip by querying node_events from storage.
