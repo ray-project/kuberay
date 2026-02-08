@@ -932,11 +932,12 @@ func TestMultipleReprocessingCycles(t *testing.T) {
 func TestTransformToEventTimestamp(t *testing.T) {
 	// Test that transformToEvent correctly converts timestamp format
 	eventMap := map[string]any{
-		"eventId":    "test-event-id",
-		"eventType":  "TASK_DEFINITION_EVENT",
-		"sourceType": "CORE_WORKER",
-		"timestamp":  "2026-01-16T19:22:49.414579427Z",
-		"severity":   "INFO",
+		"eventId":     "test-event-id",
+		"eventType":   "TASK_DEFINITION_EVENT",
+		"sourceType":  "CORE_WORKER",
+		"timestamp":   "2026-01-16T19:22:49.414579427Z",
+		"severity":    "INFO",
+		"sessionName": "session_2026-01-16_11-06-54_467309_1",
 		"taskDefinitionEvent": map[string]any{
 			"taskId": "task-123",
 			"jobId":  "AQAAAA==",
@@ -949,6 +950,11 @@ func TestTransformToEventTimestamp(t *testing.T) {
 	expectedTimestamp := "1768591369414"
 	if event.Timestamp != expectedTimestamp {
 		t.Errorf("transformToEvent timestamp = %q, want %q", event.Timestamp, expectedTimestamp)
+	}
+
+	// Verify sessionName is extracted to top-level field
+	if event.SessionName != "session_2026-01-16_11-06-54_467309_1" {
+		t.Errorf("SessionName = %q, want %q", event.SessionName, "session_2026-01-16_11-06-54_467309_1")
 	}
 
 	// Verify other fields are preserved

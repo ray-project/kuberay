@@ -219,7 +219,7 @@ func transformToEvent(eventMap map[string]any) *types.Event {
 		event.Message = v
 	}
 	if v, ok := eventMap["sessionName"].(string); ok {
-		event.CustomFields["sessionName"] = v
+		event.SessionName = v
 	}
 	// Extract nodeId from base RayEvent (field #18)
 	if v, ok := eventMap["nodeId"].(string); ok {
@@ -327,19 +327,22 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 	}
 	eventType := types.EventType(eventTypeStr)
 
-	clusterNameVal, ok := eventMap["clusterName"]
+	// clusterSessionKey is injected during event reading (Run function) and contains
+	// the full key: "{clusterName}_{namespace}_{sessionName}"
+	// This matches the key format used in router.go for retrieval.
+	clusterSessionKeyVal, ok := eventMap["clusterName"]
 	if !ok {
-		return fmt.Errorf("event missing 'clusterName' field")
+		return fmt.Errorf("event missing 'clusterName' field (clusterSessionKey)")
 	}
-	currentClusterName, ok := clusterNameVal.(string)
+	clusterSessionKey, ok := clusterSessionKeyVal.(string)
 	if !ok {
-		return fmt.Errorf("clusterName is not a string, got %T", clusterNameVal)
+		return fmt.Errorf("clusterName is not a string, got %T", clusterSessionKeyVal)
 	}
 
 	// ========== Store RayEvent for /events API ==========
 	if event := transformToEvent(eventMap); event != nil && event.EventID != "" {
 		jobID := extractJobIDFromEvent(eventMap)
-		clusterEventMap := h.ClusterEventMap.GetOrCreateEventMap(currentClusterName)
+		clusterEventMap := h.ClusterEventMap.GetOrCreateEventMap(clusterSessionKey)
 		clusterEventMap.AddEvent(jobID, *event)
 	}
 	// ====================================================
@@ -361,7 +364,7 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 			return err
 		}
 
-		taskMap := h.ClusterTaskMap.GetOrCreateTaskMap(currentClusterName)
+		taskMap := h.ClusterTaskMap.GetOrCreateTaskMap(clusterSessionKey)
 		taskMap.CreateOrMergeAttempt(currTask.TaskID, currTask.AttemptNumber, func(t *types.Task) {
 			// Merge definition fields (preserve existing Events if any)
 			existingEvents := t.Events
@@ -414,7 +417,7 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 			return nil
 		}
 
-		taskMap := h.ClusterTaskMap.GetOrCreateTaskMap(currentClusterName)
+		taskMap := h.ClusterTaskMap.GetOrCreateTaskMap(clusterSessionKey)
 		taskMap.CreateOrMergeAttempt(taskId, int(taskAttempt), func(t *types.Task) {
 			// --- DEDUPLICATION using (State + Timestamp) as unique key ---
 			// Build a set of existing event keys to detect duplicates
@@ -483,7 +486,7 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 		}
 
 		// Use CreateOrMergeActor pattern (same as Task)
-		actorMap := h.ClusterActorMap.GetOrCreateActorMap(currentClusterName)
+		actorMap := h.ClusterActorMap.GetOrCreateActorMap(clusterSessionKey)
 		actorMap.CreateOrMergeActor(currActor.ActorID, func(a *types.Actor) {
 			// Preserve lifecycle-derived fields that may have arrived first
 			existingEvents := a.Events
@@ -563,7 +566,7 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 			return nil
 		}
 
-		actorMap := h.ClusterActorMap.GetOrCreateActorMap(currentClusterName)
+		actorMap := h.ClusterActorMap.GetOrCreateActorMap(clusterSessionKey)
 		actorMap.CreateOrMergeActor(actorId, func(a *types.Actor) {
 			// Ensure ActorID is set (in case LIFECYCLE arrives before DEFINITION)
 			a.ActorID = actorId
@@ -697,7 +700,7 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 			logrus.Errorf("Failed to convert DriverNodeID from base64 to hex, will keep DriverNodeID in base64: %v", err)
 		}
 
-		jobMap := h.ClusterJobMap.GetOrCreateJobMap(currentClusterName)
+		jobMap := h.ClusterJobMap.GetOrCreateJobMap(clusterSessionKey)
 		jobMap.CreateOrMergeJob(currJob.JobID, func(j *types.Job) {
 			// If for some reason jobID is empty, we will keep whatever is in 'j'
 			var existingJobID string
@@ -784,7 +787,7 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 			return nil
 		}
 
-		jobMap := h.ClusterJobMap.GetOrCreateJobMap(currentClusterName)
+		jobMap := h.ClusterJobMap.GetOrCreateJobMap(clusterSessionKey)
 		jobMap.CreateOrMergeJob(jobId, func(j *types.Job) {
 			// TODO(chiayi): take care of status (job progress) state if part of DriverJobLifecycleEvent
 			j.JobID = jobId

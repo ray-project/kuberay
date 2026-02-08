@@ -24,6 +24,34 @@ const (
 	ACTOR_LIFECYCLE_EVENT       EventType = "ACTOR_LIFECYCLE_EVENT"
 )
 
+// SourceType represents the component that generates Ray events.
+// https://github.com/ray-project/ray/blob/3b41c97fa90c58b0b72c0026f57005b92310160d/src/ray/protobuf/public/events_base_event.proto#L34-L42
+type SourceType string
+
+const (
+	SOURCE_TYPE_UNSPECIFIED SourceType = "SOURCE_TYPE_UNSPECIFIED"
+	CORE_WORKER             SourceType = "CORE_WORKER"
+	GCS                     SourceType = "GCS"
+	RAYLET                  SourceType = "RAYLET"
+	CLUSTER_LIFECYCLE       SourceType = "CLUSTER_LIFECYCLE"
+	AUTOSCALER              SourceType = "AUTOSCALER"
+	JOBS                    SourceType = "JOBS"
+)
+
+// Severity represents the severity level of Ray events.
+// https://github.com/ray-project/ray/blob/3b41c97fa90c58b0b72c0026f57005b92310160d/src/ray/protobuf/public/events_base_event.proto#L64-L76
+type Severity string
+
+const (
+	EVENT_SEVERITY_UNSPECIFIED Severity = "EVENT_SEVERITY_UNSPECIFIED"
+	TRACE                      Severity = "TRACE"
+	DEBUG                      Severity = "DEBUG"
+	INFO                       Severity = "INFO"
+	WARNING                    Severity = "WARNING"
+	ERROR                      Severity = "ERROR"
+	FATAL                      Severity = "FATAL"
+)
+
 // AllEventTypes includes all potential event types defined in Ray.
 var AllEventTypes = []EventType{
 	EVENT_TYPE_UNSPECIFIED,
@@ -53,6 +81,7 @@ type Event struct {
 	Timestamp      string         `json:"timestamp"`                // Unix milliseconds (e.g., "1768591369414")
 	Severity       string         `json:"severity"`                 // INFO, WARNING, ERROR
 	Message        string         `json:"message,omitempty"`        // Usually empty in RayEvents
+	SessionName    string         `json:"sessionName,omitempty"`    // Ray session name (e.g., "session_2026-01-16_11-06-54_467309_1")
 	Label          string         `json:"label,omitempty"`          // Same as EventType for filtering
 	NodeID         string         `json:"nodeId,omitempty"`         // Node where event originated
 	SourceHostname string         `json:"sourceHostname,omitempty"` // Extracted from NodeDefinitionEvent
@@ -93,8 +122,8 @@ func (e *EventMap) AddEvent(jobID string, event Event) {
 	}
 }
 
-// GetAll returns all events grouped by jobId, sorted by timestamp.
-func (e *EventMap) GetAll() map[string][]Event {
+// GetAllEvents returns all events grouped by jobId, sorted by timestamp.
+func (e *EventMap) GetAllEvents() map[string][]Event {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 
@@ -108,8 +137,8 @@ func (e *EventMap) GetAll() map[string][]Event {
 	return result
 }
 
-// GetByJobID returns events for a specific job, sorted by timestamp.
-func (e *EventMap) GetByJobID(jobID string) []Event {
+// GetEventsByJobID returns events for a specific job, sorted by timestamp.
+func (e *EventMap) GetEventsByJobID(jobID string) []Event {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 
@@ -132,7 +161,8 @@ func sortEventsByTimestamp(events []Event) {
 	})
 }
 
-// ClusterEventMap stores EventMaps per cluster.
+// ClusterEventMap stores EventMaps per cluster session.
+// The key is clusterSessionKey in format "{clusterName}_{namespace}_{sessionName}".
 // This follows the same pattern as ClusterTaskMap and ClusterActorMap.
 type ClusterEventMap struct {
 	clusterEvents map[string]*EventMap
@@ -146,39 +176,42 @@ func NewClusterEventMap() *ClusterEventMap {
 	}
 }
 
-// GetOrCreateEventMap returns the EventMap for the given cluster, creating it if needed.
-func (c *ClusterEventMap) GetOrCreateEventMap(clusterName string) *EventMap {
+// GetOrCreateEventMap returns the EventMap for the given clusterSessionKey, creating it if needed.
+// clusterSessionKey format: "{clusterName}_{namespace}_{sessionName}"
+func (c *ClusterEventMap) GetOrCreateEventMap(clusterSessionKey string) *EventMap {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if eventMap, ok := c.clusterEvents[clusterName]; ok {
+	if eventMap, ok := c.clusterEvents[clusterSessionKey]; ok {
 		return eventMap
 	}
 	eventMap := NewEventMap()
-	c.clusterEvents[clusterName] = eventMap
+	c.clusterEvents[clusterSessionKey] = eventMap
 	return eventMap
 }
 
-// GetAll returns all events for a cluster, grouped by jobId.
-func (c *ClusterEventMap) GetAll(clusterName string) map[string][]Event {
+// GetAllEvents returns all events for a cluster session, grouped by jobId.
+// clusterSessionKey format: "{clusterName}_{namespace}_{sessionName}"
+func (c *ClusterEventMap) GetAllEvents(clusterSessionKey string) map[string][]Event {
 	c.mu.RLock()
-	eventMap, ok := c.clusterEvents[clusterName]
+	eventMap, ok := c.clusterEvents[clusterSessionKey]
 	c.mu.RUnlock()
 
 	if !ok {
 		return map[string][]Event{}
 	}
-	return eventMap.GetAll()
+	return eventMap.GetAllEvents()
 }
 
-// GetByJobID returns events for a specific job in a cluster.
-func (c *ClusterEventMap) GetByJobID(clusterName, jobID string) []Event {
+// GetEventsByJobID returns events for a specific job in a cluster session.
+// clusterSessionKey format: "{clusterName}_{namespace}_{sessionName}"
+func (c *ClusterEventMap) GetEventsByJobID(clusterSessionKey, jobID string) []Event {
 	c.mu.RLock()
-	eventMap, ok := c.clusterEvents[clusterName]
+	eventMap, ok := c.clusterEvents[clusterSessionKey]
 	c.mu.RUnlock()
 
 	if !ok {
 		return []Event{}
 	}
-	return eventMap.GetByJobID(jobID)
+	return eventMap.GetEventsByJobID(jobID)
 }

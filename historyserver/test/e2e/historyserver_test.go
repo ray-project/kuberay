@@ -337,6 +337,15 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 
 // testEventsEndpointLiveCluster verifies that the /events endpoint works for a live cluster.
 // For live clusters, the request is proxied to Ray Dashboard.
+//
+// The test case follows these steps:
+// 1. Prepare test environment by applying a Ray cluster
+// 2. Submit a Ray job to the existing cluster
+// 3. Apply History Server and get its URL
+// 4. Get the cluster info from the list and verify sessionName='live'
+// 5. Set cluster context via /enter_cluster/ endpoint
+// 6. Verify that the /events endpoint returns events with proper structure
+// 7. Delete S3 bucket to ensure test isolation
 func testEventsEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
@@ -379,6 +388,17 @@ func testEventsEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Namesp
 
 // testEventsEndpointDeadCluster verifies that the /events endpoint works for a dead cluster.
 // Events are retrieved from the EventHandler's in-memory ClusterEventMap.
+//
+// The test case follows these steps:
+// 1. Prepare test environment by applying a Ray cluster
+// 2. Submit a Ray job to the existing cluster
+// 3. Delete RayCluster to trigger event upload to S3
+// 4. Apply History Server and get its URL
+// 5. Get the cluster info from the list and verify sessionName != 'live'
+// 6. Set cluster context via /enter_cluster/ endpoint
+// 7. Verify that the /events endpoint returns events from storage with proper structure
+// 8. Verify that the /events endpoint supports job_id filter
+// 9. Delete S3 bucket to ensure test isolation
 func testEventsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
