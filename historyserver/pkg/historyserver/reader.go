@@ -70,22 +70,61 @@ func (s *ServerHandler) listClusters(limit int) []utils.ClusterInfo {
 }
 
 func (s *ServerHandler) _getNodeLogs(rayClusterNameID, sessionId, nodeId, dir string) ([]byte, error) {
-	// TODO(nary): make logs/ response the same for live and dead cluster
-	// Live cluster: {"result": true, "msg": "", "data": {"result": {"agent": ["file1"], ...}}}
-	// Dead cluster: {"data": {"result": {"padding": ["file1", "file2", ...]}}}
 	logPath := path.Join(sessionId, "logs", nodeId)
 	if dir != "" {
 		logPath = path.Join(logPath, dir)
 	}
 	files := s.reader.ListFiles(rayClusterNameID, logPath)
+
+	// Categorize log files to match Ray Dashboard API format.
+	// Ref: Ray Dashboard's LogsManager._categorize_log_files in log_manager.py
+	categorized := categorizeLogFiles(files)
+
 	ret := map[string]interface{}{
+		"result": true,
+		"msg":    "",
 		"data": map[string]interface{}{
-			"result": map[string]interface{}{
-				"padding": files,
-			},
+			"result": categorized,
 		},
 	}
 	return json.Marshal(ret)
+}
+
+// categorizeLogFiles categorizes log files by component type.
+// This mirrors Ray Dashboard's LogsManager._categorize_log_files logic.
+// Ref: https://github.com/ray-project/ray/blob/master/python/ray/dashboard/modules/log/log_manager.py
+//
+// NOTE: The order of checks matters. "log_monitor" must be checked before "monitor"
+// because "log_monitor" contains "monitor" as a substring.
+func categorizeLogFiles(files []string) map[string][]string {
+	result := make(map[string][]string)
+	for _, f := range files {
+		switch {
+		case strings.Contains(f, "worker") && strings.HasSuffix(f, ".out"):
+			result["worker_out"] = append(result["worker_out"], f)
+		case strings.Contains(f, "worker") && strings.HasSuffix(f, ".err"):
+			result["worker_err"] = append(result["worker_err"], f)
+		case strings.Contains(f, "core-worker") && strings.HasSuffix(f, ".log"):
+			result["core_worker"] = append(result["core_worker"], f)
+		case strings.Contains(f, "core-driver") && strings.HasSuffix(f, ".log"):
+			result["driver"] = append(result["driver"], f)
+		case strings.Contains(f, "raylet."):
+			result["raylet"] = append(result["raylet"], f)
+		case strings.Contains(f, "gcs_server."):
+			result["gcs_server"] = append(result["gcs_server"], f)
+		case strings.Contains(f, "log_monitor"):
+			result["internal"] = append(result["internal"], f)
+		case strings.Contains(f, "monitor"):
+			result["autoscaler"] = append(result["autoscaler"], f)
+		case strings.Contains(f, "agent."):
+			result["agent"] = append(result["agent"], f)
+		case strings.Contains(f, "dashboard."):
+			result["dashboard"] = append(result["dashboard"], f)
+		default:
+			result["internal"] = append(result["internal"], f)
+		}
+	}
+	return result
 }
 
 func (s *ServerHandler) _getNodeLogFile(rayClusterNameID, sessionID string, options GetLogFileOptions) ([]byte, error) {

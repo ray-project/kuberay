@@ -761,24 +761,20 @@ func (s *ServerHandler) getNodeLogFile(req *restful.Request, resp *restful.Respo
 		return
 	}
 
-	// Use provided download_filename or default to DEFAULT_DOWNLOAD_FILENAME
-	downloadFilename := options.DownloadFilename
-	if downloadFilename == "" {
-		downloadFilename = DEFAULT_DOWNLOAD_FILENAME
+	// Only set Content-Disposition header when download_filename is explicitly provided.
+	// This matches Ray Dashboard behavior: without download_filename, the browser
+	// displays the log content inline; with download_filename, it triggers a download.
+	if options.DownloadFilename != "" {
+		// Format filename correctly to escape " or \
+		disposition := mime.FormatMediaType("attachment", map[string]string{
+			"filename": options.DownloadFilename,
+		})
+		if disposition == "" {
+			logrus.Errorf("Failed to format Content-Disposition header for filename %q", options.DownloadFilename)
+			disposition = fmt.Sprintf("attachment; filename=\"%s\"", DEFAULT_DOWNLOAD_FILENAME)
+		}
+		resp.AddHeader("Content-Disposition", disposition)
 	}
-	// Format filename correct to escape " or \
-	disposition := mime.FormatMediaType("attachment", map[string]string{
-		"filename": downloadFilename,
-	})
-
-	if disposition == "" {
-		logrus.Errorf("Failed to format Content-Disposition header for filename %q", downloadFilename)
-
-		// Fallback to the default filename
-		disposition = fmt.Sprintf("attachment; filename=\"%s\"", DEFAULT_DOWNLOAD_FILENAME)
-	}
-
-	resp.AddHeader("Content-Disposition", disposition)
 
 	resp.Write(content)
 }
