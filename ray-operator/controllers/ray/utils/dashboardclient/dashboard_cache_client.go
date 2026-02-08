@@ -111,7 +111,7 @@ func (w *WorkerPool) Start(ctx context.Context) {
 					continue
 				}
 
-				logger.Info("Listing RayJobs from cache", "total", len(rayJobs.Items))
+				logger.V(1).Info("Listing RayJobs from cache", "total", len(rayJobs.Items))
 
 				for _, rayJob := range rayJobs.Items {
 					if len(rayJob.Status.DashboardURL) == 0 ||
