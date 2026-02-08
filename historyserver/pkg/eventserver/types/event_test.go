@@ -89,23 +89,28 @@ func TestClusterEventMap(t *testing.T) {
 	t.Run("GetOrCreateEventMap creates and reuses EventMap", func(t *testing.T) {
 		cm := NewClusterEventMap()
 
-		em1 := cm.GetOrCreateEventMap("cluster1")
+		// clusterSessionKey format: "{clusterName}_{namespace}_{sessionName}"
+		clusterSessionKey1 := "my-cluster_default_session_2026-01-16"
+		clusterSessionKey2 := "my-cluster_default_session_2026-01-17"
+
+		em1 := cm.GetOrCreateEventMap(clusterSessionKey1)
 		require.NotNil(t, em1)
 
-		em2 := cm.GetOrCreateEventMap("cluster1")
+		em2 := cm.GetOrCreateEventMap(clusterSessionKey1)
 		assert.Same(t, em1, em2, "should return same instance")
 
-		em3 := cm.GetOrCreateEventMap("cluster2")
-		assert.NotSame(t, em1, em3, "different cluster should get different instance")
+		em3 := cm.GetOrCreateEventMap(clusterSessionKey2)
+		assert.NotSame(t, em1, em3, "different cluster session should get different instance")
 	})
 
-	t.Run("GetAll returns events for cluster", func(t *testing.T) {
+	t.Run("GetAllEvents returns events for cluster session", func(t *testing.T) {
 		cm := NewClusterEventMap()
-		em := cm.GetOrCreateEventMap("cluster1")
+		clusterSessionKey := "my-cluster_default_session_2026-01-16"
+		em := cm.GetOrCreateEventMap(clusterSessionKey)
 		em.AddEvent("job1", Event{EventID: "1", Timestamp: "1768591375000"})
 		em.AddEvent("", Event{EventID: "2", Timestamp: "1768591370000"})
 
-		all := cm.GetAllEvents("cluster1")
+		all := cm.GetAllEvents(clusterSessionKey)
 		assert.Len(t, all, 2)
 		assert.Contains(t, all, "job1")
 		assert.Contains(t, all, "global")
@@ -118,26 +123,28 @@ func TestClusterEventMap(t *testing.T) {
 		assert.Empty(t, all)
 	})
 
-	t.Run("GetEventsByJobID returns events for cluster and job", func(t *testing.T) {
+	t.Run("GetEventsByJobID returns events for cluster session and job", func(t *testing.T) {
 		cm := NewClusterEventMap()
-		em := cm.GetOrCreateEventMap("cluster1")
+		clusterSessionKey := "my-cluster_default_session_2026-01-16"
+		em := cm.GetOrCreateEventMap(clusterSessionKey)
 		em.AddEvent("job1", Event{EventID: "1", Timestamp: "1768591375000"}) // 15s
 		em.AddEvent("job1", Event{EventID: "2", Timestamp: "1768591370000"}) // 10s
 
-		events := cm.GetEventsByJobID("cluster1", "job1")
+		events := cm.GetEventsByJobID(clusterSessionKey, "job1")
 		assert.Len(t, events, 2)
 		assert.Equal(t, "2", events[0].EventID)
 		assert.Equal(t, "1", events[1].EventID)
 	})
 
-	t.Run("GetEventsByJobID returns empty for nonexistent cluster or job", func(t *testing.T) {
+	t.Run("GetEventsByJobID returns empty for nonexistent cluster session or job", func(t *testing.T) {
 		cm := NewClusterEventMap()
-		cm.GetOrCreateEventMap("cluster1")
+		clusterSessionKey := "my-cluster_default_session_2026-01-16"
+		cm.GetOrCreateEventMap(clusterSessionKey)
 
-		events := cm.GetEventsByJobID("nonexistent", "job1")
+		events := cm.GetEventsByJobID("nonexistent_ns_session", "job1")
 		assert.Empty(t, events)
 
-		events = cm.GetEventsByJobID("cluster1", "nonexistent")
+		events = cm.GetEventsByJobID(clusterSessionKey, "nonexistent")
 		assert.Empty(t, events)
 	})
 }
