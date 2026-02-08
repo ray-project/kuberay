@@ -1091,14 +1091,6 @@ func (s *ServerHandler) getTasks(req *restful.Request, resp *restful.Response) {
 // The schema aligns with the Ray Dashboard API.
 // Ref: https://github.com/ray-project/ray/blob/d0b1d151d8ea964a711e451d0ae736f8bf95b629/python/ray/util/state/common.py#L730-L819.
 func formatTaskForResponse(task eventtypes.Task, detail bool) map[string]interface{} {
-	setNullableField := func(result map[string]interface{}, key string, value interface{}) {
-		if value != nil {
-			result[key] = value
-		} else {
-			result[key] = nil
-		}
-	}
-
 	// TODO(jwj): Maybe define result schema in types.go.
 	result := map[string]interface{}{
 		"task_id":            task.TaskID,
@@ -1157,8 +1149,16 @@ func formatTaskForResponse(task eventtypes.Task, detail bool) map[string]interfa
 		} else {
 			result["error_message"] = nil
 		}
-		setNullableField(result, "is_debugger_paused", task.IsDebuggerPaused)
-		setNullableField(result, "call_site", task.CallSite)
+		if task.IsDebuggerPaused != nil {
+			result["is_debugger_paused"] = *task.IsDebuggerPaused
+		} else {
+			result["is_debugger_paused"] = nil
+		}
+		if task.CallSite != nil {
+			result["call_site"] = *task.CallSite
+		} else {
+			result["call_site"] = nil
+		}
 		if task.LabelSelector != nil {
 			result["label_selector"] = task.LabelSelector
 		} else {
