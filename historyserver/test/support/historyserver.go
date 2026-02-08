@@ -21,6 +21,7 @@ import (
 const (
 	HistoryServerManifestPath = "../../config/historyserver.yaml"
 	HistoryServerPort         = 30080
+	EndpointLogFile           = "/api/v0/logs/file"
 
 	RayGrafanaIframeHost               = "http://127.0.0.1:3000"
 	HistoryServerGrafanaHealthResponse = `{
@@ -226,10 +227,9 @@ func GetOneOfNodeID(g *WithT, client *http.Client, historyServerURL string, isLi
 // VerifyLogFileEndpointReturnsContent verifies that the log file endpoint returns content.
 func VerifyLogFileEndpointReturnsContent(test Test, g *WithT, client *http.Client, historyServerURL, nodeID string) {
 	filename := "raylet.out"
-	endpointLogFile := "/api/v0/logs/file"
 
 	g.Eventually(func(gg Gomega) {
-		logFileURL := fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=100", historyServerURL, endpointLogFile, nodeID, filename)
+		logFileURL := fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=100", historyServerURL, EndpointLogFile, nodeID, filename)
 		resp, err := client.Get(logFileURL)
 		gg.Expect(err).NotTo(HaveOccurred())
 		defer resp.Body.Close()
@@ -245,12 +245,11 @@ func VerifyLogFileEndpointReturnsContent(test Test, g *WithT, client *http.Clien
 
 // VerifyLogFileEndpointRejectsPathTraversal verifies that the log file endpoint rejects path traversal attempts.
 func VerifyLogFileEndpointRejectsPathTraversal(test Test, g *WithT, client *http.Client, historyServerURL, nodeID string) {
-	endpointLogFile := "/api/v0/logs/file"
 	maliciousPaths := []string{"../etc/passwd", "..", "/etc/passwd", "../../secret"}
 
 	for _, malicious := range maliciousPaths {
 		g.Eventually(func(gg Gomega) {
-			url := fmt.Sprintf("%s%s?node_id=%s&filename=%s", historyServerURL, endpointLogFile, nodeID, malicious)
+			url := fmt.Sprintf("%s%s?node_id=%s&filename=%s", historyServerURL, EndpointLogFile, nodeID, malicious)
 			resp, err := client.Get(url)
 			gg.Expect(err).NotTo(HaveOccurred())
 			defer func() {

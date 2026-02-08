@@ -21,7 +21,6 @@ import (
 
 const (
 	LiveSessionName = "live"
-	EndpointLogFile = "/api/v0/logs/file"
 	EndpointNodes   = "/nodes"
 )
 
