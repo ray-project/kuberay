@@ -446,30 +446,6 @@ func (s *ServerHandler) findWorkerLogFile(clusterNameID, sessionID, nodeID, work
 	return "", "", fmt.Errorf("worker log file not found: worker_id=%s (hex=%s), suffix=%s, searched in %s", workerID, workerIDHex, suffix, logPath)
 }
 
-func (s *ServerHandler) GetNodes(rayClusterNameID, sessionId string) ([]byte, error) {
-	logPath := path.Join(sessionId, "logs")
-	nodes := s.reader.ListFiles(rayClusterNameID, logPath)
-	templ := map[string]interface{}{
-		"result": true,
-		"msg":    "Node summary fetched.",
-		"data": map[string]interface{}{
-			"summary": []map[string]interface{}{},
-		},
-	}
-	nodeSummary := []map[string]interface{}{}
-	for _, node := range nodes {
-		nodeSummary = append(nodeSummary, map[string]interface{}{
-			"raylet": map[string]interface{}{
-				"nodeId": path.Clean(node),
-				"state":  "ALIVE",
-			},
-			"ip": "UNKNOWN",
-		})
-	}
-	templ["data"].(map[string]interface{})["summary"] = nodeSummary
-	return json.Marshal(templ)
-}
-
 // ipToNodeId resolves node_id from node_ip by querying node_events from storage.
 // This mirrors Ray Dashboard's ip_to_node_id logic.
 // Returns node_id in hex format if found, error otherwise.
