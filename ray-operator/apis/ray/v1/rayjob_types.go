@@ -218,8 +218,14 @@ type RayJobSpec struct {
 	// RayClusterSpec is the cluster template to run the job
 	RayClusterSpec *RayClusterSpec `json:"rayClusterSpec,omitempty"`
 	// SubmitterPodTemplate is the template for the pod that will run `ray job submit`.
+	// This is used when SubmissionMode is `K8sJobMode`.
 	// +optional
 	SubmitterPodTemplate *corev1.PodTemplateSpec `json:"submitterPodTemplate,omitempty"`
+	// SubmitterContainerTemplate is the template for the sidecar submitter container
+	// injected into the Ray head Pod to run `ray job submit`
+	// This is used when SubmissionMode is `SidecarMode`.
+	// +optional
+	SubmitterContainerTemplate *corev1.Container `json:"submitterContainerTemplate,omitempty"`
 	// Metadata is data to store along with this job.
 	// +optional
 	Metadata map[string]string `json:"metadata,omitempty"`

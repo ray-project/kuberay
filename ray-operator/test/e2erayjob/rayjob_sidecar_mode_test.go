@@ -290,4 +290,107 @@ env_vars:
 
 		LogWithTimestamp(test.T(), "RayJob %s/%s completed successfully with auth token", rayJob.Namespace, rayJob.Name)
 	})
+
+	test.T().Run("SidecarMode with SubmitterContainerTemplate", func(_ *testing.T) {
+		// This test verifies that SubmitterContainerTemplate allows users to customize
+		// the sidecar submitter container with volume mounts and environment variables.
+		rayJobAC := rayv1ac.RayJob("sidecar-custom-submitter", namespace.Name).
+			WithSpec(rayv1ac.RayJobSpec().
+				WithSubmissionMode(rayv1.SidecarMode).
+				WithEntrypoint("python /home/ray/jobs/counter.py").
+				WithRuntimeEnvYAML(`
+env_vars:
+  counter_name: test_counter
+`).
+				WithShutdownAfterJobFinishes(true).
+				// Use SubmitterContainerTemplate to customize the submitter container
+				WithSubmitterContainerTemplate(corev1.Container{
+					// Volume mounts for the submitter container
+					VolumeMounts: []corev1.VolumeMount{
+						{
+							Name:      jobs.Name,
+							MountPath: "/home/ray/jobs",
+						},
+					},
+					// Custom environment variable
+					Env: []corev1.EnvVar{
+						{
+							Name:  "CUSTOM_SUBMITTER_VAR",
+							Value: "submitter_template_test",
+						},
+					},
+				}).
+				// Match the working "Successful RayJob" test pattern
+				WithRayClusterSpec(rayv1ac.RayClusterSpec().
+					WithRayVersion(GetRayVersion()).
+					WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
+						WithRayStartParams(map[string]string{"dashboard-host": "0.0.0.0"}).
+						WithTemplate(PodTemplateSpecApplyConfiguration(HeadPodTemplateApplyConfiguration(),
+							MountConfigMap[corev1ac.PodTemplateSpecApplyConfiguration](jobs, "/home/ray/jobs"))))))
+
+		rayJob, err := test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
+		g.Expect(err).NotTo(HaveOccurred())
+		LogWithTimestamp(test.T(), "Created RayJob %s/%s with SubmitterContainerTemplate", rayJob.Namespace, rayJob.Name)
+
+		// Wait for RayCluster to be created and ready
+		LogWithTimestamp(test.T(), "Waiting for RayCluster to be created")
+		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
+			Should(WithTransform(RayJobClusterName, Not(BeEmpty())))
+
+		rayJob, err = GetRayJob(test, rayJob.Namespace, rayJob.Name)
+		g.Expect(err).NotTo(HaveOccurred())
+
+		// Verify the submitter container has the expected configuration
+		rayCluster, err := GetRayCluster(test, namespace.Name, rayJob.Status.RayClusterName)
+		g.Expect(err).NotTo(HaveOccurred())
+
+		headPod, err := GetHeadPod(test, rayCluster)
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(headPod).NotTo(BeNil())
+
+		// Find the submitter container
+		var submitterContainer *corev1.Container
+		for i := range headPod.Spec.Containers {
+			if headPod.Spec.Containers[i].Name == utils.SubmitterContainerName {
+				submitterContainer = &headPod.Spec.Containers[i]
+				break
+			}
+		}
+		g.Expect(submitterContainer).NotTo(BeNil(), "submitter container should be present in head pod")
+
+		// Verify the volume mount is present
+		hasVolumeMount := false
+		for _, vm := range submitterContainer.VolumeMounts {
+			if vm.Name == jobs.Name && vm.MountPath == "/home/ray/jobs" {
+				hasVolumeMount = true
+				break
+			}
+		}
+		g.Expect(hasVolumeMount).To(BeTrue(), "submitter container should have the ConfigMap volume mount")
+
+		// Verify the custom environment variable is present
+		hasCustomEnv := false
+		for _, env := range submitterContainer.Env {
+			if env.Name == "CUSTOM_SUBMITTER_VAR" && env.Value == "submitter_template_test" {
+				hasCustomEnv = true
+				break
+			}
+		}
+		g.Expect(hasCustomEnv).To(BeTrue(), "submitter container should have the custom environment variable")
+
+		// Wait for the job to complete
+		LogWithTimestamp(test.T(), "Waiting for RayJob %s/%s to complete", rayJob.Namespace, rayJob.Name)
+		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
+			Should(WithTransform(RayJobStatus, Satisfy(rayv1.IsJobTerminal)))
+
+		// Assert the RayJob has completed successfully
+		g.Expect(GetRayJob(test, rayJob.Namespace, rayJob.Name)).
+			To(WithTransform(RayJobStatus, Equal(rayv1.JobStatusSucceeded)))
+
+		// And the RayJob deployment status is updated accordingly
+		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name)).
+			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusComplete)))
+
+		LogWithTimestamp(test.T(), "RayJob %s/%s with SubmitterContainerTemplate completed successfully", rayJob.Namespace, rayJob.Name)
+	})
 }
