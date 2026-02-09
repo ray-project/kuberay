@@ -22,10 +22,6 @@ const (
 	HistoryServerManifestPath = "../../config/historyserver.yaml"
 	HistoryServerPort         = 30080
 
-	// API endpoint constants
-	EndpointLogFile = "/api/v0/logs/file"
-	EndpointNodes   = "/nodes"
-
 	// Session name constants
 	LiveSessionName = "live"
 
@@ -235,7 +231,7 @@ func VerifyLogFileEndpointReturnsContent(test Test, g *WithT, client *http.Clien
 	filename := "raylet.out"
 
 	g.Eventually(func(gg Gomega) {
-		logFileURL := fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=100", historyServerURL, EndpointLogFile, nodeID, filename)
+		logFileURL := fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=100", historyServerURL, EndpointLogsFile, nodeID, filename)
 		resp, err := client.Get(logFileURL)
 		gg.Expect(err).NotTo(HaveOccurred())
 		defer resp.Body.Close()
@@ -255,7 +251,7 @@ func VerifyLogFileEndpointRejectsPathTraversal(test Test, g *WithT, client *http
 
 	for _, malicious := range maliciousPaths {
 		g.Eventually(func(gg Gomega) {
-			url := fmt.Sprintf("%s%s?node_id=%s&filename=%s", historyServerURL, EndpointLogFile, nodeID, malicious)
+			url := fmt.Sprintf("%s%s?node_id=%s&filename=%s", historyServerURL, EndpointLogsFile, nodeID, malicious)
 			resp, err := client.Get(url)
 			gg.Expect(err).NotTo(HaveOccurred())
 			defer func() {
