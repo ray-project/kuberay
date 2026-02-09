@@ -64,18 +64,18 @@ func TestEventProcessor(t *testing.T) {
 			wantStoredEvents: map[string][]types.Task{
 				"ID_12345": {
 					{
-						TaskID:        "ID_12345",
-						Name:          "Name_12345",
-						NodeID:        "Nodeid_12345",
-						AttemptNumber: 2,
+						TaskID:      "ID_12345",
+						TaskName:    "Name_12345",
+						NodeID:      "Nodeid_12345",
+						TaskAttempt: 2,
 					},
 				},
 				"ID_54321": {
 					{
-						TaskID:        "ID_54321",
-						Name:          "Name_54321",
-						NodeID:        "Nodeid_54321",
-						AttemptNumber: 1,
+						TaskID:      "ID_54321",
+						TaskName:    "Name_54321",
+						NodeID:      "Nodeid_54321",
+						TaskAttempt: 1,
 					},
 				},
 			},
@@ -106,10 +106,10 @@ func TestEventProcessor(t *testing.T) {
 			wantStoredEvents: map[string][]types.Task{
 				"ID_12345": {
 					{
-						TaskID:        "ID_12345",
-						Name:          "Name_12345",
-						NodeID:        "Nodeid_12345",
-						AttemptNumber: 2,
+						TaskID:      "ID_12345",
+						TaskName:    "Name_12345",
+						NodeID:      "Nodeid_12345",
+						TaskAttempt: 2,
 					},
 				},
 			},
@@ -179,10 +179,10 @@ func TestEventProcessor(t *testing.T) {
 
 func TestStoreEvent(t *testing.T) {
 	initialTask := types.Task{
-		TaskID:        "taskid1",
-		Name:          "taskName123",
-		NodeID:        "nodeid123",
-		AttemptNumber: 0,
+		TaskID:      "taskid1",
+		TaskName:    "taskName123",
+		NodeID:      "nodeid123",
+		TaskAttempt: 0,
 	}
 	tests := []struct {
 		name              string
@@ -218,10 +218,10 @@ func TestStoreEvent(t *testing.T) {
 			wantTaskID:        "taskid1",
 			wantTasks: []types.Task{
 				{
-					TaskID:        "taskid1",
-					Name:          "taskName123",
-					NodeID:        "nodeid1234",
-					AttemptNumber: 0,
+					TaskID:      "taskid1",
+					TaskName:    "taskName123",
+					NodeID:      "nodeid1234",
+					TaskAttempt: 0,
 				},
 			},
 		},
@@ -239,10 +239,10 @@ func TestStoreEvent(t *testing.T) {
 			wantTaskID:        "taskid2",
 			wantTasks: []types.Task{
 				{
-					TaskID:        "taskid2",
-					Name:          "taskName123",
-					NodeID:        "nodeid1234",
-					AttemptNumber: 1,
+					TaskID:      "taskid2",
+					TaskName:    "taskName123",
+					NodeID:      "nodeid1234",
+					TaskAttempt: 1,
 				},
 			},
 		},
@@ -265,16 +265,16 @@ func TestStoreEvent(t *testing.T) {
 			// Now expects BOTH attempts to be stored
 			wantTasks: []types.Task{
 				{
-					TaskID:        "taskid1",
-					Name:          "taskName123",
-					NodeID:        "nodeid123",
-					AttemptNumber: 0,
+					TaskID:      "taskid1",
+					TaskName:    "taskName123",
+					NodeID:      "nodeid123",
+					TaskAttempt: 0,
 				},
 				{
-					TaskID:        "taskid1",
-					Name:          "taskName123",
-					NodeID:        "nodeid123",
-					AttemptNumber: 2,
+					TaskID:      "taskid1",
+					TaskName:    "taskName123",
+					NodeID:      "nodeid123",
+					TaskAttempt: 2,
 				},
 			},
 		},
@@ -370,8 +370,8 @@ func TestStoreEvent(t *testing.T) {
 // and out-of-order events are properly sorted
 func TestTaskLifecycleEventDeduplication(t *testing.T) {
 	// Helper to create a StateEvent
-	makeStateEvent := func(state types.TaskStatus, timestampNano int64) types.StateEvent {
-		return types.StateEvent{
+	makeStateEvent := func(state types.TaskStatus, timestampNano int64) types.TaskStateTransition {
+		return types.TaskStateTransition{
 			State:     state,
 			Timestamp: time.Unix(0, timestampNano),
 		}
@@ -407,14 +407,14 @@ func TestTaskLifecycleEventDeduplication(t *testing.T) {
 
 	tests := []struct {
 		name           string
-		existingEvents []types.StateEvent // Events already in the task
-		newTransitions []map[string]any   // New transitions to process
-		wantEvents     []types.StateEvent // Expected final events (sorted by timestamp)
-		wantState      types.TaskStatus   // Expected final state
+		existingEvents []types.TaskStateTransition // Events already in the task
+		newTransitions []map[string]any            // New transitions to process
+		wantEvents     []types.TaskStateTransition // Expected final events (sorted by timestamp)
+		wantState      types.TaskStatus            // Expected final state
 	}{
 		{
 			name: "Scenario 1: Normal deduplication - same events processed twice",
-			existingEvents: []types.StateEvent{
+			existingEvents: []types.TaskStateTransition{
 				makeStateEvent(types.PENDING_NODE_ASSIGNMENT, 1000),
 				makeStateEvent(types.RUNNING, 2000),
 			},
@@ -422,7 +422,7 @@ func TestTaskLifecycleEventDeduplication(t *testing.T) {
 				makeTransition("PENDING_NODE_ASSIGNMENT", 1000), // Duplicate
 				makeTransition("RUNNING", 2000),                 // Duplicate
 			},
-			wantEvents: []types.StateEvent{
+			wantEvents: []types.TaskStateTransition{
 				makeStateEvent(types.PENDING_NODE_ASSIGNMENT, 1000),
 				makeStateEvent(types.RUNNING, 2000),
 			},
@@ -430,14 +430,14 @@ func TestTaskLifecycleEventDeduplication(t *testing.T) {
 		},
 		{
 			name: "Scenario 2: Out-of-order events - B(t=2) arrives after A(t=1), C(t=3)",
-			existingEvents: []types.StateEvent{
+			existingEvents: []types.TaskStateTransition{
 				makeStateEvent(types.PENDING_NODE_ASSIGNMENT, 1000), // A
 				makeStateEvent(types.FINISHED, 3000),                // C
 			},
 			newTransitions: []map[string]any{
 				makeTransition("RUNNING", 2000), // B - should be inserted in the middle
 			},
-			wantEvents: []types.StateEvent{
+			wantEvents: []types.TaskStateTransition{
 				makeStateEvent(types.PENDING_NODE_ASSIGNMENT, 1000), // A
 				makeStateEvent(types.RUNNING, 2000),                 // B - now in correct position
 				makeStateEvent(types.FINISHED, 3000),                // C
@@ -446,13 +446,13 @@ func TestTaskLifecycleEventDeduplication(t *testing.T) {
 		},
 		{
 			name: "Scenario 3: Same timestamp, different states - both should be kept",
-			existingEvents: []types.StateEvent{
+			existingEvents: []types.TaskStateTransition{
 				makeStateEvent(types.PENDING_NODE_ASSIGNMENT, 1000),
 			},
 			newTransitions: []map[string]any{
 				makeTransition("RUNNING", 1000), // Same timestamp, different state
 			},
-			wantEvents: []types.StateEvent{
+			wantEvents: []types.TaskStateTransition{
 				makeStateEvent(types.PENDING_NODE_ASSIGNMENT, 1000),
 				makeStateEvent(types.RUNNING, 1000),
 			},
@@ -460,21 +460,21 @@ func TestTaskLifecycleEventDeduplication(t *testing.T) {
 		},
 		{
 			name: "Scenario 4: Exact duplicate event - only one should remain",
-			existingEvents: []types.StateEvent{
+			existingEvents: []types.TaskStateTransition{
 				makeStateEvent(types.RUNNING, 1000),
 			},
 			newTransitions: []map[string]any{
 				makeTransition("RUNNING", 1000), // Exact duplicate
 				makeTransition("RUNNING", 1000), // Another duplicate
 			},
-			wantEvents: []types.StateEvent{
+			wantEvents: []types.TaskStateTransition{
 				makeStateEvent(types.RUNNING, 1000), // Only one
 			},
 			wantState: types.RUNNING,
 		},
 		{
 			name: "Scenario 5: Partial overlap - existing [A,B], new [B,C] -> result [A,B,C]",
-			existingEvents: []types.StateEvent{
+			existingEvents: []types.TaskStateTransition{
 				makeStateEvent(types.PENDING_NODE_ASSIGNMENT, 1000), // A
 				makeStateEvent(types.RUNNING, 2000),                 // B
 			},
@@ -482,7 +482,7 @@ func TestTaskLifecycleEventDeduplication(t *testing.T) {
 				makeTransition("RUNNING", 2000),  // B - duplicate
 				makeTransition("FINISHED", 3000), // C - new
 			},
-			wantEvents: []types.StateEvent{
+			wantEvents: []types.TaskStateTransition{
 				makeStateEvent(types.PENDING_NODE_ASSIGNMENT, 1000), // A
 				makeStateEvent(types.RUNNING, 2000),                 // B
 				makeStateEvent(types.FINISHED, 3000),                // C
@@ -491,12 +491,12 @@ func TestTaskLifecycleEventDeduplication(t *testing.T) {
 		},
 		{
 			name:           "Scenario 6: Empty initial events - add new events",
-			existingEvents: []types.StateEvent{},
+			existingEvents: []types.TaskStateTransition{},
 			newTransitions: []map[string]any{
 				makeTransition("PENDING_NODE_ASSIGNMENT", 1000),
 				makeTransition("RUNNING", 2000),
 			},
-			wantEvents: []types.StateEvent{
+			wantEvents: []types.TaskStateTransition{
 				makeStateEvent(types.PENDING_NODE_ASSIGNMENT, 1000),
 				makeStateEvent(types.RUNNING, 2000),
 			},
@@ -504,7 +504,7 @@ func TestTaskLifecycleEventDeduplication(t *testing.T) {
 		},
 		{
 			name: "Scenario 7: Multiple reprocessing cycles - events should not grow",
-			existingEvents: []types.StateEvent{
+			existingEvents: []types.TaskStateTransition{
 				makeStateEvent(types.PENDING_NODE_ASSIGNMENT, 1000),
 				makeStateEvent(types.RUNNING, 2000),
 				makeStateEvent(types.FINISHED, 3000),
@@ -515,7 +515,7 @@ func TestTaskLifecycleEventDeduplication(t *testing.T) {
 				makeTransition("RUNNING", 2000),
 				makeTransition("FINISHED", 3000),
 			},
-			wantEvents: []types.StateEvent{
+			wantEvents: []types.TaskStateTransition{
 				makeStateEvent(types.PENDING_NODE_ASSIGNMENT, 1000),
 				makeStateEvent(types.RUNNING, 2000),
 				makeStateEvent(types.FINISHED, 3000),
@@ -533,7 +533,7 @@ func TestTaskLifecycleEventDeduplication(t *testing.T) {
 				taskMap := h.ClusterTaskMap.GetOrCreateTaskMap("test-cluster")
 				taskMap.CreateOrMergeAttempt("task-1", 0, func(task *types.Task) {
 					task.TaskID = "task-1"
-					task.Events = tt.existingEvents
+					task.StateTransitions = tt.existingEvents
 					if len(tt.existingEvents) > 0 {
 						task.State = tt.existingEvents[len(tt.existingEvents)-1].State
 					}
@@ -560,7 +560,7 @@ func TestTaskLifecycleEventDeduplication(t *testing.T) {
 			task := tasks[0]
 
 			// Verify events
-			if diff := cmp.Diff(tt.wantEvents, task.Events); diff != "" {
+			if diff := cmp.Diff(tt.wantEvents, task.StateTransitions); diff != "" {
 				t.Errorf("Events mismatch (-want +got):\n%s", diff)
 			}
 
@@ -570,8 +570,8 @@ func TestTaskLifecycleEventDeduplication(t *testing.T) {
 			}
 
 			// Verify event count (important for deduplication)
-			if len(task.Events) != len(tt.wantEvents) {
-				t.Errorf("Event count = %d, want %d", len(task.Events), len(tt.wantEvents))
+			if len(task.StateTransitions) != len(tt.wantEvents) {
+				t.Errorf("Event count = %d, want %d", len(task.StateTransitions), len(tt.wantEvents))
 			}
 		})
 	}
@@ -919,7 +919,7 @@ func TestMultipleReprocessingCycles(t *testing.T) {
 		taskMap := h.ClusterTaskMap.GetOrCreateTaskMap("test-cluster")
 		taskMap.Lock()
 		tasks := taskMap.TaskMap["task-1"]
-		eventCount := len(tasks[0].Events)
+		eventCount := len(tasks[0].StateTransitions)
 		taskMap.Unlock()
 
 		// Should always be exactly 3 events, never growing

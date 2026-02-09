@@ -137,10 +137,12 @@ func routerAPI(s *ServerHandler) {
 		Produces("text/plain").
 		Writes("")) // Placeholder for specific return type
 
-	ws.Route(ws.GET("/v0/tasks").To(s.getTaskDetail).Filter(s.CookieHandle).
-		Doc("get task detail ").
-		// TODO: support limit
-		// Param(ws.QueryParameter("limit", "limit")).
+	ws.Route(ws.GET("/v0/tasks").To(s.getTasks).Filter(s.CookieHandle).
+		Doc("get task detail").
+		Param(ws.QueryParameter("limit", "limit")).
+		Param(ws.QueryParameter("timeout", "timeout")).
+		Param(ws.QueryParameter("detail", "detail")).
+		Param(ws.QueryParameter("exclude_driver", "exclude_driver")).
 		Param(ws.QueryParameter("filter_keys", "filter_keys")).
 		Param(ws.QueryParameter("filter_predicates", "filter_predicates")).
 		Param(ws.QueryParameter("filter_values", "filter_values")).
@@ -985,7 +987,7 @@ func (s *ServerHandler) getTaskSummarize(req *restful.Request, resp *restful.Res
 	// Apply generic filtering using utils.ApplyFilter
 	tasks = utils.ApplyFilter(tasks, filterKey, filterPredicate, filterValue,
 		func(t eventtypes.Task, key string) string {
-			return eventtypes.GetTaskFieldValue(t, key)
+			return t.GetFilterableFieldValue(key)
 		})
 
 	// Summarize tasks based on summary_by parameter
@@ -1019,7 +1021,7 @@ func summarizeTasksByFuncName(tasks []eventtypes.Task) map[string]interface{} {
 	summary := make(map[string]map[string]int)
 
 	for _, task := range tasks {
-		funcName := task.FuncOrClassName
+		funcName := task.GetFuncName()
 		if funcName == "" {
 			funcName = "unknown"
 		}
@@ -1070,41 +1072,54 @@ func summarizeTasksByLineage(tasks []eventtypes.Task) map[string]interface{} {
 	}
 }
 
-func (s *ServerHandler) getTaskDetail(req *restful.Request, resp *restful.Response) {
-	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
-	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
+// getTasks handles the /api/v0/tasks endpoint with the task filtering logic by query parameters.
+func (s *ServerHandler) getTasks(req *restful.Request, resp *restful.Response) {
 	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
-
 	if sessionName == "live" {
 		s.redirectRequest(req, resp)
 		return
 	}
 
-	filterKey := req.QueryParameter("filter_keys")
-	filterValue := req.QueryParameter("filter_values")
-	filterPredicate := req.QueryParameter("filter_predicates")
-
-	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
-	tasks := s.eventHandler.GetTasks(clusterSessionKey)
-	tasks = utils.ApplyFilter(tasks, filterKey, filterPredicate, filterValue,
-		func(t eventtypes.Task, key string) string {
-			return eventtypes.GetTaskFieldValue(t, key)
-		})
-
-	taskResults := make([]interface{}, 0, len(tasks))
-	for _, task := range tasks {
-		taskResults = append(taskResults, formatTaskForResponse(task))
+	// Parse query parameters.
+	listAPIOptions, err := utils.ParseOptionsFromReq(req)
+	if err != nil {
+		resp.WriteErrorString(http.StatusBadRequest, err.Error())
+		return
 	}
 
-	response := ReplyTaskInfo{
+	// Get tasks from the cluster session.
+	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
+	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
+	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
+	tasks := s.eventHandler.GetTasks(clusterSessionKey)
+
+	// Calculate the number of tasks after GCS source truncation.
+	// Since we can't access the GCS and num_status_task_events_dropped, we use num_after_truncation to approximate the total number of tasks.
+	// Ref: https://github.com/ray-project/ray/blob/d0b1d151d8ea964a711e451d0ae736f8bf95b629/python/ray/dashboard/state_aggregator.py#L314-L342
+	numAfterTruncation := len(tasks)
+	numTotal := numAfterTruncation
+
+	// Filter tasks.
+	// numFiltered is the number of tasks after filtering but before limit truncation.
+	tasks, numFiltered := utils.ApplyTaskFilters(tasks, listAPIOptions)
+
+	// Format tasks for response.
+	formattedTasks := make([]map[string]interface{}, 0, len(tasks))
+	for _, task := range tasks {
+		formattedTasks = append(formattedTasks, formatTaskForResponse(task, listAPIOptions.Detail))
+	}
+
+	response := RespTasksInfo{
 		Result: true,
-		Msg:    "Tasks fetched.",
-		Data: TaskInfoData{
-			Result: TaskInfoDataResult{
-				Result:             taskResults,
-				Total:              len(taskResults),
-				NumFiltered:        len(taskResults),
-				NumAfterTruncation: len(taskResults),
+		Msg:    "",
+		Data: TaskData{
+			Result: TaskDataResult{
+				Total:                 numTotal,
+				Result:                formattedTasks,
+				NumAfterTruncation:    numAfterTruncation,
+				NumFiltered:           numFiltered,
+				PartialFailureWarning: "",
+				Warnings:              nil,
 			},
 		},
 	}
@@ -1115,36 +1130,103 @@ func (s *ServerHandler) getTaskDetail(req *restful.Request, resp *restful.Respon
 		resp.WriteErrorString(http.StatusInternalServerError, err.Error())
 		return
 	}
+
 	resp.Write(respData)
 }
 
-// formatTaskForResponse converts an eventtypes.Task to the format expected by Ray Dashboard
-func formatTaskForResponse(task eventtypes.Task) map[string]interface{} {
+// formatTaskForResponse formats a task data result of a single task attempt for the response.
+// The schema aligns with the Ray Dashboard API.
+// Ref: https://github.com/ray-project/ray/blob/d0b1d151d8ea964a711e451d0ae736f8bf95b629/python/ray/util/state/common.py#L730-L819.
+func formatTaskForResponse(task eventtypes.Task, detail bool) map[string]interface{} {
+	// TODO(jwj): Maybe define result schema in types.go.
 	result := map[string]interface{}{
 		"task_id":            task.TaskID,
-		"name":               task.Name,
-		"attempt_number":     task.AttemptNumber,
+		"attempt_number":     task.TaskAttempt,
+		"name":               task.GetTaskName(),
 		"state":              string(task.State),
 		"job_id":             task.JobID,
-		"node_id":            task.NodeID,
 		"actor_id":           task.ActorID,
-		"placement_group_id": task.PlacementGroupID,
-		"type":               string(task.Type),
-		"func_or_class_name": task.FuncOrClassName,
-		"language":           task.Language,
-		"required_resources": task.RequiredResources,
+		"type":               string(task.TaskType),
+		"func_or_class_name": task.GetFuncName(),
+		"parent_task_id":     task.ParentTaskID,
+		"node_id":            task.NodeID,
 		"worker_id":          task.WorkerID,
-		"error_type":         task.ErrorType,
-		"error_message":      task.ErrorMessage,
-		"call_site":          task.CallSite,
+		"worker_pid":         task.WorkerPID,
+	}
+	if task.RayErrorInfo != nil {
+		result["error_type"] = string(task.RayErrorInfo.ErrorType)
+	} else {
+		result["error_type"] = nil
 	}
 
-	if !task.StartTime.IsZero() {
-		result["start_time"] = task.StartTime.UnixMilli()
-	}
+	if detail {
+		result["language"] = string(task.Language)
+		result["required_resources"] = task.RequiredResources
+		result["runtime_env_info"] = map[string]interface{}{
+			"serialized_runtime_env": task.SerializedRuntimeEnv,
+			// RuntimeEnvUris and RuntimeEnvConfig are never populated on the Ray side.
+			// Ref: https://github.com/ray-project/ray/blob/50c715e79c5ca93118e1280f3842a1946b2cddac/src/ray/core_worker/task_event_buffer.cc#L189-L237.
+			"runtime_env_config": map[string]interface{}{
+				"setup_timeout_seconds": 600,
+				"eager_install":         true,
+				"log_files":             []string{},
+			},
+		}
+		isNil, err := utils.IsHexNil(task.PlacementGroupID)
+		if isNil || task.PlacementGroupID == "" || err != nil {
+			result["placement_group_id"] = nil
+		} else {
+			result["placement_group_id"] = task.PlacementGroupID
+		}
 
-	if !task.EndTime.IsZero() {
-		result["end_time"] = task.EndTime.UnixMilli()
+		events := make([]map[string]interface{}, 0, len(task.StateTransitions))
+		for _, event := range task.StateTransitions {
+			events = append(events, map[string]interface{}{
+				"state":      string(event.State),
+				"created_ms": event.Timestamp.UnixMilli(),
+			})
+		}
+		result["events"] = events
+		// TODO(jwj): Support profiling_data after TASK_PROFILE_EVENT is supported.
+		// Ref: https://github.com/ray-project/ray/blob/d0b1d151d8ea964a711e451d0ae736f8bf95b629/python/ray/util/state/common.py#L1616-L1622.
+		// result["profiling_data"] = task.ProfilingData
+		result["task_log_info"] = task.TaskLogInfo
+		if task.RayErrorInfo != nil {
+			result["error_message"] = task.RayErrorInfo.ErrorMessage
+		} else {
+			result["error_message"] = nil
+		}
+		if task.IsDebuggerPaused != nil {
+			result["is_debugger_paused"] = *task.IsDebuggerPaused
+		} else {
+			result["is_debugger_paused"] = nil
+		}
+		if task.CallSite != nil {
+			result["call_site"] = *task.CallSite
+		} else {
+			result["call_site"] = nil
+		}
+		if task.LabelSelector != nil {
+			result["label_selector"] = task.LabelSelector
+		} else {
+			result["label_selector"] = map[string]string{}
+		}
+
+		if !task.CreationTime.IsZero() {
+			result["creation_time_ms"] = task.CreationTime.UnixMilli()
+		} else {
+			result["creation_time_ms"] = nil
+		}
+		if !task.StartTime.IsZero() {
+			result["start_time_ms"] = task.StartTime.UnixMilli()
+		} else {
+			result["start_time_ms"] = nil
+		}
+		if !task.EndTime.IsZero() {
+			result["end_time_ms"] = task.EndTime.UnixMilli()
+		} else {
+			result["end_time_ms"] = nil
+		}
 	}
 
 	return result
