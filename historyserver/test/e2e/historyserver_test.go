@@ -20,9 +20,7 @@ import (
 )
 
 const (
-	LiveSessionName       = "live"
-	EndpointLogFile       = "/api/v0/logs/file"
-	EndpointLogicalActors = "/logical/actors"
+	LiveSessionName = "live"
 )
 
 func TestHistoryServer(t *testing.T) {
@@ -151,7 +149,7 @@ func testLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Names
 	test.T().Run("should return log content", func(t *testing.T) {
 		g := NewWithT(t)
 		g.Eventually(func(gg Gomega) {
-			logFileURL := fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=100", historyServerURL, EndpointLogFile, nodeID, filename)
+			logFileURL := fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=100", historyServerURL, EndpointLogsFile, nodeID, filename)
 			resp, err := client.Get(logFileURL)
 			gg.Expect(err).NotTo(HaveOccurred())
 			defer resp.Body.Close()
@@ -169,7 +167,7 @@ func testLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Names
 
 		for _, malicious := range maliciousPaths {
 			g.Eventually(func(gg Gomega) {
-				url := fmt.Sprintf("%s%s?node_id=%s&filename=%s", historyServerURL, EndpointLogFile, nodeID, malicious)
+				url := fmt.Sprintf("%s%s?node_id=%s&filename=%s", historyServerURL, EndpointLogsFile, nodeID, malicious)
 				resp, err := client.Get(url)
 				gg.Expect(err).NotTo(HaveOccurred())
 				defer func() {
@@ -226,7 +224,7 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 	test.T().Run("should return log content from S3", func(t *testing.T) {
 		g := NewWithT(t)
 		g.Eventually(func(gg Gomega) {
-			logFileURL := fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=100", historyServerURL, EndpointLogFile, nodeID, filename)
+			logFileURL := fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=100", historyServerURL, EndpointLogsFile, nodeID, filename)
 			resp, err := client.Get(logFileURL)
 			gg.Expect(err).NotTo(HaveOccurred())
 			defer resp.Body.Close()
@@ -244,7 +242,7 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 
 		for _, malicious := range maliciousPaths {
 			g.Eventually(func(gg Gomega) {
-				url := fmt.Sprintf("%s%s?node_id=%s&filename=%s", historyServerURL, EndpointLogFile, nodeID, malicious)
+				url := fmt.Sprintf("%s%s?node_id=%s&filename=%s", historyServerURL, EndpointLogsFile, nodeID, malicious)
 				resp, err := client.Get(url)
 				gg.Expect(err).NotTo(HaveOccurred())
 				defer func() {
