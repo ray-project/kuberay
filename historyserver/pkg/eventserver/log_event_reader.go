@@ -12,7 +12,6 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
-	"io"
 	"path"
 	"strings"
 
@@ -100,18 +99,15 @@ func (r *LogEventReader) readEventFile(clusterID, filePath string, jobEventMap *
 		return fmt.Errorf("failed to get content for %s", filePath)
 	}
 
-	data, err := io.ReadAll(reader)
-	if err != nil {
-		return fmt.Errorf("failed to read %s: %w", filePath, err)
-	}
+	// Stream directly from io.Reader to avoid unnecessary memory allocation.
+	scanner := bufio.NewScanner(reader)
 
-	// Parse JSON Lines (one JSON object per line)
-	scanner := bufio.NewScanner(strings.NewReader(string(data)))
-
-	// Increase buffer size for potentially long lines
-	const maxScanTokenSize = 1024 * 1024 // 1MB
-	buf := make([]byte, maxScanTokenSize)
-	scanner.Buffer(buf, maxScanTokenSize)
+	// Ray Dashboard uses EVENT_READ_LINE_LENGTH_LIMIT = 2MB (configurable via env var).
+	// Reference: python/ray/dashboard/modules/event/event_consts.py
+	// TODO: Make this configurable via environment variable (e.g., EVENT_READ_LINE_LENGTH_LIMIT)
+	// to match Ray Dashboard's behavior.
+	const maxScanTokenSize = 2 * 1024 * 1024 // 2MB, matching Ray Dashboard default
+	scanner.Buffer(make([]byte, maxScanTokenSize), maxScanTokenSize)
 
 	lineNum := 0
 	eventCount := 0
