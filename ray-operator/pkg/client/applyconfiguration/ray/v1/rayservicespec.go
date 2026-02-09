@@ -29,6 +29,13 @@ type RayServiceSpecApplyConfiguration struct {
 	// If the field is set to true, the value of the label `ray.io/serve` on the head Pod should always be false.
 	// Therefore, the head Pod's endpoint will not be added to the Kubernetes Serve service.
 	ExcludeHeadPodFromServeSvc *bool `json:"excludeHeadPodFromServeSvc,omitempty"`
+	// ManagedBy is an optional configuration for the controller or entity that manages a RayService.
+	// The value must be either 'ray.io/kuberay-operator' or 'kueue.x-k8s.io/multikueue'.
+	// The kuberay-operator reconciles a RayService which doesn't have this field at all or
+	// the field value is the reserved string 'ray.io/kuberay-operator',
+	// but delegates reconciling the RayService with 'kueue.x-k8s.io/multikueue' to the Kueue.
+	// The field is immutable.
+	ManagedBy *string `json:"managedBy,omitempty"`
 }
 
 // RayServiceSpecApplyConfiguration constructs a declarative configuration of the RayServiceSpec type for use with
@@ -98,5 +105,13 @@ func (b *RayServiceSpecApplyConfiguration) WithRayClusterSpec(value *RayClusterS
 // If called multiple times, the ExcludeHeadPodFromServeSvc field is set to the value of the last call.
 func (b *RayServiceSpecApplyConfiguration) WithExcludeHeadPodFromServeSvc(value bool) *RayServiceSpecApplyConfiguration {
 	b.ExcludeHeadPodFromServeSvc = &value
+	return b
+}
+
+// WithManagedBy sets the ManagedBy field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the ManagedBy field is set to the value of the last call.
+func (b *RayServiceSpecApplyConfiguration) WithManagedBy(value string) *RayServiceSpecApplyConfiguration {
+	b.ManagedBy = &value
 	return b
 }

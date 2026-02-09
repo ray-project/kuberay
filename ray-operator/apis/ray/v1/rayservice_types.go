@@ -111,6 +111,16 @@ type RayServiceSpec struct {
 	// Therefore, the head Pod's endpoint will not be added to the Kubernetes Serve service.
 	// +optional
 	ExcludeHeadPodFromServeSvc bool `json:"excludeHeadPodFromServeSvc,omitempty"`
+	// ManagedBy is an optional configuration for the controller or entity that manages a RayService.
+	// The value must be either 'ray.io/kuberay-operator' or 'kueue.x-k8s.io/multikueue'.
+	// The kuberay-operator reconciles a RayService which doesn't have this field at all or
+	// the field value is the reserved string 'ray.io/kuberay-operator',
+	// but delegates reconciling the RayService with 'kueue.x-k8s.io/multikueue' to the Kueue.
+	// The field is immutable.
+	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="the managedBy field is immutable"
+	// +kubebuilder:validation:XValidation:rule="self in ['ray.io/kuberay-operator', 'kueue.x-k8s.io/multikueue']",message="the managedBy field value must be either 'ray.io/kuberay-operator' or 'kueue.x-k8s.io/multikueue'"
+	// +optional
+	ManagedBy *string `json:"managedBy,omitempty"`
 }
 
 // RayServiceStatuses defines the observed state of RayService
