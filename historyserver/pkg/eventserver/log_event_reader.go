@@ -15,7 +15,6 @@ import (
 	"io"
 	"path/filepath"
 	"strings"
-	"sync"
 
 	"github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
 	"github.com/ray-project/kuberay/historyserver/pkg/storage"
@@ -27,9 +26,6 @@ import (
 // It scans logs/{nodeId}/events/event_*.log files matching Ray Dashboard's behavior.
 type LogEventReader struct {
 	reader storage.StorageReader
-
-	// Track which event files we've already processed (by clusterSessionKey/filePath)
-	processedFiles sync.Map
 }
 
 // NewLogEventReader creates a new LogEventReader.
@@ -84,16 +80,12 @@ func (r *LogEventReader) ReadLogEvents(clusterInfo utils.ClusterInfo, clusterSes
 			// Build full path relative to clusterID for GetContent
 			eventFilePath := filepath.Join(clusterInfo.SessionName, "logs", nodeID, "events", fileName)
 
-			// Check if already processed (key: clusterSessionKey/eventFilePath)
-			processedKey := clusterSessionKey + "/" + eventFilePath
-			if _, loaded := r.processedFiles.LoadOrStore(processedKey, true); loaded {
-				continue
-			}
-
 			// Read and parse the event file
+			// Note: Duplicate events are handled by JobEventMap's deduplication using event_id as key.
+			// This matches the design of existing RayEvents reading in eventserver.go.
 			if err := r.readEventFile(clusterID, eventFilePath, jobEventMap); err != nil {
 				logrus.Warnf("Failed to read event file %s: %v", eventFilePath, err)
-				// Continue with other files
+				// Continue with other files - failed files will be retried in the next cycle
 			}
 		}
 	}
