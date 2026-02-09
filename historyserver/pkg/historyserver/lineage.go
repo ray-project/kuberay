@@ -6,15 +6,20 @@ import (
 	"strings"
 
 	eventtypes "github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
-	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 	"github.com/sirupsen/logrus"
 )
 
-// DriverTaskIDPrefix is the hex prefix of the driver's task ID.
+// DriverTaskIDPrefix is the hex prefix of the driver's task ID (20 bytes of 0xFF).
 // In Ray, tasks whose parent_task_id starts with this prefix are spawned directly
 // by the driver and should be placed at the root level of the lineage tree.
 // Ref: https://github.com/ray-project/ray/blob/d0b1d151d8ea964a711e451d0ae736f8bf95b629/python/ray/util/state/common.py#L979
 const DriverTaskIDPrefix = "ffffffffffffffffffffffffffffffffffffffff"
+
+// actorCreationTaskIDNilPrefix is the hex representation of the 8-byte nil unique bytes
+// that Ray uses as the prefix of ACTOR_CREATION_TASK task IDs.
+// Format: task_id = ffffffffffffffff{actorID} (8 bytes nil + 16 bytes ActorID)
+// Ref: https://github.com/ray-project/ray/blob/36be009ae360788550e541d81806493f52963730/src/ray/common/id.cc#L171-L176
+const actorCreationTaskIDNilPrefix = "ffffffffffffffff"
 
 // lineageBuilder encapsulates the state needed to build a lineage tree.
 // Ref: https://github.com/ray-project/ray/blob/f3d444ab01279a3870033fb4d34314cd8c987b22/python/ray/util/state/common.py#L1098-L1118
@@ -30,18 +35,10 @@ type lineageBuilder struct {
 }
 
 // isDriverTaskID checks if the given taskID belongs to a driver task.
-// Ray events may encode task IDs in base64, so this converts to hex first.
+// Task IDs are already normalized to hex by normalizeTaskIDsToHex during event ingestion,
+// so we simply check the hex prefix directly.
 func isDriverTaskID(taskID string) bool {
-	if taskID == "" {
-		return false
-	}
-	hexID, err := utils.ConvertBase64ToHex(taskID)
-	if err != nil {
-		// If conversion fails, fall back to checking base64 prefix
-		// Base64 encoding of 0xFF bytes results in '/' characters
-		return strings.HasPrefix(taskID, "////")
-	}
-	return strings.HasPrefix(hexID, DriverTaskIDPrefix)
+	return taskID != "" && strings.HasPrefix(taskID, DriverTaskIDPrefix)
 }
 
 // BuildLineageSummary constructs a hierarchical task summary following Ray's lineage algorithm.
@@ -90,9 +87,18 @@ func BuildLineageSummary(tasks []eventtypes.Task, actors []eventtypes.Actor) *Ta
 // indexData builds lookup maps for O(1) access during tree construction.
 // Also tracks ACTOR_CREATION_TASK -> actorID mapping to determine actor ownership in the tree.
 func (b *lineageBuilder) indexData(tasks []eventtypes.Task, actors []eventtypes.Actor) {
-	for _, task := range tasks {
+	for i, task := range tasks {
+		// ACTOR_CREATION_TASK from TASK_DEFINITION_EVENT has no ActorID.
+		// Derive it from task_id: ffffffffffffffff{actorID}
+		// Ref: https://github.com/ray-project/ray/blob/36be009ae360788550e541d81806493f52963730/src/ray/common/id.cc#L171-L176
+		if task.TaskType == eventtypes.ACTOR_CREATION_TASK && task.ActorID == "" {
+			if strings.HasPrefix(task.TaskID, actorCreationTaskIDNilPrefix) {
+				tasks[i].ActorID = task.TaskID[len(actorCreationTaskIDNilPrefix):]
+				task = tasks[i]
+			}
+		}
 		b.tasksByID[task.TaskID] = task
-		if task.Type == eventtypes.ACTOR_CREATION_TASK {
+		if task.TaskType == eventtypes.ACTOR_CREATION_TASK && task.ActorID != "" {
 			b.actorCreationTaskID[task.ActorID] = task.TaskID
 		}
 	}
@@ -105,7 +111,7 @@ func (b *lineageBuilder) indexData(tasks []eventtypes.Task, actors []eventtypes.
 // NOTE: DRIVER_TASK is skipped because Ray's live Dashboard API excludes them from lineage.
 func (b *lineageBuilder) buildTree(tasks []eventtypes.Task) {
 	for _, task := range tasks {
-		if task.Type == eventtypes.DRIVER_TASK {
+		if task.TaskType == eventtypes.DRIVER_TASK {
 			continue
 		}
 
@@ -114,15 +120,13 @@ func (b *lineageBuilder) buildTree(tasks []eventtypes.Task) {
 			continue
 		}
 
-		// Update state counts
 		state := string(task.State)
 		if state == "" {
 			state = "UNKNOWN"
 		}
 		group.StateCounts[state]++
 
-		// Update counters
-		switch task.Type {
+		switch task.TaskType {
 		case eventtypes.NORMAL_TASK:
 			b.totalTasks++
 		case eventtypes.ACTOR_CREATION_TASK:
@@ -154,22 +158,22 @@ func (b *lineageBuilder) getOrCreateTaskGroup(taskID string) *NestedTaskSummary 
 		return nil
 	}
 
-	// Prefer user-defined task name, fallback to func_or_class_name to match Ray Dashboard
-	name := task.Name
+	// Prefer user-defined task name, fallback to function call string to match Ray Dashboard
+	name := task.GetTaskName()
 	if name == "" {
-		name = task.FuncOrClassName
+		name = task.GetFuncName()
 	}
 
 	var timestamp *int64
-	if !task.StartTime.IsZero() {
-		ts := task.StartTime.UnixMilli()
+	if !task.CreationTime.IsZero() {
+		ts := task.CreationTime.UnixMilli()
 		timestamp = &ts
 	}
 
 	group := &NestedTaskSummary{
 		Name:        name,
 		Key:         taskID,
-		Type:        string(task.Type),
+		Type:        string(task.TaskType),
 		Timestamp:   timestamp,
 		StateCounts: make(map[string]int),
 		Children:    make([]*NestedTaskSummary, 0),
@@ -179,7 +183,7 @@ func (b *lineageBuilder) getOrCreateTaskGroup(taskID string) *NestedTaskSummary 
 
 	// Determine parent based on task type:
 	// Actor-related tasks are grouped under their ACTOR node, not their parent task.
-	if task.Type == eventtypes.ACTOR_TASK || task.Type == eventtypes.ACTOR_CREATION_TASK {
+	if task.TaskType == eventtypes.ACTOR_TASK || task.TaskType == eventtypes.ACTOR_CREATION_TASK {
 		parent := b.getOrCreateActorGroup(task.ActorID)
 		if parent != nil {
 			parent.Children = append(parent.Children, group)
@@ -205,7 +209,7 @@ func (b *lineageBuilder) getOrCreateTaskGroup(taskID string) *NestedTaskSummary 
 // The ACTOR node acts as a container for all actor-related tasks (creation + method calls).
 // Its position in the tree is determined by the creation task's parent, matching Ray's behavior.
 //
-// Actor name resolution order: ReprName -> ActorClass -> creation task's FuncOrClassName -> "UnknownActor"
+// Actor name resolution order: ReprName -> ActorClass -> creation task's GetFuncName() -> "UnknownActor"
 //
 // Ref: https://github.com/ray-project/ray/blob/d0b1d151d8ea964a711e451d0ae736f8bf95b629/python/ray/util/state/common.py#L1179-L1236
 func (b *lineageBuilder) getOrCreateActorGroup(actorID string) *NestedTaskSummary {
@@ -223,12 +227,15 @@ func (b *lineageBuilder) getOrCreateActorGroup(actorID string) *NestedTaskSummar
 		}
 	}
 
-	// Fallback: extract class name from creation task's FuncOrClassName (e.g., "Counter.__init__" -> "Counter")
+	// Fallback: extract class name from creation task's function name (e.g., "Counter.__init__" -> "Counter")
 	if actorName == "" {
 		if creationTaskID, ok := b.actorCreationTaskID[actorID]; ok {
 			if creationTask, ok := b.tasksByID[creationTaskID]; ok {
-				parts := strings.Split(creationTask.FuncOrClassName, ".")
-				actorName = parts[0]
+				funcName := creationTask.GetFuncName()
+				if funcName != "" {
+					parts := strings.Split(funcName, ".")
+					actorName = parts[0]
+				}
 			}
 		}
 	}
@@ -240,8 +247,8 @@ func (b *lineageBuilder) getOrCreateActorGroup(actorID string) *NestedTaskSummar
 	var timestamp *int64
 	if creationTaskID, ok := b.actorCreationTaskID[actorID]; ok {
 		if creationTask, ok := b.tasksByID[creationTaskID]; ok {
-			if !creationTask.StartTime.IsZero() {
-				ts := creationTask.StartTime.UnixMilli()
+			if !creationTask.CreationTime.IsZero() {
+				ts := creationTask.CreationTime.UnixMilli()
 				timestamp = &ts
 			}
 		}

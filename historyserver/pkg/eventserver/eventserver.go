@@ -850,6 +850,10 @@ func (h *EventHandler) handleTaskDefinitionEvent(eventMap map[string]any, cluste
 		existingIsDebuggerPaused := task.IsDebuggerPaused
 		existingActorReprName := task.ActorReprName
 		existingTaskLogInfo := task.TaskLogInfo
+		existingState := task.State
+		existingCreationTime := task.CreationTime
+		existingStartTime := task.StartTime
+		existingEndTime := task.EndTime
 
 		*task = currTask
 
@@ -862,7 +866,10 @@ func (h *EventHandler) handleTaskDefinitionEvent(eventMap map[string]any, cluste
 			task.IsDebuggerPaused = existingIsDebuggerPaused
 			task.ActorReprName = existingActorReprName
 			task.TaskLogInfo = existingTaskLogInfo
-			task.State = task.GetLastState()
+			task.State = existingState
+			task.CreationTime = existingCreationTime
+			task.StartTime = existingStartTime
+			task.EndTime = existingEndTime
 		}
 	})
 

@@ -129,7 +129,6 @@ type Task struct {
 	// ActorID is only available for ACTOR_TASK_DEFINITION_EVENT.
 	ActorID              string            `json:"actorId,omitempty"`
 	JobID                string            `json:"jobId"` // Present in both DEFINITION and LIFECYCLE events.
-	ParentTaskID         string            `json:"parentTaskId,omitempty"`
 	PlacementGroupID     string            `json:"placementGroupId,omitempty"`
 	RefIDs               map[string]string `json:"refIds,omitempty"`
 	SerializedRuntimeEnv string            `json:"serializedRuntimeEnv,omitempty"`

@@ -927,28 +927,28 @@ func (s *ServerHandler) getTaskSummarize(req *restful.Request, resp *restful.Res
 		return
 	}
 
-	// Parse filter parameters
-	filterKey := req.QueryParameter("filter_keys")
-	filterValue := req.QueryParameter("filter_values")
-	filterPredicate := req.QueryParameter("filter_predicates")
+	listAPIOptions, err := utils.ParseOptionsFromReq(req)
+	if err != nil {
+		resp.WriteErrorString(http.StatusBadRequest, err.Error())
+		return
+	}
 	summaryBy := req.QueryParameter("summary_by")
 
-	// Get all tasks
 	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
 	tasks := s.eventHandler.GetTasks(clusterSessionKey)
 
-	// Apply generic filtering using utils.ApplyFilter
-	tasks = utils.ApplyFilter(tasks, filterKey, filterPredicate, filterValue,
-		func(t eventtypes.Task, key string) string {
-			return t.GetFilterableFieldValue(key)
-		})
+	// Calculate the number of tasks after GCS source truncation.
+	// Since we can't access the GCS and num_status_task_events_dropped, we use num_after_truncation to approximate the total number of tasks.
+	// Ref: https://github.com/ray-project/ray/blob/d0b1d151d8ea964a711e451d0ae736f8bf95b629/python/ray/dashboard/state_aggregator.py#L314-L342
+	numAfterTruncation := len(tasks)
+	numTotal := numAfterTruncation
 
-	// Summarize tasks based on summary_by parameter
+	// Filter tasks.
+	// numFiltered is the number of tasks after filtering but before limit truncation.
+	tasks, numFiltered := utils.ApplyTaskFilters(tasks, listAPIOptions)
+
 	var response interface{}
-
 	if summaryBy == "lineage" {
-		// Lineage mode: also fetch actors
-		// Ref: https://github.com/ray-project/ray/blob/d0b1d151d8ea964a711e451d0ae736f8bf95b629/python/ray/dashboard/state_aggregator.py#L586-L599
 		actors := s.eventHandler.GetActors(clusterSessionKey)
 		lineageSummary := BuildLineageSummary(tasks, actors)
 
@@ -957,9 +957,9 @@ func (s *ServerHandler) getTaskSummarize(req *restful.Request, resp *restful.Res
 			"msg":    "",
 			"data": map[string]interface{}{
 				"result": map[string]interface{}{
-					"total":                len(tasks),
-					"num_after_truncation": len(tasks),
-					"num_filtered":         len(tasks),
+					"total":                numTotal,
+					"num_after_truncation": numAfterTruncation,
+					"num_filtered":         numFiltered,
 					"result": map[string]interface{}{
 						"node_id_to_summary": map[string]*TaskSummaries{
 							"cluster": lineageSummary,
@@ -971,7 +971,6 @@ func (s *ServerHandler) getTaskSummarize(req *restful.Request, resp *restful.Res
 			},
 		}
 	} else {
-		// Default to func_name
 		summary := summarizeTasksByFuncName(tasks)
 		response = map[string]interface{}{
 			"result": true,
