@@ -541,7 +541,7 @@ func (s *ServerHandler) getEvents(req *restful.Request, resp *restful.Response) 
 
 	// Check if job_id parameter exists in query string (even if empty)
 	// This aligns with Ray Dashboard behavior:
-	// - /events (no job_id param) → return all events
+	// - /events (no job_id param) → return all events grouped by job_id
 	// - /events?job_id= (empty job_id) → filter by empty string (return empty)
 	// - /events?job_id=abc → filter by "abc"
 	_, jobIDExists := req.Request.URL.Query()["job_id"]
@@ -550,7 +550,9 @@ func (s *ServerHandler) getEvents(req *restful.Request, resp *restful.Response) 
 	var response map[string]any
 
 	if jobIDExists {
-		events := s.eventHandler.ClusterEventMap.GetEventsByJobID(clusterSessionKey, jobID)
+		// Return events for a specific job
+		// Response format matches Ray Dashboard: {"result": true, "msg": "...", "data": {"jobId": "...", "events": [...]}}
+		events := s.eventHandler.ClusterLogEventMap.GetEventsByJobID(clusterSessionKey, jobID)
 		response = map[string]any{
 			"result": true,
 			"msg":    "Job events fetched.",
@@ -560,7 +562,9 @@ func (s *ServerHandler) getEvents(req *restful.Request, resp *restful.Response) 
 			},
 		}
 	} else {
-		events := s.eventHandler.ClusterEventMap.GetAllEvents(clusterSessionKey)
+		// Return all events grouped by job_id
+		// Response format matches Ray Dashboard: {"result": true, "msg": "...", "data": {"events": {job_id: [...], ...}}}
+		events := s.eventHandler.ClusterLogEventMap.GetAllEvents(clusterSessionKey)
 		response = map[string]any{
 			"result": true,
 			"msg":    "All events fetched.",

@@ -20,11 +20,11 @@ import (
 type EventHandler struct {
 	reader storage.StorageReader
 
-	ClusterTaskMap  *types.ClusterTaskMap
-	ClusterActorMap *types.ClusterActorMap
-	ClusterJobMap   *types.ClusterJobMap
-	ClusterEventMap *types.ClusterEventMap // For /events API
-	ClusterNodeMap  *types.ClusterNodeMap
+	ClusterTaskMap     *types.ClusterTaskMap
+	ClusterActorMap    *types.ClusterActorMap
+	ClusterJobMap      *types.ClusterJobMap
+	ClusterNodeMap     *types.ClusterNodeMap
+	ClusterLogEventMap *types.ClusterLogEventMap // For /events API (Log Events from logs/events/)
 }
 
 var eventFilePattern = regexp.MustCompile(`-\d{4}-\d{2}-\d{2}-\d{2}$`)
@@ -50,10 +50,10 @@ func NewEventHandler(reader storage.StorageReader) *EventHandler {
 		ClusterJobMap: &types.ClusterJobMap{
 			ClusterJobMap: make(map[string]*types.JobMap),
 		},
-		ClusterEventMap: types.NewClusterEventMap(),
 		ClusterNodeMap: &types.ClusterNodeMap{
 			ClusterNodeMap: make(map[string]*types.NodeMap),
 		},
+		ClusterLogEventMap: types.NewClusterLogEventMap(),
 	}
 }
 
@@ -120,12 +120,24 @@ func (h *EventHandler) Run(stop chan struct{}, numOfEventProcessors int) error {
 		defer wg.Done()
 		logrus.Info("Starting event file reader loop")
 
+		// Create a LogEventReader for reading logs/events/event_*.log files
+		logEventReader := NewLogEventReader(h.reader)
+
 		// Helper function to process all events
 		processAllEvents := func() {
 			clusterList := h.reader.List()
 			for _, clusterInfo := range clusterList {
 				clusterNameNamespace := clusterInfo.Name + "_" + clusterInfo.Namespace
 				clusterSessionKey := utils.BuildClusterSessionKey(clusterInfo.Name, clusterInfo.Namespace, clusterInfo.SessionName)
+
+				// Read Log Events from logs/{nodeId}/events/event_*.log
+				// This is the format used by Ray Dashboard's /events API
+				if err := logEventReader.ReadLogEvents(clusterInfo, clusterSessionKey, h.ClusterLogEventMap); err != nil {
+					logrus.Errorf("Failed to read Log Events for %s: %v", clusterSessionKey, err)
+				}
+
+				// Also read RayEvents (Export Events) from node_events/ and job_events/ for backward compatibility
+				// These are used for task/actor/job/node data APIs
 				eventFileList := append(h.getAllJobEventFiles(clusterInfo), h.getAllNodeEventFiles(clusterInfo)...)
 
 				logrus.Infof("current eventFileList for cluster %s is: %v", clusterInfo.Name, eventFileList)
@@ -192,136 +204,6 @@ func (h *EventHandler) Run(stop chan struct{}, numOfEventProcessors int) error {
 	return nil
 }
 
-// eventTypeToDataField maps EventType to the corresponding nested data field name in RayEvent.
-var eventTypeToDataField = map[types.EventType]string{
-	types.TASK_DEFINITION_EVENT:       "taskDefinitionEvent",
-	types.TASK_LIFECYCLE_EVENT:        "taskLifecycleEvent",
-	types.TASK_PROFILE_EVENT:          "taskProfileEvents",
-	types.ACTOR_DEFINITION_EVENT:      "actorDefinitionEvent",
-	types.ACTOR_LIFECYCLE_EVENT:       "actorLifecycleEvent",
-	types.ACTOR_TASK_DEFINITION_EVENT: "actorTaskDefinitionEvent",
-	types.NODE_DEFINITION_EVENT:       "nodeDefinitionEvent",
-	types.NODE_LIFECYCLE_EVENT:        "nodeLifecycleEvent",
-	types.DRIVER_JOB_DEFINITION_EVENT: "driverJobDefinitionEvent",
-	types.DRIVER_JOB_LIFECYCLE_EVENT:  "driverJobLifecycleEvent",
-}
-
-// transformToEvent converts a RayEvent map to the API response Event format.
-// It extracts common fields and puts event-type-specific data into customFields.
-// The output format matches Ray Dashboard's /events API response.
-//
-// Returns:
-//   - event: the transformed Event
-//   - jobID: extracted for event grouping; empty string means "global"
-func transformToEvent(eventMap map[string]any) (event *types.Event, jobID string) {
-	event = &types.Event{
-		Severity:     types.INFO,
-		SourceType:   types.SOURCE_TYPE_UNSPECIFIED,
-		CustomFields: make(map[string]any),
-	}
-
-	// Extract common fields (already camelCase from JSON unmarshaling)
-	if v, ok := eventMap["eventId"].(string); ok {
-		event.EventID = v
-	}
-	if v, ok := eventMap["sourceType"].(string); ok {
-		event.SourceType = types.SourceType(v)
-	}
-	// Convert ISO 8601 timestamp to Unix milliseconds to match Ray Dashboard format
-	if v, ok := eventMap["timestamp"].(string); ok {
-		if t, err := time.Parse(time.RFC3339Nano, v); err == nil {
-			event.Timestamp = fmt.Sprintf("%d", t.UnixMilli())
-		} else {
-			logrus.Warnf("failed to parse timestamp %q: %v", v, err)
-		}
-	}
-	if v, ok := eventMap["severity"].(string); ok {
-		event.Severity = types.Severity(v)
-	}
-	if v, ok := eventMap["message"].(string); ok {
-		event.Message = v
-	}
-
-	// Store nodeId in customFields to match Ray Dashboard format
-	if v, ok := eventMap["nodeId"].(string); ok && v != "" {
-		event.CustomFields["nodeId"] = v
-	}
-
-	// Extract eventType and set as Label for filtering
-	eventTypeStr, _ := eventMap["eventType"].(string)
-	eventType := types.EventType(eventTypeStr)
-	event.Label = eventTypeStr // Use eventType as label for Dashboard compatibility
-
-	// History Server specific fields (for future extension)
-	event.EventType = eventType
-	if v, ok := eventMap["sessionName"].(string); ok {
-		event.SessionName = v
-	}
-
-	// Extract nested event data using the eventType mapping.
-	if dataField, ok := eventTypeToDataField[eventType]; ok {
-		if nestedData, ok := eventMap[dataField].(map[string]any); ok {
-			event.CustomFields[dataField] = nestedData
-
-			// Copy IDs to top-level customFields to match Ray Dashboard format.
-			if v, ok := nestedData["jobId"].(string); ok && v != "" {
-				event.CustomFields["jobId"] = v
-				jobID = v
-			}
-			if v, ok := nestedData["taskId"].(string); ok && v != "" {
-				event.CustomFields["taskId"] = v
-			}
-			if v, ok := nestedData["actorId"].(string); ok && v != "" {
-				event.CustomFields["actorId"] = v
-			}
-
-			// Populate hostName and pid from nested event data.
-			populateHostnameAndPid(event, eventType, nestedData)
-		}
-	}
-
-	return event, jobID
-}
-
-// populateHostnameAndPid sets sourceHostname and sourcePid fields on the Event based on
-// the eventType-specific nested data. Different event types store these fields
-// in different locations as defined in Ray protos.
-func populateHostnameAndPid(event *types.Event, eventType types.EventType, nestedData map[string]any) {
-	switch eventType {
-	case types.NODE_DEFINITION_EVENT:
-		// NodeDefinitionEvent has: hostname, node_name, node_ip_address.
-		if hostname, ok := nestedData["hostname"].(string); ok && hostname != "" {
-			event.SourceHostname = hostname
-		}
-	case types.TASK_LIFECYCLE_EVENT:
-		// TaskLifecycleEvent has: worker_pid, worker_id, node_id.
-		if pid, ok := nestedData["workerPid"].(float64); ok {
-			event.SourcePid = int(pid)
-		}
-	case types.ACTOR_LIFECYCLE_EVENT:
-		// ActorLifecycleEvent has pid in StateTransition when ALIVE.
-		if transitions, ok := nestedData["stateTransitions"].([]any); ok && len(transitions) > 0 {
-			// Get the latest transition
-			if lastTransition, ok := transitions[len(transitions)-1].(map[string]any); ok {
-				if pid, ok := lastTransition["pid"].(float64); ok {
-					event.SourcePid = int(pid)
-				}
-			}
-		}
-	case types.DRIVER_JOB_DEFINITION_EVENT:
-		// DriverJobDefinitionEvent has: driver_pid, driver_node_id.
-		if pid, ok := nestedData["driverPid"].(float64); ok {
-			event.SourcePid = int(pid)
-		} else if pidStr, ok := nestedData["driverPid"].(string); ok && pidStr != "" {
-			// Sometimes stored as string.
-			var pidInt int
-			if _, err := fmt.Sscanf(pidStr, "%d", &pidInt); err == nil {
-				event.SourcePid = pidInt
-			}
-		}
-	}
-}
-
 // storeEvent unmarshals the event map into the correct actor/task struct and then stores it into the corresonding list
 func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 	eventTypeVal, ok := eventMap["eventType"]
@@ -345,13 +227,6 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 	if !ok {
 		return fmt.Errorf("clusterName is not a string, got %T", clusterSessionKeyVal)
 	}
-
-	// ========== Store RayEvent for /events API ==========
-	if event, jobID := transformToEvent(eventMap); event != nil && event.EventID != "" {
-		clusterEventMap := h.ClusterEventMap.GetOrCreateEventMap(clusterSessionKey)
-		clusterEventMap.AddEvent(jobID, *event)
-	}
-	// ====================================================
 
 	logrus.Infof("current eventType: %v", eventType)
 	switch eventType {

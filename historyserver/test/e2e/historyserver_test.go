@@ -833,17 +833,21 @@ func testEventsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namesp
 			events, ok := data["events"].(map[string]any)
 			gg.Expect(ok).To(BeTrue(), "data should have 'events' field")
 
-			// If we have events, verify their structure
+			// If we have events, verify their structure matches Cluster Events format
+			// Cluster Events are read from logs/{nodeId}/events/event_*.log files
+			// Fields: eventId, sourceType, sourceHostname, sourcePid, severity, label, message, timestamp, customFields
 			for jobID, jobEvents := range events {
 				eventsList, ok := jobEvents.([]any)
 				gg.Expect(ok).To(BeTrue(), "events for job %s should be an array", jobID)
 				for _, event := range eventsList {
 					eventMap, ok := event.(map[string]any)
 					gg.Expect(ok).To(BeTrue(), "each event should be an object")
-					// Verify required fields exist
+					// Verify required Cluster Event fields exist (camelCase format from ToAPIResponse)
 					gg.Expect(eventMap).To(HaveKey("eventId"))
-					gg.Expect(eventMap).To(HaveKey("eventType"))
+					gg.Expect(eventMap).To(HaveKey("sourceType"))
+					gg.Expect(eventMap).To(HaveKey("severity"))
 					gg.Expect(eventMap).To(HaveKey("timestamp"))
+					gg.Expect(eventMap).To(HaveKey("message"))
 				}
 			}
 		}, TestTimeoutMedium).Should(Succeed())
