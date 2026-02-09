@@ -23,6 +23,7 @@ type EventHandler struct {
 	ClusterTaskMap  *types.ClusterTaskMap
 	ClusterActorMap *types.ClusterActorMap
 	ClusterJobMap   *types.ClusterJobMap
+	ClusterNodeMap  *types.ClusterNodeMap
 }
 
 var eventFilePattern = regexp.MustCompile(`-\d{4}-\d{2}-\d{2}-\d{2}$`)
@@ -47,6 +48,9 @@ func NewEventHandler(reader storage.StorageReader) *EventHandler {
 		},
 		ClusterJobMap: &types.ClusterJobMap{
 			ClusterJobMap: make(map[string]*types.JobMap),
+		},
+		ClusterNodeMap: &types.ClusterNodeMap{
+			ClusterNodeMap: make(map[string]*types.NodeMap),
 		},
 	}
 }
@@ -198,6 +202,7 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 	}
 	eventType := types.EventType(eventTypeStr)
 
+	// clusterNameVal is actually the cluster session key.
 	clusterNameVal, ok := eventMap["clusterName"]
 	if !ok {
 		return fmt.Errorf("event missing 'clusterName' field")
@@ -210,151 +215,9 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 	logrus.Infof("current eventType: %v", eventType)
 	switch eventType {
 	case types.TASK_DEFINITION_EVENT:
-		taskDef, ok := eventMap["taskDefinitionEvent"]
-		if !ok {
-			return fmt.Errorf("event does not have 'taskDefinitionEvent'")
-		}
-		jsonTaskDefinition, err := json.Marshal(taskDef)
-		if err != nil {
-			return err
-		}
-
-		var currTask types.Task
-		if err := json.Unmarshal(jsonTaskDefinition, &currTask); err != nil {
-			return err
-		}
-
-		// Convert IDs from base64 to hex (Ray events use base64, but API returns hex)
-		currTask.TaskID, err = utils.ConvertBase64ToHex(currTask.TaskID)
-		if err != nil {
-			logrus.Errorf("Failed to convert TaskID from base64 to hex, will keep TaskID in base64: %v", err)
-		}
-		currTask.ParentTaskID, err = utils.ConvertBase64ToHex(currTask.ParentTaskID)
-		if err != nil {
-			logrus.Errorf("Failed to convert ParentTaskID from base64 to hex, will keep ParentTaskID in base64: %v", err)
-		}
-		currTask.JobID, err = utils.ConvertBase64ToHex(currTask.JobID)
-		if err != nil {
-			logrus.Errorf("Failed to convert JobID from base64 to hex, will keep JobID in base64: %v", err)
-		}
-		currTask.ActorID, err = utils.ConvertBase64ToHex(currTask.ActorID)
-		if err != nil {
-			logrus.Errorf("Failed to convert ActorID from base64 to hex, will keep ActorID in base64: %v", err)
-		}
-
-		taskMap := h.ClusterTaskMap.GetOrCreateTaskMap(currentClusterName)
-		taskMap.CreateOrMergeAttempt(currTask.TaskID, currTask.AttemptNumber, func(t *types.Task) {
-			// Merge definition fields (preserve existing Events if any)
-			existingEvents := t.Events
-			*t = currTask
-			if len(existingEvents) > 0 {
-				t.Events = existingEvents
-				t.State = existingEvents[len(existingEvents)-1].State
-			}
-		})
-
+		return h.handleTaskDefinitionEvent(eventMap, currentClusterName, false)
 	case types.TASK_LIFECYCLE_EVENT:
-		lifecycleEvent, ok := eventMap["taskLifecycleEvent"].(map[string]any)
-		if !ok {
-			return fmt.Errorf("invalid taskLifecycleEvent format")
-		}
-
-		taskId, _ := lifecycleEvent["taskId"].(string)
-		taskAttempt, _ := lifecycleEvent["taskAttempt"].(float64)
-		transitions, _ := lifecycleEvent["stateTransitions"].([]any)
-
-		nodeId, _ := lifecycleEvent["nodeId"].(string)
-		workerId, _ := lifecycleEvent["workerId"].(string)
-
-		if len(transitions) == 0 || taskId == "" {
-			return nil
-		}
-
-		// Convert taskId from base64 to hex
-		var err error
-		taskId, err = utils.ConvertBase64ToHex(taskId)
-		if err != nil {
-			logrus.Errorf("Failed to convert taskId from base64 to hex, will keep taskId in base64: %v", err)
-		}
-
-		// Parse state transitions
-		var stateEvents []types.StateEvent
-		for _, transition := range transitions {
-			tr, ok := transition.(map[string]any)
-			if !ok {
-				continue
-			}
-			state, _ := tr["state"].(string)
-			timestampStr, _ := tr["timestamp"].(string)
-
-			var timestamp time.Time
-			if timestampStr != "" {
-				timestamp, _ = time.Parse(time.RFC3339Nano, timestampStr)
-			}
-
-			stateEvents = append(stateEvents, types.StateEvent{
-				State:     types.TaskStatus(state),
-				Timestamp: timestamp,
-			})
-		}
-
-		if len(stateEvents) == 0 {
-			return nil
-		}
-
-		taskMap := h.ClusterTaskMap.GetOrCreateTaskMap(currentClusterName)
-		taskMap.CreateOrMergeAttempt(taskId, int(taskAttempt), func(t *types.Task) {
-			// --- DEDUPLICATION using (State + Timestamp) as unique key ---
-			// Build a set of existing event keys to detect duplicates
-			type eventKey struct {
-				State     string
-				Timestamp int64
-			}
-			existingKeys := make(map[eventKey]bool)
-			for _, e := range t.Events {
-				existingKeys[eventKey{string(e.State), e.Timestamp.UnixNano()}] = true
-			}
-
-			// Only append events that haven't been seen before
-			for _, e := range stateEvents {
-				key := eventKey{string(e.State), e.Timestamp.UnixNano()}
-				if !existingKeys[key] {
-					t.Events = append(t.Events, e)
-					existingKeys[key] = true
-				}
-			}
-
-			// Sort events by timestamp to ensure correct order
-			sort.Slice(t.Events, func(i, j int) bool {
-				return t.Events[i].Timestamp.Before(t.Events[j].Timestamp)
-			})
-
-			if len(t.Events) == 0 {
-				return
-			}
-
-			t.State = t.Events[len(t.Events)-1].State
-
-			if nodeId != "" {
-				t.NodeID = nodeId
-			}
-			if workerId != "" {
-				t.WorkerID = workerId
-			}
-			if t.StartTime.IsZero() {
-				for _, e := range t.Events {
-					if e.State == types.RUNNING {
-						t.StartTime = e.Timestamp
-						break
-					}
-				}
-			}
-			lastEvent := t.Events[len(t.Events)-1]
-			if lastEvent.State == types.FINISHED || lastEvent.State == types.FAILED {
-				t.EndTime = lastEvent.Timestamp
-			}
-		})
-
+		return h.handleTaskLifecycleEvent(eventMap, currentClusterName)
 	case types.ACTOR_DEFINITION_EVENT:
 		actorDef, ok := eventMap["actorDefinitionEvent"]
 		if !ok {
@@ -550,12 +413,8 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 			}
 			a.NumRestarts = restartCount
 		})
-
 	case types.ACTOR_TASK_DEFINITION_EVENT:
-		// TODO: Handle actor task definition event
-		// This is related to GET /api/v0/tasks (type=ACTOR_TASK)
-		logrus.Debugf("ACTOR_TASK_DEFINITION_EVENT received, not yet implemented")
-
+		return h.handleTaskDefinitionEvent(eventMap, currentClusterName, true)
 	case types.DRIVER_JOB_DEFINITION_EVENT:
 		// NOTE: When event comes in, JobID will be in base64, processing will convert it to Hex
 		jobDef, ok := eventMap["driverJobDefinitionEvent"]
@@ -719,6 +578,10 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 				j.EndTime = lastStateTransition.Timestamp
 			}
 		})
+	case types.NODE_DEFINITION_EVENT:
+		return h.handleNodeDefinitionEvent(eventMap, currentClusterName)
+	case types.NODE_LIFECYCLE_EVENT:
+		return h.handleNodeLifecycleEvent(eventMap, currentClusterName)
 	default:
 		logrus.Infof("Event not supported, skipping: %v", eventMap)
 	}
@@ -768,29 +631,31 @@ func (h *EventHandler) getAllNodeEventFiles(clusterInfo utils.ClusterInfo) []str
 	return nodeEventFiles
 }
 
-// GetTasks returns a thread-safe deep copy of all tasks (including all attempts) for a given cluster.
-// Each task attempt is returned as a separate element in the slice.
+// GetTasks returns a slice of thread-safe deep copies of all task attempts for a given cluster session.
 // Deep copy ensures the returned data is safe to use after the lock is released.
-func (h *EventHandler) GetTasks(clusterName string) []types.Task {
+func (h *EventHandler) GetTasks(clusterSessionKey string) []types.Task {
 	h.ClusterTaskMap.RLock()
 	defer h.ClusterTaskMap.RUnlock()
 
-	taskMap, ok := h.ClusterTaskMap.ClusterTaskMap[clusterName]
+	taskMap, ok := h.ClusterTaskMap.ClusterTaskMap[clusterSessionKey]
 	if !ok {
+		// TODO(jwj): Add error handling.
+		logrus.Errorf("Task map not found for cluster session: %s", clusterSessionKey)
 		return []types.Task{}
 	}
 
 	taskMap.Lock()
 	defer taskMap.Unlock()
 
-	// Flatten all attempts into a single slice with deep copy
-	var tasks []types.Task
-	for _, attempts := range taskMap.TaskMap {
-		for _, task := range attempts {
-			tasks = append(tasks, task.DeepCopy())
+	// Flatten all task attempts into a single slice with deep copy.
+	allTasks := make([]types.Task, 0)
+	for _, taskAttempts := range taskMap.TaskMap {
+		for _, taskAttempt := range taskAttempts {
+			allTasks = append(allTasks, taskAttempt.DeepCopy())
 		}
 	}
-	return tasks
+
+	return allTasks
 }
 
 // GetTaskByID returns all attempts for a specific task ID in a given cluster.
@@ -939,4 +804,317 @@ func (h *EventHandler) GetJobByJobID(clusterName, jobID string) (types.Job, bool
 		return types.Job{}, false
 	}
 	return job.DeepCopy(), true
+}
+
+// handleTaskDefinitionEvent processes TASK_DEFINITION_EVENT or ACTOR_TASK_DEFINITION_EVENT and preserves the task attempt ordering.
+func (h *EventHandler) handleTaskDefinitionEvent(eventMap map[string]any, clusterSessionKey string, isActorTask bool) error {
+	var taskDefField string
+	if isActorTask {
+		taskDefField = "actorTaskDefinitionEvent"
+	} else {
+		taskDefField = "taskDefinitionEvent"
+	}
+
+	taskDef, ok := eventMap[taskDefField]
+	if !ok {
+		return fmt.Errorf("event does not have '%s' field", taskDefField)
+	}
+
+	jsonTaskDefinition, err := json.Marshal(taskDef)
+	if err != nil {
+		return fmt.Errorf("failed to marshal %s event: %w", taskDefField, err)
+	}
+
+	var currTask types.Task
+	if err := json.Unmarshal(jsonTaskDefinition, &currTask); err != nil {
+		return fmt.Errorf("failed to unmarshal %s event: %w", taskDefField, err)
+	}
+	if currTask.TaskID == "" {
+		return fmt.Errorf("task ID is empty")
+	}
+	normalizeTaskIDsToHex(&currTask)
+
+	// Manually set the task type for an actor task.
+	if isActorTask {
+		currTask.TaskType = types.ACTOR_TASK
+	}
+
+	taskMap := h.ClusterTaskMap.GetOrCreateTaskMap(clusterSessionKey)
+	taskMap.CreateOrMergeAttempt(currTask.TaskID, currTask.TaskAttempt, func(task *types.Task) {
+		// Preserve existing lifecycle-derived fields to avoid overwriting.
+		existingStateTransitions := task.StateTransitions
+		existingRayErrorInfo := task.RayErrorInfo
+		existingNodeID := task.NodeID
+		existingWorkerID := task.WorkerID
+		existingWorkerPID := task.WorkerPID
+		existingIsDebuggerPaused := task.IsDebuggerPaused
+		existingActorReprName := task.ActorReprName
+		existingTaskLogInfo := task.TaskLogInfo
+
+		*task = currTask
+
+		if len(existingStateTransitions) > 0 {
+			task.StateTransitions = existingStateTransitions
+			task.RayErrorInfo = existingRayErrorInfo
+			task.NodeID = existingNodeID
+			task.WorkerID = existingWorkerID
+			task.WorkerPID = existingWorkerPID
+			task.IsDebuggerPaused = existingIsDebuggerPaused
+			task.ActorReprName = existingActorReprName
+			task.TaskLogInfo = existingTaskLogInfo
+			task.State = task.GetLastState()
+		}
+	})
+
+	return nil
+}
+
+// handleTaskLifecycleEvent processes TASK_LIFECYCLE_EVENT and merges state transitions for a given task attempt.
+func (h *EventHandler) handleTaskLifecycleEvent(eventMap map[string]any, clusterSessionKey string) error {
+	taskLifecycle, ok := eventMap["taskLifecycleEvent"]
+	if !ok {
+		return fmt.Errorf("event does not have 'taskLifecycleEvent' field")
+	}
+
+	jsonTaskLifecycle, err := json.Marshal(taskLifecycle)
+	if err != nil {
+		return fmt.Errorf("failed to marshal task lifecycle event: %w", err)
+	}
+
+	var currTask types.Task
+	if err := json.Unmarshal(jsonTaskLifecycle, &currTask); err != nil {
+		return fmt.Errorf("failed to unmarshal task lifecycle event: %w", err)
+	}
+	if currTask.TaskID == "" {
+		return fmt.Errorf("task ID is empty")
+	}
+	normalizeTaskIDsToHex(&currTask)
+
+	// TODO(jwj): Clarify if there must be at least one state transition. Can one task have more than one state transition?
+	if len(currTask.StateTransitions) == 0 {
+		return fmt.Errorf("TASK_LIFECYCLE_EVENT must have at least one state transition")
+	}
+
+	taskMap := h.ClusterTaskMap.GetOrCreateTaskMap(clusterSessionKey)
+	taskMap.CreateOrMergeAttempt(currTask.TaskID, currTask.TaskAttempt, func(task *types.Task) {
+		// --- DEDUPLICATION using (State + Timestamp) as unique key ---
+		// Build a set of existing event keys to detect duplicates
+		type eventKey struct {
+			State     string
+			Timestamp int64
+		}
+		existingKeys := make(map[eventKey]bool)
+		for _, e := range task.StateTransitions {
+			existingKeys[eventKey{string(e.State), e.Timestamp.UnixNano()}] = true
+		}
+
+		// Only append events that haven't been seen before
+		for _, e := range currTask.StateTransitions {
+			key := eventKey{string(e.State), e.Timestamp.UnixNano()}
+			if !existingKeys[key] {
+				task.StateTransitions = append(task.StateTransitions, e)
+				existingKeys[key] = true
+			}
+		}
+
+		// Sort events by timestamp to ensure correct order
+		sort.Slice(task.StateTransitions, func(i, j int) bool {
+			return task.StateTransitions[i].Timestamp.Before(task.StateTransitions[j].Timestamp)
+		})
+
+		if len(task.StateTransitions) == 0 {
+			return
+		}
+
+		// TODO(jwj): Before beta, the lifecycle-related fields are overwritten.
+		// In beta, the complete historical replay will be supported.
+		task.RayErrorInfo = currTask.RayErrorInfo
+		if currTask.JobID != "" {
+			task.JobID = currTask.JobID
+		}
+		if currTask.NodeID != "" {
+			task.NodeID = currTask.NodeID
+		}
+		if currTask.WorkerID != "" {
+			task.WorkerID = currTask.WorkerID
+		}
+		if currTask.WorkerPID != 0 {
+			task.WorkerPID = currTask.WorkerPID
+		}
+		task.IsDebuggerPaused = currTask.IsDebuggerPaused
+		task.ActorReprName = currTask.ActorReprName
+		task.TaskLogInfo = currTask.TaskLogInfo
+		task.State = task.GetLastState()
+
+		// Derive creation time, start time and end time from state transitions.
+		// Ref: https://github.com/ray-project/ray/blob/d0b1d151d8ea964a711e451d0ae736f8bf95b629/python/ray/util/state/common.py#L1660-L1685
+		for _, tr := range task.StateTransitions {
+			switch tr.State {
+			case types.PENDING_ARGS_AVAIL:
+				if task.CreationTime.IsZero() {
+					task.CreationTime = tr.Timestamp
+				}
+			case types.RUNNING:
+				if task.StartTime.IsZero() {
+					task.StartTime = tr.Timestamp
+				}
+			case types.FINISHED, types.FAILED:
+				// Take the latest timestamp as the end time.
+				task.EndTime = tr.Timestamp
+			}
+		}
+	})
+
+	return nil
+}
+
+// handleNodeDefinitionEvent processes NODE_DEFINITION_EVENT and merges it with the existing node map for a given cluster session.
+func (h *EventHandler) handleNodeDefinitionEvent(eventMap map[string]any, clusterSessionID string) error {
+	nodeDef, exists := eventMap["nodeDefinitionEvent"]
+	if !exists {
+		return fmt.Errorf("event does not have 'nodeDefinitionEvent' field")
+	}
+
+	jsonNodeDefinition, err := json.Marshal(nodeDef)
+	if err != nil {
+		return fmt.Errorf("failed to marshal node definition event: %w", err)
+	}
+
+	var currNode types.Node
+	if err := json.Unmarshal(jsonNodeDefinition, &currNode); err != nil {
+		return fmt.Errorf("failed to unmarshal node definition event: %w", err)
+	}
+	if currNode.NodeID == "" {
+		return fmt.Errorf("node ID is empty")
+	}
+
+	currNode.NodeID, err = utils.ConvertBase64ToHex(currNode.NodeID)
+	if err != nil {
+		logrus.Errorf("Failed to convert node ID from base64 to hex, will keep node ID in base64: %v", err)
+	}
+
+	nodeMap := h.ClusterNodeMap.GetOrCreateNodeMap(clusterSessionID)
+	nodeMap.CreateOrMergeNode(currNode.NodeID, func(node *types.Node) {
+		existingStateTransitions := node.StateTransitions
+
+		*node = currNode
+
+		if len(existingStateTransitions) > 0 {
+			node.StateTransitions = existingStateTransitions
+		}
+	})
+
+	return nil
+}
+
+// handleNodeLifecycleEvent processes NODE_LIFECYCLE_EVENT and merges state transitions.
+func (h *EventHandler) handleNodeLifecycleEvent(eventMap map[string]any, clusterSessionID string) error {
+	nodeLifecycle, exists := eventMap["nodeLifecycleEvent"]
+	if !exists {
+		return fmt.Errorf("event does not have 'nodeLifecycleEvent' field")
+	}
+
+	jsonNodeLifecycle, err := json.Marshal(nodeLifecycle)
+	if err != nil {
+		return fmt.Errorf("failed to marshal node lifecycle event: %w", err)
+	}
+
+	var currNode types.Node
+	if err := json.Unmarshal(jsonNodeLifecycle, &currNode); err != nil {
+		return fmt.Errorf("failed to unmarshal node lifecycle event: %w", err)
+	}
+	if currNode.NodeID == "" {
+		return fmt.Errorf("node ID is empty")
+	}
+
+	currNode.NodeID, err = utils.ConvertBase64ToHex(currNode.NodeID)
+	if err != nil {
+		logrus.Errorf("Failed to convert node ID from base64 to hex, will keep node ID in base64: %v", err)
+	}
+
+	// A NODE_LIFECYCLE_EVENT must have at least one state transition.
+	// Ref: https://github.com/ray-project/ray/blob/221a19395a836fada12ebb2bac7bff00a666faa5/src/ray/protobuf/public/events_node_lifecycle_event.proto#L58-L61.
+	if len(currNode.StateTransitions) == 0 {
+		return fmt.Errorf("node lifecycle event does not have any state transitions")
+	}
+
+	nodeMap := h.ClusterNodeMap.GetOrCreateNodeMap(clusterSessionID)
+	nodeMap.CreateOrMergeNode(currNode.NodeID, func(n *types.Node) {
+		// Merge state transitions.
+		n.StateTransitions = MergeStateTransitions[types.NodeStateTransition](
+			n.StateTransitions,
+			currNode.StateTransitions,
+		)
+	})
+
+	return nil
+}
+
+// normalizeTaskIDsToHex converts base64-encoded Ray IDs in task-related events:
+//   - TASK_DEFINITION_EVENT
+//   - ACTOR_TASK_DEFINITION_EVENT
+//   - TASK_LIFECYCLE_EVENT
+//
+// to hex so stored tasks match the live cluster API schema.
+func normalizeTaskIDsToHex(task *types.Task) {
+	normalize := func(base64ID string) string {
+		if base64ID == "" {
+			return ""
+		}
+
+		hexID, err := utils.ConvertBase64ToHex(base64ID)
+		if err != nil {
+			logrus.Errorf("Failed to convert ID from base64 to hex, keeping original: %v", err)
+			return base64ID
+		}
+		return hexID
+	}
+
+	task.TaskID = normalize(task.TaskID)
+	task.ActorID = normalize(task.ActorID)
+	task.JobID = normalize(task.JobID)
+	task.ParentTaskID = normalize(task.ParentTaskID)
+	task.PlacementGroupID = normalize(task.PlacementGroupID)
+	task.NodeID = normalize(task.NodeID)
+	task.WorkerID = normalize(task.WorkerID)
+}
+
+// GetNodeMap returns a thread-safe deep copy of all nodes for a given cluster session.
+func (h *EventHandler) GetNodeMap(clusterSessionID string) map[string]types.Node {
+	h.ClusterNodeMap.RLock()
+	defer h.ClusterNodeMap.RUnlock()
+
+	nodeMap, ok := h.ClusterNodeMap.ClusterNodeMap[clusterSessionID]
+	if !ok {
+		return map[string]types.Node{}
+	}
+
+	nodeMap.Lock()
+	defer nodeMap.Unlock()
+
+	nodes := make(map[string]types.Node, len(nodeMap.NodeMap))
+	for id, node := range nodeMap.NodeMap {
+		nodes[id] = node.DeepCopy()
+	}
+	return nodes
+}
+
+// GetNodeByNodeID returns a node by node ID for a given cluster session.
+func (h *EventHandler) GetNodeByNodeID(clusterSessionID, nodeID string) (types.Node, bool) {
+	h.ClusterNodeMap.RLock()
+	defer h.ClusterNodeMap.RUnlock()
+
+	nodeMap, ok := h.ClusterNodeMap.ClusterNodeMap[clusterSessionID]
+	if !ok {
+		return types.Node{}, false
+	}
+
+	nodeMap.Lock()
+	defer nodeMap.Unlock()
+
+	node, ok := nodeMap.NodeMap[nodeID]
+	if !ok {
+		return types.Node{}, false
+	}
+	return node.DeepCopy(), true
 }
