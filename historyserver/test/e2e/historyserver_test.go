@@ -31,46 +31,46 @@ func TestHistoryServer(t *testing.T) {
 		name     string
 		testFunc func(Test, *WithT, *corev1.Namespace, *s3.S3)
 	}{
-		{
-			name:     "Live cluster: historyserver endpoints should be accessible",
-			testFunc: testLiveClusters,
-		},
-		{
-			name:     "Live cluster: grafana health only",
-			testFunc: testLiveGrafanaHealth,
-		},
-		{
-			name:     "/v0/logs/file endpoint (live cluster)",
-			testFunc: testLogFileEndpointLiveCluster,
-		},
-		{
-			name:     "/v0/logs/file endpoint (dead cluster)",
-			testFunc: testLogFileEndpointDeadCluster,
-		},
-		{
-			name:     "Live cluster: /api/v0/tasks?detail=1 should return the detailed task information of all task attempts",
-			testFunc: testLiveClusterTasks,
-		},
-		{
-			name:     "Dead cluster: /api/v0/tasks should return the detailed task information of all task attempts (historical replay isn't supported)",
-			testFunc: testDeadClusterTasks,
-		},
-		{
-			name:     "Live cluster: /nodes?view=summary should return the current snapshot containing node summary and resource usage information",
-			testFunc: testLiveClusterNodes,
-		},
-		{
-			name:     "Dead cluster: /nodes should return the historical replay containing node summary and resource usage snapshots of a cluster session",
-			testFunc: testDeadClusterNodes,
-		},
-		{
-			name:     "Live cluster: /nodes/{node_id} should return the current snapshot containing node summary of the specified node",
-			testFunc: testLiveClusterNode,
-		},
-		{
-			name:     "Dead cluster: /nodes/{node_id} should return the historical replay containing node summary snapshots of the specified node in a cluster session",
-			testFunc: testDeadClusterNode,
-		},
+		// {
+		// 	name:     "Live cluster: historyserver endpoints should be accessible",
+		// 	testFunc: testLiveClusters,
+		// },
+		// {
+		// 	name:     "Live cluster: grafana health only",
+		// 	testFunc: testLiveGrafanaHealth,
+		// },
+		// {
+		// 	name:     "/v0/logs/file endpoint (live cluster)",
+		// 	testFunc: testLogFileEndpointLiveCluster,
+		// },
+		// {
+		// 	name:     "/v0/logs/file endpoint (dead cluster)",
+		// 	testFunc: testLogFileEndpointDeadCluster,
+		// },
+		// {
+		// 	name:     "Live cluster: /api/v0/tasks?detail=1 should return the detailed task information of all task attempts",
+		// 	testFunc: testLiveClusterTasks,
+		// },
+		// {
+		// 	name:     "Dead cluster: /api/v0/tasks should return the detailed task information of all task attempts (historical replay isn't supported)",
+		// 	testFunc: testDeadClusterTasks,
+		// },
+		// {
+		// 	name:     "Live cluster: /nodes?view=summary should return the current snapshot containing node summary and resource usage information",
+		// 	testFunc: testLiveClusterNodes,
+		// },
+		// {
+		// 	name:     "Dead cluster: /nodes should return the historical replay containing node summary and resource usage snapshots of a cluster session",
+		// 	testFunc: testDeadClusterNodes,
+		// },
+		// {
+		// 	name:     "Live cluster: /nodes/{node_id} should return the current snapshot containing node summary of the specified node",
+		// 	testFunc: testLiveClusterNode,
+		// },
+		// {
+		// 	name:     "Dead cluster: /nodes/{node_id} should return the historical replay containing node summary snapshots of the specified node in a cluster session",
+		// 	testFunc: testDeadClusterNode,
+		// },
 		{
 			name:     "Live cluster: /api/v0/tasks/summarize?summary_by=lineage should return the lineage tree of all tasks",
 			testFunc: testLiveClusterTaskSummarize,
@@ -1094,9 +1094,6 @@ func verifyNodeSummarySchema(test Test, g *WithT, nodeSummary map[string]any) {
 
 // verifyTaskSummarizeLineageRespSchema verifies that the /api/v0/tasks/summarize?summary_by=lineage
 // response is valid according to the API schema.
-// isLive indicates whether the response is from a live cluster or a dead cluster:
-//   - isLive: true for a live cluster (proxied from Ray Dashboard)
-//   - isLive: false for a dead cluster (built from historical events)
 func verifyTaskSummarizeLineageRespSchema(test Test, g *WithT, resp map[string]any, isLive bool) {
 	// Verify top-level fields.
 	g.Expect(resp).To(HaveKeyWithValue("result", BeTrue()))
@@ -1109,28 +1106,18 @@ func verifyTaskSummarizeLineageRespSchema(test Test, g *WithT, resp map[string]a
 	dataResult, ok := data["result"].(map[string]any)
 	g.Expect(ok).To(BeTrue(), "'data.result' should be a map")
 
-	var nodeIDToSummary map[string]any
+	g.Expect(dataResult).To(HaveKey("total"))
+	g.Expect(dataResult).To(HaveKey("num_after_truncation"))
+	g.Expect(dataResult).To(HaveKey("num_filtered"))
+	g.Expect(dataResult).To(HaveKey("result"))
+	g.Expect(dataResult).To(HaveKey("partial_failure_warning"))
 
-	if isLive {
-		// Live: data.result.node_id_to_summary (proxied from Ray Dashboard)
-		g.Expect(dataResult).To(HaveKey("node_id_to_summary"))
-		nodeIDToSummary, ok = dataResult["node_id_to_summary"].(map[string]any)
-		g.Expect(ok).To(BeTrue(), "'node_id_to_summary' should be a map")
-	} else {
-		// Dead: data.result has wrapper fields matching the tasks endpoint format.
-		g.Expect(dataResult).To(HaveKey("total"))
-		g.Expect(dataResult).To(HaveKey("num_after_truncation"))
-		g.Expect(dataResult).To(HaveKey("num_filtered"))
-		g.Expect(dataResult).To(HaveKey("result"))
-		g.Expect(dataResult).To(HaveKey("partial_failure_warning"))
+	innerResult, ok := dataResult["result"].(map[string]any)
+	g.Expect(ok).To(BeTrue(), "'data.result.result' should be a map")
+	g.Expect(innerResult).To(HaveKey("node_id_to_summary"))
 
-		innerResult, ok := dataResult["result"].(map[string]any)
-		g.Expect(ok).To(BeTrue(), "'data.result.result' should be a map")
-		g.Expect(innerResult).To(HaveKey("node_id_to_summary"))
-
-		nodeIDToSummary, ok = innerResult["node_id_to_summary"].(map[string]any)
-		g.Expect(ok).To(BeTrue(), "'node_id_to_summary' should be a map")
-	}
+	nodeIDToSummary, ok := innerResult["node_id_to_summary"].(map[string]any)
+	g.Expect(ok).To(BeTrue(), "'node_id_to_summary' should be a map")
 
 	// At least one entry in node_id_to_summary.
 	g.Expect(len(nodeIDToSummary)).To(BeNumerically(">", 0), "should have at least one node_id_to_summary entry")

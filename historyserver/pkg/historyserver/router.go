@@ -934,6 +934,7 @@ func (s *ServerHandler) getTaskSummarize(req *restful.Request, resp *restful.Res
 	}
 	summaryBy := req.QueryParameter("summary_by")
 
+	// Get all tasks
 	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
 	tasks := s.eventHandler.GetTasks(clusterSessionKey)
 
@@ -950,7 +951,7 @@ func (s *ServerHandler) getTaskSummarize(req *restful.Request, resp *restful.Res
 	var response interface{}
 	if summaryBy == "lineage" {
 		actors := s.eventHandler.GetActors(clusterSessionKey)
-		lineageSummary := BuildLineageSummary(tasks, actors)
+		lineageSummary := utils.BuildLineageSummary(tasks, actors)
 
 		response = map[string]interface{}{
 			"result": true,
@@ -961,7 +962,7 @@ func (s *ServerHandler) getTaskSummarize(req *restful.Request, resp *restful.Res
 					"num_after_truncation": numAfterTruncation,
 					"num_filtered":         numFiltered,
 					"result": map[string]interface{}{
-						"node_id_to_summary": map[string]*TaskSummaries{
+						"node_id_to_summary": map[string]*utils.TaskSummaries{
 							"cluster": lineageSummary,
 						},
 					},
@@ -971,6 +972,7 @@ func (s *ServerHandler) getTaskSummarize(req *restful.Request, resp *restful.Res
 			},
 		}
 	} else {
+		// Default to func_name
 		summary := summarizeTasksByFuncName(tasks)
 		response = map[string]interface{}{
 			"result": true,

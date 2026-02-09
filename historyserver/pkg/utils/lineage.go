@@ -1,4 +1,4 @@
-package historyserver
+package utils
 
 import (
 	"math"
@@ -8,6 +8,40 @@ import (
 	eventtypes "github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
 	"github.com/sirupsen/logrus"
 )
+
+// --- Lineage Summary Types ---
+
+// Link represents a navigation reference to a task or actor detail page
+type Link struct {
+	Type string `json:"type"` // task or actor
+	ID   string `json:"id"`   // task ID or actor ID
+}
+
+// NestedTaskSummary represents an entry in the task lineage tree.
+// An entry can be:
+// - a task (type = NORMAL_TASK, ACTOR_TASK, or ACTOR_CREATION_TASK)
+// - an actor grouping its creation and method tasks (type = ACTOR)
+// - a group of same-named siblings, created when >1 sibling shares a name (type = GROUP)
+// Ref: https://github.com/ray-project/ray/blob/f3d444ab01279a3870033fb4d34314cd8c987b22/python/ray/util/state/common.py#L996-L1012
+type NestedTaskSummary struct {
+	Name        string               `json:"name"`
+	Key         string               `json:"key"`
+	Type        string               `json:"type"`
+	Timestamp   *int64               `json:"timestamp"`
+	StateCounts map[string]int       `json:"state_counts"`
+	Children    []*NestedTaskSummary `json:"children"`
+	Link        *Link                `json:"link,omitempty"`
+}
+
+// TaskSummaries is the response for summary_by=lineage
+// Ref: https://github.com/ray-project/ray/blob/f3d444ab01279a3870033fb4d34314cd8c987b22/python/ray/util/state/common.py#L1022-L1033
+type TaskSummaries struct {
+	Summary             []*NestedTaskSummary `json:"summary"`
+	TotalTasks          int                  `json:"total_tasks"`
+	TotalActorTasks     int                  `json:"total_actor_tasks"`
+	TotalActorScheduled int                  `json:"total_actor_scheduled"`
+	SummaryBy           string               `json:"summary_by"`
+}
 
 // DriverTaskIDPrefix is the hex prefix of the driver's task ID (20 bytes of 0xFF).
 // In Ray, tasks whose parent_task_id starts with this prefix are spawned directly
@@ -24,14 +58,14 @@ const actorCreationTaskIDNilPrefix = "ffffffffffffffff"
 // lineageBuilder encapsulates the state needed to build a lineage tree.
 // Ref: https://github.com/ray-project/ray/blob/f3d444ab01279a3870033fb4d34314cd8c987b22/python/ray/util/state/common.py#L1098-L1118
 type lineageBuilder struct {
-	tasksByID           map[string]eventtypes.Task    // taskID -> Task for O(1) lookup
-	actorsByID          map[string]eventtypes.Actor   // actorID -> Actor for name resolution
-	actorCreationTaskID map[string]string             // actorID -> creation taskID (to find actor's parent in lineage)
-	taskGroupByID       map[string]*NestedTaskSummary // taskID or "actor:{id}" -> node (memoization for dedup)
-	rootSummary         []*NestedTaskSummary          // top-level nodes (no parent or parent is driver)
-	totalTasks          int                           // NORMAL_TASK count
-	totalActorTasks     int                           // ACTOR_TASK count
-	totalActorScheduled int                           // ACTOR_CREATION_TASK count
+	tasksByID           map[string]eventtypes.Task  // taskID -> Task for O(1) lookup
+	actorsByID          map[string]eventtypes.Actor // actorID -> Actor for name resolution
+	actorCreationTaskID map[string]string           // actorID -> creation taskID (to find actor's parent in lineage)
+	taskGroupByID       map[string]*NestedTaskSummary
+	rootSummary         []*NestedTaskSummary
+	totalTasks          int // NORMAL_TASK count
+	totalActorTasks     int // ACTOR_TASK count
+	totalActorScheduled int // ACTOR_CREATION_TASK count
 }
 
 // isDriverTaskID checks if the given taskID belongs to a driver task.
