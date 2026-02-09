@@ -294,7 +294,7 @@ func (s *ServerHandler) resolveTaskLogFilename(clusterNameID, sessionID, taskID 
 	// Find the specific attempt
 	var foundTask *eventtypes.Task
 	for i, task := range taskAttempts {
-		if task.AttemptNumber == attemptNumber {
+		if task.TaskAttempt == attemptNumber {
 			foundTask = &taskAttempts[i]
 			break
 		}
@@ -328,13 +328,14 @@ func (s *ServerHandler) resolveTaskLogFilename(clusterNameID, sessionID, taskID 
 	// Try to use task_log_info if available
 	// NOTE: task_log_info is currently not supported in ray export event, so we will always
 	// fallback to following logic.
-	if foundTask.TaskLogInfo != nil && len(foundTask.TaskLogInfo) > 0 {
-		filenameKey := "stdout_file"
+	if foundTask.TaskLogInfo != nil {
+		var logFilename string
 		if suffix == "err" {
-			filenameKey = "stderr_file"
+			logFilename = foundTask.TaskLogInfo.StderrFile
+		} else {
+			logFilename = foundTask.TaskLogInfo.StdoutFile
 		}
-
-		if logFilename, ok := foundTask.TaskLogInfo[filenameKey]; ok && logFilename != "" {
+		if logFilename != "`" {
 			return foundTask.NodeID, logFilename, nil
 		}
 	}
