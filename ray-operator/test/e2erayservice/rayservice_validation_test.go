@@ -104,7 +104,7 @@ func TestRayServiceManagedBy(t *testing.T) {
 		rcList, err := test.Client().Ray().RayV1().RayClusters(rayService.Namespace).List(test.Ctx(), metav1.ListOptions{})
 		g.Expect(err).NotTo(HaveOccurred())
 		for _, rc := range rcList.Items {
-			g.Expect(rc.Name).NotTo(HaveSuffix(*rayServiceAC.Name))
+			g.Expect(rc.Name).NotTo(HavePrefix(*rayServiceAC.Name))
 		}
 
 		// Delete the RayService
