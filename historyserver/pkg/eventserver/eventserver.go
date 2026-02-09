@@ -689,7 +689,6 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 							// But eventName has the full form like "task::Counter.increment"
 							// Use eventName to get the full func_or_class_name
 							t.FuncOrClassName = strings.TrimPrefix(e.EventName, "task::")
-							t.TaskName = name
 						}
 					}
 				}
@@ -967,7 +966,7 @@ func (h *EventHandler) handleTaskDefinitionEvent(eventMap map[string]any, cluste
 
 		existingProfileData := task.ProfileData
 		existingFuncOrClassName := task.FuncOrClassName
-		existingName := task.TaskName
+		existingCreationTime := task.CreationTime
 		existingStartTime := task.StartTime
 		existingEndTime := task.EndTime
 
@@ -985,6 +984,7 @@ func (h *EventHandler) handleTaskDefinitionEvent(eventMap map[string]any, cluste
 			task.State = task.GetLastState()
 			task.StartTime = existingStartTime
 			task.EndTime = existingEndTime
+			task.CreationTime = existingCreationTime
 		}
 
 		// Restore profile-derived fields (from TASK_PROFILE_EVENT)
@@ -993,9 +993,6 @@ func (h *EventHandler) handleTaskDefinitionEvent(eventMap map[string]any, cluste
 			task.ProfileData = existingProfileData
 			if existingFuncOrClassName != "" {
 				task.FuncOrClassName = existingFuncOrClassName
-			}
-			if existingName != "" {
-				task.TaskName = existingName
 			}
 		}
 	})
