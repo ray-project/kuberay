@@ -134,27 +134,3 @@ func (s *ServerHandler) _getNodeLogFile(rayClusterNameID, sessionID, nodeID, fil
 
 	return []byte(strings.Join(lines, "\n")), nil
 }
-
-func (s *ServerHandler) GetNodes(rayClusterNameID, sessionId string) ([]byte, error) {
-	logPath := path.Join(sessionId, "logs")
-	nodes := s.reader.ListFiles(rayClusterNameID, logPath)
-	templ := map[string]interface{}{
-		"result": true,
-		"msg":    "Node summary fetched.",
-		"data": map[string]interface{}{
-			"summary": []map[string]interface{}{},
-		},
-	}
-	nodeSummary := []map[string]interface{}{}
-	for _, node := range nodes {
-		nodeSummary = append(nodeSummary, map[string]interface{}{
-			"raylet": map[string]interface{}{
-				"nodeId": path.Clean(node),
-				"state":  "ALIVE",
-			},
-			"ip": "UNKNOWN",
-		})
-	}
-	templ["data"].(map[string]interface{})["summary"] = nodeSummary
-	return json.Marshal(templ)
-}
