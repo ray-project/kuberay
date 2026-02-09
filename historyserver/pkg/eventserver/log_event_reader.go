@@ -13,7 +13,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"path/filepath"
+	"path"
 	"strings"
 
 	"github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
@@ -48,7 +48,7 @@ func (r *LogEventReader) ReadLogEvents(clusterInfo utils.ClusterInfo, clusterSes
 	jobEventMap := eventStore.GetOrCreateJobEventMap(clusterSessionKey)
 
 	// Path: {sessionName}/logs/
-	logsBaseDir := filepath.Join(clusterInfo.SessionName, "logs")
+	logsBaseDir := path.Join(clusterInfo.SessionName, "logs")
 
 	// List all items under logs/ to find node directories
 	// Note: ListFiles returns base names only (e.g., "node1/", "node2/")
@@ -67,7 +67,7 @@ func (r *LogEventReader) ReadLogEvents(clusterInfo utils.ClusterInfo, clusterSes
 
 	for _, nodeID := range nodeIDs {
 		// Path: {sessionName}/logs/{nodeId}/events/
-		eventsDir := filepath.Join(clusterInfo.SessionName, "logs", nodeID, "events")
+		eventsDir := path.Join(clusterInfo.SessionName, "logs", nodeID, "events")
 		// Note: ListFiles returns base names only (e.g., "event_GCS.log")
 		eventFileNames := r.reader.ListFiles(clusterID, eventsDir)
 
@@ -78,7 +78,7 @@ func (r *LogEventReader) ReadLogEvents(clusterInfo utils.ClusterInfo, clusterSes
 			}
 
 			// Build full path relative to clusterID for GetContent
-			eventFilePath := filepath.Join(clusterInfo.SessionName, "logs", nodeID, "events", fileName)
+			eventFilePath := path.Join(clusterInfo.SessionName, "logs", nodeID, "events", fileName)
 
 			// Read and parse the event file
 			// Note: Duplicate events are handled by JobEventMap's deduplication using event_id as key.
