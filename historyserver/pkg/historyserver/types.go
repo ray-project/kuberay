@@ -30,21 +30,24 @@ type GetLogFileOptions struct {
 	Suffix string
 }
 
-type ReplyTaskInfo struct {
-	Data   TaskInfoData `json:"data"`
-	Msg    string       `json:"msg"`
-	Result bool         `json:"result"`
+// TODO(jwj): Can be extracted to a task-specific interface, e.g., TaskSummaryProvider.
+type TaskDataResult struct {
+	Total                 int                      `json:"total"`
+	NumAfterTruncation    int                      `json:"num_after_truncation"`
+	NumFiltered           int                      `json:"num_filtered"`
+	Result                []map[string]interface{} `json:"result"`
+	PartialFailureWarning string                   `json:"partial_failure_warning"`
+	Warnings              []string                 `json:"warnings"`
 }
-type TaskInfoData struct {
-	Result TaskInfoDataResult `json:"result"`
+
+type TaskData struct {
+	Result TaskDataResult `json:"result"`
 }
-type TaskInfoDataResult struct {
-	NumAfterTruncation    int           `json:"num_after_truncation"`
-	NumFiltered           int           `json:"num_filtered"`
-	PartialFailureWarning string        `json:"partial_failure_warning"`
-	Result                []interface{} `json:"result"`
-	Total                 int           `json:"total"`
-	Warnings              interface{}   `json:"warnings"`
+
+type RespTasksInfo struct {
+	Result bool     `json:"result"`
+	Msg    string   `json:"msg"`
+	Data   TaskData `json:"data"`
 }
 
 type ReplyActorInfo struct {
