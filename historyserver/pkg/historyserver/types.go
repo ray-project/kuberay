@@ -32,17 +32,17 @@ type ActorInfoData struct {
 
 // --- Lineage Summary Types ---
 
-// Link represents a navigation reference to a task or actor detail page.
-// Fields:
-// - Type: "task" or "actor"
-// - ID: the task ID or actor ID
+// Link represents a navigation reference to a task or actor detail page
 type Link struct {
-	Type string `json:"type"` // "task" or "actor"
-	ID   string `json:"id"`
+	Type string `json:"type"` // task or actor
+	ID   string `json:"id"`   // task ID or actor ID
 }
 
-// NestedTaskSummary represents a node in the lineage tree
-// A node can be a task, an actor container, or a group of same-named siblings
+// NestedTaskSummary represents an entry in the task lineage tree.
+// An entry can be:
+// - a task (type = NORMAL_TASK, ACTOR_TASK, or ACTOR_CREATION_TASK)
+// - an actor grouping its creation and method tasks (type = ACTOR)
+// - a group of same-named siblings, created when >1 sibling shares a name (type = GROUP)
 // Ref: https://github.com/ray-project/ray/blob/f3d444ab01279a3870033fb4d34314cd8c987b22/python/ray/util/state/common.py#L996-L1012
 type NestedTaskSummary struct {
 	Name        string               `json:"name"`
@@ -54,7 +54,7 @@ type NestedTaskSummary struct {
 	Link        *Link                `json:"link,omitempty"`
 }
 
-// TaskSummaries is the top-level lineage summary
+// TaskSummaries is the response for summary_by=lineage
 // Ref: https://github.com/ray-project/ray/blob/f3d444ab01279a3870033fb4d34314cd8c987b22/python/ray/util/state/common.py#L1022-L1033
 type TaskSummaries struct {
 	Summary             []*NestedTaskSummary `json:"summary"`

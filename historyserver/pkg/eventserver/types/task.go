@@ -107,9 +107,8 @@ type TaskLogInfo struct {
 // https://github.com/ray-project/ray/blob/36be009ae360788550e541d81806493f52963730/src/ray/core_worker/task_event_buffer.cc#L189-L295.
 type Task struct {
 	// TaskID and TaskAttempt form the unique identifier for a task.
-	TaskID       string `json:"taskId"`
-	TaskAttempt  int    `json:"taskAttempt"`
-	ParentTaskID string `json:"parentTaskId"`
+	TaskID      string `json:"taskId"`
+	TaskAttempt int    `json:"taskAttempt"`
 
 	// The task definition information.
 	// TaskType is the type of a task, only available for TASK_DEFINITION_EVENT.
@@ -129,6 +128,7 @@ type Task struct {
 	// ActorID is only available for ACTOR_TASK_DEFINITION_EVENT.
 	ActorID              string            `json:"actorId,omitempty"`
 	JobID                string            `json:"jobId"` // Present in both DEFINITION and LIFECYCLE events.
+	ParentTaskID         string            `json:"parentTaskId,omitempty"`
 	PlacementGroupID     string            `json:"placementGroupId,omitempty"`
 	RefIDs               map[string]string `json:"refIds,omitempty"`
 	SerializedRuntimeEnv string            `json:"serializedRuntimeEnv,omitempty"`
