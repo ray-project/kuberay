@@ -1376,6 +1376,13 @@ func (h *EventHandler) GetTasksTimeline(clusterName string, jobID string) []type
 			taskIDForArgs := task.TaskID
 			funcOrClassName := task.FuncOrClassName
 
+			// Fallback to GetFuncName() if FuncOrClassName is empty
+			// This ensures consistency with Ray's profiling.py which uses task["func_or_class_name"]
+			// from TASK_DEFINITION_EVENT, and handles cases where TASK_PROFILE_EVENT is missing
+			if funcOrClassName == "" {
+				funcOrClassName = task.GetFuncName()
+			}
+
 			// Try to get from extraData if available (for hex format task_id)
 			if extraData != nil {
 				if tid, ok := extraData["task_id"].(string); ok && tid != "" {
