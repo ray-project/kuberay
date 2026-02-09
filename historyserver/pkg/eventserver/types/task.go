@@ -144,7 +144,7 @@ type Task struct {
 	RayErrorInfo *RayErrorInfo `json:"rayErrorInfo,omitempty"`
 
 	ProfileData     *ProfileData `json:"profile_data,omitempty"`
-	FuncOrClassName string       `json:"functionName"`
+	FuncOrClassName string       `json:"functionName,omitempty"`
 	NodeID          string       `json:"nodeId,omitempty"`
 	WorkerID        string       `json:"workerId,omitempty"`
 	WorkerPID       int          `json:"workerPid,omitempty"`
