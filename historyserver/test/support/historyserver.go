@@ -222,7 +222,7 @@ func GetOneOfNodeID(g *WithT, client *http.Client, historyServerURL string, isLi
 // The history server returns actors from the in-memory ClusterActorMap, which is populated
 // by the Event Handler processing events from S3.
 func GetOneOfActorID(g *WithT, client *http.Client, historyServerURL string) string {
-	resp, err := client.Get(historyServerURL + "/logical/actors")
+	resp, err := client.Get(historyServerURL + EndpointLogicalActors)
 	g.Expect(err).NotTo(HaveOccurred())
 	defer resp.Body.Close()
 	g.Expect(resp.StatusCode).To(Equal(http.StatusOK))
