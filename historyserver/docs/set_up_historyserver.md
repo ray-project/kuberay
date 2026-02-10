@@ -77,7 +77,7 @@ kubectl apply -f historyserver/config/service_account.yaml
 #### Deploy In-Cluster History Server
 
 ```bash
-kubectl apply -f config/historyserver.yaml
+kubectl apply -f historyserver/config/historyserver.yaml
 
 # Port-forward to access the history server.
 kubectl port-forward svc/historyserver 8080:30080
@@ -125,6 +125,7 @@ You can also build and run the history server binary directly from the command l
 
 ```bash
 # Build the history server binary.
+cd historyserver
 make buildhistoryserver
 
 # Configure S3 connection via environment variables.
