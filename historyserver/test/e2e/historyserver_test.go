@@ -27,50 +27,50 @@ func TestHistoryServer(t *testing.T) {
 		name     string
 		testFunc func(Test, *WithT, *corev1.Namespace, *s3.S3)
 	}{
-		// {
-		// 	name:     "Live cluster: historyserver endpoints should be accessible",
-		// 	testFunc: testLiveClusters,
-		// },
-		// {
-		// 	name:     "Live cluster: grafana health only",
-		// 	testFunc: testLiveGrafanaHealth,
-		// },
-		// {
-		// 	name:     "Live cluster: prometheus health only",
-		// 	testFunc: testLivePrometheusHealth,
-		// },
-		// {
-		// 	name:     "/v0/logs/file endpoint (live cluster)",
-		// 	testFunc: testLogFileEndpointLiveCluster,
-		// },
-		// {
-		// 	name:     "/v0/logs/file endpoint (dead cluster)",
-		// 	testFunc: testLogFileEndpointDeadCluster,
-		// },
-		// {
-		// 	name:     "Live cluster: /api/v0/tasks?detail=1 should return the detailed task information of all task attempts",
-		// 	testFunc: testLiveClusterTasks,
-		// },
-		// {
-		// 	name:     "Dead cluster: /api/v0/tasks should return the detailed task information of all task attempts (historical replay isn't supported)",
-		// 	testFunc: testDeadClusterTasks,
-		// },
-		// {
-		// 	name:     "Live cluster: /nodes?view=summary should return the current snapshot containing node summary and resource usage information",
-		// 	testFunc: testLiveClusterNodes,
-		// },
-		// {
-		// 	name:     "Dead cluster: /nodes should return the historical replay containing node summary and resource usage snapshots of a cluster session",
-		// 	testFunc: testDeadClusterNodes,
-		// },
-		// {
-		// 	name:     "Live cluster: /nodes/{node_id} should return the current snapshot containing node summary of the specified node",
-		// 	testFunc: testLiveClusterNode,
-		// },
-		// {
-		// 	name:     "Dead cluster: /nodes/{node_id} should return the historical replay containing node summary snapshots of the specified node in a cluster session",
-		// 	testFunc: testDeadClusterNode,
-		// },
+		{
+			name:     "Live cluster: historyserver endpoints should be accessible",
+			testFunc: testLiveClusters,
+		},
+		{
+			name:     "Live cluster: grafana health only",
+			testFunc: testLiveGrafanaHealth,
+		},
+		{
+			name:     "Live cluster: prometheus health only",
+			testFunc: testLivePrometheusHealth,
+		},
+		{
+			name:     "/v0/logs/file endpoint (live cluster)",
+			testFunc: testLogFileEndpointLiveCluster,
+		},
+		{
+			name:     "/v0/logs/file endpoint (dead cluster)",
+			testFunc: testLogFileEndpointDeadCluster,
+		},
+		{
+			name:     "Live cluster: /api/v0/tasks?detail=1 should return the detailed task information of all task attempts",
+			testFunc: testLiveClusterTasks,
+		},
+		{
+			name:     "Dead cluster: /api/v0/tasks should return the detailed task information of all task attempts (historical replay isn't supported)",
+			testFunc: testDeadClusterTasks,
+		},
+		{
+			name:     "Live cluster: /nodes?view=summary should return the current snapshot containing node summary and resource usage information",
+			testFunc: testLiveClusterNodes,
+		},
+		{
+			name:     "Dead cluster: /nodes should return the historical replay containing node summary and resource usage snapshots of a cluster session",
+			testFunc: testDeadClusterNodes,
+		},
+		{
+			name:     "Live cluster: /nodes/{node_id} should return the current snapshot containing node summary of the specified node",
+			testFunc: testLiveClusterNode,
+		},
+		{
+			name:     "Dead cluster: /nodes/{node_id} should return the historical replay containing node summary snapshots of the specified node in a cluster session",
+			testFunc: testDeadClusterNode,
+		},
 		{
 			name:     "Live cluster: /api/v0/tasks/summarize?summary_by=lineage should return the lineage tree of all tasks",
 			testFunc: testLiveClusterTaskSummarize,

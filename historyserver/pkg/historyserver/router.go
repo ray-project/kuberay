@@ -934,6 +934,10 @@ func (s *ServerHandler) getTaskSummarize(req *restful.Request, resp *restful.Res
 	}
 	summaryBy := req.QueryParameter("summary_by")
 
+	// For summary, try getting as many entries as possible to minimize data loss.
+	// Ref: https://github.com/ray-project/ray/blob/ad1b87448fec4db7ef11f1697f9bc02ae6a7ba09/python/ray/dashboard/state_aggregator.py#L569-L582
+	listAPIOptions.Limit = utils.RayMaxLimitFromAPIServer
+
 	// Get all tasks
 	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
 	tasks := s.eventHandler.GetTasks(clusterSessionKey)
