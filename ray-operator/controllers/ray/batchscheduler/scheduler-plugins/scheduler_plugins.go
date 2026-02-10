@@ -45,7 +45,7 @@ func (k *KubeScheduler) Name() string {
 	return schedulerInstanceName
 }
 
-func createPodGroup(ctx context.Context, app *rayv1.RayCluster) *v1alpha1.PodGroup {
+func createPodGroup(app *rayv1.RayCluster) *v1alpha1.PodGroup {
 	// TODO(troychiu): Consider the case when autoscaling is enabled.
 
 	podGroup := &v1alpha1.PodGroup{
@@ -62,7 +62,7 @@ func createPodGroup(ctx context.Context, app *rayv1.RayCluster) *v1alpha1.PodGro
 			},
 		},
 		Spec: v1alpha1.PodGroupSpec{
-			MinMember:    utils.CalculateDesiredReplicas(ctx, app) + 1, // +1 for the head pod
+			MinMember:    utils.CalculateDesiredReplicas(app) + 1, // +1 for the head pod
 			MinResources: utils.CalculateDesiredResources(app),
 		},
 	}
@@ -82,7 +82,7 @@ func (k *KubeScheduler) DoBatchSchedulingOnSubmission(ctx context.Context, objec
 		if !errors.IsNotFound(err) {
 			return err
 		}
-		podGroup = createPodGroup(ctx, app)
+		podGroup = createPodGroup(app)
 		if err := k.cli.Create(ctx, podGroup); err != nil {
 			if errors.IsAlreadyExists(err) {
 				return nil

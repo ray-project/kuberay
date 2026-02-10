@@ -30,7 +30,6 @@ const (
 )
 
 // ApplyMinIO deploys minio once per test namespace, making sure it's idempotent.
-// TODO(jwj): Check idempotency (for now, only manual check).
 func ApplyMinIO(test Test, g *WithT) {
 	KubectlApplyYAML(test, MinioManifestPath, MinioNamespace)
 
