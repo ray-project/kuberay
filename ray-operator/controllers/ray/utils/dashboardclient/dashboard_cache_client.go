@@ -115,6 +115,7 @@ func (w *WorkerPool) Start(ctx context.Context) {
 
 				for _, rayJob := range rayJobs.Items {
 					if len(rayJob.Status.DashboardURL) == 0 ||
+						len(rayJob.Status.JobId) == 0 ||
 						rayv1.IsJobTerminal(rayJob.Status.JobStatus) ||
 						rayv1.IsJobDeploymentTerminal(rayJob.Status.JobDeploymentStatus) {
 						continue
