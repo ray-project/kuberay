@@ -60,6 +60,7 @@ func InitWorkerPool(ctx context.Context,
 	cacheExpiry time.Duration,
 	dashboardClientFunc func(rayCluster *rayv1.RayCluster, url string) (RayDashboardClientInterface, error),
 ) (*WorkerPool, error) {
+	var err error
 	initWorkPool.Do(func() {
 		logger := ctrl.LoggerFrom(ctx).WithName("WorkerPool")
 
@@ -67,7 +68,8 @@ func InitWorkerPool(ctx context.Context,
 		// Using zero capacity channel would be a bit of inefficient because each send operation would block.
 		taskQueue := chanx.NewUnboundedChanSize[*rayv1.RayJob](ctx, initBufferSize, initBufferSize, initBufferSize)
 
-		cacheStorage := otter.Must(&otter.Options[string, *JobInfoCache]{
+		var cacheStorage *otter.Cache[string, *JobInfoCache]
+		cacheStorage, err = otter.New(&otter.Options[string, *JobInfoCache]{
 			ExpiryCalculator: otter.ExpiryAccessing[string, *JobInfoCache](cacheExpiry), // Reset timer on reads/writes
 			OnDeletion: func(e otter.DeletionEvent[string, *JobInfoCache]) {
 				if !e.WasEvicted() {
@@ -88,7 +90,7 @@ func InitWorkerPool(ctx context.Context,
 		}
 	})
 
-	return pool, nil
+	return pool, err
 }
 
 func (w *WorkerPool) Start(ctx context.Context) {
