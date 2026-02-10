@@ -370,18 +370,13 @@ func (s *ServerHandler) getClusters(req *restful.Request, resp *restful.Response
 //   - ?view=summary: returns node summary and resource usage information
 //   - ?view=hostNameList: returns a list of hostnames for all alive nodes
 func (s *ServerHandler) getNodes(req *restful.Request, resp *restful.Response) {
-	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
-	if sessionName == "live" {
-		s.redirectRequest(req, resp)
-		return
-	}
-
 	// Parse query parameters.
 	viewParam := req.QueryParameter("view")
 
 	// Get nodes from the cluster session.
 	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
 	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
+	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
 	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
 	nodeMap := s.eventHandler.GetNodeMap(clusterSessionKey)
 
@@ -483,12 +478,6 @@ func (s *ServerHandler) getNodesHostNameList(nodeMap map[string]eventtypes.Node,
 //   - Live clusters: returns the current snapshot
 //   - Dead clusters: returns the historical replay
 func (s *ServerHandler) getNode(req *restful.Request, resp *restful.Response) {
-	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
-	if sessionName == "live" {
-		s.redirectRequest(req, resp)
-		return
-	}
-
 	// Get the target node ID from the path parameter.
 	targetNodeId := req.PathParameter("node_id")
 	if targetNodeId == "" {
@@ -500,6 +489,7 @@ func (s *ServerHandler) getNode(req *restful.Request, resp *restful.Response) {
 	// A cluster lifecycle is identified by a cluster session.
 	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
 	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
+	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
 	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
 	targetNode, found := s.eventHandler.GetNodeByNodeID(clusterSessionKey, targetNodeId)
 	if !found {
@@ -529,32 +519,16 @@ func (s *ServerHandler) getNode(req *restful.Request, resp *restful.Response) {
 }
 
 func (s *ServerHandler) getEvents(req *restful.Request, resp *restful.Response) {
-	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
-	if sessionName == "live" {
-		s.redirectRequest(req, resp)
-		return
-	}
 	// Return "not yet supported" for historical data
 	resp.WriteErrorString(http.StatusNotImplemented, "Historical events not yet supported")
 }
 
 func (s *ServerHandler) getPrometheusHealth(req *restful.Request, resp *restful.Response) {
-	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
-	if sessionName == "live" {
-		s.redirectRequest(req, resp)
-		return
-	}
 	// Return "not yet supported" for prometheus health
 	resp.WriteErrorString(http.StatusNotImplemented, "Prometheus health not yet supported")
 }
 
 func (s *ServerHandler) getGrafanaHealth(req *restful.Request, resp *restful.Response) {
-	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
-	if sessionName == "live" {
-		s.redirectRequest(req, resp)
-		return
-	}
-
 	resp.WriteErrorString(http.StatusNotImplemented, "Grafana health is not yet supported for historical sessions.")
 }
 
@@ -562,11 +536,6 @@ func (s *ServerHandler) getJobs(req *restful.Request, resp *restful.Response) {
 	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
 	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
 	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
-
-	if sessionName == "live" {
-		s.redirectRequest(req, resp)
-		return
-	}
 
 	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
 	jobsMap := s.eventHandler.GetJobsMap(clusterSessionKey)
@@ -637,10 +606,6 @@ func (s *ServerHandler) getJob(req *restful.Request, resp *restful.Response) {
 	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
 	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
 	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
-	if sessionName == "live" {
-		s.redirectRequest(req, resp)
-		return
-	}
 
 	jobID := req.PathParameter("job_id")
 
@@ -664,45 +629,21 @@ func (s *ServerHandler) getJob(req *restful.Request, resp *restful.Response) {
 }
 
 func (s *ServerHandler) getDatasets(req *restful.Request, resp *restful.Response) {
-	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
-	if sessionName == "live" {
-		s.redirectRequest(req, resp)
-		return
-	}
-
 	// Return "not yet supported" for datasets
 	resp.WriteErrorString(http.StatusNotImplemented, "Datasets not yet supported")
 }
 
 func (s *ServerHandler) getServeApplications(req *restful.Request, resp *restful.Response) {
-	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
-	if sessionName == "live" {
-		s.redirectRequest(req, resp)
-		return
-	}
-
 	// Return "not yet supported" for serve applications
 	resp.WriteErrorString(http.StatusNotImplemented, "Serve applications not yet supported")
 }
 
 func (s *ServerHandler) getPlacementGroups(req *restful.Request, resp *restful.Response) {
-	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
-	if sessionName == "live" {
-		s.redirectRequest(req, resp)
-		return
-	}
-
 	// Return "not yet supported" for placement groups
 	resp.WriteErrorString(http.StatusNotImplemented, "Placement groups not yet supported")
 }
 
 func (s *ServerHandler) getClusterStatus(req *restful.Request, resp *restful.Response) {
-	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
-	if sessionName == "live" {
-		s.redirectRequest(req, resp)
-		return
-	}
-
 	// Return "not yet supported" for cluster status
 	resp.WriteErrorString(http.StatusNotImplemented, "Cluster status not yet supported")
 }
@@ -711,10 +652,6 @@ func (s *ServerHandler) getNodeLogs(req *restful.Request, resp *restful.Response
 	clusterNameID := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
 	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
 	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
-	if sessionName == "live" {
-		s.redirectRequest(req, resp)
-		return
-	}
 	folder := ""
 	if req.QueryParameter("folder") != "" {
 		folder = req.QueryParameter("folder")
@@ -736,11 +673,6 @@ func (s *ServerHandler) getLogicalActors(req *restful.Request, resp *restful.Res
 	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
 	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
 	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
-
-	if sessionName == "live" {
-		s.redirectRequest(req, resp)
-		return
-	}
 
 	filterKey := req.QueryParameter("filter_keys")
 	filterValue := req.QueryParameter("filter_values")
@@ -826,10 +758,6 @@ func (s *ServerHandler) getLogicalActor(req *restful.Request, resp *restful.Resp
 	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
 	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
 	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
-	if sessionName == "live" {
-		s.redirectRequest(req, resp)
-		return
-	}
 
 	actorID := req.PathParameter("single_actor")
 
@@ -886,11 +814,6 @@ func (s *ServerHandler) getNodeLogFile(req *restful.Request, resp *restful.Respo
 		return
 	}
 
-	if sessionName == "live" {
-		s.redirectRequest(req, resp)
-		return
-	}
-
 	// Convert lines parameter to int
 	maxLines := 0
 	if lines != "" {
@@ -921,11 +844,6 @@ func (s *ServerHandler) getTaskSummarize(req *restful.Request, resp *restful.Res
 	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
 	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
 	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
-
-	if sessionName == "live" {
-		s.redirectRequest(req, resp)
-		return
-	}
 
 	// Parse filter parameters
 	filterKey := req.QueryParameter("filter_keys")
@@ -1027,12 +945,6 @@ func summarizeTasksByLineage(tasks []eventtypes.Task) map[string]interface{} {
 
 // getTasks handles the /api/v0/tasks endpoint with the task filtering logic by query parameters.
 func (s *ServerHandler) getTasks(req *restful.Request, resp *restful.Response) {
-	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
-	if sessionName == "live" {
-		s.redirectRequest(req, resp)
-		return
-	}
-
 	// Parse query parameters.
 	listAPIOptions, err := utils.ParseOptionsFromReq(req)
 	if err != nil {
@@ -1043,6 +955,7 @@ func (s *ServerHandler) getTasks(req *restful.Request, resp *restful.Response) {
 	// Get tasks from the cluster session.
 	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
 	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
+	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
 	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
 	tasks := s.eventHandler.GetTasks(clusterSessionKey)
 
@@ -1214,7 +1127,14 @@ func (s *ServerHandler) CookieHandle(req *restful.Request, resp *restful.Respons
 	http.SetCookie(resp, &http.Cookie{MaxAge: 600, Path: "/", Name: COOKIE_CLUSTER_NAMESPACE_KEY, Value: clusterNamespace.Value})
 	http.SetCookie(resp, &http.Cookie{MaxAge: 600, Path: "/", Name: COOKIE_SESSION_NAME_KEY, Value: sessionName.Value})
 
+	// Set attributes for all requests
+	req.SetAttribute(COOKIE_CLUSTER_NAME_KEY, clusterName.Value)
+	req.SetAttribute(COOKIE_SESSION_NAME_KEY, sessionName.Value)
+	req.SetAttribute(COOKIE_CLUSTER_NAMESPACE_KEY, clusterNamespace.Value)
+	logrus.Infof("Request URL %s", req.Request.URL.String())
+
 	if sessionName.Value == "live" {
+		// For live mode, redirect directly to Ray Dashboard API without entering handlers.
 		// Always query K8s to get the service name to prevent SSRF attacks.
 		// Do not trust user-provided cookies for service name.
 		// TODO: here might be a bottleneck if there are many requests in the future.
@@ -1224,11 +1144,11 @@ func (s *ServerHandler) CookieHandle(req *restful.Request, resp *restful.Respons
 			return
 		}
 		req.SetAttribute(ATTRIBUTE_SERVICE_NAME, svcInfo)
+		s.redirectRequest(req, resp)
+		return
 	}
-	req.SetAttribute(COOKIE_CLUSTER_NAME_KEY, clusterName.Value)
-	req.SetAttribute(COOKIE_SESSION_NAME_KEY, sessionName.Value)
-	req.SetAttribute(COOKIE_CLUSTER_NAMESPACE_KEY, clusterNamespace.Value)
-	logrus.Infof("Request URL %s", req.Request.URL.String())
+
+	// For historical mode, continue to handlers
 	chain.ProcessFilter(req, resp)
 }
 
