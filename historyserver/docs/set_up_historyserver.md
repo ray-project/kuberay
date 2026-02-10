@@ -125,7 +125,8 @@ You can also build and run the history server binary directly from the command l
 
 ```bash
 # Build the history server binary.
-make -C historyserver buildhistoryserver
+cd historyserver
+make buildhistoryserver
 
 # Configure S3 connection via environment variables.
 export S3_REGION=test
