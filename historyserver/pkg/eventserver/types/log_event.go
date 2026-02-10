@@ -11,6 +11,7 @@ package types
 
 import (
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"unicode"
@@ -72,7 +73,7 @@ func (e *LogEvent) ToAPIResponse() map[string]any {
 		"timestamp":      e.Timestamp,
 	}
 
-	if len(e.CustomFields) > 0 {
+	if e.CustomFields != nil {
 		result["customFields"] = toGoogleStyle(e.CustomFields)
 	}
 
@@ -170,6 +171,13 @@ func (m *JobEventMap) AddEvent(event *LogEvent) {
 	}
 }
 
+// timestampLess compares two Unix epoch second timestamps numerically.
+func timestampLess(a, b string) bool {
+	ai, _ := strconv.ParseInt(a, 10, 64)
+	bi, _ := strconv.ParseInt(b, 10, 64)
+	return ai < bi
+}
+
 // trimToLimit reduces events for a job to MaxEventsPerJob, keeping the newest.
 // Must be called with lock held.
 func (m *JobEventMap) trimToLimit(jobID string) {
@@ -178,9 +186,9 @@ func (m *JobEventMap) trimToLimit(jobID string) {
 		events = append(events, e)
 	}
 
-	// Sort by timestamp ascending
+	// Sort by timestamp ascending (numeric comparison of Unix epoch seconds)
 	sort.Slice(events, func(i, j int) bool {
-		return events[i].Timestamp < events[j].Timestamp
+		return timestampLess(events[i].Timestamp, events[j].Timestamp)
 	})
 
 	// Keep only the newest MaxEventsPerJob events
@@ -211,9 +219,9 @@ func (m *JobEventMap) GetAllEvents() map[string][]map[string]any {
 			events = append(events, e)
 		}
 
-		// Sort by timestamp ascending
+		// Sort by timestamp ascending (numeric comparison of Unix epoch seconds)
 		sort.Slice(events, func(i, j int) bool {
-			return events[i].Timestamp < events[j].Timestamp
+			return timestampLess(events[i].Timestamp, events[j].Timestamp)
 		})
 
 		// Convert to API response format
@@ -246,9 +254,9 @@ func (m *JobEventMap) GetEventsByJobID(jobID string) []map[string]any {
 		events = append(events, e)
 	}
 
-	// Sort by timestamp ascending
+	// Sort by timestamp ascending (numeric comparison of Unix epoch seconds)
 	sort.Slice(events, func(i, j int) bool {
-		return events[i].Timestamp < events[j].Timestamp
+		return timestampLess(events[i].Timestamp, events[j].Timestamp)
 	})
 
 	// Convert to API response format
