@@ -1693,18 +1693,16 @@ func TestInitLivenessAndReadinessProbe(t *testing.T) {
 	assert.Nil(t, rayContainer.LivenessProbe.Exec)
 	assert.Nil(t, rayContainer.ReadinessProbe.Exec)
 
-	// Test 2: User does not define a custom probe. RayService worker: liveness = exec (node health), readiness = HTTPGet /-/healthz (Serve proxy).
+	// Test 2: User does not define a custom probe. KubeRay will inject Exec probe for worker pod.
+	// Here we test the case where the Ray Pod originates from RayServiceCRD,
+	// implying that an additional serve health check will be added to the readiness probe.
 	rayContainer.LivenessProbe = nil
 	rayContainer.ReadinessProbe = nil
 	initLivenessAndReadinessProbe(rayContainer, rayv1.WorkerNode, utils.RayServiceCRD, rayStartParams, "")
 	assert.NotNil(t, rayContainer.LivenessProbe.Exec)
-	livenessCmd := strings.Join(rayContainer.LivenessProbe.Exec.Command, " ")
-	assert.Contains(t, livenessCmd, "wget", "exec probe should use wget for Ray < 2.53")
-	assert.NotContains(t, livenessCmd, "python3", "exec probe should not require Python for Ray < 2.53")
-	assert.NotContains(t, livenessCmd, utils.RayServeProxyHealthPath)
-	assert.NotNil(t, rayContainer.ReadinessProbe.HTTPGet, "RayService worker readiness should use HTTP probe for Serve proxy")
-	assert.Nil(t, rayContainer.ReadinessProbe.Exec)
-	assert.Equal(t, "/"+utils.RayServeProxyHealthPath, rayContainer.ReadinessProbe.HTTPGet.Path)
+	assert.NotNil(t, rayContainer.ReadinessProbe.Exec)
+	assert.NotContains(t, strings.Join(rayContainer.LivenessProbe.Exec.Command, " "), utils.RayServeProxyHealthPath)
+	assert.Contains(t, strings.Join(rayContainer.ReadinessProbe.Exec.Command, " "), utils.RayServeProxyHealthPath)
 	assert.Equal(t, int32(2), rayContainer.LivenessProbe.TimeoutSeconds)
 	assert.Equal(t, int32(2), rayContainer.ReadinessProbe.TimeoutSeconds)
 
@@ -1736,8 +1734,6 @@ func TestInitLivenessAndReadinessProbe(t *testing.T) {
 	livenessCommand := strings.Join(rayContainer.LivenessProbe.Exec.Command, " ")
 	readinessCommand := strings.Join(rayContainer.ReadinessProbe.Exec.Command, " ")
 
-	assert.Contains(t, livenessCommand, "wget", "exec probe should use wget for Ray < 2.53")
-	assert.NotContains(t, livenessCommand, "python3")
 	assert.Contains(t, livenessCommand, ":8266", "Head pod liveness probe should use custom dashboard-agent-listen-port")
 	assert.Contains(t, livenessCommand, ":8365", "Head pod liveness probe should use custom dashboard-port")
 	assert.Contains(t, readinessCommand, ":8266", "Head pod readiness probe should use custom dashboard-agent-listen-port")
@@ -1761,7 +1757,7 @@ func TestInitLivenessAndReadinessProbe(t *testing.T) {
 	assert.NotContains(t, workerLivenessCommand, fmt.Sprintf(":%d", utils.DefaultDashboardPort), "Worker pod should not check dashboard-port")
 	assert.NotContains(t, workerReadinessCommand, fmt.Sprintf(":%d", utils.DefaultDashboardPort), "Worker pod should not check dashboard-port")
 
-	// Test 6: Test RayService worker with custom dashboard port and serve proxy health check (readiness = HTTPGet /-/healthz).
+	// Test 6: Test RayService worker with custom ports and serve proxy health check
 	rayContainer.LivenessProbe = nil
 	rayContainer.ReadinessProbe = nil
 	rayContainer.Ports = []corev1.ContainerPort{
@@ -1774,10 +1770,9 @@ func TestInitLivenessAndReadinessProbe(t *testing.T) {
 		"dashboard-agent-listen-port": "8500",
 	}
 	initLivenessAndReadinessProbe(rayContainer, rayv1.WorkerNode, utils.RayServiceCRD, rayServiceWorkerParams, "")
-	assert.NotNil(t, rayContainer.ReadinessProbe.HTTPGet, "RayService worker readiness should use HTTP probe for Serve proxy")
-	assert.Nil(t, rayContainer.ReadinessProbe.Exec)
-	assert.Equal(t, "/"+utils.RayServeProxyHealthPath, rayContainer.ReadinessProbe.HTTPGet.Path)
-	assert.Equal(t, int32(utils.DefaultServingPort), rayContainer.ReadinessProbe.HTTPGet.Port.IntVal)
+	rayServiceReadinessCommand := strings.Join(rayContainer.ReadinessProbe.Exec.Command, " ")
+	assert.Contains(t, rayServiceReadinessCommand, ":8500", "RayService worker should use custom dashboard-agent-listen-port")
+	assert.Contains(t, rayServiceReadinessCommand, utils.RayServeProxyHealthPath, "RayService worker should include serve proxy health check")
 	assert.Equal(t, int32(utils.ServeReadinessProbeFailureThreshold), rayContainer.ReadinessProbe.FailureThreshold, "RayService worker should have correct failure threshold")
 
 	// Test 8: Test invalid port values (should fall back to defaults)
@@ -1791,8 +1786,6 @@ func TestInitLivenessAndReadinessProbe(t *testing.T) {
 
 	invalidPortLivenessCommand := strings.Join(rayContainer.LivenessProbe.Exec.Command, " ")
 
-	assert.Contains(t, invalidPortLivenessCommand, "wget", "exec probe should use wget for Ray < 2.53")
-	assert.NotContains(t, invalidPortLivenessCommand, "python3")
 	// Should fall back to default ports when invalid values are provided
 	assert.Contains(t, invalidPortLivenessCommand, fmt.Sprintf(":%d", utils.DefaultDashboardAgentListenPort), "Should fall back to default dashboard-agent-listen-port for invalid input")
 	assert.Contains(t, invalidPortLivenessCommand, fmt.Sprintf(":%d", utils.DefaultDashboardPort), "Should fall back to default dashboard-port for invalid input")
@@ -1818,15 +1811,18 @@ func TestInitLivenessAndReadinessProbe(t *testing.T) {
 	assert.NotNil(t, rayContainer.LivenessProbe.HTTPGet)
 	assert.NotNil(t, rayContainer.ReadinessProbe.HTTPGet)
 
-	// Ray Serve workers: liveness = HTTPGet /api/healthz (node), readiness = HTTPGet /-/healthz (Serve proxy).
+	// Ray Serve workers still use exec probes for readiness to check the proxy actor.
 	rayContainer.LivenessProbe = nil
 	rayContainer.ReadinessProbe = nil
 	initLivenessAndReadinessProbe(rayContainer, rayv1.WorkerNode, utils.RayServiceCRD, rayStartParams, "2.53.0")
 	assert.NotNil(t, rayContainer.LivenessProbe.HTTPGet)
 	assert.Nil(t, rayContainer.LivenessProbe.Exec)
-	assert.NotNil(t, rayContainer.ReadinessProbe.HTTPGet, "RayService worker readiness should use HTTP probe for Serve proxy")
-	assert.Nil(t, rayContainer.ReadinessProbe.Exec)
-	assert.Equal(t, "/"+utils.RayServeProxyHealthPath, rayContainer.ReadinessProbe.HTTPGet.Path)
+	assert.Nil(t, rayContainer.ReadinessProbe.HTTPGet)
+	assert.NotNil(t, rayContainer.ReadinessProbe.Exec)
+	readinessCmd := strings.Join(rayContainer.ReadinessProbe.Exec.Command, " ")
+	assert.Contains(t, readinessCmd, utils.RayServeProxyHealthPath)
+	assert.Contains(t, readinessCmd, "python3", "RayService readiness exec probe should use python for Ray >= 2.53")
+	assert.NotContains(t, readinessCmd, "wget", "RayService readiness exec probe should avoid wget for Ray >= 2.53")
 
 	// Versions parsed below 2.53 must use exec probes.
 	rayContainer.LivenessProbe = nil
