@@ -335,7 +335,7 @@ func (s *ServerHandler) resolveTaskLogFilename(clusterNameID, sessionID, taskID 
 		} else {
 			logFilename = foundTask.TaskLogInfo.StdoutFile
 		}
-		if logFilename != "`" {
+		if logFilename != "" {
 			return foundTask.NodeID, logFilename, nil
 		}
 	}
