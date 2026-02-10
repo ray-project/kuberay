@@ -22,6 +22,9 @@ const (
 	HistoryServerManifestPath = "../../config/historyserver.yaml"
 	HistoryServerPort         = 30080
 
+	// Session name constants
+	LiveSessionName = "live"
+
 	RayGrafanaIframeHost               = "http://127.0.0.1:3000"
 	HistoryServerGrafanaHealthResponse = `{
   "result": true,
@@ -73,8 +76,12 @@ const HistoryServerEndpointPrometheusHealth = "/api/prometheus_health"
 const HistoryServerEndpointGrafanaHealth = "/api/grafana_health"
 
 // ApplyHistoryServer deploys the HistoryServer and RBAC resources.
-func ApplyHistoryServer(test Test, g *WithT, namespace *corev1.Namespace) {
-	// Read RBAC resources from YAML and modify namespace fields.
+// If manifestPath is empty, the default HistoryServerManifestPath is used.
+func ApplyHistoryServer(test Test, g *WithT, namespace *corev1.Namespace, manifestPath string) {
+	if manifestPath == "" {
+		manifestPath = HistoryServerManifestPath
+	}
+
 	sa, clusterRole, clusterRoleBinding := DeserializeRBACFromYAML(test, ServiceAccountManifestPath)
 	sa.Namespace = namespace.Name
 	clusterRoleBinding.Name = fmt.Sprintf("historyserver-%s", namespace.Name)
@@ -88,6 +95,7 @@ func ApplyHistoryServer(test Test, g *WithT, namespace *corev1.Namespace) {
 	if err != nil && !k8serrors.IsAlreadyExists(err) {
 		g.Expect(err).NotTo(HaveOccurred())
 	}
+
 	_, err = test.Client().Core().RbacV1().ClusterRoleBindings().Create(test.Ctx(), clusterRoleBinding, metav1.CreateOptions{})
 	g.Expect(err).NotTo(HaveOccurred())
 
@@ -98,7 +106,7 @@ func ApplyHistoryServer(test Test, g *WithT, namespace *corev1.Namespace) {
 			context.Background(), clusterRoleBinding.Name, metav1.DeleteOptions{})
 	})
 
-	KubectlApplyYAML(test, HistoryServerManifestPath, namespace.Name)
+	KubectlApplyYAML(test, manifestPath, namespace.Name)
 
 	LogWithTimestamp(test.T(), "Waiting for HistoryServer to be ready")
 	g.Eventually(func(gg Gomega) {
@@ -217,4 +225,57 @@ func GetOneOfNodeID(g *WithT, client *http.Client, historyServerURL string, isLi
 		nodeInfo = summary[0].([]any)[0].(map[string]any)
 	}
 	return nodeInfo["raylet"].(map[string]any)["nodeId"].(string)
+}
+
+// VerifyLogFileEndpointReturnsContent verifies that the log file endpoint returns content.
+func VerifyLogFileEndpointReturnsContent(test Test, g *WithT, client *http.Client, historyServerURL, nodeID string) {
+	filename := "raylet.out"
+
+	g.Eventually(func(gg Gomega) {
+		logFileURL := fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=100", historyServerURL, EndpointLogsFile, nodeID, filename)
+		resp, err := client.Get(logFileURL)
+		gg.Expect(err).NotTo(HaveOccurred())
+		defer resp.Body.Close()
+		gg.Expect(resp.StatusCode).To(Equal(http.StatusOK))
+
+		body, err := io.ReadAll(resp.Body)
+		gg.Expect(err).NotTo(HaveOccurred())
+		gg.Expect(len(body)).To(BeNumerically(">", 0))
+	}, TestTimeoutShort).Should(Succeed())
+
+	LogWithTimestamp(test.T(), "Log file endpoint returned content successfully")
+}
+
+// VerifyLogFileEndpointRejectsPathTraversal verifies that the log file endpoint rejects path traversal attempts.
+func VerifyLogFileEndpointRejectsPathTraversal(test Test, g *WithT, client *http.Client, historyServerURL, nodeID string) {
+	maliciousPaths := []string{"../etc/passwd", "..", "/etc/passwd", "../../secret"}
+
+	for _, malicious := range maliciousPaths {
+		g.Eventually(func(gg Gomega) {
+			url := fmt.Sprintf("%s%s?node_id=%s&filename=%s", historyServerURL, EndpointLogsFile, nodeID, malicious)
+			resp, err := client.Get(url)
+			gg.Expect(err).NotTo(HaveOccurred())
+			defer func() {
+				io.Copy(io.Discard, resp.Body)
+				resp.Body.Close()
+			}()
+			gg.Expect(resp.StatusCode).To(Equal(http.StatusBadRequest))
+		}, TestTimeoutShort).Should(Succeed())
+	}
+
+	LogWithTimestamp(test.T(), "Log file endpoint correctly rejected path traversal attempts")
+}
+
+// DeleteRayClusterAndWait deletes a RayCluster and waits for it to be fully deleted.
+func DeleteRayClusterAndWait(test Test, g *WithT, namespace string, clusterName string) {
+	err := test.Client().Ray().RayV1().RayClusters(namespace).Delete(test.Ctx(), clusterName, metav1.DeleteOptions{})
+	g.Expect(err).NotTo(HaveOccurred())
+	LogWithTimestamp(test.T(), "Deleted RayCluster %s/%s", namespace, clusterName)
+
+	g.Eventually(func() error {
+		_, err := GetRayCluster(test, namespace, clusterName)
+		return err
+	}, TestTimeoutMedium).Should(WithTransform(k8serrors.IsNotFound, BeTrue()))
+
+	LogWithTimestamp(test.T(), "RayCluster %s/%s fully deleted", namespace, clusterName)
 }
