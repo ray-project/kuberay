@@ -102,15 +102,6 @@ type RayServiceSpec struct {
 	// UpgradeStrategy defines the scaling policy used when upgrading the RayService.
 	// +optional
 	UpgradeStrategy *RayServiceUpgradeStrategy `json:"upgradeStrategy,omitempty"`
-	// Important: Run "make" to regenerate code after modifying this file
-	// Defines the applications and deployments to deploy, should be a YAML multi-line scalar string.
-	// +optional
-	ServeConfigV2  string         `json:"serveConfigV2,omitempty"`
-	RayClusterSpec RayClusterSpec `json:"rayClusterConfig"`
-	// If the field is set to true, the value of the label `ray.io/serve` on the head Pod should always be false.
-	// Therefore, the head Pod's endpoint will not be added to the Kubernetes Serve service.
-	// +optional
-	ExcludeHeadPodFromServeSvc bool `json:"excludeHeadPodFromServeSvc,omitempty"`
 	// ManagedBy is an optional configuration for the controller or entity that manages a RayService.
 	// The value must be either 'ray.io/kuberay-operator' or 'kueue.x-k8s.io/multikueue'.
 	// The kuberay-operator reconciles a RayService which doesn't have this field at all or
@@ -121,6 +112,15 @@ type RayServiceSpec struct {
 	// +kubebuilder:validation:XValidation:rule="self in ['ray.io/kuberay-operator', 'kueue.x-k8s.io/multikueue']",message="the managedBy field value must be either 'ray.io/kuberay-operator' or 'kueue.x-k8s.io/multikueue'"
 	// +optional
 	ManagedBy *string `json:"managedBy,omitempty"`
+	// Important: Run "make" to regenerate code after modifying this file
+	// Defines the applications and deployments to deploy, should be a YAML multi-line scalar string.
+	// +optional
+	ServeConfigV2  string         `json:"serveConfigV2,omitempty"`
+	RayClusterSpec RayClusterSpec `json:"rayClusterConfig"`
+	// If the field is set to true, the value of the label `ray.io/serve` on the head Pod should always be false.
+	// Therefore, the head Pod's endpoint will not be added to the Kubernetes Serve service.
+	// +optional
+	ExcludeHeadPodFromServeSvc bool `json:"excludeHeadPodFromServeSvc,omitempty"`
 }
 
 // RayServiceStatuses defines the observed state of RayService
