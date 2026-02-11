@@ -58,6 +58,48 @@
     - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=5m KUBERAY_TEST_TIMEOUT_LONG=10m go test -timeout 30m -v ./test/e2erayservice 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-rayservice-log.tar -T - && exit 1)
     - echo "--- END:e2e rayservice (nightly operator) tests finished"
 
+- label: 'Test RayService Incremental Upgrade E2E (nightly operator)'
+  instance_size: large
+  image: golang:1.25-bookworm
+  commands:
+    - source .buildkite/setup-env.sh
+    - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
+    - kubectl config set clusters.kind-kind.server https://docker:6443
+
+    # Install MetalLB for LoadBalancer IPs on Kind 
+    - echo "--- Installing MetalLB"
+    - kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.13.12/config/manifests/metallb-native.yaml
+    - kubectl wait --namespace metallb-system --for=condition=ready pod --selector=app=metallb --timeout=90s
+    - kubectl apply -f ray-operator/config/samples/gateway-api/metallb-config.yaml
+
+    # Install Gateway API CRDs (Required for Incremental Upgrade)
+    - kubectl apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml
+
+    # Install Istio Gateway controller and create GatewayClass
+    - echo "--- Installing Istio (Gateway Controller)"
+    - curl -L https://istio.io/downloadIstio | sh -
+    - export PATH="$PATH:$PWD/istio-1.28.3/bin"
+    - istioctl install --set profile=minimal -y
+    - echo "--- Creating Istio GatewayClass"
+    - kubectl apply -f ray-operator/config/samples/gateway-api/istio-class.yaml
+
+    # Build nightly KubeRay operator image
+    - pushd ray-operator
+    - source ../.buildkite/build-start-operator.sh
+    - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
+
+    # Enable RayServiceIncrementalUpgrade feature gate
+    - kubectl patch deployment kuberay-operator --type='json' -p='[{"op": "add", "path": "/spec/template/spec/containers/0/args/-", "value": "--feature-gates=RayServiceIncrementalUpgrade=true"}]'
+    - kubectl rollout status deployment kuberay-operator --timeout=180s
+
+    # Run E2E Tests
+    - echo "--- START:Running RayService Incremental Upgrade E2E (nightly operator) tests"
+    - set -o pipefail
+    - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
+    - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=5m KUBERAY_TEST_TIMEOUT_LONG=10m go test -timeout 30m -v ./test/e2eincrementalupgrade 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-log.tar -T - && exit 1)
+    - echo "--- END:RayService Incremental Upgrade E2E (nightly operator) tests finished"
+
 - label: 'Test Autoscaler E2E Part 1 (nightly operator)'
   instance_size: large
   image: golang:1.25-bookworm
