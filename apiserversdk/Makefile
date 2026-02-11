@@ -40,7 +40,7 @@ test: envtest ## Run tests.
 ENVTEST = $(LOCALBIN)/setup-envtest
 $(ENVTEST): $(LOCALBIN)
 envtest: $(ENVTEST) ## Download envtest locally if necessary.
-	test -s $(ENVTEST) || GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-runtime/tools/setup-envtest@v0.0.0-20260209172322-2053ba3d414e
+	test -s $(ENVTEST) || GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-runtime/tools/setup-envtest@release-0.22
 
 .PHONY: clean
 clean:
