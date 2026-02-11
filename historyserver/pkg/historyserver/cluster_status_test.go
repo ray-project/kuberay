@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
 )
 
 func TestFormatStatus(t *testing.T) {
@@ -25,6 +27,26 @@ func TestFormatStatus(t *testing.T) {
 	}
 	builder.AddNodeFromDebugState(debugState)
 
+	nodes := map[string]types.Node{
+		"node1": {
+			NodeID:        "node1",
+			NodeIPAddress: "10.0.0.5",
+			Labels:        map[string]string{"ray.io/node-group": "worker-group"},
+			StateTransitions: []types.NodeStateTransition{
+				{State: types.NODE_ALIVE, Timestamp: time.Date(2026, 1, 20, 22, 0, 0, 0, time.UTC)},
+				{
+					State:     types.NODE_DEAD,
+					Timestamp: time.Date(2026, 1, 20, 22, 50, 0, 0, time.UTC),
+					DeathInfo: &types.NodeDeathInfo{
+						Reason:        types.UNEXPECTED_TERMINATION,
+						ReasonMessage: "raylet died",
+					},
+				},
+			},
+		},
+	}
+	builder.AddFailedNodesFromNodes(nodes)
+
 	status := builder.FormatStatus()
 
 	if !strings.Contains(status, "======== Autoscaler status: 2026-01-20 22:55:56") {
@@ -41,6 +63,15 @@ func TestFormatStatus(t *testing.T) {
 
 	if !strings.Contains(status, "memory") {
 		t.Errorf("Expected status to contain memory resources")
+	}
+
+	expectedV1 := " worker-group: NodeTerminated (ip: 10.0.0.5)" // Matches Ray v1 format: " {node_type}: NodeTerminated (ip: {ip})"
+	if !strings.Contains(status, expectedV1) {
+		t.Errorf("Expected status to contain %q, got:\n%s", expectedV1, status)
+	}
+
+	if strings.Contains(status, "(no failures)") {
+		t.Errorf("Expected failed nodes, but got '(no failures)'")
 	}
 
 	t.Logf("Generated status:\n%s", status)

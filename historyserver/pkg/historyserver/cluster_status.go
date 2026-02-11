@@ -13,6 +13,10 @@ import (
 const (
 	timestampDisplayFormat = "2006-01-02 15:04:05.000000"
 	sessionTimestampFormat = "2006-01-02_15-04-05"
+	// maxFailuresDisplayed is the maximum number of failed nodes to display,
+	// matching Ray's AUTOSCALER_MAX_FAILURES_DISPLAYED constant.
+	// Ref: https://github.com/ray-project/ray/blob/master/python/ray/autoscaler/_private/constants.py
+	maxFailuresDisplayed = 20
 )
 
 // ResourceDemand represents a pending resource request with count
@@ -21,13 +25,22 @@ type ResourceDemand struct {
 	Count     int
 }
 
+// FailedNode represents a node that transitioned to DEAD state.
+type FailedNode struct {
+	NodeID        string
+	NodeIPAddress string
+	InstanceID    string // Empty until Ray exports it. Ref: https://github.com/ray-project/ray/issues/60129
+	NodeType      string // labels["ray.io/node-group"]
+	Timestamp     time.Time
+}
+
 // ClusterStatusBuilder aggregates data from multiple sources to build cluster status
 type ClusterStatusBuilder struct {
-	ActiveNodes map[string]int
-	IdleNodes   map[string]int
-	// TODO FailedNodes would need node_events
+	ActiveNodes    map[string]int
+	IdleNodes      map[string]int
 	TotalResources map[string]float64
 	UsedResources  map[string]float64
+	FailedNodes    []FailedNode
 	PendingDemands []ResourceDemand // Demands from tasks/actors
 	Timestamp      time.Time
 }
@@ -112,6 +125,41 @@ func (b *ClusterStatusBuilder) AddNodeFromDebugState(state *NodeDebugState) {
 	usedResources := state.GetUsedResources()
 	for key, value := range usedResources {
 		b.UsedResources[key] += value
+	}
+}
+
+// AddFailedNodesFromNodes extracts node failures from node state transitions.
+// A node is considered failed if it has a DEAD state transition.
+func (b *ClusterStatusBuilder) AddFailedNodesFromNodes(nodes map[string]types.Node) {
+	for _, node := range nodes {
+		// only take the latest DEAD transition per node
+		for i := len(node.StateTransitions) - 1; i >= 0; i-- {
+			tr := node.StateTransitions[i]
+			if tr.State != types.NODE_DEAD {
+				continue
+			}
+
+			failed := FailedNode{
+				NodeID:        node.NodeID,
+				NodeIPAddress: node.NodeIPAddress,
+				InstanceID:    node.InstanceID,
+				NodeType:      node.Labels["ray.io/node-group"],
+				Timestamp:     tr.Timestamp,
+			}
+
+			b.FailedNodes = append(b.FailedNodes, failed)
+			break
+		}
+	}
+
+	// Sort failed nodes by timestamp in descending order
+	slices.SortFunc(b.FailedNodes, func(node1, node2 FailedNode) int {
+		return node2.Timestamp.Compare(node1.Timestamp)
+	})
+
+	// Cap at maxFailuresDisplayed.
+	if len(b.FailedNodes) > maxFailuresDisplayed {
+		b.FailedNodes = b.FailedNodes[:maxFailuresDisplayed]
 	}
 }
 
@@ -296,10 +344,20 @@ func (b *ClusterStatusBuilder) FormatStatus() string {
 	// TODO Reconstruct pending nodes when autoscaler state is archived.
 	sb.WriteString(" (unavailable in history server)\n")
 
-	// Recent failures (would need node_events - handled by another PR)
+	// Recent failures
 	sb.WriteString("Recent failures:\n")
-	// TODO Reconstruct failures when node_events/autoscaler state is archived.
-	sb.WriteString(" (unavailable in history server)\n")
+	if len(b.FailedNodes) == 0 {
+		sb.WriteString(" (no failures)\n")
+	} else {
+		for _, node := range b.FailedNodes {
+			// Use instance_id when available (autoscaler v2 format), fall back to ip (v1 format).
+			if node.InstanceID != "" {
+				sb.WriteString(fmt.Sprintf(" %s: NodeTerminated (instance_id: %s)\n", node.NodeType, node.InstanceID))
+			} else {
+				sb.WriteString(fmt.Sprintf(" %s: NodeTerminated (ip: %s)\n", node.NodeType, node.NodeIPAddress))
+			}
+		}
+	}
 
 	sb.WriteString("\n")
 

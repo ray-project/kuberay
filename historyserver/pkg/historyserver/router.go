@@ -775,6 +775,7 @@ func (s *ServerHandler) buildFormattedClusterStatus(clusterName, clusterNamespac
 	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
 	tasks := s.eventHandler.GetTasks(clusterSessionKey)
 	actors := s.eventHandler.GetActors(clusterSessionKey)
+	nodes := s.eventHandler.GetNodeMap(clusterSessionKey)
 
 	// Use the last timestamp from tasks/actors to represent when the cluster was last active.
 	// Fallback to session timestamp if no task/actor timestamps are available.
@@ -785,6 +786,7 @@ func (s *ServerHandler) buildFormattedClusterStatus(clusterName, clusterNamespac
 		builder.Timestamp = ts
 	}
 
+	builder.AddFailedNodesFromNodes(nodes)
 	builder.AddPendingDemandsFromTasks(tasks)
 	builder.AddPendingDemandsFromActors(actors)
 
