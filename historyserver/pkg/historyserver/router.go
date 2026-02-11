@@ -1042,6 +1042,8 @@ func parseGetLogFileOptions(req *restful.Request) (GetLogFileOptions, error) {
 	// If provided, download with the specified filename
 	if downloadFilename := req.QueryParameter("download_filename"); downloadFilename != "" {
 		options.DownloadFilename = downloadFilename
+	} else {
+		options.DownloadFilename = DEFAULT_DOWNLOAD_FILENAME
 	}
 
 	return options, nil
