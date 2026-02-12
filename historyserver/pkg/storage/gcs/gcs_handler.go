@@ -83,7 +83,6 @@ func (h *RayLogsHandler) WriteFile(file string, reader io.ReadSeeker) error {
 }
 
 func (h *RayLogsHandler) ListFiles(clusterId string, directory string) []string {
-	// TODO(chiayi): Look into potential timeout issues
 	ctx := context.Background()
 
 	pathPrefix := strings.TrimPrefix(path.Join(h.RootDir, clusterId, directory), "/") + "/"
@@ -120,7 +119,8 @@ func (h *RayLogsHandler) ListFiles(clusterId string, directory string) []string 
 		// Exclude the placeholder object if it exists for the directory itself.
 		// attrs.Name contains the whole object path.
 		if attrs.Name != "" && !strings.HasSuffix(attrs.Name, "/") {
-			fileList = append(fileList, attrs.Name)
+			fileNameOnly := path.Base(attrs.Name)
+			fileList = append(fileList, fileNameOnly)
 		}
 	}
 
@@ -184,7 +184,6 @@ func (h *RayLogsHandler) List() []utils.ClusterInfo {
 func (h *RayLogsHandler) GetContent(clusterId string, fileName string) io.Reader {
 	ctx := context.Background()
 
-	// TODO(chiayi): If we consider filename and cluster combination is unique then this is fine
 	bucket := h.StorageClient.Bucket(h.GCSBucket)
 	query := &gstorage.Query{
 		MatchGlob: "**/" + clusterId + "*/**/" + fileName,
@@ -252,7 +251,6 @@ func NewWriter(c *types.RayCollectorConfig, jd map[string]interface{}) (storage.
 func New(c *config) (*RayLogsHandler, error) {
 	logrus.Infof("Starting GCS client ...")
 
-	// TODO(chiayi): Add timeout for all contexts, close client?
 	ctx := context.Background()
 
 	baseTransport := &http.Transport{
@@ -290,7 +288,7 @@ func New(c *config) (*RayLogsHandler, error) {
 
 	// Check if bucket exists
 	_, err = storageClient.Bucket(c.Bucket).Attrs(ctx)
-	if errors.Is(err, gstorage.ErrObjectNotExist) {
+	if errors.Is(err, gstorage.ErrBucketNotExist) {
 		logrus.Warnf("Bucket %s does not exist, will attempt to create bucket", c.Bucket)
 		err = createGCSBucket(storageClient, c.GCPProjectID, c.Bucket)
 		if err != nil {

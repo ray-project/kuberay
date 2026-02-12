@@ -173,13 +173,13 @@ func TestListFiles(t *testing.T) {
 			name:      "list_logs",
 			clusterID: "cluster1",
 			directory: "logs",
-			expected:  []string{"ray_historyserver/cluster1/logs/file1.txt", "ray_historyserver/cluster1/logs/file2.log"},
+			expected:  []string{"file1.txt", "file2.log"},
 		},
 		{
 			name:      "list_other",
 			clusterID: "cluster1",
 			directory: "other",
-			expected:  []string{"ray_historyserver/cluster1/other/file4.txt"},
+			expected:  []string{"file4.txt"},
 		},
 		{
 			name:      "list_nonexistent",
@@ -191,7 +191,7 @@ func TestListFiles(t *testing.T) {
 			name:      "list_cluster2",
 			clusterID: "cluster2",
 			directory: "logs",
-			expected:  []string{"ray_historyserver/cluster2/logs/file5.txt"},
+			expected:  []string{"file5.txt"},
 		},
 	}
 
