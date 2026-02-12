@@ -41,8 +41,9 @@ var _ manager.Runnable = (*WorkerPool)(nil)
 
 type (
 	JobInfoCache struct {
-		JobInfo *utiltypes.RayJobInfo
-		Err     error
+		JobInfo   *utiltypes.RayJobInfo
+		FetchedAt time.Time
+		Err       error
 	}
 
 	jobInfoQuery struct {
@@ -212,11 +213,12 @@ func (w *WorkerPool) processRayJob(ctx context.Context, task jobInfoQuery) {
 		return
 	}
 
-	jobInfo, err := rayDashboardClient.GetJobInfo(ctx, rayJobInstance.Status.JobId)
+	jobInfo, fetchedAt, err := rayDashboardClient.GetJobInfo(ctx, rayJobInstance.Status.JobId)
 
 	w.cacheStorage.Set(key, &JobInfoCache{
-		JobInfo: jobInfo,
-		Err:     err,
+		JobInfo:   jobInfo,
+		FetchedAt: fetchedAt,
+		Err:       err,
 	})
 }
 
@@ -268,14 +270,14 @@ func (r *RayDashboardCacheClient) GetMultiApplicationStatus(ctx context.Context)
 	return r.client.GetMultiApplicationStatus(ctx)
 }
 
-func (r *RayDashboardCacheClient) GetJobInfo(ctx context.Context, jobId string) (*utiltypes.RayJobInfo, error) {
+func (r *RayDashboardCacheClient) GetJobInfo(ctx context.Context, jobId string) (*utiltypes.RayJobInfo, time.Time, error) {
 	logger := ctrl.LoggerFrom(ctx).WithName("RayDashboardCacheClient")
 
 	key := cacheKey(r.namespacedName, r.rayClusterUID, jobId)
 	cached, ok := r.cacheStorage.GetIfPresent(key)
 	if !ok {
 		logger.Info("Cache miss for jobId", "jobId", jobId, "cacheKey", key)
-		return nil, ErrAgain
+		return nil, time.Time{}, ErrAgain
 	}
 
 	// If the cache has an error, consume and invalidate it so that the reconciler does not
@@ -283,10 +285,10 @@ func (r *RayDashboardCacheClient) GetJobInfo(ctx context.Context, jobId string) 
 	if cached.Err != nil {
 		r.cacheStorage.Invalidate(key)
 		logger.Error(cached.Err, "Got an error on the job info cache, invalidating the cache", "jobId", jobId, "cacheKey", key)
-		return nil, cached.Err
+		return nil, time.Time{}, cached.Err
 	}
 
-	return cached.JobInfo, nil
+	return cached.JobInfo, cached.FetchedAt, nil
 }
 
 func (r *RayDashboardCacheClient) ListJobs(ctx context.Context) (*[]utiltypes.RayJobInfo, error) {

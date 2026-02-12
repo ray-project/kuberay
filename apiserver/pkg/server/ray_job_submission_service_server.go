@@ -110,7 +110,7 @@ func (s *RayJobSubmissionServiceServer) GetJobDetails(ctx context.Context, req *
 	if err != nil {
 		return nil, err
 	}
-	nodeInfo, err := rayDashboardClient.GetJobInfo(ctx, req.Submissionid)
+	nodeInfo, _, err := rayDashboardClient.GetJobInfo(ctx, req.Submissionid)
 	if err != nil {
 		return nil, err
 	}
