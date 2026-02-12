@@ -234,8 +234,24 @@ func (r *RayDashboardCacheClient) GetMultiApplicationStatus(ctx context.Context)
 func (r *RayDashboardCacheClient) GetJobInfo(ctx context.Context, jobId string) (*utiltypes.RayJobInfo, error) {
 	logger := ctrl.LoggerFrom(ctx).WithName("RayDashboardCacheClient")
 
-	if cached, ok := r.cacheStorage.GetIfPresent(cacheKey(r.namespacedName, jobId)); ok {
-		return cached.JobInfo, cached.Err
+	var err error
+	if cached, ok := r.cacheStorage.ComputeIfPresent(cacheKey(r.namespacedName, jobId),
+		func(oldValue *JobInfoCache) (newValue *JobInfoCache, op otter.ComputeOp) {
+			// If the cache has error, we populate it and invalidate the cache
+			// so that the reconcile would not repeatedly return the same error to trigger the rate limiter,
+			// which would cause exponential backoff and delay the recovery.
+			if oldValue.Err != nil {
+				err = oldValue.Err
+				return oldValue, otter.InvalidateOp
+			}
+			return oldValue, otter.CancelOp
+		},
+	); ok {
+		return cached.JobInfo, nil
+	}
+	if err != nil {
+		logger.Error(err, "Got an error on the job info cache, invalidating the cache", "jobId", jobId, "cacheKey", cacheKey(r.namespacedName, jobId))
+		return nil, err
 	}
 
 	logger.Info("Cache miss for jobId", "jobId", jobId, "cacheKey", cacheKey(r.namespacedName, jobId))
