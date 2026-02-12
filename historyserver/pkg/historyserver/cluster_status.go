@@ -3,6 +3,7 @@ package historyserver
 import (
 	"fmt"
 	"maps"
+	"math"
 	"slices"
 	"strings"
 	"time"
@@ -278,12 +279,13 @@ func sortedKeys[V any](m map[string]V) []string {
 }
 
 func formatResourceValue(resource string, value float64) string {
+	// e.g. memory, object_store_memory
 	if strings.Contains(strings.ToLower(resource), "memory") {
 		return formatMemory(value)
 	}
 
-	if value == float64(int64(value)) {
-		return fmt.Sprintf("%.0f", value)
+	if math.Trunc(value) == value {
+		return fmt.Sprintf("%.1f", value)
 	}
 
 	return fmt.Sprintf("%.2f", value)
@@ -297,8 +299,8 @@ func formatResourceMapForDisplay(resources map[string]float64) string {
 	var parts []string
 	for _, k := range sortedKeys(resources) {
 		v := resources[k]
-		if v == float64(int64(v)) {
-			parts = append(parts, fmt.Sprintf("'%s': %.0f", k, v))
+		if math.Trunc(v) == v {
+			parts = append(parts, fmt.Sprintf("'%s': %.1f", k, v))
 		} else {
 			parts = append(parts, fmt.Sprintf("'%s': %.2f", k, v))
 		}
