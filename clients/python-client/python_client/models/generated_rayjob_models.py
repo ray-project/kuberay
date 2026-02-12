@@ -20,7 +20,7 @@ from pydantic import AwareDatetime, BaseModel, Field, RootModel
 
 
 class JobDeploymentStatus(Enum):
-    Failed = 'Failed'
+    Failed = 'Failed-error'
 
 
 class JobStatus(Enum):
