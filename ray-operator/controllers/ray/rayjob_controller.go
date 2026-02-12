@@ -1049,8 +1049,12 @@ func (r *RayJobReconciler) checkSubmitterAndUpdateStatusIfNeeded(ctx context.Con
 			// Therefore, a failed Submitter sidecar container indicates that the submission itself has failed or the user code has thrown an error.
 			// If the failure is due to user code, the JobStatus and Job message will be updated accordingly from the previous reconciliation.
 			if rayJob.Status.JobStatus == rayv1.JobStatusFailed {
+				rayJob.Status.Reason = rayv1.AppFailed // If JobStatus is already updated to Failed then job was submitted successfully
+			} else if submitterContainerStatus.State.Terminated.ExitCode == 1 { // When JobStatus is not updated yet
+				// Exit code 1: Application failure
 				rayJob.Status.Reason = rayv1.AppFailed
 			} else {
+				// Exit code 2: Submission failure
 				rayJob.Status.Reason = rayv1.SubmissionFailed
 				rayJob.Status.Message = fmt.Sprintf("Ray head pod container %s terminated with exit code %d: %s",
 					submitterContainerStatus.Name, submitterContainerStatus.State.Terminated.ExitCode, submitterContainerStatus.State.Terminated.Reason)
