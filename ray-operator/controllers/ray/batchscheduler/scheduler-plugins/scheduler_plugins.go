@@ -113,6 +113,11 @@ func (k *KubeScheduler) isGangSchedulingEnabled(obj metav1.Object) bool {
 	return exist
 }
 
+func (k *KubeScheduler) CleanupOnCompletion(_ context.Context, _ metav1.Object) error {
+	// KubeScheduler doesn't need cleanup
+	return nil
+}
+
 func (kf *KubeSchedulerFactory) New(_ context.Context, _ *rest.Config, cli client.Client) (schedulerinterface.BatchScheduler, error) {
 	if err := v1alpha1.AddToScheme(cli.Scheme()); err != nil {
 		return nil, err
