@@ -156,7 +156,7 @@ metrics:
     additionalLabels: {}
       #  release: prometheus
     # -- Prometheus ServiceMonitor namespace
-    namespace: ""  # "monitoring"
+    namespace: null  # "monitoring"
 
 # -- Path to the operator binary
 operatorCommand: /manager
