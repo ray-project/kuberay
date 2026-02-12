@@ -295,7 +295,7 @@ func main() {
 		cacheExpiry, parseErr := time.ParseDuration(utils.GetEnvOrDefault(utils.ASYNC_JOB_INFO_QUERY_CACHE_EXPIRY, utils.DEFAULT_ASYNC_JOB_INFO_QUERY_CACHE_EXPIRY))
 		exitOnError(parseErr, "unable to parse async job info query cache expiry")
 
-		workerPool, WorkerPoolErr := dashboardclient.InitWorkerPool(
+		workerPool, workerPoolErr := dashboardclient.InitWorkerPool(
 			ctx,
 			cacheManager,
 			numWorkers,
@@ -303,7 +303,7 @@ func main() {
 			cacheExpiry,
 			config.GetDashboardClient(mgr),
 		)
-		exitOnError(WorkerPoolErr, "unable to create worker pool for async job info query")
+		exitOnError(workerPoolErr, "unable to create worker pool for async job info query")
 
 		workerPool.Start(ctx)
 	}
