@@ -1,0 +1,181 @@
+# Nightly Ray Image E2E Tests
+#
+# This pipeline tests KubeRay (main branch) against the nightly Ray image.
+# It should runs on a schedule to catch compatibility issues early before
+# Ray releases.
+#
+# Environment variables:
+#   KUBERAY_TEST_RAY_IMAGE: rayproject/ray:nightly
+
+- label: 'Test RayCluster and GCS E2E (nightly Ray image)'
+  instance_size: large
+  image: golang:1.25-bookworm
+  commands:
+    - export KUBERAY_TEST_RAY_IMAGE="rayproject/ray:nightly"
+    - source .buildkite/setup-env.sh
+    - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
+    - kubectl config set clusters.kind-kind.server https://docker:6443
+    # Build nightly KubeRay operator image
+    - pushd ray-operator
+    - source ../.buildkite/build-start-operator.sh
+    - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
+    # Run e2e tests and print KubeRay operator logs if tests fail
+    - echo "--- START:Running RayCluster and GCS E2E (nightly Ray image) tests"
+    - echo "Using Ray Image $${KUBERAY_TEST_RAY_IMAGE}"
+    - set -o pipefail
+    - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
+    - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=5m KUBERAY_TEST_TIMEOUT_LONG=10m go test -timeout 30m -v ./test/e2e 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-nightly-ray-log.tar -T - && exit 1)
+    - echo "--- END:RayCluster and GCS E2E (nightly Ray image) tests finished"
+
+- label: 'Test RayJob E2E (nightly Ray image)'
+  instance_size: large
+  image: golang:1.25-bookworm
+  commands:
+    - export KUBERAY_TEST_RAY_IMAGE="rayproject/ray:nightly"
+    - source .buildkite/setup-env.sh
+    - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
+    - kubectl config set clusters.kind-kind.server https://docker:6443
+    # Build nightly KubeRay operator image
+    - pushd ray-operator
+    - source ../.buildkite/build-start-operator.sh
+    - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
+    # Run e2e tests and print KubeRay operator logs if tests fail
+    - echo "--- START:Running RayJob E2E (nightly Ray image) tests"
+    - echo "Using Ray Image $${KUBERAY_TEST_RAY_IMAGE}"
+    - set -o pipefail
+    - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
+    - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=5m KUBERAY_TEST_TIMEOUT_LONG=10m go test -timeout 60m -v ./test/e2erayjob 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-nightly-ray-log.tar -T - && exit 1)
+    - echo "--- END:RayJob E2E (nightly Ray image) tests finished"
+
+- label: 'Test RayService E2E (nightly Ray image)'
+  instance_size: large
+  image: golang:1.25-bookworm
+  commands:
+    - export KUBERAY_TEST_RAY_IMAGE="rayproject/ray:nightly"
+    - source .buildkite/setup-env.sh
+    - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
+    - kubectl config set clusters.kind-kind.server https://docker:6443
+    # Build nightly KubeRay operator image
+    - pushd ray-operator
+    - source ../.buildkite/build-start-operator.sh
+    - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
+    # Run e2e tests and print KubeRay operator logs if tests fail
+    - echo "--- START:Running RayService E2E (nightly Ray image) tests"
+    - echo "Using Ray Image $${KUBERAY_TEST_RAY_IMAGE}"
+    - set -o pipefail
+    - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
+    - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=5m KUBERAY_TEST_TIMEOUT_LONG=10m go test -timeout 30m -v ./test/e2erayservice 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-nightly-ray-rayservice-log.tar -T - && exit 1)
+    - echo "--- END:RayService E2E (nightly Ray image) tests finished"
+
+- label: 'Test Autoscaler E2E Part 1 (nightly Ray image)'
+  instance_size: large
+  image: golang:1.25-bookworm
+  commands:
+    - export KUBERAY_TEST_RAY_IMAGE="rayproject/ray:nightly"
+    - source .buildkite/setup-env.sh
+    - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
+    - kubectl config set clusters.kind-kind.server https://docker:6443
+    # Build nightly KubeRay operator image
+    - pushd ray-operator
+    - source ../.buildkite/build-start-operator.sh
+    - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
+    # Run e2e tests and print KubeRay operator logs if tests fail
+    - echo "--- START:Running Autoscaler E2E Part 1 (nightly Ray image) tests"
+    - echo "Using Ray Image $${KUBERAY_TEST_RAY_IMAGE}"
+    - set -o pipefail
+    - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
+    - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=5m KUBERAY_TEST_TIMEOUT_LONG=10m go test -timeout 60m -v ./test/e2eautoscaler/raycluster_autoscaler_test.go ./test/e2eautoscaler/support.go 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-nightly-ray-autoscaler-log.tar -T - && exit 1)
+    - echo "--- END:Autoscaler E2E Part 1 (nightly Ray image) tests finished"
+
+- label: 'Test Autoscaler E2E Part 2 (nightly Ray image)'
+  instance_size: large
+  image: golang:1.25-bookworm
+  commands:
+    - export KUBERAY_TEST_RAY_IMAGE="rayproject/ray:nightly"
+    - source .buildkite/setup-env.sh
+    - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
+    - kubectl config set clusters.kind-kind.server https://docker:6443
+    # Build nightly KubeRay operator image
+    - pushd ray-operator
+    - source ../.buildkite/build-start-operator.sh
+    - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
+    # Run e2e tests and print KubeRay operator logs if tests fail
+    - echo "--- START:Running Autoscaler E2E Part 2 (nightly Ray image) tests"
+    - echo "Using Ray Image $${KUBERAY_TEST_RAY_IMAGE}"
+    - set -o pipefail
+    - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
+    - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=5m KUBERAY_TEST_TIMEOUT_LONG=10m go test -timeout 60m -v ./test/e2eautoscaler/raycluster_autoscaler_part2_test.go ./test/e2eautoscaler/support.go 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-nightly-ray-autoscaler-log.tar -T - && exit 1)
+    - echo "--- END:Autoscaler E2E Part 2 (nightly Ray image) tests finished"
+
+- label: 'Test RayJob Light Weight Submitter E2E (nightly Ray image)'
+  instance_size: large
+  image: golang:1.25-bookworm
+  commands:
+    - export KUBERAY_TEST_RAY_IMAGE="rayproject/ray:nightly"
+    - source .buildkite/setup-env.sh
+    - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
+    - kubectl config set clusters.kind-kind.server https://docker:6443
+    # Build nightly KubeRay operator image
+    - pushd ray-operator
+    - source ../.buildkite/build-start-operator.sh
+    - bash ../.buildkite/build-load-light-weight-submitter.sh
+    - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
+    # Run e2e tests and print KubeRay operator logs if tests fail
+    - echo "--- START:Running RayJob Light Weight Submitter E2E (nightly Ray image) tests"
+    - echo "Using Ray Image $${KUBERAY_TEST_RAY_IMAGE}"
+    - set -o pipefail
+    - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
+    - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=5m KUBERAY_TEST_TIMEOUT_LONG=10m go test -timeout 30m -v ./test/e2erayjobsubmitter 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-nightly-ray-log.tar -T - && exit 1)
+    - echo "--- END:RayJob Light Weight Submitter E2E (nightly Ray image) tests finished"
+
+- label: 'Test RayCronJob E2E (nightly Ray image)'
+  instance_size: large
+  image: golang:1.25-bookworm
+  commands:
+    - export KUBERAY_TEST_RAY_IMAGE="rayproject/ray:nightly"
+    - source .buildkite/setup-env.sh
+    - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
+    - kubectl config set clusters.kind-kind.server https://docker:6443
+    # Build nightly KubeRay operator image
+    - pushd ray-operator
+    - source ../.buildkite/build-start-operator.sh
+    - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
+    # Run e2e tests and print KubeRay operator logs if tests fail
+    - echo "--- START:Running RayCronJob E2E (nightly Ray image) tests"
+    - echo "Using Ray Image $${KUBERAY_TEST_RAY_IMAGE}"
+    - set -o pipefail
+    - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
+    - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=5m KUBERAY_TEST_TIMEOUT_LONG=10m go test -timeout 40m -v ./test/e2eraycronjob 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-nightly-ray-cronjob-log.tar -T - && exit 1)
+    - echo "--- END:RayCronJob E2E (nightly Ray image) tests finished"
+
+- label: 'Test Apiserver E2E (nightly Ray image)'
+  instance_size: large
+  image: golang:1.25-bookworm
+  commands:
+    - export E2E_API_SERVER_RAY_IMAGE="rayproject/ray:nightly-py310"
+    - source .buildkite/setup-env.sh
+    - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
+    - kubectl config set clusters.kind-kind.server https://docker:6443
+    # Build nightly KubeRay operator image
+    - pushd ray-operator
+    - source ../.buildkite/build-start-operator.sh
+    - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
+    # Build and start apiserver
+    - pushd ../apiserver
+    - KIND_CLUSTER_NAME=kind KIND=kind make install-apiserver-e2e
+    - kubectl wait --namespace ray-system --for=condition=Available --timeout=90s deployment/kuberay-apiserver -n ray-system
+    # Run e2e tests and print KubeRay api server logs if tests fail
+    - echo "--- START:Running Apiserver E2E (nightly Ray image) tests"
+    - echo "Using Ray Image $${E2E_API_SERVER_RAY_IMAGE}"
+    - set -o pipefail
+    - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
+    - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
+    - E2E_API_SERVER_URL="http://localhost:8888" go test -parallel 4 -timeout 60m -v ./test/e2e/... 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs -l app.kubernetes.io/component=kuberay-apiserver --namespace ray-system | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-apiserver.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-nightly-ray-apiserver-log.tar -T - && exit 1)
+    - echo "--- END:Apiserver E2E (nightly Ray image) tests finished"

@@ -30,6 +30,11 @@ mv linux-amd64/helm /usr/local/bin/helm
 helm repo add kuberay https://ray-project.github.io/kuberay-helm/
 helm repo update
 
+# Install kustomize
+curl -Lo kustomize.tar.gz https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv5.3.0/kustomize_v5.3.0_linux_amd64.tar.gz
+tar -zxvf kustomize.tar.gz
+mv kustomize /usr/local/bin/kustomize
+
 # Install python 3.11 and pip
 apt-get update
 apt-get install -y python3.11 python3-pip python3-venv python3-dev build-essential
