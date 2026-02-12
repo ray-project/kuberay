@@ -7,6 +7,7 @@ import (
 	"io"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -23,6 +24,7 @@ type EventHandler struct {
 	ClusterTaskMap  *types.ClusterTaskMap
 	ClusterActorMap *types.ClusterActorMap
 	ClusterJobMap   *types.ClusterJobMap
+	ClusterNodeMap  *types.ClusterNodeMap
 }
 
 var eventFilePattern = regexp.MustCompile(`-\d{4}-\d{2}-\d{2}-\d{2}$`)
@@ -47,6 +49,9 @@ func NewEventHandler(reader storage.StorageReader) *EventHandler {
 		},
 		ClusterJobMap: &types.ClusterJobMap{
 			ClusterJobMap: make(map[string]*types.JobMap),
+		},
+		ClusterNodeMap: &types.ClusterNodeMap{
+			ClusterNodeMap: make(map[string]*types.NodeMap),
 		},
 	}
 }
@@ -198,6 +203,7 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 	}
 	eventType := types.EventType(eventTypeStr)
 
+	// clusterNameVal is actually the cluster session key.
 	clusterNameVal, ok := eventMap["clusterName"]
 	if !ok {
 		return fmt.Errorf("event missing 'clusterName' field")
@@ -210,126 +216,9 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 	logrus.Infof("current eventType: %v", eventType)
 	switch eventType {
 	case types.TASK_DEFINITION_EVENT:
-		taskDef, ok := eventMap["taskDefinitionEvent"]
-		if !ok {
-			return fmt.Errorf("event does not have 'taskDefinitionEvent'")
-		}
-		jsonTaskDefinition, err := json.Marshal(taskDef)
-		if err != nil {
-			return err
-		}
-
-		var currTask types.Task
-		if err := json.Unmarshal(jsonTaskDefinition, &currTask); err != nil {
-			return err
-		}
-
-		taskMap := h.ClusterTaskMap.GetOrCreateTaskMap(currentClusterName)
-		taskMap.CreateOrMergeAttempt(currTask.TaskID, currTask.AttemptNumber, func(t *types.Task) {
-			// Merge definition fields (preserve existing Events if any)
-			existingEvents := t.Events
-			*t = currTask
-			if len(existingEvents) > 0 {
-				t.Events = existingEvents
-				t.State = existingEvents[len(existingEvents)-1].State
-			}
-		})
-
+		return h.handleTaskDefinitionEvent(eventMap, currentClusterName, false)
 	case types.TASK_LIFECYCLE_EVENT:
-		lifecycleEvent, ok := eventMap["taskLifecycleEvent"].(map[string]any)
-		if !ok {
-			return fmt.Errorf("invalid taskLifecycleEvent format")
-		}
-
-		taskId, _ := lifecycleEvent["taskId"].(string)
-		taskAttempt, _ := lifecycleEvent["taskAttempt"].(float64)
-		transitions, _ := lifecycleEvent["stateTransitions"].([]any)
-
-		nodeId, _ := lifecycleEvent["nodeId"].(string)
-		workerId, _ := lifecycleEvent["workerId"].(string)
-
-		if len(transitions) == 0 || taskId == "" {
-			return nil
-		}
-
-		// Parse state transitions
-		var stateEvents []types.StateEvent
-		for _, transition := range transitions {
-			tr, ok := transition.(map[string]any)
-			if !ok {
-				continue
-			}
-			state, _ := tr["state"].(string)
-			timestampStr, _ := tr["timestamp"].(string)
-
-			var timestamp time.Time
-			if timestampStr != "" {
-				timestamp, _ = time.Parse(time.RFC3339Nano, timestampStr)
-			}
-
-			stateEvents = append(stateEvents, types.StateEvent{
-				State:     types.TaskStatus(state),
-				Timestamp: timestamp,
-			})
-		}
-
-		if len(stateEvents) == 0 {
-			return nil
-		}
-
-		taskMap := h.ClusterTaskMap.GetOrCreateTaskMap(currentClusterName)
-		taskMap.CreateOrMergeAttempt(taskId, int(taskAttempt), func(t *types.Task) {
-			// --- DEDUPLICATION using (State + Timestamp) as unique key ---
-			// Build a set of existing event keys to detect duplicates
-			type eventKey struct {
-				State     string
-				Timestamp int64
-			}
-			existingKeys := make(map[eventKey]bool)
-			for _, e := range t.Events {
-				existingKeys[eventKey{string(e.State), e.Timestamp.UnixNano()}] = true
-			}
-
-			// Only append events that haven't been seen before
-			for _, e := range stateEvents {
-				key := eventKey{string(e.State), e.Timestamp.UnixNano()}
-				if !existingKeys[key] {
-					t.Events = append(t.Events, e)
-					existingKeys[key] = true
-				}
-			}
-
-			// Sort events by timestamp to ensure correct order
-			sort.Slice(t.Events, func(i, j int) bool {
-				return t.Events[i].Timestamp.Before(t.Events[j].Timestamp)
-			})
-
-			if len(t.Events) == 0 {
-				return
-			}
-
-			t.State = t.Events[len(t.Events)-1].State
-
-			if nodeId != "" {
-				t.NodeID = nodeId
-			}
-			if workerId != "" {
-				t.WorkerID = workerId
-			}
-			if t.StartTime.IsZero() {
-				for _, e := range t.Events {
-					if e.State == types.RUNNING {
-						t.StartTime = e.Timestamp
-						break
-					}
-				}
-			}
-			lastEvent := t.Events[len(t.Events)-1]
-			if lastEvent.State == types.FINISHED || lastEvent.State == types.FAILED {
-				t.EndTime = lastEvent.Timestamp
-			}
-		})
-
+		return h.handleTaskLifecycleEvent(eventMap, currentClusterName)
 	case types.ACTOR_DEFINITION_EVENT:
 		actorDef, ok := eventMap["actorDefinitionEvent"]
 		if !ok {
@@ -525,12 +414,8 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 			}
 			a.NumRestarts = restartCount
 		})
-
 	case types.ACTOR_TASK_DEFINITION_EVENT:
-		// TODO: Handle actor task definition event
-		// This is related to GET /api/v0/tasks (type=ACTOR_TASK)
-		logrus.Debugf("ACTOR_TASK_DEFINITION_EVENT received, not yet implemented")
-
+		return h.handleTaskDefinitionEvent(eventMap, currentClusterName, true)
 	case types.DRIVER_JOB_DEFINITION_EVENT:
 		// NOTE: When event comes in, JobID will be in base64, processing will convert it to Hex
 		jobDef, ok := eventMap["driverJobDefinitionEvent"]
@@ -694,6 +579,122 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 				j.EndTime = lastStateTransition.Timestamp
 			}
 		})
+	case types.NODE_DEFINITION_EVENT:
+		return h.handleNodeDefinitionEvent(eventMap, currentClusterName)
+	case types.NODE_LIFECYCLE_EVENT:
+		return h.handleNodeLifecycleEvent(eventMap, currentClusterName)
+	case types.TASK_PROFILE_EVENT:
+		taskProfileEvent, ok := eventMap["taskProfileEvents"]
+		if !ok {
+			return fmt.Errorf("event does not have 'taskProfileEvents'")
+		}
+		jsonBytes, err := json.Marshal(taskProfileEvent)
+		if err != nil {
+			return err
+		}
+
+		var profileData types.TaskProfileEventDTO
+		if err := json.Unmarshal(jsonBytes, &profileData); err != nil {
+			logrus.Errorf("Failed to unmarshal TASK_PROFILE_EVENT: %v", err)
+			return err
+		}
+
+		if profileData.TaskID == "" || len(profileData.ProfileEvents.Events) == 0 {
+			logrus.Debugf("TASK_PROFILE_EVENT has no taskId or events, skipping")
+			return nil
+		}
+
+		// Convert events to ProfileEventRaw format
+		var rawEvents = make([]types.ProfileEventRaw, 0, len(profileData.ProfileEvents.Events))
+		for _, e := range profileData.ProfileEvents.Events {
+			startTime, err := strconv.ParseInt(e.StartTime, 10, 64)
+			if err != nil {
+				logrus.Warnf("Failed to parse StartTime '%s': %v", e.StartTime, err)
+				continue
+			}
+			endTime, err := strconv.ParseInt(e.EndTime, 10, 64)
+			if err != nil {
+				logrus.Warnf("Failed to parse EndTime '%s': %v", e.EndTime, err)
+				continue
+			}
+
+			rawEvents = append(rawEvents, types.ProfileEventRaw{
+				EventName: e.EventName,
+				StartTime: startTime,
+				EndTime:   endTime,
+				ExtraData: e.ExtraData,
+			})
+		}
+		// Convert IDs from base64 to hex before merge (consistent with JOB_DEFINITION_EVENT pattern)
+		profileData.TaskID, err = utils.ConvertBase64ToHex(profileData.TaskID)
+		if err != nil {
+			logrus.Errorf("Failed to convert TaskID from base64 to Hex, will use base64: %v", err)
+		}
+		profileData.JobID, err = utils.ConvertBase64ToHex(profileData.JobID)
+		if err != nil {
+			logrus.Errorf("Failed to convert JobID from base64 to Hex, will use base64: %v", err)
+		}
+		profileData.ProfileEvents.ComponentID, err = utils.ConvertBase64ToHex(profileData.ProfileEvents.ComponentID)
+		if err != nil {
+			logrus.Errorf("Failed to convert ComponentID from base64 to Hex, will use base64: %v", err)
+		}
+
+		taskMap := h.ClusterTaskMap.GetOrCreateTaskMap(currentClusterName)
+		taskMap.CreateOrMergeAttempt(profileData.TaskID, profileData.AttemptNumber, func(t *types.Task) {
+			// Ensure core identifiers are set
+			if t.TaskID == "" {
+				t.TaskID = profileData.TaskID
+			}
+			if t.JobID == "" {
+				t.JobID = profileData.JobID
+			}
+
+			// Set AttemptNumber to match the attempt we're merging into
+			t.TaskAttempt = profileData.AttemptNumber
+
+			// Initialize ProfileData if not exists
+			if t.ProfileData == nil {
+				t.ProfileData = &types.ProfileData{
+					ComponentID:   profileData.ProfileEvents.ComponentID,
+					ComponentType: profileData.ProfileEvents.ComponentType,
+					NodeIPAddress: profileData.ProfileEvents.NodeIPAddress,
+				}
+			}
+
+			// Merge events with deduplication based on (eventName, startTime, endTime)
+			type eventKey struct {
+				EventName string
+				StartTime int64
+				EndTime   int64
+			}
+			existingKeys := make(map[eventKey]struct{}, len(t.ProfileData.Events)+len(rawEvents))
+			for _, e := range t.ProfileData.Events {
+				existingKeys[eventKey{e.EventName, e.StartTime, e.EndTime}] = struct{}{}
+			}
+			for _, e := range rawEvents {
+				key := eventKey{e.EventName, e.StartTime, e.EndTime}
+				if _, ok := existingKeys[key]; !ok {
+					t.ProfileData.Events = append(t.ProfileData.Events, e)
+					existingKeys[key] = struct{}{}
+				}
+			}
+
+			// Extract func_or_class_name from extraData if available
+			for _, e := range rawEvents {
+				if strings.HasPrefix(e.EventName, "task::") && e.ExtraData != "" {
+					var extra map[string]interface{}
+					if err := json.Unmarshal([]byte(e.ExtraData), &extra); err == nil {
+						if name, ok := extra["name"].(string); ok && name != "" {
+							// For actor methods, name might be just "increment" or "get_count"
+							// But eventName has the full form like "task::Counter.increment"
+							// Use eventName to get the full func_or_class_name
+							t.FuncOrClassName = strings.TrimPrefix(e.EventName, "task::")
+						}
+					}
+				}
+			}
+		})
+
 	default:
 		logrus.Infof("Event not supported, skipping: %v", eventMap)
 	}
@@ -743,29 +744,31 @@ func (h *EventHandler) getAllNodeEventFiles(clusterInfo utils.ClusterInfo) []str
 	return nodeEventFiles
 }
 
-// GetTasks returns a thread-safe deep copy of all tasks (including all attempts) for a given cluster.
-// Each task attempt is returned as a separate element in the slice.
+// GetTasks returns a slice of thread-safe deep copies of all task attempts for a given cluster session.
 // Deep copy ensures the returned data is safe to use after the lock is released.
-func (h *EventHandler) GetTasks(clusterName string) []types.Task {
+func (h *EventHandler) GetTasks(clusterSessionKey string) []types.Task {
 	h.ClusterTaskMap.RLock()
 	defer h.ClusterTaskMap.RUnlock()
 
-	taskMap, ok := h.ClusterTaskMap.ClusterTaskMap[clusterName]
+	taskMap, ok := h.ClusterTaskMap.ClusterTaskMap[clusterSessionKey]
 	if !ok {
+		// TODO(jwj): Add error handling.
+		logrus.Errorf("Task map not found for cluster session: %s", clusterSessionKey)
 		return []types.Task{}
 	}
 
 	taskMap.Lock()
 	defer taskMap.Unlock()
 
-	// Flatten all attempts into a single slice with deep copy
-	var tasks []types.Task
-	for _, attempts := range taskMap.TaskMap {
-		for _, task := range attempts {
-			tasks = append(tasks, task.DeepCopy())
+	// Flatten all task attempts into a single slice with deep copy.
+	allTasks := make([]types.Task, 0)
+	for _, taskAttempts := range taskMap.TaskMap {
+		for _, taskAttempt := range taskAttempts {
+			allTasks = append(allTasks, taskAttempt.DeepCopy())
 		}
 	}
-	return tasks
+
+	return allTasks
 }
 
 // GetTaskByID returns all attempts for a specific task ID in a given cluster.
@@ -914,4 +917,580 @@ func (h *EventHandler) GetJobByJobID(clusterName, jobID string) (types.Job, bool
 		return types.Job{}, false
 	}
 	return job.DeepCopy(), true
+}
+
+// handleTaskDefinitionEvent processes TASK_DEFINITION_EVENT or ACTOR_TASK_DEFINITION_EVENT and preserves the task attempt ordering.
+func (h *EventHandler) handleTaskDefinitionEvent(eventMap map[string]any, clusterSessionKey string, isActorTask bool) error {
+	var taskDefField string
+	if isActorTask {
+		taskDefField = "actorTaskDefinitionEvent"
+	} else {
+		taskDefField = "taskDefinitionEvent"
+	}
+
+	taskDef, ok := eventMap[taskDefField]
+	if !ok {
+		return fmt.Errorf("event does not have '%s' field", taskDefField)
+	}
+
+	jsonTaskDefinition, err := json.Marshal(taskDef)
+	if err != nil {
+		return fmt.Errorf("failed to marshal %s event: %w", taskDefField, err)
+	}
+
+	var currTask types.Task
+	if err := json.Unmarshal(jsonTaskDefinition, &currTask); err != nil {
+		return fmt.Errorf("failed to unmarshal %s event: %w", taskDefField, err)
+	}
+	if currTask.TaskID == "" {
+		return fmt.Errorf("task ID is empty")
+	}
+	normalizeTaskIDsToHex(&currTask)
+
+	// Manually set the task type for an actor task.
+	if isActorTask {
+		currTask.TaskType = types.ACTOR_TASK
+	}
+
+	taskMap := h.ClusterTaskMap.GetOrCreateTaskMap(clusterSessionKey)
+	taskMap.CreateOrMergeAttempt(currTask.TaskID, currTask.TaskAttempt, func(task *types.Task) {
+		// Preserve existing lifecycle-derived fields to avoid overwriting.
+		existingStateTransitions := task.StateTransitions
+		existingRayErrorInfo := task.RayErrorInfo
+		existingNodeID := task.NodeID
+		existingWorkerID := task.WorkerID
+		existingWorkerPID := task.WorkerPID
+		existingIsDebuggerPaused := task.IsDebuggerPaused
+		existingActorReprName := task.ActorReprName
+		existingTaskLogInfo := task.TaskLogInfo
+
+		existingProfileData := task.ProfileData
+		existingFuncOrClassName := task.FuncOrClassName
+		existingCreationTime := task.CreationTime
+		existingStartTime := task.StartTime
+		existingEndTime := task.EndTime
+
+		*task = currTask
+
+		if len(existingStateTransitions) > 0 {
+			task.StateTransitions = existingStateTransitions
+			task.RayErrorInfo = existingRayErrorInfo
+			task.NodeID = existingNodeID
+			task.WorkerID = existingWorkerID
+			task.WorkerPID = existingWorkerPID
+			task.IsDebuggerPaused = existingIsDebuggerPaused
+			task.ActorReprName = existingActorReprName
+			task.TaskLogInfo = existingTaskLogInfo
+			task.State = task.GetLastState()
+			task.StartTime = existingStartTime
+			task.EndTime = existingEndTime
+			task.CreationTime = existingCreationTime
+		}
+
+		// Restore profile-derived fields (from TASK_PROFILE_EVENT)
+		// All three come from the same event, so check together
+		if existingProfileData != nil {
+			task.ProfileData = existingProfileData
+			if existingFuncOrClassName != "" {
+				task.FuncOrClassName = existingFuncOrClassName
+			}
+		}
+	})
+
+	return nil
+}
+
+// handleTaskLifecycleEvent processes TASK_LIFECYCLE_EVENT and merges state transitions for a given task attempt.
+func (h *EventHandler) handleTaskLifecycleEvent(eventMap map[string]any, clusterSessionKey string) error {
+	taskLifecycle, ok := eventMap["taskLifecycleEvent"]
+	if !ok {
+		return fmt.Errorf("event does not have 'taskLifecycleEvent' field")
+	}
+
+	jsonTaskLifecycle, err := json.Marshal(taskLifecycle)
+	if err != nil {
+		return fmt.Errorf("failed to marshal task lifecycle event: %w", err)
+	}
+
+	var currTask types.Task
+	if err := json.Unmarshal(jsonTaskLifecycle, &currTask); err != nil {
+		return fmt.Errorf("failed to unmarshal task lifecycle event: %w", err)
+	}
+	if currTask.TaskID == "" {
+		return fmt.Errorf("task ID is empty")
+	}
+	normalizeTaskIDsToHex(&currTask)
+
+	// TODO(jwj): Clarify if there must be at least one state transition. Can one task have more than one state transition?
+	if len(currTask.StateTransitions) == 0 {
+		return fmt.Errorf("TASK_LIFECYCLE_EVENT must have at least one state transition")
+	}
+
+	taskMap := h.ClusterTaskMap.GetOrCreateTaskMap(clusterSessionKey)
+	taskMap.CreateOrMergeAttempt(currTask.TaskID, currTask.TaskAttempt, func(task *types.Task) {
+		// --- DEDUPLICATION using (State + Timestamp) as unique key ---
+		// Build a set of existing event keys to detect duplicates
+		type eventKey struct {
+			State     string
+			Timestamp int64
+		}
+		existingKeys := make(map[eventKey]bool)
+		for _, e := range task.StateTransitions {
+			existingKeys[eventKey{string(e.State), e.Timestamp.UnixNano()}] = true
+		}
+
+		// Only append events that haven't been seen before
+		for _, e := range currTask.StateTransitions {
+			key := eventKey{string(e.State), e.Timestamp.UnixNano()}
+			if !existingKeys[key] {
+				task.StateTransitions = append(task.StateTransitions, e)
+				existingKeys[key] = true
+			}
+		}
+
+		// Sort events by timestamp to ensure correct order
+		sort.Slice(task.StateTransitions, func(i, j int) bool {
+			return task.StateTransitions[i].Timestamp.Before(task.StateTransitions[j].Timestamp)
+		})
+
+		if len(task.StateTransitions) == 0 {
+			return
+		}
+
+		// TODO(jwj): Before beta, the lifecycle-related fields are overwritten.
+		// In beta, the complete historical replay will be supported.
+		task.RayErrorInfo = currTask.RayErrorInfo
+		if currTask.JobID != "" {
+			task.JobID = currTask.JobID
+		}
+		if currTask.NodeID != "" {
+			task.NodeID = currTask.NodeID
+		}
+		if currTask.WorkerID != "" {
+			task.WorkerID = currTask.WorkerID
+		}
+		if currTask.WorkerPID != 0 {
+			task.WorkerPID = currTask.WorkerPID
+		}
+		task.IsDebuggerPaused = currTask.IsDebuggerPaused
+		task.ActorReprName = currTask.ActorReprName
+		task.TaskLogInfo = currTask.TaskLogInfo
+		task.State = task.GetLastState()
+
+		// Derive creation time, start time and end time from state transitions.
+		// Ref: https://github.com/ray-project/ray/blob/d0b1d151d8ea964a711e451d0ae736f8bf95b629/python/ray/util/state/common.py#L1660-L1685
+		for _, tr := range task.StateTransitions {
+			switch tr.State {
+			case types.PENDING_ARGS_AVAIL:
+				if task.CreationTime.IsZero() {
+					task.CreationTime = tr.Timestamp
+				}
+			case types.RUNNING:
+				if task.StartTime.IsZero() {
+					task.StartTime = tr.Timestamp
+				}
+			case types.FINISHED, types.FAILED:
+				// Take the latest timestamp as the end time.
+				task.EndTime = tr.Timestamp
+			}
+		}
+	})
+
+	return nil
+}
+
+// handleNodeDefinitionEvent processes NODE_DEFINITION_EVENT and merges it with the existing node map for a given cluster session.
+func (h *EventHandler) handleNodeDefinitionEvent(eventMap map[string]any, clusterSessionID string) error {
+	nodeDef, exists := eventMap["nodeDefinitionEvent"]
+	if !exists {
+		return fmt.Errorf("event does not have 'nodeDefinitionEvent' field")
+	}
+
+	jsonNodeDefinition, err := json.Marshal(nodeDef)
+	if err != nil {
+		return fmt.Errorf("failed to marshal node definition event: %w", err)
+	}
+
+	var currNode types.Node
+	if err := json.Unmarshal(jsonNodeDefinition, &currNode); err != nil {
+		return fmt.Errorf("failed to unmarshal node definition event: %w", err)
+	}
+	if currNode.NodeID == "" {
+		return fmt.Errorf("node ID is empty")
+	}
+
+	currNode.NodeID, err = utils.ConvertBase64ToHex(currNode.NodeID)
+	if err != nil {
+		logrus.Errorf("Failed to convert node ID from base64 to hex, will keep node ID in base64: %v", err)
+	}
+
+	nodeMap := h.ClusterNodeMap.GetOrCreateNodeMap(clusterSessionID)
+	nodeMap.CreateOrMergeNode(currNode.NodeID, func(node *types.Node) {
+		existingStateTransitions := node.StateTransitions
+
+		*node = currNode
+
+		if len(existingStateTransitions) > 0 {
+			node.StateTransitions = existingStateTransitions
+		}
+	})
+
+	return nil
+}
+
+// handleNodeLifecycleEvent processes NODE_LIFECYCLE_EVENT and merges state transitions.
+func (h *EventHandler) handleNodeLifecycleEvent(eventMap map[string]any, clusterSessionID string) error {
+	nodeLifecycle, exists := eventMap["nodeLifecycleEvent"]
+	if !exists {
+		return fmt.Errorf("event does not have 'nodeLifecycleEvent' field")
+	}
+
+	jsonNodeLifecycle, err := json.Marshal(nodeLifecycle)
+	if err != nil {
+		return fmt.Errorf("failed to marshal node lifecycle event: %w", err)
+	}
+
+	var currNode types.Node
+	if err := json.Unmarshal(jsonNodeLifecycle, &currNode); err != nil {
+		return fmt.Errorf("failed to unmarshal node lifecycle event: %w", err)
+	}
+	if currNode.NodeID == "" {
+		return fmt.Errorf("node ID is empty")
+	}
+
+	currNode.NodeID, err = utils.ConvertBase64ToHex(currNode.NodeID)
+	if err != nil {
+		logrus.Errorf("Failed to convert node ID from base64 to hex, will keep node ID in base64: %v", err)
+	}
+
+	// A NODE_LIFECYCLE_EVENT must have at least one state transition.
+	// Ref: https://github.com/ray-project/ray/blob/221a19395a836fada12ebb2bac7bff00a666faa5/src/ray/protobuf/public/events_node_lifecycle_event.proto#L58-L61.
+	if len(currNode.StateTransitions) == 0 {
+		return fmt.Errorf("node lifecycle event does not have any state transitions")
+	}
+
+	nodeMap := h.ClusterNodeMap.GetOrCreateNodeMap(clusterSessionID)
+	nodeMap.CreateOrMergeNode(currNode.NodeID, func(n *types.Node) {
+		// Merge state transitions.
+		n.StateTransitions = MergeStateTransitions[types.NodeStateTransition](
+			n.StateTransitions,
+			currNode.StateTransitions,
+		)
+	})
+
+	return nil
+}
+
+// normalizeTaskIDsToHex converts base64-encoded Ray IDs in task-related events:
+//   - TASK_DEFINITION_EVENT
+//   - ACTOR_TASK_DEFINITION_EVENT
+//   - TASK_LIFECYCLE_EVENT
+//
+// to hex so stored tasks match the live cluster API schema.
+func normalizeTaskIDsToHex(task *types.Task) {
+	normalize := func(base64ID string) string {
+		if base64ID == "" {
+			return ""
+		}
+
+		hexID, err := utils.ConvertBase64ToHex(base64ID)
+		if err != nil {
+			logrus.Errorf("Failed to convert ID from base64 to hex, keeping original: %v", err)
+			return base64ID
+		}
+		return hexID
+	}
+
+	task.TaskID = normalize(task.TaskID)
+	task.ActorID = normalize(task.ActorID)
+	task.JobID = normalize(task.JobID)
+	task.ParentTaskID = normalize(task.ParentTaskID)
+	task.PlacementGroupID = normalize(task.PlacementGroupID)
+	task.NodeID = normalize(task.NodeID)
+	task.WorkerID = normalize(task.WorkerID)
+}
+
+// GetNodeMap returns a thread-safe deep copy of all nodes for a given cluster session.
+func (h *EventHandler) GetNodeMap(clusterSessionID string) map[string]types.Node {
+	h.ClusterNodeMap.RLock()
+	defer h.ClusterNodeMap.RUnlock()
+
+	nodeMap, ok := h.ClusterNodeMap.ClusterNodeMap[clusterSessionID]
+	if !ok {
+		return map[string]types.Node{}
+	}
+
+	nodeMap.Lock()
+	defer nodeMap.Unlock()
+
+	nodes := make(map[string]types.Node, len(nodeMap.NodeMap))
+	for id, node := range nodeMap.NodeMap {
+		nodes[id] = node.DeepCopy()
+	}
+	return nodes
+}
+
+// GetNodeByNodeID returns a node by node ID for a given cluster session.
+func (h *EventHandler) GetNodeByNodeID(clusterSessionID, nodeID string) (types.Node, bool) {
+	h.ClusterNodeMap.RLock()
+	defer h.ClusterNodeMap.RUnlock()
+
+	nodeMap, ok := h.ClusterNodeMap.ClusterNodeMap[clusterSessionID]
+	if !ok {
+		return types.Node{}, false
+	}
+
+	nodeMap.Lock()
+	defer nodeMap.Unlock()
+
+	node, ok := nodeMap.NodeMap[nodeID]
+	if !ok {
+		return types.Node{}, false
+	}
+	return node.DeepCopy(), true
+}
+
+// GetTasksTimeline returns timeline data in Chrome Tracing Format
+// Output format matches Ray Dashboard's /api/v0/tasks/timeline endpoint
+func (h *EventHandler) GetTasksTimeline(clusterName string, jobID string) []types.ChromeTraceEvent {
+	var tasks []types.Task
+	if jobID != "" {
+		tasks = h.GetTasksByJobID(clusterName, jobID)
+	} else {
+		tasks = h.GetTasks(clusterName)
+	}
+
+	if len(tasks) == 0 {
+		return []types.ChromeTraceEvent{}
+	}
+
+	events := []types.ChromeTraceEvent{}
+
+	// Build PID/TID mappings
+	// PID: Node IP -> numeric ID
+	// TID: clusterID (componentType:componentId) -> numeric ID per node
+	nodeIPToPID := make(map[string]int)
+	nodeIPToClusterIDToTID := make(map[string]map[string]int) // nodeIP -> clusterID (componentType:componentId) -> tid
+	pidCounter := 0
+	tidCounters := make(map[string]int) // per-node tid counter
+
+	// First pass: collect all unique nodes and workers
+	for _, task := range tasks {
+		if task.ProfileData == nil || len(task.ProfileData.Events) == 0 {
+			continue
+		}
+		// Only include worker and driver components (consistent with Ray's profiling implementation in profiling.py)
+		componentType := task.ProfileData.ComponentType
+		if componentType != "worker" && componentType != "driver" {
+			continue
+		}
+
+		nodeIP := task.ProfileData.NodeIPAddress
+		clusterID := task.ProfileData.ComponentType + ":" + task.ProfileData.ComponentID
+
+		if nodeIP == "" {
+			continue
+		}
+		if _, exists := nodeIPToPID[nodeIP]; !exists {
+			nodeIPToPID[nodeIP] = pidCounter
+			pidCounter++
+			nodeIPToClusterIDToTID[nodeIP] = make(map[string]int)
+			tidCounters[nodeIP] = 0
+		}
+
+		if _, exists := nodeIPToClusterIDToTID[nodeIP][clusterID]; !exists {
+			nodeIPToClusterIDToTID[nodeIP][clusterID] = tidCounters[nodeIP]
+			tidCounters[nodeIP]++
+		}
+	}
+
+	// Generate process_name and thread_name metadata events
+	for nodeIP, pid := range nodeIPToPID {
+		events = append(events, types.ChromeTraceEvent{
+			Name:  "process_name",
+			PID:   pid,
+			TID:   nil,
+			Phase: "M",
+			Args: map[string]interface{}{
+				"name": "Node " + nodeIP,
+			},
+		})
+
+		for clusterID, tid := range nodeIPToClusterIDToTID[nodeIP] {
+			tidVal := tid
+			events = append(events, types.ChromeTraceEvent{
+				Name:  "thread_name",
+				PID:   pid,
+				TID:   &tidVal,
+				Phase: "M",
+				Args: map[string]interface{}{
+					"name": clusterID,
+				},
+			})
+		}
+	}
+
+	// Generate trace events from ProfileData
+	for _, task := range tasks {
+		if task.ProfileData == nil || len(task.ProfileData.Events) == 0 {
+			continue
+		}
+		// Only include worker and driver components (consistent with Ray's profiling implementation in profiling.py)
+		componentType := task.ProfileData.ComponentType
+		if componentType != "worker" && componentType != "driver" {
+			continue
+		}
+
+		nodeIP := task.ProfileData.NodeIPAddress
+		clusterID := task.ProfileData.ComponentType + ":" + task.ProfileData.ComponentID
+
+		pid, ok := nodeIPToPID[nodeIP]
+		if !ok {
+			continue
+		}
+		var tidPtr *int
+		if tid, ok := nodeIPToClusterIDToTID[nodeIP][clusterID]; ok {
+			tidVal := tid
+			tidPtr = &tidVal
+		} else {
+			// This shouldn't happen if first pass worked correctly,
+			// but skip to avoid null TID
+			continue
+		}
+
+		for _, profEvent := range task.ProfileData.Events {
+			// Convert nanoseconds to microseconds
+			startTimeUs := float64(profEvent.StartTime) / 1000.0
+			durationUs := float64(profEvent.EndTime-profEvent.StartTime) / 1000.0
+
+			// Parse extraData for additional fields
+			var extraData map[string]interface{}
+			if profEvent.ExtraData != "" {
+				json.Unmarshal([]byte(profEvent.ExtraData), &extraData)
+			}
+
+			// Determine task_id and func_or_class_name
+			taskIDForArgs := task.TaskID
+			funcOrClassName := task.FuncOrClassName
+
+			// Fallback to GetFuncName() if FuncOrClassName is empty
+			// This ensures consistency with Ray's profiling.py which uses task["func_or_class_name"]
+			// from TASK_DEFINITION_EVENT, and handles cases where TASK_PROFILE_EVENT is missing
+			if funcOrClassName == "" {
+				funcOrClassName = task.GetFuncName()
+			}
+
+			// Try to get from extraData if available (for hex format task_id)
+			if extraData != nil {
+				if tid, ok := extraData["task_id"].(string); ok && tid != "" {
+					taskIDForArgs = tid
+				}
+			}
+
+			// Build args
+			actorID := extractActorIDFromTaskID(taskIDForArgs)
+			args := map[string]interface{}{
+				"task_id":            taskIDForArgs,
+				"job_id":             task.JobID,
+				"attempt_number":     task.TaskAttempt,
+				"func_or_class_name": funcOrClassName,
+				"actor_id":           nil,
+			}
+
+			if actorID != "" {
+				args["actor_id"] = actorID
+			}
+
+			// Determine event name for display
+			eventName := profEvent.EventName
+			displayName := profEvent.EventName
+
+			// For overall task events like "task::slow_task", use the full name from extraData
+			if strings.HasPrefix(profEvent.EventName, "task::") && extraData != nil {
+				if name, ok := extraData["name"].(string); ok && name != "" {
+					displayName = name
+					args["name"] = name
+				}
+			}
+
+			traceEvent := types.ChromeTraceEvent{
+				Category:  eventName,
+				Name:      displayName,
+				PID:       pid,
+				TID:       tidPtr,
+				Timestamp: &startTimeUs,
+				Duration:  &durationUs,
+				Color:     getChromeTraceColor(eventName),
+				Args:      args,
+				Phase:     "X",
+			}
+
+			events = append(events, traceEvent)
+		}
+	}
+
+	return events
+}
+
+// getChromeTraceColor maps event names to Chrome trace colors
+// Based on Ray's _default_color_mapping in profiling.py
+func getChromeTraceColor(eventName string) string {
+	// Handle task::xxx pattern (overall task event)
+	if strings.HasPrefix(eventName, "task::") {
+		return "generic_work"
+	}
+
+	// Direct mapping for known event names
+	// This logic follows Ray's profiling implementation:
+	// https://github.com/ray-project/ray/blob/68d01c4c48a59c7768ec9c2359a1859966c446b6/python/ray/_private/profiling.py#L25
+	switch eventName {
+	case "task:deserialize_arguments":
+		return "rail_load"
+	case "task:execute":
+		return "rail_animation"
+	case "task:store_outputs":
+		return "rail_idle"
+	case "task:submit_task", "task":
+		return "rail_response"
+	case "worker_idle":
+		return "cq_build_abandoned"
+	case "ray.get":
+		return "good"
+	case "ray.put":
+		return "terrible"
+	case "ray.wait":
+		return "vsync_highlight_color"
+	case "submit_task":
+		return "background_memory_dump"
+	case "wait_for_function", "fetch_and_run_function", "register_remote_function":
+		return "detailed_memory_dump"
+	default:
+		return "generic_work"
+	}
+}
+
+// extractActorIDFromTaskID extracts the ActorID from a TaskID following Ray's ID specification.
+//
+// Design doc: src/ray/design_docs/id_specification.md
+// - TaskID: 8B unique + 16B ActorID (total 24 bytes = 48 hex chars)
+// - ActorID: 12B unique + 4B JobID (total 16 bytes = 32 hex chars)
+//
+// For a 48-character hex TaskID, the last 32 hex characters (bytes 16–48)
+// correspond to the ActorID. This function further checks the "unique" portion
+// of the ActorID (first 24 hex chars) and returns an empty string if it is all Fs,
+// which indicates normal/driver tasks with no associated actor.
+func extractActorIDFromTaskID(taskIDHex string) string {
+	if len(taskIDHex) != 48 {
+		return "" // can't process if encoded in base64
+	}
+
+	actorPortion := taskIDHex[16:40] // 24 chars for actor id (12 bytes)
+	jobPortion := taskIDHex[40:48]   // 8 chars for job id (4 bytes)
+
+	// Check if all Fs (no actor)
+	if strings.ToLower(actorPortion) == "ffffffffffffffffffffffff" {
+		return ""
+	}
+
+	return actorPortion + jobPortion
 }
