@@ -78,6 +78,9 @@ func InitWorkerPool(ctx context.Context,
 				logger.WithName("cacheStorage").Info("Evict cache for key.", "key", e.Key, "cause", e.Cause.String())
 			},
 		})
+		if err != nil {
+			return
+		}
 
 		pool = &WorkerPool{
 			taskQueue:           taskQueue,
