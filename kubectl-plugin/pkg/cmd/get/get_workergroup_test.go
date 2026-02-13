@@ -88,9 +88,15 @@ func TestRayWorkerGroupGetComplete(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			err := flags.Set("namespace", tc.namespace)
-			require.NoError(t, err)
-			err = tc.opts.Complete(tc.args, cmd)
+			configFlags := genericclioptions.NewConfigFlags(true)
+			if tc.namespace != "" {
+				configFlags.Namespace = &tc.namespace
+			}
+			tc.opts.cmdFactory = cmdutil.NewFactory(configFlags)
+			cmd := &cobra.Command{}
+			flags := cmd.Flags()
+			configFlags.AddFlags(flags)
+			err := tc.opts.Complete(tc.args)
 			require.NoError(t, err)
 			assert.Equal(t, tc.expectedNamespace, tc.opts.namespace)
 			assert.Equal(t, tc.expectedWorkerGroup, tc.opts.workerGroup)
