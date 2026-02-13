@@ -36,7 +36,7 @@ func GetPluginName() string { return "kai-scheduler" }
 func (k *KaiScheduler) Name() string { return GetPluginName() }
 
 func (k *KaiScheduler) DoBatchSchedulingOnSubmission(_ context.Context, object metav1.Object) error {
-	// In K8sJobMode and InteractiveMode, RayJob first creates a RayCluster,
+	// In K8sJobMode, RayJob first creates a RayCluster,
 	// and then creates the submitter pod after the RayCluster is ready.
 	// KAI-Scheduler does not handle this two-phase creation pattern.
 	// Other schedulers like Yunikorn and Volcano support this by pre-creating PodGroups.
@@ -45,8 +45,6 @@ func (k *KaiScheduler) DoBatchSchedulingOnSubmission(_ context.Context, object m
 		switch rayJob.Spec.SubmissionMode {
 		case rayv1.K8sJobMode:
 			return fmt.Errorf("KAI-Scheduler does not support RayJob with K8sJobMode: the submitter pod is created after RayCluster is ready, preventing proper gang scheduling")
-		case rayv1.InteractiveMode:
-			return fmt.Errorf("KAI-Scheduler does not support RayJob with InteractiveMode: the user-provided submitter runs after RayCluster is ready, preventing proper gang scheduling")
 		}
 	}
 	return nil
