@@ -408,6 +408,13 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 	g.Expect(err).NotTo(HaveOccurred())
 	LogWithTimestamp(test.T(), "Deleted RayCluster %s/%s", namespace.Name, rayCluster.Name)
 
+	// Wait for cluster to be fully deleted
+	g.Eventually(func() error {
+		_, err := GetRayCluster(test, namespace.Name, rayCluster.Name)
+		return err
+	}, TestTimeoutMedium).Should(WithTransform(k8serrors.IsNotFound, BeTrue()))
+	LogWithTimestamp(test.T(), "RayCluster %s/%s fully deleted", namespace.Name, rayCluster.Name)
+
 	ApplyHistoryServer(test, g, namespace, "")
 	historyServerURL := GetHistoryServerURL(test, g, namespace)
 
