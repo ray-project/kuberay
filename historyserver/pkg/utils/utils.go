@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"regexp"
 	"strings"
 	"time"
 
@@ -17,6 +18,8 @@ import (
 const (
 	RAY_SESSIONDIR_LOGDIR_NAME  = "logs"
 	RAY_SESSIONDIR_METADIR_NAME = "meta"
+	DATETIME_LAYOUT             = "2006-01-02_15-04-05.000000"
+	SESSION_ID_REGEX            = `session_(\d{4}-\d{2}-\d{2})_(\d{2}-\d{2}-\d{2})_(\d{6})`
 )
 
 const (
@@ -285,4 +288,23 @@ func IsHexNil(hexStr string) (bool, error) {
 // Example: "raycluster-historyserver_default_session_2026-01-11_19-38-40"
 func BuildClusterSessionKey(clusterName, namespace, sessionName string) string {
 	return clusterName + connector + namespace + connector + sessionName
+}
+
+// GetDateTimeFromSessionID will convert sessionID string i.e. `session_2026-01-27_10-52-59_373533_1` to time.Time
+func GetDateTimeFromSessionID(sessionID string) (time.Time, error) {
+	regex := regexp.MustCompile(SESSION_ID_REGEX)
+	matches := regex.FindStringSubmatch(sessionID)
+
+	if len(matches) < 4 {
+		return time.Time{}, fmt.Errorf("Invalid session string format, expected `session_YYYY-MM-DD_HH-MM-SS_MICROSECOND` got: %s", sessionID)
+	}
+
+	timeStr := fmt.Sprintf("%s_%s.%s", matches[1], matches[2], matches[3])
+
+	t, err := time.Parse(DATETIME_LAYOUT, timeStr)
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	return t, nil
 }
