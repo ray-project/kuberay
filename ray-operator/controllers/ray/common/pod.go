@@ -273,6 +273,10 @@ func configureTokenAuth(clusterName string, podTemplate *corev1.PodTemplateSpec,
 
 // AddRayTokenVolume adds a projected service account token volume to the pod spec.
 func AddRayTokenVolume(podSpec *corev1.PodSpec) {
+	if utils.VolumeExists(utils.RayTokenVolumeName, podSpec.Volumes) {
+		return
+	}
+
 	podSpec.Volumes = append(podSpec.Volumes, corev1.Volume{
 		Name: utils.RayTokenVolumeName,
 		VolumeSource: corev1.VolumeSource{
@@ -288,38 +292,44 @@ func AddRayTokenVolume(podSpec *corev1.PodSpec) {
 			},
 		},
 	})
-
 }
 
 // SetContainerTokenAuthEnvVars sets Ray authentication env vars for a container.
-
 func SetContainerTokenAuthEnvVars(clusterName string, container *corev1.Container, authOptions *rayv1.AuthOptions) {
-	container.Env = append(container.Env, corev1.EnvVar{
-		Name:  utils.RAY_AUTH_MODE_ENV_VAR,
-		Value: string(rayv1.AuthModeToken),
-	})
-
-	secretName := utils.CheckName(clusterName)
-	container.Env = append(container.Env, corev1.EnvVar{
-		Name: utils.RAY_AUTH_TOKEN_ENV_VAR,
-		ValueFrom: &corev1.EnvVarSource{
-			SecretKeyRef: &corev1.SecretKeySelector{
-				LocalObjectReference: corev1.LocalObjectReference{Name: secretName},
-				Key:                  utils.RAY_AUTH_TOKEN_SECRET_KEY,
-			},
-		},
-	})
+	if !utils.EnvVarExists(utils.RAY_AUTH_MODE_ENV_VAR, container.Env) {
+		container.Env = append(container.Env, corev1.EnvVar{
+			Name:  utils.RAY_AUTH_MODE_ENV_VAR,
+			Value: string(rayv1.AuthModeToken),
+		})
+	}
 
 	if authOptions != nil && authOptions.EnableK8sTokenAuth != nil && *authOptions.EnableK8sTokenAuth {
-		container.Env = append(container.Env, corev1.EnvVar{
-			Name:  utils.RAY_ENABLE_K8S_TOKEN_AUTH,
-			Value: "true",
-		})
-		container.VolumeMounts = append(container.VolumeMounts, corev1.VolumeMount{
-			Name:      utils.RayTokenVolumeName,
-			MountPath: utils.RayTokenMountPath,
-			ReadOnly:  true,
-		})
+		if !utils.EnvVarExists(utils.RAY_ENABLE_K8S_TOKEN_AUTH, container.Env) {
+			container.Env = append(container.Env, corev1.EnvVar{
+				Name:  utils.RAY_ENABLE_K8S_TOKEN_AUTH,
+				Value: "true",
+			})
+		}
+		if !utils.VolumeMountExists(utils.RayTokenVolumeName, container.VolumeMounts) {
+			container.VolumeMounts = append(container.VolumeMounts, corev1.VolumeMount{
+				Name:      utils.RayTokenVolumeName,
+				MountPath: utils.RayTokenMountPath,
+				ReadOnly:  true,
+			})
+		}
+	} else {
+		secretName := utils.CheckName(clusterName)
+		if !utils.EnvVarExists(utils.RAY_AUTH_TOKEN_ENV_VAR, container.Env) {
+			container.Env = append(container.Env, corev1.EnvVar{
+				Name: utils.RAY_AUTH_TOKEN_ENV_VAR,
+				ValueFrom: &corev1.EnvVarSource{
+					SecretKeyRef: &corev1.SecretKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{Name: secretName},
+						Key:                  utils.RAY_AUTH_TOKEN_SECRET_KEY,
+					},
+				},
+			})
+		}
 	}
 }
 
