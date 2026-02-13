@@ -767,8 +767,8 @@ func getAllEligibleTaskIDs(g *WithT, client *http.Client, historyServerURL strin
 	return taskIDs
 }
 
-// getAllEligibleActorIDs retrieves all actor IDs with node_id and worker_id from the /logical/actors endpoint.
-// Returns a list of actor IDs that are eligible for log file testing (actors that have been scheduled and are running).
+// getAllEligibleActorIDs retrieves all actor IDs from the /logical/actors endpoint.
+// Returns a list of actor IDs.
 func getAllEligibleActorIDs(g *WithT, client *http.Client, historyServerURL string) []string {
 	var actorIDs []string
 	resp, err := client.Get(historyServerURL + "/logical/actors")
@@ -793,7 +793,7 @@ func getAllEligibleActorIDs(g *WithT, client *http.Client, historyServerURL stri
 	g.Expect(ok).To(BeTrue(), "data should have 'actors' field")
 	g.Expect(len(actors)).To(BeNumerically(">", 0), "should have at least one actor")
 
-	// Find all actors with node_id and worker_id (scheduled actors)
+	// Find all actors
 	for actorID := range actors {
 		actorIDs = append(actorIDs, actorID)
 	}
