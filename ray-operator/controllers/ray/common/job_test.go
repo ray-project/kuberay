@@ -178,15 +178,45 @@ func TestBuildJobSubmitCommandWithSidecarModeVersionSwitch(t *testing.T) {
 			require.NoError(t, err)
 			require.GreaterOrEqual(t, len(command), 2)
 			assert.Equal(t, "until", command[0])
-			expected := fmt.Sprintf(
-				utils.BasePythonHealthCommand,
-				utils.DefaultDashboardPort,
-				utils.RayDashboardGCSHealthPath,
-				utils.DefaultReadinessProbeFailureThreshold,
-			)
-
-			assert.Equal(t, expected, command[1])
+			assert.Contains(t, command[1], "python3 -c")
+			assert.Contains(t, command[1], utils.RayDashboardGCSHealthPath)
+			assert.NotContains(t, command[1], "wget")
 		})
+	}
+}
+
+func TestBuildJobSubmitCommandWithSidecarModeCustomDashboardPort(t *testing.T) {
+	testRayJob := rayJobTemplate()
+	const customPort = 9000
+	testRayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers = []corev1.Container{
+		{
+			Ports: []corev1.ContainerPort{
+				{
+					Name:          utils.DashboardPortName,
+					ContainerPort: customPort,
+				},
+			},
+		},
+	}
+
+	command, err := BuildJobSubmitCommand(testRayJob, rayv1.SidecarMode)
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, len(command), 2)
+	assert.Equal(t, "until", command[0])
+	assert.Contains(t, command[1], fmt.Sprintf("localhost:%d/%s", customPort, utils.RayDashboardGCSHealthPath))
+	assert.Contains(t, command[1], "python3 -c")
+	assert.NotContains(t, command[1], "wget")
+}
+
+func TestBuildJobSubmitCommandWithK8sJobModeNoSidecarHealthWaitLoop(t *testing.T) {
+	testRayJob := rayJobTemplate()
+	command, err := BuildJobSubmitCommand(testRayJob, rayv1.K8sJobMode)
+	require.NoError(t, err)
+	assert.NotContains(t, command, "until")
+	for _, token := range command {
+		assert.NotContains(t, token, utils.RayDashboardGCSHealthPath)
+		assert.NotContains(t, token, "python3 -c")
+		assert.NotContains(t, token, "wget")
 	}
 }
 
