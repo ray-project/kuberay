@@ -134,7 +134,12 @@ func (w *WorkerPool) Start(ctx context.Context) {
 					}
 
 					// The task queue is unbounded, so the send operation will never block.
-					w.taskQueue.In <- &rayJob
+					select {
+					case <-ctx.Done():
+						logger.Info("Async job info query producer goroutine exiting...")
+						return
+					case w.taskQueue.In <- &rayJob:
+					}
 				}
 			}
 		}
