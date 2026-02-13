@@ -77,7 +77,7 @@ kubectl apply -f historyserver/config/service_account.yaml
 #### Deploy In-Cluster History Server
 
 ```bash
-kubectl apply -f config/historyserver.yaml
+kubectl apply -f historyserver/config/historyserver.yaml
 
 # Port-forward to access the history server.
 kubectl port-forward svc/historyserver 8080:30080
@@ -125,6 +125,7 @@ You can also build and run the history server binary directly from the command l
 
 ```bash
 # Build the history server binary.
+cd historyserver
 make buildhistoryserver
 
 # Configure S3 connection via environment variables.
@@ -242,10 +243,10 @@ curl -b ~/cookies.txt "http://localhost:8080/api/jobs/"
 curl -b ~/cookies.txt "http://localhost:8080/api/cluster_status"
 ```
 
-### Live Cluster with grafana
+### Live Cluster with prometheus and grafana
 
 ```bash
-# Install grafana. ref: https://docs.ray.io/en/latest/cluster/kubernetes/k8s-ecosystem/prometheus-grafana.html#step-2-install-kubernetes-prometheus-stack-via-helm-chart
+# Install prometheus and grafana. ref: https://docs.ray.io/en/latest/cluster/kubernetes/k8s-ecosystem/prometheus-grafana.html#step-2-install-kubernetes-prometheus-stack-via-helm-chart
 ./install/prometheus/install.sh --auto-load-dashboard true
 
 # Apply RayCluster with Grafana setting
@@ -254,6 +255,22 @@ kubectl apply -f ray-operator/config/samples/ray-cluster.embed-grafana.yaml
 # Get live session cookie. (Port-forward is required)
 curl -c ~/cookies.txt "http://localhost:8080/enter_cluster/default/raycluster-embed-grafana/live"
 
+# Request to prometheus health endpoint
+curl -b ~/cookies.txt http://localhost:8080/api/prometheus_health
+
 # Request to grafana health endpoint
 curl -b ~/cookies.txt http://localhost:8080/api/grafana_health
+```
+
+After completing the Prometheus and Grafana testing, you can clean up the associated resources using the following commands:
+
+```bash
+# 1. Delete the RayCluster
+kubectl delete -f ray-operator/config/samples/ray-cluster.embed-grafana.yaml
+
+# 2. Uninstall the kube-prometheus-stack helm chart
+helm --namespace prometheus-system uninstall prometheus
+
+# 3. Delete the prometheus-system namespace
+kubectl delete namespace prometheus-system
 ```
