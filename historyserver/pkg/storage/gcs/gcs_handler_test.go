@@ -59,34 +59,27 @@ func TestCreateDirectory(t *testing.T) {
 	tests := []struct {
 		name        string
 		path        string
-		expectErr   bool
 		expectedObj string
 	}{
 		{
 			name:        "new_directory",
 			path:        "new/dir",
-			expectErr:   false,
 			expectedObj: "new/dir/",
 		},
 		{
 			name:        "existing_directory",
 			path:        "new/dir",
-			expectErr:   false,
 			expectedObj: "new/dir/",
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			err := handler.CreateDirectory(tc.path)
-			if (err != nil) != tc.expectErr {
-				t.Errorf("CreateDirectory(%q) error = %v, wantErr %v", tc.path, err, tc.expectErr)
-			}
-			if !tc.expectErr {
-				_, err := server.GetObject(bucketName, tc.expectedObj)
-				if err != nil {
-					t.Errorf("Expected directory object %q not found: %v", tc.expectedObj, err)
-				}
+			handler.CreateDirectory(tc.path)
+
+			_, err := server.GetObject(bucketName, tc.expectedObj)
+			if err != nil {
+				t.Errorf("Expected directory object %q not found: %v", tc.expectedObj, err)
 			}
 		})
 	}
@@ -159,6 +152,13 @@ func TestListFiles(t *testing.T) {
 			},
 			Content: []byte("e"),
 		},
+		{
+			ObjectAttrs: fakestorage.ObjectAttrs{
+				BucketName: "test-bucket",
+				Name:       "ray_historyserver/cluster2/logs/subdir2/",
+			},
+			Content: []byte("e"),
+		},
 	}
 	_, client, bucketName := setupFakeGCS(t, initialObjects...)
 	handler := createRayLogsHandler(client, bucketName)
@@ -170,10 +170,10 @@ func TestListFiles(t *testing.T) {
 		expected  []string
 	}{
 		{
-			name:      "list_logs",
+			name:      "list_files",
 			clusterID: "cluster1",
 			directory: "logs",
-			expected:  []string{"file1.txt", "file2.log"},
+			expected:  []string{"file1.txt", "file2.log", "subdir/"},
 		},
 		{
 			name:      "list_other",
@@ -191,7 +191,13 @@ func TestListFiles(t *testing.T) {
 			name:      "list_cluster2",
 			clusterID: "cluster2",
 			directory: "logs",
-			expected:  []string{"file5.txt"},
+			expected:  []string{"file5.txt", "subdir2/"},
+		},
+		{
+			name:      "list_empty_subdir",
+			clusterID: "cluster2",
+			directory: "logs/subdir2",
+			expected:  nil,
 		},
 	}
 
@@ -284,34 +290,3 @@ func TestGetContent(t *testing.T) {
 		t.Errorf("GetContent(%q, %q) content mismatch: got %q, want %q", clusterID, fileName, string(content), fileContent)
 	}
 }
-
-// TODO(chiayi): https://github.com/fsouza/fake-gcs-server/issues/1415 MatchGlob is currently not supported
-// 				 PR is out and was recently updated.
-// func TestGetContentNoFound(t *testing.T) {
-// 	clusterID := "clusterA"
-// 	fileName := "important.log"
-// 	objPath := "ray_historyserver/clusters/clusterA_ns/sessions/session123/logs/" + fileName
-// 	fileContent := "Random Content"
-
-// 	initialObjects := []fakestorage.Object{
-// 		{
-// 			ObjectAttrs: fakestorage.ObjectAttrs{
-// 				BucketName: "test-bucket",
-// 				Name:       objPath,
-// 			},
-// 			Content: []byte(fileContent),
-// 		},
-// 	}
-// 	_, client, bucketName := setupFakeGCS(t, initialObjects...)
-// 	handler := createRayLogsHandler(client, bucketName)
-
-// 	readerNotFound := handler.GetContent(clusterID, "notfound.log")
-// 	if readerNotFound != nil {
-// 		content, err := io.ReadAll(readerNotFound)
-// 		if err != nil {
-// 			t.Fatalf("Failed to read content: %v", err)
-// 		}
-// 		t.Errorf("Content is somehow: %q", string(content))
-// 		t.Errorf("GetContent(%q, %q) returned non-nil reader for non-existent file", clusterID, "notfound.log")
-// 	}
-// }
