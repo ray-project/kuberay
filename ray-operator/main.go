@@ -4,7 +4,9 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-logr/zapr"
 	routev1 "github.com/openshift/api/route/v1"
@@ -35,6 +37,7 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/metrics"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/dashboardclient"
 	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 	webhooks "github.com/ray-project/kuberay/ray-operator/pkg/webhooks/v1"
 )
@@ -277,14 +280,51 @@ func main() {
 	exitOnError(ray.NewReconciler(ctx, mgr, rayClusterOptions).SetupWithManager(mgr, config.ReconcileConcurrency),
 		"unable to create controller", "controller", "RayCluster")
 
-	exitOnError(ray.NewRayServiceReconciler(ctx, mgr, config).SetupWithManager(mgr, config.ReconcileConcurrency),
+	exitOnError(ray.NewRayServiceReconciler(mgr, config).SetupWithManager(mgr, config.ReconcileConcurrency),
 		"unable to create controller", "controller", "RayService")
+
+	if features.Enabled(features.AsyncJobInfoQuery) {
+		cacheManager := mgr.GetCache()
+
+		queryInterval, parseErr := time.ParseDuration(utils.GetEnvOrDefault(utils.ASYNC_JOB_INFO_QUERY_INTERVAL, utils.DEFAULT_ASYNC_JOB_INFO_QUERY_INTERVAL))
+		exitOnError(parseErr, "unable to parse async job info query interval")
+		if queryInterval < time.Second {
+			exitOnError(fmt.Errorf("async job info query interval %s is too small; must be >= 1s", queryInterval), "invalid async job info query interval")
+		}
+
+		numWorkers, parseErr := strconv.Atoi(utils.GetEnvOrDefault(utils.ASYNC_JOB_INFO_QUERY_WORKER_SIZE, utils.DEFAULT_ASYNC_JOB_INFO_QUERY_WORKER_SIZE))
+		exitOnError(parseErr, "unable to parse async job info query worker size")
+		if numWorkers < 1 {
+			exitOnError(fmt.Errorf("async job info query worker size %d should be greater than one", numWorkers), "invalid async job info query worker size")
+		}
+
+		cacheExpiry, parseErr := time.ParseDuration(utils.GetEnvOrDefault(utils.ASYNC_JOB_INFO_QUERY_CACHE_EXPIRY, utils.DEFAULT_ASYNC_JOB_INFO_QUERY_CACHE_EXPIRY))
+		exitOnError(parseErr, "unable to parse async job info query cache expiry")
+		if cacheExpiry < 0 {
+			exitOnError(fmt.Errorf("async job info query cache expiry %s must be greater than zero", cacheExpiry), "invalid async job info query cache expiry")
+		}
+		if cacheExpiry <= queryInterval {
+			exitOnError(fmt.Errorf("async job info query cache expiry %s must be greater than query interval %s", cacheExpiry, queryInterval), "invalid async job info query cache expiry")
+		}
+
+		workerPool, workerPoolErr := dashboardclient.InitWorkerPool(
+			ctx,
+			cacheManager,
+			numWorkers,
+			queryInterval,
+			cacheExpiry,
+			config.GetDashboardClient(mgr),
+		)
+		exitOnError(workerPoolErr, "unable to create worker pool for async job info query")
+
+		workerPool.Start(ctx)
+	}
 
 	rayJobOptions := ray.RayJobReconcilerOptions{
 		RayJobMetricsManager:  rayJobMetricsManager,
 		BatchSchedulerManager: batchSchedulerManager,
 	}
-	exitOnError(ray.NewRayJobReconciler(ctx, mgr, rayJobOptions, config).SetupWithManager(mgr, config.ReconcileConcurrency),
+	exitOnError(ray.NewRayJobReconciler(mgr, rayJobOptions, config).SetupWithManager(mgr, config.ReconcileConcurrency),
 		"unable to create controller", "controller", "RayJob")
 
 	if os.Getenv("ENABLE_WEBHOOKS") == "true" {
