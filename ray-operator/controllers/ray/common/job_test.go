@@ -115,10 +115,10 @@ func TestBuildJobSubmitCommandWithSidecarMode(t *testing.T) {
 	expected := []string{
 		"until",
 		fmt.Sprintf(
-			utils.BaseWgetHealthCommand,
-			utils.DefaultReadinessProbeFailureThreshold,
+			utils.BasePythonHealthCommand,
 			utils.DefaultDashboardPort,
 			utils.RayDashboardGCSHealthPath,
+			utils.DefaultReadinessProbeFailureThreshold,
 		),
 		">/dev/null", "2>&1", ";",
 		"do", "echo", strconv.Quote("Waiting for Ray Dashboard GCS to become healthy at http://127.0.0.1:8265 ..."), ";", "sleep", "2", ";", "done", ";",
@@ -140,24 +140,20 @@ func TestBuildJobSubmitCommandWithSidecarMode(t *testing.T) {
 
 func TestBuildJobSubmitCommandWithSidecarModeVersionSwitch(t *testing.T) {
 	tests := []struct {
-		name            string
-		rayVersion      string
-		usePythonHealth bool
+		name       string
+		rayVersion string
 	}{
 		{
-			name:            "uses python health command for ray >= 2.53",
-			rayVersion:      "2.53.0",
-			usePythonHealth: true,
+			name:       "uses python health command for ray >= 2.53",
+			rayVersion: "2.53.0",
 		},
 		{
-			name:            "uses wget health command for ray < 2.53",
-			rayVersion:      "2.52.0",
-			usePythonHealth: false,
+			name:       "uses python health command for ray < 2.53",
+			rayVersion: "2.52.1",
 		},
 		{
-			name:            "uses wget health command when rayVersion is invalid",
-			rayVersion:      "invalid-version",
-			usePythonHealth: false,
+			name:       "uses python health command when rayVersion is invalid",
+			rayVersion: "invalid-version",
 		},
 	}
 
@@ -165,10 +161,8 @@ func TestBuildJobSubmitCommandWithSidecarModeVersionSwitch(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			testRayJob := rayJobTemplate()
 			testRayJob.Spec.RayClusterSpec.RayVersion = tt.rayVersion
-			if tt.rayVersion == "invalid-version" {
-				// Avoid metadata-json version parsing failure; this test only checks health command selection.
-				testRayJob.Spec.Metadata = nil
-			}
+			// Avoid metadata-json version parsing failure; this test only checks health command selection.
+			testRayJob.Spec.Metadata = nil
 			testRayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers = []corev1.Container{
 				{
 					Ports: []corev1.ContainerPort{
@@ -184,21 +178,12 @@ func TestBuildJobSubmitCommandWithSidecarModeVersionSwitch(t *testing.T) {
 			require.NoError(t, err)
 			require.GreaterOrEqual(t, len(command), 2)
 			assert.Equal(t, "until", command[0])
-
 			expected := fmt.Sprintf(
-				utils.BaseWgetHealthCommand,
-				utils.DefaultReadinessProbeFailureThreshold,
+				utils.BasePythonHealthCommand,
 				utils.DefaultDashboardPort,
 				utils.RayDashboardGCSHealthPath,
+				utils.DefaultReadinessProbeFailureThreshold,
 			)
-			if tt.usePythonHealth {
-				expected = fmt.Sprintf(
-					utils.BasePythonHealthCommand,
-					utils.DefaultDashboardPort,
-					utils.RayDashboardGCSHealthPath,
-					utils.DefaultReadinessProbeFailureThreshold,
-				)
-			}
 
 			assert.Equal(t, expected, command[1])
 		})

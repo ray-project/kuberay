@@ -125,28 +125,13 @@ func BuildJobSubmitCommand(rayJobInstance *rayv1.RayJob, submissionMode rayv1.Jo
 	jobFollowCommand := []string{"ray", "job", "logs", "--address", address, "--follow", jobId}
 
 	if submissionMode == rayv1.SidecarMode {
-		rayVersion := ""
-		if rayJobInstance.Spec.RayClusterSpec != nil {
-			rayVersion = rayJobInstance.Spec.RayClusterSpec.RayVersion
-		}
-
 		// Wait until Ray Dashboard GCS is healthy before proceeding.
-		var rayDashboardGCSHealthCommand string
-		if supportsUnifiedHealthCheck(rayVersion) {
-			rayDashboardGCSHealthCommand = fmt.Sprintf(
-				utils.BasePythonHealthCommand,
-				port,
-				utils.RayDashboardGCSHealthPath,
-				utils.DefaultReadinessProbeFailureThreshold,
-			)
-		} else {
-			rayDashboardGCSHealthCommand = fmt.Sprintf(
-				utils.BaseWgetHealthCommand,
-				utils.DefaultReadinessProbeFailureThreshold,
-				port,
-				utils.RayDashboardGCSHealthPath,
-			)
-		}
+		rayDashboardGCSHealthCommand := fmt.Sprintf(
+			utils.BasePythonHealthCommand,
+			port,
+			utils.RayDashboardGCSHealthPath,
+			utils.DefaultReadinessProbeFailureThreshold,
+		)
 
 		waitLoop := []string{
 			"until", rayDashboardGCSHealthCommand, ">/dev/null", "2>&1", ";",
