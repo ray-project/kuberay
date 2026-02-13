@@ -1819,10 +1819,7 @@ func TestInitLivenessAndReadinessProbe(t *testing.T) {
 	assert.Nil(t, rayContainer.LivenessProbe.Exec)
 	assert.Nil(t, rayContainer.ReadinessProbe.HTTPGet)
 	assert.NotNil(t, rayContainer.ReadinessProbe.Exec)
-	readinessCmd := strings.Join(rayContainer.ReadinessProbe.Exec.Command, " ")
-	assert.Contains(t, readinessCmd, utils.RayServeProxyHealthPath)
-	assert.Contains(t, readinessCmd, "python3", "RayService readiness exec probe should use python for Ray >= 2.53")
-	assert.NotContains(t, readinessCmd, "wget", "RayService readiness exec probe should avoid wget for Ray >= 2.53")
+	assert.Contains(t, strings.Join(rayContainer.ReadinessProbe.Exec.Command, " "), utils.RayServeProxyHealthPath)
 
 	// Versions parsed below 2.53 must use exec probes.
 	rayContainer.LivenessProbe = nil

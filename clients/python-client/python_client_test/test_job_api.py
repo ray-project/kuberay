@@ -510,15 +510,7 @@ class TestJobApi(unittest.TestCase):
                 )
                 self.assertIsNotNone(status, f"Job {job_info['name']} status should be available")
 
-            # Retry list to allow for eventual consistency (list may lag behind creates)
-            expected_min_count = initial_count + len(test_jobs)
-            result = None
-            for _ in range(10):
-                result = self.api.list_jobs(k8s_namespace=namespace)
-                if result and len(result.get("items", [])) >= expected_min_count:
-                    break
-                time.sleep(2)
-
+            result = self.api.list_jobs(k8s_namespace=namespace)
             self.assertIsNotNone(result, "List jobs should return a result")
             self.assertIn("items", result, "Result should contain 'items' field")
 
@@ -527,8 +519,8 @@ class TestJobApi(unittest.TestCase):
 
             self.assertGreaterEqual(
                 current_count,
-                expected_min_count,
-                f"Should have at least {len(test_jobs)} more jobs than initially (got {current_count}, need {expected_min_count})"
+                initial_count + len(test_jobs),
+                f"Should have at least {len(test_jobs)} more jobs than initially"
             )
 
             job_names_in_list = [item.get("metadata", {}).get("name") for item in items]
