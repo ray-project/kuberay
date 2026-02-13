@@ -1041,15 +1041,16 @@ func parseGetLogFileOptions(req *restful.Request) (GetLogFileOptions, error) {
 		options.AttemptNumber = attemptNumber
 	}
 
-	// Parse filter_ansi_code parameter (boolean)
-	filterStr := req.QueryParameter("filter_ansi_code")
-	lowered := strings.ToLower(filterStr)
-	if lowered == "true" {
-		options.FilterAnsiCode = true
-	} else if lowered == "false" {
-		options.FilterAnsiCode = false
-	} else {
-		return options, fmt.Errorf("invalid filter_ansi_code parameter: %s (must be 'true' or 'false')", filterStr)
+	// Parse filter_ansi_code parameter (boolean, default: false)
+	if filterStr := req.QueryParameter("filter_ansi_code"); filterStr != "" {
+		switch strings.ToLower(filterStr) {
+		case "true":
+			options.FilterAnsiCode = true
+		case "false":
+			options.FilterAnsiCode = false
+		default:
+			return options, fmt.Errorf("invalid filter_ansi_code parameter: %s (must be 'true' or 'false')", filterStr)
+		}
 	}
 
 	// Parse download_filename parameter
