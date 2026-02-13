@@ -834,7 +834,7 @@ func testLiveClusterTaskSummarize(test Test, g *WithT, namespace *corev1.Namespa
 	LogWithTimestamp(test.T(), "Testing %s endpoint for live cluster: %s", endpoint, endpointURL)
 
 	verifySingleEndpoint(test, g, client, endpointURL, func(test Test, g *WithT, data map[string]any) {
-		verifyTaskSummarizeLineageRespSchema(test, g, data, true)
+		verifyTaskSummarizeLineageRespSchema(test, g, data)
 	})
 
 	DeleteS3Bucket(test, g, s3Client)
@@ -884,7 +884,7 @@ func testDeadClusterTaskSummarize(test Test, g *WithT, namespace *corev1.Namespa
 	LogWithTimestamp(test.T(), "Testing %s endpoint for dead cluster: %s", endpoint, endpointURL)
 
 	verifySingleEndpoint(test, g, client, endpointURL, func(test Test, g *WithT, data map[string]any) {
-		verifyTaskSummarizeLineageRespSchema(test, g, data, false)
+		verifyTaskSummarizeLineageRespSchema(test, g, data)
 	})
 
 	DeleteS3Bucket(test, g, s3Client)
@@ -1276,7 +1276,7 @@ func verifyNodeSummarySchema(test Test, g *WithT, nodeSummary map[string]any) {
 
 // verifyTaskSummarizeLineageRespSchema verifies that the /api/v0/tasks/summarize?summary_by=lineage
 // response is valid according to the API schema.
-func verifyTaskSummarizeLineageRespSchema(test Test, g *WithT, resp map[string]any, isLive bool) {
+func verifyTaskSummarizeLineageRespSchema(test Test, g *WithT, resp map[string]any) {
 	// Verify top-level fields.
 	g.Expect(resp).To(HaveKeyWithValue("result", BeTrue()))
 	g.Expect(resp).To(HaveKey("data"))
