@@ -284,34 +284,3 @@ func TestGetContent(t *testing.T) {
 		t.Errorf("GetContent(%q, %q) content mismatch: got %q, want %q", clusterID, fileName, string(content), fileContent)
 	}
 }
-
-// TODO(chiayi): https://github.com/fsouza/fake-gcs-server/issues/1415 MatchGlob is currently not supported
-// 				 PR is out and was recently updated.
-// func TestGetContentNoFound(t *testing.T) {
-// 	clusterID := "clusterA"
-// 	fileName := "important.log"
-// 	objPath := "ray_historyserver/clusters/clusterA_ns/sessions/session123/logs/" + fileName
-// 	fileContent := "Random Content"
-
-// 	initialObjects := []fakestorage.Object{
-// 		{
-// 			ObjectAttrs: fakestorage.ObjectAttrs{
-// 				BucketName: "test-bucket",
-// 				Name:       objPath,
-// 			},
-// 			Content: []byte(fileContent),
-// 		},
-// 	}
-// 	_, client, bucketName := setupFakeGCS(t, initialObjects...)
-// 	handler := createRayLogsHandler(client, bucketName)
-
-// 	readerNotFound := handler.GetContent(clusterID, "notfound.log")
-// 	if readerNotFound != nil {
-// 		content, err := io.ReadAll(readerNotFound)
-// 		if err != nil {
-// 			t.Fatalf("Failed to read content: %v", err)
-// 		}
-// 		t.Errorf("Content is somehow: %q", string(content))
-// 		t.Errorf("GetContent(%q, %q) returned non-nil reader for non-existent file", clusterID, "notfound.log")
-// 	}
-// }

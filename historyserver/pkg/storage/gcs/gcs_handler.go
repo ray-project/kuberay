@@ -48,15 +48,13 @@ func (h *RayLogsHandler) CreateDirectory(directoryPath string) error {
 	if errors.Is(err, gstorage.ErrObjectNotExist) {
 		writer := h.StorageClient.Bucket(h.GCSBucket).Object(objectPath).NewWriter(ctx)
 		if createErr := writer.Close(); createErr != nil {
-			logrus.Errorf("Failed to create directory: %s, error: %v", objectPath, createErr)
-			return createErr
+			return fmt.Errorf("Failed to create directory: %s, error: %v", objectPath, createErr)
 		}
 
 		logrus.Infof("Successfully created GCS directory: %s", objectPath)
 		return nil
 	} else if err != nil {
-		logrus.Errorf("Failed to check if GCS directory already exist: %s, error: %v", objectPath, err)
-		return err
+		return fmt.Errorf("Failed to check if GCS directory already exist: %s, error: %v", objectPath, err)
 	}
 
 	logrus.Infof("Directory already exists: %s", objectPath)
@@ -69,9 +67,8 @@ func (h *RayLogsHandler) WriteFile(file string, reader io.ReadSeeker) error {
 	writer := h.StorageClient.Bucket(h.GCSBucket).Object(file).NewWriter(ctx)
 	_, err := io.Copy(writer, reader)
 	if err != nil {
-		logrus.Error("GCS Client failed to Copy from source.")
 		writer.Close()
-		return err
+		return fmt.Errorf("GCS Client failed to Copy from source: %v", err)
 	}
 
 	// We don't defer close here since the close function acts as finalizing the write.
@@ -82,6 +79,7 @@ func (h *RayLogsHandler) WriteFile(file string, reader io.ReadSeeker) error {
 	return nil
 }
 
+// ListFiles will return all files within the directory, will not return subdirectories.
 func (h *RayLogsHandler) ListFiles(clusterId string, directory string) []string {
 	ctx := context.Background()
 
@@ -215,24 +213,6 @@ func (h *RayLogsHandler) GetContent(clusterId string, fileName string) io.Reader
 	return bytes.NewReader(data)
 }
 
-func createGCSBucket(gcsClient *gstorage.Client, projectID, bucketName string) error {
-	ctx := context.Background()
-
-	if projectID == "" {
-		logrus.Errorf("Project ID cannot be empty. Failed to create GCS bucket: %s", bucketName)
-		return errors.New("Project ID cannot be empty when creating a GCS Bucket")
-	}
-
-	bucket := gcsClient.Bucket(bucketName)
-	if err := bucket.Create(ctx, projectID, nil); err != nil {
-		logrus.Errorf("Failed to create GCS bucket: %s", bucketName)
-		return err
-	}
-
-	logrus.Infof("Created GCS Bucket: %s", bucketName)
-	return nil
-}
-
 func NewReader(c *types.RayHistoryServerConfig, jd map[string]interface{}) (storage.StorageReader, error) {
 	config := &config{}
 	config.completeHistoryServerConfig(c, jd)
@@ -259,16 +239,15 @@ func New(c *config) (*RayLogsHandler, error) {
 		IdleConnTimeout:     90 * time.Second,
 	}
 
-	// The gTransport is the base transport that is wrapped with the Google authenticator
-	// using option.WithHTTPClient() seems to completely override the client which causes
+	// The gTransport is the base transport that is wrapped with the Google authenticator.
+	// Using option.WithHTTPClient() seems to completely override the client which causes
 	// the final storageClient to not use Google auth, so this adds it
 	authTransport, err := gTransport.NewTransport(ctx,
 		baseTransport,
 		option.WithScopes(gstorage.ScopeFullControl),
 	)
 	if err != nil {
-		logrus.Errorf("Failed to create authentication transport object")
-		return nil, err
+		return nil, fmt.Errorf("Failed to create authentication transport object: %v", err)
 	}
 
 	// Create a custom client with the authenticated transport
@@ -282,22 +261,7 @@ func New(c *config) (*RayLogsHandler, error) {
 		option.WithHTTPClient(customHttpTransportClient),
 	)
 	if err != nil {
-		logrus.Errorf("Failed to create google cloud storage client")
-		return nil, err
-	}
-
-	// Check if bucket exists
-	_, err = storageClient.Bucket(c.Bucket).Attrs(ctx)
-	if errors.Is(err, gstorage.ErrBucketNotExist) {
-		logrus.Warnf("Bucket %s does not exist, will attempt to create bucket", c.Bucket)
-		err = createGCSBucket(storageClient, c.GCPProjectID, c.Bucket)
-		if err != nil {
-			storageClient.Close()
-			return nil, err
-		}
-	} else if err != nil {
-		logrus.Error("Failed to check if bucket exist or not")
-		return nil, err
+		return nil, fmt.Errorf("Failed to create google cloud storage client: %v", err)
 	}
 
 	return &RayLogsHandler{

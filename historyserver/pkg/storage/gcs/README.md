@@ -35,7 +35,7 @@ spec:
             cpu: "500m"
 ```
 
-RayCluster will also have the following under both the Rworker and head collector spec
+RayCluster will also have the following under both the worker and head collector spec
 
 ```yaml
   - name: collector
@@ -46,7 +46,7 @@ RayCluster will also have the following under both the Rworker and head collecto
       value: "<GCS_BUCKET_NAME>"
       command:
       - collector
-      - --role=Headx
+      - --role=Head
       - --runtime-class-name=gcs
       - --ray-cluster-name=raycluster-historyserver
       - --ray-root-dir=log
