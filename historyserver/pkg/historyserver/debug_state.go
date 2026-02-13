@@ -24,7 +24,7 @@ var (
 	reNodeGroup  = regexp.MustCompile(`"ray\.io/node-group"\s*:\s*"([^"]+)"`)
 	reTotal      = regexp.MustCompile(`"total"\s*:\s*\{([^}]+)\}`)
 	reAvailable  = regexp.MustCompile(`"available"\s*:\s*\{([^}]+)\}`)
-	reResourceKV = regexp.MustCompile(`([a-zA-Z0-9_:./\-_]+):\s*\[([0-9.e+\-]+)\]`)
+	reResourceKV = regexp.MustCompile(`([a-zA-Z0-9_:./\-]+):\s*\[([0-9.e+\-]+)\]`)
 )
 
 const rayResourceScale = 10000.0

@@ -6,7 +6,7 @@ import (
 )
 
 const (
-	shorten_debug_state_txt_1 = `NodeManager:
+	shortenDebugStateTxt1 = `NodeManager:
 Node ID: 32bbb200d7f0b1f13fc37160bbab6b0f39e53b2e4de044d2ed885cbb
 Node name: 10.244.0.9
 InitialConfigResources: {node:__internal_head__: 1, node:10.244.0.9: 1, object_store_memory: 1.43968e+09, memory: 1e+10}
@@ -17,7 +17,7 @@ Schedule queue length: 0
 cluster_resource_scheduler state:
 Local id: -2795944114624162604 Local resources: {"total":{memory: [100000000000000], node:__internal_head__: [10000], object_store_memory: [14396805120000], node:10.244.0.9: [10000]}}, "available": {memory: [100000000000000], node:__internal_head__: [10000], object_store_memory: [14396805120000], node:10.244.0.9: [10000]}}, "labels":{"ray.io/node-group":"headgroup","ray.io/node-id":"32bbb200d7f0b1f13fc37160bbab6b0f39e53b2e4de044d2ed885cbb",} is_draining: 0 is_idle: 1 Cluster resources`
 
-	shorten_debug_state_txt_2 = `NodeManager:
+	shortenDebugStateTxt2 = `NodeManager:
 Node ID: 5a21dad564fb61db93fa736a04d75eb306d57cf817091308f39ab30a
 Node name: 10.244.0.4
 InitialConfigResources: {object_store_memory: 1.45457e+09, node:__internal_head__: 1, node:10.244.0.4: 1, memory: 1e+10}
@@ -53,7 +53,7 @@ func TestParseDebugState(t *testing.T) {
 	}{
 		{
 			name:              "headgroup-short",
-			content:           shorten_debug_state_txt_1,
+			content:           shortenDebugStateTxt1,
 			expectedID:        "32bbb200d7f0b1f13fc37160bbab6b0f39e53b2e4de044d2ed885cbb",
 			expectedNodeName:  "10.244.0.9",
 			expectedNodeGroup: "headgroup",
@@ -65,7 +65,7 @@ func TestParseDebugState(t *testing.T) {
 		},
 		{
 			name:              "headgroup-long-with-cluster-resources",
-			content:           shorten_debug_state_txt_2,
+			content:           shortenDebugStateTxt2,
 			expectedID:        "5a21dad564fb61db93fa736a04d75eb306d57cf817091308f39ab30a",
 			expectedNodeName:  "10.244.0.4",
 			expectedNodeGroup: "headgroup",
