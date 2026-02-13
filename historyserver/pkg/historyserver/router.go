@@ -935,37 +935,64 @@ func (s *ServerHandler) getTaskSummarize(req *restful.Request, resp *restful.Res
 		return
 	}
 
-	// Parse filter parameters
-	filterKey := req.QueryParameter("filter_keys")
-	filterValue := req.QueryParameter("filter_values")
-	filterPredicate := req.QueryParameter("filter_predicates")
+	listAPIOptions, err := utils.ParseOptionsFromReq(req)
+	if err != nil {
+		resp.WriteErrorString(http.StatusBadRequest, err.Error())
+		return
+	}
 	summaryBy := req.QueryParameter("summary_by")
+
+	// For summary, try getting as many entries as possible to minimize data loss.
+	// Ref: https://github.com/ray-project/ray/blob/ad1b87448fec4db7ef11f1697f9bc02ae6a7ba09/python/ray/dashboard/state_aggregator.py#L569-L582
+	listAPIOptions.Limit = utils.RayMaxLimitFromAPIServer
 
 	// Get all tasks
 	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
 	tasks := s.eventHandler.GetTasks(clusterSessionKey)
 
-	// Apply generic filtering using utils.ApplyFilter
-	tasks = utils.ApplyFilter(tasks, filterKey, filterPredicate, filterValue,
-		func(t eventtypes.Task, key string) string {
-			return t.GetFilterableFieldValue(key)
-		})
+	// Calculate the number of tasks after GCS source truncation.
+	// Since we can't access the GCS and num_status_task_events_dropped, we use num_after_truncation to approximate the total number of tasks.
+	// Ref: https://github.com/ray-project/ray/blob/d0b1d151d8ea964a711e451d0ae736f8bf95b629/python/ray/dashboard/state_aggregator.py#L314-L342
+	numAfterTruncation := len(tasks)
+	numTotal := numAfterTruncation
 
-	// Summarize tasks based on summary_by parameter
-	var summary map[string]interface{}
+	// Filter tasks.
+	// numFiltered is the number of tasks after filtering but before limit truncation.
+	tasks, numFiltered := utils.ApplyTaskFilters(tasks, listAPIOptions)
+
+	var response interface{}
 	if summaryBy == "lineage" {
-		summary = summarizeTasksByLineage(tasks)
+		actors := s.eventHandler.GetActors(clusterSessionKey)
+		lineageSummary := utils.BuildLineageSummary(tasks, actors)
+
+		response = map[string]interface{}{
+			"result": true,
+			"msg":    "",
+			"data": map[string]interface{}{
+				"result": map[string]interface{}{
+					"total":                numTotal,
+					"num_after_truncation": numAfterTruncation,
+					"num_filtered":         numFiltered,
+					"result": map[string]interface{}{
+						"node_id_to_summary": map[string]*utils.TaskSummaries{
+							"cluster": lineageSummary,
+						},
+					},
+					"partial_failure_warning": "",
+					"warnings":                nil,
+				},
+			},
+		}
 	} else {
 		// Default to func_name
-		summary = summarizeTasksByFuncName(tasks)
-	}
-
-	response := map[string]interface{}{
-		"result": true,
-		"msg":    "Tasks summarized.",
-		"data": map[string]interface{}{
-			"result": summary,
-		},
+		summary := summarizeTasksByFuncName(tasks)
+		response = map[string]interface{}{
+			"result": true,
+			"msg":    "Tasks summarized.",
+			"data": map[string]interface{}{
+				"result": summary,
+			},
+		}
 	}
 
 	respData, err := json.Marshal(response)
@@ -994,37 +1021,6 @@ func summarizeTasksByFuncName(tasks []eventtypes.Task) map[string]interface{} {
 			state = "UNKNOWN"
 		}
 		summary[funcName][state]++
-	}
-
-	return map[string]interface{}{
-		"summary": summary,
-		"total":   len(tasks),
-	}
-}
-
-// TODO(Han-Ju Chen): This function has a bug - using JobID instead of actual lineage.
-// Real lineage requires:
-// 1. Add ParentTaskID field to Task struct (types/task.go)
-// 2. Parse parent_task_id from Ray events (eventserver.go)
-// 3. Build task tree structure based on ParentTaskID
-// 4. Update rayjob example to generate nested tasks for testing
-func summarizeTasksByLineage(tasks []eventtypes.Task) map[string]interface{} {
-	summary := make(map[string]map[string]int)
-
-	for _, task := range tasks {
-		// Use JobID as a simple lineage grouping for now
-		lineageKey := task.JobID
-		if lineageKey == "" {
-			lineageKey = "unknown"
-		}
-		if _, ok := summary[lineageKey]; !ok {
-			summary[lineageKey] = make(map[string]int)
-		}
-		state := string(task.State)
-		if state == "" {
-			state = "UNKNOWN"
-		}
-		summary[lineageKey][state]++
 	}
 
 	return map[string]interface{}{
