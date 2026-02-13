@@ -112,7 +112,9 @@ func TestBuildJobSubmitCommandWithSidecarMode(t *testing.T) {
 		},
 	}
 
+	address := "http://127.0.0.1:8265"
 	expected := []string{
+		// Wait for Dashboard GCS health
 		"until",
 		fmt.Sprintf(
 			utils.BaseWgetHealthCommand,
@@ -121,8 +123,19 @@ func TestBuildJobSubmitCommandWithSidecarMode(t *testing.T) {
 			utils.RayDashboardGCSHealthPath,
 		),
 		">/dev/null", "2>&1", ";",
-		"do", "echo", strconv.Quote("Waiting for Ray Dashboard GCS to become healthy at http://127.0.0.1:8265 ..."), ";", "sleep", "2", ";", "done", ";",
-		"ray", "job", "submit", "--address", "http://127.0.0.1:8265",
+		"do", "echo", strconv.Quote("Waiting for Ray Dashboard GCS to become healthy at " + address + " ..."), ";", "sleep", "2", ";", "done", ";",
+		// Wait for expected nodes to register
+		"if", "[", "-n", "\"$" + utils.RAY_EXPECTED_WORKERS + "\"", "]", "&&", "[", "\"$" + utils.RAY_EXPECTED_WORKERS + "\"", "-gt", "\"0\"", "]", ";", "then",
+		"EXPECTED_NODES=$(($" + utils.RAY_EXPECTED_WORKERS + " + 1))", ";",
+		"echo", strconv.Quote("Waiting for $EXPECTED_NODES nodes (1 head + $" + utils.RAY_EXPECTED_WORKERS + " workers) to register..."), ";",
+		"until", "[",
+		"\"$(python3 -c \"import urllib.request,json,os; req=urllib.request.Request('" + address + "/nodes?view=summary'); t=os.environ.get('" + utils.RAY_AUTH_TOKEN_ENV_VAR + "',''); t and req.add_header('x-ray-authorization','Bearer '+t); d=json.loads(urllib.request.urlopen(req,timeout=5).read()); print(len([n for n in d.get('data',{}).get('summary',[]) if n.get('raylet',{}).get('state')=='ALIVE']))\" 2>/dev/null || echo 0)\"",
+		"-ge", "\"$EXPECTED_NODES\"", "]", ";",
+		"do", "echo", strconv.Quote("Waiting for Ray nodes to register. Expected: $EXPECTED_NODES ..."), ";", "sleep", "2", ";", "done", ";",
+		"echo", strconv.Quote("All expected nodes are registered."), ";",
+		"fi", ";",
+		// Job submit command
+		"ray", "job", "submit", "--address", address,
 		"--runtime-env-json", strconv.Quote(`{"test":"test"}`),
 		"--metadata-json", strconv.Quote(`{"testKey":"testValue"}`),
 		"--submission-id", "testJobId",
