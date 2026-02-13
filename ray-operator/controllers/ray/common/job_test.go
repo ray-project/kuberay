@@ -138,6 +138,73 @@ func TestBuildJobSubmitCommandWithSidecarMode(t *testing.T) {
 	assert.Equal(t, expected, command)
 }
 
+func TestBuildJobSubmitCommandWithSidecarModeVersionSwitch(t *testing.T) {
+	tests := []struct {
+		name            string
+		rayVersion      string
+		usePythonHealth bool
+	}{
+		{
+			name:            "uses python health command for ray >= 2.53",
+			rayVersion:      "2.53.0",
+			usePythonHealth: true,
+		},
+		{
+			name:            "uses wget health command for ray < 2.53",
+			rayVersion:      "2.52.0",
+			usePythonHealth: false,
+		},
+		{
+			name:            "uses wget health command when rayVersion is invalid",
+			rayVersion:      "invalid-version",
+			usePythonHealth: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			testRayJob := rayJobTemplate()
+			testRayJob.Spec.RayClusterSpec.RayVersion = tt.rayVersion
+			if tt.rayVersion == "invalid-version" {
+				// Avoid metadata-json version parsing failure; this test only checks health command selection.
+				testRayJob.Spec.Metadata = nil
+			}
+			testRayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers = []corev1.Container{
+				{
+					Ports: []corev1.ContainerPort{
+						{
+							Name:          utils.DashboardPortName,
+							ContainerPort: utils.DefaultDashboardPort,
+						},
+					},
+				},
+			}
+
+			command, err := BuildJobSubmitCommand(testRayJob, rayv1.SidecarMode)
+			require.NoError(t, err)
+			require.GreaterOrEqual(t, len(command), 2)
+			assert.Equal(t, "until", command[0])
+
+			expected := fmt.Sprintf(
+				utils.BaseWgetHealthCommand,
+				utils.DefaultReadinessProbeFailureThreshold,
+				utils.DefaultDashboardPort,
+				utils.RayDashboardGCSHealthPath,
+			)
+			if tt.usePythonHealth {
+				expected = fmt.Sprintf(
+					utils.BasePythonHealthCommand,
+					utils.DefaultDashboardPort,
+					utils.RayDashboardGCSHealthPath,
+					utils.DefaultReadinessProbeFailureThreshold,
+				)
+			}
+
+			assert.Equal(t, expected, command[1])
+		})
+	}
+}
+
 func TestBuildJobSubmitCommandWithK8sJobModeAndYAML(t *testing.T) {
 	rayJobWithYAML := &rayv1.RayJob{
 		Spec: rayv1.RayJobSpec{

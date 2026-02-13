@@ -125,27 +125,27 @@ func BuildJobSubmitCommand(rayJobInstance *rayv1.RayJob, submissionMode rayv1.Jo
 	jobFollowCommand := []string{"ray", "job", "logs", "--address", address, "--follow", jobId}
 
 	if submissionMode == rayv1.SidecarMode {
-		// Wait until Ray Dashboard GCS is healthy before proceeding.
-		// Use wget for Ray < 2.53 (older images), and Python when wget may be unavailable (e.g. slim images).
-		rayDashboardGCSHealthCommand := fmt.Sprintf(
-			utils.BasePythonHealthCommand,
-			port,
-			utils.RayDashboardGCSHealthPath,
-			utils.DefaultReadinessProbeFailureThreshold,
-		)
+		rayVersion := ""
 		if rayJobInstance.Spec.RayClusterSpec != nil {
-			if v, err := semver.NewVersion(rayJobInstance.Spec.RayClusterSpec.RayVersion); err == nil {
-				// Ray 2.53.0 introduced a unified HTTP health endpoint; slim images without wget exist for newer versions.
-				minVersion := semver.MustParse("2.53.0")
-				if v.LessThan(minVersion) {
-					rayDashboardGCSHealthCommand = fmt.Sprintf(
-						utils.BaseWgetHealthCommand,
-						utils.DefaultReadinessProbeFailureThreshold,
-						port,
-						utils.RayDashboardGCSHealthPath,
-					)
-				}
-			}
+			rayVersion = rayJobInstance.Spec.RayClusterSpec.RayVersion
+		}
+
+		// Wait until Ray Dashboard GCS is healthy before proceeding.
+		var rayDashboardGCSHealthCommand string
+		if supportsUnifiedHealthCheck(rayVersion) {
+			rayDashboardGCSHealthCommand = fmt.Sprintf(
+				utils.BasePythonHealthCommand,
+				port,
+				utils.RayDashboardGCSHealthPath,
+				utils.DefaultReadinessProbeFailureThreshold,
+			)
+		} else {
+			rayDashboardGCSHealthCommand = fmt.Sprintf(
+				utils.BaseWgetHealthCommand,
+				utils.DefaultReadinessProbeFailureThreshold,
+				port,
+				utils.RayDashboardGCSHealthPath,
+			)
 		}
 
 		waitLoop := []string{
