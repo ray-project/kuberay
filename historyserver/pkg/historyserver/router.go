@@ -759,19 +759,14 @@ func (s *ServerHandler) buildFormattedClusterStatus(clusterName, clusterNamespac
 
 	for _, nodeID := range nodeIDs {
 		debugStatePath := path.Join(logsPath, nodeID, "debug_state.txt")
+
 		reader := s.reader.GetContent(clusterNameID, debugStatePath)
 		if reader == nil {
 			logrus.Debugf("No debug_state.txt found for node %s", nodeID)
 			continue
 		}
 
-		content, err := io.ReadAll(reader)
-		if err != nil {
-			logrus.Debugf("Failed to read debug_state.txt for node %s: %v", nodeID, err)
-			continue
-		}
-
-		debugState, err := ParseDebugState(string(content))
+		debugState, err := ParseDebugState(reader)
 		if err != nil {
 			logrus.Debugf("Failed to parse debug_state.txt for node %s: %v", nodeID, err)
 			continue

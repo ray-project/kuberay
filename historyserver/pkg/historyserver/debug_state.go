@@ -2,6 +2,7 @@ package historyserver
 
 import (
 	"bufio"
+	"io"
 	"regexp"
 	"strconv"
 	"strings"
@@ -32,36 +33,37 @@ const rayResourceScale = 10000.0
 // ParseDebugState parses the content of a debug_state.txt file
 // and extracts cluster resource scheduler state information.
 // It rebuilds the Resources section exactly, and Idle section most of the time
-func ParseDebugState(content string) (*NodeDebugState, error) {
+func ParseDebugState(rd io.Reader) (*NodeDebugState, error) {
 	state := &NodeDebugState{
 		Total:     make(map[string]float64),
 		Available: make(map[string]float64),
 	}
 
-	scanner := bufio.NewScanner(strings.NewReader(content))
-	for scanner.Scan() {
-		line := scanner.Text()
+	reader := bufio.NewReader(rd)
+	for {
+		line, err := reader.ReadString('\n')
+		if err != nil && err != io.EOF {
+			return nil, err
+		}
 
 		// Parse Node ID and Node name from the first few lines
 		if after, ok := strings.CutPrefix(line, "Node ID:"); ok {
 			state.NodeID = strings.TrimSpace(after)
-			continue
-		}
-		if after, ok := strings.CutPrefix(line, "Node name:"); ok {
+		} else if after, ok := strings.CutPrefix(line, "Node name:"); ok {
 			state.NodeName = strings.TrimSpace(after)
-			continue
-		}
-
-		if strings.Contains(line, "cluster_resource_scheduler state:") {
+		} else if strings.Contains(line, "cluster_resource_scheduler state:") {
 			// The actual data is on the next line
-			if scanner.Scan() {
-				parseClusterResourceSchedulerLine(scanner.Text(), state)
+			nextLine, nextErr := reader.ReadString('\n')
+			if nextErr != nil && nextErr != io.EOF {
+				return nil, nextErr
 			}
+			parseClusterResourceSchedulerLine(nextLine, state)
 			break
 		}
-	}
-	if err := scanner.Err(); err != nil {
-		return nil, err
+
+		if err == io.EOF {
+			break
+		}
 	}
 
 	return state, nil

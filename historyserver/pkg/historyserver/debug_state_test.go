@@ -2,6 +2,7 @@ package historyserver
 
 import (
 	"math"
+	"strings"
 	"testing"
 )
 
@@ -79,7 +80,7 @@ func TestParseDebugState(t *testing.T) {
 
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			state, err := ParseDebugState(tc.content)
+			state, err := ParseDebugState(strings.NewReader(tc.content))
 			if err != nil {
 				t.Fatalf("ParseDebugState() error = %v", err)
 			}
