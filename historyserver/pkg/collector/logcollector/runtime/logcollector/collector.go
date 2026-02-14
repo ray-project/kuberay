@@ -211,7 +211,7 @@ type timezoneInfo struct {
 }
 
 var timezones = []timezoneInfo{
-	{Offset: "-12:00", Value: "Etc/+12"},
+	{Offset: "-12:00", Value: "Etc/GMT+12"},
 	{Offset: "-11:00", Value: "Pacific/Pago_Pago"},
 	{Offset: "-10:00", Value: "Pacific/Honolulu"},
 	{Offset: "-09:00", Value: "America/Anchorage"},
@@ -238,7 +238,7 @@ var timezones = []timezoneInfo{
 	{Offset: "+06:30", Value: "Asia/Yangon"},
 	{Offset: "+07:00", Value: "Asia/Bangkok"},
 	{Offset: "+08:00", Value: "Asia/Shanghai"},
-	{Offset: "+09:00", Value: "Asia/Irkutsk"},
+	{Offset: "+09:00", Value: "Asia/Tokyo"},
 	{Offset: "+09:30", Value: "Australia/Adelaide"},
 	{Offset: "+10:00", Value: "Australia/Brisbane"},
 	{Offset: "+11:00", Value: "Asia/Magadan"},
