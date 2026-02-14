@@ -4,8 +4,10 @@
 // stored in object storage, matching Ray Dashboard's event monitoring behavior.
 //
 // Reference:
-//   - Ray Dashboard event_utils.py: python/ray/dashboard/datacenter.py (monitor_events)
-//   - Ray Dashboard event_head.py: python/ray/dashboard/modules/event/event_head.py
+//   - Ray Dashboard event_utils.py (monitor_events, _read_file, parse_event_strings)
+//     python/ray/dashboard/modules/event/event_utils.py
+//   - Ray Dashboard event_head.py
+//     python/ray/dashboard/modules/event/event_head.py
 package eventserver
 
 import (
@@ -56,7 +58,7 @@ func (r *LogEventReader) ReadLogEvents(clusterInfo utils.ClusterInfo, clusterSes
 	jobEventMap := eventStore.GetOrCreateJobEventMap(clusterSessionKey)
 
 	// Path: {sessionName}/logs/
-	logsBaseDir := path.Join(clusterInfo.SessionName, "logs")
+	logsBaseDir := path.Join(clusterInfo.SessionName, utils.RAY_SESSIONDIR_LOGDIR_NAME)
 
 	// List all items under logs/ to find node directories
 	// Note: ListFiles returns base names only (e.g., "node1/", "node2/")
