@@ -1211,7 +1211,7 @@ func verifyNodesHostNameListSchema(test Test, g *WithT, nodesResp map[string]any
 func testEventsEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
-	ApplyHistoryServer(test, g, namespace)
+	ApplyHistoryServer(test, g, namespace, "")
 	historyServerURL := GetHistoryServerURL(test, g, namespace)
 
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
@@ -1277,7 +1277,7 @@ func testEventsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namesp
 		return err
 	}, TestTimeoutMedium).Should(WithTransform(k8serrors.IsNotFound, BeTrue()))
 
-	ApplyHistoryServer(test, g, namespace)
+	ApplyHistoryServer(test, g, namespace, "")
 	historyServerURL := GetHistoryServerURL(test, g, namespace)
 
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
