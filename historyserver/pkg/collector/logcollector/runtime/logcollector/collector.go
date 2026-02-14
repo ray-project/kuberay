@@ -2,7 +2,10 @@ package logcollector
 
 import (
 	"bytes"
+	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"io/fs"
 	"net/http"
 	"os"
@@ -100,6 +103,7 @@ func (r *RayLogHandler) processSessionLatestLogs() {
 			logrus.Errorf("CreateObjectIfNotExist %s error %v", metafile, err)
 			return
 		}
+		r.writeTimezoneMeta(sessionID)
 	}
 
 	// Read node ID from /tmp/ray/raylet_node_id
@@ -199,6 +203,177 @@ func (r *RayLogHandler) processSessionLatestLogFile(absoluteLogPathName, session
 
 	logrus.Infof("Successfully wrote object %s, size: %d bytes", objectName, len(content))
 	return nil
+}
+
+type timezoneInfo struct {
+	Offset string `json:"offset"`
+	Value  string `json:"value"`
+}
+
+var timezones = []timezoneInfo{
+	{Offset: "-12:00", Value: "Etc/GMT+12"},
+	{Offset: "-11:00", Value: "Pacific/Pago_Pago"},
+	{Offset: "-10:00", Value: "Pacific/Honolulu"},
+	{Offset: "-09:00", Value: "America/Anchorage"},
+	{Offset: "-08:00", Value: "America/Los_Angeles"},
+	{Offset: "-07:00", Value: "America/Phoenix"},
+	{Offset: "-06:00", Value: "America/Guatemala"},
+	{Offset: "-05:00", Value: "America/Bogota"},
+	{Offset: "-04:00", Value: "America/Halifax"},
+	{Offset: "-03:30", Value: "America/St_Johns"},
+	{Offset: "-03:00", Value: "America/Sao_Paulo"},
+	{Offset: "-02:00", Value: "America/Godthab"},
+	{Offset: "-01:00", Value: "Atlantic/Azores"},
+	{Offset: "+00:00", Value: "Europe/London"},
+	{Offset: "+01:00", Value: "Europe/Amsterdam"},
+	{Offset: "+02:00", Value: "Asia/Amman"},
+	{Offset: "+03:00", Value: "Asia/Baghdad"},
+	{Offset: "+03:30", Value: "Asia/Tehran"},
+	{Offset: "+04:00", Value: "Asia/Dubai"},
+	{Offset: "+04:30", Value: "Asia/Kabul"},
+	{Offset: "+05:00", Value: "Asia/Karachi"},
+	{Offset: "+05:30", Value: "Asia/Kolkata"},
+	{Offset: "+05:45", Value: "Asia/Kathmandu"},
+	{Offset: "+06:00", Value: "Asia/Almaty"},
+	{Offset: "+06:30", Value: "Asia/Yangon"},
+	{Offset: "+07:00", Value: "Asia/Bangkok"},
+	{Offset: "+08:00", Value: "Asia/Shanghai"},
+	{Offset: "+09:00", Value: "Asia/Tokyo"},
+	{Offset: "+09:30", Value: "Australia/Adelaide"},
+	{Offset: "+10:00", Value: "Australia/Brisbane"},
+	{Offset: "+11:00", Value: "Asia/Magadan"},
+	{Offset: "+12:00", Value: "Pacific/Auckland"},
+	{Offset: "+13:00", Value: "Pacific/Tongatapu"},
+}
+
+// We build a map from offset to timezone name for quick lookup
+// when the system timezone only provides an offset without a name
+var offsetToNameMap = func() map[string]string {
+	m := make(map[string]string)
+	for _, tz := range timezones {
+		m[tz.Offset] = tz.Value
+	}
+	return m
+}()
+
+func (r *RayLogHandler) writeTimezoneMeta(sessionID string) {
+	if !r.EnableMeta {
+		return
+	}
+
+	clusterDir := utils.AppendRayClusterNameID(r.RayClusterName, r.RayClusterID)
+	filePath := path.Join(
+		r.RootDir,
+		"metadir",
+		clusterDir,
+		path.Base(sessionID),
+		utils.OssMetaFile_Timezone,
+	)
+
+	dirPath := path.Dir(filePath)
+	if err := r.Writer.CreateDirectory(dirPath); err != nil {
+		logrus.Errorf("Failed to create directory %s: %v", dirPath, err)
+		return
+	}
+
+	var tzInfo timezoneInfo
+	if dashboardTz, ok := r.fetchDashboardTimezone(); ok {
+		tzInfo = dashboardTz
+	} else {
+		tzInfo = currentTimezoneInfo()
+	}
+
+	data, err := json.Marshal(tzInfo)
+	if err != nil {
+		logrus.Errorf("Failed to marshal timezone info: %v", err)
+		return
+	}
+
+	if err := r.Writer.WriteFile(filePath, bytes.NewReader(data)); err != nil {
+		logrus.Errorf("Failed to write timezone meta file %s: %v", filePath, err)
+	}
+}
+
+func (r *RayLogHandler) fetchDashboardTimezone() (timezoneInfo, bool) {
+	// The dashboard exposes an endpoint to get the timezone info of the dashboard environment.
+	// The collector and raycluster are in the same pod, so the collector can call this endpoint to get the timezone info.
+	const url = "http://127.0.0.1:8265/timezone"
+
+	client := r.HttpClient
+	if client == nil {
+		client = http.DefaultClient
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	var tzInfo timezoneInfo
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		logrus.Warnf("Failed to create dashboard timezone request: %v", err)
+		return tzInfo, false
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		logrus.Warnf("Failed to fetch dashboard timezone from %s: %v", url, err)
+		return tzInfo, false
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		logrus.Warnf("Unexpected dashboard timezone status %d from %s", resp.StatusCode, url)
+		return tzInfo, false
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		logrus.Warnf("Failed to read dashboard timezone response from %s: %v", url, err)
+		return tzInfo, false
+	}
+
+	if err := json.Unmarshal(body, &tzInfo); err != nil {
+		logrus.Warnf("Failed to parse dashboard timezone response from %s: %v", url, err)
+		return tzInfo, false
+	}
+
+	if tzInfo.Offset == "" && tzInfo.Value == "" {
+		logrus.Warnf("Dashboard timezone response from %s is empty", url)
+		return tzInfo, false
+	}
+
+	return tzInfo, true
+}
+
+func currentTimezoneInfo() timezoneInfo {
+	// Use the fallback method of getting the local timezone offset
+	_, offsetSec := time.Now().Zone()
+	offsetStr := formatUTCOffset(offsetSec)
+
+	if val, ok := offsetToNameMap[offsetStr]; ok {
+		return timezoneInfo{
+			Offset: offsetStr,
+			Value:  val,
+		}
+	}
+
+	return timezoneInfo{
+		Offset: offsetStr,
+	}
+}
+
+func formatUTCOffset(offsetSeconds int) string {
+	sign := "+"
+	if offsetSeconds < 0 {
+		sign = "-"
+		offsetSeconds = -offsetSeconds
+	}
+
+	hours := offsetSeconds / 3600
+	minutes := (offsetSeconds % 3600) / 60
+
+	return fmt.Sprintf("%s%02d:%02d", sign, hours, minutes)
 }
 
 func (r *RayLogHandler) WatchPrevLogsLoops() {
@@ -449,6 +624,7 @@ func (r *RayLogHandler) processSessionPrevLogs(sessionDir string) {
 			logrus.Errorf("CreateObjectIfNotExist %s error %v", metafile, err)
 			return
 		}
+		r.writeTimezoneMeta(sessionID)
 	}
 
 	// Walk through all node directories under this session
@@ -746,6 +922,7 @@ func (r *RayLogHandler) WatchSessionLatestLoops() {
 					logrus.Errorf("CreateObjectIfNotExist %s error %v", metafile, err)
 					return
 				}
+				r.writeTimezoneMeta(sessionID)
 			}
 		case err, ok := <-watcher.Errors:
 			if !ok {
