@@ -1067,7 +1067,7 @@ func testEventsEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Namesp
 }
 
 // testEventsEndpointDeadCluster verifies that the /events endpoint works for a dead cluster.
-// Events are retrieved from the EventHandler's in-memory ClusterEventMap.
+// Events are retrieved from the EventHandler's in-memory ClusterLogEventMap.
 //
 // The test case follows these steps:
 // 1. Prepare test environment by applying a Ray cluster
