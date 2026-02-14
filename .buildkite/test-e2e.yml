@@ -78,7 +78,7 @@
     # Install Istio Gateway controller and create GatewayClass
     - echo "--- Installing Istio (Gateway Controller)"
     - curl -L https://istio.io/downloadIstio | ISTIO_VERSION=1.28.3 sh -
-    - export PATH="$PATH:$PWD/istio-1.28.3/bin"
+    - export PATH="$$PATH:$$PWD/istio-1.28.3/bin"
     - istioctl install --set profile=minimal -y
     - echo "--- Creating Istio GatewayClass"
     - kubectl apply -f ray-operator/config/samples/gateway-api/istio-class.yaml
@@ -87,12 +87,6 @@
     - pushd ray-operator
     - source ../.buildkite/build-start-operator.sh
     - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
-
-    # Enable RayServiceIncrementalUpgrade feature gate by modifying the deployment config
-    - kubectl get deployment kuberay-operator -o yaml > operator.yaml
-    - sed -i 's/--feature-gates=/--feature-gates=RayServiceIncrementalUpgrade=true,/' operator.yaml
-    - kubectl apply -f operator.yaml
-    - kubectl rollout status deployment kuberay-operator --timeout=180s
 
     # Run E2E Tests
     - echo "--- START:Running RayService Incremental Upgrade E2E (nightly operator) tests"
