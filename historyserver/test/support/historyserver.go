@@ -57,7 +57,6 @@ const (
 //   - /logical/actors/{actor_id}
 //
 // Excluded endpoints that are not yet implemented:
-//   - /events
 //   - /api/cluster_status
 //   - /api/data/datasets/{job_id}
 //   - /api/jobs
@@ -68,6 +67,7 @@ var HistoryServerEndpoints = []string{
 	"/api/v0/tasks",
 	"/api/v0/tasks/summarize",
 	"/logical/actors",
+	"/events",
 }
 
 // HistoryServerEndpointPrometheusHealth and HistoryServerEndpointGrafanaHealth are standalone constants

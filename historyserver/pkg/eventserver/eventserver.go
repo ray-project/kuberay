@@ -21,10 +21,11 @@ import (
 type EventHandler struct {
 	reader storage.StorageReader
 
-	ClusterTaskMap  *types.ClusterTaskMap
-	ClusterActorMap *types.ClusterActorMap
-	ClusterJobMap   *types.ClusterJobMap
-	ClusterNodeMap  *types.ClusterNodeMap
+	ClusterTaskMap     *types.ClusterTaskMap
+	ClusterActorMap    *types.ClusterActorMap
+	ClusterJobMap      *types.ClusterJobMap
+	ClusterNodeMap     *types.ClusterNodeMap
+	ClusterLogEventMap *types.ClusterLogEventMap // For /events API (Log Events from logs/events/)
 }
 
 var eventFilePattern = regexp.MustCompile(`-\d{4}-\d{2}-\d{2}-\d{2}$`)
@@ -53,6 +54,7 @@ func NewEventHandler(reader storage.StorageReader) *EventHandler {
 		ClusterNodeMap: &types.ClusterNodeMap{
 			ClusterNodeMap: make(map[string]*types.NodeMap),
 		},
+		ClusterLogEventMap: types.NewClusterLogEventMap(),
 	}
 }
 
@@ -119,12 +121,24 @@ func (h *EventHandler) Run(stop chan struct{}, numOfEventProcessors int) error {
 		defer wg.Done()
 		logrus.Info("Starting event file reader loop")
 
+		// Create a LogEventReader for reading logs/events/event_*.log files
+		logEventReader := NewLogEventReader(h.reader)
+
 		// Helper function to process all events
 		processAllEvents := func() {
 			clusterList := h.reader.List()
 			for _, clusterInfo := range clusterList {
 				clusterNameNamespace := clusterInfo.Name + "_" + clusterInfo.Namespace
 				clusterSessionKey := utils.BuildClusterSessionKey(clusterInfo.Name, clusterInfo.Namespace, clusterInfo.SessionName)
+
+				// Read Log Events from logs/{nodeId}/events/event_*.log
+				// This is the format used by Ray Dashboard's /events API
+				if err := logEventReader.ReadLogEvents(clusterInfo, clusterSessionKey, h.ClusterLogEventMap); err != nil {
+					logrus.Errorf("Failed to read Log Events for %s: %v", clusterSessionKey, err)
+				}
+
+				// Also read RayEvents (Export Events) from node_events/ and job_events/ for backward compatibility
+				// These are used for task/actor/job/node data APIs
 				eventFileList := append(h.getAllJobEventFiles(clusterInfo), h.getAllNodeEventFiles(clusterInfo)...)
 
 				logrus.Infof("current eventFileList for cluster %s is: %v", clusterInfo.Name, eventFileList)
@@ -203,22 +217,23 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 	}
 	eventType := types.EventType(eventTypeStr)
 
-	// clusterNameVal is actually the cluster session key.
-	clusterNameVal, ok := eventMap["clusterName"]
+	// clusterSessionKey is injected during event reading (Run function) and contains
+	// the full key: "{clusterName}_{namespace}_{sessionName}"
+	clusterSessionKeyVal, ok := eventMap["clusterName"]
 	if !ok {
-		return fmt.Errorf("event missing 'clusterName' field")
+		return fmt.Errorf("event missing 'clusterName' field (clusterSessionKey)")
 	}
-	currentClusterName, ok := clusterNameVal.(string)
+	clusterSessionKey, ok := clusterSessionKeyVal.(string)
 	if !ok {
-		return fmt.Errorf("clusterName is not a string, got %T", clusterNameVal)
+		return fmt.Errorf("clusterName is not a string, got %T", clusterSessionKeyVal)
 	}
 
 	logrus.Infof("current eventType: %v", eventType)
 	switch eventType {
 	case types.TASK_DEFINITION_EVENT:
-		return h.handleTaskDefinitionEvent(eventMap, currentClusterName, false)
+		return h.handleTaskDefinitionEvent(eventMap, clusterSessionKey, false)
 	case types.TASK_LIFECYCLE_EVENT:
-		return h.handleTaskLifecycleEvent(eventMap, currentClusterName)
+		return h.handleTaskLifecycleEvent(eventMap, clusterSessionKey)
 	case types.ACTOR_DEFINITION_EVENT:
 		actorDef, ok := eventMap["actorDefinitionEvent"]
 		if !ok {
@@ -235,7 +250,7 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 		}
 
 		// Use CreateOrMergeActor pattern (same as Task)
-		actorMap := h.ClusterActorMap.GetOrCreateActorMap(currentClusterName)
+		actorMap := h.ClusterActorMap.GetOrCreateActorMap(clusterSessionKey)
 		actorMap.CreateOrMergeActor(currActor.ActorID, func(a *types.Actor) {
 			// Preserve lifecycle-derived fields that may have arrived first
 			existingEvents := a.Events
@@ -315,7 +330,7 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 			return nil
 		}
 
-		actorMap := h.ClusterActorMap.GetOrCreateActorMap(currentClusterName)
+		actorMap := h.ClusterActorMap.GetOrCreateActorMap(clusterSessionKey)
 		actorMap.CreateOrMergeActor(actorId, func(a *types.Actor) {
 			// Ensure ActorID is set (in case LIFECYCLE arrives before DEFINITION)
 			a.ActorID = actorId
@@ -415,7 +430,7 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 			a.NumRestarts = restartCount
 		})
 	case types.ACTOR_TASK_DEFINITION_EVENT:
-		return h.handleTaskDefinitionEvent(eventMap, currentClusterName, true)
+		return h.handleTaskDefinitionEvent(eventMap, clusterSessionKey, true)
 	case types.DRIVER_JOB_DEFINITION_EVENT:
 		// NOTE: When event comes in, JobID will be in base64, processing will convert it to Hex
 		jobDef, ok := eventMap["driverJobDefinitionEvent"]
@@ -445,7 +460,7 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 			logrus.Errorf("Failed to convert DriverNodeID from base64 to hex, will keep DriverNodeID in base64: %v", err)
 		}
 
-		jobMap := h.ClusterJobMap.GetOrCreateJobMap(currentClusterName)
+		jobMap := h.ClusterJobMap.GetOrCreateJobMap(clusterSessionKey)
 		jobMap.CreateOrMergeJob(currJob.JobID, func(j *types.Job) {
 			// If for some reason jobID is empty, we will keep whatever is in 'j'
 			var existingJobID string
@@ -532,7 +547,7 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 			return nil
 		}
 
-		jobMap := h.ClusterJobMap.GetOrCreateJobMap(currentClusterName)
+		jobMap := h.ClusterJobMap.GetOrCreateJobMap(clusterSessionKey)
 		jobMap.CreateOrMergeJob(jobId, func(j *types.Job) {
 			// TODO(chiayi): take care of status (job progress) state if part of DriverJobLifecycleEvent
 			j.JobID = jobId
@@ -580,9 +595,9 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 			}
 		})
 	case types.NODE_DEFINITION_EVENT:
-		return h.handleNodeDefinitionEvent(eventMap, currentClusterName)
+		return h.handleNodeDefinitionEvent(eventMap, clusterSessionKey)
 	case types.NODE_LIFECYCLE_EVENT:
-		return h.handleNodeLifecycleEvent(eventMap, currentClusterName)
+		return h.handleNodeLifecycleEvent(eventMap, clusterSessionKey)
 	case types.TASK_PROFILE_EVENT:
 		taskProfileEvent, ok := eventMap["taskProfileEvents"]
 		if !ok {
@@ -639,7 +654,7 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 			logrus.Errorf("Failed to convert ComponentID from base64 to Hex, will use base64: %v", err)
 		}
 
-		taskMap := h.ClusterTaskMap.GetOrCreateTaskMap(currentClusterName)
+		taskMap := h.ClusterTaskMap.GetOrCreateTaskMap(clusterSessionKey)
 		taskMap.CreateOrMergeAttempt(profileData.TaskID, profileData.AttemptNumber, func(t *types.Task) {
 			// Ensure core identifiers are set
 			if t.TaskID == "" {
