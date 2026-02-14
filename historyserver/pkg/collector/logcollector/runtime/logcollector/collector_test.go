@@ -1,15 +1,25 @@
 package logcollector
 
 import (
+	"encoding/json"
+	"errors"
 	"io"
+	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	. "github.com/onsi/gomega"
 )
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
+}
 
 // MockStorageWriter is a mock implementation of storage.StorageWriter for testing
 type MockStorageWriter struct {
@@ -194,4 +204,112 @@ func TestScanAndProcess(t *testing.T) {
 
 	// Signal the background goroutine to exit gracefully
 	close(handler.ShutdownChan)
+}
+
+// TestWriteTimezoneMeta tests the complete timezone metadata writing flow
+func TestWriteTimezoneMeta(t *testing.T) {
+	// We use a fixed reference time to calculate expected offsets dynamically.
+	// This prevents test failures caused by Daylight Saving Time (DST) changes.
+
+	testCases := []struct {
+		name     string
+		tz       string
+		expected string
+		client   *http.Client
+	}{
+		{
+			name:     "Shanghai timezone",
+			tz:       "Asia/Shanghai",
+			expected: "+08:00",
+			client: &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+				return nil, errors.New("dashboard not available")
+			})},
+		},
+		{
+			name:     "Dashboard timezone",
+			expected: `{"offset":"+09:00","value":"Asia/Seoul"}`,
+			// This case tests when the TZ is fetched from a remote API (Dashboard)
+			client: &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(strings.NewReader(`{"offset":"+09:00","value":"Asia/Seoul"}`)),
+					Header:     make(http.Header),
+				}, nil
+			})},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			g := NewWithT(t)
+
+			if tc.tz != "" {
+				t.Setenv("TZ", tc.tz)
+				loc, err := time.LoadLocation(tc.tz)
+				g.Expect(err).ToNot(HaveOccurred())
+
+				prevLocal := time.Local
+				time.Local = loc
+				t.Cleanup(func() {
+					time.Local = prevLocal
+				})
+			} else {
+				os.Unsetenv("TZ")
+			}
+
+			tzInfo := writeTimezoneMetaAndRead(t, g, tc.client)
+
+			switch tc.name {
+			case "Dashboard timezone":
+				var expectedData map[string]string
+				err := json.Unmarshal([]byte(tc.expected), &expectedData)
+				g.Expect(err).ToNot(HaveOccurred())
+				g.Expect(tzInfo.Offset).To(Equal(expectedData["offset"]))
+				g.Expect(tzInfo.Value).To(Equal(expectedData["value"]))
+			default:
+				g.Expect(tzInfo.Offset).To(Equal(tc.expected), "Offset mismatch for %s", tc.tz)
+
+				if tzInfo.Value != "" {
+					// offsetToNameMap is assumed to be a global map defined in your package
+					expectedFallback := offsetToNameMap[tc.expected]
+					g.Expect(tzInfo.Value).To(Or(Equal(tc.tz), Equal(expectedFallback)),
+						"Timezone value mismatch for %s", tc.tz)
+				}
+			}
+		})
+	}
+}
+
+// writeTimezoneMetaAndRead executes the handler logic and extracts the written JSON metadata.
+func writeTimezoneMetaAndRead(t *testing.T, g *WithT, client *http.Client) timezoneInfo {
+	t.Helper()
+
+	mockWriter := NewMockStorageWriter()
+	handler := &RayLogHandler{
+		Writer:         mockWriter,
+		HttpClient:     client,
+		RayClusterName: "test-cluster",
+		RayClusterID:   "abc123",
+		RootDir:        "/tmp/test-root",
+		EnableMeta:     true,
+	}
+
+	sessionID := "session-2024-12-15_10-30-45_123456"
+	handler.writeTimezoneMeta(sessionID)
+
+	// Ensure exactly one file was written
+	g.Expect(mockWriter.writtenFiles).To(HaveLen(1))
+
+	// Extract the content from the mock storage
+	var actualContent string
+	for _, content := range mockWriter.writtenFiles {
+		actualContent = content
+		break
+	}
+
+	var tzInfo timezoneInfo
+	err := json.Unmarshal([]byte(actualContent), &tzInfo)
+	g.Expect(err).ToNot(HaveOccurred())
+
+	return tzInfo
 }
