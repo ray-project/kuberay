@@ -3,6 +3,7 @@ package volcano
 import (
 	"context"
 	"fmt"
+	"maps"
 	"strconv"
 
 	corev1 "k8s.io/api/core/v1"
@@ -62,7 +63,7 @@ func (v *VolcanoBatchScheduler) handleRayCluster(ctx context.Context, raycluster
 		return nil
 	}
 
-	minMember, totalResource := v.calculatePodGroupParams(ctx, &raycluster.Spec)
+	minMember, totalResource := v.calculatePodGroupParams(&raycluster.Spec)
 
 	return v.syncPodGroup(ctx, raycluster, minMember, totalResource)
 }
@@ -74,7 +75,7 @@ func (v *VolcanoBatchScheduler) handleRayJob(ctx context.Context, rayJob *rayv1.
 	}
 
 	var totalResourceList []corev1.ResourceList
-	minMember, totalResource := v.calculatePodGroupParams(ctx, rayJob.Spec.RayClusterSpec)
+	minMember, totalResource := v.calculatePodGroupParams(rayJob.Spec.RayClusterSpec)
 	totalResourceList = append(totalResourceList, totalResource)
 
 	// MinMember intentionally excludes the submitter pod to avoid a startup deadlock
@@ -186,11 +187,11 @@ func (v *VolcanoBatchScheduler) syncPodGroup(ctx context.Context, owner metav1.O
 	return nil
 }
 
-func (v *VolcanoBatchScheduler) calculatePodGroupParams(ctx context.Context, rayClusterSpec *rayv1.RayClusterSpec) (int32, corev1.ResourceList) {
+func (v *VolcanoBatchScheduler) calculatePodGroupParams(rayClusterSpec *rayv1.RayClusterSpec) (int32, corev1.ResourceList) {
 	rayCluster := &rayv1.RayCluster{Spec: *rayClusterSpec}
 
 	if !utils.IsAutoscalingEnabled(rayClusterSpec) {
-		return utils.CalculateDesiredReplicas(ctx, rayCluster) + 1, utils.CalculateDesiredResources(rayCluster)
+		return utils.CalculateDesiredReplicas(rayCluster) + 1, utils.CalculateDesiredResources(rayCluster)
 	}
 	return utils.CalculateMinReplicas(rayCluster) + 1, utils.CalculateMinResources(rayCluster)
 }
@@ -204,11 +205,15 @@ func createPodGroup(owner metav1.Object, podGroupName string, size int32, totalR
 		ownerRef = *metav1.NewControllerRef(obj, rayv1.SchemeGroupVersion.WithKind("RayJob"))
 	}
 
+	annotations := make(map[string]string, len(owner.GetAnnotations()))
+	maps.Copy(annotations, owner.GetAnnotations())
+
 	podGroup := volcanoschedulingv1beta1.PodGroup{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:       owner.GetNamespace(),
 			Name:            podGroupName,
 			OwnerReferences: []metav1.OwnerReference{ownerRef},
+			Annotations:     annotations,
 		},
 		Spec: volcanoschedulingv1beta1.PodGroupSpec{
 			MinMember:    size,

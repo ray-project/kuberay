@@ -6,12 +6,10 @@ import (
 	"io/fs"
 	"net/http"
 	"os"
-	"os/signal"
 	"path"
 	"path/filepath"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
@@ -42,15 +40,10 @@ type RayLogHandler struct {
 	EnableMeta             bool
 }
 
-func (r *RayLogHandler) Start(stop <-chan struct{}) error {
-	go r.Run(stop)
-	return nil
-}
-
 func (r *RayLogHandler) Run(stop <-chan struct{}) error {
 	// watchPath := r.LogDir
-	r.prevLogsDir = "/tmp/ray/prev-logs"
-	r.persistCompleteLogsDir = "/tmp/ray/persist-complete-logs"
+	r.prevLogsDir = filepath.Join("/tmp", "ray", "prev-logs")
+	r.persistCompleteLogsDir = filepath.Join("/tmp", "ray", "persist-complete-logs")
 
 	// Initialize log file paths storage
 	r.logFilePaths = make(map[string]bool)
@@ -61,10 +54,6 @@ func (r *RayLogHandler) Run(stop <-chan struct{}) error {
 	}
 	defer watcher.Close()
 
-	// Setup signal handling for SIGTERM
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGTERM)
-
 	// WatchPrevLogsLoops performs an initial scan of the prev-logs directory on startup
 	// to process leftover log files in prev-logs/{sessionID}/{nodeID}/logs/ directories.
 	// After scanning, it watches for new directories and files. This ensures incomplete
@@ -74,22 +63,12 @@ func (r *RayLogHandler) Run(stop <-chan struct{}) error {
 		go r.WatchSessionLatestLoops() // Watch session_latest symlink changes
 	}
 
-	select {
-	case <-sigChan:
-		logrus.Info("Received SIGTERM, processing all logs...")
-		r.processSessionLatestLogs()
-		close(r.ShutdownChan)
-	case <-stop:
-		logrus.Info("Received stop signal, processing all logs...")
-		r.processSessionLatestLogs()
-		close(r.ShutdownChan)
-	}
-	logrus.Warnf("Receive stop single, so stop ray collector ")
-	return nil
-}
+	<-stop
+	logrus.Info("Received stop signal, processing all logs...")
+	r.processSessionLatestLogs()
+	close(r.ShutdownChan)
 
-func (r *RayLogHandler) WaitForStop() <-chan struct{} {
-	return r.ShutdownChan
+	return nil
 }
 
 // processSessionLatestLogs processes logs in /tmp/ray/session_latest/logs directory
@@ -98,7 +77,7 @@ func (r *RayLogHandler) processSessionLatestLogs() {
 	logrus.Info("Processing session_latest logs on shutdown...")
 
 	// Resolve the session_latest symlink to get the real session directory
-	sessionLatestDir := "/tmp/ray/session_latest"
+	sessionLatestDir := filepath.Join("/tmp", "ray", "session_latest")
 	sessionRealDir, err := filepath.EvalSymlinks(sessionLatestDir)
 	if err != nil {
 		logrus.Errorf("Failed to resolve session_latest symlink: %v", err)
@@ -124,7 +103,7 @@ func (r *RayLogHandler) processSessionLatestLogs() {
 	}
 
 	// Read node ID from /tmp/ray/raylet_node_id
-	nodeIDBytes, err := os.ReadFile("/tmp/ray/raylet_node_id")
+	nodeIDBytes, err := os.ReadFile(filepath.Join("/tmp", "ray", "raylet_node_id"))
 	if err != nil {
 		logrus.Errorf("Failed to read raylet_node_id: %v", err)
 		return
@@ -178,7 +157,8 @@ func (r *RayLogHandler) processSessionLatestLogs() {
 func (r *RayLogHandler) processSessionLatestLogFile(absoluteLogPathName, sessionID, nodeID string) error {
 	// Calculate relative path within logs directory
 	// The logsDir is /tmp/ray/session_latest/logs
-	logsDir := filepath.Join("/tmp/ray/session_latest", "logs")
+	sessionLatestDir := filepath.Join("/tmp", "ray", "session_latest")
+	logsDir := filepath.Join(sessionLatestDir, "logs")
 	relativePath, err := filepath.Rel(logsDir, absoluteLogPathName)
 	if err != nil {
 		return fmt.Errorf("failed to get relative path for %s: %w", absoluteLogPathName, err)
@@ -709,7 +689,8 @@ func (r *RayLogHandler) processPrevLogFile(absoluteLogPathName, localLogDir, ses
 //		session_2024-12-15_10-30-45_123456    ← Empty file! The path itself is the information
 //		session_2024-12-15_14-20-10_789012
 func (r *RayLogHandler) WatchSessionLatestLoops() {
-	sessionLatestDir := "/tmp/ray"
+	sessionLatestDir := filepath.Join("/tmp", "ray")
+	sessionLatestSymlink := filepath.Join(sessionLatestDir, "session_latest")
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		logrus.Errorf("Failed to create fsnotify watcher for session_latest: %v", err)
@@ -736,7 +717,7 @@ func (r *RayLogHandler) WatchSessionLatestLoops() {
 			}
 
 			logrus.Infof("File system event in session_latest: %s %s", event.Op, event.Name)
-			if event.Name == "/tmp/ray/session_latest" {
+			if event.Name == sessionLatestSymlink {
 				continue
 			}
 			rel, err := filepath.Rel(sessionLatestDir, event.Name)

@@ -21,6 +21,30 @@ import (
 const (
 	HistoryServerManifestPath = "../../config/historyserver.yaml"
 	HistoryServerPort         = 30080
+
+	// Session name constants
+	LiveSessionName = "live"
+
+	RayGrafanaIframeHost               = "http://127.0.0.1:3000"
+	HistoryServerGrafanaHealthResponse = `{
+  "result": true,
+  "msg": "Grafana running",
+  "data": {
+    "grafanaHost": "%s",
+    "grafanaOrgId": "1",
+    "sessionName": "%s",
+    "dashboardUids": {
+      "default": "rayDefaultDashboard",
+      "serve": "rayServeDashboard",
+      "serveDeployment": "rayServeDeploymentDashboard",
+      "serveLlm": "rayServeLlmDashboard",
+      "data": "rayDataDashboard",
+      "train": "rayTrainDashboard"
+    },
+    "dashboardDatasource": "Prometheus",
+    "grafanaClusterFilter": null
+  }
+}`
 )
 
 // HistoryServerEndpoints defines endpoints that should be proxied to Ray Dashboard
@@ -35,8 +59,6 @@ const (
 // Excluded endpoints that are not yet implemented:
 //   - /events
 //   - /api/cluster_status
-//   - /api/grafana_health
-//   - /api/prometheus_health
 //   - /api/data/datasets/{job_id}
 //   - /api/jobs
 //   - /api/serve/applications
@@ -48,9 +70,18 @@ var HistoryServerEndpoints = []string{
 	"/logical/actors",
 }
 
+// HistoryServerEndpointPrometheusHealth and HistoryServerEndpointGrafanaHealth are standalone constants
+// because it requires some additional dependencies.
+const HistoryServerEndpointPrometheusHealth = "/api/prometheus_health"
+const HistoryServerEndpointGrafanaHealth = "/api/grafana_health"
+
 // ApplyHistoryServer deploys the HistoryServer and RBAC resources.
-func ApplyHistoryServer(test Test, g *WithT, namespace *corev1.Namespace) {
-	// Read RBAC resources from YAML and modify namespace fields.
+// If manifestPath is empty, the default HistoryServerManifestPath is used.
+func ApplyHistoryServer(test Test, g *WithT, namespace *corev1.Namespace, manifestPath string) {
+	if manifestPath == "" {
+		manifestPath = HistoryServerManifestPath
+	}
+
 	sa, clusterRole, clusterRoleBinding := DeserializeRBACFromYAML(test, ServiceAccountManifestPath)
 	sa.Namespace = namespace.Name
 	clusterRoleBinding.Name = fmt.Sprintf("historyserver-%s", namespace.Name)
@@ -64,6 +95,7 @@ func ApplyHistoryServer(test Test, g *WithT, namespace *corev1.Namespace) {
 	if err != nil && !k8serrors.IsAlreadyExists(err) {
 		g.Expect(err).NotTo(HaveOccurred())
 	}
+
 	_, err = test.Client().Core().RbacV1().ClusterRoleBindings().Create(test.Ctx(), clusterRoleBinding, metav1.CreateOptions{})
 	g.Expect(err).NotTo(HaveOccurred())
 
@@ -74,7 +106,7 @@ func ApplyHistoryServer(test Test, g *WithT, namespace *corev1.Namespace) {
 			context.Background(), clusterRoleBinding.Name, metav1.DeleteOptions{})
 	})
 
-	KubectlApplyYAML(test, HistoryServerManifestPath, namespace.Name)
+	KubectlApplyYAML(test, manifestPath, namespace.Name)
 
 	LogWithTimestamp(test.T(), "Waiting for HistoryServer to be ready")
 	g.Eventually(func(gg Gomega) {
@@ -119,7 +151,38 @@ func GetHistoryServerURL(test Test, g *WithT, namespace *corev1.Namespace) strin
 // checking the collector sidecar container exists in the head pod and an empty S3 bucket exists.
 func PrepareTestEnv(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) *rayv1.RayCluster {
 	// Deploy a Ray cluster with the collector.
-	rayCluster := ApplyRayClusterWithCollector(test, g, namespace)
+	rayCluster := ApplyRayClusterWithCollectorWithEnvs(test, g, namespace, map[string]string{})
+
+	// Check the collector sidecar exists in the head pod.
+	headPod, err := GetHeadPod(test, rayCluster)
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(headPod.Spec.Containers).To(ContainElement(
+		WithTransform(func(c corev1.Container) string { return c.Name }, Equal("collector")),
+	))
+
+	// Check an empty S3 bucket is automatically created.
+	_, err = s3Client.HeadBucket(&s3.HeadBucketInput{
+		Bucket: aws.String(S3BucketName),
+	})
+	g.Expect(err).NotTo(HaveOccurred())
+
+	return rayCluster
+}
+
+// PrepareTestEnvWithPrometheusAndGrafana prepares test environment with Prometheus and Grafana for each test case, including applying a Ray cluster,
+// checking the collector sidecar container exists in the head pod and an empty S3 bucket exists.
+func PrepareTestEnvWithPrometheusAndGrafana(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) *rayv1.RayCluster {
+
+	InstallGrafanaAndPrometheus(test, g)
+
+	additionalEnvs := map[string]string{
+		"RAY_GRAFANA_IFRAME_HOST": RayGrafanaIframeHost,
+		"RAY_GRAFANA_HOST":        "http://prometheus-grafana.prometheus-system.svc:80",
+		"RAY_PROMETHEUS_HOST":     "http://prometheus-kube-prometheus-prometheus.prometheus-system.svc:9090",
+	}
+
+	// Deploy a Ray cluster with the collector.
+	rayCluster := ApplyRayClusterWithCollectorWithEnvs(test, g, namespace, additionalEnvs)
 
 	// Check the collector sidecar exists in the head pod.
 	headPod, err := GetHeadPod(test, rayCluster)
@@ -138,7 +201,7 @@ func PrepareTestEnv(test Test, g *WithT, namespace *corev1.Namespace, s3Client *
 }
 
 // GetOneOfNodeID retrieves a node ID from the /nodes endpoint.
-func GetOneOfNodeID(g *WithT, client *http.Client, historyServerURL string) string {
+func GetOneOfNodeID(g *WithT, client *http.Client, historyServerURL string, isLive bool) string {
 	resp, err := client.Get(historyServerURL + "/nodes?view=summary")
 	g.Expect(err).NotTo(HaveOccurred())
 	defer resp.Body.Close()
@@ -155,6 +218,84 @@ func GetOneOfNodeID(g *WithT, client *http.Client, historyServerURL string) stri
 	summary := data["summary"].([]any)
 	g.Expect(len(summary)).To(BeNumerically(">", 0))
 
-	nodeInfo := summary[0].(map[string]any)
+	var nodeInfo map[string]any
+	if isLive {
+		nodeInfo = summary[0].(map[string]any)
+	} else {
+		nodeInfo = summary[0].([]any)[0].(map[string]any)
+	}
 	return nodeInfo["raylet"].(map[string]any)["nodeId"].(string)
+}
+
+// VerifyLogFileEndpointReturnsContent verifies that the log file endpoint returns content.
+func VerifyLogFileEndpointReturnsContent(test Test, g *WithT, client *http.Client, historyServerURL, nodeID string) {
+	filename := "raylet.out"
+
+	g.Eventually(func(gg Gomega) {
+		logFileURL := fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=100", historyServerURL, EndpointLogsFile, nodeID, filename)
+		resp, err := client.Get(logFileURL)
+		gg.Expect(err).NotTo(HaveOccurred())
+		defer resp.Body.Close()
+		gg.Expect(resp.StatusCode).To(Equal(http.StatusOK))
+
+		body, err := io.ReadAll(resp.Body)
+		gg.Expect(err).NotTo(HaveOccurred())
+		gg.Expect(len(body)).To(BeNumerically(">", 0))
+	}, TestTimeoutShort).Should(Succeed())
+
+	LogWithTimestamp(test.T(), "Log file endpoint returned content successfully")
+}
+
+// VerifyLogFileEndpointRejectsPathTraversal verifies that the log file endpoint rejects path traversal attempts.
+func VerifyLogFileEndpointRejectsPathTraversal(test Test, g *WithT, client *http.Client, historyServerURL, nodeID string) {
+	maliciousPaths := []string{"../etc/passwd", "..", "/etc/passwd", "../../secret"}
+
+	for _, malicious := range maliciousPaths {
+		g.Eventually(func(gg Gomega) {
+			url := fmt.Sprintf("%s%s?node_id=%s&filename=%s", historyServerURL, EndpointLogsFile, nodeID, malicious)
+			resp, err := client.Get(url)
+			gg.Expect(err).NotTo(HaveOccurred())
+			defer func() {
+				io.Copy(io.Discard, resp.Body)
+				resp.Body.Close()
+			}()
+			gg.Expect(resp.StatusCode).To(Equal(http.StatusBadRequest))
+		}, TestTimeoutShort).Should(Succeed())
+	}
+
+	LogWithTimestamp(test.T(), "Log file endpoint correctly rejected path traversal attempts")
+}
+
+// DeleteRayClusterAndWait deletes a RayCluster and waits for it to be fully deleted.
+func DeleteRayClusterAndWait(test Test, g *WithT, namespace string, clusterName string) {
+	err := test.Client().Ray().RayV1().RayClusters(namespace).Delete(test.Ctx(), clusterName, metav1.DeleteOptions{})
+	g.Expect(err).NotTo(HaveOccurred())
+	LogWithTimestamp(test.T(), "Deleted RayCluster %s/%s", namespace, clusterName)
+
+	g.Eventually(func() error {
+		_, err := GetRayCluster(test, namespace, clusterName)
+		return err
+	}, TestTimeoutMedium).Should(WithTransform(k8serrors.IsNotFound, BeTrue()))
+
+	LogWithTimestamp(test.T(), "RayCluster %s/%s fully deleted", namespace, clusterName)
+}
+
+// GetOneOfJobID retrieves a job_id from the /api/jobs endpoint.
+func GetOneOfJobID(g *WithT, client *http.Client, historyServerURL string) string {
+	resp, err := client.Get(historyServerURL + "/api/jobs/")
+	g.Expect(err).NotTo(HaveOccurred())
+	defer resp.Body.Close()
+	g.Expect(resp.StatusCode).To(Equal(http.StatusOK))
+	body, _ := io.ReadAll(resp.Body)
+	var jobs []map[string]any
+	err = json.Unmarshal(body, &jobs)
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(len(jobs)).To(BeNumerically(">", 0), "expected at least one job from /api/jobs/")
+	for _, j := range jobs {
+		if jid, ok := j["job_id"].(string); ok && jid != "" {
+			return jid
+		}
+	}
+	g.Expect(false).To(BeTrue(), "no job with non-empty job_id in /api/jobs/ response")
+	return ""
 }

@@ -253,3 +253,36 @@ func ConvertBase64ToHex(input string) (string, error) {
 
 	return hexStr, nil
 }
+
+// IsHexNil returns true if hexStr decodes to a non-empty byte slice where every byte is 0xff.
+func IsHexNil(hexStr string) (bool, error) {
+	s := strings.TrimSpace(hexStr)
+
+	if len(s) == 0 {
+		return false, nil
+	}
+
+	// Hex string must have even length.
+	if len(s)%2 != 0 {
+		return false, hex.ErrLength
+	}
+
+	bytes, err := hex.DecodeString(s)
+	if err != nil {
+		return false, err
+	}
+
+	for _, v := range bytes {
+		if v != 0xff {
+			return false, nil
+		}
+	}
+	return true, nil
+}
+
+// BuildClusterSessionKey constructs the key used to identify a specific cluster session.
+// Format: "{clusterName}_{namespace}_{sessionName}"
+// Example: "raycluster-historyserver_default_session_2026-01-11_19-38-40"
+func BuildClusterSessionKey(clusterName, namespace, sessionName string) string {
+	return clusterName + connector + namespace + connector + sessionName
+}
