@@ -966,9 +966,9 @@ func (s *ServerHandler) getNodeLogFile(req *restful.Request, resp *restful.Respo
 		return
 	}
 
-	// Only set Content-Disposition header when download_filename is explicitly provided.
-	// This matches Ray Dashboard behavior: without download_filename, the browser
-	// displays the log content inline; with download_filename, it triggers a download.
+	// Set Content-Disposition header to trigger file download.
+	// If the user provides download_filename, use that; otherwise, use DEFAULT_DOWNLOAD_FILENAME.
+	// This matches Ray Dashboard behavior where Content-Disposition is always set.
 	if options.DownloadFilename != "" {
 		// Format filename correctly to escape " or \
 		disposition := mime.FormatMediaType("attachment", map[string]string{
