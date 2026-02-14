@@ -392,7 +392,7 @@ func UnmarshalRuntimeEnvYAML(runtimeEnvYAML string) (utiltypes.RuntimeEnvType, e
 }
 
 // GetComponentActivities returns the activity status of cluster components.
-// Reference to https://github.com/ray-project/ray/blob/master/python/ray/dashboard/modules/job/job_head.py
+// Reference to https://github.com/ray-project/ray/blob/befc7e5c8e6e321d6f558a0a2d21e6623c3c73d0/python/ray/dashboard/modules/job/job_head.py#L634-L694
 func (r *RayDashboardClient) GetComponentActivities(ctx context.Context) (map[string]*utiltypes.RayActivityResponse, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, r.dashboardURL+ComponentActivitiesPath, nil)
 	if err != nil {

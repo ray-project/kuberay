@@ -58,6 +58,8 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/expectations"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/metrics/mocks"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/dashboardclient"
+	utiltypes "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/types"
 	"github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/scheme"
 	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 	"github.com/ray-project/kuberay/ray-operator/test/support"
@@ -3778,4 +3780,302 @@ func TestShouldRecreatePodsForUpgrade(t *testing.T) {
 			assert.Equal(t, tc.expectedRecreate, result)
 		})
 	}
+}
+
+func TestHandleIdleClusterTermination(t *testing.T) {
+	setupTest(t)
+	features.SetFeatureGateDuringTest(t, features.RayClusterIdleTermination, true)
+
+	ctx := context.Background()
+	clusterName := "test-idle-cluster"
+	namespace := "default"
+	dashboardPort := int32(8265)
+
+	// Helper to build a minimal RayCluster with TTLSecondsAfterIdle.
+	newIdleCluster := func(ttl int32, labels map[string]string) *rayv1.RayCluster {
+		return &rayv1.RayCluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      clusterName,
+				Namespace: namespace,
+				Labels:    labels,
+			},
+			Spec: rayv1.RayClusterSpec{
+				TTLSecondsAfterIdle: ptr.To[int32](ttl),
+				HeadGroupSpec: rayv1.HeadGroupSpec{
+					RayStartParams: map[string]string{"dashboard-host": "0.0.0.0"},
+					Template: corev1.PodTemplateSpec{
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{
+									Name:  "ray-head",
+									Image: "rayproject/ray:2.9.0",
+									Ports: []corev1.ContainerPort{
+										{Name: utils.DashboardPortName, ContainerPort: dashboardPort},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+	}
+
+	// Helper to build the head service that FetchHeadServiceURL expects.
+	newHeadService := func() *corev1.Service {
+		return &corev1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      clusterName + "-head-svc",
+				Namespace: namespace,
+			},
+			Spec: corev1.ServiceSpec{
+				Ports: []corev1.ServicePort{
+					{Name: utils.DashboardPortName, Port: dashboardPort},
+				},
+			},
+		}
+	}
+
+	// Helper to build a reconciler with a fake dashboard client.
+	newReconciler := func(fakeClient client.Client, fakeDashboard *utils.FakeRayDashboardClient) *RayClusterReconciler {
+		return &RayClusterReconciler{
+			Client:                     fakeClient,
+			Recorder:                   &record.FakeRecorder{Events: make(chan string, 10)},
+			Scheme:                     scheme.Scheme,
+			rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
+			options: RayClusterReconcilerOptions{
+				DashboardClientFunc: func(_ *rayv1.RayCluster, _ string) (dashboardclient.RayDashboardClientInterface, error) {
+					return fakeDashboard, nil
+				},
+			},
+		}
+	}
+
+	t.Run("should skip idle check for RayCluster managed by RayJob", func(t *testing.T) {
+		cluster := newIdleCluster(60, map[string]string{
+			utils.RayOriginatedFromCRDLabelKey: string(utils.RayJobCRD),
+		})
+		fakeClient := clientFake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(cluster).Build()
+		r := newReconciler(fakeClient, &utils.FakeRayDashboardClient{})
+
+		result, err := r.handleIdleClusterTermination(ctx, cluster)
+		require.NoError(t, err)
+		assert.True(t, result.IsZero(), "expected no requeue for RayJob-managed cluster")
+	})
+
+	t.Run("should skip idle check for RayCluster managed by RayService", func(t *testing.T) {
+		cluster := newIdleCluster(60, map[string]string{
+			utils.RayOriginatedFromCRDLabelKey: string(utils.RayServiceCRD),
+		})
+		fakeClient := clientFake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(cluster).Build()
+		r := newReconciler(fakeClient, &utils.FakeRayDashboardClient{})
+
+		result, err := r.handleIdleClusterTermination(ctx, cluster)
+		require.NoError(t, err)
+		assert.True(t, result.IsZero(), "expected no requeue for RayService-managed cluster")
+	})
+
+	t.Run("should requeue when FetchHeadServiceURL fails", func(t *testing.T) {
+		cluster := newIdleCluster(60, nil)
+		// No head service created, so FetchHeadServiceURL will fail.
+		fakeClient := clientFake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(cluster).Build()
+		r := newReconciler(fakeClient, &utils.FakeRayDashboardClient{})
+
+		result, err := r.handleIdleClusterTermination(ctx, cluster)
+		require.Error(t, err)
+		assert.Equal(t, DefaultRequeueDuration, result.RequeueAfter)
+	})
+
+	t.Run("should requeue when GetComponentActivities fails", func(t *testing.T) {
+		cluster := newIdleCluster(60, nil)
+		headSvc := newHeadService()
+		fakeClient := clientFake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(cluster, headSvc).Build()
+
+		fakeDashboard := &utils.FakeRayDashboardClient{}
+		mockFn := func(_ context.Context) (map[string]*utiltypes.RayActivityResponse, error) {
+			return nil, errors.New("dashboard unavailable")
+		}
+		fakeDashboard.GetComponentActivitiesMock.Store(&mockFn)
+
+		r := newReconciler(fakeClient, fakeDashboard)
+		result, err := r.handleIdleClusterTermination(ctx, cluster)
+		require.NoError(t, err)
+		assert.Equal(t, DefaultRequeueDuration, result.RequeueAfter)
+	})
+
+	t.Run("should requeue when cluster is active", func(t *testing.T) {
+		cluster := newIdleCluster(60, nil)
+		headSvc := newHeadService()
+		fakeClient := clientFake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(cluster, headSvc).Build()
+
+		fakeDashboard := &utils.FakeRayDashboardClient{}
+		mockFn := func(_ context.Context) (map[string]*utiltypes.RayActivityResponse, error) { //nolint:unparam // This is a mock function so parameters are required
+			return map[string]*utiltypes.RayActivityResponse{
+				"driver": {IsActive: utiltypes.RayActivityStatusActive},
+			}, nil
+		}
+		fakeDashboard.GetComponentActivitiesMock.Store(&mockFn)
+
+		r := newReconciler(fakeClient, fakeDashboard)
+		result, err := r.handleIdleClusterTermination(ctx, cluster)
+		require.NoError(t, err)
+		assert.Equal(t, DefaultRequeueDuration, result.RequeueAfter)
+	})
+
+	t.Run("should requeue when activity status is error", func(t *testing.T) {
+		cluster := newIdleCluster(60, nil)
+		headSvc := newHeadService()
+		fakeClient := clientFake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(cluster, headSvc).Build()
+
+		fakeDashboard := &utils.FakeRayDashboardClient{}
+		mockFn := func(_ context.Context) (map[string]*utiltypes.RayActivityResponse, error) { //nolint:unparam // This is a mock function so parameters are required
+			return map[string]*utiltypes.RayActivityResponse{
+				"driver": {IsActive: utiltypes.RayActivityStatusError},
+			}, nil
+		}
+		fakeDashboard.GetComponentActivitiesMock.Store(&mockFn)
+
+		r := newReconciler(fakeClient, fakeDashboard)
+		result, err := r.handleIdleClusterTermination(ctx, cluster)
+		require.NoError(t, err)
+		assert.Equal(t, DefaultRequeueDuration, result.RequeueAfter)
+	})
+
+	t.Run("should requeue when no activity timestamp is available", func(t *testing.T) {
+		cluster := newIdleCluster(60, nil)
+		headSvc := newHeadService()
+		fakeClient := clientFake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(cluster, headSvc).Build()
+
+		fakeDashboard := &utils.FakeRayDashboardClient{}
+		mockFn := func(_ context.Context) (map[string]*utiltypes.RayActivityResponse, error) { //nolint:unparam // This is a mock function so parameters are required
+			return map[string]*utiltypes.RayActivityResponse{
+				"driver": {
+					IsActive:       utiltypes.RayActivityStatusInactive,
+					LastActivityAt: nil,
+				},
+			}, nil
+		}
+		fakeDashboard.GetComponentActivitiesMock.Store(&mockFn)
+
+		r := newReconciler(fakeClient, fakeDashboard)
+		result, err := r.handleIdleClusterTermination(ctx, cluster)
+		require.NoError(t, err)
+		assert.Equal(t, DefaultRequeueDuration, result.RequeueAfter)
+	})
+
+	t.Run("should requeue when idle but TTL has not been reached", func(t *testing.T) {
+		ttlSeconds := int32(300) // 5 minutes
+		cluster := newIdleCluster(ttlSeconds, nil)
+		headSvc := newHeadService()
+		fakeClient := clientFake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(cluster, headSvc).Build()
+
+		// last activity was 10 seconds ago, TTL is 300 seconds → should not delete
+		lastActivity := float64(time.Now().Add(-10 * time.Second).Unix())
+		fakeDashboard := &utils.FakeRayDashboardClient{}
+		mockFn := func(_ context.Context) (map[string]*utiltypes.RayActivityResponse, error) { //nolint:unparam // This is a mock function so parameters are required
+			return map[string]*utiltypes.RayActivityResponse{
+				"driver": {
+					IsActive:       utiltypes.RayActivityStatusInactive,
+					LastActivityAt: &lastActivity,
+				},
+			}, nil
+		}
+		fakeDashboard.GetComponentActivitiesMock.Store(&mockFn)
+
+		r := newReconciler(fakeClient, fakeDashboard)
+		result, err := r.handleIdleClusterTermination(ctx, cluster)
+		require.NoError(t, err)
+		assert.Positive(t, result.RequeueAfter, "expected requeue")
+		// Should requeue for approximately 290 seconds (300 - 10)
+		assert.InDelta(t, 290, result.RequeueAfter.Seconds(), 5)
+	})
+
+	t.Run("should delete cluster when TTL has been exceeded", func(t *testing.T) {
+		ttlSeconds := int32(60)
+		cluster := newIdleCluster(ttlSeconds, nil)
+		headSvc := newHeadService()
+		fakeClient := clientFake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(cluster, headSvc).Build()
+
+		// last activity was 120 seconds ago, TTL is 60 seconds → should delete
+		lastActivity := float64(time.Now().Add(-120 * time.Second).Unix())
+		fakeDashboard := &utils.FakeRayDashboardClient{}
+		mockFn := func(_ context.Context) (map[string]*utiltypes.RayActivityResponse, error) { //nolint:unparam // This is a mock function so parameters are required
+			return map[string]*utiltypes.RayActivityResponse{
+				"driver": {
+					IsActive:       utiltypes.RayActivityStatusInactive,
+					LastActivityAt: &lastActivity,
+				},
+			}, nil
+		}
+		fakeDashboard.GetComponentActivitiesMock.Store(&mockFn)
+
+		r := newReconciler(fakeClient, fakeDashboard)
+		result, err := r.handleIdleClusterTermination(ctx, cluster)
+		require.NoError(t, err)
+		assert.True(t, result.IsZero(), "expected no requeue after deletion")
+
+		// Verify the cluster was deleted.
+		err = fakeClient.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: namespace}, &rayv1.RayCluster{})
+		assert.True(t, k8serrors.IsNotFound(err), "expected cluster to be deleted")
+	})
+
+	t.Run("should use latest activity time across multiple components", func(t *testing.T) {
+		ttlSeconds := int32(60)
+		cluster := newIdleCluster(ttlSeconds, nil)
+		headSvc := newHeadService()
+		fakeClient := clientFake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(cluster, headSvc).Build()
+
+		// driver: last activity 120 seconds ago (exceeded TTL)
+		// custom_hook: last activity 10 seconds ago (not exceeded TTL)
+		// Should use the latest (custom_hook), so should NOT delete
+		driverActivity := float64(time.Now().Add(-120 * time.Second).Unix())
+		hookActivity := float64(time.Now().Add(-10 * time.Second).Unix())
+		fakeDashboard := &utils.FakeRayDashboardClient{}
+		mockFn := func(_ context.Context) (map[string]*utiltypes.RayActivityResponse, error) { //nolint:unparam // This is a mock function so parameters are required
+			return map[string]*utiltypes.RayActivityResponse{
+				"driver": {
+					IsActive:       utiltypes.RayActivityStatusInactive,
+					LastActivityAt: &driverActivity,
+				},
+				"custom_hook": {
+					IsActive:       utiltypes.RayActivityStatusInactive,
+					LastActivityAt: &hookActivity,
+				},
+			}, nil
+		}
+		fakeDashboard.GetComponentActivitiesMock.Store(&mockFn)
+
+		r := newReconciler(fakeClient, fakeDashboard)
+		result, err := r.handleIdleClusterTermination(ctx, cluster)
+		require.NoError(t, err)
+		assert.Positive(t, result.RequeueAfter, "expected requeue, not deletion")
+	})
+
+	t.Run("should not delete when any component is active among multiple", func(t *testing.T) {
+		ttlSeconds := int32(60)
+		cluster := newIdleCluster(ttlSeconds, nil)
+		headSvc := newHeadService()
+		fakeClient := clientFake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(cluster, headSvc).Build()
+
+		driverActivity := float64(time.Now().Add(-120 * time.Second).Unix())
+		fakeDashboard := &utils.FakeRayDashboardClient{}
+		mockFn := func(_ context.Context) (map[string]*utiltypes.RayActivityResponse, error) { //nolint:unparam // This is a mock function so parameters are required
+			return map[string]*utiltypes.RayActivityResponse{
+				"driver": {
+					IsActive:       utiltypes.RayActivityStatusInactive,
+					LastActivityAt: &driverActivity,
+				},
+				"custom_hook": {
+					IsActive: utiltypes.RayActivityStatusActive,
+				},
+			}, nil
+		}
+		fakeDashboard.GetComponentActivitiesMock.Store(&mockFn)
+
+		r := newReconciler(fakeClient, fakeDashboard)
+		result, err := r.handleIdleClusterTermination(ctx, cluster)
+		require.NoError(t, err)
+		// Should requeue, not delete — cluster still has active components
+		assert.Equal(t, DefaultRequeueDuration, result.RequeueAfter)
+	})
 }
