@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"math"
 	"net/http"
+	"path"
 	"sort"
 	"strconv"
 	"strings"
@@ -52,6 +53,15 @@ func routerClusters(s *ServerHandler) {
 	ws.Route(ws.GET("/").To(s.getClusters).
 		Doc("get all clusters").
 		Writes([]string{}))
+}
+
+func routerTimezone(s *ServerHandler) {
+	ws := new(restful.WebService)
+	defer restful.Add(ws)
+	ws.Path("/timezone").Consumes(restful.MIME_JSON).Produces(restful.MIME_JSON)
+	ws.Route(ws.GET("/").To(s.getTimezone).Filter(s.CookieHandle).
+		Doc("get timezone").
+		Writes(""))
 }
 
 // routerNodes registers RESTful routers for node-related endpoints.
@@ -291,6 +301,7 @@ func routerRayClusterSet(s *ServerHandler) {
 func (s *ServerHandler) RegisterRouter() {
 	routerRayClusterSet(s)
 	routerClusters(s)
+	routerTimezone(s)
 	routerNodes(s)
 	routerEvents(s)
 	routerAPI(s)
@@ -564,6 +575,52 @@ func (s *ServerHandler) getGrafanaHealth(req *restful.Request, resp *restful.Res
 	}
 
 	resp.WriteErrorString(http.StatusNotImplemented, "Grafana health is not yet supported for historical sessions.")
+}
+
+func (s *ServerHandler) getTimezone(req *restful.Request, resp *restful.Response) {
+	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
+	if sessionName == "live" {
+		s.redirectRequest(req, resp)
+		return
+	}
+
+	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
+	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
+	clusterNameID := clusterName + "_" + clusterNamespace
+	filePath := path.Join("metadir", clusterNameID, sessionName)
+	reader := s.reader.GetContent(filePath, utils.OssMetaFile_Timezone)
+	if reader == nil {
+		respData, err := json.Marshal(map[string]string{"offset": "", "value": ""})
+		if err != nil {
+			logrus.Errorf("Failed to marshal timezone response: %v", err)
+			resp.WriteErrorString(http.StatusInternalServerError, err.Error())
+			return
+		}
+		resp.Write(respData)
+		return
+	}
+
+	content, err := io.ReadAll(reader)
+	if err != nil {
+		logrus.Errorf("Failed to read timezone metadata: %v", err)
+		resp.WriteErrorString(http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	var timezoneData map[string]string
+	if err := json.Unmarshal(content, &timezoneData); err != nil {
+		logrus.Errorf("Failed to parse timezone metadata: %v", err)
+		resp.WriteErrorString(http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	respData, err := json.Marshal(timezoneData)
+	if err != nil {
+		logrus.Errorf("Failed to marshal timezone response: %v", err)
+		resp.WriteErrorString(http.StatusInternalServerError, err.Error())
+		return
+	}
+	resp.Write(respData)
 }
 
 func (s *ServerHandler) getJobs(req *restful.Request, resp *restful.Response) {
