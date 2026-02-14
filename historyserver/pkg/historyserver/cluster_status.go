@@ -218,6 +218,7 @@ func (b *ClusterStatusBuilder) AddPendingDemandsFromActors(actors []types.Actor)
 
 func (b *ClusterStatusBuilder) mergeDemands(demandMap map[string]*ResourceDemand) {
 	indexByKey := make(map[string]int, len(b.PendingDemands))
+
 	for i, existing := range b.PendingDemands {
 		indexByKey[resourceKey(existing.Resources)] = i
 	}
@@ -266,7 +267,9 @@ func resourceKey(resources map[string]float64) string {
 
 	var parts []string
 	for k, v := range resources {
-		parts = append(parts, fmt.Sprintf("%s:%.2f", k, v))
+		// The precision of the fractional resource requirement is 0.0001
+		// Ref: https://docs.ray.io/en/latest/ray-core/scheduling/resources.html
+		parts = append(parts, fmt.Sprintf("%s:%.4f", k, v))
 	}
 
 	slices.Sort(parts)
