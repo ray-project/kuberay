@@ -358,7 +358,9 @@ func currentTimezoneInfo() timezoneInfo {
 		}
 	}
 
-	return timezoneInfo{}
+	return timezoneInfo{
+		Offset: offsetStr,
+	}
 }
 
 func formatUTCOffset(offsetSeconds int) string {
