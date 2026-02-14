@@ -130,6 +130,7 @@ const (
 
 	// Use as container env variable
 	RAY_CLUSTER_NAME                        = "RAY_CLUSTER_NAME"
+	RAY_CLUSTER_NAMESPACE                   = "RAY_CLUSTER_NAMESPACE"
 	RAY_IP                                  = "RAY_IP"
 	FQ_RAY_IP                               = "FQ_RAY_IP"
 	RAY_PORT                                = "RAY_PORT"
@@ -245,6 +246,7 @@ const (
 	RayDashboardGCSHealthPath = "api/gcs_healthz"
 	RayServeProxyHealthPath   = "-/healthz"
 	BaseWgetHealthCommand     = "wget --tries 1 -T %d -q -O- http://localhost:%d/%s | grep success"
+	RayNodeHealthPath         = "/api/healthz"
 
 	// Finalizers for RayJob
 	RayJobStopJobFinalizer = "ray.io/rayjob-finalizer"

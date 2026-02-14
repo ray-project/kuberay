@@ -2856,7 +2856,7 @@ func Test_RedisCleanup(t *testing.T) {
 				// Simulate the Job succeeded.
 				job := jobList.Items[0]
 				job.Status.Succeeded = 1
-				job.Status.Conditions = []batchv1.JobCondition{{Type: batchv1.JobComplete, Status: corev1.ConditionTrue}}
+				job.Status.Conditions = []batchv1.JobCondition{{Type: batchv1.JobSuccessCriteriaMet, Status: corev1.ConditionTrue}, {Type: batchv1.JobComplete, Status: corev1.ConditionTrue}}
 				err = fakeClient.Status().Update(ctx, &job)
 				require.NoError(t, err, "Fail to update Job status")
 
@@ -3786,6 +3786,11 @@ func TestHandleIdleClusterTermination(t *testing.T) {
 	setupTest(t)
 	features.SetFeatureGateDuringTest(t, features.RayClusterIdleTermination, true)
 
+	// Create a new scheme with CRDs, Pod, Service schemes.
+	newScheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(newScheme)
+	_ = corev1.AddToScheme(newScheme)
+
 	ctx := context.Background()
 	clusterName := "test-idle-cluster"
 	namespace := "default"
@@ -3841,7 +3846,7 @@ func TestHandleIdleClusterTermination(t *testing.T) {
 		return &RayClusterReconciler{
 			Client:                     fakeClient,
 			Recorder:                   &record.FakeRecorder{Events: make(chan string, 10)},
-			Scheme:                     scheme.Scheme,
+			Scheme:                     newScheme,
 			rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
 			options: RayClusterReconcilerOptions{
 				DashboardClientFunc: func(_ *rayv1.RayCluster, _ string) (dashboardclient.RayDashboardClientInterface, error) {
@@ -3855,7 +3860,7 @@ func TestHandleIdleClusterTermination(t *testing.T) {
 		cluster := newIdleCluster(60, map[string]string{
 			utils.RayOriginatedFromCRDLabelKey: string(utils.RayJobCRD),
 		})
-		fakeClient := clientFake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(cluster).Build()
+		fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(cluster).Build()
 		r := newReconciler(fakeClient, &utils.FakeRayDashboardClient{})
 
 		result, err := r.handleIdleClusterTermination(ctx, cluster)
@@ -3867,7 +3872,7 @@ func TestHandleIdleClusterTermination(t *testing.T) {
 		cluster := newIdleCluster(60, map[string]string{
 			utils.RayOriginatedFromCRDLabelKey: string(utils.RayServiceCRD),
 		})
-		fakeClient := clientFake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(cluster).Build()
+		fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(cluster).Build()
 		r := newReconciler(fakeClient, &utils.FakeRayDashboardClient{})
 
 		result, err := r.handleIdleClusterTermination(ctx, cluster)
@@ -3878,7 +3883,7 @@ func TestHandleIdleClusterTermination(t *testing.T) {
 	t.Run("should requeue when FetchHeadServiceURL fails", func(t *testing.T) {
 		cluster := newIdleCluster(60, nil)
 		// No head service created, so FetchHeadServiceURL will fail.
-		fakeClient := clientFake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(cluster).Build()
+		fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(cluster).Build()
 		r := newReconciler(fakeClient, &utils.FakeRayDashboardClient{})
 
 		result, err := r.handleIdleClusterTermination(ctx, cluster)
@@ -3889,7 +3894,7 @@ func TestHandleIdleClusterTermination(t *testing.T) {
 	t.Run("should requeue when GetComponentActivities fails", func(t *testing.T) {
 		cluster := newIdleCluster(60, nil)
 		headSvc := newHeadService()
-		fakeClient := clientFake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(cluster, headSvc).Build()
+		fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(cluster, headSvc).Build()
 
 		fakeDashboard := &utils.FakeRayDashboardClient{}
 		mockFn := func(_ context.Context) (map[string]*utiltypes.RayActivityResponse, error) {
@@ -3899,14 +3904,14 @@ func TestHandleIdleClusterTermination(t *testing.T) {
 
 		r := newReconciler(fakeClient, fakeDashboard)
 		result, err := r.handleIdleClusterTermination(ctx, cluster)
-		require.NoError(t, err)
+		require.Error(t, err)
 		assert.Equal(t, DefaultRequeueDuration, result.RequeueAfter)
 	})
 
 	t.Run("should requeue when cluster is active", func(t *testing.T) {
 		cluster := newIdleCluster(60, nil)
 		headSvc := newHeadService()
-		fakeClient := clientFake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(cluster, headSvc).Build()
+		fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(cluster, headSvc).Build()
 
 		fakeDashboard := &utils.FakeRayDashboardClient{}
 		mockFn := func(_ context.Context) (map[string]*utiltypes.RayActivityResponse, error) { //nolint:unparam // This is a mock function so parameters are required
@@ -3925,7 +3930,7 @@ func TestHandleIdleClusterTermination(t *testing.T) {
 	t.Run("should requeue when activity status is error", func(t *testing.T) {
 		cluster := newIdleCluster(60, nil)
 		headSvc := newHeadService()
-		fakeClient := clientFake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(cluster, headSvc).Build()
+		fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(cluster, headSvc).Build()
 
 		fakeDashboard := &utils.FakeRayDashboardClient{}
 		mockFn := func(_ context.Context) (map[string]*utiltypes.RayActivityResponse, error) { //nolint:unparam // This is a mock function so parameters are required
@@ -3944,7 +3949,7 @@ func TestHandleIdleClusterTermination(t *testing.T) {
 	t.Run("should requeue when no activity timestamp is available", func(t *testing.T) {
 		cluster := newIdleCluster(60, nil)
 		headSvc := newHeadService()
-		fakeClient := clientFake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(cluster, headSvc).Build()
+		fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(cluster, headSvc).Build()
 
 		fakeDashboard := &utils.FakeRayDashboardClient{}
 		mockFn := func(_ context.Context) (map[string]*utiltypes.RayActivityResponse, error) { //nolint:unparam // This is a mock function so parameters are required
@@ -3967,7 +3972,7 @@ func TestHandleIdleClusterTermination(t *testing.T) {
 		ttlSeconds := int32(300) // 5 minutes
 		cluster := newIdleCluster(ttlSeconds, nil)
 		headSvc := newHeadService()
-		fakeClient := clientFake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(cluster, headSvc).Build()
+		fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(cluster, headSvc).Build()
 
 		// last activity was 10 seconds ago, TTL is 300 seconds → should not delete
 		lastActivity := float64(time.Now().Add(-10 * time.Second).Unix())
@@ -3994,7 +3999,7 @@ func TestHandleIdleClusterTermination(t *testing.T) {
 		ttlSeconds := int32(60)
 		cluster := newIdleCluster(ttlSeconds, nil)
 		headSvc := newHeadService()
-		fakeClient := clientFake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(cluster, headSvc).Build()
+		fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(cluster, headSvc).Build()
 
 		// last activity was 120 seconds ago, TTL is 60 seconds → should delete
 		lastActivity := float64(time.Now().Add(-120 * time.Second).Unix())
@@ -4023,7 +4028,7 @@ func TestHandleIdleClusterTermination(t *testing.T) {
 		ttlSeconds := int32(60)
 		cluster := newIdleCluster(ttlSeconds, nil)
 		headSvc := newHeadService()
-		fakeClient := clientFake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(cluster, headSvc).Build()
+		fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(cluster, headSvc).Build()
 
 		// driver: last activity 120 seconds ago (exceeded TTL)
 		// custom_hook: last activity 10 seconds ago (not exceeded TTL)
@@ -4055,7 +4060,7 @@ func TestHandleIdleClusterTermination(t *testing.T) {
 		ttlSeconds := int32(60)
 		cluster := newIdleCluster(ttlSeconds, nil)
 		headSvc := newHeadService()
-		fakeClient := clientFake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(cluster, headSvc).Build()
+		fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(cluster, headSvc).Build()
 
 		driverActivity := float64(time.Now().Add(-120 * time.Second).Unix())
 		fakeDashboard := &utils.FakeRayDashboardClient{}

@@ -1,6 +1,8 @@
 FROM golang:1.25.1 AS builder
 
-ENV GOPROXY=https://proxy.golang.org,direct
+ARG GOPROXY=https://proxy.golang.org,direct
+ARG ENABLE_RACE=false
+ENV GOPROXY=${GOPROXY}
 WORKDIR /historyserver
 
 # Copy the go modules and manifests.
@@ -14,10 +16,15 @@ COPY cmd/collector/main.go cmd/collector/main.go
 COPY pkg/collector/ pkg/collector/
 COPY pkg/storage/ pkg/storage/
 COPY pkg/utils/ pkg/utils/
+COPY pkg/eventserver/ pkg/eventserver/
 
 # Build the collector binary.
 COPY Makefile Makefile
-RUN make buildcollector GOOS=linux GOARCH=amd64
+RUN if [ "$ENABLE_RACE" = "true" ]; then \
+    make buildcollector-race GOOS=linux GOARCH=amd64; \
+    else \
+    make buildcollector GOOS=linux GOARCH=amd64; \
+    fi
 
 FROM ubuntu:22.04
 RUN apt-get update && apt-get upgrade -y && rm -rf /var/cache/apt/ && apt-get install -y ca-certificates

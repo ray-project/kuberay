@@ -17,21 +17,34 @@ kind create cluster --image=kindest/node:v1.27.0
 
 ### 2. Build and Run Ray Operator
 
-Build and deploy the KubeRay operator (binary or deployment).
+Build and deploy the KubeRay operator (binary or deployment). For details, please refer to the
+[ray-operator development guide](https://github.com/ray-project/kuberay/blob/master/ray-operator/DEVELOPMENT.md#run-the-operator-inside-the-cluster).
 
-### 3. Deploy MinIO
+### 3. Deploy & Access MinIO
 
 ```bash
 kubectl apply -f historyserver/config/minio.yaml
 ```
 
-### 4. Build and Load Collector & History Server Images
+Use the following command to port-forward the console and API ports. The API port is required only when running the
+history server outside the kind cluster.
 
 ```bash
-cd historyserver
-make localimage-historyserver
+kubectl --namespace minio-dev port-forward svc/minio-service 9001:9001 9000:9000
+```
+
+> [!NOTE]
+> Get the correct session directory from MinIO console.
+> Login: `minioadmin` / `minioadmin`
+> See: [MinIO Setup Guide](./set_up_collector.md#deploy-minio-for-log-and-event-storage)
+
+### 4. Build and Load Collector & History Server Images
+
+If you'd like to run the history server outside the Kind cluster, you don't need to build the history server image.
+
+```bash
+make -C historyserver localimage-build
 kind load docker-image historyserver:v0.1.0
-make localimage-collector
 kind load docker-image collector:v0.1.0
 ```
 
@@ -53,21 +66,84 @@ kubectl apply -f historyserver/config/rayjob.yaml
 kubectl delete -f historyserver/config/raycluster.yaml
 ```
 
-### 8. Deploy History Server
+### 8. Create Service Account
 
 ```bash
-kubectl apply -f config/historyserver.yaml
+kubectl apply -f historyserver/config/service_account.yaml
 ```
 
-### 9. Access History Server
+### 9. Run and Access History Server
+
+#### Deploy In-Cluster History Server
 
 ```bash
+kubectl apply -f historyserver/config/historyserver.yaml
+
+# Port-forward to access the history server.
 kubectl port-forward svc/historyserver 8080:30080
 ```
 
-> **Note**: Get the correct session directory from MinIO console.
-> Login: `minioadmin` / `minioadmin`
-> See: [MinIO Setup Guide](./set_up_collector.md#deploy-minio-for-log-and-event-storage)
+#### Run History Server Outside the Kind Cluster
+
+You can also run the history server outside the Kind cluster to accelerate the development iteration and enable
+debugging in your own IDE. For example, you can set up `.vscode/launch.json` as follows:
+
+```json
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug (historyserver)",
+            "type": "go",
+            "request": "launch",
+            "program": "${workspaceFolder}/historyserver/cmd/historyserver/main.go",
+            "cwd": "${workspaceFolder}",
+            "args": [
+                "--runtime-class-name=s3",
+                "--ray-root-dir=log"
+            ],
+            "env": {
+                "S3_REGION": "test",
+                // Use localhost rather than the Kubernetes service name.
+                "S3_ENDPOINT": "localhost:9000",
+                "S3_BUCKET": "ray-historyserver",
+                "AWS_S3ID": "minioadmin",
+                "AWS_S3SECRET": "minioadmin",
+                "AWS_S3TOKEN": "",
+                "S3FORCE_PATH_STYLE": "true",
+                "S3DISABLE_SSL": "true"
+            }
+        }
+    ]
+}
+```
+
+For setting up the `args` and `env` fields, please refer to `spec.template.spec.containers.command` and
+`spec.template.spec.containers.env` in `historyserver/config/historyserver.yaml`.
+
+You can also build and run the history server binary directly from the command line:
+
+```bash
+# Build the history server binary.
+cd historyserver
+make buildhistoryserver
+
+# Configure S3 connection via environment variables.
+export S3_REGION=test
+export S3_ENDPOINT=localhost:9000
+export S3_BUCKET=ray-historyserver
+export AWS_S3ID=minioadmin
+export AWS_S3SECRET=minioadmin
+export AWS_S3TOKEN=
+export S3FORCE_PATH_STYLE=true
+export S3DISABLE_SSL=true
+
+# Run the history server.
+./output/bin/historyserver \
+  --runtime-class-name=s3 \
+  --ray-root-dir=log \
+  --use-kubernetes-proxy=true
+```
 
 ---
 
@@ -122,6 +198,21 @@ SESSION="live"
 curl -c ~/cookies.txt "http://localhost:8080/enter_cluster/default/raycluster-historyserver/$SESSION"
 ```
 
+If the command returns a "RayCluster not found" error, you need to deploy a new, live cluster before connecting:
+
+```bash
+kubectl apply -f historyserver/config/raycluster.yaml
+```
+
+Then submit a new RayJob:
+
+```sh
+kubectl apply -f historyserver/config/rayjob.yaml
+
+# If rayjob already exists, please delete it first and re-apply
+# kubectl delete -f historyserver/config/rayjob.yaml
+```
+
 ### Live Cluster Endpoints
 
 Switch to live session first, then:
@@ -150,4 +241,36 @@ curl -b ~/cookies.txt "http://localhost:8080/api/jobs/"
 
 # Cluster Status
 curl -b ~/cookies.txt "http://localhost:8080/api/cluster_status"
+```
+
+### Live Cluster with prometheus and grafana
+
+```bash
+# Install prometheus and grafana. ref: https://docs.ray.io/en/latest/cluster/kubernetes/k8s-ecosystem/prometheus-grafana.html#step-2-install-kubernetes-prometheus-stack-via-helm-chart
+./install/prometheus/install.sh --auto-load-dashboard true
+
+# Apply RayCluster with Grafana setting
+kubectl apply -f ray-operator/config/samples/ray-cluster.embed-grafana.yaml
+
+# Get live session cookie. (Port-forward is required)
+curl -c ~/cookies.txt "http://localhost:8080/enter_cluster/default/raycluster-embed-grafana/live"
+
+# Request to prometheus health endpoint
+curl -b ~/cookies.txt http://localhost:8080/api/prometheus_health
+
+# Request to grafana health endpoint
+curl -b ~/cookies.txt http://localhost:8080/api/grafana_health
+```
+
+After completing the Prometheus and Grafana testing, you can clean up the associated resources using the following commands:
+
+```bash
+# 1. Delete the RayCluster
+kubectl delete -f ray-operator/config/samples/ray-cluster.embed-grafana.yaml
+
+# 2. Uninstall the kube-prometheus-stack helm chart
+helm --namespace prometheus-system uninstall prometheus
+
+# 3. Delete the prometheus-system namespace
+kubectl delete namespace prometheus-system
 ```

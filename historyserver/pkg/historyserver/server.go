@@ -2,6 +2,7 @@ package historyserver
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -10,6 +11,7 @@ import (
 	"github.com/ray-project/kuberay/historyserver/pkg/eventserver"
 	"github.com/ray-project/kuberay/historyserver/pkg/storage"
 	"github.com/sirupsen/logrus"
+	"k8s.io/client-go/transport"
 )
 
 type ServerHandler struct {
@@ -21,10 +23,12 @@ type ServerHandler struct {
 	clientManager *ClientManager
 	eventHandler  *eventserver.EventHandler
 	httpClient    *http.Client
+
+	useKubernetesProxy bool
 }
 
-func NewServerHandler(c *types.RayHistoryServerConfig, dashboardDir string, reader storage.StorageReader, clientManager *ClientManager, eventHandler *eventserver.EventHandler) *ServerHandler {
-	return &ServerHandler{
+func NewServerHandler(c *types.RayHistoryServerConfig, dashboardDir string, reader storage.StorageReader, clientManager *ClientManager, eventHandler *eventserver.EventHandler, useKubernetesProxy bool) (*ServerHandler, error) {
+	handler := &ServerHandler{
 		reader:        reader,
 		clientManager: clientManager,
 		eventHandler:  eventHandler,
@@ -33,13 +37,39 @@ func NewServerHandler(c *types.RayHistoryServerConfig, dashboardDir string, read
 		dashboardDir: dashboardDir,
 		// TODO: make this configurable
 		maxClusters: 100,
-		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
-		},
 	}
+
+	if len(clientManager.configs) > 0 {
+		k8sRestConfig := clientManager.configs[0]
+		if useKubernetesProxy {
+			transportConfig, err := k8sRestConfig.TransportConfig()
+			if err != nil {
+				return nil, fmt.Errorf("failed to get transport config: %w", err)
+			}
+
+			// Create a Kubernetes-aware round tripper that can handle authentication and transport security.
+			rt, err := transport.New(transportConfig)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create Kubernetes-aware round tripper: %w", err)
+			}
+
+			handler.httpClient = &http.Client{
+				Timeout:   30 * time.Second,
+				Transport: rt,
+			}
+			handler.useKubernetesProxy = true
+		} else {
+			// Create a simple HTTP client that doesn't use Kubernetes API server proxy.
+			handler.httpClient = &http.Client{
+				Timeout: 30 * time.Second,
+			}
+			handler.useKubernetesProxy = false
+		}
+	}
+	return handler, nil
 }
 
-func (s *ServerHandler) Run(stop chan struct{}) error {
+func (s *ServerHandler) Run(stop <-chan struct{}) error {
 	s.RegisterRouter()
 	port := ":8080"
 	server := &http.Server{
