@@ -82,7 +82,7 @@ func (r *LogEventReader) ReadLogEvents(clusterInfo utils.ClusterInfo, clusterSes
 
 	for _, nodeID := range nodeIDs {
 		// Path: {sessionName}/logs/{nodeId}/events/
-		eventsDir := path.Join(clusterInfo.SessionName, "logs", nodeID, "events")
+		eventsDir := path.Join(clusterInfo.SessionName, utils.RAY_SESSIONDIR_LOGDIR_NAME, nodeID, "events")
 		// Note: ListFiles returns base names only (e.g., "event_GCS.log")
 		eventFileNames := r.reader.ListFiles(clusterID, eventsDir)
 
@@ -93,7 +93,7 @@ func (r *LogEventReader) ReadLogEvents(clusterInfo utils.ClusterInfo, clusterSes
 			}
 
 			// Build full path relative to clusterID for GetContent
-			eventFilePath := path.Join(clusterInfo.SessionName, "logs", nodeID, "events", fileName)
+			eventFilePath := path.Join(clusterInfo.SessionName, utils.RAY_SESSIONDIR_LOGDIR_NAME, nodeID, "events", fileName)
 
 			// Read and parse the event file
 			// Note: Duplicate events are handled by JobEventMap's deduplication using event_id as key.
