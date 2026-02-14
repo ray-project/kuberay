@@ -318,6 +318,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
+| `ttlSecondsAfterIdle` _integer_ | TTLSecondsAfterIdle specifies the time-to-live (TTL) in seconds for the RayCluster<br />after it becomes idle. A cluster is considered idle when all Ray components report<br />inactive status via the /api/component_activities endpoint.<br />When set, the operator periodically checks the cluster's activity status and deletes<br />the cluster if it has been idle for longer than the specified duration.<br />If not set (nil), idle termination is disabled. |  | Minimum: 0 <br /> |
 | `upgradeStrategy` _[RayClusterUpgradeStrategy](#rayclusterupgradestrategy)_ | UpgradeStrategy defines the scaling policy used when upgrading the RayCluster |  |  |
 | `authOptions` _[AuthOptions](#authoptions)_ | AuthOptions specifies the authentication options for the RayCluster. |  |  |
 | `suspend` _boolean_ | Suspend indicates whether a RayCluster should be suspended.<br />A suspended RayCluster will have head pods and worker pods deleted. |  |  |
