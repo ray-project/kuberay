@@ -66,7 +66,6 @@ const (
 var HistoryServerEndpoints = []string{
 	"/nodes?view=summary",
 	"/api/v0/tasks",
-	"/api/v0/tasks/summarize",
 	"/logical/actors",
 }
 

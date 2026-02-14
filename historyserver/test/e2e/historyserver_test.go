@@ -57,6 +57,14 @@ func TestHistoryServer(t *testing.T) {
 			testFunc: testTimelineEndpointDeadCluster,
 		},
 		{
+			name:     "/api/v0/tasks/summarize endpoint (live cluster)",
+			testFunc: testTasksSummarizeEndpointLiveCluster,
+		},
+		{
+			name:     "/api/v0/tasks/summarize endpoint (dead cluster)",
+			testFunc: testTasksSummarizeEndpointDeadCluster,
+		},
+		{
 			name:     "Live cluster: /api/v0/tasks?detail=1 should return the detailed task information of all task attempts",
 			testFunc: testLiveClusterTasks,
 		},
@@ -1187,4 +1195,136 @@ func verifyNodesHostNameListSchema(test Test, g *WithT, nodesResp map[string]any
 	data, ok := nodesResp["data"].(map[string]any)
 	g.Expect(ok).To(BeTrue(), "'data' should be a map")
 	g.Expect(data).To(HaveKey("hostNameList"))
+}
+
+func testTasksSummarizeEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
+	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
+
+	ApplyHistoryServer(test, g, namespace, "")
+	historyServerURL := GetHistoryServerURL(test, g, namespace)
+
+	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
+	g.Expect(clusterInfo.SessionName).To(Equal(LiveSessionName))
+
+	client := CreateHTTPClientWithCookieJar(g)
+	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
+
+	endpointURL := historyServerURL + EndpointTasksSummary
+
+	test.T().Run("should return valid task summarize response (live)", func(t *testing.T) {
+		gg := NewWithT(t)
+		verifyTasksSummarizeResponse(test, gg, client, endpointURL)
+	})
+
+	DeleteS3Bucket(test, g, s3Client)
+	LogWithTimestamp(test.T(), "Live cluster /api/v0/tasks/summarize test completed")
+}
+
+func testTasksSummarizeEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
+	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
+
+	// Delete cluster to flush data to S3
+	err := test.Client().Ray().RayV1().
+		RayClusters(namespace.Name).
+		Delete(test.Ctx(), rayCluster.Name, metav1.DeleteOptions{})
+	g.Expect(err).NotTo(HaveOccurred())
+
+	g.Eventually(func() error {
+		_, err := GetRayCluster(test, namespace.Name, rayCluster.Name)
+		return err
+	}, TestTimeoutMedium).Should(WithTransform(k8serrors.IsNotFound, BeTrue()))
+
+	ApplyHistoryServer(test, g, namespace, "")
+	historyServerURL := GetHistoryServerURL(test, g, namespace)
+
+	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
+	g.Expect(clusterInfo.SessionName).NotTo(Equal(LiveSessionName))
+
+	client := CreateHTTPClientWithCookieJar(g)
+	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
+
+	endpointURL := historyServerURL + EndpointTasksSummary
+
+	test.T().Run("should return valid task summarize response (dead)", func(t *testing.T) {
+		gg := NewWithT(t)
+		verifyTasksSummarizeResponse(test, gg, client, endpointURL)
+	})
+
+	DeleteS3Bucket(test, g, s3Client)
+	LogWithTimestamp(test.T(), "Dead cluster /api/v0/tasks/summarize test completed")
+}
+
+func verifyTasksSummarizeResponse(test Test, g *WithT, client *http.Client, endpointURL string) {
+	g.Eventually(func(gg Gomega) {
+		resp, err := client.Get(endpointURL)
+		gg.Expect(err).NotTo(HaveOccurred())
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		gg.Expect(err).NotTo(HaveOccurred())
+
+		gg.Expect(resp.StatusCode).To(Equal(http.StatusOK),
+			"[GET] %s should return 200, got %d: %s", endpointURL, resp.StatusCode, string(body))
+
+		var summarizeResp map[string]any
+		err = json.Unmarshal(body, &summarizeResp)
+		gg.Expect(err).NotTo(HaveOccurred())
+
+		verifyTasksSummarizeRespSchema(test, gg, summarizeResp)
+	}, TestTimeoutShort).Should(Succeed())
+}
+
+func verifyTasksSummarizeRespSchema(test Test, g Gomega, resp map[string]any) {
+	g.Expect(resp).To(HaveKeyWithValue("result", BeTrue()))
+	g.Expect(resp).To(HaveKey("msg"))
+	g.Expect(resp).To(HaveKey("data"))
+
+	data, ok := resp["data"].(map[string]any)
+	g.Expect(ok).To(BeTrue())
+	g.Expect(data).To(HaveKey("result"))
+
+	result, ok := data["result"].(map[string]any)
+	g.Expect(ok).To(BeTrue())
+
+	g.Expect(result).To(HaveKey("total"))
+	g.Expect(result).To(HaveKey("num_after_truncation"))
+	g.Expect(result).To(HaveKey("num_filtered"))
+	g.Expect(result).To(HaveKey("result"))
+
+	nodeSummaryContainer, ok := result["result"].(map[string]any)
+	g.Expect(ok).To(BeTrue())
+
+	g.Expect(nodeSummaryContainer).To(HaveKey("node_id_to_summary"))
+
+	nodeMap, ok := nodeSummaryContainer["node_id_to_summary"].(map[string]any)
+	g.Expect(ok).To(BeTrue())
+	g.Expect(len(nodeMap)).To(BeNumerically(">", 0))
+
+	for nodeID, summaryAny := range nodeMap {
+		g.Expect(nodeID).NotTo(BeEmpty())
+
+		summary, ok := summaryAny.(map[string]any)
+		g.Expect(ok).To(BeTrue())
+
+		g.Expect(summary).To(HaveKey("summary"))
+		g.Expect(summary).To(HaveKey("total_tasks"))
+		g.Expect(summary).To(HaveKey("total_actor_tasks"))
+		g.Expect(summary).To(HaveKey("total_actor_scheduled"))
+		g.Expect(summary).To(HaveKey("summary_by"))
+
+		taskSummaryMap, ok := summary["summary"].(map[string]any)
+		g.Expect(ok).To(BeTrue())
+
+		for _, v := range taskSummaryMap {
+			taskSummary, ok := v.(map[string]any)
+			g.Expect(ok).To(BeTrue())
+			g.Expect(taskSummary).To(HaveKey("func_or_class_name"))
+			g.Expect(taskSummary).To(HaveKey("type"))
+			g.Expect(taskSummary).To(HaveKey("state_counts"))
+		}
+	}
+
+	LogWithTimestamp(test.T(), "Verified /api/v0/tasks/summarize schema successfully")
 }
