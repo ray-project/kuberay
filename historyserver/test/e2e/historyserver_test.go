@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"testing"
 
 	"github.com/aws/aws-sdk-go/service/s3"
@@ -17,10 +18,6 @@ import (
 
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 	. "github.com/ray-project/kuberay/historyserver/test/support"
-)
-
-const (
-	LiveSessionName = "live"
 )
 
 func TestHistoryServer(t *testing.T) {
@@ -40,12 +37,24 @@ func TestHistoryServer(t *testing.T) {
 			testFunc: testLiveGrafanaHealth,
 		},
 		{
+			name:     "Live cluster: prometheus health only",
+			testFunc: testLivePrometheusHealth,
+		},
+		{
 			name:     "/v0/logs/file endpoint (live cluster)",
 			testFunc: testLogFileEndpointLiveCluster,
 		},
 		{
 			name:     "/v0/logs/file endpoint (dead cluster)",
 			testFunc: testLogFileEndpointDeadCluster,
+		},
+		{
+			name:     "/api/v0/tasks/timeline endpoint (live cluster)",
+			testFunc: testTimelineEndpointLiveCluster,
+		},
+		{
+			name:     "/api/v0/tasks/timeline endpoint (dead cluster)",
+			testFunc: testTimelineEndpointDeadCluster,
 		},
 		{
 			name:     "/events endpoint (live cluster)",
@@ -95,7 +104,7 @@ func TestHistoryServer(t *testing.T) {
 func testLiveClusters(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
-	ApplyHistoryServer(test, g, namespace)
+	ApplyHistoryServer(test, g, namespace, "")
 	historyServerURL := GetHistoryServerURL(test, g, namespace)
 
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
@@ -109,9 +118,9 @@ func testLiveClusters(test Test, g *WithT, namespace *corev1.Namespace, s3Client
 }
 
 func testLiveGrafanaHealth(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
-	rayCluster := PrepareTestEnvWithGrafana(test, g, namespace, s3Client)
+	rayCluster := PrepareTestEnvWithPrometheusAndGrafana(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
-	ApplyHistoryServer(test, g, namespace)
+	ApplyHistoryServer(test, g, namespace, "")
 	historyServerURL := GetHistoryServerURL(test, g, namespace)
 
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
@@ -126,20 +135,27 @@ func testLiveGrafanaHealth(test Test, g *WithT, namespace *corev1.Namespace, s3C
 	LogWithTimestamp(test.T(), "Live clusters grafana health E2E test completed successfully")
 }
 
+func testLivePrometheusHealth(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+	rayCluster := PrepareTestEnvWithPrometheusAndGrafana(test, g, namespace, s3Client)
+	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
+	ApplyHistoryServer(test, g, namespace, "")
+	historyServerURL := GetHistoryServerURL(test, g, namespace)
+
+	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
+	g.Expect(clusterInfo.SessionName).To(Equal(LiveSessionName), "Live cluster should have sessionName='live'")
+
+	client := CreateHTTPClientWithCookieJar(g)
+	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
+	verifyHistoryServerPrometheusHealthEndpoint(test, g, client, historyServerURL)
+	DeleteS3Bucket(test, g, s3Client)
+	LogWithTimestamp(test.T(), "Live clusters prometheus health E2E test completed successfully")
+}
+
 // testLogFileEndpointLiveCluster verifies that the history server can fetch log files from a live cluster.
-//
-// The test case follows these steps:
-// 1. Prepare test environment by applying a Ray cluster
-// 2. Submit a Ray job to the existing cluster
-// 3. Apply History Server and get its URL
-// 4. Get the cluster info from the list
-// 5. Verify that the history server can fetch log content (raylet.out)
-// 6. Verify that the history server rejects path traversal attempts
-// 7. Delete S3 bucket to ensure test isolation
 func testLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
-	ApplyHistoryServer(test, g, namespace)
+	ApplyHistoryServer(test, g, namespace, "")
 	historyServerURL := GetHistoryServerURL(test, g, namespace)
 
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
@@ -147,40 +163,13 @@ func testLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Names
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 
 	nodeID := GetOneOfNodeID(g, client, historyServerURL, true)
-	// Hardcode "raylet.out" for deterministic testing.
-	filename := "raylet.out"
 
 	test.T().Run("should return log content", func(t *testing.T) {
-		g := NewWithT(t)
-		g.Eventually(func(gg Gomega) {
-			logFileURL := fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=100", historyServerURL, EndpointLogsFile, nodeID, filename)
-			resp, err := client.Get(logFileURL)
-			gg.Expect(err).NotTo(HaveOccurred())
-			defer resp.Body.Close()
-			gg.Expect(resp.StatusCode).To(Equal(http.StatusOK))
-
-			body, err := io.ReadAll(resp.Body)
-			gg.Expect(err).NotTo(HaveOccurred())
-			gg.Expect(len(body)).To(BeNumerically(">", 0))
-		}, TestTimeoutShort).Should(Succeed())
+		VerifyLogFileEndpointReturnsContent(test, NewWithT(t), client, historyServerURL, nodeID)
 	})
 
 	test.T().Run("should reject path traversal", func(t *testing.T) {
-		g := NewWithT(t)
-		maliciousPaths := []string{"../etc/passwd", "..", "/etc/passwd", "../../secret"}
-
-		for _, malicious := range maliciousPaths {
-			g.Eventually(func(gg Gomega) {
-				url := fmt.Sprintf("%s%s?node_id=%s&filename=%s", historyServerURL, EndpointLogsFile, nodeID, malicious)
-				resp, err := client.Get(url)
-				gg.Expect(err).NotTo(HaveOccurred())
-				defer func() {
-					io.Copy(io.Discard, resp.Body)
-					resp.Body.Close()
-				}()
-				gg.Expect(resp.StatusCode).To(Equal(http.StatusBadRequest))
-			}, TestTimeoutShort).Should(Succeed())
-		}
+		VerifyLogFileEndpointRejectsPathTraversal(test, NewWithT(t), client, historyServerURL, nodeID)
 	})
 
 	DeleteS3Bucket(test, g, s3Client)
@@ -188,31 +177,13 @@ func testLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Names
 }
 
 // testLogFileEndpointDeadCluster verifies that the history server can fetch log files from S3 after a cluster is deleted.
-//
-// The test case follows these steps:
-// 1. Prepare test environment by applying a Ray cluster
-// 2. Submit a Ray job to the existing cluster
-// 3. Delete RayCluster to trigger log upload to S3
-// 4. Apply History Server and get its URL
-// 5. Verify that the history server can fetch log content from S3 (raylet.out)
-// 6. Verify that the history server rejects path traversal attempts from S3
-// 7. Delete S3 bucket to ensure test isolation
 func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 
-	// Delete RayCluster to trigger log upload
-	err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Delete(test.Ctx(), rayCluster.Name, metav1.DeleteOptions{})
-	g.Expect(err).NotTo(HaveOccurred())
-	LogWithTimestamp(test.T(), "Deleted RayCluster %s/%s", namespace.Name, rayCluster.Name)
+	DeleteRayClusterAndWait(test, g, namespace.Name, rayCluster.Name)
 
-	// Wait for cluster to be fully deleted (ensures logs are uploaded to S3)
-	g.Eventually(func() error {
-		_, err := GetRayCluster(test, namespace.Name, rayCluster.Name)
-		return err
-	}, TestTimeoutMedium).Should(WithTransform(k8serrors.IsNotFound, BeTrue()))
-
-	ApplyHistoryServer(test, g, namespace)
+	ApplyHistoryServer(test, g, namespace, "")
 	historyServerURL := GetHistoryServerURL(test, g, namespace)
 
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
@@ -222,44 +193,231 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 
 	nodeID := GetOneOfNodeID(g, client, historyServerURL, false)
-	// Hardcode "raylet.out" for deterministic testing.
-	filename := "raylet.out"
 
 	test.T().Run("should return log content from S3", func(t *testing.T) {
-		g := NewWithT(t)
-		g.Eventually(func(gg Gomega) {
-			logFileURL := fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=100", historyServerURL, EndpointLogsFile, nodeID, filename)
-			resp, err := client.Get(logFileURL)
-			gg.Expect(err).NotTo(HaveOccurred())
-			defer resp.Body.Close()
-			gg.Expect(resp.StatusCode).To(Equal(http.StatusOK))
-
-			body, err := io.ReadAll(resp.Body)
-			gg.Expect(err).NotTo(HaveOccurred())
-			gg.Expect(len(body)).To(BeNumerically(">", 0))
-		}, TestTimeoutShort).Should(Succeed())
+		VerifyLogFileEndpointReturnsContent(test, NewWithT(t), client, historyServerURL, nodeID)
 	})
 
 	test.T().Run("should reject path traversal from S3", func(t *testing.T) {
-		g := NewWithT(t)
-		maliciousPaths := []string{"../etc/passwd", "..", "/etc/passwd", "../../secret"}
-
-		for _, malicious := range maliciousPaths {
-			g.Eventually(func(gg Gomega) {
-				url := fmt.Sprintf("%s%s?node_id=%s&filename=%s", historyServerURL, EndpointLogsFile, nodeID, malicious)
-				resp, err := client.Get(url)
-				gg.Expect(err).NotTo(HaveOccurred())
-				defer func() {
-					io.Copy(io.Discard, resp.Body)
-					resp.Body.Close()
-				}()
-				gg.Expect(resp.StatusCode).To(Equal(http.StatusBadRequest))
-			}, TestTimeoutShort).Should(Succeed())
-		}
+		VerifyLogFileEndpointRejectsPathTraversal(test, NewWithT(t), client, historyServerURL, nodeID)
 	})
 
 	DeleteS3Bucket(test, g, s3Client)
 	LogWithTimestamp(test.T(), "Dead cluster log file endpoint tests completed")
+}
+
+// testTimelineEndpointLiveCluster verifies that the history server can return timeline data from a live cluster.
+//
+// The test follows these steps:
+// 1. Create a RayCluster and submit a Ray job.
+// 2. Deploy the History Server and ensure the cluster is listed as a live session.
+// 3. Verify the /api/v0/tasks/timeline endpoint behavior for a live cluster:
+//   - Without params: returns a non-empty Chrome Tracing JSON array with required metadata
+//     and trace events.
+//   - With job_id=<id>: returns only events for the specified job.
+//   - With download=1: sets Content-Disposition to attachment and includes a filename.
+//   - With download=1&job_id=<id>: filename includes the job_id.
+//
+// 4. Delete S3 bucket to ensure test isolation
+func testTimelineEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
+	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
+	ApplyHistoryServer(test, g, namespace, "")
+	historyServerURL := GetHistoryServerURL(test, g, namespace)
+
+	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
+	g.Expect(clusterInfo.SessionName).To(Equal(LiveSessionName), "Live cluster should have sessionName='live'")
+
+	client := CreateHTTPClientWithCookieJar(g)
+	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
+	jobID := GetOneOfJobID(g, client, historyServerURL)
+
+	test.T().Run("should return valid timeline data", func(t *testing.T) {
+		g := NewWithT(t)
+		verifyTimelineResponse(g, client, historyServerURL, "", false)
+	})
+	test.T().Run("with valid job_id returns filtered events", func(t *testing.T) {
+		g := NewWithT(t)
+		verifyTimelineResponse(g, client, historyServerURL, jobID, false)
+	})
+
+	test.T().Run("download=1 sets Content-Disposition and filename", func(t *testing.T) {
+		g := NewWithT(t)
+		verifyTimelineResponse(g, client, historyServerURL, "", true)
+	})
+
+	test.T().Run("download=1 with job_id sets filename with job_id", func(t *testing.T) {
+		g := NewWithT(t)
+		verifyTimelineResponse(g, client, historyServerURL, jobID, true)
+	})
+
+	DeleteS3Bucket(test, g, s3Client)
+	LogWithTimestamp(test.T(), "Live cluster timeline endpoint test completed")
+}
+
+// testTimelineEndpointDeadCluster verifies that the history server can serve task timeline data from S3
+// after a Ray cluster is deleted, and that the timeline endpoint supports query parameters.
+//
+// The test follows these steps:
+// 1. Create a RayCluster and submit a Ray job.
+// 2. Delete the RayCluster to trigger event export/upload to S3 and wait until deletion completes.
+// 3. Deploy the History Server and switch the client context to a non-live (archived) session.
+// 4. Verify the /api/v0/tasks/timeline endpoint behavior:
+//   - Without params: returns a non-empty Chrome Tracing JSON array with required metadata + trace events.
+//   - With job_id=<id>: returns only events for the specified job (job_id may require hex->base64 normalization
+//     depending on the source endpoint/session).
+//   - With download=1: sets Content-Disposition to attachment and includes a filename.
+//   - With download=1&job_id=<id>: filename includes the job_id.
+//
+// 5. Delete S3 bucket to ensure test isolation
+func testTimelineEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
+	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
+
+	// Delete RayCluster to trigger event upload
+	err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Delete(test.Ctx(), rayCluster.Name, metav1.DeleteOptions{})
+	g.Expect(err).NotTo(HaveOccurred())
+	LogWithTimestamp(test.T(), "Deleted RayCluster %s/%s", namespace.Name, rayCluster.Name)
+
+	// Wait for cluster to be fully deleted (ensures events are uploaded to S3)
+	g.Eventually(func() error {
+		_, err := GetRayCluster(test, namespace.Name, rayCluster.Name)
+		return err
+	}, TestTimeoutMedium).Should(WithTransform(k8serrors.IsNotFound, BeTrue()))
+
+	ApplyHistoryServer(test, g, namespace, "")
+	historyServerURL := GetHistoryServerURL(test, g, namespace)
+
+	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
+	g.Expect(clusterInfo.SessionName).NotTo(Equal(LiveSessionName))
+
+	client := CreateHTTPClientWithCookieJar(g)
+	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
+	jobID := GetOneOfJobID(g, client, historyServerURL)
+
+	test.T().Run("should return timeline data from S3", func(t *testing.T) {
+		g := NewWithT(t)
+		verifyTimelineResponse(g, client, historyServerURL, "", false)
+	})
+	test.T().Run("with valid job_id returns filtered events", func(t *testing.T) {
+		g := NewWithT(t)
+		verifyTimelineResponse(g, client, historyServerURL, jobID, false)
+	})
+
+	test.T().Run("download=1 sets Content-Disposition and filename", func(t *testing.T) {
+		g := NewWithT(t)
+		verifyTimelineResponse(g, client, historyServerURL, "", true)
+	})
+
+	test.T().Run("download=1 with job_id sets filename with job_id", func(t *testing.T) {
+		g := NewWithT(t)
+		verifyTimelineResponse(g, client, historyServerURL, jobID, true)
+	})
+	DeleteS3Bucket(test, g, s3Client)
+	LogWithTimestamp(test.T(), "Dead cluster timeline endpoint test completed")
+}
+
+// verifyTimelineResponse verifies the timeline endpoint returns valid Chrome Tracing format.
+// jobID: optional filter; empty means no job_id query param.
+// download: if true, adds download=1 and asserts Content-Disposition header and filename.
+func verifyTimelineResponse(g *WithT, client *http.Client, historyServerURL string, jobID string, download bool) {
+	baseURL := historyServerURL + "/api/v0/tasks/timeline"
+	if jobID != "" || download {
+		params := url.Values{}
+		if jobID != "" {
+			params.Set("job_id", jobID)
+		}
+		if download {
+			params.Set("download", "1")
+		}
+		baseURL += "?" + params.Encode()
+	}
+
+	g.Eventually(func(gg Gomega) {
+		resp, err := client.Get(baseURL)
+		gg.Expect(err).NotTo(HaveOccurred())
+		defer resp.Body.Close()
+		gg.Expect(resp.StatusCode).To(Equal(http.StatusOK))
+
+		if download {
+			cd := resp.Header.Get("Content-Disposition")
+			gg.Expect(cd).To(ContainSubstring("attachment"), "Content-Disposition should contain attachment")
+			gg.Expect(cd).To(ContainSubstring("filename="), "Content-Disposition should contain filename")
+			if jobID != "" {
+				gg.Expect(cd).To(ContainSubstring(jobID), "filename should contain job_id when job_id filter is set")
+			}
+		}
+
+		body, err := io.ReadAll(resp.Body)
+		gg.Expect(err).NotTo(HaveOccurred())
+
+		var events []map[string]any
+		err = json.Unmarshal(body, &events)
+		gg.Expect(err).NotTo(HaveOccurred())
+
+		// Should have at least some events
+		gg.Expect(len(events)).To(BeNumerically(">", 0), "Timeline should have at least one event")
+
+		// Verify all the job_id are same
+		if jobID != "" {
+			for _, event := range events {
+				ph, _ := event["ph"].(string)
+				if ph != "X" {
+					continue
+				}
+				args, ok := event["args"].(map[string]any)
+				gg.Expect(ok).To(BeTrue(), "trace event should have args")
+				jid, ok := args["job_id"]
+				gg.Expect(ok).To(BeTrue(), "trace event args should have job_id")
+				gg.Expect(jid).To(Equal(jobID),
+					"when job_id filter is %q, every trace event's args.job_id must be the same, got %v", jobID, jid)
+			}
+		}
+
+		// Verify metadata and trace events exist
+		hasProcessName := false
+		hasThreadName := false
+		hasTraceEvent := false
+
+		for _, event := range events {
+			name, _ := event["name"].(string)
+			ph, _ := event["ph"].(string)
+
+			if name == "process_name" && ph == "M" {
+				hasProcessName = true
+				argsAny, exists := event["args"]
+				gg.Expect(exists).To(BeTrue(), "process_name should have 'args' field")
+
+				args, ok := argsAny.(map[string]any)
+				gg.Expect(ok).To(BeTrue(), "process_name args should be a map[string]any")
+				gg.Expect(args["name"]).NotTo(BeNil(), "process_name args should have 'name'")
+			}
+			if name == "thread_name" && ph == "M" {
+				hasThreadName = true
+			}
+			if ph == "X" {
+				hasTraceEvent = true
+				// Verify trace event has required fields
+				gg.Expect(event["cat"]).NotTo(BeNil(), "Trace event should have 'cat'")
+				gg.Expect(event["ts"]).NotTo(BeNil(), "Trace event should have 'ts'")
+				gg.Expect(event["dur"]).NotTo(BeNil(), "Trace event should have 'dur'")
+				gg.Expect(event["args"]).NotTo(BeNil(), "Trace event should have 'args'")
+
+				// Verify args structure
+				argsAny, exists := event["args"]
+				gg.Expect(exists).To(BeTrue(), "Trace event should have 'args' field")
+
+				args, ok := argsAny.(map[string]any)
+				gg.Expect(ok).To(BeTrue(), "Trace event args should be a map[string]any")
+				gg.Expect(args["task_id"]).NotTo(BeNil(), "args should have 'task_id'")
+				gg.Expect(args["job_id"]).NotTo(BeNil(), "args should have 'job_id'")
+			}
+		}
+
+		gg.Expect(hasProcessName).To(BeTrue(), "Should have process_name metadata event")
+		gg.Expect(hasThreadName).To(BeTrue(), "Should have thread_name metadata event")
+		gg.Expect(hasTraceEvent).To(BeTrue(), "Should have at least one trace event")
+	}, TestTimeoutShort).Should(Succeed())
 }
 
 // testLiveClusterTasks verifies that the /v0/tasks?detail=1 endpoint for a live cluster will return the
@@ -279,7 +437,7 @@ func testLiveClusterTasks(test Test, g *WithT, namespace *corev1.Namespace, s3Cl
 
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
-	ApplyHistoryServer(test, g, namespace)
+	ApplyHistoryServer(test, g, namespace, "")
 	historyServerURL := GetHistoryServerURL(test, g, namespace)
 
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
@@ -342,7 +500,7 @@ func testDeadClusterTasks(test Test, g *WithT, namespace *corev1.Namespace, s3Cl
 		return err
 	}, TestTimeoutMedium).Should(WithTransform(k8serrors.IsNotFound, BeTrue()))
 
-	ApplyHistoryServer(test, g, namespace)
+	ApplyHistoryServer(test, g, namespace, "")
 	historyServerURL := GetHistoryServerURL(test, g, namespace)
 
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
@@ -473,7 +631,7 @@ func testLiveClusterNodes(test Test, g *WithT, namespace *corev1.Namespace, s3Cl
 
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
-	ApplyHistoryServer(test, g, namespace)
+	ApplyHistoryServer(test, g, namespace, "")
 	historyServerURL := GetHistoryServerURL(test, g, namespace)
 
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
@@ -520,7 +678,7 @@ func testDeadClusterNodes(test Test, g *WithT, namespace *corev1.Namespace, s3Cl
 		return err
 	}, TestTimeoutMedium).Should(WithTransform(k8serrors.IsNotFound, BeTrue()))
 
-	ApplyHistoryServer(test, g, namespace)
+	ApplyHistoryServer(test, g, namespace, "")
 	historyServerURL := GetHistoryServerURL(test, g, namespace)
 
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
@@ -567,7 +725,7 @@ func testLiveClusterNode(test Test, g *WithT, namespace *corev1.Namespace, s3Cli
 	headNodeID := GetNodeIDFromPod(test, g, HeadPod(test, rayCluster), "ray-head")
 	workerNodeID := GetNodeIDFromPod(test, g, FirstWorkerPod(test, rayCluster), "ray-worker")
 
-	ApplyHistoryServer(test, g, namespace)
+	ApplyHistoryServer(test, g, namespace, "")
 	historyServerURL := GetHistoryServerURL(test, g, namespace)
 
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
@@ -623,7 +781,7 @@ func testDeadClusterNode(test Test, g *WithT, namespace *corev1.Namespace, s3Cli
 		return err
 	}, TestTimeoutMedium).Should(WithTransform(k8serrors.IsNotFound, BeTrue()))
 
-	ApplyHistoryServer(test, g, namespace)
+	ApplyHistoryServer(test, g, namespace, "")
 	historyServerURL := GetHistoryServerURL(test, g, namespace)
 
 	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
@@ -708,6 +866,30 @@ func verifyHistoryServerGrafanaHealthEndpoint(test Test, g *WithT, client *http.
 		LogWithTimestamp(test.T(), "Endpoint %s returned status %d", endpoint, resp.StatusCode)
 	}, TestTimeoutShort).Should(Succeed())
 
+}
+
+// verifyHistoryServerPrometheusHealthEndpoint tests the /api/prometheus_health endpoint
+func verifyHistoryServerPrometheusHealthEndpoint(test Test, g *WithT, client *http.Client, historyServerURL string) {
+	endpoint := HistoryServerEndpointPrometheusHealth
+	LogWithTimestamp(test.T(), "Testing history server endpoint: %s", endpoint)
+
+	g.Eventually(func(gg Gomega) {
+		resp, err := client.Get(historyServerURL + endpoint)
+		gg.Expect(err).NotTo(HaveOccurred())
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		gg.Expect(err).NotTo(HaveOccurred())
+		gg.Expect(resp.StatusCode).To(Equal(200),
+			"Endpoint %s should return 200, got %d: %s", endpoint, resp.StatusCode, string(body))
+
+		var result map[string]any
+		err = json.Unmarshal(body, &result)
+		gg.Expect(err).NotTo(HaveOccurred())
+		gg.Expect(result["result"]).To(Equal(true), "Response should have result=true")
+		gg.Expect(result["msg"]).To(ContainSubstring("prometheus running"), "Response message should contain 'prometheus running'")
+		LogWithTimestamp(test.T(), "Endpoint %s returned status %d with valid response", endpoint, resp.StatusCode)
+	}, TestTimeoutShort).Should(Succeed())
 }
 
 // getClusterFromList retrieves a cluster from the /clusters/ endpoint by name and namespace.

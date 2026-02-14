@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/emicklei/go-restful/v3"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
@@ -154,6 +155,13 @@ func routerAPI(s *ServerHandler) {
 		Param(ws.QueryParameter("filter_predicates", "filter_predicates")).
 		Param(ws.QueryParameter("filter_values", "filter_values")).
 		Param(ws.QueryParameter("summary_by", "summary_by")).
+		Writes("")) // Placeholder for specific return type
+
+	ws.Route(ws.GET("/v0/tasks/timeline").To(s.getTasksTimeline).Filter(s.CookieHandle).
+		Doc("get tasks timeline").
+		Param(ws.QueryParameter("job_id", "filter by job_id")).
+		Param(ws.QueryParameter("download", "set to 1 to return response as attachment (timeline JSON file)")).
+		Produces(restful.MIME_JSON).
 		Writes("")) // Placeholder for specific return type
 }
 
@@ -591,8 +599,8 @@ func (s *ServerHandler) getPrometheusHealth(req *restful.Request, resp *restful.
 		s.redirectRequest(req, resp)
 		return
 	}
-	// Return "not yet supported" for prometheus health
-	resp.WriteErrorString(http.StatusNotImplemented, "Prometheus health not yet supported")
+
+	resp.WriteErrorString(http.StatusNotImplemented, "Prometheus health is not yet supported for historical sessions.")
 }
 
 func (s *ServerHandler) getGrafanaHealth(req *restful.Request, resp *restful.Response) {
@@ -1509,4 +1517,39 @@ func formatMemory(memBytes float64) string {
 		}
 	}
 	return fmt.Sprintf("%dB", int(memBytes))
+}
+
+func (s *ServerHandler) getTasksTimeline(req *restful.Request, resp *restful.Response) {
+	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
+	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
+	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
+
+	if sessionName == "live" {
+		s.redirectRequest(req, resp)
+		return
+	}
+
+	jobID := req.QueryParameter("job_id")
+	download := req.QueryParameter("download")
+
+	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
+	timeline := s.eventHandler.GetTasksTimeline(clusterSessionKey, jobID)
+
+	respData, err := json.Marshal(timeline)
+	if err != nil {
+		logrus.Errorf("Failed to marshal timeline response: %v", err)
+		resp.WriteErrorString(http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	// Support download parameter
+	if download == "1" {
+		nowStr := time.Now().Format("2006-01-02_15-04-05")
+		filename := fmt.Sprintf("timeline-%s-%s.json", jobID, nowStr)
+		if jobID == "" {
+			filename = fmt.Sprintf("timeline-%s.json", nowStr)
+		}
+		resp.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+	}
+	resp.Write(respData)
 }
