@@ -3,6 +3,7 @@ package volcano
 import (
 	"context"
 	"fmt"
+	"maps"
 	"strconv"
 
 	corev1 "k8s.io/api/core/v1"
@@ -204,11 +205,15 @@ func createPodGroup(owner metav1.Object, podGroupName string, size int32, totalR
 		ownerRef = *metav1.NewControllerRef(obj, rayv1.SchemeGroupVersion.WithKind("RayJob"))
 	}
 
+	annotations := make(map[string]string, len(owner.GetAnnotations()))
+	maps.Copy(annotations, owner.GetAnnotations())
+
 	podGroup := volcanoschedulingv1beta1.PodGroup{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:       owner.GetNamespace(),
 			Name:            podGroupName,
 			OwnerReferences: []metav1.OwnerReference{ownerRef},
+			Annotations:     annotations,
 		},
 		Spec: volcanoschedulingv1beta1.PodGroupSpec{
 			MinMember:    size,
