@@ -49,7 +49,7 @@ func TestFormatStatus(t *testing.T) {
 
 	status := builder.FormatStatus()
 
-	if !strings.Contains(status, "======== Autoscaler status: 2026-01-20 22:55:56") {
+	if !strings.Contains(status, "======== Autoscaler status: 2026-01-20 22:55:56.762825") {
 		t.Errorf("Expected status to contain timestamp header")
 	}
 
