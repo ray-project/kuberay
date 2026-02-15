@@ -70,8 +70,10 @@ type Node struct {
 	InstanceID       string `json:"instanceId,omitempty"`
 	InstanceTypeName string `json:"instanceTypeName,omitempty"`
 
-	// TODO(jwj): better comments
-	// Available only when there's at least one NODE_LIFECYCLE_EVENT.
+	// StateTransitions contains the history of node state changes.
+	// This field is populated only when at least one NODE_LIFECYCLE_EVENT has been processed.
+	// Each transition includes the state (ALIVE/DEAD), timestamp, and state-specific data
+	// (Resources for ALIVE, DeathInfo for DEAD).
 	StateTransitions []NodeStateTransition `json:"stateTransitions,omitempty"`
 }
 
