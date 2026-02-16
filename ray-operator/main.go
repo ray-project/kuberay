@@ -295,7 +295,7 @@ func main() {
 		numWorkers, parseErr := strconv.Atoi(utils.GetEnvOrDefault(utils.ASYNC_JOB_INFO_QUERY_WORKER_SIZE, utils.DEFAULT_ASYNC_JOB_INFO_QUERY_WORKER_SIZE))
 		exitOnError(parseErr, "unable to parse async job info query worker size")
 		if numWorkers < 1 {
-			exitOnError(fmt.Errorf("async job info query worker size %d should be greater than one", numWorkers), "invalid async job info query worker size")
+			exitOnError(fmt.Errorf("async job info query worker size %d should be greater than zero", numWorkers), "invalid async job info query worker size")
 		}
 
 		cacheExpiry, parseErr := time.ParseDuration(utils.GetEnvOrDefault(utils.ASYNC_JOB_INFO_QUERY_CACHE_EXPIRY, utils.DEFAULT_ASYNC_JOB_INFO_QUERY_CACHE_EXPIRY))
