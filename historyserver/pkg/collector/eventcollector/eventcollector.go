@@ -7,7 +7,7 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"path"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -105,9 +105,10 @@ func (ec *EventCollector) Run(stop <-chan struct{}, port int) {
 	close(ec.stopped)
 }
 
-// watchNodeIDFile watches /tmp/ray/raylet_node_id for content changes
+// watchNodeIDFile watches raylet_node_id for content changes.
 func (ec *EventCollector) watchNodeIDFile() {
-	nodeIDFilePath := "/tmp/ray/raylet_node_id"
+	rayTmpDir := filepath.Join(os.TempDir(), "ray")
+	nodeIDFilePath := filepath.Join(rayTmpDir, "raylet_node_id")
 
 	// Create new watcher
 	watcher, err := fsnotify.NewWatcher()
@@ -122,9 +123,9 @@ func (ec *EventCollector) watchNodeIDFile() {
 	if err != nil {
 		logrus.Infof("Failed to add %s to watcher, will watch for file creation: %v", nodeIDFilePath, err)
 		// If file doesn't exist, watch parent directory
-		err = watcher.Add("/tmp/ray")
+		err = watcher.Add(rayTmpDir)
 		if err != nil {
-			logrus.Errorf("Failed to watch directory /tmp/ray: %v", err)
+			logrus.Errorf("Failed to watch directory %s: %v", rayTmpDir, err)
 			return
 		}
 	}
@@ -137,7 +138,8 @@ func (ec *EventCollector) watchNodeIDFile() {
 			}
 
 			// Check if this is the target file
-			if event.Name == nodeIDFilePath && (event.Op&fsnotify.Write == fsnotify.Write || event.Op&fsnotify.Create == fsnotify.Create) {
+			if filepath.Clean(event.Name) == nodeIDFilePath &&
+				(event.Op&fsnotify.Write == fsnotify.Write || event.Op&fsnotify.Create == fsnotify.Create) {
 				// Read file content
 				content, err := os.ReadFile(nodeIDFilePath)
 				if err != nil {
@@ -450,7 +452,7 @@ func (ec *EventCollector) flushNodeEventsForHour(hourKey string, events []Event)
 	}
 
 	// Build node event storage path using event's nodeID
-	basePath := path.Join(
+	basePath := filepath.Join(
 		ec.root,
 		fmt.Sprintf("%s_%s", ec.clusterName, ec.clusterNamespace),
 		sessionNameToUse,
@@ -458,7 +460,7 @@ func (ec *EventCollector) flushNodeEventsForHour(hourKey string, events []Event)
 		fmt.Sprintf("%s-%s", nodeIDToUse, hourKey))
 
 	// Ensure storage directory exists
-	dir := path.Dir(basePath)
+	dir := filepath.Dir(basePath)
 	if err := ec.storageWriter.CreateDirectory(dir); err != nil {
 		return fmt.Errorf("failed to create directory %s: %w", dir, err)
 	}
@@ -500,7 +502,7 @@ func (ec *EventCollector) flushJobEventsForHour(jobID, hourKey string, events []
 	}
 
 	// Build job event storage path using event's nodeID
-	basePath := path.Join(
+	basePath := filepath.Join(
 		ec.root,
 		fmt.Sprintf("%s_%s", ec.clusterName, ec.clusterNamespace),
 		sessionNameToUse,
@@ -509,7 +511,7 @@ func (ec *EventCollector) flushJobEventsForHour(jobID, hourKey string, events []
 		fmt.Sprintf("%s-%s", nodeIDToUse, hourKey))
 
 	// Ensure storage directory exists
-	dir := path.Dir(basePath)
+	dir := filepath.Dir(basePath)
 	if err := ec.storageWriter.CreateDirectory(dir); err != nil {
 		return fmt.Errorf("failed to create directory %s: %w", dir, err)
 	}
