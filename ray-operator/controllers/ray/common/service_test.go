@@ -165,7 +165,7 @@ func TestBuildServiceForHeadPodDefaultPorts(t *testing.T) {
 				},
 			},
 			expectResult: map[string]int32{
-				"random":               1234,
+				"random":                1234,
 				utils.ClientPortName:    utils.DefaultClientPort,
 				utils.GcsServerPortName: utils.DefaultGcsServerPort,
 				utils.DashboardPortName: utils.DefaultDashboardPort,
@@ -268,7 +268,7 @@ func TestGetServicePorts(t *testing.T) {
 				},
 			},
 			expectResult: map[string]int32{
-				"random":               1234,
+				"random":                1234,
 				utils.ClientPortName:    utils.DefaultClientPort,
 				utils.GcsServerPortName: utils.DefaultGcsServerPort,
 				utils.DashboardPortName: utils.DefaultDashboardPort,
@@ -301,7 +301,7 @@ func TestGetServicePorts(t *testing.T) {
 				},
 			},
 			expectResult: map[string]int32{
-				"random":               utils.DefaultMetricsPort,
+				"random":                utils.DefaultMetricsPort,
 				utils.ClientPortName:    utils.DefaultClientPort,
 				utils.GcsServerPortName: utils.DefaultGcsServerPort,
 				utils.DashboardPortName: utils.DefaultDashboardPort,
@@ -539,6 +539,7 @@ func TestBuildServeServiceForRayCluster(t *testing.T) {
 
 func TestBuildServeServiceForRayService_WithoutServePort(t *testing.T) {
 	// Create a RayCluster without a port with the name "serve" in the Ray head container.
+	// The serve service should still be created with the default serve port.
 	cluster := rayv1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "raycluster-sample",
@@ -562,8 +563,11 @@ func TestBuildServeServiceForRayService_WithoutServePort(t *testing.T) {
 		},
 	}
 	svc, err := BuildServeServiceForRayService(context.Background(), *serviceInstance, cluster)
-	require.Error(t, err)
-	assert.Nil(t, svc)
+	require.NoError(t, err)
+	require.NotNil(t, svc)
+	require.Len(t, svc.Spec.Ports, 1)
+	assert.Equal(t, utils.ServingPortName, svc.Spec.Ports[0].Name)
+	assert.Equal(t, int32(utils.DefaultServingPort), svc.Spec.Ports[0].Port)
 }
 
 func TestUserSpecifiedServeService(t *testing.T) {

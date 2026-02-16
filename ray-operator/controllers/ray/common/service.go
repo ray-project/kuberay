@@ -212,9 +212,8 @@ func BuildServeService(ctx context.Context, rayService rayv1.RayService, rayClus
 		defaultType = rayService.Spec.RayClusterSpec.HeadGroupSpec.ServiceType
 	}
 
-	// For serve service, only use the ports explicitly defined in the head container.
-	// This keeps serve-service behavior independent from head service default-port filling.
-	portsInt := getPortsFromCluster(rayCluster)
+	// `portsInt` is a map of port names to port numbers, while `ports` is a list of ServicePort objects
+	portsInt := getServicePorts(rayCluster)
 	ports := make([]corev1.ServicePort, 0, 1)
 	if _, defined := portsInt[utils.ServingPortName]; defined {
 		// Only include serve port
