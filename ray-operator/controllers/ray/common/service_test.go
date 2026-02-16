@@ -250,9 +250,9 @@ func TestGetPortsFromCluster(t *testing.T) {
 
 func TestGetServicePorts(t *testing.T) {
 	testCases := []struct {
+		expectResult map[string]int32
 		name         string
 		ports        []corev1.ContainerPort
-		expectResult map[string]int32
 	}{
 		{
 			name:         "No ports are specified by the user.",
