@@ -13,6 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	utiltypes "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/types"
@@ -34,6 +35,8 @@ var (
 	initWorkPool sync.Once
 	pool         *WorkerPool
 )
+
+var _ manager.Runnable = (*WorkerPool)(nil)
 
 type (
 	JobInfoCache struct {
@@ -96,7 +99,7 @@ func InitWorkerPool(ctx context.Context,
 	return pool, err
 }
 
-func (w *WorkerPool) Start(ctx context.Context) {
+func (w *WorkerPool) Start(ctx context.Context) error {
 	logger := w.logger
 	go func() {
 		ticker := time.NewTicker(w.queryInterval)
@@ -192,6 +195,10 @@ func (w *WorkerPool) Start(ctx context.Context) {
 		}(i)
 	}
 	logger.Info(fmt.Sprintf("Initialize a worker pool with %d goroutines and query interval is %v.", w.numWorkers, w.queryInterval))
+
+	// Waiting for the termination
+	<-ctx.Done()
+	return ctx.Err()
 }
 
 // GetCachedDashboardClientFunc returns a function that creates a RayDashboardCacheClient.

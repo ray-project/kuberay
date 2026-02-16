@@ -317,7 +317,7 @@ func main() {
 		)
 		exitOnError(workerPoolErr, "unable to create worker pool for async job info query")
 
-		workerPool.Start(ctx)
+		exitOnError(mgr.Add(workerPool), "unable to add async job info query worker pool to manager")
 	}
 
 	rayJobOptions := ray.RayJobReconcilerOptions{
