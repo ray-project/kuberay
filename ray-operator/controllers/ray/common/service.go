@@ -100,8 +100,8 @@ func BuildServiceForHeadPod(ctx context.Context, cluster rayv1.RayCluster, label
 			headService.ObjectMeta.Annotations[k] = v
 		}
 
-		// Append default ports.
-		headService.Spec.Ports = append(headService.Spec.Ports, ports...)
+		// Merge default ports with user-provided ports. If there are overlaps, use default ports.
+		headService.Spec.Ports = mergeServicePorts(headService.Spec.Ports, ports)
 
 		setLabelsforUserProvidedService(headService, labelsForService)
 		setNameforUserProvidedService(ctx, headService, defaultName)
@@ -220,6 +220,7 @@ func BuildServeService(ctx context.Context, rayService rayv1.RayService, rayClus
 		svcPort := corev1.ServicePort{Name: utils.ServingPortName, Port: portsInt[utils.ServingPortName]}
 		ports = append(ports, svcPort)
 	}
+	_, serveDefinedInHead := getPortsFromCluster(rayCluster)[utils.ServingPortName]
 
 	if isRayService {
 		// We are invoked from RayService
@@ -240,9 +241,9 @@ func BuildServeService(ctx context.Context, rayService rayv1.RayService, rayClus
 				serveService.ObjectMeta.Annotations = make(map[string]string)
 			}
 
-			// Add port with name "serve" if it is already not added and ignore any custom ports
-			// Keeping this consistentent with adding only serve port in serve service
-			if len(ports) != 0 {
+			// If head container explicitly defines the "serve" port, it takes priority.
+			// Otherwise, preserve user-provided ServeService "serve" port.
+			if serveDefinedInHead && len(ports) != 0 {
 				log.Info("port with name 'serve' already added. Ignoring user provided ports for serve service")
 				serveService.Spec.Ports = ports
 			} else {
@@ -390,6 +391,42 @@ func setLabelsforUserProvidedService(service *corev1.Service, labels map[string]
 		service.ObjectMeta.Labels = make(map[string]string)
 	}
 	maps.Copy(service.ObjectMeta.Labels, labels)
+}
+
+// mergeServicePorts merges default ports into user-provided ports by name.
+// If names overlap, default ports take precedence to keep operator-generated ports authoritative.
+func mergeServicePorts(userPorts []corev1.ServicePort, defaultPorts []corev1.ServicePort) []corev1.ServicePort {
+	portByName := make(map[string]corev1.ServicePort, len(userPorts)+len(defaultPorts))
+	unnamedPorts := make([]corev1.ServicePort, 0)
+
+	for _, port := range userPorts {
+		if port.Name == "" {
+			unnamedPorts = append(unnamedPorts, port)
+			continue
+		}
+		portByName[port.Name] = port
+	}
+
+	for _, port := range defaultPorts {
+		if port.Name == "" {
+			unnamedPorts = append(unnamedPorts, port)
+			continue
+		}
+		portByName[port.Name] = port
+	}
+
+	names := make([]string, 0, len(portByName))
+	for name := range portByName {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	merged := make([]corev1.ServicePort, 0, len(portByName)+len(unnamedPorts))
+	for _, name := range names {
+		merged = append(merged, portByName[name])
+	}
+	merged = append(merged, unnamedPorts...)
+	return merged
 }
 
 // getServicePorts will either use user-provided ports or default ports to create the service.

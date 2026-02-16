@@ -445,18 +445,37 @@ func TestUserSpecifiedHeadService(t *testing.T) {
 	}
 	t.Logf("head service: %s", string(headServiceJSON))
 
-	// Test merged ports
-	for _, p := range userPorts {
-		found := false
-		for _, hp := range headService.Spec.Ports {
-			if p.Name == hp.Name && p.Port == hp.Port {
-				found = true
-				break
-			}
+	// "userPort" should be preserved.
+	foundUserPort := false
+	for _, hp := range headService.Spec.Ports {
+		if hp.Name == userPort.Name && hp.Port == userPort.Port {
+			foundUserPort = true
+			break
 		}
-		if !found {
-			t.Errorf("User port not found: %v", p)
+	}
+	assert.True(t, foundUserPort, "Expected user-defined non-overlapping port to be preserved")
+
+	// Overlapping user "client" port should be ignored and default should be used.
+	for _, hp := range headService.Spec.Ports {
+		assert.NotEqual(t, userPortOverride, hp, "Expected overlapping user client port to be ignored")
+	}
+	foundDefaultClientPort := false
+	for _, hp := range headService.Spec.Ports {
+		if hp.Name == utils.ClientPortName && hp.Port == utils.DefaultClientPort {
+			foundDefaultClientPort = true
+			break
 		}
+	}
+	assert.True(t, foundDefaultClientPort, "Expected default client port to be present")
+
+	// Ensure there are no duplicate port names.
+	seenNames := map[string]bool{}
+	for _, hp := range headService.Spec.Ports {
+		if hp.Name == "" {
+			continue
+		}
+		assert.False(t, seenNames[hp.Name], "Unexpected duplicate service port name: %s", hp.Name)
+		seenNames[hp.Name] = true
 	}
 
 	validateServiceTypeForUserSpecifiedService(headService, userType, t)
@@ -634,6 +653,36 @@ func TestUserSpecifiedServeService(t *testing.T) {
 	validateServiceTypeForUserSpecifiedService(svc, userType, t)
 	validateLabelsForUserSpecifiedService(svc, userLabels, t)
 	validateNameAndNamespaceForUserSpecifiedService(svc, testRayServiceWithServeService.ObjectMeta.Namespace, userName, t)
+}
+
+func TestUserSpecifiedServeServiceWithoutHeadServePort(t *testing.T) {
+	testRayServiceWithServeService := serviceInstance.DeepCopy()
+
+	clusterWithoutServePort := instanceWithWrongSvc.DeepCopy()
+	clusterWithoutServePort.Spec.HeadGroupSpec.Template.Spec.Containers[0].Ports = []corev1.ContainerPort{
+		{ContainerPort: 6379, Name: utils.GcsServerPortName},
+	}
+
+	customServePort := int32(18080)
+	testRayServiceWithServeService.Spec.ServeService = &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "custom-serve-service",
+			Namespace: "ignored-namespace",
+		},
+		Spec: corev1.ServiceSpec{
+			Ports: []corev1.ServicePort{
+				{Name: utils.ServingPortName, Port: customServePort},
+				{Name: utils.ClientPortName, Port: 19999},
+			},
+		},
+	}
+
+	svc, err := BuildServeServiceForRayService(context.Background(), *testRayServiceWithServeService, *clusterWithoutServePort)
+	require.NoError(t, err)
+	require.NotNil(t, svc)
+	require.Len(t, svc.Spec.Ports, 1)
+	assert.Equal(t, utils.ServingPortName, svc.Spec.Ports[0].Name)
+	assert.Equal(t, customServePort, svc.Spec.Ports[0].Port)
 }
 
 func validateServiceTypeForUserSpecifiedService(svc *corev1.Service, userType corev1.ServiceType, t *testing.T) {
