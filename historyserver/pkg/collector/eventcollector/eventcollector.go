@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -107,7 +108,7 @@ func (ec *EventCollector) Run(stop <-chan struct{}, port int) {
 
 // watchNodeIDFile watches raylet_node_id for content changes.
 func (ec *EventCollector) watchNodeIDFile() {
-	rayTmpDir := filepath.Join(os.TempDir(), "ray")
+	rayTmpDir := filepath.Join("/tmp", "ray")
 	nodeIDFilePath := filepath.Join(rayTmpDir, "raylet_node_id")
 
 	// Create new watcher
@@ -452,7 +453,7 @@ func (ec *EventCollector) flushNodeEventsForHour(hourKey string, events []Event)
 	}
 
 	// Build node event storage path using event's nodeID
-	basePath := filepath.Join(
+	basePath := path.Join(
 		ec.root,
 		fmt.Sprintf("%s_%s", ec.clusterName, ec.clusterNamespace),
 		sessionNameToUse,
@@ -460,7 +461,7 @@ func (ec *EventCollector) flushNodeEventsForHour(hourKey string, events []Event)
 		fmt.Sprintf("%s-%s", nodeIDToUse, hourKey))
 
 	// Ensure storage directory exists
-	dir := filepath.Dir(basePath)
+	dir := path.Dir(basePath)
 	if err := ec.storageWriter.CreateDirectory(dir); err != nil {
 		return fmt.Errorf("failed to create directory %s: %w", dir, err)
 	}
@@ -502,7 +503,7 @@ func (ec *EventCollector) flushJobEventsForHour(jobID, hourKey string, events []
 	}
 
 	// Build job event storage path using event's nodeID
-	basePath := filepath.Join(
+	basePath := path.Join(
 		ec.root,
 		fmt.Sprintf("%s_%s", ec.clusterName, ec.clusterNamespace),
 		sessionNameToUse,
@@ -511,7 +512,7 @@ func (ec *EventCollector) flushJobEventsForHour(jobID, hourKey string, events []
 		fmt.Sprintf("%s-%s", nodeIDToUse, hourKey))
 
 	// Ensure storage directory exists
-	dir := filepath.Dir(basePath)
+	dir := path.Dir(basePath)
 	if err := ec.storageWriter.CreateDirectory(dir); err != nil {
 		return fmt.Errorf("failed to create directory %s: %w", dir, err)
 	}
