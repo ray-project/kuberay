@@ -70,6 +70,7 @@ func (s *ServerHandler) listClusters(limit int) []utils.ClusterInfo {
 }
 
 func (s *ServerHandler) _getNodeLogs(rayClusterNameID, sessionId, nodeId, dir string) ([]byte, error) {
+	logPath := path.Join(sessionId, utils.RAY_SESSIONDIR_LOGDIR_NAME, nodeId)
 	if dir != "" {
 		logPath = path.Join(logPath, dir)
 	}
