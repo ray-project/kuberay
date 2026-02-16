@@ -247,15 +247,24 @@ func BuildServeService(ctx context.Context, rayService rayv1.RayService, rayClus
 				log.Info("port with name 'serve' already added. Ignoring user provided ports for serve service")
 				serveService.Spec.Ports = ports
 			} else {
-				ports := make([]corev1.ServicePort, 0, 1)
+				portsFromUserServeService := make([]corev1.ServicePort, 0, 1)
 				for _, port := range serveService.Spec.Ports {
 					if port.Name == utils.ServingPortName {
 						svcPort := corev1.ServicePort{Name: port.Name, Port: port.Port}
-						ports = append(ports, svcPort)
+						portsFromUserServeService = append(portsFromUserServeService, svcPort)
 						break
 					}
 				}
-				serveService.Spec.Ports = ports
+				if len(portsFromUserServeService) > 0 {
+					serveService.Spec.Ports = portsFromUserServeService
+				} else if len(ports) > 0 {
+					// Keep backward compatibility: fall back to operator-generated serve port
+					// when user-provided ServeService ports do not include a "serve" port name.
+					log.Info("No port named 'serve' found in user provided serve service ports. Falling back to default serve port")
+					serveService.Spec.Ports = ports
+				} else {
+					return nil, fmt.Errorf("Please specify the port named 'serve' in the Ray head container or in RayService.Spec.ServeService")
+				}
 			}
 
 			setLabelsforUserProvidedService(serveService, labels)

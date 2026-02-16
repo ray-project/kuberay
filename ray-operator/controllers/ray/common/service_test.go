@@ -685,6 +685,34 @@ func TestUserSpecifiedServeServiceWithoutHeadServePort(t *testing.T) {
 	assert.Equal(t, customServePort, svc.Spec.Ports[0].Port)
 }
 
+func TestUserSpecifiedServeServiceWithoutAnyServePort(t *testing.T) {
+	testRayServiceWithServeService := serviceInstance.DeepCopy()
+
+	clusterWithoutServePort := instanceWithWrongSvc.DeepCopy()
+	clusterWithoutServePort.Spec.HeadGroupSpec.Template.Spec.Containers[0].Ports = []corev1.ContainerPort{
+		{ContainerPort: 6379, Name: utils.GcsServerPortName},
+	}
+
+	testRayServiceWithServeService.Spec.ServeService = &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "custom-serve-service-no-serve-port",
+			Namespace: "ignored-namespace",
+		},
+		Spec: corev1.ServiceSpec{
+			Ports: []corev1.ServicePort{
+				{Name: utils.ClientPortName, Port: 19999},
+			},
+		},
+	}
+
+	svc, err := BuildServeServiceForRayService(context.Background(), *testRayServiceWithServeService, *clusterWithoutServePort)
+	require.NoError(t, err)
+	require.NotNil(t, svc)
+	require.Len(t, svc.Spec.Ports, 1)
+	assert.Equal(t, utils.ServingPortName, svc.Spec.Ports[0].Name)
+	assert.Equal(t, int32(utils.DefaultServingPort), svc.Spec.Ports[0].Port)
+}
+
 func validateServiceTypeForUserSpecifiedService(svc *corev1.Service, userType corev1.ServiceType, t *testing.T) {
 	// Test that the user service type takes priority over the default service type (example: ClusterIP)
 	if svc.Spec.Type != userType {
