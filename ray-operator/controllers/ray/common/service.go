@@ -212,8 +212,9 @@ func BuildServeService(ctx context.Context, rayService rayv1.RayService, rayClus
 		defaultType = rayService.Spec.RayClusterSpec.HeadGroupSpec.ServiceType
 	}
 
-	// `portsInt` is a map of port names to port numbers, while `ports` is a list of ServicePort objects
-	portsInt := getServicePorts(rayCluster)
+	// For serve service, only use the ports explicitly defined in the head container.
+	// This keeps serve-service behavior independent from head service default-port filling.
+	portsInt := getPortsFromCluster(rayCluster)
 	ports := make([]corev1.ServicePort, 0, 1)
 	if _, defined := portsInt[utils.ServingPortName]; defined {
 		// Only include serve port
@@ -392,18 +393,28 @@ func setLabelsforUserProvidedService(service *corev1.Service, labels map[string]
 	maps.Copy(service.ObjectMeta.Labels, labels)
 }
 
-// getServicePorts will either user passing ports or default ports to create service.
+// getServicePorts will either use user-provided ports or default ports to create the service.
 func getServicePorts(cluster rayv1.RayCluster) map[string]int32 {
 	ports := getPortsFromCluster(cluster)
+	defaultPorts := getDefaultPorts()
 
-	// Assign default ports
-	if len(ports) == 0 {
-		ports = getDefaultPorts()
+	usedPorts := make(map[int32]bool, len(ports))
+	for _, port := range ports {
+		usedPorts[port] = true
 	}
 
-	// check if metrics port is defined. If not, add default value for it.
-	if _, metricsDefined := ports[utils.MetricsPortName]; !metricsDefined {
-		ports[utils.MetricsPortName] = utils.DefaultMetricsPort
+	for name, defaultPort := range defaultPorts {
+		if _, defined := ports[name]; defined {
+			continue
+		}
+
+		// Skip assigning default ports if the default value is already used.
+		if usedPorts[defaultPort] {
+			continue
+		}
+
+		ports[name] = defaultPort
+		usedPorts[defaultPort] = true
 	}
 
 	return ports

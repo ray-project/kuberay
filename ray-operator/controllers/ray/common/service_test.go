@@ -142,8 +142,7 @@ func TestBuildServiceForHeadPod(t *testing.T) {
 	assert.Equal(t, corev1.ClusterIPNone, svc.Spec.ClusterIP)
 }
 
-// Test that default ports are applied when none are specified. The metrics
-// port is always added if not explicitly set.
+// Test that default ports are applied for each missing named port.
 func TestBuildServiceForHeadPodDefaultPorts(t *testing.T) {
 	type testCase struct {
 		name         string
@@ -166,9 +165,12 @@ func TestBuildServiceForHeadPodDefaultPorts(t *testing.T) {
 				},
 			},
 			expectResult: map[string]int32{
-				"random": 1234,
-				// metrics port will always be there
-				utils.MetricsPortName: utils.DefaultMetricsPort,
+				"random":               1234,
+				utils.ClientPortName:    utils.DefaultClientPort,
+				utils.GcsServerPortName: utils.DefaultGcsServerPort,
+				utils.DashboardPortName: utils.DefaultDashboardPort,
+				utils.MetricsPortName:   utils.DefaultMetricsPort,
+				utils.ServingPortName:   utils.DefaultServingPort,
 			},
 		},
 	}
@@ -246,16 +248,16 @@ func TestGetPortsFromCluster(t *testing.T) {
 	}
 }
 
-func TestGetServicePortsWithMetricsPort(t *testing.T) {
+func TestGetServicePorts(t *testing.T) {
 	testCases := []struct {
 		name         string
 		ports        []corev1.ContainerPort
-		expectResult int32
+		expectResult map[string]int32
 	}{
 		{
 			name:         "No ports are specified by the user.",
 			ports:        []corev1.ContainerPort{},
-			expectResult: int32(utils.DefaultMetricsPort),
+			expectResult: getDefaultPorts(),
 		},
 		{
 			name: "Only a random port is specified by the user.",
@@ -265,17 +267,46 @@ func TestGetServicePortsWithMetricsPort(t *testing.T) {
 					ContainerPort: 1234,
 				},
 			},
-			expectResult: int32(utils.DefaultMetricsPort),
+			expectResult: map[string]int32{
+				"random":               1234,
+				utils.ClientPortName:    utils.DefaultClientPort,
+				utils.GcsServerPortName: utils.DefaultGcsServerPort,
+				utils.DashboardPortName: utils.DefaultDashboardPort,
+				utils.MetricsPortName:   utils.DefaultMetricsPort,
+				utils.ServingPortName:   utils.DefaultServingPort,
+			},
 		},
 		{
-			name: "A custom port is specified by the user.",
+			name: "A custom metrics port is specified by the user.",
 			ports: []corev1.ContainerPort{
 				{
 					Name:          utils.MetricsPortName,
 					ContainerPort: int32(utils.DefaultMetricsPort) + 1,
 				},
 			},
-			expectResult: int32(utils.DefaultMetricsPort) + 1,
+			expectResult: map[string]int32{
+				utils.ClientPortName:    utils.DefaultClientPort,
+				utils.GcsServerPortName: utils.DefaultGcsServerPort,
+				utils.DashboardPortName: utils.DefaultDashboardPort,
+				utils.MetricsPortName:   int32(utils.DefaultMetricsPort) + 1,
+				utils.ServingPortName:   utils.DefaultServingPort,
+			},
+		},
+		{
+			name: "Do not assign duplicate default ports.",
+			ports: []corev1.ContainerPort{
+				{
+					Name:          "random",
+					ContainerPort: utils.DefaultMetricsPort,
+				},
+			},
+			expectResult: map[string]int32{
+				"random":               utils.DefaultMetricsPort,
+				utils.ClientPortName:    utils.DefaultClientPort,
+				utils.GcsServerPortName: utils.DefaultGcsServerPort,
+				utils.DashboardPortName: utils.DefaultDashboardPort,
+				utils.ServingPortName:   utils.DefaultServingPort,
+			},
 		},
 	}
 	for _, testCase := range testCases {
@@ -283,7 +314,7 @@ func TestGetServicePortsWithMetricsPort(t *testing.T) {
 			cluster := instanceWithWrongSvc.DeepCopy()
 			cluster.Spec.HeadGroupSpec.Template.Spec.Containers[0].Ports = testCase.ports
 			ports := getServicePorts(*cluster)
-			assert.Equal(t, testCase.expectResult, ports[utils.MetricsPortName])
+			assert.Equal(t, testCase.expectResult, ports)
 		})
 	}
 }
