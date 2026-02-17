@@ -3,7 +3,7 @@ kind: RayCluster
 metadata:
   name: verl-cluster
 spec:
-  rayVersion: '2.43.0'
+  rayVersion: "2.43.0"
   headGroupSpec:
     rayStartParams: {}
     template:
