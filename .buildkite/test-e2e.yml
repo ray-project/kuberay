@@ -81,6 +81,7 @@
     - export PATH="$$PATH:$$PWD/istio-1.28.3/bin"
     - istioctl install --set profile=minimal -y
     - echo "--- Creating Istio GatewayClass"
+    - kubectl wait --namespace istio-system --for=condition=ready pod --selector=app=istiod --timeout=120s
     - kubectl apply -f ray-operator/config/samples/gateway-api/istio-class.yaml
 
     # Build nightly KubeRay operator image
