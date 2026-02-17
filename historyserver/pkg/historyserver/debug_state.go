@@ -22,9 +22,15 @@ type NodeDebugState struct {
 }
 
 var (
-	reNodeGroup  = regexp.MustCompile(`"ray\.io/node-group"\s*:\s*"([^"]+)"`)
-	reTotal      = regexp.MustCompile(`"total"\s*:\s*\{([^}]+)\}`)
-	reAvailable  = regexp.MustCompile(`"available"\s*:\s*\{([^}]+)\}`)
+	// Extracts the node group label from "ray.io/node-group":"<group name>"
+	reNodeGroup = regexp.MustCompile(`"ray\.io/node-group"\s*:\s*"([^"]+)"`)
+	// Matches the first "total": {...} on the line, which is the Local resources section
+	reTotal = regexp.MustCompile(`"total"\s*:\s*\{([^}]+)\}`)
+	// Matches the first "available": {...} on the line, which is the Local resources section
+	reAvailable = regexp.MustCompile(`"available"\s*:\s*\{([^}]+)\}`)
+	// Matches resource key-value pairs like "memory: [100000000000000]", "CPU: [10000]", or "object_store_memory: [14396805120000]"
+	// Also matches node-specific resources like "node:10.244.0.9: [10000]"
+	// and scientific notation values like [1e-3] or [1e+10].
 	reResourceKV = regexp.MustCompile(`([a-zA-Z0-9_:./\-]+):\s*\[([0-9.e+\-]+)\]`)
 )
 
@@ -77,15 +83,15 @@ func parseClusterResourceSchedulerLine(line string, state *NodeDebugState) {
 	// Extract is_draining
 	state.IsDraining = strings.Contains(line, "is_draining: 1")
 
-	// Extract node group from labels
+	// Extract node group name from "ray.io/node-group":"<group_name>"
 	if m := reNodeGroup.FindStringSubmatch(line); len(m) > 1 {
 		state.NodeGroup = m[1]
 	}
-	// Extract total resources
+	// Extract total resources from "total":{...} block
 	if m := reTotal.FindStringSubmatch(line); len(m) > 1 {
 		state.Total = parseResourceMap(m[1])
 	}
-	// Extract available resources
+	// Extract available resources from "available":{...} block
 	if m := reAvailable.FindStringSubmatch(line); len(m) > 1 {
 		state.Available = parseResourceMap(m[1])
 	}
@@ -96,13 +102,11 @@ func parseClusterResourceSchedulerLine(line string, state *NodeDebugState) {
 func parseResourceMap(resourceStr string) map[string]float64 {
 	resources := make(map[string]float64)
 
-	// Match patterns like "memory: [100000000000000]" or "CPU: [10000]"
-	// Also handles "node:10.244.0.9: [10000]" and "object_store_memory: [14396805120000]"
 	matches := reResourceKV.FindAllStringSubmatch(resourceStr, -1)
 	for _, match := range matches {
 		if len(match) > 2 {
-			key := strings.TrimSpace(match[1])
-			valueStr := match[2]
+			key := strings.TrimSpace(match[1]) // e.g., "memory" or "object_store_memory"
+			valueStr := match[2]               // e.g., "100000000000000"
 
 			// Parse the value (handles scientific notation like 1e+10)
 			value, err := strconv.ParseFloat(valueStr, 64)

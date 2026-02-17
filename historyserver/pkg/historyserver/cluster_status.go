@@ -216,6 +216,7 @@ func (b *ClusterStatusBuilder) AddPendingDemandsFromActors(actors []types.Actor)
 	b.mergeDemands(demandMap)
 }
 
+// mergeDemands merges new demands into PendingDemands, summing counts for demands with the same resource shape.
 func (b *ClusterStatusBuilder) mergeDemands(demandMap map[string]*ResourceDemand) {
 	indexByKey := make(map[string]int, len(b.PendingDemands))
 
@@ -281,6 +282,9 @@ func sortedKeys[V any](m map[string]V) []string {
 	return slices.Sorted(maps.Keys(m))
 }
 
+// formatResourceValue formats a single resource value for display.
+// Memory resources are formatted as human-readable bytes (e.g. "10.0 GiB"),
+// while others use numeric format (e.g. "1.0", "0.25").
 func formatResourceValue(resource string, value float64) string {
 	// e.g. memory, object_store_memory
 	if strings.Contains(strings.ToLower(resource), "memory") {
@@ -294,6 +298,8 @@ func formatResourceValue(resource string, value float64) string {
 	return fmt.Sprintf("%.2f", value)
 }
 
+// formatResourceMapForDisplay formats a resource map matching Ray's autoscaler output.
+// e.g. "{'CPU': 1.0, 'memory': 9.31GiB}"
 func formatResourceMapForDisplay(resources map[string]float64) string {
 	if len(resources) == 0 {
 		return "{}"
@@ -301,12 +307,7 @@ func formatResourceMapForDisplay(resources map[string]float64) string {
 
 	var parts []string
 	for _, k := range sortedKeys(resources) {
-		v := resources[k]
-		if math.Trunc(v) == v {
-			parts = append(parts, fmt.Sprintf("'%s': %.1f", k, v))
-		} else {
-			parts = append(parts, fmt.Sprintf("'%s': %.2f", k, v))
-		}
+		parts = append(parts, fmt.Sprintf("'%s': %s", k, formatResourceValue(k, resources[k])))
 	}
 
 	return fmt.Sprintf("{%s}", strings.Join(parts, ", "))
@@ -397,6 +398,8 @@ func (b *ClusterStatusBuilder) FormatStatus() string {
 		sb.WriteString(" (no resource demands)")
 	} else {
 		for _, demand := range b.PendingDemands {
+			// Ref: https://github.com/ray-project/ray/blob/master/python/ray/autoscaler/_private/util.py (get_demand_report)
+			// Ref: https://github.com/ray-project/ray/blob/master/python/ray/autoscaler/v2/utils.py (ClusterStatusFormatter._demand_report)
 			sb.WriteString(fmt.Sprintf(" %s: %d+ pending tasks/actors\n",
 				formatResourceMapForDisplay(demand.Resources), demand.Count))
 		}
