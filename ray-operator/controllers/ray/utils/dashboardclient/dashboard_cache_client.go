@@ -286,6 +286,10 @@ func (r *RayDashboardCacheClient) DeleteJob(ctx context.Context, jobName string)
 	return r.client.DeleteJob(ctx, jobName)
 }
 
+func (r *RayDashboardCacheClient) GetComponentActivities(ctx context.Context) (map[string]*utiltypes.RayActivityResponse, error) {
+	return r.client.GetComponentActivities(ctx)
+}
+
 func cacheKey(namespacedName types.NamespacedName, jobId string) string {
 	return namespacedName.String() + string(types.Separator) + jobId
 }
