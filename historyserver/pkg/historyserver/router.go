@@ -103,6 +103,10 @@ func routerAPI(s *ServerHandler) {
 		Doc("get placement_groups").
 		Writes("")) // Placeholder for specific return type
 
+	ws.Route(ws.GET("/v0/cluster_metadata").To(s.getClusterMetadata).Filter(s.CookieHandle).
+		Doc("get cluster metadata").
+		Writes("")) // Placeholder for specific return type
+
 	ws.Route(ws.GET("/v0/logs").To(s.getNodeLogs).Filter(s.CookieHandle).
 		Doc("get appliations").Param(ws.QueryParameter("node_id", "node_id")).
 		Writes("")) // Placeholder for specific return type
@@ -506,8 +510,37 @@ func (s *ServerHandler) getClusterStatus(req *restful.Request, resp *restful.Res
 		return
 	}
 
-	// Return "not yet supported" for cluster status
-	resp.WriteErrorString(http.StatusNotImplemented, "Cluster status not yet supported")
+	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
+	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
+	rayClusterNameID := clusterName + "_" + clusterNamespace
+
+	data := s.MetaKeyInfo(rayClusterNameID, utils.OssMetaFile_ClusterStatus)
+	if data == nil {
+		resp.WriteErrorString(http.StatusNotFound, "Cluster status not yet available")
+		return
+	}
+	resp.Header().Set("Content-Type", "application/json")
+	resp.Write(data)
+}
+
+func (s *ServerHandler) getClusterMetadata(req *restful.Request, resp *restful.Response) {
+	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
+	if sessionName == "live" {
+		s.redirectRequest(req, resp)
+		return
+	}
+
+	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
+	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
+	rayClusterNameID := clusterName + "_" + clusterNamespace
+
+	data := s.MetaKeyInfo(rayClusterNameID, utils.OssMetaFile_ClusterMetadata)
+	if data == nil {
+		resp.WriteErrorString(http.StatusNotFound, "Cluster metadata not yet available")
+		return
+	}
+	resp.Header().Set("Content-Type", "application/json")
+	resp.Write(data)
 }
 
 func (s *ServerHandler) getNodeLogs(req *restful.Request, resp *restful.Response) {

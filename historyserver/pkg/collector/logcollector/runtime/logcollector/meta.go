@@ -88,6 +88,16 @@ func (r *RayLogHandler) InitMetaUrlInfo() {
 			Url:  fmt.Sprintf("%s/api/v0/placement_groups", r.DashboardAddress),
 			Type: "URL",
 		},
+		{
+			Key:  utils.OssMetaFile_ClusterMetadata,
+			Url:  fmt.Sprintf("%s/api/v0/cluster_metadata", r.DashboardAddress),
+			Type: "URL",
+		},
+		{
+			Key:  utils.OssMetaFile_ClusterStatus,
+			Url:  fmt.Sprintf("%s/api/cluster_status", r.DashboardAddress),
+			Type: "URL",
+		},
 	}
 	r.JobsUrlInfo = &types.UrlInfo{
 		Key:  utils.OssMetaFile_Jobs,

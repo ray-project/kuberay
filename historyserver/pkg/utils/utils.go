@@ -39,6 +39,8 @@ const (
 
 	OssMetaFile_Jobs         = "restful__api__jobs"
 	OssMetaFile_Applications = "restful__api__serve__applications"
+
+	OssMetaFile_ClusterMetadata = "restful__api__v0__cluster_metadata"
 )
 
 const RAY_HISTORY_SERVER_LOGNAME = "historyserver-ray.log"
