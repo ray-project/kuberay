@@ -214,16 +214,6 @@ const (
 	// If set to true, we will use deterministic name for head pod. Otherwise, the non-deterministic name is used.
 	ENABLE_DETERMINISTIC_HEAD_POD_NAME = "ENABLE_DETERMINISTIC_HEAD_POD_NAME"
 
-	// Async job info query
-	ASYNC_JOB_INFO_QUERY_INTERVAL         = "ASYNC_JOB_INFO_QUERY_INTERVAL"
-	DEFAULT_ASYNC_JOB_INFO_QUERY_INTERVAL = "3s"
-
-	ASYNC_JOB_INFO_QUERY_WORKER_SIZE         = "ASYNC_JOB_INFO_QUERY_WORKER_SIZE"
-	DEFAULT_ASYNC_JOB_INFO_QUERY_WORKER_SIZE = "8"
-
-	ASYNC_JOB_INFO_QUERY_CACHE_EXPIRY         = "ASYNC_JOB_INFO_QUERY_CACHE_EXPIRY"
-	DEFAULT_ASYNC_JOB_INFO_QUERY_CACHE_EXPIRY = "10m"
-
 	// Ray core default configurations
 	DefaultWorkerRayGcsReconnectTimeoutS = "600"
 
