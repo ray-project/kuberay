@@ -284,7 +284,7 @@ func main() {
 		"unable to create controller", "controller", "RayService")
 
 	if features.Enabled(features.AsyncJobInfoQuery) {
-		cacheManager := mgr.GetCache()
+		cacheReader := mgr.GetCache()
 
 		queryInterval, parseErr := time.ParseDuration(utils.GetEnvOrDefault(utils.ASYNC_JOB_INFO_QUERY_INTERVAL, utils.DEFAULT_ASYNC_JOB_INFO_QUERY_INTERVAL))
 		exitOnError(parseErr, "unable to parse async job info query interval")
@@ -309,7 +309,7 @@ func main() {
 
 		workerPool, workerPoolErr := dashboardclient.InitWorkerPool(
 			ctx,
-			cacheManager,
+			cacheReader,
 			numWorkers,
 			queryInterval,
 			cacheExpiry,
