@@ -4,7 +4,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 
@@ -76,6 +75,9 @@ func main() {
 	var enableMetrics bool
 	var qps float64
 	var burst int
+	var asyncJobInfoQueryInterval string
+	var asyncJobInfoQueryWorkerSize int
+	var asyncJobInfoQueryCacheExpiry string
 
 	// TODO: remove flag-based config once Configuration API graduates to v1.
 	flag.StringVar(&metricsAddr, "metrics-addr", configapi.DefaultMetricsAddr, "The address the metric endpoint binds to.")
@@ -109,6 +111,9 @@ func main() {
 	flag.BoolVar(&enableMetrics, "enable-metrics", false, "Enable the emission of control plane metrics.")
 	flag.Float64Var(&qps, "qps", float64(configapi.DefaultQPS), "The QPS value for the client communicating with the Kubernetes API server.")
 	flag.IntVar(&burst, "burst", configapi.DefaultBurst, "The maximum burst for throttling requests from this client to the Kubernetes API server.")
+	flag.StringVar(&asyncJobInfoQueryInterval, "async-job-info-query-interval", configapi.DefaultAsyncJobInfoQueryInterval, "Interval for querying job info asynchronously. Only applicable when the AsyncJobInfoQuery feature gate is enabled.")
+	flag.IntVar(&asyncJobInfoQueryWorkerSize, "async-job-info-query-worker-size", configapi.DefaultAsyncJobInfoQueryWorkerSize, "Number of workers for querying job info in parallel. Only applicable when the AsyncJobInfoQuery feature gate is enabled.")
+	flag.StringVar(&asyncJobInfoQueryCacheExpiry, "async-job-info-query-cache-expiry", configapi.DefaultAsyncJobInfoQueryCacheExpiry, "Cache expiry duration for job info keep without accessing. Only applicable when the AsyncJobInfoQuery feature gate is enabled.")
 
 	opts := k8szap.Options{
 		TimeEncoder: zapcore.ISO8601TimeEncoder,
@@ -141,6 +146,10 @@ func main() {
 		config.EnableMetrics = enableMetrics
 		config.QPS = &qps
 		config.Burst = &burst
+		config.AsyncJobInfoQueryInterval = asyncJobInfoQueryInterval
+		config.AsyncJobInfoQueryWorkerSize = asyncJobInfoQueryWorkerSize
+		config.AsyncJobInfoQueryCacheExpiry = asyncJobInfoQueryCacheExpiry
+
 	}
 
 	stdoutEncoder, err := newLogEncoder(logStdoutEncoder)
@@ -286,19 +295,17 @@ func main() {
 	if features.Enabled(features.AsyncJobInfoQuery) {
 		cacheReader := mgr.GetCache()
 
-		queryInterval, parseErr := time.ParseDuration(utils.GetEnvOrDefault(utils.ASYNC_JOB_INFO_QUERY_INTERVAL, utils.DEFAULT_ASYNC_JOB_INFO_QUERY_INTERVAL))
+		queryInterval, parseErr := time.ParseDuration(config.AsyncJobInfoQueryInterval)
 		exitOnError(parseErr, "unable to parse async job info query interval")
 		if queryInterval < time.Second {
 			exitOnError(fmt.Errorf("async job info query interval %s is too small; must be >= 1s", queryInterval), "invalid async job info query interval")
 		}
 
-		numWorkers, parseErr := strconv.Atoi(utils.GetEnvOrDefault(utils.ASYNC_JOB_INFO_QUERY_WORKER_SIZE, utils.DEFAULT_ASYNC_JOB_INFO_QUERY_WORKER_SIZE))
-		exitOnError(parseErr, "unable to parse async job info query worker size")
-		if numWorkers < 1 {
-			exitOnError(fmt.Errorf("async job info query worker size %d should be greater than zero", numWorkers), "invalid async job info query worker size")
+		if config.AsyncJobInfoQueryWorkerSize < 1 {
+			exitOnError(fmt.Errorf("async job info query worker size %d should be greater than zero", config.AsyncJobInfoQueryWorkerSize), "invalid async job info query worker size")
 		}
 
-		cacheExpiry, parseErr := time.ParseDuration(utils.GetEnvOrDefault(utils.ASYNC_JOB_INFO_QUERY_CACHE_EXPIRY, utils.DEFAULT_ASYNC_JOB_INFO_QUERY_CACHE_EXPIRY))
+		cacheExpiry, parseErr := time.ParseDuration(config.AsyncJobInfoQueryCacheExpiry)
 		exitOnError(parseErr, "unable to parse async job info query cache expiry")
 		if cacheExpiry <= 0 {
 			exitOnError(fmt.Errorf("async job info query cache expiry %s must be greater than zero", cacheExpiry), "invalid async job info query cache expiry")
@@ -310,7 +317,7 @@ func main() {
 		workerPool, workerPoolErr := dashboardclient.InitWorkerPool(
 			ctx,
 			cacheReader,
-			numWorkers,
+			config.AsyncJobInfoQueryWorkerSize,
 			queryInterval,
 			cacheExpiry,
 			config.GetDashboardClient(mgr),

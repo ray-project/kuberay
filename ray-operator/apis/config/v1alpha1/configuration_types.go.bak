@@ -13,8 +13,6 @@ import (
 //+kubebuilder:object:root=true
 
 // Configuration is the Schema for Ray operator config.
-//
-//nolint:govet // this avoids the comment being removed during the commit.
 type Configuration struct {
 	// Burst allows temporary exceeding of QPS limit for handling request spikes.
 	// Default: 200

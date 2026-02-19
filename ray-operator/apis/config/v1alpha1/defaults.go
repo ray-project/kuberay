@@ -6,12 +6,15 @@ import (
 )
 
 const (
-	DefaultMetricsAddr          = ":8080"
-	DefaultProbeAddr            = ":8082"
-	DefaultEnableLeaderElection = true
-	DefaultReconcileConcurrency = 1
-	DefaultQPS                  = float64(100)
-	DefaultBurst                = 200
+	DefaultMetricsAddr                  = ":8080"
+	DefaultProbeAddr                    = ":8082"
+	DefaultEnableLeaderElection         = true
+	DefaultReconcileConcurrency         = 1
+	DefaultQPS                          = float64(100)
+	DefaultBurst                        = 200
+	DefaultAsyncJobInfoQueryInterval    = "3s"
+	DefaultAsyncJobInfoQueryWorkerSize  = 8
+	DefaultAsyncJobInfoQueryCacheExpiry = "10m"
 )
 
 func addDefaultingFuncs(scheme *runtime.Scheme) error {
