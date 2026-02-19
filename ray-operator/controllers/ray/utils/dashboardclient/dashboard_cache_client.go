@@ -162,34 +162,7 @@ func (w *WorkerPool) Start(ctx context.Context) error {
 						return
 					}
 
-					// cannot use common.RayJobRayClusterNamespacedName because of cyclic import.
-					rayClusterNamespacedName := namespacedNameFromRayJob(rayJobInstance)
-
-					w.existInQueue.Delete(cacheKey(rayClusterNamespacedName, rayJobInstance.Status.JobId))
-
-					// get RayCluster instance from informer cache
-					var rayClusterInstance rayv1.RayCluster
-					err := w.cacheReader.Get(
-						ctx,
-						rayClusterNamespacedName,
-						&rayClusterInstance)
-					if err != nil {
-						logger.Error(err, "failed to get RayCluster instance from informer cache", "name", rayClusterNamespacedName.Name)
-						continue
-					}
-
-					rayDashboardClient, err := w.dashboardClientFunc(&rayClusterInstance, rayJobInstance.Status.DashboardURL)
-					if err != nil {
-						logger.Error(err, "failed to get dashboard client", "rayCluster", rayClusterNamespacedName.Name, "dashboardURL", rayJobInstance.Status.DashboardURL)
-						continue
-					}
-
-					jobInfo, err := rayDashboardClient.GetJobInfo(ctx, rayJobInstance.Status.JobId)
-
-					w.cacheStorage.Set(cacheKey(rayClusterNamespacedName, rayJobInstance.Status.JobId), &JobInfoCache{
-						JobInfo: jobInfo,
-						Err:     err,
-					})
+					w.processRayJob(ctx, rayJobInstance)
 				}
 			}
 		}(i)
@@ -199,6 +172,42 @@ func (w *WorkerPool) Start(ctx context.Context) error {
 	// Waiting for the termination
 	<-ctx.Done()
 	return ctx.Err()
+}
+
+// processRayJob fetches job info from Ray Dashboard and stores it in the cache.
+// It uses defer to ensure existInQueue is cleaned up after processing completes,
+// preventing the same RayJob from being enqueued again while still being processed.
+func (w *WorkerPool) processRayJob(ctx context.Context, rayJobInstance *rayv1.RayJob) {
+	logger := w.logger
+
+	// cannot use common.RayJobRayClusterNamespacedName because of cyclic import.
+	rayClusterNamespacedName := namespacedNameFromRayJob(rayJobInstance)
+	key := cacheKey(rayClusterNamespacedName, rayJobInstance.Status.JobId)
+
+	// Use defer to ensure the key is deleted from existInQueue after processing completes.
+	// This prevents the same RayJob from being processed by multiple workers simultaneously.
+	defer w.existInQueue.Delete(key)
+
+	// get RayCluster instance from informer cache
+	var rayClusterInstance rayv1.RayCluster
+	err := w.cacheReader.Get(ctx, rayClusterNamespacedName, &rayClusterInstance)
+	if err != nil {
+		logger.Error(err, "failed to get RayCluster instance from informer cache", "rayCluster", rayClusterNamespacedName.String())
+		return
+	}
+
+	rayDashboardClient, err := w.dashboardClientFunc(&rayClusterInstance, rayJobInstance.Status.DashboardURL)
+	if err != nil {
+		logger.Error(err, "failed to get dashboard client", "rayCluster", rayClusterNamespacedName.Name, "dashboardURL", rayJobInstance.Status.DashboardURL)
+		return
+	}
+
+	jobInfo, err := rayDashboardClient.GetJobInfo(ctx, rayJobInstance.Status.JobId)
+
+	w.cacheStorage.Set(key, &JobInfoCache{
+		JobInfo: jobInfo,
+		Err:     err,
+	})
 }
 
 // GetCachedDashboardClientFunc returns a function that creates a RayDashboardCacheClient.
