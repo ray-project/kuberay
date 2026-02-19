@@ -300,7 +300,7 @@ func main() {
 
 		cacheExpiry, parseErr := time.ParseDuration(utils.GetEnvOrDefault(utils.ASYNC_JOB_INFO_QUERY_CACHE_EXPIRY, utils.DEFAULT_ASYNC_JOB_INFO_QUERY_CACHE_EXPIRY))
 		exitOnError(parseErr, "unable to parse async job info query cache expiry")
-		if cacheExpiry < 0 {
+		if cacheExpiry <= 0 {
 			exitOnError(fmt.Errorf("async job info query cache expiry %s must be greater than zero", cacheExpiry), "invalid async job info query cache expiry")
 		}
 		if cacheExpiry <= queryInterval {
