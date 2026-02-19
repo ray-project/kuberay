@@ -1,6 +1,8 @@
 package e2erayjob
 
 import (
+	"os/exec"
+	"strings"
 	"testing"
 	"time"
 
@@ -289,5 +291,174 @@ env_vars:
 			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusComplete)))
 
 		LogWithTimestamp(test.T(), "RayJob %s/%s completed successfully with auth token", rayJob.Namespace, rayJob.Name)
+	})
+
+	test.T().Run("RayJob Sidecar Mode should still be running if the submitter container exit on non-zero code", func(_ *testing.T) {
+		rayJobAC := rayv1ac.RayJob("stop-head-container-rayjob-should-not-fail", namespace.Name).
+			WithSpec(rayv1ac.RayJobSpec().
+				WithSubmissionMode(rayv1.SidecarMode).
+				WithRayClusterSpec(NewRayClusterSpec()).
+				WithEntrypoint("python -c \"import time; time.sleep(60)\"").
+				WithShutdownAfterJobFinishes(true))
+
+		rayJob, err := test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
+		g.Expect(err).NotTo(HaveOccurred())
+		LogWithTimestamp(test.T(), "Created RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
+
+		// Wait until the RayJob to become Running
+		LogWithTimestamp(test.T(), "Waiting for RayJob %s/%s to be 'Running'", rayJob.Namespace, rayJob.Name)
+		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
+			Should(WithTransform(RayJobStatus, Equal(rayv1.JobStatusRunning)))
+
+		// Get RayCluster name
+		rayJob, err = GetRayJob(test, rayJob.Namespace, rayJob.Name)
+		g.Expect(err).NotTo(HaveOccurred())
+		rayClusterName := rayJob.Status.RayClusterName
+
+		// Get RayCluster
+		rayCluster, err := GetRayCluster(test, namespace.Name, rayClusterName)
+		g.Expect(err).NotTo(HaveOccurred())
+
+		// Get headPod
+		headPod, err := GetHeadPod(test, rayCluster)
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(headPod).NotTo(BeNil())
+
+		// Get Submitter Container id
+		var containerID string
+		for _, containerStatus := range headPod.Status.ContainerStatuses {
+			if containerStatus.Name == utils.SubmitterContainerName {
+				containerID = strings.TrimPrefix(containerStatus.ContainerID, "containerd://")
+				break
+			}
+		}
+		g.Expect(containerID).ToNot(BeEmpty(), "Submitter's container ID should not be empty")
+		LogWithTimestamp(test.T(), "Found submitter container ID: %s", containerID)
+
+		// Stop the container
+		kindNodeName := headPod.Spec.NodeName
+		cmd := exec.CommandContext(test.Ctx(), "docker", "exec", kindNodeName, "crictl", "stop", containerID)
+		err = cmd.Run()
+		g.Expect(err).NotTo(HaveOccurred())
+
+		// Verify RayJob is still running
+		rayJob, err = GetRayJob(test, rayJob.Namespace, rayJob.Name)
+		g.Expect(err).NotTo(HaveOccurred())
+		LogWithTimestamp(test.T(), "RayJob status after stopping submitter: jobStatus=%s deploymentStatus=%s", rayJob.Status.JobStatus, rayJob.Status.JobDeploymentStatus)
+
+		// Verify RayJob does not transition to Failed
+		g.Consistently(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutShort, 2*time.Second).
+			Should(WithTransform(RayJobDeploymentStatus, Not(Equal(rayv1.JobDeploymentStatusFailed))))
+
+		// Verify RayJob eventually completed.
+		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutLong).
+			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusComplete)))
+
+		LogWithTimestamp(test.T(), "RayJob %s/%s completed successfully", rayJob.Namespace, rayJob.Name)
+	})
+
+	test.T().Run("RayJob Sidecar Mode should restart submitter container on non-zero exit", func(t *testing.T) {
+		k8sVersion, err := utils.GetKubernetesVersion()
+		g.Expect(err).NotTo(HaveOccurred())
+
+		if !utils.IsK8sVersionAtLeast(k8sVersion, 1, 34) {
+			t.Skip("k8s version < 1.34, SidecarSubmitterRestart not supported")
+		}
+
+		rayJobAC := rayv1ac.RayJob("submitter-container-should-restart", namespace.Name).
+			WithSpec(rayv1ac.RayJobSpec().
+				WithSubmissionMode(rayv1.SidecarMode).
+				WithRayClusterSpec(NewRayClusterSpec()).
+				WithEntrypoint("python -c \"import time; time.sleep(60)\"").
+				WithShutdownAfterJobFinishes(true))
+
+		rayJob, err := test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
+		g.Expect(err).NotTo(HaveOccurred())
+		LogWithTimestamp(test.T(), "Created RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
+
+		// Wait until the RayJob to become Running
+		LogWithTimestamp(test.T(), "Waiting for RayJob %s/%s to be 'Running'", rayJob.Namespace, rayJob.Name)
+		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
+			Should(WithTransform(RayJobStatus, Equal(rayv1.JobStatusRunning)))
+
+		// Get RayCluster name
+		rayJob, err = GetRayJob(test, rayJob.Namespace, rayJob.Name)
+		g.Expect(err).NotTo(HaveOccurred())
+		rayClusterName := rayJob.Status.RayClusterName
+
+		// Get RayCluster
+		rayCluster, err := GetRayCluster(test, namespace.Name, rayClusterName)
+		g.Expect(err).NotTo(HaveOccurred())
+
+		// Get headPod
+		headPod, err := GetHeadPod(test, rayCluster)
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(headPod).NotTo(BeNil())
+
+		// Check if the operator injected restart policy rules on the submitter container.
+		// This is set when SidecarSubmitterRestart feature gate is enabled.
+		var submitterHasRestartPolicyRules bool
+		for _, c := range headPod.Spec.Containers {
+			if c.Name == utils.SubmitterContainerName {
+				if len(c.RestartPolicyRules) > 0 {
+					submitterHasRestartPolicyRules = true
+				}
+				break
+			}
+		}
+
+		if !submitterHasRestartPolicyRules {
+			// Clean up the ray job
+			err = test.Client().Ray().RayV1().RayJobs(namespace.Name).Delete(test.Ctx(), rayJob.Name, metav1.DeleteOptions{})
+			g.Expect(err).NotTo(HaveOccurred())
+			t.Skip("SidecarSubmitterRestart feature gate is not active. Submitter container has no restart policy rules")
+		}
+
+		// Get Submitter Container id
+		var containerID string
+		for _, containerStatus := range headPod.Status.ContainerStatuses {
+			if containerStatus.Name == utils.SubmitterContainerName {
+				containerID = strings.TrimPrefix(containerStatus.ContainerID, "containerd://")
+				break
+			}
+		}
+		g.Expect(containerID).ToNot(BeEmpty(), "Submitter's container ID should not be empty")
+		LogWithTimestamp(test.T(), "Found submitter container ID: %s", containerID)
+
+		// stop the container with docker exec
+		kindNodeName := headPod.Spec.NodeName
+		cmd := exec.CommandContext(test.Ctx(), "docker", "exec", kindNodeName, "crictl", "stop", containerID)
+		err = cmd.Run()
+		g.Expect(err).NotTo(HaveOccurred())
+
+		// Verify RayJob is still running
+		g.Expect(GetRayJob(test, rayJob.Namespace, rayJob.Name)).
+			To(WithTransform(RayJobStatus, Equal(rayv1.JobStatusRunning)))
+
+		// Verify the restart count should > 0
+		g.Eventually(func() int32 {
+			headPod, _ = GetHeadPod(test, rayCluster)
+			for _, cs := range headPod.Status.ContainerStatuses {
+				if cs.Name == utils.SubmitterContainerName {
+					return cs.RestartCount
+				}
+			}
+			return 0
+		}, TestTimeoutMedium, 2*time.Second).Should(BeNumerically(">", 0))
+
+		// Verify RayJob is still running
+		rayJob, err = GetRayJob(test, rayJob.Namespace, rayJob.Name)
+		g.Expect(err).NotTo(HaveOccurred())
+		LogWithTimestamp(test.T(), "RayJob status after stopping submitter: jobStatus=%s deploymentStatus=%s", rayJob.Status.JobStatus, rayJob.Status.JobDeploymentStatus)
+
+		// Verify RayJob does not transition to Failed
+		g.Consistently(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutShort, 2*time.Second).
+			Should(WithTransform(RayJobDeploymentStatus, Not(Equal(rayv1.JobDeploymentStatusFailed))))
+
+		// Verify RayJob eventually completed.
+		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutLong).
+			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusComplete)))
+
+		LogWithTimestamp(test.T(), "RayJob %s/%s completed successfully", rayJob.Namespace, rayJob.Name)
 	})
 }
