@@ -917,6 +917,34 @@ func (s *ServerHandler) getClusterMetadata(req *restful.Request, resp *restful.R
 	resp.Write(data)
 }
 
+func (s *ServerHandler) getClusterMetadata(req *restful.Request, resp *restful.Response) {
+	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
+	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
+	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
+	if sessionName == "live" {
+		s.redirectRequest(req, resp)
+		return
+	}
+
+	clusterNameID := clusterName + "_" + clusterNamespace
+	metaPath := "meta/" + utils.OssMetaFile_ClusterMetadata
+	reader := s.reader.GetContent(clusterNameID, metaPath)
+	if reader == nil {
+		resp.WriteErrorString(http.StatusNotFound, "Cluster metadata not found")
+		return
+	}
+
+	data, err := io.ReadAll(reader)
+	if err != nil {
+		logrus.Errorf("Failed to read cluster metadata: %v", err)
+		resp.WriteErrorString(http.StatusInternalServerError, "Failed to read cluster metadata")
+		return
+	}
+
+	resp.Header().Set("Content-Type", "application/json")
+	resp.Write(data)
+}
+
 func (s *ServerHandler) getNodeLogs(req *restful.Request, resp *restful.Response) {
 	clusterNameID := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
 	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)

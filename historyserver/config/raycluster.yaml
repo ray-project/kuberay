@@ -77,10 +77,6 @@ spec:
           image: collector:v0.1.0
           imagePullPolicy: IfNotPresent
           env:
-          # RAY_DASHBOARD_ADDRESS is used by the head collector to fetch endpoints' results
-          # (e.g., /api/v0/cluster_metadata) from the Ray Dashboard running in the same pod.
-          # Only the head collector uses this; worker collectors do not need it.
-          # If your Ray Dashboard uses a non-default port (not 8265), update this value accordingly.
           - name: RAY_DASHBOARD_ADDRESS
             value: "http://localhost:8265"
           - name: S3DISABLE_SSL

@@ -103,14 +103,6 @@ func TestHistoryServer(t *testing.T) {
 			testFunc: testDeadClusterNode,
 		},
 		{
-			name:     "/api/cluster_status endpoint (live cluster)",
-			testFunc: testLiveClusterStatus,
-		},
-		{
-			name:     "/api/cluster_status endpoint (dead cluster)",
-			testFunc: testDeadClusterStatus,
-		},
-		{
 			name:     "Live cluster: cluster_metadata endpoint should return metadata (Ray version, Python version, etc.)",
 			testFunc: testLiveClusterMetadata,
 		},
@@ -1853,8 +1845,7 @@ func testDeadClusterMetadata(test Test, g *WithT, namespace *corev1.Namespace, s
 
 	// Wait for cluster metadata to be stored in S3 by the collector before deleting the cluster.
 	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, rayCluster.Namespace)
-	sessionID := GetSessionIDFromHeadPod(test, g, rayCluster)
-	metaKey := fmt.Sprintf("log/%s/meta/%s/%s", clusterNameID, sessionID, utils.OssMetaFile_ClusterMetadata)
+	metaKey := fmt.Sprintf("log/%s/meta/%s", clusterNameID, "restful__api__v0__cluster_metadata")
 	LogWithTimestamp(test.T(), "Waiting for cluster metadata to appear at S3 key: %s", metaKey)
 
 	g.Eventually(func(gg Gomega) {

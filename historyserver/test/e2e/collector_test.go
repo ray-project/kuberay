@@ -302,23 +302,18 @@ func verifySessionDirectoriesExist(test Test, g *WithT, rayCluster *rayv1.RayClu
 }
 
 // testCollectorStoresClusterMetadata verifies that the Head collector fetches /api/v0/cluster_metadata
-// from the Ray Dashboard once on startup and stores the result in S3 under the session path.
-//
-// The metadata is stored per session because different sessions can use different Ray images,
-// resulting in different rayVersion / pythonVersion values.
+// from the Ray Dashboard once on startup and stores the result in S3.
 //
 // The test case follows these steps:
 // 1. Prepare test environment by applying a Ray cluster with the collector
-// 2. Get the sessionID from the head pod to build the expected S3 key
-// 3. Wait for the cluster metadata file to appear in S3 at meta/{sessionName}/restful__api__v0__cluster_metadata
-// 4. Read the file and verify it contains valid JSON with the expected schema
-// 5. Delete S3 bucket to ensure test isolation
+// 2. Wait for the cluster metadata file to appear in S3 at meta/restful__api__v0__cluster_metadata
+// 3. Read the file and verify it contains valid JSON with the expected schema
+// 4. Delete S3 bucket to ensure test isolation
 func testCollectorStoresClusterMetadata(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 
 	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, rayCluster.Namespace)
-	sessionID := GetSessionIDFromHeadPod(test, g, rayCluster)
-	metaKey := fmt.Sprintf("log/%s/meta/%s/%s", clusterNameID, sessionID, utils.OssMetaFile_ClusterMetadata)
+	metaKey := fmt.Sprintf("log/%s/meta/%s", clusterNameID, "restful__api__v0__cluster_metadata")
 
 	LogWithTimestamp(test.T(), "Waiting for cluster metadata to appear at S3 key: %s", metaKey)
 
