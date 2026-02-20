@@ -290,4 +290,61 @@ env_vars:
 
 		LogWithTimestamp(test.T(), "RayJob %s/%s completed successfully with auth token", rayJob.Namespace, rayJob.Name)
 	})
+
+	test.T().Run("SidecarMode waits for workers before job submission", func(_ *testing.T) {
+		// This test verifies that SidecarMode waits for workers to register before submitting
+		// the job. We create a RayJob with a worker that has a slow init container (30s delay).
+		// The inline Python script verifies that workers are available when it runs. If the
+		// sidecar submitted the job before workers were ready, the job would fail because no
+		// workers would be found.
+
+		// Create a worker template with a slow init container to simulate slow worker startup
+		workerTemplate := WorkerPodTemplateApplyConfiguration()
+		workerTemplate.Spec.WithInitContainers(corev1ac.Container().
+			WithName("init-delay").
+			WithImage(GetRayImage()).
+			WithCommand("bash", "-c", "echo 'Simulating slow worker startup...'; sleep 30"))
+
+		// Simple inline Python script that verifies workers are available
+		// Uses semicolons to avoid multi-line issues with shell escaping
+		verifyWorkersScript := `import ray; ray.init(); nodes = ray.nodes(); worker_count = sum(1 for n in nodes if n["Alive"] and not n.get("Resources", {}).get("node:__internal_head__")); print("Worker nodes:", worker_count); assert worker_count >= 1`
+
+		rayJobAC := rayv1ac.RayJob("wait-for-workers", namespace.Name).
+			WithSpec(rayv1ac.RayJobSpec().
+				WithSubmissionMode(rayv1.SidecarMode).
+				WithEntrypoint("python -c '" + verifyWorkersScript + "'").
+				WithShutdownAfterJobFinishes(true).
+				WithRayClusterSpec(rayv1ac.RayClusterSpec().
+					WithRayVersion(GetRayVersion()).
+					WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
+						WithRayStartParams(map[string]string{"dashboard-host": "0.0.0.0"}).
+						WithTemplate(HeadPodTemplateApplyConfiguration())).
+					WithWorkerGroupSpecs(rayv1ac.WorkerGroupSpec().
+						WithReplicas(1).
+						WithMinReplicas(1).
+						WithMaxReplicas(1).
+						WithGroupName("slow-worker").
+						WithRayStartParams(map[string]string{"num-cpus": "1"}).
+						WithTemplate(workerTemplate))))
+
+		rayJob, err := test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
+		g.Expect(err).NotTo(HaveOccurred())
+		LogWithTimestamp(test.T(), "Created RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
+
+		// Wait for the RayJob to complete. The job will fail if workers aren't available.
+		LogWithTimestamp(test.T(), "Waiting for RayJob %s/%s to complete (this may take ~40s due to worker init delay)", rayJob.Namespace, rayJob.Name)
+		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutLong).
+			Should(WithTransform(RayJobStatus, Satisfy(rayv1.IsJobTerminal)))
+
+		// Assert the RayJob has completed successfully
+		// If the sidecar didn't wait for workers, the job would fail with assertion error
+		g.Expect(GetRayJob(test, rayJob.Namespace, rayJob.Name)).
+			To(WithTransform(RayJobStatus, Equal(rayv1.JobStatusSucceeded)))
+
+		// And the RayJob deployment status is updated accordingly
+		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name)).
+			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusComplete)))
+
+		LogWithTimestamp(test.T(), "RayJob %s/%s completed successfully - workers were available before job submission", rayJob.Namespace, rayJob.Name)
+	})
 }
