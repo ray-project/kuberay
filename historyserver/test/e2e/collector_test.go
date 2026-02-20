@@ -313,7 +313,7 @@ func testCollectorStoresClusterMetadata(test Test, g *WithT, namespace *corev1.N
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 
 	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, rayCluster.Namespace)
-	metaKey := fmt.Sprintf("log/%s/meta/%s", clusterNameID, "restful__api__v0__cluster_metadata")
+	metaKey := fmt.Sprintf("log/%s/meta/%s", clusterNameID, utils.OssMetaFile_ClusterMetadata)
 
 	LogWithTimestamp(test.T(), "Waiting for cluster metadata to appear at S3 key: %s", metaKey)
 
