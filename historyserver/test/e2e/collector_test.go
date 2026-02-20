@@ -3,6 +3,7 @@ package e2e
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -47,6 +48,10 @@ func TestCollector(t *testing.T) {
 		{
 			name:     "Collector restart: should scan prev-logs and resume uploads left by a crash",
 			testFunc: testCollectorResumesUploadsOnRestart,
+		},
+		{
+			name:     "Cluster metadata: collector should fetch and store cluster_metadata endpoint data once on startup",
+			testFunc: testCollectorStoresClusterMetadata,
 		},
 	}
 
@@ -293,6 +298,56 @@ func verifySessionDirectoriesExist(test Test, g *WithT, rayCluster *rayv1.RayClu
 			gg.Expect(strings.TrimSpace(stdout.String())).To(Equal("exists"), "Session directory %s should exist in %s", sessionID, dirPath)
 		}, TestTimeoutMedium).Should(Succeed(), "Session directory %s should exist in %s", sessionID, dirPath)
 	}
+}
+
+// testCollectorStoresClusterMetadata verifies that the Head collector fetches /api/v0/cluster_metadata
+// from the Ray Dashboard once on startup and stores the result in S3.
+//
+// The test case follows these steps:
+// 1. Prepare test environment by applying a Ray cluster with the collector
+// 2. Wait for the cluster metadata file to appear in S3 at meta/restful__api__v0__cluster_metadata
+// 3. Read the file and verify it contains valid JSON with the expected schema
+// 4. Delete S3 bucket to ensure test isolation
+func testCollectorStoresClusterMetadata(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
+
+	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, rayCluster.Namespace)
+	metaKey := fmt.Sprintf("log/%s/meta/%s", clusterNameID, "restful__api__v0__cluster_metadata")
+
+	LogWithTimestamp(test.T(), "Waiting for cluster metadata to appear at S3 key: %s", metaKey)
+
+	var metadataBody []byte
+	g.Eventually(func(gg Gomega) {
+		result, err := s3Client.GetObject(&s3.GetObjectInput{
+			Bucket: aws.String(S3BucketName),
+			Key:    aws.String(metaKey),
+		})
+		gg.Expect(err).NotTo(HaveOccurred())
+		defer result.Body.Close()
+
+		body, err := io.ReadAll(result.Body)
+		gg.Expect(err).NotTo(HaveOccurred())
+		gg.Expect(body).NotTo(BeEmpty(), "Cluster metadata file should not be empty")
+
+		// Verify it is valid JSON
+		var metadata map[string]interface{}
+		err = json.Unmarshal(body, &metadata)
+		gg.Expect(err).NotTo(HaveOccurred(), "Cluster metadata should be valid JSON")
+
+		// The Ray dashboard returns {"result": true, "data": {"rayVersion": ..., "pythonVersion": ...}}.
+		// Verify the "data" sub-object contains expected fields.
+		gg.Expect(metadata).To(HaveKey("data"), "Cluster metadata should contain data field")
+		data, ok := metadata["data"].(map[string]interface{})
+		gg.Expect(ok).To(BeTrue(), "data field should be a JSON object")
+		gg.Expect(data).To(HaveKey("rayVersion"), "Cluster metadata should contain rayVersion")
+		gg.Expect(data).To(HaveKey("pythonVersion"), "Cluster metadata should contain pythonVersion")
+
+		metadataBody = body
+	}, TestTimeoutMedium).Should(Succeed())
+
+	LogWithTimestamp(test.T(), "Cluster metadata stored successfully: %s", string(metadataBody))
+
+	DeleteS3Bucket(test, g, s3Client)
 }
 
 // verifyS3SessionDirs verifies file contents in logs/, node_events/, and job_events/ directories under a session prefix in S3.

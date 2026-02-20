@@ -75,14 +75,15 @@ func main() {
 	}
 
 	globalConfig := types.RayCollectorConfig{
-		RootDir:        rayRootDir,
-		SessionDir:     sessionDir,
-		RayNodeName:    rayNodeId,
-		Role:           role,
-		RayClusterName: rayClusterName,
-		RayClusterID:   rayClusterId,
-		PushInterval:   pushInterval,
-		LogBatching:    logBatching,
+		RootDir:          rayRootDir,
+		SessionDir:       sessionDir,
+		RayNodeName:      rayNodeId,
+		Role:             role,
+		RayClusterName:   rayClusterName,
+		RayClusterID:     rayClusterId,
+		PushInterval:     pushInterval,
+		LogBatching:      logBatching,
+		DashboardAddress: os.Getenv("RAY_DASHBOARD_ADDRESS"),
 	}
 	logrus.Info("Using collector config: ", globalConfig)
 

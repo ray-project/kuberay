@@ -37,6 +37,7 @@ const (
 	OssMetaFile_PlacementGroups                       = "restful__api__v0__placement_groups_detail"
 
 	OssMetaFile_ClusterSessionName = "static__api__cluster_session_name"
+	OssMetaFile_ClusterMetadata    = "restful__api__v0__cluster_metadata"
 
 	OssMetaFile_Jobs         = "restful__api__jobs"
 	OssMetaFile_Applications = "restful__api__serve__applications"
