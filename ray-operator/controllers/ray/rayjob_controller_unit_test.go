@@ -655,7 +655,7 @@ func TestGetSubmitterTemplate_WithEnableK8sTokenAuth(t *testing.T) {
 	}
 
 	template, err := getSubmitterTemplate(rayJob, rayCluster)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Check volume
 	foundVolume := false

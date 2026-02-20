@@ -790,7 +790,7 @@ func TestBuildPod_WithEnableK8sTokenAuth(t *testing.T) {
 	pod := BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", false, utils.GetCRDType(""), "", nil, "")
 
 	rayContainer := pod.Spec.Containers[utils.RayContainerIndex]
-	checkContainerEnv(t, rayContainer, utils.RAY_ENABLE_K8S_TOKEN_AUTH, "true")
+	checkContainerEnv(t, rayContainer, utils.RAY_ENABLE_K8S_TOKEN_AUTH_ENV_VAR, "true")
 
 	foundVolumeMount := false
 	for _, vm := range rayContainer.VolumeMounts {
@@ -823,7 +823,7 @@ func TestBuildPod_WithEnableK8sTokenAuth(t *testing.T) {
 	pod = BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", false, utils.GetCRDType(""), "", nil, "")
 	rayContainer = pod.Spec.Containers[utils.RayContainerIndex]
 	for _, env := range rayContainer.Env {
-		if env.Name == utils.RAY_ENABLE_K8S_TOKEN_AUTH {
+		if env.Name == utils.RAY_ENABLE_K8S_TOKEN_AUTH_ENV_VAR {
 			t.Errorf("RAY_ENABLE_K8S_TOKEN_AUTH should not be set")
 		}
 	}
@@ -837,7 +837,7 @@ func TestBuildPod_WithEnableK8sTokenAuth(t *testing.T) {
 	pod = BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", false, utils.GetCRDType(""), "", nil, "")
 	rayContainer = pod.Spec.Containers[utils.RayContainerIndex]
 	for _, env := range rayContainer.Env {
-		if env.Name == utils.RAY_ENABLE_K8S_TOKEN_AUTH {
+		if env.Name == utils.RAY_ENABLE_K8S_TOKEN_AUTH_ENV_VAR {
 			t.Errorf("RAY_ENABLE_K8S_TOKEN_AUTH should not be set")
 		}
 	}

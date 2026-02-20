@@ -304,9 +304,9 @@ func SetContainerTokenAuthEnvVars(clusterName string, container *corev1.Containe
 	}
 
 	if authOptions != nil && authOptions.EnableK8sTokenAuth != nil && *authOptions.EnableK8sTokenAuth {
-		if !utils.EnvVarExists(utils.RAY_ENABLE_K8S_TOKEN_AUTH, container.Env) {
+		if !utils.EnvVarExists(utils.RAY_ENABLE_K8S_TOKEN_AUTH_ENV_VAR, container.Env) {
 			container.Env = append(container.Env, corev1.EnvVar{
-				Name:  utils.RAY_ENABLE_K8S_TOKEN_AUTH,
+				Name:  utils.RAY_ENABLE_K8S_TOKEN_AUTH_ENV_VAR,
 				Value: "true",
 			})
 		}
