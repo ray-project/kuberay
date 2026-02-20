@@ -2,8 +2,10 @@ package logcollector
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
+	"net/http"
 	"path"
 	"time"
 
@@ -16,6 +18,7 @@ const (
 	defaultDashboardPort     = 8265
 	metadataRetryInterval    = 5 * time.Second  // initial interval
 	metadataMaxRetryInterval = 60 * time.Second // max cap for backoff
+	metadataRequestTimeout   = 30 * time.Second // per-request timeout
 )
 
 // dashboardAddress returns the Ray Dashboard base URL.
@@ -37,7 +40,25 @@ func (r *RayLogHandler) FetchAndStoreClusterMetadata() {
 	for {
 		logrus.Infof("Fetching cluster metadata from %s", url)
 
-		resp, err := r.HttpClient.Get(url)
+		ctx, cancel := context.WithTimeout(context.Background(), metadataRequestTimeout)
+		// Listen for shutdown to cancel in-flight request.
+		go func() {
+			select {
+			case <-r.ShutdownChan:
+				cancel()
+			case <-ctx.Done():
+			}
+		}()
+
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		if err != nil {
+			cancel()
+			logrus.Errorf("Failed to create request for fetching cluster metadata: %v", err)
+			return
+		}
+
+		resp, err := r.HttpClient.Do(req)
+		cancel()
 		if err != nil {
 			logrus.Warnf("Failed to fetch cluster metadata from %s: %v, retrying in %v", url, err, retryInterval)
 			if !r.sleepOrShutdown(retryInterval) {
