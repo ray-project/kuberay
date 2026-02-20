@@ -20,3 +20,5 @@ featureGates:
     enabled: true
   - name: RayCronJob
     enabled: true
+  - name: RayServiceIncrementalUpgrade
+    enabled: true
