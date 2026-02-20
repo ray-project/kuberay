@@ -143,13 +143,20 @@ func (s *ServerHandler) _getNodeLogFile(ctx context.Context, rayClusterNameID, s
 	reader := s.reader.GetContent(ctx, rayClusterNameID, logPath)
 
 	if reader == nil {
+		// Check if nil is due to context error
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
 		return nil, utils.NewHTTPError(fmt.Errorf("log file not found: %s", logPath), http.StatusNotFound)
 	}
+
+	// Wrap reader to respect context cancellation
+	ctxReader := utils.NewContextReader(ctx, reader)
 
 	maxLines := options.Lines
 	if maxLines < 0 {
 		// -1 means read all lines
-		content, err := io.ReadAll(reader)
+		content, err := io.ReadAll(ctxReader)
 		if err != nil {
 			return nil, err
 		}
@@ -168,7 +175,7 @@ func (s *ServerHandler) _getNodeLogFile(ctx context.Context, rayClusterNameID, s
 		maxLines = MAX_LOG_LIMIT
 	}
 
-	scanner := bufio.NewScanner(reader)
+	scanner := bufio.NewScanner(ctxReader)
 	buffer := make([]string, maxLines)
 	index := 0
 	totalLines := 0

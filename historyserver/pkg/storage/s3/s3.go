@@ -219,6 +219,13 @@ func (r *RayLogsHandler) GetContent(ctx context.Context, clusterId string, fileN
 		if result != nil && result.Body != nil {
 			result.Body.Close()
 		}
+
+		// Check if error is due to context cancellation, don't retry if so
+		if ctx.Err() != nil {
+			logrus.Errorf("Context error while getting object %s: %v", fullPath, ctx.Err())
+			return nil
+		}
+
 		logrus.Errorf("Failed to get object %s: %v", fullPath, err)
 		dirPath := path.Dir(fullPath)
 		allFiles := r._listFiles(ctx, dirPath, "", false)
@@ -249,7 +256,9 @@ func (r *RayLogsHandler) GetContent(ctx context.Context, clusterId string, fileN
 
 	defer result.Body.Close()
 
-	data, err := io.ReadAll(result.Body)
+	// Wrap body reader to respect context cancellation during ReadAll
+	ctxReader := utils.NewContextReader(ctx, result.Body)
+	data, err := io.ReadAll(ctxReader)
 	if err != nil {
 		logrus.Errorf("Failed to read all data from object %s : %v", fileName, err)
 		return nil

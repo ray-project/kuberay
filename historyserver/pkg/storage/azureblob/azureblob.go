@@ -223,6 +223,13 @@ func (r *RayLogsHandler) GetContent(ctx context.Context, clusterId string, fileN
 		if resp.Body != nil {
 			resp.Body.Close()
 		}
+
+		// Check if error is due to context cancellation - don't retry if so
+		if ctx.Err() != nil {
+			logrus.Errorf("Context error while getting blob %s: %v", fullPath, ctx.Err())
+			return nil
+		}
+
 		logrus.Errorf("Failed to get blob %s: %v", fullPath, err)
 
 		// Try to find the file by listing direct children only (use delimiter)
@@ -243,7 +250,9 @@ func (r *RayLogsHandler) GetContent(ctx context.Context, clusterId string, fileN
 					return nil
 				}
 				defer resp.Body.Close()
-				data, err := io.ReadAll(resp.Body)
+				// Wrap body reader to respect context cancellation during ReadAll
+				ctxReader := utils.NewContextReader(ctx, resp.Body)
+				data, err := io.ReadAll(ctxReader)
 				if err != nil {
 					logrus.Errorf("Failed to read all data from blob %s: %v", fileName, err)
 					return nil
@@ -256,7 +265,9 @@ func (r *RayLogsHandler) GetContent(ctx context.Context, clusterId string, fileN
 	}
 	defer resp.Body.Close()
 
-	data, err := io.ReadAll(resp.Body)
+	// Wrap body reader to respect context cancellation during ReadAll
+	ctxReader := utils.NewContextReader(ctx, resp.Body)
+	data, err := io.ReadAll(ctxReader)
 	if err != nil {
 		logrus.Errorf("Failed to read all data from blob %s: %v", fileName, err)
 		return nil
