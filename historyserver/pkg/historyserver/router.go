@@ -366,6 +366,11 @@ func (s *ServerHandler) redirectRequest(req *restful.Request, resp *restful.Resp
 	// Copy headers from original request to proxy request.
 	for key, values := range req.Request.Header {
 		if strings.ToLower(key) != "host" {
+			// In auth-token mode, drop any client-supplied x-ray-authorization
+			// to avoid bypassing server-managed tokens.
+			if s.useAuthTokenMode && strings.EqualFold(key, "x-ray-authorization") {
+				continue
+			}
 			for _, value := range values {
 				// Use Add() to preserve multiple values for the same header key.
 				proxyReq.Header.Add(key, value)
