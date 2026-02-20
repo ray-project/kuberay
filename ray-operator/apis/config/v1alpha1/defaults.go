@@ -49,4 +49,16 @@ func SetDefaults_Configuration(cfg *Configuration) {
 	if cfg.Burst == nil {
 		cfg.Burst = ptr.To(DefaultBurst)
 	}
+
+	if cfg.AsyncJobInfoQueryInterval == "" {
+		cfg.AsyncJobInfoQueryInterval = DefaultAsyncJobInfoQueryInterval
+	}
+
+	if cfg.AsyncJobInfoQueryWorkerSize == 0 {
+		cfg.AsyncJobInfoQueryWorkerSize = DefaultAsyncJobInfoQueryWorkerSize
+	}
+
+	if cfg.AsyncJobInfoQueryCacheExpiry == "" {
+		cfg.AsyncJobInfoQueryCacheExpiry = DefaultAsyncJobInfoQueryCacheExpiry
+	}
 }
