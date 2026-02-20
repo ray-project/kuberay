@@ -160,18 +160,19 @@ func BuildJobSubmitCommand(rayJobInstance *rayv1.RayJob, submissionMode rayv1.Jo
 			"t and req.add_header('x-ray-authorization','Bearer '+t); " +
 			"d=json.loads(urllib.request.urlopen(req,timeout=5).read()); " +
 			"print(len([n for n in d.get('data',{}).get('summary',[]) if n.get('raylet',{}).get('state')=='ALIVE']))"
-		waitForNodesLoop := []string{
-			"if", "[", "-n", "\"$" + utils.RAY_EXPECTED_WORKERS + "\"", "]", "&&", "[", "\"$" + utils.RAY_EXPECTED_WORKERS + "\"", "-gt", "\"0\"", "]", ";", "then",
-			"EXPECTED_NODES=$(($" + utils.RAY_EXPECTED_WORKERS + " + 1))", ";",
-			"echo", strconv.Quote("Waiting for $EXPECTED_NODES nodes (1 head + $" + utils.RAY_EXPECTED_WORKERS + " workers) to register..."), ";",
-			"until", "[",
-			"\"$(python3 -c \"" + pythonNodeCountScript + "\" 2>/dev/null || echo 0)\"",
-			"-ge", "\"$EXPECTED_NODES\"", "]", ";",
-			"do", "echo", strconv.Quote("Waiting for Ray nodes to register. Expected: $EXPECTED_NODES ..."), ";", "sleep", "2", ";", "done", ";",
-			"echo", strconv.Quote("All expected nodes are registered."), ";",
-			"fi", ";",
-		}
-		cmd = append(cmd, waitForNodesLoop...)
+		expectedWorkersVar := utils.RAY_EXPECTED_WORKERS
+		waitForNodesBash := strings.TrimSpace(fmt.Sprintf(`
+if [ -n "$%[1]s" ] && [ "$%[1]s" -gt "0" ]; then
+    EXPECTED_NODES=$(($%[1]s + 1))
+    echo "Waiting for $EXPECTED_NODES nodes (1 head + $%[1]s workers) to register..."
+    until [ "$(python3 -c "%[2]s" || echo 0)" -ge "$EXPECTED_NODES" ]; do
+        echo "Waiting for Ray nodes to register. Expected: $EXPECTED_NODES ..."
+        sleep 2
+    done
+    echo "All expected nodes are registered."
+fi
+`, expectedWorkersVar, pythonNodeCountScript))
+		cmd = append(cmd, waitForNodesBash, ";")
 	}
 
 	// In Sidecar mode, we only support RayJob level retry, which means that the submitter retry won't happen,

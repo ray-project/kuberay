@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -125,15 +126,26 @@ func TestBuildJobSubmitCommandWithSidecarMode(t *testing.T) {
 		">/dev/null", "2>&1", ";",
 		"do", "echo", strconv.Quote("Waiting for Ray Dashboard GCS to become healthy at " + address + " ..."), ";", "sleep", "2", ";", "done", ";",
 		// Wait for expected nodes to register
-		"if", "[", "-n", "\"$" + utils.RAY_EXPECTED_WORKERS + "\"", "]", "&&", "[", "\"$" + utils.RAY_EXPECTED_WORKERS + "\"", "-gt", "\"0\"", "]", ";", "then",
-		"EXPECTED_NODES=$(($" + utils.RAY_EXPECTED_WORKERS + " + 1))", ";",
-		"echo", strconv.Quote("Waiting for $EXPECTED_NODES nodes (1 head + $" + utils.RAY_EXPECTED_WORKERS + " workers) to register..."), ";",
-		"until", "[",
-		"\"$(python3 -c \"import urllib.request,json,os; req=urllib.request.Request('" + address + "/nodes?view=summary'); t=os.environ.get('" + utils.RAY_AUTH_TOKEN_ENV_VAR + "',''); t and req.add_header('x-ray-authorization','Bearer '+t); d=json.loads(urllib.request.urlopen(req,timeout=5).read()); print(len([n for n in d.get('data',{}).get('summary',[]) if n.get('raylet',{}).get('state')=='ALIVE']))\" 2>/dev/null || echo 0)\"",
-		"-ge", "\"$EXPECTED_NODES\"", "]", ";",
-		"do", "echo", strconv.Quote("Waiting for Ray nodes to register. Expected: $EXPECTED_NODES ..."), ";", "sleep", "2", ";", "done", ";",
-		"echo", strconv.Quote("All expected nodes are registered."), ";",
-		"fi", ";",
+		strings.TrimSpace(fmt.Sprintf(`
+if [ -n "$%[1]s" ] && [ "$%[1]s" -gt "0" ]; then
+    EXPECTED_NODES=$(($%[1]s + 1))
+    echo "Waiting for $EXPECTED_NODES nodes (1 head + $%[1]s workers) to register..."
+    until [ "$(python3 -c "%[2]s" || echo 0)" -ge "$EXPECTED_NODES" ]; do
+        echo "Waiting for Ray nodes to register. Expected: $EXPECTED_NODES ..."
+        sleep 2
+    done
+    echo "All expected nodes are registered."
+fi
+`,
+			utils.RAY_EXPECTED_WORKERS,
+			"import urllib.request,json,os; "+
+				"req=urllib.request.Request('"+address+"/nodes?view=summary'); "+
+				"t=os.environ.get('"+utils.RAY_AUTH_TOKEN_ENV_VAR+"',''); "+
+				"t and req.add_header('x-ray-authorization','Bearer '+t); "+
+				"d=json.loads(urllib.request.urlopen(req,timeout=5).read()); "+
+				"print(len([n for n in d.get('data',{}).get('summary',[]) if n.get('raylet',{}).get('state')=='ALIVE']))",
+		)),
+		";",
 		// Job submit command
 		"ray", "job", "submit", "--address", address,
 		"--runtime-env-json", strconv.Quote(`{"test":"test"}`),
@@ -193,7 +205,7 @@ pip: ["python-multipart==0.0.6"]
 	for i := 0; i < len(expected); i++ {
 		// For non-JSON elements, compare them directly.
 		assert.Equal(t, expected[i], command[i])
-		if expected[i] == "--runtime-env-json" {
+		if expected[i] == "--runtime-env-json" && i+1 < len(expected) {
 			// Decode the JSON string from the next element.
 			var expectedMap, actualMap map[string]any
 			unquoteExpected, err1 := strconv.Unquote(expected[i+1])
