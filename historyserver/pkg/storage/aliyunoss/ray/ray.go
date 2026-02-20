@@ -2,6 +2,7 @@ package ray
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -104,7 +105,8 @@ func (r *RayLogsHandler) _listFiles(prefix string, delimiter string, onlyBase bo
 	return files
 }
 
-func (r *RayLogsHandler) ListFiles(clusterId string, dir string) []string {
+func (r *RayLogsHandler) ListFiles(ctx context.Context, clusterId string, dir string) []string {
+	// NOTE: Aliyun OSS SDK does not support context cancellation. We accept ctx for interface compatibility.
 	prefix := path.Join(r.OssRootDir, clusterId, dir)
 
 	defer func() {
@@ -120,7 +122,8 @@ func (r *RayLogsHandler) ListFiles(clusterId string, dir string) []string {
 	return nodes
 }
 
-func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
+func (r *RayLogsHandler) List(ctx context.Context) (res []utils.ClusterInfo) {
+	// NOTE: Aliyun OSS SDK does not support context cancellation. We accept ctx for interface compatibility.
 	defer func() {
 		if r := recover(); r != nil {
 			fmt.Println("Recovered from panic:", r)
@@ -184,7 +187,8 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 	return clusters
 }
 
-func (r *RayLogsHandler) GetContent(clusterId string, fileName string) io.Reader {
+func (r *RayLogsHandler) GetContent(ctx context.Context, clusterId string, fileName string) io.Reader {
+	// NOTE: Aliyun OSS SDK does not support context cancellation. We accept ctx for interface compatibility.
 	logrus.Infof("Prepare to get object %s info ...", fileName)
 	options := []oss.Option{}
 	body, err := r.OssBucket.GetObject(fileName, options...)

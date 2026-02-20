@@ -18,6 +18,7 @@ package s3
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -87,7 +88,7 @@ func (r *RayLogsHandler) WriteFile(file string, reader io.ReadSeeker) error {
 	return err
 }
 
-func (r *RayLogsHandler) _listFiles(prefix string, delimiter string, onlyBase bool) []string {
+func (r *RayLogsHandler) _listFiles(ctx context.Context, prefix string, delimiter string, onlyBase bool) []string {
 	files := []string{}
 
 	listInput := &s3.ListObjectsV2Input{
@@ -97,7 +98,7 @@ func (r *RayLogsHandler) _listFiles(prefix string, delimiter string, onlyBase bo
 		Delimiter: aws.String(delimiter),
 	}
 
-	err := r.S3Client.ListObjectsV2Pages(listInput,
+	err := r.S3Client.ListObjectsV2PagesWithContext(ctx, listInput,
 		func(page *s3.ListObjectsV2Output, lastPage bool) bool {
 			logrus.Infof("[ListFiles]Returned objects in %v. length of page.Contents: %v, length of page.CommonPrefixes: %v",
 				prefix+"/", len(page.Contents), len(page.CommonPrefixes))
@@ -127,7 +128,7 @@ func (r *RayLogsHandler) _listFiles(prefix string, delimiter string, onlyBase bo
 	return files
 }
 
-func (r *RayLogsHandler) ListFiles(clusterId string, dir string) []string {
+func (r *RayLogsHandler) ListFiles(ctx context.Context, clusterId string, dir string) []string {
 	prefix := path.Join(r.S3RootDir, clusterId, dir)
 
 	defer func() {
@@ -137,12 +138,12 @@ func (r *RayLogsHandler) ListFiles(clusterId string, dir string) []string {
 	}()
 
 	logrus.Debugf("Prepare to get list clusters info ...")
-	nodes := r._listFiles(prefix, "/", true)
+	nodes := r._listFiles(ctx, prefix, "/", true)
 	// Note: clusters is not defined in this scope, removed sorting
 	return nodes
 }
 
-func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
+func (r *RayLogsHandler) List(ctx context.Context) (res []utils.ClusterInfo) {
 	defer func() {
 		if recover := recover(); recover != nil {
 			fmt.Println("Recovered from panic:", recover)
@@ -160,7 +161,7 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 			Delimiter: aws.String(""),
 		}
 
-		err := r.S3Client.ListObjectsV2Pages(listInput,
+		err := r.S3Client.ListObjectsV2PagesWithContext(ctx, listInput,
 			func(page *s3.ListObjectsV2Output, lastPage bool) bool {
 				logrus.Infof("[List]Returned objects in %v. length of page.Contents: %v, length of page.CommonPrefixes: %v",
 					path.Join(r.S3RootDir, "metadir")+"/", len(page.Contents), len(page.CommonPrefixes))
@@ -205,11 +206,11 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 	return clusters
 }
 
-func (r *RayLogsHandler) GetContent(clusterId string, fileName string) io.Reader {
+func (r *RayLogsHandler) GetContent(ctx context.Context, clusterId string, fileName string) io.Reader {
 	fullPath := path.Join(r.S3RootDir, clusterId, fileName)
 	logrus.Infof("Prepare to get object %s info ...", fullPath)
 
-	result, err := r.S3Client.GetObject(&s3.GetObjectInput{
+	result, err := r.S3Client.GetObjectWithContext(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(r.S3Bucket),
 		Key:    aws.String(fullPath),
 	})
@@ -220,12 +221,12 @@ func (r *RayLogsHandler) GetContent(clusterId string, fileName string) io.Reader
 		}
 		logrus.Errorf("Failed to get object %s: %v", fullPath, err)
 		dirPath := path.Dir(fullPath)
-		allFiles := r._listFiles(dirPath, "", false)
+		allFiles := r._listFiles(ctx, dirPath, "", false)
 		found := false
 		for _, f := range allFiles {
 			if path.Base(f) == path.Base(fullPath) {
 				logrus.Infof("Get object %s info success", f)
-				result, err = r.S3Client.GetObject(&s3.GetObjectInput{
+				result, err = r.S3Client.GetObjectWithContext(ctx, &s3.GetObjectInput{
 					Bucket: aws.String(r.S3Bucket),
 					Key:    aws.String(f),
 				})

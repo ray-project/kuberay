@@ -1,6 +1,7 @@
 package localtest
 
 import (
+	"context"
 	"io"
 	"strings"
 
@@ -50,12 +51,12 @@ func NewMockReader() *MockReader {
 }
 
 // List returns all available files from backend
-func (r *MockReader) List() []utils.ClusterInfo {
+func (r *MockReader) List(ctx context.Context) []utils.ClusterInfo {
 	return r.clusters
 }
 
 // GetContent returns content for a specific file
-func (r *MockReader) GetContent(clusterId string, fileName string) io.Reader {
+func (r *MockReader) GetContent(ctx context.Context, clusterId string, fileName string) io.Reader {
 	if clusterData, ok := r.data[clusterId]; ok {
 		if content, ok := clusterData[fileName]; ok {
 			return strings.NewReader(content)
@@ -64,7 +65,7 @@ func (r *MockReader) GetContent(clusterId string, fileName string) io.Reader {
 	return strings.NewReader("")
 }
 
-func (r *MockReader) ListFiles(clusterId string, dir string) []string {
+func (r *MockReader) ListFiles(ctx context.Context, clusterId string, dir string) []string {
 	if clusterData, ok := r.data[clusterId]; ok {
 		files := make([]string, 0, len(clusterData))
 		for fileName := range clusterData {
