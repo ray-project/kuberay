@@ -610,8 +610,13 @@ func getSubmitterContainer(rayJobInstance *rayv1.RayJob, rayClusterInstance *ray
 			{
 				Action: corev1.ContainerRestartRuleActionRestart,
 				ExitCodes: &corev1.ContainerRestartRuleOnExitCodes{
-					// Restart on any non-zero exit code (transient failures)
-					// TODO check if it is non-zero or a specific error code again
+					// Restart on non-zero exit, which can come from `ray job submit --no-wait` or
+					// `ray job logs --follow`. The key case is `ray job logs --follow` exiting
+					// non-zero on transient failures (e.g. abnormal WebSocket closure). See the
+					// submitter command structure in ray-operator/controllers/ray/common/job.go.
+					// For the Ray-side behavior, see:
+					// https://github.com/ray-project/ray/blob/5fe22a49a729ab428fbff0d222f67c5dda69455a/python/ray/dashboard/modules/job/cli.py#L97
+					// https://github.com/ray-project/ray/blob/5fe22a49a729ab428fbff0d222f67c5dda69455a/python/ray/dashboard/modules/job/cli.py#L525
 					Operator: corev1.ContainerRestartRuleOnExitCodesOpNotIn,
 					Values:   []int32{0},
 				},
