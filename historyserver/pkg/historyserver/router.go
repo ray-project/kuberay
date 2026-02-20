@@ -1644,9 +1644,17 @@ func (s *ServerHandler) CookieHandle(req *restful.Request, resp *restful.Respons
 		if s.useAuthTokenMode {
 			authToken, err := s.clientManager.GetAuthToken(context.Background(), clusterName.Value, clusterNamespace.Value)
 			if err != nil {
-				logrus.Warnf("Failed to get auth token for cluster %s/%s: %v", clusterNamespace.Value, clusterName.Value, err)
-				// Continue without token - cluster might not have auth enabled
-				authToken = ""
+				logrus.Errorf("Failed to get auth token for cluster %s/%s: %v", clusterNamespace.Value, clusterName.Value, err)
+				resp.WriteErrorString(
+					http.StatusInternalServerError,
+					fmt.Sprintf(
+						"failed to get auth token for cluster %s/%s: %v",
+						clusterNamespace.Value,
+						clusterName.Value,
+						err,
+					),
+				)
+				return
 			}
 			req.SetAttribute(ATTRIBUTE_AUTH_TOKEN, authToken)
 		}
