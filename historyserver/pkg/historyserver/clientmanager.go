@@ -59,7 +59,7 @@ type ClientManagerConfig struct {
 }
 
 // GetAuthToken retrieves the auth token from the RayCluster's secret.
-// Returns empty string if auth is not enabled or secret not found.
+// Returns empty string if auth is not enabled; otherwise returns an error when token retrieval fails.
 func (c *ClientManager) GetAuthToken(ctx context.Context, clusterName, clusterNamespace string) (string, error) {
 	if len(c.clients) == 0 {
 		return "", fmt.Errorf("no Kubernetes client available")
