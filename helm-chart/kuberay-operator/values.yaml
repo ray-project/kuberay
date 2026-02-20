@@ -265,6 +265,19 @@ env:
 # KubeRay will update JobDeploymentStatus directly.
 # - name: RAYJOB_DEPLOYMENT_STATUS_TRANSITION_GRACE_PERIOD_SECONDS
 #   value: "300"
+# If the async job info query feature is enabled, KubeRay will periodically
+# query the job info from the Ray cluster for each RayJob in order to update
+# the job status in the RayJob CR. This controls the interval of the periodic listing RayJobs in the cluster.
+# - name: ASYNC_JOB_INFO_QUERY_INTERVAL
+#   value: "3s"
+# If the async job info query feature is enabled, it controls the number of
+# worker goroutines to query job info from Ray clusters in parallel.
+# - name: ASYNC_JOB_INFO_QUERY_WORKER_SIZE
+#   value: "8"
+# If the async job info query feature is enabled, it controls the cache expiry duration
+# for the job info queried from Ray clusters without any read or write in this duration.
+# - name: ASYNC_JOB_INFO_QUERY_CACHE_EXPIRY
+#   value: "10m"
 
 # -- Resource requests and limits for containers.
 resources:

@@ -34,11 +34,13 @@ func main() {
 
 	address := os.Getenv("RAY_DASHBOARD_ADDRESS")
 	if address == "" {
-		exitOnError(fmt.Errorf("missing RAY_DASHBOARD_ADDRESS in environment variables"))
+		// Exit code 2 for submission failures (SubmissionFailed)
+		exitOnErrorWithCode(fmt.Errorf("missing RAY_DASHBOARD_ADDRESS in environment variables"), 2)
 	}
 	submissionId := os.Getenv("RAY_JOB_SUBMISSION_ID")
 	if submissionId == "" {
-		exitOnError(fmt.Errorf("missing RAY_JOB_SUBMISSION_ID in environment variables"))
+		// Exit code 2 for submission failures (SubmissionFailed)
+		exitOnErrorWithCode(fmt.Errorf("missing RAY_JOB_SUBMISSION_ID in environment variables"), 2)
 	}
 
 	req := utiltypes.RayJobRequest{
@@ -49,17 +51,20 @@ func main() {
 	}
 	if len(runtimeEnvJson) > 0 {
 		if err := json.Unmarshal([]byte(runtimeEnvJson), &req.RuntimeEnv); err != nil {
-			exitOnError(err)
+			// Exit code 2 for submission failures (SubmissionFailed)
+			exitOnErrorWithCode(err, 2)
 		}
 	}
 	if len(metadataJson) > 0 {
 		if err := json.Unmarshal([]byte(metadataJson), &req.Metadata); err != nil {
-			exitOnError(err)
+			// Exit code 2 for submission failures (SubmissionFailed)
+			exitOnErrorWithCode(err, 2)
 		}
 	}
 	if len(entrypointResources) > 0 {
 		if err := json.Unmarshal([]byte(entrypointResources), &req.Resources); err != nil {
-			exitOnError(err)
+			// Exit code 2 for submission failures (SubmissionFailed)
+			exitOnErrorWithCode(err, 2)
 		}
 	}
 	rayDashboardClient := &dashboardclient.RayDashboardClient{}
@@ -71,19 +76,21 @@ func main() {
 		if strings.Contains(err.Error(), "Please use a different submission_id") {
 			fmt.Fprintf(os.Stdout, "INFO -- Job '%s' has already been submitted, tailing logs.\n", submissionId)
 		} else {
-			exitOnError(err)
+			// Exit code 2 for submission failures (SubmissionFailed)
+			exitOnErrorWithCode(err, 2)
 		}
 	} else {
 		fmt.Fprintf(os.Stdout, "SUCC -- Job '%s' submitted successfully\n", submissionId)
 	}
 	fmt.Fprintf(os.Stdout, "INFO -- Tailing logs until the job finishes:\n")
 	err = rayjobsubmitter.TailJobLogs(address, submissionId, authToken, os.Stdout)
-	exitOnError(err)
+	// Exit code 1 for user code failures (AppFailed)
+	exitOnErrorWithCode(err, 1)
 }
 
-func exitOnError(err error) {
+func exitOnErrorWithCode(err error, exitCode int) {
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "ERROR -- ", err)
-		os.Exit(1)
+		os.Exit(exitCode)
 	}
 }
