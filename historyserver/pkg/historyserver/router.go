@@ -989,9 +989,20 @@ func (s *ServerHandler) getNodeLogFile(req *restful.Request, resp *restful.Respo
 		return
 	}
 
+	var ctx context.Context
+	var cancel context.CancelFunc
+	if options.Timeout > 0 {
+		timeout := time.Duration(options.Timeout) * time.Second
+		ctx, cancel = context.WithTimeout(req.Request.Context(), timeout)
+	} else {
+		// No timeout
+		ctx, cancel = context.WithCancel(req.Request.Context())
+	}
+	defer cancel()
+
 	// Only resolve node_ip to node_id from stored events for dead cluster
 	if options.NodeID == "" && options.NodeIP != "" {
-		nodeID, err := s.ipToNodeId(clusterNameID+"_"+clusterNamespace, sessionName, options.NodeIP)
+		nodeID, err := s.ipToNodeId(ctx, clusterNameID+"_"+clusterNamespace, sessionName, options.NodeIP)
 		if err != nil {
 			resp.WriteErrorString(http.StatusNotFound,
 				fmt.Sprintf("Cannot find matching node_id for a given node ip %s", options.NodeIP))
@@ -1000,7 +1011,7 @@ func (s *ServerHandler) getNodeLogFile(req *restful.Request, resp *restful.Respo
 		options.NodeID = nodeID
 	}
 
-	content, err := s._getNodeLogFile(clusterNameID+"_"+clusterNamespace, sessionName, options)
+	content, err := s._getNodeLogFile(ctx, clusterNameID+"_"+clusterNamespace, sessionName, options)
 	if err != nil {
 		var httpErr *utils.HTTPError
 		if errors.As(err, &httpErr) {
