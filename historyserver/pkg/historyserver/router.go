@@ -1638,7 +1638,7 @@ func (s *ServerHandler) CookieHandle(req *restful.Request, resp *restful.Respons
 		// Always query K8s to get the service name to prevent SSRF attacks.
 		// Do not trust user-provided cookies for service name.
 		// TODO: here might be a bottleneck if there are many requests in the future.
-		svcInfo, err := getClusterSvcInfo(s.clientManager.clients, clusterName.Value, clusterNamespace.Value)
+		svcInfo, rc, err := fetchClusterAndSvcInfo(s.clientManager.clients, clusterName.Value, clusterNamespace.Value)
 		if err != nil {
 			resp.WriteHeaderAndEntity(http.StatusBadRequest, err.Error())
 			return
@@ -1647,7 +1647,7 @@ func (s *ServerHandler) CookieHandle(req *restful.Request, resp *restful.Respons
 
 		// If auth token mode is enabled, fetch the auth token for this cluster
 		if s.useAuthTokenMode {
-			authToken, err := s.clientManager.GetAuthToken(context.Background(), clusterName.Value, clusterNamespace.Value)
+			authToken, err := s.clientManager.GetAuthTokenForRayCluster(context.Background(), rc)
 			if err != nil {
 				logrus.Errorf("Failed to get auth token for cluster %s/%s: %v", clusterNamespace.Value, clusterName.Value, err)
 				resp.WriteErrorString(
@@ -1671,21 +1671,24 @@ func (s *ServerHandler) CookieHandle(req *restful.Request, resp *restful.Respons
 	chain.ProcessFilter(req, resp)
 }
 
-func getClusterSvcInfo(clis []client.Client, name, namespace string) (ServiceInfo, error) {
+// fetchClusterAndSvcInfo retrieves the RayCluster once and derives the head service info.
+// This avoids doing multiple GETs for the same cluster when auth token mode is enabled.
+func fetchClusterAndSvcInfo(clis []client.Client, name, namespace string) (ServiceInfo, *rayv1.RayCluster, error) {
+
 	if len(clis) == 0 {
-		return ServiceInfo{}, errors.New("No available kubernetes config found")
+		return ServiceInfo{}, nil, errors.New("No available kubernetes config found")
 	}
 	cli := clis[0]
 	rc := rayv1.RayCluster{}
 	err := cli.Get(context.Background(), types.NamespacedName{Namespace: namespace, Name: name}, &rc)
 	if err != nil {
-		return ServiceInfo{}, errors.New("RayCluster not found")
+		return ServiceInfo{}, nil, errors.New("RayCluster not found")
 	}
 	svcName := rc.Status.Head.ServiceName
 	if svcName == "" {
-		return ServiceInfo{}, errors.New("RayCluster head service not ready")
+		return ServiceInfo{}, nil, errors.New("RayCluster head service not ready")
 	}
-	return ServiceInfo{ServiceName: svcName, Namespace: namespace, Port: 8265}, nil
+	return ServiceInfo{ServiceName: svcName, Namespace: namespace, Port: 8265}, &rc, nil
 }
 
 // formatNodeSummaryReplayForResp formats a node summary replay of a single node for the response.
