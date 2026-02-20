@@ -18,6 +18,7 @@ import (
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 
 	"github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
+	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 	. "github.com/ray-project/kuberay/historyserver/test/support"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
@@ -312,7 +313,7 @@ func testCollectorStoresClusterMetadata(test Test, g *WithT, namespace *corev1.N
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 
 	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, rayCluster.Namespace)
-	metaKey := fmt.Sprintf("log/%s/meta/%s", clusterNameID, "restful__api__v0__cluster_metadata")
+	metaKey := fmt.Sprintf("log/%s/meta/%s", clusterNameID, utils.OssMetaFile_ClusterMetadata)
 
 	LogWithTimestamp(test.T(), "Waiting for cluster metadata to appear at S3 key: %s", metaKey)
 
