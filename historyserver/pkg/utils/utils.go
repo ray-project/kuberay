@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"regexp"
 	"strings"
 	"time"
 
@@ -243,15 +244,53 @@ func GetRayNodeID() (string, error) {
 	return "", fmt.Errorf("timeout --node_id= not found")
 }
 
-func ConvertBase64ToHex(input string) (string, error) {
-	bytes, err := base64.StdEncoding.DecodeString(input)
-	if err != nil {
-		return input, err
+// ConvertBase64ToHex converts an ID to hex format.
+// Handles both cases:
+// 1. Already hex format - returns as-is
+// 2. Base64-encoded - decodes to hex
+// It tries RawURLEncoding first (Ray's default), falling back to StdEncoding if that fails.
+func ConvertBase64ToHex(id string) (string, error) {
+	// Check if already hex (only [0-9a-f])
+	if matched, _ := regexp.MatchString("^[0-9a-fA-F]+$", id); matched {
+		return id, nil
 	}
 
-	hexStr := hex.EncodeToString(bytes)
+	// Try base64 decode
+	idBytes, err := base64.RawURLEncoding.DecodeString(id)
+	if err != nil {
+		// Try standard Base64 if URL-safe fails
+		idBytes, err = base64.StdEncoding.DecodeString(id)
+		if err != nil {
+			return id, fmt.Errorf("failed to decode Base64 ID: %w", err)
+		}
+	}
+	return fmt.Sprintf("%x", idBytes), nil
+}
 
-	return hexStr, nil
+// IsHexNil returns true if hexStr decodes to a non-empty byte slice where every byte is 0xff.
+func IsHexNil(hexStr string) (bool, error) {
+	s := strings.TrimSpace(hexStr)
+
+	if len(s) == 0 {
+		return false, nil
+	}
+
+	// Hex string must have even length.
+	if len(s)%2 != 0 {
+		return false, hex.ErrLength
+	}
+
+	bytes, err := hex.DecodeString(s)
+	if err != nil {
+		return false, err
+	}
+
+	for _, v := range bytes {
+		if v != 0xff {
+			return false, nil
+		}
+	}
+	return true, nil
 }
 
 // BuildClusterSessionKey constructs the key used to identify a specific cluster session.

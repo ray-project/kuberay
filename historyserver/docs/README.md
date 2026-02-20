@@ -81,7 +81,8 @@ Sample configs are in the `config/` directory:
 | `raycluster.yaml` | Ray cluster with collector sidecar (S3/MinIO) |
 | `raycluster-azureblob.yaml` | Ray cluster with collector sidecar (Azure Blob) |
 | `rayjob.yaml` | Sample Ray job for testing |
-| `historyserver.yaml` | History Server deployment |
+| `historyserver.yaml` | History Server deployment (S3/MinIO) |
+| `historyserver-azureblob.yaml` | History Server deployment (Azure Blob) |
 | `service_account.yaml` | Service account for History Server |
 
 ## Additional resources
