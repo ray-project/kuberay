@@ -39,40 +39,35 @@ func (c *ClientManager) ListRayClusters(ctx context.Context) ([]*rayv1.RayCluste
 	return list, nil
 }
 
-// GetAuthToken retrieves the auth token from the RayCluster's secret.
+// GetAuthTokenForRayCluster uses a pre-fetched RayCluster to avoid an extra GET.
 // Returns empty string if auth is not enabled; otherwise returns an error when token retrieval fails.
-func (c *ClientManager) GetAuthToken(ctx context.Context, clusterName, clusterNamespace string) (string, error) {
+func (c *ClientManager) GetAuthTokenForRayCluster(ctx context.Context, rayCluster *rayv1.RayCluster) (string, error) {
 	if len(c.clients) == 0 {
 		return "", fmt.Errorf("no Kubernetes client available")
 	}
-
-	// Currently only one kubeconfig is supported (enforced in NewClientManager)
-	client := c.clients[0]
-
-	// First, check if the RayCluster has auth enabled
-	rayCluster := &rayv1.RayCluster{}
-	err := client.Get(ctx, types.NamespacedName{Namespace: clusterNamespace, Name: clusterName}, rayCluster)
-	if err != nil {
-		return "", fmt.Errorf("failed to get RayCluster %s/%s: %w", clusterNamespace, clusterName, err)
+	if rayCluster == nil {
+		return "", fmt.Errorf("nil RayCluster provided")
 	}
+
+	client := c.clients[0]
 
 	// Check if auth is enabled
 	if rayCluster.Spec.AuthOptions == nil || rayCluster.Spec.AuthOptions.Mode != rayv1.AuthModeToken {
-		logrus.Debugf("Auth not enabled for RayCluster %s/%s", clusterNamespace, clusterName)
+		logrus.Debugf("Auth not enabled for RayCluster %s/%s", rayCluster.Namespace, rayCluster.Name)
 		return "", nil
 	}
 
 	// Fetch the secret containing the auth token
 	secret := &corev1.Secret{}
-	err = client.Get(ctx, types.NamespacedName{Namespace: clusterNamespace, Name: clusterName}, secret)
+	err := client.Get(ctx, types.NamespacedName{Namespace: rayCluster.Namespace, Name: rayCluster.Name}, secret)
 	if err != nil {
-		return "", fmt.Errorf("failed to get auth secret %s/%s: %w", clusterNamespace, clusterName, err)
+		return "", fmt.Errorf("failed to get auth secret %s/%s: %w", rayCluster.Namespace, rayCluster.Name, err)
 	}
 
 	// Extract the token from the secret
 	tokenBytes, exists := secret.Data["auth_token"]
 	if !exists {
-		return "", fmt.Errorf("auth_token key not found in secret %s/%s", clusterNamespace, clusterName)
+		return "", fmt.Errorf("auth_token key not found in secret %s/%s", rayCluster.Namespace, rayCluster.Name)
 	}
 
 	return string(tokenBytes), nil
