@@ -145,6 +145,9 @@ func (s *ServerHandler) _getNodeLogFile(ctx context.Context, rayClusterNameID, s
 	if reader == nil {
 		// Check if nil is due to context error
 		if ctx.Err() != nil {
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+				return nil, utils.NewHTTPError(ctx.Err(), http.StatusRequestTimeout)
+			}
 			return nil, ctx.Err()
 		}
 		return nil, utils.NewHTTPError(fmt.Errorf("log file not found: %s", logPath), http.StatusNotFound)
@@ -158,6 +161,9 @@ func (s *ServerHandler) _getNodeLogFile(ctx context.Context, rayClusterNameID, s
 		// -1 means read all lines
 		content, err := io.ReadAll(ctxReader)
 		if err != nil {
+			if errors.Is(err, context.DeadlineExceeded) {
+				return nil, utils.NewHTTPError(err, http.StatusRequestTimeout)
+			}
 			return nil, err
 		}
 		if options.FilterAnsiCode {
@@ -193,6 +199,9 @@ func (s *ServerHandler) _getNodeLogFile(ctx context.Context, rayClusterNameID, s
 	}
 
 	if err := scanner.Err(); err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			return nil, utils.NewHTTPError(err, http.StatusRequestTimeout)
+		}
 		return nil, err
 	}
 
