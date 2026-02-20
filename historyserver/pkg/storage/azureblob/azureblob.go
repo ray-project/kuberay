@@ -26,10 +26,6 @@ import (
 const (
 	// Timeout for upload operations
 	uploadTimeout = 5 * time.Minute
-	// Timeout for listing operations
-	listTimeout = 2 * time.Minute
-	// Timeout for download operations (longer to handle large files)
-	downloadTimeout = 10 * time.Minute
 )
 
 type RayLogsHandler struct {
