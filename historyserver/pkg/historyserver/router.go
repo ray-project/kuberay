@@ -34,6 +34,7 @@ const (
 	COOKIE_DASHBOARD_VERSION_KEY = "dashboard_version"
 
 	ATTRIBUTE_SERVICE_NAME = "cluster_service_name"
+	ATTRIBUTE_AUTH_TOKEN   = "cluster_auth_token"
 )
 
 type ServiceInfo struct {
@@ -368,6 +369,16 @@ func (s *ServerHandler) redirectRequest(req *restful.Request, resp *restful.Resp
 			for _, value := range values {
 				// Use Add() to preserve multiple values for the same header key.
 				proxyReq.Header.Add(key, value)
+			}
+		}
+	}
+
+	// Add auth token header if auth token mode is enabled
+	if s.useAuthTokenMode {
+		// Get the auth token from request attribute (set by CookieHandle filter)
+		if authTokenAttr := req.Attribute(ATTRIBUTE_AUTH_TOKEN); authTokenAttr != nil {
+			if authToken, ok := authTokenAttr.(string); ok && authToken != "" {
+				proxyReq.Header.Set("x-ray-authorization", fmt.Sprintf("Bearer %s", authToken))
 			}
 		}
 	}
@@ -1628,6 +1639,17 @@ func (s *ServerHandler) CookieHandle(req *restful.Request, resp *restful.Respons
 			return
 		}
 		req.SetAttribute(ATTRIBUTE_SERVICE_NAME, svcInfo)
+
+		// If auth token mode is enabled, fetch the auth token for this cluster
+		if s.useAuthTokenMode {
+			authToken, err := s.clientManager.GetAuthToken(context.Background(), clusterName.Value, clusterNamespace.Value)
+			if err != nil {
+				logrus.Warnf("Failed to get auth token for cluster %s/%s: %v", clusterNamespace.Value, clusterName.Value, err)
+				// Continue without token - cluster might not have auth enabled
+				authToken = ""
+			}
+			req.SetAttribute(ATTRIBUTE_AUTH_TOKEN, authToken)
+		}
 	}
 	req.SetAttribute(COOKIE_CLUSTER_NAME_KEY, clusterName.Value)
 	req.SetAttribute(COOKIE_SESSION_NAME_KEY, sessionName.Value)

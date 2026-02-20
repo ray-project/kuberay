@@ -22,12 +22,15 @@ func main() {
 	runtimeClassConfigPath := "/var/collector-config/data"
 	dashboardDir := ""
 	useKubernetesProxy := false
+	useAuthTokenMode := false
+
 	flag.StringVar(&runtimeClassName, "runtime-class-name", "", "")
 	flag.StringVar(&rayRootDir, "ray-root-dir", "", "")
 	flag.StringVar(&kubeconfigs, "kubeconfigs", "", "")
 	flag.StringVar(&dashboardDir, "dashboard-dir", "/dashboard", "")
 	flag.StringVar(&runtimeClassConfigPath, "runtime-class-config-path", "", "") //"/var/collector-config/data"
 	flag.BoolVar(&useKubernetesProxy, "use-kubernetes-proxy", false, "")
+	flag.BoolVar(&useAuthTokenMode, "use-auth-token-mode", false, "Enable Ray dashboard token authentication mode (requires x-ray-authorization header)")
 	flag.Parse()
 
 	cliMgr, err := historyserver.NewClientManager(kubeconfigs, useKubernetesProxy)
@@ -84,7 +87,14 @@ func main() {
 		logrus.Info("EventHandler shutdown complete")
 	}()
 
-	handler, err := historyserver.NewServerHandler(&globalConfig, dashboardDir, reader, cliMgr, eventHandler, useKubernetesProxy)
+	handler, err := historyserver.NewServerHandler(
+		&globalConfig,
+		dashboardDir,
+		reader, cliMgr,
+		eventHandler,
+		useKubernetesProxy,
+		useAuthTokenMode,
+	)
 	if err != nil {
 		logrus.Errorf("Failed to create server handler: %v", err)
 		os.Exit(1)
