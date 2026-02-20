@@ -3,6 +3,7 @@ package utils
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestSlice(t *testing.T) {
@@ -50,6 +51,56 @@ func TestConvertBase64ToHex(t *testing.T) {
 			}
 			if actualHexStr != tt.expectedHexStr {
 				t.Errorf("Actual convertion does not match expected result. Actual: %s Expected: %s", actualHexStr, tt.expectedHexStr)
+			}
+		})
+	}
+}
+
+func TestGetDateTimeFromSessionID(t *testing.T) {
+	tests := []struct {
+		name         string
+		sessionID    string
+		expectErr    bool
+		expectedTime time.Time
+	}{
+		{
+			name:         "valid session id",
+			sessionID:    "session_2024-05-15_10-30-55_123456",
+			expectErr:    false,
+			expectedTime: time.Date(2024, time.May, 15, 10, 30, 55, 123456000, time.UTC),
+		},
+		{
+			name:      "invalid prefix",
+			sessionID: "s_2024-05-15_10-30-55_123456",
+			expectErr: true,
+		},
+		{
+			name:      "missing_time",
+			sessionID: "session_2024-05-15_10-30-55",
+			expectErr: true,
+		},
+		{
+			name:      "empty_string",
+			sessionID: "",
+			expectErr: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			gotTime, err := GetDateTimeFromSessionID(tc.sessionID)
+
+			if tc.expectErr {
+				if err == nil {
+					t.Errorf("GetDateTimeFromSessionID(%q) succeeded unexpectedly, returned time: %v", tc.sessionID, gotTime)
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("GetDateTimeFromSessionID(%q) failed unexpectedly: %v", tc.sessionID, err)
+				}
+				if !gotTime.Equal(tc.expectedTime) {
+					t.Errorf("GetDateTimeFromSessionID(%q) = %v, want %v", tc.sessionID, gotTime, tc.expectedTime)
+				}
 			}
 		})
 	}
