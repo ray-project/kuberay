@@ -41,10 +41,9 @@ func filterAnsiEscapeCodes(content []byte) []byte {
 	return ansiEscapePattern.ReplaceAll(content, []byte(""))
 }
 
-func (s *ServerHandler) listClusters(limit int) []utils.ClusterInfo {
+func (s *ServerHandler) listClusters(ctx context.Context, limit int) []utils.ClusterInfo {
 	// Initial continuation marker
 	logrus.Debugf("Prepare to get list clusters info ...")
-	ctx := context.Background()
 	liveClusters, _ := s.clientManager.ListRayClusters(ctx)
 	liveClusterNames := []string{}
 	liveClusterInfos := []utils.ClusterInfo{}
@@ -60,7 +59,7 @@ func (s *ServerHandler) listClusters(limit int) []utils.ClusterInfo {
 		liveClusterNames = append(liveClusterNames, liveCluster.Name)
 	}
 	logrus.Infof("live clusters: %v", liveClusterNames)
-	clusters := s.reader.List()
+	clusters := s.reader.List(ctx)
 	sort.Sort(utils.ClusterInfoList(clusters))
 	if limit > 0 && limit < len(clusters) {
 		clusters = clusters[:limit]
@@ -69,12 +68,12 @@ func (s *ServerHandler) listClusters(limit int) []utils.ClusterInfo {
 	return clusters
 }
 
-func (s *ServerHandler) _getNodeLogs(rayClusterNameID, sessionId, nodeId, dir string) ([]byte, error) {
+func (s *ServerHandler) _getNodeLogs(ctx context.Context, rayClusterNameID, sessionId, nodeId, dir string) ([]byte, error) {
 	logPath := path.Join(sessionId, utils.RAY_SESSIONDIR_LOGDIR_NAME, nodeId)
 	if dir != "" {
 		logPath = path.Join(logPath, dir)
 	}
-	files := s.reader.ListFiles(rayClusterNameID, logPath)
+	files := s.reader.ListFiles(ctx, rayClusterNameID, logPath)
 
 	// Categorize log files to match Ray Dashboard API format.
 	// Ref: Ray Dashboard's LogsManager._categorize_log_files in log_manager.py

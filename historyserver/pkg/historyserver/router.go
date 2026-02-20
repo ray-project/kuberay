@@ -398,7 +398,7 @@ func (s *ServerHandler) redirectRequest(req *restful.Request, resp *restful.Resp
 }
 
 func (s *ServerHandler) getClusters(req *restful.Request, resp *restful.Response) {
-	clusters := s.listClusters(s.maxClusters)
+	clusters := s.listClusters(req.Request.Context(), s.maxClusters)
 	resp.WriteAsJson(clusters)
 }
 
@@ -811,7 +811,9 @@ func (s *ServerHandler) getNodeLogs(req *restful.Request, resp *restful.Response
 		folder = req.QueryParameter("glob")
 		folder = strings.TrimSuffix(folder, "*")
 	}
-	data, err := s._getNodeLogs(clusterNameID+"_"+clusterNamespace, sessionName, req.QueryParameter("node_id"), folder)
+
+	ctx := req.Request.Context()
+	data, err := s._getNodeLogs(ctx, clusterNameID+"_"+clusterNamespace, sessionName, req.QueryParameter("node_id"), folder)
 	if err != nil {
 		logrus.Errorf("Error: %v", err)
 		resp.WriteError(400, err)
