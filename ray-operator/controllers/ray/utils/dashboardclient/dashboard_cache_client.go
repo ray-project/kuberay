@@ -100,8 +100,10 @@ func InitWorkerPool(ctx context.Context,
 }
 
 func (w *WorkerPool) Start(ctx context.Context) error {
+	var wg sync.WaitGroup
 	logger := w.logger
-	go func() {
+
+	wg.Go(func() {
 		ticker := time.NewTicker(w.queryInterval)
 		defer ticker.Stop()
 		defer close(w.taskQueue.In)
@@ -148,10 +150,12 @@ func (w *WorkerPool) Start(ctx context.Context) error {
 				}
 			}
 		}
-	}()
+	})
 
 	for i := range w.numWorkers {
+		wg.Add(1)
 		go func(workerID int) {
+			defer wg.Done()
 			for {
 				select {
 				case <-ctx.Done():
@@ -172,6 +176,7 @@ func (w *WorkerPool) Start(ctx context.Context) error {
 
 	// Waiting for the termination
 	<-ctx.Done()
+	wg.Wait()
 	return ctx.Err()
 }
 
