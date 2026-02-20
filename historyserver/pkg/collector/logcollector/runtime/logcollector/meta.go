@@ -1,10 +1,10 @@
 package logcollector
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"path"
-	"strings"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -70,7 +70,7 @@ func (r *RayLogHandler) FetchAndStoreClusterMetadata() {
 
 		// Successfully fetched — store it
 		objectKey := path.Join(r.MetaDir, utils.OssMetaFile_ClusterMetadata)
-		if err := r.Writer.WriteFile(objectKey, strings.NewReader(string(body))); err != nil {
+		if err := r.Writer.WriteFile(objectKey, bytes.NewReader(body)); err != nil {
 			logrus.Errorf("Failed to store cluster metadata at %s: %v", objectKey, err)
 			// Retry storage write as well
 			if !r.sleepOrShutdown(retryInterval) {
