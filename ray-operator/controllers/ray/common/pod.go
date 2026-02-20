@@ -284,8 +284,7 @@ func AddRayTokenVolume(podSpec *corev1.PodSpec) {
 				Sources: []corev1.VolumeProjection{
 					{
 						ServiceAccountToken: &corev1.ServiceAccountTokenProjection{
-							ExpirationSeconds: ptr.To[int64](3600),
-							Path:              "token",
+							Path: "token",
 						},
 					},
 				},
