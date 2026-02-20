@@ -77,6 +77,8 @@ spec:
           image: collector:v0.1.0
           imagePullPolicy: IfNotPresent
           env:
+          - name: RAY_DASHBOARD_ADDRESS
+            value: "http://localhost:8265"
           - name: S3DISABLE_SSL
             value: "true"
           - name: AWS_S3ID

@@ -26,8 +26,9 @@ func NewCollector(config *types.RayCollectorConfig, writer storage.StorageWriter
 		RayClusterID:   config.RayClusterID,
 		RayNodeName:    config.RayNodeName,
 
-		LogBatching:  config.LogBatching,
-		PushInterval: config.PushInterval,
+		LogBatching:      config.LogBatching,
+		PushInterval:     config.PushInterval,
+		DashboardAddress: config.DashboardAddress,
 
 		HttpClient: &http.Client{
 			Transport: &http.Transport{
