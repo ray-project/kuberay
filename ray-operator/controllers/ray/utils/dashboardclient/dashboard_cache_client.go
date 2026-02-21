@@ -153,24 +153,24 @@ func (w *WorkerPool) Start(ctx context.Context) error {
 	})
 
 	for i := range w.numWorkers {
-		wg.Add(1)
-		go func(workerID int) {
-			defer wg.Done()
-			for {
-				select {
-				case <-ctx.Done():
-					logger.Info("worker exiting...", "workerID", workerID)
-					return
-				case rayJobInstance, ok := <-w.taskQueue.Out:
-					if !ok {
-						logger.Info("worker exiting from a closed channel", "workerID", workerID)
+		wg.Go(func() {
+			func(workerID int) {
+				for {
+					select {
+					case <-ctx.Done():
+						logger.Info("worker exiting...", "workerID", workerID)
 						return
-					}
+					case rayJobInstance, ok := <-w.taskQueue.Out:
+						if !ok {
+							logger.Info("worker exiting from a closed channel", "workerID", workerID)
+							return
+						}
 
-					w.processRayJob(ctx, rayJobInstance)
+						w.processRayJob(ctx, rayJobInstance)
+					}
 				}
-			}
-		}(i)
+			}(i)
+		})
 	}
 	logger.Info(fmt.Sprintf("Initialize a worker pool with %d goroutines and query interval is %v.", w.numWorkers, w.queryInterval))
 
