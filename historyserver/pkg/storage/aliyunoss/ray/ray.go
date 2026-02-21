@@ -149,10 +149,18 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 			logrus.Infof("[List]Returned objects in %v. length of lsRes.Objects: %v, length of lsRes.CommonPrefixes: %v", path.Join(r.OssRootDir, "metadir")+"/", len(lsRes.Objects),
 				len(lsRes.CommonPrefixes))
 			for _, objects := range lsRes.Objects {
+				// The timezone file lives under the session directory, which can create a
+				// directory marker object. That marker can be mistaken for a session file,
+				// so skip any object keys that end with "/".
+				if strings.HasSuffix(objects.Key, "/") {
+					continue
+				}
 				c := &utils.ClusterInfo{}
 				metaInfo := strings.Trim(strings.TrimPrefix(objects.Key, path.Join(r.OssRootDir, "metadir/")), "/")
 				metas := strings.Split(metaInfo, "/")
-				if len(metas) < 2 {
+				// Only accept exact {cluster}/{session} markers;
+				// Ignore deeper paths like timezone files
+				if len(metas) != 2 {
 					continue
 				}
 				logrus.Infof("Process %++v", metas)

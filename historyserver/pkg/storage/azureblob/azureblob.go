@@ -182,10 +182,18 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 			metadirPrefix, len(resp.Segment.BlobItems))
 
 		for _, blob := range resp.Segment.BlobItems {
+			// The timezone file lives under the session directory, which can create a
+			// directory marker object. That marker can be mistaken for a session file,
+			// so skip any object keys that end with "/".
+			if strings.HasSuffix(*blob.Name, "/") {
+				continue
+			}
 			c := &utils.ClusterInfo{}
 			metaInfo := strings.Trim(strings.TrimPrefix(*blob.Name, path.Join(r.RootDir, "metadir/")), "/")
 			metas := strings.Split(metaInfo, "/")
-			if len(metas) < 2 {
+			// Only accept exact {cluster}/{session} markers;
+			// Ignore deeper paths like timezone files
+			if len(metas) != 2 {
 				continue
 			}
 			logrus.Infof("Process %++v", metas)
