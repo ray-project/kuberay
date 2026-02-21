@@ -174,8 +174,6 @@ func (w *WorkerPool) Start(ctx context.Context) error {
 	}
 	logger.Info(fmt.Sprintf("Initialize a worker pool with %d goroutines and query interval is %v.", w.numWorkers, w.queryInterval))
 
-	// Waiting for the termination
-	<-ctx.Done()
 	wg.Wait()
 	return ctx.Err()
 }
