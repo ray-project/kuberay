@@ -154,7 +154,7 @@ func (b *lineageBuilder) buildTree(tasks []eventtypes.Task) {
 
 		state := string(task.State)
 		if state == "" {
-			state = "UNKNOWN"
+			state = "NIL"
 		}
 		group.StateCounts[state]++
 
@@ -458,4 +458,22 @@ func getTimestamp(g *NestedTaskSummary) int64 {
 		return math.MaxInt64
 	}
 	return *g.Timestamp
+}
+
+// TaskSummaryPerFuncOrClassName represents a task summary entry for func_name mode.
+// Ref: https://github.com/ray-project/ray/blob/777f37f002c14bd4c587f4d095b85c62690647de/python/ray/util/state/common.py#L983-L990
+type TaskSummaryPerFuncOrClassName struct {
+	FuncOrClassName string         `json:"func_or_class_name"`
+	Type            string         `json:"type"`
+	StateCounts     map[string]int `json:"state_counts"`
+}
+
+// TaskSummariesByFuncName is the response for summary_by=func_name
+// Uses map instead of slice for summary (different from lineage mode)
+type TaskSummariesByFuncName struct {
+	Summary             map[string]*TaskSummaryPerFuncOrClassName `json:"summary"`
+	TotalTasks          int                                       `json:"total_tasks"`
+	TotalActorTasks     int                                       `json:"total_actor_tasks"`
+	TotalActorScheduled int                                       `json:"total_actor_scheduled"`
+	SummaryBy           string                                    `json:"summary_by"`
 }

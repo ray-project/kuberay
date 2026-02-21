@@ -1159,6 +1159,13 @@ func (s *ServerHandler) getTaskSummarize(req *restful.Request, resp *restful.Res
 	// numFiltered is the number of tasks after filtering but before limit truncation.
 	tasks, numFiltered := utils.ApplyTaskFilters(tasks, listAPIOptions)
 
+	// The response envelope follows Ray Dashboard's rest_response format:
+	//   { "result": <bool>, "msg": <string>, "data": <payload> }
+	// "result" is true when status_code == 200, false otherwise.
+	// "msg" is "" on success, or the error message on failure.
+	// Error cases (bad request, marshal failure) are handled above via resp.WriteErrorString
+	// and return early, so reaching this point means success.
+	// Ref: https://github.com/ray-project/ray/blob/master/python/ray/dashboard/routes.py
 	var response interface{}
 	if summaryBy == "lineage" {
 		actors := s.eventHandler.GetActors(clusterSessionKey)
@@ -1183,13 +1190,25 @@ func (s *ServerHandler) getTaskSummarize(req *restful.Request, resp *restful.Res
 			},
 		}
 	} else {
-		// Default to func_name
-		summary := summarizeTasksByFuncName(tasks)
+
+		funcNameSummary := summarizeTasksByFuncName(tasks)
+
 		response = map[string]interface{}{
 			"result": true,
-			"msg":    "Tasks summarized.",
+			"msg":    "",
 			"data": map[string]interface{}{
-				"result": summary,
+				"result": map[string]interface{}{
+					"total":                numTotal,
+					"num_after_truncation": numAfterTruncation,
+					"num_filtered":         numFiltered,
+					"result": map[string]interface{}{
+						"node_id_to_summary": map[string]*utils.TaskSummariesByFuncName{
+							"cluster": funcNameSummary,
+						},
+					},
+					"partial_failure_warning": "",
+					"warnings":                nil,
+				},
 			},
 		}
 	}
@@ -1203,28 +1222,74 @@ func (s *ServerHandler) getTaskSummarize(req *restful.Request, resp *restful.Res
 	resp.Write(respData)
 }
 
-// summarizeTasksByFuncName groups tasks by function name and counts by state
-func summarizeTasksByFuncName(tasks []eventtypes.Task) map[string]interface{} {
-	summary := make(map[string]map[string]int)
+// summarizeTasksByFuncName groups tasks by function name and counts by state.
+//
+// The Ray Dashboard frontend always calls this API with a job_id filter
+// (e.g. filter_keys=job_id&filter_predicates=%3D&filter_values={jobId}),
+// so the summary only includes tasks belonging to that specific job.
+// Internal Ray tasks like _StatsActor (used by Ray Data) belong to a different
+// job and are excluded by the filter before reaching this function.
+// Ref: https://github.com/ray-project/ray/blob/777f37f002c14bd4c587f4d095b85c62690647de/python/ray/dashboard/client/src/service/job.ts
+//
+// Ray API source code: https://github.com/ray-project/ray/blob/777f37f002c14bd4c587f4d095b85c62690647de/python/ray/util/state/common.py#L1035-L1064
+func summarizeTasksByFuncName(tasks []eventtypes.Task) *utils.TaskSummariesByFuncName {
+	summary := make(map[string]*utils.TaskSummaryPerFuncOrClassName)
+	totalTasks := 0
+	totalActorTasks := 0
+	totalActorScheduled := 0
 
 	for _, task := range tasks {
 		funcName := task.GetFuncName()
 		if funcName == "" {
-			funcName = "unknown"
+			// Skip tasks without a function name. This can happen when we've received
+			// a TASK_LIFECYCLE_EVENT but not yet the corresponding TASK_DEFINITION_EVENT,
+			// since only the definition event carries the FunctionDescriptor (TaskFunc/ActorFunc).
+			//
+			// Unlike the live Ray Dashboard (which reads complete TaskInfo from GCS in a single object),
+			// the history server ingests definition and lifecycle as separate events that may arrive
+			// out of order. A task missing its definition also lacks TaskType, so it cannot contribute
+			// to totalTasks/totalActorTasks/totalActorScheduled counts either.
+			//
+			// We skip rather than using a fallback like "unknown" to keep the summary clean for the
+			// Dashboard frontend, which does not expect such a synthetic key.
+			// Ref: https://github.com/ray-project/ray/blob/777f37f002c14bd4c587f4d095b85c62690647de/python/ray/util/state/common.py#L1049
+			continue
 		}
+
 		if _, ok := summary[funcName]; !ok {
-			summary[funcName] = make(map[string]int)
+			summary[funcName] = &utils.TaskSummaryPerFuncOrClassName{
+				FuncOrClassName: funcName,
+				Type:            string(task.TaskType),
+				StateCounts:     make(map[string]int),
+			}
 		}
+
+		// Use "NIL" for empty state to match Ray's behavior: when a task has no lifecycle events,
+		// Ray's protobuf_to_task_state_dict defaults to "NIL" (protobuf TaskStatus enum value 0).
+		// Ref: https://github.com/ray-project/ray/blob/777f37f002c14bd4c587f4d095b85c62690647de/python/ray/util/state/common.py#L1688-L1691
 		state := string(task.State)
 		if state == "" {
-			state = "UNKNOWN"
+			state = "NIL"
 		}
-		summary[funcName][state]++
+		summary[funcName].StateCounts[state]++
+
+		// Count by task type
+		switch task.TaskType {
+		case eventtypes.NORMAL_TASK:
+			totalTasks++
+		case eventtypes.ACTOR_TASK:
+			totalActorTasks++
+		case eventtypes.ACTOR_CREATION_TASK:
+			totalActorScheduled++
+		}
 	}
 
-	return map[string]interface{}{
-		"summary": summary,
-		"total":   len(tasks),
+	return &utils.TaskSummariesByFuncName{
+		Summary:             summary,
+		TotalTasks:          totalTasks,
+		TotalActorTasks:     totalActorTasks,
+		TotalActorScheduled: totalActorScheduled,
+		SummaryBy:           "func_name",
 	}
 }
 
