@@ -1165,6 +1165,14 @@ func TestValidateRayJobSpec(t *testing.T) {
 			},
 			expectError: false,
 		},
+		{
+			name: "BackoffLimit > 0 is incompatible with ClusterSelector mode",
+			spec: rayv1.RayJobSpec{
+				ClusterSelector: map[string]string{"ray.io/cluster": "ray-cluster"},
+				BackoffLimit:    ptr.To[int32](1),
+			},
+			expectError: true,
+		},
 	}
 
 	for _, tt := range tests {
