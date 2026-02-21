@@ -15,6 +15,7 @@ import (
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/ray-project/kuberay/historyserver/pkg/historyserver"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
 
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
@@ -96,6 +97,14 @@ func TestHistoryServer(t *testing.T) {
 		{
 			name:     "Dead cluster: /nodes/{node_id} should return the historical replay containing node summary snapshots of the specified node in a cluster session",
 			testFunc: testDeadClusterNode,
+		},
+		{
+			name:     "/api/cluster_status endpoint (live cluster)",
+			testFunc: testLiveClusterStatus,
+		},
+		{
+			name:     "/api/cluster_status endpoint (dead cluster)",
+			testFunc: testDeadClusterStatus,
 		},
 	}
 
@@ -180,31 +189,57 @@ func testLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Names
 		expectedStatus int
 	}{
 		// lines parameter
-		{"lines=100", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=100", u, EndpointLogsFile, n, filename) }, http.StatusOK},
-		{"lines=0 (default 1000)", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s", u, EndpointLogsFile, n, filename) }, http.StatusOK},
-		{"lines=-1 (all)", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=-1", u, EndpointLogsFile, n, filename) }, http.StatusOK},
+		{"lines=100", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=100", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
+		{"lines=0 (default 1000)", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
+		{"lines=-1 (all)", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=-1", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
 
 		// timeout parameter
-		{"timeout=5", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&timeout=5", u, EndpointLogsFile, n, filename) }, http.StatusOK},
-		{"timeout=30", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&timeout=30", u, EndpointLogsFile, n, filename) }, http.StatusOK},
+		{"timeout=5", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&timeout=5", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
+		{"timeout=30", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&timeout=30", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
 
 		// attempt_number parameter
-		{"attempt_number=0", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&attempt_number=0", u, EndpointLogsFile, n, filename) }, http.StatusOK},
-		{"attempt_number=1", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&attempt_number=1", u, EndpointLogsFile, n, filename) }, http.StatusOK},
+		{"attempt_number=0", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&attempt_number=0", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
+		{"attempt_number=1", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&attempt_number=1", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
 
 		// download_filename parameter
-		{"download_filename=custom.log", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&download_filename=custom.log", u, EndpointLogsFile, n, filename) }, http.StatusOK},
+		{"download_filename=custom.log", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&download_filename=custom.log", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
 
 		// filter_ansi_code parameter
-		{"filter_ansi_code=true", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&filter_ansi_code=true", u, EndpointLogsFile, n, filename) }, http.StatusOK},
-		{"filter_ansi_code=false", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&filter_ansi_code=false", u, EndpointLogsFile, n, filename) }, http.StatusOK},
+		{"filter_ansi_code=true", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&filter_ansi_code=true", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
+		{"filter_ansi_code=false", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&filter_ansi_code=false", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
 
 		// suffix parameter
-		{"suffix=out (default)", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&suffix=out", u, EndpointLogsFile, n, filename) }, http.StatusOK},
-		{"suffix=err", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&suffix=err", u, EndpointLogsFile, n, filename) }, http.StatusOK},
+		{"suffix=out (default)", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&suffix=out", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
+		{"suffix=err", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&suffix=err", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
 
 		// Combined parameters
-		{"lines+timeout+filter", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=50&timeout=10&filter_ansi_code=true", u, EndpointLogsFile, n, filename) }, http.StatusOK},
+		{"lines+timeout+filter", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=50&timeout=10&filter_ansi_code=true", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
 
 		// Missing mandatory parameters
 		{"missing node_id and node_ip", func(u, n string) string { return fmt.Sprintf("%s%s?filename=%s", u, EndpointLogsFile, filename) }, http.StatusBadRequest},
@@ -212,24 +247,44 @@ func testLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Names
 		{"missing both", func(u, n string) string { return fmt.Sprintf("%s%s", u, EndpointLogsFile) }, http.StatusBadRequest},
 
 		// Invalid parameters
-		{"invalid lines (string)", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=abc", u, EndpointLogsFile, n, filename) }, http.StatusBadRequest},
-		{"invalid timeout (string)", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&timeout=invalid", u, EndpointLogsFile, n, filename) }, http.StatusBadRequest},
-		{"invalid attempt_number (string)", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&attempt_number=xyz", u, EndpointLogsFile, n, filename) }, http.StatusBadRequest},
-		{"invalid suffix", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&suffix=invalid", u, EndpointLogsFile, n, filename) }, http.StatusBadRequest},
+		{"invalid lines (string)", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=abc", u, EndpointLogsFile, n, filename)
+		}, http.StatusBadRequest},
+		{"invalid timeout (string)", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&timeout=invalid", u, EndpointLogsFile, n, filename)
+		}, http.StatusBadRequest},
+		{"invalid attempt_number (string)", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&attempt_number=xyz", u, EndpointLogsFile, n, filename)
+		}, http.StatusBadRequest},
+		{"invalid suffix", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&suffix=invalid", u, EndpointLogsFile, n, filename)
+		}, http.StatusBadRequest},
 		// NOTE: Ray Dashboard will return 500 (Internal Server Error) for the file not found error
 		// ref: https://github.com/ray-project/ray/blob/68d01c4c48a59c7768ec9c2359a1859966c446b6/python/ray/dashboard/modules/state/state_head.py#L282-L284
-		{"file not found", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=nonexistent.log", u, EndpointLogsFile, n) }, http.StatusInternalServerError},
+		{"file not found", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=nonexistent.log", u, EndpointLogsFile, n)
+		}, http.StatusInternalServerError},
 		{"task_id invalid (not found)", func(u, n string) string { return fmt.Sprintf("%s%s?task_id=nonexistent-task-id", u, EndpointLogsFile) }, http.StatusInternalServerError},
-		{"node_ip invalid (non-existent)", func(u, n string) string { return fmt.Sprintf("%s%s?node_ip=192.168.255.255&filename=%s", u, EndpointLogsFile, filename) }, http.StatusInternalServerError},
+		{"node_ip invalid (non-existent)", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_ip=192.168.255.255&filename=%s", u, EndpointLogsFile, filename)
+		}, http.StatusInternalServerError},
 		{"pid invalid (string)", func(u, n string) string { return fmt.Sprintf("%s%s?pid=abc&node_id=%s", u, EndpointLogsFile, n) }, http.StatusBadRequest},
 		{"pid non-existent", func(u, n string) string { return fmt.Sprintf("%s%s?pid=999999&node_id=%s", u, EndpointLogsFile, n) }, http.StatusInternalServerError},
 
 		// Path traversal attacks
-		{"traversal ../etc/passwd", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=../etc/passwd", u, EndpointLogsFile, n) }, http.StatusBadRequest},
+		{"traversal ../etc/passwd", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=../etc/passwd", u, EndpointLogsFile, n)
+		}, http.StatusBadRequest},
 		{"traversal ..", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=..", u, EndpointLogsFile, n) }, http.StatusBadRequest},
-		{"traversal /etc/passwd", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=/etc/passwd", u, EndpointLogsFile, n) }, http.StatusBadRequest},
-		{"traversal ../../secret", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=../../secret", u, EndpointLogsFile, n) }, http.StatusBadRequest},
-		{"traversal in node_id", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=../evil&filename=%s", u, EndpointLogsFile, filename) }, http.StatusBadRequest},
+		{"traversal /etc/passwd", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=/etc/passwd", u, EndpointLogsFile, n)
+		}, http.StatusBadRequest},
+		{"traversal ../../secret", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=../../secret", u, EndpointLogsFile, n)
+		}, http.StatusBadRequest},
+		{"traversal in node_id", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=../evil&filename=%s", u, EndpointLogsFile, filename)
+		}, http.StatusBadRequest},
 	}
 
 	for _, tc := range logFileTestCases {
@@ -432,33 +487,61 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 		expectedStatus int
 	}{
 		// Basic parameters
-		{"lines=100", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=100", u, EndpointLogsFile, n, filename) }, http.StatusOK},
-		{"lines=0 (default 1000)", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s", u, EndpointLogsFile, n, filename) }, http.StatusOK},
-		{"lines=-1 (all)", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=-1", u, EndpointLogsFile, n, filename) }, http.StatusOK},
+		{"lines=100", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=100", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
+		{"lines=0 (default 1000)", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
+		{"lines=-1 (all)", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=-1", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
 
 		// timeout parameter
 		// NOTE: timeout feature is not yet implemented, we just accept and validate the timeout parameter
-		{"timeout=5", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&timeout=5", u, EndpointLogsFile, n, filename) }, http.StatusOK},
-		{"timeout=30", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&timeout=30", u, EndpointLogsFile, n, filename) }, http.StatusOK},
+		{"timeout=5", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&timeout=5", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
+		{"timeout=30", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&timeout=30", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
 
 		// attempt_number parameter
-		{"attempt_number=0", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&attempt_number=0", u, EndpointLogsFile, n, filename) }, http.StatusOK},
-		{"attempt_number=1 (not found)", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&attempt_number=1", u, EndpointLogsFile, n, filename) }, http.StatusNotFound},
+		{"attempt_number=0", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&attempt_number=0", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
+		{"attempt_number=1 (not found)", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&attempt_number=1", u, EndpointLogsFile, n, filename)
+		}, http.StatusNotFound},
 
 		// download_filename parameter
-		{"download_filename=custom.log", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&download_filename=custom.log", u, EndpointLogsFile, n, filename) }, http.StatusOK},
+		{"download_filename=custom.log", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&download_filename=custom.log", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
 
 		// filter_ansi_code parameter
-		{"filter_ansi_code=true", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&filter_ansi_code=true", u, EndpointLogsFile, n, filename) }, http.StatusOK},
-		{"filter_ansi_code=false", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&filter_ansi_code=false", u, EndpointLogsFile, n, filename) }, http.StatusOK},
+		{"filter_ansi_code=true", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&filter_ansi_code=true", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
+		{"filter_ansi_code=false", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&filter_ansi_code=false", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
 
 		// suffix parameter
-		{"suffix=out (default)", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&suffix=out", u, EndpointLogsFile, n, filename) }, http.StatusOK},
-		{"suffix=err", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&suffix=err", u, EndpointLogsFile, n, filename) }, http.StatusOK},
+		{"suffix=out (default)", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&suffix=out", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
+		{"suffix=err", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&suffix=err", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
 
 		// Combined parameters
-		{"lines+timeout+filter", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=50&timeout=10&filter_ansi_code=true", u, EndpointLogsFile, n, filename) }, http.StatusOK},
-		{"all parameters", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=100&timeout=15&attempt_number=0&download_filename=custom.log&filter_ansi_code=true", u, EndpointLogsFile, n, filename) }, http.StatusOK},
+		{"lines+timeout+filter", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=50&timeout=10&filter_ansi_code=true", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
+		{"all parameters", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=100&timeout=15&attempt_number=0&download_filename=custom.log&filter_ansi_code=true", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
 
 		// Missing mandatory parameters
 		{"missing node_id and node_ip", func(u, n string) string { return fmt.Sprintf("%s%s?filename=%s", u, EndpointLogsFile, filename) }, http.StatusBadRequest},
@@ -466,23 +549,43 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 		{"missing both", func(u, n string) string { return fmt.Sprintf("%s%s", u, EndpointLogsFile) }, http.StatusBadRequest},
 
 		// Invalid parameters
-		{"invalid lines (string)", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=abc", u, EndpointLogsFile, n, filename) }, http.StatusBadRequest},
-		{"invalid timeout (string)", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&timeout=invalid", u, EndpointLogsFile, n, filename) }, http.StatusBadRequest},
-		{"invalid attempt_number (string)", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&attempt_number=xyz", u, EndpointLogsFile, n, filename) }, http.StatusBadRequest},
-		{"file not found", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=nonexistent.log", u, EndpointLogsFile, n) }, http.StatusNotFound},
-		{"invalid suffix", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&suffix=invalid", u, EndpointLogsFile, n, filename) }, http.StatusBadRequest},
+		{"invalid lines (string)", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=abc", u, EndpointLogsFile, n, filename)
+		}, http.StatusBadRequest},
+		{"invalid timeout (string)", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&timeout=invalid", u, EndpointLogsFile, n, filename)
+		}, http.StatusBadRequest},
+		{"invalid attempt_number (string)", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&attempt_number=xyz", u, EndpointLogsFile, n, filename)
+		}, http.StatusBadRequest},
+		{"file not found", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=nonexistent.log", u, EndpointLogsFile, n)
+		}, http.StatusNotFound},
+		{"invalid suffix", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&suffix=invalid", u, EndpointLogsFile, n, filename)
+		}, http.StatusBadRequest},
 		{"task_id invalid (not found)", func(u, n string) string { return fmt.Sprintf("%s%s?task_id=nonexistent-task-id", u, EndpointLogsFile) }, http.StatusBadRequest},
 		{"non-existent pid", func(u, n string) string { return fmt.Sprintf("%s%s?pid=999999&node_id=%s", u, EndpointLogsFile, n) }, http.StatusNotFound},
 
 		// node_ip parameter tests
-		{"node_ip invalid (non-existent)", func(u, n string) string { return fmt.Sprintf("%s%s?node_ip=192.168.255.255&filename=%s", u, EndpointLogsFile, filename) }, http.StatusNotFound},
+		{"node_ip invalid (non-existent)", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_ip=192.168.255.255&filename=%s", u, EndpointLogsFile, filename)
+		}, http.StatusNotFound},
 
 		// Path traversal attacks
-		{"traversal ../etc/passwd", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=../etc/passwd", u, EndpointLogsFile, n) }, http.StatusBadRequest},
+		{"traversal ../etc/passwd", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=../etc/passwd", u, EndpointLogsFile, n)
+		}, http.StatusBadRequest},
 		{"traversal ..", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=..", u, EndpointLogsFile, n) }, http.StatusBadRequest},
-		{"traversal /etc/passwd", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=/etc/passwd", u, EndpointLogsFile, n) }, http.StatusBadRequest},
-		{"traversal ../../secret", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=../../secret", u, EndpointLogsFile, n) }, http.StatusBadRequest},
-		{"traversal in node_id", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=../evil&filename=%s", u, EndpointLogsFile, filename) }, http.StatusBadRequest},
+		{"traversal /etc/passwd", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=/etc/passwd", u, EndpointLogsFile, n)
+		}, http.StatusBadRequest},
+		{"traversal ../../secret", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=../../secret", u, EndpointLogsFile, n)
+		}, http.StatusBadRequest},
+		{"traversal in node_id", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=../evil&filename=%s", u, EndpointLogsFile, filename)
+		}, http.StatusBadRequest},
 	}
 
 	for _, tc := range logFileTestCases {
@@ -2118,4 +2221,127 @@ func testEventsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namesp
 
 	DeleteS3Bucket(test, g, s3Client)
 	LogWithTimestamp(test.T(), "Dead cluster events endpoint tests completed")
+}
+
+func testLiveClusterStatus(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
+	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
+	ApplyHistoryServer(test, g, namespace, "")
+	historyServerURL := GetHistoryServerURL(test, g, namespace)
+
+	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
+	g.Expect(clusterInfo.SessionName).To(Equal(LiveSessionName), "Live cluster should have sessionName='live'")
+
+	client := CreateHTTPClientWithCookieJar(g)
+	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
+
+	test.T().Run("should proxy /api/cluster_status to live clusters", func(t *testing.T) {
+		g := NewWithT(t)
+		g.Eventually(func(gg Gomega) {
+			clusterStatusURL := fmt.Sprintf("%s%s", historyServerURL, EndpointClusterStatus)
+			resp, err := client.Get(clusterStatusURL)
+			gg.Expect(err).NotTo(HaveOccurred())
+			defer resp.Body.Close()
+			gg.Expect(resp.StatusCode).To(Equal(http.StatusOK))
+
+			body, err := io.ReadAll(resp.Body)
+			gg.Expect(err).NotTo(HaveOccurred())
+			gg.Expect(len(body)).To(BeNumerically(">", 0))
+
+			var response historyserver.ClusterStatusResponse
+			err = json.Unmarshal(body, &response)
+			gg.Expect(err).NotTo(HaveOccurred())
+			gg.Expect(response.Result).To(BeTrue())
+			gg.Expect(response.Msg).To(Equal("Got cluster status."))
+			gg.Expect(response.Data.AutoscalingError).To(BeNil())
+		}, TestTimeoutShort).Should(Succeed())
+	})
+
+	test.T().Run("should proxy for /api/cluster_status?format=1", func(t *testing.T) {
+		g := NewWithT(t)
+		g.Eventually(func(gg Gomega) {
+			clusterStatusURL := fmt.Sprintf("%s%s?format=1", historyServerURL, EndpointClusterStatus)
+			resp, err := client.Get(clusterStatusURL)
+			gg.Expect(err).NotTo(HaveOccurred())
+			defer resp.Body.Close()
+			gg.Expect(resp.StatusCode).To(Equal(http.StatusOK))
+
+			body, err := io.ReadAll(resp.Body)
+			gg.Expect(err).NotTo(HaveOccurred())
+			gg.Expect(len(body)).To(BeNumerically(">", 0))
+
+			var response historyserver.FormattedClusterStatusResponse
+			err = json.Unmarshal(body, &response)
+			gg.Expect(err).NotTo(HaveOccurred())
+			gg.Expect(response.Result).To(BeTrue())
+			gg.Expect(response.Msg).To(Equal("Got formatted cluster status."))
+			gg.Expect(response.Data.ClusterStatus).To(ContainSubstring("Autoscaler status"))
+		}, TestTimeoutShort).Should(Succeed())
+	})
+
+	DeleteS3Bucket(test, g, s3Client)
+	LogWithTimestamp(test.T(), "Live cluster status E2E test completed successfully")
+}
+
+func testDeadClusterStatus(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
+	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
+
+	DeleteRayClusterAndWait(test, g, namespace.Name, rayCluster.Name)
+
+	ApplyHistoryServer(test, g, namespace, "")
+	historyServerURL := GetHistoryServerURL(test, g, namespace)
+
+	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
+	g.Expect(clusterInfo.SessionName).NotTo(Equal(LiveSessionName))
+
+	client := CreateHTTPClientWithCookieJar(g)
+	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
+
+	test.T().Run("should return cluster status with /api/cluster_status", func(t *testing.T) {
+		g := NewWithT(t)
+		g.Eventually(func(gg Gomega) {
+			clusterStatusURL := fmt.Sprintf("%s%s", historyServerURL, EndpointClusterStatus)
+			resp, err := client.Get(clusterStatusURL)
+			gg.Expect(err).NotTo(HaveOccurred())
+			defer resp.Body.Close()
+			gg.Expect(resp.StatusCode).To(Equal(http.StatusOK))
+
+			body, err := io.ReadAll(resp.Body)
+			gg.Expect(err).NotTo(HaveOccurred())
+			gg.Expect(len(body)).To(BeNumerically(">", 0))
+
+			var response historyserver.ClusterStatusResponse
+			err = json.Unmarshal(body, &response)
+			gg.Expect(err).NotTo(HaveOccurred())
+			gg.Expect(response.Result).To(BeTrue())
+			gg.Expect(response.Msg).To(Equal("Got cluster status."))
+			gg.Expect(response.Data.AutoscalingError).To(BeNil())
+		}, TestTimeoutShort).Should(Succeed())
+	})
+
+	test.T().Run("should return formatted cluster status with /api/cluster_status?format=1", func(t *testing.T) {
+		g := NewWithT(t)
+		g.Eventually(func(gg Gomega) {
+			clusterStatusURL := fmt.Sprintf("%s%s?format=1", historyServerURL, EndpointClusterStatus)
+			resp, err := client.Get(clusterStatusURL)
+			gg.Expect(err).NotTo(HaveOccurred())
+			defer resp.Body.Close()
+			gg.Expect(resp.StatusCode).To(Equal(http.StatusOK))
+
+			body, err := io.ReadAll(resp.Body)
+			gg.Expect(err).NotTo(HaveOccurred())
+			gg.Expect(len(body)).To(BeNumerically(">", 0))
+
+			var response historyserver.FormattedClusterStatusResponse
+			err = json.Unmarshal(body, &response)
+			gg.Expect(err).NotTo(HaveOccurred())
+			gg.Expect(response.Result).To(BeTrue())
+			gg.Expect(response.Msg).To(Equal("Got formatted cluster status."))
+			gg.Expect(response.Data.ClusterStatus).To(ContainSubstring("Autoscaler status"))
+		}, TestTimeoutShort).Should(Succeed())
+	})
+
+	DeleteS3Bucket(test, g, s3Client)
+	LogWithTimestamp(test.T(), "Dead cluster status E2E test completed successfully")
 }
