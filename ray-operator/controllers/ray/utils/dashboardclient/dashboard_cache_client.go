@@ -69,7 +69,8 @@ func InitWorkerPool(ctx context.Context,
 
 		// It might be better to give a channel capacity because there would be a batch send after listing RayJobs from cache.
 		// Using zero capacity channel would be a bit of inefficient because each send operation would block.
-		taskQueue := chanx.NewUnboundedChanSize[*rayv1.RayJob](ctx, initBufferSize, initBufferSize, initBufferSize)
+		// Pass context.Background to let the process goroutine in UnboundedChan would not exit earlier during the closing.
+		taskQueue := chanx.NewUnboundedChanSize[*rayv1.RayJob](context.Background(), initBufferSize, initBufferSize, initBufferSize)
 
 		var cacheStorage *otter.Cache[string, *JobInfoCache]
 		cacheStorage, err = otter.New(&otter.Options[string, *JobInfoCache]{
