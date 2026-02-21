@@ -9,13 +9,34 @@ spec:
     import time
     ray.init()
 
-    @ray.remote(num_cpus=0.5)
+    # --- Scenario 1: Root-level NORMAL_TASK (single call) ---
+    @ray.remote(num_cpus=0.1)
     def my_task(x):
         # NOTE: Add this to ensure will produce log.out
         print(f'Processing {x}', flush=True)
         return x * 2
 
-    @ray.remote(num_cpus=0.5)
+    # --- Scenario 2: Nested tasks (parent spawns child) ---
+    # Tests lineage tree depth > 1: child_task is nested under parent_task.
+    @ray.remote(num_cpus=0.1)
+    def parent_task():
+        result = ray.get(child_task.remote())
+        return result
+
+    @ray.remote(num_cpus=0.1)
+    def child_task():
+        print('Child task', flush=True)
+        return 42
+
+    # --- Scenario 3: Multiple same-name tasks ---
+    # Tests GROUP merging in lineage: 3 calls to the same function
+    # are merged into a single GROUP node.
+    @ray.remote(num_cpus=0.1)
+    def repeated_task(x):
+        return x
+
+    # --- Scenario 4: Actor (creation + method calls) ---
+    @ray.remote(num_cpus=0.1)
     class Counter:
         def __init__(self):
             self.count = 0
@@ -27,16 +48,24 @@ spec:
         def get_count(self):
             return self.count
 
+    # Execute all scenarios:
     task_result = ray.get(my_task.remote(1))
     print(f'Task result: {task_result}')
 
+    nested_result = ray.get(parent_task.remote())
+    print(f'Nested result: {nested_result}')
+
+    refs = [repeated_task.remote(i) for i in range(3)]
+    results = ray.get(refs)
+    print(f'Repeated results: {results}')
+
     counter = Counter.remote()
-    for i in range(1):
+    for i in range(2):
         count = ray.get(counter.increment.remote())
         print(f'Counter: {count}')
-
     final_count = ray.get(counter.get_count.remote())
     print(f'Final count: {final_count}')
+
     print(f'Cluster resources: {ray.cluster_resources()}')
 
     # For now, events on the worker nodes aren't sent to the collector when calling ray.shutdown().
