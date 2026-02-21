@@ -31,7 +31,13 @@ type NestedTaskSummary struct {
 	Timestamp   *int64               `json:"timestamp"`
 	StateCounts map[string]int       `json:"state_counts"`
 	Children    []*NestedTaskSummary `json:"children"`
-	Link        *Link                `json:"link,omitempty"`
+	// Use `json:"link"` without omitempty so that GROUP nodes serialize as "link": null
+	// instead of omitting the field entirely. This matches Ray Dashboard's behavior:
+	// Ray's NestedTaskSummary defines `link: Optional[Link] = None`, and Python's
+	// dataclasses.asdict() serializes None as JSON null (never omits the field).
+	// GROUP nodes are created without a link, so they always have "link": null.
+	// Ref: https://github.com/ray-project/ray/blob/d0b1d151d8ea964a711e451d0ae736f8bf95b629/python/ray/util/state/common.py#L1001-L1018
+	Link *Link `json:"link"`
 }
 
 // TaskSummaries is the response for summary_by=lineage
@@ -121,14 +127,14 @@ func BuildLineageSummary(tasks []eventtypes.Task, actors []eventtypes.Actor) *Ta
 // Also tracks ACTOR_CREATION_TASK -> actorID mapping to determine actor ownership in the tree.
 // Ref: https://github.com/ray-project/ray/blob/d0b1d151d8ea964a711e451d0ae736f8bf95b629/python/ray/util/state/common.py#L1106-L1118
 func (b *lineageBuilder) indexData(tasks []eventtypes.Task, actors []eventtypes.Actor) {
-	for i, task := range tasks {
+	for _, task := range tasks {
 		// ACTOR_CREATION_TASK from TASK_DEFINITION_EVENT has no ActorID.
 		// Derive it from task_id: ffffffffffffffff{actorID}
+		// We modify the local copy (range value) instead of tasks[i] to avoid mutating the caller's slice.
 		// Ref: https://github.com/ray-project/ray/blob/36be009ae360788550e541d81806493f52963730/src/ray/common/id.cc#L171-L176
 		if task.TaskType == eventtypes.ACTOR_CREATION_TASK {
-			if strings.HasPrefix(task.TaskID, actorCreationTaskIDForActorIDPrefix) {
-				tasks[i].ActorID = task.TaskID[len(actorCreationTaskIDForActorIDPrefix):]
-				task = tasks[i]
+			if task.ActorID == "" && strings.HasPrefix(task.TaskID, actorCreationTaskIDForActorIDPrefix) {
+				task.ActorID = task.TaskID[len(actorCreationTaskIDForActorIDPrefix):]
 			}
 			b.actorCreationTaskIDForActorID[task.ActorID] = task.TaskID
 		}
@@ -248,6 +254,21 @@ func (b *lineageBuilder) getOrCreateActorGroup(actorID string) *NestedTaskSummar
 		return existing
 	}
 
+	// Look up the creation task for this actor. If it doesn't exist, return nil
+	// to skip this actor group entirely. This matches Ray's behavior:
+	// Ray's get_or_create_actor_task_group returns None when creation_task is missing.
+	// Ref: https://github.com/ray-project/ray/blob/d0b1d151d8ea964a711e451d0ae736f8bf95b629/python/ray/util/state/common.py#L1193-L1195
+	creationTaskID, hasCreationTask := b.actorCreationTaskIDForActorID[actorID]
+	if !hasCreationTask {
+		logrus.Debugf("Missing creation task for actor %s, skipping actor group", actorID)
+		return nil
+	}
+	creationTask, hasCreationTaskData := b.tasksByID[creationTaskID]
+	if !hasCreationTaskData {
+		logrus.Debugf("Missing task data for creation task %s of actor %s, skipping actor group", creationTaskID, actorID)
+		return nil
+	}
+
 	// Find actor name: prefer ReprName, fallback to ActorClass
 	var actorName string
 	if actor, ok := b.actorsByID[actorID]; ok {
@@ -259,14 +280,10 @@ func (b *lineageBuilder) getOrCreateActorGroup(actorID string) *NestedTaskSummar
 
 	// Fallback: extract class name from creation task's function name (e.g., "Counter.__init__" -> "Counter")
 	if actorName == "" {
-		if creationTaskID, ok := b.actorCreationTaskIDForActorID[actorID]; ok {
-			if creationTask, ok := b.tasksByID[creationTaskID]; ok {
-				funcName := creationTask.GetFuncName()
-				if funcName != "" {
-					parts := strings.Split(funcName, ".")
-					actorName = parts[0]
-				}
-			}
+		funcName := creationTask.GetFuncName()
+		if funcName != "" {
+			parts := strings.Split(funcName, ".")
+			actorName = parts[0]
 		}
 	}
 	if actorName == "" {
@@ -275,13 +292,9 @@ func (b *lineageBuilder) getOrCreateActorGroup(actorID string) *NestedTaskSummar
 
 	// Get timestamp from creation task
 	var timestamp *int64
-	if creationTaskID, ok := b.actorCreationTaskIDForActorID[actorID]; ok {
-		if creationTask, ok := b.tasksByID[creationTaskID]; ok {
-			if !creationTask.CreationTime.IsZero() {
-				ts := creationTask.CreationTime.UnixMilli()
-				timestamp = &ts
-			}
-		}
+	if !creationTask.CreationTime.IsZero() {
+		ts := creationTask.CreationTime.UnixMilli()
+		timestamp = &ts
 	}
 
 	group := &NestedTaskSummary{
@@ -295,18 +308,15 @@ func (b *lineageBuilder) getOrCreateActorGroup(actorID string) *NestedTaskSummar
 	}
 	b.taskGroupByID[key] = group
 
-	// Determine ACTOR entry's parent: same as its creation task's parent to match Ray's tree structure
-	if creationTaskID, ok := b.actorCreationTaskIDForActorID[actorID]; ok {
-		if creationTask, ok := b.tasksByID[creationTaskID]; ok {
-			parentID := creationTask.ParentTaskID
-			if parentID == "" || isDriverTaskID(parentID) {
-				b.summary = append(b.summary, group)
-			} else {
-				parent := b.getOrCreateTaskGroup(parentID)
-				if parent != nil {
-					parent.Children = append(parent.Children, group)
-				}
-			}
+	// Determine ACTOR entry's parent: same as its creation task's parent to match Ray's tree structure.
+	// creationTask is guaranteed to exist (early return above if missing).
+	parentID := creationTask.ParentTaskID
+	if parentID == "" || isDriverTaskID(parentID) {
+		b.summary = append(b.summary, group)
+	} else {
+		parent := b.getOrCreateTaskGroup(parentID)
+		if parent != nil {
+			parent.Children = append(parent.Children, group)
 		}
 	}
 

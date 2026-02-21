@@ -2252,10 +2252,50 @@ func verifyTaskSummarizeLineageRespSchema(test Test, g *WithT, resp map[string]a
 		g.Expect(ok).To(BeTrue(), "'summary' should be an array")
 		g.Expect(len(summary)).To(BeNumerically(">", 0), "should have at least one summary entry")
 
-		// Verify each NestedTaskSummary node.
+		// Verify each NestedTaskSummary node (schema check).
 		for _, entry := range summary {
 			verifyNestedTaskSummarySchema(test, g, entry)
 		}
+
+		// Verify lineage tree structural properties produced by rayjob.yaml scenarios.
+		// Walk the entire tree once to collect statistics, then assert.
+		stats := &lineageStats{
+			typeSeen:                  make(map[string]bool),
+			groupLinkAlwaysNull:       true,
+			nonGroupLinkAlwaysPresent: true,
+		}
+		for _, entry := range summary {
+			collectLineageStats(entry, stats)
+		}
+
+		// Check 1: All 5 node types must appear.
+		// rayjob.yaml produces NORMAL_TASK (my_task, parent_task, child_task, repeated_task),
+		// ACTOR_CREATION_TASK (Counter.__init__), ACTOR_TASK (Counter.increment, Counter.get_count),
+		// ACTOR (Counter group), and GROUP (repeated_task ×3, Counter.increment ×2).
+		for _, expectedType := range []string{"NORMAL_TASK", "ACTOR_CREATION_TASK", "ACTOR_TASK", "ACTOR", "GROUP"} {
+			g.Expect(stats.typeSeen).To(HaveKey(expectedType),
+				"lineage tree should contain node type %s", expectedType)
+		}
+
+		// Check 2: At least one NORMAL_TASK has non-empty children (Scenario 2: parent_task → child_task).
+		g.Expect(stats.hasNestedNormalTask).To(BeTrue(),
+			"lineage tree should have at least one NORMAL_TASK with children (nested tasks)")
+
+		// Check 3: At least one GROUP exists with >1 children (Scenario 3: repeated_task ×3).
+		g.Expect(stats.hasGroupWithMultipleChildren).To(BeTrue(),
+			"lineage tree should have at least one GROUP with multiple children (merged siblings)")
+
+		// Check 4: At least one ACTOR contains an ACTOR_CREATION_TASK child (Scenario 4: Counter).
+		g.Expect(stats.hasActorWithCreationTask).To(BeTrue(),
+			"lineage tree should have at least one ACTOR containing an ACTOR_CREATION_TASK child")
+
+		// Check 5: GROUP nodes have link=null (not a non-null object).
+		g.Expect(stats.groupLinkAlwaysNull).To(BeTrue(),
+			"GROUP nodes should have link=null, matching Ray Dashboard behavior")
+
+		// Check 6: Non-GROUP nodes (task/actor) have non-null link with type and id.
+		g.Expect(stats.nonGroupLinkAlwaysPresent).To(BeTrue(),
+			"non-GROUP nodes should have a non-null link with type and id")
 	}
 
 	LogWithTimestamp(test.T(), "Task summarize lineage response schema verification completed")
@@ -2300,6 +2340,75 @@ func verifyNestedTaskSummarySchema(test Test, g *WithT, entry any) {
 		linkType, ok := linkMap["type"].(string)
 		g.Expect(ok).To(BeTrue(), "'link.type' should be a string")
 		g.Expect(linkType).To(BeElementOf("task", "actor"))
+	}
+}
+
+// lineageStats holds statistics collected from a single walk of the lineage tree.
+// Used to verify that rayjob.yaml scenarios produced the expected tree structure.
+type lineageStats struct {
+	typeSeen                      map[string]bool // all node types encountered
+	hasNestedNormalTask           bool            // at least one NORMAL_TASK has non-empty children
+	hasGroupWithMultipleChildren  bool            // at least one GROUP has >1 children
+	hasActorWithCreationTask      bool            // at least one ACTOR contains ACTOR_CREATION_TASK child
+	groupLinkAlwaysNull           bool            // all GROUP nodes have link=null
+	nonGroupLinkAlwaysPresent     bool            // all non-GROUP nodes have non-null link
+}
+
+// collectLineageStats recursively walks a NestedTaskSummary node and updates stats.
+func collectLineageStats(entry any, stats *lineageStats) {
+	node, ok := entry.(map[string]any)
+	if !ok {
+		return
+	}
+
+	nodeType, _ := node["type"].(string)
+	stats.typeSeen[nodeType] = true
+
+	children, _ := node["children"].([]any)
+
+	// Check 2: NORMAL_TASK with non-empty children (nested tasks).
+	if nodeType == "NORMAL_TASK" && len(children) > 0 {
+		stats.hasNestedNormalTask = true
+	}
+
+	// Check 3: GROUP with >1 children (merged siblings).
+	if nodeType == "GROUP" && len(children) > 1 {
+		stats.hasGroupWithMultipleChildren = true
+	}
+
+	// Check 4: ACTOR contains at least one ACTOR_CREATION_TASK child.
+	if nodeType == "ACTOR" {
+		for _, child := range children {
+			if childNode, ok := child.(map[string]any); ok {
+				if childType, _ := childNode["type"].(string); childType == "ACTOR_CREATION_TASK" {
+					stats.hasActorWithCreationTask = true
+					break
+				}
+			}
+		}
+	}
+
+	// Check 5: GROUP link should be null.
+	if nodeType == "GROUP" {
+		link, exists := node["link"]
+		if !exists || link == nil {
+			// link is absent or null — correct
+		} else {
+			stats.groupLinkAlwaysNull = false
+		}
+	}
+
+	// Check 6: Non-GROUP nodes should have non-null link.
+	if nodeType != "GROUP" {
+		link, exists := node["link"]
+		if !exists || link == nil {
+			stats.nonGroupLinkAlwaysPresent = false
+		}
+	}
+
+	// Recurse into children.
+	for _, child := range children {
+		collectLineageStats(child, stats)
 	}
 }
 
