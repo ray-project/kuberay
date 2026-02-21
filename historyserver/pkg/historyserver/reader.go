@@ -9,11 +9,11 @@ import (
 	"io"
 	"net/http"
 	"path"
-	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
 
+	"github.com/bmatcuk/doublestar/v4"
 	eventtypes "github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
 	"github.com/sirupsen/logrus"
 
@@ -70,21 +70,21 @@ func (s *ServerHandler) listClusters(limit int) []utils.ClusterInfo {
 	return clusters
 }
 
-func (s *ServerHandler) _getNodeLogs(rayClusterNameID, sessionId, nodeId, prefix, glob string) ([]byte, error) {
+func (s *ServerHandler) _getNodeLogs(rayClusterNameID, sessionId, nodeId, folder, glob string) ([]byte, error) {
 	logPath := path.Join(sessionId, utils.RAY_SESSIONDIR_LOGDIR_NAME, nodeId)
-	if prefix != "" {
-		logPath = path.Join(logPath, prefix)
+	if folder != "" {
+		logPath = path.Join(logPath, folder)
 	}
 	files := s.reader.ListFiles(rayClusterNameID, logPath)
 
 	// Filter files by glob pattern if provided; otherwise use all files.
-	// Note: filepath.Match supports single-level wildcards (* and ?) but not **.
 	var matchedFiles []string
 	if glob == "" {
 		matchedFiles = files
 	} else {
 		for _, file := range files {
-			matched, err := filepath.Match(glob, file)
+			// doublestar.Match supports both single-level wildcards (* and ?) and ** for recursive matching.
+			matched, err := doublestar.Match(glob, file)
 			if err != nil {
 				return []byte{}, fmt.Errorf("invalid glob pattern %q matching against %q: %w", glob, file, err)
 			}
