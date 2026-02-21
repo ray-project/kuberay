@@ -12367,6 +12367,9 @@ spec:
                     default: 0
                     format: int32
                     type: integer
+                  ttlSecondsBeforeRunning:
+                    format: int32
+                    type: integer
                 type: object
               schedule:
                 type: string
