@@ -105,7 +105,7 @@ func BuildLineageSummary(tasks []eventtypes.Task, actors []eventtypes.Actor) *Ta
 	b.buildTree(tasks)
 
 	// Step 3: Merge siblings
-	b.summary = b.mergeSiblings(b.summary)
+	b.summary, _ = b.mergeSiblings(b.summary)
 
 	// Step 4 & 5: Calculate totals and sort
 	b.calculateTotals(b.summary)
@@ -324,58 +324,69 @@ func (b *lineageBuilder) getOrCreateActorGroup(actorID string) *NestedTaskSummar
 }
 
 // mergeSiblings groups children with the same name into GROUP nodes.
+// It also propagates the minimum timestamp from descendants upward, matching Ray's behavior:
+// if a child's subtree contains an earlier timestamp, the child's own timestamp is updated.
+// Returns the merged siblings and the minimum timestamp across all siblings (for upward propagation).
 // Ref: https://github.com/ray-project/ray/blob/d0b1d151d8ea964a711e451d0ae736f8bf95b629/python/ray/util/state/common.py#L1261-L1311
-func (b *lineageBuilder) mergeSiblings(siblings []*NestedTaskSummary) []*NestedTaskSummary {
+func (b *lineageBuilder) mergeSiblings(siblings []*NestedTaskSummary) ([]*NestedTaskSummary, *int64) {
 	if len(siblings) == 0 {
-		return siblings
+		return siblings, nil
 	}
 
-	// First, recursively merge children
-	for _, child := range siblings {
-		child.Children = b.mergeSiblings(child.Children)
-	}
-
-	// Group by name, preserving insertion order
-	groups := make(map[string][]*NestedTaskSummary)
+	// Group by name, preserving insertion order.
+	// For each child, first recursively merge its children and propagate min timestamp upward.
+	groups := make(map[string]*NestedTaskSummary)
 	order := make([]string, 0)
+	var minTimestamp *int64
+
 	for _, child := range siblings {
+		// Recursively merge children and propagate min timestamp upward.
+		var childMinTS *int64
+		child.Children, childMinTS = b.mergeSiblings(child.Children)
+		if childMinTS != nil && *childMinTS < getTimestamp(child) {
+			ts := *childMinTS
+			child.Timestamp = &ts
+		}
+
+		// Create temporary GROUP node for this name if not exists.
 		if _, exists := groups[child.Name]; !exists {
 			order = append(order, child.Name)
+			groups[child.Name] = &NestedTaskSummary{
+				Name: child.Name,
+				Key:  child.Name,
+				Type: "GROUP",
+			}
 		}
-		groups[child.Name] = append(groups[child.Name], child)
-	}
+		g := groups[child.Name]
+		g.Children = append(g.Children, child)
 
-	// Build result
-	result := make([]*NestedTaskSummary, 0, len(order))
-	for _, name := range order {
-		members := groups[name]
-		if len(members) == 1 {
-			// Single child: keep as-is
-			result = append(result, members[0])
-		} else {
-			// Multiple children with same name: create GROUP node
-			var minTimestamp *int64
-			for _, m := range members {
-				if m.Timestamp != nil {
-					if minTimestamp == nil || *m.Timestamp < *minTimestamp {
-						minTimestamp = m.Timestamp
-					}
+		// Track min timestamp for this group and overall.
+		if child.Timestamp != nil {
+			if g.Timestamp == nil || *child.Timestamp < *g.Timestamp {
+				ts := *child.Timestamp
+				g.Timestamp = &ts
+				if minTimestamp == nil || ts < *minTimestamp {
+					minTS := ts
+					minTimestamp = &minTS
 				}
 			}
-			groupNode := &NestedTaskSummary{
-				Name:        name,
-				Key:         name, // GROUP uses name as key
-				Type:        "GROUP",
-				Timestamp:   minTimestamp,
-				StateCounts: make(map[string]int),
-				Children:    members,
-				// GROUP nodes don't have a link
-			}
-			result = append(result, groupNode)
 		}
 	}
 
-	return result
+	// Build result: groups with >1 children stay as GROUP, single-child groups unwrap.
+	result := make([]*NestedTaskSummary, 0, len(order))
+	for _, name := range order {
+		g := groups[name]
+		if len(g.Children) == 1 {
+			result = append(result, g.Children[0])
+		} else {
+			g.StateCounts = make(map[string]int)
+			// GROUP nodes don't have a link
+			result = append(result, g)
+		}
+	}
+
+	return result, minTimestamp
 }
 
 // calculateTotals recursively sums children's state_counts into parent nodes.
