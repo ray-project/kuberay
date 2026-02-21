@@ -141,12 +141,7 @@ func (w *WorkerPool) Start(ctx context.Context) error {
 
 					// The task queue is unbounded, so the send operation will never block.
 					copiedRayJob := rayJob.DeepCopy()
-					select {
-					case <-ctx.Done():
-						logger.Info("Async job info query producer goroutine exiting...")
-						return
-					case w.taskQueue.In <- copiedRayJob:
-					}
+					w.taskQueue.In <- copiedRayJob
 				}
 			}
 		}
@@ -156,18 +151,13 @@ func (w *WorkerPool) Start(ctx context.Context) error {
 		wg.Go(func() {
 			func(workerID int) {
 				for {
-					select {
-					case <-ctx.Done():
-						logger.Info("worker exiting...", "workerID", workerID)
+					rayJobInstance, ok := <-w.taskQueue.Out
+					if !ok {
+						logger.Info("worker exiting from a closed channel", "workerID", workerID)
 						return
-					case rayJobInstance, ok := <-w.taskQueue.Out:
-						if !ok {
-							logger.Info("worker exiting from a closed channel", "workerID", workerID)
-							return
-						}
-
-						w.processRayJob(ctx, rayJobInstance)
 					}
+
+					w.processRayJob(ctx, rayJobInstance)
 				}
 			}(i)
 		})
