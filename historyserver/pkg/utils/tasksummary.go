@@ -64,7 +64,7 @@ const actorCreationTaskIDForActorIDPrefix = "ffffffffffffffff"
 // Ref: https://github.com/ray-project/ray/blob/f3d444ab01279a3870033fb4d34314cd8c987b22/python/ray/util/state/common.py#L1098-L1118
 type lineageBuilder struct {
 	tasksByID                     map[string]eventtypes.Task  // taskID -> Task
-	actorsByID                    map[string]eventtypes.Actor // actorID -> Actor for name resolution
+	actorDict                     map[string]eventtypes.Actor // actorID -> Actor for name resolution
 	actorCreationTaskIDForActorID map[string]string           // actorID -> creation taskID (to find actor's parent in lineage)
 	taskGroupByID                 map[string]*NestedTaskSummary
 	summary                       []*NestedTaskSummary
@@ -80,7 +80,7 @@ func isDriverTaskID(taskID string) bool {
 	return taskID != "" && strings.HasPrefix(taskID, DriverTaskIDPrefix)
 }
 
-// BuildLineageSummary constructs a hierarchical task summary following Ray's lineage algorithm.
+// ToSummaryByLineage constructs a hierarchical task summary following Ray's lineage algorithm.
 // The algorithm has 5 steps:
 //  1. Index all tasks by ID and track actor creation tasks
 //  2. Build tree structure based on task ownership (actor tasks -> actor entry, others -> parent task)
@@ -89,10 +89,10 @@ func isDriverTaskID(taskID string) bool {
 //  5. Sort by running > pending > failed > timestamp > actor_creation
 //
 // Ref: https://github.com/ray-project/ray/blob/d0b1d151d8ea964a711e451d0ae736f8bf95b629/python/ray/util/state/common.py#L1075-L1375
-func BuildLineageSummary(tasks []eventtypes.Task, actors []eventtypes.Actor) *TaskSummaries {
+func ToSummaryByLineage(tasks []eventtypes.Task, actors []eventtypes.Actor) *TaskSummaries {
 	b := &lineageBuilder{
 		tasksByID:                     make(map[string]eventtypes.Task),
-		actorsByID:                    make(map[string]eventtypes.Actor),
+		actorDict:                     make(map[string]eventtypes.Actor),
 		actorCreationTaskIDForActorID: make(map[string]string),
 		taskGroupByID:                 make(map[string]*NestedTaskSummary),
 		summary:                       make([]*NestedTaskSummary, 0),
@@ -105,11 +105,11 @@ func BuildLineageSummary(tasks []eventtypes.Task, actors []eventtypes.Actor) *Ta
 	b.buildTree(tasks)
 
 	// Step 3: Merge siblings
-	b.summary, _ = b.mergeSiblings(b.summary)
+	b.summary, _ = b.mergeSiblingsForTaskGroup(b.summary)
 
 	// Step 4 & 5: Calculate totals and sort
-	b.calculateTotals(b.summary)
-	b.sortGroups(b.summary)
+	b.calcTotalForTaskGroup(b.summary)
+	b.sortTaskGroups(b.summary)
 
 	logrus.Debugf("Built lineage summary: %d root nodes, %d tasks, %d actor tasks, %d actors",
 		len(b.summary), b.totalTasks, b.totalActorTasks, b.totalActorScheduled)
@@ -141,7 +141,7 @@ func (b *lineageBuilder) indexData(tasks []eventtypes.Task, actors []eventtypes.
 		b.tasksByID[task.TaskID] = task
 	}
 	for _, actor := range actors {
-		b.actorsByID[actor.ActorID] = actor
+		b.actorDict[actor.ActorID] = actor
 	}
 }
 
@@ -195,9 +195,9 @@ func (b *lineageBuilder) getOrCreateTaskGroup(taskID string) *NestedTaskSummary 
 	}
 
 	// Prefer user-defined task name, fallback to function call string to match Ray Dashboard
-	name := task.GetTaskName()
-	if name == "" {
-		name = task.GetFuncName()
+	funcName := task.GetTaskName()
+	if funcName == "" {
+		funcName = task.GetFuncName()
 	}
 
 	var timestamp *int64
@@ -207,7 +207,7 @@ func (b *lineageBuilder) getOrCreateTaskGroup(taskID string) *NestedTaskSummary 
 	}
 
 	group := &NestedTaskSummary{
-		Name:        name,
+		Name:        funcName,
 		Key:         taskID,
 		Type:        string(task.TaskType),
 		Timestamp:   timestamp,
@@ -220,20 +220,20 @@ func (b *lineageBuilder) getOrCreateTaskGroup(taskID string) *NestedTaskSummary 
 	// Determine parent based on task type:
 	// Actor-related tasks are grouped under their ACTOR entry, not their parent task.
 	if task.TaskType == eventtypes.ACTOR_TASK || task.TaskType == eventtypes.ACTOR_CREATION_TASK {
-		parent := b.getOrCreateActorGroup(task.ActorID)
-		if parent != nil {
-			parent.Children = append(parent.Children, group)
+		parentTaskGroup := b.getOrCreateActorTaskGroup(task.ActorID)
+		if parentTaskGroup != nil {
+			parentTaskGroup.Children = append(parentTaskGroup.Children, group)
 		}
 	} else {
 		// Normal tasks: place under parent task, or at root if parent is driver/missing
-		parentID := task.ParentTaskID
-		if parentID == "" || isDriverTaskID(parentID) {
+		parentTaskID := task.ParentTaskID
+		if parentTaskID == "" || isDriverTaskID(parentTaskID) {
 			// No parent or parent is driver -> root level
 			b.summary = append(b.summary, group)
 		} else {
-			parent := b.getOrCreateTaskGroup(parentID)
-			if parent != nil {
-				parent.Children = append(parent.Children, group)
+			parentTaskGroup := b.getOrCreateTaskGroup(parentTaskID)
+			if parentTaskGroup != nil {
+				parentTaskGroup.Children = append(parentTaskGroup.Children, group)
 			}
 		}
 	}
@@ -241,14 +241,14 @@ func (b *lineageBuilder) getOrCreateTaskGroup(taskID string) *NestedTaskSummary 
 	return group
 }
 
-// getOrCreateActorGroup returns the existing ACTOR entry, or creates one.
+// getOrCreateActorTaskGroup returns the existing ACTOR entry, or creates one.
 // The ACTOR entry acts as a container for all actor-related tasks (creation + method calls).
 // Its position in the tree is determined by the creation task's parent, matching Ray's behavior.
 //
 // Actor name resolution order: ReprName -> ActorClass -> creation task's GetFuncName() -> "UnknownActor"
 //
 // Ref: https://github.com/ray-project/ray/blob/d0b1d151d8ea964a711e451d0ae736f8bf95b629/python/ray/util/state/common.py#L1179-L1236
-func (b *lineageBuilder) getOrCreateActorGroup(actorID string) *NestedTaskSummary {
+func (b *lineageBuilder) getOrCreateActorTaskGroup(actorID string) *NestedTaskSummary {
 	key := "actor:" + actorID
 	if existing, ok := b.taskGroupByID[key]; ok {
 		return existing
@@ -271,7 +271,7 @@ func (b *lineageBuilder) getOrCreateActorGroup(actorID string) *NestedTaskSummar
 
 	// Find actor name: prefer ReprName, fallback to ActorClass
 	var actorName string
-	if actor, ok := b.actorsByID[actorID]; ok {
+	if actor, ok := b.actorDict[actorID]; ok {
 		actorName = actor.ReprName
 		if actorName == "" {
 			actorName = actor.ActorClass
@@ -310,25 +310,25 @@ func (b *lineageBuilder) getOrCreateActorGroup(actorID string) *NestedTaskSummar
 
 	// Determine ACTOR entry's parent: same as its creation task's parent to match Ray's tree structure.
 	// creationTask is guaranteed to exist (early return above if missing).
-	parentID := creationTask.ParentTaskID
-	if parentID == "" || isDriverTaskID(parentID) {
+	parentTaskID := creationTask.ParentTaskID
+	if parentTaskID == "" || isDriverTaskID(parentTaskID) {
 		b.summary = append(b.summary, group)
 	} else {
-		parent := b.getOrCreateTaskGroup(parentID)
-		if parent != nil {
-			parent.Children = append(parent.Children, group)
+		parentTaskGroup := b.getOrCreateTaskGroup(parentTaskID)
+		if parentTaskGroup != nil {
+			parentTaskGroup.Children = append(parentTaskGroup.Children, group)
 		}
 	}
 
 	return group
 }
 
-// mergeSiblings groups children with the same name into GROUP nodes.
+// mergeSiblingsForTaskGroup groups children with the same name into GROUP nodes.
 // It also propagates the minimum timestamp from descendants upward, matching Ray's behavior:
 // if a child's subtree contains an earlier timestamp, the child's own timestamp is updated.
 // Returns the merged siblings and the minimum timestamp across all siblings (for upward propagation).
 // Ref: https://github.com/ray-project/ray/blob/d0b1d151d8ea964a711e451d0ae736f8bf95b629/python/ray/util/state/common.py#L1261-L1311
-func (b *lineageBuilder) mergeSiblings(siblings []*NestedTaskSummary) ([]*NestedTaskSummary, *int64) {
+func (b *lineageBuilder) mergeSiblingsForTaskGroup(siblings []*NestedTaskSummary) ([]*NestedTaskSummary, *int64) {
 	if len(siblings) == 0 {
 		return siblings, nil
 	}
@@ -341,10 +341,10 @@ func (b *lineageBuilder) mergeSiblings(siblings []*NestedTaskSummary) ([]*Nested
 
 	for _, child := range siblings {
 		// Recursively merge children and propagate min timestamp upward.
-		var childMinTS *int64
-		child.Children, childMinTS = b.mergeSiblings(child.Children)
-		if childMinTS != nil && *childMinTS < getTimestamp(child) {
-			ts := *childMinTS
+		var childMinTimestamp *int64
+		child.Children, childMinTimestamp = b.mergeSiblingsForTaskGroup(child.Children)
+		if childMinTimestamp != nil && *childMinTimestamp < getTimestamp(child) {
+			ts := *childMinTimestamp
 			child.Timestamp = &ts
 		}
 
@@ -389,15 +389,15 @@ func (b *lineageBuilder) mergeSiblings(siblings []*NestedTaskSummary) ([]*Nested
 	return result, minTimestamp
 }
 
-// calculateTotals recursively sums children's state_counts into parent nodes.
+// calcTotalForTaskGroup recursively sums children's state_counts into parent nodes.
 // This allows parent/GROUP nodes to display aggregated state information
 // (e.g., a GROUP shows "3 RUNNING, 2 FINISHED" from its children).
 // Ref: https://github.com/ray-project/ray/blob/d0b1d151d8ea964a711e451d0ae736f8bf95b629/python/ray/util/state/common.py#L1343-L1363
-func (b *lineageBuilder) calculateTotals(groups []*NestedTaskSummary) {
+func (b *lineageBuilder) calcTotalForTaskGroup(groups []*NestedTaskSummary) {
 	for _, group := range groups {
 		if len(group.Children) > 0 {
 			// First, calculate totals for children
-			b.calculateTotals(group.Children)
+			b.calcTotalForTaskGroup(group.Children)
 
 			// Then, sum children's state_counts into this group
 			for _, child := range group.Children {
@@ -409,30 +409,30 @@ func (b *lineageBuilder) calculateTotals(groups []*NestedTaskSummary) {
 	}
 }
 
-// sortGroups sorts nodes to surface the most important tasks first.
+// sortTaskGroups sorts nodes to surface the most important tasks first.
 // Priority: running > pending > failed > earliest timestamp > actor_creation.
 // This matches Ray Dashboard's sort order so users see active tasks at the top.
 // Ref: https://github.com/ray-project/ray/blob/d0b1d151d8ea964a711e451d0ae736f8bf95b629/python/ray/util/state/common.py#L1331-L1341
-func (b *lineageBuilder) sortGroups(groups []*NestedTaskSummary) {
+func (b *lineageBuilder) sortTaskGroups(groups []*NestedTaskSummary) {
 	// First, recursively sort children
 	for _, group := range groups {
 		if len(group.Children) > 0 {
-			b.sortGroups(group.Children)
+			b.sortTaskGroups(group.Children)
 		}
 	}
 
 	// Sort this level
 	sort.SliceStable(groups, func(i, j int) bool {
 		// 1. Running tasks first (descending)
-		runI := countRunning(groups[i])
-		runJ := countRunning(groups[j])
+		runI := getRunningTasksCount(groups[i])
+		runJ := getRunningTasksCount(groups[j])
 		if runI != runJ {
 			return runI > runJ
 		}
 
 		// 2. Pending tasks (descending)
-		pendI := countPending(groups[i])
-		pendJ := countPending(groups[j])
+		pendI := getPendingTasksCount(groups[i])
+		pendJ := getPendingTasksCount(groups[j])
 		if pendI != pendJ {
 			return pendI > pendJ
 		}
@@ -456,17 +456,17 @@ func (b *lineageBuilder) sortGroups(groups []*NestedTaskSummary) {
 	})
 }
 
-// countRunning returns the total count of all running sub-states.
+// getRunningTasksCount returns the total count of all running sub-states.
 // Ray has multiple running states (RUNNING, RUNNING_IN_RAY_GET, RUNNING_IN_RAY_WAIT).
-func countRunning(g *NestedTaskSummary) int {
+func getRunningTasksCount(g *NestedTaskSummary) int {
 	return g.StateCounts["RUNNING"] +
 		g.StateCounts["RUNNING_IN_RAY_GET"] +
 		g.StateCounts["RUNNING_IN_RAY_WAIT"]
 }
 
-// countPending returns the total count of all pending sub-states.
+// getPendingTasksCount returns the total count of all pending sub-states.
 // Ray has multiple pending states depending on what the task is waiting for.
-func countPending(g *NestedTaskSummary) int {
+func getPendingTasksCount(g *NestedTaskSummary) int {
 	return g.StateCounts["PENDING_ARGS_AVAIL"] +
 		g.StateCounts["PENDING_NODE_ASSIGNMENT"] +
 		g.StateCounts["PENDING_OBJ_STORE_MEM_AVAIL"] +

@@ -1169,7 +1169,7 @@ func (s *ServerHandler) getTaskSummarize(req *restful.Request, resp *restful.Res
 	var response interface{}
 	if summaryBy == "lineage" {
 		actors := s.eventHandler.GetActors(clusterSessionKey)
-		lineageSummary := utils.BuildLineageSummary(tasks, actors)
+		lineageSummary := utils.ToSummaryByLineage(tasks, actors)
 
 		response = map[string]interface{}{
 			"result": true,
