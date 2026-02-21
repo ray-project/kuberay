@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"path"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -69,16 +70,33 @@ func (s *ServerHandler) listClusters(limit int) []utils.ClusterInfo {
 	return clusters
 }
 
-func (s *ServerHandler) _getNodeLogs(rayClusterNameID, sessionId, nodeId, dir string) ([]byte, error) {
+func (s *ServerHandler) _getNodeLogs(rayClusterNameID, sessionId, nodeId, prefix, glob string) ([]byte, error) {
 	logPath := path.Join(sessionId, utils.RAY_SESSIONDIR_LOGDIR_NAME, nodeId)
-	if dir != "" {
-		logPath = path.Join(logPath, dir)
+	if prefix != "" {
+		logPath = path.Join(logPath, prefix)
 	}
 	files := s.reader.ListFiles(rayClusterNameID, logPath)
 
+	// Filter files by glob pattern if provided; otherwise use all files.
+	// Note: filepath.Match supports single-level wildcards (* and ?) but not **.
+	var matchedFiles []string
+	if glob == "" {
+		matchedFiles = files
+	} else {
+		for _, file := range files {
+			matched, err := filepath.Match(glob, file)
+			if err != nil {
+				return []byte{}, fmt.Errorf("invalid glob pattern %q matching against %q: %w", glob, file, err)
+			}
+			if matched {
+				matchedFiles = append(matchedFiles, file)
+			}
+		}
+	}
+
 	// Categorize log files to match Ray Dashboard API format.
 	// Ref: Ray Dashboard's LogsManager._categorize_log_files in log_manager.py
-	categorized := categorizeLogFiles(files)
+	categorized := categorizeLogFiles(matchedFiles)
 
 	ret := map[string]interface{}{
 		"result": true,

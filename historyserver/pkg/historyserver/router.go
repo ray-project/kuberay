@@ -130,7 +130,10 @@ func routerAPI(s *ServerHandler) {
 		Writes("")) // Placeholder for specific return type
 
 	ws.Route(ws.GET("/v0/logs").To(s.getNodeLogs).Filter(s.CookieHandle).
-		Doc("get appliations").Param(ws.QueryParameter("node_id", "node_id")).
+		Doc("get appliations").
+		Param(ws.QueryParameter("node_id", "node_id")).
+		Param(ws.QueryParameter("folder", "folder")).
+		Param(ws.QueryParameter("glob", "glob pattern")).
 		Writes("")) // Placeholder for specific return type
 	ws.Route(ws.GET("/v0/logs/file").To(s.getNodeLogFile).Filter(s.CookieHandle).
 		Doc("get logfile").
@@ -803,15 +806,15 @@ func (s *ServerHandler) getNodeLogs(req *restful.Request, resp *restful.Response
 		s.redirectRequest(req, resp)
 		return
 	}
-	folder := ""
+	var prefix, glob string
 	if req.QueryParameter("folder") != "" {
-		folder = req.QueryParameter("folder")
+		prefix = req.QueryParameter("folder")
 	}
 	if req.QueryParameter("glob") != "" {
-		folder = req.QueryParameter("glob")
-		folder = strings.TrimSuffix(folder, "*")
+		glob = req.QueryParameter("glob")
+		prefix = utils.ExtractGlobPrefix(glob)
 	}
-	data, err := s._getNodeLogs(clusterNameID+"_"+clusterNamespace, sessionName, req.QueryParameter("node_id"), folder)
+	data, err := s._getNodeLogs(clusterNameID+"_"+clusterNamespace, sessionName, req.QueryParameter("node_id"), prefix, glob)
 	if err != nil {
 		logrus.Errorf("Error: %v", err)
 		resp.WriteError(400, err)
