@@ -28,10 +28,6 @@ AuthMode describes the authentication mode for the Ray cluster.
 _Appears in:_
 - [AuthOptions](#authoptions)
 
-| Field | Description |
-| --- | --- |
-| `disabled` | AuthModeDisabled disables authentication.<br /> |
-| `token` | AuthModeToken enables token-based authentication.<br /> |
 
 
 #### AuthOptions
@@ -87,10 +83,6 @@ _Validation:_
 _Appears in:_
 - [AutoscalerOptions](#autoscaleroptions)
 
-| Field | Description |
-| --- | --- |
-| `v1` |  |
-| `v2` |  |
 
 
 #### ClusterUpgradeOptions
@@ -160,12 +152,6 @@ _Appears in:_
 - [DeletionPolicy](#deletionpolicy)
 - [DeletionRule](#deletionrule)
 
-| Field | Description |
-| --- | --- |
-| `DeleteCluster` |  |
-| `DeleteWorkers` |  |
-| `DeleteSelf` |  |
-| `DeleteNone` |  |
 
 
 #### DeletionRule
@@ -193,14 +179,17 @@ _Appears in:_
 DeletionStrategy configures automated cleanup after the RayJob reaches a terminal state.
 Two mutually exclusive styles are supported:
 
+
 	Legacy: provide both onSuccess and onFailure (deprecated; removal planned for 1.6.0). May be combined with shutdownAfterJobFinishes and (optionally) global TTLSecondsAfterFinished.
 	Rules: provide deletionRules (non-empty list). Rules mode is incompatible with shutdownAfterJobFinishes, legacy fields, and the global TTLSecondsAfterFinished (use per‑rule condition.ttlSeconds instead).
+
 
 Semantics:
   - A non-empty deletionRules selects rules mode; empty lists are treated as unset.
   - Legacy requires both onSuccess and onFailure; specifying only one is invalid.
   - Global TTLSecondsAfterFinished > 0 requires shutdownAfterJobFinishes=true; therefore it cannot be used with rules mode or with legacy alone (no shutdown).
   - Feature gate RayJobDeletionPolicy must be enabled when this block is present.
+
 
 Validation:
   - CRD XValidations prevent mixing legacy fields with deletionRules and enforce legacy completeness.
@@ -275,12 +264,6 @@ _Underlying type:_ _string_
 _Appears in:_
 - [RayJobSpec](#rayjobspec)
 
-| Field | Description |
-| --- | --- |
-| `K8sJobMode` |  |
-| `HTTPMode` |  |
-| `InteractiveMode` |  |
-| `SidecarMode` |  |
 
 
 #### RayCluster
@@ -359,10 +342,6 @@ _Validation:_
 _Appears in:_
 - [RayClusterUpgradeStrategy](#rayclusterupgradestrategy)
 
-| Field | Description |
-| --- | --- |
-| `Recreate` | During upgrade, Recreate strategy will delete all existing pods before creating new ones<br /> |
-| `None` | No new pod will be created while the strategy is set to None<br /> |
 
 
 #### RayCronJob
@@ -450,6 +429,7 @@ _Appears in:_
 | `entrypointNumCpus` _float_ | EntrypointNumCpus specifies the number of cpus to reserve for the entrypoint command. |  |  |
 | `entrypointNumGpus` _float_ | EntrypointNumGpus specifies the number of gpus to reserve for the entrypoint command. |  |  |
 | `ttlSecondsAfterFinished` _integer_ | TTLSecondsAfterFinished is the TTL to clean up RayCluster.<br />It's only working when ShutdownAfterJobFinishes set to true. | 0 |  |
+| `ttlSecondsBeforeRunning` _integer_ | TTLSecondsBeforeRunning is the TTL in seconds for a RayJob to reach the Running state<br />from when it is first initialized (StartTime). If the RayJob does not transition to<br />Running within this time, it will be marked as Failed.<br />This is useful for cleaning up jobs stuck in Initializing or Waiting states.<br />If not set, there is no TTL. Value must be a positive integer. |  |  |
 | `shutdownAfterJobFinishes` _boolean_ | ShutdownAfterJobFinishes will determine whether to delete the ray cluster once rayJob succeed or failed. |  |  |
 | `suspend` _boolean_ | suspend specifies whether the RayJob controller should create a RayCluster instance<br />If a job is applied with the suspend field set to true,<br />the RayCluster will not be created and will wait for the transition to false.<br />If the RayCluster is already created, it will be deleted.<br />In case of transition to false a new RayCluster will be created. |  |  |
 
@@ -534,11 +514,6 @@ _Underlying type:_ _string_
 _Appears in:_
 - [RayServiceUpgradeStrategy](#rayserviceupgradestrategy)
 
-| Field | Description |
-| --- | --- |
-| `NewClusterWithIncrementalUpgrade` | During upgrade, NewClusterWithIncrementalUpgrade strategy will create an upgraded cluster to gradually scale<br />and migrate traffic to using Gateway API.<br /> |
-| `NewCluster` | During upgrade, NewCluster strategy will create new upgraded cluster and switch to it when it becomes ready<br /> |
-| `None` | No new cluster will be created while the strategy is set to None<br /> |
 
 
 #### RedisCredential

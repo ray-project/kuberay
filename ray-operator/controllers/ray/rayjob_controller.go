@@ -193,6 +193,10 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			break
 		}
 
+		if shouldUpdate := checkTTLBeforeRunningAndUpdateStatusIfNeeded(ctx, rayJobInstance); shouldUpdate {
+			break
+		}
+
 		if r.options.BatchSchedulerManager != nil {
 			if scheduler, err := r.options.BatchSchedulerManager.GetScheduler(); err == nil {
 				if err := scheduler.DoBatchSchedulingOnSubmission(ctx, rayJobInstance); err != nil {
@@ -239,6 +243,10 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 
 		rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusRunning
 	case rayv1.JobDeploymentStatusWaiting:
+		if shouldUpdate := checkTTLBeforeRunningAndUpdateStatusIfNeeded(ctx, rayJobInstance); shouldUpdate {
+			break
+		}
+
 		// Try to get the Ray job id from rayJob.Spec.JobId
 		if rayJobInstance.Spec.JobId == "" {
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
@@ -1151,6 +1159,22 @@ func checkActiveDeadlineAndUpdateStatusIfNeeded(ctx context.Context, rayJob *ray
 	rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusFailed
 	rayJob.Status.Reason = rayv1.DeadlineExceeded
 	rayJob.Status.Message = fmt.Sprintf("The RayJob has passed the activeDeadlineSeconds. StartTime: %v. ActiveDeadlineSeconds: %d", rayJob.Status.StartTime, *rayJob.Spec.ActiveDeadlineSeconds)
+	return true
+}
+
+// checkTTLBeforeRunningAndUpdateStatusIfNeeded transitions the RayJob to Failed if it has not
+// reached the Running state within ttlSecondsBeforeRunning seconds of StartTime.
+func checkTTLBeforeRunningAndUpdateStatusIfNeeded(ctx context.Context, rayJob *rayv1.RayJob) bool {
+	logger := ctrl.LoggerFrom(ctx)
+
+	if rayJob.Spec.TTLSecondsBeforeRunning == nil || time.Now().Before(rayJob.Status.StartTime.Add(time.Duration(*rayJob.Spec.TTLSecondsBeforeRunning)*time.Second)) {
+		return false
+	}
+
+	logger.Info("The RayJob has passed the ttlSecondsBeforeRunning. Transition the status to `Failed`.", "StartTime", rayJob.Status.StartTime, "TTLSecondsBeforeRunning", *rayJob.Spec.TTLSecondsBeforeRunning)
+	rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusFailed
+	rayJob.Status.Reason = rayv1.DeadlineExceeded
+	rayJob.Status.Message = fmt.Sprintf("The RayJob has passed the ttlSecondsBeforeRunning. StartTime: %v. TTLSecondsBeforeRunning: %d", rayJob.Status.StartTime, *rayJob.Spec.TTLSecondsBeforeRunning)
 	return true
 }
 
