@@ -58,6 +58,10 @@ func TestHistoryServer(t *testing.T) {
 			testFunc: testLogStreamEndpoint,
 		},
 		{
+			name:     "Dead cluster: /api/v0/logs endpoint with glob pattern",
+			testFunc: testNodeLogsEndpointDeadCluster,
+		},
+		{
 			name:     "/api/v0/tasks/timeline endpoint (live cluster)",
 			testFunc: testTimelineEndpointLiveCluster,
 		},
@@ -936,6 +940,107 @@ func testLogStreamEndpoint(test Test, g *WithT, namespace *corev1.Namespace, s3C
 
 	DeleteS3Bucket(test, g, s3Client)
 	LogWithTimestamp(test.T(), "Log stream endpoint tests completed")
+}
+
+// testNodeLogsEndpointDeadCluster verifies that the /api/v0/logs endpoint correctly lists and filters
+// log files for a dead cluster using the glob and folder query parameters.
+//
+// The test follows these steps:
+// 1. Create a RayCluster and submit a Ray job.
+// 2. Delete RayCluster to trigger log upload to S3.
+// 3. Deploy the History Server and verify the cluster is listed as a dead session.
+// 4. Test listing logs with "raylet*" glob pattern.
+// 5. Test listing logs with a glob pattern that matches nothing.
+// 6. Delete S3 bucket to ensure test isolation.
+func testNodeLogsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
+	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
+
+	DeleteRayClusterAndWait(test, g, namespace.Name, rayCluster.Name)
+
+	ApplyHistoryServer(test, g, namespace, "")
+	historyServerURL := GetHistoryServerURL(test, g, namespace)
+
+	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
+	g.Expect(clusterInfo.SessionName).NotTo(Equal(LiveSessionName), "Cluster should be a dead session after deletion")
+
+	client := CreateHTTPClientWithCookieJar(g)
+	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
+
+	nodeID := GetOneOfNodeID(g, client, historyServerURL, false)
+
+	test.T().Run("glob=raylet* matches exactly raylet.out and raylet.err", func(t *testing.T) {
+		g := NewWithT(t)
+
+		logsURL := fmt.Sprintf("%s%s?node_id=%s&glob=%s", historyServerURL, EndpointLogs, nodeID, url.QueryEscape("raylet*"))
+		resp, err := client.Get(logsURL)
+		g.Expect(err).NotTo(HaveOccurred())
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(resp.StatusCode).To(Equal(http.StatusOK), "Expected OK, body: %s", string(body))
+
+		result := parseLogsResponse(body)
+		g.Expect(result).NotTo(BeNil(), "Response should be parseable, body: %s", string(body))
+
+		// raylet* matches only raylet.out and raylet.err, so only the "raylet" category should be present.
+		g.Expect(result).To(HaveLen(1), "Should only have the 'raylet' category, got: %v", result)
+		rayletFiles, _ := result["raylet"].([]interface{})
+		g.Expect(rayletFiles).To(ConsistOf("raylet.out", "raylet.err"),
+			"raylet* should match exactly raylet.out and raylet.err")
+		LogWithTimestamp(t, "glob=raylet* correctly returned %d raylet files", len(rayletFiles))
+	})
+
+	test.T().Run("glob pattern matching no files returns empty result", func(t *testing.T) {
+		g := NewWithT(t)
+
+		logsURL := fmt.Sprintf("%s%s?node_id=%s&glob=%s", historyServerURL, EndpointLogs, nodeID, url.QueryEscape("nonexistent-*.xyz"))
+		resp, err := client.Get(logsURL)
+		g.Expect(err).NotTo(HaveOccurred())
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(resp.StatusCode).To(Equal(http.StatusOK), "Expected OK even when glob matches nothing, body: %s", string(body))
+
+		result := parseLogsResponse(body)
+		g.Expect(result).NotTo(BeNil(), "Response should be parseable, body: %s", string(body))
+		g.Expect(countFiles(result)).To(Equal(0), "A glob matching no files should return an empty result")
+		LogWithTimestamp(t, "Non-matching glob correctly returned 0 files")
+	})
+
+	DeleteS3Bucket(test, g, s3Client)
+	LogWithTimestamp(test.T(), "Dead cluster /api/v0/logs glob endpoint tests completed")
+}
+
+// parseLogsResponse parses the /api/v0/logs response body and returns the categorized
+// file map from data.result. Returns nil on any parse failure.
+func parseLogsResponse(body []byte) map[string]interface{} {
+	var resp map[string]interface{}
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return nil
+	}
+	data, ok := resp["data"].(map[string]interface{})
+	if !ok {
+		return nil
+	}
+	result, ok := data["result"].(map[string]interface{})
+	if !ok {
+		return nil
+	}
+	return result
+}
+
+// countFiles counts the total number of file entries across all categories in the result map.
+func countFiles(result map[string]interface{}) int {
+	total := 0
+	for _, v := range result {
+		if files, ok := v.([]interface{}); ok {
+			total += len(files)
+		}
+	}
+	return total
 }
 
 // testTimelineEndpointLiveCluster verifies that the history server can return timeline data from a live cluster.

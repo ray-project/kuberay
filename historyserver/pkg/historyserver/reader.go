@@ -13,6 +13,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/bmatcuk/doublestar/v4"
 	eventtypes "github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
 	"github.com/sirupsen/logrus"
 
@@ -69,16 +70,33 @@ func (s *ServerHandler) listClusters(limit int) []utils.ClusterInfo {
 	return clusters
 }
 
-func (s *ServerHandler) _getNodeLogs(rayClusterNameID, sessionId, nodeId, dir string) ([]byte, error) {
+func (s *ServerHandler) _getNodeLogs(rayClusterNameID, sessionId, nodeId, folder, glob string) ([]byte, error) {
 	logPath := path.Join(sessionId, utils.RAY_SESSIONDIR_LOGDIR_NAME, nodeId)
-	if dir != "" {
-		logPath = path.Join(logPath, dir)
+	if folder != "" {
+		logPath = path.Join(logPath, folder)
 	}
 	files := s.reader.ListFiles(rayClusterNameID, logPath)
 
+	// Filter files by glob pattern if provided; otherwise use all files.
+	var matchedFiles []string
+	if glob == "" {
+		matchedFiles = files
+	} else {
+		for _, file := range files {
+			// doublestar.Match supports both single-level wildcards (* and ?) and ** for recursive matching.
+			matched, err := doublestar.Match(glob, file)
+			if err != nil {
+				return []byte{}, fmt.Errorf("invalid glob pattern %q matching against %q: %w", glob, file, err)
+			}
+			if matched {
+				matchedFiles = append(matchedFiles, file)
+			}
+		}
+	}
+
 	// Categorize log files to match Ray Dashboard API format.
 	// Ref: Ray Dashboard's LogsManager._categorize_log_files in log_manager.py
-	categorized := categorizeLogFiles(files)
+	categorized := categorizeLogFiles(matchedFiles)
 
 	ret := map[string]interface{}{
 		"result": true,
