@@ -209,6 +209,20 @@ singleNamespaceInstall: false
 #   - n1
 #   - n2
 
+# If the async job info query feature is enabled, KubeRay will periodically
+# query the job info from the Ray cluster for each RayJob in order to update
+# the job status in the RayJob CR. This controls the interval of periodically listing RayJobs from the informer cache.
+asyncJobInfoQueryInterval: 3s
+
+# If the async job info query feature is enabled, it controls the number of
+# worker goroutines to query job info from Ray clusters in parallel.
+asyncJobInfoQueryWorkerSize: 8
+
+# If the async job info query feature is enabled, it controls the cache expiry duration.
+# Entries expire after this duration with no read or write. Timer will reset on access.
+asyncJobInfoQueryCacheExpiry: 10m
+
+
 # -- Environment variables.
 
 env:
