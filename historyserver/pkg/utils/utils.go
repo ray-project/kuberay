@@ -322,20 +322,3 @@ func GetDateTimeFromSessionID(sessionID string) (time.Time, error) {
 
 	return t, nil
 }
-
-// ExtractGlobPrefix extracts the non-wildcard prefix from a glob pattern.
-// The returned prefix can be used as a storage Prefix parameter to narrow down
-// the list of objects before client-side glob matching.
-// Returns the portion of the glob before the first wildcard character (* ? [ ] { } \).
-// Returns the full glob string if no wildcard characters are found.
-func ExtractGlobPrefix(glob string) string {
-	// Include all the charactor that will be used in glob
-	idx := strings.IndexAny(glob, "*?[]{}\\")
-
-	// No glob charactor found, consider the whole glob as prefix
-	if idx == -1 {
-		return glob
-	}
-
-	return glob[:idx]
-}
