@@ -361,7 +361,9 @@ env_vars:
 		k8sVersion, err := utils.GetKubernetesVersion()
 		g.Expect(err).NotTo(HaveOccurred())
 
-		if !utils.IsK8sVersionAtLeast(k8sVersion, 1, 34) {
+		isAtLeast, err := utils.IsK8sVersionAtLeast(k8sVersion, 1, 34, 0)
+		g.Expect(err).NotTo(HaveOccurred())
+		if !isAtLeast {
 			t.Skip("k8s version < 1.34, SidecarSubmitterRestart not supported")
 		}
 

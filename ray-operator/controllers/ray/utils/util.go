@@ -23,6 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/apimachinery/pkg/util/rand"
+	utilversion "k8s.io/apimachinery/pkg/util/version"
 	"k8s.io/apimachinery/pkg/version"
 	"k8s.io/client-go/discovery"
 	"k8s.io/utils/ptr"
@@ -900,14 +901,17 @@ func GetKubernetesVersion() (*version.Info, error) {
 	return serverVersion, nil
 }
 
-func IsK8sVersionAtLeast(serverVersion *version.Info, major, minor int) bool {
-	majorVersion, _ := strconv.Atoi(serverVersion.Major)
-	// Minor can have "+" suffix (e.g., "34+"), need to trim it
-	minorVersion, _ := strconv.Atoi(strings.TrimSuffix(serverVersion.Minor, "+"))
-	if majorVersion < major || (majorVersion == major && minorVersion < minor) {
-		return false
+func IsK8sVersionAtLeast(serverVersion *version.Info, major, minor, patch int) (bool, error) {
+	requiredVersionString := fmt.Sprintf("%d.%d.%d", major, minor, patch)
+	currentVersion, err := utilversion.ParseGeneric(serverVersion.GitVersion)
+	if err != nil {
+		return false, err
 	}
-	return true
+	requiredVersion, err := utilversion.ParseGeneric(requiredVersionString)
+	if err != nil {
+		return false, err
+	}
+	return currentVersion.AtLeast(requiredVersion), nil
 }
 
 func GetContainerCommand(additionalOptions []string) []string {

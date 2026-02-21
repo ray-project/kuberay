@@ -201,7 +201,12 @@ func main() {
 		serverVersion, err := utils.GetKubernetesVersion()
 		if err != nil {
 			exitOnError(err, "SidecarSubmitterRestart feature gate enabled but unable to detect K8s version. Feature requires K8s 1.34+.")
-		} else if !utils.IsK8sVersionAtLeast(serverVersion, 1, 34) {
+		}
+		isAtLeast, err := utils.IsK8sVersionAtLeast(serverVersion, 1, 34, 0)
+		if err != nil {
+			exitOnError(err, "Failed to compare K8s version.")
+		}
+		if !isAtLeast {
 			exitOnError(fmt.Errorf("current version %s is below 1.34", serverVersion.GitVersion),
 				"SidecarSubmitterRestart feature gate requires K8s 1.34+")
 		}
