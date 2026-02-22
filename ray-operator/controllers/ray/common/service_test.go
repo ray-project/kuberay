@@ -319,6 +319,29 @@ func TestGetServicePorts(t *testing.T) {
 	}
 }
 
+func TestGetSkippedDefaultPortNames(t *testing.T) {
+	defaultPorts := getDefaultPorts()
+
+	t.Run("skip default name when default number is occupied by another name", func(t *testing.T) {
+		userPorts := map[string]int32{
+			"random": utils.DefaultMetricsPort,
+		}
+		skipped := getSkippedDefaultPortNames(userPorts, defaultPorts)
+
+		require.Contains(t, skipped, utils.MetricsPortName)
+		assert.Equal(t, "random", skipped[utils.MetricsPortName])
+	})
+
+	t.Run("do not skip when default name is explicitly defined", func(t *testing.T) {
+		userPorts := map[string]int32{
+			utils.MetricsPortName: utils.DefaultMetricsPort + 1,
+		}
+		skipped := getSkippedDefaultPortNames(userPorts, defaultPorts)
+
+		require.NotContains(t, skipped, utils.MetricsPortName)
+	})
+}
+
 func TestUserSpecifiedHeadService(t *testing.T) {
 	// Use any RayCluster instance as a base for the test.
 	testRayClusterWithHeadService := instanceWithWrongSvc.DeepCopy()

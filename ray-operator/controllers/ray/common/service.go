@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -36,6 +37,7 @@ func HeadServiceLabels(cluster rayv1.RayCluster) map[string]string {
 // the worker nodes to connect to the head node.
 func BuildServiceForHeadPod(ctx context.Context, cluster rayv1.RayCluster, labels map[string]string, annotations map[string]string) (*corev1.Service, error) {
 	log := ctrl.LoggerFrom(ctx)
+	logSkippedDefaultPortNames(log, cluster)
 
 	if labels == nil {
 		labels = make(map[string]string)
@@ -180,6 +182,7 @@ func BuildServeServiceForRayCluster(ctx context.Context, rayCluster rayv1.RayClu
 // BuildServeService builds the service for head node and worker nodes who have healthy http proxy to serve traffics.
 func BuildServeService(ctx context.Context, rayService rayv1.RayService, rayCluster rayv1.RayCluster, isRayService bool) (*corev1.Service, error) {
 	log := ctrl.LoggerFrom(ctx)
+	logSkippedDefaultPortNames(log, rayCluster)
 	name := rayCluster.Name
 	namespace := rayCluster.Namespace
 	crdType := utils.RayClusterCRD
@@ -489,5 +492,75 @@ func getDefaultPorts() map[string]int32 {
 		utils.DashboardPortName: utils.DefaultDashboardPort,
 		utils.MetricsPortName:   utils.DefaultMetricsPort,
 		utils.ServingPortName:   utils.DefaultServingPort,
+	}
+}
+
+// getSkippedDefaultPortNames returns default named ports that were skipped because
+// their default port numbers are already occupied by another user-defined port name.
+func getSkippedDefaultPortNames(userPorts map[string]int32, defaultPorts map[string]int32) map[string]string {
+	portToNames := make(map[int32][]string)
+
+	userPortNames := make([]string, 0, len(userPorts))
+	for name := range userPorts {
+		userPortNames = append(userPortNames, name)
+	}
+	sort.Strings(userPortNames)
+
+	for _, name := range userPortNames {
+		port := userPorts[name]
+		portToNames[port] = append(portToNames[port], name)
+	}
+
+	defaultPortNames := make([]string, 0, len(defaultPorts))
+	for name := range defaultPorts {
+		defaultPortNames = append(defaultPortNames, name)
+	}
+	sort.Strings(defaultPortNames)
+
+	skipped := make(map[string]string)
+	for _, defaultName := range defaultPortNames {
+		defaultPort := defaultPorts[defaultName]
+		namesUsingDefaultPort, ok := portToNames[defaultPort]
+		if !ok {
+			continue
+		}
+
+		isDefinedByDefaultName := false
+		for _, name := range namesUsingDefaultPort {
+			if name == defaultName {
+				isDefinedByDefaultName = true
+				break
+			}
+		}
+		if isDefinedByDefaultName {
+			continue
+		}
+
+		skipped[defaultName] = namesUsingDefaultPort[0]
+	}
+
+	return skipped
+}
+
+func logSkippedDefaultPortNames(log logr.Logger, cluster rayv1.RayCluster) {
+	userPorts := getPortsFromCluster(cluster)
+	defaultPorts := getDefaultPorts()
+	skipped := getSkippedDefaultPortNames(userPorts, defaultPorts)
+	if len(skipped) == 0 {
+		return
+	}
+
+	skippedNames := make([]string, 0, len(skipped))
+	for name := range skipped {
+		skippedNames = append(skippedNames, name)
+	}
+	sort.Strings(skippedNames)
+
+	for _, defaultName := range skippedNames {
+		log.Info("Skipping default service port name because its default port number is already occupied by another head container port name",
+			"default_port_name", defaultName,
+			"default_port_number", defaultPorts[defaultName],
+			"conflicting_port_name", skipped[defaultName],
+		)
 	}
 }
