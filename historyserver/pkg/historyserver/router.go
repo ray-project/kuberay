@@ -146,16 +146,10 @@ func routerAPI(s *ServerHandler) {
 		Param(ws.QueryParameter("attempt_number", "attempt_number (task retry attempt number, default: 0)")).
 		Param(ws.QueryParameter("download_filename", "download_filename (if set, triggers download with this filename)")).
 		Param(ws.QueryParameter("filter_ansi_code", "filter_ansi_code (true/false)")).
-		// TODO: submission_id parameter is not currently supported.
-		// To support it, we need to:
-		// 1. Implement DRIVER_JOB_DEFINITION_EVENT processing in eventserver to store driver job info
-		//    (including driver_node_id from the export event)
-		// 2. Add submission_id field to DriverJobDefinitionEvent in Ray (currently missing, tracked in
-		//    https://github.com/ray-project/ray/issues/60129)
-		// 3. Create resolveSubmissionLogFilename() method to:
-		//    - Look up driver job by submission_id
-		//    - Get driver_node_id from stored event
-		//    - Return filename as "job-driver-{submission_id}.log"
+		// Note: submission_id is not supported and not needed.
+		// The Ray Dashboard frontend does not use submission_id as a query param.
+		// Instead, it embeds the submission_id directly into the filename param
+		// (e.g. filename=job-driver-raysubmit_xxx.log), which is already supported.
 		Produces("text/plain").
 		Writes("")) // Placeholder for specific return type
 	ws.Route(ws.GET("/v0/logs/stream").To(s.getNodeLogStream).Filter(s.CookieHandle).
@@ -277,11 +271,10 @@ func routerLogical(s *ServerHandler) {
 	ws := new(restful.WebService)
 	defer restful.Add(ws)
 	ws.Path("/logical").Consumes(restful.MIME_JSON).Produces(restful.MIME_JSON).Filter(RequestLogFilter) //.Filter(s.loginWrapper)
+	// Note: The Ray Dashboard frontend calls GET /logical/actors without any filter params
+	// and does client-side filtering, so filter parameters are not needed for this endpoint.
 	ws.Route(ws.GET("/actors").To(s.getLogicalActors).Filter(s.CookieHandle).
 		Doc("get logical actors").
-		Param(ws.QueryParameter("filter_keys", "filter_keys")).
-		Param(ws.QueryParameter("filter_predicates", "filter_predicates")).
-		Param(ws.QueryParameter("filter_values", "filter_values")).
 		Writes("")) // Placeholder for specific return type
 
 	// TODO: discuss with Ray Core team about this
@@ -830,29 +823,13 @@ func (s *ServerHandler) getLogicalActors(req *restful.Request, resp *restful.Res
 		return
 	}
 
-	filterKey := req.QueryParameter("filter_keys")
-	filterValue := req.QueryParameter("filter_values")
-	filterPredicate := req.QueryParameter("filter_predicates")
-
 	// Get actors from EventHandler's in-memory map
 	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
 	actorsMap := s.eventHandler.GetActorsMap(clusterSessionKey)
 
-	// Convert map to slice for filtering
-	actors := make([]eventtypes.Actor, 0, len(actorsMap))
-	for _, actor := range actorsMap {
-		actors = append(actors, actor)
-	}
-
-	// Apply generic filtering
-	actors = utils.ApplyFilter(actors, filterKey, filterPredicate, filterValue,
-		func(a eventtypes.Actor, key string) string {
-			return eventtypes.GetActorFieldValue(a, key)
-		})
-
 	// Format response to match Ray Dashboard API format
 	formattedActors := make(map[string]interface{})
-	for _, actor := range actors {
+	for _, actor := range actorsMap {
 		formattedActors[actor.ActorID] = formatActorForResponse(actor)
 	}
 
