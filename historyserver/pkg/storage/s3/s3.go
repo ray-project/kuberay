@@ -284,14 +284,18 @@ func (r *RayLogsHandler) GetContent(clusterId string, fileName string) io.Reader
 
 func NewReader(c *types.RayHistoryServerConfig, jd map[string]interface{}) (storage.StorageReader, error) {
 	config := &config{}
-	config.completeHSConfig(c, jd)
+	if err := config.completeHSConfig(c, jd); err != nil {
+		return nil, err
+	}
 
 	return New(config)
 }
 
 func NewWriter(c *types.RayCollectorConfig, jd map[string]interface{}) (storage.StorageWriter, error) {
 	config := &config{}
-	config.complete(c, jd)
+	if err := config.complete(c, jd); err != nil {
+		return nil, err
+	}
 
 	return New(config)
 }
