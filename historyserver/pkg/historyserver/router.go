@@ -142,7 +142,7 @@ func routerAPI(s *ServerHandler) {
 		Param(ws.QueryParameter("pid", "pid (resolve log file from process id)")).
 		Param(ws.QueryParameter("suffix", "suffix (out or err, default: out, used with task_id/actor_id/pid)")).
 		Param(ws.QueryParameter("lines", "lines (number of lines to return, default: 1000)")).
-		Param(ws.QueryParameter("timeout", "timeout")).
+		Param(ws.QueryParameter("timeout", "timeout in seconds. Note: for some storage backends (e.g. Aliyun OSS), timeout is not currently supported due to SDK limitations.")).
 		Param(ws.QueryParameter("attempt_number", "attempt_number (task retry attempt number, default: 0)")).
 		Param(ws.QueryParameter("download_filename", "download_filename (if set, triggers download with this filename)")).
 		Param(ws.QueryParameter("filter_ansi_code", "filter_ansi_code (true/false)")).

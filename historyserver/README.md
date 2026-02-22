@@ -89,6 +89,8 @@ History Server supports multiple storage backends:
 
 1. **S3/MinIO**: For AWS S3 or MinIO compatible storage
 2. **Aliyun OSS**: For Alibaba Cloud Object Storage Service
+    - Note: The Aliyun OSS SDK does not support context cancellation. When using the `timeout` query parameter
+    with the Aliyun OSS backend, the timeout will not interrupt in-progress storage reads
 3. **Local Test**: For local testing and development
 
 Each backend requires specific configuration parameters passed through environment variables or configuration files.
