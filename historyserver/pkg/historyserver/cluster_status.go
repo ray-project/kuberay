@@ -236,15 +236,52 @@ func (b *ClusterStatusBuilder) mergeDemands(demandMap map[string]*ResourceDemand
 	}
 }
 
+// isPendingTaskState returns true if the task state represents an unmet resource demand.
+//
+// Ray's autoscaler collects pending demands from the scheduler's lease queues
+// (SchedulerResourceReporter::FillResourceUsage), not from task states. Since the
+// history server does not have access to scheduler queue data, we approximate by
+// inferring from task states. Only states where resources have NOT been allocated
+// are counted as pending demands.
+//
+// Task lifecycle timeline:
+//
+//	PENDING_ARGS_AVAIL -> PENDING_NODE_ASSIGNMENT -> SUBMITTED_TO_WORKER -> RUNNING -> FINISHED
+//	       |                    |    |                      |
+//	       |                    |    +- PENDING_OBJ_STORE_MEM_AVAIL (sub-state)
+//	       |                    |    +- PENDING_ARGS_FETCH          (sub-state)
+//	       |                    |
+//	       |              in scheduler                  on worker
+//	       |              lease queue                   resources allocated
+//	       |
+//	  not yet submitted
+//	  to scheduler
+//	  (waiting for deps)
+//
+// Actor task lifecycle (actor already exists):
+//
+//	PENDING_ARGS_AVAIL -> SUBMITTED_TO_WORKER -> PENDING_ACTOR_TASK_ARGS_FETCH -> RUNNING
+//	                             |                       |
+//	                       sent to actor worker     actor already holds resources
+//	                       actor's resources         task queued inside actor
+//
+//	+--------------------------------------------+---------------------+----------------------+-------------------------+
+//	|                   State                    | In scheduler queue? | Resources allocated? | Count as pending demand? |
+//	+--------------------------------------------+---------------------+----------------------+-------------------------+
+//	| PENDING_ARGS_AVAIL                         | No (not submitted)  | No                   | Yes (resources needed)   |
+//	| PENDING_NODE_ASSIGNMENT                    | Yes                 | No                   | Yes                      |
+//	| PENDING_OBJ_STORE_MEM_AVAIL                | Borderline          | Tentative            | Yes (borderline)         |
+//	| PENDING_ARGS_FETCH                         | Borderline          | Tentative            | Yes (borderline)         |
+//	| SUBMITTED_TO_WORKER                        | No (granted)        | Yes                  | No                       |
+//	| PENDING_ACTOR_TASK_ARGS_FETCH              | No (at actor)       | Yes (actor's)        | No                       |
+//	| PENDING_ACTOR_TASK_ORDERING_OR_CONCURRENCY | No (at actor)       | Yes (actor's)        | No                       |
+//	+--------------------------------------------+---------------------+----------------------+-------------------------+
 func isPendingTaskState(state types.TaskStatus) bool {
 	switch state {
 	case types.PENDING_ARGS_AVAIL,
 		types.PENDING_NODE_ASSIGNMENT,
 		types.PENDING_OBJ_STORE_MEM_AVAIL,
-		types.PENDING_ARGS_FETCH,
-		types.SUBMITTED_TO_WORKER,
-		types.PENDING_ACTOR_TASK_ARGS_FETCH,
-		types.PENDING_ACTOR_TASK_ORDERING_OR_CONCURRENCY:
+		types.PENDING_ARGS_FETCH:
 		return true
 	default:
 		return false

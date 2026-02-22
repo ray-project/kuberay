@@ -15,8 +15,7 @@ type NodeDebugState struct {
 	NodeID     string
 	NodeName   string
 	NodeGroup  string
-	IsIdle     bool
-	IsDraining bool
+	IsIdle bool
 	Total      map[string]float64
 	Available  map[string]float64
 }
@@ -79,9 +78,6 @@ func ParseDebugState(rd io.Reader) (*NodeDebugState, error) {
 func parseClusterResourceSchedulerLine(line string, state *NodeDebugState) {
 	// Extract is_idle
 	state.IsIdle = strings.Contains(line, "is_idle: 1")
-
-	// Extract is_draining
-	state.IsDraining = strings.Contains(line, "is_draining: 1")
 
 	// Extract node group name from "ray.io/node-group":"<group_name>"
 	if m := reNodeGroup.FindStringSubmatch(line); len(m) > 1 {
