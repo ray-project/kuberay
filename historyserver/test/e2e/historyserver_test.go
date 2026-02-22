@@ -1949,7 +1949,7 @@ func verifyNodesHostNameListSchema(test Test, g *WithT, nodesResp map[string]any
 // 5. Set cluster context via /enter_cluster/ endpoint
 // 6. Verify that the /events endpoint returns events with proper structure
 // 7. Delete S3 bucket to ensure test isolation
-func testEventsEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testEventsEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 	ApplyHistoryServer(test, g, namespace, "")
@@ -2003,7 +2003,7 @@ func testEventsEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Namesp
 // 8. Verify that the /events endpoint supports job_id filter (non-existent job_id)
 // 9. Verify that the /events endpoint handles empty job_id parameter correctly
 // 10. Delete S3 bucket to ensure test isolation
-func testEventsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testEventsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 
