@@ -1277,10 +1277,10 @@ func summarizeTasksByFuncName(tasks []eventtypes.Task) *utils.TaskSummariesByFun
 		switch task.TaskType {
 		case eventtypes.NORMAL_TASK:
 			totalTasks++
-		case eventtypes.ACTOR_TASK:
-			totalActorTasks++
 		case eventtypes.ACTOR_CREATION_TASK:
 			totalActorScheduled++
+		case eventtypes.ACTOR_TASK:
+			totalActorTasks++
 		}
 	}
 
