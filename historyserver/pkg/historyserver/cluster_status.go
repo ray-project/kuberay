@@ -141,11 +141,19 @@ func (b *ClusterStatusBuilder) AddFailedNodesFromNodes(nodes map[string]types.No
 				continue
 			}
 
+			// Ray's autoscaler always has ray_node_type_name because it launches the nodes itself.
+			// The history server reads labels from NODE_DEFINITION_EVENT, which may be absent
+			// if the user has not enabled this export event. Fall back to NodeID.
+			nodeType := node.Labels["ray.io/node-group"]
+			if nodeType == "" {
+				nodeType = node.NodeID
+			}
+
 			failed := FailedNode{
 				NodeID:        node.NodeID,
 				NodeIPAddress: node.NodeIPAddress,
 				InstanceID:    node.InstanceID,
-				NodeType:      node.Labels["ray.io/node-group"],
+				NodeType:      nodeType,
 				Timestamp:     tr.Timestamp,
 			}
 
@@ -340,8 +348,10 @@ func formatResourceValue(resource string, value float64) string {
 	return strconv.FormatFloat(value, 'f', -1, 64)
 }
 
-// formatResourceMapForDisplay formats a resource map matching Ray's autoscaler output.
-// e.g. "{'CPU': 1.0, 'memory': 9.31GiB}"
+// formatResourceMapForDisplay formats a resource map matching Python's dict repr output,
+// which is what Ray's format_resource_demand_summary uses: f" {dict(bundle)}: {count}+ ..."
+// e.g. "{'CPU': 1.0, 'memory': 1073741824.0}"
+// Ref: https://github.com/ray-project/ray/blob/d99d5d375c9c4e6533c15edb37d93a3ee9066be4/python/ray/autoscaler/_private/util.py#L776
 func formatResourceMapForDisplay(resources map[string]float64) string {
 	if len(resources) == 0 {
 		return "{}"
@@ -349,10 +359,19 @@ func formatResourceMapForDisplay(resources map[string]float64) string {
 
 	var parts []string
 	for _, k := range sortedKeys(resources) {
-		parts = append(parts, fmt.Sprintf("'%s': %s", k, formatResourceValue(k, resources[k])))
+		parts = append(parts, fmt.Sprintf("'%s': %s", k, formatPythonFloat(resources[k])))
 	}
 
 	return fmt.Sprintf("{%s}", strings.Join(parts, ", "))
+}
+
+// formatPythonFloat formats a float64 matching Python's default float repr behavior.
+// Python: f"{1.0}" → "1.0", f"{0.1}" → "0.1", f"{1073741824.0}" → "1073741824.0"
+func formatPythonFloat(value float64) string {
+	if math.Trunc(value) == value {
+		return fmt.Sprintf("%.1f", value)
+	}
+	return strconv.FormatFloat(value, 'f', -1, 64)
 }
 
 // FormatStatus formats the cluster status as a string matching Ray's format
