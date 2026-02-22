@@ -55,7 +55,6 @@ func NewClusterStatusBuilder() *ClusterStatusBuilder {
 		TotalResources: make(map[string]float64),
 		UsedResources:  make(map[string]float64),
 		PendingDemands: []ResourceDemand{},
-		Timestamp:      time.Now(), // a fallback when no tasks and no actors have EndTime.
 	}
 }
 
@@ -381,8 +380,11 @@ func (b *ClusterStatusBuilder) FormatStatus() string {
 
 	// Header with timestamp, separator length matches header length.
 	// Ref: https://github.com/ray-project/ray/blob/d99d5d375c9c4e6533c15edb37d93a3ee9066be4/python/ray/autoscaler/_private/util.py#L801
-	header := fmt.Sprintf("======== Autoscaler status: %s ========",
-		b.Timestamp.Format(timestampDisplayFormat))
+	timestampStr := b.Timestamp.Format(timestampDisplayFormat)
+	if b.Timestamp.IsZero() {
+		timestampStr = "time unknown"
+	}
+	header := fmt.Sprintf("======== Autoscaler status: %s ========", timestampStr)
 	separator := strings.Repeat("-", len(header))
 	sb.WriteString(header + "\n")
 

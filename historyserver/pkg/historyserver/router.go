@@ -837,7 +837,7 @@ func (s *ServerHandler) getClusterStatus(req *restful.Request, resp *restful.Res
 func (s *ServerHandler) buildFormattedClusterStatus(clusterName, clusterNamespace, sessionName string) string {
 	builder := NewClusterStatusBuilder()
 	clusterNameID := clusterName + "_" + clusterNamespace
-	logsPath := path.Join(sessionName, "logs")
+	logsPath := path.Join(sessionName, utils.RAY_SESSIONDIR_LOGDIR_NAME)
 	nodeIDs := s.reader.ListFiles(clusterNameID, logsPath)
 
 	for _, nodeID := range nodeIDs {

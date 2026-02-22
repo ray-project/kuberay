@@ -172,7 +172,7 @@ func TestListFiles(t *testing.T) {
 		{
 			name:      "list_files",
 			clusterID: "cluster1",
-			directory: "logs",
+			directory: utils.RAY_SESSIONDIR_LOGDIR_NAME,
 			expected:  []string{"file1.txt", "file2.log", "subdir/"},
 		},
 		{
@@ -190,7 +190,7 @@ func TestListFiles(t *testing.T) {
 		{
 			name:      "list_cluster2",
 			clusterID: "cluster2",
-			directory: "logs",
+			directory: utils.RAY_SESSIONDIR_LOGDIR_NAME,
 			expected:  []string{"file5.txt", "subdir2/"},
 		},
 		{
