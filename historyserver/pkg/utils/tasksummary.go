@@ -136,7 +136,9 @@ func (b *lineageBuilder) indexData(tasks []eventtypes.Task, actors []eventtypes.
 			if task.ActorID == "" && strings.HasPrefix(task.TaskID, actorCreationTaskIDForActorIDPrefix) {
 				task.ActorID = task.TaskID[len(actorCreationTaskIDForActorIDPrefix):]
 			}
-			b.actorCreationTaskIDForActorID[task.ActorID] = task.TaskID
+			if task.ActorID != "" {
+				b.actorCreationTaskIDForActorID[task.ActorID] = task.TaskID
+			}
 		}
 		b.tasksByID[task.TaskID] = task
 	}
