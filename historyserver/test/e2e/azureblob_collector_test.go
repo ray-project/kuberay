@@ -93,7 +93,7 @@ func testAzureBlobSeparatesFilesBySession(test Test, g *WithT, namespace *corev1
 	killContainerAndWaitForRestart(test, g, HeadPod(test, rayCluster), "ray-head")
 	killContainerAndWaitForRestart(test, g, FirstWorkerPod(test, rayCluster), "ray-worker")
 
-	verifySessionDirectoriesExist(test, g, rayCluster, sessionID)
+	VerifySessionDirectoriesExist(test, g, rayCluster, sessionID)
 	verifyAzureBlobSessionDirs(test, g, azureClient, sessionPrefix, headNodeID, workerNodeID)
 
 	DeleteAzureBlobContainer(test, g, azureClient)
