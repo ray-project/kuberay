@@ -123,7 +123,7 @@ func routerAPI(s *ServerHandler) {
 		Writes("")) // Placeholder for specific return type
 
 	ws.Route(ws.GET("/serve/applications/").To(s.getServeApplications).Filter(s.CookieHandle).
-		Doc("get appliations").
+		Doc("get applications").
 		Writes("")) // Placeholder for specific return type
 
 	ws.Route(ws.GET("/v0/placement_groups/").To(s.getPlacementGroups).Filter(s.CookieHandle).
@@ -131,7 +131,7 @@ func routerAPI(s *ServerHandler) {
 		Writes("")) // Placeholder for specific return type
 
 	ws.Route(ws.GET("/v0/logs").To(s.getNodeLogs).Filter(s.CookieHandle).
-		Doc("get appliations").
+		Doc("get logs").
 		Param(ws.QueryParameter("node_id", "node_id")).
 		Param(ws.QueryParameter("folder", "folder")).
 		Param(ws.QueryParameter("glob", "glob pattern")).
@@ -807,10 +807,13 @@ func (s *ServerHandler) getNodeLogs(req *restful.Request, resp *restful.Response
 		s.redirectRequest(req, resp)
 		return
 	}
-	var folder, glob string
-	if req.QueryParameter("folder") != "" {
-		folder = req.QueryParameter("folder")
+	nodeID := req.QueryParameter("node_id")
+	if nodeID != "" && !fs.ValidPath(nodeID) {
+		resp.WriteErrorString(http.StatusBadRequest, fmt.Sprintf("invalid path: path traversal not allowed (node_id=%s)", nodeID))
+		return
 	}
+
+	var folder, glob string
 	if req.QueryParameter("glob") != "" {
 		glob = req.QueryParameter("glob")
 		// SplitPattern splits e.g. "logs/raylet*" into base="logs/" and pattern="raylet*",
@@ -819,10 +822,14 @@ func (s *ServerHandler) getNodeLogs(req *restful.Request, resp *restful.Response
 		base, pattern := doublestar.SplitPattern(glob)
 		glob = pattern
 		if base != "." {
+			if !fs.ValidPath(base) {
+				resp.WriteErrorString(http.StatusBadRequest, fmt.Sprintf("invalid path: path traversal not allowed (glob=%s)", req.QueryParameter("glob")))
+				return
+			}
 			folder = base
 		}
 	}
-	data, err := s._getNodeLogs(clusterNameID+"_"+clusterNamespace, sessionName, req.QueryParameter("node_id"), folder, glob)
+	data, err := s._getNodeLogs(clusterNameID+"_"+clusterNamespace, sessionName, nodeID, folder, glob)
 	if err != nil {
 		logrus.Errorf("Error: %v", err)
 		resp.WriteError(400, err)
