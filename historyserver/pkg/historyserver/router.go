@@ -142,7 +142,7 @@ func routerAPI(s *ServerHandler) {
 		Param(ws.QueryParameter("pid", "pid (resolve log file from process id)")).
 		Param(ws.QueryParameter("suffix", "suffix (out or err, default: out, used with task_id/actor_id/pid)")).
 		Param(ws.QueryParameter("lines", "lines (number of lines to return, default: 1000)")).
-		Param(ws.QueryParameter("timeout", "timeout")).
+		Param(ws.QueryParameter("timeout", "timeout in seconds. Note: for some storage backends (e.g. Aliyun OSS), timeout is not currently supported due to SDK limitations.")).
 		Param(ws.QueryParameter("attempt_number", "attempt_number (task retry attempt number, default: 0)")).
 		Param(ws.QueryParameter("download_filename", "download_filename (if set, triggers download with this filename)")).
 		Param(ws.QueryParameter("filter_ansi_code", "filter_ansi_code (true/false)")).
@@ -398,7 +398,7 @@ func (s *ServerHandler) redirectRequest(req *restful.Request, resp *restful.Resp
 }
 
 func (s *ServerHandler) getClusters(req *restful.Request, resp *restful.Response) {
-	clusters := s.listClusters(s.maxClusters)
+	clusters := s.listClusters(req.Request.Context(), s.maxClusters)
 	resp.WriteAsJson(clusters)
 }
 
@@ -811,7 +811,9 @@ func (s *ServerHandler) getNodeLogs(req *restful.Request, resp *restful.Response
 		folder = req.QueryParameter("glob")
 		folder = strings.TrimSuffix(folder, "*")
 	}
-	data, err := s._getNodeLogs(clusterNameID+"_"+clusterNamespace, sessionName, req.QueryParameter("node_id"), folder)
+
+	ctx := req.Request.Context()
+	data, err := s._getNodeLogs(ctx, clusterNameID+"_"+clusterNamespace, sessionName, req.QueryParameter("node_id"), folder)
 	if err != nil {
 		logrus.Errorf("Error: %v", err)
 		resp.WriteError(400, err)
@@ -989,10 +991,25 @@ func (s *ServerHandler) getNodeLogFile(req *restful.Request, resp *restful.Respo
 		return
 	}
 
+	var ctx context.Context
+	var cancel context.CancelFunc
+	if options.Timeout > 0 {
+		timeout := time.Duration(options.Timeout) * time.Second
+		ctx, cancel = context.WithTimeout(req.Request.Context(), timeout)
+	} else {
+		// No timeout
+		ctx, cancel = context.WithCancel(req.Request.Context())
+	}
+	defer cancel()
+
 	// Only resolve node_ip to node_id from stored events for dead cluster
 	if options.NodeID == "" && options.NodeIP != "" {
-		nodeID, err := s.ipToNodeId(clusterNameID+"_"+clusterNamespace, sessionName, options.NodeIP)
+		nodeID, err := s.ipToNodeId(ctx, clusterNameID+"_"+clusterNamespace, sessionName, options.NodeIP)
 		if err != nil {
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+				resp.WriteError(http.StatusRequestTimeout, ctx.Err())
+				return
+			}
 			resp.WriteErrorString(http.StatusNotFound,
 				fmt.Sprintf("Cannot find matching node_id for a given node ip %s", options.NodeIP))
 			return
@@ -1000,7 +1017,7 @@ func (s *ServerHandler) getNodeLogFile(req *restful.Request, resp *restful.Respo
 		options.NodeID = nodeID
 	}
 
-	content, err := s._getNodeLogFile(clusterNameID+"_"+clusterNamespace, sessionName, options)
+	content, err := s._getNodeLogFile(ctx, clusterNameID+"_"+clusterNamespace, sessionName, options)
 	if err != nil {
 		var httpErr *utils.HTTPError
 		if errors.As(err, &httpErr) {

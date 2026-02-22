@@ -126,27 +126,29 @@ func (h *EventHandler) Run(stop chan struct{}, numOfEventProcessors int) error {
 
 		// Helper function to process all events
 		processAllEvents := func() {
-			clusterList := h.reader.List()
+			// Create a context for storage operations
+			ctx := context.Background()
+			clusterList := h.reader.List(ctx)
 			for _, clusterInfo := range clusterList {
 				clusterNameNamespace := clusterInfo.Name + "_" + clusterInfo.Namespace
 				clusterSessionKey := utils.BuildClusterSessionKey(clusterInfo.Name, clusterInfo.Namespace, clusterInfo.SessionName)
 
 				// Read Log Events from logs/{nodeId}/events/event_*.log
 				// This is the format used by Ray Dashboard's /events API
-				if err := logEventReader.ReadLogEvents(clusterInfo, clusterSessionKey, h.ClusterLogEventMap); err != nil {
+				if err := logEventReader.ReadLogEvents(ctx, clusterInfo, clusterSessionKey, h.ClusterLogEventMap); err != nil {
 					logrus.Errorf("Failed to read Log Events for %s: %v", clusterSessionKey, err)
 				}
 
 				// Also read RayEvents (Export Events) from node_events/ and job_events/ for backward compatibility
 				// These are used for task/actor/job/node data APIs
-				eventFileList := append(h.getAllJobEventFiles(clusterInfo), h.getAllNodeEventFiles(clusterInfo)...)
+				eventFileList := append(h.getAllJobEventFiles(ctx, clusterInfo), h.getAllNodeEventFiles(ctx, clusterInfo)...)
 
 				logrus.Infof("current eventFileList for cluster %s is: %v", clusterInfo.Name, eventFileList)
 				for _, eventFile := range eventFileList {
 					// TODO: Filter out ones that have already been read
 					logrus.Infof("Reading event file: %s", eventFile)
 
-					eventioReader := h.reader.GetContent(clusterNameNamespace, eventFile)
+					eventioReader := h.reader.GetContent(ctx, clusterNameNamespace, eventFile)
 					if eventioReader == nil {
 						logrus.Errorf("Failed to get content for event file: %s, skipping", eventFile)
 						continue
@@ -719,11 +721,11 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 
 // getAllJobEventFiles get all the job event files for the given cluster.
 // Assuming that the events file object follow the format root/clustername/sessionid/job_events/{job-*}/*
-func (h *EventHandler) getAllJobEventFiles(clusterInfo utils.ClusterInfo) []string {
+func (h *EventHandler) getAllJobEventFiles(ctx context.Context, clusterInfo utils.ClusterInfo) []string {
 	var allJobFiles []string
 	clusterNameID := clusterInfo.Name + "_" + clusterInfo.Namespace
 	jobEventDirPrefix := clusterInfo.SessionName + "/job_events/"
-	jobDirList := h.reader.ListFiles(clusterNameID, jobEventDirPrefix)
+	jobDirList := h.reader.ListFiles(ctx, clusterNameID, jobEventDirPrefix)
 
 	for _, jobDir := range jobDirList {
 		// Skip non-directory entries
@@ -731,7 +733,7 @@ func (h *EventHandler) getAllJobEventFiles(clusterInfo utils.ClusterInfo) []stri
 			continue
 		}
 		jobDirPath := jobEventDirPrefix + jobDir
-		jobFiles := h.reader.ListFiles(clusterNameID, jobDirPath)
+		jobFiles := h.reader.ListFiles(ctx, clusterNameID, jobDirPath)
 		for _, jobFile := range jobFiles {
 			if isValidEventFile(jobFile) {
 				allJobFiles = append(allJobFiles, jobDirPath+jobFile)
@@ -742,10 +744,10 @@ func (h *EventHandler) getAllJobEventFiles(clusterInfo utils.ClusterInfo) []stri
 }
 
 // getAllNodeEventFiles retrieves all node event files for the given cluster
-func (h *EventHandler) getAllNodeEventFiles(clusterInfo utils.ClusterInfo) []string {
+func (h *EventHandler) getAllNodeEventFiles(ctx context.Context, clusterInfo utils.ClusterInfo) []string {
 	clusterNameID := clusterInfo.Name + "_" + clusterInfo.Namespace
 	nodeEventDirPrefix := clusterInfo.SessionName + "/node_events/"
-	nodeEventFileNames := h.reader.ListFiles(clusterNameID, nodeEventDirPrefix)
+	nodeEventFileNames := h.reader.ListFiles(ctx, clusterNameID, nodeEventDirPrefix)
 
 	// Filter out directories (items ending with /) and build full paths
 	var nodeEventFiles []string

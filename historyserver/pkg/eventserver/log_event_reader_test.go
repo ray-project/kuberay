@@ -2,6 +2,7 @@ package eventserver
 
 import (
 	"bufio"
+	"context"
 	"io"
 	"strings"
 	"testing"
@@ -40,9 +41,9 @@ func (m *logEventMockReader) addDir(clusterID, dirPath string, entries []string)
 	m.dirs[clusterID][dirPath] = entries
 }
 
-func (m *logEventMockReader) List() []utils.ClusterInfo { return nil }
+func (m *logEventMockReader) List(ctx context.Context) []utils.ClusterInfo { return nil }
 
-func (m *logEventMockReader) GetContent(clusterID string, fileName string) io.Reader {
+func (m *logEventMockReader) GetContent(ctx context.Context, clusterID string, fileName string) io.Reader {
 	if cd, ok := m.files[clusterID]; ok {
 		if content, ok := cd[fileName]; ok {
 			return strings.NewReader(content)
@@ -51,7 +52,7 @@ func (m *logEventMockReader) GetContent(clusterID string, fileName string) io.Re
 	return nil
 }
 
-func (m *logEventMockReader) ListFiles(clusterID string, dir string) []string {
+func (m *logEventMockReader) ListFiles(ctx context.Context, clusterID string, dir string) []string {
 	if cd, ok := m.dirs[clusterID]; ok {
 		if entries, ok := cd[dir]; ok {
 			return entries
@@ -128,7 +129,7 @@ func TestReadEventFile(t *testing.T) {
 
 		reader := NewLogEventReader(mock)
 		jobEventMap := types.NewJobEventMap()
-		err := reader.readEventFile("cluster_ns", "session/logs/node1/events/event_JOBS.log", jobEventMap)
+		err := reader.readEventFile(context.Background(), "cluster_ns", "session/logs/node1/events/event_JOBS.log", jobEventMap)
 		require.NoError(t, err)
 
 		events := jobEventMap.GetAllEvents()
@@ -148,7 +149,7 @@ func TestReadEventFile(t *testing.T) {
 
 		reader := NewLogEventReader(mock)
 		jobEventMap := types.NewJobEventMap()
-		err := reader.readEventFile("cluster_ns", "session/logs/node1/events/event_GCS.log", jobEventMap)
+		err := reader.readEventFile(context.Background(), "cluster_ns", "session/logs/node1/events/event_GCS.log", jobEventMap)
 		require.NoError(t, err)
 
 		events := jobEventMap.GetAllEvents()
@@ -161,7 +162,7 @@ func TestReadEventFile(t *testing.T) {
 
 		reader := NewLogEventReader(mock)
 		jobEventMap := types.NewJobEventMap()
-		err := reader.readEventFile("cluster_ns", "session/logs/node1/events/event_GCS.log", jobEventMap)
+		err := reader.readEventFile(context.Background(), "cluster_ns", "session/logs/node1/events/event_GCS.log", jobEventMap)
 		require.NoError(t, err)
 
 		events := jobEventMap.GetAllEvents()
@@ -175,11 +176,11 @@ func TestReadEventFile(t *testing.T) {
 		reader := NewLogEventReader(mock)
 
 		jobEventMap := types.NewJobEventMap()
-		err := reader.readEventFile("cluster_ns", "session/logs/node1/events/event_GCS.log", jobEventMap)
+		err := reader.readEventFile(context.Background(), "cluster_ns", "session/logs/node1/events/event_GCS.log", jobEventMap)
 		require.NoError(t, err)
 		assert.Empty(t, jobEventMap.GetAllEvents())
 
-		err = reader.readEventFile("cluster_ns", "nonexistent", types.NewJobEventMap())
+		err = reader.readEventFile(context.Background(), "cluster_ns", "nonexistent", types.NewJobEventMap())
 		assert.Error(t, err)
 	})
 }
@@ -201,7 +202,7 @@ func TestReadLogEvents(t *testing.T) {
 		store := types.NewClusterLogEventMap()
 		clusterInfo := utils.ClusterInfo{Name: "cluster", Namespace: "ns", SessionName: "session1"}
 
-		err := reader.ReadLogEvents(clusterInfo, "cluster_ns_session1", store)
+		err := reader.ReadLogEvents(context.Background(), clusterInfo, "cluster_ns_session1", store)
 		require.NoError(t, err)
 
 		events := store.GetAllEvents("cluster_ns_session1")
@@ -216,7 +217,7 @@ func TestReadLogEvents(t *testing.T) {
 		store := types.NewClusterLogEventMap()
 		clusterInfo := utils.ClusterInfo{Name: "cluster", Namespace: "ns", SessionName: "session1"}
 
-		err := reader.ReadLogEvents(clusterInfo, "cluster_ns_session1", store)
+		err := reader.ReadLogEvents(context.Background(), clusterInfo, "cluster_ns_session1", store)
 		require.NoError(t, err)
 		assert.Empty(t, store.GetAllEvents("cluster_ns_session1"))
 	})
