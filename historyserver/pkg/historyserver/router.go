@@ -7,9 +7,13 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"math"
+	"mime"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/emicklei/go-restful/v3"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
@@ -51,16 +55,32 @@ func routerClusters(s *ServerHandler) {
 		Writes([]string{}))
 }
 
+// routerNodes registers RESTful routers for node-related endpoints.
+// It sets up two routes:
+//   - GET /nodes: retrieves all node information for a given cluster
+//   - GET /nodes/{node_id}: retrieves node details for a specific node by its ID
+//
+// Supported view parameters for GET /nodes:
+//   - ?view=summary: returns node summary and resource usage information (default)
+//   - ?view=hostNameList: returns a list of hostnames for all alive nodes
 func routerNodes(s *ServerHandler) {
 	ws := new(restful.WebService)
 	defer restful.Add(ws)
-	ws.Path("/nodes").Consumes(restful.MIME_JSON).Produces(restful.MIME_JSON) //.Filter(s.loginWrapper)
-	ws.Route(ws.GET("/").To(s.getNodes).Filter(s.CookieHandle).
-		Doc("get nodes for a given clusters").Param(ws.QueryParameter("view", "such as summary")).
+
+	ws.Path("/nodes").
+		Consumes(restful.MIME_JSON).
+		Produces(restful.MIME_JSON) //.Filter(s.LoginWrapper)
+
+	ws.Route(ws.GET("").To(s.getNodes).
+		Filter(s.CookieHandle).
+		Doc("Get all node information for a given cluster").
+		Param(ws.QueryParameter("view", "View type: 'summary' (default) for node summary and resources, 'hostNameList' for alive node hostnames")).
 		Writes(""))
-	ws.Route(ws.GET("/{node_id}").To(s.getNode).Filter(s.CookieHandle).
-		Doc("get specifical nodes  ").
-		Param(ws.PathParameter("node_id", "node_id")).
+
+	ws.Route(ws.GET("/{node_id}").To(s.getNode).
+		Filter(s.CookieHandle).
+		Doc("Get node summary for a specific node by its ID").
+		Param(ws.PathParameter("node_id", "The unique identifier of the node")).
 		Writes(""))
 }
 
@@ -113,16 +133,50 @@ func routerAPI(s *ServerHandler) {
 		Doc("get appliations").Param(ws.QueryParameter("node_id", "node_id")).
 		Writes("")) // Placeholder for specific return type
 	ws.Route(ws.GET("/v0/logs/file").To(s.getNodeLogFile).Filter(s.CookieHandle).
-		Doc("get logfile").Param(ws.QueryParameter("node_id", "node_id")).
-		Param(ws.QueryParameter("filename", "filename")).
-		Param(ws.QueryParameter("lines", "lines")).
+		Doc("get logfile").
+		Param(ws.QueryParameter("node_id", "node_id (optional if node_ip/task_id/actor_id is provided)")).
+		Param(ws.QueryParameter("node_ip", "node_ip (optional, resolve to node_id)")).
+		Param(ws.QueryParameter("filename", "filename (explicit log file path)")).
+		Param(ws.QueryParameter("task_id", "task_id (resolve log file from task)")).
+		Param(ws.QueryParameter("actor_id", "actor_id (resolve log file from actor)")).
+		Param(ws.QueryParameter("pid", "pid (resolve log file from process id)")).
+		Param(ws.QueryParameter("suffix", "suffix (out or err, default: out, used with task_id/actor_id/pid)")).
+		Param(ws.QueryParameter("lines", "lines (number of lines to return, default: 1000)")).
+		Param(ws.QueryParameter("timeout", "timeout")).
+		Param(ws.QueryParameter("attempt_number", "attempt_number (task retry attempt number, default: 0)")).
+		Param(ws.QueryParameter("download_filename", "download_filename (if set, triggers download with this filename)")).
+		Param(ws.QueryParameter("filter_ansi_code", "filter_ansi_code (true/false)")).
+		// TODO: submission_id parameter is not currently supported.
+		// To support it, we need to:
+		// 1. Implement DRIVER_JOB_DEFINITION_EVENT processing in eventserver to store driver job info
+		//    (including driver_node_id from the export event)
+		// 2. Add submission_id field to DriverJobDefinitionEvent in Ray (currently missing, tracked in
+		//    https://github.com/ray-project/ray/issues/60129)
+		// 3. Create resolveSubmissionLogFilename() method to:
+		//    - Look up driver job by submission_id
+		//    - Get driver_node_id from stored event
+		//    - Return filename as "job-driver-{submission_id}.log"
 		Produces("text/plain").
 		Writes("")) // Placeholder for specific return type
+	ws.Route(ws.GET("/v0/logs/stream").To(s.getNodeLogStream).Filter(s.CookieHandle).
+		Doc("stream logs in real-time").
+		Param(ws.QueryParameter("node_id", "node_id (optional if node_ip/task_id/actor_id is provided)")).
+		Param(ws.QueryParameter("node_ip", "node_ip (optional, resolve to node_id)")).
+		Param(ws.QueryParameter("filename", "filename (explicit log file path)")).
+		Param(ws.QueryParameter("task_id", "task_id (resolve log file from task)")).
+		Param(ws.QueryParameter("actor_id", "actor_id (resolve log file from actor)")).
+		Param(ws.QueryParameter("pid", "pid (resolve log file from process id)")).
+		Param(ws.QueryParameter("suffix", "suffix (out or err, default: out, used with task_id/actor_id/pid)")).
+		Param(ws.QueryParameter("interval", "interval (polling interval in seconds)")).
+		Produces("text/event-stream").
+		Writes("")) // Placeholder for specific return type
 
-	ws.Route(ws.GET("/v0/tasks").To(s.getTaskDetail).Filter(s.CookieHandle).
-		Doc("get task detail ").
-		// TODO: support limit
-		// Param(ws.QueryParameter("limit", "limit")).
+	ws.Route(ws.GET("/v0/tasks").To(s.getTasks).Filter(s.CookieHandle).
+		Doc("get task detail").
+		Param(ws.QueryParameter("limit", "limit")).
+		Param(ws.QueryParameter("timeout", "timeout")).
+		Param(ws.QueryParameter("detail", "detail")).
+		Param(ws.QueryParameter("exclude_driver", "exclude_driver")).
 		Param(ws.QueryParameter("filter_keys", "filter_keys")).
 		Param(ws.QueryParameter("filter_predicates", "filter_predicates")).
 		Param(ws.QueryParameter("filter_values", "filter_values")).
@@ -134,6 +188,13 @@ func routerAPI(s *ServerHandler) {
 		Param(ws.QueryParameter("filter_predicates", "filter_predicates")).
 		Param(ws.QueryParameter("filter_values", "filter_values")).
 		Param(ws.QueryParameter("summary_by", "summary_by")).
+		Writes("")) // Placeholder for specific return type
+
+	ws.Route(ws.GET("/v0/tasks/timeline").To(s.getTasksTimeline).Filter(s.CookieHandle).
+		Doc("get tasks timeline").
+		Param(ws.QueryParameter("job_id", "filter by job_id")).
+		Param(ws.QueryParameter("download", "set to 1 to return response as attachment (timeline JSON file)")).
+		Produces(restful.MIME_JSON).
 		Writes("")) // Placeholder for specific return type
 }
 
@@ -341,37 +402,228 @@ func (s *ServerHandler) getClusters(req *restful.Request, resp *restful.Response
 	resp.WriteAsJson(clusters)
 }
 
-// getNodes returns nodes for the specified cluster
+// getNodes retrieves all node summaries and resource usage information for a specific cluster session.
+// The API schema of live and dead clusters are different:
+//   - Live clusters: returns the current snapshot
+//   - Dead clusters: returns the historical replay
+//
+// Supported view parameters:
+//   - ?view=summary: returns node summary and resource usage information
+//   - ?view=hostNameList: returns a list of hostnames for all alive nodes
 func (s *ServerHandler) getNodes(req *restful.Request, resp *restful.Response) {
 	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
 	if sessionName == "live" {
 		s.redirectRequest(req, resp)
 		return
 	}
-	clusterNameID := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
+
+	// Parse query parameters.
+	viewParam := req.QueryParameter("view")
+
+	// Get nodes from the cluster session.
+	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
 	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
-	data, err := s.GetNodes(clusterNameID+"_"+clusterNamespace, sessionName)
-	if data == nil {
-		logrus.Errorf("Failed to get nodes for cluster %s", clusterNameID+"_"+clusterNamespace)
-		resp.WriteError(http.StatusInternalServerError, errors.New("failed to get nodes"))
-		return
+	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
+	nodeMap := s.eventHandler.GetNodeMap(clusterSessionKey)
+
+	// Handle different view types.
+	switch viewParam {
+	case "hostNameList":
+		s.getNodesHostNameList(nodeMap, resp)
+	case "summary", "":
+		// Default to summary view
+		s.getNodesSummary(nodeMap, sessionName, resp)
+	default:
+		resp.WriteErrorString(http.StatusBadRequest, fmt.Sprintf("unsupported view parameter: %s", viewParam))
 	}
+}
+
+// getNodesSummary returns node summary and resource usage information for historical clusters.
+func (s *ServerHandler) getNodesSummary(nodeMap map[string]eventtypes.Node, sessionName string, resp *restful.Response) {
+	// Build node summary. Each node has an array of summary snapshots with timestamps.
+	summary := make([][]map[string]interface{}, 0, len(nodeMap))
+	// Build node logical resources. Each node has an array of resource snapshots with timestamps.
+	nodeLogicalResources := make(map[string][]map[string]interface{})
+
+	// Process each node to build the historical replay.
+	for _, node := range nodeMap {
+		nodeSummaryReplay := formatNodeSummaryReplayForResp(node, sessionName)
+		summary = append(summary, nodeSummaryReplay)
+
+		nodeResourceReplay := formatNodeResourceReplayForResp(node)
+		nodeLogicalResources[node.NodeID] = nodeResourceReplay
+	}
+
+	// Build dashboard API-compatible response.
+	response := map[string]interface{}{
+		"result": true,
+		"msg":    "Node summary fetched.",
+		"data": map[string]interface{}{
+			"summary":              summary,
+			"nodeLogicalResources": nodeLogicalResources,
+		},
+	}
+
+	data, err := json.Marshal(response)
 	if err != nil {
-		logrus.Errorf("Error: %v", err)
-		resp.WriteError(400, err)
+		logrus.Errorf("Failed to marshal nodes response: %v", err)
+		resp.WriteErrorString(http.StatusInternalServerError, err.Error())
 		return
 	}
+
 	resp.Write(data)
 }
 
-func (s *ServerHandler) getEvents(req *restful.Request, resp *restful.Response) {
+// getNodesHostNameList returns a list of hostnames for all alive nodes in historical clusters.
+func (s *ServerHandler) getNodesHostNameList(nodeMap map[string]eventtypes.Node, resp *restful.Response) {
+	hostNameList := make([]string, 0)
+
+	for _, node := range nodeMap {
+		// Only include nodes that are ALIVE (check the latest state transition)
+		if len(node.StateTransitions) > 0 {
+			lastState := node.StateTransitions[len(node.StateTransitions)-1].State
+			if lastState == eventtypes.NODE_ALIVE {
+				// Use Hostname if available, otherwise use NodeName or NodeID.
+				// TODO: Ray does not export Hostname/NodeName in base events yet.
+				// Ref: https://github.com/ray-project/ray/issues/60129
+				// Once Ray exports these fields, the hostname will be available.
+				// For now, we fallback to NodeID.
+				hostname := node.Hostname
+				if hostname == "" {
+					hostname = node.NodeName
+				}
+				if hostname == "" {
+					hostname = node.NodeID
+				}
+				hostNameList = append(hostNameList, hostname)
+			}
+		}
+	}
+
+	// Build dashboard API-compatible response.
+	response := map[string]interface{}{
+		"result": true,
+		"msg":    "Node hostname list fetched.",
+		"data": map[string]interface{}{
+			"hostNameList": hostNameList,
+		},
+	}
+
+	data, err := json.Marshal(response)
+	if err != nil {
+		logrus.Errorf("Failed to marshal nodes hostname list response: %v", err)
+		resp.WriteErrorString(http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	resp.Write(data)
+}
+
+// getNode retrieves node details for a specific node in a specific cluster session.
+// The API schema of live and dead clusters are different:
+//   - Live clusters: returns the current snapshot
+//   - Dead clusters: returns the historical replay
+func (s *ServerHandler) getNode(req *restful.Request, resp *restful.Response) {
 	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
 	if sessionName == "live" {
 		s.redirectRequest(req, resp)
 		return
 	}
-	// Return "not yet supported" for historical data
-	resp.WriteErrorString(http.StatusNotImplemented, "Historical events not yet supported")
+
+	// Get the target node ID from the path parameter.
+	targetNodeId := req.PathParameter("node_id")
+	if targetNodeId == "" {
+		resp.WriteErrorString(http.StatusBadRequest, "node_id is required")
+		return
+	}
+
+	// Get the specified node from the cluster session.
+	// A cluster lifecycle is identified by a cluster session.
+	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
+	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
+	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
+	targetNode, found := s.eventHandler.GetNodeByNodeID(clusterSessionKey, targetNodeId)
+	if !found {
+		resp.WriteErrorString(http.StatusNotFound, fmt.Sprintf("node %s not found", targetNodeId))
+		return
+	}
+
+	nodeSummaryReplay := formatNodeSummaryReplayForResp(targetNode, sessionName)
+
+	// Build dashboard API-compatible response.
+	response := map[string]interface{}{
+		"result": true,
+		"msg":    "Node details fetched.",
+		"data": map[string]interface{}{
+			"detail": nodeSummaryReplay,
+		},
+	}
+
+	data, err := json.Marshal(response)
+	if err != nil {
+		logrus.Errorf("Failed to marshal nodes response: %v", err)
+		resp.WriteErrorString(http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	resp.Write(data)
+}
+
+func (s *ServerHandler) getEvents(req *restful.Request, resp *restful.Response) {
+	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
+	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
+	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
+
+	// Live cluster: proxy to Ray Dashboard
+	if sessionName == "live" {
+		s.redirectRequest(req, resp)
+		return
+	}
+
+	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
+
+	// Check if job_id parameter exists in query string (even if empty)
+	// This aligns with Ray Dashboard behavior:
+	// - /events (no job_id param) → return all events grouped by job_id
+	// - /events?job_id= (empty job_id) → filter by empty string (return empty)
+	// - /events?job_id=abc → filter by "abc"
+	_, jobIDExists := req.Request.URL.Query()["job_id"]
+	jobID := req.QueryParameter("job_id")
+
+	var response map[string]any
+
+	if jobIDExists {
+		// Return events for a specific job
+		// Response format matches Ray Dashboard: {"result": true, "msg": "...", "data": {"jobId": "...", "events": [...]}}
+		events := s.eventHandler.ClusterLogEventMap.GetEventsByJobID(clusterSessionKey, jobID)
+		response = map[string]any{
+			"result": true,
+			"msg":    "Job events fetched.",
+			"data": map[string]any{
+				"jobId":  jobID,
+				"events": events,
+			},
+		}
+	} else {
+		// Return all events grouped by job_id
+		// Response format matches Ray Dashboard: {"result": true, "msg": "...", "data": {"events": {job_id: [...], ...}}}
+		events := s.eventHandler.ClusterLogEventMap.GetAllEvents(clusterSessionKey)
+		response = map[string]any{
+			"result": true,
+			"msg":    "All events fetched.",
+			"data": map[string]any{
+				"events": events,
+			},
+		}
+	}
+
+	respData, err := json.Marshal(response)
+	if err != nil {
+		logrus.Errorf("Failed to marshal events response: %v", err)
+		resp.WriteErrorString(http.StatusInternalServerError, err.Error())
+		return
+	}
+	resp.Write(respData)
 }
 
 func (s *ServerHandler) getPrometheusHealth(req *restful.Request, resp *restful.Response) {
@@ -380,8 +632,8 @@ func (s *ServerHandler) getPrometheusHealth(req *restful.Request, resp *restful.
 		s.redirectRequest(req, resp)
 		return
 	}
-	// Return "not yet supported" for prometheus health
-	resp.WriteErrorString(http.StatusNotImplemented, "Prometheus health not yet supported")
+
+	resp.WriteErrorString(http.StatusNotImplemented, "Prometheus health is not yet supported for historical sessions.")
 }
 
 func (s *ServerHandler) getGrafanaHealth(req *restful.Request, resp *restful.Response) {
@@ -467,16 +719,6 @@ func formatJobForResponse(job eventtypes.Job) map[string]interface{} {
 		result["end_time"] = job.EndTime.UnixMilli()
 	}
 	return result
-}
-
-func (s *ServerHandler) getNode(req *restful.Request, resp *restful.Response) {
-	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
-	if sessionName == "live" {
-		s.redirectRequest(req, resp)
-		return
-	}
-	// Return "not yet supported" for node
-	resp.WriteErrorString(http.StatusNotImplemented, "Node not yet supported")
 }
 
 func (s *ServerHandler) getJob(req *restful.Request, resp *restful.Response) {
@@ -711,44 +953,54 @@ func (s *ServerHandler) getNodeLogFile(req *restful.Request, resp *restful.Respo
 	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
 	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
 
-	// Parse query parameters
-	nodeID := req.QueryParameter("node_id")
-	filename := req.QueryParameter("filename")
-	lines := req.QueryParameter("lines")
-
-	// Validate required parameters
-	if nodeID == "" {
-		resp.WriteErrorString(http.StatusBadRequest, "Missing required parameter: node_id")
+	// Parse query parameters into GetLogFileOptions struct
+	options, err := parseGetLogFileOptions(req)
+	if err != nil {
+		resp.WriteErrorString(http.StatusBadRequest, err.Error())
 		return
 	}
-	if filename == "" {
-		resp.WriteErrorString(http.StatusBadRequest, "Missing required parameter: filename")
+
+	// node_id or node_ip is required when not using actor_id or task_id (they can auto-resolve node_id)
+	if options.NodeID == "" && options.NodeIP == "" && options.ActorID == "" && options.TaskID == "" {
+		resp.WriteErrorString(http.StatusBadRequest, "node_id or node_ip is required when actor_id or task_id is not provided")
+		return
+	}
+
+	// Validate required parameters following Ray Dashboard logic
+	// At least one of: actor_id, task_id, pid, filename, submission_id must be provided
+	if options.ActorID == "" && options.TaskID == "" && options.PID == 0 && options.Filename == "" {
+		resp.WriteErrorString(http.StatusBadRequest, "At least one of actor_id, task_id, pid, or filename is required")
 		return
 	}
 
 	// Prevent path traversal attacks (e.g., ../../etc/passwd)
-	if !fs.ValidPath(nodeID) || !fs.ValidPath(filename) {
-		resp.WriteErrorString(http.StatusBadRequest, fmt.Sprintf("invalid path: path traversal not allowed (node_id=%s, filename=%s)", nodeID, filename))
+	if options.NodeID != "" && !fs.ValidPath(options.NodeID) {
+		resp.WriteErrorString(http.StatusBadRequest, fmt.Sprintf("invalid path: path traversal not allowed (node_id=%s)", options.NodeID))
+		return
+	}
+	if options.Filename != "" && !fs.ValidPath(options.Filename) {
+		resp.WriteErrorString(http.StatusBadRequest, fmt.Sprintf("invalid path: path traversal not allowed (filename=%s)", options.Filename))
 		return
 	}
 
+	// For live cluster, proxy the request directly to Ray Dashboard without any processing
 	if sessionName == "live" {
 		s.redirectRequest(req, resp)
 		return
 	}
 
-	// Convert lines parameter to int
-	maxLines := 0
-	if lines != "" {
-		parsedLines, err := strconv.Atoi(lines)
+	// Only resolve node_ip to node_id from stored events for dead cluster
+	if options.NodeID == "" && options.NodeIP != "" {
+		nodeID, err := s.ipToNodeId(clusterNameID+"_"+clusterNamespace, sessionName, options.NodeIP)
 		if err != nil {
-			resp.WriteErrorString(http.StatusBadRequest, fmt.Sprintf("invalid lines parameter: %s", lines))
+			resp.WriteErrorString(http.StatusNotFound,
+				fmt.Sprintf("Cannot find matching node_id for a given node ip %s", options.NodeIP))
 			return
 		}
-		maxLines = parsedLines
+		options.NodeID = nodeID
 	}
 
-	content, err := s._getNodeLogFile(clusterNameID+"_"+clusterNamespace, sessionName, nodeID, filename, maxLines)
+	content, err := s._getNodeLogFile(clusterNameID+"_"+clusterNamespace, sessionName, options)
 	if err != nil {
 		var httpErr *utils.HTTPError
 		if errors.As(err, &httpErr) {
@@ -760,7 +1012,116 @@ func (s *ServerHandler) getNodeLogFile(req *restful.Request, resp *restful.Respo
 		}
 		return
 	}
+
+	// Set Content-Disposition header to trigger file download.
+	// If the user provides download_filename, use that; otherwise, use DEFAULT_DOWNLOAD_FILENAME.
+	// This matches Ray Dashboard behavior where Content-Disposition is always set.
+	if options.DownloadFilename != "" {
+		// Format filename correctly to escape " or \
+		disposition := mime.FormatMediaType("attachment", map[string]string{
+			"filename": options.DownloadFilename,
+		})
+		if disposition == "" {
+			logrus.Errorf("Failed to format Content-Disposition header for filename %q", options.DownloadFilename)
+			disposition = fmt.Sprintf("attachment; filename=\"%s\"", DEFAULT_DOWNLOAD_FILENAME)
+		}
+		resp.AddHeader("Content-Disposition", disposition)
+	}
+
 	resp.Write(content)
+}
+
+// parseGetLogFileOptions parses query parameters into GetLogFileOptions struct
+func parseGetLogFileOptions(req *restful.Request) (GetLogFileOptions, error) {
+	options := GetLogFileOptions{
+		NodeID:   req.QueryParameter("node_id"),
+		NodeIP:   req.QueryParameter("node_ip"),
+		Filename: req.QueryParameter("filename"),
+		TaskID:   req.QueryParameter("task_id"),
+		ActorID:  req.QueryParameter("actor_id"),
+		Suffix:   req.QueryParameter("suffix"),
+	}
+
+	// Parse PID parameter
+	if pidStr := req.QueryParameter("pid"); pidStr != "" {
+		pid, err := strconv.Atoi(pidStr)
+		if err != nil {
+			return options, fmt.Errorf("invalid pid parameter: %s", pidStr)
+		}
+		options.PID = pid
+	}
+
+	// Default suffix to "out" if not specified
+	if options.Suffix == "" {
+		options.Suffix = "out"
+	}
+
+	// Validate suffix parameter
+	if options.Suffix != "out" && options.Suffix != "err" {
+		return options, fmt.Errorf("invalid suffix parameter: %s (must be 'out' or 'err')", options.Suffix)
+	}
+
+	// Parse lines parameter
+	if linesStr := req.QueryParameter("lines"); linesStr != "" {
+		lines, err := strconv.Atoi(linesStr)
+		if err != nil {
+			return options, fmt.Errorf("invalid lines parameter: %s", linesStr)
+		}
+		options.Lines = lines
+	}
+
+	// Parse timeout parameter
+	if timeoutStr := req.QueryParameter("timeout"); timeoutStr != "" {
+		timeout, err := strconv.Atoi(timeoutStr)
+		if err != nil {
+			return options, fmt.Errorf("invalid timeout parameter: %s", timeoutStr)
+		}
+		options.Timeout = timeout
+	}
+
+	// Parse attempt_number parameter
+	if attemptStr := req.QueryParameter("attempt_number"); attemptStr != "" {
+		attemptNumber, err := strconv.Atoi(attemptStr)
+		if err != nil {
+			return options, fmt.Errorf("invalid attempt_number parameter: %s", attemptStr)
+		}
+		options.AttemptNumber = attemptNumber
+	}
+
+	// Parse filter_ansi_code parameter (boolean, default: false)
+	if filterStr := req.QueryParameter("filter_ansi_code"); filterStr != "" {
+		switch strings.ToLower(filterStr) {
+		case "true":
+			options.FilterAnsiCode = true
+		case "false":
+			options.FilterAnsiCode = false
+		default:
+			return options, fmt.Errorf("invalid filter_ansi_code parameter: %s (must be 'true' or 'false')", filterStr)
+		}
+	}
+
+	// Parse download_filename parameter
+	// If provided, download with the specified filename
+	if downloadFilename := req.QueryParameter("download_filename"); downloadFilename != "" {
+		options.DownloadFilename = downloadFilename
+	} else {
+		options.DownloadFilename = DEFAULT_DOWNLOAD_FILENAME
+	}
+
+	return options, nil
+}
+
+func (s *ServerHandler) getNodeLogStream(req *restful.Request, resp *restful.Response) {
+	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
+
+	// Streaming only available for live clusters
+	if sessionName != "live" {
+		resp.WriteErrorString(http.StatusNotImplemented, "Log streaming only available for live clusters")
+		return
+	}
+
+	// Forward to Ray Dashboard
+	s.redirectRequest(req, resp)
 }
 
 func (s *ServerHandler) getTaskSummarize(req *restful.Request, resp *restful.Response) {
@@ -786,7 +1147,7 @@ func (s *ServerHandler) getTaskSummarize(req *restful.Request, resp *restful.Res
 	// Apply generic filtering using utils.ApplyFilter
 	tasks = utils.ApplyFilter(tasks, filterKey, filterPredicate, filterValue,
 		func(t eventtypes.Task, key string) string {
-			return eventtypes.GetTaskFieldValue(t, key)
+			return t.GetFilterableFieldValue(key)
 		})
 
 	// Summarize tasks based on summary_by parameter
@@ -820,7 +1181,7 @@ func summarizeTasksByFuncName(tasks []eventtypes.Task) map[string]interface{} {
 	summary := make(map[string]map[string]int)
 
 	for _, task := range tasks {
-		funcName := task.FuncOrClassName
+		funcName := task.GetFuncName()
 		if funcName == "" {
 			funcName = "unknown"
 		}
@@ -871,41 +1232,54 @@ func summarizeTasksByLineage(tasks []eventtypes.Task) map[string]interface{} {
 	}
 }
 
-func (s *ServerHandler) getTaskDetail(req *restful.Request, resp *restful.Response) {
-	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
-	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
+// getTasks handles the /api/v0/tasks endpoint with the task filtering logic by query parameters.
+func (s *ServerHandler) getTasks(req *restful.Request, resp *restful.Response) {
 	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
-
 	if sessionName == "live" {
 		s.redirectRequest(req, resp)
 		return
 	}
 
-	filterKey := req.QueryParameter("filter_keys")
-	filterValue := req.QueryParameter("filter_values")
-	filterPredicate := req.QueryParameter("filter_predicates")
-
-	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
-	tasks := s.eventHandler.GetTasks(clusterSessionKey)
-	tasks = utils.ApplyFilter(tasks, filterKey, filterPredicate, filterValue,
-		func(t eventtypes.Task, key string) string {
-			return eventtypes.GetTaskFieldValue(t, key)
-		})
-
-	taskResults := make([]interface{}, 0, len(tasks))
-	for _, task := range tasks {
-		taskResults = append(taskResults, formatTaskForResponse(task))
+	// Parse query parameters.
+	listAPIOptions, err := utils.ParseOptionsFromReq(req)
+	if err != nil {
+		resp.WriteErrorString(http.StatusBadRequest, err.Error())
+		return
 	}
 
-	response := ReplyTaskInfo{
+	// Get tasks from the cluster session.
+	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
+	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
+	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
+	tasks := s.eventHandler.GetTasks(clusterSessionKey)
+
+	// Calculate the number of tasks after GCS source truncation.
+	// Since we can't access the GCS and num_status_task_events_dropped, we use num_after_truncation to approximate the total number of tasks.
+	// Ref: https://github.com/ray-project/ray/blob/d0b1d151d8ea964a711e451d0ae736f8bf95b629/python/ray/dashboard/state_aggregator.py#L314-L342
+	numAfterTruncation := len(tasks)
+	numTotal := numAfterTruncation
+
+	// Filter tasks.
+	// numFiltered is the number of tasks after filtering but before limit truncation.
+	tasks, numFiltered := utils.ApplyTaskFilters(tasks, listAPIOptions)
+
+	// Format tasks for response.
+	formattedTasks := make([]map[string]interface{}, 0, len(tasks))
+	for _, task := range tasks {
+		formattedTasks = append(formattedTasks, formatTaskForResponse(task, listAPIOptions.Detail))
+	}
+
+	response := RespTasksInfo{
 		Result: true,
-		Msg:    "Tasks fetched.",
-		Data: TaskInfoData{
-			Result: TaskInfoDataResult{
-				Result:             taskResults,
-				Total:              len(taskResults),
-				NumFiltered:        len(taskResults),
-				NumAfterTruncation: len(taskResults),
+		Msg:    "",
+		Data: TaskData{
+			Result: TaskDataResult{
+				Total:                 numTotal,
+				Result:                formattedTasks,
+				NumAfterTruncation:    numAfterTruncation,
+				NumFiltered:           numFiltered,
+				PartialFailureWarning: "",
+				Warnings:              nil,
 			},
 		},
 	}
@@ -916,36 +1290,103 @@ func (s *ServerHandler) getTaskDetail(req *restful.Request, resp *restful.Respon
 		resp.WriteErrorString(http.StatusInternalServerError, err.Error())
 		return
 	}
+
 	resp.Write(respData)
 }
 
-// formatTaskForResponse converts an eventtypes.Task to the format expected by Ray Dashboard
-func formatTaskForResponse(task eventtypes.Task) map[string]interface{} {
+// formatTaskForResponse formats a task data result of a single task attempt for the response.
+// The schema aligns with the Ray Dashboard API.
+// Ref: https://github.com/ray-project/ray/blob/d0b1d151d8ea964a711e451d0ae736f8bf95b629/python/ray/util/state/common.py#L730-L819.
+func formatTaskForResponse(task eventtypes.Task, detail bool) map[string]interface{} {
+	// TODO(jwj): Maybe define result schema in types.go.
 	result := map[string]interface{}{
 		"task_id":            task.TaskID,
-		"name":               task.Name,
-		"attempt_number":     task.AttemptNumber,
+		"attempt_number":     task.TaskAttempt,
+		"name":               task.GetTaskName(),
 		"state":              string(task.State),
 		"job_id":             task.JobID,
-		"node_id":            task.NodeID,
 		"actor_id":           task.ActorID,
-		"placement_group_id": task.PlacementGroupID,
-		"type":               string(task.Type),
-		"func_or_class_name": task.FuncOrClassName,
-		"language":           task.Language,
-		"required_resources": task.RequiredResources,
+		"type":               string(task.TaskType),
+		"func_or_class_name": task.GetFuncName(),
+		"parent_task_id":     task.ParentTaskID,
+		"node_id":            task.NodeID,
 		"worker_id":          task.WorkerID,
-		"error_type":         task.ErrorType,
-		"error_message":      task.ErrorMessage,
-		"call_site":          task.CallSite,
+		"worker_pid":         task.WorkerPID,
+	}
+	if task.RayErrorInfo != nil {
+		result["error_type"] = string(task.RayErrorInfo.ErrorType)
+	} else {
+		result["error_type"] = nil
 	}
 
-	if !task.StartTime.IsZero() {
-		result["start_time"] = task.StartTime.UnixMilli()
-	}
+	if detail {
+		result["language"] = string(task.Language)
+		result["required_resources"] = task.RequiredResources
+		result["runtime_env_info"] = map[string]interface{}{
+			"serialized_runtime_env": task.SerializedRuntimeEnv,
+			// RuntimeEnvUris and RuntimeEnvConfig are never populated on the Ray side.
+			// Ref: https://github.com/ray-project/ray/blob/50c715e79c5ca93118e1280f3842a1946b2cddac/src/ray/core_worker/task_event_buffer.cc#L189-L237.
+			"runtime_env_config": map[string]interface{}{
+				"setup_timeout_seconds": 600,
+				"eager_install":         true,
+				"log_files":             []string{},
+			},
+		}
+		isNil, err := utils.IsHexNil(task.PlacementGroupID)
+		if isNil || task.PlacementGroupID == "" || err != nil {
+			result["placement_group_id"] = nil
+		} else {
+			result["placement_group_id"] = task.PlacementGroupID
+		}
 
-	if !task.EndTime.IsZero() {
-		result["end_time"] = task.EndTime.UnixMilli()
+		events := make([]map[string]interface{}, 0, len(task.StateTransitions))
+		for _, event := range task.StateTransitions {
+			events = append(events, map[string]interface{}{
+				"state":      string(event.State),
+				"created_ms": event.Timestamp.UnixMilli(),
+			})
+		}
+		result["events"] = events
+		// TODO(jwj): Support profiling_data after TASK_PROFILE_EVENT is supported.
+		// Ref: https://github.com/ray-project/ray/blob/d0b1d151d8ea964a711e451d0ae736f8bf95b629/python/ray/util/state/common.py#L1616-L1622.
+		// result["profiling_data"] = task.ProfilingData
+		result["task_log_info"] = task.TaskLogInfo
+		if task.RayErrorInfo != nil {
+			result["error_message"] = task.RayErrorInfo.ErrorMessage
+		} else {
+			result["error_message"] = nil
+		}
+		if task.IsDebuggerPaused != nil {
+			result["is_debugger_paused"] = *task.IsDebuggerPaused
+		} else {
+			result["is_debugger_paused"] = nil
+		}
+		if task.CallSite != nil {
+			result["call_site"] = *task.CallSite
+		} else {
+			result["call_site"] = nil
+		}
+		if task.LabelSelector != nil {
+			result["label_selector"] = task.LabelSelector
+		} else {
+			result["label_selector"] = map[string]string{}
+		}
+
+		if !task.CreationTime.IsZero() {
+			result["creation_time_ms"] = task.CreationTime.UnixMilli()
+		} else {
+			result["creation_time_ms"] = nil
+		}
+		if !task.StartTime.IsZero() {
+			result["start_time_ms"] = task.StartTime.UnixMilli()
+		} else {
+			result["start_time_ms"] = nil
+		}
+		if !task.EndTime.IsZero() {
+			result["end_time_ms"] = task.EndTime.UnixMilli()
+		} else {
+			result["end_time_ms"] = nil
+		}
 	}
 
 	return result
@@ -1013,4 +1454,254 @@ func getClusterSvcInfo(clis []client.Client, name, namespace string) (ServiceInf
 		return ServiceInfo{}, errors.New("RayCluster head service not ready")
 	}
 	return ServiceInfo{ServiceName: svcName, Namespace: namespace, Port: 8265}, nil
+}
+
+// formatNodeSummaryReplayForResp formats a node summary replay of a single node for the response.
+func formatNodeSummaryReplayForResp(node eventtypes.Node, sessionName string) []map[string]interface{} {
+	nodeId := node.NodeID
+	nodeIpAddress := node.NodeIPAddress
+	labels := node.Labels
+	var nodeTypeName string
+	if nodeGroup, exists := labels["ray.io/node-group"]; exists {
+		nodeTypeName = nodeGroup
+	}
+	isHeadNode := nodeTypeName == "headgroup"
+	rayletSocketName := fmt.Sprintf("/tmp/ray/%s/sockets/raylet", sessionName)
+	objectStoreSocketName := fmt.Sprintf("/tmp/ray/%s/sockets/plasma_store", sessionName)
+
+	// Handle the start timestamp of the node.
+	// Ref: https://github.com/ray-project/ray/blob/f953f199b5d68d47c07c865c5ebcd2333d49f365/src/ray/protobuf/gcs.proto#L345-L346.
+	var startTimestamp int64
+	if !node.StartTimestamp.IsZero() {
+		startTimestamp = node.StartTimestamp.UnixMilli()
+	}
+
+	// Wait for Ray to export the following fields.
+	// Ref: https://github.com/ray-project/ray/issues/60129
+	hostname := node.Hostname
+	nodeName := node.NodeName
+	instanceID := node.InstanceID
+	instanceTypeName := node.InstanceTypeName
+
+	nodeSummaryReplay := make([]map[string]interface{}, 0)
+	for _, tr := range node.StateTransitions {
+		transitionTimestamp := tr.Timestamp.UnixMilli()
+		resourcesTotal := convertResourcesToAPISchema(tr.Resources)
+
+		// Handle DEAD state-specific fields.
+		var endTimestamp int64
+		var stateMessage string
+		if tr.State == eventtypes.NODE_DEAD {
+			endTimestamp = tr.Timestamp.UnixMilli()
+			if tr.DeathInfo != nil {
+				stateMessage = composeStateMessage(string(tr.DeathInfo.Reason), tr.DeathInfo.ReasonMessage)
+			}
+		}
+
+		// Host-level metrics (cpus, mem, shm, bootTime, disk, gpus, tpus) are not available
+		// from Ray Base Events. These metrics can be obtained from Prometheus/Grafana when
+		// Ray metrics are enabled. For historical replay, we use placeholder values.
+		nodeSummarySnapshot := map[string]interface{}{
+			"t":        transitionTimestamp,
+			"now":      transitionTimestamp,
+			"hostname": hostname,
+			"ip":       nodeIpAddress,
+			"cpus":     []int{0, 0},
+			"mem":      []int{0, 0, 0, 0},
+			"shm":      0,
+			"bootTime": 0,
+			"disk":     []int{0, 0, 0, 0},
+			"gpus":     []int{0},
+			"tpus":     []int{0},
+			"raylet": map[string]interface{}{
+				"storeStats": map[string]interface{}{
+					"objectStoreBytesAvail": resourcesTotal["objectStoreMemory"],
+				},
+				"nodeId":                nodeId,
+				"nodeManagerAddress":    nodeIpAddress,
+				"nodeManagerHostname":   hostname,
+				"rayletSocketName":      rayletSocketName,
+				"objectStoreSocketName": objectStoreSocketName,
+				"metricsExportPort":     "8080",
+				"resourcesTotal":        resourcesTotal,
+				"nodeName":              nodeName,
+				"instanceId":            instanceID,
+				"nodeTypeName":          nodeTypeName,
+				"instanceTypeName":      instanceTypeName,
+				"startTimeMs":           startTimestamp,
+				"isHeadNode":            isHeadNode,
+				"labels":                labels,
+				"state":                 string(tr.State),
+				"endTimeMs":             endTimestamp,
+				"stateMessage":          stateMessage,
+			},
+		}
+		nodeSummaryReplay = append(nodeSummaryReplay, nodeSummarySnapshot)
+	}
+
+	return nodeSummaryReplay
+}
+
+// formatNodeResourceReplayForResp formats a node resource replay of a single node for the response.
+func formatNodeResourceReplayForResp(node eventtypes.Node) []map[string]interface{} {
+	nodeResourceReplay := make([]map[string]interface{}, 0)
+	for _, tr := range node.StateTransitions {
+		transitionTimestamp := tr.Timestamp.UnixMilli()
+
+		// Create a resource snapshot.
+		var resourceString string
+		if tr.State == eventtypes.NODE_ALIVE {
+			resourceString = constructResourceString(tr.Resources)
+		}
+		nodeResourceSnapshot := map[string]interface{}{
+			"t":              transitionTimestamp,
+			"resourceString": resourceString,
+		}
+		nodeResourceReplay = append(nodeResourceReplay, nodeResourceSnapshot)
+	}
+
+	return nodeResourceReplay
+}
+
+// convertResourcesToAPISchema converts Ray's resource format to Dashboard API schema.
+// Conversion rules:
+//   - "object_store_memory" is converted to "objectStoreMemory"
+//   - "node:__internal_head__" is converted to "node:InternalHead"
+//   - Other fields remain unchanged (e.g., "memory", "CPU", "node:<node-ip>")
+func convertResourcesToAPISchema(resources map[string]float64) map[string]float64 {
+	if len(resources) == 0 {
+		return map[string]float64{}
+	}
+
+	convertedResources := make(map[string]float64, len(resources))
+	for k, v := range resources {
+		convertedKey := k
+		if k == "object_store_memory" {
+			convertedKey = "objectStoreMemory"
+		} else if k == "node:__internal_head__" {
+			convertedKey = "node:InternalHead"
+		}
+		convertedResources[convertedKey] = v
+	}
+
+	return convertedResources
+}
+
+// composeStateMessage composes a state message based on the death reason and message for a node state transition in DEAD state.
+// Ref: https://github.com/ray-project/ray/blob/f953f199b5d68d47c07c865c5ebcd2333d49f365/python/ray/dashboard/utils.py#L738-L765.
+func composeStateMessage(deathReason string, deathReasonMessage string) string {
+	var stateMessage string
+	if deathReason == string(eventtypes.EXPECTED_TERMINATION) {
+		stateMessage = "Expected termination"
+	} else if deathReason == string(eventtypes.UNEXPECTED_TERMINATION) {
+		stateMessage = "Unexpected termination"
+	} else if deathReason == string(eventtypes.AUTOSCALER_DRAIN_PREEMPTED) {
+		stateMessage = "Terminated due to preemption"
+	} else if deathReason == string(eventtypes.AUTOSCALER_DRAIN_IDLE) {
+		stateMessage = "Terminated due to idle (no Ray activity)"
+	} else {
+		stateMessage = ""
+	}
+
+	if deathReasonMessage != "" {
+		if stateMessage != "" {
+			stateMessage = fmt.Sprintf("%s: %s", stateMessage, deathReasonMessage)
+		} else {
+			stateMessage = deathReasonMessage
+		}
+	}
+	return stateMessage
+}
+
+// constructResourceString constructs a resource string based on the resources in state transition.
+// Note that we skip processing the placement group.
+// Ref: https://github.com/ray-project/ray/blob/f953f199b5d68d47c07c865c5ebcd2333d49f365/python/ray/autoscaler/_private/util.py#L643-L665.
+func constructResourceString(resources map[string]float64) string {
+	resourceKeys := make([]string, 0, len(resources))
+	for k := range resources {
+		resourceKeys = append(resourceKeys, k)
+	}
+	sort.Strings(resourceKeys)
+
+	resourceString := ""
+	for _, k := range resourceKeys {
+		v := resources[k]
+
+		if k == "memory" || k == "object_store_memory" {
+			formattedUsed := "0B"
+			formattedTotal := formatMemory(v)
+			resourceString += fmt.Sprintf("%s/%s %s", formattedUsed, formattedTotal, k)
+		} else if strings.HasPrefix(k, "node:") {
+			// Skip per-node resources
+			continue
+		} else if strings.HasPrefix(k, "accelerator_type:") {
+			// Skip accelerator_type
+			// Ref: https://github.com/ray-project/ray/issues/33272
+			continue
+		} else {
+			// Handle CPU, GPU, TPU, and other resources
+			resourceString += fmt.Sprintf("%.1f/%.1f %s", 0.0, v, k)
+		}
+
+		resourceString += "\n"
+	}
+	resourceString = strings.TrimSuffix(resourceString, "\n")
+
+	return resourceString
+}
+
+// formatMemory formats a memory value to a human-readable string.
+func formatMemory(memBytes float64) string {
+	type unit struct {
+		suffix       string
+		bytesPerUnit float64
+	}
+	units := []unit{
+		{suffix: "TiB", bytesPerUnit: math.Pow(2, 40)},
+		{suffix: "GiB", bytesPerUnit: math.Pow(2, 30)},
+		{suffix: "MiB", bytesPerUnit: math.Pow(2, 20)},
+		{suffix: "KiB", bytesPerUnit: math.Pow(2, 10)},
+	}
+	for _, unit := range units {
+		if memBytes >= unit.bytesPerUnit {
+			memInUnit := memBytes / unit.bytesPerUnit
+			return fmt.Sprintf("%.2f%s", memInUnit, unit.suffix)
+		}
+	}
+	return fmt.Sprintf("%dB", int(memBytes))
+}
+
+func (s *ServerHandler) getTasksTimeline(req *restful.Request, resp *restful.Response) {
+	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
+	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
+	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
+
+	if sessionName == "live" {
+		s.redirectRequest(req, resp)
+		return
+	}
+
+	jobID := req.QueryParameter("job_id")
+	download := req.QueryParameter("download")
+
+	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
+	timeline := s.eventHandler.GetTasksTimeline(clusterSessionKey, jobID)
+
+	respData, err := json.Marshal(timeline)
+	if err != nil {
+		logrus.Errorf("Failed to marshal timeline response: %v", err)
+		resp.WriteErrorString(http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	// Support download parameter
+	if download == "1" {
+		nowStr := time.Now().Format("2006-01-02_15-04-05")
+		filename := fmt.Sprintf("timeline-%s-%s.json", jobID, nowStr)
+		if jobID == "" {
+			filename = fmt.Sprintf("timeline-%s.json", nowStr)
+		}
+		resp.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+	}
+	resp.Write(respData)
 }

@@ -11,6 +11,8 @@ spec:
 
     @ray.remote(num_cpus=0.5)
     def my_task(x):
+        # NOTE: Add this to ensure will produce log.out
+        print(f'Processing {x}', flush=True)
         return x * 2
 
     @ray.remote(num_cpus=0.5)
