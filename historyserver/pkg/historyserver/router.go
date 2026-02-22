@@ -815,7 +815,8 @@ func (s *ServerHandler) getClusterStatus(req *restful.Request, resp *restful.Res
 	} else {
 		// TODO(https://github.com/ray-project/kuberay/issues/4381#issuecomment-3771499535)
 		// Update when Ray dashboard api supports autoscaler V2 which uses
-		// GcsClient.get_cluster_status() for /api/cluster_status
+		// GcsClient.get_cluster_status() for /api/cluster_status.
+		// Ray frontend only uses format=1, so returning empty data here is fine for now.
 		response := ClusterStatusResponse{
 			Result: true,
 			Msg:    "Got cluster status.",
