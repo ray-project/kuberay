@@ -1845,7 +1845,8 @@ func testDeadClusterMetadata(test Test, g *WithT, namespace *corev1.Namespace, s
 
 	// Wait for cluster metadata to be stored in S3 by the collector before deleting the cluster.
 	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, rayCluster.Namespace)
-	metaKey := fmt.Sprintf("log/%s/meta/%s", clusterNameID, utils.OssMetaFile_ClusterMetadata)
+	sessionID := GetSessionIDFromHeadPod(test, g, rayCluster)
+	metaKey := fmt.Sprintf("log/%s/meta/%s/%s", clusterNameID, sessionID, utils.OssMetaFile_ClusterMetadata)
 	LogWithTimestamp(test.T(), "Waiting for cluster metadata to appear at S3 key: %s", metaKey)
 
 	g.Eventually(func(gg Gomega) {
