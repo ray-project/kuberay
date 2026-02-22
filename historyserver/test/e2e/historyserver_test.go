@@ -66,6 +66,14 @@ func TestHistoryServer(t *testing.T) {
 			testFunc: testTimelineEndpointDeadCluster,
 		},
 		{
+			name:     "/events endpoint (live cluster)",
+			testFunc: testEventsEndpointLiveCluster,
+		},
+		{
+			name:     "/events endpoint (dead cluster)",
+			testFunc: testEventsEndpointDeadCluster,
+		},
+		{
 			name:     "Live cluster: /api/v0/tasks?detail=1 should return the detailed task information of all task attempts",
 			testFunc: testLiveClusterTasks,
 		},
@@ -1928,4 +1936,195 @@ func verifyNodesHostNameListSchema(test Test, g *WithT, nodesResp map[string]any
 	data, ok := nodesResp["data"].(map[string]any)
 	g.Expect(ok).To(BeTrue(), "'data' should be a map")
 	g.Expect(data).To(HaveKey("hostNameList"))
+}
+
+// testEventsEndpointLiveCluster verifies that the /events endpoint works for a live cluster.
+// For live clusters, the request is proxied to Ray Dashboard.
+//
+// The test case follows these steps:
+// 1. Prepare test environment by applying a Ray cluster
+// 2. Submit a Ray job to the existing cluster
+// 3. Apply History Server and get its URL
+// 4. Get the cluster info from the list and verify sessionName='live'
+// 5. Set cluster context via /enter_cluster/ endpoint
+// 6. Verify that the /events endpoint returns events with proper structure
+// 7. Delete S3 bucket to ensure test isolation
+func testEventsEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
+	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
+	ApplyHistoryServer(test, g, namespace, "")
+	historyServerURL := GetHistoryServerURL(test, g, namespace)
+
+	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
+	g.Expect(clusterInfo.SessionName).To(Equal(LiveSessionName), "Live cluster should have sessionName='live'")
+
+	client := CreateHTTPClientWithCookieJar(g)
+	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
+
+	test.T().Run("should return events", func(t *testing.T) {
+		g := NewWithT(t)
+		g.Eventually(func(gg Gomega) {
+			resp, err := client.Get(historyServerURL + "/events")
+			gg.Expect(err).NotTo(HaveOccurred())
+			defer resp.Body.Close()
+			gg.Expect(resp.StatusCode).To(Equal(http.StatusOK))
+
+			body, err := io.ReadAll(resp.Body)
+			gg.Expect(err).NotTo(HaveOccurred())
+
+			var result map[string]any
+			err = json.Unmarshal(body, &result)
+			gg.Expect(err).NotTo(HaveOccurred())
+			gg.Expect(result["result"]).To(Equal(true))
+
+			// Verify data.events exists
+			data, ok := result["data"].(map[string]any)
+			gg.Expect(ok).To(BeTrue(), "response should have 'data' field")
+			_, ok = data["events"].(map[string]any)
+			gg.Expect(ok).To(BeTrue(), "data should have 'events' field")
+		}, TestTimeoutShort).Should(Succeed())
+	})
+
+	DeleteS3Bucket(test, g, s3Client)
+	LogWithTimestamp(test.T(), "Live cluster events endpoint test completed")
+}
+
+// testEventsEndpointDeadCluster verifies that the /events endpoint works for a dead cluster.
+// Events are retrieved from the EventHandler's in-memory ClusterLogEventMap.
+//
+// The test case follows these steps:
+// 1. Prepare test environment by applying a Ray cluster
+// 2. Submit a Ray job to the existing cluster
+// 3. Delete RayCluster to trigger event upload to S3
+// 4. Apply History Server and get its URL
+// 5. Get the cluster info from the list and verify sessionName != 'live'
+// 6. Set cluster context via /enter_cluster/ endpoint
+// 7. Verify that the /events endpoint returns events from storage with proper structure
+// 8. Verify that the /events endpoint supports job_id filter (non-existent job_id)
+// 9. Verify that the /events endpoint handles empty job_id parameter correctly
+// 10. Delete S3 bucket to ensure test isolation
+func testEventsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
+	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
+
+	// Delete RayCluster to trigger event upload
+	err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Delete(test.Ctx(), rayCluster.Name, metav1.DeleteOptions{})
+	g.Expect(err).NotTo(HaveOccurred())
+	LogWithTimestamp(test.T(), "Deleted RayCluster %s/%s", namespace.Name, rayCluster.Name)
+
+	// Wait for cluster to be fully deleted
+	g.Eventually(func() error {
+		_, err := GetRayCluster(test, namespace.Name, rayCluster.Name)
+		return err
+	}, TestTimeoutMedium).Should(WithTransform(k8serrors.IsNotFound, BeTrue()))
+
+	ApplyHistoryServer(test, g, namespace, "")
+	historyServerURL := GetHistoryServerURL(test, g, namespace)
+
+	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
+	g.Expect(clusterInfo.SessionName).NotTo(Equal(LiveSessionName))
+
+	client := CreateHTTPClientWithCookieJar(g)
+	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
+
+	test.T().Run("should return events from storage", func(t *testing.T) {
+		g := NewWithT(t)
+		g.Eventually(func(gg Gomega) {
+			resp, err := client.Get(historyServerURL + "/events")
+			gg.Expect(err).NotTo(HaveOccurred())
+			defer resp.Body.Close()
+			gg.Expect(resp.StatusCode).To(Equal(http.StatusOK))
+
+			body, err := io.ReadAll(resp.Body)
+			gg.Expect(err).NotTo(HaveOccurred())
+
+			var result map[string]any
+			err = json.Unmarshal(body, &result)
+			gg.Expect(err).NotTo(HaveOccurred())
+			gg.Expect(result["result"]).To(Equal(true))
+			gg.Expect(result["msg"]).To(Equal("All events fetched."))
+
+			// Verify data.events exists (may be empty if no events were collected)
+			data, ok := result["data"].(map[string]any)
+			gg.Expect(ok).To(BeTrue(), "response should have 'data' field")
+			events, ok := data["events"].(map[string]any)
+			gg.Expect(ok).To(BeTrue(), "data should have 'events' field")
+
+			// If we have events, verify their structure matches Cluster Events format
+			// Cluster Events are read from logs/{nodeId}/events/event_*.log files
+			// Fields: eventId, sourceType, sourceHostname, sourcePid, severity, label, message, timestamp, customFields
+			for jobID, jobEvents := range events {
+				eventsList, ok := jobEvents.([]any)
+				gg.Expect(ok).To(BeTrue(), "events for job %s should be an array", jobID)
+				for _, event := range eventsList {
+					eventMap, ok := event.(map[string]any)
+					gg.Expect(ok).To(BeTrue(), "each event should be an object")
+					// Verify required Cluster Event fields exist (camelCase format from ToAPIResponse)
+					gg.Expect(eventMap).To(HaveKey("eventId"))
+					gg.Expect(eventMap).To(HaveKey("sourceType"))
+					gg.Expect(eventMap).To(HaveKey("severity"))
+					gg.Expect(eventMap).To(HaveKey("timestamp"))
+					gg.Expect(eventMap).To(HaveKey("message"))
+				}
+			}
+		}, TestTimeoutMedium).Should(Succeed())
+	})
+
+	test.T().Run("should support job_id filter", func(t *testing.T) {
+		g := NewWithT(t)
+		g.Eventually(func(gg Gomega) {
+			// Use a non-existent job_id to test the filter
+			resp, err := client.Get(historyServerURL + "/events?job_id=nonexistent")
+			gg.Expect(err).NotTo(HaveOccurred())
+			defer resp.Body.Close()
+			gg.Expect(resp.StatusCode).To(Equal(http.StatusOK))
+
+			body, err := io.ReadAll(resp.Body)
+			gg.Expect(err).NotTo(HaveOccurred())
+
+			var result map[string]any
+			err = json.Unmarshal(body, &result)
+			gg.Expect(err).NotTo(HaveOccurred())
+			gg.Expect(result["result"]).To(Equal(true))
+			gg.Expect(result["msg"]).To(Equal("Job events fetched."))
+
+			data, ok := result["data"].(map[string]any)
+			gg.Expect(ok).To(BeTrue())
+			gg.Expect(data["jobId"]).To(Equal("nonexistent"))
+			events, ok := data["events"].([]any)
+			gg.Expect(ok).To(BeTrue())
+			gg.Expect(events).To(BeEmpty()) // No events for non-existent job
+		}, TestTimeoutShort).Should(Succeed())
+	})
+
+	test.T().Run("should return empty for empty job_id parameter", func(t *testing.T) {
+		// This test verifies the behavior when job_id is provided but empty (/events?job_id=)
+		// It should align with Ray Dashboard behavior: filter by empty string (return empty)
+		g := NewWithT(t)
+		g.Eventually(func(gg Gomega) {
+			resp, err := client.Get(historyServerURL + "/events?job_id=")
+			gg.Expect(err).NotTo(HaveOccurred())
+			defer resp.Body.Close()
+			gg.Expect(resp.StatusCode).To(Equal(http.StatusOK))
+
+			body, err := io.ReadAll(resp.Body)
+			gg.Expect(err).NotTo(HaveOccurred())
+
+			var result map[string]any
+			err = json.Unmarshal(body, &result)
+			gg.Expect(err).NotTo(HaveOccurred())
+			gg.Expect(result["result"]).To(Equal(true))
+			gg.Expect(result["msg"]).To(Equal("Job events fetched."))
+
+			data, ok := result["data"].(map[string]any)
+			gg.Expect(ok).To(BeTrue())
+			gg.Expect(data["jobId"]).To(Equal(""))
+			events, ok := data["events"].([]any)
+			gg.Expect(ok).To(BeTrue())
+			gg.Expect(events).To(BeEmpty()) // Empty job_id filters by empty string
+		}, TestTimeoutShort).Should(Succeed())
+	})
+
+	DeleteS3Bucket(test, g, s3Client)
+	LogWithTimestamp(test.T(), "Dead cluster events endpoint tests completed")
 }

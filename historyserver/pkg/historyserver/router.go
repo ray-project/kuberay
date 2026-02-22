@@ -570,13 +570,60 @@ func (s *ServerHandler) getNode(req *restful.Request, resp *restful.Response) {
 }
 
 func (s *ServerHandler) getEvents(req *restful.Request, resp *restful.Response) {
+	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
+	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
 	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
+
+	// Live cluster: proxy to Ray Dashboard
 	if sessionName == "live" {
 		s.redirectRequest(req, resp)
 		return
 	}
-	// Return "not yet supported" for historical data
-	resp.WriteErrorString(http.StatusNotImplemented, "Historical events not yet supported")
+
+	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
+
+	// Check if job_id parameter exists in query string (even if empty)
+	// This aligns with Ray Dashboard behavior:
+	// - /events (no job_id param) → return all events grouped by job_id
+	// - /events?job_id= (empty job_id) → filter by empty string (return empty)
+	// - /events?job_id=abc → filter by "abc"
+	_, jobIDExists := req.Request.URL.Query()["job_id"]
+	jobID := req.QueryParameter("job_id")
+
+	var response map[string]any
+
+	if jobIDExists {
+		// Return events for a specific job
+		// Response format matches Ray Dashboard: {"result": true, "msg": "...", "data": {"jobId": "...", "events": [...]}}
+		events := s.eventHandler.ClusterLogEventMap.GetEventsByJobID(clusterSessionKey, jobID)
+		response = map[string]any{
+			"result": true,
+			"msg":    "Job events fetched.",
+			"data": map[string]any{
+				"jobId":  jobID,
+				"events": events,
+			},
+		}
+	} else {
+		// Return all events grouped by job_id
+		// Response format matches Ray Dashboard: {"result": true, "msg": "...", "data": {"events": {job_id: [...], ...}}}
+		events := s.eventHandler.ClusterLogEventMap.GetAllEvents(clusterSessionKey)
+		response = map[string]any{
+			"result": true,
+			"msg":    "All events fetched.",
+			"data": map[string]any{
+				"events": events,
+			},
+		}
+	}
+
+	respData, err := json.Marshal(response)
+	if err != nil {
+		logrus.Errorf("Failed to marshal events response: %v", err)
+		resp.WriteErrorString(http.StatusInternalServerError, err.Error())
+		return
+	}
+	resp.Write(respData)
 }
 
 func (s *ServerHandler) getPrometheusHealth(req *restful.Request, resp *restful.Response) {
