@@ -22,3 +22,5 @@ featureGates:
     enabled: true
   - name: RayClusterIdleTermination
     enabled: true
+  - name: RayServiceIncrementalUpgrade
+    enabled: true
