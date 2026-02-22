@@ -58,7 +58,7 @@ func TestHistoryServer(t *testing.T) {
 			testFunc: testLogStreamEndpoint,
 		},
 		{
-			name:     "Dead cluster: /api/v0/logs endpoint with glob pattern",
+			name:     "/api/v0/logs endpoint with glob pattern (dead cluster)",
 			testFunc: testNodeLogsEndpointDeadCluster,
 		},
 		{
@@ -1009,6 +1009,35 @@ func testNodeLogsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Name
 		g.Expect(countFiles(result)).To(Equal(0), "A glob matching no files should return an empty result")
 		LogWithTimestamp(t, "Non-matching glob correctly returned 0 files")
 	})
+
+	test.T().Run("glob=events/ lists the events directory and its log files", func(t *testing.T) {
+		g := NewWithT(t)
+
+		// glob=events/ should list the events/ subdirectory itself plus all event log files inside it.
+		// Expected response:
+		//   {"data":{"result":{"internal":["events","event_AUTOSCALER.log","event_CORE_WORKER_525.log",
+		//     "event_CORE_WORKER_738.log","event_CORE_WORKER_786.log","event_GCS.log",
+		//     "event_JOBS.log","event_RAYLET.log"]}},"msg":"","result":true}
+		// The "internal" category contains 1 directory entry ("events") + 7 event log files = 8 items total.
+		logsURL := fmt.Sprintf("%s%s?node_id=%s&glob=%s", historyServerURL, EndpointLogs, nodeID, url.QueryEscape("events/"))
+		resp, err := client.Get(logsURL)
+		g.Expect(err).NotTo(HaveOccurred())
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(resp.StatusCode).To(Equal(http.StatusOK), "Expected OK, body: %s", string(body))
+
+		result := parseLogsResponse(body)
+		g.Expect(result).NotTo(BeNil(), "Response should be parseable, body: %s", string(body))
+
+		g.Expect(result).To(HaveLen(1), "Should only have the 'internal' category, got: %v", result)
+		internalFiles, _ := result["internal"].([]interface{})
+		g.Expect(internalFiles).To(ContainElement("events"), "Result should include the 'events' directory entry")
+		g.Expect(countFiles(result)).To(Equal(8), "Should have 8 entries under events/ (1 dir + 7 log files), got: %d", countFiles(result))
+		LogWithTimestamp(t, "glob=events/ correctly returned %d entries", len(internalFiles))
+	})
+
 
 	DeleteS3Bucket(test, g, s3Client)
 	LogWithTimestamp(test.T(), "Dead cluster /api/v0/logs glob endpoint tests completed")
