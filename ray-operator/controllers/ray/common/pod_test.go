@@ -727,6 +727,55 @@ func TestBuildPod(t *testing.T) {
 	checkContainerEnv(t, rayContainer, "TEST_DEFAULT_ENV_NAME", "TEST_ENV_VALUE")
 }
 
+func TestBuildPod_WithPlasmaDirectory(t *testing.T) {
+	ctx := context.Background()
+
+	testCases := []struct {
+		rayStartParams     map[string]string
+		name               string
+		expectSharedMemory bool
+	}{
+		{
+			name:               "unset plasma-directory keeps shared memory mount",
+			rayStartParams:     map[string]string{},
+			expectSharedMemory: true,
+		},
+		{
+			name: "plasma-directory set to /dev/shm skips shared memory mount",
+			rayStartParams: map[string]string{
+				PlasmaDirectoryParamKey: "/dev/shm",
+			},
+			expectSharedMemory: false,
+		},
+		{
+			name: "plasma-directory set to /dev/shm/ skips shared memory mount",
+			rayStartParams: map[string]string{
+				PlasmaDirectoryParamKey: "/dev/shm/",
+			},
+			expectSharedMemory: false,
+		},
+		{
+			name: "non /dev/shm plasma-directory skips shared memory mount",
+			rayStartParams: map[string]string{
+				PlasmaDirectoryParamKey: "/tmp/ray/plasma",
+			},
+			expectSharedMemory: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			cluster := instance.DeepCopy()
+			podName := strings.ToLower(cluster.Name + utils.DashSymbol + string(rayv1.HeadNode) + utils.DashSymbol + utils.FormatInt32(0))
+			podTemplateSpec := DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
+			pod := BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, maps.Clone(tc.rayStartParams), "6379", false, utils.GetCRDType(""), "", nil, "")
+
+			assert.Equal(t, tc.expectSharedMemory, checkIfVolumeMounted(&pod.Spec.Containers[utils.RayContainerIndex], SharedMemoryVolumeMountPath))
+			assert.Equal(t, tc.expectSharedMemory, checkIfVolumeExists(&pod, SharedMemoryVolumeName))
+		})
+	}
+}
+
 func TestBuildPod_WithNoCPULimits(t *testing.T) {
 	cluster := instance.DeepCopy()
 	ctx := context.Background()

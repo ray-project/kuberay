@@ -26,6 +26,7 @@ import (
 const (
 	SharedMemoryVolumeName      = "shared-mem"
 	SharedMemoryVolumeMountPath = "/dev/shm"
+	PlasmaDirectoryParamKey     = "plasma-directory"
 	RayLogVolumeName            = "ray-logs"
 	RayLogVolumeMountPath       = "/tmp/ray"
 	AutoscalerContainerName     = "autoscaler"
@@ -547,7 +548,12 @@ func BuildPod(ctx context.Context, podTemplateSpec corev1.PodTemplateSpec, rayNo
 	}
 
 	// Add /dev/shm volumeMount for the object store to avoid performance degradation.
-	addEmptyDir(ctx, &pod.Spec.Containers[utils.RayContainerIndex], &pod, SharedMemoryVolumeName, SharedMemoryVolumeMountPath, corev1.StorageMediumMemory)
+	// Skip injection when users explicitly set plasma-directory.
+	if _, ok := rayStartParams[PlasmaDirectoryParamKey]; !ok {
+		addEmptyDir(ctx, &pod.Spec.Containers[utils.RayContainerIndex], &pod, SharedMemoryVolumeName, SharedMemoryVolumeMountPath, corev1.StorageMediumMemory)
+	} else {
+		log.Info("skip /dev/shm volumeMount injection due to explicit plasma-directory", "plasma-directory", rayStartParams[PlasmaDirectoryParamKey])
+	}
 	if rayNodeType == rayv1.HeadNode && enableRayAutoscaler {
 		// The Ray autoscaler writes logs which are read by the Ray head.
 		// We need a shared log volume to enable this information flow.
