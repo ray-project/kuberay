@@ -44,14 +44,14 @@ type (
 		Err     error
 	}
 
-	jobTask struct {
+	jobInfoQuery struct {
 		rayJob        *rayv1.RayJob
 		rayClusterUID types.UID
 	}
 
 	WorkerPool struct {
-		cacheReader         client.Reader
-		taskQueue           *chanx.UnboundedChan[jobTask]
+		informerCache       client.Reader
+		taskQueue           *chanx.UnboundedChan[jobInfoQuery]
 		existInQueue        sync.Map
 		dashboardClientFunc func(rayCluster *rayv1.RayCluster, url string) (RayDashboardClientInterface, error)
 		cacheStorage        *otter.Cache[string, *JobInfoCache]
@@ -62,7 +62,7 @@ type (
 )
 
 func InitWorkerPool(ctx context.Context,
-	cacheReader client.Reader,
+	informerCache client.Reader,
 	numWorkers int,
 	queryInterval time.Duration,
 	cacheExpiry time.Duration,
@@ -75,7 +75,7 @@ func InitWorkerPool(ctx context.Context,
 		// It might be better to give a channel capacity because there would be a batch send after listing RayJobs from cache.
 		// Using zero capacity channel would be a bit of inefficient because each send operation would block.
 		// Pass context.Background to let the process goroutine in UnboundedChan would not exit earlier during the closing.
-		taskQueue := chanx.NewUnboundedChanSize[jobTask](context.Background(), initBufferSize, initBufferSize, initBufferSize)
+		taskQueue := chanx.NewUnboundedChanSize[jobInfoQuery](context.Background(), initBufferSize, initBufferSize, initBufferSize)
 
 		var cacheStorage *otter.Cache[string, *JobInfoCache]
 		cacheStorage, err = otter.New(&otter.Options[string, *JobInfoCache]{
@@ -93,7 +93,7 @@ func InitWorkerPool(ctx context.Context,
 
 		pool = &WorkerPool{
 			taskQueue:           taskQueue,
-			cacheReader:         cacheReader,
+			informerCache:       informerCache,
 			dashboardClientFunc: dashboardClientFunc,
 			cacheStorage:        cacheStorage,
 			numWorkers:          numWorkers,
@@ -121,7 +121,7 @@ func (w *WorkerPool) Start(ctx context.Context) error {
 				return
 			case <-ticker.C:
 				var rayJobs rayv1.RayJobList
-				err := w.cacheReader.List(ctx, &rayJobs, client.InNamespace("")) // List all namespaces
+				err := w.informerCache.List(ctx, &rayJobs, client.InNamespace("")) // List all namespaces
 				if err != nil {
 					logger.Error(err, "Error listing RayJobs from cache")
 					continue
@@ -140,7 +140,7 @@ func (w *WorkerPool) Start(ctx context.Context) error {
 
 					rayClusterNamespacedName := namespacedNameFromRayJob(&rayJob)
 					var rayClusterInstance rayv1.RayCluster
-					if err := w.cacheReader.Get(ctx, rayClusterNamespacedName, &rayClusterInstance); err != nil {
+					if err := w.informerCache.Get(ctx, rayClusterNamespacedName, &rayClusterInstance); err != nil {
 						logger.Error(err, "failed to get RayCluster instance from informer cache", "rayCluster", rayClusterNamespacedName.String())
 						continue
 					}
@@ -153,7 +153,7 @@ func (w *WorkerPool) Start(ctx context.Context) error {
 					}
 
 					// The task queue is unbounded, so the send operation will never block.
-					w.taskQueue.In <- jobTask{
+					w.taskQueue.In <- jobInfoQuery{
 						rayJob:        rayJob.DeepCopy(),
 						rayClusterUID: rayClusterInstance.UID,
 					}
@@ -186,7 +186,7 @@ func (w *WorkerPool) Start(ctx context.Context) error {
 // processRayJob fetches job info from Ray Dashboard and stores it in the cache.
 // It uses defer to ensure existInQueue is cleaned up after processing completes,
 // preventing the same RayJob from being enqueued again while still being processed.
-func (w *WorkerPool) processRayJob(ctx context.Context, task jobTask) {
+func (w *WorkerPool) processRayJob(ctx context.Context, task jobInfoQuery) {
 	logger := w.logger
 	rayJobInstance := task.rayJob
 
@@ -200,7 +200,7 @@ func (w *WorkerPool) processRayJob(ctx context.Context, task jobTask) {
 
 	// get RayCluster instance from informer cache
 	var rayClusterInstance rayv1.RayCluster
-	err := w.cacheReader.Get(ctx, rayClusterNamespacedName, &rayClusterInstance)
+	err := w.informerCache.Get(ctx, rayClusterNamespacedName, &rayClusterInstance)
 	if err != nil {
 		logger.Error(err, "failed to get RayCluster instance from informer cache", "rayCluster", rayClusterNamespacedName.String())
 		return
@@ -271,28 +271,22 @@ func (r *RayDashboardCacheClient) GetMultiApplicationStatus(ctx context.Context)
 func (r *RayDashboardCacheClient) GetJobInfo(ctx context.Context, jobId string) (*utiltypes.RayJobInfo, error) {
 	logger := ctrl.LoggerFrom(ctx).WithName("RayDashboardCacheClient")
 
-	var err error
-	if cached, ok := r.cacheStorage.ComputeIfPresent(cacheKey(r.namespacedName, r.rayClusterUID, jobId),
-		func(oldValue *JobInfoCache) (newValue *JobInfoCache, op otter.ComputeOp) {
-			// If the cache has error, we populate it and invalidate the cache
-			// so that the reconcile would not repeatedly return the same error to trigger the rate limiter,
-			// which would cause exponential backoff and delay the recovery.
-			if oldValue.Err != nil {
-				err = oldValue.Err
-				return oldValue, otter.InvalidateOp
-			}
-			return oldValue, otter.CancelOp
-		},
-	); ok {
-		return cached.JobInfo, nil
-	}
-	if err != nil {
-		logger.Error(err, "Got an error on the job info cache, invalidating the cache", "jobId", jobId, "cacheKey", cacheKey(r.namespacedName, r.rayClusterUID, jobId))
-		return nil, err
+	key := cacheKey(r.namespacedName, r.rayClusterUID, jobId)
+	cached, ok := r.cacheStorage.GetIfPresent(key)
+	if !ok {
+		logger.Info("Cache miss for jobId", "jobId", jobId, "cacheKey", key)
+		return nil, ErrAgain
 	}
 
-	logger.Info("Cache miss for jobId", "jobId", jobId, "cacheKey", cacheKey(r.namespacedName, r.rayClusterUID, jobId))
-	return nil, ErrAgain
+	// If the cache has an error, consume and invalidate it so that the reconciler does not
+	// repeatedly return the same error to trigger the rate limiter's exponential backoff.
+	if cached.Err != nil {
+		r.cacheStorage.Invalidate(key)
+		logger.Error(cached.Err, "Got an error on the job info cache, invalidating the cache", "jobId", jobId, "cacheKey", key)
+		return nil, cached.Err
+	}
+
+	return cached.JobInfo, nil
 }
 
 func (r *RayDashboardCacheClient) ListJobs(ctx context.Context) (*[]utiltypes.RayJobInfo, error) {
