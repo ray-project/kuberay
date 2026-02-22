@@ -839,6 +839,7 @@ func (s *ServerHandler) buildFormattedClusterStatus(clusterName, clusterNamespac
 	clusterNameID := clusterName + "_" + clusterNamespace
 	logsPath := path.Join(sessionName, utils.RAY_SESSIONDIR_LOGDIR_NAME)
 	nodeIDs := s.reader.ListFiles(clusterNameID, logsPath)
+	successCount := 0
 
 	for _, nodeID := range nodeIDs {
 		debugStatePath := path.Join(logsPath, nodeID, "debug_state.txt")
@@ -856,6 +857,11 @@ func (s *ServerHandler) buildFormattedClusterStatus(clusterName, clusterNamespac
 		}
 
 		builder.AddNodeFromDebugState(debugState)
+		successCount++
+	}
+
+	if len(nodeIDs) > 0 && successCount == 0 {
+		logrus.Debugf("Found %d nodes but failed to parse any debug_state.txt for cluster %s session %s", len(nodeIDs), clusterName, sessionName)
 	}
 
 	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
