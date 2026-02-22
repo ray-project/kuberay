@@ -130,6 +130,10 @@ func (s *ServerHandler) _getNodeLogFile(ctx context.Context, rayClusterNameID, s
 	// Resolve node_id and filename based on options
 	nodeID, filename, err := s.resolveLogFilename(ctx, rayClusterNameID, sessionID, options)
 	if err != nil {
+		// Check if nil is due to context error
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return nil, utils.NewHTTPError(ctx.Err(), http.StatusRequestTimeout)
+		}
 		// Preserve HTTPError status code if already set, otherwise use BadRequest
 		var httpErr *utils.HTTPError
 		if errors.As(err, &httpErr) {
@@ -144,11 +148,8 @@ func (s *ServerHandler) _getNodeLogFile(ctx context.Context, rayClusterNameID, s
 
 	if reader == nil {
 		// Check if nil is due to context error
-		if ctx.Err() != nil {
-			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-				return nil, utils.NewHTTPError(ctx.Err(), http.StatusRequestTimeout)
-			}
-			return nil, ctx.Err()
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return nil, utils.NewHTTPError(ctx.Err(), http.StatusRequestTimeout)
 		}
 		return nil, utils.NewHTTPError(fmt.Errorf("log file not found: %s", logPath), http.StatusNotFound)
 	}

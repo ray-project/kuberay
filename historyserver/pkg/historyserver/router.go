@@ -1006,6 +1006,10 @@ func (s *ServerHandler) getNodeLogFile(req *restful.Request, resp *restful.Respo
 	if options.NodeID == "" && options.NodeIP != "" {
 		nodeID, err := s.ipToNodeId(ctx, clusterNameID+"_"+clusterNamespace, sessionName, options.NodeIP)
 		if err != nil {
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+				resp.WriteError(http.StatusRequestTimeout, ctx.Err())
+				return
+			}
 			resp.WriteErrorString(http.StatusNotFound,
 				fmt.Sprintf("Cannot find matching node_id for a given node ip %s", options.NodeIP))
 			return
