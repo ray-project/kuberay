@@ -136,7 +136,9 @@ func (b *ClusterStatusBuilder) AddFailedNodesFromNodes(nodes map[string]types.No
 		// only take the latest DEAD transition per node
 		for i := len(node.StateTransitions) - 1; i >= 0; i-- {
 			tr := node.StateTransitions[i]
-			if tr.State != types.NODE_DEAD {
+			if tr.State != types.NODE_DEAD ||
+				(tr.DeathInfo != nil && (tr.DeathInfo.Reason == types.EXPECTED_TERMINATION ||
+					tr.DeathInfo.Reason == types.AUTOSCALER_DRAIN_IDLE)) {
 				continue
 			}
 
@@ -338,13 +340,7 @@ func formatResourceValue(resource string, value float64) string {
 		return formatMemory(value)
 	}
 
-	// Integer values: "1.0", "4.0" (matching Python's f"{1.0}" → "1.0")
-	if math.Trunc(value) == value {
-		return fmt.Sprintf("%.1f", value)
-	}
-
-	// Non-integer values: use minimum digits (matching Python's f"{0.1}" → "0.1", f"{0.123456}" → "0.123456")
-	return strconv.FormatFloat(value, 'f', -1, 64)
+	return formatPythonFloat(value)
 }
 
 // formatResourceMapForDisplay formats a resource map matching Python's dict repr output,
