@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"maps"
 	"os"
+	"slices"
 	"sort"
 	"strings"
 
@@ -525,13 +526,7 @@ func getSkippedDefaultPortNames(userPorts map[string]int32, defaultPorts map[str
 			continue
 		}
 
-		isDefinedByDefaultName := false
-		for _, name := range namesUsingDefaultPort {
-			if name == defaultName {
-				isDefinedByDefaultName = true
-				break
-			}
-		}
+		isDefinedByDefaultName := slices.Contains(namesUsingDefaultPort, defaultName)
 		if isDefinedByDefaultName {
 			continue
 		}
