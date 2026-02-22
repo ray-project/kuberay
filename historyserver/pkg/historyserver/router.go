@@ -133,7 +133,6 @@ func routerAPI(s *ServerHandler) {
 	ws.Route(ws.GET("/v0/logs").To(s.getNodeLogs).Filter(s.CookieHandle).
 		Doc("get logs").
 		Param(ws.QueryParameter("node_id", "node_id")).
-		Param(ws.QueryParameter("folder", "folder")).
 		Param(ws.QueryParameter("glob", "glob pattern")).
 		Writes("")) // Placeholder for specific return type
 	ws.Route(ws.GET("/v0/logs/file").To(s.getNodeLogFile).Filter(s.CookieHandle).
