@@ -5,6 +5,7 @@ import (
 	"maps"
 	"math"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -16,7 +17,7 @@ const (
 	sessionTimestampFormat = "2006-01-02_15-04-05"
 	// maxFailuresDisplayed is the maximum number of failed nodes to display,
 	// matching Ray's AUTOSCALER_MAX_FAILURES_DISPLAYED constant.
-	// Ref: https://github.com/ray-project/ray/blob/master/python/ray/autoscaler/_private/constants.py
+	// Ref: https://github.com/ray-project/ray/blob/d99d5d375c9c4e6533c15edb37d93a3ee9066be4/python/ray/autoscaler/_private/constants.py#L73
 	maxFailuresDisplayed = 20
 )
 
@@ -282,20 +283,24 @@ func sortedKeys[V any](m map[string]V) []string {
 	return slices.Sorted(maps.Keys(m))
 }
 
-// formatResourceValue formats a single resource value for display.
+// formatResourceValue formats a single resource value for display,
+// matching Python's default float formatting behavior used in Ray's autoscaler.
 // Memory resources are formatted as human-readable bytes (e.g. "10.0 GiB"),
-// while others use numeric format (e.g. "1.0", "0.25").
+// while others use minimum-digits numeric format (e.g. "1.0", "0.25", "0.1").
+// Ref: https://github.com/ray-project/ray/blob/d99d5d375c9c4e6533c15edb37d93a3ee9066be4/python/ray/autoscaler/_private/util.py#L741
 func formatResourceValue(resource string, value float64) string {
 	// e.g. memory, object_store_memory
 	if strings.Contains(strings.ToLower(resource), "memory") {
 		return formatMemory(value)
 	}
 
+	// Integer values: "1.0", "4.0" (matching Python's f"{1.0}" → "1.0")
 	if math.Trunc(value) == value {
 		return fmt.Sprintf("%.1f", value)
 	}
 
-	return fmt.Sprintf("%.2f", value)
+	// Non-integer values: use minimum digits (matching Python's f"{0.1}" → "0.1", f"{0.123456}" → "0.123456")
+	return strconv.FormatFloat(value, 'f', -1, 64)
 }
 
 // formatResourceMapForDisplay formats a resource map matching Ray's autoscaler output.
@@ -314,16 +319,20 @@ func formatResourceMapForDisplay(resources map[string]float64) string {
 }
 
 // FormatStatus formats the cluster status as a string matching Ray's format
+// Ref: https://github.com/ray-project/ray/blob/d99d5d375c9c4e6533c15edb37d93a3ee9066be4/python/ray/autoscaler/_private/util.py#L790
 func (b *ClusterStatusBuilder) FormatStatus() string {
 	var sb strings.Builder
 
-	// Header with timestamp
-	sb.WriteString(fmt.Sprintf("======== Autoscaler status: %s ========\n",
-		b.Timestamp.Format(timestampDisplayFormat)))
+	// Header with timestamp, separator length matches header length.
+	// Ref: https://github.com/ray-project/ray/blob/d99d5d375c9c4e6533c15edb37d93a3ee9066be4/python/ray/autoscaler/_private/util.py#L801
+	header := fmt.Sprintf("======== Autoscaler status: %s ========",
+		b.Timestamp.Format(timestampDisplayFormat))
+	separator := strings.Repeat("-", len(header))
+	sb.WriteString(header + "\n")
 
 	// Node status section
 	sb.WriteString("Node status\n")
-	sb.WriteString("---------------------------------------------------------------\n")
+	sb.WriteString(separator + "\n")
 
 	// Active nodes
 	sb.WriteString("Active:\n")
@@ -347,7 +356,8 @@ func (b *ClusterStatusBuilder) FormatStatus() string {
 
 	// Pending nodes (not available from debug_state.txt)
 	sb.WriteString("Pending:\n")
-	// TODO Reconstruct pending nodes when autoscaler state is archived.
+	// TODO Reconstruct pending nodes when autoscaler events are exported by Ray.
+	// Ref: https://github.com/ray-project/ray/issues/60129#issuecomment-3940436320
 	sb.WriteString(" (unavailable in history server)\n")
 
 	// Recent failures
@@ -369,7 +379,7 @@ func (b *ClusterStatusBuilder) FormatStatus() string {
 
 	// Resources section
 	sb.WriteString("Resources\n")
-	sb.WriteString("---------------------------------------------------------------\n")
+	sb.WriteString(separator + "\n")
 
 	// Total Usage
 	sb.WriteString("Total Usage:\n")
@@ -377,6 +387,11 @@ func (b *ClusterStatusBuilder) FormatStatus() string {
 		sb.WriteString(" (no resources)\n")
 	} else {
 		for _, key := range sortedKeys(b.TotalResources) {
+			// Skip accelerator_type resources, matching Ray's non-verbose behavior.
+			// Ref: https://github.com/ray-project/ray/blob/d99d5d375c9c4e6533c15edb37d93a3ee9066be4/python/ray/autoscaler/_private/util.py#L760
+			if strings.HasPrefix(key, "accelerator_type:") {
+				continue
+			}
 			total := b.TotalResources[key]
 			used := b.UsedResources[key]
 			sb.WriteString(fmt.Sprintf(" %s/%s %s\n",
@@ -389,7 +404,8 @@ func (b *ClusterStatusBuilder) FormatStatus() string {
 	sb.WriteString("\n")
 
 	sb.WriteString("From request_resources:\n")
-	// TODO Reconstruct request_resources when autoscaler demand estimator is archived.
+	// TODO Reconstruct request_resources when autoscaler events are exported by Ray.
+	// Ref: https://github.com/ray-project/ray/issues/60129#issuecomment-3940436320
 	sb.WriteString(" (unavailable in history server)\n")
 
 	// Pending Demands
@@ -398,8 +414,8 @@ func (b *ClusterStatusBuilder) FormatStatus() string {
 		sb.WriteString(" (no resource demands)")
 	} else {
 		for _, demand := range b.PendingDemands {
-			// Ref: https://github.com/ray-project/ray/blob/master/python/ray/autoscaler/_private/util.py (get_demand_report)
-			// Ref: https://github.com/ray-project/ray/blob/master/python/ray/autoscaler/v2/utils.py (ClusterStatusFormatter._demand_report)
+			// Ref: https://github.com/ray-project/ray/blob/d99d5d375c9c4e6533c15edb37d93a3ee9066be4/python/ray/autoscaler/_private/util.py#L776 (get_demand_report)
+			// Ref: https://github.com/ray-project/ray/blob/d99d5d375c9c4e6533c15edb37d93a3ee9066be4/python/ray/autoscaler/v2/utils.py#L635 (ClusterStatusFormatter._demand_report)
 			sb.WriteString(fmt.Sprintf(" %s: %d+ pending tasks/actors\n",
 				formatResourceMapForDisplay(demand.Resources), demand.Count))
 		}
