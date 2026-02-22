@@ -1010,16 +1010,13 @@ func testNodeLogsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Name
 		LogWithTimestamp(t, "Non-matching glob correctly returned 0 files")
 	})
 
-	test.T().Run("glob=events/ lists the events directory and its log files", func(t *testing.T) {
+	test.T().Run("glob=events/event_JOBS* matches exactly one file in the events subdirectory", func(t *testing.T) {
 		g := NewWithT(t)
 
-		// glob=events/ should list the events/ subdirectory itself plus all event log files inside it.
+		// glob=events/event_JOBS* should match only event_JOBS.log inside the events/ subdirectory.
 		// Expected response:
-		//   {"data":{"result":{"internal":["events","event_AUTOSCALER.log","event_CORE_WORKER_525.log",
-		//     "event_CORE_WORKER_738.log","event_CORE_WORKER_786.log","event_GCS.log",
-		//     "event_JOBS.log","event_RAYLET.log"]}},"msg":"","result":true}
-		// The "internal" category contains 1 directory entry ("events") + 7 event log files = 8 items total.
-		logsURL := fmt.Sprintf("%s%s?node_id=%s&glob=%s", historyServerURL, EndpointLogs, nodeID, url.QueryEscape("events/"))
+		//   {"data":{"result":{"internal":["event_JOBS.log"]}},"msg":"","result":true}
+		logsURL := fmt.Sprintf("%s%s?node_id=%s&glob=%s", historyServerURL, EndpointLogs, nodeID, url.QueryEscape("events/event_JOBS*"))
 		resp, err := client.Get(logsURL)
 		g.Expect(err).NotTo(HaveOccurred())
 		defer resp.Body.Close()
@@ -1031,11 +1028,11 @@ func testNodeLogsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Name
 		result := parseLogsResponse(body)
 		g.Expect(result).NotTo(BeNil(), "Response should be parseable, body: %s", string(body))
 
+		// events/event_JOBS* maps to the "internal" category; no other category should be present.
 		g.Expect(result).To(HaveLen(1), "Should only have the 'internal' category, got: %v", result)
 		internalFiles, _ := result["internal"].([]interface{})
-		g.Expect(internalFiles).To(ContainElement("events"), "Result should include the 'events' directory entry")
-		g.Expect(countFiles(result)).To(Equal(8), "Should have 8 entries under events/ (1 dir + 7 log files), got: %d", countFiles(result))
-		LogWithTimestamp(t, "glob=events/ correctly returned %d entries", len(internalFiles))
+		g.Expect(internalFiles).To(ConsistOf("event_JOBS.log"), "glob=events/event_JOBS* should match exactly event_JOBS.log")
+		LogWithTimestamp(t, "glob=events/event_JOBS* correctly returned %d file", len(internalFiles))
 	})
 
 
