@@ -815,7 +815,7 @@ func (s *ServerHandler) getNodeLogs(req *restful.Request, resp *restful.Response
 	var folder, glob string
 	if req.QueryParameter("glob") != "" {
 		glob = req.QueryParameter("glob")
-		// SplitPattern splits e.g. "logs/raylet*" into base="logs/" and pattern="raylet*",
+		// SplitPattern splits e.g. "logs/raylet*" into base="logs" and pattern="raylet*",
 		// so we can use base as the storage directory prefix and pattern for matching.
 		// For a flat pattern like "raylet*", base is "." which we treat as no subdirectory.
 		base, pattern := doublestar.SplitPattern(glob)
