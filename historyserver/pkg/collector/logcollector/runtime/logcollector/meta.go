@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"path"
+	"path/filepath"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -15,27 +16,28 @@ import (
 )
 
 const (
-	defaultDashboardPort     = 8265
 	metadataRetryInterval    = 5 * time.Second  // initial interval
 	metadataMaxRetryInterval = 60 * time.Second // max cap for backoff
 	metadataRequestTimeout   = 30 * time.Second // per-request timeout
 )
 
-// dashboardAddress returns the Ray Dashboard base URL.
-// Uses set DashboardAddress or defaults to http://localhost:8265.
-func (r *RayLogHandler) dashboardAddress() string {
-	if r.DashboardAddress != "" {
-		return r.DashboardAddress
-	}
-	return fmt.Sprintf("http://localhost:%d", defaultDashboardPort)
-}
-
 // FetchAndStoreClusterMetadata fetches /api/v0/cluster_metadata from the Ray Dashboard
-// once on startup and stores the result in storage. It retries with exponential backoff
-// until the fetch succeeds or the collector is shut down.
+// once on startup and stores the result in storage per session. It retries with exponential
+// backoff until the fetch succeeds or the collector is shut down.
+//
+// The metadata is stored per session (not per cluster) because different sessions can use
+// different Ray images, resulting in different rayVersion / pythonVersion values.
 func (r *RayLogHandler) FetchAndStoreClusterMetadata() {
-	url := r.dashboardAddress() + "/api/v0/cluster_metadata"
+	url := r.DashboardAddress + "/api/v0/cluster_metadata"
 	retryInterval := metadataRetryInterval
+
+	// Resolve the session name first so we can store metadata under the correct session path.
+	sessionName, err := r.resolveSessionName()
+	if err != nil {
+		logrus.Errorf("Failed to resolve session name for cluster metadata: %v", err)
+		return
+	}
+	logrus.Infof("Resolved session name for cluster metadata: %s", sessionName)
 
 	for {
 		logrus.Infof("Fetching cluster metadata from %s", url)
@@ -80,7 +82,7 @@ func (r *RayLogHandler) FetchAndStoreClusterMetadata() {
 			continue
 		}
 
-		if resp.StatusCode != 200 {
+		if resp.StatusCode != http.StatusOK {
 			logrus.Warnf("Cluster metadata returned status %d, retrying in %v", resp.StatusCode, retryInterval)
 			if !r.sleepOrShutdown(retryInterval) {
 				return
@@ -89,8 +91,8 @@ func (r *RayLogHandler) FetchAndStoreClusterMetadata() {
 			continue
 		}
 
-		// Successfully fetched — store it
-		objectKey := path.Join(r.MetaDir, utils.OssMetaFile_ClusterMetadata)
+		// Successfully fetched — store it under the session path
+		objectKey := path.Join(r.MetaDir, sessionName, utils.OssMetaFile_ClusterMetadata)
 		if err := r.Writer.WriteFile(objectKey, bytes.NewReader(body)); err != nil {
 			logrus.Errorf("Failed to store cluster metadata at %s: %v", objectKey, err)
 			// Retry storage write as well
@@ -103,6 +105,26 @@ func (r *RayLogHandler) FetchAndStoreClusterMetadata() {
 
 		logrus.Infof("Successfully stored cluster metadata at %s (%d bytes)", objectKey, len(body))
 		return
+	}
+}
+
+// resolveSessionName waits for the session_latest symlink to appear and resolves
+// the session name from it. It retries with exponential backoff.
+func (r *RayLogHandler) resolveSessionName() (string, error) {
+	sessionLatestDir := filepath.Join("/tmp", "ray", "session_latest")
+	retryInterval := metadataRetryInterval
+
+	for {
+		sessionRealDir, err := filepath.EvalSymlinks(sessionLatestDir)
+		if err == nil {
+			return filepath.Base(sessionRealDir), nil
+		}
+
+		logrus.Warnf("session_latest symlink not ready: %v, retrying in %v", err, retryInterval)
+		if !r.sleepOrShutdown(retryInterval) {
+			return "", fmt.Errorf("shutdown signaled while waiting for session_latest")
+		}
+		retryInterval = nextBackoff(retryInterval)
 	}
 }
 

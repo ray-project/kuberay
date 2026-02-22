@@ -10,6 +10,7 @@ import (
 	"math"
 	"mime"
 	"net/http"
+	"path"
 	"sort"
 	"strconv"
 	"strings"
@@ -809,7 +810,7 @@ func (s *ServerHandler) getClusterMetadata(req *restful.Request, resp *restful.R
 	}
 
 	clusterNameID := clusterName + "_" + clusterNamespace
-	metaPath := "meta/" + utils.OssMetaFile_ClusterMetadata
+	metaPath := path.Join("meta", sessionName, utils.OssMetaFile_ClusterMetadata)
 	reader := s.reader.GetContent(clusterNameID, metaPath)
 	if reader == nil {
 		resp.WriteErrorString(http.StatusNotFound, "Cluster metadata not found")
