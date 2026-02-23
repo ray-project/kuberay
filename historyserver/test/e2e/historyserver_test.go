@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"testing"
 
+	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/s3"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -108,6 +109,14 @@ func TestHistoryServer(t *testing.T) {
 		{
 			name:     "/api/cluster_status endpoint (dead cluster)",
 			testFunc: testDeadClusterStatus,
+		},
+		{
+			name:     "Live cluster: cluster_metadata endpoint should return metadata (Ray version, Python version, etc.)",
+			testFunc: testLiveClusterMetadata,
+		},
+		{
+			name:     "Dead cluster: cluster_metadata endpoint should return stored metadata from S3",
+			testFunc: testDeadClusterMetadata,
 		},
 	}
 
@@ -1794,6 +1803,115 @@ func testDeadClusterNode(test Test, g *WithT, namespace *corev1.Namespace, s3Cli
 
 	DeleteS3Bucket(test, g, s3Client)
 	LogWithTimestamp(test.T(), "Dead cluster /nodes/{node_id} tests completed successfully")
+}
+
+// testLiveClusterMetadata verifies that the /api/v0/cluster_metadata endpoint proxies to the
+// live Ray Dashboard and returns valid cluster metadata.
+func testLiveClusterMetadata(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
+	ApplyHistoryServer(test, g, namespace, "")
+	historyServerURL := GetHistoryServerURL(test, g, namespace)
+
+	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
+	g.Expect(clusterInfo.SessionName).To(Equal(LiveSessionName))
+
+	client := CreateHTTPClientWithCookieJar(g)
+	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
+
+	endpoint := "/api/v0/cluster_metadata"
+	LogWithTimestamp(test.T(), "Testing live cluster endpoint: %s", endpoint)
+
+	g.Eventually(func(gg Gomega) {
+		resp, err := client.Get(historyServerURL + endpoint)
+		gg.Expect(err).NotTo(HaveOccurred())
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		gg.Expect(err).NotTo(HaveOccurred())
+		gg.Expect(resp.StatusCode).To(Equal(http.StatusOK),
+			"Endpoint %s should return 200, got %d: %s", endpoint, resp.StatusCode, string(body))
+
+		var metadata map[string]interface{}
+		err = json.Unmarshal(body, &metadata)
+		gg.Expect(err).NotTo(HaveOccurred(), "Cluster metadata should be valid JSON")
+		gg.Expect(metadata).To(HaveKey("data"), "Cluster metadata should contain data field")
+		data, ok := metadata["data"].(map[string]interface{})
+		gg.Expect(ok).To(BeTrue(), "data field should be a JSON object")
+		gg.Expect(data).To(HaveKey("rayVersion"))
+		gg.Expect(data).To(HaveKey("pythonVersion"))
+		LogWithTimestamp(test.T(), "Live cluster metadata: %s", string(body))
+	}, TestTimeoutShort).Should(Succeed())
+
+	DeleteS3Bucket(test, g, s3Client)
+	LogWithTimestamp(test.T(), "Live cluster /api/v0/cluster_metadata test completed successfully")
+}
+
+// testDeadClusterMetadata verifies that the /api/v0/cluster_metadata endpoint returns stored
+// cluster metadata from S3 for a dead (deleted) cluster.
+func testDeadClusterMetadata(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
+
+	// Wait for cluster metadata to be stored in S3 by the collector before deleting the cluster.
+	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, rayCluster.Namespace)
+	sessionID := GetSessionIDFromHeadPod(test, g, rayCluster)
+	metaKey := fmt.Sprintf("log/%s/meta/%s/%s", clusterNameID, sessionID, utils.OssMetaFile_ClusterMetadata)
+	LogWithTimestamp(test.T(), "Waiting for cluster metadata to appear at S3 key: %s", metaKey)
+
+	g.Eventually(func(gg Gomega) {
+		_, err := s3Client.HeadObject(&s3.HeadObjectInput{
+			Bucket: aws.String(S3BucketName),
+			Key:    aws.String(metaKey),
+		})
+		gg.Expect(err).NotTo(HaveOccurred())
+	}, TestTimeoutMedium).Should(Succeed())
+
+	// Delete the Ray cluster.
+	LogWithTimestamp(test.T(), "Deleting RayCluster %s/%s", rayCluster.Namespace, rayCluster.Name)
+	err := test.Client().Ray().RayV1().
+		RayClusters(rayCluster.Namespace).
+		Delete(test.Ctx(), rayCluster.Name, metav1.DeleteOptions{})
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Eventually(func() error {
+		_, err := GetRayCluster(test, rayCluster.Namespace, rayCluster.Name)
+		return err
+	}, TestTimeoutMedium).Should(WithTransform(k8serrors.IsNotFound, BeTrue()))
+
+	// Deploy the history server and query the dead cluster metadata.
+	ApplyHistoryServer(test, g, namespace, "")
+	historyServerURL := GetHistoryServerURL(test, g, namespace)
+
+	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
+	g.Expect(clusterInfo.SessionName).To(SatisfyAll(Not(BeEmpty()), Not(Equal(LiveSessionName))))
+
+	client := CreateHTTPClientWithCookieJar(g)
+	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
+
+	endpoint := "/api/v0/cluster_metadata"
+	LogWithTimestamp(test.T(), "Testing dead cluster endpoint: %s", endpoint)
+
+	g.Eventually(func(gg Gomega) {
+		resp, err := client.Get(historyServerURL + endpoint)
+		gg.Expect(err).NotTo(HaveOccurred())
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		gg.Expect(err).NotTo(HaveOccurred())
+		gg.Expect(resp.StatusCode).To(Equal(http.StatusOK),
+			"Endpoint %s should return 200, got %d: %s", endpoint, resp.StatusCode, string(body))
+
+		var metadata map[string]interface{}
+		err = json.Unmarshal(body, &metadata)
+		gg.Expect(err).NotTo(HaveOccurred(), "Cluster metadata should be valid JSON")
+		gg.Expect(metadata).To(HaveKey("data"), "Cluster metadata should contain data field")
+		data, ok := metadata["data"].(map[string]interface{})
+		gg.Expect(ok).To(BeTrue(), "data field should be a JSON object")
+		gg.Expect(data).To(HaveKey("rayVersion"))
+		gg.Expect(data).To(HaveKey("pythonVersion"))
+		LogWithTimestamp(test.T(), "Dead cluster metadata: %s", string(body))
+	}, TestTimeoutShort).Should(Succeed())
+
+	DeleteS3Bucket(test, g, s3Client)
+	LogWithTimestamp(test.T(), "Dead cluster /api/v0/cluster_metadata test completed successfully")
 }
 
 // setClusterContext sets the cluster context via /enter_cluster/ endpoint and verifies the response.
