@@ -291,11 +291,10 @@ func TestRayClusterIdleTermination(t *testing.T) {
 		g.Expect(err).NotTo(HaveOccurred())
 
 		LogWithTimestamp(test.T(), "Submitting a job to generate driver activity")
-		submitCmd := []string{
+		ExecPodCmd(test, headPod, headPod.Spec.Containers[utils.RayContainerIndex].Name, []string{
 			"bash", "-c",
-			"ray job submit --address http://127.0.0.1:8265 -- python -c \"print('hello')\"",
-		}
-		ExecPodCmd(test, headPod, headPod.Spec.Containers[utils.RayContainerIndex].Name, submitCmd)
+			"ray job submit --address http://127.0.0.1:8265 --no-wait -- python -c 'import ray; ray.init(); print(\"test idle termination\")'",
+		})
 
 		// Wait for the job to complete so the cluster becomes idle.
 		LogWithTimestamp(test.T(), "Waiting for the cluster to be idle and deleted after TTL")
