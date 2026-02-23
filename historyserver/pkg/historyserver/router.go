@@ -893,9 +893,7 @@ func (s *ServerHandler) getAdditionalEndpoint(req *restful.Request, resp *restfu
 		return
 	}
 
-	// Reconstruct the full API path from the request URL (strip leading "/").
-	requestPath := strings.Trim(req.Request.URL.Path, "/")
-	storageKey := "restful__" + strings.ReplaceAll(requestPath, "/", "__")
+	storageKey := utils.EndpointPathToStorageKey(req.Request.URL.Path)
 
 	clusterNameID := clusterName + "_" + clusterNamespace
 	endpointPath := path.Join(sessionName, utils.RAY_SESSIONDIR_FETCHED_ENDPOINTS_NAME, storageKey)
@@ -907,7 +905,7 @@ func (s *ServerHandler) getAdditionalEndpoint(req *restful.Request, resp *restfu
 
 	data, err := io.ReadAll(reader)
 	if err != nil {
-		logrus.Errorf("Failed to read additional endpoint data for %s: %v", requestPath, err)
+		logrus.Errorf("Failed to read additional endpoint data for %s: %v", req.Request.URL.Path, err)
 		resp.WriteErrorString(http.StatusInternalServerError, "Failed to read endpoint data")
 		return
 	}
