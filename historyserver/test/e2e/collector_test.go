@@ -402,20 +402,20 @@ func testCollectorStoresPlacementGroups(test Test, g *WithT, namespace *corev1.N
 		gg.Expect(err).NotTo(HaveOccurred())
 		gg.Expect(body).NotTo(BeEmpty(), "Placement groups file should not be empty")
 
-		// Verify it is valid JSON with a non-empty placement_groups list.
+		// Verify it is valid JSON with a non-empty placement groups list.
 		var response map[string]interface{}
 		err = json.Unmarshal(body, &response)
 		gg.Expect(err).NotTo(HaveOccurred(), "Placement groups response should be valid JSON")
 
-		// The Ray dashboard returns {"result": true, "data": {"placement_groups": [...]}}.
-		gg.Expect(response).To(HaveKey("data"), "Placement groups response should contain data field")
-		data, ok := response["data"].(map[string]interface{})
-		gg.Expect(ok).To(BeTrue(), "data field should be a JSON object")
-		gg.Expect(data).To(HaveKey("placement_groups"), "data should contain placement_groups field")
+		// The Ray State API v2 returns {"result": {"result": [...], "total": N, ...}}.
+		gg.Expect(response).To(HaveKey("result"), "Placement groups response should contain result field")
+		resultObj, ok := response["result"].(map[string]interface{})
+		gg.Expect(ok).To(BeTrue(), "result field should be a JSON object")
+		gg.Expect(resultObj).To(HaveKey("result"), "result should contain result field")
 
-		pgList, ok := data["placement_groups"].([]interface{})
-		gg.Expect(ok).To(BeTrue(), "placement_groups should be a JSON array")
-		gg.Expect(pgList).NotTo(BeEmpty(), "placement_groups list should not be empty (RayJob creates a detached PG)")
+		pgList, ok := resultObj["result"].([]interface{})
+		gg.Expect(ok).To(BeTrue(), "result.result should be a JSON array")
+		gg.Expect(pgList).NotTo(BeEmpty(), "placement groups list should not be empty (RayJob creates a detached PG)")
 
 		pgBody = body
 	}, TestTimeoutMedium).Should(Succeed())
