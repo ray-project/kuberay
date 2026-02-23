@@ -23,13 +23,16 @@ import (
 // where storageKey is derived from the endpoint path (e.g., "/api/v0/nodes/summary"
 // becomes "restful__api__v0__nodes__summary"). Each poll cycle overwrites the
 // previous response.
-//
 func (r *RayLogHandler) PollAdditionalEndpointsPeriodically() {
 	if len(r.AdditionalEndpoints) == 0 {
 		logrus.Info("No additional endpoints configured, skipping polling")
 		return
 	}
 
+	// Note: session name staleness is not a concern here because the log collector runs as a
+	// sidecar in the Ray head pod. If the Ray head process restarts (creating a new session),
+	// the entire pod — including this sidecar container — restarts, so resolveSessionName()
+	// always runs in a fresh container lifecycle with the current session.
 	sessionName, err := r.resolveSessionName()
 	if err != nil {
 		logrus.Errorf("Failed to resolve session name for additional endpoints polling: %v", err)
@@ -109,14 +112,15 @@ func (r *RayLogHandler) pollSingleEndpoint(endpoint, sessionName string) {
 	}
 
 	resp, err := r.HttpClient.Do(req)
-	cancel()
 	if err != nil {
+		cancel()
 		logrus.Warnf("Failed to fetch additional endpoint %s: %v", endpoint, err)
 		return
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	resp.Body.Close()
+	cancel()
 	if err != nil {
 		logrus.Warnf("Failed to read response body for additional endpoint %s: %v", endpoint, err)
 		return

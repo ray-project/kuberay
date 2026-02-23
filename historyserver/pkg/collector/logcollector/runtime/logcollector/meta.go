@@ -33,6 +33,10 @@ func (r *RayLogHandler) FetchAndStoreClusterMetadata() {
 	retryInterval := metadataRetryInterval
 
 	// Resolve the session name first so we can store metadata under the correct session path.
+	// Note: session name staleness is not a concern here because the log collector runs as a
+	// sidecar in the Ray head pod. If the Ray head process restarts (creating a new session),
+	// the entire pod — including this sidecar container — restarts, so resolveSessionName()
+	// always runs in a fresh container lifecycle with the current session.
 	sessionName, err := r.resolveSessionName()
 	if err != nil {
 		logrus.Errorf("Failed to resolve session name for cluster metadata: %v", err)
@@ -61,8 +65,8 @@ func (r *RayLogHandler) FetchAndStoreClusterMetadata() {
 		}
 
 		resp, err := r.HttpClient.Do(req)
-		cancel()
 		if err != nil {
+			cancel()
 			logrus.Warnf("Failed to fetch cluster metadata from %s: %v, retrying in %v", url, err, retryInterval)
 			if !r.sleepOrShutdown(retryInterval) {
 				return
@@ -73,6 +77,7 @@ func (r *RayLogHandler) FetchAndStoreClusterMetadata() {
 
 		body, err := io.ReadAll(resp.Body)
 		resp.Body.Close()
+		cancel()
 
 		if err != nil {
 			logrus.Warnf("Failed to read cluster metadata response body: %v, retrying in %v", err, retryInterval)
