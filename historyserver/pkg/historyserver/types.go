@@ -59,3 +59,25 @@ type ReplyActorInfo struct {
 type ActorInfoData struct {
 	Detail map[string]interface{} `json:"detail"`
 }
+
+type ClusterStatusResponse struct {
+	Result bool              `json:"result"`
+	Msg    string            `json:"msg"`
+	Data   ClusterStatusData `json:"data"`
+}
+
+type ClusterStatusData struct {
+	AutoscalingStatus *string `json:"autoscalingStatus"`
+	AutoscalingError  *string `json:"autoscalingError"`
+	ClusterStatus     any     `json:"clusterStatus"` // TODO: update it once ray dashboard api /api/cluster_status supports autoscaler info
+}
+
+type FormattedClusterStatusResponse struct {
+	Result bool                       `json:"result"`
+	Msg    string                     `json:"msg"`
+	Data   FormattedClusterStatusData `json:"data"`
+}
+
+type FormattedClusterStatusData struct {
+	ClusterStatus string `json:"clusterStatus"`
+}
