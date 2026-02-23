@@ -6,4 +6,5 @@ const (
 	EndpointTasks          = "/api/v0/tasks"
 	EndpointTasksSummarize = "/api/v0/tasks/summarize"
 	EndpointNodes          = "/nodes"
+	EndpointClusterStatus  = "/api/cluster_status"
 )
