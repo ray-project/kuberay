@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"path"
+	"path/filepath"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -22,6 +23,7 @@ import (
 // where storageKey is derived from the endpoint path (e.g., "/api/v0/nodes/summary"
 // becomes "restful__api__v0__nodes__summary"). Each poll cycle overwrites the
 // previous response.
+//
 func (r *RayLogHandler) PollAdditionalEndpointsPeriodically() {
 	if len(r.AdditionalEndpoints) == 0 {
 		logrus.Info("No additional endpoints configured, skipping polling")
@@ -54,16 +56,26 @@ func (r *RayLogHandler) PollAdditionalEndpointsPeriodically() {
 
 // processAdditionalEndpoints performs a final poll of all additional endpoints
 // before shutdown. This mirrors processSessionLatestLogs as a shutdown cleanup step.
+//
+// Unlike PollAdditionalEndpointsPeriodically, this does NOT retry session name
+// resolution because it runs during shutdown — if session_latest is gone (e.g.,
+// Ray head already exited), retrying would hang forever since ShutdownChan has
+// not been closed yet.
 func (r *RayLogHandler) processAdditionalEndpoints() {
 	if len(r.AdditionalEndpoints) == 0 {
 		return
 	}
 	logrus.Info("Processing additional endpoints before shutdown")
-	sessionName, err := r.resolveSessionName()
+
+	// Resolve session name directly without retry — this is a shutdown path.
+	sessionLatestDir := filepath.Join("/tmp", "ray", "session_latest")
+	sessionRealDir, err := filepath.EvalSymlinks(sessionLatestDir)
 	if err != nil {
 		logrus.Errorf("Failed to resolve session name for final additional endpoints poll: %v", err)
 		return
 	}
+	sessionName := filepath.Base(sessionRealDir)
+
 	r.pollAllEndpoints(sessionName)
 	logrus.Info("Finished processing additional endpoints")
 }

@@ -61,6 +61,9 @@ func main() {
 		if parseErr != nil {
 			panic("Failed to parse RAY_COLLECTOR_POLL_INTERVAL: " + parseErr.Error())
 		}
+		if parsed <= 0 {
+			panic("RAY_COLLECTOR_POLL_INTERVAL must be positive, got: " + intervalStr)
+		}
 		endpointPollInterval = parsed
 	}
 
