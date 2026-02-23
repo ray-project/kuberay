@@ -101,6 +101,14 @@ func TestHistoryServer(t *testing.T) {
 			name:     "Dead cluster: /nodes/{node_id} should return the historical replay containing node summary snapshots of the specified node in a cluster session",
 			testFunc: testDeadClusterNode,
 		},
+		{
+			name:     "/api/cluster_status endpoint (live cluster)",
+			testFunc: testLiveClusterStatus,
+		},
+		{
+			name:     "/api/cluster_status endpoint (dead cluster)",
+			testFunc: testDeadClusterStatus,
+		},
 	}
 
 	for _, tt := range tests {
@@ -2444,4 +2452,109 @@ func testEventsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namesp
 
 	DeleteS3Bucket(test, g, s3Client)
 	LogWithTimestamp(test.T(), "Dead cluster events endpoint tests completed")
+}
+
+// testLiveClusterStatus verifies that the /api/cluster_status endpoint works for a live cluster.
+//
+// The test case follows these steps:
+// 1. Prepare test environment by applying a Ray cluster
+// 2. Submit a Ray job to the existing cluster
+// 3. Apply History Server and get its URL
+// 4. Get the cluster info from the list and verify sessionName='live'
+// 5. Set cluster context via /enter_cluster/ endpoint
+// 6. Verify /api/cluster_status returns valid JSON response with result=true
+// 7. Verify /api/cluster_status?format=1 returns formatted cluster status string containing "Autoscaler status"
+// 8. Delete S3 bucket to ensure test isolation
+func testLiveClusterStatus(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
+	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
+	ApplyHistoryServer(test, g, namespace, "")
+	historyServerURL := GetHistoryServerURL(test, g, namespace)
+
+	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
+	g.Expect(clusterInfo.SessionName).To(Equal(LiveSessionName), "Live cluster should have sessionName='live'")
+
+	client := CreateHTTPClientWithCookieJar(g)
+	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
+
+	endpointURL := fmt.Sprintf("%s%s", historyServerURL, EndpointClusterStatus)
+
+	test.T().Run("should proxy /api/cluster_status to live clusters", func(_ *testing.T) {
+		verifySingleEndpoint(test, g, client, endpointURL, func(test Test, g *WithT, data map[string]any) {
+			g.Expect(data).To(HaveKeyWithValue("result", true))
+			g.Expect(data).To(HaveKeyWithValue("msg", "Got cluster status."))
+			g.Expect(data).To(HaveKey("data"))
+		})
+	})
+
+	test.T().Run("should proxy for /api/cluster_status?format=1", func(_ *testing.T) {
+		verifySingleEndpoint(test, g, client, endpointURL+"?format=1", func(test Test, g *WithT, data map[string]any) {
+			g.Expect(data).To(HaveKeyWithValue("result", true))
+			g.Expect(data).To(HaveKeyWithValue("msg", "Got formatted cluster status."))
+			g.Expect(data).To(HaveKey("data"))
+			respData, ok := data["data"].(map[string]any)
+			g.Expect(ok).To(BeTrue(), "'data' should be a map")
+			clusterStatus, ok := respData["clusterStatus"].(string)
+			g.Expect(ok).To(BeTrue(), "'clusterStatus' should be a string")
+			g.Expect(clusterStatus).To(ContainSubstring("Autoscaler status"))
+		})
+	})
+
+	DeleteS3Bucket(test, g, s3Client)
+	LogWithTimestamp(test.T(), "Live cluster status E2E test completed successfully")
+}
+
+// testDeadClusterStatus verifies that the /api/cluster_status endpoint works for a dead cluster.
+// Cluster status is reconstructed from debug_state.txt and task/actor data stored in S3.
+//
+// The test case follows these steps:
+// 1. Prepare test environment by applying a Ray cluster
+// 2. Submit a Ray job to the existing cluster
+// 3. Delete RayCluster to trigger data upload to S3
+// 4. Apply History Server and get its URL
+// 5. Get the cluster info from the list and verify sessionName != 'live'
+// 6. Set cluster context via /enter_cluster/ endpoint
+// 7. Verify /api/cluster_status returns valid JSON response with result=true
+// 8. Verify /api/cluster_status?format=1 returns formatted cluster status containing "Autoscaler status"
+// 9. Delete S3 bucket to ensure test isolation
+func testDeadClusterStatus(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
+	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
+
+	DeleteRayClusterAndWait(test, g, namespace.Name, rayCluster.Name)
+
+	ApplyHistoryServer(test, g, namespace, "")
+	historyServerURL := GetHistoryServerURL(test, g, namespace)
+
+	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
+	g.Expect(clusterInfo.SessionName).NotTo(Equal(LiveSessionName))
+
+	client := CreateHTTPClientWithCookieJar(g)
+	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
+
+	endpointURL := fmt.Sprintf("%s%s", historyServerURL, EndpointClusterStatus)
+
+	test.T().Run("should return cluster status with /api/cluster_status", func(_ *testing.T) {
+		verifySingleEndpoint(test, g, client, endpointURL, func(test Test, g *WithT, data map[string]any) {
+			g.Expect(data).To(HaveKeyWithValue("result", true))
+			g.Expect(data).To(HaveKeyWithValue("msg", "Got cluster status."))
+			g.Expect(data).To(HaveKey("data"))
+		})
+	})
+
+	test.T().Run("should return formatted cluster status with /api/cluster_status?format=1", func(_ *testing.T) {
+		verifySingleEndpoint(test, g, client, endpointURL+"?format=1", func(test Test, g *WithT, data map[string]any) {
+			g.Expect(data).To(HaveKeyWithValue("result", true))
+			g.Expect(data).To(HaveKeyWithValue("msg", "Got formatted cluster status."))
+			g.Expect(data).To(HaveKey("data"))
+			respData, ok := data["data"].(map[string]any)
+			g.Expect(ok).To(BeTrue(), "'data' should be a map")
+			clusterStatus, ok := respData["clusterStatus"].(string)
+			g.Expect(ok).To(BeTrue(), "'clusterStatus' should be a string")
+			g.Expect(clusterStatus).To(ContainSubstring("Autoscaler status"))
+		})
+	})
+
+	DeleteS3Bucket(test, g, s3Client)
+	LogWithTimestamp(test.T(), "Dead cluster status E2E test completed successfully")
 }

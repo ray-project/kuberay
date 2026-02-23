@@ -279,7 +279,7 @@ func (s *ServerHandler) resolvePidLogFilename(clusterNameID, sessionID, nodeID s
 		return "", "", fmt.Errorf("failed to decode node_id: %w", err)
 	}
 
-	logPath := path.Join(sessionID, "logs", nodeIDHex)
+	logPath := path.Join(sessionID, utils.RAY_SESSIONDIR_LOGDIR_NAME, nodeIDHex)
 	files := s.reader.ListFiles(clusterNameID, logPath)
 
 	pidSuffix := fmt.Sprintf("-%d.%s", pid, suffix)
@@ -448,7 +448,7 @@ func (s *ServerHandler) findWorkerLogFile(clusterNameID, sessionID, nodeID, work
 	}
 
 	// List all files in the node's log directory
-	logPath := path.Join(sessionID, "logs", nodeIDHex)
+	logPath := path.Join(sessionID, utils.RAY_SESSIONDIR_LOGDIR_NAME, nodeIDHex)
 	files := s.reader.ListFiles(clusterNameID, logPath)
 
 	// Search for files matching pattern: worker-{worker_id_hex}-*.{suffix}
