@@ -57,7 +57,6 @@ const (
 //   - /logical/actors/{actor_id}
 //
 // Excluded endpoints that are not yet implemented:
-//   - /events
 //   - /api/cluster_status
 //   - /api/data/datasets/{job_id}
 //   - /api/jobs
@@ -68,6 +67,7 @@ var HistoryServerEndpoints = []string{
 	"/api/v0/tasks",
 	"/api/v0/tasks/summarize",
 	"/logical/actors",
+	"/events",
 }
 
 // HistoryServerEndpointPrometheusHealth and HistoryServerEndpointGrafanaHealth are standalone constants
@@ -311,4 +311,24 @@ func DeleteRayClusterAndWait(test Test, g *WithT, namespace string, clusterName 
 	}, TestTimeoutMedium).Should(WithTransform(k8serrors.IsNotFound, BeTrue()))
 
 	LogWithTimestamp(test.T(), "RayCluster %s/%s fully deleted", namespace, clusterName)
+}
+
+// GetOneOfJobID retrieves a job_id from the /api/jobs endpoint.
+func GetOneOfJobID(g *WithT, client *http.Client, historyServerURL string) string {
+	resp, err := client.Get(historyServerURL + "/api/jobs/")
+	g.Expect(err).NotTo(HaveOccurred())
+	defer resp.Body.Close()
+	g.Expect(resp.StatusCode).To(Equal(http.StatusOK))
+	body, _ := io.ReadAll(resp.Body)
+	var jobs []map[string]any
+	err = json.Unmarshal(body, &jobs)
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(len(jobs)).To(BeNumerically(">", 0), "expected at least one job from /api/jobs/")
+	for _, j := range jobs {
+		if jid, ok := j["job_id"].(string); ok && jid != "" {
+			return jid
+		}
+	}
+	g.Expect(false).To(BeTrue(), "no job with non-empty job_id in /api/jobs/ response")
+	return ""
 }
