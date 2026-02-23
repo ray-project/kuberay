@@ -1340,7 +1340,7 @@ func testLogicalActorsEndpointDeadCluster(test Test, g *WithT, namespace *corev1
 				break // Only verify the first actor
 			}
 
-			LogWithTimestamp(test.T(), "Found %d actors from history server", len(actors))
+			LogWithTimestamp(t, "Found %d actors from history server", len(actors))
 		}, TestTimeoutShort).Should(Succeed())
 	})
 
@@ -1383,7 +1383,7 @@ func testLogicalActorsEndpointDeadCluster(test Test, g *WithT, namespace *corev1
 			gg.Expect(address["node_id"]).NotTo(BeNil())
 			gg.Expect(address["ip_address"]).NotTo(BeNil())
 
-			LogWithTimestamp(test.T(), "Successfully fetched actor %s from history server", actorID)
+			LogWithTimestamp(t, "Successfully fetched actor %s from history server", actorID)
 		}, TestTimeoutShort).Should(Succeed())
 	})
 
