@@ -16,6 +16,7 @@ import (
 )
 
 const (
+	clusterMetadataEndpoint  = "/api/v0/cluster_metadata"
 	metadataRetryInterval    = 5 * time.Second  // initial interval
 	metadataMaxRetryInterval = 60 * time.Second // max cap for backoff
 	metadataRequestTimeout   = 30 * time.Second // per-request timeout
@@ -28,7 +29,7 @@ const (
 // The metadata is stored per session (not per cluster) because different sessions can use
 // different Ray images, resulting in different rayVersion / pythonVersion values.
 func (r *RayLogHandler) FetchAndStoreClusterMetadata() {
-	url := r.DashboardAddress + "/api/v0/cluster_metadata"
+	url := r.DashboardAddress + clusterMetadataEndpoint
 	retryInterval := metadataRetryInterval
 
 	// Resolve the session name first so we can store metadata under the correct session path.
@@ -92,7 +93,8 @@ func (r *RayLogHandler) FetchAndStoreClusterMetadata() {
 		}
 
 		// Successfully fetched — store it under the session path
-		objectKey := path.Join(r.MetaDir, sessionName, utils.OssMetaFile_ClusterMetadata)
+		storageKey := utils.EndpointPathToStorageKey(clusterMetadataEndpoint)
+		objectKey := path.Join(r.ClusterDir, sessionName, utils.RAY_SESSIONDIR_FETCHED_ENDPOINTS_NAME, storageKey)
 		if err := r.Writer.WriteFile(objectKey, bytes.NewReader(body)); err != nil {
 			logrus.Errorf("Failed to store cluster metadata at %s: %v", objectKey, err)
 			// Retry storage write as well

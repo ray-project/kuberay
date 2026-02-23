@@ -83,6 +83,17 @@ spec:
           # If your Ray Dashboard uses a non-default port (not 8265), update this value accordingly.
           - name: RAY_DASHBOARD_ADDRESS
             value: "http://localhost:8265"
+          # RAY_COLLECTOR_ADDITIONAL_ENDPOINTS is a comma-separated list of Ray Dashboard
+          # API endpoint paths that the head collector will periodically poll and store.
+          # Use this for endpoints whose data cannot be obtained via Ray events.
+          # You can add more endpoints, e.g., "/api/v0/placement_groups,/api/serve/applications/"
+          # Note: Only static endpoints (no dynamic path parameters like {job_id}) are supported.
+          - name: RAY_COLLECTOR_ADDITIONAL_ENDPOINTS
+            value: "/api/v0/placement_groups"
+          # RAY_COLLECTOR_POLL_INTERVAL controls how often the collector polls the additional
+          # endpoints above. Accepts Go duration format (e.g., "30s", "1m", "5m").
+          - name: RAY_COLLECTOR_POLL_INTERVAL
+            value: "30s"
           - name: S3DISABLE_SSL
             value: "true"
           - name: AWS_S3ID

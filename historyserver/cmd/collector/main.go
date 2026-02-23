@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/signal"
 	"path"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -43,6 +44,25 @@ func main() {
 	flag.DurationVar(&pushInterval, "push-interval", time.Minute, "")
 
 	flag.Parse()
+
+	var additionalEndpoints []string
+	if epStr := os.Getenv("RAY_COLLECTOR_ADDITIONAL_ENDPOINTS"); epStr != "" {
+		for _, ep := range strings.Split(epStr, ",") {
+			ep = strings.TrimSpace(ep)
+			if ep != "" {
+				additionalEndpoints = append(additionalEndpoints, ep)
+			}
+		}
+	}
+
+	endpointPollInterval := 30 * time.Second
+	if intervalStr := os.Getenv("RAY_COLLECTOR_POLL_INTERVAL"); intervalStr != "" {
+		parsed, parseErr := time.ParseDuration(intervalStr)
+		if parseErr != nil {
+			panic("Failed to parse RAY_COLLECTOR_POLL_INTERVAL: " + parseErr.Error())
+		}
+		endpointPollInterval = parsed
+	}
 
 	sessionDir, err := utils.GetSessionDir()
 	if err != nil {
@@ -84,6 +104,9 @@ func main() {
 		PushInterval:     pushInterval,
 		LogBatching:      logBatching,
 		DashboardAddress: os.Getenv("RAY_DASHBOARD_ADDRESS"),
+
+		AdditionalEndpoints:  additionalEndpoints,
+		EndpointPollInterval: endpointPollInterval,
 	}
 	logrus.Info("Using collector config: ", globalConfig)
 
