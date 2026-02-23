@@ -34,6 +34,7 @@ var (
 	// Use the singleton to avoid initializing multiple worker pools.
 	initWorkPool sync.Once
 	pool         *WorkerPool
+	initErr      error
 )
 
 var _ manager.Runnable = (*WorkerPool)(nil)
@@ -68,7 +69,6 @@ func InitWorkerPool(ctx context.Context,
 	cacheExpiry time.Duration,
 	dashboardClientFunc func(rayCluster *rayv1.RayCluster, url string) (RayDashboardClientInterface, error),
 ) (*WorkerPool, error) {
-	var err error
 	initWorkPool.Do(func() {
 		logger := ctrl.LoggerFrom(ctx).WithName("WorkerPool")
 
@@ -78,7 +78,7 @@ func InitWorkerPool(ctx context.Context,
 		taskQueue := chanx.NewUnboundedChanSize[jobInfoQuery](context.Background(), initBufferSize, initBufferSize, initBufferSize)
 
 		var cacheStorage *otter.Cache[string, *JobInfoCache]
-		cacheStorage, err = otter.New(&otter.Options[string, *JobInfoCache]{
+		cacheStorage, initErr = otter.New(&otter.Options[string, *JobInfoCache]{
 			ExpiryCalculator: otter.ExpiryAccessing[string, *JobInfoCache](cacheExpiry), // Reset timer on reads/writes
 			OnDeletion: func(e otter.DeletionEvent[string, *JobInfoCache]) {
 				if !e.WasEvicted() {
@@ -87,7 +87,7 @@ func InitWorkerPool(ctx context.Context,
 				logger.WithName("cacheStorage").Info("Evict cache for key.", "key", e.Key, "cause", e.Cause.String())
 			},
 		})
-		if err != nil {
+		if initErr != nil {
 			return
 		}
 
@@ -102,7 +102,7 @@ func InitWorkerPool(ctx context.Context,
 		}
 	})
 
-	return pool, err
+	return pool, initErr
 }
 
 func (w *WorkerPool) Start(ctx context.Context) error {
