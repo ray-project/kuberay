@@ -28,6 +28,10 @@ AuthMode describes the authentication mode for the Ray cluster.
 _Appears in:_
 - [AuthOptions](#authoptions)
 
+| Field | Description |
+| --- | --- |
+| `disabled` | AuthModeDisabled disables authentication.<br /> |
+| `token` | AuthModeToken enables token-based authentication.<br /> |
 
 
 #### AuthOptions
@@ -84,6 +88,10 @@ _Validation:_
 _Appears in:_
 - [AutoscalerOptions](#autoscaleroptions)
 
+| Field | Description |
+| --- | --- |
+| `v1` |  |
+| `v2` |  |
 
 
 #### ClusterUpgradeOptions
@@ -153,6 +161,12 @@ _Appears in:_
 - [DeletionPolicy](#deletionpolicy)
 - [DeletionRule](#deletionrule)
 
+| Field | Description |
+| --- | --- |
+| `DeleteCluster` |  |
+| `DeleteWorkers` |  |
+| `DeleteSelf` |  |
+| `DeleteNone` |  |
 
 
 #### DeletionRule
@@ -180,17 +194,14 @@ _Appears in:_
 DeletionStrategy configures automated cleanup after the RayJob reaches a terminal state.
 Two mutually exclusive styles are supported:
 
-
 	Legacy: provide both onSuccess and onFailure (deprecated; removal planned for 1.6.0). May be combined with shutdownAfterJobFinishes and (optionally) global TTLSecondsAfterFinished.
 	Rules: provide deletionRules (non-empty list). Rules mode is incompatible with shutdownAfterJobFinishes, legacy fields, and the global TTLSecondsAfterFinished (use per‑rule condition.ttlSeconds instead).
-
 
 Semantics:
   - A non-empty deletionRules selects rules mode; empty lists are treated as unset.
   - Legacy requires both onSuccess and onFailure; specifying only one is invalid.
   - Global TTLSecondsAfterFinished > 0 requires shutdownAfterJobFinishes=true; therefore it cannot be used with rules mode or with legacy alone (no shutdown).
   - Feature gate RayJobDeletionPolicy must be enabled when this block is present.
-
 
 Validation:
   - CRD XValidations prevent mixing legacy fields with deletionRules and enforce legacy completeness.
@@ -265,6 +276,12 @@ _Underlying type:_ _string_
 _Appears in:_
 - [RayJobSpec](#rayjobspec)
 
+| Field | Description |
+| --- | --- |
+| `K8sJobMode` |  |
+| `HTTPMode` |  |
+| `InteractiveMode` |  |
+| `SidecarMode` |  |
 
 
 #### RayCluster
@@ -343,6 +360,10 @@ _Validation:_
 _Appears in:_
 - [RayClusterUpgradeStrategy](#rayclusterupgradestrategy)
 
+| Field | Description |
+| --- | --- |
+| `Recreate` | During upgrade, Recreate strategy will delete all existing pods before creating new ones<br /> |
+| `None` | No new pod will be created while the strategy is set to None<br /> |
 
 
 #### RayCronJob
@@ -514,6 +535,11 @@ _Underlying type:_ _string_
 _Appears in:_
 - [RayServiceUpgradeStrategy](#rayserviceupgradestrategy)
 
+| Field | Description |
+| --- | --- |
+| `NewClusterWithIncrementalUpgrade` | During upgrade, NewClusterWithIncrementalUpgrade strategy will create an upgraded cluster to gradually scale<br />and migrate traffic to using Gateway API.<br /> |
+| `NewCluster` | During upgrade, NewCluster strategy will create new upgraded cluster and switch to it when it becomes ready<br /> |
+| `None` | No new cluster will be created while the strategy is set to None<br /> |
 
 
 #### RedisCredential
