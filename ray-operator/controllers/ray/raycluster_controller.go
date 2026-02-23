@@ -410,6 +410,15 @@ func (r *RayClusterReconciler) handleIdleClusterTermination(ctx context.Context,
 		return ctrl.Result{}, nil
 	}
 
+	// Skip idle check for suspended clusters.
+	suspendStatus := utils.FindRayClusterSuspendStatus(instance)
+	statusConditionGateEnabled := features.Enabled(features.RayClusterStatusConditions)
+	if suspendStatus == rayv1.RayClusterSuspending || suspendStatus == rayv1.RayClusterSuspended ||
+		(!statusConditionGateEnabled && instance.Spec.Suspend != nil && *instance.Spec.Suspend) {
+		logger.Info("Skipping idle check: RayCluster is suspended", "suspendStatus", suspendStatus)
+		return ctrl.Result{}, nil
+	}
+
 	dashboardURL, err := utils.FetchHeadServiceURL(ctx, r.Client, instance, utils.DashboardPortName)
 	if err != nil {
 		logger.Error(err, "Failed to get the dashboard URL")
