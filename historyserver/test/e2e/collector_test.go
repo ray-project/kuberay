@@ -369,12 +369,18 @@ func testCollectorStoresClusterMetadata(test Test, g *WithT, namespace *corev1.N
 //
 // The test case follows these steps:
 // 1. Prepare test environment by applying a Ray cluster with the collector
-// 2. Get the sessionID from the head pod to build the expected S3 key
-// 3. Wait for the placement groups file to appear in S3 at {sessionName}/fetched_endpoints/restful__api__v0__placement_groups
-// 4. Read the file and verify it contains valid JSON with the expected schema
-// 5. Delete S3 bucket to ensure test isolation
+// 2. Submit a RayJob that creates a detached placement group (so the PG persists after the job)
+// 3. Get the sessionID from the head pod to build the expected S3 key
+// 4. Wait for the placement groups file to appear in S3 at {sessionName}/fetched_endpoints/restful__api__v0__placement_groups
+// 5. Read the file and verify it contains valid JSON with a non-empty placement_groups list
+// 6. Delete S3 bucket to ensure test isolation
 func testCollectorStoresPlacementGroups(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
+
+	// Submit a RayJob that creates a detached placement group named "test_pg".
+	// The detached lifetime ensures the PG persists after the job exits, so the
+	// collector captures non-empty data when polling /api/v0/placement_groups.
+	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 
 	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, rayCluster.Namespace)
 	sessionID := GetSessionIDFromHeadPod(test, g, rayCluster)
@@ -396,7 +402,7 @@ func testCollectorStoresPlacementGroups(test Test, g *WithT, namespace *corev1.N
 		gg.Expect(err).NotTo(HaveOccurred())
 		gg.Expect(body).NotTo(BeEmpty(), "Placement groups file should not be empty")
 
-		// Verify it is valid JSON
+		// Verify it is valid JSON with a non-empty placement_groups list.
 		var response map[string]interface{}
 		err = json.Unmarshal(body, &response)
 		gg.Expect(err).NotTo(HaveOccurred(), "Placement groups response should be valid JSON")
@@ -406,6 +412,10 @@ func testCollectorStoresPlacementGroups(test Test, g *WithT, namespace *corev1.N
 		data, ok := response["data"].(map[string]interface{})
 		gg.Expect(ok).To(BeTrue(), "data field should be a JSON object")
 		gg.Expect(data).To(HaveKey("placement_groups"), "data should contain placement_groups field")
+
+		pgList, ok := data["placement_groups"].([]interface{})
+		gg.Expect(ok).To(BeTrue(), "placement_groups should be a JSON array")
+		gg.Expect(pgList).NotTo(BeEmpty(), "placement_groups list should not be empty (RayJob creates a detached PG)")
 
 		pgBody = body
 	}, TestTimeoutMedium).Should(Succeed())

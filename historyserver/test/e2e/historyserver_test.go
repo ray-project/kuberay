@@ -1919,12 +1919,16 @@ func testDeadClusterMetadata(test Test, g *WithT, namespace *corev1.Namespace, s
 //
 // The test flow mirrors testDeadClusterMetadata:
 // 1. Deploy a cluster with the collector
-// 2. Wait for placement groups data to appear in S3 (written by PollAdditionalEndpointsPeriodically)
-// 3. Delete the cluster
-// 4. Deploy the history server and query /api/v0/placement_groups
-// 5. Verify the response is valid JSON containing the expected fields
+// 2. Submit a RayJob that creates a detached placement group
+// 3. Wait for placement groups data to appear in S3 (written by PollAdditionalEndpointsPeriodically)
+// 4. Delete the cluster
+// 5. Deploy the history server and query /api/v0/placement_groups
+// 6. Verify the response is valid JSON with a non-empty placement_groups list
 func testDeadClusterPlacementGroups(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
+
+	// Submit a RayJob that creates a detached placement group named "test_pg".
+	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 
 	// Wait for placement groups data to be stored in S3 by the collector before deleting the cluster.
 	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, rayCluster.Namespace)
@@ -1982,6 +1986,10 @@ func testDeadClusterPlacementGroups(test Test, g *WithT, namespace *corev1.Names
 		data, ok := response["data"].(map[string]interface{})
 		gg.Expect(ok).To(BeTrue(), "data field should be a JSON object")
 		gg.Expect(data).To(HaveKey("placement_groups"), "data should contain placement_groups field")
+
+		pgList, ok := data["placement_groups"].([]interface{})
+		gg.Expect(ok).To(BeTrue(), "placement_groups should be a JSON array")
+		gg.Expect(pgList).NotTo(BeEmpty(), "placement_groups list should not be empty (RayJob creates a detached PG)")
 		LogWithTimestamp(test.T(), "Dead cluster placement groups: %s", string(body))
 	}, TestTimeoutShort).Should(Succeed())
 
