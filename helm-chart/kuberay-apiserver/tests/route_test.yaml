@@ -41,3 +41,22 @@ tests:
       - equal:
           path: metadata.annotations.key2
           value: value2
+
+  - it: Should have route backend service name matching the service name
+    set:
+      route:
+        enabled: true
+    asserts:
+      - equal:
+          path: spec.to.name
+          value: kuberay-apiserver
+
+  - it: Should have route backend service name matching the service name when fullnameOverride is set
+    set:
+      fullnameOverride: test-name
+      route:
+        enabled: true
+    asserts:
+      - equal:
+          path: spec.to.name
+          value: test-name

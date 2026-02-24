@@ -14,7 +14,7 @@ spec:
   subdomain: api-server-kuberay
   to:
     kind: Service
-    name: {{ .Values.name }}-service
+    name: {{ include "kuberay-apiserver.fullname" . }}
     weight: 100
   port:
     targetPort: http
