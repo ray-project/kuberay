@@ -752,6 +752,10 @@ func IsAuthEnabled(spec *rayv1.RayClusterSpec) bool {
 	return spec.AuthOptions != nil && spec.AuthOptions.Mode == rayv1.AuthModeToken
 }
 
+func IsK8sAuthEnabled(spec *rayv1.RayClusterSpec) bool {
+	return spec.AuthOptions != nil && spec.AuthOptions.EnableK8sTokenAuth != nil && *spec.AuthOptions.EnableK8sTokenAuth
+}
+
 // GetRayClusterNameFromService returns the name of the RayCluster that the service points to
 func GetRayClusterNameFromService(svc *corev1.Service) string {
 	if svc == nil || svc.Spec.Selector == nil {
