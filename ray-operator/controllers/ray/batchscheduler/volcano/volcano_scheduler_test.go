@@ -619,8 +619,9 @@ func TestCleanupOnCompletion(t *testing.T) {
 		a.Equal(volcanoschedulingv1beta1.PodGroupPending, retrievedPg.Status.Phase)
 
 		// Now call CleanupOnCompletion to simulate RayJob finishing
-		err = scheduler.CleanupOnCompletion(ctx, &rayJob)
+		didCleanup, err := scheduler.CleanupOnCompletion(ctx, &rayJob)
 		require.NoError(err)
+		a.True(didCleanup) // Cleanup should have happened
 
 		// Verify PodGroup was deleted
 		err = fakeCli.Get(ctx, client.ObjectKey{Namespace: rayJob.Namespace, Name: podGroupName}, &retrievedPg)
@@ -639,9 +640,10 @@ func TestCleanupOnCompletion(t *testing.T) {
 		ctx := context.Background()
 
 		// Don't create a PodGroup, just call CleanupOnCompletion
-		err := scheduler.CleanupOnCompletion(ctx, &rayJob)
+		didCleanup, err := scheduler.CleanupOnCompletion(ctx, &rayJob)
 		// Should not return an error, just log that PodGroup was not found
 		require.NoError(err)
+		a.False(didCleanup) // No cleanup should have happened
 	})
 
 	t.Run("RayCluster - should be no-op", func(_ *testing.T) {
@@ -655,8 +657,9 @@ func TestCleanupOnCompletion(t *testing.T) {
 		ctx := context.Background()
 
 		// Call CleanupOnCompletion with RayCluster - should be no-op
-		err := scheduler.CleanupOnCompletion(ctx, &rayCluster)
+		didCleanup, err := scheduler.CleanupOnCompletion(ctx, &rayCluster)
 		require.NoError(err)
+		a.False(didCleanup) // No cleanup should have happened
 
 		// Verify no PodGroup was created (RayCluster PodGroups are not managed by this method)
 		var pg volcanoschedulingv1beta1.PodGroup
@@ -695,8 +698,9 @@ func TestCleanupOnCompletion(t *testing.T) {
 		require.NoError(err)
 
 		// Call CleanupOnCompletion
-		err = scheduler.CleanupOnCompletion(ctx, &rayJob)
+		didCleanup, err := scheduler.CleanupOnCompletion(ctx, &rayJob)
 		require.NoError(err)
+		a.True(didCleanup) // Cleanup should have happened
 
 		// Verify PodGroup was deleted
 		var retrievedPg volcanoschedulingv1beta1.PodGroup
@@ -734,8 +738,9 @@ func TestCleanupOnCompletion(t *testing.T) {
 		require.NoError(err)
 
 		// Call CleanupOnCompletion first time
-		err = scheduler.CleanupOnCompletion(ctx, &rayJob)
+		didCleanup, err := scheduler.CleanupOnCompletion(ctx, &rayJob)
 		require.NoError(err)
+		a.True(didCleanup) // Cleanup should have happened
 
 		// Verify PodGroup was deleted
 		var retrievedPg volcanoschedulingv1beta1.PodGroup
@@ -743,8 +748,9 @@ func TestCleanupOnCompletion(t *testing.T) {
 		require.Error(err)
 		a.True(errors.IsNotFound(err))
 
-		// Call CleanupOnCompletion second time - should not error
-		err = scheduler.CleanupOnCompletion(ctx, &rayJob)
+		// Call CleanupOnCompletion second time - should not error and no cleanup
+		didCleanup, err = scheduler.CleanupOnCompletion(ctx, &rayJob)
 		require.NoError(err)
+		a.False(didCleanup) // No cleanup should have happened (already deleted)
 	})
 }

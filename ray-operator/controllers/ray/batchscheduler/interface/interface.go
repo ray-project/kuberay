@@ -27,7 +27,8 @@ type BatchScheduler interface {
 	// CleanupOnCompletion handles cleanup when the RayJob reaches terminal state (Complete/Failed).
 	// For batch schedulers like Volcano, this deletes the PodGroup to release queue resources.
 	// This is a no-op for schedulers that don't need cleanup.
-	CleanupOnCompletion(ctx context.Context, object metav1.Object) error
+	// Returns (didCleanup, error) where didCleanup indicates whether actual cleanup was performed.
+	CleanupOnCompletion(ctx context.Context, object metav1.Object) (didCleanup bool, err error)
 }
 
 // BatchSchedulerFactory handles initial setup of the scheduler plugin by registering the
@@ -63,8 +64,8 @@ func (d *DefaultBatchScheduler) DoBatchSchedulingOnSubmission(_ context.Context,
 func (d *DefaultBatchScheduler) AddMetadataToChildResource(_ context.Context, _ metav1.Object, _ metav1.Object, _ string) {
 }
 
-func (d *DefaultBatchScheduler) CleanupOnCompletion(_ context.Context, _ metav1.Object) error {
-	return nil
+func (d *DefaultBatchScheduler) CleanupOnCompletion(_ context.Context, _ metav1.Object) (bool, error) {
+	return false, nil
 }
 
 func (df *DefaultBatchSchedulerFactory) New(_ context.Context, _ *rest.Config, _ client.Client) (BatchScheduler, error) {

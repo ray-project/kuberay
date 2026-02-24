@@ -293,13 +293,13 @@ func (v *VolcanoBatchScheduler) AddMetadataToChildResource(_ context.Context, pa
 // See: https://github.com/volcano-sh/volcano/blob/master/pkg/scheduler/framework/job_updater.go
 //
 //	https://github.com/volcano-sh/volcano/blob/master/pkg/scheduler/framework/session.go
-func (v *VolcanoBatchScheduler) CleanupOnCompletion(ctx context.Context, object metav1.Object) error {
+func (v *VolcanoBatchScheduler) CleanupOnCompletion(ctx context.Context, object metav1.Object) (bool, error) {
 	logger := ctrl.LoggerFrom(ctx).WithName(pluginName)
 
 	// Only handle RayJob. RayCluster PodGroups will be cleaned up via OwnerReference
 	rayJob, ok := object.(*rayv1.RayJob)
 	if !ok {
-		return nil
+		return false, nil
 	}
 
 	podGroupName := getAppPodGroupName(rayJob)
@@ -311,10 +311,10 @@ func (v *VolcanoBatchScheduler) CleanupOnCompletion(ctx context.Context, object 
 	}, &podGroup); err != nil {
 		if errors.IsNotFound(err) {
 			logger.Info("PodGroup not found, already deleted", "podGroupName", podGroupName)
-			return nil
+			return false, nil
 		}
 		logger.Error(err, "failed to get PodGroup", "podGroupName", podGroupName)
-		return err
+		return false, err
 	}
 
 	// Delete the PodGroup to immediately release queue resources
@@ -323,15 +323,15 @@ func (v *VolcanoBatchScheduler) CleanupOnCompletion(ctx context.Context, object 
 		// If already deleted, that's fine
 		if errors.IsNotFound(err) {
 			logger.Info("PodGroup already deleted", "podGroupName", podGroupName)
-			return nil
+			return false, nil
 		}
 		logger.Error(err, "failed to delete PodGroup", "podGroupName", podGroupName)
-		return err
+		return false, err
 	}
 
 	logger.Info("PodGroup deleted to release queue resources", "podGroupName", podGroupName,
 		"minMember", podGroup.Spec.MinMember)
-	return nil
+	return true, nil
 }
 
 func (vf *VolcanoBatchSchedulerFactory) New(_ context.Context, _ *rest.Config, cli client.Client) (schedulerinterface.BatchScheduler, error) {
