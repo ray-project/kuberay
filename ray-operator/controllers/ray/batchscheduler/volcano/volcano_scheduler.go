@@ -258,8 +258,8 @@ func (v *VolcanoBatchScheduler) AddMetadataToChildResource(_ context.Context, pa
 // Why delete instead of marking as Completed?
 //
 // The Volcano scheduler runs a continuous control loop that recalculates and updates
-// PodGroup status in every scheduling cycle (see volcano/pkg/scheduler/framework/job_updater.go:116).
-// The status calculation logic (getPodGroupPhase in session.go:614) works as follows:
+// PodGroup status in every scheduling cycle (see https://github.com/volcano-sh/volcano/blob/0d0690f8c95eabae90ee30031799282eb936a805/pkg/scheduler/framework/job_updater.go#L116).
+// The status calculation logic (getPodGroupPhase in https://github.com/volcano-sh/volcano/blob/0d0690f8c95eabae90ee30031799282eb936a805/pkg/scheduler/framework/session.go#L619) works as follows:
 //
 //  1. If scheduled pods < MinMember → return Pending
 //  2. If scheduled pods >= MinMember and all completed → return Completed

@@ -359,6 +359,10 @@ const (
 	FailedToUpdateRayCluster      K8sEventType = "FailedToUpdateRayCluster"
 	RayClusterNotFound            K8sEventType = "RayClusterNotFound"
 
+	// Batch scheduler event list
+	DeletedPodGroup        K8sEventType = "DeletedPodGroup"
+	FailedToDeletePodGroup K8sEventType = "FailedToDeletePodGroup"
+
 	// RayCronJob event list
 	InvalidRayCronJobSpec K8sEventType = "InvalidRayCronJobSpec"
 	SuspendedRayCronJob   K8sEventType = "SuspendedRayCronJob"

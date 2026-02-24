@@ -418,7 +418,12 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			} else {
 				if err := scheduler.CleanupOnCompletion(ctx, rayJobInstance); err != nil {
 					logger.Error(err, "Failed to cleanup batch scheduler resources")
+					r.Recorder.Eventf(rayJobInstance, corev1.EventTypeWarning, string(utils.FailedToDeletePodGroup),
+						"Failed to cleanup batch scheduler resources for RayJob %s/%s: %v", rayJobInstance.Namespace, rayJobInstance.Name, err)
 					// Don't block the reconciliation on cleanup failures, just log the error
+				} else {
+					r.Recorder.Eventf(rayJobInstance, corev1.EventTypeNormal, string(utils.DeletedPodGroup),
+						"Cleaned up batch scheduler resources for RayJob %s/%s", rayJobInstance.Namespace, rayJobInstance.Name)
 				}
 			}
 		}
