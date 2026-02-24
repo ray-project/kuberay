@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"testing"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -1289,7 +1290,7 @@ func verifyTimelineResponse(g *WithT, client *http.Client, historyServerURL stri
 // 5. Verify that the history server returns actors via /logical/actors endpoint
 // 6. Verify that the history server returns a single actor via /logical/actors/{actor_id} endpoint
 // 7. Delete S3 bucket to ensure test isolation
-func testLogicalActorsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testLogicalActorsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 
@@ -1811,7 +1812,7 @@ func testDeadClusterNode(test Test, g *WithT, namespace *corev1.Namespace, s3Cli
 
 // testLiveClusterMetadata verifies that the /api/v0/cluster_metadata endpoint proxies to the
 // live Ray Dashboard and returns valid cluster metadata.
-func testLiveClusterMetadata(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testLiveClusterMetadata(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyHistoryServer(test, g, namespace, "")
 	historyServerURL := GetHistoryServerURL(test, g, namespace)
@@ -1852,7 +1853,7 @@ func testLiveClusterMetadata(test Test, g *WithT, namespace *corev1.Namespace, s
 
 // testDeadClusterMetadata verifies that the /api/v0/cluster_metadata endpoint returns stored
 // cluster metadata from S3 for a dead (deleted) cluster.
-func testDeadClusterMetadata(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testDeadClusterMetadata(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 
 	// Wait for cluster metadata to be stored in S3 by the collector before deleting the cluster.
@@ -1863,10 +1864,10 @@ func testDeadClusterMetadata(test Test, g *WithT, namespace *corev1.Namespace, s
 	LogWithTimestamp(test.T(), "Waiting for cluster metadata to appear at S3 key: %s", metaKey)
 
 	g.Eventually(func(gg Gomega) {
-		_, err := s3Client.HeadObject(&s3.HeadObjectInput{
-			Bucket: aws.String(S3BucketName),
-			Key:    aws.String(metaKey),
-		})
+			_, err := s3Client.HeadObject(test.Ctx(), &s3.HeadObjectInput{
+				Bucket: aws.String(S3BucketName),
+				Key:    aws.String(metaKey),
+			})
 		gg.Expect(err).NotTo(HaveOccurred())
 	}, TestTimeoutMedium).Should(Succeed())
 
@@ -1932,7 +1933,7 @@ func testDeadClusterMetadata(test Test, g *WithT, namespace *corev1.Namespace, s
 // 4. Delete the cluster
 // 5. Deploy the history server and query /api/v0/placement_groups
 // 6. Verify the response is valid JSON with a non-empty placement_groups list
-func testDeadClusterPlacementGroups(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testDeadClusterPlacementGroups(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 
 	// Submit a RayJob that creates a detached placement group named "test_pg".
@@ -1946,10 +1947,10 @@ func testDeadClusterPlacementGroups(test Test, g *WithT, namespace *corev1.Names
 	LogWithTimestamp(test.T(), "Waiting for placement groups data to appear at S3 key: %s", pgKey)
 
 	g.Eventually(func(gg Gomega) {
-		_, err := s3Client.HeadObject(&s3.HeadObjectInput{
-			Bucket: aws.String(S3BucketName),
-			Key:    aws.String(pgKey),
-		})
+			_, err := s3Client.HeadObject(test.Ctx(), &s3.HeadObjectInput{
+				Bucket: aws.String(S3BucketName),
+				Key:    aws.String(pgKey),
+			})
 		gg.Expect(err).NotTo(HaveOccurred())
 	}, TestTimeoutMedium).Should(Succeed())
 
@@ -2608,7 +2609,7 @@ func testEventsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namesp
 // 6. Verify /api/cluster_status returns valid JSON response with result=true
 // 7. Verify /api/cluster_status?format=1 returns formatted cluster status string containing "Autoscaler status"
 // 8. Delete S3 bucket to ensure test isolation
-func testLiveClusterStatus(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testLiveClusterStatus(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 	ApplyHistoryServer(test, g, namespace, "")
@@ -2660,7 +2661,7 @@ func testLiveClusterStatus(test Test, g *WithT, namespace *corev1.Namespace, s3C
 // 7. Verify /api/cluster_status returns valid JSON response with result=true
 // 8. Verify /api/cluster_status?format=1 returns formatted cluster status containing "Autoscaler status"
 // 9. Delete S3 bucket to ensure test isolation
-func testDeadClusterStatus(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testDeadClusterStatus(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 
