@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/signal"
 	"path"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -44,6 +45,28 @@ func main() {
 
 	flag.Parse()
 
+	var additionalEndpoints []string
+	if epStr := os.Getenv("RAY_COLLECTOR_ADDITIONAL_ENDPOINTS"); epStr != "" {
+		for _, ep := range strings.Split(epStr, ",") {
+			ep = strings.TrimSpace(ep)
+			if ep != "" {
+				additionalEndpoints = append(additionalEndpoints, ep)
+			}
+		}
+	}
+
+	endpointPollInterval := 30 * time.Second
+	if intervalStr := os.Getenv("RAY_COLLECTOR_POLL_INTERVAL"); intervalStr != "" {
+		parsed, parseErr := time.ParseDuration(intervalStr)
+		if parseErr != nil {
+			panic("Failed to parse RAY_COLLECTOR_POLL_INTERVAL: " + parseErr.Error())
+		}
+		if parsed <= 0 {
+			panic("RAY_COLLECTOR_POLL_INTERVAL must be positive, got: " + intervalStr)
+		}
+		endpointPollInterval = parsed
+	}
+
 	sessionDir, err := utils.GetSessionDir()
 	if err != nil {
 		panic("Failed to get session dir: " + err.Error())
@@ -75,14 +98,18 @@ func main() {
 	}
 
 	globalConfig := types.RayCollectorConfig{
-		RootDir:        rayRootDir,
-		SessionDir:     sessionDir,
-		RayNodeName:    rayNodeId,
-		Role:           role,
-		RayClusterName: rayClusterName,
-		RayClusterID:   rayClusterId,
-		PushInterval:   pushInterval,
-		LogBatching:    logBatching,
+		RootDir:          rayRootDir,
+		SessionDir:       sessionDir,
+		RayNodeName:      rayNodeId,
+		Role:             role,
+		RayClusterName:   rayClusterName,
+		RayClusterID:     rayClusterId,
+		PushInterval:     pushInterval,
+		LogBatching:      logBatching,
+		DashboardAddress: os.Getenv("RAY_DASHBOARD_ADDRESS"),
+
+		AdditionalEndpoints:  additionalEndpoints,
+		EndpointPollInterval: endpointPollInterval,
 	}
 	logrus.Info("Using collector config: ", globalConfig)
 

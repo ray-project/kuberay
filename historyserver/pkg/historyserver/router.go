@@ -10,6 +10,7 @@ import (
 	"math"
 	"mime"
 	"net/http"
+	"path"
 	"sort"
 	"strconv"
 	"strings"
@@ -116,17 +117,8 @@ func routerAPI(s *ServerHandler) {
 		Param(ws.PathParameter("job_id", "job_id")).
 		Writes("")) // Placeholder for specific return type
 
-	ws.Route(ws.GET("/data/datasets/{job_id}").To(s.getDatasets).Filter(s.CookieHandle).
-		Doc("get datasets").
-		Param(ws.PathParameter("job_id", "job_id")).
-		Writes("")) // Placeholder for specific return type
-
-	ws.Route(ws.GET("/serve/applications/").To(s.getServeApplications).Filter(s.CookieHandle).
-		Doc("get appliations").
-		Writes("")) // Placeholder for specific return type
-
-	ws.Route(ws.GET("/v0/placement_groups/").To(s.getPlacementGroups).Filter(s.CookieHandle).
-		Doc("get placement_groups").
+	ws.Route(ws.GET("/v0/cluster_metadata").To(s.getClusterMetadata).Filter(s.CookieHandle).
+		Doc("get cluster metadata (Ray version, Python version, etc.)").
 		Writes("")) // Placeholder for specific return type
 
 	ws.Route(ws.GET("/v0/logs").To(s.getNodeLogs).Filter(s.CookieHandle).
@@ -196,6 +188,12 @@ func routerAPI(s *ServerHandler) {
 		Param(ws.QueryParameter("download", "set to 1 to return response as attachment (timeline JSON file)")).
 		Produces(restful.MIME_JSON).
 		Writes("")) // Placeholder for specific return type
+
+	// Fallback route for additional polled endpoints stored in storage by the collector.
+	// This must be registered last because go-restful matches more specific routes first.
+	ws.Route(ws.GET("/{subpath:*}").To(s.getAdditionalEndpoint).Filter(s.CookieHandle).
+		Doc("fallback handler for additional polled endpoints stored in storage").
+		Writes(""))
 }
 
 // func routerRoot(s *ServerHandler) {
@@ -751,39 +749,6 @@ func (s *ServerHandler) getJob(req *restful.Request, resp *restful.Response) {
 
 }
 
-func (s *ServerHandler) getDatasets(req *restful.Request, resp *restful.Response) {
-	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
-	if sessionName == "live" {
-		s.redirectRequest(req, resp)
-		return
-	}
-
-	// Return "not yet supported" for datasets
-	resp.WriteErrorString(http.StatusNotImplemented, "Datasets not yet supported")
-}
-
-func (s *ServerHandler) getServeApplications(req *restful.Request, resp *restful.Response) {
-	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
-	if sessionName == "live" {
-		s.redirectRequest(req, resp)
-		return
-	}
-
-	// Return "not yet supported" for serve applications
-	resp.WriteErrorString(http.StatusNotImplemented, "Serve applications not yet supported")
-}
-
-func (s *ServerHandler) getPlacementGroups(req *restful.Request, resp *restful.Response) {
-	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
-	if sessionName == "live" {
-		s.redirectRequest(req, resp)
-		return
-	}
-
-	// Return "not yet supported" for placement groups
-	resp.WriteErrorString(http.StatusNotImplemented, "Placement groups not yet supported")
-}
-
 func (s *ServerHandler) getClusterStatus(req *restful.Request, resp *restful.Response) {
 	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
 	if sessionName == "live" {
@@ -791,8 +756,162 @@ func (s *ServerHandler) getClusterStatus(req *restful.Request, resp *restful.Res
 		return
 	}
 
-	// Return "not yet supported" for cluster status
-	resp.WriteErrorString(http.StatusNotImplemented, "Cluster status not yet supported")
+	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
+	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
+
+	format := req.QueryParameter("format")
+
+	var respData []byte
+	var err error
+
+	if format == "1" {
+		// Build cluster status from debug_state.txt and task/actor data
+		statusString := s.buildFormattedClusterStatus(clusterName, clusterNamespace, sessionName)
+
+		response := FormattedClusterStatusResponse{
+			Result: true,
+			Msg:    "Got formatted cluster status.",
+			Data: FormattedClusterStatusData{
+				ClusterStatus: statusString,
+			},
+		}
+		respData, err = json.Marshal(response)
+	} else {
+		// TODO(https://github.com/ray-project/kuberay/issues/4381#issuecomment-3771499535)
+		// Update when Ray dashboard api supports autoscaler V2 which uses
+		// GcsClient.get_cluster_status() for /api/cluster_status.
+		// Ray frontend only uses format=1, so returning empty data here is fine for now.
+		response := ClusterStatusResponse{
+			Result: true,
+			Msg:    "Got cluster status.",
+			Data:   ClusterStatusData{},
+		}
+		respData, err = json.Marshal(response)
+	}
+	if err != nil {
+		logrus.Errorf("Failed to marshal cluster status response: %v", err)
+		resp.WriteErrorString(http.StatusInternalServerError, err.Error())
+		return
+	}
+	resp.Header().Set("Content-Type", "application/json")
+	resp.Write(respData)
+}
+
+// buildFormattedClusterStatus reconstructs the cluster status from debug_state.txt and pending tasks and actors
+func (s *ServerHandler) buildFormattedClusterStatus(clusterName, clusterNamespace, sessionName string) string {
+	builder := NewClusterStatusBuilder()
+	clusterNameID := clusterName + "_" + clusterNamespace
+	logsPath := path.Join(sessionName, utils.RAY_SESSIONDIR_LOGDIR_NAME)
+	nodeIDs := s.reader.ListFiles(clusterNameID, logsPath)
+	successCount := 0
+
+	for _, nodeID := range nodeIDs {
+		debugStatePath := path.Join(logsPath, nodeID, "debug_state.txt")
+
+		reader := s.reader.GetContent(clusterNameID, debugStatePath)
+		if reader == nil {
+			logrus.Debugf("No debug_state.txt found for node %s", nodeID)
+			continue
+		}
+
+		debugState, err := ParseDebugState(reader)
+		if err != nil {
+			logrus.Debugf("Failed to parse debug_state.txt for node %s: %v", nodeID, err)
+			continue
+		}
+
+		builder.AddNodeFromDebugState(debugState)
+		successCount++
+	}
+
+	if len(nodeIDs) > 0 && successCount == 0 {
+		logrus.Debugf("Found %d nodes but failed to parse any debug_state.txt for cluster %s session %s", len(nodeIDs), clusterName, sessionName)
+	}
+
+	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
+	tasks := s.eventHandler.GetTasks(clusterSessionKey)
+	actors := s.eventHandler.GetActors(clusterSessionKey)
+	nodes := s.eventHandler.GetNodeMap(clusterSessionKey)
+
+	// Use the last timestamp from tasks/actors to represent when the cluster was last active.
+	// Fallback to session timestamp if no task/actor timestamps are available.
+	// Other options are reading raylet.out or gcs_server.out but the files have 100k+ lines, which is inefficient.
+	if ts := GetLastTimestamp(tasks, actors); !ts.IsZero() {
+		builder.Timestamp = ts
+	} else if ts := ParseSessionTimestamp(sessionName); !ts.IsZero() {
+		builder.Timestamp = ts
+	}
+
+	builder.AddFailedNodesFromNodes(nodes)
+	builder.AddPendingDemandsFromTasks(tasks)
+	builder.AddPendingDemandsFromActors(actors)
+
+	return builder.FormatStatus()
+}
+
+func (s *ServerHandler) getClusterMetadata(req *restful.Request, resp *restful.Response) {
+	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
+	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
+	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
+	if sessionName == "live" {
+		s.redirectRequest(req, resp)
+		return
+	}
+
+	clusterNameID := clusterName + "_" + clusterNamespace
+	storageKey := utils.EndpointPathToStorageKey("/api/v0/cluster_metadata")
+	endpointPath := path.Join(sessionName, utils.RAY_SESSIONDIR_FETCHED_ENDPOINTS_NAME, storageKey)
+	reader := s.reader.GetContent(clusterNameID, endpointPath)
+	if reader == nil {
+		resp.WriteErrorString(http.StatusNotFound, "Cluster metadata not found")
+		return
+	}
+
+	data, err := io.ReadAll(reader)
+	if err != nil {
+		logrus.Errorf("Failed to read cluster metadata: %v", err)
+		resp.WriteErrorString(http.StatusInternalServerError, "Failed to read cluster metadata")
+		return
+	}
+
+	resp.Header().Set("Content-Type", "application/json")
+	resp.Write(data)
+}
+
+// getAdditionalEndpoint is the fallback handler for endpoints that don't have a
+// dedicated handler. It reads the endpoint's data from storage, where the collector
+// has previously stored it via periodic polling.
+//
+// Storage key convention: the request path "/api/v0/nodes/summary" maps to
+// storage key "restful__api__v0__nodes__summary" under {sessionName}/fetched_endpoints/.
+func (s *ServerHandler) getAdditionalEndpoint(req *restful.Request, resp *restful.Response) {
+	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
+	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
+	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
+	if sessionName == "live" {
+		s.redirectRequest(req, resp)
+		return
+	}
+
+	storageKey := utils.EndpointPathToStorageKey(req.Request.URL.Path)
+
+	clusterNameID := clusterName + "_" + clusterNamespace
+	endpointPath := path.Join(sessionName, utils.RAY_SESSIONDIR_FETCHED_ENDPOINTS_NAME, storageKey)
+	reader := s.reader.GetContent(clusterNameID, endpointPath)
+	if reader == nil {
+		resp.WriteErrorString(http.StatusNotFound, "Endpoint data not found in storage")
+		return
+	}
+
+	data, err := io.ReadAll(reader)
+	if err != nil {
+		logrus.Errorf("Failed to read additional endpoint data for %s: %v", req.Request.URL.Path, err)
+		resp.WriteErrorString(http.StatusInternalServerError, "Failed to read endpoint data")
+		return
+	}
+
+	resp.Header().Set("Content-Type", "application/json")
+	resp.Write(data)
 }
 
 func (s *ServerHandler) getNodeLogs(req *restful.Request, resp *restful.Response) {

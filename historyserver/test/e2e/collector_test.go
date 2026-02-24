@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -45,6 +46,14 @@ func TestCollector(t *testing.T) {
 		{
 			name:     "Collector restart: should scan prev-logs and resume uploads left by a crash",
 			testFunc: testCollectorResumesUploadsOnRestart,
+		},
+		{
+			name:     "Cluster metadata: collector should fetch and store cluster_metadata endpoint data once on startup",
+			testFunc: testCollectorStoresClusterMetadata,
+		},
+		{
+			name:     "Placement groups: collector should poll and store placement_groups endpoint data",
+			testFunc: testCollectorStoresPlacementGroups,
 		},
 	}
 

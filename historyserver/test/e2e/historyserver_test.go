@@ -74,6 +74,10 @@ func TestHistoryServer(t *testing.T) {
 			testFunc: testEventsEndpointDeadCluster,
 		},
 		{
+			name:     "/logical/actors endpoint (dead cluster)",
+			testFunc: testLogicalActorsEndpointDeadCluster,
+		},
+		{
 			name:     "Live cluster: /api/v0/tasks?detail=1 should return the detailed task information of all task attempts",
 			testFunc: testLiveClusterTasks,
 		},
@@ -96,6 +100,18 @@ func TestHistoryServer(t *testing.T) {
 		{
 			name:     "Dead cluster: /nodes/{node_id} should return the historical replay containing node summary snapshots of the specified node in a cluster session",
 			testFunc: testDeadClusterNode,
+		},
+		{
+			name:     "Live cluster: cluster_metadata endpoint should return metadata (Ray version, Python version, etc.)",
+			testFunc: testLiveClusterMetadata,
+		},
+		{
+			name:     "Dead cluster: cluster_metadata endpoint should return stored metadata from S3",
+			testFunc: testDeadClusterMetadata,
+		},
+		{
+			name:     "Dead cluster: /api/v0/placement_groups should return stored placement groups from S3",
+			testFunc: testDeadClusterPlacementGroups,
 		},
 	}
 
@@ -189,31 +205,57 @@ func testLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Names
 		expectedStatus int
 	}{
 		// lines parameter
-		{"lines=100", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=100", u, EndpointLogsFile, n, filename) }, http.StatusOK},
-		{"lines=0 (default 1000)", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s", u, EndpointLogsFile, n, filename) }, http.StatusOK},
-		{"lines=-1 (all)", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=-1", u, EndpointLogsFile, n, filename) }, http.StatusOK},
+		{"lines=100", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=100", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
+		{"lines=0 (default 1000)", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
+		{"lines=-1 (all)", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=-1", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
 
 		// timeout parameter
-		{"timeout=5", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&timeout=5", u, EndpointLogsFile, n, filename) }, http.StatusOK},
-		{"timeout=30", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&timeout=30", u, EndpointLogsFile, n, filename) }, http.StatusOK},
+		{"timeout=5", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&timeout=5", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
+		{"timeout=30", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&timeout=30", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
 
 		// attempt_number parameter
-		{"attempt_number=0", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&attempt_number=0", u, EndpointLogsFile, n, filename) }, http.StatusOK},
-		{"attempt_number=1", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&attempt_number=1", u, EndpointLogsFile, n, filename) }, http.StatusOK},
+		{"attempt_number=0", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&attempt_number=0", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
+		{"attempt_number=1", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&attempt_number=1", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
 
 		// download_filename parameter
-		{"download_filename=custom.log", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&download_filename=custom.log", u, EndpointLogsFile, n, filename) }, http.StatusOK},
+		{"download_filename=custom.log", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&download_filename=custom.log", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
 
 		// filter_ansi_code parameter
-		{"filter_ansi_code=true", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&filter_ansi_code=true", u, EndpointLogsFile, n, filename) }, http.StatusOK},
-		{"filter_ansi_code=false", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&filter_ansi_code=false", u, EndpointLogsFile, n, filename) }, http.StatusOK},
+		{"filter_ansi_code=true", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&filter_ansi_code=true", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
+		{"filter_ansi_code=false", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&filter_ansi_code=false", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
 
 		// suffix parameter
-		{"suffix=out (default)", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&suffix=out", u, EndpointLogsFile, n, filename) }, http.StatusOK},
-		{"suffix=err", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&suffix=err", u, EndpointLogsFile, n, filename) }, http.StatusOK},
+		{"suffix=out (default)", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&suffix=out", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
+		{"suffix=err", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&suffix=err", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
 
 		// Combined parameters
-		{"lines+timeout+filter", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=50&timeout=10&filter_ansi_code=true", u, EndpointLogsFile, n, filename) }, http.StatusOK},
+		{"lines+timeout+filter", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=50&timeout=10&filter_ansi_code=true", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
 
 		// Missing mandatory parameters
 		{"missing node_id and node_ip", func(u, n string) string { return fmt.Sprintf("%s%s?filename=%s", u, EndpointLogsFile, filename) }, http.StatusBadRequest},
@@ -221,24 +263,44 @@ func testLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Names
 		{"missing both", func(u, n string) string { return fmt.Sprintf("%s%s", u, EndpointLogsFile) }, http.StatusBadRequest},
 
 		// Invalid parameters
-		{"invalid lines (string)", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=abc", u, EndpointLogsFile, n, filename) }, http.StatusBadRequest},
-		{"invalid timeout (string)", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&timeout=invalid", u, EndpointLogsFile, n, filename) }, http.StatusBadRequest},
-		{"invalid attempt_number (string)", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&attempt_number=xyz", u, EndpointLogsFile, n, filename) }, http.StatusBadRequest},
-		{"invalid suffix", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&suffix=invalid", u, EndpointLogsFile, n, filename) }, http.StatusBadRequest},
+		{"invalid lines (string)", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=abc", u, EndpointLogsFile, n, filename)
+		}, http.StatusBadRequest},
+		{"invalid timeout (string)", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&timeout=invalid", u, EndpointLogsFile, n, filename)
+		}, http.StatusBadRequest},
+		{"invalid attempt_number (string)", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&attempt_number=xyz", u, EndpointLogsFile, n, filename)
+		}, http.StatusBadRequest},
+		{"invalid suffix", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&suffix=invalid", u, EndpointLogsFile, n, filename)
+		}, http.StatusBadRequest},
 		// NOTE: Ray Dashboard will return 500 (Internal Server Error) for the file not found error
 		// ref: https://github.com/ray-project/ray/blob/68d01c4c48a59c7768ec9c2359a1859966c446b6/python/ray/dashboard/modules/state/state_head.py#L282-L284
-		{"file not found", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=nonexistent.log", u, EndpointLogsFile, n) }, http.StatusInternalServerError},
+		{"file not found", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=nonexistent.log", u, EndpointLogsFile, n)
+		}, http.StatusInternalServerError},
 		{"task_id invalid (not found)", func(u, n string) string { return fmt.Sprintf("%s%s?task_id=nonexistent-task-id", u, EndpointLogsFile) }, http.StatusInternalServerError},
-		{"node_ip invalid (non-existent)", func(u, n string) string { return fmt.Sprintf("%s%s?node_ip=192.168.255.255&filename=%s", u, EndpointLogsFile, filename) }, http.StatusInternalServerError},
+		{"node_ip invalid (non-existent)", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_ip=192.168.255.255&filename=%s", u, EndpointLogsFile, filename)
+		}, http.StatusInternalServerError},
 		{"pid invalid (string)", func(u, n string) string { return fmt.Sprintf("%s%s?pid=abc&node_id=%s", u, EndpointLogsFile, n) }, http.StatusBadRequest},
 		{"pid non-existent", func(u, n string) string { return fmt.Sprintf("%s%s?pid=999999&node_id=%s", u, EndpointLogsFile, n) }, http.StatusInternalServerError},
 
 		// Path traversal attacks
-		{"traversal ../etc/passwd", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=../etc/passwd", u, EndpointLogsFile, n) }, http.StatusBadRequest},
+		{"traversal ../etc/passwd", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=../etc/passwd", u, EndpointLogsFile, n)
+		}, http.StatusBadRequest},
 		{"traversal ..", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=..", u, EndpointLogsFile, n) }, http.StatusBadRequest},
-		{"traversal /etc/passwd", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=/etc/passwd", u, EndpointLogsFile, n) }, http.StatusBadRequest},
-		{"traversal ../../secret", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=../../secret", u, EndpointLogsFile, n) }, http.StatusBadRequest},
-		{"traversal in node_id", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=../evil&filename=%s", u, EndpointLogsFile, filename) }, http.StatusBadRequest},
+		{"traversal /etc/passwd", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=/etc/passwd", u, EndpointLogsFile, n)
+		}, http.StatusBadRequest},
+		{"traversal ../../secret", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=../../secret", u, EndpointLogsFile, n)
+		}, http.StatusBadRequest},
+		{"traversal in node_id", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=../evil&filename=%s", u, EndpointLogsFile, filename)
+		}, http.StatusBadRequest},
 	}
 
 	for _, tc := range logFileTestCases {
@@ -441,33 +503,61 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 		expectedStatus int
 	}{
 		// Basic parameters
-		{"lines=100", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=100", u, EndpointLogsFile, n, filename) }, http.StatusOK},
-		{"lines=0 (default 1000)", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s", u, EndpointLogsFile, n, filename) }, http.StatusOK},
-		{"lines=-1 (all)", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=-1", u, EndpointLogsFile, n, filename) }, http.StatusOK},
+		{"lines=100", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=100", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
+		{"lines=0 (default 1000)", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
+		{"lines=-1 (all)", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=-1", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
 
 		// timeout parameter
 		// NOTE: timeout feature is not yet implemented, we just accept and validate the timeout parameter
-		{"timeout=5", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&timeout=5", u, EndpointLogsFile, n, filename) }, http.StatusOK},
-		{"timeout=30", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&timeout=30", u, EndpointLogsFile, n, filename) }, http.StatusOK},
+		{"timeout=5", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&timeout=5", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
+		{"timeout=30", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&timeout=30", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
 
 		// attempt_number parameter
-		{"attempt_number=0", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&attempt_number=0", u, EndpointLogsFile, n, filename) }, http.StatusOK},
-		{"attempt_number=1 (not found)", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&attempt_number=1", u, EndpointLogsFile, n, filename) }, http.StatusNotFound},
+		{"attempt_number=0", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&attempt_number=0", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
+		{"attempt_number=1 (not found)", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&attempt_number=1", u, EndpointLogsFile, n, filename)
+		}, http.StatusNotFound},
 
 		// download_filename parameter
-		{"download_filename=custom.log", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&download_filename=custom.log", u, EndpointLogsFile, n, filename) }, http.StatusOK},
+		{"download_filename=custom.log", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&download_filename=custom.log", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
 
 		// filter_ansi_code parameter
-		{"filter_ansi_code=true", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&filter_ansi_code=true", u, EndpointLogsFile, n, filename) }, http.StatusOK},
-		{"filter_ansi_code=false", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&filter_ansi_code=false", u, EndpointLogsFile, n, filename) }, http.StatusOK},
+		{"filter_ansi_code=true", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&filter_ansi_code=true", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
+		{"filter_ansi_code=false", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&filter_ansi_code=false", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
 
 		// suffix parameter
-		{"suffix=out (default)", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&suffix=out", u, EndpointLogsFile, n, filename) }, http.StatusOK},
-		{"suffix=err", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&suffix=err", u, EndpointLogsFile, n, filename) }, http.StatusOK},
+		{"suffix=out (default)", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&suffix=out", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
+		{"suffix=err", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&suffix=err", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
 
 		// Combined parameters
-		{"lines+timeout+filter", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=50&timeout=10&filter_ansi_code=true", u, EndpointLogsFile, n, filename) }, http.StatusOK},
-		{"all parameters", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=100&timeout=15&attempt_number=0&download_filename=custom.log&filter_ansi_code=true", u, EndpointLogsFile, n, filename) }, http.StatusOK},
+		{"lines+timeout+filter", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=50&timeout=10&filter_ansi_code=true", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
+		{"all parameters", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=100&timeout=15&attempt_number=0&download_filename=custom.log&filter_ansi_code=true", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
 
 		// Missing mandatory parameters
 		{"missing node_id and node_ip", func(u, n string) string { return fmt.Sprintf("%s%s?filename=%s", u, EndpointLogsFile, filename) }, http.StatusBadRequest},
@@ -475,23 +565,43 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 		{"missing both", func(u, n string) string { return fmt.Sprintf("%s%s", u, EndpointLogsFile) }, http.StatusBadRequest},
 
 		// Invalid parameters
-		{"invalid lines (string)", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=abc", u, EndpointLogsFile, n, filename) }, http.StatusBadRequest},
-		{"invalid timeout (string)", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&timeout=invalid", u, EndpointLogsFile, n, filename) }, http.StatusBadRequest},
-		{"invalid attempt_number (string)", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&attempt_number=xyz", u, EndpointLogsFile, n, filename) }, http.StatusBadRequest},
-		{"file not found", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=nonexistent.log", u, EndpointLogsFile, n) }, http.StatusNotFound},
-		{"invalid suffix", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&suffix=invalid", u, EndpointLogsFile, n, filename) }, http.StatusBadRequest},
+		{"invalid lines (string)", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=abc", u, EndpointLogsFile, n, filename)
+		}, http.StatusBadRequest},
+		{"invalid timeout (string)", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&timeout=invalid", u, EndpointLogsFile, n, filename)
+		}, http.StatusBadRequest},
+		{"invalid attempt_number (string)", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&attempt_number=xyz", u, EndpointLogsFile, n, filename)
+		}, http.StatusBadRequest},
+		{"file not found", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=nonexistent.log", u, EndpointLogsFile, n)
+		}, http.StatusNotFound},
+		{"invalid suffix", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&suffix=invalid", u, EndpointLogsFile, n, filename)
+		}, http.StatusBadRequest},
 		{"task_id invalid (not found)", func(u, n string) string { return fmt.Sprintf("%s%s?task_id=nonexistent-task-id", u, EndpointLogsFile) }, http.StatusBadRequest},
 		{"non-existent pid", func(u, n string) string { return fmt.Sprintf("%s%s?pid=999999&node_id=%s", u, EndpointLogsFile, n) }, http.StatusNotFound},
 
 		// node_ip parameter tests
-		{"node_ip invalid (non-existent)", func(u, n string) string { return fmt.Sprintf("%s%s?node_ip=192.168.255.255&filename=%s", u, EndpointLogsFile, filename) }, http.StatusNotFound},
+		{"node_ip invalid (non-existent)", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_ip=192.168.255.255&filename=%s", u, EndpointLogsFile, filename)
+		}, http.StatusNotFound},
 
 		// Path traversal attacks
-		{"traversal ../etc/passwd", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=../etc/passwd", u, EndpointLogsFile, n) }, http.StatusBadRequest},
+		{"traversal ../etc/passwd", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=../etc/passwd", u, EndpointLogsFile, n)
+		}, http.StatusBadRequest},
 		{"traversal ..", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=..", u, EndpointLogsFile, n) }, http.StatusBadRequest},
-		{"traversal /etc/passwd", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=/etc/passwd", u, EndpointLogsFile, n) }, http.StatusBadRequest},
-		{"traversal ../../secret", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=../../secret", u, EndpointLogsFile, n) }, http.StatusBadRequest},
-		{"traversal in node_id", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=../evil&filename=%s", u, EndpointLogsFile, filename) }, http.StatusBadRequest},
+		{"traversal /etc/passwd", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=/etc/passwd", u, EndpointLogsFile, n)
+		}, http.StatusBadRequest},
+		{"traversal ../../secret", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=../../secret", u, EndpointLogsFile, n)
+		}, http.StatusBadRequest},
+		{"traversal in node_id", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=../evil&filename=%s", u, EndpointLogsFile, filename)
+		}, http.StatusBadRequest},
 	}
 
 	for _, tc := range logFileTestCases {
@@ -1161,6 +1271,160 @@ func verifyTimelineResponse(g *WithT, client *http.Client, historyServerURL stri
 	}, TestTimeoutShort).Should(Succeed())
 }
 
+// testLogicalActorsEndpointDeadCluster verifies that the history server can return actors from the
+// in-memory ClusterActorMap after a cluster is deleted.
+//
+// Data flow explanation:
+// The history server does not fetch actors directly from S3. Instead:
+// 1. Collector pushes events to S3 on cluster deletion
+// 2. Storage Reader reads event files from S3
+// 3. Event Handler processes events and populates ClusterActorMap
+// 4. The /logical/actors endpoint returns actors from the in-memory ClusterActorMap
+//
+// The test case follows these steps:
+// 1. Prepare test environment by applying a Ray cluster
+// 2. Submit a Ray job to the existing cluster (generates actor events)
+// 3. Delete RayCluster to trigger log upload to S3 (and event processing)
+// 4. Apply History Server and get its URL
+// 5. Verify that the history server returns actors via /logical/actors endpoint
+// 6. Verify that the history server returns a single actor via /logical/actors/{actor_id} endpoint
+// 7. Delete S3 bucket to ensure test isolation
+func testLogicalActorsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
+	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
+
+	// Delete RayCluster to trigger log upload to S3
+	err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Delete(test.Ctx(), rayCluster.Name, metav1.DeleteOptions{})
+	g.Expect(err).NotTo(HaveOccurred())
+	LogWithTimestamp(test.T(), "Deleted RayCluster %s/%s", namespace.Name, rayCluster.Name)
+
+	// Wait for cluster to be fully deleted (ensures logs are uploaded to S3 and events are processed)
+	g.Eventually(func() error {
+		_, err := GetRayCluster(test, namespace.Name, rayCluster.Name)
+		return err
+	}, TestTimeoutMedium).Should(WithTransform(k8serrors.IsNotFound, BeTrue()))
+
+	ApplyHistoryServer(test, g, namespace, "")
+	historyServerURL := GetHistoryServerURL(test, g, namespace)
+
+	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
+	g.Expect(clusterInfo.SessionName).NotTo(Equal(LiveSessionName))
+
+	client := CreateHTTPClientWithCookieJar(g)
+	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
+
+	test.T().Run("should return actors from history server", func(t *testing.T) {
+		g := NewWithT(t)
+		g.Eventually(func(gg Gomega) {
+			resp, err := client.Get(historyServerURL + EndpointLogicalActors)
+			gg.Expect(err).NotTo(HaveOccurred())
+			defer resp.Body.Close()
+			gg.Expect(resp.StatusCode).To(Equal(http.StatusOK))
+
+			body, err := io.ReadAll(resp.Body)
+			gg.Expect(err).NotTo(HaveOccurred())
+
+			var result map[string]any
+			err = json.Unmarshal(body, &result)
+			gg.Expect(err).NotTo(HaveOccurred())
+			gg.Expect(result["result"]).To(Equal(true))
+			gg.Expect(result["msg"]).To(Equal("All actors fetched."))
+
+			// Verify data.actors exists and is a map
+			data, ok := result["data"].(map[string]any)
+			gg.Expect(ok).To(BeTrue())
+			actors, ok := data["actors"].(map[string]any)
+			gg.Expect(ok).To(BeTrue())
+			gg.Expect(len(actors)).To(BeNumerically(">", 0), "should have at least one actor")
+
+			// Verify actor schema matches formatActorForResponse format (for the first actor)
+			// Required fields from router.go:formatActorForResponse
+			for _, actorData := range actors {
+				actor, ok := actorData.(map[string]any)
+				gg.Expect(ok).To(BeTrue(), "actor should be a map")
+				gg.Expect(actor["actor_id"]).NotTo(BeNil(), "actor should have actor_id")
+				gg.Expect(actor["job_id"]).NotTo(BeNil(), "actor should have job_id")
+				gg.Expect(actor["state"]).NotTo(BeNil(), "actor should have state")
+				gg.Expect(actor["address"]).NotTo(BeNil(), "actor should have address")
+				address, ok := actor["address"].(map[string]any)
+				gg.Expect(ok).To(BeTrue(), "address should be a map")
+				gg.Expect(address["node_id"]).NotTo(BeNil(), "address should have node_id")
+				gg.Expect(address["ip_address"]).NotTo(BeNil(), "address should have ip_address")
+				break // Only verify the first actor
+			}
+
+			LogWithTimestamp(t, "Found %d actors from history server", len(actors))
+		}, TestTimeoutShort).Should(Succeed())
+	})
+
+	test.T().Run("should return single actor from history server", func(t *testing.T) {
+		g := NewWithT(t)
+
+		actorID := GetOneOfActorID(g, client, historyServerURL)
+
+		// Now test the single actor endpoint
+		g.Eventually(func(gg Gomega) {
+			singleActorURL := fmt.Sprintf("%s/logical/actors/%s", historyServerURL, actorID)
+			resp, err := client.Get(singleActorURL)
+			gg.Expect(err).NotTo(HaveOccurred())
+			defer resp.Body.Close()
+			gg.Expect(resp.StatusCode).To(Equal(http.StatusOK))
+
+			body, err := io.ReadAll(resp.Body)
+			gg.Expect(err).NotTo(HaveOccurred())
+
+			var result map[string]any
+			err = json.Unmarshal(body, &result)
+			gg.Expect(err).NotTo(HaveOccurred())
+			gg.Expect(result["result"]).To(Equal(true))
+			gg.Expect(result["msg"]).To(Equal("Actor fetched."))
+
+			// Verify data.detail exists and contains actor_id
+			data, ok := result["data"].(map[string]any)
+			gg.Expect(ok).To(BeTrue())
+			detail, ok := data["detail"].(map[string]any)
+			gg.Expect(ok).To(BeTrue())
+
+			// Verify actor schema matches formatActorForResponse format
+			// Required fields from router.go:formatActorForResponse
+			gg.Expect(detail["actor_id"]).To(Equal(actorID))
+			gg.Expect(detail["job_id"]).NotTo(BeNil())
+			gg.Expect(detail["state"]).NotTo(BeNil())
+			gg.Expect(detail["address"]).NotTo(BeNil())
+			address, ok := detail["address"].(map[string]any)
+			gg.Expect(ok).To(BeTrue(), "address should be a map")
+			gg.Expect(address["node_id"]).NotTo(BeNil())
+			gg.Expect(address["ip_address"]).NotTo(BeNil())
+
+			LogWithTimestamp(t, "Successfully fetched actor %s from history server", actorID)
+		}, TestTimeoutShort).Should(Succeed())
+	})
+
+	test.T().Run("should handle non-existent actor", func(t *testing.T) {
+		g := NewWithT(t)
+		g.Eventually(func(gg Gomega) {
+			fakeActorID := "ffffffffffffffffffffffffffffffffffffffff"
+			singleActorURL := fmt.Sprintf("%s/logical/actors/%s", historyServerURL, fakeActorID)
+			resp, err := client.Get(singleActorURL)
+			gg.Expect(err).NotTo(HaveOccurred())
+			defer resp.Body.Close()
+			gg.Expect(resp.StatusCode).To(Equal(http.StatusOK))
+
+			body, err := io.ReadAll(resp.Body)
+			gg.Expect(err).NotTo(HaveOccurred())
+
+			var result map[string]any
+			err = json.Unmarshal(body, &result)
+			gg.Expect(err).NotTo(HaveOccurred())
+			gg.Expect(result["result"]).To(Equal(false))
+			gg.Expect(result["msg"]).To(Equal("Actor not found."))
+		}, TestTimeoutShort).Should(Succeed())
+	})
+
+	DeleteS3Bucket(test, g, s3Client)
+	LogWithTimestamp(test.T(), "Dead cluster logical actors endpoint tests completed")
+}
+
 // testLiveClusterTasks verifies that the /v0/tasks?detail=1 endpoint for a live cluster will return the
 // detailed task information of all task attempts.
 //
@@ -1543,6 +1807,210 @@ func testDeadClusterNode(test Test, g *WithT, namespace *corev1.Namespace, s3Cli
 
 	DeleteS3Bucket(test, g, s3Client)
 	LogWithTimestamp(test.T(), "Dead cluster /nodes/{node_id} tests completed successfully")
+}
+
+// testLiveClusterMetadata verifies that the /api/v0/cluster_metadata endpoint proxies to the
+// live Ray Dashboard and returns valid cluster metadata.
+func testLiveClusterMetadata(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
+	ApplyHistoryServer(test, g, namespace, "")
+	historyServerURL := GetHistoryServerURL(test, g, namespace)
+
+	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
+	g.Expect(clusterInfo.SessionName).To(Equal(LiveSessionName))
+
+	client := CreateHTTPClientWithCookieJar(g)
+	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
+
+	endpoint := "/api/v0/cluster_metadata"
+	LogWithTimestamp(test.T(), "Testing live cluster endpoint: %s", endpoint)
+
+	g.Eventually(func(gg Gomega) {
+		resp, err := client.Get(historyServerURL + endpoint)
+		gg.Expect(err).NotTo(HaveOccurred())
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		gg.Expect(err).NotTo(HaveOccurred())
+		gg.Expect(resp.StatusCode).To(Equal(http.StatusOK),
+			"Endpoint %s should return 200, got %d: %s", endpoint, resp.StatusCode, string(body))
+
+		var metadata map[string]interface{}
+		err = json.Unmarshal(body, &metadata)
+		gg.Expect(err).NotTo(HaveOccurred(), "Cluster metadata should be valid JSON")
+		gg.Expect(metadata).To(HaveKey("data"), "Cluster metadata should contain data field")
+		data, ok := metadata["data"].(map[string]interface{})
+		gg.Expect(ok).To(BeTrue(), "data field should be a JSON object")
+		gg.Expect(data).To(HaveKey("rayVersion"))
+		gg.Expect(data).To(HaveKey("pythonVersion"))
+		LogWithTimestamp(test.T(), "Live cluster metadata: %s", string(body))
+	}, TestTimeoutShort).Should(Succeed())
+
+	DeleteS3Bucket(test, g, s3Client)
+	LogWithTimestamp(test.T(), "Live cluster /api/v0/cluster_metadata test completed successfully")
+}
+
+// testDeadClusterMetadata verifies that the /api/v0/cluster_metadata endpoint returns stored
+// cluster metadata from S3 for a dead (deleted) cluster.
+func testDeadClusterMetadata(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
+
+	// Wait for cluster metadata to be stored in S3 by the collector before deleting the cluster.
+	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, rayCluster.Namespace)
+	sessionID := GetSessionIDFromHeadPod(test, g, rayCluster)
+	storageKey := utils.EndpointPathToStorageKey("/api/v0/cluster_metadata")
+	metaKey := fmt.Sprintf("log/%s/%s/%s/%s", clusterNameID, sessionID, utils.RAY_SESSIONDIR_FETCHED_ENDPOINTS_NAME, storageKey)
+	LogWithTimestamp(test.T(), "Waiting for cluster metadata to appear at S3 key: %s", metaKey)
+
+	g.Eventually(func(gg Gomega) {
+		_, err := s3Client.HeadObject(&s3.HeadObjectInput{
+			Bucket: aws.String(S3BucketName),
+			Key:    aws.String(metaKey),
+		})
+		gg.Expect(err).NotTo(HaveOccurred())
+	}, TestTimeoutMedium).Should(Succeed())
+
+	// Delete the Ray cluster.
+	LogWithTimestamp(test.T(), "Deleting RayCluster %s/%s", rayCluster.Namespace, rayCluster.Name)
+	err := test.Client().Ray().RayV1().
+		RayClusters(rayCluster.Namespace).
+		Delete(test.Ctx(), rayCluster.Name, metav1.DeleteOptions{})
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Eventually(func() error {
+		_, err := GetRayCluster(test, rayCluster.Namespace, rayCluster.Name)
+		return err
+	}, TestTimeoutMedium).Should(WithTransform(k8serrors.IsNotFound, BeTrue()))
+
+	// Deploy the history server and query the dead cluster metadata.
+	ApplyHistoryServer(test, g, namespace, "")
+	historyServerURL := GetHistoryServerURL(test, g, namespace)
+
+	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
+	g.Expect(clusterInfo.SessionName).To(SatisfyAll(Not(BeEmpty()), Not(Equal(LiveSessionName))))
+
+	client := CreateHTTPClientWithCookieJar(g)
+	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
+
+	endpoint := "/api/v0/cluster_metadata"
+	LogWithTimestamp(test.T(), "Testing dead cluster endpoint: %s", endpoint)
+
+	g.Eventually(func(gg Gomega) {
+		resp, err := client.Get(historyServerURL + endpoint)
+		gg.Expect(err).NotTo(HaveOccurred())
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		gg.Expect(err).NotTo(HaveOccurred())
+		gg.Expect(resp.StatusCode).To(Equal(http.StatusOK),
+			"Endpoint %s should return 200, got %d: %s", endpoint, resp.StatusCode, string(body))
+
+		var metadata map[string]interface{}
+		err = json.Unmarshal(body, &metadata)
+		gg.Expect(err).NotTo(HaveOccurred(), "Cluster metadata should be valid JSON")
+		gg.Expect(metadata).To(HaveKey("data"), "Cluster metadata should contain data field")
+		data, ok := metadata["data"].(map[string]interface{})
+		gg.Expect(ok).To(BeTrue(), "data field should be a JSON object")
+		gg.Expect(data).To(HaveKey("rayVersion"))
+		gg.Expect(data).To(HaveKey("pythonVersion"))
+		LogWithTimestamp(test.T(), "Dead cluster metadata: %s", string(body))
+	}, TestTimeoutShort).Should(Succeed())
+
+	DeleteS3Bucket(test, g, s3Client)
+	LogWithTimestamp(test.T(), "Dead cluster /api/v0/cluster_metadata test completed successfully")
+}
+
+// testDeadClusterPlacementGroups verifies that the /api/v0/placement_groups endpoint returns
+// stored placement groups data from S3 for a dead (deleted) cluster.
+//
+// This endpoint is served by the getAdditionalEndpoint fallback handler (/{subpath:*}),
+// which reads the data from S3 at {sessionName}/fetched_endpoints/restful__api__v0__placement_groups.
+//
+// The test flow mirrors testDeadClusterMetadata:
+// 1. Deploy a cluster with the collector
+// 2. Submit a RayJob that creates a detached placement group
+// 3. Wait for placement groups data to appear in S3 (written by PollAdditionalEndpointsPeriodically)
+// 4. Delete the cluster
+// 5. Deploy the history server and query /api/v0/placement_groups
+// 6. Verify the response is valid JSON with a non-empty placement_groups list
+func testDeadClusterPlacementGroups(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
+
+	// Submit a RayJob that creates a detached placement group named "test_pg".
+	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
+
+	// Wait for placement groups data to be stored in S3 by the collector before deleting the cluster.
+	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, rayCluster.Namespace)
+	sessionID := GetSessionIDFromHeadPod(test, g, rayCluster)
+	storageKey := utils.EndpointPathToStorageKey("/api/v0/placement_groups")
+	pgKey := fmt.Sprintf("log/%s/%s/%s/%s", clusterNameID, sessionID, utils.RAY_SESSIONDIR_FETCHED_ENDPOINTS_NAME, storageKey)
+	LogWithTimestamp(test.T(), "Waiting for placement groups data to appear at S3 key: %s", pgKey)
+
+	g.Eventually(func(gg Gomega) {
+		_, err := s3Client.HeadObject(&s3.HeadObjectInput{
+			Bucket: aws.String(S3BucketName),
+			Key:    aws.String(pgKey),
+		})
+		gg.Expect(err).NotTo(HaveOccurred())
+	}, TestTimeoutMedium).Should(Succeed())
+
+	// Delete the Ray cluster.
+	LogWithTimestamp(test.T(), "Deleting RayCluster %s/%s", rayCluster.Namespace, rayCluster.Name)
+	err := test.Client().Ray().RayV1().
+		RayClusters(rayCluster.Namespace).
+		Delete(test.Ctx(), rayCluster.Name, metav1.DeleteOptions{})
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Eventually(func() error {
+		_, err := GetRayCluster(test, rayCluster.Namespace, rayCluster.Name)
+		return err
+	}, TestTimeoutMedium).Should(WithTransform(k8serrors.IsNotFound, BeTrue()))
+
+	// Deploy the history server and query the dead cluster placement groups.
+	ApplyHistoryServer(test, g, namespace, "")
+	historyServerURL := GetHistoryServerURL(test, g, namespace)
+
+	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
+	g.Expect(clusterInfo.SessionName).To(SatisfyAll(Not(BeEmpty()), Not(Equal(LiveSessionName))))
+
+	client := CreateHTTPClientWithCookieJar(g)
+	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
+
+	endpoint := "/api/v0/placement_groups"
+	LogWithTimestamp(test.T(), "Testing dead cluster endpoint: %s", endpoint)
+
+	g.Eventually(func(gg Gomega) {
+		resp, err := client.Get(historyServerURL + endpoint)
+		gg.Expect(err).NotTo(HaveOccurred())
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		gg.Expect(err).NotTo(HaveOccurred())
+		gg.Expect(resp.StatusCode).To(Equal(http.StatusOK),
+			"Endpoint %s should return 200, got %d: %s", endpoint, resp.StatusCode, string(body))
+
+		var response map[string]interface{}
+		err = json.Unmarshal(body, &response)
+		gg.Expect(err).NotTo(HaveOccurred(), "Placement groups response should be valid JSON")
+		// The Ray State API v2 returns {"result": true, "msg": "", "data": {"result": {"total": N, "result": [...], ...}}}.
+		// The history server serves raw bytes from S3 without transformation, so the
+		// schema must match what the collector stored (same as testCollectorStoresPlacementGroups).
+		gg.Expect(response).To(HaveKey("result"), "Placement groups response should contain result field")
+		gg.Expect(response["result"]).To(BeTrue(), "result field should be true")
+		gg.Expect(response).To(HaveKey("data"), "Placement groups response should contain data field")
+		data, ok := response["data"].(map[string]interface{})
+		gg.Expect(ok).To(BeTrue(), "data field should be a JSON object")
+		gg.Expect(data).To(HaveKey("result"), "data should contain result field")
+		resultObj, ok := data["result"].(map[string]interface{})
+		gg.Expect(ok).To(BeTrue(), "data.result field should be a JSON object")
+		gg.Expect(resultObj).To(HaveKey("result"), "data.result should contain result field")
+
+		pgList, ok := resultObj["result"].([]interface{})
+		gg.Expect(ok).To(BeTrue(), "data.result.result should be a JSON array")
+		gg.Expect(pgList).NotTo(BeEmpty(), "placement groups list should not be empty (RayJob creates a detached PG)")
+		LogWithTimestamp(test.T(), "Dead cluster placement groups: %s", string(body))
+	}, TestTimeoutShort).Should(Succeed())
+
+	DeleteS3Bucket(test, g, s3Client)
+	LogWithTimestamp(test.T(), "Dead cluster /api/v0/placement_groups test completed successfully")
 }
 
 // setClusterContext sets the cluster context via /enter_cluster/ endpoint and verifies the response.
@@ -2127,4 +2595,109 @@ func testEventsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namesp
 
 	DeleteS3Bucket(test, g, s3Client)
 	LogWithTimestamp(test.T(), "Dead cluster events endpoint tests completed")
+}
+
+// testLiveClusterStatus verifies that the /api/cluster_status endpoint works for a live cluster.
+//
+// The test case follows these steps:
+// 1. Prepare test environment by applying a Ray cluster
+// 2. Submit a Ray job to the existing cluster
+// 3. Apply History Server and get its URL
+// 4. Get the cluster info from the list and verify sessionName='live'
+// 5. Set cluster context via /enter_cluster/ endpoint
+// 6. Verify /api/cluster_status returns valid JSON response with result=true
+// 7. Verify /api/cluster_status?format=1 returns formatted cluster status string containing "Autoscaler status"
+// 8. Delete S3 bucket to ensure test isolation
+func testLiveClusterStatus(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
+	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
+	ApplyHistoryServer(test, g, namespace, "")
+	historyServerURL := GetHistoryServerURL(test, g, namespace)
+
+	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
+	g.Expect(clusterInfo.SessionName).To(Equal(LiveSessionName), "Live cluster should have sessionName='live'")
+
+	client := CreateHTTPClientWithCookieJar(g)
+	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
+
+	endpointURL := fmt.Sprintf("%s%s", historyServerURL, EndpointClusterStatus)
+
+	test.T().Run("should proxy /api/cluster_status to live clusters", func(_ *testing.T) {
+		verifySingleEndpoint(test, g, client, endpointURL, func(test Test, g *WithT, data map[string]any) {
+			g.Expect(data).To(HaveKeyWithValue("result", true))
+			g.Expect(data).To(HaveKeyWithValue("msg", "Got cluster status."))
+			g.Expect(data).To(HaveKey("data"))
+		})
+	})
+
+	test.T().Run("should proxy for /api/cluster_status?format=1", func(_ *testing.T) {
+		verifySingleEndpoint(test, g, client, endpointURL+"?format=1", func(test Test, g *WithT, data map[string]any) {
+			g.Expect(data).To(HaveKeyWithValue("result", true))
+			g.Expect(data).To(HaveKeyWithValue("msg", "Got formatted cluster status."))
+			g.Expect(data).To(HaveKey("data"))
+			respData, ok := data["data"].(map[string]any)
+			g.Expect(ok).To(BeTrue(), "'data' should be a map")
+			clusterStatus, ok := respData["clusterStatus"].(string)
+			g.Expect(ok).To(BeTrue(), "'clusterStatus' should be a string")
+			g.Expect(clusterStatus).To(ContainSubstring("Autoscaler status"))
+		})
+	})
+
+	DeleteS3Bucket(test, g, s3Client)
+	LogWithTimestamp(test.T(), "Live cluster status E2E test completed successfully")
+}
+
+// testDeadClusterStatus verifies that the /api/cluster_status endpoint works for a dead cluster.
+// Cluster status is reconstructed from debug_state.txt and task/actor data stored in S3.
+//
+// The test case follows these steps:
+// 1. Prepare test environment by applying a Ray cluster
+// 2. Submit a Ray job to the existing cluster
+// 3. Delete RayCluster to trigger data upload to S3
+// 4. Apply History Server and get its URL
+// 5. Get the cluster info from the list and verify sessionName != 'live'
+// 6. Set cluster context via /enter_cluster/ endpoint
+// 7. Verify /api/cluster_status returns valid JSON response with result=true
+// 8. Verify /api/cluster_status?format=1 returns formatted cluster status containing "Autoscaler status"
+// 9. Delete S3 bucket to ensure test isolation
+func testDeadClusterStatus(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
+	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
+
+	DeleteRayClusterAndWait(test, g, namespace.Name, rayCluster.Name)
+
+	ApplyHistoryServer(test, g, namespace, "")
+	historyServerURL := GetHistoryServerURL(test, g, namespace)
+
+	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
+	g.Expect(clusterInfo.SessionName).NotTo(Equal(LiveSessionName))
+
+	client := CreateHTTPClientWithCookieJar(g)
+	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
+
+	endpointURL := fmt.Sprintf("%s%s", historyServerURL, EndpointClusterStatus)
+
+	test.T().Run("should return cluster status with /api/cluster_status", func(_ *testing.T) {
+		verifySingleEndpoint(test, g, client, endpointURL, func(test Test, g *WithT, data map[string]any) {
+			g.Expect(data).To(HaveKeyWithValue("result", true))
+			g.Expect(data).To(HaveKeyWithValue("msg", "Got cluster status."))
+			g.Expect(data).To(HaveKey("data"))
+		})
+	})
+
+	test.T().Run("should return formatted cluster status with /api/cluster_status?format=1", func(_ *testing.T) {
+		verifySingleEndpoint(test, g, client, endpointURL+"?format=1", func(test Test, g *WithT, data map[string]any) {
+			g.Expect(data).To(HaveKeyWithValue("result", true))
+			g.Expect(data).To(HaveKeyWithValue("msg", "Got formatted cluster status."))
+			g.Expect(data).To(HaveKey("data"))
+			respData, ok := data["data"].(map[string]any)
+			g.Expect(ok).To(BeTrue(), "'data' should be a map")
+			clusterStatus, ok := respData["clusterStatus"].(string)
+			g.Expect(ok).To(BeTrue(), "'clusterStatus' should be a string")
+			g.Expect(clusterStatus).To(ContainSubstring("Autoscaler status"))
+		})
+	})
+
+	DeleteS3Bucket(test, g, s3Client)
+	LogWithTimestamp(test.T(), "Dead cluster status E2E test completed successfully")
 }
