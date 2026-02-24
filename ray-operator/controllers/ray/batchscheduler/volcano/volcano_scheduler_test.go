@@ -514,6 +514,72 @@ func TestGetAppPodGroupName(t *testing.T) {
 	a.Equal("ray-rayjob-sample-pg", getAppPodGroupName(&rayJob))
 }
 
+func TestCreatePodGroup_OwnerAnnotationsCopied(t *testing.T) {
+	a := assert.New(t)
+
+	t.Run("RayCluster with annotations", func(t *testing.T) {
+		cluster := createTestRayCluster(1)
+		cluster.Annotations = map[string]string{
+			"custom.io/team":       "ml-platform",
+			"custom.io/scheduling": "volcano",
+		}
+
+		minMember := utils.CalculateDesiredReplicas(&cluster) + 1
+		totalResource := utils.CalculateDesiredResources(&cluster)
+		pg, err := createPodGroup(&cluster, getAppPodGroupName(&cluster), minMember, totalResource)
+		require.NoError(t, err)
+
+		a.NotNil(pg.Annotations)
+		a.Equal(cluster.Annotations["custom.io/team"], pg.Annotations["custom.io/team"])
+		a.Equal(cluster.Annotations["custom.io/scheduling"], pg.Annotations["custom.io/scheduling"])
+		a.Len(pg.Annotations, 2)
+	})
+
+	t.Run("RayJob with annotations", func(t *testing.T) {
+		rayJob := createTestRayJob(1)
+		rayJob.Annotations = map[string]string{
+			"job-type": "training",
+			"owner":    "data-team",
+		}
+
+		minMember := utils.CalculateDesiredReplicas(&rayv1.RayCluster{Spec: *rayJob.Spec.RayClusterSpec}) + 1
+		totalResource := utils.CalculateDesiredResources(&rayv1.RayCluster{Spec: *rayJob.Spec.RayClusterSpec})
+		pg, err := createPodGroup(&rayJob, getAppPodGroupName(&rayJob), minMember, totalResource)
+		require.NoError(t, err)
+
+		a.NotNil(pg.Annotations)
+		a.Equal(rayJob.Annotations["job-type"], pg.Annotations["job-type"])
+		a.Equal(rayJob.Annotations["owner"], pg.Annotations["owner"])
+		a.Len(pg.Annotations, 2)
+	})
+
+	t.Run("RayCluster with nil annotations", func(t *testing.T) {
+		cluster := createTestRayCluster(1)
+		cluster.Annotations = nil
+
+		minMember := utils.CalculateDesiredReplicas(&cluster) + 1
+		totalResource := utils.CalculateDesiredResources(&cluster)
+		pg, err := createPodGroup(&cluster, getAppPodGroupName(&cluster), minMember, totalResource)
+		require.NoError(t, err)
+
+		a.NotNil(pg.Annotations)
+		a.Empty(pg.Annotations)
+	})
+
+	t.Run("RayCluster with empty annotations", func(t *testing.T) {
+		cluster := createTestRayCluster(1)
+		cluster.Annotations = map[string]string{}
+
+		minMember := utils.CalculateDesiredReplicas(&cluster) + 1
+		totalResource := utils.CalculateDesiredResources(&cluster)
+		pg, err := createPodGroup(&cluster, getAppPodGroupName(&cluster), minMember, totalResource)
+		require.NoError(t, err)
+
+		a.NotNil(pg.Annotations)
+		a.Empty(pg.Annotations)
+	})
+}
+
 func TestCleanupOnCompletion(t *testing.T) {
 	a := assert.New(t)
 	require := require.New(t)

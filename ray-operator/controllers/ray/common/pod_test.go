@@ -171,7 +171,7 @@ var autoscalerContainer = corev1.Container{
 			},
 		},
 		{
-			Name: "RAY_CLUSTER_NAMESPACE",
+			Name: utils.RAY_CLUSTER_NAMESPACE,
 			ValueFrom: &corev1.EnvVarSource{
 				FieldRef: &corev1.ObjectFieldSelector{
 					FieldPath: "metadata.namespace",
@@ -657,6 +657,7 @@ func TestBuildPod(t *testing.T) {
 	checkContainerEnv(t, rayContainer, utils.RAY_ADDRESS, "127.0.0.1:6379")
 	checkContainerEnv(t, rayContainer, utils.RAY_USAGE_STATS_KUBERAY_IN_USE, "1")
 	checkContainerEnv(t, rayContainer, utils.RAY_CLUSTER_NAME, fmt.Sprintf("metadata.labels['%s']", utils.RayClusterLabelKey))
+	checkContainerEnv(t, rayContainer, utils.RAY_CLUSTER_NAMESPACE, "metadata.namespace")
 	checkContainerEnv(t, rayContainer, utils.RAY_DASHBOARD_ENABLE_K8S_DISK_USAGE, "1")
 	checkContainerEnv(t, rayContainer, utils.RAY_NODE_TYPE_NAME, fmt.Sprintf("metadata.labels['%s']", utils.RayNodeGroupLabelKey))
 	checkContainerEnv(t, rayContainer, utils.RAY_USAGE_STATS_EXTRA_TAGS, fmt.Sprintf("kuberay_version=%s;kuberay_crd=%s", utils.KUBERAY_VERSION, utils.RayClusterCRD))
@@ -708,6 +709,7 @@ func TestBuildPod(t *testing.T) {
 	checkContainerEnv(t, rayContainer, utils.FQ_RAY_IP, "raycluster-sample-head-svc.default.svc.cluster.local")
 	checkContainerEnv(t, rayContainer, utils.RAY_IP, "raycluster-sample-head-svc")
 	checkContainerEnv(t, rayContainer, utils.RAY_CLUSTER_NAME, fmt.Sprintf("metadata.labels['%s']", utils.RayClusterLabelKey))
+	checkContainerEnv(t, rayContainer, utils.RAY_CLUSTER_NAMESPACE, "metadata.namespace")
 	checkContainerEnv(t, rayContainer, utils.RAY_DASHBOARD_ENABLE_K8S_DISK_USAGE, "1")
 	checkContainerEnv(t, rayContainer, utils.RAY_NODE_TYPE_NAME, fmt.Sprintf("metadata.labels['%s']", utils.RayNodeGroupLabelKey))
 	workerRayStartCommandEnv := getEnvVar(rayContainer, utils.KUBERAY_GEN_RAY_START_CMD)
@@ -723,6 +725,55 @@ func TestBuildPod(t *testing.T) {
 
 	// Test default environment variables injection in ray pods
 	checkContainerEnv(t, rayContainer, "TEST_DEFAULT_ENV_NAME", "TEST_ENV_VALUE")
+}
+
+func TestBuildPod_WithPlasmaDirectory(t *testing.T) {
+	ctx := context.Background()
+
+	testCases := []struct {
+		rayStartParams     map[string]string
+		name               string
+		expectSharedMemory bool
+	}{
+		{
+			name:               "unset plasma-directory keeps shared memory mount",
+			rayStartParams:     map[string]string{},
+			expectSharedMemory: true,
+		},
+		{
+			name: "plasma-directory set to /dev/shm skips shared memory mount",
+			rayStartParams: map[string]string{
+				PlasmaDirectoryParamKey: "/dev/shm",
+			},
+			expectSharedMemory: false,
+		},
+		{
+			name: "plasma-directory set to /dev/shm/ skips shared memory mount",
+			rayStartParams: map[string]string{
+				PlasmaDirectoryParamKey: "/dev/shm/",
+			},
+			expectSharedMemory: false,
+		},
+		{
+			name: "non /dev/shm plasma-directory skips shared memory mount",
+			rayStartParams: map[string]string{
+				PlasmaDirectoryParamKey: "/tmp/ray/plasma",
+			},
+			expectSharedMemory: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			cluster := instance.DeepCopy()
+			podName := strings.ToLower(cluster.Name + utils.DashSymbol + string(rayv1.HeadNode) + utils.DashSymbol + utils.FormatInt32(0))
+			podTemplateSpec := DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
+			pod := BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, maps.Clone(tc.rayStartParams), "6379", false, utils.GetCRDType(""), "", nil, "")
+
+			assert.Equal(t, tc.expectSharedMemory, checkIfVolumeMounted(&pod.Spec.Containers[utils.RayContainerIndex], SharedMemoryVolumeMountPath))
+			assert.Equal(t, tc.expectSharedMemory, checkIfVolumeExists(&pod, SharedMemoryVolumeName))
+		})
+	}
 }
 
 func TestBuildPod_WithNoCPULimits(t *testing.T) {

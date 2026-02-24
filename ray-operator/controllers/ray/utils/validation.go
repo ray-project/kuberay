@@ -305,6 +305,9 @@ func ValidateRayJobSpec(rayJob *rayv1.RayJob) error {
 		if rayJob.Spec.SubmissionMode == rayv1.SidecarMode {
 			return fmt.Errorf("ClusterSelector is not supported in SidecarMode")
 		}
+		if rayJob.Spec.BackoffLimit != nil && *rayJob.Spec.BackoffLimit > 0 {
+			return fmt.Errorf("The RayJob spec is invalid: BackoffLimit is incompatible with ClusterSelector mode")
+		}
 	}
 
 	// InteractiveMode does not support backoffLimit > 1.

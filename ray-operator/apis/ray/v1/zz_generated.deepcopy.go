@@ -879,6 +879,11 @@ func (in *RayServiceSpec) DeepCopyInto(out *RayServiceSpec) {
 		*out = new(RayServiceUpgradeStrategy)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.ManagedBy != nil {
+		in, out := &in.ManagedBy, &out.ManagedBy
+		*out = new(string)
+		**out = **in
+	}
 	in.RayClusterSpec.DeepCopyInto(&out.RayClusterSpec)
 }
 

@@ -776,6 +776,12 @@ func (r *RayJobReconciler) deleteSubmitterJob(ctx context.Context, rayJobInstanc
 // deleteClusterResources deletes the RayCluster associated with the RayJob to release the compute resources.
 func (r *RayJobReconciler) deleteClusterResources(ctx context.Context, rayJobInstance *rayv1.RayJob) (bool, error) {
 	logger := ctrl.LoggerFrom(ctx)
+
+	if len(rayJobInstance.Spec.ClusterSelector) > 0 {
+		logger.Info("RayJob is using an existing RayCluster via clusterSelector; skipping resource deletion.", "RayClusterSelector", rayJobInstance.Spec.ClusterSelector)
+		return true, nil
+	}
+
 	clusterIdentifier := common.RayJobRayClusterNamespacedName(rayJobInstance)
 
 	var isClusterDeleted bool
