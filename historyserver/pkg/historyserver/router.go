@@ -20,6 +20,7 @@ import (
 	"github.com/emicklei/go-restful/v3"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/sirupsen/logrus"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -35,6 +36,13 @@ const (
 
 	ATTRIBUTE_SERVICE_NAME = "cluster_service_name"
 	ATTRIBUTE_AUTH_TOKEN   = "cluster_auth_token"
+
+	// DashboardPortName is the name of the dashboard service port assigned by the ray-operator.
+	// Ref: https://github.com/ray-project/kuberay/blob/master/ray-operator/controllers/ray/utils/constant.go
+	DashboardPortName = "dashboard"
+	// DefaultDashboardPort is the default port for the Ray Dashboard if the service port is not found.
+	// Ref: https://github.com/ray-project/kuberay/blob/master/ray-operator/controllers/ray/utils/constant.go
+	DefaultDashboardPort = 8265
 )
 
 type ServiceInfo struct {
@@ -1688,7 +1696,23 @@ func fetchClusterAndSvcInfo(clis []client.Client, name, namespace string) (Servi
 	if svcName == "" {
 		return ServiceInfo{}, nil, errors.New("RayCluster head service not ready")
 	}
-	return ServiceInfo{ServiceName: svcName, Namespace: namespace, Port: 8265}, &rc, nil
+
+	// Look up the actual dashboard port from the head service instead of hardcoding the default,
+	// because users can override the port in their HeadGroupSpec.
+	port := DefaultDashboardPort
+	headSvc := corev1.Service{}
+	if err = cli.Get(context.Background(), types.NamespacedName{Namespace: namespace, Name: svcName}, &headSvc); err == nil {
+		for _, p := range headSvc.Spec.Ports {
+			if p.Name == DashboardPortName {
+				port = int(p.Port)
+				break
+			}
+		}
+	} else {
+		logrus.Warnf("Could not fetch head service %s/%s to determine dashboard port, falling back to %d: %v", namespace, svcName, port, err)
+	}
+
+	return ServiceInfo{ServiceName: svcName, Namespace: namespace, Port: port}, &rc, nil
 }
 
 // formatNodeSummaryReplayForResp formats a node summary replay of a single node for the response.
