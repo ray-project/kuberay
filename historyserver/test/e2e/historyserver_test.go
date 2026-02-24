@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"testing"
 
+	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/s3"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -78,6 +79,10 @@ func TestHistoryServer(t *testing.T) {
 			testFunc: testEventsEndpointDeadCluster,
 		},
 		{
+			name:     "/logical/actors endpoint (dead cluster)",
+			testFunc: testLogicalActorsEndpointDeadCluster,
+		},
+		{
 			name:     "Live cluster: /api/v0/tasks?detail=1 should return the detailed task information of all task attempts",
 			testFunc: testLiveClusterTasks,
 		},
@@ -102,12 +107,16 @@ func TestHistoryServer(t *testing.T) {
 			testFunc: testDeadClusterNode,
 		},
 		{
-			name:     "/api/cluster_status endpoint (live cluster)",
-			testFunc: testLiveClusterStatus,
+			name:     "Live cluster: cluster_metadata endpoint should return metadata (Ray version, Python version, etc.)",
+			testFunc: testLiveClusterMetadata,
 		},
 		{
-			name:     "/api/cluster_status endpoint (dead cluster)",
-			testFunc: testDeadClusterStatus,
+			name:     "Dead cluster: cluster_metadata endpoint should return stored metadata from S3",
+			testFunc: testDeadClusterMetadata,
+		},
+		{
+			name:     "Dead cluster: /api/v0/placement_groups should return stored placement groups from S3",
+			testFunc: testDeadClusterPlacementGroups,
 		},
 	}
 
@@ -1486,6 +1495,160 @@ func verifyTimelineResponse(g *WithT, client *http.Client, historyServerURL stri
 	}, TestTimeoutShort).Should(Succeed())
 }
 
+// testLogicalActorsEndpointDeadCluster verifies that the history server can return actors from the
+// in-memory ClusterActorMap after a cluster is deleted.
+//
+// Data flow explanation:
+// The history server does not fetch actors directly from S3. Instead:
+// 1. Collector pushes events to S3 on cluster deletion
+// 2. Storage Reader reads event files from S3
+// 3. Event Handler processes events and populates ClusterActorMap
+// 4. The /logical/actors endpoint returns actors from the in-memory ClusterActorMap
+//
+// The test case follows these steps:
+// 1. Prepare test environment by applying a Ray cluster
+// 2. Submit a Ray job to the existing cluster (generates actor events)
+// 3. Delete RayCluster to trigger log upload to S3 (and event processing)
+// 4. Apply History Server and get its URL
+// 5. Verify that the history server returns actors via /logical/actors endpoint
+// 6. Verify that the history server returns a single actor via /logical/actors/{actor_id} endpoint
+// 7. Delete S3 bucket to ensure test isolation
+func testLogicalActorsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
+	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
+
+	// Delete RayCluster to trigger log upload to S3
+	err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Delete(test.Ctx(), rayCluster.Name, metav1.DeleteOptions{})
+	g.Expect(err).NotTo(HaveOccurred())
+	LogWithTimestamp(test.T(), "Deleted RayCluster %s/%s", namespace.Name, rayCluster.Name)
+
+	// Wait for cluster to be fully deleted (ensures logs are uploaded to S3 and events are processed)
+	g.Eventually(func() error {
+		_, err := GetRayCluster(test, namespace.Name, rayCluster.Name)
+		return err
+	}, TestTimeoutMedium).Should(WithTransform(k8serrors.IsNotFound, BeTrue()))
+
+	ApplyHistoryServer(test, g, namespace, "")
+	historyServerURL := GetHistoryServerURL(test, g, namespace)
+
+	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
+	g.Expect(clusterInfo.SessionName).NotTo(Equal(LiveSessionName))
+
+	client := CreateHTTPClientWithCookieJar(g)
+	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
+
+	test.T().Run("should return actors from history server", func(t *testing.T) {
+		g := NewWithT(t)
+		g.Eventually(func(gg Gomega) {
+			resp, err := client.Get(historyServerURL + EndpointLogicalActors)
+			gg.Expect(err).NotTo(HaveOccurred())
+			defer resp.Body.Close()
+			gg.Expect(resp.StatusCode).To(Equal(http.StatusOK))
+
+			body, err := io.ReadAll(resp.Body)
+			gg.Expect(err).NotTo(HaveOccurred())
+
+			var result map[string]any
+			err = json.Unmarshal(body, &result)
+			gg.Expect(err).NotTo(HaveOccurred())
+			gg.Expect(result["result"]).To(Equal(true))
+			gg.Expect(result["msg"]).To(Equal("All actors fetched."))
+
+			// Verify data.actors exists and is a map
+			data, ok := result["data"].(map[string]any)
+			gg.Expect(ok).To(BeTrue())
+			actors, ok := data["actors"].(map[string]any)
+			gg.Expect(ok).To(BeTrue())
+			gg.Expect(len(actors)).To(BeNumerically(">", 0), "should have at least one actor")
+
+			// Verify actor schema matches formatActorForResponse format (for the first actor)
+			// Required fields from router.go:formatActorForResponse
+			for _, actorData := range actors {
+				actor, ok := actorData.(map[string]any)
+				gg.Expect(ok).To(BeTrue(), "actor should be a map")
+				gg.Expect(actor["actor_id"]).NotTo(BeNil(), "actor should have actor_id")
+				gg.Expect(actor["job_id"]).NotTo(BeNil(), "actor should have job_id")
+				gg.Expect(actor["state"]).NotTo(BeNil(), "actor should have state")
+				gg.Expect(actor["address"]).NotTo(BeNil(), "actor should have address")
+				address, ok := actor["address"].(map[string]any)
+				gg.Expect(ok).To(BeTrue(), "address should be a map")
+				gg.Expect(address["node_id"]).NotTo(BeNil(), "address should have node_id")
+				gg.Expect(address["ip_address"]).NotTo(BeNil(), "address should have ip_address")
+				break // Only verify the first actor
+			}
+
+			LogWithTimestamp(t, "Found %d actors from history server", len(actors))
+		}, TestTimeoutShort).Should(Succeed())
+	})
+
+	test.T().Run("should return single actor from history server", func(t *testing.T) {
+		g := NewWithT(t)
+
+		actorID := GetOneOfActorID(g, client, historyServerURL)
+
+		// Now test the single actor endpoint
+		g.Eventually(func(gg Gomega) {
+			singleActorURL := fmt.Sprintf("%s/logical/actors/%s", historyServerURL, actorID)
+			resp, err := client.Get(singleActorURL)
+			gg.Expect(err).NotTo(HaveOccurred())
+			defer resp.Body.Close()
+			gg.Expect(resp.StatusCode).To(Equal(http.StatusOK))
+
+			body, err := io.ReadAll(resp.Body)
+			gg.Expect(err).NotTo(HaveOccurred())
+
+			var result map[string]any
+			err = json.Unmarshal(body, &result)
+			gg.Expect(err).NotTo(HaveOccurred())
+			gg.Expect(result["result"]).To(Equal(true))
+			gg.Expect(result["msg"]).To(Equal("Actor fetched."))
+
+			// Verify data.detail exists and contains actor_id
+			data, ok := result["data"].(map[string]any)
+			gg.Expect(ok).To(BeTrue())
+			detail, ok := data["detail"].(map[string]any)
+			gg.Expect(ok).To(BeTrue())
+
+			// Verify actor schema matches formatActorForResponse format
+			// Required fields from router.go:formatActorForResponse
+			gg.Expect(detail["actor_id"]).To(Equal(actorID))
+			gg.Expect(detail["job_id"]).NotTo(BeNil())
+			gg.Expect(detail["state"]).NotTo(BeNil())
+			gg.Expect(detail["address"]).NotTo(BeNil())
+			address, ok := detail["address"].(map[string]any)
+			gg.Expect(ok).To(BeTrue(), "address should be a map")
+			gg.Expect(address["node_id"]).NotTo(BeNil())
+			gg.Expect(address["ip_address"]).NotTo(BeNil())
+
+			LogWithTimestamp(t, "Successfully fetched actor %s from history server", actorID)
+		}, TestTimeoutShort).Should(Succeed())
+	})
+
+	test.T().Run("should handle non-existent actor", func(t *testing.T) {
+		g := NewWithT(t)
+		g.Eventually(func(gg Gomega) {
+			fakeActorID := "ffffffffffffffffffffffffffffffffffffffff"
+			singleActorURL := fmt.Sprintf("%s/logical/actors/%s", historyServerURL, fakeActorID)
+			resp, err := client.Get(singleActorURL)
+			gg.Expect(err).NotTo(HaveOccurred())
+			defer resp.Body.Close()
+			gg.Expect(resp.StatusCode).To(Equal(http.StatusOK))
+
+			body, err := io.ReadAll(resp.Body)
+			gg.Expect(err).NotTo(HaveOccurred())
+
+			var result map[string]any
+			err = json.Unmarshal(body, &result)
+			gg.Expect(err).NotTo(HaveOccurred())
+			gg.Expect(result["result"]).To(Equal(false))
+			gg.Expect(result["msg"]).To(Equal("Actor not found."))
+		}, TestTimeoutShort).Should(Succeed())
+	})
+
+	DeleteS3Bucket(test, g, s3Client)
+	LogWithTimestamp(test.T(), "Dead cluster logical actors endpoint tests completed")
+}
+
 // testLiveClusterTasks verifies that the /v0/tasks?detail=1 endpoint for a live cluster will return the
 // detailed task information of all task attempts.
 //
@@ -1868,6 +2031,210 @@ func testDeadClusterNode(test Test, g *WithT, namespace *corev1.Namespace, s3Cli
 
 	DeleteS3Bucket(test, g, s3Client)
 	LogWithTimestamp(test.T(), "Dead cluster /nodes/{node_id} tests completed successfully")
+}
+
+// testLiveClusterMetadata verifies that the /api/v0/cluster_metadata endpoint proxies to the
+// live Ray Dashboard and returns valid cluster metadata.
+func testLiveClusterMetadata(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
+	ApplyHistoryServer(test, g, namespace, "")
+	historyServerURL := GetHistoryServerURL(test, g, namespace)
+
+	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
+	g.Expect(clusterInfo.SessionName).To(Equal(LiveSessionName))
+
+	client := CreateHTTPClientWithCookieJar(g)
+	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
+
+	endpoint := "/api/v0/cluster_metadata"
+	LogWithTimestamp(test.T(), "Testing live cluster endpoint: %s", endpoint)
+
+	g.Eventually(func(gg Gomega) {
+		resp, err := client.Get(historyServerURL + endpoint)
+		gg.Expect(err).NotTo(HaveOccurred())
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		gg.Expect(err).NotTo(HaveOccurred())
+		gg.Expect(resp.StatusCode).To(Equal(http.StatusOK),
+			"Endpoint %s should return 200, got %d: %s", endpoint, resp.StatusCode, string(body))
+
+		var metadata map[string]interface{}
+		err = json.Unmarshal(body, &metadata)
+		gg.Expect(err).NotTo(HaveOccurred(), "Cluster metadata should be valid JSON")
+		gg.Expect(metadata).To(HaveKey("data"), "Cluster metadata should contain data field")
+		data, ok := metadata["data"].(map[string]interface{})
+		gg.Expect(ok).To(BeTrue(), "data field should be a JSON object")
+		gg.Expect(data).To(HaveKey("rayVersion"))
+		gg.Expect(data).To(HaveKey("pythonVersion"))
+		LogWithTimestamp(test.T(), "Live cluster metadata: %s", string(body))
+	}, TestTimeoutShort).Should(Succeed())
+
+	DeleteS3Bucket(test, g, s3Client)
+	LogWithTimestamp(test.T(), "Live cluster /api/v0/cluster_metadata test completed successfully")
+}
+
+// testDeadClusterMetadata verifies that the /api/v0/cluster_metadata endpoint returns stored
+// cluster metadata from S3 for a dead (deleted) cluster.
+func testDeadClusterMetadata(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
+
+	// Wait for cluster metadata to be stored in S3 by the collector before deleting the cluster.
+	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, rayCluster.Namespace)
+	sessionID := GetSessionIDFromHeadPod(test, g, rayCluster)
+	storageKey := utils.EndpointPathToStorageKey("/api/v0/cluster_metadata")
+	metaKey := fmt.Sprintf("log/%s/%s/%s/%s", clusterNameID, sessionID, utils.RAY_SESSIONDIR_FETCHED_ENDPOINTS_NAME, storageKey)
+	LogWithTimestamp(test.T(), "Waiting for cluster metadata to appear at S3 key: %s", metaKey)
+
+	g.Eventually(func(gg Gomega) {
+		_, err := s3Client.HeadObject(&s3.HeadObjectInput{
+			Bucket: aws.String(S3BucketName),
+			Key:    aws.String(metaKey),
+		})
+		gg.Expect(err).NotTo(HaveOccurred())
+	}, TestTimeoutMedium).Should(Succeed())
+
+	// Delete the Ray cluster.
+	LogWithTimestamp(test.T(), "Deleting RayCluster %s/%s", rayCluster.Namespace, rayCluster.Name)
+	err := test.Client().Ray().RayV1().
+		RayClusters(rayCluster.Namespace).
+		Delete(test.Ctx(), rayCluster.Name, metav1.DeleteOptions{})
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Eventually(func() error {
+		_, err := GetRayCluster(test, rayCluster.Namespace, rayCluster.Name)
+		return err
+	}, TestTimeoutMedium).Should(WithTransform(k8serrors.IsNotFound, BeTrue()))
+
+	// Deploy the history server and query the dead cluster metadata.
+	ApplyHistoryServer(test, g, namespace, "")
+	historyServerURL := GetHistoryServerURL(test, g, namespace)
+
+	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
+	g.Expect(clusterInfo.SessionName).To(SatisfyAll(Not(BeEmpty()), Not(Equal(LiveSessionName))))
+
+	client := CreateHTTPClientWithCookieJar(g)
+	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
+
+	endpoint := "/api/v0/cluster_metadata"
+	LogWithTimestamp(test.T(), "Testing dead cluster endpoint: %s", endpoint)
+
+	g.Eventually(func(gg Gomega) {
+		resp, err := client.Get(historyServerURL + endpoint)
+		gg.Expect(err).NotTo(HaveOccurred())
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		gg.Expect(err).NotTo(HaveOccurred())
+		gg.Expect(resp.StatusCode).To(Equal(http.StatusOK),
+			"Endpoint %s should return 200, got %d: %s", endpoint, resp.StatusCode, string(body))
+
+		var metadata map[string]interface{}
+		err = json.Unmarshal(body, &metadata)
+		gg.Expect(err).NotTo(HaveOccurred(), "Cluster metadata should be valid JSON")
+		gg.Expect(metadata).To(HaveKey("data"), "Cluster metadata should contain data field")
+		data, ok := metadata["data"].(map[string]interface{})
+		gg.Expect(ok).To(BeTrue(), "data field should be a JSON object")
+		gg.Expect(data).To(HaveKey("rayVersion"))
+		gg.Expect(data).To(HaveKey("pythonVersion"))
+		LogWithTimestamp(test.T(), "Dead cluster metadata: %s", string(body))
+	}, TestTimeoutShort).Should(Succeed())
+
+	DeleteS3Bucket(test, g, s3Client)
+	LogWithTimestamp(test.T(), "Dead cluster /api/v0/cluster_metadata test completed successfully")
+}
+
+// testDeadClusterPlacementGroups verifies that the /api/v0/placement_groups endpoint returns
+// stored placement groups data from S3 for a dead (deleted) cluster.
+//
+// This endpoint is served by the getAdditionalEndpoint fallback handler (/{subpath:*}),
+// which reads the data from S3 at {sessionName}/fetched_endpoints/restful__api__v0__placement_groups.
+//
+// The test flow mirrors testDeadClusterMetadata:
+// 1. Deploy a cluster with the collector
+// 2. Submit a RayJob that creates a detached placement group
+// 3. Wait for placement groups data to appear in S3 (written by PollAdditionalEndpointsPeriodically)
+// 4. Delete the cluster
+// 5. Deploy the history server and query /api/v0/placement_groups
+// 6. Verify the response is valid JSON with a non-empty placement_groups list
+func testDeadClusterPlacementGroups(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
+
+	// Submit a RayJob that creates a detached placement group named "test_pg".
+	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
+
+	// Wait for placement groups data to be stored in S3 by the collector before deleting the cluster.
+	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, rayCluster.Namespace)
+	sessionID := GetSessionIDFromHeadPod(test, g, rayCluster)
+	storageKey := utils.EndpointPathToStorageKey("/api/v0/placement_groups")
+	pgKey := fmt.Sprintf("log/%s/%s/%s/%s", clusterNameID, sessionID, utils.RAY_SESSIONDIR_FETCHED_ENDPOINTS_NAME, storageKey)
+	LogWithTimestamp(test.T(), "Waiting for placement groups data to appear at S3 key: %s", pgKey)
+
+	g.Eventually(func(gg Gomega) {
+		_, err := s3Client.HeadObject(&s3.HeadObjectInput{
+			Bucket: aws.String(S3BucketName),
+			Key:    aws.String(pgKey),
+		})
+		gg.Expect(err).NotTo(HaveOccurred())
+	}, TestTimeoutMedium).Should(Succeed())
+
+	// Delete the Ray cluster.
+	LogWithTimestamp(test.T(), "Deleting RayCluster %s/%s", rayCluster.Namespace, rayCluster.Name)
+	err := test.Client().Ray().RayV1().
+		RayClusters(rayCluster.Namespace).
+		Delete(test.Ctx(), rayCluster.Name, metav1.DeleteOptions{})
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Eventually(func() error {
+		_, err := GetRayCluster(test, rayCluster.Namespace, rayCluster.Name)
+		return err
+	}, TestTimeoutMedium).Should(WithTransform(k8serrors.IsNotFound, BeTrue()))
+
+	// Deploy the history server and query the dead cluster placement groups.
+	ApplyHistoryServer(test, g, namespace, "")
+	historyServerURL := GetHistoryServerURL(test, g, namespace)
+
+	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
+	g.Expect(clusterInfo.SessionName).To(SatisfyAll(Not(BeEmpty()), Not(Equal(LiveSessionName))))
+
+	client := CreateHTTPClientWithCookieJar(g)
+	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
+
+	endpoint := "/api/v0/placement_groups"
+	LogWithTimestamp(test.T(), "Testing dead cluster endpoint: %s", endpoint)
+
+	g.Eventually(func(gg Gomega) {
+		resp, err := client.Get(historyServerURL + endpoint)
+		gg.Expect(err).NotTo(HaveOccurred())
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		gg.Expect(err).NotTo(HaveOccurred())
+		gg.Expect(resp.StatusCode).To(Equal(http.StatusOK),
+			"Endpoint %s should return 200, got %d: %s", endpoint, resp.StatusCode, string(body))
+
+		var response map[string]interface{}
+		err = json.Unmarshal(body, &response)
+		gg.Expect(err).NotTo(HaveOccurred(), "Placement groups response should be valid JSON")
+		// The Ray State API v2 returns {"result": true, "msg": "", "data": {"result": {"total": N, "result": [...], ...}}}.
+		// The history server serves raw bytes from S3 without transformation, so the
+		// schema must match what the collector stored (same as testCollectorStoresPlacementGroups).
+		gg.Expect(response).To(HaveKey("result"), "Placement groups response should contain result field")
+		gg.Expect(response["result"]).To(BeTrue(), "result field should be true")
+		gg.Expect(response).To(HaveKey("data"), "Placement groups response should contain data field")
+		data, ok := response["data"].(map[string]interface{})
+		gg.Expect(ok).To(BeTrue(), "data field should be a JSON object")
+		gg.Expect(data).To(HaveKey("result"), "data should contain result field")
+		resultObj, ok := data["result"].(map[string]interface{})
+		gg.Expect(ok).To(BeTrue(), "data.result field should be a JSON object")
+		gg.Expect(resultObj).To(HaveKey("result"), "data.result should contain result field")
+
+		pgList, ok := resultObj["result"].([]interface{})
+		gg.Expect(ok).To(BeTrue(), "data.result.result should be a JSON array")
+		gg.Expect(pgList).NotTo(BeEmpty(), "placement groups list should not be empty (RayJob creates a detached PG)")
+		LogWithTimestamp(test.T(), "Dead cluster placement groups: %s", string(body))
+	}, TestTimeoutShort).Should(Succeed())
+
+	DeleteS3Bucket(test, g, s3Client)
+	LogWithTimestamp(test.T(), "Dead cluster /api/v0/placement_groups test completed successfully")
 }
 
 // setClusterContext sets the cluster context via /enter_cluster/ endpoint and verifies the response.

@@ -227,6 +227,39 @@ func GetOneOfNodeID(g *WithT, client *http.Client, historyServerURL string, isLi
 	return nodeInfo["raylet"].(map[string]any)["nodeId"].(string)
 }
 
+// GetOneOfActorID retrieves an actor ID from the /logical/actors endpoint.
+// The history server returns actors from the in-memory ClusterActorMap, which is populated
+// by the Event Handler processing events from S3.
+func GetOneOfActorID(g *WithT, client *http.Client, historyServerURL string) string {
+	resp, err := client.Get(historyServerURL + EndpointLogicalActors)
+	g.Expect(err).NotTo(HaveOccurred())
+	defer resp.Body.Close()
+	g.Expect(resp.StatusCode).To(Equal(http.StatusOK))
+
+	body, err := io.ReadAll(resp.Body)
+	g.Expect(err).NotTo(HaveOccurred())
+
+	var result map[string]any
+	err = json.Unmarshal(body, &result)
+	g.Expect(err).NotTo(HaveOccurred())
+
+	// Response format: {"result": true, "msg": "...", "data": {"actors": {actor_id: {...}, ...}}}
+	data, ok := result["data"].(map[string]any)
+	g.Expect(ok).To(BeTrue(), "response should have 'data' field")
+
+	actors, ok := data["actors"].(map[string]any)
+	g.Expect(ok).To(BeTrue(), "data should have 'actors' field")
+	g.Expect(len(actors)).To(BeNumerically(">", 0), "should have at least one actor")
+
+	// Get the first actor ID from the map
+	for actorID := range actors {
+		return actorID
+	}
+
+	// This should never happen due to the length check above
+	return ""
+}
+
 // VerifyLogFileEndpointReturnsContent verifies that the log file endpoint returns content.
 func VerifyLogFileEndpointReturnsContent(test Test, g *WithT, client *http.Client, historyServerURL, nodeID string) {
 	filename := "raylet.out"
