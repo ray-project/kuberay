@@ -16,7 +16,7 @@ import (
 
 func NewCollector(config *types.RayCollectorConfig, writer storage.StorageWriter) RayLogCollector {
 	handler := logcollector.RayLogHandler{
-		EnableMeta: config.Role == "Head",
+		IsHead: config.Role == "Head",
 		LogFiles:   make(chan string),
 
 		RootDir:    config.RootDir,
@@ -28,7 +28,9 @@ func NewCollector(config *types.RayCollectorConfig, writer storage.StorageWriter
 
 		LogBatching:      config.LogBatching,
 		PushInterval:     config.PushInterval,
-		DashboardAddress: config.DashboardAddress,
+		DashboardAddress:     config.DashboardAddress,
+		AdditionalEndpoints:  config.AdditionalEndpoints,
+		EndpointPollInterval: config.EndpointPollInterval,
 
 		HttpClient: &http.Client{
 			Transport: &http.Transport{
@@ -42,10 +44,10 @@ func NewCollector(config *types.RayCollectorConfig, writer storage.StorageWriter
 	}
 	logDir := strings.TrimSpace(filepath.Join(config.SessionDir, utils.RAY_SESSIONDIR_LOGDIR_NAME))
 	handler.LogDir = logDir
-	// rootMetaDir uses flat key format (name_id) for S3/OSS performance optimization.
+	// clusterRootDir uses flat key format (name_id) for S3/OSS performance optimization.
 	// See utils.connector for the design rationale.
-	rootMetaDir := fmt.Sprintf("%s/", path.Clean(path.Join(handler.RootDir, handler.RayClusterName+"_"+handler.RayClusterID, "meta")))
-	handler.MetaDir = rootMetaDir
+	clusterRootDir := fmt.Sprintf("%s/", path.Clean(path.Join(handler.RootDir, handler.RayClusterName+"_"+handler.RayClusterID)))
+	handler.ClusterDir = clusterRootDir
 
 	return &handler
 }

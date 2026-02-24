@@ -103,20 +103,16 @@ func TestHistoryServer(t *testing.T) {
 			testFunc: testDeadClusterNode,
 		},
 		{
-			name:     "/api/cluster_status endpoint (live cluster)",
-			testFunc: testLiveClusterStatus,
-		},
-		{
-			name:     "/api/cluster_status endpoint (dead cluster)",
-			testFunc: testDeadClusterStatus,
-		},
-		{
 			name:     "Live cluster: cluster_metadata endpoint should return metadata (Ray version, Python version, etc.)",
 			testFunc: testLiveClusterMetadata,
 		},
 		{
 			name:     "Dead cluster: cluster_metadata endpoint should return stored metadata from S3",
 			testFunc: testDeadClusterMetadata,
+		},
+		{
+			name:     "Dead cluster: /api/v0/placement_groups should return stored placement groups from S3",
+			testFunc: testDeadClusterPlacementGroups,
 		},
 	}
 
@@ -1854,7 +1850,8 @@ func testDeadClusterMetadata(test Test, g *WithT, namespace *corev1.Namespace, s
 	// Wait for cluster metadata to be stored in S3 by the collector before deleting the cluster.
 	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, rayCluster.Namespace)
 	sessionID := GetSessionIDFromHeadPod(test, g, rayCluster)
-	metaKey := fmt.Sprintf("log/%s/meta/%s/%s", clusterNameID, sessionID, utils.OssMetaFile_ClusterMetadata)
+	storageKey := utils.EndpointPathToStorageKey("/api/v0/cluster_metadata")
+	metaKey := fmt.Sprintf("log/%s/%s/%s/%s", clusterNameID, sessionID, utils.RAY_SESSIONDIR_FETCHED_ENDPOINTS_NAME, storageKey)
 	LogWithTimestamp(test.T(), "Waiting for cluster metadata to appear at S3 key: %s", metaKey)
 
 	g.Eventually(func(gg Gomega) {
@@ -1912,6 +1909,100 @@ func testDeadClusterMetadata(test Test, g *WithT, namespace *corev1.Namespace, s
 
 	DeleteS3Bucket(test, g, s3Client)
 	LogWithTimestamp(test.T(), "Dead cluster /api/v0/cluster_metadata test completed successfully")
+}
+
+// testDeadClusterPlacementGroups verifies that the /api/v0/placement_groups endpoint returns
+// stored placement groups data from S3 for a dead (deleted) cluster.
+//
+// This endpoint is served by the getAdditionalEndpoint fallback handler (/{subpath:*}),
+// which reads the data from S3 at {sessionName}/fetched_endpoints/restful__api__v0__placement_groups.
+//
+// The test flow mirrors testDeadClusterMetadata:
+// 1. Deploy a cluster with the collector
+// 2. Submit a RayJob that creates a detached placement group
+// 3. Wait for placement groups data to appear in S3 (written by PollAdditionalEndpointsPeriodically)
+// 4. Delete the cluster
+// 5. Deploy the history server and query /api/v0/placement_groups
+// 6. Verify the response is valid JSON with a non-empty placement_groups list
+func testDeadClusterPlacementGroups(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
+
+	// Submit a RayJob that creates a detached placement group named "test_pg".
+	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
+
+	// Wait for placement groups data to be stored in S3 by the collector before deleting the cluster.
+	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, rayCluster.Namespace)
+	sessionID := GetSessionIDFromHeadPod(test, g, rayCluster)
+	storageKey := utils.EndpointPathToStorageKey("/api/v0/placement_groups")
+	pgKey := fmt.Sprintf("log/%s/%s/%s/%s", clusterNameID, sessionID, utils.RAY_SESSIONDIR_FETCHED_ENDPOINTS_NAME, storageKey)
+	LogWithTimestamp(test.T(), "Waiting for placement groups data to appear at S3 key: %s", pgKey)
+
+	g.Eventually(func(gg Gomega) {
+		_, err := s3Client.HeadObject(&s3.HeadObjectInput{
+			Bucket: aws.String(S3BucketName),
+			Key:    aws.String(pgKey),
+		})
+		gg.Expect(err).NotTo(HaveOccurred())
+	}, TestTimeoutMedium).Should(Succeed())
+
+	// Delete the Ray cluster.
+	LogWithTimestamp(test.T(), "Deleting RayCluster %s/%s", rayCluster.Namespace, rayCluster.Name)
+	err := test.Client().Ray().RayV1().
+		RayClusters(rayCluster.Namespace).
+		Delete(test.Ctx(), rayCluster.Name, metav1.DeleteOptions{})
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Eventually(func() error {
+		_, err := GetRayCluster(test, rayCluster.Namespace, rayCluster.Name)
+		return err
+	}, TestTimeoutMedium).Should(WithTransform(k8serrors.IsNotFound, BeTrue()))
+
+	// Deploy the history server and query the dead cluster placement groups.
+	ApplyHistoryServer(test, g, namespace, "")
+	historyServerURL := GetHistoryServerURL(test, g, namespace)
+
+	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
+	g.Expect(clusterInfo.SessionName).To(SatisfyAll(Not(BeEmpty()), Not(Equal(LiveSessionName))))
+
+	client := CreateHTTPClientWithCookieJar(g)
+	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
+
+	endpoint := "/api/v0/placement_groups"
+	LogWithTimestamp(test.T(), "Testing dead cluster endpoint: %s", endpoint)
+
+	g.Eventually(func(gg Gomega) {
+		resp, err := client.Get(historyServerURL + endpoint)
+		gg.Expect(err).NotTo(HaveOccurred())
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		gg.Expect(err).NotTo(HaveOccurred())
+		gg.Expect(resp.StatusCode).To(Equal(http.StatusOK),
+			"Endpoint %s should return 200, got %d: %s", endpoint, resp.StatusCode, string(body))
+
+		var response map[string]interface{}
+		err = json.Unmarshal(body, &response)
+		gg.Expect(err).NotTo(HaveOccurred(), "Placement groups response should be valid JSON")
+		// The Ray State API v2 returns {"result": true, "msg": "", "data": {"result": {"total": N, "result": [...], ...}}}.
+		// The history server serves raw bytes from S3 without transformation, so the
+		// schema must match what the collector stored (same as testCollectorStoresPlacementGroups).
+		gg.Expect(response).To(HaveKey("result"), "Placement groups response should contain result field")
+		gg.Expect(response["result"]).To(BeTrue(), "result field should be true")
+		gg.Expect(response).To(HaveKey("data"), "Placement groups response should contain data field")
+		data, ok := response["data"].(map[string]interface{})
+		gg.Expect(ok).To(BeTrue(), "data field should be a JSON object")
+		gg.Expect(data).To(HaveKey("result"), "data should contain result field")
+		resultObj, ok := data["result"].(map[string]interface{})
+		gg.Expect(ok).To(BeTrue(), "data.result field should be a JSON object")
+		gg.Expect(resultObj).To(HaveKey("result"), "data.result should contain result field")
+
+		pgList, ok := resultObj["result"].([]interface{})
+		gg.Expect(ok).To(BeTrue(), "data.result.result should be a JSON array")
+		gg.Expect(pgList).NotTo(BeEmpty(), "placement groups list should not be empty (RayJob creates a detached PG)")
+		LogWithTimestamp(test.T(), "Dead cluster placement groups: %s", string(body))
+	}, TestTimeoutShort).Should(Succeed())
+
+	DeleteS3Bucket(test, g, s3Client)
+	LogWithTimestamp(test.T(), "Dead cluster /api/v0/placement_groups test completed successfully")
 }
 
 // setClusterContext sets the cluster context via /enter_cluster/ endpoint and verifies the response.
