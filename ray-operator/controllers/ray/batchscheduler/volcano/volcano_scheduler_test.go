@@ -581,10 +581,10 @@ func TestCreatePodGroup_OwnerAnnotationsCopied(t *testing.T) {
 }
 
 func TestCleanupOnCompletion(t *testing.T) {
-	a := assert.New(t)
-	require := require.New(t)
+	t.Run("RayJob - delete PodGroup", func(t *testing.T) {
+		a := assert.New(t)
+		require := require.New(t)
 
-	t.Run("RayJob - delete PodGroup", func(_ *testing.T) {
 		rayJob := createTestRayJob(1)
 		scheme := runtime.NewScheme()
 		a.NoError(rayv1.AddToScheme(scheme))
@@ -629,7 +629,10 @@ func TestCleanupOnCompletion(t *testing.T) {
 		a.True(errors.IsNotFound(err))
 	})
 
-	t.Run("RayJob - PodGroup not found (already deleted)", func(_ *testing.T) {
+	t.Run("RayJob - PodGroup not found (already deleted)", func(t *testing.T) {
+		a := assert.New(t)
+		require := require.New(t)
+
 		rayJob := createTestRayJob(1)
 		scheme := runtime.NewScheme()
 		a.NoError(rayv1.AddToScheme(scheme))
@@ -646,7 +649,10 @@ func TestCleanupOnCompletion(t *testing.T) {
 		a.False(didCleanup) // No cleanup should have happened
 	})
 
-	t.Run("RayCluster - should be no-op", func(_ *testing.T) {
+	t.Run("RayCluster - should be no-op", func(t *testing.T) {
+		a := assert.New(t)
+		require := require.New(t)
+
 		rayCluster := createTestRayCluster(1)
 		scheme := runtime.NewScheme()
 		a.NoError(rayv1.AddToScheme(scheme))
@@ -668,7 +674,10 @@ func TestCleanupOnCompletion(t *testing.T) {
 		a.True(errors.IsNotFound(err))
 	})
 
-	t.Run("RayJob - PodGroup in Inqueue state (bug scenario)", func(_ *testing.T) {
+	t.Run("RayJob - PodGroup in Inqueue state (bug scenario)", func(t *testing.T) {
+		a := assert.New(t)
+		require := require.New(t)
+
 		rayJob := createTestRayJob(1)
 		scheme := runtime.NewScheme()
 		a.NoError(rayv1.AddToScheme(scheme))
@@ -709,7 +718,10 @@ func TestCleanupOnCompletion(t *testing.T) {
 		a.True(errors.IsNotFound(err))
 	})
 
-	t.Run("RayJob - idempotent (can call multiple times)", func(_ *testing.T) {
+	t.Run("RayJob - idempotent (can call multiple times)", func(t *testing.T) {
+		a := assert.New(t)
+		require := require.New(t)
+
 		rayJob := createTestRayJob(1)
 		scheme := runtime.NewScheme()
 		a.NoError(rayv1.AddToScheme(scheme))
