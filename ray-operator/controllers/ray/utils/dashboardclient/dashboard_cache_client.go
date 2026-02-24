@@ -148,7 +148,7 @@ func (w *WorkerPool) Start(ctx context.Context) error {
 					// If the RayJob is in the channel, skip to enqueue.
 					// In the worst case of the current implementation, we could have the number of worker working on getting JobInfo and
 					// the number of all of RayJobs in the cluster waiting in the task queue. It would not be unbounded.
-					if _, ok := w.existInQueue.LoadOrStore(cacheKey(rayClusterNamespacedName, rayClusterInstance.UID, rayJob.Status.JobId), struct{}{}); ok {
+					if _, ok := w.existInQueue.LoadOrStore(cacheKey(rayClusterInstance.UID, rayJob.Status.JobId), struct{}{}); ok {
 						continue
 					}
 
@@ -192,7 +192,7 @@ func (w *WorkerPool) processRayJob(ctx context.Context, task jobInfoQuery) {
 
 	// cannot use common.RayJobRayClusterNamespacedName because of cyclic import.
 	rayClusterNamespacedName := namespacedNameFromRayJob(rayJobInstance)
-	key := cacheKey(rayClusterNamespacedName, task.rayClusterUID, rayJobInstance.Status.JobId)
+	key := cacheKey(task.rayClusterUID, rayJobInstance.Status.JobId)
 
 	// Use defer to ensure the key is deleted from existInQueue after processing completes.
 	// This prevents the same RayJob from being processed by multiple workers simultaneously.
@@ -232,17 +232,10 @@ func GetCachedDashboardClientFunc() func(rayCluster *rayv1.RayCluster, url strin
 			return nil, err
 		}
 
-		// not use common.RayJobRayClusterNamespacedName to avoid import cycle
-		rayClusterNamespacedName := types.NamespacedName{
-			Name:      rayCluster.Name,
-			Namespace: rayCluster.Namespace,
-		}
-
 		return &RayDashboardCacheClient{
-			client:         rayDashboardClient,
-			cacheStorage:   pool.cacheStorage,
-			namespacedName: rayClusterNamespacedName,
-			rayClusterUID:  rayCluster.UID,
+			client:        rayDashboardClient,
+			cacheStorage:  pool.cacheStorage,
+			rayClusterUID: rayCluster.UID,
 		}, nil
 	}
 }
@@ -250,10 +243,9 @@ func GetCachedDashboardClientFunc() func(rayCluster *rayv1.RayCluster, url strin
 var _ RayDashboardClientInterface = (*RayDashboardCacheClient)(nil)
 
 type RayDashboardCacheClient struct {
-	client         RayDashboardClientInterface
-	cacheStorage   *otter.Cache[string, *JobInfoCache]
-	namespacedName types.NamespacedName
-	rayClusterUID  types.UID
+	client        RayDashboardClientInterface
+	cacheStorage  *otter.Cache[string, *JobInfoCache]
+	rayClusterUID types.UID
 }
 
 func (r *RayDashboardCacheClient) UpdateDeployments(ctx context.Context, configJson []byte) error {
@@ -271,7 +263,7 @@ func (r *RayDashboardCacheClient) GetMultiApplicationStatus(ctx context.Context)
 func (r *RayDashboardCacheClient) GetJobInfo(ctx context.Context, jobId string) (*utiltypes.RayJobInfo, error) {
 	logger := ctrl.LoggerFrom(ctx).WithName("RayDashboardCacheClient")
 
-	key := cacheKey(r.namespacedName, r.rayClusterUID, jobId)
+	key := cacheKey(r.rayClusterUID, jobId)
 	cached, ok := r.cacheStorage.GetIfPresent(key)
 	if !ok {
 		logger.Info("Cache miss for jobId", "jobId", jobId, "cacheKey", key)
@@ -313,8 +305,8 @@ func (r *RayDashboardCacheClient) DeleteJob(ctx context.Context, jobName string)
 	return r.client.DeleteJob(ctx, jobName)
 }
 
-func cacheKey(namespacedName types.NamespacedName, rayClusterUID types.UID, jobId string) string {
-	return namespacedName.String() + string(types.Separator) + string(rayClusterUID) + string(types.Separator) + jobId
+func cacheKey(rayClusterUID types.UID, jobId string) string {
+	return string(rayClusterUID) + string(types.Separator) + jobId
 }
 
 // namespacedNameFromRayJob is duplicated from common.RayJobRayClusterNamespacedName to avoid import cycle
