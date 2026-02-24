@@ -25,7 +25,7 @@ type RayLogHandler struct {
 	HttpClient             *http.Client
 	ShutdownChan           chan struct{}
 	logFilePaths           map[string]bool
-	MetaDir                string
+	ClusterDir             string
 	RayClusterName         string
 	LogDir                 string
 	RayNodeName            string
@@ -37,8 +37,10 @@ type RayLogHandler struct {
 	PushInterval           time.Duration
 	LogBatching            int
 	filePathMu             sync.Mutex
-	EnableMeta             bool
+	IsHead             bool
 	DashboardAddress       string
+	AdditionalEndpoints    []string
+	EndpointPollInterval   time.Duration
 }
 
 func (r *RayLogHandler) Run(stop <-chan struct{}) error {
@@ -60,14 +62,21 @@ func (r *RayLogHandler) Run(stop <-chan struct{}) error {
 	// After scanning, it watches for new directories and files. This ensures incomplete
 	// uploads from previous runs are resumed.
 	go r.WatchPrevLogsLoops()
-	if r.EnableMeta {
+	if r.IsHead {
 		go r.WatchSessionLatestLoops() // Watch session_latest symlink changes
 		go r.FetchAndStoreClusterMetadata()
+		go r.PollAdditionalEndpointsPeriodically()
 	}
 
 	<-stop
 	logrus.Info("Received stop signal, processing all logs...")
 	r.processSessionLatestLogs()
+	// Perform one final poll of additional endpoints before shutting down.
+	// This must happen before close(r.ShutdownChan) because pollSingleEndpoint
+	// uses ShutdownChan to cancel in-flight HTTP requests.
+	if r.IsHead {
+		r.processAdditionalEndpoints()
+	}
 	close(r.ShutdownChan)
 
 	return nil
@@ -88,7 +97,7 @@ func (r *RayLogHandler) processSessionLatestLogs() {
 
 	// Extract the real session ID from the resolved path
 	sessionID := filepath.Base(sessionRealDir)
-	if r.EnableMeta {
+	if r.IsHead {
 		metadir := path.Join(r.RootDir, "metadir")
 		metafile := path.Clean(metadir + "/" + fmt.Sprintf("%s/%v",
 			utils.AppendRayClusterNameID(r.RayClusterName, r.RayClusterID),
@@ -437,7 +446,7 @@ func (r *RayLogHandler) processSessionPrevLogs(sessionDir string) {
 
 	sessionID := parts[0]
 	logrus.Infof("Processing all node logs for session: %s", sessionID)
-	if r.EnableMeta {
+	if r.IsHead {
 		metadir := path.Join(r.RootDir, "metadir")
 		metafile := path.Clean(metadir + "/" + fmt.Sprintf("%s/%v",
 			utils.AppendRayClusterNameID(r.RayClusterName, r.RayClusterID),
