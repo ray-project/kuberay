@@ -130,6 +130,10 @@ func routerAPI(s *ServerHandler) {
 		Doc("get placement_groups").
 		Writes("")) // Placeholder for specific return type
 
+	ws.Route(ws.GET("/v0/cluster_metadata").To(s.getClusterMetadata).Filter(s.CookieHandle).
+		Doc("get cluster metadata (Ray version, Python version, etc.)").
+		Writes("")) // Placeholder for specific return type
+
 	ws.Route(ws.GET("/v0/logs").To(s.getNodeLogs).Filter(s.CookieHandle).
 		Doc("get appliations").Param(ws.QueryParameter("node_id", "node_id")).
 		Writes("")) // Placeholder for specific return type
@@ -883,6 +887,34 @@ func (s *ServerHandler) buildFormattedClusterStatus(clusterName, clusterNamespac
 	builder.AddPendingDemandsFromActors(actors)
 
 	return builder.FormatStatus()
+}
+
+func (s *ServerHandler) getClusterMetadata(req *restful.Request, resp *restful.Response) {
+	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
+	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
+	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
+	if sessionName == "live" {
+		s.redirectRequest(req, resp)
+		return
+	}
+
+	clusterNameID := clusterName + "_" + clusterNamespace
+	metaPath := path.Join("meta", sessionName, utils.OssMetaFile_ClusterMetadata)
+	reader := s.reader.GetContent(clusterNameID, metaPath)
+	if reader == nil {
+		resp.WriteErrorString(http.StatusNotFound, "Cluster metadata not found")
+		return
+	}
+
+	data, err := io.ReadAll(reader)
+	if err != nil {
+		logrus.Errorf("Failed to read cluster metadata: %v", err)
+		resp.WriteErrorString(http.StatusInternalServerError, "Failed to read cluster metadata")
+		return
+	}
+
+	resp.Header().Set("Content-Type", "application/json")
+	resp.Write(data)
 }
 
 func (s *ServerHandler) getNodeLogs(req *restful.Request, resp *restful.Response) {

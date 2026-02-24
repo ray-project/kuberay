@@ -38,6 +38,7 @@ type RayLogHandler struct {
 	LogBatching            int
 	filePathMu             sync.Mutex
 	EnableMeta             bool
+	DashboardAddress       string
 }
 
 func (r *RayLogHandler) Run(stop <-chan struct{}) error {
@@ -61,6 +62,7 @@ func (r *RayLogHandler) Run(stop <-chan struct{}) error {
 	go r.WatchPrevLogsLoops()
 	if r.EnableMeta {
 		go r.WatchSessionLatestLoops() // Watch session_latest symlink changes
+		go r.FetchAndStoreClusterMetadata()
 	}
 
 	<-stop
