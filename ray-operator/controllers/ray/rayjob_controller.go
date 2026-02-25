@@ -306,10 +306,11 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 					}
 					return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 				}
-				// finishedAt will only be set if submitter finished
+				// finishedAt will only be set if submitter finished.
+				// If the submitter has finished but the job was never registered in the dashboard, then submission itself failed.
 				if finishedAt != nil {
 					rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusFailed
-					rayJobInstance.Status.Reason = rayv1.AppFailed
+					rayJobInstance.Status.Reason = rayv1.SubmissionFailed
 					rayJobInstance.Status.Message = "Submitter completed but Ray job not found in RayCluster."
 					break
 				}
