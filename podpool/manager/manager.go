@@ -7,7 +7,6 @@ import (
 
 	"github.com/virtual-kubelet/virtual-kubelet/trace"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -128,62 +127,7 @@ func (m *CachePodManager) NotifyNodeStatus(ctx context.Context, cb func(*corev1.
 	ctx, span := trace.StartSpan(ctx, "NotifyNodeStatus")
 	defer span.End()
 
-	// Create a basic node status with resource capacity
-	node := &corev1.Node{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: m.nodeName,
-		},
-		Spec: corev1.NodeSpec{
-			Taints: []corev1.Taint{
-				{
-					Key:    "node.kubernetes.io/unschedulable",
-					Effect: corev1.TaintEffectNoSchedule,
-				},
-			},
-		},
-		Status: corev1.NodeStatus{
-			NodeInfo: corev1.NodeSystemInfo{
-				Architecture:    m.arch,
-				OperatingSystem: m.operatingSys,
-			},
-			Capacity: corev1.ResourceList{
-				corev1.ResourceCPU:              resource.MustParse("100"),
-				corev1.ResourceMemory:           resource.MustParse("100Gi"),
-				corev1.ResourceEphemeralStorage: resource.MustParse("100Gi"),
-			},
-			Allocatable: corev1.ResourceList{
-				corev1.ResourceCPU:              resource.MustParse("100"),
-				corev1.ResourceMemory:           resource.MustParse("100Gi"),
-				corev1.ResourceEphemeralStorage: resource.MustParse("100Gi"),
-			},
-			Conditions: []corev1.NodeCondition{
-				{
-					Type:   corev1.NodeReady,
-					Status: corev1.ConditionTrue,
-				},
-				{
-					Type:   corev1.NodeMemoryPressure,
-					Status: corev1.ConditionFalse,
-				},
-				{
-					Type:   corev1.NodeDiskPressure,
-					Status: corev1.ConditionFalse,
-				},
-				{
-					Type:   corev1.NodePIDPressure,
-					Status: corev1.ConditionFalse,
-				},
-				{
-					Type:   corev1.NodeNetworkUnavailable,
-					Status: corev1.ConditionFalse,
-				},
-			},
-		},
-	}
-
-	if cb != nil {
-		cb(node)
-	}
+	// TODO: Implement node status notification logic
 }
 
 // Start starts the pod informer
