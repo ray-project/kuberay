@@ -3,6 +3,7 @@ package historyserver
 import (
 	"context"
 	"testing"
+	"time"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/stretchr/testify/assert"
@@ -32,7 +33,7 @@ func TestGetAuthTokenForCluster(t *testing.T) {
 			Name:      "test-cluster",
 			Namespace: "default",
 		},
-		Data: map[string][]byte{"auth_token": []byte("test-token-123")},
+		Data: map[string][]byte{AuthTokenSecretKey: []byte("test-token-123")},
 	}
 
 	fakeClient := fake.NewClientBuilder().
@@ -40,9 +41,26 @@ func TestGetAuthTokenForCluster(t *testing.T) {
 		WithObjects(rc, secret).
 		Build()
 
-	clientManager := &ClientManager{clients: []client.Client{fakeClient}}
+	clientManager := &ClientManager{
+		clients:    []client.Client{fakeClient},
+		tokenCache: make(map[string]cachedToken),
+	}
 
 	token, err := clientManager.GetAuthTokenForRayCluster(context.Background(), rc)
+	assert.NoError(t, err)
+	assert.Equal(t, "test-token-123", token)
+
+	// Second call should be served from cache (fake client still has same secret, result unchanged)
+	token, err = clientManager.GetAuthTokenForRayCluster(context.Background(), rc)
+	assert.NoError(t, err)
+	assert.Equal(t, "test-token-123", token)
+
+	// Expired cache entry should trigger a re-fetch from K8s
+	clientManager.tokenCache["default/test-cluster"] = cachedToken{
+		token:     "stale-token",
+		expiresAt: time.Now().Add(-1 * time.Second),
+	}
+	token, err = clientManager.GetAuthTokenForRayCluster(context.Background(), rc)
 	assert.NoError(t, err)
 	assert.Equal(t, "test-token-123", token)
 
