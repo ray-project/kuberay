@@ -75,15 +75,20 @@ func (s *ServerHandler) _getNodeLogs(rayClusterNameID, sessionId, nodeId, folder
 	if folder != "" {
 		logPath = path.Join(logPath, folder)
 	}
-	files := s.reader.ListFiles(rayClusterNameID, logPath)
 
 	// Filter files by glob pattern if provided; otherwise use all files.
+	// Use recursive listing when glob contains ** to support cross-directory matching.
 	var matchedFiles []string
 	if glob == "" {
-		matchedFiles = files
+		matchedFiles = s.reader.ListFiles(rayClusterNameID, logPath)
 	} else {
+		var files []string
+		if strings.Contains(glob, "**") {
+			files = s.listFilesRecursive(rayClusterNameID, logPath)
+		} else {
+			files = s.reader.ListFiles(rayClusterNameID, logPath)
+		}
 		for _, file := range files {
-			// doublestar.Match supports both single-level wildcards (* and ?) and ** for recursive matching.
 			matched, err := doublestar.Match(glob, file)
 			if err != nil {
 				return []byte{}, fmt.Errorf("invalid glob pattern %q matching against %q: %w", glob, file, err)
@@ -106,6 +111,26 @@ func (s *ServerHandler) _getNodeLogs(rayClusterNameID, sessionId, nodeId, folder
 		},
 	}
 	return json.Marshal(ret)
+}
+
+// listFilesRecursive recursively lists all files under dir,
+// returning paths relative to dir (e.g. "subdir/foo.log", "bar.out").
+// It recurses into subdirectories returned by ListFiles (identified by a trailing "/").
+func (s *ServerHandler) listFilesRecursive(clusterID, dir string) []string {
+	entries := s.reader.ListFiles(clusterID, dir)
+	var result []string
+	for _, entry := range entries {
+		if strings.HasSuffix(entry, "/") {
+			subDir := path.Join(dir, entry)
+			subFiles := s.listFilesRecursive(clusterID, subDir)
+			for _, f := range subFiles {
+				result = append(result, path.Join(strings.TrimSuffix(entry, "/"), f))
+			}
+		} else {
+			result = append(result, entry)
+		}
+	}
+	return result
 }
 
 // categorizeLogFiles categorizes log files by component type.
