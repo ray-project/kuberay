@@ -6,12 +6,10 @@ import (
 	"io/fs"
 	"net/http"
 	"os"
-	"os/signal"
 	"path"
 	"path/filepath"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
@@ -27,7 +25,7 @@ type RayLogHandler struct {
 	HttpClient             *http.Client
 	ShutdownChan           chan struct{}
 	logFilePaths           map[string]bool
-	MetaDir                string
+	ClusterDir             string
 	RayClusterName         string
 	LogDir                 string
 	RayNodeName            string
@@ -39,12 +37,10 @@ type RayLogHandler struct {
 	PushInterval           time.Duration
 	LogBatching            int
 	filePathMu             sync.Mutex
-	EnableMeta             bool
-}
-
-func (r *RayLogHandler) Start(stop <-chan struct{}) error {
-	go r.Run(stop)
-	return nil
+	IsHead             bool
+	DashboardAddress       string
+	AdditionalEndpoints    []string
+	EndpointPollInterval   time.Duration
 }
 
 func (r *RayLogHandler) Run(stop <-chan struct{}) error {
@@ -61,35 +57,29 @@ func (r *RayLogHandler) Run(stop <-chan struct{}) error {
 	}
 	defer watcher.Close()
 
-	// Setup signal handling for SIGTERM
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGTERM)
-
 	// WatchPrevLogsLoops performs an initial scan of the prev-logs directory on startup
 	// to process leftover log files in prev-logs/{sessionID}/{nodeID}/logs/ directories.
 	// After scanning, it watches for new directories and files. This ensures incomplete
 	// uploads from previous runs are resumed.
 	go r.WatchPrevLogsLoops()
-	if r.EnableMeta {
+	if r.IsHead {
 		go r.WatchSessionLatestLoops() // Watch session_latest symlink changes
+		go r.FetchAndStoreClusterMetadata()
+		go r.PollAdditionalEndpointsPeriodically()
 	}
 
-	select {
-	case <-sigChan:
-		logrus.Info("Received SIGTERM, processing all logs...")
-		r.processSessionLatestLogs()
-		close(r.ShutdownChan)
-	case <-stop:
-		logrus.Info("Received stop signal, processing all logs...")
-		r.processSessionLatestLogs()
-		close(r.ShutdownChan)
+	<-stop
+	logrus.Info("Received stop signal, processing all logs...")
+	r.processSessionLatestLogs()
+	// Perform one final poll of additional endpoints before shutting down.
+	// This must happen before close(r.ShutdownChan) because pollSingleEndpoint
+	// uses ShutdownChan to cancel in-flight HTTP requests.
+	if r.IsHead {
+		r.processAdditionalEndpoints()
 	}
-	logrus.Warnf("Receive stop single, so stop ray collector ")
+	close(r.ShutdownChan)
+
 	return nil
-}
-
-func (r *RayLogHandler) WaitForStop() <-chan struct{} {
-	return r.ShutdownChan
 }
 
 // processSessionLatestLogs processes logs in /tmp/ray/session_latest/logs directory
@@ -107,7 +97,7 @@ func (r *RayLogHandler) processSessionLatestLogs() {
 
 	// Extract the real session ID from the resolved path
 	sessionID := filepath.Base(sessionRealDir)
-	if r.EnableMeta {
+	if r.IsHead {
 		metadir := path.Join(r.RootDir, "metadir")
 		metafile := path.Clean(metadir + "/" + fmt.Sprintf("%s/%v",
 			utils.AppendRayClusterNameID(r.RayClusterName, r.RayClusterID),
@@ -132,7 +122,7 @@ func (r *RayLogHandler) processSessionLatestLogs() {
 	nodeID := strings.TrimSpace(string(nodeIDBytes))
 
 	// Process logs in session_latest/logs
-	logsDir := filepath.Join(sessionLatestDir, "logs")
+	logsDir := filepath.Join(sessionLatestDir, utils.RAY_SESSIONDIR_LOGDIR_NAME)
 	dirExist := false
 	for i := 0; i < 10; i++ {
 		if _, err := os.Stat(logsDir); os.IsNotExist(err) {
@@ -179,7 +169,7 @@ func (r *RayLogHandler) processSessionLatestLogFile(absoluteLogPathName, session
 	// Calculate relative path within logs directory
 	// The logsDir is /tmp/ray/session_latest/logs
 	sessionLatestDir := filepath.Join("/tmp", "ray", "session_latest")
-	logsDir := filepath.Join(sessionLatestDir, "logs")
+	logsDir := filepath.Join(sessionLatestDir, utils.RAY_SESSIONDIR_LOGDIR_NAME)
 	relativePath, err := filepath.Rel(logsDir, absoluteLogPathName)
 	if err != nil {
 		return fmt.Errorf("failed to get relative path for %s: %w", absoluteLogPathName, err)
@@ -309,7 +299,7 @@ func (r *RayLogHandler) WatchPrevLogsLoops() {
 				// 		logrus.Errorf("Failed to add node directory %s to nodeWatcher: %v", path, err)
 				// 	}
 				// 	// Check if this node directory has a logs subdirectory
-				// 	logsDir := filepath.Join(path, "logs")
+				// 	logsDir := filepath.Join(path, utils.RAY_SESSIONDIR_LOGDIR_NAME)
 				// 	if _, err := os.Stat(logsDir); err == nil {
 				// 		// This is a session/node directory with logs, process its logs
 				// 		go r.processPrevLogsDir(path)
@@ -409,7 +399,7 @@ func (r *RayLogHandler) WatchPrevLogsLoops() {
 
 				// Check if this is a logs directory being created
 				base := filepath.Base(event.Name)
-				if info.IsDir() && base == "logs" {
+				if info.IsDir() && base == utils.RAY_SESSIONDIR_LOGDIR_NAME {
 					// This is a logs directory, process its parent (node directory)
 					nodeDir := filepath.Dir(event.Name)
 					logrus.Infof("New logs directory detected: %s", nodeDir)
@@ -456,7 +446,7 @@ func (r *RayLogHandler) processSessionPrevLogs(sessionDir string) {
 
 	sessionID := parts[0]
 	logrus.Infof("Processing all node logs for session: %s", sessionID)
-	if r.EnableMeta {
+	if r.IsHead {
 		metadir := path.Join(r.RootDir, "metadir")
 		metafile := path.Clean(metadir + "/" + fmt.Sprintf("%s/%v",
 			utils.AppendRayClusterNameID(r.RayClusterName, r.RayClusterID),
@@ -515,7 +505,7 @@ func (r *RayLogHandler) processSessionPrevLogs(sessionDir string) {
 //	- If not exists: returns false (file needs to be uploaded)
 func (r *RayLogHandler) isFileAlreadyPersisted(absoluteLogPath, sessionID, nodeID string) bool {
 	// Calculate the relative path within the logs directory
-	logsDir := filepath.Join(r.prevLogsDir, sessionID, nodeID, "logs")
+	logsDir := filepath.Join(r.prevLogsDir, sessionID, nodeID, utils.RAY_SESSIONDIR_LOGDIR_NAME)
 	relativeLogPath, err := filepath.Rel(logsDir, absoluteLogPath)
 	if err != nil {
 		logrus.Errorf("Failed to get relative path for %s: %v", absoluteLogPath, err)
@@ -523,7 +513,7 @@ func (r *RayLogHandler) isFileAlreadyPersisted(absoluteLogPath, sessionID, nodeI
 	}
 
 	// Construct the path in persist-complete-logs
-	persistedPath := filepath.Join(r.persistCompleteLogsDir, sessionID, nodeID, "logs", relativeLogPath)
+	persistedPath := filepath.Join(r.persistCompleteLogsDir, sessionID, nodeID, utils.RAY_SESSIONDIR_LOGDIR_NAME, relativeLogPath)
 
 	// Check if the file exists
 	if _, err := os.Stat(persistedPath); err == nil {
@@ -555,7 +545,7 @@ func (r *RayLogHandler) processPrevLogsDir(sessionNodeDir string) {
 
 	logrus.Infof("Processing prev-logs for session: %s, node: %s", sessionID, nodeID)
 
-	logsDir := filepath.Join(sessionNodeDir, "logs")
+	logsDir := filepath.Join(sessionNodeDir, utils.RAY_SESSIONDIR_LOGDIR_NAME)
 	dirExist := false
 	for i := 0; i < 10; i++ {
 		if _, err := os.Stat(logsDir); os.IsNotExist(err) {
@@ -656,7 +646,7 @@ func (r *RayLogHandler) processPrevLogFile(absoluteLogPathName, localLogDir, ses
 
 	// Move the processed file to persist-complete-logs directory to avoid re-uploading
 	completeBaseDir := filepath.Join(r.persistCompleteLogsDir, sessionID, nodeID)
-	completeDir := filepath.Join(completeBaseDir, "logs")
+	completeDir := filepath.Join(completeBaseDir, utils.RAY_SESSIONDIR_LOGDIR_NAME)
 
 	if _, err := os.Stat(completeDir); os.IsNotExist(err) {
 		// Create the target directory if it doesn't exist

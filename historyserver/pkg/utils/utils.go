@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"regexp"
 	"strings"
 	"time"
 
@@ -15,101 +16,28 @@ import (
 )
 
 const (
-	RAY_SESSIONDIR_LOGDIR_NAME  = "logs"
-	RAY_SESSIONDIR_METADIR_NAME = "meta"
+	RAY_SESSIONDIR_LOGDIR_NAME            = "logs"
+	RAY_SESSIONDIR_FETCHED_ENDPOINTS_NAME = "fetched_endpoints"
+	DATETIME_LAYOUT            = "2006-01-02_15-04-05.000000"
+	// The following regex shouldn't be changed unless the ray session ID changes.
+	SESSION_ID_REGEX = `session_(\d{4}-\d{2}-\d{2})_(\d{2}-\d{2}-\d{2})_(\d{6})`
 )
 
-const (
-	OssMetaFile_BasicInfo = "ack__basicinfo"
-
-	OssMetaFile_NodeSummaryKey                        = "restful__nodes_view_summary"
-	OssMetaFile_Node_Prefix                           = "restful__nodes_"
-	OssMetaFile_JOBTASK_DETAIL_Prefix                 = "restful__api__v0__tasks_detail_job_id_"
-	OssMetaFile_JOBTASK_SUMMARIZE_BY_FUNC_NAME_Prefix = "restful__api__v0__tasks_summarize_by_func_name_job_id_"
-	OssMetaFile_JOBTASK_SUMMARIZE_BY_LINEAGE_Prefix   = "restful__api__v0__tasks_summarize_by_lineage_job_id_"
-	OssMetaFile_JOBDATASETS_Prefix                    = "restful__api__data__datasets_job_id_"
-	OssMetaFile_NodeLogs_Prefix                       = "restful__api__v0__logs_node_id_"
-	OssMetaFile_ClusterStatus                         = "restful__api__cluster_status"
-	OssMetaFile_LOGICAL_ACTORS                        = "restful__logical__actors"
-	OssMetaFile_ALLTASKS_DETAIL                       = "restful__api__v0__tasks_detail"
-	OssMetaFile_Events                                = "restful__events"
-	OssMetaFile_PlacementGroups                       = "restful__api__v0__placement_groups_detail"
-
-	OssMetaFile_ClusterSessionName = "static__api__cluster_session_name"
-
-	OssMetaFile_Jobs         = "restful__api__jobs"
-	OssMetaFile_Applications = "restful__api__serve__applications"
-)
-
-const RAY_HISTORY_SERVER_LOGNAME = "historyserver-ray.log"
-
-func RecreateObjectDir(bucket *oss.Bucket, dir string, options ...oss.Option) error {
-	objectDir := fmt.Sprintf("%s/", path.Clean(dir))
-
-	isExist, err := bucket.IsObjectExist(objectDir)
-	if err != nil {
-		logrus.Errorf("Failed to check object dir %s exists: %v", objectDir, err)
-		return err
-	}
-
-	if isExist {
-		logrus.Infof("ObjectDir %s has exist, begin to delete ...", objectDir)
-		err = bucket.DeleteObject(objectDir)
-		if err != nil {
-			logrus.Errorf("Failed to delete objectdir %s: %v", objectDir, err)
-			return err
-		}
-		logrus.Infof("ObjectDir %s has delete success...", objectDir)
-
-		// List all files with the specified prefix and delete them
-		marker := oss.Marker("")
-		// To delete only the src directory and all files within it, set prefix to "src/"
-		prefix := oss.Prefix(objectDir)
-		var totalDeleted int
-
-		for {
-			lor, err := bucket.ListObjects(marker, prefix)
-			if err != nil {
-				logrus.Errorf("Failed to list objectsdir %s error %v", objectDir, err)
-				return err
-			}
-
-			objects := make([]string, len(lor.Objects))
-			for i, object := range lor.Objects {
-				objects[i] = object.Key
-			}
-
-			// Delete objects
-			delRes, err := bucket.DeleteObjects(objects, oss.DeleteObjectsQuiet(true))
-			if err != nil {
-				logrus.Errorf("Failed to delete allobjects in dir %s : %v", objectDir, err)
-				return err
-			}
-
-			if len(delRes.DeletedObjects) > 0 {
-				logrus.Errorf("Some dir %s objects failed to delete: %v", objectDir, delRes.DeletedObjects)
-				return fmt.Errorf("Some dir %s objects failed to delete: %v", objectDir, delRes.DeletedObjects)
-			}
-
-			totalDeleted += len(objects)
-
-			// Update marker
-			marker = oss.Marker(lor.NextMarker)
-			if !lor.IsTruncated {
-				break
-			}
-		}
-
-	}
-
-	logrus.Infof("Begin to create oss object dir %s ...", objectDir)
-	err = bucket.PutObject(objectDir, bytes.NewReader([]byte("")), options...)
-	if err != nil {
-		logrus.Errorf("Failed to create oss object dir %s: %v", objectDir, err)
-		return err
-	}
-	return nil
+// EndpointPathToStorageKey converts a Ray Dashboard API endpoint path to a
+// storage key that follows the existing naming convention used by OssMetaFile_*
+// constants (e.g., "restful__api__v0__cluster_metadata").
+//
+// Examples:
+//
+//	"/api/v0/cluster_metadata"  -> "restful__api__v0__cluster_metadata"
+//	"/api/v0/nodes/summary"     -> "restful__api__v0__nodes__summary"
+//	"/api/serve/applications/"  -> "restful__api__serve__applications"
+func EndpointPathToStorageKey(endpointPath string) string {
+	trimmed := strings.Trim(endpointPath, "/")
+	return "restful__" + strings.ReplaceAll(trimmed, "/", "__")
 }
+
+var regex = regexp.MustCompile(SESSION_ID_REGEX)
 
 func CreateObjectIfNotExist(bucket *oss.Bucket, obj string, options ...oss.Option) error {
 	isExist, err := bucket.IsObjectExist(obj)
@@ -129,54 +57,8 @@ func CreateObjectIfNotExist(bucket *oss.Bucket, obj string, options ...oss.Optio
 	return nil
 }
 
-func CreateObjectDirIfNotExist(bucket *oss.Bucket, dir string, options ...oss.Option) error {
-	objectDir := fmt.Sprintf("%s/", path.Clean(dir))
-
-	isExist, err := bucket.IsObjectExist(objectDir)
-	if err != nil {
-		logrus.Errorf("Failed to check if dirObject %s exists: %v", objectDir, err)
-		return err
-	}
-	if !isExist {
-		logrus.Infof("Begin to create oss dir %s ...", objectDir)
-		err = bucket.PutObject(objectDir, bytes.NewReader([]byte("")), options...)
-		if err != nil {
-			logrus.Errorf("Failed to create directory '%s': %v", objectDir, err)
-			return err
-		}
-		logrus.Infof("Create oss dir %s success", objectDir)
-	}
-	return nil
-}
-
-func DeleteObject(bucket *oss.Bucket, objectName string) error {
-	isExist, err := bucket.IsObjectExist(objectName)
-	if err != nil {
-		logrus.Errorf("Failed to check if object %s exists: %v", objectName, err)
-		return err
-	}
-
-	if isExist {
-		// Delete a single file
-		err = bucket.DeleteObject(objectName)
-		if err != nil {
-			logrus.Warnf("Failed to delete object '%s': %v", objectName, err)
-			return err
-		}
-	}
-	return nil
-}
-
-func GetMetaDirByNameID(ossHistorySeverDir, rayClusterNameID string) string {
-	return fmt.Sprintf("%s/", path.Clean(path.Join(ossHistorySeverDir, rayClusterNameID, RAY_SESSIONDIR_METADIR_NAME)))
-}
-
 func GetLogDirByNameID(ossHistorySeverDir, rayClusterNameID, rayNodeID, sessionId string) string {
 	return fmt.Sprintf("%s/", path.Clean(path.Join(ossHistorySeverDir, rayClusterNameID, sessionId, RAY_SESSIONDIR_LOGDIR_NAME, rayNodeID)))
-}
-
-func GetLogDir(ossHistorySeverDir, rayClusterName, rayClusterID, sessionId, rayNodeID string) string {
-	return fmt.Sprintf("%s/", path.Clean(path.Join(ossHistorySeverDir, AppendRayClusterNameID(rayClusterName, rayClusterID), sessionId, RAY_SESSIONDIR_LOGDIR_NAME, rayNodeID)))
 }
 
 const (
@@ -208,14 +90,6 @@ func AppendRayClusterNameID(rayClusterName, rayClusterID string) string {
 	return fmt.Sprintf("%s%s%s", rayClusterName, connector, rayClusterID)
 }
 
-func GetRarClusterNameAndID(rayClusterNameID string) (string, string) {
-	nameID := strings.Split(rayClusterNameID, connector)
-	if len(nameID) < 2 {
-		logrus.Fatalf("rayClusterNameID %s must match name%sid pattern", rayClusterNameID, connector)
-	}
-	return strings.Join(nameID[:len(nameID)-1], "_"), nameID[len(nameID)-1]
-}
-
 func GetSessionDir() (string, error) {
 	session_latest_path := "/tmp/ray/session_latest"
 	for i := 0; i < 12; i++ {
@@ -243,15 +117,53 @@ func GetRayNodeID() (string, error) {
 	return "", fmt.Errorf("timeout --node_id= not found")
 }
 
-func ConvertBase64ToHex(input string) (string, error) {
-	bytes, err := base64.StdEncoding.DecodeString(input)
-	if err != nil {
-		return input, err
+// ConvertBase64ToHex converts an ID to hex format.
+// Handles both cases:
+// 1. Already hex format - returns as-is
+// 2. Base64-encoded - decodes to hex
+// It tries RawURLEncoding first (Ray's default), falling back to StdEncoding if that fails.
+func ConvertBase64ToHex(id string) (string, error) {
+	// Check if already hex (only [0-9a-f])
+	if matched, _ := regexp.MatchString("^[0-9a-fA-F]+$", id); matched {
+		return id, nil
 	}
 
-	hexStr := hex.EncodeToString(bytes)
+	// Try base64 decode
+	idBytes, err := base64.RawURLEncoding.DecodeString(id)
+	if err != nil {
+		// Try standard Base64 if URL-safe fails
+		idBytes, err = base64.StdEncoding.DecodeString(id)
+		if err != nil {
+			return id, fmt.Errorf("failed to decode Base64 ID: %w", err)
+		}
+	}
+	return fmt.Sprintf("%x", idBytes), nil
+}
 
-	return hexStr, nil
+// IsHexNil returns true if hexStr decodes to a non-empty byte slice where every byte is 0xff.
+func IsHexNil(hexStr string) (bool, error) {
+	s := strings.TrimSpace(hexStr)
+
+	if len(s) == 0 {
+		return false, nil
+	}
+
+	// Hex string must have even length.
+	if len(s)%2 != 0 {
+		return false, hex.ErrLength
+	}
+
+	bytes, err := hex.DecodeString(s)
+	if err != nil {
+		return false, err
+	}
+
+	for _, v := range bytes {
+		if v != 0xff {
+			return false, nil
+		}
+	}
+	return true, nil
 }
 
 // BuildClusterSessionKey constructs the key used to identify a specific cluster session.
@@ -259,4 +171,22 @@ func ConvertBase64ToHex(input string) (string, error) {
 // Example: "raycluster-historyserver_default_session_2026-01-11_19-38-40"
 func BuildClusterSessionKey(clusterName, namespace, sessionName string) string {
 	return clusterName + connector + namespace + connector + sessionName
+}
+
+// GetDateTimeFromSessionID will convert sessionID string i.e. `session_2026-01-27_10-52-59_373533_1` to time.Time
+func GetDateTimeFromSessionID(sessionID string) (time.Time, error) {
+	matches := regex.FindStringSubmatch(sessionID)
+
+	if len(matches) < 4 {
+		return time.Time{}, fmt.Errorf("Invalid session string format, expected `session_YYYY-MM-DD_HH-MM-SS_MICROSECOND` got: %s", sessionID)
+	}
+
+	timeStr := fmt.Sprintf("%s_%s.%s", matches[1], matches[2], matches[3])
+
+	t, err := time.Parse(DATETIME_LAYOUT, timeStr)
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	return t, nil
 }

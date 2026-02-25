@@ -7,10 +7,13 @@ spec:
     python -c "
     import ray
     import time
+    from ray.util.placement_group import placement_group
     ray.init()
 
     @ray.remote(num_cpus=0.5)
     def my_task(x):
+        # NOTE: Add this to ensure will produce log.out
+        print(f'Processing {x}', flush=True)
         return x * 2
 
     @ray.remote(num_cpus=0.5)
@@ -36,6 +39,12 @@ spec:
     final_count = ray.get(counter.get_count.remote())
     print(f'Final count: {final_count}')
     print(f'Cluster resources: {ray.cluster_resources()}')
+
+    # Create a detached placement group so it persists after the job exits.
+    # This ensures the collector captures non-empty data when polling /api/v0/placement_groups.
+    pg = placement_group([{'CPU': 0.5}], strategy='SPREAD', lifetime='detached', name='test_pg')
+    ray.get(pg.ready())
+    print(f'Placement group created: {pg.bundle_specs}')
 
     # For now, events on the worker nodes aren't sent to the collector when calling ray.shutdown().
     # As a workaround, we explicitly wait for 5 seconds to ensure events are sent.
