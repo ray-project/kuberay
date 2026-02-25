@@ -1074,7 +1074,8 @@ func testLogStreamEndpoint(test Test, g *WithT, namespace *corev1.Namespace, s3C
 // 8. glob=raylet* — wildcard suffix matches raylet.out and raylet.err.
 // 9. glob=nonexistent-*.xyz — a pattern matching no files returns an empty result.
 // 10. glob=events/event_JOBS* — subdirectory prefix is split from the pattern, then the wildcard matches within that subdirectory.
-// 11. Delete S3 bucket to ensure test isolation.
+// 11. glob=**/*.out — doublestar pattern recursively matches all .out files across all directories.
+// 12. Delete S3 bucket to ensure test isolation.
 func testNodeLogsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
@@ -1131,14 +1132,19 @@ func testNodeLogsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Name
 		result := parseLogsResponse(body)
 		g.Expect(result).NotTo(BeNil(), "Response should be parseable, body: %s", string(body))
 
-		// *dashboard* should match files like dashboard.log, dashboard.err, etc.
-		g.Expect(result).To(HaveKey("dashboard"), "Should have the 'dashboard' category, got: %v", result)
-		dashboardFiles, _ := result["dashboard"].([]interface{})
-		g.Expect(len(dashboardFiles)).To(BeNumerically(">", 0), "Should match at least one dashboard file")
-		for _, f := range dashboardFiles {
-			g.Expect(f.(string)).To(ContainSubstring("dashboard"), "Each matched file should contain 'dashboard'")
+		// *dashboard* matches any filename containing "dashboard", which includes files like
+		// dashboard_agent.out/err/log (categorized as "agent") and dashboard.out/err/log (categorized as "dashboard").
+		// Verify that every returned file contains "dashboard".
+		totalFiles := countFiles(result)
+		g.Expect(totalFiles).To(BeNumerically(">", 0), "glob=*dashboard* should match at least one file, got: %v", result)
+		for category, files := range result {
+			fileList, _ := files.([]interface{})
+			for _, f := range fileList {
+				g.Expect(f.(string)).To(ContainSubstring("dashboard"),
+					"Each file matched by *dashboard* should contain 'dashboard', got %q in category %q", f, category)
+			}
 		}
-		LogWithTimestamp(t, "glob=*dashboard* correctly returned %d dashboard files", len(dashboardFiles))
+		LogWithTimestamp(t, "glob=*dashboard* correctly returned %d dashboard files across %d categories", totalFiles, len(result))
 	})
 
 	// Case C: enter subdirectory without search — glob=events/*
@@ -1246,6 +1252,40 @@ func testNodeLogsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Name
 		internalFiles, _ := result["internal"].([]interface{})
 		g.Expect(internalFiles).To(ConsistOf("event_JOBS.log"), "glob=events/event_JOBS* should match exactly event_JOBS.log")
 		LogWithTimestamp(t, "glob=events/event_JOBS* correctly returned %d file", len(internalFiles))
+	})
+
+	test.T().Run("glob=**/*.out recursively matches all .out files across all directories", func(t *testing.T) {
+		g := NewWithT(t)
+
+		// glob=**/*.out should recursively match all .out files in the log directory and any subdirectories.
+		// Expected response contains .out files across multiple categories, e.g.:
+		//   {"data":{"result":{"agent":[...],"autoscaler":[...],"dashboard":[...],...}},"msg":"","result":true}
+		logsURL := fmt.Sprintf("%s%s?node_id=%s&glob=%s", historyServerURL, EndpointLogs, nodeID, url.QueryEscape("**/*.out"))
+		resp, err := client.Get(logsURL)
+		g.Expect(err).NotTo(HaveOccurred())
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(resp.StatusCode).To(Equal(http.StatusOK), "Expected OK, body: %s", string(body))
+
+		result := parseLogsResponse(body)
+		g.Expect(result).NotTo(BeNil(), "Response should be parseable, body: %s", string(body))
+
+		// **/*.out should match at least the well-known .out files at root level.
+		totalFiles := countFiles(result)
+		g.Expect(totalFiles).To(BeNumerically(">", 0), "**/*.out should return at least one file, got: %v", result)
+
+		// Every returned file must end with .out regardless of which category it falls into.
+		for category, files := range result {
+			fileList, _ := files.([]interface{})
+			for _, f := range fileList {
+				g.Expect(f.(string)).To(HaveSuffix(".out"),
+					"All files matched by **/*.out should end with .out, got %q in category %q", f, category)
+			}
+		}
+
+		LogWithTimestamp(t, "glob=**/*.out correctly returned %d .out files across %d categories", totalFiles, len(result))
 	})
 
 	DeleteS3Bucket(test, g, s3Client)
