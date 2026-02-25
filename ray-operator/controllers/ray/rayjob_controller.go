@@ -320,11 +320,11 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 		}
 
-		// If we fetched the dashboard response before the submitter exits, the data may be stale (e.g., the async cache hasn't
-		// been refreshed yet). Requeue to wait for fresh data from the dashboard.
-		if finishedAt != nil && fetchedAt.Before(*finishedAt) {
-			logger.Info("Dashboard response fetched before submitter exit. Requeuing for fresh data.",
-				"FetchedAt", fetchedAt, "SubmitterFinishedAt", finishedAt)
+		// If the dashboard reports a non-terminal status but the submitter has already exited, the cached data may be stale
+		// (e.g., the async cache hasn't been refreshed yet). Requeue to wait for fresh data from the dashboard.
+		if finishedAt != nil && !rayv1.IsJobTerminal(jobInfo.JobStatus) && fetchedAt.Before(*finishedAt) {
+			logger.Info("Dashboard response fetched before submitter exit and job status is non-terminal. Requeuing for fresh data.",
+				"FetchedAt", fetchedAt, "SubmitterFinishedAt", finishedAt, "JobStatus", jobInfo.JobStatus)
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 		}
 
