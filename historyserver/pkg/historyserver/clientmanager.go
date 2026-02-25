@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
+	"time"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/sirupsen/logrus"
@@ -23,11 +25,24 @@ const (
 	// https://github.com/ray-project/kuberay/blob/178e6c91/ray-operator/apis/config/v1alpha1/defaults.go#L12-L13
 	DefaultKubeAPIQPS   = float64(100)
 	DefaultKubeAPIBurst = 200
+
+	// AuthTokenSecretKey is the key used to store the auth token in a Kubernetes Secret
+	AuthTokenSecretKey = "auth_token"
+	// authTokenCacheTTL is how long a cached token is considered valid before re-fetching from K8s
+	authTokenCacheTTL = 5 * time.Minute
 )
 
+// cachedToken holds an auth token along with its expiry time
+type cachedToken struct {
+	token     string
+	expiresAt time.Time
+}
+
 type ClientManager struct {
-	configs []*rest.Config
-	clients []client.Client
+	configs    []*rest.Config
+	clients    []client.Client
+	tokenCache map[string]cachedToken
+	mu         sync.RWMutex
 }
 
 // Client returns the primary controller-runtime client.
@@ -60,6 +75,7 @@ type ClientManagerConfig struct {
 
 // GetAuthTokenForRayCluster retrieves the auth token from the RayCluster's secret.
 // Returns empty string if auth is not enabled; otherwise returns an error when token retrieval fails.
+// Tokens are cached for authTokenCacheTTL to avoid hitting the K8s API on every request
 func (c *ClientManager) GetAuthTokenForRayCluster(ctx context.Context, rayCluster *rayv1.RayCluster) (string, error) {
 	if len(c.clients) == 0 {
 		return "", fmt.Errorf("no Kubernetes client available")
@@ -68,28 +84,48 @@ func (c *ClientManager) GetAuthTokenForRayCluster(ctx context.Context, rayCluste
 		return "", fmt.Errorf("nil RayCluster provided")
 	}
 
-	client := c.clients[0]
-
 	// Check if auth is enabled
 	if rayCluster.Spec.AuthOptions == nil || rayCluster.Spec.AuthOptions.Mode != rayv1.AuthModeToken {
 		logrus.Debugf("Auth not enabled for RayCluster %s/%s", rayCluster.Namespace, rayCluster.Name)
 		return "", nil
 	}
 
-	// Fetch the secret containing the auth token
+	cacheKey := rayCluster.Namespace + "/" + rayCluster.Name
+
+	// Check the cache first.
+	c.mu.RLock()
+	if cached, ok := c.tokenCache[cacheKey]; ok && time.Now().Before(cached.expiresAt) {
+		c.mu.RUnlock()
+		logrus.Debugf("Auth token cache hit for RayCluster %s", cacheKey)
+		return cached.token, nil
+	}
+	c.mu.RUnlock()
+
+	// Cache miss or expired — fetch from K8s.
+	client := c.clients[0]
 	secret := &corev1.Secret{}
 	err := client.Get(ctx, types.NamespacedName{Namespace: rayCluster.Namespace, Name: rayCluster.Name}, secret)
 	if err != nil {
 		return "", fmt.Errorf("failed to get auth secret %s/%s: %w", rayCluster.Namespace, rayCluster.Name, err)
 	}
 
-	// Extract the token from the secret
-	tokenBytes, exists := secret.Data["auth_token"]
+	// Extract the token from the secret.
+	tokenBytes, exists := secret.Data[AuthTokenSecretKey]
 	if !exists {
-		return "", fmt.Errorf("auth_token key not found in secret %s/%s", rayCluster.Namespace, rayCluster.Name)
+		return "", fmt.Errorf("%s key not found in secret %s/%s", AuthTokenSecretKey, rayCluster.Namespace, rayCluster.Name)
 	}
 
-	return string(tokenBytes), nil
+	token := string(tokenBytes)
+
+	// Store in cache
+	c.mu.Lock()
+	c.tokenCache[cacheKey] = cachedToken{
+		token:     token,
+		expiresAt: time.Now().Add(authTokenCacheTTL),
+	}
+	c.mu.Unlock()
+
+	return token, nil
 }
 
 func NewClientManager(cfg ClientManagerConfig) (*ClientManager, error) {
@@ -159,8 +195,9 @@ func NewClientManager(cfg ClientManagerConfig) (*ClientManager, error) {
 
 	logrus.Infof("create client manager successfully, clients: %v", len(clientList))
 	clientManager := &ClientManager{
-		configs: kubeconfigList,
-		clients: clientList,
+		configs:    kubeconfigList,
+		clients:    clientList,
+		tokenCache: make(map[string]cachedToken),
 	}
 	return clientManager, nil
 }
