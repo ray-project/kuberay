@@ -1051,6 +1051,96 @@ func TestBuildPodWithAutoscalerOptions(t *testing.T) {
 	assert.True(t, reflect.DeepEqual(expectedContainer, actualContainer))
 }
 
+// Check that autoscaler container Command and Args overrides work as expected.
+func TestBuildPodWithAutoscalerOptionsCommandAndArgs(t *testing.T) {
+	ctx := context.Background()
+
+	tests := []struct {
+		name                 string
+		autoscalerOptions    *rayv1.AutoscalerOptions
+		expectedCommand      []string
+		expectedArgs         []string
+		expectDefaultCommand bool
+		expectDefaultArgs    bool
+	}{
+		{
+			name:                 "No Command and Args specified - use defaults",
+			autoscalerOptions:    &rayv1.AutoscalerOptions{},
+			expectDefaultCommand: true,
+			expectDefaultArgs:    true,
+		},
+		{
+			name: "Custom Command only",
+			autoscalerOptions: &rayv1.AutoscalerOptions{
+				Command: []string{"/bin/sh", "-c"},
+			},
+			expectedCommand:   []string{"/bin/sh", "-c"},
+			expectDefaultArgs: true,
+		},
+		{
+			name: "Custom Args only",
+			autoscalerOptions: &rayv1.AutoscalerOptions{
+				Args: []string{"custom-autoscaler --cluster-name $(RAY_CLUSTER_NAME)"},
+			},
+			expectedArgs:         []string{"custom-autoscaler --cluster-name $(RAY_CLUSTER_NAME)"},
+			expectDefaultCommand: true,
+		},
+		{
+			name: "Custom Command and Args",
+			autoscalerOptions: &rayv1.AutoscalerOptions{
+				Command: []string{"/bin/bash", "-c"},
+				Args: []string{
+					`echo "Starting custom autoscaler..."
+ray kuberay-autoscaler --cluster-name $(RAY_CLUSTER_NAME) --cluster-namespace $(RAY_CLUSTER_NAMESPACE)`,
+				},
+			},
+			expectedCommand: []string{"/bin/bash", "-c"},
+			expectedArgs: []string{
+				`echo "Starting custom autoscaler..."
+ray kuberay-autoscaler --cluster-name $(RAY_CLUSTER_NAME) --cluster-namespace $(RAY_CLUSTER_NAMESPACE)`,
+			},
+		},
+		{
+			name: "Empty Command and Args slices should not override defaults",
+			autoscalerOptions: &rayv1.AutoscalerOptions{
+				Command: []string{},
+				Args:    []string{},
+			},
+			expectDefaultCommand: true,
+			expectDefaultArgs:    true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cluster := instance.DeepCopy()
+			cluster.Spec.EnableInTreeAutoscaling = &trueFlag
+			cluster.Spec.AutoscalerOptions = tc.autoscalerOptions
+			podName := strings.ToLower(cluster.Name + utils.DashSymbol + string(rayv1.HeadNode) + utils.DashSymbol + utils.FormatInt32(0))
+
+			podTemplateSpec := DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
+			pod := BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", true, utils.GetCRDType(""), "", nil, "")
+
+			index := getAutoscalerContainerIndex(pod)
+			actualContainer := pod.Spec.Containers[index]
+
+			if tc.expectDefaultCommand {
+				// Default command is set by utils.GetContainerCommand
+				assert.Equal(t, autoscalerContainer.Command, actualContainer.Command)
+			} else {
+				assert.Equal(t, tc.expectedCommand, actualContainer.Command)
+			}
+
+			if tc.expectDefaultArgs {
+				// Default args
+				assert.Equal(t, autoscalerContainer.Args, actualContainer.Args)
+			} else {
+				assert.Equal(t, tc.expectedArgs, actualContainer.Args)
+			}
+		})
+	}
+}
+
 func TestHeadPodTemplate_WithAutoscalingEnabled(t *testing.T) {
 	ctx := context.Background()
 
