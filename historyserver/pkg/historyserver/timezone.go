@@ -1,7 +1,6 @@
 package historyserver
 
 import (
-	"encoding/json"
 	"io"
 	"net/http"
 	"path"
@@ -29,35 +28,18 @@ func (s *ServerHandler) getTimezone(req *restful.Request, resp *restful.Response
 	endpointPath := path.Join(sessionName, utils.RAY_SESSIONDIR_FETCHED_ENDPOINTS_NAME, storageKey)
 	reader := s.reader.GetContent(clusterNameID, endpointPath)
 	if reader == nil {
-		respData, err := json.Marshal(map[string]string{"offset": "", "value": ""})
-		if err != nil {
-			logrus.Errorf("Failed to marshal timezone response: %v", err)
-			resp.WriteErrorString(http.StatusInternalServerError, err.Error())
-			return
-		}
-		resp.Write(respData)
+		resp.Header().Set("Content-Type", "application/json")
+		resp.Write([]byte(`{"offset":"","value":""}`))
 		return
 	}
 
-	content, err := io.ReadAll(reader)
+	data, err := io.ReadAll(reader)
 	if err != nil {
 		logrus.Errorf("Failed to read timezone metadata: %v", err)
-		resp.WriteErrorString(http.StatusInternalServerError, err.Error())
+		resp.WriteErrorString(http.StatusInternalServerError, "Failed to read timezone metadata")
 		return
 	}
 
-	var timezoneData map[string]string
-	if err := json.Unmarshal(content, &timezoneData); err != nil {
-		logrus.Errorf("Failed to parse timezone metadata: %v", err)
-		resp.WriteErrorString(http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	respData, err := json.Marshal(timezoneData)
-	if err != nil {
-		logrus.Errorf("Failed to marshal timezone response: %v", err)
-		resp.WriteErrorString(http.StatusInternalServerError, err.Error())
-		return
-	}
-	resp.Write(respData)
+	resp.Header().Set("Content-Type", "application/json")
+	resp.Write(data)
 }
