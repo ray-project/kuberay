@@ -111,6 +111,7 @@ func (r *RayLogHandler) processSessionLatestLogs() {
 			logrus.Errorf("CreateObjectIfNotExist %s error %v", metafile, err)
 			return
 		}
+		r.writeTimezoneMeta(sessionID)
 	}
 
 	// Read node ID from /tmp/ray/raylet_node_id
@@ -460,6 +461,7 @@ func (r *RayLogHandler) processSessionPrevLogs(sessionDir string) {
 			logrus.Errorf("CreateObjectIfNotExist %s error %v", metafile, err)
 			return
 		}
+		r.writeTimezoneMeta(sessionID)
 	}
 
 	// Walk through all node directories under this session
@@ -757,6 +759,7 @@ func (r *RayLogHandler) WatchSessionLatestLoops() {
 					logrus.Errorf("CreateObjectIfNotExist %s error %v", metafile, err)
 					return
 				}
+				r.writeTimezoneMeta(sessionID)
 			}
 		case err, ok := <-watcher.Errors:
 			if !ok {
