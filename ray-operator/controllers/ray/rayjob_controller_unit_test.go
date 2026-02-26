@@ -624,3 +624,56 @@ func TestEmitRayJobExecutionDuration(t *testing.T) {
 		})
 	}
 }
+
+func TestGetSubmitterTemplate_WithEnableK8sTokenAuth(t *testing.T) {
+	rayJob := &rayv1.RayJob{
+		Spec: rayv1.RayJobSpec{
+			SubmissionMode: rayv1.K8sJobMode,
+		},
+	}
+	rayCluster := &rayv1.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test-raycluster",
+		},
+		Spec: rayv1.RayClusterSpec{
+			AuthOptions: &rayv1.AuthOptions{
+				Mode:               rayv1.AuthModeToken,
+				EnableK8sTokenAuth: pointer.Bool(true),
+			},
+			HeadGroupSpec: rayv1.HeadGroupSpec{
+				Template: corev1.PodTemplateSpec{
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Image: "rayproject/ray",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	template, err := getSubmitterTemplate(rayJob, rayCluster)
+	require.NoError(t, err)
+
+	// Check volume
+	foundVolume := false
+	for _, v := range template.Spec.Volumes {
+		if v.Name == utils.RayTokenVolumeName && v.Projected != nil {
+			foundVolume = true
+			break
+		}
+	}
+	assert.True(t, foundVolume, "Submitter Pod should have the ray-token volume")
+
+	// Check volume mount
+	foundVolumeMount := false
+	for _, vm := range template.Spec.Containers[utils.RayContainerIndex].VolumeMounts {
+		if vm.Name == utils.RayTokenVolumeName && vm.MountPath == utils.RayTokenMountPath {
+			foundVolumeMount = true
+			break
+		}
+	}
+	assert.True(t, foundVolumeMount, "Submitter container should have the ray-token volume mount")
+}

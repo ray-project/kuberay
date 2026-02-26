@@ -118,6 +118,22 @@ func TestHistoryServer(t *testing.T) {
 			name:     "Dead cluster: /api/v0/placement_groups should return stored placement groups from S3",
 			testFunc: testDeadClusterPlacementGroups,
 		},
+		{
+			name:     "Live cluster: /api/v0/tasks/summarize?summary_by=lineage should return the lineage tree of all tasks",
+			testFunc: testLiveClusterTaskSummarize,
+		},
+		{
+			name:     "Dead cluster: /api/v0/tasks/summarize?summary_by=lineage should return the lineage tree of all tasks",
+			testFunc: testDeadClusterTaskSummarize,
+		},
+		{
+			name:     "Live cluster: /api/v0/tasks/summarize should return the task summary grouped by func_name",
+			testFunc: testLiveClusterTaskSummarizeFuncName,
+		},
+		{
+			name:     "Dead cluster: /api/v0/tasks/summarize should return the task summary grouped by func_name",
+			testFunc: testDeadClusterTaskSummarizeFuncName,
+		},
 	}
 
 	for _, tt := range tests {
@@ -2277,6 +2293,168 @@ func testDeadClusterPlacementGroups(test Test, g *WithT, namespace *corev1.Names
 	LogWithTimestamp(test.T(), "Dead cluster /api/v0/placement_groups test completed successfully")
 }
 
+// testLiveClusterTaskSummarize verifies that the /api/v0/tasks/summarize?summary_by=lineage endpoint
+// for a live cluster returns a valid lineage tree.
+//
+// The test case follows these steps:
+// 1. Prepare test environment by applying a Ray cluster
+// 2. Submit a Ray job to the existing cluster
+// 3. Apply History Server and get its URL
+// 4. Get the cluster information and set the cluster context with the session name 'live'
+// 5. Hit /api/v0/tasks/summarize?summary_by=lineage to get the lineage tree
+// 6. Verify the response status code is 200
+// 7. Verify the response API schema
+// 8. Delete S3 bucket to ensure test isolation
+func testLiveClusterTaskSummarize(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+	endpoint := EndpointTasksSummarize + "?summary_by=lineage"
+	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
+	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
+	ApplyHistoryServer(test, g, namespace, "")
+	historyServerURL := GetHistoryServerURL(test, g, namespace)
+
+	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
+	g.Expect(clusterInfo.SessionName).To(Equal(LiveSessionName), "Live cluster should have sessionName='live'")
+
+	client := CreateHTTPClientWithCookieJar(g)
+	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
+
+	endpointURL := historyServerURL + endpoint
+	LogWithTimestamp(test.T(), "Testing %s endpoint for live cluster: %s", endpoint, endpointURL)
+	verifySingleEndpoint(test, g, client, endpointURL, func(test Test, g *WithT, data map[string]any) {
+		verifyTaskSummarizeLineageRespSchema(test, g, data)
+	})
+	DeleteS3Bucket(test, g, s3Client)
+	LogWithTimestamp(test.T(), "Live cluster /api/v0/tasks/summarize?summary_by=lineage tests completed successfully")
+}
+
+// testDeadClusterTaskSummarize verifies that the /api/v0/tasks/summarize?summary_by=lineage endpoint
+// for a dead cluster returns a valid lineage tree built from historical events.
+//
+// The test case follows these steps:
+// 1. Prepare test environment by applying a Ray cluster with the collector
+// 2. Submit a Ray job to the existing cluster and wait for completion
+// 3. Delete the Ray cluster to trigger event flushing and wait for cluster deletion to complete
+// 4. Apply History Server and get its URL
+// 5. Get the cluster information and set the cluster context with the session name of the dead cluster
+// 6. Hit /api/v0/tasks/summarize?summary_by=lineage to get the lineage tree
+// 7. Verify the response status code is 200
+// 8. Verify the response API schema
+// 9. Delete S3 bucket to ensure test isolation
+func testDeadClusterTaskSummarize(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+	endpoint := EndpointTasksSummarize + "?summary_by=lineage"
+	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
+	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
+	// Delete the Ray cluster to trigger event flushing.
+	LogWithTimestamp(test.T(), "Deleting RayCluster %s/%s to trigger event flushing", rayCluster.Namespace, rayCluster.Name)
+	err := test.Client().Ray().RayV1().
+		RayClusters(rayCluster.Namespace).
+		Delete(test.Ctx(), rayCluster.Name, metav1.DeleteOptions{})
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Eventually(func() error {
+		_, err := GetRayCluster(test, rayCluster.Namespace, rayCluster.Name)
+		return err
+	}, TestTimeoutMedium).Should(WithTransform(k8serrors.IsNotFound, BeTrue()))
+
+	ApplyHistoryServer(test, g, namespace, "")
+	historyServerURL := GetHistoryServerURL(test, g, namespace)
+	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
+	g.Expect(clusterInfo.SessionName).To(SatisfyAll(Not(BeEmpty()), Not(Equal(LiveSessionName))))
+	client := CreateHTTPClientWithCookieJar(g)
+	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
+
+	endpointURL := historyServerURL + endpoint
+	LogWithTimestamp(test.T(), "Testing %s endpoint for dead cluster: %s", endpoint, endpointURL)
+
+	verifySingleEndpoint(test, g, client, endpointURL, func(test Test, g *WithT, data map[string]any) {
+		verifyTaskSummarizeLineageRespSchema(test, g, data)
+	})
+
+	DeleteS3Bucket(test, g, s3Client)
+	LogWithTimestamp(test.T(), "Dead cluster /api/v0/tasks/summarize?summary_by=lineage tests completed successfully")
+}
+
+// testLiveClusterTaskSummarizeFuncName verifies that the /api/v0/tasks/summarize endpoint (default func_name mode)
+// for a live cluster returns a valid task summary grouped by function name.
+//
+// The test case follows these steps:
+// 1. Prepare test environment by applying a Ray cluster
+// 2. Submit a Ray job to the existing cluster
+// 3. Apply History Server and get its URL
+// 4. Get the cluster information and set the cluster context with the session name 'live'
+// 5. Hit /api/v0/tasks/summarize to get the func_name summary
+// 6. Verify the response status code is 200
+// 7. Verify the response API schema
+// 8. Delete S3 bucket to ensure test isolation
+func testLiveClusterTaskSummarizeFuncName(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+	endpoint := EndpointTasksSummarize
+	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
+	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
+	ApplyHistoryServer(test, g, namespace, "")
+	historyServerURL := GetHistoryServerURL(test, g, namespace)
+
+	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
+	g.Expect(clusterInfo.SessionName).To(Equal(LiveSessionName), "Live cluster should have sessionName='live'")
+	client := CreateHTTPClientWithCookieJar(g)
+	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
+	endpointURL := historyServerURL + endpoint
+	LogWithTimestamp(test.T(), "Testing %s endpoint for live cluster: %s", endpoint, endpointURL)
+	verifySingleEndpoint(test, g, client, endpointURL, func(test Test, g *WithT, data map[string]any) {
+		verifyTaskSummarizeFuncNameRespSchema(test, g, data)
+	})
+	DeleteS3Bucket(test, g, s3Client)
+	LogWithTimestamp(test.T(), "Live cluster /api/v0/tasks/summarize (func_name) tests completed successfully")
+}
+
+// testDeadClusterTaskSummarizeFuncName verifies that the /api/v0/tasks/summarize endpoint (default func_name mode)
+// for a dead cluster returns a valid task summary grouped by function name built from historical events.
+//
+// The test case follows these steps:
+// 1. Prepare test environment by applying a Ray cluster with the collector
+// 2. Submit a Ray job to the existing cluster and wait for completion
+// 3. Delete the Ray cluster to trigger event flushing and wait for cluster deletion to complete
+// 4. Apply History Server and get its URL
+// 5. Get the cluster information and set the cluster context with the session name of the dead cluster
+// 6. Hit /api/v0/tasks/summarize to get the func_name summary
+// 7. Verify the response status code is 200
+// 8. Verify the response API schema
+// 9. Delete S3 bucket to ensure test isolation
+func testDeadClusterTaskSummarizeFuncName(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+	endpoint := EndpointTasksSummarize
+
+	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
+	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
+
+	// Delete the Ray cluster to trigger event flushing.
+	LogWithTimestamp(test.T(), "Deleting RayCluster %s/%s to trigger event flushing", rayCluster.Namespace, rayCluster.Name)
+	err := test.Client().Ray().RayV1().
+		RayClusters(rayCluster.Namespace).
+		Delete(test.Ctx(), rayCluster.Name, metav1.DeleteOptions{})
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Eventually(func() error {
+		_, err := GetRayCluster(test, rayCluster.Namespace, rayCluster.Name)
+		return err
+	}, TestTimeoutMedium).Should(WithTransform(k8serrors.IsNotFound, BeTrue()))
+
+	ApplyHistoryServer(test, g, namespace, "")
+	historyServerURL := GetHistoryServerURL(test, g, namespace)
+
+	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
+	g.Expect(clusterInfo.SessionName).To(SatisfyAll(Not(BeEmpty()), Not(Equal(LiveSessionName))))
+
+	client := CreateHTTPClientWithCookieJar(g)
+	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
+
+	endpointURL := historyServerURL + endpoint
+	LogWithTimestamp(test.T(), "Testing %s endpoint for dead cluster: %s", endpoint, endpointURL)
+
+	verifySingleEndpoint(test, g, client, endpointURL, func(test Test, g *WithT, data map[string]any) {
+		verifyTaskSummarizeFuncNameRespSchema(test, g, data)
+	})
+
+	DeleteS3Bucket(test, g, s3Client)
+	LogWithTimestamp(test.T(), "Dead cluster /api/v0/tasks/summarize (func_name) tests completed successfully")
+}
+
 // setClusterContext sets the cluster context via /enter_cluster/ endpoint and verifies the response.
 func setClusterContext(test Test, g *WithT, client *http.Client, historyServerURL, namespace, clusterName, session string) {
 	enterURL := fmt.Sprintf("%s/enter_cluster/%s/%s/%s", historyServerURL, namespace, clusterName, session)
@@ -2658,6 +2836,307 @@ func verifyNodeSummarySchema(test Test, g *WithT, nodeSummary map[string]any) {
 	g.Expect(raylet).To(HaveKey("state"))
 	g.Expect(raylet).To(HaveKey("endTimeMs"))
 	g.Expect(raylet).To(HaveKey("stateMessage"))
+}
+
+// verifyTaskSummarizeLineageRespSchema verifies that the /api/v0/tasks/summarize?summary_by=lineage
+// response is valid according to the API schema.
+func verifyTaskSummarizeLineageRespSchema(test Test, g *WithT, resp map[string]any) {
+	// Verify top-level fields.
+	g.Expect(resp).To(HaveKeyWithValue("result", BeTrue()))
+	g.Expect(resp).To(HaveKey("data"))
+
+	data, ok := resp["data"].(map[string]any)
+	g.Expect(ok).To(BeTrue(), "'data' should be a map")
+	g.Expect(data).To(HaveKey("result"))
+
+	dataResult, ok := data["result"].(map[string]any)
+	g.Expect(ok).To(BeTrue(), "'data.result' should be a map")
+
+	g.Expect(dataResult).To(HaveKey("total"))
+	g.Expect(dataResult).To(HaveKey("num_after_truncation"))
+	g.Expect(dataResult).To(HaveKey("num_filtered"))
+	g.Expect(dataResult).To(HaveKey("result"))
+	g.Expect(dataResult).To(HaveKey("partial_failure_warning"))
+
+	innerResult, ok := dataResult["result"].(map[string]any)
+	g.Expect(ok).To(BeTrue(), "'data.result.result' should be a map")
+	g.Expect(innerResult).To(HaveKey("node_id_to_summary"))
+
+	nodeIDToSummary, ok := innerResult["node_id_to_summary"].(map[string]any)
+	g.Expect(ok).To(BeTrue(), "'node_id_to_summary' should be a map")
+
+	// At least one entry in node_id_to_summary.
+	g.Expect(len(nodeIDToSummary)).To(BeNumerically(">", 0), "should have at least one node_id_to_summary entry")
+
+	// Verify each TaskSummaries entry.
+	for key, summaryVal := range nodeIDToSummary {
+		LogWithTimestamp(test.T(), "Verifying TaskSummaries for key: %s", key)
+
+		taskSummaries, ok := summaryVal.(map[string]any)
+		g.Expect(ok).To(BeTrue(), "'%s' should be a map", key)
+
+		g.Expect(taskSummaries).To(HaveKey("summary"))
+		g.Expect(taskSummaries).To(HaveKey("total_tasks"))
+		g.Expect(taskSummaries).To(HaveKey("total_actor_tasks"))
+		g.Expect(taskSummaries).To(HaveKey("total_actor_scheduled"))
+		g.Expect(taskSummaries).To(HaveKey("summary_by"))
+		g.Expect(taskSummaries["summary_by"]).To(Equal("lineage"))
+
+		// Verify summary is an array with at least one entry.
+		summary, ok := taskSummaries["summary"].([]any)
+		g.Expect(ok).To(BeTrue(), "'summary' should be an array")
+		g.Expect(len(summary)).To(BeNumerically(">", 0), "should have at least one summary entry")
+
+		// Verify each NestedTaskSummary node (schema check).
+		for _, entry := range summary {
+			verifyNestedTaskSummarySchema(test, g, entry)
+		}
+
+		// Verify lineage tree structural properties produced by rayjob.yaml scenarios.
+		// Walk the entire tree once to collect statistics, then assert.
+		stats := &lineageStats{
+			typeSeen:                  make(map[string]bool),
+			groupLinkAlwaysNull:       true,
+			nonGroupLinkAlwaysPresent: true,
+		}
+		for _, entry := range summary {
+			collectLineageStats(entry, stats)
+		}
+
+		// Check 1: All 5 node types must appear.
+		// rayjob.yaml produces NORMAL_TASK (my_task, parent_task, child_task, repeated_task),
+		// ACTOR_CREATION_TASK (Counter.__init__), ACTOR_TASK (Counter.increment, Counter.get_count),
+		// ACTOR (Counter group), and GROUP (repeated_task ×3, Counter.increment ×2).
+		for _, expectedType := range []string{"NORMAL_TASK", "ACTOR_CREATION_TASK", "ACTOR_TASK", "ACTOR", "GROUP"} {
+			g.Expect(stats.typeSeen).To(HaveKey(expectedType),
+				"lineage tree should contain node type %s", expectedType)
+		}
+
+		// Check 2: At least one NORMAL_TASK has non-empty children (Scenario 2: parent_task → child_task).
+		g.Expect(stats.hasNestedNormalTask).To(BeTrue(),
+			"lineage tree should have at least one NORMAL_TASK with children (nested tasks)")
+
+		// Check 3: At least one GROUP exists with >1 children (Scenario 3: repeated_task ×3).
+		g.Expect(stats.hasGroupWithMultipleChildren).To(BeTrue(),
+			"lineage tree should have at least one GROUP with multiple children (merged siblings)")
+
+		// Check 4: At least one ACTOR contains an ACTOR_CREATION_TASK child (Scenario 4: Counter).
+		g.Expect(stats.hasActorWithCreationTask).To(BeTrue(),
+			"lineage tree should have at least one ACTOR containing an ACTOR_CREATION_TASK child")
+
+		// Check 5: GROUP nodes have link=null (not a non-null object).
+		g.Expect(stats.groupLinkAlwaysNull).To(BeTrue(),
+			"GROUP nodes should have link=null, matching Ray Dashboard behavior")
+
+		// Check 6: Non-GROUP nodes (task/actor) have non-null link with type and id.
+		g.Expect(stats.nonGroupLinkAlwaysPresent).To(BeTrue(),
+			"non-GROUP nodes should have a non-null link with type and id")
+	}
+
+	LogWithTimestamp(test.T(), "Task summarize lineage response schema verification completed")
+}
+
+// verifyNestedTaskSummarySchema recursively verifies the schema of a NestedTaskSummary node
+// in the lineage tree, including all children.
+func verifyNestedTaskSummarySchema(test Test, g *WithT, entry any) {
+	node, ok := entry.(map[string]any)
+	g.Expect(ok).To(BeTrue(), "NestedTaskSummary should be a map")
+
+	g.Expect(node).To(HaveKey("name"))
+	g.Expect(node).To(HaveKey("key"))
+	g.Expect(node).To(HaveKey("type"))
+	g.Expect(node).To(HaveKey("timestamp"))
+	g.Expect(node).To(HaveKey("state_counts"))
+	g.Expect(node).To(HaveKey("children"))
+
+	// Verify state_counts is a map with at least one entry.
+	stateCounts, ok := node["state_counts"].(map[string]any)
+	g.Expect(ok).To(BeTrue(), "'state_counts' should be a map")
+	g.Expect(len(stateCounts)).To(BeNumerically(">", 0), "should have at least one state count")
+
+	// Verify type is one of the known node types.
+	nodeType, ok := node["type"].(string)
+	g.Expect(ok).To(BeTrue(), "'type' should be a string")
+	g.Expect(nodeType).To(BeElementOf("NORMAL_TASK", "ACTOR_CREATION_TASK", "ACTOR_TASK", "ACTOR", "GROUP"))
+
+	// Verify children is an array and recursively verify each child.
+	children, ok := node["children"].([]any)
+	g.Expect(ok).To(BeTrue(), "'children' should be an array")
+	for _, child := range children {
+		verifyNestedTaskSummarySchema(test, g, child)
+	}
+
+	// Verify link if present (optional field, absent on GROUP nodes).
+	if link, exists := node["link"]; exists && link != nil {
+		linkMap, ok := link.(map[string]any)
+		g.Expect(ok).To(BeTrue(), "'link' should be a map")
+		g.Expect(linkMap).To(HaveKey("type"))
+		g.Expect(linkMap).To(HaveKey("id"))
+		linkType, ok := linkMap["type"].(string)
+		g.Expect(ok).To(BeTrue(), "'link.type' should be a string")
+		g.Expect(linkType).To(BeElementOf("task", "actor"))
+	}
+}
+
+// lineageStats holds statistics collected from a single walk of the lineage tree.
+// Used to verify that rayjob.yaml scenarios produced the expected tree structure.
+type lineageStats struct {
+	typeSeen                     map[string]bool // all node types encountered
+	hasNestedNormalTask          bool            // at least one NORMAL_TASK has non-empty children
+	hasGroupWithMultipleChildren bool            // at least one GROUP has >1 children
+	hasActorWithCreationTask     bool            // at least one ACTOR contains ACTOR_CREATION_TASK child
+	groupLinkAlwaysNull          bool            // all GROUP nodes have link=null
+	nonGroupLinkAlwaysPresent    bool            // all non-GROUP nodes have non-null link
+}
+
+// collectLineageStats recursively walks a NestedTaskSummary node and updates stats.
+func collectLineageStats(entry any, stats *lineageStats) {
+	node, ok := entry.(map[string]any)
+	if !ok {
+		return
+	}
+
+	nodeType, _ := node["type"].(string)
+	stats.typeSeen[nodeType] = true
+
+	children, _ := node["children"].([]any)
+
+	// Check 2: NORMAL_TASK with non-empty children (nested tasks).
+	if nodeType == "NORMAL_TASK" && len(children) > 0 {
+		stats.hasNestedNormalTask = true
+	}
+
+	// Check 3: GROUP with >1 children (merged siblings).
+	if nodeType == "GROUP" && len(children) > 1 {
+		stats.hasGroupWithMultipleChildren = true
+	}
+
+	// Check 4: ACTOR contains at least one ACTOR_CREATION_TASK child.
+	if nodeType == "ACTOR" {
+		for _, child := range children {
+			if childNode, ok := child.(map[string]any); ok {
+				if childType, _ := childNode["type"].(string); childType == "ACTOR_CREATION_TASK" {
+					stats.hasActorWithCreationTask = true
+					break
+				}
+			}
+		}
+	}
+
+	// Check 5: GROUP link should be null.
+	if nodeType == "GROUP" {
+		link, exists := node["link"]
+		if !exists || link == nil {
+			// link is absent or null — correct
+		} else {
+			stats.groupLinkAlwaysNull = false
+		}
+	}
+
+	// Check 6: Non-GROUP nodes should have non-null link.
+	if nodeType != "GROUP" {
+		link, exists := node["link"]
+		if !exists || link == nil {
+			stats.nonGroupLinkAlwaysPresent = false
+		}
+	}
+
+	// Recurse into children.
+	for _, child := range children {
+		collectLineageStats(child, stats)
+	}
+}
+
+// verifyTaskSummarizeFuncNameRespSchema verifies that the /api/v0/tasks/summarize (default func_name mode)
+// response is valid according to the API schema.
+//
+// Expected response structure (matching Ray Dashboard's rest_response format):
+//
+//	{
+//	  "result": true, "msg": "",
+//	  "data": { "result": {
+//	    "total": <int>, "num_after_truncation": <int>, "num_filtered": <int>,
+//	    "result": { "node_id_to_summary": { "cluster": {
+//	      "summary": { "<func_name>": { "func_or_class_name": ..., "type": ..., "state_counts": {...} } },
+//	      "total_tasks": <int>, "total_actor_tasks": <int>, "total_actor_scheduled": <int>,
+//	      "summary_by": "func_name"
+//	    }}}
+//	  }}
+//	}
+func verifyTaskSummarizeFuncNameRespSchema(test Test, g *WithT, resp map[string]any) {
+	// Verify top-level fields.
+	g.Expect(resp).To(HaveKeyWithValue("result", BeTrue()))
+	g.Expect(resp).To(HaveKey("data"))
+
+	data, ok := resp["data"].(map[string]any)
+	g.Expect(ok).To(BeTrue(), "'data' should be a map")
+	g.Expect(data).To(HaveKey("result"))
+
+	dataResult, ok := data["result"].(map[string]any)
+	g.Expect(ok).To(BeTrue(), "'data.result' should be a map")
+
+	g.Expect(dataResult).To(HaveKey("total"))
+	g.Expect(dataResult).To(HaveKey("num_after_truncation"))
+	g.Expect(dataResult).To(HaveKey("num_filtered"))
+	g.Expect(dataResult).To(HaveKey("result"))
+	g.Expect(dataResult).To(HaveKey("partial_failure_warning"))
+
+	innerResult, ok := dataResult["result"].(map[string]any)
+	g.Expect(ok).To(BeTrue(), "'data.result.result' should be a map")
+	g.Expect(innerResult).To(HaveKey("node_id_to_summary"))
+
+	nodeIDToSummary, ok := innerResult["node_id_to_summary"].(map[string]any)
+	g.Expect(ok).To(BeTrue(), "'node_id_to_summary' should be a map")
+
+	// At least one entry in node_id_to_summary.
+	g.Expect(len(nodeIDToSummary)).To(BeNumerically(">", 0), "should have at least one node_id_to_summary entry")
+
+	// Verify each TaskSummariesByFuncName entry.
+	for key, summaryVal := range nodeIDToSummary {
+		LogWithTimestamp(test.T(), "Verifying TaskSummariesByFuncName for key: %s", key)
+
+		taskSummaries, ok := summaryVal.(map[string]any)
+		g.Expect(ok).To(BeTrue(), "'%s' should be a map", key)
+
+		g.Expect(taskSummaries).To(HaveKey("summary"))
+		g.Expect(taskSummaries).To(HaveKey("total_tasks"))
+		g.Expect(taskSummaries).To(HaveKey("total_actor_tasks"))
+		g.Expect(taskSummaries).To(HaveKey("total_actor_scheduled"))
+		g.Expect(taskSummaries).To(HaveKey("summary_by"))
+		g.Expect(taskSummaries["summary_by"]).To(Equal("func_name"))
+
+		// Verify summary is a map (func_name mode uses map, unlike lineage which uses array).
+		summary, ok := taskSummaries["summary"].(map[string]any)
+		g.Expect(ok).To(BeTrue(), "'summary' should be a map")
+		g.Expect(len(summary)).To(BeNumerically(">", 0), "should have at least one summary entry")
+
+		// Verify each TaskSummaryPerFuncOrClassName entry.
+		for funcName, entryVal := range summary {
+			LogWithTimestamp(test.T(), "Verifying TaskSummaryPerFuncOrClassName for func: %s", funcName)
+
+			entry, ok := entryVal.(map[string]any)
+			g.Expect(ok).To(BeTrue(), "'%s' should be a map", funcName)
+
+			g.Expect(entry).To(HaveKey("func_or_class_name"))
+			g.Expect(entry).To(HaveKey("type"))
+			g.Expect(entry).To(HaveKey("state_counts"))
+
+			// func_or_class_name should match the map key.
+			g.Expect(entry["func_or_class_name"]).To(Equal(funcName))
+
+			// type should be one of the known task types.
+			entryType, ok := entry["type"].(string)
+			g.Expect(ok).To(BeTrue(), "'type' should be a string")
+			g.Expect(entryType).To(BeElementOf("NORMAL_TASK", "ACTOR_CREATION_TASK", "ACTOR_TASK"))
+
+			// state_counts should be a map with at least one entry.
+			stateCounts, ok := entry["state_counts"].(map[string]any)
+			g.Expect(ok).To(BeTrue(), "'state_counts' should be a map")
+			g.Expect(len(stateCounts)).To(BeNumerically(">", 0), "should have at least one state count")
+		}
+	}
+
+	LogWithTimestamp(test.T(), "Task summarize func_name response schema verification completed")
 }
 
 // verifyNodesHostNameListSchema verifies that the /nodes?view=hostNameList response is valid according to the API schema.
