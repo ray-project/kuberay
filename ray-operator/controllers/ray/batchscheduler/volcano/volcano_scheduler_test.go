@@ -503,6 +503,63 @@ func TestCalculatePodGroupParams(t *testing.T) {
 	})
 }
 
+func TestGetSubmitterResourceSidecarModeWithCustomTemplate(t *testing.T) {
+	a := assert.New(t)
+
+	rayJob := createTestRayJob(1)
+	rayJob.Spec.SubmissionMode = rayv1.SidecarMode
+	rayJob.Spec.SubmitterContainerTemplate = &corev1.Container{
+		Name: "custom-submitter",
+		Resources: corev1.ResourceRequirements{
+			Limits: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("4"),
+				corev1.ResourceMemory: resource.MustParse("4Gi"),
+			},
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("2"),
+				corev1.ResourceMemory: resource.MustParse("2Gi"),
+			},
+		},
+	}
+
+	resource := getSubmitterResource(&rayJob)
+
+	// Should use the custom template resources, not the defaults
+	a.Equal("2", resource.Cpu().String())
+	a.Equal("2Gi", resource.Memory().String())
+}
+
+func TestGetSubmitterResourceSidecarModeWithoutTemplate(t *testing.T) {
+	a := assert.New(t)
+
+	rayJob := createTestRayJob(1)
+	rayJob.Spec.SubmissionMode = rayv1.SidecarMode
+
+	resource := getSubmitterResource(&rayJob)
+
+	// Should use the default submitter container resources
+	// Default requests: 500m CPU, 200Mi memory
+	a.Equal("500m", resource.Cpu().String())
+	a.Equal("200Mi", resource.Memory().String())
+}
+
+func TestGetSubmitterResourceSidecarModeTemplateWithoutResources(t *testing.T) {
+	a := assert.New(t)
+
+	rayJob := createTestRayJob(1)
+	rayJob.Spec.SubmissionMode = rayv1.SidecarMode
+	// Template with no resources specified should fall back to defaults
+	rayJob.Spec.SubmitterContainerTemplate = &corev1.Container{
+		Name: "custom-submitter",
+	}
+
+	resource := getSubmitterResource(&rayJob)
+
+	// Should fall back to default submitter container resources
+	a.Equal("500m", resource.Cpu().String())
+	a.Equal("200Mi", resource.Memory().String())
+}
+
 func TestGetAppPodGroupName(t *testing.T) {
 	a := assert.New(t)
 

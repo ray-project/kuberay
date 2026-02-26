@@ -14,6 +14,7 @@ import (
 	"go.uber.org/mock/gomock"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -199,6 +200,299 @@ func TestGetSubmitterTemplate(t *testing.T) {
 	envVar, found = utils.EnvVarByName(utils.RAY_JOB_SUBMISSION_ID, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Env)
 	assert.True(t, found)
 	assert.Equal(t, "test-job-id", envVar.Value)
+}
+
+func TestGetSubmitterContainer(t *testing.T) {
+	// Helper to create a basic RayClusterSpec with a head container
+	basicRayClusterSpec := func() *rayv1.RayClusterSpec {
+		return &rayv1.RayClusterSpec{
+			HeadGroupSpec: rayv1.HeadGroupSpec{
+				Template: corev1.PodTemplateSpec{
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Image: "rayproject/ray:custom-version",
+							},
+						},
+					},
+				},
+			},
+		}
+	}
+
+	rayClusterInstance := &rayv1.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-raycluster",
+			Namespace: "default",
+		},
+		Spec: *basicRayClusterSpec(),
+	}
+
+	t.Run("Default container without SubmitterContainerTemplate", func(t *testing.T) {
+		rayJobInstance := &rayv1.RayJob{
+			Spec: rayv1.RayJobSpec{
+				Entrypoint:                 "python script.py",
+				SubmitterContainerTemplate: nil,
+				RayClusterSpec:             basicRayClusterSpec(),
+			},
+			Status: rayv1.RayJobStatus{
+				DashboardURL: "test-url",
+				JobId:        "test-job-id",
+			},
+		}
+
+		container, err := getSubmitterContainer(rayJobInstance, rayClusterInstance)
+		require.NoError(t, err)
+
+		// Should use default values
+		assert.Equal(t, utils.SubmitterContainerName, container.Name)
+		assert.Equal(t, "rayproject/ray:custom-version", container.Image)
+		assert.NotEmpty(t, container.Resources.Limits)
+		assert.NotEmpty(t, container.Resources.Requests)
+	})
+
+	t.Run("Custom container with SubmitterContainerTemplate", func(t *testing.T) {
+		rayJobInstance := &rayv1.RayJob{
+			Spec: rayv1.RayJobSpec{
+				Entrypoint: "python script.py",
+				SubmitterContainerTemplate: &corev1.Container{
+					Image: "custom/image:v1",
+					VolumeMounts: []corev1.VolumeMount{
+						{
+							Name:      "scripts",
+							MountPath: "/scripts",
+						},
+					},
+					Env: []corev1.EnvVar{
+						{
+							Name:  "MY_VAR",
+							Value: "my_value",
+						},
+					},
+				},
+				RayClusterSpec: basicRayClusterSpec(),
+			},
+			Status: rayv1.RayJobStatus{
+				DashboardURL: "test-url",
+				JobId:        "test-job-id",
+			},
+		}
+
+		container, err := getSubmitterContainer(rayJobInstance, rayClusterInstance)
+		require.NoError(t, err)
+
+		// Container name should be overwritten
+		assert.Equal(t, utils.SubmitterContainerName, container.Name)
+		// Custom image should be preserved
+		assert.Equal(t, "custom/image:v1", container.Image)
+		// Volume mounts should be preserved
+		assert.Len(t, container.VolumeMounts, 1)
+		assert.Equal(t, "scripts", container.VolumeMounts[0].Name)
+		assert.Equal(t, "/scripts", container.VolumeMounts[0].MountPath)
+		// User env vars should be present (before controller env vars)
+		envVar, found := utils.EnvVarByName("MY_VAR", container.Env)
+		assert.True(t, found)
+		assert.Equal(t, "my_value", envVar.Value)
+		// Controller env vars should also be present
+		envVar, found = utils.EnvVarByName(utils.RAY_DASHBOARD_ADDRESS, container.Env)
+		assert.True(t, found)
+		assert.Equal(t, "test-url", envVar.Value)
+	})
+
+	t.Run("Image inheritance when not specified in template", func(t *testing.T) {
+		rayJobInstance := &rayv1.RayJob{
+			Spec: rayv1.RayJobSpec{
+				Entrypoint: "python script.py",
+				SubmitterContainerTemplate: &corev1.Container{
+					// Image not specified - should inherit from head container
+					VolumeMounts: []corev1.VolumeMount{
+						{
+							Name:      "data",
+							MountPath: "/data",
+						},
+					},
+				},
+				RayClusterSpec: basicRayClusterSpec(),
+			},
+			Status: rayv1.RayJobStatus{
+				DashboardURL: "test-url",
+				JobId:        "test-job-id",
+			},
+		}
+
+		container, err := getSubmitterContainer(rayJobInstance, rayClusterInstance)
+		require.NoError(t, err)
+
+		// Should inherit image from head container
+		assert.Equal(t, "rayproject/ray:custom-version", container.Image)
+		// Volume mounts should still be preserved
+		assert.Len(t, container.VolumeMounts, 1)
+		assert.Equal(t, "data", container.VolumeMounts[0].Name)
+	})
+
+	t.Run("Container name is always overwritten", func(t *testing.T) {
+		rayJobInstance := &rayv1.RayJob{
+			Spec: rayv1.RayJobSpec{
+				Entrypoint: "python script.py",
+				SubmitterContainerTemplate: &corev1.Container{
+					Name:  "user-specified-name", // Should be overwritten
+					Image: "custom/image:v1",
+				},
+				RayClusterSpec: basicRayClusterSpec(),
+			},
+			Status: rayv1.RayJobStatus{
+				DashboardURL: "test-url",
+				JobId:        "test-job-id",
+			},
+		}
+
+		container, err := getSubmitterContainer(rayJobInstance, rayClusterInstance)
+		require.NoError(t, err)
+
+		// Name should be overwritten to the standard submitter container name
+		assert.Equal(t, utils.SubmitterContainerName, container.Name)
+	})
+
+	t.Run("Command and Args are always overwritten in SidecarMode", func(t *testing.T) {
+		rayJobInstance := &rayv1.RayJob{
+			Spec: rayv1.RayJobSpec{
+				Entrypoint: "python script.py",
+				SubmitterContainerTemplate: &corev1.Container{
+					Image:   "custom/image:v1",
+					Command: []string{"user-command"}, // Should be overwritten
+					Args:    []string{"user-args"},    // Should be overwritten
+				},
+				RayClusterSpec: basicRayClusterSpec(),
+			},
+			Status: rayv1.RayJobStatus{
+				DashboardURL: "test-url",
+				JobId:        "test-job-id",
+			},
+		}
+
+		container, err := getSubmitterContainer(rayJobInstance, rayClusterInstance)
+		require.NoError(t, err)
+
+		// Command should be overwritten to the controller's command
+		assert.Equal(t, []string{"/bin/bash", "-ce", "--"}, container.Command)
+		// Args should contain the job submission command
+		assert.Len(t, container.Args, 1)
+		assert.Contains(t, container.Args[0], "ray job submit")
+	})
+
+	t.Run("Default resources when not specified in template", func(t *testing.T) {
+		rayJobInstance := &rayv1.RayJob{
+			Spec: rayv1.RayJobSpec{
+				Entrypoint: "python script.py",
+				SubmitterContainerTemplate: &corev1.Container{
+					Image: "custom/image:v1",
+					// Resources not specified - should use defaults
+				},
+				RayClusterSpec: basicRayClusterSpec(),
+			},
+			Status: rayv1.RayJobStatus{
+				DashboardURL: "test-url",
+				JobId:        "test-job-id",
+			},
+		}
+
+		container, err := getSubmitterContainer(rayJobInstance, rayClusterInstance)
+		require.NoError(t, err)
+
+		// Should have default resources
+		assert.NotEmpty(t, container.Resources.Limits)
+		assert.NotEmpty(t, container.Resources.Requests)
+	})
+
+	t.Run("Custom resources are preserved", func(t *testing.T) {
+		rayJobInstance := &rayv1.RayJob{
+			Spec: rayv1.RayJobSpec{
+				Entrypoint: "python script.py",
+				SubmitterContainerTemplate: &corev1.Container{
+					Image: "custom/image:v1",
+					Resources: corev1.ResourceRequirements{
+						Limits: corev1.ResourceList{
+							corev1.ResourceCPU:    resource.MustParse("2"),
+							corev1.ResourceMemory: resource.MustParse("2Gi"),
+						},
+					},
+				},
+				RayClusterSpec: basicRayClusterSpec(),
+			},
+			Status: rayv1.RayJobStatus{
+				DashboardURL: "test-url",
+				JobId:        "test-job-id",
+			},
+		}
+
+		container, err := getSubmitterContainer(rayJobInstance, rayClusterInstance)
+		require.NoError(t, err)
+
+		// Custom resources should be preserved
+		assert.NotEmpty(t, container.Resources.Limits)
+		assert.Equal(t, resource.MustParse("2"), container.Resources.Limits[corev1.ResourceCPU])
+	})
+
+	t.Run("Security context is preserved", func(t *testing.T) {
+		runAsUser := int64(1000)
+		rayJobInstance := &rayv1.RayJob{
+			Spec: rayv1.RayJobSpec{
+				Entrypoint: "python script.py",
+				SubmitterContainerTemplate: &corev1.Container{
+					Image: "custom/image:v1",
+					SecurityContext: &corev1.SecurityContext{
+						RunAsUser:    &runAsUser,
+						RunAsNonRoot: pointer.Bool(true),
+					},
+				},
+				RayClusterSpec: basicRayClusterSpec(),
+			},
+			Status: rayv1.RayJobStatus{
+				DashboardURL: "test-url",
+				JobId:        "test-job-id",
+			},
+		}
+
+		container, err := getSubmitterContainer(rayJobInstance, rayClusterInstance)
+		require.NoError(t, err)
+
+		// Security context should be preserved
+		assert.NotNil(t, container.SecurityContext)
+		assert.Equal(t, int64(1000), *container.SecurityContext.RunAsUser)
+		assert.True(t, *container.SecurityContext.RunAsNonRoot)
+	})
+
+	t.Run("EnvFrom is preserved", func(t *testing.T) {
+		rayJobInstance := &rayv1.RayJob{
+			Spec: rayv1.RayJobSpec{
+				Entrypoint: "python script.py",
+				SubmitterContainerTemplate: &corev1.Container{
+					Image: "custom/image:v1",
+					EnvFrom: []corev1.EnvFromSource{
+						{
+							ConfigMapRef: &corev1.ConfigMapEnvSource{
+								LocalObjectReference: corev1.LocalObjectReference{
+									Name: "my-config",
+								},
+							},
+						},
+					},
+				},
+				RayClusterSpec: basicRayClusterSpec(),
+			},
+			Status: rayv1.RayJobStatus{
+				DashboardURL: "test-url",
+				JobId:        "test-job-id",
+			},
+		}
+
+		container, err := getSubmitterContainer(rayJobInstance, rayClusterInstance)
+		require.NoError(t, err)
+
+		// EnvFrom should be preserved
+		assert.Len(t, container.EnvFrom, 1)
+		assert.Equal(t, "my-config", container.EnvFrom[0].ConfigMapRef.Name)
+	})
 }
 
 func TestUpdateStatusToSuspendingIfNeeded(t *testing.T) {
@@ -623,4 +917,205 @@ func TestEmitRayJobExecutionDuration(t *testing.T) {
 			emitRayJobExecutionDuration(mockObserver, rayJobName, rayJobNamespace, rayJobUID, tt.originalRayJobStatus, tt.rayJobStatus)
 		})
 	}
+}
+
+func TestConfigureSubmitterContainer(t *testing.T) {
+	rayCluster := &rayv1.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-raycluster",
+			Namespace: "default",
+		},
+		Spec: rayv1.RayClusterSpec{
+			HeadGroupSpec: rayv1.HeadGroupSpec{
+				Template: corev1.PodTemplateSpec{
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Name:  "ray-head",
+								Image: "rayproject/ray",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	rayJob := &rayv1.RayJob{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-rayjob",
+			Namespace: "default",
+		},
+		Spec: rayv1.RayJobSpec{
+			Entrypoint: "python script.py",
+			RayClusterSpec: &rayv1.RayClusterSpec{
+				HeadGroupSpec: rayv1.HeadGroupSpec{
+					Template: corev1.PodTemplateSpec{
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{
+									Name:  "ray-head",
+									Image: "rayproject/ray",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		Status: rayv1.RayJobStatus{
+			DashboardURL: "http://dashboard:8265",
+			JobId:        "test-job-id",
+		},
+	}
+
+	tests := []struct {
+		name                  string
+		container             corev1.Container
+		submissionMode        rayv1.JobSubmissionMode
+		expectedContainerName string
+	}{
+		{
+			name: "SidecarMode should always set container name to ray-job-submitter",
+			container: corev1.Container{
+				Name: "custom-container-name",
+			},
+			submissionMode:        rayv1.SidecarMode,
+			expectedContainerName: utils.SubmitterContainerName,
+		},
+		{
+			name: "SidecarMode with empty container name should set to ray-job-submitter",
+			container: corev1.Container{
+				Name: "",
+			},
+			submissionMode:        rayv1.SidecarMode,
+			expectedContainerName: utils.SubmitterContainerName,
+		},
+		{
+			name: "K8sJobMode should preserve custom container name",
+			container: corev1.Container{
+				Name: "my-custom-submitter",
+			},
+			submissionMode:        rayv1.K8sJobMode,
+			expectedContainerName: "my-custom-submitter",
+		},
+		{
+			name: "K8sJobMode with empty container name should remain empty",
+			container: corev1.Container{
+				Name: "",
+			},
+			submissionMode:        rayv1.K8sJobMode,
+			expectedContainerName: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			container := tt.container.DeepCopy()
+			err := configureSubmitterContainer(container, rayJob, rayCluster, tt.submissionMode)
+			require.NoError(t, err)
+			assert.Equal(t, tt.expectedContainerName, container.Name, "Container name mismatch")
+		})
+	}
+}
+
+func TestConfigureSubmitterContainerImageAndResources(t *testing.T) {
+	rayCluster := &rayv1.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-raycluster",
+			Namespace: "default",
+		},
+		Spec: rayv1.RayClusterSpec{
+			HeadGroupSpec: rayv1.HeadGroupSpec{
+				Template: corev1.PodTemplateSpec{
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Name:  "ray-head",
+								Image: "rayproject/ray",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	rayJob := &rayv1.RayJob{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-rayjob",
+			Namespace: "default",
+		},
+		Spec: rayv1.RayJobSpec{
+			Entrypoint: "python script.py",
+			RayClusterSpec: &rayv1.RayClusterSpec{
+				HeadGroupSpec: rayv1.HeadGroupSpec{
+					Template: corev1.PodTemplateSpec{
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{
+									Name:  "ray-head",
+									Image: "rayproject/ray",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		Status: rayv1.RayJobStatus{
+			DashboardURL: "http://dashboard:8265",
+			JobId:        "test-job-id",
+		},
+	}
+
+	t.Run("Empty image should be populated from RayCluster head container", func(t *testing.T) {
+		container := &corev1.Container{
+			Name: "test-container",
+		}
+		err := configureSubmitterContainer(container, rayJob, rayCluster, rayv1.K8sJobMode)
+		require.NoError(t, err)
+		assert.Equal(t, "rayproject/ray", container.Image)
+	})
+
+	t.Run("Custom image should be preserved", func(t *testing.T) {
+		container := &corev1.Container{
+			Name:  "test-container",
+			Image: "my-custom-image:latest",
+		}
+		err := configureSubmitterContainer(container, rayJob, rayCluster, rayv1.K8sJobMode)
+		require.NoError(t, err)
+		assert.Equal(t, "my-custom-image:latest", container.Image)
+	})
+
+	t.Run("Empty resources should get defaults", func(t *testing.T) {
+		container := &corev1.Container{
+			Name: "test-container",
+		}
+		err := configureSubmitterContainer(container, rayJob, rayCluster, rayv1.K8sJobMode)
+		require.NoError(t, err)
+		assert.NotNil(t, container.Resources.Requests)
+		assert.NotNil(t, container.Resources.Limits)
+	})
+
+	t.Run("Custom resources should be preserved", func(t *testing.T) {
+		customResources := corev1.ResourceRequirements{
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("500m"),
+				corev1.ResourceMemory: resource.MustParse("512Mi"),
+			},
+			Limits: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("1"),
+				corev1.ResourceMemory: resource.MustParse("1Gi"),
+			},
+		}
+		container := &corev1.Container{
+			Name:      "test-container",
+			Resources: customResources,
+		}
+		err := configureSubmitterContainer(container, rayJob, rayCluster, rayv1.K8sJobMode)
+		require.NoError(t, err)
+		assert.Equal(t, customResources.Requests[corev1.ResourceCPU], container.Resources.Requests[corev1.ResourceCPU])
+		assert.Equal(t, customResources.Requests[corev1.ResourceMemory], container.Resources.Requests[corev1.ResourceMemory])
+	})
 }
