@@ -776,6 +776,109 @@ func TestBuildPod_WithPlasmaDirectory(t *testing.T) {
 	}
 }
 
+func TestBuildPod_WithEnableK8sTokenAuth(t *testing.T) {
+	ctx := context.Background()
+
+	cluster := instance.DeepCopy()
+	cluster.Spec.AuthOptions = &rayv1.AuthOptions{
+		Mode:               rayv1.AuthModeToken,
+		EnableK8sTokenAuth: ptr.To(true),
+	}
+
+	podName := strings.ToLower(cluster.Name + utils.DashSymbol + string(rayv1.HeadNode) + utils.DashSymbol + utils.FormatInt32(0))
+	podTemplateSpec := DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
+	pod := BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", false, utils.GetCRDType(""), "", nil, "")
+
+	rayContainer := pod.Spec.Containers[utils.RayContainerIndex]
+	checkContainerEnv(t, rayContainer, utils.RAY_ENABLE_K8S_TOKEN_AUTH_ENV_VAR, "true")
+
+	foundVolumeMount := false
+	for _, vm := range rayContainer.VolumeMounts {
+		if vm.Name == utils.RayTokenVolumeName && vm.MountPath == utils.RayTokenMountPath && vm.ReadOnly {
+			foundVolumeMount = true
+			break
+		}
+	}
+	if !foundVolumeMount {
+		t.Errorf("Ray container should have the ray-token volume mount")
+	}
+
+	foundVolume := false
+	for _, v := range pod.Spec.Volumes {
+		if v.Name == utils.RayTokenVolumeName && v.Projected != nil {
+			foundVolume = true
+			break
+		}
+	}
+	if !foundVolume {
+		t.Errorf("Pod should have the ray-token volume")
+	}
+
+	cluster = instance.DeepCopy()
+	cluster.Spec.AuthOptions = &rayv1.AuthOptions{
+		Mode:               rayv1.AuthModeToken,
+		EnableK8sTokenAuth: ptr.To(false),
+	}
+	podTemplateSpec = DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
+	pod = BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", false, utils.GetCRDType(""), "", nil, "")
+	rayContainer = pod.Spec.Containers[utils.RayContainerIndex]
+	for _, env := range rayContainer.Env {
+		if env.Name == utils.RAY_ENABLE_K8S_TOKEN_AUTH_ENV_VAR {
+			t.Errorf("RAY_ENABLE_K8S_TOKEN_AUTH should not be set")
+		}
+	}
+
+	cluster = instance.DeepCopy()
+	cluster.Spec.AuthOptions = &rayv1.AuthOptions{
+		Mode:               rayv1.AuthModeToken,
+		EnableK8sTokenAuth: nil,
+	}
+	podTemplateSpec = DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
+	pod = BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", false, utils.GetCRDType(""), "", nil, "")
+	rayContainer = pod.Spec.Containers[utils.RayContainerIndex]
+	for _, env := range rayContainer.Env {
+		if env.Name == utils.RAY_ENABLE_K8S_TOKEN_AUTH_ENV_VAR {
+			t.Errorf("RAY_ENABLE_K8S_TOKEN_AUTH should not be set")
+		}
+	}
+}
+
+func TestBuildPod_WithEnableK8sTokenAuth_InitContainer(t *testing.T) {
+	ctx := context.Background()
+
+	cluster := instance.DeepCopy()
+	cluster.Spec.AuthOptions = &rayv1.AuthOptions{
+		Mode:               rayv1.AuthModeToken,
+		EnableK8sTokenAuth: ptr.To(true),
+	}
+
+	worker := cluster.Spec.WorkerGroupSpecs[0]
+	podName := cluster.Name + utils.DashSymbol + string(rayv1.WorkerNode) + utils.DashSymbol + worker.GroupName + utils.DashSymbol + utils.FormatInt32(0)
+	fqdnRayIP := utils.GenerateFQDNServiceName(ctx, *cluster, cluster.Namespace)
+	podTemplateSpec := DefaultWorkerPodTemplate(ctx, *cluster, worker, podName, fqdnRayIP, "6379", "", 0, 0)
+	pod := BuildPod(ctx, podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, "6379", false, utils.GetCRDType(""), fqdnRayIP, nil, "")
+
+	foundInitContainer := false
+	for _, container := range pod.Spec.InitContainers {
+		if container.Name == "wait-gcs-ready" {
+			foundInitContainer = true
+			foundVolumeMount := false
+			for _, vm := range container.VolumeMounts {
+				if vm.Name == utils.RayTokenVolumeName && vm.MountPath == utils.RayTokenMountPath && vm.ReadOnly {
+					foundVolumeMount = true
+					break
+				}
+			}
+			if !foundVolumeMount {
+				t.Errorf("wait-gcs-ready init container should have the ray-token volume mount")
+			}
+		}
+	}
+	if !foundInitContainer {
+		t.Errorf("wait-gcs-ready init container should be present")
+	}
+}
+
 func TestBuildPod_WithNoCPULimits(t *testing.T) {
 	cluster := instance.DeepCopy()
 	ctx := context.Background()
