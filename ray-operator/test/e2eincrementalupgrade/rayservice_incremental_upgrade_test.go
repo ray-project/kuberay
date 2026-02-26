@@ -32,6 +32,25 @@ func GetHeadServiceExternalIP(t *testing.T, clusterName, namespace string) (stri
 	return svc.Status.LoadBalancer.Ingress[0].IP, nil
 }
 
+// TestRayServiceIncrementalUpgrade tests the incremental upgrade functionality of the RayService.
+//
+// The test case follows these steps:
+// 1. Enable the RayServiceIncrementalUpgrade feature gate
+// 2. Create a RayService with IncrementalUpgrade enabled
+// 3. Wait for the RayService to be ready
+// 4. Wait for the Gateway object to be ready (Accepted and Programmed conditions are True)
+// 5. Wait for the corresponding HTTPRoute object to be ready (Accepted and ResolvedRefs conditions are True)
+// 6. Create a Curl pod to test traffic routing through Gateway to RayService and wait for it to be ready
+// 7. Validate RayService is serving traffic by sending requests through Gateway external IP
+// 8. Update the RayService serve config and RayCluster spec to trigger upgrade
+//   - NOTE: Incremental upgrade is triggered by RayCluster spec changes, not serve config changes
+//
+// 9. Wait for the RayService to be upgrading
+// 10. Validate the active and pending cluster serve services have been created
+// 11. Validate the pending cluster head pod is ready
+// 12. Validate the HTTPRoute backends have two backends (active and pending cluster serve services)
+// 13. Wait for incremental upgrade to complete
+// 14. Validate the RayService uses updated ServeConfig after upgrade completes
 func TestRayServiceIncrementalUpgrade(t *testing.T) {
 	features.SetFeatureGateDuringTest(t, features.RayServiceIncrementalUpgrade, true)
 
@@ -124,7 +143,7 @@ func TestRayServiceIncrementalUpgrade(t *testing.T) {
 	LogWithTimestamp(test.T(), "Waiting for RayService %s/%s UpgradeInProgress condition to be true", rayService.Namespace, rayService.Name)
 	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutShort).Should(WithTransform(IsRayServiceUpgrading, BeTrue()))
 
-	LogWithTimestamp(test.T(), "Verifying temporary service creation and HTTPRoute backends")
+	LogWithTimestamp(test.T(), "Verifying active and pending cluster serve services and HTTPRoute backends")
 	upgradingRaySvc, err := GetRayService(test, namespace.Name, rayServiceName)
 	g.Expect(err).NotTo(HaveOccurred())
 	activeClusterName := upgradingRaySvc.Status.ActiveServiceStatus.RayClusterName
@@ -164,7 +183,7 @@ func TestRayServiceIncrementalUpgrade(t *testing.T) {
 	oldVersionServed := false
 	newVersionServed := false
 
-	// Validate expected behavior during an IncrementalUpgrade. The following checks ensures
+	// Validate expected behavior during an IncrementalUpgrade. The following checks ensure
 	// that no requests are dropped throughout the upgrade process.
 	upgradeSteps := generateUpgradeSteps(*stepSize, *maxSurge)
 	for _, step := range upgradeSteps {
