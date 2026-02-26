@@ -17,6 +17,14 @@ import (
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
 
+func newLocustRunnerConfigMapAC(namespace string, options ...SupportOption[corev1ac.ConfigMapApplyConfiguration]) *corev1ac.ConfigMapApplyConfiguration {
+	cmAC := corev1ac.ConfigMap("locust-runner-script", namespace).
+		WithBinaryData(map[string][]byte{}).
+		WithImmutable(true)
+
+	return ConfigMapWith(cmAC, options...)
+}
+
 func CurlRayServiceGateway(
 	t Test,
 	gatewayIP string,

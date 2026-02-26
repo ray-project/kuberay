@@ -3,7 +3,9 @@ package e2eincrementalupgrade
 import (
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -12,6 +14,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	rayv1ac "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/pkg/features"
@@ -32,7 +35,7 @@ func GetHeadServiceExternalIP(t *testing.T, clusterName, namespace string) (stri
 	return svc.Status.LoadBalancer.Ingress[0].IP, nil
 }
 
-// TestRayServiceIncrementalUpgrade tests the incremental upgrade functionality of the RayService.
+// TestRayServiceIncrementalUpgrade tests the basic incremental upgrade flow of the RayService.
 //
 // The test case follows these steps:
 // 1. Enable the RayServiceIncrementalUpgrade feature gate
@@ -42,7 +45,7 @@ func GetHeadServiceExternalIP(t *testing.T, clusterName, namespace string) (stri
 // 5. Wait for the corresponding HTTPRoute object to be ready (Accepted and ResolvedRefs conditions are True)
 // 6. Create a Curl pod to test traffic routing through Gateway to RayService and wait for it to be ready
 // 7. Validate RayService is serving traffic by sending requests through Gateway external IP
-// 8. Update the RayService serve config and RayCluster spec to trigger upgrade
+// 8. Update the RayCluster spec and RayService serve config to trigger upgrade
 //   - NOTE: Incremental upgrade is triggered by RayCluster spec changes, not serve config changes
 //
 // 9. Wait for the RayService to be upgrading
@@ -234,4 +237,187 @@ func TestRayServiceIncrementalUpgrade(t *testing.T) {
 	LogWithTimestamp(test.T(), "Verifying RayService uses updated ServeConfig after upgrade completes")
 	stdout, _ = CurlRayServiceGateway(test, gatewayIP, curlPod, curlContainerName, "/fruit", `["MANGO", 2]`)
 	g.Expect(stdout.String()).To(Equal("8"))
+}
+
+// TestRayServiceIncrementalUpgradeWithLocust tests the incremental upgrade flow of the RayService
+// by running a Locust load test throughout the entire upgrade lifecycle:
+//   - Initial serving on the old cluster
+//   - During the upgrade phase
+//   - Final serving on the new cluster
+//
+// The ultimate goal is to ensure that there are no request drops during the upgrade.
+//
+// The test case follows these steps:
+// 1. Enable the RayServiceIncrementalUpgrade feature gate
+// 2. Create a RayService with IncrementalUpgrade enabled
+// 3. Wait for the RayService to be ready
+// 4. Wait for the Gateway object to be ready (Accepted and Programmed conditions are True)
+// 5. Wait for the corresponding HTTPRoute object to be ready (Accepted and ResolvedRefs conditions are True)
+// 6. Create a ConfigMap with Locust runner script
+// 7. Deploy a head-only Locust RayCluster and install Locust in the head Pod
+// 8. Start Locust in a background goroutine targeting Gateway IP
+// 9. (Should be modified) Wait for Locust to ramp up
+// 10. Update the RayCluster spec and RayService serve config to trigger upgrade
+//   - NOTE: Incremental upgrade is triggered by RayCluster spec changes, not serve config changes
+//
+// 11. Validate TrafficRoutedPercent through upgrade steps, the expected behaviors are:
+//   - Active cluster: TrafficRoutedPercent is monotonically decreasing
+//   - Pending cluster: TrafficRoutedPercent is monotonically increasing
+//
+// 12. Wait for incremental upgrade to complete
+// 13. Ensure all remaining traffic is routed to the new cluster after upgrade completes
+//
+// NOTE: locust_runner.py validates whether the Locust load test completed with zero failures.
+// So we don't need to validate this here.
+func TestRayServiceIncrementalUpgradeWithLocust(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.RayServiceIncrementalUpgrade, true)
+
+	test := With(t)
+	g := NewWithT(t)
+
+	namespace := test.NewTestNamespace()
+	rayServiceName := "incremental-rayservice"
+
+	// TODO(jwj): Loop through different combinations.
+	stepSize := ptr.To(int32(25))
+	interval := ptr.To(int32(5))
+	maxSurge := ptr.To(int32(50))
+
+	// Phase 1: Create RayService with incremental upgrade and wait for key components to be ready
+	rayServiceAC := rayv1ac.RayService(rayServiceName, namespace.Name).
+		WithSpec(IncrementalUpgradeRayServiceApplyConfiguration(stepSize, interval, maxSurge))
+	rayService, err := test.Client().Ray().RayV1().RayServices(namespace.Name).Apply(test.Ctx(), rayServiceAC, TestApplyOptions)
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(rayService).NotTo(BeNil())
+
+	LogWithTimestamp(test.T(), "Waiting for RayService %s/%s to be ready", rayService.Namespace, rayService.Name)
+	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutMedium).
+		Should(WithTransform(IsRayServiceReady, BeTrue()))
+
+	gatewayName := fmt.Sprintf("%s-gateway", rayServiceName)
+	LogWithTimestamp(test.T(), "Waiting for Gateway %s/%s to be ready", namespace.Name, gatewayName)
+	g.Eventually(Gateway(test, namespace.Name, gatewayName), TestTimeoutMedium).
+		Should(WithTransform(utils.IsGatewayReady, BeTrue()))
+
+	gateway, err := GetGateway(test, namespace.Name, gatewayName)
+	g.Expect(err).NotTo(HaveOccurred())
+
+	httpRouteName := fmt.Sprintf("%s-httproute", rayServiceName)
+	LogWithTimestamp(test.T(), "Waiting for HTTPRoute %s/%s to be ready", namespace.Name, httpRouteName)
+	g.Eventually(HTTPRoute(test, namespace.Name, httpRouteName), TestTimeoutMedium).
+		Should(Not(BeNil()))
+
+	httpRoute, err := GetHTTPRoute(test, namespace.Name, httpRouteName)
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(utils.IsHTTPRouteReady(gateway, httpRoute)).To(BeTrue())
+
+	gatewayIP := GetGatewayIP(gateway)
+	g.Expect(gatewayIP).NotTo(BeEmpty())
+
+	// Phase 2: Deploy Locust RayCluster and install Locust
+	locustYamlFile := "testdata/locust-cluster.incremental-upgrade.yaml"
+
+	configMapAC := newLocustRunnerConfigMapAC(namespace.Name, Files(test, "locust_runner.py"))
+	configMap, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), configMapAC, TestApplyOptions)
+	g.Expect(err).NotTo(HaveOccurred())
+	LogWithTimestamp(test.T(), "Created ConfigMap %s/%s successfully", configMap.Namespace, configMap.Name)
+
+	KubectlApplyYAML(test, locustYamlFile, namespace.Name)
+	locustCluster, err := GetRayCluster(test, namespace.Name, "locust-cluster")
+	g.Expect(err).NotTo(HaveOccurred())
+	LogWithTimestamp(test.T(), "Created Locust RayCluster %s/%s successfully", locustCluster.Namespace, locustCluster.Name)
+
+	g.Eventually(RayCluster(test, locustCluster.Namespace, locustCluster.Name), TestTimeoutMedium).
+		Should(WithTransform(RayClusterState, Equal(rayv1.Ready)))
+	g.Expect(GetRayCluster(test, locustCluster.Namespace, locustCluster.Name)).
+		To(WithTransform(RayClusterDesiredWorkerReplicas, Equal(int32(0))))
+
+	locustHeadPod, err := GetHeadPod(test, locustCluster)
+	g.Expect(err).NotTo(HaveOccurred())
+	LogWithTimestamp(test.T(), "Found Locust head pod %s/%s", locustHeadPod.Namespace, locustHeadPod.Name)
+
+	ExecPodCmd(test, locustHeadPod, common.RayHeadContainer, []string{"pip", "install", "locust==2.32.10"})
+
+	// Phase 3: Start Locust in a background goroutine targeting Gateway IP
+	var wg sync.WaitGroup
+	locustHost := fmt.Sprintf("http://%s", gatewayIP)
+
+	wg.Go(func() {
+		LogWithTimestamp(test.T(), "Starting Locust load test against %s", locustHost)
+		ExecPodCmd(test, locustHeadPod, common.RayHeadContainer, []string{
+			"python", "/locust-runner/locust_runner.py",
+			"-f", "/locustfile/locustfile.py",
+			"--host", locustHost,
+		})
+		LogWithTimestamp(test.T(), "Locust load test completed with zero failures")
+	})
+
+	// TODO(jwj): Not a good practice, make it more robust.
+	// Allow Locust to ramp up and send traffic to the old cluster before triggering upgrade.
+	time.Sleep(15 * time.Second)
+
+	// Phase 4: Trigger incremental upgrade
+	LogWithTimestamp(test.T(), "Triggering incremental upgrade by updating RayCluster spec and RayService serve config")
+	g.Eventually(func() error {
+		latestRayService, err := GetRayService(test, namespace.Name, rayServiceName)
+		if err != nil {
+			return err
+		}
+		latestRayService.Spec.RayClusterSpec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests[corev1.ResourceCPU] = resource.MustParse("500m")
+		serveConfig := latestRayService.Spec.ServeConfigV2
+		serveConfig = strings.ReplaceAll(serveConfig, "price: 3", "price: 4")
+		serveConfig = strings.ReplaceAll(serveConfig, "factor: 5", "factor: 3")
+		latestRayService.Spec.ServeConfigV2 = serveConfig
+
+		_, err = test.Client().Ray().RayV1().RayServices(namespace.Name).Update(
+			test.Ctx(),
+			latestRayService,
+			metav1.UpdateOptions{},
+		)
+		return err
+	}, TestTimeoutShort).Should(Succeed(), "Failed to update RayService to trigger upgrade")
+
+	LogWithTimestamp(test.T(), "Waiting for RayService %s/%s UpgradeInProgress condition to be true", namespace.Name, rayServiceName)
+	g.Eventually(RayService(test, namespace.Name, rayServiceName), TestTimeoutShort).
+		Should(WithTransform(IsRayServiceUpgrading, BeTrue()))
+
+	// Phase 5: Validate monotonic TrafficRoutedPercent through upgrade steps
+	LogWithTimestamp(test.T(), "Validating stepwise traffic migration with monotonic TrafficRoutedPercent")
+
+	prevActiveTraffic := int32(100)
+	prevPendingTraffic := int32(0)
+
+	upgradeSteps := generateUpgradeSteps(*stepSize, *maxSurge)
+	for _, step := range upgradeSteps {
+		LogWithTimestamp(test.T(), "%s", step.name)
+		g.Eventually(func(g Gomega) int32 {
+			svc, err := GetRayService(test, namespace.Name, rayServiceName)
+			g.Expect(err).NotTo(HaveOccurred())
+			return step.getValue(svc)
+		}, TestTimeoutShort).Should(Equal(step.expectedValue))
+
+		svc, err := GetRayService(test, namespace.Name, rayServiceName)
+		g.Expect(err).NotTo(HaveOccurred())
+
+		currentActiveTraffic := GetActiveTraffic(svc)
+		currentPendingTraffic := GetPendingTraffic(svc)
+
+		g.Expect(currentActiveTraffic).To(BeNumerically("<=", prevActiveTraffic),
+			"TrafficRoutedPercent in active cluster must be monotonically decreasing: prev %d, curr %d", prevActiveTraffic, currentActiveTraffic)
+		g.Expect(currentPendingTraffic).To(BeNumerically(">=", prevPendingTraffic),
+			"TrafficRoutedPercent in pending cluster must be monotonically increasing: prev %d, curr %d", prevPendingTraffic, currentPendingTraffic)
+
+		prevActiveTraffic = currentActiveTraffic
+		prevPendingTraffic = currentPendingTraffic
+	}
+
+	// Phase 6: Upgrade complete
+	LogWithTimestamp(test.T(), "Waiting for RayService %s/%s UpgradeInProgress condition to be false", namespace.Name, rayServiceName)
+	g.Eventually(RayService(test, namespace.Name, rayServiceName), TestTimeoutShort).
+		Should(WithTransform(IsRayServiceUpgrading, BeFalse()))
+
+	LogWithTimestamp(test.T(), "Waiting for Locust load test goroutine to finish")
+	// TODO(jwj): Ensure all remaining traffic is routed to the new cluster after upgrade completes.
+
+	wg.Wait()
 }
