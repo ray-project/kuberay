@@ -153,10 +153,10 @@ metrics:
     # -- When true, honorLabels preserves the metric’s labels when they collide with the target’s labels.
     honorLabels: true
     # -- Prometheus ServiceMonitor selector
-    selector: {}
+    additionalLabels: {}
       #  release: prometheus
     # -- Prometheus ServiceMonitor namespace
-    namespace: ""  # "monitoring"
+    namespace: null  # "monitoring"
 
 # -- Path to the operator binary
 operatorCommand: /manager

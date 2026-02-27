@@ -183,8 +183,8 @@ spec:
 | metrics.serviceMonitor.enabled | bool | `false` | Enable a prometheus ServiceMonitor |
 | metrics.serviceMonitor.interval | string | `"30s"` | Prometheus ServiceMonitor interval |
 | metrics.serviceMonitor.honorLabels | bool | `true` | When true, honorLabels preserves the metric’s labels when they collide with the target’s labels. |
-| metrics.serviceMonitor.selector | object | `{}` | Prometheus ServiceMonitor selector |
-| metrics.serviceMonitor.namespace | string | `""` | Prometheus ServiceMonitor namespace |
+| metrics.serviceMonitor.additionalLabels | object | `{}` | Prometheus ServiceMonitor selector |
+| metrics.serviceMonitor.namespace | string | `nil` | Prometheus ServiceMonitor namespace |
 | operatorCommand | string | `"/manager"` | Path to the operator binary |
 | leaderElectionEnabled | bool | `true` | If leaderElectionEnabled is set to true, the KubeRay operator will use leader election for high availability. |
 | reconcileConcurrency | int | `1` | The maximum number of reconcile operations that can be performed simultaneously. This setting controls the concurrency of the controller reconciliation loops. Higher values can improve throughput in clusters with many resources, but may increase resource consumption. |
