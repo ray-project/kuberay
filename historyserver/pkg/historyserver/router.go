@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bmatcuk/doublestar/v4"
 	"github.com/emicklei/go-restful/v3"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/sirupsen/logrus"
@@ -122,7 +123,9 @@ func routerAPI(s *ServerHandler) {
 		Writes("")) // Placeholder for specific return type
 
 	ws.Route(ws.GET("/v0/logs").To(s.getNodeLogs).Filter(s.CookieHandle).
-		Doc("get appliations").Param(ws.QueryParameter("node_id", "node_id")).
+		Doc("get logs").
+		Param(ws.QueryParameter("node_id", "node_id")).
+		Param(ws.QueryParameter("glob", "glob pattern")).
 		Writes("")) // Placeholder for specific return type
 	ws.Route(ws.GET("/v0/logs/file").To(s.getNodeLogFile).Filter(s.CookieHandle).
 		Doc("get logfile").
@@ -922,15 +925,29 @@ func (s *ServerHandler) getNodeLogs(req *restful.Request, resp *restful.Response
 		s.redirectRequest(req, resp)
 		return
 	}
-	folder := ""
-	if req.QueryParameter("folder") != "" {
-		folder = req.QueryParameter("folder")
+	nodeID := req.QueryParameter("node_id")
+	if nodeID != "" && !fs.ValidPath(nodeID) {
+		resp.WriteErrorString(http.StatusBadRequest, fmt.Sprintf("invalid path: path traversal not allowed (node_id=%s)", nodeID))
+		return
 	}
+
+	var folder, glob string
 	if req.QueryParameter("glob") != "" {
-		folder = req.QueryParameter("glob")
-		folder = strings.TrimSuffix(folder, "*")
+		glob = req.QueryParameter("glob")
+		// SplitPattern splits e.g. "logs/raylet*" into base="logs" and pattern="raylet*",
+		// so we can use base as the storage directory prefix and pattern for matching.
+		// For a flat pattern like "raylet*", base is "." which we treat as no subdirectory.
+		base, pattern := doublestar.SplitPattern(glob)
+		glob = pattern
+		if base != "." {
+			if !fs.ValidPath(base) {
+				resp.WriteErrorString(http.StatusBadRequest, fmt.Sprintf("invalid path: path traversal not allowed (glob=%s)", req.QueryParameter("glob")))
+				return
+			}
+			folder = base
+		}
 	}
-	data, err := s._getNodeLogs(clusterNameID+"_"+clusterNamespace, sessionName, req.QueryParameter("node_id"), folder)
+	data, err := s._getNodeLogs(clusterNameID+"_"+clusterNamespace, sessionName, nodeID, folder, glob)
 	if err != nil {
 		logrus.Errorf("Error: %v", err)
 		resp.WriteError(400, err)
