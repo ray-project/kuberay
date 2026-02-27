@@ -23,7 +23,7 @@ import (
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
 
-// BoostrapIncrementalRayService creates a RayService with incremental upgrade enabled
+// boostrapIncrementalRayService creates a RayService with incremental upgrade enabled
 // and waits for all required components to be ready, including:
 //   - RayService
 //   - Gateway
@@ -34,14 +34,14 @@ import (
 //   - interval: The time in seconds to wait between shifting traffic by stepSize.
 //   - maxSurge: The percentage of capacity (Serve replicas) to add to the new cluster in each scaling step.
 //
-// Returns the RayService, Gateway, HTTPRoute, and Gateway IP.
-func BoostrapIncrementalRayService(
+// Returns the RayService, HTTPRoute, and Gateway IP.
+func boostrapIncrementalRayService(
 	test Test,
 	g *WithT,
 	namespace string,
 	rayServiceName string,
 	stepSize, interval, maxSurge *int32,
-) (rayService *rayv1.RayService, gateway *gwv1.Gateway, httpRoute *gwv1.HTTPRoute, gatewayIP string) {
+) (rayService *rayv1.RayService, httpRoute *gwv1.HTTPRoute, gatewayIP string) {
 	var err error
 	rayServiceAC := rayv1ac.RayService(rayServiceName, namespace).
 		WithSpec(IncrementalUpgradeRayServiceApplyConfiguration(stepSize, interval, maxSurge))
@@ -58,6 +58,7 @@ func BoostrapIncrementalRayService(
 	g.Eventually(Gateway(test, rayService.Namespace, gatewayName), TestTimeoutMedium).
 		Should(WithTransform(utils.IsGatewayReady, BeTrue()))
 
+	var gateway *gwv1.Gateway
 	gateway, err = GetGateway(test, rayService.Namespace, gatewayName)
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(gateway).NotTo(BeNil())
@@ -77,6 +78,7 @@ func BoostrapIncrementalRayService(
 	return
 }
 
+// newLocustRunnerConfigMapAC creates a ConfigMap apply configuration for the Locust runner script.
 func newLocustRunnerConfigMapAC(namespace string, options ...SupportOption[corev1ac.ConfigMapApplyConfiguration]) *corev1ac.ConfigMapApplyConfiguration {
 	cmAC := corev1ac.ConfigMap("locust-runner-script", namespace).
 		WithBinaryData(map[string][]byte{}).
@@ -314,72 +316,61 @@ func generateUpgradeSteps(stepSize, maxSurge int32) []testStep {
 	return steps
 }
 
-// WarmUpLocust waits for Locust to ramp up by ...
-// For incremental upgrade, all requests are sent to the old cluster before triggering upgrade.
-func WarmUpLocust(
+// warmupLocust waits for Locust to ramp up and enter the steady state before triggering upgrade.
+// Hence, all requests are sent to the old cluster during the warmup period.
+//
+// The warmup period follows these steps:
+// 1. Retrieve the index of the Requests/s column in the stats history file
+//   - Retry for cases where the stats history file is not written yet
+//
+// 2. Query the current RPS from the stats history file
+//   - Retry for cases where the query failed
+//
+// 3. Check if the last RPS is greater than or equal to the threshold for the specified duration
+//   - Determine if the Locust has reached the steady state
+func warmupLocust(
 	test Test,
 	locustHeadPod *corev1.Pod,
 	rpsThreshold float64,
 	stableWindow int,
 	timeout time.Duration,
 ) error {
-	// Create a curl pod to poll request statistics.
-	// curlPodName := "curl-pod"
-	// curlContainerName := "curl-container"
-	// curlPod, err := CreateCurlPod(g, test, curlPodName, curlContainerName, namespace)
-	// g.Expect(err).NotTo(HaveOccurred())
-
-	// queryRPS polls current RPS via the Locust API.
-	// queryRPS := func() (float64, error) {
-	// 	stdout, stderr := ExecPodCmd(test, curlPod, curlContainerName, []string{
-	// 		"curl", "-sS", fmt.Sprintf("http://%s:8089/stats/requests", locustHeadPod.Status.PodIP),
-	// 	}, true)
-	// 	if stderr.Len() != 0 {
-	// 		return 0, fmt.Errorf("failed to get stats: %s", stderr.String())
-	// 	}
-
-	// 	var result struct {
-	// 		Stats []struct {
-	// 			Name       string  `json:"name"`
-	// 			CurrentRPS float64 `json:"current_rps"`
-	// 		} `json:"stats"`
-	// 	}
-	// 	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
-	// 		return 0, fmt.Errorf("failed to decode response: %w", err)
-	// 	}
-
-	// 	for _, s := range result.Stats {
-	// 		if s.Name == "Aggregated" {
-	// 			return s.CurrentRPS, nil
-	// 		}
-	// 	}
-	// 	return 0, fmt.Errorf("aggregated stats not found")
-	// }
+	// getRpsColIdx gets the index of the Requests/s column in the stats history file.
+	getRpsColIdx := func() (int, error) {
+		stdout, stderr := ExecPodCmd(test, locustHeadPod, common.RayHeadContainer, []string{
+			"bash", "-lc", `
+latest=$(ls /home/ray/locust_results/test_stats_history.csv 2>/dev/null | head -n 1) || exit 1
+head -n1 "$latest"
+		`,
+		}, true)
+		if stderr.Len() != 0 || stdout.Len() == 0 {
+			// TODO(jwj): Use a better way to handle this case, hardcoded -2 might not be a good idea.
+			return -2, fmt.Errorf("%s", stderr.String())
+		}
+		header := strings.TrimSpace(stdout.String())
+		cols := strings.Split(header, ",")
+		return slices.Index(cols, "Requests/s"), nil
+	}
 
 	ddl := time.Now().Add(timeout)
-	rpsIdx := -1
 	stableCount := 0
+	rpsIdx := -1
 	for time.Now().Before(ddl) {
-		if rpsIdx == -1 {
-			stdout, stderr := ExecPodCmd(test, locustHeadPod, common.RayHeadContainer, []string{
-				"bash", "-lc", `
-		latest=$(ls /home/ray/locust_results/test_stats_history.csv 2>/dev/null | head -n 1) || exit 1
-		head -n1 "$latest"
-		`,
-			}, true)
-			if stderr.Len() != 0 || stdout.Len() == 0 {
-				test.T().Logf("failed to find header in stats history file, retrying in 2 seconds: %s", stderr.String())
+		if rpsIdx == -1 || rpsIdx == -2 {
+			var err error
+			rpsIdx, err = getRpsColIdx()
+
+			if rpsIdx == -2 {
+				test.T().Logf("failed to find header in stats history file, retrying in 2 seconds: %s", err.Error())
 				time.Sleep(2 * time.Second)
 				continue
 			}
-			header := strings.TrimSpace(stdout.String())
-			cols := strings.Split(header, ",")
-			rpsIdx = slices.Index(cols, "Requests/s")
+
 			if rpsIdx == -1 {
 				return fmt.Errorf("Requests/s column not found in stats history file")
 			}
-			test.T().Logf("RPS index: %d", rpsIdx)
 		}
+		test.T().Logf("Found Requests/s column at index: %d", rpsIdx)
 
 		stdout, stderr := ExecPodCmd(test, locustHeadPod, common.RayHeadContainer, []string{
 			"bash", "-lc", `
@@ -388,25 +379,25 @@ func WarmUpLocust(
 		`,
 		}, true)
 		if stderr.Len() != 0 || stdout.Len() == 0 {
-			test.T().Logf("failed to query current RPS from Locust, trying again in 2 seconds: %s", stderr.String())
+			test.T().Logf("failed to query current RPS from Locust, retrying in 2 seconds: %s", stderr.String())
 			time.Sleep(2 * time.Second)
 			continue
 		}
-		// rps, err := queryRPS()
-		// if err != nil {
-		// 	test.T().Logf("failed to query current RPS from Locust, trying again in 1 second: %v", err)
-		// 	time.Sleep(1 * time.Second)
-		// 	continue
-		// }
 
 		lastStats := strings.TrimSpace(stdout.String())
-		test.T().Logf("last stats: %s", lastStats)
-		cols := strings.Split(lastStats, ",")
-		test.T().Logf("cols: %v", cols)
-		rps := cols[rpsIdx]
+		statsSlice := strings.Split(lastStats, ",")
+		// Sometimes, we get the last stats with only 4 numbers, which leads to RPS index out of range.
+		// This is a temporary workaround. We will fix this in the future.
+		if len(statsSlice) <= rpsIdx {
+			test.T().Logf("RPS index out of range, retrying in 2 seconds")
+			time.Sleep(2 * time.Second)
+			continue
+		}
+
+		rps := statsSlice[rpsIdx]
 		rpsFloat, err := strconv.ParseFloat(rps, 64)
 		if err != nil {
-			test.T().Logf("failed to parse RPS: %v", err)
+			test.T().Logf("failed to parse RPS, retrying in 2 seconds: %s", err.Error())
 			time.Sleep(2 * time.Second)
 			continue
 		}
@@ -416,13 +407,13 @@ func WarmUpLocust(
 		} else {
 			stableCount = 0
 		}
-
 		if stableCount >= stableWindow {
+			test.T().Logf("Locust has reached the steady state with RPS >= %.2f for %d seconds", rpsThreshold, stableWindow)
 			return nil
 		}
 
 		time.Sleep(1 * time.Second)
 	}
 
-	return fmt.Errorf("timeout waiting for locust to reach stable RPS ≥ %.2f", rpsThreshold)
+	return fmt.Errorf("timeout waiting for Locust to reach the steady state with RPS >= %.2f", rpsThreshold)
 }

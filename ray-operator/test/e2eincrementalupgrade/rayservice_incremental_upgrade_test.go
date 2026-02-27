@@ -54,7 +54,7 @@ func TestRayServiceIncrementalUpgrade(t *testing.T) {
 	maxSurge := ptr.To(int32(50))
 
 	// Create RayService with IncrementalUpgrade enabled and wait for key components to be ready
-	rayService, _, httpRoute, gatewayIP := BoostrapIncrementalRayService(test, g, namespace.Name, rayServiceName, stepSize, interval, maxSurge)
+	rayService, httpRoute, gatewayIP := boostrapIncrementalRayService(test, g, namespace.Name, rayServiceName, stepSize, interval, maxSurge)
 
 	// Create curl pod to test traffic routing through Gateway to RayService
 	curlPodName := "curl-pod"
@@ -236,7 +236,7 @@ func TestRayServiceIncrementalUpgradeWithLocust(t *testing.T) {
 	maxSurge := ptr.To(int32(50))
 
 	// Phase 1: Create RayService with incremental upgrade and wait for key components to be ready
-	_, _, _, gatewayIP := BoostrapIncrementalRayService(test, g, namespace.Name, rayServiceName, stepSize, interval, maxSurge)
+	_, _, gatewayIP := boostrapIncrementalRayService(test, g, namespace.Name, rayServiceName, stepSize, interval, maxSurge)
 
 	// Phase 2: Deploy Locust RayCluster and install Locust
 	// TODO(jwj): Extract a helper for cross-module reusability (rayservice_ha_test.go).
@@ -278,7 +278,7 @@ func TestRayServiceIncrementalUpgradeWithLocust(t *testing.T) {
 	})
 
 	// Allow Locust to ramp up and send traffic to the old cluster before triggering upgrade.
-	err = WarmUpLocust(test, locustHeadPod, 9, 15, 300*time.Second)
+	err = warmupLocust(test, locustHeadPod, 9, 15, 300*time.Second)
 	g.Expect(err).NotTo(HaveOccurred())
 
 	// Phase 4: Trigger incremental upgrade
