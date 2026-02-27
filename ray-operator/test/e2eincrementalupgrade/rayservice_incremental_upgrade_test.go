@@ -21,20 +21,6 @@ import (
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
 
-// helper function to get RayCluster head service external IP to use to poll the RayService
-func GetHeadServiceExternalIP(t *testing.T, clusterName, namespace string) (string, error) {
-	test := With(t)
-
-	svc, err := test.Client().Core().CoreV1().Services(namespace).Get(test.Ctx(), clusterName+"-head-svc", metav1.GetOptions{})
-	if err != nil {
-		return "", err
-	}
-	if len(svc.Status.LoadBalancer.Ingress) == 0 {
-		return "", fmt.Errorf("no ingress for service %s", svc.Name)
-	}
-	return svc.Status.LoadBalancer.Ingress[0].IP, nil
-}
-
 // TestRayServiceIncrementalUpgrade tests the basic incremental upgrade flow of the RayService.
 //
 // The test case follows these steps:
