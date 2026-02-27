@@ -1,3 +1,4 @@
+# This is a head-only RayCluster to run Locust load test for incremental upgrade.
 apiVersion: ray.io/v1
 kind: RayCluster
 metadata:
@@ -30,13 +31,19 @@ spec:
               - mountPath: /locust-runner
                 name: locust-runner-volume
         volumes:
+          # locustfile defines user behavior for Locust load test.
           - name: locustfile-volume
             configMap:
               name: locustfile-config
+          # locust-runner is a script to start Locust load test.
           - name: locust-runner-volume
             configMap:
               name: locust-runner-script
 ---
+# This is a ConfigMap that contains the locustfile.py which defines user behavior for Locust load test.
+# Requests are sent to the /fruit endpoint of the serve application.
+# We validate the response body to ensure it contains either "6" or "8" from the old or new cluster.
+# TODO(jwj): Consider making stages parameter configurable.
 apiVersion: v1
 kind: ConfigMap
 metadata:
