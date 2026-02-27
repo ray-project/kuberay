@@ -689,6 +689,26 @@ func EnvVarExists(envName string, envVars []corev1.EnvVar) bool {
 	return false
 }
 
+// VolumeMountExists checks if a volume mount with the given name exists in the list of volume mounts.
+func VolumeMountExists(mountName string, volumeMounts []corev1.VolumeMount) bool {
+	for _, vm := range volumeMounts {
+		if vm.Name == mountName {
+			return true
+		}
+	}
+	return false
+}
+
+// VolumeExists checks if a volume with the given name exists in the list of volumes.
+func VolumeExists(volumeName string, volumes []corev1.Volume) bool {
+	for _, v := range volumes {
+		if v.Name == volumeName {
+			return true
+		}
+	}
+	return false
+}
+
 // EnvVarByName returns an entry in []corev1.EnvVar that matches a name.
 // Also returns a bool for whether the env var exists.
 func EnvVarByName(envName string, envVars []corev1.EnvVar) (corev1.EnvVar, bool) {
@@ -730,6 +750,10 @@ func IsGCSFaultToleranceEnabled(spec *rayv1.RayClusterSpec, annotations map[stri
 // IsAuthEnabled returns whether Ray auth is enabled.
 func IsAuthEnabled(spec *rayv1.RayClusterSpec) bool {
 	return spec.AuthOptions != nil && spec.AuthOptions.Mode == rayv1.AuthModeToken
+}
+
+func IsK8sAuthEnabled(spec *rayv1.RayClusterSpec) bool {
+	return spec.AuthOptions != nil && spec.AuthOptions.EnableK8sTokenAuth != nil && *spec.AuthOptions.EnableK8sTokenAuth
 }
 
 // GetRayClusterNameFromService returns the name of the RayCluster that the service points to

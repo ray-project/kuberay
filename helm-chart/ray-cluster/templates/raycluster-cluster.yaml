@@ -377,6 +377,14 @@ spec:
           {{- with $values.resources }}
           resources:
             {{- toYaml . | nindent 12 }}
+          {{- else }}
+          resources:
+            limits:
+              cpu: "1"
+              memory: "1G"
+            requests:
+              cpu: "1"
+              memory: "1G"
           {{- end }}
           {{- with $values.securityContext }}
           securityContext:

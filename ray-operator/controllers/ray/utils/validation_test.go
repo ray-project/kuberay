@@ -861,10 +861,11 @@ func TestValidateRayClusterSpec_Labels(t *testing.T) {
 
 func TestValidateRayClusterSpecRayVersionForAuth(t *testing.T) {
 	tests := []struct {
-		name         string
-		rayVersion   string
-		errorMessage string
-		expectError  bool
+		name               string
+		rayVersion         string
+		errorMessage       string
+		enableK8sTokenAuth bool
+		expectError        bool
 	}{
 		{
 			name:        "Valid Ray version 2.52.0",
@@ -872,9 +873,27 @@ func TestValidateRayClusterSpecRayVersionForAuth(t *testing.T) {
 			expectError: false,
 		},
 		{
+			name:               "Invalid Ray version 2.52.0 with k8s token auth",
+			rayVersion:         "2.52.0",
+			enableK8sTokenAuth: true,
+			expectError:        true,
+		},
+		{
+			name:               "Valid Ray version 2.55.0 with k8s token auth",
+			rayVersion:         "2.55.0",
+			enableK8sTokenAuth: true,
+			expectError:        false,
+		},
+		{
 			name:        "Valid Ray version 3.0.0",
 			rayVersion:  "3.0.0",
 			expectError: false,
+		},
+		{
+			name:               "Valid Ray version 3.0.0 with k8s token auth",
+			rayVersion:         "3.0.0",
+			enableK8sTokenAuth: true,
+			expectError:        false,
 		},
 		{
 			name:         "Invalid Ray version 2.50.0",
@@ -904,7 +923,8 @@ func TestValidateRayClusterSpecRayVersionForAuth(t *testing.T) {
 					Template: podTemplateSpec(nil, nil),
 				},
 				AuthOptions: &rayv1.AuthOptions{
-					Mode: rayv1.AuthModeToken,
+					Mode:               rayv1.AuthModeToken,
+					EnableK8sTokenAuth: ptr.To(tt.enableK8sTokenAuth),
 				},
 			}
 			err := ValidateRayClusterSpec(spec, nil)
