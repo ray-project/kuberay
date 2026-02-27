@@ -303,34 +303,24 @@ func (v *VolcanoBatchScheduler) CleanupOnCompletion(ctx context.Context, object 
 	}
 
 	podGroupName := getAppPodGroupName(rayJob)
-	podGroup := volcanoschedulingv1beta1.PodGroup{}
-
-	if err := v.cli.Get(ctx, types.NamespacedName{
-		Namespace: rayJob.Namespace,
-		Name:      podGroupName,
-	}, &podGroup); err != nil {
-		if errors.IsNotFound(err) {
-			logger.Info("PodGroup not found, already deleted", "podGroupName", podGroupName)
-			return false, nil
-		}
-		logger.Error(err, "failed to get PodGroup", "podGroupName", podGroupName)
-		return false, err
+	podGroup := &volcanoschedulingv1beta1.PodGroup{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: rayJob.Namespace,
+			Name:      podGroupName,
+		},
 	}
 
-	// Delete the PodGroup to immediately release queue resources
-	// We use client.Delete (not background) to ensure proper cleanup
-	if err := v.cli.Delete(ctx, &podGroup); err != nil {
-		// If already deleted, that's fine
+	// Delete the PodGroup directly without Get to reduce API calls
+	if err := v.cli.Delete(ctx, podGroup); err != nil {
 		if errors.IsNotFound(err) {
-			logger.Info("PodGroup already deleted", "podGroupName", podGroupName)
+			logger.Info("PodGroup not found, already deleted", "podGroupName", podGroupName)
 			return false, nil
 		}
 		logger.Error(err, "failed to delete PodGroup", "podGroupName", podGroupName)
 		return false, err
 	}
 
-	logger.Info("PodGroup deleted to release queue resources", "podGroupName", podGroupName,
-		"minMember", podGroup.Spec.MinMember)
+	logger.Info("PodGroup deleted to release queue resources", "podGroupName", podGroupName)
 	return true, nil
 }
 
