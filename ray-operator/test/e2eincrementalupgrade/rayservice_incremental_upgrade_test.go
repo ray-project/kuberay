@@ -16,7 +16,6 @@ import (
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
-	rayv1ac "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
@@ -54,38 +53,8 @@ func TestRayServiceIncrementalUpgrade(t *testing.T) {
 	interval := ptr.To(int32(5))
 	maxSurge := ptr.To(int32(50))
 
-	rayServiceAC := rayv1ac.RayService(rayServiceName, namespace.Name).
-		WithSpec(IncrementalUpgradeRayServiceApplyConfiguration(stepSize, interval, maxSurge))
-	rayService, err := test.Client().Ray().RayV1().RayServices(namespace.Name).Apply(test.Ctx(), rayServiceAC, TestApplyOptions)
-	g.Expect(err).NotTo(HaveOccurred())
-	g.Expect(rayService).NotTo(BeNil())
-
-	LogWithTimestamp(test.T(), "Waiting for RayService %s/%s to be ready", rayService.Namespace, rayService.Name)
-	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutMedium).
-		Should(WithTransform(IsRayServiceReady, BeTrue()))
-
-	rayService, err = GetRayService(test, namespace.Name, rayServiceName)
-	g.Expect(err).NotTo(HaveOccurred())
-
-	// Validate Gateway and HTTPRoute objects have been created for incremental upgrade.
-	gatewayName := fmt.Sprintf("%s-%s", rayServiceName, "gateway")
-	LogWithTimestamp(test.T(), "Waiting for Gateway %s/%s to be ready", rayService.Namespace, gatewayName)
-	g.Eventually(Gateway(test, rayService.Namespace, gatewayName), TestTimeoutMedium).
-		Should(WithTransform(utils.IsGatewayReady, BeTrue()))
-
-	// Get the Gateway endpoint to send requests to
-	gateway, err := GetGateway(test, namespace.Name, fmt.Sprintf("%s-%s", rayServiceName, "gateway"))
-	g.Expect(err).NotTo(HaveOccurred())
-	g.Expect(gateway).NotTo(BeNil())
-
-	httpRouteName := fmt.Sprintf("%s-%s", rayServiceName, "httproute")
-	LogWithTimestamp(test.T(), "Waiting for HTTPRoute %s/%s to be ready", rayService.Namespace, httpRouteName)
-	g.Eventually(HTTPRoute(test, rayService.Namespace, httpRouteName), TestTimeoutMedium).
-		Should(Not(BeNil()))
-
-	httpRoute, err := GetHTTPRoute(test, namespace.Name, httpRouteName)
-	g.Expect(err).NotTo(HaveOccurred())
-	g.Expect(utils.IsHTTPRouteReady(gateway, httpRoute)).To(BeTrue())
+	// Create RayService with IncrementalUpgrade enabled and wait for key components to be ready
+	rayService, _, httpRoute, gatewayIP := BoostrapIncrementalRayService(test, g, namespace.Name, rayServiceName, stepSize, interval, maxSurge)
 
 	// Create curl pod to test traffic routing through Gateway to RayService
 	curlPodName := "curl-pod"
@@ -99,9 +68,6 @@ func TestRayServiceIncrementalUpgrade(t *testing.T) {
 		g.Expect(err).NotTo(HaveOccurred())
 		return updatedPod
 	}, TestTimeoutShort).Should(WithTransform(IsPodRunningAndReady, BeTrue()))
-
-	gatewayIP := GetGatewayIP(gateway)
-	g.Expect(gatewayIP).NotTo(BeEmpty())
 
 	LogWithTimestamp(test.T(), "Verifying RayService is serving traffic")
 	stdout, _ := CurlRayServiceGateway(test, gatewayIP, curlPod, curlContainerName, "/fruit", `["MANGO", 2]`)
@@ -159,7 +125,7 @@ func TestRayServiceIncrementalUpgrade(t *testing.T) {
 	// Wait for the HTTPRoute to reflect the two backends.
 	LogWithTimestamp(test.T(), "Waiting for HTTPRoute to have two backends")
 	g.Eventually(func(g Gomega) {
-		route, err := GetHTTPRoute(test, namespace.Name, httpRouteName)
+		route, err := GetHTTPRoute(test, namespace.Name, httpRoute.Name)
 		g.Expect(err).NotTo(HaveOccurred())
 		g.Expect(route.Spec.Rules).To(HaveLen(1))
 		g.Expect(route.Spec.Rules[0].BackendRefs).To(HaveLen(2))
@@ -270,37 +236,10 @@ func TestRayServiceIncrementalUpgradeWithLocust(t *testing.T) {
 	maxSurge := ptr.To(int32(50))
 
 	// Phase 1: Create RayService with incremental upgrade and wait for key components to be ready
-	rayServiceAC := rayv1ac.RayService(rayServiceName, namespace.Name).
-		WithSpec(IncrementalUpgradeRayServiceApplyConfiguration(stepSize, interval, maxSurge))
-	rayService, err := test.Client().Ray().RayV1().RayServices(namespace.Name).Apply(test.Ctx(), rayServiceAC, TestApplyOptions)
-	g.Expect(err).NotTo(HaveOccurred())
-	g.Expect(rayService).NotTo(BeNil())
-
-	LogWithTimestamp(test.T(), "Waiting for RayService %s/%s to be ready", rayService.Namespace, rayService.Name)
-	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutMedium).
-		Should(WithTransform(IsRayServiceReady, BeTrue()))
-
-	gatewayName := fmt.Sprintf("%s-gateway", rayServiceName)
-	LogWithTimestamp(test.T(), "Waiting for Gateway %s/%s to be ready", namespace.Name, gatewayName)
-	g.Eventually(Gateway(test, namespace.Name, gatewayName), TestTimeoutMedium).
-		Should(WithTransform(utils.IsGatewayReady, BeTrue()))
-
-	gateway, err := GetGateway(test, namespace.Name, gatewayName)
-	g.Expect(err).NotTo(HaveOccurred())
-
-	httpRouteName := fmt.Sprintf("%s-httproute", rayServiceName)
-	LogWithTimestamp(test.T(), "Waiting for HTTPRoute %s/%s to be ready", namespace.Name, httpRouteName)
-	g.Eventually(HTTPRoute(test, namespace.Name, httpRouteName), TestTimeoutMedium).
-		Should(Not(BeNil()))
-
-	httpRoute, err := GetHTTPRoute(test, namespace.Name, httpRouteName)
-	g.Expect(err).NotTo(HaveOccurred())
-	g.Expect(utils.IsHTTPRouteReady(gateway, httpRoute)).To(BeTrue())
-
-	gatewayIP := GetGatewayIP(gateway)
-	g.Expect(gatewayIP).NotTo(BeEmpty())
+	_, _, _, gatewayIP := BoostrapIncrementalRayService(test, g, namespace.Name, rayServiceName, stepSize, interval, maxSurge)
 
 	// Phase 2: Deploy Locust RayCluster and install Locust
+	// TODO(jwj): Extract a helper for cross-module reusability (rayservice_ha_test.go).
 	locustYamlFile := "testdata/locust-cluster.incremental-upgrade.yaml"
 
 	configMapAC := newLocustRunnerConfigMapAC(namespace.Name, Files(test, "locust_runner.py"))
@@ -338,9 +277,9 @@ func TestRayServiceIncrementalUpgradeWithLocust(t *testing.T) {
 		LogWithTimestamp(test.T(), "Locust load test completed with zero failures")
 	})
 
-	// TODO(jwj): Not a good practice, make it more robust.
 	// Allow Locust to ramp up and send traffic to the old cluster before triggering upgrade.
-	time.Sleep(15 * time.Second)
+	err = WarmUpLocust(test, locustHeadPod, 9, 15, 300*time.Second)
+	g.Expect(err).NotTo(HaveOccurred())
 
 	// Phase 4: Trigger incremental upgrade
 	LogWithTimestamp(test.T(), "Triggering incremental upgrade by updating RayCluster spec and RayService serve config")
