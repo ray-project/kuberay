@@ -102,7 +102,6 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: raylet
-  namespace: default
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
@@ -110,13 +109,11 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: raylet
-  namespace: default
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: ray-user
-  namespace: default
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
@@ -124,4 +121,3 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: ray-user
-  namespace: default
