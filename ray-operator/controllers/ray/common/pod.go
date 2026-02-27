@@ -16,7 +16,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/version"
-	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
@@ -255,7 +254,7 @@ func setAutoscalerV2EnvVars(podTemplate *corev1.PodTemplateSpec) {
 func configureTokenAuth(clusterName string, podTemplate *corev1.PodTemplateSpec, authOptions *rayv1.AuthOptions) {
 	SetContainerTokenAuthEnvVars(clusterName, &podTemplate.Spec.Containers[utils.RayContainerIndex], authOptions)
 
-	if authOptions != nil && ptr.Deref(authOptions.EnableK8sTokenAuth, false) {
+	if utils.IsK8sAuthEnabled(authOptions) {
 		AddRayTokenVolume(&podTemplate.Spec)
 	}
 
@@ -283,6 +282,7 @@ func AddRayTokenVolume(podSpec *corev1.PodSpec) {
 			Projected: &corev1.ProjectedVolumeSource{
 				Sources: []corev1.VolumeProjection{
 					{
+						// TODO: support audiences (e.g., audiences: ["ray.io"]) in service account token projection in the future.
 						ServiceAccountToken: &corev1.ServiceAccountTokenProjection{
 							Path: "token",
 						},
@@ -302,7 +302,7 @@ func SetContainerTokenAuthEnvVars(clusterName string, container *corev1.Containe
 		})
 	}
 
-	if authOptions != nil && authOptions.EnableK8sTokenAuth != nil && *authOptions.EnableK8sTokenAuth {
+	if utils.IsK8sAuthEnabled(authOptions) {
 		if !utils.EnvVarExists(utils.RAY_ENABLE_K8S_TOKEN_AUTH_ENV_VAR, container.Env) {
 			container.Env = append(container.Env, corev1.EnvVar{
 				Name:  utils.RAY_ENABLE_K8S_TOKEN_AUTH_ENV_VAR,
