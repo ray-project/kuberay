@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"sync"
 	"time"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
@@ -25,19 +24,21 @@ const (
 	AuthTokenSecretKey = "auth_token"
 	// authTokenCacheTTL is how long a cached token is considered valid before re-fetching from K8s
 	authTokenCacheTTL = 5 * time.Minute
+	// svcInfoCacheTTL is how long a cached ServiceInfo entry is considered valid before re-fetching from K8s
+	svcInfoCacheTTL = 30 * time.Second
 )
 
-// cachedToken holds an auth token along with its expiry time
-type cachedToken struct {
-	token     string
-	expiresAt time.Time
+// svcInfoEntry holds a ServiceInfo and its associated RayCluster.
+type svcInfoEntry struct {
+	svcInfo ServiceInfo
+	rc      *rayv1.RayCluster
 }
 
 type ClientManager struct {
-	configs    []*rest.Config
-	clients    []client.Client
-	tokenCache map[string]cachedToken
-	mu         sync.RWMutex
+	configs      []*rest.Config
+	clients      []client.Client
+	tokenCache   *TTLCache[string]
+	svcInfoCache *TTLCache[svcInfoEntry]
 }
 
 func (c *ClientManager) ListRayClusters(ctx context.Context) ([]*rayv1.RayCluster, error) {
@@ -76,13 +77,10 @@ func (c *ClientManager) GetAuthTokenForRayCluster(ctx context.Context, rayCluste
 	cacheKey := rayCluster.Namespace + "/" + rayCluster.Name
 
 	// Check the cache first.
-	c.mu.RLock()
-	if cached, ok := c.tokenCache[cacheKey]; ok && time.Now().Before(cached.expiresAt) {
-		c.mu.RUnlock()
+	if token, ok := c.tokenCache.Get(cacheKey); ok {
 		logrus.Debugf("Auth token cache hit for RayCluster %s", cacheKey)
-		return cached.token, nil
+		return token, nil
 	}
-	c.mu.RUnlock()
 
 	// Cache miss or expired — fetch from K8s.
 	client := c.clients[0]
@@ -99,16 +97,31 @@ func (c *ClientManager) GetAuthTokenForRayCluster(ctx context.Context, rayCluste
 	}
 
 	token := string(tokenBytes)
-
-	// Store in cache
-	c.mu.Lock()
-	c.tokenCache[cacheKey] = cachedToken{
-		token:     token,
-		expiresAt: time.Now().Add(authTokenCacheTTL),
-	}
-	c.mu.Unlock()
+	c.tokenCache.Set(cacheKey, token)
 
 	return token, nil
+}
+
+// GetClusterAndSvcInfo returns the ServiceInfo and RayCluster for the given cluster,
+// using a short-lived cache to avoid hitting the K8s API on every request.
+func (c *ClientManager) GetClusterAndSvcInfo(name, namespace string) (ServiceInfo, *rayv1.RayCluster, error) {
+	cacheKey := namespace + "/" + name
+
+	// Check the cache first.
+	if cached, ok := c.svcInfoCache.Get(cacheKey); ok {
+		logrus.Debugf("svcInfo cache hit for cluster %s", cacheKey)
+		return cached.svcInfo, cached.rc, nil
+	}
+
+	// Cache miss or expired — fetch from K8s.
+	svcInfo, rc, err := fetchClusterAndSvcInfo(c.clients, name, namespace)
+	if err != nil {
+		return ServiceInfo{}, nil, err
+	}
+
+	c.svcInfoCache.Set(cacheKey, svcInfoEntry{svcInfo: svcInfo, rc: rc})
+
+	return svcInfo, rc, nil
 }
 
 func NewClientManager(kubeconfigs string, useKubernetesProxy bool) (*ClientManager, error) {
@@ -178,9 +191,10 @@ func NewClientManager(kubeconfigs string, useKubernetesProxy bool) (*ClientManag
 
 	logrus.Infof("create client manager successfully, clients: %v", len(clientList))
 	clientManager := &ClientManager{
-		configs:    kubeconfigList,
-		clients:    clientList,
-		tokenCache: make(map[string]cachedToken),
+		configs:      kubeconfigList,
+		clients:      clientList,
+		tokenCache:   NewTTLCache[string](authTokenCacheTTL),
+		svcInfoCache: NewTTLCache[svcInfoEntry](svcInfoCacheTTL),
 	}
 	return clientManager, nil
 }
