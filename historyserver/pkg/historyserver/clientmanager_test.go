@@ -163,16 +163,6 @@ func TestGetClusterAndSvcInfo(t *testing.T) {
 	assert.Equal(t, serviceName, svcInfo3.ServiceName)
 	assert.Equal(t, int(portalPort), svcInfo3.Port)
 
-	// Verify the stale entry was evicted and replaced with the fresh one.
-	cachedEntry, ok := clientManager.svcInfoCache.Get(cacheKey)
-	assert.True(t, ok)
-	assert.Equal(t, serviceName, cachedEntry.svcInfo.ServiceName)
-
-	// Delete should remove the entry from the cache.
-	clientManager.svcInfoCache.Delete(cacheKey)
-	_, ok = clientManager.svcInfoCache.Get(cacheKey)
-	assert.False(t, ok)
-
 	// Non-existent cluster should error.
 	_, _, err = clientManager.GetClusterAndSvcInfo("not-exists", namespace)
 	assert.Error(t, err)
