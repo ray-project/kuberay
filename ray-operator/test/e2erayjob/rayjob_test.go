@@ -606,7 +606,7 @@ env_vars:
 		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutShort).
 			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusFailed)))
 		g.Expect(GetRayJob(test, rayJob.Namespace, rayJob.Name)).
-			To(WithTransform(RayJobReason, Equal(rayv1.DeadlineExceeded)))
+			To(WithTransform(RayJobReason, Equal(rayv1.PreRunningDeadlineExceeded)))
 	})
 
 	test.T().Run("RayJob PreRunningDeadlineSeconds expires during Waiting state", func(_ *testing.T) {
@@ -624,10 +624,11 @@ env_vars:
 		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutShort).
 			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusWaiting)))
 
-		// Then confirm it fails due to TTL
+		// The RayJob will transition to `Failed` because it has passed `preRunningDeadlineSeconds`.
+		LogWithTimestamp(test.T(), "Waiting for RayJob %s/%s to be 'Failed'", rayJob.Namespace, rayJob.Name)
 		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutShort).
 			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusFailed)))
 		g.Expect(GetRayJob(test, rayJob.Namespace, rayJob.Name)).
-			To(WithTransform(RayJobReason, Equal(rayv1.DeadlineExceeded)))
+			To(WithTransform(RayJobReason, Equal(rayv1.PreRunningDeadlineExceeded)))
 	})
 }
