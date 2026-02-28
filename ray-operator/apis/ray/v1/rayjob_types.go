@@ -282,13 +282,13 @@ type RayJobSpec struct {
 	// +kubebuilder:default:=0
 	// +optional
 	TTLSecondsAfterFinished int32 `json:"ttlSecondsAfterFinished,omitempty"`
-	// TTLSecondsBeforeRunning is the TTL in seconds for a RayJob to reach the Running state
+	// PreRunningDeadlineSeconds is the deadline in seconds for a RayJob to reach the Running state
 	// from when it is first initialized (StartTime). If the RayJob does not transition to
 	// Running within this time, it will be marked as Failed.
 	// This is useful for cleaning up jobs stuck in Initializing or Waiting states.
-	// If not set, there is no TTL. Value must be a positive integer.
+	// If not set, there is no deadline. Value must be a positive integer.
 	// +optional
-	TTLSecondsBeforeRunning *int32 `json:"ttlSecondsBeforeRunning,omitempty"`
+	PreRunningDeadlineSeconds *int32 `json:"preRunningDeadlineSeconds,omitempty"`
 	// ShutdownAfterJobFinishes will determine whether to delete the ray cluster once rayJob succeed or failed.
 	// +optional
 	ShutdownAfterJobFinishes bool `json:"shutdownAfterJobFinishes,omitempty"`

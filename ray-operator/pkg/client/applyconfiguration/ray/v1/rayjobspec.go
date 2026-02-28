@@ -65,12 +65,12 @@ type RayJobSpecApplyConfiguration struct {
 	// TTLSecondsAfterFinished is the TTL to clean up RayCluster.
 	// It's only working when ShutdownAfterJobFinishes set to true.
 	TTLSecondsAfterFinished *int32 `json:"ttlSecondsAfterFinished,omitempty"`
-	// TTLSecondsBeforeRunning is the TTL in seconds for a RayJob to reach the Running state
+	// PreRunningDeadlineSeconds is the deadline in seconds for a RayJob to reach the Running state
 	// from when it is first initialized (StartTime). If the RayJob does not transition to
 	// Running within this time, it will be marked as Failed.
 	// This is useful for cleaning up jobs stuck in Initializing or Waiting states.
-	// If not set, there is no TTL. Value must be a positive integer.
-	TTLSecondsBeforeRunning *int32 `json:"ttlSecondsBeforeRunning,omitempty"`
+	// If not set, there is no deadline. Value must be a positive integer.
+	PreRunningDeadlineSeconds *int32 `json:"preRunningDeadlineSeconds,omitempty"`
 	// ShutdownAfterJobFinishes will determine whether to delete the ray cluster once rayJob succeed or failed.
 	ShutdownAfterJobFinishes *bool `json:"shutdownAfterJobFinishes,omitempty"`
 	// suspend specifies whether the RayJob controller should create a RayCluster instance
@@ -235,11 +235,11 @@ func (b *RayJobSpecApplyConfiguration) WithTTLSecondsAfterFinished(value int32) 
 	return b
 }
 
-// WithTTLSecondsBeforeRunning sets the TTLSecondsBeforeRunning field in the declarative configuration to the given value
+// WithPreRunningDeadlineSeconds sets the PreRunningDeadlineSeconds field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the TTLSecondsBeforeRunning field is set to the value of the last call.
-func (b *RayJobSpecApplyConfiguration) WithTTLSecondsBeforeRunning(value int32) *RayJobSpecApplyConfiguration {
-	b.TTLSecondsBeforeRunning = &value
+// If called multiple times, the PreRunningDeadlineSeconds field is set to the value of the last call.
+func (b *RayJobSpecApplyConfiguration) WithPreRunningDeadlineSeconds(value int32) *RayJobSpecApplyConfiguration {
+	b.PreRunningDeadlineSeconds = &value
 	return b
 }
 

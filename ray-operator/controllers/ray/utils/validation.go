@@ -346,8 +346,8 @@ func ValidateRayJobSpec(rayJob *rayv1.RayJob) error {
 	if rayJob.Spec.ActiveDeadlineSeconds != nil && *rayJob.Spec.ActiveDeadlineSeconds <= 0 {
 		return fmt.Errorf("The RayJob spec is invalid: activeDeadlineSeconds must be a positive integer")
 	}
-	if rayJob.Spec.TTLSecondsBeforeRunning != nil && *rayJob.Spec.TTLSecondsBeforeRunning <= 0 {
-		return fmt.Errorf("The RayJob spec is invalid: ttlSecondsBeforeRunning must be a positive integer")
+	if rayJob.Spec.PreRunningDeadlineSeconds != nil && *rayJob.Spec.PreRunningDeadlineSeconds <= 0 {
+		return fmt.Errorf("The RayJob spec is invalid: preRunningDeadlineSeconds must be a positive integer")
 	}
 	if rayJob.Spec.BackoffLimit != nil && *rayJob.Spec.BackoffLimit < 0 {
 		return fmt.Errorf("The RayJob spec is invalid: backoffLimit must be a positive integer")

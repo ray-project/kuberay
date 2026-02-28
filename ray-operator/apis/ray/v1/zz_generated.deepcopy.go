@@ -722,8 +722,8 @@ func (in *RayJobSpec) DeepCopyInto(out *RayJobSpec) {
 		*out = new(DeletionStrategy)
 		(*in).DeepCopyInto(*out)
 	}
-	if in.TTLSecondsBeforeRunning != nil {
-		in, out := &in.TTLSecondsBeforeRunning, &out.TTLSecondsBeforeRunning
+	if in.PreRunningDeadlineSeconds != nil {
+		in, out := &in.PreRunningDeadlineSeconds, &out.PreRunningDeadlineSeconds
 		*out = new(int32)
 		**out = **in
 	}
