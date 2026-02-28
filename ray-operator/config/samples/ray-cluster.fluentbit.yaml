@@ -4,7 +4,7 @@ kind: RayCluster
 metadata:
   name: raycluster-fluentbit-sidecar-logs
 spec:
-  rayVersion: '2.52.0'
+  rayVersion: "2.52.0"
   headGroupSpec:
     rayStartParams: {}
     template:
