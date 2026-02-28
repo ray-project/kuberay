@@ -239,7 +239,7 @@ func TestRayServiceIncrementalUpgradeWithLocust(t *testing.T) {
 	_, _, gatewayIP := boostrapIncrementalRayService(test, g, namespace.Name, rayServiceName, stepSize, interval, maxSurge)
 
 	// Phase 2: Deploy Locust RayCluster and install Locust
-	// TODO(jwj): Extract a helper for cross-module reusability (rayservice_ha_test.go).
+	// TODO(jwj): Extract a helper for cross-module reusability (rayservice_ha_test.go) if needed.
 	locustYamlFile := "testdata/locust-cluster.incremental-upgrade.yaml"
 
 	configMapAC := newLocustRunnerConfigMapAC(namespace.Name, Files(test, "locust_runner.py"))
@@ -278,7 +278,7 @@ func TestRayServiceIncrementalUpgradeWithLocust(t *testing.T) {
 	})
 
 	// Allow Locust to ramp up and send traffic to the old cluster before triggering upgrade.
-	err = warmupLocust(test, locustHeadPod, 9, 15, 300*time.Second)
+	err = warmupLocust(test, locustHeadPod, 9, 15, 120*time.Second)
 	g.Expect(err).NotTo(HaveOccurred())
 
 	// Phase 4: Trigger incremental upgrade
@@ -342,7 +342,14 @@ func TestRayServiceIncrementalUpgradeWithLocust(t *testing.T) {
 		Should(WithTransform(IsRayServiceUpgrading, BeFalse()))
 
 	LogWithTimestamp(test.T(), "Waiting for Locust load test goroutine to finish")
-	// TODO(jwj): Ensure all remaining traffic is routed to the new cluster after upgrade completes.
-
 	wg.Wait()
+
+	LogWithTimestamp(test.T(), "Validating remaining traffic is routed to the new cluster after upgrade completes")
+	curlPodName := "curl-pod"
+	curlContainerName := "curl-container"
+	curlPod, err := CreateCurlPod(g, test, curlPodName, curlContainerName, namespace.Name)
+	g.Expect(err).NotTo(HaveOccurred())
+
+	stdout, _ := CurlRayServiceGateway(test, gatewayIP, curlPod, curlContainerName, "/fruit", `["MANGO", 2]`)
+	g.Expect(stdout.String()).To(Equal("8"))
 }
