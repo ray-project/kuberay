@@ -1173,7 +1173,7 @@ func checkPreRunningDeadlineAndUpdateStatusIfNeeded(ctx context.Context, rayJob 
 
 	logger.Info("The RayJob has passed the preRunningDeadlineSeconds. Transition the status to `Failed`.", "StartTime", rayJob.Status.StartTime, "PreRunningDeadlineSeconds", *rayJob.Spec.PreRunningDeadlineSeconds)
 	rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusFailed
-	rayJob.Status.Reason = rayv1.DeadlineExceeded
+	rayJob.Status.Reason = rayv1.PreRunningDeadlineExceeded
 	rayJob.Status.Message = fmt.Sprintf("The RayJob has passed the preRunningDeadlineSeconds. StartTime: %v. PreRunningDeadlineSeconds: %d", rayJob.Status.StartTime, *rayJob.Spec.PreRunningDeadlineSeconds)
 	return true
 }

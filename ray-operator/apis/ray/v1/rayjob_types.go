@@ -73,6 +73,7 @@ type JobFailedReason string
 const (
 	SubmissionFailed                                 JobFailedReason = "SubmissionFailed"
 	DeadlineExceeded                                 JobFailedReason = "DeadlineExceeded"
+	PreRunningDeadlineExceeded                       JobFailedReason = "PreRunningDeadlineExceeded"
 	AppFailed                                        JobFailedReason = "AppFailed"
 	JobDeploymentStatusTransitionGracePeriodExceeded JobFailedReason = "JobDeploymentStatusTransitionGracePeriodExceeded"
 	ValidationFailed                                 JobFailedReason = "ValidationFailed"
