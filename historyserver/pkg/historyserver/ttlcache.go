@@ -27,20 +27,14 @@ func NewTTLCache[V any](ttl time.Duration) *TTLCache[V] {
 }
 
 // Get returns the cached value for the given key, and true if it exists and has not expired.
-// Returns the zero value of V and false otherwise.
-// Expired entries are lazily evicted on access.
+// Expired entries are not evicted; the key space is small and skipping eviction
+// avoids a write lock and a TOCTOU race with concurrent Set calls.
 func (c *TTLCache[V]) Get(key string) (V, bool) {
 	c.mu.RLock()
 	entry, ok := c.items[key]
 	c.mu.RUnlock()
 	if ok && time.Now().Before(entry.expiresAt) {
 		return entry.value, true
-	}
-	if ok {
-		// Lazy eviction: remove expired entry.
-		c.mu.Lock()
-		delete(c.items, key)
-		c.mu.Unlock()
 	}
 	var zero V
 	return zero, false
@@ -54,13 +48,6 @@ func (c *TTLCache[V]) Set(key string, value V) {
 		value:     value,
 		expiresAt: time.Now().Add(c.ttl),
 	}
-}
-
-// Delete removes a cached entry by key.
-func (c *TTLCache[V]) Delete(key string) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	delete(c.items, key)
 }
 
 // SetWithExpiry stores a value with a specific expiry time, useful for testing.
