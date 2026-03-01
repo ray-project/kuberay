@@ -187,8 +187,8 @@ func testCollectorResumesUploadsOnRestart(test Test, g *WithT, namespace *corev1
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 
 	// Directory variables for easier maintenance
-	prevLogsBaseDir := "/tmp/ray/prev-logs"
-	persistCompleteBaseDir := "/tmp/ray/persist-complete-logs"
+	prevLogsBaseDir := utils.RayPrevLogsPath
+	persistCompleteBaseDir := utils.RayPersistCompletePath
 
 	// Use namespace name to ensure test isolation (avoid conflicts from previous test runs)
 	dummySessionID := fmt.Sprintf("test-recovery-session-%s", namespace.Name)
@@ -293,7 +293,7 @@ func testCollectorResumesUploadsOnRestart(test Test, g *WithT, namespace *corev1
 
 func verifySessionDirectoriesExist(test Test, g *WithT, rayCluster *rayv1.RayCluster, sessionID string) {
 	for _, dir := range []string{"prev-logs", "persist-complete-logs"} {
-		dirPath := filepath.Join("/tmp/ray", dir, sessionID)
+		dirPath := filepath.Join(utils.TmpRayRoot, dir, sessionID)
 		LogWithTimestamp(test.T(), "Checking if session directory %s exists in %s", sessionID, dirPath)
 		g.Eventually(func(gg Gomega) {
 			headPod, err := GetHeadPod(test, rayCluster)

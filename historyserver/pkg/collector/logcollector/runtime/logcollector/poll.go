@@ -71,7 +71,7 @@ func (r *RayLogHandler) processAdditionalEndpoints() {
 	logrus.Info("Processing additional endpoints before shutdown")
 
 	// Resolve session name directly without retry — this is a shutdown path.
-	sessionLatestDir := filepath.Join("/tmp", "ray", "session_latest")
+	sessionLatestDir := utils.RaySessionLatestPath
 	sessionRealDir, err := filepath.EvalSymlinks(sessionLatestDir)
 	if err != nil {
 		logrus.Errorf("Failed to resolve session name for final additional endpoints poll: %v", err)
