@@ -115,10 +115,10 @@ func TestBuildJobSubmitCommandWithSidecarMode(t *testing.T) {
 	expected := []string{
 		"until",
 		fmt.Sprintf(
-			utils.BaseWgetHealthCommand,
-			utils.DefaultReadinessProbeFailureThreshold,
+			utils.BasePythonHealthCommand,
 			utils.DefaultDashboardPort,
 			utils.RayDashboardGCSHealthPath,
+			utils.DefaultReadinessProbeFailureThreshold,
 		),
 		">/dev/null", "2>&1", ";",
 		"do", "echo", strconv.Quote("Waiting for Ray Dashboard GCS to become healthy at http://127.0.0.1:8265 ..."), ";", "sleep", "2", ";", "done", ";",
@@ -136,6 +136,88 @@ func TestBuildJobSubmitCommandWithSidecarMode(t *testing.T) {
 	command, err := BuildJobSubmitCommand(testRayJob, rayv1.SidecarMode)
 	require.NoError(t, err)
 	assert.Equal(t, expected, command)
+}
+
+func TestBuildJobSubmitCommandWithSidecarModeVersionSwitch(t *testing.T) {
+	tests := []struct {
+		name       string
+		rayVersion string
+	}{
+		{
+			name:       "uses python health command for ray >= 2.53",
+			rayVersion: "2.53.0",
+		},
+		{
+			name:       "uses python health command for ray < 2.53",
+			rayVersion: "2.52.1",
+		},
+		{
+			name:       "uses python health command when rayVersion is invalid",
+			rayVersion: "invalid-version",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			testRayJob := rayJobTemplate()
+			testRayJob.Spec.RayClusterSpec.RayVersion = tt.rayVersion
+			// Avoid metadata-json version parsing failure; this test only checks health command selection.
+			testRayJob.Spec.Metadata = nil
+			testRayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers = []corev1.Container{
+				{
+					Ports: []corev1.ContainerPort{
+						{
+							Name:          utils.DashboardPortName,
+							ContainerPort: utils.DefaultDashboardPort,
+						},
+					},
+				},
+			}
+
+			command, err := BuildJobSubmitCommand(testRayJob, rayv1.SidecarMode)
+			require.NoError(t, err)
+			require.GreaterOrEqual(t, len(command), 2)
+			assert.Equal(t, "until", command[0])
+			assert.Contains(t, command[1], "python3 -c")
+			assert.Contains(t, command[1], utils.RayDashboardGCSHealthPath)
+			assert.NotContains(t, command[1], "wget")
+		})
+	}
+}
+
+func TestBuildJobSubmitCommandWithSidecarModeCustomDashboardPort(t *testing.T) {
+	testRayJob := rayJobTemplate()
+	const customPort = 9000
+	testRayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers = []corev1.Container{
+		{
+			Ports: []corev1.ContainerPort{
+				{
+					Name:          utils.DashboardPortName,
+					ContainerPort: customPort,
+				},
+			},
+		},
+	}
+
+	command, err := BuildJobSubmitCommand(testRayJob, rayv1.SidecarMode)
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, len(command), 2)
+	assert.Equal(t, "until", command[0])
+	assert.Contains(t, command[1], fmt.Sprintf("localhost:%d/%s", customPort, utils.RayDashboardGCSHealthPath))
+	assert.Contains(t, command[1], "python3 -c")
+	assert.NotContains(t, command[1], "wget")
+}
+
+func TestBuildJobSubmitCommandWithK8sJobModeNoSidecarHealthWaitLoop(t *testing.T) {
+	testRayJob := rayJobTemplate()
+	command, err := BuildJobSubmitCommand(testRayJob, rayv1.K8sJobMode)
+	require.NoError(t, err)
+	assert.NotContains(t, command, "until")
+	for _, token := range command {
+		assert.NotContains(t, token, utils.RayDashboardGCSHealthPath)
+		assert.NotContains(t, token, "python3 -c")
+		assert.NotContains(t, token, "wget")
+	}
 }
 
 func TestBuildJobSubmitCommandWithK8sJobModeAndYAML(t *testing.T) {
