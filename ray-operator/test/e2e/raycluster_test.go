@@ -264,3 +264,43 @@ func TestRayClusterUpgradeStrategy(t *testing.T) {
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(newWorkerPods).To(HaveLen(1))
 }
+
+func TestRayClusterIdleTermination(t *testing.T) {
+	test := With(t)
+	g := NewWithT(t)
+
+	namespace := test.NewTestNamespace()
+
+	t.Run("Idle cluster should be deleted after TTL expires", func(_ *testing.T) {
+		// Create a RayCluster with a short TTL
+		rayClusterAC := rayv1ac.RayCluster("raycluster-idle", namespace.Name).
+			WithSpec(NewRayClusterSpec().
+				WithTTLSecondsAfterIdle(30))
+
+		rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
+		g.Expect(err).NotTo(HaveOccurred())
+		LogWithTimestamp(test.T(), "Created RayCluster %s/%s with TTLSecondsAfterIdle=30", rayCluster.Namespace, rayCluster.Name)
+
+		// Wait for the cluster to become ready.
+		LogWithTimestamp(test.T(), "Waiting for RayCluster %s/%s to become ready", rayCluster.Namespace, rayCluster.Name)
+		g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutMedium).
+			Should(WithTransform(StatusCondition(rayv1.HeadPodReady), MatchCondition(metav1.ConditionTrue, rayv1.HeadPodRunningAndReady)))
+
+		// Submit a simple job via the head pod to generate driver activity
+		headPod, err := GetHeadPod(test, rayCluster)
+		g.Expect(err).NotTo(HaveOccurred())
+
+		LogWithTimestamp(test.T(), "Submitting a job to generate driver activity")
+		ExecPodCmd(test, headPod, headPod.Spec.Containers[utils.RayContainerIndex].Name, []string{
+			"bash", "-c",
+			"ray job submit --address http://127.0.0.1:8265 --no-wait -- python -c 'import ray; ray.init(); print(\"test idle termination\")'",
+		})
+
+		// Wait for the job to complete so the cluster becomes idle.
+		LogWithTimestamp(test.T(), "Waiting for the cluster to be idle and deleted after TTL")
+		g.Eventually(func() bool {
+			_, err := GetRayCluster(test, rayCluster.Namespace, rayCluster.Name)
+			return errors.IsNotFound(err)
+		}, TestTimeoutLong).Should(BeTrue(), "RayCluster should be deleted after idle TTL expires")
+	})
+}

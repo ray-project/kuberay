@@ -20,5 +20,7 @@ featureGates:
     enabled: true
   - name: RayCronJob
     enabled: true
+  - name: RayClusterIdleTermination
+    enabled: true
   - name: RayServiceIncrementalUpgrade
     enabled: true

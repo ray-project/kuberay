@@ -9,6 +9,13 @@ package v1
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 // RayClusterSpec defines the desired state of RayCluster
 type RayClusterSpecApplyConfiguration struct {
+	// TTLSecondsAfterIdle specifies the time-to-live (TTL) in seconds for the RayCluster
+	// after it becomes idle. A cluster is considered idle when all Ray components report
+	// inactive status via the /api/component_activities endpoint.
+	// When set, the operator periodically checks the cluster's activity status and deletes
+	// the cluster if it has been idle for longer than the specified duration.
+	// If not set (nil), idle termination is disabled.
+	TTLSecondsAfterIdle *int32 `json:"ttlSecondsAfterIdle,omitempty"`
 	// UpgradeStrategy defines the scaling policy used when upgrading the RayCluster
 	UpgradeStrategy *RayClusterUpgradeStrategyApplyConfiguration `json:"upgradeStrategy,omitempty"`
 	// AuthOptions specifies the authentication options for the RayCluster.
@@ -42,6 +49,14 @@ type RayClusterSpecApplyConfiguration struct {
 // apply.
 func RayClusterSpec() *RayClusterSpecApplyConfiguration {
 	return &RayClusterSpecApplyConfiguration{}
+}
+
+// WithTTLSecondsAfterIdle sets the TTLSecondsAfterIdle field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the TTLSecondsAfterIdle field is set to the value of the last call.
+func (b *RayClusterSpecApplyConfiguration) WithTTLSecondsAfterIdle(value int32) *RayClusterSpecApplyConfiguration {
+	b.TTLSecondsAfterIdle = &value
+	return b
 }
 
 // WithUpgradeStrategy sets the UpgradeStrategy field in the declarative configuration to the given value

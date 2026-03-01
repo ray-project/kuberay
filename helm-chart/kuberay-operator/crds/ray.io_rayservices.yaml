@@ -4538,6 +4538,10 @@ spec:
                     type: string
                   suspend:
                     type: boolean
+                  ttlSecondsAfterIdle:
+                    format: int32
+                    minimum: 0
+                    type: integer
                   upgradeStrategy:
                     properties:
                       type:

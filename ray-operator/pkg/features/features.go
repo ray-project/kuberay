@@ -53,6 +53,13 @@ const (
 	//
 	// Enables asynchronous job info querying.
 	AsyncJobInfoQuery featuregate.Feature = "AsyncJobInfoQuery"
+
+	// owner: @win5923
+	// rep: N/A
+	// alpha: v1.6
+	//
+	// Enables idle cluster termination based on TTLSecondsAfterIdle.
+	RayClusterIdleTermination featuregate.Feature = "RayClusterIdleTermination"
 )
 
 func init() {
@@ -66,6 +73,7 @@ var defaultFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
 	RayServiceIncrementalUpgrade: {Default: false, PreRelease: featuregate.Alpha},
 	RayCronJob:                   {Default: false, PreRelease: featuregate.Alpha},
 	AsyncJobInfoQuery:            {Default: false, PreRelease: featuregate.Alpha},
+	RayClusterIdleTermination:    {Default: false, PreRelease: featuregate.Alpha},
 }
 
 // SetFeatureGateDuringTest is a helper method to override feature gates in tests.
