@@ -237,6 +237,14 @@ type AutoscalerOptions struct {
 	// Optional list of volumeMounts.  This is needed for enabling TLS for the autoscaler container.
 	// +optional
 	VolumeMounts []corev1.VolumeMount `json:"volumeMounts,omitempty"`
+	// Command is an optional override for the autoscaler container's ENTRYPOINT.
+	// If not specified, the default command will be used.
+	// +optional
+	Command []string `json:"command,omitempty"`
+	// Args is an optional override for the autoscaler container's CMD.
+	// If not specified, default args will be generated based on cluster configuration.
+	// +optional
+	Args []string `json:"args,omitempty"`
 }
 
 // +kubebuilder:validation:Enum=Default;Aggressive;Conservative

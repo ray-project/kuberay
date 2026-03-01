@@ -745,6 +745,12 @@ func mergeAutoscalerOverrides(autoscalerContainer *corev1.Container, autoscalerO
 		if autoscalerOptions.SecurityContext != nil {
 			autoscalerContainer.SecurityContext = autoscalerOptions.SecurityContext.DeepCopy()
 		}
+		if len(autoscalerOptions.Command) > 0 {
+			autoscalerContainer.Command = autoscalerOptions.Command
+		}
+		if len(autoscalerOptions.Args) > 0 {
+			autoscalerContainer.Args = autoscalerOptions.Args
+		}
 	}
 }
 
