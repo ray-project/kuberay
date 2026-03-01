@@ -70,6 +70,11 @@ func (k *KaiScheduler) AddMetadataToChildResource(ctx context.Context, parent me
 	child.SetLabels(childLabels)
 }
 
+func (k *KaiScheduler) CleanupOnCompletion(_ context.Context, _ metav1.Object) (bool, error) {
+	// KaiScheduler doesn't need cleanup
+	return false, nil
+}
+
 func (kf *KaiSchedulerFactory) New(_ context.Context, _ *rest.Config, _ client.Client) (schedulerinterface.BatchScheduler, error) {
 	return &KaiScheduler{}, nil
 }
