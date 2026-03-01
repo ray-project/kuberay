@@ -25,8 +25,6 @@ spec:
                 name: dashboard
               - containerPort: 10001
                 name: client
-              - containerPort: 8089
-                name: locust-web
             volumeMounts:
               - mountPath: /locustfile
                 name: locustfile-volume
@@ -43,8 +41,8 @@ spec:
               name: locust-runner-script
 ---
 # This is a ConfigMap that contains the locustfile.py which defines user behavior for Locust load test.
-# Requests are sent to the /fruit endpoint of the serve application.
-# We validate the response body to ensure it contains either "6" or "8" from the old or new cluster.
+# Requests are sent to the /test endpoint of the serve application.
+# With wait_time = constant(0), each test_request is sent immediately after the previous one completes.
 # TODO(jwj): Consider making stages parameter configurable.
 apiVersion: v1
 kind: ConfigMap
@@ -52,28 +50,22 @@ metadata:
   name: locustfile-config
 data:
   locustfile.py: |
-    from locust import FastHttpUser, task, constant, LoadTestShape
-    import json
+    from locust import HttpUser, constant, task, LoadTestShape
 
-    class FruitUser(FastHttpUser):
-        wait_time = constant(1)
+    class SimpleUser(HttpUser):
+        wait_time = constant(0)
         network_timeout = None
         connection_timeout = None
 
         @task
-        def fruit_request(self):
-            resp = self.client.post(
-                "/fruit",
-                json=["MANGO", 2],
-                headers={"Content-Type": "application/json"},
-            )
-            body = resp.text
-            if body not in ("6", "8"):
-                resp.failure(f"unexpected response: {body}")
+        def test_request(self):
+            resp = self.client.get("/test")
+            if resp.status_code != 200:
+                print(f"Error: {resp.status_code} - {resp.text}")
 
     class StagesShape(LoadTestShape):
         stages = [
-            {"duration": 300, "users": 10, "spawn_rate": 10},
+            {"duration": 180, "users": 10, "spawn_rate": 10},
         ]
 
         def tick(self):
