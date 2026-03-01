@@ -1,7 +1,6 @@
 package types
 
 import (
-	"strconv"
 	"sync"
 	"time"
 )
@@ -168,29 +167,6 @@ func (a *ActorMap) CreateOrMergeActor(actorId string, mergeFn func(*Actor)) {
 	// NOTE: Must write back because Go map returns a copy, not a reference
 	mergeFn(&actor)
 	a.ActorMap[actorId] = actor
-}
-
-func GetActorFieldValue(actor Actor, filterKey string) string {
-	switch filterKey {
-	case "actor_id":
-		return actor.ActorID
-	case "job_id":
-		return actor.JobID
-	case "state":
-		return string(actor.State)
-	case "name", "actor_name":
-		return actor.Name
-	case "class_name", "actor_class":
-		return actor.ActorClass
-	case "node_id":
-		return actor.Address.NodeID
-	case "pid":
-		return strconv.Itoa(actor.PID)
-	case "placement_group_id":
-		return actor.PlacementGroupID
-	default:
-		return ""
-	}
 }
 
 // DeepCopy returns a deep copy of the Actor, including slices and maps.
