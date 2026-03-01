@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"sync/atomic"
+	"time"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/dashboardclient"
@@ -41,11 +42,12 @@ func (r *FakeRayDashboardClient) SetMultiApplicationStatuses(statuses map[string
 	r.multiAppStatuses = statuses
 }
 
-func (r *FakeRayDashboardClient) GetJobInfo(ctx context.Context, jobId string) (*utiltypes.RayJobInfo, error) {
+func (r *FakeRayDashboardClient) GetJobInfo(ctx context.Context, jobId string) (*utiltypes.RayJobInfo, time.Time, error) {
 	if mock := r.GetJobInfoMock.Load(); mock != nil {
-		return (*mock)(ctx, jobId)
+		info, err := (*mock)(ctx, jobId)
+		return info, time.Now(), err
 	}
-	return &utiltypes.RayJobInfo{JobStatus: rayv1.JobStatusRunning}, nil
+	return &utiltypes.RayJobInfo{JobStatus: rayv1.JobStatusRunning}, time.Now(), nil
 }
 
 func (r *FakeRayDashboardClient) ListJobs(ctx context.Context) (*[]utiltypes.RayJobInfo, error) {

@@ -1,8 +1,6 @@
 package v1alpha1
 
 import (
-	"context"
-
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -15,6 +13,8 @@ import (
 //+kubebuilder:object:root=true
 
 // Configuration is the Schema for Ray operator config.
+//
+//nolint:govet // this avoids the comment being removed during the commit.
 type Configuration struct {
 	// Burst allows temporary exceeding of QPS limit for handling request spikes.
 	// Default: 200
@@ -88,10 +88,19 @@ type Configuration struct {
 
 	// EnableMetrics indicates whether KubeRay operator should emit control plane metrics.
 	EnableMetrics bool `json:"enableMetrics,omitempty"`
+
+	// AsyncJobInfoQueryInterval is the interval for querying job info asynchronously. Only applicable when the AsyncJobInfoQuery feature gate is enabled.
+	AsyncJobInfoQueryInterval string `json:"asyncJobInfoQueryInterval,omitempty"`
+
+	// AsyncJobInfoQueryWorkerSize is number of workers for querying job info in parallel. Only applicable when the AsyncJobInfoQuery feature gate is enabled.
+	AsyncJobInfoQueryWorkerSize int `json:"asyncJobInfoQueryWorkerSize,omitempty"`
+
+	// AsyncJobInfoQueryCacheExpiry is cache expiry duration for job info keep without accessing. Only applicable when the AsyncJobInfoQuery feature gate is enabled.
+	AsyncJobInfoQueryCacheExpiry string `json:"asyncJobInfoQueryCacheExpiry,omitempty"`
 }
 
-func (config Configuration) GetDashboardClient(ctx context.Context, mgr manager.Manager) func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error) {
-	return utils.GetRayDashboardClientFunc(ctx, mgr, config.UseKubernetesProxy)
+func (config Configuration) GetDashboardClient(mgr manager.Manager) func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error) {
+	return utils.GetRayDashboardClientFunc(mgr, config.UseKubernetesProxy)
 }
 
 func (config Configuration) GetHttpProxyClient(mgr manager.Manager) func(hostIp, podNamespace, podName string, port int) utils.RayHttpProxyClientInterface {
