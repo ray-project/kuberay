@@ -112,6 +112,11 @@ ifeq ($(ENGINE),docker)
 	${ENGINE} buildx use $(DOCKERBUILDER_INSTANCE)
 endif
 
+# TODO: Remove this once a fix for https://github.com/golang/go/issues/75031 is released.
+# This is a workaround for an issue where `go test -cover` reports errors for packages with no test files.
+GOVERSION := $(shell go env GOVERSION)
+export GOTOOLCHAIN := $(GOVERSION)+auto
+
 # Run tests
 .PHONY: test
 test:

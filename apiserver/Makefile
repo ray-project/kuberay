@@ -107,6 +107,11 @@ generate: mockgen # Generate code using command after //go:generate in each file
 
 ##@ Testing
 
+# TODO: Remove this once a fix for https://github.com/golang/go/issues/75031 is released.
+# This is a workaround for an issue where `go test -cover` reports errors for packages with no test files.
+GOVERSION := $(shell go env GOVERSION)
+export GOTOOLCHAIN := $(GOVERSION)+auto
+
 .PHONY: test
 test: fmt vet fumpt imports generate ## Run all unit tests.
 	go test ./pkg/... $(GO_TEST_FLAGS) -race -coverprofile ray-kube-api-server-coverage.out -parallel 4
