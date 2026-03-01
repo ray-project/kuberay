@@ -66,22 +66,24 @@
     - kind create cluster --wait 900s --config ./ci/kind-config-buildkite-1-29.yml
     - kubectl config set clusters.kind-kind.server https://docker:6443
 
+    # Download Istio and install Istio default Gateway controller
+    - echo "--- Downloading Istio and installing Istio default Gateway controller"
+    - curl -L https://istio.io/downloadIstio | ISTIO_VERSION=1.28.3 sh -
+    - ./istio-1.28.3/bin/istioctl install --set profile=minimal -y
+    - kubectl wait --namespace istio-system --for=condition=ready pod --selector=app=istiod --timeout=120s
+
+    # Install Gateway API CRDs (Required for Incremental Upgrade)
+    - kubectl apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml
+
+    # Create Istio GatewayClass
+    - echo "--- Creating Istio GatewayClass"
+    - kubectl apply -f ray-operator/config/samples/gateway-api/istio-class.yaml
+
     # Install MetalLB for LoadBalancer IPs on Kind
     - echo "--- Installing MetalLB"
     - kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.13.12/config/manifests/metallb-native.yaml
     - kubectl wait --namespace metallb-system --for=condition=ready pod --selector=app=metallb --timeout=90s
     - kubectl apply -f ray-operator/config/samples/gateway-api/metallb-config.yaml
-
-    # Install Gateway API CRDs (Required for Incremental Upgrade)
-    - kubectl apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml
-
-    # Install Istio Gateway controller and create GatewayClass
-    - echo "--- Installing Istio (Gateway Controller)"
-    - curl -L https://istio.io/downloadIstio | ISTIO_VERSION=1.28.3 sh -
-    - ./istio-1.28.3/bin/istioctl install --set profile=minimal -y
-    - echo "--- Creating Istio GatewayClass"
-    - kubectl wait --namespace istio-system --for=condition=ready pod --selector=app=istiod --timeout=120s
-    - kubectl apply -f ray-operator/config/samples/gateway-api/istio-class.yaml
 
     # Build nightly KubeRay operator image
     - pushd ray-operator
