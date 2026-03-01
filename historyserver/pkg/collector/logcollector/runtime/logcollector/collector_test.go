@@ -1,9 +1,13 @@
 package logcollector
 
 import (
+	"encoding/json"
+	"errors"
 	"io"
+	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -11,6 +15,12 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
+}
 
 // MockStorageWriter is a mock implementation of storage.StorageWriter for testing
 type MockStorageWriter struct {
@@ -195,4 +205,74 @@ func TestScanAndProcess(t *testing.T) {
 
 	// Signal the background goroutine to exit gracefully
 	close(handler.ShutdownChan)
+}
+
+// TestWriteTimezoneMeta tests the complete timezone metadata writing flow
+func TestWriteTimezoneMeta(t *testing.T) {
+	testCases := []struct {
+		name           string
+		client         *http.Client
+		expectWrite    bool
+		expectedOffset string
+		expectedValue  string
+	}{
+		{
+			name: "Dashboard unavailable skips write",
+			client: &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+				return nil, errors.New("dashboard not available")
+			})},
+			expectWrite: false,
+		},
+		{
+			name: "Dashboard timezone is stored",
+			client: &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(strings.NewReader(`{"offset":"+09:00","value":"Asia/Seoul"}`)),
+					Header:     make(http.Header),
+				}, nil
+			})},
+			expectWrite:    true,
+			expectedOffset: "+09:00",
+			expectedValue:  "Asia/Seoul",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			g := NewWithT(t)
+
+			mockWriter := NewMockStorageWriter()
+			handler := &RayLogHandler{
+				Writer:           mockWriter,
+				HttpClient:       tc.client,
+				RayClusterName:   "test-cluster",
+				RayClusterID:     "abc123",
+				ClusterDir:       "/tmp/test-root/test-cluster_abc123",
+				DashboardAddress: "http://127.0.0.1:8265",
+			}
+
+			sessionID := "session-2024-12-15_10-30-45_123456"
+			handler.writeTimezoneMeta(sessionID)
+
+			if !tc.expectWrite {
+				g.Expect(mockWriter.writtenFiles).To(BeEmpty(), "No file should be written when dashboard is unavailable")
+				return
+			}
+
+			g.Expect(mockWriter.writtenFiles).To(HaveLen(1))
+
+			var actualContent string
+			for _, content := range mockWriter.writtenFiles {
+				actualContent = content
+				break
+			}
+
+			var tzInfo timezoneInfo
+			err := json.Unmarshal([]byte(actualContent), &tzInfo)
+			g.Expect(err).ToNot(HaveOccurred())
+			g.Expect(tzInfo.Offset).To(Equal(tc.expectedOffset))
+			g.Expect(tzInfo.Value).To(Equal(tc.expectedValue))
+		})
+	}
 }

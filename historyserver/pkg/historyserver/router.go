@@ -57,6 +57,15 @@ func routerClusters(s *ServerHandler) {
 		Writes([]string{}))
 }
 
+func routerTimezone(s *ServerHandler) {
+	ws := new(restful.WebService)
+	defer restful.Add(ws)
+	ws.Path("/timezone").Consumes(restful.MIME_JSON).Produces(restful.MIME_JSON)
+	ws.Route(ws.GET("/").To(s.getTimezone).Filter(s.CookieHandle).
+		Doc("get timezone").
+		Writes(""))
+}
+
 // routerNodes registers RESTful routers for node-related endpoints.
 // It sets up two routes:
 //   - GET /nodes: retrieves all node information for a given cluster
@@ -325,6 +334,7 @@ func routerRayClusterSet(s *ServerHandler) {
 func (s *ServerHandler) RegisterRouter() {
 	routerRayClusterSet(s)
 	routerClusters(s)
+	routerTimezone(s)
 	routerNodes(s)
 	routerEvents(s)
 	routerAPI(s)
