@@ -9,8 +9,8 @@ import (
 	"regexp"
 	"testing"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -32,7 +32,7 @@ func TestHistoryServer(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		testFunc func(Test, *WithT, *corev1.Namespace, *s3.S3)
+		testFunc func(Test, *WithT, *corev1.Namespace, *s3.Client)
 	}{
 		{
 			name:     "Live cluster: historyserver endpoints should be accessible",
@@ -147,7 +147,7 @@ func TestHistoryServer(t *testing.T) {
 	}
 }
 
-func testLiveClusters(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testLiveClusters(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 	ApplyHistoryServer(test, g, namespace, "")
@@ -163,7 +163,7 @@ func testLiveClusters(test Test, g *WithT, namespace *corev1.Namespace, s3Client
 	LogWithTimestamp(test.T(), "Live clusters E2E test completed successfully")
 }
 
-func testLiveGrafanaHealth(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testLiveGrafanaHealth(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) {
 	rayCluster := PrepareTestEnvWithPrometheusAndGrafana(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 	ApplyHistoryServer(test, g, namespace, "")
@@ -181,7 +181,7 @@ func testLiveGrafanaHealth(test Test, g *WithT, namespace *corev1.Namespace, s3C
 	LogWithTimestamp(test.T(), "Live clusters grafana health E2E test completed successfully")
 }
 
-func testLivePrometheusHealth(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testLivePrometheusHealth(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) {
 	rayCluster := PrepareTestEnvWithPrometheusAndGrafana(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 	ApplyHistoryServer(test, g, namespace, "")
@@ -198,7 +198,16 @@ func testLivePrometheusHealth(test Test, g *WithT, namespace *corev1.Namespace, 
 }
 
 // testLogFileEndpointLiveCluster verifies that the history server can fetch log files from a live cluster.
-func testLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+//
+// The test case follows these steps:
+// 1. Prepare test environment by applying a Ray cluster
+// 2. Submit a Ray job to the existing cluster
+// 3. Apply History Server and get its URL
+// 4. Get the cluster info from the list
+// 5. Verify that the history server can fetch log content (raylet.out)
+// 6. Verify that the history server rejects path traversal attempts
+// 7. Delete S3 bucket to ensure test isolation
+func testLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 	ApplyHistoryServer(test, g, namespace, "")
@@ -479,11 +488,11 @@ func testLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Names
 // 2. Submit a Ray job to the existing cluster
 // 3. Delete RayCluster to trigger log upload to S3
 // 4. Apply History Server and get its URL
-// 5. Verify that the history server can fetch log content from S3
-// 6. Verify parameter validation for dead cluster
+// 5. Verify that the history server can fetch log content from S3 (raylet.out)
+// 6. Verify that the history server rejects path traversal attempts from S3
 // 7. Verify security (path traversal) protection
 // 8. Delete S3 bucket to ensure test isolation
-func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 
@@ -1005,7 +1014,7 @@ func getEligibleWorkerPID(g *WithT, client *http.Client, historyServerURL string
 // 5. Delete cluster to test dead cluster behavior
 // 6. Test dead cluster: streaming should return 501 Not Implemented
 // 7. Delete S3 bucket to ensure test isolation
-func testLogStreamEndpoint(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testLogStreamEndpoint(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 	ApplyHistoryServer(test, g, namespace, "")
@@ -1350,7 +1359,7 @@ func countFiles(result map[string]interface{}) int {
 //   - With download=1&job_id=<id>: filename includes the job_id.
 //
 // 4. Delete S3 bucket to ensure test isolation
-func testTimelineEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testTimelineEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 	ApplyHistoryServer(test, g, namespace, "")
@@ -1401,7 +1410,7 @@ func testTimelineEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Name
 //   - With download=1&job_id=<id>: filename includes the job_id.
 //
 // 5. Delete S3 bucket to ensure test isolation
-func testTimelineEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testTimelineEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 
@@ -1569,7 +1578,7 @@ func verifyTimelineResponse(g *WithT, client *http.Client, historyServerURL stri
 // 5. Verify that the history server returns actors via /logical/actors endpoint
 // 6. Verify that the history server returns a single actor via /logical/actors/{actor_id} endpoint
 // 7. Delete S3 bucket to ensure test isolation
-func testLogicalActorsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testLogicalActorsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 
@@ -1717,7 +1726,7 @@ func testLogicalActorsEndpointDeadCluster(test Test, g *WithT, namespace *corev1
 // 6. Verify the response status code is 200
 // 7. Verify the response API schema
 // 8. Delete S3 bucket to ensure test isolation
-func testLiveClusterTasks(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testLiveClusterTasks(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) {
 	endpoint := EndpointTasks + "?detail=1"
 
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
@@ -1770,7 +1779,7 @@ func testLiveClusterTasks(test Test, g *WithT, namespace *corev1.Namespace, s3Cl
 // 9. Delete S3 bucket to ensure test isolation
 //
 // NOTE: timeout is not tested because tasks are in-memory and retrieval is typically fast.
-func testDeadClusterTasks(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testDeadClusterTasks(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 
@@ -1907,7 +1916,7 @@ func testDeadClusterTasks(test Test, g *WithT, namespace *corev1.Namespace, s3Cl
 // 6. Verify the response status code is 200
 // 7. Verify the response API schema
 // 8. Delete S3 bucket to ensure test isolation
-func testLiveClusterNodes(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testLiveClusterNodes(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) {
 	// Explicitly specify the view parameter to get the current snapshot.
 	// If the view parameter is not specified, the following error will be returned:
 	// {"result": false, "msg": "Unknown view None", "data": {}}
@@ -1948,7 +1957,7 @@ func testLiveClusterNodes(test Test, g *WithT, namespace *corev1.Namespace, s3Cl
 // 7. Verify the response status code is 200
 // 8. Verify the response API schema
 // 9. Delete S3 bucket to ensure test isolation
-func testDeadClusterNodes(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testDeadClusterNodes(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 
@@ -2004,7 +2013,7 @@ func testDeadClusterNodes(test Test, g *WithT, namespace *corev1.Namespace, s3Cl
 //   - Verify the response API schema
 //
 // 7. Delete S3 bucket to ensure test isolation
-func testLiveClusterNode(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testLiveClusterNode(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 	headNodeID := GetNodeIDFromPod(test, g, HeadPod(test, rayCluster), "ray-head")
@@ -2049,7 +2058,7 @@ func testLiveClusterNode(test Test, g *WithT, namespace *corev1.Namespace, s3Cli
 //   - Verify the response API schema
 //
 // 8. Delete S3 bucket to ensure test isolation
-func testDeadClusterNode(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testDeadClusterNode(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 	headNodeID := GetNodeIDFromPod(test, g, HeadPod(test, rayCluster), "ray-head")
@@ -2091,7 +2100,7 @@ func testDeadClusterNode(test Test, g *WithT, namespace *corev1.Namespace, s3Cli
 
 // testLiveClusterMetadata verifies that the /api/v0/cluster_metadata endpoint proxies to the
 // live Ray Dashboard and returns valid cluster metadata.
-func testLiveClusterMetadata(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testLiveClusterMetadata(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyHistoryServer(test, g, namespace, "")
 	historyServerURL := GetHistoryServerURL(test, g, namespace)
@@ -2132,7 +2141,7 @@ func testLiveClusterMetadata(test Test, g *WithT, namespace *corev1.Namespace, s
 
 // testDeadClusterMetadata verifies that the /api/v0/cluster_metadata endpoint returns stored
 // cluster metadata from S3 for a dead (deleted) cluster.
-func testDeadClusterMetadata(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testDeadClusterMetadata(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 
 	// Wait for cluster metadata to be stored in S3 by the collector before deleting the cluster.
@@ -2143,10 +2152,10 @@ func testDeadClusterMetadata(test Test, g *WithT, namespace *corev1.Namespace, s
 	LogWithTimestamp(test.T(), "Waiting for cluster metadata to appear at S3 key: %s", metaKey)
 
 	g.Eventually(func(gg Gomega) {
-		_, err := s3Client.HeadObject(&s3.HeadObjectInput{
-			Bucket: aws.String(S3BucketName),
-			Key:    aws.String(metaKey),
-		})
+			_, err := s3Client.HeadObject(test.Ctx(), &s3.HeadObjectInput{
+				Bucket: aws.String(S3BucketName),
+				Key:    aws.String(metaKey),
+			})
 		gg.Expect(err).NotTo(HaveOccurred())
 	}, TestTimeoutMedium).Should(Succeed())
 
@@ -2212,7 +2221,7 @@ func testDeadClusterMetadata(test Test, g *WithT, namespace *corev1.Namespace, s
 // 4. Delete the cluster
 // 5. Deploy the history server and query /api/v0/placement_groups
 // 6. Verify the response is valid JSON with a non-empty placement_groups list
-func testDeadClusterPlacementGroups(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testDeadClusterPlacementGroups(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 
 	// Submit a RayJob that creates a detached placement group named "test_pg".
@@ -2226,10 +2235,10 @@ func testDeadClusterPlacementGroups(test Test, g *WithT, namespace *corev1.Names
 	LogWithTimestamp(test.T(), "Waiting for placement groups data to appear at S3 key: %s", pgKey)
 
 	g.Eventually(func(gg Gomega) {
-		_, err := s3Client.HeadObject(&s3.HeadObjectInput{
-			Bucket: aws.String(S3BucketName),
-			Key:    aws.String(pgKey),
-		})
+			_, err := s3Client.HeadObject(test.Ctx(), &s3.HeadObjectInput{
+				Bucket: aws.String(S3BucketName),
+				Key:    aws.String(pgKey),
+			})
 		gg.Expect(err).NotTo(HaveOccurred())
 	}, TestTimeoutMedium).Should(Succeed())
 
@@ -3160,7 +3169,7 @@ func verifyNodesHostNameListSchema(test Test, g *WithT, nodesResp map[string]any
 // 5. Set cluster context via /enter_cluster/ endpoint
 // 6. Verify that the /events endpoint returns events with proper structure
 // 7. Delete S3 bucket to ensure test isolation
-func testEventsEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testEventsEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 	ApplyHistoryServer(test, g, namespace, "")
@@ -3214,7 +3223,7 @@ func testEventsEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Namesp
 // 8. Verify that the /events endpoint supports job_id filter (non-existent job_id)
 // 9. Verify that the /events endpoint handles empty job_id parameter correctly
 // 10. Delete S3 bucket to ensure test isolation
-func testEventsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testEventsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 
@@ -3351,7 +3360,7 @@ func testEventsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namesp
 // 6. Verify /api/cluster_status returns valid JSON response with result=true
 // 7. Verify /api/cluster_status?format=1 returns formatted cluster status string containing "Autoscaler status"
 // 8. Delete S3 bucket to ensure test isolation
-func testLiveClusterStatus(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testLiveClusterStatus(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 	ApplyHistoryServer(test, g, namespace, "")
@@ -3403,7 +3412,7 @@ func testLiveClusterStatus(test Test, g *WithT, namespace *corev1.Namespace, s3C
 // 7. Verify /api/cluster_status returns valid JSON response with result=true
 // 8. Verify /api/cluster_status?format=1 returns formatted cluster status containing "Autoscaler status"
 // 9. Delete S3 bucket to ensure test isolation
-func testDeadClusterStatus(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testDeadClusterStatus(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 
