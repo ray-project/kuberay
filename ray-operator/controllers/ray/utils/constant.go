@@ -153,6 +153,7 @@ const (
 	// Environment variables for RayJob submitter Kubernetes Job.
 	// Example: ray job submit --address=http://$RAY_DASHBOARD_ADDRESS --submission-id=$RAY_JOB_SUBMISSION_ID ...
 	RAY_DASHBOARD_ADDRESS = "RAY_DASHBOARD_ADDRESS"
+	RAY_EXPECTED_WORKERS  = "RAY_EXPECTED_WORKERS"
 	RAY_JOB_SUBMISSION_ID = "RAY_JOB_SUBMISSION_ID"
 
 	// Environment variables for Ray Autoscaler V2.
