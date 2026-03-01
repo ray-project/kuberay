@@ -280,7 +280,7 @@ func TestRayServiceIncrementalUpgradeWithLocust(t *testing.T) {
 	})
 
 	// Allow Locust to ramp up and send traffic to the old cluster before triggering upgrade.
-	err = warmupLocust(test, locustHeadPod, 900, 15, 120*time.Second)
+	err = warmupLocust(test, locustHeadPod, 450, 15, 120*time.Second)
 	g.Expect(err).NotTo(HaveOccurred())
 
 	// Phase 4: Trigger incremental upgrade
