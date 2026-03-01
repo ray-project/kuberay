@@ -1643,9 +1643,9 @@ func (s *ServerHandler) CookieHandle(req *restful.Request, resp *restful.Respons
 	http.SetCookie(resp, &http.Cookie{MaxAge: 600, Path: "/", Name: COOKIE_SESSION_NAME_KEY, Value: sessionName.Value})
 
 	if sessionName.Value == "live" {
-		// Look up the cluster's service info, using a short-lived cache to reduce K8s API calls.
-		// The cache is invalidated after svcInfoCacheTTL (30s) to pick up changes while avoiding
-		// excessive network overhead on every request.
+		// Always query K8s to get the service name to prevent SSRF attacks.
+		// Do not trust user-provided cookies for service name.
+		// TODO: here might be a bottleneck if there are many requests in the future.
 		svcInfo, rc, err := s.clientManager.GetClusterAndSvcInfo(clusterName.Value, clusterNamespace.Value)
 		if err != nil {
 			resp.WriteHeaderAndEntity(http.StatusBadRequest, err.Error())
