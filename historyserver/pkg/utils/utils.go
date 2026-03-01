@@ -18,7 +18,7 @@ import (
 const (
 	RAY_SESSIONDIR_LOGDIR_NAME            = "logs"
 	RAY_SESSIONDIR_FETCHED_ENDPOINTS_NAME = "fetched_endpoints"
-	DATETIME_LAYOUT            = "2006-01-02_15-04-05.000000"
+	DATETIME_LAYOUT                       = "2006-01-02_15-04-05.000000"
 	// The following regex shouldn't be changed unless the ray session ID changes.
 	SESSION_ID_REGEX = `session_(\d{4}-\d{2}-\d{2})_(\d{2}-\d{2}-\d{2})_(\d{6})`
 )
@@ -91,9 +91,8 @@ func AppendRayClusterNameID(rayClusterName, rayClusterID string) string {
 }
 
 func GetSessionDir() (string, error) {
-	session_latest_path := "/tmp/ray/session_latest"
 	for i := 0; i < 12; i++ {
-		rp, err := os.Readlink(session_latest_path)
+		rp, err := os.Readlink(RaySessionLatestPath)
 		if err != nil {
 			logrus.Errorf("read session_latest file error %v", err)
 			time.Sleep(time.Second * 5)
@@ -106,7 +105,7 @@ func GetSessionDir() (string, error) {
 
 func GetRayNodeID() (string, error) {
 	for i := 0; i < 12; i++ {
-		nodeidBytes, err := os.ReadFile("/tmp/ray/raylet_node_id")
+		nodeidBytes, err := os.ReadFile(RayNodeIDPath)
 		if err != nil {
 			logrus.Errorf("read nodeid file error %v", err)
 			time.Sleep(time.Second * 5)

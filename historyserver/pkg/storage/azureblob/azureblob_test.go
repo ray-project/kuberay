@@ -8,11 +8,13 @@ import (
 	"testing"
 
 	"github.com/sirupsen/logrus"
+
+	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
 func TestTrim(t *testing.T) {
-	absoluteLogPathName := " /tmp/ray/test/LLogs/events///aa/a.txt  "
-	logdir := "/tmp/ray/test/lLogs/"
+	absoluteLogPathName := " " + filepath.Join(utils.TmpRayRoot, "test", "LLogs", "events", "aa", "a.txt") + "  "
+	logdir := filepath.Join(utils.TmpRayRoot, "test", "lLogs") + "/"
 
 	absoluteLogPathName = strings.TrimSpace(absoluteLogPathName)
 	absoluteLogPathName = filepath.Clean(absoluteLogPathName)
@@ -30,7 +32,7 @@ func TestTrim(t *testing.T) {
 }
 
 func TestWalk(t *testing.T) {
-	watchPath := "/tmp/ray/test/LLogs/"
+	watchPath := filepath.Join(utils.TmpRayRoot, "test", "LLogs") + "/"
 	filepath.Walk(watchPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			logrus.Errorf("Walk path error %v", err)
