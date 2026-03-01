@@ -53,6 +53,14 @@ const (
 	//
 	// Enables asynchronous job info querying.
 	AsyncJobInfoQuery featuregate.Feature = "AsyncJobInfoQuery"
+
+	// owner: @justinyeh1995
+	// rep: N/A
+	// alpha: v1.6
+	//
+	// Enables per-container restart policy for SidecarMode submitter to handle transient failures.
+	// Requires Kubernetes 1.34+ with ContainerRestartRules feature gate enabled.
+	SidecarSubmitterRestart featuregate.Feature = "SidecarSubmitterRestart"
 )
 
 func init() {
@@ -66,6 +74,7 @@ var defaultFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
 	RayServiceIncrementalUpgrade: {Default: false, PreRelease: featuregate.Alpha},
 	RayCronJob:                   {Default: false, PreRelease: featuregate.Alpha},
 	AsyncJobInfoQuery:            {Default: false, PreRelease: featuregate.Alpha},
+	SidecarSubmitterRestart:      {Default: false, PreRelease: featuregate.Alpha},
 }
 
 // SetFeatureGateDuringTest is a helper method to override feature gates in tests.

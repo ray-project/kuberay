@@ -27,6 +27,7 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/metrics/mocks"
 	utils "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/scheme"
+	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 )
 
 func TestCreateRayJobSubmitterIfNeed(t *testing.T) {
@@ -199,6 +200,106 @@ func TestGetSubmitterTemplate(t *testing.T) {
 	envVar, found = utils.EnvVarByName(utils.RAY_JOB_SUBMISSION_ID, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Env)
 	assert.True(t, found)
 	assert.Equal(t, "test-job-id", envVar.Value)
+}
+
+func TestGetSubmitterContainerWithFeatureGate(t *testing.T) {
+	// Enable the SidecarSubmitterRestart feature gate for this test
+	features.SetFeatureGateDuringTest(t, features.SidecarSubmitterRestart, true)
+
+	rayJobInstance := &rayv1.RayJob{
+		Spec: rayv1.RayJobSpec{
+			Entrypoint:     "echo test",
+			SubmissionMode: rayv1.SidecarMode,
+			RayClusterSpec: &rayv1.RayClusterSpec{
+				HeadGroupSpec: rayv1.HeadGroupSpec{
+					Template: corev1.PodTemplateSpec{
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{
+									Image: "rayproject/ray:test",
+									Ports: []corev1.ContainerPort{
+										{
+											Name:          utils.DashboardPortName,
+											ContainerPort: utils.DefaultDashboardPort,
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		Status: rayv1.RayJobStatus{
+			DashboardURL: "http://127.0.0.1:8265",
+			JobId:        "test-job-id",
+		},
+	}
+
+	rayClusterInstance := &rayv1.RayCluster{
+		Spec: *rayJobInstance.Spec.RayClusterSpec,
+	}
+
+	container, err := getSubmitterContainer(rayJobInstance, rayClusterInstance)
+	require.NoError(t, err)
+
+	// Verify restart policy is set to Never
+	require.NotNil(t, container.RestartPolicy)
+	assert.Equal(t, corev1.ContainerRestartPolicyNever, *container.RestartPolicy)
+
+	// Verify restart policy rules are set
+	require.Len(t, container.RestartPolicyRules, 1)
+	rule := container.RestartPolicyRules[0]
+	assert.Equal(t, corev1.ContainerRestartRuleActionRestart, rule.Action)
+	require.NotNil(t, rule.ExitCodes)
+	assert.Equal(t, corev1.ContainerRestartRuleOnExitCodesOpNotIn, rule.ExitCodes.Operator)
+	assert.Equal(t, []int32{0}, rule.ExitCodes.Values)
+}
+
+func TestGetSubmitterContainerWithoutFeatureGate(t *testing.T) {
+	// Explicitly disable the feature gate
+	features.SetFeatureGateDuringTest(t, features.SidecarSubmitterRestart, false)
+
+	rayJobInstance := &rayv1.RayJob{
+		Spec: rayv1.RayJobSpec{
+			Entrypoint:     "echo test",
+			SubmissionMode: rayv1.SidecarMode,
+			RayClusterSpec: &rayv1.RayClusterSpec{
+				HeadGroupSpec: rayv1.HeadGroupSpec{
+					Template: corev1.PodTemplateSpec{
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{
+									Image: "rayproject/ray:test",
+									Ports: []corev1.ContainerPort{
+										{
+											Name:          utils.DashboardPortName,
+											ContainerPort: utils.DefaultDashboardPort,
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		Status: rayv1.RayJobStatus{
+			DashboardURL: "http://127.0.0.1:8265",
+			JobId:        "test-job-id",
+		},
+	}
+
+	rayClusterInstance := &rayv1.RayCluster{
+		Spec: *rayJobInstance.Spec.RayClusterSpec,
+	}
+
+	container, err := getSubmitterContainer(rayJobInstance, rayClusterInstance)
+	require.NoError(t, err)
+
+	// Verify restart policy is NOT set (nil) when feature gate is disabled
+	assert.Nil(t, container.RestartPolicy)
+	assert.Empty(t, container.RestartPolicyRules)
 }
 
 func TestUpdateStatusToSuspendingIfNeeded(t *testing.T) {
