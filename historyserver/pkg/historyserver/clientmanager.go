@@ -102,8 +102,9 @@ func (c *ClientManager) GetAuthTokenForRayCluster(ctx context.Context, rayCluste
 	return token, nil
 }
 
-// GetClusterAndSvcInfo returns the ServiceInfo and RayCluster for the given cluster,
-// using a short-lived cache to avoid hitting the K8s API on every request.
+// Look up the cluster's service info, using a short-lived cache to reduce K8s API calls.
+// The cache is invalidated after svcInfoCacheTTL (30s) to pick up changes while avoiding
+// excessive network overhead on every request.
 func (c *ClientManager) GetClusterAndSvcInfo(name, namespace string) (ServiceInfo, *rayv1.RayCluster, error) {
 	cacheKey := namespace + "/" + name
 
