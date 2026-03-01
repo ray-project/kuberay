@@ -20,6 +20,7 @@ import (
 	"github.com/emicklei/go-restful/v3"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/sirupsen/logrus"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -34,6 +35,14 @@ const (
 	COOKIE_DASHBOARD_VERSION_KEY = "dashboard_version"
 
 	ATTRIBUTE_SERVICE_NAME = "cluster_service_name"
+	ATTRIBUTE_AUTH_TOKEN   = "cluster_auth_token"
+
+	// DashboardPortName is the name of the dashboard service port assigned by the ray-operator.
+	// Ref: https://github.com/ray-project/kuberay/blob/master/ray-operator/controllers/ray/utils/constant.go
+	DashboardPortName = "dashboard"
+	// DefaultDashboardPort is the default port for the Ray Dashboard if the service port is not found.
+	// Ref: https://github.com/ray-project/kuberay/blob/master/ray-operator/controllers/ray/utils/constant.go
+	DefaultDashboardPort = 8265
 )
 
 type ServiceInfo struct {
@@ -358,9 +367,24 @@ func (s *ServerHandler) redirectRequest(req *restful.Request, resp *restful.Resp
 	// Copy headers from original request to proxy request.
 	for key, values := range req.Request.Header {
 		if strings.ToLower(key) != "host" {
+			// In auth-token mode, drop any client-supplied x-ray-authorization
+			// to avoid bypassing server-managed tokens.
+			if s.useAuthTokenMode && strings.EqualFold(key, "x-ray-authorization") {
+				continue
+			}
 			for _, value := range values {
 				// Use Add() to preserve multiple values for the same header key.
 				proxyReq.Header.Add(key, value)
+			}
+		}
+	}
+
+	// Add auth token header if auth token mode is enabled
+	if s.useAuthTokenMode {
+		// Get the auth token from request attribute (set by CookieHandle filter)
+		if authTokenAttr := req.Attribute(ATTRIBUTE_AUTH_TOKEN); authTokenAttr != nil {
+			if authToken, ok := authTokenAttr.(string); ok && authToken != "" {
+				proxyReq.Header.Set("x-ray-authorization", fmt.Sprintf("Bearer %s", authToken))
 			}
 		}
 	}
@@ -1599,12 +1623,31 @@ func (s *ServerHandler) CookieHandle(req *restful.Request, resp *restful.Respons
 		// Always query K8s to get the service name to prevent SSRF attacks.
 		// Do not trust user-provided cookies for service name.
 		// TODO: here might be a bottleneck if there are many requests in the future.
-		svcInfo, err := getClusterSvcInfo(s.clientManager.clients, clusterName.Value, clusterNamespace.Value)
+		svcInfo, rc, err := s.clientManager.GetClusterAndSvcInfo(clusterName.Value, clusterNamespace.Value)
 		if err != nil {
 			resp.WriteHeaderAndEntity(http.StatusBadRequest, err.Error())
 			return
 		}
 		req.SetAttribute(ATTRIBUTE_SERVICE_NAME, svcInfo)
+
+		// If auth token mode is enabled, fetch the auth token for this cluster
+		if s.useAuthTokenMode {
+			authToken, err := s.clientManager.GetAuthTokenForRayCluster(context.Background(), rc)
+			if err != nil {
+				logrus.Errorf("Failed to get auth token for cluster %s/%s: %v", clusterNamespace.Value, clusterName.Value, err)
+				resp.WriteErrorString(
+					http.StatusInternalServerError,
+					fmt.Sprintf(
+						"failed to get auth token for cluster %s/%s: %v",
+						clusterNamespace.Value,
+						clusterName.Value,
+						err,
+					),
+				)
+				return
+			}
+			req.SetAttribute(ATTRIBUTE_AUTH_TOKEN, authToken)
+		}
 	}
 	req.SetAttribute(COOKIE_CLUSTER_NAME_KEY, clusterName.Value)
 	req.SetAttribute(COOKIE_SESSION_NAME_KEY, sessionName.Value)
@@ -1613,21 +1656,40 @@ func (s *ServerHandler) CookieHandle(req *restful.Request, resp *restful.Respons
 	chain.ProcessFilter(req, resp)
 }
 
-func getClusterSvcInfo(clis []client.Client, name, namespace string) (ServiceInfo, error) {
+// fetchClusterAndSvcInfo retrieves the RayCluster once and derives the head service info.
+// This avoids doing multiple GETs for the same cluster when auth token mode is enabled.
+func fetchClusterAndSvcInfo(clis []client.Client, name, namespace string) (ServiceInfo, *rayv1.RayCluster, error) {
+
 	if len(clis) == 0 {
-		return ServiceInfo{}, errors.New("No available kubernetes config found")
+		return ServiceInfo{}, nil, errors.New("No available kubernetes config found")
 	}
 	cli := clis[0]
 	rc := rayv1.RayCluster{}
 	err := cli.Get(context.Background(), types.NamespacedName{Namespace: namespace, Name: name}, &rc)
 	if err != nil {
-		return ServiceInfo{}, errors.New("RayCluster not found")
+		return ServiceInfo{}, nil, errors.New("RayCluster not found")
 	}
 	svcName := rc.Status.Head.ServiceName
 	if svcName == "" {
-		return ServiceInfo{}, errors.New("RayCluster head service not ready")
+		return ServiceInfo{}, nil, errors.New("RayCluster head service not ready")
 	}
-	return ServiceInfo{ServiceName: svcName, Namespace: namespace, Port: 8265}, nil
+
+	// Look up the actual dashboard port from the head service instead of hardcoding the default,
+	// because users can override the port in their HeadGroupSpec.
+	port := DefaultDashboardPort
+	headSvc := corev1.Service{}
+	if err = cli.Get(context.Background(), types.NamespacedName{Namespace: namespace, Name: svcName}, &headSvc); err == nil {
+		for _, p := range headSvc.Spec.Ports {
+			if p.Name == DashboardPortName {
+				port = int(p.Port)
+				break
+			}
+		}
+	} else {
+		logrus.Warnf("Could not fetch head service %s/%s to determine dashboard port, falling back to %d: %v", namespace, svcName, port, err)
+	}
+
+	return ServiceInfo{ServiceName: svcName, Namespace: namespace, Port: port}, &rc, nil
 }
 
 // formatNodeSummaryReplayForResp formats a node summary replay of a single node for the response.
