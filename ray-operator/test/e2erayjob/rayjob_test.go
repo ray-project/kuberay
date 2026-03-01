@@ -577,4 +577,58 @@ env_vars:
 
 		LogWithTimestamp(test.T(), "RayJob %s/%s completed successfully with auth token", rayJob.Namespace, rayJob.Name)
 	})
+
+	test.T().Run("RayJob PreRunningDeadlineSeconds expires during Initializing state", func(_ *testing.T) {
+		// Use an invalid image to force ImagePullBackOff on the head pod, guaranteeing the RayCluster never becomes Ready and the RayJob
+		// stays in Initializing long enough for the TTL to fire.
+		invalidImageOpt := func(spec *rayv1ac.RayClusterSpecApplyConfiguration) *rayv1ac.RayClusterSpecApplyConfiguration {
+			spec.HeadGroupSpec.Template.Spec.Containers[0].Image = ptr.To("invalid-image-does-not-exist:v1.0.0")
+			return spec
+		}
+
+		rayJobAC := rayv1ac.RayJob("ttl-initializing", namespace.Name).
+			WithSpec(rayv1ac.RayJobSpec().
+				WithRayClusterSpec(NewRayClusterSpec(invalidImageOpt)).
+				WithEntrypoint("echo hello").
+				WithShutdownAfterJobFinishes(true).
+				WithPreRunningDeadlineSeconds(5))
+
+		rayJob, err := test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
+		g.Expect(err).NotTo(HaveOccurred())
+		LogWithTimestamp(test.T(), "Created RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
+
+		// Confirm it enters Initializing
+		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutShort).
+			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusInitializing)))
+
+		// The RayJob will transition to `Failed` because it has passed `preRunningDeadlineSeconds`.
+		LogWithTimestamp(test.T(), "Waiting for RayJob %s/%s to be 'Failed'", rayJob.Namespace, rayJob.Name)
+		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutShort).
+			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusFailed)))
+		g.Expect(GetRayJob(test, rayJob.Namespace, rayJob.Name)).
+			To(WithTransform(RayJobReason, Equal(rayv1.PreRunningDeadlineExceeded)))
+	})
+
+	test.T().Run("RayJob PreRunningDeadlineSeconds expires during Waiting state", func(_ *testing.T) {
+		rayJobAC := rayv1ac.RayJob("ttl-waiting", namespace.Name).
+			WithSpec(rayv1ac.RayJobSpec().
+				WithSubmissionMode(rayv1.InteractiveMode).
+				WithRayClusterSpec(NewRayClusterSpec(MountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](jobs, "/home/ray/jobs"))).
+				WithShutdownAfterJobFinishes(true).
+				WithPreRunningDeadlineSeconds(30)) // larger value to reach Initializing state first
+
+		rayJob, err := test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
+		g.Expect(err).NotTo(HaveOccurred())
+
+		// First confirm it enters Waiting state
+		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutShort).
+			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusWaiting)))
+
+		// The RayJob will transition to `Failed` because it has passed `preRunningDeadlineSeconds`.
+		LogWithTimestamp(test.T(), "Waiting for RayJob %s/%s to be 'Failed'", rayJob.Namespace, rayJob.Name)
+		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutShort).
+			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusFailed)))
+		g.Expect(GetRayJob(test, rayJob.Namespace, rayJob.Name)).
+			To(WithTransform(RayJobReason, Equal(rayv1.PreRunningDeadlineExceeded)))
+	})
 }

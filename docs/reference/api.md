@@ -451,6 +451,7 @@ _Appears in:_
 | `entrypointNumCpus` _float_ | EntrypointNumCpus specifies the number of cpus to reserve for the entrypoint command. |  |  |
 | `entrypointNumGpus` _float_ | EntrypointNumGpus specifies the number of gpus to reserve for the entrypoint command. |  |  |
 | `ttlSecondsAfterFinished` _integer_ | TTLSecondsAfterFinished is the TTL to clean up RayCluster.<br />It's only working when ShutdownAfterJobFinishes set to true. | 0 |  |
+| `preRunningDeadlineSeconds` _integer_ | PreRunningDeadlineSeconds is the deadline in seconds for a RayJob to reach the Running state<br />from when it is first initialized (StartTime). If the RayJob does not transition to<br />Running within this time, it will be marked as Failed.<br />This is useful for cleaning up jobs stuck in Initializing or Waiting states.<br />If not set, there is no deadline. Value must be a positive integer. |  |  |
 | `shutdownAfterJobFinishes` _boolean_ | ShutdownAfterJobFinishes will determine whether to delete the ray cluster once rayJob succeed or failed. |  |  |
 | `suspend` _boolean_ | suspend specifies whether the RayJob controller should create a RayCluster instance<br />If a job is applied with the suspend field set to true,<br />the RayCluster will not be created and will wait for the transition to false.<br />If the RayCluster is already created, it will be deleted.<br />In case of transition to false a new RayCluster will be created. |  |  |
 

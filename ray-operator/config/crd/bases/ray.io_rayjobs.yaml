@@ -151,6 +151,9 @@ spec:
                 additionalProperties:
                   type: string
                 type: object
+              preRunningDeadlineSeconds:
+                format: int32
+                type: integer
               rayClusterSpec:
                 properties:
                   authOptions:
