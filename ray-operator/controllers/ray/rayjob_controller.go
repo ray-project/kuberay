@@ -575,7 +575,7 @@ func getSubmitterTemplate(rayJobInstance *rayv1.RayJob, rayClusterInstance *rayv
 		return corev1.PodTemplateSpec{}, err
 	}
 
-	if rayClusterInstance != nil && rayClusterInstance.Spec.AuthOptions != nil && ptr.Deref(rayClusterInstance.Spec.AuthOptions.EnableK8sTokenAuth, false) {
+	if rayClusterInstance != nil && utils.IsK8sAuthEnabled(rayClusterInstance.Spec.AuthOptions) {
 		common.AddRayTokenVolume(&submitterTemplate.Spec)
 	}
 
