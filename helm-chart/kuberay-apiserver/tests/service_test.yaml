@@ -13,7 +13,7 @@ tests:
       - containsDocument:
           apiVersion: v1
           kind: Service
-          name: kuberay-apiserver-service
+          name: kuberay-apiserver
           namespace: kuberay-system
 
   - it: Should use the specified service type if `service.type` is set
@@ -24,3 +24,13 @@ tests:
       - equal:
           path: spec.type
           value: NodePort
+
+  - it: Should have service name matching fullnameOverride when set
+    set:
+      fullnameOverride: test-name
+    asserts:
+      - containsDocument:
+          apiVersion: v1
+          kind: Service
+          name: test-name
+          namespace: kuberay-system
