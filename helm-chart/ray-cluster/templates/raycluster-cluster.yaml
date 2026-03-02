@@ -54,6 +54,10 @@ spec:
       {{- end }}
     {{- else }}
     {{- end }}
+    {{- with .Values.head.rayNodeLabels }}
+    labels:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
     template:
       metadata:
         labels:
@@ -186,6 +190,10 @@ spec:
       {{ $key }}: {{ $val | quote }}
       {{- end }}
     {{- else }}
+    {{- end }}
+    {{- with .Values.worker.rayNodeLabels }}
+    labels:
+      {{- toYaml . | nindent 6 }}
     {{- end }}
     template:
       metadata:
@@ -320,6 +328,10 @@ spec:
         {{ $key }}: {{ $val | quote }}
       {{- end }}
     {{- else }}
+    {{- end }}
+    {{- with $values.rayNodeLabels }}
+    labels:
+      {{- toYaml . | nindent 6 }}
     {{- end }}
     template:
       metadata:

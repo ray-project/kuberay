@@ -218,6 +218,40 @@ tests:
           path: spec.headGroupSpec.template.metadata.labels.key2
           value: value2
 
+  - it: Should add spec-level labels if `head.rayNodeLabels` is set
+    set:
+      head:
+        rayNodeLabels:
+          node-group: head-group
+          custom-label: custom-value
+    asserts:
+      - equal:
+          path: spec.headGroupSpec.labels.node-group
+          value: head-group
+      - equal:
+          path: spec.headGroupSpec.labels.custom-label
+          value: custom-value
+
+  - it: Should not have spec-level labels when `head.rayNodeLabels` is not set
+    asserts:
+      - isNull:
+          path: spec.headGroupSpec.labels
+
+  - it: Should have independent spec-level and pod-level labels for head
+    set:
+      head:
+        labels:
+          app: my-app
+        rayNodeLabels:
+          node-group: head-group
+    asserts:
+      - equal:
+          path: spec.headGroupSpec.template.metadata.labels.app
+          value: my-app
+      - equal:
+          path: spec.headGroupSpec.labels.node-group
+          value: head-group
+
   - it: Should add the specified annotations if `head.annotations` is set
     set:
       head:
@@ -877,6 +911,40 @@ tests:
       - equal:
           path: spec.workerGroupSpecs[?(@.groupName=="workergroup")].template.metadata.labels.key2
           value: value2
+
+  - it: Should add spec-level labels if `worker.rayNodeLabels` is set
+    set:
+      worker:
+        rayNodeLabels:
+          node-group: gpu-group
+          custom-label: custom-value
+    asserts:
+      - equal:
+          path: spec.workerGroupSpecs[?(@.groupName=="workergroup")].labels.node-group
+          value: gpu-group
+      - equal:
+          path: spec.workerGroupSpecs[?(@.groupName=="workergroup")].labels.custom-label
+          value: custom-value
+
+  - it: Should not have spec-level labels when `worker.rayNodeLabels` is not set
+    asserts:
+      - isNull:
+          path: spec.workerGroupSpecs[?(@.groupName=="workergroup")].labels
+
+  - it: Should have independent spec-level and pod-level labels for worker
+    set:
+      worker:
+        labels:
+          app: my-app
+        rayNodeLabels:
+          node-group: gpu-group
+    asserts:
+      - equal:
+          path: spec.workerGroupSpecs[?(@.groupName=="workergroup")].template.metadata.labels.app
+          value: my-app
+      - equal:
+          path: spec.workerGroupSpecs[?(@.groupName=="workergroup")].labels.node-group
+          value: gpu-group
 
   - it: Should add the specified annotations if `worker.annotations` is set
     set:
@@ -1545,6 +1613,48 @@ tests:
       - equal:
           path: spec.workerGroupSpecs[?(@.groupName=="smallGroup")].template.metadata.labels.key2
           value: value2
+
+  - it: Should add spec-level labels if `additionalWorkerGroups.smallGroup.rayNodeLabels` is set
+    set:
+      additionalWorkerGroups:
+        smallGroup:
+          disabled: false
+          rayNodeLabels:
+            node-group: gpu-group
+            custom-label: custom-value
+    asserts:
+      - equal:
+          path: spec.workerGroupSpecs[?(@.groupName=="smallGroup")].labels.node-group
+          value: gpu-group
+      - equal:
+          path: spec.workerGroupSpecs[?(@.groupName=="smallGroup")].labels.custom-label
+          value: custom-value
+
+  - it: Should not have spec-level labels when `additionalWorkerGroups.smallGroup.rayNodeLabels` is not set
+    set:
+      additionalWorkerGroups:
+        smallGroup:
+          disabled: false
+    asserts:
+      - isNull:
+          path: spec.workerGroupSpecs[?(@.groupName=="smallGroup")].labels
+
+  - it: Should have independent spec-level and pod-level labels for additional worker group
+    set:
+      additionalWorkerGroups:
+        smallGroup:
+          disabled: false
+          labels:
+            app: my-app
+          rayNodeLabels:
+            node-group: gpu-group
+    asserts:
+      - equal:
+          path: spec.workerGroupSpecs[?(@.groupName=="smallGroup")].template.metadata.labels.app
+          value: my-app
+      - equal:
+          path: spec.workerGroupSpecs[?(@.groupName=="smallGroup")].labels.node-group
+          value: gpu-group
 
   - it: Should add the specified annotations if `additionalWorkerGroups.smallGroup.annotations` is set
     set:
