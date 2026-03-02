@@ -10,6 +10,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	utiltypes "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/types"
@@ -297,5 +298,127 @@ var _ = Describe("RayFrameworkGenerator", func() {
 		_, err := rayDashboardClient.GetServeDetails(context.TODO())
 		Expect(err).To(HaveOccurred())
 		Expect(errors.Is(err, context.DeadlineExceeded)).To(BeTrue())
+	})
+
+	It("Test GetComponentActivities with inactive driver", func() {
+		httpmock.Activate()
+		defer httpmock.DeactivateAndReset()
+
+		lastActivity := 1769358371.223
+		response := map[string]*utiltypes.RayActivityResponse{
+			"driver": {
+				IsActive:       utiltypes.RayActivityStatusInactive,
+				LastActivityAt: &lastActivity,
+				Timestamp:      1769358400.0,
+			},
+		}
+		responseBytes, _ := json.Marshal(response)
+
+		httpmock.RegisterResponder(http.MethodGet, rayDashboardClient.dashboardURL+ComponentActivitiesPath,
+			func(_ *http.Request) (*http.Response, error) {
+				return httpmock.NewBytesResponse(200, responseBytes), nil
+			})
+
+		activities, err := rayDashboardClient.GetComponentActivities(context.TODO())
+		Expect(err).ToNot(HaveOccurred())
+		Expect(activities).To(HaveKey("driver"))
+		Expect(activities["driver"].IsActive).To(Equal(utiltypes.RayActivityStatusInactive))
+		Expect(*activities["driver"].LastActivityAt).To(Equal(lastActivity))
+	})
+
+	It("Test GetComponentActivities with active driver", func() {
+		httpmock.Activate()
+		defer httpmock.DeactivateAndReset()
+
+		lastActivity := 1769358371.223
+		response := map[string]*utiltypes.RayActivityResponse{
+			"driver": {
+				IsActive:       utiltypes.RayActivityStatusActive,
+				Reason:         ptr.To("Number of active drivers: 1"),
+				LastActivityAt: &lastActivity,
+				Timestamp:      1769358416.052846,
+			},
+		}
+		responseBytes, _ := json.Marshal(response)
+
+		httpmock.RegisterResponder(http.MethodGet, rayDashboardClient.dashboardURL+ComponentActivitiesPath,
+			func(_ *http.Request) (*http.Response, error) {
+				return httpmock.NewBytesResponse(200, responseBytes), nil
+			})
+
+		activities, err := rayDashboardClient.GetComponentActivities(context.TODO())
+		Expect(err).ToNot(HaveOccurred())
+		Expect(activities["driver"].IsActive).To(Equal(utiltypes.RayActivityStatusActive))
+		Expect(*activities["driver"].Reason).To(Equal("Number of active drivers: 1"))
+	})
+
+	It("Test GetComponentActivities with HTTP 500", func() {
+		httpmock.Activate()
+		defer httpmock.DeactivateAndReset()
+
+		httpmock.RegisterResponder(http.MethodGet, rayDashboardClient.dashboardURL+ComponentActivitiesPath,
+			func(_ *http.Request) (*http.Response, error) {
+				return httpmock.NewStringResponse(500, "Internal Server Error"), nil
+			})
+
+		_, err := rayDashboardClient.GetComponentActivities(context.TODO())
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("failed to get component activities"))
+	})
+
+	It("Test GetComponentActivities with invalid JSON response", func() {
+		httpmock.Activate()
+		defer httpmock.DeactivateAndReset()
+
+		httpmock.RegisterResponder(http.MethodGet, rayDashboardClient.dashboardURL+ComponentActivitiesPath,
+			func(_ *http.Request) (*http.Response, error) {
+				return httpmock.NewStringResponse(200, "not json"), nil
+			})
+
+		_, err := rayDashboardClient.GetComponentActivities(context.TODO())
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("failed to unmarshal component activities response"))
+	})
+
+	It("Test GetComponentActivities with network error", func() {
+		httpmock.Activate()
+		defer httpmock.DeactivateAndReset()
+
+		httpmock.RegisterResponder(http.MethodGet, rayDashboardClient.dashboardURL+ComponentActivitiesPath,
+			httpmock.NewErrorResponder(context.DeadlineExceeded))
+
+		_, err := rayDashboardClient.GetComponentActivities(context.TODO())
+		Expect(err).To(HaveOccurred())
+		Expect(errors.Is(err, context.DeadlineExceeded)).To(BeTrue())
+	})
+
+	It("Test GetComponentActivities with multiple components", func() {
+		httpmock.Activate()
+		defer httpmock.DeactivateAndReset()
+
+		driverActivity := 1769358371.223
+		response := map[string]*utiltypes.RayActivityResponse{
+			"driver": {
+				IsActive:       utiltypes.RayActivityStatusInactive,
+				LastActivityAt: &driverActivity,
+				Timestamp:      1769358400.0,
+			},
+			"custom_hook": {
+				IsActive:  utiltypes.RayActivityStatusActive,
+				Timestamp: 1769358410.0,
+			},
+		}
+		responseBytes, _ := json.Marshal(response)
+
+		httpmock.RegisterResponder(http.MethodGet, rayDashboardClient.dashboardURL+ComponentActivitiesPath,
+			func(_ *http.Request) (*http.Response, error) {
+				return httpmock.NewBytesResponse(200, responseBytes), nil
+			})
+
+		activities, err := rayDashboardClient.GetComponentActivities(context.TODO())
+		Expect(err).ToNot(HaveOccurred())
+		Expect(activities).To(HaveLen(2))
+		Expect(activities["driver"].IsActive).To(Equal(utiltypes.RayActivityStatusInactive))
+		Expect(activities["custom_hook"].IsActive).To(Equal(utiltypes.RayActivityStatusActive))
 	})
 })

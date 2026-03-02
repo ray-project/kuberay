@@ -43,6 +43,8 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/expectations"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/metrics"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/dashboardclient"
+	utiltypes "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/types"
 	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 )
 
@@ -85,6 +87,7 @@ type RayClusterReconciler struct {
 type RayClusterReconcilerOptions struct {
 	RayClusterMetricsManager *metrics.RayClusterMetricsManager
 	BatchSchedulerManager    *batchscheduler.SchedulerManager
+	DashboardClientFunc      func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error)
 	HeadSidecarContainers    []corev1.Container
 	WorkerSidecarContainers  []corev1.Container
 	DefaultContainerEnvs     []corev1.EnvVar
@@ -350,6 +353,11 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 	}
 
+	// Handle idle cluster termination based on TTLSecondsAfterIdle.
+	if features.Enabled(features.RayClusterIdleTermination) && instance.Spec.TTLSecondsAfterIdle != nil {
+		return r.handleIdleClusterTermination(ctx, instance)
+	}
+
 	// Unconditionally requeue after the number of seconds specified in the
 	// environment variable RAYCLUSTER_DEFAULT_REQUEUE_SECONDS_ENV. If the
 	// environment variable is not set, requeue after the default value.
@@ -385,6 +393,106 @@ func (r *RayClusterReconciler) reconcileAuthSecret(ctx context.Context, instance
 	}
 
 	return nil
+}
+
+// handleIdleClusterTermination handles the idle cluster termination based on TTLSecondsAfterIdle.
+// It queries the Ray Dashboard's /api/component_activities endpoint to determine cluster activity status.
+// If the cluster has been idle longer than the TTL, it deletes the cluster.
+// If the cluster is still active or the TTL has not been reached, it requeues for the next check.
+func (r *RayClusterReconciler) handleIdleClusterTermination(ctx context.Context, instance *rayv1.RayCluster) (ctrl.Result, error) {
+	logger := ctrl.LoggerFrom(ctx)
+
+	// Skip idle check for RayCluster created by RayJob or RayService.
+	// These controllers manage their own RayCluster lifecycle.
+	creatorCRDType := getCreatorCRDType(*instance)
+	if creatorCRDType == utils.RayJobCRD || creatorCRDType == utils.RayServiceCRD {
+		logger.Info("Skipping idle check: RayCluster managed by another controller", "creatorCRDType", creatorCRDType)
+		return ctrl.Result{}, nil
+	}
+
+	// Skip idle check for suspended clusters.
+	suspendStatus := utils.FindRayClusterSuspendStatus(instance)
+	statusConditionGateEnabled := features.Enabled(features.RayClusterStatusConditions)
+	if suspendStatus == rayv1.RayClusterSuspending || suspendStatus == rayv1.RayClusterSuspended ||
+		(!statusConditionGateEnabled && instance.Spec.Suspend != nil && *instance.Spec.Suspend) {
+		logger.Info("Skipping idle check: RayCluster is suspended", "suspendStatus", suspendStatus)
+		return ctrl.Result{}, nil
+	}
+
+	dashboardURL, err := utils.FetchHeadServiceURL(ctx, r.Client, instance, utils.DashboardPortName)
+	if err != nil {
+		logger.Error(err, "Failed to get the dashboard URL")
+		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
+	}
+
+	dashboardClient, err := r.options.DashboardClientFunc(instance, dashboardURL)
+	if err != nil {
+		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
+	}
+
+	activities, err := dashboardClient.GetComponentActivities(ctx)
+	if err != nil {
+		logger.Error(err, "Failed to get component activities from Ray Dashboard")
+		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
+	}
+
+	// Parse RayActivityResponse and find the most recent activity timestamp.
+	// The cluster is considered idle only when all components report INACTIVE status.
+	// If any component is ACTIVE or ERROR, skip the idle termination.
+	// Usually, the component only has driver, but user can set RAY_CLUSTER_ACTIVITY_HOOK to add more components.
+	// The lastActivityTime is used to determine how long the cluster has been idle.
+	// Note: A newly created cluster that has never run any jobs will have no lastActivityTime
+	var lastActivityTime *time.Time
+	for _, activity := range activities {
+		if activity == nil {
+			continue
+		}
+		if activity.IsActive == utiltypes.RayActivityStatusActive {
+			return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, nil
+		}
+		if activity.IsActive == utiltypes.RayActivityStatusError {
+			return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, nil
+		}
+		if activity.LastActivityAt != nil {
+			t := time.Unix(int64(*activity.LastActivityAt), 0)
+			if lastActivityTime == nil || t.After(*lastActivityTime) {
+				lastActivityTime = &t
+			}
+		}
+	}
+
+	// If no activity timestamp is available, requeue to check again later.
+	if lastActivityTime == nil {
+		logger.Info("Cluster is idle but no activity timestamp available")
+		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, nil
+	}
+
+	// Calculate idle duration and check if TTL has been exceeded.
+	ttlDuration := time.Duration(*instance.Spec.TTLSecondsAfterIdle) * time.Second
+	now := time.Now()
+	idleDuration := now.Sub(*lastActivityTime)
+	terminationTime := lastActivityTime.Add(ttlDuration)
+
+	if now.Before(terminationTime) {
+		requeueAfter := terminationTime.Sub(now)
+		logger.Info("TTL has not been reached for idle cluster termination. Requeuing.", "terminationTime", terminationTime, "requeueAfter", requeueAfter)
+		return ctrl.Result{RequeueAfter: requeueAfter}, nil
+	}
+
+	logger.Info("Deleting idle cluster.", "idleDuration", idleDuration, "ttl", ttlDuration)
+
+	if err := r.Delete(ctx, instance); err != nil {
+		r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.FailedToDeleteIdleRayCluster),
+			"Failed to delete idle RayCluster %s/%s: %v", instance.Namespace, instance.Name, err)
+		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
+	}
+
+	r.rayClusterScaleExpectation.Delete(instance.Name, instance.Namespace)
+	r.Recorder.Eventf(instance, corev1.EventTypeNormal, string(utils.DeletedIdleRayCluster),
+		"Deleted idle RayCluster %s/%s",
+		instance.Namespace, instance.Name)
+
+	return ctrl.Result{}, nil
 }
 
 // createAuthSecret generates a new secret with a random token.
