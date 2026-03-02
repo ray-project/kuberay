@@ -127,8 +127,10 @@ func routerAPI(s *ServerHandler) {
 		Param(ws.QueryParameter("node_id", "node_id")).
 		Param(ws.QueryParameter("glob", "glob pattern")).
 		Writes("")) // Placeholder for specific return type
-	ws.Route(ws.GET("/v0/logs/file").To(s.getNodeLogFile).Filter(s.CookieHandle).
-		Doc("get logfile").
+
+	ws.Route(ws.GET("/v0/logs/{media_type}").To(s.getNodeLog).Filter(s.CookieHandle).
+		Doc("get or stream logs").
+		Param(ws.PathParameter("media_type", "media type: 'file' for log file content, 'stream' for real-time streaming")).
 		Param(ws.QueryParameter("node_id", "node_id (optional if node_ip/task_id/actor_id is provided)")).
 		Param(ws.QueryParameter("node_ip", "node_ip (optional, resolve to node_id)")).
 		Param(ws.QueryParameter("filename", "filename (explicit log file path)")).
@@ -136,28 +138,17 @@ func routerAPI(s *ServerHandler) {
 		Param(ws.QueryParameter("actor_id", "actor_id (resolve log file from actor)")).
 		Param(ws.QueryParameter("pid", "pid (resolve log file from process id)")).
 		Param(ws.QueryParameter("suffix", "suffix (out or err, default: out, used with task_id/actor_id/pid)")).
-		Param(ws.QueryParameter("lines", "lines (number of lines to return, default: 1000)")).
+		Param(ws.QueryParameter("lines", "lines (number of lines to return, default: 1000, used with file)")).
 		Param(ws.QueryParameter("timeout", "timeout")).
-		Param(ws.QueryParameter("attempt_number", "attempt_number (task retry attempt number, default: 0)")).
-		Param(ws.QueryParameter("download_filename", "download_filename (if set, triggers download with this filename)")).
-		Param(ws.QueryParameter("filter_ansi_code", "filter_ansi_code (true/false)")).
+		Param(ws.QueryParameter("attempt_number", "attempt_number (task retry attempt number, default: 0, used with file)")).
+		Param(ws.QueryParameter("download_filename", "download_filename (if set, triggers download with this filename, used with file)")).
+		Param(ws.QueryParameter("filter_ansi_code", "filter_ansi_code (true/false, used with file)")).
+		Param(ws.QueryParameter("interval", "interval (polling interval in seconds, used with stream)")).
 		// Note: submission_id is not supported and not needed.
 		// The Ray Dashboard frontend does not use submission_id as a query param.
 		// Instead, it embeds the submission_id directly into the filename param
 		// (e.g. filename=job-driver-raysubmit_xxx.log), which is already supported.
-		Produces("text/plain").
-		Writes("")) // Placeholder for specific return type
-	ws.Route(ws.GET("/v0/logs/stream").To(s.getNodeLogStream).Filter(s.CookieHandle).
-		Doc("stream logs in real-time").
-		Param(ws.QueryParameter("node_id", "node_id (optional if node_ip/task_id/actor_id is provided)")).
-		Param(ws.QueryParameter("node_ip", "node_ip (optional, resolve to node_id)")).
-		Param(ws.QueryParameter("filename", "filename (explicit log file path)")).
-		Param(ws.QueryParameter("task_id", "task_id (resolve log file from task)")).
-		Param(ws.QueryParameter("actor_id", "actor_id (resolve log file from actor)")).
-		Param(ws.QueryParameter("pid", "pid (resolve log file from process id)")).
-		Param(ws.QueryParameter("suffix", "suffix (out or err, default: out, used with task_id/actor_id/pid)")).
-		Param(ws.QueryParameter("interval", "interval (polling interval in seconds)")).
-		Produces("text/event-stream").
+		Produces("text/plain", "text/event-stream").
 		Writes("")) // Placeholder for specific return type
 
 	ws.Route(ws.GET("/v0/tasks").To(s.getTasks).Filter(s.CookieHandle).
@@ -1235,6 +1226,21 @@ func (s *ServerHandler) getNodeLogStream(req *restful.Request, resp *restful.Res
 
 	// Forward to Ray Dashboard
 	s.redirectRequest(req, resp)
+}
+
+// getNodeLog is a unified endpoint that dispatches to getNodeLogFile or getNodeLogStream
+// based on the {media_type} path parameter, matching Ray Dashboard's GET /api/v0/logs/{media_type}.
+func (s *ServerHandler) getNodeLog(req *restful.Request, resp *restful.Response) {
+	mediaType := req.PathParameter("media_type")
+	switch mediaType {
+	case "file":
+		s.getNodeLogFile(req, resp)
+	case "stream":
+		s.getNodeLogStream(req, resp)
+	default:
+		resp.WriteErrorString(http.StatusBadRequest,
+			fmt.Sprintf("unsupported media_type: %s (must be 'file' or 'stream')", mediaType))
+	}
 }
 
 func (s *ServerHandler) getTaskSummarize(req *restful.Request, resp *restful.Response) {
