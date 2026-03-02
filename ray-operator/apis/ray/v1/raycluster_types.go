@@ -80,8 +80,15 @@ const (
 
 // AuthOptions defines the authentication options for a RayCluster.
 type AuthOptions struct {
-	// EnableK8sTokenAuth specifies whether to enable K8s token authentication.
-	// When set to true, all Ray Pods will set the environment variable RAY_ENABLE_K8S_TOKEN_AUTH to "true".
+	// EnableK8sTokenAuth enables Kubernetes-delegated token authentication.
+	// When true, the RAY_ENABLE_K8S_TOKEN_AUTH environment variable is set to "true"
+	// across all Ray Pods, and Ray will delegate authentication to the K8s API server.
+	//
+	// NOTE: The Kubernetes ServiceAccount token mounted to Raylets must be granted
+	// the `ray:write` custom verb via RBAC for this to function correctly.
+	//
+	// WARNING: This feature is intended for standalone RayCluster objects and is
+	// currently unsupported for RayJob or RayService resources.
 	// +optional
 	EnableK8sTokenAuth *bool `json:"enableK8sTokenAuth,omitempty"`
 
