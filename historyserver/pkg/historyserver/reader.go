@@ -13,6 +13,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/bmatcuk/doublestar/v4"
 	eventtypes "github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
 	"github.com/sirupsen/logrus"
 
@@ -70,14 +71,36 @@ func (s *ServerHandler) listClusters(ctx context.Context, limit int) []utils.Clu
 
 func (s *ServerHandler) _getNodeLogs(ctx context.Context, rayClusterNameID, sessionId, nodeId, dir string) ([]byte, error) {
 	logPath := path.Join(sessionId, utils.RAY_SESSIONDIR_LOGDIR_NAME, nodeId)
-	if dir != "" {
-		logPath = path.Join(logPath, dir)
+	if folder != "" {
+		logPath = path.Join(logPath, folder)
 	}
-	files := s.reader.ListFiles(ctx, rayClusterNameID, logPath)
+
+	// Filter files by glob pattern if provided; otherwise use all files.
+	// Use recursive listing when glob contains ** to support cross-directory matching.
+	var matchedFiles []string
+	if glob == "" {
+		matchedFiles = s.reader.ListFiles(rayClusterNameID, logPath)
+	} else {
+		var files []string
+		if strings.Contains(glob, "**") {
+			files = s.listFilesRecursive(rayClusterNameID, logPath)
+		} else {
+			files = s.reader.ListFiles(rayClusterNameID, logPath)
+		}
+		for _, file := range files {
+			matched, err := doublestar.Match(glob, file)
+			if err != nil {
+				return []byte{}, fmt.Errorf("invalid glob pattern %q matching against %q: %w", glob, file, err)
+			}
+			if matched {
+				matchedFiles = append(matchedFiles, file)
+			}
+		}
+	}
 
 	// Categorize log files to match Ray Dashboard API format.
 	// Ref: Ray Dashboard's LogsManager._categorize_log_files in log_manager.py
-	categorized := categorizeLogFiles(files)
+	categorized := categorizeLogFiles(matchedFiles)
 
 	ret := map[string]interface{}{
 		"result": true,
@@ -87,6 +110,26 @@ func (s *ServerHandler) _getNodeLogs(ctx context.Context, rayClusterNameID, sess
 		},
 	}
 	return json.Marshal(ret)
+}
+
+// listFilesRecursive recursively lists all files under dir,
+// returning paths relative to dir (e.g. "subdir/foo.log", "bar.out").
+// It recurses into subdirectories returned by ListFiles (identified by a trailing "/").
+func (s *ServerHandler) listFilesRecursive(clusterID, dir string) []string {
+	entries := s.reader.ListFiles(clusterID, dir)
+	var result []string
+	for _, entry := range entries {
+		if strings.HasSuffix(entry, "/") {
+			subDir := path.Join(dir, entry)
+			subFiles := s.listFilesRecursive(clusterID, subDir)
+			for _, f := range subFiles {
+				result = append(result, path.Join(strings.TrimSuffix(entry, "/"), f))
+			}
+		} else {
+			result = append(result, entry)
+		}
+	}
+	return result
 }
 
 // categorizeLogFiles categorizes log files by component type.
@@ -287,7 +330,7 @@ func (s *ServerHandler) resolvePidLogFilename(ctx context.Context, clusterNameID
 		return "", "", fmt.Errorf("failed to decode node_id: %w", err)
 	}
 
-	logPath := path.Join(sessionID, "logs", nodeIDHex)
+	logPath := path.Join(sessionID, utils.RAY_SESSIONDIR_LOGDIR_NAME, nodeIDHex)
 	files := s.reader.ListFiles(ctx, clusterNameID, logPath)
 
 	pidSuffix := fmt.Sprintf("-%d.%s", pid, suffix)
@@ -457,7 +500,7 @@ func (s *ServerHandler) findWorkerLogFile(ctx context.Context, clusterNameID, se
 	}
 
 	// List all files in the node's log directory
-	logPath := path.Join(sessionID, "logs", nodeIDHex)
+	logPath := path.Join(sessionID, utils.RAY_SESSIONDIR_LOGDIR_NAME, nodeIDHex)
 	files := s.reader.ListFiles(ctx, clusterNameID, logPath)
 
 	// Search for files matching pattern: worker-{worker_id_hex}-*.{suffix}
