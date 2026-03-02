@@ -105,7 +105,7 @@ func (r *RayLogsHandler) _listFiles(prefix string, delimiter string, onlyBase bo
 	return files
 }
 
-func (r *RayLogsHandler) ListFiles(ctx context.Context, clusterId string, dir string) []string {
+func (r *RayLogsHandler) ListFiles(_ context.Context, clusterId string, dir string) []string {
 	// NOTE: Aliyun OSS SDK does not support context cancellation. We accept ctx for interface compatibility.
 	prefix := path.Join(r.OssRootDir, clusterId, dir)
 
@@ -122,7 +122,7 @@ func (r *RayLogsHandler) ListFiles(ctx context.Context, clusterId string, dir st
 	return nodes
 }
 
-func (r *RayLogsHandler) List(ctx context.Context) (res []utils.ClusterInfo) {
+func (r *RayLogsHandler) List(_ context.Context) (res []utils.ClusterInfo) {
 	// NOTE: Aliyun OSS SDK does not support context cancellation. We accept ctx for interface compatibility.
 	defer func() {
 		if r := recover(); r != nil {
@@ -187,7 +187,7 @@ func (r *RayLogsHandler) List(ctx context.Context) (res []utils.ClusterInfo) {
 	return clusters
 }
 
-func (r *RayLogsHandler) GetContent(ctx context.Context, clusterId string, fileName string) io.Reader {
+func (r *RayLogsHandler) GetContent(_ context.Context, clusterId string, fileName string) io.Reader {
 	// NOTE: Aliyun OSS SDK does not support context cancellation. We accept ctx for interface compatibility.
 	logrus.Infof("Prepare to get object %s info ...", fileName)
 	options := []oss.Option{}
