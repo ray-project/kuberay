@@ -130,9 +130,11 @@ func (s *ServerHandler) _getNodeLogFile(ctx context.Context, rayClusterNameID, s
 	// Resolve node_id and filename based on options
 	nodeID, filename, err := s.resolveLogFilename(ctx, rayClusterNameID, sessionID, options)
 	if err != nil {
-		// Check if nil is due to context error
-		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			return nil, utils.NewHTTPError(ctx.Err(), http.StatusRequestTimeout)
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			if errors.Is(ctxErr, context.DeadlineExceeded) {
+				return nil, utils.NewHTTPError(ctxErr, http.StatusRequestTimeout)
+			}
+			return nil, utils.NewHTTPError(ctxErr, utils.StatusClientClosedRequest)
 		}
 		// Preserve HTTPError status code if already set, otherwise use BadRequest
 		var httpErr *utils.HTTPError
@@ -147,9 +149,11 @@ func (s *ServerHandler) _getNodeLogFile(ctx context.Context, rayClusterNameID, s
 	reader := s.reader.GetContent(ctx, rayClusterNameID, logPath)
 
 	if reader == nil {
-		// Check if nil is due to context error
-		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			return nil, utils.NewHTTPError(ctx.Err(), http.StatusRequestTimeout)
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			if errors.Is(ctxErr, context.DeadlineExceeded) {
+				return nil, utils.NewHTTPError(ctxErr, http.StatusRequestTimeout)
+			}
+			return nil, utils.NewHTTPError(ctxErr, utils.StatusClientClosedRequest)
 		}
 		return nil, utils.NewHTTPError(fmt.Errorf("log file not found: %s", logPath), http.StatusNotFound)
 	}
@@ -162,8 +166,11 @@ func (s *ServerHandler) _getNodeLogFile(ctx context.Context, rayClusterNameID, s
 		// -1 means read all lines
 		content, err := io.ReadAll(ctxReader)
 		if err != nil {
-			if errors.Is(err, context.DeadlineExceeded) {
-				return nil, utils.NewHTTPError(err, http.StatusRequestTimeout)
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				if errors.Is(ctxErr, context.DeadlineExceeded) {
+					return nil, utils.NewHTTPError(ctxErr, http.StatusRequestTimeout)
+				}
+				return nil, utils.NewHTTPError(ctxErr, utils.StatusClientClosedRequest)
 			}
 			return nil, err
 		}
@@ -200,8 +207,11 @@ func (s *ServerHandler) _getNodeLogFile(ctx context.Context, rayClusterNameID, s
 	}
 
 	if err := scanner.Err(); err != nil {
-		if errors.Is(err, context.DeadlineExceeded) {
-			return nil, utils.NewHTTPError(err, http.StatusRequestTimeout)
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			if errors.Is(ctxErr, context.DeadlineExceeded) {
+				return nil, utils.NewHTTPError(ctxErr, http.StatusRequestTimeout)
+			}
+			return nil, utils.NewHTTPError(ctxErr, utils.StatusClientClosedRequest)
 		}
 		return nil, err
 	}
