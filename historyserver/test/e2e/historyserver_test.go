@@ -59,6 +59,10 @@ func TestHistoryServer(t *testing.T) {
 			testFunc: testLogStreamEndpoint,
 		},
 		{
+			name:     "/api/v0/logs endpoint with glob pattern (dead cluster)",
+			testFunc: testNodeLogsEndpointDeadCluster,
+		},
+		{
 			name:     "/api/v0/tasks/timeline endpoint (live cluster)",
 			testFunc: testTimelineEndpointLiveCluster,
 		},
@@ -1063,6 +1067,274 @@ func testLogStreamEndpoint(test Test, g *WithT, namespace *corev1.Namespace, s3C
 
 	DeleteS3Bucket(test, g, s3Client)
 	LogWithTimestamp(test.T(), "Log stream endpoint tests completed")
+}
+
+// testNodeLogsEndpointDeadCluster verifies that the /api/v0/logs endpoint correctly lists and filters
+// log files for a dead cluster using the glob query parameter.
+//
+// The glob patterns tested mirror the four patterns constructed by the Ray Dashboard frontend:
+// https://github.com/ray-project/ray/blob/60d14699591f1150eb71b8f657160cab9f767dfb/python/ray/dashboard/client/src/pages/log/Logs.tsx#L134-L141
+//   - Case A: folder + filename search → "events/*RAYLET*"
+//   - Case B: root + filename search   → "*dashboard*"
+//   - Case C: folder only              → "events/*"
+//   - Case D: no glob (omitted)        → server returns all files
+//
+// The test follows these steps:
+// 1. Create a RayCluster and submit a Ray job.
+// 2. Delete RayCluster to trigger log upload to S3.
+// 3. Deploy the History Server and verify the cluster is listed as a dead session.
+// 4. Case A — glob=events/*RAYLET*: a directory prefix combined with a wrapped wildcard matches a specific file in a subdirectory.
+// 5. Case B — glob=*dashboard*: wildcards on both sides match any filename containing "dashboard" at root level.
+// 6. Case C — glob=events/*: a directory prefix with a bare wildcard lists all files in that subdirectory.
+// 7. Case D — no glob parameter: omitting the glob returns all log files (server default).
+// 8. glob=raylet* — wildcard suffix matches raylet.out and raylet.err.
+// 9. glob=nonexistent-*.xyz — a pattern matching no files returns an empty result.
+// 10. glob=events/event_JOBS* — subdirectory prefix is split from the pattern, then the wildcard matches within that subdirectory.
+// 11. glob=**/*.out — doublestar pattern recursively matches all .out files across all directories.
+// 12. Delete S3 bucket to ensure test isolation.
+func testNodeLogsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
+	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
+
+	DeleteRayClusterAndWait(test, g, namespace.Name, rayCluster.Name)
+
+	ApplyHistoryServer(test, g, namespace, "")
+	historyServerURL := GetHistoryServerURL(test, g, namespace)
+
+	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
+	g.Expect(clusterInfo.SessionName).NotTo(Equal(LiveSessionName), "Cluster should be a dead session after deletion")
+
+	client := CreateHTTPClientWithCookieJar(g)
+	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
+
+	nodeID := GetOneOfNodeID(g, client, historyServerURL, false)
+
+	// Case A: subdirectory + filename search — glob=events/*RAYLET*
+	test.T().Run("Case A: glob=events/*RAYLET* matches RAYLET event file in subdirectory", func(t *testing.T) {
+		g := NewWithT(t)
+
+		logsURL := fmt.Sprintf("%s%s?node_id=%s&glob=%s", historyServerURL, EndpointLogs, nodeID, url.QueryEscape("events/*RAYLET*"))
+		resp, err := client.Get(logsURL)
+		g.Expect(err).NotTo(HaveOccurred())
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(resp.StatusCode).To(Equal(http.StatusOK), "Expected OK, body: %s", string(body))
+
+		result := parseLogsResponse(body)
+		g.Expect(result).NotTo(BeNil(), "Response should be parseable, body: %s", string(body))
+
+		// events/*RAYLET* should match only event_RAYLET.log in the events/ subdirectory.
+		g.Expect(result).To(HaveLen(1), "Should only have one category, got: %v", result)
+		internalFiles, _ := result["internal"].([]interface{})
+		g.Expect(internalFiles).To(ConsistOf("event_RAYLET.log"), "events/*RAYLET* should match exactly event_RAYLET.log")
+		LogWithTimestamp(t, "glob=events/*RAYLET* correctly returned %d file", len(internalFiles))
+	})
+
+	// Case B: root directory filename search — glob=*dashboard*
+	test.T().Run("Case B: glob=*dashboard* matches dashboard files at root", func(t *testing.T) {
+		g := NewWithT(t)
+
+		logsURL := fmt.Sprintf("%s%s?node_id=%s&glob=%s", historyServerURL, EndpointLogs, nodeID, url.QueryEscape("*dashboard*"))
+		resp, err := client.Get(logsURL)
+		g.Expect(err).NotTo(HaveOccurred())
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(resp.StatusCode).To(Equal(http.StatusOK), "Expected OK, body: %s", string(body))
+
+		result := parseLogsResponse(body)
+		g.Expect(result).NotTo(BeNil(), "Response should be parseable, body: %s", string(body))
+
+		// *dashboard* matches any filename containing "dashboard", which includes files like
+		// dashboard_agent.out/err/log (categorized as "agent") and dashboard.out/err/log (categorized as "dashboard").
+		// Verify that every returned file contains "dashboard".
+		totalFiles := countFiles(result)
+		g.Expect(totalFiles).To(BeNumerically(">", 0), "glob=*dashboard* should match at least one file, got: %v", result)
+		for category, files := range result {
+			fileList, _ := files.([]interface{})
+			for _, f := range fileList {
+				g.Expect(f.(string)).To(ContainSubstring("dashboard"),
+					"Each file matched by *dashboard* should contain 'dashboard', got %q in category %q", f, category)
+			}
+		}
+		LogWithTimestamp(t, "glob=*dashboard* correctly returned %d dashboard files across %d categories", totalFiles, len(result))
+	})
+
+	// Case C: enter subdirectory without search — glob=events/*
+	test.T().Run("Case C: glob=events/* lists all files in events subdirectory", func(t *testing.T) {
+		g := NewWithT(t)
+
+		logsURL := fmt.Sprintf("%s%s?node_id=%s&glob=%s", historyServerURL, EndpointLogs, nodeID, url.QueryEscape("events/*"))
+		resp, err := client.Get(logsURL)
+		g.Expect(err).NotTo(HaveOccurred())
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(resp.StatusCode).To(Equal(http.StatusOK), "Expected OK, body: %s", string(body))
+
+		result := parseLogsResponse(body)
+		g.Expect(result).NotTo(BeNil(), "Response should be parseable, body: %s", string(body))
+
+		// events/* should list all event log files; they all fall into the "internal" category.
+		totalFiles := countFiles(result)
+		g.Expect(totalFiles).To(BeNumerically(">", 0), "events/* should return at least one file, got: %v", result)
+		LogWithTimestamp(t, "glob=events/* correctly returned %d files across %d categories", totalFiles, len(result))
+	})
+
+	// Case D: no glob parameter — server returns all log files.
+	test.T().Run("Case D: no glob parameter returns all log files", func(t *testing.T) {
+		g := NewWithT(t)
+
+		logsURL := fmt.Sprintf("%s%s?node_id=%s", historyServerURL, EndpointLogs, nodeID)
+		resp, err := client.Get(logsURL)
+		g.Expect(err).NotTo(HaveOccurred())
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(resp.StatusCode).To(Equal(http.StatusOK), "Expected OK, body: %s", string(body))
+
+		result := parseLogsResponse(body)
+		g.Expect(result).NotTo(BeNil(), "Response should be parseable, body: %s", string(body))
+		g.Expect(countFiles(result)).To(BeNumerically(">", 0), "No glob should return all files, got: %v", result)
+		LogWithTimestamp(t, "No glob parameter correctly returned %d files across %d categories", countFiles(result), len(result))
+	})
+
+	test.T().Run("glob=raylet* matches exactly raylet.out and raylet.err", func(t *testing.T) {
+		g := NewWithT(t)
+
+		logsURL := fmt.Sprintf("%s%s?node_id=%s&glob=%s", historyServerURL, EndpointLogs, nodeID, url.QueryEscape("raylet*"))
+		resp, err := client.Get(logsURL)
+		g.Expect(err).NotTo(HaveOccurred())
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(resp.StatusCode).To(Equal(http.StatusOK), "Expected OK, body: %s", string(body))
+
+		result := parseLogsResponse(body)
+		g.Expect(result).NotTo(BeNil(), "Response should be parseable, body: %s", string(body))
+
+		// raylet* matches only raylet.out and raylet.err, so only the "raylet" category should be present.
+		g.Expect(result).To(HaveLen(1), "Should only have the 'raylet' category, got: %v", result)
+		rayletFiles, _ := result["raylet"].([]interface{})
+		g.Expect(rayletFiles).To(ConsistOf("raylet.out", "raylet.err"),
+			"raylet* should match exactly raylet.out and raylet.err")
+		LogWithTimestamp(t, "glob=raylet* correctly returned %d raylet files", len(rayletFiles))
+	})
+
+	test.T().Run("glob pattern matching no files returns empty result", func(t *testing.T) {
+		g := NewWithT(t)
+
+		logsURL := fmt.Sprintf("%s%s?node_id=%s&glob=%s", historyServerURL, EndpointLogs, nodeID, url.QueryEscape("nonexistent-*.xyz"))
+		resp, err := client.Get(logsURL)
+		g.Expect(err).NotTo(HaveOccurred())
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(resp.StatusCode).To(Equal(http.StatusOK), "Expected OK even when glob matches nothing, body: %s", string(body))
+
+		result := parseLogsResponse(body)
+		g.Expect(result).NotTo(BeNil(), "Response should be parseable, body: %s", string(body))
+		g.Expect(countFiles(result)).To(Equal(0), "A glob matching no files should return an empty result")
+		LogWithTimestamp(t, "Non-matching glob correctly returned 0 files")
+	})
+
+	test.T().Run("glob=events/event_JOBS* matches exactly one file in the events subdirectory", func(t *testing.T) {
+		g := NewWithT(t)
+
+		// glob=events/event_JOBS* should match only event_JOBS.log inside the events/ subdirectory.
+		// Expected response:
+		//   {"data":{"result":{"internal":["event_JOBS.log"]}},"msg":"","result":true}
+		logsURL := fmt.Sprintf("%s%s?node_id=%s&glob=%s", historyServerURL, EndpointLogs, nodeID, url.QueryEscape("events/event_JOBS*"))
+		resp, err := client.Get(logsURL)
+		g.Expect(err).NotTo(HaveOccurred())
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(resp.StatusCode).To(Equal(http.StatusOK), "Expected OK, body: %s", string(body))
+
+		result := parseLogsResponse(body)
+		g.Expect(result).NotTo(BeNil(), "Response should be parseable, body: %s", string(body))
+
+		// events/event_JOBS* maps to the "internal" category; no other category should be present.
+		g.Expect(result).To(HaveLen(1), "Should only have the 'internal' category, got: %v", result)
+		internalFiles, _ := result["internal"].([]interface{})
+		g.Expect(internalFiles).To(ConsistOf("event_JOBS.log"), "glob=events/event_JOBS* should match exactly event_JOBS.log")
+		LogWithTimestamp(t, "glob=events/event_JOBS* correctly returned %d file", len(internalFiles))
+	})
+
+	test.T().Run("glob=**/*.out recursively matches all .out files across all directories", func(t *testing.T) {
+		g := NewWithT(t)
+
+		// glob=**/*.out should recursively match all .out files in the log directory and any subdirectories.
+		// Expected response contains .out files across multiple categories, e.g.:
+		//   {"data":{"result":{"agent":[...],"autoscaler":[...],"dashboard":[...],...}},"msg":"","result":true}
+		logsURL := fmt.Sprintf("%s%s?node_id=%s&glob=%s", historyServerURL, EndpointLogs, nodeID, url.QueryEscape("**/*.out"))
+		resp, err := client.Get(logsURL)
+		g.Expect(err).NotTo(HaveOccurred())
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(resp.StatusCode).To(Equal(http.StatusOK), "Expected OK, body: %s", string(body))
+
+		result := parseLogsResponse(body)
+		g.Expect(result).NotTo(BeNil(), "Response should be parseable, body: %s", string(body))
+
+		// **/*.out should match at least the well-known .out files at root level.
+		totalFiles := countFiles(result)
+		g.Expect(totalFiles).To(BeNumerically(">", 0), "**/*.out should return at least one file, got: %v", result)
+
+		// Every returned file must end with .out regardless of which category it falls into.
+		for category, files := range result {
+			fileList, _ := files.([]interface{})
+			for _, f := range fileList {
+				g.Expect(f.(string)).To(HaveSuffix(".out"),
+					"All files matched by **/*.out should end with .out, got %q in category %q", f, category)
+			}
+		}
+
+		LogWithTimestamp(t, "glob=**/*.out correctly returned %d .out files across %d categories", totalFiles, len(result))
+	})
+
+	DeleteS3Bucket(test, g, s3Client)
+	LogWithTimestamp(test.T(), "Dead cluster /api/v0/logs glob endpoint tests completed")
+}
+
+// parseLogsResponse parses the /api/v0/logs response body and returns the categorized
+// file map from data.result. Returns nil on any parse failure.
+func parseLogsResponse(body []byte) map[string]interface{} {
+	var resp map[string]interface{}
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return nil
+	}
+	data, ok := resp["data"].(map[string]interface{})
+	if !ok {
+		return nil
+	}
+	result, ok := data["result"].(map[string]interface{})
+	if !ok {
+		return nil
+	}
+	return result
+}
+
+// countFiles counts the total number of file entries across all categories in the result map.
+func countFiles(result map[string]interface{}) int {
+	total := 0
+	for _, v := range result {
+		if files, ok := v.([]interface{}); ok {
+			total += len(files)
+		}
+	}
+	return total
 }
 
 // testTimelineEndpointLiveCluster verifies that the history server can return timeline data from a live cluster.
