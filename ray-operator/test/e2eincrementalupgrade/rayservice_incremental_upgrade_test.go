@@ -16,6 +16,7 @@ import (
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
@@ -39,158 +40,158 @@ import (
 // 12. Validate the HTTPRoute backends have two backends (active and pending cluster serve services)
 // 13. Wait for incremental upgrade to complete
 // 14. Validate the RayService uses updated ServeConfig after upgrade completes
-// func TestRayServiceIncrementalUpgrade(t *testing.T) {
-// 	features.SetFeatureGateDuringTest(t, features.RayServiceIncrementalUpgrade, true)
+func TestRayServiceIncrementalUpgradeMain(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.RayServiceIncrementalUpgrade, true)
 
-// 	test := With(t)
-// 	g := NewWithT(t)
+	test := With(t)
+	g := NewWithT(t)
 
-// 	namespace := test.NewTestNamespace()
-// 	rayServiceName := "incremental-rayservice"
+	namespace := test.NewTestNamespace()
+	rayServiceName := "incremental-rayservice"
 
-// 	// Create a RayService with IncrementalUpgrade enabled
-// 	stepSize := ptr.To(int32(25))
-// 	interval := ptr.To(int32(5))
-// 	maxSurge := ptr.To(int32(50))
-// 	serveConfigV2 := defaultIncrementalUpgradeServeConfigV2
+	// Create a RayService with IncrementalUpgrade enabled
+	stepSize := ptr.To(int32(25))
+	interval := ptr.To(int32(5))
+	maxSurge := ptr.To(int32(50))
+	serveConfigV2 := defaultIncrementalUpgradeServeConfigV2
 
-// 	// Create RayService with IncrementalUpgrade enabled and wait for key components to be ready
-// 	rayService, httpRoute, gatewayIP := boostrapIncrementalRayService(test, g, namespace.Name, rayServiceName, stepSize, interval, maxSurge, serveConfigV2)
+	// Create RayService with IncrementalUpgrade enabled and wait for key components to be ready
+	rayService, httpRoute, gatewayIP := boostrapIncrementalRayService(test, g, namespace.Name, rayServiceName, stepSize, interval, maxSurge, serveConfigV2)
 
-// 	// Create curl pod to test traffic routing through Gateway to RayService
-// 	curlPodName := "curl-pod"
-// 	curlContainerName := "curl-container"
-// 	curlPod, err := CreateCurlPod(g, test, curlPodName, curlContainerName, namespace.Name)
-// 	g.Expect(err).NotTo(HaveOccurred())
+	// Create curl pod to test traffic routing through Gateway to RayService
+	curlPodName := "curl-pod"
+	curlContainerName := "curl-container"
+	curlPod, err := CreateCurlPod(g, test, curlPodName, curlContainerName, namespace.Name)
+	g.Expect(err).NotTo(HaveOccurred())
 
-// 	LogWithTimestamp(test.T(), "Waiting for Curl Pod %s to be ready", curlPodName)
-// 	g.Eventually(func(g Gomega) *corev1.Pod {
-// 		updatedPod, err := test.Client().Core().CoreV1().Pods(curlPod.Namespace).Get(test.Ctx(), curlPod.Name, metav1.GetOptions{})
-// 		g.Expect(err).NotTo(HaveOccurred())
-// 		return updatedPod
-// 	}, TestTimeoutShort).Should(WithTransform(IsPodRunningAndReady, BeTrue()))
+	LogWithTimestamp(test.T(), "Waiting for Curl Pod %s to be ready", curlPodName)
+	g.Eventually(func(g Gomega) *corev1.Pod {
+		updatedPod, err := test.Client().Core().CoreV1().Pods(curlPod.Namespace).Get(test.Ctx(), curlPod.Name, metav1.GetOptions{})
+		g.Expect(err).NotTo(HaveOccurred())
+		return updatedPod
+	}, TestTimeoutShort).Should(WithTransform(IsPodRunningAndReady, BeTrue()))
 
-// 	LogWithTimestamp(test.T(), "Verifying RayService is serving traffic")
-// 	stdout, _ := PostRayServiceGateway(test, gatewayIP, curlPod, curlContainerName, "/fruit", `["MANGO", 2]`)
-// 	g.Expect(stdout.String()).To(Equal("6"))
-// 	stdout, _ = PostRayServiceGateway(test, gatewayIP, curlPod, curlContainerName, "/calc", `["MUL", 3]`)
-// 	g.Expect(stdout.String()).To(Equal("15 pizzas please!"))
+	LogWithTimestamp(test.T(), "Verifying RayService is serving traffic")
+	stdout, _ := PostRayServiceGateway(test, gatewayIP, curlPod, curlContainerName, "/fruit", `["MANGO", 2]`)
+	g.Expect(stdout.String()).To(Equal("6"))
+	stdout, _ = PostRayServiceGateway(test, gatewayIP, curlPod, curlContainerName, "/calc", `["MUL", 3]`)
+	g.Expect(stdout.String()).To(Equal("15 pizzas please!"))
 
-// 	// Attempt to trigger NewClusterWithIncrementalUpgrade by updating RayService serve config and RayCluster spec
-// 	g.Eventually(func() error {
-// 		latestRayService, err := GetRayService(test, namespace.Name, rayServiceName)
-// 		if err != nil {
-// 			return err
-// 		}
-// 		latestRayService.Spec.RayClusterSpec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests[corev1.ResourceCPU] = resource.MustParse("500m")
-// 		serveConfig := latestRayService.Spec.ServeConfigV2
-// 		serveConfig = strings.ReplaceAll(serveConfig, "price: 3", "price: 4")
-// 		serveConfig = strings.ReplaceAll(serveConfig, "factor: 5", "factor: 3")
-// 		latestRayService.Spec.ServeConfigV2 = serveConfig
+	// Attempt to trigger NewClusterWithIncrementalUpgrade by updating RayService serve config and RayCluster spec
+	g.Eventually(func() error {
+		latestRayService, err := GetRayService(test, namespace.Name, rayServiceName)
+		if err != nil {
+			return err
+		}
+		latestRayService.Spec.RayClusterSpec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests[corev1.ResourceCPU] = resource.MustParse("500m")
+		serveConfig := latestRayService.Spec.ServeConfigV2
+		serveConfig = strings.ReplaceAll(serveConfig, "price: 3", "price: 4")
+		serveConfig = strings.ReplaceAll(serveConfig, "factor: 5", "factor: 3")
+		latestRayService.Spec.ServeConfigV2 = serveConfig
 
-// 		_, err = test.Client().Ray().RayV1().RayServices(namespace.Name).Update(
-// 			test.Ctx(),
-// 			latestRayService,
-// 			metav1.UpdateOptions{},
-// 		)
-// 		return err
-// 	}, TestTimeoutShort).Should(Succeed(), "Failed to update RayService to trigger upgrade")
+		_, err = test.Client().Ray().RayV1().RayServices(namespace.Name).Update(
+			test.Ctx(),
+			latestRayService,
+			metav1.UpdateOptions{},
+		)
+		return err
+	}, TestTimeoutShort).Should(Succeed(), "Failed to update RayService to trigger upgrade")
 
-// 	LogWithTimestamp(test.T(), "Waiting for RayService %s/%s UpgradeInProgress condition to be true", rayService.Namespace, rayService.Name)
-// 	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutShort).Should(WithTransform(IsRayServiceUpgrading, BeTrue()))
+	LogWithTimestamp(test.T(), "Waiting for RayService %s/%s UpgradeInProgress condition to be true", rayService.Namespace, rayService.Name)
+	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutShort).Should(WithTransform(IsRayServiceUpgrading, BeTrue()))
 
-// 	LogWithTimestamp(test.T(), "Verifying active and pending cluster serve services and HTTPRoute backends")
-// 	upgradingRaySvc, err := GetRayService(test, namespace.Name, rayServiceName)
-// 	g.Expect(err).NotTo(HaveOccurred())
-// 	activeClusterName := upgradingRaySvc.Status.ActiveServiceStatus.RayClusterName
-// 	g.Expect(activeClusterName).NotTo(BeEmpty(), "The active cluster should be set when a RayService is ready.")
-// 	pendingClusterName := upgradingRaySvc.Status.PendingServiceStatus.RayClusterName
-// 	g.Expect(pendingClusterName).NotTo(BeEmpty(), "The controller should have created a pending cluster.")
+	LogWithTimestamp(test.T(), "Verifying active and pending cluster serve services and HTTPRoute backends")
+	upgradingRaySvc, err := GetRayService(test, namespace.Name, rayServiceName)
+	g.Expect(err).NotTo(HaveOccurred())
+	activeClusterName := upgradingRaySvc.Status.ActiveServiceStatus.RayClusterName
+	g.Expect(activeClusterName).NotTo(BeEmpty(), "The active cluster should be set when a RayService is ready.")
+	pendingClusterName := upgradingRaySvc.Status.PendingServiceStatus.RayClusterName
+	g.Expect(pendingClusterName).NotTo(BeEmpty(), "The controller should have created a pending cluster.")
 
-// 	// Validate serve service for the active cluster exists.
-// 	activeServeSvcName := utils.GenerateServeServiceName(activeClusterName)
-// 	_, err = test.Client().Core().CoreV1().Services(namespace.Name).Get(test.Ctx(), activeServeSvcName, metav1.GetOptions{})
-// 	g.Expect(err).NotTo(HaveOccurred(), "The serve service for the active cluster should be created.")
+	// Validate serve service for the active cluster exists.
+	activeServeSvcName := utils.GenerateServeServiceName(activeClusterName)
+	_, err = test.Client().Core().CoreV1().Services(namespace.Name).Get(test.Ctx(), activeServeSvcName, metav1.GetOptions{})
+	g.Expect(err).NotTo(HaveOccurred(), "The serve service for the active cluster should be created.")
 
-// 	// Validate serve service for the pending cluster has been created for the upgrade.
-// 	pendingServeSvcName := utils.GenerateServeServiceName(pendingClusterName)
-// 	g.Eventually(func(g Gomega) {
-// 		_, err = test.Client().Core().CoreV1().Services(namespace.Name).Get(test.Ctx(), pendingServeSvcName, metav1.GetOptions{})
-// 		g.Expect(err).NotTo(HaveOccurred(), "The serve service for the pending cluster should be created.")
-// 	}, TestTimeoutShort).Should(Succeed())
+	// Validate serve service for the pending cluster has been created for the upgrade.
+	pendingServeSvcName := utils.GenerateServeServiceName(pendingClusterName)
+	g.Eventually(func(g Gomega) {
+		_, err = test.Client().Core().CoreV1().Services(namespace.Name).Get(test.Ctx(), pendingServeSvcName, metav1.GetOptions{})
+		g.Expect(err).NotTo(HaveOccurred(), "The serve service for the pending cluster should be created.")
+	}, TestTimeoutShort).Should(Succeed())
 
-// 	LogWithTimestamp(test.T(), "Waiting for pending RayCluster %s to have a ready head pod", pendingClusterName)
-// 	g.Eventually(RayCluster(test, namespace.Name, pendingClusterName), TestTimeoutMedium).
-// 		Should(WithTransform(StatusCondition(rayv1.HeadPodReady), MatchCondition(metav1.ConditionTrue, rayv1.HeadPodRunningAndReady)))
+	LogWithTimestamp(test.T(), "Waiting for pending RayCluster %s to have a ready head pod", pendingClusterName)
+	g.Eventually(RayCluster(test, namespace.Name, pendingClusterName), TestTimeoutMedium).
+		Should(WithTransform(StatusCondition(rayv1.HeadPodReady), MatchCondition(metav1.ConditionTrue, rayv1.HeadPodRunningAndReady)))
 
-// 	// Wait for the HTTPRoute to reflect the two backends.
-// 	LogWithTimestamp(test.T(), "Waiting for HTTPRoute to have two backends")
-// 	g.Eventually(func(g Gomega) {
-// 		route, err := GetHTTPRoute(test, namespace.Name, httpRoute.Name)
-// 		g.Expect(err).NotTo(HaveOccurred())
-// 		g.Expect(route.Spec.Rules).To(HaveLen(1))
-// 		g.Expect(route.Spec.Rules[0].BackendRefs).To(HaveLen(2))
-// 		g.Expect(string(route.Spec.Rules[0].BackendRefs[1].Name)).To(Equal(pendingServeSvcName))
-// 	}, TestTimeoutShort).Should(Succeed())
+	// Wait for the HTTPRoute to reflect the two backends.
+	LogWithTimestamp(test.T(), "Waiting for HTTPRoute to have two backends")
+	g.Eventually(func(g Gomega) {
+		route, err := GetHTTPRoute(test, namespace.Name, httpRoute.Name)
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(route.Spec.Rules).To(HaveLen(1))
+		g.Expect(route.Spec.Rules[0].BackendRefs).To(HaveLen(2))
+		g.Expect(string(route.Spec.Rules[0].BackendRefs[1].Name)).To(Equal(pendingServeSvcName))
+	}, TestTimeoutShort).Should(Succeed())
 
-// 	LogWithTimestamp(test.T(), "Validating stepwise traffic and capacity migration")
-// 	intervalSeconds := *interval
-// 	var lastMigratedTime *metav1.Time
-// 	oldVersionServed := false
-// 	newVersionServed := false
+	LogWithTimestamp(test.T(), "Validating stepwise traffic and capacity migration")
+	intervalSeconds := *interval
+	var lastMigratedTime *metav1.Time
+	oldVersionServed := false
+	newVersionServed := false
 
-// 	// Validate expected behavior during an IncrementalUpgrade. The following checks ensure
-// 	// that no requests are dropped throughout the upgrade process.
-// 	upgradeSteps := generateUpgradeSteps(*stepSize, *maxSurge)
-// 	for _, step := range upgradeSteps {
-// 		LogWithTimestamp(test.T(), "%s", step.name)
-// 		g.Eventually(func(g Gomega) int32 {
-// 			// Fetch updated RayService.
-// 			svc, err := GetRayService(test, namespace.Name, rayServiceName)
-// 			g.Expect(err).NotTo(HaveOccurred())
-// 			return step.getValue(svc)
-// 		}, TestTimeoutShort).Should(Equal(step.expectedValue))
+	// Validate expected behavior during an IncrementalUpgrade. The following checks ensure
+	// that no requests are dropped throughout the upgrade process.
+	upgradeSteps := generateUpgradeSteps(*stepSize, *maxSurge)
+	for _, step := range upgradeSteps {
+		LogWithTimestamp(test.T(), "%s", step.name)
+		g.Eventually(func(g Gomega) int32 {
+			// Fetch updated RayService.
+			svc, err := GetRayService(test, namespace.Name, rayServiceName)
+			g.Expect(err).NotTo(HaveOccurred())
+			return step.getValue(svc)
+		}, TestTimeoutShort).Should(Equal(step.expectedValue))
 
-// 		// Send a request to the RayService to validate no requests are dropped. Check that
-// 		// both endpoints are serving requests.
-// 		stdout, _ := PostRayServiceGateway(test, gatewayIP, curlPod, curlContainerName, "/fruit", `["MANGO", 2]`)
-// 		response := stdout.String()
-// 		g.Expect(response).To(Or(Equal("6"), Equal("8")), "Response should be from the old or new app version during the upgrade")
-// 		if response == "6" {
-// 			oldVersionServed = true
-// 		}
-// 		if response == "8" {
-// 			newVersionServed = true
-// 		}
+		// Send a request to the RayService to validate no requests are dropped. Check that
+		// both endpoints are serving requests.
+		stdout, _ := PostRayServiceGateway(test, gatewayIP, curlPod, curlContainerName, "/fruit", `["MANGO", 2]`)
+		response := stdout.String()
+		g.Expect(response).To(Or(Equal("6"), Equal("8")), "Response should be from the old or new app version during the upgrade")
+		if response == "6" {
+			oldVersionServed = true
+		}
+		if response == "8" {
+			newVersionServed = true
+		}
 
-// 		if strings.Contains(step.name, "pending traffic to shift") {
-// 			svc, err := GetRayService(test, namespace.Name, rayServiceName)
-// 			g.Expect(err).NotTo(HaveOccurred())
+		if strings.Contains(step.name, "pending traffic to shift") {
+			svc, err := GetRayService(test, namespace.Name, rayServiceName)
+			g.Expect(err).NotTo(HaveOccurred())
 
-// 			currentMigratedTime := svc.Status.PendingServiceStatus.LastTrafficMigratedTime
-// 			g.Expect(currentMigratedTime).NotTo(BeNil())
+			currentMigratedTime := svc.Status.PendingServiceStatus.LastTrafficMigratedTime
+			g.Expect(currentMigratedTime).NotTo(BeNil())
 
-// 			// Verify IntervalSeconds have passed since last TrafficRoutedPercent update.
-// 			if lastMigratedTime != nil {
-// 				duration := currentMigratedTime.Sub(lastMigratedTime.Time)
-// 				g.Expect(duration).To(BeNumerically(">=", intervalSeconds),
-// 					"Time between traffic steps should be >= IntervalSeconds")
-// 			}
-// 			lastMigratedTime = currentMigratedTime
-// 		}
-// 	}
-// 	LogWithTimestamp(test.T(), "Verifying both old and new versions served traffic during the upgrade")
-// 	g.Expect(oldVersionServed).To(BeTrue(), "The old version of the service should have served traffic during the upgrade.")
-// 	g.Expect(newVersionServed).To(BeTrue(), "The new version of the service should have served traffic during the upgrade.")
+			// Verify IntervalSeconds have passed since last TrafficRoutedPercent update.
+			if lastMigratedTime != nil {
+				duration := currentMigratedTime.Sub(lastMigratedTime.Time)
+				g.Expect(duration).To(BeNumerically(">=", intervalSeconds),
+					"Time between traffic steps should be >= IntervalSeconds")
+			}
+			lastMigratedTime = currentMigratedTime
+		}
+	}
+	LogWithTimestamp(test.T(), "Verifying both old and new versions served traffic during the upgrade")
+	g.Expect(oldVersionServed).To(BeTrue(), "The old version of the service should have served traffic during the upgrade.")
+	g.Expect(newVersionServed).To(BeTrue(), "The new version of the service should have served traffic during the upgrade.")
 
-// 	// Check that RayService completed upgrade
-// 	LogWithTimestamp(test.T(), "Waiting for RayService %s/%s UpgradeInProgress condition to be false", rayService.Namespace, rayService.Name)
-// 	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutShort).Should(WithTransform(IsRayServiceUpgrading, BeFalse()))
+	// Check that RayService completed upgrade
+	LogWithTimestamp(test.T(), "Waiting for RayService %s/%s UpgradeInProgress condition to be false", rayService.Namespace, rayService.Name)
+	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutShort).Should(WithTransform(IsRayServiceUpgrading, BeFalse()))
 
-// 	LogWithTimestamp(test.T(), "Verifying RayService uses updated ServeConfig after upgrade completes")
-// 	stdout, _ = PostRayServiceGateway(test, gatewayIP, curlPod, curlContainerName, "/fruit", `["MANGO", 2]`)
-// 	g.Expect(stdout.String()).To(Equal("8"))
-// }
+	LogWithTimestamp(test.T(), "Verifying RayService uses updated ServeConfig after upgrade completes")
+	stdout, _ = PostRayServiceGateway(test, gatewayIP, curlPod, curlContainerName, "/fruit", `["MANGO", 2]`)
+	g.Expect(stdout.String()).To(Equal("8"))
+}
 
 // TestRayServiceIncrementalUpgradeWithLocust tests the incremental upgrade flow of the RayService
 // by running a Locust load test throughout the entire upgrade lifecycle:
