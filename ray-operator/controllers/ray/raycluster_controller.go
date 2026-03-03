@@ -380,6 +380,10 @@ func (r *RayClusterReconciler) reconcileAuthSecret(ctx context.Context, instance
 		return nil
 	}
 
+	if instance.Spec.AuthOptions.SecretName != nil && *instance.Spec.AuthOptions.SecretName != "" {
+		return nil
+	}
+
 	secret := &corev1.Secret{}
 	secretName := utils.CheckName(instance.Name)
 	err := r.Get(ctx, types.NamespacedName{Name: secretName, Namespace: instance.Namespace}, secret)

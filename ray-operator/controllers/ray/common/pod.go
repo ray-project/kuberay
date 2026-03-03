@@ -318,6 +318,9 @@ func SetContainerTokenAuthEnvVars(clusterName string, container *corev1.Containe
 		}
 	} else {
 		secretName := utils.CheckName(clusterName)
+		if authOptions != nil && authOptions.SecretName != nil && *authOptions.SecretName != "" {
+			secretName = *authOptions.SecretName
+		}
 		if !utils.EnvVarExists(utils.RAY_AUTH_TOKEN_ENV_VAR, container.Env) {
 			container.Env = append(container.Env, corev1.EnvVar{
 				Name: utils.RAY_AUTH_TOKEN_ENV_VAR,

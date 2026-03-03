@@ -963,6 +963,9 @@ func GetRayDashboardClientFunc(ctx context.Context, mgr manager.Manager, useKube
 
 		if rayCluster != nil && rayCluster.Spec.AuthOptions != nil && rayCluster.Spec.AuthOptions.Mode == rayv1.AuthModeToken {
 			secretName := CheckName(rayCluster.Name)
+			if rayCluster.Spec.AuthOptions.SecretName != nil && *rayCluster.Spec.AuthOptions.SecretName != "" {
+				secretName = *rayCluster.Spec.AuthOptions.SecretName
+			}
 			secret := &corev1.Secret{}
 			secretKey := types.NamespacedName{
 				Name:      secretName,

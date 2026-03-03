@@ -3660,7 +3660,7 @@ func TestReconcile_PodsWithAuthToken(t *testing.T) {
 				ValueFrom: &corev1.EnvVarSource{
 					SecretKeyRef: &corev1.SecretKeySelector{
 						LocalObjectReference: corev1.LocalObjectReference{Name: testRayCluster.Name},
-						Key:                  "auth_token",
+						Key:                  utils.RAY_AUTH_TOKEN_SECRET_KEY,
 					},
 				},
 			}
@@ -3808,5 +3808,83 @@ func TestShouldRecreatePodsForUpgrade(t *testing.T) {
 			result := testRayClusterReconciler.shouldRecreatePodsForUpgrade(ctx, cluster)
 			assert.Equal(t, tc.expectedRecreate, result)
 		})
+	}
+}
+
+func TestReconcileAuthSecret_WithSecretName(t *testing.T) {
+	setupTest(t)
+
+	providedSecretName := "provided-secret"
+	testRayCluster.Spec.AuthOptions = &rayv1.AuthOptions{
+		Mode:       rayv1.AuthModeToken,
+		SecretName: &providedSecretName,
+	}
+
+	fakeClient := clientFake.NewClientBuilder().Build()
+	ctx := context.Background()
+
+	testRayClusterReconciler := &RayClusterReconciler{
+		Client:                     fakeClient,
+		Recorder:                   &record.FakeRecorder{},
+		Scheme:                     scheme.Scheme,
+		rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
+	}
+
+	err := testRayClusterReconciler.reconcileAuthSecret(ctx, testRayCluster)
+	require.NoError(t, err)
+
+	// Verify no secret is created.
+	secretList := corev1.SecretList{}
+	err = fakeClient.List(ctx, &secretList)
+	require.NoError(t, err)
+	assert.Empty(t, secretList.Items, "No secret should be created when SecretName is provided")
+}
+
+func TestReconcilePodsWithAuthTokenSecretName(t *testing.T) {
+	setupTest(t)
+
+	providedSecretName := "provided-secret"
+	testRayCluster.Spec.AuthOptions = &rayv1.AuthOptions{
+		Mode:       rayv1.AuthModeToken,
+		SecretName: &providedSecretName,
+	}
+
+	fakeClient := clientFake.NewClientBuilder().Build()
+	ctx := context.Background()
+
+	testRayClusterReconciler := &RayClusterReconciler{
+		Client:                     fakeClient,
+		Recorder:                   &record.FakeRecorder{},
+		Scheme:                     scheme.Scheme,
+		rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
+	}
+
+	err := testRayClusterReconciler.reconcilePods(ctx, testRayCluster)
+	require.NoError(t, err, "Fail to reconcile Pods")
+
+	podList := corev1.PodList{}
+	err = fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
+	require.NoError(t, err, "Fail to get pod list")
+	assert.NotEmpty(t, podList.Items, "expected pods to be created")
+
+	// Assert that all Pods have RAY_AUTH_TOKEN environment variable referencing providedSecretName
+	for _, pod := range podList.Items {
+		authTokenEnvFound := false
+		for _, env := range pod.Spec.Containers[utils.RayContainerIndex].Env {
+			expectedSecretValue := corev1.EnvVar{
+				Name: utils.RAY_AUTH_TOKEN_ENV_VAR,
+				ValueFrom: &corev1.EnvVarSource{
+					SecretKeyRef: &corev1.SecretKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{Name: providedSecretName},
+						Key:                  utils.RAY_AUTH_TOKEN_SECRET_KEY,
+					},
+				},
+			}
+			if reflect.DeepEqual(expectedSecretValue, env) {
+				authTokenEnvFound = true
+				break
+			}
+		}
+		assert.True(t, authTokenEnvFound, "Auth token env var with provided secret name not found")
 	}
 }

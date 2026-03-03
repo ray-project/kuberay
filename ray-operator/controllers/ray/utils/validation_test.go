@@ -2675,3 +2675,70 @@ func TestValidateRayClusterSpec_WorkerGroupReplicaValidation(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateRayClusterSpec_Auth(t *testing.T) {
+	tests := []struct {
+		authOptions *rayv1.AuthOptions
+		name        string
+		errorMsg    string
+		expectError bool
+	}{
+		{
+			name: "enableK8sTokenAuth=true and secretName set",
+			authOptions: &rayv1.AuthOptions{
+				Mode:               rayv1.AuthModeToken,
+				EnableK8sTokenAuth: ptr.To(true),
+				SecretName:         ptr.To("my-secret"),
+			},
+			expectError: true,
+			errorMsg:    "authOptions.enableK8sTokenAuth is enabled and authOptions.secretName is also set",
+		},
+		{
+			name: "enableK8sTokenAuth=true and secretName unset",
+			authOptions: &rayv1.AuthOptions{
+				Mode:               rayv1.AuthModeToken,
+				EnableK8sTokenAuth: ptr.To(true),
+			},
+			expectError: false,
+		},
+		{
+			name: "enableK8sTokenAuth=false and secretName set",
+			authOptions: &rayv1.AuthOptions{
+				Mode:       rayv1.AuthModeToken,
+				SecretName: ptr.To("my-secret"),
+			},
+			expectError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cluster := &rayv1.RayCluster{
+				Spec: rayv1.RayClusterSpec{
+					RayVersion:  "2.55.0", // Required for checks
+					AuthOptions: tt.authOptions,
+					HeadGroupSpec: rayv1.HeadGroupSpec{
+						Template: podTemplateSpec(nil, nil),
+					},
+					WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+						{
+							GroupName:   "worker-group",
+							Template:    podTemplateSpec(nil, nil),
+							MinReplicas: ptr.To(int32(1)),
+							MaxReplicas: ptr.To(int32(1)),
+						},
+					},
+				},
+			}
+			err := ValidateRayClusterSpec(&cluster.Spec, cluster.Annotations)
+			if tt.expectError {
+				require.Error(t, err)
+				if tt.errorMsg != "" {
+					assert.Contains(t, err.Error(), tt.errorMsg)
+				}
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
