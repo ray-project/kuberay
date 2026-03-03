@@ -2,7 +2,14 @@ package e2eincrementalupgrade
 
 type serveConfigV2 string
 
-// defaultIncrementalUpgradeServeConfigV2 configures a Serve app for basic incremental upgrade tests.
+// The following defines the Serve configurations for different types of incremental upgrade tests, including:
+//   - Functional test
+//   - High-RPS Locust load test
+//
+// NOTE: working_dir is coupled with the external GitHub repos, which might lead to CI flakiness considering the
+// availability and stability of these repos and specific commit hashes.
+
+// defaultIncrementalUpgradeServeConfigV2 configures a Serve app for functional tests.
 const defaultIncrementalUpgradeServeConfigV2 serveConfigV2 = `applications:
   - name: fruit_app
     import_path: fruit.deployment_graph

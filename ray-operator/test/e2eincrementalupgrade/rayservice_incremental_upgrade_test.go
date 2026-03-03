@@ -210,7 +210,7 @@ func TestRayServiceIncrementalUpgradeMain(t *testing.T) {
 // 6. Create a ConfigMap with Locust runner script
 // 7. Deploy a head-only Locust RayCluster and install Locust in the head Pod
 // 8. Start Locust in a background goroutine targeting Gateway IP
-// 9. (Should be modified) Wait for Locust to ramp up
+// 9. Wait for Locust to ramp up and enter the steady state
 // 10. Update the RayCluster spec and RayService serve config to trigger upgrade
 //   - NOTE: Incremental upgrade is triggered by RayCluster spec changes, not serve config changes
 //
@@ -264,7 +264,8 @@ func TestRayServiceIncrementalUpgradeWithLocust(t *testing.T) {
 	g.Expect(err).NotTo(HaveOccurred())
 	LogWithTimestamp(test.T(), "Found Locust head pod %s/%s", locustHeadPod.Namespace, locustHeadPod.Name)
 
-	ExecPodCmd(test, locustHeadPod, common.RayHeadContainer, []string{"pip", "install", "locust==2.32.10"})
+	_, stderr := ExecPodCmd(test, locustHeadPod, common.RayHeadContainer, []string{"pip", "install", "locust==2.32.10"}, true)
+	g.Expect(stderr.String()).To(BeEmpty(), "pip install locust should not return errors, got: %s", stderr.String())
 
 	// Phase 3: Start Locust in a background goroutine targeting Gateway IP
 	var wg sync.WaitGroup
