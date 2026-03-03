@@ -3660,7 +3660,7 @@ func TestReconcile_PodsWithAuthToken(t *testing.T) {
 				ValueFrom: &corev1.EnvVarSource{
 					SecretKeyRef: &corev1.SecretKeySelector{
 						LocalObjectReference: corev1.LocalObjectReference{Name: testRayCluster.Name},
-						Key:                  "auth_token",
+						Key:                  utils.RAY_AUTH_TOKEN_SECRET_KEY,
 					},
 				},
 			}
@@ -3849,7 +3849,7 @@ func TestReconcilePodsWithAuthTokenSecretName(t *testing.T) {
 		SecretName: &providedSecretName,
 	}
 
-	fakeClient := clientFake.NewClientBuilder().WithRuntimeObjects().Build()
+	fakeClient := clientFake.NewClientBuilder().Build()
 	ctx := context.Background()
 
 	testRayClusterReconciler := &RayClusterReconciler{
@@ -3875,7 +3875,7 @@ func TestReconcilePodsWithAuthTokenSecretName(t *testing.T) {
 				ValueFrom: &corev1.EnvVarSource{
 					SecretKeyRef: &corev1.SecretKeySelector{
 						LocalObjectReference: corev1.LocalObjectReference{Name: providedSecretName},
-						Key:                  "auth_token",
+						Key:                  utils.RAY_AUTH_TOKEN_SECRET_KEY,
 					},
 				},
 			}
