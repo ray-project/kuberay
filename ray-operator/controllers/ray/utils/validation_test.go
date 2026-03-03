@@ -2678,10 +2678,10 @@ func TestValidateRayClusterSpec_WorkerGroupReplicaValidation(t *testing.T) {
 
 func TestValidateRayClusterSpec_Auth(t *testing.T) {
 	tests := []struct {
-		name        string
 		authOptions *rayv1.AuthOptions
-		expectError bool
+		name        string
 		errorMsg    string
+		expectError bool
 	}{
 		{
 			name: "enableK8sTokenAuth=true and secretName set",
@@ -2691,7 +2691,7 @@ func TestValidateRayClusterSpec_Auth(t *testing.T) {
 				SecretName:         ptr.To("my-secret"),
 			},
 			expectError: true,
-			errorMsg:    "authOptions.secretName cannot be set when authOptions.enableK8sTokenAuth is true",
+			errorMsg:    "authOptions.enableK8sTokenAuth is enabled and authOptions.secretName is also set",
 		},
 		{
 			name: "enableK8sTokenAuth=true and secretName unset",
@@ -2715,7 +2715,7 @@ func TestValidateRayClusterSpec_Auth(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			cluster := &rayv1.RayCluster{
 				Spec: rayv1.RayClusterSpec{
-					RayVersion: "2.55.0", // Required for checks
+					RayVersion:  "2.55.0", // Required for checks
 					AuthOptions: tt.authOptions,
 					HeadGroupSpec: rayv1.HeadGroupSpec{
 						Template: podTemplateSpec(nil, nil),
