@@ -162,6 +162,8 @@ spec:
                         - disabled
                         - token
                         type: string
+                      secretName:
+                        type: string
                     type: object
                   autoscalerOptions:
                     properties:
