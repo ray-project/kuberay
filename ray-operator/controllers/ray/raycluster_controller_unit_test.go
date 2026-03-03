@@ -3865,6 +3865,7 @@ func TestReconcilePodsWithAuthTokenSecretName(t *testing.T) {
 	podList := corev1.PodList{}
 	err = fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
 	require.NoError(t, err, "Fail to get pod list")
+	assert.NotEmpty(t, podList.Items, "expected pods to be created")
 
 	// Assert that all Pods have RAY_AUTH_TOKEN environment variable referencing providedSecretName
 	for _, pod := range podList.Items {
