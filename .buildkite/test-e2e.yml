@@ -75,14 +75,19 @@
     # Install Gateway API CRDs (Required for Incremental Upgrade)
     - kubectl apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml
 
+    # Wait for Istio GatewayClass created via istiod
+    - kubectl wait --for=create gatewayclass/istio --timeout=60s
+    - kubectl wait --for=condition=Accepted gatewayclass/istio --timeout=60s
+
     # Ensure Istio GatewayClass exists
+    # TODO(jwj): Remove if redundant.
     - |
       echo "--- Ensuring Istio GatewayClass exists"
       if ! kubectl get gatewayclass istio >/dev/null 2>&1; then
         echo "Istio GatewayClass not found, creating..."
         kubectl apply -f ray-operator/config/samples/gateway-api/istio-class.yaml
       else
-        echo "Istio GatewayClass already exists"
+        echo "Istio GatewayClass has been created by istiod"
       fi
 
     # Install MetalLB for LoadBalancer IPs on Kind
