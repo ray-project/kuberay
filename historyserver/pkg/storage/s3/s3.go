@@ -46,7 +46,6 @@ import (
 type RayLogsHandler struct {
 	S3Client       *s3.Client
 	LogFiles       chan string
-	HttpClient     *http.Client
 	S3Bucket       string
 	SessionDir     string
 	S3RootDir      string
@@ -86,19 +85,10 @@ func (r *RayLogsHandler) CreateDirectory(d string) error {
 
 func (r *RayLogsHandler) WriteFile(file string, reader io.ReadSeeker) error {
 	ctx := context.Background()
-	// Get size by seeking to end; MinIO requires ContentLength to be set.
-	size, err := reader.Seek(0, io.SeekEnd)
-	if err != nil {
-		return fmt.Errorf("failed to seek to end of reader: %w", err)
-	}
-	if _, err := reader.Seek(0, io.SeekStart); err != nil {
-		return fmt.Errorf("failed to seek to start of reader: %w", err)
-	}
-	_, err = r.S3Client.PutObject(ctx, &s3.PutObjectInput{
-		Bucket:        aws.String(r.S3Bucket),
-		Key:           aws.String(file),
-		Body:          reader,
-		ContentLength: aws.Int64(size),
+	_, err := r.S3Client.PutObject(ctx, &s3.PutObjectInput{
+		Bucket: aws.String(r.S3Bucket),
+		Key:    aws.String(file),
+		Body:   reader,
 	})
 	return err
 }
@@ -456,14 +446,6 @@ func New(c *config) (*RayLogsHandler, error) {
 		RayClusterName: c.RayClusterName,
 		RayClusterID:   c.RayClusterID,
 		RayNodeName:    c.RayNodeName,
-		HttpClient: &http.Client{
-			Timeout: httpTimeout,
-			Transport: &http.Transport{
-				MaxIdleConns:        100,
-				MaxIdleConnsPerHost: 20,
-				IdleConnTimeout:     90 * time.Second,
-			},
-		},
 		LogBatching:  c.LogBatching,
 		PushInterval: c.PushInterval,
 	}, nil

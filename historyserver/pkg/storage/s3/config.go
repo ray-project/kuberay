@@ -32,103 +32,59 @@ func getS3BucketWithDefault() string {
 
 func (c *config) complete(rcc *types.RayCollectorConfig, jd map[string]interface{}) error {
 	c.RayCollectorConfig = *rcc
-	c.S3ID = os.Getenv("AWS_S3ID")
-	c.S3Secret = os.Getenv("AWS_S3SECRET")
-	c.S3Token = os.Getenv("AWS_S3TOKEN")
-	c.S3Bucket = getS3BucketWithDefault()
-	if len(jd) == 0 {
-		c.S3Endpoint = os.Getenv("S3_ENDPOINT")
-		c.S3Region = os.Getenv("S3_REGION")
-		if err := setBoolFromEnv("S3FORCE_PATH_STYLE", &c.S3ForcePathStyle); err != nil {
-			return err
-		}
-		if err := setBoolFromEnv("S3DISABLE_SSL", &c.DisableSSL); err != nil {
-			return err
-		}
-	} else {
-		if bucket, ok := jd["s3Bucket"]; ok {
-			v, ok := bucket.(string)
-			if !ok {
-				return fmt.Errorf("invalid type %T for s3Bucket: expected string", bucket)
-			}
-			c.S3Bucket = v
-		}
-		if endpoint, ok := jd["s3Endpoint"]; ok {
-			v, ok := endpoint.(string)
-			if !ok {
-				return fmt.Errorf("invalid type %T for s3Endpoint: expected string", endpoint)
-			}
-			c.S3Endpoint = v
-		}
-		if region, ok := jd["s3Region"]; ok {
-			v, ok := region.(string)
-			if !ok {
-				return fmt.Errorf("invalid type %T for s3Region: expected string", region)
-			}
-			c.S3Region = v
-		}
-		if forcePathStyle, ok := jd["s3ForcePathStyle"]; ok {
-			if err := setBoolFromValue("s3ForcePathStyle", forcePathStyle, &c.S3ForcePathStyle); err != nil {
-				return err
-			}
-		}
-		if s3disableSSL, ok := jd["s3DisableSSL"]; ok {
-			if err := setBoolFromValue("s3DisableSSL", s3disableSSL, &c.DisableSSL); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
+	return c.populateFromEnvAndJSON(jd)
 }
 
 func (c *config) completeHSConfig(rcc *types.RayHistoryServerConfig, jd map[string]interface{}) error {
 	c.RayCollectorConfig = types.RayCollectorConfig{
 		RootDir: rcc.RootDir,
 	}
+	return c.populateFromEnvAndJSON(jd)
+}
+
+func (c *config) populateFromEnvAndJSON(jd map[string]interface{}) error {
 	c.S3ID = os.Getenv("AWS_S3ID")
 	c.S3Secret = os.Getenv("AWS_S3SECRET")
 	c.S3Token = os.Getenv("AWS_S3TOKEN")
-	c.S3Bucket = getS3BucketWithDefault() // Use default if S3_BUCKET not set
-	if len(jd) == 0 {
-		c.S3Endpoint = os.Getenv("S3_ENDPOINT")
-		c.S3Region = os.Getenv("S3_REGION")
-		if err := setBoolFromEnv("S3FORCE_PATH_STYLE", &c.S3ForcePathStyle); err != nil {
+	c.S3Bucket = getS3BucketWithDefault()
+	c.S3Endpoint = os.Getenv("S3_ENDPOINT")
+	c.S3Region = os.Getenv("S3_REGION")
+	if err := setBoolFromEnv("S3FORCE_PATH_STYLE", &c.S3ForcePathStyle); err != nil {
+		return err
+	}
+	if err := setBoolFromEnv("S3DISABLE_SSL", &c.DisableSSL); err != nil {
+		return err
+	}
+
+	if bucket, ok := jd["s3Bucket"]; ok {
+		v, ok := bucket.(string)
+		if !ok {
+			return fmt.Errorf("invalid type %T for s3Bucket: expected string", bucket)
+		}
+		c.S3Bucket = v
+	}
+	if endpoint, ok := jd["s3Endpoint"]; ok {
+		v, ok := endpoint.(string)
+		if !ok {
+			return fmt.Errorf("invalid type %T for s3Endpoint: expected string", endpoint)
+		}
+		c.S3Endpoint = v
+	}
+	if region, ok := jd["s3Region"]; ok {
+		v, ok := region.(string)
+		if !ok {
+			return fmt.Errorf("invalid type %T for s3Region: expected string", region)
+		}
+		c.S3Region = v
+	}
+	if forcePathStyle, ok := jd["s3ForcePathStyle"]; ok {
+		if err := setBoolFromValue("s3ForcePathStyle", forcePathStyle, &c.S3ForcePathStyle); err != nil {
 			return err
 		}
-		if err := setBoolFromEnv("S3DISABLE_SSL", &c.DisableSSL); err != nil {
+	}
+	if s3disableSSL, ok := jd["s3DisableSSL"]; ok {
+		if err := setBoolFromValue("s3DisableSSL", s3disableSSL, &c.DisableSSL); err != nil {
 			return err
-		}
-	} else {
-		if bucket, ok := jd["s3Bucket"]; ok {
-			v, ok := bucket.(string)
-			if !ok {
-				return fmt.Errorf("invalid type %T for s3Bucket: expected string", bucket)
-			}
-			c.S3Bucket = v
-		}
-		if endpoint, ok := jd["s3Endpoint"]; ok {
-			v, ok := endpoint.(string)
-			if !ok {
-				return fmt.Errorf("invalid type %T for s3Endpoint: expected string", endpoint)
-			}
-			c.S3Endpoint = v
-		}
-		if region, ok := jd["s3Region"]; ok {
-			v, ok := region.(string)
-			if !ok {
-				return fmt.Errorf("invalid type %T for s3Region: expected string", region)
-			}
-			c.S3Region = v
-		}
-		if forcePathStyle, ok := jd["s3ForcePathStyle"]; ok {
-			if err := setBoolFromValue("s3ForcePathStyle", forcePathStyle, &c.S3ForcePathStyle); err != nil {
-				return err
-			}
-		}
-		if s3disableSSL, ok := jd["s3DisableSSL"]; ok {
-			if err := setBoolFromValue("s3DisableSSL", s3disableSSL, &c.DisableSSL); err != nil {
-				return err
-			}
 		}
 	}
 	return nil
