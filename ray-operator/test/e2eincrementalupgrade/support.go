@@ -23,7 +23,7 @@ import (
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
 
-// boostrapIncrementalRayService creates a RayService with incremental upgrade enabled
+// bootstrapIncrementalRayService creates a RayService with incremental upgrade enabled
 // and waits for all required components to be ready, including:
 //   - RayService
 //   - Gateway
@@ -36,7 +36,7 @@ import (
 //   - serveConfigV2: The Serve config V2 to use for the RayService.
 //
 // Returns the RayService, HTTPRoute, and Gateway IP.
-func boostrapIncrementalRayService(
+func bootstrapIncrementalRayService(
 	test Test,
 	g *WithT,
 	namespace string,

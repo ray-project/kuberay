@@ -1,6 +1,50 @@
 package e2eincrementalupgrade
 
+import "k8s.io/utils/ptr"
+
 type serveConfigV2 string
+
+// These parameters control capacity scaling and gradual traffic migration during the upgrade.
+type IncrementalUpgradeParams struct {
+	Name     string
+	StepSize int32
+	Interval int32
+	MaxSurge int32
+}
+
+// incrementalUpgradeCombinations defines diverse (stepSize, interval, maxSurge) combinations
+// to exercise different upgrade behaviors. Each combination targets a distinct scenario.
+var incrementalUpgradeCombinations = []IncrementalUpgradeParams{
+	{
+		// Scenario: Instant cutover.
+		// All capacity and traffic shift in one step, which behaves like a blue/green deployment.
+		StepSize: 100,
+		Interval: 1,
+		MaxSurge: 100,
+		Name:     "BlueGreen",
+	},
+	{
+		// Scenario: Standard gradual upgrade.
+		// Scaling and migration in multiple steps.
+		StepSize: 25,
+		Interval: 5,
+		MaxSurge: 50,
+		Name:     "StandardGradual",
+	},
+	{
+		// Scenario: Conservative gradual upgrade.
+		// Low-step, long-interval scaling and migration in multiple steps.
+		StepSize: 5,
+		Interval: 10,
+		MaxSurge: 25,
+		Name:     "ConservativeGradual",
+	},
+}
+
+// ptrs returns (*stepSize, *interval, *maxSurge) for use with the RayService bootstrap helper.
+func (p IncrementalUpgradeParams) ptrs() (*int32, *int32, *int32) {
+	return ptr.To(p.StepSize), ptr.To(p.Interval), ptr.To(p.MaxSurge)
+}
 
 // The following defines the Serve configurations for different types of incremental upgrade tests, including:
 //   - Functional test
