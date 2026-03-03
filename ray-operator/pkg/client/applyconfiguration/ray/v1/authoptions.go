@@ -25,6 +25,10 @@ type AuthOptionsApplyConfiguration struct {
 	// Supported values are "disabled" and "token".
 	// Defaults to "token".
 	Mode *rayv1.AuthMode `json:"mode,omitempty"`
+	// SecretName is the name of the Secret that contains the authentication token.
+	// If set, KubeRay will skip generating a Secret object per RayCluster containing a token.
+	// The Secret must have a data key `auth_token` that contains the value of the token.
+	SecretName *string `json:"secretName,omitempty"`
 }
 
 // AuthOptionsApplyConfiguration constructs a declarative configuration of the AuthOptions type for use with
@@ -46,5 +50,13 @@ func (b *AuthOptionsApplyConfiguration) WithEnableK8sTokenAuth(value bool) *Auth
 // If called multiple times, the Mode field is set to the value of the last call.
 func (b *AuthOptionsApplyConfiguration) WithMode(value rayv1.AuthMode) *AuthOptionsApplyConfiguration {
 	b.Mode = &value
+	return b
+}
+
+// WithSecretName sets the SecretName field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the SecretName field is set to the value of the last call.
+func (b *AuthOptionsApplyConfiguration) WithSecretName(value string) *AuthOptionsApplyConfiguration {
+	b.SecretName = &value
 	return b
 }
