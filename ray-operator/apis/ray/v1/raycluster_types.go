@@ -92,18 +92,18 @@ type AuthOptions struct {
 	// +optional
 	EnableK8sTokenAuth *bool `json:"enableK8sTokenAuth,omitempty"`
 
+	// SecretName is the name of the Secret that contains the authentication token.
+	// If set, KubeRay will skip generating a Secret object per RayCluster containing a token.
+	// The Secret must have a data key `auth_token` that contains the value of the token.
+	// +optional
+	SecretName *string `json:"secretName,omitempty"`
+
 	// Mode specifies the authentication mode.
 	// Supported values are "disabled" and "token".
 	// Defaults to "token".
 	// +kubebuilder:validation:Enum=disabled;token
 	// +optional
 	Mode AuthMode `json:"mode,omitempty"`
-
-	// SecretName is the name of the Secret that contains the authentication token.
-	// If set, KubeRay will skip generating a Secret object per RayCluster containing a token.
-	// The Secret must have a data key `auth_token` that contains the value of the token.
-	// +optional
-	SecretName *string `json:"secretName,omitempty"`
 }
 
 // GcsFaultToleranceOptions contains configs for GCS FT
