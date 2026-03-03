@@ -3589,6 +3589,37 @@ func TestReconcile_AuthSecret(t *testing.T) {
 	assert.Len(t, decodedBytes, 32)
 }
 
+func TestReconcile_AuthSecret_SkipWhenK8sTokenAuthEnabled(t *testing.T) {
+	setupTest(t)
+
+	testRayCluster.Spec.AuthOptions = &rayv1.AuthOptions{
+		Mode:               rayv1.AuthModeToken,
+		EnableK8sTokenAuth: ptr.To(true),
+	}
+
+	fakeClient := clientFake.NewClientBuilder().WithRuntimeObjects(testPods...).Build()
+	ctx := context.Background()
+
+	secretNamespacedName := types.NamespacedName{
+		Name:      instanceName,
+		Namespace: namespaceStr,
+	}
+
+	testRayClusterReconciler := &RayClusterReconciler{
+		Client:                     fakeClient,
+		Recorder:                   &record.FakeRecorder{},
+		Scheme:                     scheme.Scheme,
+		rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
+	}
+
+	err := testRayClusterReconciler.reconcileAuthSecret(ctx, testRayCluster)
+	require.NoError(t, err, "Fail to reconcile auth secret")
+
+	secret := corev1.Secret{}
+	err = fakeClient.Get(ctx, secretNamespacedName, &secret)
+	assert.True(t, k8serrors.IsNotFound(err), "Secret should not be created when K8s token auth is enabled")
+}
+
 func TestReconcile_PodsWithAuthToken(t *testing.T) {
 	setupTest(t)
 
