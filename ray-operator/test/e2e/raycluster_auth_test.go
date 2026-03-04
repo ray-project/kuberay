@@ -116,11 +116,9 @@ func TestRayClusterAuthOptions(t *testing.T) {
 		})
 	})
 
-	test.T().Run("RayCluster with K8s token authentication enabled", func(t *testing.T) {
+	test.T().Run("RayCluster with authOptions.enableK8sTokenAuth=true", func(t *testing.T) {
 		t.Parallel()
 
-		// Case 1: spec.authOptions=token and spec.authOptions.enableK8sTokenAuth=true
-		// Create RBAC resources for the test
 		cleanup := setupAuthRBAC(test, namespace.Name)
 		defer cleanup()
 
@@ -149,19 +147,14 @@ func TestRayClusterAuthOptions(t *testing.T) {
 		g.Expect(err).NotTo(HaveOccurred())
 		g.Expect(headPod).NotTo(BeNil())
 
-		// Verify RAY_ENABLE_K8S_TOKEN_AUTH env var is true
-		VerifyContainerEnvVar(test, rayCluster, &headPod.Spec.Containers[utils.RayContainerIndex], utils.RAY_ENABLE_K8S_TOKEN_AUTH_ENV_VAR, "true")
+		VerifyContainerEnvVar(test, &headPod.Spec.Containers[utils.RayContainerIndex], utils.RAY_ENABLE_K8S_TOKEN_AUTH_ENV_VAR, "true")
 
-		// Verify token volume mount exists
-		VerifyContainerVolumeMount(test, rayCluster, &headPod.Spec.Containers[utils.RayContainerIndex], utils.RayTokenVolumeName, utils.RayTokenMountPath)
+		VerifyContainerVolumeMount(test, &headPod.Spec.Containers[utils.RayContainerIndex], utils.RayTokenVolumeName, utils.RayTokenMountPath)
 
-		// Verify job submission works using the token from the file
-		// We can't easily "get" the token from outside without exec-ing, so we'll just exec a job submit that reads the token
 		test.T().Run("Submit job with K8s auth token should succeed", func(_ *testing.T) {
 			LogWithTimestamp(test.T(), "Testing job submission WITH K8s auth token")
 			submissionId := fmt.Sprintf("test-job-k8s-auth-%d", time.Now().Unix())
 
-			// We need to read the token from the file and use it.
 			tokenPath := fmt.Sprintf("%s/token", utils.RayTokenMountPath)
 			submitCmd := []string{
 				"bash", "-c",
@@ -175,14 +168,12 @@ func TestRayClusterAuthOptions(t *testing.T) {
 		})
 	})
 
-	test.T().Run("RayCluster with custom secret for authentication", func(t *testing.T) {
+	test.T().Run("RayCluster with authOptions.secretName", func(t *testing.T) {
 		t.Parallel()
 
-		// Case 2: spec.authOptions.secretName=test-token
-		secretName := "test-token-secret"
+		secretName := "test-token-secret" // #nosec G101
 		token := "my-custom-secret-token-123"
 
-		// Create the secret first
 		secret := &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      secretName,
@@ -214,11 +205,8 @@ func TestRayClusterAuthOptions(t *testing.T) {
 		headPod, err := GetHeadPod(test, rayCluster)
 		g.Expect(err).NotTo(HaveOccurred())
 
-		// Verify RAY_AUTH_TOKEN env var comes from the secret
-		// We can check if the env var is set to use valueFrom secretKeyRef
-		VerifyContainerEnvVarFromSecret(test, rayCluster, &headPod.Spec.Containers[utils.RayContainerIndex], utils.RAY_AUTH_TOKEN_ENV_VAR, secretName, utils.RAY_AUTH_TOKEN_SECRET_KEY)
+		VerifyContainerEnvVarFromSecret(test, &headPod.Spec.Containers[utils.RayContainerIndex], utils.RAY_AUTH_TOKEN_ENV_VAR, secretName, utils.RAY_AUTH_TOKEN_SECRET_KEY)
 
-		// Test job submission with the custom token
 		test.T().Run("Submit job with custom auth token should succeed", func(_ *testing.T) {
 			LogWithTimestamp(test.T(), "Testing job submission WITH custom auth token")
 			submissionId := fmt.Sprintf("test-job-custom-auth-%d", time.Now().Unix())
@@ -255,7 +243,7 @@ func getAuthTokenFromPod(test Test, rayCluster *rayv1.RayCluster, pod *corev1.Po
 	return ""
 }
 
-func VerifyContainerEnvVar(test Test, rayCluster *rayv1.RayCluster, container *corev1.Container, envName, envValue string) {
+func VerifyContainerEnvVar(test Test, container *corev1.Container, envName, envValue string) {
 	test.T().Helper()
 	g := NewWithT(test.T())
 
@@ -270,7 +258,7 @@ func VerifyContainerEnvVar(test Test, rayCluster *rayv1.RayCluster, container *c
 	g.Expect(envVar.Value).To(Equal(envValue), "Environment variable %s should have value %s in container %s", envName, envValue, container.Name)
 }
 
-func VerifyContainerVolumeMount(test Test, rayCluster *rayv1.RayCluster, container *corev1.Container, mountName, mountPath string) {
+func VerifyContainerVolumeMount(test Test, container *corev1.Container, mountName, mountPath string) {
 	test.T().Helper()
 	g := NewWithT(test.T())
 
@@ -285,7 +273,7 @@ func VerifyContainerVolumeMount(test Test, rayCluster *rayv1.RayCluster, contain
 	g.Expect(mount.MountPath).To(Equal(mountPath), "Volume mount %s should have path %s in container %s", mountName, mountPath, container.Name)
 }
 
-func VerifyContainerEnvVarFromSecret(test Test, rayCluster *rayv1.RayCluster, container *corev1.Container, envName, secretName, secretKey string) {
+func VerifyContainerEnvVarFromSecret(test Test, container *corev1.Container, envName, secretName, secretKey string) {
 	test.T().Helper()
 	g := NewWithT(test.T())
 
