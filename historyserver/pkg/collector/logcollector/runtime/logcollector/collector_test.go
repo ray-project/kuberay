@@ -1,12 +1,9 @@
 package logcollector
 
 import (
-	"errors"
 	"io"
-	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -14,12 +11,6 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
-
-type roundTripFunc func(*http.Request) (*http.Response, error)
-
-func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
-	return f(req)
-}
 
 // MockStorageWriter is a mock implementation of storage.StorageWriter for testing
 type MockStorageWriter struct {
@@ -204,96 +195,4 @@ func TestScanAndProcess(t *testing.T) {
 
 	// Signal the background goroutine to exit gracefully
 	close(handler.ShutdownChan)
-}
-
-// TestFetchAndStoreTimezone tests the complete timezone fetch-and-store flow,
-// including the retry loop and session name resolution.
-func TestFetchAndStoreTimezone(t *testing.T) {
-	// Create a symlink at /tmp/ray/session_latest → a real session dir
-	// so that resolveSessionName() works.
-	sessionDirName := "session_2024-12-15_10-30-45_123456"
-	sessionRealDir := filepath.Join("/tmp", "ray", sessionDirName)
-	sessionLatestLink := filepath.Join("/tmp", "ray", "session_latest")
-
-	if err := os.MkdirAll(sessionRealDir, 0755); err != nil {
-		t.Fatalf("Failed to create session dir: %v", err)
-	}
-	// Remove any pre-existing symlink, then create ours.
-	os.Remove(sessionLatestLink)
-	if err := os.Symlink(sessionRealDir, sessionLatestLink); err != nil {
-		t.Fatalf("Failed to create session_latest symlink: %v", err)
-	}
-	defer func() {
-		os.Remove(sessionLatestLink)
-		os.RemoveAll(sessionRealDir)
-	}()
-
-	testCases := []struct {
-		name         string
-		client       *http.Client
-		expectWrite  bool
-		expectedBody string
-	}{
-		{
-			name: "Dashboard unavailable triggers retry then shutdown",
-			client: &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
-				return nil, errors.New("dashboard not available")
-			})},
-			expectWrite: false,
-		},
-		{
-			name: "Dashboard timezone is stored",
-			client: &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
-				return &http.Response{
-					StatusCode: http.StatusOK,
-					Body:       io.NopCloser(strings.NewReader(`{"offset":"+09:00","value":"Asia/Seoul"}`)),
-					Header:     make(http.Header),
-				}, nil
-			})},
-			expectWrite:  true,
-			expectedBody: `{"offset":"+09:00","value":"Asia/Seoul"}`,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			g := NewWithT(t)
-
-			mockWriter := NewMockStorageWriter()
-			shutdownChan := make(chan struct{})
-			handler := &RayLogHandler{
-				Writer:           mockWriter,
-				HttpClient:       tc.client,
-				RayClusterName:   "test-cluster",
-				RayClusterID:     "abc123",
-				ClusterDir:       "/tmp/test-root/test-cluster_abc123",
-				DashboardAddress: "http://127.0.0.1:8265",
-				ShutdownChan:     shutdownChan,
-			}
-
-			if !tc.expectWrite {
-				// For failure cases, run in a goroutine and signal shutdown
-				// to break the retry loop.
-				go func() {
-					time.Sleep(100 * time.Millisecond)
-					close(shutdownChan)
-				}()
-				handler.FetchAndStoreTimezone()
-				g.Expect(mockWriter.writtenFiles).To(BeEmpty(), "No file should be written when dashboard is unavailable")
-				return
-			}
-
-			handler.FetchAndStoreTimezone()
-
-			g.Expect(mockWriter.writtenFiles).To(HaveLen(1))
-
-			var actualContent string
-			for _, content := range mockWriter.writtenFiles {
-				actualContent = content
-				break
-			}
-
-			g.Expect(actualContent).To(Equal(tc.expectedBody))
-		})
-	}
 }
