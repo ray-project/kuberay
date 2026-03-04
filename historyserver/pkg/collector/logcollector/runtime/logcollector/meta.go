@@ -118,7 +118,7 @@ func (r *RayLogHandler) FetchAndStoreClusterMetadata() {
 // resolveSessionName waits for the session_latest symlink to appear and resolves
 // the session name from it. It retries with exponential backoff.
 func (r *RayLogHandler) resolveSessionName() (string, error) {
-	sessionLatestDir := filepath.Join("/tmp", "ray", "session_latest")
+	sessionLatestDir := utils.RaySessionLatestPath
 	retryInterval := metadataRetryInterval
 
 	for {
