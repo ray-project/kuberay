@@ -208,6 +208,11 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 			SetContainerTokenAuthEnvVars(instance.Name, &autoscalerContainer)
 		}
 
+		// Configure mTLS env vars and volume mount for the autoscaler sidecar.
+		if utils.IsMTLSEnabled(&instance.Spec) {
+			SetContainerTLSConfig(&autoscalerContainer)
+		}
+
 		// Merge the user overrides from autoscalerOptions into the autoscaler container config.
 		mergeAutoscalerOverrides(&autoscalerContainer, instance.Spec.AutoscalerOptions)
 		podTemplate.Spec.Containers = append(podTemplate.Spec.Containers, autoscalerContainer)
@@ -233,6 +238,8 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 	if utils.IsAuthEnabled(&instance.Spec) {
 		configureTokenAuth(instance.Name, &podTemplate)
 	}
+
+	configureTLS(&podTemplate, instance, rayv1.HeadNode)
 
 	return podTemplate
 }
@@ -281,6 +288,98 @@ func SetContainerTokenAuthEnvVars(clusterName string, container *corev1.Containe
 			},
 		},
 	})
+}
+
+// configureTLS injects mTLS configuration into the pod template.
+// Mounts the TLS secret (cert-manager generated or BYOC) and sets TLS environment variables.
+// Idempotent: skips adding the TLS volume if one with RayTLSVolumeName already exists.
+func configureTLS(podTemplate *corev1.PodTemplateSpec, instance rayv1.RayCluster, rayNodeType rayv1.RayNodeType) {
+	if !utils.IsMTLSEnabled(&instance.Spec) {
+		return
+	}
+
+	// Get the TLS secret name. In BYOC mode, the same user-provided secret is used
+	// for both head and worker. In auto-generate mode, cert-manager creates separate secrets.
+	secretName := utils.GetTLSSecretName(instance.Name, rayNodeType, instance.Spec)
+
+	// Add the TLS volume if not already present (avoid duplicates on re-entry).
+	hasTLSVolume := false
+	for i := range podTemplate.Spec.Volumes {
+		if podTemplate.Spec.Volumes[i].Name == utils.RayTLSVolumeName {
+			hasTLSVolume = true
+			break
+		}
+	}
+	if !hasTLSVolume {
+		podTemplate.Spec.Volumes = append(podTemplate.Spec.Volumes, corev1.Volume{
+			Name: utils.RayTLSVolumeName,
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName: secretName,
+				},
+			},
+		})
+	}
+
+	// Inject env vars and volume mount into the Ray container (SetContainerTLSConfig is idempotent).
+	SetContainerTLSConfig(&podTemplate.Spec.Containers[utils.RayContainerIndex])
+
+	// Inject into init containers that need TLS (e.g. wait-gcs-ready).
+	for i := range podTemplate.Spec.InitContainers {
+		SetContainerTLSConfig(&podTemplate.Spec.InitContainers[i])
+	}
+
+	if rayNodeType == rayv1.HeadNode {
+		rayContainer := &podTemplate.Spec.Containers[utils.RayContainerIndex]
+		if !utils.EnvVarExists("MY_POD_IP", rayContainer.Env) {
+			rayContainer.Env = append(rayContainer.Env, corev1.EnvVar{
+				Name: "MY_POD_IP",
+				ValueFrom: &corev1.EnvVarSource{
+					FieldRef: &corev1.ObjectFieldSelector{FieldPath: "status.podIP"},
+				},
+			})
+		}
+	}
+}
+
+// SetContainerTLSConfig adds TLS environment variables and volume mount to a container.
+// Idempotent: only appends env vars and volume mount if not already present (avoids duplicates).
+// Exported so it can be reused by RayJob submitter containers when needed.
+func SetContainerTLSConfig(container *corev1.Container) {
+	// Add TLS env vars only if not already present.
+	// Use a slice (not a map) to ensure deterministic ordering.
+	tlsEnvVars := []corev1.EnvVar{
+		{Name: utils.RAY_USE_TLS, Value: "1"},
+		{Name: utils.RAY_TLS_SERVER_CERT, Value: utils.RayTLSCertMountPath + "/tls.crt"},
+		{Name: utils.RAY_TLS_SERVER_KEY, Value: utils.RayTLSCertMountPath + "/tls.key"},
+		{Name: utils.RAY_TLS_CA_CERT, Value: utils.RayTLSCertMountPath + "/ca.crt"},
+	}
+	existingEnvNames := make(map[string]struct{}, len(container.Env))
+	for _, e := range container.Env {
+		existingEnvNames[e.Name] = struct{}{}
+	}
+	for _, ev := range tlsEnvVars {
+		if _, ok := existingEnvNames[ev.Name]; !ok {
+			container.Env = append(container.Env, ev)
+		}
+	}
+
+	// Add TLS volume mount only if not already present (by name or mount path).
+	hasTLSMount := false
+	for i := range container.VolumeMounts {
+		m := &container.VolumeMounts[i]
+		if m.Name == utils.RayTLSVolumeName || m.MountPath == utils.RayTLSCertMountPath {
+			hasTLSMount = true
+			break
+		}
+	}
+	if !hasTLSMount {
+		container.VolumeMounts = append(container.VolumeMounts, corev1.VolumeMount{
+			Name:      utils.RayTLSVolumeName,
+			MountPath: utils.RayTLSCertMountPath,
+			ReadOnly:  true,
+		})
+	}
 }
 
 func getEnableInitContainerInjection() bool {
@@ -408,6 +507,8 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 	if utils.IsAuthEnabled(&instance.Spec) {
 		configureTokenAuth(instance.Name, &podTemplate)
 	}
+
+	configureTLS(&podTemplate, instance, rayv1.WorkerNode)
 
 	return podTemplate
 }

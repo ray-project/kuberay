@@ -147,8 +147,30 @@ const (
 	RAY_USAGE_STATS_KUBERAY_IN_USE          = "RAY_USAGE_STATS_KUBERAY_IN_USE"
 	RAY_USAGE_STATS_EXTRA_TAGS              = "RAY_USAGE_STATS_EXTRA_TAGS"
 	RAYCLUSTER_DEFAULT_REQUEUE_SECONDS_ENV  = "RAYCLUSTER_DEFAULT_REQUEUE_SECONDS_ENV"
-	RAYCLUSTER_DEFAULT_REQUEUE_SECONDS      = 300
-	KUBERAY_GEN_RAY_START_CMD               = "KUBERAY_GEN_RAY_START_CMD"
+
+	RAYCLUSTER_DEFAULT_REQUEUE_SECONDS = 300
+	KUBERAY_GEN_RAY_START_CMD          = "KUBERAY_GEN_RAY_START_CMD"
+
+	// TLS-related environment variables for Ray. See: https://docs.ray.io/en/latest/ray-core/configure.html#tls-authentication
+	RAY_USE_TLS         = "RAY_USE_TLS"
+	RAY_TLS_SERVER_CERT = "RAY_TLS_SERVER_CERT"
+	RAY_TLS_SERVER_KEY  = "RAY_TLS_SERVER_KEY"
+	RAY_TLS_CA_CERT     = "RAY_TLS_CA_CERT"
+
+	// TLS volume and mount path constants for certificate mounting into Ray pods.
+	RayTLSVolumeName    = "ray-tls"
+	RayTLSCertMountPath = "/home/ray/workspace/tls"
+
+	// cert-manager resource naming prefixes for auto-generated PKI resources.
+	RaySelfSignedIssuerPrefix = "ray-selfsigned-issuer"
+	RayCACertificatePrefix    = "ray-ca-certificate"
+	RayCAIssuerPrefix         = "ray-ca-issuer"
+	RayHeadCertPrefix         = "ray-head-cert"
+	RayWorkerCertPrefix       = "ray-worker-cert"
+	// #nosec G101 -- these are Kubernetes Secret resource name prefixes, not credentials
+	RayHeadSecretPrefix   = "ray-head-secret"
+	RayWorkerSecretPrefix = "ray-worker-secret"
+	RayCASecretPrefix     = "ca-secret"
 
 	// Environment variables for RayJob submitter Kubernetes Job.
 	// Example: ray job submit --address=http://$RAY_DASHBOARD_ADDRESS --submission-id=$RAY_JOB_SUBMISSION_ID ...
@@ -414,4 +436,15 @@ const (
 	// RoleBinding list
 	CreatedRoleBinding        K8sEventType = "CreatedRoleBinding"
 	FailedToCreateRoleBinding K8sEventType = "FailedToCreateRoleBinding"
+
+	// mTLS event list
+	MTLSPKIReady               K8sEventType = "MTLSPKIReady"
+	MTLSCertsNotReady          K8sEventType = "MTLSCertsNotReady"
+	MTLSBYOCSecretValid        K8sEventType = "MTLSBYOCSecretValid"
+	MTLSBYOCSecretNotFound     K8sEventType = "MTLSBYOCSecretNotFound"
+	MTLSBYOCSecretInvalid      K8sEventType = "MTLSBYOCSecretInvalid"
+	MTLSSecretsCleanedUp       K8sEventType = "MTLSSecretsCleanedUp"
+	MTLSFailedToReconcile      K8sEventType = "MTLSFailedToReconcile"
+	MTLSCertificatesUpdated    K8sEventType = "MTLSCertificatesUpdated"
+	MTLSFailedToCleanupSecrets K8sEventType = "MTLSFailedToCleanupSecrets"
 )

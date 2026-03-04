@@ -27,6 +27,7 @@ import (
 	"testing"
 	"time"
 
+	certmanagerv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -2510,6 +2511,7 @@ func Test_RedisCleanupFeatureFlag(t *testing.T) {
 	newScheme := runtime.NewScheme()
 	_ = rayv1.AddToScheme(newScheme)
 	_ = corev1.AddToScheme(newScheme)
+	_ = certmanagerv1.AddToScheme(newScheme)
 
 	// Prepare a RayCluster with the GCS FT enabled and Autoscaling disabled.
 	gcsFTEnabledCluster := testRayCluster.DeepCopy()
