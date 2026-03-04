@@ -168,6 +168,12 @@ const (
 	RAY_AUTH_TOKEN_ENV_VAR = "RAY_AUTH_TOKEN" // #nosec G101
 	// RAY_AUTH_TOKEN_SECRET_KEY is the key used in the Secret containing Ray auth token
 	RAY_AUTH_TOKEN_SECRET_KEY = "auth_token"
+	// RAY_ENABLE_K8S_TOKEN_AUTH is the Ray environment variable for enabling K8s token authentication.
+	RAY_ENABLE_K8S_TOKEN_AUTH_ENV_VAR = "RAY_ENABLE_K8S_TOKEN_AUTH" // #nosec G101
+	// RayTokenVolumeName is the name of the projected volume for Kubernetes token authentication.
+	RayTokenVolumeName = "ray-token" // #nosec G101
+	// RayTokenMountPath is the mount path for the projected volume for Kubernetes token authentication.
+	RayTokenMountPath = "/var/run/secrets/ray.io/serviceaccount" // #nosec G101
 
 	// This KubeRay operator environment variable is used to determine if random Pod
 	// deletion should be enabled. Note that this only takes effect when autoscaling
