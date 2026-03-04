@@ -1101,7 +1101,7 @@ func testLogStreamEndpoint(test Test, g *WithT, namespace *corev1.Namespace, s3C
 // 10. glob=events/event_JOBS* — subdirectory prefix is split from the pattern, then the wildcard matches within that subdirectory.
 // 11. glob=**/*.out — doublestar pattern recursively matches all .out files across all directories.
 // 12. Delete S3 bucket to ensure test isolation.
-func testNodeLogsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testNodeLogsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 
@@ -2314,7 +2314,7 @@ func testDeadClusterPlacementGroups(test Test, g *WithT, namespace *corev1.Names
 // 6. Verify the response status code is 200
 // 7. Verify the response API schema
 // 8. Delete S3 bucket to ensure test isolation
-func testLiveClusterTaskSummarize(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testLiveClusterTaskSummarize(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) {
 	endpoint := EndpointTasksSummarize + "?summary_by=lineage"
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
@@ -2349,7 +2349,7 @@ func testLiveClusterTaskSummarize(test Test, g *WithT, namespace *corev1.Namespa
 // 7. Verify the response status code is 200
 // 8. Verify the response API schema
 // 9. Delete S3 bucket to ensure test isolation
-func testDeadClusterTaskSummarize(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testDeadClusterTaskSummarize(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) {
 	endpoint := EndpointTasksSummarize + "?summary_by=lineage"
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
@@ -2394,7 +2394,7 @@ func testDeadClusterTaskSummarize(test Test, g *WithT, namespace *corev1.Namespa
 // 6. Verify the response status code is 200
 // 7. Verify the response API schema
 // 8. Delete S3 bucket to ensure test isolation
-func testLiveClusterTaskSummarizeFuncName(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testLiveClusterTaskSummarizeFuncName(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) {
 	endpoint := EndpointTasksSummarize
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
@@ -2427,7 +2427,7 @@ func testLiveClusterTaskSummarizeFuncName(test Test, g *WithT, namespace *corev1
 // 7. Verify the response status code is 200
 // 8. Verify the response API schema
 // 9. Delete S3 bucket to ensure test isolation
-func testDeadClusterTaskSummarizeFuncName(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testDeadClusterTaskSummarizeFuncName(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) {
 	endpoint := EndpointTasksSummarize
 
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
