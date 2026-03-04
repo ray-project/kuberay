@@ -23,14 +23,14 @@ var incrementalUpgradeCombinations = []IncrementalUpgradeParams{
 		MaxSurge: 100,
 		Name:     "BlueGreen",
 	},
-	// {
-	// 	// Scenario: Standard gradual upgrade.
-	// 	// Scaling and migration in multiple steps.
-	// 	StepSize: 25,
-	// 	Interval: 5,
-	// 	MaxSurge: 50,
-	// 	Name:     "StandardGradual",
-	// },
+	{
+		// Scenario: Standard gradual upgrade.
+		// Scaling and migration in multiple steps.
+		StepSize: 25,
+		Interval: 5,
+		MaxSurge: 50,
+		Name:     "StandardGradual",
+	},
 	{
 		// Scenario: Conservative gradual upgrade.
 		// Low-step, long-interval scaling and migration in multiple steps.
