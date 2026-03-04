@@ -1,5 +1,9 @@
 package utils
 
+// StatusClientClosedRequest is a non-standard HTTP status code used by nginx
+// to indicate that the client closed the connection before the server responded.
+const StatusClientClosedRequest = 499
+
 // HTTPError represents an error with an associated HTTP status code.
 type HTTPError struct {
 	internalError error  // Original error

@@ -42,10 +42,9 @@ func filterAnsiEscapeCodes(content []byte) []byte {
 	return ansiEscapePattern.ReplaceAll(content, []byte(""))
 }
 
-func (s *ServerHandler) listClusters(limit int) []utils.ClusterInfo {
+func (s *ServerHandler) listClusters(ctx context.Context, limit int) []utils.ClusterInfo {
 	// Initial continuation marker
 	logrus.Debugf("Prepare to get list clusters info ...")
-	ctx := context.Background()
 	liveClusters, _ := s.clientManager.ListRayClusters(ctx)
 	liveClusterNames := []string{}
 	liveClusterInfos := []utils.ClusterInfo{}
@@ -61,7 +60,7 @@ func (s *ServerHandler) listClusters(limit int) []utils.ClusterInfo {
 		liveClusterNames = append(liveClusterNames, liveCluster.Name)
 	}
 	logrus.Infof("live clusters: %v", liveClusterNames)
-	clusters := s.reader.List()
+	clusters := s.reader.List(ctx)
 	sort.Sort(utils.ClusterInfoList(clusters))
 	if limit > 0 && limit < len(clusters) {
 		clusters = clusters[:limit]
@@ -70,7 +69,7 @@ func (s *ServerHandler) listClusters(limit int) []utils.ClusterInfo {
 	return clusters
 }
 
-func (s *ServerHandler) _getNodeLogs(rayClusterNameID, sessionId, nodeId, folder, glob string) ([]byte, error) {
+func (s *ServerHandler) _getNodeLogs(ctx context.Context, rayClusterNameID, sessionId, nodeId, dir string) ([]byte, error) {
 	logPath := path.Join(sessionId, utils.RAY_SESSIONDIR_LOGDIR_NAME, nodeId)
 	if folder != "" {
 		logPath = path.Join(logPath, folder)
@@ -170,10 +169,16 @@ func categorizeLogFiles(files []string) map[string][]string {
 	return result
 }
 
-func (s *ServerHandler) _getNodeLogFile(rayClusterNameID, sessionID string, options GetLogFileOptions) ([]byte, error) {
+func (s *ServerHandler) _getNodeLogFile(ctx context.Context, rayClusterNameID, sessionID string, options GetLogFileOptions) ([]byte, error) {
 	// Resolve node_id and filename based on options
-	nodeID, filename, err := s.resolveLogFilename(rayClusterNameID, sessionID, options)
+	nodeID, filename, err := s.resolveLogFilename(ctx, rayClusterNameID, sessionID, options)
 	if err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			if errors.Is(ctxErr, context.DeadlineExceeded) {
+				return nil, utils.NewHTTPError(ctxErr, http.StatusRequestTimeout)
+			}
+			return nil, utils.NewHTTPError(ctxErr, utils.StatusClientClosedRequest)
+		}
 		// Preserve HTTPError status code if already set, otherwise use BadRequest
 		var httpErr *utils.HTTPError
 		if errors.As(err, &httpErr) {
@@ -184,17 +189,32 @@ func (s *ServerHandler) _getNodeLogFile(rayClusterNameID, sessionID string, opti
 
 	// Build log path
 	logPath := path.Join(sessionID, utils.RAY_SESSIONDIR_LOGDIR_NAME, nodeID, filename)
-	reader := s.reader.GetContent(rayClusterNameID, logPath)
+	reader := s.reader.GetContent(ctx, rayClusterNameID, logPath)
 
 	if reader == nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			if errors.Is(ctxErr, context.DeadlineExceeded) {
+				return nil, utils.NewHTTPError(ctxErr, http.StatusRequestTimeout)
+			}
+			return nil, utils.NewHTTPError(ctxErr, utils.StatusClientClosedRequest)
+		}
 		return nil, utils.NewHTTPError(fmt.Errorf("log file not found: %s", logPath), http.StatusNotFound)
 	}
+
+	// Wrap reader to respect context cancellation
+	ctxReader := utils.NewContextReader(ctx, reader)
 
 	maxLines := options.Lines
 	if maxLines < 0 {
 		// -1 means read all lines
-		content, err := io.ReadAll(reader)
+		content, err := io.ReadAll(ctxReader)
 		if err != nil {
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				if errors.Is(ctxErr, context.DeadlineExceeded) {
+					return nil, utils.NewHTTPError(ctxErr, http.StatusRequestTimeout)
+				}
+				return nil, utils.NewHTTPError(ctxErr, utils.StatusClientClosedRequest)
+			}
 			return nil, err
 		}
 		if options.FilterAnsiCode {
@@ -212,7 +232,7 @@ func (s *ServerHandler) _getNodeLogFile(rayClusterNameID, sessionID string, opti
 		maxLines = MAX_LOG_LIMIT
 	}
 
-	scanner := bufio.NewScanner(reader)
+	scanner := bufio.NewScanner(ctxReader)
 	buffer := make([]string, maxLines)
 	index := 0
 	totalLines := 0
@@ -230,6 +250,12 @@ func (s *ServerHandler) _getNodeLogFile(rayClusterNameID, sessionID string, opti
 	}
 
 	if err := scanner.Err(); err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			if errors.Is(ctxErr, context.DeadlineExceeded) {
+				return nil, utils.NewHTTPError(ctxErr, http.StatusRequestTimeout)
+			}
+			return nil, utils.NewHTTPError(ctxErr, utils.StatusClientClosedRequest)
+		}
 		return nil, err
 	}
 
@@ -259,7 +285,7 @@ func (s *ServerHandler) _getNodeLogFile(rayClusterNameID, sessionID string, opti
 // resolveLogFilename resolves the log file node_id and filename based on the provided options.
 // This mirrors Ray Dashboard's resolve_filename logic.
 // The sessionID parameter is required for task_id resolution to search worker log files.
-func (s *ServerHandler) resolveLogFilename(clusterNameID, sessionID string, options GetLogFileOptions) (nodeID, filename string, err error) {
+func (s *ServerHandler) resolveLogFilename(ctx context.Context, clusterNameID, sessionID string, options GetLogFileOptions) (nodeID, filename string, err error) {
 	// If filename is explicitly provided, use it and ignore suffix
 	if options.Filename != "" {
 		if options.NodeID == "" {
@@ -275,17 +301,17 @@ func (s *ServerHandler) resolveLogFilename(clusterNameID, sessionID string, opti
 
 	// If task_id is provided, resolve from task events
 	if options.TaskID != "" {
-		return s.resolveTaskLogFilename(clusterNameID, sessionID, options.TaskID, options.AttemptNumber, options.Suffix)
+		return s.resolveTaskLogFilename(ctx, clusterNameID, sessionID, options.TaskID, options.AttemptNumber, options.Suffix)
 	}
 
 	// If actor_id is provided, resolve from actor events
 	if options.ActorID != "" {
-		return s.resolveActorLogFilename(clusterNameID, sessionID, options.ActorID, options.Suffix)
+		return s.resolveActorLogFilename(ctx, clusterNameID, sessionID, options.ActorID, options.Suffix)
 	}
 
 	// If pid is provided, resolve worker log file
 	if options.PID > 0 {
-		return s.resolvePidLogFilename(clusterNameID, sessionID, options.NodeID, options.PID, options.Suffix)
+		return s.resolvePidLogFilename(ctx, clusterNameID, sessionID, options.NodeID, options.PID, options.Suffix)
 	}
 
 	return "", "", fmt.Errorf("must provide one of: filename, task_id, actor_id, or pid")
@@ -293,7 +319,7 @@ func (s *ServerHandler) resolveLogFilename(clusterNameID, sessionID string, opti
 
 // resolvePidLogFilename resolves a log file by PID.
 // It requires a nodeID and searches for a log file with a name ending in "-{pid}.{suffix}".
-func (s *ServerHandler) resolvePidLogFilename(clusterNameID, sessionID, nodeID string, pid int, suffix string) (string, string, error) {
+func (s *ServerHandler) resolvePidLogFilename(ctx context.Context, clusterNameID, sessionID, nodeID string, pid int, suffix string) (string, string, error) {
 	if nodeID == "" {
 		return "", "", fmt.Errorf("node_id is required for pid resolution")
 	}
@@ -305,7 +331,7 @@ func (s *ServerHandler) resolvePidLogFilename(clusterNameID, sessionID, nodeID s
 	}
 
 	logPath := path.Join(sessionID, utils.RAY_SESSIONDIR_LOGDIR_NAME, nodeIDHex)
-	files := s.reader.ListFiles(clusterNameID, logPath)
+	files := s.reader.ListFiles(ctx, clusterNameID, logPath)
 
 	pidSuffix := fmt.Sprintf("-%d.%s", pid, suffix)
 
@@ -321,7 +347,7 @@ func (s *ServerHandler) resolvePidLogFilename(clusterNameID, sessionID, nodeID s
 // resolveTaskLogFilename resolves log file for a task by querying task events.
 // This mirrors Ray Dashboard's _resolve_task_filename logic.
 // The sessionID parameter is required for searching worker log files when task_log_info is not available.
-func (s *ServerHandler) resolveTaskLogFilename(clusterNameID, sessionID, taskID string, attemptNumber int, suffix string) (nodeID, filename string, err error) {
+func (s *ServerHandler) resolveTaskLogFilename(ctx context.Context, clusterNameID, sessionID, taskID string, attemptNumber int, suffix string) (nodeID, filename string, err error) {
 	// Construct full cluster session key for event lookup
 	// We append the sessionID to the clusterNameID (which is "name_namespace")
 	// to match the key format used by utils.BuildClusterSessionKey.
@@ -389,7 +415,7 @@ func (s *ServerHandler) resolveTaskLogFilename(clusterNameID, sessionID, taskID 
 			taskID, attemptNumber,
 		)
 	}
-	nodeIDHex, logFilename, err := s.findWorkerLogFile(clusterNameID, sessionID, foundTask.NodeID, foundTask.WorkerID, suffix)
+	nodeIDHex, logFilename, err := s.findWorkerLogFile(ctx, clusterNameID, sessionID, foundTask.NodeID, foundTask.WorkerID, suffix)
 	if err != nil {
 		return "", "", fmt.Errorf(
 			"failed to find worker log file for task %s (attempt %d, worker_id=%s, node_id=%s): %w",
@@ -402,7 +428,7 @@ func (s *ServerHandler) resolveTaskLogFilename(clusterNameID, sessionID, taskID 
 
 // resolveActorLogFilename resolves log file for an actor by querying actor events.
 // This mirrors Ray Dashboard's _resolve_actor_filename logic.
-func (s *ServerHandler) resolveActorLogFilename(clusterNameID, sessionID, actorID, suffix string) (nodeID, filename string, err error) {
+func (s *ServerHandler) resolveActorLogFilename(ctx context.Context, clusterNameID, sessionID, actorID, suffix string) (nodeID, filename string, err error) {
 	// Construct full cluster session key for event lookup
 	// We append the sessionID to the clusterNameID (which is "name_namespace")
 	// to match the key format used by utils.BuildClusterSessionKey.
@@ -439,6 +465,7 @@ func (s *ServerHandler) resolveActorLogFilename(clusterNameID, sessionID, actorI
 
 	// Find worker log file by worker_id
 	nodeIDHex, logFilename, err := s.findWorkerLogFile(
+		ctx,
 		clusterNameID,
 		sessionID,
 		actor.Address.NodeID,
@@ -459,7 +486,7 @@ func (s *ServerHandler) resolveActorLogFilename(clusterNameID, sessionID, actorI
 // Worker log files follow the pattern: worker-{worker_id_hex}-{job_id_hex}-{pid}.{suffix}
 // Ref: https://github.com/ray-project/ray/blob/219ee7037bbdc02f66b58a814c9ad2618309c19e/src/ray/core_worker/core_worker_process.cc#L80-L80
 // Returns (nodeIDHex, filename, error).
-func (s *ServerHandler) findWorkerLogFile(clusterNameID, sessionID, nodeID, workerID, suffix string) (string, string, error) {
+func (s *ServerHandler) findWorkerLogFile(ctx context.Context, clusterNameID, sessionID, nodeID, workerID, suffix string) (string, string, error) {
 	// Convert to hex if not already is
 	nodeIDHex, err := utils.ConvertBase64ToHex(nodeID)
 	if err != nil {
@@ -474,7 +501,7 @@ func (s *ServerHandler) findWorkerLogFile(clusterNameID, sessionID, nodeID, work
 
 	// List all files in the node's log directory
 	logPath := path.Join(sessionID, utils.RAY_SESSIONDIR_LOGDIR_NAME, nodeIDHex)
-	files := s.reader.ListFiles(clusterNameID, logPath)
+	files := s.reader.ListFiles(ctx, clusterNameID, logPath)
 
 	// Search for files matching pattern: worker-{worker_id_hex}-*.{suffix}
 	workerPrefix := fmt.Sprintf("worker-%s-", workerIDHex)
@@ -495,19 +522,19 @@ func (s *ServerHandler) findWorkerLogFile(clusterNameID, sessionID, nodeID, work
 // ipToNodeId resolves node_id from node_ip by querying node_events from storage.
 // This mirrors Ray Dashboard's ip_to_node_id logic.
 // Returns node_id in hex format if found, error otherwise.
-func (s *ServerHandler) ipToNodeId(rayClusterNameID, sessionID, nodeIP string) (string, error) {
+func (s *ServerHandler) ipToNodeId(ctx context.Context, rayClusterNameID, sessionID, nodeIP string) (string, error) {
 	if nodeIP == "" {
 		return "", fmt.Errorf("node_ip is empty")
 	}
 
 	// List all node_events files
 	nodeEventsPath := path.Join(sessionID, "node_events")
-	files := s.reader.ListFiles(rayClusterNameID, nodeEventsPath)
+	files := s.reader.ListFiles(ctx, rayClusterNameID, nodeEventsPath)
 
 	// Parse each node event file to find matching node_ip
 	for _, file := range files {
 		filePath := path.Join(nodeEventsPath, file)
-		nodeIDHex, found := s.searchNodeIDHexInEventFile(rayClusterNameID, filePath, nodeIP)
+		nodeIDHex, found := s.searchNodeIDHexInEventFile(ctx, rayClusterNameID, filePath, nodeIP)
 		if found {
 			logrus.Infof("Resolved node_ip %s to node_id %s", nodeIP, nodeIDHex)
 			return nodeIDHex, nil
@@ -519,8 +546,8 @@ func (s *ServerHandler) ipToNodeId(rayClusterNameID, sessionID, nodeIP string) (
 
 // searchNodeIDHexInEventFile searches for a node with the given IP in a single event file.
 // Returns (nodeIDHex, true) if found, ("", false) otherwise.
-func (s *ServerHandler) searchNodeIDHexInEventFile(rayClusterNameID, filePath, nodeIP string) (string, bool) {
-	reader := s.reader.GetContent(rayClusterNameID, filePath)
+func (s *ServerHandler) searchNodeIDHexInEventFile(ctx context.Context, rayClusterNameID, filePath, nodeIP string) (string, bool) {
+	reader := s.reader.GetContent(ctx, rayClusterNameID, filePath)
 	if reader == nil {
 		return "", false
 	}
