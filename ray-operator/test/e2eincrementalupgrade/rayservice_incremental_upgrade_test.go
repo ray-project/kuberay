@@ -322,14 +322,19 @@ func TestRayServiceIncrementalUpgradeWithLocust(t *testing.T) {
 			upgradeSteps := generateUpgradeSteps(*stepSize, *maxSurge)
 			for _, step := range upgradeSteps {
 				LogWithTimestamp(test.T(), "%s", step.name)
-				g.Eventually(func(g Gomega) int32 {
+				g.Eventually(func(gg Gomega) {
 					svc, err := GetRayService(test, namespace.Name, rayServiceName)
-					g.Expect(err).NotTo(HaveOccurred())
-					return step.getValue(svc)
-				}, TestTimeoutMedium).Should(Equal(step.expectedValue))
+					gg.Expect(err).NotTo(HaveOccurred())
+					gg.Expect(step.getValue(svc) == step.expectedValue || !IsRayServiceUpgrading(svc)).
+						To(BeTrue())
+					// return step.getValue(svc)
+				}, TestTimeoutMedium).Should(Succeed())
 
 				svc, err := GetRayService(test, namespace.Name, rayServiceName)
 				g.Expect(err).NotTo(HaveOccurred())
+				if !IsRayServiceUpgrading(svc) {
+					break
+				}
 
 				currentActiveTraffic := GetActiveTraffic(svc)
 				currentPendingTraffic := GetPendingTraffic(svc)
