@@ -155,7 +155,6 @@ func TestRayClusterAuthOptions(t *testing.T) {
 		// Verify token volume mount exists
 		VerifyContainerVolumeMount(test, rayCluster, &headPod.Spec.Containers[utils.RayContainerIndex], utils.RayTokenVolumeName, utils.RayTokenMountPath)
 
-
 		// Verify job submission works using the token from the file
 		// We can't easily "get" the token from outside without exec-ing, so we'll just exec a job submit that reads the token
 		test.T().Run("Submit job with K8s auth token should succeed", func(_ *testing.T) {
@@ -320,7 +319,7 @@ func setupAuthRBAC(test Test, namespace string) func() {
 	g.Expect(err).NotTo(HaveOccurred(), "Failed to create ServiceAccount raylet")
 
 	// 2. Create ClusterRole "ray-authenticator"
-	crAuthenticatorName := "ray-authenticator"
+	crAuthenticatorName := fmt.Sprintf("ray-authenticator-%s", namespace)
 	crAuthenticator := &rbacv1.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: crAuthenticatorName,
@@ -342,7 +341,7 @@ func setupAuthRBAC(test Test, namespace string) func() {
 	g.Expect(err).NotTo(HaveOccurred(), "Failed to create ClusterRole %s", crAuthenticatorName)
 
 	// 3. Create ClusterRole "ray-writer"
-	crWriterName := "ray-writer"
+	crWriterName := fmt.Sprintf("ray-writer-%s", namespace)
 	crWriter := &rbacv1.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: crWriterName,
@@ -359,7 +358,7 @@ func setupAuthRBAC(test Test, namespace string) func() {
 	g.Expect(err).NotTo(HaveOccurred(), "Failed to create ClusterRole %s", crWriterName)
 
 	// 4. Create ClusterRoleBinding "ray-authenticator-<namespace>"
-	crbAuthenticatorName := "ray-authenticator"
+	crbAuthenticatorName := fmt.Sprintf("ray-authenticator-%s", namespace)
 	crbAuthenticator := &rbacv1.ClusterRoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: crbAuthenticatorName,
