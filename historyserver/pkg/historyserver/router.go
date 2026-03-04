@@ -138,12 +138,12 @@ func routerAPI(s *ServerHandler) {
 		Param(ws.QueryParameter("actor_id", "actor_id (resolve log file from actor)")).
 		Param(ws.QueryParameter("pid", "pid (resolve log file from process id)")).
 		Param(ws.QueryParameter("suffix", "suffix (out or err, default: out, used with task_id/actor_id/pid)")).
-		Param(ws.QueryParameter("lines", "lines (number of lines to return, default: 1000, used with file)")).
+		Param(ws.QueryParameter("lines", "lines (number of lines to return, default: 1000, used with media_type=file)")).
 		Param(ws.QueryParameter("timeout", "timeout")).
-		Param(ws.QueryParameter("attempt_number", "attempt_number (task retry attempt number, default: 0, used with file)")).
-		Param(ws.QueryParameter("download_filename", "download_filename (if set, triggers download with this filename, used with file)")).
-		Param(ws.QueryParameter("filter_ansi_code", "filter_ansi_code (true/false, used with file)")).
-		Param(ws.QueryParameter("interval", "interval (polling interval in seconds, used with stream)")).
+		Param(ws.QueryParameter("attempt_number", "attempt_number (task retry attempt number, default: 0, used with media_type=file)")).
+		Param(ws.QueryParameter("download_filename", "download_filename (if set, triggers download with this filename, used with media_type=file)")).
+		Param(ws.QueryParameter("filter_ansi_code", "filter_ansi_code (true/false, used with media_type=file)")).
+		Param(ws.QueryParameter("interval", "interval (polling interval in seconds, used with media_type=stream)")).
 		// Note: submission_id is not supported and not needed.
 		// The Ray Dashboard frontend does not use submission_id as a query param.
 		// Instead, it embeds the submission_id directly into the filename param
