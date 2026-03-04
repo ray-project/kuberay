@@ -1842,6 +1842,23 @@ tests:
               memory: 128Mi
               cpu: 500m
 
+  - it: Should add default resources if `additionalWorkerGroups.smallGroup.resources` is not set
+    set:
+      additionalWorkerGroups:
+        smallGroup:
+          disabled: false
+          resources: null
+    asserts:
+      - equal:
+          path: spec.workerGroupSpecs[?(@.groupName=="smallGroup")].template.spec.containers[?(@.name=="ray-worker")].resources
+          value:
+            limits:
+              cpu: "1"
+              memory: 1G
+            requests:
+              cpu: "1"
+              memory: 1G
+
   - it: Should add lifecycle if `additionalWorkerGroups.smallGroup.lifecycle` is set
     set:
       additionalWorkerGroups:
