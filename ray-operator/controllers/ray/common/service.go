@@ -179,7 +179,6 @@ func BuildServeServiceForRayCluster(ctx context.Context, rayCluster rayv1.RayClu
 
 // BuildServeService builds the service for head node and worker nodes who have healthy http proxy to serve traffics.
 func BuildServeService(ctx context.Context, rayService rayv1.RayService, rayCluster rayv1.RayCluster, isRayService bool) (*corev1.Service, error) {
-	log := ctrl.LoggerFrom(ctx)
 	name := rayCluster.Name
 	namespace := rayCluster.Namespace
 	crdType := utils.RayClusterCRD
@@ -246,18 +245,31 @@ func BuildServeService(ctx context.Context, rayService rayv1.RayService, rayClus
 				serveService.ObjectMeta.Annotations = make(map[string]string)
 			}
 
-			// Include auto-detected serve ports from the container spec. If none were
-			// auto-detected, fall back to filtering the user-provided ServeService ports
-			// for any that match the serving port naming convention ("serve" or "serve-*").
+			// Merge auto-detected serve ports with user-provided ServeService ports.
+			// If the user specified a port with the same name, use the user's definition
+			// to preserve fields like AppProtocol (e.g., "kubernetes.io/h2c" for gRPC).
+			// If no ports were auto-detected, fall back to filtering the user-provided
+			// ServeService ports for any that match the serving port naming convention.
+			userPortsByName := make(map[string]corev1.ServicePort)
+			for _, p := range serveService.Spec.Ports {
+				userPortsByName[p.Name] = p
+			}
+
 			if len(ports) != 0 {
-				log.Info("Serve ports detected from container spec, using auto-detected serve ports for serve service")
-				serveService.Spec.Ports = ports
+				mergedPorts := make([]corev1.ServicePort, 0, len(ports))
+				for _, autoPort := range ports {
+					if userPort, exists := userPortsByName[autoPort.Name]; exists {
+						mergedPorts = append(mergedPorts, userPort)
+					} else {
+						mergedPorts = append(mergedPorts, autoPort)
+					}
+				}
+				serveService.Spec.Ports = mergedPorts
 			} else {
 				filteredPorts := make([]corev1.ServicePort, 0)
 				for _, port := range serveService.Spec.Ports {
 					if isServingPort(port.Name) {
-						svcPort := corev1.ServicePort{Name: port.Name, Port: port.Port}
-						filteredPorts = append(filteredPorts, svcPort)
+						filteredPorts = append(filteredPorts, port)
 					}
 				}
 				sort.SliceStable(filteredPorts, func(i, j int) bool {
