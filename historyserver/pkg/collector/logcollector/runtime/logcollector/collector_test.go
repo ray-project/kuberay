@@ -1,7 +1,6 @@
 package logcollector
 
 import (
-	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -207,17 +206,36 @@ func TestScanAndProcess(t *testing.T) {
 	close(handler.ShutdownChan)
 }
 
-// TestWriteTimezoneMeta tests the complete timezone metadata writing flow
-func TestWriteTimezoneMeta(t *testing.T) {
+// TestFetchAndStoreTimezone tests the complete timezone fetch-and-store flow,
+// including the retry loop and session name resolution.
+func TestFetchAndStoreTimezone(t *testing.T) {
+	// Create a symlink at /tmp/ray/session_latest → a real session dir
+	// so that resolveSessionName() works.
+	sessionDirName := "session_2024-12-15_10-30-45_123456"
+	sessionRealDir := filepath.Join("/tmp", "ray", sessionDirName)
+	sessionLatestLink := filepath.Join("/tmp", "ray", "session_latest")
+
+	if err := os.MkdirAll(sessionRealDir, 0755); err != nil {
+		t.Fatalf("Failed to create session dir: %v", err)
+	}
+	// Remove any pre-existing symlink, then create ours.
+	os.Remove(sessionLatestLink)
+	if err := os.Symlink(sessionRealDir, sessionLatestLink); err != nil {
+		t.Fatalf("Failed to create session_latest symlink: %v", err)
+	}
+	defer func() {
+		os.Remove(sessionLatestLink)
+		os.RemoveAll(sessionRealDir)
+	}()
+
 	testCases := []struct {
-		name           string
-		client         *http.Client
-		expectWrite    bool
-		expectedOffset string
-		expectedValue  string
+		name         string
+		client       *http.Client
+		expectWrite  bool
+		expectedBody string
 	}{
 		{
-			name: "Dashboard unavailable skips write",
+			name: "Dashboard unavailable triggers retry then shutdown",
 			client: &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
 				return nil, errors.New("dashboard not available")
 			})},
@@ -232,9 +250,8 @@ func TestWriteTimezoneMeta(t *testing.T) {
 					Header:     make(http.Header),
 				}, nil
 			})},
-			expectWrite:    true,
-			expectedOffset: "+09:00",
-			expectedValue:  "Asia/Seoul",
+			expectWrite:  true,
+			expectedBody: `{"offset":"+09:00","value":"Asia/Seoul"}`,
 		},
 	}
 
@@ -243,6 +260,7 @@ func TestWriteTimezoneMeta(t *testing.T) {
 			g := NewWithT(t)
 
 			mockWriter := NewMockStorageWriter()
+			shutdownChan := make(chan struct{})
 			handler := &RayLogHandler{
 				Writer:           mockWriter,
 				HttpClient:       tc.client,
@@ -250,15 +268,22 @@ func TestWriteTimezoneMeta(t *testing.T) {
 				RayClusterID:     "abc123",
 				ClusterDir:       "/tmp/test-root/test-cluster_abc123",
 				DashboardAddress: "http://127.0.0.1:8265",
+				ShutdownChan:     shutdownChan,
 			}
 
-			sessionID := "session-2024-12-15_10-30-45_123456"
-			handler.writeTimezoneMeta(sessionID)
-
 			if !tc.expectWrite {
+				// For failure cases, run in a goroutine and signal shutdown
+				// to break the retry loop.
+				go func() {
+					time.Sleep(100 * time.Millisecond)
+					close(shutdownChan)
+				}()
+				handler.FetchAndStoreTimezone()
 				g.Expect(mockWriter.writtenFiles).To(BeEmpty(), "No file should be written when dashboard is unavailable")
 				return
 			}
+
+			handler.FetchAndStoreTimezone()
 
 			g.Expect(mockWriter.writtenFiles).To(HaveLen(1))
 
@@ -268,11 +293,7 @@ func TestWriteTimezoneMeta(t *testing.T) {
 				break
 			}
 
-			var tzInfo timezoneInfo
-			err := json.Unmarshal([]byte(actualContent), &tzInfo)
-			g.Expect(err).ToNot(HaveOccurred())
-			g.Expect(tzInfo.Offset).To(Equal(tc.expectedOffset))
-			g.Expect(tzInfo.Value).To(Equal(tc.expectedValue))
+			g.Expect(actualContent).To(Equal(tc.expectedBody))
 		})
 	}
 }
