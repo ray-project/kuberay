@@ -108,15 +108,11 @@ func NewCreateWorkerGroupCommand(cmdFactory cmdutil.Factory, streams genericclio
 }
 
 func (options *CreateWorkerGroupOptions) Complete(cmd *cobra.Command, args []string) error {
-	namespace, err := cmd.Flags().GetString("namespace")
+	namespace, _, err := options.cmdFactory.ToRawKubeConfigLoader().Namespace()
 	if err != nil {
 		return fmt.Errorf("failed to get namespace: %w", err)
 	}
 	options.namespace = namespace
-
-	if options.namespace == "" {
-		options.namespace = "default"
-	}
 
 	if options.rayStartParams == nil {
 		options.rayStartParams = map[string]string{}
