@@ -7,7 +7,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -288,7 +287,7 @@ func TestRayServiceIncrementalUpgradeWithLocust(t *testing.T) {
 			}
 
 			// Allow Locust to ramp up and send traffic to the old cluster before triggering upgrade.
-			err = warmupLocust(test, locustHeadPod, 450, 15, 120*time.Second)
+			err = warmupLocust(test, locustHeadPod, locustWarmupRPSThreshold, locustWarmupStableWindowSeconds, locustWarmupTimeout)
 			g.Expect(err).NotTo(HaveOccurred())
 			g.Expect(checkLocustErr()).NotTo(HaveOccurred(), "Locust failed during warmup")
 

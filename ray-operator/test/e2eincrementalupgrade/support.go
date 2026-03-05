@@ -271,6 +271,15 @@ func generateUpgradeSteps(stepSize, maxSurge int32) []testStep {
 	return steps
 }
 
+const (
+	// The lower bound of the RPS for the Locust to reach the steady state.
+	locustWarmupRPSThreshold = 450.0
+	// The period of time that the RPS must be greater than or equal to the threshold to be considered steady state.
+	locustWarmupStableWindowSeconds = 15
+	// The maximum duration to wait for the Locust to reach the steady state.
+	locustWarmupTimeout = 120 * time.Second
+)
+
 // warmupLocust waits for Locust to ramp up and enter the steady state before triggering upgrade.
 // Hence, all requests are sent to the old cluster during the warmup period.
 //
