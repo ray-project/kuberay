@@ -135,8 +135,8 @@ func TestHistoryServer(t *testing.T) {
 			testFunc: testDeadClusterTaskSummarizeFuncName,
 		},
 		{
-			name:     "Timezone endpoint should return consistent timezone info for live and dead clusters",
-			testFunc: testTimezoneEndpoint,
+			name:     "Live and dead cluster: /timezone should return consistent timezone info",
+			testFunc: testLiveAndDeadClusterTimezone,
 		},
 	}
 
@@ -3344,24 +3344,24 @@ func testEventsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namesp
 	LogWithTimestamp(test.T(), "Dead cluster events endpoint tests completed")
 }
 
-// testTimezoneEndpoint verifies the /timezone endpoint for both live and dead clusters,
+// testLiveAndDeadClusterTimezone verifies the /timezone endpoint for both live and dead clusters,
 // and checks that the dead cluster returns the same timezone data as the live cluster.
+//
+// The /timezone endpoint returns the head node's system timezone, so no RayJob submission is needed.
 //
 // The test case follows these steps:
 // 1. Prepare test environment by applying a Ray cluster
-// 2. Submit a Ray job to the existing cluster
-// 3. Apply History Server and get its URL
-// 4. Get live cluster info and set cluster context
-// 5. Verify /timezone returns valid JSON with non-empty 'offset' and 'value' fields
-// 6. Record the live cluster's offset and value
-// 7. Delete the RayCluster to trigger data upload to S3
-// 8. Get the dead cluster info and switch cluster context
-// 9. Verify /timezone returns valid JSON from storage with non-empty 'offset' and 'value'
-// 10. Verify dead cluster offset and value match the live cluster values
-// 11. Delete S3 bucket to ensure test isolation
-func testTimezoneEndpoint(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+// 2. Apply History Server and get its URL
+// 3. Get live cluster info and set cluster context
+// 4. Verify /timezone returns valid JSON with non-empty 'offset' and 'value' fields
+// 5. Record the live cluster's offset and value
+// 6. Delete the RayCluster to trigger data upload to S3
+// 7. Get the dead cluster info and switch cluster context
+// 8. Verify /timezone returns valid JSON from storage with non-empty 'offset' and 'value'
+// 9. Verify dead cluster offset and value match the live cluster values
+// 10. Delete S3 bucket to ensure test isolation
+func testLiveAndDeadClusterTimezone(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
-	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 	ApplyHistoryServer(test, g, namespace, "")
 	historyServerURL := GetHistoryServerURL(test, g, namespace)
 

@@ -381,7 +381,7 @@ func testCollectorStoresTimezone(test Test, g *WithT, namespace *corev1.Namespac
 
 	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, rayCluster.Namespace)
 	sessionID := GetSessionIDFromHeadPod(test, g, rayCluster)
-	storageKey := utils.EndpointPathToStorageKey("/timezone")
+	storageKey := utils.EndpointPathToStorageKey(EndpointTimezone)
 	timezoneKey := fmt.Sprintf("log/%s/%s/%s/%s", clusterNameID, sessionID, utils.RAY_SESSIONDIR_FETCHED_ENDPOINTS_NAME, storageKey)
 
 	LogWithTimestamp(test.T(), "Waiting for timezone data to appear at S3 key: %s", timezoneKey)
