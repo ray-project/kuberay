@@ -5,7 +5,7 @@ import "k8s.io/utils/ptr"
 type serveConfigV2 string
 
 // These parameters control capacity scaling and gradual traffic migration during the upgrade.
-type IncrementalUpgradeParams struct {
+type incrementalUpgradeParams struct {
 	Name     string
 	StepSize int32
 	Interval int32
@@ -14,7 +14,7 @@ type IncrementalUpgradeParams struct {
 
 // incrementalUpgradeCombinations defines diverse (stepSize, interval, maxSurge) combinations
 // to exercise different upgrade behaviors. Each combination targets a distinct scenario.
-var incrementalUpgradeCombinations = []IncrementalUpgradeParams{
+var incrementalUpgradeCombinations = []incrementalUpgradeParams{
 	{
 		// Scenario: Instant cutover.
 		// All capacity and traffic shift in one step, which behaves like a blue/green deployment.
@@ -42,7 +42,7 @@ var incrementalUpgradeCombinations = []IncrementalUpgradeParams{
 }
 
 // ptrs returns (*stepSize, *interval, *maxSurge) for use with the RayService bootstrap helper.
-func (p IncrementalUpgradeParams) ptrs() (*int32, *int32, *int32) {
+func (p incrementalUpgradeParams) ptrs() (*int32, *int32, *int32) {
 	return ptr.To(p.StepSize), ptr.To(p.Interval), ptr.To(p.MaxSurge)
 }
 
@@ -107,7 +107,7 @@ const highRPSServeConfigV2 serveConfigV2 = `applications:
     import_path: simple_serve.app
     route_prefix: /test
     runtime_env:
-      working_dir: "https://github.com/jiangjiawei1103/incr-upgrade-locust/archive/main.zip"
+      working_dir: "https://github.com/jiangjiawei1103/incr-upgrade-locust/archive/a185bb29374388e801db4331ae73af3ad1e79a5f.zip"
     deployments:
       - name: SimpleDeployment
         autoscaling_config:
