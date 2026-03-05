@@ -403,6 +403,9 @@ func (r *RayServiceReconciler) calculateStatus(
 			pendingCluster = nil
 
 			meta.RemoveStatusCondition(&rayServiceInstance.Status.Conditions, string(rayv1.RollbackInProgress))
+
+			// Ensure the upgrade state resets after a successful rollback.
+			setCondition(rayServiceInstance, rayv1.UpgradeInProgress, metav1.ConditionFalse, rayv1.NoPendingCluster, "Rollback complete, active Ray cluster exists and no pending Ray cluster")
 		}
 	}
 
