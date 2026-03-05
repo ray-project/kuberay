@@ -223,6 +223,7 @@ func (r *NetworkPolicyController) buildWorkerNetworkPolicy(instance *rayv1.RayCl
 				},
 			},
 		}
+		ingressRules = append(ingressRules, instance.Spec.NetworkIsolation.IngressRules...)
 	}
 
 	// Only restrict egress when mode includes egress denial.

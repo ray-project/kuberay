@@ -234,15 +234,15 @@ func TestBuildHeadNetworkPolicy_DenyAllIngress(t *testing.T) {
 	assert.Empty(t, policy.Spec.Egress)
 }
 
-// TestBuildHeadNetworkPolicy_DenyAllEgress verifies that denyAllEgress includes both ingress and egress.
+// TestBuildHeadNetworkPolicy_DenyAllEgress verifies that denyAllEgress only restricts egress.
 func TestBuildHeadNetworkPolicy_DenyAllEgress(t *testing.T) {
 	setupNetworkPolicyTest(t)
 
 	policy := testNetworkPolicyController.buildHeadNetworkPolicy(testRayClusterDenyAllEgress, rayv1.NetworkIsolationDenyAllEgress)
 
-	assert.Contains(t, policy.Spec.PolicyTypes, networkingv1.PolicyTypeIngress)
+	assert.NotContains(t, policy.Spec.PolicyTypes, networkingv1.PolicyTypeIngress)
 	assert.Contains(t, policy.Spec.PolicyTypes, networkingv1.PolicyTypeEgress)
-	assert.Len(t, policy.Spec.Ingress, 3)
+	assert.Empty(t, policy.Spec.Ingress)
 	assert.Len(t, policy.Spec.Egress, 2)
 }
 
@@ -293,6 +293,29 @@ func TestBuildWorkerNetworkPolicy_DenyAllIngress(t *testing.T) {
 	assert.NotContains(t, policy.Spec.PolicyTypes, networkingv1.PolicyTypeEgress)
 	assert.Len(t, policy.Spec.Ingress, 1)
 	assert.Empty(t, policy.Spec.Egress)
+}
+
+// TestBuildWorkerNetworkPolicy_CustomIngressRules verifies that custom IngressRules are appended to the worker policy.
+func TestBuildWorkerNetworkPolicy_CustomIngressRules(t *testing.T) {
+	setupNetworkPolicyTest(t)
+
+	customPort := intstr.FromInt32(9999)
+	tcpProto := corev1.ProtocolTCP
+	cluster := testRayClusterBasic.DeepCopy()
+	cluster.Spec.NetworkIsolation.IngressRules = []networkingv1.NetworkPolicyIngressRule{
+		{
+			Ports: []networkingv1.NetworkPolicyPort{
+				{Protocol: &tcpProto, Port: &customPort},
+			},
+		},
+	}
+
+	policy := testNetworkPolicyController.buildWorkerNetworkPolicy(cluster, rayv1.NetworkIsolationDenyAll)
+
+	// 1 base intra-cluster + 1 custom = 2.
+	require.Len(t, policy.Spec.Ingress, 2)
+	require.Len(t, policy.Spec.Ingress[1].Ports, 1)
+	assert.Equal(t, &customPort, policy.Spec.Ingress[1].Ports[0].Port)
 }
 
 // TestBuildBaseIngressRules verifies the structure and content of the 3 base ingress rules.

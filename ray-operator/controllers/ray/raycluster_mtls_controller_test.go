@@ -32,11 +32,11 @@ func newMTLSTestScheme() *runtime.Scheme {
 	return s
 }
 
-func newMTLSTestCluster(name, namespace string) *rayv1.RayCluster {
+func newMTLSTestCluster(name string) *rayv1.RayCluster {
 	return &rayv1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
-			Namespace: namespace,
+			Namespace: "default",
 			UID:       "test-uid-12345678",
 		},
 		Spec: rayv1.RayClusterSpec{
@@ -88,7 +88,7 @@ func newMTLSController(t *testing.T, objs ...client.Object) *RayClusterMTLSContr
 
 // markMTLSCertificatesReady sets the Ready=True condition on all Certificate objects
 // for the given cluster, simulating cert-manager issuing the certificates.
-func markMTLSCertificatesReady(t *testing.T, ctx context.Context, r *RayClusterMTLSController, cluster *rayv1.RayCluster) {
+func markMTLSCertificatesReady(ctx context.Context, t *testing.T, r *RayClusterMTLSController, cluster *rayv1.RayCluster) {
 	t.Helper()
 	certNames := []string{
 		fmt.Sprintf("%s-%s", utils.RayHeadCertPrefix, cluster.Name),
@@ -114,7 +114,7 @@ func markMTLSCertificatesReady(t *testing.T, ctx context.Context, r *RayClusterM
 // --- Auto-generate mode tests ---
 
 func TestMTLSController_Disabled(t *testing.T) {
-	cluster := newMTLSTestCluster("test-cluster", "default")
+	cluster := newMTLSTestCluster("test-cluster")
 	r := newMTLSController(t, cluster)
 
 	result, err := r.Reconcile(context.Background(), ctrl.Request{
@@ -125,7 +125,7 @@ func TestMTLSController_Disabled(t *testing.T) {
 }
 
 func TestMTLSController_AutoGenerate_CreatesFullPKI(t *testing.T) {
-	cluster := newMTLSTestCluster("test-cluster", "default")
+	cluster := newMTLSTestCluster("test-cluster")
 	cluster.Spec.EnableMTLS = ptr.To(true)
 
 	r := newMTLSController(t, cluster)
@@ -143,7 +143,7 @@ func TestMTLSController_AutoGenerate_CreatesFullPKI(t *testing.T) {
 	assert.NotZero(t, result.RequeueAfter, "should requeue when certs not ready")
 
 	// Simulate cert-manager marking certificates as ready.
-	markMTLSCertificatesReady(t, ctx, r, cluster)
+	markMTLSCertificatesReady(ctx, t, r, cluster)
 
 	result, err = r.Reconcile(ctx, req)
 	require.NoError(t, err)
@@ -214,7 +214,7 @@ func TestMTLSController_AutoGenerate_CreatesFullPKI(t *testing.T) {
 }
 
 func TestMTLSController_AutoGenerate_Idempotent(t *testing.T) {
-	cluster := newMTLSTestCluster("test-cluster", "default")
+	cluster := newMTLSTestCluster("test-cluster")
 	cluster.Spec.EnableMTLS = ptr.To(true)
 
 	r := newMTLSController(t, cluster)
@@ -225,7 +225,7 @@ func TestMTLSController_AutoGenerate_Idempotent(t *testing.T) {
 	_, err := r.Reconcile(ctx, req)
 	require.NoError(t, err)
 
-	markMTLSCertificatesReady(t, ctx, r, cluster)
+	markMTLSCertificatesReady(ctx, t, r, cluster)
 
 	// Second and third reconciles should be idempotent.
 	_, err = r.Reconcile(ctx, req)
@@ -246,7 +246,7 @@ func TestMTLSController_AutoGenerate_Idempotent(t *testing.T) {
 }
 
 func TestMTLSController_AutoGenerate_UpdatesIPAddresses(t *testing.T) {
-	cluster := newMTLSTestCluster("test-cluster", "default")
+	cluster := newMTLSTestCluster("test-cluster")
 	cluster.Spec.EnableMTLS = ptr.To(true)
 
 	pod := &corev1.Pod{
@@ -265,7 +265,7 @@ func TestMTLSController_AutoGenerate_UpdatesIPAddresses(t *testing.T) {
 	_, err := r.Reconcile(ctx, req)
 	require.NoError(t, err)
 
-	markMTLSCertificatesReady(t, ctx, r, cluster)
+	markMTLSCertificatesReady(ctx, t, r, cluster)
 	_, err = r.Reconcile(ctx, req)
 	require.NoError(t, err)
 
@@ -304,7 +304,7 @@ func TestMTLSController_AutoGenerate_UpdatesIPAddresses(t *testing.T) {
 }
 
 func TestMTLSController_Disabled_IsNoOp(t *testing.T) {
-	cluster := newMTLSTestCluster("disabled-cluster", "default")
+	cluster := newMTLSTestCluster("disabled-cluster")
 	cluster.Spec.EnableMTLS = nil
 
 	// Pre-existing resources should NOT be touched when mTLS is disabled.
@@ -328,7 +328,7 @@ func TestMTLSController_Disabled_IsNoOp(t *testing.T) {
 }
 
 func TestMTLSController_DeleteTLSSecrets(t *testing.T) {
-	cluster := newMTLSTestCluster("del-cluster", "default")
+	cluster := newMTLSTestCluster("del-cluster")
 	caSecret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{Name: utils.GetCASecretName(cluster.Name, cluster.UID), Namespace: "default"},
 	}
@@ -353,7 +353,7 @@ func TestMTLSController_DeleteTLSSecrets(t *testing.T) {
 }
 
 func TestMTLSController_WorkerCertHasWildcardDNS(t *testing.T) {
-	cluster := newMTLSTestCluster("wc-cluster", "default")
+	cluster := newMTLSTestCluster("wc-cluster")
 	cluster.Spec.EnableMTLS = ptr.To(true)
 
 	r := newMTLSController(t, cluster)
@@ -363,7 +363,7 @@ func TestMTLSController_WorkerCertHasWildcardDNS(t *testing.T) {
 	_, err := r.Reconcile(ctx, req)
 	require.NoError(t, err)
 
-	markMTLSCertificatesReady(t, ctx, r, cluster)
+	markMTLSCertificatesReady(ctx, t, r, cluster)
 	_, err = r.Reconcile(ctx, req)
 	require.NoError(t, err)
 
@@ -383,7 +383,7 @@ func TestMTLSController_WorkerCertHasWildcardDNS(t *testing.T) {
 }
 
 func TestMTLSController_CertReadinessBlocksReconciliation(t *testing.T) {
-	cluster := newMTLSTestCluster("ready-cluster", "default")
+	cluster := newMTLSTestCluster("ready-cluster")
 	cluster.Spec.EnableMTLS = ptr.To(true)
 
 	r := newMTLSController(t, cluster)
@@ -419,7 +419,7 @@ func TestMTLSController_CertReadinessBlocksReconciliation(t *testing.T) {
 	assert.Equal(t, mtlsDefaultRequeueDuration, result.RequeueAfter, "should requeue when only head cert is ready")
 
 	// Mark both certs ready; should now succeed with periodic check.
-	markMTLSCertificatesReady(t, ctx, r, cluster)
+	markMTLSCertificatesReady(ctx, t, r, cluster)
 	result, err = r.Reconcile(ctx, req)
 	require.NoError(t, err)
 	assert.Equal(t, mtlsPeriodicCheckDuration, result.RequeueAfter, "should schedule periodic check when all ready")
@@ -428,7 +428,7 @@ func TestMTLSController_CertReadinessBlocksReconciliation(t *testing.T) {
 // --- BYOC mode tests ---
 
 func TestMTLSController_BYOC_ValidSecret(t *testing.T) {
-	cluster := newMTLSTestCluster("byoc-cluster", "default")
+	cluster := newMTLSTestCluster("byoc-cluster")
 	cluster.Spec.EnableMTLS = ptr.To(true)
 	cluster.Spec.MTLSOptions = &rayv1.MTLSOptions{
 		CertificateSecretName: ptr.To("my-tls-secret"),
@@ -463,7 +463,7 @@ func TestMTLSController_BYOC_ValidSecret(t *testing.T) {
 }
 
 func TestMTLSController_BYOC_MissingSecret(t *testing.T) {
-	cluster := newMTLSTestCluster("byoc-missing", "default")
+	cluster := newMTLSTestCluster("byoc-missing")
 	cluster.Spec.EnableMTLS = ptr.To(true)
 	cluster.Spec.MTLSOptions = &rayv1.MTLSOptions{
 		CertificateSecretName: ptr.To("missing-secret"),
@@ -480,7 +480,7 @@ func TestMTLSController_BYOC_MissingSecret(t *testing.T) {
 }
 
 func TestMTLSController_BYOC_SecretMissingKey(t *testing.T) {
-	cluster := newMTLSTestCluster("byoc-partial", "default")
+	cluster := newMTLSTestCluster("byoc-partial")
 	cluster.Spec.EnableMTLS = ptr.To(true)
 	cluster.Spec.MTLSOptions = &rayv1.MTLSOptions{
 		CertificateSecretName: ptr.To("partial-secret"),
@@ -507,7 +507,7 @@ func TestMTLSController_BYOC_SecretMissingKey(t *testing.T) {
 
 func TestMTLSController_BYOC_DeletionDoesNotDeleteUserSecret(t *testing.T) {
 	now := metav1.Now()
-	cluster := newMTLSTestCluster("byoc-del", "default")
+	cluster := newMTLSTestCluster("byoc-del")
 	cluster.Spec.EnableMTLS = ptr.To(true)
 	cluster.Spec.MTLSOptions = &rayv1.MTLSOptions{
 		CertificateSecretName: ptr.To("my-company-cert"),
@@ -537,7 +537,7 @@ func TestMTLSController_BYOC_DeletionDoesNotDeleteUserSecret(t *testing.T) {
 
 func TestMTLSController_AutoGenerate_DeletionCleansUpSecrets(t *testing.T) {
 	now := metav1.Now()
-	cluster := newMTLSTestCluster("auto-del", "default")
+	cluster := newMTLSTestCluster("auto-del")
 	cluster.Spec.EnableMTLS = ptr.To(true)
 	cluster.DeletionTimestamp = &now
 	// Simulate that the finalizer was previously added during normal reconciliation.
@@ -619,7 +619,7 @@ func TestCertificateNeedsUpdate(t *testing.T) {
 // --- checkMTLSSecretsReady tests (in main reconciler) ---
 
 func TestCheckMTLSSecretsReady_AutoGenerate_SecretsPresent(t *testing.T) {
-	cluster := newMTLSTestCluster("test-cluster", "default")
+	cluster := newMTLSTestCluster("test-cluster")
 	cluster.Spec.EnableMTLS = ptr.To(true)
 
 	headSecret := &corev1.Secret{
@@ -657,7 +657,7 @@ func TestCheckMTLSSecretsReady_AutoGenerate_SecretsPresent(t *testing.T) {
 }
 
 func TestCheckMTLSSecretsReady_AutoGenerate_SecretMissing(t *testing.T) {
-	cluster := newMTLSTestCluster("test-cluster", "default")
+	cluster := newMTLSTestCluster("test-cluster")
 	cluster.Spec.EnableMTLS = ptr.To(true)
 
 	s := newMTLSTestScheme()
@@ -673,7 +673,7 @@ func TestCheckMTLSSecretsReady_AutoGenerate_SecretMissing(t *testing.T) {
 }
 
 func TestCheckMTLSSecretsReady_AutoGenerate_SecretMissingKey(t *testing.T) {
-	cluster := newMTLSTestCluster("test-cluster", "default")
+	cluster := newMTLSTestCluster("test-cluster")
 	cluster.Spec.EnableMTLS = ptr.To(true)
 
 	// Head secret missing ca.crt key.
@@ -712,7 +712,7 @@ func TestCheckMTLSSecretsReady_AutoGenerate_SecretMissingKey(t *testing.T) {
 }
 
 func TestCheckMTLSSecretsReady_BYOC(t *testing.T) {
-	cluster := newMTLSTestCluster("test-cluster", "default")
+	cluster := newMTLSTestCluster("test-cluster")
 	cluster.Spec.EnableMTLS = ptr.To(true)
 	cluster.Spec.MTLSOptions = &rayv1.MTLSOptions{
 		CertificateSecretName: ptr.To("my-cert"),

@@ -425,7 +425,7 @@ func TestRayClusterTLSEdgeCases(t *testing.T) {
 		t.Parallel()
 		g := NewWithT(t)
 
-		byocSecretName := "byoc-e2e-user-secret"
+		byocSecretName := "byoc-e2e-user-secret" // #nosec G101 -- test variable name, not a credential
 		// Placeholder cert data; BYOC only requires the keys to exist. Cluster may not become Ready.
 		userSecret := &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{Name: byocSecretName, Namespace: namespace.Name},

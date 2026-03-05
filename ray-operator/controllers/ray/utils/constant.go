@@ -167,10 +167,9 @@ const (
 	RayCAIssuerPrefix         = "ray-ca-issuer"
 	RayHeadCertPrefix         = "ray-head-cert"
 	RayWorkerCertPrefix       = "ray-worker-cert"
-	// #nosec G101 -- these are Kubernetes Secret resource name prefixes, not credentials
-	RayHeadSecretPrefix   = "ray-head-secret"
-	RayWorkerSecretPrefix = "ray-worker-secret"
-	RayCASecretPrefix     = "ca-secret"
+	RayHeadSecretPrefix       = "ray-head-secret"
+	RayWorkerSecretPrefix     = "ray-worker-secret" //nolint:gosec // G101 -- secret name prefix, not a credential
+	RayCASecretPrefix         = "ca-secret"
 
 	// Environment variables for RayJob submitter Kubernetes Job.
 	// Example: ray job submit --address=http://$RAY_DASHBOARD_ADDRESS --submission-id=$RAY_JOB_SUBMISSION_ID ...
@@ -446,13 +445,13 @@ const (
 	// mTLS event list
 	MTLSPKIReady               K8sEventType = "MTLSPKIReady"
 	MTLSCertsNotReady          K8sEventType = "MTLSCertsNotReady"
-	MTLSBYOCSecretValid        K8sEventType = "MTLSBYOCSecretValid"
-	MTLSBYOCSecretNotFound     K8sEventType = "MTLSBYOCSecretNotFound"
-	MTLSBYOCSecretInvalid      K8sEventType = "MTLSBYOCSecretInvalid"
 	MTLSSecretsCleanedUp       K8sEventType = "MTLSSecretsCleanedUp"
 	MTLSFailedToReconcile      K8sEventType = "MTLSFailedToReconcile"
 	MTLSCertificatesUpdated    K8sEventType = "MTLSCertificatesUpdated"
-	MTLSFailedToCleanupSecrets K8sEventType = "MTLSFailedToCleanupSecrets"
+	MTLSBYOCSecretValid        K8sEventType = "MTLSBYOCSecretValid"        //nolint:gosec // G101 -- event type name, not a credential
+	MTLSBYOCSecretNotFound     K8sEventType = "MTLSBYOCSecretNotFound"     //nolint:gosec // G101 -- event type name, not a credential
+	MTLSBYOCSecretInvalid      K8sEventType = "MTLSBYOCSecretInvalid"      //nolint:gosec // G101 -- event type name, not a credential
+	MTLSFailedToCleanupSecrets K8sEventType = "MTLSFailedToCleanupSecrets" //nolint:gosec // G101 -- event type name, not a credential
 	// NetworkPolicy event list
 	CreatedNetworkPolicy        K8sEventType = "CreatedNetworkPolicy"
 	DeletedNetworkPolicy        K8sEventType = "DeletedNetworkPolicy"
