@@ -401,10 +401,11 @@ func (r *RayServiceReconciler) calculateStatus(
 			// Clear the RayService pending service status to clean up the pending cluster.
 			rayServiceInstance.Status.PendingServiceStatus = rayv1.RayServiceStatus{}
 			pendingCluster = nil
+			pendingClusterServeApplications = nil
 
 			meta.RemoveStatusCondition(&rayServiceInstance.Status.Conditions, string(rayv1.RollbackInProgress))
 
-			// Ensure the upgrade state resets after a successful rollback.
+			// Ensure the upgrade state machine resets after a successful rollback.
 			setCondition(rayServiceInstance, rayv1.UpgradeInProgress, metav1.ConditionFalse, rayv1.NoPendingCluster, "Rollback complete, active Ray cluster exists and no pending Ray cluster")
 		}
 	}
@@ -442,7 +443,7 @@ func (r *RayServiceReconciler) calculateStatus(
 					logger.Info("Updated LastTrafficMigratedTime of Active Service.")
 				}
 			}
-			if pendingWeight >= 0 {
+			if pendingWeight >= 0 && pendingCluster != nil {
 				rayServiceInstance.Status.PendingServiceStatus.TrafficRoutedPercent = ptr.To(pendingWeight)
 				logger.Info("Updated pending TrafficRoutedPercent from HTTPRoute", "pendingClusterWeight", pendingWeight)
 				if pendingWeight != oldPendingPercent {
@@ -2001,8 +2002,8 @@ func (r *RayServiceReconciler) reconcileRollbackState(ctx context.Context, raySe
 
 	isRollbackInProgress := meta.IsStatusConditionTrue(rayServiceInstance.Status.Conditions, string(rayv1.RollbackInProgress))
 
-	// Case 1: The goal spec matches the pending cluster's spec. In this case, we should revert the rollback attempt
-	// and continue to upgrade as normal.
+	// Case 1: The goal spec matches the pending cluster's spec.
+	// The upgrade is on track. We should revert any accidental rollback attempt and continue.
 	if goalHash == pendingHash {
 		if isRollbackInProgress {
 			logger.Info("Goal state matches pending cluster. Canceling rollback and resuming upgrade.")
@@ -2011,10 +2012,13 @@ func (r *RayServiceReconciler) reconcileRollbackState(ctx context.Context, raySe
 		return nil
 	}
 
-	// Case 2: The goal spec differs from pending cluster's spec. Rollback to original cluster.
+	// Case 2: The goal spec diverges from the pending cluster.
+	// This happens if the user reverted to the original spec, or if they submitted a 3rd entirely new spec mid-upgrade.
+	// In all divergence cases, we must first safely route all traffic back to the original cluster before allowing
+	// a new cluster to be spun up.
 	if !isRollbackInProgress {
-		logger.Info("Goal state has changed during upgrade. Initiating rollback to the original cluster.", "goalHash", goalHash, "originalHash", originalHash, "pendingHash", pendingHash)
-		setCondition(rayServiceInstance, rayv1.RollbackInProgress, metav1.ConditionTrue, rayv1.GoalClusterChanged, "Goal state changed, rolling back to original cluster.")
+		logger.Info("Goal state has changed during upgrade. Initiating safe rollback to the original cluster.", "goalHash", goalHash, "originalHash", originalHash, "pendingHash", pendingHash)
+		setCondition(rayServiceInstance, rayv1.RollbackInProgress, metav1.ConditionTrue, rayv1.GoalClusterChanged, "Goal state changed mid-upgrade, rolling back to original cluster.")
 	}
 
 	return nil
