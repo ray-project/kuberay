@@ -575,6 +575,10 @@ func getSubmitterTemplate(rayJobInstance *rayv1.RayJob, rayClusterInstance *rayv
 		return corev1.PodTemplateSpec{}, err
 	}
 
+	if rayClusterInstance != nil && utils.IsK8sAuthEnabled(rayClusterInstance.Spec.AuthOptions) {
+		common.AddRayTokenVolume(&submitterTemplate.Spec)
+	}
+
 	return submitterTemplate, nil
 }
 
@@ -614,7 +618,7 @@ func configureSubmitterContainer(container *corev1.Container, rayJobInstance *ra
 	container.Env = append(container.Env, corev1.EnvVar{Name: utils.RAY_DASHBOARD_ADDRESS, Value: rayJobInstance.Status.DashboardURL})
 	container.Env = append(container.Env, corev1.EnvVar{Name: utils.RAY_JOB_SUBMISSION_ID, Value: rayJobInstance.Status.JobId})
 	if rayClusterInstance != nil && utils.IsAuthEnabled(&rayClusterInstance.Spec) {
-		common.SetContainerTokenAuthEnvVars(rayClusterInstance.Name, container)
+		common.SetContainerTokenAuthEnvVars(rayClusterInstance.Name, container, rayClusterInstance.Spec.AuthOptions)
 	}
 
 	return nil
@@ -756,6 +760,12 @@ func (r *RayJobReconciler) deleteSubmitterJob(ctx context.Context, rayJobInstanc
 // deleteClusterResources deletes the RayCluster associated with the RayJob to release the compute resources.
 func (r *RayJobReconciler) deleteClusterResources(ctx context.Context, rayJobInstance *rayv1.RayJob) (bool, error) {
 	logger := ctrl.LoggerFrom(ctx)
+
+	if len(rayJobInstance.Spec.ClusterSelector) > 0 {
+		logger.Info("RayJob is using an existing RayCluster via clusterSelector; skipping resource deletion.", "RayClusterSelector", rayJobInstance.Spec.ClusterSelector)
+		return true, nil
+	}
+
 	clusterIdentifier := common.RayJobRayClusterNamespacedName(rayJobInstance)
 
 	var isClusterDeleted bool

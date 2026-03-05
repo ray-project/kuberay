@@ -118,6 +118,11 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	}
 	originalRayServiceInstance := rayServiceInstance.DeepCopy()
 
+	if manager := utils.ManagedByExternalController(rayServiceInstance.Spec.ManagedBy); manager != nil {
+		logger.Info("Skipping RayService managed by a custom controller", "managed-by", manager)
+		return ctrl.Result{}, nil
+	}
+
 	// Perform all validations and directly fail the RayService if any of the validation fails
 	errType, err := validateRayService(ctx, rayServiceInstance)
 	// Immediately update the status after validation

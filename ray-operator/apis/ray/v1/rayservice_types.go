@@ -102,6 +102,16 @@ type RayServiceSpec struct {
 	// UpgradeStrategy defines the scaling policy used when upgrading the RayService.
 	// +optional
 	UpgradeStrategy *RayServiceUpgradeStrategy `json:"upgradeStrategy,omitempty"`
+	// ManagedBy is an optional configuration for the controller or entity that manages a RayService.
+	// The value must be either 'ray.io/kuberay-operator' or 'kueue.x-k8s.io/multikueue'.
+	// The kuberay-operator reconciles a RayService which doesn't have this field at all or
+	// the field value is the reserved string 'ray.io/kuberay-operator',
+	// but delegates reconciling the RayService with 'kueue.x-k8s.io/multikueue' to the Kueue.
+	// The field is immutable.
+	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="the managedBy field is immutable"
+	// +kubebuilder:validation:XValidation:rule="self in ['ray.io/kuberay-operator', 'kueue.x-k8s.io/multikueue']",message="the managedBy field value must be either 'ray.io/kuberay-operator' or 'kueue.x-k8s.io/multikueue'"
+	// +optional
+	ManagedBy *string `json:"managedBy,omitempty"`
 	// Important: Run "make" to regenerate code after modifying this file
 	// Defines the applications and deployments to deploy, should be a YAML multi-line scalar string.
 	// +optional

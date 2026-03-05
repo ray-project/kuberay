@@ -47,6 +47,8 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
+| `enableK8sTokenAuth` _boolean_ | EnableK8sTokenAuth enables Kubernetes-delegated token authentication.<br />When true, the RAY_ENABLE_K8S_TOKEN_AUTH environment variable is set to "true"<br />across all Ray Pods, and Ray will delegate authentication to the K8s API server.<br />NOTE: The Kubernetes ServiceAccount token mounted to Raylets must be granted<br />the `ray:write` custom verb via RBAC for this to function correctly.<br />WARNING: This feature is intended for standalone RayCluster objects and is<br />currently unsupported for RayJob or RayService resources. |  |  |
+| `secretName` _string_ | SecretName is the name of the Secret that contains the authentication token.<br />If set, KubeRay will skip generating a Secret object per RayCluster containing a token.<br />The Secret must have a data key `auth_token` that contains the value of the token. |  |  |
 | `mode` _[AuthMode](#authmode)_ | Mode specifies the authentication mode.<br />Supported values are "disabled" and "token".<br />Defaults to "token". |  | Enum: [disabled token] <br /> |
 
 
@@ -498,6 +500,7 @@ _Appears in:_
 | `deploymentUnhealthySecondThreshold` _integer_ | Deprecated: This field is not used anymore. ref: https://github.com/ray-project/kuberay/issues/1685 |  |  |
 | `serveService` _[Service](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#service-v1-core)_ | ServeService is the Kubernetes service for head node and worker nodes who have healthy http proxy to serve traffics. |  |  |
 | `upgradeStrategy` _[RayServiceUpgradeStrategy](#rayserviceupgradestrategy)_ | UpgradeStrategy defines the scaling policy used when upgrading the RayService. |  |  |
+| `managedBy` _string_ | ManagedBy is an optional configuration for the controller or entity that manages a RayService.<br />The value must be either 'ray.io/kuberay-operator' or 'kueue.x-k8s.io/multikueue'.<br />The kuberay-operator reconciles a RayService which doesn't have this field at all or<br />the field value is the reserved string 'ray.io/kuberay-operator',<br />but delegates reconciling the RayService with 'kueue.x-k8s.io/multikueue' to the Kueue.<br />The field is immutable. |  |  |
 | `serveConfigV2` _string_ | Important: Run "make" to regenerate code after modifying this file<br />Defines the applications and deployments to deploy, should be a YAML multi-line scalar string. |  |  |
 | `rayClusterConfig` _[RayClusterSpec](#rayclusterspec)_ |  |  |  |
 | `excludeHeadPodFromServeSvc` _boolean_ | If the field is set to true, the value of the label `ray.io/serve` on the head Pod should always be false.<br />Therefore, the head Pod's endpoint will not be added to the Kubernetes Serve service. |  |  |

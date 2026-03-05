@@ -206,6 +206,10 @@ func RayClusterManagedBy(rayCluster *rayv1.RayCluster) *string {
 	return rayCluster.Spec.ManagedBy
 }
 
+func RayServiceManagedBy(rayService *rayv1.RayService) *string {
+	return rayService.Spec.ManagedBy
+}
+
 func GetRayService(t Test, namespace, name string) (*rayv1.RayService, error) {
 	return t.Client().Ray().RayV1().RayServices(namespace).Get(t.Ctx(), name, metav1.GetOptions{})
 }

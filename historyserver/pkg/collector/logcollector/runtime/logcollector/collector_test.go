@@ -9,6 +9,7 @@ import (
 	"time"
 
 	. "github.com/onsi/gomega"
+	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
 // MockStorageWriter is a mock implementation of storage.StorageWriter for testing
@@ -98,7 +99,7 @@ func TestIsFileAlreadyPersisted(t *testing.T) {
 	nodeID := "node-456"
 
 	// Create prev-logs structure
-	prevLogsPath := filepath.Join(handler.prevLogsDir, sessionID, nodeID, "logs", "worker.log")
+	prevLogsPath := filepath.Join(handler.prevLogsDir, sessionID, nodeID, utils.RAY_SESSIONDIR_LOGDIR_NAME, "worker.log")
 	createTestLogFile(t, prevLogsPath, "test log content")
 
 	// Test case 1: File not yet persisted
@@ -107,7 +108,7 @@ func TestIsFileAlreadyPersisted(t *testing.T) {
 	}
 
 	// Create the persisted file in persist-complete-logs
-	persistedPath := filepath.Join(baseDir, "persist-complete-logs", sessionID, nodeID, "logs", "worker.log")
+	persistedPath := filepath.Join(baseDir, "persist-complete-logs", sessionID, nodeID, utils.RAY_SESSIONDIR_LOGDIR_NAME, "worker.log")
 	createTestLogFile(t, persistedPath, "test log content")
 
 	// Test case 2: File already persisted
@@ -144,7 +145,7 @@ func TestScanAndProcess(t *testing.T) {
 
 	sessionID := "session-lifecycle"
 	nodeID := "node-1"
-	logsDir := filepath.Join(handler.prevLogsDir, sessionID, nodeID, "logs")
+	logsDir := filepath.Join(handler.prevLogsDir, sessionID, nodeID, utils.RAY_SESSIONDIR_LOGDIR_NAME)
 
 	// Prepare two log files in prev-logs directory
 	f1 := filepath.Join(logsDir, "file1.log")
