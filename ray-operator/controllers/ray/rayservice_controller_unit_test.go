@@ -2700,7 +2700,7 @@ func TestReconcileRollbackState(t *testing.T) {
 			expectRollbackStatus: true,
 		},
 		{
-			name:                 "Rollback cancelled, user updated spec back to pending",
+			name:                 "Rollback canceled, user updated spec back to pending",
 			rayServiceSpec:       *updatedSpec,
 			isRollbackInProgress: true,
 			expectRollbackStatus: false,
