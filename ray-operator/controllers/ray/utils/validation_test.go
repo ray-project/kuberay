@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 
@@ -2641,6 +2642,61 @@ func TestValidateRayClusterSpec_WorkerGroupReplicaValidation(t *testing.T) {
 			if tt.expectError {
 				require.Error(t, err)
 				require.EqualError(t, err, tt.errorMsg)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestValidateNetworkIsolation(t *testing.T) {
+	tests := []struct {
+		ni          *rayv1.NetworkIsolationConfig
+		name        string
+		errorMsg    string
+		expectError bool
+	}{
+		{
+			name: "denyAllEgress with IngressRules set returns error",
+			ni: &rayv1.NetworkIsolationConfig{
+				Mode:         ptr.To(rayv1.NetworkIsolationDenyAllEgress),
+				IngressRules: []networkingv1.NetworkPolicyIngressRule{{}},
+			},
+			expectError: true,
+			errorMsg:    `networkIsolation.ingressRules cannot be set when mode is "denyAllEgress" (ingress is not restricted)`,
+		},
+		{
+			name: "denyAllIngress with EgressRules set returns error",
+			ni: &rayv1.NetworkIsolationConfig{
+				Mode:        ptr.To(rayv1.NetworkIsolationDenyAllIngress),
+				EgressRules: []networkingv1.NetworkPolicyEgressRule{{}},
+			},
+			expectError: true,
+			errorMsg:    `networkIsolation.egressRules cannot be set when mode is "denyAllIngress" (egress is not restricted)`,
+		},
+		{
+			name: "denyAll with both IngressRules and EgressRules is valid",
+			ni: &rayv1.NetworkIsolationConfig{
+				Mode:         ptr.To(rayv1.NetworkIsolationDenyAll),
+				IngressRules: []networkingv1.NetworkPolicyIngressRule{{}},
+				EgressRules:  []networkingv1.NetworkPolicyEgressRule{{}},
+			},
+			expectError: false,
+		},
+		{
+			name:        "nil NetworkIsolation is valid",
+			ni:          nil,
+			expectError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			spec := &rayv1.RayClusterSpec{NetworkIsolation: tt.ni}
+			err := validateNetworkIsolation(spec)
+			if tt.expectError {
+				require.Error(t, err)
+				assert.EqualError(t, err, tt.errorMsg)
 			} else {
 				require.NoError(t, err)
 			}
