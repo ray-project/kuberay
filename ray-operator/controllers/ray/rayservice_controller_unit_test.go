@@ -2544,6 +2544,110 @@ func TestMarkFailedIfInitializingTimedOut(t *testing.T) {
 	}
 }
 
+func Test_RayServiceReconcileManagedBy(t *testing.T) {
+	newScheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(newScheme)
+	_ = corev1.AddToScheme(newScheme)
+	_ = discoveryv1.AddToScheme(newScheme)
+
+	const (
+		// MultiKueueController represents the value of the MultiKueue controller
+		MultiKueueController = "kueue.x-k8s.io/multikueue"
+	)
+
+	tests := []struct {
+		managedBy       *string
+		name            string
+		shouldReconcile bool
+	}{
+		{
+			managedBy:       nil,
+			name:            "ManagedBy field not set",
+			shouldReconcile: true,
+		},
+		{
+			managedBy:       ptr.To(utils.KubeRayController),
+			name:            "ManagedBy field to RayOperator",
+			shouldReconcile: true,
+		},
+		{
+			managedBy: ptr.To(""),
+			name:      "ManagedBy field empty",
+		},
+		{
+			managedBy: ptr.To(MultiKueueController),
+			name:      "ManagedBy field to external allowed controller",
+		},
+		{
+			managedBy: ptr.To("controller.com/invalid"),
+			name:      "ManagedBy field to external not allowed controller",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			rayService := rayv1.RayService{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-service",
+					Namespace: "default",
+				},
+				Spec: rayv1.RayServiceSpec{
+					RayClusterSpec: rayv1.RayClusterSpec{
+						HeadGroupSpec: rayv1.HeadGroupSpec{
+							Template: corev1.PodTemplateSpec{
+								Spec: corev1.PodSpec{
+									Containers: []corev1.Container{
+										{
+											Name:  "ray-head",
+											Image: "rayproject/ray:latest",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				Status: rayv1.RayServiceStatuses{},
+			}
+			rayService.Spec.ManagedBy = tc.managedBy
+
+			runtimeObjects := []runtime.Object{&rayService}
+			fakeClient := clientFake.NewClientBuilder().
+				WithScheme(newScheme).
+				WithRuntimeObjects(runtimeObjects...).
+				WithStatusSubresource(&rayService).
+				Build()
+
+			testRayServiceReconciler := &RayServiceReconciler{
+				Client:                       fakeClient,
+				Recorder:                     &record.FakeRecorder{},
+				Scheme:                       newScheme,
+				ServeConfigs:                 lru.New(utils.ServeConfigLRUSize),
+				RayClusterDeletionTimestamps: cmap.New[time.Time](),
+			}
+
+			request := ctrl.Request{
+				NamespacedName: client.ObjectKey{
+					Name:      rayService.Name,
+					Namespace: rayService.Namespace,
+				},
+			}
+
+			result, err := testRayServiceReconciler.Reconcile(ctx, request)
+			require.NoError(t, err)
+
+			if tc.shouldReconcile {
+				// Should requeue for normal reconciliation
+				assert.NotEqual(t, time.Duration(0), result.RequeueAfter)
+			} else {
+				// Should skip reconciliation (no requeue)
+				assert.Equal(t, time.Duration(0), result.RequeueAfter)
+			}
+		})
+	}
+}
+
 func TestReconcileRollbackState(t *testing.T) {
 	ctx := context.TODO()
 	namespace := "test-ns"
