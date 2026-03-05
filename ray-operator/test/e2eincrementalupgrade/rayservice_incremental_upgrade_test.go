@@ -332,7 +332,6 @@ func TestRayServiceIncrementalUpgradeWithLocust(t *testing.T) {
 					gg.Expect(err).NotTo(HaveOccurred())
 					gg.Expect(step.getValue(svc) == step.expectedValue || !IsRayServiceUpgrading(svc)).
 						To(BeTrue())
-					// return step.getValue(svc)
 				}, TestTimeoutMedium).Should(Succeed())
 
 				svc, err := GetRayService(test, namespace.Name, rayServiceName)
