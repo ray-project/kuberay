@@ -992,14 +992,23 @@ func formatActorForResponse(actor eventtypes.Actor) map[string]interface{} {
 			"port":      actor.Address.Port,
 			"workerId":  actor.Address.WorkerID,
 		},
-		"name":              actor.Name,
-		"numRestarts":       strconv.Itoa(actor.NumRestarts),
-		"actorClass":        actor.ActorClass,
-		"className":         actor.ActorClass,
-		"requiredResources": actor.RequiredResources,
-		"exitDetail":        actor.ExitDetails,
-		"reprName":          actor.ReprName,
-		"labelSelector":     actor.LabelSelector,
+		"name":        actor.Name,
+		"numRestarts": strconv.Itoa(actor.NumRestarts),
+		"actorClass":  actor.ActorClass,
+		"className":   actor.ActorClass,
+		"exitDetail":  actor.ExitDetails,
+		"reprName":    actor.ReprName,
+	}
+
+	if actor.RequiredResources != nil {
+		result["requiredResources"] = actor.RequiredResources
+	} else {
+		result["requiredResources"] = map[string]float64{}
+	}
+	if actor.LabelSelector != nil {
+		result["labelSelector"] = actor.LabelSelector
+	} else {
+		result["labelSelector"] = map[string]string{}
 	}
 
 	// Proto3 optional fields: only include when explicitly set.
@@ -1014,7 +1023,6 @@ func formatActorForResponse(actor eventtypes.Actor) map[string]interface{} {
 	if !actor.StartTime.IsZero() {
 		result["startTime"] = actor.StartTime.UnixMilli()
 	}
-
 	if !actor.EndTime.IsZero() {
 		result["endTime"] = actor.EndTime.UnixMilli()
 		result["timestamp"] = float64(actor.EndTime.UnixMilli())
