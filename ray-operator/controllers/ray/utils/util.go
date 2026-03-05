@@ -754,6 +754,8 @@ func IsAuthEnabled(spec *rayv1.RayClusterSpec) bool {
 
 func IsK8sAuthEnabled(authOptions *rayv1.AuthOptions) bool {
 	return authOptions != nil && authOptions.EnableK8sTokenAuth != nil && *authOptions.EnableK8sTokenAuth
+}
+
 // IsMTLSEnabled returns whether mTLS is enabled for the RayCluster.
 // Returns false if spec is nil or EnableMTLS is not set to true.
 func IsMTLSEnabled(spec *rayv1.RayClusterSpec) bool {

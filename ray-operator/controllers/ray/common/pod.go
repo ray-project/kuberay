@@ -336,6 +336,12 @@ func SetContainerTokenAuthEnvVars(clusterName string, container *corev1.Containe
 						LocalObjectReference: corev1.LocalObjectReference{Name: secretName},
 						Key:                  utils.RAY_AUTH_TOKEN_SECRET_KEY,
 					},
+				},
+			})
+		}
+	}
+}
+
 // configureTLS injects mTLS configuration into the pod template.
 // Mounts the TLS secret (cert-manager generated or BYOC) and sets TLS environment variables.
 // Idempotent: skips adding the TLS volume if one with RayTLSVolumeName already exists.

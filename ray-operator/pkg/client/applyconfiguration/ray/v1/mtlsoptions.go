@@ -4,13 +4,21 @@ package v1
 
 // MTLSOptionsApplyConfiguration represents a declarative configuration of the MTLSOptions type for use
 // with apply.
+//
+// MTLSOptions configures Bring Your Own Certificate (BYOC) for mTLS.
+// When enableMTLS is true and MTLSOptions is nil, the operator auto-generates
+// certificates via cert-manager. When MTLSOptions is set with a CertificateSecretName,
+// the operator uses the user-provided secret and does not require cert-manager.
 type MTLSOptionsApplyConfiguration struct {
 	// CertificateSecretName is a user-provided Kubernetes Secret containing
 	// tls.crt, tls.key, and ca.crt. Used by both head and worker nodes.
+	// The certificate SANs must cover all Ray node identities
+	// (head service DNS, worker service DNS, pod IPs or wildcards).
+	// When set, the operator skips cert-manager PKI and mounts this secret directly.
 	CertificateSecretName *string `json:"certificateSecretName,omitempty"`
 }
 
-// MTLSOptions constructs a declarative configuration of the MTLSOptions type for use with
+// MTLSOptionsApplyConfiguration constructs a declarative configuration of the MTLSOptions type for use with
 // apply.
 func MTLSOptions() *MTLSOptionsApplyConfiguration {
 	return &MTLSOptionsApplyConfiguration{}
