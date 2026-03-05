@@ -1012,7 +1012,7 @@ func GetRayDashboardClientFunc(ctx context.Context, mgr manager.Manager, useKube
 			}, "http://"+url, authToken)
 		}
 
-		if features.Enabled(features.AsyncJobInfoQuery) {
+		if rayCluster != nil && features.Enabled(features.AsyncJobInfoQuery) {
 			namespacedName := types.NamespacedName{
 				Name:      rayCluster.Name,
 				Namespace: rayCluster.Namespace,
