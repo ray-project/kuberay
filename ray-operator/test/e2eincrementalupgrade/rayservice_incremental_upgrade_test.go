@@ -3,6 +3,7 @@ package e2eincrementalupgrade
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"strings"
 	"sync"
 	"testing"
@@ -72,9 +73,9 @@ func TestRayServiceIncrementalUpgradeMain(t *testing.T) {
 	}, TestTimeoutShort).Should(WithTransform(IsPodRunningAndReady, BeTrue()))
 
 	LogWithTimestamp(test.T(), "Verifying RayService is serving traffic")
-	stdout, _ := PostRayServiceGateway(test, gatewayIP, curlPod, curlContainerName, "/fruit", `["MANGO", 2]`)
+	stdout, _ := CurlRayServiceGateway(test, gatewayIP, curlPod, curlContainerName, http.MethodPost, "/fruit", `["MANGO", 2]`)
 	g.Expect(stdout.String()).To(Equal("6"))
-	stdout, _ = PostRayServiceGateway(test, gatewayIP, curlPod, curlContainerName, "/calc", `["MUL", 3]`)
+	stdout, _ = CurlRayServiceGateway(test, gatewayIP, curlPod, curlContainerName, http.MethodPost, "/calc", `["MUL", 3]`)
 	g.Expect(stdout.String()).To(Equal("15 pizzas please!"))
 
 	// Attempt to trigger NewClusterWithIncrementalUpgrade by updating RayService serve config and RayCluster spec
@@ -154,7 +155,7 @@ func TestRayServiceIncrementalUpgradeMain(t *testing.T) {
 
 		// Send a request to the RayService to validate no requests are dropped. Check that
 		// both endpoints are serving requests.
-		stdout, _ := PostRayServiceGateway(test, gatewayIP, curlPod, curlContainerName, "/fruit", `["MANGO", 2]`)
+		stdout, _ := CurlRayServiceGateway(test, gatewayIP, curlPod, curlContainerName, http.MethodPost, "/fruit", `["MANGO", 2]`)
 		response := stdout.String()
 		g.Expect(response).To(Or(Equal("6"), Equal("8")), "Response should be from the old or new app version during the upgrade")
 		if response == "6" {
@@ -189,7 +190,7 @@ func TestRayServiceIncrementalUpgradeMain(t *testing.T) {
 	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutShort).Should(WithTransform(IsRayServiceUpgrading, BeFalse()))
 
 	LogWithTimestamp(test.T(), "Verifying RayService uses updated ServeConfig after upgrade completes")
-	stdout, _ = PostRayServiceGateway(test, gatewayIP, curlPod, curlContainerName, "/fruit", `["MANGO", 2]`)
+	stdout, _ = CurlRayServiceGateway(test, gatewayIP, curlPod, curlContainerName, http.MethodPost, "/fruit", `["MANGO", 2]`)
 	g.Expect(stdout.String()).To(Equal("8"))
 }
 
@@ -362,7 +363,7 @@ func TestRayServiceIncrementalUpgradeWithLocust(t *testing.T) {
 			curlPod, err := CreateCurlPod(g, test, curlPodName, curlContainerName, namespace.Name)
 			g.Expect(err).NotTo(HaveOccurred())
 
-			stdout, _ := GetRayServiceGateway(test, gatewayIP, curlPod, curlContainerName, "/test")
+			stdout, _ := CurlRayServiceGateway(test, gatewayIP, curlPod, curlContainerName, http.MethodGet, "/test", "")
 			var resp struct {
 				Status string `json:"status"`
 			}

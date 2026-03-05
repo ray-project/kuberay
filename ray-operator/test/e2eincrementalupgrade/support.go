@@ -89,41 +89,27 @@ func newLocustRunnerConfigMapAC(namespace string, options ...SupportOption[corev
 	return ConfigMapWith(cmAC, options...)
 }
 
-func GetRayServiceGateway(
+// CurlRayServiceGateway sends a request to the RayService Gateway using a Curl pod.
+// This method currently supports POST and GET methods.
+func CurlRayServiceGateway(
 	t Test,
 	gatewayIP string,
 	curlPod *corev1.Pod,
 	curlPodContainerName,
-	rayServicePath string,
-) (bytes.Buffer, bytes.Buffer) {
-	cmd := []string{
-		"curl",
-		"--max-time", "10",
-		"-X", "GET",
-		"-H", "Connection: close", // avoid re-using the same connection for test
-		"-H", "Content-Type: application/json",
-		fmt.Sprintf("http://%s%s", gatewayIP, rayServicePath),
-	}
-
-	return ExecPodCmd(t, curlPod, curlPodContainerName, cmd)
-}
-
-func PostRayServiceGateway(
-	t Test,
-	gatewayIP string,
-	curlPod *corev1.Pod,
-	curlPodContainerName,
+	method,
 	rayServicePath,
 	body string,
 ) (bytes.Buffer, bytes.Buffer) {
 	cmd := []string{
 		"curl",
 		"--max-time", "10",
-		"-X", "POST",
+		"-X", method,
 		"-H", "Connection: close", // avoid re-using the same connection for test
 		"-H", "Content-Type: application/json",
 		fmt.Sprintf("http://%s%s", gatewayIP, rayServicePath),
-		"-d", body,
+	}
+	if body != "" {
+		cmd = append(cmd, "-d", body)
 	}
 
 	return ExecPodCmd(t, curlPod, curlPodContainerName, cmd)
