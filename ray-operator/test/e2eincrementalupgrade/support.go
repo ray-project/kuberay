@@ -290,8 +290,16 @@ func warmupLocust(
 	stableWindow int,
 	timeout time.Duration,
 ) error {
+	// rpsColIdxResult is the result of getting the index of the Requests/s column in the stats history file.
+	//   - index: the index of the Requests/s column (the valid index should be >= 0)
+	//   - ready: false when the file or column is not ready, a retry is needed
+	type rpsColIdxResult struct {
+		index int
+		ready bool
+	}
+
 	// getRpsColIdx gets the index of the Requests/s column in the stats history file.
-	getRpsColIdx := func() (int, error) {
+	getRpsColIdx := func() (rpsColIdxResult, error) {
 		stdout, stderr := ExecPodCmd(test, locustHeadPod, common.RayHeadContainer, []string{
 			"bash", "-lc", `
 latest=$(ls /home/ray/locust_results/test_stats_history.csv 2>/dev/null | head -n 1) || exit 1
@@ -299,33 +307,43 @@ head -n1 "$latest"
 		`,
 		}, true)
 		if stderr.Len() != 0 || stdout.Len() == 0 {
-			// TODO(jwj): Use a better way to handle this case, hardcoded -2 might not be a good idea.
-			return -2, fmt.Errorf("%s", stderr.String())
+			return rpsColIdxResult{ready: false}, nil
 		}
+
 		header := strings.TrimSpace(stdout.String())
 		cols := strings.Split(header, ",")
-		return slices.Index(cols, "Requests/s"), nil
+		idx := slices.Index(cols, "Requests/s")
+		if idx == -1 {
+			return rpsColIdxResult{}, fmt.Errorf("Requests/s column not found in stats history file")
+		}
+		return rpsColIdxResult{
+			index: idx,
+			ready: true,
+		}, nil
 	}
+
+	var rpsIdx int
+	var haveRpsColIdx bool
 
 	ddl := time.Now().Add(timeout)
 	stableCount := 0
-	rpsIdx := -1
 	for time.Now().Before(ddl) {
-		if rpsIdx == -1 || rpsIdx == -2 {
-			var err error
-			rpsIdx, err = getRpsColIdx()
+		if !haveRpsColIdx {
+			rpsColIdxRes, err := getRpsColIdx()
+			if err != nil {
+				return err
+			}
 
-			if rpsIdx == -2 {
-				test.T().Logf("failed to find header in stats history file, retrying in 2 seconds: %s", err.Error())
+			if !rpsColIdxRes.ready {
+				test.T().Logf("failed to find header in stats history file, retrying in 2 seconds")
 				time.Sleep(2 * time.Second)
 				continue
 			}
 
-			if rpsIdx == -1 {
-				return fmt.Errorf("Requests/s column not found in stats history file")
-			}
+			rpsIdx = rpsColIdxRes.index
+			haveRpsColIdx = true
+			test.T().Logf("found Requests/s column at index: %d", rpsIdx)
 		}
-		test.T().Logf("Found Requests/s column at index: %d", rpsIdx)
 
 		stdout, stderr := ExecPodCmd(test, locustHeadPod, common.RayHeadContainer, []string{
 			"bash", "-lc", `
