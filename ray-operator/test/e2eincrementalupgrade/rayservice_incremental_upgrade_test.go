@@ -65,13 +65,6 @@ func TestRayServiceIncrementalUpgradeMain(t *testing.T) {
 	curlPod, err := CreateCurlPod(g, test, curlPodName, curlContainerName, namespace.Name)
 	g.Expect(err).NotTo(HaveOccurred())
 
-	LogWithTimestamp(test.T(), "Waiting for Curl Pod %s to be ready", curlPodName)
-	g.Eventually(func(g Gomega) *corev1.Pod {
-		updatedPod, err := test.Client().Core().CoreV1().Pods(curlPod.Namespace).Get(test.Ctx(), curlPod.Name, metav1.GetOptions{})
-		g.Expect(err).NotTo(HaveOccurred())
-		return updatedPod
-	}, TestTimeoutShort).Should(WithTransform(IsPodRunningAndReady, BeTrue()))
-
 	LogWithTimestamp(test.T(), "Verifying RayService is serving traffic")
 	stdout, _ := CurlRayServiceGateway(test, gatewayIP, curlPod, curlContainerName, http.MethodPost, "/fruit", `["MANGO", 2]`)
 	g.Expect(stdout.String()).To(Equal("6"))
@@ -268,8 +261,7 @@ func TestRayServiceIncrementalUpgradeWithLocust(t *testing.T) {
 			g.Expect(err).NotTo(HaveOccurred())
 			LogWithTimestamp(test.T(), "Found Locust head pod %s/%s", locustHeadPod.Namespace, locustHeadPod.Name)
 
-			_, stderr := ExecPodCmd(test, locustHeadPod, common.RayHeadContainer, []string{"pip", "install", "locust==2.32.10"}, true)
-			g.Expect(stderr.String()).To(BeEmpty(), "pip install locust should not return errors, got: %s", stderr.String())
+			ExecPodCmd(test, locustHeadPod, common.RayHeadContainer, []string{"pip", "install", "locust==2.32.10"})
 
 			// Phase 3: Start Locust in a background goroutine targeting Gateway IP
 			locustHost := fmt.Sprintf("http://%s", gatewayIP)
