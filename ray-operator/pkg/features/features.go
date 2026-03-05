@@ -55,6 +55,14 @@ const (
 	// Enables per-container restart policy for SidecarMode submitter to handle transient failures.
 	// Requires Kubernetes v1.35+ since it supports ContainerRestartPolicy by default starting in v1.35 and Ray v2.54.0+.
 	SidecarSubmitterRestart featuregate.Feature = "SidecarSubmitterRestart"
+
+	// owner: @chipspeak @kryanbeane
+	// rep: N/A
+	// alpha: v1.7
+	//
+	// Enables mTLS (spec.tlsOptions) for RayClusters. Named consistently with RayClusterNetworkIsolation
+	// (network policies); both may be folded under a shared gate in the future.
+	RayClusterMTLS featuregate.Feature = "RayClusterMTLS"
 )
 
 func init() {
@@ -68,6 +76,7 @@ var defaultFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
 	RayServiceIncrementalUpgrade: {Default: false, PreRelease: featuregate.Alpha},
 	RayCronJob:                   {Default: false, PreRelease: featuregate.Alpha},
 	SidecarSubmitterRestart:      {Default: false, PreRelease: featuregate.Alpha},
+	RayClusterMTLS:               {Default: false, PreRelease: featuregate.Alpha},
 }
 
 // SetFeatureGateDuringTest is a helper method to override feature gates in tests.
