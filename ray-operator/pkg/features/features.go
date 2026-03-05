@@ -54,6 +54,14 @@ const (
 	//
 	// Enables asynchronous job info querying.
 	AsyncJobInfoQuery featuregate.Feature = "AsyncJobInfoQuery"
+
+	// owner: @chipspeak @kryanbeane
+	// rep: N/A
+	// alpha: v1.6
+	//
+	// Enables mTLS (spec.tlsOptions) for RayClusters. Named consistently with RayClusterNetworkIsolation
+	// (network policies); both may be folded under a shared gate in the future.
+	RayClusterMTLS featuregate.Feature = "RayClusterMTLS"
 )
 
 func init() {
@@ -67,6 +75,7 @@ var defaultFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
 	RayServiceIncrementalUpgrade: {Default: false, PreRelease: featuregate.Alpha},
 	RayCronJob:                   {Default: false, PreRelease: featuregate.Alpha},
 	AsyncJobInfoQuery:            {Default: false, PreRelease: featuregate.Alpha},
+	RayClusterMTLS:               {Default: false, PreRelease: featuregate.Alpha},
 }
 
 // SetFeatureGateDuringTest is a helper method to override feature gates in tests.
