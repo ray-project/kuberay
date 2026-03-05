@@ -921,8 +921,8 @@ func getAllEligibleActorIDs(g *WithT, client *http.Client, historyServerURL stri
 	err = json.Unmarshal(body, &result)
 	g.Expect(err).NotTo(HaveOccurred())
 
-	// Extract actor_id from response
-	// Response format: {"result": true, "msg": "...", "data": {"actors": {actor_id: {...}, ...}}}
+	// Extract actorId from response
+	// Response format: {"result": true, "msg": "...", "data": {"actors": {actorId: {...}, ...}}}
 	data, ok := result["data"].(map[string]interface{})
 	g.Expect(ok).To(BeTrue(), "response should have 'data' field")
 
@@ -1622,14 +1622,14 @@ func testLogicalActorsEndpointDeadCluster(test Test, g *WithT, namespace *corev1
 			for _, actorData := range actors {
 				actor, ok := actorData.(map[string]any)
 				gg.Expect(ok).To(BeTrue(), "actor should be a map")
-				gg.Expect(actor["actor_id"]).NotTo(BeNil(), "actor should have actor_id")
-				gg.Expect(actor["job_id"]).NotTo(BeNil(), "actor should have job_id")
+				gg.Expect(actor["actorId"]).NotTo(BeNil(), "actor should have actorId")
+				gg.Expect(actor["jobId"]).NotTo(BeNil(), "actor should have jobId")
 				gg.Expect(actor["state"]).NotTo(BeNil(), "actor should have state")
 				gg.Expect(actor["address"]).NotTo(BeNil(), "actor should have address")
 				address, ok := actor["address"].(map[string]any)
 				gg.Expect(ok).To(BeTrue(), "address should be a map")
-				gg.Expect(address["node_id"]).NotTo(BeNil(), "address should have node_id")
-				gg.Expect(address["ip_address"]).NotTo(BeNil(), "address should have ip_address")
+				gg.Expect(address["nodeId"]).NotTo(BeNil(), "address should have nodeId")
+				gg.Expect(address["ipAddress"]).NotTo(BeNil(), "address should have ipAddress")
 				break // Only verify the first actor
 			}
 
@@ -1659,7 +1659,7 @@ func testLogicalActorsEndpointDeadCluster(test Test, g *WithT, namespace *corev1
 			gg.Expect(result["result"]).To(Equal(true))
 			gg.Expect(result["msg"]).To(Equal("Actor fetched."))
 
-			// Verify data.detail exists and contains actor_id
+			// Verify data.detail exists and contains actorId
 			data, ok := result["data"].(map[string]any)
 			gg.Expect(ok).To(BeTrue())
 			detail, ok := data["detail"].(map[string]any)
@@ -1667,14 +1667,14 @@ func testLogicalActorsEndpointDeadCluster(test Test, g *WithT, namespace *corev1
 
 			// Verify actor schema matches formatActorForResponse format
 			// Required fields from router.go:formatActorForResponse
-			gg.Expect(detail["actor_id"]).To(Equal(actorID))
-			gg.Expect(detail["job_id"]).NotTo(BeNil())
+			gg.Expect(detail["actorId"]).To(Equal(actorID))
+			gg.Expect(detail["jobId"]).NotTo(BeNil())
 			gg.Expect(detail["state"]).NotTo(BeNil())
 			gg.Expect(detail["address"]).NotTo(BeNil())
 			address, ok := detail["address"].(map[string]any)
 			gg.Expect(ok).To(BeTrue(), "address should be a map")
-			gg.Expect(address["node_id"]).NotTo(BeNil())
-			gg.Expect(address["ip_address"]).NotTo(BeNil())
+			gg.Expect(address["nodeId"]).NotTo(BeNil())
+			gg.Expect(address["ipAddress"]).NotTo(BeNil())
 
 			LogWithTimestamp(t, "Successfully fetched actor %s from history server", actorID)
 		}, TestTimeoutShort).Should(Succeed())
