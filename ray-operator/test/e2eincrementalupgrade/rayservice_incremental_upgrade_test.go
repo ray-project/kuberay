@@ -272,22 +272,33 @@ func TestRayServiceIncrementalUpgradeWithLocust(t *testing.T) {
 			g.Expect(stderr.String()).To(BeEmpty(), "pip install locust should not return errors, got: %s", stderr.String())
 
 			// Phase 3: Start Locust in a background goroutine targeting Gateway IP
-			var wg sync.WaitGroup
 			locustHost := fmt.Sprintf("http://%s", gatewayIP)
+			locustErrCh := make(chan error, 1)
 
+			var wg sync.WaitGroup
 			wg.Go(func() {
 				LogWithTimestamp(test.T(), "Starting Locust load test against %s", locustHost)
-				ExecPodCmd(test, locustHeadPod, common.RayHeadContainer, []string{
+				_, _, err = ExecPodCmdWithError(test, locustHeadPod, common.RayHeadContainer, []string{
 					"python", "/locust-runner/locust_runner.py",
 					"-f", "/locustfile/locustfile.py",
 					"--host", locustHost,
 				})
-				LogWithTimestamp(test.T(), "Locust load test completed with zero failures")
+				locustErrCh <- err
 			})
+
+			checkLocustErr := func() error {
+				select {
+				case err := <-locustErrCh:
+					return err
+				default:
+					return nil
+				}
+			}
 
 			// Allow Locust to ramp up and send traffic to the old cluster before triggering upgrade.
 			err = warmupLocust(test, locustHeadPod, 450, 15, 120*time.Second)
 			g.Expect(err).NotTo(HaveOccurred())
+			g.Expect(checkLocustErr()).NotTo(HaveOccurred(), "Locust failed during warmup")
 
 			// Phase 4: Trigger incremental upgrade
 			LogWithTimestamp(test.T(), "Triggering incremental upgrade by updating RayCluster spec and RayService serve config")
@@ -323,6 +334,8 @@ func TestRayServiceIncrementalUpgradeWithLocust(t *testing.T) {
 			upgradeSteps := generateUpgradeSteps(*stepSize, *maxSurge)
 			for _, step := range upgradeSteps {
 				LogWithTimestamp(test.T(), "%s", step.name)
+				g.Expect(checkLocustErr()).NotTo(HaveOccurred(), "Locust failed during upgrade step: %s", step.name)
+
 				g.Eventually(func(gg Gomega) {
 					svc, err := GetRayService(test, namespace.Name, rayServiceName)
 					gg.Expect(err).NotTo(HaveOccurred())
@@ -356,6 +369,7 @@ func TestRayServiceIncrementalUpgradeWithLocust(t *testing.T) {
 
 			LogWithTimestamp(test.T(), "Waiting for Locust load test goroutine to finish")
 			wg.Wait()
+			g.Expect(checkLocustErr()).NotTo(HaveOccurred(), "Locust load test failed")
 
 			LogWithTimestamp(test.T(), "Validating remaining traffic is routed to the new cluster after upgrade completes")
 			curlPodName := "curl-pod"
