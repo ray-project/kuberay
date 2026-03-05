@@ -9,4 +9,5 @@ const (
 	EndpointTasksSummarize = "/api/v0/tasks/summarize"
 	EndpointNodes          = "/nodes"
 	EndpointClusterStatus  = "/api/cluster_status"
+	EndpointTimezone       = "/timezone"
 )
