@@ -101,7 +101,7 @@ type RayClusterReconcilerOptions struct {
 // +kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch;create;update;patch;delete;deletecollection
 // +kubebuilder:rbac:groups=core,resources=pods/status,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=pods/resize,verbs=patch
-// +kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;create;
+// +kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;create;delete;
 // +kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=services/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=coordination.k8s.io,resources=leases,verbs=get;list;create;update
@@ -112,6 +112,8 @@ type RayClusterReconcilerOptions struct {
 // +kubebuilder:rbac:groups=core,resources=serviceaccounts,verbs=get;list;watch;create;delete
 // +kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=roles,verbs=get;list;watch;create;delete;update
 // +kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=rolebindings,verbs=get;list;watch;create;delete
+// +kubebuilder:rbac:groups=cert-manager.io,resources=issuers,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=cert-manager.io,resources=certificates,verbs=get;list;watch;create;update;patch;delete
 
 // [WARNING]: There MUST be a newline after kubebuilder markers.
 
@@ -625,6 +627,14 @@ func (r *RayClusterReconciler) reconcileHeadlessService(ctx context.Context, ins
 func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv1.RayCluster) error {
 	logger := ctrl.LoggerFrom(ctx)
 
+	// Block pod creation until mTLS secrets are ready (created by the mTLS controller).
+	if utils.IsMTLSEnabled(&instance.Spec) {
+		if err := r.checkMTLSSecretsReady(ctx, instance); err != nil {
+			logger.Info("mTLS secrets not ready yet, requeuing", "error", err.Error())
+			return fmt.Errorf("mTLS secrets not ready: %w", err)
+		}
+	}
+
 	// Calculate RayCluster spec hash for the UpgradeStrategy
 	clusterHash, err := utils.GenerateHashWithoutReplicasAndWorkersToDelete(instance.Spec)
 	if err != nil {
@@ -702,6 +712,10 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 			"Ray container terminated status", getRayContainerStateTerminated(headPod))
 
 		shouldDelete, reason := shouldDeletePod(headPod, rayv1.HeadNode)
+		if !shouldDelete && utils.IsMTLSEnabled(&instance.Spec) && !podHasMTLSConfiguration(&headPod) {
+			shouldDelete = true
+			reason = "mTLS is enabled but pod doesn't have mTLS configuration, needs recreation"
+		}
 		logger.Info("reconcilePods", "head Pod", headPod.Name, "shouldDelete", shouldDelete, "reason", reason)
 		if shouldDelete {
 			if err := r.Delete(ctx, &headPod); err != nil {
@@ -795,6 +809,10 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 		numDeletedUnhealthyWorkerPods := 0
 		for _, workerPod := range workerPods.Items {
 			shouldDelete, reason := shouldDeletePod(workerPod, rayv1.WorkerNode)
+			if !shouldDelete && utils.IsMTLSEnabled(&instance.Spec) && !podHasMTLSConfiguration(&workerPod) {
+				shouldDelete = true
+				reason = "mTLS is enabled but pod doesn't have mTLS configuration, needs recreation"
+			}
 			logger.Info("reconcilePods", "worker Pod", workerPod.Name, "shouldDelete", shouldDelete, "reason", reason)
 			if shouldDelete {
 				numDeletedUnhealthyWorkerPods++
@@ -1524,6 +1542,60 @@ func (r *RayClusterReconciler) buildRedisCleanupJob(ctx context.Context, instanc
 	}
 
 	return redisCleanupJob
+}
+
+// checkMTLSSecretsReady verifies TLS secrets exist and contain the required keys.
+// In BYOC mode, checks the user-provided secret. In auto-generate mode, checks
+// both head and worker secrets created by cert-manager via the mTLS controller.
+func (r *RayClusterReconciler) checkMTLSSecretsReady(ctx context.Context, instance *rayv1.RayCluster) error {
+	var secretNames []string
+	if utils.IsMTLSBYOC(&instance.Spec) {
+		secretNames = []string{*instance.Spec.MTLSOptions.CertificateSecretName}
+	} else {
+		secretNames = []string{
+			utils.GetTLSSecretName(instance.Name, rayv1.HeadNode),
+			utils.GetTLSSecretName(instance.Name, rayv1.WorkerNode),
+		}
+	}
+
+	requiredKeys := []string{"tls.crt", "tls.key", "ca.crt"}
+	for _, secretName := range secretNames {
+		secret := &corev1.Secret{}
+		if err := r.Get(ctx, client.ObjectKey{Name: secretName, Namespace: instance.Namespace}, secret); err != nil {
+			return fmt.Errorf("secret %s not found: %w", secretName, err)
+		}
+		for _, key := range requiredKeys {
+			if _, ok := secret.Data[key]; !ok {
+				return fmt.Errorf("secret %s missing required key %s", secretName, key)
+			}
+		}
+	}
+	return nil
+}
+
+// podHasMTLSConfiguration checks whether a pod has mTLS configured by verifying
+// it has the ray-tls volume and RAY_USE_TLS=1 env var. Used to detect pods that
+// need recreation when mTLS is enabled after initial pod creation.
+func podHasMTLSConfiguration(pod *corev1.Pod) bool {
+	hasTLSVolume := false
+	for _, vol := range pod.Spec.Volumes {
+		if vol.Name == utils.RayTLSVolumeName {
+			hasTLSVolume = true
+			break
+		}
+	}
+	if !hasTLSVolume {
+		return false
+	}
+
+	for _, container := range pod.Spec.Containers {
+		for _, env := range container.Env {
+			if env.Name == utils.RAY_USE_TLS && env.Value == "1" {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // SetupWithManager builds the reconciler.

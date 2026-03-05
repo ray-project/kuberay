@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	certmanagerv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
 	"github.com/go-logr/zapr"
 	routev1 "github.com/openshift/api/route/v1"
 	"go.uber.org/zap"
@@ -51,6 +52,7 @@ func init() {
 	utilruntime.Must(routev1.Install(scheme))
 	utilruntime.Must(batchv1.AddToScheme(scheme))
 	utilruntime.Must(configapi.AddToScheme(scheme))
+	utilruntime.Must(certmanagerv1.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
 }
 
@@ -276,6 +278,9 @@ func main() {
 	}
 	exitOnError(ray.NewReconciler(ctx, mgr, rayClusterOptions).SetupWithManager(mgr, config.ReconcileConcurrency),
 		"unable to create controller", "controller", "RayCluster")
+
+	exitOnError(ray.NewRayClusterMTLSController(mgr).SetupWithManager(mgr),
+		"unable to create controller", "controller", "RayClusterMTLS")
 
 	exitOnError(ray.NewRayServiceReconciler(ctx, mgr, config).SetupWithManager(mgr, config.ReconcileConcurrency),
 		"unable to create controller", "controller", "RayService")

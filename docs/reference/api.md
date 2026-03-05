@@ -195,14 +195,17 @@ _Appears in:_
 DeletionStrategy configures automated cleanup after the RayJob reaches a terminal state.
 Two mutually exclusive styles are supported:
 
+
 	Legacy: provide both onSuccess and onFailure (deprecated; removal planned for 1.6.0). May be combined with shutdownAfterJobFinishes and (optionally) global TTLSecondsAfterFinished.
 	Rules: provide deletionRules (non-empty list). Rules mode is incompatible with shutdownAfterJobFinishes, legacy fields, and the global TTLSecondsAfterFinished (use per‑rule condition.ttlSeconds instead).
+
 
 Semantics:
   - A non-empty deletionRules selects rules mode; empty lists are treated as unset.
   - Legacy requires both onSuccess and onFailure; specifying only one is invalid.
   - Global TTLSecondsAfterFinished > 0 requires shutdownAfterJobFinishes=true; therefore it cannot be used with rules mode or with legacy alone (no shutdown).
   - Feature gate RayJobDeletionPolicy must be enabled when this block is present.
+
 
 Validation:
   - CRD XValidations prevent mixing legacy fields with deletionRules and enforce legacy completeness.
@@ -285,6 +288,44 @@ _Appears in:_
 | `SidecarMode` |  |
 
 
+#### MTLSOptions
+
+
+
+MTLSOptions configures Bring Your Own Certificate (BYOC) for mTLS.
+When enableMTLS is true and MTLSOptions is nil, the operator auto-generates
+certificates via cert-manager. When MTLSOptions is set with a CertificateSecretName,
+the operator uses the user-provided secret and does not require cert-manager.
+
+
+
+_Appears in:_
+- [RayClusterSpec](#rayclusterspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `certificateSecretName` _string_ | CertificateSecretName is a user-provided Kubernetes Secret containing<br />tls.crt, tls.key, and ca.crt. Used by both head and worker nodes.<br />The certificate SANs must cover all Ray node identities<br />(head service DNS, worker service DNS, pod IPs or wildcards).<br />When set, the operator skips cert-manager PKI and mounts this secret directly. |  |  |
+
+
+#### NetworkIsolationConfig
+
+
+
+NetworkIsolationConfig defines network isolation settings for Ray cluster.
+All modes maintain the cluster's ability for intra-node and KubeRay operator communication.
+
+
+
+_Appears in:_
+- [RayClusterSpec](#rayclusterspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `mode` _string_ | Mode controls the security level, all modes maintain the Cluster's<br />ability for intra-node and Kuberay operator communication.<br />- "denyAll": Denies all Ingress and Egress.<br />- "denyAllIngress": Denies all Ingress.<br />- "denyAllEgress": Denies all Egress. | denyAll | Enum: [denyAll denyAllIngress denyAllEgress] <br /> |
+| `ingressRules` _[NetworkPolicyIngressRule](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#networkpolicyingressrule-v1-networking) array_ | IngressRules specifies custom ingress rules for Ray cluster pods. |  |  |
+| `egressRules` _[NetworkPolicyEgressRule](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#networkpolicyegressrule-v1-networking) array_ | EgressRules specifies custom egress rules for Ray cluster pods. |  |  |
+
+
 #### RayCluster
 
 
@@ -328,6 +369,9 @@ _Appears in:_
 | `headServiceAnnotations` _object (keys:string, values:string)_ |  |  |  |
 | `enableInTreeAutoscaling` _boolean_ | EnableInTreeAutoscaling indicates whether operator should create in tree autoscaling configs |  |  |
 | `gcsFaultToleranceOptions` _[GcsFaultToleranceOptions](#gcsfaulttoleranceoptions)_ | GcsFaultToleranceOptions for enabling GCS FT |  |  |
+| `networkIsolation` _[NetworkIsolationConfig](#networkisolationconfig)_ | NetworkIsolation specifies optional configuration for network isolation.<br />When set, NetworkPolicies will be created to control traffic to/from Ray pods.<br />The reconciler always ensures intra-cluster and KubeRay operator communication is permitted. |  |  |
+| `enableMTLS` _boolean_ | EnableMTLS enables mutual TLS (mTLS) encryption for Ray cluster internal communication.<br />When true and MTLSOptions is nil, the operator auto-generates certificates via cert-manager.<br />When true and MTLSOptions.CertificateSecretName is set, the operator uses the user-provided<br />secret (BYOC mode) and does not require cert-manager. |  |  |
+| `mTLSOptions` _[MTLSOptions](#mtlsoptions)_ | MTLSOptions configures Bring Your Own Certificate (BYOC) for mTLS.<br />Only used when enableMTLS is true. If nil, certificates are auto-generated via cert-manager. |  |  |
 | `headGroupSpec` _[HeadGroupSpec](#headgroupspec)_ | HeadGroupSpec is the spec for the head pod |  |  |
 | `rayVersion` _string_ | RayVersion is used to determine the command for the Kubernetes Job managed by RayJob |  |  |
 | `workerGroupSpecs` _[WorkerGroupSpec](#workergroupspec) array_ | WorkerGroupSpecs are the specs for the worker pods |  |  |

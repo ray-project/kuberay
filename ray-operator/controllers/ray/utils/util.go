@@ -754,6 +754,43 @@ func IsAuthEnabled(spec *rayv1.RayClusterSpec) bool {
 
 func IsK8sAuthEnabled(authOptions *rayv1.AuthOptions) bool {
 	return authOptions != nil && authOptions.EnableK8sTokenAuth != nil && *authOptions.EnableK8sTokenAuth
+// IsMTLSEnabled returns whether mTLS is enabled for the RayCluster.
+// Returns false if spec is nil or EnableMTLS is not set to true.
+func IsMTLSEnabled(spec *rayv1.RayClusterSpec) bool {
+	return spec != nil && spec.EnableMTLS != nil && *spec.EnableMTLS
+}
+
+// IsMTLSBYOC returns true when the user provides their own certificate secret (BYOC mode).
+// BYOC is active when mTLS is enabled and MTLSOptions.CertificateSecretName is set.
+func IsMTLSBYOC(spec *rayv1.RayClusterSpec) bool {
+	return IsMTLSEnabled(spec) &&
+		spec.MTLSOptions != nil &&
+		spec.MTLSOptions.CertificateSecretName != nil &&
+		*spec.MTLSOptions.CertificateSecretName != ""
+}
+
+// GetCASecretName returns the cert-manager CA secret name with a UID-based suffix.
+// Format: {clusterName}-ca-secret-{first 8 chars of UID}
+// The UID suffix guarantees uniqueness per cluster instance. If a cluster is deleted
+// and recreated with the same name, it gets a new CA secret rather than reusing a
+// potentially stale one from a previous instance.
+func GetCASecretName(clusterName string, clusterUID types.UID) string {
+	uidSuffix := string(clusterUID)[:8]
+	return fmt.Sprintf("%s-%s-%s", clusterName, RayCASecretPrefix, uidSuffix)
+}
+
+// GetTLSSecretName returns the TLS secret name for the given node type.
+// In BYOC mode, returns the user-provided secret name for both head and worker.
+// In auto-generate mode, returns the cert-manager prefix-based name.
+func GetTLSSecretName(clusterName string, nodeType rayv1.RayNodeType, spec ...rayv1.RayClusterSpec) string {
+	// If a spec is provided and BYOC is active, return the user-provided secret name.
+	if len(spec) > 0 && IsMTLSBYOC(&spec[0]) {
+		return *spec[0].MTLSOptions.CertificateSecretName
+	}
+	if nodeType == rayv1.HeadNode {
+		return fmt.Sprintf("%s-%s", RayHeadSecretPrefix, clusterName)
+	}
+	return fmt.Sprintf("%s-%s", RayWorkerSecretPrefix, clusterName)
 }
 
 // GetRayClusterNameFromService returns the name of the RayCluster that the service points to

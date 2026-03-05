@@ -2,6 +2,7 @@ package v1
 
 import (
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -42,6 +43,21 @@ type RayClusterSpec struct {
 	// GcsFaultToleranceOptions for enabling GCS FT
 	// +optional
 	GcsFaultToleranceOptions *GcsFaultToleranceOptions `json:"gcsFaultToleranceOptions,omitempty"`
+	// NetworkIsolation specifies optional configuration for network isolation.
+	// When set, NetworkPolicies will be created to control traffic to/from Ray pods.
+	// The reconciler always ensures intra-cluster and KubeRay operator communication is permitted.
+	// +optional
+	NetworkIsolation *NetworkIsolationConfig `json:"networkIsolation,omitempty"`
+	// EnableMTLS enables mutual TLS (mTLS) encryption for Ray cluster internal communication.
+	// When true and MTLSOptions is nil, the operator auto-generates certificates via cert-manager.
+	// When true and MTLSOptions.CertificateSecretName is set, the operator uses the user-provided
+	// secret (BYOC mode) and does not require cert-manager.
+	// +optional
+	EnableMTLS *bool `json:"enableMTLS,omitempty"`
+	// MTLSOptions configures Bring Your Own Certificate (BYOC) for mTLS.
+	// Only used when enableMTLS is true. If nil, certificates are auto-generated via cert-manager.
+	// +optional
+	MTLSOptions *MTLSOptions `json:"mTLSOptions,omitempty"`
 	// HeadGroupSpec is the spec for the head pod
 	HeadGroupSpec HeadGroupSpec `json:"headGroupSpec"`
 	// RayVersion is used to determine the command for the Kubernetes Job managed by RayJob
@@ -50,6 +66,20 @@ type RayClusterSpec struct {
 	// WorkerGroupSpecs are the specs for the worker pods
 	// +optional
 	WorkerGroupSpecs []WorkerGroupSpec `json:"workerGroupSpecs,omitempty"`
+}
+
+// MTLSOptions configures Bring Your Own Certificate (BYOC) for mTLS.
+// When enableMTLS is true and MTLSOptions is nil, the operator auto-generates
+// certificates via cert-manager. When MTLSOptions is set with a CertificateSecretName,
+// the operator uses the user-provided secret and does not require cert-manager.
+type MTLSOptions struct {
+	// CertificateSecretName is a user-provided Kubernetes Secret containing
+	// tls.crt, tls.key, and ca.crt. Used by both head and worker nodes.
+	// The certificate SANs must cover all Ray node identities
+	// (head service DNS, worker service DNS, pod IPs or wildcards).
+	// When set, the operator skips cert-manager PKI and mounts this secret directly.
+	// +optional
+	CertificateSecretName *string `json:"certificateSecretName,omitempty"`
 }
 
 // +kubebuilder:validation:Enum=Recreate;None
@@ -123,6 +153,38 @@ type RedisCredential struct {
 	ValueFrom *corev1.EnvVarSource `json:"valueFrom,omitempty"`
 	// +optional
 	Value string `json:"value,omitempty"`
+}
+
+// Network isolation mode constants for NetworkIsolationConfig.Mode.
+const (
+	// NetworkIsolationDenyAll denies all ingress and egress traffic.
+	NetworkIsolationDenyAll = "denyAll"
+	// NetworkIsolationDenyAllIngress denies all ingress traffic.
+	NetworkIsolationDenyAllIngress = "denyAllIngress"
+	// NetworkIsolationDenyAllEgress denies all egress traffic.
+	NetworkIsolationDenyAllEgress = "denyAllEgress"
+)
+
+// NetworkIsolationConfig defines network isolation settings for Ray cluster.
+// All modes maintain the cluster's ability for intra-node and KubeRay operator communication.
+type NetworkIsolationConfig struct {
+	// Mode controls the security level, all modes maintain the Cluster's
+	// ability for intra-node and Kuberay operator communication.
+	// - "denyAll": Denies all Ingress and Egress.
+	// - "denyAllIngress": Denies all Ingress.
+	// - "denyAllEgress": Denies all Egress.
+	// +optional
+	// +kubebuilder:validation:Enum=denyAll;denyAllIngress;denyAllEgress
+	// +kubebuilder:default=denyAll
+	Mode *string `json:"mode,omitempty"`
+
+	// IngressRules specifies custom ingress rules for Ray cluster pods.
+	// +optional
+	IngressRules []networkingv1.NetworkPolicyIngressRule `json:"ingressRules,omitempty"`
+
+	// EgressRules specifies custom egress rules for Ray cluster pods.
+	// +optional
+	EgressRules []networkingv1.NetworkPolicyEgressRule `json:"egressRules,omitempty"`
 }
 
 // HeadGroupSpec are the spec for the head pod

@@ -1,0 +1,64 @@
+# RayCluster with mutual TLS (mTLS) using Bring Your Own Certificate (BYOC).
+# The user provides a single TLS secret containing tls.crt, tls.key, and ca.crt.
+# The operator mounts this secret on both head and worker pods without requiring
+# cert-manager. The operator never deletes the user-provided secret.
+#
+# Prerequisites:
+#   1. Create a TLS secret with the required keys:
+#
+#      kubectl create secret tls my-tls-secret \
+#        --cert=path/to/tls.crt --key=path/to/tls.key
+#      kubectl patch secret my-tls-secret --type merge \
+#        -p '{"data":{"ca.crt":"'$(base64 < path/to/ca.crt)'"}}'
+#
+#   2. The certificate SANs must cover all Ray node identities:
+#      - Head service DNS (e.g. raycluster-byoc-head-svc, raycluster-byoc-head-svc.<ns>.svc)
+#      - Worker service DNS (e.g. raycluster-byoc-worker-svc.<ns>.svc)
+#      - Pod IPs or wildcards as needed
+#      - localhost and 127.0.0.1
+apiVersion: ray.io/v1
+kind: RayCluster
+metadata:
+  name: raycluster-byoc
+spec:
+  rayVersion: '2.52.0'
+  # Enable mTLS for Ray cluster internal communication.
+  enableMTLS: true
+  # BYOC: use a user-provided TLS secret instead of cert-manager auto-generation.
+  # The same secret is mounted on both head and worker pods.
+  mTLSOptions:
+    certificateSecretName: my-tls-secret
+  headGroupSpec:
+    rayStartParams:
+      dashboard-host: "0.0.0.0"
+    template:
+      spec:
+        containers:
+        - name: ray-head
+          image: rayproject/ray:2.52.0
+          resources:
+            limits:
+              cpu: "1"
+              memory: "2Gi"
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+  workerGroupSpecs:
+  - replicas: 1
+    minReplicas: 1
+    maxReplicas: 1
+    groupName: small-group
+    rayStartParams:
+      num-cpus: "1"
+    template:
+      spec:
+        containers:
+        - name: ray-worker
+          image: rayproject/ray:2.52.0
+          resources:
+            limits:
+              cpu: "1"
+              memory: "1Gi"
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
