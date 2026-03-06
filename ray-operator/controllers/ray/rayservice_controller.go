@@ -1145,23 +1145,18 @@ func shouldSyncWorkerGroupScalingBounds(rayServiceInstance *rayv1.RayService, cl
 
 func syncWorkerGroupScalingBounds(rayServiceInstance *rayv1.RayService, cluster *rayv1.RayCluster) {
 	for i := range cluster.Spec.WorkerGroupSpecs {
-		cluster.Spec.WorkerGroupSpecs[i].MinReplicas = cloneInt32Ptr(rayServiceInstance.Spec.RayClusterSpec.WorkerGroupSpecs[i].MinReplicas)
-		cluster.Spec.WorkerGroupSpecs[i].MaxReplicas = cloneInt32Ptr(rayServiceInstance.Spec.RayClusterSpec.WorkerGroupSpecs[i].MaxReplicas)
+		serviceWorkerGroup := rayServiceInstance.Spec.RayClusterSpec.WorkerGroupSpecs[i]
+		if serviceWorkerGroup.MinReplicas != nil {
+			cluster.Spec.WorkerGroupSpecs[i].MinReplicas = ptr.To(*serviceWorkerGroup.MinReplicas)
+		} else {
+			cluster.Spec.WorkerGroupSpecs[i].MinReplicas = nil
+		}
+		if serviceWorkerGroup.MaxReplicas != nil {
+			cluster.Spec.WorkerGroupSpecs[i].MaxReplicas = ptr.To(*serviceWorkerGroup.MaxReplicas)
+		} else {
+			cluster.Spec.WorkerGroupSpecs[i].MaxReplicas = nil
+		}
 	}
-}
-
-func isInt32PtrEqual(a, b *int32) bool {
-	if a == nil || b == nil {
-		return a == nil && b == nil
-	}
-	return *a == *b
-}
-
-func cloneInt32Ptr(v *int32) *int32 {
-	if v == nil {
-		return nil
-	}
-	return ptr.To(*v)
 }
 
 func shouldPrepareNewCluster(ctx context.Context, rayServiceInstance *rayv1.RayService, activeRayCluster, pendingRayCluster *rayv1.RayCluster, isPendingClusterServing bool) bool {
