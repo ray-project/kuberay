@@ -408,6 +408,28 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		// The RayJob is already suspended, we should not requeue it.
 		return ctrl.Result{}, nil
 	case rayv1.JobDeploymentStatusComplete, rayv1.JobDeploymentStatusFailed:
+		// Clean up batch scheduler resources (e.g., delete Volcano PodGroup)
+		// This should be done before other deletion logic to ensure proper resource cleanup
+		if r.options.BatchSchedulerManager != nil {
+			scheduler, err := r.options.BatchSchedulerManager.GetScheduler()
+			if err != nil {
+				logger.Error(err, "Failed to get batch scheduler")
+				// Don't block the reconciliation on scheduler errors, just log the error
+			} else {
+				didCleanup, err := scheduler.CleanupOnCompletion(ctx, rayJobInstance)
+				if err != nil {
+					logger.Error(err, "Failed to cleanup batch scheduler resources")
+					r.Recorder.Eventf(rayJobInstance, corev1.EventTypeWarning, string(utils.FailedToCleanupBatchScheduler),
+						"Failed to cleanup batch scheduler resources for RayJob %s/%s: %v", rayJobInstance.Namespace, rayJobInstance.Name, err)
+					// Don't block the reconciliation on cleanup failures, just log the error
+				} else if didCleanup {
+					// Only emit success event if actual cleanup was performed
+					r.Recorder.Eventf(rayJobInstance, corev1.EventTypeNormal, string(utils.BatchSchedulerCleanedUp),
+						"Cleaned up batch scheduler resources for RayJob %s/%s", rayJobInstance.Namespace, rayJobInstance.Name)
+				}
+			}
+		}
+
 		// The RayJob has reached a terminal state. Handle the cleanup and deletion logic.
 		// If the RayJob uses an existing RayCluster, we must not delete it.
 		if len(rayJobInstance.Spec.ClusterSelector) > 0 {
