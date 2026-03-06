@@ -1121,13 +1121,17 @@ func shouldSyncWorkerGroupScalingBounds(rayServiceInstance *rayv1.RayService, cl
 		return false
 	}
 
+	// Validate all worker group names first, then compare scaling bounds.
+	// This avoids positional sync when group names diverge at any later index.
+	for i := range serviceWorkerGroups {
+		if serviceWorkerGroups[i].GroupName != clusterWorkerGroups[i].GroupName {
+			return false
+		}
+	}
+
 	for i := range serviceWorkerGroups {
 		serviceWorkerGroup := serviceWorkerGroups[i]
 		clusterWorkerGroup := clusterWorkerGroups[i]
-		if serviceWorkerGroup.GroupName != clusterWorkerGroup.GroupName {
-			return false
-		}
-
 		if !isInt32PtrEqual(serviceWorkerGroup.MinReplicas, clusterWorkerGroup.MinReplicas) {
 			return true
 		}

@@ -691,9 +691,9 @@ func TestShouldSyncWorkerGroupScalingBounds(t *testing.T) {
 	}
 
 	tests := []struct {
+		prepare         func(cluster *rayv1.RayCluster, service *rayv1.RayService)
 		name            string
 		isActiveCluster bool
-		prepare         func(cluster *rayv1.RayCluster, service *rayv1.RayService)
 		expected        bool
 	}{
 		{
@@ -729,6 +729,24 @@ func TestShouldSyncWorkerGroupScalingBounds(t *testing.T) {
 			isActiveCluster: false,
 			prepare: func(cluster *rayv1.RayCluster, _ *rayv1.RayService) {
 				cluster.Spec.WorkerGroupSpecs[0].GroupName = "renamed"
+			},
+			expected: false,
+		},
+		{
+			name:            "should not sync when later group name differs even if earlier bounds differ",
+			isActiveCluster: false,
+			prepare: func(cluster *rayv1.RayCluster, service *rayv1.RayService) {
+				service.Spec.RayClusterSpec.WorkerGroupSpecs = append(service.Spec.RayClusterSpec.WorkerGroupSpecs, rayv1.WorkerGroupSpec{
+					GroupName:   "worker-group-2",
+					MinReplicas: ptr.To[int32](1),
+					MaxReplicas: ptr.To[int32](10),
+				})
+				cluster.Spec.WorkerGroupSpecs = append(cluster.Spec.WorkerGroupSpecs, rayv1.WorkerGroupSpec{
+					GroupName:   "renamed-worker-group-2",
+					MinReplicas: ptr.To[int32](1),
+					MaxReplicas: ptr.To[int32](10),
+				})
+				cluster.Spec.WorkerGroupSpecs[0].MaxReplicas = ptr.To[int32](5)
 			},
 			expected: false,
 		},
