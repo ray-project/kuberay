@@ -129,6 +129,8 @@ func (r *NetworkPolicyController) createOrUpdateNetworkPolicy(ctx context.Contex
 			r.Recorder.Eventf(instance, corev1.EventTypeNormal, string(utils.UpdatedNetworkPolicy),
 				"Updated NetworkPolicy %s/%s", networkPolicy.Namespace, networkPolicy.Name)
 		} else {
+			r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.FailedToCreateNetworkPolicy),
+				"Failed to create NetworkPolicy %s/%s: %v", networkPolicy.Namespace, networkPolicy.Name, err)
 			return err
 		}
 	} else {
