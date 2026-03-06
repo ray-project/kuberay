@@ -334,11 +334,11 @@ func TestBuildBaseIngressRules(t *testing.T) {
 
 	// Rule 1: operator — two ports (dashboard + client), operator pod selector with
 	// empty namespace selector so the operator is reachable from any namespace.
+	// Only component label is used; name label differs between kustomize and Helm.
 	operatorRule := rules[1]
 	require.Len(t, operatorRule.From, 1)
 	assert.Equal(t, map[string]string{
-		"app.kubernetes.io/component": "kuberay-operator",
-		"app.kubernetes.io/name":      utils.ApplicationName,
+		"app.kubernetes.io/component": utils.ComponentName,
 	}, operatorRule.From[0].PodSelector.MatchLabels)
 	assert.NotNil(t, operatorRule.From[0].NamespaceSelector)
 	assert.Empty(t, operatorRule.From[0].NamespaceSelector.MatchLabels, "Empty namespace selector must match all namespaces")

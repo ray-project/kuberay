@@ -120,13 +120,13 @@ func (r *NetworkPolicyController) createOrUpdateNetworkPolicy(ctx context.Contex
 			existing.Labels = networkPolicy.Labels
 
 			if err := r.Update(ctx, existing); err != nil {
-				r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.FailedToCreateNetworkPolicy),
+				r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.FailedToUpdateNetworkPolicy),
 					"Failed to update NetworkPolicy %s/%s: %v", networkPolicy.Namespace, networkPolicy.Name, err)
 				return err
 			}
 
 			logger.Info("Successfully updated NetworkPolicy", "name", networkPolicy.Name)
-			r.Recorder.Eventf(instance, corev1.EventTypeNormal, string(utils.CreatedNetworkPolicy),
+			r.Recorder.Eventf(instance, corev1.EventTypeNormal, string(utils.UpdatedNetworkPolicy),
 				"Updated NetworkPolicy %s/%s", networkPolicy.Namespace, networkPolicy.Name)
 		} else {
 			return err
@@ -277,6 +277,9 @@ func (r *NetworkPolicyController) buildBaseIngressRules(instance *rayv1.RayClust
 		},
 		// Rule 2: KubeRay operator access to dashboard and client ports.
 		// Ports are resolved dynamically from the head container spec.
+		// Only app.kubernetes.io/component is used because app.kubernetes.io/name
+		// differs between deployment methods (kustomize sets "kuberay", Helm sets
+		// "kuberay-operator"), whereas component is "kuberay-operator" in both.
 		// NamespaceSelector is intentionally empty (matches all namespaces) so that
 		// the operator pod is allowed regardless of which namespace it runs in.
 		{
@@ -284,8 +287,7 @@ func (r *NetworkPolicyController) buildBaseIngressRules(instance *rayv1.RayClust
 				{
 					PodSelector: &metav1.LabelSelector{
 						MatchLabels: map[string]string{
-							"app.kubernetes.io/component": "kuberay-operator",
-							"app.kubernetes.io/name":      utils.ApplicationName,
+							"app.kubernetes.io/component": utils.ComponentName,
 						},
 					},
 					NamespaceSelector: &metav1.LabelSelector{},
