@@ -1132,10 +1132,10 @@ func shouldSyncWorkerGroupScalingBounds(rayServiceInstance *rayv1.RayService, cl
 	for i := range serviceWorkerGroups {
 		serviceWorkerGroup := serviceWorkerGroups[i]
 		clusterWorkerGroup := clusterWorkerGroups[i]
-		if !isInt32PtrEqual(serviceWorkerGroup.MinReplicas, clusterWorkerGroup.MinReplicas) {
+		if !ptr.Equal(serviceWorkerGroup.MinReplicas, clusterWorkerGroup.MinReplicas) {
 			return true
 		}
-		if !isInt32PtrEqual(serviceWorkerGroup.MaxReplicas, clusterWorkerGroup.MaxReplicas) {
+		if !ptr.Equal(serviceWorkerGroup.MaxReplicas, clusterWorkerGroup.MaxReplicas) {
 			return true
 		}
 	}
