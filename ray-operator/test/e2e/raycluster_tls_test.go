@@ -321,6 +321,9 @@ func TestRayClusterTLSEdgeCases(t *testing.T) {
 	})
 
 	t.Run("mTLS with multiple worker groups", func(t *testing.T) {
+		if !certManagerAvailable(test) {
+			t.Skip("cert-manager CRDs not found; skipping auto-generate mTLS test")
+		}
 		t.Parallel()
 		g := NewWithT(t)
 
@@ -375,6 +378,9 @@ func TestRayClusterTLSEdgeCases(t *testing.T) {
 	})
 
 	t.Run("mTLS cluster deletion cleans up cert-manager resources", func(t *testing.T) {
+		if !certManagerAvailable(test) {
+			t.Skip("cert-manager CRDs not found; skipping auto-generate mTLS test")
+		}
 		t.Parallel()
 		g := NewWithT(t)
 
@@ -466,6 +472,9 @@ func TestRayClusterTLSEdgeCases(t *testing.T) {
 	})
 
 	t.Run("mTLS with autoscaler enabled", func(t *testing.T) {
+		if !certManagerAvailable(test) {
+			t.Skip("cert-manager CRDs not found; skipping auto-generate mTLS test")
+		}
 		t.Parallel()
 		g := NewWithT(t)
 
@@ -508,6 +517,9 @@ func TestRayClusterTLSEdgeCases(t *testing.T) {
 	})
 
 	t.Run("Init container TLS configuration", func(t *testing.T) {
+		if !certManagerAvailable(test) {
+			t.Skip("cert-manager CRDs not found; skipping auto-generate mTLS test")
+		}
 		t.Parallel()
 		g := NewWithT(t)
 

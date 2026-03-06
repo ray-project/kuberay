@@ -782,12 +782,18 @@ func GetCASecretName(clusterName string, clusterUID types.UID) string {
 }
 
 // GetTLSSecretName returns the TLS secret name for the given node type.
-// In BYOC mode, returns the user-provided secret name for both head and worker.
+// In BYOC mode with WorkerCertificateSecretName set, returns the worker-specific
+// secret for worker nodes and CertificateSecretName for head nodes.
+// In BYOC mode without WorkerCertificateSecretName, returns CertificateSecretName
+// for both node types (shared-secret mode).
 // In auto-generate mode, returns the cert-manager prefix-based name.
 func GetTLSSecretName(clusterName string, nodeType rayv1.RayNodeType, spec ...rayv1.RayClusterSpec) string {
-	// If a spec is provided and BYOC is active, return the user-provided secret name.
 	if len(spec) > 0 && IsMTLSBYOC(&spec[0]) {
-		return *spec[0].MTLSOptions.CertificateSecretName
+		opts := spec[0].MTLSOptions
+		if nodeType == rayv1.WorkerNode && opts.WorkerCertificateSecretName != nil && *opts.WorkerCertificateSecretName != "" {
+			return *opts.WorkerCertificateSecretName
+		}
+		return *opts.CertificateSecretName
 	}
 	if nodeType == rayv1.HeadNode {
 		return fmt.Sprintf("%s-%s", RayHeadSecretPrefix, clusterName)

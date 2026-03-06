@@ -4534,6 +4534,8 @@ spec:
                     properties:
                       certificateSecretName:
                         type: string
+                      workerCertificateSecretName:
+                        type: string
                     type: object
                   managedBy:
                     type: string

@@ -320,25 +320,34 @@ func validateMTLSOptions(spec *rayv1.RayClusterSpec) error {
 		if spec.MTLSOptions.CertificateSecretName == nil || *spec.MTLSOptions.CertificateSecretName == "" {
 			return fmt.Errorf("mTLSOptions.certificateSecretName must be provided when mTLSOptions is set")
 		}
-	}
-
-	// Prevent conflict: user should not set RAY_USE_TLS env var manually when mTLS is enabled.
-	if len(spec.HeadGroupSpec.Template.Spec.Containers) > 0 {
-		headContainer := spec.HeadGroupSpec.Template.Spec.Containers[RayContainerIndex]
-		if EnvVarExists(RAY_USE_TLS, headContainer.Env) {
-			return fmt.Errorf("cannot set %s environment variable in head Pod when enableMTLS is true "+
-				"- the operator manages TLS configuration automatically", RAY_USE_TLS)
+		// WorkerCertificateSecretName is optional but must be non-empty when set.
+		if spec.MTLSOptions.WorkerCertificateSecretName != nil && *spec.MTLSOptions.WorkerCertificateSecretName == "" {
+			return fmt.Errorf("mTLSOptions.workerCertificateSecretName must be non-empty when set")
 		}
 	}
 
-	// Also check worker group containers for the same env var conflict.
+	// Prevent conflict: user should not set any operator-managed TLS env vars when mTLS is enabled.
+	forbiddenEnvVars := []string{RAY_USE_TLS, RAY_TLS_SERVER_CERT, RAY_TLS_SERVER_KEY, RAY_TLS_CA_CERT}
+
+	if len(spec.HeadGroupSpec.Template.Spec.Containers) > 0 {
+		headContainer := spec.HeadGroupSpec.Template.Spec.Containers[RayContainerIndex]
+		for _, envName := range forbiddenEnvVars {
+			if EnvVarExists(envName, headContainer.Env) {
+				return fmt.Errorf("cannot set %s environment variable in head Pod when enableMTLS is true "+
+					"- the operator manages TLS configuration automatically", envName)
+			}
+		}
+	}
+
 	for i := range spec.WorkerGroupSpecs {
 		worker := &spec.WorkerGroupSpecs[i]
 		if len(worker.Template.Spec.Containers) > 0 {
 			workerContainer := worker.Template.Spec.Containers[RayContainerIndex]
-			if EnvVarExists(RAY_USE_TLS, workerContainer.Env) {
-				return fmt.Errorf("cannot set %s environment variable in worker group %q when enableMTLS is true "+
-					"- the operator manages TLS configuration automatically", RAY_USE_TLS, worker.GroupName)
+			for _, envName := range forbiddenEnvVars {
+				if EnvVarExists(envName, workerContainer.Env) {
+					return fmt.Errorf("cannot set %s environment variable in worker group %q when enableMTLS is true "+
+						"- the operator manages TLS configuration automatically", envName, worker.GroupName)
+				}
 			}
 		}
 	}

@@ -535,6 +535,87 @@ func TestMTLSController_BYOC_DeletionDoesNotDeleteUserSecret(t *testing.T) {
 	require.NoError(t, err, "BYOC secret should NOT be deleted when RayCluster is deleted")
 }
 
+func TestMTLSController_BYOC_SeparateHeadWorkerSecrets(t *testing.T) {
+	cluster := newMTLSTestCluster("byoc-separate")
+	cluster.Spec.EnableMTLS = ptr.To(true)
+	cluster.Spec.MTLSOptions = &rayv1.MTLSOptions{
+		CertificateSecretName:       ptr.To("my-head-secret"),
+		WorkerCertificateSecretName: ptr.To("my-worker-secret"),
+	}
+
+	headSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: "my-head-secret", Namespace: "default"},
+		Data: map[string][]byte{
+			"tls.crt": []byte("head-cert"), "tls.key": []byte("head-key"), "ca.crt": []byte("ca"),
+		},
+	}
+	workerSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: "my-worker-secret", Namespace: "default"},
+		Data: map[string][]byte{
+			"tls.crt": []byte("worker-cert"), "tls.key": []byte("worker-key"), "ca.crt": []byte("ca"),
+		},
+	}
+
+	r := newMTLSController(t, cluster, headSecret, workerSecret)
+	ctx := context.Background()
+
+	result, err := r.Reconcile(ctx, ctrl.Request{
+		NamespacedName: types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, mtlsPeriodicCheckDuration, result.RequeueAfter, "should schedule periodic check for BYOC with separate secrets")
+}
+
+func TestMTLSController_BYOC_SeparateSecrets_WorkerMissing(t *testing.T) {
+	cluster := newMTLSTestCluster("byoc-worker-missing")
+	cluster.Spec.EnableMTLS = ptr.To(true)
+	cluster.Spec.MTLSOptions = &rayv1.MTLSOptions{
+		CertificateSecretName:       ptr.To("my-head-secret"),
+		WorkerCertificateSecretName: ptr.To("my-worker-secret"),
+	}
+
+	// Only create the head secret; worker secret is missing.
+	headSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: "my-head-secret", Namespace: "default"},
+		Data: map[string][]byte{
+			"tls.crt": []byte("head-cert"), "tls.key": []byte("head-key"), "ca.crt": []byte("ca"),
+		},
+	}
+
+	r := newMTLSController(t, cluster, headSecret)
+	ctx := context.Background()
+
+	result, err := r.Reconcile(ctx, ctrl.Request{
+		NamespacedName: types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, mtlsDefaultRequeueDuration, result.RequeueAfter, "should requeue when BYOC worker secret is missing")
+}
+
+func TestMTLSController_DeletionWithDisabledMTLS_RemovesFinalizer(t *testing.T) {
+	now := metav1.Now()
+	cluster := newMTLSTestCluster("disabled-del")
+	// mTLS was previously enabled (finalizer present) but user disabled it before deleting.
+	cluster.Spec.EnableMTLS = ptr.To(false)
+	cluster.DeletionTimestamp = &now
+	cluster.Finalizers = []string{mtlsFinalizer}
+
+	r := newMTLSController(t, cluster)
+	ctx := context.Background()
+
+	result, err := r.Reconcile(ctx, ctrl.Request{
+		NamespacedName: types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace},
+	})
+	require.NoError(t, err)
+	assert.Zero(t, result.RequeueAfter, "should not requeue after finalizer removal")
+
+	// The cluster should be fully deleted (fake client removes it when last finalizer is removed
+	// and DeletionTimestamp is set).
+	updatedCluster := &rayv1.RayCluster{}
+	err = r.Get(ctx, types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace}, updatedCluster)
+	assert.True(t, errors.IsNotFound(err), "cluster should be fully deleted after finalizer removal with disabled mTLS")
+}
+
 func TestMTLSController_AutoGenerate_DeletionCleansUpSecrets(t *testing.T) {
 	now := metav1.Now()
 	cluster := newMTLSTestCluster("auto-del")

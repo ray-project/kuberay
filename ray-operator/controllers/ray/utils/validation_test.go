@@ -2744,6 +2744,157 @@ func TestValidateRayClusterSpec_Auth(t *testing.T) {
 	}
 }
 
+func TestValidateMTLSOptions(t *testing.T) {
+	baseSpec := func() rayv1.RayClusterSpec {
+		return rayv1.RayClusterSpec{
+			HeadGroupSpec: rayv1.HeadGroupSpec{
+				Template: corev1.PodTemplateSpec{
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{{Name: "ray-head", Image: "rayproject/ray:latest"}},
+					},
+				},
+			},
+		}
+	}
+
+	tests := []struct {
+		modify      func(*rayv1.RayClusterSpec)
+		name        string
+		errorMsg    string
+		expectError bool
+	}{
+		{
+			name: "mTLS disabled, no options - valid",
+			modify: func(_ *rayv1.RayClusterSpec) {
+			},
+		},
+		{
+			name: "mTLS disabled with options set - error",
+			modify: func(s *rayv1.RayClusterSpec) {
+				s.MTLSOptions = &rayv1.MTLSOptions{CertificateSecretName: ptr.To("my-secret")}
+			},
+			expectError: true,
+			errorMsg:    "mTLSOptions cannot be set when enableMTLS is not true",
+		},
+		{
+			name: "mTLS enabled, no options (auto-generate) - valid",
+			modify: func(s *rayv1.RayClusterSpec) {
+				s.EnableMTLS = ptr.To(true)
+			},
+		},
+		{
+			name: "mTLS enabled, BYOC with certificateSecretName - valid",
+			modify: func(s *rayv1.RayClusterSpec) {
+				s.EnableMTLS = ptr.To(true)
+				s.MTLSOptions = &rayv1.MTLSOptions{CertificateSecretName: ptr.To("my-secret")}
+			},
+		},
+		{
+			name: "mTLS enabled, BYOC with empty certificateSecretName - error",
+			modify: func(s *rayv1.RayClusterSpec) {
+				s.EnableMTLS = ptr.To(true)
+				s.MTLSOptions = &rayv1.MTLSOptions{CertificateSecretName: ptr.To("")}
+			},
+			expectError: true,
+			errorMsg:    "mTLSOptions.certificateSecretName must be provided when mTLSOptions is set",
+		},
+		{
+			name: "BYOC with separate head and worker secrets - valid",
+			modify: func(s *rayv1.RayClusterSpec) {
+				s.EnableMTLS = ptr.To(true)
+				s.MTLSOptions = &rayv1.MTLSOptions{
+					CertificateSecretName:       ptr.To("head-secret"),
+					WorkerCertificateSecretName: ptr.To("worker-secret"),
+				}
+			},
+		},
+		{
+			name: "BYOC with empty workerCertificateSecretName - error",
+			modify: func(s *rayv1.RayClusterSpec) {
+				s.EnableMTLS = ptr.To(true)
+				s.MTLSOptions = &rayv1.MTLSOptions{
+					CertificateSecretName:       ptr.To("head-secret"),
+					WorkerCertificateSecretName: ptr.To(""),
+				}
+			},
+			expectError: true,
+			errorMsg:    "mTLSOptions.workerCertificateSecretName must be non-empty when set",
+		},
+		{
+			name: "RAY_USE_TLS in head container - error",
+			modify: func(s *rayv1.RayClusterSpec) {
+				s.EnableMTLS = ptr.To(true)
+				s.HeadGroupSpec.Template.Spec.Containers[0].Env = []corev1.EnvVar{{Name: "RAY_USE_TLS", Value: "1"}}
+			},
+			expectError: true,
+			errorMsg:    "cannot set RAY_USE_TLS",
+		},
+		{
+			name: "RAY_TLS_SERVER_CERT in head container - error",
+			modify: func(s *rayv1.RayClusterSpec) {
+				s.EnableMTLS = ptr.To(true)
+				s.HeadGroupSpec.Template.Spec.Containers[0].Env = []corev1.EnvVar{{Name: "RAY_TLS_SERVER_CERT", Value: "/x"}}
+			},
+			expectError: true,
+			errorMsg:    "cannot set RAY_TLS_SERVER_CERT",
+		},
+		{
+			name: "RAY_TLS_SERVER_KEY in worker container - error",
+			modify: func(s *rayv1.RayClusterSpec) {
+				s.EnableMTLS = ptr.To(true)
+				s.WorkerGroupSpecs = []rayv1.WorkerGroupSpec{{
+					GroupName: "wg",
+					Template: corev1.PodTemplateSpec{
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{{
+								Name:  "ray-worker",
+								Image: "rayproject/ray:latest",
+								Env:   []corev1.EnvVar{{Name: "RAY_TLS_SERVER_KEY", Value: "/x"}},
+							}},
+						},
+					},
+				}}
+			},
+			expectError: true,
+			errorMsg:    "cannot set RAY_TLS_SERVER_KEY",
+		},
+		{
+			name: "RAY_TLS_CA_CERT in worker container - error",
+			modify: func(s *rayv1.RayClusterSpec) {
+				s.EnableMTLS = ptr.To(true)
+				s.WorkerGroupSpecs = []rayv1.WorkerGroupSpec{{
+					GroupName: "wg",
+					Template: corev1.PodTemplateSpec{
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{{
+								Name:  "ray-worker",
+								Image: "rayproject/ray:latest",
+								Env:   []corev1.EnvVar{{Name: "RAY_TLS_CA_CERT", Value: "/x"}},
+							}},
+						},
+					},
+				}}
+			},
+			expectError: true,
+			errorMsg:    "cannot set RAY_TLS_CA_CERT",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			spec := baseSpec()
+			tt.modify(&spec)
+			err := validateMTLSOptions(&spec)
+			if tt.expectError {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errorMsg)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
 func TestValidateNetworkIsolation(t *testing.T) {
 	tests := []struct {
 		ni          *rayv1.NetworkIsolationConfig

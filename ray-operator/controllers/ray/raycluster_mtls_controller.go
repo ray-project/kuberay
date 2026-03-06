@@ -77,14 +77,10 @@ func (r *RayClusterMTLSController) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{}, err
 	}
 
-	// mTLS not enabled: nothing to do. Disabling mTLS on a running cluster
-	// is not supported; the cluster should be recreated instead.
-	if !utils.IsMTLSEnabled(&instance.Spec) {
-		return ctrl.Result{}, nil
-	}
-
-	// Handle deletion: clean up auto-generated secrets, then remove the finalizer
-	// so the RayCluster can be fully deleted.
+	// Handle deletion first, regardless of whether mTLS is currently enabled.
+	// A user may have disabled mTLS (set enableMTLS=false) before deleting the cluster.
+	// Without handling deletion before the enableMTLS check, the finalizer would
+	// never be removed and the RayCluster would be stuck in Terminating.
 	if instance.DeletionTimestamp != nil && !instance.DeletionTimestamp.IsZero() {
 		if controllerutil.ContainsFinalizer(instance, mtlsFinalizer) {
 			// Only delete secrets in auto-generate mode; BYOC secrets belong to the user.
@@ -106,6 +102,11 @@ func (r *RayClusterMTLSController) Reconcile(ctx context.Context, req ctrl.Reque
 			}
 			logger.Info("Removed mTLS finalizer after secret cleanup")
 		}
+		return ctrl.Result{}, nil
+	}
+
+	// mTLS not enabled: nothing to do.
+	if !utils.IsMTLSEnabled(&instance.Spec) {
 		return ctrl.Result{}, nil
 	}
 
@@ -178,35 +179,43 @@ func (r *RayClusterMTLSController) handleAutoGenerate(ctx context.Context, insta
 	return ctrl.Result{RequeueAfter: mtlsPeriodicCheckDuration}, nil
 }
 
-// handleBYOC validates the user-provided certificate secret exists and has the required keys.
-// No cert-manager resources are created. The user's secret is never deleted by the operator.
+// handleBYOC validates the user-provided certificate secret(s) exist and contain the required keys.
+// When WorkerCertificateSecretName is set, both head and worker secrets are validated.
+// No cert-manager resources are created. The user's secrets are never deleted by the operator.
 func (r *RayClusterMTLSController) handleBYOC(ctx context.Context, instance *rayv1.RayCluster, logger logr.Logger) (ctrl.Result, error) {
-	secretName := *instance.Spec.MTLSOptions.CertificateSecretName
-	logger.Info("BYOC mTLS mode: verifying user-provided secret", "secret", secretName)
-
-	secret := &corev1.Secret{}
-	if err := r.Get(ctx, client.ObjectKey{Name: secretName, Namespace: instance.Namespace}, secret); err != nil {
-		if errors.IsNotFound(err) {
-			logger.Info("BYOC secret not found, will requeue", "secret", secretName)
-			r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.MTLSBYOCSecretNotFound),
-				"BYOC mTLS secret %q not found; waiting for it to be created", secretName)
-			return ctrl.Result{RequeueAfter: mtlsDefaultRequeueDuration}, nil
-		}
-		return ctrl.Result{}, err
+	// Build the list of secrets to validate: head (always) + worker (if separate).
+	secretNames := []string{*instance.Spec.MTLSOptions.CertificateSecretName}
+	if w := instance.Spec.MTLSOptions.WorkerCertificateSecretName; w != nil && *w != "" {
+		secretNames = append(secretNames, *w)
 	}
 
-	for _, key := range []string{"tls.crt", "tls.key", "ca.crt"} {
-		if _, ok := secret.Data[key]; !ok {
-			logger.Info("BYOC secret missing required key", "secret", secretName, "key", key)
-			r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.MTLSBYOCSecretInvalid),
-				"BYOC mTLS secret %q is missing required key %q", secretName, key)
-			return ctrl.Result{RequeueAfter: mtlsDefaultRequeueDuration}, nil
+	for _, secretName := range secretNames {
+		logger.Info("BYOC mTLS mode: verifying user-provided secret", "secret", secretName)
+
+		secret := &corev1.Secret{}
+		if err := r.Get(ctx, client.ObjectKey{Name: secretName, Namespace: instance.Namespace}, secret); err != nil {
+			if errors.IsNotFound(err) {
+				logger.Info("BYOC secret not found, will requeue", "secret", secretName)
+				r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.MTLSBYOCSecretNotFound),
+					"BYOC mTLS secret %q not found; waiting for it to be created", secretName)
+				return ctrl.Result{RequeueAfter: mtlsDefaultRequeueDuration}, nil
+			}
+			return ctrl.Result{}, err
+		}
+
+		for _, key := range []string{"tls.crt", "tls.key", "ca.crt"} {
+			if _, ok := secret.Data[key]; !ok {
+				logger.Info("BYOC secret missing required key", "secret", secretName, "key", key)
+				r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.MTLSBYOCSecretInvalid),
+					"BYOC mTLS secret %q is missing required key %q", secretName, key)
+				return ctrl.Result{RequeueAfter: mtlsDefaultRequeueDuration}, nil
+			}
 		}
 	}
 
-	logger.Info("BYOC mTLS secret is valid", "secret", secretName)
+	logger.Info("BYOC mTLS secret(s) valid", "secrets", secretNames)
 	r.Recorder.Eventf(instance, corev1.EventTypeNormal, string(utils.MTLSBYOCSecretValid),
-		"BYOC mTLS secret %q is valid", secretName)
+		"BYOC mTLS secret(s) %v are valid", secretNames)
 	return ctrl.Result{RequeueAfter: mtlsPeriodicCheckDuration}, nil
 }
 

@@ -19,7 +19,9 @@ import (
 	"k8s.io/apimachinery/pkg/selection"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
+	"k8s.io/client-go/discovery"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
@@ -243,6 +245,12 @@ func main() {
 	restConfig.UserAgent = userAgent
 	restConfig.QPS = float32(*config.QPS)
 	restConfig.Burst = *config.Burst
+
+	// Check if cert-manager API is available before registering the mTLS controller.
+	// If cert-manager is not installed, the controller's Certificate/Issuer cache would
+	// never sync and the manager would fail to start (e.g. in E2E environments without cert-manager).
+	certManagerAvailable := certManagerAPIAvailable(restConfig)
+
 	mgr, err := ctrl.NewManager(restConfig, options)
 	exitOnError(err, "unable to start manager")
 
@@ -279,8 +287,12 @@ func main() {
 	exitOnError(ray.NewReconciler(ctx, mgr, rayClusterOptions).SetupWithManager(mgr, config.ReconcileConcurrency),
 		"unable to create controller", "controller", "RayCluster")
 
-	exitOnError(ray.NewRayClusterMTLSController(mgr).SetupWithManager(mgr),
-		"unable to create controller", "controller", "RayClusterMTLS")
+	if certManagerAvailable {
+		exitOnError(ray.NewRayClusterMTLSController(mgr).SetupWithManager(mgr),
+			"unable to create controller", "controller", "RayClusterMTLS")
+	} else {
+		setupLog.Info("cert-manager API not found; mTLS controller disabled (RayClusters with enableMTLS and no CertificateSecretName will not get auto-generated certs)")
+	}
 
 	exitOnError(ray.NewRayServiceReconciler(ctx, mgr, config).SetupWithManager(mgr, config.ReconcileConcurrency),
 		"unable to create controller", "controller", "RayService")
@@ -316,6 +328,26 @@ func main() {
 
 	setupLog.Info("starting manager")
 	exitOnError(mgr.Start(ctx), "problem running manager")
+}
+
+// certManagerAPIAvailable returns true if the cert-manager.io/v1 API (Certificate, Issuer) is
+// available in the cluster. Used to avoid registering the mTLS controller when cert-manager
+// is not installed, which would cause manager startup to time out waiting for the Certificate cache to sync.
+func certManagerAPIAvailable(restConfig *rest.Config) bool {
+	discoveryClient, err := discovery.NewDiscoveryClientForConfig(restConfig)
+	if err != nil || discoveryClient == nil {
+		return false
+	}
+	_, resources, err := discoveryClient.ServerGroupsAndResources()
+	if err != nil {
+		return false
+	}
+	for _, r := range resources {
+		if r.GroupVersion == "cert-manager.io/v1" {
+			return true
+		}
+	}
+	return false
 }
 
 func cacheSelectors() (map[client.Object]cache.ByObject, error) {

@@ -11,11 +11,15 @@ package v1
 // the operator uses the user-provided secret and does not require cert-manager.
 type MTLSOptionsApplyConfiguration struct {
 	// CertificateSecretName is a user-provided Kubernetes Secret containing
-	// tls.crt, tls.key, and ca.crt. Used by both head and worker nodes.
-	// The certificate SANs must cover all Ray node identities
-	// (head service DNS, worker service DNS, pod IPs or wildcards).
+	// tls.crt, tls.key, and ca.crt for the head node (and workers, if
+	// WorkerCertificateSecretName is not set).
 	// When set, the operator skips cert-manager PKI and mounts this secret directly.
 	CertificateSecretName *string `json:"certificateSecretName,omitempty"`
+
+	// WorkerCertificateSecretName is an optional user-provided Kubernetes Secret
+	// containing tls.crt, tls.key, and ca.crt for worker nodes.
+	// When set, workers use this secret instead of CertificateSecretName.
+	WorkerCertificateSecretName *string `json:"workerCertificateSecretName,omitempty"`
 }
 
 // MTLSOptionsApplyConfiguration constructs a declarative configuration of the MTLSOptions type for use with
@@ -29,5 +33,13 @@ func MTLSOptions() *MTLSOptionsApplyConfiguration {
 // If called multiple times, the CertificateSecretName field is set to the value of the last call.
 func (b *MTLSOptionsApplyConfiguration) WithCertificateSecretName(value string) *MTLSOptionsApplyConfiguration {
 	b.CertificateSecretName = &value
+	return b
+}
+
+// WithWorkerCertificateSecretName sets the WorkerCertificateSecretName field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the WorkerCertificateSecretName field is set to the value of the last call.
+func (b *MTLSOptionsApplyConfiguration) WithWorkerCertificateSecretName(value string) *MTLSOptionsApplyConfiguration {
+	b.WorkerCertificateSecretName = &value
 	return b
 }
