@@ -589,7 +589,6 @@ env_vars:
 		rayJobAC := rayv1ac.RayJob("ttl-initializing", namespace.Name).
 			WithSpec(rayv1ac.RayJobSpec().
 				WithRayClusterSpec(NewRayClusterSpec(invalidImageOpt)).
-				WithEntrypoint("echo hello").
 				WithShutdownAfterJobFinishes(true).
 				WithPreRunningDeadlineSeconds(5))
 
@@ -613,7 +612,6 @@ env_vars:
 		rayJobAC := rayv1ac.RayJob("ttl-waiting", namespace.Name).
 			WithSpec(rayv1ac.RayJobSpec().
 				WithSubmissionMode(rayv1.InteractiveMode).
-				WithRayClusterSpec(NewRayClusterSpec(MountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](jobs, "/home/ray/jobs"))).
 				WithShutdownAfterJobFinishes(true).
 				WithPreRunningDeadlineSeconds(30)) // larger value to reach Initializing state first
 
