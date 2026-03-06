@@ -1135,6 +1135,12 @@ func shouldPrepareNewCluster(ctx context.Context, rayServiceInstance *rayv1.RayS
 	if isPendingClusterServing {
 		return false
 	}
+
+	// Do not prepare a new cluster while a rollback is actively in progress.
+	if meta.IsStatusConditionTrue(rayServiceInstance.Status.Conditions, string(rayv1.RollbackInProgress)) {
+		return false
+	}
+
 	if activeRayCluster == nil && pendingRayCluster == nil {
 		// Both active and pending clusters are nil, which means the RayService has just been created.
 		// Create a new pending cluster.
