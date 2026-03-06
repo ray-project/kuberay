@@ -644,6 +644,29 @@ func GenerateJsonHash(obj interface{}) (string, error) {
 	return hashStr, nil
 }
 
+func GenerateHashWithoutReplicasAndWorkersToDelete(rayClusterSpec rayv1.RayClusterSpec) (string, error) {
+	// Mute certain fields that will not trigger new RayCluster preparation. For example,
+	// Autoscaler will update `Replicas` and `WorkersToDelete` when scaling up/down.
+	updatedRayClusterSpec := rayClusterSpec.DeepCopy()
+
+	// Mute tolerations and scheduling gates for all pod templates.
+	// External controllers like Kueue may inject these fields into the RayCluster
+	// after creation, which should not trigger a new RayCluster preparation.
+	updatedRayClusterSpec.HeadGroupSpec.Template.Spec.Tolerations = nil
+	updatedRayClusterSpec.HeadGroupSpec.Template.Spec.SchedulingGates = nil
+	for i := 0; i < len(updatedRayClusterSpec.WorkerGroupSpecs); i++ {
+		updatedRayClusterSpec.WorkerGroupSpecs[i].Replicas = nil
+		updatedRayClusterSpec.WorkerGroupSpecs[i].MaxReplicas = nil
+		updatedRayClusterSpec.WorkerGroupSpecs[i].MinReplicas = nil
+		updatedRayClusterSpec.WorkerGroupSpecs[i].ScaleStrategy.WorkersToDelete = nil
+		updatedRayClusterSpec.WorkerGroupSpecs[i].Template.Spec.Tolerations = nil
+		updatedRayClusterSpec.WorkerGroupSpecs[i].Template.Spec.SchedulingGates = nil
+	}
+
+	// Generate a hash for the RayClusterSpec.
+	return GenerateJsonHash(updatedRayClusterSpec)
+}
+
 // FindContainerPort searches for a specific port $portName in the container.
 // If the port is found in the container, the corresponding port is returned.
 // If the port is not found, the $defaultPort is returned instead.
