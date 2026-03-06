@@ -13,12 +13,24 @@ type MTLSOptionsApplyConfiguration struct {
 	// CertificateSecretName is a user-provided Kubernetes Secret containing
 	// tls.crt, tls.key, and ca.crt for the head node (and workers, if
 	// WorkerCertificateSecretName is not set).
+	//
+	// When WorkerCertificateSecretName is also set, this secret is mounted only
+	// on head pods. When WorkerCertificateSecretName is omitted, this single secret
+	// is mounted on both head and worker pods (shared-secret BYOC mode).
+	//
+	// The certificate SANs must cover the head node identities
+	// (head service DNS, pod IPs or wildcards, localhost, 127.0.0.1).
 	// When set, the operator skips cert-manager PKI and mounts this secret directly.
 	CertificateSecretName *string `json:"certificateSecretName,omitempty"`
-
 	// WorkerCertificateSecretName is an optional user-provided Kubernetes Secret
 	// containing tls.crt, tls.key, and ca.crt for worker nodes.
-	// When set, workers use this secret instead of CertificateSecretName.
+	//
+	// When set, workers use this secret instead of CertificateSecretName, giving
+	// head and worker pods separate TLS identities. This prevents a compromised
+	// worker key from impersonating the head node at the TLS layer.
+	//
+	// The certificate SANs must cover worker node identities
+	// (worker pod IPs or wildcards). Both secrets must share the same CA.
 	WorkerCertificateSecretName *string `json:"workerCertificateSecretName,omitempty"`
 }
 
