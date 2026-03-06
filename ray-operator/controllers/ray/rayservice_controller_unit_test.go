@@ -69,6 +69,31 @@ func TestGenerateHashWithoutReplicasAndWorkersToDelete(t *testing.T) {
 	hash3, err := utils.GenerateHashWithoutReplicasAndWorkersToDelete(cluster.Spec)
 	require.NoError(t, err)
 	assert.NotEqual(t, hash1, hash3)
+
+	// Tolerations injected by external controllers (e.g., Kueue) should not change the hash.
+	cluster.Spec.RayVersion = support.GetRayVersion()
+	cluster.Spec.HeadGroupSpec.Template.Spec.Tolerations = []corev1.Toleration{
+		{Key: "nvidia.com/gpu", Operator: corev1.TolerationOpExists, Effect: corev1.TaintEffectNoSchedule},
+	}
+	cluster.Spec.WorkerGroupSpecs[0].Template.Spec.Tolerations = []corev1.Toleration{
+		{Key: "nvidia.com/gpu", Operator: corev1.TolerationOpExists, Effect: corev1.TaintEffectNoSchedule},
+	}
+	hash4, err := utils.GenerateHashWithoutReplicasAndWorkersToDelete(cluster.Spec)
+	require.NoError(t, err)
+	assert.Equal(t, hash1, hash4)
+
+	// SchedulingGates injected by external controllers (e.g., Kueue) should not change the hash.
+	cluster.Spec.HeadGroupSpec.Template.Spec.Tolerations = nil
+	cluster.Spec.WorkerGroupSpecs[0].Template.Spec.Tolerations = nil
+	cluster.Spec.HeadGroupSpec.Template.Spec.SchedulingGates = []corev1.PodSchedulingGate{
+		{Name: "kueue.x-k8s.io/admission"},
+	}
+	cluster.Spec.WorkerGroupSpecs[0].Template.Spec.SchedulingGates = []corev1.PodSchedulingGate{
+		{Name: "kueue.x-k8s.io/admission"},
+	}
+	hash5, err := utils.GenerateHashWithoutReplicasAndWorkersToDelete(cluster.Spec)
+	require.NoError(t, err)
+	assert.Equal(t, hash1, hash5)
 }
 
 func TestIsHeadPodRunningAndReady(t *testing.T) {
