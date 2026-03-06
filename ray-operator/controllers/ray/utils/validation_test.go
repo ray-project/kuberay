@@ -1197,13 +1197,9 @@ func TestValidateRayJobSpec(t *testing.T) {
 			name: "RayJob does not support K8s token auth mode",
 			spec: rayv1.RayJobSpec{
 				RayClusterSpec: &rayv1.RayClusterSpec{
-					RayVersion: "2.55.0",
 					AuthOptions: &rayv1.AuthOptions{
 						Mode:               rayv1.AuthModeToken,
 						EnableK8sTokenAuth: ptr.To(true),
-					},
-					HeadGroupSpec: rayv1.HeadGroupSpec{
-						Template: podTemplateSpec(nil, nil),
 					},
 				},
 			},
@@ -1875,13 +1871,9 @@ func TestValidateRayServiceSpec(t *testing.T) {
 			name: "RayService does not support K8s token auth mode",
 			spec: rayv1.RayServiceSpec{
 				RayClusterSpec: rayv1.RayClusterSpec{
-					RayVersion: "2.55.0",
 					AuthOptions: &rayv1.AuthOptions{
 						Mode:               rayv1.AuthModeToken,
 						EnableK8sTokenAuth: ptr.To(true),
-					},
-					HeadGroupSpec: rayv1.HeadGroupSpec{
-						Template: podTemplateSpec(nil, nil),
 					},
 				},
 			},
