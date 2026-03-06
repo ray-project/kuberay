@@ -958,10 +958,6 @@ func FetchHeadServiceURL(ctx context.Context, cli client.Client, rayCluster *ray
 
 func GetRayDashboardClientFunc(ctx context.Context, mgr manager.Manager, useKubernetesProxy bool) func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error) {
 	return func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error) {
-		if rayCluster != nil && IsK8sAuthEnabled(rayCluster.Spec.AuthOptions) {
-			return nil, fmt.Errorf("k8s token auth mode does not currently support sending requests to the Ray dashboard, please use token auth mode instead")
-		}
-
 		dashboardClient := &dashboardclient.RayDashboardClient{}
 		var authToken string
 
@@ -1012,7 +1008,7 @@ func GetRayDashboardClientFunc(ctx context.Context, mgr manager.Manager, useKube
 			}, "http://"+url, authToken)
 		}
 
-		if rayCluster != nil && features.Enabled(features.AsyncJobInfoQuery) {
+		if features.Enabled(features.AsyncJobInfoQuery) && rayCluster != nil {
 			namespacedName := types.NamespacedName{
 				Name:      rayCluster.Name,
 				Namespace: rayCluster.Namespace,
