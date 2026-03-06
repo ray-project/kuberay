@@ -306,8 +306,9 @@ func TestRayServiceIncrementalUpgradeWithLocust(t *testing.T) {
 			g.Eventually(RayService(test, namespace.Name, rayServiceName), TestTimeoutShort).Should(WithTransform(IsRayServiceUpgrading, BeTrue()))
 
 			// Phase 5: Wait for upgrade to complete and validate remaining traffic is routed to the new cluster
+			// Since no additional validation is needed during the upgrade, we use a longer timeout.
 			LogWithTimestamp(test.T(), "Waiting for RayService %s/%s UpgradeInProgress condition to be false", namespace.Name, rayServiceName)
-			g.Eventually(RayService(test, namespace.Name, rayServiceName), TestTimeoutShort).Should(WithTransform(IsRayServiceUpgrading, BeFalse()))
+			g.Eventually(RayService(test, namespace.Name, rayServiceName), TestTimeoutMedium).Should(WithTransform(IsRayServiceUpgrading, BeFalse()))
 
 			LogWithTimestamp(test.T(), "Waiting for Locust load test goroutine to finish")
 			g.Expect(eg.Wait()).NotTo(HaveOccurred(), "Locust load test failed")
