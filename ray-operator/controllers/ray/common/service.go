@@ -222,9 +222,6 @@ func BuildServeService(ctx context.Context, rayService rayv1.RayService, rayClus
 			ports = append(ports, svcPort)
 		}
 	}
-	sort.SliceStable(ports, func(i, j int) bool {
-		return ports[i].Name < ports[j].Name
-	})
 
 	if isRayService {
 		// We are invoked from RayService
@@ -265,17 +262,6 @@ func BuildServeService(ctx context.Context, rayService rayv1.RayService, rayClus
 					}
 				}
 				serveService.Spec.Ports = mergedPorts
-			} else {
-				filteredPorts := make([]corev1.ServicePort, 0)
-				for _, port := range serveService.Spec.Ports {
-					if isServingPort(port.Name) {
-						filteredPorts = append(filteredPorts, port)
-					}
-				}
-				sort.SliceStable(filteredPorts, func(i, j int) bool {
-					return filteredPorts[i].Name < filteredPorts[j].Name
-				})
-				serveService.Spec.Ports = filteredPorts
 			}
 
 			setLabelsforUserProvidedService(serveService, labels)

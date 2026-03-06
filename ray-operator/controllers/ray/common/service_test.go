@@ -812,12 +812,14 @@ func TestUserSpecifiedServeServiceFallbackPreservesAppProtocol(t *testing.T) {
 	svc, err := BuildServeServiceForRayService(context.Background(), *testRayService, cluster)
 	require.NoError(t, err)
 
-	// Only serve-* ports are kept, non-serve ports are filtered out
-	assert.Len(t, svc.Spec.Ports, 1)
+	// All user-provided ports are kept as-is when no ports are auto-detected
+	assert.Len(t, svc.Spec.Ports, 2)
 	assert.Equal(t, "serve-grpc", svc.Spec.Ports[0].Name)
 	assert.Equal(t, int32(9000), svc.Spec.Ports[0].Port)
 	require.NotNil(t, svc.Spec.Ports[0].AppProtocol)
 	assert.Equal(t, "kubernetes.io/h2c", *svc.Spec.Ports[0].AppProtocol)
+	assert.Equal(t, "not-a-serve-port", svc.Spec.Ports[1].Name)
+	assert.Equal(t, int32(1234), svc.Spec.Ports[1].Port)
 }
 
 func TestIsServingPort(t *testing.T) {
