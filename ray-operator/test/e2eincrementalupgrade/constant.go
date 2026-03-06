@@ -2,8 +2,6 @@ package e2eincrementalupgrade
 
 import "k8s.io/utils/ptr"
 
-type serveConfigV2 string
-
 // These parameters control capacity scaling and gradual traffic migration during the upgrade.
 type incrementalUpgradeParams struct {
 	Name     string
@@ -52,6 +50,8 @@ func (p incrementalUpgradeParams) ptrs() (*int32, *int32, *int32) {
 //
 // NOTE: working_dir is coupled with the external GitHub repos, which might lead to CI flakiness considering the
 // availability and stability of these repos and specific commit hashes.
+
+type serveConfigV2 string
 
 // defaultIncrementalUpgradeServeConfigV2 configures a Serve app for functional tests.
 const defaultIncrementalUpgradeServeConfigV2 serveConfigV2 = `applications:
