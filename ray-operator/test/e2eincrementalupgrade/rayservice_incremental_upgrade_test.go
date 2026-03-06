@@ -287,7 +287,7 @@ func TestRayServiceIncrementalUpgradeWithLocust(t *testing.T) {
 			eg, _ := errgroup.WithContext(test.Ctx())
 			eg.Go(func() error {
 				LogWithTimestamp(test.T(), "Starting Locust load test against %s", locustHost)
-				_, _, err = ExecPodCmdWithError(test, locustHeadPod, common.RayHeadContainer, []string{
+				_, _, err := ExecPodCmdWithError(test, locustHeadPod, common.RayHeadContainer, []string{
 					"python", "/locust-runner/locust_runner.py",
 					"-f", "/locustfile/locustfile.py",
 					"--host", locustHost,
