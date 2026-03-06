@@ -279,11 +279,16 @@ func TestRayServiceIncrementalUpgradeRollback(t *testing.T) {
 
 	// Wait for the upgrade to be underway with traffic partially migrated.
 	LogWithTimestamp(test.T(), "Waiting for upgrade to be partially complete")
+	var pendingClusterName string
 	g.Eventually(func(g Gomega) {
 		svc, err := GetRayService(test, namespace.Name, rayServiceName)
 		g.Expect(err).NotTo(HaveOccurred())
 		g.Expect(svc.Status.PendingServiceStatus.TrafficRoutedPercent).NotTo(BeNil())
 		g.Expect(*svc.Status.PendingServiceStatus.TrafficRoutedPercent).Should(BeNumerically(">", 0))
+
+		// Capture the pending cluster name before the rollback starts
+		pendingClusterName = svc.Status.PendingServiceStatus.RayClusterName
+		g.Expect(pendingClusterName).NotTo(BeEmpty())
 	}, TestTimeoutMedium).Should(Succeed())
 
 	// Trigger a rollback by updating the spec back to the original version.
@@ -321,15 +326,11 @@ func TestRayServiceIncrementalUpgradeRollback(t *testing.T) {
 	}, TestTimeoutMedium).Should(Succeed())
 
 	// Check that the pending RayCluster resource is deleted.
-	rayService, err = GetRayService(test, namespace.Name, rayServiceName)
-	g.Expect(err).NotTo(HaveOccurred())
-	pendingClusterName := rayService.Status.PendingServiceStatus.RayClusterName
-	if pendingClusterName != "" {
-		g.Eventually(func() error {
-			_, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Get(test.Ctx(), pendingClusterName, metav1.GetOptions{})
-			return err
-		}, TestTimeoutShort).Should(WithTransform(errors.IsNotFound, BeTrue()))
-	}
+	LogWithTimestamp(test.T(), "Verifying the pending RayCluster resource was deleted")
+	g.Eventually(func() error {
+		_, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Get(test.Ctx(), pendingClusterName, metav1.GetOptions{})
+		return err
+	}, TestTimeoutShort).Should(WithTransform(errors.IsNotFound, BeTrue()))
 
 	// The HTTPRoute should now only have one backend after the rollback completes.
 	g.Eventually(HTTPRoute(test, namespace.Name, httpRouteName), TestTimeoutShort).
