@@ -242,7 +242,7 @@ func GetActiveTraffic(rs *rayv1.RayService) int32 {
 }
 
 func GetLastTrafficMigratedTime(rs *rayv1.RayService) *metav1.Time {
-	return rs.Status.ActiveServiceStatus.LastTrafficMigratedTime
+	return rs.Status.PendingServiceStatus.LastTrafficMigratedTime
 }
 
 // testStep defines a validation condition to wait for during the upgrade.

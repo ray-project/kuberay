@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	. "github.com/onsi/gomega"
 	"golang.org/x/sync/errgroup"
@@ -161,13 +162,14 @@ func TestRayServiceIncrementalUpgrade(t *testing.T) {
 
 				// Behavior 3: Traffic is migrated with respect to the interval seconds
 				if strings.Contains(step.name, "pending traffic to shift") {
-					currentMigratedTime := svc.Status.PendingServiceStatus.LastTrafficMigratedTime
+					currentMigratedTime := GetLastTrafficMigratedTime(svc)
 					g.Expect(currentMigratedTime).NotTo(BeNil())
 
 					// Verify IntervalSeconds have passed since last TrafficRoutedPercent update.
 					if lastMigratedTime != nil {
 						duration := currentMigratedTime.Sub(lastMigratedTime.Time)
-						g.Expect(duration).To(BeNumerically(">=", intervalSeconds),
+						intervalDuration := time.Duration(intervalSeconds) * time.Second
+						g.Expect(duration).To(BeNumerically(">=", intervalDuration),
 							"Time between traffic steps should be >= IntervalSeconds")
 					}
 					lastMigratedTime = currentMigratedTime
