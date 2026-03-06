@@ -9,8 +9,6 @@ import (
 
 	. "github.com/onsi/gomega"
 	"golang.org/x/sync/errgroup"
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
@@ -70,37 +68,17 @@ func TestRayServiceIncrementalUpgrade(t *testing.T) {
 			rayService, httpRoute, gatewayIP := bootstrapIncrementalRayService(test, g, namespace.Name, rayServiceName, stepSize, interval, maxSurge, serveConfigV2)
 
 			// Create curl pod to test traffic routing through Gateway to RayService
-			curlPodName := "curl-pod"
-			curlContainerName := "curl-container"
-			curlPod, err := CreateCurlPod(g, test, curlPodName, curlContainerName, namespace.Name)
+			curlPod, err := CreateCurlPod(g, test, CurlPodName, CurlContainerName, namespace.Name)
 			g.Expect(err).NotTo(HaveOccurred())
 
 			LogWithTimestamp(test.T(), "Verifying RayService is serving traffic")
-			stdout, _ := CurlRayServiceGateway(test, gatewayIP, curlPod, curlContainerName, http.MethodPost, "/fruit", `["MANGO", 2]`)
+			stdout, _ := CurlRayServiceGateway(test, gatewayIP, curlPod, CurlContainerName, http.MethodPost, "/fruit", `["MANGO", 2]`)
 			g.Expect(stdout.String()).To(Equal("6"))
-			stdout, _ = CurlRayServiceGateway(test, gatewayIP, curlPod, curlContainerName, http.MethodPost, "/calc", `["MUL", 3]`)
+			stdout, _ = CurlRayServiceGateway(test, gatewayIP, curlPod, CurlContainerName, http.MethodPost, "/calc", `["MUL", 3]`)
 			g.Expect(stdout.String()).To(Equal("15 pizzas please!"))
 
-			// Attempt to trigger NewClusterWithIncrementalUpgrade by updating RayService serve config and RayCluster spec
-			g.Eventually(func() error {
-				latestRayService, err := GetRayService(test, namespace.Name, rayServiceName)
-				if err != nil {
-					return err
-				}
-				latestRayService.Spec.RayClusterSpec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests[corev1.ResourceCPU] = resource.MustParse("500m")
-				serveConfig := latestRayService.Spec.ServeConfigV2
-				serveConfig = strings.ReplaceAll(serveConfig, "price: 3", "price: 4")
-				serveConfig = strings.ReplaceAll(serveConfig, "factor: 5", "factor: 3")
-				latestRayService.Spec.ServeConfigV2 = serveConfig
-
-				_, err = test.Client().Ray().RayV1().RayServices(namespace.Name).Update(
-					test.Ctx(),
-					latestRayService,
-					metav1.UpdateOptions{},
-				)
-				return err
-			}, TestTimeoutShort).Should(Succeed(), "Failed to update RayService to trigger upgrade")
-
+			LogWithTimestamp(test.T(), "Triggering incremental upgrade by updating RayCluster spec and RayService serve config")
+			g.Eventually(incrementalUpgrade(test, namespace.Name, rayServiceName), TestTimeoutShort).Should(Succeed(), "Failed to update RayService to trigger upgrade")
 			LogWithTimestamp(test.T(), "Waiting for RayService %s/%s UpgradeInProgress condition to be true", rayService.Namespace, rayService.Name)
 			g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutShort).Should(WithTransform(IsRayServiceUpgrading, BeTrue()))
 
@@ -165,7 +143,7 @@ func TestRayServiceIncrementalUpgrade(t *testing.T) {
 				}, TestTimeoutMedium).Should(Succeed())
 
 				// Behavior 2: Both old and new versions served traffic during the upgrade and no requests are dropped
-				stdout, _ := CurlRayServiceGateway(test, gatewayIP, curlPod, curlContainerName, http.MethodPost, "/fruit", `["MANGO", 2]`)
+				stdout, _ := CurlRayServiceGateway(test, gatewayIP, curlPod, CurlContainerName, http.MethodPost, "/fruit", `["MANGO", 2]`)
 				response := stdout.String()
 				g.Expect(response).To(Or(Equal("6"), Equal("8")), "Response should be from the old or new app version during the upgrade")
 				if response == "6" {
@@ -225,7 +203,7 @@ func TestRayServiceIncrementalUpgrade(t *testing.T) {
 			g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutShort).Should(WithTransform(IsRayServiceUpgrading, BeFalse()))
 
 			LogWithTimestamp(test.T(), "Verifying RayService uses updated ServeConfig after upgrade completes")
-			stdout, _ = CurlRayServiceGateway(test, gatewayIP, curlPod, curlContainerName, http.MethodPost, "/fruit", `["MANGO", 2]`)
+			stdout, _ = CurlRayServiceGateway(test, gatewayIP, curlPod, CurlContainerName, http.MethodPost, "/fruit", `["MANGO", 2]`)
 			g.Expect(stdout.String()).To(Equal("8"))
 		})
 	}
@@ -323,44 +301,22 @@ func TestRayServiceIncrementalUpgradeWithLocust(t *testing.T) {
 
 			// Phase 4: Trigger incremental upgrade
 			LogWithTimestamp(test.T(), "Triggering incremental upgrade by updating RayCluster spec and RayService serve config")
-			g.Eventually(func() error {
-				latestRayService, err := GetRayService(test, namespace.Name, rayServiceName)
-				if err != nil {
-					return err
-				}
-				latestRayService.Spec.RayClusterSpec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests[corev1.ResourceCPU] = resource.MustParse("500m")
-				serveConfig := latestRayService.Spec.ServeConfigV2
-				serveConfig = strings.ReplaceAll(serveConfig, "price: 3", "price: 4")
-				serveConfig = strings.ReplaceAll(serveConfig, "factor: 5", "factor: 3")
-				latestRayService.Spec.ServeConfigV2 = serveConfig
-
-				_, err = test.Client().Ray().RayV1().RayServices(namespace.Name).Update(
-					test.Ctx(),
-					latestRayService,
-					metav1.UpdateOptions{},
-				)
-				return err
-			}, TestTimeoutShort).Should(Succeed(), "Failed to update RayService to trigger upgrade")
-
+			g.Eventually(incrementalUpgrade(test, namespace.Name, rayServiceName), TestTimeoutShort).Should(Succeed(), "Failed to update RayService to trigger upgrade")
 			LogWithTimestamp(test.T(), "Waiting for RayService %s/%s UpgradeInProgress condition to be true", namespace.Name, rayServiceName)
-			g.Eventually(RayService(test, namespace.Name, rayServiceName), TestTimeoutShort).
-				Should(WithTransform(IsRayServiceUpgrading, BeTrue()))
+			g.Eventually(RayService(test, namespace.Name, rayServiceName), TestTimeoutShort).Should(WithTransform(IsRayServiceUpgrading, BeTrue()))
 
 			// Phase 5: Wait for upgrade to complete and validate remaining traffic is routed to the new cluster
 			LogWithTimestamp(test.T(), "Waiting for RayService %s/%s UpgradeInProgress condition to be false", namespace.Name, rayServiceName)
-			g.Eventually(RayService(test, namespace.Name, rayServiceName), TestTimeoutShort).
-				Should(WithTransform(IsRayServiceUpgrading, BeFalse()))
+			g.Eventually(RayService(test, namespace.Name, rayServiceName), TestTimeoutShort).Should(WithTransform(IsRayServiceUpgrading, BeFalse()))
 
 			LogWithTimestamp(test.T(), "Waiting for Locust load test goroutine to finish")
 			g.Expect(eg.Wait()).NotTo(HaveOccurred(), "Locust load test failed")
 
 			LogWithTimestamp(test.T(), "Validating remaining traffic is routed to the new cluster after upgrade completes")
-			curlPodName := "curl-pod"
-			curlContainerName := "curl-container"
-			curlPod, err := CreateCurlPod(g, test, curlPodName, curlContainerName, namespace.Name)
+			curlPod, err := CreateCurlPod(g, test, CurlPodName, CurlContainerName, namespace.Name)
 			g.Expect(err).NotTo(HaveOccurred())
 
-			stdout, _ := CurlRayServiceGateway(test, gatewayIP, curlPod, curlContainerName, http.MethodGet, "/test", "")
+			stdout, _ := CurlRayServiceGateway(test, gatewayIP, curlPod, CurlContainerName, http.MethodGet, "/test", "")
 			var resp struct {
 				Status string `json:"status"`
 			}

@@ -46,7 +46,7 @@ func bootstrapIncrementalRayService(
 ) (rayService *rayv1.RayService, httpRoute *gwv1.HTTPRoute, gatewayIP string) {
 	var err error
 	rayServiceAC := rayv1ac.RayService(rayServiceName, namespace).
-		WithSpec(IncrementalUpgradeRayServiceApplyConfiguration(stepSize, interval, maxSurge, serveConfigV2))
+		WithSpec(incrementalUpgradeRayServiceApplyConfiguration(stepSize, interval, maxSurge, serveConfigV2))
 	rayService, err = test.Client().Ray().RayV1().RayServices(namespace).Apply(test.Ctx(), rayServiceAC, TestApplyOptions)
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(rayService).NotTo(BeNil())
@@ -89,6 +89,12 @@ func newLocustRunnerConfigMapAC(namespace string, options ...SupportOption[corev
 	return ConfigMapWith(cmAC, options...)
 }
 
+// CurlPodName and CurlContainerName are the default names used when creating a curl pod for gateway tests.
+const (
+	CurlPodName       = "curl-pod"
+	CurlContainerName = "curl-container"
+)
+
 // CurlRayServiceGateway sends a request to the RayService Gateway using a Curl pod.
 // This method currently supports POST and GET methods.
 func CurlRayServiceGateway(
@@ -115,7 +121,7 @@ func CurlRayServiceGateway(
 	return ExecPodCmd(t, curlPod, curlPodContainerName, cmd)
 }
 
-func IncrementalUpgradeRayServiceApplyConfiguration(
+func incrementalUpgradeRayServiceApplyConfiguration(
 	stepSizePercent, intervalSeconds, maxSurgePercent *int32,
 	serveConfigV2 serveConfigV2,
 ) *rayv1ac.RayServiceSpecApplyConfiguration {
@@ -184,6 +190,39 @@ func GetGatewayIP(gateway *gwv1.Gateway) string {
 	}
 
 	return ""
+}
+
+// incrementalUpgrade is a wrapper around triggerIncrementalUpgrade that returns a function that can be used with g.Eventually.
+func incrementalUpgrade(test Test, namespace, rayServiceName string) func() error {
+	return func() error {
+		return triggerIncrementalUpgrade(test, namespace, rayServiceName)
+	}
+}
+
+// triggerIncrementalUpgrade updates the RayService to trigger an incremental upgrade:
+//   - RayCluster spec: Set worker CPU request to 500m
+//   - Serve config: Update (price 3->4, factor 5->3)
+func triggerIncrementalUpgrade(test Test, namespace, rayServiceName string) error {
+	rayService, err := GetRayService(test, namespace, rayServiceName)
+	if err != nil {
+		return err
+	}
+
+	// Update the RayCluster spec.
+	rayService.Spec.RayClusterSpec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests[corev1.ResourceCPU] = resource.MustParse("500m")
+
+	// Update the serve config.
+	serveConfig := rayService.Spec.ServeConfigV2
+	serveConfig = strings.ReplaceAll(serveConfig, "price: 3", "price: 4")
+	serveConfig = strings.ReplaceAll(serveConfig, "factor: 5", "factor: 3")
+	rayService.Spec.ServeConfigV2 = serveConfig
+
+	_, err = test.Client().Ray().RayV1().RayServices(namespace).Update(
+		test.Ctx(),
+		rayService,
+		metav1.UpdateOptions{},
+	)
+	return err
 }
 
 func GetPendingCapacity(rs *rayv1.RayService) int32 {
