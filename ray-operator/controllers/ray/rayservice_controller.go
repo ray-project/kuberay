@@ -920,6 +920,14 @@ func (r *RayServiceReconciler) reconcileRayCluster(ctx context.Context, rayServi
 			return activeRayCluster, pendingRayCluster, err
 		}
 		r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeNormal, string(utils.UpdatedRayCluster), "Updated the active RayCluster %s/%s", activeRayCluster.Namespace, activeRayCluster.Name)
+	} else if shouldSyncWorkerGroupScalingBounds(rayServiceInstance, activeRayCluster, true) {
+		logger.Info("Syncing worker group scaling bounds to the active RayCluster instance", "clusterName", activeRayCluster.Name)
+		syncWorkerGroupScalingBounds(rayServiceInstance, activeRayCluster)
+		if err = r.Update(ctx, activeRayCluster); err != nil {
+			r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(utils.FailedToUpdateRayCluster), "Failed to sync scaling bounds to the active RayCluster %s/%s: %v", activeRayCluster.Namespace, activeRayCluster.Name, err)
+			return activeRayCluster, pendingRayCluster, err
+		}
+		r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeNormal, string(utils.UpdatedRayCluster), "Updated the active RayCluster %s/%s", activeRayCluster.Namespace, activeRayCluster.Name)
 	}
 
 	if shouldUpdateCluster(rayServiceInstance, pendingRayCluster, false) {
@@ -932,6 +940,14 @@ func (r *RayServiceReconciler) reconcileRayCluster(ctx context.Context, rayServi
 		modifyRayCluster(ctx, pendingRayCluster, goalCluster)
 		if err = r.Update(ctx, pendingRayCluster); err != nil {
 			r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(utils.FailedToUpdateRayCluster), "Failed to update the pending RayCluster %s/%s: %v", pendingRayCluster.Namespace, pendingRayCluster.Name, err)
+			return activeRayCluster, pendingRayCluster, err
+		}
+		r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeNormal, string(utils.UpdatedRayCluster), "Updated the pending RayCluster %s/%s", pendingRayCluster.Namespace, pendingRayCluster.Name)
+	} else if shouldSyncWorkerGroupScalingBounds(rayServiceInstance, pendingRayCluster, false) {
+		logger.Info("Syncing worker group scaling bounds to the pending RayCluster instance", "clusterName", pendingRayCluster.Name)
+		syncWorkerGroupScalingBounds(rayServiceInstance, pendingRayCluster)
+		if err = r.Update(ctx, pendingRayCluster); err != nil {
+			r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(utils.FailedToUpdateRayCluster), "Failed to sync scaling bounds to the pending RayCluster %s/%s: %v", pendingRayCluster.Namespace, pendingRayCluster.Name, err)
 			return activeRayCluster, pendingRayCluster, err
 		}
 		r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeNormal, string(utils.UpdatedRayCluster), "Updated the pending RayCluster %s/%s", pendingRayCluster.Namespace, pendingRayCluster.Name)
@@ -1088,6 +1104,60 @@ func isClusterSpecHashEqual(rayServiceInstance *rayv1.RayService, cluster *rayv1
 		}
 	}
 	return clusterHash == goalClusterHash
+}
+
+func shouldSyncWorkerGroupScalingBounds(rayServiceInstance *rayv1.RayService, cluster *rayv1.RayCluster, isActiveCluster bool) bool {
+	if cluster == nil {
+		return false
+	}
+
+	if isActiveCluster && meta.IsStatusConditionTrue(rayServiceInstance.Status.Conditions, string(rayv1.UpgradeInProgress)) {
+		return false
+	}
+
+	serviceWorkerGroups := rayServiceInstance.Spec.RayClusterSpec.WorkerGroupSpecs
+	clusterWorkerGroups := cluster.Spec.WorkerGroupSpecs
+	if len(serviceWorkerGroups) != len(clusterWorkerGroups) {
+		return false
+	}
+
+	for i := range serviceWorkerGroups {
+		serviceWorkerGroup := serviceWorkerGroups[i]
+		clusterWorkerGroup := clusterWorkerGroups[i]
+		if serviceWorkerGroup.GroupName != clusterWorkerGroup.GroupName {
+			return false
+		}
+
+		if !isInt32PtrEqual(serviceWorkerGroup.MinReplicas, clusterWorkerGroup.MinReplicas) {
+			return true
+		}
+		if !isInt32PtrEqual(serviceWorkerGroup.MaxReplicas, clusterWorkerGroup.MaxReplicas) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func syncWorkerGroupScalingBounds(rayServiceInstance *rayv1.RayService, cluster *rayv1.RayCluster) {
+	for i := range cluster.Spec.WorkerGroupSpecs {
+		cluster.Spec.WorkerGroupSpecs[i].MinReplicas = cloneInt32Ptr(rayServiceInstance.Spec.RayClusterSpec.WorkerGroupSpecs[i].MinReplicas)
+		cluster.Spec.WorkerGroupSpecs[i].MaxReplicas = cloneInt32Ptr(rayServiceInstance.Spec.RayClusterSpec.WorkerGroupSpecs[i].MaxReplicas)
+	}
+}
+
+func isInt32PtrEqual(a, b *int32) bool {
+	if a == nil || b == nil {
+		return a == nil && b == nil
+	}
+	return *a == *b
+}
+
+func cloneInt32Ptr(v *int32) *int32 {
+	if v == nil {
+		return nil
+	}
+	return ptr.To(*v)
 }
 
 func shouldPrepareNewCluster(ctx context.Context, rayServiceInstance *rayv1.RayService, activeRayCluster, pendingRayCluster *rayv1.RayCluster, isPendingClusterServing bool) bool {

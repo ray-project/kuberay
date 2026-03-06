@@ -593,6 +593,159 @@ func TestReconcileRayCluster_UpdatePendingCluster(t *testing.T) {
 	assert.Len(t, pendingCluster.Spec.WorkerGroupSpecs, expectedWorkerGroupCount)
 }
 
+func TestReconcileRayCluster_SyncActiveClusterScalingBounds(t *testing.T) {
+	newScheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(newScheme)
+
+	ctx := context.TODO()
+	namespace := "ray"
+	groupName := "worker-group-1"
+	serviceMaxReplicas := int32(10)
+	clusterMaxReplicas := int32(5)
+	minReplicas := int32(1)
+	replicas := int32(1)
+
+	rayService := rayv1.RayService{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-service",
+			Namespace: namespace,
+		},
+		Spec: rayv1.RayServiceSpec{
+			RayClusterSpec: rayv1.RayClusterSpec{
+				WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+					{
+						GroupName:   groupName,
+						Replicas:    ptr.To(replicas),
+						MinReplicas: ptr.To(minReplicas),
+						MaxReplicas: ptr.To(serviceMaxReplicas),
+					},
+				},
+			},
+		},
+		Status: rayv1.RayServiceStatuses{
+			ActiveServiceStatus: rayv1.RayServiceStatus{
+				RayClusterName: "active-cluster",
+			},
+		},
+	}
+
+	hash, err := utils.GenerateHashWithoutReplicasAndWorkersToDelete(rayService.Spec.RayClusterSpec)
+	require.NoError(t, err)
+
+	activeCluster := rayv1.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "active-cluster",
+			Namespace: namespace,
+			Annotations: map[string]string{
+				utils.HashWithoutReplicasAndWorkersToDeleteKey: hash,
+				utils.NumWorkerGroupsKey:                       strconv.Itoa(len(rayService.Spec.RayClusterSpec.WorkerGroupSpecs)),
+				utils.KubeRayVersion:                           utils.KUBERAY_VERSION,
+			},
+		},
+		Spec: rayv1.RayClusterSpec{
+			WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+				{
+					GroupName:   groupName,
+					Replicas:    ptr.To(replicas),
+					MinReplicas: ptr.To(minReplicas),
+					MaxReplicas: ptr.To(clusterMaxReplicas),
+				},
+			},
+		},
+	}
+
+	runtimeObjects := []runtime.Object{&activeCluster}
+	fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
+	r := RayServiceReconciler{
+		Client:   fakeClient,
+		Scheme:   newScheme,
+		Recorder: record.NewFakeRecorder(1),
+	}
+
+	reconciledActive, reconciledPending, err := r.reconcileRayCluster(ctx, &rayService)
+	require.NoError(t, err)
+	assert.Nil(t, reconciledPending)
+	require.NotNil(t, reconciledActive)
+	require.NotNil(t, reconciledActive.Spec.WorkerGroupSpecs[0].MaxReplicas)
+	assert.Equal(t, serviceMaxReplicas, *reconciledActive.Spec.WorkerGroupSpecs[0].MaxReplicas)
+}
+
+func TestShouldSyncWorkerGroupScalingBounds(t *testing.T) {
+	maxReplicas := int32(10)
+	minReplicas := int32(1)
+	replicas := int32(1)
+
+	rayService := rayv1.RayService{
+		Spec: rayv1.RayServiceSpec{
+			RayClusterSpec: rayv1.RayClusterSpec{
+				WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+					{
+						GroupName:   "worker-group-1",
+						Replicas:    ptr.To(replicas),
+						MinReplicas: ptr.To(minReplicas),
+						MaxReplicas: ptr.To(maxReplicas),
+					},
+				},
+			},
+		},
+	}
+
+	tests := []struct {
+		name            string
+		isActiveCluster bool
+		prepare         func(cluster *rayv1.RayCluster, service *rayv1.RayService)
+		expected        bool
+	}{
+		{
+			name:            "should sync when maxReplicas differs",
+			isActiveCluster: false,
+			prepare: func(cluster *rayv1.RayCluster, _ *rayv1.RayService) {
+				cluster.Spec.WorkerGroupSpecs[0].MaxReplicas = ptr.To[int32](5)
+			},
+			expected: true,
+		},
+		{
+			name:            "should not sync when in active-cluster upgrade",
+			isActiveCluster: true,
+			prepare: func(cluster *rayv1.RayCluster, service *rayv1.RayService) {
+				cluster.Spec.WorkerGroupSpecs[0].MaxReplicas = ptr.To[int32](5)
+				meta.SetStatusCondition(&service.Status.Conditions, metav1.Condition{
+					Type:   string(rayv1.UpgradeInProgress),
+					Status: metav1.ConditionTrue,
+				})
+			},
+			expected: false,
+		},
+		{
+			name:            "should not sync when worker group count differs",
+			isActiveCluster: false,
+			prepare: func(cluster *rayv1.RayCluster, _ *rayv1.RayService) {
+				cluster.Spec.WorkerGroupSpecs = append(cluster.Spec.WorkerGroupSpecs, rayv1.WorkerGroupSpec{GroupName: "worker-group-2"})
+			},
+			expected: false,
+		},
+		{
+			name:            "should not sync when worker group names differ",
+			isActiveCluster: false,
+			prepare: func(cluster *rayv1.RayCluster, _ *rayv1.RayService) {
+				cluster.Spec.WorkerGroupSpecs[0].GroupName = "renamed"
+			},
+			expected: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			service := rayService.DeepCopy()
+			cluster := &rayv1.RayCluster{
+				Spec: *service.Spec.RayClusterSpec.DeepCopy(),
+			}
+			tc.prepare(cluster, service)
+			assert.Equal(t, tc.expected, shouldSyncWorkerGroupScalingBounds(service, cluster, tc.isActiveCluster))
+		})
+	}
+}
+
 func initFakeDashboardClient(appName string, deploymentStatus string, appStatus string) dashboardclient.RayDashboardClientInterface {
 	fakeDashboardClient := utils.FakeRayDashboardClient{}
 	status := generateServeStatus(deploymentStatus, appStatus)
