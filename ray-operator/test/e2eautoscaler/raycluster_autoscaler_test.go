@@ -11,6 +11,7 @@ import (
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	rayv1ac "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/ray/v1"
+	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
 
@@ -177,13 +178,13 @@ func TestRayClusterAutoscalerWithFakeSingleHostTPU(t *testing.T) {
 					WithTemplate(tc.WorkerPodTemplateGetter()))
 			rayClusterAC := rayv1ac.RayCluster("ray-cluster", namespace.Name).
 				WithSpec(Apply(rayClusterSpecAC, MountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](scripts, "/home/ray/test_scripts")))
-			
+
 			// Set required TPU specific Pod fields.
 			rayClusterAC.Spec.WorkerGroupSpecs[0].Template.Spec.NodeSelector = map[string]string{
 				"cloud.google.com/gke-tpu-topology":    "2x2x1",
 				"cloud.google.com/gke-tpu-accelerator": "tpu-v4-podslice",
 			}
-			
+
 			rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
 			g.Expect(err).NotTo(gomega.HaveOccurred())
 			LogWithTimestamp(test.T(), "Created RayCluster %s/%s successfully", rayCluster.Namespace, rayCluster.Name)
@@ -280,11 +281,11 @@ func TestRayClusterAutoscalerWithFakeMultiHostTPU(t *testing.T) {
 
 			// Create a detached TPU actor requiring 16 TPUs (4 hosts * 4 TPUs/host) to trigger a full slice scale-up.
 			ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "/home/ray/test_scripts/create_detached_actor.py", "tpu_actor", "--custom-resource-name=TPU", "--num-custom-resources=16"})
-			
+
 			// Autoscaler scales up desired replicas by 1 (which represents 1 group of 4 pods for multi-host)
 			g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutMedium).
 				Should(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(int32(1))))
-			
+
 			// Verify that scaling up 1 replica results in exactly 4 Pods being created for the multi-host group
 			g.Expect(GetGroupPods(test, rayCluster, groupName)).To(gomega.HaveLen(4))
 			LogWithTimestamp(test.T(), "Created multi-host TPU workers of group %s", groupName)
