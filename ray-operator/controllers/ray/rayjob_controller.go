@@ -56,8 +56,11 @@ type RayJobReconcilerOptions struct {
 }
 
 // NewRayJobReconciler returns a new reconcile.Reconciler
-func NewRayJobReconciler(ctx context.Context, mgr manager.Manager, options RayJobReconcilerOptions, provider utils.ClientProvider) *RayJobReconciler {
-	dashboardClientFunc := provider.GetDashboardClient(ctx, mgr)
+func NewRayJobReconciler(mgr manager.Manager, options RayJobReconcilerOptions, provider utils.ClientProvider) *RayJobReconciler {
+	dashboardClientFunc := provider.GetDashboardClient(mgr)
+	if features.Enabled(features.AsyncJobInfoQuery) {
+		dashboardClientFunc = dashboardclient.GetCachedDashboardClientFunc()
+	}
 	return &RayJobReconciler{
 		Client:              mgr.GetClient(),
 		Scheme:              mgr.GetScheme(),
@@ -119,13 +122,6 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			rayClusterInstance := &rayv1.RayCluster{}
 			if err := r.Get(ctx, rayClusterNamespacedName, rayClusterInstance); err != nil {
 				logger.Error(err, "Failed to get RayCluster")
-
-				if features.Enabled(features.AsyncJobInfoQuery) {
-					// If the RayCluster is already deleted, we provide the name and namespace to the RayClusterInstance
-					// for the dashboard client to remove cache correctly.
-					rayClusterInstance.Name = rayClusterNamespacedName.Name
-					rayClusterInstance.Namespace = rayClusterNamespacedName.Namespace
-				}
 			}
 
 			rayDashboardClient, err := r.dashboardClientFunc(rayClusterInstance, rayJobInstance.Status.DashboardURL)
@@ -294,7 +290,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 		}
 
-		jobInfo, err := rayDashboardClient.GetJobInfo(ctx, rayJobInstance.Status.JobId)
+		jobInfo, fetchedAt, err := rayDashboardClient.GetJobInfo(ctx, rayJobInstance.Status.JobId)
 		if err != nil {
 			if errs.Is(err, dashboardclient.ErrAgain) {
 				logger.Info("The Ray job info was not ready. Try again next iteration.", "JobId", rayJobInstance.Status.JobId)
@@ -310,10 +306,11 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 					}
 					return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 				}
-				// finishedAt will only be set if submitter finished
+				// finishedAt will only be set if submitter finished.
+				// If the submitter has finished but the job was never registered in the dashboard, then submission itself failed.
 				if finishedAt != nil {
 					rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusFailed
-					rayJobInstance.Status.Reason = rayv1.AppFailed
+					rayJobInstance.Status.Reason = rayv1.SubmissionFailed
 					rayJobInstance.Status.Message = "Submitter completed but Ray job not found in RayCluster."
 					break
 				}
@@ -321,6 +318,14 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 
 			logger.Error(err, "Failed to get job info", "JobId", rayJobInstance.Status.JobId)
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+		}
+
+		// If the dashboard reports a non-terminal status but the submitter has already exited, the cached data may be stale
+		// (e.g., the async cache hasn't been refreshed yet). Requeue to wait for fresh data from the dashboard.
+		if finishedAt != nil && !rayv1.IsJobTerminal(jobInfo.JobStatus) && fetchedAt.Before(*finishedAt) {
+			logger.Info("Dashboard response fetched before submitter exit and job status is non-terminal. Requeuing for fresh data.",
+				"FetchedAt", fetchedAt, "SubmitterFinishedAt", finishedAt, "JobStatus", jobInfo.JobStatus)
+			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 		}
 
 		// If the JobStatus is in a terminal status, such as SUCCEEDED, FAILED, or STOPPED, it is impossible for the Ray job
@@ -1025,8 +1030,6 @@ func (r *RayJobReconciler) checkSubmitterAndUpdateStatusIfNeeded(ctx context.Con
 	logger := ctrl.LoggerFrom(ctx)
 	shouldUpdate = false
 	finishedAt = nil
-	var submitterContainerStatus *corev1.ContainerStatus
-	var condition *batchv1.JobCondition
 
 	switch rayJob.Spec.SubmissionMode {
 	case rayv1.SidecarMode:
@@ -1054,21 +1057,13 @@ func (r *RayJobReconciler) checkSubmitterAndUpdateStatusIfNeeded(ctx context.Con
 			return
 		}
 
-		shouldUpdate, submitterContainerStatus = checkSidecarContainerStatus(headPod)
-		if shouldUpdate {
-			logger.Info("The submitter sidecar container has failed. Attempting to transition the status to `Failed`.",
-				"Submitter sidecar container", submitterContainerStatus.Name, "Reason", submitterContainerStatus.State.Terminated.Reason, "Message", submitterContainerStatus.State.Terminated.Message)
-			rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusFailed
-			// The submitter sidecar container needs to wait for the user code to finish and retrieve its logs.
-			// Therefore, a failed Submitter sidecar container indicates that the submission itself has failed or the user code has thrown an error.
-			// If the failure is due to user code, the JobStatus and Job message will be updated accordingly from the previous reconciliation.
-			if rayJob.Status.JobStatus == rayv1.JobStatusFailed {
-				rayJob.Status.Reason = rayv1.AppFailed
-			} else {
-				rayJob.Status.Reason = rayv1.SubmissionFailed
-				rayJob.Status.Message = fmt.Sprintf("Ray head pod container %s terminated with exit code %d: %s",
-					submitterContainerStatus.Name, submitterContainerStatus.State.Terminated.ExitCode, submitterContainerStatus.State.Terminated.Reason)
-			}
+		// Check if the sidecar container has terminated with a non-zero exit code.
+		// We do NOT set terminal status here — the dashboard (GetJobInfo) is the single source of truth
+		// for determining whether the failure was an AppFailed or SubmissionFailed.
+		// This avoids a race condition where the async job info cache hasn't populated yet.
+		if isFailed, cs := checkSidecarContainerStatus(headPod); isFailed {
+			logger.Info("The submitter sidecar container has terminated with a non-zero exit code. Deferring terminal status decision to the dashboard.",
+				"Submitter sidecar container", cs.Name, "ExitCode", cs.State.Terminated.ExitCode, "Reason", cs.State.Terminated.Reason)
 		}
 
 		finishedAt = getSubmitterContainerFinishedTime(headPod)
@@ -1086,20 +1081,11 @@ func (r *RayJobReconciler) checkSubmitterAndUpdateStatusIfNeeded(ctx context.Con
 			return
 		}
 
-		shouldUpdate, condition = checkK8sJobStatus(job)
-		if shouldUpdate {
-			logger.Info("The submitter Kubernetes Job has failed. Attempting to transition the status to `Failed`.",
-				"Submitter K8s Job", job.Name, "Reason", condition.Reason, "Message", condition.Message)
-			rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusFailed
-			// The submitter Job needs to wait for the user code to finish and retrieve its logs.
-			// Therefore, a failed Submitter Job indicates that the submission itself has failed or the user code has thrown an error.
-			// If the failure is due to user code, the JobStatus and Job message will be updated accordingly from the previous reconciliation.
-			if rayJob.Status.JobStatus == rayv1.JobStatusFailed {
-				rayJob.Status.Reason = rayv1.AppFailed
-			} else {
-				rayJob.Status.Reason = rayv1.SubmissionFailed
-				rayJob.Status.Message = fmt.Sprintf("Job submission has failed. Reason: %s. Message: %s", condition.Reason, condition.Message)
-			}
+		// Check if the submitter Kubernetes Job has failed.
+		// We do NOT set terminal status here — the dashboard (GetJobInfo) is the single source of truth.
+		if isFailed, cond := checkK8sJobStatus(job); isFailed {
+			logger.Info("The submitter Kubernetes Job has failed. Deferring terminal status decision to the dashboard.",
+				"Submitter K8s Job", job.Name, "Reason", cond.Reason, "Message", cond.Message)
 		}
 
 		var jobFinishedCondition *batchv1.JobCondition
