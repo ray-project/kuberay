@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"maps"
 	"os"
+	"slices"
 	"sort"
 	"strings"
 
+	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -36,6 +38,7 @@ func HeadServiceLabels(cluster rayv1.RayCluster) map[string]string {
 // the worker nodes to connect to the head node.
 func BuildServiceForHeadPod(ctx context.Context, cluster rayv1.RayCluster, labels map[string]string, annotations map[string]string) (*corev1.Service, error) {
 	log := ctrl.LoggerFrom(ctx)
+	logSkippedDefaultPortNames(log, cluster)
 
 	if labels == nil {
 		labels = make(map[string]string)
@@ -100,8 +103,8 @@ func BuildServiceForHeadPod(ctx context.Context, cluster rayv1.RayCluster, label
 			headService.ObjectMeta.Annotations[k] = v
 		}
 
-		// Append default ports.
-		headService.Spec.Ports = append(headService.Spec.Ports, ports...)
+		// Merge default ports with user-provided ports. If there are overlaps, use default ports.
+		headService.Spec.Ports = mergeServicePorts(headService.Spec.Ports, ports)
 
 		setLabelsforUserProvidedService(headService, labelsForService)
 		setNameforUserProvidedService(ctx, headService, defaultName)
@@ -180,6 +183,7 @@ func BuildServeServiceForRayCluster(ctx context.Context, rayCluster rayv1.RayClu
 // BuildServeService builds the service for head node and worker nodes who have healthy http proxy to serve traffics.
 func BuildServeService(ctx context.Context, rayService rayv1.RayService, rayCluster rayv1.RayCluster, isRayService bool) (*corev1.Service, error) {
 	log := ctrl.LoggerFrom(ctx)
+	logSkippedDefaultPortNames(log, rayCluster)
 	name := rayCluster.Name
 	namespace := rayCluster.Namespace
 	crdType := utils.RayClusterCRD
@@ -220,6 +224,7 @@ func BuildServeService(ctx context.Context, rayService rayv1.RayService, rayClus
 		svcPort := corev1.ServicePort{Name: utils.ServingPortName, Port: portsInt[utils.ServingPortName]}
 		ports = append(ports, svcPort)
 	}
+	_, serveDefinedInHead := getPortsFromCluster(rayCluster)[utils.ServingPortName]
 
 	if isRayService {
 		// We are invoked from RayService
@@ -240,21 +245,30 @@ func BuildServeService(ctx context.Context, rayService rayv1.RayService, rayClus
 				serveService.ObjectMeta.Annotations = make(map[string]string)
 			}
 
-			// Add port with name "serve" if it is already not added and ignore any custom ports
-			// Keeping this consistentent with adding only serve port in serve service
-			if len(ports) != 0 {
+			// If head container explicitly defines the "serve" port, it takes priority.
+			// Otherwise, preserve user-provided ServeService "serve" port.
+			if serveDefinedInHead && len(ports) != 0 {
 				log.Info("port with name 'serve' already added. Ignoring user provided ports for serve service")
 				serveService.Spec.Ports = ports
 			} else {
-				ports := make([]corev1.ServicePort, 0, 1)
+				portsFromUserServeService := make([]corev1.ServicePort, 0, 1)
 				for _, port := range serveService.Spec.Ports {
 					if port.Name == utils.ServingPortName {
 						svcPort := corev1.ServicePort{Name: port.Name, Port: port.Port}
-						ports = append(ports, svcPort)
+						portsFromUserServeService = append(portsFromUserServeService, svcPort)
 						break
 					}
 				}
-				serveService.Spec.Ports = ports
+				if len(portsFromUserServeService) > 0 {
+					serveService.Spec.Ports = portsFromUserServeService
+				} else if len(ports) > 0 {
+					// Keep backward compatibility: fall back to operator-generated serve port
+					// when user-provided ServeService ports do not include a "serve" port name.
+					log.Info("No port named 'serve' found in user provided serve service ports. Falling back to default serve port")
+					serveService.Spec.Ports = ports
+				} else {
+					return nil, fmt.Errorf("Please specify the port named 'serve' in the Ray head container or in RayService.Spec.ServeService")
+				}
 			}
 
 			setLabelsforUserProvidedService(serveService, labels)
@@ -392,18 +406,64 @@ func setLabelsforUserProvidedService(service *corev1.Service, labels map[string]
 	maps.Copy(service.ObjectMeta.Labels, labels)
 }
 
-// getServicePorts will either user passing ports or default ports to create service.
-func getServicePorts(cluster rayv1.RayCluster) map[string]int32 {
-	ports := getPortsFromCluster(cluster)
+// mergeServicePorts merges default ports into user-provided ports by name.
+// If names overlap, default ports take precedence to keep operator-generated ports authoritative.
+func mergeServicePorts(userPorts []corev1.ServicePort, defaultPorts []corev1.ServicePort) []corev1.ServicePort {
+	portByName := make(map[string]corev1.ServicePort, len(userPorts)+len(defaultPorts))
+	unnamedPorts := make([]corev1.ServicePort, 0)
 
-	// Assign default ports
-	if len(ports) == 0 {
-		ports = getDefaultPorts()
+	for _, port := range userPorts {
+		if port.Name == "" {
+			unnamedPorts = append(unnamedPorts, port)
+			continue
+		}
+		portByName[port.Name] = port
 	}
 
-	// check if metrics port is defined. If not, add default value for it.
-	if _, metricsDefined := ports[utils.MetricsPortName]; !metricsDefined {
-		ports[utils.MetricsPortName] = utils.DefaultMetricsPort
+	for _, port := range defaultPorts {
+		if port.Name == "" {
+			unnamedPorts = append(unnamedPorts, port)
+			continue
+		}
+		portByName[port.Name] = port
+	}
+
+	names := make([]string, 0, len(portByName))
+	for name := range portByName {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	merged := make([]corev1.ServicePort, 0, len(portByName)+len(unnamedPorts))
+	for _, name := range names {
+		merged = append(merged, portByName[name])
+	}
+	merged = append(merged, unnamedPorts...)
+	return merged
+}
+
+// getServicePorts will either use user-provided ports or default ports to create the service.
+func getServicePorts(cluster rayv1.RayCluster) map[string]int32 {
+	ports := getPortsFromCluster(cluster)
+	defaultPorts := getDefaultPorts()
+
+	usedPorts := make(map[int32]bool, len(ports))
+	for _, port := range ports {
+		usedPorts[port] = true
+	}
+
+	for name, defaultPort := range defaultPorts {
+		if _, defined := ports[name]; defined {
+			continue
+		}
+
+		// Skip assigning default ports if the default value is already used.
+		if usedPorts[defaultPort] {
+			continue
+		}
+
+		ports[name] = defaultPort
+		usedPorts[defaultPort] = true
 	}
 
 	return ports
@@ -433,5 +493,69 @@ func getDefaultPorts() map[string]int32 {
 		utils.DashboardPortName: utils.DefaultDashboardPort,
 		utils.MetricsPortName:   utils.DefaultMetricsPort,
 		utils.ServingPortName:   utils.DefaultServingPort,
+	}
+}
+
+// getSkippedDefaultPortNames returns default named ports that were skipped because
+// their default port numbers are already occupied by another user-defined port name.
+func getSkippedDefaultPortNames(userPorts map[string]int32, defaultPorts map[string]int32) map[string]string {
+	portToNames := make(map[int32][]string)
+
+	userPortNames := make([]string, 0, len(userPorts))
+	for name := range userPorts {
+		userPortNames = append(userPortNames, name)
+	}
+	sort.Strings(userPortNames)
+
+	for _, name := range userPortNames {
+		port := userPorts[name]
+		portToNames[port] = append(portToNames[port], name)
+	}
+
+	defaultPortNames := make([]string, 0, len(defaultPorts))
+	for name := range defaultPorts {
+		defaultPortNames = append(defaultPortNames, name)
+	}
+	sort.Strings(defaultPortNames)
+
+	skipped := make(map[string]string)
+	for _, defaultName := range defaultPortNames {
+		defaultPort := defaultPorts[defaultName]
+		namesUsingDefaultPort, ok := portToNames[defaultPort]
+		if !ok {
+			continue
+		}
+
+		isDefinedByDefaultName := slices.Contains(namesUsingDefaultPort, defaultName)
+		if isDefinedByDefaultName {
+			continue
+		}
+
+		skipped[defaultName] = namesUsingDefaultPort[0]
+	}
+
+	return skipped
+}
+
+func logSkippedDefaultPortNames(log logr.Logger, cluster rayv1.RayCluster) {
+	userPorts := getPortsFromCluster(cluster)
+	defaultPorts := getDefaultPorts()
+	skipped := getSkippedDefaultPortNames(userPorts, defaultPorts)
+	if len(skipped) == 0 {
+		return
+	}
+
+	skippedNames := make([]string, 0, len(skipped))
+	for name := range skipped {
+		skippedNames = append(skippedNames, name)
+	}
+	sort.Strings(skippedNames)
+
+	for _, defaultName := range skippedNames {
+		log.Info("Skipping default service port name because its default port number is already occupied by another head container port name",
+			"default_port_name", defaultName,
+			"default_port_number", defaultPorts[defaultName],
+			"conflicting_port_name", skipped[defaultName],
+		)
 	}
 }
