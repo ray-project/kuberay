@@ -638,7 +638,7 @@ func TestRayClusterAutoscalerUpscalingModeConservative(t *testing.T) {
 			headPod, err := GetHeadPod(test, rayCluster)
 			g.Expect(err).NotTo(gomega.HaveOccurred())
 			LogWithTimestamp(test.T(), "Found head pod %s/%s", headPod.Namespace, headPod.Name)
-			for i := 0; i < 10; i++ {
+			for i := range 10 {
 				ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "/home/ray/test_scripts/create_detached_actor.py", fmt.Sprintf("actor%d", i)})
 			}
 			// Check that upscaling is rate-limited to the size of the RayCluster. The minimum number of pending launches is 5 regardless of upscaling_speed.

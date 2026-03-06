@@ -180,15 +180,6 @@ func PodPhase(pod corev1.Pod) corev1.PodPhase {
 	return pod.Status.Phase
 }
 
-func AllPodsRunning(pods []corev1.Pod) bool {
-	for _, pod := range pods {
-		if pod.Status.Phase != corev1.PodRunning {
-			return false
-		}
-	}
-	return true
-}
-
 func RateLimitedPendingPods(pods []corev1.Pod) bool {
 	// The number of Pending Pods must be less than or equal to the size of the RayCluster.
 	// The minimum number of pending launches is 5 regardless of RayCluster size and upscaling_speed.
