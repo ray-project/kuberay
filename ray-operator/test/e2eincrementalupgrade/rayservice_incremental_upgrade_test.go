@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"sync"
 	"testing"
 
 	. "github.com/onsi/gomega"
+	"golang.org/x/sync/errgroup"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -305,32 +305,21 @@ func TestRayServiceIncrementalUpgradeWithLocust(t *testing.T) {
 
 			// Phase 3: Start Locust in a background goroutine targeting Gateway IP
 			locustHost := fmt.Sprintf("http://%s", gatewayIP)
-			locustErrCh := make(chan error, 1)
 
-			var wg sync.WaitGroup
-			wg.Go(func() {
+			eg, _ := errgroup.WithContext(test.Ctx())
+			eg.Go(func() error {
 				LogWithTimestamp(test.T(), "Starting Locust load test against %s", locustHost)
 				_, _, err = ExecPodCmdWithError(test, locustHeadPod, common.RayHeadContainer, []string{
 					"python", "/locust-runner/locust_runner.py",
 					"-f", "/locustfile/locustfile.py",
 					"--host", locustHost,
 				})
-				locustErrCh <- err
+				return err
 			})
-
-			checkLocustErr := func() error {
-				select {
-				case err := <-locustErrCh:
-					return err
-				default:
-					return nil
-				}
-			}
 
 			// Allow Locust to ramp up and send traffic to the old cluster before triggering upgrade.
 			err = warmupLocust(test, locustHeadPod, locustWarmupRPSThreshold, locustWarmupStableWindowSeconds, locustWarmupTimeout)
 			g.Expect(err).NotTo(HaveOccurred())
-			g.Expect(checkLocustErr()).NotTo(HaveOccurred(), "Locust failed during warmup")
 
 			// Phase 4: Trigger incremental upgrade
 			LogWithTimestamp(test.T(), "Triggering incremental upgrade by updating RayCluster spec and RayService serve config")
@@ -363,8 +352,7 @@ func TestRayServiceIncrementalUpgradeWithLocust(t *testing.T) {
 				Should(WithTransform(IsRayServiceUpgrading, BeFalse()))
 
 			LogWithTimestamp(test.T(), "Waiting for Locust load test goroutine to finish")
-			wg.Wait()
-			g.Expect(checkLocustErr()).NotTo(HaveOccurred(), "Locust load test failed")
+			g.Expect(eg.Wait()).NotTo(HaveOccurred(), "Locust load test failed")
 
 			LogWithTimestamp(test.T(), "Validating remaining traffic is routed to the new cluster after upgrade completes")
 			curlPodName := "curl-pod"
