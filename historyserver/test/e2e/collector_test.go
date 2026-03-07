@@ -46,6 +46,18 @@ func TestCollector(t *testing.T) {
 			name:     "Collector restart: should scan prev-logs and resume uploads left by a crash",
 			testFunc: testCollectorResumesUploadsOnRestart,
 		},
+		{
+			name:     "Cluster metadata: collector should fetch and store cluster_metadata endpoint data once on startup",
+			testFunc: testCollectorStoresClusterMetadata,
+		},
+		{
+			name:     "Placement groups: collector should poll and store placement_groups endpoint data",
+			testFunc: testCollectorStoresPlacementGroups,
+		},
+		{
+			name:     "Timezone: collector should fetch and store timezone endpoint data once on startup",
+			testFunc: testCollectorStoresTimezone,
+		},
 	}
 
 	for _, tt := range tests {
@@ -215,6 +227,118 @@ func verifyS3SessionDirs(test Test, g *WithT, s3Client *s3.Client, sessionPrefix
 			// Allow >= 0 so 0-byte placeholders (e.g. monitor.out before content) and Azure e2e consistency pass
 			gg.Expect(aws.ToInt64(obj.ContentLength)).To(BeNumerically(">=", 0))
 		}
+		result, err := s3Client.GetObject(&s3.GetObjectInput{
+			Bucket: aws.String(S3BucketName),
+			Key:    aws.String(metaKey),
+		})
+		gg.Expect(err).NotTo(HaveOccurred())
+		defer result.Body.Close()
+
+		body, err := io.ReadAll(result.Body)
+		gg.Expect(err).NotTo(HaveOccurred())
+		gg.Expect(body).NotTo(BeEmpty(), "Cluster metadata file should not be empty")
+
+		// Verify it is valid JSON
+		var metadata map[string]interface{}
+		err = json.Unmarshal(body, &metadata)
+		gg.Expect(err).NotTo(HaveOccurred(), "Cluster metadata should be valid JSON")
+
+		// The Ray dashboard returns {"result": true, "data": {"rayVersion": ..., "pythonVersion": ...}}.
+		// Verify the "data" sub-object contains expected fields.
+		gg.Expect(metadata).To(HaveKey("data"), "Cluster metadata should contain data field")
+		data, ok := metadata["data"].(map[string]interface{})
+		gg.Expect(ok).To(BeTrue(), "data field should be a JSON object")
+		gg.Expect(data).To(HaveKey("rayVersion"), "Cluster metadata should contain rayVersion")
+		gg.Expect(data).To(HaveKey("pythonVersion"), "Cluster metadata should contain pythonVersion")
+
+		metadataBody = body
+	}, TestTimeoutMedium).Should(Succeed())
+
+	LogWithTimestamp(test.T(), "Cluster metadata stored successfully: %s", string(metadataBody))
+
+	DeleteS3Bucket(test, g, s3Client)
+}
+
+// testCollectorStoresTimezone verifies that the Head collector fetches /timezone
+// from the Ray Dashboard once on startup and stores the result in S3 under the session path.
+//
+// The timezone data is stored per session under fetched_endpoints/ in storage.
+//
+// The test case follows these steps:
+// 1. Prepare test environment by applying a Ray cluster with the collector
+// 2. Get the sessionID from the head pod to build the expected S3 key
+// 3. Wait for the timezone file to appear in S3 at {sessionName}/fetched_endpoints/restful__timezone
+// 4. Read the file and verify it contains valid JSON with the expected schema (offset, value)
+// 5. Delete S3 bucket to ensure test isolation
+func testCollectorStoresTimezone(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
+
+	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, rayCluster.Namespace)
+	sessionID := GetSessionIDFromHeadPod(test, g, rayCluster)
+	storageKey := utils.EndpointPathToStorageKey(EndpointTimezone)
+	timezoneKey := fmt.Sprintf("log/%s/%s/%s/%s", clusterNameID, sessionID, utils.RAY_SESSIONDIR_FETCHED_ENDPOINTS_NAME, storageKey)
+
+	LogWithTimestamp(test.T(), "Waiting for timezone data to appear at S3 key: %s", timezoneKey)
+
+	var timezoneBody []byte
+	g.Eventually(func(gg Gomega) {
+		result, err := s3Client.GetObject(&s3.GetObjectInput{
+			Bucket: aws.String(S3BucketName),
+			Key:    aws.String(timezoneKey),
+		})
+		gg.Expect(err).NotTo(HaveOccurred())
+		defer result.Body.Close()
+
+		body, err := io.ReadAll(result.Body)
+		gg.Expect(err).NotTo(HaveOccurred())
+		gg.Expect(body).NotTo(BeEmpty(), "Timezone file should not be empty")
+
+		// Verify it is valid JSON
+		var timezone map[string]interface{}
+		err = json.Unmarshal(body, &timezone)
+		gg.Expect(err).NotTo(HaveOccurred(), "Timezone data should be valid JSON")
+
+		// The Ray dashboard /timezone endpoint returns {"offset": ..., "value": ...}.
+		gg.Expect(timezone).To(HaveKey("offset"), "Timezone data should contain offset field")
+		gg.Expect(timezone).To(HaveKey("value"), "Timezone data should contain value field")
+		gg.Expect(timezone["offset"]).NotTo(BeEmpty(), "Timezone offset should not be empty")
+		gg.Expect(timezone["value"]).NotTo(BeEmpty(), "Timezone value should not be empty")
+
+		timezoneBody = body
+	}, TestTimeoutMedium).Should(Succeed())
+
+	LogWithTimestamp(test.T(), "Timezone data stored successfully: %s", string(timezoneBody))
+
+	DeleteS3Bucket(test, g, s3Client)
+}
+
+// testCollectorStoresPlacementGroups verifies that the Head collector periodically polls
+// /api/v0/placement_groups from the Ray Dashboard and stores the result in S3.
+//
+// The placement_groups endpoint is configured via RAY_COLLECTOR_ADDITIONAL_ENDPOINTS in
+// raycluster.yaml and polled by PollAdditionalEndpointsPeriodically.
+//
+// The test case follows these steps:
+// 1. Prepare test environment by applying a Ray cluster with the collector
+// 2. Submit a RayJob that creates a detached placement group (so the PG persists after the job)
+// 3. Get the sessionID from the head pod to build the expected S3 key
+// 4. Wait for the placement groups file to appear in S3 at {sessionName}/fetched_endpoints/restful__api__v0__placement_groups
+// 5. Read the file and verify it contains valid JSON with a non-empty placement_groups list
+// 6. Delete S3 bucket to ensure test isolation
+func testCollectorStoresPlacementGroups(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
+
+	// Submit a RayJob that creates a detached placement group named "test_pg".
+	// The detached lifetime ensures the PG persists after the job exits, so the
+	// collector captures non-empty data when polling /api/v0/placement_groups.
+	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
+
+	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, rayCluster.Namespace)
+	sessionID := GetSessionIDFromHeadPod(test, g, rayCluster)
+	storageKey := utils.EndpointPathToStorageKey("/api/v0/placement_groups")
+	pgKey := fmt.Sprintf("log/%s/%s/%s/%s", clusterNameID, sessionID, utils.RAY_SESSIONDIR_FETCHED_ENDPOINTS_NAME, storageKey)
+
+	LogWithTimestamp(test.T(), "Waiting for placement groups data to appear at S3 key: %s", pgKey)
 
 		workerFileKey := fmt.Sprintf("%s/%s", workerLogDirPrefix, "raylet.out")
 		LogWithTimestamp(test.T(), "Verifying worker log file %s exists", workerFileKey)

@@ -37,7 +37,7 @@ type RayLogHandler struct {
 	PushInterval           time.Duration
 	LogBatching            int
 	filePathMu             sync.Mutex
-	IsHead             bool
+	IsHead                 bool
 	DashboardAddress       string
 	AdditionalEndpoints    []string
 	EndpointPollInterval   time.Duration
@@ -65,6 +65,7 @@ func (r *RayLogHandler) Run(stop <-chan struct{}) error {
 	if r.IsHead {
 		go r.WatchSessionLatestLoops() // Watch session_latest symlink changes
 		go r.FetchAndStoreClusterMetadata()
+		go r.FetchAndStoreTimezone()
 		go r.PollAdditionalEndpointsPeriodically()
 	}
 

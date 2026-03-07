@@ -134,6 +134,10 @@ func TestHistoryServer(t *testing.T) {
 			name:     "Dead cluster: /api/v0/tasks/summarize should return the task summary grouped by func_name",
 			testFunc: testDeadClusterTaskSummarizeFuncName,
 		},
+		{
+			name:     "Live and dead cluster: /timezone should return consistent timezone info",
+			testFunc: testLiveAndDeadClusterTimezone,
+		},
 	}
 
 	for _, tt := range tests {
@@ -3347,6 +3351,77 @@ func testEventsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namesp
 
 	DeleteS3Bucket(test, g, s3Client)
 	LogWithTimestamp(test.T(), "Dead cluster events endpoint tests completed")
+}
+
+// testLiveAndDeadClusterTimezone verifies the /timezone endpoint for both live and dead clusters,
+// and checks that the dead cluster returns the same timezone data as the live cluster.
+//
+// The /timezone endpoint returns the head node's system timezone, so no RayJob submission is needed.
+//
+// The test case follows these steps:
+// 1. Prepare test environment by applying a Ray cluster
+// 2. Apply History Server and get its URL
+// 3. Get live cluster info and set cluster context
+// 4. Verify /timezone returns valid JSON with non-empty 'offset' and 'value' fields
+// 5. Record the live cluster's offset and value
+// 6. Delete the RayCluster to trigger data upload to S3
+// 7. Get the dead cluster info and switch cluster context
+// 8. Verify /timezone returns valid JSON from storage with non-empty 'offset' and 'value'
+// 9. Verify dead cluster offset and value match the live cluster values
+// 10. Delete S3 bucket to ensure test isolation
+func testLiveAndDeadClusterTimezone(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
+	ApplyHistoryServer(test, g, namespace, "")
+	historyServerURL := GetHistoryServerURL(test, g, namespace)
+
+	// --- Live cluster ---
+	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
+	g.Expect(clusterInfo.SessionName).To(Equal(LiveSessionName), "Live cluster should have sessionName='live'")
+
+	client := CreateHTTPClientWithCookieJar(g)
+	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
+
+	endpointURL := fmt.Sprintf("%s%s", historyServerURL, EndpointTimezone)
+
+	var liveOffset, liveValue string
+	test.T().Run("live cluster should proxy /timezone and return timezone info", func(_ *testing.T) {
+		verifySingleEndpoint(test, g, client, endpointURL, func(test Test, g *WithT, data map[string]any) {
+			// The Ray Dashboard /timezone endpoint returns {"offset": ..., "value": ...}
+			g.Expect(data).To(HaveKey("offset"), "response should have 'offset' field")
+			g.Expect(data).To(HaveKey("value"), "response should have 'value' field")
+			g.Expect(data["offset"]).NotTo(BeEmpty(), "offset should not be empty")
+			g.Expect(data["value"]).NotTo(BeEmpty(), "value should not be empty")
+			liveOffset = data["offset"].(string)
+			liveValue = data["value"].(string)
+			LogWithTimestamp(test.T(), "Live cluster timezone: offset=%s, value=%s", liveOffset, liveValue)
+		})
+	})
+
+	// --- Delete cluster ---
+	DeleteRayClusterAndWait(test, g, namespace.Name, rayCluster.Name)
+
+	// --- Dead cluster ---
+	deadClusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
+	g.Expect(deadClusterInfo.SessionName).NotTo(Equal(LiveSessionName))
+
+	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, deadClusterInfo.SessionName)
+
+	test.T().Run("dead cluster should return timezone from storage matching live cluster", func(_ *testing.T) {
+		verifySingleEndpoint(test, g, client, endpointURL, func(test Test, g *WithT, data map[string]any) {
+			// Dead cluster: timezone data is read from S3 storage
+			g.Expect(data).To(HaveKey("offset"), "response should have 'offset' field")
+			g.Expect(data).To(HaveKey("value"), "response should have 'value' field")
+			g.Expect(data["offset"]).NotTo(BeEmpty(), "offset should not be empty")
+			g.Expect(data["value"]).NotTo(BeEmpty(), "value should not be empty")
+			// Verify consistency: dead cluster timezone should match the live cluster values
+			g.Expect(data["offset"]).To(Equal(liveOffset), "dead cluster offset should match live cluster offset")
+			g.Expect(data["value"]).To(Equal(liveValue), "dead cluster value should match live cluster value")
+			LogWithTimestamp(test.T(), "Dead cluster timezone matches live: offset=%s, value=%s", data["offset"], data["value"])
+		})
+	})
+
+	DeleteS3Bucket(test, g, s3Client)
+	LogWithTimestamp(test.T(), "Timezone endpoint tests completed successfully")
 }
 
 // testLiveClusterStatus verifies that the /api/cluster_status endpoint works for a live cluster.
