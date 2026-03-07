@@ -24,3 +24,23 @@ tests:
       - equal:
           path: spec.type
           value: NodePort
+
+  - it: Should have service name matching fullnameOverride when set
+    set:
+      fullnameOverride: test-name
+    asserts:
+      - containsDocument:
+          apiVersion: v1
+          kind: Service
+          name: test-name-service
+          namespace: kuberay-system
+
+  - it: Should have service name matching nameOverride when set
+    set:
+      nameOverride: custom-api
+    asserts:
+      - containsDocument:
+          apiVersion: v1
+          kind: Service
+          name: kuberay-apiserver-custom-api-service
+          namespace: kuberay-system
