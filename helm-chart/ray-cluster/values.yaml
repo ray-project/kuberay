@@ -93,6 +93,11 @@ head:
   # -- Labels for the head pod
   labels: {}
 
+  # -- Ray node labels for the head group, used for label-based scheduling.
+  # Set at the RayCluster spec level (headGroupSpec.labels), not pod metadata.
+  # ref: https://docs.ray.io/en/latest/cluster/kubernetes/user-guides/label-based-scheduling.html
+  rayNodeLabels: {}
+
   # Note: From KubeRay v0.6.0, users need to create the ServiceAccount by themselves if they specify the `serviceAccountName`
   # in the headGroupSpec. See https://github.com/ray-project/kuberay/pull/1128 for more details.
   serviceAccountName: ""
@@ -214,6 +219,11 @@ worker:
 
   # -- Labels for the worker pod
   labels: {}
+
+  # -- Ray node labels for this worker group, used for label-based scheduling.
+  # Set at the RayCluster spec level (workerGroupSpec.labels), not pod metadata.
+  # ref: https://docs.ray.io/en/latest/cluster/kubernetes/user-guides/label-based-scheduling.html
+  rayNodeLabels: {}
   serviceAccountName: ""
   restartPolicy: ""
 
@@ -328,6 +338,11 @@ additionalWorkerGroups:
 
     # -- Labels for the additional worker pod
     labels: {}
+
+    # -- Ray node labels for this worker group, used for label-based scheduling.
+    # Set at the RayCluster spec level (workerGroupSpec.labels), not pod metadata.
+    # ref: https://docs.ray.io/en/latest/cluster/kubernetes/user-guides/label-based-scheduling.html
+    rayNodeLabels: {}
     serviceAccountName: ""
     restartPolicy: ""
 

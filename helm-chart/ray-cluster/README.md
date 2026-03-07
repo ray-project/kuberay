@@ -82,6 +82,7 @@ helm uninstall raycluster
 | common.containerEnv | list | `[]` | containerEnv specifies environment variables for the Ray head and worker containers. Follows standard K8s container env schema. |
 | head.initContainers | list | `[]` | Init containers to add to the head pod |
 | head.labels | object | `{}` | Labels for the head pod |
+| head.rayNodeLabels | object | `{}` | Ray node labels for the head group, used for label-based scheduling. Set at the RayCluster spec level (headGroupSpec.labels), not pod metadata. ref: https://docs.ray.io/en/latest/cluster/kubernetes/user-guides/label-based-scheduling.html |
 | head.serviceAccountName | string | `""` |  |
 | head.restartPolicy | string | `""` |  |
 | head.runtimeClassName | string | `""` | runtimeClassName is the name of the RuntimeClass to use to run the head Pod. |
@@ -113,6 +114,7 @@ helm uninstall raycluster
 | worker.minReplicas | int | `1` | The minimum number of replicas for the worker pod |
 | worker.maxReplicas | int | `3` | The maximum number of replicas for the worker pod |
 | worker.labels | object | `{}` | Labels for the worker pod |
+| worker.rayNodeLabels | object | `{}` | Ray node labels for this worker group, used for label-based scheduling. Set at the RayCluster spec level (workerGroupSpec.labels), not pod metadata. ref: https://docs.ray.io/en/latest/cluster/kubernetes/user-guides/label-based-scheduling.html |
 | worker.serviceAccountName | string | `""` |  |
 | worker.restartPolicy | string | `""` |  |
 | worker.runtimeClassName | string | `""` | runtimeClassName is the name of the RuntimeClass to use to run the worker Pods. |
@@ -144,6 +146,7 @@ helm uninstall raycluster
 | additionalWorkerGroups.smallGroup.minReplicas | int | `0` | The minimum number of replicas for the additional worker pod |
 | additionalWorkerGroups.smallGroup.maxReplicas | int | `3` | The maximum number of replicas for the additional worker pod |
 | additionalWorkerGroups.smallGroup.labels | object | `{}` | Labels for the additional worker pod |
+| additionalWorkerGroups.smallGroup.rayNodeLabels | object | `{}` | Ray node labels for this worker group, used for label-based scheduling. Set at the RayCluster spec level (workerGroupSpec.labels), not pod metadata. ref: https://docs.ray.io/en/latest/cluster/kubernetes/user-guides/label-based-scheduling.html |
 | additionalWorkerGroups.smallGroup.serviceAccountName | string | `""` |  |
 | additionalWorkerGroups.smallGroup.restartPolicy | string | `""` |  |
 | additionalWorkerGroups.smallGroup.runtimeClassName | string | `""` | runtimeClassName for this additional worker group. Empty string means default runtime. |
