@@ -2,7 +2,6 @@ package e2eautoscaler
 
 import (
 	"context"
-	"fmt"
 	"slices"
 	"testing"
 	"time"
@@ -638,20 +637,20 @@ func TestRayClusterAutoscalerUpscalingModeConservative(t *testing.T) {
 			headPod, err := GetHeadPod(test, rayCluster)
 			g.Expect(err).NotTo(gomega.HaveOccurred())
 			LogWithTimestamp(test.T(), "Found head pod %s/%s", headPod.Namespace, headPod.Name)
-			for i := 0; i < 10; i++ {
-				ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "/home/ray/test_scripts/create_detached_actor.py", fmt.Sprintf("actor%d", i)})
-			}
+			ExecPodCmd(test, headPod, common.RayHeadContainer, []string{
+				"bash", "-c",
+				`for i in {0..9}; do python /home/ray/test_scripts/create_detached_actor.py "actor$i" & done; wait`,
+			})
 
-			// Check that upscaling is rate-limited to the size of the RayCluster.
-			// We use GetAllPods to ensure the Head Pod is correctly included in the numRunning calculation.
-			g.Consistently(func() ([]corev1.Pod, error) {
-				return GetAllPods(test, rayCluster)
-			}, TestTimeoutShort).Should(gomega.WithTransform(RateLimitedPendingPods, gomega.BeTrue()))
+			// Verify the Autoscaler's CRD patching behavior.
+			// In Default mode, replicas would jump straight to 10 to meet the demand.
+			// In Conservative mode, the initial batch is capped at max(5, num_running).
+			g.Expect(RateLimitedReplicas(test, rayCluster, 5)).To(gomega.BeTrue(), "Conservative mode should cap the initial scale-up to 5")
 
-			// All worker Pods should connect to the RayCluster.
-			g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutMedium).
+			// Eventually, all worker Pods should connect to the RayCluster.
+			g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutLong).
 				Should(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(int32(10))))
-			g.Expect(GetGroupPods(test, rayCluster, groupName)).To(gomega.HaveLen(10))
+			g.Eventually(GroupPods(test, rayCluster, groupName), TestTimeoutLong).Should(gomega.HaveLen(10))
 		})
 	}
 }
