@@ -249,6 +249,8 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 			return err
 		}
 
+		normalizeActorIDsToHex(&currActor)
+
 		// Use CreateOrMergeActor pattern (same as Task)
 		actorMap := h.ClusterActorMap.GetOrCreateActorMap(clusterSessionKey)
 		actorMap.CreateOrMergeActor(currActor.ActorID, func(a *types.Actor) {
@@ -284,6 +286,9 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 		}
 
 		actorId, _ := lifecycleEvent["actorId"].(string)
+		if hexID, err := utils.ConvertBase64ToHex(actorId); err == nil {
+			actorId = hexID
+		}
 		transitions, _ := lifecycleEvent["stateTransitions"].([]any)
 
 		if len(transitions) == 0 || actorId == "" {
@@ -302,6 +307,14 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 			nodeId, _ := tr["nodeId"].(string)
 			workerId, _ := tr["workerId"].(string)
 			reprName, _ := tr["reprName"].(string)
+
+			// Convert IDs from base64 to hex
+			if hexID, err := utils.ConvertBase64ToHex(nodeId); nodeId != "" && err == nil {
+				nodeId = hexID
+			}
+			if hexID, err := utils.ConvertBase64ToHex(workerId); workerId != "" && err == nil {
+				workerId = hexID
+			}
 
 			var timestamp time.Time
 			if timestampStr != "" {
@@ -1223,6 +1236,32 @@ func normalizeTaskIDsToHex(task *types.Task) {
 	task.PlacementGroupID = normalize(task.PlacementGroupID)
 	task.NodeID = normalize(task.NodeID)
 	task.WorkerID = normalize(task.WorkerID)
+}
+
+// normalizeActorIDsToHex converts base64-encoded Ray IDs in actor events:
+//   - ACTOR_DEFINITION_EVENT
+//
+// to hex so stored actors match the live cluster API schema.
+// Note: ACTOR_LIFECYCLE_EVENT IDs are normalized inline at parse time.
+func normalizeActorIDsToHex(actor *types.Actor) {
+	normalize := func(base64ID string) string {
+		if base64ID == "" {
+			return ""
+		}
+
+		hexID, err := utils.ConvertBase64ToHex(base64ID)
+		if err != nil {
+			logrus.Errorf("Failed to convert ID from base64 to hex, keeping original: %v", err)
+			return base64ID
+		}
+		return hexID
+	}
+
+	actor.ActorID = normalize(actor.ActorID)
+	actor.JobID = normalize(actor.JobID)
+	actor.PlacementGroupID = normalize(actor.PlacementGroupID)
+	actor.Address.NodeID = normalize(actor.Address.NodeID)
+	actor.Address.WorkerID = normalize(actor.Address.WorkerID)
 }
 
 // GetNodeMap returns a thread-safe deep copy of all nodes for a given cluster session.

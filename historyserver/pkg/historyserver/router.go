@@ -987,39 +987,55 @@ func (s *ServerHandler) getLogicalActors(req *restful.Request, resp *restful.Res
 	resp.Write(respData)
 }
 
-// formatActorForResponse converts an eventtypes.Actor to the format expected by Ray Dashboard
+// formatActorForResponse converts an eventtypes.Actor to the format expected by Ray Dashboard.
+// Ref: https://github.com/ray-project/ray/blob/9e9c8cb3bba050cf7995dfa4d3faf7bb9bab462c/python/ray/dashboard/modules/node/node_head.py#L84-L142
 func formatActorForResponse(actor eventtypes.Actor) map[string]interface{} {
+
 	result := map[string]interface{}{
-		"actor_id":           actor.ActorID,
-		"job_id":             actor.JobID,
-		"placement_group_id": actor.PlacementGroupID,
-		"state":              string(actor.State),
-		"pid":                actor.PID,
+		"actorId": actor.ActorID,
+		"jobId":   actor.JobID,
+		"state":   string(actor.State),
+		"pid":     actor.PID,
 		"address": map[string]interface{}{
-			"node_id":    actor.Address.NodeID,
-			"ip_address": actor.Address.IPAddress,
-			"port":       actor.Address.Port,
-			"worker_id":  actor.Address.WorkerID,
+			"nodeId":    actor.Address.NodeID,
+			"ipAddress": actor.Address.IPAddress,
+			"port":      actor.Address.Port,
+			"workerId":  actor.Address.WorkerID,
 		},
-		"name":               actor.Name,
-		"num_restarts":       actor.NumRestarts,
-		"actor_class":        actor.ActorClass,
-		"required_resources": actor.RequiredResources,
-		"exit_details":       actor.ExitDetails,
-		"repr_name":          actor.ReprName,
-		"call_site":          actor.CallSite,
-		"is_detached":        actor.IsDetached,
-		"ray_namespace":      actor.RayNamespace,
+		"name":        actor.Name,
+		"numRestarts": strconv.Itoa(actor.NumRestarts),
+		"actorClass":  actor.ActorClass,
+		"className":   actor.ActorClass,
+		"exitDetail":  actor.ExitDetails,
+		"reprName":    actor.ReprName,
 	}
 
-	// Only include start_time if it's set (non-zero)
+	if actor.RequiredResources != nil {
+		result["requiredResources"] = actor.RequiredResources
+	} else {
+		result["requiredResources"] = map[string]float64{}
+	}
+	if actor.LabelSelector != nil {
+		result["labelSelector"] = actor.LabelSelector
+	} else {
+		result["labelSelector"] = map[string]string{}
+	}
+
+	// Proto3 optional fields: only include when explicitly set.
+	// Ref: ray/src/ray/protobuf/gcs.proto — ActorTableData.call_site, ActorTableData.placement_group_id
+	if actor.PlacementGroupID != "" {
+		result["placementGroupId"] = actor.PlacementGroupID
+	}
+	if actor.CallSite != "" {
+		result["callSite"] = actor.CallSite
+	}
+
 	if !actor.StartTime.IsZero() {
-		result["start_time"] = actor.StartTime.UnixMilli()
+		result["startTime"] = actor.StartTime.UnixMilli()
 	}
-
-	// Only include end_time if it's set (non-zero)
 	if !actor.EndTime.IsZero() {
-		result["end_time"] = actor.EndTime.UnixMilli()
+		result["endTime"] = actor.EndTime.UnixMilli()
+		result["timestamp"] = float64(actor.EndTime.UnixMilli())
 	}
 
 	return result
