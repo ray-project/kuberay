@@ -617,6 +617,13 @@ func configureSubmitterContainer(container *corev1.Container, rayJobInstance *ra
 	// ray job submit --address=http://$RAY_DASHBOARD_ADDRESS --submission-id=$RAY_JOB_SUBMISSION_ID ...
 	container.Env = append(container.Env, corev1.EnvVar{Name: utils.RAY_DASHBOARD_ADDRESS, Value: rayJobInstance.Status.DashboardURL})
 	container.Env = append(container.Env, corev1.EnvVar{Name: utils.RAY_JOB_SUBMISSION_ID, Value: rayJobInstance.Status.JobId})
+
+	// In SidecarMode, pass the expected worker count so the submitter can wait for workers to register
+	if submissionMode == rayv1.SidecarMode && rayClusterInstance != nil {
+		expectedWorkers := utils.CalculateDesiredReplicas(rayClusterInstance)
+		container.Env = append(container.Env, corev1.EnvVar{Name: utils.RAY_EXPECTED_WORKERS, Value: strconv.Itoa(int(expectedWorkers))})
+	}
+
 	if rayClusterInstance != nil && utils.IsAuthEnabled(&rayClusterInstance.Spec) {
 		common.SetContainerTokenAuthEnvVars(rayClusterInstance.Name, container, rayClusterInstance.Spec.AuthOptions)
 	}

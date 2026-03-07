@@ -139,6 +139,40 @@ func BuildJobSubmitCommand(rayJobInstance *rayv1.RayJob, submissionMode rayv1.Jo
 			"do", "echo", strconv.Quote("Waiting for Ray Dashboard GCS to become healthy at " + address + " ..."), ";", "sleep", "2", ";", "done", ";",
 		}
 		cmd = append(cmd, waitLoop...)
+
+		// Wait for the expected number of worker nodes to register for the Ray cluster.
+		// RAY_EXPECTED_WORKERS is set by the controller based on CalculateDesiredReplicas.
+		// The loop queries the Ray Dashboard API to get the number of alive nodes and
+		// continues until the number of alive nodes is equal to (expected_workers + 1) for head node.
+		// This ensures that worker pods are connected before the job is submitted otherwise
+		// the jobs may run on the Head node.
+		//
+		// Note: This loop will never timeout and will wait indefinitely if workers never register.
+		// This can be mitigated by setting the RayJob's `activeDeadlineSeconds` field
+		// to enforce a maximum job execution time.
+		//
+		// The Python script uses urllib (stdlib) to query the Ray Dashboard API.
+		// It includes the x-ray-authorization header if RAY_AUTH_TOKEN is set.
+		// This is required when Ray auth token mode is enabled, otherwise the request will fail with 401.
+		pythonNodeCountScript := "import urllib.request,json,os; " +
+			"req=urllib.request.Request('" + address + "/nodes?view=summary'); " +
+			"t=os.environ.get('" + utils.RAY_AUTH_TOKEN_ENV_VAR + "',''); " +
+			"t and req.add_header('x-ray-authorization','Bearer '+t); " +
+			"d=json.loads(urllib.request.urlopen(req,timeout=5).read()); " +
+			"print(len([n for n in d.get('data',{}).get('summary',[]) if n.get('raylet',{}).get('state')=='ALIVE']))"
+		expectedWorkersVar := utils.RAY_EXPECTED_WORKERS
+		waitForNodesBash := strings.TrimSpace(fmt.Sprintf(`
+if [ -n "$%[1]s" ] && [ "$%[1]s" -gt "0" ]; then
+    EXPECTED_NODES=$(($%[1]s + 1))
+    echo "Waiting for $EXPECTED_NODES nodes (1 head + $%[1]s workers) to register..."
+    until [ "$(python3 -c "%[2]s" || echo 0)" -ge "$EXPECTED_NODES" ]; do
+        echo "Waiting for Ray nodes to register. Expected: $EXPECTED_NODES ..."
+        sleep 2
+    done
+    echo "All expected nodes are registered."
+fi
+`, expectedWorkersVar, pythonNodeCountScript))
+		cmd = append(cmd, waitForNodesBash, ";")
 	}
 
 	// In Sidecar mode, we only support RayJob level retry, which means that the submitter retry won't happen,
