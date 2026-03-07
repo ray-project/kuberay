@@ -8,7 +8,7 @@ This guide covers the purpose, requirements, and deployment of the Kuberay API S
 | Software | Version  |                                                                Link |
 |:---------|:--------:|--------------------------------------------------------------------:|
 | kubectl  | v1.18.3+ | [Download](https://kubernetes.io/docs/tasks/tools/install-kubectl/) |
-| Go       |  v1.20   |                                  [Download](https://golang.org/dl/) |
+| Go       |  v1.26   |                                  [Download](https://golang.org/dl/) |
 | Docker   |  19.03+  |                        [Download](https://docs.docker.com/install/) |
 | GNU Make |  3.81+   |                                                                     |
 | curl     |  7.88+   |                                                                     |
