@@ -165,6 +165,16 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, client.IgnoreNotFound(err)
 	}
 
+	// Determine the rollback state immediately before making serving decisions.
+	if utils.IsIncrementalUpgradeEnabled(&rayServiceInstance.Spec) {
+		// If an upgrade is in progress, check if rollback is necessary.
+		if activeRayClusterInstance != nil && pendingRayClusterInstance != nil {
+			if err := r.reconcileRollbackState(ctx, rayServiceInstance, activeRayClusterInstance, pendingRayClusterInstance); err != nil {
+				return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
+			}
+		}
+	}
+
 	// Check both active and pending Ray clusters to see if the head Pod is ready to serve requests.
 	// This is important to ensure the reliability of the serve service because the head Pod cannot
 	// rely on readiness probes to determine serve readiness.
@@ -207,12 +217,6 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	// Check if NewClusterWithIncrementalUpgrade is enabled, if so reconcile Gateway objects.
 	var httpRouteInstance *gwv1.HTTPRoute
 	if utils.IsIncrementalUpgradeEnabled(&rayServiceInstance.Spec) {
-		// If an upgrade is in progress, check if rollback is necessary.
-		if activeRayClusterInstance != nil && pendingRayClusterInstance != nil {
-			if err := r.reconcileRollbackState(ctx, rayServiceInstance, activeRayClusterInstance, pendingRayClusterInstance); err != nil {
-				return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
-			}
-		}
 		// Ensure per-cluster Serve service exists for the active and pending RayClusters.
 		if err = r.reconcilePerClusterServeService(ctx, rayServiceInstance, activeRayClusterInstance); err != nil {
 			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
@@ -731,41 +735,43 @@ func (r *RayServiceReconciler) calculateTrafficRoutedPercent(ctx context.Context
 	activeClusterWeight = ptr.Deref(activeServiceStatus.TrafficRoutedPercent, 100)
 	pendingClusterWeight = ptr.Deref(pendingServiceStatus.TrafficRoutedPercent, 0)
 
-	if isPendingClusterReady {
-		// Zero-downtime upgrade in progress.
-		options := utils.GetRayServiceClusterUpgradeOptions(&rayServiceInstance.Spec)
-		if options == nil {
-			return 0, 0, errstd.New("ClusterUpgradeOptions are not set during upgrade.")
-		}
+	// Zero-downtime upgrade in progress.
+	options := utils.GetRayServiceClusterUpgradeOptions(&rayServiceInstance.Spec)
+	if options == nil {
+		return 0, 0, errstd.New("ClusterUpgradeOptions are not set during upgrade.")
+	}
 
-		// Check that target_capacity has been updated before migrating traffic.
-		pendingClusterTargetCapacity := ptr.Deref(pendingServiceStatus.TargetCapacity, 0)
-		activeClusterTargetCapacity := ptr.Deref(activeServiceStatus.TargetCapacity, 100)
-		isRollbackInProgress := meta.IsStatusConditionTrue(rayServiceInstance.Status.Conditions, string(rayv1.RollbackInProgress))
+	// Check that target_capacity has been updated before migrating traffic.
+	pendingClusterTargetCapacity := ptr.Deref(pendingServiceStatus.TargetCapacity, 0)
+	activeClusterTargetCapacity := ptr.Deref(activeServiceStatus.TargetCapacity, 100)
+	isRollbackInProgress := meta.IsStatusConditionTrue(rayServiceInstance.Status.Conditions, string(rayv1.RollbackInProgress))
 
-		if (pendingClusterWeight == pendingClusterTargetCapacity && !isRollbackInProgress) || (isRollbackInProgress && activeClusterWeight == activeClusterTargetCapacity) {
-			// Stop traffic migration because the cluster being migrated to has reached its target capacity limit.
-			return activeClusterWeight, pendingClusterWeight, nil
-		}
+	if (pendingClusterWeight == pendingClusterTargetCapacity && !isRollbackInProgress) || (isRollbackInProgress && activeClusterWeight == activeClusterTargetCapacity) {
+		// Stop traffic migration because the cluster being migrated to has reached its target capacity limit.
+		return activeClusterWeight, pendingClusterWeight, nil
+	}
 
-		// If IntervalSeconds has passed since LastTrafficMigratedTime, migrate StepSizePercent traffic
-		// from the active RayCluster to the pending RayCluster.
-		interval := time.Duration(*options.IntervalSeconds) * time.Second
-		lastTrafficMigratedTime := pendingServiceStatus.LastTrafficMigratedTime
-		if lastTrafficMigratedTime == nil || time.Since(lastTrafficMigratedTime.Time) >= interval {
-			if isRollbackInProgress {
-				// Gradually shift traffic from the pending to the active cluster.
-				logger.Info("Rollback in progress. Shifting traffic back to active cluster.", "stepSize", *options.StepSizePercent)
-				proposedActiveWeight := activeClusterWeight + *options.StepSizePercent
-				activeClusterWeight = min(100, proposedActiveWeight, activeClusterTargetCapacity)
-				pendingClusterWeight = 100 - activeClusterWeight
-			} else {
-				// Gradually shift traffic from the active to the pending cluster.
-				logger.Info("Upgrade in progress. Migrating traffic by StepSizePercent.", "stepSize", *options.StepSizePercent)
-				proposedPendingWeight := pendingClusterWeight + *options.StepSizePercent
-				pendingClusterWeight = min(100, proposedPendingWeight, pendingClusterTargetCapacity)
-				activeClusterWeight = 100 - pendingClusterWeight
-			}
+	// If IntervalSeconds has passed since LastTrafficMigratedTime, migrate StepSizePercent traffic
+	// from the active RayCluster to the pending RayCluster.
+	interval := time.Duration(*options.IntervalSeconds) * time.Second
+	lastTrafficMigratedTime := pendingServiceStatus.LastTrafficMigratedTime
+
+	if lastTrafficMigratedTime == nil || time.Since(lastTrafficMigratedTime.Time) >= interval {
+		if isRollbackInProgress {
+			// Gradually shift traffic from the pending to the active cluster.
+			// Rollback traffic migration occurs regardless of pending cluster readiness.
+			logger.Info("Rollback in progress. Shifting traffic back to active cluster.", "stepSize", *options.StepSizePercent)
+			proposedActiveWeight := activeClusterWeight + *options.StepSizePercent
+			activeClusterWeight = min(100, proposedActiveWeight, activeClusterTargetCapacity)
+			pendingClusterWeight = 100 - activeClusterWeight
+		} else if isPendingClusterReady {
+			// Gradually shift traffic from the active to the pending cluster if it's ready.
+			logger.Info("Upgrade in progress. Migrating traffic by StepSizePercent.", "stepSize", *options.StepSizePercent)
+			proposedPendingWeight := pendingClusterWeight + *options.StepSizePercent
+			pendingClusterWeight = min(100, proposedPendingWeight, pendingClusterTargetCapacity)
+			activeClusterWeight = 100 - pendingClusterWeight
+		} else {
+			logger.Info("Upgrade in progress, but pending cluster is not ready. Pausing traffic migration.")
 		}
 	}
 
