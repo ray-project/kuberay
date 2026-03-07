@@ -287,7 +287,7 @@ func TestRayClusterAutoscalerWithFakeMultiHostTPU(t *testing.T) {
 				Should(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(int32(1))))
 
 			// Verify that scaling up 1 replica results in exactly 4 Pods being created for the multi-host group
-			g.Expect(GetGroupPods(test, rayCluster, groupName)).To(gomega.HaveLen(4))
+			g.Eventually(GroupPods(test, rayCluster, groupName), TestTimeoutMedium).Should(gomega.HaveLen(4))
 			LogWithTimestamp(test.T(), "Created multi-host TPU workers of group %s", groupName)
 
 			// Terminate the TPU actor to remove the allocated resource request.
