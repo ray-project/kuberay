@@ -288,6 +288,7 @@ type RayJobSpec struct {
 	// Running within this time, it will be marked as Failed.
 	// This is useful for cleaning up jobs stuck in Initializing or Waiting states.
 	// If not set, there is no deadline. Value must be a positive integer.
+	// +kubebuilder:validation:Minimum=1
 	// +optional
 	PreRunningDeadlineSeconds *int32 `json:"preRunningDeadlineSeconds,omitempty"`
 	// ShutdownAfterJobFinishes will determine whether to delete the ray cluster once rayJob succeed or failed.
