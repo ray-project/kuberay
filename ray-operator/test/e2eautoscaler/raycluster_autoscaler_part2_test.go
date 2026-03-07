@@ -638,12 +638,16 @@ func TestRayClusterAutoscalerUpscalingModeConservative(t *testing.T) {
 			headPod, err := GetHeadPod(test, rayCluster)
 			g.Expect(err).NotTo(gomega.HaveOccurred())
 			LogWithTimestamp(test.T(), "Found head pod %s/%s", headPod.Namespace, headPod.Name)
-			for i := range 10 {
+			for i := 0; i < 10; i++ {
 				ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "/home/ray/test_scripts/create_detached_actor.py", fmt.Sprintf("actor%d", i)})
 			}
-			// Check that upscaling is rate-limited to the size of the RayCluster. The minimum number of pending launches is 5 regardless of upscaling_speed.
-			g.Consistently(WorkerPods(test, rayCluster), TestTimeoutShort).
-				Should(gomega.WithTransform(RateLimitedPendingPods, gomega.BeTrue()))
+
+			// Check that upscaling is rate-limited to the size of the RayCluster.
+			// We use GetAllPods to ensure the Head Pod is correctly included in the numRunning calculation.
+			g.Consistently(func() ([]corev1.Pod, error) {
+				return GetAllPods(test, rayCluster)
+			}, TestTimeoutShort).Should(gomega.WithTransform(RateLimitedPendingPods, gomega.BeTrue()))
+
 			// All worker Pods should connect to the RayCluster.
 			g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutMedium).
 				Should(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(int32(10))))

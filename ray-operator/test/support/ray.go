@@ -207,6 +207,12 @@ func GetAllPods(t Test, rayCluster *rayv1.RayCluster) ([]corev1.Pod, error) {
 	return pods.Items, err
 }
 
+func AllPods(t Test, rayCluster *rayv1.RayCluster) func() ([]corev1.Pod, error) {
+	return func() ([]corev1.Pod, error) {
+		return GetAllPods(t, rayCluster)
+	}
+}
+
 func GetGroupPods(t Test, rayCluster *rayv1.RayCluster, group string) ([]corev1.Pod, error) {
 	t.T().Helper()
 	pods, err := t.Client().Core().CoreV1().Pods(rayCluster.Namespace).List(
