@@ -1,0 +1,77 @@
+# RayCluster with mutual TLS (mTLS) using Bring Your Own Certificate (BYOC).
+# The user provides TLS secret(s) containing tls.crt, tls.key, and ca.crt.
+# The operator mounts these secrets on head and worker pods without requiring
+# cert-manager. The operator never deletes user-provided secrets.
+#
+# Two modes are supported:
+#   A) Shared secret: set only certificateSecretName. The same secret is
+#      mounted on both head and worker pods.
+#   B) Separate secrets: set both certificateSecretName (head) and
+#      workerCertificateSecretName (workers). This prevents a compromised
+#      worker key from impersonating the head node.
+#
+# Prerequisites:
+#   1. Create TLS secret(s) with the required keys:
+#
+#      kubectl create secret tls my-head-tls-secret \
+#        --cert=path/to/head-tls.crt --key=path/to/head-tls.key
+#      kubectl patch secret my-head-tls-secret --type merge \
+#        -p '{"data":{"ca.crt":"'$(base64 < path/to/ca.crt)'"}}'
+#
+#      # Optional: separate worker secret
+#      kubectl create secret tls my-worker-tls-secret \
+#        --cert=path/to/worker-tls.crt --key=path/to/worker-tls.key
+#      kubectl patch secret my-worker-tls-secret --type merge \
+#        -p '{"data":{"ca.crt":"'$(base64 < path/to/ca.crt)'"}}'
+#
+#   2. The certificate SANs must cover the corresponding node identities:
+#      - Head cert: head service DNS, localhost, 127.0.0.1
+#      - Worker cert: worker pod IPs or wildcards
+#      - Both certs must share the same CA.
+apiVersion: ray.io/v1
+kind: RayCluster
+metadata:
+  name: raycluster-byoc
+spec:
+  rayVersion: '2.52.0'
+  # Enable mTLS for Ray cluster internal communication.
+  enableMTLS: true
+  # BYOC: use user-provided TLS secrets instead of cert-manager auto-generation.
+  # Set workerCertificateSecretName for head/worker identity separation.
+  mTLSOptions:
+    certificateSecretName: my-head-tls-secret
+    workerCertificateSecretName: my-worker-tls-secret
+  headGroupSpec:
+    rayStartParams:
+      dashboard-host: "0.0.0.0"
+    template:
+      spec:
+        containers:
+        - name: ray-head
+          image: rayproject/ray:2.52.0
+          resources:
+            limits:
+              cpu: "1"
+              memory: "2Gi"
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+  workerGroupSpecs:
+  - replicas: 1
+    minReplicas: 1
+    maxReplicas: 1
+    groupName: small-group
+    rayStartParams:
+      num-cpus: "1"
+    template:
+      spec:
+        containers:
+        - name: ray-worker
+          image: rayproject/ray:2.52.0
+          resources:
+            limits:
+              cpu: "1"
+              memory: "1Gi"
+            requests:
+              cpu: "500m"
+              memory: "1Gi"

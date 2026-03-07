@@ -765,6 +765,51 @@ func IsK8sAuthEnabled(authOptions *rayv1.AuthOptions) bool {
 	return authOptions != nil && authOptions.EnableK8sTokenAuth != nil && *authOptions.EnableK8sTokenAuth
 }
 
+// IsMTLSEnabled returns whether mTLS is enabled for the RayCluster.
+// Returns false if spec is nil or EnableMTLS is not set to true.
+func IsMTLSEnabled(spec *rayv1.RayClusterSpec) bool {
+	return spec != nil && spec.EnableMTLS != nil && *spec.EnableMTLS
+}
+
+// IsMTLSBYOC returns true when the user provides their own certificate secret (BYOC mode).
+// BYOC is active when mTLS is enabled and MTLSOptions.CertificateSecretName is set.
+func IsMTLSBYOC(spec *rayv1.RayClusterSpec) bool {
+	return IsMTLSEnabled(spec) &&
+		spec.MTLSOptions != nil &&
+		spec.MTLSOptions.CertificateSecretName != nil &&
+		*spec.MTLSOptions.CertificateSecretName != ""
+}
+
+// GetCASecretName returns the cert-manager CA secret name with a UID-based suffix.
+// Format: {clusterName}-ca-secret-{first 8 chars of UID}
+// The UID suffix guarantees uniqueness per cluster instance. If a cluster is deleted
+// and recreated with the same name, it gets a new CA secret rather than reusing a
+// potentially stale one from a previous instance.
+func GetCASecretName(clusterName string, clusterUID types.UID) string {
+	uidSuffix := string(clusterUID)[:8]
+	return fmt.Sprintf("%s-%s-%s", clusterName, RayCASecretPrefix, uidSuffix)
+}
+
+// GetTLSSecretName returns the TLS secret name for the given node type.
+// In BYOC mode with WorkerCertificateSecretName set, returns the worker-specific
+// secret for worker nodes and CertificateSecretName for head nodes.
+// In BYOC mode without WorkerCertificateSecretName, returns CertificateSecretName
+// for both node types (shared-secret mode).
+// In auto-generate mode, returns the cert-manager prefix-based name.
+func GetTLSSecretName(clusterName string, nodeType rayv1.RayNodeType, spec ...rayv1.RayClusterSpec) string {
+	if len(spec) > 0 && IsMTLSBYOC(&spec[0]) {
+		opts := spec[0].MTLSOptions
+		if nodeType == rayv1.WorkerNode && opts.WorkerCertificateSecretName != nil && *opts.WorkerCertificateSecretName != "" {
+			return *opts.WorkerCertificateSecretName
+		}
+		return *opts.CertificateSecretName
+	}
+	if nodeType == rayv1.HeadNode {
+		return fmt.Sprintf("%s-%s", RayHeadSecretPrefix, clusterName)
+	}
+	return fmt.Sprintf("%s-%s", RayWorkerSecretPrefix, clusterName)
+}
+
 // GetRayClusterNameFromService returns the name of the RayCluster that the service points to
 func GetRayClusterNameFromService(svc *corev1.Service) string {
 	if svc == nil || svc.Spec.Selector == nil {

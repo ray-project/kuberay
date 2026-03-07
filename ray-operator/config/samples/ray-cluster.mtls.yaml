@@ -1,0 +1,48 @@
+# RayCluster with mutual TLS (mTLS) enabled using cert-manager.
+# Requires cert-manager to be installed in the cluster.
+# The operator automatically creates cert-manager Issuers and Certificates,
+# and injects TLS configuration (env vars, volume mounts) into Ray pods.
+# For manual TLS setup without cert-manager, see ray-cluster.tls.yaml.
+apiVersion: ray.io/v1
+kind: RayCluster
+metadata:
+  name: raycluster-mtls
+spec:
+  rayVersion: '2.52.0'
+  # Enable mTLS for Ray cluster internal communication.
+  # This creates a self-signed CA and issues certificates for head and worker pods.
+  enableMTLS: true
+  headGroupSpec:
+    rayStartParams:
+      dashboard-host: "0.0.0.0"
+    template:
+      spec:
+        containers:
+        - name: ray-head
+          image: rayproject/ray:2.52.0
+          resources:
+            limits:
+              cpu: "1"
+              memory: "2Gi"
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+  workerGroupSpecs:
+  - replicas: 1
+    minReplicas: 1
+    maxReplicas: 1
+    groupName: small-group
+    rayStartParams:
+      num-cpus: "1"
+    template:
+      spec:
+        containers:
+        - name: ray-worker
+          image: rayproject/ray:2.52.0
+          resources:
+            limits:
+              cpu: "1"
+              memory: "1Gi"
+            requests:
+              cpu: "500m"
+              memory: "1Gi"

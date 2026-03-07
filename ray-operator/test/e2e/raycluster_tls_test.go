@@ -1,0 +1,573 @@
+package e2e
+
+import (
+	"fmt"
+	"testing"
+	"time"
+
+	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
+	rayv1ac "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/ray/v1"
+	. "github.com/ray-project/kuberay/ray-operator/test/support"
+)
+
+// certManagerAvailable returns true if cert-manager CRDs are installed in the cluster.
+// Tests that require cert-manager call t.Skip() when this returns false.
+func certManagerAvailable(test Test) bool {
+	_, resources, err := test.Client().Core().Discovery().ServerGroupsAndResources()
+	if err != nil {
+		return false
+	}
+	for _, r := range resources {
+		if r.GroupVersion == "cert-manager.io/v1" {
+			return true
+		}
+	}
+	return false
+}
+
+// NewRayClusterSpecWithMTLS creates a RayClusterSpec with mTLS enabled (auto-generated certs).
+func NewRayClusterSpecWithMTLS() *rayv1ac.RayClusterSpecApplyConfiguration {
+	return NewRayClusterSpec().
+		WithEnableMTLS(true)
+}
+
+// verifyContainerTLSEnvVars asserts a container has the expected TLS environment variables.
+func verifyContainerTLSEnvVars(g Gomega, container *corev1.Container) {
+	envMap := make(map[string]string)
+	for _, env := range container.Env {
+		envMap[env.Name] = env.Value
+	}
+
+	g.Expect(envMap).To(HaveKeyWithValue(utils.RAY_USE_TLS, "1"),
+		"container %s should have RAY_USE_TLS=1", container.Name)
+	g.Expect(envMap).To(HaveKeyWithValue(utils.RAY_TLS_SERVER_CERT, utils.RayTLSCertMountPath+"/tls.crt"),
+		"container %s should have RAY_TLS_SERVER_CERT", container.Name)
+	g.Expect(envMap).To(HaveKeyWithValue(utils.RAY_TLS_SERVER_KEY, utils.RayTLSCertMountPath+"/tls.key"),
+		"container %s should have RAY_TLS_SERVER_KEY", container.Name)
+	g.Expect(envMap).To(HaveKeyWithValue(utils.RAY_TLS_CA_CERT, utils.RayTLSCertMountPath+"/ca.crt"),
+		"container %s should have RAY_TLS_CA_CERT", container.Name)
+}
+
+// verifyNoTLSEnvVars asserts a container does NOT have TLS environment variables.
+func verifyNoTLSEnvVars(g Gomega, container *corev1.Container) {
+	for _, env := range container.Env {
+		g.Expect(env.Name).NotTo(Equal(utils.RAY_USE_TLS),
+			"container %s should not have RAY_USE_TLS", container.Name)
+	}
+}
+
+// verifyTLSVolumeMount asserts the pod has a ray-tls volume backed by a Secret
+// and the container has a volume mount at the TLS mount path.
+func verifyTLSVolumeMount(g Gomega, pod *corev1.Pod, expectedSecretName string) {
+	// Find the ray-tls volume
+	var tlsVolume *corev1.Volume
+	for i := range pod.Spec.Volumes {
+		if pod.Spec.Volumes[i].Name == utils.RayTLSVolumeName {
+			tlsVolume = &pod.Spec.Volumes[i]
+			break
+		}
+	}
+	g.Expect(tlsVolume).NotTo(BeNil(), "pod %s should have a %s volume", pod.Name, utils.RayTLSVolumeName)
+	g.Expect(tlsVolume.Secret).NotTo(BeNil(), "volume %s should be a Secret volume", utils.RayTLSVolumeName)
+
+	if expectedSecretName != "" {
+		g.Expect(tlsVolume.Secret.SecretName).To(Equal(expectedSecretName),
+			"volume %s should reference secret %s", utils.RayTLSVolumeName, expectedSecretName)
+	}
+
+	// Verify the Ray container has the volume mount
+	rayContainer := pod.Spec.Containers[utils.RayContainerIndex]
+	var tlsMount *corev1.VolumeMount
+	for i := range rayContainer.VolumeMounts {
+		if rayContainer.VolumeMounts[i].Name == utils.RayTLSVolumeName {
+			tlsMount = &rayContainer.VolumeMounts[i]
+			break
+		}
+	}
+	g.Expect(tlsMount).NotTo(BeNil(), "container %s should have a %s volume mount", rayContainer.Name, utils.RayTLSVolumeName)
+	g.Expect(tlsMount.MountPath).To(Equal(utils.RayTLSCertMountPath),
+		"volume mount path should be %s", utils.RayTLSCertMountPath)
+}
+
+// verifyNoTLSVolume asserts the pod does NOT have a ray-tls volume.
+func verifyNoTLSVolume(g Gomega, pod *corev1.Pod) {
+	for _, vol := range pod.Spec.Volumes {
+		g.Expect(vol.Name).NotTo(Equal(utils.RayTLSVolumeName),
+			"pod %s should not have a %s volume", pod.Name, utils.RayTLSVolumeName)
+	}
+}
+
+// --- Test: Auto-Generate mTLS ---
+
+func TestRayClusterTLSAutoGenerate(t *testing.T) {
+	test := With(t)
+	g := NewWithT(t)
+
+	if !certManagerAvailable(test) {
+		t.Skip("cert-manager CRDs not found; skipping TLS auto-generate e2e test")
+	}
+
+	namespace := test.NewTestNamespace()
+
+	t.Run("mTLS auto-generate cluster becomes Ready", func(t *testing.T) {
+		t.Parallel()
+		g := NewWithT(t)
+
+		clusterName := "tls-autogen-mtls"
+		rayClusterAC := rayv1ac.RayCluster(clusterName, namespace.Name).
+			WithSpec(NewRayClusterSpecWithMTLS().WithRayVersion(GetRayVersion()))
+
+		rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
+		g.Expect(err).NotTo(HaveOccurred())
+		LogWithTimestamp(t, "Created RayCluster %s/%s with mTLS auto-generate", rayCluster.Namespace, rayCluster.Name)
+
+		// Wait for cluster to become Ready
+		g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutLong).
+			Should(WithTransform(RayClusterState, Equal(rayv1.Ready)))
+		LogWithTimestamp(t, "RayCluster %s is Ready", clusterName)
+
+		// Verify head pod is running
+		headPod, err := GetHeadPod(test, rayCluster)
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(headPod).NotTo(BeNil())
+		g.Expect(IsPodRunningAndReady(headPod)).To(BeTrue(), "head pod should be running and ready")
+
+		// Verify worker pods are running
+		workerPods, err := GetWorkerPods(test, rayCluster)
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(workerPods).NotTo(BeEmpty())
+		g.Expect(AllPodsRunningAndReady(workerPods)).To(BeTrue(), "all worker pods should be running and ready")
+	})
+
+	t.Run("mTLS auto-generate cert-manager resources created", func(t *testing.T) {
+		t.Parallel()
+		g := NewWithT(t)
+
+		clusterName := "tls-certmgr-res"
+		rayClusterAC := rayv1ac.RayCluster(clusterName, namespace.Name).
+			WithSpec(NewRayClusterSpecWithMTLS().WithRayVersion(GetRayVersion()))
+
+		rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
+		g.Expect(err).NotTo(HaveOccurred())
+
+		g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutLong).
+			Should(WithTransform(RayClusterState, Equal(rayv1.Ready)))
+
+		// Re-fetch to get the UID assigned by the API server.
+		rayCluster, err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Get(test.Ctx(), clusterName, metav1.GetOptions{})
+		g.Expect(err).NotTo(HaveOccurred())
+
+		// Verify cert-manager CA secret was created.
+		caSecretName := utils.GetCASecretName(clusterName, rayCluster.UID)
+		caSecret, err := test.Client().Core().CoreV1().Secrets(namespace.Name).Get(test.Ctx(), caSecretName, metav1.GetOptions{})
+		g.Expect(err).NotTo(HaveOccurred(), "CA secret %s should exist", caSecretName)
+		g.Expect(caSecret.Data).To(HaveKey("tls.crt"), "CA secret should have tls.crt")
+		g.Expect(caSecret.Data).To(HaveKey("tls.key"), "CA secret should have tls.key")
+		g.Expect(caSecret.Data).To(HaveKey("ca.crt"), "CA secret should have ca.crt")
+
+		// Verify head certificate secret was created by cert-manager.
+		headSecretName := fmt.Sprintf("%s-%s", utils.RayHeadSecretPrefix, clusterName)
+		headSecret, err := test.Client().Core().CoreV1().Secrets(namespace.Name).Get(test.Ctx(), headSecretName, metav1.GetOptions{})
+		g.Expect(err).NotTo(HaveOccurred(), "head secret %s should exist", headSecretName)
+		g.Expect(headSecret.Data).To(HaveKey("tls.crt"), "head secret should have tls.crt")
+		g.Expect(headSecret.Data).To(HaveKey("tls.key"), "head secret should have tls.key")
+		g.Expect(headSecret.Data).To(HaveKey("ca.crt"), "head secret should have ca.crt")
+
+		// Verify worker certificate secret was created by cert-manager.
+		workerSecretName := fmt.Sprintf("%s-%s", utils.RayWorkerSecretPrefix, clusterName)
+		workerSecret, err := test.Client().Core().CoreV1().Secrets(namespace.Name).Get(test.Ctx(), workerSecretName, metav1.GetOptions{})
+		g.Expect(err).NotTo(HaveOccurred(), "worker secret %s should exist", workerSecretName)
+		g.Expect(workerSecret.Data).To(HaveKey("tls.crt"), "worker secret should have tls.crt")
+		g.Expect(workerSecret.Data).To(HaveKey("tls.key"), "worker secret should have tls.key")
+		g.Expect(workerSecret.Data).To(HaveKey("ca.crt"), "worker secret should have ca.crt")
+
+		LogWithTimestamp(t, "Cert-manager CA, head, and worker secrets verified for cluster %s", clusterName)
+	})
+
+	t.Run("mTLS auto-generate pod TLS configuration", func(t *testing.T) {
+		t.Parallel()
+		g := NewWithT(t)
+
+		clusterName := "tls-pod-config"
+		rayClusterAC := rayv1ac.RayCluster(clusterName, namespace.Name).
+			WithSpec(NewRayClusterSpecWithMTLS().WithRayVersion(GetRayVersion()))
+
+		rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
+		g.Expect(err).NotTo(HaveOccurred())
+
+		g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutLong).
+			Should(WithTransform(RayClusterState, Equal(rayv1.Ready)))
+
+		// Auto-generate mode: head pod mounts the head secret, workers mount the worker secret.
+		headSecretName := fmt.Sprintf("%s-%s", utils.RayHeadSecretPrefix, clusterName)
+		workerSecretName := fmt.Sprintf("%s-%s", utils.RayWorkerSecretPrefix, clusterName)
+
+		// Verify head pod configuration
+		headPod, err := GetHeadPod(test, rayCluster)
+		g.Expect(err).NotTo(HaveOccurred())
+		verifyContainerTLSEnvVars(g, &headPod.Spec.Containers[utils.RayContainerIndex])
+		verifyTLSVolumeMount(g, headPod, headSecretName)
+
+		// Verify worker pod configuration
+		workerPods, err := GetWorkerPods(test, rayCluster)
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(workerPods).NotTo(BeEmpty())
+		for i := range workerPods {
+			verifyContainerTLSEnvVars(g, &workerPods[i].Spec.Containers[utils.RayContainerIndex])
+			verifyTLSVolumeMount(g, &workerPods[i], workerSecretName)
+		}
+
+		LogWithTimestamp(t, "Pod TLS configuration verified for cluster %s", clusterName)
+	})
+
+	t.Run("mTLS auto-generate Ray job submission succeeds", func(t *testing.T) {
+		t.Parallel()
+		g := NewWithT(t)
+
+		clusterName := "tls-job-submit"
+		rayClusterAC := rayv1ac.RayCluster(clusterName, namespace.Name).
+			WithSpec(NewRayClusterSpecWithMTLS().WithRayVersion(GetRayVersion()))
+
+		rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
+		g.Expect(err).NotTo(HaveOccurred())
+
+		g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutLong).
+			Should(WithTransform(RayClusterState, Equal(rayv1.Ready)))
+
+		headPod, err := GetHeadPod(test, rayCluster)
+		g.Expect(err).NotTo(HaveOccurred())
+
+		// Submit a simple Ray job and verify it completes.
+		// This proves head-worker mTLS communication is functional.
+		submissionID := fmt.Sprintf("mtls-test-job-%d", time.Now().Unix())
+		submitCmd := []string{
+			"bash", "-c",
+			fmt.Sprintf(
+				"ray job submit --address http://127.0.0.1:8265 --submission-id %s --no-wait -- python -c 'import ray; ray.init(); print(ray.cluster_resources())'",
+				submissionID,
+			),
+		}
+		stdout, _ := ExecPodCmd(test, headPod, headPod.Spec.Containers[utils.RayContainerIndex].Name, submitCmd)
+		g.Expect(stdout.String()).To(ContainSubstring(submissionID), "job submission should succeed")
+
+		// Wait for the job to complete
+		g.Eventually(func(gg Gomega) {
+			statusCmd := []string{
+				"bash", "-c",
+				fmt.Sprintf("ray job status --address http://127.0.0.1:8265 %s", submissionID),
+			}
+			stdout, _ := ExecPodCmd(test, headPod, headPod.Spec.Containers[utils.RayContainerIndex].Name, statusCmd)
+			gg.Expect(stdout.String()).To(ContainSubstring("SUCCEEDED"))
+		}, TestTimeoutMedium).Should(Succeed())
+
+		LogWithTimestamp(t, "Ray job submission succeeded with mTLS for cluster %s", clusterName)
+	})
+
+	_ = test
+	_ = g
+}
+
+// --- Test: Edge Cases ---
+
+func TestRayClusterTLSEdgeCases(t *testing.T) {
+	test := With(t)
+	g := NewWithT(t)
+
+	namespace := test.NewTestNamespace()
+
+	t.Run("TLS disabled has no TLS resources", func(t *testing.T) {
+		t.Parallel()
+		g := NewWithT(t)
+
+		clusterName := "tls-disabled"
+		rayClusterAC := rayv1ac.RayCluster(clusterName, namespace.Name).
+			WithSpec(NewRayClusterSpec().WithRayVersion(GetRayVersion()))
+
+		rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
+		g.Expect(err).NotTo(HaveOccurred())
+
+		g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutLong).
+			Should(WithTransform(RayClusterState, Equal(rayv1.Ready)))
+
+		// Verify NO TLS env vars or volumes on head pod
+		headPod, err := GetHeadPod(test, rayCluster)
+		g.Expect(err).NotTo(HaveOccurred())
+		verifyNoTLSEnvVars(g, &headPod.Spec.Containers[utils.RayContainerIndex])
+		verifyNoTLSVolume(g, headPod)
+
+		// Verify NO TLS env vars or volumes on worker pods
+		workerPods, err := GetWorkerPods(test, rayCluster)
+		g.Expect(err).NotTo(HaveOccurred())
+		for i := range workerPods {
+			verifyNoTLSEnvVars(g, &workerPods[i].Spec.Containers[utils.RayContainerIndex])
+			verifyNoTLSVolume(g, &workerPods[i])
+		}
+
+		// Verify no CA secret was created for this cluster (list by prefix since
+		// the CA secret name includes a UID suffix we don't know for disabled clusters).
+		secretList, err := test.Client().Core().CoreV1().Secrets(namespace.Name).List(test.Ctx(), metav1.ListOptions{})
+		g.Expect(err).NotTo(HaveOccurred())
+		for _, s := range secretList.Items {
+			g.Expect(s.Name).NotTo(HavePrefix(clusterName+"-"+utils.RayCASecretPrefix),
+				"CA secret should NOT exist for TLS-disabled cluster")
+		}
+
+		LogWithTimestamp(t, "TLS disabled cluster %s verified: no TLS resources", clusterName)
+	})
+
+	t.Run("mTLS with multiple worker groups", func(t *testing.T) {
+		if !certManagerAvailable(test) {
+			t.Skip("cert-manager CRDs not found; skipping auto-generate mTLS test")
+		}
+		t.Parallel()
+		g := NewWithT(t)
+
+		clusterName := "tls-multi-wg"
+		spec := rayv1ac.RayClusterSpec().
+			WithRayVersion(GetRayVersion()).
+			WithEnableMTLS(true).
+			WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
+				WithRayStartParams(map[string]string{"dashboard-host": "0.0.0.0"}).
+				WithTemplate(HeadPodTemplateApplyConfiguration())).
+			WithWorkerGroupSpecs(
+				rayv1ac.WorkerGroupSpec().
+					WithReplicas(1).WithMinReplicas(1).WithMaxReplicas(1).
+					WithGroupName("group-a").
+					WithRayStartParams(map[string]string{"num-cpus": "1"}).
+					WithTemplate(WorkerPodTemplateApplyConfiguration()),
+				rayv1ac.WorkerGroupSpec().
+					WithReplicas(1).WithMinReplicas(1).WithMaxReplicas(1).
+					WithGroupName("group-b").
+					WithRayStartParams(map[string]string{"num-cpus": "1"}).
+					WithTemplate(WorkerPodTemplateApplyConfiguration()),
+			)
+
+		rayClusterAC := rayv1ac.RayCluster(clusterName, namespace.Name).WithSpec(spec)
+		rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
+		g.Expect(err).NotTo(HaveOccurred())
+		LogWithTimestamp(t, "Created mTLS RayCluster %s with 2 worker groups", clusterName)
+
+		g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutLong).
+			Should(WithTransform(RayClusterState, Equal(rayv1.Ready)))
+
+		// All worker pods from both groups mount the same cert-manager worker secret.
+		workerSecretName := fmt.Sprintf("%s-%s", utils.RayWorkerSecretPrefix, clusterName)
+
+		groupAPods, err := GetGroupPods(test, rayCluster, "group-a")
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(groupAPods).NotTo(BeEmpty(), "group-a should have worker pods")
+		for i := range groupAPods {
+			verifyContainerTLSEnvVars(g, &groupAPods[i].Spec.Containers[utils.RayContainerIndex])
+			verifyTLSVolumeMount(g, &groupAPods[i], workerSecretName)
+		}
+
+		groupBPods, err := GetGroupPods(test, rayCluster, "group-b")
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(groupBPods).NotTo(BeEmpty(), "group-b should have worker pods")
+		for i := range groupBPods {
+			verifyContainerTLSEnvVars(g, &groupBPods[i].Spec.Containers[utils.RayContainerIndex])
+			verifyTLSVolumeMount(g, &groupBPods[i], workerSecretName)
+		}
+
+		LogWithTimestamp(t, "Multiple worker groups TLS verified for cluster %s", clusterName)
+	})
+
+	t.Run("mTLS cluster deletion cleans up cert-manager resources", func(t *testing.T) {
+		if !certManagerAvailable(test) {
+			t.Skip("cert-manager CRDs not found; skipping auto-generate mTLS test")
+		}
+		t.Parallel()
+		g := NewWithT(t)
+
+		clusterName := "tls-cleanup"
+		rayClusterAC := rayv1ac.RayCluster(clusterName, namespace.Name).
+			WithSpec(NewRayClusterSpecWithMTLS().WithRayVersion(GetRayVersion()))
+
+		rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
+		g.Expect(err).NotTo(HaveOccurred())
+
+		g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutLong).
+			Should(WithTransform(RayClusterState, Equal(rayv1.Ready)))
+
+		// Re-fetch to get the UID assigned by the API server.
+		rayCluster, err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Get(test.Ctx(), clusterName, metav1.GetOptions{})
+		g.Expect(err).NotTo(HaveOccurred())
+
+		// Verify secrets exist before deletion.
+		caSecretName := utils.GetCASecretName(clusterName, rayCluster.UID)
+		headSecretName := fmt.Sprintf("%s-%s", utils.RayHeadSecretPrefix, clusterName)
+		workerSecretName := fmt.Sprintf("%s-%s", utils.RayWorkerSecretPrefix, clusterName)
+
+		_, err = test.Client().Core().CoreV1().Secrets(namespace.Name).Get(test.Ctx(), caSecretName, metav1.GetOptions{})
+		g.Expect(err).NotTo(HaveOccurred(), "CA secret should exist before deletion")
+		_, err = test.Client().Core().CoreV1().Secrets(namespace.Name).Get(test.Ctx(), headSecretName, metav1.GetOptions{})
+		g.Expect(err).NotTo(HaveOccurred(), "head secret should exist before deletion")
+
+		// Delete the RayCluster
+		err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Delete(test.Ctx(), clusterName, metav1.DeleteOptions{})
+		g.Expect(err).NotTo(HaveOccurred())
+		LogWithTimestamp(t, "Deleted RayCluster %s", clusterName)
+
+		// Verify all TLS secrets are garbage-collected via ownerRef.
+		g.Eventually(func(gg Gomega) {
+			_, err := test.Client().Core().CoreV1().Secrets(namespace.Name).Get(test.Ctx(), caSecretName, metav1.GetOptions{})
+			gg.Expect(err).To(HaveOccurred(), "CA secret should be cleaned up after RayCluster deletion")
+			_, err = test.Client().Core().CoreV1().Secrets(namespace.Name).Get(test.Ctx(), headSecretName, metav1.GetOptions{})
+			gg.Expect(err).To(HaveOccurred(), "head secret should be cleaned up after RayCluster deletion")
+			_, err = test.Client().Core().CoreV1().Secrets(namespace.Name).Get(test.Ctx(), workerSecretName, metav1.GetOptions{})
+			gg.Expect(err).To(HaveOccurred(), "worker secret should be cleaned up after RayCluster deletion")
+		}, TestTimeoutMedium).Should(Succeed())
+
+		LogWithTimestamp(t, "Cert-manager resources cleaned up after deletion of cluster %s", clusterName)
+	})
+
+	// BYOC (Bring Your Own Certificate): user-provided secret must never be deleted by the operator.
+	t.Run("mTLS BYOC cluster deletion leaves user secret intact", func(t *testing.T) {
+		t.Parallel()
+		g := NewWithT(t)
+
+		byocSecretName := "byoc-e2e-user-secret" // #nosec G101 -- test variable name, not a credential
+		// Placeholder cert data; BYOC only requires the keys to exist. Cluster may not become Ready.
+		userSecret := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{Name: byocSecretName, Namespace: namespace.Name},
+			Data: map[string][]byte{
+				"tls.crt": []byte("placeholder-cert"),
+				"tls.key": []byte("placeholder-key"),
+				"ca.crt":  []byte("placeholder-ca"),
+			},
+		}
+		_, err := test.Client().Core().CoreV1().Secrets(namespace.Name).Create(test.Ctx(), userSecret, metav1.CreateOptions{})
+		g.Expect(err).NotTo(HaveOccurred())
+		LogWithTimestamp(t, "Created BYOC user secret %s", byocSecretName)
+
+		clusterName := "tls-byoc-delete"
+		spec := rayv1ac.RayClusterSpec().
+			WithRayVersion(GetRayVersion()).
+			WithEnableMTLS(true).
+			WithMTLSOptions(rayv1ac.MTLSOptions().WithCertificateSecretName(byocSecretName))
+		rayClusterAC := rayv1ac.RayCluster(clusterName, namespace.Name).WithSpec(spec)
+		_, err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
+		g.Expect(err).NotTo(HaveOccurred())
+		LogWithTimestamp(t, "Created BYOC RayCluster %s", clusterName)
+
+		// Delete the RayCluster. Operator must not delete the user's secret.
+		err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Delete(test.Ctx(), clusterName, metav1.DeleteOptions{})
+		g.Expect(err).NotTo(HaveOccurred())
+
+		// Wait for RayCluster to be gone so reconciliation has run.
+		g.Eventually(func(gg Gomega) {
+			_, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Get(test.Ctx(), clusterName, metav1.GetOptions{})
+			gg.Expect(err).To(HaveOccurred(), "RayCluster should be deleted")
+		}, TestTimeoutMedium).Should(Succeed())
+
+		// User secret must still exist (operator never deletes BYOC secrets).
+		_, err = test.Client().Core().CoreV1().Secrets(namespace.Name).Get(test.Ctx(), byocSecretName, metav1.GetOptions{})
+		g.Expect(err).NotTo(HaveOccurred(), "BYOC user secret %s must still exist after RayCluster deletion", byocSecretName)
+		LogWithTimestamp(t, "BYOC user secret %s intact after cluster deletion", byocSecretName)
+	})
+
+	t.Run("mTLS with autoscaler enabled", func(t *testing.T) {
+		if !certManagerAvailable(test) {
+			t.Skip("cert-manager CRDs not found; skipping auto-generate mTLS test")
+		}
+		t.Parallel()
+		g := NewWithT(t)
+
+		clusterName := "tls-autoscaler"
+		spec := NewRayClusterSpecWithMTLS().
+			WithRayVersion(GetRayVersion()).
+			WithEnableInTreeAutoscaling(true)
+
+		rayClusterAC := rayv1ac.RayCluster(clusterName, namespace.Name).WithSpec(spec)
+		rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
+		g.Expect(err).NotTo(HaveOccurred())
+		LogWithTimestamp(t, "Created mTLS RayCluster %s with autoscaler enabled", clusterName)
+
+		g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutLong).
+			Should(WithTransform(RayClusterState, Equal(rayv1.Ready)))
+
+		headPod, err := GetHeadPod(test, rayCluster)
+		g.Expect(err).NotTo(HaveOccurred())
+
+		// The autoscaler sidecar is injected as a second container.
+		// Find it and verify it has TLS config too.
+		g.Expect(len(headPod.Spec.Containers)).To(BeNumerically(">", 1),
+			"head pod should have more than 1 container when autoscaler is enabled")
+
+		// Verify the Ray container has TLS
+		verifyContainerTLSEnvVars(g, &headPod.Spec.Containers[utils.RayContainerIndex])
+
+		// Verify the autoscaler sidecar also has TLS env vars
+		for i := 1; i < len(headPod.Spec.Containers); i++ {
+			container := &headPod.Spec.Containers[i]
+			verifyContainerTLSEnvVars(g, container)
+			LogWithTimestamp(t, "Autoscaler container %s has TLS env vars", container.Name)
+		}
+
+		// Verify TLS volume mount exists on the pod with the head secret.
+		headSecretName := fmt.Sprintf("%s-%s", utils.RayHeadSecretPrefix, clusterName)
+		verifyTLSVolumeMount(g, headPod, headSecretName)
+
+		LogWithTimestamp(t, "Autoscaler TLS verified for cluster %s", clusterName)
+	})
+
+	t.Run("Init container TLS configuration", func(t *testing.T) {
+		if !certManagerAvailable(test) {
+			t.Skip("cert-manager CRDs not found; skipping auto-generate mTLS test")
+		}
+		t.Parallel()
+		g := NewWithT(t)
+
+		clusterName := "tls-initcontainer"
+		rayClusterAC := rayv1ac.RayCluster(clusterName, namespace.Name).
+			WithSpec(NewRayClusterSpecWithMTLS().WithRayVersion(GetRayVersion()))
+
+		rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
+		g.Expect(err).NotTo(HaveOccurred())
+
+		g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutLong).
+			Should(WithTransform(RayClusterState, Equal(rayv1.Ready)))
+
+		// Worker pods should have init containers (wait-gcs-ready) with TLS env vars
+		workerPods, err := GetWorkerPods(test, rayCluster)
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(workerPods).NotTo(BeEmpty())
+
+		for _, pod := range workerPods {
+			g.Expect(pod.Spec.InitContainers).NotTo(BeEmpty(),
+				"worker pod %s should have init containers", pod.Name)
+
+			// All init containers (e.g. wait-gcs-ready) should have TLS config.
+			for _, initContainer := range pod.Spec.InitContainers {
+				envMap := make(map[string]string)
+				for _, env := range initContainer.Env {
+					envMap[env.Name] = env.Value
+				}
+				g.Expect(envMap).To(HaveKeyWithValue(utils.RAY_USE_TLS, "1"),
+					"init container %s should have RAY_USE_TLS=1", initContainer.Name)
+
+				// Verify init container has TLS volume mount
+				var hasMount bool
+				for _, mount := range initContainer.VolumeMounts {
+					if mount.Name == utils.RayTLSVolumeName {
+						hasMount = true
+						g.Expect(mount.MountPath).To(Equal(utils.RayTLSCertMountPath))
+						break
+					}
+				}
+				g.Expect(hasMount).To(BeTrue(),
+					"init container %s should have %s volume mount", initContainer.Name, utils.RayTLSVolumeName)
+			}
+		}
+
+		LogWithTimestamp(t, "Init container TLS configuration verified for cluster %s", clusterName)
+	})
+
+	_ = test
+	_ = g
+}
