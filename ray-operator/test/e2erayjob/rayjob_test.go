@@ -612,8 +612,9 @@ env_vars:
 		rayJobAC := rayv1ac.RayJob("ttl-waiting", namespace.Name).
 			WithSpec(rayv1ac.RayJobSpec().
 				WithSubmissionMode(rayv1.InteractiveMode).
+				WithRayClusterSpec(NewRayClusterSpec()).
 				WithShutdownAfterJobFinishes(true).
-				WithPreRunningDeadlineSeconds(30)) // larger value to reach Initializing state first
+				WithPreRunningDeadlineSeconds(60)) // larger value to reach Initializing state first
 
 		rayJob, err := test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
 		g.Expect(err).NotTo(HaveOccurred())
