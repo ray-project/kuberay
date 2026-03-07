@@ -194,6 +194,9 @@ spec:
 | rbacEnable | bool | `true` | If rbacEnable is set to false, no RBAC resources will be created, including the Role for leader election, the Role for Pods and Services, and so on. |
 | crNamespacedRbacEnable | bool | `true` | When crNamespacedRbacEnable is set to true, the KubeRay operator will create a Role for RayCluster preparation (e.g., Pods, Services) and a corresponding RoleBinding for each namespace listed in the "watchNamespace" parameter. Please note that even if crNamespacedRbacEnable is set to false, the Role and RoleBinding for leader election will still be created.  Note: (1) This variable is only effective when rbacEnable and singleNamespaceInstall are both set to true. (2) In most cases, it should be set to true, unless you are using a Kubernetes cluster managed by GitOps tools such as ArgoCD. |
 | singleNamespaceInstall | bool | `false` | When singleNamespaceInstall is true: - Install namespaced RBAC resources such as Role and RoleBinding instead of cluster-scoped ones like ClusterRole and ClusterRoleBinding so that   the chart can be installed by users with permissions restricted to a single namespace.   (Please note that this excludes the CRDs, which can only be installed at the cluster scope.) - If "watchNamespace" is not set, the KubeRay operator will, by default, only listen   to resource events within its own namespace. |
+| asyncJobInfoQueryInterval | string | `"3s"` |  |
+| asyncJobInfoQueryWorkerSize | int | `8` |  |
+| asyncJobInfoQueryCacheExpiry | string | `"10m"` |  |
 | env | string | `nil` | Environment variables. |
 | resources | object | `{"limits":{"cpu":"100m","memory":"512Mi"}}` | Resource requests and limits for containers. |
 | livenessProbe.initialDelaySeconds | int | `10` |  |
