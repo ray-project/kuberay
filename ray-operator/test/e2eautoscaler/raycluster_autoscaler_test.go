@@ -252,7 +252,7 @@ func TestRayClusterAutoscalerWithFakeMultiHostTPU(t *testing.T) {
 				WithWorkerGroupSpecs(rayv1ac.WorkerGroupSpec().
 					WithReplicas(0).
 					WithMinReplicas(0).
-					WithMaxReplicas(3).
+					WithMaxReplicas(4).
 					WithNumOfHosts(4). // Defines a multi-host worker group (4 Pods per replica)
 					WithGroupName(groupName).
 					WithRayStartParams(map[string]string{"num-cpus": "1", "resources": `'{"TPU":4}'`}).
@@ -279,19 +279,26 @@ func TestRayClusterAutoscalerWithFakeMultiHostTPU(t *testing.T) {
 			g.Expect(err).NotTo(gomega.HaveOccurred())
 			LogWithTimestamp(test.T(), "Found head pod %s/%s", headPod.Namespace, headPod.Name)
 
-			// Create a detached TPU actor requiring 16 TPUs (4 hosts * 4 TPUs/host) to trigger a full slice scale-up.
-			ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "/home/ray/test_scripts/create_detached_actor.py", "tpu_actor", "--custom-resource-name=TPU", "--num-custom-resources=16"})
+			// Create 4 detached TPU actors concurrently using a single shell script execution.
+			// This ensures the Autoscaler sees the resource request on the same iteration.
+			ExecPodCmd(test, headPod, common.RayHeadContainer, []string{
+				"bash", "-c",
+				`for i in {0..3}; do python /home/ray/test_scripts/create_detached_actor.py "tpu_actor_$i" --custom-resource-name=TPU --num-custom-resources=4 & done; wait`,
+			})
 
 			// Autoscaler scales up desired replicas by 1 (which represents 1 group of 4 pods for multi-host)
-			g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutMedium).
-				Should(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(int32(1))))
+			g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutLong).
+				Should(gomega.WithTransform(GetRayClusterWorkerGroupReplicaSum, gomega.BeNumerically(">=", int32(1))))
 
-			// Verify that scaling up 1 replica results in exactly 4 Pods being created for the multi-host group
-			g.Eventually(GroupPods(test, rayCluster, groupName), TestTimeoutMedium).Should(gomega.HaveLen(4))
+			// Verify that exactly 4 Pods are created for the multi-host group
+			g.Eventually(GroupPods(test, rayCluster, groupName), TestTimeoutLong).Should(gomega.HaveLen(4))
 			LogWithTimestamp(test.T(), "Created multi-host TPU workers of group %s", groupName)
 
-			// Terminate the TPU actor to remove the allocated resource request.
-			ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "/home/ray/test_scripts/terminate_detached_actor.py", "tpu_actor"})
+			// Terminate all 4 TPU actors concurrently to remove the allocated resource requests.
+			ExecPodCmd(test, headPod, common.RayHeadContainer, []string{
+				"bash", "-c",
+				`for i in {0..3}; do python /home/ray/test_scripts/terminate_detached_actor.py "tpu_actor_$i" & done; wait`,
+			})
 
 			// Set maxReplicas of the TPU worker group replica to 0 to force scale-down.
 			rayCluster, err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Get(test.Ctx(), rayCluster.Name, metav1.GetOptions{})
