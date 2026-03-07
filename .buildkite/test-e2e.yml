@@ -1,6 +1,6 @@
 - label: 'Test RayCluster and GCS E2E (nightly operator)'
   instance_size: large
-  image: golang:1.25-bookworm
+  image: golang:1.26-bookworm
   commands:
     - source .buildkite/setup-env.sh
     - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
@@ -20,7 +20,7 @@
 
 - label: 'Test RayJob E2E (nightly operator)'
   instance_size: large
-  image: golang:1.25-bookworm
+  image: golang:1.26-bookworm
   commands:
     - source .buildkite/setup-env.sh
     - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
@@ -40,7 +40,7 @@
 
 - label: 'Test E2E rayservice (nightly operator)'
   instance_size: large
-  image: golang:1.25-bookworm
+  image: golang:1.26-bookworm
   commands:
     - source .buildkite/setup-env.sh
     - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
@@ -60,7 +60,7 @@
 
 - label: 'Test RayService Incremental Upgrade E2E (nightly operator)'
   instance_size: large
-  image: golang:1.25-bookworm
+  image: golang:1.26-bookworm
   commands:
     - source .buildkite/setup-env.sh
     - kind create cluster --wait 900s --config ./ci/kind-config-buildkite-1-29.yml
@@ -99,7 +99,7 @@
 
 - label: 'Test Autoscaler E2E Part 1 (nightly operator)'
   instance_size: large
-  image: golang:1.25-bookworm
+  image: golang:1.26-bookworm
   commands:
     - source .buildkite/setup-env.sh
     - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
@@ -119,7 +119,7 @@
 
 - label: 'Test Autoscaler E2E Part 2 (nightly operator)'
   instance_size: large
-  image: golang:1.25-bookworm
+  image: golang:1.26-bookworm
   commands:
     - source .buildkite/setup-env.sh
     - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
@@ -139,7 +139,7 @@
 
 - label: 'Test E2E Operator Version Upgrade (v1.5.1)'
   instance_size: large
-  image: golang:1.25-bookworm
+  image: golang:1.26-bookworm
   commands:
     - source .buildkite/setup-env.sh
     - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
@@ -158,7 +158,7 @@
 
 - label: 'Test Apiserver E2E (nightly operator)'
   instance_size: large
-  image: golang:1.25-bookworm
+  image: golang:1.26-bookworm
   commands:
     - source .buildkite/setup-env.sh
     - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
@@ -181,7 +181,7 @@
 
 - label: 'Test RayJob Light Weight Submitter E2E (nightly operator)'
   instance_size: large
-  image: golang:1.25-bookworm
+  image: golang:1.26-bookworm
   commands:
     - source .buildkite/setup-env.sh
     - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
@@ -202,7 +202,7 @@
 
 - label: 'Test RayCronJob E2E (nightly operator)'
   instance_size: large
-  image: golang:1.25-bookworm
+  image: golang:1.26-bookworm
   commands:
     - source .buildkite/setup-env.sh
     - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
