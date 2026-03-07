@@ -2156,10 +2156,10 @@ func testDeadClusterMetadata(test Test, g *WithT, namespace *corev1.Namespace, s
 	LogWithTimestamp(test.T(), "Waiting for cluster metadata to appear at S3 key: %s", metaKey)
 
 	g.Eventually(func(gg Gomega) {
-			_, err := s3Client.HeadObject(test.Ctx(), &s3.HeadObjectInput{
-				Bucket: aws.String(S3BucketName),
-				Key:    aws.String(metaKey),
-			})
+		_, err := s3Client.HeadObject(test.Ctx(), &s3.HeadObjectInput{
+			Bucket: aws.String(S3BucketName),
+			Key:    aws.String(metaKey),
+		})
 		gg.Expect(err).NotTo(HaveOccurred())
 	}, TestTimeoutMedium).Should(Succeed())
 
@@ -2239,10 +2239,10 @@ func testDeadClusterPlacementGroups(test Test, g *WithT, namespace *corev1.Names
 	LogWithTimestamp(test.T(), "Waiting for placement groups data to appear at S3 key: %s", pgKey)
 
 	g.Eventually(func(gg Gomega) {
-			_, err := s3Client.HeadObject(test.Ctx(), &s3.HeadObjectInput{
-				Bucket: aws.String(S3BucketName),
-				Key:    aws.String(pgKey),
-			})
+		_, err := s3Client.HeadObject(test.Ctx(), &s3.HeadObjectInput{
+			Bucket: aws.String(S3BucketName),
+			Key:    aws.String(pgKey),
+		})
 		gg.Expect(err).NotTo(HaveOccurred())
 	}, TestTimeoutMedium).Should(Succeed())
 
@@ -3369,7 +3369,7 @@ func testEventsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namesp
 // 8. Verify /timezone returns valid JSON from storage with non-empty 'offset' and 'value'
 // 9. Verify dead cluster offset and value match the live cluster values
 // 10. Delete S3 bucket to ensure test isolation
-func testLiveAndDeadClusterTimezone(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testLiveAndDeadClusterTimezone(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyHistoryServer(test, g, namespace, "")
 	historyServerURL := GetHistoryServerURL(test, g, namespace)
