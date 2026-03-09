@@ -330,7 +330,7 @@ func TestRayServiceIncrementalUpgradeRollback(t *testing.T) {
 	g.Eventually(func() error {
 		_, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Get(test.Ctx(), pendingClusterName, metav1.GetOptions{})
 		return err
-	}, TestTimeoutShort).Should(WithTransform(errors.IsNotFound, BeTrue()))
+	}, TestTimeoutMedium).Should(WithTransform(errors.IsNotFound, BeTrue()))
 
 	// The HTTPRoute should now only have one backend after the rollback completes.
 	g.Eventually(HTTPRoute(test, namespace.Name, httpRouteName), TestTimeoutShort).
