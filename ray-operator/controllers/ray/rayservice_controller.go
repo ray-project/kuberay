@@ -168,7 +168,8 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	// Determine the rollback state immediately before making serving decisions.
 	if utils.IsIncrementalUpgradeEnabled(&rayServiceInstance.Spec) {
 		// If an upgrade is in progress, check if rollback is necessary.
-		if activeRayClusterInstance != nil && pendingRayClusterInstance != nil {
+		isUpgradeInProgress := meta.IsStatusConditionTrue(rayServiceInstance.Status.Conditions, string(rayv1.UpgradeInProgress))
+		if isUpgradeInProgress && activeRayClusterInstance != nil && pendingRayClusterInstance != nil {
 			if err := r.reconcileRollbackState(ctx, rayServiceInstance, activeRayClusterInstance, pendingRayClusterInstance); err != nil {
 				return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
 			}
@@ -389,31 +390,6 @@ func (r *RayServiceReconciler) calculateStatus(
 
 	rayServiceInstance.Status.ObservedGeneration = rayServiceInstance.ObjectMeta.Generation
 
-	if meta.IsStatusConditionTrue(rayServiceInstance.Status.Conditions, string(rayv1.RollbackInProgress)) {
-		activeStatus := &rayServiceInstance.Status.ActiveServiceStatus
-		pendingStatus := &rayServiceInstance.Status.PendingServiceStatus
-
-		// A rollback is complete when the active cluster is back at 100% TargetCapacity and TrafficRoutedPercent,
-		// and the pending cluster is at 0% TargetCapacity and TrafficRoutedPercent.
-		if ptr.Deref(activeStatus.TargetCapacity, -1) == 100 &&
-			ptr.Deref(activeStatus.TrafficRoutedPercent, -1) == 100 &&
-			ptr.Deref(pendingStatus.TargetCapacity, -1) == 0 &&
-			ptr.Deref(pendingStatus.TrafficRoutedPercent, -1) == 0 {
-
-			logger.Info("Rollback to original cluster is complete. Cleaning up pending cluster from prior upgrade.")
-
-			// Clear the RayService pending service status to clean up the pending cluster.
-			rayServiceInstance.Status.PendingServiceStatus = rayv1.RayServiceStatus{}
-			pendingCluster = nil
-			pendingClusterServeApplications = nil
-
-			meta.RemoveStatusCondition(&rayServiceInstance.Status.Conditions, string(rayv1.RollbackInProgress))
-
-			// Ensure the upgrade state machine resets after a successful rollback.
-			setCondition(rayServiceInstance, rayv1.UpgradeInProgress, metav1.ConditionFalse, rayv1.NoPendingCluster, "Rollback complete, active Ray cluster exists and no pending Ray cluster")
-		}
-	}
-
 	// Update RayClusterStatus in RayService status.
 	var activeClusterStatus, pendingClusterStatus rayv1.RayClusterStatus
 	if activeCluster != nil {
@@ -458,6 +434,30 @@ func (r *RayServiceReconciler) calculateStatus(
 		}
 		// Reconcile serving status and promotion logic for all upgrade strategies.
 		isPendingClusterServing = reconcilePromotionAndServingStatus(ctx, headSvc, serveSvc, rayServiceInstance, pendingCluster)
+	}
+
+	if meta.IsStatusConditionTrue(rayServiceInstance.Status.Conditions, string(rayv1.RollbackInProgress)) {
+		activeStatus := &rayServiceInstance.Status.ActiveServiceStatus
+		pendingStatus := &rayServiceInstance.Status.PendingServiceStatus
+
+		// A rollback is complete when the active cluster is back at 100% TargetCapacity and TrafficRoutedPercent,
+		// and the pending cluster is at 0% TargetCapacity and TrafficRoutedPercent.
+		if ptr.Deref(activeStatus.TargetCapacity, -1) == 100 &&
+			ptr.Deref(activeStatus.TrafficRoutedPercent, -1) == 100 &&
+			ptr.Deref(pendingStatus.TargetCapacity, -1) == 0 &&
+			ptr.Deref(pendingStatus.TrafficRoutedPercent, -1) == 0 {
+
+			logger.Info("Rollback to original cluster is complete. Cleaning up pending cluster from prior upgrade.")
+
+			// Clear the RayService pending service status to clean up the pending cluster.
+			rayServiceInstance.Status.PendingServiceStatus = rayv1.RayServiceStatus{}
+			pendingCluster = nil
+
+			meta.RemoveStatusCondition(&rayServiceInstance.Status.Conditions, string(rayv1.RollbackInProgress))
+
+			// Ensure the upgrade state machine resets after a successful rollback.
+			setCondition(rayServiceInstance, rayv1.UpgradeInProgress, metav1.ConditionFalse, rayv1.NoPendingCluster, "Rollback complete, active Ray cluster exists and no pending Ray cluster")
+		}
 	}
 
 	if shouldPrepareNewCluster(ctx, rayServiceInstance, activeCluster, pendingCluster, isPendingClusterServing) {
@@ -918,7 +918,7 @@ func (r *RayServiceReconciler) reconcileHTTPRoute(ctx context.Context, rayServic
 	}
 
 	// If HTTPRoute already exists, check if update is needed
-	if !reflect.DeepEqual(existingHTTPRoute.Spec, desiredHTTPRoute.Spec) {
+	if !utils.IsHTTPRouteEqual(existingHTTPRoute, desiredHTTPRoute) {
 		logger.Info("Updating existing HTTPRoute", "name", desiredHTTPRoute.Name)
 		existingHTTPRoute.Spec = desiredHTTPRoute.Spec
 		if err := r.Update(ctx, existingHTTPRoute); err != nil {
