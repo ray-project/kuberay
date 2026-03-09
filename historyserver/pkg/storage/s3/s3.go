@@ -72,7 +72,6 @@ func (r *RayLogsHandler) CreateDirectory(d string) error {
 			Bucket:        aws.String(r.S3Bucket),
 			Key:           aws.String(objectDir),
 			Body:          bytes.NewReader([]byte("")),
-			ContentLength: aws.Int64(0),
 		})
 		if err != nil {
 			logrus.Errorf("Failed to create directory '%s': %v", objectDir, err)
