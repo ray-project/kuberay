@@ -89,6 +89,7 @@ type RayClusterReconcilerOptions struct {
 	WorkerSidecarContainers  []corev1.Container
 	DefaultContainerEnvs     []corev1.EnvVar
 	IsOpenShift              bool
+	CertManagerAvailable     bool
 }
 
 // Reconcile reads that state of the cluster for a RayCluster object and makes changes based on it
@@ -178,6 +179,18 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 
 	if err := utils.ValidateRayClusterSpec(&instance.Spec, instance.Annotations); err != nil {
 		logger.Error(err, "The RayCluster spec is invalid")
+		r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.InvalidRayClusterSpec),
+			"The RayCluster spec is invalid %s/%s: %v", instance.Namespace, instance.Name, err)
+		return ctrl.Result{}, nil
+	}
+
+	// Fail fast when auto-generate mTLS is requested but cert-manager is not installed.
+	// BYOC mode is always allowed since the user manages their own certificates.
+	if utils.IsTLSEnabled(&instance.Spec) && !utils.IsTLSBYOC(&instance.Spec) && !r.options.CertManagerAvailable {
+		err := fmt.Errorf("tlsOptions requires cert-manager for auto-generated certificates, " +
+			"but cert-manager is not installed; install cert-manager or use BYOC mode " +
+			"by setting spec.tlsOptions.certificateSecretName")
+		logger.Error(err, "cert-manager not available for mTLS auto-generate")
 		r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.InvalidRayClusterSpec),
 			"The RayCluster spec is invalid %s/%s: %v", instance.Namespace, instance.Name, err)
 		return ctrl.Result{}, nil

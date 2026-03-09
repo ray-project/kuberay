@@ -159,7 +159,7 @@ const (
 
 	// TLS volume and mount path constants for certificate mounting into Ray pods.
 	RayTLSVolumeName    = "ray-tls"
-	RayTLSCertMountPath = "/home/ray/workspace/tls"
+	RayTLSCertMountPath = "/etc/ray/tls"
 
 	// cert-manager resource naming prefixes for auto-generated PKI resources.
 	RaySelfSignedIssuerPrefix = "ray-selfsigned-issuer"

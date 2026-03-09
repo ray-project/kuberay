@@ -47,6 +47,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/ptr"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	clientFake "sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
@@ -3888,5 +3889,127 @@ func TestReconcilePodsWithAuthTokenSecretName(t *testing.T) {
 			}
 		}
 		assert.True(t, authTokenEnvFound, "Auth token env var with provided secret name not found")
+	}
+}
+
+func TestReconcile_TLSAutoGenerate_RejectsWithoutCertManager(t *testing.T) {
+	cluster := &rayv1.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "tls-cluster",
+			Namespace: "default",
+		},
+		Spec: rayv1.RayClusterSpec{
+			TLSOptions: &rayv1.TLSOptions{},
+			HeadGroupSpec: rayv1.HeadGroupSpec{
+				RayStartParams: map[string]string{"dashboard-host": "0.0.0.0"},
+				Template: corev1.PodTemplateSpec{
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{{Name: "ray-head", Image: "rayproject/ray:latest"}},
+					},
+				},
+			},
+		},
+	}
+
+	fakeClient := clientFake.NewClientBuilder().
+		WithScheme(scheme.Scheme).
+		WithRuntimeObjects(cluster).
+		WithStatusSubresource(cluster).
+		Build()
+
+	recorder := record.NewFakeRecorder(10)
+	r := &RayClusterReconciler{
+		Client:                     fakeClient,
+		Scheme:                     scheme.Scheme,
+		Recorder:                   recorder,
+		rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
+		options:                    RayClusterReconcilerOptions{CertManagerAvailable: false},
+	}
+
+	result, err := r.Reconcile(context.Background(), ctrl.Request{
+		NamespacedName: types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace},
+	})
+
+	require.NoError(t, err, "should not return an error (no requeue)")
+	assert.Equal(t, ctrl.Result{}, result, "should not requeue")
+
+	// Verify a warning event was emitted.
+	select {
+	case event := <-recorder.Events:
+		assert.Contains(t, event, "cert-manager")
+		assert.Contains(t, event, "Warning")
+	default:
+		t.Fatal("expected a warning event about cert-manager, but none was emitted")
+	}
+}
+
+func TestReconcile_TLSBYOC_AllowedWithoutCertManager(t *testing.T) {
+	cluster := &rayv1.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "tls-byoc-cluster",
+			Namespace: "default",
+		},
+		Spec: rayv1.RayClusterSpec{
+			TLSOptions: &rayv1.TLSOptions{
+				CertificateSecretName: ptr.To("user-provided-secret"),
+			},
+			HeadGroupSpec: rayv1.HeadGroupSpec{
+				RayStartParams: map[string]string{"dashboard-host": "0.0.0.0"},
+				Template: corev1.PodTemplateSpec{
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{{Name: "ray-head", Image: "rayproject/ray:latest"}},
+					},
+				},
+			},
+		},
+	}
+
+	// The BYOC secret referenced by the cluster.
+	byocSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "user-provided-secret",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"tls.crt": []byte("cert"),
+			"tls.key": []byte("key"),
+			"ca.crt":  []byte("ca"),
+		},
+	}
+
+	// Use a scheme that includes core types (Secret, Service, etc.) in addition to Ray types.
+	s := newMTLSTestScheme()
+	fakeClient := clientFake.NewClientBuilder().
+		WithScheme(s).
+		WithRuntimeObjects(cluster, byocSecret).
+		WithStatusSubresource(cluster).
+		Build()
+
+	recorder := record.NewFakeRecorder(10)
+	r := &RayClusterReconciler{
+		Client:                     fakeClient,
+		Scheme:                     s,
+		Recorder:                   recorder,
+		rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
+		options:                    RayClusterReconcilerOptions{CertManagerAvailable: false},
+	}
+
+	result, err := r.Reconcile(context.Background(), ctrl.Request{
+		NamespacedName: types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace},
+	})
+
+	// BYOC mode should NOT be rejected -- the reconciler proceeds past the cert-manager guard.
+	// It may return an error later (e.g. missing head service), but the key assertion is
+	// that it was NOT rejected by the cert-manager availability check.
+	_ = result
+	_ = err
+
+	// Verify no warning event about cert-manager was emitted.
+	select {
+	case event := <-recorder.Events:
+		assert.NotContains(t, event, "cert-manager",
+			"BYOC mode should not trigger a cert-manager availability warning")
+	default:
+		// No events -- expected for BYOC mode passing the guard.
 	}
 }

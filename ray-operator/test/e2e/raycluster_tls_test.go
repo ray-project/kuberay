@@ -446,8 +446,7 @@ func TestRayClusterTLSEdgeCases(t *testing.T) {
 		LogWithTimestamp(t, "Created BYOC user secret %s", byocSecretName)
 
 		clusterName := "tls-byoc-delete"
-		spec := rayv1ac.RayClusterSpec().
-			WithRayVersion(GetRayVersion()).
+		spec := NewRayClusterSpec().
 			WithTLSOptions(rayv1ac.TLSOptions().WithCertificateSecretName(byocSecretName))
 		rayClusterAC := rayv1ac.RayCluster(clusterName, namespace.Name).WithSpec(spec)
 		_, err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
