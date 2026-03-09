@@ -754,7 +754,15 @@ func (r *RayServiceReconciler) calculateTrafficRoutedPercent(ctx context.Context
 	// If IntervalSeconds has passed since LastTrafficMigratedTime, migrate StepSizePercent traffic
 	// from the active RayCluster to the pending RayCluster.
 	interval := time.Duration(*options.IntervalSeconds) * time.Second
-	lastTrafficMigratedTime := pendingServiceStatus.LastTrafficMigratedTime
+
+	// Determine which timestamp to use based on the direction of traffic flow.
+	// We use the LastTrafficMigratedTime of the cluster to which traffic is increasing.
+	var lastTrafficMigratedTime *metav1.Time
+	if isRollbackInProgress {
+		lastTrafficMigratedTime = activeServiceStatus.LastTrafficMigratedTime
+	} else {
+		lastTrafficMigratedTime = pendingServiceStatus.LastTrafficMigratedTime
+	}
 
 	if lastTrafficMigratedTime == nil || time.Since(lastTrafficMigratedTime.Time) >= interval {
 		if isRollbackInProgress {
