@@ -84,8 +84,8 @@ func TestCollector(t *testing.T) {
 // 4. Delete the Ray cluster to trigger log uploading and event flushing on deletion. When the Ray cluster is deleted,
 // logs, node_events, and job_events are processed as follows:
 //   - logs: Trigger RayLogHandler.processSessionLatestLog to process logs under /tmp/ray/session_latest
-//   - node_events: Trigger EventServer.flushEvents, which calls es.flushNodeEventsForHour to process in-memory node events
-//   - job_events: Trigger EventServer.flushEvents, which calls es.flushJobEventsForHour to process in-memory job events
+//   - node_events: Trigger EventCollector.flushEvents, which calls es.flushNodeEventsForHour to process in-memory node events
+//   - job_events: Trigger EventCollector.flushEvents, which calls es.flushJobEventsForHour to process in-memory job events
 //
 // 5. Verify logs, node_events, and job_events are successfully uploaded to S3. Expected S3 path structure:
 //   - {S3BucketName}/log/{clusterName}_{clusterID}/{sessionID}/logs/...
