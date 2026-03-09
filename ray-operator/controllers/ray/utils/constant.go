@@ -247,7 +247,7 @@ const (
 	RayServeProxyHealthPath   = "-/healthz"
 	// BaseWgetHealthCommand checks a single health URL; args: timeout_sec, port, path (no leading slash).
 	// This is used for Ray versions that rely on exec probes and assume common CLI tools exist in the image.
-	BaseWgetHealthCommand = `wget -q -T %d -O- http://localhost:%d/%s | grep -q success`
+	BaseWgetHealthCommand = "wget --tries 1 -T %d -q -O- http://localhost:%d/%s | grep success"
 	// BasePythonHealthCommand checks a single health URL; args: port, path (no leading slash), timeout_sec.
 	// This is used when wget is not available (e.g. slim Ray images).
 	BasePythonHealthCommand = `python3 -c "import urllib.request; r=urllib.request.urlopen('http://localhost:%d/%s', timeout=%d); exit(0 if b'success' in r.read() else 1)"`
