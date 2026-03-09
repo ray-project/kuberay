@@ -756,19 +756,18 @@ func IsK8sAuthEnabled(authOptions *rayv1.AuthOptions) bool {
 	return authOptions != nil && authOptions.EnableK8sTokenAuth != nil && *authOptions.EnableK8sTokenAuth
 }
 
-// IsMTLSEnabled returns whether mTLS is enabled for the RayCluster.
-// Returns false if spec is nil or EnableMTLS is not set to true.
-func IsMTLSEnabled(spec *rayv1.RayClusterSpec) bool {
-	return spec != nil && spec.EnableMTLS != nil && *spec.EnableMTLS
+// IsTLSEnabled returns whether TLS is enabled for the RayCluster.
+// TLS is enabled when spec.TLSOptions is non-nil.
+func IsTLSEnabled(spec *rayv1.RayClusterSpec) bool {
+	return spec != nil && spec.TLSOptions != nil
 }
 
-// IsMTLSBYOC returns true when the user provides their own certificate secret (BYOC mode).
-// BYOC is active when mTLS is enabled and MTLSOptions.CertificateSecretName is set.
-func IsMTLSBYOC(spec *rayv1.RayClusterSpec) bool {
-	return IsMTLSEnabled(spec) &&
-		spec.MTLSOptions != nil &&
-		spec.MTLSOptions.CertificateSecretName != nil &&
-		*spec.MTLSOptions.CertificateSecretName != ""
+// IsTLSBYOC returns true when the user provides their own certificate secret (BYOC mode).
+// BYOC is active when TLS is enabled and TLSOptions.CertificateSecretName is set.
+func IsTLSBYOC(spec *rayv1.RayClusterSpec) bool {
+	return IsTLSEnabled(spec) &&
+		spec.TLSOptions.CertificateSecretName != nil &&
+		*spec.TLSOptions.CertificateSecretName != ""
 }
 
 // GetCASecretName returns the cert-manager CA secret name with a UID-based suffix.
@@ -788,8 +787,8 @@ func GetCASecretName(clusterName string, clusterUID types.UID) string {
 // for both node types (shared-secret mode).
 // In auto-generate mode, returns the cert-manager prefix-based name.
 func GetTLSSecretName(clusterName string, nodeType rayv1.RayNodeType, spec ...rayv1.RayClusterSpec) string {
-	if len(spec) > 0 && IsMTLSBYOC(&spec[0]) {
-		opts := spec[0].MTLSOptions
+	if len(spec) > 0 && IsTLSBYOC(&spec[0]) {
+		opts := spec[0].TLSOptions
 		if nodeType == rayv1.WorkerNode && opts.WorkerCertificateSecretName != nil && *opts.WorkerCertificateSecretName != "" {
 			return *opts.WorkerCertificateSecretName
 		}

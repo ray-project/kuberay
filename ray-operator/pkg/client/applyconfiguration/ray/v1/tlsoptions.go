@@ -2,14 +2,16 @@
 
 package v1
 
-// MTLSOptionsApplyConfiguration represents a declarative configuration of the MTLSOptions type for use
+// TLSOptionsApplyConfiguration represents a declarative configuration of the TLSOptions type for use
 // with apply.
 //
-// MTLSOptions configures Bring Your Own Certificate (BYOC) for mTLS.
-// When enableMTLS is true and MTLSOptions is nil, the operator auto-generates
-// certificates via cert-manager. When MTLSOptions is set with a CertificateSecretName,
-// the operator uses the user-provided secret and does not require cert-manager.
-type MTLSOptionsApplyConfiguration struct {
+// TLSOptions configures TLS encryption for the RayCluster.
+// When TLSOptions is nil, TLS is disabled. When set, the operator configures
+// TLS on head and worker pods according to the selected mode.
+type TLSOptionsApplyConfiguration struct {
+	// Mode controls the TLS security level.
+	// - "mTLS": Enables mutual TLS (client & server authentication).
+	Mode *string `json:"mode,omitempty"`
 	// CertificateSecretName is a user-provided Kubernetes Secret containing
 	// tls.crt, tls.key, and ca.crt for the head node (and workers, if
 	// WorkerCertificateSecretName is not set).
@@ -34,16 +36,24 @@ type MTLSOptionsApplyConfiguration struct {
 	WorkerCertificateSecretName *string `json:"workerCertificateSecretName,omitempty"`
 }
 
-// MTLSOptionsApplyConfiguration constructs a declarative configuration of the MTLSOptions type for use with
+// TLSOptionsApplyConfiguration constructs a declarative configuration of the TLSOptions type for use with
 // apply.
-func MTLSOptions() *MTLSOptionsApplyConfiguration {
-	return &MTLSOptionsApplyConfiguration{}
+func TLSOptions() *TLSOptionsApplyConfiguration {
+	return &TLSOptionsApplyConfiguration{}
+}
+
+// WithMode sets the Mode field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the Mode field is set to the value of the last call.
+func (b *TLSOptionsApplyConfiguration) WithMode(value string) *TLSOptionsApplyConfiguration {
+	b.Mode = &value
+	return b
 }
 
 // WithCertificateSecretName sets the CertificateSecretName field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the CertificateSecretName field is set to the value of the last call.
-func (b *MTLSOptionsApplyConfiguration) WithCertificateSecretName(value string) *MTLSOptionsApplyConfiguration {
+func (b *TLSOptionsApplyConfiguration) WithCertificateSecretName(value string) *TLSOptionsApplyConfiguration {
 	b.CertificateSecretName = &value
 	return b
 }
@@ -51,7 +61,7 @@ func (b *MTLSOptionsApplyConfiguration) WithCertificateSecretName(value string) 
 // WithWorkerCertificateSecretName sets the WorkerCertificateSecretName field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the WorkerCertificateSecretName field is set to the value of the last call.
-func (b *MTLSOptionsApplyConfiguration) WithWorkerCertificateSecretName(value string) *MTLSOptionsApplyConfiguration {
+func (b *TLSOptionsApplyConfiguration) WithWorkerCertificateSecretName(value string) *TLSOptionsApplyConfiguration {
 	b.WorkerCertificateSecretName = &value
 	return b
 }

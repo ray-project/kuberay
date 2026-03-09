@@ -2744,7 +2744,7 @@ func TestValidateRayClusterSpec_Auth(t *testing.T) {
 	}
 }
 
-func TestValidateMTLSOptions(t *testing.T) {
+func TestValidateTLSOptions(t *testing.T) {
 	baseSpec := func() rayv1.RayClusterSpec {
 		return rayv1.RayClusterSpec{
 			HeadGroupSpec: rayv1.HeadGroupSpec{
@@ -2764,45 +2764,34 @@ func TestValidateMTLSOptions(t *testing.T) {
 		expectError bool
 	}{
 		{
-			name: "mTLS disabled, no options - valid",
+			name: "TLS disabled, no options - valid",
 			modify: func(_ *rayv1.RayClusterSpec) {
 			},
 		},
 		{
-			name: "mTLS disabled with options set - error",
+			name: "TLS enabled, no options (auto-generate) - valid",
 			modify: func(s *rayv1.RayClusterSpec) {
-				s.MTLSOptions = &rayv1.MTLSOptions{CertificateSecretName: ptr.To("my-secret")}
+				s.TLSOptions = &rayv1.TLSOptions{}
+			},
+		},
+		{
+			name: "TLS enabled, BYOC with certificateSecretName - valid",
+			modify: func(s *rayv1.RayClusterSpec) {
+				s.TLSOptions = &rayv1.TLSOptions{CertificateSecretName: ptr.To("my-secret")}
+			},
+		},
+		{
+			name: "TLS enabled, BYOC with empty certificateSecretName - error",
+			modify: func(s *rayv1.RayClusterSpec) {
+				s.TLSOptions = &rayv1.TLSOptions{CertificateSecretName: ptr.To("")}
 			},
 			expectError: true,
-			errorMsg:    "mTLSOptions cannot be set when enableMTLS is not true",
-		},
-		{
-			name: "mTLS enabled, no options (auto-generate) - valid",
-			modify: func(s *rayv1.RayClusterSpec) {
-				s.EnableMTLS = ptr.To(true)
-			},
-		},
-		{
-			name: "mTLS enabled, BYOC with certificateSecretName - valid",
-			modify: func(s *rayv1.RayClusterSpec) {
-				s.EnableMTLS = ptr.To(true)
-				s.MTLSOptions = &rayv1.MTLSOptions{CertificateSecretName: ptr.To("my-secret")}
-			},
-		},
-		{
-			name: "mTLS enabled, BYOC with empty certificateSecretName - error",
-			modify: func(s *rayv1.RayClusterSpec) {
-				s.EnableMTLS = ptr.To(true)
-				s.MTLSOptions = &rayv1.MTLSOptions{CertificateSecretName: ptr.To("")}
-			},
-			expectError: true,
-			errorMsg:    "mTLSOptions.certificateSecretName must be provided when mTLSOptions is set",
+			errorMsg:    "tlsOptions.certificateSecretName must be non-empty when set",
 		},
 		{
 			name: "BYOC with separate head and worker secrets - valid",
 			modify: func(s *rayv1.RayClusterSpec) {
-				s.EnableMTLS = ptr.To(true)
-				s.MTLSOptions = &rayv1.MTLSOptions{
+				s.TLSOptions = &rayv1.TLSOptions{
 					CertificateSecretName:       ptr.To("head-secret"),
 					WorkerCertificateSecretName: ptr.To("worker-secret"),
 				}
@@ -2811,19 +2800,18 @@ func TestValidateMTLSOptions(t *testing.T) {
 		{
 			name: "BYOC with empty workerCertificateSecretName - error",
 			modify: func(s *rayv1.RayClusterSpec) {
-				s.EnableMTLS = ptr.To(true)
-				s.MTLSOptions = &rayv1.MTLSOptions{
+				s.TLSOptions = &rayv1.TLSOptions{
 					CertificateSecretName:       ptr.To("head-secret"),
 					WorkerCertificateSecretName: ptr.To(""),
 				}
 			},
 			expectError: true,
-			errorMsg:    "mTLSOptions.workerCertificateSecretName must be non-empty when set",
+			errorMsg:    "tlsOptions.workerCertificateSecretName must be non-empty when set",
 		},
 		{
 			name: "RAY_USE_TLS in head container - error",
 			modify: func(s *rayv1.RayClusterSpec) {
-				s.EnableMTLS = ptr.To(true)
+				s.TLSOptions = &rayv1.TLSOptions{}
 				s.HeadGroupSpec.Template.Spec.Containers[0].Env = []corev1.EnvVar{{Name: "RAY_USE_TLS", Value: "1"}}
 			},
 			expectError: true,
@@ -2832,7 +2820,7 @@ func TestValidateMTLSOptions(t *testing.T) {
 		{
 			name: "RAY_TLS_SERVER_CERT in head container - error",
 			modify: func(s *rayv1.RayClusterSpec) {
-				s.EnableMTLS = ptr.To(true)
+				s.TLSOptions = &rayv1.TLSOptions{}
 				s.HeadGroupSpec.Template.Spec.Containers[0].Env = []corev1.EnvVar{{Name: "RAY_TLS_SERVER_CERT", Value: "/x"}}
 			},
 			expectError: true,
@@ -2841,7 +2829,7 @@ func TestValidateMTLSOptions(t *testing.T) {
 		{
 			name: "RAY_TLS_SERVER_KEY in worker container - error",
 			modify: func(s *rayv1.RayClusterSpec) {
-				s.EnableMTLS = ptr.To(true)
+				s.TLSOptions = &rayv1.TLSOptions{}
 				s.WorkerGroupSpecs = []rayv1.WorkerGroupSpec{{
 					GroupName: "wg",
 					Template: corev1.PodTemplateSpec{
@@ -2861,7 +2849,7 @@ func TestValidateMTLSOptions(t *testing.T) {
 		{
 			name: "RAY_TLS_CA_CERT in worker container - error",
 			modify: func(s *rayv1.RayClusterSpec) {
-				s.EnableMTLS = ptr.To(true)
+				s.TLSOptions = &rayv1.TLSOptions{}
 				s.WorkerGroupSpecs = []rayv1.WorkerGroupSpec{{
 					GroupName: "wg",
 					Template: corev1.PodTemplateSpec{
@@ -2884,7 +2872,7 @@ func TestValidateMTLSOptions(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			spec := baseSpec()
 			tt.modify(&spec)
-			err := validateMTLSOptions(&spec)
+			err := validateTLSOptions(&spec)
 			if tt.expectError {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), tt.errorMsg)

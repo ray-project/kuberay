@@ -33,7 +33,7 @@ func certManagerAvailable(test Test) bool {
 // NewRayClusterSpecWithMTLS creates a RayClusterSpec with mTLS enabled (auto-generated certs).
 func NewRayClusterSpecWithMTLS() *rayv1ac.RayClusterSpecApplyConfiguration {
 	return NewRayClusterSpec().
-		WithEnableMTLS(true)
+		WithTLSOptions(rayv1ac.TLSOptions())
 }
 
 // verifyContainerTLSEnvVars asserts a container has the expected TLS environment variables.
@@ -330,7 +330,7 @@ func TestRayClusterTLSEdgeCases(t *testing.T) {
 		clusterName := "tls-multi-wg"
 		spec := rayv1ac.RayClusterSpec().
 			WithRayVersion(GetRayVersion()).
-			WithEnableMTLS(true).
+			WithTLSOptions(rayv1ac.TLSOptions()).
 			WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
 				WithRayStartParams(map[string]string{"dashboard-host": "0.0.0.0"}).
 				WithTemplate(HeadPodTemplateApplyConfiguration())).
@@ -448,8 +448,7 @@ func TestRayClusterTLSEdgeCases(t *testing.T) {
 		clusterName := "tls-byoc-delete"
 		spec := rayv1ac.RayClusterSpec().
 			WithRayVersion(GetRayVersion()).
-			WithEnableMTLS(true).
-			WithMTLSOptions(rayv1ac.MTLSOptions().WithCertificateSecretName(byocSecretName))
+			WithTLSOptions(rayv1ac.TLSOptions().WithCertificateSecretName(byocSecretName))
 		rayClusterAC := rayv1ac.RayCluster(clusterName, namespace.Name).WithSpec(spec)
 		_, err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
 		g.Expect(err).NotTo(HaveOccurred())

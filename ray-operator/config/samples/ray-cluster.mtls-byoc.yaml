@@ -34,11 +34,10 @@ metadata:
   name: raycluster-byoc
 spec:
   rayVersion: '2.52.0'
-  # Enable mTLS for Ray cluster internal communication.
-  enableMTLS: true
-  # BYOC: use user-provided TLS secrets instead of cert-manager auto-generation.
+  # Enable mTLS for Ray cluster internal communication using BYOC (Bring Your Own Certificate).
+  # User-provided TLS secrets are used instead of cert-manager auto-generation.
   # Set workerCertificateSecretName for head/worker identity separation.
-  mTLSOptions:
+  tlsOptions:
     certificateSecretName: my-head-tls-secret
     workerCertificateSecretName: my-worker-tls-secret
   headGroupSpec:

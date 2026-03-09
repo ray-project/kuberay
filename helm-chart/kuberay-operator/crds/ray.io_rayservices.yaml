@@ -320,8 +320,6 @@ spec:
                     type: object
                   enableInTreeAutoscaling:
                     type: boolean
-                  enableMTLS:
-                    type: boolean
                   gcsFaultToleranceOptions:
                     properties:
                       externalStorageNamespace:
@@ -4530,13 +4528,6 @@ spec:
                     additionalProperties:
                       type: string
                     type: object
-                  mTLSOptions:
-                    properties:
-                      certificateSecretName:
-                        type: string
-                      workerCertificateSecretName:
-                        type: string
-                    type: object
                   managedBy:
                     type: string
                     x-kubernetes-validations:
@@ -4741,6 +4732,18 @@ spec:
                     type: string
                   suspend:
                     type: boolean
+                  tlsOptions:
+                    properties:
+                      certificateSecretName:
+                        type: string
+                      mode:
+                        default: mTLS
+                        enum:
+                        - mTLS
+                        type: string
+                      workerCertificateSecretName:
+                        type: string
+                    type: object
                   upgradeStrategy:
                     properties:
                       type:

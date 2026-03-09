@@ -11,7 +11,8 @@ spec:
   rayVersion: '2.52.0'
   # Enable mTLS for Ray cluster internal communication.
   # This creates a self-signed CA and issues certificates for head and worker pods.
-  enableMTLS: true
+  # mode defaults to "mTLS" when tlsOptions is set.
+  tlsOptions: {}
   headGroupSpec:
     rayStartParams:
       dashboard-host: "0.0.0.0"

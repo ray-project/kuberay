@@ -2362,7 +2362,7 @@ func TestUpdateRayStartParamsResources(t *testing.T) {
 
 func TestConfigureTLS_Disabled(t *testing.T) {
 	cluster := instance.DeepCopy()
-	// EnableMTLS is nil by default => mTLS disabled.
+	// TLSOptions is nil by default => TLS disabled.
 	ctx := context.Background()
 
 	podName := "test-head"
@@ -2379,7 +2379,7 @@ func TestConfigureTLS_Disabled(t *testing.T) {
 
 func TestConfigureTLS_AutoGenerate_HeadPod(t *testing.T) {
 	cluster := instance.DeepCopy()
-	cluster.Spec.EnableMTLS = ptr.To(true)
+	cluster.Spec.TLSOptions = &rayv1.TLSOptions{}
 	ctx := context.Background()
 
 	podName := "test-head"
@@ -2420,7 +2420,7 @@ func TestConfigureTLS_AutoGenerate_HeadPod(t *testing.T) {
 
 func TestConfigureTLS_AutoGenerate_WorkerPod(t *testing.T) {
 	cluster := instance.DeepCopy()
-	cluster.Spec.EnableMTLS = ptr.To(true)
+	cluster.Spec.TLSOptions = &rayv1.TLSOptions{}
 	ctx := context.Background()
 
 	worker := cluster.Spec.WorkerGroupSpecs[0]
@@ -2454,7 +2454,7 @@ func TestConfigureTLS_AutoGenerate_WorkerPod(t *testing.T) {
 
 func TestConfigureTLS_AutoscalerContainer(t *testing.T) {
 	cluster := instance.DeepCopy()
-	cluster.Spec.EnableMTLS = ptr.To(true)
+	cluster.Spec.TLSOptions = &rayv1.TLSOptions{}
 	cluster.Spec.EnableInTreeAutoscaling = ptr.To(true)
 	ctx := context.Background()
 

@@ -210,7 +210,7 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 		}
 
 		// Configure mTLS env vars and volume mount for the autoscaler sidecar.
-		if utils.IsMTLSEnabled(&instance.Spec) {
+		if utils.IsTLSEnabled(&instance.Spec) {
 			SetContainerTLSConfig(&autoscalerContainer)
 		}
 
@@ -346,7 +346,7 @@ func SetContainerTokenAuthEnvVars(clusterName string, container *corev1.Containe
 // Mounts the TLS secret (cert-manager generated or BYOC) and sets TLS environment variables.
 // Idempotent: skips adding the TLS volume if one with RayTLSVolumeName already exists.
 func configureTLS(podTemplate *corev1.PodTemplateSpec, instance rayv1.RayCluster, rayNodeType rayv1.RayNodeType) {
-	if !utils.IsMTLSEnabled(&instance.Spec) {
+	if !utils.IsTLSEnabled(&instance.Spec) {
 		return
 	}
 

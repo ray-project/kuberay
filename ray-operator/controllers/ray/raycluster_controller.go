@@ -634,7 +634,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 	logger := ctrl.LoggerFrom(ctx)
 
 	// Block pod creation until mTLS secrets are ready (created by the mTLS controller).
-	if utils.IsMTLSEnabled(&instance.Spec) {
+	if utils.IsTLSEnabled(&instance.Spec) {
 		if err := r.checkMTLSSecretsReady(ctx, instance); err != nil {
 			logger.Info("mTLS secrets not ready yet, requeuing", "error", err.Error())
 			return fmt.Errorf("mTLS secrets not ready: %w", err)
@@ -718,7 +718,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 			"Ray container terminated status", getRayContainerStateTerminated(headPod))
 
 		shouldDelete, reason := shouldDeletePod(headPod, rayv1.HeadNode)
-		if !shouldDelete && utils.IsMTLSEnabled(&instance.Spec) && !podHasMTLSConfiguration(&headPod) {
+		if !shouldDelete && utils.IsTLSEnabled(&instance.Spec) && !podHasMTLSConfiguration(&headPod) {
 			shouldDelete = true
 			reason = "mTLS is enabled but pod doesn't have mTLS configuration, needs recreation"
 		}
@@ -815,7 +815,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 		numDeletedUnhealthyWorkerPods := 0
 		for _, workerPod := range workerPods.Items {
 			shouldDelete, reason := shouldDeletePod(workerPod, rayv1.WorkerNode)
-			if !shouldDelete && utils.IsMTLSEnabled(&instance.Spec) && !podHasMTLSConfiguration(&workerPod) {
+			if !shouldDelete && utils.IsTLSEnabled(&instance.Spec) && !podHasMTLSConfiguration(&workerPod) {
 				shouldDelete = true
 				reason = "mTLS is enabled but pod doesn't have mTLS configuration, needs recreation"
 			}
@@ -1555,9 +1555,9 @@ func (r *RayClusterReconciler) buildRedisCleanupJob(ctx context.Context, instanc
 // both head and worker secrets created by cert-manager via the mTLS controller.
 func (r *RayClusterReconciler) checkMTLSSecretsReady(ctx context.Context, instance *rayv1.RayCluster) error {
 	var secretNames []string
-	if utils.IsMTLSBYOC(&instance.Spec) {
-		secretNames = []string{*instance.Spec.MTLSOptions.CertificateSecretName}
-		if w := instance.Spec.MTLSOptions.WorkerCertificateSecretName; w != nil && *w != "" {
+	if utils.IsTLSBYOC(&instance.Spec) {
+		secretNames = []string{*instance.Spec.TLSOptions.CertificateSecretName}
+		if w := instance.Spec.TLSOptions.WorkerCertificateSecretName; w != nil && *w != "" {
 			secretNames = append(secretNames, *w)
 		}
 	} else {

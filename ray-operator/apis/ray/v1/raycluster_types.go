@@ -48,16 +48,11 @@ type RayClusterSpec struct {
 	// The reconciler always ensures intra-cluster and KubeRay operator communication is permitted.
 	// +optional
 	NetworkIsolation *NetworkIsolationConfig `json:"networkIsolation,omitempty"`
-	// EnableMTLS enables mutual TLS (mTLS) encryption for Ray cluster internal communication.
-	// When true and MTLSOptions is nil, the operator auto-generates certificates via cert-manager.
-	// When true and MTLSOptions.CertificateSecretName is set, the operator uses the user-provided
-	// secret (BYOC mode) and does not require cert-manager.
+	// TLSOptions specifies optional TLS encryption settings for the RayCluster.
+	// If omitted, TLS is disabled. When set, the mode field controls the
+	// security level (defaults to "mTLS" for mutual TLS).
 	// +optional
-	EnableMTLS *bool `json:"enableMTLS,omitempty"`
-	// MTLSOptions configures Bring Your Own Certificate (BYOC) for mTLS.
-	// Only used when enableMTLS is true. If nil, certificates are auto-generated via cert-manager.
-	// +optional
-	MTLSOptions *MTLSOptions `json:"mTLSOptions,omitempty"`
+	TLSOptions *TLSOptions `json:"tlsOptions,omitempty"`
 	// HeadGroupSpec is the spec for the head pod
 	HeadGroupSpec HeadGroupSpec `json:"headGroupSpec"`
 	// RayVersion is used to determine the command for the Kubernetes Job managed by RayJob
@@ -68,11 +63,17 @@ type RayClusterSpec struct {
 	WorkerGroupSpecs []WorkerGroupSpec `json:"workerGroupSpecs,omitempty"`
 }
 
-// MTLSOptions configures Bring Your Own Certificate (BYOC) for mTLS.
-// When enableMTLS is true and MTLSOptions is nil, the operator auto-generates
-// certificates via cert-manager. When MTLSOptions is set with a CertificateSecretName,
-// the operator uses the user-provided secret and does not require cert-manager.
-type MTLSOptions struct {
+// TLSOptions configures TLS encryption for the RayCluster.
+// When TLSOptions is nil, TLS is disabled. When set, the operator configures
+// TLS on head and worker pods according to the selected mode.
+type TLSOptions struct {
+	// Mode controls the TLS security level.
+	// - "mTLS": Enables mutual TLS (client & server authentication).
+	// +optional
+	// +kubebuilder:validation:Enum=mTLS
+	// +kubebuilder:default=mTLS
+	Mode *string `json:"mode,omitempty"`
+
 	// CertificateSecretName is a user-provided Kubernetes Secret containing
 	// tls.crt, tls.key, and ca.crt for the head node (and workers, if
 	// WorkerCertificateSecretName is not set).

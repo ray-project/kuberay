@@ -78,13 +78,13 @@ func (r *RayClusterMTLSController) Reconcile(ctx context.Context, req ctrl.Reque
 	}
 
 	// Handle deletion first, regardless of whether mTLS is currently enabled.
-	// A user may have disabled mTLS (set enableMTLS=false) before deleting the cluster.
-	// Without handling deletion before the enableMTLS check, the finalizer would
+	// A user may have disabled TLS (set tlsOptions to nil) before deleting the cluster.
+	// Without handling deletion before the TLS check, the finalizer would
 	// never be removed and the RayCluster would be stuck in Terminating.
 	if instance.DeletionTimestamp != nil && !instance.DeletionTimestamp.IsZero() {
 		if controllerutil.ContainsFinalizer(instance, mtlsFinalizer) {
 			// Only delete secrets in auto-generate mode; BYOC secrets belong to the user.
-			if !utils.IsMTLSBYOC(&instance.Spec) {
+			if !utils.IsTLSBYOC(&instance.Spec) {
 				if err := r.deleteTLSSecrets(ctx, instance); err != nil {
 					logger.Error(err, "Failed to delete TLS secrets during RayCluster deletion")
 					r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.MTLSFailedToCleanupSecrets),
@@ -106,13 +106,13 @@ func (r *RayClusterMTLSController) Reconcile(ctx context.Context, req ctrl.Reque
 	}
 
 	// mTLS not enabled: nothing to do.
-	if !utils.IsMTLSEnabled(&instance.Spec) {
+	if !utils.IsTLSEnabled(&instance.Spec) {
 		return ctrl.Result{}, nil
 	}
 
 	// Ensure the finalizer is present so we get a chance to clean up secrets before deletion.
 	// Only needed for auto-generate mode; BYOC secrets are user-managed and never deleted.
-	if !utils.IsMTLSBYOC(&instance.Spec) {
+	if !utils.IsTLSBYOC(&instance.Spec) {
 		if !controllerutil.ContainsFinalizer(instance, mtlsFinalizer) {
 			controllerutil.AddFinalizer(instance, mtlsFinalizer)
 			if err := r.Update(ctx, instance); err != nil {
@@ -126,7 +126,7 @@ func (r *RayClusterMTLSController) Reconcile(ctx context.Context, req ctrl.Reque
 	}
 
 	// BYOC mode: user provides their own certificate secret. No cert-manager PKI needed.
-	if utils.IsMTLSBYOC(&instance.Spec) {
+	if utils.IsTLSBYOC(&instance.Spec) {
 		return r.handleBYOC(ctx, instance, logger)
 	}
 
@@ -184,8 +184,8 @@ func (r *RayClusterMTLSController) handleAutoGenerate(ctx context.Context, insta
 // No cert-manager resources are created. The user's secrets are never deleted by the operator.
 func (r *RayClusterMTLSController) handleBYOC(ctx context.Context, instance *rayv1.RayCluster, logger logr.Logger) (ctrl.Result, error) {
 	// Build the list of secrets to validate: head (always) + worker (if separate).
-	secretNames := []string{*instance.Spec.MTLSOptions.CertificateSecretName}
-	if w := instance.Spec.MTLSOptions.WorkerCertificateSecretName; w != nil && *w != "" {
+	secretNames := []string{*instance.Spec.TLSOptions.CertificateSecretName}
+	if w := instance.Spec.TLSOptions.WorkerCertificateSecretName; w != nil && *w != "" {
 		secretNames = append(secretNames, *w)
 	}
 

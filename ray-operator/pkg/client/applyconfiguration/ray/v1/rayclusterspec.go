@@ -34,14 +34,10 @@ type RayClusterSpecApplyConfiguration struct {
 	// When set, NetworkPolicies will be created to control traffic to/from Ray pods.
 	// The reconciler always ensures intra-cluster and KubeRay operator communication is permitted.
 	NetworkIsolation *NetworkIsolationConfigApplyConfiguration `json:"networkIsolation,omitempty"`
-	// EnableMTLS enables mutual TLS (mTLS) encryption for Ray cluster internal communication.
-	// When true and MTLSOptions is nil, the operator auto-generates certificates via cert-manager.
-	// When true and MTLSOptions.CertificateSecretName is set, the operator uses the user-provided
-	// secret (BYOC mode) and does not require cert-manager.
-	EnableMTLS *bool `json:"enableMTLS,omitempty"`
-	// MTLSOptions configures Bring Your Own Certificate (BYOC) for mTLS.
-	// Only used when enableMTLS is true. If nil, certificates are auto-generated via cert-manager.
-	MTLSOptions *MTLSOptionsApplyConfiguration `json:"mTLSOptions,omitempty"`
+	// TLSOptions specifies optional TLS encryption settings for the RayCluster.
+	// If omitted, TLS is disabled. When set, the mode field controls the
+	// security level (defaults to "mTLS" for mutual TLS).
+	TLSOptions *TLSOptionsApplyConfiguration `json:"tlsOptions,omitempty"`
 	// HeadGroupSpec is the spec for the head pod
 	HeadGroupSpec *HeadGroupSpecApplyConfiguration `json:"headGroupSpec,omitempty"`
 	// RayVersion is used to determine the command for the Kubernetes Job managed by RayJob
@@ -134,19 +130,11 @@ func (b *RayClusterSpecApplyConfiguration) WithNetworkIsolation(value *NetworkIs
 	return b
 }
 
-// WithEnableMTLS sets the EnableMTLS field in the declarative configuration to the given value
+// WithTLSOptions sets the TLSOptions field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the EnableMTLS field is set to the value of the last call.
-func (b *RayClusterSpecApplyConfiguration) WithEnableMTLS(value bool) *RayClusterSpecApplyConfiguration {
-	b.EnableMTLS = &value
-	return b
-}
-
-// WithMTLSOptions sets the MTLSOptions field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the MTLSOptions field is set to the value of the last call.
-func (b *RayClusterSpecApplyConfiguration) WithMTLSOptions(value *MTLSOptionsApplyConfiguration) *RayClusterSpecApplyConfiguration {
-	b.MTLSOptions = value
+// If called multiple times, the TLSOptions field is set to the value of the last call.
+func (b *RayClusterSpecApplyConfiguration) WithTLSOptions(value *TLSOptionsApplyConfiguration) *RayClusterSpecApplyConfiguration {
+	b.TLSOptions = value
 	return b
 }
 
