@@ -178,7 +178,7 @@ func TestBuildJobSubmitCommandWithSidecarModeVersionSwitch(t *testing.T) {
 			require.NoError(t, err)
 			require.GreaterOrEqual(t, len(command), 2)
 			assert.Equal(t, "until", command[0])
-			assert.Contains(t, command[1], "python3 -c")
+			assert.Contains(t, command[1], "python -c")
 			assert.Contains(t, command[1], utils.RayDashboardGCSHealthPath)
 			assert.NotContains(t, command[1], "wget")
 		})
@@ -204,7 +204,7 @@ func TestBuildJobSubmitCommandWithSidecarModeCustomDashboardPort(t *testing.T) {
 	require.GreaterOrEqual(t, len(command), 2)
 	assert.Equal(t, "until", command[0])
 	assert.Contains(t, command[1], fmt.Sprintf("localhost:%d/%s", customPort, utils.RayDashboardGCSHealthPath))
-	assert.Contains(t, command[1], "python3 -c")
+	assert.Contains(t, command[1], "python -c")
 	assert.NotContains(t, command[1], "wget")
 }
 
@@ -215,7 +215,7 @@ func TestBuildJobSubmitCommandWithK8sJobModeNoSidecarHealthWaitLoop(t *testing.T
 	assert.NotContains(t, command, "until")
 	for _, token := range command {
 		assert.NotContains(t, token, utils.RayDashboardGCSHealthPath)
-		assert.NotContains(t, token, "python3 -c")
+		assert.NotContains(t, token, "python -c")
 		assert.NotContains(t, token, "wget")
 	}
 }
