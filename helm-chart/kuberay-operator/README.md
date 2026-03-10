@@ -179,6 +179,8 @@ spec:
 | featureGates[2].enabled | bool | `false` |  |
 | featureGates[3].name | string | `"RayServiceIncrementalUpgrade"` |  |
 | featureGates[3].enabled | bool | `false` |  |
+| featureGates[4].name | string | `"RayCronJob"` |  |
+| featureGates[4].enabled | bool | `false` |  |
 | metrics.enabled | bool | `true` | Whether KubeRay operator should emit control plane metrics. |
 | metrics.serviceMonitor.enabled | bool | `false` | Enable a prometheus ServiceMonitor |
 | metrics.serviceMonitor.interval | string | `"30s"` | Prometheus ServiceMonitor interval |
