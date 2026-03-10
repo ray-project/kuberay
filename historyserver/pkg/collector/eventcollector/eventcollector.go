@@ -320,10 +320,10 @@ func (ec *EventCollector) flushEventsInternal(eventsToFlush []Event) {
 		hourKey := event.Timestamp.Truncate(time.Hour).Format("2006-01-02-15")
 
 		// Check event type
-		if ec.isNodeEvent(event.Data) {
+		if isNodeEvent(event.Data) {
 			// Node-related events
 			nodeEventsByHour[hourKey] = append(nodeEventsByHour[hourKey], event)
-		} else if jobID := ec.getJobID(event.Data); jobID != "" {
+		} else if jobID := getJobID(event.Data); jobID != "" {
 			// Job-related events, use jobID-hour as key
 			jobKey := fmt.Sprintf("%s-%s", jobID, hourKey)
 			jobEventsByHour[jobKey] = append(jobEventsByHour[jobKey], event)
@@ -396,7 +396,7 @@ func countEventsInMap(eventsMap map[string][]Event) int {
 var nodeEventType = []string{"NODE_LIFECYCLE_EVENT", "NODE_DEFINITION_EVENT"}
 
 // isNodeEvent checks if event is node-related
-func (ec *EventCollector) isNodeEvent(eventData map[string]interface{}) bool {
+func isNodeEvent(eventData map[string]interface{}) bool {
 	eventType, ok := eventData["eventType"].(string)
 	if !ok {
 		return false
@@ -410,7 +410,7 @@ func (ec *EventCollector) isNodeEvent(eventData map[string]interface{}) bool {
 }
 
 // getJobID gets jobID associated with event
-func (ec *EventCollector) getJobID(eventData map[string]interface{}) string {
+func getJobID(eventData map[string]interface{}) string {
 	for _, eventType := range eventTypesWithJobID {
 		if nestedEvent, ok := eventData[eventType].(map[string]interface{}); ok {
 			if jobID, hasJob := nestedEvent["jobId"]; hasJob && jobID != "" {
