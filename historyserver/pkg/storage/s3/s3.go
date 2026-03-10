@@ -57,6 +57,11 @@ type RayLogsHandler struct {
 	PushInterval   time.Duration
 }
 
+const (
+	initTimeout       = 30 * time.Second
+	httpClientTimeout = 30 * time.Second
+)
+
 func (r *RayLogsHandler) CreateDirectory(d string) error {
 	ctx := context.Background()
 	objectDir := fmt.Sprintf("%s/", path.Clean(d))
@@ -289,8 +294,7 @@ func NewWriter(c *types.RayCollectorConfig, jd map[string]interface{}) (storage.
 	return New(config)
 }
 
-// TODO: refactor this
-func createBucketIfNotExists(ctx context.Context, s3Client *s3.Client, bucketName, region string, useLocationConstraint bool) error {
+func ensureBucketExists(ctx context.Context, s3Client *s3.Client, bucketName, region string, useLocationConstraint bool) error {
 	_, err := s3Client.HeadBucket(ctx, &s3.HeadBucketInput{
 		Bucket: aws.String(bucketName),
 	})
@@ -299,16 +303,11 @@ func createBucketIfNotExists(ctx context.Context, s3Client *s3.Client, bucketNam
 		return nil
 	}
 
-	if isBucketNotFound(err) {
-		logrus.Infof("Bucket %s does not exist, creating...", bucketName)
-		if err := createBucket(ctx, s3Client, bucketName, region, useLocationConstraint); err != nil {
-			return err
-		}
-		logrus.Infof("Successfully created bucket %s", bucketName)
-		return nil
+	if !isBucketNotFound(err) {
+		return fmt.Errorf("failed to check bucket %s: %w", bucketName, err)
 	}
 
-	logrus.Warnf("HeadBucket error for %s: %v, attempting to create bucket", bucketName, err)
+	logrus.Infof("Bucket %s does not exist, creating...", bucketName)
 	if err := createBucket(ctx, s3Client, bucketName, region, useLocationConstraint); err != nil {
 		return err
 	}
@@ -379,30 +378,23 @@ func isInvalidLocationConstraint(err error) bool {
 	return false
 }
 
-func New(c *config) (*RayLogsHandler, error) {
-	logrus.Infof("Begin to create s3 client ...")
-	ctx := context.Background()
-
-	httpTimeout := 30 * time.Second
-	httpClient := &http.Client{
-		Timeout: httpTimeout,
-	}
-
+func createS3Client(ctx context.Context, c *config) (*s3.Client, error) {
 	credsProvider := credentials.NewStaticCredentialsProvider(c.S3ID, c.S3Secret, c.S3Token)
 	endpoint := normalizeEndpoint(strings.TrimSpace(c.S3Endpoint), c.DisableSSL)
 
-	loadOptions := []func(*awsconfig.LoadOptions) error{
-		awsconfig.WithRegion(c.S3Region),
-		awsconfig.WithCredentialsProvider(credsProvider),
-		awsconfig.WithHTTPClient(httpClient),
-	}
-
-	// Use full endpoint URL (including scheme) for WithBaseEndpoint so that
-	// custom endpoints (e.g. MinIO at http://minio-service:9000) use the correct scheme.
 	if endpoint != "" {
 		if _, err := url.Parse(endpoint); err != nil {
 			return nil, fmt.Errorf("failed to parse endpoint URL %s: %w", endpoint, err)
 		}
+	}
+
+	loadOptions := []func(*awsconfig.LoadOptions) error{
+		awsconfig.WithRegion(c.S3Region),
+		awsconfig.WithCredentialsProvider(credsProvider),
+		awsconfig.WithHTTPClient(&http.Client{Timeout: httpClientTimeout}),
+	}
+
+	if endpoint != "" {
 		loadOptions = append(loadOptions, awsconfig.WithBaseEndpoint(endpoint))
 	}
 
@@ -414,17 +406,27 @@ func New(c *config) (*RayLogsHandler, error) {
 	s3Client := s3.NewFromConfig(awsCfg, func(o *s3.Options) {
 		o.UsePathStyle = c.S3ForcePathStyle
 		o.EndpointOptions.DisableHTTPS = c.DisableSSL
-		// S3 client uses its own Options.BaseEndpoint for resolution; without this,
-		// custom endpoints (e.g. MinIO) would be ignored and the client would target AWS.
 		if endpoint != "" {
 			o.BaseEndpoint = aws.String(endpoint)
 		}
 	})
+	return s3Client, nil
+}
 
-	// Ensure bucket exists, create if not
+func New(c *config) (*RayLogsHandler, error) {
+	logrus.Infof("Begin to create s3 client ...")
+
+	ctx, cancel := context.WithTimeout(context.Background(), initTimeout)
+	defer cancel()
+
+	s3Client, err := createS3Client(ctx, c)
+	if err != nil {
+		return nil, err
+	}
+
 	logrus.Infof("Checking if bucket %s exists...", c.S3Bucket)
-	useLocationConstraint := endpoint == ""
-	if err := createBucketIfNotExists(ctx, s3Client, c.S3Bucket, c.S3Region, useLocationConstraint); err != nil {
+	useLocationConstraint := strings.TrimSpace(c.S3Endpoint) == ""
+	if err := ensureBucketExists(ctx, s3Client, c.S3Bucket, c.S3Region, useLocationConstraint); err != nil {
 		return nil, fmt.Errorf("failed to ensure bucket exists: %w", err)
 	}
 
@@ -445,8 +447,8 @@ func New(c *config) (*RayLogsHandler, error) {
 		RayClusterName: c.RayClusterName,
 		RayClusterID:   c.RayClusterID,
 		RayNodeName:    c.RayNodeName,
-		LogBatching:  c.LogBatching,
-		PushInterval: c.PushInterval,
+		LogBatching:    c.LogBatching,
+		PushInterval:   c.PushInterval,
 	}, nil
 }
 
