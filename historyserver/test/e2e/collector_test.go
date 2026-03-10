@@ -93,7 +93,7 @@ func TestCollector(t *testing.T) {
 //
 // For detailed verification logic, please refer to verifyS3SessionDirs.
 //
-// 6. Delete S3 bucket to ensure test isolationCollapse comment
+// 6. Delete S3 bucket to ensure test isolation
 func testCollectorUploadOnGracefulShutdown(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 
