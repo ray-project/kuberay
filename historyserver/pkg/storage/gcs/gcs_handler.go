@@ -181,12 +181,41 @@ func (h *RayLogsHandler) List() []utils.ClusterInfo {
 		cluster.CreateTimeStamp = datetime.Unix()
 		cluster.CreateTime = datetime.UTC().Format(("2006-01-02T15:04:05Z"))
 
+		// Read the file for associated owner object
+		ownerObjectID, err := h.ReadFileFromFullPath(fullObjectPath)
+		if err != nil {
+			logrus.Errorf("Failed to retrieve associated owner resource: %v", err)
+		} else {
+			ownerObjectInfo := strings.Split(ownerObjectID, "_")
+			if len(ownerObjectInfo) == 2 {
+				cluster.OwnerKind = ownerObjectInfo[0]
+				cluster.OwnerName = ownerObjectInfo[1]
+			}
+		}
+
 		logrus.Infof("Parsed cluster %s for session %s to list", cluster.Name, cluster.SessionName)
 		clusterList = append(clusterList, *cluster)
 	}
 
 	sort.Sort(clusterList)
 	return clusterList
+}
+
+func (h *RayLogsHandler) ReadFileFromFullPath(objectPath string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	objReader, err := h.StorageClient.Bucket(h.GCSBucket).Object(objectPath).NewReader(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer objReader.Close()
+
+	content, err := io.ReadAll(objReader)
+	if err != nil {
+		return "", err
+	}
+	return string(content), nil
 }
 
 func (h *RayLogsHandler) GetContent(clusterId string, fileName string) io.Reader {

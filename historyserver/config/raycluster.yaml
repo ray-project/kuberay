@@ -110,6 +110,10 @@ spec:
             value: "test"
           - name: S3FORCE_PATH_STYLE
             value: "true"
+          - name: RAYCLUSTER_NAME_ENV_VAR
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.labels['ray.io/cluster']
           command:
           - collector
           - --role=Head
