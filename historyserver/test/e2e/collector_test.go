@@ -179,7 +179,7 @@ func testCollectorSeparatesFilesBySession(test Test, g *WithT, namespace *corev1
 // 2. Inject leftover logs before killing the collector:
 //   - file1.log -> /tmp/ray/persist-complete-logs/{sessionID}/{nodeID}/logs/ (already uploaded)
 //   - file2.log -> /tmp/ray/prev-logs/{sessionID}/{nodeID}/logs/ (pending upload)
-//     Note: node_events are not injected or verified here; they are handled by the EventServer via a separate path,
+//     Note: node_events are not injected or verified here; they are handled by the event collector,
 //     and prev-logs processing only covers the logs directory.
 //
 // 3. Kill the collector sidecar container to trigger a container restart.
