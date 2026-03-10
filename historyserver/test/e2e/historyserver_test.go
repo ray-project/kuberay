@@ -202,15 +202,6 @@ func testLivePrometheusHealth(test Test, g *WithT, namespace *corev1.Namespace, 
 }
 
 // testLogFileEndpointLiveCluster verifies that the history server can fetch log files from a live cluster.
-//
-// The test case follows these steps:
-// 1. Prepare test environment by applying a Ray cluster
-// 2. Submit a Ray job to the existing cluster
-// 3. Apply History Server and get its URL
-// 4. Get the cluster info from the list
-// 5. Verify that the history server can fetch log content (raylet.out)
-// 6. Verify that the history server rejects path traversal attempts
-// 7. Delete S3 bucket to ensure test isolation
 func testLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
@@ -492,8 +483,8 @@ func testLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Names
 // 2. Submit a Ray job to the existing cluster
 // 3. Delete RayCluster to trigger log upload to S3
 // 4. Apply History Server and get its URL
-// 5. Verify that the history server can fetch log content from S3 (raylet.out)
-// 6. Verify that the history server rejects path traversal attempts from S3
+// 5. Verify that the history server can fetch log content from S3
+// 6. Verify parameter validation for dead cluster
 // 7. Verify security (path traversal) protection
 // 8. Delete S3 bucket to ensure test isolation
 func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) {
