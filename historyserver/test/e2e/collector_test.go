@@ -74,12 +74,32 @@ func TestCollector(t *testing.T) {
 }
 
 // testCollectorUploadOnGracefulShutdown verifies that logs, node_events, and job_events are successfully uploaded to S3 on cluster deletion.
+//
+// The test case follows these steps:
+// 1. Prepare test environment by applying a Ray cluster with the collector
+// 2. Submit a Ray job to the existing Ray cluster
+// 3. Get the sessionID and nodeID for further verification
+// 4. Delete the Ray cluster to trigger log uploading and event flushing on deletion. When the Ray cluster is deleted,
+// logs, node_events, and job_events are processed as follows:
+//   - logs: Trigger RayLogHandler.processSessionLatestLog to process logs under /tmp/ray/session_latest
+//   - node_events: Trigger EventServer.flushEvents, which calls es.flushNodeEventsForHour to process in-memory node events
+//   - job_events: Trigger EventServer.flushEvents, which calls es.flushJobEventsForHour to process in-memory job events
+//
+// 5. Verify logs, node_events, and job_events are successfully uploaded to S3. Expected S3 path structure:
+//   - {S3BucketName}/log/{clusterName}_{clusterID}/{sessionID}/logs/...
+//   - {S3BucketName}/log/{clusterName}_{clusterID}/{sessionID}/node_events/...
+//   - {S3BucketName}/log/{clusterName}_{clusterID}/{sessionID}/job_events/AgAAAA==/...
+//   - {S3BucketName}/log/{clusterName}_{clusterID}/{sessionID}/job_events/AQAAAA==/...
+//
+// For detailed verification logic, please refer to verifyS3SessionDirs.
+//
+// 6. Delete S3 bucket to ensure test isolationCollapse comment
 func testCollectorUploadOnGracefulShutdown(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 
 	_ = ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 
-	// clusterID is injected as namespace.Name by ApplyRayClusterWithCollector.
+	// Define variables for constructing S3 object prefix.
 	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, namespace.Name)
 	sessionID := GetSessionIDFromHeadPod(test, g, rayCluster)
 	headNodeID := GetNodeIDFromPod(test, g, HeadPod(test, rayCluster), "ray-head")
@@ -95,7 +115,7 @@ func testCollectorUploadOnGracefulShutdown(test Test, g *WithT, namespace *corev
 		return err
 	}, TestTimeoutMedium).Should(WithTransform(k8serrors.IsNotFound, BeTrue()))
 
-	verifyS3SessionDirs(test, g, s3Client, sessionPrefix, headNodeID, workerNodeID, false)
+	verifyS3SessionDirs(test, g, s3Client, sessionPrefix, headNodeID, workerNodeID)
 	DeleteS3Bucket(test, g, s3Client)
 }
 
@@ -116,7 +136,7 @@ func testCollectorSeparatesFilesBySession(test Test, g *WithT, namespace *corev1
 	killContainerAndWaitForRestart(test, g, FirstWorkerPod(test, rayCluster), "ray-worker")
 
 	VerifySessionDirectoriesExist(test, g, rayCluster, sessionID)
-	verifyS3SessionDirs(test, g, s3Client, sessionPrefix, headNodeID, workerNodeID, false)
+	verifyS3SessionDirs(test, g, s3Client, sessionPrefix, headNodeID, workerNodeID)
 	DeleteS3Bucket(test, g, s3Client)
 }
 
@@ -344,8 +364,7 @@ func testCollectorStoresPlacementGroups(test Test, g *WithT, namespace *corev1.N
 }
 
 // verifyS3SessionDirs verifies that directories logs/<headNodeID>/, logs/<workerNodeID>/, and node_events/ exist under a session prefix in S3.
-// If skipNodeEvents is true, node_events directory verification will be skipped.
-func verifyS3SessionDirs(test Test, g *WithT, s3Client *s3.Client, sessionPrefix string, headNodeID string, workerNodeID string, skipNodeEvents bool) {
+func verifyS3SessionDirs(test Test, g *WithT, s3Client *s3.Client, sessionPrefix string, headNodeID string, workerNodeID string) {
 	headLogDirPrefix := fmt.Sprintf("%slogs/%s", sessionPrefix, headNodeID)
 	workerLogDirPrefix := fmt.Sprintf("%slogs/%s", sessionPrefix, workerNodeID)
 
@@ -371,10 +390,6 @@ func verifyS3SessionDirs(test Test, g *WithT, s3Client *s3.Client, sessionPrefix
 		gg.Expect(err).NotTo(HaveOccurred())
 		gg.Expect(aws.ToInt64(obj.ContentLength)).To(BeNumerically(">=", 0))
 	}, TestTimeoutMedium).Should(Succeed(), "Failed to verify required log files under %s", sessionPrefix+"logs/")
-
-	if skipNodeEvents {
-		return
-	}
 
 	LogWithTimestamp(test.T(), "Verifying all %d event types are covered, except for EVENT_TYPE_UNSPECIFIED: %v", len(eventtypes.AllEventTypes)-1, eventtypes.AllEventTypes)
 	g.Eventually(func(gg Gomega) {
