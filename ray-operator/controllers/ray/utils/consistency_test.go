@@ -52,7 +52,7 @@ func TestInconsistentRayClusterStatus(t *testing.T) {
 		{
 			name: "State is updated, expect result to be true",
 			modifyStatus: func(newStatus *rayv1.RayClusterStatus) {
-				newStatus.State = rayv1.Suspended
+				newStatus.State = rayv1.Suspended //nolint:staticcheck // Intentional use of deprecated State field for backward compatibility
 			},
 			expectResult: true,
 		},
@@ -177,12 +177,12 @@ func TestInconsistentRayServiceStatuses(t *testing.T) {
 				},
 			},
 		},
-		ServiceStatus: rayv1.NotRunning,
+		ServiceStatus: rayv1.NotRunning, //nolint:staticcheck // Intentional use of deprecated ServiceStatus field for backward compatibility
 	}
 
 	// Test 1: Update ServiceStatus only.
 	newStatus := oldStatus.DeepCopy()
-	newStatus.ServiceStatus = rayv1.Running
+	newStatus.ServiceStatus = rayv1.Running //nolint:staticcheck // Intentional use of deprecated ServiceStatus field for backward compatibility
 	assert.True(t, InconsistentRayServiceStatuses(oldStatus, *newStatus))
 
 	// Test 2: Test RayServiceStatus

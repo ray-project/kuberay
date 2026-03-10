@@ -1604,7 +1604,7 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 
 	if reconcileErr == nil && len(runtimePods.Items) == int(newInstance.Status.DesiredWorkerReplicas)+1 { // workers + 1 head
 		if utils.CheckAllPodsRunning(ctx, runtimePods) {
-			newInstance.Status.State = rayv1.Ready
+			newInstance.Status.State = rayv1.Ready //nolint:staticcheck // Intentional use of deprecated State field for backward compatibility
 			newInstance.Status.Reason = ""
 		}
 	}
@@ -1700,7 +1700,7 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 	}
 
 	if newInstance.Spec.Suspend != nil && *newInstance.Spec.Suspend && len(runtimePods.Items) == 0 {
-		newInstance.Status.State = rayv1.Suspended
+		newInstance.Status.State = rayv1.Suspended //nolint:staticcheck // Intentional use of deprecated State field for backward compatibility
 	}
 
 	if err := r.updateEndpoints(ctx, newInstance); err != nil {
@@ -1714,11 +1714,12 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 	timeNow := metav1.Now()
 	newInstance.Status.LastUpdateTime = &timeNow
 
+	//nolint:staticcheck // Intentional use of deprecated State field for backward compatibility
 	if instance.Status.State != newInstance.Status.State {
 		if newInstance.Status.StateTransitionTimes == nil {
 			newInstance.Status.StateTransitionTimes = make(map[rayv1.ClusterState]*metav1.Time)
 		}
-		newInstance.Status.StateTransitionTimes[newInstance.Status.State] = &timeNow
+		newInstance.Status.StateTransitionTimes[newInstance.Status.State] = &timeNow //nolint:staticcheck // Intentional use of deprecated State field for backward compatibility
 	}
 
 	return newInstance, nil

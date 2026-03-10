@@ -25,7 +25,7 @@ linters:
     - revive
   settings:
     staticcheck:
-      checks: ["all", "-SA1019", "-ST1001", "-ST1003", "-ST1005", "-QF1008"]
+      checks: ["all", "-ST1001", "-ST1003", "-ST1005", "-QF1008"]
     ginkgolinter:
       forbid-focus-container: true
     gocyclo:

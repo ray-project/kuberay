@@ -214,7 +214,9 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 
 		// Check the current status of RayCluster before submitting.
 		if clientURL := rayJobInstance.Status.DashboardURL; clientURL == "" {
+			//nolint:staticcheck // Intentional use of deprecated State field for backward compatibility
 			if rayClusterInstance.Status.State != rayv1.Ready {
+				//nolint:staticcheck // Intentional use of deprecated State field for backward compatibility
 				logger.Info("Wait for the RayCluster.Status.State to be ready before submitting the job.", "RayCluster", rayClusterInstance.Name, "State", rayClusterInstance.Status.State)
 				// The nonready RayCluster status should be reflected in the RayJob's status.
 				// Breaking from the switch statement will drop directly to the status update code

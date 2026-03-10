@@ -14,6 +14,7 @@ import (
 // TODO (kevin85421): The field `ObservedGeneration` is not being well-maintained at the moment. In the future,
 // this field should be used to determine whether to update this CR or not.
 func InconsistentRayClusterStatus(oldStatus rayv1.RayClusterStatus, newStatus rayv1.RayClusterStatus) bool {
+	//nolint:staticcheck // Intentional use of deprecated State field for backward compatibility
 	if oldStatus.State != newStatus.State || oldStatus.Reason != newStatus.Reason {
 		return true
 	}
@@ -89,6 +90,7 @@ func inconsistentRayServiceStatus(oldStatus rayv1.RayServiceStatus, newStatus ra
 
 // Determine whether to update the status of the RayService instance.
 func InconsistentRayServiceStatuses(oldStatus rayv1.RayServiceStatuses, newStatus rayv1.RayServiceStatuses) bool {
+	//nolint:staticcheck // Intentional use of deprecated ServiceStatus field for backward compatibility
 	if oldStatus.ServiceStatus != newStatus.ServiceStatus {
 		return true
 	}

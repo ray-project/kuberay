@@ -82,7 +82,7 @@ func GetRayCluster(t Test, namespace, name string) (*rayv1.RayCluster, error) {
 }
 
 func RayClusterState(cluster *rayv1.RayCluster) rayv1.ClusterState {
-	return cluster.Status.State
+	return cluster.Status.State //nolint:staticcheck // Intentional use of deprecated State field for backward compatibility
 }
 
 func StatusCondition(condType rayv1.RayClusterConditionType) func(*rayv1.RayCluster) metav1.Condition {
@@ -221,7 +221,7 @@ func RayService(t Test, namespace, name string) func() (*rayv1.RayService, error
 }
 
 func RayServiceStatus(service *rayv1.RayService) rayv1.ServiceStatus {
-	return service.Status.ServiceStatus
+	return service.Status.ServiceStatus //nolint:staticcheck // Intentional use of deprecated ServiceStatus field for backward compatibility
 }
 
 func IsRayServiceReady(service *rayv1.RayService) bool {

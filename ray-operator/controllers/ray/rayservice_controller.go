@@ -483,9 +483,9 @@ func (r *RayServiceReconciler) calculateStatus(
 	calculateConditions(ctx, r, rayServiceInstance)
 
 	// The definition of `ServiceStatus` is equivalent to the `RayServiceReady` condition
-	rayServiceInstance.Status.ServiceStatus = rayv1.NotRunning
+	rayServiceInstance.Status.ServiceStatus = rayv1.NotRunning //nolint:staticcheck // Intentional use of deprecated ServiceStatus field for backward compatibility
 	if meta.IsStatusConditionTrue(rayServiceInstance.Status.Conditions, string(rayv1.RayServiceReady)) {
-		rayServiceInstance.Status.ServiceStatus = rayv1.Running
+		rayServiceInstance.Status.ServiceStatus = rayv1.Running //nolint:staticcheck // Intentional use of deprecated ServiceStatus field for backward compatibility
 	}
 
 	return nil

@@ -86,7 +86,7 @@ func TestRayServiceManagedBy(t *testing.T) {
 			condition := meta.FindStatusCondition(rs.Status.Conditions, string(rayv1.RayServiceReady))
 			gg.Expect(condition).To(BeNil())
 			// ServiceStatus should remain empty/NotRunning
-			gg.Expect(rs.Status.ServiceStatus).To(Equal(rayv1.NotRunning))
+			gg.Expect(rs.Status.ServiceStatus).To(Equal(rayv1.NotRunning)) //nolint:staticcheck // Intentional use of deprecated ServiceStatus field for backward compatibility
 			// ActiveServiceStatus should remain empty
 			gg.Expect(rs.Status.ActiveServiceStatus.RayClusterName).To(BeEmpty())
 			// PendingServiceStatus should remain empty
