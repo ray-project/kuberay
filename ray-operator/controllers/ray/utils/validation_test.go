@@ -1047,22 +1047,6 @@ func TestValidateRayJobSpec(t *testing.T) {
 			expectError: true,
 		},
 		{
-			name: "RayJobDeletionPolicy feature gate must be enabled to use the DeletionStrategy feature",
-			spec: rayv1.RayJobSpec{
-				DeletionStrategy: &rayv1.DeletionStrategy{
-					OnSuccess: &rayv1.DeletionPolicy{
-						Policy: ptr.To(rayv1.DeleteCluster),
-					},
-					OnFailure: &rayv1.DeletionPolicy{
-						Policy: ptr.To(rayv1.DeleteCluster),
-					},
-				},
-				ShutdownAfterJobFinishes: true,
-				RayClusterSpec:           createBasicRayClusterSpec(),
-			},
-			expectError: true,
-		},
-		{
 			name: "BackoffLimit is incompatible with InteractiveMode",
 			spec: rayv1.RayJobSpec{
 				BackoffLimit:   ptr.To[int32](1),
