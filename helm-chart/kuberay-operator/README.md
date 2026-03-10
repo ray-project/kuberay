@@ -8,7 +8,7 @@ A Helm chart for deploying the Kuberay operator on Kubernetes.
 
 ## Introduction
 
-This document provides instructions to install both CRDs (RayCluster, RayJob, RayService) and
+This document provides instructions to install both CRDs (RayCluster, RayJob, RayService, RayCronJob) and
 KubeRay operator with a Helm chart.
 
 ## Prerequisites
