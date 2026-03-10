@@ -22,7 +22,7 @@ const (
 	// owner: @andrewsykim @seanlaii
 	// rep: N/A
 	// alpha: v1.3
-	//
+	// beta: v1.6
 	// Enables new deletion policy API in RayJob
 	RayJobDeletionPolicy featuregate.Feature = "RayJobDeletionPolicy"
 
@@ -61,7 +61,7 @@ func init() {
 
 var defaultFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
 	RayClusterStatusConditions:   {Default: true, PreRelease: featuregate.Beta},
-	RayJobDeletionPolicy:         {Default: false, PreRelease: featuregate.Alpha},
+	RayJobDeletionPolicy:         {Default: true, PreRelease: featuregate.Beta},
 	RayMultiHostIndexing:         {Default: false, PreRelease: featuregate.Alpha},
 	RayServiceIncrementalUpgrade: {Default: false, PreRelease: featuregate.Alpha},
 	RayCronJob:                   {Default: false, PreRelease: featuregate.Alpha},
