@@ -174,7 +174,7 @@ spec:
 | featureGates[0].name | string | `"RayClusterStatusConditions"` |  |
 | featureGates[0].enabled | bool | `true` |  |
 | featureGates[1].name | string | `"RayJobDeletionPolicy"` |  |
-| featureGates[1].enabled | bool | `false` |  |
+| featureGates[1].enabled | bool | `true` |  |
 | featureGates[2].name | string | `"RayMultiHostIndexing"` |  |
 | featureGates[2].enabled | bool | `false` |  |
 | featureGates[3].name | string | `"RayServiceIncrementalUpgrade"` |  |
