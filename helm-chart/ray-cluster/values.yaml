@@ -94,7 +94,9 @@ head:
   labels: {}
 
   # -- Ray node labels for the head group, used for label-based scheduling.
-  # Set at the RayCluster spec level (headGroupSpec.labels), not pod metadata.
+  # Set at the RayCluster spec level (headGroupSpec.labels).
+  # Note: The operator will also merge these into pod metadata labels,
+  # so avoid using the same keys as `labels` to prevent silent overrides.
   # ref: https://docs.ray.io/en/latest/cluster/kubernetes/user-guides/label-based-scheduling.html
   rayNodeLabels: {}
 
@@ -221,7 +223,9 @@ worker:
   labels: {}
 
   # -- Ray node labels for this worker group, used for label-based scheduling.
-  # Set at the RayCluster spec level (workerGroupSpec.labels), not pod metadata.
+  # Set at the RayCluster spec level (workerGroupSpec.labels).
+  # Note: The operator will also merge these into pod metadata labels,
+  # so avoid using the same keys as `labels` to prevent silent overrides.
   # ref: https://docs.ray.io/en/latest/cluster/kubernetes/user-guides/label-based-scheduling.html
   rayNodeLabels: {}
   serviceAccountName: ""
@@ -340,7 +344,9 @@ additionalWorkerGroups:
     labels: {}
 
     # -- Ray node labels for this worker group, used for label-based scheduling.
-    # Set at the RayCluster spec level (workerGroupSpec.labels), not pod metadata.
+    # Set at the RayCluster spec level (workerGroupSpec.labels).
+    # Note: The operator will also merge these into pod metadata labels,
+    # so avoid using the same keys as `labels` to prevent silent overrides.
     # ref: https://docs.ray.io/en/latest/cluster/kubernetes/user-guides/label-based-scheduling.html
     rayNodeLabels: {}
     serviceAccountName: ""
