@@ -9,8 +9,6 @@
 # Usage examples:
 #   helm install kuberay-operator kuberay/kuberay-operator -f ../.buildkite/values-kuberay-operator-override.yaml
 #   (add or remove feature gates below as e2e scenarios expand)
-#
-# Current overrides: enable RayJobDeletionPolicy alpha feature gate alongside the existing status conditions gate.
 featureGates:
   - name: RayClusterStatusConditions
     enabled: true

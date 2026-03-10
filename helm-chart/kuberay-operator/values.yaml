@@ -135,7 +135,7 @@ featureGates:
 - name: RayClusterStatusConditions
   enabled: true
 - name: RayJobDeletionPolicy
-  enabled: false
+  enabled: true
 - name: RayMultiHostIndexing
   enabled: false
 - name: RayServiceIncrementalUpgrade
