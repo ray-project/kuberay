@@ -163,7 +163,7 @@ func printClusters(rayclusterList *rayv1.RayClusterList, output io.Writer) error
 				raycluster.Status.DesiredTPU.String(),
 				raycluster.Status.DesiredMemory.String(),
 				relevantConditionType,
-				raycluster.Status.State,
+				raycluster.Status.State, //nolint:staticcheck // Intentional use of deprecated State field for backward compatibility
 				age,
 			},
 		})

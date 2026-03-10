@@ -432,6 +432,8 @@ func TestRayScaleClusterRun(t *testing.T) {
 			}
 
 			kubeClientSet := kubefake.NewClientset()
+			//nolint:staticcheck // NewClientset requires a structured merge diff schema that ray-operator doesn't generate
+			// because k8s.io/apimachinery types use OpenAPI v3 features incompatible with the v2 code generator.
 			rayClient := rayClientFake.NewSimpleClientset(tc.rayClusters...)
 			k8sClients := client.NewClientForTesting(kubeClientSet, rayClient)
 

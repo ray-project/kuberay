@@ -145,6 +145,7 @@ func (c *k8sClient) WaitRayClusterProvisioned(ctx context.Context, namespace, na
 				return fmt.Errorf("unexpected type %T", event.Object)
 			}
 
+			//nolint:staticcheck // Intentional use of deprecated State field for backward compatibility
 			if meta.IsStatusConditionTrue(cluster.Status.Conditions, string(rayv1.RayClusterProvisioned)) || cluster.Status.State == rayv1.Ready {
 				return nil
 			}
