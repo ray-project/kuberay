@@ -104,6 +104,7 @@ func routerEvents(s *ServerHandler) {
 		Writes(""))
 }
 
+// routerAPI uses HTTP Cookie to identify the cluster session.
 func routerAPI(s *ServerHandler) {
 	ws := new(restful.WebService)
 	defer restful.Add(ws)
@@ -289,6 +290,138 @@ func routerLogical(s *ServerHandler) {
 
 }
 
+// routerRESTfulAPI registers RESTful path-parameter-based routes for all cluster-session-scoped endpoints.
+// These routes allow stateless access without cookies.
+//
+// The general API endpoint pattern is:
+// GET /namespaces/{namespace}/clusters/{cluster}/sessions/{session}/<original-endpoint>
+//
+// The PathParamHandle WebService filter extracts cluster session information from path parameters
+// and rewrites the URL to the original endpoint path, so all existing downstream handlers work unchanged.
+func routerRESTfulAPI(s *ServerHandler) {
+	ws := new(restful.WebService)
+	defer restful.Add(ws)
+
+	// Apply the WebService-level filter to all routes.
+	ws.Path("/namespaces").
+		Consumes(restful.MIME_JSON).
+		Produces(restful.MIME_JSON).
+		Filter(s.PathParamHandle)
+
+	// Define the base path for all cluster-session-scoped endpoints.
+	base := "/{namespace}/clusters/{cluster}/sessions/{session}"
+
+	ws.Route(ws.GET(base + "/timezone/").To(s.getTimezone).
+		Doc("Get timezone").
+		Writes(""))
+
+	ws.Route(ws.GET(base + "/nodes").To(s.getNodes).
+		Doc("Get all node information for a given cluster").
+		Param(ws.QueryParameter("view", "View type: 'summary' (default) for node summary and resources, 'hostNameList' for alive node hostnames")).
+		Writes(""))
+
+	ws.Route(ws.GET(base + "/nodes/{node_id}").To(s.getNode).
+		Doc("Get node summary for a specific node by its ID").
+		Param(ws.PathParameter("node_id", "The unique identifier of the node")).
+		Writes(""))
+
+	ws.Route(ws.GET(base + "/events/").To(s.getEvents).
+		Doc("Get events").
+		Writes(""))
+
+	ws.Route(ws.GET(base + "/api/cluster_status").To(s.getClusterStatus).
+		Doc("Get cluster status").
+		Param(ws.QueryParameter("format", "such as 1")).
+		Writes(""))
+
+	ws.Route(ws.GET(base + "/api/grafana_health").To(s.getGrafanaHealth).
+		Doc("Get Grafana health").
+		Writes(""))
+
+	ws.Route(ws.GET(base + "/api/prometheus_health").To(s.getPrometheusHealth).
+		Doc("Get Prometheus health").
+		Writes(""))
+
+	ws.Route(ws.GET(base + "/api/jobs/").To(s.getJobs).
+		Doc("Get driver jobs").
+		Writes(""))
+
+	ws.Route(ws.GET(base + "/api/jobs/{job_id}").To(s.getJob).
+		Doc("Get a single driver job").
+		Param(ws.PathParameter("job_id", "job_id")).
+		Writes(""))
+
+	ws.Route(ws.GET(base + "/api/v0/cluster_metadata").To(s.getClusterMetadata).
+		Doc("Get cluster metadata (Ray version, Python version, etc.)").
+		Writes(""))
+
+	ws.Route(ws.GET(base + "/api/v0/logs").To(s.getNodeLogs).
+		Doc("Get logs").
+		Param(ws.QueryParameter("node_id", "node_id")).
+		Param(ws.QueryParameter("glob", "glob pattern")).
+		Writes(""))
+
+	ws.Route(ws.GET(base+"/api/v0/logs/{media_type}").To(s.getNodeLog).
+		Doc("Get or stream logs").
+		Param(ws.PathParameter("media_type", "media type: 'file' for log file content, 'stream' for real-time streaming")).
+		Param(ws.QueryParameter("node_id", "node_id (optional if node_ip/task_id/actor_id is provided)")).
+		Param(ws.QueryParameter("node_ip", "node_ip (optional, resolve to node_id)")).
+		Param(ws.QueryParameter("filename", "filename (explicit log file path)")).
+		Param(ws.QueryParameter("task_id", "task_id (resolve log file from task)")).
+		Param(ws.QueryParameter("actor_id", "actor_id (resolve log file from actor)")).
+		Param(ws.QueryParameter("pid", "pid (resolve log file from process id)")).
+		Param(ws.QueryParameter("suffix", "suffix (out or err, default: out)")).
+		Param(ws.QueryParameter("lines", "lines (number of lines to return, default: 1000)")).
+		Param(ws.QueryParameter("timeout", "timeout")).
+		Param(ws.QueryParameter("attempt_number", "attempt_number (task retry attempt number, default: 0)")).
+		Param(ws.QueryParameter("download_filename", "download_filename (if set, triggers download)")).
+		Param(ws.QueryParameter("filter_ansi_code", "filter_ansi_code (true/false)")).
+		Param(ws.QueryParameter("interval", "interval (polling interval in seconds, for stream)")).
+		Produces("text/plain", "text/event-stream").
+		Writes(""))
+
+	ws.Route(ws.GET(base + "/api/v0/tasks").To(s.getTasks).
+		Doc("Get tasks").
+		Param(ws.QueryParameter("limit", "limit")).
+		Param(ws.QueryParameter("timeout", "timeout")).
+		Param(ws.QueryParameter("detail", "detail")).
+		Param(ws.QueryParameter("exclude_driver", "exclude_driver")).
+		Param(ws.QueryParameter("filter_keys", "filter_keys")).
+		Param(ws.QueryParameter("filter_predicates", "filter_predicates")).
+		Param(ws.QueryParameter("filter_values", "filter_values")).
+		Writes(""))
+
+	ws.Route(ws.GET(base + "/api/v0/tasks/summarize").To(s.getTaskSummarize).
+		Doc("Get task summarize").
+		Param(ws.QueryParameter("filter_keys", "filter_keys")).
+		Param(ws.QueryParameter("filter_predicates", "filter_predicates")).
+		Param(ws.QueryParameter("filter_values", "filter_values")).
+		Param(ws.QueryParameter("summary_by", "summary_by")).
+		Writes(""))
+
+	ws.Route(ws.GET(base + "/api/v0/tasks/timeline").To(s.getTasksTimeline).
+		Doc("Get tasks timeline").
+		Param(ws.QueryParameter("job_id", "filter by job_id")).
+		Param(ws.QueryParameter("download", "set to 1 to return response as attachment (timeline JSON file)")).
+		Produces(restful.MIME_JSON).
+		Writes(""))
+
+	ws.Route(ws.GET(base + "/logical/actors").To(s.getLogicalActors).
+		Doc("Get logical actors").
+		Writes(""))
+
+	ws.Route(ws.GET(base + "/logical/actors/{single_actor:*}").To(s.getLogicalActor).
+		Doc("Get a logical single actor").
+		Param(ws.PathParameter("single_actor", "single_actor")).
+		Writes(""))
+
+	// Fallback for additional polled endpoints stored in storage by the collector.
+	// Must be registered last; go-restful matches more specific routes first.
+	ws.Route(ws.GET(base + "/api/{subpath:*}").To(s.getAdditionalEndpoint).
+		Doc("Fallback handler for additional polled endpoints stored in storage").
+		Writes(""))
+}
+
 func routerRayClusterSet(s *ServerHandler) {
 	ws := new(restful.WebService)
 	defer restful.Add(ws)
@@ -326,6 +459,9 @@ func (s *ServerHandler) RegisterRouter() {
 	// routerHomepage(s)
 	routerHealthz(s)
 	routerLogical(s)
+
+	// Register RESTful API routes for all cluster-session-scoped endpoints.
+	routerRESTfulAPI(s)
 }
 
 func (s *ServerHandler) redirectRequest(req *restful.Request, resp *restful.Response) {
@@ -1626,6 +1762,50 @@ func (s *ServerHandler) CookieHandle(req *restful.Request, resp *restful.Respons
 	req.SetAttribute(COOKIE_SESSION_NAME_KEY, sessionName.Value)
 	req.SetAttribute(COOKIE_CLUSTER_NAMESPACE_KEY, clusterNamespace.Value)
 	logrus.Infof("Request URL %s", req.Request.URL.String())
+	chain.ProcessFilter(req, resp)
+}
+
+// PathParamHandle is a preprocessing filter for RESTful path-parameter-based routes.
+// It extracts namespace, cluster, and session from URL path parameters instead of cookies,
+// enabling stateless requests without prior cookie setup.
+//
+// After extraction, it rewrites req.Request.URL.Path by stripping the RESTful prefix:
+// /namespaces/{namespace}/clusters/{cluster}/sessions/{session}
+//
+// Hence, the downstream handlers see the same URL path as they would through the cookie-based routes.
+func (s *ServerHandler) PathParamHandle(req *restful.Request, resp *restful.Response, chain *restful.FilterChain) {
+	namespace := req.PathParameter("namespace")
+	cluster := req.PathParameter("cluster")
+	session := req.PathParameter("session")
+
+	// Validate path parameters to prevent path traversal attacks.
+	if !fs.ValidPath(cluster) || !fs.ValidPath(namespace) || !fs.ValidPath(session) {
+		resp.WriteHeaderAndEntity(http.StatusBadRequest,
+			fmt.Sprintf("invalid path parameters: path traversal not allowed (cluster=%s, namespace=%s, session=%s)",
+				cluster, namespace, session))
+		return
+	}
+
+	// Rewrite the URL path to reveal the original endpoint path.
+	logrus.Infof("Received RESTful request: %s %s", req.Request.Method, req.Request.URL.String())
+	prefix := "/namespaces/" + namespace + "/clusters/" + cluster + "/sessions/" + session
+	req.Request.URL.Path = strings.TrimPrefix(req.Request.URL.Path, prefix)
+	req.Request.URL.RawPath = ""
+
+	// Set the cluster session attributes for the downstream handlers.
+	req.SetAttribute(COOKIE_CLUSTER_NAME_KEY, cluster)
+	req.SetAttribute(COOKIE_SESSION_NAME_KEY, session)
+	req.SetAttribute(COOKIE_CLUSTER_NAMESPACE_KEY, namespace)
+
+	if session == "live" {
+		svcInfo, err := getClusterSvcInfo(s.clientManager.clients, cluster, namespace)
+		if err != nil {
+			resp.WriteHeaderAndEntity(http.StatusBadRequest, err.Error())
+			return
+		}
+		req.SetAttribute(ATTRIBUTE_SERVICE_NAME, svcInfo)
+	}
+
 	chain.ProcessFilter(req, resp)
 }
 
