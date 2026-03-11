@@ -111,7 +111,7 @@ helm uninstall raycluster
 | worker.groupName | string | `"workergroup"` | The name of the workergroup |
 | worker.replicas | int | `1` | The number of replicas for the worker pod |
 | worker.minReplicas | int | `1` | The minimum number of replicas for the worker pod |
-| worker.maxReplicas | int | `3` | The maximum number of replicas for the worker pod |
+| worker.maxReplicas | int | `5` | The maximum number of replicas for the worker pod |
 | worker.labels | object | `{}` | Labels for the worker pod |
 | worker.serviceAccountName | string | `""` |  |
 | worker.restartPolicy | string | `""` |  |
