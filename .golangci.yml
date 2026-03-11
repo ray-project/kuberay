@@ -33,9 +33,6 @@ linters:
     gosec:
       excludes:
         - G601
-    govet:
-      enable:
-        - fieldalignment
     lll:
       line-length: 120
     misspell:
