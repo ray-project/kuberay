@@ -176,7 +176,7 @@ spec:
 | featureGates[1].name | string | `"RayJobDeletionPolicy"` |  |
 | featureGates[1].enabled | bool | `true` |  |
 | featureGates[2].name | string | `"RayMultiHostIndexing"` |  |
-| featureGates[2].enabled | bool | `true` |  |
+| featureGates[2].enabled | bool | `false` |  |
 | featureGates[3].name | string | `"RayServiceIncrementalUpgrade"` |  |
 | featureGates[3].enabled | bool | `false` |  |
 | featureGates[4].name | string | `"RayCronJob"` |  |
