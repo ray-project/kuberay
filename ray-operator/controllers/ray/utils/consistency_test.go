@@ -177,7 +177,7 @@ func TestInconsistentRayServiceStatuses(t *testing.T) {
 				},
 			},
 		},
-		ServiceStatus: rayv1.NotRunning, //nolint:staticcheck // Intentional use of deprecated ServiceStatus field for backward compatibility
+		ServiceStatus: rayv1.NotRunning,
 	}
 
 	// Test 1: Update ServiceStatus only.
