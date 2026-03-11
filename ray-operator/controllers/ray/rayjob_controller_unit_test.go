@@ -536,7 +536,6 @@ func TestEmitRayJobExecutionDuration(t *testing.T) {
 	rayJobUID := types.UID("test-job-uid")
 	mockTime := time.Now().Add(-60 * time.Second)
 
-	//nolint:govet // disable govet to keep the order of the struct fields
 	tests := []struct {
 		name                        string
 		originalRayJobStatus        rayv1.RayJobStatus
