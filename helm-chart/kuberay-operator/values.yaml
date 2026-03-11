@@ -137,7 +137,7 @@ featureGates:
 - name: RayJobDeletionPolicy
   enabled: true
 - name: RayMultiHostIndexing
-  enabled: false
+  enabled: true
 - name: RayServiceIncrementalUpgrade
   enabled: false
 - name: RayCronJob
