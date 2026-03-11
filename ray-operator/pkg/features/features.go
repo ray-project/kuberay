@@ -29,6 +29,7 @@ const (
 	// owner: @aaronliang @ryanaoleary
 	// rep: N/A
 	// alpha: v1.5
+	// beta: v1.6
 	//
 	// Enables multi-host worker indexing
 	RayMultiHostIndexing featuregate.Feature = "RayMultiHostIndexing"
@@ -62,7 +63,7 @@ func init() {
 var defaultFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
 	RayClusterStatusConditions:   {Default: true, PreRelease: featuregate.Beta},
 	RayJobDeletionPolicy:         {Default: true, PreRelease: featuregate.Beta},
-	RayMultiHostIndexing:         {Default: false, PreRelease: featuregate.Alpha},
+	RayMultiHostIndexing:         {Default: true, PreRelease: featuregate.Beta},
 	RayServiceIncrementalUpgrade: {Default: false, PreRelease: featuregate.Alpha},
 	RayCronJob:                   {Default: false, PreRelease: featuregate.Alpha},
 	AsyncJobInfoQuery:            {Default: false, PreRelease: featuregate.Alpha},
