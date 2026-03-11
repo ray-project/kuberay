@@ -1047,22 +1047,6 @@ func TestValidateRayJobSpec(t *testing.T) {
 			expectError: true,
 		},
 		{
-			name: "RayJobDeletionPolicy feature gate must be enabled to use the DeletionStrategy feature",
-			spec: rayv1.RayJobSpec{
-				DeletionStrategy: &rayv1.DeletionStrategy{
-					OnSuccess: &rayv1.DeletionPolicy{
-						Policy: ptr.To(rayv1.DeleteCluster),
-					},
-					OnFailure: &rayv1.DeletionPolicy{
-						Policy: ptr.To(rayv1.DeleteCluster),
-					},
-				},
-				ShutdownAfterJobFinishes: true,
-				RayClusterSpec:           createBasicRayClusterSpec(),
-			},
-			expectError: true,
-		},
-		{
 			name: "BackoffLimit is incompatible with InteractiveMode",
 			spec: rayv1.RayJobSpec{
 				BackoffLimit:   ptr.To[int32](1),
@@ -1190,6 +1174,18 @@ func TestValidateRayJobSpec(t *testing.T) {
 			spec: rayv1.RayJobSpec{
 				ClusterSelector: map[string]string{"ray.io/cluster": "ray-cluster"},
 				BackoffLimit:    ptr.To[int32](1),
+			},
+			expectError: true,
+		},
+		{
+			name: "RayJob does not support K8s token auth mode",
+			spec: rayv1.RayJobSpec{
+				RayClusterSpec: &rayv1.RayClusterSpec{
+					AuthOptions: &rayv1.AuthOptions{
+						Mode:               rayv1.AuthModeToken,
+						EnableK8sTokenAuth: ptr.To(true),
+					},
+				},
 			},
 			expectError: true,
 		},
@@ -1852,6 +1848,18 @@ func TestValidateRayServiceSpec(t *testing.T) {
 			spec: rayv1.RayServiceSpec{
 				RayClusterSpec:                 *createBasicRayClusterSpec(),
 				RayClusterDeletionDelaySeconds: ptr.To[int32](-1),
+			},
+			expectError: true,
+		},
+		{
+			name: "RayService does not support K8s token auth mode",
+			spec: rayv1.RayServiceSpec{
+				RayClusterSpec: rayv1.RayClusterSpec{
+					AuthOptions: &rayv1.AuthOptions{
+						Mode:               rayv1.AuthModeToken,
+						EnableK8sTokenAuth: ptr.To(true),
+					},
+				},
 			},
 			expectError: true,
 		},

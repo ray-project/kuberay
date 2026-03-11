@@ -135,10 +135,12 @@ featureGates:
 - name: RayClusterStatusConditions
   enabled: true
 - name: RayJobDeletionPolicy
-  enabled: false
+  enabled: true
 - name: RayMultiHostIndexing
   enabled: false
 - name: RayServiceIncrementalUpgrade
+  enabled: false
+- name: RayCronJob
   enabled: false
 
 # Configurations for KubeRay operator metrics.
