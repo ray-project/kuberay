@@ -103,7 +103,7 @@ kubectl get pods
 | replicaCount | int | `1` |  |
 | name | string | `"kuberay-apiserver"` |  |
 | image.repository | string | `"quay.io/kuberay/apiserver"` | Image repository. |
-| image.tag | string | `"nightly"` | Image tag. |
+| image.tag | string | `"v1.6.0-rc.0"` | Image tag. |
 | image.pullPolicy | string | `"IfNotPresent"` | Image pull policy. |
 | cors | string | `nil` |  |
 | labels | object | `{}` | Extra labels. |
