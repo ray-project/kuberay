@@ -2965,6 +2965,8 @@ func TestReconcile_Replicas_Optional(t *testing.T) {
 func TestReconcile_Multihost_Replicas(t *testing.T) {
 	setupTest(t)
 
+	features.SetFeatureGateDuringTest(t, features.RayMultiHostIndexing, false)
+
 	// This test makes some assumptions about the testRayCluster object.
 	// (1) 1 workerGroup (2) disable autoscaling
 	assert.Len(t, testRayCluster.Spec.WorkerGroupSpecs, 1, "This test assumes only one worker group.")
