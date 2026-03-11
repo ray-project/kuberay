@@ -128,10 +128,10 @@ head:
     limits:
       cpu: "1"
       # To avoid out-of-memory issues, never allocate less than 2G memory for the Ray head.
-      memory: "2G"
+      memory: "5Gi"
     requests:
       cpu: "1"
-      memory: "2G"
+      memory: "2Gi"
 
   # -- ResourceClaims to allocate with the head pod
   resourceClaims: []
@@ -249,10 +249,10 @@ worker:
   resources:
     limits:
       cpu: "1"
-      memory: "1G"
+      memory: "1Gi"
     requests:
       cpu: "1"
-      memory: "1G"
+      memory: "1Gi"
 
   # -- ResourceClaims to allocate with the worker pod
   resourceClaims: []
@@ -324,7 +324,7 @@ additionalWorkerGroups:
     minReplicas: 0
 
     # -- The maximum number of replicas for the additional worker pod
-    maxReplicas: 3
+    maxReplicas: 5
 
     # -- Labels for the additional worker pod
     labels: {}
@@ -360,10 +360,10 @@ additionalWorkerGroups:
     resources:
       limits:
         cpu: 1
-        memory: "1G"
+        memory: "1Gi"
       requests:
         cpu: 1
-        memory: "1G"
+        memory: "1Gi"
 
     # -- ResourceClaims to allocate with the additional worker pod
     resourceClaims: []

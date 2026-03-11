@@ -88,9 +88,9 @@ helm uninstall raycluster
 | head.containerEnv | list | `[]` |  |
 | head.envFrom | list | `[]` | envFrom to pass to head pod |
 | head.resources.limits.cpu | string | `"1"` |  |
-| head.resources.limits.memory | string | `"2G"` |  |
+| head.resources.limits.memory | string | `"5Gi"` |  |
 | head.resources.requests.cpu | string | `"1"` |  |
-| head.resources.requests.memory | string | `"2G"` |  |
+| head.resources.requests.memory | string | `"2Gi"` |  |
 | head.resourceClaims | list | `[]` | ResourceClaims to allocate with the head pod |
 | head.annotations | object | `{}` | Extra annotations for head pod |
 | head.nodeSelector | object | `{}` | Node labels for head pod assignment |
@@ -120,9 +120,9 @@ helm uninstall raycluster
 | worker.containerEnv | list | `[]` |  |
 | worker.envFrom | list | `[]` | envFrom to pass to worker pod |
 | worker.resources.limits.cpu | string | `"1"` |  |
-| worker.resources.limits.memory | string | `"1G"` |  |
+| worker.resources.limits.memory | string | `"1Gi"` |  |
 | worker.resources.requests.cpu | string | `"1"` |  |
-| worker.resources.requests.memory | string | `"1G"` |  |
+| worker.resources.requests.memory | string | `"1Gi"` |  |
 | worker.resourceClaims | list | `[]` | ResourceClaims to allocate with the worker pod |
 | worker.annotations | object | `{}` | Extra annotations for worker pod |
 | worker.nodeSelector | object | `{}` | Node labels for worker pod assignment |
@@ -142,7 +142,7 @@ helm uninstall raycluster
 | additionalWorkerGroups.smallGroup.disabled | bool | `true` |  |
 | additionalWorkerGroups.smallGroup.replicas | int | `0` | The number of replicas for the additional worker pod |
 | additionalWorkerGroups.smallGroup.minReplicas | int | `0` | The minimum number of replicas for the additional worker pod |
-| additionalWorkerGroups.smallGroup.maxReplicas | int | `3` | The maximum number of replicas for the additional worker pod |
+| additionalWorkerGroups.smallGroup.maxReplicas | int | `5` | The maximum number of replicas for the additional worker pod |
 | additionalWorkerGroups.smallGroup.labels | object | `{}` | Labels for the additional worker pod |
 | additionalWorkerGroups.smallGroup.serviceAccountName | string | `""` |  |
 | additionalWorkerGroups.smallGroup.restartPolicy | string | `""` |  |
@@ -150,9 +150,9 @@ helm uninstall raycluster
 | additionalWorkerGroups.smallGroup.containerEnv | list | `[]` |  |
 | additionalWorkerGroups.smallGroup.envFrom | list | `[]` | envFrom to pass to additional worker pod |
 | additionalWorkerGroups.smallGroup.resources.limits.cpu | int | `1` |  |
-| additionalWorkerGroups.smallGroup.resources.limits.memory | string | `"1G"` |  |
+| additionalWorkerGroups.smallGroup.resources.limits.memory | string | `"1Gi"` |  |
 | additionalWorkerGroups.smallGroup.resources.requests.cpu | int | `1` |  |
-| additionalWorkerGroups.smallGroup.resources.requests.memory | string | `"1G"` |  |
+| additionalWorkerGroups.smallGroup.resources.requests.memory | string | `"1Gi"` |  |
 | additionalWorkerGroups.smallGroup.resourceClaims | list | `[]` | ResourceClaims to allocate with the additional worker pod |
 | additionalWorkerGroups.smallGroup.annotations | object | `{}` | Extra annotations for additional worker pod |
 | additionalWorkerGroups.smallGroup.nodeSelector | object | `{}` | Node labels for additional worker pod assignment |
