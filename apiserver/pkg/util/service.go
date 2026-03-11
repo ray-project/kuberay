@@ -63,12 +63,14 @@ func buildRayServiceSpec(apiService *api.RayService, computeTemplateMap map[stri
 		return nil, err
 	}
 	var serviceUnhealthySecondThreshold *int32
+	//nolint:staticcheck // ServiceUnhealthySecondThreshold is deprecated but still needed for backward compatibility with the API.
 	if apiService.ServiceUnhealthySecondThreshold > 0 {
 		serviceUnhealthySecondThreshold = &apiService.ServiceUnhealthySecondThreshold
 	} else {
 		serviceUnhealthySecondThreshold = nil
 	}
 	var deploymentUnhealthySecondThreshold *int32
+	//nolint:staticcheck // DeploymentUnhealthySecondThreshold is deprecated but still needed for backward compatibility with the API.
 	if apiService.DeploymentUnhealthySecondThreshold > 0 {
 		deploymentUnhealthySecondThreshold = &apiService.DeploymentUnhealthySecondThreshold
 	} else {

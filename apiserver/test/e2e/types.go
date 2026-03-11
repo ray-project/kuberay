@@ -370,6 +370,7 @@ func (e2etc *End2EndTestingContext) DeleteRayCluster(t *testing.T, clusterName s
 		if err != nil && k8sApiErrors.IsNotFound(err) {
 			return true
 		}
+		//nolint:staticcheck // Status.State is deprecated but still useful for logging during e2e tests.
 		t.Logf("Found cluster state of '%s' for ray cluster '%s'", rayCluster.Status.State, clusterName)
 		return false
 	}, TestTimeoutMedium).Should(gomega.BeTrue())
@@ -391,6 +392,7 @@ func (e2etc *End2EndTestingContext) DeleteRayService(t *testing.T, serviceName s
 		if err != nil && k8sApiErrors.IsNotFound(err) {
 			return true
 		}
+		//nolint:staticcheck // Status.ServiceStatus is deprecated but still useful for logging during e2e tests.
 		t.Logf("Found service state of '%s' for ray service '%s'", rayService.Status.ServiceStatus, serviceName)
 		return false
 	}, TestTimeoutMedium).Should(gomega.BeTrue())

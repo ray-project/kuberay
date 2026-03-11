@@ -36,6 +36,8 @@ func TestBuildService(t *testing.T) {
 	if got.RayService.Spec.ServeConfigV2 == "" {
 		t.Errorf("Got empty V2")
 	}
+	//nolint:staticcheck // ServiceUnhealthySecondThreshold is deprecated but still needed for backward compatibility testing.
 	assert.NotNil(t, got.Spec.ServiceUnhealthySecondThreshold)
+	//nolint:staticcheck // DeploymentUnhealthySecondThreshold is deprecated but still needed for backward compatibility testing.
 	assert.Nil(t, got.Spec.DeploymentUnhealthySecondThreshold)
 }

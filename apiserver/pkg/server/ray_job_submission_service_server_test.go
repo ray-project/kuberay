@@ -91,6 +91,7 @@ func TestGetRayClusterURL(t *testing.T) {
 			name: "Get URL from a cluster without ready state",
 			rayCluster: func() *rayv1.RayCluster {
 				newCluster := validCluster.DeepCopy()
+				//nolint:staticcheck // Status.State is deprecated but still needed for test setup.
 				newCluster.Status.State = rayv1.Suspended
 				return newCluster
 			}(),
@@ -121,6 +122,8 @@ func TestGetRayClusterURL(t *testing.T) {
 			// Mock ray cluster client
 			mockClusterClient := client.NewMockClusterClientInterface(ctrl)
 			// create fake ray cluster
+			//nolint:staticcheck // NewClientset requires a structured merge diff schema that ray-operator doesn't generate
+			// because k8s.io/apimachinery types use OpenAPI v3 features incompatible with the v2 code generator.
 			fakeClient := fakeclientset.NewSimpleClientset(tc.rayCluster)
 			fakeRayCluster := fakeClient.RayV1().RayClusters(tc.rayCluster.Namespace)
 			mockClusterClient.EXPECT().RayClusterClient(tc.rayCluster.Namespace).Return(fakeRayCluster).MinTimes(1).MaxTimes(2)
