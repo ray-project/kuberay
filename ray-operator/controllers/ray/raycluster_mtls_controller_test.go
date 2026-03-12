@@ -22,6 +22,7 @@ import (
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
+	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 )
 
 func newMTLSTestScheme() *runtime.Scheme {
@@ -69,6 +70,7 @@ func newMTLSTestCluster(name string) *rayv1.RayCluster {
 
 func newMTLSController(t *testing.T, objs ...client.Object) *RayClusterMTLSController {
 	t.Helper()
+	features.SetFeatureGateDuringTest(t, features.EnhancedSecurityPrimitives, true)
 	s := newMTLSTestScheme()
 	runtimeObjs := make([]runtime.Object, len(objs))
 	for i, obj := range objs {
@@ -787,6 +789,7 @@ func TestCheckMTLSSecretsReady_AutoGenerate_SecretMissingKey(t *testing.T) {
 }
 
 func TestCheckMTLSSecretsReady_BYOC(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.EnhancedSecurityPrimitives, true)
 	cluster := newMTLSTestCluster("test-cluster")
 	cluster.Spec.TLSOptions = &rayv1.TLSOptions{
 		CertificateSecretName: ptr.To("my-cert"),
