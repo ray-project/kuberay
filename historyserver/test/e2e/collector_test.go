@@ -58,6 +58,10 @@ func TestCollector(t *testing.T) {
 			name:     "Placement groups: collector should poll and store placement_groups endpoint data",
 			testFunc: testCollectorStoresPlacementGroups,
 		},
+		{
+			name:     "Timezone: collector should fetch and store timezone endpoint data once on startup",
+			testFunc: testCollectorStoresTimezone,
+		},
 	}
 
 	for _, tt := range tests {
@@ -357,6 +361,59 @@ func testCollectorStoresClusterMetadata(test Test, g *WithT, namespace *corev1.N
 	}, TestTimeoutMedium).Should(Succeed())
 
 	LogWithTimestamp(test.T(), "Cluster metadata stored successfully: %s", string(metadataBody))
+
+	DeleteS3Bucket(test, g, s3Client)
+}
+
+// testCollectorStoresTimezone verifies that the Head collector fetches /timezone
+// from the Ray Dashboard once on startup and stores the result in S3 under the session path.
+//
+// The timezone data is stored per session under fetched_endpoints/ in storage.
+//
+// The test case follows these steps:
+// 1. Prepare test environment by applying a Ray cluster with the collector
+// 2. Get the sessionID from the head pod to build the expected S3 key
+// 3. Wait for the timezone file to appear in S3 at {sessionName}/fetched_endpoints/restful__timezone
+// 4. Read the file and verify it contains valid JSON with the expected schema (offset, value)
+// 5. Delete S3 bucket to ensure test isolation
+func testCollectorStoresTimezone(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
+
+	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, rayCluster.Namespace)
+	sessionID := GetSessionIDFromHeadPod(test, g, rayCluster)
+	storageKey := utils.EndpointPathToStorageKey(EndpointTimezone)
+	timezoneKey := fmt.Sprintf("log/%s/%s/%s/%s", clusterNameID, sessionID, utils.RAY_SESSIONDIR_FETCHED_ENDPOINTS_NAME, storageKey)
+
+	LogWithTimestamp(test.T(), "Waiting for timezone data to appear at S3 key: %s", timezoneKey)
+
+	var timezoneBody []byte
+	g.Eventually(func(gg Gomega) {
+		result, err := s3Client.GetObject(&s3.GetObjectInput{
+			Bucket: aws.String(S3BucketName),
+			Key:    aws.String(timezoneKey),
+		})
+		gg.Expect(err).NotTo(HaveOccurred())
+		defer result.Body.Close()
+
+		body, err := io.ReadAll(result.Body)
+		gg.Expect(err).NotTo(HaveOccurred())
+		gg.Expect(body).NotTo(BeEmpty(), "Timezone file should not be empty")
+
+		// Verify it is valid JSON
+		var timezone map[string]interface{}
+		err = json.Unmarshal(body, &timezone)
+		gg.Expect(err).NotTo(HaveOccurred(), "Timezone data should be valid JSON")
+
+		// The Ray dashboard /timezone endpoint returns {"offset": ..., "value": ...}.
+		gg.Expect(timezone).To(HaveKey("offset"), "Timezone data should contain offset field")
+		gg.Expect(timezone).To(HaveKey("value"), "Timezone data should contain value field")
+		gg.Expect(timezone["offset"]).NotTo(BeEmpty(), "Timezone offset should not be empty")
+		gg.Expect(timezone["value"]).NotTo(BeEmpty(), "Timezone value should not be empty")
+
+		timezoneBody = body
+	}, TestTimeoutMedium).Should(Succeed())
+
+	LogWithTimestamp(test.T(), "Timezone data stored successfully: %s", string(timezoneBody))
 
 	DeleteS3Bucket(test, g, s3Client)
 }

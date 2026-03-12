@@ -95,7 +95,7 @@ func (r *RayLogHandler) pollAllEndpoints(sessionName string) {
 func (r *RayLogHandler) pollSingleEndpoint(endpoint, sessionName string) {
 	url := r.DashboardAddress + endpoint
 
-	ctx, cancel := context.WithTimeout(context.Background(), metadataRequestTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultRequestTimeout)
 	go func() {
 		select {
 		case <-r.ShutdownChan:

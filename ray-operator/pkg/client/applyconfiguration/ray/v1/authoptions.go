@@ -11,9 +11,20 @@ import (
 //
 // AuthOptions defines the authentication options for a RayCluster.
 type AuthOptionsApplyConfiguration struct {
-	// EnableK8sTokenAuth specifies whether to enable K8s token authentication.
-	// When set to true, all Ray Pods will set the environment variable RAY_ENABLE_K8S_TOKEN_AUTH to "true".
+	// EnableK8sTokenAuth enables Kubernetes-delegated token authentication.
+	// When true, the RAY_ENABLE_K8S_TOKEN_AUTH environment variable is set to "true"
+	// across all Ray Pods, and Ray will delegate authentication to the K8s API server.
+	//
+	// NOTE: The Kubernetes ServiceAccount token mounted to Raylets must be granted
+	// the `ray:write` custom verb via RBAC for this to function correctly.
+	//
+	// WARNING: This feature is intended for standalone RayCluster objects and is
+	// currently unsupported for RayJob or RayService resources.
 	EnableK8sTokenAuth *bool `json:"enableK8sTokenAuth,omitempty"`
+	// SecretName is the name of the Secret that contains the authentication token.
+	// If set, KubeRay will skip generating a Secret object per RayCluster containing a token.
+	// The Secret must have a data key `auth_token` that contains the value of the token.
+	SecretName *string `json:"secretName,omitempty"`
 	// Mode specifies the authentication mode.
 	// Supported values are "disabled" and "token".
 	// Defaults to "token".
@@ -31,6 +42,14 @@ func AuthOptions() *AuthOptionsApplyConfiguration {
 // If called multiple times, the EnableK8sTokenAuth field is set to the value of the last call.
 func (b *AuthOptionsApplyConfiguration) WithEnableK8sTokenAuth(value bool) *AuthOptionsApplyConfiguration {
 	b.EnableK8sTokenAuth = &value
+	return b
+}
+
+// WithSecretName sets the SecretName field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the SecretName field is set to the value of the last call.
+func (b *AuthOptionsApplyConfiguration) WithSecretName(value string) *AuthOptionsApplyConfiguration {
+	b.SecretName = &value
 	return b
 }
 

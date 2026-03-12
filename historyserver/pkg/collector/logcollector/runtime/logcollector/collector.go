@@ -65,6 +65,7 @@ func (r *RayLogHandler) Run(stop <-chan struct{}) error {
 	if r.IsHead {
 		go r.WatchSessionLatestLoops() // Watch session_latest symlink changes
 		go r.FetchAndStoreClusterMetadata()
+		go r.FetchAndStoreTimezone()
 		go r.PollAdditionalEndpointsPeriodically()
 	}
 

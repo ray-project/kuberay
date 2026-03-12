@@ -374,6 +374,16 @@ func (r *RayClusterReconciler) reconcileAuthSecret(ctx context.Context, instance
 		return nil
 	}
 
+	// When K8s token auth is enabled, authentication is delegated to the K8s API server
+	// via ServiceAccount tokens, so no Secret needs to be created.
+	if utils.IsK8sAuthEnabled(instance.Spec.AuthOptions) {
+		return nil
+	}
+
+	if instance.Spec.AuthOptions.SecretName != nil && *instance.Spec.AuthOptions.SecretName != "" {
+		return nil
+	}
+
 	secret := &corev1.Secret{}
 	secretName := utils.CheckName(instance.Name)
 	err := r.Get(ctx, types.NamespacedName{Name: secretName, Namespace: instance.Namespace}, secret)
