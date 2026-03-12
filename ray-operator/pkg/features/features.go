@@ -53,6 +53,13 @@ const (
 	//
 	// Enables asynchronous job info querying.
 	AsyncJobInfoQuery featuregate.Feature = "AsyncJobInfoQuery"
+
+	// owner: @chipspeak @kryanbeane
+	// rep: N/A
+	// alpha: v1.6
+	//
+	// Enables NetworkPolicy-based network isolation and mTLS for RayClusters.
+	EnhancedSecurityPrimitives featuregate.Feature = "EnhancedSecurityPrimitives"
 )
 
 func init() {
@@ -66,6 +73,7 @@ var defaultFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
 	RayServiceIncrementalUpgrade: {Default: false, PreRelease: featuregate.Alpha},
 	RayCronJob:                   {Default: false, PreRelease: featuregate.Alpha},
 	AsyncJobInfoQuery:            {Default: false, PreRelease: featuregate.Alpha},
+	EnhancedSecurityPrimitives:   {Default: false, PreRelease: featuregate.Alpha},
 }
 
 // SetFeatureGateDuringTest is a helper method to override feature gates in tests.

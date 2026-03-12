@@ -34,6 +34,7 @@ import (
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
+	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 )
 
 var (
@@ -45,7 +46,9 @@ var (
 	testRayClusterWithOtherOwner *rayv1.RayCluster
 )
 
-func setupNetworkPolicyTest(_ *testing.T) {
+func setupNetworkPolicyTest(t *testing.T) {
+	t.Helper()
+	features.SetFeatureGateDuringTest(t, features.EnhancedSecurityPrimitives, true)
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
 	testScheme := runtime.NewScheme()

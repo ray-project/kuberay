@@ -267,11 +267,17 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 	}
 
 	// Validate NetworkIsolation configuration if set.
+	if spec.NetworkIsolation != nil && !features.Enabled(features.EnhancedSecurityPrimitives) {
+		return fmt.Errorf("spec.networkIsolation requires the EnhancedSecurityPrimitives feature gate to be enabled")
+	}
 	if err := validateNetworkIsolation(spec); err != nil {
 		return err
 	}
 
 	// Validate TLS configuration if set.
+	if spec.TLSOptions != nil && !features.Enabled(features.EnhancedSecurityPrimitives) {
+		return fmt.Errorf("spec.tlsOptions requires the EnhancedSecurityPrimitives feature gate to be enabled")
+	}
 	return validateTLSOptions(spec)
 }
 

@@ -757,8 +757,11 @@ func IsK8sAuthEnabled(authOptions *rayv1.AuthOptions) bool {
 }
 
 // IsTLSEnabled returns whether TLS is enabled for the RayCluster.
-// TLS is enabled when spec.TLSOptions is non-nil.
+// TLS is enabled when the EnhancedSecurityPrimitives feature gate is on and spec.TLSOptions is non-nil.
 func IsTLSEnabled(spec *rayv1.RayClusterSpec) bool {
+	if !features.Enabled(features.EnhancedSecurityPrimitives) {
+		return false
+	}
 	return spec != nil && spec.TLSOptions != nil
 }
 

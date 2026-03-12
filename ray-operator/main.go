@@ -288,11 +288,15 @@ func main() {
 	exitOnError(ray.NewReconciler(ctx, mgr, rayClusterOptions).SetupWithManager(mgr, config.ReconcileConcurrency),
 		"unable to create controller", "controller", "RayCluster")
 
-	if certManagerAvailable {
-		exitOnError(ray.NewRayClusterMTLSController(mgr).SetupWithManager(mgr),
-			"unable to create controller", "controller", "RayClusterMTLS")
+	if features.Enabled(features.EnhancedSecurityPrimitives) {
+		if certManagerAvailable {
+			exitOnError(ray.NewRayClusterMTLSController(mgr).SetupWithManager(mgr),
+				"unable to create controller", "controller", "RayClusterMTLS")
+		} else {
+			setupLog.Info("cert-manager API not found; mTLS controller disabled (RayClusters with tlsOptions and no CertificateSecretName will not get auto-generated certs)")
+		}
 	} else {
-		setupLog.Info("cert-manager API not found; mTLS controller disabled (RayClusters with tlsOptions and no CertificateSecretName will not get auto-generated certs)")
+		setupLog.Info("EnhancedSecurityPrimitives feature gate is disabled, skipping mTLS controller setup")
 	}
 
 	exitOnError(ray.NewRayServiceReconciler(ctx, mgr, config).SetupWithManager(mgr, config.ReconcileConcurrency),
@@ -318,9 +322,13 @@ func main() {
 		setupLog.Info("RayCronJob feature gate is disabled, skipping RayCronJob controller setup")
 	}
 
-	// NetworkPolicy Controller
-	exitOnError(ray.NewNetworkPolicyController(mgr).SetupWithManager(mgr),
-		"unable to create controller", "controller", "NetworkPolicy")
+	if features.Enabled(features.EnhancedSecurityPrimitives) {
+		setupLog.Info("EnhancedSecurityPrimitives feature gate is enabled, starting NetworkPolicy controller")
+		exitOnError(ray.NewNetworkPolicyController(mgr).SetupWithManager(mgr),
+			"unable to create controller", "controller", "NetworkPolicy")
+	} else {
+		setupLog.Info("EnhancedSecurityPrimitives feature gate is disabled, skipping NetworkPolicy controller setup")
+	}
 
 	// +kubebuilder:scaffold:builder
 
