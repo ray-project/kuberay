@@ -861,10 +861,11 @@ func TestValidateRayClusterSpec_Labels(t *testing.T) {
 
 func TestValidateRayClusterSpecRayVersionForAuth(t *testing.T) {
 	tests := []struct {
-		name         string
-		rayVersion   string
-		errorMessage string
-		expectError  bool
+		name               string
+		rayVersion         string
+		errorMessage       string
+		enableK8sTokenAuth bool
+		expectError        bool
 	}{
 		{
 			name:        "Valid Ray version 2.52.0",
@@ -872,9 +873,27 @@ func TestValidateRayClusterSpecRayVersionForAuth(t *testing.T) {
 			expectError: false,
 		},
 		{
+			name:               "Invalid Ray version 2.52.0 with k8s token auth",
+			rayVersion:         "2.52.0",
+			enableK8sTokenAuth: true,
+			expectError:        true,
+		},
+		{
+			name:               "Valid Ray version 2.55.0 with k8s token auth",
+			rayVersion:         "2.55.0",
+			enableK8sTokenAuth: true,
+			expectError:        false,
+		},
+		{
 			name:        "Valid Ray version 3.0.0",
 			rayVersion:  "3.0.0",
 			expectError: false,
+		},
+		{
+			name:               "Valid Ray version 3.0.0 with k8s token auth",
+			rayVersion:         "3.0.0",
+			enableK8sTokenAuth: true,
+			expectError:        false,
 		},
 		{
 			name:         "Invalid Ray version 2.50.0",
@@ -904,7 +923,8 @@ func TestValidateRayClusterSpecRayVersionForAuth(t *testing.T) {
 					Template: podTemplateSpec(nil, nil),
 				},
 				AuthOptions: &rayv1.AuthOptions{
-					Mode: rayv1.AuthModeToken,
+					Mode:               rayv1.AuthModeToken,
+					EnableK8sTokenAuth: ptr.To(tt.enableK8sTokenAuth),
 				},
 			}
 			err := ValidateRayClusterSpec(spec, nil)
@@ -1023,22 +1043,6 @@ func TestValidateRayJobSpec(t *testing.T) {
 			spec: rayv1.RayJobSpec{
 				BackoffLimit:   ptr.To[int32](-1),
 				RayClusterSpec: createBasicRayClusterSpec(),
-			},
-			expectError: true,
-		},
-		{
-			name: "RayJobDeletionPolicy feature gate must be enabled to use the DeletionStrategy feature",
-			spec: rayv1.RayJobSpec{
-				DeletionStrategy: &rayv1.DeletionStrategy{
-					OnSuccess: &rayv1.DeletionPolicy{
-						Policy: ptr.To(rayv1.DeleteCluster),
-					},
-					OnFailure: &rayv1.DeletionPolicy{
-						Policy: ptr.To(rayv1.DeleteCluster),
-					},
-				},
-				ShutdownAfterJobFinishes: true,
-				RayClusterSpec:           createBasicRayClusterSpec(),
 			},
 			expectError: true,
 		},
@@ -1170,6 +1174,18 @@ func TestValidateRayJobSpec(t *testing.T) {
 			spec: rayv1.RayJobSpec{
 				ClusterSelector: map[string]string{"ray.io/cluster": "ray-cluster"},
 				BackoffLimit:    ptr.To[int32](1),
+			},
+			expectError: true,
+		},
+		{
+			name: "RayJob does not support K8s token auth mode",
+			spec: rayv1.RayJobSpec{
+				RayClusterSpec: &rayv1.RayClusterSpec{
+					AuthOptions: &rayv1.AuthOptions{
+						Mode:               rayv1.AuthModeToken,
+						EnableK8sTokenAuth: ptr.To(true),
+					},
+				},
 			},
 			expectError: true,
 		},
@@ -1832,6 +1848,18 @@ func TestValidateRayServiceSpec(t *testing.T) {
 			spec: rayv1.RayServiceSpec{
 				RayClusterSpec:                 *createBasicRayClusterSpec(),
 				RayClusterDeletionDelaySeconds: ptr.To[int32](-1),
+			},
+			expectError: true,
+		},
+		{
+			name: "RayService does not support K8s token auth mode",
+			spec: rayv1.RayServiceSpec{
+				RayClusterSpec: rayv1.RayClusterSpec{
+					AuthOptions: &rayv1.AuthOptions{
+						Mode:               rayv1.AuthModeToken,
+						EnableK8sTokenAuth: ptr.To(true),
+					},
+				},
 			},
 			expectError: true,
 		},
@@ -2649,6 +2677,73 @@ func TestValidateRayClusterSpec_WorkerGroupReplicaValidation(t *testing.T) {
 			if tt.expectError {
 				require.Error(t, err)
 				require.EqualError(t, err, tt.errorMsg)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestValidateRayClusterSpec_Auth(t *testing.T) {
+	tests := []struct {
+		authOptions *rayv1.AuthOptions
+		name        string
+		errorMsg    string
+		expectError bool
+	}{
+		{
+			name: "enableK8sTokenAuth=true and secretName set",
+			authOptions: &rayv1.AuthOptions{
+				Mode:               rayv1.AuthModeToken,
+				EnableK8sTokenAuth: ptr.To(true),
+				SecretName:         ptr.To("my-secret"),
+			},
+			expectError: true,
+			errorMsg:    "authOptions.enableK8sTokenAuth is enabled and authOptions.secretName is also set",
+		},
+		{
+			name: "enableK8sTokenAuth=true and secretName unset",
+			authOptions: &rayv1.AuthOptions{
+				Mode:               rayv1.AuthModeToken,
+				EnableK8sTokenAuth: ptr.To(true),
+			},
+			expectError: false,
+		},
+		{
+			name: "enableK8sTokenAuth=false and secretName set",
+			authOptions: &rayv1.AuthOptions{
+				Mode:       rayv1.AuthModeToken,
+				SecretName: ptr.To("my-secret"),
+			},
+			expectError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cluster := &rayv1.RayCluster{
+				Spec: rayv1.RayClusterSpec{
+					RayVersion:  "2.55.0", // Required for checks
+					AuthOptions: tt.authOptions,
+					HeadGroupSpec: rayv1.HeadGroupSpec{
+						Template: podTemplateSpec(nil, nil),
+					},
+					WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+						{
+							GroupName:   "worker-group",
+							Template:    podTemplateSpec(nil, nil),
+							MinReplicas: ptr.To(int32(1)),
+							MaxReplicas: ptr.To(int32(1)),
+						},
+					},
+				},
+			}
+			err := ValidateRayClusterSpec(&cluster.Spec, cluster.Annotations)
+			if tt.expectError {
+				require.Error(t, err)
+				if tt.errorMsg != "" {
+					assert.Contains(t, err.Error(), tt.errorMsg)
+				}
 			} else {
 				require.NoError(t, err)
 			}

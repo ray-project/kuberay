@@ -9,6 +9,12 @@ spec:
   # and then update the `spec.jobId` field with the job ID.
   # After that, KubeRay will handle the rest of the lifecycle for the RayJob.
   submissionMode: InteractiveMode
+
+  # preRunningDeadlineSeconds is the number of seconds before this InteractiveMode RayJob must reach Running.
+  # In InteractiveMode, RayJob can stay in Waiting while you manually submit the job and set `spec.jobId`.
+  # If this deadline is exceeded before Running, the RayJob is marked as Failed.
+  # preRunningDeadlineSeconds: 300
+
   # User needs to update this field with the job ID after submitting the job
   jobId: ""
   rayClusterSpec:
