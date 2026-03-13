@@ -186,8 +186,10 @@ func TestMTLSController_AutoGenerate_CreatesFullPKI(t *testing.T) {
 		Namespace: "default",
 	}, headCert)
 	require.NoError(t, err, "head certificate should be created")
+	headSvcName, err := utils.GenerateHeadServiceName(utils.RayClusterCRD, cluster.Spec, cluster.Name)
+	require.NoError(t, err)
 	assert.Contains(t, headCert.Spec.DNSNames, "localhost")
-	assert.Contains(t, headCert.Spec.DNSNames, fmt.Sprintf("%s-head-svc", cluster.Name))
+	assert.Contains(t, headCert.Spec.DNSNames, headSvcName)
 	assert.Contains(t, headCert.Spec.IPAddresses, "127.0.0.1")
 
 	// Verify worker certificate was created with correct DNS names.
@@ -376,7 +378,7 @@ func TestMTLSController_WorkerCertHasWildcardDNS(t *testing.T) {
 	}, workerCert)
 	require.NoError(t, err)
 
-	workerSvcName := fmt.Sprintf("%s-worker-svc", cluster.Name)
+	workerSvcName := fmt.Sprintf("%s-%s", cluster.Name, utils.HeadlessServiceSuffix)
 	assert.Contains(t, workerCert.Spec.DNSNames, workerSvcName)
 	assert.Contains(t, workerCert.Spec.DNSNames,
 		fmt.Sprintf("*.%s.%s.svc", workerSvcName, cluster.Namespace))
@@ -594,7 +596,7 @@ func TestMTLSController_DeletionWithDisabledMTLS_RemovesFinalizer(t *testing.T) 
 	// mTLS was previously enabled (finalizer present) but user disabled it before deleting.
 	cluster.Spec.TLSOptions = nil
 	cluster.DeletionTimestamp = &now
-	cluster.Finalizers = []string{mtlsFinalizer}
+	cluster.Finalizers = []string{utils.MTLSCleanupFinalizer}
 
 	r := newMTLSController(t, cluster)
 	ctx := context.Background()
@@ -618,7 +620,7 @@ func TestMTLSController_AutoGenerate_DeletionCleansUpSecrets(t *testing.T) {
 	cluster.Spec.TLSOptions = &rayv1.TLSOptions{}
 	cluster.DeletionTimestamp = &now
 	// Simulate that the finalizer was previously added during normal reconciliation.
-	cluster.Finalizers = []string{mtlsFinalizer}
+	cluster.Finalizers = []string{utils.MTLSCleanupFinalizer}
 
 	caSecret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{Name: utils.GetCASecretName(cluster.Name, cluster.UID), Namespace: "default"},
@@ -691,6 +693,16 @@ func TestCertificateNeedsUpdate(t *testing.T) {
 		IPAddresses: []string{"10.0.0.1", "10.0.0.2"},
 	}
 	assert.True(t, certificateNeedsUpdate(existing, desired2), "different DNS names should need update")
+
+	existing3 := &certmanagerv1.CertificateSpec{
+		DNSNames:    []string{"a.svc"},
+		IPAddresses: []string{"127.0.0.1"},
+	}
+	desired3 := &certmanagerv1.CertificateSpec{
+		DNSNames:    []string{"a.svc"},
+		IPAddresses: []string{"127.0.0.1", "10.0.0.1"},
+	}
+	assert.True(t, certificateNeedsUpdate(existing3, desired3), "different IP addresses should need update")
 }
 
 // --- checkMTLSSecretsReady tests (in main reconciler) ---
