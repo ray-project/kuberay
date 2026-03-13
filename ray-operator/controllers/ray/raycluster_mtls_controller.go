@@ -29,10 +29,6 @@ const (
 	// Requeue intervals aligned with ODH mTLS controller.
 	mtlsDefaultRequeueDuration = 30 * time.Second
 	mtlsPeriodicCheckDuration  = 1 * time.Minute
-
-	// mtlsFinalizer prevents the RayCluster from being deleted before the mTLS
-	// controller has cleaned up auto-generated cert-manager secrets.
-	mtlsFinalizer = "ray.io/mtls-cleanup"
 )
 
 // RayClusterMTLSController manages mTLS certificates for RayClusters using cert-manager.
@@ -82,7 +78,7 @@ func (r *RayClusterMTLSController) Reconcile(ctx context.Context, req ctrl.Reque
 	// Without handling deletion before the TLS check, the finalizer would
 	// never be removed and the RayCluster would be stuck in Terminating.
 	if instance.DeletionTimestamp != nil && !instance.DeletionTimestamp.IsZero() {
-		if controllerutil.ContainsFinalizer(instance, mtlsFinalizer) {
+		if controllerutil.ContainsFinalizer(instance, utils.MTLSCleanupFinalizer) {
 			// Only delete secrets in auto-generate mode; BYOC secrets belong to the user.
 			if !utils.IsTLSBYOC(&instance.Spec) {
 				if err := r.deleteTLSSecrets(ctx, instance); err != nil {
@@ -95,7 +91,7 @@ func (r *RayClusterMTLSController) Reconcile(ctx context.Context, req ctrl.Reque
 					"Auto-generated mTLS secrets deleted")
 			}
 			// Remove the finalizer to unblock deletion.
-			controllerutil.RemoveFinalizer(instance, mtlsFinalizer)
+			controllerutil.RemoveFinalizer(instance, utils.MTLSCleanupFinalizer)
 			if err := r.Update(ctx, instance); err != nil {
 				logger.Error(err, "Failed to remove mTLS finalizer")
 				return ctrl.Result{}, err
@@ -113,8 +109,8 @@ func (r *RayClusterMTLSController) Reconcile(ctx context.Context, req ctrl.Reque
 	// Ensure the finalizer is present so we get a chance to clean up secrets before deletion.
 	// Only needed for auto-generate mode; BYOC secrets are user-managed and never deleted.
 	if !utils.IsTLSBYOC(&instance.Spec) {
-		if !controllerutil.ContainsFinalizer(instance, mtlsFinalizer) {
-			controllerutil.AddFinalizer(instance, mtlsFinalizer)
+		if !controllerutil.ContainsFinalizer(instance, utils.MTLSCleanupFinalizer) {
+			controllerutil.AddFinalizer(instance, utils.MTLSCleanupFinalizer)
 			if err := r.Update(ctx, instance); err != nil {
 				logger.Error(err, "Failed to add mTLS finalizer")
 				return ctrl.Result{}, err
@@ -393,7 +389,10 @@ func (r *RayClusterMTLSController) reconcileCAIssuer(ctx context.Context, instan
 func (r *RayClusterMTLSController) reconcileHeadCertificate(ctx context.Context, instance *rayv1.RayCluster) error {
 	certName := fmt.Sprintf("%s-%s", utils.RayHeadCertPrefix, instance.Name)
 	secretName := fmt.Sprintf("%s-%s", utils.RayHeadSecretPrefix, instance.Name)
-	headSvcName := fmt.Sprintf("%s-head-svc", instance.Name)
+	headSvcName, err := utils.GenerateHeadServiceName(utils.RayClusterCRD, instance.Spec, instance.Name)
+	if err != nil {
+		return err
+	}
 
 	podIPs, err := r.getPodIPs(ctx, instance)
 	if err != nil {
@@ -410,6 +409,11 @@ func (r *RayClusterMTLSController) reconcileHeadCertificate(ctx context.Context,
 	sort.Strings(desiredDNSNames)
 	desiredIPAddresses := normalizeIPs(podIPs)
 
+	// Known limitation: Ray reads TLS files once at startup and does not hot-reload them.
+	// When cert-manager renews this certificate (updating the Secret), running Ray pods
+	// will continue using the old certificate until restarted. The RenewBefore window
+	// (15 days before the 90-day expiry) provides time for a rolling restart, but no
+	// automatic restart mechanism is currently implemented.
 	desiredSpec := certmanagerv1.CertificateSpec{
 		SecretName:  secretName,
 		Duration:    &metav1.Duration{Duration: 2160 * time.Hour},
@@ -472,8 +476,9 @@ func (r *RayClusterMTLSController) reconcileWorkerCertificate(ctx context.Contex
 	}
 
 	// Build DNS names including per-worker-group service names and wildcards
-	// for dynamic worker discovery (aligned with ODH mTLS controller).
-	workerSvcName := fmt.Sprintf("%s-worker-svc", instance.Name)
+	// for dynamic worker discovery. Uses the headless service name ({cluster}-headless)
+	// which is the actual worker service created by KubeRay.
+	workerSvcName := fmt.Sprintf("%s-%s", instance.Name, utils.HeadlessServiceSuffix)
 	dnsNames := []string{
 		workerSvcName,
 		"localhost",
@@ -501,6 +506,8 @@ func (r *RayClusterMTLSController) reconcileWorkerCertificate(ctx context.Contex
 	sort.Strings(desiredDNSNames)
 	desiredIPAddresses := normalizeIPs(podIPs)
 
+	// Known limitation: Ray reads TLS files once at startup and does not hot-reload them.
+	// See the equivalent comment in reconcileHeadCertificate for details.
 	desiredSpec := certmanagerv1.CertificateSpec{
 		SecretName:  secretName,
 		Duration:    &metav1.Duration{Duration: 2160 * time.Hour},
@@ -718,8 +725,9 @@ func uniqueStrings(values []string) []string {
 // tlsResourceLabels returns standard labels for cert-manager resources owned by a RayCluster.
 func tlsResourceLabels(clusterName, component string) map[string]string {
 	return map[string]string{
-		"app.kubernetes.io/name":      "ray-tls",
-		"app.kubernetes.io/component": component,
-		utils.RayClusterLabelKey:      clusterName,
+		utils.KubernetesApplicationNameLabelKey: utils.ApplicationName,
+		utils.KubernetesCreatedByLabelKey:       utils.ComponentName,
+		"app.kubernetes.io/component":           component,
+		utils.RayClusterLabelKey:                clusterName,
 	}
 }
