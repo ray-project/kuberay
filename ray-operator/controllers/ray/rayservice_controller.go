@@ -2012,7 +2012,7 @@ func (r *RayServiceReconciler) reconcilePerClusterServeService(ctx context.Conte
 func (r *RayServiceReconciler) reconcileRollbackState(ctx context.Context, rayServiceInstance *rayv1.RayService, activeCluster, pendingCluster *rayv1.RayCluster) error {
 	logger := ctrl.LoggerFrom(ctx)
 
-	goalHash, err := utils.GenerateHashWithoutReplicasAndWorkersToDelete(rayServiceInstance.Spec.RayClusterSpec)
+	targetHash, err := utils.GenerateHashWithoutReplicasAndWorkersToDelete(rayServiceInstance.Spec.RayClusterSpec)
 	if err != nil {
 		return fmt.Errorf("failed to generate hash for goal cluster spec: %w", err)
 	}
@@ -2024,7 +2024,7 @@ func (r *RayServiceReconciler) reconcileRollbackState(ctx context.Context, raySe
 
 	// Case 1: The goal spec matches the pending cluster's spec.
 	// The upgrade is on track. We should revert any accidental rollback attempt and continue.
-	if goalHash == pendingHash {
+	if targetHash == pendingHash {
 		if isRollbackInProgress {
 			logger.Info("Goal state matches pending cluster. Canceling rollback and resuming upgrade.")
 			meta.RemoveStatusCondition(&rayServiceInstance.Status.Conditions, string(rayv1.RollbackInProgress))
@@ -2037,8 +2037,8 @@ func (r *RayServiceReconciler) reconcileRollbackState(ctx context.Context, raySe
 	// In all divergence cases, we must first safely route all traffic back to the original cluster before allowing
 	// a new cluster to be spun up.
 	if !isRollbackInProgress {
-		logger.Info("Goal state has changed during upgrade. Initiating safe rollback to the original cluster.", "goalHash", goalHash, "originalHash", originalHash, "pendingHash", pendingHash)
-		setCondition(rayServiceInstance, rayv1.RollbackInProgress, metav1.ConditionTrue, rayv1.GoalClusterChanged, "Goal state changed mid-upgrade, rolling back to original cluster.")
+		logger.Info("Goal state has changed during upgrade. Initiating safe rollback to the original cluster.", "targetHash", targetHash, "originalHash", originalHash, "pendingHash", pendingHash)
+		setCondition(rayServiceInstance, rayv1.RollbackInProgress, metav1.ConditionTrue, rayv1.TargetClusterChanged, "Goal state changed mid-upgrade, rolling back to original cluster.")
 	}
 
 	return nil

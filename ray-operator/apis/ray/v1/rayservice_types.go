@@ -219,7 +219,7 @@ const (
 	NoPendingCluster               RayServiceConditionReason = "NoPendingCluster"
 	NoActiveCluster                RayServiceConditionReason = "NoActiveCluster"
 	RayServiceValidationFailed     RayServiceConditionReason = "ValidationFailed"
-	GoalClusterChanged             RayServiceConditionReason = "GoalClusterChanged"
+	TargetClusterChanged           RayServiceConditionReason = "TargetClusterChanged"
 )
 
 // +kubebuilder:object:root=true

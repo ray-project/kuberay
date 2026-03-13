@@ -2720,7 +2720,7 @@ func TestReconcileRollbackState(t *testing.T) {
 			}
 
 			if tt.isRollbackInProgress {
-				setCondition(rayService, rayv1.RollbackInProgress, metav1.ConditionTrue, rayv1.GoalClusterChanged, "rolling back")
+				setCondition(rayService, rayv1.RollbackInProgress, metav1.ConditionTrue, rayv1.TargetClusterChanged, "rolling back")
 			}
 
 			reconciler := RayServiceReconciler{
