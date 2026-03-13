@@ -142,6 +142,14 @@ func (r *NetworkPolicyController) createOrUpdateNetworkPolicy(ctx context.Contex
 	return nil
 }
 
+func headNetworkPolicyName(clusterName string) string {
+	return fmt.Sprintf("%s-head", clusterName)
+}
+
+func workerNetworkPolicyName(clusterName string) string {
+	return fmt.Sprintf("%s-workers", clusterName)
+}
+
 // buildHeadNetworkPolicy creates a NetworkPolicy for Ray head pods
 func (r *NetworkPolicyController) buildHeadNetworkPolicy(instance *rayv1.RayCluster, mode string) *networkingv1.NetworkPolicy {
 	labels := map[string]string{
@@ -178,7 +186,7 @@ func (r *NetworkPolicyController) buildHeadNetworkPolicy(instance *rayv1.RayClus
 
 	return &networkingv1.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      fmt.Sprintf("%s-head", instance.Name),
+			Name:      headNetworkPolicyName(instance.Name),
 			Namespace: instance.Namespace,
 			Labels:    labels,
 		},
@@ -237,7 +245,7 @@ func (r *NetworkPolicyController) buildWorkerNetworkPolicy(instance *rayv1.RayCl
 
 	return &networkingv1.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      fmt.Sprintf("%s-workers", instance.Name),
+			Name:      workerNetworkPolicyName(instance.Name),
 			Namespace: instance.Namespace,
 			Labels:    labels,
 		},
@@ -387,7 +395,7 @@ func (r *NetworkPolicyController) cleanupNetworkPoliciesIfNeeded(ctx context.Con
 
 	// Try to delete head NetworkPolicy if it exists
 	headNetworkPolicy := &networkingv1.NetworkPolicy{}
-	headName := fmt.Sprintf("%s-head", instance.Name)
+	headName := headNetworkPolicyName(instance.Name)
 	headKey := client.ObjectKey{Namespace: instance.Namespace, Name: headName}
 
 	if err := r.Get(ctx, headKey, headNetworkPolicy); err == nil {
@@ -405,7 +413,7 @@ func (r *NetworkPolicyController) cleanupNetworkPoliciesIfNeeded(ctx context.Con
 
 	// Try to delete worker NetworkPolicy if it exists
 	workerNetworkPolicy := &networkingv1.NetworkPolicy{}
-	workerName := fmt.Sprintf("%s-workers", instance.Name)
+	workerName := workerNetworkPolicyName(instance.Name)
 	workerKey := client.ObjectKey{Namespace: instance.Namespace, Name: workerName}
 
 	if err := r.Get(ctx, workerKey, workerNetworkPolicy); err == nil {
