@@ -265,6 +265,9 @@ pip: ["python-multipart==0.0.6"]
 		if expected[i] == "--runtime-env-json" {
 			// Decode the JSON string from the next element.
 			var expectedMap, actualMap map[string]any
+			if i+1 >= len(expected) || i+1 >= len(command) {
+				t.Fatalf("unexpected end of slice at index %d", i)
+			}
 			unquoteExpected, err1 := strconv.Unquote(expected[i+1])
 			require.NoError(t, err1)
 			unquotedCommand, err2 := strconv.Unquote(command[i+1])
