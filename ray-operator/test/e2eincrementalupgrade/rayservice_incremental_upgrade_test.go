@@ -10,10 +10,10 @@ import (
 
 	. "github.com/onsi/gomega"
 	"golang.org/x/sync/errgroup"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
@@ -348,39 +348,14 @@ func TestRayServiceIncrementalUpgradeRollback(t *testing.T) {
 	stepSize := ptr.To(int32(25))
 	interval := ptr.To(int32(10))
 	maxSurge := ptr.To(int32(50))
+	serveConfigV2 := defaultIncrementalUpgradeServeConfigV2
 
-	rayServiceAC := rayv1ac.RayService(rayServiceName, namespace.Name).
-		WithSpec(IncrementalUpgradeRayServiceApplyConfiguration(stepSize, interval, maxSurge))
-	rayService, err := test.Client().Ray().RayV1().RayServices(namespace.Name).Apply(test.Ctx(), rayServiceAC, TestApplyOptions)
-	g.Expect(err).NotTo(HaveOccurred())
-	g.Expect(rayService).NotTo(BeNil())
-
-	LogWithTimestamp(test.T(), "Waiting for RayService %s/%s to be ready", rayService.Namespace, rayService.Name)
-	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutMedium).
-		Should(WithTransform(IsRayServiceReady, BeTrue()))
+	_, httpRoute, _ := bootstrapIncrementalRayService(test, g, namespace.Name, rayServiceName, stepSize, interval, maxSurge, serveConfigV2)
 
 	// Copy original spec to use to trigger a rollback later.
-	rayService, err = GetRayService(test, namespace.Name, rayServiceName)
+	rayService, err := GetRayService(test, namespace.Name, rayServiceName)
 	g.Expect(err).NotTo(HaveOccurred())
 	originalSpec := rayService.Spec.DeepCopy()
-
-	// Verify Gateway and HTTPRoute are ready.
-	gatewayName := fmt.Sprintf("%s-%s", rayServiceName, "gateway")
-	g.Eventually(Gateway(test, rayService.Namespace, gatewayName), TestTimeoutMedium).
-		Should(WithTransform(utils.IsGatewayReady, BeTrue()))
-
-	gateway, err := GetGateway(test, namespace.Name, fmt.Sprintf("%s-%s", rayServiceName, "gateway"))
-	g.Expect(err).NotTo(HaveOccurred())
-	g.Expect(gateway).NotTo(BeNil())
-
-	httpRouteName := fmt.Sprintf("%s-%s", rayServiceName, "httproute")
-	LogWithTimestamp(test.T(), "Waiting for HTTPRoute %s/%s to be ready", rayService.Namespace, httpRouteName)
-	g.Eventually(HTTPRoute(test, rayService.Namespace, httpRouteName), TestTimeoutMedium).
-		Should(Not(BeNil()))
-
-	httpRoute, err := GetHTTPRoute(test, namespace.Name, httpRouteName)
-	g.Expect(err).NotTo(HaveOccurred())
-	g.Expect(utils.IsHTTPRouteReady(gateway, httpRoute)).To(BeTrue())
 
 	// Trigger an incremental upgrade through a change to the RayCluster spec.
 	LogWithTimestamp(test.T(), "Triggering an upgrade for RayService %s/%s", rayService.Namespace, rayService.Name)
@@ -449,7 +424,7 @@ func TestRayServiceIncrementalUpgradeRollback(t *testing.T) {
 	}, TestTimeoutMedium).Should(WithTransform(errors.IsNotFound, BeTrue()))
 
 	// The HTTPRoute should now only have one backend after the rollback completes.
-	g.Eventually(HTTPRoute(test, namespace.Name, httpRouteName), TestTimeoutShort).
+	g.Eventually(HTTPRoute(test, namespace.Name, httpRoute.Name), TestTimeoutShort).
 		Should(WithTransform(func(route *gwv1.HTTPRoute) int {
 			if route == nil || len(route.Spec.Rules) == 0 {
 				return 0
