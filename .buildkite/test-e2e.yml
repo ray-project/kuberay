@@ -59,7 +59,7 @@
     - echo "--- END:e2e rayservice (nightly operator) tests finished"
 
 - label: 'Test RayService Incremental Upgrade E2E (nightly operator)'
-  instance_size: large
+  instance_size: xlarge
   image: golang:1.25-bookworm
   commands:
     - source .buildkite/setup-env.sh
