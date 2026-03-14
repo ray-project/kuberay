@@ -1577,6 +1577,12 @@ func TestIsIncrementalUpgradeEnabled(t *testing.T) {
 		expected       bool
 	}{
 		{
+			name:           "nil spec",
+			spec:           nil,
+			featureEnabled: true,
+			expected:       false,
+		},
+		{
 			name:           "missing UpgradeStrategy Type",
 			spec:           &rayv1.RayServiceSpec{},
 			featureEnabled: true,
@@ -1794,6 +1800,24 @@ func TestIsHTTPRouteEqual(t *testing.T) {
 		expected bool
 	}{
 		{
+			name:     "Both nil",
+			existing: nil,
+			desired:  nil,
+			expected: true,
+		},
+		{
+			name:     "Existing nil",
+			existing: nil,
+			desired:  &gwv1.HTTPRoute{},
+			expected: false,
+		},
+		{
+			name:     "Desired nil",
+			existing: &gwv1.HTTPRoute{},
+			desired:  nil,
+			expected: false,
+		},
+		{
 			name: "Exactly equal HTTPRoutes",
 			existing: &gwv1.HTTPRoute{
 				Spec: gwv1.HTTPRouteSpec{
@@ -1911,6 +1935,28 @@ func TestIsHTTPRouteEqual(t *testing.T) {
 							BackendRefs: []gwv1.HTTPBackendRef{
 								{BackendRef: gwv1.BackendRef{BackendObjectReference: gwv1.BackendObjectReference{Name: "svc-new"}}},
 							},
+						},
+					},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "Different ParentRefs",
+			existing: &gwv1.HTTPRoute{
+				Spec: gwv1.HTTPRouteSpec{
+					CommonRouteSpec: gwv1.CommonRouteSpec{
+						ParentRefs: []gwv1.ParentReference{
+							{Name: "gateway-old"},
+						},
+					},
+				},
+			},
+			desired: &gwv1.HTTPRoute{
+				Spec: gwv1.HTTPRouteSpec{
+					CommonRouteSpec: gwv1.CommonRouteSpec{
+						ParentRefs: []gwv1.ParentReference{
+							{Name: "gateway-new"},
 						},
 					},
 				},

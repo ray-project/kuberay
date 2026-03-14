@@ -1627,7 +1627,9 @@ func TestCreateHTTPRoute(t *testing.T) {
 			},
 			runtimeObjects:        []runtime.Object{activeCluster, pendingCluster, gateway, activeServeService, pendingServeService},
 			isPendingClusterReady: true,
-			expectError:           true,
+			expectError:           false,
+			expectedActiveWeight:  100, // default weights
+			expectedPendingWeight: 0,
 		},
 		{
 			name: "No on-going upgrade, pending cluster does not exist.",
