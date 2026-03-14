@@ -64,7 +64,7 @@ var defaultFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
 	RayClusterStatusConditions:   {Default: true, PreRelease: featuregate.Beta},
 	RayJobDeletionPolicy:         {Default: true, PreRelease: featuregate.Beta},
 	RayMultiHostIndexing:         {Default: true, PreRelease: featuregate.Beta},
-	RayServiceIncrementalUpgrade: {Default: true, PreRelease: featuregate.Beta},
+	RayServiceIncrementalUpgrade: {Default: false, PreRelease: featuregate.Alpha},
 	RayCronJob:                   {Default: false, PreRelease: featuregate.Alpha},
 	AsyncJobInfoQuery:            {Default: false, PreRelease: featuregate.Alpha},
 }
