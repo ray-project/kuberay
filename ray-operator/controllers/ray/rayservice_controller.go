@@ -1416,7 +1416,7 @@ func (r *RayServiceReconciler) checkIfNeedTargetCapacityUpdate(ctx context.Conte
 
 	if meta.IsStatusConditionTrue(rayServiceInstance.Status.Conditions, string(rayv1.RollbackInProgress)) {
 		if activeTargetCapacity == 100 && pendingTargetCapacity == 0 {
-			return false, "Rollback of traffic to the old cluster is complete."
+			return false, "Rollback capacity scaling is complete. Traffic migration will continue independently."
 		}
 		return true, "Rollback in progress, traffic adjustment needed."
 	}
