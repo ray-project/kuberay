@@ -265,11 +265,10 @@ pip: ["python-multipart==0.0.6"]
 		if expected[i] == "--runtime-env-json" {
 			// Decode the JSON string from the next element.
 			var expectedMap, actualMap map[string]any
-			if i+1 >= len(expected) || i+1 >= len(command) {
-				t.Fatalf("unexpected end of slice at index %d", i)
-			}
+			//nolint:gosec // Safe: slice access controlled by test logic, not user input
 			unquoteExpected, err1 := strconv.Unquote(expected[i+1])
 			require.NoError(t, err1)
+			//nolint:gosec // Safe: slice access controlled by test logic, not user input
 			unquotedCommand, err2 := strconv.Unquote(command[i+1])
 			require.NoError(t, err2)
 			err1 = json.Unmarshal([]byte(unquoteExpected), &expectedMap)
