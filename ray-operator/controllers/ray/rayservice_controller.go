@@ -1515,7 +1515,7 @@ func (r *RayServiceReconciler) reconcileServeTargetCapacity(ctx context.Context,
 	if meta.IsStatusConditionTrue(rayServiceInstance.Status.Conditions, string(rayv1.RollbackInProgress)) {
 		// Rollback the upgrade. The active RayCluster should be scaled back to 100% target_capacity,
 		// while the pending RayCluster is scaled to 0%. This is the inverse of the regular upgrade path.
-		activeTrafficRoutedPercent := ptr.Deref(activeRayServiceStatus.TrafficRoutedPercent, 0)
+		activeTrafficRoutedPercent := ptr.Deref(activeRayServiceStatus.TrafficRoutedPercent, activeTargetCapacity)
 		if activeTargetCapacity != activeTrafficRoutedPercent {
 			logger.Info("Traffic is rolling back to active cluster, deferring capacity update.", "ActiveTargetCapacity", activeTargetCapacity, "ActiveTrafficRoutedPercent", activeTrafficRoutedPercent)
 			return nil

@@ -1995,11 +1995,32 @@ func TestReconcileServeTargetCapacity(t *testing.T) {
 			expectedPendingCapacity: 50, // No change
 			updatedCluster:          "pending",
 		},
+		{
+			name:                    "[Rollback] No deadlock when TrafficRoutedPercent is nil",
+			activeCapacity:          50,
+			pendingCapacity:         50,
+			activeRoutedPercent:     -1, // nil pointer
+			pendingRoutedPercent:    -1, // nil pointer
+			maxSurgePercent:         20,
+			isRollbackInProgress:    true,
+			expectedActiveCapacity:  70,
+			expectedPendingCapacity: 50,
+			updatedCluster:          "active",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.TODO()
+
+			var activeTraffic, pendingTraffic *int32
+			if tt.activeRoutedPercent != -1 {
+				activeTraffic = ptr.To(tt.activeRoutedPercent)
+			}
+			if tt.pendingRoutedPercent != -1 {
+				pendingTraffic = ptr.To(tt.pendingRoutedPercent)
+			}
+
 			rayService := &rayv1.RayService{
 				Spec: rayv1.RayServiceSpec{
 					UpgradeStrategy: &rayv1.RayServiceUpgradeStrategy{
@@ -2014,12 +2035,12 @@ func TestReconcileServeTargetCapacity(t *testing.T) {
 					ActiveServiceStatus: rayv1.RayServiceStatus{
 						RayClusterName:       "active",
 						TargetCapacity:       ptr.To(tt.activeCapacity),
-						TrafficRoutedPercent: ptr.To(tt.activeRoutedPercent),
+						TrafficRoutedPercent: activeTraffic,
 					},
 					PendingServiceStatus: rayv1.RayServiceStatus{
 						RayClusterName:       "pending",
 						TargetCapacity:       ptr.To(tt.pendingCapacity),
-						TrafficRoutedPercent: ptr.To(tt.pendingRoutedPercent),
+						TrafficRoutedPercent: pendingTraffic,
 					},
 				},
 			}
@@ -2913,11 +2934,34 @@ func TestCalculateTrafficRoutedPercent(t *testing.T) {
 			expectedActiveWeight:  50, // Remains paused
 			expectedPendingWeight: 50,
 		},
+		{
+			name:                  "[Rollback] No deadlock when active TrafficRoutedPercent is nil",
+			activeCapacity:        100,
+			pendingCapacity:       0,
+			activeRoutedPercent:   -1, // nil pointer
+			pendingRoutedPercent:  -1, // nil pointer
+			stepSize:              20,
+			isRollbackInProgress:  true,
+			isActiveClusterReady:  true,
+			isPendingClusterReady: true,
+			timeSinceMigration:    10 * time.Second,
+			expectedActiveWeight:  100,
+			expectedPendingWeight: 0,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			interval := int32(5)
+
+			var activeTraffic, pendingTraffic *int32
+			if tt.activeRoutedPercent != -1 {
+				activeTraffic = ptr.To(tt.activeRoutedPercent)
+			}
+			if tt.pendingRoutedPercent != -1 {
+				pendingTraffic = ptr.To(tt.pendingRoutedPercent)
+			}
+
 			rayService := &rayv1.RayService{
 				Spec: rayv1.RayServiceSpec{
 					UpgradeStrategy: &rayv1.RayServiceUpgradeStrategy{
@@ -2931,12 +2975,12 @@ func TestCalculateTrafficRoutedPercent(t *testing.T) {
 				Status: rayv1.RayServiceStatuses{
 					ActiveServiceStatus: rayv1.RayServiceStatus{
 						TargetCapacity:          ptr.To(tt.activeCapacity),
-						TrafficRoutedPercent:    ptr.To(tt.activeRoutedPercent),
+						TrafficRoutedPercent:    activeTraffic,
 						LastTrafficMigratedTime: &metav1.Time{Time: time.Now().Add(-tt.timeSinceMigration)},
 					},
 					PendingServiceStatus: rayv1.RayServiceStatus{
 						TargetCapacity:          ptr.To(tt.pendingCapacity),
-						TrafficRoutedPercent:    ptr.To(tt.pendingRoutedPercent),
+						TrafficRoutedPercent:    pendingTraffic,
 						LastTrafficMigratedTime: &metav1.Time{Time: time.Now().Add(-tt.timeSinceMigration)},
 					},
 				},
