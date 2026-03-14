@@ -12,6 +12,7 @@ import (
 	"golang.org/x/sync/errgroup"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
@@ -392,7 +393,16 @@ func TestRayServiceIncrementalUpgradeRollbackToOriginal(t *testing.T) {
 
 	// Verify that the controller enters the rollback state.
 	LogWithTimestamp(test.T(), "Waiting for RayService %s/%s RollbackInProgress condition to be true", rayService.Namespace, rayService.Name)
-	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutShort).Should(WithTransform(IsRayServiceRollingBack, BeTrue()))
+	g.Eventually(func(g Gomega) {
+		svc, err := GetRayService(test, namespace.Name, rayServiceName)
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(IsRayServiceRollingBack(svc)).To(BeTrue())
+
+		// Assert the condition message indicates a rollback to original cluster spec.
+		cond := meta.FindStatusCondition(svc.Status.Conditions, string(rayv1.RollbackInProgress))
+		g.Expect(cond).NotTo(BeNil())
+		g.Expect(cond.Message).To(Equal("Reverted to original cluster spec, rolling back."))
+	}, TestTimeoutShort).Should(Succeed())
 
 	// Verify that traffic gradually shifts back to the active cluster.
 	LogWithTimestamp(test.T(), "Verifying traffic shifts back to the active cluster")
@@ -442,23 +452,18 @@ func TestRayServiceIncrementalUpgradeRollbackToThirdSpec(t *testing.T) {
 	namespace := test.NewTestNamespace()
 	rayServiceName := "rollback-third-spec-rayservice"
 
-	// Create a RayService with IncrementalUpgrade enabled (Spec A)
+	// Configuration for the upgrade
 	stepSize := ptr.To(int32(50))
 	interval := ptr.To(int32(2))
 	maxSurge := ptr.To(int32(50))
+	serveConfigV2 := defaultIncrementalUpgradeServeConfigV2
 
-	rayServiceAC := rayv1ac.RayService(rayServiceName, namespace.Name).
-		WithSpec(IncrementalUpgradeRayServiceApplyConfiguration(stepSize, interval, maxSurge))
-	rayService, err := test.Client().Ray().RayV1().RayServices(namespace.Name).Apply(test.Ctx(), rayServiceAC, TestApplyOptions)
-	g.Expect(err).NotTo(HaveOccurred())
-
-	LogWithTimestamp(test.T(), "Waiting for RayService %s/%s to be ready", rayService.Namespace, rayService.Name)
-	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutMedium).
-		Should(WithTransform(IsRayServiceReady, BeTrue()))
+	// Bootstrap the initial RayService (Spec A) and wait for readiness
+	_, _, _ = bootstrapIncrementalRayService(test, g, namespace.Name, rayServiceName, stepSize, interval, maxSurge, serveConfigV2)
 
 	// Trigger an incremental upgrade from Spec A to Spec B.
 	LogWithTimestamp(test.T(), "Triggering an upgrade to Spec B")
-	rayService, err = GetRayService(test, namespace.Name, rayServiceName)
+	rayService, err := GetRayService(test, namespace.Name, rayServiceName)
 	g.Expect(err).NotTo(HaveOccurred())
 	rayService.Spec.RayClusterSpec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests[corev1.ResourceCPU] = resource.MustParse("500m")
 	_, err = test.Client().Ray().RayV1().RayServices(namespace.Name).Update(test.Ctx(), rayService, metav1.UpdateOptions{})
@@ -483,7 +488,16 @@ func TestRayServiceIncrementalUpgradeRollbackToThirdSpec(t *testing.T) {
 
 	// Verify that the controller enters the rollback state first, going from B -> A.
 	LogWithTimestamp(test.T(), "Waiting for RayService to enter Rollback state")
-	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutShort).Should(WithTransform(IsRayServiceRollingBack, BeTrue()))
+	g.Eventually(func(g Gomega) {
+		svc, err := GetRayService(test, namespace.Name, rayServiceName)
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(IsRayServiceRollingBack(svc)).To(BeTrue())
+
+		// Validate the condition message is for a rollback to a third, new spec.
+		cond := meta.FindStatusCondition(svc.Status.Conditions, string(rayv1.RollbackInProgress))
+		g.Expect(cond).NotTo(BeNil())
+		g.Expect(cond.Message).To(Equal("Goal state diverged from both active and pending clusters. Rolling back first, then a new upgrade will begin."))
+	}, TestTimeoutShort).Should(Succeed())
 
 	// Verify that the rollback completes successfully.
 	LogWithTimestamp(test.T(), "Waiting for rollback of Spec B to complete")
@@ -494,6 +508,8 @@ func TestRayServiceIncrementalUpgradeRollbackToThirdSpec(t *testing.T) {
 	}, TestTimeoutMedium).Should(Succeed())
 
 	// Verify that after the rollback, the system starts the new upgrade from A to C.
+	// Forward upgrade path is tested above, so it's enough here to just verify the
+	// upgrade starts after the rollback.
 	LogWithTimestamp(test.T(), "Waiting for new upgrade to third spec to begin")
 	g.Eventually(func(g Gomega) {
 		svc, err := GetRayService(test, namespace.Name, rayServiceName)
