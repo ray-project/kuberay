@@ -335,7 +335,7 @@ func TestRayServiceIncrementalUpgradeWithLocust(t *testing.T) {
 	}
 }
 
-func TestRayServiceIncrementalUpgradeRollback(t *testing.T) {
+func TestRayServiceIncrementalUpgradeRollbackToOriginal(t *testing.T) {
 	features.SetFeatureGateDuringTest(t, features.RayServiceIncrementalUpgrade, true)
 
 	test := With(t)
@@ -431,4 +431,74 @@ func TestRayServiceIncrementalUpgradeRollback(t *testing.T) {
 			}
 			return len(route.Spec.Rules[0].BackendRefs)
 		}, Equal(1)))
+}
+
+func TestRayServiceIncrementalUpgradeRollbackToThirdSpec(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.RayServiceIncrementalUpgrade, true)
+
+	test := With(t)
+	g := NewWithT(t)
+
+	namespace := test.NewTestNamespace()
+	rayServiceName := "rollback-third-spec-rayservice"
+
+	// Create a RayService with IncrementalUpgrade enabled (Spec A)
+	stepSize := ptr.To(int32(50))
+	interval := ptr.To(int32(2))
+	maxSurge := ptr.To(int32(50))
+
+	rayServiceAC := rayv1ac.RayService(rayServiceName, namespace.Name).
+		WithSpec(IncrementalUpgradeRayServiceApplyConfiguration(stepSize, interval, maxSurge))
+	rayService, err := test.Client().Ray().RayV1().RayServices(namespace.Name).Apply(test.Ctx(), rayServiceAC, TestApplyOptions)
+	g.Expect(err).NotTo(HaveOccurred())
+
+	LogWithTimestamp(test.T(), "Waiting for RayService %s/%s to be ready", rayService.Namespace, rayService.Name)
+	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutMedium).
+		Should(WithTransform(IsRayServiceReady, BeTrue()))
+
+	// Trigger an incremental upgrade from Spec A to Spec B.
+	LogWithTimestamp(test.T(), "Triggering an upgrade to Spec B")
+	rayService, err = GetRayService(test, namespace.Name, rayServiceName)
+	g.Expect(err).NotTo(HaveOccurred())
+	rayService.Spec.RayClusterSpec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests[corev1.ResourceCPU] = resource.MustParse("500m")
+	_, err = test.Client().Ray().RayV1().RayServices(namespace.Name).Update(test.Ctx(), rayService, metav1.UpdateOptions{})
+	g.Expect(err).NotTo(HaveOccurred())
+
+	// Wait for the upgrade to be partially complete (i.e. traffic partially migrated to B).
+	LogWithTimestamp(test.T(), "Waiting for upgrade to be partially complete")
+	g.Eventually(func(g Gomega) {
+		svc, err := GetRayService(test, namespace.Name, rayServiceName)
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(svc.Status.PendingServiceStatus.TrafficRoutedPercent).NotTo(BeNil())
+		g.Expect(*svc.Status.PendingServiceStatus.TrafficRoutedPercent).Should(BeNumerically(">", 0))
+	}, TestTimeoutMedium).Should(Succeed())
+
+	// Update the RayService to a completely new spec C mid-upgrade from A -> B.
+	LogWithTimestamp(test.T(), "Submitting Spec C mid-upgrade")
+	rayService, err = GetRayService(test, namespace.Name, rayServiceName)
+	g.Expect(err).NotTo(HaveOccurred())
+	rayService.Spec.RayClusterSpec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests[corev1.ResourceCPU] = resource.MustParse("600m")
+	_, err = test.Client().Ray().RayV1().RayServices(namespace.Name).Update(test.Ctx(), rayService, metav1.UpdateOptions{})
+	g.Expect(err).NotTo(HaveOccurred())
+
+	// Verify that the controller enters the rollback state first, going from B -> A.
+	LogWithTimestamp(test.T(), "Waiting for RayService to enter Rollback state")
+	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutShort).Should(WithTransform(IsRayServiceRollingBack, BeTrue()))
+
+	// Verify that the rollback completes successfully.
+	LogWithTimestamp(test.T(), "Waiting for rollback of Spec B to complete")
+	g.Eventually(func(g Gomega) {
+		svc, err := GetRayService(test, namespace.Name, rayServiceName)
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(IsRayServiceRollingBack(svc)).To(BeFalse())
+	}, TestTimeoutMedium).Should(Succeed())
+
+	// Verify that after the rollback, the system starts the new upgrade from A to C.
+	LogWithTimestamp(test.T(), "Waiting for new upgrade to third spec to begin")
+	g.Eventually(func(g Gomega) {
+		svc, err := GetRayService(test, namespace.Name, rayServiceName)
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(IsRayServiceUpgrading(svc)).To(BeTrue())
+		g.Expect(svc.Status.PendingServiceStatus.RayClusterName).NotTo(BeEmpty())
+	}, TestTimeoutMedium).Should(Succeed())
 }
