@@ -449,9 +449,6 @@ func (r *RayServiceReconciler) calculateStatus(
 		activeStatus := &rayServiceInstance.Status.ActiveServiceStatus
 		pendingStatus := &rayServiceInstance.Status.PendingServiceStatus
 
-		// Check if the pending status was already cleared
-		isPendingCleared := pendingStatus.RayClusterName == ""
-
 		// Check if the pending cluster is healthy enough to receive scale-down API calls.
 		// If the pending cluster is unhealthy and the active cluster has 100% of traffic
 		// routed to it, we should complete the rollback.
@@ -462,7 +459,7 @@ func (r *RayServiceReconciler) calculateStatus(
 		// and the pending cluster is at 0% TargetCapacity and TrafficRoutedPercent.
 		if ptr.Deref(activeStatus.TargetCapacity, -1) == 100 &&
 			ptr.Deref(activeStatus.TrafficRoutedPercent, -1) == 100 &&
-			(isPendingCleared || !pendingClusterHealthy || (ptr.Deref(pendingStatus.TargetCapacity, -1) == 0 &&
+			(!pendingClusterHealthy || (ptr.Deref(pendingStatus.TargetCapacity, -1) == 0 &&
 				ptr.Deref(pendingStatus.TrafficRoutedPercent, -1) == 0)) {
 
 			logger.Info("Rollback to original cluster is complete. Cleaning up pending cluster from prior upgrade.")
@@ -1515,6 +1512,10 @@ func (r *RayServiceReconciler) reconcileServeTargetCapacity(ctx context.Context,
 	if meta.IsStatusConditionTrue(rayServiceInstance.Status.Conditions, string(rayv1.RollbackInProgress)) {
 		// Rollback the upgrade. The active RayCluster should be scaled back to 100% target_capacity,
 		// while the pending RayCluster is scaled to 0%. This is the inverse of the regular upgrade path.
+		//
+		// We default activeTrafficRoutedPercent to activeTargetCapacity here if the pointer is nil.
+		// This prevents a deadlock during early rollbacks where the capacity reconciler defers
+		// waiting for traffic to shift, while the traffic reconciler defers waiting for capacity to scale.
 		activeTrafficRoutedPercent := ptr.Deref(activeRayServiceStatus.TrafficRoutedPercent, activeTargetCapacity)
 		if activeTargetCapacity != activeTrafficRoutedPercent {
 			logger.Info("Traffic is rolling back to active cluster, deferring capacity update.", "ActiveTargetCapacity", activeTargetCapacity, "ActiveTrafficRoutedPercent", activeTrafficRoutedPercent)

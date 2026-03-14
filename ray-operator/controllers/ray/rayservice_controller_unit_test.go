@@ -2999,3 +2999,97 @@ func TestCalculateTrafficRoutedPercent(t *testing.T) {
 		})
 	}
 }
+
+func TestReconcilePromotionAndServingStatus(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.RayServiceIncrementalUpgrade, true)
+
+	ctx := context.TODO()
+
+	activeClusterName := "active-cluster"
+	pendingClusterName := "pending-cluster"
+
+	// Mock the Kubernetes services to point to the pending cluster.
+	// This satisfies the cluster switchover prerequisite for promotion.
+	headSvc := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{Name: "head-svc"},
+		Spec:       corev1.ServiceSpec{Selector: map[string]string{utils.RayClusterLabelKey: pendingClusterName}},
+	}
+	serveSvc := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{Name: "serve-svc"},
+		Spec:       corev1.ServiceSpec{Selector: map[string]string{utils.RayClusterLabelKey: pendingClusterName}},
+	}
+
+	tests := []struct {
+		name                 string
+		isRollbackInProgress bool
+		expectedActiveName   string
+		expectedPendingName  string
+	}{
+		{
+			name:                 "[Upgrade] Normal upgrade complete, should promote",
+			isRollbackInProgress: false,
+			expectedActiveName:   pendingClusterName, // Successfully Promoted
+			expectedPendingName:  "",                 // Pending status cleared
+		},
+		{
+			name:                 "[Rollback] Rollback in progress, should not promote even if upgrade is complete",
+			isRollbackInProgress: true,
+			expectedActiveName:   activeClusterName, // Remains unchanged
+			expectedPendingName:  pendingClusterName,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rayService := &rayv1.RayService{
+				Spec: rayv1.RayServiceSpec{
+					UpgradeStrategy: &rayv1.RayServiceUpgradeStrategy{
+						Type: ptr.To(rayv1.RayServiceNewClusterWithIncrementalUpgrade),
+						ClusterUpgradeOptions: &rayv1.ClusterUpgradeOptions{
+							StepSizePercent: ptr.To(int32(10)),
+						},
+					},
+				},
+				Status: rayv1.RayServiceStatuses{
+					ActiveServiceStatus: rayv1.RayServiceStatus{
+						RayClusterName:       activeClusterName,
+						TargetCapacity:       ptr.To(int32(0)),
+						TrafficRoutedPercent: ptr.To(int32(0)),
+					},
+					PendingServiceStatus: rayv1.RayServiceStatus{
+						RayClusterName:       pendingClusterName,
+						TargetCapacity:       ptr.To(int32(100)), // fully migrated
+						TrafficRoutedPercent: ptr.To(int32(100)),
+					},
+				},
+			}
+
+			setCondition(rayService, rayv1.UpgradeInProgress, metav1.ConditionTrue, rayv1.BothActivePendingClustersExist, "upgrade")
+
+			if tt.isRollbackInProgress {
+				setCondition(rayService, rayv1.RollbackInProgress, metav1.ConditionTrue, rayv1.TargetClusterChanged, "rolling back")
+			}
+
+			pendingCluster := &rayv1.RayCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: pendingClusterName},
+				Status: rayv1.RayClusterStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:   string(rayv1.HeadPodReady),
+							Status: metav1.ConditionTrue,
+						},
+					},
+				},
+			}
+
+			isPendingClusterServing := reconcilePromotionAndServingStatus(ctx, headSvc, serveSvc, rayService, pendingCluster)
+
+			// Both scenarios should recognize the pending cluster is actively serving traffic based on K8s services
+			assert.True(t, isPendingClusterServing)
+
+			// Verify if the promotion state machine respected the Rollback status
+			assert.Equal(t, tt.expectedActiveName, rayService.Status.ActiveServiceStatus.RayClusterName)
+			assert.Equal(t, tt.expectedPendingName, rayService.Status.PendingServiceStatus.RayClusterName)
+		})
+	}
+}
