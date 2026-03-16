@@ -849,6 +849,34 @@ func IsIncrementalUpgradeComplete(rayServiceInstance *rayv1.RayService, pendingC
 		ptr.Deref(rayServiceInstance.Status.PendingServiceStatus.TrafficRoutedPercent, -1) == 100
 }
 
+// IsHTTPRouteEqual checks if the existing HTTPRoute matches the desired HTTPRoute.
+// It only compares fields that the controller manages (Name, Weight, Port) to avoid
+// false diffs caused by server-side defaulting of fields like Group and Kind.
+func IsHTTPRouteEqual(existing, desired *gwv1.HTTPRoute) bool {
+	if len(existing.Spec.Rules) != len(desired.Spec.Rules) {
+		return false
+	}
+
+	for i := range desired.Spec.Rules {
+		if len(existing.Spec.Rules[i].BackendRefs) != len(desired.Spec.Rules[i].BackendRefs) {
+			return false
+		}
+
+		for j := range desired.Spec.Rules[i].BackendRefs {
+			existingRef := existing.Spec.Rules[i].BackendRefs[j]
+			desiredRef := desired.Spec.Rules[i].BackendRefs[j]
+
+			// Only compare the fields the controller updates.
+			if existingRef.Name != desiredRef.Name ||
+				ptr.Deref(existingRef.Weight, 1) != ptr.Deref(desiredRef.Weight, 1) ||
+				ptr.Deref(existingRef.Port, 0) != ptr.Deref(desiredRef.Port, 0) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
 // GetWeightsFromHTTPRoute parses a given HTTPRoute object and extracts the traffic weights
 // for the active and pending clusters (if present) of a RayService.
 func GetWeightsFromHTTPRoute(httpRoute *gwv1.HTTPRoute, rayServiceInstance *rayv1.RayService) (activeWeight int32, pendingWeight int32) {

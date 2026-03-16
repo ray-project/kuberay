@@ -871,7 +871,7 @@ func (r *RayServiceReconciler) reconcileHTTPRoute(ctx context.Context, rayServic
 	}
 
 	// If HTTPRoute already exists, check if update is needed
-	if !reflect.DeepEqual(existingHTTPRoute.Spec, desiredHTTPRoute.Spec) {
+	if !utils.IsHTTPRouteEqual(existingHTTPRoute, desiredHTTPRoute) {
 		logger.Info("Updating existing HTTPRoute", "name", desiredHTTPRoute.Name)
 		existingHTTPRoute.Spec = desiredHTTPRoute.Spec
 		if err := r.Update(ctx, existingHTTPRoute); err != nil {
