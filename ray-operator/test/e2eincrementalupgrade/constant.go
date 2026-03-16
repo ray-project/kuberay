@@ -104,10 +104,10 @@ const defaultIncrementalUpgradeServeConfigV2 serveConfigV2 = `applications:
 // highRPSServeConfigV2 configures a minimal high-RPS Serve app (SimpleDeployment) for Locust load tests.
 const highRPSServeConfigV2 serveConfigV2 = `applications:
   - name: simple_app
-    import_path: simple_serve.app
+    import_path: locust_test.simple_serve:app
     route_prefix: /test
     runtime_env:
-      working_dir: "https://github.com/jiangjiawei1103/incr-upgrade-locust/archive/a185bb29374388e801db4331ae73af3ad1e79a5f.zip"
+      working_dir: "https://github.com/ray-project/serve_config_examples/archive/530e247ca195530b71b92d7e708048a1bdc02583.zip"
     deployments:
       - name: SimpleDeployment
         autoscaling_config:
