@@ -29,7 +29,7 @@ helm version
 helm repo add kuberay https://ray-project.github.io/kuberay-helm/
 helm repo update
 # Install KubeRay APIServer without security proxy
-helm install kuberay-apiserver kuberay/kuberay-apiserver --version 1.6.0 --set security=null
+helm install kuberay-apiserver kuberay/kuberay-apiserver --version 1.4.2 --set security=null
 ```
 
 - Install the nightly version
@@ -52,7 +52,7 @@ helm install kuberay-apiserver . --set security=null
 helm repo add kuberay https://ray-project.github.io/kuberay-helm/
 helm repo update
 # Install KubeRay APIServer
-helm install kuberay-apiserver kuberay/kuberay-apiserver --version 1.6.0
+helm install kuberay-apiserver kuberay/kuberay-apiserver --version 1.4.2
 ```
 
 - Install the nightly version
@@ -79,7 +79,7 @@ To list the `kuberay-apiserver` release:
 ```sh
 helm ls
 # NAME                    NAMESPACE       REVISION        UPDATED                                 STATUS          CHART
-# kuberay-apiserver       default         1               2025-08-08 17:07:51.472353906 +0000 UTC deployed        kuberay-apiserver-1.6.0
+# kuberay-apiserver       default         1               2025-08-08 17:07:51.472353906 +0000 UTC deployed        kuberay-apiserver-1.4.2
 ```
 
 ## Uninstall the Chart
