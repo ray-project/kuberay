@@ -131,7 +131,7 @@ head:
       memory: "5Gi"
     requests:
       cpu: "1"
-      memory: "2Gi"
+      memory: "5Gi"
 
   # -- ResourceClaims to allocate with the head pod
   resourceClaims: []

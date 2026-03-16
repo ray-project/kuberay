@@ -90,7 +90,7 @@ helm uninstall raycluster
 | head.resources.limits.cpu | string | `"1"` |  |
 | head.resources.limits.memory | string | `"5Gi"` |  |
 | head.resources.requests.cpu | string | `"1"` |  |
-| head.resources.requests.memory | string | `"2Gi"` |  |
+| head.resources.requests.memory | string | `"5Gi"` |  |
 | head.resourceClaims | list | `[]` | ResourceClaims to allocate with the head pod |
 | head.annotations | object | `{}` | Extra annotations for head pod |
 | head.nodeSelector | object | `{}` | Node labels for head pod assignment |
