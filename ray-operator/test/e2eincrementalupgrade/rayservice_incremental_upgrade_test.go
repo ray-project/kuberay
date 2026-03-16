@@ -29,7 +29,7 @@ import (
 //
 // It iterates over incrementalUpgradeCombinations to cover diverse upgrade scenarios:
 //   - BlueGreen
-//   - StandardGradual
+//   - AggressiveGradual
 //   - ConservativeGradual
 //
 // The test case follows these steps:
@@ -224,7 +224,7 @@ func TestRayServiceIncrementalUpgrade(t *testing.T) {
 //
 // It iterates over incrementalUpgradeCombinations to cover diverse upgrade scenarios under load:
 //   - BlueGreen
-//   - StandardGradual
+//   - AggressiveGradual
 //   - ConservativeGradual
 //
 // The ultimate goal is to ensure that there are no request drops during the upgrade.
