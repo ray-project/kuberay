@@ -10,7 +10,12 @@ import (
 
 	. "github.com/onsi/gomega"
 	"golang.org/x/sync/errgroup"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
+	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
@@ -328,4 +333,102 @@ func TestRayServiceIncrementalUpgradeWithLocust(t *testing.T) {
 			g.Expect(resp.Status).To(Equal("ok"), "GET /test status field should be ok, got: %s", resp.Status)
 		})
 	}
+}
+
+func TestRayServiceIncrementalUpgradeRollback(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.RayServiceIncrementalUpgrade, true)
+
+	test := With(t)
+	g := NewWithT(t)
+
+	namespace := test.NewTestNamespace()
+	rayServiceName := "rollback-rayservice"
+
+	// Create a RayService with IncrementalUpgrade enabled
+	stepSize := ptr.To(int32(25))
+	interval := ptr.To(int32(10))
+	maxSurge := ptr.To(int32(50))
+	serveConfigV2 := defaultIncrementalUpgradeServeConfigV2
+
+	_, httpRoute, _ := bootstrapIncrementalRayService(test, g, namespace.Name, rayServiceName, stepSize, interval, maxSurge, serveConfigV2)
+
+	// Copy original spec to use to trigger a rollback later.
+	rayService, err := GetRayService(test, namespace.Name, rayServiceName)
+	g.Expect(err).NotTo(HaveOccurred())
+	originalSpec := rayService.Spec.DeepCopy()
+
+	// Trigger an incremental upgrade through a change to the RayCluster spec.
+	LogWithTimestamp(test.T(), "Triggering an upgrade for RayService %s/%s", rayService.Namespace, rayService.Name)
+	rayService, err = GetRayService(test, namespace.Name, rayServiceName)
+	g.Expect(err).NotTo(HaveOccurred())
+	rayService.Spec.RayClusterSpec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests[corev1.ResourceCPU] = resource.MustParse("500m")
+	_, err = test.Client().Ray().RayV1().RayServices(namespace.Name).Update(test.Ctx(), rayService, metav1.UpdateOptions{})
+	g.Expect(err).NotTo(HaveOccurred())
+
+	LogWithTimestamp(test.T(), "Waiting for RayService %s/%s UpgradeInProgress condition to be true", rayService.Namespace, rayService.Name)
+	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutShort).Should(WithTransform(IsRayServiceUpgrading, BeTrue()))
+
+	// Wait for the upgrade to be underway with traffic partially migrated.
+	LogWithTimestamp(test.T(), "Waiting for upgrade to be partially complete")
+	var pendingClusterName string
+	g.Eventually(func(g Gomega) {
+		svc, err := GetRayService(test, namespace.Name, rayServiceName)
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(svc.Status.PendingServiceStatus.TrafficRoutedPercent).NotTo(BeNil())
+		g.Expect(*svc.Status.PendingServiceStatus.TrafficRoutedPercent).Should(BeNumerically(">", 0))
+
+		// Capture the pending cluster name before the rollback starts
+		pendingClusterName = svc.Status.PendingServiceStatus.RayClusterName
+		g.Expect(pendingClusterName).NotTo(BeEmpty())
+	}, TestTimeoutMedium).Should(Succeed())
+
+	// Trigger a rollback by updating the spec back to the original version.
+	LogWithTimestamp(test.T(), "Triggering a rollback for RayService %s/%s", rayService.Namespace, rayService.Name)
+	rayService, err = GetRayService(test, namespace.Name, rayServiceName)
+	g.Expect(err).NotTo(HaveOccurred())
+	rayService.Spec = *originalSpec
+	_, err = test.Client().Ray().RayV1().RayServices(namespace.Name).Update(test.Ctx(), rayService, metav1.UpdateOptions{})
+	g.Expect(err).NotTo(HaveOccurred())
+
+	// Verify that the controller enters the rollback state.
+	LogWithTimestamp(test.T(), "Waiting for RayService %s/%s RollbackInProgress condition to be true", rayService.Namespace, rayService.Name)
+	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutShort).Should(WithTransform(IsRayServiceRollingBack, BeTrue()))
+
+	// Verify that traffic gradually shifts back to the active cluster.
+	LogWithTimestamp(test.T(), "Verifying traffic shifts back to the active cluster")
+	g.Eventually(func(g Gomega) {
+		svc, err := GetRayService(test, namespace.Name, rayServiceName)
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(svc.Status.ActiveServiceStatus.TrafficRoutedPercent).NotTo(BeNil())
+		g.Expect(*svc.Status.ActiveServiceStatus.TrafficRoutedPercent).Should(Equal(int32(100)))
+		g.Expect(svc.Status.PendingServiceStatus.TrafficRoutedPercent).NotTo(BeNil())
+		g.Expect(*svc.Status.PendingServiceStatus.TrafficRoutedPercent).Should(Equal(int32(0)))
+	}, TestTimeoutMedium).Should(Succeed())
+
+	// Verify that the rollback completes and the pending cluster is cleaned up.
+	LogWithTimestamp(test.T(), "Waiting for rollback to complete and pending cluster to be deleted")
+	g.Eventually(func(g Gomega) {
+		svc, err := GetRayService(test, namespace.Name, rayServiceName)
+		g.Expect(err).NotTo(HaveOccurred())
+		// Rollback is done when both conditions are false and pending status is empty.
+		g.Expect(IsRayServiceRollingBack(svc)).To(BeFalse())
+		g.Expect(IsRayServiceUpgrading(svc)).To(BeFalse())
+		g.Expect(svc.Status.PendingServiceStatus.RayClusterName).To(BeEmpty())
+	}, TestTimeoutMedium).Should(Succeed())
+
+	// Check that the pending RayCluster resource is deleted.
+	LogWithTimestamp(test.T(), "Verifying the pending RayCluster resource was deleted")
+	g.Eventually(func() error {
+		_, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Get(test.Ctx(), pendingClusterName, metav1.GetOptions{})
+		return err
+	}, TestTimeoutMedium).Should(WithTransform(errors.IsNotFound, BeTrue()))
+
+	// The HTTPRoute should now only have one backend after the rollback completes.
+	g.Eventually(HTTPRoute(test, namespace.Name, httpRoute.Name), TestTimeoutShort).
+		Should(WithTransform(func(route *gwv1.HTTPRoute) int {
+			if route == nil || len(route.Spec.Rules) == 0 {
+				return 0
+			}
+			return len(route.Spec.Rules[0].BackendRefs)
+		}, Equal(1)))
 }

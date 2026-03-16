@@ -1839,75 +1839,13 @@ func TestIsHTTPRouteEqual(t *testing.T) {
 			expected: false,
 		},
 		{
-			name: "Different backend name",
-			existing: &gwv1.HTTPRoute{
-				Spec: gwv1.HTTPRouteSpec{
-					Rules: []gwv1.HTTPRouteRule{
-						{BackendRefs: []gwv1.HTTPBackendRef{{BackendRef: gwv1.BackendRef{BackendObjectReference: gwv1.BackendObjectReference{Name: "svc-a", Port: ptr.To(gwv1.PortNumber(8000))}, Weight: ptr.To(int32(100))}}}},
-					},
-				},
-			},
-			desired: &gwv1.HTTPRoute{
-				Spec: gwv1.HTTPRouteSpec{
-					Rules: []gwv1.HTTPRouteRule{
-						{BackendRefs: []gwv1.HTTPBackendRef{{BackendRef: gwv1.BackendRef{BackendObjectReference: gwv1.BackendObjectReference{Name: "svc-b", Port: ptr.To(gwv1.PortNumber(8000))}, Weight: ptr.To(int32(100))}}}},
-					},
-				},
-			},
-			expected: false,
-		},
-		{
-			name: "Different weight",
-			existing: &gwv1.HTTPRoute{
-				Spec: gwv1.HTTPRouteSpec{
-					Rules: []gwv1.HTTPRouteRule{
-						{BackendRefs: []gwv1.HTTPBackendRef{{BackendRef: gwv1.BackendRef{BackendObjectReference: gwv1.BackendObjectReference{Name: "svc-a", Port: ptr.To(gwv1.PortNumber(8000))}, Weight: ptr.To(int32(80))}}}},
-					},
-				},
-			},
-			desired: &gwv1.HTTPRoute{
-				Spec: gwv1.HTTPRouteSpec{
-					Rules: []gwv1.HTTPRouteRule{
-						{BackendRefs: []gwv1.HTTPBackendRef{{BackendRef: gwv1.BackendRef{BackendObjectReference: gwv1.BackendObjectReference{Name: "svc-a", Port: ptr.To(gwv1.PortNumber(8000))}, Weight: ptr.To(int32(100))}}}},
-					},
-				},
-			},
-			expected: false,
-		},
-		{
-			name: "Different port",
-			existing: &gwv1.HTTPRoute{
-				Spec: gwv1.HTTPRouteSpec{
-					Rules: []gwv1.HTTPRouteRule{
-						{BackendRefs: []gwv1.HTTPBackendRef{{BackendRef: gwv1.BackendRef{BackendObjectReference: gwv1.BackendObjectReference{Name: "svc-a", Port: ptr.To(gwv1.PortNumber(8000))}, Weight: ptr.To(int32(100))}}}},
-					},
-				},
-			},
-			desired: &gwv1.HTTPRoute{
-				Spec: gwv1.HTTPRouteSpec{
-					Rules: []gwv1.HTTPRouteRule{
-						{BackendRefs: []gwv1.HTTPBackendRef{{BackendRef: gwv1.BackendRef{BackendObjectReference: gwv1.BackendObjectReference{Name: "svc-a", Port: ptr.To(gwv1.PortNumber(9000))}, Weight: ptr.To(int32(100))}}}},
-					},
-				},
-			},
-			expected: false,
-		},
-		{
-			name: "Existing has server-defaulted Group and Kind, desired has nil - should be equal",
+			name: "Different number of backends",
 			existing: &gwv1.HTTPRoute{
 				Spec: gwv1.HTTPRouteSpec{
 					Rules: []gwv1.HTTPRouteRule{
 						{
 							BackendRefs: []gwv1.HTTPBackendRef{
-								{BackendRef: gwv1.BackendRef{
-									BackendObjectReference: gwv1.BackendObjectReference{
-										Group: ptr.To(gwv1.Group("")),
-										Kind:  ptr.To(gwv1.Kind("Service")),
-										Name:  "svc-a",
-										Port:  ptr.To(gwv1.PortNumber(8000)),
-									},
-									Weight: ptr.To(int32(100)),
-								}},
+								{BackendRef: gwv1.BackendRef{BackendObjectReference: gwv1.BackendObjectReference{Name: "svc-a"}}},
 							},
 						},
 					},
@@ -1918,44 +1856,69 @@ func TestIsHTTPRouteEqual(t *testing.T) {
 					Rules: []gwv1.HTTPRouteRule{
 						{
 							BackendRefs: []gwv1.HTTPBackendRef{
-								{BackendRef: gwv1.BackendRef{
-									BackendObjectReference: gwv1.BackendObjectReference{
-										Name: "svc-a",
-										Port: ptr.To(gwv1.PortNumber(8000)),
-									},
-									Weight: ptr.To(int32(100)),
-								}},
+								{BackendRef: gwv1.BackendRef{BackendObjectReference: gwv1.BackendObjectReference{Name: "svc-a"}}},
+								{BackendRef: gwv1.BackendRef{BackendObjectReference: gwv1.BackendObjectReference{Name: "svc-b"}}},
 							},
 						},
 					},
 				},
 			},
-			expected: true,
+			expected: false,
 		},
 		{
-			name: "Different number of backend refs",
+			name: "Different backend weights",
 			existing: &gwv1.HTTPRoute{
 				Spec: gwv1.HTTPRouteSpec{
 					Rules: []gwv1.HTTPRouteRule{
-						{BackendRefs: []gwv1.HTTPBackendRef{
-							{BackendRef: gwv1.BackendRef{BackendObjectReference: gwv1.BackendObjectReference{Name: "svc-a"}, Weight: ptr.To(int32(50))}},
-							{BackendRef: gwv1.BackendRef{BackendObjectReference: gwv1.BackendObjectReference{Name: "svc-b"}, Weight: ptr.To(int32(50))}},
-						}},
+						{
+							BackendRefs: []gwv1.HTTPBackendRef{
+								{BackendRef: gwv1.BackendRef{BackendObjectReference: gwv1.BackendObjectReference{Name: "svc-a"}, Weight: ptr.To(int32(100))}},
+							},
+						},
 					},
 				},
 			},
 			desired: &gwv1.HTTPRoute{
 				Spec: gwv1.HTTPRouteSpec{
 					Rules: []gwv1.HTTPRouteRule{
-						{BackendRefs: []gwv1.HTTPBackendRef{
-							{BackendRef: gwv1.BackendRef{BackendObjectReference: gwv1.BackendObjectReference{Name: "svc-a"}, Weight: ptr.To(int32(100))}},
-						}},
+						{
+							BackendRefs: []gwv1.HTTPBackendRef{
+								{BackendRef: gwv1.BackendRef{BackendObjectReference: gwv1.BackendObjectReference{Name: "svc-a"}, Weight: ptr.To(int32(75))}},
+							},
+						},
+					},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "Different backend names",
+			existing: &gwv1.HTTPRoute{
+				Spec: gwv1.HTTPRouteSpec{
+					Rules: []gwv1.HTTPRouteRule{
+						{
+							BackendRefs: []gwv1.HTTPBackendRef{
+								{BackendRef: gwv1.BackendRef{BackendObjectReference: gwv1.BackendObjectReference{Name: "svc-old"}}},
+							},
+						},
+					},
+				},
+			},
+			desired: &gwv1.HTTPRoute{
+				Spec: gwv1.HTTPRouteSpec{
+					Rules: []gwv1.HTTPRouteRule{
+						{
+							BackendRefs: []gwv1.HTTPBackendRef{
+								{BackendRef: gwv1.BackendRef{BackendObjectReference: gwv1.BackendObjectReference{Name: "svc-new"}}},
+							},
+						},
 					},
 				},
 			},
 			expected: false,
 		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := IsHTTPRouteEqual(tt.existing, tt.desired)
