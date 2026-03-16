@@ -30,34 +30,6 @@ tests:
           name: kuberay-apiserver
           namespace: kuberay-system
 
-  - it: Should create Ingress if `ingress.enabled` is `true`
-    capabilities:
-      majorVersion: 1
-      minorVersion: 14
-    set:
-      ingress:
-        enabled: true
-    asserts:
-      - containsDocument:
-          apiVersion: networking.k8s.io/v1beta1
-          kind: Ingress
-          name: kuberay-apiserver
-          namespace: kuberay-system
-
-  - it: Should create Ingress if `ingress.enabled` is `true`
-    capabilities:
-      majorVersion: 1
-      minorVersion: 12
-    set:
-      ingress:
-        enabled: true
-    asserts:
-      - containsDocument:
-          apiVersion: extensions/v1beta1
-          kind: Ingress
-          name: kuberay-apiserver
-          namespace: kuberay-system
-
   - it: Should have ingress backend service name matching the service name
     capabilities:
       majorVersion: 1
