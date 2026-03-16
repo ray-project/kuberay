@@ -1,6 +1,6 @@
 # KubeRay APIServer
 
-![Version: 1.6.0-rc.0](https://img.shields.io/badge/Version-1.6.0--rc.0-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square)
+![Version: 1.6.0](https://img.shields.io/badge/Version-1.6.0-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square)
 
 A Helm chart for kuberay-apiserver
 
@@ -79,7 +79,7 @@ To list the `kuberay-apiserver` release:
 ```sh
 helm ls
 # NAME                    NAMESPACE       REVISION        UPDATED                                 STATUS          CHART
-# kuberay-apiserver       default         1               2025-08-08 17:07:51.472353906 +0000 UTC deployed        kuberay-apiserver-1.6.0-rc.0
+# kuberay-apiserver       default         1               2025-08-08 17:07:51.472353906 +0000 UTC deployed        kuberay-apiserver-1.6.0
 ```
 
 ## Uninstall the Chart
@@ -103,7 +103,7 @@ kubectl get pods
 | replicaCount | int | `1` |  |
 | name | string | `"kuberay-apiserver"` |  |
 | image.repository | string | `"quay.io/kuberay/apiserver"` | Image repository. |
-| image.tag | string | `"v1.6.0-rc.0"` | Image tag. |
+| image.tag | string | `"v1.6.0"` | Image tag. |
 | image.pullPolicy | string | `"IfNotPresent"` | Image pull policy. |
 | cors | string | `nil` |  |
 | labels | object | `{}` | Extra labels. |
