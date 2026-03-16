@@ -10,7 +10,7 @@ image:
   # -- Image repository.
   repository: quay.io/kuberay/apiserver
   # -- Image tag.
-  tag: v1.6.0
+  tag: nightly
   # -- Image pull policy.
   pullPolicy: IfNotPresent
 
