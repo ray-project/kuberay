@@ -206,8 +206,6 @@ const (
 	RayServiceReady RayServiceConditionType = "Ready"
 	// UpgradeInProgress means the RayService is currently performing a zero-downtime upgrade.
 	UpgradeInProgress RayServiceConditionType = "UpgradeInProgress"
-	// RollbackInProgress means the RayService is currently rolling back an in-progress upgrade to the original cluster state.
-	RollbackInProgress RayServiceConditionType = "RollbackInProgress"
 )
 
 const (
@@ -219,7 +217,6 @@ const (
 	NoPendingCluster               RayServiceConditionReason = "NoPendingCluster"
 	NoActiveCluster                RayServiceConditionReason = "NoActiveCluster"
 	RayServiceValidationFailed     RayServiceConditionReason = "ValidationFailed"
-	TargetClusterChanged           RayServiceConditionReason = "TargetClusterChanged"
 )
 
 // +kubebuilder:object:root=true
