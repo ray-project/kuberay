@@ -371,7 +371,7 @@ _Appears in:_
 
 
 
-
+RayCronJob is the Schema for the raycronjobs API
 
 
 
