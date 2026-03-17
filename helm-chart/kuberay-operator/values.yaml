@@ -139,7 +139,7 @@ featureGates:
 - name: RayMultiHostIndexing
   enabled: true
 - name: RayServiceIncrementalUpgrade
-  enabled: true
+  enabled: false
 - name: RayCronJob
   enabled: false
 
