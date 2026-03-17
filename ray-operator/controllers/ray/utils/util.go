@@ -698,6 +698,19 @@ func EnvVarExists(envName string, envVars []corev1.EnvVar) bool {
 	return false
 }
 
+// SetOrReplaceEnvVar sets an env var on a container. If the env var already exists, its value is replaced.
+// If it does not exist, it is appended.
+func SetOrReplaceEnvVar(container *corev1.Container, name, value string) {
+	for i := range container.Env {
+		if container.Env[i].Name == name {
+			container.Env[i].Value = value
+			container.Env[i].ValueFrom = nil
+			return
+		}
+	}
+	container.Env = append(container.Env, corev1.EnvVar{Name: name, Value: value})
+}
+
 // VolumeMountExists checks if a volume mount with the given name exists in the list of volume mounts.
 func VolumeMountExists(mountName string, volumeMounts []corev1.VolumeMount) bool {
 	for _, vm := range volumeMounts {

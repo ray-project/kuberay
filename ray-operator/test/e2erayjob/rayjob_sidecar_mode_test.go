@@ -290,4 +290,112 @@ env_vars:
 
 		LogWithTimestamp(test.T(), "RayJob %s/%s completed successfully with auth token", rayJob.Namespace, rayJob.Name)
 	})
+
+	test.T().Run("Successful RayJob with user-provided submitter container", func(_ *testing.T) {
+		// Create a separate ConfigMap to mount into the user-provided submitter to prove user volume mounts are preserved.
+		sidecarCMAC := corev1ac.ConfigMap("custom-submitter-scripts", namespace.Name).
+			WithData(map[string]string{"hello.txt": "hello from user-provided submitter"})
+		sidecarCM, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), sidecarCMAC, TestApplyOptions)
+		g.Expect(err).NotTo(HaveOccurred())
+
+		// Build the head pod template with the user-provided sidecar container already present.
+		headTemplate := PodTemplateSpecApplyConfiguration(
+			HeadPodTemplateApplyConfiguration(),
+			MountConfigMap[corev1ac.PodTemplateSpecApplyConfiguration](jobs, "/home/ray/jobs"),
+		)
+		// Append a user-provided container named "ray-job-submitter" with a custom volume mount.
+		headTemplate.Spec.WithContainers(
+			corev1ac.Container().
+				WithName(utils.SubmitterContainerName).
+				WithImage(GetRayImage()).
+				WithVolumeMounts(corev1ac.VolumeMount().
+					WithName(sidecarCM.Name).
+					WithMountPath("/custom-scripts")),
+		)
+		headTemplate.Spec.WithVolumes(corev1ac.Volume().
+			WithName(sidecarCM.Name).
+			WithConfigMap(corev1ac.ConfigMapVolumeSource().WithName(sidecarCM.Name)))
+
+		rayJobAC := rayv1ac.RayJob("custom-submitter-counter", namespace.Name).
+			WithSpec(rayv1ac.RayJobSpec().
+				WithSubmissionMode(rayv1.SidecarMode).
+				WithEntrypoint("python /home/ray/jobs/counter.py").
+				WithRuntimeEnvYAML(`
+env_vars:
+  counter_name: test_counter
+`).
+				WithShutdownAfterJobFinishes(false).
+				WithRayClusterSpec(rayv1ac.RayClusterSpec().
+					WithRayVersion(GetRayVersion()).
+					WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
+						WithRayStartParams(map[string]string{"dashboard-host": "0.0.0.0"}).
+						WithTemplate(headTemplate))))
+
+		rayJob, err := test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
+		g.Expect(err).NotTo(HaveOccurred())
+		LogWithTimestamp(test.T(), "Created RayJob %s/%s with user-provided submitter container successfully", rayJob.Namespace, rayJob.Name)
+
+		LogWithTimestamp(test.T(), "Waiting for RayJob %s/%s to complete", rayJob.Namespace, rayJob.Name)
+		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutMedium).
+			Should(WithTransform(RayJobStatus, Satisfy(rayv1.IsJobTerminal)))
+
+		// Assert the RayJob has completed successfully
+		g.Expect(GetRayJob(test, rayJob.Namespace, rayJob.Name)).
+			To(WithTransform(RayJobStatus, Equal(rayv1.JobStatusSucceeded)))
+
+		// And the RayJob deployment status is updated accordingly
+		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name)).
+			Should(WithTransform(RayJobDeploymentStatus, Equal(rayv1.JobDeploymentStatusComplete)))
+
+		// Refresh the RayJob status
+		rayJob, err = GetRayJob(test, rayJob.Namespace, rayJob.Name)
+		g.Expect(err).NotTo(HaveOccurred())
+
+		// Verify the submitter container is present on the head pod and retains the user's volume mount.
+		rayCluster, err := GetRayCluster(test, namespace.Name, rayJob.Status.RayClusterName)
+		g.Expect(err).NotTo(HaveOccurred())
+
+		headPod, err := GetHeadPod(test, rayCluster)
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(headPod).NotTo(BeNil())
+
+		var submitterContainer *corev1.Container
+		for i := range headPod.Spec.Containers {
+			if headPod.Spec.Containers[i].Name == utils.SubmitterContainerName {
+				submitterContainer = &headPod.Spec.Containers[i]
+				break
+			}
+		}
+		g.Expect(submitterContainer).NotTo(BeNil(), "submitter container should be present in head pod")
+
+		// Verify the user's custom volume mount was preserved.
+		hasCustomMount := false
+		for _, vm := range submitterContainer.VolumeMounts {
+			if vm.MountPath == "/custom-scripts" {
+				hasCustomMount = true
+				break
+			}
+		}
+		g.Expect(hasCustomMount).To(BeTrue(), "user's custom volume mount should be preserved on the submitter container")
+
+		// Verify that the controller injected the required environment variables.
+		envMap := make(map[string]string)
+		for _, env := range submitterContainer.Env {
+			envMap[env.Name] = env.Value
+		}
+		g.Expect(envMap).To(HaveKey(utils.RAY_DASHBOARD_ADDRESS), "RAY_DASHBOARD_ADDRESS should be injected")
+		g.Expect(envMap).To(HaveKey(utils.RAY_JOB_SUBMISSION_ID), "RAY_JOB_SUBMISSION_ID should be injected")
+
+		// Verify the user's image was preserved (not overwritten).
+		g.Expect(submitterContainer.Image).To(Equal(GetRayImage()), "user-specified image should be preserved")
+
+		// Verify there is no duplicate submitter container.
+		submitterCount := 0
+		for _, c := range headPod.Spec.Containers {
+			if c.Name == utils.SubmitterContainerName {
+				submitterCount++
+			}
+		}
+		g.Expect(submitterCount).To(Equal(1), "there should be exactly one submitter container")
+	})
 }
