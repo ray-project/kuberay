@@ -353,6 +353,44 @@ func TestCreatePodGroupForRayJob(t *testing.T) {
 		a.Len(pg.OwnerReferences, 1)
 		a.Equal("RayJob", pg.OwnerReferences[0].Kind)
 	})
+
+	t.Run("SidecarMode with user-provided submitter container does not double-count resources", func(_ *testing.T) {
+		rayJob := createTestRayJob(1)
+		rayJob.Spec.SubmissionMode = rayv1.SidecarMode
+		// Add a user-provided submitter container to the head pod spec.
+		rayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers = append(
+			rayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers,
+			corev1.Container{
+				Name:  utils.SubmitterContainerName,
+				Image: "my-custom-image:latest",
+				Resources: corev1.ResourceRequirements{
+					Requests: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("200m"),
+						corev1.ResourceMemory: resource.MustParse("128Mi"),
+					},
+					Limits: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("400m"),
+						corev1.ResourceMemory: resource.MustParse("256Mi"),
+					},
+				},
+			},
+		)
+
+		err := scheduler.handleRayJob(ctx, &rayJob)
+		require.NoError(t, err)
+
+		var pg volcanoschedulingv1beta1.PodGroup
+		err = fakeCli.Get(ctx, client.ObjectKey{Namespace: rayJob.Namespace, Name: getAppPodGroupName(&rayJob)}, &pg)
+		require.NoError(t, err)
+
+		a.Equal(int32(3), pg.Spec.MinMember)
+		// The user-provided submitter container resources (200m) are already included in the head pod calculation:
+		// head (256m) + user-provided submitter (200m) + 2 workers (256m each) = 968m
+		// No additional submitter resources should be added.
+		a.Equal("968m", pg.Spec.MinResources.Cpu().String())
+		// head (256Mi) + user-provided submitter (128Mi) + 2 workers (256Mi each) = 896Mi
+		a.Equal("896Mi", pg.Spec.MinResources.Memory().String())
+	})
 }
 
 func TestCreatePodGroupForRayJob_NumOfHosts2(t *testing.T) {

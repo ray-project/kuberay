@@ -1165,6 +1165,64 @@ func TestValidateRayJobSpec(t *testing.T) {
 			expectError: true,
 		},
 		{
+			name: "reserved container name ray-job-submitter rejected in K8sJobMode",
+			spec: rayv1.RayJobSpec{
+				SubmissionMode: rayv1.K8sJobMode,
+				RayClusterSpec: &rayv1.RayClusterSpec{
+					HeadGroupSpec: rayv1.HeadGroupSpec{
+						Template: corev1.PodTemplateSpec{
+							Spec: corev1.PodSpec{
+								Containers: []corev1.Container{
+									{Name: "ray-head"},
+									{Name: SubmitterContainerName},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectError: true,
+		},
+		{
+			name: "reserved container name ray-job-submitter allowed in SidecarMode",
+			spec: rayv1.RayJobSpec{
+				SubmissionMode: rayv1.SidecarMode,
+				RayClusterSpec: &rayv1.RayClusterSpec{
+					HeadGroupSpec: rayv1.HeadGroupSpec{
+						Template: corev1.PodTemplateSpec{
+							Spec: corev1.PodSpec{
+								Containers: []corev1.Container{
+									{Name: "ray-head"},
+									{Name: SubmitterContainerName, Image: "rayproject/ray:2.9.0"},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "duplicate ray-job-submitter containers rejected in SidecarMode",
+			spec: rayv1.RayJobSpec{
+				SubmissionMode: rayv1.SidecarMode,
+				RayClusterSpec: &rayv1.RayClusterSpec{
+					HeadGroupSpec: rayv1.HeadGroupSpec{
+						Template: corev1.PodTemplateSpec{
+							Spec: corev1.PodSpec{
+								Containers: []corev1.Container{
+									{Name: "ray-head"},
+									{Name: SubmitterContainerName, Image: "rayproject/ray:2.9.0"},
+									{Name: SubmitterContainerName, Image: "rayproject/ray:2.9.0"},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectError: true,
+		},
+		{
 			name: "failed to get cluster name in ClusterSelector map",
 			spec: rayv1.RayJobSpec{
 				ClusterSelector: map[string]string{},
