@@ -381,10 +381,10 @@ spec:
           resources:
             limits:
               cpu: "1"
-              memory: "1G"
+              memory: "1Gi"
             requests:
               cpu: "1"
-              memory: "1G"
+              memory: "1Gi"
           {{- end }}
           {{- with $values.securityContext }}
           securityContext:
