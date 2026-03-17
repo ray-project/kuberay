@@ -82,7 +82,11 @@ func GetMetadataJson(metadata map[string]string, rayVersion string) (string, err
 }
 
 // BuildJobSubmitCommand builds the `ray job submit` command based on submission mode.
-func BuildJobSubmitCommand(rayJobInstance *rayv1.RayJob, submissionMode rayv1.JobSubmissionMode) ([]string, error) {
+// rayVersion is the Ray version of the cluster being targeted. It is used to determine
+// whether the --metadata-json flag is supported. When RayJob uses clusterSelector to target
+// an existing RayCluster, RayClusterSpec is nil, so the caller must pass the version from
+// the selected cluster's spec.
+func BuildJobSubmitCommand(rayJobInstance *rayv1.RayJob, submissionMode rayv1.JobSubmissionMode, rayVersion string) ([]string, error) {
 	var address string
 	port := utils.DefaultDashboardPort
 
@@ -163,8 +167,8 @@ func BuildJobSubmitCommand(rayJobInstance *rayv1.RayJob, submissionMode rayv1.Jo
 		cmd = append(cmd, "--runtime-env-json", strconv.Quote(runtimeEnvJson))
 	}
 
-	if len(metadata) > 0 && rayJobInstance.Spec.RayClusterSpec != nil {
-		metadataJson, err := GetMetadataJson(metadata, rayJobInstance.Spec.RayClusterSpec.RayVersion)
+	if len(metadata) > 0 && len(rayVersion) > 0 {
+		metadataJson, err := GetMetadataJson(metadata, rayVersion)
 		if err != nil {
 			return nil, err
 		}

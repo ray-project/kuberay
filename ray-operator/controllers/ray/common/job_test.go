@@ -94,7 +94,7 @@ func TestBuildJobSubmitCommandWithK8sJobMode(t *testing.T) {
 		";", "fi", ";",
 		"ray", "job", "logs", "--address", "http://127.0.0.1:8265", "--follow", "testJobId",
 	}
-	command, err := BuildJobSubmitCommand(testRayJob, rayv1.K8sJobMode)
+	command, err := BuildJobSubmitCommand(testRayJob, rayv1.K8sJobMode, testRayJob.Spec.RayClusterSpec.RayVersion)
 	require.NoError(t, err)
 	assert.Equal(t, expected, command)
 }
@@ -133,7 +133,7 @@ func TestBuildJobSubmitCommandWithSidecarMode(t *testing.T) {
 		"echo no quote 'single quote' \"double quote\"",
 		";",
 	}
-	command, err := BuildJobSubmitCommand(testRayJob, rayv1.SidecarMode)
+	command, err := BuildJobSubmitCommand(testRayJob, rayv1.SidecarMode, testRayJob.Spec.RayClusterSpec.RayVersion)
 	require.NoError(t, err)
 	assert.Equal(t, expected, command)
 }
@@ -174,7 +174,7 @@ func TestBuildJobSubmitCommandWithSidecarModeVersionSwitch(t *testing.T) {
 				},
 			}
 
-			command, err := BuildJobSubmitCommand(testRayJob, rayv1.SidecarMode)
+			command, err := BuildJobSubmitCommand(testRayJob, rayv1.SidecarMode, testRayJob.Spec.RayClusterSpec.RayVersion)
 			require.NoError(t, err)
 			require.GreaterOrEqual(t, len(command), 2)
 			assert.Equal(t, "until", command[0])
@@ -199,7 +199,7 @@ func TestBuildJobSubmitCommandWithSidecarModeCustomDashboardPort(t *testing.T) {
 		},
 	}
 
-	command, err := BuildJobSubmitCommand(testRayJob, rayv1.SidecarMode)
+	command, err := BuildJobSubmitCommand(testRayJob, rayv1.SidecarMode, testRayJob.Spec.RayClusterSpec.RayVersion)
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, len(command), 2)
 	assert.Equal(t, "until", command[0])
@@ -210,7 +210,7 @@ func TestBuildJobSubmitCommandWithSidecarModeCustomDashboardPort(t *testing.T) {
 
 func TestBuildJobSubmitCommandWithK8sJobModeNoSidecarHealthWaitLoop(t *testing.T) {
 	testRayJob := rayJobTemplate()
-	command, err := BuildJobSubmitCommand(testRayJob, rayv1.K8sJobMode)
+	command, err := BuildJobSubmitCommand(testRayJob, rayv1.K8sJobMode, testRayJob.Spec.RayClusterSpec.RayVersion)
 	require.NoError(t, err)
 	assert.NotContains(t, command, "until")
 	for _, token := range command {
@@ -253,7 +253,7 @@ pip: ["python-multipart==0.0.6"]
 		";", "fi", ";",
 		"ray", "job", "logs", "--address", "http://127.0.0.1:8265", "--follow", "testJobId",
 	}
-	command, err := BuildJobSubmitCommand(rayJobWithYAML, rayv1.K8sJobMode)
+	command, err := BuildJobSubmitCommand(rayJobWithYAML, rayv1.K8sJobMode, rayJobWithYAML.Spec.RayClusterSpec.RayVersion)
 	require.NoError(t, err)
 
 	// Ensure the slices are the same length.
@@ -298,6 +298,50 @@ func TestMetadataRaisesErrorBeforeRay26(t *testing.T) {
 	}
 	_, err := GetMetadataJson(rayJob.Spec.Metadata, rayJob.Spec.RayClusterSpec.RayVersion)
 	require.Error(t, err)
+}
+
+// TestBuildJobSubmitCommandWithClusterSelectorIncludesMetadata verifies that metadata
+// is correctly included in the job submit command when using clusterSelector (i.e.,
+// RayClusterSpec on the RayJob is nil). This tests the fix for:
+// https://github.com/ray-project/kuberay/issues/4589
+func TestBuildJobSubmitCommandWithClusterSelectorIncludesMetadata(t *testing.T) {
+	// Simulate a RayJob that uses clusterSelector: RayClusterSpec is nil.
+	rayJobWithClusterSelector := &rayv1.RayJob{
+		Spec: rayv1.RayJobSpec{
+			ClusterSelector: map[string]string{
+				"ray.io/cluster-name": "existing-cluster",
+			},
+			// RayClusterSpec is intentionally nil — this is the clusterSelector case.
+			RayClusterSpec: nil,
+			Metadata: map[string]string{
+				"tenant": "tenant1",
+				"team":   "ml-platform",
+			},
+			Entrypoint: "python /app/batch_inference.py",
+		},
+		Status: rayv1.RayJobStatus{
+			DashboardURL: "http://ray-dashboard.svc:8265",
+			JobId:        "test-job-001",
+		},
+	}
+	// The rayVersion is passed from the selected RayCluster's spec (>= 2.6.0 supports --metadata-json).
+	const clusterRayVersion = "2.35.0"
+	command, err := BuildJobSubmitCommand(rayJobWithClusterSelector, rayv1.K8sJobMode, clusterRayVersion)
+	require.NoError(t, err)
+	// The command must contain --metadata-json to populate metadata in Ray UI/jobs API.
+	assert.Contains(t, command, "--metadata-json")
+	metadataIdx := -1
+	for i, token := range command {
+		if token == "--metadata-json" {
+			metadataIdx = i
+			break
+		}
+	}
+	require.NotEqual(t, -1, metadataIdx, "--metadata-json flag must be present in the command")
+	require.Less(t, metadataIdx+1, len(command), "--metadata-json must be followed by a value")
+	unquoted, err := strconv.Unquote(command[metadataIdx+1])
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"tenant":"tenant1","team":"ml-platform"}`, unquoted)
 }
 
 func TestGetSubmitterTemplate(t *testing.T) {
