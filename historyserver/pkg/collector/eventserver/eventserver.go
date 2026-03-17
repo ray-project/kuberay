@@ -17,6 +17,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/ray-project/kuberay/historyserver/pkg/storage"
+	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
 type Event struct {
@@ -107,7 +108,7 @@ func (es *EventServer) InitServer(stop <-chan struct{}, port int) {
 
 // watchNodeIDFile watches /tmp/ray/raylet_node_id for content changes
 func (es *EventServer) watchNodeIDFile() {
-	nodeIDFilePath := "/tmp/ray/raylet_node_id"
+	nodeIDFilePath := utils.RayNodeIDPath
 
 	// Create new watcher
 	watcher, err := fsnotify.NewWatcher()
@@ -122,9 +123,9 @@ func (es *EventServer) watchNodeIDFile() {
 	if err != nil {
 		logrus.Infof("Failed to add %s to watcher, will watch for file creation: %v", nodeIDFilePath, err)
 		// If file doesn't exist, watch parent directory
-		err = watcher.Add("/tmp/ray")
+		err = watcher.Add(utils.TmpRayRoot)
 		if err != nil {
-			logrus.Errorf("Failed to watch directory /tmp/ray: %v", err)
+			logrus.Errorf("Failed to watch directory %s: %v", utils.TmpRayRoot, err)
 			return
 		}
 	}
