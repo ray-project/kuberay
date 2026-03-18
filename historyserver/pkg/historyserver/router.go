@@ -954,7 +954,7 @@ func (s *ServerHandler) getAdditionalEndpoint(req *restful.Request, resp *restfu
 	// Try to find the stored endpoint data. The collector may store keys with or without
 	// query params depending on the RAY_COLLECTOR_ADDITIONAL_ENDPOINTS configuration.
 	// First try the full request URI (path + query), then fall back to path-only.
-	var reader io.ReadCloser
+	var reader io.Reader
 	for _, uri := range []string{req.Request.URL.RequestURI(), req.Request.URL.Path} {
 		storageKey := utils.EndpointPathToStorageKey(uri)
 		endpointPath := path.Join(sessionName, utils.RAY_SESSIONDIR_FETCHED_ENDPOINTS_NAME, storageKey)
