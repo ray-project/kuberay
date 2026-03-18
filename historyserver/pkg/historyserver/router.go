@@ -1175,11 +1175,12 @@ func formatActorForResponse(actor eventtypes.Actor) map[string]interface{} {
 		// Note: The key is "exitDetail" (singular), not "exitDetails" (plural). This matches
 		// the Ray Dashboard frontend TypeScript type and the live Ray Dashboard API.
 		// Ref: https://github.com/ray-project/ray/blob/a8fdb50e72/python/ray/dashboard/client/src/type/actor.ts#L33
-		"exitDetail":   actor.ExitDetails,
-		"reprName":     actor.ReprName,
-		"callSite":     actor.CallSite,
-		"isDetached":   actor.IsDetached,
-		"rayNamespace": actor.RayNamespace,
+		"exitDetail":    actor.ExitDetails,
+		"reprName":      actor.ReprName,
+		"callSite":      actor.CallSite,
+		"isDetached":    actor.IsDetached,
+		"rayNamespace":  actor.RayNamespace,
+		"labelSelector": actor.LabelSelector,
 	}
 
 	if !actor.StartTime.IsZero() {
