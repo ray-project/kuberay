@@ -260,8 +260,8 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 		}
 
 		if headSvc == nil || serveSvc == nil {
-			panic("Both head and serve services are nil before calculate RayService status. " +
-				"This should never happen. Please open a GitHub issue in the KubeRay repository.")
+			panic(fmt.Sprintf("Either head service (%v) or serve service (%v) is nil before calculating RayService status. "+
+				"This should never happen. Please open a GitHub issue in the KubeRay repository.", headSvc, serveSvc))
 		}
 	}
 
