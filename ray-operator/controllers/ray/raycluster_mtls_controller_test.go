@@ -383,7 +383,10 @@ func TestMTLSController_WorkerCertHasWildcardDNS(t *testing.T) {
 	assert.Contains(t, workerCert.Spec.DNSNames,
 		fmt.Sprintf("*.%s.%s.svc", workerSvcName, cluster.Namespace))
 	assert.Contains(t, workerCert.Spec.DNSNames,
-		fmt.Sprintf("*-worker-*.%s.svc", cluster.Namespace))
+		fmt.Sprintf("*.%s.%s.svc.cluster.local", workerSvcName, cluster.Namespace))
+	assert.NotContains(t, workerCert.Spec.DNSNames,
+		fmt.Sprintf("*-worker-*.%s.svc", cluster.Namespace),
+		"no per-group or *-worker-* services exist in KubeRay")
 }
 
 func TestMTLSController_CertReadinessBlocksReconciliation(t *testing.T) {
