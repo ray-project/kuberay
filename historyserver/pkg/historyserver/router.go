@@ -963,18 +963,13 @@ func (s *ServerHandler) getAdditionalEndpoint(req *restful.Request, resp *restfu
 
 	clusterNameID := clusterName + "_" + clusterNamespace
 
-	// Try to find the stored endpoint data. The collector may store keys with or without
-	// query params depending on the RAY_COLLECTOR_ADDITIONAL_ENDPOINTS configuration.
-	// First try the full request URI (path + query), then fall back to path-only.
-	var reader io.Reader
-	for _, uri := range []string{req.Request.URL.RequestURI(), req.Request.URL.Path} {
-		storageKey := utils.EndpointPathToStorageKey(uri)
-		endpointPath := path.Join(sessionName, utils.RAY_SESSIONDIR_FETCHED_ENDPOINTS_NAME, storageKey)
-		reader = s.reader.GetContent(clusterNameID, endpointPath)
-		if reader != nil {
-			break
-		}
-	}
+	// Use the full request URI (path + query) for storage key lookup.
+	// The collector stores keys using the full endpoint URL from RAY_COLLECTOR_ADDITIONAL_ENDPOINTS,
+	// which may include query params (e.g., "/api/v0/placement_groups?detail=1&limit=10000").
+	// RequestURI() includes query params when present, and equals URL.Path when absent.
+	storageKey := utils.EndpointPathToStorageKey(req.Request.URL.RequestURI())
+	endpointPath := path.Join(sessionName, utils.RAY_SESSIONDIR_FETCHED_ENDPOINTS_NAME, storageKey)
+	reader := s.reader.GetContent(clusterNameID, endpointPath)
 	if reader == nil {
 		// For known frontend endpoints, return empty but valid JSON responses instead of 404.
 		// This prevents the frontend from showing error states for endpoints that may not have been
