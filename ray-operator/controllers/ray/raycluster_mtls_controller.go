@@ -301,7 +301,7 @@ func (r *RayClusterMTLSController) reconcileCACertificate(ctx context.Context, i
 			certmanagerv1.UsageCertSign,
 			certmanagerv1.UsageCRLSign,
 		},
-		IssuerRef: cmmeta.ObjectReference{
+		IssuerRef: cmmeta.IssuerReference{
 			Name:  fmt.Sprintf("%s-%s", utils.RaySelfSignedIssuerPrefix, instance.Name),
 			Kind:  "Issuer",
 			Group: "cert-manager.io",
@@ -421,7 +421,7 @@ func (r *RayClusterMTLSController) reconcileHeadCertificate(ctx context.Context,
 		DNSNames:    desiredDNSNames,
 		IPAddresses: desiredIPAddresses,
 		Usages:      leafCertKeyUsages(),
-		IssuerRef: cmmeta.ObjectReference{
+		IssuerRef: cmmeta.IssuerReference{
 			Name:  fmt.Sprintf("%s-%s", utils.RayCAIssuerPrefix, instance.Name),
 			Kind:  "Issuer",
 			Group: "cert-manager.io",
@@ -475,31 +475,19 @@ func (r *RayClusterMTLSController) reconcileWorkerCertificate(ctx context.Contex
 		return err
 	}
 
-	// Build DNS names including per-worker-group service names and wildcards
-	// for dynamic worker discovery. Uses the headless service name ({cluster}-headless)
-	// which is the actual worker service created by KubeRay.
+	// The only worker-related service KubeRay creates is the headless service
+	// ({cluster}-headless) used for multi-host peer discovery. Head-to-worker
+	// connections use pod IPs directly, so the DNS SANs only need the headless
+	// service name and a wildcard for its subdomain records.
 	workerSvcName := fmt.Sprintf("%s-%s", instance.Name, utils.HeadlessServiceSuffix)
 	dnsNames := []string{
 		workerSvcName,
 		"localhost",
 		fmt.Sprintf("%s.%s.svc", workerSvcName, instance.Namespace),
 		fmt.Sprintf("%s.%s.svc.cluster.local", workerSvcName, instance.Namespace),
-	}
-	for _, wg := range instance.Spec.WorkerGroupSpecs {
-		groupSvc := fmt.Sprintf("%s-%s", instance.Name, wg.GroupName)
-		dnsNames = append(dnsNames,
-			groupSvc,
-			fmt.Sprintf("%s.%s.svc", groupSvc, instance.Namespace),
-			fmt.Sprintf("%s.%s.svc.cluster.local", groupSvc, instance.Namespace),
-		)
-	}
-	// Wildcard patterns for dynamic worker services.
-	dnsNames = append(dnsNames,
 		fmt.Sprintf("*.%s.%s.svc", workerSvcName, instance.Namespace),
 		fmt.Sprintf("*.%s.%s.svc.cluster.local", workerSvcName, instance.Namespace),
-		fmt.Sprintf("*-worker-*.%s.svc", instance.Namespace),
-		fmt.Sprintf("*-worker-*.%s.svc.cluster.local", instance.Namespace),
-	)
+	}
 
 	desiredLabels := tlsResourceLabels(instance.Name, "worker-certificate")
 	desiredDNSNames := uniqueStrings(dnsNames)
@@ -515,7 +503,7 @@ func (r *RayClusterMTLSController) reconcileWorkerCertificate(ctx context.Contex
 		DNSNames:    desiredDNSNames,
 		IPAddresses: desiredIPAddresses,
 		Usages:      leafCertKeyUsages(),
-		IssuerRef: cmmeta.ObjectReference{
+		IssuerRef: cmmeta.IssuerReference{
 			Name:  fmt.Sprintf("%s-%s", utils.RayCAIssuerPrefix, instance.Name),
 			Kind:  "Issuer",
 			Group: "cert-manager.io",
