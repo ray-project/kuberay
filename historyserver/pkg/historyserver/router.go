@@ -1006,6 +1006,10 @@ func (s *ServerHandler) getAdditionalEndpoint(req *restful.Request, resp *restfu
 func emptyResponseForEndpoint(urlPath string) []byte {
 	trimmed := strings.TrimRight(urlPath, "/")
 	switch trimmed {
+	// "applications" must exist so Object.values() doesn't crash. Missing http_options
+	// triggers "Serve not started" warning, matching live cluster behavior.
+	// Ref: https://github.com/ray-project/ray/blob/27d3d81d47/python/ray/dashboard/client/src/pages/serve/hook/useServeApplications.ts#L30
+	// Ref: https://github.com/ray-project/ray/blob/b775a604ce/python/ray/dashboard/client/src/pages/serve/ServeDeploymentsListPage.tsx#L68
 	case "/api/serve/applications":
 		data, _ := json.Marshal(map[string]interface{}{
 			"applications": map[string]interface{}{},
