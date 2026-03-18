@@ -876,6 +876,9 @@ func (h *EventHandler) GetActorByID(clusterName, actorID string) (types.Actor, b
 	}
 
 	// If not found, the caller may have passed a hex-encoded ID (from the frontend).
+	// The frontend calls /logical/actors/{actorId} with hex IDs returned by formatActorForResponse.
+	// Ref: https://github.com/ray-project/ray/blob/27d3d81d47/python/ray/dashboard/client/src/service/actor.ts#L24-L25
+	//
 	// This O(n) scan is a known performance limitation. The proper fix is to normalize
 	// actor IDs to hex at ingestion time (see PR #4563), which would make the direct
 	// map lookup above always succeed. This fallback will be removed after that change.
