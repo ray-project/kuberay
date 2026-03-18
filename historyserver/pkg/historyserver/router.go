@@ -437,6 +437,11 @@ func (s *ServerHandler) getNodes(req *restful.Request, resp *restful.Response) {
 // The response format matches the Ray Dashboard API: summary is a flat array where each element
 // is a single node object {hostname, ip, raylet: {...}, ...}. For historical clusters, we use
 // the latest state transition snapshot to represent each node's final state.
+//
+// Frontend references:
+//   - summary[i].raylet.state: https://github.com/ray-project/ray/blob/27d3d81d47/python/ray/dashboard/client/src/pages/node/hook/useNodeList.ts#L48-L53
+//   - nodeLogicalResources[nodeId] (expects string): https://github.com/ray-project/ray/blob/27d3d81d47/python/ray/dashboard/client/src/pages/node/hook/useNodeList.ts#L48
+//   - Logs page node.raylet.state filter: https://github.com/ray-project/ray/blob/60d1469959/python/ray/dashboard/client/src/pages/log/Logs.tsx#L92-L97
 func (s *ServerHandler) getNodesSummary(nodeMap map[string]eventtypes.Node, sessionName string, resp *restful.Response) {
 	// Build node summary. Use the latest snapshot for each node to match Ray Dashboard API format.
 	summary := make([]map[string]interface{}, 0, len(nodeMap))
@@ -559,6 +564,7 @@ func (s *ServerHandler) getNode(req *restful.Request, resp *restful.Response) {
 
 	// Use the latest snapshot to match Ray Dashboard API format.
 	// Frontend expects "detail" to be a single object {hostname, ip, raylet: {...}}, not an array.
+	// Ref: https://github.com/ray-project/ray/blob/27d3d81d47/python/ray/dashboard/client/src/pages/node/hook/useNodeDetail.ts#L33-L34
 	var detail map[string]interface{}
 	if len(nodeSummaryReplay) > 0 {
 		detail = nodeSummaryReplay[len(nodeSummaryReplay)-1]
@@ -566,6 +572,7 @@ func (s *ServerHandler) getNode(req *restful.Request, resp *restful.Response) {
 
 	// Fill actors for this node.
 	// Frontend expects actors as {[actorId]: ActorDetail}, not an empty array.
+	// Ref: https://github.com/ray-project/ray/blob/8a7b47bc5c/python/ray/dashboard/client/src/pages/node/NodeDetail.tsx#L233
 	actorsMap := s.eventHandler.GetActorsMap(clusterSessionKey)
 	nodeActors := make(map[string]interface{})
 	for _, actor := range actorsMap {
@@ -722,6 +729,8 @@ func formatJobForResponse(job eventtypes.Job) map[string]interface{} {
 
 	// Determine job status. Prefer the latest StatusTransition (most accurate),
 	// then fall back to job.Status from the definition event, then infer from State.
+	// Frontend uses status for filtering and display:
+	// Ref: https://github.com/ray-project/ray/blob/beae3b3f94/python/ray/dashboard/client/src/pages/job/hook/useJobList.ts#L12
 	status := string(job.Status)
 	if len(job.StatusTransitions) > 0 {
 		status = string(job.StatusTransitions[len(job.StatusTransitions)-1].Status)
@@ -1010,8 +1019,9 @@ func emptyResponseForEndpoint(urlPath string) []byte {
 }
 
 // ensurePlacementGroupFields adds missing "bundles" and "stats" fields to each placement group
-// in the response. The collector may not store these fields, but the frontend crashes without them
-// (PlacementGroupTable.tsx calls bundles.map() which fails on undefined).
+// in the response. The collector may not store these fields, but the frontend crashes without them.
+// Ref: bundles.map() at https://github.com/ray-project/ray/blob/5fbfc81b00/python/ray/dashboard/client/src/components/PlacementGroupTable.tsx#L32
+// Ref: bundles.map() at https://github.com/ray-project/ray/blob/5fbfc81b00/python/ray/dashboard/client/src/components/PlacementGroupTable.tsx#L53
 func ensurePlacementGroupFields(data []byte) []byte {
 	var response map[string]interface{}
 	if err := json.Unmarshal(data, &response); err != nil {
@@ -1131,6 +1141,7 @@ func (s *ServerHandler) getLogicalActors(req *restful.Request, resp *restful.Res
 
 // formatActorForResponse converts an eventtypes.Actor to the format expected by Ray Dashboard.
 // Uses camelCase keys and hex-encoded IDs to match the Ray Dashboard API format.
+// Ref: ActorDetail type https://github.com/ray-project/ray/blob/a8fdb50e72/python/ray/dashboard/client/src/type/actor.ts#L18-L69
 func formatActorForResponse(actor eventtypes.Actor) map[string]interface{} {
 	// Convert Base64 IDs to Hex format for Dashboard API compatibility
 	actorIDHex, _ := utils.ConvertBase64ToHex(actor.ActorID)
@@ -1669,6 +1680,7 @@ func formatTaskForResponse(task eventtypes.Task, detail bool) map[string]interfa
 		result["required_resources"] = task.RequiredResources
 		// Frontend expects runtime_env_info as a JSON string, not an object.
 		// Serialize to match the Ray State API format.
+		// Ref: https://github.com/ray-project/ray/blob/2f93603ad1/python/ray/dashboard/client/src/type/task.ts#L39
 		runtimeEnvInfoObj := map[string]interface{}{
 			"serialized_runtime_env": task.SerializedRuntimeEnv,
 			// RuntimeEnvUris and RuntimeEnvConfig are never populated on the Ray side.
@@ -1806,6 +1818,10 @@ func getClusterSvcInfo(clis []client.Client, name, namespace string) (ServiceInf
 }
 
 // formatNodeSummaryReplayForResp formats a node summary replay of a single node for the response.
+// Fields must match the Ray Dashboard frontend NodeDetail type to avoid TypeError crashes.
+// Ref: NodeDetail.tsx (loadAvg, networkSpeed, cmdline, disk, workers, actors):
+//
+//	https://github.com/ray-project/ray/blob/8a7b47bc5c/python/ray/dashboard/client/src/pages/node/NodeDetail.tsx#L65-L233
 func formatNodeSummaryReplayForResp(node eventtypes.Node, sessionName string) []map[string]interface{} {
 	nodeId := node.NodeID
 	nodeIpAddress := node.NodeIPAddress
