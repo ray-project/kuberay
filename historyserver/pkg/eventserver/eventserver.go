@@ -875,8 +875,10 @@ func (h *EventHandler) GetActorByID(clusterName, actorID string) (types.Actor, b
 		return actor.DeepCopy(), true
 	}
 
-	// If not found, the caller may have passed a hex-encoded ID.
-	// Iterate and compare hex-converted IDs.
+	// If not found, the caller may have passed a hex-encoded ID (from the frontend).
+	// This O(n) scan is a known performance limitation. The proper fix is to normalize
+	// actor IDs to hex at ingestion time (see PR #4563), which would make the direct
+	// map lookup above always succeed. This fallback will be removed after that change.
 	for _, a := range actorMap.ActorMap {
 		hexID, err := utils.ConvertBase64ToHex(a.ActorID)
 		if err == nil && hexID == actorID {
