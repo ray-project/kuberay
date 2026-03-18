@@ -25,9 +25,12 @@ import (
 
 var (
 	buildVersion = "N/A"
-	buildTime    = "N/A"
-	k8sVersion   = "v1.31.4"
+	k8sVersion   = "v1.35.0"
 )
+
+func kubeletVersion() string {
+	return fmt.Sprintf("pod-pool-%s-%s", buildVersion, k8sVersion)
+}
 
 func main() {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -139,7 +142,7 @@ func runVirtualKubelet(ctx context.Context, cmd *cobra.Command) error {
 			NodeInfo: corev1.NodeSystemInfo{
 				OperatingSystem: operatingOS,
 				Architecture:    arch,
-				KubeletVersion:  k8sVersion,
+				KubeletVersion:  kubeletVersion(),
 			},
 			Capacity:    corev1.ResourceList{},
 			Allocatable: corev1.ResourceList{},
