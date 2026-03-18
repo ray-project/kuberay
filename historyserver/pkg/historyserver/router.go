@@ -565,10 +565,11 @@ func (s *ServerHandler) getNode(req *restful.Request, resp *restful.Response) {
 	// Use the latest snapshot to match Ray Dashboard API format.
 	// Frontend expects "detail" to be a single object {hostname, ip, raylet: {...}}, not an array.
 	// Ref: https://github.com/ray-project/ray/blob/27d3d81d47/python/ray/dashboard/client/src/pages/node/hook/useNodeDetail.ts#L33-L34
-	var detail map[string]interface{}
-	if len(nodeSummaryReplay) > 0 {
-		detail = nodeSummaryReplay[len(nodeSummaryReplay)-1]
+	if len(nodeSummaryReplay) == 0 {
+		resp.WriteErrorString(http.StatusNotFound, fmt.Sprintf("node %s has no state transitions yet", targetNodeId))
+		return
 	}
+	detail := nodeSummaryReplay[len(nodeSummaryReplay)-1]
 
 	// Fill actors for this node.
 	// Frontend expects actors as {[actorId]: ActorDetail}, not an empty array.
@@ -733,7 +734,9 @@ func formatJobForResponse(job eventtypes.Job) map[string]interface{} {
 	// Ref: https://github.com/ray-project/ray/blob/beae3b3f94/python/ray/dashboard/client/src/pages/job/hook/useJobList.ts#L12
 	status := string(job.Status)
 	if len(job.StatusTransitions) > 0 {
-		status = string(job.StatusTransitions[len(job.StatusTransitions)-1].Status)
+		if latest := string(job.StatusTransitions[len(job.StatusTransitions)-1].Status); latest != "" {
+			status = latest
+		}
 	}
 	if status == "" {
 		// Only infer RUNNING from CREATED state. JOBFINISHED does not imply SUCCEEDED
