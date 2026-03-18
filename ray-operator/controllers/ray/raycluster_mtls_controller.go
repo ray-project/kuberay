@@ -584,9 +584,10 @@ func (r *RayClusterMTLSController) checkTLSCertificatesReady(ctx context.Context
 	return true, nil
 }
 
-// checkTLSCertificateExpiry logs warnings for certificates approaching expiry.
+// checkTLSCertificateExpiry emits a warning Event for certificates expiring within 24 hours.
+// The Kubernetes event recorder deduplicates identical events, so this is safe to call on
+// every reconcile without flooding the event stream.
 func (r *RayClusterMTLSController) checkTLSCertificateExpiry(ctx context.Context, instance *rayv1.RayCluster) {
-	logger := ctrl.LoggerFrom(ctx)
 	certNames := []string{
 		fmt.Sprintf("%s-%s", utils.RayHeadCertPrefix, instance.Name),
 		fmt.Sprintf("%s-%s", utils.RayWorkerCertPrefix, instance.Name),
@@ -600,11 +601,9 @@ func (r *RayClusterMTLSController) checkTLSCertificateExpiry(ctx context.Context
 		if cert.Status.NotAfter != nil {
 			remaining := time.Until(cert.Status.NotAfter.Time)
 			if remaining < 24*time.Hour {
-				logger.Info("TLS certificate expiring soon",
-					"certificate", name,
-					"expiresAt", cert.Status.NotAfter.Time,
-					"remainingHours", remaining.Hours(),
-				)
+				r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.MTLSCertificateExpiringSoon),
+					"TLS certificate %s expires in %.1f hours; Ray does not hot-reload certs so a pod restart will be needed after renewal",
+					name, remaining.Hours())
 			}
 		}
 	}

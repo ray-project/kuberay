@@ -163,7 +163,7 @@ func configureGCSFaultTolerance(podTemplate *corev1.PodTemplateSpec, instance ra
 }
 
 // DefaultHeadPodTemplate sets the config values
-func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, headSpec rayv1.HeadGroupSpec, podName string, headPort string) corev1.PodTemplateSpec {
+func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, headSpec rayv1.HeadGroupSpec, podName string, headPort string, fqdnRayIP string) corev1.PodTemplateSpec {
 	// TODO (Dmitri) The argument headPort is essentially unused;
 	// headPort is passed into setMissingRayStartParams but unused there for the head pod.
 	// To mitigate this awkwardness and reduce code redundancy, unify head and worker pod configuration logic.
@@ -187,7 +187,7 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 	mergedLabels := mergeLabels(headSpec.Template.ObjectMeta.Labels, headSpec.Labels)
 	podTemplate.Labels = labelPod(rayv1.HeadNode, instance.Name, utils.RayNodeHeadGroupLabelValue, mergedLabels)
 
-	headSpec.RayStartParams = setMissingRayStartParams(ctx, headSpec.RayStartParams, rayv1.HeadNode, headPort, "")
+	headSpec.RayStartParams = setMissingRayStartParams(ctx, headSpec.RayStartParams, rayv1.HeadNode, headPort, fqdnRayIP)
 
 	initTemplateAnnotations(instance, &podTemplate)
 
@@ -379,18 +379,6 @@ func configureTLS(podTemplate *corev1.PodTemplateSpec, instance rayv1.RayCluster
 	// Inject into init containers that need TLS (e.g. wait-gcs-ready).
 	for i := range podTemplate.Spec.InitContainers {
 		SetContainerTLSConfig(&podTemplate.Spec.InitContainers[i])
-	}
-
-	if rayNodeType == rayv1.HeadNode {
-		rayContainer := &podTemplate.Spec.Containers[utils.RayContainerIndex]
-		if !utils.EnvVarExists("MY_POD_IP", rayContainer.Env) {
-			rayContainer.Env = append(rayContainer.Env, corev1.EnvVar{
-				Name: "MY_POD_IP",
-				ValueFrom: &corev1.EnvVarSource{
-					FieldRef: &corev1.ObjectFieldSelector{FieldPath: "status.podIP"},
-				},
-			})
-		}
 	}
 }
 
@@ -1045,6 +1033,15 @@ func setMissingRayStartParams(ctx context.Context, rayStartParams map[string]str
 	}
 
 	if nodeType == rayv1.HeadNode {
+		// Set node-ip-address to the head service FQDN so the head node advertises its
+		// stable service address instead of the pod IP. This avoids a TLS SAN race condition
+		// when mTLS is enabled: certs are created before pods exist, so the initial cert only
+		// contains DNS SANs and 127.0.0.1. Using the FQDN ensures GCS connections match a
+		// DNS SAN that is present from the start.
+		if _, ok := rayStartParams["node-ip-address"]; !ok && fqdnRayIP != "" {
+			rayStartParams["node-ip-address"] = fqdnRayIP
+		}
+
 		// Allow incoming connections from all network interfaces for the dashboard by default.
 		// The default value of `dashboard-host` is `localhost` which is not accessible from outside the head Pod.
 		if _, ok := rayStartParams["dashboard-host"]; !ok {

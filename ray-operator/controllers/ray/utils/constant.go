@@ -447,15 +447,16 @@ const (
 	FailedToCreateRoleBinding K8sEventType = "FailedToCreateRoleBinding"
 
 	// mTLS event list
-	MTLSPKIReady               K8sEventType = "MTLSPKIReady"
-	MTLSCertsNotReady          K8sEventType = "MTLSCertsNotReady"
-	MTLSSecretsCleanedUp       K8sEventType = "MTLSSecretsCleanedUp"
-	MTLSFailedToReconcile      K8sEventType = "MTLSFailedToReconcile"
-	MTLSCertificatesUpdated    K8sEventType = "MTLSCertificatesUpdated"
-	MTLSBYOCSecretValid        K8sEventType = "MTLSBYOCSecretValid"        //nolint:gosec // G101 -- event type name, not a credential
-	MTLSBYOCSecretNotFound     K8sEventType = "MTLSBYOCSecretNotFound"     //nolint:gosec // G101 -- event type name, not a credential
-	MTLSBYOCSecretInvalid      K8sEventType = "MTLSBYOCSecretInvalid"      //nolint:gosec // G101 -- event type name, not a credential
-	MTLSFailedToCleanupSecrets K8sEventType = "MTLSFailedToCleanupSecrets" //nolint:gosec // G101 -- event type name, not a credential
+	MTLSPKIReady                K8sEventType = "MTLSPKIReady"
+	MTLSCertsNotReady           K8sEventType = "MTLSCertsNotReady"
+	MTLSSecretsCleanedUp        K8sEventType = "MTLSSecretsCleanedUp"
+	MTLSFailedToReconcile       K8sEventType = "MTLSFailedToReconcile"
+	MTLSCertificatesUpdated     K8sEventType = "MTLSCertificatesUpdated"
+	MTLSBYOCSecretValid         K8sEventType = "MTLSBYOCSecretValid"        //nolint:gosec // G101 -- event type name, not a credential
+	MTLSBYOCSecretNotFound      K8sEventType = "MTLSBYOCSecretNotFound"     //nolint:gosec // G101 -- event type name, not a credential
+	MTLSBYOCSecretInvalid       K8sEventType = "MTLSBYOCSecretInvalid"      //nolint:gosec // G101 -- event type name, not a credential
+	MTLSFailedToCleanupSecrets  K8sEventType = "MTLSFailedToCleanupSecrets" //nolint:gosec // G101 -- event type name, not a credential
+	MTLSCertificateExpiringSoon K8sEventType = "MTLSCertificateExpiringSoon"
 	// NetworkPolicy event list
 	CreatedNetworkPolicy        K8sEventType = "CreatedNetworkPolicy"
 	UpdatedNetworkPolicy        K8sEventType = "UpdatedNetworkPolicy"
