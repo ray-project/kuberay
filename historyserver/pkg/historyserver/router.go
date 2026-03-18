@@ -434,19 +434,29 @@ func (s *ServerHandler) getNodes(req *restful.Request, resp *restful.Response) {
 }
 
 // getNodesSummary returns node summary and resource usage information for historical clusters.
+// The response format matches the Ray Dashboard API: summary is a flat array where each element
+// is a single node object {hostname, ip, raylet: {...}, ...}. For historical clusters, we use
+// the latest state transition snapshot to represent each node's final state.
 func (s *ServerHandler) getNodesSummary(nodeMap map[string]eventtypes.Node, sessionName string, resp *restful.Response) {
-	// Build node summary. Each node has an array of summary snapshots with timestamps.
-	summary := make([][]map[string]interface{}, 0, len(nodeMap))
-	// Build node logical resources. Each node has an array of resource snapshots with timestamps.
-	nodeLogicalResources := make(map[string][]map[string]interface{})
+	// Build node summary. Use the latest snapshot for each node to match Ray Dashboard API format.
+	summary := make([]map[string]interface{}, 0, len(nodeMap))
+	// Build node logical resources. Frontend expects { nodeId: "0.0/8.0 CPU\n..." } (string per node).
+	nodeLogicalResources := make(map[string]string)
 
-	// Process each node to build the historical replay.
+	// Process each node: take the latest snapshot (last state transition) for dashboard compatibility.
 	for _, node := range nodeMap {
 		nodeSummaryReplay := formatNodeSummaryReplayForResp(node, sessionName)
-		summary = append(summary, nodeSummaryReplay)
+		if len(nodeSummaryReplay) > 0 {
+			summary = append(summary, nodeSummaryReplay[len(nodeSummaryReplay)-1])
+		}
 
+		// Use the latest resource string for dashboard compatibility.
 		nodeResourceReplay := formatNodeResourceReplayForResp(node)
-		nodeLogicalResources[node.NodeID] = nodeResourceReplay
+		if len(nodeResourceReplay) > 0 {
+			if rs, ok := nodeResourceReplay[len(nodeResourceReplay)-1]["resourceString"].(string); ok {
+				nodeLogicalResources[node.NodeID] = rs
+			}
+		}
 	}
 
 	// Build dashboard API-compatible response.
@@ -545,12 +555,34 @@ func (s *ServerHandler) getNode(req *restful.Request, resp *restful.Response) {
 
 	nodeSummaryReplay := formatNodeSummaryReplayForResp(targetNode, sessionName)
 
+	// Use the latest snapshot to match Ray Dashboard API format.
+	// Frontend expects "detail" to be a single object {hostname, ip, raylet: {...}}, not an array.
+	var detail map[string]interface{}
+	if len(nodeSummaryReplay) > 0 {
+		detail = nodeSummaryReplay[len(nodeSummaryReplay)-1]
+	}
+
+	// Fill actors for this node.
+	// Frontend expects actors as {[actorId]: ActorDetail}, not an empty array.
+	actorsMap := s.eventHandler.GetActorsMap(clusterSessionKey)
+	nodeActors := make(map[string]interface{})
+	for _, actor := range actorsMap {
+		nodeIDHex, _ := utils.ConvertBase64ToHex(actor.Address.NodeID)
+		if nodeIDHex == targetNodeId {
+			actorIDHex, _ := utils.ConvertBase64ToHex(actor.ActorID)
+			nodeActors[actorIDHex] = formatActorForResponse(actor)
+		}
+	}
+	if detail != nil {
+		detail["actors"] = nodeActors
+	}
+
 	// Build dashboard API-compatible response.
 	response := map[string]interface{}{
 		"result": true,
 		"msg":    "Node details fetched.",
 		"data": map[string]interface{}{
-			"detail": nodeSummaryReplay,
+			"detail": detail,
 		},
 	}
 
@@ -686,6 +718,28 @@ func formatJobForResponse(job eventtypes.Job) map[string]interface{} {
 		}
 	}
 
+	// Infer status from lifecycle state if not set by definition event.
+	// Ray's DRIVER_JOB_DEFINITION_EVENT may not always include status.
+	status := string(job.Status)
+	if status == "" {
+		switch job.State {
+		case eventtypes.JOBFINISHED:
+			status = string(eventtypes.SUCCEEDED)
+		case eventtypes.CREATED:
+			status = string(eventtypes.JOBRUNNING)
+		}
+	}
+
+	// Infer job type if not set. Ray Dashboard expects "SUBMISSION" or "DRIVER".
+	jobType := job.JobType
+	if jobType == "" {
+		if submissionID != "" {
+			jobType = "SUBMISSION"
+		} else {
+			jobType = "DRIVER"
+		}
+	}
+
 	result := map[string]interface{}{
 		"driver_exit_code":          job.DriverExitCode,
 		"driver_node_id":            job.DriverNodeID,
@@ -695,7 +749,7 @@ func formatJobForResponse(job eventtypes.Job) map[string]interface{} {
 		"error_type":                job.ErrorType,
 		"message":                   job.Message,
 		"entrypoint":                job.EntryPoint,
-		"status":                    string(job.Status),
+		"status":                    status,
 		"driver_info": map[string]interface{}{
 			"id":              job.JobID,
 			"node_ip_address": job.DriverNodeIPAddress,
@@ -703,7 +757,7 @@ func formatJobForResponse(job eventtypes.Job) map[string]interface{} {
 		},
 		"job_id":        job.JobID,
 		"submission_id": submissionID,
-		"type":          string(job.JobType),
+		"type":          jobType,
 	}
 
 	if !job.StartTime.IsZero() {
@@ -890,12 +944,23 @@ func (s *ServerHandler) getAdditionalEndpoint(req *restful.Request, resp *restfu
 		return
 	}
 
-	storageKey := utils.EndpointPathToStorageKey(req.Request.URL.Path)
+	// Use the full request URI (path + query) for the storage key, because the collector
+	// stores endpoints with their query params (e.g., "/api/v0/placement_groups?detail=1&limit=10000"
+	// becomes "restful__api__v0__placement_groups?detail=1&limit=10000").
+	storageKey := utils.EndpointPathToStorageKey(req.Request.URL.RequestURI())
 
 	clusterNameID := clusterName + "_" + clusterNamespace
 	endpointPath := path.Join(sessionName, utils.RAY_SESSIONDIR_FETCHED_ENDPOINTS_NAME, storageKey)
 	reader := s.reader.GetContent(clusterNameID, endpointPath)
 	if reader == nil {
+		// For known frontend endpoints, return empty but valid JSON responses instead of 404.
+		// This prevents the frontend from showing error states for endpoints that may not have been
+		// collected (e.g., Serve was not enabled on the cluster).
+		if emptyResp := emptyResponseForEndpoint(req.Request.URL.Path); emptyResp != nil {
+			resp.Header().Set("Content-Type", "application/json")
+			resp.Write(emptyResp)
+			return
+		}
 		resp.WriteErrorString(http.StatusNotFound, "Endpoint data not found in storage")
 		return
 	}
@@ -907,8 +972,72 @@ func (s *ServerHandler) getAdditionalEndpoint(req *restful.Request, resp *restfu
 		return
 	}
 
+	// Post-process placement_groups response to add missing fields that the frontend requires.
+	// The collector may not store "bundles" and "stats", but the frontend crashes without them.
+	trimmedPath := strings.TrimRight(req.Request.URL.Path, "/")
+	if trimmedPath == "/api/v0/placement_groups" {
+		data = ensurePlacementGroupFields(data)
+	}
+
 	resp.Header().Set("Content-Type", "application/json")
 	resp.Write(data)
+}
+
+// emptyResponseForEndpoint returns a valid empty JSON response for known frontend endpoints
+// that may not have been collected. Returns nil if the endpoint is unknown.
+func emptyResponseForEndpoint(urlPath string) []byte {
+	trimmed := strings.TrimRight(urlPath, "/")
+	switch trimmed {
+	case "/api/serve/applications":
+		data, _ := json.Marshal(map[string]interface{}{
+			"applications": map[string]interface{}{},
+		})
+		return data
+	default:
+		return nil
+	}
+}
+
+// ensurePlacementGroupFields adds missing "bundles" and "stats" fields to each placement group
+// in the response. The collector may not store these fields, but the frontend crashes without them
+// (PlacementGroupTable.tsx calls bundles.map() which fails on undefined).
+func ensurePlacementGroupFields(data []byte) []byte {
+	var response map[string]interface{}
+	if err := json.Unmarshal(data, &response); err != nil {
+		return data
+	}
+
+	dataField, ok := response["data"].(map[string]interface{})
+	if !ok {
+		return data
+	}
+	resultField, ok := dataField["result"].(map[string]interface{})
+	if !ok {
+		return data
+	}
+	resultArray, ok := resultField["result"].([]interface{})
+	if !ok {
+		return data
+	}
+
+	for _, item := range resultArray {
+		pg, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if _, exists := pg["bundles"]; !exists {
+			pg["bundles"] = []interface{}{}
+		}
+		if _, exists := pg["stats"]; !exists {
+			pg["stats"] = map[string]interface{}{}
+		}
+	}
+
+	patched, err := json.Marshal(response)
+	if err != nil {
+		return data
+	}
+	return patched
 }
 
 func (s *ServerHandler) getNodeLogs(req *restful.Request, resp *restful.Response) {
@@ -967,7 +1096,9 @@ func (s *ServerHandler) getLogicalActors(req *restful.Request, resp *restful.Res
 	// Format response to match Ray Dashboard API format
 	formattedActors := make(map[string]interface{})
 	for _, actor := range actorsMap {
-		formattedActors[actor.ActorID] = formatActorForResponse(actor)
+		// Use hex ID as map key to match Ray Dashboard API format
+		actorIDHex, _ := utils.ConvertBase64ToHex(actor.ActorID)
+		formattedActors[actorIDHex] = formatActorForResponse(actor)
 	}
 
 	response := map[string]interface{}{
@@ -987,39 +1118,48 @@ func (s *ServerHandler) getLogicalActors(req *restful.Request, resp *restful.Res
 	resp.Write(respData)
 }
 
-// formatActorForResponse converts an eventtypes.Actor to the format expected by Ray Dashboard
+// formatActorForResponse converts an eventtypes.Actor to the format expected by Ray Dashboard.
+// Uses camelCase keys and hex-encoded IDs to match the Ray Dashboard API format.
 func formatActorForResponse(actor eventtypes.Actor) map[string]interface{} {
+	// Convert Base64 IDs to Hex format for Dashboard API compatibility
+	actorIDHex, _ := utils.ConvertBase64ToHex(actor.ActorID)
+	jobIDHex, _ := utils.ConvertBase64ToHex(actor.JobID)
+	nodeIDHex, _ := utils.ConvertBase64ToHex(actor.Address.NodeID)
+	workerIDHex, _ := utils.ConvertBase64ToHex(actor.Address.WorkerID)
+	placementGroupIDHex := actor.PlacementGroupID
+	if placementGroupIDHex != "" {
+		placementGroupIDHex, _ = utils.ConvertBase64ToHex(placementGroupIDHex)
+	}
+
 	result := map[string]interface{}{
-		"actor_id":           actor.ActorID,
-		"job_id":             actor.JobID,
-		"placement_group_id": actor.PlacementGroupID,
-		"state":              string(actor.State),
-		"pid":                actor.PID,
+		"actorId":          actorIDHex,
+		"jobId":            jobIDHex,
+		"placementGroupId": placementGroupIDHex,
+		"state":            string(actor.State),
+		"pid":              actor.PID,
 		"address": map[string]interface{}{
-			"node_id":    actor.Address.NodeID,
-			"ip_address": actor.Address.IPAddress,
-			"port":       actor.Address.Port,
-			"worker_id":  actor.Address.WorkerID,
+			"nodeId":    nodeIDHex,
+			"ipAddress": actor.Address.IPAddress,
+			"port":      actor.Address.Port,
+			"workerId":  workerIDHex,
 		},
-		"name":               actor.Name,
-		"num_restarts":       actor.NumRestarts,
-		"actor_class":        actor.ActorClass,
-		"required_resources": actor.RequiredResources,
-		"exit_details":       actor.ExitDetails,
-		"repr_name":          actor.ReprName,
-		"call_site":          actor.CallSite,
-		"is_detached":        actor.IsDetached,
-		"ray_namespace":      actor.RayNamespace,
+		"name":              actor.Name,
+		"numRestarts":       actor.NumRestarts,
+		"actorClass":        actor.ActorClass,
+		"requiredResources": actor.RequiredResources,
+		"exitDetail":        actor.ExitDetails,
+		"reprName":          actor.ReprName,
+		"callSite":          actor.CallSite,
+		"isDetached":        actor.IsDetached,
+		"rayNamespace":      actor.RayNamespace,
 	}
 
-	// Only include start_time if it's set (non-zero)
 	if !actor.StartTime.IsZero() {
-		result["start_time"] = actor.StartTime.UnixMilli()
+		result["startTime"] = actor.StartTime.UnixMilli()
 	}
 
-	// Only include end_time if it's set (non-zero)
 	if !actor.EndTime.IsZero() {
-		result["end_time"] = actor.EndTime.UnixMilli()
+		result["endTime"] = actor.EndTime.UnixMilli()
 	}
 
 	return result
@@ -1035,7 +1175,8 @@ func (s *ServerHandler) getLogicalActor(req *restful.Request, resp *restful.Resp
 
 	actorID := req.PathParameter("single_actor")
 
-	// Get actor from EventHandler's in-memory map
+	// Get actor from EventHandler's in-memory map.
+	// GetActorByID supports both Base64 and hex-encoded IDs.
 	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
 	actor, found := s.eventHandler.GetActorByID(clusterSessionKey, actorID)
 
@@ -1512,7 +1653,9 @@ func formatTaskForResponse(task eventtypes.Task, detail bool) map[string]interfa
 	if detail {
 		result["language"] = string(task.Language)
 		result["required_resources"] = task.RequiredResources
-		result["runtime_env_info"] = map[string]interface{}{
+		// Frontend expects runtime_env_info as a JSON string, not an object.
+		// Serialize to match the Ray State API format.
+		runtimeEnvInfoObj := map[string]interface{}{
 			"serialized_runtime_env": task.SerializedRuntimeEnv,
 			// RuntimeEnvUris and RuntimeEnvConfig are never populated on the Ray side.
 			// Ref: https://github.com/ray-project/ray/blob/50c715e79c5ca93118e1280f3842a1946b2cddac/src/ray/core_worker/task_event_buffer.cc#L189-L237.
@@ -1522,6 +1665,8 @@ func formatTaskForResponse(task eventtypes.Task, detail bool) map[string]interfa
 				"log_files":             []string{},
 			},
 		}
+		runtimeEnvInfoBytes, _ := json.Marshal(runtimeEnvInfoObj)
+		result["runtime_env_info"] = string(runtimeEnvInfoBytes)
 		isNil, err := utils.IsHexNil(task.PlacementGroupID)
 		if isNil || task.PlacementGroupID == "" || err != nil {
 			result["placement_group_id"] = nil
@@ -1691,18 +1836,32 @@ func formatNodeSummaryReplayForResp(node eventtypes.Node, sessionName string) []
 		// Host-level metrics (cpus, mem, shm, bootTime, disk, gpus, tpus) are not available
 		// from Ray Base Events. These metrics can be obtained from Prometheus/Grafana when
 		// Ray metrics are enabled. For historical replay, we use placeholder values.
+		// Format must match the Ray Dashboard API schema expected by the frontend.
 		nodeSummarySnapshot := map[string]interface{}{
-			"t":        transitionTimestamp,
-			"now":      transitionTimestamp,
-			"hostname": hostname,
-			"ip":       nodeIpAddress,
-			"cpus":     []int{0, 0},
-			"mem":      []int{0, 0, 0, 0},
-			"shm":      0,
-			"bootTime": 0,
-			"disk":     []int{0, 0, 0, 0},
-			"gpus":     []int{0},
-			"tpus":     []int{0},
+			"t":            transitionTimestamp,
+			"now":          transitionTimestamp,
+			"hostname":     hostname,
+			"ip":           nodeIpAddress,
+			"cpu":          0,
+			"cmdline":      []string{},
+			"cpus":         []int{0, 0},
+			"mem":          []int{0, 0, 0, 0},
+			"shm":          0,
+			"bootTime":     0,
+			"loadAvg":      [][]float64{{0, 0, 0}, {0, 0, 0}},
+			"networkSpeed": []float64{0, 0},
+			// Frontend expects disk as {mountPoint: {total, used, free, percent}}, not an array.
+			"disk": map[string]map[string]interface{}{
+				"/":    {"total": 0, "used": 0, "free": 0, "percent": 0.0},
+				"/tmp": {"total": 0, "used": 0, "free": 0, "percent": 0.0},
+			},
+			// Frontend expects gpus as GPUStats[] ({uuid, name, utilizationGpu, ...}), not int array.
+			"gpus": []interface{}{},
+			"tpus": []interface{}{},
+			// Frontend expects workers as Worker[] and actors as {[actorId]: ActorDetail}.
+			// actors is set as empty map here; getNode() fills it with actual data.
+			"workers": []interface{}{},
+			"actors":  map[string]interface{}{},
 			"raylet": map[string]interface{}{
 				"storeStats": map[string]interface{}{
 					"objectStoreBytesAvail": resourcesTotal["objectStoreMemory"],

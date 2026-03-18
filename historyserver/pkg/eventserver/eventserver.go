@@ -869,11 +869,22 @@ func (h *EventHandler) GetActorByID(clusterName, actorID string) (types.Actor, b
 	actorMap.Lock()
 	defer actorMap.Unlock()
 
+	// Try direct lookup first (Base64 key).
 	actor, ok := actorMap.ActorMap[actorID]
-	if !ok {
-		return types.Actor{}, false
+	if ok {
+		return actor.DeepCopy(), true
 	}
-	return actor.DeepCopy(), true
+
+	// If not found, the caller may have passed a hex-encoded ID.
+	// Iterate and compare hex-converted IDs.
+	for _, a := range actorMap.ActorMap {
+		hexID, err := utils.ConvertBase64ToHex(a.ActorID)
+		if err == nil && hexID == actorID {
+			return a.DeepCopy(), true
+		}
+	}
+
+	return types.Actor{}, false
 }
 
 // GetActorsMap returns a thread-safe deep copy of all actors as a map for a given cluster

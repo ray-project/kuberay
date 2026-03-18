@@ -89,7 +89,7 @@ spec:
           # You can add more endpoints, e.g., "/api/v0/placement_groups,/api/serve/applications/"
           # Note: Only static endpoints (no dynamic path parameters like {job_id}) are supported.
           - name: RAY_COLLECTOR_ADDITIONAL_ENDPOINTS
-            value: "/api/v0/placement_groups"
+            value: "/api/v0/placement_groups?detail=1&limit=10000"
           # RAY_COLLECTOR_POLL_INTERVAL controls how often the collector polls the additional
           # endpoints above. Accepts Go duration format (e.g., "30s", "1m", "5m").
           - name: RAY_COLLECTOR_POLL_INTERVAL
