@@ -218,12 +218,8 @@ func GetOneOfNodeID(g *WithT, client *http.Client, historyServerURL string, isLi
 	summary := data["summary"].([]any)
 	g.Expect(len(summary)).To(BeNumerically(">", 0))
 
-	var nodeInfo map[string]any
-	if isLive {
-		nodeInfo = summary[0].(map[string]any)
-	} else {
-		nodeInfo = summary[0].([]any)[0].(map[string]any)
-	}
+	// Both live and dead clusters return a flat array of node objects.
+	nodeInfo := summary[0].(map[string]any)
 	return nodeInfo["raylet"].(map[string]any)["nodeId"].(string)
 }
 
