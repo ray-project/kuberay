@@ -718,14 +718,17 @@ func formatJobForResponse(job eventtypes.Job) map[string]interface{} {
 		}
 	}
 
-	// Infer status from lifecycle state if not set by definition event.
-	// Ray's DRIVER_JOB_DEFINITION_EVENT may not always include status.
+	// Determine job status. Prefer the latest StatusTransition (most accurate),
+	// then fall back to job.Status from the definition event, then infer from State.
 	status := string(job.Status)
+	if len(job.StatusTransitions) > 0 {
+		status = string(job.StatusTransitions[len(job.StatusTransitions)-1].Status)
+	}
 	if status == "" {
-		switch job.State {
-		case eventtypes.JOBFINISHED:
-			status = string(eventtypes.SUCCEEDED)
-		case eventtypes.CREATED:
+		// Only infer RUNNING from CREATED state. JOBFINISHED does not imply SUCCEEDED
+		// (the driver may have crashed or been stopped), so we leave it empty rather
+		// than showing a misleading status.
+		if job.State == eventtypes.CREATED {
 			status = string(eventtypes.JOBRUNNING)
 		}
 	}
@@ -944,14 +947,20 @@ func (s *ServerHandler) getAdditionalEndpoint(req *restful.Request, resp *restfu
 		return
 	}
 
-	// Use the full request URI (path + query) for the storage key, because the collector
-	// stores endpoints with their query params (e.g., "/api/v0/placement_groups?detail=1&limit=10000"
-	// becomes "restful__api__v0__placement_groups?detail=1&limit=10000").
-	storageKey := utils.EndpointPathToStorageKey(req.Request.URL.RequestURI())
-
 	clusterNameID := clusterName + "_" + clusterNamespace
-	endpointPath := path.Join(sessionName, utils.RAY_SESSIONDIR_FETCHED_ENDPOINTS_NAME, storageKey)
-	reader := s.reader.GetContent(clusterNameID, endpointPath)
+
+	// Try to find the stored endpoint data. The collector may store keys with or without
+	// query params depending on the RAY_COLLECTOR_ADDITIONAL_ENDPOINTS configuration.
+	// First try the full request URI (path + query), then fall back to path-only.
+	var reader io.ReadCloser
+	for _, uri := range []string{req.Request.URL.RequestURI(), req.Request.URL.Path} {
+		storageKey := utils.EndpointPathToStorageKey(uri)
+		endpointPath := path.Join(sessionName, utils.RAY_SESSIONDIR_FETCHED_ENDPOINTS_NAME, storageKey)
+		reader = s.reader.GetContent(clusterNameID, endpointPath)
+		if reader != nil {
+			break
+		}
+	}
 	if reader == nil {
 		// For known frontend endpoints, return empty but valid JSON responses instead of 404.
 		// This prevents the frontend from showing error states for endpoints that may not have been
