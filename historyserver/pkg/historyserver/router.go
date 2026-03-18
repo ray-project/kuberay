@@ -450,11 +450,13 @@ func (s *ServerHandler) getNodesSummary(nodeMap map[string]eventtypes.Node, sess
 			summary = append(summary, nodeSummaryReplay[len(nodeSummaryReplay)-1])
 		}
 
-		// Use the latest resource string for dashboard compatibility.
+		// Find the last non-empty resource string. NODE_DEAD transitions have empty
+		// resources, so we search backwards for the last ALIVE transition's resource string.
 		nodeResourceReplay := formatNodeResourceReplayForResp(node)
-		if len(nodeResourceReplay) > 0 {
-			if rs, ok := nodeResourceReplay[len(nodeResourceReplay)-1]["resourceString"].(string); ok {
+		for i := len(nodeResourceReplay) - 1; i >= 0; i-- {
+			if rs, ok := nodeResourceReplay[i]["resourceString"].(string); ok && rs != "" {
 				nodeLogicalResources[node.NodeID] = rs
+				break
 			}
 		}
 	}
