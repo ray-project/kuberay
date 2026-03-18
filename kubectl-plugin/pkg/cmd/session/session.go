@@ -108,14 +108,11 @@ func NewSessionCommand(cmdFactory cmdutil.Factory, streams genericiooptions.IOSt
 }
 
 func (options *SessionOptions) Complete(cmd *cobra.Command, args []string) error {
-	namespace, err := cmd.Flags().GetString("namespace")
+	namespace, _, err := options.cmdFactory.ToRawKubeConfigLoader().Namespace()
 	if err != nil {
 		return fmt.Errorf("failed to get namespace: %w", err)
 	}
 	options.namespace = namespace
-	if options.namespace == "" {
-		options.namespace = "default"
-	}
 
 	context, err := cmd.Flags().GetString("context")
 	if err != nil || context == "" {

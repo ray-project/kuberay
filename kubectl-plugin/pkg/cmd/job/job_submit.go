@@ -141,7 +141,7 @@ func NewJobSubmitCommand(cmdFactory cmdutil.Factory, streams genericclioptions.I
 				return cmdutil.UsageErrorf(cmd, "%s", cmd.Use)
 			}
 			options.entryPoint = strings.Join(args[entryPointStart:], " ")
-			if err := options.Complete(cmd); err != nil {
+			if err := options.Complete(); err != nil {
 				return err
 			}
 			if err := options.Validate(cmd); err != nil {
@@ -186,15 +186,12 @@ func NewJobSubmitCommand(cmdFactory cmdutil.Factory, streams genericclioptions.I
 	return cmd
 }
 
-func (options *SubmitJobOptions) Complete(cmd *cobra.Command) error {
-	namespace, err := cmd.Flags().GetString("namespace")
+func (options *SubmitJobOptions) Complete() error {
+	namespace, _, err := options.cmdFactory.ToRawKubeConfigLoader().Namespace()
 	if err != nil {
 		return fmt.Errorf("failed to get namespace: %w", err)
 	}
 	options.namespace = namespace
-	if options.namespace == "" {
-		options.namespace = "default"
-	}
 
 	if len(options.runtimeEnv) > 0 {
 		options.runtimeEnv = filepath.Clean(options.runtimeEnv)
