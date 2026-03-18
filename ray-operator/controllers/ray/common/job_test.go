@@ -36,6 +36,15 @@ func rayJobTemplate() *rayv1.RayJob {
 	}
 }
 
+func rayClusterFromRayJob(rayJob *rayv1.RayJob) *rayv1.RayCluster {
+	if rayJob.Spec.RayClusterSpec == nil {
+		return nil
+	}
+	return &rayv1.RayCluster{
+		Spec: *rayJob.Spec.RayClusterSpec,
+	}
+}
+
 func TestGetRuntimeEnvJsonFromBase64(t *testing.T) {
 	testRayJob := rayJobTemplate()
 	expected := `{"test":"test"}`
@@ -78,6 +87,7 @@ func TestGetMetadataJson(t *testing.T) {
 
 func TestBuildJobSubmitCommandWithK8sJobMode(t *testing.T) {
 	testRayJob := rayJobTemplate()
+	testRayCluster := rayClusterFromRayJob(testRayJob)
 	expected := []string{
 		"if",
 		"!", "ray", "job", "status", "--address", "http://127.0.0.1:8265", "testJobId", ">/dev/null", "2>&1",
@@ -94,7 +104,7 @@ func TestBuildJobSubmitCommandWithK8sJobMode(t *testing.T) {
 		";", "fi", ";",
 		"ray", "job", "logs", "--address", "http://127.0.0.1:8265", "--follow", "testJobId",
 	}
-	command, err := BuildJobSubmitCommand(testRayJob, rayv1.K8sJobMode)
+	command, err := BuildJobSubmitCommand(testRayJob, testRayCluster, rayv1.K8sJobMode)
 	require.NoError(t, err)
 	assert.Equal(t, expected, command)
 }
@@ -111,6 +121,7 @@ func TestBuildJobSubmitCommandWithSidecarMode(t *testing.T) {
 			},
 		},
 	}
+	testRayCluster := rayClusterFromRayJob(testRayJob)
 
 	expected := []string{
 		"until",
@@ -133,7 +144,7 @@ func TestBuildJobSubmitCommandWithSidecarMode(t *testing.T) {
 		"echo no quote 'single quote' \"double quote\"",
 		";",
 	}
-	command, err := BuildJobSubmitCommand(testRayJob, rayv1.SidecarMode)
+	command, err := BuildJobSubmitCommand(testRayJob, testRayCluster, rayv1.SidecarMode)
 	require.NoError(t, err)
 	assert.Equal(t, expected, command)
 }
@@ -173,8 +184,9 @@ func TestBuildJobSubmitCommandWithSidecarModeVersionSwitch(t *testing.T) {
 					},
 				},
 			}
+			testRayCluster := rayClusterFromRayJob(testRayJob)
 
-			command, err := BuildJobSubmitCommand(testRayJob, rayv1.SidecarMode)
+			command, err := BuildJobSubmitCommand(testRayJob, testRayCluster, rayv1.SidecarMode)
 			require.NoError(t, err)
 			require.GreaterOrEqual(t, len(command), 2)
 			assert.Equal(t, "until", command[0])
@@ -198,8 +210,9 @@ func TestBuildJobSubmitCommandWithSidecarModeCustomDashboardPort(t *testing.T) {
 			},
 		},
 	}
+	testRayCluster := rayClusterFromRayJob(testRayJob)
 
-	command, err := BuildJobSubmitCommand(testRayJob, rayv1.SidecarMode)
+	command, err := BuildJobSubmitCommand(testRayJob, testRayCluster, rayv1.SidecarMode)
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, len(command), 2)
 	assert.Equal(t, "until", command[0])
@@ -210,7 +223,8 @@ func TestBuildJobSubmitCommandWithSidecarModeCustomDashboardPort(t *testing.T) {
 
 func TestBuildJobSubmitCommandWithK8sJobModeNoSidecarHealthWaitLoop(t *testing.T) {
 	testRayJob := rayJobTemplate()
-	command, err := BuildJobSubmitCommand(testRayJob, rayv1.K8sJobMode)
+	testRayCluster := rayClusterFromRayJob(testRayJob)
+	command, err := BuildJobSubmitCommand(testRayJob, testRayCluster, rayv1.K8sJobMode)
 	require.NoError(t, err)
 	assert.NotContains(t, command, "until")
 	for _, token := range command {
@@ -240,6 +254,7 @@ pip: ["python-multipart==0.0.6"]
 			JobId:        "testJobId",
 		},
 	}
+	rayClusterWithYAML := rayClusterFromRayJob(rayJobWithYAML)
 	expected := []string{
 		"if",
 		"!", "ray", "job", "status", "--address", "http://127.0.0.1:8265", "testJobId", ">/dev/null", "2>&1",
@@ -253,7 +268,7 @@ pip: ["python-multipart==0.0.6"]
 		";", "fi", ";",
 		"ray", "job", "logs", "--address", "http://127.0.0.1:8265", "--follow", "testJobId",
 	}
-	command, err := BuildJobSubmitCommand(rayJobWithYAML, rayv1.K8sJobMode)
+	command, err := BuildJobSubmitCommand(rayJobWithYAML, rayClusterWithYAML, rayv1.K8sJobMode)
 	require.NoError(t, err)
 
 	// Ensure the slices are the same length.
@@ -298,6 +313,55 @@ func TestMetadataRaisesErrorBeforeRay26(t *testing.T) {
 	}
 	_, err := GetMetadataJson(rayJob.Spec.Metadata, rayJob.Spec.RayClusterSpec.RayVersion)
 	require.Error(t, err)
+}
+
+// TestBuildJobSubmitCommandWithClusterSelector verifies that metadata is included
+// when submitting a RayJob to an existing cluster via clusterSelector.
+func TestBuildJobSubmitCommandWithClusterSelector(t *testing.T) {
+	// RayJob uses clusterSelector (no RayClusterSpec)
+	rayJobWithClusterSelector := &rayv1.RayJob{
+		Spec: rayv1.RayJobSpec{
+			ClusterSelector: map[string]string{
+				"ray.io/cluster": "existing-cluster",
+			},
+			Metadata: map[string]string{
+				"tenant": "tenant1",
+				"team":   "ml-platform",
+			},
+			Entrypoint: "python /app/batch_inference.py",
+		},
+		Status: rayv1.RayJobStatus{
+			DashboardURL: "http://existing-cluster-head-svc:8265",
+			JobId:        "cluster-selector-job-id",
+		},
+	}
+
+	// The existing RayCluster that the job will be submitted to
+	existingRayCluster := &rayv1.RayCluster{
+		Spec: rayv1.RayClusterSpec{
+			RayVersion: "2.35.0",
+		},
+	}
+
+	command, err := BuildJobSubmitCommand(rayJobWithClusterSelector, existingRayCluster, rayv1.K8sJobMode)
+	require.NoError(t, err)
+
+	// Verify --metadata-json flag is present and contains correct values
+	hasMetadataFlag := false
+	for i, arg := range command {
+		if arg == "--metadata-json" {
+			hasMetadataFlag = true
+			require.Greater(t, len(command), i+1)
+			unquoted, err := strconv.Unquote(command[i+1])
+			require.NoError(t, err)
+			var metadata map[string]string
+			require.NoError(t, json.Unmarshal([]byte(unquoted), &metadata))
+			assert.Equal(t, "tenant1", metadata["tenant"])
+			assert.Equal(t, "ml-platform", metadata["team"])
+			break
+		}
+	}
+	assert.True(t, hasMetadataFlag, "metadata-json flag should be present when using clusterSelector with metadata")
 }
 
 func TestGetSubmitterTemplate(t *testing.T) {
