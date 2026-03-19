@@ -307,7 +307,7 @@ func TestRayServiceIncrementalUpgradeWithLocust(t *testing.T) {
 			g.Expect(err).NotTo(HaveOccurred())
 
 			// Phase 4: Trigger incremental upgrade
-			LogWithTimestamp(test.T(), "Triggering incremental upgrade by updating RayCluster spec and RayService serve config")
+			LogWithTimestamp(test.T(), "Triggering incremental upgrade by updating RayCluster spec")
 			g.Eventually(incrementalUpgrade(test, namespace.Name, rayServiceName), TestTimeoutShort).Should(Succeed(), "Failed to update RayService to trigger upgrade")
 			LogWithTimestamp(test.T(), "Waiting for RayService %s/%s UpgradeInProgress condition to be true", namespace.Name, rayServiceName)
 			g.Eventually(RayService(test, namespace.Name, rayServiceName), TestTimeoutShort).Should(WithTransform(IsRayServiceUpgrading, BeTrue()))
