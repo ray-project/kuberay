@@ -223,6 +223,39 @@ func GetOneOfNodeID(g *WithT, client *http.Client, historyServerURL string, isLi
 	return nodeInfo["raylet"].(map[string]any)["nodeId"].(string)
 }
 
+// GetHeadNodeID retrieves the head node's ID from the /nodes endpoint.
+// It iterates over all nodes and returns the one with isHeadNode == true.
+func GetHeadNodeID(g *WithT, client *http.Client, historyServerURL string) string {
+	resp, err := client.Get(historyServerURL + "/nodes?view=summary")
+	g.Expect(err).NotTo(HaveOccurred())
+	defer resp.Body.Close()
+	g.Expect(resp.StatusCode).To(Equal(http.StatusOK))
+
+	body, err := io.ReadAll(resp.Body)
+	g.Expect(err).NotTo(HaveOccurred())
+
+	var result map[string]any
+	err = json.Unmarshal(body, &result)
+	g.Expect(err).NotTo(HaveOccurred())
+
+	data := result["data"].(map[string]any)
+	summary := data["summary"].([]any)
+	g.Expect(len(summary)).To(BeNumerically(">", 0))
+
+	headNodeId := ""
+	for _, node := range summary {
+		nodeInfo := node.(map[string]any)
+		raylet := nodeInfo["raylet"].(map[string]any)
+		if isHead, ok := raylet["isHeadNode"].(bool); ok && isHead {
+			headNodeId = raylet["nodeId"].(string)
+			break
+		}
+	}
+	g.Expect(headNodeId).NotTo(BeEmpty(), "Expected to find a head node in /nodes summary")
+
+	return headNodeId
+}
+
 // GetOneOfActorID retrieves an actor ID from the /logical/actors endpoint.
 // The history server returns actors from the in-memory ClusterActorMap, which is populated
 // by the Event Handler processing events from S3.

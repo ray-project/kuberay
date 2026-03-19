@@ -1255,7 +1255,8 @@ func testNodeLogsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Name
 		// glob=events/event_JOBS* should match only event_JOBS.log inside the events/ subdirectory.
 		// Expected response:
 		//   {"data":{"result":{"internal":["event_JOBS.log"]}},"msg":"","result":true}
-		logsURL := fmt.Sprintf("%s%s?node_id=%s&glob=%s", historyServerURL, EndpointLogs, nodeID, url.QueryEscape("events/event_JOBS*"))
+		headNodeID := GetHeadNodeID(g, client, historyServerURL)
+		logsURL := fmt.Sprintf("%s%s?node_id=%s&glob=%s", historyServerURL, EndpointLogs, headNodeID, url.QueryEscape("events/event_JOBS*"))
 		resp, err := client.Get(logsURL)
 		g.Expect(err).NotTo(HaveOccurred())
 		defer resp.Body.Close()
