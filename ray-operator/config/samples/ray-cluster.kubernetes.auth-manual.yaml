@@ -4,9 +4,6 @@ metadata:
   name: ray-cluster-with-k8s-auth
 spec:
   rayVersion: '2.55.0'
-  authOptions:
-    mode: 'token'
-    enableK8sTokenAuth: true
   headGroupSpec:
     rayStartParams: {}
     template:
@@ -17,6 +14,11 @@ spec:
           imagePullPolicy: Always
           # TODO: update to rayproject/ray:2.55.0 once released
           image: rayproject/ray:nightly
+          env:
+          - name: RAY_AUTH_MODE
+            value: "token"
+          - name: RAY_ENABLE_K8S_TOKEN_AUTH
+            value: "true"
           resources:
             limits:
               cpu: "4"
@@ -31,6 +33,15 @@ spec:
             name: dashboard
           - containerPort: 10001
             name: client
+          volumeMounts:
+          - mountPath: /var/run/secrets/ray.io/serviceaccount
+            name: ray-token
+        volumes:
+        - name: ray-token
+          projected:
+            sources:
+            - serviceAccountToken:
+                path: token
   workerGroupSpecs:
   - replicas: 1
     minReplicas: 1
@@ -45,6 +56,11 @@ spec:
           imagePullPolicy: Always
           # TODO: update to rayproject/ray:2.55.0 once released
           image: rayproject/ray:nightly
+          env:
+          - name: RAY_AUTH_MODE
+            value: "token"
+          - name: RAY_ENABLE_K8S_TOKEN_AUTH
+            value: "true"
           resources:
             limits:
               cpu: "4"
@@ -52,6 +68,15 @@ spec:
             requests:
               cpu: "4"
               memory: "8Gi"
+          volumeMounts:
+          - mountPath: /var/run/secrets/ray.io/serviceaccount
+            name: ray-token
+        volumes:
+        - name: ray-token
+          projected:
+            sources:
+            - serviceAccountToken:
+                path: token
 ---
 apiVersion: v1
 kind: ServiceAccount

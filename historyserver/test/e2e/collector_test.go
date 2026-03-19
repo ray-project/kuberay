@@ -441,7 +441,8 @@ func testCollectorStoresPlacementGroups(test Test, g *WithT, namespace *corev1.N
 
 	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, rayCluster.Namespace)
 	sessionID := GetSessionIDFromHeadPod(test, g, rayCluster)
-	storageKey := utils.EndpointPathToStorageKey("/api/v0/placement_groups")
+	// The collector stores the endpoint with query params (as configured in RAY_COLLECTOR_ADDITIONAL_ENDPOINTS).
+	storageKey := utils.EndpointPathToStorageKey("/api/v0/placement_groups?detail=1&limit=10000")
 	pgKey := fmt.Sprintf("log/%s/%s/%s/%s", clusterNameID, sessionID, utils.RAY_SESSIONDIR_FETCHED_ENDPOINTS_NAME, storageKey)
 
 	LogWithTimestamp(test.T(), "Waiting for placement groups data to appear at S3 key: %s", pgKey)

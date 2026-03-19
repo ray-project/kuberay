@@ -12,7 +12,7 @@
 ### 1. Create Kind Cluster
 
 ```bash
-kind create cluster --image=kindest/node:v1.27.0
+kind create cluster --image=kindest/node:v1.29.0
 ```
 
 ### 2. Build and Run Ray Operator
