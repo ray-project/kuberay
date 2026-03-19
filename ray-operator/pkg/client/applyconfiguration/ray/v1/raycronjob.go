@@ -3,8 +3,11 @@
 package v1
 
 import (
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	internal "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/internal"
 	apismetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
+	managedfields "k8s.io/apimachinery/pkg/util/managedfields"
 	metav1 "k8s.io/client-go/applyconfigurations/meta/v1"
 )
 
@@ -28,6 +31,47 @@ func RayCronJob(name, namespace string) *RayCronJobApplyConfiguration {
 	b.WithKind("RayCronJob")
 	b.WithAPIVersion("ray.io/v1")
 	return b
+}
+
+// ExtractRayCronJobFrom extracts the applied configuration owned by fieldManager from
+// rayCronJob for the specified subresource. Pass an empty string for subresource to extract
+// the main resource. Common subresources include "status", "scale", etc.
+// rayCronJob must be a unmodified RayCronJob API object that was retrieved from the Kubernetes API.
+// ExtractRayCronJobFrom provides a way to perform a extract/modify-in-place/apply workflow.
+// Note that an extracted apply configuration will contain fewer fields than what the fieldManager previously
+// applied if another fieldManager has updated or force applied any of the previously applied fields.
+func ExtractRayCronJobFrom(rayCronJob *rayv1.RayCronJob, fieldManager string, subresource string) (*RayCronJobApplyConfiguration, error) {
+	b := &RayCronJobApplyConfiguration{}
+	err := managedfields.ExtractInto(rayCronJob, internal.Parser().Type("com.github.ray-project.kuberay.ray-operator.apis.ray.v1.RayCronJob"), fieldManager, b, subresource)
+	if err != nil {
+		return nil, err
+	}
+	b.WithName(rayCronJob.Name)
+	b.WithNamespace(rayCronJob.Namespace)
+
+	b.WithKind("RayCronJob")
+	b.WithAPIVersion("ray.io/v1")
+	return b, nil
+}
+
+// ExtractRayCronJob extracts the applied configuration owned by fieldManager from
+// rayCronJob. If no managedFields are found in rayCronJob for fieldManager, a
+// RayCronJobApplyConfiguration is returned with only the Name, Namespace (if applicable),
+// APIVersion and Kind populated. It is possible that no managed fields were found for because other
+// field managers have taken ownership of all the fields previously owned by fieldManager, or because
+// the fieldManager never owned fields any fields.
+// rayCronJob must be a unmodified RayCronJob API object that was retrieved from the Kubernetes API.
+// ExtractRayCronJob provides a way to perform a extract/modify-in-place/apply workflow.
+// Note that an extracted apply configuration will contain fewer fields than what the fieldManager previously
+// applied if another fieldManager has updated or force applied any of the previously applied fields.
+func ExtractRayCronJob(rayCronJob *rayv1.RayCronJob, fieldManager string) (*RayCronJobApplyConfiguration, error) {
+	return ExtractRayCronJobFrom(rayCronJob, fieldManager, "")
+}
+
+// ExtractRayCronJobStatus extracts the applied configuration owned by fieldManager from
+// rayCronJob for the status subresource.
+func ExtractRayCronJobStatus(rayCronJob *rayv1.RayCronJob, fieldManager string) (*RayCronJobApplyConfiguration, error) {
+	return ExtractRayCronJobFrom(rayCronJob, fieldManager, "status")
 }
 
 func (b RayCronJobApplyConfiguration) IsApplyConfiguration() {}
