@@ -74,9 +74,9 @@ export REPO_NAME=<repository-name>
 ### (Optional) Create Artifact Registry Repository
 
 ```sh
-gcloud artifacts repositories create ${REPO_NAME} \\
-    --repository-format=docker \\
-    --location=${REGION} \\
+gcloud artifacts repositories create ${REPO_NAME} \
+    --repository-format=docker \
+    --location=${REGION} \
     --description="History Server images"
 ```
 
@@ -90,7 +90,7 @@ gcloud auth configure-docker ${REGION}-docker.pkg.dev
 
 ## Tagging Artifact Registry Images
 
-The image have to follows a specific naming convention for Google Artifact Registry
+The image has to follow a specific naming convention for Google Artifact Registry
 
 Format:
 
