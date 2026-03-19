@@ -3,8 +3,11 @@
 package v1
 
 import (
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	internal "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/internal"
 	apismetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
+	managedfields "k8s.io/apimachinery/pkg/util/managedfields"
 	metav1 "k8s.io/client-go/applyconfigurations/meta/v1"
 )
 
@@ -28,6 +31,47 @@ func RayJob(name, namespace string) *RayJobApplyConfiguration {
 	b.WithKind("RayJob")
 	b.WithAPIVersion("ray.io/v1")
 	return b
+}
+
+// ExtractRayJobFrom extracts the applied configuration owned by fieldManager from
+// rayJob for the specified subresource. Pass an empty string for subresource to extract
+// the main resource. Common subresources include "status", "scale", etc.
+// rayJob must be a unmodified RayJob API object that was retrieved from the Kubernetes API.
+// ExtractRayJobFrom provides a way to perform a extract/modify-in-place/apply workflow.
+// Note that an extracted apply configuration will contain fewer fields than what the fieldManager previously
+// applied if another fieldManager has updated or force applied any of the previously applied fields.
+func ExtractRayJobFrom(rayJob *rayv1.RayJob, fieldManager string, subresource string) (*RayJobApplyConfiguration, error) {
+	b := &RayJobApplyConfiguration{}
+	err := managedfields.ExtractInto(rayJob, internal.Parser().Type("com.github.ray-project.kuberay.ray-operator.apis.ray.v1.RayJob"), fieldManager, b, subresource)
+	if err != nil {
+		return nil, err
+	}
+	b.WithName(rayJob.Name)
+	b.WithNamespace(rayJob.Namespace)
+
+	b.WithKind("RayJob")
+	b.WithAPIVersion("ray.io/v1")
+	return b, nil
+}
+
+// ExtractRayJob extracts the applied configuration owned by fieldManager from
+// rayJob. If no managedFields are found in rayJob for fieldManager, a
+// RayJobApplyConfiguration is returned with only the Name, Namespace (if applicable),
+// APIVersion and Kind populated. It is possible that no managed fields were found for because other
+// field managers have taken ownership of all the fields previously owned by fieldManager, or because
+// the fieldManager never owned fields any fields.
+// rayJob must be a unmodified RayJob API object that was retrieved from the Kubernetes API.
+// ExtractRayJob provides a way to perform a extract/modify-in-place/apply workflow.
+// Note that an extracted apply configuration will contain fewer fields than what the fieldManager previously
+// applied if another fieldManager has updated or force applied any of the previously applied fields.
+func ExtractRayJob(rayJob *rayv1.RayJob, fieldManager string) (*RayJobApplyConfiguration, error) {
+	return ExtractRayJobFrom(rayJob, fieldManager, "")
+}
+
+// ExtractRayJobStatus extracts the applied configuration owned by fieldManager from
+// rayJob for the status subresource.
+func ExtractRayJobStatus(rayJob *rayv1.RayJob, fieldManager string) (*RayJobApplyConfiguration, error) {
+	return ExtractRayJobFrom(rayJob, fieldManager, "status")
 }
 
 func (b RayJobApplyConfiguration) IsApplyConfiguration() {}
