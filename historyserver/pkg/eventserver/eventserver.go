@@ -869,11 +869,27 @@ func (h *EventHandler) GetActorByID(clusterName, actorID string) (types.Actor, b
 	actorMap.Lock()
 	defer actorMap.Unlock()
 
+	// Try direct lookup first (Base64 key).
 	actor, ok := actorMap.ActorMap[actorID]
-	if !ok {
-		return types.Actor{}, false
+	if ok {
+		return actor.DeepCopy(), true
 	}
-	return actor.DeepCopy(), true
+
+	// If not found, the caller may have passed a hex-encoded ID (from the frontend).
+	// The frontend calls /logical/actors/{actorId} with hex IDs returned by formatActorForResponse.
+	// Ref: https://github.com/ray-project/ray/blob/27d3d81d47/python/ray/dashboard/client/src/service/actor.ts#L24-L25
+	//
+	// This O(n) scan is a known performance limitation. The proper fix is to normalize
+	// actor IDs to hex at ingestion time (see PR #4563), which would make the direct
+	// map lookup above always succeed. This fallback will be removed after that change.
+	for _, a := range actorMap.ActorMap {
+		hexID, err := utils.ConvertBase64ToHex(a.ActorID)
+		if err == nil && hexID == actorID {
+			return a.DeepCopy(), true
+		}
+	}
+
+	return types.Actor{}, false
 }
 
 // GetActorsMap returns a thread-safe deep copy of all actors as a map for a given cluster
