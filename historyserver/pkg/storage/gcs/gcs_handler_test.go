@@ -225,7 +225,7 @@ func TestList(t *testing.T) {
 				BucketName: "test-bucket",
 				Name:       "ray_historyserver/metadir/mycluster1_default/" + sessionID,
 			},
-			Content: []byte(""),
+			Content: []byte("rayjob_some-name"),
 		},
 		{
 			ObjectAttrs: fakestorage.ObjectAttrs{
@@ -234,13 +234,37 @@ func TestList(t *testing.T) {
 			},
 			Content: []byte(""),
 		},
+		{
+			ObjectAttrs: fakestorage.ObjectAttrs{
+				BucketName: "test-bucket",
+				Name:       "ray_historyserver/metadir/mycluster3_testns/" + sessionID,
+			},
+			Content: []byte("rayservice_service-name"),
+		},
 	}
 	_, client, bucketName := setupFakeGCS(t, initialObjects...)
 	handler := createRayLogsHandler(client, bucketName)
 
 	expected := []utils.ClusterInfo{
-		{Name: "mycluster1", Namespace: "default", SessionName: sessionID, CreateTimeStamp: ts.Unix(), CreateTime: ts.UTC().Format("2006-01-02T15:04:05Z")},
+		{
+			Name:            "mycluster1",
+			Namespace:       "default",
+			SessionName:     sessionID,
+			CreateTimeStamp: ts.Unix(),
+			CreateTime:      ts.UTC().Format("2006-01-02T15:04:05Z"),
+			OwnerKind:       "rayjob",
+			OwnerName:       "some-name",
+		},
 		{Name: "mycluster2", Namespace: "testns", SessionName: sessionID, CreateTimeStamp: ts.Unix(), CreateTime: ts.UTC().Format("2006-01-02T15:04:05Z")},
+		{
+			Name:            "mycluster3",
+			Namespace:       "testns",
+			SessionName:     sessionID,
+			CreateTimeStamp: ts.Unix(),
+			CreateTime:      ts.UTC().Format("2006-01-02T15:04:05Z"),
+			OwnerKind:       "rayservice",
+			OwnerName:       "service-name",
+		},
 	}
 
 	result := handler.List()

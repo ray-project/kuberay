@@ -1,9 +1,17 @@
 package utils
 
 import (
+	"context"
 	"strings"
 	"testing"
 	"time"
+
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
 func TestSlice(t *testing.T) {
@@ -101,6 +109,91 @@ func TestGetDateTimeFromSessionID(t *testing.T) {
 				if !gotTime.Equal(tc.expectedTime) {
 					t.Errorf("GetDateTimeFromSessionID(%q) = %v, want %v", tc.sessionID, gotTime, tc.expectedTime)
 				}
+			}
+		})
+	}
+}
+
+func TestGetRayClusterOwnerInfoFromClient(t *testing.T) {
+	scheme := runtime.NewScheme()
+	utilruntime.Must(rayv1.AddToScheme(scheme))
+	utilruntime.Must(corev1.AddToScheme(scheme))
+
+	clusterName := "test-cluster"
+	namespace := "test-ns"
+	trueVal := true
+
+	t.Setenv(RAYCLUSTER_NAME_ENV_VAR, clusterName)
+
+	tests := []struct {
+		name          string
+		rayCluster    *rayv1.RayCluster
+		expectedKind  string
+		expectedName  string
+		expectedError bool
+	}{
+		{
+			name: "with controller owner reference",
+			rayCluster: &rayv1.RayCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      clusterName,
+					Namespace: namespace,
+					OwnerReferences: []metav1.OwnerReference{
+						{
+							Kind:       "RayJob",
+							Name:       "my-job",
+							Controller: &trueVal,
+						},
+					},
+				},
+			},
+			expectedKind: "RayJob",
+			expectedName: "my-job",
+		},
+		{
+			name: "with multiple owner references, fallback to first",
+			rayCluster: &rayv1.RayCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      clusterName,
+					Namespace: namespace,
+					OwnerReferences: []metav1.OwnerReference{
+						{Kind: "RayService", Name: "my-service"},
+						{Kind: "RandomReference", Name: "random-reference"},
+					},
+				},
+			},
+			expectedKind: "RayService",
+			expectedName: "my-service",
+		},
+		{
+			name: "no owner references",
+			rayCluster: &rayv1.RayCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      clusterName,
+					Namespace: namespace,
+				},
+			},
+			expectedError: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(tc.rayCluster).Build()
+			kind, name, err := getRayClusterOwnerInfoFromClient(context.Background(), fakeClient, namespace)
+
+			if tc.expectedError {
+				if err == nil {
+					t.Error("expected error but got none")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if kind != tc.expectedKind || name != tc.expectedName {
+				t.Errorf("got (%s, %s), want (%s, %s)", kind, name, tc.expectedKind, tc.expectedName)
 			}
 		})
 	}
