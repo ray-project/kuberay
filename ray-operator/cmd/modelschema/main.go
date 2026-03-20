@@ -54,7 +54,9 @@ func output() error {
 	if err != nil {
 		return fmt.Errorf("error serializing API definitions: %w", err)
 	}
-	os.Stdout.Write(data)
+	if _, err := os.Stdout.Write(data); err != nil {
+		return fmt.Errorf("error writing to stdout: %w", err)
+	}
 	return nil
 }
 
