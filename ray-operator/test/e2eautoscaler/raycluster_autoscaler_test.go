@@ -11,6 +11,7 @@ import (
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	rayv1ac "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/ray/v1"
+	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
 
@@ -137,6 +138,178 @@ func TestRayClusterAutoscalerWithFakeGPU(t *testing.T) {
 			ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "/home/ray/test_scripts/terminate_detached_actor.py", "gpu_actor"})
 			g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutMedium).
 				Should(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(int32(0))))
+		})
+	}
+}
+
+func TestRayClusterAutoscalerWithFakeSingleHostTPU(t *testing.T) {
+	// Enable the below multi-host indexing feature, even on single-host, to ensure
+	// stablity on TPU which commonly run in SPMD configurations.
+	features.SetFeatureGateDuringTest(t, features.RayMultiHostIndexing, true)
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			test := With(t)
+			g := gomega.NewWithT(t)
+
+			// Create a namespace
+			namespace := test.NewTestNamespace()
+
+			// Scripts for creating and terminating detached actors to trigger autoscaling
+			scriptsAC := newConfigMap(namespace.Name, Files(test, "create_detached_actor.py", "terminate_detached_actor.py"))
+			scripts, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), scriptsAC, TestApplyOptions)
+			g.Expect(err).NotTo(gomega.HaveOccurred())
+			LogWithTimestamp(test.T(), "Created ConfigMap %s/%s successfully", scripts.Namespace, scripts.Name)
+
+			groupName := "tpu-group"
+			rayClusterSpecAC := rayv1ac.RayClusterSpec().
+				WithEnableInTreeAutoscaling(true).
+				WithRayVersion(GetRayVersion()).
+				WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
+					WithRayStartParams(map[string]string{"num-cpus": "0"}).
+					WithTemplate(tc.HeadPodTemplateGetter())).
+				WithWorkerGroupSpecs(rayv1ac.WorkerGroupSpec().
+					WithReplicas(0).
+					WithMinReplicas(0).
+					WithMaxReplicas(3).
+					WithNumOfHosts(1).
+					WithGroupName(groupName).
+					WithRayStartParams(map[string]string{"num-cpus": "1", "resources": `'{"TPU":4}'`}).
+					WithTemplate(tc.WorkerPodTemplateGetter()))
+			rayClusterAC := rayv1ac.RayCluster("ray-cluster", namespace.Name).
+				WithSpec(Apply(rayClusterSpecAC, MountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](scripts, "/home/ray/test_scripts")))
+
+			// Set required TPU specific Pod fields.
+			rayClusterAC.Spec.WorkerGroupSpecs[0].Template.Spec.NodeSelector = map[string]string{
+				"cloud.google.com/gke-tpu-topology":    "2x2x1",
+				"cloud.google.com/gke-tpu-accelerator": "tpu-v4-podslice",
+			}
+
+			rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
+			g.Expect(err).NotTo(gomega.HaveOccurred())
+			LogWithTimestamp(test.T(), "Created RayCluster %s/%s successfully", rayCluster.Namespace, rayCluster.Name)
+
+			// Wait for RayCluster to become ready and verify the number of available worker replicas.
+			g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutMedium).
+				Should(gomega.WithTransform(RayClusterState, gomega.Equal(rayv1.Ready)))
+			g.Expect(GetRayCluster(test, rayCluster.Namespace, rayCluster.Name)).To(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(int32(0))))
+
+			headPod, err := GetHeadPod(test, rayCluster)
+			g.Expect(err).NotTo(gomega.HaveOccurred())
+			LogWithTimestamp(test.T(), "Found head pod %s/%s", headPod.Namespace, headPod.Name)
+
+			// Create a detached TPU actor, and a TPU worker Pod should be created.
+			ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "/home/ray/test_scripts/create_detached_actor.py", "tpu_actor", "--custom-resource-name=TPU", "--num-custom-resources=4"})
+			g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutMedium).
+				Should(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(int32(1))))
+			g.Expect(GetGroupPods(test, rayCluster, groupName)).To(gomega.HaveLen(1))
+			LogWithTimestamp(test.T(), "Created TPU worker of group %s", groupName)
+
+			// Terminate the TPU actor to remove the allocated resource request.
+			ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "/home/ray/test_scripts/terminate_detached_actor.py", "tpu_actor"})
+
+			// Set maxReplicas of the TPU worker group replica to 0 to force scale-down.
+			// It's not possible to wait on idle timeout since the required TPU nodeSelectors prevent scheduling.
+			rayCluster, err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Get(test.Ctx(), rayCluster.Name, metav1.GetOptions{})
+			g.Expect(err).NotTo(gomega.HaveOccurred())
+			rayCluster.Spec.WorkerGroupSpecs[0].MaxReplicas = ptr.To(int32(0))
+			rayCluster, err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Update(test.Ctx(), rayCluster, metav1.UpdateOptions{})
+			g.Expect(err).NotTo(gomega.HaveOccurred())
+			LogWithTimestamp(test.T(), "Updated RayCluster %s/%s successfully", rayCluster.Namespace, rayCluster.Name)
+
+			// Validate that the TPU slice is scaled down.
+			g.Eventually(WorkerPods(test, rayCluster), TestTimeoutMedium).Should(gomega.BeEmpty())
+		})
+	}
+}
+
+func TestRayClusterAutoscalerWithFakeMultiHostTPU(t *testing.T) {
+	// Enable the below multi-host indexing feature to ensure stablity on TPU
+	// which commonly run in SPMD configurations.
+	features.SetFeatureGateDuringTest(t, features.RayMultiHostIndexing, true)
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			test := With(t)
+			g := gomega.NewWithT(t)
+
+			// Create a namespace
+			namespace := test.NewTestNamespace()
+
+			// Scripts for creating and terminating detached actors to trigger autoscaling
+			scriptsAC := newConfigMap(namespace.Name, Files(test, "create_detached_actor.py", "terminate_detached_actor.py"))
+			scripts, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), scriptsAC, TestApplyOptions)
+			g.Expect(err).NotTo(gomega.HaveOccurred())
+			LogWithTimestamp(test.T(), "Created ConfigMap %s/%s successfully", scripts.Namespace, scripts.Name)
+
+			groupName := "tpu-multi-host-group"
+			rayClusterSpecAC := rayv1ac.RayClusterSpec().
+				WithEnableInTreeAutoscaling(true).
+				WithRayVersion(GetRayVersion()).
+				WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
+					WithRayStartParams(map[string]string{"num-cpus": "0"}).
+					WithTemplate(tc.HeadPodTemplateGetter())).
+				WithWorkerGroupSpecs(rayv1ac.WorkerGroupSpec().
+					WithReplicas(0).
+					WithMinReplicas(0).
+					WithMaxReplicas(4).
+					WithNumOfHosts(4). // Defines a multi-host worker group (4 Pods per replica)
+					WithGroupName(groupName).
+					WithRayStartParams(map[string]string{"num-cpus": "1", "resources": `'{"TPU":4}'`}).
+					WithTemplate(tc.WorkerPodTemplateGetter()))
+			rayClusterAC := rayv1ac.RayCluster("ray-cluster-multi-host", namespace.Name).
+				WithSpec(Apply(rayClusterSpecAC, MountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](scripts, "/home/ray/test_scripts")))
+
+			// Set required multi-host TPU specific Pod fields.
+			rayClusterAC.Spec.WorkerGroupSpecs[0].Template.Spec.NodeSelector = map[string]string{
+				"cloud.google.com/gke-tpu-topology":    "4x4",
+				"cloud.google.com/gke-tpu-accelerator": "tpu-v6e-slice",
+			}
+
+			rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
+			g.Expect(err).NotTo(gomega.HaveOccurred())
+			LogWithTimestamp(test.T(), "Created RayCluster %s/%s successfully", rayCluster.Namespace, rayCluster.Name)
+
+			// Wait for RayCluster to become ready and verify the number of available worker replicas.
+			g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutMedium).
+				Should(gomega.WithTransform(RayClusterState, gomega.Equal(rayv1.Ready)))
+			g.Expect(GetRayCluster(test, rayCluster.Namespace, rayCluster.Name)).To(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(int32(0))))
+
+			headPod, err := GetHeadPod(test, rayCluster)
+			g.Expect(err).NotTo(gomega.HaveOccurred())
+			LogWithTimestamp(test.T(), "Found head pod %s/%s", headPod.Namespace, headPod.Name)
+
+			// Create 4 detached TPU actors concurrently using a single shell script execution.
+			// This ensures the Autoscaler sees the resource request on the same iteration.
+			ExecPodCmd(test, headPod, common.RayHeadContainer, []string{
+				"bash", "-c",
+				`for i in {0..3}; do python /home/ray/test_scripts/create_detached_actor.py "tpu_actor_$i" --custom-resource-name=TPU --num-custom-resources=4 & done; wait`,
+			})
+
+			// Autoscaler scales up desired replicas by 1 (which represents 1 group of 4 pods for multi-host)
+			g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutLong).
+				Should(gomega.WithTransform(GetRayClusterWorkerGroupReplicaSum, gomega.BeNumerically(">=", int32(1))))
+
+			// Verify that exactly 4 Pods are created for the multi-host group
+			g.Eventually(GroupPods(test, rayCluster, groupName), TestTimeoutLong).Should(gomega.HaveLen(4))
+			LogWithTimestamp(test.T(), "Created multi-host TPU workers of group %s", groupName)
+
+			// Terminate all 4 TPU actors concurrently to remove the allocated resource requests.
+			ExecPodCmd(test, headPod, common.RayHeadContainer, []string{
+				"bash", "-c",
+				`for i in {0..3}; do python /home/ray/test_scripts/terminate_detached_actor.py "tpu_actor_$i" & done; wait`,
+			})
+
+			// Set maxReplicas of the TPU worker group replica to 0 to force scale-down.
+			rayCluster, err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Get(test.Ctx(), rayCluster.Name, metav1.GetOptions{})
+			g.Expect(err).NotTo(gomega.HaveOccurred())
+			rayCluster.Spec.WorkerGroupSpecs[0].MaxReplicas = ptr.To(int32(0))
+			rayCluster, err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Update(test.Ctx(), rayCluster, metav1.UpdateOptions{})
+			g.Expect(err).NotTo(gomega.HaveOccurred())
+			LogWithTimestamp(test.T(), "Updated RayCluster %s/%s successfully", rayCluster.Namespace, rayCluster.Name)
+
+			// Validate that the entire multi-host TPU slice is scaled down.
+			g.Eventually(WorkerPods(test, rayCluster), TestTimeoutMedium).Should(gomega.BeEmpty())
 		})
 	}
 }
