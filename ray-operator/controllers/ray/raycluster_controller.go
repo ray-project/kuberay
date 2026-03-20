@@ -48,22 +48,10 @@ import (
 
 type reconcileFunc func(context.Context, *rayv1.RayCluster) error
 
-var (
-	DefaultRequeueDuration = 2 * time.Second
-
-	// Definition of a index field for pod name
-	podUIDIndexField = "metadata.uid"
-)
+var DefaultRequeueDuration = 2 * time.Second
 
 // NewReconciler returns a new reconcile.Reconciler
-func NewReconciler(ctx context.Context, mgr manager.Manager, options RayClusterReconcilerOptions) *RayClusterReconciler {
-	if err := mgr.GetFieldIndexer().IndexField(ctx, &corev1.Pod{}, podUIDIndexField, func(rawObj client.Object) []string {
-		pod := rawObj.(*corev1.Pod)
-		return []string{string(pod.UID)}
-	}); err != nil {
-		panic(err)
-	}
-
+func NewReconciler(mgr manager.Manager, options RayClusterReconcilerOptions) *RayClusterReconciler {
 	return &RayClusterReconciler{
 		Client:                     mgr.GetClient(),
 		Scheme:                     mgr.GetScheme(),
