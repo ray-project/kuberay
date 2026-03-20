@@ -201,7 +201,8 @@ func PrepareTestEnvWithPrometheusAndGrafana(test Test, g *WithT, namespace *core
 }
 
 // GetOneOfNodeID retrieves a node ID from the /nodes endpoint.
-func GetOneOfNodeID(g *WithT, client *http.Client, historyServerURL string, isLive bool) string {
+// If headNode is true, it iterates over all nodes and returns the one with isHeadNode == true.
+func GetOneOfNodeID(g *WithT, client *http.Client, historyServerURL string, headNode bool) string {
 	resp, err := client.Get(historyServerURL + "/nodes?view=summary")
 	g.Expect(err).NotTo(HaveOccurred())
 	defer resp.Body.Close()
@@ -219,41 +220,31 @@ func GetOneOfNodeID(g *WithT, client *http.Client, historyServerURL string, isLi
 	g.Expect(len(summary)).To(BeNumerically(">", 0))
 
 	// Both live and dead clusters return a flat array of node objects.
-	nodeInfo := summary[0].(map[string]any)
-	return nodeInfo["raylet"].(map[string]any)["nodeId"].(string)
-}
+	if !headNode {
+		raylet := getRayletFromNode(g, summary[0])
+		return raylet["nodeId"].(string)
+	}
 
-// GetHeadNodeID retrieves the head node's ID from the /nodes endpoint.
-// It iterates over all nodes and returns the one with isHeadNode == true.
-func GetHeadNodeID(g *WithT, client *http.Client, historyServerURL string) string {
-	resp, err := client.Get(historyServerURL + "/nodes?view=summary")
-	g.Expect(err).NotTo(HaveOccurred())
-	defer resp.Body.Close()
-	g.Expect(resp.StatusCode).To(Equal(http.StatusOK))
-
-	body, err := io.ReadAll(resp.Body)
-	g.Expect(err).NotTo(HaveOccurred())
-
-	var result map[string]any
-	err = json.Unmarshal(body, &result)
-	g.Expect(err).NotTo(HaveOccurred())
-
-	data := result["data"].(map[string]any)
-	summary := data["summary"].([]any)
-	g.Expect(len(summary)).To(BeNumerically(">", 0))
-
-	headNodeId := ""
 	for _, node := range summary {
-		nodeInfo := node.(map[string]any)
-		raylet := nodeInfo["raylet"].(map[string]any)
+		raylet := getRayletFromNode(g, node)
 		if isHead, ok := raylet["isHeadNode"].(bool); ok && isHead {
-			headNodeId = raylet["nodeId"].(string)
-			break
+			return raylet["nodeId"].(string)
 		}
 	}
-	g.Expect(headNodeId).NotTo(BeEmpty(), "Expected to find a head node in /nodes summary")
 
-	return headNodeId
+	g.Expect(false).To(BeTrue(), "Expected to find a head node in /nodes summary")
+	return ""
+}
+
+// getRayletFromNode extracts the raylet object from a node summary.
+func getRayletFromNode(g *WithT, node any) map[string]any {
+	nodeInfo, ok := node.(map[string]any)
+	g.Expect(ok).To(BeTrue(), "node should be an object")
+
+	raylet, ok := nodeInfo["raylet"].(map[string]any)
+	g.Expect(ok).To(BeTrue(), "node should contain raylet object")
+
+	return raylet
 }
 
 // GetOneOfActorID retrieves an actor ID from the /logical/actors endpoint.
