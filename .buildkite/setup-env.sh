@@ -7,7 +7,7 @@ export PATH=$PATH:/usr/local/go/bin
 export DOCKER_API_VERSION=1.43
 
 # Install kind
-curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.22.0/kind-linux-amd64
+curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.31.0/kind-linux-amd64
 chmod +x ./kind
 mv ./kind /usr/local/bin/kind
 
