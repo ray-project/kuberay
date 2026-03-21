@@ -975,6 +975,14 @@ func (r *RayServiceReconciler) reconcileRayCluster(ctx context.Context, rayServi
 			return activeRayCluster, pendingRayCluster, err
 		}
 		r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeNormal, string(utils.UpdatedRayCluster), "Updated the active RayCluster %s/%s", activeRayCluster.Namespace, activeRayCluster.Name)
+	} else if shouldSyncWorkerGroupScalingBounds(rayServiceInstance, activeRayCluster, true) {
+		logger.Info("Syncing worker group scaling bounds to the active RayCluster instance", "clusterName", activeRayCluster.Name)
+		syncWorkerGroupScalingBounds(rayServiceInstance, activeRayCluster)
+		if err = r.Update(ctx, activeRayCluster); err != nil {
+			r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(utils.FailedToUpdateRayCluster), "Failed to sync scaling bounds to the active RayCluster %s/%s: %v", activeRayCluster.Namespace, activeRayCluster.Name, err)
+			return activeRayCluster, pendingRayCluster, err
+		}
+		r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeNormal, string(utils.UpdatedRayCluster), "Updated the active RayCluster %s/%s", activeRayCluster.Namespace, activeRayCluster.Name)
 	}
 
 	if shouldUpdateCluster(rayServiceInstance, pendingRayCluster, false) {
@@ -987,6 +995,14 @@ func (r *RayServiceReconciler) reconcileRayCluster(ctx context.Context, rayServi
 		modifyRayCluster(ctx, pendingRayCluster, goalCluster)
 		if err = r.Update(ctx, pendingRayCluster); err != nil {
 			r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(utils.FailedToUpdateRayCluster), "Failed to update the pending RayCluster %s/%s: %v", pendingRayCluster.Namespace, pendingRayCluster.Name, err)
+			return activeRayCluster, pendingRayCluster, err
+		}
+		r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeNormal, string(utils.UpdatedRayCluster), "Updated the pending RayCluster %s/%s", pendingRayCluster.Namespace, pendingRayCluster.Name)
+	} else if shouldSyncWorkerGroupScalingBounds(rayServiceInstance, pendingRayCluster, false) {
+		logger.Info("Syncing worker group scaling bounds to the pending RayCluster instance", "clusterName", pendingRayCluster.Name)
+		syncWorkerGroupScalingBounds(rayServiceInstance, pendingRayCluster)
+		if err = r.Update(ctx, pendingRayCluster); err != nil {
+			r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(utils.FailedToUpdateRayCluster), "Failed to sync scaling bounds to the pending RayCluster %s/%s: %v", pendingRayCluster.Namespace, pendingRayCluster.Name, err)
 			return activeRayCluster, pendingRayCluster, err
 		}
 		r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeNormal, string(utils.UpdatedRayCluster), "Updated the pending RayCluster %s/%s", pendingRayCluster.Namespace, pendingRayCluster.Name)
@@ -1143,6 +1159,59 @@ func isClusterSpecHashEqual(rayServiceInstance *rayv1.RayService, cluster *rayv1
 		}
 	}
 	return clusterHash == goalClusterHash
+}
+
+func shouldSyncWorkerGroupScalingBounds(rayServiceInstance *rayv1.RayService, cluster *rayv1.RayCluster, isActiveCluster bool) bool {
+	if cluster == nil {
+		return false
+	}
+
+	if isActiveCluster && meta.IsStatusConditionTrue(rayServiceInstance.Status.Conditions, string(rayv1.UpgradeInProgress)) {
+		return false
+	}
+
+	serviceWorkerGroups := rayServiceInstance.Spec.RayClusterSpec.WorkerGroupSpecs
+	clusterWorkerGroups := cluster.Spec.WorkerGroupSpecs
+	if len(serviceWorkerGroups) != len(clusterWorkerGroups) {
+		return false
+	}
+
+	// Validate all worker group names first, then compare scaling bounds.
+	// This avoids positional sync when group names diverge at any later index.
+	for i := range serviceWorkerGroups {
+		if serviceWorkerGroups[i].GroupName != clusterWorkerGroups[i].GroupName {
+			return false
+		}
+	}
+
+	for i := range serviceWorkerGroups {
+		serviceWorkerGroup := serviceWorkerGroups[i]
+		clusterWorkerGroup := clusterWorkerGroups[i]
+		if !ptr.Equal(serviceWorkerGroup.MinReplicas, clusterWorkerGroup.MinReplicas) {
+			return true
+		}
+		if !ptr.Equal(serviceWorkerGroup.MaxReplicas, clusterWorkerGroup.MaxReplicas) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func syncWorkerGroupScalingBounds(rayServiceInstance *rayv1.RayService, cluster *rayv1.RayCluster) {
+	for i := range cluster.Spec.WorkerGroupSpecs {
+		serviceWorkerGroup := rayServiceInstance.Spec.RayClusterSpec.WorkerGroupSpecs[i]
+		if serviceWorkerGroup.MinReplicas != nil {
+			cluster.Spec.WorkerGroupSpecs[i].MinReplicas = ptr.To(*serviceWorkerGroup.MinReplicas)
+		} else {
+			cluster.Spec.WorkerGroupSpecs[i].MinReplicas = nil
+		}
+		if serviceWorkerGroup.MaxReplicas != nil {
+			cluster.Spec.WorkerGroupSpecs[i].MaxReplicas = ptr.To(*serviceWorkerGroup.MaxReplicas)
+		} else {
+			cluster.Spec.WorkerGroupSpecs[i].MaxReplicas = nil
+		}
+	}
 }
 
 func shouldPrepareNewCluster(ctx context.Context, rayServiceInstance *rayv1.RayService, activeRayCluster, pendingRayCluster *rayv1.RayCluster, isPendingClusterServing bool) bool {
