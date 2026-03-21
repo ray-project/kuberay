@@ -1,0 +1,13 @@
+# Bootstrap pipeline is the entrypoint for the Buildkite pipeline steps.
+# It uploads the real steps from .buildkite/upload-pipeline.sh based on PR file paths.
+#
+# Configure the Buildkite pipeline to use this file as the only initial step source
+# (see .buildkite/ray-ci-integration.md).
+#
+# Use the same image family as other KubeRay Buildkite steps.
+- label: ':pipeline: Boostrap Pipeline - Upload Conditional Pipeline Steps'
+  instance_size: small
+  image: golang:1.25-bookworm
+  commands:
+    - chmod +x .buildkite/upload-pipeline.sh
+    - ./.buildkite/upload-pipeline.sh
