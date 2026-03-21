@@ -8,7 +8,7 @@ This section walks through how to build and test the operator in a running Kuber
 | software | version  |                                                                link |
 |:---------|:--------:|--------------------------------------------------------------------:|
 | kubectl  | v1.23.0+ | [download](https://kubernetes.io/docs/tasks/tools/install-kubectl/) |
-| go       |  v1.25   |                                  [download](https://golang.org/dl/) |
+| go       |  v1.26   |                                  [download](https://golang.org/dl/) |
 | docker   |  19.03+  |                        [download](https://docs.docker.com/install/) |
 
 Alternatively, you can use podman (version 4.5+) instead of docker. See [podman.io](https://podman.io/getting-started/installation) for installation instructions. The Makefile allows you to specify the container engine to use via the `ENGINE` variable. For example, to use podman, you can run `ENGINE=podman make docker-build`.
@@ -18,15 +18,15 @@ The instructions assume you have access to a running Kubernetes cluster via `kub
 ### Setup on Kind
 
 For local development, we recommend using [Kind](https://kind.sigs.k8s.io/) to create a Kubernetes cluster.
-
-### Use go v1.25
-
-Currently, KubeRay uses go v1.25 for development.
-
+ 
+### Use go v1.26
+ 
+Currently, KubeRay uses go v1.26 for development.
+ 
 ```bash
-go install golang.org/dl/go1.25.0@latest
-go1.25.0 download
-export GOROOT=$(go1.25.0 env GOROOT)
+go install golang.org/dl/go1.26.0@latest
+go1.26.0 download
+export GOROOT=$(go1.26.0 env GOROOT)
 export PATH="$GOROOT/bin:$PATH"
 ```
 
