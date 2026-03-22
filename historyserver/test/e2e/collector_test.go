@@ -84,8 +84,8 @@ func TestCollector(t *testing.T) {
 // 4. Delete the Ray cluster to trigger log uploading and event flushing on deletion. When the Ray cluster is deleted,
 // logs, node_events, and job_events are processed as follows:
 //   - logs: Trigger RayLogHandler.processSessionLatestLog to process logs under /tmp/ray/session_latest
-//   - node_events: Trigger EventServer.flushEvents, which calls es.flushNodeEventsForHour to process in-memory node events
-//   - job_events: Trigger EventServer.flushEvents, which calls es.flushJobEventsForHour to process in-memory job events
+//   - node_events: Trigger EventCollector.flushEvents, which calls ec.flushNodeEventsForHour to process in-memory node events
+//   - job_events: Trigger EventCollector.flushEvents, which calls ec.flushJobEventsForHour to process in-memory job events
 //
 // 5. Verify logs, node_events, and job_events are successfully uploaded to S3. Expected S3 path structure:
 //   - {S3BucketName}/log/{clusterName}_{clusterID}/{sessionID}/logs/...
@@ -179,7 +179,7 @@ func testCollectorSeparatesFilesBySession(test Test, g *WithT, namespace *corev1
 // 2. Inject leftover logs before killing the collector:
 //   - file1.log -> /tmp/ray/persist-complete-logs/{sessionID}/{nodeID}/logs/ (already uploaded)
 //   - file2.log -> /tmp/ray/prev-logs/{sessionID}/{nodeID}/logs/ (pending upload)
-//     Note: node_events are not injected or verified here; they are handled by the EventServer via a separate path,
+//     Note: node_events are not injected or verified here; they are handled by the event collector,
 //     and prev-logs processing only covers the logs directory.
 //
 // 3. Kill the collector sidecar container to trigger a container restart.
@@ -441,7 +441,8 @@ func testCollectorStoresPlacementGroups(test Test, g *WithT, namespace *corev1.N
 
 	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, rayCluster.Namespace)
 	sessionID := GetSessionIDFromHeadPod(test, g, rayCluster)
-	storageKey := utils.EndpointPathToStorageKey("/api/v0/placement_groups")
+	// The collector stores the endpoint with query params (as configured in RAY_COLLECTOR_ADDITIONAL_ENDPOINTS).
+	storageKey := utils.EndpointPathToStorageKey("/api/v0/placement_groups?detail=1&limit=10000")
 	pgKey := fmt.Sprintf("log/%s/%s/%s/%s", clusterNameID, sessionID, utils.RAY_SESSIONDIR_FETCHED_ENDPOINTS_NAME, storageKey)
 
 	LogWithTimestamp(test.T(), "Waiting for placement groups data to appear at S3 key: %s", pgKey)

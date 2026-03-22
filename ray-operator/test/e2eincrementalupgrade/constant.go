@@ -22,16 +22,16 @@ var incrementalUpgradeCombinations = []incrementalUpgradeParams{
 		Name:     "BlueGreen",
 	},
 	{
-		// Scenario: Standard gradual upgrade.
-		// Scaling and migration in multiple steps.
+		// Scenario: Aggressive gradual upgrade.
+		// Larger traffic migration steps with shorter intervals.
 		StepSize: 25,
 		Interval: 5,
 		MaxSurge: 50,
-		Name:     "StandardGradual",
+		Name:     "AggressiveGradual",
 	},
 	{
 		// Scenario: Conservative gradual upgrade.
-		// Low-step, long-interval scaling and migration in multiple steps.
+		// Smaller traffic migration steps with longer intervals.
 		StepSize: 5,
 		Interval: 10,
 		MaxSurge: 25,
@@ -104,15 +104,15 @@ const defaultIncrementalUpgradeServeConfigV2 serveConfigV2 = `applications:
 // highRPSServeConfigV2 configures a minimal high-RPS Serve app (SimpleDeployment) for Locust load tests.
 const highRPSServeConfigV2 serveConfigV2 = `applications:
   - name: simple_app
-    import_path: simple_serve.app
+    import_path: locust_test.simple_serve:app
     route_prefix: /test
     runtime_env:
-      working_dir: "https://github.com/jiangjiawei1103/incr-upgrade-locust/archive/a185bb29374388e801db4331ae73af3ad1e79a5f.zip"
+      working_dir: "https://github.com/ray-project/serve_config_examples/archive/530e247ca195530b71b92d7e708048a1bdc02583.zip"
     deployments:
       - name: SimpleDeployment
         autoscaling_config:
           min_replicas: 1
-          max_replicas: 3
+          max_replicas: 2
           target_ongoing_requests: 2
           max_ongoing_requests: 6
           upscale_delay_s: 0.5

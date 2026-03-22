@@ -30,7 +30,7 @@ import (
 //
 // It iterates over incrementalUpgradeCombinations to cover diverse upgrade scenarios:
 //   - BlueGreen
-//   - StandardGradual
+//   - AggressiveGradual
 //   - ConservativeGradual
 //
 // The test case follows these steps:
@@ -41,7 +41,7 @@ import (
 // 5. Wait for the corresponding HTTPRoute object to be ready (Accepted and ResolvedRefs conditions are True)
 // 6. Create a Curl pod to test traffic routing through Gateway to RayService and wait for it to be ready
 // 7. Validate RayService is serving traffic by sending requests through Gateway external IP
-// 8. Update the RayCluster spec and RayService serve config to trigger upgrade
+// 8. Modify the RayCluster spec to trigger upgrade and change the RayService serve config to update the serve deployment
 //   - NOTE: Incremental upgrade is triggered by RayCluster spec changes, not serve config changes
 //
 // 9. Wait for the RayService to be upgrading
@@ -84,7 +84,7 @@ func TestRayServiceIncrementalUpgrade(t *testing.T) {
 			stdout, _ = CurlRayServiceGateway(test, gatewayIP, curlPod, CurlContainerName, http.MethodPost, "/calc", `["MUL", 3]`)
 			g.Expect(stdout.String()).To(Equal("15 pizzas please!"))
 
-			LogWithTimestamp(test.T(), "Triggering incremental upgrade by updating RayCluster spec and RayService serve config")
+			LogWithTimestamp(test.T(), "Triggering incremental upgrade by modifying RayCluster spec and updating serve deployment by changing RayService serve config")
 			g.Eventually(incrementalUpgrade(test, namespace.Name, rayServiceName), TestTimeoutShort).Should(Succeed(), "Failed to update RayService to trigger upgrade")
 			LogWithTimestamp(test.T(), "Waiting for RayService %s/%s UpgradeInProgress condition to be true", rayService.Namespace, rayService.Name)
 			g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutShort).Should(WithTransform(IsRayServiceUpgrading, BeTrue()))
@@ -225,7 +225,7 @@ func TestRayServiceIncrementalUpgrade(t *testing.T) {
 //
 // It iterates over incrementalUpgradeCombinations to cover diverse upgrade scenarios under load:
 //   - BlueGreen
-//   - StandardGradual
+//   - AggressiveGradual
 //   - ConservativeGradual
 //
 // The ultimate goal is to ensure that there are no request drops during the upgrade.
@@ -240,7 +240,7 @@ func TestRayServiceIncrementalUpgrade(t *testing.T) {
 // 7. Deploy a head-only Locust RayCluster and install Locust in the head Pod
 // 8. Start Locust in a background goroutine targeting Gateway IP
 // 9. Wait for Locust to ramp up and enter the steady state
-// 10. Update the RayCluster spec and RayService serve config to trigger upgrade
+// 10. Modify the RayCluster spec to trigger upgrade and change the RayService serve config to update the serve deployment
 //   - NOTE: Incremental upgrade is triggered by RayCluster spec changes, not serve config changes
 //
 // 11. Wait for incremental upgrade to complete
@@ -308,7 +308,7 @@ func TestRayServiceIncrementalUpgradeWithLocust(t *testing.T) {
 			g.Expect(err).NotTo(HaveOccurred())
 
 			// Phase 4: Trigger incremental upgrade
-			LogWithTimestamp(test.T(), "Triggering incremental upgrade by updating RayCluster spec and RayService serve config")
+			LogWithTimestamp(test.T(), "Triggering incremental upgrade by updating RayCluster spec")
 			g.Eventually(incrementalUpgrade(test, namespace.Name, rayServiceName), TestTimeoutShort).Should(Succeed(), "Failed to update RayService to trigger upgrade")
 			LogWithTimestamp(test.T(), "Waiting for RayService %s/%s UpgradeInProgress condition to be true", namespace.Name, rayServiceName)
 			g.Eventually(RayService(test, namespace.Name, rayServiceName), TestTimeoutShort).Should(WithTransform(IsRayServiceUpgrading, BeTrue()))
