@@ -158,7 +158,7 @@ func incrementalUpgradeRayServiceApplyConfiguration(
 			WithWorkerGroupSpecs(rayv1ac.WorkerGroupSpec().
 				WithReplicas(1).
 				WithMinReplicas(1).
-				WithMaxReplicas(4).
+				WithMaxReplicas(2).
 				WithGroupName("small-group").
 				WithTemplate(corev1ac.PodTemplateSpec().
 					WithSpec(corev1ac.PodSpec().

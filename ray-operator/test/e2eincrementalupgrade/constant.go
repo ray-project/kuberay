@@ -112,7 +112,7 @@ const highRPSServeConfigV2 serveConfigV2 = `applications:
       - name: SimpleDeployment
         autoscaling_config:
           min_replicas: 1
-          max_replicas: 3
+          max_replicas: 2
           target_ongoing_requests: 2
           max_ongoing_requests: 6
           upscale_delay_s: 0.5
