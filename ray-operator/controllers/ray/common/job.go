@@ -82,7 +82,7 @@ func GetMetadataJson(metadata map[string]string, rayVersion string) (string, err
 }
 
 // BuildJobSubmitCommand builds the `ray job submit` command based on submission mode.
-func BuildJobSubmitCommand(rayJobInstance *rayv1.RayJob, submissionMode rayv1.JobSubmissionMode) ([]string, error) {
+func BuildJobSubmitCommand(rayJobInstance *rayv1.RayJob, rayClusterInstance *rayv1.RayCluster, submissionMode rayv1.JobSubmissionMode) ([]string, error) {
 	var address string
 	port := utils.DefaultDashboardPort
 
@@ -163,8 +163,8 @@ func BuildJobSubmitCommand(rayJobInstance *rayv1.RayJob, submissionMode rayv1.Jo
 		cmd = append(cmd, "--runtime-env-json", strconv.Quote(runtimeEnvJson))
 	}
 
-	if len(metadata) > 0 && rayJobInstance.Spec.RayClusterSpec != nil {
-		metadataJson, err := GetMetadataJson(metadata, rayJobInstance.Spec.RayClusterSpec.RayVersion)
+	if len(metadata) > 0 && rayClusterInstance != nil {
+		metadataJson, err := GetMetadataJson(metadata, rayClusterInstance.Spec.RayVersion)
 		if err != nil {
 			return nil, err
 		}
