@@ -266,6 +266,96 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 		}
 	}
 
+	// Validate NetworkIsolation configuration if set.
+	if spec.NetworkIsolation != nil && !features.Enabled(features.EnhancedSecurityPrimitives) {
+		return fmt.Errorf("spec.networkIsolation requires the EnhancedSecurityPrimitives feature gate to be enabled")
+	}
+	if err := validateNetworkIsolation(spec); err != nil {
+		return err
+	}
+
+	// Validate TLS configuration if set.
+	if spec.TLSOptions != nil && !features.Enabled(features.EnhancedSecurityPrimitives) {
+		return fmt.Errorf("spec.tlsOptions requires the EnhancedSecurityPrimitives feature gate to be enabled")
+	}
+	return validateTLSOptions(spec)
+}
+
+// validateNetworkIsolation checks that the NetworkIsolation config is internally consistent.
+// For example, ingress rules should only be specified when ingress is being denied,
+// and egress rules should only be specified when egress is being denied.
+func validateNetworkIsolation(spec *rayv1.RayClusterSpec) error {
+	ni := spec.NetworkIsolation
+	if ni == nil {
+		return nil
+	}
+
+	// Resolve mode, defaulting to denyAll if not set (matches kubebuilder default).
+	mode := rayv1.NetworkIsolationDenyAll
+	if ni.Mode != nil {
+		mode = *ni.Mode
+	}
+
+	// Ingress rules are only meaningful when ingress is being denied.
+	if mode == rayv1.NetworkIsolationDenyAllEgress && len(ni.IngressRules) > 0 {
+		return fmt.Errorf("networkIsolation.ingressRules cannot be set when mode is %q (ingress is not restricted)", mode)
+	}
+
+	// Egress rules are only meaningful when egress is being denied.
+	if mode == rayv1.NetworkIsolationDenyAllIngress && len(ni.EgressRules) > 0 {
+		return fmt.Errorf("networkIsolation.egressRules cannot be set when mode is %q (egress is not restricted)", mode)
+	}
+
+	return nil
+}
+
+// validateTLSOptions checks that the TLS config is internally consistent.
+// It prevents users from setting TLS environment variables manually when TLS is enabled,
+// and validates BYOC certificate secret names if provided.
+func validateTLSOptions(spec *rayv1.RayClusterSpec) error {
+	if !IsTLSEnabled(spec) {
+		return nil
+	}
+
+	// Validate BYOC fields: if CertificateSecretName is set it must be non-empty.
+	if spec.TLSOptions.CertificateSecretName != nil && *spec.TLSOptions.CertificateSecretName == "" {
+		return fmt.Errorf("tlsOptions.certificateSecretName must be non-empty when set")
+	}
+	// WorkerCertificateSecretName is optional but must be non-empty when set.
+	if spec.TLSOptions.WorkerCertificateSecretName != nil && *spec.TLSOptions.WorkerCertificateSecretName == "" {
+		return fmt.Errorf("tlsOptions.workerCertificateSecretName must be non-empty when set")
+	}
+	// WorkerCertificateSecretName requires CertificateSecretName to also be set.
+	if spec.TLSOptions.WorkerCertificateSecretName != nil && spec.TLSOptions.CertificateSecretName == nil {
+		return fmt.Errorf("tlsOptions.workerCertificateSecretName requires certificateSecretName to also be set")
+	}
+
+	// Prevent conflict: user should not set any operator-managed TLS env vars when TLS is enabled.
+	forbiddenEnvVars := []string{RAY_USE_TLS, RAY_TLS_SERVER_CERT, RAY_TLS_SERVER_KEY, RAY_TLS_CA_CERT}
+
+	if len(spec.HeadGroupSpec.Template.Spec.Containers) > 0 {
+		headContainer := spec.HeadGroupSpec.Template.Spec.Containers[RayContainerIndex]
+		for _, envName := range forbiddenEnvVars {
+			if EnvVarExists(envName, headContainer.Env) {
+				return fmt.Errorf("cannot set %s environment variable in head Pod when tlsOptions is set "+
+					"- the operator manages TLS configuration automatically", envName)
+			}
+		}
+	}
+
+	for i := range spec.WorkerGroupSpecs {
+		worker := &spec.WorkerGroupSpecs[i]
+		if len(worker.Template.Spec.Containers) > 0 {
+			workerContainer := worker.Template.Spec.Containers[RayContainerIndex]
+			for _, envName := range forbiddenEnvVars {
+				if EnvVarExists(envName, workerContainer.Env) {
+					return fmt.Errorf("cannot set %s environment variable in worker group %q when tlsOptions is set "+
+						"- the operator manages TLS configuration automatically", envName, worker.GroupName)
+				}
+			}
+		}
+	}
+
 	return nil
 }
 

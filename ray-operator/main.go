@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	certmanagerv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
 	"github.com/go-logr/zapr"
 	routev1 "github.com/openshift/api/route/v1"
 	"go.uber.org/zap"
@@ -18,7 +19,9 @@ import (
 	"k8s.io/apimachinery/pkg/selection"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
+	"k8s.io/client-go/discovery"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
@@ -51,6 +54,7 @@ func init() {
 	utilruntime.Must(routev1.Install(scheme))
 	utilruntime.Must(batchv1.AddToScheme(scheme))
 	utilruntime.Must(configapi.AddToScheme(scheme))
+	utilruntime.Must(certmanagerv1.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
 }
 
@@ -241,6 +245,12 @@ func main() {
 	restConfig.UserAgent = userAgent
 	restConfig.QPS = float32(*config.QPS)
 	restConfig.Burst = *config.Burst
+
+	// Check if cert-manager API is available before registering the mTLS controller.
+	// If cert-manager is not installed, the controller's Certificate/Issuer cache would
+	// never sync and the manager would fail to start (e.g. in E2E environments without cert-manager).
+	certManagerAvailable := certManagerAPIAvailable(restConfig)
+
 	mgr, err := ctrl.NewManager(restConfig, options)
 	exitOnError(err, "unable to start manager")
 
@@ -273,9 +283,21 @@ func main() {
 		RayClusterMetricsManager: rayClusterMetricsManager,
 		BatchSchedulerManager:    batchSchedulerManager,
 		DefaultContainerEnvs:     config.DefaultContainerEnvs,
+		CertManagerAvailable:     certManagerAvailable,
 	}
 	exitOnError(ray.NewReconciler(mgr, rayClusterOptions).SetupWithManager(mgr, config.ReconcileConcurrency),
 		"unable to create controller", "controller", "RayCluster")
+
+	if features.Enabled(features.EnhancedSecurityPrimitives) {
+		if certManagerAvailable {
+			exitOnError(ray.NewRayClusterMTLSController(mgr).SetupWithManager(mgr),
+				"unable to create controller", "controller", "RayClusterMTLS")
+		} else {
+			setupLog.Info("cert-manager API not found; mTLS controller disabled (RayClusters with tlsOptions and no CertificateSecretName will not get auto-generated certs)")
+		}
+	} else {
+		setupLog.Info("EnhancedSecurityPrimitives feature gate is disabled, skipping mTLS controller setup")
+	}
 
 	exitOnError(ray.NewRayServiceReconciler(ctx, mgr, config).SetupWithManager(mgr, config.ReconcileConcurrency),
 		"unable to create controller", "controller", "RayService")
@@ -299,6 +321,15 @@ func main() {
 	} else {
 		setupLog.Info("RayCronJob feature gate is disabled, skipping RayCronJob controller setup")
 	}
+
+	if features.Enabled(features.EnhancedSecurityPrimitives) {
+		setupLog.Info("EnhancedSecurityPrimitives feature gate is enabled, starting NetworkPolicy controller")
+		exitOnError(ray.NewNetworkPolicyController(mgr).SetupWithManager(mgr),
+			"unable to create controller", "controller", "NetworkPolicy")
+	} else {
+		setupLog.Info("EnhancedSecurityPrimitives feature gate is disabled, skipping NetworkPolicy controller setup")
+	}
+
 	// +kubebuilder:scaffold:builder
 
 	exitOnError(mgr.AddHealthzCheck("healthz", healthz.Ping), "unable to set up health check")
@@ -306,6 +337,26 @@ func main() {
 
 	setupLog.Info("starting manager")
 	exitOnError(mgr.Start(ctx), "problem running manager")
+}
+
+// certManagerAPIAvailable returns true if the cert-manager.io/v1 API (Certificate, Issuer) is
+// available in the cluster. Used to avoid registering the mTLS controller when cert-manager
+// is not installed, which would cause manager startup to time out waiting for the Certificate cache to sync.
+func certManagerAPIAvailable(restConfig *rest.Config) bool {
+	discoveryClient, err := discovery.NewDiscoveryClientForConfig(restConfig)
+	if err != nil || discoveryClient == nil {
+		return false
+	}
+	_, resources, err := discoveryClient.ServerGroupsAndResources()
+	if err != nil {
+		return false
+	}
+	for _, r := range resources {
+		if r.GroupVersion == "cert-manager.io/v1" {
+			return true
+		}
+	}
+	return false
 }
 
 func cacheSelectors() (map[client.Object]cache.ByObject, error) {
