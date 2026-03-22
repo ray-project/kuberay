@@ -831,8 +831,11 @@ func IsIncrementalUpgradeEnabled(spec *rayv1.RayServiceSpec) bool {
 	if !features.Enabled(features.RayServiceIncrementalUpgrade) {
 		return false
 	}
-	return spec != nil && spec.UpgradeStrategy != nil &&
-		*spec.UpgradeStrategy.Type == rayv1.RayServiceNewClusterWithIncrementalUpgrade
+	if spec == nil || spec.UpgradeStrategy == nil || spec.UpgradeStrategy.Type == nil {
+		return false
+	}
+
+	return *spec.UpgradeStrategy.Type == rayv1.RayServiceNewClusterWithIncrementalUpgrade
 }
 
 func GetRayServiceClusterUpgradeOptions(spec *rayv1.RayServiceSpec) *rayv1.ClusterUpgradeOptions {
@@ -1050,24 +1053,61 @@ func HasSubmitter(rayJobInstance *rayv1.RayJob) bool {
 }
 
 // IsHTTPRouteEqual checks if the existing HTTPRoute matches the desired HTTPRoute.
+// This check only compares the fields explicitly managed by the KubeRay controller.
 func IsHTTPRouteEqual(existing, desired *gwv1.HTTPRoute) bool {
-	if len(existing.Spec.Rules) != len(desired.Spec.Rules) {
+	if existing == nil || desired == nil {
+		return existing == desired
+	}
+
+	// Compare Hostnames
+	if !reflect.DeepEqual(existing.Spec.Hostnames, desired.Spec.Hostnames) {
 		return false
 	}
 
+	// Compare ParentRefs
+	if len(existing.Spec.ParentRefs) != len(desired.Spec.ParentRefs) {
+		return false
+	}
+	for i := range desired.Spec.ParentRefs {
+		eRef := existing.Spec.ParentRefs[i]
+		dRef := desired.Spec.ParentRefs[i]
+
+		if string(eRef.Name) != string(dRef.Name) ||
+			string(ptr.Deref(eRef.Namespace, "")) != string(ptr.Deref(dRef.Namespace, "")) {
+			return false
+		}
+	}
+
+	// Compare Rules
+	if len(existing.Spec.Rules) != len(desired.Spec.Rules) {
+		return false
+	}
 	for i := range desired.Spec.Rules {
-		if len(existing.Spec.Rules[i].BackendRefs) != len(desired.Spec.Rules[i].BackendRefs) {
+		eRule := existing.Spec.Rules[i]
+		dRule := desired.Spec.Rules[i]
+
+		// Compare Matches and Filters
+		if !reflect.DeepEqual(eRule.Matches, dRule.Matches) {
+			return false
+		}
+		if !reflect.DeepEqual(eRule.Filters, dRule.Filters) {
 			return false
 		}
 
-		for j := range desired.Spec.Rules[i].BackendRefs {
-			existingRef := existing.Spec.Rules[i].BackendRefs[j]
-			desiredRef := desired.Spec.Rules[i].BackendRefs[j]
+		// Compare BackendRefs
+		if len(eRule.BackendRefs) != len(dRule.BackendRefs) {
+			return false
+		}
 
-			// Only compare the fields the controller updates.
-			if string(existingRef.Name) != string(desiredRef.Name) ||
-				ptr.Deref(existingRef.Weight, 1) != ptr.Deref(desiredRef.Weight, 1) ||
-				ptr.Deref(existingRef.Port, 0) != ptr.Deref(desiredRef.Port, 0) {
+		for j := range dRule.BackendRefs {
+			eBack := eRule.BackendRefs[j]
+			dBack := dRule.BackendRefs[j]
+
+			// KubeRay explicitly sets Name, Namespace, Port, and Weight on BackendRefs.
+			if string(eBack.Name) != string(dBack.Name) ||
+				string(ptr.Deref(eBack.Namespace, "")) != string(ptr.Deref(dBack.Namespace, "")) ||
+				ptr.Deref(eBack.Weight, 1) != ptr.Deref(dBack.Weight, 1) ||
+				ptr.Deref(eBack.Port, 0) != ptr.Deref(dBack.Port, 0) {
 				return false
 			}
 		}
