@@ -270,11 +270,7 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 	if spec.NetworkIsolation != nil && !features.Enabled(features.RayClusterNetworkIsolation) {
 		return fmt.Errorf("spec.networkIsolation requires the RayClusterNetworkIsolation feature gate to be enabled")
 	}
-	if err := validateNetworkIsolation(spec); err != nil {
-		return err
-	}
-
-	return nil
+	return validateNetworkIsolation(spec)
 }
 
 // validateNetworkIsolation checks that the NetworkIsolation config is internally consistent.

@@ -37,6 +37,7 @@ import (
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/dashboardclient"
+	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 )
 
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to
@@ -128,6 +129,10 @@ var _ = BeforeSuite(func(ctx SpecContext) {
 	rayJobOptions := RayJobReconcilerOptions{}
 	err = NewRayJobReconciler(ctx, mgr, rayJobOptions, testClientProvider).SetupWithManager(mgr, 1)
 	Expect(err).NotTo(HaveOccurred(), "failed to setup RayJob controller")
+
+	features.SetFeatureGateDuringTest(GinkgoTB(), features.RayClusterNetworkIsolation, true)
+	err = NewNetworkPolicyController(mgr).SetupWithManager(mgr)
+	Expect(err).NotTo(HaveOccurred(), "failed to setup NetworkPolicy controller")
 
 	go func() {
 		err = mgr.Start(ctrl.SetupSignalHandler())
