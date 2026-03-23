@@ -1,0 +1,58 @@
+apiVersion: ray.io/v1
+kind: RayCluster
+metadata:
+  name: raycluster-custom-rules
+spec:
+  networkIsolation:
+    mode: denyAll
+    ingressRules:
+    # Allow pods labelled app=ray-client to reach the serving port (8000)
+    - ports:
+      - protocol: TCP
+        port: 8000
+      from:
+      - podSelector:
+          matchLabels:
+            app: ray-client
+  rayVersion: '2.52.0'
+  headGroupSpec:
+    rayStartParams: {}
+    template:
+      spec:
+        containers:
+        - name: ray-head
+          image: rayproject/ray:2.52.0
+          resources:
+            limits:
+              cpu: "1"
+              memory: "5Gi"
+            requests:
+              cpu: "1"
+              memory: "2Gi"
+          ports:
+          - containerPort: 6379
+            name: gcs-server
+          - containerPort: 8265
+            name: dashboard
+          - containerPort: 10001
+            name: client
+          - containerPort: 8000
+            name: serve
+  workerGroupSpecs:
+  - replicas: 1
+    minReplicas: 1
+    maxReplicas: 5
+    groupName: workergroup
+    rayStartParams: {}
+    template:
+      spec:
+        containers:
+        - name: ray-worker
+          image: rayproject/ray:2.52.0
+          resources:
+            limits:
+              cpu: "1"
+              memory: "1Gi"
+            requests:
+              cpu: "1"
+              memory: "1Gi"

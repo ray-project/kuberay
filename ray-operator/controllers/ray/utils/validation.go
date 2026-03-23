@@ -266,6 +266,42 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 		}
 	}
 
+	// Validate NetworkIsolation configuration if set.
+	if spec.NetworkIsolation != nil && !features.Enabled(features.RayClusterNetworkIsolation) {
+		return fmt.Errorf("spec.networkIsolation requires the RayClusterNetworkIsolation feature gate to be enabled")
+	}
+	if err := validateNetworkIsolation(spec); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// validateNetworkIsolation checks that the NetworkIsolation config is internally consistent.
+// For example, ingress rules should only be specified when ingress is being denied,
+// and egress rules should only be specified when egress is being denied.
+func validateNetworkIsolation(spec *rayv1.RayClusterSpec) error {
+	ni := spec.NetworkIsolation
+	if ni == nil {
+		return nil
+	}
+
+	// Resolve mode, defaulting to denyAll if not set (matches kubebuilder default).
+	mode := rayv1.NetworkIsolationDenyAll
+	if ni.Mode != nil {
+		mode = *ni.Mode
+	}
+
+	// Ingress rules are only meaningful when ingress is being denied.
+	if mode == rayv1.NetworkIsolationDenyAllEgress && len(ni.IngressRules) > 0 {
+		return fmt.Errorf("networkIsolation.ingressRules cannot be set when mode is %q (ingress is not restricted)", mode)
+	}
+
+	// Egress rules are only meaningful when egress is being denied.
+	if mode == rayv1.NetworkIsolationDenyAllIngress && len(ni.EgressRules) > 0 {
+		return fmt.Errorf("networkIsolation.egressRules cannot be set when mode is %q (egress is not restricted)", mode)
+	}
+
 	return nil
 }
 
