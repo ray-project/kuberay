@@ -1,0 +1,69 @@
+apiVersion: ray.io/v1
+kind: RayCluster
+metadata:
+  name: raycluster-complex-rules
+spec:
+  networkIsolation:
+    mode: denyAll
+    ingressRules:
+    # Allow Prometheus pods in the monitoring namespace to scrape metrics
+    - from:
+      - namespaceSelector:
+          matchLabels:
+            monitoring: prometheus
+        podSelector:
+          matchLabels:
+            app: prometheus
+      ports:
+      - port: 8080
+        protocol: TCP
+    # Allow an API gateway in its own namespace to access the Ray dashboard
+    - from:
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: my-gateway-namespace
+      ports:
+      - port: 8265
+        protocol: TCP
+  rayVersion: '2.52.0'
+  headGroupSpec:
+    rayStartParams: {}
+    template:
+      spec:
+        containers:
+        - name: ray-head
+          image: rayproject/ray:2.52.0
+          resources:
+            limits:
+              cpu: "1"
+              memory: "5Gi"
+            requests:
+              cpu: "1"
+              memory: "2Gi"
+          ports:
+          - containerPort: 6379
+            name: gcs-server
+          - containerPort: 8265
+            name: dashboard
+          - containerPort: 10001
+            name: client
+          - containerPort: 8080
+            name: metrics
+  workerGroupSpecs:
+  - replicas: 1
+    minReplicas: 1
+    maxReplicas: 5
+    groupName: workergroup
+    rayStartParams: {}
+    template:
+      spec:
+        containers:
+        - name: ray-worker
+          image: rayproject/ray:2.52.0
+          resources:
+            limits:
+              cpu: "1"
+              memory: "1Gi"
+            requests:
+              cpu: "1"
+              memory: "1Gi"

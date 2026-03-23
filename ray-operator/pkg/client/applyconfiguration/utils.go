@@ -38,6 +38,8 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &rayv1.HeadGroupSpecApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("HeadInfo"):
 		return &rayv1.HeadInfoApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("NetworkIsolationConfig"):
+		return &rayv1.NetworkIsolationConfigApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("RayCluster"):
 		return &rayv1.RayClusterApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("RayClusterSpec"):
