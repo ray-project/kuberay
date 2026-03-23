@@ -151,6 +151,8 @@ spec:
                     properties:
                       authOptions:
                         properties:
+                          enableK8sTokenAuth:
+                            type: boolean
                           mode:
                             enum:
                             - disabled

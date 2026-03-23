@@ -251,6 +251,16 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 			return fmt.Errorf("authOptions.mode is 'token' but minimum Ray version is 2.52.0, got %s", spec.RayVersion)
 		}
 
+		if IsK8sAuthEnabled(spec) {
+			minVersion := version.MustParseGeneric("2.55.0")
+			if rayVersion.LessThan(minVersion) {
+				return fmt.Errorf("authOptions.enableK8sTokenAuth is enabled but minimum Ray version is 2.55.0, got %s", spec.RayVersion)
+			}
+		}
+	} else {
+		if IsK8sAuthEnabled(spec) {
+			return fmt.Errorf("authOptions.enableK8sTokenAuth is enabled but authOptions.mode not set to 'token'")
+		}
 	}
 
 	return nil

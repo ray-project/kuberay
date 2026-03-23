@@ -16,6 +16,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/version"
+	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
@@ -206,7 +207,7 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 
 		// Configure RAY_AUTH_TOKEN and RAY_AUTH_MODE if auth is enabled.
 		if utils.IsAuthEnabled(&instance.Spec) {
-			SetContainerTokenAuthEnvVars(instance.Name, &autoscalerContainer)
+			SetContainerTokenAuthEnvVars(instance.Name, &autoscalerContainer, instance.Spec.AuthOptions)
 		}
 
 		// Merge the user overrides from autoscalerOptions into the autoscaler container config.
@@ -232,7 +233,7 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 	}
 
 	if utils.IsAuthEnabled(&instance.Spec) {
-		configureTokenAuth(instance.Name, &podTemplate)
+		configureTokenAuth(instance.Name, &podTemplate, instance.Spec.AuthOptions)
 	}
 
 	return podTemplate
@@ -251,8 +252,13 @@ func setAutoscalerV2EnvVars(podTemplate *corev1.PodTemplateSpec) {
 }
 
 // configureTokenAuth sets environment variables required for Ray token authentication
-func configureTokenAuth(clusterName string, podTemplate *corev1.PodTemplateSpec) {
-	SetContainerTokenAuthEnvVars(clusterName, &podTemplate.Spec.Containers[utils.RayContainerIndex])
+func configureTokenAuth(clusterName string, podTemplate *corev1.PodTemplateSpec, authOptions *rayv1.AuthOptions) {
+	SetContainerTokenAuthEnvVars(clusterName, &podTemplate.Spec.Containers[utils.RayContainerIndex], authOptions)
+
+	if authOptions != nil && ptr.Deref(authOptions.EnableK8sTokenAuth, false) {
+		AddRayTokenVolume(&podTemplate.Spec)
+	}
+
 	// For RayJob Sidecar mode, we need to set the auth token for the submitter container.
 
 	// Configure auth token for wait-gcs-ready init container if it exists
@@ -261,27 +267,69 @@ func configureTokenAuth(clusterName string, podTemplate *corev1.PodTemplateSpec)
 			continue
 		}
 
-		SetContainerTokenAuthEnvVars(clusterName, &podTemplate.Spec.InitContainers[i])
+		SetContainerTokenAuthEnvVars(clusterName, &podTemplate.Spec.InitContainers[i], authOptions)
 	}
 }
 
-// SetContainerTokenAuthEnvVars sets Ray authentication env vars for a container.
-func SetContainerTokenAuthEnvVars(clusterName string, container *corev1.Container) {
-	container.Env = append(container.Env, corev1.EnvVar{
-		Name:  utils.RAY_AUTH_MODE_ENV_VAR,
-		Value: string(rayv1.AuthModeToken),
-	})
+// AddRayTokenVolume adds a projected service account token volume to the pod spec.
+func AddRayTokenVolume(podSpec *corev1.PodSpec) {
+	if utils.VolumeExists(utils.RayTokenVolumeName, podSpec.Volumes) {
+		return
+	}
 
-	secretName := utils.CheckName(clusterName)
-	container.Env = append(container.Env, corev1.EnvVar{
-		Name: utils.RAY_AUTH_TOKEN_ENV_VAR,
-		ValueFrom: &corev1.EnvVarSource{
-			SecretKeyRef: &corev1.SecretKeySelector{
-				LocalObjectReference: corev1.LocalObjectReference{Name: secretName},
-				Key:                  utils.RAY_AUTH_TOKEN_SECRET_KEY,
+	podSpec.Volumes = append(podSpec.Volumes, corev1.Volume{
+		Name: utils.RayTokenVolumeName,
+		VolumeSource: corev1.VolumeSource{
+			Projected: &corev1.ProjectedVolumeSource{
+				Sources: []corev1.VolumeProjection{
+					{
+						ServiceAccountToken: &corev1.ServiceAccountTokenProjection{
+							Path: "token",
+						},
+					},
+				},
 			},
 		},
 	})
+}
+
+// SetContainerTokenAuthEnvVars sets Ray authentication env vars for a container.
+func SetContainerTokenAuthEnvVars(clusterName string, container *corev1.Container, authOptions *rayv1.AuthOptions) {
+	if !utils.EnvVarExists(utils.RAY_AUTH_MODE_ENV_VAR, container.Env) {
+		container.Env = append(container.Env, corev1.EnvVar{
+			Name:  utils.RAY_AUTH_MODE_ENV_VAR,
+			Value: string(rayv1.AuthModeToken),
+		})
+	}
+
+	if authOptions != nil && authOptions.EnableK8sTokenAuth != nil && *authOptions.EnableK8sTokenAuth {
+		if !utils.EnvVarExists(utils.RAY_ENABLE_K8S_TOKEN_AUTH_ENV_VAR, container.Env) {
+			container.Env = append(container.Env, corev1.EnvVar{
+				Name:  utils.RAY_ENABLE_K8S_TOKEN_AUTH_ENV_VAR,
+				Value: "true",
+			})
+		}
+		if !utils.VolumeMountExists(utils.RayTokenVolumeName, container.VolumeMounts) {
+			container.VolumeMounts = append(container.VolumeMounts, corev1.VolumeMount{
+				Name:      utils.RayTokenVolumeName,
+				MountPath: utils.RayTokenMountPath,
+				ReadOnly:  true,
+			})
+		}
+	} else {
+		secretName := utils.CheckName(clusterName)
+		if !utils.EnvVarExists(utils.RAY_AUTH_TOKEN_ENV_VAR, container.Env) {
+			container.Env = append(container.Env, corev1.EnvVar{
+				Name: utils.RAY_AUTH_TOKEN_ENV_VAR,
+				ValueFrom: &corev1.EnvVarSource{
+					SecretKeyRef: &corev1.SecretKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{Name: secretName},
+						Key:                  utils.RAY_AUTH_TOKEN_SECRET_KEY,
+					},
+				},
+			})
+		}
+	}
 }
 
 func getEnableInitContainerInjection() bool {
@@ -407,7 +455,7 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 	}
 
 	if utils.IsAuthEnabled(&instance.Spec) {
-		configureTokenAuth(instance.Name, &podTemplate)
+		configureTokenAuth(instance.Name, &podTemplate, instance.Spec.AuthOptions)
 	}
 
 	return podTemplate
