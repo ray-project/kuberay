@@ -12,6 +12,19 @@ type TLSOptionsApplyConfiguration struct {
 	// Mode controls the TLS security level.
 	// - "mTLS": Enables mutual TLS (client & server authentication).
 	Mode *string `json:"mode,omitempty"`
+	// Provisioning controls whether TLS certificates are issued by the operator via cert-manager
+	// (CertManager) or supplied by the user as Kubernetes Secrets (UserSecret).
+	//
+	// CertManager: do not set certificateSecretName or workerCertificateSecretName; the operator
+	// manages Issuers, Certificates, and Secrets.
+	//
+	// UserSecret (bring your own certificate): set certificateSecretName; optional workerCertificateSecretName
+	// for split head/worker identities. The operator does not create cert-manager resources for TLS.
+	//
+	// When omitted, provisioning is inferred: a non-empty certificateSecretName implies UserSecret;
+	// otherwise CertManager is used. Setting provisioning to CertManager together with user secret
+	// fields is invalid.
+	Provisioning *string `json:"provisioning,omitempty"`
 	// CertificateSecretName is a user-provided Kubernetes Secret containing
 	// tls.crt, tls.key, and ca.crt for the head node (and workers, if
 	// WorkerCertificateSecretName is not set).
@@ -47,6 +60,14 @@ func TLSOptions() *TLSOptionsApplyConfiguration {
 // If called multiple times, the Mode field is set to the value of the last call.
 func (b *TLSOptionsApplyConfiguration) WithMode(value string) *TLSOptionsApplyConfiguration {
 	b.Mode = &value
+	return b
+}
+
+// WithProvisioning sets the Provisioning field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the Provisioning field is set to the value of the last call.
+func (b *TLSOptionsApplyConfiguration) WithProvisioning(value string) *TLSOptionsApplyConfiguration {
+	b.Provisioning = &value
 	return b
 }
 

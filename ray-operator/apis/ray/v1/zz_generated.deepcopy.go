@@ -1090,6 +1090,11 @@ func (in *TLSOptions) DeepCopyInto(out *TLSOptions) {
 		*out = new(string)
 		**out = **in
 	}
+	if in.Provisioning != nil {
+		in, out := &in.Provisioning, &out.Provisioning
+		*out = new(string)
+		**out = **in
+	}
 	if in.CertificateSecretName != nil {
 		in, out := &in.CertificateSecretName, &out.CertificateSecretName
 		*out = new(string)

@@ -33,6 +33,7 @@ type RayClusterSpecApplyConfiguration struct {
 	// TLSOptions specifies optional TLS encryption settings for the RayCluster.
 	// If omitted, TLS is disabled. When set, the mode field controls the
 	// security level (defaults to "mTLS" for mutual TLS).
+	// Requires the RayClusterMTLS feature gate on the operator.
 	TLSOptions *TLSOptionsApplyConfiguration `json:"tlsOptions,omitempty"`
 	// HeadGroupSpec is the spec for the head pod
 	HeadGroupSpec *HeadGroupSpecApplyConfiguration `json:"headGroupSpec,omitempty"`

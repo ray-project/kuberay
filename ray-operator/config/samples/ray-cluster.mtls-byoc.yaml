@@ -39,6 +39,8 @@ spec:
   # User-provided TLS secrets are used instead of cert-manager auto-generation.
   # Set workerCertificateSecretName for head/worker identity separation.
   tlsOptions:
+    # Explicit UserSecret provisioning separates BYOC from operator-managed cert-manager TLS.
+    provisioning: UserSecret
     certificateSecretName: my-head-tls-secret
     workerCertificateSecretName: my-worker-tls-secret
   headGroupSpec:

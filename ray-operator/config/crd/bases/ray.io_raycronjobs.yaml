@@ -4652,6 +4652,11 @@ spec:
                             enum:
                             - mTLS
                             type: string
+                          provisioning:
+                            enum:
+                            - CertManager
+                            - UserSecret
+                            type: string
                           workerCertificateSecretName:
                             type: string
                         type: object

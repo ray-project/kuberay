@@ -13,6 +13,8 @@ spec:
   # Enable mTLS for Ray cluster internal communication.
   # This creates a self-signed CA and issues certificates for head and worker pods.
   # mode defaults to "mTLS" when tlsOptions is set.
+  # Optional: set tlsOptions.provisioning: CertManager explicitly (default when certificateSecretName is unset).
+  # Do not set certificateSecretName here — that is only for bring-your-own secrets (UserSecret); see ray-cluster.mtls-byoc.yaml.
   tlsOptions: {}
   headGroupSpec:
     rayStartParams:

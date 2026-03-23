@@ -276,9 +276,52 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 // validateTLSOptions checks that the TLS config is internally consistent.
 // It prevents users from setting TLS environment variables manually when TLS is enabled,
 // and validates BYOC certificate secret names if provided.
+// ValidateRayClusterTLSOptionsProvisioning rejects tlsOptions that explicitly combine operator-managed
+// cert-manager provisioning with bring-your-own secret references, or UserSecret without a head secret.
+// Call from admission webhooks for parity when tlsOptions is set (feature gate may still block in reconcile).
+func ValidateRayClusterTLSOptionsProvisioning(spec *rayv1.RayClusterSpec) error {
+	if spec == nil || spec.TLSOptions == nil {
+		return nil
+	}
+	return validateTLSOptionsProvisioning(spec.TLSOptions)
+}
+
+func validateTLSOptionsProvisioning(opts *rayv1.TLSOptions) error {
+	if opts == nil {
+		return nil
+	}
+	hasHead := opts.CertificateSecretName != nil && *opts.CertificateSecretName != ""
+	hasWorker := opts.WorkerCertificateSecretName != nil && *opts.WorkerCertificateSecretName != ""
+
+	var prov string
+	if opts.Provisioning != nil {
+		prov = *opts.Provisioning
+		if prov != rayv1.TLSProvisioningCertManager && prov != rayv1.TLSProvisioningUserSecret {
+			return fmt.Errorf("tlsOptions.provisioning must be %q or %q", rayv1.TLSProvisioningCertManager, rayv1.TLSProvisioningUserSecret)
+		}
+	}
+
+	switch prov {
+	case rayv1.TLSProvisioningCertManager:
+		if hasHead || hasWorker {
+			return fmt.Errorf("tlsOptions.provisioning is %q but tlsOptions.certificateSecretName or workerCertificateSecretName is set; omit secret references for operator-managed certificates or set provisioning to %q for bring-your-own secrets",
+				rayv1.TLSProvisioningCertManager, rayv1.TLSProvisioningUserSecret)
+		}
+	case rayv1.TLSProvisioningUserSecret:
+		if !hasHead {
+			return fmt.Errorf("tlsOptions.provisioning is %q but tlsOptions.certificateSecretName must be set to a non-empty secret name", rayv1.TLSProvisioningUserSecret)
+		}
+	}
+	return nil
+}
+
 func validateTLSOptions(spec *rayv1.RayClusterSpec) error {
 	if !IsTLSEnabled(spec) {
 		return nil
+	}
+
+	if err := validateTLSOptionsProvisioning(spec.TLSOptions); err != nil {
+		return err
 	}
 
 	// Validate BYOC fields: if CertificateSecretName is set it must be non-empty.

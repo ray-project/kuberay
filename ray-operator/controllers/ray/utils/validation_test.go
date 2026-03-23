@@ -2874,6 +2874,65 @@ func TestValidateTLSOptions(t *testing.T) {
 			expectError: true,
 			errorMsg:    "cannot set RAY_TLS_CA_CERT",
 		},
+		{
+			name: "provisioning CertManager with certificateSecretName - error",
+			modify: func(s *rayv1.RayClusterSpec) {
+				s.TLSOptions = &rayv1.TLSOptions{
+					Provisioning:            ptr.To(rayv1.TLSProvisioningCertManager),
+					CertificateSecretName: ptr.To("x"),
+				}
+			},
+			expectError: true,
+			errorMsg:    "omit secret references",
+		},
+		{
+			name: "provisioning CertManager with workerCertificateSecretName only - error",
+			modify: func(s *rayv1.RayClusterSpec) {
+				s.TLSOptions = &rayv1.TLSOptions{
+					Provisioning:                ptr.To(rayv1.TLSProvisioningCertManager),
+					WorkerCertificateSecretName: ptr.To("w"),
+				}
+			},
+			expectError: true,
+			errorMsg:    "omit secret references",
+		},
+		{
+			name: "provisioning UserSecret without certificateSecretName - error",
+			modify: func(s *rayv1.RayClusterSpec) {
+				s.TLSOptions = &rayv1.TLSOptions{
+					Provisioning: ptr.To(rayv1.TLSProvisioningUserSecret),
+				}
+			},
+			expectError: true,
+			errorMsg:    "certificateSecretName must be set",
+		},
+		{
+			name: "provisioning UserSecret with certificateSecretName - valid",
+			modify: func(s *rayv1.RayClusterSpec) {
+				s.TLSOptions = &rayv1.TLSOptions{
+					Provisioning:            ptr.To(rayv1.TLSProvisioningUserSecret),
+					CertificateSecretName: ptr.To("my-secret"),
+				}
+			},
+		},
+		{
+			name: "provisioning CertManager explicit with no secrets - valid",
+			modify: func(s *rayv1.RayClusterSpec) {
+				s.TLSOptions = &rayv1.TLSOptions{
+					Provisioning: ptr.To(rayv1.TLSProvisioningCertManager),
+				}
+			},
+		},
+		{
+			name: "invalid provisioning value - error",
+			modify: func(s *rayv1.RayClusterSpec) {
+				s.TLSOptions = &rayv1.TLSOptions{
+					Provisioning: ptr.To("bogus"),
+				}
+			},
+			expectError: true,
+			errorMsg:    "tlsOptions.provisioning must be",
+		},
 	}
 
 	for _, tt := range tests {
