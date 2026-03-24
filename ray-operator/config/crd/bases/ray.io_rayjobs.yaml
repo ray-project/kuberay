@@ -137,6 +137,8 @@ spec:
                 type: number
               entrypointResources:
                 type: string
+              failFastOnCustomInitContainerFailure:
+                type: boolean
               jobId:
                 type: string
               managedBy:

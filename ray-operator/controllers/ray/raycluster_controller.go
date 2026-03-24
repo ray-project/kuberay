@@ -647,6 +647,24 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 		}
 	}
 
+	// If this RayCluster is marked for RayJob-driven fail-fast behavior, and a user-defined init
+	// container fails on a Pod with RestartPolicy=Never, skip pod reconcile to avoid recreating Pods.
+	if shouldSkipPodReconcileOnFailedCustomInitContainer(instance) {
+		runtimePods := corev1.PodList{}
+		if err := r.List(ctx, &runtimePods, common.RayClusterAllPodsAssociationOptions(instance).ToListOptions()...); err != nil {
+			return err
+		}
+		for _, pod := range runtimePods.Items {
+			for _, initStatus := range pod.Status.InitContainerStatuses {
+				if !shouldConsiderInitContainerStatus(initStatus, pod.Spec.RestartPolicy) {
+					continue
+				}
+				logger.Info("Skip RayCluster pod recreation after failed init container", "rayCluster", instance.Name)
+				return nil
+			}
+		}
+	}
+
 	// Check if pods need to be recreated with Recreate upgradeStrategy
 	if r.shouldRecreatePodsForUpgrade(ctx, instance) {
 		logger.Info("RayCluster spec changed with Recreate upgradeStrategy, deleting all pods")
@@ -1222,6 +1240,10 @@ func shouldDeletePod(pod corev1.Pod, nodeType rayv1.RayNodeType) (bool, string) 
 		"KubeRay does not need to delete the %s Pod %s. The Pod status is %s, and the Ray container terminated status is %v.",
 		nodeType, pod.Name, pod.Status.Phase, rayContainerTerminated)
 	return false, reason
+}
+
+func shouldSkipPodReconcileOnFailedCustomInitContainer(instance *rayv1.RayCluster) bool {
+	return instance.Annotations[utils.FailFastOnCustomInitContainerFailureAnnotationKey] == "true"
 }
 
 // `ContainerStatuses` does not guarantee the order of the containers. Therefore, we need to find the Ray

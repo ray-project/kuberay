@@ -212,6 +212,12 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 		}
 
+		if shouldUpdate, err := r.checkCustomInitContainerFailureAndUpdateStatusIfNeeded(ctx, rayJobInstance, rayClusterInstance); err != nil {
+			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+		} else if shouldUpdate {
+			break
+		}
+
 		// Check the current status of RayCluster before submitting.
 		if clientURL := rayJobInstance.Status.DashboardURL; clientURL == "" {
 			if rayClusterInstance.Status.State != rayv1.Ready {
@@ -998,6 +1004,9 @@ func (r *RayJobReconciler) constructRayClusterForRayJob(rayJobInstance *rayv1.Ra
 	if rayJobInstance.Spec.SubmissionMode == rayv1.SidecarMode {
 		annotations[utils.DisableProvisionedHeadRestartAnnotationKey] = "true"
 	}
+	if rayJobInstance.Spec.FailFastOnCustomInitContainerFailure {
+		annotations[utils.FailFastOnCustomInitContainerFailureAnnotationKey] = "true"
+	}
 
 	rayCluster := &rayv1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
@@ -1208,6 +1217,61 @@ func checkPreRunningDeadlineAndUpdateStatusIfNeeded(ctx context.Context, rayJob 
 	rayJob.Status.Reason = rayv1.PreRunningDeadlineExceeded
 	rayJob.Status.Message = fmt.Sprintf("The RayJob has passed the preRunningDeadlineSeconds. StartTime: %v. PreRunningDeadlineSeconds: %d", rayJob.Status.StartTime, *rayJob.Spec.PreRunningDeadlineSeconds)
 	return true
+}
+
+// checkCustomInitContainerFailureAndUpdateStatusIfNeeded transitions the RayJob to Failed while JobDeploymentStatus is
+// Initializing when a user-defined init container on a RayCluster Pod exits non-zero (see spec.failFastOnCustomInitContainerFailure).
+// Callers typically pass the RayCluster instance returned by getOrCreateRayClusterInstance.
+func (r *RayJobReconciler) checkCustomInitContainerFailureAndUpdateStatusIfNeeded(ctx context.Context, rayJob *rayv1.RayJob, rayCluster *rayv1.RayCluster) (bool, error) {
+	logger := ctrl.LoggerFrom(ctx)
+
+	if !rayJob.Spec.FailFastOnCustomInitContainerFailure {
+		return false, nil
+	}
+
+	runtimePods := corev1.PodList{}
+	if err := r.List(ctx, &runtimePods, common.RayClusterAllPodsAssociationOptions(rayCluster).ToListOptions()...); err != nil {
+		return false, err
+	}
+
+	for _, pod := range runtimePods.Items {
+		for _, initStatus := range pod.Status.InitContainerStatuses {
+			if !shouldConsiderInitContainerStatus(initStatus, pod.Spec.RestartPolicy) {
+				continue
+			}
+
+			logger.Info("A RayCluster init container failed during pre-running. Transition RayJob status to `Failed`.",
+				"RayCluster", rayCluster.Name,
+				"Pod", pod.Name,
+				"InitContainer", initStatus.Name,
+				"ExitCode", initStatus.State.Terminated.ExitCode,
+				"Reason", initStatus.State.Terminated.Reason)
+
+			rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusFailed
+			rayJob.Status.Reason = rayv1.RayClusterCustomInitContainerFailed
+			rayJob.Status.Message = fmt.Sprintf("RayCluster pod %s/%s init container %s terminated with exit code %d: %s",
+				pod.Namespace,
+				pod.Name,
+				initStatus.Name,
+				initStatus.State.Terminated.ExitCode,
+				initStatus.State.Terminated.Reason)
+			r.Recorder.Eventf(rayJob, corev1.EventTypeWarning, string(utils.RayClusterCustomInitContainerFailed), rayJob.Status.Message)
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+func shouldConsiderInitContainerStatus(status corev1.ContainerStatus, restartPolicy corev1.RestartPolicy) bool {
+	if restartPolicy != corev1.RestartPolicyNever {
+		return false
+	}
+	// Exclude the KubeRay injected init container.
+	if status.Name == utils.WaitGCSReadyInitContainerName {
+		return false
+	}
+	return status.State.Terminated != nil && status.State.Terminated.ExitCode != 0
 }
 
 func checkSubmitterFinishedTimeoutAndUpdateStatusIfNeeded(ctx context.Context, rayJob *rayv1.RayJob, finishedAt *time.Time) bool {

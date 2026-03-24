@@ -32,6 +32,9 @@ const (
 	RayJobSubmissionModeLabelKey             = "ray.io/job-submission-mode"
 	// DisableProvisionedHeadRestartAnnotationKey marks RayClusters created for sidecar-mode RayJobs to skip head Pod recreation after provisioning.
 	DisableProvisionedHeadRestartAnnotationKey = "ray.io/disable-provisioned-head-restart"
+	// FailFastOnCustomInitContainerFailureAnnotationKey enables RayJob-driven RayCluster fail-fast handling
+	// for user init container failures by skipping pod recreation in RayCluster reconcile.
+	FailFastOnCustomInitContainerFailureAnnotationKey = "ray.io/fail-fast-on-custom-init-container-failure"
 
 	// Labels for feature RayMultihostIndexing
 	//
@@ -359,20 +362,21 @@ const (
 	FailedToCreateRedisCleanupJob K8sEventType = "FailedToCreateRedisCleanupJob"
 
 	// RayJob event list
-	InvalidRayJobSpec             K8sEventType = "InvalidRayJobSpec"
-	InvalidRayJobMetadata         K8sEventType = "InvalidRayJobMetadata"
-	InvalidRayJobStatus           K8sEventType = "InvalidRayJobStatus"
-	CreatedRayJobSubmitter        K8sEventType = "CreatedRayJobSubmitter"
-	DeletedRayJobSubmitter        K8sEventType = "DeletedRayJobSubmitter"
-	FailedToCreateRayJobSubmitter K8sEventType = "FailedToCreateRayJobSubmitter"
-	FailedToDeleteRayJobSubmitter K8sEventType = "FailedToDeleteRayJobSubmitter"
-	CreatedRayCluster             K8sEventType = "CreatedRayCluster"
-	UpdatedRayCluster             K8sEventType = "UpdatedRayCluster"
-	DeletedRayCluster             K8sEventType = "DeletedRayCluster"
-	FailedToCreateRayCluster      K8sEventType = "FailedToCreateRayCluster"
-	FailedToDeleteRayCluster      K8sEventType = "FailedToDeleteRayCluster"
-	FailedToUpdateRayCluster      K8sEventType = "FailedToUpdateRayCluster"
-	RayClusterNotFound            K8sEventType = "RayClusterNotFound"
+	InvalidRayJobSpec                   K8sEventType = "InvalidRayJobSpec"
+	InvalidRayJobMetadata               K8sEventType = "InvalidRayJobMetadata"
+	InvalidRayJobStatus                 K8sEventType = "InvalidRayJobStatus"
+	CreatedRayJobSubmitter              K8sEventType = "CreatedRayJobSubmitter"
+	DeletedRayJobSubmitter              K8sEventType = "DeletedRayJobSubmitter"
+	FailedToCreateRayJobSubmitter       K8sEventType = "FailedToCreateRayJobSubmitter"
+	FailedToDeleteRayJobSubmitter       K8sEventType = "FailedToDeleteRayJobSubmitter"
+	CreatedRayCluster                   K8sEventType = "CreatedRayCluster"
+	UpdatedRayCluster                   K8sEventType = "UpdatedRayCluster"
+	DeletedRayCluster                   K8sEventType = "DeletedRayCluster"
+	FailedToCreateRayCluster            K8sEventType = "FailedToCreateRayCluster"
+	FailedToDeleteRayCluster            K8sEventType = "FailedToDeleteRayCluster"
+	FailedToUpdateRayCluster            K8sEventType = "FailedToUpdateRayCluster"
+	RayClusterNotFound                  K8sEventType = "RayClusterNotFound"
+	RayClusterCustomInitContainerFailed K8sEventType = "RayClusterCustomInitContainerFailed"
 
 	// Batch scheduler event list
 	BatchSchedulerCleanedUp       K8sEventType = "BatchSchedulerCleanedUp"

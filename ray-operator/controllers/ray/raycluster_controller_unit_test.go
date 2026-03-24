@@ -3890,3 +3890,92 @@ func TestReconcilePodsWithAuthTokenSecretName(t *testing.T) {
 		assert.True(t, authTokenEnvFound, "Auth token env var with provided secret name not found")
 	}
 }
+
+func TestReconcilePodsSkipPodReconcileOnFailedCustomInitContainer(t *testing.T) {
+	newScheme := runtime.NewScheme()
+	require.NoError(t, rayv1.AddToScheme(newScheme))
+	require.NoError(t, corev1.AddToScheme(newScheme))
+
+	cluster := &rayv1.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "default",
+			Annotations: map[string]string{
+				utils.FailFastOnCustomInitContainerFailureAnnotationKey: "true",
+			},
+		},
+		Spec: rayv1.RayClusterSpec{
+			HeadGroupSpec: rayv1.HeadGroupSpec{
+				Template: corev1.PodTemplateSpec{
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{{Name: "ray-head", Image: "rayproject/ray:latest"}},
+					},
+				},
+			},
+			WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+				{
+					GroupName:   "worker",
+					Replicas:    ptr.To[int32](1),
+					MinReplicas: ptr.To[int32](1),
+					MaxReplicas: ptr.To[int32](1),
+					Template: corev1.PodTemplateSpec{
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{{Name: "ray-worker", Image: "rayproject/ray:latest"}},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	failedPod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster-worker-0",
+			Namespace: "default",
+			Labels: map[string]string{
+				utils.RayClusterLabelKey: "test-cluster",
+			},
+		},
+		Spec: corev1.PodSpec{
+			RestartPolicy: corev1.RestartPolicyNever,
+		},
+		Status: corev1.PodStatus{
+			InitContainerStatuses: []corev1.ContainerStatus{
+				{
+					Name: "user-init",
+					State: corev1.ContainerState{
+						Terminated: &corev1.ContainerStateTerminated{ExitCode: 1, Reason: "Error"},
+					},
+				},
+			},
+		},
+	}
+
+	fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(cluster, failedPod).Build()
+	reconciler := &RayClusterReconciler{
+		Client:                     fakeClient,
+		Recorder:                   &record.FakeRecorder{},
+		Scheme:                     newScheme,
+		rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
+	}
+
+	err := reconciler.reconcilePods(context.Background(), cluster)
+	require.NoError(t, err)
+
+	podList := corev1.PodList{}
+	require.NoError(t, fakeClient.List(context.Background(), &podList, client.InNamespace("default")))
+	assert.Len(t, podList.Items, 1, "should skip pod reconciliation and avoid creating extra pods")
+	assert.Equal(t, "test-cluster-worker-0", podList.Items[0].Name)
+}
+
+func TestShouldConsiderInitContainerStatusRequiresRestartPolicyNever(t *testing.T) {
+	failedInit := corev1.ContainerStatus{
+		Name: "user-init",
+		State: corev1.ContainerState{
+			Terminated: &corev1.ContainerStateTerminated{ExitCode: 1, Reason: "Error"},
+		},
+	}
+
+	assert.False(t, shouldConsiderInitContainerStatus(failedInit, corev1.RestartPolicyAlways))
+	assert.True(t, shouldConsiderInitContainerStatus(failedInit, corev1.RestartPolicyNever))
+}

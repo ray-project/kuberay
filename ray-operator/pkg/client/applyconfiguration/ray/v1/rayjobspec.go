@@ -71,6 +71,9 @@ type RayJobSpecApplyConfiguration struct {
 	// This is useful for cleaning up jobs stuck in Initializing or Waiting states.
 	// If not set, there is no deadline. Value must be a positive integer.
 	PreRunningDeadlineSeconds *int32 `json:"preRunningDeadlineSeconds,omitempty"`
+	// FailFastOnCustomInitContainerFailure enables immediate RayJob failure while JobDeploymentStatus is Initializing
+	// when a user-defined (custom) init container in any RayCluster Pod terminates with a non-zero exit code.
+	FailFastOnCustomInitContainerFailure *bool `json:"failFastOnCustomInitContainerFailure,omitempty"`
 	// ShutdownAfterJobFinishes will determine whether to delete the ray cluster once rayJob succeed or failed.
 	ShutdownAfterJobFinishes *bool `json:"shutdownAfterJobFinishes,omitempty"`
 	// suspend specifies whether the RayJob controller should create a RayCluster instance
@@ -240,6 +243,14 @@ func (b *RayJobSpecApplyConfiguration) WithTTLSecondsAfterFinished(value int32) 
 // If called multiple times, the PreRunningDeadlineSeconds field is set to the value of the last call.
 func (b *RayJobSpecApplyConfiguration) WithPreRunningDeadlineSeconds(value int32) *RayJobSpecApplyConfiguration {
 	b.PreRunningDeadlineSeconds = &value
+	return b
+}
+
+// WithFailFastOnCustomInitContainerFailure sets the FailFastOnCustomInitContainerFailure field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the FailFastOnCustomInitContainerFailure field is set to the value of the last call.
+func (b *RayJobSpecApplyConfiguration) WithFailFastOnCustomInitContainerFailure(value bool) *RayJobSpecApplyConfiguration {
+	b.FailFastOnCustomInitContainerFailure = &value
 	return b
 }
 

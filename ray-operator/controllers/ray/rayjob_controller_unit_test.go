@@ -676,3 +676,259 @@ func TestGetSubmitterTemplate_WithEnableK8sTokenAuth(t *testing.T) {
 	}
 	assert.True(t, foundVolumeMount, "Submitter container should have the ray-token volume mount")
 }
+
+func TestShouldConsiderInitContainerStatus(t *testing.T) {
+	tests := []struct {
+		name          string
+		restartPolicy corev1.RestartPolicy
+		status        corev1.ContainerStatus
+		expected      bool
+	}{
+		{
+			name:          "ignore kuberay injected wait gcs ready container",
+			restartPolicy: corev1.RestartPolicyNever,
+			status: corev1.ContainerStatus{
+				Name: utils.WaitGCSReadyInitContainerName,
+				State: corev1.ContainerState{
+					Terminated: &corev1.ContainerStateTerminated{ExitCode: 1},
+				},
+			},
+			expected: false,
+		},
+		{
+			name:          "ignore non terminated status",
+			restartPolicy: corev1.RestartPolicyNever,
+			status: corev1.ContainerStatus{
+				Name: "user-init",
+				State: corev1.ContainerState{
+					Running: &corev1.ContainerStateRunning{},
+				},
+			},
+			expected: false,
+		},
+		{
+			name:          "ignore successful termination",
+			restartPolicy: corev1.RestartPolicyNever,
+			status: corev1.ContainerStatus{
+				Name: "user-init",
+				State: corev1.ContainerState{
+					Terminated: &corev1.ContainerStateTerminated{ExitCode: 0},
+				},
+			},
+			expected: false,
+		},
+		{
+			name:          "detect failed user init container",
+			restartPolicy: corev1.RestartPolicyNever,
+			status: corev1.ContainerStatus{
+				Name: "user-init",
+				State: corev1.ContainerState{
+					Terminated: &corev1.ContainerStateTerminated{ExitCode: 2},
+				},
+			},
+			expected: true,
+		},
+		{
+			name:          "ignore failed user init container when restartPolicy is always",
+			restartPolicy: corev1.RestartPolicyAlways,
+			status: corev1.ContainerStatus{
+				Name: "user-init",
+				State: corev1.ContainerState{
+					Terminated: &corev1.ContainerStateTerminated{ExitCode: 2},
+				},
+			},
+			expected: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, shouldConsiderInitContainerStatus(tc.status, tc.restartPolicy))
+		})
+	}
+}
+
+func TestCheckCustomInitContainerFailureAndUpdateStatusIfNeeded(t *testing.T) {
+	newScheme := runtime.NewScheme()
+	require.NoError(t, rayv1.AddToScheme(newScheme))
+	require.NoError(t, corev1.AddToScheme(newScheme))
+
+	rayCluster := &rayv1.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-raycluster",
+			Namespace: "default",
+		},
+	}
+
+	rayJobTemplate := func(failFast bool, deployStatus rayv1.JobDeploymentStatus) *rayv1.RayJob {
+		return &rayv1.RayJob{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-rayjob",
+				Namespace: "default",
+			},
+			Spec: rayv1.RayJobSpec{
+				FailFastOnCustomInitContainerFailure: failFast,
+				ClusterSelector: map[string]string{
+					utils.RayJobClusterSelectorKey: "test-raycluster",
+				},
+			},
+			Status: rayv1.RayJobStatus{
+				RayClusterName:      "test-raycluster",
+				JobDeploymentStatus: deployStatus,
+				JobStatus:           rayv1.JobStatusPending,
+			},
+		}
+	}
+
+	podWithClusterLabel := func(name string, initStatuses []corev1.ContainerStatus) *corev1.Pod {
+		return &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: "default",
+				Labels: map[string]string{
+					utils.RayClusterLabelKey: "test-raycluster",
+				},
+			},
+			Spec: corev1.PodSpec{
+				RestartPolicy: corev1.RestartPolicyNever,
+			},
+			Status: corev1.PodStatus{
+				InitContainerStatuses: initStatuses,
+			},
+		}
+	}
+
+	failedUserInit := []corev1.ContainerStatus{
+		{
+			Name: "user-defined-init",
+			State: corev1.ContainerState{
+				Terminated: &corev1.ContainerStateTerminated{
+					ExitCode: 17,
+					Reason:   "Error",
+				},
+			},
+		},
+	}
+
+	t.Run("failFast disabled does not update status", func(t *testing.T) {
+		rayJob := rayJobTemplate(false, rayv1.JobDeploymentStatusInitializing)
+		origDeploy := rayJob.Status.JobDeploymentStatus
+		pod := podWithClusterLabel("test-raycluster-worker-0", failedUserInit)
+		fakeClient := clientFake.NewClientBuilder().
+			WithScheme(newScheme).
+			WithRuntimeObjects(rayJob.DeepCopy(), rayCluster, pod).
+			Build()
+		reconciler := &RayJobReconciler{Client: fakeClient, Scheme: newScheme, Recorder: record.NewFakeRecorder(10)}
+		// Re-fetch rayJob so we mutate the same object the client has, matching reconcile pattern
+		rayJob = &rayv1.RayJob{}
+		require.NoError(t, fakeClient.Get(context.Background(), types.NamespacedName{Namespace: "default", Name: "test-rayjob"}, rayJob))
+
+		shouldUpdate, err := reconciler.checkCustomInitContainerFailureAndUpdateStatusIfNeeded(context.Background(), rayJob, rayCluster)
+		require.NoError(t, err)
+		assert.False(t, shouldUpdate)
+		assert.Equal(t, origDeploy, rayJob.Status.JobDeploymentStatus)
+	})
+
+	t.Run("user-defined init container failed sets Failed and emits event", func(t *testing.T) {
+		rayJob := rayJobTemplate(true, rayv1.JobDeploymentStatusInitializing)
+		pod := podWithClusterLabel("test-raycluster-worker-0", failedUserInit)
+		recorder := record.NewFakeRecorder(10)
+		fakeClient := clientFake.NewClientBuilder().
+			WithScheme(newScheme).
+			WithRuntimeObjects(rayJob, rayCluster, pod).
+			Build()
+		reconciler := &RayJobReconciler{Client: fakeClient, Scheme: newScheme, Recorder: recorder}
+
+		shouldUpdate, err := reconciler.checkCustomInitContainerFailureAndUpdateStatusIfNeeded(context.Background(), rayJob, rayCluster)
+		require.NoError(t, err)
+		require.True(t, shouldUpdate)
+		assert.Equal(t, rayv1.JobDeploymentStatusFailed, rayJob.Status.JobDeploymentStatus)
+		assert.Equal(t, rayv1.RayClusterCustomInitContainerFailed, rayJob.Status.Reason)
+		assert.Contains(t, rayJob.Status.Message, "user-defined-init")
+		assert.Contains(t, rayJob.Status.Message, "exit code 17")
+
+		select {
+		case ev := <-recorder.Events:
+			assert.Contains(t, ev, string(utils.RayClusterCustomInitContainerFailed))
+		default:
+			t.Fatal("expected a warning event for custom init failure")
+		}
+	})
+
+	t.Run("ignores wait-gcs-ready init failure only", func(t *testing.T) {
+		rayJob := rayJobTemplate(true, rayv1.JobDeploymentStatusInitializing)
+		initStatuses := []corev1.ContainerStatus{
+			{
+				Name: utils.WaitGCSReadyInitContainerName,
+				State: corev1.ContainerState{
+					Terminated: &corev1.ContainerStateTerminated{ExitCode: 1, Reason: "Error"},
+				},
+			},
+		}
+		pod := podWithClusterLabel("test-raycluster-head-0", initStatuses)
+		fakeClient := clientFake.NewClientBuilder().
+			WithScheme(newScheme).
+			WithRuntimeObjects(rayJob, rayCluster, pod).
+			Build()
+		reconciler := &RayJobReconciler{Client: fakeClient, Scheme: newScheme, Recorder: record.NewFakeRecorder(10)}
+
+		shouldUpdate, err := reconciler.checkCustomInitContainerFailureAndUpdateStatusIfNeeded(context.Background(), rayJob, rayCluster)
+		require.NoError(t, err)
+		assert.False(t, shouldUpdate)
+		assert.Equal(t, rayv1.JobDeploymentStatusInitializing, rayJob.Status.JobDeploymentStatus)
+	})
+
+	t.Run("user init exit 0 does not update", func(t *testing.T) {
+		rayJob := rayJobTemplate(true, rayv1.JobDeploymentStatusInitializing)
+		okInit := []corev1.ContainerStatus{
+			{
+				Name: "user-defined-init",
+				State: corev1.ContainerState{
+					Terminated: &corev1.ContainerStateTerminated{ExitCode: 0, Reason: "Completed"},
+				},
+			},
+		}
+		pod := podWithClusterLabel("test-raycluster-worker-0", okInit)
+		fakeClient := clientFake.NewClientBuilder().
+			WithScheme(newScheme).
+			WithRuntimeObjects(rayJob, rayCluster, pod).
+			Build()
+		reconciler := &RayJobReconciler{Client: fakeClient, Scheme: newScheme, Recorder: record.NewFakeRecorder(10)}
+
+		shouldUpdate, err := reconciler.checkCustomInitContainerFailureAndUpdateStatusIfNeeded(context.Background(), rayJob, rayCluster)
+		require.NoError(t, err)
+		assert.False(t, shouldUpdate)
+	})
+}
+
+func TestConstructRayClusterForRayJobPropagatesFailFastAnnotation(t *testing.T) {
+	newScheme := runtime.NewScheme()
+	require.NoError(t, rayv1.AddToScheme(newScheme))
+
+	rayJob := &rayv1.RayJob{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-rayjob",
+			Namespace: "default",
+		},
+		Spec: rayv1.RayJobSpec{
+			FailFastOnCustomInitContainerFailure: true,
+			RayClusterSpec: &rayv1.RayClusterSpec{
+				HeadGroupSpec: rayv1.HeadGroupSpec{
+					Template: corev1.PodTemplateSpec{
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{Name: "ray-head", Image: "rayproject/ray:latest"},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	reconciler := &RayJobReconciler{Scheme: newScheme}
+	cluster, err := reconciler.constructRayClusterForRayJob(rayJob, "test-cluster")
+	require.NoError(t, err)
+	require.NotNil(t, cluster.Annotations)
+	assert.Equal(t, "true", cluster.Annotations[utils.FailFastOnCustomInitContainerFailureAnnotationKey])
+}

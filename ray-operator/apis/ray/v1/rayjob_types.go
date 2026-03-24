@@ -77,6 +77,7 @@ const (
 	AppFailed                                        JobFailedReason = "AppFailed"
 	JobDeploymentStatusTransitionGracePeriodExceeded JobFailedReason = "JobDeploymentStatusTransitionGracePeriodExceeded"
 	ValidationFailed                                 JobFailedReason = "ValidationFailed"
+	RayClusterCustomInitContainerFailed              JobFailedReason = "RayClusterCustomInitContainerFailed"
 )
 
 type JobSubmissionMode string
@@ -289,6 +290,10 @@ type RayJobSpec struct {
 	// +kubebuilder:validation:Minimum=1
 	// +optional
 	PreRunningDeadlineSeconds *int32 `json:"preRunningDeadlineSeconds,omitempty"`
+	// FailFastOnCustomInitContainerFailure enables immediate RayJob failure while JobDeploymentStatus is Initializing
+	// when a user-defined (custom) init container in any RayCluster Pod terminates with a non-zero exit code.
+	// +optional
+	FailFastOnCustomInitContainerFailure bool `json:"failFastOnCustomInitContainerFailure,omitempty"`
 	// ShutdownAfterJobFinishes will determine whether to delete the ray cluster once rayJob succeed or failed.
 	// +optional
 	ShutdownAfterJobFinishes bool `json:"shutdownAfterJobFinishes,omitempty"`
