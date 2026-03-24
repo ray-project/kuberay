@@ -143,7 +143,7 @@ func BuildJobSubmitCommand(rayJobInstance *rayv1.RayJob, submissionMode rayv1.Jo
 
 	// In Sidecar mode without SidecarSubmitterRestart feature gate enabled, we only support RayJob level retry, which means that the submitter retry won't happen,
 	// so we won't have to check if the job has been submitted.
-	// In K8sJobMode (submitter Job may retry) or Sidecar mode with SidecarSubmitterRestart feature gate enabled (container may restart on failure).
+	// In K8sJobMode (submitter Job may retry) or Sidecar mode with SidecarSubmitterRestart feature gate enabled (submitter container may restart on failure).
 	// we check job status before submitting to handle duplicated submission gracefully.
 	needsStatusCheck := submissionMode == rayv1.K8sJobMode || (submissionMode == rayv1.SidecarMode && features.Enabled(features.SidecarSubmitterRestart))
 
