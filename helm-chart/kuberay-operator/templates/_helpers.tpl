@@ -248,7 +248,6 @@ rules:
   - watch
 - apiGroups:
   - extensions
-  - networking.k8s.io
   resources:
   - ingresses
   verbs:
@@ -277,6 +276,19 @@ rules:
   verbs:
   - get
   - list
+  - watch
+- apiGroups:
+  - networking.k8s.io
+  resources:
+  - ingresses
+  - networkpolicies
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
   - watch
 - apiGroups:
   - ray.io
