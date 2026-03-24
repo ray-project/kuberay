@@ -1099,20 +1099,20 @@ func (h *EventHandler) handleTaskProfileEvent(eventMap map[string]any, clusterSe
 		return err
 	}
 
-	var profileData types.TaskProfileEvent
+	var profileData types.TaskProfileEvents
 	if err := json.Unmarshal(jsonBytes, &profileData); err != nil {
 		logrus.Errorf("Failed to unmarshal TASK_PROFILE_EVENT: %v", err)
 		return err
 	}
 
-	if profileData.TaskID == "" || len(profileData.Component.Spans) == 0 {
+	if profileData.TaskID == "" || len(profileData.ProfileEvents.ProfileEventEntry) == 0 {
 		logrus.Debugf("TASK_PROFILE_EVENT has no taskId or events, skipping")
 		return nil
 	}
 
 	// Convert events to ProfileEventRaw format
-	var rawEvents = make([]types.ProfileEventRaw, 0, len(profileData.Component.Spans))
-	for _, e := range profileData.Component.Spans {
+	var rawEvents = make([]types.ProfileEventRaw, 0, len(profileData.ProfileEvents.ProfileEventEntry))
+	for _, e := range profileData.ProfileEvents.ProfileEventEntry {
 		startTime, err := strconv.ParseInt(e.StartTime, 10, 64)
 		if err != nil {
 			logrus.Warnf("Failed to parse StartTime '%s': %v", e.StartTime, err)
@@ -1140,7 +1140,7 @@ func (h *EventHandler) handleTaskProfileEvent(eventMap map[string]any, clusterSe
 	if err != nil {
 		logrus.Errorf("Failed to convert JobID from base64 to Hex, will use base64: %v", err)
 	}
-	profileData.Component.ComponentID, err = utils.ConvertBase64ToHex(profileData.Component.ComponentID)
+	profileData.ProfileEvents.ComponentID, err = utils.ConvertBase64ToHex(profileData.ProfileEvents.ComponentID)
 	if err != nil {
 		logrus.Errorf("Failed to convert ComponentID from base64 to Hex, will use base64: %v", err)
 	}
@@ -1161,9 +1161,9 @@ func (h *EventHandler) handleTaskProfileEvent(eventMap map[string]any, clusterSe
 		// Initialize ProfileData if not exists
 		if t.ProfileData == nil {
 			t.ProfileData = &types.ProfileData{
-				ComponentID:   profileData.Component.ComponentID,
-				ComponentType: profileData.Component.ComponentType,
-				NodeIPAddress: profileData.Component.NodeIPAddress,
+				ComponentID:   profileData.ProfileEvents.ComponentID,
+				ComponentType: profileData.ProfileEvents.ComponentType,
+				NodeIPAddress: profileData.ProfileEvents.NodeIPAddress,
 			}
 		}
 
