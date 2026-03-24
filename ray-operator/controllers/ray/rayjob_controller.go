@@ -288,7 +288,8 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 			}
 
-			// For K8sJobMode, check timeout before dashboard check
+			// In K8sJobMode, check timeout before the dashboard since finishedAt is reliable.
+			// The submitter Job’s termination reflects job submission and log tailing outcomes.
 			if rayJobInstance.Spec.SubmissionMode == rayv1.K8sJobMode &&
 				checkSubmitterFinishedTimeoutAndUpdateStatusIfNeeded(ctx, rayJobInstance, finishedAt) {
 				break
@@ -329,12 +330,13 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 					break
 				}
 			}
-			// If in Sidecar mode, apply timeout as fallback if dashboard is unreachable and submitter has finished
-			if rayJobInstance.Spec.SubmissionMode == rayv1.SidecarMode {
-				if checkSubmitterFinishedTimeoutAndUpdateStatusIfNeeded(ctx, rayJobInstance, finishedAt) {
-					// rayJobInstance.Status marked to Failed
-					break
-				}
+			// In Sidecar mode, finishedAt alone does not guarantee RayJob termination.
+			// The dashboard is the source of truth; check timeout only if it is unreachable
+			// and the submitter has finished.
+			if rayJobInstance.Spec.SubmissionMode == rayv1.SidecarMode &&
+				checkSubmitterFinishedTimeoutAndUpdateStatusIfNeeded(ctx, rayJobInstance, finishedAt) {
+				// rayJobInstance.Status marked to Failed
+				break
 			}
 
 			logger.Error(err, "Failed to get job info", "JobId", rayJobInstance.Status.JobId)
@@ -353,7 +355,6 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			isJobTerminal = isJobTerminal && finishedAt != nil
 		}
 
-		// inform the user when submitter exited (finishedAt != nil) but job is still running (!isJobTerminal).
 		if rayJobInstance.Spec.SubmissionMode == rayv1.SidecarMode && finishedAt != nil && !isJobTerminal {
 			logger.Info("Submitter container exited but Ray job is still running.",
 				"JobId", rayJobInstance.Status.JobId, "JobStatus", jobInfo.JobStatus)
