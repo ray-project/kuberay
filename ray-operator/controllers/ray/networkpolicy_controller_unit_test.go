@@ -321,11 +321,26 @@ func TestBuildWorkerNetworkPolicy_CustomIngressRules(t *testing.T) {
 	assert.Equal(t, &customPort, policy.Spec.Ingress[1].Ports[0].Port)
 }
 
-// TestBuildBaseIngressRules verifies the structure and content of the 3 base ingress rules.
+// TestBuildBaseIngressRules verifies the shared intra-cluster ingress rule used by both head and workers.
 func TestBuildBaseIngressRules(t *testing.T) {
 	setupNetworkPolicyTest(t)
 
 	rules := testNetworkPolicyController.buildBaseIngressRules(testRayClusterBasic)
+	require.Len(t, rules, 1)
+
+	intraClusterRule := rules[0]
+	require.Len(t, intraClusterRule.From, 1)
+	assert.Equal(t, map[string]string{utils.RayClusterLabelKey: "test-cluster"},
+		intraClusterRule.From[0].PodSelector.MatchLabels)
+	assert.Empty(t, intraClusterRule.Ports, "Intra-cluster rule must allow all ports (no Ports field)")
+}
+
+// TestBuildHeadIngressRules verifies the full set of head ingress rules:
+// intra-cluster + operator access + same-namespace access.
+func TestBuildHeadIngressRules(t *testing.T) {
+	setupNetworkPolicyTest(t)
+
+	rules := testNetworkPolicyController.buildHeadIngressRules(testRayClusterBasic)
 	require.Len(t, rules, 3)
 
 	// Rule 0: intra-cluster — no ports, pod selector matching the cluster label.
