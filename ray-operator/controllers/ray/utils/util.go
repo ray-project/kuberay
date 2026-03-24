@@ -646,11 +646,20 @@ func GenerateHashWithoutReplicasAndWorkersToDelete(rayClusterSpec rayv1.RayClust
 	// Mute certain fields that will not trigger new RayCluster preparation. For example,
 	// Autoscaler will update `Replicas` and `WorkersToDelete` when scaling up/down.
 	updatedRayClusterSpec := rayClusterSpec.DeepCopy()
+
+	// Mute tolerations and scheduling gates for all pod templates.
+	// External controllers like Kueue may inject these fields into the RayCluster
+	// after creation, which should not trigger a new RayCluster preparation.
+	updatedRayClusterSpec.HeadGroupSpec.Template.Spec.Tolerations = nil
+	updatedRayClusterSpec.HeadGroupSpec.Template.Spec.SchedulingGates = nil
+
 	for i := 0; i < len(updatedRayClusterSpec.WorkerGroupSpecs); i++ {
 		updatedRayClusterSpec.WorkerGroupSpecs[i].Replicas = nil
 		updatedRayClusterSpec.WorkerGroupSpecs[i].MaxReplicas = nil
 		updatedRayClusterSpec.WorkerGroupSpecs[i].MinReplicas = nil
 		updatedRayClusterSpec.WorkerGroupSpecs[i].ScaleStrategy.WorkersToDelete = nil
+		updatedRayClusterSpec.WorkerGroupSpecs[i].Template.Spec.Tolerations = nil
+		updatedRayClusterSpec.WorkerGroupSpecs[i].Template.Spec.SchedulingGates = nil
 	}
 	updatedRayClusterSpec.UpgradeStrategy = nil
 
@@ -685,6 +694,26 @@ func IsJobFinished(j *batchv1.Job) (batchv1.JobConditionType, bool) {
 func EnvVarExists(envName string, envVars []corev1.EnvVar) bool {
 	for _, env := range envVars {
 		if env.Name == envName {
+			return true
+		}
+	}
+	return false
+}
+
+// VolumeMountExists checks if a volume mount with the given name exists in the list of volume mounts.
+func VolumeMountExists(mountName string, volumeMounts []corev1.VolumeMount) bool {
+	for _, vm := range volumeMounts {
+		if vm.Name == mountName {
+			return true
+		}
+	}
+	return false
+}
+
+// VolumeExists checks if a volume with the given name exists in the list of volumes.
+func VolumeExists(volumeName string, volumes []corev1.Volume) bool {
+	for _, v := range volumes {
+		if v.Name == volumeName {
 			return true
 		}
 	}
@@ -732,6 +761,10 @@ func IsGCSFaultToleranceEnabled(spec *rayv1.RayClusterSpec, annotations map[stri
 // IsAuthEnabled returns whether Ray auth is enabled.
 func IsAuthEnabled(spec *rayv1.RayClusterSpec) bool {
 	return spec.AuthOptions != nil && spec.AuthOptions.Mode == rayv1.AuthModeToken
+}
+
+func IsK8sAuthEnabled(authOptions *rayv1.AuthOptions) bool {
+	return authOptions != nil && authOptions.EnableK8sTokenAuth != nil && *authOptions.EnableK8sTokenAuth
 }
 
 // GetRayClusterNameFromService returns the name of the RayCluster that the service points to
@@ -972,6 +1005,9 @@ func GetRayDashboardClientFunc(ctx context.Context, mgr manager.Manager, useKube
 
 		if rayCluster != nil && rayCluster.Spec.AuthOptions != nil && rayCluster.Spec.AuthOptions.Mode == rayv1.AuthModeToken {
 			secretName := CheckName(rayCluster.Name)
+			if rayCluster.Spec.AuthOptions.SecretName != nil && *rayCluster.Spec.AuthOptions.SecretName != "" {
+				secretName = *rayCluster.Spec.AuthOptions.SecretName
+			}
 			secret := &corev1.Secret{}
 			secretKey := types.NamespacedName{
 				Name:      secretName,
@@ -1044,4 +1080,30 @@ func GetRayHttpProxyClientFunc(mgr manager.Manager, useKubernetesProxy bool) fun
 
 func HasSubmitter(rayJobInstance *rayv1.RayJob) bool {
 	return rayJobInstance.Spec.SubmissionMode == rayv1.K8sJobMode || rayJobInstance.Spec.SubmissionMode == rayv1.SidecarMode
+}
+
+// IsHTTPRouteEqual checks if the existing HTTPRoute matches the desired HTTPRoute.
+func IsHTTPRouteEqual(existing, desired *gwv1.HTTPRoute) bool {
+	if len(existing.Spec.Rules) != len(desired.Spec.Rules) {
+		return false
+	}
+
+	for i := range desired.Spec.Rules {
+		if len(existing.Spec.Rules[i].BackendRefs) != len(desired.Spec.Rules[i].BackendRefs) {
+			return false
+		}
+
+		for j := range desired.Spec.Rules[i].BackendRefs {
+			existingRef := existing.Spec.Rules[i].BackendRefs[j]
+			desiredRef := desired.Spec.Rules[i].BackendRefs[j]
+
+			// Only compare the fields the controller updates.
+			if string(existingRef.Name) != string(desiredRef.Name) ||
+				ptr.Deref(existingRef.Weight, 1) != ptr.Deref(desiredRef.Weight, 1) ||
+				ptr.Deref(existingRef.Port, 0) != ptr.Deref(desiredRef.Port, 0) {
+				return false
+			}
+		}
+	}
+	return true
 }

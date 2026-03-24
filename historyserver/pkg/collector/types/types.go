@@ -15,11 +15,15 @@ type RayCollectorConfig struct {
 	SessionDir  string
 	RayNodeName string
 
-	Role           string
-	RayClusterName string
-	RayClusterID   string
-	LogBatching    int
-	PushInterval   time.Duration
+	Role             string
+	RayClusterName   string
+	RayClusterID     string
+	LogBatching      int
+	PushInterval     time.Duration
+	DashboardAddress string
+
+	AdditionalEndpoints  []string
+	EndpointPollInterval time.Duration
 }
 
 // ValidateRayHanderConfig is

@@ -69,6 +69,31 @@ func TestGenerateHashWithoutReplicasAndWorkersToDelete(t *testing.T) {
 	hash3, err := utils.GenerateHashWithoutReplicasAndWorkersToDelete(cluster.Spec)
 	require.NoError(t, err)
 	assert.NotEqual(t, hash1, hash3)
+
+	// Tolerations injected by external controllers (e.g., Kueue) should not change the hash.
+	cluster.Spec.RayVersion = support.GetRayVersion()
+	cluster.Spec.HeadGroupSpec.Template.Spec.Tolerations = []corev1.Toleration{
+		{Key: "nvidia.com/gpu", Operator: corev1.TolerationOpExists, Effect: corev1.TaintEffectNoSchedule},
+	}
+	cluster.Spec.WorkerGroupSpecs[0].Template.Spec.Tolerations = []corev1.Toleration{
+		{Key: "nvidia.com/gpu", Operator: corev1.TolerationOpExists, Effect: corev1.TaintEffectNoSchedule},
+	}
+	hash4, err := utils.GenerateHashWithoutReplicasAndWorkersToDelete(cluster.Spec)
+	require.NoError(t, err)
+	assert.Equal(t, hash1, hash4)
+
+	// SchedulingGates injected by external controllers (e.g., Kueue) should not change the hash.
+	cluster.Spec.HeadGroupSpec.Template.Spec.Tolerations = nil
+	cluster.Spec.WorkerGroupSpecs[0].Template.Spec.Tolerations = nil
+	cluster.Spec.HeadGroupSpec.Template.Spec.SchedulingGates = []corev1.PodSchedulingGate{
+		{Name: "kueue.x-k8s.io/admission"},
+	}
+	cluster.Spec.WorkerGroupSpecs[0].Template.Spec.SchedulingGates = []corev1.PodSchedulingGate{
+		{Name: "kueue.x-k8s.io/admission"},
+	}
+	hash5, err := utils.GenerateHashWithoutReplicasAndWorkersToDelete(cluster.Spec)
+	require.NoError(t, err)
+	assert.Equal(t, hash1, hash5)
 }
 
 func TestIsHeadPodRunningAndReady(t *testing.T) {
@@ -2644,6 +2669,94 @@ func Test_RayServiceReconcileManagedBy(t *testing.T) {
 				// Should skip reconciliation (no requeue)
 				assert.Equal(t, time.Duration(0), result.RequeueAfter)
 			}
+		})
+	}
+}
+
+func TestReconcileRollbackState(t *testing.T) {
+	ctx := context.TODO()
+	namespace := "test-ns"
+
+	baseSpec := rayv1.RayClusterSpec{
+		RayVersion: "2.54.0",
+		WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+			{GroupName: "worker-group", Replicas: ptr.To(int32(1))},
+		},
+	}
+
+	updatedSpec := baseSpec.DeepCopy()
+	updatedSpec.RayVersion = "2.50.0"
+
+	baseHash, err := utils.GenerateHashWithoutReplicasAndWorkersToDelete(baseSpec)
+	require.NoError(t, err)
+
+	updatedHash, err := utils.GenerateHashWithoutReplicasAndWorkersToDelete(*updatedSpec)
+	require.NoError(t, err)
+
+	activeCluster := &rayv1.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "active-cluster", Namespace: namespace, Annotations: map[string]string{utils.HashWithoutReplicasAndWorkersToDeleteKey: baseHash}},
+	}
+	pendingCluster := &rayv1.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "pending-cluster", Namespace: namespace, Annotations: map[string]string{utils.HashWithoutReplicasAndWorkersToDeleteKey: updatedHash}},
+	}
+
+	tests := []struct {
+		name                 string
+		rayServiceSpec       rayv1.RayClusterSpec
+		isRollbackInProgress bool
+		expectRollbackStatus bool
+	}{
+		{
+			name:                 "Normal RayService upgrade, goal matches pending",
+			rayServiceSpec:       *updatedSpec,
+			isRollbackInProgress: false,
+			expectRollbackStatus: false,
+		},
+		{
+			name:                 "RayService Spec changed, initiate rollback",
+			rayServiceSpec:       baseSpec,
+			isRollbackInProgress: false,
+			expectRollbackStatus: true,
+		},
+		{
+			name:                 "Rollback in progress, continues rolling back",
+			rayServiceSpec:       baseSpec,
+			isRollbackInProgress: true,
+			expectRollbackStatus: true,
+		},
+		{
+			name:                 "Rollback canceled, user updated spec back to pending",
+			rayServiceSpec:       *updatedSpec,
+			isRollbackInProgress: true,
+			expectRollbackStatus: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rayService := &rayv1.RayService{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-rayservice", Namespace: namespace},
+				Spec: rayv1.RayServiceSpec{
+					RayClusterSpec: tt.rayServiceSpec,
+				},
+				Status: rayv1.RayServiceStatuses{
+					Conditions: []metav1.Condition{},
+				},
+			}
+
+			if tt.isRollbackInProgress {
+				setCondition(rayService, rayv1.RollbackInProgress, metav1.ConditionTrue, rayv1.TargetClusterChanged, "rolling back")
+			}
+
+			reconciler := RayServiceReconciler{
+				Recorder: record.NewFakeRecorder(1),
+			}
+
+			err := reconciler.reconcileRollbackState(ctx, rayService, activeCluster, pendingCluster)
+			require.NoError(t, err)
+
+			isCurrentlyRollingBack := meta.IsStatusConditionTrue(rayService.Status.Conditions, string(rayv1.RollbackInProgress))
+			assert.Equal(t, tt.expectRollbackStatus, isCurrentlyRollingBack)
 		})
 	}
 }

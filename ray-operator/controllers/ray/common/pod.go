@@ -26,6 +26,7 @@ import (
 const (
 	SharedMemoryVolumeName      = "shared-mem"
 	SharedMemoryVolumeMountPath = "/dev/shm"
+	PlasmaDirectoryParamKey     = "plasma-directory"
 	RayLogVolumeName            = "ray-logs"
 	RayLogVolumeMountPath       = "/tmp/ray"
 	AutoscalerContainerName     = "autoscaler"
@@ -205,7 +206,7 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 
 		// Configure RAY_AUTH_TOKEN and RAY_AUTH_MODE if auth is enabled.
 		if utils.IsAuthEnabled(&instance.Spec) {
-			SetContainerTokenAuthEnvVars(instance.Name, &autoscalerContainer)
+			SetContainerTokenAuthEnvVars(instance.Name, &autoscalerContainer, instance.Spec.AuthOptions)
 		}
 
 		// Merge the user overrides from autoscalerOptions into the autoscaler container config.
@@ -231,7 +232,7 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 	}
 
 	if utils.IsAuthEnabled(&instance.Spec) {
-		configureTokenAuth(instance.Name, &podTemplate)
+		configureTokenAuth(instance.Name, &podTemplate, instance.Spec.AuthOptions)
 	}
 
 	return podTemplate
@@ -250,8 +251,13 @@ func setAutoscalerV2EnvVars(podTemplate *corev1.PodTemplateSpec) {
 }
 
 // configureTokenAuth sets environment variables required for Ray token authentication
-func configureTokenAuth(clusterName string, podTemplate *corev1.PodTemplateSpec) {
-	SetContainerTokenAuthEnvVars(clusterName, &podTemplate.Spec.Containers[utils.RayContainerIndex])
+func configureTokenAuth(clusterName string, podTemplate *corev1.PodTemplateSpec, authOptions *rayv1.AuthOptions) {
+	SetContainerTokenAuthEnvVars(clusterName, &podTemplate.Spec.Containers[utils.RayContainerIndex], authOptions)
+
+	if utils.IsK8sAuthEnabled(authOptions) {
+		AddRayTokenVolume(&podTemplate.Spec)
+	}
+
 	// For RayJob Sidecar mode, we need to set the auth token for the submitter container.
 
 	// Configure auth token for wait-gcs-ready init container if it exists
@@ -260,27 +266,73 @@ func configureTokenAuth(clusterName string, podTemplate *corev1.PodTemplateSpec)
 			continue
 		}
 
-		SetContainerTokenAuthEnvVars(clusterName, &podTemplate.Spec.InitContainers[i])
+		SetContainerTokenAuthEnvVars(clusterName, &podTemplate.Spec.InitContainers[i], authOptions)
 	}
 }
 
-// SetContainerTokenAuthEnvVars sets Ray authentication env vars for a container.
-func SetContainerTokenAuthEnvVars(clusterName string, container *corev1.Container) {
-	container.Env = append(container.Env, corev1.EnvVar{
-		Name:  utils.RAY_AUTH_MODE_ENV_VAR,
-		Value: string(rayv1.AuthModeToken),
-	})
+// AddRayTokenVolume adds a projected service account token volume to the pod spec.
+func AddRayTokenVolume(podSpec *corev1.PodSpec) {
+	if utils.VolumeExists(utils.RayTokenVolumeName, podSpec.Volumes) {
+		return
+	}
 
-	secretName := utils.CheckName(clusterName)
-	container.Env = append(container.Env, corev1.EnvVar{
-		Name: utils.RAY_AUTH_TOKEN_ENV_VAR,
-		ValueFrom: &corev1.EnvVarSource{
-			SecretKeyRef: &corev1.SecretKeySelector{
-				LocalObjectReference: corev1.LocalObjectReference{Name: secretName},
-				Key:                  utils.RAY_AUTH_TOKEN_SECRET_KEY,
+	podSpec.Volumes = append(podSpec.Volumes, corev1.Volume{
+		Name: utils.RayTokenVolumeName,
+		VolumeSource: corev1.VolumeSource{
+			Projected: &corev1.ProjectedVolumeSource{
+				Sources: []corev1.VolumeProjection{
+					{
+						// TODO: support audiences (e.g., audiences: ["ray.io"]) in service account token projection in the future.
+						ServiceAccountToken: &corev1.ServiceAccountTokenProjection{
+							Path: "token",
+						},
+					},
+				},
 			},
 		},
 	})
+}
+
+// SetContainerTokenAuthEnvVars sets Ray authentication env vars for a container.
+func SetContainerTokenAuthEnvVars(clusterName string, container *corev1.Container, authOptions *rayv1.AuthOptions) {
+	if !utils.EnvVarExists(utils.RAY_AUTH_MODE_ENV_VAR, container.Env) {
+		container.Env = append(container.Env, corev1.EnvVar{
+			Name:  utils.RAY_AUTH_MODE_ENV_VAR,
+			Value: string(rayv1.AuthModeToken),
+		})
+	}
+
+	if utils.IsK8sAuthEnabled(authOptions) {
+		if !utils.EnvVarExists(utils.RAY_ENABLE_K8S_TOKEN_AUTH_ENV_VAR, container.Env) {
+			container.Env = append(container.Env, corev1.EnvVar{
+				Name:  utils.RAY_ENABLE_K8S_TOKEN_AUTH_ENV_VAR,
+				Value: "true",
+			})
+		}
+		if !utils.VolumeMountExists(utils.RayTokenVolumeName, container.VolumeMounts) {
+			container.VolumeMounts = append(container.VolumeMounts, corev1.VolumeMount{
+				Name:      utils.RayTokenVolumeName,
+				MountPath: utils.RayTokenMountPath,
+				ReadOnly:  true,
+			})
+		}
+	} else {
+		secretName := utils.CheckName(clusterName)
+		if authOptions != nil && authOptions.SecretName != nil && *authOptions.SecretName != "" {
+			secretName = *authOptions.SecretName
+		}
+		if !utils.EnvVarExists(utils.RAY_AUTH_TOKEN_ENV_VAR, container.Env) {
+			container.Env = append(container.Env, corev1.EnvVar{
+				Name: utils.RAY_AUTH_TOKEN_ENV_VAR,
+				ValueFrom: &corev1.EnvVarSource{
+					SecretKeyRef: &corev1.SecretKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{Name: secretName},
+						Key:                  utils.RAY_AUTH_TOKEN_SECRET_KEY,
+					},
+				},
+			})
+		}
+	}
 }
 
 func getEnableInitContainerInjection() bool {
@@ -406,7 +458,7 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 	}
 
 	if utils.IsAuthEnabled(&instance.Spec) {
-		configureTokenAuth(instance.Name, &podTemplate)
+		configureTokenAuth(instance.Name, &podTemplate, instance.Spec.AuthOptions)
 	}
 
 	return podTemplate
@@ -547,7 +599,12 @@ func BuildPod(ctx context.Context, podTemplateSpec corev1.PodTemplateSpec, rayNo
 	}
 
 	// Add /dev/shm volumeMount for the object store to avoid performance degradation.
-	addEmptyDir(ctx, &pod.Spec.Containers[utils.RayContainerIndex], &pod, SharedMemoryVolumeName, SharedMemoryVolumeMountPath, corev1.StorageMediumMemory)
+	// Skip injection when users explicitly set plasma-directory.
+	if _, ok := rayStartParams[PlasmaDirectoryParamKey]; !ok {
+		addEmptyDir(ctx, &pod.Spec.Containers[utils.RayContainerIndex], &pod, SharedMemoryVolumeName, SharedMemoryVolumeMountPath, corev1.StorageMediumMemory)
+	} else {
+		log.Info("skip /dev/shm volumeMount injection due to explicit plasma-directory", "plasma-directory", rayStartParams[PlasmaDirectoryParamKey])
+	}
 	if rayNodeType == rayv1.HeadNode && enableRayAutoscaler {
 		// The Ray autoscaler writes logs which are read by the Ray head.
 		// We need a shared log volume to enable this information flow.

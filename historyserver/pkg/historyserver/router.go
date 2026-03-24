@@ -10,11 +10,13 @@ import (
 	"math"
 	"mime"
 	"net/http"
+	"path"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/bmatcuk/doublestar/v4"
 	"github.com/emicklei/go-restful/v3"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/sirupsen/logrus"
@@ -53,6 +55,15 @@ func routerClusters(s *ServerHandler) {
 	ws.Route(ws.GET("/").To(s.getClusters).
 		Doc("get all clusters").
 		Writes([]string{}))
+}
+
+func routerTimezone(s *ServerHandler) {
+	ws := new(restful.WebService)
+	defer restful.Add(ws)
+	ws.Path("/timezone").Consumes(restful.MIME_JSON).Produces(restful.MIME_JSON)
+	ws.Route(ws.GET("/").To(s.getTimezone).Filter(s.CookieHandle).
+		Doc("get timezone").
+		Writes(""))
 }
 
 // routerNodes registers RESTful routers for node-related endpoints.
@@ -116,24 +127,19 @@ func routerAPI(s *ServerHandler) {
 		Param(ws.PathParameter("job_id", "job_id")).
 		Writes("")) // Placeholder for specific return type
 
-	ws.Route(ws.GET("/data/datasets/{job_id}").To(s.getDatasets).Filter(s.CookieHandle).
-		Doc("get datasets").
-		Param(ws.PathParameter("job_id", "job_id")).
-		Writes("")) // Placeholder for specific return type
-
-	ws.Route(ws.GET("/serve/applications/").To(s.getServeApplications).Filter(s.CookieHandle).
-		Doc("get appliations").
-		Writes("")) // Placeholder for specific return type
-
-	ws.Route(ws.GET("/v0/placement_groups/").To(s.getPlacementGroups).Filter(s.CookieHandle).
-		Doc("get placement_groups").
+	ws.Route(ws.GET("/v0/cluster_metadata").To(s.getClusterMetadata).Filter(s.CookieHandle).
+		Doc("get cluster metadata (Ray version, Python version, etc.)").
 		Writes("")) // Placeholder for specific return type
 
 	ws.Route(ws.GET("/v0/logs").To(s.getNodeLogs).Filter(s.CookieHandle).
-		Doc("get appliations").Param(ws.QueryParameter("node_id", "node_id")).
+		Doc("get logs").
+		Param(ws.QueryParameter("node_id", "node_id")).
+		Param(ws.QueryParameter("glob", "glob pattern")).
 		Writes("")) // Placeholder for specific return type
-	ws.Route(ws.GET("/v0/logs/file").To(s.getNodeLogFile).Filter(s.CookieHandle).
-		Doc("get logfile").
+
+	ws.Route(ws.GET("/v0/logs/{media_type}").To(s.getNodeLog).Filter(s.CookieHandle).
+		Doc("get or stream logs").
+		Param(ws.PathParameter("media_type", "media type: 'file' for log file content, 'stream' for real-time streaming")).
 		Param(ws.QueryParameter("node_id", "node_id (optional if node_ip/task_id/actor_id is provided)")).
 		Param(ws.QueryParameter("node_ip", "node_ip (optional, resolve to node_id)")).
 		Param(ws.QueryParameter("filename", "filename (explicit log file path)")).
@@ -141,34 +147,17 @@ func routerAPI(s *ServerHandler) {
 		Param(ws.QueryParameter("actor_id", "actor_id (resolve log file from actor)")).
 		Param(ws.QueryParameter("pid", "pid (resolve log file from process id)")).
 		Param(ws.QueryParameter("suffix", "suffix (out or err, default: out, used with task_id/actor_id/pid)")).
-		Param(ws.QueryParameter("lines", "lines (number of lines to return, default: 1000)")).
+		Param(ws.QueryParameter("lines", "lines (number of lines to return, default: 1000, used with media_type=file)")).
 		Param(ws.QueryParameter("timeout", "timeout")).
-		Param(ws.QueryParameter("attempt_number", "attempt_number (task retry attempt number, default: 0)")).
-		Param(ws.QueryParameter("download_filename", "download_filename (if set, triggers download with this filename)")).
-		Param(ws.QueryParameter("filter_ansi_code", "filter_ansi_code (true/false)")).
-		// TODO: submission_id parameter is not currently supported.
-		// To support it, we need to:
-		// 1. Implement DRIVER_JOB_DEFINITION_EVENT processing in eventserver to store driver job info
-		//    (including driver_node_id from the export event)
-		// 2. Add submission_id field to DriverJobDefinitionEvent in Ray (currently missing, tracked in
-		//    https://github.com/ray-project/ray/issues/60129)
-		// 3. Create resolveSubmissionLogFilename() method to:
-		//    - Look up driver job by submission_id
-		//    - Get driver_node_id from stored event
-		//    - Return filename as "job-driver-{submission_id}.log"
-		Produces("text/plain").
-		Writes("")) // Placeholder for specific return type
-	ws.Route(ws.GET("/v0/logs/stream").To(s.getNodeLogStream).Filter(s.CookieHandle).
-		Doc("stream logs in real-time").
-		Param(ws.QueryParameter("node_id", "node_id (optional if node_ip/task_id/actor_id is provided)")).
-		Param(ws.QueryParameter("node_ip", "node_ip (optional, resolve to node_id)")).
-		Param(ws.QueryParameter("filename", "filename (explicit log file path)")).
-		Param(ws.QueryParameter("task_id", "task_id (resolve log file from task)")).
-		Param(ws.QueryParameter("actor_id", "actor_id (resolve log file from actor)")).
-		Param(ws.QueryParameter("pid", "pid (resolve log file from process id)")).
-		Param(ws.QueryParameter("suffix", "suffix (out or err, default: out, used with task_id/actor_id/pid)")).
-		Param(ws.QueryParameter("interval", "interval (polling interval in seconds)")).
-		Produces("text/event-stream").
+		Param(ws.QueryParameter("attempt_number", "attempt_number (task retry attempt number, default: 0, used with media_type=file)")).
+		Param(ws.QueryParameter("download_filename", "download_filename (if set, triggers download with this filename, used with media_type=file)")).
+		Param(ws.QueryParameter("filter_ansi_code", "filter_ansi_code (true/false, used with media_type=file)")).
+		Param(ws.QueryParameter("interval", "interval (polling interval in seconds, used with media_type=stream)")).
+		// Note: submission_id is not supported and not needed.
+		// The Ray Dashboard frontend does not use submission_id as a query param.
+		// Instead, it embeds the submission_id directly into the filename param
+		// (e.g. filename=job-driver-raysubmit_xxx.log), which is already supported.
+		Produces("text/plain", "text/event-stream").
 		Writes("")) // Placeholder for specific return type
 
 	ws.Route(ws.GET("/v0/tasks").To(s.getTasks).Filter(s.CookieHandle).
@@ -196,6 +185,12 @@ func routerAPI(s *ServerHandler) {
 		Param(ws.QueryParameter("download", "set to 1 to return response as attachment (timeline JSON file)")).
 		Produces(restful.MIME_JSON).
 		Writes("")) // Placeholder for specific return type
+
+	// Fallback route for additional polled endpoints stored in storage by the collector.
+	// This must be registered last because go-restful matches more specific routes first.
+	ws.Route(ws.GET("/{subpath:*}").To(s.getAdditionalEndpoint).Filter(s.CookieHandle).
+		Doc("fallback handler for additional polled endpoints stored in storage").
+		Writes(""))
 }
 
 // func routerRoot(s *ServerHandler) {
@@ -277,11 +272,10 @@ func routerLogical(s *ServerHandler) {
 	ws := new(restful.WebService)
 	defer restful.Add(ws)
 	ws.Path("/logical").Consumes(restful.MIME_JSON).Produces(restful.MIME_JSON).Filter(RequestLogFilter) //.Filter(s.loginWrapper)
+	// Note: The Ray Dashboard frontend calls GET /logical/actors without any filter params
+	// and does client-side filtering, so filter parameters are not needed for this endpoint.
 	ws.Route(ws.GET("/actors").To(s.getLogicalActors).Filter(s.CookieHandle).
 		Doc("get logical actors").
-		Param(ws.QueryParameter("filter_keys", "filter_keys")).
-		Param(ws.QueryParameter("filter_predicates", "filter_predicates")).
-		Param(ws.QueryParameter("filter_values", "filter_values")).
 		Writes("")) // Placeholder for specific return type
 
 	// TODO: discuss with Ray Core team about this
@@ -324,6 +318,7 @@ func routerRayClusterSet(s *ServerHandler) {
 func (s *ServerHandler) RegisterRouter() {
 	routerRayClusterSet(s)
 	routerClusters(s)
+	routerTimezone(s)
 	routerNodes(s)
 	routerEvents(s)
 	routerAPI(s)
@@ -439,19 +434,36 @@ func (s *ServerHandler) getNodes(req *restful.Request, resp *restful.Response) {
 }
 
 // getNodesSummary returns node summary and resource usage information for historical clusters.
+// The response format matches the Ray Dashboard API: summary is a flat array where each element
+// is a single node object {hostname, ip, raylet: {...}, ...}. For historical clusters, we use
+// the latest state transition snapshot to represent each node's final state.
+//
+// Frontend references:
+//   - summary[i].raylet.state: https://github.com/ray-project/ray/blob/27d3d81d47/python/ray/dashboard/client/src/pages/node/hook/useNodeList.ts#L48-L53
+//   - nodeLogicalResources[nodeId] (expects string): https://github.com/ray-project/ray/blob/27d3d81d47/python/ray/dashboard/client/src/pages/node/hook/useNodeList.ts#L48
+//   - Logs page node.raylet.state filter: https://github.com/ray-project/ray/blob/60d1469959/python/ray/dashboard/client/src/pages/log/Logs.tsx#L92-L97
 func (s *ServerHandler) getNodesSummary(nodeMap map[string]eventtypes.Node, sessionName string, resp *restful.Response) {
-	// Build node summary. Each node has an array of summary snapshots with timestamps.
-	summary := make([][]map[string]interface{}, 0, len(nodeMap))
-	// Build node logical resources. Each node has an array of resource snapshots with timestamps.
-	nodeLogicalResources := make(map[string][]map[string]interface{})
+	// Build node summary. Use the latest snapshot for each node to match Ray Dashboard API format.
+	summary := make([]map[string]interface{}, 0, len(nodeMap))
+	// Build node logical resources. Frontend expects { nodeId: "0.0/8.0 CPU\n..." } (string per node).
+	nodeLogicalResources := make(map[string]string)
 
-	// Process each node to build the historical replay.
+	// Process each node: take the latest snapshot (last state transition) for dashboard compatibility.
 	for _, node := range nodeMap {
 		nodeSummaryReplay := formatNodeSummaryReplayForResp(node, sessionName)
-		summary = append(summary, nodeSummaryReplay)
+		if len(nodeSummaryReplay) > 0 {
+			summary = append(summary, nodeSummaryReplay[len(nodeSummaryReplay)-1])
+		}
 
+		// Find the last non-empty resource string. NODE_DEAD transitions have empty
+		// resources, so we search backwards for the last ALIVE transition's resource string.
 		nodeResourceReplay := formatNodeResourceReplayForResp(node)
-		nodeLogicalResources[node.NodeID] = nodeResourceReplay
+		for i := len(nodeResourceReplay) - 1; i >= 0; i-- {
+			if rs, ok := nodeResourceReplay[i]["resourceString"].(string); ok && rs != "" {
+				nodeLogicalResources[node.NodeID] = rs
+				break
+			}
+		}
 	}
 
 	// Build dashboard API-compatible response.
@@ -550,12 +562,37 @@ func (s *ServerHandler) getNode(req *restful.Request, resp *restful.Response) {
 
 	nodeSummaryReplay := formatNodeSummaryReplayForResp(targetNode, sessionName)
 
+	// Use the latest snapshot to match Ray Dashboard API format.
+	// Frontend expects "detail" to be a single object {hostname, ip, raylet: {...}}, not an array.
+	// Ref: https://github.com/ray-project/ray/blob/27d3d81d47/python/ray/dashboard/client/src/pages/node/hook/useNodeDetail.ts#L33-L34
+	if len(nodeSummaryReplay) == 0 {
+		resp.WriteErrorString(http.StatusNotFound, fmt.Sprintf("node %s has no state transitions yet", targetNodeId))
+		return
+	}
+	detail := nodeSummaryReplay[len(nodeSummaryReplay)-1]
+
+	// Fill actors for this node.
+	// Frontend expects actors as {[actorId]: ActorDetail}, not an empty array.
+	// Ref: https://github.com/ray-project/ray/blob/8a7b47bc5c/python/ray/dashboard/client/src/pages/node/NodeDetail.tsx#L233
+	actorsMap := s.eventHandler.GetActorsMap(clusterSessionKey)
+	nodeActors := make(map[string]interface{})
+	for _, actor := range actorsMap {
+		nodeIDHex, _ := utils.ConvertBase64ToHex(actor.Address.NodeID)
+		if nodeIDHex == targetNodeId {
+			actorIDHex, _ := utils.ConvertBase64ToHex(actor.ActorID)
+			nodeActors[actorIDHex] = formatActorForResponse(actor)
+		}
+	}
+	if detail != nil {
+		detail["actors"] = nodeActors
+	}
+
 	// Build dashboard API-compatible response.
 	response := map[string]interface{}{
 		"result": true,
 		"msg":    "Node details fetched.",
 		"data": map[string]interface{}{
-			"detail": nodeSummaryReplay,
+			"detail": detail,
 		},
 	}
 
@@ -691,6 +728,35 @@ func formatJobForResponse(job eventtypes.Job) map[string]interface{} {
 		}
 	}
 
+	// Determine job status. Prefer the latest StatusTransition (most accurate),
+	// then fall back to job.Status from the definition event, then infer from State.
+	// Frontend uses status for filtering and display:
+	// Ref: https://github.com/ray-project/ray/blob/beae3b3f94/python/ray/dashboard/client/src/pages/job/hook/useJobList.ts#L12
+	status := string(job.Status)
+	if len(job.StatusTransitions) > 0 {
+		if latest := string(job.StatusTransitions[len(job.StatusTransitions)-1].Status); latest != "" {
+			status = latest
+		}
+	}
+	if status == "" {
+		// Only infer RUNNING from CREATED state. JOBFINISHED does not imply SUCCEEDED
+		// (the driver may have crashed or been stopped), so we leave it empty rather
+		// than showing a misleading status.
+		if job.State == eventtypes.CREATED {
+			status = string(eventtypes.JOBRUNNING)
+		}
+	}
+
+	// Infer job type if not set. Ray Dashboard expects "SUBMISSION" or "DRIVER".
+	jobType := job.JobType
+	if jobType == "" {
+		if submissionID != "" {
+			jobType = "SUBMISSION"
+		} else {
+			jobType = "DRIVER"
+		}
+	}
+
 	result := map[string]interface{}{
 		"driver_exit_code":          job.DriverExitCode,
 		"driver_node_id":            job.DriverNodeID,
@@ -700,7 +766,7 @@ func formatJobForResponse(job eventtypes.Job) map[string]interface{} {
 		"error_type":                job.ErrorType,
 		"message":                   job.Message,
 		"entrypoint":                job.EntryPoint,
-		"status":                    string(job.Status),
+		"status":                    status,
 		"driver_info": map[string]interface{}{
 			"id":              job.JobID,
 			"node_ip_address": job.DriverNodeIPAddress,
@@ -708,7 +774,7 @@ func formatJobForResponse(job eventtypes.Job) map[string]interface{} {
 		},
 		"job_id":        job.JobID,
 		"submission_id": submissionID,
-		"type":          string(job.JobType),
+		"type":          jobType,
 	}
 
 	if !job.StartTime.IsZero() {
@@ -751,39 +817,6 @@ func (s *ServerHandler) getJob(req *restful.Request, resp *restful.Response) {
 
 }
 
-func (s *ServerHandler) getDatasets(req *restful.Request, resp *restful.Response) {
-	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
-	if sessionName == "live" {
-		s.redirectRequest(req, resp)
-		return
-	}
-
-	// Return "not yet supported" for datasets
-	resp.WriteErrorString(http.StatusNotImplemented, "Datasets not yet supported")
-}
-
-func (s *ServerHandler) getServeApplications(req *restful.Request, resp *restful.Response) {
-	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
-	if sessionName == "live" {
-		s.redirectRequest(req, resp)
-		return
-	}
-
-	// Return "not yet supported" for serve applications
-	resp.WriteErrorString(http.StatusNotImplemented, "Serve applications not yet supported")
-}
-
-func (s *ServerHandler) getPlacementGroups(req *restful.Request, resp *restful.Response) {
-	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
-	if sessionName == "live" {
-		s.redirectRequest(req, resp)
-		return
-	}
-
-	// Return "not yet supported" for placement groups
-	resp.WriteErrorString(http.StatusNotImplemented, "Placement groups not yet supported")
-}
-
 func (s *ServerHandler) getClusterStatus(req *restful.Request, resp *restful.Response) {
 	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
 	if sessionName == "live" {
@@ -791,8 +824,243 @@ func (s *ServerHandler) getClusterStatus(req *restful.Request, resp *restful.Res
 		return
 	}
 
-	// Return "not yet supported" for cluster status
-	resp.WriteErrorString(http.StatusNotImplemented, "Cluster status not yet supported")
+	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
+	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
+
+	format := req.QueryParameter("format")
+
+	var respData []byte
+	var err error
+
+	if format == "1" {
+		// Build cluster status from debug_state.txt and task/actor data
+		statusString := s.buildFormattedClusterStatus(clusterName, clusterNamespace, sessionName)
+
+		response := FormattedClusterStatusResponse{
+			Result: true,
+			Msg:    "Got formatted cluster status.",
+			Data: FormattedClusterStatusData{
+				ClusterStatus: statusString,
+			},
+		}
+		respData, err = json.Marshal(response)
+	} else {
+		// TODO(https://github.com/ray-project/kuberay/issues/4381#issuecomment-3771499535)
+		// Update when Ray dashboard api supports autoscaler V2 which uses
+		// GcsClient.get_cluster_status() for /api/cluster_status.
+		// Ray frontend only uses format=1, so returning empty data here is fine for now.
+		response := ClusterStatusResponse{
+			Result: true,
+			Msg:    "Got cluster status.",
+			Data:   ClusterStatusData{},
+		}
+		respData, err = json.Marshal(response)
+	}
+	if err != nil {
+		logrus.Errorf("Failed to marshal cluster status response: %v", err)
+		resp.WriteErrorString(http.StatusInternalServerError, err.Error())
+		return
+	}
+	resp.Header().Set("Content-Type", "application/json")
+	resp.Write(respData)
+}
+
+// buildFormattedClusterStatus reconstructs the cluster status from debug_state.txt and pending tasks and actors
+func (s *ServerHandler) buildFormattedClusterStatus(clusterName, clusterNamespace, sessionName string) string {
+	builder := NewClusterStatusBuilder()
+	clusterNameID := clusterName + "_" + clusterNamespace
+	logsPath := path.Join(sessionName, utils.RAY_SESSIONDIR_LOGDIR_NAME)
+	nodeIDs := s.reader.ListFiles(clusterNameID, logsPath)
+	successCount := 0
+
+	for _, nodeID := range nodeIDs {
+		debugStatePath := path.Join(logsPath, nodeID, "debug_state.txt")
+
+		reader := s.reader.GetContent(clusterNameID, debugStatePath)
+		if reader == nil {
+			logrus.Debugf("No debug_state.txt found for node %s", nodeID)
+			continue
+		}
+
+		debugState, err := ParseDebugState(reader)
+		if err != nil {
+			logrus.Debugf("Failed to parse debug_state.txt for node %s: %v", nodeID, err)
+			continue
+		}
+
+		builder.AddNodeFromDebugState(debugState)
+		successCount++
+	}
+
+	if len(nodeIDs) > 0 && successCount == 0 {
+		logrus.Debugf("Found %d nodes but failed to parse any debug_state.txt for cluster %s session %s", len(nodeIDs), clusterName, sessionName)
+	}
+
+	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
+	tasks := s.eventHandler.GetTasks(clusterSessionKey)
+	actors := s.eventHandler.GetActors(clusterSessionKey)
+	nodes := s.eventHandler.GetNodeMap(clusterSessionKey)
+
+	// Use the last timestamp from tasks/actors to represent when the cluster was last active.
+	// Fallback to session timestamp if no task/actor timestamps are available.
+	// Other options are reading raylet.out or gcs_server.out but the files have 100k+ lines, which is inefficient.
+	if ts := GetLastTimestamp(tasks, actors); !ts.IsZero() {
+		builder.Timestamp = ts
+	} else if ts := ParseSessionTimestamp(sessionName); !ts.IsZero() {
+		builder.Timestamp = ts
+	}
+
+	builder.AddFailedNodesFromNodes(nodes)
+	builder.AddPendingDemandsFromTasks(tasks)
+	builder.AddPendingDemandsFromActors(actors)
+
+	return builder.FormatStatus()
+}
+
+func (s *ServerHandler) getClusterMetadata(req *restful.Request, resp *restful.Response) {
+	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
+	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
+	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
+	if sessionName == "live" {
+		s.redirectRequest(req, resp)
+		return
+	}
+
+	clusterNameID := clusterName + "_" + clusterNamespace
+	storageKey := utils.EndpointPathToStorageKey("/api/v0/cluster_metadata")
+	endpointPath := path.Join(sessionName, utils.RAY_SESSIONDIR_FETCHED_ENDPOINTS_NAME, storageKey)
+	reader := s.reader.GetContent(clusterNameID, endpointPath)
+	if reader == nil {
+		resp.WriteErrorString(http.StatusNotFound, "Cluster metadata not found")
+		return
+	}
+
+	data, err := io.ReadAll(reader)
+	if err != nil {
+		logrus.Errorf("Failed to read cluster metadata: %v", err)
+		resp.WriteErrorString(http.StatusInternalServerError, "Failed to read cluster metadata")
+		return
+	}
+
+	resp.Header().Set("Content-Type", "application/json")
+	resp.Write(data)
+}
+
+// getAdditionalEndpoint is the fallback handler for endpoints that don't have a
+// dedicated handler. It reads the endpoint's data from storage, where the collector
+// has previously stored it via periodic polling.
+//
+// Storage key convention: the request path "/api/v0/nodes/summary" maps to
+// storage key "restful__api__v0__nodes__summary" under {sessionName}/fetched_endpoints/.
+func (s *ServerHandler) getAdditionalEndpoint(req *restful.Request, resp *restful.Response) {
+	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
+	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
+	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
+	if sessionName == "live" {
+		s.redirectRequest(req, resp)
+		return
+	}
+
+	clusterNameID := clusterName + "_" + clusterNamespace
+
+	// Use the full request URI (path + query) for storage key lookup.
+	// The collector stores keys using the full endpoint URL from RAY_COLLECTOR_ADDITIONAL_ENDPOINTS,
+	// which may include query params (e.g., "/api/v0/placement_groups?detail=1&limit=10000").
+	// RequestURI() includes query params when present, and equals URL.Path when absent.
+	storageKey := utils.EndpointPathToStorageKey(req.Request.URL.RequestURI())
+	endpointPath := path.Join(sessionName, utils.RAY_SESSIONDIR_FETCHED_ENDPOINTS_NAME, storageKey)
+	reader := s.reader.GetContent(clusterNameID, endpointPath)
+	if reader == nil {
+		// For known frontend endpoints, return empty but valid JSON responses instead of 404.
+		// This prevents the frontend from showing error states for endpoints that may not have been
+		// collected (e.g., Serve was not enabled on the cluster).
+		if emptyResp := emptyResponseForEndpoint(req.Request.URL.Path); emptyResp != nil {
+			resp.Header().Set("Content-Type", "application/json")
+			resp.Write(emptyResp)
+			return
+		}
+		resp.WriteErrorString(http.StatusNotFound, "Endpoint data not found in storage")
+		return
+	}
+
+	data, err := io.ReadAll(reader)
+	if err != nil {
+		logrus.Errorf("Failed to read additional endpoint data for %s: %v", req.Request.URL.Path, err)
+		resp.WriteErrorString(http.StatusInternalServerError, "Failed to read endpoint data")
+		return
+	}
+
+	// Post-process placement_groups response to add missing fields that the frontend requires.
+	// The collector may not store "bundles" and "stats", but the frontend crashes without them.
+	trimmedPath := strings.TrimRight(req.Request.URL.Path, "/")
+	if trimmedPath == "/api/v0/placement_groups" {
+		data = ensurePlacementGroupFields(data)
+	}
+
+	resp.Header().Set("Content-Type", "application/json")
+	resp.Write(data)
+}
+
+// emptyResponseForEndpoint returns a valid empty JSON response for known frontend endpoints
+// that may not have been collected. Returns nil if the endpoint is unknown.
+func emptyResponseForEndpoint(urlPath string) []byte {
+	trimmed := strings.TrimRight(urlPath, "/")
+	switch trimmed {
+	// "applications" must exist so Object.values() doesn't crash. Missing http_options
+	// triggers "Serve not started" warning, matching live cluster behavior.
+	// Ref: https://github.com/ray-project/ray/blob/27d3d81d47/python/ray/dashboard/client/src/pages/serve/hook/useServeApplications.ts#L30
+	// Ref: https://github.com/ray-project/ray/blob/b775a604ce/python/ray/dashboard/client/src/pages/serve/ServeDeploymentsListPage.tsx#L68
+	case "/api/serve/applications":
+		data, _ := json.Marshal(map[string]interface{}{
+			"applications": map[string]interface{}{},
+		})
+		return data
+	default:
+		return nil
+	}
+}
+
+// ensurePlacementGroupFields adds missing "bundles" and "stats" fields to each placement group
+// in the response. The collector may not store these fields, but the frontend crashes without them.
+// Ref: bundles.map() at https://github.com/ray-project/ray/blob/5fbfc81b00/python/ray/dashboard/client/src/components/PlacementGroupTable.tsx#L32
+// Ref: bundles.map() at https://github.com/ray-project/ray/blob/5fbfc81b00/python/ray/dashboard/client/src/components/PlacementGroupTable.tsx#L53
+func ensurePlacementGroupFields(data []byte) []byte {
+	var response map[string]interface{}
+	if err := json.Unmarshal(data, &response); err != nil {
+		return data
+	}
+
+	dataField, ok := response["data"].(map[string]interface{})
+	if !ok {
+		return data
+	}
+	resultField, ok := dataField["result"].(map[string]interface{})
+	if !ok {
+		return data
+	}
+	resultArray, ok := resultField["result"].([]interface{})
+	if !ok {
+		return data
+	}
+
+	for _, item := range resultArray {
+		pg, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if _, exists := pg["bundles"]; !exists {
+			pg["bundles"] = []interface{}{}
+		}
+		if _, exists := pg["stats"]; !exists {
+			pg["stats"] = map[string]interface{}{}
+		}
+	}
+
+	patched, err := json.Marshal(response)
+	if err != nil {
+		return data
+	}
+	return patched
 }
 
 func (s *ServerHandler) getNodeLogs(req *restful.Request, resp *restful.Response) {
@@ -803,15 +1071,29 @@ func (s *ServerHandler) getNodeLogs(req *restful.Request, resp *restful.Response
 		s.redirectRequest(req, resp)
 		return
 	}
-	folder := ""
-	if req.QueryParameter("folder") != "" {
-		folder = req.QueryParameter("folder")
+	nodeID := req.QueryParameter("node_id")
+	if nodeID != "" && !fs.ValidPath(nodeID) {
+		resp.WriteErrorString(http.StatusBadRequest, fmt.Sprintf("invalid path: path traversal not allowed (node_id=%s)", nodeID))
+		return
 	}
+
+	var folder, glob string
 	if req.QueryParameter("glob") != "" {
-		folder = req.QueryParameter("glob")
-		folder = strings.TrimSuffix(folder, "*")
+		glob = req.QueryParameter("glob")
+		// SplitPattern splits e.g. "logs/raylet*" into base="logs" and pattern="raylet*",
+		// so we can use base as the storage directory prefix and pattern for matching.
+		// For a flat pattern like "raylet*", base is "." which we treat as no subdirectory.
+		base, pattern := doublestar.SplitPattern(glob)
+		glob = pattern
+		if base != "." {
+			if !fs.ValidPath(base) {
+				resp.WriteErrorString(http.StatusBadRequest, fmt.Sprintf("invalid path: path traversal not allowed (glob=%s)", req.QueryParameter("glob")))
+				return
+			}
+			folder = base
+		}
 	}
-	data, err := s._getNodeLogs(clusterNameID+"_"+clusterNamespace, sessionName, req.QueryParameter("node_id"), folder)
+	data, err := s._getNodeLogs(clusterNameID+"_"+clusterNamespace, sessionName, nodeID, folder, glob)
 	if err != nil {
 		logrus.Errorf("Error: %v", err)
 		resp.WriteError(400, err)
@@ -830,30 +1112,16 @@ func (s *ServerHandler) getLogicalActors(req *restful.Request, resp *restful.Res
 		return
 	}
 
-	filterKey := req.QueryParameter("filter_keys")
-	filterValue := req.QueryParameter("filter_values")
-	filterPredicate := req.QueryParameter("filter_predicates")
-
 	// Get actors from EventHandler's in-memory map
 	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
 	actorsMap := s.eventHandler.GetActorsMap(clusterSessionKey)
 
-	// Convert map to slice for filtering
-	actors := make([]eventtypes.Actor, 0, len(actorsMap))
-	for _, actor := range actorsMap {
-		actors = append(actors, actor)
-	}
-
-	// Apply generic filtering
-	actors = utils.ApplyFilter(actors, filterKey, filterPredicate, filterValue,
-		func(a eventtypes.Actor, key string) string {
-			return eventtypes.GetActorFieldValue(a, key)
-		})
-
 	// Format response to match Ray Dashboard API format
 	formattedActors := make(map[string]interface{})
-	for _, actor := range actors {
-		formattedActors[actor.ActorID] = formatActorForResponse(actor)
+	for _, actor := range actorsMap {
+		// Use hex ID as map key to match Ray Dashboard API format
+		actorIDHex, _ := utils.ConvertBase64ToHex(actor.ActorID)
+		formattedActors[actorIDHex] = formatActorForResponse(actor)
 	}
 
 	response := map[string]interface{}{
@@ -873,39 +1141,53 @@ func (s *ServerHandler) getLogicalActors(req *restful.Request, resp *restful.Res
 	resp.Write(respData)
 }
 
-// formatActorForResponse converts an eventtypes.Actor to the format expected by Ray Dashboard
+// formatActorForResponse converts an eventtypes.Actor to the format expected by Ray Dashboard.
+// Uses camelCase keys and hex-encoded IDs to match the Ray Dashboard API format.
+// Ref: ActorDetail type https://github.com/ray-project/ray/blob/a8fdb50e72/python/ray/dashboard/client/src/type/actor.ts#L18-L69
 func formatActorForResponse(actor eventtypes.Actor) map[string]interface{} {
+	// Convert Base64 IDs to Hex format for Dashboard API compatibility
+	actorIDHex, _ := utils.ConvertBase64ToHex(actor.ActorID)
+	jobIDHex, _ := utils.ConvertBase64ToHex(actor.JobID)
+	nodeIDHex, _ := utils.ConvertBase64ToHex(actor.Address.NodeID)
+	workerIDHex, _ := utils.ConvertBase64ToHex(actor.Address.WorkerID)
+	placementGroupIDHex := actor.PlacementGroupID
+	if placementGroupIDHex != "" {
+		placementGroupIDHex, _ = utils.ConvertBase64ToHex(placementGroupIDHex)
+	}
+
 	result := map[string]interface{}{
-		"actor_id":           actor.ActorID,
-		"job_id":             actor.JobID,
-		"placement_group_id": actor.PlacementGroupID,
-		"state":              string(actor.State),
-		"pid":                actor.PID,
+		"actorId":          actorIDHex,
+		"jobId":            jobIDHex,
+		"placementGroupId": placementGroupIDHex,
+		"state":            string(actor.State),
+		"pid":              actor.PID,
 		"address": map[string]interface{}{
-			"node_id":    actor.Address.NodeID,
-			"ip_address": actor.Address.IPAddress,
-			"port":       actor.Address.Port,
-			"worker_id":  actor.Address.WorkerID,
+			"nodeId":    nodeIDHex,
+			"ipAddress": actor.Address.IPAddress,
+			"port":      actor.Address.Port,
+			"workerId":  workerIDHex,
 		},
-		"name":               actor.Name,
-		"num_restarts":       actor.NumRestarts,
-		"actor_class":        actor.ActorClass,
-		"required_resources": actor.RequiredResources,
-		"exit_details":       actor.ExitDetails,
-		"repr_name":          actor.ReprName,
-		"call_site":          actor.CallSite,
-		"is_detached":        actor.IsDetached,
-		"ray_namespace":      actor.RayNamespace,
+		"name":              actor.Name,
+		"numRestarts":       actor.NumRestarts,
+		"actorClass":        actor.ActorClass,
+		"requiredResources": actor.RequiredResources,
+		// Note: The key is "exitDetail" (singular), not "exitDetails" (plural). This matches
+		// the Ray Dashboard frontend TypeScript type and the live Ray Dashboard API.
+		// Ref: https://github.com/ray-project/ray/blob/a8fdb50e72/python/ray/dashboard/client/src/type/actor.ts#L33
+		"exitDetail":    actor.ExitDetails,
+		"reprName":      actor.ReprName,
+		"callSite":      actor.CallSite,
+		"isDetached":    actor.IsDetached,
+		"rayNamespace":  actor.RayNamespace,
+		"labelSelector": actor.LabelSelector,
 	}
 
-	// Only include start_time if it's set (non-zero)
 	if !actor.StartTime.IsZero() {
-		result["start_time"] = actor.StartTime.UnixMilli()
+		result["startTime"] = actor.StartTime.UnixMilli()
 	}
 
-	// Only include end_time if it's set (non-zero)
 	if !actor.EndTime.IsZero() {
-		result["end_time"] = actor.EndTime.UnixMilli()
+		result["endTime"] = actor.EndTime.UnixMilli()
 	}
 
 	return result
@@ -921,7 +1203,8 @@ func (s *ServerHandler) getLogicalActor(req *restful.Request, resp *restful.Resp
 
 	actorID := req.PathParameter("single_actor")
 
-	// Get actor from EventHandler's in-memory map
+	// Get actor from EventHandler's in-memory map.
+	// GetActorByID supports both Base64 and hex-encoded IDs.
 	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
 	actor, found := s.eventHandler.GetActorByID(clusterSessionKey, actorID)
 
@@ -1124,6 +1407,21 @@ func (s *ServerHandler) getNodeLogStream(req *restful.Request, resp *restful.Res
 	s.redirectRequest(req, resp)
 }
 
+// getNodeLog is a unified endpoint that dispatches to getNodeLogFile or getNodeLogStream
+// based on the {media_type} path parameter, matching Ray Dashboard's GET /api/v0/logs/{media_type}.
+func (s *ServerHandler) getNodeLog(req *restful.Request, resp *restful.Response) {
+	mediaType := req.PathParameter("media_type")
+	switch mediaType {
+	case "file":
+		s.getNodeLogFile(req, resp)
+	case "stream":
+		s.getNodeLogStream(req, resp)
+	default:
+		resp.WriteErrorString(http.StatusBadRequest,
+			fmt.Sprintf("unsupported media_type: %s (must be 'file' or 'stream')", mediaType))
+	}
+}
+
 func (s *ServerHandler) getTaskSummarize(req *restful.Request, resp *restful.Response) {
 	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
 	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
@@ -1134,37 +1432,83 @@ func (s *ServerHandler) getTaskSummarize(req *restful.Request, resp *restful.Res
 		return
 	}
 
-	// Parse filter parameters
-	filterKey := req.QueryParameter("filter_keys")
-	filterValue := req.QueryParameter("filter_values")
-	filterPredicate := req.QueryParameter("filter_predicates")
+	listAPIOptions, err := utils.ParseOptionsFromReq(req)
+	if err != nil {
+		resp.WriteErrorString(http.StatusBadRequest, err.Error())
+		return
+	}
 	summaryBy := req.QueryParameter("summary_by")
+
+	// For summary, try getting as many entries as possible to minimize data loss.
+	// Ref: https://github.com/ray-project/ray/blob/ad1b87448fec4db7ef11f1697f9bc02ae6a7ba09/python/ray/dashboard/state_aggregator.py#L569-L582
+	listAPIOptions.Limit = utils.RayMaxLimitFromAPIServer
 
 	// Get all tasks
 	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
 	tasks := s.eventHandler.GetTasks(clusterSessionKey)
 
-	// Apply generic filtering using utils.ApplyFilter
-	tasks = utils.ApplyFilter(tasks, filterKey, filterPredicate, filterValue,
-		func(t eventtypes.Task, key string) string {
-			return t.GetFilterableFieldValue(key)
-		})
+	// Calculate the number of tasks after GCS source truncation.
+	// Since we can't access the GCS and num_status_task_events_dropped, we use num_after_truncation to approximate the total number of tasks.
+	// Ref: https://github.com/ray-project/ray/blob/d0b1d151d8ea964a711e451d0ae736f8bf95b629/python/ray/dashboard/state_aggregator.py#L314-L342
+	numAfterTruncation := len(tasks)
+	numTotal := numAfterTruncation
 
-	// Summarize tasks based on summary_by parameter
-	var summary map[string]interface{}
+	// Filter tasks.
+	// numFiltered is the number of tasks after filtering but before limit truncation.
+	tasks, numFiltered := utils.ApplyTaskFilters(tasks, listAPIOptions)
+
+	// The response envelope follows Ray Dashboard's rest_response format:
+	//   { "result": <bool>, "msg": <string>, "data": <payload> }
+	// "result" is true when status_code == 200, false otherwise.
+	// "msg" is "" on success, or the error message on failure.
+	// Error cases (bad request, marshal failure) are handled above via resp.WriteErrorString
+	// and return early, so reaching this point means success.
+	// Ref: https://github.com/ray-project/ray/blob/master/python/ray/dashboard/routes.py
+	var response interface{}
 	if summaryBy == "lineage" {
-		summary = summarizeTasksByLineage(tasks)
-	} else {
-		// Default to func_name
-		summary = summarizeTasksByFuncName(tasks)
-	}
+		actors := s.eventHandler.GetActors(clusterSessionKey)
+		lineageSummary := utils.ToSummaryByLineage(tasks, actors)
 
-	response := map[string]interface{}{
-		"result": true,
-		"msg":    "Tasks summarized.",
-		"data": map[string]interface{}{
-			"result": summary,
-		},
+		response = map[string]interface{}{
+			"result": true,
+			"msg":    "",
+			"data": map[string]interface{}{
+				"result": map[string]interface{}{
+					"total":                numTotal,
+					"num_after_truncation": numAfterTruncation,
+					"num_filtered":         numFiltered,
+					"result": map[string]interface{}{
+						"node_id_to_summary": map[string]*utils.TaskSummaries{
+							"cluster": lineageSummary,
+						},
+					},
+					"partial_failure_warning": "",
+					"warnings":                nil,
+				},
+			},
+		}
+	} else {
+
+		funcNameSummary := summarizeTasksByFuncName(tasks)
+
+		response = map[string]interface{}{
+			"result": true,
+			"msg":    "",
+			"data": map[string]interface{}{
+				"result": map[string]interface{}{
+					"total":                numTotal,
+					"num_after_truncation": numAfterTruncation,
+					"num_filtered":         numFiltered,
+					"result": map[string]interface{}{
+						"node_id_to_summary": map[string]*utils.TaskSummariesByFuncName{
+							"cluster": funcNameSummary,
+						},
+					},
+					"partial_failure_warning": "",
+					"warnings":                nil,
+				},
+			},
+		}
 	}
 
 	respData, err := json.Marshal(response)
@@ -1176,59 +1520,74 @@ func (s *ServerHandler) getTaskSummarize(req *restful.Request, resp *restful.Res
 	resp.Write(respData)
 }
 
-// summarizeTasksByFuncName groups tasks by function name and counts by state
-func summarizeTasksByFuncName(tasks []eventtypes.Task) map[string]interface{} {
-	summary := make(map[string]map[string]int)
+// summarizeTasksByFuncName groups tasks by function name and counts by state.
+//
+// The Ray Dashboard frontend always calls this API with a job_id filter
+// (e.g. filter_keys=job_id&filter_predicates=%3D&filter_values={jobId}),
+// so the summary only includes tasks belonging to that specific job.
+// Internal Ray tasks like _StatsActor (used by Ray Data) belong to a different
+// job and are excluded by the filter before reaching this function.
+// Ref: https://github.com/ray-project/ray/blob/777f37f002c14bd4c587f4d095b85c62690647de/python/ray/dashboard/client/src/service/job.ts
+//
+// Ray API source code: https://github.com/ray-project/ray/blob/777f37f002c14bd4c587f4d095b85c62690647de/python/ray/util/state/common.py#L1035-L1064
+func summarizeTasksByFuncName(tasks []eventtypes.Task) *utils.TaskSummariesByFuncName {
+	summary := make(map[string]*utils.TaskSummaryPerFuncOrClassName)
+	totalTasks := 0
+	totalActorTasks := 0
+	totalActorScheduled := 0
 
 	for _, task := range tasks {
 		funcName := task.GetFuncName()
 		if funcName == "" {
-			funcName = "unknown"
+			// Skip tasks without a function name. This can happen when we've received
+			// a TASK_LIFECYCLE_EVENT but not yet the corresponding TASK_DEFINITION_EVENT,
+			// since only the definition event carries the FunctionDescriptor (TaskFunc/ActorFunc).
+			//
+			// Unlike the live Ray Dashboard (which reads complete TaskInfo from GCS in a single object),
+			// the history server ingests definition and lifecycle as separate events that may arrive
+			// out of order. A task missing its definition also lacks TaskType, so it cannot contribute
+			// to totalTasks/totalActorTasks/totalActorScheduled counts either.
+			//
+			// We skip rather than using a fallback like "unknown" to keep the summary clean for the
+			// Dashboard frontend, which does not expect such a synthetic key.
+			// Ref: https://github.com/ray-project/ray/blob/777f37f002c14bd4c587f4d095b85c62690647de/python/ray/util/state/common.py#L1049
+			continue
 		}
+
 		if _, ok := summary[funcName]; !ok {
-			summary[funcName] = make(map[string]int)
+			summary[funcName] = &utils.TaskSummaryPerFuncOrClassName{
+				FuncOrClassName: funcName,
+				Type:            string(task.TaskType),
+				StateCounts:     make(map[string]int),
+			}
 		}
+
+		// Use "NIL" for empty state to match Ray's behavior: when a task has no lifecycle events,
+		// Ray's protobuf_to_task_state_dict defaults to "NIL" (protobuf TaskStatus enum value 0).
+		// Ref: https://github.com/ray-project/ray/blob/777f37f002c14bd4c587f4d095b85c62690647de/python/ray/util/state/common.py#L1688-L1691
 		state := string(task.State)
 		if state == "" {
-			state = "UNKNOWN"
+			state = "NIL"
 		}
-		summary[funcName][state]++
+		summary[funcName].StateCounts[state]++
+
+		// Count by task type
+		switch task.TaskType {
+		case eventtypes.NORMAL_TASK:
+			totalTasks++
+		case eventtypes.ACTOR_CREATION_TASK:
+			totalActorScheduled++
+		case eventtypes.ACTOR_TASK:
+			totalActorTasks++
+		}
 	}
 
-	return map[string]interface{}{
-		"summary": summary,
-		"total":   len(tasks),
-	}
-}
-
-// TODO(Han-Ju Chen): This function has a bug - using JobID instead of actual lineage.
-// Real lineage requires:
-// 1. Add ParentTaskID field to Task struct (types/task.go)
-// 2. Parse parent_task_id from Ray events (eventserver.go)
-// 3. Build task tree structure based on ParentTaskID
-// 4. Update rayjob example to generate nested tasks for testing
-func summarizeTasksByLineage(tasks []eventtypes.Task) map[string]interface{} {
-	summary := make(map[string]map[string]int)
-
-	for _, task := range tasks {
-		// Use JobID as a simple lineage grouping for now
-		lineageKey := task.JobID
-		if lineageKey == "" {
-			lineageKey = "unknown"
-		}
-		if _, ok := summary[lineageKey]; !ok {
-			summary[lineageKey] = make(map[string]int)
-		}
-		state := string(task.State)
-		if state == "" {
-			state = "UNKNOWN"
-		}
-		summary[lineageKey][state]++
-	}
-
-	return map[string]interface{}{
-		"summary": summary,
-		"total":   len(tasks),
+	return &utils.TaskSummariesByFuncName{
+		Summary:             summary,
+		TotalTasks:          totalTasks,
+		TotalActorTasks:     totalActorTasks,
+		TotalActorScheduled: totalActorScheduled,
+		SummaryBy:           "func_name",
 	}
 }
 
@@ -1322,7 +1681,10 @@ func formatTaskForResponse(task eventtypes.Task, detail bool) map[string]interfa
 	if detail {
 		result["language"] = string(task.Language)
 		result["required_resources"] = task.RequiredResources
-		result["runtime_env_info"] = map[string]interface{}{
+		// Frontend expects runtime_env_info as a JSON string, not an object.
+		// Serialize to match the Ray State API format.
+		// Ref: https://github.com/ray-project/ray/blob/2f93603ad1/python/ray/dashboard/client/src/type/task.ts#L39
+		runtimeEnvInfoObj := map[string]interface{}{
 			"serialized_runtime_env": task.SerializedRuntimeEnv,
 			// RuntimeEnvUris and RuntimeEnvConfig are never populated on the Ray side.
 			// Ref: https://github.com/ray-project/ray/blob/50c715e79c5ca93118e1280f3842a1946b2cddac/src/ray/core_worker/task_event_buffer.cc#L189-L237.
@@ -1332,6 +1694,8 @@ func formatTaskForResponse(task eventtypes.Task, detail bool) map[string]interfa
 				"log_files":             []string{},
 			},
 		}
+		runtimeEnvInfoBytes, _ := json.Marshal(runtimeEnvInfoObj)
+		result["runtime_env_info"] = string(runtimeEnvInfoBytes)
 		isNil, err := utils.IsHexNil(task.PlacementGroupID)
 		if isNil || task.PlacementGroupID == "" || err != nil {
 			result["placement_group_id"] = nil
@@ -1457,6 +1821,10 @@ func getClusterSvcInfo(clis []client.Client, name, namespace string) (ServiceInf
 }
 
 // formatNodeSummaryReplayForResp formats a node summary replay of a single node for the response.
+// Fields must match the Ray Dashboard frontend NodeDetail type to avoid TypeError crashes.
+// Ref: NodeDetail.tsx (loadAvg, networkSpeed, cmdline, disk, workers, actors):
+//
+//	https://github.com/ray-project/ray/blob/8a7b47bc5c/python/ray/dashboard/client/src/pages/node/NodeDetail.tsx#L65-L233
 func formatNodeSummaryReplayForResp(node eventtypes.Node, sessionName string) []map[string]interface{} {
 	nodeId := node.NodeID
 	nodeIpAddress := node.NodeIPAddress
@@ -1501,18 +1869,32 @@ func formatNodeSummaryReplayForResp(node eventtypes.Node, sessionName string) []
 		// Host-level metrics (cpus, mem, shm, bootTime, disk, gpus, tpus) are not available
 		// from Ray Base Events. These metrics can be obtained from Prometheus/Grafana when
 		// Ray metrics are enabled. For historical replay, we use placeholder values.
+		// Format must match the Ray Dashboard API schema expected by the frontend.
 		nodeSummarySnapshot := map[string]interface{}{
-			"t":        transitionTimestamp,
-			"now":      transitionTimestamp,
-			"hostname": hostname,
-			"ip":       nodeIpAddress,
-			"cpus":     []int{0, 0},
-			"mem":      []int{0, 0, 0, 0},
-			"shm":      0,
-			"bootTime": 0,
-			"disk":     []int{0, 0, 0, 0},
-			"gpus":     []int{0},
-			"tpus":     []int{0},
+			"t":            transitionTimestamp,
+			"now":          transitionTimestamp,
+			"hostname":     hostname,
+			"ip":           nodeIpAddress,
+			"cpu":          0,
+			"cmdline":      []string{},
+			"cpus":         []int{0, 0},
+			"mem":          []int{0, 0, 0, 0},
+			"shm":          0,
+			"bootTime":     0,
+			"loadAvg":      [][]float64{{0, 0, 0}, {0, 0, 0}},
+			"networkSpeed": []float64{0, 0},
+			// Frontend expects disk as {mountPoint: {total, used, free, percent}}, not an array.
+			"disk": map[string]map[string]interface{}{
+				"/":    {"total": 0, "used": 0, "free": 0, "percent": 0.0},
+				"/tmp": {"total": 0, "used": 0, "free": 0, "percent": 0.0},
+			},
+			// Frontend expects gpus as GPUStats[] ({uuid, name, utilizationGpu, ...}), not int array.
+			"gpus": []interface{}{},
+			"tpus": []interface{}{},
+			// Frontend expects workers as Worker[] and actors as {[actorId]: ActorDetail}.
+			// actors is set as empty map here; getNode() fills it with actual data.
+			"workers": []interface{}{},
+			"actors":  map[string]interface{}{},
 			"raylet": map[string]interface{}{
 				"storeStats": map[string]interface{}{
 					"objectStoreBytesAvail": resourcesTotal["objectStoreMemory"],

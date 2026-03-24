@@ -201,7 +201,8 @@ func PrepareTestEnvWithPrometheusAndGrafana(test Test, g *WithT, namespace *core
 }
 
 // GetOneOfNodeID retrieves a node ID from the /nodes endpoint.
-func GetOneOfNodeID(g *WithT, client *http.Client, historyServerURL string, isLive bool) string {
+// If headNode is true, it iterates over all nodes and returns the one with isHeadNode == true.
+func GetOneOfNodeID(g *WithT, client *http.Client, historyServerURL string, headNode bool) string {
 	resp, err := client.Get(historyServerURL + "/nodes?view=summary")
 	g.Expect(err).NotTo(HaveOccurred())
 	defer resp.Body.Close()
@@ -218,13 +219,65 @@ func GetOneOfNodeID(g *WithT, client *http.Client, historyServerURL string, isLi
 	summary := data["summary"].([]any)
 	g.Expect(len(summary)).To(BeNumerically(">", 0))
 
-	var nodeInfo map[string]any
-	if isLive {
-		nodeInfo = summary[0].(map[string]any)
-	} else {
-		nodeInfo = summary[0].([]any)[0].(map[string]any)
+	// Both live and dead clusters return a flat array of node objects.
+	if !headNode {
+		raylet := getRayletFromNode(g, summary[0])
+		return raylet["nodeId"].(string)
 	}
-	return nodeInfo["raylet"].(map[string]any)["nodeId"].(string)
+
+	for _, node := range summary {
+		raylet := getRayletFromNode(g, node)
+		if isHead, ok := raylet["isHeadNode"].(bool); ok && isHead {
+			return raylet["nodeId"].(string)
+		}
+	}
+
+	g.Expect(false).To(BeTrue(), "Expected to find a head node in /nodes summary")
+	return ""
+}
+
+// getRayletFromNode extracts the raylet object from a node summary.
+func getRayletFromNode(g *WithT, node any) map[string]any {
+	nodeInfo, ok := node.(map[string]any)
+	g.Expect(ok).To(BeTrue(), "node should be an object")
+
+	raylet, ok := nodeInfo["raylet"].(map[string]any)
+	g.Expect(ok).To(BeTrue(), "node should contain raylet object")
+
+	return raylet
+}
+
+// GetOneOfActorID retrieves an actor ID from the /logical/actors endpoint.
+// The history server returns actors from the in-memory ClusterActorMap, which is populated
+// by the Event Handler processing events from S3.
+func GetOneOfActorID(g *WithT, client *http.Client, historyServerURL string) string {
+	resp, err := client.Get(historyServerURL + EndpointLogicalActors)
+	g.Expect(err).NotTo(HaveOccurred())
+	defer resp.Body.Close()
+	g.Expect(resp.StatusCode).To(Equal(http.StatusOK))
+
+	body, err := io.ReadAll(resp.Body)
+	g.Expect(err).NotTo(HaveOccurred())
+
+	var result map[string]any
+	err = json.Unmarshal(body, &result)
+	g.Expect(err).NotTo(HaveOccurred())
+
+	// Response format: {"result": true, "msg": "...", "data": {"actors": {actor_id: {...}, ...}}}
+	data, ok := result["data"].(map[string]any)
+	g.Expect(ok).To(BeTrue(), "response should have 'data' field")
+
+	actors, ok := data["actors"].(map[string]any)
+	g.Expect(ok).To(BeTrue(), "data should have 'actors' field")
+	g.Expect(len(actors)).To(BeNumerically(">", 0), "should have at least one actor")
+
+	// Get the first actor ID from the map
+	for actorID := range actors {
+		return actorID
+	}
+
+	// This should never happen due to the length check above
+	return ""
 }
 
 // VerifyLogFileEndpointReturnsContent verifies that the log file endpoint returns content.

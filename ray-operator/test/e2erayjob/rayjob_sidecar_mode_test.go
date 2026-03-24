@@ -128,6 +128,17 @@ env_vars:
 			containerNames[container.Name] = true
 		}
 		g.Expect(containerNames[utils.SubmitterContainerName]).To(BeTrue(), "submitter container should be present")
+
+		// Delete the RayJob
+		err = test.Client().Ray().RayV1().RayJobs(namespace.Name).Delete(test.Ctx(), rayJob.Name, metav1.DeleteOptions{})
+		g.Expect(err).NotTo(HaveOccurred())
+		LogWithTimestamp(test.T(), "Deleted RayJob %s/%s successfully", rayJob.Namespace, rayJob.Name)
+
+		// Assert the RayCluster has been cascade deleted
+		g.Eventually(func() error {
+			_, err := GetRayCluster(test, namespace.Name, rayJob.Status.RayClusterName)
+			return err
+		}).Should(WithTransform(k8serrors.IsNotFound, BeTrue()))
 	})
 
 	test.T().Run("Should transition to 'Complete' if the Ray job has stopped.", func(_ *testing.T) {
