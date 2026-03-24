@@ -347,21 +347,10 @@ func (r *NetworkPolicyController) buildBaseEgressRules(instance *rayv1.RayCluste
 			},
 			// No Ports specified = allow all ports
 		},
-		// Rule 2: DNS egress to kube-system
+		// Rule 2: DNS egress (port 53) to any destination.
+		// Not namespace-restricted so clusters with non-standard DNS deployments
+		// (e.g. custom CoreDNS, cloud-provider DNS) are not broken.
 		{
-			To: []networkingv1.NetworkPolicyPeer{
-				{
-					NamespaceSelector: &metav1.LabelSelector{
-						MatchExpressions: []metav1.LabelSelectorRequirement{
-							{
-								Key:      corev1.LabelMetadataName,
-								Operator: metav1.LabelSelectorOpIn,
-								Values:   []string{"kube-system", "openshift-dns"},
-							},
-						},
-					},
-				},
-			},
 			Ports: []networkingv1.NetworkPolicyPort{
 				{
 					Protocol: &udpProtocol,
