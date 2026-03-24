@@ -49,7 +49,6 @@ func (r *NetworkPolicyController) Reconcile(ctx context.Context, req ctrl.Reques
 	if err := r.Get(ctx, req.NamespacedName, instance); err != nil {
 		if errors.IsNotFound(err) {
 			// RayCluster was deleted - NetworkPolicies will be garbage collected automatically
-			logger.Info("RayCluster not found, NetworkPolicies will be garbage collected")
 			return ctrl.Result{}, nil
 		}
 		return ctrl.Result{}, err
@@ -57,18 +56,17 @@ func (r *NetworkPolicyController) Reconcile(ctx context.Context, req ctrl.Reques
 
 	// Check if RayCluster is being deleted
 	if instance.DeletionTimestamp != nil {
-		logger.Info("RayCluster is being deleted, NetworkPolicies will be garbage collected")
 		return ctrl.Result{}, nil
 	}
 
 	// Check if NetworkIsolation is configured
 	if instance.Spec.NetworkIsolation == nil {
-		logger.V(1).Info("NetworkIsolation not configured for RayCluster", "cluster", instance.Name)
+		logger.V(1).Info("NetworkIsolation not configured for RayCluster", "cluster", instance.Name, "namespace", instance.Namespace)
 		// If NetworkPolicies exist but NetworkIsolation is removed, clean them up
 		return r.cleanupNetworkPoliciesIfNeeded(ctx, instance)
 	}
 
-	logger.Info("Reconciling NetworkPolicies for RayCluster", "cluster", instance.Name)
+	logger.Info("Reconciling NetworkPolicies for RayCluster", "cluster", instance.Name, "namespace", instance.Namespace)
 
 	// Determine mode (default to denyAll)
 	mode := rayv1.NetworkIsolationDenyAll
@@ -88,7 +86,7 @@ func (r *NetworkPolicyController) Reconcile(ctx context.Context, req ctrl.Reques
 		return ctrl.Result{}, err
 	}
 
-	logger.Info("Successfully reconciled NetworkPolicies for RayCluster", "cluster", instance.Name)
+	logger.Info("Successfully reconciled NetworkPolicies for RayCluster", "cluster", instance.Name, "namespace", instance.Namespace)
 	return ctrl.Result{}, nil
 }
 
@@ -399,6 +397,7 @@ func (r *NetworkPolicyController) cleanupNetworkPoliciesIfNeeded(ctx context.Con
 		r.Recorder.Eventf(instance, corev1.EventTypeNormal, string(utils.DeletedNetworkPolicy),
 			"Deleted NetworkPolicy %s/%s", instance.Namespace, headName)
 	} else if !errors.IsNotFound(err) {
+		// Return errors other than NotFound
 		return ctrl.Result{}, err
 	}
 
@@ -417,6 +416,7 @@ func (r *NetworkPolicyController) cleanupNetworkPoliciesIfNeeded(ctx context.Con
 		r.Recorder.Eventf(instance, corev1.EventTypeNormal, string(utils.DeletedNetworkPolicy),
 			"Deleted NetworkPolicy %s/%s", instance.Namespace, workerName)
 	} else if !errors.IsNotFound(err) {
+		// Return errors other than NotFound
 		return ctrl.Result{}, err
 	}
 
