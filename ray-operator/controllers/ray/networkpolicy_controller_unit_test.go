@@ -388,15 +388,9 @@ func TestBuildBaseEgressRules(t *testing.T) {
 		intraClusterRule.To[0].PodSelector.MatchLabels)
 	assert.Empty(t, intraClusterRule.Ports, "Intra-cluster egress must allow all ports (no Ports field)")
 
-	// Rule 1: DNS egress — UDP+TCP port 53, kube-system/openshift-dns namespace selector.
+	// Rule 1: DNS egress — UDP+TCP port 53, no namespace restriction.
 	dnsRule := rules[1]
-	require.Len(t, dnsRule.To, 1)
-	require.NotNil(t, dnsRule.To[0].NamespaceSelector)
-	require.Len(t, dnsRule.To[0].NamespaceSelector.MatchExpressions, 1)
-	expr := dnsRule.To[0].NamespaceSelector.MatchExpressions[0]
-	assert.Equal(t, corev1.LabelMetadataName, expr.Key)
-	assert.Equal(t, metav1.LabelSelectorOpIn, expr.Operator)
-	assert.ElementsMatch(t, []string{"kube-system", "openshift-dns"}, expr.Values)
+	assert.Empty(t, dnsRule.To, "DNS rule must not restrict destination namespaces")
 
 	require.Len(t, dnsRule.Ports, 2)
 	dnsPort := intstr.FromInt(53)
