@@ -60,11 +60,7 @@ const (
 // IsJobDeploymentTerminal returns true if the given JobDeploymentStatus
 // is in a terminal state. Terminal states are either Complete or Failed.
 func IsJobDeploymentTerminal(status JobDeploymentStatus) bool {
-	terminalStatusSet := map[JobDeploymentStatus]struct{}{
-		JobDeploymentStatusComplete: {}, JobDeploymentStatusFailed: {},
-	}
-	_, ok := terminalStatusSet[status]
-	return ok
+	return status == JobDeploymentStatusComplete || status == JobDeploymentStatusFailed
 }
 
 // JobFailedReason indicates the reason the RayJob changes its JobDeploymentStatus to 'Failed'
