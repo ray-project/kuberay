@@ -47,7 +47,8 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `enableK8sTokenAuth` _boolean_ | EnableK8sTokenAuth specifies whether to enable K8s token authentication.<br />When set to true, all Ray Pods will set the environment variable RAY_ENABLE_K8S_TOKEN_AUTH to "true". |  |  |
+| `enableK8sTokenAuth` _boolean_ | EnableK8sTokenAuth enables Kubernetes-delegated token authentication.<br />When true, the RAY_ENABLE_K8S_TOKEN_AUTH environment variable is set to "true"<br />across all Ray Pods, and Ray will delegate authentication to the K8s API server.<br />NOTE: The Kubernetes ServiceAccount token mounted to Raylets must be granted<br />the `ray:write` custom verb via RBAC for this to function correctly.<br />WARNING: This feature is intended for standalone RayCluster objects and is<br />currently unsupported for RayJob or RayService resources. |  |  |
+| `secretName` _string_ | SecretName is the name of the Secret that contains the authentication token.<br />If set, KubeRay will skip generating a Secret object per RayCluster containing a token.<br />The Secret must have a data key `auth_token` that contains the value of the token. |  |  |
 | `mode` _[AuthMode](#authmode)_ | Mode specifies the authentication mode.<br />Supported values are "disabled" and "token".<br />Defaults to "token". |  | Enum: [disabled token] <br /> |
 
 
@@ -372,7 +373,7 @@ _Appears in:_
 
 
 
-
+RayCronJob is the Schema for the raycronjobs API
 
 
 
@@ -453,6 +454,7 @@ _Appears in:_
 | `entrypointNumCpus` _float_ | EntrypointNumCpus specifies the number of cpus to reserve for the entrypoint command. |  |  |
 | `entrypointNumGpus` _float_ | EntrypointNumGpus specifies the number of gpus to reserve for the entrypoint command. |  |  |
 | `ttlSecondsAfterFinished` _integer_ | TTLSecondsAfterFinished is the TTL to clean up RayCluster.<br />It's only working when ShutdownAfterJobFinishes set to true. | 0 |  |
+| `preRunningDeadlineSeconds` _integer_ | PreRunningDeadlineSeconds is the deadline in seconds for a RayJob to reach the Running state<br />from when it is first initialized (StartTime). If the RayJob does not transition to<br />Running within this time, it will be marked as Failed.<br />This is useful for cleaning up jobs stuck in Initializing or Waiting states.<br />If not set, there is no deadline. Value must be a positive integer. |  | Minimum: 1 <br /> |
 | `shutdownAfterJobFinishes` _boolean_ | ShutdownAfterJobFinishes will determine whether to delete the ray cluster once rayJob succeed or failed. |  |  |
 | `suspend` _boolean_ | suspend specifies whether the RayJob controller should create a RayCluster instance<br />If a job is applied with the suspend field set to true,<br />the RayCluster will not be created and will wait for the transition to false.<br />If the RayCluster is already created, it will be deleted.<br />In case of transition to false a new RayCluster will be created. |  |  |
 

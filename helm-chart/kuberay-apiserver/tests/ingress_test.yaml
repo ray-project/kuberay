@@ -30,30 +30,92 @@ tests:
           name: kuberay-apiserver
           namespace: kuberay-system
 
-  - it: Should create Ingress if `ingress.enabled` is `true`
+  - it: Should have ingress backend service name matching the service name
     capabilities:
       majorVersion: 1
-      minorVersion: 14
+      minorVersion: 19
     set:
       ingress:
         enabled: true
+        hosts:
+          - host: example.com
+            paths:
+              - path: /
+                pathType: Prefix
+      service:
+        port: 8888
     asserts:
-      - containsDocument:
-          apiVersion: networking.k8s.io/v1beta1
-          kind: Ingress
-          name: kuberay-apiserver
-          namespace: kuberay-system
+      - equal:
+          path: spec.rules[0].http.paths[0].backend.service.name
+          value: kuberay-apiserver-service
 
-  - it: Should create Ingress if `ingress.enabled` is `true`
+  - it: Should have ingress backend service name matching the service name when fullnameOverride is set
     capabilities:
       majorVersion: 1
-      minorVersion: 12
+      minorVersion: 19
+    set:
+      fullnameOverride: test-name
+      ingress:
+        enabled: true
+        hosts:
+          - host: example.com
+            paths:
+              - path: /
+                pathType: Prefix
+      service:
+        port: 8888
+    asserts:
+      - equal:
+          path: spec.rules[0].http.paths[0].backend.service.name
+          value: test-name-service
+
+  - it: Should have ingress backend service name matching the service name when nameOverride is set
+    capabilities:
+      majorVersion: 1
+      minorVersion: 19
+    set:
+      nameOverride: custom-api
+      ingress:
+        enabled: true
+        hosts:
+          - host: example.com
+            paths:
+              - path: /
+                pathType: Prefix
+      service:
+        port: 8888
+    asserts:
+      - equal:
+          path: spec.rules[0].http.paths[0].backend.service.name
+          value: kuberay-apiserver-custom-api-service
+
+  - it: Should have correct service name in all backend references with multiple hosts and paths
+    capabilities:
+      majorVersion: 1
+      minorVersion: 19
     set:
       ingress:
         enabled: true
+        hosts:
+          - host: example.com
+            paths:
+              - path: /api
+                pathType: Prefix
+              - path: /health
+                pathType: Exact
+          - host: api.example.com
+            paths:
+              - path: /
+                pathType: Prefix
+      service:
+        port: 8888
     asserts:
-      - containsDocument:
-          apiVersion: extensions/v1beta1
-          kind: Ingress
-          name: kuberay-apiserver
-          namespace: kuberay-system
+      - equal:
+          path: spec.rules[0].http.paths[0].backend.service.name
+          value: kuberay-apiserver-service
+      - equal:
+          path: spec.rules[0].http.paths[1].backend.service.name
+          value: kuberay-apiserver-service
+      - equal:
+          path: spec.rules[1].http.paths[0].backend.service.name
+          value: kuberay-apiserver-service
