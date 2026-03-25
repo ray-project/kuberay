@@ -34,11 +34,12 @@ var AllJobStatuses = []JobStatus{
 
 // This function should be synchronized with the function `is_terminal()` in Ray Job.
 func IsJobTerminal(status JobStatus) bool {
-	terminalStatusSet := map[JobStatus]struct{}{
-		JobStatusStopped: {}, JobStatusSucceeded: {}, JobStatusFailed: {},
+	switch status {
+	case JobStatusStopped, JobStatusSucceeded, JobStatusFailed:
+		return true
+	default:
+		return false
 	}
-	_, ok := terminalStatusSet[status]
-	return ok
 }
 
 // JobDeploymentStatus indicates RayJob status including RayCluster lifecycle management and Job submission
