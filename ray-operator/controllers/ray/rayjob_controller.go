@@ -641,23 +641,14 @@ func getSubmitterContainer(rayJobInstance *rayv1.RayJob, rayClusterInstance *ray
 	// When SidecarSubmitterRestart feature gate is enabled, configure per-container restart rules.
 	// This requires Kubernetes 1.34+ with ContainerRestartRules feature gate enabled.
 	if features.Enabled(features.SidecarSubmitterRestart) {
-		submitterContainer.RestartPolicy = ptr.To(corev1.ContainerRestartPolicyNever)
-		submitterContainer.RestartPolicyRules = []corev1.ContainerRestartRule{
-			{
-				Action: corev1.ContainerRestartRuleActionRestart,
-				ExitCodes: &corev1.ContainerRestartRuleOnExitCodes{
-					// Restart on non-zero exit, which can come from `ray job submit --no-wait` or
-					// `ray job logs --follow`. The key case is `ray job logs --follow` exiting
-					// non-zero on transient failures (e.g. abnormal WebSocket closure). See the
-					// submitter command structure in ray-operator/controllers/ray/common/job.go.
-					// For the Ray-side behavior, see:
-					// https://github.com/ray-project/ray/blob/5fe22a49a729ab428fbff0d222f67c5dda69455a/python/ray/dashboard/modules/job/cli.py#L97
-					// https://github.com/ray-project/ray/blob/5fe22a49a729ab428fbff0d222f67c5dda69455a/python/ray/dashboard/modules/job/cli.py#L525
-					Operator: corev1.ContainerRestartRuleOnExitCodesOpNotIn,
-					Values:   []int32{0},
-				},
-			},
-		}
+		// OnFailure restarts only the submitter container (not all containers in the pod) on non-zero exit.
+		// The non-zero exit can come from `ray job submit --no-wait` or `ray job logs --follow`.
+		// The key case is `ray job logs --follow` exiting non-zero on a transient
+		// WebSocket closure even when the Ray job is still running.
+		// On restart, the submitter checks ray job status first.
+		// Since the job is still running, the submitter simply reattaches to the log stream.
+		// See BuildJobSubmitCommand in ray-operator/controllers/ray/common/job.go for more details.
+		submitterContainer.RestartPolicy = ptr.To(corev1.ContainerRestartPolicyOnFailure)
 	}
 
 	return submitterContainer, nil
@@ -1064,8 +1055,8 @@ func (r *RayJobReconciler) constructRayClusterForRayJob(rayJobInstance *rayv1.Ra
 			rayCluster.Spec.HeadGroupSpec.Template.Spec.Containers, sidecar)
 		// In K8sJobMode, the submitter Job relies on the K8s Job backoffLimit API to restart if it fails.
 		// This mainly handles WebSocket connection failures caused by transient network issues.
-		// In SidecarMode, however, the submitter container shares the same network namespace as the Ray dashboard,
-		// so restarts are no longer needed.
+		// In SidecarMode, the pod-level RestartPolicy is set to Never.
+		// The submitter container may override this with per-container restart rules when the SidecarSubmitterRestart feature gate is enabled.
 		rayCluster.Spec.HeadGroupSpec.Template.Spec.RestartPolicy = corev1.RestartPolicyNever
 	}
 
