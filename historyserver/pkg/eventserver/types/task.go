@@ -175,10 +175,10 @@ type TaskProfileEvents struct {
 
 // ProfileEvents contains component and event information
 type ProfileEvents struct {
-	ComponentID       string              `json:"componentId"`
-	ComponentType     string              `json:"componentType"`
-	NodeIPAddress     string              `json:"nodeIpAddress"`
-	ProfileEventEntry []ProfileEventEntry `json:"events"`
+	ComponentID   string              `json:"componentId"`
+	ComponentType string              `json:"componentType"`
+	NodeIPAddress string              `json:"nodeIpAddress"`
+	Events        []ProfileEventEntry `json:"events"`
 }
 
 // ProfileEventEntry represents a single profile event within Spans

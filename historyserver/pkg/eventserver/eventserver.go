@@ -1105,14 +1105,14 @@ func (h *EventHandler) handleTaskProfileEvent(eventMap map[string]any, clusterSe
 		return err
 	}
 
-	if profileData.TaskID == "" || len(profileData.ProfileEvents.ProfileEventEntry) == 0 {
+	if profileData.TaskID == "" || len(profileData.ProfileEvents.Events) == 0 {
 		logrus.Debugf("TASK_PROFILE_EVENT has no taskId or events, skipping")
 		return nil
 	}
 
 	// Convert events to ProfileEventRaw format
-	var rawEvents = make([]types.ProfileEventRaw, 0, len(profileData.ProfileEvents.ProfileEventEntry))
-	for _, e := range profileData.ProfileEvents.ProfileEventEntry {
+	var rawEvents = make([]types.ProfileEventRaw, 0, len(profileData.ProfileEvents.Events))
+	for _, e := range profileData.ProfileEvents.Events {
 		startTime, err := strconv.ParseInt(e.StartTime, 10, 64)
 		if err != nil {
 			logrus.Warnf("Failed to parse StartTime '%s': %v", e.StartTime, err)
