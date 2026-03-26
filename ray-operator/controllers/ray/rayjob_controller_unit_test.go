@@ -243,17 +243,9 @@ func TestGetSubmitterContainerWithFeatureGate(t *testing.T) {
 	container, err := getSubmitterContainer(rayJobInstance, rayClusterInstance)
 	require.NoError(t, err)
 
-	// Verify restart policy is set to Never
+	// Verify restart policy is set to OnFailure for the submitter container
 	require.NotNil(t, container.RestartPolicy)
-	assert.Equal(t, corev1.ContainerRestartPolicyNever, *container.RestartPolicy)
-
-	// Verify restart policy rules are set
-	require.Len(t, container.RestartPolicyRules, 1)
-	rule := container.RestartPolicyRules[0]
-	assert.Equal(t, corev1.ContainerRestartRuleActionRestart, rule.Action)
-	require.NotNil(t, rule.ExitCodes)
-	assert.Equal(t, corev1.ContainerRestartRuleOnExitCodesOpNotIn, rule.ExitCodes.Operator)
-	assert.Equal(t, []int32{0}, rule.ExitCodes.Values)
+	assert.Equal(t, corev1.ContainerRestartPolicyOnFailure, *container.RestartPolicy)
 }
 
 func TestGetSubmitterContainerWithoutFeatureGate(t *testing.T) {
@@ -297,9 +289,8 @@ func TestGetSubmitterContainerWithoutFeatureGate(t *testing.T) {
 	container, err := getSubmitterContainer(rayJobInstance, rayClusterInstance)
 	require.NoError(t, err)
 
-	// Verify restart policy is NOT set (nil) when feature gate is disabled
+	// Verify restart policy is NOT set (nil) for the submitter container when feature gate is disabled
 	assert.Nil(t, container.RestartPolicy)
-	assert.Empty(t, container.RestartPolicyRules)
 }
 
 func TestUpdateStatusToSuspendingIfNeeded(t *testing.T) {

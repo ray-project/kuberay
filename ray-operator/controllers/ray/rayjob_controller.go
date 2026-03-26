@@ -638,7 +638,7 @@ func getSubmitterContainer(rayJobInstance *rayv1.RayJob, rayClusterInstance *ray
 	}
 
 	// When SidecarSubmitterRestart feature gate is enabled, configure per-container restart rules.
-	// This requires Kubernetes 1.34+ with ContainerRestartRules feature gate enabled.
+	// This requires Kubernetes 1.35+ with ContainerRestartRules feature gate enabled.
 	if features.Enabled(features.SidecarSubmitterRestart) {
 		// OnFailure restarts only the submitter container (not all containers in the pod) on non-zero exit.
 		// The non-zero exit can come from `ray job submit --no-wait` or `ray job logs --follow`.
