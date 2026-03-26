@@ -73,11 +73,32 @@ spec:
           - name: historyserver
             mountPath: /tmp/ray
         - name: collector
-          image: collector:v0.1.0
+          image: ${COLLECTOR_IMAGE}
           imagePullPolicy: IfNotPresent
           env:
           - name: GCS_BUCKET
             value: "${GCS_BUCKET}"
+          # RAY_DASHBOARD_ADDRESS is used by the head collector to fetch endpoints' results
+          # (e.g., /api/v0/cluster_metadata) from the Ray Dashboard running in the same pod.
+          # Only the head collector uses this; worker collectors do not need it.
+          # If your Ray Dashboard uses a non-default port (not 8265), update this value accordingly.
+          - name: RAY_DASHBOARD_ADDRESS
+            value: "http://localhost:8265"
+          # RAY_COLLECTOR_ADDITIONAL_ENDPOINTS is a comma-separated list of Ray Dashboard
+          # API endpoint paths that the head collector will periodically poll and store.
+          # Use this for endpoints whose data cannot be obtained via Ray events.
+          # You can add more endpoints, e.g., "/api/v0/placement_groups,/api/serve/applications/"
+          # Note: Only static endpoints (no dynamic path parameters like {job_id}) are supported.
+          - name: RAY_COLLECTOR_ADDITIONAL_ENDPOINTS
+            value: "/api/v0/placement_groups?detail=1&limit=10000"
+            # Query params must match the Ray Dashboard frontend request exactly
+            # (see https://github.com/ray-project/ray/blob/cb9c80fee6a700efe61ea97987248ce82e3fa2e2/python/ray/dashboard/client/src/service/placementGroup.ts):
+            #   detail=1    — include bundles and stats fields required by PlacementGroupTable
+            #   limit=10000 — match the frontend's default limit to avoid truncation
+          # RAY_COLLECTOR_POLL_INTERVAL controls how often the collector polls the additional
+          # endpoints above. Accepts Go duration format (e.g., "30s", "1m", "5m").
+          - name: RAY_COLLECTOR_POLL_INTERVAL
+            value: "30s"
           command:
           - collector
           - --role=Head
@@ -162,7 +183,7 @@ spec:
           - name: historyserver
             mountPath: /tmp/ray
         - name: collector
-          image: collector:v0.1.0
+          image: ${COLLECTOR_IMAGE}
           imagePullPolicy: IfNotPresent
           env:
           - name: GCS_BUCKET
