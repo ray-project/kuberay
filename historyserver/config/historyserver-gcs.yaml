@@ -37,7 +37,7 @@ spec:
         env:
           - name: GCS_BUCKET
             value: "${GCS_BUCKET}"
-        image: historyserver:v0.1.0
+        image: ${HISTORY_SERVER_IMAGE}
         imagePullPolicy: IfNotPresent
         command:
         - historyserver
