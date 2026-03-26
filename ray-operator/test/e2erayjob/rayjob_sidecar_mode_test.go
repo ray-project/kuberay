@@ -372,10 +372,10 @@ env_vars:
 		k8sVersion, err := utils.GetKubernetesVersion()
 		g.Expect(err).NotTo(HaveOccurred())
 
-		isAtLeast, err := utils.IsK8sVersionAtLeast(k8sVersion, 1, 34, 0)
+		isAtLeast, err := utils.IsK8sVersionAtLeast(k8sVersion, 1, 35, 0)
 		g.Expect(err).NotTo(HaveOccurred())
 		if !isAtLeast {
-			t.Skip("k8s version < 1.34, SidecarSubmitterRestart not supported")
+			t.Skip("k8s version < 1.35, SidecarSubmitterRestart not supported")
 		}
 
 		rayJobAC := rayv1ac.RayJob("submitter-container-should-restart", namespace.Name).
@@ -408,23 +408,23 @@ env_vars:
 		g.Expect(err).NotTo(HaveOccurred())
 		g.Expect(headPod).NotTo(BeNil())
 
-		// Check if the operator injected restart policy rules on the submitter container.
+		// Check if the operator injected OnFailure restart policy on the submitter container.
 		// This is set when SidecarSubmitterRestart feature gate is enabled.
-		var submitterHasRestartPolicyRules bool
+		var submitterHasOnFailureRestartPolicy bool
 		for _, c := range headPod.Spec.Containers {
 			if c.Name == utils.SubmitterContainerName {
-				if len(c.RestartPolicyRules) > 0 {
-					submitterHasRestartPolicyRules = true
+				if c.RestartPolicy != nil && *c.RestartPolicy == corev1.ContainerRestartPolicyOnFailure {
+					submitterHasOnFailureRestartPolicy = true
 				}
 				break
 			}
 		}
 
-		if !submitterHasRestartPolicyRules {
+		if !submitterHasOnFailureRestartPolicy {
 			// Clean up the ray job
 			err = test.Client().Ray().RayV1().RayJobs(namespace.Name).Delete(test.Ctx(), rayJob.Name, metav1.DeleteOptions{})
 			g.Expect(err).NotTo(HaveOccurred())
-			t.Skip("SidecarSubmitterRestart feature gate is not active. Submitter container has no restart policy rules")
+			t.Skip("SidecarSubmitterRestart feature gate is not active. Submitter container has no onFailure restart policy")
 		}
 
 		// Get Submitter Container id
