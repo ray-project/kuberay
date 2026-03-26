@@ -51,7 +51,7 @@ export interface RayJobItem {
   kind: string;
   metadata: V1ObjectMeta;
   spec: RayJobAPISpec;
-  status: RayJobAPIStatus;
+  status?: RayJobAPIStatus;
 }
 
 export interface CreateRayJobConfig {

@@ -212,7 +212,7 @@ func testLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Names
 	client := CreateHTTPClientWithCookieJar(g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 
-	nodeID := GetOneOfNodeID(g, client, historyServerURL, true)
+	nodeID := GetOneOfNodeID(g, client, historyServerURL, false)
 	filename := "raylet.out"
 
 	logFileTestCases := []struct {
@@ -1023,7 +1023,7 @@ func testLogStreamEndpoint(test Test, g *WithT, namespace *corev1.Namespace, s3C
 	client := CreateHTTPClientWithCookieJar(g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 
-	nodeID := GetOneOfNodeID(g, client, historyServerURL, true)
+	nodeID := GetOneOfNodeID(g, client, historyServerURL, false)
 	filename := "raylet.out"
 	streamURL := fmt.Sprintf("%s%s?node_id=%s&filename=%s", historyServerURL, EndpointLogsStream, nodeID, filename)
 
@@ -1255,7 +1255,11 @@ func testNodeLogsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Name
 		// glob=events/event_JOBS* should match only event_JOBS.log inside the events/ subdirectory.
 		// Expected response:
 		//   {"data":{"result":{"internal":["event_JOBS.log"]}},"msg":"","result":true}
-		logsURL := fmt.Sprintf("%s%s?node_id=%s&glob=%s", historyServerURL, EndpointLogs, nodeID, url.QueryEscape("events/event_JOBS*"))
+		//
+		// Always use the head node ID to avoid flakiness since events/event_JOBS.log is only present on the head node.
+		// Ref: https://github.com/ray-project/ray/blob/20eae5b1/python/ray/dashboard/modules/job/job_head.py#L397-L399
+		headNodeID := GetOneOfNodeID(g, client, historyServerURL, true)
+		logsURL := fmt.Sprintf("%s%s?node_id=%s&glob=%s", historyServerURL, EndpointLogs, headNodeID, url.QueryEscape("events/event_JOBS*"))
 		resp, err := client.Get(logsURL)
 		g.Expect(err).NotTo(HaveOccurred())
 		defer resp.Body.Close()
