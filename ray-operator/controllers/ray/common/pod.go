@@ -995,13 +995,6 @@ func generateRayStartCommand(ctx context.Context, nodeType rayv1.RayNodeType, ra
 		}
 	}
 
-	if _, ok := rayStartParams["memory"]; !ok {
-		memory := resource.Limits[corev1.ResourceMemory]
-		if !memory.IsZero() {
-			rayStartParams["memory"] = strconv.FormatInt(memory.Value(), 10)
-		}
-	}
-
 	// Add GPU and custom accelerator resources to rayStartParams if not already present.
 	if err := addWellKnownAcceleratorResources(rayStartParams, resource.Limits); err != nil {
 		log.Error(err, "failed to add accelerator resources to rayStartParams")
