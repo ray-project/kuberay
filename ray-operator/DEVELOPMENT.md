@@ -18,11 +18,11 @@ The instructions assume you have access to a running Kubernetes cluster via `kub
 ### Setup on Kind
 
 For local development, we recommend using [Kind](https://kind.sigs.k8s.io/) to create a Kubernetes cluster.
- 
+
 ### Use go v1.26
- 
+
 Currently, KubeRay uses go v1.26 for development.
- 
+
 ```bash
 go install golang.org/dl/go1.26.0@latest
 go1.26.0 download
