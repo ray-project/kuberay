@@ -589,3 +589,68 @@ func TestRayClusterAutoscalerGCSFT(t *testing.T) {
 		})
 	}
 }
+
+func TestRayClusterAutoscalerUpscalingModeConservative(t *testing.T) {
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			test := With(t)
+			g := gomega.NewWithT(t)
+
+			// Create a namespace
+			namespace := test.NewTestNamespace()
+
+			// Script for creating detached actors to trigger autoscaling
+			scriptsAC := newConfigMap(namespace.Name, Files(test, "create_detached_actor.py"))
+			scripts, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), scriptsAC, TestApplyOptions)
+			g.Expect(err).NotTo(gomega.HaveOccurred())
+			LogWithTimestamp(test.T(), "Created ConfigMap %s/%s successfully", scripts.Namespace, scripts.Name)
+
+			groupName := "test-group"
+			rayClusterSpecAC := rayv1ac.RayClusterSpec().
+				WithEnableInTreeAutoscaling(true).
+				WithRayVersion(GetRayVersion()).
+				WithAutoscalerOptions(rayv1ac.AutoscalerOptions().
+					WithUpscalingMode("Conservative")).
+				WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
+					WithRayStartParams(map[string]string{"num-cpus": "0"}).
+					WithTemplate(tc.HeadPodTemplateGetter())).
+				WithWorkerGroupSpecs(rayv1ac.WorkerGroupSpec().
+					WithReplicas(0).
+					WithMinReplicas(0).
+					WithMaxReplicas(10).
+					WithGroupName(groupName).
+					WithRayStartParams(map[string]string{"num-cpus": "1"}).
+					WithTemplate(tc.WorkerPodTemplateGetter()))
+			rayClusterAC := rayv1ac.RayCluster("ray-cluster", namespace.Name).
+				WithSpec(Apply(rayClusterSpecAC, MountConfigMap[rayv1ac.RayClusterSpecApplyConfiguration](scripts, "/home/ray/test_scripts")))
+
+			rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
+			g.Expect(err).NotTo(gomega.HaveOccurred())
+			LogWithTimestamp(test.T(), "Created RayCluster %s/%s successfully", rayCluster.Namespace, rayCluster.Name)
+
+			// Wait for the RayCluster to become ready
+			g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutMedium).
+				Should(gomega.WithTransform(RayClusterState, gomega.Equal(rayv1.Ready)))
+			g.Expect(GetRayCluster(test, rayCluster.Namespace, rayCluster.Name)).To(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(int32(0))))
+
+			// Scale up 10 workers. The Conservative UpscalingMode should rate-limit the number of pending Pods with upscaling_speed = 1.
+			headPod, err := GetHeadPod(test, rayCluster)
+			g.Expect(err).NotTo(gomega.HaveOccurred())
+			LogWithTimestamp(test.T(), "Found head pod %s/%s", headPod.Namespace, headPod.Name)
+			ExecPodCmd(test, headPod, common.RayHeadContainer, []string{
+				"bash", "-c",
+				`for i in {0..9}; do python /home/ray/test_scripts/create_detached_actor.py "actor$i" & done; wait`,
+			})
+
+			// Verify the Autoscaler's CRD patching behavior.
+			// In Default mode, replicas would jump straight to 10 to meet the demand.
+			// In Conservative mode, the initial batch is capped at max(5, num_running).
+			g.Expect(RateLimitedReplicas(test, rayCluster, 5)).To(gomega.BeTrue(), "Conservative mode should cap the initial scale-up to 5")
+
+			// Eventually, all worker Pods should connect to the RayCluster.
+			g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutLong).
+				Should(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(int32(10))))
+			g.Eventually(GroupPods(test, rayCluster, groupName), TestTimeoutLong).Should(gomega.HaveLen(10))
+		})
+	}
+}
