@@ -923,7 +923,7 @@ func (r *RayJobReconciler) updateRayJobStatus(ctx context.Context, oldRayJob *ra
 		oldRayJobStatus.JobDeploymentStatus != newRayJobStatus.JobDeploymentStatus ||
 		rayClusterStatusChanged {
 
-		if newRayJobStatus.JobDeploymentStatus == rayv1.JobDeploymentStatusComplete || newRayJobStatus.JobDeploymentStatus == rayv1.JobDeploymentStatusFailed {
+		if rayv1.IsJobDeploymentTerminal(newRayJobStatus.JobDeploymentStatus) {
 			newRayJob.Status.EndTime = &metav1.Time{Time: time.Now()}
 		}
 
