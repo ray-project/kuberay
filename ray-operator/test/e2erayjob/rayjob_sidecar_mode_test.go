@@ -378,6 +378,36 @@ env_vars:
 			t.Skip("k8s version < 1.35, SidecarSubmitterRestart not supported")
 		}
 
+		// Check if the SidecarSubmitterRestart feature gate is enabled by inspecting the operator's args directly, rather than inferring from the container spec.
+		var sidecarSubmitterRestartEnabled bool
+		// Search all namespaces since the operator may be deployed in any namespace
+		operatorDeploymentList, err := test.Client().Core().AppsV1().Deployments("").List(t.Context(), metav1.ListOptions{
+			LabelSelector: "app.kubernetes.io/name=kuberay-operator",
+		})
+		g.Expect(err).NotTo(HaveOccurred())
+		// Assuming there should only be one kuberay-operator in the cluster
+		g.Expect(operatorDeploymentList.Items).To(HaveLen(1), "expected exactly one kuberay-operator deployment during the test")
+
+		for _, container := range operatorDeploymentList.Items[0].Spec.Template.Spec.Containers {
+			if container.Name != "kuberay-operator" {
+				continue
+			}
+			for _, arg := range container.Args {
+				if strings.Contains(arg, "SidecarSubmitterRestart=true") {
+					sidecarSubmitterRestartEnabled = true
+					break
+				}
+			}
+
+			if sidecarSubmitterRestartEnabled {
+				break
+			}
+		}
+
+		if !sidecarSubmitterRestartEnabled {
+			t.Skip("SidecarSubmitterRestart feature gate is not active. SidecarSubmitterRestart is not set to true")
+		}
+
 		rayJobAC := rayv1ac.RayJob("submitter-container-should-restart", namespace.Name).
 			WithSpec(rayv1ac.RayJobSpec().
 				WithSubmissionMode(rayv1.SidecarMode).
@@ -407,25 +437,6 @@ env_vars:
 		headPod, err := GetHeadPod(test, rayCluster)
 		g.Expect(err).NotTo(HaveOccurred())
 		g.Expect(headPod).NotTo(BeNil())
-
-		// Check if the operator injected OnFailure restart policy on the submitter container.
-		// This is set when SidecarSubmitterRestart feature gate is enabled.
-		var submitterHasOnFailureRestartPolicy bool
-		for _, c := range headPod.Spec.Containers {
-			if c.Name == utils.SubmitterContainerName {
-				if c.RestartPolicy != nil && *c.RestartPolicy == corev1.ContainerRestartPolicyOnFailure {
-					submitterHasOnFailureRestartPolicy = true
-				}
-				break
-			}
-		}
-
-		if !submitterHasOnFailureRestartPolicy {
-			// Clean up the ray job
-			err = test.Client().Ray().RayV1().RayJobs(namespace.Name).Delete(test.Ctx(), rayJob.Name, metav1.DeleteOptions{})
-			g.Expect(err).NotTo(HaveOccurred())
-			t.Skip("SidecarSubmitterRestart feature gate is not active. Submitter container has no onFailure restart policy")
-		}
 
 		// Get Submitter Container id
 		var containerID string
