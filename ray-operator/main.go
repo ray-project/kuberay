@@ -266,10 +266,14 @@ func main() {
 	exitOnError(err, "unable to create batch scheduler manager")
 	batchSchedulerManager.AddToScheme(mgr.GetScheme())
 
+	isOpenShift, err := utils.IsOpenShiftCluster(restConfig)
+	exitOnError(err, "unable to detect cluster type (OpenShift vs Kubernetes)")
+
 	rayClusterOptions := ray.RayClusterReconcilerOptions{
 		HeadSidecarContainers:    config.HeadSidecarContainers,
 		WorkerSidecarContainers:  config.WorkerSidecarContainers,
-		IsOpenShift:              utils.GetClusterType(),
+		IsOpenShift:              isOpenShift,
+		UseIngressOnOpenShift:    utils.ShouldUseIngressOnOpenShift(),
 		RayClusterMetricsManager: rayClusterMetricsManager,
 		BatchSchedulerManager:    batchSchedulerManager,
 		DefaultContainerEnvs:     config.DefaultContainerEnvs,
