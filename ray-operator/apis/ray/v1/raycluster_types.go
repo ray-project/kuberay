@@ -42,6 +42,12 @@ type RayClusterSpec struct {
 	// GcsFaultToleranceOptions for enabling GCS FT
 	// +optional
 	GcsFaultToleranceOptions *GcsFaultToleranceOptions `json:"gcsFaultToleranceOptions,omitempty"`
+	// TLSOptions specifies optional TLS encryption settings for the RayCluster.
+	// If omitted, TLS is disabled. When set, the mode field controls the
+	// security level (defaults to "mTLS" for mutual TLS).
+	// Requires the RayClusterMTLS feature gate on the operator.
+	// +optional
+	TLSOptions *TLSOptions `json:"tlsOptions,omitempty"`
 	// HeadGroupSpec is the spec for the head pod
 	HeadGroupSpec HeadGroupSpec `json:"headGroupSpec"`
 	// RayVersion is used to determine the command for the Kubernetes Job managed by RayJob
@@ -50,6 +56,68 @@ type RayClusterSpec struct {
 	// WorkerGroupSpecs are the specs for the worker pods
 	// +optional
 	WorkerGroupSpecs []WorkerGroupSpec `json:"workerGroupSpecs,omitempty"`
+}
+
+// TLSProvisioning values for TLSOptions.Provisioning.
+const (
+	// TLSProvisioningCertManager means the operator issues certificates using cert-manager.
+	TLSProvisioningCertManager = "CertManager"
+	// TLSProvisioningUserSecret means the user supplies TLS Secrets (bring your own certificate).
+	TLSProvisioningUserSecret = "UserSecret"
+)
+
+// TLSOptions configures TLS encryption for the RayCluster.
+// When TLSOptions is nil, TLS is disabled. When set, the operator configures
+// TLS on head and worker pods according to the selected mode.
+type TLSOptions struct {
+	// Mode controls the TLS security level.
+	// - "mTLS": Enables mutual TLS (client & server authentication).
+	// +optional
+	// +kubebuilder:validation:Enum=mTLS
+	// +kubebuilder:default=mTLS
+	Mode *string `json:"mode,omitempty"`
+
+	// Provisioning controls whether TLS certificates are issued by the operator via cert-manager
+	// (CertManager) or supplied by the user as Kubernetes Secrets (UserSecret).
+	//
+	// CertManager: do not set certificateSecretName or workerCertificateSecretName; the operator
+	// manages Issuers, Certificates, and Secrets.
+	//
+	// UserSecret (bring your own certificate): set certificateSecretName; optional workerCertificateSecretName
+	// for split head/worker identities. The operator does not create cert-manager resources for TLS.
+	//
+	// When omitted, provisioning is inferred: a non-empty certificateSecretName implies UserSecret;
+	// otherwise CertManager is used. Setting provisioning to CertManager together with user secret
+	// fields is invalid.
+	// +optional
+	// +kubebuilder:validation:Enum=CertManager;UserSecret
+	Provisioning *string `json:"provisioning,omitempty"`
+
+	// CertificateSecretName is a user-provided Kubernetes Secret containing
+	// tls.crt, tls.key, and ca.crt for the head node (and workers, if
+	// WorkerCertificateSecretName is not set).
+	//
+	// When WorkerCertificateSecretName is also set, this secret is mounted only
+	// on head pods. When WorkerCertificateSecretName is omitted, this single secret
+	// is mounted on both head and worker pods (shared-secret BYOC mode).
+	//
+	// The certificate SANs must cover the head node identities
+	// (head service DNS, pod IPs or wildcards, localhost, 127.0.0.1).
+	// When set, the operator skips cert-manager PKI and mounts this secret directly.
+	// +optional
+	CertificateSecretName *string `json:"certificateSecretName,omitempty"`
+
+	// WorkerCertificateSecretName is an optional user-provided Kubernetes Secret
+	// containing tls.crt, tls.key, and ca.crt for worker nodes.
+	//
+	// When set, workers use this secret instead of CertificateSecretName, giving
+	// head and worker pods separate TLS identities. This prevents a compromised
+	// worker key from impersonating the head node at the TLS layer.
+	//
+	// The certificate SANs must cover worker node identities
+	// (worker pod IPs or wildcards). Both secrets must share the same CA.
+	// +optional
+	WorkerCertificateSecretName *string `json:"workerCertificateSecretName,omitempty"`
 }
 
 // +kubebuilder:validation:Enum=Recreate;None

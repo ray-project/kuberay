@@ -4540,6 +4540,23 @@ spec:
                     type: string
                   suspend:
                     type: boolean
+                  tlsOptions:
+                    properties:
+                      certificateSecretName:
+                        type: string
+                      mode:
+                        default: mTLS
+                        enum:
+                        - mTLS
+                        type: string
+                      provisioning:
+                        enum:
+                        - CertManager
+                        - UserSecret
+                        type: string
+                      workerCertificateSecretName:
+                        type: string
+                    type: object
                   upgradeStrategy:
                     properties:
                       type:

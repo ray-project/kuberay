@@ -62,6 +62,10 @@ func (w *RayClusterWebhook) validateRayCluster(rayCluster *rayv1.RayCluster) err
 		allErrs = append(allErrs, err)
 	}
 
+	if err := utils.ValidateRayClusterTLSOptionsProvisioning(&rayCluster.Spec); err != nil {
+		allErrs = append(allErrs, field.Invalid(field.NewPath("spec").Child("tlsOptions"), rayCluster.Spec.TLSOptions, err.Error()))
+	}
+
 	if len(allErrs) == 0 {
 		return nil
 	}

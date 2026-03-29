@@ -266,6 +266,103 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 		}
 	}
 
+	// Validate TLS configuration if set.
+	if spec.TLSOptions != nil && !features.Enabled(features.RayClusterMTLS) {
+		return fmt.Errorf("spec.tlsOptions requires the RayClusterMTLS feature gate to be enabled")
+	}
+	return validateTLSOptions(spec)
+}
+
+// validateTLSOptions checks that the TLS config is internally consistent.
+// It prevents users from setting TLS environment variables manually when TLS is enabled,
+// and validates BYOC certificate secret names if provided.
+// ValidateRayClusterTLSOptionsProvisioning rejects tlsOptions that explicitly combine operator-managed
+// cert-manager provisioning with bring-your-own secret references, or UserSecret without a head secret.
+// Call from admission webhooks for parity when tlsOptions is set (feature gate may still block in reconcile).
+func ValidateRayClusterTLSOptionsProvisioning(spec *rayv1.RayClusterSpec) error {
+	if spec == nil || spec.TLSOptions == nil {
+		return nil
+	}
+	return validateTLSOptionsProvisioning(spec.TLSOptions)
+}
+
+func validateTLSOptionsProvisioning(opts *rayv1.TLSOptions) error {
+	if opts == nil {
+		return nil
+	}
+	hasHead := opts.CertificateSecretName != nil && *opts.CertificateSecretName != ""
+	hasWorker := opts.WorkerCertificateSecretName != nil && *opts.WorkerCertificateSecretName != ""
+
+	var prov string
+	if opts.Provisioning != nil {
+		prov = *opts.Provisioning
+		if prov != rayv1.TLSProvisioningCertManager && prov != rayv1.TLSProvisioningUserSecret {
+			return fmt.Errorf("tlsOptions.provisioning must be %q or %q", rayv1.TLSProvisioningCertManager, rayv1.TLSProvisioningUserSecret)
+		}
+	}
+
+	switch prov {
+	case rayv1.TLSProvisioningCertManager:
+		if hasHead || hasWorker {
+			return fmt.Errorf("tlsOptions.provisioning is %q but tlsOptions.certificateSecretName or workerCertificateSecretName is set; omit secret references for operator-managed certificates or set provisioning to %q for bring-your-own secrets",
+				rayv1.TLSProvisioningCertManager, rayv1.TLSProvisioningUserSecret)
+		}
+	case rayv1.TLSProvisioningUserSecret:
+		if !hasHead {
+			return fmt.Errorf("tlsOptions.provisioning is %q but tlsOptions.certificateSecretName must be set to a non-empty secret name", rayv1.TLSProvisioningUserSecret)
+		}
+	}
+	return nil
+}
+
+func validateTLSOptions(spec *rayv1.RayClusterSpec) error {
+	if !IsTLSEnabled(spec) {
+		return nil
+	}
+
+	if err := validateTLSOptionsProvisioning(spec.TLSOptions); err != nil {
+		return err
+	}
+
+	// Validate BYOC fields: if CertificateSecretName is set it must be non-empty.
+	if spec.TLSOptions.CertificateSecretName != nil && *spec.TLSOptions.CertificateSecretName == "" {
+		return fmt.Errorf("tlsOptions.certificateSecretName must be non-empty when set")
+	}
+	// WorkerCertificateSecretName is optional but must be non-empty when set.
+	if spec.TLSOptions.WorkerCertificateSecretName != nil && *spec.TLSOptions.WorkerCertificateSecretName == "" {
+		return fmt.Errorf("tlsOptions.workerCertificateSecretName must be non-empty when set")
+	}
+	// WorkerCertificateSecretName requires CertificateSecretName to also be set.
+	if spec.TLSOptions.WorkerCertificateSecretName != nil && spec.TLSOptions.CertificateSecretName == nil {
+		return fmt.Errorf("tlsOptions.workerCertificateSecretName requires certificateSecretName to also be set")
+	}
+
+	// Prevent conflict: user should not set any operator-managed TLS env vars when TLS is enabled.
+	forbiddenEnvVars := []string{RAY_USE_TLS, RAY_TLS_SERVER_CERT, RAY_TLS_SERVER_KEY, RAY_TLS_CA_CERT}
+
+	if len(spec.HeadGroupSpec.Template.Spec.Containers) > 0 {
+		headContainer := spec.HeadGroupSpec.Template.Spec.Containers[RayContainerIndex]
+		for _, envName := range forbiddenEnvVars {
+			if EnvVarExists(envName, headContainer.Env) {
+				return fmt.Errorf("cannot set %s environment variable in head Pod when tlsOptions is set "+
+					"- the operator manages TLS configuration automatically", envName)
+			}
+		}
+	}
+
+	for i := range spec.WorkerGroupSpecs {
+		worker := &spec.WorkerGroupSpecs[i]
+		if len(worker.Template.Spec.Containers) > 0 {
+			workerContainer := worker.Template.Spec.Containers[RayContainerIndex]
+			for _, envName := range forbiddenEnvVars {
+				if EnvVarExists(envName, workerContainer.Env) {
+					return fmt.Errorf("cannot set %s environment variable in worker group %q when tlsOptions is set "+
+						"- the operator manages TLS configuration automatically", envName, worker.GroupName)
+				}
+			}
+		}
+	}
+
 	return nil
 }
 
