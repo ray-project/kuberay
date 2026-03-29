@@ -193,7 +193,7 @@ func main() {
 	features.LogFeatureGates(setupLog)
 
 	if features.Enabled(features.RayServiceIncrementalUpgrade) {
-		utilruntime.Must(gwv1.AddToScheme(scheme))
+		utilruntime.Must(gwv1.Install(scheme))
 	}
 
 	// Manager options

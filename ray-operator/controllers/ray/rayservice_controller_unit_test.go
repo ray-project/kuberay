@@ -1650,7 +1650,7 @@ func TestCreateHTTPRoute(t *testing.T) {
 			newScheme := runtime.NewScheme()
 			_ = rayv1.AddToScheme(newScheme)
 			_ = corev1.AddToScheme(newScheme)
-			_ = gwv1.AddToScheme(newScheme)
+			_ = gwv1.Install(newScheme)
 			fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(tt.runtimeObjects...).Build()
 
 			reconciler := RayServiceReconciler{
@@ -1693,7 +1693,7 @@ func TestReconcileHTTPRoute(t *testing.T) {
 	newScheme := runtime.NewScheme()
 	_ = rayv1.AddToScheme(newScheme)
 	_ = corev1.AddToScheme(newScheme)
-	_ = gwv1.AddToScheme(newScheme)
+	_ = gwv1.Install(newScheme)
 
 	ctx := context.TODO()
 	namespace := "test-ns"
@@ -1843,7 +1843,7 @@ func TestReconcileGateway(t *testing.T) {
 	newScheme := runtime.NewScheme()
 	_ = rayv1.AddToScheme(newScheme)
 	_ = corev1.AddToScheme(newScheme)
-	_ = gwv1.AddToScheme(newScheme)
+	_ = gwv1.Install(newScheme)
 
 	ctx := context.TODO()
 	namespace := "test-ns"
@@ -2146,7 +2146,7 @@ func TestCheckIfNeedTargetCapacityUpdate(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			newScheme := runtime.NewScheme()
 			_ = corev1.AddToScheme(newScheme)
-			_ = gwv1.AddToScheme(newScheme)
+			_ = gwv1.Install(newScheme)
 			fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(tt.runtimeObjects...).Build()
 			// Initialize RayService reconciler.
 			ctx := context.TODO()
