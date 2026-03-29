@@ -298,6 +298,84 @@ func TestPropagateTaskGroupsAnnotationToPod(t *testing.T) {
 	assert.Equal(t, resource.MustParse("1"), workerGroup.MinResource["nvidia.com/gpu"])
 }
 
+func TestPropagateTaskGroupsAnnotation_SidecarMode_UserProvidedSubmitter(t *testing.T) {
+	appID := "job-1-01234"
+	queue := "root.default"
+
+	rayCluster := createRayClusterWithLabels(
+		"ray-job-user-submitter",
+		"test-namespace",
+		map[string]string{},
+	)
+
+	addHeadPodSpec(rayCluster, corev1.ResourceList{
+		corev1.ResourceCPU:    resource.MustParse("5"),
+		corev1.ResourceMemory: resource.MustParse("5Gi"),
+	})
+
+	// Add a user-provided submitter container to the head pod spec.
+	rayCluster.Spec.HeadGroupSpec.Template.Spec.Containers = append(
+		rayCluster.Spec.HeadGroupSpec.Template.Spec.Containers,
+		corev1.Container{
+			Name:  utils.SubmitterContainerName,
+			Image: "my-custom-submitter:latest",
+			Resources: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("1"),
+					corev1.ResourceMemory: resource.MustParse("1Gi"),
+				},
+			},
+		},
+	)
+
+	addWorkerPodSpec(rayCluster, "worker-group-1", 2, 2, 2, corev1.ResourceList{
+		corev1.ResourceCPU:    resource.MustParse("2"),
+		corev1.ResourceMemory: resource.MustParse("10Gi"),
+	})
+
+	rayJobWithUserSubmitter := createRayJobWithLabels(
+		"ray-job-user-submitter",
+		"test-namespace",
+		rayCluster.Spec.DeepCopy(),
+		map[string]string{
+			RayApplicationIDLabelName:      appID,
+			RayApplicationQueueLabelName:   queue,
+			utils.RayGangSchedulingEnabled: "true",
+		},
+	)
+	rayJobWithUserSubmitter.Spec.SubmissionMode = rayv1.SidecarMode
+
+	rayPod := createPod("ray-pod", "default")
+	err := propagateTaskGroupsAnnotation(rayJobWithUserSubmitter, rayPod)
+	require.NoError(t, err)
+
+	taskGroupsSpec := rayPod.Annotations[YuniKornTaskGroupsAnnotationName]
+	assert.NotEmpty(t, taskGroupsSpec)
+	taskGroups := newTaskGroups()
+	err = taskGroups.unmarshalFrom(taskGroupsSpec)
+	require.NoError(t, err)
+
+	// Should only have 2 task groups (head + worker), NO separate submitter task group.
+	// The user-provided submitter container resources are already included in the head task group.
+	assert.Len(t, taskGroups.Groups, 2)
+
+	headGroup := taskGroups.getTaskGroup(utils.RayNodeHeadGroupLabelValue)
+	assert.NotNil(t, headGroup)
+	assert.Equal(t, int32(1), headGroup.MinMember)
+	// Head resources include both the ray-head container (5 CPU) and the user-provided submitter container (1 CPU) = 6 CPU
+	assert.Equal(t, resource.MustParse("6"), headGroup.MinResource[corev1.ResourceCPU.String()])
+	// Head memory: 5Gi + 1Gi = 6Gi
+	assert.Equal(t, resource.MustParse("6Gi"), headGroup.MinResource[corev1.ResourceMemory.String()])
+
+	workerGroup := taskGroups.getTaskGroup("worker-group-1")
+	assert.NotNil(t, workerGroup)
+	assert.Equal(t, int32(2), workerGroup.MinMember)
+
+	// Verify no submitter task group was created
+	submitterGroup := taskGroups.getTaskGroup(utils.RayNodeSubmitterGroupLabelValue)
+	assert.Equal(t, TaskGroup{}, submitterGroup)
+}
+
 func TestPropagateTaskGroupsAnnotationToRayClusterAndSubmitterPodTemplate(t *testing.T) {
 	appID := "job-1-01234"
 	queue := "root.default"

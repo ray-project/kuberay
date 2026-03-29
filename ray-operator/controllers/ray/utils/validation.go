@@ -348,6 +348,32 @@ func ValidateRayJobSpec(rayJob *rayv1.RayJob) error {
 		}
 	}
 
+	// Reject a container named "ray-job-submitter" in the head pod spec when not using SidecarMode.
+	// The name is reserved for the sidecar submitter and would conflict with the controller's status monitoring.
+	if rayJob.Spec.RayClusterSpec != nil {
+		submitterCount := 0
+		for _, c := range rayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers {
+			if c.Name == SubmitterContainerName {
+				submitterCount++
+			}
+		}
+		if rayJob.Spec.SubmissionMode != rayv1.SidecarMode && submitterCount > 0 {
+			return fmt.Errorf("container name %q is reserved for the sidecar submitter and can only be used with SidecarMode", SubmitterContainerName)
+		}
+		if submitterCount > 1 {
+			return fmt.Errorf("only one container named %q is allowed in the head pod spec", SubmitterContainerName)
+		}
+		// In SidecarMode, the controller always overwrites Command/Args on the submitter container.
+		// Reject user-specified Command/Args to avoid silent overwriting.
+		if rayJob.Spec.SubmissionMode == rayv1.SidecarMode {
+			for _, c := range rayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers {
+				if c.Name == SubmitterContainerName && (len(c.Command) > 0 || len(c.Args) > 0) {
+					return fmt.Errorf("setting Command or Args on the %q container is not allowed in SidecarMode because the controller manages the command", SubmitterContainerName)
+				}
+			}
+		}
+	}
+
 	if rayJob.Spec.RayClusterSpec != nil {
 		if IsK8sAuthEnabled(rayJob.Spec.RayClusterSpec.AuthOptions) {
 			return fmt.Errorf("The RayJob spec is invalid: K8s token auth mode is currently not supported for RayJob")
