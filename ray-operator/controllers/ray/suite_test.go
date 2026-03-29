@@ -16,7 +16,6 @@ limitations under the License.
 package ray
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -53,7 +52,7 @@ var (
 
 type TestClientProvider struct{}
 
-func (testProvider TestClientProvider) GetDashboardClient(_ context.Context, _ manager.Manager) func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error) {
+func (testProvider TestClientProvider) GetDashboardClient(_ manager.Manager) func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error) {
 	return func(_ *rayv1.RayCluster, _ string) (dashboardclient.RayDashboardClientInterface, error) {
 		return fakeRayDashboardClient, nil
 	}
@@ -122,11 +121,11 @@ var _ = BeforeSuite(func(ctx SpecContext) {
 	Expect(err).NotTo(HaveOccurred(), "failed to setup RayCluster controller")
 
 	testClientProvider := TestClientProvider{}
-	err = NewRayServiceReconciler(ctx, mgr, testClientProvider).SetupWithManager(mgr, 1)
+	err = NewRayServiceReconciler(mgr, testClientProvider).SetupWithManager(mgr, 1)
 	Expect(err).NotTo(HaveOccurred(), "failed to setup RayService controller")
 
 	rayJobOptions := RayJobReconcilerOptions{}
-	err = NewRayJobReconciler(ctx, mgr, rayJobOptions, testClientProvider).SetupWithManager(mgr, 1)
+	err = NewRayJobReconciler(mgr, rayJobOptions, testClientProvider).SetupWithManager(mgr, 1)
 	Expect(err).NotTo(HaveOccurred(), "failed to setup RayJob controller")
 
 	go func() {
