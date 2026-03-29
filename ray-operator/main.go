@@ -12,6 +12,7 @@ import (
 	"go.uber.org/zap/zapcore"
 	"gopkg.in/natefinch/lumberjack.v2"
 	batchv1 "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
@@ -216,8 +217,9 @@ func main() {
 	// This improves the scalability of the system, both for KubeRay itself by reducing the size of the
 	// informers cache, and for the API server / etcd, by reducing the number of watch events.
 	// For example, KubeRay is only interested in the batch Jobs it creates when reconciling RayJobs,
-	// so the controller sets the app.kubernetes.io/created-by=kuberay-operator label on any Job it creates,
-	// and that label is provided to the manager cache as a selector for Job resources.
+	// and the Pods it creates when reconciling RayClusters,
+	// so the controller sets the app.kubernetes.io/created-by=kuberay-operator label on any Job and Pod it creates,
+	// and that label is provided to the manager cache as a selector for Job and Pod resources.
 	selectorsByObject, err := cacheSelectors()
 	exitOnError(err, "unable to create cache selectors")
 	options.Cache.ByObject = selectorsByObject
@@ -317,6 +319,7 @@ func cacheSelectors() (map[client.Object]cache.ByObject, error) {
 
 	return map[client.Object]cache.ByObject{
 		&batchv1.Job{}: {Label: selector},
+		&corev1.Pod{}:  {Label: selector},
 	}, nil
 }
 
