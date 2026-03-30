@@ -84,7 +84,7 @@ func TestOldHeadPodFailDuringUpgrade(t *testing.T) {
 				{
 					EphemeralContainerCommon: corev1.EphemeralContainerCommon{
 						Name:    "proxy-actor-drop",
-						Image:   "istio/iptables",
+						Image:   "istio/iptables:1.29-2026-02-27T19-00-52",
 						Command: []string{"iptables"},
 						Args:    []string{"-A", "INPUT", "-p", "tcp", "--dport", "8000", "-j", "DROP"},
 						SecurityContext: &corev1.SecurityContext{
