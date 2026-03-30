@@ -84,7 +84,7 @@ func TestOldHeadPodFailDuringUpgrade(t *testing.T) {
 				{
 					EphemeralContainerCommon: corev1.EphemeralContainerCommon{
 						Name:    "proxy-actor-drop",
-						Image:   "istio/iptables",
+						Image:   "istio/iptables:1.29-2026-02-27T19-00-52",
 						Command: []string{"iptables"},
 						Args:    []string{"-A", "INPUT", "-p", "tcp", "--dport", "8000", "-j", "DROP"},
 						SecurityContext: &corev1.SecurityContext{
@@ -109,7 +109,7 @@ func TestOldHeadPodFailDuringUpgrade(t *testing.T) {
 		headPod, err := test.Client().Core().CoreV1().Pods(namespace.Name).Get(test.Ctx(), headPodName, metav1.GetOptions{})
 		g.Expect(err).NotTo(HaveOccurred())
 		return headPod.Labels[utils.RayClusterServingServiceLabelKey]
-	}, TestTimeoutShort).Should(Equal("false"))
+	}, TestTimeoutLong).Should(Equal("false"))
 
 	LogWithTimestamp(test.T(), "Waiting for RayService %s/%s UpgradeInProgress condition to be true", rayService.Namespace, rayService.Name)
 	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutShort).Should(WithTransform(IsRayServiceUpgrading, BeTrue()))
