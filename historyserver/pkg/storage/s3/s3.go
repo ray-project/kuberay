@@ -162,34 +162,30 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 
 		err := r.S3Client.ListObjectsV2Pages(listInput,
 			func(page *s3.ListObjectsV2Output, lastPage bool) bool {
+				// metadir format should one of the following:
+				// 1. metadir/namespace/raycluster/rayclustername/session
+				// 2. metadir/namespace/owner_resource/resource_name/raycluster/rayclustesname/session
 				logrus.Infof("[List]Returned objects in %v. length of page.Contents: %v, length of page.CommonPrefixes: %v",
 					path.Join(r.S3RootDir, "metadir")+"/", len(page.Contents), len(page.CommonPrefixes))
 
 				for _, object := range page.Contents {
 					c := &utils.ClusterInfo{}
 					metaInfo := strings.Trim(strings.TrimPrefix(*object.Key, path.Join(r.S3RootDir, "metadir/")), "/")
-					metas := strings.Split(metaInfo, "/")
-					if len(metas) < 2 {
-						continue
-					}
-					logrus.Infof("Process %++v", metas)
-					namespaceName := strings.Split(metas[0], "_")
-					if len(namespaceName) < 2 {
-						continue
-					}
-					c.Name = namespaceName[0]
-					c.Namespace = namespaceName[1]
-					c.SessionName = metas[1]
-					sessionInfo := strings.Split(metas[1], "_")
-					date := sessionInfo[1]
-					dataTime := sessionInfo[2]
-					createTime, err := time.Parse("2006-01-02_15-04-05", date+"_"+dataTime)
+					err := utils.ParseMetaDirPath(metaInfo, c)
 					if err != nil {
-						logrus.Errorf("Failed to parse time %s: %v", date+"_"+dataTime, err)
+						logrus.Errorf("Failed to parse meta dir path: %s, error: %v", metaInfo, err)
 						continue
 					}
-					c.CreateTimeStamp = createTime.Unix()
-					c.CreateTime = createTime.UTC().Format(("2006-01-02T15:04:05Z"))
+
+					datetime, err := utils.GetDateTimeFromSessionID(c.SessionName)
+					if err != nil {
+						logrus.Errorf("Failed to get date time from the given sessionID: %s, error: %v", c.SessionName, err)
+						continue
+					}
+					c.CreateTimeStamp = datetime.Unix()
+					c.CreateTime = datetime.UTC().Format(("2006-01-02T15:04:05Z"))
+
+					logrus.Infof("Parsed cluster %s for session %s to list", c.Name, c.SessionName)
 					clusters = append(clusters, *c)
 				}
 				return true

@@ -184,27 +184,15 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 		for _, blob := range resp.Segment.BlobItems {
 			c := &utils.ClusterInfo{}
 			metaInfo := strings.Trim(strings.TrimPrefix(*blob.Name, path.Join(r.RootDir, "metadir/")), "/")
-			metas := strings.Split(metaInfo, "/")
-			if len(metas) < 2 {
-				continue
-			}
-			logrus.Infof("Process %++v", metas)
-			namespaceName := strings.Split(metas[0], "_")
-			if len(namespaceName) < 2 {
-				continue
-			}
-			c.Name = namespaceName[0]
-			c.Namespace = namespaceName[1]
-			c.SessionName = metas[1]
-			sessionInfo := strings.Split(metas[1], "_")
-			if len(sessionInfo) < 3 {
-				continue
-			}
-			date := sessionInfo[1]
-			dataTime := sessionInfo[2]
-			createTime, err := time.Parse("2006-01-02_15-04-05", date+"_"+dataTime)
+			err := utils.ParseMetaDirPath(metaInfo, c)
 			if err != nil {
-				logrus.Errorf("Failed to parse time %s: %v", date+"_"+dataTime, err)
+				logrus.Errorf("Failed to parse meta dir path: %s, error: %v", metaInfo, err)
+				continue
+			}
+
+			createTime, err := utils.GetDateTimeFromSessionID(c.SessionName)
+			if err != nil {
+				logrus.Errorf("Failed to parse time from session %s: %v", c.SessionName, err)
 				continue
 			}
 			c.CreateTimeStamp = createTime.Unix()

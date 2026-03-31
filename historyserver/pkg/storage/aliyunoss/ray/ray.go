@@ -166,21 +166,15 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 			for _, objects := range page.Contents {
 				c := &utils.ClusterInfo{}
 				metaInfo := strings.Trim(strings.TrimPrefix(*objects.Key, path.Join(r.OssRootDir, "metadir/")), "/")
-				metas := strings.Split(metaInfo, "/")
-				if len(metas) < 2 {
+				err = utils.ParseMetaDirPath(metaInfo, c)
+				if err != nil {
+					logrus.Errorf("Failed to parse meta dir path: %s, error: %v", metaInfo, err)
 					continue
 				}
-				logrus.Infof("Process %++v", metas)
-				namespaceName := strings.Split(metas[0], "_")
-				c.Name = namespaceName[0]
-				c.Namespace = namespaceName[1]
-				c.SessionName = metas[1]
-				sessionInfo := strings.Split(metas[1], "_")
-				date := sessionInfo[1]
-				dataTime := sessionInfo[2]
-				createTime, err := time.Parse("2006-01-02_15-04-05", date+"_"+dataTime)
+
+				createTime, err := utils.GetDateTimeFromSessionID(c.SessionName)
 				if err != nil {
-					logrus.Errorf("Failed to parse time %s: %v", date+"_"+dataTime, err)
+					logrus.Errorf("Failed to parse time from session %s: %v", c.SessionName, err)
 					continue
 				}
 				c.CreateTimeStamp = createTime.Unix()

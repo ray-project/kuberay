@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
@@ -11,6 +12,13 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/rest"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	corev1 "k8s.io/api/core/v1"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 )
 
 const (
@@ -19,6 +27,13 @@ const (
 	DATETIME_LAYOUT                       = "2006-01-02_15-04-05.000000"
 	// The following regex shouldn't be changed unless the ray session ID changes.
 	SESSION_ID_REGEX = `session_(\d{4}-\d{2}-\d{2})_(\d{2}-\d{2}-\d{2})_(\d{6})`
+	RAY_CLUSTER_NAME = "RAY_CLUSTER_NAME"
+
+	RAYCLUSTER_CONST = "raycluster"
+	RAYJOB_CONST     = "rayjob"
+	RAYSERVICE_CONST = "rayservice"
+
+	timeout = 30 * time.Second
 )
 
 // EndpointPathToStorageKey converts a Ray Dashboard API endpoint path to a
@@ -168,4 +183,89 @@ func GetDateTimeFromSessionID(sessionID string) (time.Time, error) {
 	}
 
 	return t, nil
+}
+
+func GetRayClusterOwnerInfo(namespace string) (kind string, ownerName string, err error) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		return "", "", fmt.Errorf("failed to get in-cluster config: %w", err)
+	}
+
+	scheme := runtime.NewScheme()
+	utilruntime.Must(rayv1.AddToScheme(scheme))
+	utilruntime.Must(corev1.AddToScheme(scheme))
+
+	kubeClient, err := client.New(config, client.Options{
+		Scheme: scheme,
+	})
+	if err != nil {
+		return "", "", fmt.Errorf("failed to create kubernetes client: %w", err)
+	}
+
+	return getRayClusterOwnerInfoFromClient(ctx, kubeClient, namespace)
+}
+
+// getRayClusterOwnerInfoFromClient will retrieve the OwnerReference for a RayCluster
+func getRayClusterOwnerInfoFromClient(ctx context.Context, kubeClient client.Client, namespace string) (kind string, ownerName string, err error) {
+	// Find the owner reference of the current pod to get the actual name
+	rayClusterName := os.Getenv(RAY_CLUSTER_NAME)
+	if rayClusterName == "" {
+		return "", "", fmt.Errorf("no RayCluster name found. This could be caused by missing env var %s", RAY_CLUSTER_NAME)
+	}
+
+	rayCluster := &rayv1.RayCluster{}
+	if err := kubeClient.Get(ctx, client.ObjectKey{Name: rayClusterName, Namespace: namespace}, rayCluster); err != nil {
+		return "", "", fmt.Errorf("failed to get RayCluster %s/%s: %w", namespace, rayClusterName, err)
+	}
+
+	if len(rayCluster.OwnerReferences) == 0 {
+		return "", "", fmt.Errorf("RayCluster %s/%s has no owner references", namespace, rayClusterName)
+	}
+
+	// Try to find the one with Controller = true
+	for _, ref := range rayCluster.OwnerReferences {
+		if ref.Controller != nil && *ref.Controller {
+			return ref.Kind, ref.Name, nil
+		}
+	}
+
+	// Use first OwnerReference if there isn't one with Controller = true
+	return rayCluster.OwnerReferences[0].Kind, rayCluster.OwnerReferences[0].Name, nil
+}
+
+// ParseMetaDirPath parses the metadir path and populates the ClusterInfo struct
+func ParseMetaDirPath(metaDirPath string, c *ClusterInfo) error {
+	// metadir format should one of the following:
+	// 1. metadir/namespace/raycluster/rayclustername/session
+	// 2. metadir/namespace/owner_resource/resource_name/raycluster/rayclustesname/session
+	metas := strings.Split(metaDirPath, "/")
+	if len(metas) < 4 {
+		return fmt.Errorf("Not enough parts to parse metadir path with fullpath: %s", metaDirPath)
+	}
+	logrus.Infof("Process %s", metas)
+	c.Namespace = metas[0]
+	switch len(metas) {
+	case 4:
+		if metas[1] == RAYCLUSTER_CONST {
+			c.Name = metas[2]
+			c.SessionName = metas[3]
+		} else {
+			return fmt.Errorf("Unable to properly parse ray cluster metadir path with fullpath: %s", metaDirPath)
+		}
+	case 6:
+		if metas[1] == RAYJOB_CONST || metas[1] == RAYSERVICE_CONST {
+			c.OwnerKind = metas[1]
+			c.OwnerName = metas[2]
+			c.Name = metas[4]
+			c.SessionName = metas[5]
+		} else {
+			return fmt.Errorf("Unable to properly parse owner-related metadir path with fullpath: %s, unknown kind: %s", metaDirPath, metas[1])
+		}
+	default:
+		return fmt.Errorf("Unable to properly metadir path with fullpath: %s", metaDirPath)
+	}
+	return nil
 }
