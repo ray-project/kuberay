@@ -30,6 +30,8 @@ type RayLogHandler struct {
 	LogDir                 string
 	RayNodeName            string
 	RayClusterID           string
+	OwnerKind              string
+	OwnerName              string
 	RootDir                string
 	SessionDir             string
 	prevLogsDir            string
@@ -56,6 +58,24 @@ func (r *RayLogHandler) Run(stop <-chan struct{}) error {
 		logrus.Fatalf("Create fsnotify NewWatcher error %v", err)
 	}
 	defer watcher.Close()
+
+	// Retrieve associated resource, we want to run before any log watching
+	if r.IsHead {
+		kind, ownerName, err := utils.GetRayClusterOwnerInfo(r.RayClusterID)
+		if err != nil {
+			logrus.Warnf("Failed to retrieve associated owner reference for RayCluster %s with error: %v, leaving owner empty", r.RayClusterName, err)
+			r.OwnerKind = ""
+			r.OwnerName = ""
+		} else if kind == "" || ownerName == "" {
+			logrus.Warnf("No associated owner reference found %s, leaving empty", r.RayClusterName)
+			r.OwnerKind = ""
+			r.OwnerName = ""
+		} else {
+			r.OwnerKind = kind
+			r.OwnerName = ownerName
+			logrus.Infof("The associated owner resource is: %s/%s", r.OwnerKind, r.OwnerName)
+		}
+	}
 
 	// WatchPrevLogsLoops performs an initial scan of the prev-logs directory on startup
 	// to process leftover log files in prev-logs/{sessionID}/{nodeID}/logs/ directories.
@@ -100,10 +120,14 @@ func (r *RayLogHandler) processSessionLatestLogs() {
 	sessionID := filepath.Base(sessionRealDir)
 	if r.IsHead {
 		metadir := path.Join(r.RootDir, "metadir")
-		metafile := path.Clean(metadir + "/" + fmt.Sprintf("%s/%v",
-			utils.AppendRayClusterNameID(r.RayClusterName, r.RayClusterID),
-			path.Base(sessionID),
-		))
+		metafile := path.Clean(path.Join(
+			metadir,
+			r.RayClusterID,
+			r.OwnerKind,
+			r.OwnerName,
+			"rayclusters",
+			r.RayClusterName,
+			path.Base(sessionID)))
 		if err := r.Writer.CreateDirectory(path.Dir(metafile)); err != nil {
 			logrus.Errorf("CreateObjectIfNotExist %s error %v", metadir, err)
 			return
@@ -449,10 +473,14 @@ func (r *RayLogHandler) processSessionPrevLogs(sessionDir string) {
 	logrus.Infof("Processing all node logs for session: %s", sessionID)
 	if r.IsHead {
 		metadir := path.Join(r.RootDir, "metadir")
-		metafile := path.Clean(metadir + "/" + fmt.Sprintf("%s/%v",
-			utils.AppendRayClusterNameID(r.RayClusterName, r.RayClusterID),
-			path.Base(sessionID),
-		))
+		metafile := path.Clean(path.Join(
+			metadir,
+			r.RayClusterID,
+			r.OwnerKind,
+			r.OwnerName,
+			"rayclusters",
+			r.RayClusterName,
+			path.Base(sessionID)))
 		if err := r.Writer.CreateDirectory(path.Dir(metafile)); err != nil {
 			logrus.Errorf("CreateObjectIfNotExist %s error %v", metadir, err)
 			return
@@ -746,10 +774,14 @@ func (r *RayLogHandler) WatchSessionLatestLoops() {
 			if event.Op&(fsnotify.Create|fsnotify.Write) != 0 {
 				sessionID := filepath.Base(event.Name)
 				metadir := path.Join(r.RootDir, "metadir")
-				metafile := path.Clean(metadir + "/" + fmt.Sprintf("%s/%v",
-					utils.AppendRayClusterNameID(r.RayClusterName, r.RayClusterID),
-					path.Base(sessionID),
-				))
+				metafile := path.Clean(path.Join(
+					metadir,
+					r.RayClusterID,
+					r.OwnerKind,
+					r.OwnerName,
+					"rayclusters",
+					r.RayClusterName,
+					path.Base(sessionID)))
 				if err := r.Writer.CreateDirectory(path.Dir(metafile)); err != nil {
 					logrus.Errorf("CreateObjectIfNotExist %s error %v", metadir, err)
 					return
