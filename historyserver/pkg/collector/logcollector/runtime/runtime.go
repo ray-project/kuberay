@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/ray-project/kuberay/historyserver/pkg/collector/logcollector/runtime/logcollector"
 	"github.com/ray-project/kuberay/historyserver/pkg/collector/types"
 	"github.com/ray-project/kuberay/historyserver/pkg/storage"
@@ -42,10 +44,17 @@ func NewCollector(config *types.RayCollectorConfig, writer storage.StorageWriter
 		Writer:       writer,
 		ShutdownChan: make(chan struct{}),
 	}
+
+	if handler.IsHead {
+		handler.OwnerKind = config.OwnerKind
+		handler.OwnerName = config.OwnerName
+		if handler.OwnerKind != "" {
+			logrus.Infof("The associated owner resource is: %s/%s", handler.OwnerKind, handler.OwnerName)
+		}
+	}
+
 	logDir := strings.TrimSpace(filepath.Join(config.SessionDir, utils.RAY_SESSIONDIR_LOGDIR_NAME))
 	handler.LogDir = logDir
-	// clusterRootDir uses flat key format (name_id) for S3/OSS performance optimization.
-	// See utils.connector for the design rationale.
 	clusterRootDir := fmt.Sprintf("%s/", path.Clean(path.Join(handler.RootDir, utils.AppendRayClusterNameNamespace(handler.RayClusterName, handler.RayClusterNamespace))))
 	handler.ClusterDir = clusterRootDir
 

@@ -20,6 +20,8 @@ const (
 	// The following regex shouldn't be changed unless the ray session ID changes.
 	SESSION_ID_REGEX = `session_(\d{4}-\d{2}-\d{2})_(\d{2}-\d{2}-\d{2})_(\d{6})`
 	HEX_REGEX        = `^[0-9a-fA-F]+$`
+
+	METADIR_NAME = "metadir"
 )
 
 var (
@@ -171,4 +173,48 @@ func GetDateTimeFromSessionID(sessionID string) (time.Time, error) {
 	}
 
 	return t, nil
+}
+
+// ParseMetaFilePath parses the metadir path and populates the ClusterInfo struct
+func ParseMetaFilePath(metaDirPath string) (ClusterInfo, error) {
+	// metadir format should be one of the following:
+	// 1. metadir/{namespace}_{raycluster_name}/{session_id}
+	// 2. metadir/{rayjob|rayservice}_{owner_name}_{namespace}_{raycluster_name}/{session_id}
+	var c ClusterInfo
+	metas := strings.Split(metaDirPath, "/")
+	if len(metas) < 2 {
+		return ClusterInfo{}, fmt.Errorf("not enough parts to parse metadir path with fullpath: %s", metaDirPath)
+	}
+	logrus.Infof("Process %s", metas)
+
+	switch len(metas) {
+	case 2:
+		dirName := metas[0]
+		c.SessionName = metas[1]
+
+		parts := strings.Split(dirName, "_")
+		if len(parts) == 4 {
+			c.OwnerKind = parts[0]
+			c.OwnerName = parts[1]
+			c.Namespace = parts[2]
+			c.Name = parts[3]
+		} else if len(parts) == 2 {
+			c.Namespace = parts[0]
+			c.Name = parts[1]
+		} else {
+			return ClusterInfo{}, fmt.Errorf("unable to properly parse flat metadir path with fullpath: %s", metaDirPath)
+		}
+	default:
+		return ClusterInfo{}, fmt.Errorf("unable to properly parse metadir path with fullpath: %s", metaDirPath)
+	}
+
+	// Populate time fields
+	createTime, err := GetDateTimeFromSessionID(c.SessionName)
+	if err != nil {
+		return ClusterInfo{}, fmt.Errorf("parse session time from %s: %w", c.SessionName, err)
+	}
+	c.CreateTimeStamp = createTime.Unix()
+	c.CreateTime = createTime.UTC().Format("2006-01-02T15:04:05Z")
+
+	return c, nil
 }
