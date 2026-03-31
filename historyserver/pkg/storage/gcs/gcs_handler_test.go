@@ -223,14 +223,28 @@ func TestList(t *testing.T) {
 		{
 			ObjectAttrs: fakestorage.ObjectAttrs{
 				BucketName: "test-bucket",
-				Name:       "ray_historyserver/metadir/mycluster1_default/" + sessionID,
+				Name:       "ray_historyserver/metadir/defaultns/raycluster/mycluster1/" + sessionID,
 			},
 			Content: []byte(""),
 		},
 		{
 			ObjectAttrs: fakestorage.ObjectAttrs{
 				BucketName: "test-bucket",
-				Name:       "ray_historyserver/metadir/mycluster2_testns/" + sessionID,
+				Name:       "ray_historyserver/metadir/testns/raycluster/mycluster2/" + sessionID,
+			},
+			Content: []byte(""),
+		},
+		{
+			ObjectAttrs: fakestorage.ObjectAttrs{
+				BucketName: "test-bucket",
+				Name:       "ray_historyserver/metadir/defaultns/rayjob/myrayjob/raycluster/mycluster3/" + sessionID,
+			},
+			Content: []byte(""),
+		},
+		{
+			ObjectAttrs: fakestorage.ObjectAttrs{
+				BucketName: "test-bucket",
+				Name:       "ray_historyserver/metadir/defaultns/rayservice/myraysvc/raycluster/mycluster4/" + sessionID,
 			},
 			Content: []byte(""),
 		},
@@ -239,8 +253,10 @@ func TestList(t *testing.T) {
 	handler := createRayLogsHandler(client, bucketName)
 
 	expected := []utils.ClusterInfo{
-		{Name: "mycluster1", Namespace: "default", SessionName: sessionID, CreateTimeStamp: ts.Unix(), CreateTime: ts.UTC().Format("2006-01-02T15:04:05Z")},
+		{Name: "mycluster1", Namespace: "defaultns", SessionName: sessionID, CreateTimeStamp: ts.Unix(), CreateTime: ts.UTC().Format("2006-01-02T15:04:05Z")},
 		{Name: "mycluster2", Namespace: "testns", SessionName: sessionID, CreateTimeStamp: ts.Unix(), CreateTime: ts.UTC().Format("2006-01-02T15:04:05Z")},
+		{Name: "mycluster3", OwnerKind: "rayjob", OwnerName: "myrayjob", Namespace: "defaultns", SessionName: sessionID, CreateTimeStamp: ts.Unix(), CreateTime: ts.UTC().Format("2006-01-02T15:04:05Z")},
+		{Name: "mycluster4", OwnerKind: "rayservice", OwnerName: "myraysvc", Namespace: "defaultns", SessionName: sessionID, CreateTimeStamp: ts.Unix(), CreateTime: ts.UTC().Format("2006-01-02T15:04:05Z")},
 	}
 
 	result := handler.List()

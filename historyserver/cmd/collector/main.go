@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"os"
@@ -12,9 +13,17 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+	k8sruntime "k8s.io/apimachinery/pkg/runtime"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/client-go/rest"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	corev1 "k8s.io/api/core/v1"
 
 	"github.com/ray-project/kuberay/historyserver/pkg/collector"
 	"github.com/ray-project/kuberay/historyserver/pkg/collector/eventcollector"
+	"github.com/ray-project/kuberay/historyserver/pkg/collector/kube"
 	"github.com/ray-project/kuberay/historyserver/pkg/collector/logcollector/runtime"
 	"github.com/ray-project/kuberay/historyserver/pkg/collector/types"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
@@ -116,6 +125,36 @@ func main() {
 	writer, err := factory(&globalConfig, jsonData)
 	if err != nil {
 		panic("Failed to create writer for runtime class name: " + runtimeClassName + " for role: " + role + ".")
+	}
+
+	if globalConfig.Role == "Head" {
+		// Initialize k8s client
+		k8sConfig, err := rest.InClusterConfig()
+		if err != nil {
+			logrus.Warnf("Failed to get in-cluster config: %v, leaving owner empty", err)
+		} else {
+			scheme := k8sruntime.NewScheme()
+			utilruntime.Must(rayv1.AddToScheme(scheme))
+			utilruntime.Must(corev1.AddToScheme(scheme))
+
+			kubeClient, err := client.New(k8sConfig, client.Options{
+				Scheme: scheme,
+			})
+			if err != nil {
+				logrus.Warnf("Failed to create kubernetes client: %v, leaving owner empty", err)
+			} else {
+				kubeClientWrapper := kube.NewKubeClient(kubeClient)
+				resolver := runtime.NewLogCollectorOwnerResolver(kubeClientWrapper)
+
+				ownerKind, ownerName, err := resolver.Resolve(context.Background(), globalConfig.RayClusterNamespace, globalConfig.RayClusterName)
+				if err != nil {
+					logrus.Warnf("Failed to retrieve associated owner reference for RayCluster %s with error: %v, leaving owner empty", globalConfig.RayClusterName, err)
+				} else {
+					globalConfig.OwnerKind = ownerKind
+					globalConfig.OwnerName = ownerName
+				}
+			}
+		}
 	}
 
 	var wg sync.WaitGroup

@@ -155,7 +155,7 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 	getClusters := func() {
 		listInput := &s3.ListObjectsV2Input{
 			Bucket:    aws.String(r.S3Bucket),
-			Prefix:    aws.String(path.Join(r.S3RootDir, "metadir") + "/"),
+			Prefix:    aws.String(path.Join(r.S3RootDir, utils.METADIR_NAME) + "/"),
 			MaxKeys:   aws.Int64(100),
 			Delimiter: aws.String(""),
 		}
@@ -163,39 +163,22 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 		err := r.S3Client.ListObjectsV2Pages(listInput,
 			func(page *s3.ListObjectsV2Output, lastPage bool) bool {
 				logrus.Infof("[List]Returned objects in %v. length of page.Contents: %v, length of page.CommonPrefixes: %v",
-					path.Join(r.S3RootDir, "metadir")+"/", len(page.Contents), len(page.CommonPrefixes))
+					path.Join(r.S3RootDir, utils.METADIR_NAME)+"/", len(page.Contents), len(page.CommonPrefixes))
 
 				for _, object := range page.Contents {
-					c := &utils.ClusterInfo{}
-					metaInfo := strings.Trim(strings.TrimPrefix(*object.Key, path.Join(r.S3RootDir, "metadir/")), "/")
-					metas := strings.Split(metaInfo, "/")
-					if len(metas) < 2 {
-						continue
-					}
-					logrus.Infof("Process %++v", metas)
-					namespaceName := strings.Split(metas[0], "_")
-					if len(namespaceName) < 2 {
-						continue
-					}
-					c.Name = namespaceName[0]
-					c.Namespace = namespaceName[1]
-					c.SessionName = metas[1]
-					sessionInfo := strings.Split(metas[1], "_")
-					date := sessionInfo[1]
-					dataTime := sessionInfo[2]
-					createTime, err := time.Parse("2006-01-02_15-04-05", date+"_"+dataTime)
+					metaInfo := strings.Trim(strings.TrimPrefix(*object.Key, path.Join(r.S3RootDir, utils.METADIR_NAME)+"/"), "/")
+					c, err := utils.ParseMetaFilePath(metaInfo)
 					if err != nil {
-						logrus.Errorf("Failed to parse time %s: %v", date+"_"+dataTime, err)
+						logrus.Errorf("Failed to parse meta file path: %s, error: %v", metaInfo, err)
 						continue
 					}
-					c.CreateTimeStamp = createTime.Unix()
-					c.CreateTime = createTime.UTC().Format(("2006-01-02T15:04:05Z"))
-					clusters = append(clusters, *c)
+					logrus.Infof("Parsed cluster %s for session %s to list", c.Name, c.SessionName)
+					clusters = append(clusters, c)
 				}
 				return true
 			})
 		if err != nil {
-			logrus.Errorf("Failed to list objects from %s: %v", path.Join(r.S3RootDir, "metadir")+"/", err)
+			logrus.Errorf("Failed to list objects from %s: %v", path.Join(r.S3RootDir, utils.METADIR_NAME)+"/", err)
 			return
 		}
 	}

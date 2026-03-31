@@ -19,6 +19,12 @@ const (
 	DATETIME_LAYOUT                       = "2006-01-02_15-04-05.000000"
 	// The following regex shouldn't be changed unless the ray session ID changes.
 	SESSION_ID_REGEX = `session_(\d{4}-\d{2}-\d{2})_(\d{2}-\d{2}-\d{2})_(\d{6})`
+
+	METADIR_NAME = "metadir"
+
+	RAYCLUSTER_KIND = "raycluster"
+	RAYJOB_KIND     = "rayjob"
+	RAYSERVICE_KIND = "rayservice"
 )
 
 // EndpointPathToStorageKey converts a Ray Dashboard API endpoint path to a
@@ -168,4 +174,48 @@ func GetDateTimeFromSessionID(sessionID string) (time.Time, error) {
 	}
 
 	return t, nil
+}
+
+// ParseMetaFilePath parses the metadir path and populates the ClusterInfo struct
+func ParseMetaFilePath(metaDirPath string) (ClusterInfo, error) {
+	// metadir format should one of the following:
+	// 1. metadir/namespace/raycluster/rayclustername/session
+	// 2. metadir/namespace/owner_resource/resource_name/raycluster/rayclustesname/session
+	var c ClusterInfo
+	metas := strings.Split(metaDirPath, "/")
+	if len(metas) < 4 {
+		return ClusterInfo{}, fmt.Errorf("not enough parts to parse metadir path with fullpath: %s", metaDirPath)
+	}
+	logrus.Infof("Process %s", metas)
+	c.Namespace = metas[0]
+	switch len(metas) {
+	case 4:
+		if metas[1] == RAYCLUSTER_KIND {
+			c.Name = metas[2]
+			c.SessionName = metas[3]
+		} else {
+			return ClusterInfo{}, fmt.Errorf("unable to properly parse ray cluster metadir path with fullpath: %s", metaDirPath)
+		}
+	case 6:
+		if metas[1] == RAYJOB_KIND || metas[1] == RAYSERVICE_KIND {
+			c.OwnerKind = metas[1]
+			c.OwnerName = metas[2]
+			c.Name = metas[4]
+			c.SessionName = metas[5]
+		} else {
+			return ClusterInfo{}, fmt.Errorf("unable to properly parse owner-related metadir path with fullpath: %s, unknown kind: %s", metaDirPath, metas[1])
+		}
+	default:
+		return ClusterInfo{}, fmt.Errorf("unable to properly metadir path with fullpath: %s", metaDirPath)
+	}
+
+	// Populate time fields
+	createTime, err := GetDateTimeFromSessionID(c.SessionName)
+	if err != nil {
+		return ClusterInfo{}, fmt.Errorf("parse session time from %s: %w", c.SessionName, err)
+	}
+	c.CreateTimeStamp = createTime.Unix()
+	c.CreateTime = createTime.UTC().Format("2006-01-02T15:04:05Z")
+
+	return c, nil
 }
