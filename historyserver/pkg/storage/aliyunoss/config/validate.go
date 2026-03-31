@@ -29,8 +29,8 @@ func ValidateMetaHanderConfig(c *RayMetaHanderConfig, fldpath *field.Path) field
 	if len(c.RayClusterName) == 0 {
 		allErrs = append(allErrs, field.Invalid(fldpath, c.RayClusterName, "ray_cluster_name must be set"))
 	}
-	if len(c.RayClusterID) == 0 {
-		allErrs = append(allErrs, field.Invalid(fldpath, c.RayClusterID, "ray_cluster_id must be set"))
+	if len(c.RayClusterNamespace) == 0 {
+		allErrs = append(allErrs, field.Invalid(fldpath, c.RayClusterNamespace, "ray_cluster_namespace must be set"))
 	}
 	return allErrs
 }

@@ -27,14 +27,14 @@ const (
 )
 
 type RayLogsHandler struct {
-	GCSBucket      string
-	LogFiles       chan string
-	RootDir        string
-	SessionDir     string
-	RayClusterName string
-	RayClusterID   string
-	RayNodeName    string
-	LogBatching    int
+	GCSBucket           string
+	LogFiles            chan string
+	RootDir             string
+	SessionDir          string
+	RayClusterName      string
+	RayClusterNamespace string
+	RayNodeName         string
+	LogBatching         int
 
 	StorageClient *gstorage.Client
 	PushInterval  time.Duration
@@ -276,15 +276,15 @@ func New(c *config) (*RayLogsHandler, error) {
 	}
 
 	return &RayLogsHandler{
-		StorageClient:  storageClient,
-		GCSBucket:      c.Bucket,
-		RayClusterName: c.RayClusterName,
-		RayClusterID:   c.RayClusterID,
-		RootDir:        c.RootDir,
-		LogFiles:       make(chan string, 100),
-		LogBatching:    c.LogBatching,
-		RayNodeName:    c.RayNodeName,
-		SessionDir:     c.SessionDir,
-		PushInterval:   c.PushInterval,
+		StorageClient:       storageClient,
+		GCSBucket:           c.Bucket,
+		RayClusterName:      c.RayClusterName,
+		RayClusterNamespace: c.RayClusterNamespace,
+		RootDir:             c.RootDir,
+		LogFiles:            make(chan string, 100),
+		LogBatching:         c.LogBatching,
+		RayNodeName:         c.RayNodeName,
+		SessionDir:          c.SessionDir,
+		PushInterval:        c.PushInterval,
 	}, nil
 }
