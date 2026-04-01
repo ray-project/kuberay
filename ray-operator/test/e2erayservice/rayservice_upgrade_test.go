@@ -2,6 +2,7 @@ package e2erayservice
 
 import (
 	"encoding/json"
+	"fmt"
 	"testing"
 
 	. "github.com/onsi/gomega"
@@ -104,12 +105,22 @@ func TestOldHeadPodFailDuringUpgrade(t *testing.T) {
 	LogWithTimestamp(test.T(), "Checking that the old Head Pod's label `ray.io/serve` is `true`")
 	g.Expect(headPod.Labels[utils.RayClusterServingServiceLabelKey]).To(Equal("true"))
 
+	headPod, err = test.Client().Core().CoreV1().Pods(namespace.Name).Get(test.Ctx(), headPodName, metav1.GetOptions{})
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(headPod.Status.PodIP).NotTo(BeEmpty())
+	healthURL := fmt.Sprintf("http://%s:%d/", headPod.Status.PodIP, utils.DefaultServingPort) + utils.RayServeProxyHealthPath
+	LogWithTimestamp(test.T(), "Curling head Pod %s at %s to verify iptables DROP on :%d takes effect (expect failure)", headPodName, healthURL, utils.DefaultServingPort)
+	_, _, curlErr := ExecPodCmdWithError(test, curlPod, curlContainerName, []string{
+		"curl", "-sS", "-f", "--connect-timeout", "3", "--max-time", "5", "-X", "GET", healthURL,
+	})
+	g.Expect(curlErr).To(HaveOccurred(), "iptables should block TCP :8000; curl to proxy health should fail like CheckProxyActorHealth would")
+
 	LogWithTimestamp(test.T(), "Checking that the old Head Pod's label `ray.io/serve` is `false` because it is not healthy")
 	g.Eventually(func(g Gomega) string {
 		headPod, err := test.Client().Core().CoreV1().Pods(namespace.Name).Get(test.Ctx(), headPodName, metav1.GetOptions{})
 		g.Expect(err).NotTo(HaveOccurred())
 		return headPod.Labels[utils.RayClusterServingServiceLabelKey]
-	}, TestTimeoutLong).Should(Equal("false"))
+	}, TestTimeoutMedium).Should(Equal("false"))
 
 	LogWithTimestamp(test.T(), "Waiting for RayService %s/%s UpgradeInProgress condition to be true", rayService.Namespace, rayService.Name)
 	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutShort).Should(WithTransform(IsRayServiceUpgrading, BeTrue()))
