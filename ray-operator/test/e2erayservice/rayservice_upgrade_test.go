@@ -117,10 +117,10 @@ func TestOldHeadPodFailDuringUpgrade(t *testing.T) {
 	curlCmd := []string{
 		"curl", "-sS", "-f", "--connect-timeout", "3", "--max-time", "5", "-X", "GET", healthURL,
 	}
-	g.Eventually(func(gg Gomega) {
+	g.Eventually(func() error {
 		_, _, curlErr := ExecPodCmdWithError(test, curlPod, curlContainerName, curlCmd)
-		gg.Expect(curlErr).To(HaveOccurred(), "iptables should block TCP :8000 like CheckProxyActorHealth would fail")
-	}, TestTimeoutShort, 2*time.Second).Should(Succeed())
+		return curlErr
+	}, TestTimeoutShort, 2*time.Second).Should(HaveOccurred(), "iptables should block TCP :8000 like CheckProxyActorHealth would fail")
 
 	LogWithTimestamp(test.T(), "Checking that the old Head Pod's label `ray.io/serve` is `false` because it is not healthy")
 	g.Eventually(func(g Gomega) string {
