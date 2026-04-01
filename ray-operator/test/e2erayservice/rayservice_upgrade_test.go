@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"testing"
+	"time"
 
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -109,11 +110,14 @@ func TestOldHeadPodFailDuringUpgrade(t *testing.T) {
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(headPod.Status.PodIP).NotTo(BeEmpty())
 	healthURL := fmt.Sprintf("http://%s:%d/", headPod.Status.PodIP, utils.DefaultServingPort) + utils.RayServeProxyHealthPath
-	LogWithTimestamp(test.T(), "Curling head Pod %s at %s to verify iptables DROP on :%d takes effect (expect failure)", headPodName, healthURL, utils.DefaultServingPort)
-	_, _, curlErr := ExecPodCmdWithError(test, curlPod, curlContainerName, []string{
+	LogWithTimestamp(test.T(), "Curling head Pod %s at %s until ephemeral iptables applies DROP on :%d (expect curl to fail)", headPodName, healthURL, utils.DefaultServingPort)
+	curlCmd := []string{
 		"curl", "-sS", "-f", "--connect-timeout", "3", "--max-time", "5", "-X", "GET", healthURL,
-	})
-	g.Expect(curlErr).To(HaveOccurred(), "iptables should block TCP :8000; curl to proxy health should fail like CheckProxyActorHealth would")
+	}
+	g.Eventually(func(gg Gomega) {
+		_, _, curlErr := ExecPodCmdWithError(test, curlPod, curlContainerName, curlCmd)
+		gg.Expect(curlErr).To(HaveOccurred(), "iptables should block TCP :8000 like CheckProxyActorHealth would fail")
+	}, TestTimeoutShort, 2*time.Second).Should(Succeed())
 
 	LogWithTimestamp(test.T(), "Checking that the old Head Pod's label `ray.io/serve` is `false` because it is not healthy")
 	g.Eventually(func(g Gomega) string {
