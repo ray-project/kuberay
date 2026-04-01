@@ -79,30 +79,34 @@ func TestOldHeadPodFailDuringUpgrade(t *testing.T) {
 	rayService, err = test.Client().Ray().RayV1().RayServices(namespace.Name).Update(test.Ctx(), rayService, metav1.UpdateOptions{})
 	g.Expect(err).NotTo(HaveOccurred())
 
-	LogWithTimestamp(test.T(), "Using iptables to make the ProxyActor(8000 port) fail to receive requests on the old head Pod")
-	headPodPatch := map[string]any{
-		"spec": map[string]any{
-			"ephemeralContainers": []corev1.EphemeralContainer{
-				{
-					EphemeralContainerCommon: corev1.EphemeralContainerCommon{
-						Name:    "proxy-actor-drop",
-						Image:   "istio/iptables:1.27-2026-02-26T19-02-11",
-						Command: []string{"iptables"},
-						Args:    []string{"-A", "INPUT", "-p", "tcp", "--dport", "8000", "-j", "DROP"},
-						SecurityContext: &corev1.SecurityContext{
-							Privileged: ptr.To(true),
-							RunAsUser:  ptr.To(int64(0)),
+	for _, iptables := range []string{"iptables-legacy", "iptables-nft"} {
+		LogWithTimestamp(test.T(), "Using %s to make the ProxyActor(8000 port) fail to receive requests on the old head Pod", iptables)
+		headPodPatch := map[string]any{
+			"spec": map[string]any{
+				"ephemeralContainers": []corev1.EphemeralContainer{
+					{
+						EphemeralContainerCommon: corev1.EphemeralContainerCommon{
+							Name:    "proxy-actor-drop-" + iptables,
+							Image:   "istio/iptables:1.27-2026-02-26T19-02-11",
+							Command: []string{iptables},
+							Args:    []string{"-A", "INPUT", "-p", "tcp", "--dport", "8000", "-j", "DROP"},
+							SecurityContext: &corev1.SecurityContext{
+								Privileged: ptr.To(true),
+								RunAsUser:  ptr.To(int64(0)),
+							},
 						},
 					},
 				},
 			},
-		},
+		}
+		patchBytes, err := json.Marshal(headPodPatch)
+		g.Expect(err).NotTo(HaveOccurred())
+		_, err = test.Client().Core().CoreV1().Pods(namespace.Name).Patch(test.Ctx(), headPodName, types.StrategicMergePatchType, patchBytes, metav1.PatchOptions{}, "ephemeralcontainers")
+		g.Expect(err).NotTo(HaveOccurred())
 	}
-	patchBytes, err := json.Marshal(headPodPatch)
-	g.Expect(err).NotTo(HaveOccurred())
-	headPod, err := test.Client().Core().CoreV1().Pods(namespace.Name).Patch(test.Ctx(), headPodName, types.StrategicMergePatchType, patchBytes, metav1.PatchOptions{}, "ephemeralcontainers")
-	g.Expect(err).NotTo(HaveOccurred())
 
+	headPod, err := test.Client().Core().CoreV1().Pods(namespace.Name).Get(test.Ctx(), headPodName, metav1.GetOptions{})
+	g.Expect(err).NotTo(HaveOccurred())
 	LogWithTimestamp(test.T(), "Checking that the old Head Pod's label `ray.io/serve` is `true`")
 	g.Expect(headPod.Labels[utils.RayClusterServingServiceLabelKey]).To(Equal("true"))
 
