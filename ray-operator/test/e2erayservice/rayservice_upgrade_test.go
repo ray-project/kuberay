@@ -73,7 +73,7 @@ func TestOldHeadPodFailDuringUpgrade(t *testing.T) {
 			Command: []string{"/bin/bash"},
 			// Intentionally make the new pending cluster sleep for a while to give us
 			// time to capture the iptables manipulation below.
-			Args: []string{"-c", "sleep 60"},
+			Args: []string{"-c", "sleep 30"},
 		},
 	)
 	rayService, err = test.Client().Ray().RayV1().RayServices(namespace.Name).Update(test.Ctx(), rayService, metav1.UpdateOptions{})
@@ -107,12 +107,11 @@ func TestOldHeadPodFailDuringUpgrade(t *testing.T) {
 
 	headPod, err := test.Client().Core().CoreV1().Pods(namespace.Name).Get(test.Ctx(), headPodName, metav1.GetOptions{})
 	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(headPod.Status.PodIP).NotTo(BeEmpty())
+
 	LogWithTimestamp(test.T(), "Checking that the old Head Pod's label `ray.io/serve` is `true`")
 	g.Expect(headPod.Labels[utils.RayClusterServingServiceLabelKey]).To(Equal("true"))
 
-	headPod, err = test.Client().Core().CoreV1().Pods(namespace.Name).Get(test.Ctx(), headPodName, metav1.GetOptions{})
-	g.Expect(err).NotTo(HaveOccurred())
-	g.Expect(headPod.Status.PodIP).NotTo(BeEmpty())
 	healthURL := fmt.Sprintf("http://%s:%d/", headPod.Status.PodIP, utils.DefaultServingPort) + utils.RayServeProxyHealthPath
 	LogWithTimestamp(test.T(), "Curling head Pod %s at %s until ephemeral iptables applies DROP on :%d (expect curl to fail)", headPodName, healthURL, utils.DefaultServingPort)
 	curlCmd := []string{
@@ -128,7 +127,7 @@ func TestOldHeadPodFailDuringUpgrade(t *testing.T) {
 		headPod, err := test.Client().Core().CoreV1().Pods(namespace.Name).Get(test.Ctx(), headPodName, metav1.GetOptions{})
 		g.Expect(err).NotTo(HaveOccurred())
 		return headPod.Labels[utils.RayClusterServingServiceLabelKey]
-	}, TestTimeoutMedium).Should(Equal("false"))
+	}, TestTimeoutShort).Should(Equal("false"))
 
 	LogWithTimestamp(test.T(), "Waiting for RayService %s/%s UpgradeInProgress condition to be true", rayService.Namespace, rayService.Name)
 	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutShort).Should(WithTransform(IsRayServiceUpgrading, BeTrue()))
