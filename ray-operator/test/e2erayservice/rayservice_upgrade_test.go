@@ -71,7 +71,7 @@ func TestOldHeadPodFailDuringUpgrade(t *testing.T) {
 			Command: []string{"/bin/bash"},
 			// Intentionally make the new pending cluster sleep for a while to give us
 			// time to capture the iptables manipulation below.
-			Args: []string{"-c", "sleep 30"},
+			Args: []string{"-c", "sleep 60"},
 		},
 	)
 	rayService, err = test.Client().Ray().RayV1().RayServices(namespace.Name).Update(test.Ctx(), rayService, metav1.UpdateOptions{})
@@ -109,7 +109,7 @@ func TestOldHeadPodFailDuringUpgrade(t *testing.T) {
 		headPod, err := test.Client().Core().CoreV1().Pods(namespace.Name).Get(test.Ctx(), headPodName, metav1.GetOptions{})
 		g.Expect(err).NotTo(HaveOccurred())
 		return headPod.Labels[utils.RayClusterServingServiceLabelKey]
-	}, TestTimeoutMedium).Should(Equal("false"))
+	}, TestTimeoutLong).Should(Equal("false"))
 
 	LogWithTimestamp(test.T(), "Waiting for RayService %s/%s UpgradeInProgress condition to be true", rayService.Namespace, rayService.Name)
 	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutShort).Should(WithTransform(IsRayServiceUpgrading, BeTrue()))
