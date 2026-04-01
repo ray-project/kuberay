@@ -1,0 +1,123 @@
+apiVersion: ray.io/v1
+kind: RayService
+metadata:
+  name: ray-serve-extra-dependency
+spec:
+  serveConfigV2: |
+    applications:
+      - name: fruit_app
+        import_path: fruit.deployment_graph
+        route_prefix: /fruit
+        runtime_env:
+          pip:
+            - pandas
+          working_dir: "https://github.com/ray-project/test_dag/archive/78b4a5da38796123d9f9ffff59bab2792a043e95.zip"
+        deployments:
+          - name: MangoStand
+            num_replicas: 1
+            max_replicas_per_node: 1
+            user_config:
+              price: 3
+            ray_actor_options:
+              num_cpus: 0.1
+          - name: OrangeStand
+            num_replicas: 1
+            user_config:
+              price: 2
+            ray_actor_options:
+              num_cpus: 0.1
+          - name: PearStand
+            num_replicas: 1
+            user_config:
+              price: 1
+            ray_actor_options:
+              num_cpus: 0.1
+          - name: FruitMarket
+            num_replicas: 1
+            ray_actor_options:
+              num_cpus: 0.1
+      - name: math_app
+        import_path: conditional_dag.serve_dag
+        route_prefix: /calc
+        runtime_env:
+          pip:
+            - numpy
+          working_dir: "https://github.com/ray-project/test_dag/archive/78b4a5da38796123d9f9ffff59bab2792a043e95.zip"
+        deployments:
+          - name: Adder
+            num_replicas: 1
+            user_config:
+              increment: 3
+            ray_actor_options:
+              num_cpus: 0.1
+          - name: Multiplier
+            num_replicas: 1
+            user_config:
+              factor: 5
+            ray_actor_options:
+              num_cpus: 0.1
+          - name: Router
+            num_replicas: 1
+  rayClusterConfig:
+    rayVersion: "2.53.0"
+    headGroupSpec:
+      rayStartParams:
+        num-cpus: "0"
+        dashboard-host: "0.0.0.0"
+      template:
+        spec:
+          containers:
+          - name: ray-head
+            image: rayproject/ray:2.53.0
+            ports:
+            - containerPort: 8000
+              name: serve
+              protocol: TCP
+            - containerPort: 8080
+              name: metrics
+              protocol: TCP
+            - containerPort: 6379
+              name: gcs
+              protocol: TCP
+            - containerPort: 8265
+              name: dashboard
+              protocol: TCP
+            - containerPort: 10001
+              name: client
+              protocol: TCP
+            resources:
+              limits:
+                cpu: "2"
+                memory: "5Gi"
+              requests:
+                cpu: "2"
+                memory: "5Gi"
+    workerGroupSpecs:
+    - groupName: worker-group
+      replicas: 1
+      minReplicas: 1
+      maxReplicas: 1
+      numOfHosts: 1
+      rayStartParams: {}
+      template:
+        spec:
+          containers:
+          - name: ray-worker
+            image: rayproject/ray:2.53.0
+            # Shared dependencies via args
+            # System packages and pip packages installed here are accessible
+            # to ALL applications in this RayService
+            args:
+            - |
+              sudo apt-get update && \
+              sudo apt-get install -y --no-install-recommends curl && \
+              sudo rm -rf /var/lib/apt/lists/* && \
+              pip install httpx \
+            # Make sure to add the \ at the end of the last line
+            resources:
+              limits:
+                cpu: "2"
+                memory: "4Gi"
+              requests:
+                cpu: "2"
+                memory: "4Gi"
