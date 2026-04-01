@@ -15,7 +15,7 @@ metadata:
   labels:
     volcano.sh/queue-name: kuberay-test-queue
 spec:
-  rayVersion: '2.52.0'
+  rayVersion: "2.52.0"
   headGroupSpec:
     rayStartParams: {}
     template:
