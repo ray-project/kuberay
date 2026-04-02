@@ -1,19 +1,36 @@
 apiVersion: ray.io/v1
 kind: RayCluster
 metadata:
-  name: raycluster-custom-rules
+  name: raycluster-deny-egress
 spec:
   networkIsolation:
-    mode: denyAll
-    ingressRules:
-    # Allow pods labelled app=ray-client to reach the serving port (8000)
-    - ports:
-      - protocol: TCP
-        port: 8000
-      from:
+    # Restricts all outbound traffic except intra-cluster communication and DNS.
+    # Inbound traffic (ingress) is unrestricted.
+    # NOTE: pip install, RayJob submission to external endpoints, and RayServe
+    # all require explicit egressRules to function.
+    mode: denyAllEgress
+    egressRules:
+    # Allow pip install / PyPI access over HTTPS
+    - to:
+      - ipBlock:
+          cidr: 0.0.0.0/0
+      ports:
+      - port: 443
+        protocol: TCP
+    # Allow RayJob submitter pods to reach the head dashboard port for job submission
+    - to:
       - podSelector:
           matchLabels:
-            app: ray-client
+            ray.io/node-type: head
+      ports:
+      - port: 8265
+        protocol: TCP
+    # Allow RayServe traffic to leave worker pods on the default serve port
+    - to:
+      - podSelector: {}
+      ports:
+      - port: 8000
+        protocol: TCP
   rayVersion: '2.52.0'
   headGroupSpec:
     rayStartParams: {}
