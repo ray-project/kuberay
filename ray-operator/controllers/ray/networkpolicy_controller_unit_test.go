@@ -53,7 +53,8 @@ func setupNetworkPolicyTest(t *testing.T) {
 
 	testScheme := runtime.NewScheme()
 	testNetworkPolicyController = &NetworkPolicyController{
-		Scheme: testScheme,
+		Scheme:            testScheme,
+		OperatorNamespace: "kuberay-system",
 		Client: clientFake.NewClientBuilder().
 			WithScheme(testScheme).
 			Build(),
@@ -351,15 +352,17 @@ func TestBuildHeadIngressRules(t *testing.T) {
 	assert.Empty(t, intraClusterRule.Ports, "Intra-cluster rule must allow all ports (no Ports field)")
 
 	// Rule 1: operator — two ports (dashboard + client), operator pod selector with
-	// empty namespace selector so the operator is reachable from any namespace.
+	// namespace selector restricted to the operator's namespace.
 	// Only component label is used; name label differs between kustomize and Helm.
 	operatorRule := rules[1]
 	require.Len(t, operatorRule.From, 1)
 	assert.Equal(t, map[string]string{
 		"app.kubernetes.io/component": utils.ComponentName,
 	}, operatorRule.From[0].PodSelector.MatchLabels)
-	assert.NotNil(t, operatorRule.From[0].NamespaceSelector)
-	assert.Empty(t, operatorRule.From[0].NamespaceSelector.MatchLabels, "Empty namespace selector must match all namespaces")
+	require.NotNil(t, operatorRule.From[0].NamespaceSelector)
+	assert.Equal(t, map[string]string{
+		corev1.LabelMetadataName: "kuberay-system",
+	}, operatorRule.From[0].NamespaceSelector.MatchLabels, "Namespace selector must restrict to operator namespace")
 	require.Len(t, operatorRule.Ports, 2)
 	dashboardPort := intstr.FromInt32(utils.DefaultDashboardPort)
 	clientPort := intstr.FromInt32(utils.DefaultClientPort)

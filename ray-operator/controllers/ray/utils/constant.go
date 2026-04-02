@@ -94,6 +94,8 @@ const (
 	KubernetesApplicationNameLabelKey = "app.kubernetes.io/name"
 	KubernetesCreatedByLabelKey       = "app.kubernetes.io/created-by"
 
+	InClusterNamespacePath = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
+
 	// Use as separator for pod name, for example, raycluster-small-size-worker-0
 	DashSymbol = "-"
 

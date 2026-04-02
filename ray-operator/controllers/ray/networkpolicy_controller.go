@@ -3,6 +3,8 @@ package ray
 import (
 	"context"
 	"fmt"
+	"os"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -24,17 +26,31 @@ import (
 // resources and manages NetworkPolicies for them.
 type NetworkPolicyController struct {
 	client.Client
-	Scheme   *runtime.Scheme
-	Recorder record.EventRecorder
+	Scheme            *runtime.Scheme
+	Recorder          record.EventRecorder
+	OperatorNamespace string
 }
 
-// NewNetworkPolicyController creates a new independent NetworkPolicy controller
+// NewNetworkPolicyController creates a new independent NetworkPolicy controller.
+// The operator's namespace is resolved from the in-cluster service account token,
+// falling back to the POD_NAMESPACE environment variable.
 func NewNetworkPolicyController(mgr manager.Manager) *NetworkPolicyController {
 	return &NetworkPolicyController{
-		Client:   mgr.GetClient(),
-		Scheme:   mgr.GetScheme(),
-		Recorder: mgr.GetEventRecorderFor("networkpolicy-controller"),
+		Client:            mgr.GetClient(),
+		Scheme:            mgr.GetScheme(),
+		Recorder:          mgr.GetEventRecorderFor("networkpolicy-controller"),
+		OperatorNamespace: getOperatorNamespace(),
 	}
+}
+
+// getOperatorNamespace returns the namespace the operator is running in.
+// It reads from the in-cluster service account namespace file first, then
+// falls back to the POD_NAMESPACE environment variable.
+func getOperatorNamespace() string {
+	if ns, err := os.ReadFile(utils.InClusterNamespacePath); err == nil {
+		return strings.TrimSpace(string(ns))
+	}
+	return os.Getenv("POD_NAMESPACE")
 }
 
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=get;list;watch;create;update;delete;patch
@@ -280,8 +296,9 @@ func (r *NetworkPolicyController) buildHeadIngressRules(instance *rayv1.RayClust
 		// Only app.kubernetes.io/component is used because app.kubernetes.io/name
 		// differs between deployment methods (kustomize sets "kuberay", Helm sets
 		// "kuberay-operator"), whereas component is "kuberay-operator" in both.
-		// NamespaceSelector is intentionally empty (matches all namespaces) so that
-		// the operator pod is allowed regardless of which namespace it runs in.
+		// NamespaceSelector restricts to the operator's namespace using the
+		// immutable kubernetes.io/metadata.name label (available since K8s 1.21)
+		// to prevent label-spoofing from user-supplied RayCluster pod labels.
 		networkingv1.NetworkPolicyIngressRule{
 			From: []networkingv1.NetworkPolicyPeer{
 				{
@@ -290,7 +307,11 @@ func (r *NetworkPolicyController) buildHeadIngressRules(instance *rayv1.RayClust
 							"app.kubernetes.io/component": utils.ComponentName,
 						},
 					},
-					NamespaceSelector: &metav1.LabelSelector{},
+					NamespaceSelector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							corev1.LabelMetadataName: r.OperatorNamespace,
+						},
+					},
 				},
 			},
 			Ports: []networkingv1.NetworkPolicyPort{
