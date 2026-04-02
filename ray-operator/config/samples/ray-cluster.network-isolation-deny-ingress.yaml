@@ -5,8 +5,19 @@ metadata:
 spec:
   networkIsolation:
     # Restricts all inbound traffic except intra-cluster and KubeRay operator.
-    # Outbound traffic (egress) is unrestricted - pods can reach external services.
+    # Outbound traffic (egress) is unrestricted — pods can reach external services.
     mode: denyAllIngress
+    ingressRules:
+    # Allow pods labelled app=ray-client to reach the Ray Serve inference endpoint.
+    # The base rules only open dashboard (8265) and client (10001) ports, so
+    # an explicit rule is needed for serve traffic to reach the cluster.
+    - from:
+      - podSelector:
+          matchLabels:
+            app: ray-client
+      ports:
+      - port: 8000
+        protocol: TCP
   rayVersion: '2.52.0'
   headGroupSpec:
     rayStartParams: {}
@@ -29,6 +40,8 @@ spec:
             name: dashboard
           - containerPort: 10001
             name: client
+          - containerPort: 8000
+            name: serve
   workerGroupSpecs:
   - replicas: 1
     minReplicas: 1
