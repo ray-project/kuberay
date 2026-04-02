@@ -13,7 +13,7 @@ spec:
     rayStartParams:
       port: "6380"
       dashboard-port: "9000"
-      ray-client-server-port: "10002"
+      ray-client-server-port: "9001"
     template:
       spec:
         containers:
@@ -30,9 +30,9 @@ spec:
           - containerPort: 6380
             name: gcs-server
           - containerPort: 9000
-            name: dashboard # resolved automatically → operator rule targets 9000
-          - containerPort: 10002
-            name: client # resolved automatically → operator rule targets 10002
+            name: dashboard # resolved automatically by the operator rule which targets 9000
+          - containerPort: 9001
+            name: client # resolved automatically by the operator rule which targets 9001
           - containerPort: 9090
             name: metrics
   workerGroupSpecs:
