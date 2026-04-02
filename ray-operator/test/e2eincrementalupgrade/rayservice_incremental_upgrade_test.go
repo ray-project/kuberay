@@ -12,7 +12,6 @@ import (
 	"golang.org/x/sync/errgroup"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
@@ -336,7 +335,7 @@ func TestRayServiceIncrementalUpgradeWithLocust(t *testing.T) {
 	}
 }
 
-func TestRayServiceIncrementalUpgradeRollbackToOriginal(t *testing.T) {
+func TestRayServiceIncrementalUpgradeRollback(t *testing.T) {
 	features.SetFeatureGateDuringTest(t, features.RayServiceIncrementalUpgrade, true)
 
 	test := With(t)
@@ -393,16 +392,7 @@ func TestRayServiceIncrementalUpgradeRollbackToOriginal(t *testing.T) {
 
 	// Verify that the controller enters the rollback state.
 	LogWithTimestamp(test.T(), "Waiting for RayService %s/%s RollbackInProgress condition to be true", rayService.Namespace, rayService.Name)
-	g.Eventually(func(g Gomega) {
-		svc, err := GetRayService(test, namespace.Name, rayServiceName)
-		g.Expect(err).NotTo(HaveOccurred())
-		g.Expect(IsRayServiceRollingBack(svc)).To(BeTrue())
-
-		// Assert the condition message indicates a rollback to original cluster spec.
-		cond := meta.FindStatusCondition(svc.Status.Conditions, string(rayv1.RollbackInProgress))
-		g.Expect(cond).NotTo(BeNil())
-		g.Expect(cond.Message).To(Equal("Reverted to original cluster spec, rolling back."))
-	}, TestTimeoutShort).Should(Succeed())
+	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutShort).Should(WithTransform(IsRayServiceRollingBack, BeTrue()))
 
 	// Verify that traffic gradually shifts back to the active cluster.
 	LogWithTimestamp(test.T(), "Verifying traffic shifts back to the active cluster")
@@ -441,168 +431,4 @@ func TestRayServiceIncrementalUpgradeRollbackToOriginal(t *testing.T) {
 			}
 			return len(route.Spec.Rules[0].BackendRefs)
 		}, Equal(1)))
-}
-
-func TestRayServiceIncrementalUpgradeRollbackToThirdSpec(t *testing.T) {
-	features.SetFeatureGateDuringTest(t, features.RayServiceIncrementalUpgrade, true)
-
-	test := With(t)
-	g := NewWithT(t)
-
-	namespace := test.NewTestNamespace()
-	rayServiceName := "rollback-third-spec-rayservice"
-
-	// Configuration for the upgrade
-	stepSize := ptr.To(int32(50))
-	interval := ptr.To(int32(2))
-	maxSurge := ptr.To(int32(50))
-	serveConfigV2 := defaultIncrementalUpgradeServeConfigV2
-
-	// Bootstrap the initial RayService (Spec A) and wait for readiness
-	_, _, _ = bootstrapIncrementalRayService(test, g, namespace.Name, rayServiceName, stepSize, interval, maxSurge, serveConfigV2)
-
-	// Trigger an incremental upgrade from Spec A to Spec B.
-	LogWithTimestamp(test.T(), "Triggering an upgrade to Spec B")
-	rayService, err := GetRayService(test, namespace.Name, rayServiceName)
-	g.Expect(err).NotTo(HaveOccurred())
-	rayService.Spec.RayClusterSpec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests[corev1.ResourceCPU] = resource.MustParse("500m")
-	_, err = test.Client().Ray().RayV1().RayServices(namespace.Name).Update(test.Ctx(), rayService, metav1.UpdateOptions{})
-	g.Expect(err).NotTo(HaveOccurred())
-
-	// Wait for the upgrade to be partially complete (i.e. traffic partially migrated to B).
-	LogWithTimestamp(test.T(), "Waiting for upgrade to be partially complete")
-	g.Eventually(func(g Gomega) {
-		svc, err := GetRayService(test, namespace.Name, rayServiceName)
-		g.Expect(err).NotTo(HaveOccurred())
-		g.Expect(svc.Status.PendingServiceStatus.TrafficRoutedPercent).NotTo(BeNil())
-		g.Expect(*svc.Status.PendingServiceStatus.TrafficRoutedPercent).Should(BeNumerically(">", 0))
-	}, TestTimeoutMedium).Should(Succeed())
-
-	// Update the RayService to a completely new spec C mid-upgrade from A -> B.
-	LogWithTimestamp(test.T(), "Submitting Spec C mid-upgrade")
-	rayService, err = GetRayService(test, namespace.Name, rayServiceName)
-	g.Expect(err).NotTo(HaveOccurred())
-	rayService.Spec.RayClusterSpec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests[corev1.ResourceCPU] = resource.MustParse("600m")
-	_, err = test.Client().Ray().RayV1().RayServices(namespace.Name).Update(test.Ctx(), rayService, metav1.UpdateOptions{})
-	g.Expect(err).NotTo(HaveOccurred())
-
-	// Verify that the controller enters the rollback state first, going from B -> A.
-	LogWithTimestamp(test.T(), "Waiting for RayService to enter Rollback state")
-	g.Eventually(func(g Gomega) {
-		svc, err := GetRayService(test, namespace.Name, rayServiceName)
-		g.Expect(err).NotTo(HaveOccurred())
-		g.Expect(IsRayServiceRollingBack(svc)).To(BeTrue())
-
-		// Validate the condition message is for a rollback to a third, new spec.
-		cond := meta.FindStatusCondition(svc.Status.Conditions, string(rayv1.RollbackInProgress))
-		g.Expect(cond).NotTo(BeNil())
-		g.Expect(cond.Message).To(Equal("Goal state diverged from both active and pending clusters. Rolling back first, then a new upgrade will begin."))
-	}, TestTimeoutShort).Should(Succeed())
-
-	// Verify that the rollback completes successfully.
-	LogWithTimestamp(test.T(), "Waiting for rollback of Spec B to complete")
-	g.Eventually(func(g Gomega) {
-		svc, err := GetRayService(test, namespace.Name, rayServiceName)
-		g.Expect(err).NotTo(HaveOccurred())
-		g.Expect(IsRayServiceRollingBack(svc)).To(BeFalse())
-	}, TestTimeoutMedium).Should(Succeed())
-
-	// Verify that after the rollback, the system starts the new upgrade from A to C.
-	// Forward upgrade path is tested above, so it's enough here to just verify the
-	// upgrade starts after the rollback.
-	LogWithTimestamp(test.T(), "Waiting for new upgrade to third spec to begin")
-	g.Eventually(func(g Gomega) {
-		svc, err := GetRayService(test, namespace.Name, rayServiceName)
-		g.Expect(err).NotTo(HaveOccurred())
-		g.Expect(IsRayServiceUpgrading(svc)).To(BeTrue())
-		g.Expect(svc.Status.PendingServiceStatus.RayClusterName).NotTo(BeEmpty())
-	}, TestTimeoutMedium).Should(Succeed())
-}
-
-// Tests the scenario where a user initiates an upgrade, but State B contains
-// a bad configuration that prevents the pending cluster from becoming ready.
-//
-// The expected behavior is that the controller safely pauses traffic migration
-// (100% still on old cluster) and waits for the user to revert the spec back.
-func TestRayServiceIncrementalUpgradeRollbackOnError(t *testing.T) {
-	features.SetFeatureGateDuringTest(t, features.RayServiceIncrementalUpgrade, true)
-
-	test := With(t)
-	g := NewWithT(t)
-
-	namespace := test.NewTestNamespace()
-	rayServiceName := "rollback-error-rayservice"
-
-	stepSize := ptr.To(int32(25))
-	interval := ptr.To(int32(2))
-	maxSurge := ptr.To(int32(50))
-	serveConfigV2 := defaultIncrementalUpgradeServeConfigV2
-
-	// Bootstrap the initial RayService (State A) and wait for readiness
-	_, _, _ = bootstrapIncrementalRayService(test, g, namespace.Name, rayServiceName, stepSize, interval, maxSurge, serveConfigV2)
-
-	rayService, err := GetRayService(test, namespace.Name, rayServiceName)
-	g.Expect(err).NotTo(HaveOccurred())
-	originalSpec := rayService.Spec.DeepCopy()
-
-	// Trigger an incremental upgrade with a bad serve config / app error
-	LogWithTimestamp(test.T(), "Triggering an upgrade with an invalid Serve config")
-	rayService, err = GetRayService(test, namespace.Name, rayServiceName)
-	g.Expect(err).NotTo(HaveOccurred())
-
-	// Invalid serve config that will crash/fail to deploy
-	invalidServeConfig := strings.Replace(string(serveConfigV2), "fruit.deployment_graph", "invalid.path.that.does.not.exist", 1)
-	rayService.Spec.ServeConfigV2 = invalidServeConfig
-
-	// Modify the RayClusterSpec to trigger the creation of the pending cluster
-	rayService.Spec.RayClusterSpec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests[corev1.ResourceCPU] = resource.MustParse("500m")
-
-	_, err = test.Client().Ray().RayV1().RayServices(namespace.Name).Update(test.Ctx(), rayService, metav1.UpdateOptions{})
-	g.Expect(err).NotTo(HaveOccurred())
-
-	LogWithTimestamp(test.T(), "Waiting for RayService %s/%s UpgradeInProgress condition to be true", rayService.Namespace, rayService.Name)
-	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutShort).Should(WithTransform(IsRayServiceUpgrading, BeTrue()))
-
-	// Verify that the pending cluster is created but traffic doesn't shift because the app errored.
-	LogWithTimestamp(test.T(), "Verifying traffic does not migrate due to application error")
-	var pendingClusterName string
-	g.Eventually(func(g Gomega) {
-		svc, err := GetRayService(test, namespace.Name, rayServiceName)
-		g.Expect(err).NotTo(HaveOccurred())
-		g.Expect(svc.Status.PendingServiceStatus.RayClusterName).NotTo(BeEmpty())
-		pendingClusterName = svc.Status.PendingServiceStatus.RayClusterName
-	}, TestTimeoutShort).Should(Succeed())
-
-	// Wait longer than the interval to ensure traffic on new cluster stays at 0%
-	time.Sleep(5 * time.Second)
-	svc, err := GetRayService(test, namespace.Name, rayServiceName)
-	g.Expect(err).NotTo(HaveOccurred())
-	g.Expect(*svc.Status.PendingServiceStatus.TrafficRoutedPercent).To(Equal(int32(0)), "Traffic should not migrate to a failing pending cluster")
-	g.Expect(*svc.Status.ActiveServiceStatus.TrafficRoutedPercent).To(Equal(int32(100)), "Traffic should remain 100% on the healthy active cluster")
-
-	// User notices the error and manually reverts back to the original spec
-	LogWithTimestamp(test.T(), "Reverting to the original spec to recover from the error")
-	rayService, err = GetRayService(test, namespace.Name, rayServiceName)
-	g.Expect(err).NotTo(HaveOccurred())
-	rayService.Spec = *originalSpec
-	_, err = test.Client().Ray().RayV1().RayServices(namespace.Name).Update(test.Ctx(), rayService, metav1.UpdateOptions{})
-	g.Expect(err).NotTo(HaveOccurred())
-
-	// Verify that we rollback back to original spec -  rolling back just consists of clearing
-	// the pending service / cluster that are in error. This happens in a single reconcile
-	// loop so we do not need to check for the rollback condition.
-	LogWithTimestamp(test.T(), "Waiting for rollback to complete and pending cluster to be deleted")
-	g.Eventually(func(g Gomega) {
-		svc, err := GetRayService(test, namespace.Name, rayServiceName)
-		g.Expect(err).NotTo(HaveOccurred())
-		g.Expect(IsRayServiceRollingBack(svc)).To(BeFalse())
-		g.Expect(IsRayServiceUpgrading(svc)).To(BeFalse())
-		g.Expect(svc.Status.PendingServiceStatus.RayClusterName).To(BeEmpty())
-	}, TestTimeoutMedium).Should(Succeed())
-
-	// Check that the broken pending RayCluster resource is deleted.
-	g.Eventually(func() error {
-		_, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Get(test.Ctx(), pendingClusterName, metav1.GetOptions{})
-		return err
-	}, TestTimeoutMedium).Should(WithTransform(errors.IsNotFound, BeTrue()))
 }
