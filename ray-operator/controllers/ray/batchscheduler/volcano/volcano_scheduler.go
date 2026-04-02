@@ -277,6 +277,11 @@ func (v *VolcanoBatchScheduler) CleanupOnCompletion(ctx context.Context, object 
 		return false, nil
 	}
 
+	if len(rayJob.Spec.ClusterSelector) > 0 {
+		// Batch scheduling is not supported for RayJob with ClusterSelector.
+		return false, nil
+	}
+
 	var minMember int32
 	var totalResourceList []corev1.ResourceList
 
