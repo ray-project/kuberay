@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"reflect"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
@@ -129,7 +130,11 @@ func (r *NetworkPolicyController) createOrUpdateNetworkPolicy(ctx context.Contex
 				return err
 			}
 
-			// Update the existing NetworkPolicy
+			if reflect.DeepEqual(existing.Spec, networkPolicy.Spec) && reflect.DeepEqual(existing.Labels, networkPolicy.Labels) {
+				logger.V(1).Info("NetworkPolicy already up to date, skipping update", "name", networkPolicy.Name)
+				return nil
+			}
+
 			existing.Spec = networkPolicy.Spec
 			existing.Labels = networkPolicy.Labels
 
