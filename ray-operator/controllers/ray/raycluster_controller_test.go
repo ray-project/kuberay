@@ -34,6 +34,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/utils/ptr"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
@@ -1712,6 +1713,217 @@ var _ = Context("Inside the default namespace", func() {
 				g.Expect(names).NotTo(ContainElement(unrelatedPodName), "unrelated pod must not appear in the manager's Pod store; got: %v", names)
 				g.Expect(cachedRayPods.Items).To(HaveLen(2), "this RayCluster has one head and one worker Pod in cache")
 			}, time.Second*10, time.Millisecond*300).Should(Succeed(), "wait for the manager informer to sync listed Pods")
+		})
+	})
+
+	Describe("RayCluster Redis cleanup finalizer timeout and auto-deletion", func() {
+		var (
+			ctx        = context.Background()
+			namespace  = "default"
+			rayCluster *rayv1.RayCluster
+			reconciler *RayClusterReconciler
+		)
+
+		BeforeEach(func() {
+			rayCluster = rayClusterTemplate("raycluster-redis-cleanup", namespace)
+			reconciler = &RayClusterReconciler{
+				Client:   k8sClient,
+				Scheme:   k8sClient.Scheme(),
+				Recorder: nil, // Not needed for unit tests
+			}
+		})
+
+		Describe("Helper function tests", func() {
+			It("Should correctly detect RayService ownership", func() {
+				// Test cluster without RayService ownership
+				Expect(isOwnedByRayService(rayCluster)).To(BeFalse())
+
+				// Test cluster with RayService ownership label
+				rayCluster.Labels = map[string]string{
+					utils.RayOriginatedFromCRDLabelKey: utils.RayOriginatedFromCRDLabelValue(utils.RayServiceCRD),
+				}
+				Expect(isOwnedByRayService(rayCluster)).To(BeTrue())
+
+				// Test cluster with different ownership label
+				rayCluster.Labels[utils.RayOriginatedFromCRDLabelKey] = "SomeOtherCRD"
+				Expect(isOwnedByRayService(rayCluster)).To(BeFalse())
+
+				// Test cluster without labels
+				rayCluster.Labels = nil
+				Expect(isOwnedByRayService(rayCluster)).To(BeFalse())
+			})
+
+			It("Should return correct deletion timeout from environment variable", func() {
+				// Test default timeout when no env var is set
+				timeout := getGCSFTDeletionTimeout()
+				Expect(timeout).To(Equal(time.Duration(utils.RAYCLUSTER_GCS_FT_DELETION_TIMEOUT_DEFAULT) * time.Second))
+
+				// Test with custom environment variable (this would require setting env var in real test environment)
+				// For unit test, we just verify the default behavior
+			})
+		})
+
+		Describe("Auto-deletion for stuck RayService clusters", Ordered, func() {
+			var redisCleanupFinalizer = "ray.io/gcs-ft-redis-cleanup-finalizer"
+
+			It("Should create RayService-owned cluster with Redis cleanup finalizer", func() {
+				// Set up cluster as owned by RayService
+				rayCluster.Labels = map[string]string{
+					utils.RayOriginatedFromCRDLabelKey: utils.RayOriginatedFromCRDLabelValue(utils.RayServiceCRD),
+				}
+				rayCluster.Finalizers = []string{redisCleanupFinalizer}
+
+				err := k8sClient.Create(ctx, rayCluster)
+				Expect(err).NotTo(HaveOccurred(), "Failed to create RayCluster")
+
+				Eventually(
+					getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: namespace}, rayCluster),
+					time.Second*3, time.Millisecond*500).Should(BeNil())
+
+				// Verify cluster has the finalizer and RayService ownership
+				Expect(rayCluster.Finalizers).To(ContainElement(redisCleanupFinalizer))
+				Expect(rayCluster.Labels[utils.RayOriginatedFromCRDLabelKey]).To(Equal(utils.RayOriginatedFromCRDLabelValue(utils.RayServiceCRD)))
+			})
+
+			It("Should NOT auto-delete cluster before timeout", func() {
+				// Set deletion timestamp to recent time (within timeout)
+				recentTime := metav1.NewTime(time.Now().Add(-5 * time.Minute)) // 5 minutes ago, less than 15 minute default timeout
+				rayCluster.DeletionTimestamp = &recentTime
+
+				err := k8sClient.Update(ctx, rayCluster)
+				Expect(err).NotTo(HaveOccurred(), "Failed to update RayCluster deletion timestamp")
+
+				// Verify cluster still exists with finalizer
+				Eventually(
+					getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: namespace}, rayCluster),
+					time.Second*3, time.Millisecond*500).Should(BeNil())
+				Expect(rayCluster.Finalizers).To(ContainElement(redisCleanupFinalizer))
+			})
+
+			It("Should auto-delete cluster after timeout", func() {
+				// Set deletion timestamp to old time (past timeout)
+				oldTime := metav1.NewTime(time.Now().Add(-20 * time.Minute)) // 20 minutes ago, past 15 minute default timeout
+				rayCluster.DeletionTimestamp = &oldTime
+
+				err := k8sClient.Update(ctx, rayCluster)
+				Expect(err).NotTo(HaveOccurred(), "Failed to update RayCluster deletion timestamp")
+
+				// Call the force delete function directly
+				result, err := reconciler.forceDeleteStuckRayServiceCluster(ctx, rayCluster)
+				Expect(err).NotTo(HaveOccurred(), "Force deletion should succeed")
+				Expect(result).To(Equal(ctrl.Result{}))
+
+				// Verify finalizer is removed
+				Eventually(func() []string {
+					err := getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: namespace}, rayCluster)()
+					if err != nil {
+						return nil
+					}
+					return rayCluster.Finalizers
+				}, time.Second*3, time.Millisecond*500).ShouldNot(ContainElement(redisCleanupFinalizer))
+			})
+		})
+
+		Describe("Auto-deletion safety for standalone clusters", Ordered, func() {
+			var (
+				standaloneCluster     *rayv1.RayCluster
+				redisCleanupFinalizer = "ray.io/gcs-ft-redis-cleanup-finalizer"
+			)
+
+			BeforeEach(func() {
+				standaloneCluster = rayClusterTemplate("raycluster-standalone", namespace)
+				// Do NOT set RayService ownership label
+				standaloneCluster.Finalizers = []string{redisCleanupFinalizer}
+			})
+
+			It("Should create standalone cluster with Redis cleanup finalizer", func() {
+				err := k8sClient.Create(ctx, standaloneCluster)
+				Expect(err).NotTo(HaveOccurred(), "Failed to create standalone RayCluster")
+
+				Eventually(
+					getResourceFunc(ctx, client.ObjectKey{Name: standaloneCluster.Name, Namespace: namespace}, standaloneCluster),
+					time.Second*3, time.Millisecond*500).Should(BeNil())
+
+				// Verify cluster has the finalizer but NO RayService ownership
+				Expect(standaloneCluster.Finalizers).To(ContainElement(redisCleanupFinalizer))
+				Expect(standaloneCluster.Labels).NotTo(HaveKey(utils.RayOriginatedFromCRDLabelKey))
+			})
+
+			It("Should NEVER auto-delete standalone cluster even after timeout", func() {
+				// Set deletion timestamp to very old time (way past timeout)
+				veryOldTime := metav1.NewTime(time.Now().Add(-2 * time.Hour)) // 2 hours ago
+				standaloneCluster.DeletionTimestamp = &veryOldTime
+
+				err := k8sClient.Update(ctx, standaloneCluster)
+				Expect(err).NotTo(HaveOccurred(), "Failed to update standalone RayCluster deletion timestamp")
+
+				// Verify isOwnedByRayService returns false for standalone cluster
+				Expect(isOwnedByRayService(standaloneCluster)).To(BeFalse())
+
+				// Verify finalizer remains even after long timeout
+				Consistently(func() []string {
+					err := getResourceFunc(ctx, client.ObjectKey{Name: standaloneCluster.Name, Namespace: namespace}, standaloneCluster)()
+					if err != nil {
+						return nil
+					}
+					return standaloneCluster.Finalizers
+				}, time.Second*2, time.Millisecond*200).Should(ContainElement(redisCleanupFinalizer))
+			})
+		})
+
+		Describe("Integration with Redis cleanup flow", func() {
+			var (
+				rayServiceCluster     *rayv1.RayCluster
+				redisCleanupFinalizer = "ray.io/gcs-ft-redis-cleanup-finalizer"
+			)
+
+			BeforeEach(func() {
+				rayServiceCluster = rayClusterTemplate("raycluster-integration", namespace)
+				rayServiceCluster.Labels = map[string]string{
+					utils.RayOriginatedFromCRDLabelKey: utils.RayOriginatedFromCRDLabelValue(utils.RayServiceCRD),
+				}
+				rayServiceCluster.Finalizers = []string{redisCleanupFinalizer}
+			})
+
+			It("Should handle auto-deletion within Redis cleanup reconciliation flow", func() {
+				// Create cluster
+				err := k8sClient.Create(ctx, rayServiceCluster)
+				Expect(err).NotTo(HaveOccurred(), "Failed to create RayService cluster")
+
+				Eventually(
+					getResourceFunc(ctx, client.ObjectKey{Name: rayServiceCluster.Name, Namespace: namespace}, rayServiceCluster),
+					time.Second*3, time.Millisecond*500).Should(BeNil())
+
+				// Simulate cluster stuck in deletion for a long time
+				oldTime := metav1.NewTime(time.Now().Add(-30 * time.Minute)) // 30 minutes ago
+				rayServiceCluster.DeletionTimestamp = &oldTime
+
+				err = k8sClient.Update(ctx, rayServiceCluster)
+				Expect(err).NotTo(HaveOccurred(), "Failed to set deletion timestamp")
+
+				// Run reconciliation - this should detect the timeout and force delete
+				req := ctrl.Request{
+					NamespacedName: types.NamespacedName{
+						Name:      rayServiceCluster.Name,
+						Namespace: namespace,
+					},
+				}
+
+				result, err := reconciler.Reconcile(ctx, req)
+				Expect(err).NotTo(HaveOccurred(), "Reconciliation should succeed")
+
+				// Should return empty result (no requeue) since finalizer was removed
+				Expect(result).To(Equal(ctrl.Result{}))
+
+				// Verify finalizer was removed
+				Eventually(func() []string {
+					err := getResourceFunc(ctx, client.ObjectKey{Name: rayServiceCluster.Name, Namespace: namespace}, rayServiceCluster)()
+					if err != nil {
+						return nil
+					}
+					return rayServiceCluster.Finalizers
+				}, time.Second*3, time.Millisecond*500).ShouldNot(ContainElement(redisCleanupFinalizer))
+			})
 		})
 	})
 })

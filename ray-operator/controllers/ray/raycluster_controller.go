@@ -239,6 +239,24 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 				return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 			}
 
+			// Check finalizer timeout for RayService FT clusters and set requeue flag
+			// This is to handle edge cases where the finalizer doesn't get removed,
+			// thus preventing release of resource quotas.
+			var shouldRequeueForTimeout bool
+			if isOwnedByRayService(instance) {
+				deletionAge := time.Since(instance.DeletionTimestamp.Time)
+				configuredTimeout := getGCSFTDeletionTimeout()
+
+				if deletionAge >= configuredTimeout {
+					// Timeout exceeded - force delete immediately
+					// Do not wait for redis cleanup job processing below.
+					return r.forceDeleteStuckRayServiceCluster(ctx, instance)
+				} else {
+					// Set flag for Redis cleanup job processing to requeue instead of quitting.
+					shouldRequeueForTimeout = true
+				}
+			}
+
 			if len(redisCleanupJobs.Items) != 0 {
 				// Check whether the Redis cleanup Job has been completed.
 				redisCleanupJob := redisCleanupJobs.Items[0]
@@ -266,7 +284,11 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 							"redisStorageNamespace", redisCleanupJob.Annotations[utils.RayExternalStorageNSAnnotationKey],
 						)
 					}
-					return ctrl.Result{}, nil
+					if shouldRequeueForTimeout {
+						return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, nil
+					} else {
+						return ctrl.Result{}, nil
+					}
 				}
 				// the redisCleanupJob is still running
 				return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, nil
@@ -2011,4 +2033,43 @@ func setDefaults(instance *rayv1.RayCluster) {
 			instance.Spec.WorkerGroupSpecs[i].RayStartParams = map[string]string{}
 		}
 	}
+}
+
+// isOwnedByRayService checks if the RayCluster is owned by a RayService
+func isOwnedByRayService(cluster *rayv1.RayCluster) bool {
+	if crdLabel, exists := cluster.Labels[utils.RayOriginatedFromCRDLabelKey]; exists {
+		return crdLabel == "RayService"
+	}
+	return false
+}
+
+// getGCSFTDeletionTimeout returns the configured timeout for RayService cluster auto-deletion
+func getGCSFTDeletionTimeout() time.Duration {
+	timeoutSeconds, err := strconv.Atoi(os.Getenv(utils.RAYCLUSTER_GCS_FT_DELETION_TIMEOUT_ENV))
+	if err != nil || timeoutSeconds < 60 {
+		return utils.RAYCLUSTER_GCS_FT_DELETION_TIMEOUT_DEFAULT * time.Second
+	}
+	return time.Duration(timeoutSeconds) * time.Second
+}
+
+// forceDeleteStuckRayServiceCluster removes the finalizer to allow stuck RayService clusters to be deleted
+func (r *RayClusterReconciler) forceDeleteStuckRayServiceCluster(ctx context.Context, instance *rayv1.RayCluster) (ctrl.Result, error) {
+	logger := ctrl.LoggerFrom(ctx)
+	deletionAge := time.Since(instance.DeletionTimestamp.Time)
+
+	logger.Info("Force deleting stuck RayService cluster - Redis cleanup timeout exceeded",
+		"cluster", instance.Name, "deletionAge", deletionAge,
+		"timeout", getGCSFTDeletionTimeout())
+
+	// Remove finalizer to allow deletion to proceed
+	controllerutil.RemoveFinalizer(instance, utils.GCSFaultToleranceRedisCleanupFinalizer)
+	if err := r.Update(ctx, instance); err != nil {
+		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
+	}
+
+	// Record event for observability
+	r.Recorder.Eventf(instance, corev1.EventTypeWarning, "ForceDeletedStuckCluster",
+		"Force deleted RayService cluster after %v due to Redis cleanup timeout", deletionAge)
+
+	return ctrl.Result{}, nil // No requeue - deletion proceeds naturally
 }
