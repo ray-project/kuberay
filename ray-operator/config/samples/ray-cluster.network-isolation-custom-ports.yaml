@@ -11,7 +11,9 @@ spec:
   rayVersion: '2.52.0'
   headGroupSpec:
     rayStartParams:
+      port: "6380"
       dashboard-port: "9000"
+      ray-client-server-port: "10002"
     template:
       spec:
         containers:
