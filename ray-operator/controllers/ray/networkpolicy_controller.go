@@ -131,8 +131,10 @@ func (r *NetworkPolicyController) createOrUpdateNetworkPolicy(ctx context.Contex
 			}
 
 			if !metav1.IsControlledBy(existing, instance) {
-				logger.Info("NetworkPolicy exists but is not owned by this RayCluster, skipping update",
-					"name", networkPolicy.Name, "namespace", networkPolicy.Namespace)
+				r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.NetworkPolicyNameCollision),
+					"NetworkPolicy %s/%s already exists and is not owned by this RayCluster, network isolation will not be applied. "+
+						"Rename the existing NetworkPolicy or use a different RayCluster name to avoid the collision",
+					networkPolicy.Namespace, networkPolicy.Name)
 				return nil
 			}
 

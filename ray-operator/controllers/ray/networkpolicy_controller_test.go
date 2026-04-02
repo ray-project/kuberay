@@ -460,7 +460,7 @@ var _ = Context("NetworkPolicy Controller Integration Tests", func() {
 		})
 	})
 
-	Describe("Pre-existing NetworkPolicy is updated by the controller", Ordered, func() {
+	Describe("Pre-existing NetworkPolicy is not modified by the controller", Ordered, func() {
 		ctx := context.Background()
 		namespace := "default"
 		rayCluster := rayClusterTemplateForNetworkPolicy("raycluster-existing-np", namespace)
@@ -483,7 +483,7 @@ var _ = Context("NetworkPolicy Controller Integration Tests", func() {
 			Expect(err).NotTo(HaveOccurred(), "Failed to create pre-existing Head NetworkPolicy")
 		})
 
-		It("Create RayCluster — controller should update the pre-existing NetworkPolicy", func() {
+		It("Create RayCluster — controller should skip the pre-existing NetworkPolicy", func() {
 			err := k8sClient.Create(ctx, rayCluster)
 			Expect(err).NotTo(HaveOccurred(), "Failed to create RayCluster")
 			Eventually(
@@ -491,15 +491,16 @@ var _ = Context("NetworkPolicy Controller Integration Tests", func() {
 				time.Second*3, time.Millisecond*500).Should(Succeed())
 		})
 
-		It("Pre-existing Head NetworkPolicy has owner reference set", func() {
+		It("Pre-existing Head NetworkPolicy is not adopted by the controller", func() {
 			headNetworkPolicy := &networkingv1.NetworkPolicy{}
 			headKey := types.NamespacedName{Namespace: namespace, Name: existingHeadNetworkPolicy.Name}
 
-			Eventually(func(g Gomega) {
+			// Give the controller time to reconcile, then verify the policy was not modified.
+			Consistently(func(g Gomega) {
 				g.Expect(k8sClient.Get(ctx, headKey, headNetworkPolicy)).To(Succeed())
-				g.Expect(headNetworkPolicy.OwnerReferences).NotTo(BeEmpty())
-				g.Expect(headNetworkPolicy.OwnerReferences[0].Name).To(Equal(rayCluster.Name))
-			}, time.Second*10, time.Millisecond*500).Should(Succeed(), "Controller should set owner reference on pre-existing policy")
+				g.Expect(headNetworkPolicy.OwnerReferences).To(BeEmpty(), "Controller must not adopt a pre-existing NetworkPolicy")
+				g.Expect(headNetworkPolicy.Labels).To(Equal(map[string]string{"test": "existing"}), "Labels must remain unchanged")
+			}, time.Second*5, time.Millisecond*500).Should(Succeed())
 		})
 
 		It("Worker NetworkPolicy is created", func() {
@@ -513,11 +514,12 @@ var _ = Context("NetworkPolicy Controller Integration Tests", func() {
 			err := k8sClient.Delete(ctx, rayCluster)
 			Expect(err).NotTo(HaveOccurred(), "Failed to delete RayCluster")
 
-			workerNetworkPolicy := &networkingv1.NetworkPolicy{}
-			workerKey := types.NamespacedName{Namespace: namespace, Name: rayCluster.Name + "-workers"}
-			err = k8sClient.Get(ctx, workerKey, workerNetworkPolicy)
+			// Clean up the pre-existing policy (not garbage collected since it has no owner)
+			headNetworkPolicy := &networkingv1.NetworkPolicy{}
+			headKey := types.NamespacedName{Namespace: namespace, Name: existingHeadNetworkPolicy.Name}
+			err = k8sClient.Get(ctx, headKey, headNetworkPolicy)
 			if err == nil {
-				Expect(k8sClient.Delete(ctx, workerNetworkPolicy)).To(Succeed())
+				Expect(k8sClient.Delete(ctx, headNetworkPolicy)).To(Succeed())
 			}
 		})
 	})
