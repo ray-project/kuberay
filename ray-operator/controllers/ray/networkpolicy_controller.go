@@ -46,12 +46,18 @@ func NewNetworkPolicyController(mgr manager.Manager) *NetworkPolicyController {
 
 // getOperatorNamespace returns the namespace the operator is running in.
 // It reads from the in-cluster service account namespace file first, then
-// falls back to the POD_NAMESPACE environment variable.
+// falls back to the POD_NAMESPACE environment variable, and finally to "default"
+// which matches both the Helm and Kustomize deployment defaults.
 func getOperatorNamespace() string {
 	if ns, err := os.ReadFile(utils.InClusterNamespacePath); err == nil {
 		return strings.TrimSpace(string(ns))
 	}
-	return os.Getenv("POD_NAMESPACE")
+	if ns := os.Getenv("POD_NAMESPACE"); ns != "" {
+		return ns
+	}
+	ctrl.Log.WithName("networkpolicy-controller").Info(
+		"Unable to determine operator namespace from service account or POD_NAMESPACE env var, falling back to 'default'")
+	return "default"
 }
 
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=get;list;watch;create;update;delete;patch
@@ -119,15 +125,15 @@ func (r *NetworkPolicyController) createOrUpdateNetworkPolicy(ctx context.Contex
 	// Try to create the NetworkPolicy
 	if err := r.Create(ctx, networkPolicy); err != nil {
 		if errors.IsAlreadyExists(err) {
-			// NetworkPolicy exists, update it
 			existing := &networkingv1.NetworkPolicy{}
 			if err := r.Get(ctx, client.ObjectKeyFromObject(networkPolicy), existing); err != nil {
 				return err
 			}
 
-			// Ensure controller owner reference is set
-			if err := controllerutil.SetControllerReference(instance, existing, r.Scheme); err != nil {
-				return err
+			if !metav1.IsControlledBy(existing, instance) {
+				logger.Info("NetworkPolicy exists but is not owned by this RayCluster, skipping update",
+					"name", networkPolicy.Name, "namespace", networkPolicy.Namespace)
+				return nil
 			}
 
 			if reflect.DeepEqual(existing.Spec, networkPolicy.Spec) && reflect.DeepEqual(existing.Labels, networkPolicy.Labels) {
@@ -403,16 +409,17 @@ func (r *NetworkPolicyController) cleanupNetworkPoliciesIfNeeded(ctx context.Con
 	headKey := client.ObjectKey{Namespace: instance.Namespace, Name: headName}
 
 	if err := r.Get(ctx, headKey, headNetworkPolicy); err == nil {
-		// NetworkPolicy exists, delete it
-		if err := r.Delete(ctx, headNetworkPolicy); err != nil {
+		if !metav1.IsControlledBy(headNetworkPolicy, instance) {
+			logger.V(1).Info("Head NetworkPolicy exists but is not owned by this RayCluster, skipping deletion", "name", headName)
+		} else if err := r.Delete(ctx, headNetworkPolicy); err != nil {
 			logger.Error(err, "Failed to delete head NetworkPolicy", "name", headName)
 			return ctrl.Result{}, err
+		} else {
+			logger.Info("Deleted head NetworkPolicy", "name", headName)
+			r.Recorder.Eventf(instance, corev1.EventTypeNormal, string(utils.DeletedNetworkPolicy),
+				"Deleted NetworkPolicy %s/%s", instance.Namespace, headName)
 		}
-		logger.Info("Deleted head NetworkPolicy", "name", headName)
-		r.Recorder.Eventf(instance, corev1.EventTypeNormal, string(utils.DeletedNetworkPolicy),
-			"Deleted NetworkPolicy %s/%s", instance.Namespace, headName)
 	} else if !errors.IsNotFound(err) {
-		// Return errors other than NotFound
 		return ctrl.Result{}, err
 	}
 
@@ -422,16 +429,17 @@ func (r *NetworkPolicyController) cleanupNetworkPoliciesIfNeeded(ctx context.Con
 	workerKey := client.ObjectKey{Namespace: instance.Namespace, Name: workerName}
 
 	if err := r.Get(ctx, workerKey, workerNetworkPolicy); err == nil {
-		// NetworkPolicy exists, delete it
-		if err := r.Delete(ctx, workerNetworkPolicy); err != nil {
+		if !metav1.IsControlledBy(workerNetworkPolicy, instance) {
+			logger.V(1).Info("Worker NetworkPolicy exists but is not owned by this RayCluster, skipping deletion", "name", workerName)
+		} else if err := r.Delete(ctx, workerNetworkPolicy); err != nil {
 			logger.Error(err, "Failed to delete worker NetworkPolicy", "name", workerName)
 			return ctrl.Result{}, err
+		} else {
+			logger.Info("Deleted worker NetworkPolicy", "name", workerName)
+			r.Recorder.Eventf(instance, corev1.EventTypeNormal, string(utils.DeletedNetworkPolicy),
+				"Deleted NetworkPolicy %s/%s", instance.Namespace, workerName)
 		}
-		logger.Info("Deleted worker NetworkPolicy", "name", workerName)
-		r.Recorder.Eventf(instance, corev1.EventTypeNormal, string(utils.DeletedNetworkPolicy),
-			"Deleted NetworkPolicy %s/%s", instance.Namespace, workerName)
 	} else if !errors.IsNotFound(err) {
-		// Return errors other than NotFound
 		return ctrl.Result{}, err
 	}
 
