@@ -2,10 +2,12 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 
 	"github.com/ray-project/kuberay/podpool/manager"
@@ -29,7 +31,7 @@ var (
 )
 
 func kubeletVersion() string {
-	return fmt.Sprintf("pod-pool-%s-%s", buildVersion, k8sVersion)
+	return strings.Join([]string{k8sVersion, "pod-pool", buildVersion}, "-")
 }
 
 func main() {
@@ -79,7 +81,7 @@ func main() {
 		return nil
 	}
 
-	if err := rootCmd.Execute(); err != nil && err != context.Canceled {
+	if err := rootCmd.Execute(); err != nil && !errors.Is(err, context.Canceled) {
 		log.G(ctx).Fatal(err)
 	}
 }
