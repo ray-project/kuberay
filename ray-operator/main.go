@@ -196,7 +196,9 @@ func main() {
 		utilruntime.Must(gwv1.AddToScheme(scheme))
 	}
 
-	// Fail if SidecarSubmitterRestart is enabled but K8s < 1.35
+	// Although ContainerRestartPolicy is introduced in Kubernetes v1.34 as an alpha feature, which requires
+	// manually enabling the ContainerRestartRules feature gate, it becomes beta in v1.35.
+	// We require v1.35+ to avoid asking users to opt in to a separate K8s feature gate.
 	if features.Enabled(features.SidecarSubmitterRestart) {
 		serverVersion, err := utils.GetKubernetesVersion()
 		if err != nil {
