@@ -56,18 +56,12 @@ func main() {
 	}
 
 	// Add flags
-	var (
-		kubeconfig  string
-		nodeName    string
-		operatingOS string
-		arch        string
-		logLevel    string
-	)
+	var logLevel string
 
-	rootCmd.Flags().StringVar(&kubeconfig, "kubeconfig", "", "path to kubeconfig file")
-	rootCmd.Flags().StringVar(&nodeName, "nodename", "virtual-kubelet", "name of the virtual node")
-	rootCmd.Flags().StringVar(&operatingOS, "operating-system", "Linux", "operating system of the node")
-	rootCmd.Flags().StringVar(&arch, "architecture", "amd64", "architecture of the node")
+	rootCmd.Flags().String("kubeconfig", "", "path to kubeconfig file")
+	rootCmd.Flags().String("nodename", "virtual-kubelet", "name of the virtual node")
+	rootCmd.Flags().String("operating-system", "Linux", "operating system of the node")
+	rootCmd.Flags().String("architecture", "amd64", "architecture of the node")
 	rootCmd.PersistentFlags().StringVar(&logLevel, "log-level", "info", `set the log level, e.g. "debug", "info", "warn", "error"`)
 
 	rootCmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
