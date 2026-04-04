@@ -869,7 +869,7 @@ func TestCleanupOnCompletion(t *testing.T) {
 		a.True(retrievedPg.Spec.MinResources.Memory().IsZero())
 	})
 
-	t.Run("RayJob - idempotent (calling multiple times updates consistently)", func(t *testing.T) {
+	t.Run("RayJob - The bool return of CleanupOnCompletion should reflect the update if calling multiple times ", func(t *testing.T) {
 		a := assert.New(t)
 		require := require.New(t)
 
@@ -923,7 +923,7 @@ func TestCleanupOnCompletion(t *testing.T) {
 		// second call should succeed without changes.
 		didUpdate, err = scheduler.CleanupOnCompletion(ctx, &rayJob)
 		require.NoError(err)
-		a.True(didUpdate)
+		a.False(didUpdate)
 
 		// PodGroup should still exist with same values
 		err = fakeCli.Get(ctx, client.ObjectKey{Namespace: rayJob.Namespace, Name: getAppPodGroupName(&rayJob)}, &retrievedPg)

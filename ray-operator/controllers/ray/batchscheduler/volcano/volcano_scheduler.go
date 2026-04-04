@@ -65,7 +65,8 @@ func (v *VolcanoBatchScheduler) handleRayCluster(ctx context.Context, raycluster
 
 	minMember, totalResource := v.calculatePodGroupParams(&raycluster.Spec)
 
-	return v.syncPodGroup(ctx, raycluster, minMember, totalResource)
+	_, err := v.syncPodGroup(ctx, raycluster, minMember, totalResource)
+	return err
 }
 
 // handleRayJob calculates the PodGroup MinMember and MinResources for a RayJob
@@ -83,7 +84,8 @@ func (v *VolcanoBatchScheduler) handleRayJob(ctx context.Context, rayJob *rayv1.
 	// submitter's resource requests into MinResources so capacity is reserved.
 	submitterResource := getSubmitterResource(rayJob)
 	totalResourceList = append(totalResourceList, submitterResource)
-	return v.syncPodGroup(ctx, rayJob, minMember, utils.SumResourceList(totalResourceList))
+	_, err := v.syncPodGroup(ctx, rayJob, minMember, utils.SumResourceList(totalResourceList))
+	return err
 }
 
 func getSubmitterResource(rayJob *rayv1.RayJob) corev1.ResourceList {
@@ -149,7 +151,8 @@ func populateLabelsFromObject(parent metav1.Object, child metav1.Object, key str
 
 // syncPodGroup ensures a Volcano PodGroup exists/updated for the given object
 // with the provided size (MinMember) and total resources.
-func (v *VolcanoBatchScheduler) syncPodGroup(ctx context.Context, owner metav1.Object, size int32, totalResource corev1.ResourceList) error {
+// It returns true if the PodGroup was created or updated, false if no changes were needed.
+func (v *VolcanoBatchScheduler) syncPodGroup(ctx context.Context, owner metav1.Object, size int32, totalResource corev1.ResourceList) (bool, error) {
 	logger := ctrl.LoggerFrom(ctx).WithName(pluginName)
 
 	podGroupName := getAppPodGroupName(owner)
@@ -157,34 +160,37 @@ func (v *VolcanoBatchScheduler) syncPodGroup(ctx context.Context, owner metav1.O
 	if err := v.cli.Get(ctx, types.NamespacedName{Namespace: owner.GetNamespace(), Name: podGroupName}, &podGroup); err != nil {
 		if !errors.IsNotFound(err) {
 			logger.Error(err, "failed to get PodGroup", "podGroupName", podGroupName, "ownerKind", utils.GetCRDType(owner.GetLabels()[utils.RayOriginatedFromCRDLabelKey]), "ownerName", owner.GetName(), "ownerNamespace", owner.GetNamespace())
-			return err
+			return false, err
 		}
 
 		podGroup, err := createPodGroup(owner, podGroupName, size, totalResource)
 		if err != nil {
 			logger.Error(err, "Failed to create pod group specification", "PodGroup.Error", err)
-			return err
+			return false, err
 		}
 		if err := v.cli.Create(ctx, &podGroup); err != nil {
 			if errors.IsAlreadyExists(err) {
 				logger.Info("podGroup already exists, no need to create", "name", podGroupName)
-				return nil
+				return false, nil
 			}
 
 			logger.Error(err, "failed to create PodGroup", "name", podGroupName, "ownerKind", utils.GetCRDType(owner.GetLabels()[utils.RayOriginatedFromCRDLabelKey]), "ownerName", owner.GetName(), "ownerNamespace", owner.GetNamespace())
-			return err
+			return false, err
 		}
-	} else {
-		if podGroup.Spec.MinMember != size || podGroup.Spec.MinResources == nil || !quotav1.Equals(*podGroup.Spec.MinResources, totalResource) {
-			podGroup.Spec.MinMember = size
-			podGroup.Spec.MinResources = &totalResource
-			if err := v.cli.Update(ctx, &podGroup); err != nil {
-				logger.Error(err, "failed to update PodGroup", "name", podGroupName, "ownerKind", utils.GetCRDType(owner.GetLabels()[utils.RayOriginatedFromCRDLabelKey]), "ownerName", owner.GetName(), "ownerNamespace", owner.GetNamespace())
-				return err
-			}
-		}
+		return true, nil
 	}
-	return nil
+
+	if podGroup.Spec.MinMember != size || podGroup.Spec.MinResources == nil || !quotav1.Equals(*podGroup.Spec.MinResources, totalResource) {
+		podGroup.Spec.MinMember = size
+		podGroup.Spec.MinResources = &totalResource
+		if err := v.cli.Update(ctx, &podGroup); err != nil {
+			logger.Error(err, "failed to update PodGroup", "name", podGroupName, "ownerKind", utils.GetCRDType(owner.GetLabels()[utils.RayOriginatedFromCRDLabelKey]), "ownerName", owner.GetName(), "ownerNamespace", owner.GetNamespace())
+			return false, err
+		}
+		return true, nil
+	}
+
+	return false, nil
 }
 
 func (v *VolcanoBatchScheduler) calculatePodGroupParams(rayClusterSpec *rayv1.RayClusterSpec) (int32, corev1.ResourceList) {
@@ -307,11 +313,12 @@ func (v *VolcanoBatchScheduler) CleanupOnCompletion(ctx context.Context, object 
 		totalResourceList = append(totalResourceList, clusterResource)
 	}
 
-	if err := v.syncPodGroup(ctx, rayJob, minMember, utils.SumResourceList(totalResourceList)); err != nil {
+	didUpdate, err := v.syncPodGroup(ctx, rayJob, minMember, utils.SumResourceList(totalResourceList))
+	if err != nil {
 		return false, err
 	}
 
-	return true, nil
+	return didUpdate, nil
 }
 
 func (vf *VolcanoBatchSchedulerFactory) New(_ context.Context, _ *rest.Config, cli client.Client) (schedulerinterface.BatchScheduler, error) {
