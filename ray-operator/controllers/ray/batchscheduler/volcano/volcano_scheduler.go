@@ -286,7 +286,7 @@ func (v *VolcanoBatchScheduler) CleanupOnCompletion(ctx context.Context, object 
 	var totalResourceList []corev1.ResourceList
 
 	if len(rayJob.Status.RayClusterName) == 0 {
-		// The RayClusterName has been assigned so that there is no PodGroup to update.
+		// The RayClusterName has not been assigned so that there is no PodGroup to update.
 		return false, nil
 	}
 

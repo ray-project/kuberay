@@ -1525,7 +1525,7 @@ func (r *RayJobReconciler) batchSchedulerOnCompletion(ctx context.Context, rayJo
 					"Failed to cleanup batch scheduler resources for RayJob %s/%s: %v", rayJobInstance.Namespace, rayJobInstance.Name, err)
 				// Don't block the reconciliation on cleanup failures, just log the error
 			} else if didUpdate {
-				// Only emit success event if actual cleanup was performed
+				// emit event if cleanup was performed
 				r.Recorder.Eventf(rayJobInstance, corev1.EventTypeNormal, string(utils.BatchSchedulerCleanedUp),
 					"Cleaned up batch scheduler resources for RayJob %s/%s", rayJobInstance.Namespace, rayJobInstance.Name)
 			}
