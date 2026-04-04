@@ -748,6 +748,74 @@ func TestCleanupOnCompletion(t *testing.T) {
 		a.Equal("768Mi", retrievedPg.Spec.MinResources.Memory().String())
 	})
 
+	t.Run("RayJob - RayCluster exists, recalculates PodGroup with the submitter container", func(t *testing.T) {
+		a := assert.New(t)
+		require := require.New(t)
+
+		rayJob := createTestRayJob(1)
+		rayJob.Status.RayClusterName = "raycluster-sample"
+		rayJob.Spec.SubmissionMode = rayv1.SidecarMode
+		rayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers = append(rayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers, corev1.Container{
+			Name: "submitter",
+			Resources: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("200m"),
+					corev1.ResourceMemory: resource.MustParse("200Mi"),
+				},
+			},
+		})
+
+		rayCluster := rayv1.RayCluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "raycluster-sample",
+				Namespace: "default",
+			},
+			Spec: *rayJob.Spec.RayClusterSpec,
+		}
+
+		scheme := runtime.NewScheme()
+		a.NoError(rayv1.AddToScheme(scheme))
+		a.NoError(volcanoschedulingv1beta1.AddToScheme(scheme))
+		fakeCli := fake.NewClientBuilder().WithScheme(scheme).WithObjects(&rayCluster).Build()
+		scheduler := &VolcanoBatchScheduler{cli: fakeCli}
+
+		ctx := context.Background()
+
+		// Pre-create a PodGroup with stale values (e.g. minMember=10)
+		podGroupName := getAppPodGroupName(&rayJob)
+		pg := &volcanoschedulingv1beta1.PodGroup{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      podGroupName,
+				Namespace: rayJob.Namespace,
+			},
+			Spec: volcanoschedulingv1beta1.PodGroupSpec{
+				MinMember: 10,
+				MinResources: &corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("10"),
+					corev1.ResourceMemory: resource.MustParse("10Gi"),
+				},
+			},
+		}
+		err := fakeCli.Create(ctx, pg)
+		require.NoError(err)
+
+		didUpdate, err := scheduler.CleanupOnCompletion(ctx, &rayJob)
+		require.NoError(err)
+		a.True(didUpdate)
+
+		// Verify PodGroup was updated with recalculated values from live cluster spec
+		// RayCluster has 1 head + 2 workers = 3 minMember (+ 1 for head = 3 total from calculatePodGroupParams)
+		var retrievedPg volcanoschedulingv1beta1.PodGroup
+		err = fakeCli.Get(ctx, client.ObjectKey{Namespace: rayJob.Namespace, Name: podGroupName}, &retrievedPg)
+		require.NoError(err)
+		// 1 head + 2 workers (desired, not min replicas)
+		a.Equal(int32(3), retrievedPg.Spec.MinMember)
+		// 256m * 3 + 200Mi(requests, not limits)
+		a.Equal("968m", retrievedPg.Spec.MinResources.Cpu().String())
+		// 256Mi * 3 + 200Mi (requests, not limits)
+		a.Equal("968Mi", retrievedPg.Spec.MinResources.Memory().String())
+	})
+
 	t.Run("RayJob - RayCluster exists, recalculates PodGroup from live spec with worker suspended", func(t *testing.T) {
 		a := assert.New(t)
 		require := require.New(t)
