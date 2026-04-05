@@ -73,6 +73,18 @@ func newTaskGroupsFromRayClusterSpec(rayClusterSpec *v1.RayClusterSpec) *TaskGro
 func newTaskGroupsFromRayJobSpec(rayJobSpec *v1.RayJobSpec) *TaskGroups {
 	taskGroups := newTaskGroupsFromRayClusterSpec(rayJobSpec.RayClusterSpec)
 
+	// In SidecarMode, check if the user provided a container named "ray-job-submitter"
+	// in the head pod spec. If so, its resources are already counted in the head task group
+	// from newTaskGroupsFromRayClusterSpec — skip creating a separate submitter task group
+	// to avoid double-counting.
+	if rayJobSpec.SubmissionMode == v1.SidecarMode {
+		for _, c := range rayJobSpec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers {
+			if c.Name == utils.SubmitterContainerName {
+				return taskGroups
+			}
+		}
+	}
+
 	submitterGroupSpec := common.GetSubmitterTemplate(rayJobSpec, rayJobSpec.RayClusterSpec).Spec
 
 	submitterPodMinResource := utils.CalculatePodResource(submitterGroupSpec)

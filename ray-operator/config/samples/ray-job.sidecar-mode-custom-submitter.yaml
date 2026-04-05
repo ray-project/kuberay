@@ -1,0 +1,139 @@
+apiVersion: ray.io/v1
+kind: RayJob
+metadata:
+  name: rayjob-sidecar-mode-custom-submitter
+spec:
+  # In SidecarMode, the KubeRay operator injects a submitter container into the Ray head Pod.
+  # By default, the operator creates the submitter container automatically.
+  #
+  # However, you can provide your own submitter container by adding a container named
+  # "ray-job-submitter" to the head pod spec. This lets you customize the submitter's
+  # image, volume mounts, environment variables, resource limits, and more.
+  #
+  # The controller will detect the container by its well-known name and inject the
+  # required state (command, args, dashboard address, job ID, auth env vars) into it.
+  #
+  # What the controller always injects (cannot be overridden):
+  #   - Command and Args (the `ray job submit` command with GCS health wait loop)
+  #   - PYTHONUNBUFFERED env var
+  #   - RAY_DASHBOARD_ADDRESS env var
+  #   - RAY_JOB_SUBMISSION_ID env var
+  #   - Auth-related env vars and volume mounts (when auth is enabled)
+  #
+  # What you can customize:
+  #   - Container image (defaults to Ray head image if left empty)
+  #   - Resource requests/limits (defaults to 500m/200Mi requests, 1/1Gi limits if unset)
+  #   - Volume mounts (e.g., mount ConfigMaps, Secrets, PVCs for job scripts)
+  #   - Additional environment variables (preserved alongside injected vars)
+  #   - Image pull policy
+  #   - Security context
+  #
+  # What you cannot change:
+  #   - Container name (must be "ray-job-submitter")
+  #   - Command/Args (always overwritten by the controller in SidecarMode)
+  submissionMode: "SidecarMode"
+  entrypoint: python /scripts/sample_code.py
+  runtimeEnvYAML: |
+    env_vars:
+      counter_name: "test_counter"
+
+  rayClusterSpec:
+    rayVersion: '2.52.0'
+    headGroupSpec:
+      rayStartParams: {}
+      template:
+        spec:
+          # Define volumes at the pod level — both the Ray head and the custom
+          # submitter container can mount them.
+          volumes:
+          - name: job-scripts
+            configMap:
+              name: ray-job-scripts
+          containers:
+          - name: ray-head
+            image: rayproject/ray:2.52.0
+            ports:
+            - containerPort: 6379
+              name: gcs-server
+            - containerPort: 8265
+              name: dashboard
+            - containerPort: 10001
+              name: client
+            resources:
+              limits:
+                cpu: "1"
+                memory: "5Gi"
+              requests:
+                cpu: "1"
+                memory: "2Gi"
+
+          # User-provided sidecar submitter container.
+          # The controller detects this container by its well-known name
+          # "ray-job-submitter" and configures it in place.
+          - name: ray-job-submitter
+            image: rayproject/ray:2.52.0
+            volumeMounts:
+            - name: job-scripts
+              mountPath: /scripts
+              readOnly: true
+            env:
+            - name: MY_CUSTOM_VAR
+              value: "hello"
+            resources:
+              requests:
+                cpu: "200m"
+                memory: "256Mi"
+              limits:
+                cpu: "500m"
+                memory: "512Mi"
+
+    workerGroupSpecs:
+    - replicas: 1
+      minReplicas: 1
+      maxReplicas: 5
+      groupName: small-group
+      rayStartParams: {}
+      template:
+        spec:
+          containers:
+          - name: ray-worker
+            image: rayproject/ray:2.52.0
+            resources:
+              limits:
+                cpu: "1"
+                memory: "1Gi"
+              requests:
+                cpu: "1"
+                memory: "1Gi"
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ray-job-scripts
+data:
+  sample_code.py: |
+    import ray
+    import os
+
+    ray.init()
+
+    @ray.remote
+    class Counter:
+        def __init__(self):
+            self.name = os.getenv("counter_name")
+            assert self.name == "test_counter"
+            self.counter = 0
+
+        def inc(self):
+            self.counter += 1
+
+        def get_counter(self):
+            return "{} got {}".format(self.name, self.counter)
+
+    counter = Counter.remote()
+
+    for _ in range(5):
+        ray.get(counter.inc.remote())
+
+    print(ray.get(counter.get_counter.remote()))

@@ -14,6 +14,7 @@ import (
 	"go.uber.org/mock/gomock"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -675,4 +676,457 @@ func TestGetSubmitterTemplate_WithEnableK8sTokenAuth(t *testing.T) {
 		}
 	}
 	assert.True(t, foundVolumeMount, "Submitter container should have the ray-token volume mount")
+}
+
+// newSidecarModeRayJob creates a base RayJob configured for SidecarMode testing.
+// If submitter is non-nil, it's added as a user-provided submitter container in the head pod.
+func newSidecarModeRayJob(submitter *corev1.Container) *rayv1.RayJob {
+	containers := []corev1.Container{
+		{Name: "ray-head", Image: "rayproject/ray:2.9.0"},
+	}
+	if submitter != nil {
+		containers = append(containers, *submitter)
+	}
+	return &rayv1.RayJob{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-rayjob", Namespace: "default"},
+		Spec: rayv1.RayJobSpec{
+			SubmissionMode: rayv1.SidecarMode,
+			Entrypoint:     "python test.py",
+			RayClusterSpec: &rayv1.RayClusterSpec{
+				HeadGroupSpec: rayv1.HeadGroupSpec{
+					Template: corev1.PodTemplateSpec{
+						Spec: corev1.PodSpec{Containers: containers},
+					},
+				},
+			},
+		},
+		Status: rayv1.RayJobStatus{
+			DashboardURL: "test-url",
+			JobId:        "test-job-id",
+		},
+	}
+}
+
+// constructSidecarModeCluster runs the reconciler on a SidecarMode RayJob and returns the resulting RayCluster.
+func constructSidecarModeCluster(t *testing.T, rayJob *rayv1.RayJob) *rayv1.RayCluster {
+	t.Helper()
+	newScheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(newScheme)
+	reconciler := &RayJobReconciler{Scheme: newScheme}
+	rayCluster, err := reconciler.constructRayClusterForRayJob(rayJob, "test-raycluster")
+	require.NoError(t, err)
+	return rayCluster
+}
+
+func TestConstructRayClusterForRayJob_SidecarMode_DefaultContainer(t *testing.T) {
+	// When no user-provided ray-job-submitter container exists, the controller
+	// should create a default sidecar and append it to the head pod containers.
+	rayJob := newSidecarModeRayJob(nil)
+	rayCluster := constructSidecarModeCluster(t, rayJob)
+
+	// Should have 2 containers: ray-head + ray-job-submitter
+	require.Len(t, rayCluster.Spec.HeadGroupSpec.Template.Spec.Containers, 2)
+	assert.Equal(t, "ray-head", rayCluster.Spec.HeadGroupSpec.Template.Spec.Containers[0].Name)
+	assert.Equal(t, utils.SubmitterContainerName, rayCluster.Spec.HeadGroupSpec.Template.Spec.Containers[1].Name)
+
+	// Default sidecar should use the ray head image
+	assert.Equal(t, "rayproject/ray:2.9.0", rayCluster.Spec.HeadGroupSpec.Template.Spec.Containers[1].Image)
+
+	// RestartPolicy should be set to Never
+	assert.Equal(t, corev1.RestartPolicyNever, rayCluster.Spec.HeadGroupSpec.Template.Spec.RestartPolicy)
+
+	// Annotation should be set
+	assert.Equal(t, "true", rayCluster.Annotations[utils.DisableProvisionedHeadRestartAnnotationKey])
+
+	// Env vars should be injected
+	submitter := rayCluster.Spec.HeadGroupSpec.Template.Spec.Containers[1]
+	envVar, found := utils.EnvVarByName(PythonUnbufferedEnvVarName, submitter.Env)
+	assert.True(t, found)
+	assert.Equal(t, "1", envVar.Value)
+
+	envVar, found = utils.EnvVarByName(utils.RAY_DASHBOARD_ADDRESS, submitter.Env)
+	assert.True(t, found)
+	assert.Equal(t, "test-url", envVar.Value)
+
+	envVar, found = utils.EnvVarByName(utils.RAY_JOB_SUBMISSION_ID, submitter.Env)
+	assert.True(t, found)
+	assert.Equal(t, "test-job-id", envVar.Value)
+}
+
+func TestConstructRayClusterForRayJob_SidecarMode_UserProvidedContainer(t *testing.T) {
+	// When the user provides a container named "ray-job-submitter" in the head pod spec,
+	// the controller should configure it in place rather than appending a new one.
+	rayJob := newSidecarModeRayJob(&corev1.Container{
+		Name:  utils.SubmitterContainerName,
+		Image: "my-custom-image:latest",
+		VolumeMounts: []corev1.VolumeMount{
+			{Name: "job-scripts", MountPath: "/scripts"},
+		},
+		Env: []corev1.EnvVar{
+			{Name: "MY_CUSTOM_VAR", Value: "hello"},
+		},
+	})
+	rayJob.Spec.Entrypoint = "python /scripts/my_job.py"
+	rayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Volumes = []corev1.Volume{
+		{
+			Name: "job-scripts",
+			VolumeSource: corev1.VolumeSource{
+				ConfigMap: &corev1.ConfigMapVolumeSource{
+					LocalObjectReference: corev1.LocalObjectReference{Name: "my-job-scripts"},
+				},
+			},
+		},
+	}
+
+	rayCluster := constructSidecarModeCluster(t, rayJob)
+
+	// Should still have exactly 2 containers — no duplicate appended
+	require.Len(t, rayCluster.Spec.HeadGroupSpec.Template.Spec.Containers, 2)
+	assert.Equal(t, "ray-head", rayCluster.Spec.HeadGroupSpec.Template.Spec.Containers[0].Name)
+	assert.Equal(t, utils.SubmitterContainerName, rayCluster.Spec.HeadGroupSpec.Template.Spec.Containers[1].Name)
+
+	submitter := rayCluster.Spec.HeadGroupSpec.Template.Spec.Containers[1]
+
+	// User's custom image should be preserved
+	assert.Equal(t, "my-custom-image:latest", submitter.Image)
+
+	// User's volume mounts should be preserved
+	require.Len(t, submitter.VolumeMounts, 1)
+	assert.Equal(t, "job-scripts", submitter.VolumeMounts[0].Name)
+	assert.Equal(t, "/scripts", submitter.VolumeMounts[0].MountPath)
+
+	// User's env vars should be preserved, with controller env vars appended
+	envVar, found := utils.EnvVarByName("MY_CUSTOM_VAR", submitter.Env)
+	assert.True(t, found)
+	assert.Equal(t, "hello", envVar.Value)
+
+	envVar, found = utils.EnvVarByName(PythonUnbufferedEnvVarName, submitter.Env)
+	assert.True(t, found)
+	assert.Equal(t, "1", envVar.Value)
+
+	envVar, found = utils.EnvVarByName(utils.RAY_DASHBOARD_ADDRESS, submitter.Env)
+	assert.True(t, found)
+	assert.Equal(t, "test-url", envVar.Value)
+
+	envVar, found = utils.EnvVarByName(utils.RAY_JOB_SUBMISSION_ID, submitter.Env)
+	assert.True(t, found)
+	assert.Equal(t, "test-job-id", envVar.Value)
+
+	// Command should be overwritten by the controller
+	assert.Equal(t, []string{"/bin/bash", "-ce", "--"}, submitter.Command)
+	assert.Len(t, submitter.Args, 1)
+
+	// RestartPolicy should be set to Never
+	assert.Equal(t, corev1.RestartPolicyNever, rayCluster.Spec.HeadGroupSpec.Template.Spec.RestartPolicy)
+}
+
+func TestConstructRayClusterForRayJob_SidecarMode_UserProvidedContainer_ImageDefaulting(t *testing.T) {
+	// When the user provides a ray-job-submitter container without an image,
+	// the controller should default to the Ray head image.
+	rayJob := newSidecarModeRayJob(&corev1.Container{
+		Name: utils.SubmitterContainerName,
+		// No image specified — should default to ray head image
+		VolumeMounts: []corev1.VolumeMount{
+			{Name: "job-scripts", MountPath: "/scripts"},
+		},
+	})
+
+	rayCluster := constructSidecarModeCluster(t, rayJob)
+	submitter := rayCluster.Spec.HeadGroupSpec.Template.Spec.Containers[1]
+
+	// Image should default to the ray head image
+	assert.Equal(t, "rayproject/ray:2.9.0", submitter.Image)
+
+	// Volume mounts should be preserved
+	require.Len(t, submitter.VolumeMounts, 1)
+	assert.Equal(t, "job-scripts", submitter.VolumeMounts[0].Name)
+}
+
+func TestConstructRayClusterForRayJob_SidecarMode_UserProvidedContainer_ResourceDefaulting(t *testing.T) {
+	// When the user provides a ray-job-submitter container without resources,
+	// the controller should apply default resource limits.
+	rayJob := newSidecarModeRayJob(&corev1.Container{
+		Name:  utils.SubmitterContainerName,
+		Image: "my-custom-image:latest",
+		// No resources specified — should get defaults
+	})
+
+	rayCluster := constructSidecarModeCluster(t, rayJob)
+	submitter := rayCluster.Spec.HeadGroupSpec.Template.Spec.Containers[1]
+
+	// Default resources should be applied
+	assert.NotNil(t, submitter.Resources.Limits)
+	assert.NotNil(t, submitter.Resources.Requests)
+}
+
+func TestConstructRayClusterForRayJob_SidecarMode_UserProvidedContainer_CustomResources(t *testing.T) {
+	// When the user specifies custom resources, they should be preserved.
+	rayJob := newSidecarModeRayJob(&corev1.Container{
+		Name:  utils.SubmitterContainerName,
+		Image: "my-custom-image:latest",
+		Resources: corev1.ResourceRequirements{
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("200m"),
+				corev1.ResourceMemory: resource.MustParse("256Mi"),
+			},
+			Limits: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("500m"),
+				corev1.ResourceMemory: resource.MustParse("512Mi"),
+			},
+		},
+	})
+
+	rayCluster := constructSidecarModeCluster(t, rayJob)
+	submitter := rayCluster.Spec.HeadGroupSpec.Template.Spec.Containers[1]
+
+	// User-specified resources should be preserved
+	assert.True(t, submitter.Resources.Requests.Cpu().Equal(resource.MustParse("200m")))
+	assert.True(t, submitter.Resources.Requests.Memory().Equal(resource.MustParse("256Mi")))
+	assert.True(t, submitter.Resources.Limits.Cpu().Equal(resource.MustParse("500m")))
+	assert.True(t, submitter.Resources.Limits.Memory().Equal(resource.MustParse("512Mi")))
+}
+
+func TestConstructRayClusterForRayJob_SidecarMode_UserProvidedContainer_PartialResources_OnlyRequests(t *testing.T) {
+	// When the user specifies only Requests (no Limits), defaults are NOT applied.
+	// The user's partial resource spec is preserved as-is.
+	rayJob := newSidecarModeRayJob(&corev1.Container{
+		Name:  utils.SubmitterContainerName,
+		Image: "my-custom-image:latest",
+		Resources: corev1.ResourceRequirements{
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("100m"),
+				corev1.ResourceMemory: resource.MustParse("128Mi"),
+			},
+		},
+	})
+
+	rayCluster := constructSidecarModeCluster(t, rayJob)
+	submitter := rayCluster.Spec.HeadGroupSpec.Template.Spec.Containers[1]
+
+	// User's Requests should be preserved
+	assert.True(t, submitter.Resources.Requests.Cpu().Equal(resource.MustParse("100m")))
+	assert.True(t, submitter.Resources.Requests.Memory().Equal(resource.MustParse("128Mi")))
+
+	// Limits should remain nil (no defaults applied for partial spec)
+	assert.Nil(t, submitter.Resources.Limits)
+}
+
+func TestConstructRayClusterForRayJob_SidecarMode_UserProvidedContainer_PartialResources_OnlyLimits(t *testing.T) {
+	// When the user specifies only Limits (no Requests), defaults are NOT applied.
+	// The user's partial resource spec is preserved as-is.
+	rayJob := newSidecarModeRayJob(&corev1.Container{
+		Name:  utils.SubmitterContainerName,
+		Image: "my-custom-image:latest",
+		Resources: corev1.ResourceRequirements{
+			Limits: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("500m"),
+				corev1.ResourceMemory: resource.MustParse("512Mi"),
+			},
+		},
+	})
+
+	rayCluster := constructSidecarModeCluster(t, rayJob)
+	submitter := rayCluster.Spec.HeadGroupSpec.Template.Spec.Containers[1]
+
+	// Requests should remain nil (no defaults applied for partial spec)
+	assert.Nil(t, submitter.Resources.Requests)
+
+	// User's Limits should be preserved
+	assert.True(t, submitter.Resources.Limits.Cpu().Equal(resource.MustParse("500m")))
+	assert.True(t, submitter.Resources.Limits.Memory().Equal(resource.MustParse("512Mi")))
+}
+
+func TestConstructRayClusterForRayJob_SidecarMode_UserEnvVarsPreserved(t *testing.T) {
+	// Verify that user-defined env vars on the user-provided submitter container are preserved
+	// and controller-injected env vars are appended (not replacing user vars).
+	rayJob := newSidecarModeRayJob(&corev1.Container{
+		Name:  utils.SubmitterContainerName,
+		Image: "my-custom-image:latest",
+		Env: []corev1.EnvVar{
+			{Name: "USER_VAR_1", Value: "value1"},
+			{Name: "USER_VAR_2", Value: "value2"},
+			{Name: "API_KEY", Value: "secret-key"},
+		},
+	})
+
+	rayCluster := constructSidecarModeCluster(t, rayJob)
+	submitter := rayCluster.Spec.HeadGroupSpec.Template.Spec.Containers[1]
+
+	// All user-defined env vars should be preserved
+	envVar, found := utils.EnvVarByName("USER_VAR_1", submitter.Env)
+	assert.True(t, found, "USER_VAR_1 should be preserved")
+	assert.Equal(t, "value1", envVar.Value)
+
+	envVar, found = utils.EnvVarByName("USER_VAR_2", submitter.Env)
+	assert.True(t, found, "USER_VAR_2 should be preserved")
+	assert.Equal(t, "value2", envVar.Value)
+
+	envVar, found = utils.EnvVarByName("API_KEY", submitter.Env)
+	assert.True(t, found, "API_KEY should be preserved")
+	assert.Equal(t, "secret-key", envVar.Value)
+
+	// Controller-injected env vars should also be present
+	_, found = utils.EnvVarByName(utils.RAY_DASHBOARD_ADDRESS, submitter.Env)
+	assert.True(t, found, "RAY_DASHBOARD_ADDRESS should be injected")
+	_, found = utils.EnvVarByName(utils.RAY_JOB_SUBMISSION_ID, submitter.Env)
+	assert.True(t, found, "RAY_JOB_SUBMISSION_ID should be injected")
+	_, found = utils.EnvVarByName(PythonUnbufferedEnvVarName, submitter.Env)
+	assert.True(t, found, "PYTHONUNBUFFERED should be injected")
+
+	// Total env count: 3 user + 3 controller-injected
+	assert.Len(t, submitter.Env, 6)
+}
+
+func TestConstructRayClusterForRayJob_SidecarMode_ControllerEnvVarsOverrideUserValues(t *testing.T) {
+	// Verify that when a user pre-defines controller-managed env vars (RAY_DASHBOARD_ADDRESS,
+	// RAY_JOB_SUBMISSION_ID, PYTHONUNBUFFERED) on the user-provided submitter container,
+	// the controller replaces them with the correct runtime values instead of creating duplicates.
+	rayJob := newSidecarModeRayJob(&corev1.Container{
+		Name:  utils.SubmitterContainerName,
+		Image: "my-custom-image:latest",
+		Env: []corev1.EnvVar{
+			{Name: "USER_VAR", Value: "keep-me"},
+			{Name: utils.RAY_DASHBOARD_ADDRESS, Value: "user-should-be-overridden"},
+			{Name: utils.RAY_JOB_SUBMISSION_ID, Value: "user-should-be-overridden"},
+			{Name: PythonUnbufferedEnvVarName, Value: "0"},
+		},
+	})
+	rayJob.Status.DashboardURL = "correct-dashboard-url"
+	rayJob.Status.JobId = "correct-job-id"
+
+	rayCluster := constructSidecarModeCluster(t, rayJob)
+	submitter := rayCluster.Spec.HeadGroupSpec.Template.Spec.Containers[1]
+
+	// Controller-managed env vars should have the controller's values, not the user's
+	envVar, found := utils.EnvVarByName(utils.RAY_DASHBOARD_ADDRESS, submitter.Env)
+	assert.True(t, found)
+	assert.Equal(t, "correct-dashboard-url", envVar.Value, "RAY_DASHBOARD_ADDRESS should be overridden with controller value")
+
+	envVar, found = utils.EnvVarByName(utils.RAY_JOB_SUBMISSION_ID, submitter.Env)
+	assert.True(t, found)
+	assert.Equal(t, "correct-job-id", envVar.Value, "RAY_JOB_SUBMISSION_ID should be overridden with controller value")
+
+	envVar, found = utils.EnvVarByName(PythonUnbufferedEnvVarName, submitter.Env)
+	assert.True(t, found)
+	assert.Equal(t, "1", envVar.Value, "PYTHONUNBUFFERED should be overridden with controller value")
+
+	// User-defined env var should still be preserved
+	envVar, found = utils.EnvVarByName("USER_VAR", submitter.Env)
+	assert.True(t, found)
+	assert.Equal(t, "keep-me", envVar.Value)
+
+	// No duplicates — should be exactly 4 env vars (1 user + 3 controller-managed, replaced in place)
+	assert.Len(t, submitter.Env, 4)
+}
+
+func TestConstructRayClusterForRayJob_SidecarMode_CommandAlwaysOverwritten(t *testing.T) {
+	// Verify that even if the user sets Command and Args on the user-provided submitter container,
+	// the controller overwrites them in SidecarMode.
+	rayJob := newSidecarModeRayJob(&corev1.Container{
+		Name:    utils.SubmitterContainerName,
+		Image:   "my-custom-image:latest",
+		Command: []string{"/bin/sh", "-c"},
+		Args:    []string{"echo user-command"},
+	})
+
+	rayCluster := constructSidecarModeCluster(t, rayJob)
+	submitter := rayCluster.Spec.HeadGroupSpec.Template.Spec.Containers[1]
+
+	// Command should be overwritten to the controller's default, not the user's
+	assert.Equal(t, []string{"/bin/bash", "-ce", "--"}, submitter.Command)
+	assert.NotContains(t, submitter.Args[0], "echo user-command", "user args should be overwritten")
+	assert.Contains(t, submitter.Args[0], "ray job submit", "controller should inject ray job submit command")
+}
+
+func TestConstructRayClusterForRayJob_SidecarMode_UserVolumeMountsPreserved(t *testing.T) {
+	// Verify that user-defined volume mounts on the user-provided submitter container are preserved
+	// since configureSubmitterContainer never touches VolumeMounts.
+	rayJob := newSidecarModeRayJob(&corev1.Container{
+		Name:  utils.SubmitterContainerName,
+		Image: "my-custom-image:latest",
+		VolumeMounts: []corev1.VolumeMount{
+			{Name: "scripts", MountPath: "/opt/scripts", ReadOnly: true},
+			{Name: "creds", MountPath: "/etc/creds", ReadOnly: true},
+		},
+	})
+	rayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Volumes = []corev1.Volume{
+		{
+			Name: "scripts",
+			VolumeSource: corev1.VolumeSource{
+				ConfigMap: &corev1.ConfigMapVolumeSource{
+					LocalObjectReference: corev1.LocalObjectReference{Name: "my-scripts"},
+				},
+			},
+		},
+		{
+			Name: "creds",
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{SecretName: "my-creds"},
+			},
+		},
+	}
+
+	rayCluster := constructSidecarModeCluster(t, rayJob)
+	submitter := rayCluster.Spec.HeadGroupSpec.Template.Spec.Containers[1]
+
+	// Both user-defined volume mounts should be preserved
+	require.Len(t, submitter.VolumeMounts, 2)
+
+	assert.Equal(t, "scripts", submitter.VolumeMounts[0].Name)
+	assert.Equal(t, "/opt/scripts", submitter.VolumeMounts[0].MountPath)
+	assert.True(t, submitter.VolumeMounts[0].ReadOnly)
+
+	assert.Equal(t, "creds", submitter.VolumeMounts[1].Name)
+	assert.Equal(t, "/etc/creds", submitter.VolumeMounts[1].MountPath)
+	assert.True(t, submitter.VolumeMounts[1].ReadOnly)
+}
+
+func TestConstructRayClusterForRayJob_SidecarMode_UserProvidedContainer_WithAuthToken(t *testing.T) {
+	// Verify that when auth is enabled, the controller injects auth env vars into
+	// a user-provided submitter container without conflicting with user-defined
+	// env vars or volume mounts.
+	rayJob := newSidecarModeRayJob(&corev1.Container{
+		Name:  utils.SubmitterContainerName,
+		Image: "my-custom-image:latest",
+		Env: []corev1.EnvVar{
+			{Name: "USER_VAR", Value: "keep-me"},
+		},
+		VolumeMounts: []corev1.VolumeMount{
+			{Name: "user-mount", MountPath: "/data"},
+		},
+	})
+	rayJob.Spec.RayClusterSpec.AuthOptions = &rayv1.AuthOptions{
+		Mode: rayv1.AuthModeToken,
+	}
+
+	rayCluster := constructSidecarModeCluster(t, rayJob)
+	submitter := rayCluster.Spec.HeadGroupSpec.Template.Spec.Containers[1]
+
+	// User env var preserved
+	envVar, found := utils.EnvVarByName("USER_VAR", submitter.Env)
+	assert.True(t, found)
+	assert.Equal(t, "keep-me", envVar.Value)
+
+	// Controller-injected env vars present
+	_, found = utils.EnvVarByName(utils.RAY_DASHBOARD_ADDRESS, submitter.Env)
+	assert.True(t, found, "RAY_DASHBOARD_ADDRESS should be injected")
+	_, found = utils.EnvVarByName(utils.RAY_JOB_SUBMISSION_ID, submitter.Env)
+	assert.True(t, found, "RAY_JOB_SUBMISSION_ID should be injected")
+	_, found = utils.EnvVarByName(PythonUnbufferedEnvVarName, submitter.Env)
+	assert.True(t, found, "PYTHONUNBUFFERED should be injected")
+
+	// Auth env vars should be injected
+	envVar, found = utils.EnvVarByName(utils.RAY_AUTH_MODE_ENV_VAR, submitter.Env)
+	assert.True(t, found, "RAY_AUTH_MODE should be injected")
+	assert.Equal(t, string(rayv1.AuthModeToken), envVar.Value)
+
+	envVar, found = utils.EnvVarByName(utils.RAY_AUTH_TOKEN_ENV_VAR, submitter.Env)
+	assert.True(t, found, "RAY_AUTH_TOKEN should be injected")
+	assert.NotNil(t, envVar.ValueFrom, "RAY_AUTH_TOKEN should reference a secret")
+	assert.NotNil(t, envVar.ValueFrom.SecretKeyRef)
+	assert.Equal(t, utils.RAY_AUTH_TOKEN_SECRET_KEY, envVar.ValueFrom.SecretKeyRef.Key)
+
+	// User volume mount preserved
+	assert.Equal(t, "user-mount", submitter.VolumeMounts[0].Name)
+	assert.Equal(t, "/data", submitter.VolumeMounts[0].MountPath)
 }
