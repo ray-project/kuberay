@@ -140,6 +140,15 @@ spec:
             {{- $argList = append $argList (printf "--burst=%v" .Values.kubeClient.burst) -}}
             {{- end -}}
             {{- end -}}
+            {{- if hasKey .Values "asyncJobInfoQueryInterval" }}
+            {{- $argList = append $argList (printf "--async-job-info-query-interval=%v" .Values.asyncJobInfoQueryInterval) -}}
+            {{- end }}
+            {{- if hasKey .Values "asyncJobInfoQueryWorkerSize" }}
+            {{- $argList = append $argList (printf "--async-job-info-query-worker-size=%v" .Values.asyncJobInfoQueryWorkerSize) -}}
+            {{- end }}
+            {{- if hasKey .Values "asyncJobInfoQueryCacheExpiry" }}
+            {{- $argList = append $argList (printf "--async-job-info-query-cache-expiry=%v" .Values.asyncJobInfoQueryCacheExpiry) -}}
+            {{- end }}
             {{- end -}}
             {{- $argList = append $argList (include "kuberay.featureGates" . | trim) -}}
             {{- (printf "\n") -}}
