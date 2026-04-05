@@ -44,14 +44,17 @@ func TestRayScaleClusterComplete(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			testStreams, _, _, _ := genericclioptions.NewTestIOStreams()
-			cmdFactory := cmdutil.NewFactory(genericclioptions.NewConfigFlags(true))
+			configFlags := genericclioptions.NewConfigFlags(true)
+			if tc.namespace != "" {
+				configFlags.Namespace = &tc.namespace
+			}
+			cmdFactory := cmdutil.NewFactory(configFlags)
 
 			fakeScaleClusterOptions := NewScaleClusterOptions(cmdFactory, testStreams)
 
 			cmd := &cobra.Command{}
-			cmd.Flags().StringVarP(&fakeScaleClusterOptions.namespace, "namespace", "n", tc.namespace, "")
-
-			err := fakeScaleClusterOptions.Complete(tc.args, cmd)
+			configFlags.AddFlags(cmd.Flags())
+			err := fakeScaleClusterOptions.Complete(tc.args)
 
 			require.NoError(t, err)
 			assert.Equal(t, tc.expectedNamespace, fakeScaleClusterOptions.namespace)
