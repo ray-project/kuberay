@@ -100,11 +100,11 @@ spec:
             value: "30s"
           - name: S3DISABLE_SSL
             value: "true"
-          - name: AWS_S3ID
+          - name: AWS_ACCESS_KEY_ID
             value: minioadmin
-          - name: AWS_S3SECRET
+          - name: AWS_SECRET_ACCESS_KEY
             value: minioadmin
-          - name: AWS_S3TOKEN
+          - name: AWS_SESSION_TOKEN
             value: ""
           - name: S3_BUCKET
             value: "ray-historyserver"
@@ -203,11 +203,11 @@ spec:
           image: collector:v0.1.0
           imagePullPolicy: IfNotPresent
           env:
-          - name: AWS_S3ID
+          - name: AWS_ACCESS_KEY_ID
             value: minioadmin
-          - name: AWS_S3SECRET
+          - name: AWS_SECRET_ACCESS_KEY
             value: minioadmin
-          - name: AWS_S3TOKEN
+          - name: AWS_SESSION_TOKEN
             value: ""
           - name: S3_BUCKET
             value: "ray-historyserver"

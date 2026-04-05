@@ -342,8 +342,8 @@ func New(c *config) (*RayLogsHandler, error) {
 	// Only use static credentials when explicitly provided; otherwise let the
 	// SDK fall back to the default credential chain (IRSA, instance role, etc.).
 	var creds *credentials.Credentials
-	if c.S3ID != "" {
-		creds = credentials.NewStaticCredentials(c.S3ID, c.S3Secret, c.S3Token)
+	if c.AccessKeyID != "" {
+		creds = credentials.NewStaticCredentials(c.AccessKeyID, c.SecretAccessKey, c.SessionToken)
 	}
 
 	// Create AWS session
