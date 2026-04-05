@@ -613,7 +613,6 @@ func TestCleanupOnCompletion(t *testing.T) {
 
 		ctx := context.Background()
 
-		// Call CleanupOnCompletion with RayJob - cluster selector is not supported
 		didUpdate, err := scheduler.CleanupOnCompletion(ctx, &rayJob)
 		require.NoError(err)
 		a.False(didUpdate)
@@ -639,7 +638,7 @@ func TestCleanupOnCompletion(t *testing.T) {
 		// Delete the RayJob to set DeletionTimestamp (finalizer prevents actual removal)
 		err := fakeCli.Delete(ctx, &rayJob)
 		require.NoError(err)
-		// Call CleanupOnCompletion with RayJob - cluster selector is not supported
+
 		didUpdate, err := scheduler.CleanupOnCompletion(ctx, oldRayJob)
 		require.NoError(err)
 		a.False(didUpdate)
@@ -926,7 +925,7 @@ func TestCleanupOnCompletion(t *testing.T) {
 		a.Equal(int32(1), retrievedPg.Spec.MinMember)
 		// 256m * 1 (requests, not limits)
 		a.Equal("256m", retrievedPg.Spec.MinResources.Cpu().String())
-		// 256Mi * 3 (requests, not limits)
+		// 256Mi * 1 (requests, not limits)
 		a.Equal("256Mi", retrievedPg.Spec.MinResources.Memory().String())
 	})
 
