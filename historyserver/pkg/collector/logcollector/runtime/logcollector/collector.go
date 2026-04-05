@@ -30,6 +30,7 @@ type RayLogHandler struct {
 	LogDir                 string
 	RayNodeName            string
 	RayClusterID           string
+	OwnerResource          string
 	RootDir                string
 	SessionDir             string
 	prevLogsDir            string
@@ -56,6 +57,21 @@ func (r *RayLogHandler) Run(stop <-chan struct{}) error {
 		logrus.Fatalf("Create fsnotify NewWatcher error %v", err)
 	}
 	defer watcher.Close()
+
+	// Retrieve associated resource, we want to run before any log watching
+	if r.IsHead {
+		kind, ownerName, err := utils.GetRayClusterOwnerInfo(r.RayClusterID)
+		if err != nil {
+			logrus.Warnf("Failed to retrieve associated owner reference for %s with error: %v, leaving empty", r.RayClusterName, err)
+			r.OwnerResource = ""
+		} else if kind == "" || ownerName == "" {
+			logrus.Warnf("No associated owner reference found %s, leaving empty", r.RayClusterName)
+			r.OwnerResource = ""
+		} else {
+			r.OwnerResource = utils.AppendRayClusterNameID(kind, ownerName)
+			logrus.Infof("The associated owner resource is: %s", r.OwnerResource)
+		}
+	}
 
 	// WatchPrevLogsLoops performs an initial scan of the prev-logs directory on startup
 	// to process leftover log files in prev-logs/{sessionID}/{nodeID}/logs/ directories.
@@ -108,7 +124,8 @@ func (r *RayLogHandler) processSessionLatestLogs() {
 			logrus.Errorf("CreateObjectIfNotExist %s error %v", metadir, err)
 			return
 		}
-		if err := r.Writer.WriteFile(metafile, strings.NewReader("")); err != nil {
+
+		if err := r.Writer.WriteFile(metafile, strings.NewReader(r.OwnerResource)); err != nil {
 			logrus.Errorf("CreateObjectIfNotExist %s error %v", metafile, err)
 			return
 		}
@@ -754,7 +771,7 @@ func (r *RayLogHandler) WatchSessionLatestLoops() {
 					logrus.Errorf("CreateObjectIfNotExist %s error %v", metadir, err)
 					return
 				}
-				if err := r.Writer.WriteFile(metafile, strings.NewReader("")); err != nil {
+				if err := r.Writer.WriteFile(metafile, strings.NewReader(r.OwnerResource)); err != nil {
 					logrus.Errorf("CreateObjectIfNotExist %s error %v", metafile, err)
 					return
 				}

@@ -190,6 +190,19 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 					}
 					c.CreateTimeStamp = createTime.Unix()
 					c.CreateTime = createTime.UTC().Format(("2006-01-02T15:04:05Z"))
+
+					// Read file to retrieve associated owner object
+					ownerObjectID, err := r.ReadFileFromFullPath(path.Join(r.S3RootDir, "metadir", metas[0], c.SessionName))
+					if err != nil {
+						logrus.Errorf("Failed to retrieve associated owner resource: %v", err)
+					} else {
+						ownerObjectInfo := strings.Split(ownerObjectID, "_")
+						if len(ownerObjectInfo) == 2 {
+							c.OwnerKind = ownerObjectInfo[0]
+							c.OwnerName = ownerObjectInfo[1]
+						}
+					}
+
 					clusters = append(clusters, *c)
 				}
 				return true
@@ -203,6 +216,26 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 	getClusters()
 	sort.Sort(clusters)
 	return clusters
+}
+
+// ReadFileFromFullPath will return the contents of the file input
+func (r *RayLogsHandler) ReadFileFromFullPath(objectPath string) (string, error) {
+	result, err := r.S3Client.GetObject(
+		&s3.GetObjectInput{
+			Bucket: aws.String(r.S3Bucket),
+			Key:    aws.String(objectPath),
+		},
+	)
+	if err != nil {
+		return "", err
+	}
+	defer result.Body.Close()
+
+	content, err := io.ReadAll(result.Body)
+	if err != nil {
+		return "", err
+	}
+	return string(content), nil
 }
 
 func (r *RayLogsHandler) GetContent(clusterId string, fileName string) io.Reader {

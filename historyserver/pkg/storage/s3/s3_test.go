@@ -17,12 +17,18 @@ limitations under the License.
 package s3
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/sirupsen/logrus"
 )
 
@@ -59,4 +65,44 @@ func TestWalk(t *testing.T) {
 		}
 		return nil
 	})
+}
+
+func TestReadFileFromFullPath(t *testing.T) {
+	expectedContent := "RayJob_my-job"
+	objectKey := "path/to/my/object"
+	bucketName := "test-bucket"
+
+	// Start a local HTTP server to mock S3
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Verify the request is correct
+		if r.URL.Path != "/"+bucketName+"/"+objectKey {
+			t.Errorf("expected path /%s/%s, got %s", bucketName, objectKey, r.URL.Path)
+		}
+
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(expectedContent))
+	}))
+	defer server.Close()
+
+	// Configure a real S3 client to use the mock server as its endpoint
+	sess, _ := session.NewSession(&aws.Config{
+		Endpoint:         aws.String(server.URL),
+		Region:           aws.String("us-east-1"),
+		S3ForcePathStyle: aws.Bool(true), // Need is needed for local testing
+		Credentials:      credentials.NewStaticCredentials("mock_id", "mock_secret", ""),
+	})
+
+	handler := &RayLogsHandler{
+		S3Client: s3.New(sess),
+		S3Bucket: bucketName,
+	}
+
+	content, err := handler.ReadFileFromFullPath(objectKey)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if content != expectedContent {
+		t.Errorf("expected content %q, got %q", expectedContent, content)
+	}
 }
