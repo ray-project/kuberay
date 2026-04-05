@@ -285,6 +285,25 @@ _Appears in:_
 | `SidecarMode` |  |
 
 
+#### NetworkIsolationConfig
+
+
+
+NetworkIsolationConfig defines network isolation settings for Ray cluster.
+All modes maintain the cluster's ability for intra-node and KubeRay operator communication.
+
+
+
+_Appears in:_
+- [RayClusterSpec](#rayclusterspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `mode` _string_ | Mode controls the security level, all modes maintain the Cluster's<br />ability for intra-node and Kuberay operator communication.<br />- "denyAll": Denies all Ingress and Egress.<br />- "denyAllIngress": Denies all Ingress.<br />- "denyAllEgress": Denies all Egress. | denyAll | Enum: [denyAll denyAllIngress denyAllEgress] <br /> |
+| `ingressRules` _[NetworkPolicyIngressRule](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#networkpolicyingressrule-v1-networking) array_ | IngressRules specifies custom ingress rules for Ray cluster pods. |  |  |
+| `egressRules` _[NetworkPolicyEgressRule](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#networkpolicyegressrule-v1-networking) array_ | EgressRules specifies custom egress rules for Ray cluster pods. |  |  |
+
+
 #### RayCluster
 
 
@@ -328,6 +347,7 @@ _Appears in:_
 | `headServiceAnnotations` _object (keys:string, values:string)_ |  |  |  |
 | `enableInTreeAutoscaling` _boolean_ | EnableInTreeAutoscaling indicates whether operator should create in tree autoscaling configs |  |  |
 | `gcsFaultToleranceOptions` _[GcsFaultToleranceOptions](#gcsfaulttoleranceoptions)_ | GcsFaultToleranceOptions for enabling GCS FT |  |  |
+| `networkIsolation` _[NetworkIsolationConfig](#networkisolationconfig)_ | NetworkIsolation specifies optional configuration for network isolation.<br />When set, NetworkPolicies will be created to control traffic to/from Ray pods.<br />The reconciler always ensures intra-cluster and KubeRay operator communication is permitted. |  |  |
 | `headGroupSpec` _[HeadGroupSpec](#headgroupspec)_ | HeadGroupSpec is the spec for the head pod |  |  |
 | `rayVersion` _string_ | RayVersion is used to determine the command for the Kubernetes Job managed by RayJob |  |  |
 | `workerGroupSpecs` _[WorkerGroupSpec](#workergroupspec) array_ | WorkerGroupSpecs are the specs for the worker pods |  |  |
