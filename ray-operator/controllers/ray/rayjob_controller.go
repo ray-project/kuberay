@@ -626,7 +626,7 @@ func getSubmitterContainer(rayJobInstance *rayv1.RayJob, rayClusterInstance *ray
 // pass the RayCluster instance for cluster selector case
 func configureSubmitterContainer(container *corev1.Container, rayJobInstance *rayv1.RayJob, rayClusterInstance *rayv1.RayCluster, submissionMode rayv1.JobSubmissionMode) error {
 	// If the command in the submitter container manifest isn't set, use the default command.
-	jobCmd, err := common.BuildJobSubmitCommand(rayJobInstance, submissionMode)
+	jobCmd, err := common.BuildJobSubmitCommand(rayJobInstance, rayClusterInstance, submissionMode)
 	if err != nil {
 		return err
 	}
