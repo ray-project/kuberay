@@ -34,12 +34,12 @@ func ApplyRayClusterWithCollectorWithEnvs(test Test, g *WithT, namespace *corev1
 		headContainer.Env = append(headContainer.Env, env)
 	}
 
-	// Inject namespace name as ray-cluster-id for head group collector
-	injectCollectorRayClusterID(rayClusterFromYaml.Spec.HeadGroupSpec.Template.Spec.Containers, namespace.Name)
+	// Inject namespace name as the ray-cluster-namespace for head group collector
+	injectCollectorRayClusterNamespace(rayClusterFromYaml.Spec.HeadGroupSpec.Template.Spec.Containers, namespace.Name)
 
-	// Inject namespace name as ray-cluster-id for worker group collectors
+	// Inject namespace name as the ray-cluster-namespace for worker group collectors
 	for wg := range rayClusterFromYaml.Spec.WorkerGroupSpecs {
-		injectCollectorRayClusterID(rayClusterFromYaml.Spec.WorkerGroupSpecs[wg].Template.Spec.Containers, namespace.Name)
+		injectCollectorRayClusterNamespace(rayClusterFromYaml.Spec.WorkerGroupSpecs[wg].Template.Spec.Containers, namespace.Name)
 	}
 
 	rayCluster, err := test.Client().Ray().RayV1().
@@ -59,13 +59,13 @@ func ApplyRayClusterWithCollectorWithEnvs(test Test, g *WithT, namespace *corev1
 	return rayCluster
 }
 
-// injectCollectorRayClusterID injects the ray-cluster-id argument into all collector containers.
-func injectCollectorRayClusterID(containers []corev1.Container, rayClusterID string) {
+// injectCollectorRayClusterNamespace injects the ray-cluster-namespace argument into all collector containers.
+func injectCollectorRayClusterNamespace(containers []corev1.Container, rayClusterNamespace string) {
 	for i := range containers {
 		if containers[i].Name == "collector" {
 			containers[i].Command = append(
 				containers[i].Command,
-				fmt.Sprintf("--ray-cluster-id=%s", rayClusterID),
+				fmt.Sprintf("--ray-cluster-namespace=%s", rayClusterNamespace),
 			)
 		}
 	}
