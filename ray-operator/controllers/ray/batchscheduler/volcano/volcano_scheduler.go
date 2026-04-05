@@ -65,7 +65,8 @@ func (v *VolcanoBatchScheduler) handleRayCluster(ctx context.Context, raycluster
 
 	minMember, totalResource := v.calculatePodGroupParams(&raycluster.Spec)
 
-	return v.syncPodGroup(ctx, raycluster, minMember, totalResource)
+	_, err := v.syncPodGroup(ctx, raycluster, minMember, totalResource)
+	return err
 }
 
 // handleRayJob calculates the PodGroup MinMember and MinResources for a RayJob
@@ -83,7 +84,8 @@ func (v *VolcanoBatchScheduler) handleRayJob(ctx context.Context, rayJob *rayv1.
 	// submitter's resource requests into MinResources so capacity is reserved.
 	submitterResource := getSubmitterResource(rayJob)
 	totalResourceList = append(totalResourceList, submitterResource)
-	return v.syncPodGroup(ctx, rayJob, minMember, utils.SumResourceList(totalResourceList))
+	_, err := v.syncPodGroup(ctx, rayJob, minMember, utils.SumResourceList(totalResourceList))
+	return err
 }
 
 func getSubmitterResource(rayJob *rayv1.RayJob) corev1.ResourceList {
@@ -149,7 +151,8 @@ func populateLabelsFromObject(parent metav1.Object, child metav1.Object, key str
 
 // syncPodGroup ensures a Volcano PodGroup exists/updated for the given object
 // with the provided size (MinMember) and total resources.
-func (v *VolcanoBatchScheduler) syncPodGroup(ctx context.Context, owner metav1.Object, size int32, totalResource corev1.ResourceList) error {
+// It returns true if the PodGroup was created or updated, false if no changes were needed.
+func (v *VolcanoBatchScheduler) syncPodGroup(ctx context.Context, owner metav1.Object, size int32, totalResource corev1.ResourceList) (bool, error) {
 	logger := ctrl.LoggerFrom(ctx).WithName(pluginName)
 
 	podGroupName := getAppPodGroupName(owner)
@@ -157,34 +160,37 @@ func (v *VolcanoBatchScheduler) syncPodGroup(ctx context.Context, owner metav1.O
 	if err := v.cli.Get(ctx, types.NamespacedName{Namespace: owner.GetNamespace(), Name: podGroupName}, &podGroup); err != nil {
 		if !errors.IsNotFound(err) {
 			logger.Error(err, "failed to get PodGroup", "podGroupName", podGroupName, "ownerKind", utils.GetCRDType(owner.GetLabels()[utils.RayOriginatedFromCRDLabelKey]), "ownerName", owner.GetName(), "ownerNamespace", owner.GetNamespace())
-			return err
+			return false, err
 		}
 
 		podGroup, err := createPodGroup(owner, podGroupName, size, totalResource)
 		if err != nil {
 			logger.Error(err, "Failed to create pod group specification", "PodGroup.Error", err)
-			return err
+			return false, err
 		}
 		if err := v.cli.Create(ctx, &podGroup); err != nil {
 			if errors.IsAlreadyExists(err) {
 				logger.Info("podGroup already exists, no need to create", "name", podGroupName)
-				return nil
+				return false, nil
 			}
 
 			logger.Error(err, "failed to create PodGroup", "name", podGroupName, "ownerKind", utils.GetCRDType(owner.GetLabels()[utils.RayOriginatedFromCRDLabelKey]), "ownerName", owner.GetName(), "ownerNamespace", owner.GetNamespace())
-			return err
+			return false, err
 		}
-	} else {
-		if podGroup.Spec.MinMember != size || podGroup.Spec.MinResources == nil || !quotav1.Equals(*podGroup.Spec.MinResources, totalResource) {
-			podGroup.Spec.MinMember = size
-			podGroup.Spec.MinResources = &totalResource
-			if err := v.cli.Update(ctx, &podGroup); err != nil {
-				logger.Error(err, "failed to update PodGroup", "name", podGroupName, "ownerKind", utils.GetCRDType(owner.GetLabels()[utils.RayOriginatedFromCRDLabelKey]), "ownerName", owner.GetName(), "ownerNamespace", owner.GetNamespace())
-				return err
-			}
-		}
+		return true, nil
 	}
-	return nil
+
+	if podGroup.Spec.MinMember != size || podGroup.Spec.MinResources == nil || !quotav1.Equals(*podGroup.Spec.MinResources, totalResource) {
+		podGroup.Spec.MinMember = size
+		podGroup.Spec.MinResources = &totalResource
+		if err := v.cli.Update(ctx, &podGroup); err != nil {
+			logger.Error(err, "failed to update PodGroup", "name", podGroupName, "ownerKind", utils.GetCRDType(owner.GetLabels()[utils.RayOriginatedFromCRDLabelKey]), "ownerName", owner.GetName(), "ownerNamespace", owner.GetNamespace())
+			return false, err
+		}
+		return true, nil
+	}
+
+	return false, nil
 }
 
 func (v *VolcanoBatchScheduler) calculatePodGroupParams(rayClusterSpec *rayv1.RayClusterSpec) (int32, corev1.ResourceList) {
@@ -257,71 +263,76 @@ func (v *VolcanoBatchScheduler) AddMetadataToChildResource(_ context.Context, pa
 	addSchedulerName(child, v.Name())
 }
 
-// CleanupOnCompletion deletes the PodGroup when RayJob finishes.
+// CleanupOnCompletion recalculates and updates the PodGroup resources when a RayJob finishes.
 // This is called when the RayJob reaches terminal state (Complete/Failed).
 //
-// Why delete instead of marking as Completed?
+// For RayCluster objects, this is a no-op because the PodGroup is cleaned up by the OwnerReference of the RayCluster.
 //
-// The Volcano scheduler runs a continuous control loop that recalculates and updates
-// PodGroup status in every scheduling cycle (see https://github.com/volcano-sh/volcano/blob/0d0690f8c95eabae90ee30031799282eb936a805/pkg/scheduler/framework/job_updater.go#L116).
-// The status calculation logic (getPodGroupPhase in https://github.com/volcano-sh/volcano/blob/0d0690f8c95eabae90ee30031799282eb936a805/pkg/scheduler/framework/session.go#L619) works as follows:
-//
-//  1. If scheduled pods < MinMember → return Pending
-//  2. If scheduled pods >= MinMember and all completed → return Completed
-//  3. If scheduled pods >= MinMember and some running → return Running
-//  4. If current status is Inqueue → return Inqueue (preserve it)
-//  5. Otherwise → return Pending
-//
-// When RayJob finishes and RayCluster is deleted:
-// - All pods are deleted, so scheduled = 0
-// - Since scheduled (0) < MinMember (e.g., 3), condition #1 applies
-// - The function returns Pending
-// - The enqueue action then changes Pending to Inqueue (enqueue.go:97)
-//
-// Therefore, marking the PodGroup as Completed doesn't work because:
-// 1. We set status to Completed
-// 2. Volcano scheduler runs its next cycle
-// 3. jobStatus() recalculates: "scheduled < MinMember, so status = Pending"
-// 4. enqueue action sees Pending and changes it to Inqueue
-// 5. User sees PodGroup stuck in Inqueue state, queue resources NOT released
-//
-// By deleting the PodGroup entirely:
-// - Volcano scheduler can't find the PodGroup (NotFound)
-// - Skips all status updates for this PodGroup
-// - Queue resources are immediately and permanently released
-//
-// See: https://github.com/volcano-sh/volcano/blob/master/pkg/scheduler/framework/job_updater.go
-//
-//	https://github.com/volcano-sh/volcano/blob/master/pkg/scheduler/framework/session.go
+// For RayJob objects, the PodGroup's MinMember and MinResources are recalculated based on the
+// live RayCluster state. This correctly handles deletion strategies:
+//   - If workers are suspended by DeleteWorkers policy, calculatePodGroupParams automatically
+//     excludes suspended groups, so the PodGroup reflects only the head pod.
+//   - If the RayCluster is deleted by DeleteCluster or ShutdownAfterJobFinishes, the PodGroup is
+//     updated with empty resources.
 func (v *VolcanoBatchScheduler) CleanupOnCompletion(ctx context.Context, object metav1.Object) (bool, error) {
 	logger := ctrl.LoggerFrom(ctx).WithName(pluginName)
 
-	// Only handle RayJob. RayCluster PodGroups will be cleaned up via OwnerReference
+	// Only handle RayJob. RayCluster PodGroups will be cleaned up by the OwnerReference.
 	rayJob, ok := object.(*rayv1.RayJob)
 	if !ok {
 		return false, nil
 	}
 
-	podGroupName := getAppPodGroupName(rayJob)
-	podGroup := &volcanoschedulingv1beta1.PodGroup{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: rayJob.Namespace,
-			Name:      podGroupName,
-		},
-	}
-
-	// Delete the PodGroup directly without Get to reduce API calls
-	if err := v.cli.Delete(ctx, podGroup); err != nil {
+	latestRayJob := &rayv1.RayJob{}
+	if err := v.cli.Get(ctx, types.NamespacedName{Namespace: rayJob.Namespace, Name: rayJob.Name}, latestRayJob); err != nil {
 		if errors.IsNotFound(err) {
-			logger.Info("PodGroup not found, already deleted", "podGroupName", podGroupName)
+			logger.Info("RayJob not found, it might have been deleted. No need to update PodGroup.", "RayJob", types.NamespacedName{Namespace: rayJob.Namespace, Name: rayJob.Name})
 			return false, nil
 		}
-		logger.Error(err, "failed to delete PodGroup", "podGroupName", podGroupName)
+		logger.Error(err, "Failed to get the latest RayJob for cleanup", "RayJob", types.NamespacedName{Namespace: rayJob.Namespace, Name: rayJob.Name})
+		return false, err
+	}
+	if !latestRayJob.DeletionTimestamp.IsZero() {
+		logger.Info("RayJob is being mark deleted, no need to update PodGroup.", "RayJob", types.NamespacedName{Namespace: latestRayJob.Namespace, Name: latestRayJob.Name})
+		return false, nil
+	}
+
+	if len(latestRayJob.Spec.ClusterSelector) > 0 {
+		// Batch scheduling is not supported for RayJob with ClusterSelector.
+		return false, nil
+	}
+
+	var minMember int32
+	var totalResourceList []corev1.ResourceList
+
+	if len(latestRayJob.Status.RayClusterName) == 0 {
+		// The RayClusterName has not been assigned so that there is no PodGroup to update.
+		return false, nil
+	}
+
+	cluster := &rayv1.RayCluster{}
+	clusterKey := types.NamespacedName{Namespace: latestRayJob.Namespace, Name: latestRayJob.Status.RayClusterName}
+	if err := v.cli.Get(ctx, clusterKey, cluster); err != nil {
+		if !errors.IsNotFound(err) {
+			return false, err
+		}
+
+		logger.Info("RayCluster not found, updating PodGroup with empty resources", "RayCluster", clusterKey)
+	} else if cluster.ObjectMeta.DeletionTimestamp.IsZero() {
+		// RayCluster exists. Recalculate based on live spec (suspended workers are automatically excluded).
+		// If the RayJob is SidecarMode, the submitter is included. Even if the submitter container has terminated, it still takes into account
+		// If it is K8sJobMode, the submitter pod is not taken into account. The completed pod doesn't have resources allocated.
+		clusterMinMember, clusterResource := v.calculatePodGroupParams(&cluster.Spec)
+		minMember = clusterMinMember
+		totalResourceList = append(totalResourceList, clusterResource)
+	}
+
+	didUpdate, err := v.syncPodGroup(ctx, latestRayJob, minMember, utils.SumResourceList(totalResourceList))
+	if err != nil {
 		return false, err
 	}
 
-	logger.Info("PodGroup deleted to release queue resources", "podGroupName", podGroupName)
-	return true, nil
+	return didUpdate, nil
 }
 
 func (vf *VolcanoBatchSchedulerFactory) New(_ context.Context, _ *rest.Config, cli client.Client) (schedulerinterface.BatchScheduler, error) {
