@@ -16,7 +16,7 @@ type config struct {
 	S3Endpoint       string
 	S3Bucket         string
 	S3Region         string
-	AccessKeyID     string
+	AccessKeyID      string
 	SecretAccessKey  string
 	SessionToken     string
 	types.RayCollectorConfig
