@@ -101,6 +101,7 @@ type RayClusterReconcilerOptions struct {
 // +kubebuilder:rbac:groups=core,resources=serviceaccounts,verbs=get;list;watch;create;delete
 // +kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=roles,verbs=get;list;watch;create;delete;update
 // +kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=rolebindings,verbs=get;list;watch;create;delete
+// +kubebuilder:rbac:groups=scheduling.k8s.io,resources=podgroups;workloads,verbs=get;list;watch;create;update;patch;delete
 
 // [WARNING]: There MUST be a newline after kubebuilder markers.
 
