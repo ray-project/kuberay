@@ -23,10 +23,14 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -46,6 +50,7 @@ var (
 	cfg       *rest.Config
 	k8sClient client.Client
 	testEnv   *envtest.Environment
+	mgr       ctrl.Manager
 
 	fakeRayDashboardClient *utils.FakeRayDashboardClient
 	fakeRayHttpProxyClient *utils.FakeRayHttpProxyClient
@@ -94,15 +99,27 @@ var _ = BeforeSuite(func(ctx SpecContext) {
 	Expect(err).ToNot(HaveOccurred())
 	Expect(k8sClient).ToNot(BeNil())
 
-	// The RAYCLUSTER_DEFAULT_REQUEUE_SECONDS_ENV is an insurance to keep reconciliation continuously triggered to hopefully fix an unexpected state.
-	// In a production environment, the requeue period is set to five minutes by default, which is relatively infrequent.
-	// TODO: We probably should not shorten RAYCLUSTER_DEFAULT_REQUEUE_SECONDS_ENV here just to make tests pass.
-	// Instead, we should fix the reconciliation if any unexpected happened.
 	os.Setenv(utils.RAYCLUSTER_DEFAULT_REQUEUE_SECONDS_ENV, "10")
-	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
+
+	// 建立 cache selectors
+	rayNodeLabel, err := labels.NewRequirement(utils.RayNodeLabelKey, selection.Equals, []string{"yes"})
+	Expect(err).NotTo(HaveOccurred())
+	podSelector := labels.NewSelector().Add(*rayNodeLabel)
+
+	createdByLabel, err := labels.NewRequirement(utils.KubernetesCreatedByLabelKey, selection.Equals, []string{utils.ComponentName})
+	Expect(err).NotTo(HaveOccurred())
+	jobSelector := labels.NewSelector().Add(*createdByLabel)
+
+	mgr, err = ctrl.NewManager(cfg, ctrl.Options{ // ← 注意這裡是 = 不是 :=
 		Scheme: scheme.Scheme,
 		Metrics: metricsserver.Options{
 			BindAddress: "0",
+		},
+		Cache: cache.Options{
+			ByObject: map[client.Object]cache.ByObject{
+				&batchv1.Job{}: {Label: jobSelector},
+				&corev1.Pod{}:  {Label: podSelector},
+			},
 		},
 	})
 	Expect(err).NotTo(HaveOccurred(), "failed to create manager")

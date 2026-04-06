@@ -216,10 +216,11 @@ func main() {
 	// Set the informers label selectors to narrow the scope of the resources being watched and cached.
 	// This improves the scalability of the system, both for KubeRay itself by reducing the size of the
 	// informers cache, and for the API server / etcd, by reducing the number of watch events.
-	// For example, KubeRay is only interested in the batch Jobs it creates when reconciling RayJobs,
-	// and the Pods it creates when reconciling RayClusters,
-	// so the controller sets the app.kubernetes.io/created-by=kuberay-operator label on any Job and Pod it creates,
-	// and that label is provided to the manager cache as a selector for Job and Pod resources.
+	// For Jobs, the controller sets the app.kubernetes.io/created-by=kuberay-operator label on any Job it creates,
+	// and that label is provided to the manager cache as a selector for Job resources.
+	// For Pods, the controller uses the ray.io/node-type label instead of app.kubernetes.io/created-by,
+	// because the latter can be overridden by user-provided pod template labels, which would cause
+	// Pods to become invisible to the cache. The ray.io/node-type label is protected from user override.
 	selectorsByObject, err := cacheSelectors()
 	exitOnError(err, "unable to create cache selectors")
 	options.Cache.ByObject = selectorsByObject
@@ -311,15 +312,21 @@ func main() {
 }
 
 func cacheSelectors() (map[client.Object]cache.ByObject, error) {
-	label, err := labels.NewRequirement(utils.KubernetesCreatedByLabelKey, selection.Equals, []string{utils.ComponentName})
+	createdByLabel, err := labels.NewRequirement(utils.KubernetesCreatedByLabelKey, selection.Equals, []string{utils.ComponentName})
 	if err != nil {
 		return nil, err
 	}
-	selector := labels.NewSelector().Add(*label)
+	jobSelector := labels.NewSelector().Add(*createdByLabel)
+
+	rayNodeLabel, err := labels.NewRequirement(utils.RayNodeLabelKey, selection.Equals, []string{"yes"})
+	if err != nil {
+		return nil, err
+	}
+	podSelector := labels.NewSelector().Add(*rayNodeLabel)
 
 	return map[client.Object]cache.ByObject{
-		&batchv1.Job{}: {Label: selector},
-		&corev1.Pod{}:  {Label: selector},
+		&batchv1.Job{}: {Label: jobSelector},
+		&corev1.Pod{}:  {Label: podSelector},
 	}, nil
 }
 

@@ -264,32 +264,3 @@ func TestRayClusterUpgradeStrategy(t *testing.T) {
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(newWorkerPods).To(HaveLen(1))
 }
-
-func TestRayClusterPodCacheSelector(t *testing.T) {
-	test := With(t)
-	g := NewWithT(t)
-
-	// Create a namespace
-	namespace := test.NewTestNamespace()
-
-	rayClusterAC := rayv1ac.RayCluster("raycluster-pod-cache", namespace.Name).
-		WithSpec(NewRayClusterSpec())
-
-	rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
-	g.Expect(err).NotTo(HaveOccurred())
-	LogWithTimestamp(test.T(), "Created RayCluster %s/%s successfully", rayCluster.Namespace, rayCluster.Name)
-
-	LogWithTimestamp(test.T(), "Waiting for RayCluster %s/%s to become ready", rayCluster.Namespace, rayCluster.Name)
-	g.Eventually(RayCluster(test, namespace.Name, rayCluster.Name), TestTimeoutMedium).
-		Should(WithTransform(RayClusterState, Equal(rayv1.Ready)))
-
-	// Verify all Pods carry the kuberay-operator label
-	pods, err := test.Client().Core().CoreV1().Pods(namespace.Name).List(test.Ctx(), metav1.ListOptions{})
-	g.Expect(err).NotTo(HaveOccurred())
-	g.Expect(pods.Items).NotTo(BeEmpty())
-
-	for _, pod := range pods.Items {
-		g.Expect(pod.Labels).To(HaveKeyWithValue(utils.KubernetesCreatedByLabelKey, utils.ComponentName),
-			"Pod %s/%s should have label %s=%s", pod.Namespace, pod.Name, utils.KubernetesCreatedByLabelKey, utils.ComponentName)
-	}
-}
