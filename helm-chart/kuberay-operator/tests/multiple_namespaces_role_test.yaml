@@ -1,0 +1,31 @@
+suite: Test Multiple Namespaces Role
+
+templates:
+  - multiple_namespaces_role.yaml
+
+release:
+  name: kuberay-operator
+  namespace: kuberay-system
+
+tests:
+  - it: Should always include scheduling.k8s.io RBAC rules
+    set:
+      singleNamespaceInstall: true
+      crNamespacedRbacEnable: true
+    asserts:
+      - contains:
+          path: rules
+          content:
+            apiGroups:
+              - scheduling.k8s.io
+            resources:
+              - podgroups
+              - workloads
+            verbs:
+              - create
+              - delete
+              - get
+              - list
+              - patch
+              - update
+              - watch
