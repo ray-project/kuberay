@@ -31,3 +31,68 @@ tests:
           apiVersion: rbac.authorization.k8s.io/v1
           kind: ClusterRole
           name: kuberay-operator
+
+  - it: Should not include scheduling.k8s.io RBAC rules by default
+    asserts:
+      - notContains:
+          path: rules
+          content:
+            apiGroups:
+              - scheduling.k8s.io
+            resources:
+              - podgroups
+              - workloads
+            verbs:
+              - create
+              - delete
+              - get
+              - list
+              - patch
+              - update
+              - watch
+
+  - it: Should not include scheduling.k8s.io RBAC rules when NativeWorkloadScheduling feature gate is explicitly disabled
+    set:
+      featureGates:
+        - name: NativeWorkloadScheduling
+          enabled: false
+    asserts:
+      - notContains:
+          path: rules
+          content:
+            apiGroups:
+              - scheduling.k8s.io
+            resources:
+              - podgroups
+              - workloads
+            verbs:
+              - create
+              - delete
+              - get
+              - list
+              - patch
+              - update
+              - watch
+
+  - it: Should include scheduling.k8s.io RBAC rules when NativeWorkloadScheduling feature gate is enabled
+    set:
+      featureGates:
+        - name: NativeWorkloadScheduling
+          enabled: true
+    asserts:
+      - contains:
+          path: rules
+          content:
+            apiGroups:
+              - scheduling.k8s.io
+            resources:
+              - podgroups
+              - workloads
+            verbs:
+              - create
+              - delete
+              - get
+              - list
+              - patch
+              - update
+              - watch
