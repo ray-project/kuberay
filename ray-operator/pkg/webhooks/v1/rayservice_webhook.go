@@ -20,9 +20,8 @@ var rayServiceLog = logf.Log.WithName("rayservice-resource")
 
 // SetupRayServiceWebhookWithManager registers the webhook for RayService in the manager.
 func SetupRayServiceWebhookWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewWebhookManagedBy(mgr).
-		For(&rayv1.RayService{}).
-		WithValidator(&RayServiceWebhook{}).
+	return ctrl.NewWebhookManagedBy(mgr, &rayv1.RayService{}).
+		WithCustomValidator(&RayServiceWebhook{}).
 		Complete()
 }
 
