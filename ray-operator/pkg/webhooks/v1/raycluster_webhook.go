@@ -20,9 +20,8 @@ var rayClusterLog = logf.Log.WithName("raycluster-resource")
 
 // SetupRayClusterWebhookWithManager registers the webhook for RayCluster in the manager.
 func SetupRayClusterWebhookWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewWebhookManagedBy(mgr).
-		For(&rayv1.RayCluster{}).
-		WithValidator(&RayClusterWebhook{}).
+	return ctrl.NewWebhookManagedBy(mgr, &rayv1.RayCluster{}).
+		WithCustomValidator(&RayClusterWebhook{}).
 		Complete()
 }
 
