@@ -62,6 +62,13 @@ const (
 	//
 	// Enables NetworkPolicy-based network isolation for RayClusters (spec.networkIsolation).
 	RayClusterNetworkIsolation featuregate.Feature = "RayClusterNetworkIsolation"
+
+	// owner: @marosset
+	// rep: N/A
+	// alpha: v1.6
+	//
+	// Enables native Kubernetes gang scheduling via scheduling.k8s.io/v1alpha2 Workload and PodGroup APIs.
+	NativeWorkloadScheduling featuregate.Feature = "NativeWorkloadScheduling"
 )
 
 func init() {
@@ -76,6 +83,7 @@ var defaultFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
 	RayCronJob:                   {Default: false, PreRelease: featuregate.Alpha},
 	SidecarSubmitterRestart:      {Default: false, PreRelease: featuregate.Alpha},
 	RayClusterNetworkIsolation:   {Default: false, PreRelease: featuregate.Alpha},
+	NativeWorkloadScheduling:     {Default: false, PreRelease: featuregate.Alpha},
 }
 
 // SetFeatureGateDuringTest is a helper method to override feature gates in tests.
