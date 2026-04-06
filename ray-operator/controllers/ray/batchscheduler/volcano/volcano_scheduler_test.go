@@ -705,7 +705,7 @@ func TestCleanupOnCompletion(t *testing.T) {
 		scheme := runtime.NewScheme()
 		a.NoError(rayv1.AddToScheme(scheme))
 		a.NoError(volcanoschedulingv1beta1.AddToScheme(scheme))
-		fakeCli := fake.NewClientBuilder().WithScheme(scheme).WithObjects(&rayJob).Build()
+		fakeCli := fake.NewClientBuilder().WithScheme(scheme).Build()
 		scheduler := &VolcanoBatchScheduler{cli: fakeCli}
 
 		ctx := context.Background()
@@ -760,7 +760,7 @@ func TestCleanupOnCompletion(t *testing.T) {
 		scheme := runtime.NewScheme()
 		a.NoError(rayv1.AddToScheme(scheme))
 		a.NoError(volcanoschedulingv1beta1.AddToScheme(scheme))
-		fakeCli := fake.NewClientBuilder().WithScheme(scheme).WithObjects(&rayCluster, &rayJob).Build()
+		fakeCli := fake.NewClientBuilder().WithScheme(scheme).WithObjects(&rayCluster).Build()
 		scheduler := &VolcanoBatchScheduler{cli: fakeCli}
 
 		ctx := context.Background()
@@ -828,7 +828,7 @@ func TestCleanupOnCompletion(t *testing.T) {
 		scheme := runtime.NewScheme()
 		a.NoError(rayv1.AddToScheme(scheme))
 		a.NoError(volcanoschedulingv1beta1.AddToScheme(scheme))
-		fakeCli := fake.NewClientBuilder().WithScheme(scheme).WithObjects(&rayCluster, &rayJob).Build()
+		fakeCli := fake.NewClientBuilder().WithScheme(scheme).WithObjects(&rayCluster).Build()
 		scheduler := &VolcanoBatchScheduler{cli: fakeCli}
 
 		ctx := context.Background()
@@ -889,7 +889,7 @@ func TestCleanupOnCompletion(t *testing.T) {
 		scheme := runtime.NewScheme()
 		a.NoError(rayv1.AddToScheme(scheme))
 		a.NoError(volcanoschedulingv1beta1.AddToScheme(scheme))
-		fakeCli := fake.NewClientBuilder().WithScheme(scheme).WithObjects(&rayCluster, &rayJob).Build()
+		fakeCli := fake.NewClientBuilder().WithScheme(scheme).WithObjects(&rayCluster).Build()
 		scheduler := &VolcanoBatchScheduler{cli: fakeCli}
 
 		ctx := context.Background()
@@ -949,7 +949,7 @@ func TestCleanupOnCompletion(t *testing.T) {
 		scheme := runtime.NewScheme()
 		a.NoError(rayv1.AddToScheme(scheme))
 		a.NoError(volcanoschedulingv1beta1.AddToScheme(scheme))
-		fakeCli := fake.NewClientBuilder().WithScheme(scheme).WithObjects(&rayCluster, &rayJob).Build()
+		fakeCli := fake.NewClientBuilder().WithScheme(scheme).WithObjects(&rayCluster).Build()
 		scheduler := &VolcanoBatchScheduler{cli: fakeCli}
 
 		ctx := context.Background()
@@ -999,7 +999,7 @@ func TestCleanupOnCompletion(t *testing.T) {
 		scheme := runtime.NewScheme()
 		a.NoError(rayv1.AddToScheme(scheme))
 		a.NoError(volcanoschedulingv1beta1.AddToScheme(scheme))
-		fakeCli := fake.NewClientBuilder().WithScheme(scheme).WithObjects(&rayJob).Build()
+		fakeCli := fake.NewClientBuilder().WithScheme(scheme).Build()
 		scheduler := &VolcanoBatchScheduler{cli: fakeCli}
 
 		ctx := context.Background()

@@ -283,21 +283,7 @@ func (v *VolcanoBatchScheduler) CleanupOnCompletion(ctx context.Context, object 
 		return false, nil
 	}
 
-	latestRayJob := &rayv1.RayJob{}
-	if err := v.cli.Get(ctx, types.NamespacedName{Namespace: rayJob.Namespace, Name: rayJob.Name}, latestRayJob); err != nil {
-		if errors.IsNotFound(err) {
-			logger.Info("RayJob not found, it might have been deleted. No need to update PodGroup.", "RayJob", types.NamespacedName{Namespace: rayJob.Namespace, Name: rayJob.Name})
-			return false, nil
-		}
-		logger.Error(err, "Failed to get the latest RayJob for cleanup", "RayJob", types.NamespacedName{Namespace: rayJob.Namespace, Name: rayJob.Name})
-		return false, err
-	}
-	if !latestRayJob.DeletionTimestamp.IsZero() {
-		logger.Info("RayJob is being mark deleted, no need to update PodGroup.", "RayJob", types.NamespacedName{Namespace: latestRayJob.Namespace, Name: latestRayJob.Name})
-		return false, nil
-	}
-
-	if len(latestRayJob.Spec.ClusterSelector) > 0 {
+	if len(rayJob.Spec.ClusterSelector) > 0 {
 		// Batch scheduling is not supported for RayJob with ClusterSelector.
 		return false, nil
 	}
@@ -305,13 +291,13 @@ func (v *VolcanoBatchScheduler) CleanupOnCompletion(ctx context.Context, object 
 	var minMember int32
 	var totalResourceList []corev1.ResourceList
 
-	if len(latestRayJob.Status.RayClusterName) == 0 {
+	if len(rayJob.Status.RayClusterName) == 0 {
 		// The RayClusterName has not been assigned so that there is no PodGroup to update.
 		return false, nil
 	}
 
 	cluster := &rayv1.RayCluster{}
-	clusterKey := types.NamespacedName{Namespace: latestRayJob.Namespace, Name: latestRayJob.Status.RayClusterName}
+	clusterKey := types.NamespacedName{Namespace: rayJob.Namespace, Name: rayJob.Status.RayClusterName}
 	if err := v.cli.Get(ctx, clusterKey, cluster); err != nil {
 		if !errors.IsNotFound(err) {
 			return false, err
@@ -327,7 +313,7 @@ func (v *VolcanoBatchScheduler) CleanupOnCompletion(ctx context.Context, object 
 		totalResourceList = append(totalResourceList, clusterResource)
 	}
 
-	didUpdate, err := v.syncPodGroup(ctx, latestRayJob, minMember, utils.SumResourceList(totalResourceList))
+	didUpdate, err := v.syncPodGroup(ctx, rayJob, minMember, utils.SumResourceList(totalResourceList))
 	if err != nil {
 		return false, err
 	}
