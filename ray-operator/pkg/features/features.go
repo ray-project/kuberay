@@ -47,6 +47,13 @@ const (
 	//
 	// Enables RayCronJob controller for scheduled RayJob execution.
 	RayCronJob featuregate.Feature = "RayCronJob"
+
+	// owner: @marosset
+	// rep: N/A
+	// alpha: v1.6
+	//
+	// Enables native Kubernetes gang scheduling via scheduling.k8s.io/v1alpha2 Workload and PodGroup APIs.
+	NativeWorkloadScheduling featuregate.Feature = "NativeWorkloadScheduling"
 )
 
 func init() {
@@ -59,6 +66,7 @@ var defaultFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
 	RayMultiHostIndexing:         {Default: true, PreRelease: featuregate.Beta},
 	RayServiceIncrementalUpgrade: {Default: false, PreRelease: featuregate.Alpha},
 	RayCronJob:                   {Default: false, PreRelease: featuregate.Alpha},
+	NativeWorkloadScheduling:     {Default: false, PreRelease: featuregate.Alpha},
 }
 
 // SetFeatureGateDuringTest is a helper method to override feature gates in tests.
