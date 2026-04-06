@@ -403,3 +403,14 @@ tests:
       - contains:
           path: spec.template.spec.containers[?(@.name=="kuberay-operator")].args
           content: "--burst=200"
+
+  - it: Should succeed when NativeWorkloadScheduling feature gate is enabled
+    set:
+      featureGates:
+        - name: NativeWorkloadScheduling
+          enabled: true
+    asserts:
+      - containsDocument:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: kuberay-operator

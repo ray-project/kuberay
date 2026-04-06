@@ -132,6 +132,17 @@ It should be called early in the deployment to ensure invalid values are caught.
 {{- end }}
 {{- end }}
 
+{{/*
+Check if a feature gate is enabled in the featureGates list.
+Usage: include "kuberay.isFeatureGateEnabled" (dict "featureGates" .Values.featureGates "name" "NativeWorkloadScheduling")
+Returns "true" if found and enabled, empty string otherwise.
+*/}}
+{{- define "kuberay.isFeatureGateEnabled" -}}
+{{- range .featureGates }}
+{{- if and (eq .name $.name) .enabled }}true{{- end }}
+{{- end }}
+{{- end -}}
+
 {{- /* Create the name of the leader election role to use. */ -}}
 {{- define "kuberay-operator.leaderElectionRole.name" -}}
 {{- include "kuberay-operator.fullname" . -}}-leader-election
@@ -346,6 +357,21 @@ rules:
   - patch
   - update
   - watch
+{{- if .nativeWorkloadSchedulingEnabled }}
+- apiGroups:
+  - scheduling.k8s.io
+  resources:
+  - podgroups
+  - workloads
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+{{- end -}}
 {{- if or .batchSchedulerEnabled (eq .batchSchedulerName "volcano") }}
 - apiGroups:
   - scheduling.volcano.sh
