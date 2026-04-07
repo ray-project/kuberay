@@ -192,7 +192,6 @@ func (options *ClusterLogOptions) Complete(cmd *cobra.Command, args []string) er
 }
 
 func (options *ClusterLogOptions) Validate() error {
-
 	switch options.nodeType {
 	case "all":
 		fmt.Fprintln(options.ioStreams.Out, "Command set to retrieve both head and worker node logs.")
