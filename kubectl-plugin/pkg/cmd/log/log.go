@@ -265,7 +265,7 @@ func (options *ClusterLogOptions) Run(ctx context.Context, factory cmdutil.Facto
 	// If GCP Link is requested, break out and generate a link to query for the
 	// cluster name.
 	if options.printGCPLink {
-		return options.gcpLink(clusterName)
+		return options.gcpLink(ctx, clientSet, clusterName)
 	}
 
 	// set the list options for the specified nodetype
@@ -462,7 +462,25 @@ func (options *ClusterLogOptions) downloadRayLogFiles(ctx context.Context, exec 
 	return nil
 }
 
-func (options *ClusterLogOptions) gcpLink(clusterName string) error {
+func (options *ClusterLogOptions) gcpLink(ctx context.Context, clientSet client.Client, clusterName string) error {
+	// Fetch the head pod to check for fluentbit container.
+	headPods, err := clientSet.KubernetesClient().CoreV1().Pods(options.namespace).List(ctx, v1.ListOptions{
+		LabelSelector: fmt.Sprintf("ray.io/node-type=head,ray.io/cluster=%s", clusterName),
+	})
+	if err == nil && len(headPods.Items) > 0 {
+		headPod := headPods.Items[0]
+		hasFluentbit := false
+		for _, container := range headPod.Spec.Containers {
+			if container.Name == "fluentbit" {
+				hasFluentbit = true
+				break
+			}
+		}
+		if !hasFluentbit {
+			fmt.Fprintln(options.ioStreams.ErrOut, "Warning: The head pod does not have a 'fluentbit' container. Logs might not be exported to Google Cloud Logging.")
+		}
+	}
+
 	queryLines := []string{
 		`resource.type="k8s_container"`,
 		fmt.Sprintf(`resource.labels.namespace_name="%s"`, options.namespace),
