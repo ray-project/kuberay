@@ -62,31 +62,25 @@ func GetLogDirByNameID(ossHistorySeverDir, rayClusterNameNamespace, rayNodeID, s
 }
 
 const (
-	// connector is the separator for creating flat storage keys.
+	// connector is the separator used for in-memory map keys (e.g., BuildClusterSessionKey)
+	// and metadir paths. NOT used for data storage paths.
 	//
-	// Design Philosophy:
-	// - Format: "{clusterName}_{namespace}" for router/historyserver/collector
-	//
-	// Why "_" instead of "/"?
-	// Using "/" would create a hierarchical path like "namespace/cluster/session/..."
-	// which requires multiple ListObjects API calls to traverse:
-	//   1. First list all clusters under a namespace
-	//   2. Then list contents of the target cluster
-	//
-	// Using "_" creates a flat path like "namespace_cluster/session/..."
-	// which allows direct access with a single ListObjects call.
-	//
-	// Why this is SAFE for parsing:
+	// Why "_" is safe for parsing:
 	// - Kubernetes namespace follows DNS-1123 label spec
 	// - DNS-1123 only allows: lowercase letters, digits, and hyphens (-)
-	// - Namespace CANNOT contain "_", so we can unambiguously split from the LAST "_"
-	//
-	// DO NOT CHANGE: Would break existing stored data paths
+	// - Namespace CANNOT contain "_", so we can unambiguously split on "_"
 	connector = "_"
 )
 
+// AppendRayClusterNameNamespace builds the hierarchical storage path prefix
+// for a RayCluster's data in object storage.
+//
+// Format: "{namespace}/{clusterName}"
+//
+// The namespace-first layout enables bucket policies scoped per namespace
+// (e.g., an S3 bucket policy restricting access to "ns-prod/*").
 func AppendRayClusterNameNamespace(rayClusterName, rayClusterNamespace string) string {
-	return fmt.Sprintf("%s%s%s", rayClusterName, connector, rayClusterNamespace)
+	return path.Join(rayClusterNamespace, rayClusterName)
 }
 
 func GetSessionDir() (string, error) {

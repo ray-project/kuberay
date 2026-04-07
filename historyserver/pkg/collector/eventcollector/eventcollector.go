@@ -452,7 +452,8 @@ func (ec *EventCollector) flushNodeEventsForHour(hourKey string, events []Event)
 	// Build node event storage path using event's nodeID
 	basePath := path.Join(
 		ec.root,
-		fmt.Sprintf("%s_%s", ec.clusterName, ec.clusterNamespace),
+		ec.clusterNamespace,
+		ec.clusterName,
 		sessionNameToUse,
 		"node_events",
 		fmt.Sprintf("%s-%s", nodeIDToUse, hourKey))
@@ -502,7 +503,8 @@ func (ec *EventCollector) flushJobEventsForHour(jobID, hourKey string, events []
 	// Build job event storage path using event's nodeID
 	basePath := path.Join(
 		ec.root,
-		fmt.Sprintf("%s_%s", ec.clusterName, ec.clusterNamespace),
+		ec.clusterNamespace,
+		ec.clusterName,
 		sessionNameToUse,
 		"job_events",
 		jobID,

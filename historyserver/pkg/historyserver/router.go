@@ -868,7 +868,7 @@ func (s *ServerHandler) getClusterStatus(req *restful.Request, resp *restful.Res
 // buildFormattedClusterStatus reconstructs the cluster status from debug_state.txt and pending tasks and actors
 func (s *ServerHandler) buildFormattedClusterStatus(clusterName, clusterNamespace, sessionName string) string {
 	builder := NewClusterStatusBuilder()
-	clusterNameID := clusterName + "_" + clusterNamespace
+	clusterNameID := utils.AppendRayClusterNameNamespace(clusterName, clusterNamespace)
 	logsPath := path.Join(sessionName, utils.RAY_SESSIONDIR_LOGDIR_NAME)
 	nodeIDs := s.reader.ListFiles(clusterNameID, logsPath)
 	successCount := 0
@@ -926,7 +926,7 @@ func (s *ServerHandler) getClusterMetadata(req *restful.Request, resp *restful.R
 		return
 	}
 
-	clusterNameID := clusterName + "_" + clusterNamespace
+	clusterNameID := utils.AppendRayClusterNameNamespace(clusterName, clusterNamespace)
 	storageKey := utils.EndpointPathToStorageKey("/api/v0/cluster_metadata")
 	endpointPath := path.Join(sessionName, utils.RAY_SESSIONDIR_FETCHED_ENDPOINTS_NAME, storageKey)
 	reader := s.reader.GetContent(clusterNameID, endpointPath)
@@ -961,7 +961,7 @@ func (s *ServerHandler) getAdditionalEndpoint(req *restful.Request, resp *restfu
 		return
 	}
 
-	clusterNameID := clusterName + "_" + clusterNamespace
+	clusterNameID := utils.AppendRayClusterNameNamespace(clusterName, clusterNamespace)
 
 	// Use the full request URI (path + query) for storage key lookup.
 	// The collector stores keys using the full endpoint URL from RAY_COLLECTOR_ADDITIONAL_ENDPOINTS,
@@ -1093,7 +1093,7 @@ func (s *ServerHandler) getNodeLogs(req *restful.Request, resp *restful.Response
 			folder = base
 		}
 	}
-	data, err := s._getNodeLogs(clusterNameID+"_"+clusterNamespace, sessionName, nodeID, folder, glob)
+	data, err := s._getNodeLogs(utils.AppendRayClusterNameNamespace(clusterNameID, clusterNamespace), sessionName, nodeID, folder, glob)
 	if err != nil {
 		logrus.Errorf("Error: %v", err)
 		resp.WriteError(400, err)
@@ -1274,7 +1274,7 @@ func (s *ServerHandler) getNodeLogFile(req *restful.Request, resp *restful.Respo
 
 	// Only resolve node_ip to node_id from stored events for dead cluster
 	if options.NodeID == "" && options.NodeIP != "" {
-		nodeID, err := s.ipToNodeId(clusterNameID+"_"+clusterNamespace, sessionName, options.NodeIP)
+		nodeID, err := s.ipToNodeId(utils.AppendRayClusterNameNamespace(clusterNameID, clusterNamespace), sessionName, options.NodeIP)
 		if err != nil {
 			resp.WriteErrorString(http.StatusNotFound,
 				fmt.Sprintf("Cannot find matching node_id for a given node ip %s", options.NodeIP))
@@ -1283,7 +1283,7 @@ func (s *ServerHandler) getNodeLogFile(req *restful.Request, resp *restful.Respo
 		options.NodeID = nodeID
 	}
 
-	content, err := s._getNodeLogFile(clusterNameID+"_"+clusterNamespace, sessionName, options)
+	content, err := s._getNodeLogFile(utils.AppendRayClusterNameNamespace(clusterNameID, clusterNamespace), sessionName, options)
 	if err != nil {
 		var httpErr *utils.HTTPError
 		if errors.As(err, &httpErr) {

@@ -2142,7 +2142,7 @@ func testDeadClusterMetadata(test Test, g *WithT, namespace *corev1.Namespace, s
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 
 	// Wait for cluster metadata to be stored in S3 by the collector before deleting the cluster.
-	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, rayCluster.Namespace)
+	clusterNameID := fmt.Sprintf("%s/%s", rayCluster.Namespace, rayCluster.Name)
 	sessionID := GetSessionIDFromHeadPod(test, g, rayCluster)
 	storageKey := utils.EndpointPathToStorageKey("/api/v0/cluster_metadata")
 	metaKey := fmt.Sprintf("log/%s/%s/%s/%s", clusterNameID, sessionID, utils.RAY_SESSIONDIR_FETCHED_ENDPOINTS_NAME, storageKey)
@@ -2226,7 +2226,7 @@ func testDeadClusterPlacementGroups(test Test, g *WithT, namespace *corev1.Names
 
 	// Wait for placement groups data to be stored in S3 by the collector before deleting the cluster.
 	// The collector stores the endpoint with query params, so the storage key includes them.
-	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, rayCluster.Namespace)
+	clusterNameID := fmt.Sprintf("%s/%s", rayCluster.Namespace, rayCluster.Name)
 	sessionID := GetSessionIDFromHeadPod(test, g, rayCluster)
 	storageKey := utils.EndpointPathToStorageKey("/api/v0/placement_groups?detail=1&limit=10000")
 	pgKey := fmt.Sprintf("log/%s/%s/%s/%s", clusterNameID, sessionID, utils.RAY_SESSIONDIR_FETCHED_ENDPOINTS_NAME, storageKey)

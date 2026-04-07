@@ -131,7 +131,7 @@ func (h *EventHandler) Run(stop chan struct{}, numOfEventProcessors int) error {
 		processAllEvents := func() {
 			clusterList := h.reader.List()
 			for _, clusterInfo := range clusterList {
-				clusterNameNamespace := clusterInfo.Name + "_" + clusterInfo.Namespace
+				clusterNameNamespace := utils.AppendRayClusterNameNamespace(clusterInfo.Name, clusterInfo.Namespace)
 				clusterSessionKey := utils.BuildClusterSessionKey(clusterInfo.Name, clusterInfo.Namespace, clusterInfo.SessionName)
 
 				// Read Log Events from logs/{nodeId}/events/event_*.log
@@ -611,10 +611,10 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 }
 
 // getAllJobEventFiles get all the job event files for the given cluster.
-// Assuming that the events file object follow the format root/clustername/sessionid/job_events/{job-*}/*
+// Assuming that the events file object follow the format root/{namespace}/{clustername}/sessionid/job_events/{job-*}/*
 func (h *EventHandler) getAllJobEventFiles(clusterInfo utils.ClusterInfo) []string {
 	var allJobFiles []string
-	clusterNameID := clusterInfo.Name + "_" + clusterInfo.Namespace
+	clusterNameID := utils.AppendRayClusterNameNamespace(clusterInfo.Name, clusterInfo.Namespace)
 	jobEventDirPrefix := clusterInfo.SessionName + "/job_events/"
 	jobDirList := h.reader.ListFiles(clusterNameID, jobEventDirPrefix)
 
@@ -636,7 +636,7 @@ func (h *EventHandler) getAllJobEventFiles(clusterInfo utils.ClusterInfo) []stri
 
 // getAllNodeEventFiles retrieves all node event files for the given cluster
 func (h *EventHandler) getAllNodeEventFiles(clusterInfo utils.ClusterInfo) []string {
-	clusterNameID := clusterInfo.Name + "_" + clusterInfo.Namespace
+	clusterNameID := utils.AppendRayClusterNameNamespace(clusterInfo.Name, clusterInfo.Namespace)
 	nodeEventDirPrefix := clusterInfo.SessionName + "/node_events/"
 	nodeEventFileNames := h.reader.ListFiles(clusterNameID, nodeEventDirPrefix)
 

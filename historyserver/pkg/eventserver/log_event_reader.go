@@ -48,11 +48,11 @@ func NewLogEventReader(reader storage.StorageReader) *LogEventReader {
 // ReadLogEvents reads all Log Events from logs/{nodeId}/events/event_*.log files
 // and stores them in the provided ClusterLogEventMap.
 //
-// Path structure in storage: {clusterName}_{namespace}/{sessionName}/logs/{nodeId}/events/event_*.log
+// Path structure in storage: {namespace}/{clusterName}/{sessionName}/logs/{nodeId}/events/event_*.log
 // This is called from eventserver.go Run() to populate events for a cluster session.
 func (r *LogEventReader) ReadLogEvents(clusterInfo utils.ClusterInfo, clusterSessionKey string, eventStore *types.ClusterLogEventMap) error {
 	// Build cluster ID used by StorageReader
-	clusterID := clusterInfo.Name + "_" + clusterInfo.Namespace
+	clusterID := utils.AppendRayClusterNameNamespace(clusterInfo.Name, clusterInfo.Namespace)
 
 	// Get or create the JobEventMap for this cluster session
 	jobEventMap := eventStore.GetOrCreateJobEventMap(clusterSessionKey)

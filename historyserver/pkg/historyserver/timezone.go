@@ -22,7 +22,7 @@ func (s *ServerHandler) getTimezone(req *restful.Request, resp *restful.Response
 
 	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
 	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
-	clusterNameID := clusterName + "_" + clusterNamespace
+	clusterNameID := utils.AppendRayClusterNameNamespace(clusterName, clusterNamespace)
 
 	storageKey := utils.EndpointPathToStorageKey(timezoneEndpoint)
 	endpointPath := path.Join(sessionName, utils.RAY_SESSIONDIR_FETCHED_ENDPOINTS_NAME, storageKey)

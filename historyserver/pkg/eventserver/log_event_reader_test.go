@@ -188,13 +188,13 @@ func TestReadLogEvents(t *testing.T) {
 	t.Run("reads events from multiple nodes, skips non-event files", func(t *testing.T) {
 		mock := newLogEventMockReader()
 
-		mock.addDir("cluster_ns", "session1/logs", []string{"node1/", "node2/", "stray_file.txt"})
-		mock.addDir("cluster_ns", "session1/logs/node1/events", []string{"event_GCS.log", "debug.log"})
-		mock.addDir("cluster_ns", "session1/logs/node2/events", []string{"event_RAYLET.log"})
+		mock.addDir("ns/cluster", "session1/logs", []string{"node1/", "node2/", "stray_file.txt"})
+		mock.addDir("ns/cluster", "session1/logs/node1/events", []string{"event_GCS.log", "debug.log"})
+		mock.addDir("ns/cluster", "session1/logs/node2/events", []string{"event_RAYLET.log"})
 
-		mock.addFile("cluster_ns", "session1/logs/node1/events/event_GCS.log",
+		mock.addFile("ns/cluster", "session1/logs/node1/events/event_GCS.log",
 			`{"event_id":"e1","source_type":"GCS","severity":"INFO","message":"from node1","timestamp":"1770635700"}`+"\n")
-		mock.addFile("cluster_ns", "session1/logs/node2/events/event_RAYLET.log",
+		mock.addFile("ns/cluster", "session1/logs/node2/events/event_RAYLET.log",
 			`{"event_id":"e2","source_type":"RAYLET","severity":"WARNING","message":"from node2","timestamp":"1770635800"}`+"\n")
 
 		reader := NewLogEventReader(mock)
@@ -210,7 +210,7 @@ func TestReadLogEvents(t *testing.T) {
 
 	t.Run("handles empty cluster with no nodes", func(t *testing.T) {
 		mock := newLogEventMockReader()
-		mock.addDir("cluster_ns", "session1/logs", []string{})
+		mock.addDir("ns/cluster", "session1/logs", []string{})
 
 		reader := NewLogEventReader(mock)
 		store := types.NewClusterLogEventMap()

@@ -100,8 +100,10 @@ func (r *RayLogHandler) processSessionLatestLogs() {
 	sessionID := filepath.Base(sessionRealDir)
 	if r.IsHead {
 		metadir := path.Join(r.RootDir, "metadir")
-		metafile := path.Clean(metadir + "/" + fmt.Sprintf("%s/%v",
-			utils.AppendRayClusterNameNamespace(r.RayClusterName, r.RayClusterNamespace),
+		// metadir uses flat "{name}_{namespace}" format (not the hierarchical data path format)
+		// to maintain compatibility with storage backend List() parsing.
+		metafile := path.Clean(metadir + "/" + fmt.Sprintf("%s_%s/%v",
+			r.RayClusterName, r.RayClusterNamespace,
 			path.Base(sessionID),
 		))
 		if err := r.Writer.CreateDirectory(path.Dir(metafile)); err != nil {
@@ -449,8 +451,10 @@ func (r *RayLogHandler) processSessionPrevLogs(sessionDir string) {
 	logrus.Infof("Processing all node logs for session: %s", sessionID)
 	if r.IsHead {
 		metadir := path.Join(r.RootDir, "metadir")
-		metafile := path.Clean(metadir + "/" + fmt.Sprintf("%s/%v",
-			utils.AppendRayClusterNameNamespace(r.RayClusterName, r.RayClusterNamespace),
+		// metadir uses flat "{name}_{namespace}" format (not the hierarchical data path format)
+		// to maintain compatibility with storage backend List() parsing.
+		metafile := path.Clean(metadir + "/" + fmt.Sprintf("%s_%s/%v",
+			r.RayClusterName, r.RayClusterNamespace,
 			path.Base(sessionID),
 		))
 		if err := r.Writer.CreateDirectory(path.Dir(metafile)); err != nil {
@@ -746,8 +750,10 @@ func (r *RayLogHandler) WatchSessionLatestLoops() {
 			if event.Op&(fsnotify.Create|fsnotify.Write) != 0 {
 				sessionID := filepath.Base(event.Name)
 				metadir := path.Join(r.RootDir, "metadir")
-				metafile := path.Clean(metadir + "/" + fmt.Sprintf("%s/%v",
-					utils.AppendRayClusterNameNamespace(r.RayClusterName, r.RayClusterNamespace),
+				// metadir uses flat "{name}_{namespace}" format (not the hierarchical data path format)
+				// to maintain compatibility with storage backend List() parsing.
+				metafile := path.Clean(metadir + "/" + fmt.Sprintf("%s_%s/%v",
+					r.RayClusterName, r.RayClusterNamespace,
 					path.Base(sessionID),
 				))
 				if err := r.Writer.CreateDirectory(path.Dir(metafile)); err != nil {
