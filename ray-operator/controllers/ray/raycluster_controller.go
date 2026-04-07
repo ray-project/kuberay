@@ -20,6 +20,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	schedulingv1alpha2 "k8s.io/api/scheduling/v1alpha2"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -1556,6 +1557,11 @@ func (r *RayClusterReconciler) SetupWithManager(mgr ctrl.Manager, reconcileConcu
 		Owns(&corev1.Secret{})
 	if r.options.BatchSchedulerManager != nil {
 		r.options.BatchSchedulerManager.ConfigureReconciler(b)
+	}
+
+	if features.Enabled(features.NativeWorkloadScheduling) {
+		b = b.Owns(&schedulingv1alpha2.Workload{}).
+			Owns(&schedulingv1alpha2.PodGroup{})
 	}
 
 	return b.
