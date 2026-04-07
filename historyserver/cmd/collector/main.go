@@ -26,7 +26,7 @@ func main() {
 	role := ""
 	runtimeClassName := ""
 	rayClusterName := ""
-	rayClusterId := ""
+	rayClusterNamespace := ""
 	rayRootDir := ""
 	logBatching := 1000
 	eventsPort := 8080
@@ -36,7 +36,7 @@ func main() {
 	flag.StringVar(&role, "role", "Worker", "")
 	flag.StringVar(&runtimeClassName, "runtime-class-name", "", "")
 	flag.StringVar(&rayClusterName, "ray-cluster-name", "", "")
-	flag.StringVar(&rayClusterId, "ray-cluster-id", "default", "")
+	flag.StringVar(&rayClusterNamespace, "ray-cluster-namespace", "default", "")
 	flag.StringVar(&rayRootDir, "ray-root-dir", "", "")
 	flag.IntVar(&logBatching, "log-batching", 1000, "")
 	flag.IntVar(&eventsPort, "events-port", 8080, "")
@@ -98,15 +98,15 @@ func main() {
 	}
 
 	globalConfig := types.RayCollectorConfig{
-		RootDir:          rayRootDir,
-		SessionDir:       sessionDir,
-		RayNodeName:      rayNodeId,
-		Role:             role,
-		RayClusterName:   rayClusterName,
-		RayClusterID:     rayClusterId,
-		PushInterval:     pushInterval,
-		LogBatching:      logBatching,
-		DashboardAddress: os.Getenv("RAY_DASHBOARD_ADDRESS"),
+		RootDir:             rayRootDir,
+		SessionDir:          sessionDir,
+		RayNodeName:         rayNodeId,
+		Role:                role,
+		RayClusterName:      rayClusterName,
+		RayClusterNamespace: rayClusterNamespace,
+		PushInterval:        pushInterval,
+		LogBatching:         logBatching,
+		DashboardAddress:    os.Getenv("RAY_DASHBOARD_ADDRESS"),
 
 		AdditionalEndpoints:  additionalEndpoints,
 		EndpointPollInterval: endpointPollInterval,
@@ -128,7 +128,7 @@ func main() {
 	// Create and initialize EventCollector
 	go func() {
 		defer wg.Done()
-		eventCollector := eventcollector.NewEventCollector(writer, rayRootDir, sessionDir, rayNodeId, rayClusterName, rayClusterId, sessionName)
+		eventCollector := eventcollector.NewEventCollector(writer, rayRootDir, sessionDir, rayNodeId, rayClusterName, rayClusterNamespace, sessionName)
 		eventCollector.Run(stop, eventsPort)
 		logrus.Info("Event collector shutdown")
 	}()

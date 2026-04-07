@@ -21,17 +21,17 @@ import (
 )
 
 type RayLogsHandler struct {
-	OssBucket      *oss.Bucket
-	LogFiles       chan string
-	HttpClient     *http.Client
-	SessionDir     string
-	OssRootDir     string
-	LogDir         string
-	RayClusterName string
-	RayClusterID   string
-	RayNodeName    string
-	LogBatching    int
-	PushInterval   time.Duration
+	OssBucket           *oss.Bucket
+	LogFiles            chan string
+	HttpClient          *http.Client
+	SessionDir          string
+	OssRootDir          string
+	LogDir              string
+	RayClusterName      string
+	RayClusterNamespace string
+	RayNodeName         string
+	LogBatching         int
+	PushInterval        time.Duration
 }
 
 func (r *RayLogsHandler) CreateDirectory(d string) error {
@@ -258,14 +258,14 @@ func New(c *config) (*RayLogsHandler, error) {
 	logrus.Infof("Clean logdir is %s", logdir)
 
 	return &RayLogsHandler{
-		OssBucket:      bucket,
-		SessionDir:     sessionDir,
-		OssRootDir:     c.RootDir,
-		LogDir:         logdir,
-		LogFiles:       make(chan string, 100),
-		RayClusterName: c.RayClusterName,
-		RayClusterID:   c.RayClusterID,
-		RayNodeName:    c.RayNodeName,
+		OssBucket:           bucket,
+		SessionDir:          sessionDir,
+		OssRootDir:          c.RootDir,
+		LogDir:              logdir,
+		LogFiles:            make(chan string, 100),
+		RayClusterName:      c.RayClusterName,
+		RayClusterNamespace: c.RayClusterNamespace,
+		RayNodeName:         c.RayNodeName,
 		HttpClient: &http.Client{
 			Transport: &http.Transport{
 				MaxIdleConns:        100,              // Max idle connections

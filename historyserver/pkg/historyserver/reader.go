@@ -70,7 +70,7 @@ func (s *ServerHandler) listClusters(limit int) []utils.ClusterInfo {
 	return clusters
 }
 
-func (s *ServerHandler) _getNodeLogs(rayClusterNameID, sessionId, nodeId, folder, glob string) ([]byte, error) {
+func (s *ServerHandler) _getNodeLogs(rayClusterNameNamespace, sessionId, nodeId, folder, glob string) ([]byte, error) {
 	logPath := path.Join(sessionId, utils.RAY_SESSIONDIR_LOGDIR_NAME, nodeId)
 	if folder != "" {
 		logPath = path.Join(logPath, folder)
@@ -80,13 +80,13 @@ func (s *ServerHandler) _getNodeLogs(rayClusterNameID, sessionId, nodeId, folder
 	// Use recursive listing when glob contains ** to support cross-directory matching.
 	var matchedFiles []string
 	if glob == "" {
-		matchedFiles = s.reader.ListFiles(rayClusterNameID, logPath)
+		matchedFiles = s.reader.ListFiles(rayClusterNameNamespace, logPath)
 	} else {
 		var files []string
 		if strings.Contains(glob, "**") {
-			files = s.listFilesRecursive(rayClusterNameID, logPath)
+			files = s.listFilesRecursive(rayClusterNameNamespace, logPath)
 		} else {
-			files = s.reader.ListFiles(rayClusterNameID, logPath)
+			files = s.reader.ListFiles(rayClusterNameNamespace, logPath)
 		}
 		for _, file := range files {
 			matched, err := doublestar.Match(glob, file)
@@ -170,9 +170,9 @@ func categorizeLogFiles(files []string) map[string][]string {
 	return result
 }
 
-func (s *ServerHandler) _getNodeLogFile(rayClusterNameID, sessionID string, options GetLogFileOptions) ([]byte, error) {
+func (s *ServerHandler) _getNodeLogFile(rayClusterNameNamespace, sessionID string, options GetLogFileOptions) ([]byte, error) {
 	// Resolve node_id and filename based on options
-	nodeID, filename, err := s.resolveLogFilename(rayClusterNameID, sessionID, options)
+	nodeID, filename, err := s.resolveLogFilename(rayClusterNameNamespace, sessionID, options)
 	if err != nil {
 		// Preserve HTTPError status code if already set, otherwise use BadRequest
 		var httpErr *utils.HTTPError
@@ -184,7 +184,7 @@ func (s *ServerHandler) _getNodeLogFile(rayClusterNameID, sessionID string, opti
 
 	// Build log path
 	logPath := path.Join(sessionID, utils.RAY_SESSIONDIR_LOGDIR_NAME, nodeID, filename)
-	reader := s.reader.GetContent(rayClusterNameID, logPath)
+	reader := s.reader.GetContent(rayClusterNameNamespace, logPath)
 
 	if reader == nil {
 		return nil, utils.NewHTTPError(fmt.Errorf("log file not found: %s", logPath), http.StatusNotFound)
@@ -495,19 +495,19 @@ func (s *ServerHandler) findWorkerLogFile(clusterNameID, sessionID, nodeID, work
 // ipToNodeId resolves node_id from node_ip by querying node_events from storage.
 // This mirrors Ray Dashboard's ip_to_node_id logic.
 // Returns node_id in hex format if found, error otherwise.
-func (s *ServerHandler) ipToNodeId(rayClusterNameID, sessionID, nodeIP string) (string, error) {
+func (s *ServerHandler) ipToNodeId(rayClusterNameNamespace, sessionID, nodeIP string) (string, error) {
 	if nodeIP == "" {
 		return "", fmt.Errorf("node_ip is empty")
 	}
 
 	// List all node_events files
 	nodeEventsPath := path.Join(sessionID, "node_events")
-	files := s.reader.ListFiles(rayClusterNameID, nodeEventsPath)
+	files := s.reader.ListFiles(rayClusterNameNamespace, nodeEventsPath)
 
 	// Parse each node event file to find matching node_ip
 	for _, file := range files {
 		filePath := path.Join(nodeEventsPath, file)
-		nodeIDHex, found := s.searchNodeIDHexInEventFile(rayClusterNameID, filePath, nodeIP)
+		nodeIDHex, found := s.searchNodeIDHexInEventFile(rayClusterNameNamespace, filePath, nodeIP)
 		if found {
 			logrus.Infof("Resolved node_ip %s to node_id %s", nodeIP, nodeIDHex)
 			return nodeIDHex, nil
@@ -519,8 +519,8 @@ func (s *ServerHandler) ipToNodeId(rayClusterNameID, sessionID, nodeIP string) (
 
 // searchNodeIDHexInEventFile searches for a node with the given IP in a single event file.
 // Returns (nodeIDHex, true) if found, ("", false) otherwise.
-func (s *ServerHandler) searchNodeIDHexInEventFile(rayClusterNameID, filePath, nodeIP string) (string, bool) {
-	reader := s.reader.GetContent(rayClusterNameID, filePath)
+func (s *ServerHandler) searchNodeIDHexInEventFile(rayClusterNameNamespace, filePath, nodeIP string) (string, bool) {
+	reader := s.reader.GetContent(rayClusterNameNamespace, filePath)
 	if reader == nil {
 		return "", false
 	}

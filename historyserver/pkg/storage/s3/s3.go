@@ -40,18 +40,18 @@ import (
 )
 
 type RayLogsHandler struct {
-	S3Client       *s3.S3
-	LogFiles       chan string
-	HttpClient     *http.Client
-	S3Bucket       string
-	SessionDir     string
-	S3RootDir      string
-	LogDir         string
-	RayClusterName string
-	RayClusterID   string
-	RayNodeName    string
-	LogBatching    int
-	PushInterval   time.Duration
+	S3Client            *s3.S3
+	LogFiles            chan string
+	HttpClient          *http.Client
+	S3Bucket            string
+	SessionDir          string
+	S3RootDir           string
+	LogDir              string
+	RayClusterName      string
+	RayClusterNamespace string
+	RayNodeName         string
+	LogBatching         int
+	PushInterval        time.Duration
 }
 
 func (r *RayLogsHandler) CreateDirectory(d string) error {
@@ -375,15 +375,15 @@ func New(c *config) (*RayLogsHandler, error) {
 	logrus.Infof("Clean logdir is %s", logdir)
 
 	return &RayLogsHandler{
-		S3Client:       s3Client,
-		S3Bucket:       c.S3Bucket,
-		SessionDir:     sessionDir,
-		S3RootDir:      c.RootDir,
-		LogDir:         logdir,
-		LogFiles:       make(chan string, 100),
-		RayClusterName: c.RayClusterName,
-		RayClusterID:   c.RayClusterID,
-		RayNodeName:    c.RayNodeName,
+		S3Client:            s3Client,
+		S3Bucket:            c.S3Bucket,
+		SessionDir:          sessionDir,
+		S3RootDir:           c.RootDir,
+		LogDir:              logdir,
+		LogFiles:            make(chan string, 100),
+		RayClusterName:      c.RayClusterName,
+		RayClusterNamespace: c.RayClusterNamespace,
+		RayNodeName:         c.RayNodeName,
 		HttpClient: &http.Client{
 			Transport: &http.Transport{
 				MaxIdleConns:        100,
