@@ -9,8 +9,8 @@ spec:
     mode: denyAllIngress
     ingressRules:
     # Allow pods labelled app=ray-client to reach the Ray Serve inference endpoint.
-    # The base rules only open dashboard (8265) and client (10001) ports, so
-    # an explicit rule is needed for serve traffic to reach the cluster.
+    # The base rules only allow intra-cluster and operator access, so an explicit
+    # rule is needed for any external traffic to reach the cluster.
     - from:
       - podSelector:
           matchLabels:
