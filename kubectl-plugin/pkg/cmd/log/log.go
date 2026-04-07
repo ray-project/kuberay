@@ -80,6 +80,7 @@ type ClusterLogOptions struct {
 	nodeType     nodeTypeEnum
 	ResourceName string
 	ResourceType util.ResourceType
+	printGCPLink bool
 }
 
 var (
@@ -146,6 +147,7 @@ func NewClusterLogCommand(cmdFactory cmdutil.Factory, streams genericclioptions.
 	}
 	cmd.Flags().StringVar(&options.outputDir, "out-dir", options.outputDir, "directory to save the logs to")
 	cmd.Flags().Var(&options.nodeType, "node-type", "type of Ray node from which to download logs, supports: 'worker', 'head', or 'all'")
+	cmd.Flags().BoolVar(&options.printGCPLink, "gke-link", false, "print a link to Google Cloud Console to view logs")
 
 	cobra.CheckErr(cmd.RegisterFlagCompletionFunc("node-type", nodeTypeCompletion))
 
@@ -190,15 +192,6 @@ func (options *ClusterLogOptions) Complete(cmd *cobra.Command, args []string) er
 }
 
 func (options *ClusterLogOptions) Validate() error {
-	if options.outputDir == "" {
-		fmt.Fprintln(options.ioStreams.Out, "No output directory specified, creating dir under current directory using resource name.")
-		options.outputDir = options.ResourceName
-		err := os.MkdirAll(options.outputDir, 0o755)
-		if err != nil {
-			return fmt.Errorf("could not create directory with cluster name %s: %w", options.outputDir, err)
-		}
-		deleteOutputDir = true
-	}
 
 	switch options.nodeType {
 	case "all":
@@ -209,6 +202,25 @@ func (options *ClusterLogOptions) Validate() error {
 		fmt.Fprintln(options.ioStreams.Out, "Command set to retrieve only worker node logs.")
 	default:
 		return fmt.Errorf("unknown node type `%s`", options.nodeType)
+	}
+
+	if options.printGCPLink {
+		if options.outputDir != "" {
+			return fmt.Errorf("--out-dir is incompatible with --gke-link")
+		}
+
+		// No more validation for the output dir is needed if printing a link.
+		return nil
+	}
+
+	if options.outputDir == "" {
+		fmt.Fprintln(options.ioStreams.Out, "No output directory specified, creating dir under current directory using resource name.")
+		options.outputDir = options.ResourceName
+		err := os.MkdirAll(options.outputDir, 0o755)
+		if err != nil {
+			return fmt.Errorf("could not create directory with cluster name %s: %w", options.outputDir, err)
+		}
+		deleteOutputDir = true
 	}
 
 	info, err := os.Stat(options.outputDir)
@@ -248,6 +260,12 @@ func (options *ClusterLogOptions) Run(ctx context.Context, factory cmdutil.Facto
 		clusterName = rayService.Status.ActiveServiceStatus.RayClusterName
 	default:
 		return fmt.Errorf("unsupported resource type: %s", options.ResourceType)
+	}
+
+	// If GCP Link is requested, break out and generate a link to query for the
+	// cluster name.
+	if options.printGCPLink {
+		return options.gcpLink(clusterName)
 	}
 
 	// set the list options for the specified nodetype
@@ -441,5 +459,39 @@ func (options *ClusterLogOptions) downloadRayLogFiles(ctx context.Context, exec 
 		}
 	}
 
+	return nil
+}
+
+func (options *ClusterLogOptions) gcpLink(clusterName string) error {
+	queryLines := []string{
+		`resource.type="k8s_container"`,
+		fmt.Sprintf(`resource.labels.namespace_name="%s"`, options.namespace),
+		fmt.Sprintf(`labels."k8s-pod/ray_io/cluster"="%s"`, clusterName),
+	}
+
+	switch options.nodeType {
+	case headNodeType, workerNodeType:
+		queryLines = append(queryLines, fmt.Sprintf(`labels."k8s-pod/ray_io/node-type"="%s"`, options.nodeType))
+	default:
+		queryLines = append(queryLines, `labels."k8s-pod/ray_io/is-ray-node"="yes"`)
+	}
+
+	query := strings.Join(queryLines, "\n")
+	gcpURL := fmt.Sprintf("https://console.cloud.google.com/logs/query;query=%s", url.QueryEscape(query))
+
+	config, err := options.cmdFactory.ToRawKubeConfigLoader().RawConfig()
+	if err != nil {
+		return fmt.Errorf("cannot determine current kubectl context to infer GCP project: %w", err)
+	}
+	if strings.HasPrefix(config.CurrentContext, "gke_") {
+		// GKE context names are usually in the format: gke_PROJECT_LOCATION_NAME.
+		_, rest, _ := strings.Cut(config.CurrentContext, "_")
+		project, _, _ := strings.Cut(rest, "_")
+		gcpURL += fmt.Sprintf(";project=%s", url.QueryEscape(project))
+	} else {
+		fmt.Fprintln(options.ioStreams.ErrOut, "Warning: The current kubectl context does not appear to be a GKE cluster. The generated link may not work.")
+	}
+
+	fmt.Fprintln(options.ioStreams.Out, gcpURL)
 	return nil
 }
