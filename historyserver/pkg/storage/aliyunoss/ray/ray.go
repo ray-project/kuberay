@@ -104,8 +104,8 @@ func (r *RayLogsHandler) _listFiles(prefix string, delimiter string, onlyBase bo
 	return files
 }
 
-func (r *RayLogsHandler) ListFiles(clusterId string, dir string) []string {
-	prefix := path.Join(r.OssRootDir, clusterId, dir)
+func (r *RayLogsHandler) ListFiles(clusterNameNamespace string, dir string) []string {
+	prefix := path.Join(r.OssRootDir, clusterNameNamespace, dir)
 
 	defer func() {
 		if r := recover(); r != nil {
@@ -184,13 +184,13 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 	return clusters
 }
 
-func (r *RayLogsHandler) GetContent(clusterId string, fileName string) io.Reader {
+func (r *RayLogsHandler) GetContent(clusterNameNamespace string, fileName string) io.Reader {
 	logrus.Infof("Prepare to get object %s info ...", fileName)
 	options := []oss.Option{}
 	body, err := r.OssBucket.GetObject(fileName, options...)
 	if err != nil {
 		logrus.Errorf("Failed to get object %s: %v", fileName, err)
-		allFiles := r._listFiles(clusterId+"/"+path.Dir(fileName), "", false)
+		allFiles := r._listFiles(clusterNameNamespace+"/"+path.Dir(fileName), "", false)
 		found := false
 		for _, f := range allFiles {
 			if path.Base(f) == fileName {

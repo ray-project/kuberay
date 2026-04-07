@@ -103,11 +103,11 @@ func testCollectorUploadOnGracefulShutdown(test Test, g *WithT, namespace *corev
 	_ = ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 
 	// Define variables for constructing S3 object prefix.
-	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, rayCluster.Namespace)
+	clusterNameNamespace := fmt.Sprintf("%s_%s", rayCluster.Name, rayCluster.Namespace)
 	sessionID := GetSessionIDFromHeadPod(test, g, rayCluster)
 	headNodeID := GetNodeIDFromPod(test, g, HeadPod(test, rayCluster), "ray-head")
 	workerNodeID := GetNodeIDFromPod(test, g, FirstWorkerPod(test, rayCluster), "ray-worker")
-	sessionPrefix := fmt.Sprintf("log/%s/%s/", clusterNameID, sessionID)
+	sessionPrefix := fmt.Sprintf("log/%s/%s/", clusterNameNamespace, sessionID)
 
 	// Delete the Ray cluster to trigger log uploading and event flushing on deletion.
 	err := test.Client().Ray().RayV1().
@@ -150,11 +150,11 @@ func testCollectorSeparatesFilesBySession(test Test, g *WithT, namespace *corev1
 	// Submit a Ray job to the existing cluster.
 	_ = ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 
-	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, rayCluster.Namespace)
+	clusterNameNamespace := fmt.Sprintf("%s_%s", rayCluster.Name, rayCluster.Namespace)
 	sessionID := GetSessionIDFromHeadPod(test, g, rayCluster)
 	headNodeID := GetNodeIDFromPod(test, g, HeadPod(test, rayCluster), "ray-head")
 	workerNodeID := GetNodeIDFromPod(test, g, FirstWorkerPod(test, rayCluster), "ray-worker")
-	sessionPrefix := fmt.Sprintf("log/%s/%s/", clusterNameID, sessionID)
+	sessionPrefix := fmt.Sprintf("log/%s/%s/", clusterNameNamespace, sessionID)
 
 	// NOTE: We use `kill 1` to simulate Kubernetes OOMKilled behavior.
 	// Before Kubernetes 1.28 (cgroups v1), if one process in a multi-process container exceeded its memory limit,
@@ -197,8 +197,8 @@ func testCollectorResumesUploadsOnRestart(test Test, g *WithT, namespace *corev1
 	// Use namespace name to ensure test isolation (avoid conflicts from previous test runs)
 	dummySessionID := fmt.Sprintf("test-recovery-session-%s", namespace.Name)
 	dummyNodeID := fmt.Sprintf("head-node-%s", namespace.Name)
-	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, rayCluster.Namespace)
-	sessionPrefix := fmt.Sprintf("log/%s/%s/", clusterNameID, dummySessionID)
+	clusterNameNamespace := fmt.Sprintf("%s_%s", rayCluster.Name, rayCluster.Namespace)
+	sessionPrefix := fmt.Sprintf("log/%s/%s/", clusterNameNamespace, dummySessionID)
 
 	// Inject "leftover" logs BEFORE killing collector.
 	// This ensures files exist when collector restarts and performs its initial scan.
@@ -324,10 +324,10 @@ func verifySessionDirectoriesExist(test Test, g *WithT, rayCluster *rayv1.RayClu
 func testCollectorStoresClusterMetadata(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 
-	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, rayCluster.Namespace)
+	clusterNameNamespace := fmt.Sprintf("%s_%s", rayCluster.Name, rayCluster.Namespace)
 	sessionID := GetSessionIDFromHeadPod(test, g, rayCluster)
 	storageKey := utils.EndpointPathToStorageKey("/api/v0/cluster_metadata")
-	metaKey := fmt.Sprintf("log/%s/%s/%s/%s", clusterNameID, sessionID, utils.RAY_SESSIONDIR_FETCHED_ENDPOINTS_NAME, storageKey)
+	metaKey := fmt.Sprintf("log/%s/%s/%s/%s", clusterNameNamespace, sessionID, utils.RAY_SESSIONDIR_FETCHED_ENDPOINTS_NAME, storageKey)
 
 	LogWithTimestamp(test.T(), "Waiting for cluster metadata to appear at S3 key: %s", metaKey)
 
@@ -379,10 +379,10 @@ func testCollectorStoresClusterMetadata(test Test, g *WithT, namespace *corev1.N
 func testCollectorStoresTimezone(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 
-	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, rayCluster.Namespace)
+	clusterNameNamespace := fmt.Sprintf("%s_%s", rayCluster.Name, rayCluster.Namespace)
 	sessionID := GetSessionIDFromHeadPod(test, g, rayCluster)
 	storageKey := utils.EndpointPathToStorageKey(EndpointTimezone)
-	timezoneKey := fmt.Sprintf("log/%s/%s/%s/%s", clusterNameID, sessionID, utils.RAY_SESSIONDIR_FETCHED_ENDPOINTS_NAME, storageKey)
+	timezoneKey := fmt.Sprintf("log/%s/%s/%s/%s", clusterNameNamespace, sessionID, utils.RAY_SESSIONDIR_FETCHED_ENDPOINTS_NAME, storageKey)
 
 	LogWithTimestamp(test.T(), "Waiting for timezone data to appear at S3 key: %s", timezoneKey)
 
@@ -439,11 +439,11 @@ func testCollectorStoresPlacementGroups(test Test, g *WithT, namespace *corev1.N
 	// collector captures non-empty data when polling /api/v0/placement_groups.
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 
-	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, rayCluster.Namespace)
+	clusterNameNamespace := fmt.Sprintf("%s_%s", rayCluster.Name, rayCluster.Namespace)
 	sessionID := GetSessionIDFromHeadPod(test, g, rayCluster)
 	// The collector stores the endpoint with query params (as configured in RAY_COLLECTOR_ADDITIONAL_ENDPOINTS).
 	storageKey := utils.EndpointPathToStorageKey("/api/v0/placement_groups?detail=1&limit=10000")
-	pgKey := fmt.Sprintf("log/%s/%s/%s/%s", clusterNameID, sessionID, utils.RAY_SESSIONDIR_FETCHED_ENDPOINTS_NAME, storageKey)
+	pgKey := fmt.Sprintf("log/%s/%s/%s/%s", clusterNameNamespace, sessionID, utils.RAY_SESSIONDIR_FETCHED_ENDPOINTS_NAME, storageKey)
 
 	LogWithTimestamp(test.T(), "Waiting for placement groups data to appear at S3 key: %s", pgKey)
 

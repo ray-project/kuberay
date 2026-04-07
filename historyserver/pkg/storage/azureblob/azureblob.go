@@ -139,14 +139,14 @@ func (r *RayLogsHandler) listBlobs(prefix string, delimiter string, onlyBase boo
 	return files
 }
 
-func (r *RayLogsHandler) ListFiles(clusterId string, dir string) []string {
+func (r *RayLogsHandler) ListFiles(clusterNameNamespace string, dir string) []string {
 	defer func() {
 		if r := recover(); r != nil {
 			logrus.Errorf("Recovered from panic: %v", r)
 		}
 	}()
 
-	prefix := path.Join(r.RootDir, clusterId, dir)
+	prefix := path.Join(r.RootDir, clusterNameNamespace, dir)
 	logrus.Debugf("Prepare to list files ...")
 	return r.listBlobs(prefix, "/", true)
 }
@@ -217,8 +217,8 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 	return clusters
 }
 
-func (r *RayLogsHandler) GetContent(clusterId string, fileName string) io.Reader {
-	fullPath := path.Join(r.RootDir, clusterId, fileName)
+func (r *RayLogsHandler) GetContent(clusterNameNamespace string, fileName string) io.Reader {
+	fullPath := path.Join(r.RootDir, clusterNameNamespace, fileName)
 	logrus.Infof("Prepare to get blob %s info ...", fullPath)
 
 	ctx, cancel := context.WithTimeout(context.Background(), downloadTimeout)
