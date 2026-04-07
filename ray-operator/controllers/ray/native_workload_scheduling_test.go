@@ -14,13 +14,13 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
-	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	clientFake "sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/expectations"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 )
@@ -33,11 +33,11 @@ func newTestScheme() *runtime.Scheme {
 	return s
 }
 
-func newTestRayCluster(name, namespace string, workerGroups ...rayv1.WorkerGroupSpec) *rayv1.RayCluster {
+func newTestRayCluster(workerGroups ...rayv1.WorkerGroupSpec) *rayv1.RayCluster {
 	return &rayv1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
+			Name:      "test-cluster",
+			Namespace: "default",
 			UID:       types.UID("test-uid"),
 			Annotations: map[string]string{
 				NativeWorkloadSchedulingAnnotation: "true",
@@ -45,6 +45,10 @@ func newTestRayCluster(name, namespace string, workerGroups ...rayv1.WorkerGroup
 		},
 		Spec: rayv1.RayClusterSpec{
 			HeadGroupSpec: rayv1.HeadGroupSpec{
+				RayStartParams: map[string]string{
+					"port":     "6379",
+					"num-cpus": "1",
+				},
 				Template: corev1.PodTemplateSpec{
 					Spec: corev1.PodSpec{
 						Containers: []corev1.Container{{Name: "ray-head", Image: "rayproject/ray:latest"}},
@@ -58,11 +62,15 @@ func newTestRayCluster(name, namespace string, workerGroups ...rayv1.WorkerGroup
 
 func newWorkerGroup(name string, replicas int32) rayv1.WorkerGroupSpec {
 	return rayv1.WorkerGroupSpec{
-		GroupName: name,
-		Replicas:  ptr.To(replicas),
-		MinReplicas: ptr.To(replicas),
-		MaxReplicas: ptr.To(replicas),
+		GroupName:   name,
+		Replicas:    new(replicas),
+		MinReplicas: new(replicas),
+		MaxReplicas: new(replicas),
 		NumOfHosts:  1,
+		RayStartParams: map[string]string{
+			"port":     "6379",
+			"num-cpus": "1",
+		},
 		Template: corev1.PodTemplateSpec{
 			Spec: corev1.PodSpec{
 				Containers: []corev1.Container{{Name: "ray-worker", Image: "rayproject/ray:latest"}},
@@ -77,10 +85,11 @@ func newReconciler(fakeClient client.Client, s *runtime.Scheme, recorder record.
 		options = opts[0]
 	}
 	return &RayClusterReconciler{
-		Client:   fakeClient,
-		Scheme:   s,
-		Recorder: recorder,
-		options:  options,
+		Client:                     fakeClient,
+		Scheme:                     s,
+		Recorder:                   recorder,
+		options:                    options,
+		rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
 	}
 }
 
@@ -89,7 +98,7 @@ func newReconciler(fakeClient client.Client, s *runtime.Scheme, recorder record.
 func TestReconcileNativeWorkloadScheduling_CreatesWorkloadAndPodGroups(t *testing.T) {
 	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
 
-	cluster := newTestRayCluster("test-cluster", "default", newWorkerGroup("workers", 3))
+	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
 	s := newTestScheme()
 	fakeClient := clientFake.NewClientBuilder().WithScheme(s).Build()
 	r := newReconciler(fakeClient, s, record.NewFakeRecorder(10))
@@ -119,7 +128,7 @@ func TestReconcileNativeWorkloadScheduling_CreatesWorkloadAndPodGroups(t *testin
 func TestReconcileNativeWorkloadScheduling_MultipleWorkerGroups(t *testing.T) {
 	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
 
-	cluster := newTestRayCluster("test-cluster", "default",
+	cluster := newTestRayCluster(
 		newWorkerGroup("cpu-workers", 2),
 		newWorkerGroup("gpu-workers", 4),
 		newWorkerGroup("tpu-workers", 1),
@@ -149,7 +158,7 @@ func TestReconcileNativeWorkloadScheduling_MultipleWorkerGroups(t *testing.T) {
 func TestReconcileNativeWorkloadScheduling_Idempotent(t *testing.T) {
 	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
 
-	cluster := newTestRayCluster("test-cluster", "default", newWorkerGroup("workers", 3))
+	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
 	s := newTestScheme()
 	fakeClient := clientFake.NewClientBuilder().WithScheme(s).Build()
 	r := newReconciler(fakeClient, s, record.NewFakeRecorder(20))
@@ -177,7 +186,7 @@ func TestReconcileNativeWorkloadScheduling_Idempotent(t *testing.T) {
 func TestReconcileNativeWorkloadScheduling_SkipsWhenAnnotationMissing(t *testing.T) {
 	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
 
-	cluster := newTestRayCluster("test-cluster", "default", newWorkerGroup("workers", 3))
+	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
 	cluster.Annotations = nil // No annotation
 	s := newTestScheme()
 	fakeClient := clientFake.NewClientBuilder().WithScheme(s).Build()
@@ -197,7 +206,7 @@ func TestReconcileNativeWorkloadScheduling_SkipsWhenAnnotationMissing(t *testing
 func TestReconcileNativeWorkloadScheduling_SkipsWhenFeatureGateDisabled(t *testing.T) {
 	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, false)
 
-	cluster := newTestRayCluster("test-cluster", "default", newWorkerGroup("workers", 3))
+	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
 	s := newTestScheme()
 	fakeClient := clientFake.NewClientBuilder().WithScheme(s).Build()
 	r := newReconciler(fakeClient, s, record.NewFakeRecorder(10))
@@ -216,8 +225,8 @@ func TestReconcileNativeWorkloadScheduling_SkipsWhenFeatureGateDisabled(t *testi
 func TestReconcileNativeWorkloadScheduling_SkipsWhenAutoscalingEnabled(t *testing.T) {
 	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
 
-	cluster := newTestRayCluster("test-cluster", "default", newWorkerGroup("workers", 3))
-	cluster.Spec.EnableInTreeAutoscaling = ptr.To(true)
+	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
+	cluster.Spec.EnableInTreeAutoscaling = new(true)
 	s := newTestScheme()
 	fakeClient := clientFake.NewClientBuilder().WithScheme(s).Build()
 	fakeRecorder := record.NewFakeRecorder(10)
@@ -240,7 +249,7 @@ func TestReconcileNativeWorkloadScheduling_SkipsWhenAutoscalingEnabled(t *testin
 func TestReconcileNativeWorkloadScheduling_SkipsWhenBatchSchedulerConfigured(t *testing.T) {
 	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
 
-	cluster := newTestRayCluster("test-cluster", "default", newWorkerGroup("workers", 3))
+	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
 	s := newTestScheme()
 	fakeClient := clientFake.NewClientBuilder().WithScheme(s).Build()
 	fakeRecorder := record.NewFakeRecorder(10)
@@ -269,7 +278,7 @@ func TestReconcileNativeWorkloadScheduling_FailsWhenMoreThan7WorkerGroups(t *tes
 	for i := range workers {
 		workers[i] = newWorkerGroup("workers-"+string(rune('a'+i)), 1)
 	}
-	cluster := newTestRayCluster("test-cluster", "default", workers...)
+	cluster := newTestRayCluster(workers...)
 	s := newTestScheme()
 	fakeClient := clientFake.NewClientBuilder().WithScheme(s).Build()
 	fakeRecorder := record.NewFakeRecorder(10)
@@ -292,7 +301,7 @@ func TestReconcileNativeWorkloadScheduling_FailsWhenMoreThan7WorkerGroups(t *tes
 func TestBuildWorkload_HeadTemplateUsesBasicPolicy(t *testing.T) {
 	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
 
-	cluster := newTestRayCluster("test-cluster", "default", newWorkerGroup("workers", 3))
+	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
 	s := newTestScheme()
 	fakeClient := clientFake.NewClientBuilder().WithScheme(s).Build()
 	r := newReconciler(fakeClient, s, record.NewFakeRecorder(10))
@@ -311,7 +320,7 @@ func TestBuildWorkload_HeadTemplateUsesBasicPolicy(t *testing.T) {
 func TestBuildWorkload_WorkerTemplateUsesGangPolicy(t *testing.T) {
 	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
 
-	cluster := newTestRayCluster("test-cluster", "default", newWorkerGroup("workers", 3))
+	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
 	s := newTestScheme()
 	fakeClient := clientFake.NewClientBuilder().WithScheme(s).Build()
 	r := newReconciler(fakeClient, s, record.NewFakeRecorder(10))
@@ -331,7 +340,7 @@ func TestBuildWorkload_WorkerTemplateUsesGangPolicy(t *testing.T) {
 func TestBuildWorkload_MinCountMatchesDesiredReplicas(t *testing.T) {
 	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
 
-	cluster := newTestRayCluster("test-cluster", "default",
+	cluster := newTestRayCluster(
 		newWorkerGroup("small", 2),
 		newWorkerGroup("large", 5),
 	)
@@ -352,7 +361,7 @@ func TestBuildWorkload_MinCountWithNumOfHosts2(t *testing.T) {
 
 	wg := newWorkerGroup("multi-host", 3)
 	wg.NumOfHosts = 2
-	cluster := newTestRayCluster("test-cluster", "default", wg)
+	cluster := newTestRayCluster(wg)
 	s := newTestScheme()
 	fakeClient := clientFake.NewClientBuilder().WithScheme(s).Build()
 	r := newReconciler(fakeClient, s, record.NewFakeRecorder(10))
@@ -370,8 +379,8 @@ func TestBuildWorkload_SuspendedWorkerGroupMinCount0(t *testing.T) {
 	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
 
 	wg := newWorkerGroup("suspended-group", 3)
-	wg.Suspend = ptr.To(true)
-	cluster := newTestRayCluster("test-cluster", "default", wg)
+	wg.Suspend = new(true)
+	cluster := newTestRayCluster(wg)
 	s := newTestScheme()
 	fakeClient := clientFake.NewClientBuilder().WithScheme(s).Build()
 	r := newReconciler(fakeClient, s, record.NewFakeRecorder(10))
@@ -390,9 +399,9 @@ func TestBuildWorkload_MinReplicas0UsesBasicPolicy(t *testing.T) {
 	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
 
 	wg := newWorkerGroup("zero-min", 0)
-	wg.MinReplicas = ptr.To(int32(0))
-	wg.Replicas = ptr.To(int32(0))
-	cluster := newTestRayCluster("test-cluster", "default", wg)
+	wg.MinReplicas = new(int32(0))
+	wg.Replicas = new(int32(0))
+	cluster := newTestRayCluster(wg)
 	s := newTestScheme()
 	fakeClient := clientFake.NewClientBuilder().WithScheme(s).Build()
 	r := newReconciler(fakeClient, s, record.NewFakeRecorder(10))
@@ -411,7 +420,7 @@ func TestBuildWorkload_MinReplicas0UsesBasicPolicy(t *testing.T) {
 func TestBuildWorkload_OwnerReference(t *testing.T) {
 	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
 
-	cluster := newTestRayCluster("test-cluster", "default", newWorkerGroup("workers", 3))
+	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
 	s := newTestScheme()
 	fakeClient := clientFake.NewClientBuilder().WithScheme(s).Build()
 	r := newReconciler(fakeClient, s, record.NewFakeRecorder(10))
@@ -432,7 +441,7 @@ func TestBuildWorkload_OwnerReference(t *testing.T) {
 func TestBuildPodGroup_OwnerReference(t *testing.T) {
 	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
 
-	cluster := newTestRayCluster("test-cluster", "default", newWorkerGroup("workers", 3))
+	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
 	s := newTestScheme()
 	fakeClient := clientFake.NewClientBuilder().WithScheme(s).Build()
 	r := newReconciler(fakeClient, s, record.NewFakeRecorder(10))
@@ -458,7 +467,7 @@ func TestBuildPodGroup_OwnerReference(t *testing.T) {
 func TestBuildPodGroup_TemplateRef(t *testing.T) {
 	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
 
-	cluster := newTestRayCluster("test-cluster", "default")
+	cluster := newTestRayCluster()
 	s := newTestScheme()
 	fakeClient := clientFake.NewClientBuilder().WithScheme(s).Build()
 	r := newReconciler(fakeClient, s, record.NewFakeRecorder(10))
@@ -478,7 +487,7 @@ func TestBuildPodGroup_TemplateRef(t *testing.T) {
 func TestBuildPodGroup_PolicyCopied(t *testing.T) {
 	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
 
-	cluster := newTestRayCluster("test-cluster", "default")
+	cluster := newTestRayCluster()
 	s := newTestScheme()
 	fakeClient := clientFake.NewClientBuilder().WithScheme(s).Build()
 	r := newReconciler(fakeClient, s, record.NewFakeRecorder(10))
@@ -499,7 +508,7 @@ func TestBuildPodGroup_PolicyCopied(t *testing.T) {
 func TestBuildWorkload_ControllerRef(t *testing.T) {
 	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
 
-	cluster := newTestRayCluster("test-cluster", "default", newWorkerGroup("workers", 3))
+	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
 	s := newTestScheme()
 	fakeClient := clientFake.NewClientBuilder().WithScheme(s).Build()
 	r := newReconciler(fakeClient, s, record.NewFakeRecorder(10))
@@ -516,7 +525,7 @@ func TestBuildWorkload_ControllerRef(t *testing.T) {
 func TestBuildWorkload_Labels(t *testing.T) {
 	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
 
-	cluster := newTestRayCluster("test-cluster", "default", newWorkerGroup("workers", 3))
+	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
 	s := newTestScheme()
 	fakeClient := clientFake.NewClientBuilder().WithScheme(s).Build()
 	r := newReconciler(fakeClient, s, record.NewFakeRecorder(10))
@@ -530,7 +539,7 @@ func TestBuildWorkload_Labels(t *testing.T) {
 func TestBuildPodGroup_Labels(t *testing.T) {
 	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
 
-	cluster := newTestRayCluster("test-cluster", "default")
+	cluster := newTestRayCluster()
 	s := newTestScheme()
 	fakeClient := clientFake.NewClientBuilder().WithScheme(s).Build()
 	r := newReconciler(fakeClient, s, record.NewFakeRecorder(10))
@@ -640,7 +649,7 @@ func TestIsNativeWorkloadSchedulingEnabled(t *testing.T) {
 // --- buildPodGroupSpecs direct tests ---
 
 func TestBuildPodGroupSpecs_HeadOnly(t *testing.T) {
-	cluster := newTestRayCluster("test-cluster", "default")
+	cluster := newTestRayCluster()
 	specs := buildPodGroupSpecs(cluster)
 
 	require.Len(t, specs, 1)
@@ -666,7 +675,7 @@ func TestBuildPodGroupSpecs_WorkerGroupPolicies(t *testing.T) {
 			name: "suspended worker group uses basic policy",
 			workerGroup: func() rayv1.WorkerGroupSpec {
 				wg := newWorkerGroup("suspended", 3)
-				wg.Suspend = ptr.To(true)
+				wg.Suspend = new(true)
 				return wg
 			}(),
 			expectGang: false,
@@ -675,8 +684,8 @@ func TestBuildPodGroupSpecs_WorkerGroupPolicies(t *testing.T) {
 			name: "zero replicas uses basic policy",
 			workerGroup: func() rayv1.WorkerGroupSpec {
 				wg := newWorkerGroup("zero", 0)
-				wg.MinReplicas = ptr.To(int32(0))
-				wg.Replicas = ptr.To(int32(0))
+				wg.MinReplicas = new(int32(0))
+				wg.Replicas = new(int32(0))
 				return wg
 			}(),
 			expectGang: false,
@@ -695,7 +704,7 @@ func TestBuildPodGroupSpecs_WorkerGroupPolicies(t *testing.T) {
 			name: "replicas clamped to max",
 			workerGroup: func() rayv1.WorkerGroupSpec {
 				wg := newWorkerGroup("clamped", 10)
-				wg.MaxReplicas = ptr.To(int32(5))
+				wg.MaxReplicas = new(int32(5))
 				return wg
 			}(),
 			expectGang:   true,
@@ -704,7 +713,7 @@ func TestBuildPodGroupSpecs_WorkerGroupPolicies(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cluster := newTestRayCluster("test-cluster", "default", tt.workerGroup)
+			cluster := newTestRayCluster(tt.workerGroup)
 			specs := buildPodGroupSpecs(cluster)
 
 			require.Len(t, specs, 2)
@@ -726,7 +735,7 @@ func TestBuildPodGroupSpecs_WorkerGroupPolicies(t *testing.T) {
 }
 
 func TestBuildPodGroupSpecs_MultipleWorkerGroups(t *testing.T) {
-	cluster := newTestRayCluster("test-cluster", "default",
+	cluster := newTestRayCluster(
 		newWorkerGroup("cpu", 2),
 		newWorkerGroup("gpu", 4),
 	)
@@ -749,7 +758,7 @@ func TestReconcileNativeWorkloadScheduling_Exactly7WorkerGroups(t *testing.T) {
 	for i := range workers {
 		workers[i] = newWorkerGroup("workers-"+strconv.Itoa(i), 1)
 	}
-	cluster := newTestRayCluster("test-cluster", "default", workers...)
+	cluster := newTestRayCluster(workers...)
 	s := newTestScheme()
 	fakeClient := clientFake.NewClientBuilder().WithScheme(s).Build()
 	r := newReconciler(fakeClient, s, record.NewFakeRecorder(20))
@@ -774,7 +783,7 @@ func TestReconcileNativeWorkloadScheduling_Exactly7WorkerGroups(t *testing.T) {
 // --- Error path tests ---
 
 func TestBuildWorkload_SetControllerReferenceError(t *testing.T) {
-	cluster := newTestRayCluster("test-cluster", "default", newWorkerGroup("workers", 3))
+	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
 	// Use a scheme that doesn't know about RayCluster — SetControllerReference will fail.
 	badScheme := runtime.NewScheme()
 	_ = schedulingv1alpha2.AddToScheme(badScheme)
@@ -787,7 +796,7 @@ func TestBuildWorkload_SetControllerReferenceError(t *testing.T) {
 }
 
 func TestBuildPodGroup_SetControllerReferenceError(t *testing.T) {
-	cluster := newTestRayCluster("test-cluster", "default")
+	cluster := newTestRayCluster()
 	badScheme := runtime.NewScheme()
 	_ = schedulingv1alpha2.AddToScheme(badScheme)
 	fakeClient := clientFake.NewClientBuilder().WithScheme(badScheme).Build()
@@ -804,7 +813,7 @@ func TestBuildPodGroup_SetControllerReferenceError(t *testing.T) {
 func TestReconcileNativeWorkloadScheduling_WorkloadCreateFailure(t *testing.T) {
 	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
 
-	cluster := newTestRayCluster("test-cluster", "default", newWorkerGroup("workers", 3))
+	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
 	s := newTestScheme()
 	fakeClient := clientFake.NewClientBuilder().WithScheme(s).
 		WithInterceptorFuncs(interceptor.Funcs{
@@ -832,7 +841,7 @@ func TestReconcileNativeWorkloadScheduling_WorkloadCreateFailure(t *testing.T) {
 func TestReconcileNativeWorkloadScheduling_PodGroupCreateFailure(t *testing.T) {
 	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
 
-	cluster := newTestRayCluster("test-cluster", "default", newWorkerGroup("workers", 3))
+	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
 	s := newTestScheme()
 	fakeClient := clientFake.NewClientBuilder().WithScheme(s).
 		WithInterceptorFuncs(interceptor.Funcs{
@@ -860,3 +869,140 @@ func TestReconcileNativeWorkloadScheduling_PodGroupCreateFailure(t *testing.T) {
 	assert.Len(t, fakeRecorder.Events, 2)
 }
 
+// --- Controller integration tests: schedulingGroup on pods ---
+
+func TestCreateHeadPod_SetsSchedulingGroup(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
+
+	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
+	s := newTestScheme()
+	fakeClient := clientFake.NewClientBuilder().WithScheme(s).Build()
+	r := newReconciler(fakeClient, s, record.NewFakeRecorder(10))
+	ctx := context.Background()
+
+	err := r.createHeadPod(ctx, *cluster, "")
+	require.NoError(t, err)
+
+	podList := &corev1.PodList{}
+	err = fakeClient.List(ctx, podList, &client.ListOptions{Namespace: "default"})
+	require.NoError(t, err)
+	require.Len(t, podList.Items, 1)
+
+	pod := podList.Items[0]
+	require.NotNil(t, pod.Spec.SchedulingGroup, "head pod should have schedulingGroup set")
+	assert.Equal(t, "test-cluster-head", *pod.Spec.SchedulingGroup.PodGroupName)
+}
+
+func TestCreateWorkerPod_SetsSchedulingGroup(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
+
+	worker := newWorkerGroup("gpu-workers", 3)
+	cluster := newTestRayCluster(worker)
+	s := newTestScheme()
+	fakeClient := clientFake.NewClientBuilder().WithScheme(s).Build()
+	r := newReconciler(fakeClient, s, record.NewFakeRecorder(10))
+	ctx := context.Background()
+
+	err := r.createWorkerPod(ctx, *cluster, worker)
+	require.NoError(t, err)
+
+	podList := &corev1.PodList{}
+	err = fakeClient.List(ctx, podList, &client.ListOptions{Namespace: "default"})
+	require.NoError(t, err)
+	require.Len(t, podList.Items, 1)
+
+	pod := podList.Items[0]
+	require.NotNil(t, pod.Spec.SchedulingGroup, "worker pod should have schedulingGroup set")
+	assert.Equal(t, "test-cluster-worker-gpu-workers", *pod.Spec.SchedulingGroup.PodGroupName)
+}
+
+func TestCreateWorkerPodWithIndex_SetsSchedulingGroup(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
+
+	worker := newWorkerGroup("tpu-workers", 2)
+	cluster := newTestRayCluster(worker)
+	s := newTestScheme()
+	fakeClient := clientFake.NewClientBuilder().WithScheme(s).Build()
+	r := newReconciler(fakeClient, s, record.NewFakeRecorder(10))
+	ctx := context.Background()
+
+	err := r.createWorkerPodWithIndex(ctx, *cluster, worker, "replica-0", 0, 0)
+	require.NoError(t, err)
+
+	podList := &corev1.PodList{}
+	err = fakeClient.List(ctx, podList, &client.ListOptions{Namespace: "default"})
+	require.NoError(t, err)
+	require.Len(t, podList.Items, 1)
+
+	pod := podList.Items[0]
+	require.NotNil(t, pod.Spec.SchedulingGroup, "worker pod should have schedulingGroup set")
+	assert.Equal(t, "test-cluster-worker-tpu-workers", *pod.Spec.SchedulingGroup.PodGroupName)
+}
+
+func TestCreateHeadPod_NoSchedulingGroupWhenDisabled(t *testing.T) {
+	// Feature gate enabled but annotation missing
+	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
+
+	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
+	delete(cluster.Annotations, NativeWorkloadSchedulingAnnotation)
+	s := newTestScheme()
+	fakeClient := clientFake.NewClientBuilder().WithScheme(s).Build()
+	r := newReconciler(fakeClient, s, record.NewFakeRecorder(10))
+	ctx := context.Background()
+
+	err := r.createHeadPod(ctx, *cluster, "")
+	require.NoError(t, err)
+
+	podList := &corev1.PodList{}
+	err = fakeClient.List(ctx, podList, &client.ListOptions{Namespace: "default"})
+	require.NoError(t, err)
+	require.Len(t, podList.Items, 1)
+
+	pod := podList.Items[0]
+	assert.Nil(t, pod.Spec.SchedulingGroup, "head pod should not have schedulingGroup when annotation is missing")
+}
+
+func TestCreateWorkerPod_NoSchedulingGroupWhenFeatureGateDisabled(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, false)
+
+	worker := newWorkerGroup("workers", 3)
+	cluster := newTestRayCluster(worker)
+	s := newTestScheme()
+	fakeClient := clientFake.NewClientBuilder().WithScheme(s).Build()
+	r := newReconciler(fakeClient, s, record.NewFakeRecorder(10))
+	ctx := context.Background()
+
+	err := r.createWorkerPod(ctx, *cluster, worker)
+	require.NoError(t, err)
+
+	podList := &corev1.PodList{}
+	err = fakeClient.List(ctx, podList, &client.ListOptions{Namespace: "default"})
+	require.NoError(t, err)
+	require.Len(t, podList.Items, 1)
+
+	pod := podList.Items[0]
+	assert.Nil(t, pod.Spec.SchedulingGroup, "worker pod should not have schedulingGroup when feature gate is disabled")
+}
+
+func TestCreateWorkerPodWithIndex_NoSchedulingGroupWhenDisabled(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
+
+	worker := newWorkerGroup("tpu-workers", 2)
+	cluster := newTestRayCluster(worker)
+	delete(cluster.Annotations, NativeWorkloadSchedulingAnnotation)
+	s := newTestScheme()
+	fakeClient := clientFake.NewClientBuilder().WithScheme(s).Build()
+	r := newReconciler(fakeClient, s, record.NewFakeRecorder(10))
+	ctx := context.Background()
+
+	err := r.createWorkerPodWithIndex(ctx, *cluster, worker, "replica-0", 0, 0)
+	require.NoError(t, err)
+
+	podList := &corev1.PodList{}
+	err = fakeClient.List(ctx, podList, &client.ListOptions{Namespace: "default"})
+	require.NoError(t, err)
+	require.Len(t, podList.Items, 1)
+
+	pod := podList.Items[0]
+	assert.Nil(t, pod.Spec.SchedulingGroup, "worker pod should not have schedulingGroup when annotation is missing")
+}
