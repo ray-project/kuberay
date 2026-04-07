@@ -22,11 +22,11 @@ const (
 
 // Event reasons used for native workload scheduling operations.
 const (
-	CreatedWorkload              utils.K8sEventType = "CreatedWorkload"
-	CreatedPodGroup              utils.K8sEventType = "CreatedPodGroup"
-	FailedToCreateWorkload       utils.K8sEventType = "FailedToCreateWorkload"
-	FailedToCreatePodGroup       utils.K8sEventType = "FailedToCreatePodGroup"
-	WorkloadSchedulingSkipped    utils.K8sEventType = "WorkloadSchedulingSkipped"
+	CreatedWorkload               utils.K8sEventType = "CreatedWorkload"
+	CreatedPodGroup               utils.K8sEventType = "CreatedPodGroup"
+	FailedToCreateWorkload        utils.K8sEventType = "FailedToCreateWorkload"
+	FailedToCreatePodGroup        utils.K8sEventType = "FailedToCreatePodGroup"
+	WorkloadSchedulingSkipped     utils.K8sEventType = "WorkloadSchedulingSkipped"
 	WorkloadSchedulingInvalidSpec utils.K8sEventType = "WorkloadSchedulingInvalidSpec"
 )
 
