@@ -296,8 +296,10 @@ func (r *NetworkPolicyController) buildBaseIngressRules(instance *rayv1.RayClust
 }
 
 // buildHeadIngressRules returns the full set of base ingress rules for the head
-// NetworkPolicy: intra-cluster communication plus operator and same-namespace
-// access to dashboard and client ports.
+// NetworkPolicy: intra-cluster communication plus operator access to dashboard
+// and client ports. No same-namespace rule is added by default to keep the
+// policy strict. Users who need external access (e.g. RayJob submitters) must
+// add explicit IngressRules in the NetworkIsolation spec.
 func (r *NetworkPolicyController) buildHeadIngressRules(instance *rayv1.RayCluster) []networkingv1.NetworkPolicyIngressRule {
 	tcpProtocol := corev1.ProtocolTCP
 	dashboardPort := intstr.FromInt32(r.getHeadPort(instance, utils.DashboardPortName, utils.DefaultDashboardPort))
@@ -325,21 +327,6 @@ func (r *NetworkPolicyController) buildHeadIngressRules(instance *rayv1.RayClust
 							corev1.LabelMetadataName: r.OperatorNamespace,
 						},
 					},
-				},
-			},
-			Ports: []networkingv1.NetworkPolicyPort{
-				{Protocol: &tcpProtocol, Port: &dashboardPort},
-				{Protocol: &tcpProtocol, Port: &clientPort},
-			},
-		},
-		// Same-namespace access to dashboard and client ports.
-		// An empty PodSelector matches all pods in the same namespace, which
-		// covers RayJob submitter pods targeting this cluster via clusterSelector
-		// (where no ownerReference exists on the RayCluster).
-		networkingv1.NetworkPolicyIngressRule{
-			From: []networkingv1.NetworkPolicyPeer{
-				{
-					PodSelector: &metav1.LabelSelector{},
 				},
 			},
 			Ports: []networkingv1.NetworkPolicyPort{
