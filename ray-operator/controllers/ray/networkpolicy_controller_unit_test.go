@@ -219,8 +219,8 @@ func TestBuildHeadNetworkPolicy_DenyAll(t *testing.T) {
 	assert.Contains(t, policy.Spec.PolicyTypes, networkingv1.PolicyTypeIngress)
 	assert.Contains(t, policy.Spec.PolicyTypes, networkingv1.PolicyTypeEgress)
 
-	// 3 base ingress rules: intra-cluster, operator, same-namespace.
-	assert.Len(t, policy.Spec.Ingress, 3)
+	// 2 base ingress rules: intra-cluster and operator access.
+	assert.Len(t, policy.Spec.Ingress, 2)
 
 	// 2 base egress rules: intra-cluster and DNS.
 	assert.Len(t, policy.Spec.Egress, 2)
@@ -234,7 +234,7 @@ func TestBuildHeadNetworkPolicy_DenyAllIngress(t *testing.T) {
 
 	assert.Contains(t, policy.Spec.PolicyTypes, networkingv1.PolicyTypeIngress)
 	assert.NotContains(t, policy.Spec.PolicyTypes, networkingv1.PolicyTypeEgress)
-	assert.Len(t, policy.Spec.Ingress, 3)
+	assert.Len(t, policy.Spec.Ingress, 2)
 	assert.Empty(t, policy.Spec.Egress)
 }
 
@@ -336,13 +336,14 @@ func TestBuildBaseIngressRules(t *testing.T) {
 	assert.Empty(t, intraClusterRule.Ports, "Intra-cluster rule must allow all ports (no Ports field)")
 }
 
-// TestBuildHeadIngressRules verifies the full set of head ingress rules:
-// intra-cluster + operator access + same-namespace access.
+// TestBuildHeadIngressRules verifies the 2 head-specific base ingress rules:
+// intra-cluster + operator access. No same-namespace rule is added by default
+// to keep the policy strict; users must add explicit IngressRules for external access.
 func TestBuildHeadIngressRules(t *testing.T) {
 	setupNetworkPolicyTest(t)
 
 	rules := testNetworkPolicyController.buildHeadIngressRules(testRayClusterBasic)
-	require.Len(t, rules, 3)
+	require.Len(t, rules, 2)
 
 	// Rule 0: intra-cluster — no ports, pod selector matching the cluster label.
 	intraClusterRule := rules[0]
@@ -368,13 +369,6 @@ func TestBuildHeadIngressRules(t *testing.T) {
 	clientPort := intstr.FromInt32(utils.DefaultClientPort)
 	assert.Equal(t, &dashboardPort, operatorRule.Ports[0].Port)
 	assert.Equal(t, &clientPort, operatorRule.Ports[1].Port)
-
-	// Rule 2: same-namespace — empty pod selector, two ports.
-	sameNsRule := rules[2]
-	require.Len(t, sameNsRule.From, 1)
-	assert.NotNil(t, sameNsRule.From[0].PodSelector)
-	assert.Empty(t, sameNsRule.From[0].PodSelector.MatchLabels, "Empty selector matches all pods in namespace")
-	require.Len(t, sameNsRule.Ports, 2)
 }
 
 // TestBuildBaseEgressRules verifies the 2 base egress rules (intra-cluster + DNS).
@@ -465,11 +459,11 @@ func TestBuildHeadNetworkPolicy_WithRayJob(t *testing.T) {
 
 	policy := testNetworkPolicyController.buildHeadNetworkPolicy(testRayClusterWithRayJob, rayv1.NetworkIsolationDenyAll)
 
-	// 3 base rules + 1 RayJob peer rule = 4.
-	require.Len(t, policy.Spec.Ingress, 4)
+	// 2 base rules + 1 RayJob peer rule = 3.
+	require.Len(t, policy.Spec.Ingress, 3)
 
 	// The last rule carries the RayJob submitter pod selector.
-	lastRule := policy.Spec.Ingress[3]
+	lastRule := policy.Spec.Ingress[2]
 	require.Len(t, lastRule.From, 1)
 	assert.Equal(t, map[string]string{
 		"batch.kubernetes.io/job-name": "test-job",
@@ -493,10 +487,10 @@ func TestBuildHeadNetworkPolicy_CustomIngressRules(t *testing.T) {
 
 	policy := testNetworkPolicyController.buildHeadNetworkPolicy(cluster, rayv1.NetworkIsolationDenyAll)
 
-	// 3 base + 1 custom = 4.
-	require.Len(t, policy.Spec.Ingress, 4)
-	require.Len(t, policy.Spec.Ingress[3].Ports, 1)
-	assert.Equal(t, &customPort, policy.Spec.Ingress[3].Ports[0].Port)
+	// 2 base + 1 custom = 3.
+	require.Len(t, policy.Spec.Ingress, 3)
+	require.Len(t, policy.Spec.Ingress[2].Ports, 1)
+	assert.Equal(t, &customPort, policy.Spec.Ingress[2].Ports[0].Port)
 }
 
 // TestBuildHeadNetworkPolicy_CustomEgressRules verifies that custom EgressRules are appended after base egress.
