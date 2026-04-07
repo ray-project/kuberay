@@ -243,6 +243,9 @@ const (
 	DefaultLivenessProbeSuccessThreshold   = 1
 	DefaultLivenessProbeFailureThreshold   = 120
 
+	// Timeout for Ray HTTP proxy client
+	RayHTTPProxyClientTimeoutSeconds = 2
+
 	// Ray health check related configurations
 	// Note: Since the Raylet process and the dashboard agent process are fate-sharing,
 	// only one of them needs to be checked. So, RayAgentRayletHealthPath accesses the dashboard agent's API endpoint

@@ -1033,13 +1033,17 @@ func GetRayDashboardClientFunc(ctx context.Context, mgr manager.Manager, useKube
 func GetRayHttpProxyClientFunc(mgr manager.Manager, useKubernetesProxy bool) func(hostIp, podNamespace, podName string, port int) RayHttpProxyClientInterface {
 	return func(hostIp, podNamespace, podName string, port int) RayHttpProxyClientInterface {
 		if useKubernetesProxy {
+			// Preserve the manager's transport (TLS, authentication to the API server) and set an explicit timeout
+			// aligned with the non-proxy mode. This prevents a hung TCP from blocking reconcile indefinitely.
+			httpClient := mgr.GetHTTPClient()
+			httpClient.Timeout = time.Duration(RayHTTPProxyClientTimeoutSeconds) * time.Second
 			return &RayHttpProxyClient{
-				client:       mgr.GetHTTPClient(),
+				client:       httpClient,
 				httpProxyURL: fmt.Sprintf("%s/api/v1/namespaces/%s/pods/%s:%d/proxy/", mgr.GetConfig().Host, podNamespace, podName, port),
 			}
 		}
 		return &RayHttpProxyClient{
-			client:       &http.Client{Timeout: 2 * time.Second},
+			client:       &http.Client{Timeout: time.Duration(RayHTTPProxyClientTimeoutSeconds) * time.Second},
 			httpProxyURL: fmt.Sprintf("http://%s:%d/", hostIp, port),
 		}
 	}
