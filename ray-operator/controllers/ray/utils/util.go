@@ -1035,8 +1035,10 @@ func GetRayHttpProxyClientFunc(mgr manager.Manager, useKubernetesProxy bool) fun
 		if useKubernetesProxy {
 			// Preserve the manager's transport (TLS, authentication to the API server) and set an explicit timeout
 			// aligned with the non-proxy mode. This prevents a hung TCP from blocking reconcile indefinitely.
-			httpClient := mgr.GetHTTPClient()
-			httpClient.Timeout = time.Duration(RayHTTPProxyClientTimeoutSeconds) * time.Second
+			httpClient := &http.Client{
+				Transport: mgr.GetHTTPClient().Transport,
+				Timeout:   time.Duration(RayHTTPProxyClientTimeoutSeconds) * time.Second,
+			}
 			return &RayHttpProxyClient{
 				client:       httpClient,
 				httpProxyURL: fmt.Sprintf("%s/api/v1/namespaces/%s/pods/%s:%d/proxy/", mgr.GetConfig().Host, podNamespace, podName, port),
