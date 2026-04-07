@@ -687,6 +687,12 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 			return err
 		}
 	}
+
+	// Create Workload and PodGroup resources for native workload scheduling
+	if err := r.reconcileNativeWorkloadScheduling(ctx, instance); err != nil {
+		return err
+	}
+
 	// Reconcile head Pod
 	if !r.rayClusterScaleExpectation.IsSatisfied(ctx, instance.Namespace, instance.Name, expectations.HeadGroup) {
 		logger.Info("reconcilePods", "Expectation", "NotSatisfiedHeadExpectations, reconcile head later")
@@ -1328,6 +1334,11 @@ func (r *RayClusterReconciler) createHeadPod(ctx context.Context, instance rayv1
 		}
 	}
 
+	// Native workload scheduling: set schedulingGroup on head pod
+	if isNativeWorkloadSchedulingEnabled(&instance) {
+		setSchedulingGroup(&pod, podGroupName(instance.Name, "head"))
+	}
+
 	if err := r.Create(ctx, &pod); err != nil {
 		r.Recorder.Eventf(&instance, corev1.EventTypeWarning, string(utils.FailedToCreateHeadPod), "Failed to create head Pod %s/%s, %v", pod.Namespace, pod.Name, err)
 		return err
@@ -1349,6 +1360,11 @@ func (r *RayClusterReconciler) createWorkerPod(ctx context.Context, instance ray
 		} else {
 			return err
 		}
+	}
+
+	// Native workload scheduling: set schedulingGroup on worker pod
+	if isNativeWorkloadSchedulingEnabled(&instance) {
+		setSchedulingGroup(&pod, podGroupName(instance.Name, "worker-"+worker.GroupName))
 	}
 
 	replica := pod
@@ -1373,6 +1389,11 @@ func (r *RayClusterReconciler) createWorkerPodWithIndex(ctx context.Context, ins
 		} else {
 			return err
 		}
+	}
+
+	// Native workload scheduling: set schedulingGroup on worker pod
+	if isNativeWorkloadSchedulingEnabled(&instance) {
+		setSchedulingGroup(&pod, podGroupName(instance.Name, "worker-"+worker.GroupName))
 	}
 
 	replica := pod
