@@ -1,0 +1,34 @@
+- label: 'Test Native Workload Scheduling E2E (nightly operator)'
+  instance_size: large
+  image: golang:1.26-bookworm
+  commands:
+    - source .buildkite/setup-env.sh
+
+    # Install a kind version that supports Kubernetes 1.36
+    - echo "--- Installing kind v0.27.0 (required for K8s 1.36 support)"
+    - curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.27.0/kind-linux-amd64
+    - chmod +x ./kind
+    - mv ./kind /usr/local/bin/kind
+
+    # Build the kind node image for K8s 1.36 with GenericWorkload and GangScheduling
+    - echo "--- Building kind node image for K8s 1.36"
+    - kind build node-image --image kindest/node:v1.36.0 v1.36.0
+
+    # Create the kind cluster with native scheduling feature gates
+    - kind create cluster --wait 900s --config ./ci/kind-config-buildkite-native-scheduling.yml
+    - kubectl config set clusters.kind-kind.server https://docker:6443
+
+    # Build nightly KubeRay operator image and deploy with NativeWorkloadScheduling enabled
+    - pushd ray-operator
+    - IMG=kuberay/operator:nightly make docker-image
+    - kind load docker-image kuberay/operator:nightly
+    - IMG=kuberay/operator:nightly make deploy-native-scheduling
+    - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
+
+    # Run native scheduling e2e tests
+    - echo "--- START:Running Native Workload Scheduling E2E tests"
+    - set -o pipefail
+    - mkdir -p "$(pwd)/tmp" && export KUBERAY_TEST_OUTPUT_DIR=$(pwd)/tmp
+    - echo "KUBERAY_TEST_OUTPUT_DIR=$$KUBERAY_TEST_OUTPUT_DIR"
+    - KUBERAY_TEST_TIMEOUT_SHORT=1m KUBERAY_TEST_TIMEOUT_MEDIUM=5m KUBERAY_TEST_TIMEOUT_LONG=10m go test -timeout 30m -v ./test/e2enativescheduling 2>&1 | awk -f ../.buildkite/format.awk | tee $$KUBERAY_TEST_OUTPUT_DIR/gotest.log || (kubectl logs --tail -1 -l app.kubernetes.io/name=kuberay | tee $$KUBERAY_TEST_OUTPUT_DIR/kuberay-operator.log && cd $$KUBERAY_TEST_OUTPUT_DIR && find . -name "*.log" | tar -cf /artifact-mount/e2e-native-scheduling-log.tar -T - && exit 1)
+    - echo "--- END:Native Workload Scheduling E2E tests finished"
