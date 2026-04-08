@@ -19,6 +19,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	configapi "github.com/ray-project/kuberay/ray-operator/apis/config/v1alpha1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/expectations"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
@@ -253,12 +254,16 @@ func TestReconcileNativeWorkloadScheduling_SkipsWhenBatchSchedulerConfigured(t *
 	s := newTestScheme()
 	fakeClient := clientFake.NewClientBuilder().WithScheme(s).Build()
 	fakeRecorder := record.NewFakeRecorder(10)
+	// Create a SchedulerManager with a real non-default batch scheduler (yunikorn).
+	batchMgr, err := batchscheduler.NewSchedulerManager(context.Background(),
+		configapi.Configuration{BatchScheduler: "yunikorn"}, nil, nil)
+	require.NoError(t, err)
 	r := newReconciler(fakeClient, s, fakeRecorder, RayClusterReconcilerOptions{
-		BatchSchedulerManager: &batchscheduler.SchedulerManager{},
+		BatchSchedulerManager: batchMgr,
 	})
 	ctx := context.Background()
 
-	err := r.reconcileNativeWorkloadScheduling(ctx, cluster)
+	err = r.reconcileNativeWorkloadScheduling(ctx, cluster)
 	require.NoError(t, err)
 
 	// No Workloads should be created.
@@ -642,6 +647,64 @@ func TestIsNativeWorkloadSchedulingEnabled(t *testing.T) {
 				cluster.Annotations = nil
 			}
 			assert.Equal(t, tt.expected, isNativeWorkloadSchedulingEnabled(cluster))
+		})
+	}
+}
+
+func TestShouldSetSchedulingGroup(t *testing.T) {
+	tests := []struct {
+		name           string
+		featureGate    bool
+		annotation     string
+		autoscaling    bool
+		batchSched     bool
+		tooManyWorkers bool
+		expected       bool
+	}{
+		{"enabled without autoscaling", true, "true", false, false, false, true},
+		{"enabled with autoscaling", true, "true", true, false, false, false},
+		{"disabled", false, "true", false, false, false, false},
+		{"no annotation", true, "", false, false, false, false},
+		{"batch scheduler configured", true, "true", false, true, false, false},
+		{"too many worker groups", true, "true", false, false, true, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, tt.featureGate)
+			cluster := &rayv1.RayCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						NativeWorkloadSchedulingAnnotation: tt.annotation,
+					},
+				},
+			}
+			if tt.annotation == "" {
+				cluster.Annotations = nil
+			}
+			if tt.autoscaling {
+				cluster.Spec.EnableInTreeAutoscaling = new(true)
+			}
+			if tt.tooManyWorkers {
+				for i := 0; i < 8; i++ {
+					cluster.Spec.WorkerGroupSpecs = append(cluster.Spec.WorkerGroupSpecs,
+						newWorkerGroup(fmt.Sprintf("wg-%d", i), 1))
+				}
+			}
+
+			s := newTestScheme()
+			fakeClient := clientFake.NewClientBuilder().WithScheme(s).Build()
+			fakeRecorder := record.NewFakeRecorder(10)
+			var opts RayClusterReconcilerOptions
+			if tt.batchSched {
+				batchMgr, err := batchscheduler.NewSchedulerManager(context.Background(),
+					configapi.Configuration{BatchScheduler: "yunikorn"}, nil, nil)
+				require.NoError(t, err)
+				opts = RayClusterReconcilerOptions{
+					BatchSchedulerManager: batchMgr,
+				}
+			}
+			r := newReconciler(fakeClient, s, fakeRecorder, opts)
+			assert.Equal(t, tt.expected, r.shouldSetSchedulingGroup(cluster))
 		})
 	}
 }
