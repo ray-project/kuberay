@@ -42,9 +42,11 @@ func (r *RayClusterReconciler) reconcileNativeWorkloadScheduling(ctx context.Con
 
 	// Native workload scheduling is mutually exclusive with batch schedulers.
 	if r.options.BatchSchedulerManager != nil {
-		r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(WorkloadSchedulingSkipped),
-			"Native workload scheduling is mutually exclusive with batch scheduler; skipping native scheduling")
-		return nil
+		if scheduler, err := r.options.BatchSchedulerManager.GetScheduler(); err == nil && scheduler != nil && scheduler.Name() != "default" {
+			r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(WorkloadSchedulingSkipped),
+				"Native workload scheduling is mutually exclusive with batch scheduler %q; skipping native scheduling", scheduler.Name())
+			return nil
+		}
 	}
 
 	// Native workload scheduling does not support autoscaling.
@@ -71,7 +73,6 @@ func (r *RayClusterReconciler) reconcileNativeWorkloadScheduling(ctx context.Con
 	if err != nil {
 		return fmt.Errorf("failed to build Workload for RayCluster %s/%s: %w", instance.Namespace, instance.Name, err)
 	}
-
 	if err := r.Create(ctx, workload); err != nil {
 		if !errors.IsAlreadyExists(err) {
 			r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(FailedToCreateWorkload),
@@ -237,6 +238,23 @@ func podGroupName(clusterName, templateName string) string {
 func isNativeWorkloadSchedulingEnabled(instance *rayv1.RayCluster) bool {
 	return features.Enabled(features.NativeWorkloadScheduling) &&
 		instance.Annotations[NativeWorkloadSchedulingAnnotation] == "true"
+}
+
+// shouldSetSchedulingGroup returns true when native scheduling is active and
+// Workload/PodGroup resources will actually be created (i.e. no skip conditions).
+func (r *RayClusterReconciler) shouldSetSchedulingGroup(instance *rayv1.RayCluster) bool {
+	if !isNativeWorkloadSchedulingEnabled(instance) {
+		return false
+	}
+	if r.options.BatchSchedulerManager != nil {
+		if scheduler, err := r.options.BatchSchedulerManager.GetScheduler(); err == nil && scheduler != nil && scheduler.Name() != "default" {
+			return false
+		}
+	}
+	if utils.IsAutoscalingEnabled(&instance.Spec) {
+		return false
+	}
+	return len(instance.Spec.WorkerGroupSpecs) <= schedulingv1alpha2.WorkloadMaxPodGroupTemplates-1
 }
 
 // setSchedulingGroup sets the schedulingGroup field on a pod to link it to a PodGroup.

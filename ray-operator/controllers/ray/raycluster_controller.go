@@ -1335,8 +1335,8 @@ func (r *RayClusterReconciler) createHeadPod(ctx context.Context, instance rayv1
 		}
 	}
 
-	// Native workload scheduling: set schedulingGroup on head pod
-	if isNativeWorkloadSchedulingEnabled(&instance) {
+	// Native workload scheduling: set schedulingGroup on head pod.
+	if r.shouldSetSchedulingGroup(&instance) {
 		setSchedulingGroup(&pod, podGroupName(instance.Name, "head"))
 	}
 
@@ -1363,8 +1363,8 @@ func (r *RayClusterReconciler) createWorkerPod(ctx context.Context, instance ray
 		}
 	}
 
-	// Native workload scheduling: set schedulingGroup on worker pod
-	if isNativeWorkloadSchedulingEnabled(&instance) {
+	// Native workload scheduling: set schedulingGroup on worker pod.
+	if r.shouldSetSchedulingGroup(&instance) {
 		setSchedulingGroup(&pod, podGroupName(instance.Name, "worker-"+worker.GroupName))
 	}
 
@@ -1392,8 +1392,8 @@ func (r *RayClusterReconciler) createWorkerPodWithIndex(ctx context.Context, ins
 		}
 	}
 
-	// Native workload scheduling: set schedulingGroup on worker pod
-	if isNativeWorkloadSchedulingEnabled(&instance) {
+	// Native workload scheduling: set schedulingGroup on worker pod.
+	if r.shouldSetSchedulingGroup(&instance) {
 		setSchedulingGroup(&pod, podGroupName(instance.Name, "worker-"+worker.GroupName))
 	}
 
