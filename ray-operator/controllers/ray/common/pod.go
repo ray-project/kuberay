@@ -163,7 +163,7 @@ func configureGCSFaultTolerance(podTemplate *corev1.PodTemplateSpec, instance ra
 }
 
 // DefaultHeadPodTemplate sets the config values
-func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, headSpec rayv1.HeadGroupSpec, podName string, headPort string) corev1.PodTemplateSpec {
+func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, headSpec rayv1.HeadGroupSpec, podName string, headPort string, fqdnRayIP string) corev1.PodTemplateSpec {
 	// TODO (Dmitri) The argument headPort is essentially unused;
 	// headPort is passed into setMissingRayStartParams but unused there for the head pod.
 	// To mitigate this awkwardness and reduce code redundancy, unify head and worker pod configuration logic.
@@ -187,7 +187,7 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 	mergedLabels := mergeLabels(headSpec.Template.ObjectMeta.Labels, headSpec.Labels)
 	podTemplate.Labels = labelPod(rayv1.HeadNode, instance.Name, utils.RayNodeHeadGroupLabelValue, mergedLabels)
 
-	headSpec.RayStartParams = setMissingRayStartParams(ctx, headSpec.RayStartParams, rayv1.HeadNode, headPort, "")
+	headSpec.RayStartParams = setMissingRayStartParams(ctx, headSpec.RayStartParams, rayv1.HeadNode, headPort, fqdnRayIP)
 
 	initTemplateAnnotations(instance, &podTemplate)
 
@@ -207,6 +207,11 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 		// Configure RAY_AUTH_TOKEN and RAY_AUTH_MODE if auth is enabled.
 		if utils.IsAuthEnabled(&instance.Spec) {
 			SetContainerTokenAuthEnvVars(instance.Name, &autoscalerContainer, instance.Spec.AuthOptions)
+		}
+
+		// Configure mTLS env vars and volume mount for the autoscaler sidecar.
+		if utils.IsTLSEnabled(&instance.Spec) {
+			SetContainerTLSConfig(&autoscalerContainer)
 		}
 
 		// Merge the user overrides from autoscalerOptions into the autoscaler container config.
@@ -234,6 +239,8 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 	if utils.IsAuthEnabled(&instance.Spec) {
 		configureTokenAuth(instance.Name, &podTemplate, instance.Spec.AuthOptions)
 	}
+
+	configureTLS(&podTemplate, instance, rayv1.HeadNode)
 
 	return podTemplate
 }
@@ -331,6 +338,86 @@ func SetContainerTokenAuthEnvVars(clusterName string, container *corev1.Containe
 				},
 			})
 		}
+	}
+}
+
+// configureTLS injects mTLS configuration into the pod template.
+// Mounts the TLS secret (cert-manager generated or BYOC) and sets TLS environment variables.
+// Idempotent: skips adding the TLS volume if one with RayTLSVolumeName already exists.
+func configureTLS(podTemplate *corev1.PodTemplateSpec, instance rayv1.RayCluster, rayNodeType rayv1.RayNodeType) {
+	if !utils.IsTLSEnabled(&instance.Spec) {
+		return
+	}
+
+	// Get the TLS secret name. In BYOC mode, the same user-provided secret is used
+	// for both head and worker. In auto-generate mode, cert-manager creates separate secrets.
+	secretName := utils.GetTLSSecretName(instance.Name, rayNodeType, instance.Spec)
+
+	// Add the TLS volume if not already present (avoid duplicates on re-entry).
+	hasTLSVolume := false
+	for i := range podTemplate.Spec.Volumes {
+		if podTemplate.Spec.Volumes[i].Name == utils.RayTLSVolumeName {
+			hasTLSVolume = true
+			break
+		}
+	}
+	if !hasTLSVolume {
+		podTemplate.Spec.Volumes = append(podTemplate.Spec.Volumes, corev1.Volume{
+			Name: utils.RayTLSVolumeName,
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName: secretName,
+				},
+			},
+		})
+	}
+
+	// Inject env vars and volume mount into the Ray container (SetContainerTLSConfig is idempotent).
+	SetContainerTLSConfig(&podTemplate.Spec.Containers[utils.RayContainerIndex])
+
+	// Inject into init containers that need TLS (e.g. wait-gcs-ready).
+	for i := range podTemplate.Spec.InitContainers {
+		SetContainerTLSConfig(&podTemplate.Spec.InitContainers[i])
+	}
+}
+
+// SetContainerTLSConfig adds TLS environment variables and volume mount to a container.
+// Idempotent: only appends env vars and volume mount if not already present (avoids duplicates).
+// Exported so it can be reused by RayJob submitter containers when needed.
+func SetContainerTLSConfig(container *corev1.Container) {
+	// Add TLS env vars only if not already present.
+	// Use a slice (not a map) to ensure deterministic ordering.
+	tlsEnvVars := []corev1.EnvVar{
+		{Name: utils.RAY_USE_TLS, Value: "1"},
+		{Name: utils.RAY_TLS_SERVER_CERT, Value: utils.RayTLSCertMountPath + "/tls.crt"},
+		{Name: utils.RAY_TLS_SERVER_KEY, Value: utils.RayTLSCertMountPath + "/tls.key"},
+		{Name: utils.RAY_TLS_CA_CERT, Value: utils.RayTLSCertMountPath + "/ca.crt"},
+	}
+	existingEnvNames := make(map[string]struct{}, len(container.Env))
+	for _, e := range container.Env {
+		existingEnvNames[e.Name] = struct{}{}
+	}
+	for _, ev := range tlsEnvVars {
+		if _, ok := existingEnvNames[ev.Name]; !ok {
+			container.Env = append(container.Env, ev)
+		}
+	}
+
+	// Add TLS volume mount only if not already present (by name or mount path).
+	hasTLSMount := false
+	for i := range container.VolumeMounts {
+		m := &container.VolumeMounts[i]
+		if m.Name == utils.RayTLSVolumeName || m.MountPath == utils.RayTLSCertMountPath {
+			hasTLSMount = true
+			break
+		}
+	}
+	if !hasTLSMount {
+		container.VolumeMounts = append(container.VolumeMounts, corev1.VolumeMount{
+			Name:      utils.RayTLSVolumeName,
+			MountPath: utils.RayTLSCertMountPath,
+			ReadOnly:  true,
+		})
 	}
 }
 
@@ -459,6 +546,8 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 	if utils.IsAuthEnabled(&instance.Spec) {
 		configureTokenAuth(instance.Name, &podTemplate, instance.Spec.AuthOptions)
 	}
+
+	configureTLS(&podTemplate, instance, rayv1.WorkerNode)
 
 	return podTemplate
 }
@@ -943,6 +1032,15 @@ func setMissingRayStartParams(ctx context.Context, rayStartParams map[string]str
 	}
 
 	if nodeType == rayv1.HeadNode {
+		// Set node-ip-address to the head service FQDN so the head node advertises its
+		// stable service address instead of the pod IP. This avoids a TLS SAN race condition
+		// when mTLS is enabled: certs are created before pods exist, so the initial cert only
+		// contains DNS SANs and 127.0.0.1. Using the FQDN ensures GCS connections match a
+		// DNS SAN that is present from the start.
+		if _, ok := rayStartParams["node-ip-address"]; !ok && fqdnRayIP != "" {
+			rayStartParams["node-ip-address"] = fqdnRayIP
+		}
+
 		// Allow incoming connections from all network interfaces for the dashboard by default.
 		// The default value of `dashboard-host` is `localhost` which is not accessible from outside the head Pod.
 		if _, ok := rayStartParams["dashboard-host"]; !ok {
