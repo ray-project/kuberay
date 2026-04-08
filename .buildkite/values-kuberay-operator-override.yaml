@@ -20,3 +20,5 @@ featureGates:
     enabled: true
   - name: RayServiceIncrementalUpgrade
     enabled: true
+  - name: NativeWorkloadScheduling
+    enabled: true
