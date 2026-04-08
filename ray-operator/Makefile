@@ -108,6 +108,10 @@ test-e2e-rayjob: WHAT ?= ./test/e2erayjob
 test-e2e-rayjob: manifests fmt vet ## Run e2e RayJob tests.
 	go test -timeout 30m -v $(WHAT)
 
+test-e2e-native-scheduling: WHAT ?= ./test/e2enativescheduling
+test-e2e-native-scheduling: manifests fmt vet ## Run e2e native workload scheduling tests.
+	go test -timeout 30m -v $(WHAT)
+
 sync: helm api-docs
 	./hack/update-codegen.sh
 
@@ -167,6 +171,10 @@ deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in
 deploy-with-override: manifests kustomize ## Deploy controller with test-only feature gate overrides (does NOT affect default chart).
 	cd config/default && $(KUSTOMIZE) edit set image kuberay/operator=${IMG}
 	$(KUSTOMIZE) build config/overlays/test-overrides | kubectl apply --server-side=true -f -
+
+deploy-native-scheduling: manifests kustomize ## Deploy controller with NativeWorkloadScheduling enabled (requires K8s 1.36+).
+	cd config/default && $(KUSTOMIZE) edit set image kuberay/operator=${IMG}
+	$(KUSTOMIZE) build config/overlays/native-scheduling | kubectl apply --server-side=true -f -
 
 undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/config.
 	$(KUSTOMIZE) build config/default | kubectl delete -f -
