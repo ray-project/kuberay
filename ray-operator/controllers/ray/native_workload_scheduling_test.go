@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	schedulingv1alpha2 "k8s.io/api/scheduling/v1alpha2"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -18,8 +19,8 @@ import (
 	clientFake "sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
-	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	configapi "github.com/ray-project/kuberay/ray-operator/apis/config/v1alpha1"
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/expectations"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
@@ -685,7 +686,7 @@ func TestShouldSetSchedulingGroup(t *testing.T) {
 				cluster.Spec.EnableInTreeAutoscaling = new(true)
 			}
 			if tt.tooManyWorkers {
-				for i := 0; i < 8; i++ {
+				for i := range 8 {
 					cluster.Spec.WorkerGroupSpecs = append(cluster.Spec.WorkerGroupSpecs,
 						newWorkerGroup(fmt.Sprintf("wg-%d", i), 1))
 				}
@@ -1068,4 +1069,744 @@ func TestCreateWorkerPodWithIndex_NoSchedulingGroupWhenDisabled(t *testing.T) {
 
 	pod := podList.Items[0]
 	assert.Nil(t, pod.Spec.SchedulingGroup, "worker pod should not have schedulingGroup when annotation is missing")
+}
+
+// --- isWorkloadStale tests ---
+
+func TestIsWorkloadStale_NoChange(t *testing.T) {
+	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
+	workload := &schedulingv1alpha2.Workload{
+		Spec: schedulingv1alpha2.WorkloadSpec{
+			PodGroupTemplates: []schedulingv1alpha2.PodGroupTemplate{
+				{Name: "head", SchedulingPolicy: schedulingv1alpha2.PodGroupSchedulingPolicy{Basic: &schedulingv1alpha2.BasicSchedulingPolicy{}}},
+				{Name: "worker-workers", SchedulingPolicy: schedulingv1alpha2.PodGroupSchedulingPolicy{Gang: &schedulingv1alpha2.GangSchedulingPolicy{MinCount: 3}}},
+			},
+		},
+	}
+	assert.False(t, isWorkloadStale(workload, cluster))
+}
+
+func TestIsWorkloadStale_WorkerGroupAdded(t *testing.T) {
+	cluster := newTestRayCluster(newWorkerGroup("cpu", 2), newWorkerGroup("gpu", 4))
+	// Existing workload only has head + cpu.
+	workload := &schedulingv1alpha2.Workload{
+		Spec: schedulingv1alpha2.WorkloadSpec{
+			PodGroupTemplates: []schedulingv1alpha2.PodGroupTemplate{
+				{Name: "head", SchedulingPolicy: schedulingv1alpha2.PodGroupSchedulingPolicy{Basic: &schedulingv1alpha2.BasicSchedulingPolicy{}}},
+				{Name: "worker-cpu", SchedulingPolicy: schedulingv1alpha2.PodGroupSchedulingPolicy{Gang: &schedulingv1alpha2.GangSchedulingPolicy{MinCount: 2}}},
+			},
+		},
+	}
+	assert.True(t, isWorkloadStale(workload, cluster))
+}
+
+func TestIsWorkloadStale_WorkerGroupRemoved(t *testing.T) {
+	cluster := newTestRayCluster(newWorkerGroup("cpu", 2))
+	// Existing workload has head + cpu + gpu.
+	workload := &schedulingv1alpha2.Workload{
+		Spec: schedulingv1alpha2.WorkloadSpec{
+			PodGroupTemplates: []schedulingv1alpha2.PodGroupTemplate{
+				{Name: "head", SchedulingPolicy: schedulingv1alpha2.PodGroupSchedulingPolicy{Basic: &schedulingv1alpha2.BasicSchedulingPolicy{}}},
+				{Name: "worker-cpu", SchedulingPolicy: schedulingv1alpha2.PodGroupSchedulingPolicy{Gang: &schedulingv1alpha2.GangSchedulingPolicy{MinCount: 2}}},
+				{Name: "worker-gpu", SchedulingPolicy: schedulingv1alpha2.PodGroupSchedulingPolicy{Gang: &schedulingv1alpha2.GangSchedulingPolicy{MinCount: 4}}},
+			},
+		},
+	}
+	assert.True(t, isWorkloadStale(workload, cluster))
+}
+
+func TestIsWorkloadStale_WorkerGroupRenamed(t *testing.T) {
+	cluster := newTestRayCluster(newWorkerGroup("gpu-v2", 3))
+	// Existing workload has old name.
+	workload := &schedulingv1alpha2.Workload{
+		Spec: schedulingv1alpha2.WorkloadSpec{
+			PodGroupTemplates: []schedulingv1alpha2.PodGroupTemplate{
+				{Name: "head", SchedulingPolicy: schedulingv1alpha2.PodGroupSchedulingPolicy{Basic: &schedulingv1alpha2.BasicSchedulingPolicy{}}},
+				{Name: "worker-gpu-v1", SchedulingPolicy: schedulingv1alpha2.PodGroupSchedulingPolicy{Gang: &schedulingv1alpha2.GangSchedulingPolicy{MinCount: 3}}},
+			},
+		},
+	}
+	assert.True(t, isWorkloadStale(workload, cluster))
+}
+
+func TestIsWorkloadStale_ReplicaCountChanged(t *testing.T) {
+	cluster := newTestRayCluster(newWorkerGroup("workers", 5))
+	workload := &schedulingv1alpha2.Workload{
+		Spec: schedulingv1alpha2.WorkloadSpec{
+			PodGroupTemplates: []schedulingv1alpha2.PodGroupTemplate{
+				{Name: "head", SchedulingPolicy: schedulingv1alpha2.PodGroupSchedulingPolicy{Basic: &schedulingv1alpha2.BasicSchedulingPolicy{}}},
+				{Name: "worker-workers", SchedulingPolicy: schedulingv1alpha2.PodGroupSchedulingPolicy{Gang: &schedulingv1alpha2.GangSchedulingPolicy{MinCount: 3}}},
+			},
+		},
+	}
+	assert.True(t, isWorkloadStale(workload, cluster))
+}
+
+func TestIsWorkloadStale_NumOfHostsChanged(t *testing.T) {
+	wg := newWorkerGroup("workers", 2)
+	wg.NumOfHosts = 3
+	cluster := newTestRayCluster(wg)
+	// Existing workload has minCount=2 (old NumOfHosts=1), desired is 2*3=6.
+	workload := &schedulingv1alpha2.Workload{
+		Spec: schedulingv1alpha2.WorkloadSpec{
+			PodGroupTemplates: []schedulingv1alpha2.PodGroupTemplate{
+				{Name: "head", SchedulingPolicy: schedulingv1alpha2.PodGroupSchedulingPolicy{Basic: &schedulingv1alpha2.BasicSchedulingPolicy{}}},
+				{Name: "worker-workers", SchedulingPolicy: schedulingv1alpha2.PodGroupSchedulingPolicy{Gang: &schedulingv1alpha2.GangSchedulingPolicy{MinCount: 2}}},
+			},
+		},
+	}
+	assert.True(t, isWorkloadStale(workload, cluster))
+}
+
+func TestIsWorkloadStale_WorkerGroupSuspended(t *testing.T) {
+	wg := newWorkerGroup("workers", 3)
+	wg.Suspend = new(true)
+	cluster := newTestRayCluster(wg)
+	// Existing workload has gang policy with minCount=3, but suspended group should have basic policy.
+	workload := &schedulingv1alpha2.Workload{
+		Spec: schedulingv1alpha2.WorkloadSpec{
+			PodGroupTemplates: []schedulingv1alpha2.PodGroupTemplate{
+				{Name: "head", SchedulingPolicy: schedulingv1alpha2.PodGroupSchedulingPolicy{Basic: &schedulingv1alpha2.BasicSchedulingPolicy{}}},
+				{Name: "worker-workers", SchedulingPolicy: schedulingv1alpha2.PodGroupSchedulingPolicy{Gang: &schedulingv1alpha2.GangSchedulingPolicy{MinCount: 3}}},
+			},
+		},
+	}
+	assert.True(t, isWorkloadStale(workload, cluster))
+}
+
+// --- schedulingPoliciesMatch tests ---
+
+func TestSchedulingPoliciesMatch(t *testing.T) {
+	tests := []struct {
+		name     string
+		a, b     schedulingv1alpha2.PodGroupSchedulingPolicy
+		expected bool
+	}{
+		{
+			name:     "both basic",
+			a:        schedulingv1alpha2.PodGroupSchedulingPolicy{Basic: &schedulingv1alpha2.BasicSchedulingPolicy{}},
+			b:        schedulingv1alpha2.PodGroupSchedulingPolicy{Basic: &schedulingv1alpha2.BasicSchedulingPolicy{}},
+			expected: true,
+		},
+		{
+			name:     "both gang same minCount",
+			a:        schedulingv1alpha2.PodGroupSchedulingPolicy{Gang: &schedulingv1alpha2.GangSchedulingPolicy{MinCount: 5}},
+			b:        schedulingv1alpha2.PodGroupSchedulingPolicy{Gang: &schedulingv1alpha2.GangSchedulingPolicy{MinCount: 5}},
+			expected: true,
+		},
+		{
+			name:     "both gang different minCount",
+			a:        schedulingv1alpha2.PodGroupSchedulingPolicy{Gang: &schedulingv1alpha2.GangSchedulingPolicy{MinCount: 3}},
+			b:        schedulingv1alpha2.PodGroupSchedulingPolicy{Gang: &schedulingv1alpha2.GangSchedulingPolicy{MinCount: 5}},
+			expected: false,
+		},
+		{
+			name:     "basic vs gang",
+			a:        schedulingv1alpha2.PodGroupSchedulingPolicy{Basic: &schedulingv1alpha2.BasicSchedulingPolicy{}},
+			b:        schedulingv1alpha2.PodGroupSchedulingPolicy{Gang: &schedulingv1alpha2.GangSchedulingPolicy{MinCount: 1}},
+			expected: false,
+		},
+		{
+			name:     "gang vs basic",
+			a:        schedulingv1alpha2.PodGroupSchedulingPolicy{Gang: &schedulingv1alpha2.GangSchedulingPolicy{MinCount: 1}},
+			b:        schedulingv1alpha2.PodGroupSchedulingPolicy{Basic: &schedulingv1alpha2.BasicSchedulingPolicy{}},
+			expected: false,
+		},
+		{
+			name:     "both nil",
+			a:        schedulingv1alpha2.PodGroupSchedulingPolicy{},
+			b:        schedulingv1alpha2.PodGroupSchedulingPolicy{},
+			expected: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, schedulingPoliciesMatch(tt.a, tt.b))
+		})
+	}
+}
+
+// --- deleteNativeWorkloadSchedulingResources tests ---
+
+func TestDeleteNativeWorkloadSchedulingResources_DeletesAll(t *testing.T) {
+	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
+	s := newTestScheme()
+
+	// Pre-create Workload and PodGroups.
+	workload := &schedulingv1alpha2.Workload{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "default",
+			Labels:    map[string]string{utils.RayClusterLabelKey: "test-cluster"},
+		},
+	}
+	headPG := &schedulingv1alpha2.PodGroup{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster-head",
+			Namespace: "default",
+			Labels:    map[string]string{utils.RayClusterLabelKey: "test-cluster"},
+		},
+	}
+	workerPG := &schedulingv1alpha2.PodGroup{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster-worker-workers",
+			Namespace: "default",
+			Labels:    map[string]string{utils.RayClusterLabelKey: "test-cluster"},
+		},
+	}
+
+	fakeClient := clientFake.NewClientBuilder().WithScheme(s).
+		WithObjects(workload, headPG, workerPG).Build()
+	fakeRecorder := record.NewFakeRecorder(10)
+	r := newReconciler(fakeClient, s, fakeRecorder)
+	ctx := context.Background()
+
+	err := r.deleteNativeWorkloadSchedulingResources(ctx, cluster)
+	require.NoError(t, err)
+
+	// Verify Workload is deleted.
+	err = fakeClient.Get(ctx, types.NamespacedName{Name: "test-cluster", Namespace: "default"}, &schedulingv1alpha2.Workload{})
+	assert.True(t, apierrors.IsNotFound(err), "Workload should be deleted")
+
+	// Verify PodGroups are deleted.
+	pgList := &schedulingv1alpha2.PodGroupList{}
+	err = fakeClient.List(ctx, pgList, client.InNamespace("default"), client.MatchingLabels{utils.RayClusterLabelKey: "test-cluster"})
+	require.NoError(t, err)
+	assert.Empty(t, pgList.Items, "All PodGroups should be deleted")
+}
+
+func TestDeleteNativeWorkloadSchedulingResources_NotFoundIsNoop(t *testing.T) {
+	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
+	s := newTestScheme()
+	// No pre-existing resources.
+	fakeClient := clientFake.NewClientBuilder().WithScheme(s).Build()
+	fakeRecorder := record.NewFakeRecorder(10)
+	r := newReconciler(fakeClient, s, fakeRecorder)
+	ctx := context.Background()
+
+	err := r.deleteNativeWorkloadSchedulingResources(ctx, cluster)
+	require.NoError(t, err)
+}
+
+func TestDeleteNativeWorkloadSchedulingResources_PodGroupDeleteFailure(t *testing.T) {
+	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
+	s := newTestScheme()
+
+	pg := &schedulingv1alpha2.PodGroup{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster-head",
+			Namespace: "default",
+			Labels:    map[string]string{utils.RayClusterLabelKey: "test-cluster"},
+		},
+	}
+
+	fakeClient := clientFake.NewClientBuilder().WithScheme(s).
+		WithObjects(pg).
+		WithInterceptorFuncs(interceptor.Funcs{
+			Delete: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.DeleteOption) error {
+				if _, ok := obj.(*schedulingv1alpha2.PodGroup); ok {
+					return fmt.Errorf("simulated PodGroup delete error")
+				}
+				return c.Delete(ctx, obj, opts...)
+			},
+		}).Build()
+	fakeRecorder := record.NewFakeRecorder(10)
+	r := newReconciler(fakeClient, s, fakeRecorder)
+	ctx := context.Background()
+
+	err := r.deleteNativeWorkloadSchedulingResources(ctx, cluster)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "simulated PodGroup delete error")
+
+	// Should have emitted a FailedToDeletePodGroup event.
+	event := <-fakeRecorder.Events
+	assert.Contains(t, event, string(FailedToDeletePodGroup))
+}
+
+func TestDeleteNativeWorkloadSchedulingResources_WorkloadDeleteFailure(t *testing.T) {
+	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
+	s := newTestScheme()
+
+	workload := &schedulingv1alpha2.Workload{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "default",
+			Labels:    map[string]string{utils.RayClusterLabelKey: "test-cluster"},
+		},
+	}
+
+	fakeClient := clientFake.NewClientBuilder().WithScheme(s).
+		WithObjects(workload).
+		WithInterceptorFuncs(interceptor.Funcs{
+			Delete: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.DeleteOption) error {
+				if _, ok := obj.(*schedulingv1alpha2.Workload); ok {
+					return fmt.Errorf("simulated Workload delete error")
+				}
+				return c.Delete(ctx, obj, opts...)
+			},
+		}).Build()
+	fakeRecorder := record.NewFakeRecorder(10)
+	r := newReconciler(fakeClient, s, fakeRecorder)
+	ctx := context.Background()
+
+	err := r.deleteNativeWorkloadSchedulingResources(ctx, cluster)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "simulated Workload delete error")
+
+	// Should have emitted a FailedToDeleteWorkload event.
+	event := <-fakeRecorder.Events
+	assert.Contains(t, event, string(FailedToDeleteWorkload))
+}
+
+func TestDeleteNativeWorkloadSchedulingResources_ListFailure(t *testing.T) {
+	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
+	s := newTestScheme()
+
+	fakeClient := clientFake.NewClientBuilder().WithScheme(s).
+		WithInterceptorFuncs(interceptor.Funcs{
+			List: func(ctx context.Context, c client.WithWatch, list client.ObjectList, opts ...client.ListOption) error {
+				if _, ok := list.(*schedulingv1alpha2.PodGroupList); ok {
+					return fmt.Errorf("simulated list error")
+				}
+				return c.List(ctx, list, opts...)
+			},
+		}).Build()
+	fakeRecorder := record.NewFakeRecorder(10)
+	r := newReconciler(fakeClient, s, fakeRecorder)
+	ctx := context.Background()
+
+	err := r.deleteNativeWorkloadSchedulingResources(ctx, cluster)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to list PodGroups")
+}
+
+func TestDeleteNativeWorkloadSchedulingResources_RemovesSchedulerFinalizer(t *testing.T) {
+	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
+	s := newTestScheme()
+
+	// Pre-create a PodGroup with the scheduler's protection finalizer.
+	pg := &schedulingv1alpha2.PodGroup{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       "test-cluster-head",
+			Namespace:  "default",
+			Labels:     map[string]string{utils.RayClusterLabelKey: "test-cluster"},
+			Finalizers: []string{podGroupProtectionFinalizer},
+		},
+	}
+
+	fakeClient := clientFake.NewClientBuilder().WithScheme(s).
+		WithObjects(pg).Build()
+	fakeRecorder := record.NewFakeRecorder(10)
+	r := newReconciler(fakeClient, s, fakeRecorder)
+	ctx := context.Background()
+
+	err := r.deleteNativeWorkloadSchedulingResources(ctx, cluster)
+	require.NoError(t, err)
+
+	// PodGroup should be deleted (not stuck in deleting state).
+	err = fakeClient.Get(ctx, types.NamespacedName{Name: "test-cluster-head", Namespace: "default"}, &schedulingv1alpha2.PodGroup{})
+	assert.True(t, apierrors.IsNotFound(err), "PodGroup with finalizer should be deleted after stripping finalizer")
+}
+
+func TestReconcileNativeWorkloadScheduling_PodGroupDeletionTimestampReturnsError(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
+
+	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
+	s := newTestScheme()
+
+	// Pre-create a Workload whose spec matches the desired state so that
+	// isWorkloadStale() returns false and we proceed to PodGroup creation.
+	// This isolates the test to the PodGroup AlreadyExists + DeletionTimestamp path.
+	existingWorkload := &schedulingv1alpha2.Workload{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "default",
+			Labels:    map[string]string{utils.RayClusterLabelKey: "test-cluster"},
+		},
+		Spec: schedulingv1alpha2.WorkloadSpec{
+			PodGroupTemplates: []schedulingv1alpha2.PodGroupTemplate{
+				{Name: "head", SchedulingPolicy: schedulingv1alpha2.PodGroupSchedulingPolicy{Basic: &schedulingv1alpha2.BasicSchedulingPolicy{}}},
+				{Name: "worker-workers", SchedulingPolicy: schedulingv1alpha2.PodGroupSchedulingPolicy{Gang: &schedulingv1alpha2.GangSchedulingPolicy{MinCount: 3}}},
+			},
+		},
+	}
+
+	// Pre-create a head PodGroup with DeletionTimestamp so Create returns AlreadyExists
+	// and the subsequent Get finds the object mid-deletion.
+	now := metav1.Now()
+	headPG := &schedulingv1alpha2.PodGroup{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              "test-cluster-head",
+			Namespace:         "default",
+			Labels:            map[string]string{utils.RayClusterLabelKey: "test-cluster"},
+			DeletionTimestamp: &now,
+			Finalizers:        []string{"fake-finalizer"}, // Needed to keep the fake client from deleting immediately.
+		},
+	}
+
+	fakeClient := clientFake.NewClientBuilder().WithScheme(s).
+		WithObjects(existingWorkload, headPG).Build()
+	fakeRecorder := record.NewFakeRecorder(10)
+	r := newReconciler(fakeClient, s, fakeRecorder)
+	ctx := context.Background()
+
+	err := r.reconcileNativeWorkloadScheduling(ctx, cluster)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "is being deleted (finalizer pending)")
+}
+
+func TestReconcileNativeWorkloadScheduling_GetFailureAfterAlreadyExists(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
+
+	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
+	s := newTestScheme()
+
+	// Pre-create a Workload so that Create returns AlreadyExists.
+	existingWorkload := &schedulingv1alpha2.Workload{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "default",
+			Labels:    map[string]string{utils.RayClusterLabelKey: "test-cluster"},
+		},
+	}
+
+	fakeClient := clientFake.NewClientBuilder().WithScheme(s).
+		WithObjects(existingWorkload).
+		WithInterceptorFuncs(interceptor.Funcs{
+			Get: func(ctx context.Context, c client.WithWatch, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+				if _, ok := obj.(*schedulingv1alpha2.Workload); ok {
+					return fmt.Errorf("simulated Get error")
+				}
+				return c.Get(ctx, key, obj, opts...)
+			},
+		}).Build()
+	fakeRecorder := record.NewFakeRecorder(10)
+	r := newReconciler(fakeClient, s, fakeRecorder)
+	ctx := context.Background()
+
+	err := r.reconcileNativeWorkloadScheduling(ctx, cluster)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to get existing Workload")
+}
+
+// --- Reconcile drift detection integration tests ---
+
+func TestReconcile_StaleWorkloadRecreated(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
+
+	// Start with 1 worker group with 3 replicas.
+	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
+	s := newTestScheme()
+
+	// Pre-create a stale Workload with old minCount=2.
+	staleWorkload := &schedulingv1alpha2.Workload{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "default",
+			Labels:    map[string]string{utils.RayClusterLabelKey: "test-cluster"},
+		},
+		Spec: schedulingv1alpha2.WorkloadSpec{
+			PodGroupTemplates: []schedulingv1alpha2.PodGroupTemplate{
+				{Name: "head", SchedulingPolicy: schedulingv1alpha2.PodGroupSchedulingPolicy{Basic: &schedulingv1alpha2.BasicSchedulingPolicy{}}},
+				{Name: "worker-workers", SchedulingPolicy: schedulingv1alpha2.PodGroupSchedulingPolicy{Gang: &schedulingv1alpha2.GangSchedulingPolicy{MinCount: 2}}},
+			},
+		},
+	}
+	stalePG := &schedulingv1alpha2.PodGroup{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster-worker-workers",
+			Namespace: "default",
+			Labels:    map[string]string{utils.RayClusterLabelKey: "test-cluster"},
+		},
+	}
+
+	fakeClient := clientFake.NewClientBuilder().WithScheme(s).
+		WithObjects(staleWorkload, stalePG).Build()
+	fakeRecorder := record.NewFakeRecorder(20)
+	r := newReconciler(fakeClient, s, fakeRecorder)
+	ctx := context.Background()
+
+	err := r.reconcileNativeWorkloadScheduling(ctx, cluster)
+	require.NoError(t, err)
+
+	// Verify the Workload was recreated with the correct minCount.
+	workload := &schedulingv1alpha2.Workload{}
+	err = fakeClient.Get(ctx, types.NamespacedName{Name: "test-cluster", Namespace: "default"}, workload)
+	require.NoError(t, err)
+	require.Len(t, workload.Spec.PodGroupTemplates, 2)
+	assert.Equal(t, "worker-workers", workload.Spec.PodGroupTemplates[1].Name)
+	require.NotNil(t, workload.Spec.PodGroupTemplates[1].SchedulingPolicy.Gang)
+	assert.Equal(t, int32(3), workload.Spec.PodGroupTemplates[1].SchedulingPolicy.Gang.MinCount)
+
+	// Verify PodGroups were recreated (head + worker).
+	pgList := &schedulingv1alpha2.PodGroupList{}
+	err = fakeClient.List(ctx, pgList, client.InNamespace("default"))
+	require.NoError(t, err)
+	assert.Len(t, pgList.Items, 2)
+}
+
+func TestReconcile_UpToDateWorkloadNotRecreated(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
+
+	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
+	s := newTestScheme()
+	fakeClient := clientFake.NewClientBuilder().WithScheme(s).Build()
+	fakeRecorder := record.NewFakeRecorder(20)
+	r := newReconciler(fakeClient, s, fakeRecorder)
+	ctx := context.Background()
+
+	// First reconcile — creates everything.
+	err := r.reconcileNativeWorkloadScheduling(ctx, cluster)
+	require.NoError(t, err)
+
+	workload := &schedulingv1alpha2.Workload{}
+	err = fakeClient.Get(ctx, types.NamespacedName{Name: "test-cluster", Namespace: "default"}, workload)
+	require.NoError(t, err)
+	originalUID := workload.UID
+	originalRV := workload.ResourceVersion
+
+	// Second reconcile — should not recreate.
+	err = r.reconcileNativeWorkloadScheduling(ctx, cluster)
+	require.NoError(t, err)
+
+	err = fakeClient.Get(ctx, types.NamespacedName{Name: "test-cluster", Namespace: "default"}, workload)
+	require.NoError(t, err)
+	assert.Equal(t, originalUID, workload.UID, "Workload UID should not change when spec is up-to-date")
+	assert.Equal(t, originalRV, workload.ResourceVersion, "Workload ResourceVersion should not change when spec is up-to-date")
+}
+
+func TestReconcile_StaleWorkloadWorkerGroupAdded(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
+
+	// Cluster now has 2 worker groups.
+	cluster := newTestRayCluster(newWorkerGroup("cpu", 2), newWorkerGroup("gpu", 4))
+	s := newTestScheme()
+
+	// Pre-create Workload with only cpu worker group.
+	staleWorkload := &schedulingv1alpha2.Workload{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "default",
+			Labels:    map[string]string{utils.RayClusterLabelKey: "test-cluster"},
+		},
+		Spec: schedulingv1alpha2.WorkloadSpec{
+			PodGroupTemplates: []schedulingv1alpha2.PodGroupTemplate{
+				{Name: "head", SchedulingPolicy: schedulingv1alpha2.PodGroupSchedulingPolicy{Basic: &schedulingv1alpha2.BasicSchedulingPolicy{}}},
+				{Name: "worker-cpu", SchedulingPolicy: schedulingv1alpha2.PodGroupSchedulingPolicy{Gang: &schedulingv1alpha2.GangSchedulingPolicy{MinCount: 2}}},
+			},
+		},
+	}
+
+	fakeClient := clientFake.NewClientBuilder().WithScheme(s).
+		WithObjects(staleWorkload).Build()
+	fakeRecorder := record.NewFakeRecorder(20)
+	r := newReconciler(fakeClient, s, fakeRecorder)
+	ctx := context.Background()
+
+	err := r.reconcileNativeWorkloadScheduling(ctx, cluster)
+	require.NoError(t, err)
+
+	// Verify Workload has 3 templates now (head + cpu + gpu).
+	workload := &schedulingv1alpha2.Workload{}
+	err = fakeClient.Get(ctx, types.NamespacedName{Name: "test-cluster", Namespace: "default"}, workload)
+	require.NoError(t, err)
+	assert.Len(t, workload.Spec.PodGroupTemplates, 3)
+
+	// Verify 3 PodGroups exist.
+	pgList := &schedulingv1alpha2.PodGroupList{}
+	err = fakeClient.List(ctx, pgList, client.InNamespace("default"))
+	require.NoError(t, err)
+	assert.Len(t, pgList.Items, 3)
+}
+
+// --- reconcilePods lifecycle tests (suspend / recreate paths) ---
+
+func TestReconcilePods_SuspendDeletesNativeSchedulingResources(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
+	features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, false)
+
+	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
+	suspend := true
+	cluster.Spec.Suspend = &suspend
+
+	s := newTestScheme()
+
+	// Pre-create Workload and PodGroups that should be deleted on suspend.
+	workload := &schedulingv1alpha2.Workload{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "default",
+			Labels:    map[string]string{utils.RayClusterLabelKey: "test-cluster"},
+		},
+	}
+	headPG := &schedulingv1alpha2.PodGroup{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster-head",
+			Namespace: "default",
+			Labels:    map[string]string{utils.RayClusterLabelKey: "test-cluster"},
+		},
+	}
+	workerPG := &schedulingv1alpha2.PodGroup{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster-worker-workers",
+			Namespace: "default",
+			Labels:    map[string]string{utils.RayClusterLabelKey: "test-cluster"},
+		},
+	}
+
+	fakeClient := clientFake.NewClientBuilder().WithScheme(s).
+		WithObjects(workload, headPG, workerPG).Build()
+	fakeRecorder := record.NewFakeRecorder(20)
+	r := newReconciler(fakeClient, s, fakeRecorder)
+	ctx := context.Background()
+
+	err := r.reconcilePods(ctx, cluster)
+	require.NoError(t, err)
+
+	// Verify Workload is deleted.
+	err = fakeClient.Get(ctx, types.NamespacedName{Name: "test-cluster", Namespace: "default"}, &schedulingv1alpha2.Workload{})
+	assert.True(t, apierrors.IsNotFound(err), "Workload should be deleted on suspend")
+
+	// Verify PodGroups are deleted.
+	pgList := &schedulingv1alpha2.PodGroupList{}
+	err = fakeClient.List(ctx, pgList, client.InNamespace("default"), client.MatchingLabels{utils.RayClusterLabelKey: "test-cluster"})
+	require.NoError(t, err)
+	assert.Empty(t, pgList.Items, "PodGroups should be deleted on suspend")
+}
+
+func TestReconcilePods_SuspendSkipsDeletionWhenNativeSchedulingDisabled(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, false)
+	features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, false)
+
+	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
+	delete(cluster.Annotations, NativeWorkloadSchedulingAnnotation)
+	suspend := true
+	cluster.Spec.Suspend = &suspend
+
+	s := newTestScheme()
+
+	// Pre-create resources — they should NOT be deleted since native scheduling is disabled.
+	workload := &schedulingv1alpha2.Workload{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "default",
+			Labels:    map[string]string{utils.RayClusterLabelKey: "test-cluster"},
+		},
+	}
+
+	fakeClient := clientFake.NewClientBuilder().WithScheme(s).
+		WithObjects(workload).Build()
+	fakeRecorder := record.NewFakeRecorder(20)
+	r := newReconciler(fakeClient, s, fakeRecorder)
+	ctx := context.Background()
+
+	err := r.reconcilePods(ctx, cluster)
+	require.NoError(t, err)
+
+	// Verify Workload still exists.
+	err = fakeClient.Get(ctx, types.NamespacedName{Name: "test-cluster", Namespace: "default"}, &schedulingv1alpha2.Workload{})
+	assert.NoError(t, err, "Workload should still exist when native scheduling is disabled")
+}
+
+func TestReconcilePods_RecreateUpgradeDeletesNativeSchedulingResources(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
+	features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, false)
+
+	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
+	recreate := rayv1.RayClusterRecreate
+	cluster.Spec.UpgradeStrategy = &rayv1.RayClusterUpgradeStrategy{Type: &recreate}
+
+	// Compute the "stale" hash (a different value than what the current spec produces).
+	staleHash := "stale-hash-value"
+
+	s := newTestScheme()
+
+	// Pre-create a head pod with a stale hash to trigger shouldRecreatePodsForUpgrade.
+	headPod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster-head-pod",
+			Namespace: "default",
+			Labels: map[string]string{
+				utils.RayClusterLabelKey:  "test-cluster",
+				utils.RayNodeTypeLabelKey: string(rayv1.HeadNode),
+			},
+			Annotations: map[string]string{
+				utils.UpgradeStrategyRecreateHashKey: staleHash,
+				utils.KubeRayVersion:                 utils.KUBERAY_VERSION,
+			},
+		},
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{{Name: "ray-head", Image: "rayproject/ray:latest"}},
+		},
+	}
+
+	// Pre-create Workload and PodGroups that should be deleted on recreate.
+	workload := &schedulingv1alpha2.Workload{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "default",
+			Labels:    map[string]string{utils.RayClusterLabelKey: "test-cluster"},
+		},
+	}
+	workerPG := &schedulingv1alpha2.PodGroup{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster-worker-workers",
+			Namespace: "default",
+			Labels:    map[string]string{utils.RayClusterLabelKey: "test-cluster"},
+		},
+	}
+
+	fakeClient := clientFake.NewClientBuilder().WithScheme(s).
+		WithObjects(headPod, workload, workerPG).Build()
+	fakeRecorder := record.NewFakeRecorder(20)
+	r := newReconciler(fakeClient, s, fakeRecorder)
+	ctx := context.Background()
+
+	err := r.reconcilePods(ctx, cluster)
+	require.NoError(t, err)
+
+	// Verify Workload is deleted.
+	err = fakeClient.Get(ctx, types.NamespacedName{Name: "test-cluster", Namespace: "default"}, &schedulingv1alpha2.Workload{})
+	assert.True(t, apierrors.IsNotFound(err), "Workload should be deleted on recreate upgrade")
+
+	// Verify PodGroups are deleted.
+	pgList := &schedulingv1alpha2.PodGroupList{}
+	err = fakeClient.List(ctx, pgList, client.InNamespace("default"), client.MatchingLabels{utils.RayClusterLabelKey: "test-cluster"})
+	require.NoError(t, err)
+	assert.Empty(t, pgList.Items, "PodGroups should be deleted on recreate upgrade")
+}
+
+func TestReconcilePods_ResumeRecreatesNativeSchedulingResources(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
+	features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, false)
+
+	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
+	// Cluster is NOT suspended (simulating resume after prior suspension deleted resources).
+
+	s := newTestScheme()
+
+	// No pre-existing Workload or PodGroups — they were deleted during suspend.
+	fakeClient := clientFake.NewClientBuilder().WithScheme(s).Build()
+	fakeRecorder := record.NewFakeRecorder(20)
+	r := newReconciler(fakeClient, s, fakeRecorder)
+	ctx := context.Background()
+
+	err := r.reconcilePods(ctx, cluster)
+	require.NoError(t, err)
+
+	// Verify Workload was recreated.
+	workload := &schedulingv1alpha2.Workload{}
+	err = fakeClient.Get(ctx, types.NamespacedName{Name: "test-cluster", Namespace: "default"}, workload)
+	require.NoError(t, err, "Workload should be created after resume")
+	assert.Len(t, workload.Spec.PodGroupTemplates, 2)
+	assert.Equal(t, "head", workload.Spec.PodGroupTemplates[0].Name)
+	assert.Equal(t, "worker-workers", workload.Spec.PodGroupTemplates[1].Name)
+	require.NotNil(t, workload.Spec.PodGroupTemplates[1].SchedulingPolicy.Gang)
+	assert.Equal(t, int32(3), workload.Spec.PodGroupTemplates[1].SchedulingPolicy.Gang.MinCount)
+
+	// Verify PodGroups were recreated.
+	pgList := &schedulingv1alpha2.PodGroupList{}
+	err = fakeClient.List(ctx, pgList, client.InNamespace("default"), client.MatchingLabels{utils.RayClusterLabelKey: "test-cluster"})
+	require.NoError(t, err)
+	assert.Len(t, pgList.Items, 2, "PodGroups should be recreated after resume")
 }
