@@ -23,11 +23,15 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/rest/fake"
 	"k8s.io/client-go/tools/remotecommand"
+	"k8s.io/client-go/tools/clientcmd"
+	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 	cmdtesting "k8s.io/kubectl/pkg/cmd/testing"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubectl/pkg/scheme"
+	k8s_fake "k8s.io/client-go/kubernetes/fake"
 
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
+	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client"
 )
 
 // Mocked NewSPDYExecutor
@@ -477,5 +481,137 @@ func TestDownloadRayLogFiles(t *testing.T) {
 		actualContent, err := io.ReadAll(openfile)
 		require.NoError(t, err)
 		assert.Equal(t, curr.Body, string(actualContent))
+	}
+}
+
+// createTempKubeConfigFile creates a temporary kubeconfig file with the given current context.
+func createTempKubeConfigFile(t *testing.T, currentContext string) (string, error) {
+	tmpDir := t.TempDir()
+
+	// Set up fake config for kubeconfig
+	config := &clientcmdapi.Config{
+		Clusters: map[string]*clientcmdapi.Cluster{
+			"test-cluster": {
+				Server:                "https://fake-kubernetes-cluster.example.com",
+				InsecureSkipTLSVerify: true, // For testing purposes
+			},
+		},
+		Contexts: map[string]*clientcmdapi.Context{
+			"gke_my-project_us-central1-a_my-cluster": {
+				Cluster: "test-cluster",
+			},
+			"minikube": {
+				Cluster: "test-cluster",
+			},
+		},
+		CurrentContext: currentContext,
+	}
+
+	fakeFile := filepath.Join(tmpDir, ".kubeconfig")
+
+	return fakeFile, clientcmd.WriteToFile(*config, fakeFile)
+}
+
+func TestGCPLogLink(t *testing.T) {
+	tests := []struct {
+		name            string
+		currentContext  string
+		headPods        *v1.PodList
+		expectedGCPURL  string
+		expectedWarning string
+	}{
+		{
+			name:           "GKE context with fluentbit",
+			currentContext: "gke_my-project_us-central1-a_my-cluster",
+			headPods: &v1.PodList{
+				Items: []v1.Pod{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "head-pod",
+							Labels: map[string]string{
+								"ray.io/node-type": "head",
+								"ray.io/cluster":   "test-cluster",
+							},
+						},
+						Spec: v1.PodSpec{
+							Containers: []v1.Container{
+								{Name: "ray-head"},
+								{Name: "fluentbit"},
+							},
+						},
+					},
+				},
+			},
+			expectedGCPURL:  "https://console.cloud.google.com/logs/query;query=resource.type%3D%22k8s_container%22%0Aresource.labels.namespace_name%3D%22default%22%0Alabels.%22k8s-pod%2Fray_io%2Fcluster%22%3D%22test-cluster%22%0Alabels.%22k8s-pod%2Fray_io%2Fis-ray-node%22%3D%22yes%22;project=my-project",
+			expectedWarning: "",
+		},
+		{
+			name:           "GKE context without fluentbit",
+			currentContext: "gke_my-project_us-central1-a_my-cluster",
+			headPods: &v1.PodList{
+				Items: []v1.Pod{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "head-pod",
+							Labels: map[string]string{
+								"ray.io/node-type": "head",
+								"ray.io/cluster":   "test-cluster",
+							},
+						},
+						Spec: v1.PodSpec{
+							Containers: []v1.Container{
+								{Name: "ray-head"},
+							},
+						},
+					},
+				},
+			},
+			expectedGCPURL:  "https://console.cloud.google.com/logs/query;query=resource.type%3D%22k8s_container%22%0Aresource.labels.namespace_name%3D%22default%22%0Alabels.%22k8s-pod%2Fray_io%2Fcluster%22%3D%22test-cluster%22%0Alabels.%22k8s-pod%2Fray_io%2Fis-ray-node%22%3D%22yes%22;project=my-project",
+			expectedWarning: "Warning: The head pod does not have a 'fluentbit' container. Logs might not be exported to Google Cloud Logging.",
+		},
+		{
+			name:           "Non-GKE context",
+			currentContext: "minikube",
+			headPods:       &v1.PodList{},
+			expectedGCPURL:  "https://console.cloud.google.com/logs/query;query=resource.type%3D%22k8s_container%22%0Aresource.labels.namespace_name%3D%22default%22%0Alabels.%22k8s-pod%2Fray_io%2Fcluster%22%3D%22test-cluster%22%0Alabels.%22k8s-pod%2Fray_io%2Fis-ray-node%22%3D%22yes%22",
+			expectedWarning: "Warning: The current kubectl context does not appear to be a GKE cluster. The generated link may not work.",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			testStreams, _, _, errOut := genericclioptions.NewTestIOStreams()
+
+			kubeConfig, err := createTempKubeConfigFile(t, tc.currentContext)
+			require.NoError(t, err)
+
+			tf := cmdutil.NewFactory(&genericclioptions.ConfigFlags{
+				KubeConfig: &kubeConfig,
+			})
+
+			options := NewClusterLogOptions(tf, testStreams)
+			options.namespace = "default"
+			options.printGCPLink = true
+
+			fakeKubeClient := k8s_fake.NewSimpleClientset()
+			if tc.headPods != nil {
+				for _, pod := range tc.headPods.Items {
+					_, err := fakeKubeClient.CoreV1().Pods("default").Create(context.TODO(), &pod, metav1.CreateOptions{})
+					require.NoError(t, err)
+				}
+			}
+
+			clientSet := client.NewClientForTesting(fakeKubeClient, nil)
+
+			err = options.gcpLink(context.Background(), clientSet, "test-cluster")
+			require.NoError(t, err)
+
+			assert.Contains(t, testStreams.Out.(*bytes.Buffer).String(), tc.expectedGCPURL)
+			if tc.expectedWarning != "" {
+				assert.Contains(t, errOut.String(), tc.expectedWarning)
+			} else {
+				assert.Empty(t, errOut.String())
+			}
+		})
 	}
 }
