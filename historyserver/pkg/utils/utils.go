@@ -2,6 +2,7 @@ package utils
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
@@ -11,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aliyun/aliyun-oss-go-sdk/oss"
+	"github.com/aliyun/alibabacloud-oss-go-sdk-v2/oss"
 	"github.com/sirupsen/logrus"
 )
 
@@ -39,15 +40,20 @@ func EndpointPathToStorageKey(endpointPath string) string {
 
 var regex = regexp.MustCompile(SESSION_ID_REGEX)
 
-func CreateObjectIfNotExist(bucket *oss.Bucket, obj string, options ...oss.Option) error {
-	isExist, err := bucket.IsObjectExist(obj)
+func CreateObjectIfNotExist(client *oss.Client, bucket string, obj string) error {
+	ctx := context.Background()
+	isExist, err := client.IsObjectExist(ctx, bucket, obj)
 	if err != nil {
 		logrus.Errorf("Failed to check if object %s exists: %v", obj, err)
 		return err
 	}
 	if !isExist {
 		logrus.Infof("Begin to create oss object %s ...", obj)
-		err = bucket.PutObject(obj, bytes.NewReader([]byte("")), options...)
+		_, err = client.PutObject(ctx, &oss.PutObjectRequest{
+			Bucket: oss.Ptr(bucket),
+			Key:    oss.Ptr(obj),
+			Body:   bytes.NewReader([]byte("")),
+		})
 		if err != nil {
 			logrus.Errorf("Failed to create directory '%s': %v", obj, err)
 			return err
