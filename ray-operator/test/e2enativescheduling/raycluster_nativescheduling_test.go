@@ -417,3 +417,364 @@ func TestNativeScheduling_Idempotent(t *testing.T) {
 	g.Consistently(Workloads(test, namespace.Name), 10*time.Second, time.Second).Should(HaveLen(1))
 	g.Consistently(PodGroups(test, namespace.Name), 10*time.Second, time.Second).Should(HaveLen(2))
 }
+
+func TestNativeScheduling_SuspendDeletesResources(t *testing.T) {
+	test := With(t)
+	g := NewWithT(t)
+
+	namespace := test.NewTestNamespace()
+
+	rayClusterAC := rayv1ac.RayCluster("suspend-del", namespace.Name).
+		WithAnnotations(map[string]string{"ray.io/native-workload-scheduling": "true"}).
+		WithSpec(NewRayClusterSpec())
+
+	rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
+	g.Expect(err).NotTo(HaveOccurred())
+	LogWithTimestamp(test.T(), "Created RayCluster %s/%s successfully", rayCluster.Namespace, rayCluster.Name)
+
+	// Wait for cluster to become ready so Workload and PodGroups are created.
+	LogWithTimestamp(test.T(), "Waiting for RayCluster %s/%s to become ready", rayCluster.Namespace, rayCluster.Name)
+	g.Eventually(RayCluster(test, namespace.Name, rayCluster.Name), TestTimeoutMedium).
+		Should(WithTransform(RayClusterState, Equal(rayv1.Ready)))
+
+	// Verify Workload and PodGroups exist before suspend.
+	g.Eventually(Workloads(test, namespace.Name), TestTimeoutShort).Should(HaveLen(1))
+	g.Eventually(PodGroups(test, namespace.Name), TestTimeoutShort).Should(HaveLen(2))
+
+	// Suspend the cluster.
+	LogWithTimestamp(test.T(), "Suspending RayCluster %s/%s", rayCluster.Namespace, rayCluster.Name)
+	rayClusterAC = rayClusterAC.WithSpec(rayClusterAC.Spec.WithSuspend(true))
+	rayCluster, err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
+	g.Expect(err).NotTo(HaveOccurred())
+
+	// Wait for the cluster to be suspended.
+	LogWithTimestamp(test.T(), "Waiting for RayCluster %s/%s to be suspended", rayCluster.Namespace, rayCluster.Name)
+	g.Eventually(RayCluster(test, namespace.Name, rayCluster.Name), TestTimeoutMedium).
+		Should(WithTransform(StatusCondition(rayv1.RayClusterSuspended), MatchCondition(metav1.ConditionTrue, string(rayv1.RayClusterSuspended))))
+
+	// Verify Workload is deleted after suspend.
+	LogWithTimestamp(test.T(), "Verifying Workload is deleted after suspend")
+	g.Eventually(func() bool {
+		_, err := GetWorkload(test, namespace.Name, rayCluster.Name)
+		return errors.IsNotFound(err)
+	}, TestTimeoutShort).Should(BeTrue())
+
+	// Verify PodGroups are deleted after suspend.
+	LogWithTimestamp(test.T(), "Verifying PodGroups are deleted after suspend")
+	g.Eventually(PodGroups(test, namespace.Name), TestTimeoutShort).Should(BeEmpty())
+
+	// Verify DeletedWorkload and DeletedPodGroup events were emitted.
+	g.Eventually(GetEvents(test, namespace.Name, rayCluster.Name, "DeletedWorkload"), TestTimeoutShort).
+		ShouldNot(BeEmpty())
+	g.Eventually(GetEvents(test, namespace.Name, rayCluster.Name, "DeletedPodGroup"), TestTimeoutShort).
+		ShouldNot(BeEmpty())
+}
+
+func TestNativeScheduling_ResumeRecreatesResources(t *testing.T) {
+	test := With(t)
+	g := NewWithT(t)
+
+	namespace := test.NewTestNamespace()
+
+	rayClusterAC := rayv1ac.RayCluster("resume-rec", namespace.Name).
+		WithAnnotations(map[string]string{"ray.io/native-workload-scheduling": "true"}).
+		WithSpec(NewRayClusterSpec())
+
+	rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
+	g.Expect(err).NotTo(HaveOccurred())
+	LogWithTimestamp(test.T(), "Created RayCluster %s/%s successfully", rayCluster.Namespace, rayCluster.Name)
+
+	// Wait for cluster to become ready.
+	LogWithTimestamp(test.T(), "Waiting for RayCluster %s/%s to become ready", rayCluster.Namespace, rayCluster.Name)
+	g.Eventually(RayCluster(test, namespace.Name, rayCluster.Name), TestTimeoutMedium).
+		Should(WithTransform(RayClusterState, Equal(rayv1.Ready)))
+	g.Eventually(Workloads(test, namespace.Name), TestTimeoutShort).Should(HaveLen(1))
+	g.Eventually(PodGroups(test, namespace.Name), TestTimeoutShort).Should(HaveLen(2))
+
+	// Capture the original Workload UID to verify it changes after resume.
+	workload, err := GetWorkload(test, namespace.Name, rayCluster.Name)
+	g.Expect(err).NotTo(HaveOccurred())
+	originalWorkloadUID := workload.UID
+
+	// Suspend the cluster.
+	LogWithTimestamp(test.T(), "Suspending RayCluster %s/%s", rayCluster.Namespace, rayCluster.Name)
+	rayClusterAC = rayClusterAC.WithSpec(rayClusterAC.Spec.WithSuspend(true))
+	_, err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
+	g.Expect(err).NotTo(HaveOccurred())
+
+	// Wait for suspend to complete and resources to be deleted.
+	g.Eventually(RayCluster(test, namespace.Name, rayCluster.Name), TestTimeoutMedium).
+		Should(WithTransform(StatusCondition(rayv1.RayClusterSuspended), MatchCondition(metav1.ConditionTrue, string(rayv1.RayClusterSuspended))))
+	g.Eventually(func() bool {
+		_, err := GetWorkload(test, namespace.Name, rayCluster.Name)
+		return errors.IsNotFound(err)
+	}, TestTimeoutShort).Should(BeTrue())
+	g.Eventually(PodGroups(test, namespace.Name), TestTimeoutShort).Should(BeEmpty())
+
+	// Resume the cluster.
+	LogWithTimestamp(test.T(), "Resuming RayCluster %s/%s", rayCluster.Namespace, rayCluster.Name)
+	rayClusterAC = rayClusterAC.WithSpec(rayClusterAC.Spec.WithSuspend(false))
+	_, err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
+	g.Expect(err).NotTo(HaveOccurred())
+
+	// Wait for cluster to become ready again.
+	LogWithTimestamp(test.T(), "Waiting for RayCluster %s/%s to become ready after resume", rayCluster.Namespace, rayCluster.Name)
+	g.Eventually(RayCluster(test, namespace.Name, rayCluster.Name), TestTimeoutMedium).
+		Should(WithTransform(RayClusterState, Equal(rayv1.Ready)))
+
+	// Verify Workload is recreated with correct spec and a new UID (proving it was deleted and recreated).
+	LogWithTimestamp(test.T(), "Verifying Workload is recreated after resume")
+	g.Eventually(func(inner Gomega) {
+		w, err := GetWorkload(test, namespace.Name, rayCluster.Name)
+		inner.Expect(err).NotTo(HaveOccurred())
+		inner.Expect(w.UID).NotTo(Equal(originalWorkloadUID), "Workload should have a new UID after resume")
+		inner.Expect(w.Spec.PodGroupTemplates).To(HaveLen(2))
+		inner.Expect(w.Spec.PodGroupTemplates[0].Name).To(Equal("head"))
+		inner.Expect(w.Spec.PodGroupTemplates[1].Name).To(Equal("worker-small-group"))
+		inner.Expect(w.Spec.PodGroupTemplates[1].SchedulingPolicy.Gang).NotTo(BeNil())
+		inner.Expect(w.Spec.PodGroupTemplates[1].SchedulingPolicy.Gang.MinCount).To(Equal(int32(1)))
+	}, TestTimeoutShort).Should(Succeed())
+
+	// Verify PodGroups are recreated.
+	g.Eventually(PodGroups(test, namespace.Name), TestTimeoutShort).Should(HaveLen(2))
+
+	_, err = GetPodGroup(test, namespace.Name, rayCluster.Name+"-head")
+	g.Expect(err).NotTo(HaveOccurred())
+	_, err = GetPodGroup(test, namespace.Name, rayCluster.Name+"-worker-small-group")
+	g.Expect(err).NotTo(HaveOccurred())
+
+	// Verify new pods get schedulingGroup set.
+	headPod, err := GetHeadPod(test, rayCluster)
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(headPod.Spec.SchedulingGroup).NotTo(BeNil())
+	g.Expect(headPod.Spec.SchedulingGroup.PodGroupName).NotTo(BeNil())
+	g.Expect(*headPod.Spec.SchedulingGroup.PodGroupName).To(Equal(rayCluster.Name + "-head"))
+
+	workerPods, err := GetWorkerPods(test, rayCluster)
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(workerPods).NotTo(BeEmpty())
+	for _, pod := range workerPods {
+		g.Expect(pod.Spec.SchedulingGroup).NotTo(BeNil())
+		g.Expect(pod.Spec.SchedulingGroup.PodGroupName).NotTo(BeNil())
+		g.Expect(*pod.Spec.SchedulingGroup.PodGroupName).To(Equal(rayCluster.Name + "-worker-small-group"))
+	}
+}
+
+func TestNativeScheduling_ScaleUpRecreatesWorkload(t *testing.T) {
+	test := With(t)
+	g := NewWithT(t)
+
+	namespace := test.NewTestNamespace()
+
+	rayClusterAC := rayv1ac.RayCluster("scale-up", namespace.Name).
+		WithAnnotations(map[string]string{"ray.io/native-workload-scheduling": "true"}).
+		WithSpec(NewRayClusterSpec())
+
+	rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
+	g.Expect(err).NotTo(HaveOccurred())
+	LogWithTimestamp(test.T(), "Created RayCluster %s/%s successfully", rayCluster.Namespace, rayCluster.Name)
+
+	// Wait for cluster to become ready.
+	LogWithTimestamp(test.T(), "Waiting for RayCluster %s/%s to become ready", rayCluster.Namespace, rayCluster.Name)
+	g.Eventually(RayCluster(test, namespace.Name, rayCluster.Name), TestTimeoutMedium).
+		Should(WithTransform(RayClusterState, Equal(rayv1.Ready)))
+
+	// Record the original Workload UID.
+	workload, err := GetWorkload(test, namespace.Name, rayCluster.Name)
+	g.Expect(err).NotTo(HaveOccurred())
+	originalUID := workload.UID
+	g.Expect(workload.Spec.PodGroupTemplates).To(HaveLen(2))
+	g.Expect(workload.Spec.PodGroupTemplates[1].SchedulingPolicy.Gang).NotTo(BeNil())
+	g.Expect(workload.Spec.PodGroupTemplates[1].SchedulingPolicy.Gang.MinCount).To(Equal(int32(1)))
+
+	// Scale up workers from 1 to 3.
+	LogWithTimestamp(test.T(), "Scaling up worker replicas from 1 to 3")
+	rayClusterAC.Spec.WorkerGroupSpecs[0].WithReplicas(3).WithMinReplicas(3).WithMaxReplicas(3)
+	rayCluster, err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
+	g.Expect(err).NotTo(HaveOccurred())
+
+	// Wait for the cluster to become ready with new replicas.
+	LogWithTimestamp(test.T(), "Waiting for RayCluster %s/%s to become ready after scale-up", rayCluster.Namespace, rayCluster.Name)
+	g.Eventually(func(inner Gomega) {
+		rc, err := GetRayCluster(test, namespace.Name, rayCluster.Name)
+		inner.Expect(err).NotTo(HaveOccurred())
+		inner.Expect(RayClusterState(rc)).To(Equal(rayv1.Ready))
+		inner.Expect(RayClusterDesiredWorkerReplicas(rc)).To(Equal(int32(3)))
+	}, TestTimeoutMedium).Should(Succeed())
+
+	// Verify the Workload was recreated (different UID) with updated minCount.
+	// Both checks are in a single Eventually to avoid a race where the UID passes
+	// but the spec is read from a stale object.
+	LogWithTimestamp(test.T(), "Verifying Workload was recreated with updated minCount")
+	g.Eventually(func(inner Gomega) {
+		w, err := GetWorkload(test, namespace.Name, rayCluster.Name)
+		inner.Expect(err).NotTo(HaveOccurred())
+		inner.Expect(w.UID).NotTo(Equal(originalUID), "Workload should have been recreated with a new UID")
+		inner.Expect(w.Spec.PodGroupTemplates).To(HaveLen(2))
+		inner.Expect(w.Spec.PodGroupTemplates[1].Name).To(Equal("worker-small-group"))
+		inner.Expect(w.Spec.PodGroupTemplates[1].SchedulingPolicy.Gang).NotTo(BeNil())
+		inner.Expect(w.Spec.PodGroupTemplates[1].SchedulingPolicy.Gang.MinCount).To(Equal(int32(3)))
+	}, TestTimeoutShort).Should(Succeed())
+
+	// Verify PodGroups are recreated with updated minCount.
+	// PodGroups may be delayed by scheduler finalizer removal during the delete-then-create flow,
+	// so we use Eventually to wait for the reconciler to successfully recreate them.
+	LogWithTimestamp(test.T(), "Waiting for worker PodGroup to be recreated with updated minCount")
+	g.Eventually(func() int32 {
+		pg, err := GetPodGroup(test, namespace.Name, rayCluster.Name+"-worker-small-group")
+		if err != nil || pg.DeletionTimestamp != nil {
+			return -1
+		}
+		if pg.Spec.SchedulingPolicy.Gang == nil {
+			return -1
+		}
+		return pg.Spec.SchedulingPolicy.Gang.MinCount
+	}, TestTimeoutShort).Should(Equal(int32(3)))
+}
+
+func TestNativeScheduling_ScaleDownRecreatesWorkload(t *testing.T) {
+	test := With(t)
+	g := NewWithT(t)
+
+	namespace := test.NewTestNamespace()
+
+	// Start with 3 replicas so we can scale down.
+	rayClusterAC := rayv1ac.RayCluster("scale-down", namespace.Name).
+		WithAnnotations(map[string]string{"ray.io/native-workload-scheduling": "true"}).
+		WithSpec(rayv1ac.RayClusterSpec().
+			WithRayVersion(GetRayVersion()).
+			WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
+				WithRayStartParams(map[string]string{"dashboard-host": "0.0.0.0"}).
+				WithTemplate(HeadPodTemplateApplyConfiguration())).
+			WithWorkerGroupSpecs(rayv1ac.WorkerGroupSpec().
+				WithReplicas(3).
+				WithMinReplicas(3).
+				WithMaxReplicas(3).
+				WithGroupName("small-group").
+				WithRayStartParams(map[string]string{"num-cpus": "1"}).
+				WithTemplate(WorkerPodTemplateApplyConfiguration())))
+
+	rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
+	g.Expect(err).NotTo(HaveOccurred())
+	LogWithTimestamp(test.T(), "Created RayCluster %s/%s with 3 replicas", rayCluster.Namespace, rayCluster.Name)
+
+	// Wait for cluster to become ready.
+	LogWithTimestamp(test.T(), "Waiting for RayCluster %s/%s to become ready", rayCluster.Namespace, rayCluster.Name)
+	g.Eventually(RayCluster(test, namespace.Name, rayCluster.Name), TestTimeoutMedium).
+		Should(WithTransform(RayClusterState, Equal(rayv1.Ready)))
+
+	// Record the original Workload UID and verify minCount=3.
+	workload, err := GetWorkload(test, namespace.Name, rayCluster.Name)
+	g.Expect(err).NotTo(HaveOccurred())
+	originalUID := workload.UID
+	g.Expect(workload.Spec.PodGroupTemplates).To(HaveLen(2))
+	g.Expect(workload.Spec.PodGroupTemplates[1].SchedulingPolicy.Gang).NotTo(BeNil())
+	g.Expect(workload.Spec.PodGroupTemplates[1].SchedulingPolicy.Gang.MinCount).To(Equal(int32(3)))
+
+	// Scale down workers from 3 to 1.
+	LogWithTimestamp(test.T(), "Scaling down worker replicas from 3 to 1")
+	rayClusterAC.Spec.WorkerGroupSpecs[0].WithReplicas(1).WithMinReplicas(1).WithMaxReplicas(1)
+	rayCluster, err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
+	g.Expect(err).NotTo(HaveOccurred())
+
+	// Wait for the cluster to become ready with new replicas.
+	LogWithTimestamp(test.T(), "Waiting for RayCluster %s/%s to become ready after scale-down", rayCluster.Namespace, rayCluster.Name)
+	g.Eventually(func(inner Gomega) {
+		rc, err := GetRayCluster(test, namespace.Name, rayCluster.Name)
+		inner.Expect(err).NotTo(HaveOccurred())
+		inner.Expect(RayClusterState(rc)).To(Equal(rayv1.Ready))
+		inner.Expect(RayClusterDesiredWorkerReplicas(rc)).To(Equal(int32(1)))
+	}, TestTimeoutMedium).Should(Succeed())
+
+	// Verify the Workload was recreated (different UID) with updated minCount=1.
+	LogWithTimestamp(test.T(), "Verifying Workload was recreated with updated minCount")
+	g.Eventually(func(inner Gomega) {
+		w, err := GetWorkload(test, namespace.Name, rayCluster.Name)
+		inner.Expect(err).NotTo(HaveOccurred())
+		inner.Expect(w.UID).NotTo(Equal(originalUID), "Workload should have a new UID after scale-down")
+		inner.Expect(w.Spec.PodGroupTemplates).To(HaveLen(2))
+		inner.Expect(w.Spec.PodGroupTemplates[1].Name).To(Equal("worker-small-group"))
+		inner.Expect(w.Spec.PodGroupTemplates[1].SchedulingPolicy.Gang).NotTo(BeNil())
+		inner.Expect(w.Spec.PodGroupTemplates[1].SchedulingPolicy.Gang.MinCount).To(Equal(int32(1)))
+	}, TestTimeoutShort).Should(Succeed())
+
+	// Verify worker PodGroup is recreated with updated minCount.
+	LogWithTimestamp(test.T(), "Waiting for worker PodGroup to be recreated with updated minCount")
+	g.Eventually(func() int32 {
+		pg, err := GetPodGroup(test, namespace.Name, rayCluster.Name+"-worker-small-group")
+		if err != nil || pg.DeletionTimestamp != nil {
+			return -1
+		}
+		if pg.Spec.SchedulingPolicy.Gang == nil {
+			return -1
+		}
+		return pg.Spec.SchedulingPolicy.Gang.MinCount
+	}, TestTimeoutShort).Should(Equal(int32(1)))
+}
+
+func TestNativeScheduling_AddWorkerGroupRecreatesWorkload(t *testing.T) {
+	test := With(t)
+	g := NewWithT(t)
+
+	namespace := test.NewTestNamespace()
+
+	rayClusterAC := rayv1ac.RayCluster("add-wg", namespace.Name).
+		WithAnnotations(map[string]string{"ray.io/native-workload-scheduling": "true"}).
+		WithSpec(NewRayClusterSpec())
+
+	rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
+	g.Expect(err).NotTo(HaveOccurred())
+	LogWithTimestamp(test.T(), "Created RayCluster %s/%s with 1 worker group", rayCluster.Namespace, rayCluster.Name)
+
+	// Wait for cluster to become ready.
+	LogWithTimestamp(test.T(), "Waiting for RayCluster %s/%s to become ready", rayCluster.Namespace, rayCluster.Name)
+	g.Eventually(RayCluster(test, namespace.Name, rayCluster.Name), TestTimeoutMedium).
+		Should(WithTransform(RayClusterState, Equal(rayv1.Ready)))
+
+	// Record the original Workload UID and verify 2 PodGroupTemplates (head + 1 worker group).
+	workload, err := GetWorkload(test, namespace.Name, rayCluster.Name)
+	g.Expect(err).NotTo(HaveOccurred())
+	originalUID := workload.UID
+	g.Expect(workload.Spec.PodGroupTemplates).To(HaveLen(2))
+
+	// Add a second worker group.
+	LogWithTimestamp(test.T(), "Adding second worker group 'gpu-group' to RayCluster")
+	rayClusterAC.Spec.WithWorkerGroupSpecs(rayv1ac.WorkerGroupSpec().
+		WithReplicas(2).
+		WithMinReplicas(2).
+		WithMaxReplicas(2).
+		WithGroupName("gpu-group").
+		WithRayStartParams(map[string]string{"num-cpus": "1"}).
+		WithTemplate(WorkerPodTemplateApplyConfiguration()))
+	rayCluster, err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
+	g.Expect(err).NotTo(HaveOccurred())
+
+	// Wait for the cluster to become ready with the new worker group.
+	LogWithTimestamp(test.T(), "Waiting for RayCluster %s/%s to become ready after adding worker group", rayCluster.Namespace, rayCluster.Name)
+	g.Eventually(RayCluster(test, namespace.Name, rayCluster.Name), TestTimeoutMedium).
+		Should(WithTransform(RayClusterState, Equal(rayv1.Ready)))
+
+	// Verify the Workload was recreated with 3 PodGroupTemplates (head + 2 worker groups).
+	LogWithTimestamp(test.T(), "Verifying Workload was recreated with 3 PodGroupTemplates")
+	g.Eventually(func(inner Gomega) {
+		w, err := GetWorkload(test, namespace.Name, rayCluster.Name)
+		inner.Expect(err).NotTo(HaveOccurred())
+		inner.Expect(w.UID).NotTo(Equal(originalUID), "Workload should have a new UID after adding worker group")
+		inner.Expect(w.Spec.PodGroupTemplates).To(HaveLen(3))
+		inner.Expect(w.Spec.PodGroupTemplates[0].Name).To(Equal("head"))
+		inner.Expect(w.Spec.PodGroupTemplates[1].Name).To(Equal("worker-small-group"))
+		inner.Expect(w.Spec.PodGroupTemplates[2].Name).To(Equal("worker-gpu-group"))
+		inner.Expect(w.Spec.PodGroupTemplates[2].SchedulingPolicy.Gang).NotTo(BeNil())
+		inner.Expect(w.Spec.PodGroupTemplates[2].SchedulingPolicy.Gang.MinCount).To(Equal(int32(2)))
+	}, TestTimeoutShort).Should(Succeed())
+
+	// Verify 3 PodGroups exist (head + 2 worker groups).
+	g.Eventually(PodGroups(test, namespace.Name), TestTimeoutShort).Should(HaveLen(3))
+
+	_, err = GetPodGroup(test, namespace.Name, rayCluster.Name+"-head")
+	g.Expect(err).NotTo(HaveOccurred())
+	_, err = GetPodGroup(test, namespace.Name, rayCluster.Name+"-worker-small-group")
+	g.Expect(err).NotTo(HaveOccurred())
+	_, err = GetPodGroup(test, namespace.Name, rayCluster.Name+"-worker-gpu-group")
+	g.Expect(err).NotTo(HaveOccurred())
+}
