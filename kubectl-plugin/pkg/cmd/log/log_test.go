@@ -20,15 +20,15 @@ import (
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/cli-runtime/pkg/genericiooptions"
 	"k8s.io/cli-runtime/pkg/resource"
+	k8s_fake "k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/rest/fake"
-	"k8s.io/client-go/tools/remotecommand"
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
+	"k8s.io/client-go/tools/remotecommand"
 	cmdtesting "k8s.io/kubectl/pkg/cmd/testing"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubectl/pkg/scheme"
-	k8s_fake "k8s.io/client-go/kubernetes/fake"
 
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client"
@@ -570,9 +570,9 @@ func TestGCPLogLink(t *testing.T) {
 			expectedWarning: "Warning: The head pod does not have a 'fluentbit' container. Logs might not be exported to Google Cloud Logging.",
 		},
 		{
-			name:           "Non-GKE context",
-			currentContext: "minikube",
-			headPods:       &v1.PodList{},
+			name:            "Non-GKE context",
+			currentContext:  "minikube",
+			headPods:        &v1.PodList{},
 			expectedGCPURL:  "https://console.cloud.google.com/logs/query;query=resource.type%3D%22k8s_container%22%0Aresource.labels.namespace_name%3D%22default%22%0Alabels.%22k8s-pod%2Fray_io%2Fcluster%22%3D%22test-cluster%22%0Alabels.%22k8s-pod%2Fray_io%2Fis-ray-node%22%3D%22yes%22",
 			expectedWarning: "Warning: The current kubectl context does not appear to be a GKE cluster. The generated link may not work.",
 		},
