@@ -266,10 +266,17 @@ func main() {
 	exitOnError(err, "unable to create batch scheduler manager")
 	batchSchedulerManager.AddToScheme(mgr.GetScheme())
 
+	// TODO: Remove isOpenShift and related reconciler options once Gateway API support is mature
+	// and Route-based dashboard access is no longer needed.
+	// See: https://github.com/ray-project/kuberay/pull/4365#issuecomment-4143407845
+	isOpenShift, err := utils.IsOpenShiftCluster(restConfig)
+	exitOnError(err, "unable to detect cluster type (OpenShift vs Kubernetes)")
+
 	rayClusterOptions := ray.RayClusterReconcilerOptions{
 		HeadSidecarContainers:    config.HeadSidecarContainers,
 		WorkerSidecarContainers:  config.WorkerSidecarContainers,
-		IsOpenShift:              utils.GetClusterType(),
+		IsOpenShift:              isOpenShift,
+		UseIngressOnOpenShift:    utils.ShouldUseIngressOnOpenShift(),
 		RayClusterMetricsManager: rayClusterMetricsManager,
 		BatchSchedulerManager:    batchSchedulerManager,
 		DefaultContainerEnvs:     config.DefaultContainerEnvs,
