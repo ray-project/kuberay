@@ -193,13 +193,15 @@ func (r *RayLogsHandler) GetContent(clusterId string, fileName string) io.Reader
 		allFiles := r._listFiles(clusterId+"/"+path.Dir(fileName), "", false)
 		found := false
 		for _, f := range allFiles {
-			if path.Base(f) == fileName {
+			if path.Base(f) == path.Base(fileName) {
 				logrus.Infof("Get object %s info success", f)
 				body, err = r.OssBucket.GetObject(f, options...)
 				if err != nil {
 					logrus.Errorf("Failed to get object %s: %v", f, err)
 					return nil
 				}
+				found = true
+				break
 			}
 		}
 		if !found {
