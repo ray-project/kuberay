@@ -34,9 +34,6 @@ spec:
           imagePullPolicy: IfNotPresent
           command:
           - 'echo "=========================================="; [ -d "/tmp/ray/session_latest" ] && dest="/tmp/ray/prev-logs/$(basename $(readlink /tmp/ray/session_latest))/$(cat /tmp/ray/raylet_node_id)" && echo "dst is $dest" && mkdir -p "$dest" && mv /tmp/ray/session_latest/logs "$dest/logs"; echo "========================================="'
-          securityContext:
-            allowPrivilegeEscalation: true
-            privileged: true
           name: ray-head
           lifecycle:
             postStart:
@@ -121,9 +118,6 @@ spec:
           - 'echo "=========================================="; [ -d "/tmp/ray/session_latest" ] && dest="/tmp/ray/prev-logs/$(basename $(readlink /tmp/ray/session_latest))/$(cat /tmp/ray/raylet_node_id)" && echo "dst is $dest" && mkdir -p "$dest" && mv /tmp/ray/session_latest/logs "$dest/logs"; echo "========================================="'
           imagePullPolicy: IfNotPresent
           name: ray-worker
-          securityContext:
-            allowPrivilegeEscalation: true
-            privileged: true
           lifecycle:
             postStart:
               exec:

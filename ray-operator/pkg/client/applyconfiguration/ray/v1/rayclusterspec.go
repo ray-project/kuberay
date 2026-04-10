@@ -24,8 +24,13 @@ type RayClusterSpecApplyConfiguration struct {
 	// The field is immutable.
 	ManagedBy *string `json:"managedBy,omitempty"`
 	// AutoscalerOptions specifies optional configuration for the Ray autoscaler.
-	AutoscalerOptions      *AutoscalerOptionsApplyConfiguration `json:"autoscalerOptions,omitempty"`
-	HeadServiceAnnotations map[string]string                    `json:"headServiceAnnotations,omitempty"`
+	AutoscalerOptions *AutoscalerOptionsApplyConfiguration `json:"autoscalerOptions,omitempty"`
+	// HistoryServerCollector specifies optional configuration for the History Server
+	// Collector sidecar. When enabled, the operator automatically injects the Collector
+	// container, the shared /tmp/ray volume, the node ID extraction postStart hook, and
+	// the required Ray event export environment variables into every Ray pod.
+	HistoryServerCollector *HistoryServerCollectorOptionsApplyConfiguration `json:"historyServerCollector,omitempty"`
+	HeadServiceAnnotations map[string]string                                `json:"headServiceAnnotations,omitempty"`
 	// EnableInTreeAutoscaling indicates whether operator should create in tree autoscaling configs
 	EnableInTreeAutoscaling *bool `json:"enableInTreeAutoscaling,omitempty"`
 	// GcsFaultToleranceOptions for enabling GCS FT
@@ -81,6 +86,14 @@ func (b *RayClusterSpecApplyConfiguration) WithManagedBy(value string) *RayClust
 // If called multiple times, the AutoscalerOptions field is set to the value of the last call.
 func (b *RayClusterSpecApplyConfiguration) WithAutoscalerOptions(value *AutoscalerOptionsApplyConfiguration) *RayClusterSpecApplyConfiguration {
 	b.AutoscalerOptions = value
+	return b
+}
+
+// WithHistoryServerCollector sets the HistoryServerCollector field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the HistoryServerCollector field is set to the value of the last call.
+func (b *RayClusterSpecApplyConfiguration) WithHistoryServerCollector(value *HistoryServerCollectorOptionsApplyConfiguration) *RayClusterSpecApplyConfiguration {
+	b.HistoryServerCollector = value
 	return b
 }
 

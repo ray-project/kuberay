@@ -34,6 +34,12 @@ type RayClusterSpec struct {
 	// AutoscalerOptions specifies optional configuration for the Ray autoscaler.
 	// +optional
 	AutoscalerOptions *AutoscalerOptions `json:"autoscalerOptions,omitempty"`
+	// HistoryServerCollector specifies optional configuration for the History Server
+	// Collector sidecar. When enabled, the operator automatically injects the Collector
+	// container, the shared /tmp/ray volume, the node ID extraction postStart hook, and
+	// the required Ray event export environment variables into every Ray pod.
+	// +optional
+	HistoryServerCollector *HistoryServerCollectorOptions `json:"historyServerCollector,omitempty"`
 	// +optional
 	HeadServiceAnnotations map[string]string `json:"headServiceAnnotations,omitempty"`
 	// EnableInTreeAutoscaling indicates whether operator should create in tree autoscaling configs
@@ -250,6 +256,36 @@ type AutoscalerOptions struct {
 	// Optional list of volumeMounts.  This is needed for enabling TLS for the autoscaler container.
 	// +optional
 	VolumeMounts []corev1.VolumeMount `json:"volumeMounts,omitempty"`
+}
+
+// HistoryServerCollectorOptions specifies optional configuration for the
+// History Server Collector sidecar that ships Ray logs and events to an
+// external storage backend (S3, GCS, Azure Blob, etc.).
+//
+// Credentials and storage-specific configuration should be passed via EnvFrom
+// referencing a Secret or ConfigMap, so sensitive values never appear in the
+// RayCluster spec itself.
+type HistoryServerCollectorOptions struct {
+	// Image optionally overrides the Collector container image.
+	// +optional
+	Image *string `json:"image,omitempty"`
+	// ImagePullPolicy optionally overrides the Collector container's image pull policy.
+	// +optional
+	ImagePullPolicy *corev1.PullPolicy `json:"imagePullPolicy,omitempty"`
+	// RuntimeClassName selects the storage backend implementation
+	// (e.g. "s3", "gcs", "azureblob"). Defaults to "s3".
+	// +optional
+	RuntimeClassName *string `json:"runtimeClassName,omitempty"`
+	// Resources specifies optional resource request and limit overrides for the Collector container.
+	// +optional
+	Resources *corev1.ResourceRequirements `json:"resources,omitempty"`
+	// Env is an optional list of environment variables to set in the Collector container.
+	// +optional
+	Env []corev1.EnvVar `json:"env,omitempty"`
+	// EnvFrom is an optional list of sources to populate environment variables in the Collector container.
+	// This is the recommended place to supply storage credentials via a Secret reference.
+	// +optional
+	EnvFrom []corev1.EnvFromSource `json:"envFrom,omitempty"`
 }
 
 // +kubebuilder:validation:Enum=Default;Aggressive;Conservative

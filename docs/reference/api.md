@@ -264,6 +264,33 @@ _Appears in:_
 | `serviceType` _[ServiceType](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#servicetype-v1-core)_ | ServiceType is Kubernetes service type of the head service. it will be used by the workers to connect to the head pod |  |  |
 
 
+#### HistoryServerCollectorOptions
+
+
+
+HistoryServerCollectorOptions specifies optional configuration for the
+History Server Collector sidecar that ships Ray logs and events to an
+external storage backend (S3, GCS, Azure Blob, etc.).
+
+Credentials and storage-specific configuration should be passed via EnvFrom
+referencing a Secret or ConfigMap, so sensitive values never appear in the
+RayCluster spec itself.
+
+
+
+_Appears in:_
+- [RayClusterSpec](#rayclusterspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `image` _string_ | Image optionally overrides the Collector container image. |  |  |
+| `imagePullPolicy` _[PullPolicy](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#pullpolicy-v1-core)_ | ImagePullPolicy optionally overrides the Collector container's image pull policy. |  |  |
+| `runtimeClassName` _string_ | RuntimeClassName selects the storage backend implementation<br />(e.g. "s3", "gcs", "azureblob"). Defaults to "s3". |  |  |
+| `resources` _[ResourceRequirements](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#resourcerequirements-v1-core)_ | Resources specifies optional resource request and limit overrides for the Collector container. |  |  |
+| `env` _[EnvVar](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#envvar-v1-core) array_ | Env is an optional list of environment variables to set in the Collector container. |  |  |
+| `envFrom` _[EnvFromSource](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#envfromsource-v1-core) array_ | EnvFrom is an optional list of sources to populate environment variables in the Collector container.<br />This is the recommended place to supply storage credentials via a Secret reference. |  |  |
+
+
 
 
 #### JobSubmissionMode
@@ -325,6 +352,7 @@ _Appears in:_
 | `suspend` _boolean_ | Suspend indicates whether a RayCluster should be suspended.<br />A suspended RayCluster will have head pods and worker pods deleted. |  |  |
 | `managedBy` _string_ | ManagedBy is an optional configuration for the controller or entity that manages a RayCluster.<br />The value must be either 'ray.io/kuberay-operator' or 'kueue.x-k8s.io/multikueue'.<br />The kuberay-operator reconciles a RayCluster which doesn't have this field at all or<br />the field value is the reserved string 'ray.io/kuberay-operator',<br />but delegates reconciling the RayCluster with 'kueue.x-k8s.io/multikueue' to the Kueue.<br />The field is immutable. |  |  |
 | `autoscalerOptions` _[AutoscalerOptions](#autoscaleroptions)_ | AutoscalerOptions specifies optional configuration for the Ray autoscaler. |  |  |
+| `historyServerCollector` _[HistoryServerCollectorOptions](#historyservercollectoroptions)_ | HistoryServerCollector specifies optional configuration for the History Server<br />Collector sidecar. When enabled, the operator automatically injects the Collector<br />container, the shared /tmp/ray volume, the node ID extraction postStart hook, and<br />the required Ray event export environment variables into every Ray pod. |  |  |
 | `headServiceAnnotations` _object (keys:string, values:string)_ |  |  |  |
 | `enableInTreeAutoscaling` _boolean_ | EnableInTreeAutoscaling indicates whether operator should create in tree autoscaling configs |  |  |
 | `gcsFaultToleranceOptions` _[GcsFaultToleranceOptions](#gcsfaulttoleranceoptions)_ | GcsFaultToleranceOptions for enabling GCS FT |  |  |
