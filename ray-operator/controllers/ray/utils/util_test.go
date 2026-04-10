@@ -1917,6 +1917,171 @@ func TestIsHTTPRouteEqual(t *testing.T) {
 			},
 			expected: false,
 		},
+
+		{
+			name: "Different ParentRefs",
+			existing: &gwv1.HTTPRoute{
+				Spec: gwv1.HTTPRouteSpec{
+					CommonRouteSpec: gwv1.CommonRouteSpec{
+						ParentRefs: []gwv1.ParentReference{
+							{Name: "gateway-old"},
+						},
+					},
+				},
+			},
+			desired: &gwv1.HTTPRoute{
+				Spec: gwv1.HTTPRouteSpec{
+					CommonRouteSpec: gwv1.CommonRouteSpec{
+						ParentRefs: []gwv1.ParentReference{
+							{Name: "gateway-new"},
+						},
+					},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "Different Hostnames",
+			existing: &gwv1.HTTPRoute{
+				Spec: gwv1.HTTPRouteSpec{
+					Hostnames: []gwv1.Hostname{"example.com"},
+				},
+			},
+			desired: &gwv1.HTTPRoute{
+				Spec: gwv1.HTTPRouteSpec{
+					Hostnames: []gwv1.Hostname{"different.com"},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "Different Matches",
+			existing: &gwv1.HTTPRoute{
+				Spec: gwv1.HTTPRouteSpec{
+					Rules: []gwv1.HTTPRouteRule{
+						{
+							Matches: []gwv1.HTTPRouteMatch{
+								{Path: &gwv1.HTTPPathMatch{Value: ptr.To("/api")}},
+							},
+						},
+					},
+				},
+			},
+			desired: &gwv1.HTTPRoute{
+				Spec: gwv1.HTTPRouteSpec{
+					Rules: []gwv1.HTTPRouteRule{
+						{
+							Matches: []gwv1.HTTPRouteMatch{
+								{Path: &gwv1.HTTPPathMatch{Value: ptr.To("/v2")}},
+							},
+						},
+					},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "Different Filters",
+			existing: &gwv1.HTTPRoute{
+				Spec: gwv1.HTTPRouteSpec{
+					Rules: []gwv1.HTTPRouteRule{
+						{
+							Filters: []gwv1.HTTPRouteFilter{
+								{Type: gwv1.HTTPRouteFilterRequestHeaderModifier},
+							},
+						},
+					},
+				},
+			},
+			desired: &gwv1.HTTPRoute{
+				Spec: gwv1.HTTPRouteSpec{
+					Rules: []gwv1.HTTPRouteRule{
+						{
+							Filters: []gwv1.HTTPRouteFilter{
+								{Type: gwv1.HTTPRouteFilterRequestRedirect},
+							},
+						},
+					},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "Filters nil vs empty slice, should be equal for our check.",
+			existing: &gwv1.HTTPRoute{
+				Spec: gwv1.HTTPRouteSpec{
+					Rules: []gwv1.HTTPRouteRule{
+						{
+							// Nil slice
+							Filters: nil,
+						},
+					},
+				},
+			},
+			desired: &gwv1.HTTPRoute{
+				Spec: gwv1.HTTPRouteSpec{
+					Rules: []gwv1.HTTPRouteRule{
+						{
+							Filters: []gwv1.HTTPRouteFilter{},
+						},
+					},
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "Different Backend Namespace",
+			existing: &gwv1.HTTPRoute{
+				Spec: gwv1.HTTPRouteSpec{
+					Rules: []gwv1.HTTPRouteRule{
+						{
+							BackendRefs: []gwv1.HTTPBackendRef{
+								{BackendRef: gwv1.BackendRef{BackendObjectReference: gwv1.BackendObjectReference{Name: "svc-a", Namespace: ptr.To(gwv1.Namespace("default"))}}},
+							},
+						},
+					},
+				},
+			},
+			desired: &gwv1.HTTPRoute{
+				Spec: gwv1.HTTPRouteSpec{
+					Rules: []gwv1.HTTPRouteRule{
+						{
+							BackendRefs: []gwv1.HTTPBackendRef{
+								{BackendRef: gwv1.BackendRef{BackendObjectReference: gwv1.BackendObjectReference{Name: "svc-a", Namespace: ptr.To(gwv1.Namespace("other-ns"))}}},
+							},
+						},
+					},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "Different Backend Port",
+			existing: &gwv1.HTTPRoute{
+				Spec: gwv1.HTTPRouteSpec{
+					Rules: []gwv1.HTTPRouteRule{
+						{
+							BackendRefs: []gwv1.HTTPBackendRef{
+								{BackendRef: gwv1.BackendRef{BackendObjectReference: gwv1.BackendObjectReference{Name: "svc-a", Port: ptr.To(gwv1.PortNumber(8000))}}},
+							},
+						},
+					},
+				},
+			},
+			desired: &gwv1.HTTPRoute{
+				Spec: gwv1.HTTPRouteSpec{
+					Rules: []gwv1.HTTPRouteRule{
+						{
+							BackendRefs: []gwv1.HTTPBackendRef{
+								{BackendRef: gwv1.BackendRef{BackendObjectReference: gwv1.BackendObjectReference{Name: "svc-a", Port: ptr.To(gwv1.PortNumber(9000))}}},
+							},
+						},
+					},
+				},
+			},
+			expected: false,
+		},
+
 	}
 
 	for _, tt := range tests {

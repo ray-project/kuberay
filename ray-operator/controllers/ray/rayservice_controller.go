@@ -446,16 +446,7 @@ func (r *RayServiceReconciler) calculateStatus(
 		activeStatus := &rayServiceInstance.Status.ActiveServiceStatus
 		pendingStatus := &rayServiceInstance.Status.PendingServiceStatus
 
-		// A rollback is complete when the active cluster is back at 100% TargetCapacity and TrafficRoutedPercent,
-		// A rollback is complete when the active cluster is back at 100% TargetCapacity
-		// and TrafficRoutedPercent, and either:
-		// - The pending cluster has been fully scaled down (TargetCapacity and TrafficRoutedPercent are both 0), or
-		// - The pending cluster is unhealthy (head Pod not ready)
-		if ptr.Deref(activeStatus.TargetCapacity, -1) == 100 &&
-			ptr.Deref(activeStatus.TrafficRoutedPercent, -1) == 100 &&
-			ptr.Deref(pendingStatus.TargetCapacity, -1) == 0 &&
-			ptr.Deref(pendingStatus.TrafficRoutedPercent, -1) == 0 {
-
+		if shouldCompleteIncrementalRollback(activeStatus, pendingStatus, pendingCluster) {
 			logger.Info("Rollback to original cluster is complete. Cleaning up pending cluster from prior upgrade.")
 
 			// Clear the RayService pending service status to clean up the pending cluster.
@@ -2023,6 +2014,28 @@ func (r *RayServiceReconciler) reconcilePerClusterServeService(ctx context.Conte
 	}
 
 	return err
+}
+
+func shouldCompleteIncrementalRollback(
+	activeStatus *rayv1.RayServiceStatus,
+	pendingStatus *rayv1.RayServiceStatus,
+	pendingCluster *rayv1.RayCluster,
+) bool {
+	// Check if the pending cluster is healthy enough to receive scale-down API calls.
+	// If the pending cluster is unhealthy and the active cluster has 100% of traffic
+	// routed to it, we should complete the rollback.
+	pendingClusterHealthy := pendingCluster != nil &&
+		meta.IsStatusConditionTrue(pendingCluster.Status.Conditions, string(rayv1.HeadPodReady))
+
+	// A rollback is complete when the active cluster is back at 100% TargetCapacity and TrafficRoutedPercent,
+	// A rollback is complete when the active cluster is back at 100% TargetCapacity
+	// and TrafficRoutedPercent, and either:
+	// - The pending cluster has been fully scaled down (TargetCapacity and TrafficRoutedPercent are both 0), or
+	// - The pending cluster is unhealthy (head Pod not ready)
+	return ptr.Deref(activeStatus.TargetCapacity, -1) == 100 &&
+		ptr.Deref(activeStatus.TrafficRoutedPercent, -1) == 100 &&
+		(!pendingClusterHealthy || (ptr.Deref(pendingStatus.TargetCapacity, -1) == 0 &&
+			ptr.Deref(pendingStatus.TrafficRoutedPercent, -1) == 0))
 }
 
 // reconcileRollbackState determines whether to initiate a rollback by setting the RollbackInProgress condition.
