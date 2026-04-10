@@ -1395,7 +1395,7 @@ func (r *RayClusterReconciler) buildHeadPod(ctx context.Context, instance rayv1.
 	creatorCRDType := getCreatorCRDType(instance)
 	pod := common.BuildPod(ctx, podConf, rayv1.HeadNode, instance.Spec.HeadGroupSpec.RayStartParams, headPort, autoscalingEnabled, creatorCRDType, fqdnRayIP, r.options.DefaultContainerEnvs, instance.Spec.RayVersion)
 	// Inject History Server Collector sidecar when configured on the RayCluster spec.
-	common.InjectHistoryServerCollector(ctx, instance.Spec.HistoryServerCollector, &pod)
+	common.InjectHistoryServerCollector(ctx, instance.Spec.HistoryServerCollector, &pod, rayv1.HeadNode, instance.Name, instance.Namespace)
 	// Set raycluster instance as the owner and controller
 	if err := controllerutil.SetControllerReference(&instance, &pod, r.Scheme); err != nil {
 		logger.Error(err, "Failed to set controller reference for raycluster pod")
@@ -1424,7 +1424,7 @@ func (r *RayClusterReconciler) buildWorkerPod(ctx context.Context, instance rayv
 	creatorCRDType := getCreatorCRDType(instance)
 	pod := common.BuildPod(ctx, podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, headPort, autoscalingEnabled, creatorCRDType, fqdnRayIP, r.options.DefaultContainerEnvs, instance.Spec.RayVersion)
 	// Inject History Server Collector sidecar when configured on the RayCluster spec.
-	common.InjectHistoryServerCollector(ctx, instance.Spec.HistoryServerCollector, &pod)
+	common.InjectHistoryServerCollector(ctx, instance.Spec.HistoryServerCollector, &pod, rayv1.WorkerNode, instance.Name, instance.Namespace)
 	// Set raycluster instance as the owner and controller
 	if err := controllerutil.SetControllerReference(&instance, &pod, r.Scheme); err != nil {
 		logger.Error(err, "Failed to set controller reference for raycluster pod")

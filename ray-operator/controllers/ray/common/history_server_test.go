@@ -37,7 +37,7 @@ func makeTestPod() corev1.Pod {
 func TestInjectHistoryServerCollector_Disabled(t *testing.T) {
 	pod := makeTestPod()
 
-	InjectHistoryServerCollector(context.Background(), nil, &pod)
+	InjectHistoryServerCollector(context.Background(), nil, &pod, rayv1.HeadNode, "test-cluster", "default")
 
 	assert.Len(t, pod.Spec.Containers, 1, "should not inject when options is nil")
 }
@@ -46,7 +46,7 @@ func TestInjectHistoryServerCollector_Enabled(t *testing.T) {
 	pod := makeTestPod()
 	opts := &rayv1.HistoryServerCollectorOptions{}
 
-	InjectHistoryServerCollector(context.Background(), opts, &pod)
+	InjectHistoryServerCollector(context.Background(), opts, &pod, rayv1.HeadNode, "test-cluster", "default")
 
 	// Should have 2 containers: ray-head + collector
 	assert.Len(t, pod.Spec.Containers, 2)
@@ -96,7 +96,7 @@ func TestInjectHistoryServerCollector_ReusesExistingVolumeAtTmpRay(t *testing.T)
 		{Name: RayLogVolumeName, MountPath: RayLogVolumeMountPath},
 	}
 
-	InjectHistoryServerCollector(context.Background(), &rayv1.HistoryServerCollectorOptions{}, &pod)
+	InjectHistoryServerCollector(context.Background(), &rayv1.HistoryServerCollectorOptions{}, &pod, rayv1.HeadNode, "test-cluster", "default")
 
 	// There should be exactly one volume named ray-logs; addEmptyDir must
 	// have skipped adding a second one.
@@ -129,7 +129,7 @@ func TestInjectHistoryServerCollector_ReusesCustomVolumeName(t *testing.T) {
 		{Name: customName, MountPath: RayLogVolumeMountPath},
 	}
 
-	InjectHistoryServerCollector(context.Background(), &rayv1.HistoryServerCollectorOptions{}, &pod)
+	InjectHistoryServerCollector(context.Background(), &rayv1.HistoryServerCollectorOptions{}, &pod, rayv1.HeadNode, "test-cluster", "default")
 
 	collector := pod.Spec.Containers[1]
 	assert.Equal(t, customName, collector.VolumeMounts[0].Name,
@@ -142,7 +142,7 @@ func TestInjectHistoryServerCollector_CustomImage(t *testing.T) {
 		Image: ptr.To("my-registry/collector:v1.0"),
 	}
 
-	InjectHistoryServerCollector(context.Background(), opts, &pod)
+	InjectHistoryServerCollector(context.Background(), opts, &pod, rayv1.HeadNode, "test-cluster", "default")
 
 	assert.Len(t, pod.Spec.Containers, 2)
 	assert.Equal(t, "my-registry/collector:v1.0", pod.Spec.Containers[1].Image)
@@ -154,7 +154,7 @@ func TestInjectHistoryServerCollector_CustomRuntimeClass(t *testing.T) {
 		RuntimeClassName: ptr.To("gcs"),
 	}
 
-	InjectHistoryServerCollector(context.Background(), opts, &pod)
+	InjectHistoryServerCollector(context.Background(), opts, &pod, rayv1.HeadNode, "test-cluster", "default")
 
 	collector := pod.Spec.Containers[1]
 	foundRuntimeClass := false
@@ -178,7 +178,7 @@ func TestInjectHistoryServerCollector_EnvFromSecret(t *testing.T) {
 		},
 	}
 
-	InjectHistoryServerCollector(context.Background(), opts, &pod)
+	InjectHistoryServerCollector(context.Background(), opts, &pod, rayv1.HeadNode, "test-cluster", "default")
 
 	collector := pod.Spec.Containers[1]
 	assert.Len(t, collector.EnvFrom, 1)
@@ -195,7 +195,7 @@ func TestInjectHistoryServerCollector_ExplicitEnv(t *testing.T) {
 		},
 	}
 
-	InjectHistoryServerCollector(context.Background(), opts, &pod)
+	InjectHistoryServerCollector(context.Background(), opts, &pod, rayv1.HeadNode, "test-cluster", "default")
 
 	collector := pod.Spec.Containers[1]
 	envMap := make(map[string]string)
@@ -217,7 +217,7 @@ func TestInjectHistoryServerCollector_CustomResources(t *testing.T) {
 		},
 	}
 
-	InjectHistoryServerCollector(context.Background(), opts, &pod)
+	InjectHistoryServerCollector(context.Background(), opts, &pod, rayv1.HeadNode, "test-cluster", "default")
 
 	collector := pod.Spec.Containers[1]
 	assert.Equal(t, resource.MustParse("500m"), collector.Resources.Requests[corev1.ResourceCPU])
@@ -235,7 +235,7 @@ func TestInjectHistoryServerCollector_PreservesExistingPostStart(t *testing.T) {
 	}
 	opts := &rayv1.HistoryServerCollectorOptions{}
 
-	InjectHistoryServerCollector(context.Background(), opts, &pod)
+	InjectHistoryServerCollector(context.Background(), opts, &pod, rayv1.HeadNode, "test-cluster", "default")
 
 	// Should NOT overwrite existing postStart hook
 	assert.Equal(t, "echo existing-hook", pod.Spec.Containers[0].Lifecycle.PostStart.Exec.Command[2])
@@ -250,7 +250,7 @@ func TestInjectHistoryServerCollector_SkipsExistingEnvVars(t *testing.T) {
 	}
 	opts := &rayv1.HistoryServerCollectorOptions{}
 
-	InjectHistoryServerCollector(context.Background(), opts, &pod)
+	InjectHistoryServerCollector(context.Background(), opts, &pod, rayv1.HeadNode, "test-cluster", "default")
 
 	// Should NOT overwrite existing env var
 	envMap := make(map[string]string)

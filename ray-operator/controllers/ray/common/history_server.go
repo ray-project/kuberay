@@ -15,10 +15,13 @@ const (
 	historyServerCollectorContainerName = "collector"
 	historyServerCollectorDefaultImage  = "kuberay/collector:latest"
 	historyServerDefaultRuntimeClass    = "s3"
+	// Events port for the collector HTTP server. Port 8080 is taken by Ray's
+	// metrics exporter, so we use 8084 (matching the existing manual manifests).
+	historyServerEventsPort = "8084"
 
-	// Event export address used by the Ray dashboard aggregator to push events
-	// to the Collector sidecar running in the same pod.
-	historyServerEventsExportAddr = "http://localhost:8084/v1/events"
+	// Event export address injected into the Ray container. The port must
+	// match historyServerEventsPort above.
+	historyServerEventsExportAddr = "http://localhost:" + historyServerEventsPort + "/v1/events"
 
 	// nodeIDExtractionScript extracts the raylet node ID from /proc and writes
 	// it to the shared volume. It uses awk instead of Perl-regex grep (grep -oP)
@@ -46,7 +49,7 @@ done`
 // on the RayCluster spec.
 //
 // This follows the same pattern as autoscaler sidecar injection in BuildPod().
-func InjectHistoryServerCollector(ctx context.Context, opts *rayv1.HistoryServerCollectorOptions, pod *corev1.Pod) {
+func InjectHistoryServerCollector(ctx context.Context, opts *rayv1.HistoryServerCollectorOptions, pod *corev1.Pod, rayNodeType rayv1.RayNodeType, clusterName, clusterNamespace string) {
 	log := ctrl.LoggerFrom(ctx)
 
 	if opts == nil {
@@ -94,7 +97,11 @@ func InjectHistoryServerCollector(ctx context.Context, opts *rayv1.HistoryServer
 	injectEnvIfMissing(rayContainer, "RAY_DASHBOARD_AGGREGATOR_AGENT_EVENTS_EXPORT_ADDR", historyServerEventsExportAddr)
 
 	// 4. Build and append the Collector sidecar container.
-	pod.Spec.Containers = append(pod.Spec.Containers, buildCollectorContainer(opts, sharedVolumeName))
+	role := "Worker"
+	if rayNodeType == rayv1.HeadNode {
+		role = "Head"
+	}
+	pod.Spec.Containers = append(pod.Spec.Containers, buildCollectorContainer(opts, sharedVolumeName, role, clusterName, clusterNamespace))
 }
 
 // volumeNameAtMountPath returns the name of the volume mounted at the given
@@ -108,7 +115,7 @@ func volumeNameAtMountPath(container *corev1.Container, mountPath string) string
 	return ""
 }
 
-func buildCollectorContainer(opts *rayv1.HistoryServerCollectorOptions, sharedVolumeName string) corev1.Container {
+func buildCollectorContainer(opts *rayv1.HistoryServerCollectorOptions, sharedVolumeName, role, clusterName, clusterNamespace string) corev1.Container {
 	image := historyServerCollectorDefaultImage
 	if opts.Image != nil && *opts.Image != "" {
 		image = *opts.Image
@@ -133,9 +140,14 @@ func buildCollectorContainer(opts *rayv1.HistoryServerCollectorOptions, sharedVo
 		Name:            historyServerCollectorContainerName,
 		Image:           image,
 		ImagePullPolicy: pullPolicy,
+		Command: []string{"collector"},
 		Args: []string{
+			"--role=" + role,
 			"--runtime-class-name=" + runtimeClass,
+			"--ray-cluster-name=" + clusterName,
+			"--ray-cluster-namespace=" + clusterNamespace,
 			"--ray-root-dir=" + RayLogVolumeMountPath,
+			"--events-port=" + historyServerEventsPort,
 		},
 		Env:     opts.Env,
 		EnvFrom: opts.EnvFrom,
