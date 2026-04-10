@@ -456,7 +456,10 @@ func (r *RayServiceReconciler) calculateStatus(
 			meta.IsStatusConditionTrue(pendingCluster.Status.Conditions, string(rayv1.HeadPodReady))
 
 		// A rollback is complete when the active cluster is back at 100% TargetCapacity and TrafficRoutedPercent,
-		// and the pending cluster is at 0% TargetCapacity and TrafficRoutedPercent.
+		// A rollback is complete when the active cluster is back at 100% TargetCapacity
+		// and TrafficRoutedPercent, and either:
+		// - The pending cluster has been fully scaled down (TargetCapacity and TrafficRoutedPercent are both 0), or
+		// - The pending cluster is unhealthy (head Pod not ready)
 		if ptr.Deref(activeStatus.TargetCapacity, -1) == 100 &&
 			ptr.Deref(activeStatus.TrafficRoutedPercent, -1) == 100 &&
 			(!pendingClusterHealthy || (ptr.Deref(pendingStatus.TargetCapacity, -1) == 0 &&
