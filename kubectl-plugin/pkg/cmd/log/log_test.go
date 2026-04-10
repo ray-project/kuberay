@@ -591,7 +591,7 @@ func TestGCPLogLink(t *testing.T) {
 
 			options := NewClusterLogOptions(tf, testStreams)
 			options.namespace = "default"
-			options.printGCPLink = true
+			options.link = "gke"
 
 			fakeKubeClient := k8s_fake.NewSimpleClientset()
 			if tc.headPods != nil {

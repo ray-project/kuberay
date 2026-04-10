@@ -80,7 +80,7 @@ type ClusterLogOptions struct {
 	nodeType     nodeTypeEnum
 	ResourceName string
 	ResourceType util.ResourceType
-	printGCPLink bool
+	link         string
 }
 
 var (
@@ -103,6 +103,9 @@ var (
 
 		# Download all (worker node and head node) the logs from a Ray cluster
 		kubectl ray log my-raycluster --node-type all
+
+		# Print a link to Google Cloud Console to view logs for a Ray cluster
+		kubectl ray log my-raycluster --link gke
 	`)
 
 	// flag to check if output directory is generated and needs to be deleted
@@ -122,7 +125,7 @@ func NewClusterLogCommand(cmdFactory cmdutil.Factory, streams genericclioptions.
 	options := NewClusterLogOptions(cmdFactory, streams)
 
 	cmd := &cobra.Command{
-		Use:          "log (RAYCLUSTER | TYPE/NAME) [--out-dir DIR_PATH] [--node-type all|head|worker]",
+		Use:          "log (RAYCLUSTER | TYPE/NAME) [--out-dir DIR_PATH] [--node-type all|head|worker] [--link gke]",
 		Short:        "Get Ray cluster logs",
 		Long:         logLong,
 		Example:      logExample,
@@ -147,9 +150,12 @@ func NewClusterLogCommand(cmdFactory cmdutil.Factory, streams genericclioptions.
 	}
 	cmd.Flags().StringVar(&options.outputDir, "out-dir", options.outputDir, "directory to save the logs to")
 	cmd.Flags().Var(&options.nodeType, "node-type", "type of Ray node from which to download logs, supports: 'worker', 'head', or 'all'")
-	cmd.Flags().BoolVar(&options.printGCPLink, "gke-link", false, "print a link to Google Cloud Console to view logs")
+	cmd.Flags().StringVar(&options.link, "link", "", "print a link to a cloud console to view logs, supports: 'gke'")
 
 	cobra.CheckErr(cmd.RegisterFlagCompletionFunc("node-type", nodeTypeCompletion))
+	cobra.CheckErr(cmd.RegisterFlagCompletionFunc("link", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return []string{"gke"}, cobra.ShellCompDirectiveNoFileComp
+	}))
 
 	return cmd
 }
@@ -203,9 +209,12 @@ func (options *ClusterLogOptions) Validate() error {
 		return fmt.Errorf("unknown node type `%s`", options.nodeType)
 	}
 
-	if options.printGCPLink {
+	if options.link != "" {
+		if options.link != "gke" {
+			return fmt.Errorf("unsupported link type %q, only %q is supported", options.link, "gke")
+		}
 		if options.outputDir != "" {
-			return fmt.Errorf("--out-dir is incompatible with --gke-link")
+			return fmt.Errorf("--out-dir is incompatible with --link")
 		}
 
 		// No more validation for the output dir is needed if printing a link.
@@ -261,9 +270,9 @@ func (options *ClusterLogOptions) Run(ctx context.Context, factory cmdutil.Facto
 		return fmt.Errorf("unsupported resource type: %s", options.ResourceType)
 	}
 
-	// If GCP Link is requested, break out and generate a link to query for the
+	// If a cloud link is requested, break out and generate a link to query for the
 	// cluster name.
-	if options.printGCPLink {
+	if options.link == "gke" {
 		return options.gcpLink(ctx, clientSet, clusterName)
 	}
 
