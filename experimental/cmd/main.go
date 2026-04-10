@@ -103,6 +103,7 @@ func main() {
 	}
 
 	// Create reverse proxy
+	// #nosec G704: trusted internal URL, not user-controlled
 	proxy := httputil.NewSingleHostReverseProxy(remote)
 	klog.Info("Connected to remote HTTP ", remoteURL)
 	// Create token authorization
