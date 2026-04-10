@@ -18,6 +18,7 @@ require (
 	github.com/onsi/gomega v1.38.2
 	github.com/ray-project/kuberay/ray-operator v1.5.1
 	github.com/sirupsen/logrus v1.9.3
+	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.11.1
 	google.golang.org/api v0.264.0
 	k8s.io/apimachinery v0.35.0
@@ -118,6 +119,7 @@ require (
 	github.com/googleapis/gax-go/v2 v2.16.0 // indirect
 	github.com/gorilla/handlers v1.5.2 // indirect
 	github.com/gorilla/mux v1.8.1 // indirect
+	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/moby/spdystream v0.5.0 // indirect
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c // indirect
