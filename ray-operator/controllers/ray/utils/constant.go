@@ -243,8 +243,10 @@ const (
 	DefaultLivenessProbeSuccessThreshold   = 1
 	DefaultLivenessProbeFailureThreshold   = 120
 
-	// Timeout for Ray HTTP proxy client
-	RayHTTPProxyClientTimeoutSeconds = 2
+	// RayHTTPClientDirectTimeoutSeconds applies to HTTP clients that send requests directly to pod IP or in-cluster Service.
+	RayHTTPClientDirectTimeoutSeconds = 2
+	// RayHTTPClientProxyTimeoutSeconds applies when requests are proxied through the Kubernetes apiserver.
+	RayHTTPClientProxyTimeoutSeconds = 10
 
 	// Ray health check related configurations
 	// Note: Since the Raylet process and the dashboard agent process are fate-sharing,
