@@ -1053,7 +1053,7 @@ func HasSubmitter(rayJobInstance *rayv1.RayJob) bool {
 }
 
 // IsHTTPRouteEqual checks if the existing HTTPRoute matches the desired HTTPRoute.
-// This check only compares the fields explicitly managed by the KubeRay controller.
+// This check only compares the fields explicitly managed by the RayService controller.
 func IsHTTPRouteEqual(existing, desired *gwv1.HTTPRoute) bool {
 	if existing == nil || desired == nil {
 		return existing == desired
