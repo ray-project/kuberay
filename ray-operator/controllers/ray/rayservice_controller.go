@@ -357,8 +357,10 @@ func reconcilePromotionAndServingStatus(ctx context.Context, headSvc, serveSvc *
 		if meta.IsStatusConditionTrue(rayServiceInstance.Status.Conditions, string(rayv1.UpgradeInProgress)) {
 			isRollbackInProgress := meta.IsStatusConditionTrue(rayServiceInstance.Status.Conditions, string(rayv1.RollbackInProgress))
 
-			// Do not promote if a rollback is in progress. Instead, we should start to roll traffic
-			// back to the active cluster.
+			// Do not promote the pending cluster during a rollback. Traffic is being
+			// shifted back to the active cluster, so the pending cluster must not
+			// become the new active even if its TargetCapacity and TrafficRoutedPercent
+			// reach the promotion thresholds.
 			if !isRollbackInProgress && utils.IsIncrementalUpgradeComplete(rayServiceInstance, pendingCluster) {
 				shouldPromote = true
 				logger.Info("Incremental upgrade completed, triggering promotion.", "rayService", rayServiceInstance.Name)
