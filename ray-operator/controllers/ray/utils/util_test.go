@@ -2030,6 +2030,29 @@ func TestIsHTTPRouteEqual(t *testing.T) {
 			expected: false,
 		},
 		{
+			name: "Filters nil vs empty slice, should be equal for our check.",
+			existing: &gwv1.HTTPRoute{
+				Spec: gwv1.HTTPRouteSpec{
+					Rules: []gwv1.HTTPRouteRule{
+						{
+							// Nil slice
+							Filters: nil,
+						},
+					},
+				},
+			},
+			desired: &gwv1.HTTPRoute{
+				Spec: gwv1.HTTPRouteSpec{
+					Rules: []gwv1.HTTPRouteRule{
+						{
+							Filters: []gwv1.HTTPRouteFilter{},
+						},
+					},
+				},
+			},
+			expected: true,
+		},
+		{
 			name: "Different Backend Namespace",
 			existing: &gwv1.HTTPRoute{
 				Spec: gwv1.HTTPRouteSpec{

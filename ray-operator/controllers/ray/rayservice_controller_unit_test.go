@@ -3093,3 +3093,88 @@ func TestReconcilePromotionAndServingStatus(t *testing.T) {
 		})
 	}
 }
+
+// headReadyCluster is a quick test helper to construct a RayCluster with a specific HeadPodReady condition.
+func headReadyCluster(ready bool) *rayv1.RayCluster {
+	status := metav1.ConditionFalse
+	if ready {
+		status = metav1.ConditionTrue
+	}
+	return &rayv1.RayCluster{
+		Status: rayv1.RayClusterStatus{
+			Conditions: []metav1.Condition{
+				{
+					Type:   string(rayv1.HeadPodReady),
+					Status: status,
+				},
+			},
+		},
+	}
+}
+
+func TestShouldCompleteIncrementalRollback(t *testing.T) {
+	tests := []struct {
+		name           string
+		activeTC       int32
+		activeTRP      int32
+		pendingTC      int32
+		pendingTRP     int32
+		pendingCluster *rayv1.RayCluster
+		want           bool
+	}{
+		{
+			name:           "healthy pending at zero capacity and traffic — complete",
+			activeTC:       100,
+			activeTRP:      100,
+			pendingTC:      0,
+			pendingTRP:     0,
+			pendingCluster: headReadyCluster(true),
+			want:           true,
+		},
+		{
+			name:           "unhealthy pending with leftover capacity — bypass complete",
+			activeTC:       100,
+			activeTRP:      100,
+			pendingTC:      30,
+			pendingTRP:     0,
+			pendingCluster: headReadyCluster(false),
+			want:           true,
+		},
+		{
+			name:           "no pending RayCluster — complete when active is full",
+			activeTC:       100,
+			activeTRP:      100,
+			pendingTC:      0,
+			pendingTRP:     0,
+			pendingCluster: nil,
+			want:           true,
+		},
+		{
+			name:           "healthy pending still holding target capacity — not complete",
+			activeTC:       100,
+			activeTRP:      100,
+			pendingTC:      50,
+			pendingTRP:     0,
+			pendingCluster: headReadyCluster(true),
+			want:           false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			activeStatus := &rayv1.RayServiceStatus{
+				TargetCapacity:       ptr.To(tt.activeTC),
+				TrafficRoutedPercent: ptr.To(tt.activeTRP),
+			}
+			pendingStatus := &rayv1.RayServiceStatus{
+				TargetCapacity:       ptr.To(tt.pendingTC),
+				TrafficRoutedPercent: ptr.To(tt.pendingTRP),
+			}
+
+			got := shouldCompleteIncrementalRollback(activeStatus, pendingStatus, tt.pendingCluster)
+			if got != tt.want {
+				t.Errorf("shouldCompleteIncrementalRollback() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

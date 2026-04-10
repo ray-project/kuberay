@@ -1086,11 +1086,17 @@ func IsHTTPRouteEqual(existing, desired *gwv1.HTTPRoute) bool {
 		eRule := existing.Spec.Rules[i]
 		dRule := desired.Spec.Rules[i]
 
-		// Compare Matches and Filters
+		// Compare Matches
 		if !reflect.DeepEqual(eRule.Matches, dRule.Matches) {
 			return false
 		}
-		if !reflect.DeepEqual(eRule.Filters, dRule.Filters) {
+
+		// Compare Filters. Treat nil and empty slice as equivalent to avoid false positives
+		// caused by renormalization from the API server or the Gateway implementation.
+		if len(eRule.Filters) != len(dRule.Filters) {
+			return false
+		}
+		if len(eRule.Filters) > 0 && !reflect.DeepEqual(eRule.Filters, dRule.Filters) {
 			return false
 		}
 
