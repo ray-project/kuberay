@@ -86,7 +86,6 @@ linters:
     modernize:
       disable:
         - omitzero
-        - newexpr
   exclusions:
     generated: strict
     presets:

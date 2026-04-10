@@ -103,7 +103,6 @@ func main() {
 	}
 
 	// Create reverse proxy
-	// #nosec G704: remote is trusted and controlled (localhost only)
 	proxy := httputil.NewSingleHostReverseProxy(remote)
 	klog.Info("Connected to remote HTTP ", remoteURL)
 	// Create token authorization

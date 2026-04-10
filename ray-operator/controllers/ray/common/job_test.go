@@ -265,7 +265,7 @@ pip: ["python-multipart==0.0.6"]
 		if expected[i] == "--runtime-env-json" {
 			// Decode the JSON string from the next element.
 			var expectedMap, actualMap map[string]any
-			//nolint:gosec // Safe: slice access controlled by test logic, not user input
+			//nolint:gosec // G602: test invariant guarantees "--runtime-env-json" is followed by a value.
 			unquoteExpected, err1 := strconv.Unquote(expected[i+1])
 			require.NoError(t, err1)
 

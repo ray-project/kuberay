@@ -137,8 +137,7 @@ func (options *DeleteOptions) Run(ctx context.Context, factory cmdutil.Factory) 
 	var resources strings.Builder
 	for resourceType, resourceNames := range options.resources {
 		for _, resourceName := range resourceNames {
-			//nolint:staticcheck // acceptable use of WriteString+Sprintf for clarity
-			resources.WriteString(fmt.Sprintf("\n- %s/%s", resourceType, resourceName))
+			fmt.Fprintf(&resources, "\n- %s/%s", resourceType, resourceName)
 		}
 	}
 
