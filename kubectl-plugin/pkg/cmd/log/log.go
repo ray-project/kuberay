@@ -153,7 +153,7 @@ func NewClusterLogCommand(cmdFactory cmdutil.Factory, streams genericclioptions.
 	cmd.Flags().StringVar(&options.link, "link", "", "print a link to a cloud console to view logs, supports: 'gke'")
 
 	cobra.CheckErr(cmd.RegisterFlagCompletionFunc("node-type", nodeTypeCompletion))
-	cobra.CheckErr(cmd.RegisterFlagCompletionFunc("link", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	cobra.CheckErr(cmd.RegisterFlagCompletionFunc("link", func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
 		return []string{"gke"}, cobra.ShellCompDirectiveNoFileComp
 	}))
 
