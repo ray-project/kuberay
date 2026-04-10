@@ -57,7 +57,7 @@ func CreateObjectIfNotExist(bucket *oss.Bucket, obj string, options ...oss.Optio
 	return nil
 }
 
-func GetLogDirByNameID(ossHistorySeverDir, rayClusterNameNamespace, rayNodeID, sessionId string) string {
+func GetLogDirByNameNamespace(ossHistorySeverDir, rayClusterNameNamespace, rayNodeID, sessionId string) string {
 	return fmt.Sprintf("%s/", path.Clean(path.Join(ossHistorySeverDir, rayClusterNameNamespace, sessionId, RAY_SESSIONDIR_LOGDIR_NAME, rayNodeID)))
 }
 
