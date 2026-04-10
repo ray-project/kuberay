@@ -441,6 +441,10 @@ func TestNativeScheduling_SuspendDeletesResources(t *testing.T) {
 	g.Eventually(Workloads(test, namespace.Name), TestTimeoutShort).Should(HaveLen(1))
 	g.Eventually(PodGroups(test, namespace.Name), TestTimeoutShort).Should(HaveLen(2))
 
+	// Verify WorkloadScheduled condition is True before suspend.
+	g.Eventually(RayCluster(test, namespace.Name, rayCluster.Name), TestTimeoutShort).
+		Should(WithTransform(StatusCondition(rayv1.RayClusterWorkloadScheduled), MatchCondition(metav1.ConditionTrue, rayv1.WorkloadReady)))
+
 	// Suspend the cluster.
 	LogWithTimestamp(test.T(), "Suspending RayCluster %s/%s", rayCluster.Namespace, rayCluster.Name)
 	rayClusterAC = rayClusterAC.WithSpec(rayClusterAC.Spec.WithSuspend(true))
@@ -462,6 +466,15 @@ func TestNativeScheduling_SuspendDeletesResources(t *testing.T) {
 	// Verify PodGroups are deleted after suspend.
 	LogWithTimestamp(test.T(), "Verifying PodGroups are deleted after suspend")
 	g.Eventually(PodGroups(test, namespace.Name), TestTimeoutShort).Should(BeEmpty())
+
+	// Verify WorkloadScheduled condition is removed after suspend.
+	LogWithTimestamp(test.T(), "Verifying WorkloadScheduled condition is removed after suspend")
+	g.Eventually(func(gg Gomega) {
+		cluster, err := GetRayCluster(test, namespace.Name, rayCluster.Name)
+		gg.Expect(err).NotTo(HaveOccurred())
+		cond := meta.FindStatusCondition(cluster.Status.Conditions, string(rayv1.RayClusterWorkloadScheduled))
+		gg.Expect(cond).To(BeNil(), "WorkloadScheduled condition should be removed when suspended")
+	}, TestTimeoutShort).Should(Succeed())
 
 	// Verify DeletedWorkload and DeletedPodGroup events were emitted.
 	g.Eventually(GetEvents(test, namespace.Name, rayCluster.Name, "DeletedWorkload"), TestTimeoutShort).
@@ -542,6 +555,11 @@ func TestNativeScheduling_ResumeRecreatesResources(t *testing.T) {
 	g.Expect(err).NotTo(HaveOccurred())
 	_, err = GetPodGroup(test, namespace.Name, rayCluster.Name+"-worker-small-group")
 	g.Expect(err).NotTo(HaveOccurred())
+
+	// Verify WorkloadScheduled condition is True after resume.
+	LogWithTimestamp(test.T(), "Verifying WorkloadScheduled condition is True after resume")
+	g.Eventually(RayCluster(test, namespace.Name, rayCluster.Name), TestTimeoutShort).
+		Should(WithTransform(StatusCondition(rayv1.RayClusterWorkloadScheduled), MatchCondition(metav1.ConditionTrue, rayv1.WorkloadReady)))
 
 	// Verify new pods get schedulingGroup set.
 	headPod, err := GetHeadPod(test, rayCluster)
@@ -777,4 +795,59 @@ func TestNativeScheduling_AddWorkerGroupRecreatesWorkload(t *testing.T) {
 	g.Expect(err).NotTo(HaveOccurred())
 	_, err = GetPodGroup(test, namespace.Name, rayCluster.Name+"-worker-gpu-group")
 	g.Expect(err).NotTo(HaveOccurred())
+}
+
+func TestNativeScheduling_WorkloadScheduledCondition(t *testing.T) {
+	test := With(t)
+	g := NewWithT(t)
+
+	namespace := test.NewTestNamespace()
+
+	rayClusterAC := rayv1ac.RayCluster("cond-test", namespace.Name).
+		WithAnnotations(map[string]string{"ray.io/native-workload-scheduling": "true"}).
+		WithSpec(NewRayClusterSpec())
+
+	rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
+	g.Expect(err).NotTo(HaveOccurred())
+	LogWithTimestamp(test.T(), "Created RayCluster %s/%s", rayCluster.Namespace, rayCluster.Name)
+
+	// Wait for cluster to become ready.
+	g.Eventually(RayCluster(test, namespace.Name, rayCluster.Name), TestTimeoutMedium).
+		Should(WithTransform(RayClusterState, Equal(rayv1.Ready)))
+
+	// Verify the WorkloadScheduled condition is True/WorkloadReady.
+	LogWithTimestamp(test.T(), "Verifying WorkloadScheduled condition is True")
+	g.Eventually(RayCluster(test, namespace.Name, rayCluster.Name), TestTimeoutShort).
+		Should(WithTransform(StatusCondition(rayv1.RayClusterWorkloadScheduled), SatisfyAll(
+			WithTransform(func(c metav1.Condition) metav1.ConditionStatus { return c.Status }, Equal(metav1.ConditionTrue)),
+			WithTransform(func(c metav1.Condition) string { return c.Reason }, Equal(rayv1.WorkloadReady)),
+		)))
+}
+
+func TestNativeScheduling_WorkloadScheduledConditionAbsentWhenDisabled(t *testing.T) {
+	test := With(t)
+	g := NewWithT(t)
+
+	namespace := test.NewTestNamespace()
+
+	// Create a RayCluster without the native scheduling annotation.
+	rayClusterAC := rayv1ac.RayCluster("no-cond", namespace.Name).
+		WithSpec(NewRayClusterSpec())
+
+	rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
+	g.Expect(err).NotTo(HaveOccurred())
+	LogWithTimestamp(test.T(), "Created RayCluster %s/%s without native scheduling annotation", rayCluster.Namespace, rayCluster.Name)
+
+	// Wait for cluster to become ready.
+	g.Eventually(RayCluster(test, namespace.Name, rayCluster.Name), TestTimeoutMedium).
+		Should(WithTransform(RayClusterState, Equal(rayv1.Ready)))
+
+	// Verify no WorkloadScheduled condition is set, and it stays absent over time.
+	LogWithTimestamp(test.T(), "Verifying WorkloadScheduled condition is absent")
+	g.Consistently(func(gg Gomega) {
+		cluster, err := GetRayCluster(test, namespace.Name, rayCluster.Name)
+		gg.Expect(err).NotTo(HaveOccurred())
+		cond := meta.FindStatusCondition(cluster.Status.Conditions, string(rayv1.RayClusterWorkloadScheduled))
+		gg.Expect(cond).To(BeNil(), "WorkloadScheduled condition should not be set without annotation")
+	}, 10*time.Second, time.Second).Should(Succeed())
 }
