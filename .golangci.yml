@@ -86,6 +86,9 @@ linters:
     modernize:
       disable:
         - omitzero
+        # Disable newexpr check for now since it introduces too many changes in our existing codebase.
+        # To be re-enabled as a part of https://github.com/ray-project/kuberay/issues/4694.
+        - newexpr
   exclusions:
     generated: strict
     presets:

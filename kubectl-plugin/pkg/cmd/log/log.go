@@ -417,8 +417,7 @@ func (options *ClusterLogOptions) downloadRayLogFiles(ctx context.Context, exec 
 			// new linter version. We are suppressing it here to maintain zero-behavior change
 			// for this version-bump PR. A separate PR will be created to properly handle
 			// invalid modes and fix a file descriptor leak in this loop.
-			// #nosec G115
-			outFile, err := os.OpenFile(localFilePath, os.O_CREATE|os.O_RDWR, os.FileMode(header.Mode))
+			outFile, err := os.OpenFile(localFilePath, os.O_CREATE|os.O_RDWR, os.FileMode(header.Mode)) // #nosec G115
 			if err != nil {
 				return fmt.Errorf("Error creating file: %w", err)
 			}
