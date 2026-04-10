@@ -69,11 +69,71 @@ func TestInjectHistoryServerCollector_Enabled(t *testing.T) {
 	assert.Equal(t, historyServerEventsExportAddr, envMap["RAY_DASHBOARD_AGGREGATOR_AGENT_EVENTS_EXPORT_ADDR"])
 
 	// Both containers should have /tmp/ray volume mount
-	assert.True(t, hasVolumeMount(rayContainer.VolumeMounts, historyServerVolumeMountPath))
-	assert.True(t, hasVolumeMount(pod.Spec.Containers[1].VolumeMounts, historyServerVolumeMountPath))
+	assert.True(t, hasVolumeMount(rayContainer.VolumeMounts, RayLogVolumeMountPath))
+	assert.True(t, hasVolumeMount(pod.Spec.Containers[1].VolumeMounts, RayLogVolumeMountPath))
 
-	// Pod should have the shared volume
-	assert.True(t, hasVolume(pod.Spec.Volumes, historyServerVolumeName))
+	// Pod should have the shared volume, and both mounts should reference it by name.
+	assert.True(t, hasVolume(pod.Spec.Volumes, RayLogVolumeName))
+	assert.Equal(t, RayLogVolumeName, volumeNameAtMountPath(&pod.Spec.Containers[0], RayLogVolumeMountPath))
+	assert.Equal(t, RayLogVolumeName, volumeNameAtMountPath(&pod.Spec.Containers[1], RayLogVolumeMountPath))
+}
+
+// Regression test for the case where the autoscaler injection in BuildPod
+// has already added a volume at /tmp/ray. InjectHistoryServerCollector must
+// reuse the existing volume name so the collector sidecar doesn't reference
+// a non-existent volume (issue caught by Cursor Bugbot on PR #4689).
+func TestInjectHistoryServerCollector_ReusesExistingVolumeAtTmpRay(t *testing.T) {
+	pod := makeTestPod()
+	// Simulate autoscaler injection: /tmp/ray is already mounted under a
+	// pre-existing volume named "ray-logs".
+	pod.Spec.Volumes = []corev1.Volume{
+		{
+			Name:         RayLogVolumeName,
+			VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}},
+		},
+	}
+	pod.Spec.Containers[0].VolumeMounts = []corev1.VolumeMount{
+		{Name: RayLogVolumeName, MountPath: RayLogVolumeMountPath},
+	}
+
+	InjectHistoryServerCollector(context.Background(), &rayv1.HistoryServerCollectorOptions{}, &pod)
+
+	// There should be exactly one volume named ray-logs; addEmptyDir must
+	// have skipped adding a second one.
+	var volumeNames []string
+	for _, v := range pod.Spec.Volumes {
+		volumeNames = append(volumeNames, v.Name)
+	}
+	assert.Equal(t, []string{RayLogVolumeName}, volumeNames, "should not create a duplicate volume")
+
+	// The collector sidecar's volume mount must reference the pre-existing
+	// volume name, not a hardcoded one that would fail pod validation.
+	collector := pod.Spec.Containers[1]
+	assert.Len(t, collector.VolumeMounts, 1)
+	assert.Equal(t, RayLogVolumeName, collector.VolumeMounts[0].Name)
+	assert.Equal(t, RayLogVolumeMountPath, collector.VolumeMounts[0].MountPath)
+}
+
+// If the user's pod template already mounts /tmp/ray under a custom volume
+// name, the collector sidecar must reuse that name.
+func TestInjectHistoryServerCollector_ReusesCustomVolumeName(t *testing.T) {
+	pod := makeTestPod()
+	const customName = "user-supplied-ray-volume"
+	pod.Spec.Volumes = []corev1.Volume{
+		{
+			Name:         customName,
+			VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}},
+		},
+	}
+	pod.Spec.Containers[0].VolumeMounts = []corev1.VolumeMount{
+		{Name: customName, MountPath: RayLogVolumeMountPath},
+	}
+
+	InjectHistoryServerCollector(context.Background(), &rayv1.HistoryServerCollectorOptions{}, &pod)
+
+	collector := pod.Spec.Containers[1]
+	assert.Equal(t, customName, collector.VolumeMounts[0].Name,
+		"collector should reuse the user-supplied volume name")
 }
 
 func TestInjectHistoryServerCollector_CustomImage(t *testing.T) {

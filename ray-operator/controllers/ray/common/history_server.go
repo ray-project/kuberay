@@ -13,8 +13,6 @@ import (
 
 const (
 	historyServerCollectorContainerName = "collector"
-	historyServerVolumeName             = "ray-tmp"
-	historyServerVolumeMountPath        = "/tmp/ray"
 	historyServerCollectorDefaultImage  = "kuberay/collector:latest"
 	historyServerDefaultRuntimeClass    = "s3"
 
@@ -58,8 +56,22 @@ func InjectHistoryServerCollector(ctx context.Context, opts *rayv1.HistoryServer
 
 	rayContainer := &pod.Spec.Containers[utils.RayContainerIndex]
 
-	// 1. Ensure shared /tmp/ray volume exists on the Ray container.
-	addEmptyDir(ctx, rayContainer, pod, historyServerVolumeName, historyServerVolumeMountPath, corev1.StorageMediumDefault)
+	// 1. Ensure a shared /tmp/ray volume exists on the Ray container.
+	//    Reuse RayLogVolumeName so we share the same volume the autoscaler
+	//    injection in BuildPod() uses. addEmptyDir is a no-op when a volume
+	//    is already mounted at /tmp/ray, which is what we want.
+	addEmptyDir(ctx, rayContainer, pod, RayLogVolumeName, RayLogVolumeMountPath, corev1.StorageMediumDefault)
+
+	// Look up the actual volume name mounted at /tmp/ray on the Ray container.
+	// It will usually be RayLogVolumeName, but a user-supplied pod template
+	// could already have a different volume mounted there — in that case we
+	// need to reuse its name so the collector sidecar mounts the same volume.
+	sharedVolumeName := volumeNameAtMountPath(rayContainer, RayLogVolumeMountPath)
+	if sharedVolumeName == "" {
+		log.Info("Unable to resolve shared volume name for History Server Collector; skipping injection",
+			"expectedMountPath", RayLogVolumeMountPath)
+		return
+	}
 
 	// 2. Inject postStart lifecycle hook for node ID extraction.
 	//    Preserve any existing postStart hook by only injecting when it's unset.
@@ -82,10 +94,21 @@ func InjectHistoryServerCollector(ctx context.Context, opts *rayv1.HistoryServer
 	injectEnvIfMissing(rayContainer, "RAY_DASHBOARD_AGGREGATOR_AGENT_EVENTS_EXPORT_ADDR", historyServerEventsExportAddr)
 
 	// 4. Build and append the Collector sidecar container.
-	pod.Spec.Containers = append(pod.Spec.Containers, buildCollectorContainer(opts))
+	pod.Spec.Containers = append(pod.Spec.Containers, buildCollectorContainer(opts, sharedVolumeName))
 }
 
-func buildCollectorContainer(opts *rayv1.HistoryServerCollectorOptions) corev1.Container {
+// volumeNameAtMountPath returns the name of the volume mounted at the given
+// path on the container, or an empty string if no such mount exists.
+func volumeNameAtMountPath(container *corev1.Container, mountPath string) string {
+	for _, m := range container.VolumeMounts {
+		if m.MountPath == mountPath {
+			return m.Name
+		}
+	}
+	return ""
+}
+
+func buildCollectorContainer(opts *rayv1.HistoryServerCollectorOptions, sharedVolumeName string) corev1.Container {
 	image := historyServerCollectorDefaultImage
 	if opts.Image != nil && *opts.Image != "" {
 		image = *opts.Image
@@ -112,14 +135,14 @@ func buildCollectorContainer(opts *rayv1.HistoryServerCollectorOptions) corev1.C
 		ImagePullPolicy: pullPolicy,
 		Args: []string{
 			"--runtime-class-name=" + runtimeClass,
-			"--ray-root-dir=/tmp/ray",
+			"--ray-root-dir=" + RayLogVolumeMountPath,
 		},
 		Env:     opts.Env,
 		EnvFrom: opts.EnvFrom,
 		VolumeMounts: []corev1.VolumeMount{
 			{
-				Name:      historyServerVolumeName,
-				MountPath: historyServerVolumeMountPath,
+				Name:      sharedVolumeName,
+				MountPath: RayLogVolumeMountPath,
 				ReadOnly:  false,
 			},
 		},
