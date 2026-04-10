@@ -7,6 +7,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	schedulingv1alpha2 "k8s.io/api/scheduling/v1alpha2"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -93,7 +94,7 @@ func (r *RayClusterReconciler) reconcileNativeWorkloadScheduling(ctx context.Con
 		// Workload already exists — check if it is stale and needs to be recreated.
 		// Note: the recreate path below may itself hit AlreadyExists if the old Workload has
 		// a finalizer delaying its deletion. In that case the error propagates and the
-		// reconciler requeues, which is the correct self-healing behaviour.
+		// reconciler requeues, which is the correct self-healing behavior.
 		existing := &schedulingv1alpha2.Workload{}
 		if err := r.Get(ctx, types.NamespacedName{Name: workload.Name, Namespace: workload.Namespace}, existing); err != nil {
 			return fmt.Errorf("failed to get existing Workload %s/%s: %w", workload.Namespace, workload.Name, err)
@@ -432,4 +433,39 @@ func (r *RayClusterReconciler) deleteNativeWorkloadSchedulingResources(ctx conte
 	}
 
 	return nil
+}
+
+// setWorkloadScheduledCondition sets the WorkloadScheduled condition on the RayCluster status.
+// When native workload scheduling is enabled and the cluster is not suspended, the condition
+// reflects whether the Workload resource has been created. When native scheduling is not enabled
+// or the cluster is suspended/suspending, the condition is removed entirely rather than set to
+// False because the condition is not meaningful when scheduling resources do not exist.
+func (r *RayClusterReconciler) setWorkloadScheduledCondition(ctx context.Context, instance *rayv1.RayCluster, suspendStatus rayv1.RayClusterConditionType) {
+	if !isNativeWorkloadSchedulingEnabled(instance) || suspendStatus == rayv1.RayClusterSuspended || suspendStatus == rayv1.RayClusterSuspending {
+		meta.RemoveStatusCondition(&instance.Status.Conditions, string(rayv1.RayClusterWorkloadScheduled))
+		return
+	}
+
+	workload := &schedulingv1alpha2.Workload{}
+	err := r.Get(ctx, types.NamespacedName{Name: instance.Name, Namespace: instance.Namespace}, workload)
+	if err != nil {
+		if !errors.IsNotFound(err) {
+			logger := ctrl.LoggerFrom(ctx)
+			logger.V(1).Info("Failed to get Workload for condition check", "error", err)
+		}
+		meta.SetStatusCondition(&instance.Status.Conditions, metav1.Condition{
+			Type:    string(rayv1.RayClusterWorkloadScheduled),
+			Status:  metav1.ConditionFalse,
+			Reason:  rayv1.WorkloadPending,
+			Message: "Workload has not been created yet",
+		})
+		return
+	}
+
+	meta.SetStatusCondition(&instance.Status.Conditions, metav1.Condition{
+		Type:    string(rayv1.RayClusterWorkloadScheduled),
+		Status:  metav1.ConditionTrue,
+		Reason:  rayv1.WorkloadReady,
+		Message: "Workload and PodGroups have been created",
+	})
 }

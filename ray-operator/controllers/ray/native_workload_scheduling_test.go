@@ -11,6 +11,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	schedulingv1alpha2 "k8s.io/api/scheduling/v1alpha2"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -1809,4 +1810,220 @@ func TestReconcilePods_ResumeRecreatesNativeSchedulingResources(t *testing.T) {
 	err = fakeClient.List(ctx, pgList, client.InNamespace("default"), client.MatchingLabels{utils.RayClusterLabelKey: "test-cluster"})
 	require.NoError(t, err)
 	assert.Len(t, pgList.Items, 2, "PodGroups should be recreated after resume")
+}
+
+// --- WorkloadScheduled condition tests ---
+
+func TestSetWorkloadScheduledCondition_TrueWhenWorkloadExists(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
+	features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, true)
+
+	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
+	s := newTestScheme()
+
+	// Pre-create a Workload so the condition check finds it.
+	workload := &schedulingv1alpha2.Workload{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "default",
+			Labels:    map[string]string{utils.RayClusterLabelKey: "test-cluster"},
+		},
+	}
+	fakeClient := clientFake.NewClientBuilder().WithScheme(s).WithObjects(workload).Build()
+	r := newReconciler(fakeClient, s, record.NewFakeRecorder(10))
+	ctx := context.Background()
+
+	r.setWorkloadScheduledCondition(ctx, cluster, "")
+
+	cond := meta.FindStatusCondition(cluster.Status.Conditions, string(rayv1.RayClusterWorkloadScheduled))
+	require.NotNil(t, cond, "WorkloadScheduled condition should be set")
+	assert.Equal(t, metav1.ConditionTrue, cond.Status)
+	assert.Equal(t, rayv1.WorkloadReady, cond.Reason)
+}
+
+func TestSetWorkloadScheduledCondition_FalseWhenWorkloadDoesNotExist(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
+	features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, true)
+
+	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
+	s := newTestScheme()
+
+	// No pre-existing Workload.
+	fakeClient := clientFake.NewClientBuilder().WithScheme(s).Build()
+	r := newReconciler(fakeClient, s, record.NewFakeRecorder(10))
+	ctx := context.Background()
+
+	r.setWorkloadScheduledCondition(ctx, cluster, "")
+
+	cond := meta.FindStatusCondition(cluster.Status.Conditions, string(rayv1.RayClusterWorkloadScheduled))
+	require.NotNil(t, cond, "WorkloadScheduled condition should be set")
+	assert.Equal(t, metav1.ConditionFalse, cond.Status)
+	assert.Equal(t, rayv1.WorkloadPending, cond.Reason)
+}
+
+func TestSetWorkloadScheduledCondition_NotSetWhenFeatureGateDisabled(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, false)
+	features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, true)
+
+	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
+	s := newTestScheme()
+	fakeClient := clientFake.NewClientBuilder().WithScheme(s).Build()
+	r := newReconciler(fakeClient, s, record.NewFakeRecorder(10))
+	ctx := context.Background()
+
+	r.setWorkloadScheduledCondition(ctx, cluster, "")
+
+	cond := meta.FindStatusCondition(cluster.Status.Conditions, string(rayv1.RayClusterWorkloadScheduled))
+	assert.Nil(t, cond, "WorkloadScheduled condition should not be set when feature gate is disabled")
+}
+
+func TestSetWorkloadScheduledCondition_NotSetWhenAnnotationMissing(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
+	features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, true)
+
+	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
+	cluster.Annotations = nil // Remove the opt-in annotation.
+	s := newTestScheme()
+	fakeClient := clientFake.NewClientBuilder().WithScheme(s).Build()
+	r := newReconciler(fakeClient, s, record.NewFakeRecorder(10))
+	ctx := context.Background()
+
+	r.setWorkloadScheduledCondition(ctx, cluster, "")
+
+	cond := meta.FindStatusCondition(cluster.Status.Conditions, string(rayv1.RayClusterWorkloadScheduled))
+	assert.Nil(t, cond, "WorkloadScheduled condition should not be set when annotation is missing")
+}
+
+func TestSetWorkloadScheduledCondition_RemovedWhenSuspended(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
+	features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, true)
+
+	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
+	// Pre-set the condition to verify it gets removed.
+	meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
+		Type:    string(rayv1.RayClusterWorkloadScheduled),
+		Status:  metav1.ConditionTrue,
+		Reason:  rayv1.WorkloadReady,
+		Message: "Workload and PodGroups have been created",
+	})
+	s := newTestScheme()
+	fakeClient := clientFake.NewClientBuilder().WithScheme(s).Build()
+	r := newReconciler(fakeClient, s, record.NewFakeRecorder(10))
+	ctx := context.Background()
+
+	r.setWorkloadScheduledCondition(ctx, cluster, rayv1.RayClusterSuspended)
+
+	cond := meta.FindStatusCondition(cluster.Status.Conditions, string(rayv1.RayClusterWorkloadScheduled))
+	assert.Nil(t, cond, "WorkloadScheduled condition should be removed when cluster is suspended")
+}
+
+func TestSetWorkloadScheduledCondition_RemovedWhenSuspending(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
+	features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, true)
+
+	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
+	// Pre-set the condition to verify it gets removed.
+	meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
+		Type:    string(rayv1.RayClusterWorkloadScheduled),
+		Status:  metav1.ConditionTrue,
+		Reason:  rayv1.WorkloadReady,
+		Message: "Workload and PodGroups have been created",
+	})
+	s := newTestScheme()
+	fakeClient := clientFake.NewClientBuilder().WithScheme(s).Build()
+	r := newReconciler(fakeClient, s, record.NewFakeRecorder(10))
+	ctx := context.Background()
+
+	r.setWorkloadScheduledCondition(ctx, cluster, rayv1.RayClusterSuspending)
+
+	cond := meta.FindStatusCondition(cluster.Status.Conditions, string(rayv1.RayClusterWorkloadScheduled))
+	assert.Nil(t, cond, "WorkloadScheduled condition should be removed when cluster is suspending")
+}
+
+// --- calculateStatus integration tests ---
+
+func TestCalculateStatus_WorkloadScheduledConditionSetWhenBothGatesEnabled(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
+	features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, true)
+
+	cluster := newTestRayCluster(newWorkerGroup("workers", 1))
+	s := newTestScheme()
+
+	// Create a Workload so the condition check finds it.
+	workload := &schedulingv1alpha2.Workload{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "default",
+			Labels:    map[string]string{utils.RayClusterLabelKey: "test-cluster"},
+		},
+	}
+
+	// Create a head service so calculateStatus's updateEndpoints/updateHeadInfo succeed.
+	headService := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster-head-svc",
+			Namespace: "default",
+			Labels: map[string]string{
+				utils.RayClusterLabelKey:  "test-cluster",
+				utils.RayNodeTypeLabelKey: string(rayv1.HeadNode),
+				utils.RayIDLabelKey:       utils.CheckLabel(utils.GenerateIdentifier("test-cluster", rayv1.HeadNode)),
+			},
+		},
+		Spec: corev1.ServiceSpec{
+			ClusterIP: "10.0.0.1",
+		},
+	}
+
+	fakeClient := clientFake.NewClientBuilder().WithScheme(s).WithObjects(workload, headService).Build()
+	r := newReconciler(fakeClient, s, record.NewFakeRecorder(10))
+	ctx := context.Background()
+
+	newInstance, err := r.calculateStatus(ctx, cluster, nil)
+	require.NoError(t, err)
+
+	cond := meta.FindStatusCondition(newInstance.Status.Conditions, string(rayv1.RayClusterWorkloadScheduled))
+	require.NotNil(t, cond, "WorkloadScheduled condition should be set through calculateStatus")
+	assert.Equal(t, metav1.ConditionTrue, cond.Status)
+	assert.Equal(t, rayv1.WorkloadReady, cond.Reason)
+}
+
+func TestCalculateStatus_WorkloadScheduledConditionNotSetWhenStatusConditionsGateDisabled(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
+	features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, false)
+
+	cluster := newTestRayCluster(newWorkerGroup("workers", 1))
+	s := newTestScheme()
+
+	workload := &schedulingv1alpha2.Workload{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "default",
+			Labels:    map[string]string{utils.RayClusterLabelKey: "test-cluster"},
+		},
+	}
+
+	headService := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster-head-svc",
+			Namespace: "default",
+			Labels: map[string]string{
+				utils.RayClusterLabelKey:  "test-cluster",
+				utils.RayNodeTypeLabelKey: string(rayv1.HeadNode),
+				utils.RayIDLabelKey:       utils.CheckLabel(utils.GenerateIdentifier("test-cluster", rayv1.HeadNode)),
+			},
+		},
+		Spec: corev1.ServiceSpec{
+			ClusterIP: "10.0.0.1",
+		},
+	}
+
+	fakeClient := clientFake.NewClientBuilder().WithScheme(s).WithObjects(workload, headService).Build()
+	r := newReconciler(fakeClient, s, record.NewFakeRecorder(10))
+	ctx := context.Background()
+
+	newInstance, err := r.calculateStatus(ctx, cluster, nil)
+	require.NoError(t, err)
+
+	cond := meta.FindStatusCondition(newInstance.Status.Conditions, string(rayv1.RayClusterWorkloadScheduled))
+	assert.Nil(t, cond, "WorkloadScheduled condition should not be set when RayClusterStatusConditions gate is disabled")
 }

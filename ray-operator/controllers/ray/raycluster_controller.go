@@ -1736,6 +1736,8 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 				})
 			}
 		}
+
+		r.setWorkloadScheduledCondition(ctx, newInstance, suspendStatus)
 	}
 
 	if newInstance.Spec.Suspend != nil && *newInstance.Spec.Suspend && len(runtimePods.Items) == 0 {
