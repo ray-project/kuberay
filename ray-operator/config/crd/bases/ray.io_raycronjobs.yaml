@@ -20,6 +20,9 @@ spec:
     - jsonPath: .spec.schedule
       name: schedule
       type: string
+    - jsonPath: .spec.timeZone
+      name: timezone
+      type: string
     - jsonPath: .status.lastScheduleTime
       name: last schedule
       type: string
@@ -12380,6 +12383,8 @@ spec:
                 type: string
               suspend:
                 type: boolean
+              timeZone:
+                type: string
             required:
             - jobTemplate
             - schedule
