@@ -1463,6 +1463,10 @@ func (r *RayClusterReconciler) buildRedisCleanupJob(ctx context.Context, instanc
 	// Disable liveness and readiness probes because the Job will not launch processes like Raylet and GCS.
 	pod.Spec.Containers[utils.RayContainerIndex].LivenessProbe = nil
 	pod.Spec.Containers[utils.RayContainerIndex].ReadinessProbe = nil
+	// Clear lifecycle hooks injected by History Server Collector (or user-defined ones).
+	// The postStart hook polls for raylet, which never starts in a cleanup Job, so it
+	// would hang the container indefinitely.
+	pod.Spec.Containers[utils.RayContainerIndex].Lifecycle = nil
 
 	// Set the environment variables to ensure that the cleanup Job has at least 60s.
 	pod.Spec.Containers[utils.RayContainerIndex].Env = append(pod.Spec.Containers[utils.RayContainerIndex].Env, corev1.EnvVar{
