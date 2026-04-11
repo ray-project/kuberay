@@ -243,6 +243,11 @@ const (
 	DefaultLivenessProbeSuccessThreshold   = 1
 	DefaultLivenessProbeFailureThreshold   = 120
 
+	// RayHTTPClientDirectTimeoutSeconds applies to HTTP clients that send requests directly to pod IP or in-cluster Service.
+	RayHTTPClientDirectTimeoutSeconds = 2
+	// RayHTTPClientProxyTimeoutSeconds applies when requests are proxied through the Kubernetes apiserver.
+	RayHTTPClientProxyTimeoutSeconds = 10
+
 	// Ray health check related configurations
 	// Note: Since the Raylet process and the dashboard agent process are fate-sharing,
 	// only one of them needs to be checked. So, RayAgentRayletHealthPath accesses the dashboard agent's API endpoint
@@ -251,8 +256,13 @@ const (
 	RayAgentRayletHealthPath  = "api/local_raylet_healthz"
 	RayDashboardGCSHealthPath = "api/gcs_healthz"
 	RayServeProxyHealthPath   = "-/healthz"
-	BaseWgetHealthCommand     = "wget --tries 1 -T %d -q -O- http://localhost:%d/%s | grep success"
-	RayNodeHealthPath         = "/api/healthz"
+	// BaseWgetHealthCommand checks a single health URL; args: timeout_sec, port, path (no leading slash).
+	// This is used for Ray versions that rely on exec probes and assume common CLI tools exist in the image.
+	BaseWgetHealthCommand = "wget --tries 1 -T %d -q -O- http://localhost:%d/%s | grep success"
+	// BasePythonHealthCommand checks a single health URL; args: port, path (no leading slash), timeout_sec.
+	// This is used when wget is not available (e.g. slim Ray images).
+	BasePythonHealthCommand = `python -c "import urllib.request; r=urllib.request.urlopen('http://localhost:%d/%s', timeout=%d); exit(0 if b'success' in r.read() else 1)"`
+	RayNodeHealthPath       = "/api/healthz"
 
 	// Finalizers for RayJob
 	RayJobStopJobFinalizer = "ray.io/rayjob-finalizer"
@@ -365,6 +375,10 @@ const (
 	FailedToDeleteRayCluster      K8sEventType = "FailedToDeleteRayCluster"
 	FailedToUpdateRayCluster      K8sEventType = "FailedToUpdateRayCluster"
 	RayClusterNotFound            K8sEventType = "RayClusterNotFound"
+
+	// Batch scheduler event list
+	BatchSchedulerCleanedUp       K8sEventType = "BatchSchedulerCleanedUp"
+	FailedToCleanupBatchScheduler K8sEventType = "FailedToCleanupBatchScheduler"
 
 	// RayCronJob event list
 	InvalidRayCronJobSpec K8sEventType = "InvalidRayCronJobSpec"

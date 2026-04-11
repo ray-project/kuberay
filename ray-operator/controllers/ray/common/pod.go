@@ -282,7 +282,6 @@ func AddRayTokenVolume(podSpec *corev1.PodSpec) {
 			Projected: &corev1.ProjectedVolumeSource{
 				Sources: []corev1.VolumeProjection{
 					{
-						// TODO: support audiences (e.g., audiences: ["ray.io"]) in service account token projection in the future.
 						ServiceAccountToken: &corev1.ServiceAccountTokenProjection{
 							Path: "token",
 						},

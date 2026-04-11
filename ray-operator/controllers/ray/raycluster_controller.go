@@ -48,22 +48,10 @@ import (
 
 type reconcileFunc func(context.Context, *rayv1.RayCluster) error
 
-var (
-	DefaultRequeueDuration = 2 * time.Second
-
-	// Definition of a index field for pod name
-	podUIDIndexField = "metadata.uid"
-)
+var DefaultRequeueDuration = 2 * time.Second
 
 // NewReconciler returns a new reconcile.Reconciler
-func NewReconciler(ctx context.Context, mgr manager.Manager, options RayClusterReconcilerOptions) *RayClusterReconciler {
-	if err := mgr.GetFieldIndexer().IndexField(ctx, &corev1.Pod{}, podUIDIndexField, func(rawObj client.Object) []string {
-		pod := rawObj.(*corev1.Pod)
-		return []string{string(pod.UID)}
-	}); err != nil {
-		panic(err)
-	}
-
+func NewReconciler(mgr manager.Manager, options RayClusterReconcilerOptions) *RayClusterReconciler {
 	return &RayClusterReconciler{
 		Client:                     mgr.GetClient(),
 		Scheme:                     mgr.GetScheme(),
@@ -89,6 +77,7 @@ type RayClusterReconcilerOptions struct {
 	WorkerSidecarContainers  []corev1.Container
 	DefaultContainerEnvs     []corev1.EnvVar
 	IsOpenShift              bool
+	UseIngressOnOpenShift    bool
 }
 
 // Reconcile reads that state of the cluster for a RayCluster object and makes changes based on it
@@ -432,6 +421,14 @@ func generateRandomToken(length int) (string, error) {
 	return base64.StdEncoding.EncodeToString(bytes), nil
 }
 
+// shouldCreateOpenShiftRoute determines if an OpenShift Route should be created based on cluster type and configuration.
+// Uses the stored values from reconciler options (no function calls during reconciliation).
+// TODO: Remove once Gateway API support is mature and Route-based dashboard access is no longer needed.
+// See: https://github.com/ray-project/kuberay/pull/4365#issuecomment-4143407845
+func (r *RayClusterReconciler) shouldCreateOpenShiftRoute() bool {
+	return r.options.IsOpenShift && !r.options.UseIngressOnOpenShift
+}
+
 func (r *RayClusterReconciler) reconcileIngress(ctx context.Context, instance *rayv1.RayCluster) error {
 	logger := ctrl.LoggerFrom(ctx)
 	logger.Info("Reconciling Ingress")
@@ -439,11 +436,9 @@ func (r *RayClusterReconciler) reconcileIngress(ctx context.Context, instance *r
 		return nil
 	}
 
-	if r.options.IsOpenShift {
-		// This is open shift - create route
+	if r.shouldCreateOpenShiftRoute() {
 		return r.reconcileRouteOpenShift(ctx, instance)
 	}
-	// plain vanilla kubernetes - create ingress
 	return r.reconcileIngressKubernetes(ctx, instance)
 }
 

@@ -37,7 +37,7 @@ spec:
               memory: "5Gi"
             requests:
               cpu: "1"
-              memory: "2Gi"
+              memory: "5Gi"
           ports:
           - containerPort: 6379
             name: gcs-server

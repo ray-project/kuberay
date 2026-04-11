@@ -10,6 +10,8 @@ import (
 
 // RayCronJobApplyConfiguration represents a declarative configuration of the RayCronJob type for use
 // with apply.
+//
+// RayCronJob is the Schema for the raycronjobs API
 type RayCronJobApplyConfiguration struct {
 	metav1.TypeMetaApplyConfiguration    `json:",inline"`
 	*metav1.ObjectMetaApplyConfiguration `json:"metadata,omitempty"`

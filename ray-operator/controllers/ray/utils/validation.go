@@ -349,6 +349,9 @@ func ValidateRayJobSpec(rayJob *rayv1.RayJob) error {
 	}
 
 	if rayJob.Spec.RayClusterSpec != nil {
+		if IsK8sAuthEnabled(rayJob.Spec.RayClusterSpec.AuthOptions) {
+			return fmt.Errorf("The RayJob spec is invalid: K8s token auth mode is currently not supported for RayJob")
+		}
 		if err := ValidateRayClusterSpec(rayJob.Spec.RayClusterSpec, rayJob.Annotations); err != nil {
 			return fmt.Errorf("The RayJob spec is invalid: %w", err)
 		}
@@ -361,6 +364,9 @@ func ValidateRayJobSpec(rayJob *rayv1.RayJob) error {
 	}
 	if rayJob.Spec.ActiveDeadlineSeconds != nil && *rayJob.Spec.ActiveDeadlineSeconds <= 0 {
 		return fmt.Errorf("The RayJob spec is invalid: activeDeadlineSeconds must be a positive integer")
+	}
+	if rayJob.Spec.PreRunningDeadlineSeconds != nil && *rayJob.Spec.PreRunningDeadlineSeconds <= 0 {
+		return fmt.Errorf("The RayJob spec is invalid: preRunningDeadlineSeconds must be a positive integer")
 	}
 	if rayJob.Spec.BackoffLimit != nil && *rayJob.Spec.BackoffLimit < 0 {
 		return fmt.Errorf("The RayJob spec is invalid: backoffLimit must be a positive integer")
@@ -418,6 +424,10 @@ func validateInitializingTimeout(annotations map[string]string) error {
 }
 
 func ValidateRayServiceSpec(rayService *rayv1.RayService) error {
+	if IsK8sAuthEnabled(rayService.Spec.RayClusterSpec.AuthOptions) {
+		return fmt.Errorf("The RayService spec is invalid: K8s token auth mode is currently not supported for RayService")
+	}
+
 	if err := ValidateRayClusterSpec(&rayService.Spec.RayClusterSpec, rayService.Annotations); err != nil {
 		return fmt.Errorf("The RayService spec is invalid: %w", err)
 	}
@@ -467,6 +477,10 @@ func ValidateClusterUpgradeOptions(rayService *rayv1.RayService) error {
 
 	if options.StepSizePercent == nil || *options.StepSizePercent < 0 || *options.StepSizePercent > 100 {
 		return fmt.Errorf("stepSizePercent must be between 0 and 100")
+	}
+
+	if *options.StepSizePercent > *options.MaxSurgePercent {
+		return fmt.Errorf("stepSizePercent must be less than or equal to maxSurgePercent")
 	}
 
 	if options.IntervalSeconds == nil || *options.IntervalSeconds <= 0 {

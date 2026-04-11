@@ -29,7 +29,7 @@ type RayLogHandler struct {
 	RayClusterName         string
 	LogDir                 string
 	RayNodeName            string
-	RayClusterID           string
+	RayClusterNamespace    string
 	RootDir                string
 	SessionDir             string
 	prevLogsDir            string
@@ -37,7 +37,7 @@ type RayLogHandler struct {
 	PushInterval           time.Duration
 	LogBatching            int
 	filePathMu             sync.Mutex
-	IsHead             bool
+	IsHead                 bool
 	DashboardAddress       string
 	AdditionalEndpoints    []string
 	EndpointPollInterval   time.Duration
@@ -65,6 +65,7 @@ func (r *RayLogHandler) Run(stop <-chan struct{}) error {
 	if r.IsHead {
 		go r.WatchSessionLatestLoops() // Watch session_latest symlink changes
 		go r.FetchAndStoreClusterMetadata()
+		go r.FetchAndStoreTimezone()
 		go r.PollAdditionalEndpointsPeriodically()
 	}
 
@@ -100,7 +101,7 @@ func (r *RayLogHandler) processSessionLatestLogs() {
 	if r.IsHead {
 		metadir := path.Join(r.RootDir, "metadir")
 		metafile := path.Clean(metadir + "/" + fmt.Sprintf("%s/%v",
-			utils.AppendRayClusterNameID(r.RayClusterName, r.RayClusterID),
+			utils.AppendRayClusterNameNamespace(r.RayClusterName, r.RayClusterNamespace),
 			path.Base(sessionID),
 		))
 		if err := r.Writer.CreateDirectory(path.Dir(metafile)); err != nil {
@@ -179,7 +180,7 @@ func (r *RayLogHandler) processSessionLatestLogFile(absoluteLogPathName, session
 	subdir, _ := filepath.Split(relativePath)
 
 	// Build the object name using the standard path structure
-	logDir := utils.GetLogDirByNameID(r.RootDir, utils.AppendRayClusterNameID(r.RayClusterName, r.RayClusterID), nodeID, sessionID)
+	logDir := utils.GetLogDirByNameID(r.RootDir, utils.AppendRayClusterNameNamespace(r.RayClusterName, r.RayClusterNamespace), nodeID, sessionID)
 
 	if subdir != "" && subdir != "." {
 		// Remove trailing separator if present
@@ -449,7 +450,7 @@ func (r *RayLogHandler) processSessionPrevLogs(sessionDir string) {
 	if r.IsHead {
 		metadir := path.Join(r.RootDir, "metadir")
 		metafile := path.Clean(metadir + "/" + fmt.Sprintf("%s/%v",
-			utils.AppendRayClusterNameID(r.RayClusterName, r.RayClusterID),
+			utils.AppendRayClusterNameNamespace(r.RayClusterName, r.RayClusterNamespace),
 			path.Base(sessionID),
 		))
 		if err := r.Writer.CreateDirectory(path.Dir(metafile)); err != nil {
@@ -613,7 +614,7 @@ func (r *RayLogHandler) processPrevLogFile(absoluteLogPathName, localLogDir, ses
 	subdir, _ := filepath.Split(relativePath)
 
 	// Build the object name using the standard path structure
-	logDir := utils.GetLogDirByNameID(r.RootDir, utils.AppendRayClusterNameID(r.RayClusterName, r.RayClusterID), nodeID, sessionID)
+	logDir := utils.GetLogDirByNameID(r.RootDir, utils.AppendRayClusterNameNamespace(r.RayClusterName, r.RayClusterNamespace), nodeID, sessionID)
 
 	if subdir != "" && subdir != "." {
 		// Remove trailing separator if present
@@ -746,7 +747,7 @@ func (r *RayLogHandler) WatchSessionLatestLoops() {
 				sessionID := filepath.Base(event.Name)
 				metadir := path.Join(r.RootDir, "metadir")
 				metafile := path.Clean(metadir + "/" + fmt.Sprintf("%s/%v",
-					utils.AppendRayClusterNameID(r.RayClusterName, r.RayClusterID),
+					utils.AppendRayClusterNameNamespace(r.RayClusterName, r.RayClusterNamespace),
 					path.Base(sessionID),
 				))
 				if err := r.Writer.CreateDirectory(path.Dir(metafile)); err != nil {

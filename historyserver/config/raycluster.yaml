@@ -89,18 +89,22 @@ spec:
           # You can add more endpoints, e.g., "/api/v0/placement_groups,/api/serve/applications/"
           # Note: Only static endpoints (no dynamic path parameters like {job_id}) are supported.
           - name: RAY_COLLECTOR_ADDITIONAL_ENDPOINTS
-            value: "/api/v0/placement_groups"
+            # Query params must match the Ray Dashboard frontend request exactly
+            # (see https://github.com/ray-project/ray/blob/cb9c80fee6a700efe61ea97987248ce82e3fa2e2/python/ray/dashboard/client/src/service/placementGroup.ts):
+            #   detail=1    — include bundles and stats fields required by PlacementGroupTable
+            #   limit=10000 — match the frontend's default limit to avoid truncation
+            value: "/api/v0/placement_groups?detail=1&limit=10000"
           # RAY_COLLECTOR_POLL_INTERVAL controls how often the collector polls the additional
           # endpoints above. Accepts Go duration format (e.g., "30s", "1m", "5m").
           - name: RAY_COLLECTOR_POLL_INTERVAL
             value: "30s"
           - name: S3DISABLE_SSL
             value: "true"
-          - name: AWS_S3ID
+          - name: AWS_ACCESS_KEY_ID
             value: minioadmin
-          - name: AWS_S3SECRET
+          - name: AWS_SECRET_ACCESS_KEY
             value: minioadmin
-          - name: AWS_S3TOKEN
+          - name: AWS_SESSION_TOKEN
             value: ""
           - name: S3_BUCKET
             value: "ray-historyserver"
@@ -199,11 +203,11 @@ spec:
           image: collector:v0.1.0
           imagePullPolicy: IfNotPresent
           env:
-          - name: AWS_S3ID
+          - name: AWS_ACCESS_KEY_ID
             value: minioadmin
-          - name: AWS_S3SECRET
+          - name: AWS_SECRET_ACCESS_KEY
             value: minioadmin
-          - name: AWS_S3TOKEN
+          - name: AWS_SESSION_TOKEN
             value: ""
           - name: S3_BUCKET
             value: "ray-historyserver"
