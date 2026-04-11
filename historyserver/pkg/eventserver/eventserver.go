@@ -1112,17 +1112,125 @@ func (h *EventHandler) handleNodeLifecycleEvent(eventMap map[string]any, cluster
 	return nil
 }
 
-// normalizeTaskIDsToHex converts base64-encoded Ray IDs in task-related events:
-//   - TASK_DEFINITION_EVENT
-//   - ACTOR_TASK_DEFINITION_EVENT
-//   - TASK_LIFECYCLE_EVENT
-//
-// to hex so stored tasks match the live cluster API schema.
-func normalizeTaskIDsToHex(task *types.Task) {
-	normalize := func(base64ID string) string {
-		if base64ID == "" {
-			return ""
+func (h *EventHandler) handleTaskProfileEvent(eventMap map[string]any, clusterSessionKey string) error {
+	taskProfileEvent, ok := eventMap["taskProfileEvents"]
+	if !ok {
+		return fmt.Errorf("event does not have 'taskProfileEvents'")
+	}
+	jsonBytes, err := json.Marshal(taskProfileEvent)
+	if err != nil {
+		return err
+	}
+
+	var profileData types.TaskProfileEvents
+	if err := json.Unmarshal(jsonBytes, &profileData); err != nil {
+		logrus.Errorf("Failed to unmarshal TASK_PROFILE_EVENT: %v", err)
+		return err
+	}
+
+	if profileData.TaskID == "" || len(profileData.ProfileEvents.Events) == 0 {
+		logrus.Debugf("TASK_PROFILE_EVENT has no taskId or events, skipping")
+		return nil
+	}
+
+	// Convert events to ProfileEventRaw format
+	var rawEvents = make([]types.ProfileEventRaw, 0, len(profileData.ProfileEvents.Events))
+	for _, e := range profileData.ProfileEvents.Events {
+		startTime, err := strconv.ParseInt(e.StartTime, 10, 64)
+		if err != nil {
+			logrus.Warnf("Failed to parse StartTime '%s': %v", e.StartTime, err)
+			continue
 		}
+		endTime, err := strconv.ParseInt(e.EndTime, 10, 64)
+		if err != nil {
+			logrus.Warnf("Failed to parse EndTime '%s': %v", e.EndTime, err)
+			continue
+		}
+
+		rawEvents = append(rawEvents, types.ProfileEventRaw{
+			EventName: e.EventName,
+			StartTime: startTime,
+			EndTime:   endTime,
+			ExtraData: e.ExtraData,
+		})
+	}
+	// Convert IDs from base64 to hex before merge (consistent with JOB_DEFINITION_EVENT pattern)
+	profileData.TaskID, err = utils.ConvertBase64ToHex(profileData.TaskID)
+	if err != nil {
+		logrus.Errorf("Failed to convert TaskID from base64 to Hex, will use base64: %v", err)
+	}
+	profileData.JobID, err = utils.ConvertBase64ToHex(profileData.JobID)
+	if err != nil {
+		logrus.Errorf("Failed to convert JobID from base64 to Hex, will use base64: %v", err)
+	}
+	profileData.ProfileEvents.ComponentID, err = utils.ConvertBase64ToHex(profileData.ProfileEvents.ComponentID)
+	if err != nil {
+		logrus.Errorf("Failed to convert ComponentID from base64 to Hex, will use base64: %v", err)
+	}
+
+	taskMap := h.ClusterTaskMap.GetOrCreateTaskMap(clusterSessionKey)
+	taskMap.CreateOrMergeAttempt(profileData.TaskID, profileData.AttemptNumber, func(t *types.Task) {
+		// Ensure core identifiers are set
+		if t.TaskID == "" {
+			t.TaskID = profileData.TaskID
+		}
+		if t.JobID == "" {
+			t.JobID = profileData.JobID
+		}
+
+		// Set AttemptNumber to match the attempt we're merging into
+		t.TaskAttempt = profileData.AttemptNumber
+
+		// Initialize ProfileData if not exists
+		if t.ProfileData == nil {
+			t.ProfileData = &types.ProfileData{
+				ComponentID:   profileData.ProfileEvents.ComponentID,
+				ComponentType: profileData.ProfileEvents.ComponentType,
+				NodeIPAddress: profileData.ProfileEvents.NodeIPAddress,
+			}
+		}
+
+		// Merge events with deduplication based on (eventName, startTime, endTime)
+		type eventKey struct {
+			EventName string
+			StartTime int64
+			EndTime   int64
+		}
+		existingKeys := make(map[eventKey]struct{}, len(t.ProfileData.Events)+len(rawEvents))
+		for _, e := range t.ProfileData.Events {
+			existingKeys[eventKey{e.EventName, e.StartTime, e.EndTime}] = struct{}{}
+		}
+		for _, e := range rawEvents {
+			key := eventKey{e.EventName, e.StartTime, e.EndTime}
+			if _, ok := existingKeys[key]; !ok {
+				t.ProfileData.Events = append(t.ProfileData.Events, e)
+				existingKeys[key] = struct{}{}
+			}
+		}
+
+		// Extract func_or_class_name from extraData if available
+		for _, e := range rawEvents {
+			if strings.HasPrefix(e.EventName, taskPrefix) && e.ExtraData != "" {
+				var extra map[string]interface{}
+				if err := json.Unmarshal([]byte(e.ExtraData), &extra); err == nil {
+					if name, ok := extra["name"].(string); ok && name != "" {
+						// For actor methods, name might be just "increment" or "get_count"
+						// But eventName has the full form like "task::Counter.increment"
+						// Use eventName to get the full func_or_class_name
+						t.FuncOrClassName = strings.TrimPrefix(e.EventName, taskPrefix)
+					}
+				}
+			}
+		}
+	})
+	return nil
+}
+
+// normalizeIDToHex converts a single base64-encoded Ray ID to hex
+func normalizeIDToHex(base64ID string) string {
+	if base64ID == "" {
+		return ""
+	}
 
 	hexID, err := utils.ConvertBase64ToHex(base64ID)
 	if err != nil {
@@ -1131,7 +1239,6 @@ func normalizeTaskIDsToHex(task *types.Task) {
 	}
 	return hexID
 }
-
 
 // normalizeTaskIDsToHex converts base64-encoded Ray IDs in task-related events:
 //   - TASK_DEFINITION_EVENT
