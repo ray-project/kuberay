@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	_ "time/tzdata" // For RayCronJob time zone support
 
 	"github.com/robfig/cron/v3"
 	corev1 "k8s.io/api/core/v1"
@@ -714,8 +715,18 @@ func validateLegacyDeletionPolicies(rayJob *rayv1.RayJob) error {
 // ValidateRayCronJobSpec validates the RayCronJob specification
 func ValidateRayCronJobSpec(rayCronJob *rayv1.RayCronJob) error {
 	// Validate cron schedule format
+	if strings.Contains(rayCronJob.Spec.Schedule, "TZ") {
+		return fmt.Errorf("cannot use TZ or CRON_TZ in schedule, use timeZone field instead")
+	}
 	if _, err := cron.ParseStandard(rayCronJob.Spec.Schedule); err != nil {
 		return fmt.Errorf("invalid cron schedule: %w", err)
+	}
+
+	// Validate time zone if set
+	if rayCronJob.Spec.TimeZone != nil {
+		if _, err := time.LoadLocation(*rayCronJob.Spec.TimeZone); err != nil {
+			return fmt.Errorf("invalid time zone: %w", err)
+		}
 	}
 
 	// Validate the ray job spec
