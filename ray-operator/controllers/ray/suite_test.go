@@ -23,10 +23,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -101,25 +98,16 @@ var _ = BeforeSuite(func(ctx SpecContext) {
 
 	os.Setenv(utils.RAYCLUSTER_DEFAULT_REQUEUE_SECONDS_ENV, "10")
 
-	// 建立 cache selectors
-	rayNodeLabel, err := labels.NewRequirement(utils.RayNodeLabelKey, selection.Equals, []string{"yes"})
+	selectorsByObject, err := CacheSelectors()
 	Expect(err).NotTo(HaveOccurred())
-	podSelector := labels.NewSelector().Add(*rayNodeLabel)
 
-	createdByLabel, err := labels.NewRequirement(utils.KubernetesCreatedByLabelKey, selection.Equals, []string{utils.ComponentName})
-	Expect(err).NotTo(HaveOccurred())
-	jobSelector := labels.NewSelector().Add(*createdByLabel)
-
-	mgr, err = ctrl.NewManager(cfg, ctrl.Options{ // ← 注意這裡是 = 不是 :=
+	mgr, err = ctrl.NewManager(cfg, ctrl.Options{
 		Scheme: scheme.Scheme,
 		Metrics: metricsserver.Options{
 			BindAddress: "0",
 		},
 		Cache: cache.Options{
-			ByObject: map[client.Object]cache.ByObject{
-				&batchv1.Job{}: {Label: jobSelector},
-				&corev1.Pod{}:  {Label: podSelector},
-			},
+			ByObject: selectorsByObject,
 		},
 	})
 	Expect(err).NotTo(HaveOccurred(), "failed to create manager")
