@@ -1618,4 +1618,159 @@ var _ = Context("Inside the default namespace", func() {
 				time.Second*3, time.Millisecond*500).Should(Equal(rayv1.Ready))
 		})
 	})
+
+	// TestPodCacheSelector verifies that the informer cache correctly captures
+	// KubeRay-managed Pods even when a user overrides app.kubernetes.io/created-by
+	// in the pod template labels.
+	//
+	// The cache selector was changed from app.kubernetes.io/created-by=kuberay-operator
+	// to ray.io/node-type (Exists) because the former can be overridden by users,
+	// which would cause Pods to disappear from the cache and break reconciliation.
+	// ray.io/node-type is protected from user override in labelPod().
+	Describe("Pod cache selector with overridden created-by label", Ordered, func() {
+		ctx := context.Background()
+		namespace := "default"
+		const numWorkers int32 = 1
+
+		rayCluster := &rayv1.RayCluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "raycluster-cache-selector",
+				Namespace: namespace,
+			},
+			Spec: rayv1.RayClusterSpec{
+				HeadGroupSpec: rayv1.HeadGroupSpec{
+					Template: corev1.PodTemplateSpec{
+						ObjectMeta: metav1.ObjectMeta{
+							// Override created-by to simulate a user providing custom pod template labels.
+							// This label is NOT protected in labelPod(), so it takes effect on the final Pod.
+							// The cache must NOT rely on this label to find Pods.
+							Labels: map[string]string{
+								utils.KubernetesCreatedByLabelKey: "custom-value",
+							},
+						},
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{{
+								Name:  "ray-head",
+								Image: support.GetRayImage(),
+							}},
+						},
+					},
+				},
+				WorkerGroupSpecs: []rayv1.WorkerGroupSpec{{
+					GroupName: "workergroup",
+					Replicas:  ptr.To(numWorkers),
+					Template: corev1.PodTemplateSpec{
+						ObjectMeta: metav1.ObjectMeta{
+							Labels: map[string]string{
+								utils.KubernetesCreatedByLabelKey: "custom-value",
+							},
+						},
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{{
+								Name:  "ray-worker",
+								Image: support.GetRayImage(),
+							}},
+						},
+					},
+				}},
+			},
+		}
+
+		headFilters := common.RayClusterHeadPodsAssociationOptions(rayCluster).ToListOptions()
+		workerFilters := common.RayClusterGroupPodsAssociationOptions(rayCluster, rayCluster.Spec.WorkerGroupSpecs[0].GroupName).ToListOptions()
+
+		It("Create RayCluster with overridden created-by label", func() {
+			Expect(k8sClient.Create(ctx, rayCluster)).To(Succeed())
+		})
+
+		It("Controller creates exactly 1 head pod and expected worker pods", func() {
+			headPods := corev1.PodList{}
+			workerPods := corev1.PodList{}
+			Eventually(
+				listResourceFunc(ctx, &headPods, headFilters...),
+				time.Second*3, time.Millisecond*500).Should(Equal(1), "expected 1 head pod")
+			Eventually(
+				listResourceFunc(ctx, &workerPods, workerFilters...),
+				time.Second*3, time.Millisecond*500).Should(Equal(int(numWorkers)), "expected %d worker pod(s)", numWorkers)
+		})
+
+		It("Pods have overridden created-by and protected ray.io/node-type labels", func() {
+			// Sanity check: confirm the override took effect and the protected label is present.
+			// This proves the test scenario is valid — created-by is NOT kuberay-operator,
+			// yet ray.io/node-type is still set.
+			var allPods corev1.PodList
+			Expect(k8sClient.List(ctx, &allPods, client.InNamespace(namespace),
+				client.MatchingLabels{utils.RayClusterLabelKey: rayCluster.Name})).To(Succeed())
+			Expect(allPods.Items).To(HaveLen(int(1 + numWorkers)))
+
+			for _, pod := range allPods.Items {
+				Expect(pod.Labels).To(HaveKeyWithValue(utils.KubernetesCreatedByLabelKey, "custom-value"),
+					"pod %s/%s: created-by should be overridden to custom-value", pod.Namespace, pod.Name)
+				Expect(pod.Labels).To(HaveKey(utils.RayNodeTypeLabelKey),
+					"pod %s/%s: ray.io/node-type should be set (protected label)", pod.Namespace, pod.Name)
+			}
+		})
+
+		It("Update all pods to Running and Ready", func() {
+			updateHeadPodToRunningAndReady(ctx, rayCluster.Name, namespace)
+			updateWorkerPodsToRunningAndReady(ctx, rayCluster.Name, namespace)
+
+			// Confirm via k8sClient before proceeding — status patches in envtest
+			// are not always immediately visible.
+			headPods := corev1.PodList{}
+			workerPods := corev1.PodList{}
+			Eventually(isAllPodsRunningByFilters).
+				WithContext(ctx).WithArguments(headPods, headFilters).
+				WithTimeout(time.Second*3).WithPolling(time.Millisecond*500).
+				Should(BeTrue(), "head pod should be Running")
+			Eventually(isAllPodsRunningByFilters).
+				WithContext(ctx).WithArguments(workerPods, workerFilters).
+				WithTimeout(time.Second*3).WithPolling(time.Millisecond*500).
+				Should(BeTrue(), "worker pods should be Running")
+		})
+
+		It("Manager cache contains exactly all head and worker pods for this cluster", func() {
+			// Get the ground-truth pod name set via the direct API client.
+			var directPods corev1.PodList
+			Expect(k8sClient.List(ctx, &directPods, client.InNamespace(namespace),
+				client.MatchingLabels{utils.RayClusterLabelKey: rayCluster.Name})).To(Succeed())
+			expectedNames := make([]string, 0, len(directPods.Items))
+			for _, pod := range directPods.Items {
+				expectedNames = append(expectedNames, pod.Name)
+			}
+
+			// The cached client must return the exact same pod set.
+			// If the cache were still using created-by=kuberay-operator as the selector,
+			// these pods would be invisible here because their created-by is "custom-value".
+			Eventually(func() []string {
+				var cachedPods corev1.PodList
+				if err := mgr.GetClient().List(ctx, &cachedPods, client.InNamespace(namespace),
+					client.MatchingLabels{utils.RayClusterLabelKey: rayCluster.Name}); err != nil {
+					return nil
+				}
+				names := make([]string, 0, len(cachedPods.Items))
+				for _, pod := range cachedPods.Items {
+					names = append(names, pod.Name)
+				}
+				return names
+			}, time.Second*3, time.Millisecond*500).Should(ConsistOf(expectedNames))
+		})
+
+		It("RayCluster reaches Ready state with expected available worker replicas", func() {
+			Eventually(
+				getClusterState(ctx, namespace, rayCluster.Name),
+				time.Second*3, time.Millisecond*500).Should(Equal(rayv1.Ready))
+			Eventually(func() int32 {
+				var cluster rayv1.RayCluster
+				if err := k8sClient.Get(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: namespace}, &cluster); err != nil {
+					return 0
+				}
+				return cluster.Status.AvailableWorkerReplicas
+			}, time.Second*3, time.Millisecond*500).Should(Equal(numWorkers))
+		})
+
+		It("Delete RayCluster", func() {
+			Expect(k8sClient.Delete(ctx, rayCluster)).To(Succeed())
+		})
+	})
 })
