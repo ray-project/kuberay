@@ -1142,11 +1142,10 @@ func (s *ServerHandler) getLogicalActors(req *restful.Request, resp *restful.Res
 // Ref: ActorDetail type https://github.com/ray-project/ray/blob/a8fdb50e72/python/ray/dashboard/client/src/type/actor.ts#L18-L69
 func formatActorForResponse(actor eventtypes.Actor) map[string]interface{} {
 	result := map[string]interface{}{
-		"actorId":          actor.ActorID,
-		"jobId":            actor.JobID,
-		"placementGroupId": actor.PlacementGroupID,
-		"state":            string(actor.State),
-		"pid":              actor.PID,
+		"actorId": actor.ActorID,
+		"jobId":   actor.JobID,
+		"state":   string(actor.State),
+		"pid":     actor.PID,
 		"address": map[string]interface{}{
 			"nodeId":    actor.Address.NodeID,
 			"ipAddress": actor.Address.IPAddress,
@@ -1154,18 +1153,18 @@ func formatActorForResponse(actor eventtypes.Actor) map[string]interface{} {
 			"workerId":  actor.Address.WorkerID,
 		},
 		"name":              actor.Name,
-		"numRestarts":       actor.NumRestarts,
+		"numRestarts":       strconv.Itoa(actor.NumRestarts),
 		"actorClass":        actor.ActorClass,
+		"className":         actor.ActorClass,
 		"requiredResources": actor.RequiredResources,
 		// Note: The key is "exitDetail" (singular), not "exitDetails" (plural). This matches
 		// the Ray Dashboard frontend TypeScript type and the live Ray Dashboard API.
 		// Ref: https://github.com/ray-project/ray/blob/a8fdb50e72/python/ray/dashboard/client/src/type/actor.ts#L33
-		"exitDetail":    actor.ExitDetails,
-		"reprName":      actor.ReprName,
-		"callSite":      actor.CallSite,
-		"isDetached":    actor.IsDetached,
-		"rayNamespace":  actor.RayNamespace,
-		"labelSelector": actor.LabelSelector,
+		"exitDetail":       actor.ExitDetails,
+		"reprName":         actor.ReprName,
+		"placementGroupId": actor.PlacementGroupID,
+		"callSite":         actor.CallSite,
+		"labelSelector":    actor.LabelSelector,
 	}
 
 	if !actor.StartTime.IsZero() {
@@ -1174,6 +1173,7 @@ func formatActorForResponse(actor eventtypes.Actor) map[string]interface{} {
 
 	if !actor.EndTime.IsZero() {
 		result["endTime"] = actor.EndTime.UnixMilli()
+		result["timestamp"] = float64(actor.EndTime.UnixMilli())
 	}
 
 	return result
@@ -1190,7 +1190,7 @@ func (s *ServerHandler) getLogicalActor(req *restful.Request, resp *restful.Resp
 	actorID := req.PathParameter("single_actor")
 
 	// Get actor from EventHandler's in-memory map.
-	// GetActorByID supports both Base64 and hex-encoded IDs.
+	// Actor IDs are normalized to hex at ingestion time, so lookup is by hex ID.
 	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
 	actor, found := s.eventHandler.GetActorByID(clusterSessionKey, actorID)
 
