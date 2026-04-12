@@ -577,10 +577,8 @@ func (s *ServerHandler) getNode(req *restful.Request, resp *restful.Response) {
 	actorsMap := s.eventHandler.GetActorsMap(clusterSessionKey)
 	nodeActors := make(map[string]interface{})
 	for _, actor := range actorsMap {
-		nodeIDHex, _ := utils.ConvertBase64ToHex(actor.Address.NodeID)
-		if nodeIDHex == targetNodeId {
-			actorIDHex, _ := utils.ConvertBase64ToHex(actor.ActorID)
-			nodeActors[actorIDHex] = formatActorForResponse(actor)
+		if actor.Address.NodeID == targetNodeId {
+			nodeActors[actor.ActorID] = formatActorForResponse(actor)
 		}
 	}
 	if detail != nil {
@@ -1119,9 +1117,7 @@ func (s *ServerHandler) getLogicalActors(req *restful.Request, resp *restful.Res
 	// Format response to match Ray Dashboard API format
 	formattedActors := make(map[string]interface{})
 	for _, actor := range actorsMap {
-		// Use hex ID as map key to match Ray Dashboard API format
-		actorIDHex, _ := utils.ConvertBase64ToHex(actor.ActorID)
-		formattedActors[actorIDHex] = formatActorForResponse(actor)
+		formattedActors[actor.ActorID] = formatActorForResponse(actor)
 	}
 
 	response := map[string]interface{}{
@@ -1145,27 +1141,17 @@ func (s *ServerHandler) getLogicalActors(req *restful.Request, resp *restful.Res
 // Uses camelCase keys and hex-encoded IDs to match the Ray Dashboard API format.
 // Ref: ActorDetail type https://github.com/ray-project/ray/blob/a8fdb50e72/python/ray/dashboard/client/src/type/actor.ts#L18-L69
 func formatActorForResponse(actor eventtypes.Actor) map[string]interface{} {
-	// Convert Base64 IDs to Hex format for Dashboard API compatibility
-	actorIDHex, _ := utils.ConvertBase64ToHex(actor.ActorID)
-	jobIDHex, _ := utils.ConvertBase64ToHex(actor.JobID)
-	nodeIDHex, _ := utils.ConvertBase64ToHex(actor.Address.NodeID)
-	workerIDHex, _ := utils.ConvertBase64ToHex(actor.Address.WorkerID)
-	placementGroupIDHex := actor.PlacementGroupID
-	if placementGroupIDHex != "" {
-		placementGroupIDHex, _ = utils.ConvertBase64ToHex(placementGroupIDHex)
-	}
-
 	result := map[string]interface{}{
-		"actorId":          actorIDHex,
-		"jobId":            jobIDHex,
-		"placementGroupId": placementGroupIDHex,
+		"actorId":          actor.ActorID,
+		"jobId":            actor.JobID,
+		"placementGroupId": actor.PlacementGroupID,
 		"state":            string(actor.State),
 		"pid":              actor.PID,
 		"address": map[string]interface{}{
-			"nodeId":    nodeIDHex,
+			"nodeId":    actor.Address.NodeID,
 			"ipAddress": actor.Address.IPAddress,
 			"port":      actor.Address.Port,
-			"workerId":  workerIDHex,
+			"workerId":  actor.Address.WorkerID,
 		},
 		"name":              actor.Name,
 		"numRestarts":       actor.NumRestarts,
