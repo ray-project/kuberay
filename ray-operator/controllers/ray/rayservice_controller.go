@@ -1985,10 +1985,10 @@ func (r *RayServiceReconciler) reconcilePerClusterServeService(ctx context.Conte
 
 	logger := ctrl.LoggerFrom(ctx).WithValues("RayCluster", rayClusterInstance.Name)
 
-	logger.Info("Building per-cluster RayService")
+	logger.Info("Building per-cluster serve service")
 
 	// Create a serve service for the RayCluster associated with this RayService. During an incremental
-	// upgrade, this will be called for the pending RayCluster instance.
+	// upgrade, this will be called for both the active and pending RayCluster instances.
 	desiredSvc, err := common.BuildServeService(ctx, *rayServiceInstance, *rayClusterInstance, true)
 	if err != nil {
 		logger.Error(err, "Failed to build per-cluster serve service spec")
