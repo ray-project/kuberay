@@ -267,7 +267,7 @@ pip: ["python-multipart==0.0.6"]
 			var expectedMap, actualMap map[string]any
 			unquoteExpected, err1 := strconv.Unquote(expected[i+1]) //nolint:gosec // loop bounds guarantee i+1 is valid
 			require.NoError(t, err1)
-			unquotedCommand, err2 := strconv.Unquote(command[i+1]) //nolint:gosec // loop bounds guarantee i+1 is valid
+			unquotedCommand, err2 := strconv.Unquote(command[i+1])
 			require.NoError(t, err2)
 			err1 = json.Unmarshal([]byte(unquoteExpected), &expectedMap)
 			err2 = json.Unmarshal([]byte(unquotedCommand), &actualMap)
