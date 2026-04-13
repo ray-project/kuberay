@@ -70,9 +70,10 @@ func bootstrapIncrementalRayService(
 	g.Eventually(HTTPRoute(test, rayService.Namespace, httpRouteName), TestTimeoutMedium).
 		Should(Not(BeNil()))
 
-	httpRoute, err = GetHTTPRoute(test, rayService.Namespace, httpRouteName)
-	g.Expect(err).NotTo(HaveOccurred())
-	g.Expect(utils.IsHTTPRouteReady(gateway, httpRoute)).To(BeTrue())
+	g.Eventually(func() (bool, error) {
+		httpRoute, err = GetHTTPRoute(test, rayService.Namespace, httpRouteName)
+		return utils.IsHTTPRouteReady(gateway, httpRoute), err
+	}, TestTimeoutMedium).Should(BeTrue())
 
 	gatewayIP = GetGatewayIP(gateway)
 	g.Expect(gatewayIP).NotTo(BeEmpty())
