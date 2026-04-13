@@ -2007,9 +2007,9 @@ func TestValidateClusterUpgradeOptions(t *testing.T) {
 		},
 		{
 			name:              "invalid StepSizePercent (greater than MaxSurgePercent)",
-			maxSurgePercent:   ptr.To(int32(50)),
-			stepSizePercent:   ptr.To(int32(75)),
-			intervalSeconds:   ptr.To(int32(10)),
+			maxSurgePercent:   new(int32(50)),
+			stepSizePercent:   new(int32(75)),
+			intervalSeconds:   new(int32(10)),
 			gatewayClassName:  "istio",
 			enableAutoscaling: true,
 			expectError:       true,
