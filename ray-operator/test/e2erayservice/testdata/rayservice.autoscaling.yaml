@@ -43,7 +43,7 @@ spec:
                   cpu: 300m
                   memory: 1G
                 limits:
-                  cpu: 500m
+                  cpu: 1
                   memory: 2G
               ports:
                 - containerPort: 6379
