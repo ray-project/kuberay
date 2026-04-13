@@ -103,7 +103,7 @@ func main() {
 	}
 
 	// Create reverse proxy
-	proxy := httputil.NewSingleHostReverseProxy(remote)
+	proxy := httputil.NewSingleHostReverseProxy(remote) //nolint:gosec // URL is constructed from localhost + config port, not user input
 	klog.Info("Connected to remote HTTP ", remoteURL)
 	// Create token authorization
 	token := httpproxy.NewTokenAuth(securityToken, proxy, securePrefix, remote)
