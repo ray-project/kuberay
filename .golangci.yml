@@ -22,6 +22,7 @@ linters:
     - errorlint
     - staticcheck
     - noctx
+    - newexpr
     - revive
   settings:
     staticcheck:
