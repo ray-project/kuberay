@@ -156,8 +156,8 @@ var _ = Context("NetworkPolicy Controller Integration Tests", func() {
 			}
 			Expect(headNetworkPolicy.Spec.PodSelector).To(Equal(expectedPodSelector))
 
-			// 2 base ingress rules: intra-cluster and operator access.
-			Expect(headNetworkPolicy.Spec.Ingress).To(HaveLen(2), "Should have 2 base ingress rules")
+			// 3 base ingress rules: intra-cluster, operator, and RayJob submitter access.
+			Expect(headNetworkPolicy.Spec.Ingress).To(HaveLen(3), "Should have 3 base ingress rules")
 
 			// Rule 0: intra-cluster — no ports (allows all).
 			intraClusterRule := headNetworkPolicy.Spec.Ingress[0]
@@ -426,15 +426,15 @@ var _ = Context("NetworkPolicy Controller Integration Tests", func() {
 				time.Second*3, time.Millisecond*500).Should(Succeed())
 		})
 
-		It("Head NetworkPolicy has 3 ingress rules (2 base + 1 custom)", func() {
+		It("Head NetworkPolicy has 4 ingress rules (3 base + 1 custom)", func() {
 			headNetworkPolicy := &networkingv1.NetworkPolicy{}
 			headKey := types.NamespacedName{Namespace: namespace, Name: rayCluster.Name + "-head"}
 			Eventually(
 				getResourceFunc(ctx, headKey, headNetworkPolicy),
 				time.Second*10, time.Millisecond*500).Should(Succeed())
 
-			Expect(headNetworkPolicy.Spec.Ingress).To(HaveLen(3), "Should have 2 base + 1 custom ingress rules")
-			Expect(headNetworkPolicy.Spec.Ingress[2].Ports[0].Port.IntVal).To(Equal(customPort))
+			Expect(headNetworkPolicy.Spec.Ingress).To(HaveLen(4), "Should have 3 base + 1 custom ingress rules")
+			Expect(headNetworkPolicy.Spec.Ingress[3].Ports[0].Port.IntVal).To(Equal(customPort))
 		})
 
 		It("Delete RayCluster", func() {
@@ -443,28 +443,20 @@ var _ = Context("NetworkPolicy Controller Integration Tests", func() {
 		})
 	})
 
-	Describe("RayCluster owned by RayJob", Ordered, func() {
+	Describe("RayJob submitter ingress rule is present on all clusters", Ordered, func() {
 		ctx := context.Background()
 		namespace := "default"
-		rayCluster := rayClusterTemplateForNetworkPolicy("raycluster-rayjob", namespace)
-		rayCluster.OwnerReferences = []metav1.OwnerReference{
-			{
-				APIVersion: "ray.io/v1",
-				Kind:       "RayJob",
-				Name:       "test-rayjob",
-				UID:        "12345",
-			},
-		}
+		rayCluster := rayClusterTemplateForNetworkPolicy("raycluster-submitter-rule", namespace)
 
-		It("Create a RayCluster with RayJob owner reference", func() {
+		It("Create a standalone RayCluster", func() {
 			err := k8sClient.Create(ctx, rayCluster)
-			Expect(err).NotTo(HaveOccurred(), "Failed to create RayCluster with RayJob owner")
+			Expect(err).NotTo(HaveOccurred(), "Failed to create RayCluster")
 			Eventually(
 				getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: namespace}, rayCluster),
-				time.Second*3, time.Millisecond*500).Should(Succeed(), "Should be able to see RayCluster: %v", rayCluster.Name)
+				time.Second*3, time.Millisecond*500).Should(Succeed())
 		})
 
-		It("Head NetworkPolicy includes RayJob peer as additional ingress rule", func() {
+		It("Head NetworkPolicy includes RayJob submitter ingress rule on dashboard port", func() {
 			headNetworkPolicy := &networkingv1.NetworkPolicy{}
 			headKey := types.NamespacedName{Namespace: namespace, Name: rayCluster.Name + "-head"}
 
@@ -472,21 +464,22 @@ var _ = Context("NetworkPolicy Controller Integration Tests", func() {
 				getResourceFunc(ctx, headKey, headNetworkPolicy),
 				time.Second*10, time.Millisecond*500).Should(Succeed(), "Head NetworkPolicy should be created")
 
-			// 2 base rules + 1 RayJob peer = 3.
-			Expect(headNetworkPolicy.Spec.Ingress).To(HaveLen(3), "Should have additional RayJob ingress rule")
+			Expect(headNetworkPolicy.Spec.Ingress).To(HaveLen(3), "Should have 3 base ingress rules")
 
-			rayJobRule := headNetworkPolicy.Spec.Ingress[len(headNetworkPolicy.Spec.Ingress)-1]
-			Expect(rayJobRule.From).To(HaveLen(1), "RayJob rule should have one peer")
-			Expect(rayJobRule.From[0]).To(Equal(networkingv1.NetworkPolicyPeer{
+			submitterRule := headNetworkPolicy.Spec.Ingress[2]
+			Expect(submitterRule.From).To(HaveLen(1))
+			Expect(submitterRule.From[0]).To(Equal(networkingv1.NetworkPolicyPeer{
 				PodSelector: &metav1.LabelSelector{
 					MatchLabels: map[string]string{
-						"batch.kubernetes.io/job-name": "test-rayjob",
+						utils.RayOriginatedFromCRDLabelKey: utils.RayOriginatedFromCRDLabelValue(utils.RayJobCRD),
 					},
 				},
 			}))
+			Expect(submitterRule.Ports).To(HaveLen(1), "Submitter rule should only allow dashboard port")
+			Expect(submitterRule.Ports[0].Port.IntVal).To(Equal(int32(8265)))
 		})
 
-		It("Clean up RayCluster with RayJob owner", func() {
+		It("Clean up RayCluster", func() {
 			err := k8sClient.Delete(ctx, rayCluster)
 			Expect(err).NotTo(HaveOccurred(), "Failed to delete RayCluster")
 		})
@@ -584,48 +577,6 @@ var _ = Context("NetworkPolicy Controller Integration Tests", func() {
 					return err != nil && client.IgnoreNotFound(err) == nil
 				},
 				time.Second*10, time.Millisecond*500).Should(BeTrue(), "RayCluster should be deleted")
-		})
-	})
-
-	Describe("RayJob submitter cannot reach an unowned RayCluster without explicit ingress rules", Ordered, func() {
-		ctx := context.Background()
-		namespace := "default"
-		rayCluster := rayClusterTemplateForNetworkPolicy("raycluster-no-job-owner", namespace)
-
-		It("Create a standalone RayCluster (not owned by any RayJob)", func() {
-			err := k8sClient.Create(ctx, rayCluster)
-			Expect(err).NotTo(HaveOccurred())
-			Eventually(
-				getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: namespace}, rayCluster),
-				time.Second*3, time.Millisecond*500).Should(Succeed())
-		})
-
-		It("Head NetworkPolicy has no submitter or same-namespace ingress rule", func() {
-			headNetworkPolicy := &networkingv1.NetworkPolicy{}
-			headKey := types.NamespacedName{Namespace: namespace, Name: rayCluster.Name + "-head"}
-			Eventually(
-				getResourceFunc(ctx, headKey, headNetworkPolicy),
-				time.Second*10, time.Millisecond*500).Should(Succeed())
-
-			// Without a RayJob owner reference, only 2 base rules should exist:
-			// intra-cluster and operator access. No RayJob submitter peer and no
-			// broad same-namespace rule, so a clusterSelector-based RayJob submitter
-			// would be blocked from reaching the dashboard port.
-			Expect(headNetworkPolicy.Spec.Ingress).To(HaveLen(2),
-				"Only intra-cluster and operator ingress rules should be present")
-
-			for _, rule := range headNetworkPolicy.Spec.Ingress {
-				for _, peer := range rule.From {
-					Expect(peer.PodSelector).NotTo(BeNil(), "Every peer should have a PodSelector")
-					Expect(peer.PodSelector.MatchLabels).NotTo(BeEmpty(),
-						"No rule should use an empty PodSelector; submitter access requires explicit IngressRules")
-				}
-			}
-		})
-
-		It("Delete RayCluster", func() {
-			err := k8sClient.Delete(ctx, rayCluster)
-			Expect(err).NotTo(HaveOccurred())
 		})
 	})
 })
