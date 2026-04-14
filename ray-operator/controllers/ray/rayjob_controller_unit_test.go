@@ -385,6 +385,55 @@ func TestFailedToCreateRayJobSubmitterEvent(t *testing.T) {
 	assert.Truef(t, foundFailureEvent, "Expected event to be generated for job creation failure, got events: %s", strings.Join(events, "\n"))
 }
 
+// TestCreateNewK8sJob_PropagatesLabelsToSubmitterPodTemplate verifies that createNewK8sJob
+// propagates KubeRay labels to the submitter pod template so that NetworkPolicies can
+// select submitter pods by KubeRay-specific labels.
+func TestCreateNewK8sJob_PropagatesLabelsToSubmitterPodTemplate(t *testing.T) {
+	rayJob := &rayv1.RayJob{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-rayjob",
+			Namespace: "default",
+			UID:       "test-uid",
+		},
+	}
+
+	submitterTemplate := corev1.PodTemplateSpec{
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
+				{Name: "ray-submit", Image: "rayproject/ray:latest"},
+			},
+		},
+	}
+
+	var createdJob *batchv1.Job
+	fakeClient := clientFake.NewClientBuilder().WithInterceptorFuncs(interceptor.Funcs{
+		Create: func(_ context.Context, _ client.WithWatch, obj client.Object, _ ...client.CreateOption) error {
+			if job, ok := obj.(*batchv1.Job); ok {
+				createdJob = job
+			}
+			return nil
+		},
+	}).WithScheme(scheme.Scheme).Build()
+
+	reconciler := &RayJobReconciler{
+		Client:   fakeClient,
+		Recorder: record.NewFakeRecorder(10),
+		Scheme:   scheme.Scheme,
+	}
+
+	err := reconciler.createNewK8sJob(context.Background(), rayJob, submitterTemplate)
+	require.NoError(t, err)
+	require.NotNil(t, createdJob)
+
+	podLabels := createdJob.Spec.Template.Labels
+	assert.Equal(t, "test-rayjob", podLabels[utils.RayOriginatedFromCRNameLabelKey],
+		"Pod template should have ray.io/originated-from-cr-name label")
+	assert.Equal(t, string(utils.RayJobCRD), podLabels[utils.RayOriginatedFromCRDLabelKey],
+		"Pod template should have ray.io/originated-from-crd label")
+	assert.Equal(t, utils.ComponentName, podLabels[utils.KubernetesCreatedByLabelKey],
+		"Pod template should have app.kubernetes.io/created-by label")
+}
+
 func TestFailedCreateRayClusterEvent(t *testing.T) {
 	rayJob := &rayv1.RayJob{
 		ObjectMeta: metav1.ObjectMeta{

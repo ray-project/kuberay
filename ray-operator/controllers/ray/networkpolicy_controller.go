@@ -195,13 +195,6 @@ func (r *NetworkPolicyController) buildHeadNetworkPolicy(instance *rayv1.RayClus
 		policyTypes = append(policyTypes, networkingv1.PolicyTypeIngress)
 		ingressRules = r.buildHeadIngressRules(instance)
 		ingressRules = append(ingressRules, instance.Spec.NetworkIsolation.IngressRules...)
-
-		// Auto-allow RayJob submitter pod if RayCluster is owned by a RayJob
-		if rayJobPeer := r.buildRayJobPeer(instance); rayJobPeer != nil {
-			ingressRules = append(ingressRules, networkingv1.NetworkPolicyIngressRule{
-				From: []networkingv1.NetworkPolicyPeer{*rayJobPeer},
-			})
-		}
 	}
 
 	// Only restrict egress when mode includes egress denial.
@@ -296,10 +289,9 @@ func (r *NetworkPolicyController) buildBaseIngressRules(instance *rayv1.RayClust
 }
 
 // buildHeadIngressRules returns the full set of base ingress rules for the head
-// NetworkPolicy: intra-cluster communication plus operator access to dashboard
-// and client ports. No same-namespace rule is added by default to keep the
-// policy strict. Users who need external access (e.g. RayJob submitters) must
-// add explicit IngressRules in the NetworkIsolation spec.
+// NetworkPolicy: intra-cluster communication, KubeRay operator access, and
+// RayJob submitter access to the dashboard port. Users who need other external
+// access must add explicit IngressRules in the NetworkIsolation spec.
 func (r *NetworkPolicyController) buildHeadIngressRules(instance *rayv1.RayCluster) []networkingv1.NetworkPolicyIngressRule {
 	tcpProtocol := corev1.ProtocolTCP
 	dashboardPort := intstr.FromInt32(r.getHeadPort(instance, utils.DashboardPortName, utils.DefaultDashboardPort))
@@ -332,6 +324,25 @@ func (r *NetworkPolicyController) buildHeadIngressRules(instance *rayv1.RayClust
 			Ports: []networkingv1.NetworkPolicyPort{
 				{Protocol: &tcpProtocol, Port: &dashboardPort},
 				{Protocol: &tcpProtocol, Port: &clientPort},
+			},
+		},
+		// RayJob submitter pod access to the dashboard port. The KubeRay operator
+		// propagates ray.io/originated-from-crd=RayJob to all submitter pod
+		// templates, so this rule allows any KubeRay-created RayJob submitter in
+		// the same namespace to submit jobs — whether the RayCluster is owned by
+		// the RayJob or pre-existing (clusterSelector).
+		networkingv1.NetworkPolicyIngressRule{
+			From: []networkingv1.NetworkPolicyPeer{
+				{
+					PodSelector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							utils.RayOriginatedFromCRDLabelKey: utils.RayOriginatedFromCRDLabelValue(utils.RayJobCRD),
+						},
+					},
+				},
+			},
+			Ports: []networkingv1.NetworkPolicyPort{
+				{Protocol: &tcpProtocol, Port: &dashboardPort},
 			},
 		},
 	)
@@ -433,23 +444,6 @@ func (r *NetworkPolicyController) cleanupNetworkPoliciesIfNeeded(ctx context.Con
 	}
 
 	return ctrl.Result{}, nil
-}
-
-// buildRayJobPeer returns a NetworkPolicyPeer for the RayJob submitter pod
-// if the RayCluster is owned by a RayJob. Returns nil otherwise.
-func (r *NetworkPolicyController) buildRayJobPeer(instance *rayv1.RayCluster) *networkingv1.NetworkPolicyPeer {
-	for _, ownerRef := range instance.OwnerReferences {
-		if ownerRef.Kind == "RayJob" {
-			return &networkingv1.NetworkPolicyPeer{
-				PodSelector: &metav1.LabelSelector{
-					MatchLabels: map[string]string{
-						"batch.kubernetes.io/job-name": ownerRef.Name,
-					},
-				},
-			}
-		}
-	}
-	return nil
 }
 
 // SetupWithManager sets up the controller with the Manager

@@ -43,7 +43,6 @@ var (
 	testRayClusterDenyAllIngress *rayv1.RayCluster
 	testRayClusterDenyAllEgress  *rayv1.RayCluster
 	testRayClusterWithRayJob     *rayv1.RayCluster
-	testRayClusterWithOtherOwner *rayv1.RayCluster
 )
 
 func setupNetworkPolicyTest(t *testing.T) {
@@ -159,37 +158,6 @@ func setupNetworkPolicyTest(t *testing.T) {
 			},
 		},
 	}
-
-	// Cluster owned by something other than a RayJob.
-	testRayClusterWithOtherOwner = &rayv1.RayCluster{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-cluster-other",
-			Namespace: "default",
-			OwnerReferences: []metav1.OwnerReference{
-				{
-					APIVersion: "apps/v1",
-					Kind:       "Deployment",
-					Name:       "test-deployment",
-					UID:        "67890",
-				},
-			},
-		},
-		Spec: rayv1.RayClusterSpec{
-			NetworkIsolation: &rayv1.NetworkIsolationConfig{
-				Mode: ptr.To(rayv1.NetworkIsolationDenyAll),
-			},
-			HeadGroupSpec: rayv1.HeadGroupSpec{
-				RayStartParams: map[string]string{},
-				Template: corev1.PodTemplateSpec{
-					Spec: corev1.PodSpec{
-						Containers: []corev1.Container{
-							{Name: "ray-head", Image: "rayproject/ray:latest"},
-						},
-					},
-				},
-			},
-		},
-	}
 }
 
 // TestBuildHeadNetworkPolicy_DenyAll verifies the head NetworkPolicy in default denyAll mode.
@@ -219,8 +187,8 @@ func TestBuildHeadNetworkPolicy_DenyAll(t *testing.T) {
 	assert.Contains(t, policy.Spec.PolicyTypes, networkingv1.PolicyTypeIngress)
 	assert.Contains(t, policy.Spec.PolicyTypes, networkingv1.PolicyTypeEgress)
 
-	// 2 base ingress rules: intra-cluster and operator access.
-	assert.Len(t, policy.Spec.Ingress, 2)
+	// 3 base ingress rules: intra-cluster, operator, and RayJob submitter access.
+	assert.Len(t, policy.Spec.Ingress, 3)
 
 	// 2 base egress rules: intra-cluster and DNS.
 	assert.Len(t, policy.Spec.Egress, 2)
@@ -234,7 +202,7 @@ func TestBuildHeadNetworkPolicy_DenyAllIngress(t *testing.T) {
 
 	assert.Contains(t, policy.Spec.PolicyTypes, networkingv1.PolicyTypeIngress)
 	assert.NotContains(t, policy.Spec.PolicyTypes, networkingv1.PolicyTypeEgress)
-	assert.Len(t, policy.Spec.Ingress, 2)
+	assert.Len(t, policy.Spec.Ingress, 3)
 	assert.Empty(t, policy.Spec.Egress)
 }
 
@@ -336,14 +304,13 @@ func TestBuildBaseIngressRules(t *testing.T) {
 	assert.Empty(t, intraClusterRule.Ports, "Intra-cluster rule must allow all ports (no Ports field)")
 }
 
-// TestBuildHeadIngressRules verifies the 2 head-specific base ingress rules:
-// intra-cluster + operator access. No same-namespace rule is added by default
-// to keep the policy strict; users must add explicit IngressRules for external access.
+// TestBuildHeadIngressRules verifies the 3 head-specific base ingress rules:
+// intra-cluster, operator access, and RayJob submitter access.
 func TestBuildHeadIngressRules(t *testing.T) {
 	setupNetworkPolicyTest(t)
 
 	rules := testNetworkPolicyController.buildHeadIngressRules(testRayClusterBasic)
-	require.Len(t, rules, 2)
+	require.Len(t, rules, 3)
 
 	// Rule 0: intra-cluster — no ports, pod selector matching the cluster label.
 	intraClusterRule := rules[0]
@@ -354,7 +321,6 @@ func TestBuildHeadIngressRules(t *testing.T) {
 
 	// Rule 1: operator — two ports (dashboard + client), operator pod selector with
 	// namespace selector restricted to the operator's namespace.
-	// Only component label is used; name label differs between kustomize and Helm.
 	operatorRule := rules[1]
 	require.Len(t, operatorRule.From, 1)
 	assert.Equal(t, map[string]string{
@@ -369,6 +335,16 @@ func TestBuildHeadIngressRules(t *testing.T) {
 	clientPort := intstr.FromInt32(utils.DefaultClientPort)
 	assert.Equal(t, &dashboardPort, operatorRule.Ports[0].Port)
 	assert.Equal(t, &clientPort, operatorRule.Ports[1].Port)
+
+	// Rule 2: RayJob submitter — dashboard port only, matching ray.io/originated-from-crd=RayJob.
+	submitterRule := rules[2]
+	require.Len(t, submitterRule.From, 1)
+	assert.Equal(t, map[string]string{
+		utils.RayOriginatedFromCRDLabelKey: utils.RayOriginatedFromCRDLabelValue(utils.RayJobCRD),
+	}, submitterRule.From[0].PodSelector.MatchLabels)
+	assert.Nil(t, submitterRule.From[0].NamespaceSelector, "Submitter rule should only match pods in the same namespace")
+	require.Len(t, submitterRule.Ports, 1)
+	assert.Equal(t, &dashboardPort, submitterRule.Ports[0].Port)
 }
 
 // TestBuildBaseEgressRules verifies the 2 base egress rules (intra-cluster + DNS).
@@ -397,77 +373,15 @@ func TestBuildBaseEgressRules(t *testing.T) {
 	assert.ElementsMatch(t, []corev1.Protocol{corev1.ProtocolUDP, corev1.ProtocolTCP}, protocols)
 }
 
-// TestBuildRayJobPeer_NoOwner verifies nil is returned when the cluster has no owner references.
-func TestBuildRayJobPeer_NoOwner(t *testing.T) {
-	setupNetworkPolicyTest(t)
-
-	peer := testNetworkPolicyController.buildRayJobPeer(testRayClusterBasic)
-	assert.Nil(t, peer)
-}
-
-// TestBuildRayJobPeer_WithRayJobOwner verifies the correct peer is built from a RayJob ownerRef.
-func TestBuildRayJobPeer_WithRayJobOwner(t *testing.T) {
-	setupNetworkPolicyTest(t)
-
-	peer := testNetworkPolicyController.buildRayJobPeer(testRayClusterWithRayJob)
-	require.NotNil(t, peer)
-
-	expectedPeer := &networkingv1.NetworkPolicyPeer{
-		PodSelector: &metav1.LabelSelector{
-			MatchLabels: map[string]string{
-				"batch.kubernetes.io/job-name": "test-job",
-			},
-		},
-	}
-	assert.Equal(t, expectedPeer, peer)
-}
-
-// TestBuildRayJobPeer_WithOtherOwner verifies nil is returned for non-RayJob owner references.
-func TestBuildRayJobPeer_WithOtherOwner(t *testing.T) {
-	setupNetworkPolicyTest(t)
-
-	peer := testNetworkPolicyController.buildRayJobPeer(testRayClusterWithOtherOwner)
-	assert.Nil(t, peer)
-}
-
-// TestBuildRayJobPeer_MultipleOwners verifies the RayJob peer is found among multiple owner references.
-func TestBuildRayJobPeer_MultipleOwners(t *testing.T) {
-	setupNetworkPolicyTest(t)
-
-	cluster := testRayClusterBasic.DeepCopy()
-	cluster.OwnerReferences = []metav1.OwnerReference{
-		{APIVersion: "apps/v1", Kind: "Deployment", Name: "test-deployment", UID: "67890"},
-		{APIVersion: "ray.io/v1", Kind: "RayJob", Name: "test-job", UID: "12345"},
-	}
-
-	peer := testNetworkPolicyController.buildRayJobPeer(cluster)
-	require.NotNil(t, peer)
-
-	expectedPeer := &networkingv1.NetworkPolicyPeer{
-		PodSelector: &metav1.LabelSelector{
-			MatchLabels: map[string]string{
-				"batch.kubernetes.io/job-name": "test-job",
-			},
-		},
-	}
-	assert.Equal(t, expectedPeer, peer)
-}
-
-// TestBuildHeadNetworkPolicy_WithRayJob verifies the extra ingress rule added for a RayJob owner.
+// TestBuildHeadNetworkPolicy_WithRayJob verifies that a RayJob-owned cluster gets the same
+// 3 base ingress rules as any other cluster (submitter access is now a standing base rule).
 func TestBuildHeadNetworkPolicy_WithRayJob(t *testing.T) {
 	setupNetworkPolicyTest(t)
 
 	policy := testNetworkPolicyController.buildHeadNetworkPolicy(testRayClusterWithRayJob, rayv1.NetworkIsolationDenyAll)
 
-	// 2 base rules + 1 RayJob peer rule = 3.
+	// 3 base rules: intra-cluster, operator, and RayJob submitter.
 	require.Len(t, policy.Spec.Ingress, 3)
-
-	// The last rule carries the RayJob submitter pod selector.
-	lastRule := policy.Spec.Ingress[2]
-	require.Len(t, lastRule.From, 1)
-	assert.Equal(t, map[string]string{
-		"batch.kubernetes.io/job-name": "test-job",
-	}, lastRule.From[0].PodSelector.MatchLabels)
 }
 
 // TestBuildHeadNetworkPolicy_CustomIngressRules verifies that custom IngressRules are appended after base rules.
@@ -487,10 +401,10 @@ func TestBuildHeadNetworkPolicy_CustomIngressRules(t *testing.T) {
 
 	policy := testNetworkPolicyController.buildHeadNetworkPolicy(cluster, rayv1.NetworkIsolationDenyAll)
 
-	// 2 base + 1 custom = 3.
-	require.Len(t, policy.Spec.Ingress, 3)
-	require.Len(t, policy.Spec.Ingress[2].Ports, 1)
-	assert.Equal(t, &customPort, policy.Spec.Ingress[2].Ports[0].Port)
+	// 3 base + 1 custom = 4.
+	require.Len(t, policy.Spec.Ingress, 4)
+	require.Len(t, policy.Spec.Ingress[3].Ports, 1)
+	assert.Equal(t, &customPort, policy.Spec.Ingress[3].Ports[0].Port)
 }
 
 // TestBuildHeadNetworkPolicy_CustomEgressRules verifies that custom EgressRules are appended after base egress.
