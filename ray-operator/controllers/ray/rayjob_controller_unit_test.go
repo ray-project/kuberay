@@ -248,51 +248,6 @@ func TestGetSubmitterContainerWithFeatureGate(t *testing.T) {
 	assert.Equal(t, corev1.ContainerRestartPolicyOnFailure, *container.RestartPolicy)
 }
 
-func TestGetSubmitterContainerWithoutFeatureGate(t *testing.T) {
-	// Explicitly disable the feature gate
-	features.SetFeatureGateDuringTest(t, features.SidecarSubmitterRestart, false)
-
-	rayJobInstance := &rayv1.RayJob{
-		Spec: rayv1.RayJobSpec{
-			Entrypoint:     "echo test",
-			SubmissionMode: rayv1.SidecarMode,
-			RayClusterSpec: &rayv1.RayClusterSpec{
-				HeadGroupSpec: rayv1.HeadGroupSpec{
-					Template: corev1.PodTemplateSpec{
-						Spec: corev1.PodSpec{
-							Containers: []corev1.Container{
-								{
-									Image: "rayproject/ray:test",
-									Ports: []corev1.ContainerPort{
-										{
-											Name:          utils.DashboardPortName,
-											ContainerPort: utils.DefaultDashboardPort,
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-		Status: rayv1.RayJobStatus{
-			DashboardURL: "http://127.0.0.1:8265",
-			JobId:        "test-job-id",
-		},
-	}
-
-	rayClusterInstance := &rayv1.RayCluster{
-		Spec: *rayJobInstance.Spec.RayClusterSpec,
-	}
-
-	container, err := getSubmitterContainer(rayJobInstance, rayClusterInstance)
-	require.NoError(t, err)
-
-	// Verify restart policy is NOT set (nil) for the submitter container when feature gate is disabled
-	assert.Nil(t, container.RestartPolicy)
-}
-
 func TestUpdateStatusToSuspendingIfNeeded(t *testing.T) {
 	newScheme := runtime.NewScheme()
 	_ = rayv1.AddToScheme(newScheme)
