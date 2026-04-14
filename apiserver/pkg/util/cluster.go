@@ -821,7 +821,6 @@ func buildSecurityContext(securityCtx *api.SecurityContext) *corev1.SecurityCont
 	return result
 }
 
-// Init pointer
 // Get converts this object to a rayv1api.Workflow.
 func (c *RayCluster) Get() *rayv1api.RayCluster {
 	return c.RayCluster
