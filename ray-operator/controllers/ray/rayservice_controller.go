@@ -476,7 +476,7 @@ func (r *RayServiceReconciler) calculateStatus(
 				if rayServiceInstance.Status.ActiveServiceStatus.TargetCapacity == nil {
 					rayServiceInstance.Status.PendingServiceStatus.TargetCapacity = ptr.To(int32(100))
 				}
-			} else if meta.IsStatusConditionTrue(rayServiceInstance.Status.Conditions, string(rayv1.UpgradeInProgress)) {
+			} else {
 				// Pending RayCluster during an upgrade should start with 0% TargetCapacity, since
 				// traffic will be gradually migrated to the new cluster.
 				if rayServiceInstance.Status.PendingServiceStatus.TargetCapacity == nil {

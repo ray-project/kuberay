@@ -1820,6 +1820,22 @@ func TestIsHTTPRouteEqual(t *testing.T) {
 			expected: true,
 		},
 		{
+			name: "Hostnames nil vs empty slice - equal",
+			existing: &gwv1.HTTPRoute{
+				Spec: gwv1.HTTPRouteSpec{
+					// Empty slice
+					Hostnames: []gwv1.Hostname{},
+				},
+			},
+			desired: &gwv1.HTTPRoute{
+				Spec: gwv1.HTTPRouteSpec{
+					// Nil slice
+					Hostnames: nil,
+				},
+			},
+			expected: true,
+		},
+		{
 			name: "Different number of rules",
 			existing: &gwv1.HTTPRoute{
 				Spec: gwv1.HTTPRouteSpec{
