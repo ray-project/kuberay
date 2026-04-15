@@ -1059,8 +1059,12 @@ func IsHTTPRouteEqual(existing, desired *gwv1.HTTPRoute) bool {
 		return existing == desired
 	}
 
-	// Compare Hostnames
-	if !reflect.DeepEqual(existing.Spec.Hostnames, desired.Spec.Hostnames) {
+	// Compare Hostnames. Treat nil and empty slice as equivalent to avoid false positives
+	// caused by renormalization from the API server or the Gateway implementation.
+	if len(existing.Spec.Hostnames) != len(desired.Spec.Hostnames) {
+		return false
+	}
+	if len(existing.Spec.Hostnames) > 0 && !reflect.DeepEqual(existing.Spec.Hostnames, desired.Spec.Hostnames) {
 		return false
 	}
 
