@@ -206,7 +206,7 @@ func (r *RayLogsHandler) GetContent(clusterNameNamespace string, fileName string
 		allFiles := r._listFiles(clusterNameNamespace+"/"+path.Dir(fileName), "", false)
 		found := false
 		for _, f := range allFiles {
-			if path.Base(f) == fileName {
+			if path.Base(f) == path.Base(fileName) {
 				logrus.Infof("Get object %s info success", f)
 				result, err = r.OssClient.GetObject(ctx, &oss.GetObjectRequest{
 					Bucket: oss.Ptr(r.OssBucket),
@@ -216,6 +216,8 @@ func (r *RayLogsHandler) GetContent(clusterNameNamespace string, fileName string
 					logrus.Errorf("Failed to get object %s: %v", f, err)
 					return nil
 				}
+				found = true
+				break
 			}
 		}
 		if !found {
