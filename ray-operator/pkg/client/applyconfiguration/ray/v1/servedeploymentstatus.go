@@ -4,6 +4,8 @@ package v1
 
 // ServeDeploymentStatusApplyConfiguration represents a declarative configuration of the ServeDeploymentStatus type for use
 // with apply.
+//
+// ServeDeploymentStatus defines the current state of a Serve deployment
 type ServeDeploymentStatusApplyConfiguration struct {
 	Status  *string `json:"status,omitempty"`
 	Message *string `json:"message,omitempty"`

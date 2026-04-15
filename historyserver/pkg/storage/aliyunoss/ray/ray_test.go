@@ -1,19 +1,3 @@
-// Package logs is
-/*
-Copyright 2024 by the zhangjie bingyu.zj@alibaba-inc.com Authors.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
 package ray
 
 import (
@@ -44,6 +28,21 @@ func TestTrim(t *testing.T) {
 	t.Logf("file [%s] logdir [%s] subdir %s filename %s", absoluteLogPathName,
 		logdir, subdir, filename)
 	t.Logf("test_path_join [%s]", test_path_join)
+}
+
+func TestGetContentPathComparison(t *testing.T) {
+	// fileName is a full path like the caller passes
+	fileName := "session_2026-04-09_06-41-42_754637_1/logs/abc123/events/event_RAYLET.log"
+	// f is a full key returned by _listFiles (onlyBase=false)
+	f := "session_2026-04-09_06-41-42_754637_1/logs/abc123/events/event_RAYLET.log"
+
+	if path.Base(f) != path.Base(fileName) {
+		t.Errorf("expected path.Base(%q) == path.Base(%q)", f, fileName)
+	}
+	// Verify old buggy comparison would fail
+	if path.Base(f) == fileName {
+		t.Errorf("old comparison should not match: path.Base(%q) == %q", f, fileName)
+	}
 }
 
 func TestWalk(t *testing.T) {

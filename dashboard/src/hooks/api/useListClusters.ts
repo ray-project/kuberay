@@ -1,5 +1,5 @@
 import { useNamespace } from "@/components/NamespaceProvider";
-import fetcher from "@/utils/fetch";
+import { apiServerFetcher } from "@/utils/fetch";
 import useSWR from "swr";
 
 import { RayClusterListResponse } from "@/types/v2/api/raycluster";
@@ -24,7 +24,7 @@ export const useListClusters = (
     namespace
       ? `${namespace == ALL_NAMESPACES ? `` : `/namespaces/${namespace}`}/rayclusters`
       : null,
-    fetcher,
+    apiServerFetcher,
     { refreshInterval },
   );
 

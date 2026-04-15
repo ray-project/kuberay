@@ -8,6 +8,8 @@ import (
 
 // RedisCredentialApplyConfiguration represents a declarative configuration of the RedisCredential type for use
 // with apply.
+//
+// RedisCredential is the redis username/password or a reference to the source containing the username/password
 type RedisCredentialApplyConfiguration struct {
 	ValueFrom *corev1.EnvVarSource `json:"valueFrom,omitempty"`
 	Value     *string              `json:"value,omitempty"`

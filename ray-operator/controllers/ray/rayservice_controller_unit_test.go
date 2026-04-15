@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -20,6 +21,7 @@ import (
 	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/lru"
 	"k8s.io/utils/ptr"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	clientFake "sigs.k8s.io/controller-runtime/pkg/client/fake"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
@@ -67,6 +69,31 @@ func TestGenerateHashWithoutReplicasAndWorkersToDelete(t *testing.T) {
 	hash3, err := utils.GenerateHashWithoutReplicasAndWorkersToDelete(cluster.Spec)
 	require.NoError(t, err)
 	assert.NotEqual(t, hash1, hash3)
+
+	// Tolerations injected by external controllers (e.g., Kueue) should not change the hash.
+	cluster.Spec.RayVersion = support.GetRayVersion()
+	cluster.Spec.HeadGroupSpec.Template.Spec.Tolerations = []corev1.Toleration{
+		{Key: "nvidia.com/gpu", Operator: corev1.TolerationOpExists, Effect: corev1.TaintEffectNoSchedule},
+	}
+	cluster.Spec.WorkerGroupSpecs[0].Template.Spec.Tolerations = []corev1.Toleration{
+		{Key: "nvidia.com/gpu", Operator: corev1.TolerationOpExists, Effect: corev1.TaintEffectNoSchedule},
+	}
+	hash4, err := utils.GenerateHashWithoutReplicasAndWorkersToDelete(cluster.Spec)
+	require.NoError(t, err)
+	assert.Equal(t, hash1, hash4)
+
+	// SchedulingGates injected by external controllers (e.g., Kueue) should not change the hash.
+	cluster.Spec.HeadGroupSpec.Template.Spec.Tolerations = nil
+	cluster.Spec.WorkerGroupSpecs[0].Template.Spec.Tolerations = nil
+	cluster.Spec.HeadGroupSpec.Template.Spec.SchedulingGates = []corev1.PodSchedulingGate{
+		{Name: "kueue.x-k8s.io/admission"},
+	}
+	cluster.Spec.WorkerGroupSpecs[0].Template.Spec.SchedulingGates = []corev1.PodSchedulingGate{
+		{Name: "kueue.x-k8s.io/admission"},
+	}
+	hash5, err := utils.GenerateHashWithoutReplicasAndWorkersToDelete(cluster.Spec)
+	require.NoError(t, err)
+	assert.Equal(t, hash1, hash5)
 }
 
 func TestIsHeadPodRunningAndReady(t *testing.T) {
@@ -1623,7 +1650,7 @@ func TestCreateHTTPRoute(t *testing.T) {
 			newScheme := runtime.NewScheme()
 			_ = rayv1.AddToScheme(newScheme)
 			_ = corev1.AddToScheme(newScheme)
-			_ = gwv1.AddToScheme(newScheme)
+			_ = gwv1.Install(newScheme)
 			fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(tt.runtimeObjects...).Build()
 
 			reconciler := RayServiceReconciler{
@@ -1666,7 +1693,7 @@ func TestReconcileHTTPRoute(t *testing.T) {
 	newScheme := runtime.NewScheme()
 	_ = rayv1.AddToScheme(newScheme)
 	_ = corev1.AddToScheme(newScheme)
-	_ = gwv1.AddToScheme(newScheme)
+	_ = gwv1.Install(newScheme)
 
 	ctx := context.TODO()
 	namespace := "test-ns"
@@ -1816,7 +1843,7 @@ func TestReconcileGateway(t *testing.T) {
 	newScheme := runtime.NewScheme()
 	_ = rayv1.AddToScheme(newScheme)
 	_ = corev1.AddToScheme(newScheme)
-	_ = gwv1.AddToScheme(newScheme)
+	_ = gwv1.Install(newScheme)
 
 	ctx := context.TODO()
 	namespace := "test-ns"
@@ -2119,7 +2146,7 @@ func TestCheckIfNeedTargetCapacityUpdate(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			newScheme := runtime.NewScheme()
 			_ = corev1.AddToScheme(newScheme)
-			_ = gwv1.AddToScheme(newScheme)
+			_ = gwv1.Install(newScheme)
 			fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(tt.runtimeObjects...).Build()
 			// Initialize RayService reconciler.
 			ctx := context.TODO()
@@ -2538,6 +2565,198 @@ func TestMarkFailedIfInitializingTimedOut(t *testing.T) {
 					// Expected - no event
 				}
 			}
+		})
+	}
+}
+
+func Test_RayServiceReconcileManagedBy(t *testing.T) {
+	newScheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(newScheme)
+	_ = corev1.AddToScheme(newScheme)
+	_ = discoveryv1.AddToScheme(newScheme)
+
+	const (
+		// MultiKueueController represents the value of the MultiKueue controller
+		MultiKueueController = "kueue.x-k8s.io/multikueue"
+	)
+
+	tests := []struct {
+		managedBy       *string
+		name            string
+		shouldReconcile bool
+	}{
+		{
+			managedBy:       nil,
+			name:            "ManagedBy field not set",
+			shouldReconcile: true,
+		},
+		{
+			managedBy:       ptr.To(utils.KubeRayController),
+			name:            "ManagedBy field to RayOperator",
+			shouldReconcile: true,
+		},
+		{
+			managedBy: ptr.To(""),
+			name:      "ManagedBy field empty",
+		},
+		{
+			managedBy: ptr.To(MultiKueueController),
+			name:      "ManagedBy field to external allowed controller",
+		},
+		{
+			managedBy: ptr.To("controller.com/invalid"),
+			name:      "ManagedBy field to external not allowed controller",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			rayService := rayv1.RayService{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-service",
+					Namespace: "default",
+				},
+				Spec: rayv1.RayServiceSpec{
+					RayClusterSpec: rayv1.RayClusterSpec{
+						HeadGroupSpec: rayv1.HeadGroupSpec{
+							Template: corev1.PodTemplateSpec{
+								Spec: corev1.PodSpec{
+									Containers: []corev1.Container{
+										{
+											Name:  "ray-head",
+											Image: "rayproject/ray:latest",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				Status: rayv1.RayServiceStatuses{},
+			}
+			rayService.Spec.ManagedBy = tc.managedBy
+
+			runtimeObjects := []runtime.Object{&rayService}
+			fakeClient := clientFake.NewClientBuilder().
+				WithScheme(newScheme).
+				WithRuntimeObjects(runtimeObjects...).
+				WithStatusSubresource(&rayService).
+				Build()
+
+			testRayServiceReconciler := &RayServiceReconciler{
+				Client:                       fakeClient,
+				Recorder:                     &record.FakeRecorder{},
+				Scheme:                       newScheme,
+				ServeConfigs:                 lru.New(utils.ServeConfigLRUSize),
+				RayClusterDeletionTimestamps: cmap.New[time.Time](),
+			}
+
+			request := ctrl.Request{
+				NamespacedName: client.ObjectKey{
+					Name:      rayService.Name,
+					Namespace: rayService.Namespace,
+				},
+			}
+
+			result, err := testRayServiceReconciler.Reconcile(ctx, request)
+			require.NoError(t, err)
+
+			if tc.shouldReconcile {
+				// Should requeue for normal reconciliation
+				assert.NotEqual(t, time.Duration(0), result.RequeueAfter)
+			} else {
+				// Should skip reconciliation (no requeue)
+				assert.Equal(t, time.Duration(0), result.RequeueAfter)
+			}
+		})
+	}
+}
+
+func TestReconcileRollbackState(t *testing.T) {
+	ctx := context.TODO()
+	namespace := "test-ns"
+
+	baseSpec := rayv1.RayClusterSpec{
+		RayVersion: "2.54.0",
+		WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+			{GroupName: "worker-group", Replicas: ptr.To(int32(1))},
+		},
+	}
+
+	updatedSpec := baseSpec.DeepCopy()
+	updatedSpec.RayVersion = "2.50.0"
+
+	baseHash, err := utils.GenerateHashWithoutReplicasAndWorkersToDelete(baseSpec)
+	require.NoError(t, err)
+
+	updatedHash, err := utils.GenerateHashWithoutReplicasAndWorkersToDelete(*updatedSpec)
+	require.NoError(t, err)
+
+	activeCluster := &rayv1.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "active-cluster", Namespace: namespace, Annotations: map[string]string{utils.HashWithoutReplicasAndWorkersToDeleteKey: baseHash}},
+	}
+	pendingCluster := &rayv1.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "pending-cluster", Namespace: namespace, Annotations: map[string]string{utils.HashWithoutReplicasAndWorkersToDeleteKey: updatedHash}},
+	}
+
+	tests := []struct {
+		name                 string
+		rayServiceSpec       rayv1.RayClusterSpec
+		isRollbackInProgress bool
+		expectRollbackStatus bool
+	}{
+		{
+			name:                 "Normal RayService upgrade, goal matches pending",
+			rayServiceSpec:       *updatedSpec,
+			isRollbackInProgress: false,
+			expectRollbackStatus: false,
+		},
+		{
+			name:                 "RayService Spec changed, initiate rollback",
+			rayServiceSpec:       baseSpec,
+			isRollbackInProgress: false,
+			expectRollbackStatus: true,
+		},
+		{
+			name:                 "Rollback in progress, continues rolling back",
+			rayServiceSpec:       baseSpec,
+			isRollbackInProgress: true,
+			expectRollbackStatus: true,
+		},
+		{
+			name:                 "Rollback canceled, user updated spec back to pending",
+			rayServiceSpec:       *updatedSpec,
+			isRollbackInProgress: true,
+			expectRollbackStatus: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rayService := &rayv1.RayService{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-rayservice", Namespace: namespace},
+				Spec: rayv1.RayServiceSpec{
+					RayClusterSpec: tt.rayServiceSpec,
+				},
+				Status: rayv1.RayServiceStatuses{
+					Conditions: []metav1.Condition{},
+				},
+			}
+
+			if tt.isRollbackInProgress {
+				setCondition(rayService, rayv1.RollbackInProgress, metav1.ConditionTrue, rayv1.TargetClusterChanged, "rolling back")
+			}
+
+			reconciler := RayServiceReconciler{
+				Recorder: record.NewFakeRecorder(1),
+			}
+
+			err := reconciler.reconcileRollbackState(ctx, rayService, activeCluster, pendingCluster)
+			require.NoError(t, err)
+
+			isCurrentlyRollingBack := meta.IsStatusConditionTrue(rayService.Status.Conditions, string(rayv1.RollbackInProgress))
+			assert.Equal(t, tt.expectRollbackStatus, isCurrentlyRollingBack)
 		})
 	}
 }

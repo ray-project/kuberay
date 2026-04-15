@@ -104,6 +104,34 @@ FeatureGates
 {{- include "kuberay-operator.fullname" . -}}
 {{- end -}}
 
+{{/*
+Validate operator configuration values.
+This template validates reconcileConcurrency, kubeClient.qps, and kubeClient.burst.
+It should be called early in the deployment to ensure invalid values are caught.
+*/}}
+{{- define "kuberay-operator.validateConfig" -}}
+{{- if hasKey .Values "reconcileConcurrency" }}
+{{- $rc := toString .Values.reconcileConcurrency }}
+{{- if not (regexMatch "^[1-9][0-9]*$" $rc) }}
+{{- fail (printf "values.reconcileConcurrency must be a positive integer, got %q" $rc) }}
+{{- end }}
+{{- end }}
+{{- if hasKey .Values "kubeClient" }}
+{{- if hasKey .Values.kubeClient "qps" }}
+{{- $qps := toString .Values.kubeClient.qps }}
+{{- if not (regexMatch "^[0-9]+(\\.[0-9]+)?$" $qps) }}
+{{- fail (printf "values.kubeClient.qps must be a valid float number, got %q" $qps) }}
+{{- end }}
+{{- end }}
+{{- if hasKey .Values.kubeClient "burst" }}
+{{- $burst := toString .Values.kubeClient.burst }}
+{{- if not (regexMatch "^[0-9]+$" $burst) }}
+{{- fail (printf "values.kubeClient.burst must be a non-negative integer, got %q" $burst) }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
+
 {{- /* Create the name of the leader election role to use. */ -}}
 {{- define "kuberay-operator.leaderElectionRole.name" -}}
 {{- include "kuberay-operator.fullname" . -}}-leader-election

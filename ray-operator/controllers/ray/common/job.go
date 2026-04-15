@@ -126,12 +126,11 @@ func BuildJobSubmitCommand(rayJobInstance *rayv1.RayJob, submissionMode rayv1.Jo
 
 	if submissionMode == rayv1.SidecarMode {
 		// Wait until Ray Dashboard GCS is healthy before proceeding.
-		// Use the same Ray Dashboard GCS health check command as the readiness probe
 		rayDashboardGCSHealthCommand := fmt.Sprintf(
-			utils.BaseWgetHealthCommand,
-			utils.DefaultReadinessProbeFailureThreshold,
+			utils.BasePythonHealthCommand,
 			port,
 			utils.RayDashboardGCSHealthPath,
+			utils.DefaultReadinessProbeFailureThreshold,
 		)
 
 		waitLoop := []string{

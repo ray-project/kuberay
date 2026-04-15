@@ -1,17 +1,20 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"flag"
 	"os"
+	"os/signal"
 	"path"
+	"strings"
+	"sync"
+	"syscall"
 	"time"
 
 	"github.com/sirupsen/logrus"
 
 	"github.com/ray-project/kuberay/historyserver/pkg/collector"
-	"github.com/ray-project/kuberay/historyserver/pkg/collector/eventserver"
+	"github.com/ray-project/kuberay/historyserver/pkg/collector/eventcollector"
 	"github.com/ray-project/kuberay/historyserver/pkg/collector/logcollector/runtime"
 	"github.com/ray-project/kuberay/historyserver/pkg/collector/types"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
@@ -23,7 +26,7 @@ func main() {
 	role := ""
 	runtimeClassName := ""
 	rayClusterName := ""
-	rayClusterId := ""
+	rayClusterNamespace := ""
 	rayRootDir := ""
 	logBatching := 1000
 	eventsPort := 8080
@@ -33,7 +36,7 @@ func main() {
 	flag.StringVar(&role, "role", "Worker", "")
 	flag.StringVar(&runtimeClassName, "runtime-class-name", "", "")
 	flag.StringVar(&rayClusterName, "ray-cluster-name", "", "")
-	flag.StringVar(&rayClusterId, "ray-cluster-id", "default", "")
+	flag.StringVar(&rayClusterNamespace, "ray-cluster-namespace", "default", "")
 	flag.StringVar(&rayRootDir, "ray-root-dir", "", "")
 	flag.IntVar(&logBatching, "log-batching", 1000, "")
 	flag.IntVar(&eventsPort, "events-port", 8080, "")
@@ -41,6 +44,28 @@ func main() {
 	flag.DurationVar(&pushInterval, "push-interval", time.Minute, "")
 
 	flag.Parse()
+
+	var additionalEndpoints []string
+	if epStr := os.Getenv("RAY_COLLECTOR_ADDITIONAL_ENDPOINTS"); epStr != "" {
+		for _, ep := range strings.Split(epStr, ",") {
+			ep = strings.TrimSpace(ep)
+			if ep != "" {
+				additionalEndpoints = append(additionalEndpoints, ep)
+			}
+		}
+	}
+
+	endpointPollInterval := 30 * time.Second
+	if intervalStr := os.Getenv("RAY_COLLECTOR_POLL_INTERVAL"); intervalStr != "" {
+		parsed, parseErr := time.ParseDuration(intervalStr)
+		if parseErr != nil {
+			panic("Failed to parse RAY_COLLECTOR_POLL_INTERVAL: " + parseErr.Error())
+		}
+		if parsed <= 0 {
+			panic("RAY_COLLECTOR_POLL_INTERVAL must be positive, got: " + intervalStr)
+		}
+		endpointPollInterval = parsed
+	}
 
 	sessionDir, err := utils.GetSessionDir()
 	if err != nil {
@@ -73,14 +98,18 @@ func main() {
 	}
 
 	globalConfig := types.RayCollectorConfig{
-		RootDir:        rayRootDir,
-		SessionDir:     sessionDir,
-		RayNodeName:    rayNodeId,
-		Role:           role,
-		RayClusterName: rayClusterName,
-		RayClusterID:   rayClusterId,
-		PushInterval:   pushInterval,
-		LogBatching:    logBatching,
+		RootDir:             rayRootDir,
+		SessionDir:          sessionDir,
+		RayNodeName:         rayNodeId,
+		Role:                role,
+		RayClusterName:      rayClusterName,
+		RayClusterNamespace: rayClusterNamespace,
+		PushInterval:        pushInterval,
+		LogBatching:         logBatching,
+		DashboardAddress:    os.Getenv("RAY_DASHBOARD_ADDRESS"),
+
+		AdditionalEndpoints:  additionalEndpoints,
+		EndpointPollInterval: endpointPollInterval,
 	}
 	logrus.Info("Using collector config: ", globalConfig)
 
@@ -89,18 +118,36 @@ func main() {
 		panic("Failed to create writer for runtime class name: " + runtimeClassName + " for role: " + role + ".")
 	}
 
-	// Create and initialize EventServer
-	eventServer := eventserver.NewEventServer(writer, rayRootDir, sessionDir, rayNodeId, rayClusterName, rayClusterId, sessionName)
-	eventServer.InitServer(eventsPort)
+	var wg sync.WaitGroup
 
-	collector := runtime.NewCollector(&globalConfig, writer)
-	_ = collector.Start(context.TODO().Done())
+	sigChan := make(chan os.Signal, 1)
+	stop := make(chan struct{}, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
-	eventStop := eventServer.WaitForStop()
-	logStop := collector.WaitForStop()
-	<-eventStop
-	logrus.Info("Event server shutdown")
-	<-logStop
-	logrus.Info("Log server shutdown")
-	logrus.Info("All servers shutdown")
+	wg.Add(1)
+	// Create and initialize EventCollector
+	go func() {
+		defer wg.Done()
+		eventCollector := eventcollector.NewEventCollector(writer, rayRootDir, sessionDir, rayNodeId, rayClusterName, rayClusterNamespace, sessionName)
+		eventCollector.Run(stop, eventsPort)
+		logrus.Info("Event collector shutdown")
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		logCollector := runtime.NewCollector(&globalConfig, writer)
+		logCollector.Run(stop)
+		logrus.Info("Log collector shutdown")
+	}()
+
+	<-sigChan
+	logrus.Info("Received shutdown signal, initiating graceful shutdown...")
+
+	// Stop both the event collector and the log collector
+	close(stop)
+
+	// Wait for both goroutines to complete
+	wg.Wait()
+	logrus.Info("Graceful shutdown complete")
 }

@@ -7,7 +7,6 @@ import (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
-//nolint:govet // RayCronJobSpec defines the desired state of RayCronJob
 type RayCronJobSpec struct {
 	// JobTemplate defines the job spec that will be created by cron scheduling
 	JobTemplate RayJobSpec `json:"jobTemplate"`
@@ -31,7 +30,11 @@ type RayCronJobStatus struct {
 //+kubebuilder:printcolumn:name="age",type="date",JSONPath=".metadata.creationTimestamp",priority=0
 //+kubebuilder:printcolumn:name="suspend",type=boolean,JSONPath=".spec.suspend",priority=0
 
-//nolint:govet // RayCronJob is the Schema for the raycronjobs API
+// +genclient
+// +kubebuilder:resource:categories=all
+// +kubebuilder:storageversion
+//
+// RayCronJob is the Schema for the raycronjobs API
 type RayCronJob struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

@@ -40,18 +40,18 @@ import (
 )
 
 type RayLogsHandler struct {
-	S3Client       *s3.S3
-	LogFiles       chan string
-	HttpClient     *http.Client
-	S3Bucket       string
-	SessionDir     string
-	S3RootDir      string
-	LogDir         string
-	RayClusterName string
-	RayClusterID   string
-	RayNodeName    string
-	LogBatching    int
-	PushInterval   time.Duration
+	S3Client            *s3.S3
+	LogFiles            chan string
+	HttpClient          *http.Client
+	S3Bucket            string
+	SessionDir          string
+	S3RootDir           string
+	LogDir              string
+	RayClusterName      string
+	RayClusterNamespace string
+	RayNodeName         string
+	LogBatching         int
+	PushInterval        time.Duration
 }
 
 func (r *RayLogsHandler) CreateDirectory(d string) error {
@@ -174,6 +174,9 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 					}
 					logrus.Infof("Process %++v", metas)
 					namespaceName := strings.Split(metas[0], "_")
+					if len(namespaceName) < 2 {
+						continue
+					}
 					c.Name = namespaceName[0]
 					c.Namespace = namespaceName[1]
 					c.SessionName = metas[1]
@@ -203,24 +206,33 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 }
 
 func (r *RayLogsHandler) GetContent(clusterId string, fileName string) io.Reader {
-	logrus.Infof("Prepare to get object %s info ...", fileName)
+	fullPath := path.Join(r.S3RootDir, clusterId, fileName)
+	logrus.Infof("Prepare to get object %s info ...", fullPath)
 
 	result, err := r.S3Client.GetObject(&s3.GetObjectInput{
 		Bucket: aws.String(r.S3Bucket),
-		Key:    aws.String(fileName),
+		Key:    aws.String(fullPath),
 	})
 	if err != nil {
-		logrus.Errorf("Failed to get object %s: %v", fileName, err)
-		allFiles := r._listFiles(clusterId+"/"+path.Dir(fileName), "", false)
+		// Close the first result's Body if it exists to prevent connection leak
+		if result != nil && result.Body != nil {
+			result.Body.Close()
+		}
+		logrus.Errorf("Failed to get object %s: %v", fullPath, err)
+		dirPath := path.Dir(fullPath)
+		allFiles := r._listFiles(dirPath, "", false)
 		found := false
 		for _, f := range allFiles {
-			if path.Base(f) == fileName {
+			if path.Base(f) == path.Base(fullPath) {
 				logrus.Infof("Get object %s info success", f)
 				result, err = r.S3Client.GetObject(&s3.GetObjectInput{
 					Bucket: aws.String(r.S3Bucket),
 					Key:    aws.String(f),
 				})
 				if err != nil {
+					if result != nil && result.Body != nil {
+						result.Body.Close()
+					}
 					logrus.Errorf("Failed to get object %s: %v", f, err)
 					return nil
 				}
@@ -251,7 +263,7 @@ func NewReader(c *types.RayHistoryServerConfig, jd map[string]interface{}) (stor
 	return New(config)
 }
 
-func NewWritter(c *types.RayCollectorConfig, jd map[string]interface{}) (storage.StorageWriter, error) {
+func NewWriter(c *types.RayCollectorConfig, jd map[string]interface{}) (storage.StorageWriter, error) {
 	config := &config{}
 	config.complete(c, jd)
 
@@ -327,9 +339,16 @@ func New(c *config) (*RayLogsHandler, error) {
 		Timeout: 5 * time.Second,
 	}
 
+	// Only use static credentials when explicitly provided; otherwise let the
+	// SDK fall back to the default credential chain (IRSA, instance role, etc.).
+	var creds *credentials.Credentials
+	if c.AccessKeyID != "" {
+		creds = credentials.NewStaticCredentials(c.AccessKeyID, c.SecretAccessKey, c.SessionToken)
+	}
+
 	// Create AWS session
 	sess, err := session.NewSession(&aws.Config{
-		Credentials:      credentials.NewStaticCredentials(c.S3ID, c.S3Secret, c.S3Token),
+		Credentials:      creds,
 		Endpoint:         aws.String(c.S3Endpoint),
 		Region:           aws.String(c.S3Region),
 		HTTPClient:       httpClient,
@@ -356,15 +375,15 @@ func New(c *config) (*RayLogsHandler, error) {
 	logrus.Infof("Clean logdir is %s", logdir)
 
 	return &RayLogsHandler{
-		S3Client:       s3Client,
-		S3Bucket:       c.S3Bucket,
-		SessionDir:     sessionDir,
-		S3RootDir:      c.RootDir,
-		LogDir:         logdir,
-		LogFiles:       make(chan string, 100),
-		RayClusterName: c.RayClusterName,
-		RayClusterID:   c.RayClusterID,
-		RayNodeName:    c.RayNodeName,
+		S3Client:            s3Client,
+		S3Bucket:            c.S3Bucket,
+		SessionDir:          sessionDir,
+		S3RootDir:           c.RootDir,
+		LogDir:              logdir,
+		LogFiles:            make(chan string, 100),
+		RayClusterName:      c.RayClusterName,
+		RayClusterNamespace: c.RayClusterNamespace,
+		RayNodeName:         c.RayNodeName,
 		HttpClient: &http.Client{
 			Transport: &http.Transport{
 				MaxIdleConns:        100,

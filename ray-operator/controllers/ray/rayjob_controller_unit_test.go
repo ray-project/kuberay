@@ -18,7 +18,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	clientFake "sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
@@ -536,7 +536,6 @@ func TestEmitRayJobExecutionDuration(t *testing.T) {
 	rayJobUID := types.UID("test-job-uid")
 	mockTime := time.Now().Add(-60 * time.Second)
 
-	//nolint:govet // disable govet to keep the order of the struct fields
 	tests := []struct {
 		name                        string
 		originalRayJobStatus        rayv1.RayJobStatus
@@ -578,7 +577,7 @@ func TestEmitRayJobExecutionDuration(t *testing.T) {
 			name: "non-terminal to retrying state should emit metrics",
 			originalRayJobStatus: rayv1.RayJobStatus{
 				JobDeploymentStatus: rayv1.JobDeploymentStatusRunning,
-				Failed:              pointer.Int32(2),
+				Failed:              ptr.To(int32(2)),
 			},
 			rayJobStatus: rayv1.RayJobStatus{
 				JobDeploymentStatus: rayv1.JobDeploymentStatusRetrying,
@@ -623,4 +622,57 @@ func TestEmitRayJobExecutionDuration(t *testing.T) {
 			emitRayJobExecutionDuration(mockObserver, rayJobName, rayJobNamespace, rayJobUID, tt.originalRayJobStatus, tt.rayJobStatus)
 		})
 	}
+}
+
+func TestGetSubmitterTemplate_WithEnableK8sTokenAuth(t *testing.T) {
+	rayJob := &rayv1.RayJob{
+		Spec: rayv1.RayJobSpec{
+			SubmissionMode: rayv1.K8sJobMode,
+		},
+	}
+	rayCluster := &rayv1.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test-raycluster",
+		},
+		Spec: rayv1.RayClusterSpec{
+			AuthOptions: &rayv1.AuthOptions{
+				Mode:               rayv1.AuthModeToken,
+				EnableK8sTokenAuth: ptr.To(true),
+			},
+			HeadGroupSpec: rayv1.HeadGroupSpec{
+				Template: corev1.PodTemplateSpec{
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Image: "rayproject/ray",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	template, err := getSubmitterTemplate(rayJob, rayCluster)
+	require.NoError(t, err)
+
+	// Check volume
+	foundVolume := false
+	for _, v := range template.Spec.Volumes {
+		if v.Name == utils.RayTokenVolumeName && v.Projected != nil {
+			foundVolume = true
+			break
+		}
+	}
+	assert.True(t, foundVolume, "Submitter Pod should have the ray-token volume")
+
+	// Check volume mount
+	foundVolumeMount := false
+	for _, vm := range template.Spec.Containers[utils.RayContainerIndex].VolumeMounts {
+		if vm.Name == utils.RayTokenVolumeName && vm.MountPath == utils.RayTokenMountPath {
+			foundVolumeMount = true
+			break
+		}
+	}
+	assert.True(t, foundVolumeMount, "Submitter container should have the ray-token volume mount")
 }

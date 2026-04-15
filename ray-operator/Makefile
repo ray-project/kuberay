@@ -62,8 +62,13 @@ vet: ## Run go vet against code.
 fumpt: gofumpt
 	$(GOFUMPT) -l -w ../
 
+# TODO: Remove this once a fix for https://github.com/golang/go/issues/75031 is released.
+# This is a workaround for an issue where `go test -cover` reports errors for packages with no test files.
+GOVERSION := $(shell go env GOVERSION)
+export GOTOOLCHAIN := $(GOVERSION)+auto
+
 test: WHAT ?= $(shell go list ./... | grep -v /test/)
-test: ENVTEST_K8S_VERSION ?= 1.24.2
+test: ENVTEST_K8S_VERSION ?= 1.34.1
 test: manifests fmt vet envtest ## Run tests.
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test $(WHAT) -coverprofile cover.out
 
@@ -200,7 +205,7 @@ kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary.
 ENVTEST = $(LOCALBIN)/setup-envtest
 $(ENVTEST): $(LOCALBIN)
 envtest: $(ENVTEST) ## Download envtest locally if necessary.
-	test -s $(ENVTEST) || GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-runtime/tools/setup-envtest@v0.0.0-20240201105228-4000e996a202
+	test -s $(ENVTEST) || GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-runtime/tools/setup-envtest@release-0.23
 
 GOFUMPT = $(LOCALBIN)/gofumpt
 $(GOFUMPT): $(LOCALBIN)

@@ -36,9 +36,16 @@ func GetPluginName() string { return "kai-scheduler" }
 func (k *KaiScheduler) Name() string { return GetPluginName() }
 
 func (k *KaiScheduler) DoBatchSchedulingOnSubmission(_ context.Context, object metav1.Object) error {
-	_, ok := object.(*rayv1.RayCluster)
-	if !ok {
-		return fmt.Errorf("currently only RayCluster is supported, got %T", object)
+	// In K8sJobMode, RayJob first creates a RayCluster,
+	// and then creates the submitter pod after the RayCluster is ready.
+	// KAI-Scheduler does not handle this two-phase creation pattern.
+	// Other schedulers like Yunikorn and Volcano support this by pre-creating PodGroups.
+	// For more details, see https://github.com/ray-project/kuberay/pull/4418#pullrequestreview-3751609041
+	if rayJob, ok := object.(*rayv1.RayJob); ok {
+		switch rayJob.Spec.SubmissionMode {
+		case rayv1.K8sJobMode:
+			return fmt.Errorf("KAI-Scheduler does not support RayJob with K8sJobMode: the submitter pod is created after RayCluster is ready, preventing proper gang scheduling")
+		}
 	}
 	return nil
 }
@@ -61,6 +68,11 @@ func (k *KaiScheduler) AddMetadataToChildResource(ctx context.Context, parent me
 	}
 	childLabels[QueueLabelName] = queue
 	child.SetLabels(childLabels)
+}
+
+func (k *KaiScheduler) CleanupOnCompletion(_ context.Context, _ metav1.Object) (bool, error) {
+	// KaiScheduler doesn't need cleanup
+	return false, nil
 }
 
 func (kf *KaiSchedulerFactory) New(_ context.Context, _ *rest.Config, _ client.Client) (schedulerinterface.BatchScheduler, error) {

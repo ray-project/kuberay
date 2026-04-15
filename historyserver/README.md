@@ -76,7 +76,7 @@ The collector can be configured using command-line flags:
 - `--role`: Node role ("Head" or "Worker")
 - `--runtime-class-name`: Storage backend type (e.g., "s3", "aliyunoss")
 - `--ray-cluster-name`: Name of the Ray cluster
-- `--ray-cluster-id`: ID of the Ray cluster
+- `--ray-cluster-namespace`: Namespace of the Ray cluster
 - `--ray-root-dir`: Root directory for Ray logs
 - `--log-batching`: Number of log entries to batch before writing
 - `--events-port`: Port for the events server

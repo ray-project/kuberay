@@ -14,6 +14,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/apimachinery/pkg/util/version"
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
@@ -24,6 +26,7 @@ import (
 const (
 	SharedMemoryVolumeName      = "shared-mem"
 	SharedMemoryVolumeMountPath = "/dev/shm"
+	PlasmaDirectoryParamKey     = "plasma-directory"
 	RayLogVolumeName            = "ray-logs"
 	RayLogVolumeMountPath       = "/tmp/ray"
 	AutoscalerContainerName     = "autoscaler"
@@ -203,7 +206,7 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 
 		// Configure RAY_AUTH_TOKEN and RAY_AUTH_MODE if auth is enabled.
 		if utils.IsAuthEnabled(&instance.Spec) {
-			SetContainerTokenAuthEnvVars(instance.Name, &autoscalerContainer)
+			SetContainerTokenAuthEnvVars(instance.Name, &autoscalerContainer, instance.Spec.AuthOptions)
 		}
 
 		// Merge the user overrides from autoscalerOptions into the autoscaler container config.
@@ -229,7 +232,7 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 	}
 
 	if utils.IsAuthEnabled(&instance.Spec) {
-		configureTokenAuth(instance.Name, &podTemplate)
+		configureTokenAuth(instance.Name, &podTemplate, instance.Spec.AuthOptions)
 	}
 
 	return podTemplate
@@ -248,8 +251,13 @@ func setAutoscalerV2EnvVars(podTemplate *corev1.PodTemplateSpec) {
 }
 
 // configureTokenAuth sets environment variables required for Ray token authentication
-func configureTokenAuth(clusterName string, podTemplate *corev1.PodTemplateSpec) {
-	SetContainerTokenAuthEnvVars(clusterName, &podTemplate.Spec.Containers[utils.RayContainerIndex])
+func configureTokenAuth(clusterName string, podTemplate *corev1.PodTemplateSpec, authOptions *rayv1.AuthOptions) {
+	SetContainerTokenAuthEnvVars(clusterName, &podTemplate.Spec.Containers[utils.RayContainerIndex], authOptions)
+
+	if utils.IsK8sAuthEnabled(authOptions) {
+		AddRayTokenVolume(&podTemplate.Spec)
+	}
+
 	// For RayJob Sidecar mode, we need to set the auth token for the submitter container.
 
 	// Configure auth token for wait-gcs-ready init container if it exists
@@ -258,27 +266,72 @@ func configureTokenAuth(clusterName string, podTemplate *corev1.PodTemplateSpec)
 			continue
 		}
 
-		SetContainerTokenAuthEnvVars(clusterName, &podTemplate.Spec.InitContainers[i])
+		SetContainerTokenAuthEnvVars(clusterName, &podTemplate.Spec.InitContainers[i], authOptions)
 	}
 }
 
-// SetContainerTokenAuthEnvVars sets Ray authentication env vars for a container.
-func SetContainerTokenAuthEnvVars(clusterName string, container *corev1.Container) {
-	container.Env = append(container.Env, corev1.EnvVar{
-		Name:  utils.RAY_AUTH_MODE_ENV_VAR,
-		Value: string(rayv1.AuthModeToken),
-	})
+// AddRayTokenVolume adds a projected service account token volume to the pod spec.
+func AddRayTokenVolume(podSpec *corev1.PodSpec) {
+	if utils.VolumeExists(utils.RayTokenVolumeName, podSpec.Volumes) {
+		return
+	}
 
-	secretName := utils.CheckName(clusterName)
-	container.Env = append(container.Env, corev1.EnvVar{
-		Name: utils.RAY_AUTH_TOKEN_ENV_VAR,
-		ValueFrom: &corev1.EnvVarSource{
-			SecretKeyRef: &corev1.SecretKeySelector{
-				LocalObjectReference: corev1.LocalObjectReference{Name: secretName},
-				Key:                  utils.RAY_AUTH_TOKEN_SECRET_KEY,
+	podSpec.Volumes = append(podSpec.Volumes, corev1.Volume{
+		Name: utils.RayTokenVolumeName,
+		VolumeSource: corev1.VolumeSource{
+			Projected: &corev1.ProjectedVolumeSource{
+				Sources: []corev1.VolumeProjection{
+					{
+						ServiceAccountToken: &corev1.ServiceAccountTokenProjection{
+							Path: "token",
+						},
+					},
+				},
 			},
 		},
 	})
+}
+
+// SetContainerTokenAuthEnvVars sets Ray authentication env vars for a container.
+func SetContainerTokenAuthEnvVars(clusterName string, container *corev1.Container, authOptions *rayv1.AuthOptions) {
+	if !utils.EnvVarExists(utils.RAY_AUTH_MODE_ENV_VAR, container.Env) {
+		container.Env = append(container.Env, corev1.EnvVar{
+			Name:  utils.RAY_AUTH_MODE_ENV_VAR,
+			Value: string(rayv1.AuthModeToken),
+		})
+	}
+
+	if utils.IsK8sAuthEnabled(authOptions) {
+		if !utils.EnvVarExists(utils.RAY_ENABLE_K8S_TOKEN_AUTH_ENV_VAR, container.Env) {
+			container.Env = append(container.Env, corev1.EnvVar{
+				Name:  utils.RAY_ENABLE_K8S_TOKEN_AUTH_ENV_VAR,
+				Value: "true",
+			})
+		}
+		if !utils.VolumeMountExists(utils.RayTokenVolumeName, container.VolumeMounts) {
+			container.VolumeMounts = append(container.VolumeMounts, corev1.VolumeMount{
+				Name:      utils.RayTokenVolumeName,
+				MountPath: utils.RayTokenMountPath,
+				ReadOnly:  true,
+			})
+		}
+	} else {
+		secretName := utils.CheckName(clusterName)
+		if authOptions != nil && authOptions.SecretName != nil && *authOptions.SecretName != "" {
+			secretName = *authOptions.SecretName
+		}
+		if !utils.EnvVarExists(utils.RAY_AUTH_TOKEN_ENV_VAR, container.Env) {
+			container.Env = append(container.Env, corev1.EnvVar{
+				Name: utils.RAY_AUTH_TOKEN_ENV_VAR,
+				ValueFrom: &corev1.EnvVarSource{
+					SecretKeyRef: &corev1.SecretKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{Name: secretName},
+						Key:                  utils.RAY_AUTH_TOKEN_SECRET_KEY,
+					},
+				},
+			})
+		}
+	}
 }
 
 func getEnableInitContainerInjection() bool {
@@ -404,20 +457,41 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 	}
 
 	if utils.IsAuthEnabled(&instance.Spec) {
-		configureTokenAuth(instance.Name, &podTemplate)
+		configureTokenAuth(instance.Name, &podTemplate, instance.Spec.AuthOptions)
 	}
 
 	return podTemplate
 }
 
-func initLivenessAndReadinessProbe(rayContainer *corev1.Container, rayNodeType rayv1.RayNodeType, creatorCRDType utils.CRDType, rayStartParams map[string]string) {
-	getPort := func(key string, defaultVal int) int {
+func supportsUnifiedHealthCheck(rayVersion string) bool {
+	v, err := version.ParseGeneric(rayVersion)
+	if err != nil {
+		return false
+	}
+
+	// Ray version 2.53.0 supports a single HTTP health check endpoint.
+	minVersion := version.MustParseGeneric("2.53.0")
+	return v.AtLeast(minVersion)
+}
+
+func initLivenessAndReadinessProbe(rayContainer *corev1.Container, rayNodeType rayv1.RayNodeType, creatorCRDType utils.CRDType, rayStartParams map[string]string, rayVersion string) {
+	getPort := func(key string, defaultVal int32) int32 {
 		if portStr, ok := rayStartParams[key]; ok {
-			if port, err := strconv.Atoi(portStr); err == nil {
-				return port
+			// ParseInt with bitSize=32 ensures the value fits in int32
+			if port, err := strconv.ParseInt(portStr, 10, 32); err == nil {
+				return int32(port)
 			}
 		}
 		return defaultVal
+	}
+
+	httpHealthCheck := supportsUnifiedHealthCheck(rayVersion)
+	httpHealthCheckAction := &corev1.HTTPGetAction{
+		Path: utils.RayNodeHealthPath,
+		Port: intstr.IntOrString{
+			Type:   intstr.Int,
+			IntVal: getPort("dashboard-agent-listen-port", utils.DefaultDashboardAgentListenPort),
+		},
 	}
 
 	rayAgentRayletHealthCommand := fmt.Sprintf(
@@ -456,7 +530,11 @@ func initLivenessAndReadinessProbe(rayContainer *corev1.Container, rayNodeType r
 			SuccessThreshold:    utils.DefaultLivenessProbeSuccessThreshold,
 			FailureThreshold:    utils.DefaultLivenessProbeFailureThreshold,
 		}
-		rayContainer.LivenessProbe.Exec = &corev1.ExecAction{Command: []string{"bash", "-c", strings.Join(commands, " && ")}}
+		if httpHealthCheck {
+			rayContainer.LivenessProbe.HTTPGet = httpHealthCheckAction
+		} else {
+			rayContainer.LivenessProbe.Exec = &corev1.ExecAction{Command: []string{"bash", "-c", strings.Join(commands, " && ")}}
+		}
 	}
 
 	if rayContainer.ReadinessProbe == nil {
@@ -471,7 +549,11 @@ func initLivenessAndReadinessProbe(rayContainer *corev1.Container, rayNodeType r
 			SuccessThreshold:    utils.DefaultReadinessProbeSuccessThreshold,
 			FailureThreshold:    utils.DefaultReadinessProbeFailureThreshold,
 		}
-		rayContainer.ReadinessProbe.Exec = &corev1.ExecAction{Command: []string{"bash", "-c", strings.Join(commands, " && ")}}
+		if httpHealthCheck {
+			rayContainer.ReadinessProbe.HTTPGet = httpHealthCheckAction
+		} else {
+			rayContainer.ReadinessProbe.Exec = &corev1.ExecAction{Command: []string{"bash", "-c", strings.Join(commands, " && ")}}
+		}
 
 		// For worker Pods serving traffic, we need to add an additional HTTP proxy health check for the readiness probe.
 		// Note: head Pod checks the HTTP proxy's health at every rayservice controller reconcile instaed of using readiness probe.
@@ -485,13 +567,14 @@ func initLivenessAndReadinessProbe(rayContainer *corev1.Container, rayNodeType r
 				utils.RayServeProxyHealthPath,
 			)
 			commands = append(commands, rayServeProxyHealthCommand)
+			rayContainer.ReadinessProbe.HTTPGet = nil
 			rayContainer.ReadinessProbe.Exec = &corev1.ExecAction{Command: []string{"bash", "-c", strings.Join(commands, " && ")}}
 		}
 	}
 }
 
 // BuildPod a pod config
-func BuildPod(ctx context.Context, podTemplateSpec corev1.PodTemplateSpec, rayNodeType rayv1.RayNodeType, rayStartParams map[string]string, headPort string, enableRayAutoscaler bool, creatorCRDType utils.CRDType, fqdnRayIP string, defaultContainerEnvs []corev1.EnvVar) (aPod corev1.Pod) {
+func BuildPod(ctx context.Context, podTemplateSpec corev1.PodTemplateSpec, rayNodeType rayv1.RayNodeType, rayStartParams map[string]string, headPort string, enableRayAutoscaler bool, creatorCRDType utils.CRDType, fqdnRayIP string, defaultContainerEnvs []corev1.EnvVar, rayVersion string) (aPod corev1.Pod) {
 	log := ctrl.LoggerFrom(ctx)
 
 	// For Worker Pod: Traffic readiness is determined by the readiness probe.
@@ -515,7 +598,12 @@ func BuildPod(ctx context.Context, podTemplateSpec corev1.PodTemplateSpec, rayNo
 	}
 
 	// Add /dev/shm volumeMount for the object store to avoid performance degradation.
-	addEmptyDir(ctx, &pod.Spec.Containers[utils.RayContainerIndex], &pod, SharedMemoryVolumeName, SharedMemoryVolumeMountPath, corev1.StorageMediumMemory)
+	// Skip injection when users explicitly set plasma-directory.
+	if _, ok := rayStartParams[PlasmaDirectoryParamKey]; !ok {
+		addEmptyDir(ctx, &pod.Spec.Containers[utils.RayContainerIndex], &pod, SharedMemoryVolumeName, SharedMemoryVolumeMountPath, corev1.StorageMediumMemory)
+	} else {
+		log.Info("skip /dev/shm volumeMount injection due to explicit plasma-directory", "plasma-directory", rayStartParams[PlasmaDirectoryParamKey])
+	}
 	if rayNodeType == rayv1.HeadNode && enableRayAutoscaler {
 		// The Ray autoscaler writes logs which are read by the Ray head.
 		// We need a shared log volume to enable this information flow.
@@ -575,7 +663,7 @@ func BuildPod(ctx context.Context, podTemplateSpec corev1.PodTemplateSpec, rayNo
 		// Configure the readiness and liveness probes for the Ray container. These probes
 		// play a crucial role in KubeRay health checks. Without them, certain failures,
 		// such as the Raylet process crashing, may go undetected.
-		initLivenessAndReadinessProbe(&pod.Spec.Containers[utils.RayContainerIndex], rayNodeType, creatorCRDType, rayStartParams)
+		initLivenessAndReadinessProbe(&pod.Spec.Containers[utils.RayContainerIndex], rayNodeType, creatorCRDType, rayStartParams, rayVersion)
 	}
 
 	return pod
@@ -597,7 +685,7 @@ func BuildAutoscalerContainer(autoscalerImage string) corev1.Container {
 				},
 			},
 			{
-				Name: "RAY_CLUSTER_NAMESPACE",
+				Name: utils.RAY_CLUSTER_NAMESPACE,
 				ValueFrom: &corev1.EnvVarSource{
 					FieldRef: &corev1.ObjectFieldSelector{
 						FieldPath: "metadata.namespace",
@@ -760,6 +848,17 @@ func setContainerEnvVars(pod *corev1.Pod, rayNodeType rayv1.RayNodeType, fqdnRay
 		},
 	}
 	container.Env = append(container.Env, clusterNameEnv)
+
+	// The RAY_CLUSTER_NAMESPACE environment variable is managed by KubeRay and should not be set by the user.
+	clusterNamespaceEnv := corev1.EnvVar{
+		Name: utils.RAY_CLUSTER_NAMESPACE,
+		ValueFrom: &corev1.EnvVarSource{
+			FieldRef: &corev1.ObjectFieldSelector{
+				FieldPath: "metadata.namespace",
+			},
+		},
+	}
+	container.Env = append(container.Env, clusterNamespaceEnv)
 
 	// RAY_CLOUD_INSTANCE_ID is used by Ray Autoscaler V2 (alpha). See https://github.com/ray-project/kuberay/issues/1751 for more details.
 	rayCloudInstanceID := corev1.EnvVar{

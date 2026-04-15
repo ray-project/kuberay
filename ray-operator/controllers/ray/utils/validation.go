@@ -111,11 +111,30 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 		return err
 	}
 
+	// Check if autoscaling is enabled once to avoid repeated calls
+	isAutoscalingEnabled := IsAutoscalingEnabled(spec)
+
 	for _, workerGroup := range spec.WorkerGroupSpecs {
 		if len(workerGroup.Template.Spec.Containers) == 0 {
 			return fmt.Errorf("workerGroupSpec should have at least one container")
 		}
 
+		// When autoscaling is enabled, MinReplicas and MaxReplicas are optional
+		// as users can manually update them and the autoscaler will handle the adjustment.
+		if !isAutoscalingEnabled && (workerGroup.MinReplicas == nil || workerGroup.MaxReplicas == nil) {
+			return fmt.Errorf("worker group %s must set both minReplicas and maxReplicas when autoscaling is disabled", workerGroup.GroupName)
+		}
+		if workerGroup.MinReplicas != nil && *workerGroup.MinReplicas < 0 {
+			return fmt.Errorf("worker group %s has negative minReplicas %d", workerGroup.GroupName, *workerGroup.MinReplicas)
+		}
+		if workerGroup.MaxReplicas != nil && *workerGroup.MaxReplicas < 0 {
+			return fmt.Errorf("worker group %s has negative maxReplicas %d", workerGroup.GroupName, *workerGroup.MaxReplicas)
+		}
+		if workerGroup.MinReplicas != nil && workerGroup.MaxReplicas != nil {
+			if *workerGroup.MinReplicas > *workerGroup.MaxReplicas {
+				return fmt.Errorf("worker group %s has minReplicas %d greater than maxReplicas %d", workerGroup.GroupName, *workerGroup.MinReplicas, *workerGroup.MaxReplicas)
+			}
+		}
 		if err := validateRayGroupResources(workerGroup.GroupName, workerGroup.RayStartParams, workerGroup.Resources); err != nil {
 			return err
 		}
@@ -175,9 +194,6 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 		}
 	}
 
-	// Check if autoscaling is enabled once to avoid repeated calls
-	isAutoscalingEnabled := IsAutoscalingEnabled(spec)
-
 	// Validate that RAY_enable_autoscaler_v2 environment variable is not set to "1" or "true" when autoscaler is disabled
 	if !isAutoscalingEnabled {
 		if envVar, exists := EnvVarByName(RAY_ENABLE_AUTOSCALER_V2, spec.HeadGroupSpec.Template.Spec.Containers[RayContainerIndex].Env); exists {
@@ -235,6 +251,19 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 			return fmt.Errorf("authOptions.mode is 'token' but minimum Ray version is 2.52.0, got %s", spec.RayVersion)
 		}
 
+		if IsK8sAuthEnabled(spec.AuthOptions) {
+			minVersion := version.MustParseGeneric("2.55.0")
+			if rayVersion.LessThan(minVersion) {
+				return fmt.Errorf("authOptions.enableK8sTokenAuth is enabled but minimum Ray version is 2.55.0, got %s", spec.RayVersion)
+			}
+			if spec.AuthOptions.SecretName != nil && *spec.AuthOptions.SecretName != "" {
+				return fmt.Errorf("authOptions.enableK8sTokenAuth is enabled and authOptions.secretName is also set")
+			}
+		}
+	} else {
+		if IsK8sAuthEnabled(spec.AuthOptions) {
+			return fmt.Errorf("authOptions.enableK8sTokenAuth is enabled but authOptions.mode not set to 'token'")
+		}
 	}
 
 	return nil
@@ -289,6 +318,9 @@ func ValidateRayJobSpec(rayJob *rayv1.RayJob) error {
 		if rayJob.Spec.SubmissionMode == rayv1.SidecarMode {
 			return fmt.Errorf("ClusterSelector is not supported in SidecarMode")
 		}
+		if rayJob.Spec.BackoffLimit != nil && *rayJob.Spec.BackoffLimit > 0 {
+			return fmt.Errorf("The RayJob spec is invalid: BackoffLimit is incompatible with ClusterSelector mode")
+		}
 	}
 
 	// InteractiveMode does not support backoffLimit > 1.
@@ -317,6 +349,9 @@ func ValidateRayJobSpec(rayJob *rayv1.RayJob) error {
 	}
 
 	if rayJob.Spec.RayClusterSpec != nil {
+		if IsK8sAuthEnabled(rayJob.Spec.RayClusterSpec.AuthOptions) {
+			return fmt.Errorf("The RayJob spec is invalid: K8s token auth mode is currently not supported for RayJob")
+		}
 		if err := ValidateRayClusterSpec(rayJob.Spec.RayClusterSpec, rayJob.Annotations); err != nil {
 			return fmt.Errorf("The RayJob spec is invalid: %w", err)
 		}
@@ -329,6 +364,9 @@ func ValidateRayJobSpec(rayJob *rayv1.RayJob) error {
 	}
 	if rayJob.Spec.ActiveDeadlineSeconds != nil && *rayJob.Spec.ActiveDeadlineSeconds <= 0 {
 		return fmt.Errorf("The RayJob spec is invalid: activeDeadlineSeconds must be a positive integer")
+	}
+	if rayJob.Spec.PreRunningDeadlineSeconds != nil && *rayJob.Spec.PreRunningDeadlineSeconds <= 0 {
+		return fmt.Errorf("The RayJob spec is invalid: preRunningDeadlineSeconds must be a positive integer")
 	}
 	if rayJob.Spec.BackoffLimit != nil && *rayJob.Spec.BackoffLimit < 0 {
 		return fmt.Errorf("The RayJob spec is invalid: backoffLimit must be a positive integer")
@@ -386,6 +424,10 @@ func validateInitializingTimeout(annotations map[string]string) error {
 }
 
 func ValidateRayServiceSpec(rayService *rayv1.RayService) error {
+	if IsK8sAuthEnabled(rayService.Spec.RayClusterSpec.AuthOptions) {
+		return fmt.Errorf("The RayService spec is invalid: K8s token auth mode is currently not supported for RayService")
+	}
+
 	if err := ValidateRayClusterSpec(&rayService.Spec.RayClusterSpec, rayService.Annotations); err != nil {
 		return fmt.Errorf("The RayService spec is invalid: %w", err)
 	}
@@ -435,6 +477,10 @@ func ValidateClusterUpgradeOptions(rayService *rayv1.RayService) error {
 
 	if options.StepSizePercent == nil || *options.StepSizePercent < 0 || *options.StepSizePercent > 100 {
 		return fmt.Errorf("stepSizePercent must be between 0 and 100")
+	}
+
+	if *options.StepSizePercent > *options.MaxSurgePercent {
+		return fmt.Errorf("stepSizePercent must be less than or equal to maxSurgePercent")
 	}
 
 	if options.IntervalSeconds == nil || *options.IntervalSeconds <= 0 {

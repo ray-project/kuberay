@@ -40,11 +40,11 @@ spec:
               image: rayproject/ray:2.52.0
               resources:
                 requests:
-                  cpu: "300m"
-                  memory: "1G"
+                  cpu: "1"
+                  memory: 1G
                 limits:
-                  cpu: "500m"
-                  memory: "2G"
+                  cpu: "1"
+                  memory: 2G
               ports:
                 - containerPort: 6379
                   name: gcs-server

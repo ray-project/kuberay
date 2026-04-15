@@ -553,7 +553,6 @@ func TestGenerateHeadServiceName(t *testing.T) {
 }
 
 func TestGetWorkerGroupDesiredReplicas(t *testing.T) {
-	ctx := context.Background()
 	// Test 1: `WorkerGroupSpec.Replicas` is nil.
 	// `Replicas` is impossible to be nil in a real RayCluster CR as it has a default value assigned in the CRD.
 	numOfHosts := int32(1)
@@ -565,37 +564,31 @@ func TestGetWorkerGroupDesiredReplicas(t *testing.T) {
 		MinReplicas: &minReplicas,
 		MaxReplicas: &maxReplicas,
 	}
-	assert.Equal(t, GetWorkerGroupDesiredReplicas(ctx, workerGroupSpec), minReplicas)
+	assert.Equal(t, GetWorkerGroupDesiredReplicas(workerGroupSpec), minReplicas)
 
 	// Test 2: `WorkerGroupSpec.Replicas` is not nil and is within the range.
 	replicas := int32(3)
 	workerGroupSpec.Replicas = &replicas
-	assert.Equal(t, GetWorkerGroupDesiredReplicas(ctx, workerGroupSpec), replicas)
+	assert.Equal(t, GetWorkerGroupDesiredReplicas(workerGroupSpec), replicas)
 
 	// Test 3: `WorkerGroupSpec.Replicas` is not nil but is more than maxReplicas.
 	replicas = int32(6)
 	workerGroupSpec.Replicas = &replicas
-	assert.Equal(t, GetWorkerGroupDesiredReplicas(ctx, workerGroupSpec), maxReplicas)
+	assert.Equal(t, GetWorkerGroupDesiredReplicas(workerGroupSpec), maxReplicas)
 
 	// Test 4: `WorkerGroupSpec.Replicas` is not nil but is less than minReplicas.
 	replicas = int32(0)
 	workerGroupSpec.Replicas = &replicas
-	assert.Equal(t, GetWorkerGroupDesiredReplicas(ctx, workerGroupSpec), minReplicas)
+	assert.Equal(t, GetWorkerGroupDesiredReplicas(workerGroupSpec), minReplicas)
 
-	// Test 5: `WorkerGroupSpec.Replicas` is nil and minReplicas is less than maxReplicas.
-	workerGroupSpec.Replicas = nil
-	workerGroupSpec.MinReplicas = &maxReplicas
-	workerGroupSpec.MaxReplicas = &minReplicas
-	assert.Equal(t, GetWorkerGroupDesiredReplicas(ctx, workerGroupSpec), *workerGroupSpec.MaxReplicas)
-
-	// Test 6: `WorkerGroupSpec.Suspend` is true.
+	// Test 5: `WorkerGroupSpec.Suspend` is true.
 	suspend := true
 	workerGroupSpec.MinReplicas = &maxReplicas
 	workerGroupSpec.MaxReplicas = &minReplicas
 	workerGroupSpec.Suspend = &suspend
-	assert.Zero(t, GetWorkerGroupDesiredReplicas(ctx, workerGroupSpec))
+	assert.Zero(t, GetWorkerGroupDesiredReplicas(workerGroupSpec))
 
-	// Test 7: `WorkerGroupSpec.NumOfHosts` is 4.
+	// Test 6: `WorkerGroupSpec.NumOfHosts` is 4.
 	numOfHosts = int32(4)
 	replicas = int32(5)
 	suspend = false
@@ -604,7 +597,7 @@ func TestGetWorkerGroupDesiredReplicas(t *testing.T) {
 	workerGroupSpec.Suspend = &suspend
 	workerGroupSpec.MinReplicas = &minReplicas
 	workerGroupSpec.MaxReplicas = &maxReplicas
-	assert.Equal(t, GetWorkerGroupDesiredReplicas(ctx, workerGroupSpec), replicas*numOfHosts)
+	assert.Equal(t, GetWorkerGroupDesiredReplicas(workerGroupSpec), replicas*numOfHosts)
 }
 
 func TestCalculateMinAndMaxReplicas(t *testing.T) {
@@ -801,7 +794,7 @@ func TestCalculateDesiredReplicas(t *testing.T) {
 					},
 				},
 			}
-			assert.Equal(t, CalculateDesiredReplicas(context.Background(), &cluster), tc.answer)
+			assert.Equal(t, CalculateDesiredReplicas(&cluster), tc.answer)
 		})
 	}
 }
@@ -1789,6 +1782,147 @@ func TestGetWeightsFromHTTPRoute(t *testing.T) {
 			active, pending := GetWeightsFromHTTPRoute(tt.httpRoute, tt.rayService)
 			assert.Equal(t, tt.expectedActive, active, "Active weight mismatch")
 			assert.Equal(t, tt.expectedPending, pending, "Pending weight mismatch")
+		})
+	}
+}
+
+func TestIsHTTPRouteEqual(t *testing.T) {
+	tests := []struct {
+		existing *gwv1.HTTPRoute
+		desired  *gwv1.HTTPRoute
+		name     string
+		expected bool
+	}{
+		{
+			name: "Exactly equal HTTPRoutes",
+			existing: &gwv1.HTTPRoute{
+				Spec: gwv1.HTTPRouteSpec{
+					Rules: []gwv1.HTTPRouteRule{
+						{
+							BackendRefs: []gwv1.HTTPBackendRef{
+								{BackendRef: gwv1.BackendRef{BackendObjectReference: gwv1.BackendObjectReference{Name: "svc-a", Port: ptr.To(gwv1.PortNumber(8000))}, Weight: ptr.To(int32(100))}},
+							},
+						},
+					},
+				},
+			},
+			desired: &gwv1.HTTPRoute{
+				Spec: gwv1.HTTPRouteSpec{
+					Rules: []gwv1.HTTPRouteRule{
+						{
+							BackendRefs: []gwv1.HTTPBackendRef{
+								{BackendRef: gwv1.BackendRef{BackendObjectReference: gwv1.BackendObjectReference{Name: "svc-a", Port: ptr.To(gwv1.PortNumber(8000))}, Weight: ptr.To(int32(100))}},
+							},
+						},
+					},
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "Different number of rules",
+			existing: &gwv1.HTTPRoute{
+				Spec: gwv1.HTTPRouteSpec{
+					Rules: []gwv1.HTTPRouteRule{
+						{BackendRefs: []gwv1.HTTPBackendRef{{BackendRef: gwv1.BackendRef{BackendObjectReference: gwv1.BackendObjectReference{Name: "svc-a"}}}}},
+					},
+				},
+			},
+			desired: &gwv1.HTTPRoute{
+				Spec: gwv1.HTTPRouteSpec{
+					Rules: []gwv1.HTTPRouteRule{
+						{BackendRefs: []gwv1.HTTPBackendRef{{BackendRef: gwv1.BackendRef{BackendObjectReference: gwv1.BackendObjectReference{Name: "svc-a"}}}}},
+						{BackendRefs: []gwv1.HTTPBackendRef{{BackendRef: gwv1.BackendRef{BackendObjectReference: gwv1.BackendObjectReference{Name: "svc-b"}}}}},
+					},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "Different number of backends",
+			existing: &gwv1.HTTPRoute{
+				Spec: gwv1.HTTPRouteSpec{
+					Rules: []gwv1.HTTPRouteRule{
+						{
+							BackendRefs: []gwv1.HTTPBackendRef{
+								{BackendRef: gwv1.BackendRef{BackendObjectReference: gwv1.BackendObjectReference{Name: "svc-a"}}},
+							},
+						},
+					},
+				},
+			},
+			desired: &gwv1.HTTPRoute{
+				Spec: gwv1.HTTPRouteSpec{
+					Rules: []gwv1.HTTPRouteRule{
+						{
+							BackendRefs: []gwv1.HTTPBackendRef{
+								{BackendRef: gwv1.BackendRef{BackendObjectReference: gwv1.BackendObjectReference{Name: "svc-a"}}},
+								{BackendRef: gwv1.BackendRef{BackendObjectReference: gwv1.BackendObjectReference{Name: "svc-b"}}},
+							},
+						},
+					},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "Different backend weights",
+			existing: &gwv1.HTTPRoute{
+				Spec: gwv1.HTTPRouteSpec{
+					Rules: []gwv1.HTTPRouteRule{
+						{
+							BackendRefs: []gwv1.HTTPBackendRef{
+								{BackendRef: gwv1.BackendRef{BackendObjectReference: gwv1.BackendObjectReference{Name: "svc-a"}, Weight: ptr.To(int32(100))}},
+							},
+						},
+					},
+				},
+			},
+			desired: &gwv1.HTTPRoute{
+				Spec: gwv1.HTTPRouteSpec{
+					Rules: []gwv1.HTTPRouteRule{
+						{
+							BackendRefs: []gwv1.HTTPBackendRef{
+								{BackendRef: gwv1.BackendRef{BackendObjectReference: gwv1.BackendObjectReference{Name: "svc-a"}, Weight: ptr.To(int32(75))}},
+							},
+						},
+					},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "Different backend names",
+			existing: &gwv1.HTTPRoute{
+				Spec: gwv1.HTTPRouteSpec{
+					Rules: []gwv1.HTTPRouteRule{
+						{
+							BackendRefs: []gwv1.HTTPBackendRef{
+								{BackendRef: gwv1.BackendRef{BackendObjectReference: gwv1.BackendObjectReference{Name: "svc-old"}}},
+							},
+						},
+					},
+				},
+			},
+			desired: &gwv1.HTTPRoute{
+				Spec: gwv1.HTTPRouteSpec{
+					Rules: []gwv1.HTTPRouteRule{
+						{
+							BackendRefs: []gwv1.HTTPBackendRef{
+								{BackendRef: gwv1.BackendRef{BackendObjectReference: gwv1.BackendObjectReference{Name: "svc-new"}}},
+							},
+						},
+					},
+				},
+			},
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := IsHTTPRouteEqual(tt.existing, tt.desired)
+			assert.Equal(t, tt.expected, result)
 		})
 	}
 }

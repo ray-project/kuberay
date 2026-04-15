@@ -23,7 +23,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/apimachinery/pkg/util/rand"
-	"k8s.io/client-go/discovery"
 	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -384,23 +383,20 @@ func GenerateIdentifier(clusterName string, nodeType rayv1.RayNodeType) string {
 	return fmt.Sprintf("%s-%s", clusterName, nodeType)
 }
 
-func GetWorkerGroupDesiredReplicas(ctx context.Context, workerGroupSpec rayv1.WorkerGroupSpec) int32 {
-	log := ctrl.LoggerFrom(ctx)
+func GetWorkerGroupDesiredReplicas(workerGroupSpec rayv1.WorkerGroupSpec) int32 {
 	// Always adhere to min/max replicas constraints.
 	var workerReplicas int32
+	minReplicas := ptr.Deref(workerGroupSpec.MinReplicas, int32(0))
+	maxReplicas := ptr.Deref(workerGroupSpec.MaxReplicas, int32(math.MaxInt32))
 	if workerGroupSpec.Suspend != nil && *workerGroupSpec.Suspend {
 		return 0
 	}
-	if *workerGroupSpec.MinReplicas > *workerGroupSpec.MaxReplicas {
-		log.Info("minReplicas is greater than maxReplicas, using maxReplicas as desired replicas. "+
-			"Please fix this to avoid any unexpected behaviors.", "minReplicas", *workerGroupSpec.MinReplicas, "maxReplicas", *workerGroupSpec.MaxReplicas)
-		workerReplicas = *workerGroupSpec.MaxReplicas
-	} else if workerGroupSpec.Replicas == nil || *workerGroupSpec.Replicas < *workerGroupSpec.MinReplicas {
+	if workerGroupSpec.Replicas == nil || *workerGroupSpec.Replicas < minReplicas {
 		// Replicas is impossible to be nil as it has a default value assigned in the CRD.
 		// Add this check to make testing easier.
-		workerReplicas = *workerGroupSpec.MinReplicas
-	} else if *workerGroupSpec.Replicas > *workerGroupSpec.MaxReplicas {
-		workerReplicas = *workerGroupSpec.MaxReplicas
+		workerReplicas = minReplicas
+	} else if *workerGroupSpec.Replicas > maxReplicas {
+		workerReplicas = maxReplicas
 	} else {
 		workerReplicas = *workerGroupSpec.Replicas
 	}
@@ -408,10 +404,10 @@ func GetWorkerGroupDesiredReplicas(ctx context.Context, workerGroupSpec rayv1.Wo
 }
 
 // CalculateDesiredReplicas calculate desired worker replicas at the cluster level
-func CalculateDesiredReplicas(ctx context.Context, cluster *rayv1.RayCluster) int32 {
+func CalculateDesiredReplicas(cluster *rayv1.RayCluster) int32 {
 	count := int32(0)
 	for _, nodeGroup := range cluster.Spec.WorkerGroupSpecs {
-		count += GetWorkerGroupDesiredReplicas(ctx, nodeGroup)
+		count += GetWorkerGroupDesiredReplicas(nodeGroup)
 	}
 
 	return count
@@ -424,7 +420,8 @@ func CalculateMinReplicas(cluster *rayv1.RayCluster) int32 {
 		if nodeGroup.Suspend != nil && *nodeGroup.Suspend {
 			continue
 		}
-		count += (*nodeGroup.MinReplicas * nodeGroup.NumOfHosts)
+		minReplicas := ptr.Deref(nodeGroup.MinReplicas, int32(0))
+		count += (minReplicas * nodeGroup.NumOfHosts)
 	}
 
 	return count
@@ -437,7 +434,8 @@ func CalculateMaxReplicas(cluster *rayv1.RayCluster) int32 {
 		if nodeGroup.Suspend != nil && *nodeGroup.Suspend {
 			continue
 		}
-		count += int64(*nodeGroup.MaxReplicas) * int64(nodeGroup.NumOfHosts)
+		maxReplicas := ptr.Deref(nodeGroup.MaxReplicas, int32(math.MaxInt32))
+		count += int64(maxReplicas) * int64(nodeGroup.NumOfHosts)
 	}
 
 	return SafeInt64ToInt32(count)
@@ -499,7 +497,8 @@ func CalculateMinResources(cluster *rayv1.RayCluster) corev1.ResourceList {
 	for _, nodeGroup := range cluster.Spec.WorkerGroupSpecs {
 		podResource := CalculatePodResource(nodeGroup.Template.Spec)
 		calculateReplicaResource(&podResource, nodeGroup.NumOfHosts)
-		for i := int32(0); i < *nodeGroup.MinReplicas; i++ {
+		minReplicas := ptr.Deref(nodeGroup.MinReplicas, int32(0))
+		for range minReplicas {
 			minResourcesList = append(minResourcesList, podResource)
 		}
 	}
@@ -644,11 +643,20 @@ func GenerateHashWithoutReplicasAndWorkersToDelete(rayClusterSpec rayv1.RayClust
 	// Mute certain fields that will not trigger new RayCluster preparation. For example,
 	// Autoscaler will update `Replicas` and `WorkersToDelete` when scaling up/down.
 	updatedRayClusterSpec := rayClusterSpec.DeepCopy()
+
+	// Mute tolerations and scheduling gates for all pod templates.
+	// External controllers like Kueue may inject these fields into the RayCluster
+	// after creation, which should not trigger a new RayCluster preparation.
+	updatedRayClusterSpec.HeadGroupSpec.Template.Spec.Tolerations = nil
+	updatedRayClusterSpec.HeadGroupSpec.Template.Spec.SchedulingGates = nil
+
 	for i := 0; i < len(updatedRayClusterSpec.WorkerGroupSpecs); i++ {
 		updatedRayClusterSpec.WorkerGroupSpecs[i].Replicas = nil
 		updatedRayClusterSpec.WorkerGroupSpecs[i].MaxReplicas = nil
 		updatedRayClusterSpec.WorkerGroupSpecs[i].MinReplicas = nil
 		updatedRayClusterSpec.WorkerGroupSpecs[i].ScaleStrategy.WorkersToDelete = nil
+		updatedRayClusterSpec.WorkerGroupSpecs[i].Template.Spec.Tolerations = nil
+		updatedRayClusterSpec.WorkerGroupSpecs[i].Template.Spec.SchedulingGates = nil
 	}
 	updatedRayClusterSpec.UpgradeStrategy = nil
 
@@ -689,6 +697,26 @@ func EnvVarExists(envName string, envVars []corev1.EnvVar) bool {
 	return false
 }
 
+// VolumeMountExists checks if a volume mount with the given name exists in the list of volume mounts.
+func VolumeMountExists(mountName string, volumeMounts []corev1.VolumeMount) bool {
+	for _, vm := range volumeMounts {
+		if vm.Name == mountName {
+			return true
+		}
+	}
+	return false
+}
+
+// VolumeExists checks if a volume with the given name exists in the list of volumes.
+func VolumeExists(volumeName string, volumes []corev1.Volume) bool {
+	for _, v := range volumes {
+		if v.Name == volumeName {
+			return true
+		}
+	}
+	return false
+}
+
 // EnvVarByName returns an entry in []corev1.EnvVar that matches a name.
 // Also returns a bool for whether the env var exists.
 func EnvVarByName(envName string, envVars []corev1.EnvVar) (corev1.EnvVar, bool) {
@@ -701,7 +729,7 @@ func EnvVarByName(envName string, envVars []corev1.EnvVar) (corev1.EnvVar, bool)
 }
 
 type ClientProvider interface {
-	GetDashboardClient(mgr manager.Manager) func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error)
+	GetDashboardClient(ctx context.Context, mgr manager.Manager) func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error)
 	GetHttpProxyClient(mgr manager.Manager) func(hostIp, podNamespace, podName string, port int) RayHttpProxyClientInterface
 }
 
@@ -730,6 +758,10 @@ func IsGCSFaultToleranceEnabled(spec *rayv1.RayClusterSpec, annotations map[stri
 // IsAuthEnabled returns whether Ray auth is enabled.
 func IsAuthEnabled(spec *rayv1.RayClusterSpec) bool {
 	return spec.AuthOptions != nil && spec.AuthOptions.Mode == rayv1.AuthModeToken
+}
+
+func IsK8sAuthEnabled(authOptions *rayv1.AuthOptions) bool {
+	return authOptions != nil && authOptions.EnableK8sTokenAuth != nil && *authOptions.EnableK8sTokenAuth
 }
 
 // GetRayClusterNameFromService returns the name of the RayCluster that the service points to
@@ -849,38 +881,6 @@ func GetWeightsFromHTTPRoute(httpRoute *gwv1.HTTPRoute, rayServiceInstance *rayv
 	return
 }
 
-// Check where we are running. We are trying to distinguish here whether
-// this is vanilla kubernetes cluster or Openshift
-func GetClusterType() bool {
-	if os.Getenv(USE_INGRESS_ON_OPENSHIFT) == "true" {
-		// Environment is set to treat OpenShift cluster as Vanilla Kubernetes
-		return false
-	}
-
-	// The discovery package is used to discover APIs supported by a Kubernetes API server.
-	config, err := ctrl.GetConfig()
-	if err != nil || config == nil {
-		return false
-	}
-
-	discoveryClient, err := discovery.NewDiscoveryClientForConfig(config)
-	if err != nil || discoveryClient == nil {
-		return false
-	}
-
-	apiGroupList, err := discoveryClient.ServerGroups()
-	if err != nil {
-		return false
-	}
-
-	for _, group := range apiGroupList.Groups {
-		if strings.HasSuffix(group.Name, ".openshift.io") {
-			return true
-		}
-	}
-	return false
-}
-
 func GetContainerCommand(additionalOptions []string) []string {
 	bashOptions := []string{"c"}
 	bashOptions = append(bashOptions, additionalOptions...)
@@ -932,13 +932,16 @@ func FetchHeadServiceURL(ctx context.Context, cli client.Client, rayCluster *ray
 	return headServiceURL, nil
 }
 
-func GetRayDashboardClientFunc(mgr manager.Manager, useKubernetesProxy bool) func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error) {
+func GetRayDashboardClientFunc(ctx context.Context, mgr manager.Manager, useKubernetesProxy bool) func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error) {
 	return func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error) {
 		dashboardClient := &dashboardclient.RayDashboardClient{}
 		var authToken string
 
 		if rayCluster != nil && rayCluster.Spec.AuthOptions != nil && rayCluster.Spec.AuthOptions.Mode == rayv1.AuthModeToken {
 			secretName := CheckName(rayCluster.Name)
+			if rayCluster.Spec.AuthOptions.SecretName != nil && *rayCluster.Spec.AuthOptions.SecretName != "" {
+				secretName = *rayCluster.Spec.AuthOptions.SecretName
+			}
 			secret := &corev1.Secret{}
 			secretKey := types.NamespacedName{
 				Name:      secretName,
@@ -957,6 +960,11 @@ func GetRayDashboardClientFunc(mgr manager.Manager, useKubernetesProxy bool) fun
 			authToken = string(tokenBytes)
 		}
 
+		httpClient := &http.Client{
+			Timeout: rayHTTPClientTimeout(useKubernetesProxy),
+		}
+		dashboardURL := fmt.Sprintf("http://%s", url)
+
 		if useKubernetesProxy {
 			var err error
 			headSvcName := rayCluster.Status.Head.ServiceName
@@ -967,44 +975,80 @@ func GetRayDashboardClientFunc(mgr manager.Manager, useKubernetesProxy bool) fun
 					return nil, err
 				}
 			}
-
-			dashboardClient.InitClient(
-				// Use `mgr.GetHTTPClient()` instead of `http.Client{}` so that the client has proper authentication
-				// configured to communicate with the Kubernetes API server.
-				mgr.GetHTTPClient(),
-				fmt.Sprintf("%s/api/v1/namespaces/%s/services/%s:dashboard/proxy", mgr.GetConfig().Host, rayCluster.Namespace, headSvcName),
-				authToken,
-			)
-			return dashboardClient, nil
+			// Use the manager transport for TLS and API server authentication.
+			httpClient.Transport = mgr.GetHTTPClient().Transport
+			dashboardURL = fmt.Sprintf("%s/api/v1/namespaces/%s/services/%s:dashboard/proxy", mgr.GetConfig().Host, rayCluster.Namespace, headSvcName)
 		}
+		dashboardClient.InitClient(httpClient, dashboardURL, authToken)
 
-		dashboardClient.InitClient(
-			&http.Client{
-				Timeout: 2 * time.Second,
-			},
-			"http://"+url,
-			authToken,
-		)
-
+		if features.Enabled(features.AsyncJobInfoQuery) && rayCluster != nil {
+			namespacedName := types.NamespacedName{
+				Name:      rayCluster.Name,
+				Namespace: rayCluster.Namespace,
+			}
+			dashboardCachedClient := &dashboardclient.RayDashboardCacheClient{}
+			dashboardCachedClient.InitClient(ctx, namespacedName, dashboardClient)
+			return dashboardCachedClient, nil
+		}
 		return dashboardClient, nil
 	}
 }
 
 func GetRayHttpProxyClientFunc(mgr manager.Manager, useKubernetesProxy bool) func(hostIp, podNamespace, podName string, port int) RayHttpProxyClientInterface {
 	return func(hostIp, podNamespace, podName string, port int) RayHttpProxyClientInterface {
-		if useKubernetesProxy {
-			return &RayHttpProxyClient{
-				client:       mgr.GetHTTPClient(),
-				httpProxyURL: fmt.Sprintf("%s/api/v1/namespaces/%s/pods/%s:%d/proxy/", mgr.GetConfig().Host, podNamespace, podName, port),
-			}
+		httpClient := &http.Client{
+			Timeout: rayHTTPClientTimeout(useKubernetesProxy),
 		}
+		httpProxyURL := fmt.Sprintf("http://%s:%d/", hostIp, port)
+
+		if useKubernetesProxy {
+			// Use the manager's transport for TLS and API server authentication.
+			httpClient.Transport = mgr.GetHTTPClient().Transport
+			httpProxyURL = fmt.Sprintf("%s/api/v1/namespaces/%s/pods/%s:%d/proxy/", mgr.GetConfig().Host, podNamespace, podName, port)
+		}
+
 		return &RayHttpProxyClient{
-			client:       &http.Client{Timeout: 2 * time.Second},
-			httpProxyURL: fmt.Sprintf("http://%s:%d/", hostIp, port),
+			client:       httpClient,
+			httpProxyURL: httpProxyURL,
 		}
 	}
 }
 
+// rayHTTPClientTimeout returns the request deadline for Ray HTTP clients.
+// Traffic proxied through the apiserver requires a longer timeout than direct connections to pods or Services.
+func rayHTTPClientTimeout(useKubernetesProxy bool) time.Duration {
+	if useKubernetesProxy {
+		return RayHTTPClientProxyTimeoutSeconds * time.Second
+	}
+	return RayHTTPClientDirectTimeoutSeconds * time.Second
+}
+
 func HasSubmitter(rayJobInstance *rayv1.RayJob) bool {
 	return rayJobInstance.Spec.SubmissionMode == rayv1.K8sJobMode || rayJobInstance.Spec.SubmissionMode == rayv1.SidecarMode
+}
+
+// IsHTTPRouteEqual checks if the existing HTTPRoute matches the desired HTTPRoute.
+func IsHTTPRouteEqual(existing, desired *gwv1.HTTPRoute) bool {
+	if len(existing.Spec.Rules) != len(desired.Spec.Rules) {
+		return false
+	}
+
+	for i := range desired.Spec.Rules {
+		if len(existing.Spec.Rules[i].BackendRefs) != len(desired.Spec.Rules[i].BackendRefs) {
+			return false
+		}
+
+		for j := range desired.Spec.Rules[i].BackendRefs {
+			existingRef := existing.Spec.Rules[i].BackendRefs[j]
+			desiredRef := desired.Spec.Rules[i].BackendRefs[j]
+
+			// Only compare the fields the controller updates.
+			if string(existingRef.Name) != string(desiredRef.Name) ||
+				ptr.Deref(existingRef.Weight, 1) != ptr.Deref(desiredRef.Weight, 1) ||
+				ptr.Deref(existingRef.Port, 0) != ptr.Deref(desiredRef.Port, 0) {
+				return false
+			}
+		}
+	}
+	return true
 }

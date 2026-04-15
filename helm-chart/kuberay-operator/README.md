@@ -8,7 +8,7 @@ A Helm chart for deploying the Kuberay operator on Kubernetes.
 
 ## Introduction
 
-This document provides instructions to install both CRDs (RayCluster, RayJob, RayService) and
+This document provides instructions to install both CRDs (RayCluster, RayJob, RayService, RayCronJob) and
 KubeRay operator with a Helm chart.
 
 ## Prerequisites
@@ -167,16 +167,20 @@ spec:
 | logging.sizeLimit | string | `""` | EmptyDir volume size limit for kuberay-operator log file. |
 | batchScheduler.enabled | bool | `false` |  |
 | batchScheduler.name | string | `""` |  |
-| configuration.enabled | bool | `false` | Whether to enable the configuration feature. If enabled, a ConfigMap will be created and mounted to the operator. |
+| configuration.enabled | bool | `false` | Whether to enable the configuration feature. If enabled, a ConfigMap will be created and mounted to the operator. When enabled, flag-based configuration values (leaderElectionEnabled, metrics.enabled, kubeClient.qps, etc.) will be injected into the ConfigMap. The operator will use the ConfigMap and ignore command-line flags. |
 | configuration.defaultContainerEnvs | list | `[]` | Default environment variables to inject into all Ray containers in all RayCluster CRs. This allows user to set feature flags across all Ray pods. Example: defaultContainerEnvs: - name: RAY_enable_open_telemetry   value: "true" - name: RAY_metric_cardinality_level   value: "recommended" |
+| configuration.headSidecarContainers | list | `[]` | Sidecar containers to inject into every Ray head pod. Example: headSidecarContainers: - name: fluentbit   image: fluent/fluent-bit:1.9 |
+| configuration.workerSidecarContainers | list | `[]` | Sidecar containers to inject into every Ray worker pod. Example: workerSidecarContainers: - name: fluentbit   image: fluent/fluent-bit:1.9 |
 | featureGates[0].name | string | `"RayClusterStatusConditions"` |  |
 | featureGates[0].enabled | bool | `true` |  |
 | featureGates[1].name | string | `"RayJobDeletionPolicy"` |  |
-| featureGates[1].enabled | bool | `false` |  |
+| featureGates[1].enabled | bool | `true` |  |
 | featureGates[2].name | string | `"RayMultiHostIndexing"` |  |
-| featureGates[2].enabled | bool | `false` |  |
+| featureGates[2].enabled | bool | `true` |  |
 | featureGates[3].name | string | `"RayServiceIncrementalUpgrade"` |  |
 | featureGates[3].enabled | bool | `false` |  |
+| featureGates[4].name | string | `"RayCronJob"` |  |
+| featureGates[4].enabled | bool | `false` |  |
 | metrics.enabled | bool | `true` | Whether KubeRay operator should emit control plane metrics. |
 | metrics.serviceMonitor.enabled | bool | `false` | Enable a prometheus ServiceMonitor |
 | metrics.serviceMonitor.interval | string | `"30s"` | Prometheus ServiceMonitor interval |

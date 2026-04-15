@@ -3,6 +3,7 @@ package volcano
 import (
 	"context"
 	"fmt"
+	"maps"
 	"strconv"
 
 	corev1 "k8s.io/api/core/v1"
@@ -62,7 +63,7 @@ func (v *VolcanoBatchScheduler) handleRayCluster(ctx context.Context, raycluster
 		return nil
 	}
 
-	minMember, totalResource := v.calculatePodGroupParams(ctx, &raycluster.Spec)
+	minMember, totalResource := v.calculatePodGroupParams(&raycluster.Spec)
 
 	return v.syncPodGroup(ctx, raycluster, minMember, totalResource)
 }
@@ -74,7 +75,7 @@ func (v *VolcanoBatchScheduler) handleRayJob(ctx context.Context, rayJob *rayv1.
 	}
 
 	var totalResourceList []corev1.ResourceList
-	minMember, totalResource := v.calculatePodGroupParams(ctx, rayJob.Spec.RayClusterSpec)
+	minMember, totalResource := v.calculatePodGroupParams(rayJob.Spec.RayClusterSpec)
 	totalResourceList = append(totalResourceList, totalResource)
 
 	// MinMember intentionally excludes the submitter pod to avoid a startup deadlock
@@ -186,11 +187,11 @@ func (v *VolcanoBatchScheduler) syncPodGroup(ctx context.Context, owner metav1.O
 	return nil
 }
 
-func (v *VolcanoBatchScheduler) calculatePodGroupParams(ctx context.Context, rayClusterSpec *rayv1.RayClusterSpec) (int32, corev1.ResourceList) {
+func (v *VolcanoBatchScheduler) calculatePodGroupParams(rayClusterSpec *rayv1.RayClusterSpec) (int32, corev1.ResourceList) {
 	rayCluster := &rayv1.RayCluster{Spec: *rayClusterSpec}
 
 	if !utils.IsAutoscalingEnabled(rayClusterSpec) {
-		return utils.CalculateDesiredReplicas(ctx, rayCluster) + 1, utils.CalculateDesiredResources(rayCluster)
+		return utils.CalculateDesiredReplicas(rayCluster) + 1, utils.CalculateDesiredResources(rayCluster)
 	}
 	return utils.CalculateMinReplicas(rayCluster) + 1, utils.CalculateMinResources(rayCluster)
 }
@@ -204,11 +205,15 @@ func createPodGroup(owner metav1.Object, podGroupName string, size int32, totalR
 		ownerRef = *metav1.NewControllerRef(obj, rayv1.SchemeGroupVersion.WithKind("RayJob"))
 	}
 
+	annotations := make(map[string]string, len(owner.GetAnnotations()))
+	maps.Copy(annotations, owner.GetAnnotations())
+
 	podGroup := volcanoschedulingv1beta1.PodGroup{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:       owner.GetNamespace(),
 			Name:            podGroupName,
 			OwnerReferences: []metav1.OwnerReference{ownerRef},
+			Annotations:     annotations,
 		},
 		Spec: volcanoschedulingv1beta1.PodGroupSpec{
 			MinMember:    size,
@@ -250,6 +255,73 @@ func (v *VolcanoBatchScheduler) AddMetadataToChildResource(_ context.Context, pa
 	populateLabelsFromObject(parent, child, utils.RayPriorityClassName)
 	populateAnnotations(parent, child, groupName)
 	addSchedulerName(child, v.Name())
+}
+
+// CleanupOnCompletion deletes the PodGroup when RayJob finishes.
+// This is called when the RayJob reaches terminal state (Complete/Failed).
+//
+// Why delete instead of marking as Completed?
+//
+// The Volcano scheduler runs a continuous control loop that recalculates and updates
+// PodGroup status in every scheduling cycle (see https://github.com/volcano-sh/volcano/blob/0d0690f8c95eabae90ee30031799282eb936a805/pkg/scheduler/framework/job_updater.go#L116).
+// The status calculation logic (getPodGroupPhase in https://github.com/volcano-sh/volcano/blob/0d0690f8c95eabae90ee30031799282eb936a805/pkg/scheduler/framework/session.go#L619) works as follows:
+//
+//  1. If scheduled pods < MinMember → return Pending
+//  2. If scheduled pods >= MinMember and all completed → return Completed
+//  3. If scheduled pods >= MinMember and some running → return Running
+//  4. If current status is Inqueue → return Inqueue (preserve it)
+//  5. Otherwise → return Pending
+//
+// When RayJob finishes and RayCluster is deleted:
+// - All pods are deleted, so scheduled = 0
+// - Since scheduled (0) < MinMember (e.g., 3), condition #1 applies
+// - The function returns Pending
+// - The enqueue action then changes Pending to Inqueue (enqueue.go:97)
+//
+// Therefore, marking the PodGroup as Completed doesn't work because:
+// 1. We set status to Completed
+// 2. Volcano scheduler runs its next cycle
+// 3. jobStatus() recalculates: "scheduled < MinMember, so status = Pending"
+// 4. enqueue action sees Pending and changes it to Inqueue
+// 5. User sees PodGroup stuck in Inqueue state, queue resources NOT released
+//
+// By deleting the PodGroup entirely:
+// - Volcano scheduler can't find the PodGroup (NotFound)
+// - Skips all status updates for this PodGroup
+// - Queue resources are immediately and permanently released
+//
+// See: https://github.com/volcano-sh/volcano/blob/master/pkg/scheduler/framework/job_updater.go
+//
+//	https://github.com/volcano-sh/volcano/blob/master/pkg/scheduler/framework/session.go
+func (v *VolcanoBatchScheduler) CleanupOnCompletion(ctx context.Context, object metav1.Object) (bool, error) {
+	logger := ctrl.LoggerFrom(ctx).WithName(pluginName)
+
+	// Only handle RayJob. RayCluster PodGroups will be cleaned up via OwnerReference
+	rayJob, ok := object.(*rayv1.RayJob)
+	if !ok {
+		return false, nil
+	}
+
+	podGroupName := getAppPodGroupName(rayJob)
+	podGroup := &volcanoschedulingv1beta1.PodGroup{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: rayJob.Namespace,
+			Name:      podGroupName,
+		},
+	}
+
+	// Delete the PodGroup directly without Get to reduce API calls
+	if err := v.cli.Delete(ctx, podGroup); err != nil {
+		if errors.IsNotFound(err) {
+			logger.Info("PodGroup not found, already deleted", "podGroupName", podGroupName)
+			return false, nil
+		}
+		logger.Error(err, "failed to delete PodGroup", "podGroupName", podGroupName)
+		return false, err
+	}
+
+	logger.Info("PodGroup deleted to release queue resources", "podGroupName", podGroupName)
+	return true, nil
 }
 
 func (vf *VolcanoBatchSchedulerFactory) New(_ context.Context, _ *rest.Config, cli client.Client) (schedulerinterface.BatchScheduler, error) {

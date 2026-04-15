@@ -11,24 +11,56 @@ import (
 
 // RayClusterStatusApplyConfiguration represents a declarative configuration of the RayClusterStatus type for use
 // with apply.
+//
+// RayClusterStatus defines the observed state of RayCluster
 type RayClusterStatusApplyConfiguration struct {
-	State                   *rayv1.ClusterState                                     `json:"state,omitempty"`
-	DesiredCPU              *resource.Quantity                                      `json:"desiredCPU,omitempty"`
-	DesiredMemory           *resource.Quantity                                      `json:"desiredMemory,omitempty"`
-	DesiredGPU              *resource.Quantity                                      `json:"desiredGPU,omitempty"`
-	DesiredTPU              *resource.Quantity                                      `json:"desiredTPU,omitempty"`
-	LastUpdateTime          *metav1.Time                                            `json:"lastUpdateTime,omitempty"`
-	StateTransitionTimes    map[rayv1.ClusterState]*metav1.Time                     `json:"stateTransitionTimes,omitempty"`
-	Endpoints               map[string]string                                       `json:"endpoints,omitempty"`
-	Head                    *HeadInfoApplyConfiguration                             `json:"head,omitempty"`
-	Reason                  *string                                                 `json:"reason,omitempty"`
-	Conditions              []applyconfigurationsmetav1.ConditionApplyConfiguration `json:"conditions,omitempty"`
-	ReadyWorkerReplicas     *int32                                                  `json:"readyWorkerReplicas,omitempty"`
-	AvailableWorkerReplicas *int32                                                  `json:"availableWorkerReplicas,omitempty"`
-	DesiredWorkerReplicas   *int32                                                  `json:"desiredWorkerReplicas,omitempty"`
-	MinWorkerReplicas       *int32                                                  `json:"minWorkerReplicas,omitempty"`
-	MaxWorkerReplicas       *int32                                                  `json:"maxWorkerReplicas,omitempty"`
-	ObservedGeneration      *int64                                                  `json:"observedGeneration,omitempty"`
+	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
+	// Important: Run "make" to regenerate code after modifying this file
+	// Status reflects the status of the cluster
+	//
+	// Deprecated: the State field is replaced by the Conditions field.
+	State *rayv1.ClusterState `json:"state,omitempty"`
+	// DesiredCPU indicates total desired CPUs for the cluster
+	DesiredCPU *resource.Quantity `json:"desiredCPU,omitempty"`
+	// DesiredMemory indicates total desired memory for the cluster
+	DesiredMemory *resource.Quantity `json:"desiredMemory,omitempty"`
+	// DesiredGPU indicates total desired GPUs for the cluster
+	DesiredGPU *resource.Quantity `json:"desiredGPU,omitempty"`
+	// DesiredTPU indicates total desired TPUs for the cluster
+	DesiredTPU *resource.Quantity `json:"desiredTPU,omitempty"`
+	// LastUpdateTime indicates last update timestamp for this cluster status.
+	LastUpdateTime *metav1.Time `json:"lastUpdateTime,omitempty"`
+	// StateTransitionTimes indicates the time of the last state transition for each state.
+	StateTransitionTimes map[rayv1.ClusterState]*metav1.Time `json:"stateTransitionTimes,omitempty"`
+	// Service Endpoints
+	Endpoints map[string]string `json:"endpoints,omitempty"`
+	// Head info
+	Head *HeadInfoApplyConfiguration `json:"head,omitempty"`
+	// Reason provides more information about current State
+	Reason *string `json:"reason,omitempty"`
+	// Represents the latest available observations of a RayCluster's current state.
+	Conditions []applyconfigurationsmetav1.ConditionApplyConfiguration `json:"conditions,omitempty"`
+	// ReadyWorkerReplicas indicates the number of worker pods currently in the Ready state in the cluster.
+	// It actually reflects the number of Ready pods, although it is named "replicas" to maintain backward compatibility.
+	ReadyWorkerReplicas *int32 `json:"readyWorkerReplicas,omitempty"`
+	// AvailableWorkerReplicas indicates how many worker pods are currently available (i.e., running).
+	// It is named "replicas" to maintain backward compatibility.
+	AvailableWorkerReplicas *int32 `json:"availableWorkerReplicas,omitempty"`
+	// DesiredWorkerReplicas indicates the desired total number of worker Pods at the cluster level,
+	// calculated as the sum of `replicas * numOfHosts` for each worker group.
+	// It is named "replicas" to maintain backward compatibility.
+	DesiredWorkerReplicas *int32 `json:"desiredWorkerReplicas,omitempty"`
+	// MinWorkerReplicas indicates the minimum number of worker pods across all worker groups,
+	// calculated as the sum of `minReplicas * numOfHosts` for each worker group.
+	// It is named "replicas" to maintain backward compatibility.
+	MinWorkerReplicas *int32 `json:"minWorkerReplicas,omitempty"`
+	// MaxWorkerReplicas indicates the maximum number of worker pods across all worker groups,
+	// calculated as the sum of `maxReplicas * numOfHosts` for each worker group.
+	// It is named "replicas" to maintain backward compatibility.
+	MaxWorkerReplicas *int32 `json:"maxWorkerReplicas,omitempty"`
+	// observedGeneration is the most recent generation observed for this RayCluster. It corresponds to the
+	// RayCluster's generation, which is updated on mutation by the API Server.
+	ObservedGeneration *int64 `json:"observedGeneration,omitempty"`
 }
 
 // RayClusterStatusApplyConfiguration constructs a declarative configuration of the RayClusterStatus type for use with

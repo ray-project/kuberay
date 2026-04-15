@@ -1,18 +1,18 @@
 # Generate client code (go & json) from API protocol buffers
 FROM golang:1.25-bookworm AS generator
 
-ENV PROTOC_VERSION 3.17.3
-ENV GOLANG_PROTOBUF_VERSION v1.5.2
-ENV GRPC_GATEWAY_VERSION v2.6.0
-ENV GRPC_GATEWAY_OPENAPI_VERSION v2.5.0
-ENV GRPC_VERSION v1.38.0
-ENV GOLANG_GRPC_VERSION v1.1.0
+ENV PROTOC_VERSION 29.2
+ENV GOLANG_PROTOBUF_VERSION v1.36.1
+ENV GRPC_GATEWAY_VERSION v2.26.0
+ENV GRPC_GATEWAY_OPENAPI_VERSION v2.26.0
+ENV GRPC_VERSION v1.75.0
+ENV GOLANG_GRPC_VERSION v1.5.1
 
 ENV GOBIN=/go/bin
 
 # Install protoc.
 USER root
-RUN wget https://github.com/jqlang/jq/releases/download/jq-1.6/jq-linux64 -O /usr/bin/jq && chmod +x /usr/bin/jq
+RUN wget https://github.com/jqlang/jq/releases/download/jq-1.7.1/jq-linux64 -O /usr/bin/jq && chmod +x /usr/bin/jq
 RUN curl -L -o protoc.zip https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-linux-x86_64.zip
 RUN apt-get update && apt-get install -y unzip
 RUN unzip -o protoc.zip -d /usr/ bin/protoc
@@ -22,7 +22,7 @@ ENV PROTOCCOMPILER /usr/bin/protoc
 ENV PROTOCINCLUDE /usr/include/google/protobuf
 
 # Install protoc-gen-go && protoc-gen-go-grpc
-RUN go install github.com/golang/protobuf/protoc-gen-go@$GOLANG_PROTOBUF_VERSION
+RUN go install google.golang.org/protobuf/cmd/protoc-gen-go@$GOLANG_PROTOBUF_VERSION
 RUN go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@$GOLANG_GRPC_VERSION
 # These go binaries are installed under /go/bin
 ENV PATH /go/bin:${PATH}

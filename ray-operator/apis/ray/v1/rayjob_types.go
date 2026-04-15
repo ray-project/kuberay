@@ -34,11 +34,12 @@ var AllJobStatuses = []JobStatus{
 
 // This function should be synchronized with the function `is_terminal()` in Ray Job.
 func IsJobTerminal(status JobStatus) bool {
-	terminalStatusSet := map[JobStatus]struct{}{
-		JobStatusStopped: {}, JobStatusSucceeded: {}, JobStatusFailed: {},
+	switch status {
+	case JobStatusStopped, JobStatusSucceeded, JobStatusFailed:
+		return true
+	default:
+		return false
 	}
-	_, ok := terminalStatusSet[status]
-	return ok
 }
 
 // JobDeploymentStatus indicates RayJob status including RayCluster lifecycle management and Job submission
@@ -60,11 +61,7 @@ const (
 // IsJobDeploymentTerminal returns true if the given JobDeploymentStatus
 // is in a terminal state. Terminal states are either Complete or Failed.
 func IsJobDeploymentTerminal(status JobDeploymentStatus) bool {
-	terminalStatusSet := map[JobDeploymentStatus]struct{}{
-		JobDeploymentStatusComplete: {}, JobDeploymentStatusFailed: {},
-	}
-	_, ok := terminalStatusSet[status]
-	return ok
+	return status == JobDeploymentStatusComplete || status == JobDeploymentStatusFailed
 }
 
 // JobFailedReason indicates the reason the RayJob changes its JobDeploymentStatus to 'Failed'
@@ -73,6 +70,7 @@ type JobFailedReason string
 const (
 	SubmissionFailed                                 JobFailedReason = "SubmissionFailed"
 	DeadlineExceeded                                 JobFailedReason = "DeadlineExceeded"
+	PreRunningDeadlineExceeded                       JobFailedReason = "PreRunningDeadlineExceeded"
 	AppFailed                                        JobFailedReason = "AppFailed"
 	JobDeploymentStatusTransitionGracePeriodExceeded JobFailedReason = "JobDeploymentStatusTransitionGracePeriodExceeded"
 	ValidationFailed                                 JobFailedReason = "ValidationFailed"
@@ -280,6 +278,14 @@ type RayJobSpec struct {
 	// +kubebuilder:default:=0
 	// +optional
 	TTLSecondsAfterFinished int32 `json:"ttlSecondsAfterFinished,omitempty"`
+	// PreRunningDeadlineSeconds is the deadline in seconds for a RayJob to reach the Running state
+	// from when it is first initialized (StartTime). If the RayJob does not transition to
+	// Running within this time, it will be marked as Failed.
+	// This is useful for cleaning up jobs stuck in Initializing or Waiting states.
+	// If not set, there is no deadline. Value must be a positive integer.
+	// +kubebuilder:validation:Minimum=1
+	// +optional
+	PreRunningDeadlineSeconds *int32 `json:"preRunningDeadlineSeconds,omitempty"`
 	// ShutdownAfterJobFinishes will determine whether to delete the ray cluster once rayJob succeed or failed.
 	// +optional
 	ShutdownAfterJobFinishes bool `json:"shutdownAfterJobFinishes,omitempty"`

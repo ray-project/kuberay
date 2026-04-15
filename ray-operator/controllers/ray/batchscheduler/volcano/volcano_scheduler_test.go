@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -160,7 +161,7 @@ func TestCreatePodGroupForRayCluster(t *testing.T) {
 
 	cluster := createTestRayCluster(1)
 
-	minMember := utils.CalculateDesiredReplicas(context.Background(), &cluster) + 1
+	minMember := utils.CalculateDesiredReplicas(&cluster) + 1
 	totalResource := utils.CalculateDesiredResources(&cluster)
 	pg, err := createPodGroup(&cluster, getAppPodGroupName(&cluster), minMember, totalResource)
 	require.NoError(t, err)
@@ -185,7 +186,7 @@ func TestCreatePodGroupForRayCluster_NumOfHosts2(t *testing.T) {
 
 	cluster := createTestRayCluster(2)
 
-	minMember := utils.CalculateDesiredReplicas(context.Background(), &cluster) + 1
+	minMember := utils.CalculateDesiredReplicas(&cluster) + 1
 	totalResource := utils.CalculateDesiredResources(&cluster)
 	pg, err := createPodGroup(&cluster, getAppPodGroupName(&cluster), minMember, totalResource)
 	require.NoError(t, err)
@@ -227,7 +228,7 @@ func TestCreatePodGroup_NetworkTopologyBothLabels(t *testing.T) {
 		NetworkTopologyHighestTierAllowedLabelKey: "3",
 	})
 
-	minMember := utils.CalculateDesiredReplicas(context.Background(), &cluster) + 1
+	minMember := utils.CalculateDesiredReplicas(&cluster) + 1
 	totalResource := utils.CalculateDesiredResources(&cluster)
 	pg, err := createPodGroup(&cluster, getAppPodGroupName(&cluster), minMember, totalResource)
 	require.NoError(t, err)
@@ -246,7 +247,7 @@ func TestCreatePodGroup_NetworkTopologyOnlyModeLabel(t *testing.T) {
 		NetworkTopologyModeLabelKey: "hard",
 	})
 
-	minMember := utils.CalculateDesiredReplicas(context.Background(), &cluster) + 1
+	minMember := utils.CalculateDesiredReplicas(&cluster) + 1
 	totalResource := utils.CalculateDesiredResources(&cluster)
 	pg, err := createPodGroup(&cluster, getAppPodGroupName(&cluster), minMember, totalResource)
 	require.NoError(t, err)
@@ -266,7 +267,7 @@ func TestCreatePodGroup_NetworkTopologyHighestTierAllowedNotInt(t *testing.T) {
 		NetworkTopologyHighestTierAllowedLabelKey: "not-an-int",
 	})
 
-	minMember := utils.CalculateDesiredReplicas(context.Background(), &cluster) + 1
+	minMember := utils.CalculateDesiredReplicas(&cluster) + 1
 	totalResource := utils.CalculateDesiredResources(&cluster)
 	pg, err := createPodGroup(&cluster, getAppPodGroupName(&cluster), minMember, totalResource)
 
@@ -474,7 +475,7 @@ func TestCalculatePodGroupParams(t *testing.T) {
 	t.Run("Autoscaling disabled", func(_ *testing.T) {
 		cluster := createTestRayCluster(1)
 
-		minMember, totalResource := scheduler.calculatePodGroupParams(context.Background(), &cluster.Spec)
+		minMember, totalResource := scheduler.calculatePodGroupParams(&cluster.Spec)
 
 		// 1 head + 2 workers (desired replicas)
 		a.Equal(int32(3), minMember)
@@ -490,7 +491,7 @@ func TestCalculatePodGroupParams(t *testing.T) {
 		cluster := createTestRayCluster(1)
 		cluster.Spec.EnableInTreeAutoscaling = ptr.To(true)
 
-		minMember, totalResource := scheduler.calculatePodGroupParams(context.Background(), &cluster.Spec)
+		minMember, totalResource := scheduler.calculatePodGroupParams(&cluster.Spec)
 
 		// 1 head + 1 worker (min replicas)
 		a.Equal(int32(2), minMember)
@@ -511,4 +512,257 @@ func TestGetAppPodGroupName(t *testing.T) {
 
 	rayJob := createTestRayJob(1)
 	a.Equal("ray-rayjob-sample-pg", getAppPodGroupName(&rayJob))
+}
+
+func TestCreatePodGroup_OwnerAnnotationsCopied(t *testing.T) {
+	a := assert.New(t)
+
+	t.Run("RayCluster with annotations", func(t *testing.T) {
+		cluster := createTestRayCluster(1)
+		cluster.Annotations = map[string]string{
+			"custom.io/team":       "ml-platform",
+			"custom.io/scheduling": "volcano",
+		}
+
+		minMember := utils.CalculateDesiredReplicas(&cluster) + 1
+		totalResource := utils.CalculateDesiredResources(&cluster)
+		pg, err := createPodGroup(&cluster, getAppPodGroupName(&cluster), minMember, totalResource)
+		require.NoError(t, err)
+
+		a.NotNil(pg.Annotations)
+		a.Equal(cluster.Annotations["custom.io/team"], pg.Annotations["custom.io/team"])
+		a.Equal(cluster.Annotations["custom.io/scheduling"], pg.Annotations["custom.io/scheduling"])
+		a.Len(pg.Annotations, 2)
+	})
+
+	t.Run("RayJob with annotations", func(t *testing.T) {
+		rayJob := createTestRayJob(1)
+		rayJob.Annotations = map[string]string{
+			"job-type": "training",
+			"owner":    "data-team",
+		}
+
+		minMember := utils.CalculateDesiredReplicas(&rayv1.RayCluster{Spec: *rayJob.Spec.RayClusterSpec}) + 1
+		totalResource := utils.CalculateDesiredResources(&rayv1.RayCluster{Spec: *rayJob.Spec.RayClusterSpec})
+		pg, err := createPodGroup(&rayJob, getAppPodGroupName(&rayJob), minMember, totalResource)
+		require.NoError(t, err)
+
+		a.NotNil(pg.Annotations)
+		a.Equal(rayJob.Annotations["job-type"], pg.Annotations["job-type"])
+		a.Equal(rayJob.Annotations["owner"], pg.Annotations["owner"])
+		a.Len(pg.Annotations, 2)
+	})
+
+	t.Run("RayCluster with nil annotations", func(t *testing.T) {
+		cluster := createTestRayCluster(1)
+		cluster.Annotations = nil
+
+		minMember := utils.CalculateDesiredReplicas(&cluster) + 1
+		totalResource := utils.CalculateDesiredResources(&cluster)
+		pg, err := createPodGroup(&cluster, getAppPodGroupName(&cluster), minMember, totalResource)
+		require.NoError(t, err)
+
+		a.NotNil(pg.Annotations)
+		a.Empty(pg.Annotations)
+	})
+
+	t.Run("RayCluster with empty annotations", func(t *testing.T) {
+		cluster := createTestRayCluster(1)
+		cluster.Annotations = map[string]string{}
+
+		minMember := utils.CalculateDesiredReplicas(&cluster) + 1
+		totalResource := utils.CalculateDesiredResources(&cluster)
+		pg, err := createPodGroup(&cluster, getAppPodGroupName(&cluster), minMember, totalResource)
+		require.NoError(t, err)
+
+		a.NotNil(pg.Annotations)
+		a.Empty(pg.Annotations)
+	})
+}
+
+func TestCleanupOnCompletion(t *testing.T) {
+	t.Run("RayJob - delete PodGroup", func(t *testing.T) {
+		a := assert.New(t)
+		require := require.New(t)
+
+		rayJob := createTestRayJob(1)
+		scheme := runtime.NewScheme()
+		a.NoError(rayv1.AddToScheme(scheme))
+		a.NoError(volcanoschedulingv1beta1.AddToScheme(scheme))
+		fakeCli := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(&volcanoschedulingv1beta1.PodGroup{}).Build()
+		scheduler := &VolcanoBatchScheduler{cli: fakeCli}
+
+		ctx := context.Background()
+
+		// Manually create a PodGroup in Pending state to simulate the real scenario
+		podGroupName := getAppPodGroupName(&rayJob)
+		pg := &volcanoschedulingv1beta1.PodGroup{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      podGroupName,
+				Namespace: rayJob.Namespace,
+			},
+			Spec: volcanoschedulingv1beta1.PodGroupSpec{
+				MinMember: 3,
+			},
+			Status: volcanoschedulingv1beta1.PodGroupStatus{
+				Phase:   volcanoschedulingv1beta1.PodGroupPending,
+				Running: 1,
+			},
+		}
+		err := fakeCli.Create(ctx, pg)
+		require.NoError(err)
+
+		// Verify PodGroup was created in Pending state
+		var retrievedPg volcanoschedulingv1beta1.PodGroup
+		err = fakeCli.Get(ctx, client.ObjectKey{Namespace: rayJob.Namespace, Name: podGroupName}, &retrievedPg)
+		require.NoError(err)
+		a.Equal(volcanoschedulingv1beta1.PodGroupPending, retrievedPg.Status.Phase)
+
+		// Now call CleanupOnCompletion to simulate RayJob finishing
+		didCleanup, err := scheduler.CleanupOnCompletion(ctx, &rayJob)
+		require.NoError(err)
+		a.True(didCleanup) // Cleanup should have happened
+
+		// Verify PodGroup was deleted
+		err = fakeCli.Get(ctx, client.ObjectKey{Namespace: rayJob.Namespace, Name: podGroupName}, &retrievedPg)
+		require.Error(err)
+		a.True(errors.IsNotFound(err))
+	})
+
+	t.Run("RayJob - PodGroup not found (already deleted)", func(t *testing.T) {
+		a := assert.New(t)
+		require := require.New(t)
+
+		rayJob := createTestRayJob(1)
+		scheme := runtime.NewScheme()
+		a.NoError(rayv1.AddToScheme(scheme))
+		a.NoError(volcanoschedulingv1beta1.AddToScheme(scheme))
+		fakeCli := fake.NewClientBuilder().WithScheme(scheme).Build()
+		scheduler := &VolcanoBatchScheduler{cli: fakeCli}
+
+		ctx := context.Background()
+
+		// Don't create a PodGroup, just call CleanupOnCompletion
+		didCleanup, err := scheduler.CleanupOnCompletion(ctx, &rayJob)
+		// Should not return an error, just log that PodGroup was not found
+		require.NoError(err)
+		a.False(didCleanup) // No cleanup should have happened
+	})
+
+	t.Run("RayCluster - should be no-op", func(t *testing.T) {
+		a := assert.New(t)
+		require := require.New(t)
+
+		rayCluster := createTestRayCluster(1)
+		scheme := runtime.NewScheme()
+		a.NoError(rayv1.AddToScheme(scheme))
+		a.NoError(volcanoschedulingv1beta1.AddToScheme(scheme))
+		fakeCli := fake.NewClientBuilder().WithScheme(scheme).Build()
+		scheduler := &VolcanoBatchScheduler{cli: fakeCli}
+
+		ctx := context.Background()
+
+		// Call CleanupOnCompletion with RayCluster - should be no-op
+		didCleanup, err := scheduler.CleanupOnCompletion(ctx, &rayCluster)
+		require.NoError(err)
+		a.False(didCleanup) // No cleanup should have happened
+
+		// Verify no PodGroup was created (RayCluster PodGroups are not managed by this method)
+		var pg volcanoschedulingv1beta1.PodGroup
+		err = fakeCli.Get(ctx, client.ObjectKey{Namespace: rayCluster.Namespace, Name: getAppPodGroupName(&rayCluster)}, &pg)
+		require.Error(err) // Should not be found
+		a.True(errors.IsNotFound(err))
+	})
+
+	t.Run("RayJob - PodGroup in Inqueue state (bug scenario)", func(t *testing.T) {
+		a := assert.New(t)
+		require := require.New(t)
+
+		rayJob := createTestRayJob(1)
+		scheme := runtime.NewScheme()
+		a.NoError(rayv1.AddToScheme(scheme))
+		a.NoError(volcanoschedulingv1beta1.AddToScheme(scheme))
+		fakeCli := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(&volcanoschedulingv1beta1.PodGroup{}).Build()
+		scheduler := &VolcanoBatchScheduler{cli: fakeCli}
+
+		ctx := context.Background()
+
+		// Create a PodGroup in Inqueue state to simulate the bug scenario
+		podGroupName := getAppPodGroupName(&rayJob)
+		pg := &volcanoschedulingv1beta1.PodGroup{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      podGroupName,
+				Namespace: rayJob.Namespace,
+			},
+			Spec: volcanoschedulingv1beta1.PodGroupSpec{
+				MinMember: 31,
+			},
+			Status: volcanoschedulingv1beta1.PodGroupStatus{
+				Phase:     volcanoschedulingv1beta1.PodGroupInqueue,
+				Running:   0,
+				Succeeded: 1,
+			},
+		}
+		err := fakeCli.Create(ctx, pg)
+		require.NoError(err)
+
+		// Call CleanupOnCompletion
+		didCleanup, err := scheduler.CleanupOnCompletion(ctx, &rayJob)
+		require.NoError(err)
+		a.True(didCleanup) // Cleanup should have happened
+
+		// Verify PodGroup was deleted
+		var retrievedPg volcanoschedulingv1beta1.PodGroup
+		err = fakeCli.Get(ctx, client.ObjectKey{Namespace: rayJob.Namespace, Name: podGroupName}, &retrievedPg)
+		require.Error(err)
+		a.True(errors.IsNotFound(err))
+	})
+
+	t.Run("RayJob - idempotent (can call multiple times)", func(t *testing.T) {
+		a := assert.New(t)
+		require := require.New(t)
+
+		rayJob := createTestRayJob(1)
+		scheme := runtime.NewScheme()
+		a.NoError(rayv1.AddToScheme(scheme))
+		a.NoError(volcanoschedulingv1beta1.AddToScheme(scheme))
+		fakeCli := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(&volcanoschedulingv1beta1.PodGroup{}).Build()
+		scheduler := &VolcanoBatchScheduler{cli: fakeCli}
+
+		ctx := context.Background()
+
+		// Create a PodGroup
+		podGroupName := getAppPodGroupName(&rayJob)
+		pg := &volcanoschedulingv1beta1.PodGroup{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      podGroupName,
+				Namespace: rayJob.Namespace,
+			},
+			Spec: volcanoschedulingv1beta1.PodGroupSpec{
+				MinMember: 3,
+			},
+			Status: volcanoschedulingv1beta1.PodGroupStatus{
+				Phase:   volcanoschedulingv1beta1.PodGroupPending,
+				Running: 1,
+			},
+		}
+		err := fakeCli.Create(ctx, pg)
+		require.NoError(err)
+
+		// Call CleanupOnCompletion first time
+		didCleanup, err := scheduler.CleanupOnCompletion(ctx, &rayJob)
+		require.NoError(err)
+		a.True(didCleanup) // Cleanup should have happened
+
+		// Verify PodGroup was deleted
+		var retrievedPg volcanoschedulingv1beta1.PodGroup
+		err = fakeCli.Get(ctx, client.ObjectKey{Namespace: rayJob.Namespace, Name: podGroupName}, &retrievedPg)
+		require.Error(err)
+		a.True(errors.IsNotFound(err))
+
+		// Call CleanupOnCompletion second time - should not error and no cleanup
+		didCleanup, err = scheduler.CleanupOnCompletion(ctx, &rayJob)
+		require.NoError(err)
+		a.False(didCleanup) // No cleanup should have happened (already deleted)
+	})
 }

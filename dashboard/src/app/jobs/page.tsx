@@ -1,18 +1,10 @@
 "use client";
-import { useFirstVisit } from "@/components/FirstVisitContext";
 import { JobsTable } from "@/components/JobsTable/JobsTable";
 import { AddRounded } from "@mui/icons-material";
 import { Box, Button, Typography } from "@mui/joy";
 import NextLink from "next/link";
-import { useEffect } from "react";
 
 export default function JobsPage() {
-  const { firstVisit, setFirstVisit } = useFirstVisit();
-  useEffect(() => {
-    if (firstVisit) {
-      setFirstVisit(false);
-    }
-  }, [firstVisit, setFirstVisit]);
   return (
     <>
       <Box

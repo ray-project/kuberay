@@ -84,8 +84,6 @@ fumpt: gofumpt ## Run gofmtumpt against code.
 imports: goimports ## Run goimports against code.
 	$(GOIMPORTS) -l -w .
 
-# Exclude the SA1019 check which checks the usage of deprecated fields
-# via the linters.settings.staticcheck.checks configuration in .golangci.yaml.
 .PHONY: lint
 lint: golangci-lint fmt vet fumpt imports ## Run the linter.
 	test -s $(GOLANGCI_LINT) || ($(GOLANGCI_LINT) run --timeout=3m --allow-parallel-runners)
@@ -106,6 +104,11 @@ generate: mockgen # Generate code using command after //go:generate in each file
 	PATH=$(REPO_ROOT_BIN):$$PATH go generate ./...
 
 ##@ Testing
+
+# TODO: Remove this once a fix for https://github.com/golang/go/issues/75031 is released.
+# This is a workaround for an issue where `go test -cover` reports errors for packages with no test files.
+GOVERSION := $(shell go env GOVERSION)
+export GOTOOLCHAIN := $(GOVERSION)+auto
 
 .PHONY: test
 test: fmt vet fumpt imports generate ## Run all unit tests.

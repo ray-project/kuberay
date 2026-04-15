@@ -7,7 +7,7 @@
     - kubectl config set clusters.kind-kind.server https://docker:6443
     # Build nightly KubeRay operator image
     - pushd ray-operator
-    - bash ../.buildkite/build-start-operator.sh
+    - source ../.buildkite/build-start-operator.sh
     - kubectl wait --timeout=90s --for=condition=Available=true deployment kuberay-operator
     - popd
     # Setup Python environment and install Python client

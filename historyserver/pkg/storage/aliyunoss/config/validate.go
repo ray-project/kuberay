@@ -1,19 +1,3 @@
-// Package config is
-/*
-Copyright 2024 by the zhangjie bingyu.zj@alibaba-inc.com Authors.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
 package config
 
 import (
@@ -45,8 +29,8 @@ func ValidateMetaHanderConfig(c *RayMetaHanderConfig, fldpath *field.Path) field
 	if len(c.RayClusterName) == 0 {
 		allErrs = append(allErrs, field.Invalid(fldpath, c.RayClusterName, "ray_cluster_name must be set"))
 	}
-	if len(c.RayClusterID) == 0 {
-		allErrs = append(allErrs, field.Invalid(fldpath, c.RayClusterID, "ray_cluster_id must be set"))
+	if len(c.RayClusterNamespace) == 0 {
+		allErrs = append(allErrs, field.Invalid(fldpath, c.RayClusterNamespace, "ray_cluster_namespace must be set"))
 	}
 	return allErrs
 }

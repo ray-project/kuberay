@@ -15,12 +15,24 @@ export async function fetchRuntimeConfig(): Promise<RuntimeConfig> {
     if (response.ok) {
       const data: RuntimeConfig = await response.json();
       runtimeConfig = {
-        domain: data.domain || defaultConfig.domain,
-        rayApiPath: data.rayApiPath || defaultConfig.rayApiPath,
-        coreApiPath:
-          data.coreApiPath !== undefined
-            ? data.coreApiPath
-            : defaultConfig.coreApiPath,
+        apiserver: {
+          domain: data.apiserver?.domain || defaultConfig.apiserver.domain,
+          rayApiPath:
+            data.apiserver?.rayApiPath || defaultConfig.apiserver.rayApiPath,
+          coreApiPath:
+            data.apiserver?.coreApiPath !== undefined
+              ? data.apiserver.coreApiPath
+              : defaultConfig.apiserver.coreApiPath,
+        },
+        historyserver: {
+          domain:
+            data.historyserver?.domain || defaultConfig.historyserver.domain,
+          apiPath:
+            data.historyserver?.apiPath || defaultConfig.historyserver.apiPath,
+          proxyEndpoint:
+            data.historyserver?.proxyEndpoint ||
+            defaultConfig.historyserver.proxyEndpoint,
+        },
       };
       return runtimeConfig;
     }
@@ -35,27 +47,37 @@ export async function fetchRuntimeConfig(): Promise<RuntimeConfig> {
 export const config = {
   async getRayApiUrl(): Promise<string> {
     const cfg = await fetchRuntimeConfig();
-    return `${cfg.domain}${cfg.rayApiPath}`;
+    return `${cfg.apiserver.domain}${cfg.apiserver.rayApiPath}`;
   },
 
   async getCoreApiUrl(): Promise<string | undefined> {
     const cfg = await fetchRuntimeConfig();
-    return cfg.coreApiPath ? `${cfg.domain}${cfg.coreApiPath}` : undefined;
+    return cfg.apiserver.coreApiPath
+      ? `${cfg.apiserver.domain}${cfg.apiserver.coreApiPath}`
+      : undefined;
+  },
+  async getHistoryServerUrl() {
+    const cfg = await fetchRuntimeConfig();
+    return {
+      domain: cfg.historyserver.domain,
+      apiPath: cfg.historyserver.apiPath,
+      proxyEndpoint: cfg.historyserver.proxyEndpoint,
+    };
   },
 
   get rayApiUrl(): string {
     if (runtimeConfig) {
-      return `${runtimeConfig.domain}${runtimeConfig.rayApiPath}`;
+      return `${runtimeConfig.apiserver.domain}${runtimeConfig.apiserver.rayApiPath}`;
     }
-    return `${defaultConfig.domain}${defaultConfig.rayApiPath}`;
+    return `${defaultConfig.apiserver.domain}${defaultConfig.apiserver.rayApiPath}`;
   },
 
   get coreApiUrl(): string | undefined {
-    if (runtimeConfig?.coreApiPath) {
-      return `${runtimeConfig.domain}${runtimeConfig.coreApiPath}`;
+    if (runtimeConfig?.apiserver.coreApiPath) {
+      return `${runtimeConfig.apiserver.domain}${runtimeConfig.apiserver.coreApiPath}`;
     }
-    return defaultConfig.coreApiPath
-      ? `${defaultConfig.domain}${defaultConfig.coreApiPath}`
+    return defaultConfig.apiserver.coreApiPath
+      ? `${defaultConfig.apiserver.domain}${defaultConfig.apiserver.coreApiPath}`
       : undefined;
   },
 };

@@ -17,6 +17,16 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 )
 
+func RayCronJob(t Test, namespace, name string) func() (*rayv1.RayCronJob, error) {
+	return func() (*rayv1.RayCronJob, error) {
+		return GetRayCronJob(t, namespace, name)
+	}
+}
+
+func GetRayCronJob(t Test, namespace, name string) (*rayv1.RayCronJob, error) {
+	return t.Client().Ray().RayV1().RayCronJobs(namespace).Get(t.Ctx(), name, metav1.GetOptions{})
+}
+
 func RayJob(t Test, namespace, name string) func() (*rayv1.RayJob, error) {
 	return func() (*rayv1.RayJob, error) {
 		return GetRayJob(t, namespace, name)
@@ -196,6 +206,10 @@ func RayClusterManagedBy(rayCluster *rayv1.RayCluster) *string {
 	return rayCluster.Spec.ManagedBy
 }
 
+func RayServiceManagedBy(rayService *rayv1.RayService) *string {
+	return rayService.Spec.ManagedBy
+}
+
 func GetRayService(t Test, namespace, name string) (*rayv1.RayService, error) {
 	return t.Client().Ray().RayV1().RayServices(namespace).Get(t.Ctx(), name, metav1.GetOptions{})
 }
@@ -216,6 +230,10 @@ func IsRayServiceReady(service *rayv1.RayService) bool {
 
 func IsRayServiceUpgrading(service *rayv1.RayService) bool {
 	return meta.IsStatusConditionTrue(service.Status.Conditions, string(rayv1.UpgradeInProgress))
+}
+
+func IsRayServiceRollingBack(service *rayv1.RayService) bool {
+	return meta.IsStatusConditionTrue(service.Status.Conditions, string(rayv1.RollbackInProgress))
 }
 
 func RayServicesNumEndPoints(service *rayv1.RayService) int32 {
