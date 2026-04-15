@@ -1,7 +1,6 @@
 package utils
 
 import (
-	"bytes"
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
@@ -11,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aliyun/aliyun-oss-go-sdk/oss"
 	"github.com/sirupsen/logrus"
 )
 
@@ -38,24 +36,6 @@ func EndpointPathToStorageKey(endpointPath string) string {
 }
 
 var regex = regexp.MustCompile(SESSION_ID_REGEX)
-
-func CreateObjectIfNotExist(bucket *oss.Bucket, obj string, options ...oss.Option) error {
-	isExist, err := bucket.IsObjectExist(obj)
-	if err != nil {
-		logrus.Errorf("Failed to check if object %s exists: %v", obj, err)
-		return err
-	}
-	if !isExist {
-		logrus.Infof("Begin to create oss object %s ...", obj)
-		err = bucket.PutObject(obj, bytes.NewReader([]byte("")), options...)
-		if err != nil {
-			logrus.Errorf("Failed to create directory '%s': %v", obj, err)
-			return err
-		}
-		logrus.Infof("Create oss object %s success", obj)
-	}
-	return nil
-}
 
 func GetLogDirByNameNamespace(ossHistorySeverDir, rayClusterNameNamespace, rayNodeID, sessionId string) string {
 	return fmt.Sprintf("%s/", path.Clean(path.Join(ossHistorySeverDir, rayClusterNameNamespace, sessionId, RAY_SESSIONDIR_LOGDIR_NAME, rayNodeID)))
