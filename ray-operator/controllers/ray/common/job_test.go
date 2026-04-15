@@ -244,10 +244,10 @@ func TestBuildJobSubmitCommandWithSidecarModeAndFeatureGate(t *testing.T) {
 	expected := []string{
 		"until",
 		fmt.Sprintf(
-			utils.BaseWgetHealthCommand,
-			utils.DefaultReadinessProbeFailureThreshold,
+			utils.BasePythonHealthCommand,
 			utils.DefaultDashboardPort,
 			utils.RayDashboardGCSHealthPath,
+			utils.DefaultReadinessProbeFailureThreshold,
 		),
 		">/dev/null", "2>&1", ";",
 		"do", "echo", strconv.Quote("Waiting for Ray Dashboard GCS to become healthy at http://127.0.0.1:8265 ..."), ";", "sleep", "2", ";", "done", ";",
