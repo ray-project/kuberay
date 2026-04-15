@@ -2039,8 +2039,7 @@ func shouldCompleteIncrementalRollback(
 		meta.IsStatusConditionTrue(pendingCluster.Status.Conditions, string(rayv1.HeadPodReady))
 
 	// A rollback is complete when the active cluster is back at 100% TargetCapacity and TrafficRoutedPercent,
-	// A rollback is complete when the active cluster is back at 100% TargetCapacity
-	// and TrafficRoutedPercent, and either:
+	// and either:
 	// - The pending cluster has been fully scaled down (TargetCapacity and TrafficRoutedPercent are both 0), or
 	// - The pending cluster is unhealthy (head Pod not ready)
 	return ptr.Deref(activeStatus.TargetCapacity, -1) == 100 &&
