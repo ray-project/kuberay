@@ -212,7 +212,7 @@ func testLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Names
 	client := CreateHTTPClientWithCookieJar(g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 
-	nodeID := GetOneOfNodeID(g, client, historyServerURL, true)
+	nodeID := GetOneOfNodeID(g, client, historyServerURL, false)
 	filename := "raylet.out"
 
 	logFileTestCases := []struct {
@@ -1023,7 +1023,7 @@ func testLogStreamEndpoint(test Test, g *WithT, namespace *corev1.Namespace, s3C
 	client := CreateHTTPClientWithCookieJar(g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 
-	nodeID := GetOneOfNodeID(g, client, historyServerURL, true)
+	nodeID := GetOneOfNodeID(g, client, historyServerURL, false)
 	filename := "raylet.out"
 	streamURL := fmt.Sprintf("%s%s?node_id=%s&filename=%s", historyServerURL, EndpointLogsStream, nodeID, filename)
 
@@ -1255,7 +1255,11 @@ func testNodeLogsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Name
 		// glob=events/event_JOBS* should match only event_JOBS.log inside the events/ subdirectory.
 		// Expected response:
 		//   {"data":{"result":{"internal":["event_JOBS.log"]}},"msg":"","result":true}
-		logsURL := fmt.Sprintf("%s%s?node_id=%s&glob=%s", historyServerURL, EndpointLogs, nodeID, url.QueryEscape("events/event_JOBS*"))
+		//
+		// Always use the head node ID to avoid flakiness since events/event_JOBS.log is only present on the head node.
+		// Ref: https://github.com/ray-project/ray/blob/20eae5b1/python/ray/dashboard/modules/job/job_head.py#L397-L399
+		headNodeID := GetOneOfNodeID(g, client, historyServerURL, true)
+		logsURL := fmt.Sprintf("%s%s?node_id=%s&glob=%s", historyServerURL, EndpointLogs, headNodeID, url.QueryEscape("events/event_JOBS*"))
 		resp, err := client.Get(logsURL)
 		g.Expect(err).NotTo(HaveOccurred())
 		defer resp.Body.Close()
@@ -1621,19 +1625,18 @@ func testLogicalActorsEndpointDeadCluster(test Test, g *WithT, namespace *corev1
 			gg.Expect(ok).To(BeTrue())
 			gg.Expect(len(actors)).To(BeNumerically(">", 0), "should have at least one actor")
 
-			// Verify actor schema matches formatActorForResponse format (for the first actor)
-			// Required fields from router.go:formatActorForResponse
+			// Verify actor schema matches formatActorForResponse format (camelCase keys, hex IDs)
 			for _, actorData := range actors {
 				actor, ok := actorData.(map[string]any)
 				gg.Expect(ok).To(BeTrue(), "actor should be a map")
-				gg.Expect(actor["actor_id"]).NotTo(BeNil(), "actor should have actor_id")
-				gg.Expect(actor["job_id"]).NotTo(BeNil(), "actor should have job_id")
+				gg.Expect(actor["actorId"]).NotTo(BeNil(), "actor should have actorId")
+				gg.Expect(actor["jobId"]).NotTo(BeNil(), "actor should have jobId")
 				gg.Expect(actor["state"]).NotTo(BeNil(), "actor should have state")
 				gg.Expect(actor["address"]).NotTo(BeNil(), "actor should have address")
 				address, ok := actor["address"].(map[string]any)
 				gg.Expect(ok).To(BeTrue(), "address should be a map")
-				gg.Expect(address["node_id"]).NotTo(BeNil(), "address should have node_id")
-				gg.Expect(address["ip_address"]).NotTo(BeNil(), "address should have ip_address")
+				gg.Expect(address["nodeId"]).NotTo(BeNil(), "address should have nodeId")
+				gg.Expect(address["ipAddress"]).NotTo(BeNil(), "address should have ipAddress")
 				break // Only verify the first actor
 			}
 
@@ -1669,16 +1672,15 @@ func testLogicalActorsEndpointDeadCluster(test Test, g *WithT, namespace *corev1
 			detail, ok := data["detail"].(map[string]any)
 			gg.Expect(ok).To(BeTrue())
 
-			// Verify actor schema matches formatActorForResponse format
-			// Required fields from router.go:formatActorForResponse
-			gg.Expect(detail["actor_id"]).To(Equal(actorID))
-			gg.Expect(detail["job_id"]).NotTo(BeNil())
+			// Verify actor schema matches formatActorForResponse format (camelCase keys, hex IDs)
+			gg.Expect(detail["actorId"]).To(Equal(actorID))
+			gg.Expect(detail["jobId"]).NotTo(BeNil())
 			gg.Expect(detail["state"]).NotTo(BeNil())
 			gg.Expect(detail["address"]).NotTo(BeNil())
 			address, ok := detail["address"].(map[string]any)
 			gg.Expect(ok).To(BeTrue(), "address should be a map")
-			gg.Expect(address["node_id"]).NotTo(BeNil())
-			gg.Expect(address["ip_address"]).NotTo(BeNil())
+			gg.Expect(address["nodeId"]).NotTo(BeNil())
+			gg.Expect(address["ipAddress"]).NotTo(BeNil())
 
 			LogWithTimestamp(t, "Successfully fetched actor %s from history server", actorID)
 		}, TestTimeoutShort).Should(Succeed())
@@ -2223,9 +2225,10 @@ func testDeadClusterPlacementGroups(test Test, g *WithT, namespace *corev1.Names
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 
 	// Wait for placement groups data to be stored in S3 by the collector before deleting the cluster.
+	// The collector stores the endpoint with query params, so the storage key includes them.
 	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, rayCluster.Namespace)
 	sessionID := GetSessionIDFromHeadPod(test, g, rayCluster)
-	storageKey := utils.EndpointPathToStorageKey("/api/v0/placement_groups")
+	storageKey := utils.EndpointPathToStorageKey("/api/v0/placement_groups?detail=1&limit=10000")
 	pgKey := fmt.Sprintf("log/%s/%s/%s/%s", clusterNameID, sessionID, utils.RAY_SESSIONDIR_FETCHED_ENDPOINTS_NAME, storageKey)
 	LogWithTimestamp(test.T(), "Waiting for placement groups data to appear at S3 key: %s", pgKey)
 
@@ -2258,7 +2261,8 @@ func testDeadClusterPlacementGroups(test Test, g *WithT, namespace *corev1.Names
 	client := CreateHTTPClientWithCookieJar(g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 
-	endpoint := "/api/v0/placement_groups"
+	// Use the same query params as the frontend to match the storage key.
+	endpoint := "/api/v0/placement_groups?detail=1&limit=10000"
 	LogWithTimestamp(test.T(), "Testing dead cluster endpoint: %s", endpoint)
 
 	g.Eventually(func(gg Gomega) {
@@ -2698,9 +2702,8 @@ func verifySingleEndpoint(test Test, g *WithT, client *http.Client, endpointURL 
 
 // TODO(jwj): Make verification for node-related endpoints more robust.
 // verifyNodesRespSchema verifies that the /nodes response is valid according to the API schema.
-// isLive indicates whether the response is from a live cluster or a dead cluster:
-//   - isLive: true for a live cluster (current snapshot)
-//   - isLive: false for a dead cluster (historical replay)
+// Both live and dead clusters now return the same format (flat array of latest snapshots).
+// isLive is kept for signature compatibility but no longer affects validation.
 func verifyNodesRespSchema(test Test, g *WithT, nodesResp map[string]any, isLive bool) {
 	// Verify top-level fields.
 	g.Expect(nodesResp).To(HaveKeyWithValue("result", BeTrue()))
@@ -2717,28 +2720,13 @@ func verifyNodesRespSchema(test Test, g *WithT, nodesResp map[string]any, isLive
 	summary, ok := data["summary"].([]any)
 	g.Expect(ok).To(BeTrue(), "'summary' should be an array")
 
-	if isLive {
-		// Live cluster: summary contains node summary snapshot of each node in the cluster.
-		g.Expect(len(summary)).To(Equal(2), "Live cluster should have 2 node summaries (one head node and one worker node)")
-		for _, nodeSummary := range summary {
-			nodeSummarySnapshot, ok := nodeSummary.(map[string]any)
-			g.Expect(ok).To(BeTrue(), "nodeSummary should be a map")
-			verifyNodeSummarySchema(test, g, nodeSummarySnapshot)
-		}
-	} else {
-		// Dead cluster: summary contains node summary replay (array of snapshots) of each node in the cluster.
-		// The node summary replay should follow the chronological order of the node state transitions.
-		g.Expect(len(summary)).To(Equal(2), "Dead cluster should have 2 node summary replays (one head node and one worker node)")
-		for _, nodeSummaryReplay := range summary {
-			nodeSummarySnapshots, ok := nodeSummaryReplay.([]any)
-			g.Expect(ok).To(BeTrue(), "nodeSummaryReplay should be an array")
-
-			for _, nodeSummarySnapshot := range nodeSummarySnapshots {
-				nodeSummarySnapshotMap, ok := nodeSummarySnapshot.(map[string]any)
-				g.Expect(ok).To(BeTrue(), "nodeSummarySnapshot should be a map")
-				verifyNodeSummarySchema(test, g, nodeSummarySnapshotMap)
-			}
-		}
+	// Both live and dead clusters now return a flat array of node summaries.
+	// Dead cluster uses the latest snapshot per node to match the Ray Dashboard API format.
+	g.Expect(len(summary)).To(Equal(2), "Should have 2 node summaries (one head node and one worker node)")
+	for _, nodeSummary := range summary {
+		nodeSummarySnapshot, ok := nodeSummary.(map[string]any)
+		g.Expect(ok).To(BeTrue(), "nodeSummary should be a map")
+		verifyNodeSummarySchema(test, g, nodeSummarySnapshot)
 	}
 
 	// Verify nodeLogicalResources field.
@@ -2746,45 +2734,20 @@ func verifyNodesRespSchema(test Test, g *WithT, nodesResp map[string]any, isLive
 	nodeLogicalResources, ok := data["nodeLogicalResources"].(map[string]any)
 	g.Expect(ok).To(BeTrue(), "'nodeLogicalResources' should be a map")
 
-	if isLive {
-		// Live cluster: nodeLogicalResources contains resource string of each node in the cluster.
-		g.Expect(len(nodeLogicalResources)).To(Equal(2), "Live cluster should have 2 resource strings (one head node and one worker node)")
-		for nodeId, resourceString := range nodeLogicalResources {
-			g.Expect(nodeId).NotTo(BeEmpty())
-			g.Expect(resourceString).NotTo(BeEmpty())
-		}
-	} else {
-		// Dead cluster: nodeLogicalResources contains resource string replay (array of snapshots) of each node in the cluster.
-		// The resource string replay should follow the chronological order of the node state transitions.
-		g.Expect(len(nodeLogicalResources)).To(Equal(2), "Dead cluster should have 2 resource string replays (one head node and one worker node)")
-		for nodeId, resourceStringReplay := range nodeLogicalResources {
-			g.Expect(nodeId).NotTo(BeEmpty())
-
-			resourceStringSnapshots, ok := resourceStringReplay.([]any)
-			g.Expect(ok).To(BeTrue(), "resourceStringReplay should be an array")
-			for _, resourceStringSnapshot := range resourceStringSnapshots {
-				resourceStringSnapshotMap, ok := resourceStringSnapshot.(map[string]any)
-				g.Expect(ok).To(BeTrue(), "resourceStringSnapshot should be a map")
-				g.Expect(resourceStringSnapshotMap).To(HaveKey("t"))
-				g.Expect(resourceStringSnapshotMap).To(HaveKey("resourceString"))
-
-				resourceString, ok := resourceStringSnapshotMap["resourceString"].(string)
-				g.Expect(ok).To(BeTrue(), "resourceString should be a string")
-				if resourceString != "" {
-					g.Expect(resourceString).To(ContainSubstring("memory"))
-					g.Expect(resourceString).To(ContainSubstring("object_store_memory"))
-				}
-			}
-		}
+	// Both live and dead clusters return {nodeId: string} format.
+	// Dead cluster uses the latest resource string per node.
+	g.Expect(len(nodeLogicalResources)).To(Equal(2), "Should have 2 resource strings (one head node and one worker node)")
+	for nodeId, resourceString := range nodeLogicalResources {
+		g.Expect(nodeId).NotTo(BeEmpty())
+		g.Expect(resourceString).NotTo(BeEmpty())
 	}
 
 	LogWithTimestamp(test.T(), "/nodes response schema verification completed")
 }
 
 // verifyNodeRespSchema verifies that the /nodes/{node_id} response is valid according to the API schema.
-// isLive indicates whether the response is from a live cluster or a dead cluster:
-//   - isLive: true for a live cluster (current snapshot)
-//   - isLive: false for a dead cluster (historical replay)
+// Both live and dead clusters now return the same format (single object with latest snapshot).
+// isLive is kept for signature compatibility but no longer affects validation.
 func verifyNodeRespSchema(test Test, g *WithT, nodeResp map[string]any, isLive bool) {
 	// Verify top-level fields.
 	g.Expect(nodeResp).To(HaveKeyWithValue("result", BeTrue()))
@@ -2795,22 +2758,10 @@ func verifyNodeRespSchema(test Test, g *WithT, nodeResp map[string]any, isLive b
 	g.Expect(ok).To(BeTrue(), "'data' should be a map")
 	g.Expect(data).To(HaveKey("detail"))
 
-	if isLive {
-		// Live cluster: detail contains node summary snapshot of the specified node.
-		nodeSummarySnapshot, ok := data["detail"].(map[string]any)
-		g.Expect(ok).To(BeTrue(), "'detail' should be a map")
-		verifyNodeSummarySchema(test, g, nodeSummarySnapshot)
-	} else {
-		// Dead cluster: detail contains node summary replay (array of snapshots) of the specified node.
-		// The node summary replay should follow the chronological order of the node state transitions.
-		nodeSummarySnapshots, ok := data["detail"].([]any)
-		g.Expect(ok).To(BeTrue(), "'detail' should be an array")
-		for _, nodeSummarySnapshot := range nodeSummarySnapshots {
-			nodeSummarySnapshotMap, ok := nodeSummarySnapshot.(map[string]any)
-			g.Expect(ok).To(BeTrue(), "nodeSummarySnapshot should be a map")
-			verifyNodeSummarySchema(test, g, nodeSummarySnapshotMap)
-		}
-	}
+	// Both live and dead clusters return detail as a single node object (latest snapshot).
+	nodeSummarySnapshot, ok := data["detail"].(map[string]any)
+	g.Expect(ok).To(BeTrue(), "'detail' should be a map")
+	verifyNodeSummarySchema(test, g, nodeSummarySnapshot)
 }
 
 // verifyNodeSummarySchema verifies that the node summary contains key fields.

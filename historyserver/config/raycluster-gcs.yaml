@@ -16,6 +16,7 @@ spec:
         labels:
           test: raycluster-historyserver
       spec:
+        serviceAccountName: historyserver
         imagePullSecrets:
         affinity:
         containers:
@@ -26,8 +27,6 @@ spec:
             value: "true"
           - name: RAY_DASHBOARD_AGGREGATOR_AGENT_EVENTS_EXPORT_ADDR
             value: "http://localhost:8084/v1/events"
-            # in ray 2.52.0, we need to set RAY_DASHBOARD_AGGREGATOR_AGENT_EXPOSABLE_EVENT_TYPES
-            # in ray 2.53.0 (noy yet done). we need to set RAY_DASHBOARD_AGGREGATOR_AGENT_PUBLISHER_HTTP_ENDPOINT_EXPOSABLE_EVENT_TYPES
           - name: RAY_DASHBOARD_AGGREGATOR_AGENT_EXPOSABLE_EVENT_TYPES
             value: "TASK_DEFINITION_EVENT,TASK_LIFECYCLE_EVENT,ACTOR_TASK_DEFINITION_EVENT,
                     TASK_PROFILE_EVENT,DRIVER_JOB_DEFINITION_EVENT,DRIVER_JOB_LIFECYCLE_EVENT,
@@ -65,7 +64,7 @@ spec:
                   GetNodeId
           resources:
             limits:
-              cpu: "5"
+              cpu: "6"
               memory: 10G
             requests:
               cpu: "50m"
@@ -74,9 +73,11 @@ spec:
           - name: historyserver
             mountPath: /tmp/ray
         - name: collector
-          image: collector:v0.1.0
+          image: ${COLLECTOR_IMAGE}
           imagePullPolicy: IfNotPresent
           env:
+          - name: GCS_BUCKET
+            value: "${GCS_BUCKET}"
           # RAY_DASHBOARD_ADDRESS is used by the head collector to fetch endpoints' results
           # (e.g., /api/v0/cluster_metadata) from the Ray Dashboard running in the same pod.
           # Only the head collector uses this; worker collectors do not need it.
@@ -89,36 +90,20 @@ spec:
           # You can add more endpoints, e.g., "/api/v0/placement_groups,/api/serve/applications/"
           # Note: Only static endpoints (no dynamic path parameters like {job_id}) are supported.
           - name: RAY_COLLECTOR_ADDITIONAL_ENDPOINTS
+            value: "/api/v0/placement_groups?detail=1&limit=10000"
             # Query params must match the Ray Dashboard frontend request exactly
             # (see https://github.com/ray-project/ray/blob/cb9c80fee6a700efe61ea97987248ce82e3fa2e2/python/ray/dashboard/client/src/service/placementGroup.ts):
             #   detail=1    — include bundles and stats fields required by PlacementGroupTable
             #   limit=10000 — match the frontend's default limit to avoid truncation
-            value: "/api/v0/placement_groups?detail=1&limit=10000"
           # RAY_COLLECTOR_POLL_INTERVAL controls how often the collector polls the additional
           # endpoints above. Accepts Go duration format (e.g., "30s", "1m", "5m").
           - name: RAY_COLLECTOR_POLL_INTERVAL
             value: "30s"
-          - name: S3DISABLE_SSL
-            value: "true"
-          - name: AWS_ACCESS_KEY_ID
-            value: minioadmin
-          - name: AWS_SECRET_ACCESS_KEY
-            value: minioadmin
-          - name: AWS_SESSION_TOKEN
-            value: ""
-          - name: S3_BUCKET
-            value: "ray-historyserver"
-          - name: S3_ENDPOINT
-            value: "minio-service.minio-dev:9000"
-          - name: S3_REGION
-            value: "test"
-          - name: S3FORCE_PATH_STYLE
-            value: "true"
           command:
           - collector
           - --role=Head
-          - --runtime-class-name=s3
-          - --ray-cluster-name=raycluster-historyserver
+          - --runtime-class-name=gcs
+          - --ray-cluster-name=${RAY_CLUSTER}
           - --ray-root-dir=log
           - --events-port=8084
           volumeMounts:
@@ -143,7 +128,7 @@ spec:
         labels:
           test: raycluster-historyserver
       spec:
-        imagePullSecrets:
+        serviceAccountName: historyserver
         containers:
         - env:
           - name: RAY_enable_ray_event
@@ -152,8 +137,6 @@ spec:
             value: "true"
           - name: RAY_DASHBOARD_AGGREGATOR_AGENT_EVENTS_EXPORT_ADDR
             value: "http://localhost:8084/v1/events"
-            # in ray 2.52.0, we need to set RAY_DASHBOARD_AGGREGATOR_AGENT_EXPOSABLE_EVENT_TYPES
-            # in ray 2.53.0 (not yet done). we need to set RAY_DASHBOARD_AGGREGATOR_AGENT_PUBLISHER_HTTP_ENDPOINT_EXPOSABLE_EVENT_TYPES
           - name: RAY_DASHBOARD_AGGREGATOR_AGENT_EXPOSABLE_EVENT_TYPES
             value: "TASK_DEFINITION_EVENT,TASK_LIFECYCLE_EVENT,ACTOR_TASK_DEFINITION_EVENT,
                     TASK_PROFILE_EVENT,DRIVER_JOB_DEFINITION_EVENT,DRIVER_JOB_LIFECYCLE_EVENT,
@@ -200,30 +183,16 @@ spec:
           - name: historyserver
             mountPath: /tmp/ray
         - name: collector
-          image: collector:v0.1.0
+          image: ${COLLECTOR_IMAGE}
           imagePullPolicy: IfNotPresent
           env:
-          - name: AWS_ACCESS_KEY_ID
-            value: minioadmin
-          - name: AWS_SECRET_ACCESS_KEY
-            value: minioadmin
-          - name: AWS_SESSION_TOKEN
-            value: ""
-          - name: S3_BUCKET
-            value: "ray-historyserver"
-          - name: S3_ENDPOINT
-            value: "minio-service.minio-dev:9000"
-          - name: S3_REGION
-            value: "test"
-          - name: S3FORCE_PATH_STYLE
-            value: "true"
-          - name: S3DISABLE_SSL
-            value: "true"
+          - name: GCS_BUCKET
+            value: "${GCS_BUCKET}"
           command:
           - collector
           - --role=Worker
-          - --runtime-class-name=s3
-          - --ray-cluster-name=raycluster-historyserver
+          - --runtime-class-name=gcs
+          - --ray-cluster-name=${RAY_CLUSTER}
           - --ray-root-dir=log
           - --events-port=8084
           volumeMounts:

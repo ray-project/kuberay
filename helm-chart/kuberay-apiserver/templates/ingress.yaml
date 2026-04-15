@@ -1,7 +1,7 @@
 {{- if .Values.ingress.enabled -}}
 {{- $fullName := include "kuberay-apiserver.fullname" . -}}
 {{- $svcName := printf "%s-service" $fullName -}}
-{{- $svcPort := .Values.service.port -}}
+{{- $svcPort := (index .Values.service.ports 0).port -}}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:

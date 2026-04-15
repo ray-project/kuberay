@@ -1,7 +1,8 @@
+# Ensure that the env var GCS_BUCKET is set before applying
 apiVersion: v1
 kind: Service
 metadata:
-  name: historyserver #TODO: to specify your service name
+  name: historyserver
   labels:
     app: historyserver
 spec:
@@ -34,27 +35,13 @@ spec:
       containers:
       - name: historyserver
         env:
-          - name: S3DISABLE_SSL
-            value: "true"
-          - name: AWS_ACCESS_KEY_ID
-            value: minioadmin
-          - name: AWS_SECRET_ACCESS_KEY
-            value: minioadmin
-          - name: AWS_SESSION_TOKEN
-            value: ""
-          - name: S3_BUCKET
-            value: "ray-historyserver"
-          - name: S3_ENDPOINT
-            value: "minio-service.minio-dev:9000"
-          - name: S3_REGION
-            value: "test"
-          - name: S3FORCE_PATH_STYLE
-            value: "true"
-        image: historyserver:v0.1.0
+          - name: GCS_BUCKET
+            value: "${GCS_BUCKET}"
+        image: ${HISTORY_SERVER_IMAGE}
         imagePullPolicy: IfNotPresent
         command:
         - historyserver
-        - --runtime-class-name=s3
+        - --runtime-class-name=gcs
         - --ray-root-dir=log
         ports:
         - containerPort: 8080

@@ -260,8 +260,8 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 		}
 
 		if headSvc == nil || serveSvc == nil {
-			panic("Both head and serve services are nil before calculate RayService status. " +
-				"This should never happen. Please open a GitHub issue in the KubeRay repository.")
+			panic(fmt.Sprintf("Either head service (%v) or serve service (%v) is nil before calculating RayService status. "+
+				"This should never happen. Please open a GitHub issue in the KubeRay repository.", headSvc, serveSvc))
 		}
 	}
 
@@ -1985,10 +1985,10 @@ func (r *RayServiceReconciler) reconcilePerClusterServeService(ctx context.Conte
 
 	logger := ctrl.LoggerFrom(ctx).WithValues("RayCluster", rayClusterInstance.Name)
 
-	logger.Info("Building per-cluster RayService")
+	logger.Info("Building per-cluster serve service")
 
 	// Create a serve service for the RayCluster associated with this RayService. During an incremental
-	// upgrade, this will be called for the pending RayCluster instance.
+	// upgrade, this will be called for both the active and pending RayCluster instances.
 	desiredSvc, err := common.BuildServeService(ctx, *rayServiceInstance, *rayClusterInstance, true)
 	if err != nil {
 		logger.Error(err, "Failed to build per-cluster serve service spec")

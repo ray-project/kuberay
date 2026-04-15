@@ -2,6 +2,7 @@ package ray
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -11,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aliyun/aliyun-oss-go-sdk/oss"
+	"github.com/aliyun/alibabacloud-oss-go-sdk-v2/oss"
 	"github.com/sirupsen/logrus"
 
 	"github.com/ray-project/kuberay/historyserver/pkg/collector/types"
@@ -21,30 +22,36 @@ import (
 )
 
 type RayLogsHandler struct {
-	OssBucket      *oss.Bucket
-	LogFiles       chan string
-	HttpClient     *http.Client
-	SessionDir     string
-	OssRootDir     string
-	LogDir         string
-	RayClusterName string
-	RayClusterID   string
-	RayNodeName    string
-	LogBatching    int
-	PushInterval   time.Duration
+	OssClient           *oss.Client
+	OssBucket           string
+	LogFiles            chan string
+	HttpClient          *http.Client
+	SessionDir          string
+	OssRootDir          string
+	LogDir              string
+	RayClusterName      string
+	RayClusterNamespace string
+	RayNodeName         string
+	LogBatching         int
+	PushInterval        time.Duration
 }
 
 func (r *RayLogsHandler) CreateDirectory(d string) error {
+	ctx := context.TODO()
 	objectDir := fmt.Sprintf("%s/", path.Clean(d))
 
-	isExist, err := r.OssBucket.IsObjectExist(objectDir)
+	isExist, err := r.OssClient.IsObjectExist(ctx, r.OssBucket, objectDir)
 	if err != nil {
 		logrus.Errorf("Failed to check if dirObject %s exists: %v", objectDir, err)
 		return err
 	}
 	if !isExist {
 		logrus.Infof("Begin to create oss dir %s ...", objectDir)
-		err = r.OssBucket.PutObject(objectDir, bytes.NewReader([]byte("")))
+		_, err = r.OssClient.PutObject(ctx, &oss.PutObjectRequest{
+			Bucket: oss.Ptr(r.OssBucket),
+			Key:    oss.Ptr(objectDir),
+			Body:   bytes.NewReader([]byte("")),
+		})
 		if err != nil {
 			logrus.Errorf("Failed to create directory '%s': %v", objectDir, err)
 			return err
@@ -55,50 +62,60 @@ func (r *RayLogsHandler) CreateDirectory(d string) error {
 }
 
 func (r *RayLogsHandler) Append(file string, reader io.Reader, appendPosition int64) (nextPod int64, err error) {
-	return r.OssBucket.AppendObject(file, reader, appendPosition)
+	result, err := r.OssClient.AppendObject(context.TODO(), &oss.AppendObjectRequest{
+		Bucket:   oss.Ptr(r.OssBucket),
+		Key:      oss.Ptr(file),
+		Position: &appendPosition,
+		Body:     reader,
+	})
+	if err != nil {
+		return 0, err
+	}
+
+	return result.NextPosition, nil
 }
 
 func (r *RayLogsHandler) WriteFile(file string, reader io.ReadSeeker) error {
-	return r.OssBucket.PutObject(file, reader)
+	_, err := r.OssClient.PutObject(context.TODO(), &oss.PutObjectRequest{
+		Bucket: oss.Ptr(r.OssBucket),
+		Key:    oss.Ptr(file),
+		Body:   reader,
+	})
+	return err
 }
 
 func (r *RayLogsHandler) _listFiles(prefix string, delimiter string, onlyBase bool) []string {
-	continueToken := ""
+	ctx := context.Background()
 	files := []string{}
-	for {
-		options := []oss.Option{
-			oss.Prefix(prefix + "/"),
-			oss.ContinuationToken(continueToken),
-			oss.MaxKeys(100),
-			oss.Delimiter(delimiter),
-		}
 
-		// List all files
-		lsRes, err := r.OssBucket.ListObjectsV2(options...)
+	p := r.OssClient.NewListObjectsV2Paginator(&oss.ListObjectsV2Request{
+		Bucket:    oss.Ptr(r.OssBucket),
+		Prefix:    oss.Ptr(prefix + "/"),
+		Delimiter: oss.Ptr(delimiter),
+		MaxKeys:   100,
+	})
+
+	for p.HasNext() {
+		page, err := p.NextPage(ctx)
 		if err != nil {
 			logrus.Errorf("Failed to list objects from %s: %v", prefix+"/", err)
 			return []string{}
 		}
-		logrus.Infof("[ListFiles]Returned objects in %v. length of lsRes.Objects: %v, length of lsRes.CommonPrefixes: %v", prefix+"/", len(lsRes.Objects),
-			len(lsRes.CommonPrefixes))
-		for _, objects := range lsRes.Objects {
-			objName := objects.Key
+		logrus.Infof("[ListFiles]Returned objects in %v. length of Contents: %v, length of CommonPrefixes: %v", prefix+"/", len(page.Contents),
+			len(page.CommonPrefixes))
+		for _, objects := range page.Contents {
+			objName := *objects.Key
 			if onlyBase {
-				objName = path.Base(objects.Key)
+				objName = path.Base(*objects.Key)
 			}
 			files = append(files, objName)
 		}
-		for _, object := range lsRes.CommonPrefixes {
-			objName := object
+		for _, object := range page.CommonPrefixes {
+			objName := *object.Prefix
 			if onlyBase {
-				objName = path.Base(object)
+				objName = path.Base(*object.Prefix)
 			}
 			files = append(files, objName+"/")
-		}
-		if lsRes.IsTruncated {
-			continueToken = lsRes.NextContinuationToken
-		} else {
-			break
 		}
 	}
 	return files
@@ -126,31 +143,29 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 			fmt.Println("Recovered from panic:", r)
 		}
 	}()
-	// Initial continuation token
-	continueToken := ""
+	ctx := context.Background()
 	clusters := make(utils.ClusterInfoList, 0, 10)
 	logrus.Debugf("Prepare to get list clusters info ...")
 
 	getClusters := func() {
-		for {
-			options := []oss.Option{
-				oss.Prefix(path.Join(r.OssRootDir, "metadir") + "/"),
-				oss.ContinuationToken(continueToken),
-				oss.MaxKeys(100),
-				oss.Delimiter(""),
-			}
+		p := r.OssClient.NewListObjectsV2Paginator(&oss.ListObjectsV2Request{
+			Bucket:    oss.Ptr(r.OssBucket),
+			Prefix:    oss.Ptr(path.Join(r.OssRootDir, "metadir") + "/"),
+			Delimiter: oss.Ptr(""),
+			MaxKeys:   100,
+		})
 
-			// List all files
-			lsRes, err := r.OssBucket.ListObjectsV2(options...)
+		for p.HasNext() {
+			page, err := p.NextPage(ctx)
 			if err != nil {
 				logrus.Errorf("Failed to list objects from %s: %v", path.Join(r.OssRootDir, "metadir")+"/", err)
 				return
 			}
-			logrus.Infof("[List]Returned objects in %v. length of lsRes.Objects: %v, length of lsRes.CommonPrefixes: %v", path.Join(r.OssRootDir, "metadir")+"/", len(lsRes.Objects),
-				len(lsRes.CommonPrefixes))
-			for _, objects := range lsRes.Objects {
+			logrus.Infof("[List]Returned objects in %v. length of Contents: %v, length of CommonPrefixes: %v", path.Join(r.OssRootDir, "metadir")+"/", len(page.Contents),
+				len(page.CommonPrefixes))
+			for _, objects := range page.Contents {
 				c := &utils.ClusterInfo{}
-				metaInfo := strings.Trim(strings.TrimPrefix(objects.Key, path.Join(r.OssRootDir, "metadir/")), "/")
+				metaInfo := strings.Trim(strings.TrimPrefix(*objects.Key, path.Join(r.OssRootDir, "metadir/")), "/")
 				metas := strings.Split(metaInfo, "/")
 				if len(metas) < 2 {
 					continue
@@ -172,11 +187,6 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 				c.CreateTime = createTime.UTC().Format(("2006-01-02T15:04:05Z"))
 				clusters = append(clusters, *c)
 			}
-			if lsRes.IsTruncated {
-				continueToken = lsRes.NextContinuationToken
-			} else {
-				break
-			}
 		}
 	}
 	getClusters()
@@ -185,21 +195,29 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 }
 
 func (r *RayLogsHandler) GetContent(clusterId string, fileName string) io.Reader {
+	ctx := context.TODO()
 	logrus.Infof("Prepare to get object %s info ...", fileName)
-	options := []oss.Option{}
-	body, err := r.OssBucket.GetObject(fileName, options...)
+	result, err := r.OssClient.GetObject(ctx, &oss.GetObjectRequest{
+		Bucket: oss.Ptr(r.OssBucket),
+		Key:    oss.Ptr(fileName),
+	})
 	if err != nil {
 		logrus.Errorf("Failed to get object %s: %v", fileName, err)
 		allFiles := r._listFiles(clusterId+"/"+path.Dir(fileName), "", false)
 		found := false
 		for _, f := range allFiles {
-			if path.Base(f) == fileName {
+			if path.Base(f) == path.Base(fileName) {
 				logrus.Infof("Get object %s info success", f)
-				body, err = r.OssBucket.GetObject(f, options...)
+				result, err = r.OssClient.GetObject(ctx, &oss.GetObjectRequest{
+					Bucket: oss.Ptr(r.OssBucket),
+					Key:    oss.Ptr(f),
+				})
 				if err != nil {
 					logrus.Errorf("Failed to get object %s: %v", f, err)
 					return nil
 				}
+				found = true
+				break
 			}
 		}
 		if !found {
@@ -207,9 +225,9 @@ func (r *RayLogsHandler) GetContent(clusterId string, fileName string) io.Reader
 			return nil
 		}
 	}
-	defer body.Close()
+	defer result.Body.Close()
 
-	data, err := io.ReadAll(body)
+	data, err := io.ReadAll(result.Body)
 	if err != nil {
 		logrus.Errorf("Failed to read all data from object %s : %v", fileName, err)
 		return nil
@@ -232,24 +250,26 @@ func NewWriter(c *types.RayCollectorConfig, jd map[string]interface{}) (storage.
 }
 
 func New(c *config) (*RayLogsHandler, error) {
+	// Create OSS client using Alibaba Cloud OSS SDK v2.
+	// Ref: https://github.com/aliyun/alibabacloud-oss-go-sdk-v2.
+
 	logrus.Infof("Begin to create oss client ...")
 	httpClient := &http.Client{
 		Timeout: 5 * time.Second, // Set timeout
 	}
-	provider, err := rrsa.NewOssProvider()
+	provider, err := rrsa.NewCredentialsProvider()
 	if err != nil {
-		logrus.Fatalf("Create rrsa provider error %v", err)
+		logrus.Fatalf("Failed to create credentials provider: %v", err)
 	}
-	var client *oss.Client
-	client, err = oss.New(c.OSSEndpoint, "", "", oss.HTTPClient(httpClient), oss.SetCredentialsProvider(provider))
-	if err != nil {
-		logrus.Fatalf("Create oss client error %v", err)
-	}
-	logrus.Infof("Begin to create oss bucket %s ...", c.OSSBucket)
-	bucket, err := client.Bucket(c.OSSBucket)
-	if err != nil {
-		logrus.Fatalf("Create oss bucket instance error %v", err)
-	}
+
+	cfg := oss.LoadDefaultConfig().
+		WithCredentialsProvider(provider).
+		WithRegion(c.OSSRegion).
+		WithEndpoint(c.OSSEndpoint).
+		WithHttpClient(httpClient)
+	client := oss.NewClient(cfg)
+
+	logrus.Infof("Begin to use oss bucket %s ...", c.OSSBucket)
 	sessionDir := strings.TrimSpace(c.SessionDir)
 	sessionDir = filepath.Clean(sessionDir)
 
@@ -258,14 +278,15 @@ func New(c *config) (*RayLogsHandler, error) {
 	logrus.Infof("Clean logdir is %s", logdir)
 
 	return &RayLogsHandler{
-		OssBucket:      bucket,
-		SessionDir:     sessionDir,
-		OssRootDir:     c.RootDir,
-		LogDir:         logdir,
-		LogFiles:       make(chan string, 100),
-		RayClusterName: c.RayClusterName,
-		RayClusterID:   c.RayClusterID,
-		RayNodeName:    c.RayNodeName,
+		OssClient:           client,
+		OssBucket:           c.OSSBucket,
+		SessionDir:          sessionDir,
+		OssRootDir:          c.RootDir,
+		LogDir:              logdir,
+		LogFiles:            make(chan string, 100),
+		RayClusterName:      c.RayClusterName,
+		RayClusterNamespace: c.RayClusterNamespace,
+		RayNodeName:         c.RayNodeName,
 		HttpClient: &http.Client{
 			Transport: &http.Transport{
 				MaxIdleConns:        100,              // Max idle connections

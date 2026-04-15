@@ -1,3 +1,6 @@
+// TODO: Remove this file once Gateway API support is mature and Route-based dashboard access
+// is no longer needed. OpenShift-specific resource construction should eventually be removed
+// entirely. See: https://github.com/ray-project/kuberay/pull/4365#issuecomment-4143407845
 package common
 
 import (
