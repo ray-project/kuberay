@@ -1,83 +1,47 @@
 package rrsa
 
 import (
-	"log"
+	"context"
 	"os"
 
-	"github.com/alibabacloud-go/tea/tea"
-	"github.com/aliyun/aliyun-oss-go-sdk/oss"
-	"github.com/aliyun/credentials-go/credentials"
+	"github.com/aliyun/alibabacloud-oss-go-sdk-v2/oss/credentials"
+	"github.com/aliyun/credentials-go/credentials/providers"
 )
 
-func newCredential() (credentials.Credential, error) {
-	// https://www.alibabacloud.com/help/doc-detail/378661.html
-	credType := "oidc_role_arn"
-	var cred credentials.Credential
+// NewCredentialsProvider creates a new credentials.CredentialsProvider instance.
+// TODO(ChenYi015): Add support for other credential providers.
+func NewCredentialsProvider() (credentials.CredentialsProvider, error) {
+	var provider providers.CredentialsProvider
 	var err error
+
 	if os.Getenv("LOCAL_TEST") == "true" {
-		cred, err = credentials.NewCredential(nil)
+		provider = providers.NewDefaultCredentialsProvider()
 	} else {
-		cred, err = credentials.NewCredential(&credentials.Config{
-			Type: &credType,
-		})
+		provider, err = providers.NewOIDCCredentialsProviderBuilder().Build()
 	}
-	return cred, err
-}
 
-type Credentials struct {
-	AccessKeyId     string
-	AccessKeySecret string
-	SecurityToken   string
-}
-
-func NewProvider() (credentials.Credential, error) {
-	return newCredential()
-}
-
-func NewOssProvider() (*OssCredentialsProvider, error) {
-	cred, err := newCredential()
 	if err != nil {
 		return nil, err
 	}
-	return &OssCredentialsProvider{cred: cred}, nil
+
+	return &OIDCCredentialsProvider{provider: provider}, nil
 }
 
-type OssCredentialsProvider struct {
-	cred credentials.Credential
+// OIDCCredentialsProvider implements credentials.CredentialsProvider interface.
+type OIDCCredentialsProvider struct {
+	provider providers.CredentialsProvider
 }
 
-func (c *Credentials) GetAccessKeyID() string {
-	return c.AccessKeyId
-}
-
-func (c *Credentials) GetAccessKeySecret() string {
-	return c.AccessKeySecret
-}
-
-func (c *Credentials) GetSecurityToken() string {
-	return c.SecurityToken
-}
-
-func (p *OssCredentialsProvider) GetCredentials() oss.Credentials {
-	id, err := p.cred.GetAccessKeyId()
+// GetCredentials implements credentials.CredentialsProvider interface.
+func (p *OIDCCredentialsProvider) GetCredentials(ctx context.Context) (credentials.Credentials, error) {
+	cred, err := p.provider.GetCredentials()
 	if err != nil {
-		log.Printf("get access key id failed: %+v", err)
-		return &Credentials{}
-	}
-	secret, err := p.cred.GetAccessKeySecret()
-	if err != nil {
-		log.Printf("get access key secret failed: %+v", err)
-		return &Credentials{}
-	}
-	token, err := p.cred.GetSecurityToken()
-	if err != nil {
-		log.Printf("get access security token failed: %+v", err)
-		return &Credentials{}
+		return credentials.Credentials{}, err
 	}
 
-	return &Credentials{
-		AccessKeyId:     tea.StringValue(id),
-		AccessKeySecret: tea.StringValue(secret),
-		SecurityToken:   tea.StringValue(token),
-	}
+	return credentials.Credentials{
+		AccessKeyID:     cred.AccessKeyId,
+		AccessKeySecret: cred.AccessKeySecret,
+		SecurityToken:   cred.SecurityToken,
+	}, nil
 }

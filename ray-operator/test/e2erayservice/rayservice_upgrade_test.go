@@ -79,6 +79,13 @@ func TestOldHeadPodFailDuringUpgrade(t *testing.T) {
 	rayService, err = test.Client().Ray().RayV1().RayServices(namespace.Name).Update(test.Ctx(), rayService, metav1.UpdateOptions{})
 	g.Expect(err).NotTo(HaveOccurred())
 
+	headPod, err := test.Client().Core().CoreV1().Pods(namespace.Name).Get(test.Ctx(), headPodName, metav1.GetOptions{})
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(headPod.Status.PodIP).NotTo(BeEmpty())
+
+	LogWithTimestamp(test.T(), "Checking that the old Head Pod's label `ray.io/serve` is `true`")
+	g.Expect(headPod.Labels[utils.RayClusterServingServiceLabelKey]).To(Equal("true"))
+
 	for _, iptables := range []string{"iptables-legacy", "iptables-nft"} {
 		LogWithTimestamp(test.T(), "Using %s to make the ProxyActor(8000 port) fail to receive requests on the old head Pod", iptables)
 		headPodPatch := map[string]any{
@@ -104,13 +111,6 @@ func TestOldHeadPodFailDuringUpgrade(t *testing.T) {
 		_, err = test.Client().Core().CoreV1().Pods(namespace.Name).Patch(test.Ctx(), headPodName, types.StrategicMergePatchType, patchBytes, metav1.PatchOptions{}, "ephemeralcontainers")
 		g.Expect(err).NotTo(HaveOccurred())
 	}
-
-	headPod, err := test.Client().Core().CoreV1().Pods(namespace.Name).Get(test.Ctx(), headPodName, metav1.GetOptions{})
-	g.Expect(err).NotTo(HaveOccurred())
-	g.Expect(headPod.Status.PodIP).NotTo(BeEmpty())
-
-	LogWithTimestamp(test.T(), "Checking that the old Head Pod's label `ray.io/serve` is `true`")
-	g.Expect(headPod.Labels[utils.RayClusterServingServiceLabelKey]).To(Equal("true"))
 
 	healthURL := fmt.Sprintf("http://%s:%d/", headPod.Status.PodIP, utils.DefaultServingPort) + utils.RayServeProxyHealthPath
 	LogWithTimestamp(test.T(), "Curling head Pod %s at %s until ephemeral iptables applies DROP on :%d (expect curl to fail)", headPodName, healthURL, utils.DefaultServingPort)
