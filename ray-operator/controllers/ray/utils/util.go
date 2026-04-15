@@ -1030,6 +1030,34 @@ func HasSubmitter(rayJobInstance *rayv1.RayJob) bool {
 // IsHTTPRouteEqual checks if the existing HTTPRoute matches the desired HTTPRoute.
 // This check only compares the fields explicitly managed by the RayService controller.
 func IsHTTPRouteEqual(existing, desired *gwv1.HTTPRoute) bool {
+	if existing == nil || desired == nil {
+		return existing == desired
+	}
+
+	// Compare Hostnames. Treat nil and empty slice as equivalent to avoid false positives
+	// caused by renormalization from the API server or the Gateway implementation.
+	if len(existing.Spec.Hostnames) != len(desired.Spec.Hostnames) {
+		return false
+	}
+	if len(existing.Spec.Hostnames) > 0 && !reflect.DeepEqual(existing.Spec.Hostnames, desired.Spec.Hostnames) {
+		return false
+	}
+
+	// Compare ParentRefs
+	if len(existing.Spec.ParentRefs) != len(desired.Spec.ParentRefs) {
+		return false
+	}
+	for i := range desired.Spec.ParentRefs {
+		eRef := existing.Spec.ParentRefs[i]
+		dRef := desired.Spec.ParentRefs[i]
+
+		if string(eRef.Name) != string(dRef.Name) ||
+			string(ptr.Deref(eRef.Namespace, "")) != string(ptr.Deref(dRef.Namespace, "")) {
+			return false
+		}
+	}
+
+	// Compare Rules
 	if len(existing.Spec.Rules) != len(desired.Spec.Rules) {
 		return false
 	}
