@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
+	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
 func makeTaskEventMap(taskName, nodeId, taskID, cluster string, attempt int) map[string]any {
@@ -926,5 +927,71 @@ func TestMultipleReprocessingCycles(t *testing.T) {
 		if eventCount != 3 {
 			t.Errorf("Cycle %d: Event count = %d, want 3 (events are duplicating!)", cycle, eventCount)
 		}
+	}
+}
+
+func TestNormalizeIDToHex(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "empty string returns empty",
+			input:    "",
+			expected: "",
+		},
+		{
+			name:     "valid base64 converts to hex",
+			input:    "AgAAAA==",
+			expected: "02000000",
+		},
+		{
+			name:     "invalid base64 returns original",
+			input:    "not_valid_base64!!!",
+			expected: "not_valid_base64!!!",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := normalizeIDToHex(tt.input)
+			if got != tt.expected {
+				t.Errorf("normalizeIDToHex(%q) = %q, want %q", tt.input, got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestNormalizeActorIDsToHex(t *testing.T) {
+	base64Val := "AgAAAA=="
+	expectedHex, _ := utils.ConvertBase64ToHex(base64Val)
+
+	actor := types.Actor{
+		ActorID:          base64Val,
+		JobID:            base64Val,
+		PlacementGroupID: base64Val,
+		Address: types.Address{
+			NodeID:   base64Val,
+			WorkerID: base64Val,
+		},
+	}
+
+	normalizeActorIDsToHex(&actor)
+
+	if actor.ActorID != expectedHex {
+		t.Errorf("ActorID = %q, want %q", actor.ActorID, expectedHex)
+	}
+	if actor.JobID != expectedHex {
+		t.Errorf("JobID = %q, want %q", actor.JobID, expectedHex)
+	}
+	if actor.PlacementGroupID != expectedHex {
+		t.Errorf("PlacementGroupID = %q, want %q", actor.PlacementGroupID, expectedHex)
+	}
+	if actor.Address.NodeID != expectedHex {
+		t.Errorf("Address.NodeID = %q, want %q", actor.Address.NodeID, expectedHex)
+	}
+	if actor.Address.WorkerID != expectedHex {
+		t.Errorf("Address.WorkerID = %q, want %q", actor.Address.WorkerID, expectedHex)
 	}
 }

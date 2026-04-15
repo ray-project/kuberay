@@ -252,6 +252,8 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 			return err
 		}
 
+		normalizeActorIDsToHex(&currActor)
+
 		// Use CreateOrMergeActor pattern (same as Task)
 		actorMap := h.ClusterActorMap.GetOrCreateActorMap(clusterSessionKey)
 		actorMap.CreateOrMergeActor(currActor.ActorID, func(a *types.Actor) {
@@ -287,6 +289,7 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 		}
 
 		actorId, _ := lifecycleEvent["actorId"].(string)
+		actorId = normalizeIDToHex(actorId)
 		transitions, _ := lifecycleEvent["stateTransitions"].([]any)
 
 		if len(transitions) == 0 || actorId == "" {
@@ -305,6 +308,10 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 			nodeId, _ := tr["nodeId"].(string)
 			workerId, _ := tr["workerId"].(string)
 			reprName, _ := tr["reprName"].(string)
+
+			// Convert IDs from base64 to hex
+			nodeId = normalizeIDToHex(nodeId)
+			workerId = normalizeIDToHex(workerId)
 
 			var timestamp time.Time
 			if timestampStr != "" {
@@ -762,27 +769,13 @@ func (h *EventHandler) GetActorByID(clusterName, actorID string) (types.Actor, b
 	actorMap.Lock()
 	defer actorMap.Unlock()
 
-	// Try direct lookup first (Base64 key).
+	// Actor IDs are normalized to hex at ingestion time (normalizeActorIDsToHex),
+	// so direct lookup by hex ID always succeeds.
 	actor, ok := actorMap.ActorMap[actorID]
-	if ok {
-		return actor.DeepCopy(), true
+	if !ok {
+		return types.Actor{}, false
 	}
-
-	// If not found, the caller may have passed a hex-encoded ID (from the frontend).
-	// The frontend calls /logical/actors/{actorId} with hex IDs returned by formatActorForResponse.
-	// Ref: https://github.com/ray-project/ray/blob/27d3d81d47/python/ray/dashboard/client/src/service/actor.ts#L24-L25
-	//
-	// This O(n) scan is a known performance limitation. The proper fix is to normalize
-	// actor IDs to hex at ingestion time (see PR #4563), which would make the direct
-	// map lookup above always succeed. This fallback will be removed after that change.
-	for _, a := range actorMap.ActorMap {
-		hexID, err := utils.ConvertBase64ToHex(a.ActorID)
-		if err == nil && hexID == actorID {
-			return a.DeepCopy(), true
-		}
-	}
-
-	return types.Actor{}, false
+	return actor.DeepCopy(), true
 }
 
 // GetActorsMap returns a thread-safe deep copy of all actors as a map for a given cluster
@@ -1219,6 +1212,20 @@ func (h *EventHandler) handleTaskProfileEvent(eventMap map[string]any, clusterSe
 	return nil
 }
 
+// normalizeIDToHex converts a single base64-encoded Ray ID to hex
+func normalizeIDToHex(base64ID string) string {
+	if base64ID == "" {
+		return ""
+	}
+
+	hexID, err := utils.ConvertBase64ToHex(base64ID)
+	if err != nil {
+		logrus.Errorf("Failed to convert ID from base64 to hex, keeping original: %v", err)
+		return base64ID
+	}
+	return hexID
+}
+
 // normalizeTaskIDsToHex converts base64-encoded Ray IDs in task-related events:
 //   - TASK_DEFINITION_EVENT
 //   - ACTOR_TASK_DEFINITION_EVENT
@@ -1226,26 +1233,26 @@ func (h *EventHandler) handleTaskProfileEvent(eventMap map[string]any, clusterSe
 //
 // to hex so stored tasks match the live cluster API schema.
 func normalizeTaskIDsToHex(task *types.Task) {
-	normalize := func(base64ID string) string {
-		if base64ID == "" {
-			return ""
-		}
+	task.TaskID = normalizeIDToHex(task.TaskID)
+	task.ActorID = normalizeIDToHex(task.ActorID)
+	task.JobID = normalizeIDToHex(task.JobID)
+	task.ParentTaskID = normalizeIDToHex(task.ParentTaskID)
+	task.PlacementGroupID = normalizeIDToHex(task.PlacementGroupID)
+	task.NodeID = normalizeIDToHex(task.NodeID)
+	task.WorkerID = normalizeIDToHex(task.WorkerID)
+}
 
-		hexID, err := utils.ConvertBase64ToHex(base64ID)
-		if err != nil {
-			logrus.Errorf("Failed to convert ID from base64 to hex, keeping original: %v", err)
-			return base64ID
-		}
-		return hexID
-	}
-
-	task.TaskID = normalize(task.TaskID)
-	task.ActorID = normalize(task.ActorID)
-	task.JobID = normalize(task.JobID)
-	task.ParentTaskID = normalize(task.ParentTaskID)
-	task.PlacementGroupID = normalize(task.PlacementGroupID)
-	task.NodeID = normalize(task.NodeID)
-	task.WorkerID = normalize(task.WorkerID)
+// normalizeActorIDsToHex converts base64-encoded Ray IDs in actor events:
+//   - ACTOR_DEFINITION_EVENT
+//
+// to hex so stored actors match the live cluster API schema.
+// Note: ACTOR_LIFECYCLE_EVENT IDs are normalized inline at parse time.
+func normalizeActorIDsToHex(actor *types.Actor) {
+	actor.ActorID = normalizeIDToHex(actor.ActorID)
+	actor.JobID = normalizeIDToHex(actor.JobID)
+	actor.PlacementGroupID = normalizeIDToHex(actor.PlacementGroupID)
+	actor.Address.NodeID = normalizeIDToHex(actor.Address.NodeID)
+	actor.Address.WorkerID = normalizeIDToHex(actor.Address.WorkerID)
 }
 
 // GetNodeMap returns a thread-safe deep copy of all nodes for a given cluster session.
