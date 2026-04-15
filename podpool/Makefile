@@ -1,7 +1,8 @@
+.PHONY: build mod
+build: bin/virtual-kubelet
+
 mod:
 	@go mod tidy
-.PHONY: build
-build: bin/virtual-kubelet
 
 bin/virtual-kubelet: BUILD_VERSION          ?= $(shell git describe --tags --always)
 bin/virtual-kubelet: K8S_VERSION            ?= v$(shell cd $(CURDIR) && go list -m k8s.io/api | awk '{print $$2}' | sed 's/^v0\./1./')

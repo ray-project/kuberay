@@ -16,8 +16,6 @@ import (
 	"github.com/virtual-kubelet/virtual-kubelet/log"
 	logruslogger "github.com/virtual-kubelet/virtual-kubelet/log/logrus"
 	"github.com/virtual-kubelet/virtual-kubelet/node"
-	"github.com/virtual-kubelet/virtual-kubelet/trace"
-	"github.com/virtual-kubelet/virtual-kubelet/trace/opencensus"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -44,12 +42,13 @@ func main() {
 	}()
 
 	log.L = logruslogger.FromLogrus(logrus.NewEntry(logrus.StandardLogger()))
-	trace.T = opencensus.Adapter{}
 
 	rootCmd := &cobra.Command{
-		Use:   filepath.Base(os.Args[0]),
-		Short: "Virtual Kubelet for PodPool",
-		Long:  "Virtual Kubelet provider for managing PodPool resources",
+		Use:           filepath.Base(os.Args[0]),
+		Short:         "Virtual Kubelet for PodPool",
+		Long:          "Virtual Kubelet provider for managing PodPool resources",
+		SilenceUsage:  true,
+		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runVirtualKubelet(ctx, cmd)
 		},
