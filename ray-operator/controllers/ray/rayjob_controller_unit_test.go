@@ -18,7 +18,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	clientFake "sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
@@ -577,7 +577,7 @@ func TestEmitRayJobExecutionDuration(t *testing.T) {
 			name: "non-terminal to retrying state should emit metrics",
 			originalRayJobStatus: rayv1.RayJobStatus{
 				JobDeploymentStatus: rayv1.JobDeploymentStatusRunning,
-				Failed:              pointer.Int32(2),
+				Failed:              ptr.To(int32(2)),
 			},
 			rayJobStatus: rayv1.RayJobStatus{
 				JobDeploymentStatus: rayv1.JobDeploymentStatusRetrying,
@@ -637,7 +637,7 @@ func TestGetSubmitterTemplate_WithEnableK8sTokenAuth(t *testing.T) {
 		Spec: rayv1.RayClusterSpec{
 			AuthOptions: &rayv1.AuthOptions{
 				Mode:               rayv1.AuthModeToken,
-				EnableK8sTokenAuth: pointer.Bool(true),
+				EnableK8sTokenAuth: ptr.To(true),
 			},
 			HeadGroupSpec: rayv1.HeadGroupSpec{
 				Template: corev1.PodTemplateSpec{
