@@ -542,7 +542,7 @@ func TestGCPLogLink(t *testing.T) {
 					},
 				},
 			},
-			expectedGCPURL:  "https://console.cloud.google.com/logs/query;query=resource.type%3D%22k8s_container%22%0Aresource.labels.namespace_name%3D%22default%22%0Alabels.%22k8s-pod%2Fray_io%2Fcluster%22%3D%22test-cluster%22%0Alabels.%22k8s-pod%2Fray_io%2Fis-ray-node%22%3D%22yes%22;project=my-project",
+			expectedGCPURL:  "https://console.cloud.google.com/logs/query;query=resource.type%3D%22k8s_container%22%0Aresource.labels.namespace_name%3D%22default%22%0Alabels.%22k8s-pod%2Fray_io%2Fcluster%22%3D%22test-cluster%22%0Alabels.%22k8s-pod%2Fray_io%2Fis-ray-node%22%3D%22yes%22?project=my-project",
 			expectedWarning: "",
 		},
 		{
@@ -566,7 +566,7 @@ func TestGCPLogLink(t *testing.T) {
 					},
 				},
 			},
-			expectedGCPURL:  "https://console.cloud.google.com/logs/query;query=resource.type%3D%22k8s_container%22%0Aresource.labels.namespace_name%3D%22default%22%0Alabels.%22k8s-pod%2Fray_io%2Fcluster%22%3D%22test-cluster%22%0Alabels.%22k8s-pod%2Fray_io%2Fis-ray-node%22%3D%22yes%22;project=my-project",
+			expectedGCPURL:  "https://console.cloud.google.com/logs/query;query=resource.type%3D%22k8s_container%22%0Aresource.labels.namespace_name%3D%22default%22%0Alabels.%22k8s-pod%2Fray_io%2Fcluster%22%3D%22test-cluster%22%0Alabels.%22k8s-pod%2Fray_io%2Fis-ray-node%22%3D%22yes%22?project=my-project",
 			expectedWarning: "Warning: The head pod does not have a 'fluentbit' container. Logs might not be exported to Google Cloud Logging.",
 		},
 		{
