@@ -1854,9 +1854,9 @@ func TestInitLivenessAndReadinessProbe(t *testing.T) {
 	rayContainer.ReadinessProbe = nil
 	initLivenessAndReadinessProbe(rayContainer, rayv1.WorkerNode, utils.RayServiceCRD, rayStartParams, "")
 	assert.NotNil(t, rayContainer.LivenessProbe.Exec)
-	assert.NotNil(t, rayContainer.ReadinessProbe.Exec)
+	assert.NotNil(t, rayContainer.ReadinessProbe.HTTPGet)
 	assert.NotContains(t, strings.Join(rayContainer.LivenessProbe.Exec.Command, " "), utils.RayServeProxyHealthPath)
-	assert.Contains(t, strings.Join(rayContainer.ReadinessProbe.Exec.Command, " "), utils.RayServeProxyHealthPath)
+	assert.Equal(t, int32(utils.DefaultServingPort), rayContainer.ReadinessProbe.HTTPGet.Port.IntVal)
 	assert.Equal(t, int32(2), rayContainer.LivenessProbe.TimeoutSeconds)
 	assert.Equal(t, int32(2), rayContainer.ReadinessProbe.TimeoutSeconds)
 
@@ -1924,9 +1924,9 @@ func TestInitLivenessAndReadinessProbe(t *testing.T) {
 		"dashboard-agent-listen-port": "8500",
 	}
 	initLivenessAndReadinessProbe(rayContainer, rayv1.WorkerNode, utils.RayServiceCRD, rayServiceWorkerParams, "")
-	rayServiceReadinessCommand := strings.Join(rayContainer.ReadinessProbe.Exec.Command, " ")
-	assert.Contains(t, rayServiceReadinessCommand, ":8500", "RayService worker should use custom dashboard-agent-listen-port")
-	assert.Contains(t, rayServiceReadinessCommand, utils.RayServeProxyHealthPath, "RayService worker should include serve proxy health check")
+	rayServiceLivenessCommand := strings.Join(rayContainer.LivenessProbe.Exec.Command, " ")
+	assert.Contains(t, rayServiceLivenessCommand, ":8500", "RayService worker should use custom dashboard-agent-listen-port")
+	assert.Equal(t, int32(utils.DefaultServingPort), rayContainer.ReadinessProbe.HTTPGet.Port.IntVal)
 	assert.Equal(t, int32(utils.ServeReadinessProbeFailureThreshold), rayContainer.ReadinessProbe.FailureThreshold, "RayService worker should have correct failure threshold")
 
 	// Test 8: Test invalid port values (should fall back to defaults)
@@ -1965,15 +1965,16 @@ func TestInitLivenessAndReadinessProbe(t *testing.T) {
 	assert.NotNil(t, rayContainer.LivenessProbe.HTTPGet)
 	assert.NotNil(t, rayContainer.ReadinessProbe.HTTPGet)
 
-	// Ray Serve workers still use exec probes for readiness to check the proxy actor.
+	// Ray Serve workers check the proxy actor for readiness.
 	rayContainer.LivenessProbe = nil
 	rayContainer.ReadinessProbe = nil
 	initLivenessAndReadinessProbe(rayContainer, rayv1.WorkerNode, utils.RayServiceCRD, rayStartParams, "2.53.0")
 	assert.NotNil(t, rayContainer.LivenessProbe.HTTPGet)
 	assert.Nil(t, rayContainer.LivenessProbe.Exec)
-	assert.Nil(t, rayContainer.ReadinessProbe.HTTPGet)
-	assert.NotNil(t, rayContainer.ReadinessProbe.Exec)
-	assert.Contains(t, strings.Join(rayContainer.ReadinessProbe.Exec.Command, " "), utils.RayServeProxyHealthPath)
+	assert.Nil(t, rayContainer.ReadinessProbe.Exec)
+	assert.NotNil(t, rayContainer.ReadinessProbe.HTTPGet)
+	assert.Equal(t, int32(utils.DefaultServingPort), rayContainer.ReadinessProbe.HTTPGet.Port.IntVal)
+	assert.Equal(t, utils.RayServeProxyHealthPath, rayContainer.ReadinessProbe.HTTPGet.Path)
 
 	// Versions parsed below 2.53 must use exec probes.
 	rayContainer.LivenessProbe = nil
