@@ -2359,3 +2359,79 @@ func TestUpdateRayStartParamsResources(t *testing.T) {
 		})
 	}
 }
+
+func TestUpdateRayStartParamsResources_WithFractionalGPU(t *testing.T) {
+	// Test that fractional GPU values are properly converted when using Resources field
+	// See: https://github.com/ray-project/kuberay/issues/4447
+	ctx := context.Background()
+
+	tests := map[string]struct {
+		groupResources       map[string]string
+		expectedNumGPUs      string
+		expectedParamPresent bool
+	}{
+		"Fractional GPU as millicores": {
+			groupResources:       map[string]string{"nvidia.com/gpu": "400m"}, // 400 millicores = 0.4 GPU
+			expectedNumGPUs:      "0.4",
+			expectedParamPresent: true,
+		},
+		"Single GPU": {
+			groupResources:       map[string]string{"nvidia.com/gpu": "1"},
+			expectedNumGPUs:      "1",
+			expectedParamPresent: true,
+		},
+		"Multiple GPUs": {
+			groupResources:       map[string]string{"nvidia.com/gpu": "4"},
+			expectedNumGPUs:      "4",
+			expectedParamPresent: true,
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			rayStartParams := make(map[string]string)
+			updateRayStartParamsResources(ctx, rayStartParams, tc.groupResources)
+
+			if tc.expectedParamPresent {
+				val, ok := rayStartParams["num-gpus"]
+				assert.True(t, ok, "num-gpus should be set in rayStartParams")
+				assert.Equal(t, tc.expectedNumGPUs, val, "GPU value should match expected fractional value")
+			}
+		})
+	}
+}
+
+func TestAddWellKnownAcceleratorResources_WithFractionalGPU(t *testing.T) {
+	// Test that fractional GPU values are properly converted in container resource limits
+	// This tests the code path used when GPU resources are specified via container.Resources.Limits
+	// See: https://github.com/ray-project/kuberay/issues/4447
+	tests := map[string]struct {
+		resourceLimits  corev1.ResourceList
+		expectedNumGPUs string
+	}{
+		"Fractional GPU as millicores in container limits": {
+			resourceLimits:  corev1.ResourceList{corev1.ResourceName("nvidia.com/gpu"): *resource.NewMilliQuantity(400, resource.DecimalSI)}, // 400m = 0.4 GPU
+			expectedNumGPUs: "0.4",
+		},
+		"Single GPU in container limits": {
+			resourceLimits:  corev1.ResourceList{corev1.ResourceName("nvidia.com/gpu"): *resource.NewQuantity(1, resource.DecimalSI)},
+			expectedNumGPUs: "1",
+		},
+		"Multiple GPUs in container limits": {
+			resourceLimits:  corev1.ResourceList{corev1.ResourceName("nvidia.com/gpu"): *resource.NewQuantity(4, resource.DecimalSI)},
+			expectedNumGPUs: "4",
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			rayStartParams := make(map[string]string)
+			err := addWellKnownAcceleratorResources(rayStartParams, tc.resourceLimits)
+			assert.NoError(t, err, "addWellKnownAcceleratorResources should not return an error")
+
+			val, ok := rayStartParams["num-gpus"]
+			assert.True(t, ok, "num-gpus should be set in rayStartParams")
+			assert.Equal(t, tc.expectedNumGPUs, val, "GPU value should match expected fractional value")
+		})
+	}
+}
