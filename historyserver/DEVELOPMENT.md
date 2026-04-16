@@ -203,7 +203,7 @@ A successful request produces output like the following:
 
 Once set up, you can hit any endpoint via the Ray Dashboard. Take `http://localhost:8265/#/cluster` as an example:
 
-<dead_raycluster.png>
+![dead_raycluster](https://github.com/ray-project/kuberay/blob/93e81e60ddc486f60ae6432a3d178edbf952eff3/historyserver/docs/assets/dead_raycluster.png)
 
 ## Step 8: Validate the Live Path
 
@@ -234,7 +234,7 @@ The result should look like the following:
 Navigate the same pages as in Step 7. This time the History Server reverse-proxies each API call to the live
 RayCluster's head dashboard service, so you see real-time state instead of replay:
 
-<live_raycluster.png>
+![live_raycluster](https://github.com/ray-project/kuberay/blob/93e81e60ddc486f60ae6432a3d178edbf952eff3/historyserver/docs/assets/live_raycluster.png)
 
 ## Cleanup
 
