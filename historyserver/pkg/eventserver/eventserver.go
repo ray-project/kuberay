@@ -1,6 +1,7 @@
 package eventserver
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -20,6 +21,9 @@ import (
 
 type EventHandler struct {
 	reader storage.StorageReader
+	writer storage.StorageWriter
+	// WaitGroup since event processing is done synchronously, this precents writing incomplete data.
+	processingWg sync.WaitGroup
 
 	ClusterTaskMap     *types.ClusterTaskMap
 	ClusterActorMap    *types.ClusterActorMap
@@ -42,9 +46,10 @@ func isValidEventFile(fileName string) bool {
 	return eventFilePattern.MatchString(fileName)
 }
 
-func NewEventHandler(reader storage.StorageReader) *EventHandler {
+func NewEventHandler(reader storage.StorageReader, writer storage.StorageWriter) *EventHandler {
 	return &EventHandler{
 		reader: reader,
+		writer: writer,
 		ClusterTaskMap: &types.ClusterTaskMap{
 			ClusterTaskMap: make(map[string]*types.TaskMap),
 		},
@@ -78,8 +83,8 @@ func (h *EventHandler) ProcessEvents(ctx context.Context, ch <-chan map[string]a
 			}
 			if err := h.storeEvent(currEventData); err != nil {
 				logrus.Errorf("Failed to store event: %v", err)
-				continue
 			}
+			h.processingWg.Done()
 		}
 	}
 }
@@ -173,6 +178,7 @@ func (h *EventHandler) Run(stop chan struct{}, numOfEventProcessors int) error {
 							continue
 						}
 						curr["clusterName"] = clusterSessionKey
+						h.processingWg.Add(1)
 						eventProcessorChannels[i%numOfEventProcessors] <- curr
 					}
 				}
@@ -181,6 +187,10 @@ func (h *EventHandler) Run(stop chan struct{}, numOfEventProcessors int) error {
 
 		// Process events immediately on startup
 		processAllEvents()
+		h.processingWg.Wait()
+		if err := h.WriteStateToStorage(); err != nil {
+			logrus.Errorf("Failed to write state to storage on startup: %v", err)
+		}
 
 		// Create a ticker for hourly processing
 		ticker := time.NewTicker(1 * time.Hour)
@@ -200,6 +210,10 @@ func (h *EventHandler) Run(stop chan struct{}, numOfEventProcessors int) error {
 			case <-ticker.C:
 				// Process events every hour
 				processAllEvents()
+				h.processingWg.Wait()
+				if err := h.WriteStateToStorage(); err != nil {
+					logrus.Errorf("Failed to write state to storage in cycle: %v", err)
+				}
 			}
 		}
 	}()
@@ -1530,4 +1544,35 @@ func extractActorIDFromTaskID(taskIDHex string) string {
 	}
 
 	return actorPortion + jobPortion
+}
+
+// WriteStateToStorage writes processed data to storage
+func (h *EventHandler) WriteStateToStorage() error {
+	if h.writer == nil {
+		logrus.Warn("StorageWriter is nil, skipping writing state to storage")
+		return nil
+	}
+
+	// TODO: Since we are separating out the eventserver to a standalone component, the eventserver will now need to write to storage
+	return nil
+}
+
+// writeComponentState does the actual writing of processed data to storage
+func (h *EventHandler) writeComponentState(clusterInfo utils.ClusterInfo, filename string, data any) error {
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return fmt.Errorf("failed to marshal data: %w", err)
+	}
+
+	// Path for processed data snapshots (TODO: Align on this): processed/<namespace>/<cluster-name>/<session-name>/<filename>
+	// TODO: make path format and storage writing generic to be able to support multiple storage backends
+	path := fmt.Sprintf("processed/%s/%s/%s/%s", clusterInfo.Namespace, clusterInfo.Name, clusterInfo.SessionName, filename)
+
+	dirPath := fmt.Sprintf("processed/%s/%s/%s", clusterInfo.Namespace, clusterInfo.Name, clusterInfo.SessionName)
+	if err := h.writer.CreateDirectory(dirPath); err != nil {
+		logrus.Warnf("Failed to create directory %s (might be fine if storage doesn't require it): %v", dirPath, err)
+	}
+
+	reader := bytes.NewReader(jsonData)
+	return h.writer.WriteFile(path, reader)
 }
