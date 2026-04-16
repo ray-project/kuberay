@@ -215,7 +215,7 @@ func TestListFiles(t *testing.T) {
 
 func TestList(t *testing.T) {
 	// RootDir is "ray_historyserver"
-	// Path format: {RootDir}/metadir/{ClusterName}_{Namespace}/{SessionName}
+	// Path format: {RootDir}/metadir/{Namespace}/{ClusterName}/{SessionName}
 	ts := time.Now().UTC()
 	sessionID := "session_" + ts.Format("2006-01-02_15-04-05_000000")
 
@@ -223,14 +223,14 @@ func TestList(t *testing.T) {
 		{
 			ObjectAttrs: fakestorage.ObjectAttrs{
 				BucketName: "test-bucket",
-				Name:       "ray_historyserver/metadir/mycluster1_default/" + sessionID,
+				Name:       "ray_historyserver/metadir/default/mycluster1/" + sessionID,
 			},
 			Content: []byte(""),
 		},
 		{
 			ObjectAttrs: fakestorage.ObjectAttrs{
 				BucketName: "test-bucket",
-				Name:       "ray_historyserver/metadir/mycluster2_testns/" + sessionID,
+				Name:       "ray_historyserver/metadir/testns/mycluster2/" + sessionID,
 			},
 			Content: []byte(""),
 		},
@@ -259,9 +259,9 @@ func TestList(t *testing.T) {
 }
 
 func TestGetContent(t *testing.T) {
-	clusterID := "clusterA"
+	clusterID := "testns/clusterA"
 	fileName := "important.log"
-	objPath := "ray_historyserver/clusters/clusterA_ns/sessions/session123/logs/" + fileName
+	objPath := "ray_historyserver/testns/clusterA/sessions/session123/logs/" + fileName
 	fileContent := "Log content here"
 
 	initialObjects := []fakestorage.Object{

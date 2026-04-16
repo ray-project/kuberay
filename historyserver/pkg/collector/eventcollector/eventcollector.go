@@ -17,6 +17,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/ray-project/kuberay/historyserver/pkg/storage"
+	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
 type Event struct {
@@ -450,10 +451,13 @@ func (ec *EventCollector) flushNodeEventsForHour(hourKey string, events []Event)
 	}
 
 	// Build node event storage path using event's nodeID
+	session := utils.ClusterSessionRef{
+		ClusterRef:  utils.ClusterRef{Namespace: ec.clusterNamespace, Name: ec.clusterName},
+		SessionName: sessionNameToUse,
+	}
 	basePath := path.Join(
 		ec.root,
-		fmt.Sprintf("%s_%s", ec.clusterName, ec.clusterNamespace),
-		sessionNameToUse,
+		session.StoragePrefix(),
 		"node_events",
 		fmt.Sprintf("%s-%s", nodeIDToUse, hourKey))
 
@@ -500,10 +504,13 @@ func (ec *EventCollector) flushJobEventsForHour(jobID, hourKey string, events []
 	}
 
 	// Build job event storage path using event's nodeID
+	session := utils.ClusterSessionRef{
+		ClusterRef:  utils.ClusterRef{Namespace: ec.clusterNamespace, Name: ec.clusterName},
+		SessionName: sessionNameToUse,
+	}
 	basePath := path.Join(
 		ec.root,
-		fmt.Sprintf("%s_%s", ec.clusterName, ec.clusterNamespace),
-		sessionNameToUse,
+		session.StoragePrefix(),
 		"job_events",
 		jobID,
 		fmt.Sprintf("%s-%s", nodeIDToUse, hourKey))
