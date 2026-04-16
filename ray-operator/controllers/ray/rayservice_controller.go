@@ -1350,6 +1350,15 @@ func (r *RayServiceReconciler) applyServeTargetCapacity(ctx context.Context, ray
 	// Retrieve cached ServeConfig from last reconciliation for cluster to update
 	cachedConfig := r.getServeConfigFromCache(rayServiceInstance, rayClusterInstance.Name)
 	if cachedConfig == "" {
+		isActiveCluster := rayClusterInstance.Name == rayServiceInstance.Status.ActiveServiceStatus.RayClusterName
+		isIncrementalUpgradeInProgress := utils.IsIncrementalUpgradeEnabled(&rayServiceInstance.Spec) &&
+			meta.IsStatusConditionTrue(rayServiceInstance.Status.Conditions, string(rayv1.UpgradeInProgress))
+		if isActiveCluster && isIncrementalUpgradeInProgress {
+			// On cache miss, skip applying the new ServeConfigV2 to the active cluster
+			// to prevent a 3rd spec from being applied during rollback.
+			logger.Info("Cache miss for active cluster during upgrade, skipping target_capacity update", "clusterName", rayClusterInstance.Name)
+			return nil
+		}
 		cachedConfig = rayServiceInstance.Spec.ServeConfigV2
 	}
 

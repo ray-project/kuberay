@@ -2003,6 +2003,62 @@ func TestReconcileServeTargetCapacity(t *testing.T) {
 	}
 }
 
+func TestApplyServeTargetCapacityCacheMiss(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.RayServiceIncrementalUpgrade, true)
+
+	ctx := context.TODO()
+	makeService := func(upgradeInProgress bool) *rayv1.RayService {
+		rs := &rayv1.RayService{
+			Spec: rayv1.RayServiceSpec{
+				UpgradeStrategy: &rayv1.RayServiceUpgradeStrategy{
+					Type: ptr.To(rayv1.RayServiceNewClusterWithIncrementalUpgrade),
+					ClusterUpgradeOptions: &rayv1.ClusterUpgradeOptions{
+						MaxSurgePercent: ptr.To(int32(20)),
+					},
+				},
+				ServeConfigV2: `{"target_capacity": 0}`,
+			},
+			Status: rayv1.RayServiceStatuses{
+				ActiveServiceStatus: rayv1.RayServiceStatus{
+					RayClusterName: "active",
+					TargetCapacity: ptr.To(int32(80)),
+				},
+				PendingServiceStatus: rayv1.RayServiceStatus{
+					RayClusterName: "pending",
+					TargetCapacity: ptr.To(int32(30)),
+				},
+			},
+		}
+		if upgradeInProgress {
+			meta.SetStatusCondition(&rs.Status.Conditions, metav1.Condition{
+				Type:   string(rayv1.UpgradeInProgress),
+				Status: metav1.ConditionTrue,
+				Reason: string(rayv1.BothActivePendingClustersExist),
+			})
+		}
+		return rs
+	}
+
+	t.Run("cache miss on active cluster during upgrade skips update", func(t *testing.T) {
+		rs := makeService(true)
+		fakeDashboard := &utils.FakeRayDashboardClient{}
+		reconciler := &RayServiceReconciler{ServeConfigs: lru.New(10)}
+		// No cache seeded — cache miss
+		err := reconciler.applyServeTargetCapacity(ctx, rs, &rayv1.RayCluster{ObjectMeta: metav1.ObjectMeta{Name: "active"}}, fakeDashboard, int32(60))
+		require.NoError(t, err)
+		assert.Empty(t, fakeDashboard.LastUpdatedConfig, "dashboard should not be called on active cluster cache miss during upgrade")
+	})
+
+	t.Run("cache miss on active cluster without upgrade applies update", func(t *testing.T) {
+		rs := makeService(false)
+		fakeDashboard := &utils.FakeRayDashboardClient{}
+		reconciler := &RayServiceReconciler{ServeConfigs: lru.New(10)}
+		err := reconciler.applyServeTargetCapacity(ctx, rs, &rayv1.RayCluster{ObjectMeta: metav1.ObjectMeta{Name: "active"}}, fakeDashboard, int32(60))
+		require.NoError(t, err)
+		assert.NotEmpty(t, fakeDashboard.LastUpdatedConfig)
+	})
+}
+
 // MakeGateway is a helper function to return an Gateway object
 func makeGateway(name, namespace string, isReady bool) *gwv1.Gateway {
 	status := metav1.ConditionFalse
