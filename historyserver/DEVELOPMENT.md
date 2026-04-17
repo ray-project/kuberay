@@ -5,49 +5,17 @@ through the Ray Dashboard's middleware (from [ray-project/ray#61295](https://git
 
 ## Table of Contents
 
-- [Architecture](#architecture)
 - [Prerequisites](#prerequisites)
 - [Step 1: Set Up Kind and KubeRay Operator](#step-1-set-up-kind-and-kuberay-operator)
 - [Step 2: Build and Load Images](#step-2-build-and-load-images)
 - [Step 3: Deploy MinIO](#step-3-deploy-minio)
 - [Step 4: Generate a Dead Session](#step-4-generate-a-dead-session)
 - [Step 5: Deploy History Server](#step-5-deploy-history-server)
-- [Step 6: Deploy the Dashboard-Only Cluster (Middleware Entry Point)](#step-6-deploy-the-dashboard-only-cluster-middleware-entry-point)
+- [Step 6: Access the Local Ray Dashboard](#step-6-access-the-local-ray-dashboard)
 - [Step 7: Validate the Dead Path](#step-7-validate-the-dead-path)
 - [Step 8: Validate the Live Path](#step-8-validate-the-live-path)
 - [Cleanup](#cleanup)
 - [Troubleshooting](#troubleshooting)
-
-## Architecture
-
-```text
- Browser                      dashboard-only-cluster            historyserver Deployment
- ┌─────────┐                  ┌─────────────────────┐           ┌──────────────────────┐
- │         │  localhost:8265  │  ray-head           │           │                      │
- │ Chrome  │ ───────────────► │  ┌──────────────┐   │  HTTP     │  historyserver :8080 │
- │         │                  │  │ Ray Dashboard│   │ ───────►  │  (svc :30080)        │
- └─────────┘                  │  │ + proxy m/w  │   │           │                      │
-      ▲                       │  │ (--proxy-    │   │           │                      │
-      │                       │  │  server-url) │   │           │                      │
-      │                       │  └──────────────┘   │           │                      │
-   Client                     └─────────────────────┘           └──────────────────────┘
-                                                                        │
-                             live session                               │ dead session
-                             (proxy to running RayCluster svc)          │ (MinIO as raw event source)
-                                                                        ▼
-                             raycluster-historyserver           ┌──────────────────┐
-                             ┌──────────────────────┐           │ MinIO (S3)       │
-                             │ ray-head + collector │ ─────────►│ ray-historyserver│
-                             │ ray-worker + colletor|           │ bucket           │
-                             └──────────────────────┘           └──────────────────┘
-```
-
-Under the `historyserver/config/` directory, there are two RayCluster manifests with different roles:
-
-1. `raycluster-historyserver` (`historyserver/config/raycluster.yaml`): The *data-generating* cluster with the
-  collector sidecar that pushes logs and events to MinIO
-2. `dashboard-only-cluster` (`historyserver/config/raycluster.dashboard.yaml`): The head-only cluster whose sole
-  purpose is to host the Ray Dashboard for UI browsing
 
 ## Prerequisites
 
@@ -137,23 +105,29 @@ kubectl apply -f historyserver/config/service_account.yaml
 kubectl apply -f historyserver/config/historyserver.yaml
 ```
 
-## Step 6: Deploy the Dashboard-Only Cluster (Middleware Entry Point)
+## Step 6: Access the Local Ray Dashboard
 
-`config/raycluster.dashboard.yaml` is a head-only RayCluster on Ray `2.55.0` (which includes ray-project/ray#61295). The
-critical piece is in `rayStartParams`:
-
-```yaml
-rayStartParams:
-  dashboard-host: '0.0.0.0'
-  proxy-server-url: 'http://historyserver:30080'
-```
+To access the local Ray Dashboard, you have to port forward the History Server service:
 
 ```bash
-kubectl apply -f historyserver/config/raycluster.dashboard.yaml
-
-# Port-forward the dashboard.
-kubectl port-forward $(kubectl get pod -l ray.io/cluster=dashboard-only-cluster -o name) 8265:8265
+kubectl port-forward svc/historyserver 8080:30080
 ```
+
+Install Ray locally. Make sure to use at least Ray `v2.55`.
+
+```bash
+pip uninstall -y ray
+pip install -U "ray[default]==2.55.0"
+```
+
+Run the `ray start` command:
+
+```bash
+ray start --head --num-cpus=1 --proxy-server-url=http://localhost:8080
+```
+
+> [!NOTE]
+> Use `--proxy-server-url` parameter to route requests to the port-forwarded History Server.
 
 ## Step 7: Validate the Dead Path
 
@@ -210,7 +184,6 @@ RayCluster's head dashboard service, so you see real-time state instead of repla
 ```bash
 kubectl delete -f historyserver/config/rayjob.yaml
 kubectl delete -f historyserver/config/raycluster.yaml
-kubectl delete -f historyserver/config/raycluster.dashboard.yaml
 kubectl delete -f historyserver/config/historyserver.yaml
 kubectl delete -f historyserver/config/service_account.yaml
 kubectl delete -f historyserver/config/minio.yaml
