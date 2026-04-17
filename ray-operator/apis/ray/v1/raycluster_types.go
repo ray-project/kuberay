@@ -357,6 +357,9 @@ const (
 	HeadPodRunningAndReady         = "HeadPodRunningAndReady"
 	// UnknownReason says that the reason for the condition is unknown.
 	UnknownReason = "Unknown"
+
+	WorkloadReady   = "WorkloadReady"
+	WorkloadPending = "WorkloadPending"
 )
 
 const (
@@ -371,6 +374,9 @@ const (
 	RayClusterSuspending RayClusterConditionType = "RayClusterSuspending"
 	// RayClusterSuspended is set to true when all Pods belonging to a suspending RayCluster are deleted. Note that RayClusterSuspending and RayClusterSuspended cannot both be true at the same time.
 	RayClusterSuspended RayClusterConditionType = "RayClusterSuspended"
+	// RayClusterWorkloadScheduled indicates whether the Workload and PodGroup resources have been
+	// successfully created for a RayCluster with native workload scheduling enabled.
+	RayClusterWorkloadScheduled RayClusterConditionType = "WorkloadScheduled"
 )
 
 // HeadInfo gives info about head

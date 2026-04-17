@@ -12,13 +12,16 @@ import (
 	"go.uber.org/zap/zapcore"
 	"gopkg.in/natefinch/lumberjack.v2"
 	batchv1 "k8s.io/api/batch/v1"
+	schedulingv1alpha2 "k8s.io/api/scheduling/v1alpha2"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/selection"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
+	"k8s.io/client-go/discovery"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
@@ -50,6 +53,7 @@ func init() {
 	utilruntime.Must(rayv1.AddToScheme(scheme))
 	utilruntime.Must(routev1.Install(scheme))
 	utilruntime.Must(batchv1.AddToScheme(scheme))
+	utilruntime.Must(schedulingv1alpha2.AddToScheme(scheme))
 	utilruntime.Must(configapi.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
 }
@@ -192,6 +196,10 @@ func main() {
 	}
 	features.LogFeatureGates(setupLog)
 
+	if err := validateNativeWorkloadSchedulingConfig(config); err != nil {
+		exitOnError(err, "startup validation failed")
+	}
+
 	if features.Enabled(features.RayServiceIncrementalUpgrade) {
 		utilruntime.Must(gwv1.Install(scheme))
 	}
@@ -241,6 +249,14 @@ func main() {
 	restConfig.UserAgent = userAgent
 	restConfig.QPS = float32(*config.QPS)
 	restConfig.Burst = *config.Burst
+
+	if features.Enabled(features.NativeWorkloadScheduling) {
+		if err := checkSchedulingV1alpha2Available(restConfig); err != nil {
+			exitOnError(err, "NativeWorkloadScheduling feature gate is enabled but scheduling.k8s.io/v1alpha2 API is not available. "+
+				"Ensure Kubernetes 1.36+ with GenericWorkload feature gate enabled.")
+		}
+	}
+
 	mgr, err := ctrl.NewManager(restConfig, options)
 	exitOnError(err, "unable to start manager")
 
@@ -332,6 +348,30 @@ func exitOnError(err error, msg string, keysAndValues ...any) {
 		setupLog.Error(err, msg, keysAndValues...)
 		os.Exit(1)
 	}
+}
+
+// validateNativeWorkloadSchedulingConfig checks that the NativeWorkloadScheduling feature gate
+// is not enabled alongside a batch scheduler configuration, since the two are mutually exclusive.
+func validateNativeWorkloadSchedulingConfig(config configapi.Configuration) error {
+	if features.Enabled(features.NativeWorkloadScheduling) && (config.EnableBatchScheduler || len(config.BatchScheduler) > 0) {
+		return fmt.Errorf("NativeWorkloadScheduling feature gate and batchScheduler configuration are mutually exclusive")
+	}
+	return nil
+}
+
+// checkSchedulingV1alpha2Available uses the discovery API to verify that scheduling.k8s.io/v1alpha2
+// is served by the API server. This confirms the cluster is running Kubernetes 1.36+ with the
+// GenericWorkload feature gate enabled.
+func checkSchedulingV1alpha2Available(restConfig *rest.Config) error {
+	discoveryClient, err := discovery.NewDiscoveryClientForConfig(restConfig)
+	if err != nil {
+		return fmt.Errorf("failed to create discovery client: %w", err)
+	}
+	_, err = discoveryClient.ServerResourcesForGroupVersion("scheduling.k8s.io/v1alpha2")
+	if err != nil {
+		return fmt.Errorf("scheduling.k8s.io/v1alpha2 API is not available: %w", err)
+	}
+	return nil
 }
 
 // decodeConfig decodes raw config data and returns the Configuration type.

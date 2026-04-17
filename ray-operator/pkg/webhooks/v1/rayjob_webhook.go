@@ -20,9 +20,8 @@ var rayJobLog = logf.Log.WithName("rayjob-resource")
 
 // SetupRayJobWebhookWithManager registers the webhook for RayJob in the manager.
 func SetupRayJobWebhookWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewWebhookManagedBy(mgr).
-		For(&rayv1.RayJob{}).
-		WithValidator(&RayJobWebhook{}).
+	return ctrl.NewWebhookManagedBy(mgr, &rayv1.RayJob{}).
+		WithCustomValidator(&RayJobWebhook{}).
 		Complete()
 }
 
