@@ -113,49 +113,49 @@ func TestListFiles(t *testing.T) {
 		{
 			ObjectAttrs: fakestorage.ObjectAttrs{
 				BucketName: "test-bucket",
-				Name:       "ray_historyserver/cluster1/logs/file1.txt",
+				Name:       "ray_historyserver/ns1/cluster1/logs/file1.txt",
 			},
 			Content: []byte("a"),
 		},
 		{
 			ObjectAttrs: fakestorage.ObjectAttrs{
 				BucketName: "test-bucket",
-				Name:       "ray_historyserver/cluster1/logs/file2.log",
+				Name:       "ray_historyserver/ns1/cluster1/logs/file2.log",
 			},
 			Content: []byte("b"),
 		},
 		{
 			ObjectAttrs: fakestorage.ObjectAttrs{
 				BucketName: "test-bucket",
-				Name:       "ray_historyserver/cluster1/logs/subdir/",
+				Name:       "ray_historyserver/ns1/cluster1/logs/subdir/",
 			},
 			Content: []byte(""),
 		},
 		{
 			ObjectAttrs: fakestorage.ObjectAttrs{
 				BucketName: "test-bucket",
-				Name:       "ray_historyserver/cluster1/logs/subdir/file3.txt",
+				Name:       "ray_historyserver/ns1/cluster1/logs/subdir/file3.txt",
 			},
 			Content: []byte("c"),
 		},
 		{
 			ObjectAttrs: fakestorage.ObjectAttrs{
 				BucketName: "test-bucket",
-				Name:       "ray_historyserver/cluster1/other/file4.txt",
+				Name:       "ray_historyserver/ns1/cluster1/other/file4.txt",
 			},
 			Content: []byte("d"),
 		},
 		{
 			ObjectAttrs: fakestorage.ObjectAttrs{
 				BucketName: "test-bucket",
-				Name:       "ray_historyserver/cluster2/logs/file5.txt",
+				Name:       "ray_historyserver/ns2/cluster2/logs/file5.txt",
 			},
 			Content: []byte("e"),
 		},
 		{
 			ObjectAttrs: fakestorage.ObjectAttrs{
 				BucketName: "test-bucket",
-				Name:       "ray_historyserver/cluster2/logs/subdir2/",
+				Name:       "ray_historyserver/ns2/cluster2/logs/subdir2/",
 			},
 			Content: []byte("e"),
 		},
