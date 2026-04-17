@@ -87,7 +87,7 @@ func (ec *EventCollector) Run(stop <-chan struct{}, port int) {
 	ws.Consumes(restful.MIME_JSON)
 	ws.Produces(restful.MIME_JSON)
 
-	ws.Route(ws.POST("/events").To(ec.PersistEvents))
+	ws.Route(ws.POST("/events").To(ec.persistEvents))
 
 	restful.Add(ws)
 
@@ -197,7 +197,10 @@ func (ec *EventCollector) watchNodeIDFile() {
 	}
 }
 
-func (ec *EventCollector) PersistEvents(req *restful.Request, resp *restful.Response) {
+// persistEvents flushes the event collector's event buffer on session change to ensure cluster session isolation.
+// It also parses batchified events pushed by the HTTP publisher of the aggregator agent and stores them in the
+// event collector's event buffer.
+func (ec *EventCollector) persistEvents(req *restful.Request, resp *restful.Response) {
 	body, err := io.ReadAll(req.Request.Body)
 	if err != nil {
 		logrus.Errorf("Failed to read request body: %v", err)
@@ -211,28 +214,53 @@ func (ec *EventCollector) PersistEvents(req *restful.Request, resp *restful.Resp
 		resp.WriteError(http.StatusBadRequest, err)
 		return
 	}
+	if len(eventDatas) == 0 {
+		logrus.Errorf("No events to persist")
+		resp.WriteError(http.StatusBadRequest, fmt.Errorf("no events to persist"))
+		return
+	}
 
+	// Flush event collector's event buffer on session change.
+	// Note that all batchified events pushed by the HTTP publisher of the aggregator agent
+	// share exactly the same session name.
+	// Ref: https://github.com/ray-project/ray/blob/e0dee730/python/ray/dashboard/utils.py#L70
+	// In addition, each event must have a non-empty session name.
+	// Ref: https://github.com/ray-project/ray/blob/e0dee730/src/ray/protobuf/public/events_base_event.proto#L100
+	sessionNameStr, ok := eventDatas[0]["sessionName"].(string)
+	if !ok {
+		logrus.Errorf("Event sessionName not found or not a string")
+		resp.WriteError(http.StatusBadRequest, fmt.Errorf("sessionName not found or not a string"))
+		return
+	}
+
+	if ec.currentSessionName != sessionNameStr && len(ec.events) > 0 {
+		logrus.Infof("Session name changed from %s to %s, flushing events", ec.currentSessionName, sessionNameStr)
+		eventsToFlush := make([]Event, len(ec.events))
+		copy(eventsToFlush, ec.events)
+		ec.events = ec.events[:0]
+		ec.flushEventsInternal(eventsToFlush)
+		ec.currentSessionName = sessionNameStr
+	}
+
+	// Parse and store events to event collector's event buffer.
 	for _, eventData := range eventDatas {
-		// Parse timestamp
 		timestampStr, ok := eventData["timestamp"].(string)
 		if !ok {
 			logrus.Errorf("Event timestamp not found or not a string")
-			resp.WriteError(http.StatusBadRequest, fmt.Errorf("timestamp not found"))
+			resp.WriteError(http.StatusBadRequest, fmt.Errorf("timestamp not found or not a string"))
 			return
 		}
-
-		// Get sessionName from event
-		sessionNameStr, ok := eventData["sessionName"].(string)
-		if !ok {
-			logrus.Errorf("Event sessionName not found or not a string")
-			resp.WriteError(http.StatusBadRequest, fmt.Errorf("sessionName not found"))
-			return
-		}
-
 		timestamp, err := time.Parse(time.RFC3339Nano, timestampStr)
 		if err != nil {
 			logrus.Errorf("Failed to parse timestamp: %v", err)
 			resp.WriteError(http.StatusBadRequest, err)
+			return
+		}
+
+		sessionNameStr, ok := eventData["sessionName"].(string)
+		if !ok {
+			logrus.Errorf("Event sessionName not found or not a string")
+			resp.WriteError(http.StatusBadRequest, fmt.Errorf("sessionName not found or not a string"))
 			return
 		}
 
@@ -241,30 +269,9 @@ func (ec *EventCollector) PersistEvents(req *restful.Request, resp *restful.Resp
 			Data:        eventData,
 			Timestamp:   timestamp,
 			SessionName: sessionNameStr,
-			NodeID:      ec.currentNodeID, // Store currentNodeID when event arrived
+			NodeID:      ec.currentNodeID,
 		}
 		ec.events = append(ec.events, event)
-
-		// Check if sessionName changed
-		if ec.currentSessionName != sessionNameStr {
-			logrus.Infof("Session name changed from %s to %s, flushing events", ec.currentSessionName, sessionNameStr)
-			// Save current events before flushing
-			eventsToFlush := make([]Event, len(ec.events))
-			copy(eventsToFlush, ec.events)
-
-			// Clear event list
-			ec.events = ec.events[:0]
-
-			// Update current sessionName
-			ec.currentSessionName = sessionNameStr
-
-			// Unlock before flushing
-			ec.mutex.Unlock()
-
-			// Flush previous events
-			ec.flushEventsInternal(eventsToFlush)
-			return
-		}
 		ec.mutex.Unlock()
 
 		logrus.Infof("Received event with ID: %v at %v, session: %s, node: %s", eventData["eventId"], timestamp, sessionNameStr, ec.currentNodeID)
