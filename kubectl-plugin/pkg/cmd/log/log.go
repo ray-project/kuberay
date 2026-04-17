@@ -513,7 +513,7 @@ func (options *ClusterLogOptions) gcpLink(ctx context.Context, clientSet client.
 		// GKE context names are usually in the format: gke_PROJECT_LOCATION_NAME.
 		_, rest, _ := strings.Cut(config.CurrentContext, "_")
 		project, _, _ := strings.Cut(rest, "_")
-		gcpURL += fmt.Sprintf(";project=%s", url.QueryEscape(project))
+		gcpURL += fmt.Sprintf("?project=%s", url.QueryEscape(project))
 	} else {
 		fmt.Fprintln(options.ioStreams.ErrOut, "Warning: The current kubectl context does not appear to be a GKE cluster. The generated link may not work.")
 	}
