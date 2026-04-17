@@ -147,6 +147,9 @@ func (h *RayLogsHandler) List() []utils.ClusterInfo {
 	}
 	objectIterator := bucket.Objects(ctx, query)
 	for {
+		// metadir format should one of the following:
+		// 1. metadir/namespace/raycluster/rayclustername/session
+		// 2. metadir/namespace/owner_resource/resource_name/raycluster/rayclustesname/session
 		cluster := &utils.ClusterInfo{}
 		objectAttr, err := objectIterator.Next()
 		if err == gIterator.Done {
@@ -159,23 +162,16 @@ func (h *RayLogsHandler) List() []utils.ClusterInfo {
 		}
 
 		fullObjectPath := objectAttr.Name
-		metaInfo := strings.Split(strings.TrimPrefix(fullObjectPath, pathPrefix), "/")
-		if len(metaInfo) != 2 {
-			logrus.Errorf("Unable to properly parse cluster metadir path with fullpath: %s", fullObjectPath)
-			continue
-		}
-		clusterMeta := strings.Split(metaInfo[0], "_")
-		if len(clusterMeta) != 2 {
-			logrus.Errorf("Unable to get cluster name and namespace from directory: %s", metaInfo[0])
-			continue
-		}
-		cluster.Name = clusterMeta[0]
-		cluster.Namespace = clusterMeta[1]
-
-		cluster.SessionName = metaInfo[1]
-		datetime, err := utils.GetDateTimeFromSessionID(metaInfo[1])
+		metaInfo := strings.TrimPrefix(fullObjectPath, pathPrefix)
+		err = utils.ParseMetaDirPath(metaInfo, cluster)
 		if err != nil {
-			logrus.Errorf("Failed to get date time from the given sessionID: %s, error: %v", metaInfo[1], err)
+			logrus.Errorf("Failed to parse meta dir path: %s, error: %v", metaInfo, err)
+			continue
+		}
+
+		datetime, err := utils.GetDateTimeFromSessionID(cluster.SessionName)
+		if err != nil {
+			logrus.Errorf("Failed to get date time from the given sessionID: %s, error: %v", cluster.SessionName, err)
 			continue
 		}
 		cluster.CreateTimeStamp = datetime.Unix()

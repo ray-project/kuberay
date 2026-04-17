@@ -105,3 +105,99 @@ func TestGetDateTimeFromSessionID(t *testing.T) {
 		})
 	}
 }
+
+func TestParseMetaDirPath(t *testing.T) {
+	tests := []struct {
+		name        string
+		metaDirPath string
+		expectErr   bool
+		expected    ClusterInfo
+	}{
+		{
+			name:        "valid raycluster path",
+			metaDirPath: "defaultns/raycluster/mycluster1/session_2024-05-15_10-30-55_123456",
+			expectErr:   false,
+			expected: ClusterInfo{
+				Namespace:   "defaultns",
+				Name:        "mycluster1",
+				SessionName: "session_2024-05-15_10-30-55_123456",
+			},
+		},
+		{
+			name:        "valid rayjob path",
+			metaDirPath: "defaultns/rayjob/myrayjob/raycluster/mycluster3/session_2024-05-15_10-30-55_123456",
+			expectErr:   false,
+			expected: ClusterInfo{
+				Namespace:   "defaultns",
+				OwnerKind:   "rayjob",
+				OwnerName:   "myrayjob",
+				Name:        "mycluster3",
+				SessionName: "session_2024-05-15_10-30-55_123456",
+			},
+		},
+		{
+			name:        "valid rayservice path",
+			metaDirPath: "defaultns/rayservice/myraysvc/raycluster/mycluster4/session_2024-05-15_10-30-55_123456",
+			expectErr:   false,
+			expected: ClusterInfo{
+				Namespace:   "defaultns",
+				OwnerKind:   "rayservice",
+				OwnerName:   "myraysvc",
+				Name:        "mycluster4",
+				SessionName: "session_2024-05-15_10-30-55_123456",
+			},
+		},
+		{
+			name:        "invalid length less than 4",
+			metaDirPath: "defaultns/raycluster/mycluster1",
+			expectErr:   true,
+		},
+		{
+			name:        "invalid length 5",
+			metaDirPath: "defaultns/rayjob/myrayjob/mycluster3/session",
+			expectErr:   true,
+		},
+		{
+			name:        "invalid kind in length 4",
+			metaDirPath: "defaultns/invalidkind/mycluster1/session",
+			expectErr:   true,
+		},
+		{
+			name:        "invalid kind in length 6",
+			metaDirPath: "defaultns/invalidkind/myrayjob/raycluster/mycluster3/session",
+			expectErr:   true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var c ClusterInfo
+			err := ParseMetaDirPath(tc.metaDirPath, &c)
+
+			if tc.expectErr {
+				if err == nil {
+					t.Errorf("ParseMetaDirPath(%q) succeeded unexpectedly", tc.metaDirPath)
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("ParseMetaDirPath(%q) failed unexpectedly: %v", tc.metaDirPath, err)
+				}
+				if c.Namespace != tc.expected.Namespace {
+					t.Errorf("Namespace = %q, want %q", c.Namespace, tc.expected.Namespace)
+				}
+				if c.Name != tc.expected.Name {
+					t.Errorf("Name = %q, want %q", c.Name, tc.expected.Name)
+				}
+				if c.SessionName != tc.expected.SessionName {
+					t.Errorf("SessionName = %q, want %q", c.SessionName, tc.expected.SessionName)
+				}
+				if c.OwnerKind != tc.expected.OwnerKind {
+					t.Errorf("OwnerKind = %q, want %q", c.OwnerKind, tc.expected.OwnerKind)
+				}
+				if c.OwnerName != tc.expected.OwnerName {
+					t.Errorf("OwnerName = %q, want %q", c.OwnerName, tc.expected.OwnerName)
+				}
+			}
+		})
+	}
+}
