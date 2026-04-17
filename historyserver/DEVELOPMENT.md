@@ -64,8 +64,11 @@ docker exec -it kind-control-plane crictl images | grep -E 'collector|historyser
 
 ```bash
 kubectl apply -f historyserver/config/minio.yaml
+```
 
-# Port-forward the console and API ports.
+Port forward the console and API ports:
+
+```bash
 kubectl -n minio-dev port-forward svc/minio-service 9001:9001 9000:9000
 ```
 
@@ -84,14 +87,14 @@ kubectl -n minio-dev port-forward svc/minio-service 9001:9001 9000:9000
 ```bash
 # 1. Apply the data-generating RayCluster (has the collector sidecar).
 kubectl apply -f historyserver/config/raycluster.yaml
+kubectl wait pod -l ray.io/cluster=raycluster-historyserver --for=condition=Ready=True --timeout=5m
 
 # 2. Submit the RayJob.
 kubectl apply -f historyserver/config/rayjob.yaml
+# RayJob uses status.jobStatus (not status.conditions); use a jsonpath wait until the user job succeeds.
+kubectl wait rayjob/rayjob --for=jsonpath='{.status.jobStatus}=SUCCEEDED' --timeout=5m
 
-# 3. Watch the RayJob until status is SUCCEEDED.
-kubectl get rayjob rayjob -w
-
-# 4. Delete to trigger a final event/log flush.
+# 3. Delete to trigger a final event/log flush.
 kubectl delete -f historyserver/config/rayjob.yaml
 kubectl delete -f historyserver/config/raycluster.yaml
 ```
@@ -161,7 +164,10 @@ Re-apply the data-generating cluster and submit a RayJob.
 
 ```bash
 kubectl apply -f historyserver/config/raycluster.yaml
+kubectl wait pod -l ray.io/cluster=raycluster-historyserver --for=condition=Ready=True --timeout=5m
+
 kubectl apply -f historyserver/config/rayjob.yaml
+kubectl wait rayjob/rayjob --for=jsonpath='{.status.jobStatus}=SUCCEEDED' --timeout=5m
 ```
 
 In the browser, switch to the live session by visiting:
