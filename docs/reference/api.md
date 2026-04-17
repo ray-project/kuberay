@@ -133,23 +133,6 @@ _Appears in:_
 | `ttlSeconds` _integer_ | TTLSeconds is the time in seconds from when the JobStatus or JobDeploymentStatus<br />reaches the specified terminal state to when this deletion action should be triggered.<br />The value must be a non-negative integer. | 0 | Minimum: 0 <br /> |
 
 
-#### DeletionPolicy
-
-
-
-DeletionPolicy is the legacy single-stage deletion policy.
-Deprecated: This struct is part of the legacy API. Use DeletionRule for new configurations.
-
-
-
-_Appears in:_
-- [DeletionStrategy](#deletionstrategy)
-
-| Field | Description | Default | Validation |
-| --- | --- | --- | --- |
-| `policy` _[DeletionPolicyType](#deletionpolicytype)_ | Policy is the action to take when the condition is met.<br />This field is logically required when using the legacy OnSuccess/OnFailure policies.<br />It is marked as '+optional' at the API level to allow the 'deletionRules' field to be used instead. |  | Enum: [DeleteCluster DeleteWorkers DeleteSelf DeleteNone] <br /> |
-
-
 #### DeletionPolicyType
 
 _Underlying type:_ _string_
@@ -159,7 +142,6 @@ _Underlying type:_ _string_
 
 
 _Appears in:_
-- [DeletionPolicy](#deletionpolicy)
 - [DeletionRule](#deletionrule)
 
 | Field | Description |
@@ -205,9 +187,8 @@ Semantics:
   - Feature gate RayJobDeletionPolicy must be enabled when this block is present.
 
 Validation:
-  - CRD XValidations prevent mixing legacy fields with deletionRules and enforce legacy completeness.
   - Controller logic enforces rules vs shutdown exclusivity and TTL constraints.
-  - onSuccess/onFailure are deprecated; migration to deletionRules is encouraged.
+  - Users should use deletionRules for deletion control.
 
 
 
@@ -216,8 +197,6 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `onSuccess` _[DeletionPolicy](#deletionpolicy)_ | OnSuccess is the deletion policy for a successful RayJob.<br />Deprecated: Use `deletionRules` instead for more flexible, multi-stage deletion strategies.<br />This field will be removed in release 1.6.0. |  |  |
-| `onFailure` _[DeletionPolicy](#deletionpolicy)_ | OnFailure is the deletion policy for a failed RayJob.<br />Deprecated: Use `deletionRules` instead for more flexible, multi-stage deletion strategies.<br />This field will be removed in release 1.6.0. |  |  |
 | `deletionRules` _[DeletionRule](#deletionrule) array_ | DeletionRules is a list of deletion rules, processed based on their trigger conditions.<br />While the rules can be used to define a sequence, if multiple rules are overdue (e.g., due to controller downtime),<br />the most impactful rule (e.g., DeleteSelf) will be executed first to prioritize resource cleanup. |  | MinItems: 1 <br /> |
 
 
