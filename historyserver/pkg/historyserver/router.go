@@ -1071,12 +1071,12 @@ func ensurePlacementGroupFields(data []byte) []byte {
 }
 
 func (s *ServerHandler) getNodeLogs(req *restful.Request, resp *restful.Response) {
-	clusterNameID := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
+	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
 	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
 	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
 	cluster := utils.ClusterRef{
 		Namespace: clusterNamespace,
-		Name:      clusterNameID,
+		Name:      clusterName,
 	}
 
 	if sessionName == "live" {
@@ -1232,12 +1232,12 @@ func (s *ServerHandler) getLogicalActor(req *restful.Request, resp *restful.Resp
 }
 
 func (s *ServerHandler) getNodeLogFile(req *restful.Request, resp *restful.Response) {
-	clusterNameID := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
+	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
 	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
 	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
 	cluster := utils.ClusterRef{
 		Namespace: clusterNamespace,
-		Name:      clusterNameID,
+		Name:      clusterName,
 	}
 
 	// Parse query parameters into GetLogFileOptions struct

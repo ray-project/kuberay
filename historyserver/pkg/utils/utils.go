@@ -37,9 +37,9 @@ func EndpointPathToStorageKey(endpointPath string) string {
 
 var regex = regexp.MustCompile(SESSION_ID_REGEX)
 
-// GetLogDirByNameID returns the per-node log directory under the storage root:
+// GetLogDirByClusterSession returns the per-node log directory under the storage root:
 // "{namespace}/{name}/{session}/logs/{nodeID}/"
-func GetLogDirByNameID(rootDir string, session ClusterSessionRef, rayNodeID string) string {
+func GetLogDirByClusterSession(rootDir string, session ClusterSessionRef, rayNodeID string) string {
 	return fmt.Sprintf("%s/", path.Clean(path.Join(rootDir, session.StoragePrefix(), RAY_SESSIONDIR_LOGDIR_NAME, rayNodeID)))
 }
 
