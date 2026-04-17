@@ -94,6 +94,8 @@ const (
 	KubernetesApplicationNameLabelKey = "app.kubernetes.io/name"
 	KubernetesCreatedByLabelKey       = "app.kubernetes.io/created-by"
 
+	InClusterNamespacePath = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
+
 	// Use as separator for pod name, for example, raycluster-small-size-worker-0
 	DashSymbol = "-"
 
@@ -434,4 +436,12 @@ const (
 	// RoleBinding list
 	CreatedRoleBinding        K8sEventType = "CreatedRoleBinding"
 	FailedToCreateRoleBinding K8sEventType = "FailedToCreateRoleBinding"
+
+	// NetworkPolicy event list
+	CreatedNetworkPolicy        K8sEventType = "CreatedNetworkPolicy"
+	UpdatedNetworkPolicy        K8sEventType = "UpdatedNetworkPolicy"
+	DeletedNetworkPolicy        K8sEventType = "DeletedNetworkPolicy"
+	FailedToCreateNetworkPolicy K8sEventType = "FailedToCreateNetworkPolicy"
+	FailedToUpdateNetworkPolicy K8sEventType = "FailedToUpdateNetworkPolicy"
+	NetworkPolicyNameCollision  K8sEventType = "NetworkPolicyNameCollision"
 )

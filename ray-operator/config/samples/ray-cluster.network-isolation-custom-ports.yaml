@@ -1,0 +1,55 @@
+apiVersion: ray.io/v1
+kind: RayCluster
+metadata:
+  name: raycluster-custom-ports
+spec:
+  networkIsolation:
+    # The operator ingress rule automatically resolves the dashboard and client
+    # ports from the head container spec by name, so no additional configuration
+    # is needed here even with non-default port values.
+    mode: denyAll
+  rayVersion: '2.52.0'
+  headGroupSpec:
+    rayStartParams:
+      port: "6380"
+      dashboard-port: "9000"
+      ray-client-server-port: "9001"
+    template:
+      spec:
+        containers:
+        - name: ray-head
+          image: rayproject/ray:2.52.0
+          resources:
+            limits:
+              cpu: "1"
+              memory: "5Gi"
+            requests:
+              cpu: "1"
+              memory: "2Gi"
+          ports:
+          - containerPort: 6380
+            name: gcs-server
+          - containerPort: 9000
+            name: dashboard # resolved automatically by the operator rule which targets 9000
+          - containerPort: 9001
+            name: client # resolved automatically by the operator rule which targets 9001
+          - containerPort: 9090
+            name: metrics
+  workerGroupSpecs:
+  - replicas: 1
+    minReplicas: 1
+    maxReplicas: 5
+    groupName: workergroup
+    rayStartParams: {}
+    template:
+      spec:
+        containers:
+        - name: ray-worker
+          image: rayproject/ray:2.52.0
+          resources:
+            limits:
+              cpu: "1"
+              memory: "1Gi"
+            requests:
+              cpu: "1"
+              memory: "1Gi"
