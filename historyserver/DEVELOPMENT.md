@@ -1,7 +1,8 @@
 # History Server - Local Development with Ray Dashboard
 
-This guide walks through how to develop the History Server locally with MinIO as the S3 backend, and browse the UI
-through the Ray Dashboard's middleware (from [ray-project/ray#61295](https://github.com/ray-project/ray/pull/61295)).
+This guide walks through how to develop the History Server locally with MinIO as the
+S3-compatible object store, and browse the UI through the Ray Dashboard's middleware
+(from [ray-project/ray#61295](https://github.com/ray-project/ray/pull/61295)).
 
 ## Table of Contents
 
@@ -20,8 +21,8 @@ through the Ray Dashboard's middleware (from [ray-project/ray#61295](https://git
 ## Prerequisites
 
 - Kind, kubectl
-- Go v1.24+
-- Docker: Engine for building the container image
+- Go v1.25+
+- Docker
 - GNU Make
 - K9s (optional)
 
@@ -72,17 +73,12 @@ Port forward the console and API ports:
 kubectl -n minio-dev port-forward svc/minio-service 9001:9001 9000:9000
 ```
 
-> [!NOTE]
-> Open `http://localhost:9001/browser`, log in with `minioadmin` / `minioadmin`, and confirm the `ray-historyserver`
-> bucket exists.
-
 ## Step 4: Generate a Dead Session
 
 > [!IMPORTANT]
-> We deploy the data-generating RayCluster first and the history server [Step 5](#step-5-deploy-history-server)
-> afterwards. By deleting the RayCluster before starting the history server, we guarantee the startup
-> `processAllEvents()` picks up every event file. Reversing the order means the pages stay empty until the hourly tick
-> fires (or you do a `kubectl rollout restart`, please see [Troubleshooting](#troubleshooting)).
+> Finish this step before [Step 5](#step-5-deploy-history-server): the history server
+> only scans object store on startup and hourly, so a late session won't show up until
+> the next tick (see [Troubleshooting](#troubleshooting)).
 
 ```bash
 # 1. Apply the data-generating RayCluster (has the collector sidecar).
@@ -98,6 +94,10 @@ kubectl wait rayjob/rayjob --for=jsonpath='{.status.jobStatus}=SUCCEEDED' --time
 kubectl delete -f historyserver/config/rayjob.yaml
 kubectl delete -f historyserver/config/raycluster.yaml
 ```
+
+> [!NOTE]
+> Open `http://localhost:9001/browser`, log in with `minioadmin` / `minioadmin`, and confirm the `ray-historyserver`
+> bucket exists.
 
 ## Step 5: Deploy History Server
 
@@ -180,8 +180,8 @@ The result should look like the following:
 
 ![enter_cluster_live](https://github.com/ray-project/kuberay/blob/40bf59590022c459086629e56b96444297c507d1/historyserver/docs/assets/enter_cluster_live.png)
 
-Navigate the same pages as in Step 7. This time the History Server reverse-proxies each API call to the live
-RayCluster's head dashboard service, so you see real-time state instead of replay:
+Now open `http://localhost:8265/#/cluster`. Unlike Step 7, the History Server reverse-proxies each API
+call to the live RayCluster's head dashboard service, so you see real-time state instead of replay:
 
 ![live_raycluster](https://github.com/ray-project/kuberay/blob/93e81e60ddc486f60ae6432a3d178edbf952eff3/historyserver/docs/assets/live_raycluster.png)
 
@@ -209,6 +209,9 @@ kubectl delete -f historyserver/config/minio.yaml
   ```bash
   kubectl rollout restart deploy/historyserver-demo
   kubectl rollout status deploy/historyserver-demo
+
+  # The previous port-forward tunnel dies with the old pod; re-run it.
+  kubectl port-forward svc/historyserver 8080:30080
   ```
 
   Then, hard-refresh the browser, the UI will now render.
