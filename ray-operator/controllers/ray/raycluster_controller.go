@@ -1597,10 +1597,24 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 	newInstance.Status.DesiredGPU = sumGPUs(totalResources)
 	newInstance.Status.DesiredTPU = totalResources[corev1.ResourceName("google.com/tpu")]
 
-	if reconcileErr == nil && len(runtimePods.Items) == int(newInstance.Status.DesiredWorkerReplicas)+1 { // workers + 1 head
-		if utils.CheckAllPodsRunning(ctx, runtimePods) {
-			newInstance.Status.State = rayv1.Ready
-			newInstance.Status.Reason = ""
+	activePods := utils.FilterActivePods(runtimePods)
+	if reconcileErr == nil {
+		if utils.IsAutoscalingEnabled(&newInstance.Spec) && newInstance.Status.MinWorkerReplicas > 0 {
+			// With autoscaling and a guaranteed minimum, DesiredWorkerReplicas is a
+			// moving target. Consider the cluster ready when the head pod and at least
+			// MinWorkerReplicas are running. Use activePods so terminating pods don't
+			// inflate the count during scale-down.
+			activeReadyWorkers := utils.CalculateReadyReplicas(activePods)
+			if activeReadyWorkers >= newInstance.Status.MinWorkerReplicas &&
+				utils.IsHeadPodRunningAndReady(activePods) {
+				newInstance.Status.State = rayv1.Ready
+				newInstance.Status.Reason = ""
+			}
+		} else if len(activePods.Items) == int(newInstance.Status.DesiredWorkerReplicas)+1 {
+			if utils.CheckAllPodsRunning(ctx, activePods) {
+				newInstance.Status.State = rayv1.Ready
+				newInstance.Status.Reason = ""
+			}
 		}
 	}
 
@@ -1627,7 +1641,19 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 		if !meta.IsStatusConditionTrue(newInstance.Status.Conditions, string(rayv1.RayClusterProvisioned)) && suspendStatus != rayv1.RayClusterSuspended {
 			// RayClusterProvisioned indicates whether all Ray Pods are ready when the RayCluster is first created.
 			// Note RayClusterProvisioned StatusCondition will not be updated after all Ray Pods are ready for the first time. Unless the cluster has been suspended.
-			if utils.CheckAllPodsRunning(ctx, runtimePods) {
+			provisioned := false
+			if utils.IsAutoscalingEnabled(&newInstance.Spec) && newInstance.Status.MinWorkerReplicas > 0 {
+				// With autoscaling and a guaranteed minimum, pods are continuously
+				// added/removed. Consider the cluster provisioned when head +
+				// MinWorkerReplicas are running and ready. Use activePods so terminating
+				// pods don't inflate the count.
+				activeReadyWorkers := utils.CalculateReadyReplicas(activePods)
+				provisioned = activeReadyWorkers >= newInstance.Status.MinWorkerReplicas &&
+					utils.IsHeadPodRunningAndReady(activePods)
+			} else {
+				provisioned = utils.CheckAllPodsRunning(ctx, activePods)
+			}
+			if provisioned {
 				meta.SetStatusCondition(&newInstance.Status.Conditions, metav1.Condition{
 					Type:    string(rayv1.RayClusterProvisioned),
 					Status:  metav1.ConditionTrue,
