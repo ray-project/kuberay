@@ -165,7 +165,7 @@ http://localhost:8265/clusters
 
 The result should look something like the following:
 
-![clusters_endpoint](https://github.com/ray-project/kuberay/blob//historyserver/docs/assets/clusters_endpoint.png)
+![clusters_endpoint](https://github.com/ray-project/kuberay/blob/40bf59590022c459086629e56b96444297c507d1/historyserver/docs/assets/clusters_endpoint.png)
 
 Substitute your real `<SELECTED_SESSION_ID>`:
 
@@ -175,7 +175,7 @@ http://localhost:8265/enter_cluster/default/raycluster-historyserver/<SELECTED_S
 
 A successful request produces output like the following:
 
-![enter_cluster_dead](https://github.com/ray-project/kuberay/blob//historyserver/docs/assets/enter_cluster_dead.png)
+![enter_cluster_dead](https://github.com/ray-project/kuberay/blob/40bf59590022c459086629e56b96444297c507d1/historyserver/docs/assets/enter_cluster_dead.png)
 
 Once set up, you can hit any endpoint via the Ray Dashboard. Take `http://localhost:8265/#/cluster` as an example:
 
@@ -198,7 +198,7 @@ http://localhost:8265/enter_cluster/default/raycluster-historyserver/live
 
 The result should look like the following:
 
-![enter_cluster_live](https://github.com/ray-project/kuberay/blob//historyserver/docs/assets/enter_cluster_live.png)
+![enter_cluster_live](https://github.com/ray-project/kuberay/blob/40bf59590022c459086629e56b96444297c507d1/historyserver/docs/assets/enter_cluster_live.png)
 
 Navigate the same pages as in Step 7. This time the History Server reverse-proxies each API call to the live
 RayCluster's head dashboard service, so you see real-time state instead of replay:
