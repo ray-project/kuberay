@@ -623,8 +623,23 @@ func getSubmitterContainer(rayJobInstance *rayv1.RayJob, rayClusterInstance *ray
 	return submitterContainer, nil
 }
 
-// pass the RayCluster instance for cluster selector case
+// configureSubmitterContainer injects the required state into a submitter container.
+// This function works for both the default submitter and user-provided submitter containers.
+// It handles: image defaulting, resource defaulting, command/args generation,
+// and env var injection (PYTHONUNBUFFERED, RAY_DASHBOARD_ADDRESS, RAY_JOB_SUBMISSION_ID, auth).
+// In SidecarMode, Command/Args are always overwritten. User-defined env vars and volume mounts are preserved.
 func configureSubmitterContainer(container *corev1.Container, rayJobInstance *rayv1.RayJob, rayClusterInstance *rayv1.RayCluster, submissionMode rayv1.JobSubmissionMode) error {
+	// In SidecarMode, default the image to the Ray head image if not specified.
+	if submissionMode == rayv1.SidecarMode && container.Image == "" && rayClusterInstance != nil {
+		container.Image = rayClusterInstance.Spec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex].Image
+	}
+
+	// In SidecarMode, default resource requests/limits if not specified.
+	if submissionMode == rayv1.SidecarMode && container.Resources.Limits == nil && container.Resources.Requests == nil {
+		defaultContainer := common.GetDefaultSubmitterContainer(&rayClusterInstance.Spec)
+		container.Resources = defaultContainer.Resources
+	}
+
 	// If the command in the submitter container manifest isn't set, use the default command.
 	jobCmd, err := common.BuildJobSubmitCommand(rayJobInstance, submissionMode)
 	if err != nil {
@@ -639,14 +654,16 @@ func configureSubmitterContainer(container *corev1.Container, rayJobInstance *ra
 		container.Args = []string{strings.Join(jobCmd, " ")}
 	}
 
-	// Set PYTHONUNBUFFERED=1 for real-time logging
-	container.Env = append(container.Env, corev1.EnvVar{Name: PythonUnbufferedEnvVarName, Value: "1"})
+	// Set PYTHONUNBUFFERED=1 for real-time logging.
+	// Use SetOrReplaceEnvVar to avoid duplicates when users pre-define these env vars
+	// in a user-provided submitter container.
+	utils.SetOrReplaceEnvVar(container, PythonUnbufferedEnvVarName, "1")
 
 	// Users can use `RAY_DASHBOARD_ADDRESS` to specify the dashboard address and `RAY_JOB_SUBMISSION_ID` to specify the job id to avoid
 	// double submission in the `ray job submit` command. For example:
 	// ray job submit --address=http://$RAY_DASHBOARD_ADDRESS --submission-id=$RAY_JOB_SUBMISSION_ID ...
-	container.Env = append(container.Env, corev1.EnvVar{Name: utils.RAY_DASHBOARD_ADDRESS, Value: rayJobInstance.Status.DashboardURL})
-	container.Env = append(container.Env, corev1.EnvVar{Name: utils.RAY_JOB_SUBMISSION_ID, Value: rayJobInstance.Status.JobId})
+	utils.SetOrReplaceEnvVar(container, utils.RAY_DASHBOARD_ADDRESS, rayJobInstance.Status.DashboardURL)
+	utils.SetOrReplaceEnvVar(container, utils.RAY_JOB_SUBMISSION_ID, rayJobInstance.Status.JobId)
 	if rayClusterInstance != nil && utils.IsAuthEnabled(&rayClusterInstance.Spec) {
 		common.SetContainerTokenAuthEnvVars(rayClusterInstance.Name, container, rayClusterInstance.Spec.AuthOptions)
 	}
@@ -1014,14 +1031,31 @@ func (r *RayJobReconciler) constructRayClusterForRayJob(rayJobInstance *rayv1.Ra
 		return nil, err
 	}
 
-	// Inject a submitter container into the head Pod in SidecarMode.
+	// Inject or configure a submitter container in the head Pod in SidecarMode.
 	if rayJobInstance.Spec.SubmissionMode == rayv1.SidecarMode {
-		sidecar, err := getSubmitterContainer(rayJobInstance, rayCluster)
-		if err != nil {
-			return nil, err
+		// Check if the user already provided a container named "ray-job-submitter" in the head pod spec.
+		userContainerIdx := -1
+		for i, c := range rayCluster.Spec.HeadGroupSpec.Template.Spec.Containers {
+			if c.Name == utils.SubmitterContainerName {
+				userContainerIdx = i
+				break
+			}
 		}
-		rayCluster.Spec.HeadGroupSpec.Template.Spec.Containers = append(
-			rayCluster.Spec.HeadGroupSpec.Template.Spec.Containers, sidecar)
+
+		if userContainerIdx >= 0 {
+			// User provided their own sidecar submitter container — configure it in place.
+			if err := configureSubmitterContainer(&rayCluster.Spec.HeadGroupSpec.Template.Spec.Containers[userContainerIdx], rayJobInstance, rayCluster, rayv1.SidecarMode); err != nil {
+				return nil, err
+			}
+		} else {
+			// No user-provided container — create the default sidecar and append it.
+			sidecar, err := getSubmitterContainer(rayJobInstance, rayCluster)
+			if err != nil {
+				return nil, err
+			}
+			rayCluster.Spec.HeadGroupSpec.Template.Spec.Containers = append(
+				rayCluster.Spec.HeadGroupSpec.Template.Spec.Containers, sidecar)
+		}
 		// In K8sJobMode, the submitter Job relies on the K8s Job backoffLimit API to restart if it fails.
 		// This mainly handles WebSocket connection failures caused by transient network issues.
 		// In SidecarMode, however, the submitter container shares the same network namespace as the Ray dashboard,

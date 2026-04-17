@@ -6,6 +6,9 @@ spec:
   # In SidecarMode, the KubeRay operator injects a container into the Ray head Pod to submit the Ray job and tail logs.
   # This will avoid inter-Pod communication, which may cause network issues. For example, some users face WebSocket hangs.
   # For more details, see https://github.com/ray-project/kuberay/issues/3928#issuecomment-3187164736.
+  #
+  # To customize the submitter container (e.g., mount volumes, set env vars, use a custom image),
+  # see the ray-job.sidecar-mode-custom-submitter.yaml sample.
   submissionMode: "SidecarMode"
   entrypoint: python /home/ray/samples/sample_code.py
   runtimeEnvYAML: |

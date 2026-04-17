@@ -92,6 +92,16 @@ func getSubmitterResource(rayJob *rayv1.RayJob) corev1.ResourceList {
 		submitterTemplate := common.GetSubmitterTemplate(&rayJob.Spec, rayJob.Spec.RayClusterSpec)
 		return utils.CalculatePodResource(submitterTemplate.Spec)
 	case rayv1.SidecarMode:
+		// If the user provided a submitter container named "ray-job-submitter" in the head pod spec,
+		// its resources are already included in the head pod resource calculation from
+		// calculatePodGroupParams. Return an empty list to avoid double-counting.
+		for _, c := range rayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers {
+			if c.Name == utils.SubmitterContainerName {
+				return corev1.ResourceList{}
+			}
+		}
+		// No user-provided container — use default sidecar resources to account for
+		// the container that will be injected at cluster creation time.
 		submitterContainer := common.GetDefaultSubmitterContainer(rayJob.Spec.RayClusterSpec)
 		containerResource := submitterContainer.Resources.Requests
 		for name, quantity := range submitterContainer.Resources.Limits {
