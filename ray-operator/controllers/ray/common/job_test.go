@@ -265,7 +265,7 @@ pip: ["python-multipart==0.0.6"]
 		if expected[i] == "--runtime-env-json" {
 			// Decode the JSON string from the next element.
 			var expectedMap, actualMap map[string]any
-			unquoteExpected, err1 := strconv.Unquote(expected[i+1])
+			unquoteExpected, err1 := strconv.Unquote(expected[i+1]) //nolint:gosec // loop bounds guarantee i+1 is valid
 			require.NoError(t, err1)
 			unquotedCommand, err2 := strconv.Unquote(command[i+1])
 			require.NoError(t, err2)

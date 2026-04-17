@@ -9,7 +9,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/utils/ptr"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
@@ -63,7 +62,7 @@ func TestRayClusterManagedBy(t *testing.T) {
 		rayCluster, err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
 		g.Expect(err).To(HaveOccurred())
 		g.Eventually(RayCluster(test, *rayClusterAC.Namespace, *rayClusterAC.Name)).
-			Should(WithTransform(RayClusterManagedBy, Equal(ptr.To("kueue.x-k8s.io/multikueue"))))
+			Should(WithTransform(RayClusterManagedBy, Equal(new("kueue.x-k8s.io/multikueue"))))
 	})
 
 	test.T().Run("Failed creation of cluster, managed by external non supported controller", func(t *testing.T) {
