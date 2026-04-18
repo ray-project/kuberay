@@ -139,14 +139,14 @@ func (r *RayLogsHandler) listBlobs(prefix string, delimiter string, onlyBase boo
 	return files
 }
 
-func (r *RayLogsHandler) ListFiles(clusterId string, dir string) []string {
+func (r *RayLogsHandler) ListFiles(clusterStoragePrefix string, dir string) []string {
 	defer func() {
 		if r := recover(); r != nil {
 			logrus.Errorf("Recovered from panic: %v", r)
 		}
 	}()
 
-	prefix := path.Join(r.RootDir, clusterId, dir)
+	prefix := path.Join(r.RootDir, clusterStoragePrefix, dir)
 	logrus.Debugf("Prepare to list files ...")
 	return r.listBlobs(prefix, "/", true)
 }
@@ -182,34 +182,31 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 			metadirPrefix, len(resp.Segment.BlobItems))
 
 		for _, blob := range resp.Segment.BlobItems {
-			c := &utils.ClusterInfo{}
 			metaInfo := strings.Trim(strings.TrimPrefix(*blob.Name, path.Join(r.RootDir, "metadir/")), "/")
-			metas := strings.Split(metaInfo, "/")
-			if len(metas) < 2 {
+			session, err := utils.ParseMetaDirRelPath(metaInfo)
+			if err != nil {
 				continue
 			}
-			logrus.Infof("Process %++v", metas)
-			namespaceName := strings.Split(metas[0], "_")
-			if len(namespaceName) < 2 {
-				continue
-			}
-			c.Name = namespaceName[0]
-			c.Namespace = namespaceName[1]
-			c.SessionName = metas[1]
-			sessionInfo := strings.Split(metas[1], "_")
+			logrus.Infof("Process %++v", session)
+			sessionInfo := strings.Split(session.SessionName, "_")
 			if len(sessionInfo) < 3 {
 				continue
 			}
 			date := sessionInfo[1]
 			dataTime := sessionInfo[2]
+			// TODO(jwj): Use utils.GetDateTimeFromSessionID instead of time.Parse.
 			createTime, err := time.Parse("2006-01-02_15-04-05", date+"_"+dataTime)
 			if err != nil {
 				logrus.Errorf("Failed to parse time %s: %v", date+"_"+dataTime, err)
 				continue
 			}
-			c.CreateTimeStamp = createTime.Unix()
-			c.CreateTime = createTime.UTC().Format("2006-01-02T15:04:05Z")
-			clusters = append(clusters, *c)
+			clusters = append(clusters, utils.ClusterInfo{
+				Name:            session.Name,
+				Namespace:       session.Namespace,
+				SessionName:     session.SessionName,
+				CreateTimeStamp: createTime.Unix(),
+				CreateTime:      createTime.UTC().Format("2006-01-02T15:04:05Z"),
+			})
 		}
 	}
 
@@ -217,8 +214,8 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 	return clusters
 }
 
-func (r *RayLogsHandler) GetContent(clusterId string, fileName string) io.Reader {
-	fullPath := path.Join(r.RootDir, clusterId, fileName)
+func (r *RayLogsHandler) GetContent(clusterStoragePrefix string, fileName string) io.Reader {
+	fullPath := path.Join(r.RootDir, clusterStoragePrefix, fileName)
 	logrus.Infof("Prepare to get blob %s info ...", fullPath)
 
 	ctx, cancel := context.WithTimeout(context.Background(), downloadTimeout)

@@ -127,8 +127,8 @@ func (r *RayLogsHandler) _listFiles(prefix string, delimiter string, onlyBase bo
 	return files
 }
 
-func (r *RayLogsHandler) ListFiles(clusterId string, dir string) []string {
-	prefix := path.Join(r.S3RootDir, clusterId, dir)
+func (r *RayLogsHandler) ListFiles(clusterStoragePrefix string, dir string) []string {
+	prefix := path.Join(r.S3RootDir, clusterStoragePrefix, dir)
 
 	defer func() {
 		if recover := recover(); recover != nil {
@@ -166,31 +166,31 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 					path.Join(r.S3RootDir, "metadir")+"/", len(page.Contents), len(page.CommonPrefixes))
 
 				for _, object := range page.Contents {
-					c := &utils.ClusterInfo{}
 					metaInfo := strings.Trim(strings.TrimPrefix(*object.Key, path.Join(r.S3RootDir, "metadir/")), "/")
-					metas := strings.Split(metaInfo, "/")
-					if len(metas) < 2 {
+					session, err := utils.ParseMetaDirRelPath(metaInfo)
+					if err != nil {
 						continue
 					}
-					logrus.Infof("Process %++v", metas)
-					namespaceName := strings.Split(metas[0], "_")
-					if len(namespaceName) < 2 {
+					logrus.Infof("Process %++v", session)
+					sessionInfo := strings.Split(session.SessionName, "_")
+					if len(sessionInfo) < 3 {
 						continue
 					}
-					c.Name = namespaceName[0]
-					c.Namespace = namespaceName[1]
-					c.SessionName = metas[1]
-					sessionInfo := strings.Split(metas[1], "_")
 					date := sessionInfo[1]
 					dataTime := sessionInfo[2]
+					// TODO(jwj): Use utils.GetDateTimeFromSessionID instead of time.Parse.
 					createTime, err := time.Parse("2006-01-02_15-04-05", date+"_"+dataTime)
 					if err != nil {
 						logrus.Errorf("Failed to parse time %s: %v", date+"_"+dataTime, err)
 						continue
 					}
-					c.CreateTimeStamp = createTime.Unix()
-					c.CreateTime = createTime.UTC().Format(("2006-01-02T15:04:05Z"))
-					clusters = append(clusters, *c)
+					clusters = append(clusters, utils.ClusterInfo{
+						Name:            session.Name,
+						Namespace:       session.Namespace,
+						SessionName:     session.SessionName,
+						CreateTimeStamp: createTime.Unix(),
+						CreateTime:      createTime.UTC().Format("2006-01-02T15:04:05Z"),
+					})
 				}
 				return true
 			})
@@ -205,8 +205,8 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 	return clusters
 }
 
-func (r *RayLogsHandler) GetContent(clusterId string, fileName string) io.Reader {
-	fullPath := path.Join(r.S3RootDir, clusterId, fileName)
+func (r *RayLogsHandler) GetContent(clusterStoragePrefix string, fileName string) io.Reader {
+	fullPath := path.Join(r.S3RootDir, clusterStoragePrefix, fileName)
 	logrus.Infof("Prepare to get object %s info ...", fullPath)
 
 	result, err := r.S3Client.GetObject(&s3.GetObjectInput{

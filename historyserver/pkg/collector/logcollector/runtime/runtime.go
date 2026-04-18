@@ -44,9 +44,8 @@ func NewCollector(config *types.RayCollectorConfig, writer storage.StorageWriter
 	}
 	logDir := strings.TrimSpace(filepath.Join(config.SessionDir, utils.RAY_SESSIONDIR_LOGDIR_NAME))
 	handler.LogDir = logDir
-	// clusterRootDir uses flat key format (name_id) for S3/OSS performance optimization.
-	// See utils.connector for the design rationale.
-	clusterRootDir := fmt.Sprintf("%s/", path.Clean(path.Join(handler.RootDir, utils.AppendRayClusterNameNamespace(handler.RayClusterName, handler.RayClusterNamespace))))
+	cluster := utils.ClusterRef{Namespace: handler.RayClusterNamespace, Name: handler.RayClusterName}
+	clusterRootDir := fmt.Sprintf("%s/", path.Clean(path.Join(handler.RootDir, cluster.StoragePrefix())))
 	handler.ClusterDir = clusterRootDir
 
 	return &handler
