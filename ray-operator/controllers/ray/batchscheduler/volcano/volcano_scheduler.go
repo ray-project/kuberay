@@ -312,9 +312,9 @@ func (v *VolcanoBatchScheduler) CleanupOnCompletion(ctx context.Context, object 
 		// RayCluster exists. Recalculate based on live spec (suspended workers are automatically excluded).
 		// If the RayJob is SidecarMode, the submitter is included. Even if the submitter container has terminated, it still takes into account
 		// If it is K8sJobMode, the submitter pod is not taken into account. The completed pod doesn't have resources allocated.
-		clusterMinMember, clusterMinResource := v.calculatePodGroupParams(&cluster.Spec)
-		minMember = clusterMinMember
-		totalResourceList = append(totalResourceList, clusterMinResource)
+		clusterMinMembers, clusterMinResources := v.calculatePodGroupParams(&cluster.Spec)
+		minMember = clusterMinMembers
+		totalResourceList = append(totalResourceList, clusterMinResources)
 	}
 
 	didUpdate, err := v.syncPodGroup(ctx, rayJob, minMember, utils.SumResourceList(totalResourceList))
