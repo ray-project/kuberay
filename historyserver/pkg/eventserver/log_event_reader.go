@@ -48,11 +48,13 @@ func NewLogEventReader(reader storage.StorageReader) *LogEventReader {
 // ReadLogEvents reads all Log Events from logs/{nodeId}/events/event_*.log files
 // and stores them in the provided ClusterLogEventMap.
 //
-// Path structure in storage: {clusterName}_{namespace}/{sessionName}/logs/{nodeId}/events/event_*.log
+// Path structure in storage: {namespace}/{clusterName}/{sessionName}/logs/{nodeId}/events/event_*.log
 // This is called from eventserver.go Run() to populate events for a cluster session.
 func (r *LogEventReader) ReadLogEvents(clusterInfo utils.ClusterInfo, clusterSessionKey string, eventStore *types.ClusterLogEventMap) error {
-	// Build cluster ID used by StorageReader
-	clusterID := clusterInfo.Name + "_" + clusterInfo.Namespace
+	clusterStoragePrefix := utils.ClusterRef{
+		Namespace: clusterInfo.Namespace,
+		Name:      clusterInfo.Name,
+	}.StoragePrefix()
 
 	// Get or create the JobEventMap for this cluster session
 	jobEventMap := eventStore.GetOrCreateJobEventMap(clusterSessionKey)
@@ -62,7 +64,7 @@ func (r *LogEventReader) ReadLogEvents(clusterInfo utils.ClusterInfo, clusterSes
 
 	// List all items under logs/ to find node directories
 	// Note: ListFiles returns base names only (e.g., "node1/", "node2/")
-	nodeEntries := r.reader.ListFiles(clusterID, logsBaseDir)
+	nodeEntries := r.reader.ListFiles(clusterStoragePrefix, logsBaseDir)
 
 	// Filter to get node IDs (only directories end with "/")
 	// This matches the pattern used in eventserver.go getAllJobEventFiles()
@@ -84,7 +86,7 @@ func (r *LogEventReader) ReadLogEvents(clusterInfo utils.ClusterInfo, clusterSes
 		// Path: {sessionName}/logs/{nodeId}/events/
 		eventsDir := path.Join(clusterInfo.SessionName, utils.RAY_SESSIONDIR_LOGDIR_NAME, nodeID, "events")
 		// Note: ListFiles returns base names only (e.g., "event_GCS.log")
-		eventFileNames := r.reader.ListFiles(clusterID, eventsDir)
+		eventFileNames := r.reader.ListFiles(clusterStoragePrefix, eventsDir)
 
 		for _, fileName := range eventFileNames {
 			// Only process event_*.log files
@@ -92,13 +94,13 @@ func (r *LogEventReader) ReadLogEvents(clusterInfo utils.ClusterInfo, clusterSes
 				continue
 			}
 
-			// Build full path relative to clusterID for GetContent
+			// Build full path relative to clusterStoragePrefix for GetContent
 			eventFilePath := path.Join(clusterInfo.SessionName, utils.RAY_SESSIONDIR_LOGDIR_NAME, nodeID, "events", fileName)
 
 			// Read and parse the event file
 			// Note: Duplicate events are handled by JobEventMap's deduplication using event_id as key.
 			// This matches the design of existing RayEvents reading in eventserver.go.
-			if err := r.readEventFile(clusterID, eventFilePath, jobEventMap); err != nil {
+			if err := r.readEventFile(clusterStoragePrefix, eventFilePath, jobEventMap); err != nil {
 				logrus.Warnf("Failed to read event file %s: %v", eventFilePath, err)
 				// Continue with other files - failed files will be retried in the next cycle
 			}
@@ -111,8 +113,8 @@ func (r *LogEventReader) ReadLogEvents(clusterInfo utils.ClusterInfo, clusterSes
 // readEventFile reads and parses a single event_*.log file (JSON Lines format).
 // Lines exceeding maxLineLengthLimit are drained and skipped without accumulating
 // in memory, matching Ray Dashboard's _read_file() behavior in event_utils.py.
-func (r *LogEventReader) readEventFile(clusterID, filePath string, jobEventMap *types.JobEventMap) error {
-	ioReader := r.reader.GetContent(clusterID, filePath)
+func (r *LogEventReader) readEventFile(clusterStoragePrefix, filePath string, jobEventMap *types.JobEventMap) error {
+	ioReader := r.reader.GetContent(clusterStoragePrefix, filePath)
 	if ioReader == nil {
 		return fmt.Errorf("failed to get content for %s", filePath)
 	}

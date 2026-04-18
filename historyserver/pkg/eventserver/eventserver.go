@@ -131,7 +131,10 @@ func (h *EventHandler) Run(stop chan struct{}, numOfEventProcessors int) error {
 		processAllEvents := func() {
 			clusterList := h.reader.List()
 			for _, clusterInfo := range clusterList {
-				clusterNameNamespace := clusterInfo.Name + "_" + clusterInfo.Namespace
+				clusterStoragePrefix := utils.ClusterRef{
+					Namespace: clusterInfo.Namespace,
+					Name:      clusterInfo.Name,
+				}.StoragePrefix()
 				clusterSessionKey := utils.BuildClusterSessionKey(clusterInfo.Name, clusterInfo.Namespace, clusterInfo.SessionName)
 
 				// Read Log Events from logs/{nodeId}/events/event_*.log
@@ -149,7 +152,7 @@ func (h *EventHandler) Run(stop chan struct{}, numOfEventProcessors int) error {
 					// TODO: Filter out ones that have already been read
 					logrus.Infof("Reading event file: %s", eventFile)
 
-					eventioReader := h.reader.GetContent(clusterNameNamespace, eventFile)
+					eventioReader := h.reader.GetContent(clusterStoragePrefix, eventFile)
 					if eventioReader == nil {
 						logrus.Errorf("Failed to get content for event file: %s, skipping", eventFile)
 						continue
@@ -618,12 +621,15 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 }
 
 // getAllJobEventFiles get all the job event files for the given cluster.
-// Assuming that the events file object follow the format root/clustername/sessionid/job_events/{job-*}/*
+// Assuming that the events file object follow the format root/{namespace}/{name}/sessionid/job_events/{job-*}/*
 func (h *EventHandler) getAllJobEventFiles(clusterInfo utils.ClusterInfo) []string {
 	var allJobFiles []string
-	clusterNameID := clusterInfo.Name + "_" + clusterInfo.Namespace
+	clusterStoragePrefix := utils.ClusterRef{
+		Namespace: clusterInfo.Namespace,
+		Name:      clusterInfo.Name,
+	}.StoragePrefix()
 	jobEventDirPrefix := clusterInfo.SessionName + "/job_events/"
-	jobDirList := h.reader.ListFiles(clusterNameID, jobEventDirPrefix)
+	jobDirList := h.reader.ListFiles(clusterStoragePrefix, jobEventDirPrefix)
 
 	for _, jobDir := range jobDirList {
 		// Skip non-directory entries
@@ -631,7 +637,7 @@ func (h *EventHandler) getAllJobEventFiles(clusterInfo utils.ClusterInfo) []stri
 			continue
 		}
 		jobDirPath := jobEventDirPrefix + jobDir
-		jobFiles := h.reader.ListFiles(clusterNameID, jobDirPath)
+		jobFiles := h.reader.ListFiles(clusterStoragePrefix, jobDirPath)
 		for _, jobFile := range jobFiles {
 			if isValidEventFile(jobFile) {
 				allJobFiles = append(allJobFiles, jobDirPath+jobFile)
@@ -643,9 +649,12 @@ func (h *EventHandler) getAllJobEventFiles(clusterInfo utils.ClusterInfo) []stri
 
 // getAllNodeEventFiles retrieves all node event files for the given cluster
 func (h *EventHandler) getAllNodeEventFiles(clusterInfo utils.ClusterInfo) []string {
-	clusterNameID := clusterInfo.Name + "_" + clusterInfo.Namespace
+	clusterStoragePrefix := utils.ClusterRef{
+		Namespace: clusterInfo.Namespace,
+		Name:      clusterInfo.Name,
+	}.StoragePrefix()
 	nodeEventDirPrefix := clusterInfo.SessionName + "/node_events/"
-	nodeEventFileNames := h.reader.ListFiles(clusterNameID, nodeEventDirPrefix)
+	nodeEventFileNames := h.reader.ListFiles(clusterStoragePrefix, nodeEventDirPrefix)
 
 	// Filter out directories (items ending with /) and build full paths
 	var nodeEventFiles []string
