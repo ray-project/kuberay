@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"path"
 	"path/filepath"
 	"sort"
@@ -34,8 +33,6 @@ import (
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
-	"github.com/aws/smithy-go"
 	"github.com/sirupsen/logrus"
 
 	"github.com/ray-project/kuberay/historyserver/pkg/collector/types"
@@ -57,11 +54,6 @@ type RayLogsHandler struct {
 	LogBatching         int
 	PushInterval        time.Duration
 }
-
-const (
-	initTimeout       = 30 * time.Second
-	httpClientTimeout = 30 * time.Second
-)
 
 func (r *RayLogsHandler) CreateDirectory(d string) error {
 	ctx := context.Background()
@@ -279,131 +271,89 @@ func (r *RayLogsHandler) GetContent(clusterId string, fileName string) io.Reader
 
 func NewReader(c *types.RayHistoryServerConfig, jd map[string]interface{}) (storage.StorageReader, error) {
 	config := &config{}
-	if err := config.completeHSConfig(c, jd); err != nil {
-		return nil, err
-	}
+	config.completeHSConfig(c, jd)
 
 	return New(config)
 }
 
 func NewWriter(c *types.RayCollectorConfig, jd map[string]interface{}) (storage.StorageWriter, error) {
 	config := &config{}
-	if err := config.complete(c, jd); err != nil {
-		return nil, err
-	}
+	config.complete(c, jd)
 
 	return New(config)
 }
 
-func ensureBucketExists(ctx context.Context, s3Client *s3.Client, bucketName, region string, useLocationConstraint bool) error {
+func createBucketIfNotExists(ctx context.Context, s3Client *s3.Client, bucketName string) error {
 	_, err := s3Client.HeadBucket(ctx, &s3.HeadBucketInput{
 		Bucket: aws.String(bucketName),
 	})
-	if err == nil {
-		logrus.Infof("Bucket %s already exists", bucketName)
-		return nil
-	}
-
-	if !isBucketNotFound(err) {
-		logrus.Warnf("HeadBucket returned %v for %s, attempting CreateBucket fallback", err, bucketName)
-		if createErr := createBucket(ctx, s3Client, bucketName, region, useLocationConstraint); createErr != nil {
-			return fmt.Errorf("failed to check bucket %s: %v; create fallback failed: %w", bucketName, err, createErr)
+	if err != nil {
+		var apiErr interface{ ErrorCode() string }
+		if errors.As(err, &apiErr) {
+			switch apiErr.ErrorCode() {
+			case "NoSuchBucket", "NotFound", "404":
+				logrus.Infof("Bucket %s does not exist, creating...", bucketName)
+				_, createErr := s3Client.CreateBucket(ctx, &s3.CreateBucketInput{
+					Bucket: aws.String(bucketName),
+				})
+				if createErr != nil {
+					var createAPIError interface{ ErrorCode() string }
+					if errors.As(createErr, &createAPIError) {
+						if createAPIError.ErrorCode() == "BucketAlreadyExists" ||
+							createAPIError.ErrorCode() == "BucketAlreadyOwnedByYou" {
+							logrus.Infof("Bucket %s already exists", bucketName)
+							return nil
+						}
+					}
+					logrus.Errorf("Failed to create bucket %s: %v", bucketName, createErr)
+					return fmt.Errorf("failed to create bucket %s: %w", bucketName, createErr)
+				}
+				logrus.Infof("Successfully created bucket %s", bucketName)
+				return nil
+			default:
+				logrus.Warnf("HeadBucket error for %s: %v, attempting to create bucket", bucketName, err)
+			}
 		}
-		logrus.Infof("Successfully created bucket %s via fallback path", bucketName)
+
+		logrus.Infof("Attempting to create bucket %s...", bucketName)
+		_, createErr := s3Client.CreateBucket(ctx, &s3.CreateBucketInput{
+			Bucket: aws.String(bucketName),
+		})
+		if createErr != nil {
+			var createAPIError interface{ ErrorCode() string }
+			if errors.As(createErr, &createAPIError) {
+				if createAPIError.ErrorCode() == "BucketAlreadyExists" ||
+					createAPIError.ErrorCode() == "BucketAlreadyOwnedByYou" {
+					logrus.Infof("Bucket %s already exists", bucketName)
+					return nil
+				}
+			}
+			logrus.Errorf("Failed to create bucket %s: %v", bucketName, createErr)
+			return fmt.Errorf("failed to create bucket %s: %w", bucketName, createErr)
+		}
+		logrus.Infof("Successfully created bucket %s", bucketName)
 		return nil
 	}
 
-	logrus.Infof("Bucket %s does not exist, creating...", bucketName)
-	if err := createBucket(ctx, s3Client, bucketName, region, useLocationConstraint); err != nil {
-		return err
-	}
-	logrus.Infof("Successfully created bucket %s", bucketName)
+	logrus.Infof("Bucket %s already exists", bucketName)
 	return nil
 }
 
-func isBucketNotFound(err error) bool {
-	var apiErr smithy.APIError
-	if errors.As(err, &apiErr) {
-		switch apiErr.ErrorCode() {
-		case "NoSuchBucket", "NotFound", "404":
-			return true
-		}
-	}
-	return false
-}
-
-func createBucket(ctx context.Context, s3Client *s3.Client, bucketName, region string, useLocationConstraint bool) error {
-	input := &s3.CreateBucketInput{
-		Bucket: aws.String(bucketName),
-	}
-	useLocation := useLocationConstraint && region != "" && region != "us-east-1"
-	if useLocation {
-		input.CreateBucketConfiguration = &s3types.CreateBucketConfiguration{
-			LocationConstraint: s3types.BucketLocationConstraint(region),
-		}
-	}
-	_, err := s3Client.CreateBucket(ctx, input)
-	if err == nil {
-		return nil
-	}
-	if isBucketAlreadyExists(err) {
-		logrus.Infof("Bucket %s already exists", bucketName)
-		return nil
-	}
-	if useLocation && isInvalidLocationConstraint(err) {
-		logrus.Warnf("CreateBucket with location constraint %s failed, retrying without location constraint: %v", region, err)
-		_, retryErr := s3Client.CreateBucket(ctx, &s3.CreateBucketInput{
-			Bucket: aws.String(bucketName),
-		})
-		if retryErr == nil || isBucketAlreadyExists(retryErr) {
-			return nil
-		}
-		return fmt.Errorf("failed to create bucket %s without location constraint: %w", bucketName, retryErr)
-	}
-	logrus.Errorf("Failed to create bucket %s: %v", bucketName, err)
-	return fmt.Errorf("failed to create bucket %s: %w", bucketName, err)
-}
-
-func isBucketAlreadyExists(err error) bool {
-	var apiErr smithy.APIError
-	if errors.As(err, &apiErr) {
-		return apiErr.ErrorCode() == "BucketAlreadyExists" ||
-			apiErr.ErrorCode() == "BucketAlreadyOwnedByYou"
-	}
-	return false
-}
-
-func isInvalidLocationConstraint(err error) bool {
-	var apiErr smithy.APIError
-	if errors.As(err, &apiErr) {
-		switch apiErr.ErrorCode() {
-		case "InvalidLocationConstraint", "IllegalLocationConstraintException":
-			return true
-		}
-	}
-	return false
-}
-
 func createS3Client(ctx context.Context, c *config) (*s3.Client, error) {
-	endpoint := normalizeEndpoint(strings.TrimSpace(c.S3Endpoint), c.DisableSSL)
-
-	if endpoint != "" {
-		if _, err := url.Parse(endpoint); err != nil {
-			return nil, fmt.Errorf("failed to parse endpoint URL %s: %w", endpoint, err)
-		}
+	httpClient := &http.Client{
+		Timeout: 5 * time.Second,
 	}
 
 	loadOptions := []func(*awsconfig.LoadOptions) error{
 		awsconfig.WithRegion(c.S3Region),
-		awsconfig.WithHTTPClient(&http.Client{Timeout: httpClientTimeout}),
+		awsconfig.WithHTTPClient(httpClient),
 	}
-	if c.AccessKeyID != "" {
-		credsProvider := credentials.NewStaticCredentialsProvider(c.AccessKeyID, c.SecretAccessKey, c.SessionToken)
+	if c.S3ID != "" {
+		credsProvider := credentials.NewStaticCredentialsProvider(c.S3ID, c.S3Secret, c.S3Token)
 		loadOptions = append(loadOptions, awsconfig.WithCredentialsProvider(credsProvider))
 	}
-
-	if endpoint != "" {
-		loadOptions = append(loadOptions, awsconfig.WithBaseEndpoint(endpoint))
+	if c.S3Endpoint != "" {
+		loadOptions = append(loadOptions, awsconfig.WithBaseEndpoint(c.S3Endpoint))
 	}
 
 	awsCfg, err := awsconfig.LoadDefaultConfig(ctx, loadOptions...)
@@ -412,10 +362,10 @@ func createS3Client(ctx context.Context, c *config) (*s3.Client, error) {
 	}
 
 	s3Client := s3.NewFromConfig(awsCfg, func(o *s3.Options) {
-		o.UsePathStyle = c.S3ForcePathStyle
-		o.EndpointOptions.DisableHTTPS = c.DisableSSL
-		if endpoint != "" {
-			o.BaseEndpoint = aws.String(endpoint)
+		o.UsePathStyle = aws.ToBool(c.S3ForcePathStyle)
+		o.EndpointOptions.DisableHTTPS = aws.ToBool(c.DisableSSL)
+		if c.S3Endpoint != "" {
+			o.BaseEndpoint = aws.String(c.S3Endpoint)
 		}
 	})
 	return s3Client, nil
@@ -423,18 +373,14 @@ func createS3Client(ctx context.Context, c *config) (*s3.Client, error) {
 
 func New(c *config) (*RayLogsHandler, error) {
 	logrus.Infof("Begin to create s3 client ...")
-
-	ctx, cancel := context.WithTimeout(context.Background(), initTimeout)
-	defer cancel()
-
+	ctx := context.Background()
 	s3Client, err := createS3Client(ctx, c)
 	if err != nil {
 		return nil, err
 	}
 
 	logrus.Infof("Checking if bucket %s exists...", c.S3Bucket)
-	useLocationConstraint := strings.TrimSpace(c.S3Endpoint) == ""
-	if err := ensureBucketExists(ctx, s3Client, c.S3Bucket, c.S3Region, useLocationConstraint); err != nil {
+	if err := createBucketIfNotExists(ctx, s3Client, c.S3Bucket); err != nil {
 		return nil, fmt.Errorf("failed to ensure bucket exists: %w", err)
 	}
 
@@ -465,26 +411,4 @@ func New(c *config) (*RayLogsHandler, error) {
 		LogBatching:  c.LogBatching,
 		PushInterval: c.PushInterval,
 	}, nil
-}
-
-func normalizeEndpoint(endpoint string, disableSSL bool) string {
-	if endpoint == "" {
-		return ""
-	}
-
-	if strings.HasPrefix(endpoint, "http://") {
-		return endpoint
-	}
-	if strings.HasPrefix(endpoint, "https://") {
-		if disableSSL {
-			return "http://" + strings.TrimPrefix(endpoint, "https://")
-		}
-		return endpoint
-	}
-
-	scheme := "https"
-	if disableSSL {
-		scheme = "http"
-	}
-	return scheme + "://" + endpoint
 }

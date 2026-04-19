@@ -26,7 +26,6 @@ const (
 	MinioAPIEndpoint  = "http://localhost:9000"
 	MinioAPIPort      = 9000
 	S3BucketName      = "ray-historyserver"
-	S3Region          = "us-east-1"
 )
 
 // ApplyMinIO deploys minio once per test namespace, making sure it's idempotent.
@@ -75,7 +74,7 @@ func EnsureS3Client(t *testing.T) *s3.Client {
 func NewS3Client(endpoint string) (*s3.Client, error) {
 	ctx := context.Background()
 	awsCfg, err := config.LoadDefaultConfig(ctx,
-		config.WithRegion(S3Region),
+		config.WithRegion("e2e-test"),
 		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(MinioUsername, MinioSecret, "")),
 	)
 	if err != nil {

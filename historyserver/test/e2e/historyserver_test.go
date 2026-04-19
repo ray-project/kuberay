@@ -2223,9 +2223,10 @@ func testDeadClusterPlacementGroups(test Test, g *WithT, namespace *corev1.Names
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 
 	// Wait for placement groups data to be stored in S3 by the collector before deleting the cluster.
+	// The collector stores the endpoint with query params, so the storage key includes them.
 	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, rayCluster.Namespace)
 	sessionID := GetSessionIDFromHeadPod(test, g, rayCluster)
-	storageKey := utils.EndpointPathToStorageKey("/api/v0/placement_groups")
+	storageKey := utils.EndpointPathToStorageKey("/api/v0/placement_groups?detail=1&limit=10000")
 	pgKey := fmt.Sprintf("log/%s/%s/%s/%s", clusterNameID, sessionID, utils.RAY_SESSIONDIR_FETCHED_ENDPOINTS_NAME, storageKey)
 	LogWithTimestamp(test.T(), "Waiting for placement groups data to appear at S3 key: %s", pgKey)
 
@@ -2258,7 +2259,8 @@ func testDeadClusterPlacementGroups(test Test, g *WithT, namespace *corev1.Names
 	client := CreateHTTPClientWithCookieJar(g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 
-	endpoint := "/api/v0/placement_groups"
+	// Use the same query params as the frontend to match the storage key.
+	endpoint := "/api/v0/placement_groups?detail=1&limit=10000"
 	LogWithTimestamp(test.T(), "Testing dead cluster endpoint: %s", endpoint)
 
 	g.Eventually(func(gg Gomega) {
@@ -2698,8 +2700,8 @@ func verifySingleEndpoint(test Test, g *WithT, client *http.Client, endpointURL 
 
 // TODO(jwj): Make verification for node-related endpoints more robust.
 // verifyNodesRespSchema verifies that the /nodes response is valid according to the API schema.
-// Both live and dead clusters return the same format (flat array of latest snapshots).
-// isLive is kept for signature compatibility but does not affect validation.
+// Both live and dead clusters now return the same format (flat array of latest snapshots).
+// isLive is kept for signature compatibility but no longer affects validation.
 func verifyNodesRespSchema(test Test, g *WithT, nodesResp map[string]any, isLive bool) {
 	// Verify top-level fields.
 	g.Expect(nodesResp).To(HaveKeyWithValue("result", BeTrue()))
@@ -2716,7 +2718,8 @@ func verifyNodesRespSchema(test Test, g *WithT, nodesResp map[string]any, isLive
 	summary, ok := data["summary"].([]any)
 	g.Expect(ok).To(BeTrue(), "'summary' should be an array")
 
-	_ = isLive
+	// Both live and dead clusters now return a flat array of node summaries.
+	// Dead cluster uses the latest snapshot per node to match the Ray Dashboard API format.
 	g.Expect(len(summary)).To(Equal(2), "Should have 2 node summaries (one head node and one worker node)")
 	for _, nodeSummary := range summary {
 		nodeSummarySnapshot, ok := nodeSummary.(map[string]any)
@@ -2729,6 +2732,8 @@ func verifyNodesRespSchema(test Test, g *WithT, nodesResp map[string]any, isLive
 	nodeLogicalResources, ok := data["nodeLogicalResources"].(map[string]any)
 	g.Expect(ok).To(BeTrue(), "'nodeLogicalResources' should be a map")
 
+	// Both live and dead clusters return {nodeId: string} format.
+	// Dead cluster uses the latest resource string per node.
 	g.Expect(len(nodeLogicalResources)).To(Equal(2), "Should have 2 resource strings (one head node and one worker node)")
 	for nodeId, resourceString := range nodeLogicalResources {
 		g.Expect(nodeId).NotTo(BeEmpty())
@@ -2739,8 +2744,8 @@ func verifyNodesRespSchema(test Test, g *WithT, nodesResp map[string]any, isLive
 }
 
 // verifyNodeRespSchema verifies that the /nodes/{node_id} response is valid according to the API schema.
-// Both live and dead clusters return the same format (single object with latest snapshot).
-// isLive is kept for signature compatibility but does not affect validation.
+// Both live and dead clusters now return the same format (single object with latest snapshot).
+// isLive is kept for signature compatibility but no longer affects validation.
 func verifyNodeRespSchema(test Test, g *WithT, nodeResp map[string]any, isLive bool) {
 	// Verify top-level fields.
 	g.Expect(nodeResp).To(HaveKeyWithValue("result", BeTrue()))
@@ -2751,7 +2756,7 @@ func verifyNodeRespSchema(test Test, g *WithT, nodeResp map[string]any, isLive b
 	g.Expect(ok).To(BeTrue(), "'data' should be a map")
 	g.Expect(data).To(HaveKey("detail"))
 
-	_ = isLive
+	// Both live and dead clusters return detail as a single node object (latest snapshot).
 	nodeSummarySnapshot, ok := data["detail"].(map[string]any)
 	g.Expect(ok).To(BeTrue(), "'detail' should be a map")
 	verifyNodeSummarySchema(test, g, nodeSummarySnapshot)

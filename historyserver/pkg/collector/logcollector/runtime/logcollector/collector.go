@@ -202,7 +202,7 @@ func (r *RayLogHandler) processSessionLatestLogFile(absoluteLogPathName, session
 		return err
 	}
 
-	// Write to storage (including 0-byte so Azure e2e sees monitor.out etc. within timeout)
+	// Write to storage
 	err = r.Writer.WriteFile(objectName, bytes.NewReader(content))
 	if err != nil {
 		logrus.Errorf("Failed to write object %s: %v", objectName, err)
@@ -636,7 +636,7 @@ func (r *RayLogHandler) processPrevLogFile(absoluteLogPathName, localLogDir, ses
 		return err
 	}
 
-	// Write to storage (including 0-byte so Azure e2e sees all required files)
+	// Write to storage
 	err = r.Writer.WriteFile(objectName, bytes.NewReader(content))
 	if err != nil {
 		logrus.Errorf("Failed to write object %s: %v", objectName, err)
