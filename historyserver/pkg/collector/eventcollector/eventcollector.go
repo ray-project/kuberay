@@ -108,8 +108,7 @@ func (ec *EventCollector) Run(stop <-chan struct{}, port int) {
 
 // watchNodeIDFile watches raylet_node_id for content changes.
 func (ec *EventCollector) watchNodeIDFile() {
-	rayTmpDir := filepath.Join("/tmp", "ray")
-	nodeIDFilePath := filepath.Join(rayTmpDir, "raylet_node_id")
+	nodeIDFilePath := filepath.Join("/tmp", "ray", "raylet_node_id")
 
 	// Create new watcher
 	watcher, err := fsnotify.NewWatcher()
@@ -124,9 +123,9 @@ func (ec *EventCollector) watchNodeIDFile() {
 	if err != nil {
 		logrus.Infof("Failed to add %s to watcher, will watch for file creation: %v", nodeIDFilePath, err)
 		// If file doesn't exist, watch parent directory
-		err = watcher.Add(rayTmpDir)
+		err = watcher.Add(filepath.Dir(nodeIDFilePath))
 		if err != nil {
-			logrus.Errorf("Failed to watch directory %s: %v", rayTmpDir, err)
+			logrus.Errorf("Failed to watch directory %s: %v", filepath.Dir(nodeIDFilePath), err)
 			return
 		}
 	}
@@ -139,7 +138,7 @@ func (ec *EventCollector) watchNodeIDFile() {
 			}
 
 			// Check if this is the target file
-			if filepath.Clean(event.Name) == nodeIDFilePath &&
+			if event.Name == nodeIDFilePath &&
 				(event.Op&fsnotify.Write == fsnotify.Write || event.Op&fsnotify.Create == fsnotify.Create) {
 				// Read file content
 				content, err := os.ReadFile(nodeIDFilePath)
