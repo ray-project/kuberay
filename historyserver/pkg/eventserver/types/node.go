@@ -78,71 +78,103 @@ type Node struct {
 }
 
 type NodeMap struct {
-	NodeMap map[string]Node
-	Mu      sync.Mutex
-}
-
-func (n *NodeMap) Lock() {
-	n.Mu.Lock()
-}
-
-func (n *NodeMap) Unlock() {
-	n.Mu.Unlock()
+	nodeMap map[string]Node
+	mu      sync.Mutex
 }
 
 func NewNodeMap() *NodeMap {
 	return &NodeMap{
-		NodeMap: make(map[string]Node),
+		nodeMap: make(map[string]Node),
 	}
 }
 
 type ClusterNodeMap struct {
 	// ClusterNodeMap is a map of cluster session ID to NodeMap.
-	ClusterNodeMap map[string]*NodeMap
-	Mu             sync.RWMutex
+	clusterNodeMap map[string]*NodeMap
+	mu             sync.RWMutex
 }
 
-func (c *ClusterNodeMap) RLock() {
-	c.Mu.RLock()
-}
-
-func (c *ClusterNodeMap) RUnlock() {
-	c.Mu.RUnlock()
-}
-
-func (c *ClusterNodeMap) Lock() {
-	c.Mu.Lock()
-}
-
-func (c *ClusterNodeMap) Unlock() {
-	c.Mu.Unlock()
+func NewClusterNodeMap() *ClusterNodeMap {
+	return &ClusterNodeMap{
+		clusterNodeMap: make(map[string]*NodeMap),
+	}
 }
 
 // GetOrCreateNodeMap retrieves the NodeMap for the given cluster session, creating it if it doesn't exist.
 func (c *ClusterNodeMap) GetOrCreateNodeMap(clusterSessionID string) *NodeMap {
-	c.Lock()
-	defer c.Unlock()
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
-	nodeMap, exists := c.ClusterNodeMap[clusterSessionID]
+	nodeMap, exists := c.clusterNodeMap[clusterSessionID]
 	if !exists {
 		nodeMap = NewNodeMap()
-		c.ClusterNodeMap[clusterSessionID] = nodeMap
+		c.clusterNodeMap[clusterSessionID] = nodeMap
 	}
 	return nodeMap
 }
 
+// GetNodeMap returns all nodes for a cluster session as deep copies.
+func (c *ClusterNodeMap) GetNodeMap(clusterSessionID string) map[string]Node {
+	c.mu.RLock()
+	nodeMap, ok := c.clusterNodeMap[clusterSessionID]
+	c.mu.RUnlock()
+	if !ok {
+		return map[string]Node{}
+	}
+
+	return nodeMap.GetNodeMap()
+}
+
+// GetNodeByNodeID returns a node by ID in a cluster session as a deep copy.
+func (c *ClusterNodeMap) GetNodeByNodeID(clusterSessionID, nodeID string) (Node, bool) {
+	c.mu.RLock()
+	nodeMap, ok := c.clusterNodeMap[clusterSessionID]
+	c.mu.RUnlock()
+	if !ok {
+		return Node{}, false
+	}
+
+	return nodeMap.GetNodeByNodeID(nodeID)
+}
+
 // CreateOrMergeNode retrieves or creates a Node and applies the merge function.
 func (n *NodeMap) CreateOrMergeNode(nodeId string, mergeFn func(*Node)) {
-	n.Lock()
-	defer n.Unlock()
+	n.mu.Lock()
+	defer n.mu.Unlock()
 
-	node, exists := n.NodeMap[nodeId]
+	node, exists := n.nodeMap[nodeId]
 	if !exists {
 		node = Node{NodeID: nodeId}
 	}
 
 	mergeFn(&node)
-	n.NodeMap[nodeId] = node
+	n.nodeMap[nodeId] = node
+}
+
+// GetNodeMap returns all nodes as deep copies keyed by node ID.
+func (n *NodeMap) GetNodeMap() map[string]Node {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	nodes := make(map[string]Node, len(n.nodeMap))
+	for id, node := range n.nodeMap {
+		nodes[id] = node.DeepCopy()
+	}
+
+	return nodes
+}
+
+// GetNodeByNodeID returns a node by ID as a deep copy.
+func (n *NodeMap) GetNodeByNodeID(nodeID string) (Node, bool) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	node, ok := n.nodeMap[nodeID]
+	if !ok {
+		return Node{}, false
+	}
+
+	return node.DeepCopy(), true
 }
 
 // DeepCopy returns a deep copy of the Node, which prevents race conditions.
