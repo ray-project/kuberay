@@ -1,9 +1,9 @@
 package s3
 
 import (
+	"fmt"
 	"os"
-
-	"github.com/aws/aws-sdk-go/aws"
+	"strconv"
 
 	"github.com/ray-project/kuberay/historyserver/pkg/collector/types"
 )
@@ -11,8 +11,8 @@ import (
 const DefaultS3Bucket = "ray-historyserver"
 
 type config struct {
-	S3ForcePathStyle *bool
-	DisableSSL       *bool
+	S3ForcePathStyle bool
+	DisableSSL       bool
 	S3Endpoint       string
 	S3Bucket         string
 	S3Region         string
@@ -30,72 +30,104 @@ func getS3BucketWithDefault() string {
 	return bucket
 }
 
-func (c *config) complete(rcc *types.RayCollectorConfig, jd map[string]interface{}) {
+func (c *config) complete(rcc *types.RayCollectorConfig, jd map[string]interface{}) error {
 	c.RayCollectorConfig = *rcc
-	c.AccessKeyID = os.Getenv("AWS_ACCESS_KEY_ID")
-	c.SecretAccessKey = os.Getenv("AWS_SECRET_ACCESS_KEY")
-	c.SessionToken = os.Getenv("AWS_SESSION_TOKEN")
-	c.S3Bucket = getS3BucketWithDefault()
-	if len(jd) == 0 {
-		c.S3Endpoint = os.Getenv("S3_ENDPOINT")
-		c.S3Region = os.Getenv("S3_REGION")
-		if os.Getenv("S3FORCE_PATH_STYLE") != "" {
-			c.S3ForcePathStyle = aws.Bool(os.Getenv("S3FORCE_PATH_STYLE") == "true")
-		}
-		if os.Getenv("S3DISABLE_SSL") != "" {
-			c.DisableSSL = aws.Bool(os.Getenv("S3DISABLE_SSL") == "true")
-		}
-	} else {
-		if bucket, ok := jd["s3Bucket"]; ok {
-			c.S3Bucket = bucket.(string)
-		}
-		if endpoint, ok := jd["s3Endpoint"]; ok {
-			c.S3Endpoint = endpoint.(string)
-		}
-		if region, ok := jd["s3Region"]; ok {
-			c.S3Region = region.(string)
-		}
-		if forcePathStyle, ok := jd["s3ForcePathStyle"]; ok {
-			c.S3ForcePathStyle = aws.Bool(forcePathStyle.(string) == "true")
-		}
-		if s3disableSSL, ok := jd["s3DisableSSL"]; ok {
-			c.DisableSSL = aws.Bool(s3disableSSL.(string) == "true")
-		}
-	}
+	return c.populateFromEnvAndJSON(jd)
 }
 
-func (c *config) completeHSConfig(rcc *types.RayHistoryServerConfig, jd map[string]interface{}) {
+func (c *config) completeHSConfig(rcc *types.RayHistoryServerConfig, jd map[string]interface{}) error {
 	c.RayCollectorConfig = types.RayCollectorConfig{
 		RootDir: rcc.RootDir,
 	}
+	return c.populateFromEnvAndJSON(jd)
+}
+
+func (c *config) populateFromEnvAndJSON(jd map[string]interface{}) error {
 	c.AccessKeyID = os.Getenv("AWS_ACCESS_KEY_ID")
 	c.SecretAccessKey = os.Getenv("AWS_SECRET_ACCESS_KEY")
 	c.SessionToken = os.Getenv("AWS_SESSION_TOKEN")
+	if c.AccessKeyID == "" {
+		c.AccessKeyID = os.Getenv("AWS_S3ID")
+	}
+	if c.SecretAccessKey == "" {
+		c.SecretAccessKey = os.Getenv("AWS_S3SECRET")
+	}
+	if c.SessionToken == "" {
+		c.SessionToken = os.Getenv("AWS_S3TOKEN")
+	}
 	c.S3Bucket = getS3BucketWithDefault()
-	if len(jd) == 0 {
-		c.S3Endpoint = os.Getenv("S3_ENDPOINT")
-		c.S3Region = os.Getenv("S3_REGION")
-		if os.Getenv("S3FORCE_PATH_STYLE") != "" {
-			c.S3ForcePathStyle = aws.Bool(os.Getenv("S3FORCE_PATH_STYLE") == "true")
+	c.S3Endpoint = os.Getenv("S3_ENDPOINT")
+	c.S3Region = os.Getenv("S3_REGION")
+	if err := setBoolFromEnv("S3FORCE_PATH_STYLE", &c.S3ForcePathStyle); err != nil {
+		return err
+	}
+	if err := setBoolFromEnv("S3DISABLE_SSL", &c.DisableSSL); err != nil {
+		return err
+	}
+
+	if bucket, ok := jd["s3Bucket"]; ok {
+		v, ok := bucket.(string)
+		if !ok {
+			return fmt.Errorf("invalid type %T for s3Bucket: expected string", bucket)
 		}
-		if os.Getenv("S3DISABLE_SSL") != "" {
-			c.DisableSSL = aws.Bool(os.Getenv("S3DISABLE_SSL") == "true")
+		c.S3Bucket = v
+	}
+	if endpoint, ok := jd["s3Endpoint"]; ok {
+		v, ok := endpoint.(string)
+		if !ok {
+			return fmt.Errorf("invalid type %T for s3Endpoint: expected string", endpoint)
 		}
-	} else {
-		if bucket, ok := jd["s3Bucket"]; ok {
-			c.S3Bucket = bucket.(string)
+		c.S3Endpoint = v
+	}
+	if region, ok := jd["s3Region"]; ok {
+		v, ok := region.(string)
+		if !ok {
+			return fmt.Errorf("invalid type %T for s3Region: expected string", region)
 		}
-		if endpoint, ok := jd["s3Endpoint"]; ok {
-			c.S3Endpoint = endpoint.(string)
+		c.S3Region = v
+	}
+	if forcePathStyle, ok := jd["s3ForcePathStyle"]; ok {
+		if err := setBoolFromValue("s3ForcePathStyle", forcePathStyle, &c.S3ForcePathStyle); err != nil {
+			return err
 		}
-		if region, ok := jd["s3Region"]; ok {
-			c.S3Region = region.(string)
+	}
+	if s3disableSSL, ok := jd["s3DisableSSL"]; ok {
+		if err := setBoolFromValue("s3DisableSSL", s3disableSSL, &c.DisableSSL); err != nil {
+			return err
 		}
-		if forcePathStyle, ok := jd["s3ForcePathStyle"]; ok {
-			c.S3ForcePathStyle = aws.Bool(forcePathStyle.(string) == "true")
+	}
+	return nil
+}
+
+func setBoolFromEnv(envKey string, target *bool) error {
+	value, ok := os.LookupEnv(envKey)
+	if !ok || value == "" {
+		return nil
+	}
+	parsed, err := strconv.ParseBool(value)
+	if err != nil {
+		return fmt.Errorf("failed to parse boolean from environment variable %q: %w", envKey, err)
+	}
+	*target = parsed
+	return nil
+}
+
+func setBoolFromValue(name string, value interface{}, target *bool) error {
+	if value == nil {
+		return nil
+	}
+	switch v := value.(type) {
+	case bool:
+		*target = v
+		return nil
+	case string:
+		parsed, err := strconv.ParseBool(v)
+		if err != nil {
+			return fmt.Errorf("failed to parse boolean value for %q: %w", name, err)
 		}
-		if s3disableSSL, ok := jd["s3DisableSSL"]; ok {
-			c.DisableSSL = aws.Bool(s3disableSSL.(string) == "true")
-		}
+		*target = parsed
+		return nil
+	default:
+		return fmt.Errorf("unsupported type %T for config field %q: expected bool or string", value, name)
 	}
 }

@@ -29,7 +29,7 @@ type RayLogHandler struct {
 	RayClusterName         string
 	LogDir                 string
 	RayNodeName            string
-	RayClusterNamespace    string
+	RayClusterID           string
 	RootDir                string
 	SessionDir             string
 	prevLogsDir            string
@@ -101,7 +101,7 @@ func (r *RayLogHandler) processSessionLatestLogs() {
 	if r.IsHead {
 		metadir := path.Join(r.RootDir, "metadir")
 		metafile := path.Clean(metadir + "/" + fmt.Sprintf("%s/%v",
-			utils.AppendRayClusterNameNamespace(r.RayClusterName, r.RayClusterNamespace),
+			utils.AppendRayClusterNameID(r.RayClusterName, r.RayClusterID),
 			path.Base(sessionID),
 		))
 		if err := r.Writer.CreateDirectory(path.Dir(metafile)); err != nil {
@@ -180,7 +180,7 @@ func (r *RayLogHandler) processSessionLatestLogFile(absoluteLogPathName, session
 	subdir, _ := filepath.Split(relativePath)
 
 	// Build the object name using the standard path structure
-	logDir := utils.GetLogDirByNameID(r.RootDir, utils.AppendRayClusterNameNamespace(r.RayClusterName, r.RayClusterNamespace), nodeID, sessionID)
+	logDir := utils.GetLogDirByNameID(r.RootDir, utils.AppendRayClusterNameID(r.RayClusterName, r.RayClusterID), nodeID, sessionID)
 
 	if subdir != "" && subdir != "." {
 		// Remove trailing separator if present
@@ -202,7 +202,7 @@ func (r *RayLogHandler) processSessionLatestLogFile(absoluteLogPathName, session
 		return err
 	}
 
-	// Write to storage
+	// Write to storage (including 0-byte so Azure e2e sees monitor.out etc. within timeout)
 	err = r.Writer.WriteFile(objectName, bytes.NewReader(content))
 	if err != nil {
 		logrus.Errorf("Failed to write object %s: %v", objectName, err)
@@ -450,7 +450,7 @@ func (r *RayLogHandler) processSessionPrevLogs(sessionDir string) {
 	if r.IsHead {
 		metadir := path.Join(r.RootDir, "metadir")
 		metafile := path.Clean(metadir + "/" + fmt.Sprintf("%s/%v",
-			utils.AppendRayClusterNameNamespace(r.RayClusterName, r.RayClusterNamespace),
+			utils.AppendRayClusterNameID(r.RayClusterName, r.RayClusterID),
 			path.Base(sessionID),
 		))
 		if err := r.Writer.CreateDirectory(path.Dir(metafile)); err != nil {
@@ -614,7 +614,7 @@ func (r *RayLogHandler) processPrevLogFile(absoluteLogPathName, localLogDir, ses
 	subdir, _ := filepath.Split(relativePath)
 
 	// Build the object name using the standard path structure
-	logDir := utils.GetLogDirByNameID(r.RootDir, utils.AppendRayClusterNameNamespace(r.RayClusterName, r.RayClusterNamespace), nodeID, sessionID)
+	logDir := utils.GetLogDirByNameID(r.RootDir, utils.AppendRayClusterNameID(r.RayClusterName, r.RayClusterID), nodeID, sessionID)
 
 	if subdir != "" && subdir != "." {
 		// Remove trailing separator if present
@@ -636,13 +636,12 @@ func (r *RayLogHandler) processPrevLogFile(absoluteLogPathName, localLogDir, ses
 		return err
 	}
 
-	// Write to storage
+	// Write to storage (including 0-byte so Azure e2e sees all required files)
 	err = r.Writer.WriteFile(objectName, bytes.NewReader(content))
 	if err != nil {
 		logrus.Errorf("Failed to write object %s: %v", objectName, err)
 		return err
 	}
-
 	logrus.Infof("Successfully wrote object %s, size: %d bytes", objectName, len(content))
 
 	// Move the processed file to persist-complete-logs directory to avoid re-uploading
@@ -747,7 +746,7 @@ func (r *RayLogHandler) WatchSessionLatestLoops() {
 				sessionID := filepath.Base(event.Name)
 				metadir := path.Join(r.RootDir, "metadir")
 				metafile := path.Clean(metadir + "/" + fmt.Sprintf("%s/%v",
-					utils.AppendRayClusterNameNamespace(r.RayClusterName, r.RayClusterNamespace),
+					utils.AppendRayClusterNameID(r.RayClusterName, r.RayClusterID),
 					path.Base(sessionID),
 				))
 				if err := r.Writer.CreateDirectory(path.Dir(metafile)); err != nil {

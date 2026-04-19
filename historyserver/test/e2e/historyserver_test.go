@@ -9,8 +9,8 @@ import (
 	"regexp"
 	"testing"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -32,7 +32,7 @@ func TestHistoryServer(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		testFunc func(Test, *WithT, *corev1.Namespace, *s3.S3)
+		testFunc func(Test, *WithT, *corev1.Namespace, *s3.Client)
 	}{
 		{
 			name:     "Live cluster: historyserver endpoints should be accessible",
@@ -151,7 +151,7 @@ func TestHistoryServer(t *testing.T) {
 	}
 }
 
-func testLiveClusters(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testLiveClusters(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 	ApplyHistoryServer(test, g, namespace, "")
@@ -167,7 +167,7 @@ func testLiveClusters(test Test, g *WithT, namespace *corev1.Namespace, s3Client
 	LogWithTimestamp(test.T(), "Live clusters E2E test completed successfully")
 }
 
-func testLiveGrafanaHealth(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testLiveGrafanaHealth(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) {
 	rayCluster := PrepareTestEnvWithPrometheusAndGrafana(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 	ApplyHistoryServer(test, g, namespace, "")
@@ -185,7 +185,7 @@ func testLiveGrafanaHealth(test Test, g *WithT, namespace *corev1.Namespace, s3C
 	LogWithTimestamp(test.T(), "Live clusters grafana health E2E test completed successfully")
 }
 
-func testLivePrometheusHealth(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testLivePrometheusHealth(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) {
 	rayCluster := PrepareTestEnvWithPrometheusAndGrafana(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 	ApplyHistoryServer(test, g, namespace, "")
@@ -202,7 +202,7 @@ func testLivePrometheusHealth(test Test, g *WithT, namespace *corev1.Namespace, 
 }
 
 // testLogFileEndpointLiveCluster verifies that the history server can fetch log files from a live cluster.
-func testLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 	ApplyHistoryServer(test, g, namespace, "")
@@ -212,7 +212,7 @@ func testLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Names
 	client := CreateHTTPClientWithCookieJar(g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 
-	nodeID := GetOneOfNodeID(g, client, historyServerURL, false)
+	nodeID := GetOneOfNodeID(g, client, historyServerURL, true)
 	filename := "raylet.out"
 
 	logFileTestCases := []struct {
@@ -487,7 +487,7 @@ func testLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Names
 // 6. Verify parameter validation for dead cluster
 // 7. Verify security (path traversal) protection
 // 8. Delete S3 bucket to ensure test isolation
-func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 
@@ -925,8 +925,8 @@ func getAllEligibleActorIDs(g *WithT, client *http.Client, historyServerURL stri
 	err = json.Unmarshal(body, &result)
 	g.Expect(err).NotTo(HaveOccurred())
 
-	// Extract actorId from response
-	// Response format: {"result": true, "msg": "...", "data": {"actors": {actorId: {...}, ...}}}
+	// Extract actor_id from response
+	// Response format: {"result": true, "msg": "...", "data": {"actors": {actor_id: {...}, ...}}}
 	data, ok := result["data"].(map[string]interface{})
 	g.Expect(ok).To(BeTrue(), "response should have 'data' field")
 
@@ -1009,7 +1009,7 @@ func getEligibleWorkerPID(g *WithT, client *http.Client, historyServerURL string
 // 5. Delete cluster to test dead cluster behavior
 // 6. Test dead cluster: streaming should return 501 Not Implemented
 // 7. Delete S3 bucket to ensure test isolation
-func testLogStreamEndpoint(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testLogStreamEndpoint(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 	ApplyHistoryServer(test, g, namespace, "")
@@ -1023,7 +1023,7 @@ func testLogStreamEndpoint(test Test, g *WithT, namespace *corev1.Namespace, s3C
 	client := CreateHTTPClientWithCookieJar(g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 
-	nodeID := GetOneOfNodeID(g, client, historyServerURL, false)
+	nodeID := GetOneOfNodeID(g, client, historyServerURL, true)
 	filename := "raylet.out"
 	streamURL := fmt.Sprintf("%s%s?node_id=%s&filename=%s", historyServerURL, EndpointLogsStream, nodeID, filename)
 
@@ -1096,7 +1096,7 @@ func testLogStreamEndpoint(test Test, g *WithT, namespace *corev1.Namespace, s3C
 // 10. glob=events/event_JOBS* — subdirectory prefix is split from the pattern, then the wildcard matches within that subdirectory.
 // 11. glob=**/*.out — doublestar pattern recursively matches all .out files across all directories.
 // 12. Delete S3 bucket to ensure test isolation.
-func testNodeLogsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testNodeLogsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 
@@ -1255,11 +1255,7 @@ func testNodeLogsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Name
 		// glob=events/event_JOBS* should match only event_JOBS.log inside the events/ subdirectory.
 		// Expected response:
 		//   {"data":{"result":{"internal":["event_JOBS.log"]}},"msg":"","result":true}
-		//
-		// Always use the head node ID to avoid flakiness since events/event_JOBS.log is only present on the head node.
-		// Ref: https://github.com/ray-project/ray/blob/20eae5b1/python/ray/dashboard/modules/job/job_head.py#L397-L399
-		headNodeID := GetOneOfNodeID(g, client, historyServerURL, true)
-		logsURL := fmt.Sprintf("%s%s?node_id=%s&glob=%s", historyServerURL, EndpointLogs, headNodeID, url.QueryEscape("events/event_JOBS*"))
+		logsURL := fmt.Sprintf("%s%s?node_id=%s&glob=%s", historyServerURL, EndpointLogs, nodeID, url.QueryEscape("events/event_JOBS*"))
 		resp, err := client.Get(logsURL)
 		g.Expect(err).NotTo(HaveOccurred())
 		defer resp.Body.Close()
@@ -1358,7 +1354,7 @@ func countFiles(result map[string]interface{}) int {
 //   - With download=1&job_id=<id>: filename includes the job_id.
 //
 // 4. Delete S3 bucket to ensure test isolation
-func testTimelineEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testTimelineEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 	ApplyHistoryServer(test, g, namespace, "")
@@ -1409,7 +1405,7 @@ func testTimelineEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Name
 //   - With download=1&job_id=<id>: filename includes the job_id.
 //
 // 5. Delete S3 bucket to ensure test isolation
-func testTimelineEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testTimelineEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 
@@ -1577,7 +1573,7 @@ func verifyTimelineResponse(g *WithT, client *http.Client, historyServerURL stri
 // 5. Verify that the history server returns actors via /logical/actors endpoint
 // 6. Verify that the history server returns a single actor via /logical/actors/{actor_id} endpoint
 // 7. Delete S3 bucket to ensure test isolation
-func testLogicalActorsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testLogicalActorsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 
@@ -1625,18 +1621,19 @@ func testLogicalActorsEndpointDeadCluster(test Test, g *WithT, namespace *corev1
 			gg.Expect(ok).To(BeTrue())
 			gg.Expect(len(actors)).To(BeNumerically(">", 0), "should have at least one actor")
 
-			// Verify actor schema matches formatActorForResponse format
+			// Verify actor schema matches formatActorForResponse format (for the first actor)
+			// Required fields from router.go:formatActorForResponse
 			for _, actorData := range actors {
 				actor, ok := actorData.(map[string]any)
 				gg.Expect(ok).To(BeTrue(), "actor should be a map")
-				gg.Expect(actor["actorId"]).NotTo(BeNil(), "actor should have actorId")
-				gg.Expect(actor["jobId"]).NotTo(BeNil(), "actor should have jobId")
+				gg.Expect(actor["actor_id"]).NotTo(BeNil(), "actor should have actor_id")
+				gg.Expect(actor["job_id"]).NotTo(BeNil(), "actor should have job_id")
 				gg.Expect(actor["state"]).NotTo(BeNil(), "actor should have state")
 				gg.Expect(actor["address"]).NotTo(BeNil(), "actor should have address")
 				address, ok := actor["address"].(map[string]any)
 				gg.Expect(ok).To(BeTrue(), "address should be a map")
-				gg.Expect(address["nodeId"]).NotTo(BeNil(), "address should have nodeId")
-				gg.Expect(address["ipAddress"]).NotTo(BeNil(), "address should have ipAddress")
+				gg.Expect(address["node_id"]).NotTo(BeNil(), "address should have node_id")
+				gg.Expect(address["ip_address"]).NotTo(BeNil(), "address should have ip_address")
 				break // Only verify the first actor
 			}
 
@@ -1666,21 +1663,22 @@ func testLogicalActorsEndpointDeadCluster(test Test, g *WithT, namespace *corev1
 			gg.Expect(result["result"]).To(Equal(true))
 			gg.Expect(result["msg"]).To(Equal("Actor fetched."))
 
-			// Verify data.detail exists and contains actorId
+			// Verify data.detail exists and contains actor_id
 			data, ok := result["data"].(map[string]any)
 			gg.Expect(ok).To(BeTrue())
 			detail, ok := data["detail"].(map[string]any)
 			gg.Expect(ok).To(BeTrue())
 
 			// Verify actor schema matches formatActorForResponse format
-			gg.Expect(detail["actorId"]).To(Equal(actorID))
-			gg.Expect(detail["jobId"]).NotTo(BeNil())
+			// Required fields from router.go:formatActorForResponse
+			gg.Expect(detail["actor_id"]).To(Equal(actorID))
+			gg.Expect(detail["job_id"]).NotTo(BeNil())
 			gg.Expect(detail["state"]).NotTo(BeNil())
 			gg.Expect(detail["address"]).NotTo(BeNil())
 			address, ok := detail["address"].(map[string]any)
 			gg.Expect(ok).To(BeTrue(), "address should be a map")
-			gg.Expect(address["nodeId"]).NotTo(BeNil())
-			gg.Expect(address["ipAddress"]).NotTo(BeNil())
+			gg.Expect(address["node_id"]).NotTo(BeNil())
+			gg.Expect(address["ip_address"]).NotTo(BeNil())
 
 			LogWithTimestamp(t, "Successfully fetched actor %s from history server", actorID)
 		}, TestTimeoutShort).Should(Succeed())
@@ -1723,7 +1721,7 @@ func testLogicalActorsEndpointDeadCluster(test Test, g *WithT, namespace *corev1
 // 6. Verify the response status code is 200
 // 7. Verify the response API schema
 // 8. Delete S3 bucket to ensure test isolation
-func testLiveClusterTasks(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testLiveClusterTasks(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) {
 	endpoint := EndpointTasks + "?detail=1"
 
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
@@ -1776,7 +1774,7 @@ func testLiveClusterTasks(test Test, g *WithT, namespace *corev1.Namespace, s3Cl
 // 9. Delete S3 bucket to ensure test isolation
 //
 // NOTE: timeout is not tested because tasks are in-memory and retrieval is typically fast.
-func testDeadClusterTasks(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testDeadClusterTasks(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 
@@ -1913,7 +1911,7 @@ func testDeadClusterTasks(test Test, g *WithT, namespace *corev1.Namespace, s3Cl
 // 6. Verify the response status code is 200
 // 7. Verify the response API schema
 // 8. Delete S3 bucket to ensure test isolation
-func testLiveClusterNodes(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testLiveClusterNodes(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) {
 	// Explicitly specify the view parameter to get the current snapshot.
 	// If the view parameter is not specified, the following error will be returned:
 	// {"result": false, "msg": "Unknown view None", "data": {}}
@@ -1954,7 +1952,7 @@ func testLiveClusterNodes(test Test, g *WithT, namespace *corev1.Namespace, s3Cl
 // 7. Verify the response status code is 200
 // 8. Verify the response API schema
 // 9. Delete S3 bucket to ensure test isolation
-func testDeadClusterNodes(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testDeadClusterNodes(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 
@@ -2010,7 +2008,7 @@ func testDeadClusterNodes(test Test, g *WithT, namespace *corev1.Namespace, s3Cl
 //   - Verify the response API schema
 //
 // 7. Delete S3 bucket to ensure test isolation
-func testLiveClusterNode(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testLiveClusterNode(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 	headNodeID := GetNodeIDFromPod(test, g, HeadPod(test, rayCluster), "ray-head")
@@ -2055,7 +2053,7 @@ func testLiveClusterNode(test Test, g *WithT, namespace *corev1.Namespace, s3Cli
 //   - Verify the response API schema
 //
 // 8. Delete S3 bucket to ensure test isolation
-func testDeadClusterNode(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testDeadClusterNode(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 	headNodeID := GetNodeIDFromPod(test, g, HeadPod(test, rayCluster), "ray-head")
@@ -2097,7 +2095,7 @@ func testDeadClusterNode(test Test, g *WithT, namespace *corev1.Namespace, s3Cli
 
 // testLiveClusterMetadata verifies that the /api/v0/cluster_metadata endpoint proxies to the
 // live Ray Dashboard and returns valid cluster metadata.
-func testLiveClusterMetadata(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testLiveClusterMetadata(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyHistoryServer(test, g, namespace, "")
 	historyServerURL := GetHistoryServerURL(test, g, namespace)
@@ -2138,7 +2136,7 @@ func testLiveClusterMetadata(test Test, g *WithT, namespace *corev1.Namespace, s
 
 // testDeadClusterMetadata verifies that the /api/v0/cluster_metadata endpoint returns stored
 // cluster metadata from S3 for a dead (deleted) cluster.
-func testDeadClusterMetadata(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testDeadClusterMetadata(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 
 	// Wait for cluster metadata to be stored in S3 by the collector before deleting the cluster.
@@ -2149,7 +2147,7 @@ func testDeadClusterMetadata(test Test, g *WithT, namespace *corev1.Namespace, s
 	LogWithTimestamp(test.T(), "Waiting for cluster metadata to appear at S3 key: %s", metaKey)
 
 	g.Eventually(func(gg Gomega) {
-		_, err := s3Client.HeadObject(&s3.HeadObjectInput{
+		_, err := s3Client.HeadObject(test.Ctx(), &s3.HeadObjectInput{
 			Bucket: aws.String(S3BucketName),
 			Key:    aws.String(metaKey),
 		})
@@ -2218,22 +2216,21 @@ func testDeadClusterMetadata(test Test, g *WithT, namespace *corev1.Namespace, s
 // 4. Delete the cluster
 // 5. Deploy the history server and query /api/v0/placement_groups
 // 6. Verify the response is valid JSON with a non-empty placement_groups list
-func testDeadClusterPlacementGroups(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testDeadClusterPlacementGroups(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 
 	// Submit a RayJob that creates a detached placement group named "test_pg".
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 
 	// Wait for placement groups data to be stored in S3 by the collector before deleting the cluster.
-	// The collector stores the endpoint with query params, so the storage key includes them.
 	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, rayCluster.Namespace)
 	sessionID := GetSessionIDFromHeadPod(test, g, rayCluster)
-	storageKey := utils.EndpointPathToStorageKey("/api/v0/placement_groups?detail=1&limit=10000")
+	storageKey := utils.EndpointPathToStorageKey("/api/v0/placement_groups")
 	pgKey := fmt.Sprintf("log/%s/%s/%s/%s", clusterNameID, sessionID, utils.RAY_SESSIONDIR_FETCHED_ENDPOINTS_NAME, storageKey)
 	LogWithTimestamp(test.T(), "Waiting for placement groups data to appear at S3 key: %s", pgKey)
 
 	g.Eventually(func(gg Gomega) {
-		_, err := s3Client.HeadObject(&s3.HeadObjectInput{
+		_, err := s3Client.HeadObject(test.Ctx(), &s3.HeadObjectInput{
 			Bucket: aws.String(S3BucketName),
 			Key:    aws.String(pgKey),
 		})
@@ -2261,8 +2258,7 @@ func testDeadClusterPlacementGroups(test Test, g *WithT, namespace *corev1.Names
 	client := CreateHTTPClientWithCookieJar(g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 
-	// Use the same query params as the frontend to match the storage key.
-	endpoint := "/api/v0/placement_groups?detail=1&limit=10000"
+	endpoint := "/api/v0/placement_groups"
 	LogWithTimestamp(test.T(), "Testing dead cluster endpoint: %s", endpoint)
 
 	g.Eventually(func(gg Gomega) {
@@ -2313,7 +2309,7 @@ func testDeadClusterPlacementGroups(test Test, g *WithT, namespace *corev1.Names
 // 6. Verify the response status code is 200
 // 7. Verify the response API schema
 // 8. Delete S3 bucket to ensure test isolation
-func testLiveClusterTaskSummarize(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testLiveClusterTaskSummarize(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) {
 	endpoint := EndpointTasksSummarize + "?summary_by=lineage"
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
@@ -2348,7 +2344,7 @@ func testLiveClusterTaskSummarize(test Test, g *WithT, namespace *corev1.Namespa
 // 7. Verify the response status code is 200
 // 8. Verify the response API schema
 // 9. Delete S3 bucket to ensure test isolation
-func testDeadClusterTaskSummarize(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testDeadClusterTaskSummarize(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) {
 	endpoint := EndpointTasksSummarize + "?summary_by=lineage"
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
@@ -2393,7 +2389,7 @@ func testDeadClusterTaskSummarize(test Test, g *WithT, namespace *corev1.Namespa
 // 6. Verify the response status code is 200
 // 7. Verify the response API schema
 // 8. Delete S3 bucket to ensure test isolation
-func testLiveClusterTaskSummarizeFuncName(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testLiveClusterTaskSummarizeFuncName(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) {
 	endpoint := EndpointTasksSummarize
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
@@ -2426,7 +2422,7 @@ func testLiveClusterTaskSummarizeFuncName(test Test, g *WithT, namespace *corev1
 // 7. Verify the response status code is 200
 // 8. Verify the response API schema
 // 9. Delete S3 bucket to ensure test isolation
-func testDeadClusterTaskSummarizeFuncName(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testDeadClusterTaskSummarizeFuncName(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) {
 	endpoint := EndpointTasksSummarize
 
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
@@ -2702,8 +2698,9 @@ func verifySingleEndpoint(test Test, g *WithT, client *http.Client, endpointURL 
 
 // TODO(jwj): Make verification for node-related endpoints more robust.
 // verifyNodesRespSchema verifies that the /nodes response is valid according to the API schema.
-// Both live and dead clusters now return the same format (flat array of latest snapshots).
-// isLive is kept for signature compatibility but no longer affects validation.
+// isLive indicates whether the response is from a live cluster or a dead cluster:
+//   - isLive: true for a live cluster (current snapshot)
+//   - isLive: false for a dead cluster (historical replay)
 func verifyNodesRespSchema(test Test, g *WithT, nodesResp map[string]any, isLive bool) {
 	// Verify top-level fields.
 	g.Expect(nodesResp).To(HaveKeyWithValue("result", BeTrue()))
@@ -2720,13 +2717,28 @@ func verifyNodesRespSchema(test Test, g *WithT, nodesResp map[string]any, isLive
 	summary, ok := data["summary"].([]any)
 	g.Expect(ok).To(BeTrue(), "'summary' should be an array")
 
-	// Both live and dead clusters now return a flat array of node summaries.
-	// Dead cluster uses the latest snapshot per node to match the Ray Dashboard API format.
-	g.Expect(len(summary)).To(Equal(2), "Should have 2 node summaries (one head node and one worker node)")
-	for _, nodeSummary := range summary {
-		nodeSummarySnapshot, ok := nodeSummary.(map[string]any)
-		g.Expect(ok).To(BeTrue(), "nodeSummary should be a map")
-		verifyNodeSummarySchema(test, g, nodeSummarySnapshot)
+	if isLive {
+		// Live cluster: summary contains node summary snapshot of each node in the cluster.
+		g.Expect(len(summary)).To(Equal(2), "Live cluster should have 2 node summaries (one head node and one worker node)")
+		for _, nodeSummary := range summary {
+			nodeSummarySnapshot, ok := nodeSummary.(map[string]any)
+			g.Expect(ok).To(BeTrue(), "nodeSummary should be a map")
+			verifyNodeSummarySchema(test, g, nodeSummarySnapshot)
+		}
+	} else {
+		// Dead cluster: summary contains node summary replay (array of snapshots) of each node in the cluster.
+		// The node summary replay should follow the chronological order of the node state transitions.
+		g.Expect(len(summary)).To(Equal(2), "Dead cluster should have 2 node summary replays (one head node and one worker node)")
+		for _, nodeSummaryReplay := range summary {
+			nodeSummarySnapshots, ok := nodeSummaryReplay.([]any)
+			g.Expect(ok).To(BeTrue(), "nodeSummaryReplay should be an array")
+
+			for _, nodeSummarySnapshot := range nodeSummarySnapshots {
+				nodeSummarySnapshotMap, ok := nodeSummarySnapshot.(map[string]any)
+				g.Expect(ok).To(BeTrue(), "nodeSummarySnapshot should be a map")
+				verifyNodeSummarySchema(test, g, nodeSummarySnapshotMap)
+			}
+		}
 	}
 
 	// Verify nodeLogicalResources field.
@@ -2734,20 +2746,45 @@ func verifyNodesRespSchema(test Test, g *WithT, nodesResp map[string]any, isLive
 	nodeLogicalResources, ok := data["nodeLogicalResources"].(map[string]any)
 	g.Expect(ok).To(BeTrue(), "'nodeLogicalResources' should be a map")
 
-	// Both live and dead clusters return {nodeId: string} format.
-	// Dead cluster uses the latest resource string per node.
-	g.Expect(len(nodeLogicalResources)).To(Equal(2), "Should have 2 resource strings (one head node and one worker node)")
-	for nodeId, resourceString := range nodeLogicalResources {
-		g.Expect(nodeId).NotTo(BeEmpty())
-		g.Expect(resourceString).NotTo(BeEmpty())
+	if isLive {
+		// Live cluster: nodeLogicalResources contains resource string of each node in the cluster.
+		g.Expect(len(nodeLogicalResources)).To(Equal(2), "Live cluster should have 2 resource strings (one head node and one worker node)")
+		for nodeId, resourceString := range nodeLogicalResources {
+			g.Expect(nodeId).NotTo(BeEmpty())
+			g.Expect(resourceString).NotTo(BeEmpty())
+		}
+	} else {
+		// Dead cluster: nodeLogicalResources contains resource string replay (array of snapshots) of each node in the cluster.
+		// The resource string replay should follow the chronological order of the node state transitions.
+		g.Expect(len(nodeLogicalResources)).To(Equal(2), "Dead cluster should have 2 resource string replays (one head node and one worker node)")
+		for nodeId, resourceStringReplay := range nodeLogicalResources {
+			g.Expect(nodeId).NotTo(BeEmpty())
+
+			resourceStringSnapshots, ok := resourceStringReplay.([]any)
+			g.Expect(ok).To(BeTrue(), "resourceStringReplay should be an array")
+			for _, resourceStringSnapshot := range resourceStringSnapshots {
+				resourceStringSnapshotMap, ok := resourceStringSnapshot.(map[string]any)
+				g.Expect(ok).To(BeTrue(), "resourceStringSnapshot should be a map")
+				g.Expect(resourceStringSnapshotMap).To(HaveKey("t"))
+				g.Expect(resourceStringSnapshotMap).To(HaveKey("resourceString"))
+
+				resourceString, ok := resourceStringSnapshotMap["resourceString"].(string)
+				g.Expect(ok).To(BeTrue(), "resourceString should be a string")
+				if resourceString != "" {
+					g.Expect(resourceString).To(ContainSubstring("memory"))
+					g.Expect(resourceString).To(ContainSubstring("object_store_memory"))
+				}
+			}
+		}
 	}
 
 	LogWithTimestamp(test.T(), "/nodes response schema verification completed")
 }
 
 // verifyNodeRespSchema verifies that the /nodes/{node_id} response is valid according to the API schema.
-// Both live and dead clusters now return the same format (single object with latest snapshot).
-// isLive is kept for signature compatibility but no longer affects validation.
+// isLive indicates whether the response is from a live cluster or a dead cluster:
+//   - isLive: true for a live cluster (current snapshot)
+//   - isLive: false for a dead cluster (historical replay)
 func verifyNodeRespSchema(test Test, g *WithT, nodeResp map[string]any, isLive bool) {
 	// Verify top-level fields.
 	g.Expect(nodeResp).To(HaveKeyWithValue("result", BeTrue()))
@@ -2758,10 +2795,22 @@ func verifyNodeRespSchema(test Test, g *WithT, nodeResp map[string]any, isLive b
 	g.Expect(ok).To(BeTrue(), "'data' should be a map")
 	g.Expect(data).To(HaveKey("detail"))
 
-	// Both live and dead clusters return detail as a single node object (latest snapshot).
-	nodeSummarySnapshot, ok := data["detail"].(map[string]any)
-	g.Expect(ok).To(BeTrue(), "'detail' should be a map")
-	verifyNodeSummarySchema(test, g, nodeSummarySnapshot)
+	if isLive {
+		// Live cluster: detail contains node summary snapshot of the specified node.
+		nodeSummarySnapshot, ok := data["detail"].(map[string]any)
+		g.Expect(ok).To(BeTrue(), "'detail' should be a map")
+		verifyNodeSummarySchema(test, g, nodeSummarySnapshot)
+	} else {
+		// Dead cluster: detail contains node summary replay (array of snapshots) of the specified node.
+		// The node summary replay should follow the chronological order of the node state transitions.
+		nodeSummarySnapshots, ok := data["detail"].([]any)
+		g.Expect(ok).To(BeTrue(), "'detail' should be an array")
+		for _, nodeSummarySnapshot := range nodeSummarySnapshots {
+			nodeSummarySnapshotMap, ok := nodeSummarySnapshot.(map[string]any)
+			g.Expect(ok).To(BeTrue(), "nodeSummarySnapshot should be a map")
+			verifyNodeSummarySchema(test, g, nodeSummarySnapshotMap)
+		}
+	}
 }
 
 // verifyNodeSummarySchema verifies that the node summary contains key fields.
@@ -3115,7 +3164,7 @@ func verifyNodesHostNameListSchema(test Test, g *WithT, nodesResp map[string]any
 // 5. Set cluster context via /enter_cluster/ endpoint
 // 6. Verify that the /events endpoint returns events with proper structure
 // 7. Delete S3 bucket to ensure test isolation
-func testEventsEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testEventsEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 	ApplyHistoryServer(test, g, namespace, "")
@@ -3169,7 +3218,7 @@ func testEventsEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Namesp
 // 8. Verify that the /events endpoint supports job_id filter (non-existent job_id)
 // 9. Verify that the /events endpoint handles empty job_id parameter correctly
 // 10. Delete S3 bucket to ensure test isolation
-func testEventsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testEventsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 
@@ -3311,7 +3360,7 @@ func testEventsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namesp
 // 8. Verify /timezone returns valid JSON from storage with non-empty 'offset' and 'value'
 // 9. Verify dead cluster offset and value match the live cluster values
 // 10. Delete S3 bucket to ensure test isolation
-func testLiveAndDeadClusterTimezone(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testLiveAndDeadClusterTimezone(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyHistoryServer(test, g, namespace, "")
 	historyServerURL := GetHistoryServerURL(test, g, namespace)
@@ -3377,7 +3426,7 @@ func testLiveAndDeadClusterTimezone(test Test, g *WithT, namespace *corev1.Names
 // 6. Verify /api/cluster_status returns valid JSON response with result=true
 // 7. Verify /api/cluster_status?format=1 returns formatted cluster status string containing "Autoscaler status"
 // 8. Delete S3 bucket to ensure test isolation
-func testLiveClusterStatus(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testLiveClusterStatus(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 	ApplyHistoryServer(test, g, namespace, "")
@@ -3429,7 +3478,7 @@ func testLiveClusterStatus(test Test, g *WithT, namespace *corev1.Namespace, s3C
 // 7. Verify /api/cluster_status returns valid JSON response with result=true
 // 8. Verify /api/cluster_status?format=1 returns formatted cluster status containing "Autoscaler status"
 // 9. Delete S3 bucket to ensure test isolation
-func testDeadClusterStatus(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+func testDeadClusterStatus(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) {
 	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
 	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 

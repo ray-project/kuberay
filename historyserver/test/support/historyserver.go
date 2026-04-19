@@ -7,8 +7,8 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -149,7 +149,7 @@ func GetHistoryServerURL(test Test, g *WithT, namespace *corev1.Namespace) strin
 
 // PrepareTestEnv prepares test environment for each test case, including applying a Ray cluster,
 // checking the collector sidecar container exists in the head pod and an empty S3 bucket exists.
-func PrepareTestEnv(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) *rayv1.RayCluster {
+func PrepareTestEnv(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) *rayv1.RayCluster {
 	// Deploy a Ray cluster with the collector.
 	rayCluster := ApplyRayClusterWithCollectorWithEnvs(test, g, namespace, map[string]string{})
 
@@ -161,7 +161,7 @@ func PrepareTestEnv(test Test, g *WithT, namespace *corev1.Namespace, s3Client *
 	))
 
 	// Check an empty S3 bucket is automatically created.
-	_, err = s3Client.HeadBucket(&s3.HeadBucketInput{
+	_, err = s3Client.HeadBucket(test.Ctx(), &s3.HeadBucketInput{
 		Bucket: aws.String(S3BucketName),
 	})
 	g.Expect(err).NotTo(HaveOccurred())
@@ -171,7 +171,7 @@ func PrepareTestEnv(test Test, g *WithT, namespace *corev1.Namespace, s3Client *
 
 // PrepareTestEnvWithPrometheusAndGrafana prepares test environment with Prometheus and Grafana for each test case, including applying a Ray cluster,
 // checking the collector sidecar container exists in the head pod and an empty S3 bucket exists.
-func PrepareTestEnvWithPrometheusAndGrafana(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) *rayv1.RayCluster {
+func PrepareTestEnvWithPrometheusAndGrafana(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.Client) *rayv1.RayCluster {
 
 	InstallGrafanaAndPrometheus(test, g)
 
@@ -192,7 +192,7 @@ func PrepareTestEnvWithPrometheusAndGrafana(test Test, g *WithT, namespace *core
 	))
 
 	// Check an empty S3 bucket is automatically created.
-	_, err = s3Client.HeadBucket(&s3.HeadBucketInput{
+	_, err = s3Client.HeadBucket(test.Ctx(), &s3.HeadBucketInput{
 		Bucket: aws.String(S3BucketName),
 	})
 	g.Expect(err).NotTo(HaveOccurred())
@@ -201,8 +201,7 @@ func PrepareTestEnvWithPrometheusAndGrafana(test Test, g *WithT, namespace *core
 }
 
 // GetOneOfNodeID retrieves a node ID from the /nodes endpoint.
-// If headNode is true, it iterates over all nodes and returns the one with isHeadNode == true.
-func GetOneOfNodeID(g *WithT, client *http.Client, historyServerURL string, headNode bool) string {
+func GetOneOfNodeID(g *WithT, client *http.Client, historyServerURL string, isLive bool) string {
 	resp, err := client.Get(historyServerURL + "/nodes?view=summary")
 	g.Expect(err).NotTo(HaveOccurred())
 	defer resp.Body.Close()
@@ -219,32 +218,13 @@ func GetOneOfNodeID(g *WithT, client *http.Client, historyServerURL string, head
 	summary := data["summary"].([]any)
 	g.Expect(len(summary)).To(BeNumerically(">", 0))
 
-	// Both live and dead clusters return a flat array of node objects.
-	if !headNode {
-		raylet := getRayletFromNode(g, summary[0])
-		return raylet["nodeId"].(string)
+	var nodeInfo map[string]any
+	if isLive {
+		nodeInfo = summary[0].(map[string]any)
+	} else {
+		nodeInfo = summary[0].([]any)[0].(map[string]any)
 	}
-
-	for _, node := range summary {
-		raylet := getRayletFromNode(g, node)
-		if isHead, ok := raylet["isHeadNode"].(bool); ok && isHead {
-			return raylet["nodeId"].(string)
-		}
-	}
-
-	g.Expect(false).To(BeTrue(), "Expected to find a head node in /nodes summary")
-	return ""
-}
-
-// getRayletFromNode extracts the raylet object from a node summary.
-func getRayletFromNode(g *WithT, node any) map[string]any {
-	nodeInfo, ok := node.(map[string]any)
-	g.Expect(ok).To(BeTrue(), "node should be an object")
-
-	raylet, ok := nodeInfo["raylet"].(map[string]any)
-	g.Expect(ok).To(BeTrue(), "node should contain raylet object")
-
-	return raylet
+	return nodeInfo["raylet"].(map[string]any)["nodeId"].(string)
 }
 
 // GetOneOfActorID retrieves an actor ID from the /logical/actors endpoint.
