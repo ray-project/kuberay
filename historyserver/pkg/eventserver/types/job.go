@@ -71,56 +71,62 @@ type Job struct {
 }
 
 type JobMap struct {
-	JobMap map[string]Job
-	Mu     sync.Mutex
-}
-
-func (j *JobMap) Lock() {
-	j.Mu.Lock()
-}
-
-func (j *JobMap) Unlock() {
-	j.Mu.Unlock()
+	jobMap map[string]Job
+	mu     sync.Mutex
 }
 
 func NewJobMap() *JobMap {
 	return &JobMap{
-		JobMap: make(map[string]Job),
+		jobMap: make(map[string]Job),
 	}
 }
 
 type ClusterJobMap struct {
-	ClusterJobMap map[string]*JobMap
-	Mu            sync.RWMutex
+	clusterJobMap map[string]*JobMap
+	mu            sync.RWMutex
 }
 
-func (c *ClusterJobMap) RLock() {
-	c.Mu.RLock()
-}
-
-func (c *ClusterJobMap) RUnlock() {
-	c.Mu.RUnlock()
-}
-
-func (c *ClusterJobMap) Lock() {
-	c.Mu.Lock()
-}
-
-func (c *ClusterJobMap) Unlock() {
-	c.Mu.Unlock()
+func NewClusterJobMap() *ClusterJobMap {
+	return &ClusterJobMap{
+		clusterJobMap: make(map[string]*JobMap),
+	}
 }
 
 func (c *ClusterJobMap) GetOrCreateJobMap(clusterName string) *JobMap {
-	c.Lock()
-	defer c.Unlock()
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
-	jobMap, exists := c.ClusterJobMap[clusterName]
+	jobMap, exists := c.clusterJobMap[clusterName]
 	if !exists {
 		jobMap = NewJobMap()
-		c.ClusterJobMap[clusterName] = jobMap
+		c.clusterJobMap[clusterName] = jobMap
 	}
 
 	return jobMap
+}
+
+// GetJobsMap returns a deep copy of all jobs for a cluster session.
+func (c *ClusterJobMap) GetJobsMap(clusterName string) map[string]Job {
+	c.mu.RLock()
+	jobMap, ok := c.clusterJobMap[clusterName]
+	c.mu.RUnlock()
+	if !ok {
+		return map[string]Job{}
+	}
+
+	return jobMap.GetJobsMap()
+}
+
+// GetJobByJobID returns a deep copy of a job by ID in a cluster session.
+func (c *ClusterJobMap) GetJobByJobID(clusterName, jobID string) (Job, bool) {
+	c.mu.RLock()
+	jobMap, ok := c.clusterJobMap[clusterName]
+	c.mu.RUnlock()
+	if !ok {
+		return Job{}, false
+	}
+
+	return jobMap.GetJobByJobID(jobID)
 }
 
 // CreateOrMergeJob will find or create the job and runs the merge function.
@@ -128,20 +134,46 @@ func (c *ClusterJobMap) GetOrCreateJobMap(clusterName string) *JobMap {
 // The State and Status, one representing the driver lifecycle and another
 // represents the status of the progress of the job.
 func (j *JobMap) CreateOrMergeJob(jobId string, mergeFn func(*Job)) {
-	j.Lock()
-	defer j.Unlock()
+	j.mu.Lock()
+	defer j.mu.Unlock()
 
-	job, exist := j.JobMap[jobId]
+	job, exist := j.jobMap[jobId]
 	if !exist {
 		// Job does not exist, creating new with JobID
 		newJob := Job{JobID: jobId}
 		mergeFn(&newJob)
-		j.JobMap[jobId] = newJob
+		j.jobMap[jobId] = newJob
 		return
 	}
 
 	mergeFn(&job)
-	j.JobMap[jobId] = job
+	j.jobMap[jobId] = job
+}
+
+// GetJobsMap returns a deep copy of all jobs.
+func (j *JobMap) GetJobsMap() map[string]Job {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+
+	jobs := make(map[string]Job, len(j.jobMap))
+	for id, job := range j.jobMap {
+		jobs[id] = job.DeepCopy()
+	}
+
+	return jobs
+}
+
+// GetJobByJobID returns a deep copy of a job by ID.
+func (j *JobMap) GetJobByJobID(jobID string) (Job, bool) {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+
+	job, ok := j.jobMap[jobID]
+	if !ok {
+		return Job{}, false
+	}
+
+	return job.DeepCopy(), true
 }
 
 // DeepCopy will return a deep copy of the Job
