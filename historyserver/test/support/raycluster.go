@@ -5,7 +5,8 @@ import (
 	"strings"
 
 	. "github.com/onsi/gomega"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
+	hsutils "github.com/ray-project/kuberay/historyserver/pkg/utils"
+	rayutils "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -21,7 +22,7 @@ func ApplyRayClusterWithCollectorWithEnvs(test Test, g *WithT, namespace *corev1
 	rayClusterFromYaml := DeserializeRayClusterYAML(test, RayClusterManifestPath)
 	rayClusterFromYaml.Namespace = namespace.Name
 
-	headContainer := &rayClusterFromYaml.Spec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex]
+	headContainer := &rayClusterFromYaml.Spec.HeadGroupSpec.Template.Spec.Containers[rayutils.RayContainerIndex]
 	if len(headContainer.Env) == 0 {
 		headContainer.Env = []corev1.EnvVar{}
 	}
@@ -77,13 +78,13 @@ func GetSessionIDFromHeadPod(test Test, g *WithT, rayCluster *rayv1.RayCluster) 
 	headPod, err := GetHeadPod(test, rayCluster)
 	g.Expect(err).NotTo(HaveOccurred())
 
-	getSessionIDCmd := `if [ -L "/tmp/ray/session_latest" ]; then
-  session_path=$(readlink /tmp/ray/session_latest)
+	getSessionIDCmd := fmt.Sprintf(`if [ -L "%s" ]; then
+  session_path=$(readlink %s)
   basename "$session_path"
 else
   echo "session_latest is not a symlink"
   exit 1
-fi`
+fi`, hsutils.RaySessionLatestPath, hsutils.RaySessionLatestPath)
 	output, _ := ExecPodCmd(test, headPod, "ray-head", []string{"sh", "-c", getSessionIDCmd})
 
 	// Parse output to extract the sessionID.
@@ -99,12 +100,12 @@ func GetNodeIDFromHeadPod(test Test, g *WithT, rayCluster *rayv1.RayCluster) str
 	headPod, err := GetHeadPod(test, rayCluster)
 	g.Expect(err).NotTo(HaveOccurred())
 
-	getNodeIDCmd := `if [ -f "/tmp/ray/raylet_node_id" ]; then
-  cat /tmp/ray/raylet_node_id
+	getNodeIDCmd := fmt.Sprintf(`if [ -f "%s" ]; then
+  cat %s
 else
   echo "raylet_node_id not found"
   exit 1
-fi`
+fi`, hsutils.RayNodeIDPath, hsutils.RayNodeIDPath)
 	output, _ := ExecPodCmd(test, headPod, "ray-head", []string{"sh", "-c", getNodeIDCmd})
 
 	nodeID := strings.TrimSpace(output.String())
@@ -119,12 +120,12 @@ func GetNodeIDFromPod(test Test, g *WithT, getPod func() (*corev1.Pod, error), c
 	pod, err := getPod()
 	g.Expect(err).NotTo(HaveOccurred())
 
-	getNodeIDCmd := `if [ -f "/tmp/ray/raylet_node_id" ]; then
-  cat /tmp/ray/raylet_node_id
+	getNodeIDCmd := fmt.Sprintf(`if [ -f "%s" ]; then
+  cat %s
 else
   echo "raylet_node_id not found"
   exit 1
-fi`
+fi`, hsutils.RayNodeIDPath, hsutils.RayNodeIDPath)
 	output, _ := ExecPodCmd(test, pod, containerName, []string{"sh", "-c", getNodeIDCmd})
 
 	// Parse output to extract the nodeID.
