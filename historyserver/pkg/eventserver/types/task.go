@@ -208,57 +208,95 @@ type ProfileEventRaw struct {
 // TaskMap is a struct that uses TaskID as key and stores a list of Task attempts.
 // Each TaskID maps to a slice of Tasks, where each element represents a different attempt.
 type TaskMap struct {
-	TaskMap map[string][]Task
-	Mu      sync.Mutex
-}
-
-func (t *TaskMap) Lock() {
-	t.Mu.Lock()
-}
-
-func (t *TaskMap) Unlock() {
-	t.Mu.Unlock()
+	taskMap map[string][]Task
+	mu      sync.Mutex
 }
 
 func NewTaskMap() *TaskMap {
 	return &TaskMap{
-		TaskMap: make(map[string][]Task),
+		taskMap: make(map[string][]Task),
 	}
 }
 
 type ClusterTaskMap struct {
 	// ClusterTaskMap is a map of cluster session ID to TaskMap.
-	ClusterTaskMap map[string]*TaskMap
-	Mu             sync.RWMutex
+	clusterTaskMap map[string]*TaskMap
+	mu             sync.RWMutex
 }
 
-func (c *ClusterTaskMap) RLock() {
-	c.Mu.RLock()
-}
-
-func (c *ClusterTaskMap) RUnlock() {
-	c.Mu.RUnlock()
-}
-
-func (c *ClusterTaskMap) Lock() {
-	c.Mu.Lock()
-}
-
-func (c *ClusterTaskMap) Unlock() {
-	c.Mu.Unlock()
+func NewClusterTaskMap() *ClusterTaskMap {
+	return &ClusterTaskMap{
+		clusterTaskMap: make(map[string]*TaskMap),
+	}
 }
 
 // GetOrCreateTaskMap retrieves the TaskMap for the given cluster session, creating it if it doesn't exist.
 func (c *ClusterTaskMap) GetOrCreateTaskMap(clusterSessionKey string) *TaskMap {
-	c.Lock()
-	defer c.Unlock()
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
-	taskMap, exists := c.ClusterTaskMap[clusterSessionKey]
+	taskMap, exists := c.clusterTaskMap[clusterSessionKey]
 	if !exists {
 		taskMap = NewTaskMap()
-		c.ClusterTaskMap[clusterSessionKey] = taskMap
+		c.clusterTaskMap[clusterSessionKey] = taskMap
 	}
 	return taskMap
+}
+
+// GetClusterCount returns the number of cluster sessions currently tracked.
+func (c *ClusterTaskMap) GetClusterCount() int {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	return len(c.clusterTaskMap)
+}
+
+// GetTaskMap returns a deep copy of all task attempts for a cluster session.
+func (c *ClusterTaskMap) GetTaskMap(clusterSessionKey string) (map[string][]Task, bool) {
+	c.mu.RLock()
+	taskMap, ok := c.clusterTaskMap[clusterSessionKey]
+	c.mu.RUnlock()
+	if !ok {
+		return nil, false
+	}
+
+	return taskMap.GetTaskMap(), true
+}
+
+// GetTasks returns all task attempts for a cluster session.
+func (c *ClusterTaskMap) GetTasks(clusterSessionKey string) []Task {
+	c.mu.RLock()
+	taskMap, ok := c.clusterTaskMap[clusterSessionKey]
+	c.mu.RUnlock()
+	if !ok {
+		return []Task{}
+	}
+
+	return taskMap.GetTasks()
+}
+
+// GetTaskByID returns all attempts for a task ID in a cluster session.
+func (c *ClusterTaskMap) GetTaskByID(clusterSessionKey, taskID string) ([]Task, bool) {
+	c.mu.RLock()
+	taskMap, ok := c.clusterTaskMap[clusterSessionKey]
+	c.mu.RUnlock()
+	if !ok {
+		return nil, false
+	}
+
+	return taskMap.GetTaskByID(taskID)
+}
+
+// GetTasksByJobID returns all task attempts associated with a job ID in a cluster session.
+func (c *ClusterTaskMap) GetTasksByJobID(clusterSessionKey, jobID string) []Task {
+	c.mu.RLock()
+	taskMap, ok := c.clusterTaskMap[clusterSessionKey]
+	c.mu.RUnlock()
+	if !ok {
+		return []Task{}
+	}
+
+	return taskMap.GetTasksByJobID(jobID)
 }
 
 // CreateOrMergeTaskAttempt creates a new slice of Task attempts or insert the current attempt at the correct position for the given taskId.
@@ -267,16 +305,16 @@ func (c *ClusterTaskMap) GetOrCreateTaskMap(clusterSessionKey string) *TaskMap {
 //   - If the attempt doesn't exist, creates a new one at the correct position
 //   - If the attempt exists, applies mergeFn to merge new data into existing
 func (t *TaskMap) CreateOrMergeAttempt(taskId string, taskAttempt int, mergeFn func(*Task)) {
-	t.Lock()
-	defer t.Unlock()
+	t.mu.Lock()
+	defer t.mu.Unlock()
 
 	// Case 1: tasks doesn't exist.
 	// Create a new slice of Task attempts with the current attempt.
-	tasks, exists := t.TaskMap[taskId]
+	tasks, exists := t.taskMap[taskId]
 	if !exists {
 		newTask := Task{TaskID: taskId, TaskAttempt: taskAttempt}
 		mergeFn(&newTask)
-		t.TaskMap[taskId] = []Task{newTask}
+		t.taskMap[taskId] = []Task{newTask}
 		return
 	}
 
@@ -301,7 +339,74 @@ func (t *TaskMap) CreateOrMergeAttempt(taskId string, taskAttempt int, mergeFn f
 	tasks = append(tasks, Task{})    // Extend slice by 1
 	copy(tasks[idx+1:], tasks[idx:]) // Shift elements right
 	tasks[idx] = newTask             // Insert at correct position
-	t.TaskMap[taskId] = tasks
+	t.taskMap[taskId] = tasks
+}
+
+// GetTaskMap returns a deep copy of the task attempts map.
+func (t *TaskMap) GetTaskMap() map[string][]Task {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	result := make(map[string][]Task, len(t.taskMap))
+	for taskID, attempts := range t.taskMap {
+		attemptCopies := make([]Task, len(attempts))
+		for i, attempt := range attempts {
+			attemptCopies[i] = attempt.DeepCopy()
+		}
+		result[taskID] = attemptCopies
+	}
+
+	return result
+}
+
+// GetTasks returns all task attempts in the map as deep copies.
+func (t *TaskMap) GetTasks() []Task {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	allTasks := make([]Task, 0)
+	for _, attempts := range t.taskMap {
+		for _, attempt := range attempts {
+			allTasks = append(allTasks, attempt.DeepCopy())
+		}
+	}
+
+	return allTasks
+}
+
+// GetTaskByID returns all attempts for a task ID as deep copies.
+func (t *TaskMap) GetTaskByID(taskID string) ([]Task, bool) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	attempts, ok := t.taskMap[taskID]
+	if !ok || len(attempts) == 0 {
+		return nil, false
+	}
+
+	result := make([]Task, len(attempts))
+	for i, task := range attempts {
+		result[i] = task.DeepCopy()
+	}
+
+	return result, true
+}
+
+// GetTasksByJobID returns all task attempts for a given job ID as deep copies.
+func (t *TaskMap) GetTasksByJobID(jobID string) []Task {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	tasks := make([]Task, 0)
+	for _, attempts := range t.taskMap {
+		for _, task := range attempts {
+			if task.JobID == jobID {
+				tasks = append(tasks, task.DeepCopy())
+			}
+		}
+	}
+
+	return tasks
 }
 
 // GetTaskName returns the task name of the task.
