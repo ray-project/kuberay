@@ -27,7 +27,7 @@ export const filterJobs = (
       }
       if (
         typeFilter == 1 &&
-        job.clusterSpec.headGroupSpec.labels["mlp.rbx.com/component"] !==
+        job.clusterSpec?.headGroupSpec?.labels?.["mlp.rbx.com/component"] !==
           "rayllmbatchinference"
       ) {
         return false;
@@ -110,7 +110,7 @@ const transformCluster = (cluster: Cluster): ClusterRow => {
 
 export const clusterIsRayJob = (cluster: Cluster): boolean => {
   const jobType =
-    cluster.clusterSpec.headGroupSpec.labels["mlp.rbx.com/component"];
+    cluster.clusterSpec?.headGroupSpec?.labels?.["mlp.rbx.com/component"];
   return jobType === "rayjob" || jobType === "rayllmbatchinference";
 };
 

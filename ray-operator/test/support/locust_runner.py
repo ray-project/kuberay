@@ -55,6 +55,7 @@ base_locust_cmd = [
     "locust",
     "--headless",
     f"--html={HTML_RESULTS_DIR}/{args.html}",
+    f"--csv={HTML_RESULTS_DIR}/test",
     *locust_args,
 ]
 

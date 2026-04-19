@@ -47,7 +47,7 @@ const convertRayJobItemToJobRow = (item: RayJobItem): JobRow => {
   const generateLinks = () => {
     const serviceName = item.status?.rayClusterStatus?.head?.serviceName;
     const dashboardPort =
-      item.spec.rayClusterSpec.headGroupSpec?.template?.spec?.containers?.[0].ports?.find(
+      item.spec?.rayClusterSpec?.headGroupSpec?.template?.spec?.containers?.[0]?.ports?.find(
         (port) => port.name === "dashboard",
       )?.containerPort;
     if (!serviceName || !dashboardPort || !config.coreApiUrl) {
@@ -63,13 +63,13 @@ const convertRayJobItemToJobRow = (item: RayJobItem): JobRow => {
   return {
     name: item.metadata.name!,
     namespace: item.metadata.namespace!,
-    jobStatus: item.status,
+    jobStatus: item.status ?? { jobStatus: "PENDING", jobDeploymentStatus: "" },
     createdAt: item.metadata.creationTimestamp!,
-    message: item.status.message,
+    message: item.status?.message ?? "",
     links: generateLinks(),
-    rayClusterName: item.status.rayClusterName,
-    submissionMode: item.spec.submissionMode,
-    rayVersion: item.spec.rayClusterSpec.rayVersion,
-    clusterSpec: item.spec.rayClusterSpec,
+    rayClusterName: item.status?.rayClusterName ?? "",
+    submissionMode: item.spec?.submissionMode,
+    rayVersion: item.spec?.rayClusterSpec?.rayVersion,
+    clusterSpec: item.spec?.rayClusterSpec,
   };
 };

@@ -12,7 +12,7 @@
 ### 1. Create Kind Cluster
 
 ```bash
-kind create cluster --image=kindest/node:v1.27.0
+kind create cluster --image=kindest/node:v1.29.0
 ```
 
 ### 2. Build and Run Ray Operator
@@ -107,9 +107,9 @@ debugging in your own IDE. For example, you can set up `.vscode/launch.json` as 
                 // Use localhost rather than the Kubernetes service name.
                 "S3_ENDPOINT": "localhost:9000",
                 "S3_BUCKET": "ray-historyserver",
-                "AWS_S3ID": "minioadmin",
-                "AWS_S3SECRET": "minioadmin",
-                "AWS_S3TOKEN": "",
+                "AWS_ACCESS_KEY_ID": "minioadmin",
+                "AWS_SECRET_ACCESS_KEY": "minioadmin",
+                "AWS_SESSION_TOKEN": "",
                 "S3FORCE_PATH_STYLE": "true",
                 "S3DISABLE_SSL": "true"
             }
@@ -132,9 +132,9 @@ make buildhistoryserver
 export S3_REGION=test
 export S3_ENDPOINT=localhost:9000
 export S3_BUCKET=ray-historyserver
-export AWS_S3ID=minioadmin
-export AWS_S3SECRET=minioadmin
-export AWS_S3TOKEN=
+export AWS_ACCESS_KEY_ID=minioadmin
+export AWS_SECRET_ACCESS_KEY=minioadmin
+export AWS_SESSION_TOKEN=
 export S3FORCE_PATH_STYLE=true
 export S3DISABLE_SSL=true
 

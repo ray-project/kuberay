@@ -479,6 +479,10 @@ func ValidateClusterUpgradeOptions(rayService *rayv1.RayService) error {
 		return fmt.Errorf("stepSizePercent must be between 0 and 100")
 	}
 
+	if *options.StepSizePercent > *options.MaxSurgePercent {
+		return fmt.Errorf("stepSizePercent must be less than or equal to maxSurgePercent")
+	}
+
 	if options.IntervalSeconds == nil || *options.IntervalSeconds <= 0 {
 		return fmt.Errorf("intervalSeconds must be greater than 0")
 	}

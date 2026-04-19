@@ -67,6 +67,7 @@ type ClusterUpgradeOptions struct {
 	// +kubebuilder:default:=100
 	MaxSurgePercent *int32 `json:"maxSurgePercent,omitempty"`
 	// The percentage of traffic to switch to the upgraded RayCluster at a set interval after scaling by MaxSurgePercent.
+	// StepSizePercent must be less than or equal to MaxSurgePercent.
 	StepSizePercent *int32 `json:"stepSizePercent"`
 	// The interval in seconds between transferring StepSize traffic from the old to new RayCluster.
 	IntervalSeconds *int32 `json:"intervalSeconds"`
@@ -206,6 +207,8 @@ const (
 	RayServiceReady RayServiceConditionType = "Ready"
 	// UpgradeInProgress means the RayService is currently performing a zero-downtime upgrade.
 	UpgradeInProgress RayServiceConditionType = "UpgradeInProgress"
+	// RollbackInProgress means the RayService is currently rolling back an in-progress upgrade to the original cluster state.
+	RollbackInProgress RayServiceConditionType = "RollbackInProgress"
 )
 
 const (
@@ -217,6 +220,7 @@ const (
 	NoPendingCluster               RayServiceConditionReason = "NoPendingCluster"
 	NoActiveCluster                RayServiceConditionReason = "NoActiveCluster"
 	RayServiceValidationFailed     RayServiceConditionReason = "ValidationFailed"
+	TargetClusterChanged           RayServiceConditionReason = "TargetClusterChanged"
 )
 
 // +kubebuilder:object:root=true

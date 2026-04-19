@@ -33,17 +33,17 @@ const (
 )
 
 type RayLogsHandler struct {
-	ContainerClient *container.Client
-	LogFiles        chan string
-	ContainerName   string
-	SessionDir      string
-	RootDir         string
-	LogDir          string
-	RayClusterName  string
-	RayClusterID    string
-	RayNodeName     string
-	LogBatching     int
-	PushInterval    time.Duration
+	ContainerClient     *container.Client
+	LogFiles            chan string
+	ContainerName       string
+	SessionDir          string
+	RootDir             string
+	LogDir              string
+	RayClusterName      string
+	RayClusterNamespace string
+	RayNodeName         string
+	LogBatching         int
+	PushInterval        time.Duration
 }
 
 func (r *RayLogsHandler) CreateDirectory(d string) error {
@@ -380,17 +380,17 @@ func New(c *config) (*RayLogsHandler, error) {
 	logrus.Infof("Clean logdir is %s", logdir)
 
 	return &RayLogsHandler{
-		ContainerClient: containerClient,
-		LogFiles:        make(chan string, 100),
-		ContainerName:   c.ContainerName,
-		SessionDir:      sessionDir,
-		RootDir:         c.RootDir,
-		LogDir:          logdir,
-		RayClusterName:  c.RayClusterName,
-		RayClusterID:    c.RayClusterID,
-		RayNodeName:     c.RayNodeName,
-		LogBatching:     c.LogBatching,
-		PushInterval:    c.PushInterval,
+		ContainerClient:     containerClient,
+		LogFiles:            make(chan string, 100),
+		ContainerName:       c.ContainerName,
+		SessionDir:          sessionDir,
+		RootDir:             c.RootDir,
+		LogDir:              logdir,
+		RayClusterName:      c.RayClusterName,
+		RayClusterNamespace: c.RayClusterNamespace,
+		RayNodeName:         c.RayNodeName,
+		LogBatching:         c.LogBatching,
+		PushInterval:        c.PushInterval,
 	}, nil
 }
 

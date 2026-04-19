@@ -1,4 +1,4 @@
-package eventserver
+package eventcollector
 
 import (
 	"bytes"
@@ -28,10 +28,10 @@ type Event struct {
 	NodeID      string
 }
 
-type EventServer struct {
+type EventCollector struct {
 	storageWriter      storage.StorageWriter
 	stopped            chan struct{}
-	clusterID          string
+	clusterNamespace   string
 	sessionDir         string
 	nodeID             string
 	clusterName        string
@@ -59,15 +59,15 @@ var eventTypesWithJobID = []string{
 	"actorDefinitionEvent",
 }
 
-func NewEventServer(writer storage.StorageWriter, rootDir, sessionDir, nodeID, clusterName, clusterID, sessionName string) *EventServer {
-	server := &EventServer{
+func NewEventCollector(writer storage.StorageWriter, rootDir, sessionDir, nodeID, clusterName, clusterNamespace, sessionName string) *EventCollector {
+	collector := &EventCollector{
 		events:             make([]Event, 0),
 		storageWriter:      writer,
 		root:               rootDir,
 		sessionDir:         sessionDir,
 		nodeID:             nodeID,
 		clusterName:        clusterName,
-		clusterID:          clusterID,
+		clusterNamespace:   clusterNamespace,
 		sessionName:        sessionName,
 		mutex:              sync.Mutex{},
 		flushInterval:      time.Hour, // Default flush interval: 1 hour
@@ -77,37 +77,37 @@ func NewEventServer(writer storage.StorageWriter, rootDir, sessionDir, nodeID, c
 	}
 
 	// Start goroutine to watch nodeID file changes
-	go server.watchNodeIDFile()
+	go collector.watchNodeIDFile()
 
-	return server
+	return collector
 }
 
-func (es *EventServer) InitServer(stop <-chan struct{}, port int) {
+func (ec *EventCollector) Run(stop <-chan struct{}, port int) {
 	ws := new(restful.WebService)
 	ws.Path("/v1")
 	ws.Consumes(restful.MIME_JSON)
 	ws.Produces(restful.MIME_JSON)
 
-	ws.Route(ws.POST("/events").To(es.PersistEvents))
+	ws.Route(ws.POST("/events").To(ec.PersistEvents))
 
 	restful.Add(ws)
 
 	go func() {
-		logrus.Infof("Starting event server on port %d", port)
+		logrus.Infof("Starting event collector on port %d", port)
 		logrus.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", port), nil))
 	}()
 	go func() {
-		es.periodicFlush()
+		ec.periodicFlush()
 	}()
 
 	<-stop
 	logrus.Info("Received stop signal, flushing events to storage")
-	es.flushEvents()
-	close(es.stopped)
+	ec.flushEvents()
+	close(ec.stopped)
 }
 
 // watchNodeIDFile watches /tmp/ray/raylet_node_id for content changes
-func (es *EventServer) watchNodeIDFile() {
+func (ec *EventCollector) watchNodeIDFile() {
 	nodeIDFilePath := utils.RayNodeIDPath
 
 	// Create new watcher
@@ -153,18 +153,18 @@ func (es *EventServer) watchNodeIDFile() {
 				}
 
 				// Check if nodeID changed
-				es.mutex.Lock()
-				if es.currentNodeID != newNodeID {
-					oldNodeID := es.currentNodeID
+				ec.mutex.Lock()
+				if ec.currentNodeID != newNodeID {
+					oldNodeID := ec.currentNodeID
 					logrus.Infof("Node ID changed from %s to %s, flushing events", oldNodeID, newNodeID)
 
 					// Update current nodeID
-					es.currentNodeID = newNodeID
+					ec.currentNodeID = newNodeID
 
 					// Collect events with same nodeID
 					var eventsToFlush []Event
 					var remainingEvents []Event
-					for _, event := range es.events {
+					for _, event := range ec.events {
 						if event.NodeID == oldNodeID {
 							eventsToFlush = append(eventsToFlush, event)
 						} else if event.NodeID == newNodeID {
@@ -175,30 +175,30 @@ func (es *EventServer) watchNodeIDFile() {
 					}
 
 					// Update event list, keep only events with different nodeID
-					es.events = remainingEvents
-					es.mutex.Unlock()
+					ec.events = remainingEvents
+					ec.mutex.Unlock()
 
 					// Flush events with same nodeID
 					if len(eventsToFlush) > 0 {
-						go es.flushEventsInternal(eventsToFlush)
+						go ec.flushEventsInternal(eventsToFlush)
 					}
 					continue
 				}
-				es.mutex.Unlock()
+				ec.mutex.Unlock()
 			}
 		case err, ok := <-watcher.Errors:
 			if !ok {
 				return
 			}
 			logrus.Errorf("File watcher error: %v", err)
-		case <-es.stopped:
-			logrus.Info("Event server stopped, exiting node ID watcher")
+		case <-ec.stopped:
+			logrus.Info("Event collector stopped, exiting node ID watcher")
 			return
 		}
 	}
 }
 
-func (es *EventServer) PersistEvents(req *restful.Request, resp *restful.Response) {
+func (ec *EventCollector) PersistEvents(req *restful.Request, resp *restful.Response) {
 	body, err := io.ReadAll(req.Request.Body)
 	if err != nil {
 		logrus.Errorf("Failed to read request body: %v", err)
@@ -237,81 +237,81 @@ func (es *EventServer) PersistEvents(req *restful.Request, resp *restful.Respons
 			return
 		}
 
-		es.mutex.Lock()
+		ec.mutex.Lock()
 		event := Event{
 			Data:        eventData,
 			Timestamp:   timestamp,
 			SessionName: sessionNameStr,
-			NodeID:      es.currentNodeID, // Store currentNodeID when event arrived
+			NodeID:      ec.currentNodeID, // Store currentNodeID when event arrived
 		}
-		es.events = append(es.events, event)
+		ec.events = append(ec.events, event)
 
 		// Check if sessionName changed
-		if es.currentSessionName != sessionNameStr {
-			logrus.Infof("Session name changed from %s to %s, flushing events", es.currentSessionName, sessionNameStr)
+		if ec.currentSessionName != sessionNameStr {
+			logrus.Infof("Session name changed from %s to %s, flushing events", ec.currentSessionName, sessionNameStr)
 			// Save current events before flushing
-			eventsToFlush := make([]Event, len(es.events))
-			copy(eventsToFlush, es.events)
+			eventsToFlush := make([]Event, len(ec.events))
+			copy(eventsToFlush, ec.events)
 
 			// Clear event list
-			es.events = es.events[:0]
+			ec.events = ec.events[:0]
 
 			// Update current sessionName
-			es.currentSessionName = sessionNameStr
+			ec.currentSessionName = sessionNameStr
 
 			// Unlock before flushing
-			es.mutex.Unlock()
+			ec.mutex.Unlock()
 
 			// Flush previous events
-			es.flushEventsInternal(eventsToFlush)
+			ec.flushEventsInternal(eventsToFlush)
 			return
 		}
-		es.mutex.Unlock()
+		ec.mutex.Unlock()
 
-		logrus.Infof("Received event with ID: %v at %v, session: %s, node: %s", eventData["eventId"], timestamp, sessionNameStr, es.currentNodeID)
+		logrus.Infof("Received event with ID: %v at %v, session: %s, node: %s", eventData["eventId"], timestamp, sessionNameStr, ec.currentNodeID)
 	}
 
 	resp.WriteHeader(http.StatusOK)
 }
 
-func (es *EventServer) periodicFlush() {
-	ticker := time.NewTicker(es.flushInterval)
+func (ec *EventCollector) periodicFlush() {
+	ticker := time.NewTicker(ec.flushInterval)
 	defer ticker.Stop()
 
 	for {
 		select {
 		case <-ticker.C:
 			logrus.Info("Periodic flush triggered")
-			es.flushEvents()
-		case <-es.stopped:
-			logrus.Info("Event server stopped, exiting periodic flush")
+			ec.flushEvents()
+		case <-ec.stopped:
+			logrus.Info("Event collector stopped, exiting periodic flush")
 			return
 		}
 	}
 }
 
-func (es *EventServer) flushEvents() {
-	es.mutex.Lock()
-	if len(es.events) == 0 {
-		es.mutex.Unlock()
+func (ec *EventCollector) flushEvents() {
+	ec.mutex.Lock()
+	if len(ec.events) == 0 {
+		ec.mutex.Unlock()
 		logrus.Info("No events to flush")
 		return
 	}
 
 	// Copy current event list
-	eventsToFlush := make([]Event, len(es.events))
-	copy(eventsToFlush, es.events)
+	eventsToFlush := make([]Event, len(ec.events))
+	copy(eventsToFlush, ec.events)
 
 	// Clear event list
-	es.events = es.events[:0]
-	es.mutex.Unlock()
+	ec.events = ec.events[:0]
+	ec.mutex.Unlock()
 
 	// Execute flush operation
-	es.flushEventsInternal(eventsToFlush)
+	ec.flushEventsInternal(eventsToFlush)
 }
 
 // flushEventsInternal performs the actual event flush
-func (es *EventServer) flushEventsInternal(eventsToFlush []Event) {
+func (ec *EventCollector) flushEventsInternal(eventsToFlush []Event) {
 	// Group events by hour and type
 	nodeEventsByHour := make(map[string][]Event) // Node-related events
 	jobEventsByHour := make(map[string][]Event)  // Job-related events
@@ -321,10 +321,10 @@ func (es *EventServer) flushEventsInternal(eventsToFlush []Event) {
 		hourKey := event.Timestamp.Truncate(time.Hour).Format("2006-01-02-15")
 
 		// Check event type
-		if es.isNodeEvent(event.Data) {
+		if isNodeEvent(event.Data) {
 			// Node-related events
 			nodeEventsByHour[hourKey] = append(nodeEventsByHour[hourKey], event)
-		} else if jobID := es.getJobID(event.Data); jobID != "" {
+		} else if jobID := getJobID(event.Data); jobID != "" {
 			// Job-related events, use jobID-hour as key
 			jobKey := fmt.Sprintf("%s-%s", jobID, hourKey)
 			jobEventsByHour[jobKey] = append(jobEventsByHour[jobKey], event)
@@ -343,7 +343,7 @@ func (es *EventServer) flushEventsInternal(eventsToFlush []Event) {
 		wg.Add(1)
 		go func(hourKey string, hourEvents []Event) {
 			defer wg.Done()
-			if err := es.flushNodeEventsForHour(hourKey, hourEvents); err != nil {
+			if err := ec.flushNodeEventsForHour(hourKey, hourEvents); err != nil {
 				errChan <- err
 			}
 		}(hour, events)
@@ -364,7 +364,7 @@ func (es *EventServer) flushEventsInternal(eventsToFlush []Event) {
 			jobID := parts[0]
 			hourKey := strings.Join(parts[1:], "-") // Rejoin time parts as hourKey
 
-			if err := es.flushJobEventsForHour(jobID, hourKey, hourEvents); err != nil {
+			if err := ec.flushJobEventsForHour(jobID, hourKey, hourEvents); err != nil {
 				errChan <- err
 			}
 		}(jobHour, events)
@@ -397,7 +397,7 @@ func countEventsInMap(eventsMap map[string][]Event) int {
 var nodeEventType = []string{"NODE_LIFECYCLE_EVENT", "NODE_DEFINITION_EVENT"}
 
 // isNodeEvent checks if event is node-related
-func (es *EventServer) isNodeEvent(eventData map[string]interface{}) bool {
+func isNodeEvent(eventData map[string]interface{}) bool {
 	eventType, ok := eventData["eventType"].(string)
 	if !ok {
 		return false
@@ -411,7 +411,7 @@ func (es *EventServer) isNodeEvent(eventData map[string]interface{}) bool {
 }
 
 // getJobID gets jobID associated with event
-func (es *EventServer) getJobID(eventData map[string]interface{}) string {
+func getJobID(eventData map[string]interface{}) string {
 	for _, eventType := range eventTypesWithJobID {
 		if nestedEvent, ok := eventData[eventType].(map[string]interface{}); ok {
 			if jobID, hasJob := nestedEvent["jobId"]; hasJob && jobID != "" {
@@ -424,7 +424,7 @@ func (es *EventServer) getJobID(eventData map[string]interface{}) string {
 }
 
 // flushNodeEventsForHour flushes node events to storage
-func (es *EventServer) flushNodeEventsForHour(hourKey string, events []Event) error {
+func (ec *EventCollector) flushNodeEventsForHour(hourKey string, events []Event) error {
 	// Create event data
 	eventsData := make([]map[string]interface{}, len(events))
 	for i, event := range events {
@@ -439,33 +439,33 @@ func (es *EventServer) flushNodeEventsForHour(hourKey string, events []Event) er
 	reader := bytes.NewReader(data)
 
 	// Use sessionName from event, not config
-	sessionNameToUse := es.sessionName // Default to configured sessionName
+	sessionNameToUse := ec.sessionName // Default to configured sessionName
 	if len(events) > 0 && events[0].SessionName != "" {
 		sessionNameToUse = events[0].SessionName
 	}
 
 	// Use NodeID from event, not current NodeID
-	nodeIDToUse := es.nodeID // Default to configured nodeID
+	nodeIDToUse := ec.nodeID // Default to configured nodeID
 	if len(events) > 0 && events[0].NodeID != "" {
 		nodeIDToUse = events[0].NodeID
 	}
 
 	// Build node event storage path using event's nodeID
 	basePath := path.Join(
-		es.root,
-		fmt.Sprintf("%s_%s", es.clusterName, es.clusterID),
+		ec.root,
+		fmt.Sprintf("%s_%s", ec.clusterName, ec.clusterNamespace),
 		sessionNameToUse,
 		"node_events",
 		fmt.Sprintf("%s-%s", nodeIDToUse, hourKey))
 
 	// Ensure storage directory exists
 	dir := path.Dir(basePath)
-	if err := es.storageWriter.CreateDirectory(dir); err != nil {
+	if err := ec.storageWriter.CreateDirectory(dir); err != nil {
 		return fmt.Errorf("failed to create directory %s: %w", dir, err)
 	}
 
 	// Write event file
-	if err := es.storageWriter.WriteFile(basePath, reader); err != nil {
+	if err := ec.storageWriter.WriteFile(basePath, reader); err != nil {
 		return fmt.Errorf("failed to write node events file %s: %w", basePath, err)
 	}
 
@@ -474,7 +474,7 @@ func (es *EventServer) flushNodeEventsForHour(hourKey string, events []Event) er
 }
 
 // flushJobEventsForHour flushes job events to storage
-func (es *EventServer) flushJobEventsForHour(jobID, hourKey string, events []Event) error {
+func (ec *EventCollector) flushJobEventsForHour(jobID, hourKey string, events []Event) error {
 	// Create event data
 	eventsData := make([]map[string]interface{}, len(events))
 	for i, event := range events {
@@ -489,21 +489,21 @@ func (es *EventServer) flushJobEventsForHour(jobID, hourKey string, events []Eve
 	reader := bytes.NewReader(data)
 
 	// Use sessionName from event, not config
-	sessionNameToUse := es.sessionName // Default to configured sessionName
+	sessionNameToUse := ec.sessionName // Default to configured sessionName
 	if len(events) > 0 && events[0].SessionName != "" {
 		sessionNameToUse = events[0].SessionName
 	}
 
 	// Use NodeID from event, not current NodeID
-	nodeIDToUse := es.nodeID // Default to configured nodeID
+	nodeIDToUse := ec.nodeID // Default to configured nodeID
 	if len(events) > 0 && events[0].NodeID != "" {
 		nodeIDToUse = events[0].NodeID
 	}
 
 	// Build job event storage path using event's nodeID
 	basePath := path.Join(
-		es.root,
-		fmt.Sprintf("%s_%s", es.clusterName, es.clusterID),
+		ec.root,
+		fmt.Sprintf("%s_%s", ec.clusterName, ec.clusterNamespace),
 		sessionNameToUse,
 		"job_events",
 		jobID,
@@ -511,12 +511,12 @@ func (es *EventServer) flushJobEventsForHour(jobID, hourKey string, events []Eve
 
 	// Ensure storage directory exists
 	dir := path.Dir(basePath)
-	if err := es.storageWriter.CreateDirectory(dir); err != nil {
+	if err := ec.storageWriter.CreateDirectory(dir); err != nil {
 		return fmt.Errorf("failed to create directory %s: %w", dir, err)
 	}
 
 	// Write event file
-	if err := es.storageWriter.WriteFile(basePath, reader); err != nil {
+	if err := ec.storageWriter.WriteFile(basePath, reader); err != nil {
 		return fmt.Errorf("failed to write job events file %s: %w", basePath, err)
 	}
 

@@ -11,7 +11,7 @@ spec:
     rayStartParams: {}
     template:
       spec:
-        serviceAccountName: raylet
+        serviceAccountName: ray-cluster-with-k8s-auth
         containers:
         - name: ray-head
           imagePullPolicy: Always
@@ -39,7 +39,7 @@ spec:
     rayStartParams: {}
     template:
       spec:
-        serviceAccountName: raylet
+        serviceAccountName: ray-cluster-with-k8s-auth
         containers:
         - name: ray-worker
           imagePullPolicy: Always
@@ -56,7 +56,7 @@ spec:
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: raylet
+  name: ray-cluster-with-k8s-auth
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -92,18 +92,18 @@ roleRef:
   name: ray-authenticator
 subjects:
 - kind: ServiceAccount
-  name: raylet
+  name: ray-cluster-with-k8s-auth
   namespace: default
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: raylet
+  name: ray-cluster-with-k8s-auth
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
   name: ray-writer
 subjects:
 - kind: ServiceAccount
-  name: raylet
+  name: ray-cluster-with-k8s-auth
   namespace: default

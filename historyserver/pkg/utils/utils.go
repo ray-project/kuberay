@@ -1,7 +1,6 @@
 package utils
 
 import (
-	"bytes"
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
@@ -11,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aliyun/aliyun-oss-go-sdk/oss"
 	"github.com/sirupsen/logrus"
 )
 
@@ -39,34 +37,15 @@ func EndpointPathToStorageKey(endpointPath string) string {
 
 var regex = regexp.MustCompile(SESSION_ID_REGEX)
 
-func CreateObjectIfNotExist(bucket *oss.Bucket, obj string, options ...oss.Option) error {
-	isExist, err := bucket.IsObjectExist(obj)
-	if err != nil {
-		logrus.Errorf("Failed to check if object %s exists: %v", obj, err)
-		return err
-	}
-	if !isExist {
-		logrus.Infof("Begin to create oss object %s ...", obj)
-		err = bucket.PutObject(obj, bytes.NewReader([]byte("")), options...)
-		if err != nil {
-			logrus.Errorf("Failed to create directory '%s': %v", obj, err)
-			return err
-		}
-		logrus.Infof("Create oss object %s success", obj)
-	}
-	return nil
-}
-
-func GetLogDirByNameID(ossHistorySeverDir, rayClusterNameID, rayNodeID, sessionId string) string {
-	return fmt.Sprintf("%s/", path.Clean(path.Join(ossHistorySeverDir, rayClusterNameID, sessionId, RAY_SESSIONDIR_LOGDIR_NAME, rayNodeID)))
+func GetLogDirByNameID(ossHistorySeverDir, rayClusterNameNamespace, rayNodeID, sessionId string) string {
+	return fmt.Sprintf("%s/", path.Clean(path.Join(ossHistorySeverDir, rayClusterNameNamespace, sessionId, RAY_SESSIONDIR_LOGDIR_NAME, rayNodeID)))
 }
 
 const (
 	// connector is the separator for creating flat storage keys.
 	//
 	// Design Philosophy:
-	// - Format: "{clusterName}_{namespace}" for router/historyserver
-	//           "{clusterName}_{clusterID}" for collector
+	// - Format: "{clusterName}_{namespace}" for router/historyserver/collector
 	//
 	// Why "_" instead of "/"?
 	// Using "/" would create a hierarchical path like "namespace/cluster/session/..."
@@ -86,8 +65,8 @@ const (
 	connector = "_"
 )
 
-func AppendRayClusterNameID(rayClusterName, rayClusterID string) string {
-	return fmt.Sprintf("%s%s%s", rayClusterName, connector, rayClusterID)
+func AppendRayClusterNameNamespace(rayClusterName, rayClusterNamespace string) string {
+	return fmt.Sprintf("%s%s%s", rayClusterName, connector, rayClusterNamespace)
 }
 
 func GetSessionDir() (string, error) {

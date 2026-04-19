@@ -1854,10 +1854,10 @@ tests:
           value:
             limits:
               cpu: "1"
-              memory: 1G
+              memory: 1Gi
             requests:
               cpu: "1"
-              memory: 1G
+              memory: 1Gi
 
   - it: Should add lifecycle if `additionalWorkerGroups.smallGroup.lifecycle` is set
     set:
