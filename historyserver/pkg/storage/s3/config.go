@@ -43,9 +43,9 @@ func (c *config) complete(rcc *types.RayCollectorConfig, jd map[string]interface
 	c.S3Secret = getEnvOrFallback("AWS_S3SECRET", "AWS_SECRET_ACCESS_KEY")
 	c.S3Token = getEnvOrFallback("AWS_S3TOKEN", "AWS_SESSION_TOKEN")
 	c.S3Bucket = getS3BucketWithDefault()
+	c.S3Endpoint = os.Getenv("S3_ENDPOINT")
+	c.S3Region = os.Getenv("S3_REGION")
 	if len(jd) == 0 {
-		c.S3Endpoint = os.Getenv("S3_ENDPOINT")
-		c.S3Region = os.Getenv("S3_REGION")
 		if os.Getenv("S3FORCE_PATH_STYLE") != "" {
 			c.S3ForcePathStyle = aws.Bool(os.Getenv("S3FORCE_PATH_STYLE") == "true")
 		}

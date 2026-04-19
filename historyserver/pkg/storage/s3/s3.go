@@ -354,9 +354,6 @@ func createS3Client(ctx context.Context, c *config) (*s3.Client, error) {
 		credsProvider := credentials.NewStaticCredentialsProvider(c.S3ID, c.S3Secret, c.S3Token)
 		loadOptions = append(loadOptions, awsconfig.WithCredentialsProvider(credsProvider))
 	}
-	if c.S3Endpoint != "" {
-		loadOptions = append(loadOptions, awsconfig.WithBaseEndpoint(c.S3Endpoint))
-	}
 
 	awsCfg, err := awsconfig.LoadDefaultConfig(ctx, loadOptions...)
 	if err != nil {

@@ -101,7 +101,7 @@ func testCollectorUploadOnGracefulShutdown(test Test, g *WithT, namespace *corev
 	_ = ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 
 	// Define variables for constructing S3 object prefix.
-	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, namespace.Name)
+	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, rayCluster.Namespace)
 	sessionID := GetSessionIDFromHeadPod(test, g, rayCluster)
 	headNodeID := GetNodeIDFromPod(test, g, HeadPod(test, rayCluster), "ray-head")
 	workerNodeID := GetNodeIDFromPod(test, g, FirstWorkerPod(test, rayCluster), "ray-worker")
