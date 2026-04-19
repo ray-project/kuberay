@@ -642,6 +642,7 @@ func (r *RayLogHandler) processPrevLogFile(absoluteLogPathName, localLogDir, ses
 		logrus.Errorf("Failed to write object %s: %v", objectName, err)
 		return err
 	}
+
 	logrus.Infof("Successfully wrote object %s, size: %d bytes", objectName, len(content))
 
 	// Move the processed file to persist-complete-logs directory to avoid re-uploading

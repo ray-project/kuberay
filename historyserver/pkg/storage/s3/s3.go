@@ -311,10 +311,12 @@ func createBucketIfNotExists(ctx context.Context, s3Client *s3.Client, bucketNam
 				logrus.Infof("Successfully created bucket %s", bucketName)
 				return nil
 			default:
+				// For other AWS errors, try to create anyway
 				logrus.Warnf("HeadBucket error for %s: %v, attempting to create bucket", bucketName, err)
 			}
 		}
 
+		// Try to create the bucket anyway (might be a permission issue for HeadBucket)
 		logrus.Infof("Attempting to create bucket %s...", bucketName)
 		_, createErr := s3Client.CreateBucket(ctx, &s3.CreateBucketInput{
 			Bucket: aws.String(bucketName),

@@ -1621,8 +1621,7 @@ func testLogicalActorsEndpointDeadCluster(test Test, g *WithT, namespace *corev1
 			gg.Expect(ok).To(BeTrue())
 			gg.Expect(len(actors)).To(BeNumerically(">", 0), "should have at least one actor")
 
-			// Verify actor schema matches formatActorForResponse format (for the first actor)
-			// Required fields from router.go:formatActorForResponse
+			// Verify actor schema matches formatActorForResponse format
 			for _, actorData := range actors {
 				actor, ok := actorData.(map[string]any)
 				gg.Expect(ok).To(BeTrue(), "actor should be a map")
