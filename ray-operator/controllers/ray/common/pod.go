@@ -502,7 +502,7 @@ func initLivenessAndReadinessProbe(rayContainer *corev1.Container, rayNodeType r
 	)
 	rayDashboardGCSHealthCommand := fmt.Sprintf(
 		utils.BaseWgetHealthCommand,
-		utils.DefaultReadinessProbeFailureThreshold,
+		utils.DefaultReadinessProbeTimeoutSeconds,
 		getPort("dashboard-port", utils.DefaultDashboardPort),
 		utils.RayDashboardGCSHealthPath,
 	)
