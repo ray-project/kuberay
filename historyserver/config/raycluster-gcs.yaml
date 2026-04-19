@@ -21,6 +21,8 @@ spec:
         affinity:
         containers:
         - env:
+          - name: RAY_TMP_ROOT
+            value: &rayTmpRoot /tmp/ray
           - name: RAY_enable_ray_event
             value: "true"
           - name: RAY_enable_core_worker_ray_event_to_aggregator
@@ -34,7 +36,7 @@ spec:
           image: rayproject/ray:2.52.0
           imagePullPolicy: IfNotPresent
           command:
-          - 'echo "=========================================="; [ -d "/tmp/ray/session_latest" ] && dest="/tmp/ray/prev-logs/$(basename $(readlink /tmp/ray/session_latest))/$(cat /tmp/ray/raylet_node_id)" && echo "dst is $dest" && mkdir -p "$dest" && mv /tmp/ray/session_latest/logs "$dest/logs"; echo "========================================="'
+          - 'echo "=========================================="; [ -d "$RAY_TMP_ROOT/session_latest" ] && dest="$RAY_TMP_ROOT/prev-logs/$(basename $(readlink "$RAY_TMP_ROOT/session_latest"))/$(cat "$RAY_TMP_ROOT/raylet_node_id")" && echo "dst is $dest" && mkdir -p "$dest" && mv "$RAY_TMP_ROOT/session_latest/logs" "$dest/logs"; echo "========================================="'
           securityContext:
             allowPrivilegeEscalation: true
             privileged: true
@@ -52,11 +54,11 @@ spec:
                     do
                       nodeid=$(ps -ef | grep raylet | grep node_id | grep -v grep | grep -oP '(?<=--node_id=)[^ ]*')
                       if [ -n "$nodeid" ]; then
-                        echo "$(date) raylet started: \"$(ps -ef | grep raylet | grep node_id | grep -v grep | grep -oP '(?<=--node_id=)[^ ]*')\" => ${nodeid}" >> /tmp/ray/init.log
-                        echo $nodeid > /tmp/ray/raylet_node_id
+                        echo "$(date) raylet started: \"$(ps -ef | grep raylet | grep node_id | grep -v grep | grep -oP '(?<=--node_id=)[^ ]*')\" => ${nodeid}" >> "$RAY_TMP_ROOT/init.log"
+                        echo $nodeid > "$RAY_TMP_ROOT/raylet_node_id"
                         break
                       else
-                        echo "$(date) raylet not start >> /tmp/ray/init.log"
+                        echo "$(date) raylet not start >> $RAY_TMP_ROOT/init.log"
                         sleep 1
                       fi
                     done
@@ -71,7 +73,7 @@ spec:
               memory: 1G
           volumeMounts:
           - name: historyserver
-            mountPath: /tmp/ray
+            mountPath: *rayTmpRoot
         - name: collector
           image: ${COLLECTOR_IMAGE}
           imagePullPolicy: IfNotPresent
@@ -108,7 +110,7 @@ spec:
           - --events-port=8084
           volumeMounts:
           - name: historyserver
-            mountPath: /tmp/ray
+            mountPath: *rayTmpRoot
         tolerations:
         - key: ray
           operator: Equal
@@ -131,6 +133,8 @@ spec:
         serviceAccountName: historyserver
         containers:
         - env:
+          - name: RAY_TMP_ROOT
+            value: *rayTmpRoot
           - name: RAY_enable_ray_event
             value: "true"
           - name: RAY_enable_core_worker_ray_event_to_aggregator
@@ -143,7 +147,7 @@ spec:
                     ACTOR_DEFINITION_EVENT,ACTOR_LIFECYCLE_EVENT,NODE_DEFINITION_EVENT,NODE_LIFECYCLE_EVENT"
           image: rayproject/ray:2.52.0
           command:
-          - 'echo "=========================================="; [ -d "/tmp/ray/session_latest" ] && dest="/tmp/ray/prev-logs/$(basename $(readlink /tmp/ray/session_latest))/$(cat /tmp/ray/raylet_node_id)" && echo "dst is $dest" && mkdir -p "$dest" && mv /tmp/ray/session_latest/logs "$dest/logs"; echo "========================================="'
+          - 'echo "=========================================="; [ -d "$RAY_TMP_ROOT/session_latest" ] && dest="$RAY_TMP_ROOT/prev-logs/$(basename $(readlink "$RAY_TMP_ROOT/session_latest"))/$(cat "$RAY_TMP_ROOT/raylet_node_id")" && echo "dst is $dest" && mkdir -p "$dest" && mv "$RAY_TMP_ROOT/session_latest/logs" "$dest/logs"; echo "========================================="'
           imagePullPolicy: IfNotPresent
           name: ray-worker
           securityContext:
@@ -162,11 +166,11 @@ spec:
                     do
                       nodeid=$(ps -ef | grep raylet | grep node_id | grep -v grep | grep -oP '(?<=--node_id=)[^ ]*')
                       if [ -n "$nodeid" ]; then
-                        echo "$(date) raylet started: \"$(ps -ef | grep raylet | grep node_id | grep -v grep | grep -oP '(?<=--node_id=)[^ ]*')\" => ${nodeid}" >> /tmp/ray/init.log
-                        echo $nodeid > /tmp/ray/raylet_node_id
+                        echo "$(date) raylet started: \"$(ps -ef | grep raylet | grep node_id | grep -v grep | grep -oP '(?<=--node_id=)[^ ]*')\" => ${nodeid}" >> "$RAY_TMP_ROOT/init.log"
+                        echo $nodeid > "$RAY_TMP_ROOT/raylet_node_id"
                         break
                       else
-                        echo "$(date) raylet not start >> /tmp/ray/init.log"
+                        echo "$(date) raylet not start >> $RAY_TMP_ROOT/init.log"
                         sleep 1
                       fi
                     done
@@ -181,7 +185,7 @@ spec:
               memory: 1G
           volumeMounts:
           - name: historyserver
-            mountPath: /tmp/ray
+            mountPath: *rayTmpRoot
         - name: collector
           image: ${COLLECTOR_IMAGE}
           imagePullPolicy: IfNotPresent
@@ -197,7 +201,7 @@ spec:
           - --events-port=8084
           volumeMounts:
           - name: historyserver
-            mountPath: /tmp/ray
+            mountPath: *rayTmpRoot
         tolerations:
         - key: ray
           operator: Equal
