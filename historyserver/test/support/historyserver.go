@@ -201,7 +201,7 @@ func PrepareTestEnvWithPrometheusAndGrafana(test Test, g *WithT, namespace *core
 }
 
 // GetOneOfNodeID retrieves a node ID from the /nodes endpoint.
-func GetOneOfNodeID(g *WithT, client *http.Client, historyServerURL string, isLive bool) string {
+func GetOneOfNodeID(g *WithT, client *http.Client, historyServerURL string, _ bool) string {
 	resp, err := client.Get(historyServerURL + "/nodes?view=summary")
 	g.Expect(err).NotTo(HaveOccurred())
 	defer resp.Body.Close()
@@ -218,12 +218,7 @@ func GetOneOfNodeID(g *WithT, client *http.Client, historyServerURL string, isLi
 	summary := data["summary"].([]any)
 	g.Expect(len(summary)).To(BeNumerically(">", 0))
 
-	var nodeInfo map[string]any
-	if isLive {
-		nodeInfo = summary[0].(map[string]any)
-	} else {
-		nodeInfo = summary[0].([]any)[0].(map[string]any)
-	}
+	nodeInfo := summary[0].(map[string]any)
 	return nodeInfo["raylet"].(map[string]any)["nodeId"].(string)
 }
 

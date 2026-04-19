@@ -2698,9 +2698,8 @@ func verifySingleEndpoint(test Test, g *WithT, client *http.Client, endpointURL 
 
 // TODO(jwj): Make verification for node-related endpoints more robust.
 // verifyNodesRespSchema verifies that the /nodes response is valid according to the API schema.
-// isLive indicates whether the response is from a live cluster or a dead cluster:
-//   - isLive: true for a live cluster (current snapshot)
-//   - isLive: false for a dead cluster (historical replay)
+// Both live and dead clusters return the same format (flat array of latest snapshots).
+// isLive is kept for signature compatibility but does not affect validation.
 func verifyNodesRespSchema(test Test, g *WithT, nodesResp map[string]any, isLive bool) {
 	// Verify top-level fields.
 	g.Expect(nodesResp).To(HaveKeyWithValue("result", BeTrue()))
@@ -2717,28 +2716,12 @@ func verifyNodesRespSchema(test Test, g *WithT, nodesResp map[string]any, isLive
 	summary, ok := data["summary"].([]any)
 	g.Expect(ok).To(BeTrue(), "'summary' should be an array")
 
-	if isLive {
-		// Live cluster: summary contains node summary snapshot of each node in the cluster.
-		g.Expect(len(summary)).To(Equal(2), "Live cluster should have 2 node summaries (one head node and one worker node)")
-		for _, nodeSummary := range summary {
-			nodeSummarySnapshot, ok := nodeSummary.(map[string]any)
-			g.Expect(ok).To(BeTrue(), "nodeSummary should be a map")
-			verifyNodeSummarySchema(test, g, nodeSummarySnapshot)
-		}
-	} else {
-		// Dead cluster: summary contains node summary replay (array of snapshots) of each node in the cluster.
-		// The node summary replay should follow the chronological order of the node state transitions.
-		g.Expect(len(summary)).To(Equal(2), "Dead cluster should have 2 node summary replays (one head node and one worker node)")
-		for _, nodeSummaryReplay := range summary {
-			nodeSummarySnapshots, ok := nodeSummaryReplay.([]any)
-			g.Expect(ok).To(BeTrue(), "nodeSummaryReplay should be an array")
-
-			for _, nodeSummarySnapshot := range nodeSummarySnapshots {
-				nodeSummarySnapshotMap, ok := nodeSummarySnapshot.(map[string]any)
-				g.Expect(ok).To(BeTrue(), "nodeSummarySnapshot should be a map")
-				verifyNodeSummarySchema(test, g, nodeSummarySnapshotMap)
-			}
-		}
+	_ = isLive
+	g.Expect(len(summary)).To(Equal(2), "Should have 2 node summaries (one head node and one worker node)")
+	for _, nodeSummary := range summary {
+		nodeSummarySnapshot, ok := nodeSummary.(map[string]any)
+		g.Expect(ok).To(BeTrue(), "nodeSummary should be a map")
+		verifyNodeSummarySchema(test, g, nodeSummarySnapshot)
 	}
 
 	// Verify nodeLogicalResources field.
@@ -2746,45 +2729,18 @@ func verifyNodesRespSchema(test Test, g *WithT, nodesResp map[string]any, isLive
 	nodeLogicalResources, ok := data["nodeLogicalResources"].(map[string]any)
 	g.Expect(ok).To(BeTrue(), "'nodeLogicalResources' should be a map")
 
-	if isLive {
-		// Live cluster: nodeLogicalResources contains resource string of each node in the cluster.
-		g.Expect(len(nodeLogicalResources)).To(Equal(2), "Live cluster should have 2 resource strings (one head node and one worker node)")
-		for nodeId, resourceString := range nodeLogicalResources {
-			g.Expect(nodeId).NotTo(BeEmpty())
-			g.Expect(resourceString).NotTo(BeEmpty())
-		}
-	} else {
-		// Dead cluster: nodeLogicalResources contains resource string replay (array of snapshots) of each node in the cluster.
-		// The resource string replay should follow the chronological order of the node state transitions.
-		g.Expect(len(nodeLogicalResources)).To(Equal(2), "Dead cluster should have 2 resource string replays (one head node and one worker node)")
-		for nodeId, resourceStringReplay := range nodeLogicalResources {
-			g.Expect(nodeId).NotTo(BeEmpty())
-
-			resourceStringSnapshots, ok := resourceStringReplay.([]any)
-			g.Expect(ok).To(BeTrue(), "resourceStringReplay should be an array")
-			for _, resourceStringSnapshot := range resourceStringSnapshots {
-				resourceStringSnapshotMap, ok := resourceStringSnapshot.(map[string]any)
-				g.Expect(ok).To(BeTrue(), "resourceStringSnapshot should be a map")
-				g.Expect(resourceStringSnapshotMap).To(HaveKey("t"))
-				g.Expect(resourceStringSnapshotMap).To(HaveKey("resourceString"))
-
-				resourceString, ok := resourceStringSnapshotMap["resourceString"].(string)
-				g.Expect(ok).To(BeTrue(), "resourceString should be a string")
-				if resourceString != "" {
-					g.Expect(resourceString).To(ContainSubstring("memory"))
-					g.Expect(resourceString).To(ContainSubstring("object_store_memory"))
-				}
-			}
-		}
+	g.Expect(len(nodeLogicalResources)).To(Equal(2), "Should have 2 resource strings (one head node and one worker node)")
+	for nodeId, resourceString := range nodeLogicalResources {
+		g.Expect(nodeId).NotTo(BeEmpty())
+		g.Expect(resourceString).NotTo(BeEmpty())
 	}
 
 	LogWithTimestamp(test.T(), "/nodes response schema verification completed")
 }
 
 // verifyNodeRespSchema verifies that the /nodes/{node_id} response is valid according to the API schema.
-// isLive indicates whether the response is from a live cluster or a dead cluster:
-//   - isLive: true for a live cluster (current snapshot)
-//   - isLive: false for a dead cluster (historical replay)
+// Both live and dead clusters return the same format (single object with latest snapshot).
+// isLive is kept for signature compatibility but does not affect validation.
 func verifyNodeRespSchema(test Test, g *WithT, nodeResp map[string]any, isLive bool) {
 	// Verify top-level fields.
 	g.Expect(nodeResp).To(HaveKeyWithValue("result", BeTrue()))
@@ -2795,22 +2751,10 @@ func verifyNodeRespSchema(test Test, g *WithT, nodeResp map[string]any, isLive b
 	g.Expect(ok).To(BeTrue(), "'data' should be a map")
 	g.Expect(data).To(HaveKey("detail"))
 
-	if isLive {
-		// Live cluster: detail contains node summary snapshot of the specified node.
-		nodeSummarySnapshot, ok := data["detail"].(map[string]any)
-		g.Expect(ok).To(BeTrue(), "'detail' should be a map")
-		verifyNodeSummarySchema(test, g, nodeSummarySnapshot)
-	} else {
-		// Dead cluster: detail contains node summary replay (array of snapshots) of the specified node.
-		// The node summary replay should follow the chronological order of the node state transitions.
-		nodeSummarySnapshots, ok := data["detail"].([]any)
-		g.Expect(ok).To(BeTrue(), "'detail' should be an array")
-		for _, nodeSummarySnapshot := range nodeSummarySnapshots {
-			nodeSummarySnapshotMap, ok := nodeSummarySnapshot.(map[string]any)
-			g.Expect(ok).To(BeTrue(), "nodeSummarySnapshot should be a map")
-			verifyNodeSummarySchema(test, g, nodeSummarySnapshotMap)
-		}
-	}
+	_ = isLive
+	nodeSummarySnapshot, ok := data["detail"].(map[string]any)
+	g.Expect(ok).To(BeTrue(), "'detail' should be a map")
+	verifyNodeSummarySchema(test, g, nodeSummarySnapshot)
 }
 
 // verifyNodeSummarySchema verifies that the node summary contains key fields.
