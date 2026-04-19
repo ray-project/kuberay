@@ -92,58 +92,76 @@ type Actor struct {
 
 // ActorMap is a struct that uses ActorID as key and the Actor struct as value
 type ActorMap struct {
-	ActorMap map[string]Actor
-	Mu       sync.Mutex
-}
-
-func (a *ActorMap) Lock() {
-	a.Mu.Lock()
-}
-
-func (a *ActorMap) Unlock() {
-	a.Mu.Unlock()
+	actorMap map[string]Actor
+	mu       sync.Mutex
 }
 
 func NewActorMap() *ActorMap {
 	return &ActorMap{
-		ActorMap: make(map[string]Actor),
+		actorMap: make(map[string]Actor),
 	}
 }
 
 // ClusterActorMap uses the cluster name as the key
 type ClusterActorMap struct {
-	ClusterActorMap map[string]*ActorMap
-	Mu              sync.RWMutex
+	clusterActorMap map[string]*ActorMap
+	mu              sync.RWMutex
 }
 
-func (c *ClusterActorMap) RLock() {
-	c.Mu.RLock()
-}
-
-func (c *ClusterActorMap) RUnlock() {
-	c.Mu.RUnlock()
-}
-
-func (c *ClusterActorMap) Lock() {
-	c.Mu.Lock()
-}
-
-func (c *ClusterActorMap) Unlock() {
-	c.Mu.Unlock()
+func NewClusterActorMap() *ClusterActorMap {
+	return &ClusterActorMap{
+		clusterActorMap: make(map[string]*ActorMap),
+	}
 }
 
 // GetOrCreateActorMap returns the ActorMap for the given cluster, creating it if it doesn't exist.
 // This is the actor equivalent of ClusterTaskMap.GetOrCreateTaskMap
 func (c *ClusterActorMap) GetOrCreateActorMap(clusterName string) *ActorMap {
-	c.Lock()
-	defer c.Unlock()
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
-	actorMap, exists := c.ClusterActorMap[clusterName]
+	actorMap, exists := c.clusterActorMap[clusterName]
 	if !exists {
 		actorMap = NewActorMap()
-		c.ClusterActorMap[clusterName] = actorMap
+		c.clusterActorMap[clusterName] = actorMap
 	}
 	return actorMap
+}
+
+// GetActors returns all actors in a cluster session as deep copies.
+func (c *ClusterActorMap) GetActors(clusterName string) []Actor {
+	c.mu.RLock()
+	actorMap, ok := c.clusterActorMap[clusterName]
+	c.mu.RUnlock()
+	if !ok {
+		return []Actor{}
+	}
+
+	return actorMap.GetActors()
+}
+
+// GetActorByID returns an actor by ID in a cluster session as a deep copy.
+func (c *ClusterActorMap) GetActorByID(clusterName, actorID string) (Actor, bool) {
+	c.mu.RLock()
+	actorMap, ok := c.clusterActorMap[clusterName]
+	c.mu.RUnlock()
+	if !ok {
+		return Actor{}, false
+	}
+
+	return actorMap.GetActorByID(actorID)
+}
+
+// GetActorsMap returns all actors in a cluster session as deep copies keyed by actor ID.
+func (c *ClusterActorMap) GetActorsMap(clusterName string) map[string]Actor {
+	c.mu.RLock()
+	actorMap, ok := c.clusterActorMap[clusterName]
+	c.mu.RUnlock()
+	if !ok {
+		return map[string]Actor{}
+	}
+
+	return actorMap.GetActorsMap()
 }
 
 // CreateOrMergeActor finds or creates an actor and applies the merge function.
@@ -151,22 +169,61 @@ func (c *ClusterActorMap) GetOrCreateActorMap(clusterName string) *ActorMap {
 // Actor uses simple map lookup since ActorID is unique.
 // This handles the case where LIFECYCLE events arrive before DEFINITION events.
 func (a *ActorMap) CreateOrMergeActor(actorId string, mergeFn func(*Actor)) {
-	a.Lock()
-	defer a.Unlock()
+	a.mu.Lock()
+	defer a.mu.Unlock()
 
-	actor, exists := a.ActorMap[actorId]
+	actor, exists := a.actorMap[actorId]
 	if !exists {
 		// Actor doesn't exist, create new with ActorID initialized
 		newActor := Actor{ActorID: actorId}
 		mergeFn(&newActor)
-		a.ActorMap[actorId] = newActor
+		a.actorMap[actorId] = newActor
 		return
 	}
 
 	// Actor exists: apply merge function and write back to map
 	// NOTE: Must write back because Go map returns a copy, not a reference
 	mergeFn(&actor)
-	a.ActorMap[actorId] = actor
+	a.actorMap[actorId] = actor
+}
+
+// GetActors returns all actors as deep copies.
+func (a *ActorMap) GetActors() []Actor {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	actors := make([]Actor, 0, len(a.actorMap))
+	for _, actor := range a.actorMap {
+		actors = append(actors, actor.DeepCopy())
+	}
+
+	return actors
+}
+
+// GetActorByID returns an actor by ID as a deep copy.
+func (a *ActorMap) GetActorByID(actorID string) (Actor, bool) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	actor, ok := a.actorMap[actorID]
+	if !ok {
+		return Actor{}, false
+	}
+
+	return actor.DeepCopy(), true
+}
+
+// GetActorsMap returns all actors as deep copies keyed by actor ID.
+func (a *ActorMap) GetActorsMap() map[string]Actor {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	actors := make(map[string]Actor, len(a.actorMap))
+	for id, actor := range a.actorMap {
+		actors[id] = actor.DeepCopy()
+	}
+
+	return actors
 }
 
 // DeepCopy returns a deep copy of the Actor, including slices and maps.
