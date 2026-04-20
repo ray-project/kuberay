@@ -7,7 +7,6 @@ import (
 	"maps"
 	"math"
 	"os"
-	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -705,7 +704,7 @@ func (r *RayServiceReconciler) reconcileGateway(ctx context.Context, rayServiceI
 	}
 
 	// If Gateway already exists, check if update is needed to reach desired state
-	if !reflect.DeepEqual(existingGateway.Spec, desiredGateway.Spec) {
+	if !utils.IsGatewayEqual(existingGateway, desiredGateway) {
 		logger.Info("Updating existing Gateway", "name", existingGateway.Name)
 		existingGateway.Spec = desiredGateway.Spec
 		if err := r.Update(ctx, existingGateway); err != nil {
