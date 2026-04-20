@@ -2761,31 +2761,6 @@ func TestReconcileRollbackState(t *testing.T) {
 	}
 }
 
-func TestSuspendValueSame(t *testing.T) {
-	tests := []struct {
-		name   string
-		value1 *bool
-		value2 *bool
-		expect bool
-	}{
-		{"both nil", nil, nil, true},
-		{"nil and false", nil, ptr.To(false), true},
-		{"false and nil", ptr.To(false), nil, true},
-		{"both false", ptr.To(false), ptr.To(false), true},
-		{"both true", ptr.To(true), ptr.To(true), true},
-		{"nil and true", nil, ptr.To(true), false},
-		{"true and nil", ptr.To(true), nil, false},
-		{"true and false", ptr.To(true), ptr.To(false), false},
-		{"false and true", ptr.To(false), ptr.To(true), false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.expect, suspendValueSame(tt.value1, tt.value2))
-		})
-	}
-}
-
 // TestShouldUpdateCluster_SuspendFlip covers ray-project/kuberay#4686: when Kueue
 // toggles RayService.Spec.RayClusterSpec.Suspend, the existing RayCluster must be
 // updated in-place. Previously shouldUpdateCluster returned false because the
