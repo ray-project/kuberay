@@ -3,7 +3,7 @@ kind: RayCluster
 metadata:
   name: raycluster-py-spy
 spec:
-  rayVersion: '2.52.0' # should match the Ray version in the image of the containers
+  rayVersion: "2.52.0" # should match the Ray version in the image of the containers
   # Ray head pod template
   headGroupSpec:
     rayStartParams: {}

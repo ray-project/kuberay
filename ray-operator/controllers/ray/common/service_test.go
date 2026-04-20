@@ -664,14 +664,11 @@ func TestUserSpecifiedServeService(t *testing.T) {
 		t.Errorf("Serve Service selector key %s value didn't match expected value : expected value=%s, actual value=%s", utils.RayClusterServingServiceLabelKey, utils.EnableRayClusterServingServiceTrue, svc.Spec.Selector[utils.RayClusterServingServiceLabelKey])
 	}
 
-	// ports should only have DefaultServePort
-	ports := svc.Spec.Ports
-	expectedPortName := utils.ServingPortName
-	expectedPortNumber := int32(8000)
-	for _, port := range ports {
-		assert.Equal(t, expectedPortName, port.Name)
-		assert.Equal(t, expectedPortNumber, port.Port)
-	}
+	// When user specifies a port with the same name as an auto-detected port,
+	// the user's definition takes precedence (preserving fields like AppProtocol).
+	assert.Len(t, svc.Spec.Ports, 1)
+	assert.Equal(t, utils.ServingPortName, svc.Spec.Ports[0].Name)
+	assert.Equal(t, int32(12345), svc.Spec.Ports[0].Port)
 
 	validateServiceTypeForUserSpecifiedService(svc, userType, t)
 	validateLabelsForUserSpecifiedService(svc, userLabels, t)
@@ -734,6 +731,239 @@ func TestUserSpecifiedServeServiceWithoutAnyServePort(t *testing.T) {
 	require.Len(t, svc.Spec.Ports, 1)
 	assert.Equal(t, utils.ServingPortName, svc.Spec.Ports[0].Name)
 	assert.Equal(t, int32(utils.DefaultServingPort), svc.Spec.Ports[0].Port)
+func TestBuildServeServiceWithGrpcPort(t *testing.T) {
+	cluster := rayv1.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "raycluster-grpc",
+			Namespace: "default",
+		},
+		Spec: rayv1.RayClusterSpec{
+			HeadGroupSpec: rayv1.HeadGroupSpec{
+				ServiceType: corev1.ServiceTypeClusterIP,
+				Template: corev1.PodTemplateSpec{
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Name: "ray-head",
+								Ports: []corev1.ContainerPort{
+									{ContainerPort: 6379, Name: utils.GcsServerPortName},
+									{ContainerPort: 8265, Name: utils.DashboardPortName},
+									{ContainerPort: 8000, Name: utils.ServingPortName},
+									{ContainerPort: 9000, Name: "serve-grpc"},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	svc, err := BuildServeServiceForRayCluster(context.Background(), cluster)
+	require.NoError(t, err)
+
+	// The serve service should include both "serve" (HTTP) and "serve-grpc" (gRPC) ports
+	assert.Len(t, svc.Spec.Ports, 2)
+
+	portsByName := map[string]int32{}
+	for _, p := range svc.Spec.Ports {
+		portsByName[p.Name] = p.Port
+	}
+	assert.Equal(t, int32(8000), portsByName[utils.ServingPortName])
+	assert.Equal(t, int32(9000), portsByName["serve-grpc"])
+
+	// Internal ports like gcs-server and dashboard should NOT be included
+	_, hasGcs := portsByName[utils.GcsServerPortName]
+	_, hasDashboard := portsByName[utils.DashboardPortName]
+	assert.False(t, hasGcs, "gcs-server port should not be in serve service")
+	assert.False(t, hasDashboard, "dashboard port should not be in serve service")
+}
+
+func TestBuildServeServiceForRayServiceWithGrpcPort(t *testing.T) {
+	cluster := rayv1.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "raycluster-grpc",
+			Namespace: "default",
+		},
+		Spec: rayv1.RayClusterSpec{
+			HeadGroupSpec: rayv1.HeadGroupSpec{
+				Template: corev1.PodTemplateSpec{
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Name: "ray-head",
+								Ports: []corev1.ContainerPort{
+									{ContainerPort: 6379, Name: utils.GcsServerPortName},
+									{ContainerPort: 8000, Name: utils.ServingPortName},
+									{ContainerPort: 9000, Name: "serve-grpc"},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	svc, err := BuildServeServiceForRayService(context.Background(), *serviceInstance, cluster)
+	require.NoError(t, err)
+
+	assert.Len(t, svc.Spec.Ports, 2)
+
+	portsByName := map[string]int32{}
+	for _, p := range svc.Spec.Ports {
+		portsByName[p.Name] = p.Port
+	}
+	assert.Equal(t, int32(8000), portsByName[utils.ServingPortName])
+	assert.Equal(t, int32(9000), portsByName["serve-grpc"])
+}
+
+func TestUserSpecifiedServeServiceWithGrpcPort(t *testing.T) {
+	testRayServiceWithServeService := serviceInstance.DeepCopy()
+
+	testRayServiceWithServeService.Spec.ServeService = &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "custom-serve-svc",
+		},
+		Spec: corev1.ServiceSpec{
+			Ports: []corev1.ServicePort{
+				{Name: "serve", Port: 8000},
+				{Name: "serve-grpc", Port: 9000},
+			},
+			Type: corev1.ServiceTypeLoadBalancer,
+		},
+	}
+
+	// instanceWithWrongSvc has serve:8000 in its container ports.
+	// The custom ServeService also specifies serve-grpc:9000, but since
+	// auto-detected ports (serve:8000) are non-empty, only those are used.
+	svc, err := BuildServeServiceForRayService(context.Background(), *testRayServiceWithServeService, *instanceWithWrongSvc)
+	require.NoError(t, err)
+
+	// Only the auto-detected serve port from the container spec is included
+	assert.Len(t, svc.Spec.Ports, 1)
+	assert.Equal(t, utils.ServingPortName, svc.Spec.Ports[0].Name)
+	assert.Equal(t, int32(8000), svc.Spec.Ports[0].Port)
+}
+
+func TestUserSpecifiedServeServiceAppProtocolPreserved(t *testing.T) {
+	cluster := rayv1.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "raycluster-grpc",
+			Namespace: "default",
+		},
+		Spec: rayv1.RayClusterSpec{
+			HeadGroupSpec: rayv1.HeadGroupSpec{
+				Template: corev1.PodTemplateSpec{
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Name: "ray-head",
+								Ports: []corev1.ContainerPort{
+									{ContainerPort: 8000, Name: utils.ServingPortName},
+									{ContainerPort: 9000, Name: "serve-grpc"},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	h2c := "kubernetes.io/h2c"
+	testRayService := serviceInstance.DeepCopy()
+	testRayService.Spec.ServeService = &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "custom-serve-svc",
+		},
+		Spec: corev1.ServiceSpec{
+			Ports: []corev1.ServicePort{
+				{Name: utils.ServingPortName, Port: 8000},
+				{Name: "serve-grpc", Port: 9000, AppProtocol: &h2c},
+			},
+		},
+	}
+
+	svc, err := BuildServeServiceForRayService(context.Background(), *testRayService, cluster)
+	require.NoError(t, err)
+
+	assert.Len(t, svc.Spec.Ports, 2)
+
+	portsByName := map[string]corev1.ServicePort{}
+	for _, p := range svc.Spec.Ports {
+		portsByName[p.Name] = p
+	}
+
+	// HTTP port has no appProtocol
+	assert.Nil(t, portsByName[utils.ServingPortName].AppProtocol)
+
+	// gRPC port preserves user-specified appProtocol
+	require.NotNil(t, portsByName["serve-grpc"].AppProtocol)
+	assert.Equal(t, "kubernetes.io/h2c", *portsByName["serve-grpc"].AppProtocol)
+}
+
+func TestUserSpecifiedServeServiceFallbackPreservesAppProtocol(t *testing.T) {
+	// Cluster with NO serve ports in container spec
+	cluster := rayv1.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "raycluster-no-serve",
+			Namespace: "default",
+		},
+		Spec: rayv1.RayClusterSpec{
+			HeadGroupSpec: rayv1.HeadGroupSpec{
+				Template: corev1.PodTemplateSpec{
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Name: "ray-head",
+								Ports: []corev1.ContainerPort{
+									{ContainerPort: 6379, Name: utils.GcsServerPortName},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	h2c := "kubernetes.io/h2c"
+	testRayService := serviceInstance.DeepCopy()
+	testRayService.Spec.ServeService = &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "custom-serve-svc",
+		},
+		Spec: corev1.ServiceSpec{
+			Ports: []corev1.ServicePort{
+				{Name: "serve-grpc", Port: 9000, AppProtocol: &h2c},
+				{Name: "not-a-serve-port", Port: 1234},
+			},
+		},
+	}
+
+	svc, err := BuildServeServiceForRayService(context.Background(), *testRayService, cluster)
+	require.NoError(t, err)
+
+	// All user-provided ports are kept as-is when no ports are auto-detected
+	assert.Len(t, svc.Spec.Ports, 2)
+	assert.Equal(t, "serve-grpc", svc.Spec.Ports[0].Name)
+	assert.Equal(t, int32(9000), svc.Spec.Ports[0].Port)
+	require.NotNil(t, svc.Spec.Ports[0].AppProtocol)
+	assert.Equal(t, "kubernetes.io/h2c", *svc.Spec.Ports[0].AppProtocol)
+	assert.Equal(t, "not-a-serve-port", svc.Spec.Ports[1].Name)
+	assert.Equal(t, int32(1234), svc.Spec.Ports[1].Port)
+}
+
+func TestIsServingPort(t *testing.T) {
+	assert.True(t, isServingPort("serve"))
+	assert.True(t, isServingPort("serve-grpc"))
+	assert.True(t, isServingPort("serve-http"))
+	assert.False(t, isServingPort("server"))
+	assert.False(t, isServingPort("dashboard"))
+	assert.False(t, isServingPort("gcs-server"))
+	assert.False(t, isServingPort("metrics"))
+	assert.False(t, isServingPort(""))
 }
 
 func validateServiceTypeForUserSpecifiedService(svc *corev1.Service, userType corev1.ServiceType, t *testing.T) {

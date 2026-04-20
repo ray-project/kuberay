@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"testing"
 
+	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/s3"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -58,12 +59,28 @@ func TestHistoryServer(t *testing.T) {
 			testFunc: testLogStreamEndpoint,
 		},
 		{
+			name:     "/api/v0/logs endpoint with glob pattern (dead cluster)",
+			testFunc: testNodeLogsEndpointDeadCluster,
+		},
+		{
 			name:     "/api/v0/tasks/timeline endpoint (live cluster)",
 			testFunc: testTimelineEndpointLiveCluster,
 		},
 		{
 			name:     "/api/v0/tasks/timeline endpoint (dead cluster)",
 			testFunc: testTimelineEndpointDeadCluster,
+		},
+		{
+			name:     "/events endpoint (live cluster)",
+			testFunc: testEventsEndpointLiveCluster,
+		},
+		{
+			name:     "/events endpoint (dead cluster)",
+			testFunc: testEventsEndpointDeadCluster,
+		},
+		{
+			name:     "/logical/actors endpoint (dead cluster)",
+			testFunc: testLogicalActorsEndpointDeadCluster,
 		},
 		{
 			name:     "Live cluster: /api/v0/tasks?detail=1 should return the detailed task information of all task attempts",
@@ -88,6 +105,38 @@ func TestHistoryServer(t *testing.T) {
 		{
 			name:     "Dead cluster: /nodes/{node_id} should return the historical replay containing node summary snapshots of the specified node in a cluster session",
 			testFunc: testDeadClusterNode,
+		},
+		{
+			name:     "Live cluster: cluster_metadata endpoint should return metadata (Ray version, Python version, etc.)",
+			testFunc: testLiveClusterMetadata,
+		},
+		{
+			name:     "Dead cluster: cluster_metadata endpoint should return stored metadata from S3",
+			testFunc: testDeadClusterMetadata,
+		},
+		{
+			name:     "Dead cluster: /api/v0/placement_groups should return stored placement groups from S3",
+			testFunc: testDeadClusterPlacementGroups,
+		},
+		{
+			name:     "Live cluster: /api/v0/tasks/summarize?summary_by=lineage should return the lineage tree of all tasks",
+			testFunc: testLiveClusterTaskSummarize,
+		},
+		{
+			name:     "Dead cluster: /api/v0/tasks/summarize?summary_by=lineage should return the lineage tree of all tasks",
+			testFunc: testDeadClusterTaskSummarize,
+		},
+		{
+			name:     "Live cluster: /api/v0/tasks/summarize should return the task summary grouped by func_name",
+			testFunc: testLiveClusterTaskSummarizeFuncName,
+		},
+		{
+			name:     "Dead cluster: /api/v0/tasks/summarize should return the task summary grouped by func_name",
+			testFunc: testDeadClusterTaskSummarizeFuncName,
+		},
+		{
+			name:     "Live and dead cluster: /timezone should return consistent timezone info",
+			testFunc: testLiveAndDeadClusterTimezone,
 		},
 	}
 
@@ -163,7 +212,7 @@ func testLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Names
 	client := CreateHTTPClientWithCookieJar(g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 
-	nodeID := GetOneOfNodeID(g, client, historyServerURL, true)
+	nodeID := GetOneOfNodeID(g, client, historyServerURL, false)
 	filename := "raylet.out"
 
 	logFileTestCases := []struct {
@@ -172,31 +221,57 @@ func testLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Names
 		expectedStatus int
 	}{
 		// lines parameter
-		{"lines=100", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=100", u, EndpointLogsFile, n, filename) }, http.StatusOK},
-		{"lines=0 (default 1000)", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s", u, EndpointLogsFile, n, filename) }, http.StatusOK},
-		{"lines=-1 (all)", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=-1", u, EndpointLogsFile, n, filename) }, http.StatusOK},
+		{"lines=100", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=100", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
+		{"lines=0 (default 1000)", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
+		{"lines=-1 (all)", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=-1", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
 
 		// timeout parameter
-		{"timeout=5", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&timeout=5", u, EndpointLogsFile, n, filename) }, http.StatusOK},
-		{"timeout=30", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&timeout=30", u, EndpointLogsFile, n, filename) }, http.StatusOK},
+		{"timeout=5", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&timeout=5", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
+		{"timeout=30", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&timeout=30", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
 
 		// attempt_number parameter
-		{"attempt_number=0", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&attempt_number=0", u, EndpointLogsFile, n, filename) }, http.StatusOK},
-		{"attempt_number=1", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&attempt_number=1", u, EndpointLogsFile, n, filename) }, http.StatusOK},
+		{"attempt_number=0", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&attempt_number=0", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
+		{"attempt_number=1", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&attempt_number=1", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
 
 		// download_filename parameter
-		{"download_filename=custom.log", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&download_filename=custom.log", u, EndpointLogsFile, n, filename) }, http.StatusOK},
+		{"download_filename=custom.log", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&download_filename=custom.log", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
 
 		// filter_ansi_code parameter
-		{"filter_ansi_code=true", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&filter_ansi_code=true", u, EndpointLogsFile, n, filename) }, http.StatusOK},
-		{"filter_ansi_code=false", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&filter_ansi_code=false", u, EndpointLogsFile, n, filename) }, http.StatusOK},
+		{"filter_ansi_code=true", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&filter_ansi_code=true", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
+		{"filter_ansi_code=false", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&filter_ansi_code=false", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
 
 		// suffix parameter
-		{"suffix=out (default)", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&suffix=out", u, EndpointLogsFile, n, filename) }, http.StatusOK},
-		{"suffix=err", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&suffix=err", u, EndpointLogsFile, n, filename) }, http.StatusOK},
+		{"suffix=out (default)", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&suffix=out", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
+		{"suffix=err", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&suffix=err", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
 
 		// Combined parameters
-		{"lines+timeout+filter", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=50&timeout=10&filter_ansi_code=true", u, EndpointLogsFile, n, filename) }, http.StatusOK},
+		{"lines+timeout+filter", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=50&timeout=10&filter_ansi_code=true", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
 
 		// Missing mandatory parameters
 		{"missing node_id and node_ip", func(u, n string) string { return fmt.Sprintf("%s%s?filename=%s", u, EndpointLogsFile, filename) }, http.StatusBadRequest},
@@ -204,24 +279,44 @@ func testLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Names
 		{"missing both", func(u, n string) string { return fmt.Sprintf("%s%s", u, EndpointLogsFile) }, http.StatusBadRequest},
 
 		// Invalid parameters
-		{"invalid lines (string)", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=abc", u, EndpointLogsFile, n, filename) }, http.StatusBadRequest},
-		{"invalid timeout (string)", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&timeout=invalid", u, EndpointLogsFile, n, filename) }, http.StatusBadRequest},
-		{"invalid attempt_number (string)", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&attempt_number=xyz", u, EndpointLogsFile, n, filename) }, http.StatusBadRequest},
-		{"invalid suffix", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&suffix=invalid", u, EndpointLogsFile, n, filename) }, http.StatusBadRequest},
+		{"invalid lines (string)", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=abc", u, EndpointLogsFile, n, filename)
+		}, http.StatusBadRequest},
+		{"invalid timeout (string)", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&timeout=invalid", u, EndpointLogsFile, n, filename)
+		}, http.StatusBadRequest},
+		{"invalid attempt_number (string)", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&attempt_number=xyz", u, EndpointLogsFile, n, filename)
+		}, http.StatusBadRequest},
+		{"invalid suffix", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&suffix=invalid", u, EndpointLogsFile, n, filename)
+		}, http.StatusBadRequest},
 		// NOTE: Ray Dashboard will return 500 (Internal Server Error) for the file not found error
 		// ref: https://github.com/ray-project/ray/blob/68d01c4c48a59c7768ec9c2359a1859966c446b6/python/ray/dashboard/modules/state/state_head.py#L282-L284
-		{"file not found", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=nonexistent.log", u, EndpointLogsFile, n) }, http.StatusInternalServerError},
+		{"file not found", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=nonexistent.log", u, EndpointLogsFile, n)
+		}, http.StatusInternalServerError},
 		{"task_id invalid (not found)", func(u, n string) string { return fmt.Sprintf("%s%s?task_id=nonexistent-task-id", u, EndpointLogsFile) }, http.StatusInternalServerError},
-		{"node_ip invalid (non-existent)", func(u, n string) string { return fmt.Sprintf("%s%s?node_ip=192.168.255.255&filename=%s", u, EndpointLogsFile, filename) }, http.StatusInternalServerError},
+		{"node_ip invalid (non-existent)", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_ip=192.168.255.255&filename=%s", u, EndpointLogsFile, filename)
+		}, http.StatusInternalServerError},
 		{"pid invalid (string)", func(u, n string) string { return fmt.Sprintf("%s%s?pid=abc&node_id=%s", u, EndpointLogsFile, n) }, http.StatusBadRequest},
 		{"pid non-existent", func(u, n string) string { return fmt.Sprintf("%s%s?pid=999999&node_id=%s", u, EndpointLogsFile, n) }, http.StatusInternalServerError},
 
 		// Path traversal attacks
-		{"traversal ../etc/passwd", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=../etc/passwd", u, EndpointLogsFile, n) }, http.StatusBadRequest},
+		{"traversal ../etc/passwd", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=../etc/passwd", u, EndpointLogsFile, n)
+		}, http.StatusBadRequest},
 		{"traversal ..", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=..", u, EndpointLogsFile, n) }, http.StatusBadRequest},
-		{"traversal /etc/passwd", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=/etc/passwd", u, EndpointLogsFile, n) }, http.StatusBadRequest},
-		{"traversal ../../secret", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=../../secret", u, EndpointLogsFile, n) }, http.StatusBadRequest},
-		{"traversal in node_id", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=../evil&filename=%s", u, EndpointLogsFile, filename) }, http.StatusBadRequest},
+		{"traversal /etc/passwd", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=/etc/passwd", u, EndpointLogsFile, n)
+		}, http.StatusBadRequest},
+		{"traversal ../../secret", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=../../secret", u, EndpointLogsFile, n)
+		}, http.StatusBadRequest},
+		{"traversal in node_id", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=../evil&filename=%s", u, EndpointLogsFile, filename)
+		}, http.StatusBadRequest},
 	}
 
 	for _, tc := range logFileTestCases {
@@ -424,33 +519,61 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 		expectedStatus int
 	}{
 		// Basic parameters
-		{"lines=100", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=100", u, EndpointLogsFile, n, filename) }, http.StatusOK},
-		{"lines=0 (default 1000)", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s", u, EndpointLogsFile, n, filename) }, http.StatusOK},
-		{"lines=-1 (all)", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=-1", u, EndpointLogsFile, n, filename) }, http.StatusOK},
+		{"lines=100", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=100", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
+		{"lines=0 (default 1000)", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
+		{"lines=-1 (all)", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=-1", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
 
 		// timeout parameter
 		// NOTE: timeout feature is not yet implemented, we just accept and validate the timeout parameter
-		{"timeout=5", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&timeout=5", u, EndpointLogsFile, n, filename) }, http.StatusOK},
-		{"timeout=30", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&timeout=30", u, EndpointLogsFile, n, filename) }, http.StatusOK},
+		{"timeout=5", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&timeout=5", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
+		{"timeout=30", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&timeout=30", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
 
 		// attempt_number parameter
-		{"attempt_number=0", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&attempt_number=0", u, EndpointLogsFile, n, filename) }, http.StatusOK},
-		{"attempt_number=1 (not found)", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&attempt_number=1", u, EndpointLogsFile, n, filename) }, http.StatusNotFound},
+		{"attempt_number=0", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&attempt_number=0", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
+		{"attempt_number=1 (not found)", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&attempt_number=1", u, EndpointLogsFile, n, filename)
+		}, http.StatusNotFound},
 
 		// download_filename parameter
-		{"download_filename=custom.log", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&download_filename=custom.log", u, EndpointLogsFile, n, filename) }, http.StatusOK},
+		{"download_filename=custom.log", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&download_filename=custom.log", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
 
 		// filter_ansi_code parameter
-		{"filter_ansi_code=true", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&filter_ansi_code=true", u, EndpointLogsFile, n, filename) }, http.StatusOK},
-		{"filter_ansi_code=false", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&filter_ansi_code=false", u, EndpointLogsFile, n, filename) }, http.StatusOK},
+		{"filter_ansi_code=true", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&filter_ansi_code=true", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
+		{"filter_ansi_code=false", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&filter_ansi_code=false", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
 
 		// suffix parameter
-		{"suffix=out (default)", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&suffix=out", u, EndpointLogsFile, n, filename) }, http.StatusOK},
-		{"suffix=err", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&suffix=err", u, EndpointLogsFile, n, filename) }, http.StatusOK},
+		{"suffix=out (default)", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&suffix=out", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
+		{"suffix=err", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&suffix=err", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
 
 		// Combined parameters
-		{"lines+timeout+filter", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=50&timeout=10&filter_ansi_code=true", u, EndpointLogsFile, n, filename) }, http.StatusOK},
-		{"all parameters", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=100&timeout=15&attempt_number=0&download_filename=custom.log&filter_ansi_code=true", u, EndpointLogsFile, n, filename) }, http.StatusOK},
+		{"lines+timeout+filter", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=50&timeout=10&filter_ansi_code=true", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
+		{"all parameters", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=100&timeout=15&attempt_number=0&download_filename=custom.log&filter_ansi_code=true", u, EndpointLogsFile, n, filename)
+		}, http.StatusOK},
 
 		// Missing mandatory parameters
 		{"missing node_id and node_ip", func(u, n string) string { return fmt.Sprintf("%s%s?filename=%s", u, EndpointLogsFile, filename) }, http.StatusBadRequest},
@@ -458,23 +581,43 @@ func testLogFileEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Names
 		{"missing both", func(u, n string) string { return fmt.Sprintf("%s%s", u, EndpointLogsFile) }, http.StatusBadRequest},
 
 		// Invalid parameters
-		{"invalid lines (string)", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=abc", u, EndpointLogsFile, n, filename) }, http.StatusBadRequest},
-		{"invalid timeout (string)", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&timeout=invalid", u, EndpointLogsFile, n, filename) }, http.StatusBadRequest},
-		{"invalid attempt_number (string)", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&attempt_number=xyz", u, EndpointLogsFile, n, filename) }, http.StatusBadRequest},
-		{"file not found", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=nonexistent.log", u, EndpointLogsFile, n) }, http.StatusNotFound},
-		{"invalid suffix", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=%s&suffix=invalid", u, EndpointLogsFile, n, filename) }, http.StatusBadRequest},
+		{"invalid lines (string)", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&lines=abc", u, EndpointLogsFile, n, filename)
+		}, http.StatusBadRequest},
+		{"invalid timeout (string)", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&timeout=invalid", u, EndpointLogsFile, n, filename)
+		}, http.StatusBadRequest},
+		{"invalid attempt_number (string)", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&attempt_number=xyz", u, EndpointLogsFile, n, filename)
+		}, http.StatusBadRequest},
+		{"file not found", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=nonexistent.log", u, EndpointLogsFile, n)
+		}, http.StatusNotFound},
+		{"invalid suffix", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=%s&suffix=invalid", u, EndpointLogsFile, n, filename)
+		}, http.StatusBadRequest},
 		{"task_id invalid (not found)", func(u, n string) string { return fmt.Sprintf("%s%s?task_id=nonexistent-task-id", u, EndpointLogsFile) }, http.StatusBadRequest},
 		{"non-existent pid", func(u, n string) string { return fmt.Sprintf("%s%s?pid=999999&node_id=%s", u, EndpointLogsFile, n) }, http.StatusNotFound},
 
 		// node_ip parameter tests
-		{"node_ip invalid (non-existent)", func(u, n string) string { return fmt.Sprintf("%s%s?node_ip=192.168.255.255&filename=%s", u, EndpointLogsFile, filename) }, http.StatusNotFound},
+		{"node_ip invalid (non-existent)", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_ip=192.168.255.255&filename=%s", u, EndpointLogsFile, filename)
+		}, http.StatusNotFound},
 
 		// Path traversal attacks
-		{"traversal ../etc/passwd", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=../etc/passwd", u, EndpointLogsFile, n) }, http.StatusBadRequest},
+		{"traversal ../etc/passwd", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=../etc/passwd", u, EndpointLogsFile, n)
+		}, http.StatusBadRequest},
 		{"traversal ..", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=..", u, EndpointLogsFile, n) }, http.StatusBadRequest},
-		{"traversal /etc/passwd", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=/etc/passwd", u, EndpointLogsFile, n) }, http.StatusBadRequest},
-		{"traversal ../../secret", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=%s&filename=../../secret", u, EndpointLogsFile, n) }, http.StatusBadRequest},
-		{"traversal in node_id", func(u, n string) string { return fmt.Sprintf("%s%s?node_id=../evil&filename=%s", u, EndpointLogsFile, filename) }, http.StatusBadRequest},
+		{"traversal /etc/passwd", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=/etc/passwd", u, EndpointLogsFile, n)
+		}, http.StatusBadRequest},
+		{"traversal ../../secret", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=%s&filename=../../secret", u, EndpointLogsFile, n)
+		}, http.StatusBadRequest},
+		{"traversal in node_id", func(u, n string) string {
+			return fmt.Sprintf("%s%s?node_id=../evil&filename=%s", u, EndpointLogsFile, filename)
+		}, http.StatusBadRequest},
 	}
 
 	for _, tc := range logFileTestCases {
@@ -782,8 +925,8 @@ func getAllEligibleActorIDs(g *WithT, client *http.Client, historyServerURL stri
 	err = json.Unmarshal(body, &result)
 	g.Expect(err).NotTo(HaveOccurred())
 
-	// Extract actor_id from response
-	// Response format: {"result": true, "msg": "...", "data": {"actors": {actor_id: {...}, ...}}}
+	// Extract actorId from response
+	// Response format: {"result": true, "msg": "...", "data": {"actors": {actorId: {...}, ...}}}
 	data, ok := result["data"].(map[string]interface{})
 	g.Expect(ok).To(BeTrue(), "response should have 'data' field")
 
@@ -880,7 +1023,7 @@ func testLogStreamEndpoint(test Test, g *WithT, namespace *corev1.Namespace, s3C
 	client := CreateHTTPClientWithCookieJar(g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 
-	nodeID := GetOneOfNodeID(g, client, historyServerURL, true)
+	nodeID := GetOneOfNodeID(g, client, historyServerURL, false)
 	filename := "raylet.out"
 	streamURL := fmt.Sprintf("%s%s?node_id=%s&filename=%s", historyServerURL, EndpointLogsStream, nodeID, filename)
 
@@ -928,6 +1071,278 @@ func testLogStreamEndpoint(test Test, g *WithT, namespace *corev1.Namespace, s3C
 
 	DeleteS3Bucket(test, g, s3Client)
 	LogWithTimestamp(test.T(), "Log stream endpoint tests completed")
+}
+
+// testNodeLogsEndpointDeadCluster verifies that the /api/v0/logs endpoint correctly lists and filters
+// log files for a dead cluster using the glob query parameter.
+//
+// The glob patterns tested mirror the four patterns constructed by the Ray Dashboard frontend:
+// https://github.com/ray-project/ray/blob/60d14699591f1150eb71b8f657160cab9f767dfb/python/ray/dashboard/client/src/pages/log/Logs.tsx#L134-L141
+//   - Case A: folder + filename search → "events/*RAYLET*"
+//   - Case B: root + filename search   → "*dashboard*"
+//   - Case C: folder only              → "events/*"
+//   - Case D: no glob (omitted)        → server returns all files
+//
+// The test follows these steps:
+// 1. Create a RayCluster and submit a Ray job.
+// 2. Delete RayCluster to trigger log upload to S3.
+// 3. Deploy the History Server and verify the cluster is listed as a dead session.
+// 4. Case A — glob=events/*RAYLET*: a directory prefix combined with a wrapped wildcard matches a specific file in a subdirectory.
+// 5. Case B — glob=*dashboard*: wildcards on both sides match any filename containing "dashboard" at root level.
+// 6. Case C — glob=events/*: a directory prefix with a bare wildcard lists all files in that subdirectory.
+// 7. Case D — no glob parameter: omitting the glob returns all log files (server default).
+// 8. glob=raylet* — wildcard suffix matches raylet.out and raylet.err.
+// 9. glob=nonexistent-*.xyz — a pattern matching no files returns an empty result.
+// 10. glob=events/event_JOBS* — subdirectory prefix is split from the pattern, then the wildcard matches within that subdirectory.
+// 11. glob=**/*.out — doublestar pattern recursively matches all .out files across all directories.
+// 12. Delete S3 bucket to ensure test isolation.
+func testNodeLogsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
+	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
+
+	DeleteRayClusterAndWait(test, g, namespace.Name, rayCluster.Name)
+
+	ApplyHistoryServer(test, g, namespace, "")
+	historyServerURL := GetHistoryServerURL(test, g, namespace)
+
+	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
+	g.Expect(clusterInfo.SessionName).NotTo(Equal(LiveSessionName), "Cluster should be a dead session after deletion")
+
+	client := CreateHTTPClientWithCookieJar(g)
+	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
+
+	nodeID := GetOneOfNodeID(g, client, historyServerURL, false)
+
+	// Case A: subdirectory + filename search — glob=events/*RAYLET*
+	test.T().Run("Case A: glob=events/*RAYLET* matches RAYLET event file in subdirectory", func(t *testing.T) {
+		g := NewWithT(t)
+
+		logsURL := fmt.Sprintf("%s%s?node_id=%s&glob=%s", historyServerURL, EndpointLogs, nodeID, url.QueryEscape("events/*RAYLET*"))
+		resp, err := client.Get(logsURL)
+		g.Expect(err).NotTo(HaveOccurred())
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(resp.StatusCode).To(Equal(http.StatusOK), "Expected OK, body: %s", string(body))
+
+		result := parseLogsResponse(body)
+		g.Expect(result).NotTo(BeNil(), "Response should be parseable, body: %s", string(body))
+
+		// events/*RAYLET* should match only event_RAYLET.log in the events/ subdirectory.
+		g.Expect(result).To(HaveLen(1), "Should only have one category, got: %v", result)
+		internalFiles, _ := result["internal"].([]interface{})
+		g.Expect(internalFiles).To(ConsistOf("event_RAYLET.log"), "events/*RAYLET* should match exactly event_RAYLET.log")
+		LogWithTimestamp(t, "glob=events/*RAYLET* correctly returned %d file", len(internalFiles))
+	})
+
+	// Case B: root directory filename search — glob=*dashboard*
+	test.T().Run("Case B: glob=*dashboard* matches dashboard files at root", func(t *testing.T) {
+		g := NewWithT(t)
+
+		logsURL := fmt.Sprintf("%s%s?node_id=%s&glob=%s", historyServerURL, EndpointLogs, nodeID, url.QueryEscape("*dashboard*"))
+		resp, err := client.Get(logsURL)
+		g.Expect(err).NotTo(HaveOccurred())
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(resp.StatusCode).To(Equal(http.StatusOK), "Expected OK, body: %s", string(body))
+
+		result := parseLogsResponse(body)
+		g.Expect(result).NotTo(BeNil(), "Response should be parseable, body: %s", string(body))
+
+		// *dashboard* matches any filename containing "dashboard", which includes files like
+		// dashboard_agent.out/err/log (categorized as "agent") and dashboard.out/err/log (categorized as "dashboard").
+		// Verify that every returned file contains "dashboard".
+		totalFiles := countFiles(result)
+		g.Expect(totalFiles).To(BeNumerically(">", 0), "glob=*dashboard* should match at least one file, got: %v", result)
+		for category, files := range result {
+			fileList, _ := files.([]interface{})
+			for _, f := range fileList {
+				g.Expect(f.(string)).To(ContainSubstring("dashboard"),
+					"Each file matched by *dashboard* should contain 'dashboard', got %q in category %q", f, category)
+			}
+		}
+		LogWithTimestamp(t, "glob=*dashboard* correctly returned %d dashboard files across %d categories", totalFiles, len(result))
+	})
+
+	// Case C: enter subdirectory without search — glob=events/*
+	test.T().Run("Case C: glob=events/* lists all files in events subdirectory", func(t *testing.T) {
+		g := NewWithT(t)
+
+		logsURL := fmt.Sprintf("%s%s?node_id=%s&glob=%s", historyServerURL, EndpointLogs, nodeID, url.QueryEscape("events/*"))
+		resp, err := client.Get(logsURL)
+		g.Expect(err).NotTo(HaveOccurred())
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(resp.StatusCode).To(Equal(http.StatusOK), "Expected OK, body: %s", string(body))
+
+		result := parseLogsResponse(body)
+		g.Expect(result).NotTo(BeNil(), "Response should be parseable, body: %s", string(body))
+
+		// events/* should list all event log files; they all fall into the "internal" category.
+		totalFiles := countFiles(result)
+		g.Expect(totalFiles).To(BeNumerically(">", 0), "events/* should return at least one file, got: %v", result)
+		LogWithTimestamp(t, "glob=events/* correctly returned %d files across %d categories", totalFiles, len(result))
+	})
+
+	// Case D: no glob parameter — server returns all log files.
+	test.T().Run("Case D: no glob parameter returns all log files", func(t *testing.T) {
+		g := NewWithT(t)
+
+		logsURL := fmt.Sprintf("%s%s?node_id=%s", historyServerURL, EndpointLogs, nodeID)
+		resp, err := client.Get(logsURL)
+		g.Expect(err).NotTo(HaveOccurred())
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(resp.StatusCode).To(Equal(http.StatusOK), "Expected OK, body: %s", string(body))
+
+		result := parseLogsResponse(body)
+		g.Expect(result).NotTo(BeNil(), "Response should be parseable, body: %s", string(body))
+		g.Expect(countFiles(result)).To(BeNumerically(">", 0), "No glob should return all files, got: %v", result)
+		LogWithTimestamp(t, "No glob parameter correctly returned %d files across %d categories", countFiles(result), len(result))
+	})
+
+	test.T().Run("glob=raylet* matches exactly raylet.out and raylet.err", func(t *testing.T) {
+		g := NewWithT(t)
+
+		logsURL := fmt.Sprintf("%s%s?node_id=%s&glob=%s", historyServerURL, EndpointLogs, nodeID, url.QueryEscape("raylet*"))
+		resp, err := client.Get(logsURL)
+		g.Expect(err).NotTo(HaveOccurred())
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(resp.StatusCode).To(Equal(http.StatusOK), "Expected OK, body: %s", string(body))
+
+		result := parseLogsResponse(body)
+		g.Expect(result).NotTo(BeNil(), "Response should be parseable, body: %s", string(body))
+
+		// raylet* matches only raylet.out and raylet.err, so only the "raylet" category should be present.
+		g.Expect(result).To(HaveLen(1), "Should only have the 'raylet' category, got: %v", result)
+		rayletFiles, _ := result["raylet"].([]interface{})
+		g.Expect(rayletFiles).To(ConsistOf("raylet.out", "raylet.err"),
+			"raylet* should match exactly raylet.out and raylet.err")
+		LogWithTimestamp(t, "glob=raylet* correctly returned %d raylet files", len(rayletFiles))
+	})
+
+	test.T().Run("glob pattern matching no files returns empty result", func(t *testing.T) {
+		g := NewWithT(t)
+
+		logsURL := fmt.Sprintf("%s%s?node_id=%s&glob=%s", historyServerURL, EndpointLogs, nodeID, url.QueryEscape("nonexistent-*.xyz"))
+		resp, err := client.Get(logsURL)
+		g.Expect(err).NotTo(HaveOccurred())
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(resp.StatusCode).To(Equal(http.StatusOK), "Expected OK even when glob matches nothing, body: %s", string(body))
+
+		result := parseLogsResponse(body)
+		g.Expect(result).NotTo(BeNil(), "Response should be parseable, body: %s", string(body))
+		g.Expect(countFiles(result)).To(Equal(0), "A glob matching no files should return an empty result")
+		LogWithTimestamp(t, "Non-matching glob correctly returned 0 files")
+	})
+
+	test.T().Run("glob=events/event_JOBS* matches exactly one file in the events subdirectory", func(t *testing.T) {
+		g := NewWithT(t)
+
+		// glob=events/event_JOBS* should match only event_JOBS.log inside the events/ subdirectory.
+		// Expected response:
+		//   {"data":{"result":{"internal":["event_JOBS.log"]}},"msg":"","result":true}
+		//
+		// Always use the head node ID to avoid flakiness since events/event_JOBS.log is only present on the head node.
+		// Ref: https://github.com/ray-project/ray/blob/20eae5b1/python/ray/dashboard/modules/job/job_head.py#L397-L399
+		headNodeID := GetOneOfNodeID(g, client, historyServerURL, true)
+		logsURL := fmt.Sprintf("%s%s?node_id=%s&glob=%s", historyServerURL, EndpointLogs, headNodeID, url.QueryEscape("events/event_JOBS*"))
+		resp, err := client.Get(logsURL)
+		g.Expect(err).NotTo(HaveOccurred())
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(resp.StatusCode).To(Equal(http.StatusOK), "Expected OK, body: %s", string(body))
+
+		result := parseLogsResponse(body)
+		g.Expect(result).NotTo(BeNil(), "Response should be parseable, body: %s", string(body))
+
+		// events/event_JOBS* maps to the "internal" category; no other category should be present.
+		g.Expect(result).To(HaveLen(1), "Should only have the 'internal' category, got: %v", result)
+		internalFiles, _ := result["internal"].([]interface{})
+		g.Expect(internalFiles).To(ConsistOf("event_JOBS.log"), "glob=events/event_JOBS* should match exactly event_JOBS.log")
+		LogWithTimestamp(t, "glob=events/event_JOBS* correctly returned %d file", len(internalFiles))
+	})
+
+	test.T().Run("glob=**/*.out recursively matches all .out files across all directories", func(t *testing.T) {
+		g := NewWithT(t)
+
+		// glob=**/*.out should recursively match all .out files in the log directory and any subdirectories.
+		// Expected response contains .out files across multiple categories, e.g.:
+		//   {"data":{"result":{"agent":[...],"autoscaler":[...],"dashboard":[...],...}},"msg":"","result":true}
+		logsURL := fmt.Sprintf("%s%s?node_id=%s&glob=%s", historyServerURL, EndpointLogs, nodeID, url.QueryEscape("**/*.out"))
+		resp, err := client.Get(logsURL)
+		g.Expect(err).NotTo(HaveOccurred())
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(resp.StatusCode).To(Equal(http.StatusOK), "Expected OK, body: %s", string(body))
+
+		result := parseLogsResponse(body)
+		g.Expect(result).NotTo(BeNil(), "Response should be parseable, body: %s", string(body))
+
+		// **/*.out should match at least the well-known .out files at root level.
+		totalFiles := countFiles(result)
+		g.Expect(totalFiles).To(BeNumerically(">", 0), "**/*.out should return at least one file, got: %v", result)
+
+		// Every returned file must end with .out regardless of which category it falls into.
+		for category, files := range result {
+			fileList, _ := files.([]interface{})
+			for _, f := range fileList {
+				g.Expect(f.(string)).To(HaveSuffix(".out"),
+					"All files matched by **/*.out should end with .out, got %q in category %q", f, category)
+			}
+		}
+
+		LogWithTimestamp(t, "glob=**/*.out correctly returned %d .out files across %d categories", totalFiles, len(result))
+	})
+
+	DeleteS3Bucket(test, g, s3Client)
+	LogWithTimestamp(test.T(), "Dead cluster /api/v0/logs glob endpoint tests completed")
+}
+
+// parseLogsResponse parses the /api/v0/logs response body and returns the categorized
+// file map from data.result. Returns nil on any parse failure.
+func parseLogsResponse(body []byte) map[string]interface{} {
+	var resp map[string]interface{}
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return nil
+	}
+	data, ok := resp["data"].(map[string]interface{})
+	if !ok {
+		return nil
+	}
+	result, ok := data["result"].(map[string]interface{})
+	if !ok {
+		return nil
+	}
+	return result
+}
+
+// countFiles counts the total number of file entries across all categories in the result map.
+func countFiles(result map[string]interface{}) int {
+	total := 0
+	for _, v := range result {
+		if files, ok := v.([]interface{}); ok {
+			total += len(files)
+		}
+	}
+	return total
 }
 
 // testTimelineEndpointLiveCluster verifies that the history server can return timeline data from a live cluster.
@@ -1142,6 +1557,158 @@ func verifyTimelineResponse(g *WithT, client *http.Client, historyServerURL stri
 		gg.Expect(hasThreadName).To(BeTrue(), "Should have thread_name metadata event")
 		gg.Expect(hasTraceEvent).To(BeTrue(), "Should have at least one trace event")
 	}, TestTimeoutShort).Should(Succeed())
+}
+
+// testLogicalActorsEndpointDeadCluster verifies that the history server can return actors from the
+// in-memory ClusterActorMap after a cluster is deleted.
+//
+// Data flow explanation:
+// The history server does not fetch actors directly from S3. Instead:
+// 1. Collector pushes events to S3 on cluster deletion
+// 2. Storage Reader reads event files from S3
+// 3. Event Handler processes events and populates ClusterActorMap
+// 4. The /logical/actors endpoint returns actors from the in-memory ClusterActorMap
+//
+// The test case follows these steps:
+// 1. Prepare test environment by applying a Ray cluster
+// 2. Submit a Ray job to the existing cluster (generates actor events)
+// 3. Delete RayCluster to trigger log upload to S3 (and event processing)
+// 4. Apply History Server and get its URL
+// 5. Verify that the history server returns actors via /logical/actors endpoint
+// 6. Verify that the history server returns a single actor via /logical/actors/{actor_id} endpoint
+// 7. Delete S3 bucket to ensure test isolation
+func testLogicalActorsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
+	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
+
+	// Delete RayCluster to trigger log upload to S3
+	err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Delete(test.Ctx(), rayCluster.Name, metav1.DeleteOptions{})
+	g.Expect(err).NotTo(HaveOccurred())
+	LogWithTimestamp(test.T(), "Deleted RayCluster %s/%s", namespace.Name, rayCluster.Name)
+
+	// Wait for cluster to be fully deleted (ensures logs are uploaded to S3 and events are processed)
+	g.Eventually(func() error {
+		_, err := GetRayCluster(test, namespace.Name, rayCluster.Name)
+		return err
+	}, TestTimeoutMedium).Should(WithTransform(k8serrors.IsNotFound, BeTrue()))
+
+	ApplyHistoryServer(test, g, namespace, "")
+	historyServerURL := GetHistoryServerURL(test, g, namespace)
+
+	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
+	g.Expect(clusterInfo.SessionName).NotTo(Equal(LiveSessionName))
+
+	client := CreateHTTPClientWithCookieJar(g)
+	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
+
+	test.T().Run("should return actors from history server", func(t *testing.T) {
+		g := NewWithT(t)
+		g.Eventually(func(gg Gomega) {
+			resp, err := client.Get(historyServerURL + EndpointLogicalActors)
+			gg.Expect(err).NotTo(HaveOccurred())
+			defer resp.Body.Close()
+			gg.Expect(resp.StatusCode).To(Equal(http.StatusOK))
+
+			body, err := io.ReadAll(resp.Body)
+			gg.Expect(err).NotTo(HaveOccurred())
+
+			var result map[string]any
+			err = json.Unmarshal(body, &result)
+			gg.Expect(err).NotTo(HaveOccurred())
+			gg.Expect(result["result"]).To(Equal(true))
+			gg.Expect(result["msg"]).To(Equal("All actors fetched."))
+
+			// Verify data.actors exists and is a map
+			data, ok := result["data"].(map[string]any)
+			gg.Expect(ok).To(BeTrue())
+			actors, ok := data["actors"].(map[string]any)
+			gg.Expect(ok).To(BeTrue())
+			gg.Expect(len(actors)).To(BeNumerically(">", 0), "should have at least one actor")
+
+			// Verify actor schema matches formatActorForResponse format
+			for _, actorData := range actors {
+				actor, ok := actorData.(map[string]any)
+				gg.Expect(ok).To(BeTrue(), "actor should be a map")
+				gg.Expect(actor["actorId"]).NotTo(BeNil(), "actor should have actorId")
+				gg.Expect(actor["jobId"]).NotTo(BeNil(), "actor should have jobId")
+				gg.Expect(actor["state"]).NotTo(BeNil(), "actor should have state")
+				gg.Expect(actor["address"]).NotTo(BeNil(), "actor should have address")
+				address, ok := actor["address"].(map[string]any)
+				gg.Expect(ok).To(BeTrue(), "address should be a map")
+				gg.Expect(address["nodeId"]).NotTo(BeNil(), "address should have nodeId")
+				gg.Expect(address["ipAddress"]).NotTo(BeNil(), "address should have ipAddress")
+				break // Only verify the first actor
+			}
+
+			LogWithTimestamp(t, "Found %d actors from history server", len(actors))
+		}, TestTimeoutShort).Should(Succeed())
+	})
+
+	test.T().Run("should return single actor from history server", func(t *testing.T) {
+		g := NewWithT(t)
+
+		actorID := GetOneOfActorID(g, client, historyServerURL)
+
+		// Now test the single actor endpoint
+		g.Eventually(func(gg Gomega) {
+			singleActorURL := fmt.Sprintf("%s/logical/actors/%s", historyServerURL, actorID)
+			resp, err := client.Get(singleActorURL)
+			gg.Expect(err).NotTo(HaveOccurred())
+			defer resp.Body.Close()
+			gg.Expect(resp.StatusCode).To(Equal(http.StatusOK))
+
+			body, err := io.ReadAll(resp.Body)
+			gg.Expect(err).NotTo(HaveOccurred())
+
+			var result map[string]any
+			err = json.Unmarshal(body, &result)
+			gg.Expect(err).NotTo(HaveOccurred())
+			gg.Expect(result["result"]).To(Equal(true))
+			gg.Expect(result["msg"]).To(Equal("Actor fetched."))
+
+			// Verify data.detail exists and contains actorId
+			data, ok := result["data"].(map[string]any)
+			gg.Expect(ok).To(BeTrue())
+			detail, ok := data["detail"].(map[string]any)
+			gg.Expect(ok).To(BeTrue())
+
+			// Verify actor schema matches formatActorForResponse format
+			gg.Expect(detail["actorId"]).To(Equal(actorID))
+			gg.Expect(detail["jobId"]).NotTo(BeNil())
+			gg.Expect(detail["state"]).NotTo(BeNil())
+			gg.Expect(detail["address"]).NotTo(BeNil())
+			address, ok := detail["address"].(map[string]any)
+			gg.Expect(ok).To(BeTrue(), "address should be a map")
+			gg.Expect(address["nodeId"]).NotTo(BeNil())
+			gg.Expect(address["ipAddress"]).NotTo(BeNil())
+
+			LogWithTimestamp(t, "Successfully fetched actor %s from history server", actorID)
+		}, TestTimeoutShort).Should(Succeed())
+	})
+
+	test.T().Run("should handle non-existent actor", func(t *testing.T) {
+		g := NewWithT(t)
+		g.Eventually(func(gg Gomega) {
+			fakeActorID := "ffffffffffffffffffffffffffffffffffffffff"
+			singleActorURL := fmt.Sprintf("%s/logical/actors/%s", historyServerURL, fakeActorID)
+			resp, err := client.Get(singleActorURL)
+			gg.Expect(err).NotTo(HaveOccurred())
+			defer resp.Body.Close()
+			gg.Expect(resp.StatusCode).To(Equal(http.StatusOK))
+
+			body, err := io.ReadAll(resp.Body)
+			gg.Expect(err).NotTo(HaveOccurred())
+
+			var result map[string]any
+			err = json.Unmarshal(body, &result)
+			gg.Expect(err).NotTo(HaveOccurred())
+			gg.Expect(result["result"]).To(Equal(false))
+			gg.Expect(result["msg"]).To(Equal("Actor not found."))
+		}, TestTimeoutShort).Should(Succeed())
+	})
+
+	DeleteS3Bucket(test, g, s3Client)
+	LogWithTimestamp(test.T(), "Dead cluster logical actors endpoint tests completed")
 }
 
 // testLiveClusterTasks verifies that the /v0/tasks?detail=1 endpoint for a live cluster will return the
@@ -1528,6 +2095,374 @@ func testDeadClusterNode(test Test, g *WithT, namespace *corev1.Namespace, s3Cli
 	LogWithTimestamp(test.T(), "Dead cluster /nodes/{node_id} tests completed successfully")
 }
 
+// testLiveClusterMetadata verifies that the /api/v0/cluster_metadata endpoint proxies to the
+// live Ray Dashboard and returns valid cluster metadata.
+func testLiveClusterMetadata(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
+	ApplyHistoryServer(test, g, namespace, "")
+	historyServerURL := GetHistoryServerURL(test, g, namespace)
+
+	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
+	g.Expect(clusterInfo.SessionName).To(Equal(LiveSessionName))
+
+	client := CreateHTTPClientWithCookieJar(g)
+	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
+
+	endpoint := "/api/v0/cluster_metadata"
+	LogWithTimestamp(test.T(), "Testing live cluster endpoint: %s", endpoint)
+
+	g.Eventually(func(gg Gomega) {
+		resp, err := client.Get(historyServerURL + endpoint)
+		gg.Expect(err).NotTo(HaveOccurred())
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		gg.Expect(err).NotTo(HaveOccurred())
+		gg.Expect(resp.StatusCode).To(Equal(http.StatusOK),
+			"Endpoint %s should return 200, got %d: %s", endpoint, resp.StatusCode, string(body))
+
+		var metadata map[string]interface{}
+		err = json.Unmarshal(body, &metadata)
+		gg.Expect(err).NotTo(HaveOccurred(), "Cluster metadata should be valid JSON")
+		gg.Expect(metadata).To(HaveKey("data"), "Cluster metadata should contain data field")
+		data, ok := metadata["data"].(map[string]interface{})
+		gg.Expect(ok).To(BeTrue(), "data field should be a JSON object")
+		gg.Expect(data).To(HaveKey("rayVersion"))
+		gg.Expect(data).To(HaveKey("pythonVersion"))
+		LogWithTimestamp(test.T(), "Live cluster metadata: %s", string(body))
+	}, TestTimeoutShort).Should(Succeed())
+
+	DeleteS3Bucket(test, g, s3Client)
+	LogWithTimestamp(test.T(), "Live cluster /api/v0/cluster_metadata test completed successfully")
+}
+
+// testDeadClusterMetadata verifies that the /api/v0/cluster_metadata endpoint returns stored
+// cluster metadata from S3 for a dead (deleted) cluster.
+func testDeadClusterMetadata(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
+
+	// Wait for cluster metadata to be stored in S3 by the collector before deleting the cluster.
+	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, rayCluster.Namespace)
+	sessionID := GetSessionIDFromHeadPod(test, g, rayCluster)
+	storageKey := utils.EndpointPathToStorageKey("/api/v0/cluster_metadata")
+	metaKey := fmt.Sprintf("log/%s/%s/%s/%s", clusterNameID, sessionID, utils.RAY_SESSIONDIR_FETCHED_ENDPOINTS_NAME, storageKey)
+	LogWithTimestamp(test.T(), "Waiting for cluster metadata to appear at S3 key: %s", metaKey)
+
+	g.Eventually(func(gg Gomega) {
+		_, err := s3Client.HeadObject(&s3.HeadObjectInput{
+			Bucket: aws.String(S3BucketName),
+			Key:    aws.String(metaKey),
+		})
+		gg.Expect(err).NotTo(HaveOccurred())
+	}, TestTimeoutMedium).Should(Succeed())
+
+	// Delete the Ray cluster.
+	LogWithTimestamp(test.T(), "Deleting RayCluster %s/%s", rayCluster.Namespace, rayCluster.Name)
+	err := test.Client().Ray().RayV1().
+		RayClusters(rayCluster.Namespace).
+		Delete(test.Ctx(), rayCluster.Name, metav1.DeleteOptions{})
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Eventually(func() error {
+		_, err := GetRayCluster(test, rayCluster.Namespace, rayCluster.Name)
+		return err
+	}, TestTimeoutMedium).Should(WithTransform(k8serrors.IsNotFound, BeTrue()))
+
+	// Deploy the history server and query the dead cluster metadata.
+	ApplyHistoryServer(test, g, namespace, "")
+	historyServerURL := GetHistoryServerURL(test, g, namespace)
+
+	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
+	g.Expect(clusterInfo.SessionName).To(SatisfyAll(Not(BeEmpty()), Not(Equal(LiveSessionName))))
+
+	client := CreateHTTPClientWithCookieJar(g)
+	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
+
+	endpoint := "/api/v0/cluster_metadata"
+	LogWithTimestamp(test.T(), "Testing dead cluster endpoint: %s", endpoint)
+
+	g.Eventually(func(gg Gomega) {
+		resp, err := client.Get(historyServerURL + endpoint)
+		gg.Expect(err).NotTo(HaveOccurred())
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		gg.Expect(err).NotTo(HaveOccurred())
+		gg.Expect(resp.StatusCode).To(Equal(http.StatusOK),
+			"Endpoint %s should return 200, got %d: %s", endpoint, resp.StatusCode, string(body))
+
+		var metadata map[string]interface{}
+		err = json.Unmarshal(body, &metadata)
+		gg.Expect(err).NotTo(HaveOccurred(), "Cluster metadata should be valid JSON")
+		gg.Expect(metadata).To(HaveKey("data"), "Cluster metadata should contain data field")
+		data, ok := metadata["data"].(map[string]interface{})
+		gg.Expect(ok).To(BeTrue(), "data field should be a JSON object")
+		gg.Expect(data).To(HaveKey("rayVersion"))
+		gg.Expect(data).To(HaveKey("pythonVersion"))
+		LogWithTimestamp(test.T(), "Dead cluster metadata: %s", string(body))
+	}, TestTimeoutShort).Should(Succeed())
+
+	DeleteS3Bucket(test, g, s3Client)
+	LogWithTimestamp(test.T(), "Dead cluster /api/v0/cluster_metadata test completed successfully")
+}
+
+// testDeadClusterPlacementGroups verifies that the /api/v0/placement_groups endpoint returns
+// stored placement groups data from S3 for a dead (deleted) cluster.
+//
+// This endpoint is served by the getAdditionalEndpoint fallback handler (/{subpath:*}),
+// which reads the data from S3 at {sessionName}/fetched_endpoints/restful__api__v0__placement_groups.
+//
+// The test flow mirrors testDeadClusterMetadata:
+// 1. Deploy a cluster with the collector
+// 2. Submit a RayJob that creates a detached placement group
+// 3. Wait for placement groups data to appear in S3 (written by PollAdditionalEndpointsPeriodically)
+// 4. Delete the cluster
+// 5. Deploy the history server and query /api/v0/placement_groups
+// 6. Verify the response is valid JSON with a non-empty placement_groups list
+func testDeadClusterPlacementGroups(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
+
+	// Submit a RayJob that creates a detached placement group named "test_pg".
+	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
+
+	// Wait for placement groups data to be stored in S3 by the collector before deleting the cluster.
+	// The collector stores the endpoint with query params, so the storage key includes them.
+	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, rayCluster.Namespace)
+	sessionID := GetSessionIDFromHeadPod(test, g, rayCluster)
+	storageKey := utils.EndpointPathToStorageKey("/api/v0/placement_groups?detail=1&limit=10000")
+	pgKey := fmt.Sprintf("log/%s/%s/%s/%s", clusterNameID, sessionID, utils.RAY_SESSIONDIR_FETCHED_ENDPOINTS_NAME, storageKey)
+	LogWithTimestamp(test.T(), "Waiting for placement groups data to appear at S3 key: %s", pgKey)
+
+	g.Eventually(func(gg Gomega) {
+		_, err := s3Client.HeadObject(&s3.HeadObjectInput{
+			Bucket: aws.String(S3BucketName),
+			Key:    aws.String(pgKey),
+		})
+		gg.Expect(err).NotTo(HaveOccurred())
+	}, TestTimeoutMedium).Should(Succeed())
+
+	// Delete the Ray cluster.
+	LogWithTimestamp(test.T(), "Deleting RayCluster %s/%s", rayCluster.Namespace, rayCluster.Name)
+	err := test.Client().Ray().RayV1().
+		RayClusters(rayCluster.Namespace).
+		Delete(test.Ctx(), rayCluster.Name, metav1.DeleteOptions{})
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Eventually(func() error {
+		_, err := GetRayCluster(test, rayCluster.Namespace, rayCluster.Name)
+		return err
+	}, TestTimeoutMedium).Should(WithTransform(k8serrors.IsNotFound, BeTrue()))
+
+	// Deploy the history server and query the dead cluster placement groups.
+	ApplyHistoryServer(test, g, namespace, "")
+	historyServerURL := GetHistoryServerURL(test, g, namespace)
+
+	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
+	g.Expect(clusterInfo.SessionName).To(SatisfyAll(Not(BeEmpty()), Not(Equal(LiveSessionName))))
+
+	client := CreateHTTPClientWithCookieJar(g)
+	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
+
+	// Use the same query params as the frontend to match the storage key.
+	endpoint := "/api/v0/placement_groups?detail=1&limit=10000"
+	LogWithTimestamp(test.T(), "Testing dead cluster endpoint: %s", endpoint)
+
+	g.Eventually(func(gg Gomega) {
+		resp, err := client.Get(historyServerURL + endpoint)
+		gg.Expect(err).NotTo(HaveOccurred())
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		gg.Expect(err).NotTo(HaveOccurred())
+		gg.Expect(resp.StatusCode).To(Equal(http.StatusOK),
+			"Endpoint %s should return 200, got %d: %s", endpoint, resp.StatusCode, string(body))
+
+		var response map[string]interface{}
+		err = json.Unmarshal(body, &response)
+		gg.Expect(err).NotTo(HaveOccurred(), "Placement groups response should be valid JSON")
+		// The Ray State API v2 returns {"result": true, "msg": "", "data": {"result": {"total": N, "result": [...], ...}}}.
+		// The history server serves raw bytes from S3 without transformation, so the
+		// schema must match what the collector stored (same as testCollectorStoresPlacementGroups).
+		gg.Expect(response).To(HaveKey("result"), "Placement groups response should contain result field")
+		gg.Expect(response["result"]).To(BeTrue(), "result field should be true")
+		gg.Expect(response).To(HaveKey("data"), "Placement groups response should contain data field")
+		data, ok := response["data"].(map[string]interface{})
+		gg.Expect(ok).To(BeTrue(), "data field should be a JSON object")
+		gg.Expect(data).To(HaveKey("result"), "data should contain result field")
+		resultObj, ok := data["result"].(map[string]interface{})
+		gg.Expect(ok).To(BeTrue(), "data.result field should be a JSON object")
+		gg.Expect(resultObj).To(HaveKey("result"), "data.result should contain result field")
+
+		pgList, ok := resultObj["result"].([]interface{})
+		gg.Expect(ok).To(BeTrue(), "data.result.result should be a JSON array")
+		gg.Expect(pgList).NotTo(BeEmpty(), "placement groups list should not be empty (RayJob creates a detached PG)")
+		LogWithTimestamp(test.T(), "Dead cluster placement groups: %s", string(body))
+	}, TestTimeoutShort).Should(Succeed())
+
+	DeleteS3Bucket(test, g, s3Client)
+	LogWithTimestamp(test.T(), "Dead cluster /api/v0/placement_groups test completed successfully")
+}
+
+// testLiveClusterTaskSummarize verifies that the /api/v0/tasks/summarize?summary_by=lineage endpoint
+// for a live cluster returns a valid lineage tree.
+//
+// The test case follows these steps:
+// 1. Prepare test environment by applying a Ray cluster
+// 2. Submit a Ray job to the existing cluster
+// 3. Apply History Server and get its URL
+// 4. Get the cluster information and set the cluster context with the session name 'live'
+// 5. Hit /api/v0/tasks/summarize?summary_by=lineage to get the lineage tree
+// 6. Verify the response status code is 200
+// 7. Verify the response API schema
+// 8. Delete S3 bucket to ensure test isolation
+func testLiveClusterTaskSummarize(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+	endpoint := EndpointTasksSummarize + "?summary_by=lineage"
+	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
+	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
+	ApplyHistoryServer(test, g, namespace, "")
+	historyServerURL := GetHistoryServerURL(test, g, namespace)
+
+	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
+	g.Expect(clusterInfo.SessionName).To(Equal(LiveSessionName), "Live cluster should have sessionName='live'")
+
+	client := CreateHTTPClientWithCookieJar(g)
+	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
+
+	endpointURL := historyServerURL + endpoint
+	LogWithTimestamp(test.T(), "Testing %s endpoint for live cluster: %s", endpoint, endpointURL)
+	verifySingleEndpoint(test, g, client, endpointURL, func(test Test, g *WithT, data map[string]any) {
+		verifyTaskSummarizeLineageRespSchema(test, g, data)
+	})
+	DeleteS3Bucket(test, g, s3Client)
+	LogWithTimestamp(test.T(), "Live cluster /api/v0/tasks/summarize?summary_by=lineage tests completed successfully")
+}
+
+// testDeadClusterTaskSummarize verifies that the /api/v0/tasks/summarize?summary_by=lineage endpoint
+// for a dead cluster returns a valid lineage tree built from historical events.
+//
+// The test case follows these steps:
+// 1. Prepare test environment by applying a Ray cluster with the collector
+// 2. Submit a Ray job to the existing cluster and wait for completion
+// 3. Delete the Ray cluster to trigger event flushing and wait for cluster deletion to complete
+// 4. Apply History Server and get its URL
+// 5. Get the cluster information and set the cluster context with the session name of the dead cluster
+// 6. Hit /api/v0/tasks/summarize?summary_by=lineage to get the lineage tree
+// 7. Verify the response status code is 200
+// 8. Verify the response API schema
+// 9. Delete S3 bucket to ensure test isolation
+func testDeadClusterTaskSummarize(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+	endpoint := EndpointTasksSummarize + "?summary_by=lineage"
+	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
+	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
+	// Delete the Ray cluster to trigger event flushing.
+	LogWithTimestamp(test.T(), "Deleting RayCluster %s/%s to trigger event flushing", rayCluster.Namespace, rayCluster.Name)
+	err := test.Client().Ray().RayV1().
+		RayClusters(rayCluster.Namespace).
+		Delete(test.Ctx(), rayCluster.Name, metav1.DeleteOptions{})
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Eventually(func() error {
+		_, err := GetRayCluster(test, rayCluster.Namespace, rayCluster.Name)
+		return err
+	}, TestTimeoutMedium).Should(WithTransform(k8serrors.IsNotFound, BeTrue()))
+
+	ApplyHistoryServer(test, g, namespace, "")
+	historyServerURL := GetHistoryServerURL(test, g, namespace)
+	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
+	g.Expect(clusterInfo.SessionName).To(SatisfyAll(Not(BeEmpty()), Not(Equal(LiveSessionName))))
+	client := CreateHTTPClientWithCookieJar(g)
+	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
+
+	endpointURL := historyServerURL + endpoint
+	LogWithTimestamp(test.T(), "Testing %s endpoint for dead cluster: %s", endpoint, endpointURL)
+
+	verifySingleEndpoint(test, g, client, endpointURL, func(test Test, g *WithT, data map[string]any) {
+		verifyTaskSummarizeLineageRespSchema(test, g, data)
+	})
+
+	DeleteS3Bucket(test, g, s3Client)
+	LogWithTimestamp(test.T(), "Dead cluster /api/v0/tasks/summarize?summary_by=lineage tests completed successfully")
+}
+
+// testLiveClusterTaskSummarizeFuncName verifies that the /api/v0/tasks/summarize endpoint (default func_name mode)
+// for a live cluster returns a valid task summary grouped by function name.
+//
+// The test case follows these steps:
+// 1. Prepare test environment by applying a Ray cluster
+// 2. Submit a Ray job to the existing cluster
+// 3. Apply History Server and get its URL
+// 4. Get the cluster information and set the cluster context with the session name 'live'
+// 5. Hit /api/v0/tasks/summarize to get the func_name summary
+// 6. Verify the response status code is 200
+// 7. Verify the response API schema
+// 8. Delete S3 bucket to ensure test isolation
+func testLiveClusterTaskSummarizeFuncName(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+	endpoint := EndpointTasksSummarize
+	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
+	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
+	ApplyHistoryServer(test, g, namespace, "")
+	historyServerURL := GetHistoryServerURL(test, g, namespace)
+
+	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
+	g.Expect(clusterInfo.SessionName).To(Equal(LiveSessionName), "Live cluster should have sessionName='live'")
+	client := CreateHTTPClientWithCookieJar(g)
+	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
+	endpointURL := historyServerURL + endpoint
+	LogWithTimestamp(test.T(), "Testing %s endpoint for live cluster: %s", endpoint, endpointURL)
+	verifySingleEndpoint(test, g, client, endpointURL, func(test Test, g *WithT, data map[string]any) {
+		verifyTaskSummarizeFuncNameRespSchema(test, g, data)
+	})
+	DeleteS3Bucket(test, g, s3Client)
+	LogWithTimestamp(test.T(), "Live cluster /api/v0/tasks/summarize (func_name) tests completed successfully")
+}
+
+// testDeadClusterTaskSummarizeFuncName verifies that the /api/v0/tasks/summarize endpoint (default func_name mode)
+// for a dead cluster returns a valid task summary grouped by function name built from historical events.
+//
+// The test case follows these steps:
+// 1. Prepare test environment by applying a Ray cluster with the collector
+// 2. Submit a Ray job to the existing cluster and wait for completion
+// 3. Delete the Ray cluster to trigger event flushing and wait for cluster deletion to complete
+// 4. Apply History Server and get its URL
+// 5. Get the cluster information and set the cluster context with the session name of the dead cluster
+// 6. Hit /api/v0/tasks/summarize to get the func_name summary
+// 7. Verify the response status code is 200
+// 8. Verify the response API schema
+// 9. Delete S3 bucket to ensure test isolation
+func testDeadClusterTaskSummarizeFuncName(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+	endpoint := EndpointTasksSummarize
+
+	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
+	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
+
+	// Delete the Ray cluster to trigger event flushing.
+	LogWithTimestamp(test.T(), "Deleting RayCluster %s/%s to trigger event flushing", rayCluster.Namespace, rayCluster.Name)
+	err := test.Client().Ray().RayV1().
+		RayClusters(rayCluster.Namespace).
+		Delete(test.Ctx(), rayCluster.Name, metav1.DeleteOptions{})
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Eventually(func() error {
+		_, err := GetRayCluster(test, rayCluster.Namespace, rayCluster.Name)
+		return err
+	}, TestTimeoutMedium).Should(WithTransform(k8serrors.IsNotFound, BeTrue()))
+
+	ApplyHistoryServer(test, g, namespace, "")
+	historyServerURL := GetHistoryServerURL(test, g, namespace)
+
+	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
+	g.Expect(clusterInfo.SessionName).To(SatisfyAll(Not(BeEmpty()), Not(Equal(LiveSessionName))))
+
+	client := CreateHTTPClientWithCookieJar(g)
+	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
+
+	endpointURL := historyServerURL + endpoint
+	LogWithTimestamp(test.T(), "Testing %s endpoint for dead cluster: %s", endpoint, endpointURL)
+
+	verifySingleEndpoint(test, g, client, endpointURL, func(test Test, g *WithT, data map[string]any) {
+		verifyTaskSummarizeFuncNameRespSchema(test, g, data)
+	})
+
+	DeleteS3Bucket(test, g, s3Client)
+	LogWithTimestamp(test.T(), "Dead cluster /api/v0/tasks/summarize (func_name) tests completed successfully")
+}
+
 // setClusterContext sets the cluster context via /enter_cluster/ endpoint and verifies the response.
 func setClusterContext(test Test, g *WithT, client *http.Client, historyServerURL, namespace, clusterName, session string) {
 	enterURL := fmt.Sprintf("%s/enter_cluster/%s/%s/%s", historyServerURL, namespace, clusterName, session)
@@ -1767,9 +2702,8 @@ func verifySingleEndpoint(test Test, g *WithT, client *http.Client, endpointURL 
 
 // TODO(jwj): Make verification for node-related endpoints more robust.
 // verifyNodesRespSchema verifies that the /nodes response is valid according to the API schema.
-// isLive indicates whether the response is from a live cluster or a dead cluster:
-//   - isLive: true for a live cluster (current snapshot)
-//   - isLive: false for a dead cluster (historical replay)
+// Both live and dead clusters now return the same format (flat array of latest snapshots).
+// isLive is kept for signature compatibility but no longer affects validation.
 func verifyNodesRespSchema(test Test, g *WithT, nodesResp map[string]any, isLive bool) {
 	// Verify top-level fields.
 	g.Expect(nodesResp).To(HaveKeyWithValue("result", BeTrue()))
@@ -1786,28 +2720,13 @@ func verifyNodesRespSchema(test Test, g *WithT, nodesResp map[string]any, isLive
 	summary, ok := data["summary"].([]any)
 	g.Expect(ok).To(BeTrue(), "'summary' should be an array")
 
-	if isLive {
-		// Live cluster: summary contains node summary snapshot of each node in the cluster.
-		g.Expect(len(summary)).To(Equal(2), "Live cluster should have 2 node summaries (one head node and one worker node)")
-		for _, nodeSummary := range summary {
-			nodeSummarySnapshot, ok := nodeSummary.(map[string]any)
-			g.Expect(ok).To(BeTrue(), "nodeSummary should be a map")
-			verifyNodeSummarySchema(test, g, nodeSummarySnapshot)
-		}
-	} else {
-		// Dead cluster: summary contains node summary replay (array of snapshots) of each node in the cluster.
-		// The node summary replay should follow the chronological order of the node state transitions.
-		g.Expect(len(summary)).To(Equal(2), "Dead cluster should have 2 node summary replays (one head node and one worker node)")
-		for _, nodeSummaryReplay := range summary {
-			nodeSummarySnapshots, ok := nodeSummaryReplay.([]any)
-			g.Expect(ok).To(BeTrue(), "nodeSummaryReplay should be an array")
-
-			for _, nodeSummarySnapshot := range nodeSummarySnapshots {
-				nodeSummarySnapshotMap, ok := nodeSummarySnapshot.(map[string]any)
-				g.Expect(ok).To(BeTrue(), "nodeSummarySnapshot should be a map")
-				verifyNodeSummarySchema(test, g, nodeSummarySnapshotMap)
-			}
-		}
+	// Both live and dead clusters now return a flat array of node summaries.
+	// Dead cluster uses the latest snapshot per node to match the Ray Dashboard API format.
+	g.Expect(len(summary)).To(Equal(2), "Should have 2 node summaries (one head node and one worker node)")
+	for _, nodeSummary := range summary {
+		nodeSummarySnapshot, ok := nodeSummary.(map[string]any)
+		g.Expect(ok).To(BeTrue(), "nodeSummary should be a map")
+		verifyNodeSummarySchema(test, g, nodeSummarySnapshot)
 	}
 
 	// Verify nodeLogicalResources field.
@@ -1815,45 +2734,20 @@ func verifyNodesRespSchema(test Test, g *WithT, nodesResp map[string]any, isLive
 	nodeLogicalResources, ok := data["nodeLogicalResources"].(map[string]any)
 	g.Expect(ok).To(BeTrue(), "'nodeLogicalResources' should be a map")
 
-	if isLive {
-		// Live cluster: nodeLogicalResources contains resource string of each node in the cluster.
-		g.Expect(len(nodeLogicalResources)).To(Equal(2), "Live cluster should have 2 resource strings (one head node and one worker node)")
-		for nodeId, resourceString := range nodeLogicalResources {
-			g.Expect(nodeId).NotTo(BeEmpty())
-			g.Expect(resourceString).NotTo(BeEmpty())
-		}
-	} else {
-		// Dead cluster: nodeLogicalResources contains resource string replay (array of snapshots) of each node in the cluster.
-		// The resource string replay should follow the chronological order of the node state transitions.
-		g.Expect(len(nodeLogicalResources)).To(Equal(2), "Dead cluster should have 2 resource string replays (one head node and one worker node)")
-		for nodeId, resourceStringReplay := range nodeLogicalResources {
-			g.Expect(nodeId).NotTo(BeEmpty())
-
-			resourceStringSnapshots, ok := resourceStringReplay.([]any)
-			g.Expect(ok).To(BeTrue(), "resourceStringReplay should be an array")
-			for _, resourceStringSnapshot := range resourceStringSnapshots {
-				resourceStringSnapshotMap, ok := resourceStringSnapshot.(map[string]any)
-				g.Expect(ok).To(BeTrue(), "resourceStringSnapshot should be a map")
-				g.Expect(resourceStringSnapshotMap).To(HaveKey("t"))
-				g.Expect(resourceStringSnapshotMap).To(HaveKey("resourceString"))
-
-				resourceString, ok := resourceStringSnapshotMap["resourceString"].(string)
-				g.Expect(ok).To(BeTrue(), "resourceString should be a string")
-				if resourceString != "" {
-					g.Expect(resourceString).To(ContainSubstring("memory"))
-					g.Expect(resourceString).To(ContainSubstring("object_store_memory"))
-				}
-			}
-		}
+	// Both live and dead clusters return {nodeId: string} format.
+	// Dead cluster uses the latest resource string per node.
+	g.Expect(len(nodeLogicalResources)).To(Equal(2), "Should have 2 resource strings (one head node and one worker node)")
+	for nodeId, resourceString := range nodeLogicalResources {
+		g.Expect(nodeId).NotTo(BeEmpty())
+		g.Expect(resourceString).NotTo(BeEmpty())
 	}
 
 	LogWithTimestamp(test.T(), "/nodes response schema verification completed")
 }
 
 // verifyNodeRespSchema verifies that the /nodes/{node_id} response is valid according to the API schema.
-// isLive indicates whether the response is from a live cluster or a dead cluster:
-//   - isLive: true for a live cluster (current snapshot)
-//   - isLive: false for a dead cluster (historical replay)
+// Both live and dead clusters now return the same format (single object with latest snapshot).
+// isLive is kept for signature compatibility but no longer affects validation.
 func verifyNodeRespSchema(test Test, g *WithT, nodeResp map[string]any, isLive bool) {
 	// Verify top-level fields.
 	g.Expect(nodeResp).To(HaveKeyWithValue("result", BeTrue()))
@@ -1864,22 +2758,10 @@ func verifyNodeRespSchema(test Test, g *WithT, nodeResp map[string]any, isLive b
 	g.Expect(ok).To(BeTrue(), "'data' should be a map")
 	g.Expect(data).To(HaveKey("detail"))
 
-	if isLive {
-		// Live cluster: detail contains node summary snapshot of the specified node.
-		nodeSummarySnapshot, ok := data["detail"].(map[string]any)
-		g.Expect(ok).To(BeTrue(), "'detail' should be a map")
-		verifyNodeSummarySchema(test, g, nodeSummarySnapshot)
-	} else {
-		// Dead cluster: detail contains node summary replay (array of snapshots) of the specified node.
-		// The node summary replay should follow the chronological order of the node state transitions.
-		nodeSummarySnapshots, ok := data["detail"].([]any)
-		g.Expect(ok).To(BeTrue(), "'detail' should be an array")
-		for _, nodeSummarySnapshot := range nodeSummarySnapshots {
-			nodeSummarySnapshotMap, ok := nodeSummarySnapshot.(map[string]any)
-			g.Expect(ok).To(BeTrue(), "nodeSummarySnapshot should be a map")
-			verifyNodeSummarySchema(test, g, nodeSummarySnapshotMap)
-		}
-	}
+	// Both live and dead clusters return detail as a single node object (latest snapshot).
+	nodeSummarySnapshot, ok := data["detail"].(map[string]any)
+	g.Expect(ok).To(BeTrue(), "'detail' should be a map")
+	verifyNodeSummarySchema(test, g, nodeSummarySnapshot)
 }
 
 // verifyNodeSummarySchema verifies that the node summary contains key fields.
@@ -1911,6 +2793,307 @@ func verifyNodeSummarySchema(test Test, g *WithT, nodeSummary map[string]any) {
 	g.Expect(raylet).To(HaveKey("stateMessage"))
 }
 
+// verifyTaskSummarizeLineageRespSchema verifies that the /api/v0/tasks/summarize?summary_by=lineage
+// response is valid according to the API schema.
+func verifyTaskSummarizeLineageRespSchema(test Test, g *WithT, resp map[string]any) {
+	// Verify top-level fields.
+	g.Expect(resp).To(HaveKeyWithValue("result", BeTrue()))
+	g.Expect(resp).To(HaveKey("data"))
+
+	data, ok := resp["data"].(map[string]any)
+	g.Expect(ok).To(BeTrue(), "'data' should be a map")
+	g.Expect(data).To(HaveKey("result"))
+
+	dataResult, ok := data["result"].(map[string]any)
+	g.Expect(ok).To(BeTrue(), "'data.result' should be a map")
+
+	g.Expect(dataResult).To(HaveKey("total"))
+	g.Expect(dataResult).To(HaveKey("num_after_truncation"))
+	g.Expect(dataResult).To(HaveKey("num_filtered"))
+	g.Expect(dataResult).To(HaveKey("result"))
+	g.Expect(dataResult).To(HaveKey("partial_failure_warning"))
+
+	innerResult, ok := dataResult["result"].(map[string]any)
+	g.Expect(ok).To(BeTrue(), "'data.result.result' should be a map")
+	g.Expect(innerResult).To(HaveKey("node_id_to_summary"))
+
+	nodeIDToSummary, ok := innerResult["node_id_to_summary"].(map[string]any)
+	g.Expect(ok).To(BeTrue(), "'node_id_to_summary' should be a map")
+
+	// At least one entry in node_id_to_summary.
+	g.Expect(len(nodeIDToSummary)).To(BeNumerically(">", 0), "should have at least one node_id_to_summary entry")
+
+	// Verify each TaskSummaries entry.
+	for key, summaryVal := range nodeIDToSummary {
+		LogWithTimestamp(test.T(), "Verifying TaskSummaries for key: %s", key)
+
+		taskSummaries, ok := summaryVal.(map[string]any)
+		g.Expect(ok).To(BeTrue(), "'%s' should be a map", key)
+
+		g.Expect(taskSummaries).To(HaveKey("summary"))
+		g.Expect(taskSummaries).To(HaveKey("total_tasks"))
+		g.Expect(taskSummaries).To(HaveKey("total_actor_tasks"))
+		g.Expect(taskSummaries).To(HaveKey("total_actor_scheduled"))
+		g.Expect(taskSummaries).To(HaveKey("summary_by"))
+		g.Expect(taskSummaries["summary_by"]).To(Equal("lineage"))
+
+		// Verify summary is an array with at least one entry.
+		summary, ok := taskSummaries["summary"].([]any)
+		g.Expect(ok).To(BeTrue(), "'summary' should be an array")
+		g.Expect(len(summary)).To(BeNumerically(">", 0), "should have at least one summary entry")
+
+		// Verify each NestedTaskSummary node (schema check).
+		for _, entry := range summary {
+			verifyNestedTaskSummarySchema(test, g, entry)
+		}
+
+		// Verify lineage tree structural properties produced by rayjob.yaml scenarios.
+		// Walk the entire tree once to collect statistics, then assert.
+		stats := &lineageStats{
+			typeSeen:                  make(map[string]bool),
+			groupLinkAlwaysNull:       true,
+			nonGroupLinkAlwaysPresent: true,
+		}
+		for _, entry := range summary {
+			collectLineageStats(entry, stats)
+		}
+
+		// Check 1: All 5 node types must appear.
+		// rayjob.yaml produces NORMAL_TASK (my_task, parent_task, child_task, repeated_task),
+		// ACTOR_CREATION_TASK (Counter.__init__), ACTOR_TASK (Counter.increment, Counter.get_count),
+		// ACTOR (Counter group), and GROUP (repeated_task ×3, Counter.increment ×2).
+		for _, expectedType := range []string{"NORMAL_TASK", "ACTOR_CREATION_TASK", "ACTOR_TASK", "ACTOR", "GROUP"} {
+			g.Expect(stats.typeSeen).To(HaveKey(expectedType),
+				"lineage tree should contain node type %s", expectedType)
+		}
+
+		// Check 2: At least one NORMAL_TASK has non-empty children (Scenario 2: parent_task → child_task).
+		g.Expect(stats.hasNestedNormalTask).To(BeTrue(),
+			"lineage tree should have at least one NORMAL_TASK with children (nested tasks)")
+
+		// Check 3: At least one GROUP exists with >1 children (Scenario 3: repeated_task ×3).
+		g.Expect(stats.hasGroupWithMultipleChildren).To(BeTrue(),
+			"lineage tree should have at least one GROUP with multiple children (merged siblings)")
+
+		// Check 4: At least one ACTOR contains an ACTOR_CREATION_TASK child (Scenario 4: Counter).
+		g.Expect(stats.hasActorWithCreationTask).To(BeTrue(),
+			"lineage tree should have at least one ACTOR containing an ACTOR_CREATION_TASK child")
+
+		// Check 5: GROUP nodes have link=null (not a non-null object).
+		g.Expect(stats.groupLinkAlwaysNull).To(BeTrue(),
+			"GROUP nodes should have link=null, matching Ray Dashboard behavior")
+
+		// Check 6: Non-GROUP nodes (task/actor) have non-null link with type and id.
+		g.Expect(stats.nonGroupLinkAlwaysPresent).To(BeTrue(),
+			"non-GROUP nodes should have a non-null link with type and id")
+	}
+
+	LogWithTimestamp(test.T(), "Task summarize lineage response schema verification completed")
+}
+
+// verifyNestedTaskSummarySchema recursively verifies the schema of a NestedTaskSummary node
+// in the lineage tree, including all children.
+func verifyNestedTaskSummarySchema(test Test, g *WithT, entry any) {
+	node, ok := entry.(map[string]any)
+	g.Expect(ok).To(BeTrue(), "NestedTaskSummary should be a map")
+
+	g.Expect(node).To(HaveKey("name"))
+	g.Expect(node).To(HaveKey("key"))
+	g.Expect(node).To(HaveKey("type"))
+	g.Expect(node).To(HaveKey("timestamp"))
+	g.Expect(node).To(HaveKey("state_counts"))
+	g.Expect(node).To(HaveKey("children"))
+
+	// Verify state_counts is a map with at least one entry.
+	stateCounts, ok := node["state_counts"].(map[string]any)
+	g.Expect(ok).To(BeTrue(), "'state_counts' should be a map")
+	g.Expect(len(stateCounts)).To(BeNumerically(">", 0), "should have at least one state count")
+
+	// Verify type is one of the known node types.
+	nodeType, ok := node["type"].(string)
+	g.Expect(ok).To(BeTrue(), "'type' should be a string")
+	g.Expect(nodeType).To(BeElementOf("NORMAL_TASK", "ACTOR_CREATION_TASK", "ACTOR_TASK", "ACTOR", "GROUP"))
+
+	// Verify children is an array and recursively verify each child.
+	children, ok := node["children"].([]any)
+	g.Expect(ok).To(BeTrue(), "'children' should be an array")
+	for _, child := range children {
+		verifyNestedTaskSummarySchema(test, g, child)
+	}
+
+	// Verify link if present (optional field, absent on GROUP nodes).
+	if link, exists := node["link"]; exists && link != nil {
+		linkMap, ok := link.(map[string]any)
+		g.Expect(ok).To(BeTrue(), "'link' should be a map")
+		g.Expect(linkMap).To(HaveKey("type"))
+		g.Expect(linkMap).To(HaveKey("id"))
+		linkType, ok := linkMap["type"].(string)
+		g.Expect(ok).To(BeTrue(), "'link.type' should be a string")
+		g.Expect(linkType).To(BeElementOf("task", "actor"))
+	}
+}
+
+// lineageStats holds statistics collected from a single walk of the lineage tree.
+// Used to verify that rayjob.yaml scenarios produced the expected tree structure.
+type lineageStats struct {
+	typeSeen                     map[string]bool // all node types encountered
+	hasNestedNormalTask          bool            // at least one NORMAL_TASK has non-empty children
+	hasGroupWithMultipleChildren bool            // at least one GROUP has >1 children
+	hasActorWithCreationTask     bool            // at least one ACTOR contains ACTOR_CREATION_TASK child
+	groupLinkAlwaysNull          bool            // all GROUP nodes have link=null
+	nonGroupLinkAlwaysPresent    bool            // all non-GROUP nodes have non-null link
+}
+
+// collectLineageStats recursively walks a NestedTaskSummary node and updates stats.
+func collectLineageStats(entry any, stats *lineageStats) {
+	node, ok := entry.(map[string]any)
+	if !ok {
+		return
+	}
+
+	nodeType, _ := node["type"].(string)
+	stats.typeSeen[nodeType] = true
+
+	children, _ := node["children"].([]any)
+
+	// Check 2: NORMAL_TASK with non-empty children (nested tasks).
+	if nodeType == "NORMAL_TASK" && len(children) > 0 {
+		stats.hasNestedNormalTask = true
+	}
+
+	// Check 3: GROUP with >1 children (merged siblings).
+	if nodeType == "GROUP" && len(children) > 1 {
+		stats.hasGroupWithMultipleChildren = true
+	}
+
+	// Check 4: ACTOR contains at least one ACTOR_CREATION_TASK child.
+	if nodeType == "ACTOR" {
+		for _, child := range children {
+			if childNode, ok := child.(map[string]any); ok {
+				if childType, _ := childNode["type"].(string); childType == "ACTOR_CREATION_TASK" {
+					stats.hasActorWithCreationTask = true
+					break
+				}
+			}
+		}
+	}
+
+	// Check 5: GROUP link should be null.
+	if nodeType == "GROUP" {
+		link, exists := node["link"]
+		if !exists || link == nil {
+			// link is absent or null — correct
+		} else {
+			stats.groupLinkAlwaysNull = false
+		}
+	}
+
+	// Check 6: Non-GROUP nodes should have non-null link.
+	if nodeType != "GROUP" {
+		link, exists := node["link"]
+		if !exists || link == nil {
+			stats.nonGroupLinkAlwaysPresent = false
+		}
+	}
+
+	// Recurse into children.
+	for _, child := range children {
+		collectLineageStats(child, stats)
+	}
+}
+
+// verifyTaskSummarizeFuncNameRespSchema verifies that the /api/v0/tasks/summarize (default func_name mode)
+// response is valid according to the API schema.
+//
+// Expected response structure (matching Ray Dashboard's rest_response format):
+//
+//	{
+//	  "result": true, "msg": "",
+//	  "data": { "result": {
+//	    "total": <int>, "num_after_truncation": <int>, "num_filtered": <int>,
+//	    "result": { "node_id_to_summary": { "cluster": {
+//	      "summary": { "<func_name>": { "func_or_class_name": ..., "type": ..., "state_counts": {...} } },
+//	      "total_tasks": <int>, "total_actor_tasks": <int>, "total_actor_scheduled": <int>,
+//	      "summary_by": "func_name"
+//	    }}}
+//	  }}
+//	}
+func verifyTaskSummarizeFuncNameRespSchema(test Test, g *WithT, resp map[string]any) {
+	// Verify top-level fields.
+	g.Expect(resp).To(HaveKeyWithValue("result", BeTrue()))
+	g.Expect(resp).To(HaveKey("data"))
+
+	data, ok := resp["data"].(map[string]any)
+	g.Expect(ok).To(BeTrue(), "'data' should be a map")
+	g.Expect(data).To(HaveKey("result"))
+
+	dataResult, ok := data["result"].(map[string]any)
+	g.Expect(ok).To(BeTrue(), "'data.result' should be a map")
+
+	g.Expect(dataResult).To(HaveKey("total"))
+	g.Expect(dataResult).To(HaveKey("num_after_truncation"))
+	g.Expect(dataResult).To(HaveKey("num_filtered"))
+	g.Expect(dataResult).To(HaveKey("result"))
+	g.Expect(dataResult).To(HaveKey("partial_failure_warning"))
+
+	innerResult, ok := dataResult["result"].(map[string]any)
+	g.Expect(ok).To(BeTrue(), "'data.result.result' should be a map")
+	g.Expect(innerResult).To(HaveKey("node_id_to_summary"))
+
+	nodeIDToSummary, ok := innerResult["node_id_to_summary"].(map[string]any)
+	g.Expect(ok).To(BeTrue(), "'node_id_to_summary' should be a map")
+
+	// At least one entry in node_id_to_summary.
+	g.Expect(len(nodeIDToSummary)).To(BeNumerically(">", 0), "should have at least one node_id_to_summary entry")
+
+	// Verify each TaskSummariesByFuncName entry.
+	for key, summaryVal := range nodeIDToSummary {
+		LogWithTimestamp(test.T(), "Verifying TaskSummariesByFuncName for key: %s", key)
+
+		taskSummaries, ok := summaryVal.(map[string]any)
+		g.Expect(ok).To(BeTrue(), "'%s' should be a map", key)
+
+		g.Expect(taskSummaries).To(HaveKey("summary"))
+		g.Expect(taskSummaries).To(HaveKey("total_tasks"))
+		g.Expect(taskSummaries).To(HaveKey("total_actor_tasks"))
+		g.Expect(taskSummaries).To(HaveKey("total_actor_scheduled"))
+		g.Expect(taskSummaries).To(HaveKey("summary_by"))
+		g.Expect(taskSummaries["summary_by"]).To(Equal("func_name"))
+
+		// Verify summary is a map (func_name mode uses map, unlike lineage which uses array).
+		summary, ok := taskSummaries["summary"].(map[string]any)
+		g.Expect(ok).To(BeTrue(), "'summary' should be a map")
+		g.Expect(len(summary)).To(BeNumerically(">", 0), "should have at least one summary entry")
+
+		// Verify each TaskSummaryPerFuncOrClassName entry.
+		for funcName, entryVal := range summary {
+			LogWithTimestamp(test.T(), "Verifying TaskSummaryPerFuncOrClassName for func: %s", funcName)
+
+			entry, ok := entryVal.(map[string]any)
+			g.Expect(ok).To(BeTrue(), "'%s' should be a map", funcName)
+
+			g.Expect(entry).To(HaveKey("func_or_class_name"))
+			g.Expect(entry).To(HaveKey("type"))
+			g.Expect(entry).To(HaveKey("state_counts"))
+
+			// func_or_class_name should match the map key.
+			g.Expect(entry["func_or_class_name"]).To(Equal(funcName))
+
+			// type should be one of the known task types.
+			entryType, ok := entry["type"].(string)
+			g.Expect(ok).To(BeTrue(), "'type' should be a string")
+			g.Expect(entryType).To(BeElementOf("NORMAL_TASK", "ACTOR_CREATION_TASK", "ACTOR_TASK"))
+
+			// state_counts should be a map with at least one entry.
+			stateCounts, ok := entry["state_counts"].(map[string]any)
+			g.Expect(ok).To(BeTrue(), "'state_counts' should be a map")
+			g.Expect(len(stateCounts)).To(BeNumerically(">", 0), "should have at least one state count")
+		}
+	}
+
+	LogWithTimestamp(test.T(), "Task summarize func_name response schema verification completed")
+}
+
 // verifyNodesHostNameListSchema verifies that the /nodes?view=hostNameList response is valid according to the API schema.
 func verifyNodesHostNameListSchema(test Test, g *WithT, nodesResp map[string]any, isLive bool) {
 	g.Expect(nodesResp).To(HaveKeyWithValue("result", BeTrue()))
@@ -1919,4 +3102,371 @@ func verifyNodesHostNameListSchema(test Test, g *WithT, nodesResp map[string]any
 	data, ok := nodesResp["data"].(map[string]any)
 	g.Expect(ok).To(BeTrue(), "'data' should be a map")
 	g.Expect(data).To(HaveKey("hostNameList"))
+}
+
+// testEventsEndpointLiveCluster verifies that the /events endpoint works for a live cluster.
+// For live clusters, the request is proxied to Ray Dashboard.
+//
+// The test case follows these steps:
+// 1. Prepare test environment by applying a Ray cluster
+// 2. Submit a Ray job to the existing cluster
+// 3. Apply History Server and get its URL
+// 4. Get the cluster info from the list and verify sessionName='live'
+// 5. Set cluster context via /enter_cluster/ endpoint
+// 6. Verify that the /events endpoint returns events with proper structure
+// 7. Delete S3 bucket to ensure test isolation
+func testEventsEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
+	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
+	ApplyHistoryServer(test, g, namespace, "")
+	historyServerURL := GetHistoryServerURL(test, g, namespace)
+
+	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
+	g.Expect(clusterInfo.SessionName).To(Equal(LiveSessionName), "Live cluster should have sessionName='live'")
+
+	client := CreateHTTPClientWithCookieJar(g)
+	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
+
+	test.T().Run("should return events", func(t *testing.T) {
+		g := NewWithT(t)
+		g.Eventually(func(gg Gomega) {
+			resp, err := client.Get(historyServerURL + "/events")
+			gg.Expect(err).NotTo(HaveOccurred())
+			defer resp.Body.Close()
+			gg.Expect(resp.StatusCode).To(Equal(http.StatusOK))
+
+			body, err := io.ReadAll(resp.Body)
+			gg.Expect(err).NotTo(HaveOccurred())
+
+			var result map[string]any
+			err = json.Unmarshal(body, &result)
+			gg.Expect(err).NotTo(HaveOccurred())
+			gg.Expect(result["result"]).To(Equal(true))
+
+			// Verify data.events exists
+			data, ok := result["data"].(map[string]any)
+			gg.Expect(ok).To(BeTrue(), "response should have 'data' field")
+			_, ok = data["events"].(map[string]any)
+			gg.Expect(ok).To(BeTrue(), "data should have 'events' field")
+		}, TestTimeoutShort).Should(Succeed())
+	})
+
+	DeleteS3Bucket(test, g, s3Client)
+	LogWithTimestamp(test.T(), "Live cluster events endpoint test completed")
+}
+
+// testEventsEndpointDeadCluster verifies that the /events endpoint works for a dead cluster.
+// Events are retrieved from the EventHandler's in-memory ClusterLogEventMap.
+//
+// The test case follows these steps:
+// 1. Prepare test environment by applying a Ray cluster
+// 2. Submit a Ray job to the existing cluster
+// 3. Delete RayCluster to trigger event upload to S3
+// 4. Apply History Server and get its URL
+// 5. Get the cluster info from the list and verify sessionName != 'live'
+// 6. Set cluster context via /enter_cluster/ endpoint
+// 7. Verify that the /events endpoint returns events from storage with proper structure
+// 8. Verify that the /events endpoint supports job_id filter (non-existent job_id)
+// 9. Verify that the /events endpoint handles empty job_id parameter correctly
+// 10. Delete S3 bucket to ensure test isolation
+func testEventsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
+	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
+
+	// Delete RayCluster to trigger event upload
+	err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Delete(test.Ctx(), rayCluster.Name, metav1.DeleteOptions{})
+	g.Expect(err).NotTo(HaveOccurred())
+	LogWithTimestamp(test.T(), "Deleted RayCluster %s/%s", namespace.Name, rayCluster.Name)
+
+	// Wait for cluster to be fully deleted
+	g.Eventually(func() error {
+		_, err := GetRayCluster(test, namespace.Name, rayCluster.Name)
+		return err
+	}, TestTimeoutMedium).Should(WithTransform(k8serrors.IsNotFound, BeTrue()))
+
+	ApplyHistoryServer(test, g, namespace, "")
+	historyServerURL := GetHistoryServerURL(test, g, namespace)
+
+	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
+	g.Expect(clusterInfo.SessionName).NotTo(Equal(LiveSessionName))
+
+	client := CreateHTTPClientWithCookieJar(g)
+	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
+
+	test.T().Run("should return events from storage", func(t *testing.T) {
+		g := NewWithT(t)
+		g.Eventually(func(gg Gomega) {
+			resp, err := client.Get(historyServerURL + "/events")
+			gg.Expect(err).NotTo(HaveOccurred())
+			defer resp.Body.Close()
+			gg.Expect(resp.StatusCode).To(Equal(http.StatusOK))
+
+			body, err := io.ReadAll(resp.Body)
+			gg.Expect(err).NotTo(HaveOccurred())
+
+			var result map[string]any
+			err = json.Unmarshal(body, &result)
+			gg.Expect(err).NotTo(HaveOccurred())
+			gg.Expect(result["result"]).To(Equal(true))
+			gg.Expect(result["msg"]).To(Equal("All events fetched."))
+
+			// Verify data.events exists (may be empty if no events were collected)
+			data, ok := result["data"].(map[string]any)
+			gg.Expect(ok).To(BeTrue(), "response should have 'data' field")
+			events, ok := data["events"].(map[string]any)
+			gg.Expect(ok).To(BeTrue(), "data should have 'events' field")
+
+			// If we have events, verify their structure matches Cluster Events format
+			// Cluster Events are read from logs/{nodeId}/events/event_*.log files
+			// Fields: eventId, sourceType, sourceHostname, sourcePid, severity, label, message, timestamp, customFields
+			for jobID, jobEvents := range events {
+				eventsList, ok := jobEvents.([]any)
+				gg.Expect(ok).To(BeTrue(), "events for job %s should be an array", jobID)
+				for _, event := range eventsList {
+					eventMap, ok := event.(map[string]any)
+					gg.Expect(ok).To(BeTrue(), "each event should be an object")
+					// Verify required Cluster Event fields exist (camelCase format from ToAPIResponse)
+					gg.Expect(eventMap).To(HaveKey("eventId"))
+					gg.Expect(eventMap).To(HaveKey("sourceType"))
+					gg.Expect(eventMap).To(HaveKey("severity"))
+					gg.Expect(eventMap).To(HaveKey("timestamp"))
+					gg.Expect(eventMap).To(HaveKey("message"))
+				}
+			}
+		}, TestTimeoutMedium).Should(Succeed())
+	})
+
+	test.T().Run("should support job_id filter", func(t *testing.T) {
+		g := NewWithT(t)
+		g.Eventually(func(gg Gomega) {
+			// Use a non-existent job_id to test the filter
+			resp, err := client.Get(historyServerURL + "/events?job_id=nonexistent")
+			gg.Expect(err).NotTo(HaveOccurred())
+			defer resp.Body.Close()
+			gg.Expect(resp.StatusCode).To(Equal(http.StatusOK))
+
+			body, err := io.ReadAll(resp.Body)
+			gg.Expect(err).NotTo(HaveOccurred())
+
+			var result map[string]any
+			err = json.Unmarshal(body, &result)
+			gg.Expect(err).NotTo(HaveOccurred())
+			gg.Expect(result["result"]).To(Equal(true))
+			gg.Expect(result["msg"]).To(Equal("Job events fetched."))
+
+			data, ok := result["data"].(map[string]any)
+			gg.Expect(ok).To(BeTrue())
+			gg.Expect(data["jobId"]).To(Equal("nonexistent"))
+			events, ok := data["events"].([]any)
+			gg.Expect(ok).To(BeTrue())
+			gg.Expect(events).To(BeEmpty()) // No events for non-existent job
+		}, TestTimeoutShort).Should(Succeed())
+	})
+
+	test.T().Run("should return empty for empty job_id parameter", func(t *testing.T) {
+		// This test verifies the behavior when job_id is provided but empty (/events?job_id=)
+		// It should align with Ray Dashboard behavior: filter by empty string (return empty)
+		g := NewWithT(t)
+		g.Eventually(func(gg Gomega) {
+			resp, err := client.Get(historyServerURL + "/events?job_id=")
+			gg.Expect(err).NotTo(HaveOccurred())
+			defer resp.Body.Close()
+			gg.Expect(resp.StatusCode).To(Equal(http.StatusOK))
+
+			body, err := io.ReadAll(resp.Body)
+			gg.Expect(err).NotTo(HaveOccurred())
+
+			var result map[string]any
+			err = json.Unmarshal(body, &result)
+			gg.Expect(err).NotTo(HaveOccurred())
+			gg.Expect(result["result"]).To(Equal(true))
+			gg.Expect(result["msg"]).To(Equal("Job events fetched."))
+
+			data, ok := result["data"].(map[string]any)
+			gg.Expect(ok).To(BeTrue())
+			gg.Expect(data["jobId"]).To(Equal(""))
+			events, ok := data["events"].([]any)
+			gg.Expect(ok).To(BeTrue())
+			gg.Expect(events).To(BeEmpty()) // Empty job_id filters by empty string
+		}, TestTimeoutShort).Should(Succeed())
+	})
+
+	DeleteS3Bucket(test, g, s3Client)
+	LogWithTimestamp(test.T(), "Dead cluster events endpoint tests completed")
+}
+
+// testLiveAndDeadClusterTimezone verifies the /timezone endpoint for both live and dead clusters,
+// and checks that the dead cluster returns the same timezone data as the live cluster.
+//
+// The /timezone endpoint returns the head node's system timezone, so no RayJob submission is needed.
+//
+// The test case follows these steps:
+// 1. Prepare test environment by applying a Ray cluster
+// 2. Apply History Server and get its URL
+// 3. Get live cluster info and set cluster context
+// 4. Verify /timezone returns valid JSON with non-empty 'offset' and 'value' fields
+// 5. Record the live cluster's offset and value
+// 6. Delete the RayCluster to trigger data upload to S3
+// 7. Get the dead cluster info and switch cluster context
+// 8. Verify /timezone returns valid JSON from storage with non-empty 'offset' and 'value'
+// 9. Verify dead cluster offset and value match the live cluster values
+// 10. Delete S3 bucket to ensure test isolation
+func testLiveAndDeadClusterTimezone(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
+	ApplyHistoryServer(test, g, namespace, "")
+	historyServerURL := GetHistoryServerURL(test, g, namespace)
+
+	// --- Live cluster ---
+	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
+	g.Expect(clusterInfo.SessionName).To(Equal(LiveSessionName), "Live cluster should have sessionName='live'")
+
+	client := CreateHTTPClientWithCookieJar(g)
+	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
+
+	endpointURL := fmt.Sprintf("%s%s", historyServerURL, EndpointTimezone)
+
+	var liveOffset, liveValue string
+	test.T().Run("live cluster should proxy /timezone and return timezone info", func(_ *testing.T) {
+		verifySingleEndpoint(test, g, client, endpointURL, func(test Test, g *WithT, data map[string]any) {
+			// The Ray Dashboard /timezone endpoint returns {"offset": ..., "value": ...}
+			g.Expect(data).To(HaveKey("offset"), "response should have 'offset' field")
+			g.Expect(data).To(HaveKey("value"), "response should have 'value' field")
+			g.Expect(data["offset"]).NotTo(BeEmpty(), "offset should not be empty")
+			g.Expect(data["value"]).NotTo(BeEmpty(), "value should not be empty")
+			liveOffset = data["offset"].(string)
+			liveValue = data["value"].(string)
+			LogWithTimestamp(test.T(), "Live cluster timezone: offset=%s, value=%s", liveOffset, liveValue)
+		})
+	})
+
+	// --- Delete cluster ---
+	DeleteRayClusterAndWait(test, g, namespace.Name, rayCluster.Name)
+
+	// --- Dead cluster ---
+	deadClusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
+	g.Expect(deadClusterInfo.SessionName).NotTo(Equal(LiveSessionName))
+
+	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, deadClusterInfo.SessionName)
+
+	test.T().Run("dead cluster should return timezone from storage matching live cluster", func(_ *testing.T) {
+		verifySingleEndpoint(test, g, client, endpointURL, func(test Test, g *WithT, data map[string]any) {
+			// Dead cluster: timezone data is read from S3 storage
+			g.Expect(data).To(HaveKey("offset"), "response should have 'offset' field")
+			g.Expect(data).To(HaveKey("value"), "response should have 'value' field")
+			g.Expect(data["offset"]).NotTo(BeEmpty(), "offset should not be empty")
+			g.Expect(data["value"]).NotTo(BeEmpty(), "value should not be empty")
+			// Verify consistency: dead cluster timezone should match the live cluster values
+			g.Expect(data["offset"]).To(Equal(liveOffset), "dead cluster offset should match live cluster offset")
+			g.Expect(data["value"]).To(Equal(liveValue), "dead cluster value should match live cluster value")
+			LogWithTimestamp(test.T(), "Dead cluster timezone matches live: offset=%s, value=%s", data["offset"], data["value"])
+		})
+	})
+
+	DeleteS3Bucket(test, g, s3Client)
+	LogWithTimestamp(test.T(), "Timezone endpoint tests completed successfully")
+}
+
+// testLiveClusterStatus verifies that the /api/cluster_status endpoint works for a live cluster.
+//
+// The test case follows these steps:
+// 1. Prepare test environment by applying a Ray cluster
+// 2. Submit a Ray job to the existing cluster
+// 3. Apply History Server and get its URL
+// 4. Get the cluster info from the list and verify sessionName='live'
+// 5. Set cluster context via /enter_cluster/ endpoint
+// 6. Verify /api/cluster_status returns valid JSON response with result=true
+// 7. Verify /api/cluster_status?format=1 returns formatted cluster status string containing "Autoscaler status"
+// 8. Delete S3 bucket to ensure test isolation
+func testLiveClusterStatus(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
+	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
+	ApplyHistoryServer(test, g, namespace, "")
+	historyServerURL := GetHistoryServerURL(test, g, namespace)
+
+	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
+	g.Expect(clusterInfo.SessionName).To(Equal(LiveSessionName), "Live cluster should have sessionName='live'")
+
+	client := CreateHTTPClientWithCookieJar(g)
+	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
+
+	endpointURL := fmt.Sprintf("%s%s", historyServerURL, EndpointClusterStatus)
+
+	test.T().Run("should proxy /api/cluster_status to live clusters", func(_ *testing.T) {
+		verifySingleEndpoint(test, g, client, endpointURL, func(test Test, g *WithT, data map[string]any) {
+			g.Expect(data).To(HaveKeyWithValue("result", true))
+			g.Expect(data).To(HaveKeyWithValue("msg", "Got cluster status."))
+			g.Expect(data).To(HaveKey("data"))
+		})
+	})
+
+	test.T().Run("should proxy for /api/cluster_status?format=1", func(_ *testing.T) {
+		verifySingleEndpoint(test, g, client, endpointURL+"?format=1", func(test Test, g *WithT, data map[string]any) {
+			g.Expect(data).To(HaveKeyWithValue("result", true))
+			g.Expect(data).To(HaveKeyWithValue("msg", "Got formatted cluster status."))
+			g.Expect(data).To(HaveKey("data"))
+			respData, ok := data["data"].(map[string]any)
+			g.Expect(ok).To(BeTrue(), "'data' should be a map")
+			clusterStatus, ok := respData["clusterStatus"].(string)
+			g.Expect(ok).To(BeTrue(), "'clusterStatus' should be a string")
+			g.Expect(clusterStatus).To(ContainSubstring("Autoscaler status"))
+		})
+	})
+
+	DeleteS3Bucket(test, g, s3Client)
+	LogWithTimestamp(test.T(), "Live cluster status E2E test completed successfully")
+}
+
+// testDeadClusterStatus verifies that the /api/cluster_status endpoint works for a dead cluster.
+// Cluster status is reconstructed from debug_state.txt and task/actor data stored in S3.
+//
+// The test case follows these steps:
+// 1. Prepare test environment by applying a Ray cluster
+// 2. Submit a Ray job to the existing cluster
+// 3. Delete RayCluster to trigger data upload to S3
+// 4. Apply History Server and get its URL
+// 5. Get the cluster info from the list and verify sessionName != 'live'
+// 6. Set cluster context via /enter_cluster/ endpoint
+// 7. Verify /api/cluster_status returns valid JSON response with result=true
+// 8. Verify /api/cluster_status?format=1 returns formatted cluster status containing "Autoscaler status"
+// 9. Delete S3 bucket to ensure test isolation
+func testDeadClusterStatus(test Test, g *WithT, namespace *corev1.Namespace, s3Client *s3.S3) {
+	rayCluster := PrepareTestEnv(test, g, namespace, s3Client)
+	ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
+
+	DeleteRayClusterAndWait(test, g, namespace.Name, rayCluster.Name)
+
+	ApplyHistoryServer(test, g, namespace, "")
+	historyServerURL := GetHistoryServerURL(test, g, namespace)
+
+	clusterInfo := getClusterFromList(test, g, historyServerURL, rayCluster.Name, namespace.Name)
+	g.Expect(clusterInfo.SessionName).NotTo(Equal(LiveSessionName))
+
+	client := CreateHTTPClientWithCookieJar(g)
+	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
+
+	endpointURL := fmt.Sprintf("%s%s", historyServerURL, EndpointClusterStatus)
+
+	test.T().Run("should return cluster status with /api/cluster_status", func(_ *testing.T) {
+		verifySingleEndpoint(test, g, client, endpointURL, func(test Test, g *WithT, data map[string]any) {
+			g.Expect(data).To(HaveKeyWithValue("result", true))
+			g.Expect(data).To(HaveKeyWithValue("msg", "Got cluster status."))
+			g.Expect(data).To(HaveKey("data"))
+		})
+	})
+
+	test.T().Run("should return formatted cluster status with /api/cluster_status?format=1", func(_ *testing.T) {
+		verifySingleEndpoint(test, g, client, endpointURL+"?format=1", func(test Test, g *WithT, data map[string]any) {
+			g.Expect(data).To(HaveKeyWithValue("result", true))
+			g.Expect(data).To(HaveKeyWithValue("msg", "Got formatted cluster status."))
+			g.Expect(data).To(HaveKey("data"))
+			respData, ok := data["data"].(map[string]any)
+			g.Expect(ok).To(BeTrue(), "'data' should be a map")
+			clusterStatus, ok := respData["clusterStatus"].(string)
+			g.Expect(ok).To(BeTrue(), "'clusterStatus' should be a string")
+			g.Expect(clusterStatus).To(ContainSubstring("Autoscaler status"))
+		})
+	})
+
+	DeleteS3Bucket(test, g, s3Client)
+	LogWithTimestamp(test.T(), "Dead cluster status E2E test completed successfully")
 }

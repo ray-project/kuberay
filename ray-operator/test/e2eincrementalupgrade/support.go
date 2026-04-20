@@ -3,7 +3,12 @@ package e2eincrementalupgrade
 import (
 	"bytes"
 	"fmt"
+	"slices"
+	"strconv"
+	"strings"
+	"time"
 
+	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -12,34 +17,114 @@ import (
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	rayv1ac "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/ray/v1"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
 
+// bootstrapIncrementalRayService creates a RayService with incremental upgrade enabled
+// and waits for all required components to be ready, including:
+//   - RayService
+//   - Gateway
+//   - HTTPRoute
+//
+// Parameters:
+//   - stepSize: The percentage of traffic to shift from the old to the new cluster during each interval.
+//   - interval: The time in seconds to wait between shifting traffic by stepSize.
+//   - maxSurge: The percentage of capacity (Serve replicas) to add to the new cluster in each scaling step.
+//   - serveConfigV2: The Serve config V2 to use for the RayService.
+//
+// Returns the RayService, HTTPRoute, and Gateway IP.
+func bootstrapIncrementalRayService(
+	test Test,
+	g *WithT,
+	namespace string,
+	rayServiceName string,
+	stepSize, interval, maxSurge *int32,
+	serveConfigV2 serveConfigV2,
+) (rayService *rayv1.RayService, httpRoute *gwv1.HTTPRoute, gatewayIP string) {
+	var err error
+	rayServiceAC := rayv1ac.RayService(rayServiceName, namespace).
+		WithSpec(incrementalUpgradeRayServiceApplyConfiguration(stepSize, interval, maxSurge, serveConfigV2))
+	rayService, err = test.Client().Ray().RayV1().RayServices(namespace).Apply(test.Ctx(), rayServiceAC, TestApplyOptions)
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(rayService).NotTo(BeNil())
+
+	LogWithTimestamp(test.T(), "Waiting for RayService %s/%s to be ready", rayService.Namespace, rayService.Name)
+	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutMedium).
+		Should(WithTransform(IsRayServiceReady, BeTrue()))
+
+	gatewayName := fmt.Sprintf("%s-gateway", rayServiceName)
+	LogWithTimestamp(test.T(), "Waiting for Gateway %s/%s to be ready", rayService.Namespace, gatewayName)
+	g.Eventually(Gateway(test, rayService.Namespace, gatewayName), TestTimeoutMedium).
+		Should(WithTransform(utils.IsGatewayReady, BeTrue()))
+
+	var gateway *gwv1.Gateway
+	gateway, err = GetGateway(test, rayService.Namespace, gatewayName)
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(gateway).NotTo(BeNil())
+
+	httpRouteName := fmt.Sprintf("%s-httproute", rayServiceName)
+	LogWithTimestamp(test.T(), "Waiting for HTTPRoute %s/%s to be ready", rayService.Namespace, httpRouteName)
+	g.Eventually(HTTPRoute(test, rayService.Namespace, httpRouteName), TestTimeoutMedium).
+		Should(Not(BeNil()))
+
+	g.Eventually(func() (bool, error) {
+		httpRoute, err = GetHTTPRoute(test, rayService.Namespace, httpRouteName)
+		return utils.IsHTTPRouteReady(gateway, httpRoute), err
+	}, TestTimeoutMedium).Should(BeTrue())
+
+	gatewayIP = GetGatewayIP(gateway)
+	g.Expect(gatewayIP).NotTo(BeEmpty())
+
+	return
+}
+
+// newLocustRunnerConfigMapAC creates a ConfigMap apply configuration for the Locust runner script.
+func newLocustRunnerConfigMapAC(namespace string, options ...SupportOption[corev1ac.ConfigMapApplyConfiguration]) *corev1ac.ConfigMapApplyConfiguration {
+	cmAC := corev1ac.ConfigMap("locust-runner-script", namespace).
+		WithBinaryData(map[string][]byte{}).
+		WithImmutable(true)
+
+	return ConfigMapWith(cmAC, options...)
+}
+
+// CurlPodName and CurlContainerName are the default names used when creating a curl pod for gateway tests.
+const (
+	CurlPodName       = "curl-pod"
+	CurlContainerName = "curl-container"
+)
+
+// CurlRayServiceGateway sends a request to the RayService Gateway using a Curl pod.
+// This method currently supports POST and GET methods.
 func CurlRayServiceGateway(
 	t Test,
 	gatewayIP string,
 	curlPod *corev1.Pod,
 	curlPodContainerName,
+	method,
 	rayServicePath,
 	body string,
 ) (bytes.Buffer, bytes.Buffer) {
 	cmd := []string{
 		"curl",
 		"--max-time", "10",
-		"-X", "POST",
+		"-X", method,
 		"-H", "Connection: close", // avoid re-using the same connection for test
 		"-H", "Content-Type: application/json",
 		fmt.Sprintf("http://%s%s", gatewayIP, rayServicePath),
-		"-d", body,
+	}
+	if body != "" {
+		cmd = append(cmd, "-d", body)
 	}
 
 	return ExecPodCmd(t, curlPod, curlPodContainerName, cmd)
 }
 
-func IncrementalUpgradeRayServiceApplyConfiguration(
+func incrementalUpgradeRayServiceApplyConfiguration(
 	stepSizePercent, intervalSeconds, maxSurgePercent *int32,
+	serveConfigV2 serveConfigV2,
 ) *rayv1ac.RayServiceSpecApplyConfiguration {
 	return rayv1ac.RayServiceSpec().
 		WithUpgradeStrategy(rayv1ac.RayServiceUpgradeStrategy().
@@ -51,56 +136,13 @@ func IncrementalUpgradeRayServiceApplyConfiguration(
 					WithIntervalSeconds(*intervalSeconds).
 					WithMaxSurgePercent(*maxSurgePercent),
 			)).
-		WithServeConfigV2(`applications:
-  - name: fruit_app
-    import_path: fruit.deployment_graph
-    route_prefix: /fruit
-    runtime_env:
-      working_dir: "https://github.com/ray-project/test_dag/archive/78b4a5da38796123d9f9ffff59bab2792a043e95.zip"
-    deployments:
-      - name: MangoStand
-        num_replicas: 1
-        user_config:
-          price: 3
-        ray_actor_options:
-          num_cpus: 0.1
-      - name: OrangeStand
-        num_replicas: 1
-        user_config:
-          price: 2
-        ray_actor_options:
-          num_cpus: 0.1
-      - name: FruitMarket
-        num_replicas: 1
-        ray_actor_options:
-          num_cpus: 0.1
-  - name: math_app
-    import_path: conditional_dag.serve_dag
-    route_prefix: /calc
-    runtime_env:
-      working_dir: "https://github.com/ray-project/test_dag/archive/78b4a5da38796123d9f9ffff59bab2792a043e95.zip"
-    deployments:
-      - name: Adder
-        num_replicas: 1
-        user_config:
-          increment: 3
-        ray_actor_options:
-          num_cpus: 0.1
-      - name: Multiplier
-        num_replicas: 1
-        user_config:
-          factor: 5
-        ray_actor_options:
-          num_cpus: 0.1
-      - name: Router
-        ray_actor_options:
-          num_cpus: 0.1
-        num_replicas: 1`).
+		WithServeConfigV2(string(serveConfigV2)).
 		WithRayClusterSpec(rayv1ac.RayClusterSpec().
 			WithRayVersion(GetRayVersion()).
 			WithEnableInTreeAutoscaling(true).
 			WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
-				WithRayStartParams(map[string]string{"dashboard-host": "0.0.0.0"}).
+				// Prevent actors from being scheduled on the Ray head node.
+				WithRayStartParams(map[string]string{"dashboard-host": "0.0.0.0", "num-cpus": "0"}).
 				WithTemplate(corev1ac.PodTemplateSpec().
 					WithSpec(corev1ac.PodSpec().
 						WithRestartPolicy(corev1.RestartPolicyNever).
@@ -113,21 +155,11 @@ func IncrementalUpgradeRayServiceApplyConfiguration(
 								corev1ac.ContainerPort().WithName(utils.ServingPortName).WithContainerPort(utils.DefaultServingPort),
 								corev1ac.ContainerPort().WithName(utils.DashboardPortName).WithContainerPort(utils.DefaultDashboardPort),
 								corev1ac.ContainerPort().WithName(utils.ClientPortName).WithContainerPort(utils.DefaultClientPort),
-							).
-							WithResources(corev1ac.ResourceRequirements().
-								WithRequests(corev1.ResourceList{
-									corev1.ResourceCPU:    resource.MustParse("2"),
-									corev1.ResourceMemory: resource.MustParse("3Gi"),
-								}).
-								WithLimits(corev1.ResourceList{
-									corev1.ResourceCPU:    resource.MustParse("2"),
-									corev1.ResourceMemory: resource.MustParse("3Gi"),
-								})))))).
+							))))).
 			WithWorkerGroupSpecs(rayv1ac.WorkerGroupSpec().
 				WithReplicas(1).
 				WithMinReplicas(1).
-				WithMaxReplicas(4).
-				WithRayStartParams(map[string]string{"num-cpus": "1"}).
+				WithMaxReplicas(2).
 				WithGroupName("small-group").
 				WithTemplate(corev1ac.PodTemplateSpec().
 					WithSpec(corev1ac.PodSpec().
@@ -137,12 +169,12 @@ func IncrementalUpgradeRayServiceApplyConfiguration(
 							WithImage(GetRayImage()).
 							WithResources(corev1ac.ResourceRequirements().
 								WithRequests(corev1.ResourceList{
-									corev1.ResourceCPU:    resource.MustParse("300m"),
-									corev1.ResourceMemory: resource.MustParse("1G"),
+									corev1.ResourceCPU:    resource.MustParse("2"),
+									corev1.ResourceMemory: resource.MustParse("2Gi"),
 								}).
 								WithLimits(corev1.ResourceList{
-									corev1.ResourceCPU:    resource.MustParse("500m"),
-									corev1.ResourceMemory: resource.MustParse("1G"),
+									corev1.ResourceCPU:    resource.MustParse("2"),
+									corev1.ResourceMemory: resource.MustParse("2Gi"),
 								})))))),
 		)
 }
@@ -159,6 +191,39 @@ func GetGatewayIP(gateway *gwv1.Gateway) string {
 	}
 
 	return ""
+}
+
+// incrementalUpgrade is a wrapper around triggerIncrementalUpgrade that returns a function that can be used with g.Eventually.
+func incrementalUpgrade(test Test, namespace, rayServiceName string) func() error {
+	return func() error {
+		return triggerIncrementalUpgrade(test, namespace, rayServiceName)
+	}
+}
+
+// triggerIncrementalUpgrade updates the RayService to trigger an incremental upgrade:
+//   - RayCluster spec: Set worker CPU request to 500m
+//   - Serve config: Update (price 3->4, factor 5->3)
+func triggerIncrementalUpgrade(test Test, namespace, rayServiceName string) error {
+	rayService, err := GetRayService(test, namespace, rayServiceName)
+	if err != nil {
+		return err
+	}
+
+	// Update the RayCluster spec.
+	rayService.Spec.RayClusterSpec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests[corev1.ResourceCPU] = resource.MustParse("500m")
+
+	// Update the serve config.
+	serveConfig := rayService.Spec.ServeConfigV2
+	serveConfig = strings.ReplaceAll(serveConfig, "price: 3", "price: 4")
+	serveConfig = strings.ReplaceAll(serveConfig, "factor: 5", "factor: 3")
+	rayService.Spec.ServeConfigV2 = serveConfig
+
+	_, err = test.Client().Ray().RayV1().RayServices(namespace).Update(
+		test.Ctx(),
+		rayService,
+		metav1.UpdateOptions{},
+	)
+	return err
 }
 
 func GetPendingCapacity(rs *rayv1.RayService) int32 {
@@ -178,7 +243,7 @@ func GetActiveTraffic(rs *rayv1.RayService) int32 {
 }
 
 func GetLastTrafficMigratedTime(rs *rayv1.RayService) *metav1.Time {
-	return rs.Status.ActiveServiceStatus.LastTrafficMigratedTime
+	return rs.Status.PendingServiceStatus.LastTrafficMigratedTime
 }
 
 // testStep defines a validation condition to wait for during the upgrade.
@@ -244,4 +309,133 @@ func generateUpgradeSteps(stepSize, maxSurge int32) []testStep {
 		}
 	}
 	return steps
+}
+
+const (
+	// The lower bound of the RPS for the Locust to reach the steady state.
+	locustWarmupRPSThreshold = 400.0
+	// The period of time that the RPS must be greater than or equal to the threshold to be considered steady state.
+	locustWarmupStableWindowSeconds = 15
+	// The maximum duration to wait for the Locust to reach the steady state.
+	locustWarmupTimeout = 120 * time.Second
+)
+
+// warmupLocust waits for Locust to ramp up and enter the steady state before triggering upgrade.
+// Hence, all requests are sent to the old cluster during the warmup period.
+//
+// The warmup period follows these steps:
+// 1. Retrieve the index of the Requests/s column in the stats history file
+//   - Retry for cases where the stats history file is not written yet
+//
+// 2. Query the current RPS from the stats history file
+//   - Retry for cases where the query failed
+//
+// 3. Check if the last RPS is greater than or equal to the threshold for the specified duration
+//   - Determine if the Locust has reached the steady state
+func warmupLocust(
+	test Test,
+	locustHeadPod *corev1.Pod,
+	rpsThreshold float64,
+	stableWindow int,
+	timeout time.Duration,
+) error {
+	// rpsColIdxResult is the result of getting the index of the Requests/s column in the stats history file.
+	//   - index: the index of the Requests/s column (the valid index should be >= 0)
+	//   - ready: false when the file or column is not ready, a retry is needed
+	type rpsColIdxResult struct {
+		index int
+		ready bool
+	}
+
+	// getRpsColIdx gets the index of the Requests/s column in the stats history file.
+	getRpsColIdx := func() (rpsColIdxResult, error) {
+		stdout, stderr := ExecPodCmd(test, locustHeadPod, common.RayHeadContainer, []string{
+			"bash", "-lc", `
+latest=$(ls /home/ray/locust_results/test_stats_history.csv 2>/dev/null | head -n 1) || exit 1
+head -n1 "$latest"
+		`,
+		}, true)
+		if stderr.Len() != 0 || stdout.Len() == 0 {
+			return rpsColIdxResult{ready: false}, nil
+		}
+
+		header := strings.TrimSpace(stdout.String())
+		cols := strings.Split(header, ",")
+		idx := slices.Index(cols, "Requests/s")
+		if idx == -1 {
+			return rpsColIdxResult{}, fmt.Errorf("Requests/s column not found in stats history file")
+		}
+		return rpsColIdxResult{
+			index: idx,
+			ready: true,
+		}, nil
+	}
+
+	var rpsIdx int
+	var haveRpsColIdx bool
+
+	ddl := time.Now().Add(timeout)
+	stableCount := 0
+	for time.Now().Before(ddl) {
+		if !haveRpsColIdx {
+			rpsColIdxRes, err := getRpsColIdx()
+			if err != nil {
+				return err
+			}
+
+			if !rpsColIdxRes.ready {
+				test.T().Logf("failed to find header in stats history file, retrying in 2 seconds")
+				time.Sleep(2 * time.Second)
+				continue
+			}
+
+			rpsIdx = rpsColIdxRes.index
+			haveRpsColIdx = true
+			test.T().Logf("found Requests/s column at index: %d", rpsIdx)
+		}
+
+		stdout, stderr := ExecPodCmd(test, locustHeadPod, common.RayHeadContainer, []string{
+			"bash", "-lc", `
+		latest=$(ls /home/ray/locust_results/test_stats_history.csv 2>/dev/null | head -n1) || exit 1
+		tail -n1 "$latest"
+		`,
+		}, true)
+		if stderr.Len() != 0 || stdout.Len() == 0 {
+			test.T().Logf("failed to query current RPS from Locust, retrying in 2 seconds: %s", stderr.String())
+			time.Sleep(2 * time.Second)
+			continue
+		}
+
+		lastStats := strings.TrimSpace(stdout.String())
+		statsSlice := strings.Split(lastStats, ",")
+		// Sometimes, we get the last stats with only 4 numbers, which leads to RPS index out of range.
+		// This is a temporary workaround. We will fix this in the future.
+		if len(statsSlice) <= rpsIdx {
+			test.T().Logf("RPS index out of range, retrying in 2 seconds")
+			time.Sleep(2 * time.Second)
+			continue
+		}
+
+		rps := statsSlice[rpsIdx]
+		rpsFloat, err := strconv.ParseFloat(rps, 64)
+		if err != nil {
+			test.T().Logf("failed to parse RPS, retrying in 2 seconds: %s", err.Error())
+			time.Sleep(2 * time.Second)
+			continue
+		}
+
+		if rpsFloat >= rpsThreshold {
+			stableCount++
+		} else {
+			stableCount = 0
+		}
+		if stableCount >= stableWindow {
+			test.T().Logf("Locust has reached the steady state with RPS >= %.2f for %d seconds", rpsThreshold, stableWindow)
+			return nil
+		}
+
+		time.Sleep(1 * time.Second)
+	}
+
+	return fmt.Errorf("timeout waiting for Locust to reach the steady state with RPS >= %.2f", rpsThreshold)
 }

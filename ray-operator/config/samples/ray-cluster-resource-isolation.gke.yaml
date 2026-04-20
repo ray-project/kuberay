@@ -3,7 +3,7 @@ kind: RayCluster
 metadata:
   name: raycluster-resource-isolation
 spec:
-  rayVersion: '2.52.0'
+  rayVersion: "2.52.0"
   headGroupSpec:
     rayStartParams:
       enable-resource-isolation: "true" # Set --enable-resource-isolation flag in `ray start`

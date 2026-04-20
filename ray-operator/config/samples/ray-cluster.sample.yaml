@@ -21,7 +21,7 @@ spec:
   #   * May cause temporary service disruption during recreation
   # upgradeStrategy:
   #   type: None
-  rayVersion: '2.52.0' # should match the Ray version in the image of the containers
+  rayVersion: "2.52.0" # should match the Ray version in the image of the containers
   # Ray head pod template
   headGroupSpec:
     # rayStartParams is optional with RayCluster CRD from KubeRay 1.4.0 or later but required in earlier versions.

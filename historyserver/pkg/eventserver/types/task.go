@@ -163,27 +163,26 @@ type Task struct {
 	EndTime      time.Time
 }
 
-// TaskProfileEventDTO represents the structure of TASK_PROFILE_EVENT from Ray Event Export API
-// DTO (Data Transfer Object)
+// TaskProfileEvents represents the structure of TASK_PROFILE_EVENT from Ray Event Export API
 // Note: Ray API uses "attemptNumber" for TASK_PROFILE_EVENT, but "taskAttempt"
 // for TASK_LIFECYCLE_EVENT and TASK_DEFINITION_EVENT
-type TaskProfileEventDTO struct {
-	TaskID        string           `json:"taskId"`
-	AttemptNumber int              `json:"attemptNumber"`
-	JobID         string           `json:"jobId"`
-	ProfileEvents ProfileEventsDTO `json:"profileEvents"`
+type TaskProfileEvents struct {
+	TaskID        string        `json:"taskId"`
+	AttemptNumber int           `json:"attemptNumber"`
+	JobID         string        `json:"jobId"`
+	ProfileEvents ProfileEvents `json:"profileEvents"`
 }
 
-// ProfileEventsDTO contains component and event information
-type ProfileEventsDTO struct {
-	ComponentID   string            `json:"componentId"`
-	ComponentType string            `json:"componentType"`
-	NodeIPAddress string            `json:"nodeIpAddress"`
-	Events        []ProfileEventDTO `json:"events"`
+// ProfileEvents contains component and event information
+type ProfileEvents struct {
+	ComponentID   string              `json:"componentId"`
+	ComponentType string              `json:"componentType"`
+	NodeIPAddress string              `json:"nodeIpAddress"`
+	Events        []ProfileEventEntry `json:"events"`
 }
 
-// ProfileEventDTO represents a single profile event within ProfileEvents
-type ProfileEventDTO struct {
+// ProfileEventEntry represents a single profile event within Spans
+type ProfileEventEntry struct {
 	EventName string `json:"eventName"`
 	StartTime string `json:"startTime"`
 	EndTime   string `json:"endTime"`

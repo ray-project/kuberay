@@ -24,11 +24,14 @@ vet: ## Run go vet against code.
 golangci-lint: ## Download golangci_lint locally if necessary.
 	test -s $(GOLANGCI_LINT) || (curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | bash -s -- -b $(REPO_ROOT_BIN)/ $(GOLANGCI_LINT_VERSION))
 
-# Exclude the SA1019 check which checks the usage of deprecated fields
-# via the linters.settings.staticcheck.checks configuration in .golangci.yaml.
 .PHONY: lint
 lint: golangci-lint fmt vet ## Run the linter.
 	test -s $(GOLANGCI_LINT) || ($(GOLANGCI_LINT) run --timeout=3m --allow-parallel-runners)
+
+# TODO: Remove this once a fix for https://github.com/golang/go/issues/75031 is released.
+# This is a workaround for an issue where `go test -cover` reports errors for packages with no test files.
+GOVERSION := $(shell go env GOVERSION)
+export GOTOOLCHAIN := $(GOVERSION)+auto
 
 test: WHAT ?= $(shell go list ./... | grep -v /test/)
 test: ENVTEST_K8S_VERSION ?= 1.34.1

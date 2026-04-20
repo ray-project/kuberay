@@ -30,6 +30,21 @@ func TestTrim(t *testing.T) {
 	t.Logf("test_path_join [%s]", test_path_join)
 }
 
+func TestGetContentPathComparison(t *testing.T) {
+	// fileName is a full path like the caller passes
+	fileName := "session_2026-04-09_06-41-42_754637_1/logs/abc123/events/event_RAYLET.log"
+	// f is a full key returned by _listFiles (onlyBase=false)
+	f := "session_2026-04-09_06-41-42_754637_1/logs/abc123/events/event_RAYLET.log"
+
+	if path.Base(f) != path.Base(fileName) {
+		t.Errorf("expected path.Base(%q) == path.Base(%q)", f, fileName)
+	}
+	// Verify old buggy comparison would fail
+	if path.Base(f) == fileName {
+		t.Errorf("old comparison should not match: path.Base(%q) == %q", f, fileName)
+	}
+}
+
 func TestWalk(t *testing.T) {
 	watchPath := "/tmp/ray/test/LLogs/"
 	filepath.Walk(watchPath, func(path string, info os.FileInfo, err error) error {

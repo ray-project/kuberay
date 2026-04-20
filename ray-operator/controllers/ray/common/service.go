@@ -216,21 +216,24 @@ func BuildServeService(ctx context.Context, rayService rayv1.RayService, rayClus
 		defaultType = rayService.Spec.RayClusterSpec.HeadGroupSpec.ServiceType
 	}
 
-	// `portsInt` is a map of port names to port numbers, while `ports` is a list of ServicePort objects
+	// `portsInt` is a map of port names to port numbers, while `ports` is a list of ServicePort objects.
+	// Include ports named "serve" or with the prefix "serve-" (e.g., "serve-grpc") to support
+	// multiple serving protocols such as HTTP and gRPC.
 	portsInt := getServicePorts(rayCluster)
-	ports := make([]corev1.ServicePort, 0, 1)
-	if _, defined := portsInt[utils.ServingPortName]; defined {
-		// Only include serve port
-		svcPort := corev1.ServicePort{Name: utils.ServingPortName, Port: portsInt[utils.ServingPortName]}
-		ports = append(ports, svcPort)
+	ports := make([]corev1.ServicePort, 0)
+	for name, port := range portsInt {
+		if isServingPort(name) {
+			svcPort := corev1.ServicePort{Name: name, Port: port}
+			ports = append(ports, svcPort)
+		}
 	}
 	_, serveDefinedInHead := getPortsFromCluster(rayCluster)[utils.ServingPortName]
 
 	if isRayService {
 		// We are invoked from RayService
 		if len(ports) == 0 && rayService.Spec.ServeService == nil {
-			return nil, fmt.Errorf("Please specify the port named 'serve' in the Ray head container; " +
-				"otherwise, the Kubernetes service for Ray Serve will not be created.")
+			return nil, fmt.Errorf("Please specify a port named 'serve' (or with the prefix 'serve-', e.g. 'serve-grpc') " +
+				"in the Ray head container; otherwise, the Kubernetes service for Ray Serve will not be created.")
 		}
 
 		if rayService.Spec.ServeService != nil && !utils.IsIncrementalUpgradeEnabled(&rayService.Spec) {
@@ -269,6 +272,26 @@ func BuildServeService(ctx context.Context, rayService rayv1.RayService, rayClus
 				} else {
 					return nil, fmt.Errorf("Please specify the port named 'serve' in the Ray head container or in RayService.Spec.ServeService")
 				}
+			// Merge auto-detected serve ports with user-provided ServeService ports.
+			// If the user specified a port with the same name, use the user's definition
+			// to preserve fields like AppProtocol (e.g., "kubernetes.io/h2c" for gRPC).
+			// If no ports were auto-detected, fall back to filtering the user-provided
+			// ServeService ports for any that match the serving port naming convention.
+			userPortsByName := make(map[string]corev1.ServicePort)
+			for _, p := range serveService.Spec.Ports {
+				userPortsByName[p.Name] = p
+			}
+
+			if len(ports) != 0 {
+				mergedPorts := make([]corev1.ServicePort, 0, len(ports))
+				for _, autoPort := range ports {
+					if userPort, exists := userPortsByName[autoPort.Name]; exists {
+						mergedPorts = append(mergedPorts, userPort)
+					} else {
+						mergedPorts = append(mergedPorts, autoPort)
+					}
+				}
+				serveService.Spec.Ports = mergedPorts
 			}
 
 			setLabelsforUserProvidedService(serveService, labels)
@@ -282,8 +305,8 @@ func BuildServeService(ctx context.Context, rayService rayv1.RayService, rayClus
 
 	// We are invoked from cluster
 	if len(ports) == 0 {
-		return nil, fmt.Errorf("Please specify the port named 'serve' in the Ray head container; " +
-			"otherwise, the Kubernetes service for Ray Serve will not be created.")
+		return nil, fmt.Errorf("Please specify a port named 'serve' (or with the prefix 'serve-', e.g. 'serve-grpc') " +
+			"in the Ray head container; otherwise, the Kubernetes service for Ray Serve will not be created.")
 	}
 
 	serveService := &corev1.Service{
@@ -558,4 +581,8 @@ func logSkippedDefaultPortNames(log logr.Logger, cluster rayv1.RayCluster) {
 			"conflicting_port_name", skipped[defaultName],
 		)
 	}
+// isServingPort returns true if the port name matches the serving port naming convention:
+// either exactly "serve" or prefixed with "serve-" (e.g., "serve-grpc").
+func isServingPort(name string) bool {
+	return name == utils.ServingPortName || strings.HasPrefix(name, utils.ServingPortName+"-")
 }

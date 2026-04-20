@@ -7,7 +7,7 @@ kind: RayCluster
 metadata:
   name: raycluster-complete
 spec:
-  rayVersion: '2.52.0'
+  rayVersion: "2.52.0"
   # Ray head pod configuration
   headGroupSpec:
     # Kubernetes Service Type. This is an optional field, and the default value is ClusterIP.
@@ -17,7 +17,7 @@ spec:
     # See https://github.com/ray-project/kuberay/blob/master/docs/guidance/rayStartParams.md for the default settings of `rayStartParams` in KubeRay.
     # See https://docs.ray.io/en/latest/cluster/cli.html#ray-start for all available options in `rayStartParams`.
     rayStartParams:
-      dashboard-host: '0.0.0.0'
+      dashboard-host: "0.0.0.0"
     # pod template
     template:
       metadata:

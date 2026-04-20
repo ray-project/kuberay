@@ -165,6 +165,17 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, client.IgnoreNotFound(err)
 	}
 
+	// Determine the rollback state immediately before making serving decisions.
+	if utils.IsIncrementalUpgradeEnabled(&rayServiceInstance.Spec) {
+		// If an upgrade is in progress, check if rollback is necessary.
+		isUpgradeInProgress := meta.IsStatusConditionTrue(rayServiceInstance.Status.Conditions, string(rayv1.UpgradeInProgress))
+		if isUpgradeInProgress && activeRayClusterInstance != nil && pendingRayClusterInstance != nil {
+			if err := r.reconcileRollbackState(ctx, rayServiceInstance, activeRayClusterInstance, pendingRayClusterInstance); err != nil {
+				return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
+			}
+		}
+	}
+
 	// Check both active and pending Ray clusters to see if the head Pod is ready to serve requests.
 	// This is important to ensure the reliability of the serve service because the head Pod cannot
 	// rely on readiness probes to determine serve readiness.
@@ -249,8 +260,8 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 		}
 
 		if headSvc == nil || serveSvc == nil {
-			panic("Both head and serve services are nil before calculate RayService status. " +
-				"This should never happen. Please open a GitHub issue in the KubeRay repository.")
+			panic(fmt.Sprintf("Either head service (%v) or serve service (%v) is nil before calculating RayService status. "+
+				"This should never happen. Please open a GitHub issue in the KubeRay repository.", headSvc, serveSvc))
 		}
 	}
 
@@ -412,7 +423,7 @@ func (r *RayServiceReconciler) calculateStatus(
 					logger.Info("Updated LastTrafficMigratedTime of Active Service.")
 				}
 			}
-			if pendingWeight >= 0 {
+			if pendingWeight >= 0 && pendingCluster != nil {
 				rayServiceInstance.Status.PendingServiceStatus.TrafficRoutedPercent = ptr.To(pendingWeight)
 				logger.Info("Updated pending TrafficRoutedPercent from HTTPRoute", "pendingClusterWeight", pendingWeight)
 				if pendingWeight != oldPendingPercent {
@@ -423,6 +434,30 @@ func (r *RayServiceReconciler) calculateStatus(
 		}
 		// Reconcile serving status and promotion logic for all upgrade strategies.
 		isPendingClusterServing = reconcilePromotionAndServingStatus(ctx, headSvc, serveSvc, rayServiceInstance, pendingCluster)
+	}
+
+	if meta.IsStatusConditionTrue(rayServiceInstance.Status.Conditions, string(rayv1.RollbackInProgress)) {
+		activeStatus := &rayServiceInstance.Status.ActiveServiceStatus
+		pendingStatus := &rayServiceInstance.Status.PendingServiceStatus
+
+		// A rollback is complete when the active cluster is back at 100% TargetCapacity and TrafficRoutedPercent,
+		// and the pending cluster is at 0% TargetCapacity and TrafficRoutedPercent.
+		if ptr.Deref(activeStatus.TargetCapacity, -1) == 100 &&
+			ptr.Deref(activeStatus.TrafficRoutedPercent, -1) == 100 &&
+			ptr.Deref(pendingStatus.TargetCapacity, -1) == 0 &&
+			ptr.Deref(pendingStatus.TrafficRoutedPercent, -1) == 0 {
+
+			logger.Info("Rollback to original cluster is complete. Cleaning up pending cluster from prior upgrade.")
+
+			// Clear the RayService pending service status to clean up the pending cluster.
+			rayServiceInstance.Status.PendingServiceStatus = rayv1.RayServiceStatus{}
+			pendingCluster = nil
+
+			meta.RemoveStatusCondition(&rayServiceInstance.Status.Conditions, string(rayv1.RollbackInProgress))
+
+			// Ensure the upgrade state machine resets after a successful rollback.
+			setCondition(rayServiceInstance, rayv1.UpgradeInProgress, metav1.ConditionFalse, rayv1.NoPendingCluster, "Rollback complete, active Ray cluster exists and no pending Ray cluster")
+		}
 	}
 
 	if shouldPrepareNewCluster(ctx, rayServiceInstance, activeCluster, pendingCluster, isPendingClusterServing) {
@@ -700,31 +735,51 @@ func (r *RayServiceReconciler) calculateTrafficRoutedPercent(ctx context.Context
 	activeClusterWeight = ptr.Deref(activeServiceStatus.TrafficRoutedPercent, 100)
 	pendingClusterWeight = ptr.Deref(pendingServiceStatus.TrafficRoutedPercent, 0)
 
-	if isPendingClusterReady {
-		// Zero-downtime upgrade in progress.
-		options := utils.GetRayServiceClusterUpgradeOptions(&rayServiceInstance.Spec)
-		if options == nil {
-			return 0, 0, errstd.New("ClusterUpgradeOptions are not set during upgrade.")
-		}
+	// Zero-downtime upgrade in progress.
+	options := utils.GetRayServiceClusterUpgradeOptions(&rayServiceInstance.Spec)
+	if options == nil {
+		return 0, 0, errstd.New("ClusterUpgradeOptions are not set during upgrade.")
+	}
 
-		// Check that target_capacity has been updated before migrating traffic.
-		pendingClusterTargetCapacity := ptr.Deref(pendingServiceStatus.TargetCapacity, 0)
+	// Check that target_capacity has been updated before migrating traffic.
+	pendingClusterTargetCapacity := ptr.Deref(pendingServiceStatus.TargetCapacity, 0)
+	activeClusterTargetCapacity := ptr.Deref(activeServiceStatus.TargetCapacity, 100)
+	isRollbackInProgress := meta.IsStatusConditionTrue(rayServiceInstance.Status.Conditions, string(rayv1.RollbackInProgress))
 
-		if pendingClusterWeight == pendingClusterTargetCapacity {
-			// Stop traffic migration because the pending cluster's current traffic weight has reached its target capacity limit.
-			return activeClusterWeight, pendingClusterWeight, nil
-		}
+	if (pendingClusterWeight == pendingClusterTargetCapacity && !isRollbackInProgress) || (isRollbackInProgress && activeClusterWeight == activeClusterTargetCapacity) {
+		// Stop traffic migration because the cluster being migrated to has reached its target capacity limit.
+		return activeClusterWeight, pendingClusterWeight, nil
+	}
 
-		// If IntervalSeconds has passed since LastTrafficMigratedTime, migrate StepSizePercent traffic
-		// from the active RayCluster to the pending RayCluster.
-		interval := time.Duration(*options.IntervalSeconds) * time.Second
-		lastTrafficMigratedTime := pendingServiceStatus.LastTrafficMigratedTime
-		if lastTrafficMigratedTime == nil || time.Since(lastTrafficMigratedTime.Time) >= interval {
-			// Gradually shift traffic from the active to the pending cluster.
+	// If IntervalSeconds has passed since LastTrafficMigratedTime, migrate StepSizePercent traffic
+	// from the active RayCluster to the pending RayCluster.
+	interval := time.Duration(*options.IntervalSeconds) * time.Second
+
+	// Determine which timestamp to use based on the direction of traffic flow.
+	// We use the LastTrafficMigratedTime of the cluster to which traffic is increasing.
+	var lastTrafficMigratedTime *metav1.Time
+	if isRollbackInProgress {
+		lastTrafficMigratedTime = activeServiceStatus.LastTrafficMigratedTime
+	} else {
+		lastTrafficMigratedTime = pendingServiceStatus.LastTrafficMigratedTime
+	}
+
+	if lastTrafficMigratedTime == nil || time.Since(lastTrafficMigratedTime.Time) >= interval {
+		if isRollbackInProgress {
+			// Gradually shift traffic from the pending to the active cluster.
+			// Rollback traffic migration occurs regardless of pending cluster readiness.
+			logger.Info("Rollback in progress. Shifting traffic back to active cluster.", "stepSize", *options.StepSizePercent)
+			proposedActiveWeight := activeClusterWeight + *options.StepSizePercent
+			activeClusterWeight = min(100, proposedActiveWeight, activeClusterTargetCapacity)
+			pendingClusterWeight = 100 - activeClusterWeight
+		} else if isPendingClusterReady {
+			// Gradually shift traffic from the active to the pending cluster if it's ready.
 			logger.Info("Upgrade in progress. Migrating traffic by StepSizePercent.", "stepSize", *options.StepSizePercent)
 			proposedPendingWeight := pendingClusterWeight + *options.StepSizePercent
 			pendingClusterWeight = min(100, proposedPendingWeight, pendingClusterTargetCapacity)
 			activeClusterWeight = 100 - pendingClusterWeight
+		} else {
+			logger.Info("Upgrade in progress, but pending cluster is not ready. Pausing traffic migration.")
 		}
 	}
 
@@ -871,7 +926,7 @@ func (r *RayServiceReconciler) reconcileHTTPRoute(ctx context.Context, rayServic
 	}
 
 	// If HTTPRoute already exists, check if update is needed
-	if !reflect.DeepEqual(existingHTTPRoute.Spec, desiredHTTPRoute.Spec) {
+	if !utils.IsHTTPRouteEqual(existingHTTPRoute, desiredHTTPRoute) {
 		logger.Info("Updating existing HTTPRoute", "name", desiredHTTPRoute.Name)
 		existingHTTPRoute.Spec = desiredHTTPRoute.Spec
 		if err := r.Update(ctx, existingHTTPRoute); err != nil {
@@ -1094,6 +1149,12 @@ func shouldPrepareNewCluster(ctx context.Context, rayServiceInstance *rayv1.RayS
 	if isPendingClusterServing {
 		return false
 	}
+
+	// Do not prepare a new cluster while a rollback is actively in progress.
+	if meta.IsStatusConditionTrue(rayServiceInstance.Status.Conditions, string(rayv1.RollbackInProgress)) {
+		return false
+	}
+
 	if activeRayCluster == nil && pendingRayCluster == nil {
 		// Both active and pending clusters are nil, which means the RayService has just been created.
 		// Create a new pending cluster.
@@ -1422,6 +1483,31 @@ func (r *RayServiceReconciler) reconcileServeTargetCapacity(ctx context.Context,
 		return errstd.New("Missing RayService ClusterUpgradeOptions during upgrade")
 	}
 	maxSurgePercent := ptr.Deref(options.MaxSurgePercent, 100)
+
+	if meta.IsStatusConditionTrue(rayServiceInstance.Status.Conditions, string(rayv1.RollbackInProgress)) {
+		// Rollback the upgrade. The active RayCluster should be scaled back to 100% target_capacity,
+		// while the pending RayCluster is scaled to 0%. This is the inverse of the regular upgrade path.
+		activeTrafficRoutedPercent := ptr.Deref(activeRayServiceStatus.TrafficRoutedPercent, 0)
+		if activeTargetCapacity != activeTrafficRoutedPercent {
+			logger.Info("Traffic is rolling back to active cluster, deferring capacity update.", "ActiveTargetCapacity", activeTargetCapacity, "ActiveTrafficRoutedPercent", activeTrafficRoutedPercent)
+			return nil
+		}
+
+		if activeTargetCapacity+pendingTargetCapacity > 100 {
+			if rayClusterInstance.Name == pendingRayServiceStatus.RayClusterName {
+				goalTargetCapacity := max(int32(0), pendingTargetCapacity-maxSurgePercent)
+				logger.Info("Rollback: Scaling down pending cluster `target_capacity`.", "goal", goalTargetCapacity)
+				return r.applyServeTargetCapacity(ctx, rayServiceInstance, rayClusterInstance, rayDashboardClient, goalTargetCapacity)
+			}
+		} else {
+			if rayClusterInstance.Name == activeRayServiceStatus.RayClusterName {
+				goalTargetCapacity := min(int32(100), activeTargetCapacity+maxSurgePercent)
+				logger.Info("Rollback: Scaling up active cluster `target_capacity`.", "goal", goalTargetCapacity)
+				return r.applyServeTargetCapacity(ctx, rayServiceInstance, rayClusterInstance, rayDashboardClient, goalTargetCapacity)
+			}
+		}
+		return nil
+	}
 
 	// Defer updating the target_capacity until traffic weights are updated
 	if pendingTargetCapacity != pendingTrafficRoutedPercent {
@@ -1899,10 +1985,10 @@ func (r *RayServiceReconciler) reconcilePerClusterServeService(ctx context.Conte
 
 	logger := ctrl.LoggerFrom(ctx).WithValues("RayCluster", rayClusterInstance.Name)
 
-	logger.Info("Building per-cluster RayService")
+	logger.Info("Building per-cluster serve service")
 
 	// Create a serve service for the RayCluster associated with this RayService. During an incremental
-	// upgrade, this will be called for the pending RayCluster instance.
+	// upgrade, this will be called for both the active and pending RayCluster instances.
 	desiredSvc, err := common.BuildServeService(ctx, *rayServiceInstance, *rayClusterInstance, true)
 	if err != nil {
 		logger.Error(err, "Failed to build per-cluster serve service spec")
@@ -1920,4 +2006,40 @@ func (r *RayServiceReconciler) reconcilePerClusterServeService(ctx context.Conte
 	}
 
 	return err
+}
+
+// reconcileRollbackState determines whether to initiate a rollback by setting the RollbackInProgress condition.
+func (r *RayServiceReconciler) reconcileRollbackState(ctx context.Context, rayServiceInstance *rayv1.RayService, activeCluster, pendingCluster *rayv1.RayCluster) error {
+	logger := ctrl.LoggerFrom(ctx)
+
+	targetHash, err := utils.GenerateHashWithoutReplicasAndWorkersToDelete(rayServiceInstance.Spec.RayClusterSpec)
+	if err != nil {
+		return fmt.Errorf("failed to generate hash for goal cluster spec: %w", err)
+	}
+
+	originalHash := activeCluster.Annotations[utils.HashWithoutReplicasAndWorkersToDeleteKey]
+	pendingHash := pendingCluster.Annotations[utils.HashWithoutReplicasAndWorkersToDeleteKey]
+
+	isRollbackInProgress := meta.IsStatusConditionTrue(rayServiceInstance.Status.Conditions, string(rayv1.RollbackInProgress))
+
+	// Case 1: The goal spec matches the pending cluster's spec.
+	// The upgrade is on track. We should revert any accidental rollback attempt and continue.
+	if targetHash == pendingHash {
+		if isRollbackInProgress {
+			logger.Info("Goal state matches pending cluster. Canceling rollback and resuming upgrade.")
+			meta.RemoveStatusCondition(&rayServiceInstance.Status.Conditions, string(rayv1.RollbackInProgress))
+		}
+		return nil
+	}
+
+	// Case 2: The goal spec diverges from the pending cluster.
+	// This happens if the user reverted to the original spec, or if they submitted a 3rd entirely new spec mid-upgrade.
+	// In all divergence cases, we must first safely route all traffic back to the original cluster before allowing
+	// a new cluster to be spun up.
+	if !isRollbackInProgress {
+		logger.Info("Goal state has changed during upgrade. Initiating safe rollback to the original cluster.", "targetHash", targetHash, "originalHash", originalHash, "pendingHash", pendingHash)
+		setCondition(rayServiceInstance, rayv1.RollbackInProgress, metav1.ConditionTrue, rayv1.TargetClusterChanged, "Goal state changed mid-upgrade, rolling back to original cluster.")
+	}
+
+	return nil
 }

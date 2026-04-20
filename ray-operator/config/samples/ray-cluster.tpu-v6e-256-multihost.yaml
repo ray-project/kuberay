@@ -3,7 +3,7 @@ kind: RayCluster
 metadata:
   name: raycluster-tpu-v6e-multihost
 spec:
-  rayVersion: '2.52.0'
+  rayVersion: "2.52.0"
   headGroupSpec:
     rayStartParams: {}
     template:

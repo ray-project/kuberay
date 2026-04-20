@@ -26,10 +26,10 @@ spec:
             requests:
               cpu: "10m"
   rayClusterSpec:
-    rayVersion: '2.52.0'
+    rayVersion: "2.52.0"
     headGroupSpec:
       rayStartParams:
-        disable-usage-stats: 'true'
+        disable-usage-stats: "true"
       template:
         spec:
           containers:

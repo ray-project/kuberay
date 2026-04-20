@@ -25,7 +25,7 @@ linters:
     - revive
   settings:
     staticcheck:
-      checks: ["all", "-SA1019", "-ST1001", "-ST1003", "-ST1005", "-QF1008"]
+      checks: ["all", "-ST1001", "-ST1003", "-ST1005", "-QF1008"]
     ginkgolinter:
       forbid-focus-container: true
     gocyclo:
@@ -33,9 +33,6 @@ linters:
     gosec:
       excludes:
         - G601
-    govet:
-      enable:
-        - fieldalignment
     lll:
       line-length: 120
     misspell:
@@ -90,6 +87,24 @@ linters:
       disable:
         - omitzero
   exclusions:
+    # Suppress SA1019 for the project's own deprecated API fields that are
+    # intentionally maintained for backward compatibility. External deprecated
+    # API usage (e.g., from third-party libraries) will still be caught.
+    rules:
+      - linters: [staticcheck]
+        text: "SA1019:.*\\.State is deprecated: the State field"
+      - linters: [staticcheck]
+        text: "SA1019:.*\\.ServiceStatus is deprecated"
+      - linters: [staticcheck]
+        text: "SA1019:.*ServiceUnhealthySecondThreshold is deprecated"
+      - linters: [staticcheck]
+        text: "SA1019:.*DeploymentUnhealthySecondThreshold is deprecated"
+      # NewSimpleClientset is deprecated in favor of NewClientset, but
+      # NewClientset requires complete structured-merge-diff type schemas
+      # for field management which breaks Update-based tests.
+      # TODO(#4627): migrate once SMD schemas are properly generated.
+      - linters: [staticcheck]
+        text: "SA1019:.*NewSimpleClientset"
     generated: strict
     presets:
       - comments

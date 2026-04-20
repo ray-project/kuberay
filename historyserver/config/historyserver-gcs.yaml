@@ -1,0 +1,50 @@
+# Ensure that the env var GCS_BUCKET is set before applying
+apiVersion: v1
+kind: Service
+metadata:
+  name: historyserver
+  labels:
+    app: historyserver
+spec:
+  selector:
+    app: historyserver
+  ports:
+  - protocol: TCP
+    name: http
+    port: 30080
+    targetPort: 8080
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: historyserver-demo
+  labels:
+    app: historyserver
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: historyserver
+  template:
+    metadata:
+      labels:
+        app: historyserver
+    spec:
+      serviceAccountName: historyserver
+      containers:
+      - name: historyserver
+        env:
+          - name: GCS_BUCKET
+            value: "${GCS_BUCKET}"
+        image: ${HISTORY_SERVER_IMAGE}
+        imagePullPolicy: IfNotPresent
+        command:
+        - historyserver
+        - --runtime-class-name=gcs
+        - --ray-root-dir=log
+        ports:
+        - containerPort: 8080
+        resources:
+          limits:
+            cpu: "500m"

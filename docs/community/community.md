@@ -19,7 +19,7 @@ to get started. You can also read [ray-project/kuberay#1059](https://github.com/
 for tips on getting involved in the KubeRay community.
 
 In addition, you can add the
-[Ray / KubeRay OSS community Google calendar](https://calendar.google.com/calendar/u/0?cid=Y184NmVlNzE0NjM2YzVjZTA5YzJjOGYzOGMzYTYyYzY5YjRmMDY0MDRlMWU2MjNlZGYxN2FiM2JlMDg5MDY4ZTdkQGdyb3VwLmNhbGVuZGFyLmdvb2dsZS5jb20)
+[Ray / KubeRay OSS community Google calendar](https://calendar.google.com/calendar/u/0?cid=Y19iZWIwYTUxZDQyZTczMTFmZWFmYTY5YjZiOTY1NjAxMTQ3ZTEzOTAxZWE0ZGU5YzA1NjFlZWQ5OTljY2FiOWM4QGdyb3VwLmNhbGVuZGFyLmdvb2dsZS5jb20)
 to your calendar and join the bi-weekly KubeRay community meetings.
 
 ### Becoming a Triager
