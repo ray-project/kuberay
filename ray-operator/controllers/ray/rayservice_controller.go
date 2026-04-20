@@ -1025,6 +1025,14 @@ func shouldUpdateCluster(rayServiceInstance *rayv1.RayService, cluster *rayv1.Ra
 		}
 	}
 
+	if ptr.Deref(rayServiceInstance.Spec.RayClusterSpec.Suspend, false) != ptr.Deref(cluster.Spec.Suspend, false) {
+		// Suspend toggles (e.g. from Kueue admitting or preempting the workload) must be
+		// applied in-place to the existing RayCluster. Otherwise the hash comparison below
+		// selects neither the update nor the new-cluster path, and the cluster stays
+		// suspended with no head pod (ray-project/kuberay#4686).
+		return true
+	}
+
 	if isClusterSpecHashEqual(rayServiceInstance, cluster, false) {
 		// The RayCluster spec matches the cluster spec in the RayService. No need to update the cluster.
 		return false
