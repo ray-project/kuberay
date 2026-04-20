@@ -385,6 +385,7 @@ const (
 	InvalidRayServiceSpec           K8sEventType = "InvalidRayServiceSpec"
 	InvalidRayServiceMetadata       K8sEventType = "InvalidRayServiceMetadata"
 	RayServiceInitializingTimeout   K8sEventType = "RayServiceInitializingTimeout"
+	RollbackImpossible              K8sEventType = "RollbackImpossible"
 	UpdatedHeadPodServeLabel        K8sEventType = "UpdatedHeadPodServeLabel"
 	UpdatedGateway                  K8sEventType = "UpdatedGateway"
 	UpdatedHTTPRoute                K8sEventType = "UpdatedHTTPRoute"

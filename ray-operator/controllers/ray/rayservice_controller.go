@@ -171,7 +171,7 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 		if isUpgradeInProgress {
 			if activeRayClusterInstance == nil {
 				logger.Info("Cannot initiate rollback: active cluster not found")
-				r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, "RollbackImpossible", "Active cluster not found, rollback cannot be initiated")
+				r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(utils.RollbackImpossible), "Active cluster not found, rollback cannot be initiated")
 			} else if pendingRayClusterInstance != nil {
 				if err := r.reconcileRollbackState(ctx, rayServiceInstance, activeRayClusterInstance, pendingRayClusterInstance); err != nil {
 					return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
