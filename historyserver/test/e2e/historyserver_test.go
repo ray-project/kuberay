@@ -212,7 +212,7 @@ func testLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Names
 	client := CreateHTTPClientWithCookieJar(g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 
-	nodeID := GetOneOfNodeID(g, client, historyServerURL, true)
+	nodeID := GetOneOfNodeID(g, client, historyServerURL, false)
 	filename := "raylet.out"
 
 	logFileTestCases := []struct {
@@ -925,8 +925,8 @@ func getAllEligibleActorIDs(g *WithT, client *http.Client, historyServerURL stri
 	err = json.Unmarshal(body, &result)
 	g.Expect(err).NotTo(HaveOccurred())
 
-	// Extract actor_id from response
-	// Response format: {"result": true, "msg": "...", "data": {"actors": {actor_id: {...}, ...}}}
+	// Extract actorId from response
+	// Response format: {"result": true, "msg": "...", "data": {"actors": {actorId: {...}, ...}}}
 	data, ok := result["data"].(map[string]interface{})
 	g.Expect(ok).To(BeTrue(), "response should have 'data' field")
 

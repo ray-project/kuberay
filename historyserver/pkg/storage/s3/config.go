@@ -22,13 +22,6 @@ type config struct {
 	types.RayCollectorConfig
 }
 
-func getEnvOrFallback(primary string, fallback string) string {
-	if value := os.Getenv(primary); value != "" {
-		return value
-	}
-	return os.Getenv(fallback)
-}
-
 func getS3BucketWithDefault() string {
 	bucket := os.Getenv("S3_BUCKET")
 	if bucket == "" {
@@ -39,9 +32,9 @@ func getS3BucketWithDefault() string {
 
 func (c *config) complete(rcc *types.RayCollectorConfig, jd map[string]interface{}) {
 	c.RayCollectorConfig = *rcc
-	c.S3ID = getEnvOrFallback("AWS_S3ID", "AWS_ACCESS_KEY_ID")
-	c.S3Secret = getEnvOrFallback("AWS_S3SECRET", "AWS_SECRET_ACCESS_KEY")
-	c.S3Token = getEnvOrFallback("AWS_S3TOKEN", "AWS_SESSION_TOKEN")
+	c.S3ID = os.Getenv("AWS_ACCESS_KEY_ID")
+	c.S3Secret = os.Getenv("AWS_SECRET_ACCESS_KEY")
+	c.S3Token = os.Getenv("AWS_SESSION_TOKEN")
 	c.S3Bucket = getS3BucketWithDefault()
 	if len(jd) == 0 {
 		c.S3Endpoint = os.Getenv("S3_ENDPOINT")
@@ -75,9 +68,9 @@ func (c *config) completeHSConfig(rcc *types.RayHistoryServerConfig, jd map[stri
 	c.RayCollectorConfig = types.RayCollectorConfig{
 		RootDir: rcc.RootDir,
 	}
-	c.S3ID = getEnvOrFallback("AWS_S3ID", "AWS_ACCESS_KEY_ID")
-	c.S3Secret = getEnvOrFallback("AWS_S3SECRET", "AWS_SECRET_ACCESS_KEY")
-	c.S3Token = getEnvOrFallback("AWS_S3TOKEN", "AWS_SESSION_TOKEN")
+	c.S3ID = os.Getenv("AWS_ACCESS_KEY_ID")
+	c.S3Secret = os.Getenv("AWS_SECRET_ACCESS_KEY")
+	c.S3Token = os.Getenv("AWS_SESSION_TOKEN")
 	c.S3Bucket = getS3BucketWithDefault()
 	if len(jd) == 0 {
 		c.S3Endpoint = os.Getenv("S3_ENDPOINT")
