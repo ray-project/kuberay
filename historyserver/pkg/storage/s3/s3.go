@@ -350,8 +350,8 @@ func createS3Client(ctx context.Context, c *config) (*s3.Client, error) {
 		awsconfig.WithRegion(c.S3Region),
 		awsconfig.WithHTTPClient(httpClient),
 	}
-	if c.S3ID != "" {
-		credsProvider := credentials.NewStaticCredentialsProvider(c.S3ID, c.S3Secret, c.S3Token)
+	if c.AccessKeyID != "" {
+		credsProvider := credentials.NewStaticCredentialsProvider(c.AccessKeyID, c.SecretAccessKey, c.SessionToken)
 		loadOptions = append(loadOptions, awsconfig.WithCredentialsProvider(credsProvider))
 	}
 
