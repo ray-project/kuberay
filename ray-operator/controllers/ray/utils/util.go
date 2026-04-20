@@ -1124,3 +1124,32 @@ func IsHTTPRouteEqual(existing, desired *gwv1.HTTPRoute) bool {
 	}
 	return true
 }
+
+// IsGatewayEqual checks if the existing Gateway matches the desired Gateway.
+// This check only compares the fields explicitly managed by the RayService controller to
+// avoid infinite update loops caused by defaults injected by the Gateway implementation.
+func IsGatewayEqual(existing, desired *gwv1.Gateway) bool {
+	if existing == nil || desired == nil {
+		return existing == desired
+	}
+
+	if string(existing.Spec.GatewayClassName) != string(desired.Spec.GatewayClassName) {
+		return false
+	}
+
+	// Compare Listeners. RayService controller sets Name, Protocol, and Port on each Listener.
+	if len(existing.Spec.Listeners) != len(desired.Spec.Listeners) {
+		return false
+	}
+	for i := range desired.Spec.Listeners {
+		eL := existing.Spec.Listeners[i]
+		dL := desired.Spec.Listeners[i]
+
+		if string(eL.Name) != string(dL.Name) ||
+			eL.Protocol != dL.Protocol ||
+			eL.Port != dL.Port {
+			return false
+		}
+	}
+	return true
+}
