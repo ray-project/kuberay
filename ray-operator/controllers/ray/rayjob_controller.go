@@ -280,8 +280,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		}
 
 		var finishedAt *time.Time
-		if rayJobInstance.Spec.SubmissionMode == rayv1.K8sJobMode ||
-			rayJobInstance.Spec.SubmissionMode == rayv1.SidecarMode {
+		if rayJobInstance.Spec.SubmissionMode == rayv1.K8sJobMode || rayJobInstance.Spec.SubmissionMode == rayv1.SidecarMode {
 			var shouldUpdate bool
 			shouldUpdate, finishedAt, err = r.checkSubmitterAndUpdateStatusIfNeeded(ctx, rayJobInstance)
 			if err != nil {
@@ -342,11 +341,6 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		// See https://github.com/ray-project/kuberay/pull/1919 for reasons.
 		if utils.HasSubmitter(rayJobInstance) {
 			isJobTerminal = isJobTerminal && finishedAt != nil
-		}
-
-		if rayJobInstance.Spec.SubmissionMode == rayv1.SidecarMode && finishedAt != nil && !isJobTerminal {
-			logger.Info("Submitter container exited but Ray job is still running.",
-				"JobId", rayJobInstance.Status.JobId, "JobStatus", jobInfo.JobStatus)
 		}
 
 		if isJobTerminal {
