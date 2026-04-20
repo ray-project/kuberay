@@ -1576,6 +1576,7 @@ func TestCreateHTTPRoute(t *testing.T) {
 		expectError           bool
 		expectedActiveWeight  int32
 		expectedPendingWeight int32
+		isActiveClusterReady  bool
 		isPendingClusterReady bool
 	}{
 		{
@@ -1584,6 +1585,7 @@ func TestCreateHTTPRoute(t *testing.T) {
 				rs.Status.PendingServiceStatus.LastTrafficMigratedTime = &metav1.Time{Time: time.Now().Add(-time.Duration(interval+1) * time.Second)}
 			},
 			runtimeObjects:        []runtime.Object{activeCluster, pendingCluster, gateway, activeServeService, pendingServeService},
+			isActiveClusterReady:  true,
 			isPendingClusterReady: false,
 			expectedActiveWeight:  100,
 			expectedPendingWeight: 0,
@@ -1594,6 +1596,7 @@ func TestCreateHTTPRoute(t *testing.T) {
 				rs.Status.PendingServiceStatus.LastTrafficMigratedTime = &metav1.Time{Time: time.Now()}
 			},
 			runtimeObjects:        []runtime.Object{activeCluster, pendingCluster, gateway, activeServeService, pendingServeService},
+			isActiveClusterReady:  true,
 			isPendingClusterReady: true,
 			expectedActiveWeight:  100,
 			expectedPendingWeight: 0,
@@ -1605,6 +1608,7 @@ func TestCreateHTTPRoute(t *testing.T) {
 				rs.Status.PendingServiceStatus.TargetCapacity = ptr.To(int32(60))
 			},
 			runtimeObjects:        []runtime.Object{activeCluster, pendingCluster, gateway, activeServeService, pendingServeService},
+			isActiveClusterReady:  true,
 			isPendingClusterReady: true,
 			expectedActiveWeight:  90,
 			expectedPendingWeight: 10,
@@ -1616,6 +1620,7 @@ func TestCreateHTTPRoute(t *testing.T) {
 				rs.Status.PendingServiceStatus.TargetCapacity = ptr.To(int32(5))
 			},
 			runtimeObjects:        []runtime.Object{activeCluster, pendingCluster, gateway, activeServeService, pendingServeService},
+			isActiveClusterReady:  true,
 			isPendingClusterReady: true,
 			expectedActiveWeight:  95,
 			expectedPendingWeight: 5, // can only migrate 5% to pending until TargetCapacity reached
@@ -1626,8 +1631,11 @@ func TestCreateHTTPRoute(t *testing.T) {
 				rs.Spec.UpgradeStrategy.ClusterUpgradeOptions = nil
 			},
 			runtimeObjects:        []runtime.Object{activeCluster, pendingCluster, gateway, activeServeService, pendingServeService},
+			isActiveClusterReady:  true,
 			isPendingClusterReady: true,
-			expectError:           true,
+			expectError:           false,
+			expectedActiveWeight:  100, // default weights
+			expectedPendingWeight: 0,
 		},
 		{
 			name: "No on-going upgrade, pending cluster does not exist.",
@@ -1635,6 +1643,7 @@ func TestCreateHTTPRoute(t *testing.T) {
 				rs.Status.PendingServiceStatus = rayv1.RayServiceStatus{}
 			},
 			runtimeObjects:        []runtime.Object{activeCluster, gateway, activeServeService},
+			isActiveClusterReady:  true,
 			isPendingClusterReady: false,
 			expectedActiveWeight:  100,
 			expectedPendingWeight: 0,
@@ -1659,7 +1668,7 @@ func TestCreateHTTPRoute(t *testing.T) {
 				Recorder: record.NewFakeRecorder(1),
 			}
 
-			route, err := reconciler.createHTTPRoute(ctx, rayService, tt.isPendingClusterReady)
+			route, err := reconciler.createHTTPRoute(ctx, rayService, tt.isActiveClusterReady, tt.isPendingClusterReady)
 
 			if tt.expectError {
 				require.Error(t, err)
@@ -1741,10 +1750,12 @@ func TestReconcileHTTPRoute(t *testing.T) {
 		expectedActiveWeight  int32
 		expectedPendingWeight int32
 		pendingClusterExists  bool
+		isActiveClusterReady  bool
 		isPendingClusterReady bool
 	}{
 		{
 			name:                  "Create HTTPRoute with no pending cluster.",
+			isActiveClusterReady:  true,
 			isPendingClusterReady: false,
 			pendingClusterExists:  false,
 			expectedActiveWeight:  100,
@@ -1752,6 +1763,7 @@ func TestReconcileHTTPRoute(t *testing.T) {
 		},
 		{
 			name:                  "Create HTTPRoute when pending cluster exists, but is not ready.",
+			isActiveClusterReady:  true,
 			isPendingClusterReady: false,
 			pendingClusterExists:  true,
 			expectedActiveWeight:  100,
@@ -1759,6 +1771,7 @@ func TestReconcileHTTPRoute(t *testing.T) {
 		},
 		{
 			name:                  "Create new HTTPRoute with existing weights.",
+			isActiveClusterReady:  true,
 			isPendingClusterReady: true,
 			pendingClusterExists:  true,
 			expectedActiveWeight:  90,
@@ -1766,6 +1779,7 @@ func TestReconcileHTTPRoute(t *testing.T) {
 		},
 		{
 			name:                  "Update HTTPRoute when pending cluster is ready.",
+			isActiveClusterReady:  true,
 			isPendingClusterReady: true,
 			pendingClusterExists:  true,
 			expectedActiveWeight:  90,
@@ -1773,6 +1787,7 @@ func TestReconcileHTTPRoute(t *testing.T) {
 		},
 		{
 			name:                  "Existing HTTPRoute, time since LastTrafficMigratedTime >= IntervalSeconds so updates HTTPRoute.",
+			isActiveClusterReady:  true,
 			isPendingClusterReady: true,
 			pendingClusterExists:  true,
 			modifier: func(rs *rayv1.RayService) {
@@ -1787,6 +1802,7 @@ func TestReconcileHTTPRoute(t *testing.T) {
 		},
 		{
 			name:                  "Existing HTTPRoute, time since LastTrafficMigratedTime < IntervalSeconds so no update.",
+			isActiveClusterReady:  true,
 			isPendingClusterReady: true,
 			pendingClusterExists:  true,
 			modifier: func(rs *rayv1.RayService) {
@@ -1816,7 +1832,7 @@ func TestReconcileHTTPRoute(t *testing.T) {
 			fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
 			reconciler := RayServiceReconciler{Client: fakeClient, Scheme: newScheme, Recorder: record.NewFakeRecorder(10)}
 
-			reconciledRoute, err := reconciler.reconcileHTTPRoute(ctx, rayService, tt.isPendingClusterReady)
+			reconciledRoute, err := reconciler.reconcileHTTPRoute(ctx, rayService, tt.isActiveClusterReady, tt.isPendingClusterReady)
 			require.NoError(t, err)
 
 			require.Len(t, reconciledRoute.Spec.Rules, 1)
@@ -1920,27 +1936,75 @@ func TestReconcileServeTargetCapacity(t *testing.T) {
 		activeRoutedPercent     int32
 		pendingRoutedPercent    int32
 		maxSurgePercent         int32
+		isRollbackInProgress    bool
 		expectedActiveCapacity  int32
 		expectedPendingCapacity int32
 	}{
 		{
-			name:                    "Scale up pending RayCluster when total TargetCapacity < 100",
+			name:                    "[Upgrade] Scale up pending RayCluster when total TargetCapacity < 100",
 			pendingRoutedPercent:    10,
 			activeCapacity:          70,
 			pendingCapacity:         10,
 			maxSurgePercent:         20,
+			isRollbackInProgress:    false,
 			expectedActiveCapacity:  70,
 			expectedPendingCapacity: 30,
 			updatedCluster:          "pending",
 		},
 		{
-			name:                    "Scale down active RayCluster when total TargetCapacity > 100",
+			name:                    "[Upgrade] Scale down active RayCluster when total TargetCapacity > 100",
 			pendingRoutedPercent:    30,
 			activeCapacity:          80,
 			pendingCapacity:         30,
 			maxSurgePercent:         20,
+			isRollbackInProgress:    false,
 			expectedActiveCapacity:  60,
 			expectedPendingCapacity: 30,
+			updatedCluster:          "active",
+		},
+		{
+			name:                    "[Rollback] Scale down pending RayCluster when total TargetCapacity > 100",
+			activeRoutedPercent:     70, // Traffic successfully routed back
+			activeCapacity:          70,
+			pendingCapacity:         50, // 120 total
+			maxSurgePercent:         20,
+			isRollbackInProgress:    true,
+			expectedActiveCapacity:  70,
+			expectedPendingCapacity: 30,
+			updatedCluster:          "pending",
+		},
+		{
+			name:                    "[Rollback] Scale up active RayCluster when total TargetCapacity <= 100",
+			activeRoutedPercent:     70,
+			activeCapacity:          70,
+			pendingCapacity:         20, // 90 total
+			maxSurgePercent:         20,
+			isRollbackInProgress:    true,
+			expectedActiveCapacity:  90,
+			expectedPendingCapacity: 20,
+			updatedCluster:          "active",
+		},
+		{
+			name:                    "[Rollback] Defer capacity update if traffic hasn't caught up",
+			activeRoutedPercent:     50, // Traffic is lagging behind capacity
+			activeCapacity:          70,
+			pendingCapacity:         50,
+			maxSurgePercent:         20,
+			isRollbackInProgress:    true,
+			expectedActiveCapacity:  70, // No change
+			expectedPendingCapacity: 50, // No change
+			updatedCluster:          "pending",
+		},
+		{
+			name:                    "[Rollback] No deadlock when TrafficRoutedPercent is nil",
+			activeCapacity:          50,
+			pendingCapacity:         50,
+			activeRoutedPercent:     -1, // nil pointer
+			pendingRoutedPercent:    -1, // nil pointer
+			maxSurgePercent:         20,
+			isRollbackInProgress:    true,
+			expectedActiveCapacity:  70,
+			expectedPendingCapacity: 50,
 			updatedCluster:          "active",
 		},
 	}
@@ -1948,6 +2012,15 @@ func TestReconcileServeTargetCapacity(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.TODO()
+
+			var activeTraffic, pendingTraffic *int32
+			if tt.activeRoutedPercent != -1 {
+				activeTraffic = ptr.To(tt.activeRoutedPercent)
+			}
+			if tt.pendingRoutedPercent != -1 {
+				pendingTraffic = ptr.To(tt.pendingRoutedPercent)
+			}
+
 			rayService := &rayv1.RayService{
 				Spec: rayv1.RayServiceSpec{
 					UpgradeStrategy: &rayv1.RayServiceUpgradeStrategy{
@@ -1962,14 +2035,18 @@ func TestReconcileServeTargetCapacity(t *testing.T) {
 					ActiveServiceStatus: rayv1.RayServiceStatus{
 						RayClusterName:       "active",
 						TargetCapacity:       ptr.To(tt.activeCapacity),
-						TrafficRoutedPercent: ptr.To(tt.activeRoutedPercent),
+						TrafficRoutedPercent: activeTraffic,
 					},
 					PendingServiceStatus: rayv1.RayServiceStatus{
 						RayClusterName:       "pending",
 						TargetCapacity:       ptr.To(tt.pendingCapacity),
-						TrafficRoutedPercent: ptr.To(tt.pendingRoutedPercent),
+						TrafficRoutedPercent: pendingTraffic,
 					},
 				},
+			}
+
+			if tt.isRollbackInProgress {
+				setCondition(rayService, rayv1.RollbackInProgress, metav1.ConditionTrue, rayv1.TargetClusterChanged, "rolling back")
 			}
 
 			var rayCluster *rayv1.RayCluster
@@ -1986,18 +2063,23 @@ func TestReconcileServeTargetCapacity(t *testing.T) {
 
 			err := reconciler.reconcileServeTargetCapacity(ctx, rayService, rayCluster, fakeDashboard)
 			require.NoError(t, err)
-			require.NotEmpty(t, fakeDashboard.LastUpdatedConfig)
 
 			if tt.updatedCluster == "active" {
 				assert.Equal(t, tt.expectedActiveCapacity, *rayService.Status.ActiveServiceStatus.TargetCapacity)
 				assert.Equal(t, tt.pendingCapacity, *rayService.Status.PendingServiceStatus.TargetCapacity)
-				expectedServeConfig := `{"target_capacity":` + strconv.Itoa(int(tt.expectedActiveCapacity)) + `}`
-				assert.JSONEq(t, expectedServeConfig, string(fakeDashboard.LastUpdatedConfig))
+
+				if tt.expectedActiveCapacity != tt.activeCapacity {
+					expectedServeConfig := `{"target_capacity":` + strconv.Itoa(int(tt.expectedActiveCapacity)) + `}`
+					assert.JSONEq(t, expectedServeConfig, string(fakeDashboard.LastUpdatedConfig))
+				}
 			} else {
 				assert.Equal(t, tt.expectedPendingCapacity, *rayService.Status.PendingServiceStatus.TargetCapacity)
 				assert.Equal(t, tt.activeCapacity, *rayService.Status.ActiveServiceStatus.TargetCapacity)
-				expectedServeConfig := `{"target_capacity":` + strconv.Itoa(int(tt.expectedPendingCapacity)) + `}`
-				assert.JSONEq(t, expectedServeConfig, string(fakeDashboard.LastUpdatedConfig))
+
+				if tt.expectedPendingCapacity != tt.pendingCapacity {
+					expectedServeConfig := `{"target_capacity":` + strconv.Itoa(int(tt.expectedPendingCapacity)) + `}`
+					assert.JSONEq(t, expectedServeConfig, string(fakeDashboard.LastUpdatedConfig))
+				}
 			}
 		})
 	}
@@ -2687,6 +2769,9 @@ func TestReconcileRollbackState(t *testing.T) {
 	updatedSpec := baseSpec.DeepCopy()
 	updatedSpec.RayVersion = "2.50.0"
 
+	thirdSpec := baseSpec.DeepCopy()
+	thirdSpec.RayVersion = "2.60.0"
+
 	baseHash, err := utils.GenerateHashWithoutReplicasAndWorkersToDelete(baseSpec)
 	require.NoError(t, err)
 
@@ -2701,10 +2786,11 @@ func TestReconcileRollbackState(t *testing.T) {
 	}
 
 	tests := []struct {
-		name                 string
-		rayServiceSpec       rayv1.RayClusterSpec
-		isRollbackInProgress bool
-		expectRollbackStatus bool
+		name                  string
+		rayServiceSpec        rayv1.RayClusterSpec
+		isRollbackInProgress  bool
+		expectRollbackStatus  bool
+		expectedReasonMessage string
 	}{
 		{
 			name:                 "Normal RayService upgrade, goal matches pending",
@@ -2713,10 +2799,18 @@ func TestReconcileRollbackState(t *testing.T) {
 			expectRollbackStatus: false,
 		},
 		{
-			name:                 "RayService Spec changed, initiate rollback",
-			rayServiceSpec:       baseSpec,
-			isRollbackInProgress: false,
-			expectRollbackStatus: true,
+			name:                  "RayService Spec reverted to original, initiate rollback",
+			rayServiceSpec:        baseSpec,
+			isRollbackInProgress:  false,
+			expectRollbackStatus:  true,
+			expectedReasonMessage: "Reverted to original cluster spec, rolling back.",
+		},
+		{
+			name:                  "RayService Spec changed to a 3rd entirely new spec, initiate rollback",
+			rayServiceSpec:        *thirdSpec,
+			isRollbackInProgress:  false,
+			expectRollbackStatus:  true,
+			expectedReasonMessage: "Goal state diverged from both active and pending clusters. Rolling back first, then a new upgrade will begin.",
 		},
 		{
 			name:                 "Rollback in progress, continues rolling back",
@@ -2757,6 +2851,330 @@ func TestReconcileRollbackState(t *testing.T) {
 
 			isCurrentlyRollingBack := meta.IsStatusConditionTrue(rayService.Status.Conditions, string(rayv1.RollbackInProgress))
 			assert.Equal(t, tt.expectRollbackStatus, isCurrentlyRollingBack)
+
+			if tt.expectedReasonMessage != "" {
+				cond := meta.FindStatusCondition(rayService.Status.Conditions, string(rayv1.RollbackInProgress))
+				require.NotNil(t, cond)
+				assert.Equal(t, tt.expectedReasonMessage, cond.Message)
+			}
+		})
+	}
+}
+
+func TestCalculateTrafficRoutedPercent(t *testing.T) {
+	ctx := context.TODO()
+
+	tests := []struct {
+		name                  string
+		activeCapacity        int32
+		pendingCapacity       int32
+		activeRoutedPercent   int32
+		pendingRoutedPercent  int32
+		stepSize              int32
+		isRollbackInProgress  bool
+		isActiveClusterReady  bool
+		isPendingClusterReady bool
+		timeSinceMigration    time.Duration
+		expectedActiveWeight  int32
+		expectedPendingWeight int32
+	}{
+		{
+			name:                  "[Upgrade] Normal forward traffic migration",
+			activeCapacity:        90,
+			pendingCapacity:       10,
+			activeRoutedPercent:   100,
+			pendingRoutedPercent:  0,
+			stepSize:              10,
+			isRollbackInProgress:  false,
+			isActiveClusterReady:  true,
+			isPendingClusterReady: true,
+			timeSinceMigration:    10 * time.Second,
+			expectedActiveWeight:  90,
+			expectedPendingWeight: 10,
+		},
+		{
+			name:                  "[Upgrade] Pause traffic migration if pending cluster not ready",
+			activeCapacity:        90,
+			pendingCapacity:       10,
+			activeRoutedPercent:   100,
+			pendingRoutedPercent:  0,
+			stepSize:              10,
+			isRollbackInProgress:  false,
+			isActiveClusterReady:  true,
+			isPendingClusterReady: false,
+			timeSinceMigration:    10 * time.Second,
+			expectedActiveWeight:  100,
+			expectedPendingWeight: 0,
+		},
+		{
+			name:                  "[Rollback] Normal backward traffic migration",
+			activeCapacity:        70,
+			pendingCapacity:       50,
+			activeRoutedPercent:   50,
+			pendingRoutedPercent:  50,
+			stepSize:              20,
+			isRollbackInProgress:  true,
+			isActiveClusterReady:  true,
+			isPendingClusterReady: true,
+			timeSinceMigration:    10 * time.Second,
+			expectedActiveWeight:  70,
+			expectedPendingWeight: 30,
+		},
+		{
+			name:                  "[Rollback] Pause migration if active cluster not ready",
+			activeCapacity:        70,
+			pendingCapacity:       50,
+			activeRoutedPercent:   50,
+			pendingRoutedPercent:  50,
+			stepSize:              20,
+			isRollbackInProgress:  true,
+			isActiveClusterReady:  false,
+			isPendingClusterReady: true,
+			timeSinceMigration:    10 * time.Second,
+			expectedActiveWeight:  50, // Remains paused
+			expectedPendingWeight: 50,
+		},
+		{
+			name:                  "[Rollback] No deadlock when active TrafficRoutedPercent is nil",
+			activeCapacity:        100,
+			pendingCapacity:       0,
+			activeRoutedPercent:   -1, // nil pointer
+			pendingRoutedPercent:  -1, // nil pointer
+			stepSize:              20,
+			isRollbackInProgress:  true,
+			isActiveClusterReady:  true,
+			isPendingClusterReady: true,
+			timeSinceMigration:    10 * time.Second,
+			expectedActiveWeight:  100,
+			expectedPendingWeight: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			interval := int32(5)
+
+			var activeTraffic, pendingTraffic *int32
+			if tt.activeRoutedPercent != -1 {
+				activeTraffic = ptr.To(tt.activeRoutedPercent)
+			}
+			if tt.pendingRoutedPercent != -1 {
+				pendingTraffic = ptr.To(tt.pendingRoutedPercent)
+			}
+
+			rayService := &rayv1.RayService{
+				Spec: rayv1.RayServiceSpec{
+					UpgradeStrategy: &rayv1.RayServiceUpgradeStrategy{
+						Type: ptr.To(rayv1.RayServiceNewClusterWithIncrementalUpgrade),
+						ClusterUpgradeOptions: &rayv1.ClusterUpgradeOptions{
+							StepSizePercent: ptr.To(tt.stepSize),
+							IntervalSeconds: ptr.To(interval),
+						},
+					},
+				},
+				Status: rayv1.RayServiceStatuses{
+					ActiveServiceStatus: rayv1.RayServiceStatus{
+						TargetCapacity:          ptr.To(tt.activeCapacity),
+						TrafficRoutedPercent:    activeTraffic,
+						LastTrafficMigratedTime: &metav1.Time{Time: time.Now().Add(-tt.timeSinceMigration)},
+					},
+					PendingServiceStatus: rayv1.RayServiceStatus{
+						TargetCapacity:          ptr.To(tt.pendingCapacity),
+						TrafficRoutedPercent:    pendingTraffic,
+						LastTrafficMigratedTime: &metav1.Time{Time: time.Now().Add(-tt.timeSinceMigration)},
+					},
+				},
+			}
+
+			if tt.isRollbackInProgress {
+				setCondition(rayService, rayv1.RollbackInProgress, metav1.ConditionTrue, rayv1.TargetClusterChanged, "rolling back")
+			}
+
+			reconciler := &RayServiceReconciler{}
+
+			activeWeight, pendingWeight := reconciler.calculateTrafficRoutedPercent(ctx, rayService, tt.isActiveClusterReady, tt.isPendingClusterReady)
+
+			assert.Equal(t, tt.expectedActiveWeight, activeWeight)
+			assert.Equal(t, tt.expectedPendingWeight, pendingWeight)
+		})
+	}
+}
+
+func TestReconcilePromotionAndServingStatus(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.RayServiceIncrementalUpgrade, true)
+
+	ctx := context.TODO()
+
+	activeClusterName := "active-cluster"
+	pendingClusterName := "pending-cluster"
+
+	// Mock the Kubernetes services to point to the pending cluster.
+	// This satisfies the cluster switchover prerequisite for promotion.
+	headSvc := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{Name: "head-svc"},
+		Spec:       corev1.ServiceSpec{Selector: map[string]string{utils.RayClusterLabelKey: pendingClusterName}},
+	}
+	serveSvc := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{Name: "serve-svc"},
+		Spec:       corev1.ServiceSpec{Selector: map[string]string{utils.RayClusterLabelKey: pendingClusterName}},
+	}
+
+	tests := []struct {
+		name                 string
+		isRollbackInProgress bool
+		expectedActiveName   string
+		expectedPendingName  string
+	}{
+		{
+			name:                 "[Upgrade] Normal upgrade complete, should promote",
+			isRollbackInProgress: false,
+			expectedActiveName:   pendingClusterName, // Successfully Promoted
+			expectedPendingName:  "",                 // Pending status cleared
+		},
+		{
+			name:                 "[Rollback] Rollback in progress, should not promote even if upgrade is complete",
+			isRollbackInProgress: true,
+			expectedActiveName:   activeClusterName, // Remains unchanged
+			expectedPendingName:  pendingClusterName,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rayService := &rayv1.RayService{
+				Spec: rayv1.RayServiceSpec{
+					UpgradeStrategy: &rayv1.RayServiceUpgradeStrategy{
+						Type: ptr.To(rayv1.RayServiceNewClusterWithIncrementalUpgrade),
+						ClusterUpgradeOptions: &rayv1.ClusterUpgradeOptions{
+							StepSizePercent: ptr.To(int32(10)),
+						},
+					},
+				},
+				Status: rayv1.RayServiceStatuses{
+					ActiveServiceStatus: rayv1.RayServiceStatus{
+						RayClusterName:       activeClusterName,
+						TargetCapacity:       ptr.To(int32(0)),
+						TrafficRoutedPercent: ptr.To(int32(0)),
+					},
+					PendingServiceStatus: rayv1.RayServiceStatus{
+						RayClusterName:       pendingClusterName,
+						TargetCapacity:       ptr.To(int32(100)), // fully migrated
+						TrafficRoutedPercent: ptr.To(int32(100)),
+					},
+				},
+			}
+
+			setCondition(rayService, rayv1.UpgradeInProgress, metav1.ConditionTrue, rayv1.BothActivePendingClustersExist, "upgrade")
+
+			if tt.isRollbackInProgress {
+				setCondition(rayService, rayv1.RollbackInProgress, metav1.ConditionTrue, rayv1.TargetClusterChanged, "rolling back")
+			}
+
+			pendingCluster := &rayv1.RayCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: pendingClusterName},
+				Status: rayv1.RayClusterStatus{
+					Conditions: []metav1.Condition{
+						{
+							Type:   string(rayv1.HeadPodReady),
+							Status: metav1.ConditionTrue,
+						},
+					},
+				},
+			}
+
+			isPendingClusterServing := reconcilePromotionAndServingStatus(ctx, headSvc, serveSvc, rayService, pendingCluster)
+
+			// Both scenarios should recognize the pending cluster is actively serving traffic based on K8s services
+			assert.True(t, isPendingClusterServing)
+
+			// Verify if the promotion state machine respected the Rollback status
+			assert.Equal(t, tt.expectedActiveName, rayService.Status.ActiveServiceStatus.RayClusterName)
+			assert.Equal(t, tt.expectedPendingName, rayService.Status.PendingServiceStatus.RayClusterName)
+		})
+	}
+}
+
+// headReadyCluster is a quick test helper to construct a RayCluster with a specific HeadPodReady condition.
+func headReadyCluster(ready bool) *rayv1.RayCluster {
+	status := metav1.ConditionFalse
+	if ready {
+		status = metav1.ConditionTrue
+	}
+	return &rayv1.RayCluster{
+		Status: rayv1.RayClusterStatus{
+			Conditions: []metav1.Condition{
+				{
+					Type:   string(rayv1.HeadPodReady),
+					Status: status,
+				},
+			},
+		},
+	}
+}
+
+func TestShouldCompleteIncrementalRollback(t *testing.T) {
+	tests := []struct {
+		name           string
+		activeTC       int32
+		activeTRP      int32
+		pendingTC      int32
+		pendingTRP     int32
+		pendingCluster *rayv1.RayCluster
+		want           bool
+	}{
+		{
+			name:           "healthy pending at zero capacity and traffic — complete",
+			activeTC:       100,
+			activeTRP:      100,
+			pendingTC:      0,
+			pendingTRP:     0,
+			pendingCluster: headReadyCluster(true),
+			want:           true,
+		},
+		{
+			name:           "unhealthy pending with leftover capacity — bypass complete",
+			activeTC:       100,
+			activeTRP:      100,
+			pendingTC:      30,
+			pendingTRP:     0,
+			pendingCluster: headReadyCluster(false),
+			want:           true,
+		},
+		{
+			name:           "no pending RayCluster — complete when active is full",
+			activeTC:       100,
+			activeTRP:      100,
+			pendingTC:      0,
+			pendingTRP:     0,
+			pendingCluster: nil,
+			want:           true,
+		},
+		{
+			name:           "healthy pending still holding target capacity — not complete",
+			activeTC:       100,
+			activeTRP:      100,
+			pendingTC:      50,
+			pendingTRP:     0,
+			pendingCluster: headReadyCluster(true),
+			want:           false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			activeStatus := &rayv1.RayServiceStatus{
+				TargetCapacity:       ptr.To(tt.activeTC),
+				TrafficRoutedPercent: ptr.To(tt.activeTRP),
+			}
+			pendingStatus := &rayv1.RayServiceStatus{
+				TargetCapacity:       ptr.To(tt.pendingTC),
+				TrafficRoutedPercent: ptr.To(tt.pendingTRP),
+			}
+
+			got := shouldCompleteIncrementalRollback(activeStatus, pendingStatus, tt.pendingCluster)
+			if got != tt.want {
+				t.Errorf("shouldCompleteIncrementalRollback() = %v, want %v", got, tt.want)
+			}
 		})
 	}
 }
