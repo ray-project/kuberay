@@ -1154,15 +1154,7 @@ func isClusterSpecHashEqual(rayServiceInstance *rayv1.RayService, cluster *rayv1
 }
 
 func suspendValueSame(value1 *bool, value2 *bool) bool {
-	boolValue1 := false
-	if value1 != nil {
-		boolValue1 = *value1
-	}
-	boolValue2 := false
-	if value2 != nil {
-		boolValue2 = *value2
-	}
-	return boolValue1 == boolValue2
+	return ptr.Deref(value1, false) == ptr.Deref(value2, false)
 }
 
 func shouldPrepareNewCluster(ctx context.Context, rayServiceInstance *rayv1.RayService, activeRayCluster, pendingRayCluster *rayv1.RayCluster, isPendingClusterServing bool) bool {
