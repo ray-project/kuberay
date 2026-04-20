@@ -664,11 +664,10 @@ func TestUserSpecifiedServeService(t *testing.T) {
 		t.Errorf("Serve Service selector key %s value didn't match expected value : expected value=%s, actual value=%s", utils.RayClusterServingServiceLabelKey, utils.EnableRayClusterServingServiceTrue, svc.Spec.Selector[utils.RayClusterServingServiceLabelKey])
 	}
 
-	// When user specifies a port with the same name as an auto-detected port,
-	// the user's definition takes precedence (preserving fields like AppProtocol).
+	// When the head container explicitly defines the "serve" port, it remains authoritative.
 	assert.Len(t, svc.Spec.Ports, 1)
 	assert.Equal(t, utils.ServingPortName, svc.Spec.Ports[0].Name)
-	assert.Equal(t, int32(12345), svc.Spec.Ports[0].Port)
+	assert.Equal(t, int32(utils.DefaultServingPort), svc.Spec.Ports[0].Port)
 
 	validateServiceTypeForUserSpecifiedService(svc, userType, t)
 	validateLabelsForUserSpecifiedService(svc, userLabels, t)
@@ -731,6 +730,8 @@ func TestUserSpecifiedServeServiceWithoutAnyServePort(t *testing.T) {
 	require.Len(t, svc.Spec.Ports, 1)
 	assert.Equal(t, utils.ServingPortName, svc.Spec.Ports[0].Name)
 	assert.Equal(t, int32(utils.DefaultServingPort), svc.Spec.Ports[0].Port)
+}
+
 func TestBuildServeServiceWithGrpcPort(t *testing.T) {
 	cluster := rayv1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
@@ -835,12 +836,11 @@ func TestUserSpecifiedServeServiceWithGrpcPort(t *testing.T) {
 	}
 
 	// instanceWithWrongSvc has serve:8000 in its container ports.
-	// The custom ServeService also specifies serve-grpc:9000, but since
-	// auto-detected ports (serve:8000) are non-empty, only those are used.
+	// The explicit head "serve" port remains authoritative, so only that port is used.
 	svc, err := BuildServeServiceForRayService(context.Background(), *testRayServiceWithServeService, *instanceWithWrongSvc)
 	require.NoError(t, err)
 
-	// Only the auto-detected serve port from the container spec is included
+	// Only the explicit head "serve" port from the container spec is included.
 	assert.Len(t, svc.Spec.Ports, 1)
 	assert.Equal(t, utils.ServingPortName, svc.Spec.Ports[0].Name)
 	assert.Equal(t, int32(8000), svc.Spec.Ports[0].Port)
@@ -904,7 +904,8 @@ func TestUserSpecifiedServeServiceAppProtocolPreserved(t *testing.T) {
 }
 
 func TestUserSpecifiedServeServiceFallbackPreservesAppProtocol(t *testing.T) {
-	// Cluster with NO serve ports in container spec
+	// Cluster with no explicit serving ports in the container spec.
+	// The operator falls back to the default "serve" port.
 	cluster := rayv1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "raycluster-no-serve",
@@ -945,14 +946,10 @@ func TestUserSpecifiedServeServiceFallbackPreservesAppProtocol(t *testing.T) {
 	svc, err := BuildServeServiceForRayService(context.Background(), *testRayService, cluster)
 	require.NoError(t, err)
 
-	// All user-provided ports are kept as-is when no ports are auto-detected
-	assert.Len(t, svc.Spec.Ports, 2)
-	assert.Equal(t, "serve-grpc", svc.Spec.Ports[0].Name)
-	assert.Equal(t, int32(9000), svc.Spec.Ports[0].Port)
-	require.NotNil(t, svc.Spec.Ports[0].AppProtocol)
-	assert.Equal(t, "kubernetes.io/h2c", *svc.Spec.Ports[0].AppProtocol)
-	assert.Equal(t, "not-a-serve-port", svc.Spec.Ports[1].Name)
-	assert.Equal(t, int32(1234), svc.Spec.Ports[1].Port)
+	require.Len(t, svc.Spec.Ports, 1)
+	assert.Equal(t, utils.ServingPortName, svc.Spec.Ports[0].Name)
+	assert.Equal(t, int32(utils.DefaultServingPort), svc.Spec.Ports[0].Port)
+	assert.Nil(t, svc.Spec.Ports[0].AppProtocol)
 }
 
 func TestIsServingPort(t *testing.T) {

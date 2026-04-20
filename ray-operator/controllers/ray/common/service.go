@@ -227,6 +227,9 @@ func BuildServeService(ctx context.Context, rayService rayv1.RayService, rayClus
 			ports = append(ports, svcPort)
 		}
 	}
+	sort.SliceStable(ports, func(i, j int) bool {
+		return ports[i].Name < ports[j].Name
+	})
 	_, serveDefinedInHead := getPortsFromCluster(rayCluster)[utils.ServingPortName]
 
 	if isRayService {
@@ -248,50 +251,41 @@ func BuildServeService(ctx context.Context, rayService rayv1.RayService, rayClus
 				serveService.ObjectMeta.Annotations = make(map[string]string)
 			}
 
-			// If head container explicitly defines the "serve" port, it takes priority.
-			// Otherwise, preserve user-provided ServeService "serve" port.
-			if serveDefinedInHead && len(ports) != 0 {
-				log.Info("port with name 'serve' already added. Ignoring user provided ports for serve service")
-				serveService.Spec.Ports = ports
-			} else {
-				portsFromUserServeService := make([]corev1.ServicePort, 0, 1)
-				for _, port := range serveService.Spec.Ports {
-					if port.Name == utils.ServingPortName {
-						svcPort := corev1.ServicePort{Name: port.Name, Port: port.Port}
-						portsFromUserServeService = append(portsFromUserServeService, svcPort)
-						break
-					}
-				}
-				if len(portsFromUserServeService) > 0 {
-					serveService.Spec.Ports = portsFromUserServeService
-				} else if len(ports) > 0 {
-					// Keep backward compatibility: fall back to operator-generated serve port
-					// when user-provided ServeService ports do not include a "serve" port name.
-					log.Info("No port named 'serve' found in user provided serve service ports. Falling back to default serve port")
-					serveService.Spec.Ports = ports
-				} else {
-					return nil, fmt.Errorf("Please specify the port named 'serve' in the Ray head container or in RayService.Spec.ServeService")
-				}
-			// Merge auto-detected serve ports with user-provided ServeService ports.
-			// If the user specified a port with the same name, use the user's definition
-			// to preserve fields like AppProtocol (e.g., "kubernetes.io/h2c" for gRPC).
-			// If no ports were auto-detected, fall back to filtering the user-provided
-			// ServeService ports for any that match the serving port naming convention.
+			// Merge auto-detected serving ports with user-provided ServeService ports.
+			// Preserve user fields like AppProtocol on matching names, except that an
+			// explicitly defined head "serve" port remains authoritative.
 			userPortsByName := make(map[string]corev1.ServicePort)
+			userServingPorts := make([]corev1.ServicePort, 0)
 			for _, p := range serveService.Spec.Ports {
+				if !isServingPort(p.Name) {
+					continue
+				}
 				userPortsByName[p.Name] = p
+				userServingPorts = append(userServingPorts, p)
 			}
+			sort.SliceStable(userServingPorts, func(i, j int) bool {
+				return userServingPorts[i].Name < userServingPorts[j].Name
+			})
 
-			if len(ports) != 0 {
+			switch {
+			case len(ports) != 0:
 				mergedPorts := make([]corev1.ServicePort, 0, len(ports))
 				for _, autoPort := range ports {
 					if userPort, exists := userPortsByName[autoPort.Name]; exists {
-						mergedPorts = append(mergedPorts, userPort)
-					} else {
-						mergedPorts = append(mergedPorts, autoPort)
+						if autoPort.Name == utils.ServingPortName && serveDefinedInHead {
+							mergedPorts = append(mergedPorts, autoPort)
+						} else {
+							mergedPorts = append(mergedPorts, userPort)
+						}
+						continue
 					}
+					mergedPorts = append(mergedPorts, autoPort)
 				}
 				serveService.Spec.Ports = mergedPorts
+			case len(userServingPorts) != 0:
+				serveService.Spec.Ports = userServingPorts
+			default:
+				return nil, fmt.Errorf("Please specify a port named 'serve' (or with the prefix 'serve-', e.g. 'serve-grpc') in the Ray head container or in RayService.Spec.ServeService")
 			}
 
 			setLabelsforUserProvidedService(serveService, labels)
@@ -581,6 +575,8 @@ func logSkippedDefaultPortNames(log logr.Logger, cluster rayv1.RayCluster) {
 			"conflicting_port_name", skipped[defaultName],
 		)
 	}
+}
+
 // isServingPort returns true if the port name matches the serving port naming convention:
 // either exactly "serve" or prefixed with "serve-" (e.g., "serve-grpc").
 func isServingPort(name string) bool {
