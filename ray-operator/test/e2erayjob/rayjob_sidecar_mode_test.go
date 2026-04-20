@@ -397,7 +397,10 @@ env_vars:
 
 		// Verify the restart count should > 0
 		g.Eventually(func() int32 {
-			headPod, _ = GetHeadPod(test, rayCluster)
+			headPod, err = GetHeadPod(test, rayCluster)
+			if err != nil || headPod == nil {
+				return 0
+			}
 			for _, cs := range headPod.Status.ContainerStatuses {
 				if cs.Name == utils.SubmitterContainerName {
 					return cs.RestartCount
