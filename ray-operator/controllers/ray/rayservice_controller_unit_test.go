@@ -2541,3 +2541,75 @@ func TestMarkFailedIfInitializingTimedOut(t *testing.T) {
 		})
 	}
 }
+
+// TestShouldUpdateCluster_SuspendFlip covers ray-project/kuberay#4686: when Kueue
+// toggles RayService.Spec.RayClusterSpec.Suspend, the existing RayCluster must be
+// updated in-place. Previously shouldUpdateCluster returned false because the
+// cluster hash annotation encodes the old Suspend value, leaving the cluster
+// stuck suspended with no head pod.
+func TestShouldUpdateCluster_SuspendFlip(t *testing.T) {
+	namespace := "test-namespace"
+
+	newRayService := func(suspend *bool) *rayv1.RayService {
+		return &rayv1.RayService{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-service",
+				Namespace: namespace,
+			},
+			Spec: rayv1.RayServiceSpec{
+				RayClusterSpec: rayv1.RayClusterSpec{
+					RayVersion: "2.9.0",
+					Suspend:    suspend,
+				},
+			},
+		}
+	}
+
+	// newClusterFrom mirrors the annotation layout produced by
+	// constructRayClusterForRayService so the hash reflects the cluster's
+	// actual spec (including its Suspend value).
+	newClusterFrom := func(t *testing.T, service *rayv1.RayService, suspend *bool) *rayv1.RayCluster {
+		t.Helper()
+		clusterSpec := service.Spec.RayClusterSpec.DeepCopy()
+		clusterSpec.Suspend = suspend
+		hash, err := utils.GenerateHashWithoutReplicasAndWorkersToDelete(*clusterSpec)
+		require.NoError(t, err)
+		return &rayv1.RayCluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-cluster",
+				Namespace: namespace,
+				Annotations: map[string]string{
+					utils.HashWithoutReplicasAndWorkersToDeleteKey: hash,
+					utils.NumWorkerGroupsKey:                       strconv.Itoa(len(clusterSpec.WorkerGroupSpecs)),
+					utils.KubeRayVersion:                           utils.KUBERAY_VERSION,
+				},
+			},
+			Spec: *clusterSpec,
+		}
+	}
+
+	tests := []struct {
+		name            string
+		serviceSuspend  *bool
+		clusterSuspend  *bool
+		isActiveCluster bool
+		expect          bool
+	}{
+		{"pending unsuspended by Kueue: true -> false", ptr.To(false), ptr.To(true), false, true},
+		{"pending suspended by Kueue: false -> true", ptr.To(true), ptr.To(false), false, true},
+		{"active unsuspended by Kueue: true -> false", ptr.To(false), ptr.To(true), true, true},
+		{"active suspended by Kueue: false -> true", ptr.To(true), ptr.To(false), true, true},
+		{"no change, both nil", nil, nil, false, false},
+		{"no change, both false", ptr.To(false), ptr.To(false), false, false},
+		{"no change, both true", ptr.To(true), ptr.To(true), false, false},
+		{"nil vs false treated equal", nil, ptr.To(false), false, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			service := newRayService(tt.serviceSuspend)
+			cluster := newClusterFrom(t, service, tt.clusterSuspend)
+			assert.Equal(t, tt.expect, shouldUpdateCluster(service, cluster, tt.isActiveCluster))
+		})
+	}
+}
