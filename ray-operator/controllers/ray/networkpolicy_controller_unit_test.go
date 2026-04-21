@@ -187,8 +187,8 @@ func TestBuildHeadNetworkPolicy_DenyAll(t *testing.T) {
 	assert.Contains(t, policy.Spec.PolicyTypes, networkingv1.PolicyTypeIngress)
 	assert.Contains(t, policy.Spec.PolicyTypes, networkingv1.PolicyTypeEgress)
 
-	// 3 base ingress rules: intra-cluster, operator, and RayJob submitter access.
-	assert.Len(t, policy.Spec.Ingress, 3)
+	// 2 base ingress rules: intra-cluster and operator access.
+	assert.Len(t, policy.Spec.Ingress, 2)
 
 	// 2 base egress rules: intra-cluster and DNS.
 	assert.Len(t, policy.Spec.Egress, 2)
@@ -202,7 +202,7 @@ func TestBuildHeadNetworkPolicy_DenyAllIngress(t *testing.T) {
 
 	assert.Contains(t, policy.Spec.PolicyTypes, networkingv1.PolicyTypeIngress)
 	assert.NotContains(t, policy.Spec.PolicyTypes, networkingv1.PolicyTypeEgress)
-	assert.Len(t, policy.Spec.Ingress, 3)
+	assert.Len(t, policy.Spec.Ingress, 2)
 	assert.Empty(t, policy.Spec.Egress)
 }
 
@@ -304,13 +304,13 @@ func TestBuildBaseIngressRules(t *testing.T) {
 	assert.Empty(t, intraClusterRule.Ports, "Intra-cluster rule must allow all ports (no Ports field)")
 }
 
-// TestBuildHeadIngressRules verifies the 3 head-specific base ingress rules:
-// intra-cluster, operator access, and RayJob submitter access.
+// TestBuildHeadIngressRules verifies the 2 head-specific base ingress rules:
+// intra-cluster and operator access.
 func TestBuildHeadIngressRules(t *testing.T) {
 	setupNetworkPolicyTest(t)
 
 	rules := testNetworkPolicyController.buildHeadIngressRules(testRayClusterBasic)
-	require.Len(t, rules, 3)
+	require.Len(t, rules, 2)
 
 	// Rule 0: intra-cluster — no ports, pod selector matching the cluster label.
 	intraClusterRule := rules[0]
@@ -335,15 +335,60 @@ func TestBuildHeadIngressRules(t *testing.T) {
 	clientPort := intstr.FromInt32(utils.DefaultClientPort)
 	assert.Equal(t, &dashboardPort, operatorRule.Ports[0].Port)
 	assert.Equal(t, &clientPort, operatorRule.Ports[1].Port)
+}
 
-	// Rule 2: RayJob submitter — dashboard port only, matching ray.io/originated-from-crd=RayJob.
+// TestBuildRayJobPeer verifies that buildRayJobPeer returns a peer for RayJob-owned clusters
+// and nil for standalone clusters.
+func TestBuildRayJobPeer(t *testing.T) {
+	setupNetworkPolicyTest(t)
+
+	peer := testNetworkPolicyController.buildRayJobPeer(testRayClusterBasic)
+	assert.Nil(t, peer, "Standalone cluster should not have a RayJob peer")
+
+	peer = testNetworkPolicyController.buildRayJobPeer(testRayClusterWithRayJob)
+	require.NotNil(t, peer, "RayJob-owned cluster should have a RayJob peer")
+	assert.Equal(t, map[string]string{
+		utils.RayOriginatedFromCRNameLabelKey: "test-job",
+		utils.RayOriginatedFromCRDLabelKey:    utils.RayOriginatedFromCRDLabelValue(utils.RayJobCRD),
+	}, peer.PodSelector.MatchLabels)
+}
+
+// TestBuildHeadIngressRules_WithRayJobOwner verifies that a RayJob-owned cluster gets
+// a per-job submitter ingress rule (3 rules total).
+func TestBuildHeadIngressRules_WithRayJobOwner(t *testing.T) {
+	setupNetworkPolicyTest(t)
+
+	rules := testNetworkPolicyController.buildHeadIngressRules(testRayClusterWithRayJob)
+	require.Len(t, rules, 3)
+
+	submitterRule := rules[2]
+	require.Len(t, submitterRule.From, 1)
+	assert.Equal(t, map[string]string{
+		utils.RayOriginatedFromCRNameLabelKey: "test-job",
+		utils.RayOriginatedFromCRDLabelKey:    utils.RayOriginatedFromCRDLabelValue(utils.RayJobCRD),
+	}, submitterRule.From[0].PodSelector.MatchLabels)
+	require.Len(t, submitterRule.Ports, 1)
+	dashboardPort := intstr.FromInt32(utils.DefaultDashboardPort)
+	assert.Equal(t, &dashboardPort, submitterRule.Ports[0].Port)
+}
+
+// TestBuildHeadIngressRules_AllowAllRayJobSubmitters verifies the broad submitter rule
+// when ALLOW_ALL_RAYJOB_SUBMITTERS is enabled.
+func TestBuildHeadIngressRules_AllowAllRayJobSubmitters(t *testing.T) {
+	setupNetworkPolicyTest(t)
+	testNetworkPolicyController.AllowAllRayJobSubmitters = true
+	defer func() { testNetworkPolicyController.AllowAllRayJobSubmitters = false }()
+
+	rules := testNetworkPolicyController.buildHeadIngressRules(testRayClusterBasic)
+	require.Len(t, rules, 3)
+
 	submitterRule := rules[2]
 	require.Len(t, submitterRule.From, 1)
 	assert.Equal(t, map[string]string{
 		utils.RayOriginatedFromCRDLabelKey: utils.RayOriginatedFromCRDLabelValue(utils.RayJobCRD),
 	}, submitterRule.From[0].PodSelector.MatchLabels)
-	assert.Nil(t, submitterRule.From[0].NamespaceSelector, "Submitter rule should only match pods in the same namespace")
 	require.Len(t, submitterRule.Ports, 1)
+	dashboardPort := intstr.FromInt32(utils.DefaultDashboardPort)
 	assert.Equal(t, &dashboardPort, submitterRule.Ports[0].Port)
 }
 
@@ -373,14 +418,13 @@ func TestBuildBaseEgressRules(t *testing.T) {
 	assert.ElementsMatch(t, []corev1.Protocol{corev1.ProtocolUDP, corev1.ProtocolTCP}, protocols)
 }
 
-// TestBuildHeadNetworkPolicy_WithRayJob verifies that a RayJob-owned cluster gets the same
-// 3 base ingress rules as any other cluster (submitter access is now a standing base rule).
+// TestBuildHeadNetworkPolicy_WithRayJob verifies that a RayJob-owned cluster gets
+// 3 ingress rules: 2 base + 1 per-job submitter.
 func TestBuildHeadNetworkPolicy_WithRayJob(t *testing.T) {
 	setupNetworkPolicyTest(t)
 
 	policy := testNetworkPolicyController.buildHeadNetworkPolicy(testRayClusterWithRayJob, rayv1.NetworkIsolationDenyAll)
 
-	// 3 base rules: intra-cluster, operator, and RayJob submitter.
 	require.Len(t, policy.Spec.Ingress, 3)
 }
 
@@ -401,10 +445,10 @@ func TestBuildHeadNetworkPolicy_CustomIngressRules(t *testing.T) {
 
 	policy := testNetworkPolicyController.buildHeadNetworkPolicy(cluster, rayv1.NetworkIsolationDenyAll)
 
-	// 3 base + 1 custom = 4.
-	require.Len(t, policy.Spec.Ingress, 4)
-	require.Len(t, policy.Spec.Ingress[3].Ports, 1)
-	assert.Equal(t, &customPort, policy.Spec.Ingress[3].Ports[0].Port)
+	// 2 base + 1 custom = 3.
+	require.Len(t, policy.Spec.Ingress, 3)
+	require.Len(t, policy.Spec.Ingress[2].Ports, 1)
+	assert.Equal(t, &customPort, policy.Spec.Ingress[2].Ports[0].Port)
 }
 
 // TestBuildHeadNetworkPolicy_CustomEgressRules verifies that custom EgressRules are appended after base egress.
