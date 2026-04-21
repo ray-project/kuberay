@@ -84,7 +84,7 @@ func GetSessionIDFromHeadPod(test Test, g *WithT, rayCluster *rayv1.RayCluster) 
 else
   echo "session_latest is not a symlink"
   exit 1
-fi`, hsutils.RaySessionLatestPath, hsutils.RaySessionLatestPath)
+fi`, hsutils.GetRaySessionLatestPath(), hsutils.GetRaySessionLatestPath())
 	output, _ := ExecPodCmd(test, headPod, "ray-head", []string{"sh", "-c", getSessionIDCmd})
 
 	// Parse output to extract the sessionID.
@@ -105,7 +105,7 @@ func GetNodeIDFromHeadPod(test Test, g *WithT, rayCluster *rayv1.RayCluster) str
 else
   echo "raylet_node_id not found"
   exit 1
-fi`, hsutils.RayNodeIDPath, hsutils.RayNodeIDPath)
+fi`, hsutils.GetRayNodeIDPath(), hsutils.GetRayNodeIDPath())
 	output, _ := ExecPodCmd(test, headPod, "ray-head", []string{"sh", "-c", getNodeIDCmd})
 
 	nodeID := strings.TrimSpace(output.String())
@@ -125,7 +125,7 @@ func GetNodeIDFromPod(test Test, g *WithT, getPod func() (*corev1.Pod, error), c
 else
   echo "raylet_node_id not found"
   exit 1
-fi`, hsutils.RayNodeIDPath, hsutils.RayNodeIDPath)
+fi`, hsutils.GetRayNodeIDPath(), hsutils.GetRayNodeIDPath())
 	output, _ := ExecPodCmd(test, pod, containerName, []string{"sh", "-c", getNodeIDCmd})
 
 	// Parse output to extract the nodeID.

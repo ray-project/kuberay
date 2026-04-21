@@ -71,7 +71,7 @@ func AppendRayClusterNameNamespace(rayClusterName, rayClusterNamespace string) s
 
 func GetSessionDir() (string, error) {
 	for i := 0; i < 12; i++ {
-		rp, err := os.Readlink(RaySessionLatestPath)
+		rp, err := os.Readlink(GetRaySessionLatestPath())
 		if err != nil {
 			logrus.Errorf("read session_latest file error %v", err)
 			time.Sleep(time.Second * 5)
@@ -84,7 +84,7 @@ func GetSessionDir() (string, error) {
 
 func GetRayNodeID() (string, error) {
 	for i := 0; i < 12; i++ {
-		nodeidBytes, err := os.ReadFile(RayNodeIDPath)
+		nodeidBytes, err := os.ReadFile(GetRayNodeIDPath())
 		if err != nil {
 			logrus.Errorf("read nodeid file error %v", err)
 			time.Sleep(time.Second * 5)

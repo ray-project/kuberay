@@ -1,18 +1,31 @@
 package utils
 
-import "os"
-
-var (
-	TmpRayRoot             = getTmpRayRoot()
-	RayPrevLogsPath        = TmpRayRoot + "/prev-logs"
-	RayPersistCompletePath = TmpRayRoot + "/persist-complete-logs"
-	RaySessionLatestPath   = TmpRayRoot + "/session_latest"
-	RayNodeIDPath          = TmpRayRoot + "/raylet_node_id"
+import (
+	"os"
+	"path/filepath"
 )
 
-func getTmpRayRoot() string {
+const defaultTmpRayRoot = "/tmp/ray"
+
+func GetTmpRayRoot() string {
 	if tmpRoot := os.Getenv("RAY_TMP_ROOT"); tmpRoot != "" {
 		return tmpRoot
 	}
-	return "/tmp/ray"
+	return defaultTmpRayRoot
+}
+
+func GetRayPrevLogsPath() string {
+	return filepath.Join(GetTmpRayRoot(), "prev-logs")
+}
+
+func GetRayPersistCompletePath() string {
+	return filepath.Join(GetTmpRayRoot(), "persist-complete-logs")
+}
+
+func GetRaySessionLatestPath() string {
+	return filepath.Join(GetTmpRayRoot(), "session_latest")
+}
+
+func GetRayNodeIDPath() string {
+	return filepath.Join(GetTmpRayRoot(), "raylet_node_id")
 }

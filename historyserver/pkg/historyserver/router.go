@@ -1820,8 +1820,8 @@ func formatNodeSummaryReplayForResp(node eventtypes.Node, sessionName string) []
 		nodeTypeName = nodeGroup
 	}
 	isHeadNode := nodeTypeName == "headgroup"
-	rayletSocketName := path.Join(utils.TmpRayRoot, sessionName, "sockets", "raylet")
-	objectStoreSocketName := path.Join(utils.TmpRayRoot, sessionName, "sockets", "plasma_store")
+	rayletSocketName := path.Join(utils.GetTmpRayRoot(), sessionName, "sockets", "raylet")
+	objectStoreSocketName := path.Join(utils.GetTmpRayRoot(), sessionName, "sockets", "plasma_store")
 
 	// Handle the start timestamp of the node.
 	// Ref: https://github.com/ray-project/ray/blob/f953f199b5d68d47c07c865c5ebcd2333d49f365/src/ray/protobuf/gcs.proto#L345-L346.

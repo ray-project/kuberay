@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"os"
 	"path"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -107,9 +106,9 @@ func (ec *EventCollector) Run(stop <-chan struct{}, port int) {
 	close(ec.stopped)
 }
 
-// watchNodeIDFile watches /tmp/ray/raylet_node_id for content changes
+// watchNodeIDFile watches the configured raylet_node_id file for content changes.
 func (ec *EventCollector) watchNodeIDFile() {
-	nodeIDFilePath := utils.RayNodeIDPath
+	nodeIDFilePath := utils.GetRayNodeIDPath()
 
 	// Create new watcher
 	watcher, err := fsnotify.NewWatcher()
@@ -124,9 +123,10 @@ func (ec *EventCollector) watchNodeIDFile() {
 	if err != nil {
 		logrus.Infof("Failed to add %s to watcher, will watch for file creation: %v", nodeIDFilePath, err)
 		// If file doesn't exist, watch parent directory
-		err = watcher.Add(utils.TmpRayRoot)
+		tmpRayRoot := utils.GetTmpRayRoot()
+		err = watcher.Add(tmpRayRoot)
 		if err != nil {
-			logrus.Errorf("Failed to watch directory %s: %v", utils.TmpRayRoot, err)
+			logrus.Errorf("Failed to watch directory %s: %v", tmpRayRoot, err)
 			return
 		}
 	}

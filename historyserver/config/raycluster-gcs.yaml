@@ -78,6 +78,8 @@ spec:
           image: ${COLLECTOR_IMAGE}
           imagePullPolicy: IfNotPresent
           env:
+          - name: RAY_TMP_ROOT
+            value: *rayTmpRoot
           - name: GCS_BUCKET
             value: "${GCS_BUCKET}"
           # RAY_DASHBOARD_ADDRESS is used by the head collector to fetch endpoints' results
@@ -190,6 +192,8 @@ spec:
           image: ${COLLECTOR_IMAGE}
           imagePullPolicy: IfNotPresent
           env:
+          - name: RAY_TMP_ROOT
+            value: *rayTmpRoot
           - name: GCS_BUCKET
             value: "${GCS_BUCKET}"
           command:

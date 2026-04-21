@@ -1,6 +1,7 @@
 package ray
 
 import (
+	"fmt"
 	"os"
 	"path"
 	"path/filepath"
@@ -13,8 +14,9 @@ import (
 )
 
 func TestTrim(t *testing.T) {
-	absoluteLogPathName := " " + filepath.Join(utils.TmpRayRoot, "test", "LLogs", "events", "aa", "a.txt") + "  "
-	logdir := filepath.Join(utils.TmpRayRoot, "test", "lLogs") + "/"
+	tmpRayRoot := utils.GetTmpRayRoot()
+	absoluteLogPathName := fmt.Sprintf(" %s/test/LLogs/events/aa/a.txt  ", tmpRayRoot)
+	logdir := fmt.Sprintf("%s/test/lLogs/", tmpRayRoot)
 
 	absoluteLogPathName = strings.TrimSpace(absoluteLogPathName)
 	absoluteLogPathName = filepath.Clean(absoluteLogPathName)
@@ -48,7 +50,7 @@ func TestGetContentPathComparison(t *testing.T) {
 }
 
 func TestWalk(t *testing.T) {
-	watchPath := filepath.Join(utils.TmpRayRoot, "test", "LLogs") + "/"
+	watchPath := fmt.Sprintf("%s/test/LLogs/", utils.GetTmpRayRoot())
 	filepath.Walk(watchPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			logrus.Errorf("Walk path error %v", err)

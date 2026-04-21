@@ -104,8 +104,8 @@ func testAzureBlobSeparatesFilesBySession(test Test, g *WithT, namespace *corev1
 func testAzureBlobResumesUploadsOnRestart(test Test, g *WithT, namespace *corev1.Namespace, azureClient *azblob.Client) {
 	rayCluster := PrepareAzureBlobTestEnv(test, g, namespace, azureClient)
 
-	prevLogsBaseDir := utils.RayPrevLogsPath
-	persistCompleteBaseDir := utils.RayPersistCompletePath
+	prevLogsBaseDir := utils.GetRayPrevLogsPath()
+	persistCompleteBaseDir := utils.GetRayPersistCompletePath()
 
 	dummySessionID := fmt.Sprintf("test-recovery-session-%s", namespace.Name)
 	dummyNodeID := fmt.Sprintf("head-node-%s", namespace.Name)
