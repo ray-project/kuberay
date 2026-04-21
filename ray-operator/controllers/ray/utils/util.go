@@ -602,6 +602,30 @@ func CheckAllPodsRunning(ctx context.Context, runningPods corev1.PodList) bool {
 	return true
 }
 
+// FilterActivePods returns a PodList excluding pods that are being terminated
+// (i.e., have a non-nil DeletionTimestamp). Terminating pods should not block
+// cluster readiness checks during autoscaler-driven scaling.
+func FilterActivePods(pods corev1.PodList) corev1.PodList {
+	var active []corev1.Pod
+	for i := range pods.Items {
+		if pods.Items[i].DeletionTimestamp == nil {
+			active = append(active, pods.Items[i])
+		}
+	}
+	return corev1.PodList{Items: active}
+}
+
+// IsHeadPodRunningAndReady returns true if the head pod in the given PodList
+// is in the Running phase and has the PodReady condition set to True.
+func IsHeadPodRunningAndReady(pods corev1.PodList) bool {
+	for i := range pods.Items {
+		if val, ok := pods.Items[i].Labels[RayNodeTypeLabelKey]; ok && val == string(rayv1.HeadNode) {
+			return IsRunningAndReady(&pods.Items[i])
+		}
+	}
+	return false
+}
+
 // CompareJsonStruct This is a way to better compare if two objects are the same when they are json/yaml structs. reflect.DeepEqual will fail in some cases.
 func CompareJsonStruct(objA any, objB any) bool {
 	a, err := json.Marshal(objA)

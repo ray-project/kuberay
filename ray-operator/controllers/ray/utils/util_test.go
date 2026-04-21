@@ -107,6 +107,101 @@ func TestCheckAllPodsRunning(t *testing.T) {
 	}
 }
 
+func TestFilterActivePods(t *testing.T) {
+	now := metav1.Now()
+	tests := []struct {
+		name          string
+		pods          corev1.PodList
+		expectedCount int
+	}{
+		{
+			name: "should keep pods without DeletionTimestamp",
+			pods: corev1.PodList{
+				Items: []corev1.Pod{
+					*createSomePodWithPhase(corev1.PodRunning),
+					*createSomePodWithPhase(corev1.PodRunning),
+				},
+			},
+			expectedCount: 2,
+		},
+		{
+			name: "should filter out pods with DeletionTimestamp",
+			pods: corev1.PodList{
+				Items: []corev1.Pod{
+					*createSomePodWithPhase(corev1.PodRunning),
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:              "terminating-pod",
+							DeletionTimestamp: &now,
+						},
+						Status: corev1.PodStatus{Phase: corev1.PodRunning},
+					},
+				},
+			},
+			expectedCount: 1,
+		},
+		{
+			name:          "should handle empty list",
+			pods:          corev1.PodList{Items: []corev1.Pod{}},
+			expectedCount: 0,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := FilterActivePods(tc.pods)
+			assert.Len(t, result.Items, tc.expectedCount)
+		})
+	}
+}
+
+func TestIsHeadPodRunningAndReady(t *testing.T) {
+	tests := []struct {
+		name     string
+		pods     corev1.PodList
+		expected bool
+	}{
+		{
+			name: "should return true when head pod is running and ready",
+			pods: corev1.PodList{
+				Items: []corev1.Pod{
+					*createRayHeadPodWithPhaseAndCondition(corev1.PodRunning, corev1.ConditionTrue),
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "should return false when head pod is not ready",
+			pods: corev1.PodList{
+				Items: []corev1.Pod{
+					*createRayHeadPodWithPhaseAndCondition(corev1.PodRunning, corev1.ConditionFalse),
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "should return false when head pod is pending",
+			pods: corev1.PodList{
+				Items: []corev1.Pod{
+					*createRayHeadPodWithPhaseAndCondition(corev1.PodPending, corev1.ConditionFalse),
+				},
+			},
+			expected: false,
+		},
+		{
+			name:     "should return false when no head pod exists",
+			pods:     corev1.PodList{Items: []corev1.Pod{*createSomePodWithPhase(corev1.PodRunning)}},
+			expected: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, IsHeadPodRunningAndReady(tc.pods))
+		})
+	}
+}
+
 func TestWorkerPodName(t *testing.T) {
 	tests := []struct {
 		name     string
