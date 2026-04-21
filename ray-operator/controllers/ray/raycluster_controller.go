@@ -536,14 +536,13 @@ func (r *RayClusterReconciler) reconcileHeadService(ctx context.Context, instanc
 		// We may consider deprecating this field when we bump the CRD version.
 		maps.Copy(annotations, instance.Spec.HeadServiceAnnotations)
 		headSvc, err := common.BuildServiceForHeadPod(ctx, *instance, labels, annotations)
+		if err != nil {
+			return err
+		}
 		// TODO (kevin85421): Provide a detailed and actionable error message. For example, which port is missing?
 		if len(headSvc.Spec.Ports) == 0 {
 			logger.Info("Ray head service does not have any ports set up.", "serviceSpecification", headSvc.Spec)
 			return fmt.Errorf("ray head service does not have any ports set up. Service specification: %v", headSvc.Spec)
-		}
-
-		if err != nil {
-			return err
 		}
 
 		if err := r.createService(ctx, headSvc, instance); err != nil {
