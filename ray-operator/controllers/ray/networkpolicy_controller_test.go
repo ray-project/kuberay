@@ -156,8 +156,8 @@ var _ = Context("NetworkPolicy Controller Integration Tests", func() {
 			}
 			Expect(headNetworkPolicy.Spec.PodSelector).To(Equal(expectedPodSelector))
 
-			// 3 base ingress rules: intra-cluster, operator, and RayJob submitter access.
-			Expect(headNetworkPolicy.Spec.Ingress).To(HaveLen(3), "Should have 3 base ingress rules")
+			// 2 base ingress rules: intra-cluster and operator access.
+			Expect(headNetworkPolicy.Spec.Ingress).To(HaveLen(2), "Should have 2 base ingress rules")
 
 			// Rule 0: intra-cluster — no ports (allows all).
 			intraClusterRule := headNetworkPolicy.Spec.Ingress[0]
@@ -426,15 +426,15 @@ var _ = Context("NetworkPolicy Controller Integration Tests", func() {
 				time.Second*3, time.Millisecond*500).Should(Succeed())
 		})
 
-		It("Head NetworkPolicy has 4 ingress rules (3 base + 1 custom)", func() {
+		It("Head NetworkPolicy has 3 ingress rules (2 base + 1 custom)", func() {
 			headNetworkPolicy := &networkingv1.NetworkPolicy{}
 			headKey := types.NamespacedName{Namespace: namespace, Name: rayCluster.Name + "-head"}
 			Eventually(
 				getResourceFunc(ctx, headKey, headNetworkPolicy),
 				time.Second*10, time.Millisecond*500).Should(Succeed())
 
-			Expect(headNetworkPolicy.Spec.Ingress).To(HaveLen(4), "Should have 3 base + 1 custom ingress rules")
-			Expect(headNetworkPolicy.Spec.Ingress[3].Ports[0].Port.IntVal).To(Equal(customPort))
+			Expect(headNetworkPolicy.Spec.Ingress).To(HaveLen(3), "Should have 2 base + 1 custom ingress rules")
+			Expect(headNetworkPolicy.Spec.Ingress[2].Ports[0].Port.IntVal).To(Equal(customPort))
 		})
 
 		It("Delete RayCluster", func() {
@@ -443,10 +443,10 @@ var _ = Context("NetworkPolicy Controller Integration Tests", func() {
 		})
 	})
 
-	Describe("RayJob submitter ingress rule is present on all clusters", Ordered, func() {
+	Describe("Standalone RayCluster has no submitter ingress rule", Ordered, func() {
 		ctx := context.Background()
 		namespace := "default"
-		rayCluster := rayClusterTemplateForNetworkPolicy("raycluster-submitter-rule", namespace)
+		rayCluster := rayClusterTemplateForNetworkPolicy("raycluster-no-submitter", namespace)
 
 		It("Create a standalone RayCluster", func() {
 			err := k8sClient.Create(ctx, rayCluster)
@@ -456,7 +456,7 @@ var _ = Context("NetworkPolicy Controller Integration Tests", func() {
 				time.Second*3, time.Millisecond*500).Should(Succeed())
 		})
 
-		It("Head NetworkPolicy includes RayJob submitter ingress rule on dashboard port", func() {
+		It("Head NetworkPolicy has only 2 base ingress rules (no submitter rule)", func() {
 			headNetworkPolicy := &networkingv1.NetworkPolicy{}
 			headKey := types.NamespacedName{Namespace: namespace, Name: rayCluster.Name + "-head"}
 
@@ -464,19 +464,7 @@ var _ = Context("NetworkPolicy Controller Integration Tests", func() {
 				getResourceFunc(ctx, headKey, headNetworkPolicy),
 				time.Second*10, time.Millisecond*500).Should(Succeed(), "Head NetworkPolicy should be created")
 
-			Expect(headNetworkPolicy.Spec.Ingress).To(HaveLen(3), "Should have 3 base ingress rules")
-
-			submitterRule := headNetworkPolicy.Spec.Ingress[2]
-			Expect(submitterRule.From).To(HaveLen(1))
-			Expect(submitterRule.From[0]).To(Equal(networkingv1.NetworkPolicyPeer{
-				PodSelector: &metav1.LabelSelector{
-					MatchLabels: map[string]string{
-						utils.RayOriginatedFromCRDLabelKey: utils.RayOriginatedFromCRDLabelValue(utils.RayJobCRD),
-					},
-				},
-			}))
-			Expect(submitterRule.Ports).To(HaveLen(1), "Submitter rule should only allow dashboard port")
-			Expect(submitterRule.Ports[0].Port.IntVal).To(Equal(int32(8265)))
+			Expect(headNetworkPolicy.Spec.Ingress).To(HaveLen(2), "Standalone cluster should have only 2 base ingress rules")
 		})
 
 		It("Clean up RayCluster", func() {

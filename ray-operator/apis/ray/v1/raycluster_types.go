@@ -155,10 +155,12 @@ type NetworkIsolationConfig struct {
 	Mode *string `json:"mode,omitempty"`
 
 	// IngressRules specifies custom ingress rules for Ray cluster pods.
-	// By default, the generated NetworkPolicy allows intra-cluster traffic,
-	// KubeRay operator access to dashboard and client ports, and RayJob
-	// submitter access to the dashboard port. All other ingress is denied.
-	// If other external pods need to reach the head, add explicit rules here.
+	// By default, the generated NetworkPolicy allows intra-cluster traffic
+	// and KubeRay operator access to dashboard and client ports. For
+	// RayJob-owned clusters, the specific submitter pod is also allowed.
+	// All other ingress is denied. If other external pods (e.g. a
+	// clusterSelector-based RayJob submitter) need to reach the head,
+	// add explicit rules here.
 	// +optional
 	IngressRules []networkingv1.NetworkPolicyIngressRule `json:"ingressRules,omitempty"`
 
