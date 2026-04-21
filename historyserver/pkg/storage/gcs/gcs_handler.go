@@ -86,11 +86,11 @@ func (h *RayLogsHandler) WriteFile(file string, reader io.ReadSeeker) error {
 }
 
 // ListFiles will return all files within the directory.
-func (h *RayLogsHandler) ListFiles(clusterId string, directory string) []string {
+func (h *RayLogsHandler) ListFiles(clusterStoragePrefix string, directory string) []string {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	pathPrefix := strings.TrimPrefix(path.Join(h.RootDir, clusterId, directory), "/") + "/"
+	pathPrefix := strings.TrimPrefix(path.Join(h.RootDir, clusterStoragePrefix, directory), "/") + "/"
 
 	query := &gstorage.Query{
 		Prefix: pathPrefix,
@@ -159,27 +159,21 @@ func (h *RayLogsHandler) List() []utils.ClusterInfo {
 		}
 
 		fullObjectPath := objectAttr.Name
-		metaInfo := strings.Split(strings.TrimPrefix(fullObjectPath, pathPrefix), "/")
-		if len(metaInfo) != 2 {
-			logrus.Errorf("Unable to properly parse cluster metadir path with fullpath: %s", fullObjectPath)
-			continue
-		}
-		clusterMeta := strings.Split(metaInfo[0], "_")
-		if len(clusterMeta) != 2 {
-			logrus.Errorf("Unable to get cluster name and namespace from directory: %s", metaInfo[0])
-			continue
-		}
-		cluster.Name = clusterMeta[0]
-		cluster.Namespace = clusterMeta[1]
-
-		cluster.SessionName = metaInfo[1]
-		datetime, err := utils.GetDateTimeFromSessionID(metaInfo[1])
+		session, err := utils.ParseMetaDirRelPath(strings.TrimPrefix(fullObjectPath, pathPrefix))
 		if err != nil {
-			logrus.Errorf("Failed to get date time from the given sessionID: %s, error: %v", metaInfo[1], err)
+			logrus.Errorf("Unable to properly parse cluster metadir path with fullpath: %s (%v)", fullObjectPath, err)
+			continue
+		}
+		cluster.Name = session.Name
+		cluster.Namespace = session.Namespace
+		cluster.SessionName = session.SessionName
+		datetime, err := utils.GetDateTimeFromSessionID(session.SessionName)
+		if err != nil {
+			logrus.Errorf("Failed to get date time from the given sessionID: %s, error: %v", session.SessionName, err)
 			continue
 		}
 		cluster.CreateTimeStamp = datetime.Unix()
-		cluster.CreateTime = datetime.UTC().Format(("2006-01-02T15:04:05Z"))
+		cluster.CreateTime = datetime.UTC().Format("2006-01-02T15:04:05Z")
 
 		logrus.Infof("Parsed cluster %s for session %s to list", cluster.Name, cluster.SessionName)
 		clusterList = append(clusterList, *cluster)
@@ -189,18 +183,18 @@ func (h *RayLogsHandler) List() []utils.ClusterInfo {
 	return clusterList
 }
 
-func (h *RayLogsHandler) GetContent(clusterId string, fileName string) io.Reader {
+func (h *RayLogsHandler) GetContent(clusterStoragePrefix string, fileName string) io.Reader {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	bucket := h.StorageClient.Bucket(h.GCSBucket)
 	query := &gstorage.Query{
-		MatchGlob: "**/" + clusterId + "*/**/" + fileName,
+		MatchGlob: "**/" + clusterStoragePrefix + "/**/" + fileName,
 	}
 	objectIterator := bucket.Objects(ctx, query)
 	fileAttrs, err := objectIterator.Next()
 	if err == gIterator.Done {
-		logrus.Errorf("File %s was not found in bucket for cluster %s", fileName, clusterId)
+		logrus.Errorf("File %s was not found in bucket for cluster %s", fileName, clusterStoragePrefix)
 		return nil
 	}
 	if err != nil {
@@ -210,7 +204,7 @@ func (h *RayLogsHandler) GetContent(clusterId string, fileName string) io.Reader
 
 	reader, err := h.StorageClient.Bucket(h.GCSBucket).Object(fileAttrs.Name).NewReader(ctx)
 	if err != nil {
-		logrus.Errorf("Failed to create reader for file: %s in cluster: %s", fileName, clusterId)
+		logrus.Errorf("Failed to create reader for file: %s in cluster: %s", fileName, clusterStoragePrefix)
 		return nil
 	}
 	defer reader.Close()

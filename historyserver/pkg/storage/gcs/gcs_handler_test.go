@@ -113,49 +113,49 @@ func TestListFiles(t *testing.T) {
 		{
 			ObjectAttrs: fakestorage.ObjectAttrs{
 				BucketName: "test-bucket",
-				Name:       "ray_historyserver/cluster1/logs/file1.txt",
+				Name:       "ray_historyserver/ns1/cluster1/logs/file1.txt",
 			},
 			Content: []byte("a"),
 		},
 		{
 			ObjectAttrs: fakestorage.ObjectAttrs{
 				BucketName: "test-bucket",
-				Name:       "ray_historyserver/cluster1/logs/file2.log",
+				Name:       "ray_historyserver/ns1/cluster1/logs/file2.log",
 			},
 			Content: []byte("b"),
 		},
 		{
 			ObjectAttrs: fakestorage.ObjectAttrs{
 				BucketName: "test-bucket",
-				Name:       "ray_historyserver/cluster1/logs/subdir/",
+				Name:       "ray_historyserver/ns1/cluster1/logs/subdir/",
 			},
 			Content: []byte(""),
 		},
 		{
 			ObjectAttrs: fakestorage.ObjectAttrs{
 				BucketName: "test-bucket",
-				Name:       "ray_historyserver/cluster1/logs/subdir/file3.txt",
+				Name:       "ray_historyserver/ns1/cluster1/logs/subdir/file3.txt",
 			},
 			Content: []byte("c"),
 		},
 		{
 			ObjectAttrs: fakestorage.ObjectAttrs{
 				BucketName: "test-bucket",
-				Name:       "ray_historyserver/cluster1/other/file4.txt",
+				Name:       "ray_historyserver/ns1/cluster1/other/file4.txt",
 			},
 			Content: []byte("d"),
 		},
 		{
 			ObjectAttrs: fakestorage.ObjectAttrs{
 				BucketName: "test-bucket",
-				Name:       "ray_historyserver/cluster2/logs/file5.txt",
+				Name:       "ray_historyserver/ns2/cluster2/logs/file5.txt",
 			},
 			Content: []byte("e"),
 		},
 		{
 			ObjectAttrs: fakestorage.ObjectAttrs{
 				BucketName: "test-bucket",
-				Name:       "ray_historyserver/cluster2/logs/subdir2/",
+				Name:       "ray_historyserver/ns2/cluster2/logs/subdir2/",
 			},
 			Content: []byte("e"),
 		},
@@ -164,50 +164,50 @@ func TestListFiles(t *testing.T) {
 	handler := createRayLogsHandler(client, bucketName)
 
 	tests := []struct {
-		name      string
-		clusterID string
-		directory string
-		expected  []string
+		name                 string
+		clusterStoragePrefix string
+		directory            string
+		expected             []string
 	}{
 		{
-			name:      "list_files",
-			clusterID: "cluster1",
-			directory: utils.RAY_SESSIONDIR_LOGDIR_NAME,
-			expected:  []string{"file1.txt", "file2.log", "subdir/"},
+			name:                 "list_files",
+			clusterStoragePrefix: "ns1/cluster1",
+			directory:            utils.RAY_SESSIONDIR_LOGDIR_NAME,
+			expected:             []string{"file1.txt", "file2.log", "subdir/"},
 		},
 		{
-			name:      "list_other",
-			clusterID: "cluster1",
-			directory: "other",
-			expected:  []string{"file4.txt"},
+			name:                 "list_other",
+			clusterStoragePrefix: "ns1/cluster1",
+			directory:            "other",
+			expected:             []string{"file4.txt"},
 		},
 		{
-			name:      "list_nonexistent",
-			clusterID: "cluster1",
-			directory: "nonexistent",
-			expected:  nil,
+			name:                 "list_nonexistent",
+			clusterStoragePrefix: "ns1/cluster1",
+			directory:            "nonexistent",
+			expected:             nil,
 		},
 		{
-			name:      "list_cluster2",
-			clusterID: "cluster2",
-			directory: utils.RAY_SESSIONDIR_LOGDIR_NAME,
-			expected:  []string{"file5.txt", "subdir2/"},
+			name:                 "list_cluster2",
+			clusterStoragePrefix: "ns2/cluster2",
+			directory:            utils.RAY_SESSIONDIR_LOGDIR_NAME,
+			expected:             []string{"file5.txt", "subdir2/"},
 		},
 		{
-			name:      "list_empty_subdir",
-			clusterID: "cluster2",
-			directory: "logs/subdir2",
-			expected:  nil,
+			name:                 "list_empty_subdir",
+			clusterStoragePrefix: "ns2/cluster2",
+			directory:            "logs/subdir2",
+			expected:             nil,
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			files := handler.ListFiles(tc.clusterID, tc.directory)
+			files := handler.ListFiles(tc.clusterStoragePrefix, tc.directory)
 			sort.Strings(files)
 			sort.Strings(tc.expected)
 			if diff := cmp.Diff(tc.expected, files); diff != "" {
-				t.Errorf("ListFiles(%q, %q) returned diff (-want +got):\n%s", tc.clusterID, tc.directory, diff)
+				t.Errorf("ListFiles(%q, %q) returned diff (-want +got):\n%s", tc.clusterStoragePrefix, tc.directory, diff)
 			}
 		})
 	}
@@ -215,7 +215,7 @@ func TestListFiles(t *testing.T) {
 
 func TestList(t *testing.T) {
 	// RootDir is "ray_historyserver"
-	// Path format: {RootDir}/metadir/{ClusterName}_{Namespace}/{SessionName}
+	// Path format: {RootDir}/metadir/{Namespace}/{ClusterName}/{SessionName}
 	ts := time.Now().UTC()
 	sessionID := "session_" + ts.Format("2006-01-02_15-04-05_000000")
 
@@ -223,14 +223,14 @@ func TestList(t *testing.T) {
 		{
 			ObjectAttrs: fakestorage.ObjectAttrs{
 				BucketName: "test-bucket",
-				Name:       "ray_historyserver/metadir/mycluster1_default/" + sessionID,
+				Name:       "ray_historyserver/metadir/default/mycluster1/" + sessionID,
 			},
 			Content: []byte(""),
 		},
 		{
 			ObjectAttrs: fakestorage.ObjectAttrs{
 				BucketName: "test-bucket",
-				Name:       "ray_historyserver/metadir/mycluster2_testns/" + sessionID,
+				Name:       "ray_historyserver/metadir/testns/mycluster2/" + sessionID,
 			},
 			Content: []byte(""),
 		},
@@ -259,9 +259,9 @@ func TestList(t *testing.T) {
 }
 
 func TestGetContent(t *testing.T) {
-	clusterID := "clusterA"
+	clusterStoragePrefix := "testns/clusterA"
 	fileName := "important.log"
-	objPath := "ray_historyserver/clusters/clusterA_ns/sessions/session123/logs/" + fileName
+	objPath := "ray_historyserver/testns/clusterA/sessions/session123/logs/" + fileName
 	fileContent := "Log content here"
 
 	initialObjects := []fakestorage.Object{
@@ -276,9 +276,9 @@ func TestGetContent(t *testing.T) {
 	_, client, bucketName := setupFakeGCS(t, initialObjects...)
 	handler := createRayLogsHandler(client, bucketName)
 
-	reader := handler.GetContent(clusterID, fileName)
+	reader := handler.GetContent(clusterStoragePrefix, fileName)
 	if reader == nil {
-		t.Fatalf("GetContent(%q, %q) returned nil reader, expected non-nil", clusterID, fileName)
+		t.Fatalf("GetContent(%q, %q) returned nil reader, expected non-nil", clusterStoragePrefix, fileName)
 	}
 
 	content, err := io.ReadAll(reader)
@@ -287,6 +287,6 @@ func TestGetContent(t *testing.T) {
 	}
 
 	if string(content) != fileContent {
-		t.Errorf("GetContent(%q, %q) content mismatch: got %q, want %q", clusterID, fileName, string(content), fileContent)
+		t.Errorf("GetContent(%q, %q) content mismatch: got %q, want %q", clusterStoragePrefix, fileName, string(content), fileContent)
 	}
 }
