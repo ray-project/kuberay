@@ -675,6 +675,12 @@ func BuildAutoscalerContainer(autoscalerImage string) corev1.Container {
 		Name:            AutoscalerContainerName,
 		Image:           autoscalerImage,
 		ImagePullPolicy: corev1.PullIfNotPresent,
+		Ports: []corev1.ContainerPort{
+			{
+				ContainerPort: int32(utils.DefaultAutoscalerMetricsPort),
+				Name:          utils.AutoscalerMetricsPortName,
+			},
+		},
 		Env: []corev1.EnvVar{
 			{
 				Name: utils.RAY_CLUSTER_NAME,
