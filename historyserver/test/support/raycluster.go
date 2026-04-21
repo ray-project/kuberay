@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	. "github.com/onsi/gomega"
-	hsutils "github.com/ray-project/kuberay/historyserver/pkg/utils"
 	rayutils "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -78,13 +77,14 @@ func GetSessionIDFromHeadPod(test Test, g *WithT, rayCluster *rayv1.RayCluster) 
 	headPod, err := GetHeadPod(test, rayCluster)
 	g.Expect(err).NotTo(HaveOccurred())
 
-	getSessionIDCmd := fmt.Sprintf(`if [ -L "%s" ]; then
-  session_path=$(readlink "%s")
+	getSessionIDCmd := `ray_tmp_root="${RAY_TMP_ROOT:-/tmp/ray}"
+if [ -L "${ray_tmp_root}/session_latest" ]; then
+  session_path=$(readlink "${ray_tmp_root}/session_latest")
   basename "$session_path"
 else
   echo "session_latest is not a symlink"
   exit 1
-fi`, hsutils.GetRaySessionLatestPath(), hsutils.GetRaySessionLatestPath())
+fi`
 	output, _ := ExecPodCmd(test, headPod, "ray-head", []string{"sh", "-c", getSessionIDCmd})
 
 	// Parse output to extract the sessionID.
@@ -100,12 +100,13 @@ func GetNodeIDFromHeadPod(test Test, g *WithT, rayCluster *rayv1.RayCluster) str
 	headPod, err := GetHeadPod(test, rayCluster)
 	g.Expect(err).NotTo(HaveOccurred())
 
-	getNodeIDCmd := fmt.Sprintf(`if [ -f "%s" ]; then
-  cat "%s"
+	getNodeIDCmd := `ray_tmp_root="${RAY_TMP_ROOT:-/tmp/ray}"
+if [ -f "${ray_tmp_root}/raylet_node_id" ]; then
+  cat "${ray_tmp_root}/raylet_node_id"
 else
   echo "raylet_node_id not found"
   exit 1
-fi`, hsutils.GetRayNodeIDPath(), hsutils.GetRayNodeIDPath())
+fi`
 	output, _ := ExecPodCmd(test, headPod, "ray-head", []string{"sh", "-c", getNodeIDCmd})
 
 	nodeID := strings.TrimSpace(output.String())
@@ -120,12 +121,13 @@ func GetNodeIDFromPod(test Test, g *WithT, getPod func() (*corev1.Pod, error), c
 	pod, err := getPod()
 	g.Expect(err).NotTo(HaveOccurred())
 
-	getNodeIDCmd := fmt.Sprintf(`if [ -f "%s" ]; then
-  cat "%s"
+	getNodeIDCmd := `ray_tmp_root="${RAY_TMP_ROOT:-/tmp/ray}"
+if [ -f "${ray_tmp_root}/raylet_node_id" ]; then
+  cat "${ray_tmp_root}/raylet_node_id"
 else
   echo "raylet_node_id not found"
   exit 1
-fi`, hsutils.GetRayNodeIDPath(), hsutils.GetRayNodeIDPath())
+fi`
 	output, _ := ExecPodCmd(test, pod, containerName, []string{"sh", "-c", getNodeIDCmd})
 
 	// Parse output to extract the nodeID.
