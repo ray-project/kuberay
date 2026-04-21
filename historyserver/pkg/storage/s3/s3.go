@@ -33,6 +33,7 @@ import (
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/sirupsen/logrus"
 
 	"github.com/ray-project/kuberay/historyserver/pkg/collector/types"
@@ -93,10 +94,11 @@ func (r *RayLogsHandler) WriteFile(file string, reader io.ReadSeeker) error {
 func (r *RayLogsHandler) _listFiles(prefix string, delimiter string, onlyBase bool) []string {
 	ctx := context.Background()
 	files := []string{}
+	listPrefix := strings.TrimSuffix(prefix, "/") + "/"
 
 	paginator := s3.NewListObjectsV2Paginator(r.S3Client, &s3.ListObjectsV2Input{
 		Bucket:    aws.String(r.S3Bucket),
-		Prefix:    aws.String(prefix + "/"),
+		Prefix:    aws.String(listPrefix),
 		MaxKeys:   aws.Int32(100),
 		Delimiter: aws.String(delimiter),
 	})
@@ -104,11 +106,11 @@ func (r *RayLogsHandler) _listFiles(prefix string, delimiter string, onlyBase bo
 	for paginator.HasMorePages() {
 		page, err := paginator.NextPage(ctx)
 		if err != nil {
-			logrus.Errorf("Failed to list objects from %s: %v", prefix+"/", err)
+			logrus.Errorf("Failed to list objects from %s: %v", listPrefix, err)
 			return []string{}
 		}
 		logrus.Infof("[ListFiles]Returned objects in %v. length of page.Contents: %v, length of page.CommonPrefixes: %v",
-			prefix+"/", len(page.Contents), len(page.CommonPrefixes))
+			listPrefix, len(page.Contents), len(page.CommonPrefixes))
 
 		for _, object := range page.Contents {
 			objName := aws.ToString(object.Key)
@@ -288,10 +290,32 @@ func createBucketIfNotExists(ctx context.Context, s3Client *s3.Client, bucketNam
 		Bucket: aws.String(bucketName),
 	})
 	if err != nil {
+		var noSuchBucket *s3types.NoSuchBucket
+		if errors.As(err, &noSuchBucket) {
+			logrus.Infof("Bucket %s does not exist, creating...", bucketName)
+			_, createErr := s3Client.CreateBucket(ctx, &s3.CreateBucketInput{
+				Bucket: aws.String(bucketName),
+			})
+			if createErr != nil {
+				var createAPIError interface{ ErrorCode() string }
+				if errors.As(createErr, &createAPIError) {
+					if createAPIError.ErrorCode() == "BucketAlreadyExists" ||
+						createAPIError.ErrorCode() == "BucketAlreadyOwnedByYou" {
+						logrus.Infof("Bucket %s already exists", bucketName)
+						return nil
+					}
+				}
+				logrus.Errorf("Failed to create bucket %s: %v", bucketName, createErr)
+				return fmt.Errorf("failed to create bucket %s: %w", bucketName, createErr)
+			}
+			logrus.Infof("Successfully created bucket %s", bucketName)
+			return nil
+		}
+
 		var apiErr interface{ ErrorCode() string }
 		if errors.As(err, &apiErr) {
 			switch apiErr.ErrorCode() {
-			case "NoSuchBucket", "NotFound", "404":
+			case "NotFound", "404":
 				logrus.Infof("Bucket %s does not exist, creating...", bucketName)
 				_, createErr := s3Client.CreateBucket(ctx, &s3.CreateBucketInput{
 					Bucket: aws.String(bucketName),
