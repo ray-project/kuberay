@@ -544,7 +544,7 @@ func schema_ray_operator_apis_ray_v1_ClusterUpgradeOptions(ref common.ReferenceC
 					},
 					"stepSizePercent": {
 						SchemaProps: spec.SchemaProps{
-							Description: "The percentage of traffic to switch to the upgraded RayCluster at a set interval after scaling by MaxSurgePercent.",
+							Description: "The percentage of traffic to switch to the upgraded RayCluster at a set interval after scaling by MaxSurgePercent. StepSizePercent must be less than or equal to MaxSurgePercent.",
 							Type:        []string{"integer"},
 							Format:      "int32",
 						},

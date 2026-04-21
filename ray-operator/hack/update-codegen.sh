@@ -53,13 +53,19 @@ kube::codegen::gen_openapi \
   --update-report \
   "${SCRIPT_ROOT}/apis"
 
+MODELSCHEMA_TMPFILE=$(mktemp)
+# Intentional early expansion: capture current value of MODELSCHEMA_TMPFILE.
+# shellcheck disable=SC2064
+trap "rm -f '${MODELSCHEMA_TMPFILE}'" EXIT
+go run ./cmd/modelschema > "${MODELSCHEMA_TMPFILE}"
+
 kube::codegen::gen_client \
   --boilerplate "${SCRIPT_ROOT}/hack/boilerplate.go.txt" \
   --output-dir "${SCRIPT_ROOT}/pkg/client" \
   --output-pkg "${ROOT_PKG}/pkg/client" \
   --with-watch \
   --with-applyconfig \
-  --applyconfig-openapi-schema <(go run ./cmd/modelschema) \
+  --applyconfig-openapi-schema "${MODELSCHEMA_TMPFILE}" \
   --applyconfig-externals k8s.io/api/core/v1.PodTemplateSpec:k8s.io/client-go/applyconfigurations/core/v1 \
   --one-input-api ray/v1 \
   "${SCRIPT_ROOT}/apis"

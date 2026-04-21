@@ -1,5 +1,6 @@
 # Project related ignores
 /ray-operator
+/modelschema
 
 *.vscode
 __debug_bin

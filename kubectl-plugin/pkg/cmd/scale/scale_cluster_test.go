@@ -432,7 +432,7 @@ func TestRayScaleClusterRun(t *testing.T) {
 			}
 
 			kubeClientSet := kubefake.NewClientset()
-			rayClient := rayClientFake.NewSimpleClientset(tc.rayClusters...)
+			rayClient := rayClientFake.NewClientset(tc.rayClusters...)
 			k8sClients := client.NewClientForTesting(kubeClientSet, rayClient)
 
 			var buf bytes.Buffer

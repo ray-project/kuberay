@@ -99,12 +99,6 @@ linters:
         text: "SA1019:.*ServiceUnhealthySecondThreshold is deprecated"
       - linters: [staticcheck]
         text: "SA1019:.*DeploymentUnhealthySecondThreshold is deprecated"
-      # NewSimpleClientset is deprecated in favor of NewClientset, but
-      # NewClientset requires complete structured-merge-diff type schemas
-      # for field management which breaks Update-based tests.
-      # TODO(#4627): migrate once SMD schemas are properly generated.
-      - linters: [staticcheck]
-        text: "SA1019:.*NewSimpleClientset"
     generated: strict
     presets:
       - comments
