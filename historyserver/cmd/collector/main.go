@@ -17,14 +17,13 @@ import (
 	"github.com/ray-project/kuberay/historyserver/pkg/collector/eventcollector"
 	"github.com/ray-project/kuberay/historyserver/pkg/collector/logcollector/runtime"
 	"github.com/ray-project/kuberay/historyserver/pkg/collector/types"
-	"github.com/ray-project/kuberay/historyserver/pkg/logging"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
 const runtimeClassConfigPath = "/var/collector-config/data"
 
 func main() {
-	logging.Init()
+	logrus.SetReportCaller(true)
 
 	role := ""
 	runtimeClassName := ""

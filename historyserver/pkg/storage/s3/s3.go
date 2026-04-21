@@ -33,7 +33,6 @@ import (
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/sirupsen/logrus"
 
 	"github.com/ray-project/kuberay/historyserver/pkg/collector/types"
@@ -290,32 +289,10 @@ func createBucketIfNotExists(ctx context.Context, s3Client *s3.Client, bucketNam
 		Bucket: aws.String(bucketName),
 	})
 	if err != nil {
-		var noSuchBucket *s3types.NoSuchBucket
-		if errors.As(err, &noSuchBucket) {
-			logrus.Infof("Bucket %s does not exist, creating...", bucketName)
-			_, createErr := s3Client.CreateBucket(ctx, &s3.CreateBucketInput{
-				Bucket: aws.String(bucketName),
-			})
-			if createErr != nil {
-				var createAPIError interface{ ErrorCode() string }
-				if errors.As(createErr, &createAPIError) {
-					if createAPIError.ErrorCode() == "BucketAlreadyExists" ||
-						createAPIError.ErrorCode() == "BucketAlreadyOwnedByYou" {
-						logrus.Infof("Bucket %s already exists", bucketName)
-						return nil
-					}
-				}
-				logrus.Errorf("Failed to create bucket %s: %v", bucketName, createErr)
-				return fmt.Errorf("failed to create bucket %s: %w", bucketName, createErr)
-			}
-			logrus.Infof("Successfully created bucket %s", bucketName)
-			return nil
-		}
-
 		var apiErr interface{ ErrorCode() string }
 		if errors.As(err, &apiErr) {
 			switch apiErr.ErrorCode() {
-			case "NotFound", "404":
+			case "NoSuchBucket", "NotFound", "404":
 				logrus.Infof("Bucket %s does not exist, creating...", bucketName)
 				_, createErr := s3Client.CreateBucket(ctx, &s3.CreateBucketInput{
 					Bucket: aws.String(bucketName),

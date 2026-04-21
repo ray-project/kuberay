@@ -12,12 +12,11 @@ import (
 	"github.com/ray-project/kuberay/historyserver/pkg/collector/types"
 	"github.com/ray-project/kuberay/historyserver/pkg/eventserver"
 	"github.com/ray-project/kuberay/historyserver/pkg/historyserver"
-	"github.com/ray-project/kuberay/historyserver/pkg/logging"
 	"github.com/sirupsen/logrus"
 )
 
 func main() {
-	logging.Init()
+	logrus.SetReportCaller(true)
 
 	runtimeClassName := ""
 	rayRootDir := ""
