@@ -79,7 +79,7 @@ func GetSessionIDFromHeadPod(test Test, g *WithT, rayCluster *rayv1.RayCluster) 
 	g.Expect(err).NotTo(HaveOccurred())
 
 	getSessionIDCmd := fmt.Sprintf(`if [ -L "%s" ]; then
-  session_path=$(readlink %s)
+  session_path=$(readlink "%s")
   basename "$session_path"
 else
   echo "session_latest is not a symlink"
@@ -101,7 +101,7 @@ func GetNodeIDFromHeadPod(test Test, g *WithT, rayCluster *rayv1.RayCluster) str
 	g.Expect(err).NotTo(HaveOccurred())
 
 	getNodeIDCmd := fmt.Sprintf(`if [ -f "%s" ]; then
-  cat %s
+  cat "%s"
 else
   echo "raylet_node_id not found"
   exit 1
@@ -121,7 +121,7 @@ func GetNodeIDFromPod(test Test, g *WithT, getPod func() (*corev1.Pod, error), c
 	g.Expect(err).NotTo(HaveOccurred())
 
 	getNodeIDCmd := fmt.Sprintf(`if [ -f "%s" ]; then
-  cat %s
+  cat "%s"
 else
   echo "raylet_node_id not found"
   exit 1
