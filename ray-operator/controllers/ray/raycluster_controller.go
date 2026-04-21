@@ -195,7 +195,7 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 
 	if enableGCSFTRedisCleanup && utils.IsGCSFaultToleranceEnabled(&instance.Spec, instance.Annotations) {
 		if instance.DeletionTimestamp.IsZero() {
-			if afterWaitingState, err := r.isHeadPodAfterWaiting(ctx, instance); err != nil {
+			if afterWaitingState, err := r.isHeadPodPastWaiting(ctx, instance); err != nil {
 				logger.Error(err, "failed to get head pod for getting container state")
 				return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 			} else if !controllerutil.ContainsFinalizer(instance, utils.GCSFaultToleranceRedisCleanupFinalizer) && afterWaitingState {
@@ -1255,12 +1255,12 @@ func getRayContainerStateTerminated(pod corev1.Pod) *corev1.ContainerStateTermin
 	return nil
 }
 
-// isRayContainerAfterWaiting checks whether the Ray container in the given pod has moved past
+// isRayContainerPastWaiting checks whether the Ray container in the given pod has moved past
 // the Waiting state. It returns true if the container is in a Running or Terminated state,
 // and false if the container is still Waiting or if no container status has been reported yet.
 // Similar to getRayContainerStateTerminated, this function finds the Ray container's status
 // by name because ContainerStatuses order is not guaranteed.
-func isRayContainerAfterWaiting(pod corev1.Pod) bool {
+func isRayContainerPastWaiting(pod corev1.Pod) bool {
 	rayContainerName := pod.Spec.Containers[utils.RayContainerIndex].Name
 	for _, containerStatus := range pod.Status.ContainerStatuses {
 		if containerStatus.Name == rayContainerName {
@@ -1271,11 +1271,11 @@ func isRayContainerAfterWaiting(pod corev1.Pod) bool {
 	return false
 }
 
-// isHeadPodAfterWaiting retrieves the head pod for the given RayCluster and checks whether
+// isHeadPodPastWaiting retrieves the head pod for the given RayCluster and checks whether
 // its Ray container has moved past the Waiting state. It returns true if the head pod
 // exists and its Ray container is running or terminated, false if the head pod is not found
 // or is still waiting, and an error if listing head pods fails.
-func (r *RayClusterReconciler) isHeadPodAfterWaiting(ctx context.Context, instance *rayv1.RayCluster) (bool, error) {
+func (r *RayClusterReconciler) isHeadPodPastWaiting(ctx context.Context, instance *rayv1.RayCluster) (bool, error) {
 	headPods := corev1.PodList{}
 	if err := r.List(ctx, &headPods, common.RayClusterHeadPodsAssociationOptions(instance).ToListOptions()...); err != nil {
 		return false, err
@@ -1283,7 +1283,7 @@ func (r *RayClusterReconciler) isHeadPodAfterWaiting(ctx context.Context, instan
 	if len(headPods.Items) == 0 {
 		return false, nil
 	}
-	return isRayContainerAfterWaiting(headPods.Items[0]), nil
+	return isRayContainerPastWaiting(headPods.Items[0]), nil
 }
 
 func (r *RayClusterReconciler) createHeadIngress(ctx context.Context, ingress *networkingv1.Ingress, instance *rayv1.RayCluster) error {

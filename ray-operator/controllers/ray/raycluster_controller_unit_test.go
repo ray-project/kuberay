@@ -2593,7 +2593,7 @@ func Test_IsRayContainerAfterWaiting(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			assert.Equal(t, tc.expected, isRayContainerAfterWaiting(tc.pod))
+			assert.Equal(t, tc.expected, isRayContainerPastWaiting(tc.pod))
 		})
 	}
 }
@@ -2673,7 +2673,7 @@ func Test_IsHeadPodAfterWaiting(t *testing.T) {
 				Build()
 
 			reconciler := &RayClusterReconciler{Client: fakeClient, Scheme: newScheme}
-			result, err := reconciler.isHeadPodAfterWaiting(ctx, testRayCluster.DeepCopy())
+			result, err := reconciler.isHeadPodPastWaiting(ctx, testRayCluster.DeepCopy())
 			require.NoError(t, err)
 			assert.Equal(t, tc.expected, result)
 		})
@@ -2699,7 +2699,7 @@ func Test_IsHeadPodAfterWaiting_ListError(t *testing.T) {
 		Build()
 
 	reconciler := &RayClusterReconciler{Client: fakeClient, Scheme: newScheme}
-	result, err := reconciler.isHeadPodAfterWaiting(ctx, testRayCluster.DeepCopy())
+	result, err := reconciler.isHeadPodPastWaiting(ctx, testRayCluster.DeepCopy())
 	require.ErrorIs(t, err, expectedErr)
 	assert.False(t, result)
 }
