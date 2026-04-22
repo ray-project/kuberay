@@ -112,6 +112,7 @@ _Appears in:_
 | `stepSizePercent` _integer_ | The percentage of traffic to switch to the upgraded RayCluster at a set interval after scaling by MaxSurgePercent.<br />StepSizePercent must be less than or equal to MaxSurgePercent. |  |  |
 | `intervalSeconds` _integer_ | The interval in seconds between transferring StepSize traffic from the old to new RayCluster. |  |  |
 | `gatewayClassName` _string_ | The name of the Gateway Class installed by the Kubernetes Cluster admin. |  |  |
+| `gatewayAddresses` _GatewayAddress array_ | GatewayAddresses is an optional list of addresses to set on the Gateway resource.<br />This is required on bare-metal clusters (e.g. MetalLB + Envoy Gateway) where the<br />Gateway implementation only becomes PROGRAMMED when spec.addresses is explicitly<br />provided. If empty, no addresses field is set on the Gateway (suitable for cloud<br />load-balancer environments that assign addresses automatically). |  |  |
 
 
 #### DeletionCondition

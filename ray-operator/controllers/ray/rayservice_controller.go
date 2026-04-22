@@ -664,6 +664,11 @@ func (r *RayServiceReconciler) createGateway(rayServiceInstance *rayv1.RayServic
 			},
 		},
 	}
+	// Add addresses if specified in the upgrade options
+	if len(options.GatewayAddresses) > 0 {
+		rayServiceGateway.Spec.Addresses = options.GatewayAddresses
+	}
+
 
 	return rayServiceGateway, nil
 }
