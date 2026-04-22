@@ -2107,3 +2107,172 @@ func TestIsHTTPRouteEqual(t *testing.T) {
 		})
 	}
 }
+
+func TestIsGatewayEqual(t *testing.T) {
+	tests := []struct {
+		existing *gwv1.Gateway
+		desired  *gwv1.Gateway
+		name     string
+		expected bool
+	}{
+		{
+			name:     "Both nil",
+			existing: nil,
+			desired:  nil,
+			expected: true,
+		},
+		{
+			name:     "Existing nil",
+			desired:  &gwv1.Gateway{},
+			expected: false,
+		},
+		{
+			name:     "Desired nil",
+			existing: &gwv1.Gateway{},
+			expected: false,
+		},
+		{
+			name: "Exactly equal Gateways",
+			existing: &gwv1.Gateway{
+				Spec: gwv1.GatewaySpec{
+					GatewayClassName: "test-class",
+					Listeners: []gwv1.Listener{
+						{Name: "http", Protocol: gwv1.HTTPProtocolType, Port: 80},
+					},
+				},
+			},
+			desired: &gwv1.Gateway{
+				Spec: gwv1.GatewaySpec{
+					GatewayClassName: "test-class",
+					Listeners: []gwv1.Listener{
+						{Name: "http", Protocol: gwv1.HTTPProtocolType, Port: 80},
+					},
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "Different GatewayClassName",
+			existing: &gwv1.Gateway{
+				Spec: gwv1.GatewaySpec{
+					GatewayClassName: "test-class-old",
+				},
+			},
+			desired: &gwv1.Gateway{
+				Spec: gwv1.GatewaySpec{
+					GatewayClassName: "test-class-new",
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "Different number of Listeners",
+			existing: &gwv1.Gateway{
+				Spec: gwv1.GatewaySpec{
+					Listeners: []gwv1.Listener{
+						{Name: "http", Protocol: gwv1.HTTPProtocolType, Port: 80},
+					},
+				},
+			},
+			desired: &gwv1.Gateway{
+				Spec: gwv1.GatewaySpec{
+					Listeners: []gwv1.Listener{
+						{Name: "http", Protocol: gwv1.HTTPProtocolType, Port: 80},
+						{Name: "https", Protocol: gwv1.HTTPSProtocolType, Port: 443},
+					},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "Different Listener Name",
+			existing: &gwv1.Gateway{
+				Spec: gwv1.GatewaySpec{
+					Listeners: []gwv1.Listener{
+						{Name: "http-old", Protocol: gwv1.HTTPProtocolType, Port: 80},
+					},
+				},
+			},
+			desired: &gwv1.Gateway{
+				Spec: gwv1.GatewaySpec{
+					Listeners: []gwv1.Listener{
+						{Name: "http-new", Protocol: gwv1.HTTPProtocolType, Port: 80},
+					},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "Different Listener Protocol",
+			existing: &gwv1.Gateway{
+				Spec: gwv1.GatewaySpec{
+					Listeners: []gwv1.Listener{
+						{Name: "http", Protocol: gwv1.HTTPProtocolType, Port: 80},
+					},
+				},
+			},
+			desired: &gwv1.Gateway{
+				Spec: gwv1.GatewaySpec{
+					Listeners: []gwv1.Listener{
+						{Name: "http", Protocol: gwv1.HTTPSProtocolType, Port: 80},
+					},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "Different Listener Port",
+			existing: &gwv1.Gateway{
+				Spec: gwv1.GatewaySpec{
+					Listeners: []gwv1.Listener{
+						{Name: "http", Protocol: gwv1.HTTPProtocolType, Port: 80},
+					},
+				},
+			},
+			desired: &gwv1.Gateway{
+				Spec: gwv1.GatewaySpec{
+					Listeners: []gwv1.Listener{
+						{Name: "http", Protocol: gwv1.HTTPProtocolType, Port: 8080},
+					},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "Equal Gateways ignoring defaulted AllowedRoutes",
+			existing: &gwv1.Gateway{
+				Spec: gwv1.GatewaySpec{
+					GatewayClassName: "test-class",
+					Listeners: []gwv1.Listener{
+						{
+							Name:     "http",
+							Protocol: gwv1.HTTPProtocolType,
+							Port:     80,
+							AllowedRoutes: &gwv1.AllowedRoutes{
+								Namespaces: &gwv1.RouteNamespaces{
+									From: ptr.To(gwv1.NamespacesFromSame),
+								},
+							},
+						},
+					},
+				},
+			},
+			desired: &gwv1.Gateway{
+				Spec: gwv1.GatewaySpec{
+					GatewayClassName: "test-class",
+					Listeners: []gwv1.Listener{
+						{Name: "http", Protocol: gwv1.HTTPProtocolType, Port: 80},
+					},
+				},
+			},
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := IsGatewayEqual(tt.existing, tt.desired)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
