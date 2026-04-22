@@ -8647,15 +8647,13 @@ spec:
                               type: string
                             value:
                               maxLength: 253
-                              minLength: 1
                               type: string
-                          required:
-                          - value
                           type: object
                           x-kubernetes-validations:
-                          - message: Hostname value must only contain valid characters
-                              (matching ^(\*\.)?[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$)
-                            rule: 'self.type == ''Hostname'' ? self.value.matches(r"""^(\*\.)?[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$"""):
+                          - message: Hostname value must be empty or contain only
+                              valid characters (matching ^(\*\.)?[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$)
+                            rule: 'self.type == ''Hostname'' ? (!has(self.value) ||
+                              self.value.matches(r"""^(\*\.)?[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$""")):
                               true'
                         type: array
                       gatewayClassName:
