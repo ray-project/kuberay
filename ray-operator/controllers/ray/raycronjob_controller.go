@@ -180,7 +180,6 @@ func (r *RayCronJobReconciler) constructRayJob(cronJob *rayv1.RayCronJob, expect
 func (r *RayCronJobReconciler) SetupWithManager(mgr ctrl.Manager, reconcileConcurrency int) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&rayv1.RayCronJob{}).
-		Owns(&rayv1.RayJob{}).
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: reconcileConcurrency,
 			LogConstructor: func(request *reconcile.Request) logr.Logger {
