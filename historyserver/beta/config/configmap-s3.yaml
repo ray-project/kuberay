@@ -1,0 +1,31 @@
+# Sample backend config ConfigMap (S3 / MinIO). Edit for your actual backend.
+#
+# Both eventprocessor and historyserver mount this ConfigMap at
+# /var/collector-config and pass the file path via --runtime-class-config-path.
+# The JSON is parsed by the reader/writer factory registered under
+# --runtime-class-name (see pkg/collector/registry.go).
+#
+# IMPORTANT — JSON key convention (see pkg/storage/s3/config.go):
+#   - Keys are camelCase with "s3" prefix: s3Bucket / s3Endpoint / s3Region
+#   - Boolean flags (s3ForcePathStyle, s3DisableSSL) MUST be JSON strings
+#     ("true" / "false"), not booleans — the code does `.(string) == "true"`.
+#   - If the JSON has any non-empty value, it OVERRIDES all S3_* env vars
+#     (len(jd)==0 branch is env fallback). Treat this as all-or-nothing.
+#
+# For GCS / Azure Blob / Aliyun OSS, mirror this file but swap the keys per
+# the backend-specific struct in pkg/collector/<backend>/types.go.
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: historyserver-beta-runtime-config
+  namespace: default
+data:
+  data: |
+    {
+      "s3Bucket": "ray-historyserver",
+      "s3Endpoint": "minio-service.minio-dev:9000",
+      "s3Region": "test",
+      "s3ForcePathStyle": "true",
+      "s3DisableSSL": "true"
+    }

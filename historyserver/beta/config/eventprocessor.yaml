@@ -1,0 +1,121 @@
+# History Server v2 beta: eventprocessor Deployment.
+#
+# The processor scans object storage every 10 minutes, probes the K8s API for
+# each session's RayCluster CR, and writes an immutable snapshot once the
+# cluster is gone. See beta/cmd/eventprocessor/main.go for the wiring and
+# implementation_plan.md §Phase 3.3 for the pipeline design.
+#
+# Why replicas=1 + strategy: Recreate (implementation_plan.md §9 #15, §7 #3):
+#   - PoC has no leader election. Two replicas writing the same snapshot at
+#     once would race on S3 PUT.
+#   - Default RollingUpdate briefly runs TWO pods during a rollout, which is
+#     exactly the race we want to avoid. Recreate stops the old pod before
+#     starting the new one, trading a short gap for correctness.
+#   - Future work: K8s Lease leader election would unlock replicas>1.
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: eventprocessor-beta
+  namespace: default
+automountServiceAccountToken: true
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: eventprocessor-beta
+  namespace: default
+  labels:
+    app: eventprocessor-beta
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: eventprocessor-beta
+  template:
+    metadata:
+      labels:
+        app: eventprocessor-beta
+    spec:
+      serviceAccountName: eventprocessor-beta
+      containers:
+      - name: eventprocessor
+        image: historyserver-beta-eventprocessor:v0.1.0
+        imagePullPolicy: IfNotPresent
+        command:
+        - eventprocessor
+        - --runtime-class-name=s3
+        - --ray-root-dir=log
+        - --runtime-class-config-path=/var/collector-config/data
+        - --process-interval=10m
+        - --metrics-addr=:9090
+        ports:
+        - containerPort: 9090
+          name: metrics
+        # eventprocessor has no primary HTTP server (daemon tick loop),
+        # but the sidecar metrics server doubles as a health signal:
+        # if /metrics responds, the process is alive and its main goroutine
+        # hasn't OOMed. Longer period than HS since ticks are 10min anyway.
+        livenessProbe:
+          httpGet:
+            path: /metrics
+            port: metrics
+          initialDelaySeconds: 15
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /metrics
+            port: metrics
+          initialDelaySeconds: 5
+          periodSeconds: 15
+          timeoutSeconds: 3
+          failureThreshold: 2
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 10001
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: ["ALL"]
+        env:
+        - name: S3DISABLE_SSL
+          value: "true"
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: historyserver-beta-s3
+              key: access_key
+              optional: true
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: historyserver-beta-s3
+              key: secret_key
+              optional: true
+        - name: S3_BUCKET
+          value: "ray-historyserver"
+        - name: S3_ENDPOINT
+          value: "minio-service.minio-dev:9000"
+        - name: S3_REGION
+          value: "test"
+        - name: S3FORCE_PATH_STYLE
+          value: "true"
+        volumeMounts:
+        - name: collector-config
+          mountPath: /var/collector-config
+          readOnly: true
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "256Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+      volumes:
+      - name: collector-config
+        configMap:
+          name: historyserver-beta-runtime-config

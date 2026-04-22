@@ -1,0 +1,50 @@
+# RBAC for History Server v2 beta.
+#
+# Both binaries (eventprocessor, historyserver) need the same RayCluster read
+# access, but we intentionally keep them on separate ServiceAccounts so their
+# audit trails and (future) policy scoping stay distinct.
+#
+# The ClusterRole is named `rayclusters-reader-beta` (not `-reader`) to avoid
+# colliding with v1's `raycluster-reader` when both versions are deployed in
+# the same cluster.
+#
+# `watch` is included for future controller-pattern readiness; today only
+# `get` + `list` are exercised (processor -> Get(RayCluster); historyserver
+# -> List(RayCluster) via /clusters + Get for redirectRequest proxy).
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: rayclusters-reader-beta
+rules:
+- apiGroups: ["ray.io"]
+  resources: ["rayclusters"]
+  verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: eventprocessor-beta
+  namespace: default
+subjects:
+- kind: ServiceAccount
+  name: eventprocessor-beta
+  namespace: default
+roleRef:
+  kind: ClusterRole
+  name: rayclusters-reader-beta
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: historyserver-beta
+  namespace: default
+subjects:
+- kind: ServiceAccount
+  name: historyserver-beta
+  namespace: default
+roleRef:
+  kind: ClusterRole
+  name: rayclusters-reader-beta
+  apiGroup: rbac.authorization.k8s.io

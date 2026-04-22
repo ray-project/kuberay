@@ -1,0 +1,150 @@
+# History Server v2 beta: historyserver Deployment + Service.
+#
+# The historyserver is a stateless HTTP daemon. Each pod holds an independent
+# LRU cache over immutable session snapshots, so replicas can scale
+# horizontally without coordination. See beta/cmd/historyserver/main.go and
+# implementation_plan.md §Phase 4.5.
+#
+# Why replicas=3 + default RollingUpdate (implementation_plan.md §Phase 6):
+#   - Stateless: any pod can answer any request. Rolling updates are safe
+#     because snapshots in S3 are immutable; two pod versions seeing the same
+#     file will produce the same response.
+#   - K8s API usage is read-only (List for /clusters, Get for redirectRequest
+#     live proxy) — no write race to worry about.
+#
+# The Service mirrors v1 (ClusterIP, 30080 -> 8080) so operators have a
+# familiar surface when migrating.
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: historyserver-beta
+  namespace: default
+automountServiceAccountToken: true
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: historyserver-beta
+  namespace: default
+  labels:
+    app: historyserver-beta
+spec:
+  selector:
+    app: historyserver-beta
+  ports:
+  - protocol: TCP
+    name: http
+    port: 30080
+    targetPort: 8080
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: historyserver-beta
+  namespace: default
+  labels:
+    app: historyserver-beta
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: historyserver-beta
+  template:
+    metadata:
+      labels:
+        app: historyserver-beta
+    spec:
+      serviceAccountName: historyserver-beta
+      containers:
+      - name: historyserver
+        image: historyserver-beta-historyserver:v0.1.0
+        imagePullPolicy: IfNotPresent
+        command:
+        - historyserver
+        - --runtime-class-name=s3
+        - --ray-root-dir=log
+        - --runtime-class-config-path=/var/collector-config/data
+        - --dashboard-dir=/dashboard
+        ports:
+        - containerPort: 8080
+          name: http
+        # Probes use endpoints registered by beta/pkg/server/router.go.
+        # /readz: serves traffic as soon as HTTP listener is up.
+        # /livez: process restarts if handler hangs > failureThreshold * period.
+        livenessProbe:
+          httpGet:
+            path: /livez
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 20
+          timeoutSeconds: 3
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /readz
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 2
+          failureThreshold: 2
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 10001
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: ["ALL"]
+        env:
+        - name: S3DISABLE_SSL
+          value: "true"
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: historyserver-beta-s3
+              key: access_key
+              optional: true
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: historyserver-beta-s3
+              key: secret_key
+              optional: true
+        - name: S3_BUCKET
+          value: "ray-historyserver"
+        - name: S3_ENDPOINT
+          value: "minio-service.minio-dev:9000"
+        - name: S3_REGION
+          value: "test"
+        - name: S3FORCE_PATH_STYLE
+          value: "true"
+        volumeMounts:
+        - name: collector-config
+          mountPath: /var/collector-config
+          readOnly: true
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "256Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+      volumes:
+      - name: collector-config
+        configMap:
+          name: historyserver-beta-runtime-config
+---
+# PodDisruptionBudget: during voluntary disruption (node drain, cluster
+# upgrade), guarantee at least one historyserver replica stays up so users
+# don't see total outage. minAvailable=1 suits replicas=3 + RollingUpdate.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: historyserver-beta
+  namespace: default
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: historyserver-beta

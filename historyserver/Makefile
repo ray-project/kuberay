@@ -181,3 +181,52 @@ endif
 #else
 #CONTROLLER_GEN=$(shell which controller-gen)
 #endif
+
+# =========================================================================
+# v2 beta targets — mirrors v1 pattern. Builds / images for beta binaries.
+# =========================================================================
+
+.PHONY: buildbeta buildbeta-eventprocessor buildbeta-historyserver
+.PHONY: localimage-beta localimage-beta-eventprocessor localimage-beta-historyserver
+.PHONY: pushbeta deploybeta-kind
+
+BETA_IMAGE_REGISTRY ?= localhost:5001
+BETA_IMAGE_TAG      ?= v0.1.0
+BETA_EP_IMAGE       := $(BETA_IMAGE_REGISTRY)/historyserver-beta-eventprocessor:$(BETA_IMAGE_TAG)
+BETA_HS_IMAGE       := $(BETA_IMAGE_REGISTRY)/historyserver-beta-historyserver:$(BETA_IMAGE_TAG)
+
+buildbeta: buildbeta-eventprocessor buildbeta-historyserver
+
+buildbeta-eventprocessor: mod
+	@echo ""
+	@echo "go build beta/cmd/eventprocessor ..."
+	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) \
+		go build -v $(GO_BUILD_FLAGS) -o $(BIN_DIR)/eventprocessor ./beta/cmd/eventprocessor
+
+buildbeta-historyserver: mod
+	@echo ""
+	@echo "go build beta/cmd/historyserver ..."
+	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) \
+		go build -v $(GO_BUILD_FLAGS) -o $(BIN_DIR)/historyserver-beta ./beta/cmd/historyserver
+
+localimage-beta: localimage-beta-eventprocessor localimage-beta-historyserver
+
+localimage-beta-eventprocessor: dockerbuilder_instance
+	${ENGINE} buildx build --platform linux/amd64 --load \
+		--build-arg GOPROXY=$(GOPROXY) \
+		-f beta/Dockerfile.eventprocessor \
+		-t $(BETA_EP_IMAGE) .
+
+localimage-beta-historyserver: dockerbuilder_instance
+	${ENGINE} buildx build --platform linux/amd64 --load \
+		--build-arg GOPROXY=$(GOPROXY) \
+		-f beta/Dockerfile.historyserver \
+		-t $(BETA_HS_IMAGE) .
+
+pushbeta: localimage-beta
+	${ENGINE} push $(BETA_EP_IMAGE)
+	${ENGINE} push $(BETA_HS_IMAGE)
+
+# One-shot dev bootstrap: kind + KubeRay + MinIO + load images + apply manifests.
+deploybeta-kind:
+	bash beta/scripts/setup-kind-dev.sh

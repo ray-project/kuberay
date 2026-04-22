@@ -1,0 +1,33 @@
+# Multi-stage build for v2 beta eventprocessor binary.
+# Mirrors historyserver/Dockerfile.historyserver (v1) for consistency.
+FROM golang:1.25.1 AS builder
+
+ARG GOPROXY=https://proxy.golang.org,direct
+ENV GOPROXY=${GOPROXY}
+WORKDIR /historyserver
+
+# Go modules first for dep caching.
+COPY go.mod go.mod
+COPY go.sum go.sum
+RUN go mod download
+
+# v1 packages that v2 imports (transitively required by beta/cmd/eventprocessor).
+# Keep narrow — only what's needed.
+COPY pkg/collector/   pkg/collector/
+COPY pkg/eventserver/ pkg/eventserver/
+COPY pkg/historyserver/ pkg/historyserver/
+COPY pkg/storage/     pkg/storage/
+COPY pkg/utils/       pkg/utils/
+
+# v2 beta packages.
+COPY beta/cmd/eventprocessor/ beta/cmd/eventprocessor/
+COPY beta/pkg/                beta/pkg/
+
+# Build.
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+    go build -o /out/eventprocessor ./beta/cmd/eventprocessor
+
+FROM ubuntu:22.04
+RUN apt-get update && apt-get upgrade -y && rm -rf /var/cache/apt/ && apt-get install -y ca-certificates
+COPY --from=builder /out/eventprocessor /usr/local/bin/eventprocessor
+ENTRYPOINT ["eventprocessor"]
