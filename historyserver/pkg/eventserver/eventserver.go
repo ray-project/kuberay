@@ -105,8 +105,8 @@ func (h *EventHandler) Run(stop chan struct{}, numOfEventProcessors int) error {
 		cctx[i] = cancel
 		go func() {
 			defer wg.Done()
-			var processor EventProcessor[map[string]any] = h
-			err := processor.ProcessEvents(ctx, currEventChannel)
+			// TODO(jwj): Remove this once the ticker/worker-pool refactor (plan step A1/A3) is complete.
+			err := h.ProcessEvents(ctx, currEventChannel)
 			if err == ctx.Err() {
 				logrus.Warnf("Event processor go routine %d is now closed", i)
 				return
