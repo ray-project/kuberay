@@ -2840,6 +2840,116 @@ func Test_RedisCleanupFeatureFlag(t *testing.T) {
 	}
 }
 
+func Test_RedisCleanupFeatureFlag_HeadPodCrashLoopBackOffAddsFinalizer(t *testing.T) {
+	setupTest(t)
+	defer os.Unsetenv(utils.ENABLE_GCS_FT_REDIS_CLEANUP)
+	os.Setenv(utils.ENABLE_GCS_FT_REDIS_CLEANUP, "true")
+
+	newScheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(newScheme)
+	_ = corev1.AddToScheme(newScheme)
+
+	cluster := testRayCluster.DeepCopy()
+	if cluster.Annotations == nil {
+		cluster.Annotations = map[string]string{}
+	}
+	cluster.Annotations[utils.RayFTEnabledAnnotationKey] = "true"
+	cluster.Spec.EnableInTreeAutoscaling = nil
+
+	ctx := context.Background()
+	fakeClient := clientFake.NewClientBuilder().
+		WithScheme(newScheme).
+		WithObjects(cluster).
+		WithStatusSubresource(cluster).
+		Build()
+
+	reconciler := &RayClusterReconciler{
+		Client:                     fakeClient,
+		Recorder:                   &record.FakeRecorder{},
+		Scheme:                     newScheme,
+		rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
+	}
+
+	// First reconcile creates Pods before head container status is available.
+	_, err := reconciler.rayClusterReconcile(ctx, cluster)
+	require.NoError(t, err)
+
+	headPods := corev1.PodList{}
+	err = fakeClient.List(ctx, &headPods,
+		client.InNamespace(namespaceStr),
+		client.MatchingLabels{
+			utils.RayClusterLabelKey:  cluster.Name,
+			utils.RayNodeTypeLabelKey: string(rayv1.HeadNode),
+		},
+	)
+	require.NoError(t, err)
+	require.Len(t, headPods.Items, 1)
+
+	// head pod container is in running.
+	headPod := headPods.Items[0]
+	headPod.Status.Phase = corev1.PodRunning
+	headPod.Status.ContainerStatuses = []corev1.ContainerStatus{{
+		Name: headPod.Spec.Containers[utils.RayContainerIndex].Name,
+		State: corev1.ContainerState{Running: &corev1.ContainerStateRunning{
+			StartedAt: metav1.Now(),
+		}},
+	}}
+	err = fakeClient.Status().Update(ctx, &headPod)
+	require.NoError(t, err)
+
+	latestCluster := &rayv1.RayCluster{}
+	err = fakeClient.Get(ctx, client.ObjectKey{Name: cluster.Name, Namespace: cluster.Namespace}, latestCluster)
+	require.NoError(t, err)
+
+	_, err = reconciler.rayClusterReconcile(ctx, latestCluster)
+	require.NoError(t, err)
+
+	// the finalizer should be added
+	rayClusterList := rayv1.RayClusterList{}
+	err = fakeClient.List(ctx, &rayClusterList, client.InNamespace(namespaceStr))
+	require.NoError(t, err)
+	require.Len(t, rayClusterList.Items, 1)
+	assert.True(t, controllerutil.ContainsFinalizer(&rayClusterList.Items[0], utils.GCSFaultToleranceRedisCleanupFinalizer))
+
+	// get update-to-date head pod for setting crashing state
+	headPods = corev1.PodList{}
+	err = fakeClient.List(ctx, &headPods,
+		client.InNamespace(namespaceStr),
+		client.MatchingLabels{
+			utils.RayClusterLabelKey:  cluster.Name,
+			utils.RayNodeTypeLabelKey: string(rayv1.HeadNode),
+		},
+	)
+	require.NoError(t, err)
+	require.Len(t, headPods.Items, 1)
+
+	headPod = headPods.Items[0]
+	headPod.Status.Phase = corev1.PodPending
+	headPod.Status.ContainerStatuses = []corev1.ContainerStatus{{
+		Name:         headPod.Spec.Containers[utils.RayContainerIndex].Name,
+		RestartCount: 1,
+		State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{
+			Reason: "CrashLoopBackOff",
+		}},
+	}}
+	err = fakeClient.Status().Update(ctx, &headPod)
+	require.NoError(t, err)
+
+	latestCluster = &rayv1.RayCluster{}
+	err = fakeClient.Get(ctx, client.ObjectKey{Name: cluster.Name, Namespace: cluster.Namespace}, latestCluster)
+	require.NoError(t, err)
+
+	_, err = reconciler.rayClusterReconcile(ctx, latestCluster)
+	require.NoError(t, err)
+
+	// finalizer should still exist.
+	rayClusterList = rayv1.RayClusterList{}
+	err = fakeClient.List(ctx, &rayClusterList, client.InNamespace(namespaceStr))
+	require.NoError(t, err)
+	require.Len(t, rayClusterList.Items, 1)
+	assert.True(t, controllerutil.ContainsFinalizer(&rayClusterList.Items[0], utils.GCSFaultToleranceRedisCleanupFinalizer))
+}
+
 func TestEvents_RedisCleanup(t *testing.T) {
 	setupTest(t)
 	newScheme := runtime.NewScheme()
