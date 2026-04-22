@@ -2,8 +2,8 @@ package v1
 
 import (
 	corev1 "k8s.io/api/core/v1"
-	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
@@ -79,6 +79,7 @@ type ClusterUpgradeOptions struct {
 	// Gateway implementation only becomes PROGRAMMED when spec.addresses is explicitly
 	// provided. If empty, no addresses field is set on the Gateway (suitable for cloud
 	// load-balancer environments that assign addresses automatically).
+	// +kubebuilder:validation:MaxItems=16
 	// +optional
 	GatewayAddresses []gatewayv1.GatewaySpecAddress `json:"gatewayAddresses,omitempty"`
 }
