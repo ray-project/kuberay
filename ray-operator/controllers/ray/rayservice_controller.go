@@ -673,7 +673,6 @@ func (r *RayServiceReconciler) createGateway(rayServiceInstance *rayv1.RayServic
 		rayServiceGateway.Spec.Addresses = options.GatewayAddresses
 	}
 
-
 	return rayServiceGateway, nil
 }
 
