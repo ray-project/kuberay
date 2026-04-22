@@ -353,6 +353,9 @@ func (r *RayDashboardClient) DeleteJob(ctx context.Context, jobName string) erro
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		return fmt.Errorf("DeleteJob fail: %s %s", resp.Status, string(body))
+	}
 	return nil
 }
 
