@@ -2097,7 +2097,6 @@ func TestIsHTTPRouteEqual(t *testing.T) {
 			},
 			expected: false,
 		},
-
 	}
 
 	for _, tt := range tests {

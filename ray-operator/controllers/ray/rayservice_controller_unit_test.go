@@ -2932,7 +2932,7 @@ func TestReconcileServe_SkipConfigUpdateDuringRollback(t *testing.T) {
 			},
 		},
 	}
-	
+
 	pendingCluster := &rayv1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: "pending-cluster", Namespace: namespace},
 		Status: rayv1.RayClusterStatus{
@@ -2949,7 +2949,7 @@ func TestReconcileServe_SkipConfigUpdateDuringRollback(t *testing.T) {
 			Ports: []corev1.ServicePort{{Name: utils.DashboardPortName, Port: 8265}},
 		},
 	}
-	
+
 	pendingServiceName, _ := utils.GenerateHeadServiceName(utils.RayClusterCRD, rayv1.RayClusterSpec{}, "pending-cluster")
 	pendingService := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{Name: pendingServiceName, Namespace: namespace},
@@ -2959,11 +2959,11 @@ func TestReconcileServe_SkipConfigUpdateDuringRollback(t *testing.T) {
 	}
 
 	tests := []struct {
-		name                  string
-		clusterInstance       *rayv1.RayCluster
-		isRollback            bool
-		isActiveCluster       bool
-		expectUpdate          bool
+		name            string
+		clusterInstance *rayv1.RayCluster
+		isRollback      bool
+		isActiveCluster bool
+		expectUpdate    bool
 	}{
 		{
 			name:            "Active cluster during rollback -> should update",
@@ -3007,7 +3007,7 @@ func TestReconcileServe_SkipConfigUpdateDuringRollback(t *testing.T) {
 			reconciler := &RayServiceReconciler{
 				Client:   fakeClient,
 				Recorder: &record.FakeRecorder{},
-				dashboardClientFunc: func(rayCluster *rayv1.RayCluster, clientURL string) (dashboardclient.RayDashboardClientInterface, error) {
+				dashboardClientFunc: func(_ *rayv1.RayCluster, _ string) (dashboardclient.RayDashboardClientInterface, error) {
 					return fakeDashboardClient, nil
 				},
 				ServeConfigs: lru.New(10),
@@ -3019,7 +3019,7 @@ func TestReconcileServe_SkipConfigUpdateDuringRollback(t *testing.T) {
 					UpgradeStrategy: &rayv1.RayServiceUpgradeStrategy{
 						Type: ptr.To(rayv1.RayServiceNewClusterWithIncrementalUpgrade),
 					},
-					ServeConfigV2: `{"key": "new-config"}`, 
+					ServeConfigV2: `{"key": "new-config"}`,
 				},
 				Status: rayv1.RayServiceStatuses{
 					ActiveServiceStatus: rayv1.RayServiceStatus{

@@ -1090,6 +1090,7 @@ func IsHTTPRouteEqual(existing, desired *gwv1.HTTPRoute) bool {
 
 			// Only compare the fields the controller updates.
 			if string(existingRef.Name) != string(desiredRef.Name) ||
+				string(ptr.Deref(existingRef.Namespace, "")) != string(ptr.Deref(desiredRef.Namespace, "")) ||
 				ptr.Deref(existingRef.Weight, 1) != ptr.Deref(desiredRef.Weight, 1) ||
 				ptr.Deref(existingRef.Port, 0) != ptr.Deref(desiredRef.Port, 0) {
 				return false
@@ -1100,8 +1101,7 @@ func IsHTTPRouteEqual(existing, desired *gwv1.HTTPRoute) bool {
 }
 
 // IsGatewayEqual checks if the existing Gateway matches the desired Gateway.
-// This check only compares the fields explicitly managed by the RayService controller to
-// avoid infinite update loops caused by defaults injected by the Gateway implementation.
+// This check only compares the fields explicitly managed by the RayService controller.
 func IsGatewayEqual(existing, desired *gwv1.Gateway) bool {
 	if existing == nil || desired == nil {
 		return existing == desired
