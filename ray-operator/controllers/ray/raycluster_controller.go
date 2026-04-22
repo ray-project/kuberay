@@ -195,20 +195,22 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 
 	if enableGCSFTRedisCleanup && utils.IsGCSFaultToleranceEnabled(&instance.Spec, instance.Annotations) {
 		if instance.DeletionTimestamp.IsZero() {
-			if afterWaitingState, err := r.isHeadPodPastWaiting(ctx, instance); err != nil {
-				logger.Error(err, "failed to get head pod for getting container state")
-				return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
-			} else if !controllerutil.ContainsFinalizer(instance, utils.GCSFaultToleranceRedisCleanupFinalizer) && afterWaitingState {
-				logger.Info(
-					"GCS fault tolerance has been enabled. Implementing a finalizer to ensure that Redis is properly cleaned up once the RayCluster custom resource (CR) is deleted.",
-					"finalizer", utils.GCSFaultToleranceRedisCleanupFinalizer)
-				controllerutil.AddFinalizer(instance, utils.GCSFaultToleranceRedisCleanupFinalizer)
-				if err := r.Update(ctx, instance); err != nil {
-					err = fmt.Errorf("failed to add the finalizer %s to the RayCluster: %w", utils.GCSFaultToleranceRedisCleanupFinalizer, err)
+			if !controllerutil.ContainsFinalizer(instance, utils.GCSFaultToleranceRedisCleanupFinalizer) {
+				if afterWaitingState, err := r.isHeadPodPastWaiting(ctx, instance); err != nil {
+					logger.Error(err, "failed to get head pod for getting container state")
 					return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
+				} else if afterWaitingState {
+					logger.Info(
+						"GCS fault tolerance has been enabled. Implementing a finalizer to ensure that Redis is properly cleaned up once the RayCluster custom resource (CR) is deleted.",
+						"finalizer", utils.GCSFaultToleranceRedisCleanupFinalizer)
+					controllerutil.AddFinalizer(instance, utils.GCSFaultToleranceRedisCleanupFinalizer)
+					if err := r.Update(ctx, instance); err != nil {
+						err = fmt.Errorf("failed to add the finalizer %s to the RayCluster: %w", utils.GCSFaultToleranceRedisCleanupFinalizer, err)
+						return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
+					}
+					// Only start the RayCluster reconciliation after the finalizer is added.
+					return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, nil
 				}
-				// Only start the RayCluster reconciliation after the finalizer is added.
-				return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, nil
 			}
 		} else {
 			logger.Info(
