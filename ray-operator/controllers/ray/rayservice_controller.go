@@ -1747,12 +1747,20 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 	isActiveCluster := rayClusterInstance.Name == rayServiceInstance.Status.ActiveServiceStatus.RayClusterName
 	isIncrementalUpgradeInProgress := utils.IsIncrementalUpgradeEnabled(&rayServiceInstance.Spec) &&
 		meta.IsStatusConditionTrue(rayServiceInstance.Status.Conditions, string(rayv1.UpgradeInProgress))
+	isRollbackInProgress := utils.IsIncrementalUpgradeEnabled(&rayServiceInstance.Spec) &&
+		meta.IsStatusConditionTrue(rayServiceInstance.Status.Conditions, string(rayv1.RollbackInProgress))
 
 	if isActiveCluster && isIncrementalUpgradeInProgress {
 		// Skip updating the Serve config for the Active cluster during NewClusterWithIncrementalUpgrade. The updated
 		// Serve config is applied to the pending RayService's RayCluster.
 		skipConfigUpdate = true
 		logger.Info("Blocking new Serve config submission for Active cluster during upgrade.", "clusterName", rayClusterInstance.Name)
+	} else if !isActiveCluster && isRollbackInProgress {
+		// During rollback, the pending cluster is being scaled down and phased out.
+		// We skip updating its Serve config to prevent unnecessary disruptive redeployments,
+		// since its only goal is to drain traffic while the active cluster takes over.
+		skipConfigUpdate = true
+		logger.Info("Blocking new Serve config submission for Pending cluster during rollback.", "clusterName", rayClusterInstance.Name)
 	}
 
 	cachedServeConfigV2 := r.getServeConfigFromCache(rayServiceInstance, rayClusterInstance.Name)

@@ -2917,3 +2917,138 @@ func TestShouldCompleteIncrementalRollback(t *testing.T) {
 		})
 	}
 }
+
+func TestReconcileServe_SkipConfigUpdateDuringRollback(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, true)
+	features.SetFeatureGateDuringTest(t, features.RayServiceIncrementalUpgrade, true)
+	ctx := context.TODO()
+	namespace := "test-ns"
+
+	activeCluster := &rayv1.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "active-cluster", Namespace: namespace},
+		Status: rayv1.RayClusterStatus{
+			Conditions: []metav1.Condition{
+				{Type: string(rayv1.HeadPodReady), Status: metav1.ConditionTrue},
+			},
+		},
+	}
+	
+	pendingCluster := &rayv1.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "pending-cluster", Namespace: namespace},
+		Status: rayv1.RayClusterStatus{
+			Conditions: []metav1.Condition{
+				{Type: string(rayv1.HeadPodReady), Status: metav1.ConditionTrue},
+			},
+		},
+	}
+
+	activeServiceName, _ := utils.GenerateHeadServiceName(utils.RayClusterCRD, rayv1.RayClusterSpec{}, "active-cluster")
+	activeService := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{Name: activeServiceName, Namespace: namespace},
+		Spec: corev1.ServiceSpec{
+			Ports: []corev1.ServicePort{{Name: utils.DashboardPortName, Port: 8265}},
+		},
+	}
+	
+	pendingServiceName, _ := utils.GenerateHeadServiceName(utils.RayClusterCRD, rayv1.RayClusterSpec{}, "pending-cluster")
+	pendingService := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{Name: pendingServiceName, Namespace: namespace},
+		Spec: corev1.ServiceSpec{
+			Ports: []corev1.ServicePort{{Name: utils.DashboardPortName, Port: 8265}},
+		},
+	}
+
+	tests := []struct {
+		name                  string
+		clusterInstance       *rayv1.RayCluster
+		isRollback            bool
+		isActiveCluster       bool
+		expectUpdate          bool
+	}{
+		{
+			name:            "Active cluster during rollback -> should update",
+			clusterInstance: activeCluster,
+			isRollback:      true,
+			isActiveCluster: true,
+			expectUpdate:    true,
+		},
+		{
+			name:            "Pending cluster during rollback -> should skip update",
+			clusterInstance: pendingCluster,
+			isRollback:      true,
+			isActiveCluster: false,
+			expectUpdate:    false,
+		},
+		{
+			name:            "Pending cluster during upgrade (no rollback) -> should update",
+			clusterInstance: pendingCluster,
+			isRollback:      false,
+			isActiveCluster: false,
+			expectUpdate:    true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			newScheme := runtime.NewScheme()
+			_ = rayv1.AddToScheme(newScheme)
+			_ = corev1.AddToScheme(newScheme)
+
+			fakeClient := clientFake.NewClientBuilder().
+				WithScheme(newScheme).
+				WithRuntimeObjects(activeCluster, pendingCluster, activeService, pendingService).
+				Build()
+
+			fakeDashboardClient := &utils.FakeRayDashboardClient{}
+			fakeDashboardClient.SetMultiApplicationStatuses(map[string]*utiltypes.ServeApplicationStatus{
+				"app1": {Status: rayv1.ApplicationStatusEnum.RUNNING},
+			})
+
+			reconciler := &RayServiceReconciler{
+				Client:   fakeClient,
+				Recorder: &record.FakeRecorder{},
+				dashboardClientFunc: func(rayCluster *rayv1.RayCluster, clientURL string) (dashboardclient.RayDashboardClientInterface, error) {
+					return fakeDashboardClient, nil
+				},
+				ServeConfigs: lru.New(10),
+			}
+
+			rayService := &rayv1.RayService{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-rayservice", Namespace: namespace},
+				Spec: rayv1.RayServiceSpec{
+					UpgradeStrategy: &rayv1.RayServiceUpgradeStrategy{
+						Type: ptr.To(rayv1.RayServiceNewClusterWithIncrementalUpgrade),
+					},
+					ServeConfigV2: `{"key": "new-config"}`, 
+				},
+				Status: rayv1.RayServiceStatuses{
+					ActiveServiceStatus: rayv1.RayServiceStatus{
+						RayClusterName: "active-cluster",
+					},
+					PendingServiceStatus: rayv1.RayServiceStatus{
+						RayClusterName: "pending-cluster",
+					},
+				},
+			}
+
+			if tt.isRollback {
+				setCondition(rayService, rayv1.RollbackInProgress, metav1.ConditionTrue, rayv1.TargetClusterChanged, "rolling back")
+				setCondition(rayService, rayv1.UpgradeInProgress, metav1.ConditionFalse, rayv1.TargetClusterChanged, "rollback in progress")
+			} else {
+				setCondition(rayService, rayv1.UpgradeInProgress, metav1.ConditionTrue, rayv1.TargetClusterChanged, "upgrading")
+			}
+
+			// Run reconcileServe
+			_, _, err := reconciler.reconcileServe(ctx, rayService, tt.clusterInstance)
+			require.NoError(t, err)
+
+			// Check if UpdateDeployments was called
+			if tt.expectUpdate {
+				assert.NotNil(t, fakeDashboardClient.LastUpdatedConfig)
+				assert.Contains(t, string(fakeDashboardClient.LastUpdatedConfig), "new-config")
+			} else {
+				assert.Nil(t, fakeDashboardClient.LastUpdatedConfig)
+			}
+		})
+	}
+}
