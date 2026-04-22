@@ -8655,6 +8655,7 @@ spec:
                             rule: 'self.type == ''Hostname'' ? (!has(self.value) ||
                               self.value.matches(r"""^(\*\.)?[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$""")):
                               true'
+                        maxItems: 16
                         type: array
                       gatewayClassName:
                         type: string
