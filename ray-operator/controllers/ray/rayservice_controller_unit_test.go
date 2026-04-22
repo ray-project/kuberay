@@ -2833,7 +2833,7 @@ func TestShouldUpdateCluster_SuspendFlip(t *testing.T) {
 	}
 }
 
-// headReadyCluster is a quick test helper to construct a RayCluster with a specific HeadPodReady condition.
+// headReadyCluster is a helper to construct a RayCluster with a specific HeadPodReady condition.
 func headReadyCluster(ready bool) *rayv1.RayCluster {
 	status := metav1.ConditionFalse
 	if ready {
@@ -3033,7 +3033,7 @@ func TestReconcileServe_SkipConfigUpdateDuringRollback(t *testing.T) {
 
 			if tt.isRollback {
 				setCondition(rayService, rayv1.RollbackInProgress, metav1.ConditionTrue, rayv1.TargetClusterChanged, "rolling back")
-				setCondition(rayService, rayv1.UpgradeInProgress, metav1.ConditionFalse, rayv1.TargetClusterChanged, "rollback in progress")
+				setCondition(rayService, rayv1.UpgradeInProgress, metav1.ConditionTrue, rayv1.TargetClusterChanged, "upgrade still in progress during rollback")
 			} else {
 				setCondition(rayService, rayv1.UpgradeInProgress, metav1.ConditionTrue, rayv1.TargetClusterChanged, "upgrading")
 			}

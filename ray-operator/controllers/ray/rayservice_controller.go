@@ -1750,7 +1750,7 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 	isRollbackInProgress := utils.IsIncrementalUpgradeEnabled(&rayServiceInstance.Spec) &&
 		meta.IsStatusConditionTrue(rayServiceInstance.Status.Conditions, string(rayv1.RollbackInProgress))
 
-	if isActiveCluster && isIncrementalUpgradeInProgress {
+	if isActiveCluster && isIncrementalUpgradeInProgress && !isRollbackInProgress {
 		// Skip updating the Serve config for the Active cluster during NewClusterWithIncrementalUpgrade. The updated
 		// Serve config is applied to the pending RayService's RayCluster.
 		skipConfigUpdate = true
