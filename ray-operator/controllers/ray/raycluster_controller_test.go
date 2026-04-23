@@ -27,6 +27,7 @@ import (
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -1616,6 +1617,101 @@ var _ = Context("Inside the default namespace", func() {
 			Eventually(
 				getClusterState(ctx, namespace, rayCluster.Name),
 				time.Second*3, time.Millisecond*500).Should(Equal(rayv1.Ready))
+		})
+	})
+
+	Describe("Manager cache Pod label selectors", Ordered, func() {
+		ctx := context.Background()
+		namespace := "ray-mgr-cache-test"
+		rayClusterName := "raycluster-cache-label-selectors"
+		unrelatedPodName := "unrelated-pod-for-cache-test"
+
+		rayCluster := rayClusterTemplate(rayClusterName, namespace)
+		rayCluster.Spec.WorkerGroupSpecs[0].Replicas = ptr.To[int32](1)
+		rayCluster.Spec.WorkerGroupSpecs[0].MaxReplicas = ptr.To[int32](1)
+		rayCluster.Spec.WorkerGroupSpecs[0].MinReplicas = ptr.To[int32](0)
+
+		unrelatedPod := &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      unrelatedPodName,
+				Namespace: namespace,
+				Labels:    map[string]string{"app": "unrelated-to-ray"},
+			},
+			Spec: corev1.PodSpec{
+				Containers: []corev1.Container{
+					{
+						Name:  "pause",
+						Image: support.GetRayImage(),
+					},
+				},
+			},
+		}
+
+		headPods := corev1.PodList{}
+		workerPods := corev1.PodList{}
+		workerFilters := common.RayClusterGroupPodsAssociationOptions(rayCluster, rayCluster.Spec.WorkerGroupSpecs[0].GroupName).ToListOptions()
+		headFilters := common.RayClusterHeadPodsAssociationOptions(rayCluster).ToListOptions()
+
+		BeforeAll(func() {
+			ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespace}}
+			err := k8sClient.Create(ctx, ns)
+			if !apierrors.IsAlreadyExists(err) {
+				Expect(err).NotTo(HaveOccurred(), "create test namespace for cache selector test")
+			}
+		})
+
+		It("Create RayCluster and unrelated Pod", func() {
+			err := k8sClient.Create(ctx, rayCluster)
+			Expect(err).NotTo(HaveOccurred(), "create RayCluster")
+			Eventually(
+				getResourceFunc(ctx, client.ObjectKey{Name: rayCluster.Name, Namespace: namespace}, rayCluster),
+				time.Second*10, time.Millisecond*200).Should(Succeed())
+
+			err = k8sClient.Create(ctx, unrelatedPod)
+			Expect(err).NotTo(HaveOccurred(), "create unrelated pod")
+
+			Eventually(
+				listResourceFunc(ctx, &headPods, headFilters...),
+				time.Second*10, time.Millisecond*200).Should(Equal(1))
+			Eventually(
+				listResourceFunc(ctx, &workerPods, workerFilters...),
+				time.Second*10, time.Millisecond*200).Should(Equal(1))
+
+			Expect(k8sClient.Get(ctx, client.ObjectKey{Namespace: namespace, Name: unrelatedPodName}, unrelatedPod)).Should(Succeed())
+		})
+
+		It("The direct API client should list head, worker, and unrelated Pod", func() {
+			Eventually(
+				listResourceFunc(ctx, &headPods, headFilters...),
+				time.Second*3, time.Millisecond*200).Should(Equal(1))
+			Eventually(
+				listResourceFunc(ctx, &workerPods, workerFilters...),
+				time.Second*3, time.Millisecond*200).Should(Equal(1))
+			Expect(k8sClient.Get(ctx, client.ObjectKey{Namespace: namespace, Name: unrelatedPodName}, unrelatedPod)).Should(Succeed(), "unrelated pod visible to API")
+		})
+
+		It("The manager cache should only include Ray node Pods (ray.io/node-type in head|worker|redis-cleanup), not the unrelated Pod", func() {
+			cacheClient := k8sManager.GetClient()
+			clusterListOpts := []client.ListOption{
+				client.InNamespace(namespace),
+				client.MatchingLabels{utils.RayClusterLabelKey: rayClusterName},
+			}
+			Eventually(func(g Gomega) {
+				var cachedRayPods corev1.PodList
+				g.Expect(cacheClient.List(ctx, &cachedRayPods, clusterListOpts...)).To(Succeed())
+				var names []string
+				for _, p := range cachedRayPods.Items {
+					names = append(names, p.Name)
+					g.Expect(p.Labels[utils.RayNodeTypeLabelKey]).To(Or(
+						Equal(string(rayv1.HeadNode)),
+						Equal(string(rayv1.WorkerNode)),
+						Equal(string(rayv1.RedisCleanupNode)),
+					), "informer only watches Pods with a Ray node type; pod %q has labels %v", p.Name, p.Labels)
+				}
+				g.Expect(names).To(ContainElements(headPods.Items[0].Name, workerPods.Items[0].Name), "cache should list this cluster's Ray head and worker: got %v", names)
+				g.Expect(names).NotTo(ContainElement(unrelatedPodName), "unrelated pod must not appear in the manager's Pod store; got: %v", names)
+				g.Expect(cachedRayPods.Items).To(HaveLen(2), "this RayCluster has one head and one worker Pod in cache")
+			}, time.Second*10, time.Millisecond*300).Should(Succeed(), "wait for the manager informer to sync listed Pods")
 		})
 	})
 })
