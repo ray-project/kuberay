@@ -2535,6 +2535,23 @@ func Test_IsRayContainerAfterWaiting(t *testing.T) {
 			expected: false,
 		},
 		{
+			name: "ray container is waiting after a non-zero exit code previously",
+			pod: corev1.Pod{
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{{Name: "ray-head"}},
+				},
+				Status: corev1.PodStatus{
+					ContainerStatuses: []corev1.ContainerStatus{{
+						Name: "ray-head",
+						State: corev1.ContainerState{
+							Waiting: &corev1.ContainerStateWaiting{Reason: "CrashLoopBackOff"},
+						},
+					}},
+				},
+			},
+			expected: true,
+		},
+		{
 			name: "ray container is running",
 			pod: corev1.Pod{
 				Spec: corev1.PodSpec{
