@@ -376,8 +376,7 @@ func TestBuildHeadIngressRules_WithRayJobOwner(t *testing.T) {
 // when ALLOW_ALL_RAYJOB_SUBMITTERS is enabled.
 func TestBuildHeadIngressRules_AllowAllRayJobSubmitters(t *testing.T) {
 	setupNetworkPolicyTest(t)
-	testNetworkPolicyController.AllowAllRayJobSubmitters = true
-	defer func() { testNetworkPolicyController.AllowAllRayJobSubmitters = false }()
+	t.Setenv(utils.ALLOW_ALL_RAYJOB_SUBMITTERS, "true")
 
 	rules := testNetworkPolicyController.buildHeadIngressRules(testRayClusterBasic)
 	require.Len(t, rules, 3)

@@ -27,10 +27,9 @@ import (
 // resources and manages NetworkPolicies for them.
 type NetworkPolicyController struct {
 	client.Client
-	Scheme                   *runtime.Scheme
-	Recorder                 record.EventRecorder
-	OperatorNamespace        string
-	AllowAllRayJobSubmitters bool
+	Scheme            *runtime.Scheme
+	Recorder          record.EventRecorder
+	OperatorNamespace string
 }
 
 // NewNetworkPolicyController creates a new independent NetworkPolicy controller.
@@ -38,12 +37,15 @@ type NetworkPolicyController struct {
 // falling back to the POD_NAMESPACE environment variable.
 func NewNetworkPolicyController(mgr manager.Manager) *NetworkPolicyController {
 	return &NetworkPolicyController{
-		Client:                   mgr.GetClient(),
-		Scheme:                   mgr.GetScheme(),
-		Recorder:                 mgr.GetEventRecorderFor("networkpolicy-controller"),
-		OperatorNamespace:        getOperatorNamespace(),
-		AllowAllRayJobSubmitters: os.Getenv(utils.ALLOW_ALL_RAYJOB_SUBMITTERS) == "true",
+		Client:            mgr.GetClient(),
+		Scheme:            mgr.GetScheme(),
+		Recorder:          mgr.GetEventRecorderFor("networkpolicy-controller"),
+		OperatorNamespace: getOperatorNamespace(),
 	}
+}
+
+func getAllowAllRayJobSubmitters() bool {
+	return os.Getenv(utils.ALLOW_ALL_RAYJOB_SUBMITTERS) == "true"
 }
 
 // getOperatorNamespace returns the namespace the operator is running in.
@@ -293,8 +295,10 @@ func (r *NetworkPolicyController) buildBaseIngressRules(instance *rayv1.RayClust
 // buildHeadIngressRules returns the full set of base ingress rules for the head
 // NetworkPolicy: intra-cluster communication and KubeRay operator access.
 // For RayJob-owned clusters, a per-job submitter rule is added via buildRayJobPeer.
-// When the ALLOW_ALL_RAYJOB_SUBMITTERS env var is set to true, a broad rule allowing all
-// KubeRay-created RayJob submitters in the namespace is added instead.
+// For RayClusters that are NOT owned by a RayJob (e.g. clusterSelector use cases),
+// the ALLOW_ALL_RAYJOB_SUBMITTERS env var can be set to true to add a broad rule
+// allowing all KubeRay-created RayJob submitters in the namespace. This env var
+// has no effect on RayJob-owned RayClusters.
 // Users who need other external access must add explicit IngressRules in the
 // NetworkIsolation spec.
 func (r *NetworkPolicyController) buildHeadIngressRules(instance *rayv1.RayCluster) []networkingv1.NetworkPolicyIngressRule {
@@ -341,7 +345,7 @@ func (r *NetworkPolicyController) buildHeadIngressRules(instance *rayv1.RayClust
 				{Protocol: &tcpProtocol, Port: &dashboardPort},
 			},
 		})
-	} else if r.AllowAllRayJobSubmitters {
+	} else if getAllowAllRayJobSubmitters() {
 		// Not owned by a RayJob: opt-in broad rule for clusterSelector use cases.
 		rules = append(rules, networkingv1.NetworkPolicyIngressRule{
 			From: []networkingv1.NetworkPolicyPeer{
