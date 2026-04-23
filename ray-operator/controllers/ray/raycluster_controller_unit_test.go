@@ -2887,35 +2887,69 @@ func Test_RedisCleanupCustomResources(t *testing.T) {
 	now := metav1.Now()
 	gcsFTEnabledCluster.DeletionTimestamp = &now
 
-	t.Setenv(utils.REDIS_CLEANUP_JOB_CPU, "500m")
-	t.Setenv(utils.REDIS_CLEANUP_JOB_MEMORY, "512Mi")
-
-	ctx := context.Background()
-	fakeClient := clientFake.NewClientBuilder().
-		WithScheme(newScheme).
-		WithRuntimeObjects(gcsFTEnabledCluster.DeepCopy()).
-		WithStatusSubresource(gcsFTEnabledCluster).
-		Build()
-
-	testRayClusterReconciler := &RayClusterReconciler{
-		Client:   fakeClient,
-		Recorder: &record.FakeRecorder{},
-		Scheme:   newScheme,
+	tests := []struct {
+		name        string
+		cpuEnv      string
+		memEnv      string
+		expectedCPU string
+		expectedMem string
+	}{
+		{
+			name:        "Valid custom resources are used",
+			cpuEnv:      "500m",
+			memEnv:      "512Mi",
+			expectedCPU: "500m",
+			expectedMem: "512Mi",
+		},
+		{
+			name:        "Invalid CPU falls back to default",
+			cpuEnv:      "invalid",
+			memEnv:      "512Mi",
+			expectedCPU: "200m",
+			expectedMem: "512Mi",
+		},
+		{
+			name:        "Invalid memory falls back to default",
+			cpuEnv:      "500m",
+			memEnv:      "invalid",
+			expectedCPU: "500m",
+			expectedMem: "256Mi",
+		},
 	}
 
-	_, err := testRayClusterReconciler.rayClusterReconcile(ctx, gcsFTEnabledCluster)
-	require.NoError(t, err)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv(utils.REDIS_CLEANUP_JOB_CPU, tc.cpuEnv)
+			t.Setenv(utils.REDIS_CLEANUP_JOB_MEMORY, tc.memEnv)
 
-	jobList := batchv1.JobList{}
-	err = fakeClient.List(ctx, &jobList, client.InNamespace(namespaceStr))
-	require.NoError(t, err)
-	require.Len(t, jobList.Items, 1)
+			ctx := context.Background()
+			fakeClient := clientFake.NewClientBuilder().
+				WithScheme(newScheme).
+				WithRuntimeObjects(gcsFTEnabledCluster.DeepCopy()).
+				WithStatusSubresource(gcsFTEnabledCluster).
+				Build()
 
-	container := jobList.Items[0].Spec.Template.Spec.Containers[utils.RayContainerIndex]
-	assert.Equal(t, resource.MustParse("500m"), container.Resources.Requests[corev1.ResourceCPU])
-	assert.Equal(t, resource.MustParse("512Mi"), container.Resources.Requests[corev1.ResourceMemory])
-	assert.Equal(t, resource.MustParse("500m"), container.Resources.Limits[corev1.ResourceCPU])
-	assert.Equal(t, resource.MustParse("512Mi"), container.Resources.Limits[corev1.ResourceMemory])
+			testRayClusterReconciler := &RayClusterReconciler{
+				Client:   fakeClient,
+				Recorder: &record.FakeRecorder{},
+				Scheme:   newScheme,
+			}
+
+			_, err := testRayClusterReconciler.rayClusterReconcile(ctx, gcsFTEnabledCluster)
+			require.NoError(t, err)
+
+			jobList := batchv1.JobList{}
+			err = fakeClient.List(ctx, &jobList, client.InNamespace(namespaceStr))
+			require.NoError(t, err)
+			require.Len(t, jobList.Items, 1)
+
+			container := jobList.Items[0].Spec.Template.Spec.Containers[utils.RayContainerIndex]
+			assert.Equal(t, resource.MustParse(tc.expectedCPU), container.Resources.Requests[corev1.ResourceCPU])
+			assert.Equal(t, resource.MustParse(tc.expectedMem), container.Resources.Requests[corev1.ResourceMemory])
+			assert.Equal(t, resource.MustParse(tc.expectedCPU), container.Resources.Limits[corev1.ResourceCPU])
+			assert.Equal(t, resource.MustParse(tc.expectedMem), container.Resources.Limits[corev1.ResourceMemory])
+		})
+	}
 }
 
 func TestReconcile_Replicas_Optional(t *testing.T) {
