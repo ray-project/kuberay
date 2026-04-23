@@ -1,0 +1,135 @@
+# History Server v2 beta: MinIO dev backend.
+#
+# Mirrors the layout of historyserver/config/minio.yaml (v1) so operators
+# already familiar with v1 see a near-identical surface. Two differences:
+#
+#   1. Add the `historyserver-beta-s3` Secret (in the `default` namespace)
+#      consumed by beta/config/eventprocessor.yaml + historyserver.yaml.
+#
+#   2. Keys on the client-side Secret are `access_key` / `secret_key`
+#      to match what the beta Deployments already reference via `secretKeyRef`.
+#
+# NOT for production:
+#   - Credentials are hardcoded (`minioadmin:minioadmin`) with a CHANGE THIS
+#     reminder — same posture as v1.
+#   - Storage is ephemeral (no PVC); the PVC block is left commented so a
+#     developer can opt in without re-writing the Deployment.
+#   - No TLS; clients set `S3DISABLE_SSL=true`.
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: minio-dev
+---
+# 1. Secrets for MinIO server login (mirrors v1).
+apiVersion: v1
+kind: Secret
+metadata:
+  name: minio-creds
+  namespace: minio-dev
+type: Opaque
+stringData:
+  rootUser: minioadmin      # CHANGE THIS
+  rootPassword: minioadmin  # CHANGE THIS
+---
+# 1b. Client-side Secret referenced by beta eventprocessor + historyserver.
+#     Same values as minio-creds above; separate object because it must live
+#     in the client Deployments' namespace (default).
+apiVersion: v1
+kind: Secret
+metadata:
+  name: historyserver-beta-s3
+  namespace: default
+type: Opaque
+stringData:
+  access_key: minioadmin    # CHANGE THIS (keep in sync with minio-creds.rootUser)
+  secret_key: minioadmin    # CHANGE THIS (keep in sync with minio-creds.rootPassword)
+#---
+## 2. Storage (PVC) — uncomment for persistent MinIO data across pod restarts.
+#apiVersion: v1
+#kind: PersistentVolumeClaim
+#metadata:
+#  name: minio-pvc
+#  namespace: minio-dev
+#spec:
+#  accessModes:
+#    - ReadWriteOnce
+#  resources:
+#    requests:
+#      storage: 10Gi
+---
+# 3. Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: minio
+  namespace: minio-dev
+  labels:
+    app: minio
+spec:
+  replicas: 1
+  # Recreate (not RollingUpdate) because the emptyDir volume is pod-local —
+  # two pods briefly co-existing during a rollout would each hold distinct
+  # data directories, a race condition we want to avoid.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: minio
+  template:
+    metadata:
+      labels:
+        app: minio
+    spec:
+      containers:
+      - name: minio
+        image: minio/minio:latest
+        args: ["server", "/data", "--console-address", ":9001"]
+        env:
+        - name: MINIO_ROOT_USER
+          valueFrom:
+            secretKeyRef:
+              name: minio-creds
+              key: rootUser
+        - name: MINIO_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: minio-creds
+              key: rootPassword
+        ports:
+        - containerPort: 9000
+          name: api
+        - containerPort: 9001
+          name: console
+        volumeMounts:
+        - name: data
+          mountPath: /data
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "256Mi"
+          limits:
+            cpu: "500m"
+            memory: "1Gi"
+      volumes:
+      - name: data
+        emptyDir:
+          sizeLimit: 2Gi
+---
+# 4. Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: minio-service
+  namespace: minio-dev
+spec:
+  selector:
+    app: minio
+  ports:
+    - name: api
+      port: 9000
+      targetPort: 9000
+    - name: console
+      port: 9001
+      targetPort: 9001
+  type: ClusterIP # Change to LoadBalancer if on Cloud/MetalLB
