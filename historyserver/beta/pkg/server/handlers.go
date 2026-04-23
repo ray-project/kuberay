@@ -254,7 +254,7 @@ func writeJSON(resp *restful.Response, v interface{}) {
 // The snapshot stores Tasks as taskID -> []attempt (one entry per TaskAttempt);
 // flatten, apply ParseOptionsFromReq + ApplyTaskFilters, then format.
 func (s *Server) getTasks(req *restful.Request, resp *restful.Response) {
-	_, sessionName, _, ok := extractSessionKey(req)
+	clusterNameID, sessionName, _, ok := extractSessionKey(req)
 	if !ok {
 		writeMissingCookies(resp)
 		return
@@ -263,7 +263,6 @@ func (s *Server) getTasks(req *restful.Request, resp *restful.Response) {
 		s.redirectRequest(req, resp)
 		return
 	}
-	clusterNameID, _, _, _ := extractSessionKey(req)
 
 	opts, err := utils.ParseOptionsFromReq(req)
 	if err != nil {
@@ -327,7 +326,7 @@ func flattenTasks(byID map[string][]eventtypes.Task) []eventtypes.Task {
 // summary_by=lineage requires utils.ToSummaryByLineage plus Actors; both are
 // wired. Matches v1 response envelope.
 func (s *Server) getTaskSummarize(req *restful.Request, resp *restful.Response) {
-	_, sessionName, _, ok := extractSessionKey(req)
+	clusterNameID, sessionName, _, ok := extractSessionKey(req)
 	if !ok {
 		writeMissingCookies(resp)
 		return
@@ -336,7 +335,6 @@ func (s *Server) getTaskSummarize(req *restful.Request, resp *restful.Response) 
 		s.redirectRequest(req, resp)
 		return
 	}
-	clusterNameID, _, _, _ := extractSessionKey(req)
 
 	opts, err := utils.ParseOptionsFromReq(req)
 	if err != nil {
@@ -410,7 +408,7 @@ func (s *Server) getTaskSummarize(req *restful.Request, resp *restful.Response) 
 //     as a .json file. Filename includes job_id and the current timestamp,
 //     matching v1.
 func (s *Server) getTasksTimeline(req *restful.Request, resp *restful.Response) {
-	_, sessionName, _, ok := extractSessionKey(req)
+	clusterNameID, sessionName, _, ok := extractSessionKey(req)
 	if !ok {
 		writeMissingCookies(resp)
 		return
@@ -419,7 +417,6 @@ func (s *Server) getTasksTimeline(req *restful.Request, resp *restful.Response) 
 		s.redirectRequest(req, resp)
 		return
 	}
-	clusterNameID, _, _, _ := extractSessionKey(req)
 
 	snap, err := s.loader.Load(clusterNameID, sessionName)
 	if err != nil {
@@ -457,7 +454,7 @@ func (s *Server) getTasksTimeline(req *restful.Request, resp *restful.Response) 
 // --- getLogicalActors: GET /logical/actors -----------------------------------
 
 func (s *Server) getLogicalActors(req *restful.Request, resp *restful.Response) {
-	_, sessionName, _, ok := extractSessionKey(req)
+	clusterNameID, sessionName, _, ok := extractSessionKey(req)
 	if !ok {
 		writeMissingCookies(resp)
 		return
@@ -466,7 +463,6 @@ func (s *Server) getLogicalActors(req *restful.Request, resp *restful.Response) 
 		s.redirectRequest(req, resp)
 		return
 	}
-	clusterNameID, _, _, _ := extractSessionKey(req)
 
 	snap, err := s.loader.Load(clusterNameID, sessionName)
 	if err != nil {
@@ -494,7 +490,7 @@ func (s *Server) getLogicalActors(req *restful.Request, resp *restful.Response) 
 // --- getLogicalActor: GET /logical/actors/{single_actor} ---------------------
 
 func (s *Server) getLogicalActor(req *restful.Request, resp *restful.Response) {
-	_, sessionName, _, ok := extractSessionKey(req)
+	clusterNameID, sessionName, _, ok := extractSessionKey(req)
 	if !ok {
 		writeMissingCookies(resp)
 		return
@@ -503,7 +499,6 @@ func (s *Server) getLogicalActor(req *restful.Request, resp *restful.Response) {
 		s.redirectRequest(req, resp)
 		return
 	}
-	clusterNameID, _, _, _ := extractSessionKey(req)
 
 	actorID := req.PathParameter("single_actor")
 
@@ -549,7 +544,7 @@ func (s *Server) getLogicalActor(req *restful.Request, resp *restful.Response) {
 // --- getJobs: GET /api/jobs/ --------------------------------------------------
 
 func (s *Server) getJobs(req *restful.Request, resp *restful.Response) {
-	_, sessionName, _, ok := extractSessionKey(req)
+	clusterNameID, sessionName, _, ok := extractSessionKey(req)
 	if !ok {
 		writeMissingCookies(resp)
 		return
@@ -558,7 +553,6 @@ func (s *Server) getJobs(req *restful.Request, resp *restful.Response) {
 		s.redirectRequest(req, resp)
 		return
 	}
-	clusterNameID, _, _, _ := extractSessionKey(req)
 
 	snap, err := s.loader.Load(clusterNameID, sessionName)
 	if err != nil {
@@ -577,7 +571,7 @@ func (s *Server) getJobs(req *restful.Request, resp *restful.Response) {
 // --- getJob: GET /api/jobs/{job_id} ------------------------------------------
 
 func (s *Server) getJob(req *restful.Request, resp *restful.Response) {
-	_, sessionName, _, ok := extractSessionKey(req)
+	clusterNameID, sessionName, _, ok := extractSessionKey(req)
 	if !ok {
 		writeMissingCookies(resp)
 		return
@@ -586,7 +580,6 @@ func (s *Server) getJob(req *restful.Request, resp *restful.Response) {
 		s.redirectRequest(req, resp)
 		return
 	}
-	clusterNameID, _, _, _ := extractSessionKey(req)
 
 	jobID := req.PathParameter("job_id")
 
@@ -612,7 +605,7 @@ func (s *Server) getJob(req *restful.Request, resp *restful.Response) {
 
 // getNodes supports view=summary (default) and view=hostNameList, matching v1.
 func (s *Server) getNodes(req *restful.Request, resp *restful.Response) {
-	_, sessionName, _, ok := extractSessionKey(req)
+	clusterNameID, sessionName, _, ok := extractSessionKey(req)
 	if !ok {
 		writeMissingCookies(resp)
 		return
@@ -621,7 +614,6 @@ func (s *Server) getNodes(req *restful.Request, resp *restful.Response) {
 		s.redirectRequest(req, resp)
 		return
 	}
-	clusterNameID, _, _, _ := extractSessionKey(req)
 
 	viewParam := req.QueryParameter("view")
 
@@ -714,7 +706,7 @@ func writeNodesHostNameList(nodeMap map[string]eventtypes.Node, resp *restful.Re
 // frontend renders actors on the NodeDetail page, so we filter snap.Actors
 // by NodeID here — same pattern as v1).
 func (s *Server) getNode(req *restful.Request, resp *restful.Response) {
-	_, sessionName, _, ok := extractSessionKey(req)
+	clusterNameID, sessionName, _, ok := extractSessionKey(req)
 	if !ok {
 		writeMissingCookies(resp)
 		return
@@ -723,7 +715,6 @@ func (s *Server) getNode(req *restful.Request, resp *restful.Response) {
 		s.redirectRequest(req, resp)
 		return
 	}
-	clusterNameID, _, _, _ := extractSessionKey(req)
 
 	targetNodeID := req.PathParameter("node_id")
 	if targetNodeID == "" {
@@ -779,7 +770,7 @@ func (s *Server) getNode(req *restful.Request, resp *restful.Response) {
 // empty). The empty-job_id branch matches v1 which distinguishes "param not
 // given" from "param given but empty".
 func (s *Server) getEvents(req *restful.Request, resp *restful.Response) {
-	_, sessionName, _, ok := extractSessionKey(req)
+	clusterNameID, sessionName, _, ok := extractSessionKey(req)
 	if !ok {
 		writeMissingCookies(resp)
 		return
@@ -788,7 +779,6 @@ func (s *Server) getEvents(req *restful.Request, resp *restful.Response) {
 		s.redirectRequest(req, resp)
 		return
 	}
-	clusterNameID, _, _, _ := extractSessionKey(req)
 
 	snap, err := s.loader.Load(clusterNameID, sessionName)
 	if err != nil {
