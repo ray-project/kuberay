@@ -1691,7 +1691,7 @@ var _ = Context("Inside the default namespace", func() {
 		})
 
 		It("The manager cache should only include Ray node Pods (ray.io/node-type in head|worker|redis-cleanup), not the unrelated Pod", func() {
-			cacheClient := k8sManager.GetClient()
+			cacheClient := mgr.GetClient()
 			clusterListOpts := []client.ListOption{
 				client.InNamespace(namespace),
 				client.MatchingLabels{utils.RayClusterLabelKey: rayClusterName},
