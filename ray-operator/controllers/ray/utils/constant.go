@@ -203,10 +203,12 @@ const (
 	// If set to true, the RayJob CR itself will be deleted if shutdownAfterJobFinishes is set to true. Note that all resources created by the RayJob CR will be deleted, including the K8s Job.
 	DELETE_RAYJOB_CR_AFTER_JOB_FINISHES = "DELETE_RAYJOB_CR_AFTER_JOB_FINISHES"
 
-	// If set to true, a broad NetworkPolicy ingress rule is added to all network-isolated
-	// RayClusters allowing any pod with ray.io/originated-from-crd=RayJob to access the
-	// dashboard port. When false (default), only RayJob-owned clusters get a per-job
-	// submitter ingress rule; clusterSelector-based RayJobs require explicit ingress rules.
+	// If set to true, a broad NetworkPolicy ingress rule is added to network-isolated
+	// RayClusters that are NOT owned by a RayJob (i.e. clusterSelector use cases),
+	// allowing any pod with ray.io/originated-from-crd=RayJob to access the dashboard
+	// port. This flag has no effect on RayJob-owned RayClusters, which always receive
+	// a per-job submitter ingress rule based on the ownerReference. When false (default),
+	// clusterSelector-based RayJobs require the user to add explicit ingress rules.
 	ALLOW_ALL_RAYJOB_SUBMITTERS = "ALLOW_ALL_RAYJOB_SUBMITTERS"
 
 	// If `JobDeploymentStatus` does not transition to `Complete` or `Failed` within

@@ -609,6 +609,13 @@ func getSubmitterTemplate(rayJobInstance *rayv1.RayJob, rayClusterInstance *rayv
 		common.AddRayTokenVolume(&submitterTemplate.Spec)
 	}
 
+	if submitterTemplate.Labels == nil {
+		submitterTemplate.Labels = make(map[string]string)
+	}
+	submitterTemplate.Labels[utils.RayOriginatedFromCRNameLabelKey] = rayJobInstance.Name
+	submitterTemplate.Labels[utils.RayOriginatedFromCRDLabelKey] = utils.RayOriginatedFromCRDLabelValue(utils.RayJobCRD)
+	submitterTemplate.Labels[utils.KubernetesCreatedByLabelKey] = utils.ComponentName
+
 	return submitterTemplate, nil
 }
 
@@ -712,16 +719,6 @@ func (r *RayJobReconciler) createNewK8sJob(ctx context.Context, rayJobInstance *
 	if rayJobInstance.Spec.SubmitterConfig != nil && rayJobInstance.Spec.SubmitterConfig.BackoffLimit != nil {
 		submitterBackoffLimit = rayJobInstance.Spec.SubmitterConfig.BackoffLimit
 	}
-	// Propagate KubeRay labels to the pod template so that NetworkPolicies can
-	// select submitter pods by KubeRay-specific labels rather than the generic
-	// batch.kubernetes.io/job-name label set by Kubernetes.
-	if submitterTemplate.Labels == nil {
-		submitterTemplate.Labels = make(map[string]string)
-	}
-	submitterTemplate.Labels[utils.RayOriginatedFromCRNameLabelKey] = rayJobInstance.Name
-	submitterTemplate.Labels[utils.RayOriginatedFromCRDLabelKey] = utils.RayOriginatedFromCRDLabelValue(utils.RayJobCRD)
-	submitterTemplate.Labels[utils.KubernetesCreatedByLabelKey] = utils.ComponentName
-
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      rayJobInstance.Name,
