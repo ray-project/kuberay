@@ -116,7 +116,7 @@ func main() {
 
 	writer, err := factory(&globalConfig, jsonData)
 	if err != nil {
-		panic(fmt.Sprintf("Failed to create writer for runtime class name: %s for role: %s: %+v", runtimeClassName, role, err))
+		panic(fmt.Sprintf("Failed to create writer for runtime class name: %s for role: %s, err: %+v", runtimeClassName, role, err))
 	}
 
 	var wg sync.WaitGroup
