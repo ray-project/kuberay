@@ -27,6 +27,7 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -45,6 +46,7 @@ import (
 var (
 	cfg       *rest.Config
 	k8sClient client.Client
+	mgr       ctrl.Manager
 	testEnv   *envtest.Environment
 
 	fakeRayDashboardClient *utils.FakeRayDashboardClient
@@ -99,10 +101,15 @@ var _ = BeforeSuite(func(ctx SpecContext) {
 	// TODO: We probably should not shorten RAYCLUSTER_DEFAULT_REQUEUE_SECONDS_ENV here just to make tests pass.
 	// Instead, we should fix the reconciliation if any unexpected happened.
 	os.Setenv(utils.RAYCLUSTER_DEFAULT_REQUEUE_SECONDS_ENV, "10")
-	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
+	selectorsByObject, err := CacheSelectors()
+	Expect(err).NotTo(HaveOccurred(), "failed to create cache selectors")
+	mgr, err = ctrl.NewManager(cfg, ctrl.Options{
 		Scheme: scheme.Scheme,
 		Metrics: metricsserver.Options{
 			BindAddress: "0",
+		},
+		Cache: cache.Options{
+			ByObject: selectorsByObject,
 		},
 	})
 	Expect(err).NotTo(HaveOccurred(), "failed to create manager")
