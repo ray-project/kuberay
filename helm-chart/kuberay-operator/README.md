@@ -181,6 +181,8 @@ spec:
 | featureGates[3].enabled | bool | `false` |  |
 | featureGates[4].name | string | `"RayCronJob"` |  |
 | featureGates[4].enabled | bool | `false` |  |
+| featureGates[5].name | string | `"NativeWorkloadScheduling"` | Enables native Kubernetes gang scheduling via `scheduling.k8s.io/v1alpha2` Workload and PodGroup APIs. Requires Kubernetes 1.36+ with `GenericWorkload` and `GangScheduling` feature gates enabled on the cluster. See the [native workload scheduling guide](../guidance/native-workload-scheduling.md). |
+| featureGates[5].enabled | bool | `false` |  |
 | metrics.enabled | bool | `true` | Whether KubeRay operator should emit control plane metrics. |
 | metrics.serviceMonitor.enabled | bool | `false` | Enable a prometheus ServiceMonitor |
 | metrics.serviceMonitor.interval | string | `"30s"` | Prometheus ServiceMonitor interval |

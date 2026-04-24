@@ -104,6 +104,10 @@ test-e2e-rayjob: WHAT ?= ./test/e2erayjob
 test-e2e-rayjob: manifests fmt vet ## Run e2e RayJob tests.
 	go test -timeout 30m -v $(WHAT)
 
+test-e2e-native-scheduling: WHAT ?= ./test/e2enativescheduling
+test-e2e-native-scheduling: manifests fmt vet ## Run e2e native workload scheduling tests.
+	go test -timeout 30m -v $(WHAT)
+
 sync: helm api-docs
 	./hack/update-codegen.sh
 
