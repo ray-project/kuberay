@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"flag"
+	"fmt"
 	"os"
 	"os/signal"
 	"path"
@@ -115,7 +116,7 @@ func main() {
 
 	writer, err := factory(&globalConfig, jsonData)
 	if err != nil {
-		panic("Failed to create writer for runtime class name: " + runtimeClassName + " for role: " + role + ".")
+		panic(fmt.Sprintf("Failed to create writer for runtime class name: %s for role: %s, err: %+v", runtimeClassName, role, err))
 	}
 
 	var wg sync.WaitGroup
