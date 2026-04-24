@@ -60,20 +60,24 @@ func getRuntimeEnvJson(rayJobInstance *rayv1.RayJob) (string, error) {
 	return "", nil
 }
 
-// GetMetadataJson returns the JSON string of the metadata for the Ray job.
-func GetMetadataJson(metadata map[string]string, rayVersion string) (string, error) {
-	// Check that the Ray version is at least 2.6.0.
-	// If it is, we can use the --metadata-json flag.
-	// Otherwise, we need to raise an error.
-	constraint, _ := semver.NewConstraint(">= 2.6.0")
-	v, err := semver.NewVersion(rayVersion)
-	if err != nil {
-		return "", fmt.Errorf("failed to parse Ray version: %v: %w", rayVersion, err)
+// getMetadataJSONForSubmitCommand serializes job metadata for `ray job submit --metadata-json`.
+// Ray added --metadata-json in 2.6.0, so the only rejected case is when
+// RayJob.Spec.RayClusterSpec.RayVersion is explicitly set below 2.6.0. If RayClusterSpec is
+// absent (clusterSelector) or RayVersion is unset, we assume the cluster is >= 2.6.0.
+func getMetadataJSONForSubmitCommand(rayJobInstance *rayv1.RayJob, metadata map[string]string) (string, error) {
+	if rayJobInstance.Spec.RayClusterSpec != nil {
+		rv := rayJobInstance.Spec.RayClusterSpec.RayVersion
+		if len(rv) > 0 {
+			constraint, _ := semver.NewConstraint(">= 2.6.0")
+			v, err := semver.NewVersion(rv)
+			if err != nil {
+				return "", fmt.Errorf("failed to parse Ray version: %v: %w", rv, err)
+			}
+			if !constraint.Check(v) {
+				return "", fmt.Errorf("the Ray version must be at least 2.6.0 to use the metadata field")
+			}
+		}
 	}
-	if !constraint.Check(v) {
-		return "", fmt.Errorf("the Ray version must be at least 2.6.0 to use the metadata field")
-	}
-	// Convert the metadata map to a JSON string.
 	metadataBytes, err := json.Marshal(metadata)
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal metadata: %v: %w", metadata, err)
@@ -163,8 +167,8 @@ func BuildJobSubmitCommand(rayJobInstance *rayv1.RayJob, submissionMode rayv1.Jo
 		cmd = append(cmd, "--runtime-env-json", strconv.Quote(runtimeEnvJson))
 	}
 
-	if len(metadata) > 0 && rayJobInstance.Spec.RayClusterSpec != nil {
-		metadataJson, err := GetMetadataJson(metadata, rayJobInstance.Spec.RayClusterSpec.RayVersion)
+	if len(metadata) > 0 {
+		metadataJson, err := getMetadataJSONForSubmitCommand(rayJobInstance, metadata)
 		if err != nil {
 			return nil, err
 		}
