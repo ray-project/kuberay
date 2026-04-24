@@ -140,14 +140,13 @@ func (h *RayLogsHandler) List() []utils.ClusterInfo {
 
 	clusterList := make(utils.ClusterInfoList, 0, 20)
 	bucket := h.StorageClient.Bucket(h.GCSBucket)
-	pathPrefix := strings.TrimPrefix(path.Join(h.RootDir, "metadir"), "/") + "/"
+	pathPrefix := strings.TrimPrefix(path.Join(h.RootDir, utils.METADIR_NAME), "/") + "/"
 	query := &gstorage.Query{
 		// Match with only non-directory objects
 		MatchGlob: pathPrefix + "**/*[!/]",
 	}
 	objectIterator := bucket.Objects(ctx, query)
 	for {
-		cluster := &utils.ClusterInfo{}
 		objectAttr, err := objectIterator.Next()
 		if err == gIterator.Done {
 			logrus.Infof("Finished iterating through gcs objects")
@@ -159,30 +158,15 @@ func (h *RayLogsHandler) List() []utils.ClusterInfo {
 		}
 
 		fullObjectPath := objectAttr.Name
-		metaInfo := strings.Split(strings.TrimPrefix(fullObjectPath, pathPrefix), "/")
-		if len(metaInfo) != 2 {
-			logrus.Errorf("Unable to properly parse cluster metadir path with fullpath: %s", fullObjectPath)
-			continue
-		}
-		clusterMeta := strings.Split(metaInfo[0], "_")
-		if len(clusterMeta) != 2 {
-			logrus.Errorf("Unable to get cluster name and namespace from directory: %s", metaInfo[0])
-			continue
-		}
-		cluster.Name = clusterMeta[0]
-		cluster.Namespace = clusterMeta[1]
-
-		cluster.SessionName = metaInfo[1]
-		datetime, err := utils.GetDateTimeFromSessionID(metaInfo[1])
+		metaInfo := strings.TrimPrefix(fullObjectPath, pathPrefix)
+		cluster, err := utils.ParseMetaFilePath(metaInfo)
 		if err != nil {
-			logrus.Errorf("Failed to get date time from the given sessionID: %s, error: %v", metaInfo[1], err)
+			logrus.Errorf("Failed to parse meta file path: %s, error: %v", metaInfo, err)
 			continue
 		}
-		cluster.CreateTimeStamp = datetime.Unix()
-		cluster.CreateTime = datetime.UTC().Format(("2006-01-02T15:04:05Z"))
 
 		logrus.Infof("Parsed cluster %s for session %s to list", cluster.Name, cluster.SessionName)
-		clusterList = append(clusterList, *cluster)
+		clusterList = append(clusterList, cluster)
 	}
 
 	sort.Sort(clusterList)

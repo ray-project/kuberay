@@ -150,7 +150,7 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 	getClusters := func() {
 		p := r.OssClient.NewListObjectsV2Paginator(&oss.ListObjectsV2Request{
 			Bucket:    oss.Ptr(r.OssBucket),
-			Prefix:    oss.Ptr(path.Join(r.OssRootDir, "metadir") + "/"),
+			Prefix:    oss.Ptr(path.Join(r.OssRootDir, utils.METADIR_NAME) + "/"),
 			Delimiter: oss.Ptr(""),
 			MaxKeys:   100,
 		})
@@ -158,34 +158,19 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 		for p.HasNext() {
 			page, err := p.NextPage(ctx)
 			if err != nil {
-				logrus.Errorf("Failed to list objects from %s: %v", path.Join(r.OssRootDir, "metadir")+"/", err)
+				logrus.Errorf("Failed to list objects from %s: %v", path.Join(r.OssRootDir, utils.METADIR_NAME)+"/", err)
 				return
 			}
-			logrus.Infof("[List]Returned objects in %v. length of Contents: %v, length of CommonPrefixes: %v", path.Join(r.OssRootDir, "metadir")+"/", len(page.Contents),
+			logrus.Infof("[List]Returned objects in %v. length of Contents: %v, length of CommonPrefixes: %v", path.Join(r.OssRootDir, utils.METADIR_NAME)+"/", len(page.Contents),
 				len(page.CommonPrefixes))
 			for _, objects := range page.Contents {
-				c := &utils.ClusterInfo{}
-				metaInfo := strings.Trim(strings.TrimPrefix(*objects.Key, path.Join(r.OssRootDir, "metadir/")), "/")
-				metas := strings.Split(metaInfo, "/")
-				if len(metas) < 2 {
-					continue
-				}
-				logrus.Infof("Process %++v", metas)
-				namespaceName := strings.Split(metas[0], "_")
-				c.Name = namespaceName[0]
-				c.Namespace = namespaceName[1]
-				c.SessionName = metas[1]
-				sessionInfo := strings.Split(metas[1], "_")
-				date := sessionInfo[1]
-				dataTime := sessionInfo[2]
-				createTime, err := time.Parse("2006-01-02_15-04-05", date+"_"+dataTime)
+				metaInfo := strings.Trim(strings.TrimPrefix(*objects.Key, path.Join(r.OssRootDir, utils.METADIR_NAME)+"/"), "/")
+				cluster, err := utils.ParseMetaFilePath(metaInfo)
 				if err != nil {
-					logrus.Errorf("Failed to parse time %s: %v", date+"_"+dataTime, err)
+					logrus.Errorf("Failed to parse meta file path: %s, error: %v", metaInfo, err)
 					continue
 				}
-				c.CreateTimeStamp = createTime.Unix()
-				c.CreateTime = createTime.UTC().Format(("2006-01-02T15:04:05Z"))
-				clusters = append(clusters, *c)
+				clusters = append(clusters, cluster)
 			}
 		}
 	}
