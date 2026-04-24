@@ -196,6 +196,24 @@ func main() {
 		utilruntime.Must(gwv1.Install(scheme))
 	}
 
+	// Although ContainerRestartPolicy is introduced in Kubernetes v1.34 as an alpha feature, which requires
+	// manually enabling the ContainerRestartRules feature gate, it becomes beta in v1.35.
+	// We require v1.35+ to avoid asking users to opt in to a separate K8s feature gate.
+	if features.Enabled(features.SidecarSubmitterRestart) {
+		serverVersion, err := utils.GetKubernetesVersion()
+		if err != nil {
+			exitOnError(err, "SidecarSubmitterRestart feature gate enabled but unable to detect K8s version. Feature requires K8s 1.35+.")
+		}
+		isAtLeast, err := utils.IsK8sVersionAtLeast(serverVersion, 1, 35, 0)
+		if err != nil {
+			exitOnError(err, "Failed to compare K8s version.")
+		}
+		if !isAtLeast {
+			exitOnError(fmt.Errorf("current version %s is below 1.35", serverVersion.GitVersion),
+				"SidecarSubmitterRestart feature gate requires K8s 1.35+")
+		}
+	}
+
 	// Manager options
 	options := ctrl.Options{
 		Cache: cache.Options{
