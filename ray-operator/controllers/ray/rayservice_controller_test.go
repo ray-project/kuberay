@@ -134,7 +134,7 @@ func endpointSliceTemplate(name string, namespace string) *discoveryv1.EndpointS
 			{
 				Addresses: []string{"10.9.8.7"},
 				Conditions: discoveryv1.EndpointConditions{
-					Ready: ptr.To(true),
+					Ready: new(true),
 				},
 				// TargetRef should always be set in production to identify the backing Pod.
 				// This allows proper deduplication when a Pod appears in multiple EndpointSlices.

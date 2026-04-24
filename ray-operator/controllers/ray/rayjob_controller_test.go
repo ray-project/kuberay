@@ -562,10 +562,27 @@ var _ = Context("RayJob with different submission modes", func() {
 			It("If DELETE_RAYJOB_CR_AFTER_JOB_FINISHES environement variable is set, RayJob should be deleted.", func() {
 				os.Setenv(utils.DELETE_RAYJOB_CR_AFTER_JOB_FINISHES, "true")
 				defer os.Unsetenv(utils.DELETE_RAYJOB_CR_AFTER_JOB_FINISHES)
+
+				// The reconciler may have already run handleShutdownAfterJobFinishes without the env var set,
+				// deleting only the RayCluster and returning without requeue. Force a reconciliation by
+				// patching the RayJob so the controller re-runs with the env var now set.
+				Eventually(func() error {
+					if err := k8sClient.Get(ctx, client.ObjectKey{Name: rayJob.Name, Namespace: namespace}, rayJob); err != nil {
+						// RayJob already deleted — treat as success.
+						return nil
+					}
+					patch := client.MergeFrom(rayJob.DeepCopy())
+					if rayJob.Annotations == nil {
+						rayJob.Annotations = map[string]string{}
+					}
+					rayJob.Annotations["ray.io/trigger-reconcile"] = "true"
+					return k8sClient.Patch(ctx, rayJob, patch)
+				}, time.Second*3, time.Millisecond*500).Should(Succeed())
+
 				Eventually(
 					func() bool {
 						return apierrors.IsNotFound(getResourceFunc(ctx, client.ObjectKey{Name: rayJob.Name, Namespace: namespace}, rayJob)())
-					}, time.Second*3, time.Millisecond*500).Should(BeTrue())
+					}, time.Second*10, time.Millisecond*500).Should(BeTrue())
 			})
 		})
 
@@ -574,7 +591,7 @@ var _ = Context("RayJob with different submission modes", func() {
 			namespace := "default"
 			activeDeadlineSeconds := int32(3)
 			rayJob := rayJobTemplate("rayjob-deadline", namespace)
-			rayJob.Spec.ActiveDeadlineSeconds = ptr.To(activeDeadlineSeconds)
+			rayJob.Spec.ActiveDeadlineSeconds = new(activeDeadlineSeconds)
 
 			It("Verify RayJob spec", func() {
 				// In this test, RayJob passes through the following states: New -> Initializing -> Complete (because of ActiveDeadlineSeconds).

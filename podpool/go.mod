@@ -1,6 +1,6 @@
 module github.com/ray-project/kuberay/podpool
 
-go 1.25.0
+go 1.26.0
 
 require (
 	github.com/sirupsen/logrus v1.9.4
