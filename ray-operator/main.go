@@ -284,14 +284,14 @@ func main() {
 	exitOnError(ray.NewReconciler(mgr, rayClusterOptions).SetupWithManager(mgr, config.ReconcileConcurrency),
 		"unable to create controller", "controller", "RayCluster")
 
-	exitOnError(ray.NewRayServiceReconciler(ctx, mgr, config).SetupWithManager(mgr, config.ReconcileConcurrency),
+	exitOnError(ray.NewRayServiceReconciler(mgr, config).SetupWithManager(mgr, config.ReconcileConcurrency),
 		"unable to create controller", "controller", "RayService")
 
 	rayJobOptions := ray.RayJobReconcilerOptions{
 		RayJobMetricsManager:  rayJobMetricsManager,
 		BatchSchedulerManager: batchSchedulerManager,
 	}
-	exitOnError(ray.NewRayJobReconciler(ctx, mgr, rayJobOptions, config).SetupWithManager(mgr, config.ReconcileConcurrency),
+	exitOnError(ray.NewRayJobReconciler(mgr, rayJobOptions, config).SetupWithManager(mgr, config.ReconcileConcurrency),
 		"unable to create controller", "controller", "RayJob")
 
 	if os.Getenv("ENABLE_WEBHOOKS") == "true" {
