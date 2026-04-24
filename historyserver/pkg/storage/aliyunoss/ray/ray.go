@@ -121,8 +121,8 @@ func (r *RayLogsHandler) _listFiles(prefix string, delimiter string, onlyBase bo
 	return files
 }
 
-func (r *RayLogsHandler) ListFiles(clusterId string, dir string) []string {
-	prefix := path.Join(r.OssRootDir, clusterId, dir)
+func (r *RayLogsHandler) ListFiles(clusterStoragePrefix string, dir string) []string {
+	prefix := path.Join(r.OssRootDir, clusterStoragePrefix, dir)
 
 	defer func() {
 		if r := recover(); r != nil {
@@ -164,28 +164,31 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 			logrus.Infof("[List]Returned objects in %v. length of Contents: %v, length of CommonPrefixes: %v", path.Join(r.OssRootDir, "metadir")+"/", len(page.Contents),
 				len(page.CommonPrefixes))
 			for _, objects := range page.Contents {
-				c := &utils.ClusterInfo{}
 				metaInfo := strings.Trim(strings.TrimPrefix(*objects.Key, path.Join(r.OssRootDir, "metadir/")), "/")
-				metas := strings.Split(metaInfo, "/")
-				if len(metas) < 2 {
+				session, err := utils.ParseMetaDirRelPath(metaInfo)
+				if err != nil {
 					continue
 				}
-				logrus.Infof("Process %++v", metas)
-				namespaceName := strings.Split(metas[0], "_")
-				c.Name = namespaceName[0]
-				c.Namespace = namespaceName[1]
-				c.SessionName = metas[1]
-				sessionInfo := strings.Split(metas[1], "_")
+				logrus.Infof("Process %++v", session)
+				sessionInfo := strings.Split(session.SessionName, "_")
+				if len(sessionInfo) < 3 {
+					continue
+				}
 				date := sessionInfo[1]
 				dataTime := sessionInfo[2]
+				// TODO(jwj): Use utils.GetDateTimeFromSessionID instead of time.Parse.
 				createTime, err := time.Parse("2006-01-02_15-04-05", date+"_"+dataTime)
 				if err != nil {
 					logrus.Errorf("Failed to parse time %s: %v", date+"_"+dataTime, err)
 					continue
 				}
-				c.CreateTimeStamp = createTime.Unix()
-				c.CreateTime = createTime.UTC().Format(("2006-01-02T15:04:05Z"))
-				clusters = append(clusters, *c)
+				clusters = append(clusters, utils.ClusterInfo{
+					Name:            session.Name,
+					Namespace:       session.Namespace,
+					SessionName:     session.SessionName,
+					CreateTimeStamp: createTime.Unix(),
+					CreateTime:      createTime.UTC().Format("2006-01-02T15:04:05Z"),
+				})
 			}
 		}
 	}
@@ -194,7 +197,7 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 	return clusters
 }
 
-func (r *RayLogsHandler) GetContent(clusterId string, fileName string) io.Reader {
+func (r *RayLogsHandler) GetContent(clusterStoragePrefix string, fileName string) io.Reader {
 	ctx := context.TODO()
 	logrus.Infof("Prepare to get object %s info ...", fileName)
 	result, err := r.OssClient.GetObject(ctx, &oss.GetObjectRequest{
@@ -203,7 +206,7 @@ func (r *RayLogsHandler) GetContent(clusterId string, fileName string) io.Reader
 	})
 	if err != nil {
 		logrus.Errorf("Failed to get object %s: %v", fileName, err)
-		allFiles := r._listFiles(clusterId+"/"+path.Dir(fileName), "", false)
+		allFiles := r._listFiles(clusterStoragePrefix+"/"+path.Dir(fileName), "", false)
 		found := false
 		for _, f := range allFiles {
 			if path.Base(f) == path.Base(fileName) {
