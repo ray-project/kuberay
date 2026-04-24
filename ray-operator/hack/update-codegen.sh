@@ -38,12 +38,28 @@ kube::codegen::gen_helpers \
   --boilerplate "${SCRIPT_ROOT}/hack/boilerplate.go.txt" \
   "${SCRIPT_ROOT}/apis"
 
+# Generate OpenAPI definitions for kuberay types. The output is used by
+# cmd/modelschema to produce a Swagger v2 JSON file, which in turn is
+# consumed by applyconfiguration-gen to produce complete structured-merge-diff
+# type schemas.
+kube::codegen::gen_openapi \
+  --boilerplate "${SCRIPT_ROOT}/hack/boilerplate.go.txt" \
+  --output-dir "${SCRIPT_ROOT}/pkg/generated/openapi" \
+  --output-pkg "${ROOT_PKG}/pkg/generated/openapi" \
+  --extra-pkgs k8s.io/apimachinery/pkg/api/resource \
+  --extra-pkgs k8s.io/apimachinery/pkg/util/intstr \
+  --extra-pkgs k8s.io/api/core/v1 \
+  --report-filename "${SCRIPT_ROOT}/hack/openapi-violations.report" \
+  --update-report \
+  "${SCRIPT_ROOT}/apis"
+
 kube::codegen::gen_client \
   --boilerplate "${SCRIPT_ROOT}/hack/boilerplate.go.txt" \
   --output-dir "${SCRIPT_ROOT}/pkg/client" \
   --output-pkg "${ROOT_PKG}/pkg/client" \
   --with-watch \
   --with-applyconfig \
+  --applyconfig-openapi-schema <(go run ./cmd/modelschema) \
   --applyconfig-externals k8s.io/api/core/v1.PodTemplateSpec:k8s.io/client-go/applyconfigurations/core/v1 \
   --one-input-api ray/v1 \
   "${SCRIPT_ROOT}/apis"

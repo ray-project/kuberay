@@ -23,6 +23,3251 @@ func Parser() *typed.Parser {
 var parserOnce sync.Once
 var parser *typed.Parser
 var schemaYAML = typed.YAMLObject(`types:
+- name: AWSElasticBlockStoreVolumeSource.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: fsType
+      type:
+        scalar: string
+    - name: partition
+      type:
+        scalar: numeric
+    - name: readOnly
+      type:
+        scalar: boolean
+    - name: volumeID
+      type:
+        scalar: string
+      default: ""
+- name: Affinity.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: nodeAffinity
+      type:
+        namedType: NodeAffinity.v1.core.api.k8s.io
+    - name: podAffinity
+      type:
+        namedType: PodAffinity.v1.core.api.k8s.io
+    - name: podAntiAffinity
+      type:
+        namedType: PodAntiAffinity.v1.core.api.k8s.io
+- name: AppArmorProfile.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: localhostProfile
+      type:
+        scalar: string
+    - name: type
+      type:
+        scalar: string
+      default: ""
+    unions:
+    - discriminator: type
+      fields:
+      - fieldName: localhostProfile
+        discriminatorValue: LocalhostProfile
+- name: AzureDiskVolumeSource.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: cachingMode
+      type:
+        scalar: string
+      default: ReadWrite
+    - name: diskName
+      type:
+        scalar: string
+      default: ""
+    - name: diskURI
+      type:
+        scalar: string
+      default: ""
+    - name: fsType
+      type:
+        scalar: string
+      default: ext4
+    - name: kind
+      type:
+        scalar: string
+      default: Shared
+    - name: readOnly
+      type:
+        scalar: boolean
+      default: false
+- name: AzureFileVolumeSource.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: readOnly
+      type:
+        scalar: boolean
+    - name: secretName
+      type:
+        scalar: string
+      default: ""
+    - name: shareName
+      type:
+        scalar: string
+      default: ""
+- name: CSIVolumeSource.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: driver
+      type:
+        scalar: string
+      default: ""
+    - name: fsType
+      type:
+        scalar: string
+    - name: nodePublishSecretRef
+      type:
+        namedType: LocalObjectReference.v1.core.api.k8s.io
+    - name: readOnly
+      type:
+        scalar: boolean
+    - name: volumeAttributes
+      type:
+        map:
+          elementType:
+            scalar: string
+- name: Capabilities.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: add
+      type:
+        list:
+          elementType:
+            scalar: string
+          elementRelationship: atomic
+    - name: drop
+      type:
+        list:
+          elementType:
+            scalar: string
+          elementRelationship: atomic
+- name: CephFSVolumeSource.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: monitors
+      type:
+        list:
+          elementType:
+            scalar: string
+          elementRelationship: atomic
+    - name: path
+      type:
+        scalar: string
+    - name: readOnly
+      type:
+        scalar: boolean
+    - name: secretFile
+      type:
+        scalar: string
+    - name: secretRef
+      type:
+        namedType: LocalObjectReference.v1.core.api.k8s.io
+    - name: user
+      type:
+        scalar: string
+- name: CinderVolumeSource.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: fsType
+      type:
+        scalar: string
+    - name: readOnly
+      type:
+        scalar: boolean
+    - name: secretRef
+      type:
+        namedType: LocalObjectReference.v1.core.api.k8s.io
+    - name: volumeID
+      type:
+        scalar: string
+      default: ""
+- name: ClientIPConfig.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: timeoutSeconds
+      type:
+        scalar: numeric
+- name: ClusterTrustBundleProjection.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: labelSelector
+      type:
+        namedType: LabelSelector.v1.meta.apis.pkg.apimachinery.k8s.io
+    - name: name
+      type:
+        scalar: string
+    - name: optional
+      type:
+        scalar: boolean
+    - name: path
+      type:
+        scalar: string
+      default: ""
+    - name: signerName
+      type:
+        scalar: string
+- name: Condition.v1.meta.apis.pkg.apimachinery.k8s.io
+  map:
+    fields:
+    - name: lastTransitionTime
+      type:
+        namedType: Time.v1.meta.apis.pkg.apimachinery.k8s.io
+    - name: message
+      type:
+        scalar: string
+      default: ""
+    - name: observedGeneration
+      type:
+        scalar: numeric
+    - name: reason
+      type:
+        scalar: string
+      default: ""
+    - name: status
+      type:
+        scalar: string
+      default: ""
+    - name: type
+      type:
+        scalar: string
+      default: ""
+- name: ConfigMapEnvSource.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: name
+      type:
+        scalar: string
+      default: ""
+    - name: optional
+      type:
+        scalar: boolean
+- name: ConfigMapKeySelector.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: key
+      type:
+        scalar: string
+      default: ""
+    - name: name
+      type:
+        scalar: string
+      default: ""
+    - name: optional
+      type:
+        scalar: boolean
+    elementRelationship: atomic
+- name: ConfigMapProjection.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: items
+      type:
+        list:
+          elementType:
+            namedType: KeyToPath.v1.core.api.k8s.io
+          elementRelationship: atomic
+    - name: name
+      type:
+        scalar: string
+      default: ""
+    - name: optional
+      type:
+        scalar: boolean
+- name: ConfigMapVolumeSource.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: defaultMode
+      type:
+        scalar: numeric
+    - name: items
+      type:
+        list:
+          elementType:
+            namedType: KeyToPath.v1.core.api.k8s.io
+          elementRelationship: atomic
+    - name: name
+      type:
+        scalar: string
+      default: ""
+    - name: optional
+      type:
+        scalar: boolean
+- name: Container.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: args
+      type:
+        list:
+          elementType:
+            scalar: string
+          elementRelationship: atomic
+    - name: command
+      type:
+        list:
+          elementType:
+            scalar: string
+          elementRelationship: atomic
+    - name: env
+      type:
+        list:
+          elementType:
+            namedType: EnvVar.v1.core.api.k8s.io
+          elementRelationship: associative
+          keys:
+          - name
+    - name: envFrom
+      type:
+        list:
+          elementType:
+            namedType: EnvFromSource.v1.core.api.k8s.io
+          elementRelationship: atomic
+    - name: image
+      type:
+        scalar: string
+    - name: imagePullPolicy
+      type:
+        scalar: string
+    - name: lifecycle
+      type:
+        namedType: Lifecycle.v1.core.api.k8s.io
+    - name: livenessProbe
+      type:
+        namedType: Probe.v1.core.api.k8s.io
+    - name: name
+      type:
+        scalar: string
+      default: ""
+    - name: ports
+      type:
+        list:
+          elementType:
+            namedType: ContainerPort.v1.core.api.k8s.io
+          elementRelationship: associative
+          keys:
+          - containerPort
+          - protocol
+    - name: readinessProbe
+      type:
+        namedType: Probe.v1.core.api.k8s.io
+    - name: resizePolicy
+      type:
+        list:
+          elementType:
+            namedType: ContainerResizePolicy.v1.core.api.k8s.io
+          elementRelationship: atomic
+    - name: resources
+      type:
+        namedType: ResourceRequirements.v1.core.api.k8s.io
+      default: {}
+    - name: restartPolicy
+      type:
+        scalar: string
+    - name: restartPolicyRules
+      type:
+        list:
+          elementType:
+            namedType: ContainerRestartRule.v1.core.api.k8s.io
+          elementRelationship: atomic
+    - name: securityContext
+      type:
+        namedType: SecurityContext.v1.core.api.k8s.io
+    - name: startupProbe
+      type:
+        namedType: Probe.v1.core.api.k8s.io
+    - name: stdin
+      type:
+        scalar: boolean
+    - name: stdinOnce
+      type:
+        scalar: boolean
+    - name: terminationMessagePath
+      type:
+        scalar: string
+    - name: terminationMessagePolicy
+      type:
+        scalar: string
+    - name: tty
+      type:
+        scalar: boolean
+    - name: volumeDevices
+      type:
+        list:
+          elementType:
+            namedType: VolumeDevice.v1.core.api.k8s.io
+          elementRelationship: associative
+          keys:
+          - devicePath
+    - name: volumeMounts
+      type:
+        list:
+          elementType:
+            namedType: VolumeMount.v1.core.api.k8s.io
+          elementRelationship: associative
+          keys:
+          - mountPath
+    - name: workingDir
+      type:
+        scalar: string
+- name: ContainerPort.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: containerPort
+      type:
+        scalar: numeric
+      default: 0
+    - name: hostIP
+      type:
+        scalar: string
+    - name: hostPort
+      type:
+        scalar: numeric
+    - name: name
+      type:
+        scalar: string
+    - name: protocol
+      type:
+        scalar: string
+      default: TCP
+- name: ContainerResizePolicy.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: resourceName
+      type:
+        scalar: string
+      default: ""
+    - name: restartPolicy
+      type:
+        scalar: string
+      default: ""
+- name: ContainerRestartRule.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: action
+      type:
+        scalar: string
+    - name: exitCodes
+      type:
+        namedType: ContainerRestartRuleOnExitCodes.v1.core.api.k8s.io
+- name: ContainerRestartRuleOnExitCodes.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: operator
+      type:
+        scalar: string
+    - name: values
+      type:
+        list:
+          elementType:
+            scalar: numeric
+          elementRelationship: associative
+- name: DownwardAPIProjection.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: items
+      type:
+        list:
+          elementType:
+            namedType: DownwardAPIVolumeFile.v1.core.api.k8s.io
+          elementRelationship: atomic
+- name: DownwardAPIVolumeFile.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: fieldRef
+      type:
+        namedType: ObjectFieldSelector.v1.core.api.k8s.io
+    - name: mode
+      type:
+        scalar: numeric
+    - name: path
+      type:
+        scalar: string
+      default: ""
+    - name: resourceFieldRef
+      type:
+        namedType: ResourceFieldSelector.v1.core.api.k8s.io
+- name: DownwardAPIVolumeSource.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: defaultMode
+      type:
+        scalar: numeric
+    - name: items
+      type:
+        list:
+          elementType:
+            namedType: DownwardAPIVolumeFile.v1.core.api.k8s.io
+          elementRelationship: atomic
+- name: EmptyDirVolumeSource.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: medium
+      type:
+        scalar: string
+    - name: sizeLimit
+      type:
+        namedType: Quantity.resource.api.pkg.apimachinery.k8s.io
+- name: EnvFromSource.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: configMapRef
+      type:
+        namedType: ConfigMapEnvSource.v1.core.api.k8s.io
+    - name: prefix
+      type:
+        scalar: string
+    - name: secretRef
+      type:
+        namedType: SecretEnvSource.v1.core.api.k8s.io
+- name: EnvVar.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: name
+      type:
+        scalar: string
+      default: ""
+    - name: value
+      type:
+        scalar: string
+    - name: valueFrom
+      type:
+        namedType: EnvVarSource.v1.core.api.k8s.io
+- name: EnvVarSource.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: configMapKeyRef
+      type:
+        namedType: ConfigMapKeySelector.v1.core.api.k8s.io
+    - name: fieldRef
+      type:
+        namedType: ObjectFieldSelector.v1.core.api.k8s.io
+    - name: fileKeyRef
+      type:
+        namedType: FileKeySelector.v1.core.api.k8s.io
+    - name: resourceFieldRef
+      type:
+        namedType: ResourceFieldSelector.v1.core.api.k8s.io
+    - name: secretKeyRef
+      type:
+        namedType: SecretKeySelector.v1.core.api.k8s.io
+- name: EphemeralContainer.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: args
+      type:
+        list:
+          elementType:
+            scalar: string
+          elementRelationship: atomic
+    - name: command
+      type:
+        list:
+          elementType:
+            scalar: string
+          elementRelationship: atomic
+    - name: env
+      type:
+        list:
+          elementType:
+            namedType: EnvVar.v1.core.api.k8s.io
+          elementRelationship: associative
+          keys:
+          - name
+    - name: envFrom
+      type:
+        list:
+          elementType:
+            namedType: EnvFromSource.v1.core.api.k8s.io
+          elementRelationship: atomic
+    - name: image
+      type:
+        scalar: string
+    - name: imagePullPolicy
+      type:
+        scalar: string
+    - name: lifecycle
+      type:
+        namedType: Lifecycle.v1.core.api.k8s.io
+    - name: livenessProbe
+      type:
+        namedType: Probe.v1.core.api.k8s.io
+    - name: name
+      type:
+        scalar: string
+      default: ""
+    - name: ports
+      type:
+        list:
+          elementType:
+            namedType: ContainerPort.v1.core.api.k8s.io
+          elementRelationship: associative
+          keys:
+          - containerPort
+          - protocol
+    - name: readinessProbe
+      type:
+        namedType: Probe.v1.core.api.k8s.io
+    - name: resizePolicy
+      type:
+        list:
+          elementType:
+            namedType: ContainerResizePolicy.v1.core.api.k8s.io
+          elementRelationship: atomic
+    - name: resources
+      type:
+        namedType: ResourceRequirements.v1.core.api.k8s.io
+      default: {}
+    - name: restartPolicy
+      type:
+        scalar: string
+    - name: restartPolicyRules
+      type:
+        list:
+          elementType:
+            namedType: ContainerRestartRule.v1.core.api.k8s.io
+          elementRelationship: atomic
+    - name: securityContext
+      type:
+        namedType: SecurityContext.v1.core.api.k8s.io
+    - name: startupProbe
+      type:
+        namedType: Probe.v1.core.api.k8s.io
+    - name: stdin
+      type:
+        scalar: boolean
+    - name: stdinOnce
+      type:
+        scalar: boolean
+    - name: targetContainerName
+      type:
+        scalar: string
+    - name: terminationMessagePath
+      type:
+        scalar: string
+    - name: terminationMessagePolicy
+      type:
+        scalar: string
+    - name: tty
+      type:
+        scalar: boolean
+    - name: volumeDevices
+      type:
+        list:
+          elementType:
+            namedType: VolumeDevice.v1.core.api.k8s.io
+          elementRelationship: associative
+          keys:
+          - devicePath
+    - name: volumeMounts
+      type:
+        list:
+          elementType:
+            namedType: VolumeMount.v1.core.api.k8s.io
+          elementRelationship: associative
+          keys:
+          - mountPath
+    - name: workingDir
+      type:
+        scalar: string
+- name: EphemeralVolumeSource.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: volumeClaimTemplate
+      type:
+        namedType: PersistentVolumeClaimTemplate.v1.core.api.k8s.io
+- name: ExecAction.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: command
+      type:
+        list:
+          elementType:
+            scalar: string
+          elementRelationship: atomic
+- name: FCVolumeSource.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: fsType
+      type:
+        scalar: string
+    - name: lun
+      type:
+        scalar: numeric
+    - name: readOnly
+      type:
+        scalar: boolean
+    - name: targetWWNs
+      type:
+        list:
+          elementType:
+            scalar: string
+          elementRelationship: atomic
+    - name: wwids
+      type:
+        list:
+          elementType:
+            scalar: string
+          elementRelationship: atomic
+- name: FieldsV1.v1.meta.apis.pkg.apimachinery.k8s.io
+  map:
+    elementType:
+      scalar: untyped
+      list:
+        elementType:
+          namedType: __untyped_atomic_
+        elementRelationship: atomic
+      map:
+        elementType:
+          namedType: __untyped_deduced_
+        elementRelationship: separable
+- name: FileKeySelector.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: key
+      type:
+        scalar: string
+      default: ""
+    - name: optional
+      type:
+        scalar: boolean
+      default: false
+    - name: path
+      type:
+        scalar: string
+      default: ""
+    - name: volumeName
+      type:
+        scalar: string
+      default: ""
+    elementRelationship: atomic
+- name: FlexVolumeSource.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: driver
+      type:
+        scalar: string
+      default: ""
+    - name: fsType
+      type:
+        scalar: string
+    - name: options
+      type:
+        map:
+          elementType:
+            scalar: string
+    - name: readOnly
+      type:
+        scalar: boolean
+    - name: secretRef
+      type:
+        namedType: LocalObjectReference.v1.core.api.k8s.io
+- name: FlockerVolumeSource.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: datasetName
+      type:
+        scalar: string
+    - name: datasetUUID
+      type:
+        scalar: string
+- name: GCEPersistentDiskVolumeSource.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: fsType
+      type:
+        scalar: string
+    - name: partition
+      type:
+        scalar: numeric
+    - name: pdName
+      type:
+        scalar: string
+      default: ""
+    - name: readOnly
+      type:
+        scalar: boolean
+- name: GRPCAction.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: port
+      type:
+        scalar: numeric
+      default: 0
+    - name: service
+      type:
+        scalar: string
+      default: ""
+- name: GitRepoVolumeSource.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: directory
+      type:
+        scalar: string
+    - name: repository
+      type:
+        scalar: string
+      default: ""
+    - name: revision
+      type:
+        scalar: string
+- name: GlusterfsVolumeSource.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: endpoints
+      type:
+        scalar: string
+      default: ""
+    - name: path
+      type:
+        scalar: string
+      default: ""
+    - name: readOnly
+      type:
+        scalar: boolean
+- name: HTTPGetAction.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: host
+      type:
+        scalar: string
+    - name: httpHeaders
+      type:
+        list:
+          elementType:
+            namedType: HTTPHeader.v1.core.api.k8s.io
+          elementRelationship: atomic
+    - name: path
+      type:
+        scalar: string
+    - name: port
+      type:
+        namedType: IntOrString.intstr.util.pkg.apimachinery.k8s.io
+    - name: scheme
+      type:
+        scalar: string
+- name: HTTPHeader.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: name
+      type:
+        scalar: string
+      default: ""
+    - name: value
+      type:
+        scalar: string
+      default: ""
+- name: HostAlias.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: hostnames
+      type:
+        list:
+          elementType:
+            scalar: string
+          elementRelationship: atomic
+    - name: ip
+      type:
+        scalar: string
+      default: ""
+- name: HostPathVolumeSource.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: path
+      type:
+        scalar: string
+      default: ""
+    - name: type
+      type:
+        scalar: string
+- name: ISCSIVolumeSource.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: chapAuthDiscovery
+      type:
+        scalar: boolean
+    - name: chapAuthSession
+      type:
+        scalar: boolean
+    - name: fsType
+      type:
+        scalar: string
+    - name: initiatorName
+      type:
+        scalar: string
+    - name: iqn
+      type:
+        scalar: string
+      default: ""
+    - name: iscsiInterface
+      type:
+        scalar: string
+      default: default
+    - name: lun
+      type:
+        scalar: numeric
+      default: 0
+    - name: portals
+      type:
+        list:
+          elementType:
+            scalar: string
+          elementRelationship: atomic
+    - name: readOnly
+      type:
+        scalar: boolean
+    - name: secretRef
+      type:
+        namedType: LocalObjectReference.v1.core.api.k8s.io
+    - name: targetPortal
+      type:
+        scalar: string
+      default: ""
+- name: ImageVolumeSource.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: pullPolicy
+      type:
+        scalar: string
+    - name: reference
+      type:
+        scalar: string
+- name: IntOrString.intstr.util.pkg.apimachinery.k8s.io
+  scalar: untyped
+- name: KeyToPath.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: key
+      type:
+        scalar: string
+      default: ""
+    - name: mode
+      type:
+        scalar: numeric
+    - name: path
+      type:
+        scalar: string
+      default: ""
+- name: LabelSelector.v1.meta.apis.pkg.apimachinery.k8s.io
+  map:
+    fields:
+    - name: matchExpressions
+      type:
+        list:
+          elementType:
+            namedType: LabelSelectorRequirement.v1.meta.apis.pkg.apimachinery.k8s.io
+          elementRelationship: atomic
+    - name: matchLabels
+      type:
+        map:
+          elementType:
+            scalar: string
+    elementRelationship: atomic
+- name: LabelSelectorRequirement.v1.meta.apis.pkg.apimachinery.k8s.io
+  map:
+    fields:
+    - name: key
+      type:
+        scalar: string
+      default: ""
+    - name: operator
+      type:
+        scalar: string
+      default: ""
+    - name: values
+      type:
+        list:
+          elementType:
+            scalar: string
+          elementRelationship: atomic
+- name: Lifecycle.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: postStart
+      type:
+        namedType: LifecycleHandler.v1.core.api.k8s.io
+    - name: preStop
+      type:
+        namedType: LifecycleHandler.v1.core.api.k8s.io
+    - name: stopSignal
+      type:
+        scalar: string
+- name: LifecycleHandler.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: exec
+      type:
+        namedType: ExecAction.v1.core.api.k8s.io
+    - name: httpGet
+      type:
+        namedType: HTTPGetAction.v1.core.api.k8s.io
+    - name: sleep
+      type:
+        namedType: SleepAction.v1.core.api.k8s.io
+    - name: tcpSocket
+      type:
+        namedType: TCPSocketAction.v1.core.api.k8s.io
+- name: LoadBalancerIngress.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: hostname
+      type:
+        scalar: string
+    - name: ip
+      type:
+        scalar: string
+    - name: ipMode
+      type:
+        scalar: string
+    - name: ports
+      type:
+        list:
+          elementType:
+            namedType: PortStatus.v1.core.api.k8s.io
+          elementRelationship: atomic
+- name: LoadBalancerStatus.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: ingress
+      type:
+        list:
+          elementType:
+            namedType: LoadBalancerIngress.v1.core.api.k8s.io
+          elementRelationship: atomic
+- name: LocalObjectReference.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: name
+      type:
+        scalar: string
+      default: ""
+    elementRelationship: atomic
+- name: ManagedFieldsEntry.v1.meta.apis.pkg.apimachinery.k8s.io
+  map:
+    fields:
+    - name: apiVersion
+      type:
+        scalar: string
+    - name: fieldsType
+      type:
+        scalar: string
+    - name: fieldsV1
+      type:
+        namedType: FieldsV1.v1.meta.apis.pkg.apimachinery.k8s.io
+    - name: manager
+      type:
+        scalar: string
+    - name: operation
+      type:
+        scalar: string
+    - name: subresource
+      type:
+        scalar: string
+    - name: time
+      type:
+        namedType: Time.v1.meta.apis.pkg.apimachinery.k8s.io
+- name: NFSVolumeSource.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: path
+      type:
+        scalar: string
+      default: ""
+    - name: readOnly
+      type:
+        scalar: boolean
+    - name: server
+      type:
+        scalar: string
+      default: ""
+- name: NodeAffinity.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: preferredDuringSchedulingIgnoredDuringExecution
+      type:
+        list:
+          elementType:
+            namedType: PreferredSchedulingTerm.v1.core.api.k8s.io
+          elementRelationship: atomic
+    - name: requiredDuringSchedulingIgnoredDuringExecution
+      type:
+        namedType: NodeSelector.v1.core.api.k8s.io
+- name: NodeSelector.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: nodeSelectorTerms
+      type:
+        list:
+          elementType:
+            namedType: NodeSelectorTerm.v1.core.api.k8s.io
+          elementRelationship: atomic
+    elementRelationship: atomic
+- name: NodeSelectorRequirement.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: key
+      type:
+        scalar: string
+      default: ""
+    - name: operator
+      type:
+        scalar: string
+      default: ""
+    - name: values
+      type:
+        list:
+          elementType:
+            scalar: string
+          elementRelationship: atomic
+- name: NodeSelectorTerm.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: matchExpressions
+      type:
+        list:
+          elementType:
+            namedType: NodeSelectorRequirement.v1.core.api.k8s.io
+          elementRelationship: atomic
+    - name: matchFields
+      type:
+        list:
+          elementType:
+            namedType: NodeSelectorRequirement.v1.core.api.k8s.io
+          elementRelationship: atomic
+    elementRelationship: atomic
+- name: ObjectFieldSelector.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: apiVersion
+      type:
+        scalar: string
+    - name: fieldPath
+      type:
+        scalar: string
+      default: ""
+    elementRelationship: atomic
+- name: ObjectMeta.v1.meta.apis.pkg.apimachinery.k8s.io
+  map:
+    fields:
+    - name: annotations
+      type:
+        map:
+          elementType:
+            scalar: string
+    - name: creationTimestamp
+      type:
+        namedType: Time.v1.meta.apis.pkg.apimachinery.k8s.io
+    - name: deletionGracePeriodSeconds
+      type:
+        scalar: numeric
+    - name: deletionTimestamp
+      type:
+        namedType: Time.v1.meta.apis.pkg.apimachinery.k8s.io
+    - name: finalizers
+      type:
+        list:
+          elementType:
+            scalar: string
+          elementRelationship: associative
+    - name: generateName
+      type:
+        scalar: string
+    - name: generation
+      type:
+        scalar: numeric
+    - name: labels
+      type:
+        map:
+          elementType:
+            scalar: string
+    - name: managedFields
+      type:
+        list:
+          elementType:
+            namedType: ManagedFieldsEntry.v1.meta.apis.pkg.apimachinery.k8s.io
+          elementRelationship: atomic
+    - name: name
+      type:
+        scalar: string
+    - name: namespace
+      type:
+        scalar: string
+    - name: ownerReferences
+      type:
+        list:
+          elementType:
+            namedType: OwnerReference.v1.meta.apis.pkg.apimachinery.k8s.io
+          elementRelationship: associative
+          keys:
+          - uid
+    - name: resourceVersion
+      type:
+        scalar: string
+    - name: selfLink
+      type:
+        scalar: string
+    - name: uid
+      type:
+        scalar: string
+- name: OwnerReference.v1.meta.apis.pkg.apimachinery.k8s.io
+  map:
+    fields:
+    - name: apiVersion
+      type:
+        scalar: string
+      default: ""
+    - name: blockOwnerDeletion
+      type:
+        scalar: boolean
+    - name: controller
+      type:
+        scalar: boolean
+    - name: kind
+      type:
+        scalar: string
+      default: ""
+    - name: name
+      type:
+        scalar: string
+      default: ""
+    - name: uid
+      type:
+        scalar: string
+      default: ""
+    elementRelationship: atomic
+- name: PersistentVolumeClaimSpec.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: accessModes
+      type:
+        list:
+          elementType:
+            scalar: string
+          elementRelationship: atomic
+    - name: dataSource
+      type:
+        namedType: TypedLocalObjectReference.v1.core.api.k8s.io
+    - name: dataSourceRef
+      type:
+        namedType: TypedObjectReference.v1.core.api.k8s.io
+    - name: resources
+      type:
+        namedType: VolumeResourceRequirements.v1.core.api.k8s.io
+      default: {}
+    - name: selector
+      type:
+        namedType: LabelSelector.v1.meta.apis.pkg.apimachinery.k8s.io
+    - name: storageClassName
+      type:
+        scalar: string
+    - name: volumeAttributesClassName
+      type:
+        scalar: string
+    - name: volumeMode
+      type:
+        scalar: string
+    - name: volumeName
+      type:
+        scalar: string
+- name: PersistentVolumeClaimTemplate.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: metadata
+      type:
+        namedType: ObjectMeta.v1.meta.apis.pkg.apimachinery.k8s.io
+      default: {}
+    - name: spec
+      type:
+        namedType: PersistentVolumeClaimSpec.v1.core.api.k8s.io
+      default: {}
+- name: PersistentVolumeClaimVolumeSource.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: claimName
+      type:
+        scalar: string
+      default: ""
+    - name: readOnly
+      type:
+        scalar: boolean
+- name: PhotonPersistentDiskVolumeSource.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: fsType
+      type:
+        scalar: string
+    - name: pdID
+      type:
+        scalar: string
+      default: ""
+- name: PodAffinity.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: preferredDuringSchedulingIgnoredDuringExecution
+      type:
+        list:
+          elementType:
+            namedType: WeightedPodAffinityTerm.v1.core.api.k8s.io
+          elementRelationship: atomic
+    - name: requiredDuringSchedulingIgnoredDuringExecution
+      type:
+        list:
+          elementType:
+            namedType: PodAffinityTerm.v1.core.api.k8s.io
+          elementRelationship: atomic
+- name: PodAffinityTerm.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: labelSelector
+      type:
+        namedType: LabelSelector.v1.meta.apis.pkg.apimachinery.k8s.io
+    - name: matchLabelKeys
+      type:
+        list:
+          elementType:
+            scalar: string
+          elementRelationship: atomic
+    - name: mismatchLabelKeys
+      type:
+        list:
+          elementType:
+            scalar: string
+          elementRelationship: atomic
+    - name: namespaceSelector
+      type:
+        namedType: LabelSelector.v1.meta.apis.pkg.apimachinery.k8s.io
+    - name: namespaces
+      type:
+        list:
+          elementType:
+            scalar: string
+          elementRelationship: atomic
+    - name: topologyKey
+      type:
+        scalar: string
+      default: ""
+- name: PodAntiAffinity.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: preferredDuringSchedulingIgnoredDuringExecution
+      type:
+        list:
+          elementType:
+            namedType: WeightedPodAffinityTerm.v1.core.api.k8s.io
+          elementRelationship: atomic
+    - name: requiredDuringSchedulingIgnoredDuringExecution
+      type:
+        list:
+          elementType:
+            namedType: PodAffinityTerm.v1.core.api.k8s.io
+          elementRelationship: atomic
+- name: PodCertificateProjection.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: certificateChainPath
+      type:
+        scalar: string
+    - name: credentialBundlePath
+      type:
+        scalar: string
+    - name: keyPath
+      type:
+        scalar: string
+    - name: keyType
+      type:
+        scalar: string
+    - name: maxExpirationSeconds
+      type:
+        scalar: numeric
+    - name: signerName
+      type:
+        scalar: string
+    - name: userAnnotations
+      type:
+        map:
+          elementType:
+            scalar: string
+- name: PodDNSConfig.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: nameservers
+      type:
+        list:
+          elementType:
+            scalar: string
+          elementRelationship: atomic
+    - name: options
+      type:
+        list:
+          elementType:
+            namedType: PodDNSConfigOption.v1.core.api.k8s.io
+          elementRelationship: atomic
+    - name: searches
+      type:
+        list:
+          elementType:
+            scalar: string
+          elementRelationship: atomic
+- name: PodDNSConfigOption.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: name
+      type:
+        scalar: string
+    - name: value
+      type:
+        scalar: string
+- name: PodOS.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: name
+      type:
+        scalar: string
+      default: ""
+- name: PodReadinessGate.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: conditionType
+      type:
+        scalar: string
+      default: ""
+- name: PodResourceClaim.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: name
+      type:
+        scalar: string
+      default: ""
+    - name: resourceClaimName
+      type:
+        scalar: string
+    - name: resourceClaimTemplateName
+      type:
+        scalar: string
+- name: PodSchedulingGate.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: name
+      type:
+        scalar: string
+      default: ""
+- name: PodSecurityContext.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: appArmorProfile
+      type:
+        namedType: AppArmorProfile.v1.core.api.k8s.io
+    - name: fsGroup
+      type:
+        scalar: numeric
+    - name: fsGroupChangePolicy
+      type:
+        scalar: string
+    - name: runAsGroup
+      type:
+        scalar: numeric
+    - name: runAsNonRoot
+      type:
+        scalar: boolean
+    - name: runAsUser
+      type:
+        scalar: numeric
+    - name: seLinuxChangePolicy
+      type:
+        scalar: string
+    - name: seLinuxOptions
+      type:
+        namedType: SELinuxOptions.v1.core.api.k8s.io
+    - name: seccompProfile
+      type:
+        namedType: SeccompProfile.v1.core.api.k8s.io
+    - name: supplementalGroups
+      type:
+        list:
+          elementType:
+            scalar: numeric
+          elementRelationship: atomic
+    - name: supplementalGroupsPolicy
+      type:
+        scalar: string
+    - name: sysctls
+      type:
+        list:
+          elementType:
+            namedType: Sysctl.v1.core.api.k8s.io
+          elementRelationship: atomic
+    - name: windowsOptions
+      type:
+        namedType: WindowsSecurityContextOptions.v1.core.api.k8s.io
+- name: PodSpec.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: activeDeadlineSeconds
+      type:
+        scalar: numeric
+    - name: affinity
+      type:
+        namedType: Affinity.v1.core.api.k8s.io
+    - name: automountServiceAccountToken
+      type:
+        scalar: boolean
+    - name: containers
+      type:
+        list:
+          elementType:
+            namedType: Container.v1.core.api.k8s.io
+          elementRelationship: associative
+          keys:
+          - name
+    - name: dnsConfig
+      type:
+        namedType: PodDNSConfig.v1.core.api.k8s.io
+    - name: dnsPolicy
+      type:
+        scalar: string
+    - name: enableServiceLinks
+      type:
+        scalar: boolean
+    - name: ephemeralContainers
+      type:
+        list:
+          elementType:
+            namedType: EphemeralContainer.v1.core.api.k8s.io
+          elementRelationship: associative
+          keys:
+          - name
+    - name: hostAliases
+      type:
+        list:
+          elementType:
+            namedType: HostAlias.v1.core.api.k8s.io
+          elementRelationship: associative
+          keys:
+          - ip
+    - name: hostIPC
+      type:
+        scalar: boolean
+    - name: hostNetwork
+      type:
+        scalar: boolean
+    - name: hostPID
+      type:
+        scalar: boolean
+    - name: hostUsers
+      type:
+        scalar: boolean
+    - name: hostname
+      type:
+        scalar: string
+    - name: hostnameOverride
+      type:
+        scalar: string
+    - name: imagePullSecrets
+      type:
+        list:
+          elementType:
+            namedType: LocalObjectReference.v1.core.api.k8s.io
+          elementRelationship: associative
+          keys:
+          - name
+    - name: initContainers
+      type:
+        list:
+          elementType:
+            namedType: Container.v1.core.api.k8s.io
+          elementRelationship: associative
+          keys:
+          - name
+    - name: nodeName
+      type:
+        scalar: string
+    - name: nodeSelector
+      type:
+        map:
+          elementType:
+            scalar: string
+          elementRelationship: atomic
+    - name: os
+      type:
+        namedType: PodOS.v1.core.api.k8s.io
+    - name: overhead
+      type:
+        map:
+          elementType:
+            namedType: Quantity.resource.api.pkg.apimachinery.k8s.io
+    - name: preemptionPolicy
+      type:
+        scalar: string
+    - name: priority
+      type:
+        scalar: numeric
+    - name: priorityClassName
+      type:
+        scalar: string
+    - name: readinessGates
+      type:
+        list:
+          elementType:
+            namedType: PodReadinessGate.v1.core.api.k8s.io
+          elementRelationship: atomic
+    - name: resourceClaims
+      type:
+        list:
+          elementType:
+            namedType: PodResourceClaim.v1.core.api.k8s.io
+          elementRelationship: associative
+          keys:
+          - name
+    - name: resources
+      type:
+        namedType: ResourceRequirements.v1.core.api.k8s.io
+    - name: restartPolicy
+      type:
+        scalar: string
+    - name: runtimeClassName
+      type:
+        scalar: string
+    - name: schedulerName
+      type:
+        scalar: string
+    - name: schedulingGates
+      type:
+        list:
+          elementType:
+            namedType: PodSchedulingGate.v1.core.api.k8s.io
+          elementRelationship: associative
+          keys:
+          - name
+    - name: securityContext
+      type:
+        namedType: PodSecurityContext.v1.core.api.k8s.io
+    - name: serviceAccount
+      type:
+        scalar: string
+    - name: serviceAccountName
+      type:
+        scalar: string
+    - name: setHostnameAsFQDN
+      type:
+        scalar: boolean
+    - name: shareProcessNamespace
+      type:
+        scalar: boolean
+    - name: subdomain
+      type:
+        scalar: string
+    - name: terminationGracePeriodSeconds
+      type:
+        scalar: numeric
+    - name: tolerations
+      type:
+        list:
+          elementType:
+            namedType: Toleration.v1.core.api.k8s.io
+          elementRelationship: atomic
+    - name: topologySpreadConstraints
+      type:
+        list:
+          elementType:
+            namedType: TopologySpreadConstraint.v1.core.api.k8s.io
+          elementRelationship: associative
+          keys:
+          - topologyKey
+          - whenUnsatisfiable
+    - name: volumes
+      type:
+        list:
+          elementType:
+            namedType: Volume.v1.core.api.k8s.io
+          elementRelationship: associative
+          keys:
+          - name
+    - name: workloadRef
+      type:
+        namedType: WorkloadReference.v1.core.api.k8s.io
+- name: PodTemplateSpec.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: metadata
+      type:
+        namedType: ObjectMeta.v1.meta.apis.pkg.apimachinery.k8s.io
+      default: {}
+    - name: spec
+      type:
+        namedType: PodSpec.v1.core.api.k8s.io
+      default: {}
+- name: PortStatus.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: error
+      type:
+        scalar: string
+    - name: port
+      type:
+        scalar: numeric
+      default: 0
+    - name: protocol
+      type:
+        scalar: string
+      default: ""
+- name: PortworxVolumeSource.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: fsType
+      type:
+        scalar: string
+    - name: readOnly
+      type:
+        scalar: boolean
+    - name: volumeID
+      type:
+        scalar: string
+      default: ""
+- name: PreferredSchedulingTerm.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: preference
+      type:
+        namedType: NodeSelectorTerm.v1.core.api.k8s.io
+      default: {}
+    - name: weight
+      type:
+        scalar: numeric
+      default: 0
+- name: Probe.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: exec
+      type:
+        namedType: ExecAction.v1.core.api.k8s.io
+    - name: failureThreshold
+      type:
+        scalar: numeric
+    - name: grpc
+      type:
+        namedType: GRPCAction.v1.core.api.k8s.io
+    - name: httpGet
+      type:
+        namedType: HTTPGetAction.v1.core.api.k8s.io
+    - name: initialDelaySeconds
+      type:
+        scalar: numeric
+    - name: periodSeconds
+      type:
+        scalar: numeric
+    - name: successThreshold
+      type:
+        scalar: numeric
+    - name: tcpSocket
+      type:
+        namedType: TCPSocketAction.v1.core.api.k8s.io
+    - name: terminationGracePeriodSeconds
+      type:
+        scalar: numeric
+    - name: timeoutSeconds
+      type:
+        scalar: numeric
+- name: ProjectedVolumeSource.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: defaultMode
+      type:
+        scalar: numeric
+    - name: sources
+      type:
+        list:
+          elementType:
+            namedType: VolumeProjection.v1.core.api.k8s.io
+          elementRelationship: atomic
+- name: Quantity.resource.api.pkg.apimachinery.k8s.io
+  scalar: string
+- name: QuobyteVolumeSource.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: group
+      type:
+        scalar: string
+    - name: readOnly
+      type:
+        scalar: boolean
+    - name: registry
+      type:
+        scalar: string
+      default: ""
+    - name: tenant
+      type:
+        scalar: string
+    - name: user
+      type:
+        scalar: string
+    - name: volume
+      type:
+        scalar: string
+      default: ""
+- name: RBDVolumeSource.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: fsType
+      type:
+        scalar: string
+    - name: image
+      type:
+        scalar: string
+      default: ""
+    - name: keyring
+      type:
+        scalar: string
+      default: /etc/ceph/keyring
+    - name: monitors
+      type:
+        list:
+          elementType:
+            scalar: string
+          elementRelationship: atomic
+    - name: pool
+      type:
+        scalar: string
+      default: rbd
+    - name: readOnly
+      type:
+        scalar: boolean
+    - name: secretRef
+      type:
+        namedType: LocalObjectReference.v1.core.api.k8s.io
+    - name: user
+      type:
+        scalar: string
+      default: admin
+- name: ResourceClaim.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: name
+      type:
+        scalar: string
+      default: ""
+    - name: request
+      type:
+        scalar: string
+- name: ResourceFieldSelector.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: containerName
+      type:
+        scalar: string
+    - name: divisor
+      type:
+        namedType: Quantity.resource.api.pkg.apimachinery.k8s.io
+    - name: resource
+      type:
+        scalar: string
+      default: ""
+    elementRelationship: atomic
+- name: ResourceRequirements.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: claims
+      type:
+        list:
+          elementType:
+            namedType: ResourceClaim.v1.core.api.k8s.io
+          elementRelationship: associative
+          keys:
+          - name
+    - name: limits
+      type:
+        map:
+          elementType:
+            namedType: Quantity.resource.api.pkg.apimachinery.k8s.io
+    - name: requests
+      type:
+        map:
+          elementType:
+            namedType: Quantity.resource.api.pkg.apimachinery.k8s.io
+- name: SELinuxOptions.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: level
+      type:
+        scalar: string
+    - name: role
+      type:
+        scalar: string
+    - name: type
+      type:
+        scalar: string
+    - name: user
+      type:
+        scalar: string
+- name: ScaleIOVolumeSource.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: fsType
+      type:
+        scalar: string
+      default: xfs
+    - name: gateway
+      type:
+        scalar: string
+      default: ""
+    - name: protectionDomain
+      type:
+        scalar: string
+    - name: readOnly
+      type:
+        scalar: boolean
+    - name: secretRef
+      type:
+        namedType: LocalObjectReference.v1.core.api.k8s.io
+    - name: sslEnabled
+      type:
+        scalar: boolean
+    - name: storageMode
+      type:
+        scalar: string
+      default: ThinProvisioned
+    - name: storagePool
+      type:
+        scalar: string
+    - name: system
+      type:
+        scalar: string
+      default: ""
+    - name: volumeName
+      type:
+        scalar: string
+- name: SeccompProfile.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: localhostProfile
+      type:
+        scalar: string
+    - name: type
+      type:
+        scalar: string
+      default: ""
+    unions:
+    - discriminator: type
+      fields:
+      - fieldName: localhostProfile
+        discriminatorValue: LocalhostProfile
+- name: SecretEnvSource.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: name
+      type:
+        scalar: string
+      default: ""
+    - name: optional
+      type:
+        scalar: boolean
+- name: SecretKeySelector.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: key
+      type:
+        scalar: string
+      default: ""
+    - name: name
+      type:
+        scalar: string
+      default: ""
+    - name: optional
+      type:
+        scalar: boolean
+    elementRelationship: atomic
+- name: SecretProjection.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: items
+      type:
+        list:
+          elementType:
+            namedType: KeyToPath.v1.core.api.k8s.io
+          elementRelationship: atomic
+    - name: name
+      type:
+        scalar: string
+      default: ""
+    - name: optional
+      type:
+        scalar: boolean
+- name: SecretVolumeSource.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: defaultMode
+      type:
+        scalar: numeric
+    - name: items
+      type:
+        list:
+          elementType:
+            namedType: KeyToPath.v1.core.api.k8s.io
+          elementRelationship: atomic
+    - name: optional
+      type:
+        scalar: boolean
+    - name: secretName
+      type:
+        scalar: string
+- name: SecurityContext.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: allowPrivilegeEscalation
+      type:
+        scalar: boolean
+    - name: appArmorProfile
+      type:
+        namedType: AppArmorProfile.v1.core.api.k8s.io
+    - name: capabilities
+      type:
+        namedType: Capabilities.v1.core.api.k8s.io
+    - name: privileged
+      type:
+        scalar: boolean
+    - name: procMount
+      type:
+        scalar: string
+    - name: readOnlyRootFilesystem
+      type:
+        scalar: boolean
+    - name: runAsGroup
+      type:
+        scalar: numeric
+    - name: runAsNonRoot
+      type:
+        scalar: boolean
+    - name: runAsUser
+      type:
+        scalar: numeric
+    - name: seLinuxOptions
+      type:
+        namedType: SELinuxOptions.v1.core.api.k8s.io
+    - name: seccompProfile
+      type:
+        namedType: SeccompProfile.v1.core.api.k8s.io
+    - name: windowsOptions
+      type:
+        namedType: WindowsSecurityContextOptions.v1.core.api.k8s.io
+- name: Service.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: apiVersion
+      type:
+        scalar: string
+    - name: kind
+      type:
+        scalar: string
+    - name: metadata
+      type:
+        namedType: ObjectMeta.v1.meta.apis.pkg.apimachinery.k8s.io
+      default: {}
+    - name: spec
+      type:
+        namedType: ServiceSpec.v1.core.api.k8s.io
+      default: {}
+    - name: status
+      type:
+        namedType: ServiceStatus.v1.core.api.k8s.io
+      default: {}
+- name: ServiceAccountTokenProjection.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: audience
+      type:
+        scalar: string
+    - name: expirationSeconds
+      type:
+        scalar: numeric
+    - name: path
+      type:
+        scalar: string
+      default: ""
+- name: ServicePort.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: appProtocol
+      type:
+        scalar: string
+    - name: name
+      type:
+        scalar: string
+    - name: nodePort
+      type:
+        scalar: numeric
+    - name: port
+      type:
+        scalar: numeric
+      default: 0
+    - name: protocol
+      type:
+        scalar: string
+      default: TCP
+    - name: targetPort
+      type:
+        namedType: IntOrString.intstr.util.pkg.apimachinery.k8s.io
+- name: ServiceSpec.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: allocateLoadBalancerNodePorts
+      type:
+        scalar: boolean
+    - name: clusterIP
+      type:
+        scalar: string
+    - name: clusterIPs
+      type:
+        list:
+          elementType:
+            scalar: string
+          elementRelationship: atomic
+    - name: externalIPs
+      type:
+        list:
+          elementType:
+            scalar: string
+          elementRelationship: atomic
+    - name: externalName
+      type:
+        scalar: string
+    - name: externalTrafficPolicy
+      type:
+        scalar: string
+    - name: healthCheckNodePort
+      type:
+        scalar: numeric
+    - name: internalTrafficPolicy
+      type:
+        scalar: string
+    - name: ipFamilies
+      type:
+        list:
+          elementType:
+            scalar: string
+          elementRelationship: atomic
+    - name: ipFamilyPolicy
+      type:
+        scalar: string
+    - name: loadBalancerClass
+      type:
+        scalar: string
+    - name: loadBalancerIP
+      type:
+        scalar: string
+    - name: loadBalancerSourceRanges
+      type:
+        list:
+          elementType:
+            scalar: string
+          elementRelationship: atomic
+    - name: ports
+      type:
+        list:
+          elementType:
+            namedType: ServicePort.v1.core.api.k8s.io
+          elementRelationship: associative
+          keys:
+          - port
+          - protocol
+    - name: publishNotReadyAddresses
+      type:
+        scalar: boolean
+    - name: selector
+      type:
+        map:
+          elementType:
+            scalar: string
+          elementRelationship: atomic
+    - name: sessionAffinity
+      type:
+        scalar: string
+    - name: sessionAffinityConfig
+      type:
+        namedType: SessionAffinityConfig.v1.core.api.k8s.io
+    - name: trafficDistribution
+      type:
+        scalar: string
+    - name: type
+      type:
+        scalar: string
+- name: ServiceStatus.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: conditions
+      type:
+        list:
+          elementType:
+            namedType: Condition.v1.meta.apis.pkg.apimachinery.k8s.io
+          elementRelationship: associative
+          keys:
+          - type
+    - name: loadBalancer
+      type:
+        namedType: LoadBalancerStatus.v1.core.api.k8s.io
+      default: {}
+- name: SessionAffinityConfig.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: clientIP
+      type:
+        namedType: ClientIPConfig.v1.core.api.k8s.io
+- name: SleepAction.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: seconds
+      type:
+        scalar: numeric
+      default: 0
+- name: StorageOSVolumeSource.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: fsType
+      type:
+        scalar: string
+    - name: readOnly
+      type:
+        scalar: boolean
+    - name: secretRef
+      type:
+        namedType: LocalObjectReference.v1.core.api.k8s.io
+    - name: volumeName
+      type:
+        scalar: string
+    - name: volumeNamespace
+      type:
+        scalar: string
+- name: Sysctl.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: name
+      type:
+        scalar: string
+      default: ""
+    - name: value
+      type:
+        scalar: string
+      default: ""
+- name: TCPSocketAction.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: host
+      type:
+        scalar: string
+    - name: port
+      type:
+        namedType: IntOrString.intstr.util.pkg.apimachinery.k8s.io
+- name: Time.v1.meta.apis.pkg.apimachinery.k8s.io
+  scalar: untyped
+- name: Toleration.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: effect
+      type:
+        scalar: string
+    - name: key
+      type:
+        scalar: string
+    - name: operator
+      type:
+        scalar: string
+    - name: tolerationSeconds
+      type:
+        scalar: numeric
+    - name: value
+      type:
+        scalar: string
+- name: TopologySpreadConstraint.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: labelSelector
+      type:
+        namedType: LabelSelector.v1.meta.apis.pkg.apimachinery.k8s.io
+    - name: matchLabelKeys
+      type:
+        list:
+          elementType:
+            scalar: string
+          elementRelationship: atomic
+    - name: maxSkew
+      type:
+        scalar: numeric
+      default: 0
+    - name: minDomains
+      type:
+        scalar: numeric
+    - name: nodeAffinityPolicy
+      type:
+        scalar: string
+    - name: nodeTaintsPolicy
+      type:
+        scalar: string
+    - name: topologyKey
+      type:
+        scalar: string
+      default: ""
+    - name: whenUnsatisfiable
+      type:
+        scalar: string
+      default: ""
+- name: TypedLocalObjectReference.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: apiGroup
+      type:
+        scalar: string
+    - name: kind
+      type:
+        scalar: string
+      default: ""
+    - name: name
+      type:
+        scalar: string
+      default: ""
+    elementRelationship: atomic
+- name: TypedObjectReference.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: apiGroup
+      type:
+        scalar: string
+    - name: kind
+      type:
+        scalar: string
+      default: ""
+    - name: name
+      type:
+        scalar: string
+      default: ""
+    - name: namespace
+      type:
+        scalar: string
+- name: Volume.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: awsElasticBlockStore
+      type:
+        namedType: AWSElasticBlockStoreVolumeSource.v1.core.api.k8s.io
+    - name: azureDisk
+      type:
+        namedType: AzureDiskVolumeSource.v1.core.api.k8s.io
+    - name: azureFile
+      type:
+        namedType: AzureFileVolumeSource.v1.core.api.k8s.io
+    - name: cephfs
+      type:
+        namedType: CephFSVolumeSource.v1.core.api.k8s.io
+    - name: cinder
+      type:
+        namedType: CinderVolumeSource.v1.core.api.k8s.io
+    - name: configMap
+      type:
+        namedType: ConfigMapVolumeSource.v1.core.api.k8s.io
+    - name: csi
+      type:
+        namedType: CSIVolumeSource.v1.core.api.k8s.io
+    - name: downwardAPI
+      type:
+        namedType: DownwardAPIVolumeSource.v1.core.api.k8s.io
+    - name: emptyDir
+      type:
+        namedType: EmptyDirVolumeSource.v1.core.api.k8s.io
+    - name: ephemeral
+      type:
+        namedType: EphemeralVolumeSource.v1.core.api.k8s.io
+    - name: fc
+      type:
+        namedType: FCVolumeSource.v1.core.api.k8s.io
+    - name: flexVolume
+      type:
+        namedType: FlexVolumeSource.v1.core.api.k8s.io
+    - name: flocker
+      type:
+        namedType: FlockerVolumeSource.v1.core.api.k8s.io
+    - name: gcePersistentDisk
+      type:
+        namedType: GCEPersistentDiskVolumeSource.v1.core.api.k8s.io
+    - name: gitRepo
+      type:
+        namedType: GitRepoVolumeSource.v1.core.api.k8s.io
+    - name: glusterfs
+      type:
+        namedType: GlusterfsVolumeSource.v1.core.api.k8s.io
+    - name: hostPath
+      type:
+        namedType: HostPathVolumeSource.v1.core.api.k8s.io
+    - name: image
+      type:
+        namedType: ImageVolumeSource.v1.core.api.k8s.io
+    - name: iscsi
+      type:
+        namedType: ISCSIVolumeSource.v1.core.api.k8s.io
+    - name: name
+      type:
+        scalar: string
+      default: ""
+    - name: nfs
+      type:
+        namedType: NFSVolumeSource.v1.core.api.k8s.io
+    - name: persistentVolumeClaim
+      type:
+        namedType: PersistentVolumeClaimVolumeSource.v1.core.api.k8s.io
+    - name: photonPersistentDisk
+      type:
+        namedType: PhotonPersistentDiskVolumeSource.v1.core.api.k8s.io
+    - name: portworxVolume
+      type:
+        namedType: PortworxVolumeSource.v1.core.api.k8s.io
+    - name: projected
+      type:
+        namedType: ProjectedVolumeSource.v1.core.api.k8s.io
+    - name: quobyte
+      type:
+        namedType: QuobyteVolumeSource.v1.core.api.k8s.io
+    - name: rbd
+      type:
+        namedType: RBDVolumeSource.v1.core.api.k8s.io
+    - name: scaleIO
+      type:
+        namedType: ScaleIOVolumeSource.v1.core.api.k8s.io
+    - name: secret
+      type:
+        namedType: SecretVolumeSource.v1.core.api.k8s.io
+    - name: storageos
+      type:
+        namedType: StorageOSVolumeSource.v1.core.api.k8s.io
+    - name: vsphereVolume
+      type:
+        namedType: VsphereVirtualDiskVolumeSource.v1.core.api.k8s.io
+- name: VolumeDevice.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: devicePath
+      type:
+        scalar: string
+      default: ""
+    - name: name
+      type:
+        scalar: string
+      default: ""
+- name: VolumeMount.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: mountPath
+      type:
+        scalar: string
+      default: ""
+    - name: mountPropagation
+      type:
+        scalar: string
+    - name: name
+      type:
+        scalar: string
+      default: ""
+    - name: readOnly
+      type:
+        scalar: boolean
+    - name: recursiveReadOnly
+      type:
+        scalar: string
+    - name: subPath
+      type:
+        scalar: string
+    - name: subPathExpr
+      type:
+        scalar: string
+- name: VolumeProjection.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: clusterTrustBundle
+      type:
+        namedType: ClusterTrustBundleProjection.v1.core.api.k8s.io
+    - name: configMap
+      type:
+        namedType: ConfigMapProjection.v1.core.api.k8s.io
+    - name: downwardAPI
+      type:
+        namedType: DownwardAPIProjection.v1.core.api.k8s.io
+    - name: podCertificate
+      type:
+        namedType: PodCertificateProjection.v1.core.api.k8s.io
+    - name: secret
+      type:
+        namedType: SecretProjection.v1.core.api.k8s.io
+    - name: serviceAccountToken
+      type:
+        namedType: ServiceAccountTokenProjection.v1.core.api.k8s.io
+- name: VolumeResourceRequirements.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: limits
+      type:
+        map:
+          elementType:
+            namedType: Quantity.resource.api.pkg.apimachinery.k8s.io
+    - name: requests
+      type:
+        map:
+          elementType:
+            namedType: Quantity.resource.api.pkg.apimachinery.k8s.io
+- name: VsphereVirtualDiskVolumeSource.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: fsType
+      type:
+        scalar: string
+    - name: storagePolicyID
+      type:
+        scalar: string
+    - name: storagePolicyName
+      type:
+        scalar: string
+    - name: volumePath
+      type:
+        scalar: string
+      default: ""
+- name: WeightedPodAffinityTerm.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: podAffinityTerm
+      type:
+        namedType: PodAffinityTerm.v1.core.api.k8s.io
+      default: {}
+    - name: weight
+      type:
+        scalar: numeric
+      default: 0
+- name: WindowsSecurityContextOptions.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: gmsaCredentialSpec
+      type:
+        scalar: string
+    - name: gmsaCredentialSpecName
+      type:
+        scalar: string
+    - name: hostProcess
+      type:
+        scalar: boolean
+    - name: runAsUserName
+      type:
+        scalar: string
+- name: WorkloadReference.v1.core.api.k8s.io
+  map:
+    fields:
+    - name: name
+      type:
+        scalar: string
+      default: ""
+    - name: podGroup
+      type:
+        scalar: string
+      default: ""
+    - name: podGroupReplicaKey
+      type:
+        scalar: string
+- name: com.github.ray-project.kuberay.ray-operator.apis.ray.v1.AppStatus
+  map:
+    fields:
+    - name: message
+      type:
+        scalar: string
+    - name: serveDeploymentStatuses
+      type:
+        map:
+          elementType:
+            namedType: com.github.ray-project.kuberay.ray-operator.apis.ray.v1.ServeDeploymentStatus
+    - name: status
+      type:
+        scalar: string
+- name: com.github.ray-project.kuberay.ray-operator.apis.ray.v1.AuthOptions
+  map:
+    fields:
+    - name: enableK8sTokenAuth
+      type:
+        scalar: boolean
+    - name: mode
+      type:
+        scalar: string
+    - name: secretName
+      type:
+        scalar: string
+- name: com.github.ray-project.kuberay.ray-operator.apis.ray.v1.AutoscalerOptions
+  map:
+    fields:
+    - name: env
+      type:
+        list:
+          elementType:
+            namedType: EnvVar.v1.core.api.k8s.io
+          elementRelationship: atomic
+    - name: envFrom
+      type:
+        list:
+          elementType:
+            namedType: EnvFromSource.v1.core.api.k8s.io
+          elementRelationship: atomic
+    - name: idleTimeoutSeconds
+      type:
+        scalar: numeric
+    - name: image
+      type:
+        scalar: string
+    - name: imagePullPolicy
+      type:
+        scalar: string
+    - name: resources
+      type:
+        namedType: ResourceRequirements.v1.core.api.k8s.io
+    - name: securityContext
+      type:
+        namedType: SecurityContext.v1.core.api.k8s.io
+    - name: upscalingMode
+      type:
+        scalar: string
+    - name: version
+      type:
+        scalar: string
+    - name: volumeMounts
+      type:
+        list:
+          elementType:
+            namedType: VolumeMount.v1.core.api.k8s.io
+          elementRelationship: atomic
+- name: com.github.ray-project.kuberay.ray-operator.apis.ray.v1.ClusterUpgradeOptions
+  map:
+    fields:
+    - name: gatewayClassName
+      type:
+        scalar: string
+      default: ""
+    - name: intervalSeconds
+      type:
+        scalar: numeric
+    - name: maxSurgePercent
+      type:
+        scalar: numeric
+    - name: stepSizePercent
+      type:
+        scalar: numeric
+- name: com.github.ray-project.kuberay.ray-operator.apis.ray.v1.DeletionCondition
+  map:
+    fields:
+    - name: jobDeploymentStatus
+      type:
+        scalar: string
+    - name: jobStatus
+      type:
+        scalar: string
+    - name: ttlSeconds
+      type:
+        scalar: numeric
+- name: com.github.ray-project.kuberay.ray-operator.apis.ray.v1.DeletionPolicy
+  map:
+    fields:
+    - name: policy
+      type:
+        scalar: string
+- name: com.github.ray-project.kuberay.ray-operator.apis.ray.v1.DeletionRule
+  map:
+    fields:
+    - name: condition
+      type:
+        namedType: com.github.ray-project.kuberay.ray-operator.apis.ray.v1.DeletionCondition
+      default: {}
+    - name: policy
+      type:
+        scalar: string
+      default: ""
+- name: com.github.ray-project.kuberay.ray-operator.apis.ray.v1.DeletionStrategy
+  map:
+    fields:
+    - name: deletionRules
+      type:
+        list:
+          elementType:
+            namedType: com.github.ray-project.kuberay.ray-operator.apis.ray.v1.DeletionRule
+          elementRelationship: atomic
+    - name: onFailure
+      type:
+        namedType: com.github.ray-project.kuberay.ray-operator.apis.ray.v1.DeletionPolicy
+    - name: onSuccess
+      type:
+        namedType: com.github.ray-project.kuberay.ray-operator.apis.ray.v1.DeletionPolicy
+- name: com.github.ray-project.kuberay.ray-operator.apis.ray.v1.GcsFaultToleranceOptions
+  map:
+    fields:
+    - name: externalStorageNamespace
+      type:
+        scalar: string
+    - name: redisAddress
+      type:
+        scalar: string
+      default: ""
+    - name: redisPassword
+      type:
+        namedType: com.github.ray-project.kuberay.ray-operator.apis.ray.v1.RedisCredential
+    - name: redisUsername
+      type:
+        namedType: com.github.ray-project.kuberay.ray-operator.apis.ray.v1.RedisCredential
+- name: com.github.ray-project.kuberay.ray-operator.apis.ray.v1.HeadGroupSpec
+  map:
+    fields:
+    - name: enableIngress
+      type:
+        scalar: boolean
+    - name: headService
+      type:
+        namedType: Service.v1.core.api.k8s.io
+    - name: labels
+      type:
+        map:
+          elementType:
+            scalar: string
+    - name: rayStartParams
+      type:
+        map:
+          elementType:
+            scalar: string
+    - name: resources
+      type:
+        map:
+          elementType:
+            scalar: string
+    - name: serviceType
+      type:
+        scalar: string
+    - name: template
+      type:
+        namedType: PodTemplateSpec.v1.core.api.k8s.io
+      default: {}
+- name: com.github.ray-project.kuberay.ray-operator.apis.ray.v1.HeadInfo
+  map:
+    fields:
+    - name: podIP
+      type:
+        scalar: string
+    - name: podName
+      type:
+        scalar: string
+    - name: serviceIP
+      type:
+        scalar: string
+    - name: serviceName
+      type:
+        scalar: string
+- name: com.github.ray-project.kuberay.ray-operator.apis.ray.v1.RayCluster
+  map:
+    fields:
+    - name: apiVersion
+      type:
+        scalar: string
+    - name: kind
+      type:
+        scalar: string
+    - name: metadata
+      type:
+        namedType: ObjectMeta.v1.meta.apis.pkg.apimachinery.k8s.io
+      default: {}
+    - name: spec
+      type:
+        namedType: com.github.ray-project.kuberay.ray-operator.apis.ray.v1.RayClusterSpec
+      default: {}
+    - name: status
+      type:
+        namedType: com.github.ray-project.kuberay.ray-operator.apis.ray.v1.RayClusterStatus
+      default: {}
+- name: com.github.ray-project.kuberay.ray-operator.apis.ray.v1.RayClusterSpec
+  map:
+    fields:
+    - name: authOptions
+      type:
+        namedType: com.github.ray-project.kuberay.ray-operator.apis.ray.v1.AuthOptions
+    - name: autoscalerOptions
+      type:
+        namedType: com.github.ray-project.kuberay.ray-operator.apis.ray.v1.AutoscalerOptions
+    - name: enableInTreeAutoscaling
+      type:
+        scalar: boolean
+    - name: gcsFaultToleranceOptions
+      type:
+        namedType: com.github.ray-project.kuberay.ray-operator.apis.ray.v1.GcsFaultToleranceOptions
+    - name: headGroupSpec
+      type:
+        namedType: com.github.ray-project.kuberay.ray-operator.apis.ray.v1.HeadGroupSpec
+      default: {}
+    - name: headServiceAnnotations
+      type:
+        map:
+          elementType:
+            scalar: string
+    - name: managedBy
+      type:
+        scalar: string
+    - name: rayVersion
+      type:
+        scalar: string
+    - name: suspend
+      type:
+        scalar: boolean
+    - name: upgradeStrategy
+      type:
+        namedType: com.github.ray-project.kuberay.ray-operator.apis.ray.v1.RayClusterUpgradeStrategy
+    - name: workerGroupSpecs
+      type:
+        list:
+          elementType:
+            namedType: com.github.ray-project.kuberay.ray-operator.apis.ray.v1.WorkerGroupSpec
+          elementRelationship: atomic
+- name: com.github.ray-project.kuberay.ray-operator.apis.ray.v1.RayClusterStatus
+  map:
+    fields:
+    - name: availableWorkerReplicas
+      type:
+        scalar: numeric
+    - name: conditions
+      type:
+        list:
+          elementType:
+            namedType: Condition.v1.meta.apis.pkg.apimachinery.k8s.io
+          elementRelationship: associative
+          keys:
+          - type
+    - name: desiredCPU
+      type:
+        namedType: Quantity.resource.api.pkg.apimachinery.k8s.io
+    - name: desiredGPU
+      type:
+        namedType: Quantity.resource.api.pkg.apimachinery.k8s.io
+    - name: desiredMemory
+      type:
+        namedType: Quantity.resource.api.pkg.apimachinery.k8s.io
+    - name: desiredTPU
+      type:
+        namedType: Quantity.resource.api.pkg.apimachinery.k8s.io
+    - name: desiredWorkerReplicas
+      type:
+        scalar: numeric
+    - name: endpoints
+      type:
+        map:
+          elementType:
+            scalar: string
+    - name: head
+      type:
+        namedType: com.github.ray-project.kuberay.ray-operator.apis.ray.v1.HeadInfo
+      default: {}
+    - name: lastUpdateTime
+      type:
+        namedType: Time.v1.meta.apis.pkg.apimachinery.k8s.io
+    - name: maxWorkerReplicas
+      type:
+        scalar: numeric
+    - name: minWorkerReplicas
+      type:
+        scalar: numeric
+    - name: observedGeneration
+      type:
+        scalar: numeric
+    - name: readyWorkerReplicas
+      type:
+        scalar: numeric
+    - name: reason
+      type:
+        scalar: string
+    - name: state
+      type:
+        scalar: string
+    - name: stateTransitionTimes
+      type:
+        map:
+          elementType:
+            namedType: Time.v1.meta.apis.pkg.apimachinery.k8s.io
+- name: com.github.ray-project.kuberay.ray-operator.apis.ray.v1.RayClusterUpgradeStrategy
+  map:
+    fields:
+    - name: type
+      type:
+        scalar: string
+- name: com.github.ray-project.kuberay.ray-operator.apis.ray.v1.RayCronJob
+  map:
+    fields:
+    - name: apiVersion
+      type:
+        scalar: string
+    - name: kind
+      type:
+        scalar: string
+    - name: metadata
+      type:
+        namedType: ObjectMeta.v1.meta.apis.pkg.apimachinery.k8s.io
+      default: {}
+    - name: spec
+      type:
+        namedType: com.github.ray-project.kuberay.ray-operator.apis.ray.v1.RayCronJobSpec
+      default: {}
+    - name: status
+      type:
+        namedType: com.github.ray-project.kuberay.ray-operator.apis.ray.v1.RayCronJobStatus
+      default: {}
+- name: com.github.ray-project.kuberay.ray-operator.apis.ray.v1.RayCronJobSpec
+  map:
+    fields:
+    - name: jobTemplate
+      type:
+        namedType: com.github.ray-project.kuberay.ray-operator.apis.ray.v1.RayJobSpec
+      default: {}
+    - name: schedule
+      type:
+        scalar: string
+      default: ""
+    - name: suspend
+      type:
+        scalar: boolean
+- name: com.github.ray-project.kuberay.ray-operator.apis.ray.v1.RayCronJobStatus
+  map:
+    fields:
+    - name: lastScheduleTime
+      type:
+        namedType: Time.v1.meta.apis.pkg.apimachinery.k8s.io
+- name: com.github.ray-project.kuberay.ray-operator.apis.ray.v1.RayJob
+  map:
+    fields:
+    - name: apiVersion
+      type:
+        scalar: string
+    - name: kind
+      type:
+        scalar: string
+    - name: metadata
+      type:
+        namedType: ObjectMeta.v1.meta.apis.pkg.apimachinery.k8s.io
+      default: {}
+    - name: spec
+      type:
+        namedType: com.github.ray-project.kuberay.ray-operator.apis.ray.v1.RayJobSpec
+      default: {}
+    - name: status
+      type:
+        namedType: com.github.ray-project.kuberay.ray-operator.apis.ray.v1.RayJobStatus
+      default: {}
+- name: com.github.ray-project.kuberay.ray-operator.apis.ray.v1.RayJobSpec
+  map:
+    fields:
+    - name: activeDeadlineSeconds
+      type:
+        scalar: numeric
+    - name: backoffLimit
+      type:
+        scalar: numeric
+    - name: clusterSelector
+      type:
+        map:
+          elementType:
+            scalar: string
+    - name: deletionStrategy
+      type:
+        namedType: com.github.ray-project.kuberay.ray-operator.apis.ray.v1.DeletionStrategy
+    - name: entrypoint
+      type:
+        scalar: string
+    - name: entrypointNumCpus
+      type:
+        scalar: numeric
+    - name: entrypointNumGpus
+      type:
+        scalar: numeric
+    - name: entrypointResources
+      type:
+        scalar: string
+    - name: jobId
+      type:
+        scalar: string
+    - name: managedBy
+      type:
+        scalar: string
+    - name: metadata
+      type:
+        map:
+          elementType:
+            scalar: string
+    - name: preRunningDeadlineSeconds
+      type:
+        scalar: numeric
+    - name: rayClusterSpec
+      type:
+        namedType: com.github.ray-project.kuberay.ray-operator.apis.ray.v1.RayClusterSpec
+    - name: runtimeEnvYAML
+      type:
+        scalar: string
+    - name: shutdownAfterJobFinishes
+      type:
+        scalar: boolean
+    - name: submissionMode
+      type:
+        scalar: string
+    - name: submitterConfig
+      type:
+        namedType: com.github.ray-project.kuberay.ray-operator.apis.ray.v1.SubmitterConfig
+    - name: submitterPodTemplate
+      type:
+        namedType: PodTemplateSpec.v1.core.api.k8s.io
+    - name: suspend
+      type:
+        scalar: boolean
+    - name: ttlSecondsAfterFinished
+      type:
+        scalar: numeric
+- name: com.github.ray-project.kuberay.ray-operator.apis.ray.v1.RayJobStatus
+  map:
+    fields:
+    - name: dashboardURL
+      type:
+        scalar: string
+    - name: endTime
+      type:
+        namedType: Time.v1.meta.apis.pkg.apimachinery.k8s.io
+    - name: failed
+      type:
+        scalar: numeric
+    - name: jobDeploymentStatus
+      type:
+        scalar: string
+    - name: jobId
+      type:
+        scalar: string
+    - name: jobStatus
+      type:
+        scalar: string
+    - name: message
+      type:
+        scalar: string
+    - name: observedGeneration
+      type:
+        scalar: numeric
+    - name: rayClusterName
+      type:
+        scalar: string
+    - name: rayClusterStatus
+      type:
+        namedType: com.github.ray-project.kuberay.ray-operator.apis.ray.v1.RayClusterStatus
+      default: {}
+    - name: rayJobInfo
+      type:
+        namedType: com.github.ray-project.kuberay.ray-operator.apis.ray.v1.RayJobStatusInfo
+      default: {}
+    - name: reason
+      type:
+        scalar: string
+    - name: startTime
+      type:
+        namedType: Time.v1.meta.apis.pkg.apimachinery.k8s.io
+    - name: succeeded
+      type:
+        scalar: numeric
+- name: com.github.ray-project.kuberay.ray-operator.apis.ray.v1.RayJobStatusInfo
+  map:
+    fields:
+    - name: endTime
+      type:
+        namedType: Time.v1.meta.apis.pkg.apimachinery.k8s.io
+    - name: startTime
+      type:
+        namedType: Time.v1.meta.apis.pkg.apimachinery.k8s.io
+- name: com.github.ray-project.kuberay.ray-operator.apis.ray.v1.RayService
+  map:
+    fields:
+    - name: apiVersion
+      type:
+        scalar: string
+    - name: kind
+      type:
+        scalar: string
+    - name: metadata
+      type:
+        namedType: ObjectMeta.v1.meta.apis.pkg.apimachinery.k8s.io
+      default: {}
+    - name: spec
+      type:
+        namedType: com.github.ray-project.kuberay.ray-operator.apis.ray.v1.RayServiceSpec
+      default: {}
+    - name: status
+      type:
+        namedType: com.github.ray-project.kuberay.ray-operator.apis.ray.v1.RayServiceStatuses
+      default: {}
+- name: com.github.ray-project.kuberay.ray-operator.apis.ray.v1.RayServiceSpec
+  map:
+    fields:
+    - name: deploymentUnhealthySecondThreshold
+      type:
+        scalar: numeric
+    - name: excludeHeadPodFromServeSvc
+      type:
+        scalar: boolean
+    - name: managedBy
+      type:
+        scalar: string
+    - name: rayClusterConfig
+      type:
+        namedType: com.github.ray-project.kuberay.ray-operator.apis.ray.v1.RayClusterSpec
+      default: {}
+    - name: rayClusterDeletionDelaySeconds
+      type:
+        scalar: numeric
+    - name: serveConfigV2
+      type:
+        scalar: string
+    - name: serveService
+      type:
+        namedType: Service.v1.core.api.k8s.io
+    - name: serviceUnhealthySecondThreshold
+      type:
+        scalar: numeric
+    - name: upgradeStrategy
+      type:
+        namedType: com.github.ray-project.kuberay.ray-operator.apis.ray.v1.RayServiceUpgradeStrategy
+- name: com.github.ray-project.kuberay.ray-operator.apis.ray.v1.RayServiceStatus
+  map:
+    fields:
+    - name: applicationStatuses
+      type:
+        map:
+          elementType:
+            namedType: com.github.ray-project.kuberay.ray-operator.apis.ray.v1.AppStatus
+    - name: lastTrafficMigratedTime
+      type:
+        namedType: Time.v1.meta.apis.pkg.apimachinery.k8s.io
+    - name: rayClusterName
+      type:
+        scalar: string
+    - name: rayClusterStatus
+      type:
+        namedType: com.github.ray-project.kuberay.ray-operator.apis.ray.v1.RayClusterStatus
+      default: {}
+    - name: targetCapacity
+      type:
+        scalar: numeric
+    - name: trafficRoutedPercent
+      type:
+        scalar: numeric
+- name: com.github.ray-project.kuberay.ray-operator.apis.ray.v1.RayServiceStatuses
+  map:
+    fields:
+    - name: activeServiceStatus
+      type:
+        namedType: com.github.ray-project.kuberay.ray-operator.apis.ray.v1.RayServiceStatus
+      default: {}
+    - name: conditions
+      type:
+        list:
+          elementType:
+            namedType: Condition.v1.meta.apis.pkg.apimachinery.k8s.io
+          elementRelationship: associative
+          keys:
+          - type
+    - name: lastUpdateTime
+      type:
+        namedType: Time.v1.meta.apis.pkg.apimachinery.k8s.io
+    - name: numServeEndpoints
+      type:
+        scalar: numeric
+    - name: observedGeneration
+      type:
+        scalar: numeric
+    - name: pendingServiceStatus
+      type:
+        namedType: com.github.ray-project.kuberay.ray-operator.apis.ray.v1.RayServiceStatus
+      default: {}
+    - name: serviceStatus
+      type:
+        scalar: string
+- name: com.github.ray-project.kuberay.ray-operator.apis.ray.v1.RayServiceUpgradeStrategy
+  map:
+    fields:
+    - name: clusterUpgradeOptions
+      type:
+        namedType: com.github.ray-project.kuberay.ray-operator.apis.ray.v1.ClusterUpgradeOptions
+    - name: type
+      type:
+        scalar: string
+- name: com.github.ray-project.kuberay.ray-operator.apis.ray.v1.RedisCredential
+  map:
+    fields:
+    - name: value
+      type:
+        scalar: string
+    - name: valueFrom
+      type:
+        namedType: EnvVarSource.v1.core.api.k8s.io
+- name: com.github.ray-project.kuberay.ray-operator.apis.ray.v1.ScaleStrategy
+  map:
+    fields:
+    - name: workersToDelete
+      type:
+        list:
+          elementType:
+            scalar: string
+          elementRelationship: atomic
+- name: com.github.ray-project.kuberay.ray-operator.apis.ray.v1.ServeDeploymentStatus
+  map:
+    fields:
+    - name: message
+      type:
+        scalar: string
+    - name: status
+      type:
+        scalar: string
+- name: com.github.ray-project.kuberay.ray-operator.apis.ray.v1.SubmitterConfig
+  map:
+    fields:
+    - name: backoffLimit
+      type:
+        scalar: numeric
+- name: com.github.ray-project.kuberay.ray-operator.apis.ray.v1.WorkerGroupSpec
+  map:
+    fields:
+    - name: groupName
+      type:
+        scalar: string
+      default: ""
+    - name: idleTimeoutSeconds
+      type:
+        scalar: numeric
+    - name: labels
+      type:
+        map:
+          elementType:
+            scalar: string
+    - name: maxReplicas
+      type:
+        scalar: numeric
+    - name: minReplicas
+      type:
+        scalar: numeric
+    - name: numOfHosts
+      type:
+        scalar: numeric
+    - name: rayStartParams
+      type:
+        map:
+          elementType:
+            scalar: string
+    - name: replicas
+      type:
+        scalar: numeric
+    - name: resources
+      type:
+        map:
+          elementType:
+            scalar: string
+    - name: scaleStrategy
+      type:
+        namedType: com.github.ray-project.kuberay.ray-operator.apis.ray.v1.ScaleStrategy
+      default: {}
+    - name: suspend
+      type:
+        scalar: boolean
+    - name: template
+      type:
+        namedType: PodTemplateSpec.v1.core.api.k8s.io
+      default: {}
 - name: __untyped_atomic_
   scalar: untyped
   list:
