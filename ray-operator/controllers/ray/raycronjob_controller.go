@@ -91,7 +91,7 @@ func (r *RayCronJobReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	}
 
 	// Parse the schedule after validation
-	schedule, err := cron.ParseStandard(rayCronJobInstance.Spec.Schedule)
+	schedule, err := cron.ParseStandard(formatSchedule(rayCronJobInstance))
 	if err != nil {
 		// This should not happen as validation already checked the schedule
 		logger.Error(err, "Failed to parse validated cron schedule")
@@ -180,7 +180,6 @@ func (r *RayCronJobReconciler) constructRayJob(cronJob *rayv1.RayCronJob, expect
 func (r *RayCronJobReconciler) SetupWithManager(mgr ctrl.Manager, reconcileConcurrency int) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&rayv1.RayCronJob{}).
-		Owns(&rayv1.RayJob{}).
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: reconcileConcurrency,
 			LogConstructor: func(request *reconcile.Request) logr.Logger {
@@ -192,4 +191,13 @@ func (r *RayCronJobReconciler) SetupWithManager(mgr ctrl.Manager, reconcileConcu
 			},
 		}).
 		Complete(r)
+}
+
+// formatSchedule formats the schedule string based on schedule and time zone in RayCronJob Spec
+func formatSchedule(cronJob *rayv1.RayCronJob) string {
+	if cronJob.Spec.TimeZone != nil {
+		return fmt.Sprintf("TZ=%s %s", *cronJob.Spec.TimeZone, cronJob.Spec.Schedule)
+	}
+
+	return cronJob.Spec.Schedule
 }

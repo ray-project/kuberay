@@ -2326,7 +2326,7 @@ func TestValidateRayCronJobSpec(t *testing.T) {
 										Containers: []corev1.Container{
 											{
 												Name:  "ray-head",
-												Image: "rayproject/ray:2.9.0",
+												Image: "rayproject/ray:2.52.0",
 											},
 										},
 									},
@@ -2356,7 +2356,7 @@ func TestValidateRayCronJobSpec(t *testing.T) {
 										Containers: []corev1.Container{
 											{
 												Name:  "ray-head",
-												Image: "rayproject/ray:2.9.0",
+												Image: "rayproject/ray:2.52.0",
 											},
 										},
 									},
@@ -2410,6 +2410,162 @@ func TestValidateRayCronJobSpec(t *testing.T) {
 			},
 			expectError: true,
 			errorMsg:    "invalid RayJob template",
+		},
+		{
+			name: "Valid schedule with valid timezone",
+			cronJob: &rayv1.RayCronJob{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cronjob",
+					Namespace: "default",
+				},
+				Spec: rayv1.RayCronJobSpec{
+					Schedule: "0 9 * * *",
+					TimeZone: ptr.To("Asia/Taipei"),
+					JobTemplate: rayv1.RayJobSpec{
+						Entrypoint: "python test.py",
+						RayClusterSpec: &rayv1.RayClusterSpec{
+							HeadGroupSpec: rayv1.HeadGroupSpec{
+								Template: corev1.PodTemplateSpec{
+									Spec: corev1.PodSpec{
+										Containers: []corev1.Container{
+											{
+												Name:  "ray-head",
+												Image: "rayproject/ray:2.52.0",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "Valid schedule with UTC timezone",
+			cronJob: &rayv1.RayCronJob{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cronjob",
+					Namespace: "default",
+				},
+				Spec: rayv1.RayCronJobSpec{
+					Schedule: "0 0 * * *",
+					TimeZone: ptr.To("UTC"),
+					JobTemplate: rayv1.RayJobSpec{
+						Entrypoint: "python test.py",
+						RayClusterSpec: &rayv1.RayClusterSpec{
+							HeadGroupSpec: rayv1.HeadGroupSpec{
+								Template: corev1.PodTemplateSpec{
+									Spec: corev1.PodSpec{
+										Containers: []corev1.Container{
+											{
+												Name:  "ray-head",
+												Image: "rayproject/ray:2.52.0",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "Invalid timezone",
+			cronJob: &rayv1.RayCronJob{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cronjob",
+					Namespace: "default",
+				},
+				Spec: rayv1.RayCronJobSpec{
+					Schedule: "*/5 * * * *",
+					TimeZone: ptr.To("Invalid/Zone"),
+					JobTemplate: rayv1.RayJobSpec{
+						Entrypoint: "python test.py",
+						RayClusterSpec: &rayv1.RayClusterSpec{
+							HeadGroupSpec: rayv1.HeadGroupSpec{
+								Template: corev1.PodTemplateSpec{
+									Spec: corev1.PodSpec{
+										Containers: []corev1.Container{
+											{
+												Name:  "ray-head",
+												Image: "rayproject/ray:2.52.0",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectError: true,
+			errorMsg:    "invalid time zone",
+		},
+		{
+			name: "Schedule with TZ= prefix is rejected",
+			cronJob: &rayv1.RayCronJob{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cronjob",
+					Namespace: "default",
+				},
+				Spec: rayv1.RayCronJobSpec{
+					Schedule: "TZ=UTC */5 * * * *",
+					JobTemplate: rayv1.RayJobSpec{
+						Entrypoint: "python test.py",
+						RayClusterSpec: &rayv1.RayClusterSpec{
+							HeadGroupSpec: rayv1.HeadGroupSpec{
+								Template: corev1.PodTemplateSpec{
+									Spec: corev1.PodSpec{
+										Containers: []corev1.Container{
+											{
+												Name:  "ray-head",
+												Image: "rayproject/ray:2.52.0",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectError: true,
+			errorMsg:    "cannot use TZ or CRON_TZ in schedule",
+		},
+		{
+			name: "Schedule with CRON_TZ= prefix is rejected",
+			cronJob: &rayv1.RayCronJob{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cronjob",
+					Namespace: "default",
+				},
+				Spec: rayv1.RayCronJobSpec{
+					Schedule: "CRON_TZ=UTC */5 * * * *",
+					JobTemplate: rayv1.RayJobSpec{
+						Entrypoint: "python test.py",
+						RayClusterSpec: &rayv1.RayClusterSpec{
+							HeadGroupSpec: rayv1.HeadGroupSpec{
+								Template: corev1.PodTemplateSpec{
+									Spec: corev1.PodSpec{
+										Containers: []corev1.Container{
+											{
+												Name:  "ray-head",
+												Image: "rayproject/ray:2.52.0",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectError: true,
+			errorMsg:    "cannot use TZ or CRON_TZ in schedule",
 		},
 	}
 
