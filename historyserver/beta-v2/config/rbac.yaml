@@ -1,0 +1,38 @@
+# RBAC for History Server v2 beta-v2 (lazy mode).
+#
+# beta-v2 collapses the beta "historyserver + eventprocessor" pair into a
+# single Deployment, so we only need one ServiceAccount and one
+# ClusterRoleBinding. The RayCluster read verbs (get / list / watch) are
+# unchanged from beta — beta-v2's Pipeline.isDead() does the same Get that
+# beta's eventprocessor used to do, and the /clusters handler keeps the
+# same List.
+#
+# Naming: we use `rayclusters-reader-beta-v2` (not `-beta`) to avoid
+# colliding with the beta RBAC if both releases are deployed side by side
+# in the same cluster.
+#
+# `watch` is kept for future controller-pattern readiness; today only
+# `get` + `list` are exercised.
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: rayclusters-reader-beta-v2
+rules:
+- apiGroups: ["ray.io"]
+  resources: ["rayclusters"]
+  verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: historyserver-beta-v2
+  namespace: default
+subjects:
+- kind: ServiceAccount
+  name: historyserver-beta-v2
+  namespace: default
+roleRef:
+  kind: ClusterRole
+  name: rayclusters-reader-beta-v2
+  apiGroup: rbac.authorization.k8s.io

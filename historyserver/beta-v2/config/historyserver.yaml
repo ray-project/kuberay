@@ -1,0 +1,176 @@
+# History Server v2 beta-v2: historyserver Deployment + Service.
+#
+# beta-v2 is a single-binary daemon that both serves HTTP API calls and
+# drives the per-session snapshot pipeline on demand via an internal
+# Supervisor (see historyserver/beta_poc.md §3). There is no separate
+# eventprocessor Deployment — the Pipeline runs inside this pod as a
+# goroutine whenever /enter_cluster is visited for a dead session.
+#
+# Why replicas=1 (PoC default):
+#   - Keeps the dev/demo footprint minimal so one-machine kind clusters fit.
+#   - beta-v2 is safe to run at replicas>1 (snapshots in S3 are immutable
+#     via skip-if-exists; each pod owns its own LRU + singleflight; the
+#     worst-case cross-replica race is a redundant idempotent Pipeline
+#     execution). Bump replicas directly for production — no other changes
+#     needed. See beta_poc.md §9 ("分散式 singleflight 可接受 [to be
+#     added later]") for the multi-replica trade-off.
+#   - K8s API usage is read-only (List for /clusters, Get for
+#     redirectRequest live proxy, Get for Pipeline.isDead) — no write race.
+#
+# Why rolling updates are safe even though Pipeline writes to S3:
+#   - skip-if-exists: a pod mid-write whose new pod version starts another
+#     Pipeline for the same session — the second PUT is a no-op when the
+#     first completes. If the old pod crashes mid-write, the new pod re-
+#     drives; S3 never sees a partial object.
+#   - beta-v2 keeps beta's "replicas=1 Recreate for eventprocessor" -> N/A
+#     because there is no separate eventprocessor anymore.
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: historyserver-beta-v2
+  namespace: default
+automountServiceAccountToken: true
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: historyserver-beta-v2
+  namespace: default
+  labels:
+    app: historyserver-beta-v2
+spec:
+  selector:
+    app: historyserver-beta-v2
+  ports:
+  - protocol: TCP
+    name: http
+    port: 30080
+    targetPort: 8080
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: historyserver-beta-v2
+  namespace: default
+  labels:
+    app: historyserver-beta-v2
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: historyserver-beta-v2
+  template:
+    metadata:
+      labels:
+        app: historyserver-beta-v2
+    spec:
+      serviceAccountName: historyserver-beta-v2
+      containers:
+      - name: historyserver
+        image: historyserver-beta-v2-historyserver:v0.1.0
+        imagePullPolicy: IfNotPresent
+        command:
+        - historyserver
+        - --runtime-class-name=s3
+        - --ray-root-dir=log
+        - --runtime-class-config-path=/var/collector-config/data
+        - --dashboard-dir=/dashboard
+        ports:
+        - containerPort: 8080
+          name: http
+        # Probes use endpoints registered by beta-v2/pkg/server/router.go.
+        # /readz: serves traffic as soon as HTTP listener is up.
+        # /livez: process restarts if handler hangs > failureThreshold * period.
+        #
+        # Note on /enter_cluster latency vs. liveness: a cold-path Pipeline
+        # run can take a few seconds (List + parse + PUT). /livez probes
+        # are cheap (no snapshot work), so they stay responsive even while
+        # /enter_cluster is blocked — the kubelet won't restart us just
+        # because one user triggered a slow snapshot.
+        livenessProbe:
+          httpGet:
+            path: /livez
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 20
+          timeoutSeconds: 3
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /readz
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 2
+          failureThreshold: 2
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 10001
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: ["ALL"]
+        # Env block absorbs both the beta historyserver AND the beta
+        # eventprocessor env, because beta-v2 does both jobs in one pod.
+        # S3 credentials are marked optional so MinIO dev setups (which
+        # use env-sourced keys from configmap-s3.yaml) still work without
+        # a Secret present.
+        env:
+        - name: S3DISABLE_SSL
+          value: "true"
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: historyserver-beta-v2-s3
+              key: access_key
+              optional: true
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: historyserver-beta-v2-s3
+              key: secret_key
+              optional: true
+        - name: S3_BUCKET
+          value: "ray-historyserver"
+        - name: S3_ENDPOINT
+          value: "minio-service.minio-dev:9000"
+        - name: S3_REGION
+          value: "test"
+        - name: S3FORCE_PATH_STYLE
+          value: "true"
+        volumeMounts:
+        - name: collector-config
+          mountPath: /var/collector-config
+          readOnly: true
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "256Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+      volumes:
+      - name: collector-config
+        configMap:
+          name: historyserver-beta-v2-runtime-config
+---
+# PodDisruptionBudget: during voluntary disruption (node drain, cluster
+# upgrade), keep at least one replica up so users don't see total outage.
+#
+# WHY minAvailable=0 with replicas=1: at the current PoC replica count a
+# minAvailable=1 PDB would deadlock any voluntary disruption (node drain
+# etc.) because there is no second pod to satisfy it. We keep the PDB
+# object in place so scaling up (e.g. replicas: 3) just requires bumping
+# minAvailable here; deleting the PDB would be harder to re-introduce.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: historyserver-beta-v2
+  namespace: default
+spec:
+  minAvailable: 0
+  selector:
+    matchLabels:
+      app: historyserver-beta-v2

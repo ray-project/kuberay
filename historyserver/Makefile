@@ -181,3 +181,50 @@ endif
 #else
 #CONTROLLER_GEN=$(shell which controller-gen)
 #endif
+
+# =========================================================================
+# v2 beta-v2 targets (lazy mode, single binary). beta-v2 collapses the
+# historyserver + eventprocessor pair — see historyserver/beta_poc.md §3.
+# The older `beta` targets were removed alongside the beta/ directory; if
+# you need the ticker-mode pair, check it out from a tagged release.
+# =========================================================================
+
+.PHONY: buildbeta-v2 buildbeta-v2-historyserver
+.PHONY: localimage-beta-v2 localimage-beta-v2-historyserver
+.PHONY: testbeta-v2 pushbeta-v2 deploybeta-v2-kind
+
+BETA_V2_IMAGE_REGISTRY ?= localhost:5001
+BETA_V2_IMAGE_TAG      ?= v0.1.0
+BETA_V2_HS_IMAGE       := $(BETA_V2_IMAGE_REGISTRY)/historyserver-beta-v2-historyserver:$(BETA_V2_IMAGE_TAG)
+
+buildbeta-v2: buildbeta-v2-historyserver
+
+buildbeta-v2-historyserver: mod
+	@echo ""
+	@echo "go build beta-v2/cmd/historyserver ..."
+	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) \
+		go build -v $(GO_BUILD_FLAGS) -o $(BIN_DIR)/historyserver-beta-v2 ./beta-v2/cmd/historyserver
+
+localimage-beta-v2: localimage-beta-v2-historyserver
+
+localimage-beta-v2-historyserver: dockerbuilder_instance
+	${ENGINE} buildx build --platform linux/amd64 --load \
+		--build-arg GOPROXY=$(GOPROXY) \
+		-f beta-v2/Dockerfile.historyserver \
+		-t $(BETA_V2_HS_IMAGE) .
+
+pushbeta-v2: localimage-beta-v2
+	${ENGINE} push $(BETA_V2_HS_IMAGE)
+
+# Run the beta-v2 unit test suite under the race detector. Isolated from
+# the top-level `test` target so beta-v2 changes can be validated quickly
+# without pulling the whole repo's tests.
+testbeta-v2:
+	@echo ""
+	@echo "go test ./beta-v2/..."
+	go test -race -v ./beta-v2/...
+
+# One-shot dev bootstrap for beta-v2: kind + KubeRay + MinIO + image +
+# manifests. See beta-v2/scripts/setup-kind-dev.sh.
+deploybeta-v2-kind:
+	bash beta-v2/scripts/setup-kind-dev.sh

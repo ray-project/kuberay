@@ -1,0 +1,243 @@
+# Sample RayCluster for testing History Server v2 beta-v2 end-to-end with
+# real event data. Deploy this into a namespace, let it run briefly so the
+# Ray collectors push events to S3, then `kubectl delete rc/ray-beta-sample`
+# — the beta-v2 historyserver will detect the dead session the first time a
+# user visits /enter_cluster for this cluster's session, lazily build the
+# snapshot, and serve subsequent requests from the LRU cache (no ticker
+# loop, no eventprocessor Deployment needed — see beta_poc.md §1).
+#
+# Adapted from historyserver/config/raycluster.yaml (v1). Differences:
+#   - Name is "ray-beta-sample" to avoid colliding with v1's test cluster.
+#   - Head memory limit is 2Gi (v1 was 10G) — enough for a small test, sized
+#     so kind clusters with limited RAM can still schedule the pod.
+#   - rayStartParams.object-store-memory explicitly set to 200 MB. Ray's
+#     default (30% of available RAM) can fall below the 78 MB minimum when
+#     cgroup accounting under-reports the container limit; setting it
+#     explicitly dodges the "Attempting to cap object store memory usage at
+#     72784281 bytes, but the minimum allowed is 78643200 bytes" ValueError.
+#   - Images for collector point at our local registry (localhost:5001).
+#     Override at apply time via envsubst / sed if deploying to a shared
+#     registry.
+#
+# S3 config mirrors the beta/config/configmap-s3.yaml convention but stays
+# inline here as env vars because v1 collector reads from env only (jd is
+# empty since we don't pass --runtime-class-config-path).
+apiVersion: ray.io/v1
+kind: RayCluster
+metadata:
+  labels:
+    ray.io/cluster: ray-beta-sample
+  name: ray-beta-sample
+  namespace: default
+spec:
+  headGroupSpec:
+    rayStartParams:
+      dashboard-host: 0.0.0.0
+      num-cpus: "0"
+      # Explicit sizing to clear Ray's 78 MB object-store minimum; see
+      # header notes. Still required on Ray 2.55 — cgroup accounting has
+      # not changed.
+      object-store-memory: "200000000"
+    serviceType: ClusterIP
+    template:
+      metadata:
+        labels:
+          test: ray-beta-sample
+      spec:
+        containers:
+        - name: ray-head
+          image: rayproject/ray:2.55.0
+          imagePullPolicy: IfNotPresent
+          env:
+          - name: RAY_enable_ray_event
+            value: "true"
+          - name: RAY_enable_core_worker_ray_event_to_aggregator
+            value: "true"
+          - name: RAY_DASHBOARD_AGGREGATOR_AGENT_EVENTS_EXPORT_ADDR
+            value: "http://localhost:8084/v1/events"
+          # Event-type allowlist. Ray 2.53 renamed this env var from
+          # RAY_DASHBOARD_AGGREGATOR_AGENT_EXPOSABLE_EVENT_TYPES to the
+          # longer RAY_DASHBOARD_AGGREGATOR_AGENT_PUBLISHER_HTTP_ENDPOINT_EXPOSABLE_EVENT_TYPES
+          # name below — see v1 historyserver/config/raycluster.yaml for
+          # the upstream note. beta-v2 pins Ray 2.55 so we ship only the
+          # new name.
+          - name: RAY_DASHBOARD_AGGREGATOR_AGENT_PUBLISHER_HTTP_ENDPOINT_EXPOSABLE_EVENT_TYPES
+            value: "TASK_DEFINITION_EVENT,TASK_LIFECYCLE_EVENT,ACTOR_TASK_DEFINITION_EVENT,
+                    TASK_PROFILE_EVENT,DRIVER_JOB_DEFINITION_EVENT,DRIVER_JOB_LIFECYCLE_EVENT,
+                    ACTOR_DEFINITION_EVENT,ACTOR_LIFECYCLE_EVENT,NODE_DEFINITION_EVENT,NODE_LIFECYCLE_EVENT"
+          command:
+          - 'echo "=========================================="; [ -d "/tmp/ray/session_latest" ] && dest="/tmp/ray/prev-logs/$(basename $(readlink /tmp/ray/session_latest))/$(cat /tmp/ray/raylet_node_id)" && echo "dst is $dest" && mkdir -p "$dest" && mv /tmp/ray/session_latest/logs "$dest/logs"; echo "========================================="'
+          securityContext:
+            allowPrivilegeEscalation: true
+            privileged: true
+          lifecycle:
+            postStart:
+              exec:
+                command:
+                - /bin/sh
+                - -lc
+                - --
+                - |
+                  GetNodeId(){
+                    while true;
+                    do
+                      nodeid=$(ps -ef | grep raylet | grep node_id | grep -v grep | grep -oP '(?<=--node_id=)[^ ]*')
+                      if [ -n "$nodeid" ]; then
+                        echo "$(date) raylet started => ${nodeid}" >> /tmp/ray/init.log
+                        echo $nodeid > /tmp/ray/raylet_node_id
+                        break
+                      else
+                        sleep 1
+                      fi
+                    done
+                  }
+                  GetNodeId
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "1Gi"
+            limits:
+              cpu: "2"
+              memory: "2Gi"
+          volumeMounts:
+          - name: session
+            mountPath: /tmp/ray
+        - name: collector
+          image: localhost:5001/collector:dev
+          imagePullPolicy: IfNotPresent
+          env:
+          - name: RAY_DASHBOARD_ADDRESS
+            value: "http://localhost:8265"
+          - name: RAY_COLLECTOR_ADDITIONAL_ENDPOINTS
+            value: "/api/v0/placement_groups?detail=1&limit=10000"
+          - name: RAY_COLLECTOR_POLL_INTERVAL
+            value: "30s"
+          - name: S3DISABLE_SSL
+            value: "true"
+          - name: AWS_ACCESS_KEY_ID
+            value: minioadmin
+          - name: AWS_SECRET_ACCESS_KEY
+            value: minioadmin
+          - name: AWS_SESSION_TOKEN
+            value: ""
+          - name: S3_BUCKET
+            value: "ray-historyserver"
+          - name: S3_ENDPOINT
+            value: "minio-service.minio-dev:9000"
+          - name: S3_REGION
+            value: "test"
+          - name: S3FORCE_PATH_STYLE
+            value: "true"
+          command:
+          - collector
+          - --role=Head
+          - --runtime-class-name=s3
+          - --ray-cluster-name=ray-beta-sample
+          - --ray-root-dir=log
+          - --events-port=8084
+          volumeMounts:
+          - name: session
+            mountPath: /tmp/ray
+        volumes:
+        - name: session
+          emptyDir: {}
+  workerGroupSpecs:
+  - groupName: cpu
+    replicas: 1
+    minReplicas: 1
+    maxReplicas: 1
+    numOfHosts: 1
+    rayStartParams:
+      object-store-memory: "200000000"
+    template:
+      metadata:
+        labels:
+          test: ray-beta-sample
+      spec:
+        containers:
+        - name: ray-worker
+          image: rayproject/ray:2.55.0
+          imagePullPolicy: IfNotPresent
+          env:
+          - name: RAY_enable_ray_event
+            value: "true"
+          - name: RAY_enable_core_worker_ray_event_to_aggregator
+            value: "true"
+          - name: RAY_DASHBOARD_AGGREGATOR_AGENT_EVENTS_EXPORT_ADDR
+            value: "http://localhost:8084/v1/events"
+          # Same 2.53+ env-var rename as the head pod above — see the
+          # comment on the head container for context.
+          - name: RAY_DASHBOARD_AGGREGATOR_AGENT_PUBLISHER_HTTP_ENDPOINT_EXPOSABLE_EVENT_TYPES
+            value: "TASK_DEFINITION_EVENT,TASK_LIFECYCLE_EVENT,ACTOR_TASK_DEFINITION_EVENT,
+                    TASK_PROFILE_EVENT,DRIVER_JOB_DEFINITION_EVENT,DRIVER_JOB_LIFECYCLE_EVENT,
+                    ACTOR_DEFINITION_EVENT,ACTOR_LIFECYCLE_EVENT,NODE_DEFINITION_EVENT,NODE_LIFECYCLE_EVENT"
+          command:
+          - 'echo "=========================================="; [ -d "/tmp/ray/session_latest" ] && dest="/tmp/ray/prev-logs/$(basename $(readlink /tmp/ray/session_latest))/$(cat /tmp/ray/raylet_node_id)" && echo "dst is $dest" && mkdir -p "$dest" && mv /tmp/ray/session_latest/logs "$dest/logs"; echo "========================================="'
+          securityContext:
+            allowPrivilegeEscalation: true
+            privileged: true
+          lifecycle:
+            postStart:
+              exec:
+                command:
+                - /bin/sh
+                - -lc
+                - --
+                - |
+                  GetNodeId(){
+                    while true;
+                    do
+                      nodeid=$(ps -ef | grep raylet | grep node_id | grep -v grep | grep -oP '(?<=--node_id=)[^ ]*')
+                      if [ -n "$nodeid" ]; then
+                        echo "$(date) raylet started => ${nodeid}" >> /tmp/ray/init.log
+                        echo $nodeid > /tmp/ray/raylet_node_id
+                        break
+                      else
+                        sleep 1
+                      fi
+                    done
+                  }
+                  GetNodeId
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "1Gi"
+            limits:
+              cpu: "1"
+              memory: "2Gi"
+          volumeMounts:
+          - name: session
+            mountPath: /tmp/ray
+        - name: collector
+          image: localhost:5001/collector:dev
+          imagePullPolicy: IfNotPresent
+          env:
+          - name: AWS_ACCESS_KEY_ID
+            value: minioadmin
+          - name: AWS_SECRET_ACCESS_KEY
+            value: minioadmin
+          - name: AWS_SESSION_TOKEN
+            value: ""
+          - name: S3_BUCKET
+            value: "ray-historyserver"
+          - name: S3_ENDPOINT
+            value: "minio-service.minio-dev:9000"
+          - name: S3_REGION
+            value: "test"
+          - name: S3FORCE_PATH_STYLE
+            value: "true"
+          - name: S3DISABLE_SSL
+            value: "true"
+          command:
+          - collector
+          - --role=Worker
+          - --runtime-class-name=s3
+          - --ray-cluster-name=ray-beta-sample
+          - --ray-root-dir=log
+          - --events-port=8084
+          volumeMounts:
+          - name: session
+            mountPath: /tmp/ray
+        volumes:
+        - name: session
+          emptyDir: {}

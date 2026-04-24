@@ -1,0 +1,35 @@
+# Multi-stage build for v2 beta-v2 historyserver binary (lazy mode, single
+# binary — replaces the beta historyserver + eventprocessor pair).
+#
+# Mirrors historyserver/Dockerfile.historyserver (v1) for consistency.
+FROM golang:1.25.1 AS builder
+
+ARG GOPROXY=https://proxy.golang.org,direct
+ENV GOPROXY=${GOPROXY}
+WORKDIR /historyserver
+
+# Go modules first for dep caching.
+COPY go.mod go.mod
+COPY go.sum go.sum
+RUN go mod download
+
+# v1 packages that beta-v2 imports (transitively required).
+COPY pkg/collector/     pkg/collector/
+COPY pkg/eventserver/   pkg/eventserver/
+COPY pkg/historyserver/ pkg/historyserver/
+COPY pkg/storage/       pkg/storage/
+COPY pkg/utils/         pkg/utils/
+
+# beta-v2 packages.
+COPY beta-v2/cmd/historyserver/ beta-v2/cmd/historyserver/
+COPY beta-v2/pkg/               beta-v2/pkg/
+
+# Build.
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+    go build -o /out/historyserver ./beta-v2/cmd/historyserver
+
+FROM ubuntu:22.04
+RUN apt-get update && apt-get upgrade -y && rm -rf /var/cache/apt/ && apt-get install -y ca-certificates
+COPY --from=builder /out/historyserver /usr/local/bin/historyserver
+EXPOSE 8080
+ENTRYPOINT ["historyserver"]
