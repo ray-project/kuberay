@@ -2,6 +2,10 @@
 
 package v1
 
+import (
+	apisv1 "sigs.k8s.io/gateway-api/apis/v1"
+)
+
 // ClusterUpgradeOptionsApplyConfiguration represents a declarative configuration of the ClusterUpgradeOptions type for use
 // with apply.
 //
@@ -17,6 +21,12 @@ type ClusterUpgradeOptionsApplyConfiguration struct {
 	IntervalSeconds *int32 `json:"intervalSeconds,omitempty"`
 	// The name of the Gateway Class installed by the Kubernetes Cluster admin.
 	GatewayClassName *string `json:"gatewayClassName,omitempty"`
+	// GatewayAddresses is an optional list of addresses to set on the Gateway resource.
+	// This is required on bare-metal clusters (e.g. MetalLB + Envoy Gateway) where the
+	// Gateway implementation only becomes PROGRAMMED when spec.addresses is explicitly
+	// provided. If empty, no addresses field is set on the Gateway (suitable for cloud
+	// load-balancer environments that assign addresses automatically).
+	GatewayAddresses []apisv1.GatewaySpecAddress `json:"gatewayAddresses,omitempty"`
 }
 
 // ClusterUpgradeOptionsApplyConfiguration constructs a declarative configuration of the ClusterUpgradeOptions type for use with
@@ -54,5 +64,15 @@ func (b *ClusterUpgradeOptionsApplyConfiguration) WithIntervalSeconds(value int3
 // If called multiple times, the GatewayClassName field is set to the value of the last call.
 func (b *ClusterUpgradeOptionsApplyConfiguration) WithGatewayClassName(value string) *ClusterUpgradeOptionsApplyConfiguration {
 	b.GatewayClassName = &value
+	return b
+}
+
+// WithGatewayAddresses adds the given value to the GatewayAddresses field in the declarative configuration
+// and returns the receiver, so that objects can be build by chaining "With" function invocations.
+// If called multiple times, values provided by each call will be appended to the GatewayAddresses field.
+func (b *ClusterUpgradeOptionsApplyConfiguration) WithGatewayAddresses(values ...apisv1.GatewaySpecAddress) *ClusterUpgradeOptionsApplyConfiguration {
+	for i := range values {
+		b.GatewayAddresses = append(b.GatewayAddresses, values[i])
+	}
 	return b
 }
