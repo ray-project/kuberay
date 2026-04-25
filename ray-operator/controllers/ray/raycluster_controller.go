@@ -1480,35 +1480,22 @@ func (r *RayClusterReconciler) buildRedisCleanupJob(ctx context.Context, instanc
 	// Avoid using the GPU for the Redis cleanup Job. Allow overriding the default
 	// resources via operator env vars for platforms with higher minimum requirements
 	// (e.g. GKE Autopilot).
-	defaultCPU := resource.MustParse("200m")
-	defaultMemory := resource.MustParse("256Mi")
-
-	cpuQuantity := defaultCPU
-	if cpuStr := os.Getenv(utils.REDIS_CLEANUP_JOB_CPU); cpuStr != "" {
-		if parsed, err := resource.ParseQuantity(cpuStr); err != nil {
-			logger.Error(err, "Invalid value for env var, using default", "envVar", utils.REDIS_CLEANUP_JOB_CPU, "value", cpuStr, "default", defaultCPU.String())
-		} else {
-			cpuQuantity = parsed
-		}
+	cpuStr := os.Getenv(utils.REDIS_CLEANUP_JOB_CPU)
+	if cpuStr == "" {
+		cpuStr = "200m"
 	}
-
-	memQuantity := defaultMemory
-	if memStr := os.Getenv(utils.REDIS_CLEANUP_JOB_MEMORY); memStr != "" {
-		if parsed, err := resource.ParseQuantity(memStr); err != nil {
-			logger.Error(err, "Invalid value for env var, using default", "envVar", utils.REDIS_CLEANUP_JOB_MEMORY, "value", memStr, "default", defaultMemory.String())
-		} else {
-			memQuantity = parsed
-		}
+	memStr := os.Getenv(utils.REDIS_CLEANUP_JOB_MEMORY)
+	if memStr == "" {
+		memStr = "256Mi"
 	}
-
 	pod.Spec.Containers[utils.RayContainerIndex].Resources = corev1.ResourceRequirements{
 		Limits: corev1.ResourceList{
-			corev1.ResourceCPU:    cpuQuantity,
-			corev1.ResourceMemory: memQuantity,
+			corev1.ResourceCPU:    resource.MustParse(cpuStr),
+			corev1.ResourceMemory: resource.MustParse(memStr),
 		},
 		Requests: corev1.ResourceList{
-			corev1.ResourceCPU:    cpuQuantity,
-			corev1.ResourceMemory: memQuantity,
+			corev1.ResourceCPU:    resource.MustParse(cpuStr),
+			corev1.ResourceMemory: resource.MustParse(memStr),
 		},
 	}
 
