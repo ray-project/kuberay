@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"maps"
 	"testing"
 	"time"
 
@@ -399,9 +400,7 @@ func TestRedisCleanupJobCustomResources(t *testing.T) {
 			annotations := map[string]string{
 				utils.RayFTEnabledAnnotationKey: "true",
 			}
-			for k, v := range tc.annotations {
-				annotations[k] = v
-			}
+			maps.Copy(annotations, tc.annotations)
 
 			rayClusterAC := rayv1ac.RayCluster("raycluster-cleanup-res", namespace.Name).
 				WithAnnotations(annotations).
