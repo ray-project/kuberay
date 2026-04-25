@@ -1279,14 +1279,14 @@ func isRayContainerPastWaiting(pod corev1.Pod) bool {
 // exists and its Ray container is running or terminated, false if the head pod is not found
 // or is still waiting, and an error if listing head pods fails.
 func (r *RayClusterReconciler) isHeadPodPastWaiting(ctx context.Context, instance *rayv1.RayCluster) (bool, error) {
-	headPods := corev1.PodList{}
-	if err := r.List(ctx, &headPods, common.RayClusterHeadPodsAssociationOptions(instance).ToListOptions()...); err != nil {
+	headPod, err := common.GetRayClusterHeadPod(ctx, r.Client, instance)
+	if err != nil {
 		return false, err
 	}
-	if len(headPods.Items) == 0 {
+	if headPod == nil {
 		return false, nil
 	}
-	return isRayContainerPastWaiting(headPods.Items[0]), nil
+	return isRayContainerPastWaiting(*headPod), nil
 }
 
 func (r *RayClusterReconciler) createHeadIngress(ctx context.Context, ingress *networkingv1.Ingress, instance *rayv1.RayCluster) error {
