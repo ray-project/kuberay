@@ -2502,7 +2502,7 @@ func Test_ShouldDeletePod(t *testing.T) {
 	}
 }
 
-func Test_IsRayContainerAfterWaiting(t *testing.T) {
+func Test_IsRayContainerPastWaiting(t *testing.T) {
 	tests := []struct {
 		name     string
 		pod      corev1.Pod
@@ -2615,7 +2615,7 @@ func Test_IsRayContainerAfterWaiting(t *testing.T) {
 	}
 }
 
-func Test_IsHeadPodAfterWaiting(t *testing.T) {
+func Test_IsHeadPodPastWaiting(t *testing.T) {
 	setupTest(t)
 	ctx := context.Background()
 
