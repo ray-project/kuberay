@@ -2502,6 +2502,225 @@ func Test_ShouldDeletePod(t *testing.T) {
 	}
 }
 
+func Test_IsRayContainerPastWaiting(t *testing.T) {
+	tests := []struct {
+		name     string
+		pod      corev1.Pod
+		expected bool
+	}{
+		{
+			name: "no container statuses reported yet",
+			pod: corev1.Pod{
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{{Name: "ray-head"}},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "ray container is still waiting",
+			pod: corev1.Pod{
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{{Name: "ray-head"}},
+				},
+				Status: corev1.PodStatus{
+					ContainerStatuses: []corev1.ContainerStatus{{
+						Name: "ray-head",
+						State: corev1.ContainerState{
+							Waiting: &corev1.ContainerStateWaiting{Reason: "ContainerCreating"},
+						},
+					}},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "ray container is waiting after a non-zero exit code previously",
+			pod: corev1.Pod{
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{{Name: "ray-head"}},
+				},
+				Status: corev1.PodStatus{
+					ContainerStatuses: []corev1.ContainerStatus{{
+						Name: "ray-head",
+						State: corev1.ContainerState{
+							Waiting: &corev1.ContainerStateWaiting{Reason: "CrashLoopBackOff"},
+						},
+					}},
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "ray container is running",
+			pod: corev1.Pod{
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{{Name: "ray-head"}},
+				},
+				Status: corev1.PodStatus{
+					ContainerStatuses: []corev1.ContainerStatus{{
+						Name: "ray-head",
+						State: corev1.ContainerState{
+							Running: &corev1.ContainerStateRunning{},
+						},
+					}},
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "ray container is terminated",
+			pod: corev1.Pod{
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{{Name: "ray-head"}},
+				},
+				Status: corev1.PodStatus{
+					ContainerStatuses: []corev1.ContainerStatus{{
+						Name: "ray-head",
+						State: corev1.ContainerState{
+							Terminated: &corev1.ContainerStateTerminated{},
+						},
+					}},
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "status order differs and helper still finds ray container by name",
+			pod: corev1.Pod{
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{{Name: "ray-head"}, {Name: "sidecar"}},
+				},
+				Status: corev1.PodStatus{
+					ContainerStatuses: []corev1.ContainerStatus{
+						{
+							Name:  "sidecar",
+							State: corev1.ContainerState{Running: &corev1.ContainerStateRunning{}},
+						},
+						{
+							Name:  "ray-head",
+							State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{}},
+						},
+					},
+				},
+			},
+			expected: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, isRayContainerPastWaiting(tc.pod))
+		})
+	}
+}
+
+func Test_IsHeadPodPastWaiting(t *testing.T) {
+	setupTest(t)
+	ctx := context.Background()
+
+	newScheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(newScheme)
+	_ = corev1.AddToScheme(newScheme)
+
+	createHeadPod := func(name string, state corev1.ContainerState) *corev1.Pod {
+		return &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: namespaceStr,
+				Labels: map[string]string{
+					utils.RayClusterLabelKey:   instanceName,
+					utils.RayNodeTypeLabelKey:  string(rayv1.HeadNode),
+					utils.RayNodeGroupLabelKey: headGroupNameStr,
+				},
+			},
+			Spec: corev1.PodSpec{
+				Containers: []corev1.Container{{Name: "ray-head"}},
+			},
+			Status: corev1.PodStatus{
+				ContainerStatuses: []corev1.ContainerStatus{{
+					Name:  "ray-head",
+					State: state,
+				}},
+			},
+		}
+	}
+
+	tests := []struct {
+		name           string
+		runtimeObjects []runtime.Object
+		expected       bool
+	}{
+		{
+			name:           "head pod does not exist yet",
+			runtimeObjects: []runtime.Object{testRayCluster.DeepCopy()},
+			expected:       false,
+		},
+		{
+			name: "head pod is still waiting",
+			runtimeObjects: []runtime.Object{
+				testRayCluster.DeepCopy(),
+				createHeadPod("head-waiting", corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{}}),
+			},
+			expected: false,
+		},
+		{
+			name: "head pod is running",
+			runtimeObjects: []runtime.Object{
+				testRayCluster.DeepCopy(),
+				createHeadPod("head-running", corev1.ContainerState{Running: &corev1.ContainerStateRunning{}}),
+			},
+			expected: true,
+		},
+		{
+			name: "head pod is terminated",
+			runtimeObjects: []runtime.Object{
+				testRayCluster.DeepCopy(),
+				createHeadPod("head-terminated", corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{}}),
+			},
+			expected: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			fakeClient := clientFake.NewClientBuilder().
+				WithScheme(newScheme).
+				WithRuntimeObjects(tc.runtimeObjects...).
+				Build()
+
+			reconciler := &RayClusterReconciler{Client: fakeClient, Scheme: newScheme}
+			result, err := reconciler.isHeadPodPastWaiting(ctx, testRayCluster.DeepCopy())
+			require.NoError(t, err)
+			assert.Equal(t, tc.expected, result)
+		})
+	}
+}
+
+func Test_IsHeadPodAfterWaiting_ListError(t *testing.T) {
+	setupTest(t)
+	ctx := context.Background()
+	expectedErr := errors.New("list failed")
+
+	newScheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(newScheme)
+	_ = corev1.AddToScheme(newScheme)
+
+	fakeClient := clientFake.NewClientBuilder().
+		WithScheme(newScheme).
+		WithInterceptorFuncs(interceptor.Funcs{
+			List: func(_ context.Context, _ client.WithWatch, _ client.ObjectList, _ ...client.ListOption) error {
+				return expectedErr
+			},
+		}).
+		Build()
+
+	reconciler := &RayClusterReconciler{Client: fakeClient, Scheme: newScheme}
+	result, err := reconciler.isHeadPodPastWaiting(ctx, testRayCluster.DeepCopy())
+	require.ErrorIs(t, err, expectedErr)
+	assert.False(t, result)
+}
+
 func Test_RedisCleanupFeatureFlag(t *testing.T) {
 	setupTest(t)
 
@@ -2574,15 +2793,52 @@ func Test_RedisCleanupFeatureFlag(t *testing.T) {
 			assert.Len(t, rayClusterList.Items, 1)
 			assert.Empty(t, rayClusterList.Items[0].Finalizers)
 
+			podList := corev1.PodList{}
+			err = fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
+			require.NoError(t, err, "Fail to get Pod list")
+			assert.Empty(t, podList.Items)
+
 			_, err = testRayClusterReconciler.rayClusterReconcile(ctx, cluster)
-			if tc.enableGCSFTRedisCleanup == "false" {
-				require.NoError(t, err)
-				podList := corev1.PodList{}
-				err = fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
-				require.NoError(t, err)
-				assert.NotEmpty(t, podList.Items)
-			} else {
-				// Add the GCS FT Redis cleanup finalizer to the RayCluster.
+			require.NoError(t, err)
+
+			// On first reconcile, the head Pod is not after Waiting yet, so Pods are created first.
+			podList = corev1.PodList{}
+			err = fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
+			require.NoError(t, err, "Fail to get Pod list")
+			assert.NotEmpty(t, podList.Items)
+
+			rayClusterList = rayv1.RayClusterList{}
+			err = fakeClient.List(ctx, &rayClusterList, client.InNamespace(namespaceStr))
+			require.NoError(t, err, "Fail to get RayCluster list")
+			assert.Len(t, rayClusterList.Items, 1)
+			assert.Empty(t, rayClusterList.Items[0].Finalizers)
+
+			if tc.expectedNumFinalizers > 0 {
+				headPods := corev1.PodList{}
+				err = fakeClient.List(ctx, &headPods,
+					client.InNamespace(namespaceStr),
+					client.MatchingLabels{
+						utils.RayClusterLabelKey:  cluster.Name,
+						utils.RayNodeTypeLabelKey: string(rayv1.HeadNode),
+					},
+				)
+				require.NoError(t, err, "Fail to get head Pod list")
+				require.Len(t, headPods.Items, 1)
+
+				headPod := headPods.Items[0]
+				headPod.Status.Phase = corev1.PodRunning
+				headPod.Status.ContainerStatuses = []corev1.ContainerStatus{{
+					Name:  headPod.Spec.Containers[utils.RayContainerIndex].Name,
+					State: corev1.ContainerState{Running: &corev1.ContainerStateRunning{}},
+				}}
+				err = fakeClient.Status().Update(ctx, &headPod)
+				require.NoError(t, err, "Fail to update head Pod status")
+
+				latestCluster := &rayv1.RayCluster{}
+				err = fakeClient.Get(ctx, client.ObjectKey{Name: cluster.Name, Namespace: cluster.Namespace}, latestCluster)
+				require.NoError(t, err, "Fail to get latest RayCluster")
+
+				_, err = testRayClusterReconciler.rayClusterReconcile(ctx, latestCluster)
 				require.NoError(t, err)
 			}
 
@@ -2594,23 +2850,121 @@ func Test_RedisCleanupFeatureFlag(t *testing.T) {
 			assert.Len(t, rayClusterList.Items[0].Finalizers, tc.expectedNumFinalizers)
 			if tc.expectedNumFinalizers > 0 {
 				assert.True(t, controllerutil.ContainsFinalizer(&rayClusterList.Items[0], utils.GCSFaultToleranceRedisCleanupFinalizer))
-
-				// No Pod should be created before adding the GCS FT Redis cleanup finalizer.
-				podList := corev1.PodList{}
-				err = fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
-				require.NoError(t, err, "Fail to get Pod list")
-				assert.Empty(t, podList.Items)
-
-				// Reconcile the RayCluster again. The controller should create Pods.
-				_, err = testRayClusterReconciler.rayClusterReconcile(ctx, cluster)
-				require.NoError(t, err)
-
-				err = fakeClient.List(ctx, &podList, client.InNamespace(namespaceStr))
-				require.NoError(t, err, "Fail to get Pod list")
-				assert.NotEmpty(t, podList.Items)
+			} else {
+				assert.False(t, controllerutil.ContainsFinalizer(&rayClusterList.Items[0], utils.GCSFaultToleranceRedisCleanupFinalizer))
 			}
 		})
 	}
+}
+
+func Test_RedisCleanupFeatureFlag_HeadPodCrashLoopBackOffAddsFinalizer(t *testing.T) {
+	setupTest(t)
+	defer os.Unsetenv(utils.ENABLE_GCS_FT_REDIS_CLEANUP)
+	os.Setenv(utils.ENABLE_GCS_FT_REDIS_CLEANUP, "true")
+
+	newScheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(newScheme)
+	_ = corev1.AddToScheme(newScheme)
+
+	cluster := testRayCluster.DeepCopy()
+	if cluster.Annotations == nil {
+		cluster.Annotations = map[string]string{}
+	}
+	cluster.Annotations[utils.RayFTEnabledAnnotationKey] = "true"
+	cluster.Spec.EnableInTreeAutoscaling = nil
+
+	ctx := context.Background()
+	fakeClient := clientFake.NewClientBuilder().
+		WithScheme(newScheme).
+		WithObjects(cluster).
+		WithStatusSubresource(cluster).
+		Build()
+
+	reconciler := &RayClusterReconciler{
+		Client:                     fakeClient,
+		Recorder:                   &record.FakeRecorder{},
+		Scheme:                     newScheme,
+		rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
+	}
+
+	// First reconcile creates Pods before head container status is available.
+	_, err := reconciler.rayClusterReconcile(ctx, cluster)
+	require.NoError(t, err)
+
+	headPods := corev1.PodList{}
+	err = fakeClient.List(ctx, &headPods,
+		client.InNamespace(namespaceStr),
+		client.MatchingLabels{
+			utils.RayClusterLabelKey:  cluster.Name,
+			utils.RayNodeTypeLabelKey: string(rayv1.HeadNode),
+		},
+	)
+	require.NoError(t, err)
+	require.Len(t, headPods.Items, 1)
+
+	// head pod container is in running.
+	headPod := headPods.Items[0]
+	headPod.Status.Phase = corev1.PodRunning
+	headPod.Status.ContainerStatuses = []corev1.ContainerStatus{{
+		Name: headPod.Spec.Containers[utils.RayContainerIndex].Name,
+		State: corev1.ContainerState{Running: &corev1.ContainerStateRunning{
+			StartedAt: metav1.Now(),
+		}},
+	}}
+	err = fakeClient.Status().Update(ctx, &headPod)
+	require.NoError(t, err)
+
+	latestCluster := &rayv1.RayCluster{}
+	err = fakeClient.Get(ctx, client.ObjectKey{Name: cluster.Name, Namespace: cluster.Namespace}, latestCluster)
+	require.NoError(t, err)
+
+	_, err = reconciler.rayClusterReconcile(ctx, latestCluster)
+	require.NoError(t, err)
+
+	// the finalizer should be added
+	rayClusterList := rayv1.RayClusterList{}
+	err = fakeClient.List(ctx, &rayClusterList, client.InNamespace(namespaceStr))
+	require.NoError(t, err)
+	require.Len(t, rayClusterList.Items, 1)
+	assert.True(t, controllerutil.ContainsFinalizer(&rayClusterList.Items[0], utils.GCSFaultToleranceRedisCleanupFinalizer))
+
+	// get update-to-date head pod for setting crashing state
+	headPods = corev1.PodList{}
+	err = fakeClient.List(ctx, &headPods,
+		client.InNamespace(namespaceStr),
+		client.MatchingLabels{
+			utils.RayClusterLabelKey:  cluster.Name,
+			utils.RayNodeTypeLabelKey: string(rayv1.HeadNode),
+		},
+	)
+	require.NoError(t, err)
+	require.Len(t, headPods.Items, 1)
+
+	headPod = headPods.Items[0]
+	headPod.Status.Phase = corev1.PodPending
+	headPod.Status.ContainerStatuses = []corev1.ContainerStatus{{
+		Name:         headPod.Spec.Containers[utils.RayContainerIndex].Name,
+		RestartCount: 1,
+		State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{
+			Reason: "CrashLoopBackOff",
+		}},
+	}}
+	err = fakeClient.Status().Update(ctx, &headPod)
+	require.NoError(t, err)
+
+	latestCluster = &rayv1.RayCluster{}
+	err = fakeClient.Get(ctx, client.ObjectKey{Name: cluster.Name, Namespace: cluster.Namespace}, latestCluster)
+	require.NoError(t, err)
+
+	_, err = reconciler.rayClusterReconcile(ctx, latestCluster)
+	require.NoError(t, err)
+
+	// finalizer should still exist.
+	rayClusterList = rayv1.RayClusterList{}
+	err = fakeClient.List(ctx, &rayClusterList, client.InNamespace(namespaceStr))
+	require.NoError(t, err)
+	require.Len(t, rayClusterList.Items, 1)
+	assert.True(t, controllerutil.ContainsFinalizer(&rayClusterList.Items[0], utils.GCSFaultToleranceRedisCleanupFinalizer))
 }
 
 func TestEvents_RedisCleanup(t *testing.T) {
