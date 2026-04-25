@@ -1477,25 +1477,16 @@ func (r *RayClusterReconciler) buildRedisCleanupJob(ctx context.Context, instanc
 		Value: "500",
 	})
 
-	// Avoid using the GPU for the Redis cleanup Job. Allow overriding the default
-	// resources via operator env vars for platforms with higher minimum requirements
-	// (e.g. GKE Autopilot).
-	cpuStr := os.Getenv(utils.REDIS_CLEANUP_JOB_CPU)
-	if cpuStr == "" {
-		cpuStr = "200m"
-	}
-	memStr := os.Getenv(utils.REDIS_CLEANUP_JOB_MEMORY)
-	if memStr == "" {
-		memStr = "256Mi"
-	}
+	// The container's resource consumption remains constant. Hard-coding the resources is acceptable.
+	// Avoid using the GPU for the Redis cleanup Job.
 	pod.Spec.Containers[utils.RayContainerIndex].Resources = corev1.ResourceRequirements{
 		Limits: corev1.ResourceList{
-			corev1.ResourceCPU:    resource.MustParse(cpuStr),
-			corev1.ResourceMemory: resource.MustParse(memStr),
+			corev1.ResourceCPU:    resource.MustParse("200m"),
+			corev1.ResourceMemory: resource.MustParse("256Mi"),
 		},
 		Requests: corev1.ResourceList{
-			corev1.ResourceCPU:    resource.MustParse(cpuStr),
-			corev1.ResourceMemory: resource.MustParse(memStr),
+			corev1.ResourceCPU:    resource.MustParse("200m"),
+			corev1.ResourceMemory: resource.MustParse("256Mi"),
 		},
 	}
 

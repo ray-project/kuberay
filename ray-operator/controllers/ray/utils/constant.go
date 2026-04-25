@@ -185,13 +185,6 @@ const (
 	// cleanup Job should be enabled. This is a feature flag for v1.0.0.
 	ENABLE_GCS_FT_REDIS_CLEANUP = "ENABLE_GCS_FT_REDIS_CLEANUP"
 
-	// These KubeRay operator environment variables allow overriding the default
-	// resource requests/limits for the Redis cleanup Job. This is useful on
-	// platforms like GKE Autopilot where minimum resource requirements may be
-	// higher than the defaults.
-	REDIS_CLEANUP_JOB_CPU    = "REDIS_CLEANUP_JOB_CPU"
-	REDIS_CLEANUP_JOB_MEMORY = "REDIS_CLEANUP_JOB_MEMORY"
-
 	// This environment variable for the KubeRay operator is used to determine whether to enable
 	// the injection of readiness and liveness probes into Ray head and worker containers.
 	// Enabling this feature contributes to the robustness of Ray clusters. It is currently a feature

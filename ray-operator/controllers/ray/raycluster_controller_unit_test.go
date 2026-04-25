@@ -2870,54 +2870,6 @@ func Test_RedisCleanup(t *testing.T) {
 	}
 }
 
-func Test_RedisCleanupCustomResources(t *testing.T) {
-	setupTest(t)
-	newScheme := runtime.NewScheme()
-	_ = rayv1.AddToScheme(newScheme)
-	_ = corev1.AddToScheme(newScheme)
-	_ = batchv1.AddToScheme(newScheme)
-
-	gcsFTEnabledCluster := testRayCluster.DeepCopy()
-	if gcsFTEnabledCluster.Annotations == nil {
-		gcsFTEnabledCluster.Annotations = make(map[string]string)
-	}
-	gcsFTEnabledCluster.Annotations[utils.RayFTEnabledAnnotationKey] = "true"
-	gcsFTEnabledCluster.Spec.EnableInTreeAutoscaling = nil
-	controllerutil.AddFinalizer(gcsFTEnabledCluster, utils.GCSFaultToleranceRedisCleanupFinalizer)
-	now := metav1.Now()
-	gcsFTEnabledCluster.DeletionTimestamp = &now
-
-	t.Setenv(utils.REDIS_CLEANUP_JOB_CPU, "500m")
-	t.Setenv(utils.REDIS_CLEANUP_JOB_MEMORY, "512Mi")
-
-	ctx := context.Background()
-	fakeClient := clientFake.NewClientBuilder().
-		WithScheme(newScheme).
-		WithRuntimeObjects(gcsFTEnabledCluster.DeepCopy()).
-		WithStatusSubresource(gcsFTEnabledCluster).
-		Build()
-
-	testRayClusterReconciler := &RayClusterReconciler{
-		Client:   fakeClient,
-		Recorder: &record.FakeRecorder{},
-		Scheme:   newScheme,
-	}
-
-	_, err := testRayClusterReconciler.rayClusterReconcile(ctx, gcsFTEnabledCluster)
-	require.NoError(t, err)
-
-	jobList := batchv1.JobList{}
-	err = fakeClient.List(ctx, &jobList, client.InNamespace(namespaceStr))
-	require.NoError(t, err)
-	require.Len(t, jobList.Items, 1)
-
-	container := jobList.Items[0].Spec.Template.Spec.Containers[utils.RayContainerIndex]
-	assert.Equal(t, resource.MustParse("500m"), container.Resources.Requests[corev1.ResourceCPU])
-	assert.Equal(t, resource.MustParse("512Mi"), container.Resources.Requests[corev1.ResourceMemory])
-	assert.Equal(t, resource.MustParse("500m"), container.Resources.Limits[corev1.ResourceCPU])
-	assert.Equal(t, resource.MustParse("512Mi"), container.Resources.Limits[corev1.ResourceMemory])
-}
-
 func TestReconcile_Replicas_Optional(t *testing.T) {
 	setupTest(t)
 
