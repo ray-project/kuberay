@@ -3,7 +3,7 @@ package s3
 import (
 	"os"
 
-	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go-v2/aws"
 
 	"github.com/ray-project/kuberay/historyserver/pkg/collector/types"
 )
