@@ -434,28 +434,44 @@ func (options *ClusterLogOptions) downloadRayLogFiles(ctx context.Context, exec 
 				return fmt.Errorf("Error creating directory: %w", err)
 			}
 		case tar.TypeReg:
-			// Check for overflow: G115
+			// Reject modes that can't be represented as an os.FileMode
+			// (uint32) before any cast so gosec G115 is satisfied and a
+			// crafted tar header cannot set unexpected bits on disk.
+			// Note: 'break' exits the switch, not the for loop, so the
+			// tarReader.Next() call below still runs and we advance to
+			// the next entry; using 'continue' here would skip that
+			// advance and spin forever on the bad entry.
 			if header.Mode < 0 || header.Mode > math.MaxUint32 {
-				fmt.Fprintf(options.ioStreams.Out, "file mode out side of accceptable value %d skipping file", header.Mode)
+				fmt.Fprintf(options.ioStreams.Out, "file mode %d outside of acceptable range, skipping file %s\n", header.Mode, header.Name)
+				break
 			}
-			// Create file and write contents
-			outFile, err := os.OpenFile(localFilePath, os.O_CREATE|os.O_RDWR, os.FileMode(header.Mode))
+			// Create file and write contents.
+			outFile, err := os.OpenFile(localFilePath, os.O_CREATE|os.O_RDWR, os.FileMode(uint32(header.Mode)))
 			if err != nil {
 				return fmt.Errorf("Error creating file: %w", err)
 			}
-			defer outFile.Close()
 			// This is to limit the copy size for a decompression bomb, currently set arbitrarily
-			for {
-				n, err := io.CopyN(outFile, tarReader, 1000000)
-				if err != nil {
-					if errors.Is(err, io.EOF) {
-						break
+			copyErr := func() error {
+				// Close the file when this iteration ends instead of
+				// deferring inside the loop: a large tar would otherwise
+				// hold every opened fd until the whole function returns
+				// and can hit the "too many open files" ulimit.
+				defer outFile.Close()
+				for {
+					n, err := io.CopyN(outFile, tarReader, 1000000)
+					if err != nil {
+						if errors.Is(err, io.EOF) {
+							return nil
+						}
+						return fmt.Errorf("failed while writing to file: %w", err)
 					}
-					return fmt.Errorf("failed while writing to file: %w", err)
+					if n == 0 {
+						return nil
+					}
 				}
-				if n == 0 {
-					break
-				}
+			}()
+			if copyErr != nil {
+				return copyErr
 			}
 		default:
 			fmt.Printf("Ignoring unsupported file type: %b", header.Typeflag)
