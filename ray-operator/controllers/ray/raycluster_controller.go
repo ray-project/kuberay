@@ -221,7 +221,7 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 
 			if !controllerutil.ContainsFinalizer(instance, utils.GCSFaultToleranceRedisCleanupFinalizer) {
 				logger.Info("The RayCluster has no finalizer on it, skip Redis cleanup job")
-				return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, nil
+				return ctrl.Result{}, nil
 			}
 
 			// Delete the head Pod if it exists.
