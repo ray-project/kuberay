@@ -1477,16 +1477,38 @@ func (r *RayClusterReconciler) buildRedisCleanupJob(ctx context.Context, instanc
 		Value: "500",
 	})
 
-	// The container's resource consumption remains constant. Hard-coding the resources is acceptable.
-	// Avoid using the GPU for the Redis cleanup Job.
+	// Avoid using the GPU for the Redis cleanup Job. Allow overriding the default
+	// resources via per-cluster annotations for platforms with higher minimum requirements
+	// (e.g. GKE Autopilot).
+	defaultCPU := resource.MustParse("200m")
+	defaultMemory := resource.MustParse("256Mi")
+
+	cpuQuantity := defaultCPU
+	if cpuStr, ok := instance.Annotations[utils.RayGCSFTRedisCleanupJobCPURequestAnnotationKey]; ok {
+		if parsed, err := resource.ParseQuantity(cpuStr); err != nil {
+			logger.Error(err, "Invalid annotation value, using default", "annotation", utils.RayGCSFTRedisCleanupJobCPURequestAnnotationKey, "value", cpuStr, "default", defaultCPU.String())
+		} else {
+			cpuQuantity = parsed
+		}
+	}
+
+	memQuantity := defaultMemory
+	if memStr, ok := instance.Annotations[utils.RayGCSFTRedisCleanupJobMemoryRequestAnnotationKey]; ok {
+		if parsed, err := resource.ParseQuantity(memStr); err != nil {
+			logger.Error(err, "Invalid annotation value, using default", "annotation", utils.RayGCSFTRedisCleanupJobMemoryRequestAnnotationKey, "value", memStr, "default", defaultMemory.String())
+		} else {
+			memQuantity = parsed
+		}
+	}
+
 	pod.Spec.Containers[utils.RayContainerIndex].Resources = corev1.ResourceRequirements{
 		Limits: corev1.ResourceList{
-			corev1.ResourceCPU:    resource.MustParse("200m"),
-			corev1.ResourceMemory: resource.MustParse("256Mi"),
+			corev1.ResourceCPU:    cpuQuantity,
+			corev1.ResourceMemory: memQuantity,
 		},
 		Requests: corev1.ResourceList{
-			corev1.ResourceCPU:    resource.MustParse("200m"),
-			corev1.ResourceMemory: resource.MustParse("256Mi"),
+			corev1.ResourceCPU:    cpuQuantity,
+			corev1.ResourceMemory: memQuantity,
 		},
 	}
 

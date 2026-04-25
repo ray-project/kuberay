@@ -83,6 +83,15 @@ const (
 	// Finalizers for GCS fault tolerance
 	GCSFaultToleranceRedisCleanupFinalizer = "ray.io/gcs-ft-redis-cleanup-finalizer"
 
+	// RayGCSFTRedisCleanupJobCPURequestAnnotationKey allows overriding the CPU request/limit
+	// for the Redis cleanup Job on a per-cluster basis. Accepts any valid Kubernetes quantity
+	// (e.g. "500m", "1"). Defaults to "200m" if unset or invalid.
+	RayGCSFTRedisCleanupJobCPURequestAnnotationKey = "ray.io/gcs-ft-redis-cleanup-job-cpu-requests"
+	// RayGCSFTRedisCleanupJobMemoryRequestAnnotationKey allows overriding the memory request/limit
+	// for the Redis cleanup Job on a per-cluster basis. Accepts any valid Kubernetes quantity
+	// (e.g. "512Mi", "1Gi"). Defaults to "256Mi" if unset or invalid.
+	RayGCSFTRedisCleanupJobMemoryRequestAnnotationKey = "ray.io/gcs-ft-redis-cleanup-job-memory-requests"
+
 	// EnableServeServiceKey is exclusively utilized to indicate if a RayCluster is directly used for serving.
 	// See https://github.com/ray-project/kuberay/pull/1672 for more details.
 	EnableServeServiceKey  = "ray.io/enable-serve-service"
