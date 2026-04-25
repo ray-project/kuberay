@@ -120,12 +120,12 @@ var _ = Describe("RayFrameworkGenerator", func() {
 		Expect(err).ToNot(HaveOccurred())
 		Expect(jobId).To(Equal(expectJobId))
 
-		rayJobInfo, err := rayDashboardClient.GetJobInfo(context.TODO(), jobId)
+		rayJobInfo, _, err := rayDashboardClient.GetJobInfo(context.TODO(), jobId)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(rayJobInfo.Entrypoint).To(Equal(rayJob.Spec.Entrypoint))
 		Expect(rayJobInfo.JobStatus).To(Equal(rayv1.JobStatusRunning))
 
-		_, err = rayDashboardClient.GetJobInfo(context.TODO(), errorJobId)
+		_, _, err = rayDashboardClient.GetJobInfo(context.TODO(), errorJobId)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("GetJobInfo fail"))
 		Expect(err.Error()).To(ContainSubstring("Ray misbehaved"))

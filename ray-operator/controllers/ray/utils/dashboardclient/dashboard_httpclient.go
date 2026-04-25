@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/util/json"
@@ -31,7 +32,7 @@ type RayDashboardClientInterface interface {
 	// V2/multi-app Rest API
 	GetServeDetails(ctx context.Context) (*utiltypes.ServeDetails, error)
 	GetMultiApplicationStatus(context.Context) (map[string]*utiltypes.ServeApplicationStatus, error)
-	GetJobInfo(ctx context.Context, jobId string) (*utiltypes.RayJobInfo, error)
+	GetJobInfo(ctx context.Context, jobId string) (*utiltypes.RayJobInfo, time.Time, error)
 	ListJobs(ctx context.Context) (*[]utiltypes.RayJobInfo, error)
 	SubmitJob(ctx context.Context, rayJob *rayv1.RayJob) (string, error)
 	SubmitJobReq(ctx context.Context, request *utiltypes.RayJobRequest) (string, error)
@@ -151,36 +152,36 @@ func (r *RayDashboardClient) ConvertServeDetailsToApplicationStatuses(serveDetai
 
 // Note that RayJobInfo and error can't be nil at the same time.
 // Please make sure if the Ray job with JobId can't be found. Return a BadRequest error.
-func (r *RayDashboardClient) GetJobInfo(ctx context.Context, jobId string) (*utiltypes.RayJobInfo, error) {
+func (r *RayDashboardClient) GetJobInfo(ctx context.Context, jobId string) (*utiltypes.RayJobInfo, time.Time, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, r.dashboardURL+JobPath+jobId, nil)
 	if err != nil {
-		return nil, err
+		return nil, time.Time{}, err
 	}
 
 	r.setAuthHeader(req)
 
 	resp, err := r.client.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, time.Time{}, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusNotFound {
-		return nil, errors.NewBadRequest("Job " + jobId + " does not exist on the cluster")
+		return nil, time.Time{}, errors.NewBadRequest("Job " + jobId + " does not exist on the cluster")
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response when getting job info: %w", err)
+		return nil, time.Time{}, fmt.Errorf("failed to read response when getting job info: %w", err)
 	}
 
 	var jobInfo utiltypes.RayJobInfo
 	if err = json.Unmarshal(body, &jobInfo); err != nil {
 		// Maybe body is not valid json, raise an error with the body.
-		return nil, fmt.Errorf("GetJobInfo fail: %s", string(body))
+		return nil, time.Time{}, fmt.Errorf("GetJobInfo fail: %s", string(body))
 	}
 
-	return &jobInfo, nil
+	return &jobInfo, time.Now(), nil
 }
 
 func (r *RayDashboardClient) ListJobs(ctx context.Context) (*[]utiltypes.RayJobInfo, error) {
@@ -326,7 +327,7 @@ func (r *RayDashboardClient) StopJob(ctx context.Context, jobName string) (err e
 	}
 
 	if !jobStopResp.Stopped {
-		jobInfo, err := r.GetJobInfo(ctx, jobName)
+		jobInfo, _, err := r.GetJobInfo(ctx, jobName)
 		if err != nil {
 			return err
 		}
