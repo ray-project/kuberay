@@ -621,6 +621,7 @@ func (b *clusterStatusBuilder) formatStatus() string {
 
 	sb.WriteString("Pending Demands:\n")
 	if len(b.PendingDemands) == 0 {
+		// NOTE: Bug-for-bug match with alpha. If alpha gets fixed, we should fix this too.
 		sb.WriteString(" (no resource demands)")
 	} else {
 		for _, demand := range b.PendingDemands {
