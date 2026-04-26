@@ -70,7 +70,7 @@ func TestEnsure_SnapshotCached_NoPipelineCall(t *testing.T) {
 	loader.Prime(clusterNameID, info.SessionName, &snapshot.SessionSnapshot{SessionKey: "primed"})
 
 	fp := &fakePipeline{}
-	sup := NewSupervisor(fp, loader)
+	sup := NewSupervisor(fp, loader, context.Background())
 
 	if err := sup.Ensure(context.Background(), info); err != nil {
 		t.Fatalf("Ensure: %v", err)
@@ -94,7 +94,7 @@ func TestEnsure_SnapshotInS3_NoPipelineCall(t *testing.T) {
 		makeSnapshotBlob(t, "from-s3"))
 
 	fp := &fakePipeline{}
-	sup := NewSupervisor(fp, loader)
+	sup := NewSupervisor(fp, loader, context.Background())
 
 	if err := sup.Ensure(context.Background(), info); err != nil {
 		t.Fatalf("Ensure: %v", err)
@@ -124,7 +124,7 @@ func TestEnsure_Missing_PipelineRuns_AndPrimes(t *testing.T) {
 			return processor.SessionStatusProcessed, built, nil
 		},
 	}
-	sup := NewSupervisor(fp, loader)
+	sup := NewSupervisor(fp, loader, context.Background())
 
 	if err := sup.Ensure(context.Background(), info); err != nil {
 		t.Fatalf("Ensure: %v", err)
@@ -170,7 +170,7 @@ func TestEnsure_LoaderTransientError_Propagates(t *testing.T) {
 	}
 
 	fp := &fakePipeline{}
-	sup := NewSupervisor(fp, loader)
+	sup := NewSupervisor(fp, loader, context.Background())
 
 	err = sup.Ensure(context.Background(), info)
 	if err == nil {
@@ -202,7 +202,7 @@ func TestEnsure_ConcurrentCallers_PipelineOnce(t *testing.T) {
 			return processor.SessionStatusProcessed, &snapshot.SessionSnapshot{SessionKey: "coalesced"}, nil
 		},
 	}
-	sup := NewSupervisor(fp, loader)
+	sup := NewSupervisor(fp, loader, context.Background())
 
 	const n = 10
 	var wg sync.WaitGroup
@@ -250,7 +250,7 @@ func TestEnsure_ContextCanceled_ReleasesFollower(t *testing.T) {
 			return processor.SessionStatusProcessed, &snapshot.SessionSnapshot{SessionKey: "eventual"}, nil
 		},
 	}
-	sup := NewSupervisor(fp, loader)
+	sup := NewSupervisor(fp, loader, context.Background())
 
 	// Fire the winner in a background goroutine with its own
 	// (not-to-be-canceled) ctx so the singleflight group stays alive.
@@ -293,7 +293,7 @@ func TestEnsure_Live_ReturnsOK_NoSnapshot(t *testing.T) {
 			return processor.SessionStatusLive, nil, nil
 		},
 	}
-	sup := NewSupervisor(fp, loader)
+	sup := NewSupervisor(fp, loader, context.Background())
 
 	if err := sup.Ensure(context.Background(), info); err != nil {
 		t.Fatalf("Ensure: %v", err)
@@ -316,7 +316,7 @@ func TestEnsure_PipelineError_Propagates(t *testing.T) {
 			return processor.SessionStatusK8sProbeErr, nil, boom
 		},
 	}
-	sup := NewSupervisor(fp, loader)
+	sup := NewSupervisor(fp, loader, context.Background())
 
 	err := sup.Ensure(context.Background(), info)
 	if !errors.Is(err, boom) {
@@ -334,7 +334,7 @@ func TestEnsure_PipelineError_Propagates(t *testing.T) {
 func TestEnterClusterHandler_LiveSession_SkipsSupervisor(t *testing.T) {
 	loader, _ := newTestLoader(t)
 	fp := &fakePipeline{}
-	sup := NewSupervisor(fp, loader)
+	sup := NewSupervisor(fp, loader, context.Background())
 
 	s := newServerWithLoader(&fakeLoader{})
 	s.supervisor = sup
@@ -363,7 +363,7 @@ func TestEnterClusterHandler_DeadSession_BlocksOnSupervisor(t *testing.T) {
 			return processor.SessionStatusProcessed, built, nil
 		},
 	}
-	sup := NewSupervisor(fp, loader)
+	sup := NewSupervisor(fp, loader, context.Background())
 
 	s := newServerWithLoader(&fakeLoader{})
 	s.supervisor = sup
@@ -403,7 +403,7 @@ func TestEnterClusterHandler_SupervisorError_Returns500(t *testing.T) {
 			return processor.SessionStatusK8sProbeErr, nil, boom
 		},
 	}
-	sup := NewSupervisor(fp, loader)
+	sup := NewSupervisor(fp, loader, context.Background())
 
 	s := newServerWithLoader(&fakeLoader{})
 	s.supervisor = sup

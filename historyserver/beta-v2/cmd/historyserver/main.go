@@ -138,6 +138,13 @@ func main() {
 		logrus.Fatalf("snapshot loader: %v", err)
 	}
 
+	// ===== Server context =====
+	serverCtx, serverCancel := signal.NotifyContext(
+		context.Background(),
+		syscall.SIGINT, syscall.SIGTERM,
+	)
+	defer serverCancel()
+
 	// ===== Pipeline & Supervisor =====
 	// Pipeline's K8s client is separate from the proxy-resolver client
 	// below. Both are lightweight read-only clients; building two (vs.
@@ -151,7 +158,7 @@ func main() {
 	// rayRootDir is passed so writeSnapshot prepends it when generating S3
 	// keys, matching what the reader's GetContent auto-prepends on read.
 	pipeline := processor.NewPipeline(reader, writer, pipelineK8s, rayRootDir)
-	supervisor := server.NewSupervisor(pipeline, loader)
+	supervisor := server.NewSupervisor(pipeline, loader, serverCtx)
 
 	// ===== Server =====
 	srv := server.NewServer(loader, supervisor, reader, cm, dashboardDir, useKubernetesProxy)
@@ -179,12 +186,10 @@ func main() {
 	srv.SetHTTPClient(httpClient)
 
 	// ===== Signals + run =====
-	sigCh := make(chan os.Signal, 1)
 	stop := make(chan struct{})
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
-		<-sigCh
-		logrus.Info("shutdown signal received")
+		<-serverCtx.Done()
+		logrus.Info("History server received shutdown signal, initiating graceful shutdown...")
 		close(stop)
 	}()
 

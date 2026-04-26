@@ -12,7 +12,8 @@
 //   - historyserver/beta_poc.md §1 idempotency layers (LRU -> S3 -> Pipeline)
 //   - historyserver/beta_poc.md §6 singleflight wrapper
 //   - historyserver/beta_poc.md §8 risk #1 (ctx.Err between steps)
-//   - historyserver/beta_poc.md §8 risk #2 (follower ctx cancel via DoChan)
+//   - historyserver/beta_poc.md §8 risk #2 (resolved: closure uses serverCtx
+//     to decouple shared work from any single caller's lifecycle)
 package server
 
 import (
@@ -61,13 +62,15 @@ type Supervisor struct {
 	// uses the same "{name}_{namespace}/{session}" shape the LRU uses for
 	// cache lookups, so reasoning about dedup and cache keys stays in
 	// lockstep.
-	sf singleflight.Group
+	sf        singleflight.Group
+	serverCtx context.Context
 }
 
-// NewSupervisor wires a Supervisor. Both arguments must be non-nil; passing
-// nil is treated as a programmer error and will panic on first Ensure.
-func NewSupervisor(p sessionPipeline, l *SnapshotLoader) *Supervisor {
-	return &Supervisor{pipeline: p, loader: l}
+// NewSupervisor wires a Supervisor. All three arguments must be non-nil; passing
+// nil for any argument is treated as a programmer error and will panic on first Ensure.
+// serverCtx is the server-lifetime context, used to cancel in-flight work during graceful shutdown.
+func NewSupervisor(p sessionPipeline, l *SnapshotLoader, serverCtx context.Context) *Supervisor {
+	return &Supervisor{pipeline: p, loader: l, serverCtx: serverCtx}
 }
 
 // Ensure blocks until a snapshot is available for (info.Name, info.Namespace,
@@ -95,9 +98,10 @@ func NewSupervisor(p sessionPipeline, l *SnapshotLoader) *Supervisor {
 //	Layer 3 (Pipeline)   — dead-detection + events + PUT + Prime.
 //
 // WHY singleflight.DoChan and not Do: Do is synchronous and ignores the
-// follower's ctx. With DoChan we wrap the wait in a select, so a follower
-// whose HTTP client hung up can return promptly while the winner keeps
-// running. See beta_poc.md §8 risk #2.
+// follower's ctx. With DoChan each caller's wait is wrapped in a select,
+// so any caller (winner OR follower) whose HTTP client hangs up can
+// return promptly. The shared closure runs under serverCtx so it is
+// not affected by ANY single caller leaving. See beta_poc.md §8 risk #2.
 func (s *Supervisor) Ensure(ctx context.Context, info utils.ClusterInfo) error {
 	// Fast pre-flight: if the caller's ctx is already dead, don't even
 	// enter singleflight. This keeps the dedup group clean in the unusual
@@ -109,8 +113,11 @@ func (s *Supervisor) Ensure(ctx context.Context, info utils.ClusterInfo) error {
 	clusterNameID := info.Name + "_" + info.Namespace
 	key := clusterNameID + "/" + info.SessionName
 
+	// TODO(jwj): Graceful drain if needed. Currently SIGTERM immediately cancels
+	// in-flight work. If 500-during-shutdown becomes a customer pain point, switch
+	// closure to a separate runCtx with grace timer.
 	ch := s.sf.DoChan(key, func() (interface{}, error) {
-		return s.runOnce(ctx, info, clusterNameID)
+		return s.runOnce(s.serverCtx, info, clusterNameID)
 	})
 
 	select {
@@ -166,10 +173,12 @@ func (s *Supervisor) runOnce(ctx context.Context, info utils.ClusterInfo, cluste
 		return nil, fmt.Errorf("loader.Load %s/%s: %w", clusterNameID, info.SessionName, err)
 	}
 
-	// Layer 3: synchronously build + PUT. Passes the winner's request ctx
-	// so that if the winner's client disconnects we stop wasting work. This
-	// also means followers whose own ctxs remain live receive whatever the
-	// winner observed — an accepted simplification (beta_poc.md §8 risk #2).
+	// Layer 3: synchronously build + PUT. Uses the server-lifetime ctx (not the
+	// winner's request ctx) so that:
+	//   - winner client disconnect does NOT propagate context.Canceled to
+	//     followers whose own connections remain healthy;
+	//   - HS graceful shutdown (SIGTERM) DOES still cancel in-flight work via
+	//     serverCtx, so we don't keep spinning during pod termination.
 	status, built, perr := s.pipeline.ProcessSession(ctx, info)
 	if perr != nil {
 		// Pipeline already labeled the failure into metrics.SessionErrors
