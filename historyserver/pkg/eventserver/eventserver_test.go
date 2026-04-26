@@ -525,6 +525,8 @@ func TestTaskLifecycleEventDeduplication(t *testing.T) {
 		},
 	}
 
+	const taskID = "AAaaFFff1234"
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			h := NewEventHandler(nil)
@@ -532,8 +534,8 @@ func TestTaskLifecycleEventDeduplication(t *testing.T) {
 			// Pre-populate existing events if any
 			if len(tt.existingEvents) > 0 {
 				taskMap := h.ClusterTaskMap.GetOrCreateTaskMap("test-cluster")
-				taskMap.CreateOrMergeAttempt("task-1", 0, func(task *types.Task) {
-					task.TaskID = "task-1"
+				taskMap.CreateOrMergeAttempt(taskID, 0, func(task *types.Task) {
+					task.TaskID = taskID
 					task.StateTransitions = tt.existingEvents
 					if len(tt.existingEvents) > 0 {
 						task.State = tt.existingEvents[len(tt.existingEvents)-1].State
@@ -542,7 +544,7 @@ func TestTaskLifecycleEventDeduplication(t *testing.T) {
 			}
 
 			// Process the lifecycle event
-			eventMap := makeLifecycleEvent("task-1", 0, tt.newTransitions)
+			eventMap := makeLifecycleEvent(taskID, 0, tt.newTransitions)
 			err := h.storeEvent(eventMap)
 			if err != nil {
 				t.Fatalf("storeEvent() unexpected error: %v", err)
@@ -553,7 +555,7 @@ func TestTaskLifecycleEventDeduplication(t *testing.T) {
 			taskMap.Lock()
 			defer taskMap.Unlock()
 
-			tasks, exists := taskMap.TaskMap["task-1"]
+			tasks, exists := taskMap.TaskMap[taskID]
 			if !exists || len(tasks) == 0 {
 				t.Fatal("Task not found after processing")
 			}
@@ -897,11 +899,14 @@ func TestMultipleReprocessingCycles(t *testing.T) {
 		map[string]any{"state": "FINISHED", "timestamp": time.Unix(0, 3000).Format(time.RFC3339Nano)},
 	}
 
+	// Use a pure hex task ID so normalizeIDToHex returns it unchanged.
+	const taskID = "AAaaFFff1234"
+
 	eventMap := map[string]any{
 		"eventType":   string(types.TASK_LIFECYCLE_EVENT),
 		"clusterName": "test-cluster",
 		"taskLifecycleEvent": map[string]any{
-			"taskId":           "task-1",
+			"taskId":           taskID,
 			"taskAttempt":      float64(0),
 			"stateTransitions": transitions,
 			"nodeId":           "node-1",
@@ -919,7 +924,7 @@ func TestMultipleReprocessingCycles(t *testing.T) {
 		// Check event count after each cycle
 		taskMap := h.ClusterTaskMap.GetOrCreateTaskMap("test-cluster")
 		taskMap.Lock()
-		tasks := taskMap.TaskMap["task-1"]
+		tasks := taskMap.TaskMap[taskID]
 		eventCount := len(tasks[0].StateTransitions)
 		taskMap.Unlock()
 
