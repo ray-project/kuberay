@@ -11,16 +11,16 @@
 //  2. backend config JSON -> reader + writer (ReaderRegistry / WriterRegistry)
 //  3. ClientManager -> used by getClusters to enumerate live RayClusters
 //  4. SnapshotLoader -> LRU over storage reader
-//  5. k8s client.Client -> used by Pipeline.isDead (same shape beta's
-//     eventprocessor built; see beta/cmd/eventprocessor/main.go:167)
-//  6. Pipeline -> (reader, writer, k8sClient, rayRootDir)
-//  7. Supervisor -> (pipeline, loader)
-//  8. Server -> (loader, supervisor, reader, cm, dashboardDir, useKubeProxy)
-//  9. productionProxyResolver -> a second controller-runtime client.Client
-//     for the live reverse proxy (ClientManager's clients field is private,
-//     so we build a separate client here and a separate one for Pipeline —
-//     cheap; both are read-only).
-//  10. signal handling -> close stop on SIGINT/SIGTERM, srv.Run(stop).
+//  5. serverCtx -> SIGINT/SIGTERM-aware ctx for Supervisor closure & shutdown
+//  6. k8s client.Client (+ *rest.Config) -> shared by Pipeline.isDead and
+//     productionProxyResolver. Built ourselves (not borrowed from
+//     ClientManager) because ClientManager's internal clients/configs are
+//     unexported and beta-v2's spec forbids modifying v1.
+//  7. Pipeline -> (reader, writer, k8sClient, rayRootDir)
+//  8. Supervisor -> (pipeline, loader, serverCtx)
+//  9. Server -> (loader, supervisor, reader, cm, dashboardDir, useKubeProxy)
+//  10. productionProxyResolver -> reuses k8sClient + cfg.Host above.
+//  11. signal handling -> bridge serverCtx.Done() to srv.Run(stop).
 package main
 
 import (
@@ -127,6 +127,8 @@ func main() {
 	}
 
 	// ===== ClientManager (for getClusters) =====
+	// v1 abstraction designed for multi-cluster federation with partial-failure
+	// tolerance (one cluster's List failure logs and continues)
 	cm, err := historyserver.NewClientManager(kubeconfigs, useKubernetesProxy)
 	if err != nil {
 		logrus.Fatalf("client manager: %v", err)
@@ -145,35 +147,29 @@ func main() {
 	)
 	defer serverCancel()
 
-	// ===== Pipeline & Supervisor =====
-	// Pipeline's K8s client is separate from the proxy-resolver client
-	// below. Both are lightweight read-only clients; building two (vs.
-	// threading one through ClientManager) is cheaper than forking v1 to
-	// expose its private fields. Same rationale beta uses for its
-	// dedicated eventprocessor client.
-	pipelineK8s, err := buildK8sClient(kubeconfigs, useKubernetesProxy)
+	// ===== K8s client (shared) =====
+	// One controller-runtime client.Client + *rest.Config is shared by
+	// both Pipeline.isDead and the production ProxyResolver.
+	k8sClient, k8sCfg, err := buildK8sClient(kubeconfigs, useKubernetesProxy)
 	if err != nil {
-		logrus.Fatalf("build pipeline k8s client: %v", err)
+		logrus.Fatalf("build k8s client: %v", err)
 	}
+
+	// ===== Pipeline & Supervisor =====
 	// rayRootDir is passed so writeSnapshot prepends it when generating S3
 	// keys, matching what the reader's GetContent auto-prepends on read.
-	pipeline := processor.NewPipeline(reader, writer, pipelineK8s, rayRootDir)
+	pipeline := processor.NewPipeline(reader, writer, k8sClient, rayRootDir)
 	supervisor := server.NewSupervisor(pipeline, loader, serverCtx)
 
 	// ===== Server =====
 	srv := server.NewServer(loader, supervisor, reader, cm, dashboardDir, useKubernetesProxy)
 
 	// ===== ProxyResolver wiring =====
-	// Build an independent controller-runtime client + capture rest.Config.Host
-	// so the production ProxyResolver can answer ResolveHead() +
-	// APIServerHost().
-	proxyClient, apiHost, err := buildProxyPrimitives(kubeconfigs, useKubernetesProxy)
-	if err != nil {
-		logrus.Fatalf("build proxy primitives: %v", err)
-	}
+	// Reuses k8sClient + cfg.Host built above. APIServerHost is empty when
+	// using in-cluster config — buildProxyTargetURL handles that fallback.
 	srv.SetProxyResolver(&productionProxyResolver{
-		k8sClient:     proxyClient,
-		apiServerHost: apiHost,
+		k8sClient:     k8sClient,
+		apiServerHost: k8sCfg.Host,
 	})
 
 	// ===== HTTP client for the reverse proxy =====
@@ -200,43 +196,14 @@ func main() {
 }
 
 // buildK8sClient constructs a controller-runtime client.Client with the
-// rayv1 scheme registered — used by Pipeline.isDead. Pattern lifted
-// verbatim from beta/cmd/eventprocessor/main.go:167.
-func buildK8sClient(kubeconfigs string, useKubeProxy bool) (client.Client, error) {
-	var cfg *rest.Config
-	var err error
-
-	switch {
-	case kubeconfigs != "":
-		cfg, err = clientcmd.BuildConfigFromFlags("", kubeconfigs)
-	case useKubeProxy:
-		loading := clientcmd.NewDefaultClientConfigLoadingRules()
-		cfg, err = clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loading, &clientcmd.ConfigOverrides{}).ClientConfig()
-	default:
-		cfg, err = rest.InClusterConfig()
-	}
-	if err != nil {
-		return nil, err
-	}
-	cfg.QPS = 50
-	cfg.Burst = 100
-
-	scheme := runtime.NewScheme()
-	utilruntime.Must(rayv1.AddToScheme(scheme))
-
-	return client.New(cfg, client.Options{Scheme: scheme})
-}
-
-// buildProxyPrimitives builds a controller-runtime client.Client and
-// returns the rest.Config.Host used for the ProxyResolver production
-// adapter. Mirrors v1 ClientManager's config-building
-// (clientmanager.go) but exposes the pieces (client + host) that the
-// proxy resolver needs.
+// rayv1 scheme registered, returning the underlying *rest.Config so callers
+// that need cfg.Host (e.g. the production ProxyResolver) can pull it without
+// rebuilding the config. Pattern lifted from beta/cmd/eventprocessor/main.go:167.
 //
-// Note: we intentionally duplicate this instead of calling ClientManager
+// Note: we intentionally build this instead of calling ClientManager
 // methods because ClientManager.clients / .configs are unexported and
 // beta-v2's spec forbids modifying v1.
-func buildProxyPrimitives(kubeconfigs string, useKubeProxy bool) (client.Client, string, error) {
+func buildK8sClient(kubeconfigs string, useKubeProxy bool) (client.Client, *rest.Config, error) {
 	var cfg *rest.Config
 	var err error
 
@@ -250,7 +217,7 @@ func buildProxyPrimitives(kubeconfigs string, useKubeProxy bool) (client.Client,
 		cfg, err = rest.InClusterConfig()
 	}
 	if err != nil {
-		return nil, "", err
+		return nil, nil, err
 	}
 	cfg.QPS = 50
 	cfg.Burst = 100
@@ -259,9 +226,9 @@ func buildProxyPrimitives(kubeconfigs string, useKubeProxy bool) (client.Client,
 	utilruntime.Must(rayv1.AddToScheme(scheme))
 	c, err := client.New(cfg, client.Options{Scheme: scheme})
 	if err != nil {
-		return nil, "", err
+		return nil, nil, err
 	}
-	return c, cfg.Host, nil
+	return c, cfg, nil
 }
 
 // productionProxyResolver implements server.ProxyResolver by querying K8s
