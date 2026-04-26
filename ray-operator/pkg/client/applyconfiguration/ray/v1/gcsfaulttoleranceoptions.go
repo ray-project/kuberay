@@ -5,7 +5,12 @@ package v1
 // GcsFaultToleranceOptionsApplyConfiguration represents a declarative configuration of the GcsFaultToleranceOptions type for use
 // with apply.
 //
-// GcsFaultToleranceOptions contains configs for GCS FT
+// GcsFaultToleranceOptions contains configs for GCS FT.
+//
+// The Redis cleanup Job created on RayCluster deletion defaults to 200m CPU and 256Mi memory.
+// To override these defaults (e.g. on GKE Autopilot), set the following annotations on the RayCluster:
+// - ray.io/gcs-ft-redis-cleanup-job-cpu-resource: CPU request/limit (e.g. "500m")
+// - ray.io/gcs-ft-redis-cleanup-job-memory-resource: memory request/limit (e.g. "512Mi")
 type GcsFaultToleranceOptionsApplyConfiguration struct {
 	RedisUsername            *RedisCredentialApplyConfiguration `json:"redisUsername,omitempty"`
 	RedisPassword            *RedisCredentialApplyConfiguration `json:"redisPassword,omitempty"`

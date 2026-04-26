@@ -1,12 +1,15 @@
 package e2e
 
 import (
+	"maps"
 	"testing"
 	"time"
 
 	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/require"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
 
@@ -357,6 +360,98 @@ func TestGcsFaultToleranceAnnotations(t *testing.T) {
 
 			err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Delete(test.Ctx(), rayCluster.Name, metav1.DeleteOptions{})
 			g.Expect(err).NotTo(HaveOccurred())
+		})
+	}
+}
+
+func TestRedisCleanupJobCustomResources(t *testing.T) {
+	tests := []struct {
+		name        string
+		annotations map[string]string
+		expectedCPU string
+		expectedMem string
+	}{
+		{
+			name:        "Default resources when no annotations set",
+			annotations: map[string]string{},
+			expectedCPU: "200m",
+			expectedMem: "256Mi",
+		},
+		{
+			name: "Custom resources via annotations",
+			annotations: map[string]string{
+				utils.RayGCSFTRedisCleanupJobCPUAnnotationKey:    "500m",
+				utils.RayGCSFTRedisCleanupJobMemoryAnnotationKey: "512Mi",
+			},
+			expectedCPU: "500m",
+			expectedMem: "512Mi",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			test := With(t)
+			g := NewWithT(t)
+			namespace := test.NewTestNamespace()
+
+			DeployRedis(test, namespace.Name, "")
+
+			// Build annotations map: always include ft-enabled, merge test-specific annotations
+			annotations := map[string]string{
+				utils.RayFTEnabledAnnotationKey: "true",
+			}
+			maps.Copy(annotations, tc.annotations)
+
+			rayClusterAC := rayv1ac.RayCluster("raycluster-cleanup-res", namespace.Name).
+				WithAnnotations(annotations).
+				WithSpec(
+					RayClusterSpecWith(
+						rayv1ac.RayClusterSpec().
+							WithRayVersion(GetRayVersion()).
+							WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
+								WithRayStartParams(map[string]string{"dashboard-host": "0.0.0.0"}).
+								WithTemplate(HeadPodTemplateApplyConfiguration())),
+					),
+				)
+
+			rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
+			g.Expect(err).NotTo(HaveOccurred())
+			LogWithTimestamp(test.T(), "Created RayCluster %s/%s successfully", rayCluster.Namespace, rayCluster.Name)
+
+			// Wait for the cluster to become ready
+			LogWithTimestamp(test.T(), "Waiting for RayCluster %s/%s to become ready", rayCluster.Namespace, rayCluster.Name)
+			g.Eventually(RayCluster(test, namespace.Name, rayCluster.Name), TestTimeoutMedium).
+				Should(WithTransform(StatusCondition(rayv1.RayClusterProvisioned), MatchCondition(metav1.ConditionTrue, rayv1.AllPodRunningAndReadyFirstTime)))
+
+			// Delete the RayCluster to trigger the Redis cleanup Job
+			LogWithTimestamp(test.T(), "Deleting RayCluster to trigger Redis cleanup Job")
+			err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Delete(test.Ctx(), rayCluster.Name, metav1.DeleteOptions{})
+			g.Expect(err).NotTo(HaveOccurred())
+
+			// Wait for the Redis cleanup Job to appear
+			LogWithTimestamp(test.T(), "Waiting for Redis cleanup Job to be created")
+			var cleanupJob *batchv1.Job
+			g.Eventually(func() (bool, error) {
+				jobs, err := test.Client().Core().BatchV1().Jobs(namespace.Name).List(test.Ctx(), metav1.ListOptions{})
+				if err != nil {
+					return false, err
+				}
+				for i := range jobs.Items {
+					if jobs.Items[i].Name == rayCluster.Name+"-redis-cleanup" {
+						cleanupJob = &jobs.Items[i]
+						return true, nil
+					}
+				}
+				return false, nil
+			}, TestTimeoutMedium).Should(BeTrue(), "Redis cleanup Job should be created")
+
+			// Verify the cleanup Job container resources
+			container := cleanupJob.Spec.Template.Spec.Containers[utils.RayContainerIndex]
+			LogWithTimestamp(test.T(), "Verifying Redis cleanup Job resources: expecting CPU=%s, Memory=%s", tc.expectedCPU, tc.expectedMem)
+			g.Expect(container.Resources.Requests[corev1.ResourceCPU]).To(Equal(resource.MustParse(tc.expectedCPU)))
+			g.Expect(container.Resources.Requests[corev1.ResourceMemory]).To(Equal(resource.MustParse(tc.expectedMem)))
+			g.Expect(container.Resources.Limits[corev1.ResourceCPU]).To(Equal(resource.MustParse(tc.expectedCPU)))
+			g.Expect(container.Resources.Limits[corev1.ResourceMemory]).To(Equal(resource.MustParse(tc.expectedMem)))
 		})
 	}
 }
