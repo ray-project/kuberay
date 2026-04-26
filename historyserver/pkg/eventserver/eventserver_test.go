@@ -685,6 +685,8 @@ func TestActorLifecycleEventDeduplication(t *testing.T) {
 		},
 	}
 
+	const actorID = "AAaaFFff1234"
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			h := NewEventHandler(nil)
@@ -692,8 +694,8 @@ func TestActorLifecycleEventDeduplication(t *testing.T) {
 			// Pre-populate existing events
 			if len(tt.existingEvents) > 0 {
 				actorMap := h.ClusterActorMap.GetOrCreateActorMap("test-cluster")
-				actorMap.CreateOrMergeActor("actor-1", func(a *types.Actor) {
-					a.ActorID = "actor-1"
+				actorMap.CreateOrMergeActor(actorID, func(a *types.Actor) {
+					a.ActorID = actorID
 					a.Events = tt.existingEvents
 					if len(tt.existingEvents) > 0 {
 						a.State = tt.existingEvents[len(tt.existingEvents)-1].State
@@ -702,14 +704,14 @@ func TestActorLifecycleEventDeduplication(t *testing.T) {
 			}
 
 			// Process the lifecycle event
-			eventMap := makeActorLifecycleEvent("actor-1", tt.newTransitions)
+			eventMap := makeActorLifecycleEvent(actorID, tt.newTransitions)
 			err := h.storeEvent(eventMap)
 			if err != nil {
 				t.Fatalf("storeEvent() unexpected error: %v", err)
 			}
 
 			// Get the actor and verify
-			actor, found := h.GetActorByID("test-cluster", "actor-1")
+			actor, found := h.GetActorByID("test-cluster", actorID)
 			if !found {
 				t.Fatal("Actor not found after processing")
 			}
