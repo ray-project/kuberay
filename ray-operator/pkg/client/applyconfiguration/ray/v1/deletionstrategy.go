@@ -18,18 +18,9 @@ package v1
 // - Feature gate RayJobDeletionPolicy must be enabled when this block is present.
 //
 // Validation:
-// - CRD XValidations prevent mixing legacy fields with deletionRules and enforce legacy completeness.
 // - Controller logic enforces rules vs shutdown exclusivity and TTL constraints.
-// - onSuccess/onFailure are deprecated; migration to deletionRules is encouraged.
+// - Users should use deletionRules for deletion control.
 type DeletionStrategyApplyConfiguration struct {
-	// OnSuccess is the deletion policy for a successful RayJob.
-	// Deprecated: Use `deletionRules` instead for more flexible, multi-stage deletion strategies.
-	// This field will be removed in release 1.6.0.
-	OnSuccess *DeletionPolicyApplyConfiguration `json:"onSuccess,omitempty"`
-	// OnFailure is the deletion policy for a failed RayJob.
-	// Deprecated: Use `deletionRules` instead for more flexible, multi-stage deletion strategies.
-	// This field will be removed in release 1.6.0.
-	OnFailure *DeletionPolicyApplyConfiguration `json:"onFailure,omitempty"`
 	// DeletionRules is a list of deletion rules, processed based on their trigger conditions.
 	// While the rules can be used to define a sequence, if multiple rules are overdue (e.g., due to controller downtime),
 	// the most impactful rule (e.g., DeleteSelf) will be executed first to prioritize resource cleanup.
@@ -40,22 +31,6 @@ type DeletionStrategyApplyConfiguration struct {
 // apply.
 func DeletionStrategy() *DeletionStrategyApplyConfiguration {
 	return &DeletionStrategyApplyConfiguration{}
-}
-
-// WithOnSuccess sets the OnSuccess field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the OnSuccess field is set to the value of the last call.
-func (b *DeletionStrategyApplyConfiguration) WithOnSuccess(value *DeletionPolicyApplyConfiguration) *DeletionStrategyApplyConfiguration {
-	b.OnSuccess = value
-	return b
-}
-
-// WithOnFailure sets the OnFailure field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the OnFailure field is set to the value of the last call.
-func (b *DeletionStrategyApplyConfiguration) WithOnFailure(value *DeletionPolicyApplyConfiguration) *DeletionStrategyApplyConfiguration {
-	b.OnFailure = value
-	return b
 }
 
 // WithDeletionRules adds the given value to the DeletionRules field in the declarative configuration
