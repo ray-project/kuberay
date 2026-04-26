@@ -380,8 +380,8 @@ func TestRedisCleanupJobCustomResources(t *testing.T) {
 		{
 			name: "Custom resources via annotations",
 			annotations: map[string]string{
-				utils.RayGCSFTRedisCleanupJobCPURequestAnnotationKey:    "500m",
-				utils.RayGCSFTRedisCleanupJobMemoryRequestAnnotationKey: "512Mi",
+				utils.RayGCSFTRedisCleanupJobCPUAnnotationKey:    "500m",
+				utils.RayGCSFTRedisCleanupJobMemoryAnnotationKey: "512Mi",
 			},
 			expectedCPU: "500m",
 			expectedMem: "512Mi",

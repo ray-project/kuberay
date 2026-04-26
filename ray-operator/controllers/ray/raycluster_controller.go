@@ -1484,18 +1484,18 @@ func (r *RayClusterReconciler) buildRedisCleanupJob(ctx context.Context, instanc
 	defaultMemory := resource.MustParse("256Mi")
 
 	cpuQuantity := defaultCPU
-	if cpuStr, ok := instance.Annotations[utils.RayGCSFTRedisCleanupJobCPURequestAnnotationKey]; ok {
+	if cpuStr, ok := instance.Annotations[utils.RayGCSFTRedisCleanupJobCPUAnnotationKey]; ok {
 		if parsed, err := resource.ParseQuantity(cpuStr); err != nil {
-			logger.Error(err, "Invalid annotation value, using default", "annotation", utils.RayGCSFTRedisCleanupJobCPURequestAnnotationKey, "value", cpuStr, "default", defaultCPU.String())
+			logger.Error(err, "Invalid annotation value, using default", "annotation", utils.RayGCSFTRedisCleanupJobCPUAnnotationKey, "value", cpuStr, "default", defaultCPU.String())
 		} else {
 			cpuQuantity = parsed
 		}
 	}
 
 	memQuantity := defaultMemory
-	if memStr, ok := instance.Annotations[utils.RayGCSFTRedisCleanupJobMemoryRequestAnnotationKey]; ok {
+	if memStr, ok := instance.Annotations[utils.RayGCSFTRedisCleanupJobMemoryAnnotationKey]; ok {
 		if parsed, err := resource.ParseQuantity(memStr); err != nil {
-			logger.Error(err, "Invalid annotation value, using default", "annotation", utils.RayGCSFTRedisCleanupJobMemoryRequestAnnotationKey, "value", memStr, "default", defaultMemory.String())
+			logger.Error(err, "Invalid annotation value, using default", "annotation", utils.RayGCSFTRedisCleanupJobMemoryAnnotationKey, "value", memStr, "default", defaultMemory.String())
 		} else {
 			memQuantity = parsed
 		}

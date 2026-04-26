@@ -2936,10 +2936,10 @@ func Test_RedisCleanupCustomResources(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			cluster := gcsFTEnabledCluster.DeepCopy()
 			if tc.setCPU {
-				cluster.Annotations[utils.RayGCSFTRedisCleanupJobCPURequestAnnotationKey] = tc.cpuAnnotation
+				cluster.Annotations[utils.RayGCSFTRedisCleanupJobCPUAnnotationKey] = tc.cpuAnnotation
 			}
 			if tc.setMem {
-				cluster.Annotations[utils.RayGCSFTRedisCleanupJobMemoryRequestAnnotationKey] = tc.memAnnotation
+				cluster.Annotations[utils.RayGCSFTRedisCleanupJobMemoryAnnotationKey] = tc.memAnnotation
 			}
 
 			ctx := context.Background()

@@ -110,8 +110,8 @@ type AuthOptions struct {
 //
 // The Redis cleanup Job created on RayCluster deletion defaults to 200m CPU and 256Mi memory.
 // To override these defaults (e.g. on GKE Autopilot), set the following annotations on the RayCluster:
-//   - ray.io/gcs-ft-redis-cleanup-job-cpu-requests: CPU request/limit (e.g. "500m")
-//   - ray.io/gcs-ft-redis-cleanup-job-memory-requests: memory request/limit (e.g. "512Mi")
+//   - ray.io/gcs-ft-redis-cleanup-job-cpu-resource: CPU request/limit (e.g. "500m")
+//   - ray.io/gcs-ft-redis-cleanup-job-memory-resource: memory request/limit (e.g. "512Mi")
 type GcsFaultToleranceOptions struct {
 	// +optional
 	RedisUsername *RedisCredential `json:"redisUsername,omitempty"`
