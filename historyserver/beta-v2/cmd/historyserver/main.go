@@ -63,10 +63,7 @@ const httpClientTimeout = 60 * time.Second
 
 func main() {
 	// ===== Flags =====
-	// Mirror beta's historyserver flags (beta/cmd/historyserver/main.go) and
-	// absorb the eventprocessor-only flag beta-v2 still needs: rayRootDir is
-	// now used by the Pipeline's writeSnapshot (it was the eventprocessor's
-	// sole job in beta).
+	// Mirrors beta HS flags + rayRootDir (now used by Pipeline.writeSnapshot).
 	var (
 		runtimeClassName       string
 		rayRootDir             string
@@ -173,11 +170,8 @@ func main() {
 	})
 
 	// ===== HTTP client for the reverse proxy =====
-	// PoC uses a plain http.Client. For useKubernetesProxy=true we would
-	// ideally wrap with a kube-aware RoundTripper so buildProxyTargetURL's
-	// "/api/v1/namespaces/.../services/.../proxy" path authenticates against
-	// kube-apiserver. That wiring is deferred — see v1 NewServerHandler for
-	// the reference implementation.
+	// PoC uses a plain http.Client; useKubernetesProxy=true ideally needs a
+	// kube-aware RoundTripper (deferred — see v1 NewServerHandler).
 	httpClient := &http.Client{Timeout: httpClientTimeout}
 	srv.SetHTTPClient(httpClient)
 

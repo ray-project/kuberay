@@ -78,30 +78,14 @@ func NewSupervisor(p sessionPipeline, l *SnapshotLoader, serverCtx context.Conte
 // for the same session are coalesced via singleflight.
 //
 // Return contract:
-//   - nil                   -> caller may proceed; the snapshot is either
-//     cached or was just written (live sessions
-//     also return nil — no snapshot is needed).
-//   - ctx.Err() (canceled)  -> the CALLER's ctx was canceled while waiting.
-//     The winner goroutine keeps running; a future
-//     request will benefit from its result.
-//   - other error           -> bubble to HTTP 500.
+//   - nil                   - caller may proceed (cached, just-written, or live).
+//   - ctx.Err() (canceled)  - caller's ctx died while waiting; Pipeline keeps running.
+//   - other error           - bubble to HTTP 500.
 //
-// Three-layer resolution inside the singleflight closure:
-//
-//	Layer 1 (LRU hit)    — loader.Load returns the cached pointer in O(1).
-//	Layer 2 (S3 GET)     — loader.Load falls through to reader.GetContent;
-//	                       on ErrSnapshotNotFound we proceed to Layer 3. On
-//	                       any OTHER error we CONSERVATIVELY return the
-//	                       error without running Pipeline — a transient S3
-//	                       outage should not trigger a needless K8s probe
-//	                       + event-parse storm (see beta_poc.md Q1 answer).
-//	Layer 3 (Pipeline)   — dead-detection + events + PUT + Prime.
-//
-// WHY singleflight.DoChan and not Do: Do is synchronous and ignores the
-// follower's ctx. With DoChan each caller's wait is wrapped in a select,
-// so any caller (winner OR follower) whose HTTP client hangs up can
-// return promptly. The shared closure runs under serverCtx so it is
-// not affected by ANY single caller leaving. See beta_poc.md §8 risk #2.
+// WHY DoChan over Do: each caller's wait is in a select, so any caller
+// (winner or follower) whose HTTP client hangs up returns promptly. The
+// shared closure runs under serverCtx, so a single caller leaving doesn't
+// kill the work. See beta_poc.md §8 risk #2.
 func (s *Supervisor) Ensure(ctx context.Context, info utils.ClusterInfo) error {
 	// Fast pre-flight: if the caller's ctx is already dead, don't even
 	// enter singleflight. This keeps the dedup group clean in the unusual
@@ -144,24 +128,13 @@ func (s *Supervisor) Ensure(ctx context.Context, info utils.ClusterInfo) error {
 	}
 }
 
-// runOnce is the body the singleflight winner executes. Returning a non-nil
-// interface{} is pointless (callers discard it) so we always return
-// (nil, err) — the Prime side-effect is what matters.
-//
-// This is split out from Ensure mainly for readability: the Do closure would
-// otherwise be ~40 lines of nested logic inside a select block.
+// runOnce is the singleflight winner's body, which always returns (nil, err).
+// The Prime side-effect is what matters for callers.
 func (s *Supervisor) runOnce(ctx context.Context, info utils.ClusterInfo, clusterNameID string) (interface{}, error) {
 	// Layer 1 + 2: LRU then S3 GET (both hidden inside loader.Load).
+	// Load already primes the LRU on success; no re-Prime needed here.
 	snap, err := s.loader.Load(clusterNameID, info.SessionName)
 	if err == nil {
-		// Snapshot already persisted (either this process cached it, or a
-		// sibling replica PUT it earlier). Ensure the loader cache holds
-		// it for subsequent same-process calls.
-		//
-		// NOTE: Load already inserts into the LRU on miss+success, so this
-		// is already correct — we deliberately do NOT re-Prime here to
-		// keep the fast path metric-free (a CacheHit is just as cheap as
-		// a Prime+Load pair).
 		_ = snap
 		return nil, nil
 	}

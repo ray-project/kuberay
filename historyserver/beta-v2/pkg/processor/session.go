@@ -4,12 +4,8 @@
 // if dead and not already snapshotted — its raw events are parsed into a
 // SessionSnapshot and persisted to object storage.
 //
-// Relative to beta (ticker mode), beta-v2 drops the standalone Processor
-// loop: Pipeline.ProcessSession is driven on-demand by the HTTP Supervisor
-// (pkg/server/enter_cluster.go) when a user visits /enter_cluster on a dead
-// session. The per-session body is otherwise unchanged — same state machine,
-// same skip-if-exists write, same K8s dead-detection. See beta_poc.md §1/§2
-// for the lazy-mode sequence diagram.
+// Pipeline.ProcessSession is driven on-demand by the HTTP Supervisor
+// (pkg/server/enter_cluster.go) when /enter_cluster hits a dead session.
 //
 // Design references:
 //   - historyserver/beta_poc.md §4 (exported ProcessSession signature)
@@ -42,13 +38,10 @@ import (
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
-// SessionStatus is the outcome classification returned by ProcessSession. The
-// Supervisor consumes this to drive per-status metric labels (see
-// enter_cluster.go) without peeking into error strings. Callers should treat
-// "error" and "not processed this call" as independent concerns: every
-// non-Live / non-AlreadySnapped / non-Processed status pairs with a non-nil
-// error, and vice-versa the three terminal success states always return nil
-// error.
+// SessionStatus is ProcessSession's outcome classification. Supervisor
+// uses it for per-status metric labels. Success statuses (Live /
+// AlreadySnapped / Processed) always return nil error; all others pair
+// with a non-nil error.
 type SessionStatus int
 
 const (
@@ -72,25 +65,16 @@ const (
 	// /enter_cluster call re-drives the pipeline; skip-if-exists still permits
 	// the write since a failed PUT leaves no object behind.
 	SessionStatusSnapshotWriteErr
-	// SessionStatusCanceled — ctx was canceled mid-pipeline (e.g. HTTP client
-	// disconnected or Supervisor followers hung up while waiting on the
-	// singleflight winner). WHY a dedicated status: lazy mode is request-
-	// driven, so client cancellation is both common and benign — operators
-	// should NOT be paged for it. Having a distinct status keeps it out of the
-	// "real failure" stage labels (k8s_probe / events / snapshot_write) that
-	// feed the SessionErrors alerting signal.
+	// SessionStatusCanceled — ctx was canceled mid-pipeline (client
+	// disconnect or shutdown). Separated from the *Err statuses so it stays
+	// out of the SessionErrors alerting signal — client cancellation in
+	// lazy mode is benign, not pageable.
 	SessionStatusCanceled
 )
 
-// Pipeline processes a single Ray session end-to-end: dead detection,
-// skip-if-exists, event parsing, snapshot write.
-//
-// A Pipeline is stateless across sessions; it is safe to share one instance
-// across many ProcessSession calls (concurrently or serially). All mutable
-// state lives in per-call EventHandler instances that do not escape
-// ProcessSession. In beta-v2 the Supervisor serializes concurrent callers
-// for the same session via singleflight, but Pipeline itself makes no such
-// assumption — parallel calls for distinct sessions are always safe.
+// Pipeline processes a single Ray session end-to-end:
+// dead detection, skip-if-exists, event parsing, snapshot write.
+// It is stateless across sessions and safe for concurrent use.
 type Pipeline struct {
 	reader    storage.StorageReader
 	writer    storage.StorageWriter
@@ -104,11 +88,8 @@ type Pipeline struct {
 	rootDir string
 }
 
-// NewPipeline constructs a Pipeline. Any of the three collaborators must be
-// non-nil; nil inputs are treated as programmer errors and will panic on first
-// use rather than silently skipping sessions. rootDir is the configured
-// storage prefix (same value passed to the reader/writer factory as RootDir);
-// empty string means "no prefix" which matches backends that have no rootDir.
+// NewPipeline constructs a Pipeline. The three collaborators must be
+// non-nil. rootDir is the storage prefix; empty = no prefix.
 func NewPipeline(reader storage.StorageReader, writer storage.StorageWriter, k8sClient client.Client, rootDir string) *Pipeline {
 	return &Pipeline{
 		reader:    reader,
@@ -131,15 +112,11 @@ func NewPipeline(reader storage.StorageReader, writer storage.StorageWriter, k8s
 //   - (Canceled,        nil,  ctx.Err()): ctx was canceled between steps
 //     (e.g. HTTP client disconnected).
 //
-// WHY ctx.Err() checks between steps and not a context-aware storage layer:
-// v1 StorageReader / StorageWriter / EventHandler.ProcessSingleSession do
-// NOT take context. Instead of forcing a v1 API change we poll ctx at each
-// pipeline boundary. Granularity is coarse (one step ≈ a few seconds), which
-// is fine for lazy mode's goal of releasing the HTTP goroutine promptly when
-// the client disconnects. See beta_poc.md §8 risk #1.
+// ctx is polled at each step boundary (v1 storage layer is not context-aware).
+// Granularity is coarse — fine for lazy mode's goal of releasing the HTTP goroutine
+// on client disconnect. See beta_poc.md §8 risk #1.
 //
-// Wall time is always recorded to metrics.SessionDuration regardless of
-// outcome — a stuck session with a slow K8s probe is still signal.
+// Wall time is always recorded to metrics.SessionDuration regardless of outcome.
 func (p *Pipeline) ProcessSession(ctx context.Context, session utils.ClusterInfo) (SessionStatus, *snapshot.SessionSnapshot, error) {
 	start := time.Now()
 	defer func() { metrics.SessionDuration.Observe(time.Since(start).Seconds()) }()
@@ -183,16 +160,11 @@ func (p *Pipeline) ProcessSession(ctx context.Context, session utils.ClusterInfo
 		return SessionStatusAlreadySnapped, nil, nil
 	}
 
-	// Step 3: Parse raw events into an in-memory handler. We create a fresh
-	// EventHandler per call to keep memory bounded and so that a Supervisor
-	// handling multiple sessions concurrently does not share handler state
-	// across them.
+	// Step 3: Parse raw events into a fresh per-call EventHandler so a Supervisor
+	// handling multiple sessions concurrently does not share handler state across them.
 	//
-	// NOTE: eventserver.EventHandler.ProcessSingleSession does NOT accept a
-	// context; once we call it, ctx cancellation cannot interrupt the read
-	// loop mid-file. We accept this granularity — a single session's event
-	// files are bounded in size, so worst case the goroutine drains within
-	// a few seconds after the client disconnects.
+	// ProcessSingleSession does not accept ctx, so cancellation cannot interrupt mid-file
+	// This is accepted because a single session's event files are bounded in size.
 	if err := ctx.Err(); err != nil {
 		return SessionStatusCanceled, nil, err
 	}
@@ -228,12 +200,10 @@ func (p *Pipeline) ProcessSession(ctx context.Context, session utils.ClusterInfo
 //   - (false, err): other error  -> state is unknown; caller must skip
 //     this session for this call and retry later.
 //
-// Why K8s API and not a collector-written marker file: collectors run in
-// every Ray pod (head + workers). Any pod SIGTERM (worker rolling update,
-// autoscaler scale-down, node drain) would write a marker and falsely mark a
-// live cluster dead. A RayCluster CR is deleted only by the operator at true
-// end-of-life, giving us an authoritative dead signal. See
-// implementation_plan.md §9 decision #5.
+// Why K8s API not a collector-written marker file: collectors run in
+// every Ray pod; any pod SIGTERM (rolling update, autoscale, drain)
+// would falsely mark a live cluster dead. The CR is deleted only at
+// true end-of-life. See implementation_plan.md §9 decision #5.
 func (p *Pipeline) isDead(ctx context.Context, session utils.ClusterInfo) (bool, error) {
 	rc := &rayv1.RayCluster{}
 	err := p.k8sClient.Get(ctx, k8stypes.NamespacedName{

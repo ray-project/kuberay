@@ -1,30 +1,19 @@
 // Package server — HTTP lifecycle and top-level handlers for the v2 beta
 // History Server.
 //
-// This file owns three concerns that belong together:
-//  1. Run(): bring up the go-restful container, start the HTTP listener, and
-//     shut it down gracefully when a stop signal arrives.
-//  2. redirectRequest(): the live-session reverse proxy that forwards requests
-//     to the Ray Dashboard on the head pod. Replaces the W6 501 stub.
-//  3. getClusters / getTimezone: two top-level handlers that do not fit the
-//     snapshot-only pattern of handlers.go. getClusters unions live clusters
-//     from ClientManager with dead clusters from StorageReader.List();
-//     getTimezone reads a polled endpoint file directly from storage.
+// This file owns three concerns:
+//  1. Run(): bring up the go-restful container, listen, and shutdown gracefully.
+//  2. redirectRequest(): live-session reverse proxy to the Ray Dashboard
+//     on the head pod.
+//  3. getClusters / getTimezone: top-level handlers that don't fit the
+//     snapshot-only pattern of handlers.go.
 //
 // Design notes:
-//   - HTTP port is hard-coded to 8080 per implementation_plan §1 (matches v1).
-//   - Shutdown uses a 10-second deadline to drain in-flight proxy requests.
-//   - The reverse proxy uses a plain http.Client (not httputil.ReverseProxy)
-//     to mirror v1 router.go:redirectRequest byte-for-byte. Using
-//     ReverseProxy would subtly change header handling (Hop-by-hop stripping,
-//     X-Forwarded-For injection) — both useful, but would diverge from v1
-//     for no user-visible win on this beta.
-//   - v1 historyserver.ClientManager has private fields (configs/clients)
-//     that redirectRequest needs. Since we are not allowed to modify v1,
-//     we avoid reaching into those private fields and instead use the
-//     exported ListRayClusters() method plus an injected ProxyResolver
-//     for head-service lookup. The ProxyResolver is nil in test paths —
-//     in that case redirectRequest returns 501 deterministically.
+//   - HTTP port 8080 (matches v1).
+//   - Shutdown bounded by 10s graceful drain.
+//   - Reverse proxy uses plain http.Client (not httputil.ReverseProxy) to
+//     match v1 byte-for-byte; ReverseProxy would change Hop-by-hop / XFF
+//     handling for no v1-parity gain.
 package server
 
 import (
@@ -76,26 +65,20 @@ type ServiceInfo struct {
 	Port        int
 }
 
-// ProxyResolver abstracts the "which head-service handles this RayCluster?"
-// question that redirectRequest must answer on every live-proxy call.
+// ProxyResolver answers "which head-service handles this RayCluster?" for
+// redirectRequest's live-proxy path. Production wires it to a
+// controller-runtime client lookup; tests leave it nil so redirectRequest
+// returns a deterministic 501.
 //
-// In production this is wired to a controller-runtime client lookup (same
-// query v1 getClusterSvcInfo performs). In tests the field stays nil — which
-// makes redirectRequest return 501, a deterministic observable.
-//
-// This indirection exists because v1 historyserver.ClientManager hides its
-// controller-runtime clients behind private fields, and W8's spec forbids
-// modifying v1 code. The wiring code that constructs a real ProxyResolver
-// lives in main (Wave 4) and passes it in via SetProxyResolver.
+// Indirected because v1 ClientManager hides its clients behind private
+// fields; concrete wiring lives in main via SetProxyResolver.
 type ProxyResolver interface {
-	// ResolveHead returns the head-service information for (namespace, name)
-	// or an error if the cluster does not exist / its head service is not
-	// yet ready.
+	// ResolveHead returns head-service info for (namespace, name), or an
+	// error if the cluster is missing or its head service is not ready.
 	ResolveHead(ctx context.Context, namespace, name string) (ServiceInfo, error)
 
-	// APIServerHost returns the base URL to route through when useKubeProxy
-	// is true (e.g. "https://kubernetes.default.svc"). Returning empty string
-	// signals "no kube-apiserver proxy available — use in-cluster DNS".
+	// APIServerHost returns the base URL for useKubeProxy=true mode.
+	// Empty string = "no kube-apiserver proxy; use in-cluster DNS".
 	APIServerHost() string
 }
 
@@ -108,10 +91,8 @@ func (s *Server) SetProxyResolver(r ProxyResolver) {
 // Run starts the HTTP server and blocks until stop is closed. On stop, it
 // performs a graceful shutdown bounded by gracefulShutdownTimeout.
 //
-// Matches v1 ServerHandler.Run. Differences:
-//   - Uses a scoped *restful.Container instead of restful.DefaultContainer —
-//     lets tests mount a fresh router without global state bleed.
-//   - Returns nothing; errors are logged. Callers signal shutdown via stop.
+// It uses a scoped *restful.Container (vs v1's DefaultContainer) so tests
+// can mount a fresh router without global state bleed.
 func (s *Server) Run(stop <-chan struct{}) {
 	container := restful.NewContainer()
 	s.RegisterRouter(container)
