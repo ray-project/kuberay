@@ -1,81 +1,67 @@
-# History Server v2 — beta-v2 (lazy mode, single binary)
+# History Server Beta
 
-beta-v2 is a refactor of the beta `historyserver + eventprocessor` pair
-into a single binary. Snapshots are built **on demand** the first time a
-user visits `/enter_cluster` for a dead session, rather than on a periodic
-ticker. See `../beta_poc.md` for the full design (sequence diagram,
-idempotency layers, risk analysis).
+History Server Beta is a single-binary HTTP daemon that serves Ray Dashboard-shaped API calls and drives the
+per-session snapshot pipeline on demand.
 
----
-
-## 1. Key differences from beta
-
-| Topic                  | beta                          | beta-v2                                               |
-| ---------------------- | ----------------------------- | ----------------------------------------------------- |
-| Processes              | `historyserver` + `eventprocessor` | Just `historyserver` (Pipeline lives as a goroutine) |
-| Snapshot trigger       | Ticker every 10 min            | `/enter_cluster` on dead session                      |
-| `/enter_cluster` latency on cold path | ~ms (sets cookies only) | Blocks until snapshot lands                          |
-| Concurrent dedup       | None (one-process tick loop)   | `singleflight.Group` per session                      |
-| Cache prime after PUT  | No (next handler GET pays the cost) | Yes (`SnapshotLoader.Prime`)                          |
-| Replicas               | 3 HS + 1 processor             | 3 HS, no separate processor                           |
-
----
-
-## 2. Repository layout
+## 1. Repository Layout
 
 ```sh
 beta-v2/
-├── cmd/historyserver/main.go     # single binary entrypoint
+├── cmd/historyserver/        # single-binary entrypoint
 ├── pkg/
-│   ├── server/
-│   │   ├── enter_cluster.go      # Supervisor + singleflight (new)
-│   │   ├── enter_cluster_test.go
-│   │   ├── cache.go              # SnapshotLoader + Prime (new)
-│   │   ├── router.go             # blocking /enter_cluster handler
-│   │   ├── handlers.go / server.go / …   (unchanged from beta semantically)
-│   ├── processor/session.go      # Pipeline: exported ProcessSession(ctx)
-│   ├── snapshot/                 # SessionSnapshot schema (unchanged)
-│   └── metrics/                  # enter_cluster + singleflight metrics
-├── config/                       # k8s manifests + README
-├── scripts/setup-kind-dev.sh     # one-shot kind + KubeRay + MinIO + deploy
+│   ├── processor/            # Pipeline: dead-session events → SessionSnapshot
+│   ├── snapshot/             # SessionSnapshot schema
+│   ├── server/               # HTTP handlers, Supervisor, SnapshotLoader
+│   └── metrics/              # Prometheus declarations
+├── config/                   # k8s manifests (Deployment, RBAC, MinIO, sample RayCluster)
+├── scripts/
+│   └── setup-kind-dev.sh     # one-shot kind + KubeRay + MinIO + image push + deploy
+├── docs/
+│   └── design.md             # (wip) architecture, design decisions, v1 ports, Ray refs
 ├── Dockerfile.historyserver
-└── README.md                     # you are here
+└── README.md
 ```
 
----
+## 2. Local Development
 
-## 3. Local development
+### 2.1 Unit Tests
 
-### 3.1 Unit tests
-
-Quickest inner loop. Runs under `-race`; no Docker needed.
+Run unit tests under `-race` (no Docker needed):
 
 ```sh
 cd historyserver
 make testbeta-v2
 ```
 
-or equivalently from any dir:
+or equivalently from any directory:
 
 ```sh
 go test -race -v ./historyserver/beta-v2/...
 ```
 
-What's covered:
+Coverage by package:
 
-- `beta-v2/pkg/processor/session_test.go` — Pipeline state-machine
-  branches: live/dead/already-snapped/k8s-error/ctx-canceled.
-- `beta-v2/pkg/server/cache_test.go` — LRU hit/miss/eviction +
-  `Prime` bypass / overwrite / nil guard.
-- `beta-v2/pkg/server/enter_cluster_test.go` — Supervisor three-layer
-  logic, singleflight coalescing, ctx-canceled follower release, and
-  HTTP-level `/enter_cluster` against a fake Pipeline.
-- `beta-v2/pkg/server/server_test.go` — route registration, cookie
-  writes, proxy URL shapes (unchanged from beta).
-- `beta-v2/pkg/metrics/metrics_test.go` — metric delta assertions +
-  /metrics exposition smoke test.
+```text
+pkg/snapshot          100.0%
+pkg/metrics           100.0%
+pkg/processor          71.9%
+pkg/server             43.0%
+cmd/historyserver       0.0%   (main entry; integration-only)
+```
 
-### 3.2 Build the binary
+What each test file focuses on:
+
+| File | Focus |
+|---|---|
+| `pkg/processor/session_test.go` | Pipeline state machine: Live / AlreadySnapped / Processed / EventsErr / SnapshotWriteErr / Canceled. |
+| `pkg/server/cache_test.go` | LRU hit/miss, fetch errors, `Prime` semantics + nil guard. |
+| `pkg/server/enter_cluster_test.go` | Supervisor singleflight dedup, follower ctx-cancel release, Pipeline status routing. |
+| `pkg/server/handlers_test.go` | Tasks / actor / timeline / nodelogs / cluster_metadata / cluster_status happy + error paths. |
+| `pkg/server/server_test.go` | Route registration, cookie writes, proxy URL shapes, `redirectRequest` 501 short-circuit. |
+| `pkg/snapshot/snapshot_test.go` | Schema round-trip + `SnapshotPath`. |
+| `pkg/metrics/metrics_test.go` | Counter increments + `/metrics` exposition smoke. |
+
+### 2.2 Build the Binary
 
 ```sh
 cd historyserver
@@ -83,60 +69,50 @@ make buildbeta-v2
 ./output/bin/historyserver-beta-v2 --help
 ```
 
-### 3.3 Build the image
+### 2.3 Build the Image
 
 ```sh
 cd historyserver
 make localimage-beta-v2
-# Tag/registry overrides:
-make BETA_V2_IMAGE_REGISTRY=<your-registry> BETA_V2_IMAGE_TAG=<tag> pushbeta-v2
+
+# Override tag and registry.
+make BETA_V2_IMAGE_REGISTRY=<your-registry> \
+     BETA_V2_IMAGE_TAG=<tag> \
+     pushbeta-v2
 ```
 
----
-
-## 4. End-to-end on kind (one command)
+## 3. End-to-End on Kind
 
 ```sh
 cd historyserver
 make deploybeta-v2-kind
 ```
 
-This wraps `beta-v2/scripts/setup-kind-dev.sh`, which is idempotent —
-safe to re-run. It provisions:
+This wraps `beta-v2/scripts/setup-kind-dev.sh`, which is idempotent (safe to re-run). It provisions:
 
-1. Local docker registry at `127.0.0.1:5001`.
-2. kind cluster `beta-v2-dev` with the registry mirror.
-3. KubeRay operator (default v1.6.0; beta-v2 is tested against v1.6.0+) —
-   supplies the `RayCluster` CRD. Override with
-   `KUBERAY_VERSION=<x.y.z>` when invoking the script.
-4. MinIO in namespace `minio-dev` (dev creds: `minioadmin/minioadmin`).
-5. `ray-historyserver` bucket in MinIO.
-6. Builds the beta-v2 image and pushes it to the local registry.
-7. Applies `beta-v2/config/*.yaml` with the image ref rewritten to
-   `localhost:5001/...`.
+1. Local Docker registry at `127.0.0.1:5001`
+2. kind cluster `beta-v2-dev` with the registry mirror
+3. KubeRay operator (default `v1.6.0`; override with `KUBERAY_VERSION=<x.y.z>`), supplying the `RayCluster` CRD
+4. MinIO in namespace `minio-dev` (dev creds: `minioadmin/minioadmin`)
+5. Build the beta-v2 image and push it to the local registry
+6. Apply `beta-v2/config/*.yaml` with the image ref rewritten to `localhost:5001/...`
 
----
+## 4. Smoke Tests
 
-## 5. Smoke tests on a live cluster
-
-After `make deploybeta-v2-kind` finishes, port-forward the HS Service:
+Port-forward the History Server Service:
 
 ```sh
 kubectl port-forward svc/historyserver-beta-v2 8080:30080
 ```
 
-### 5.1 Generate a dead session
+### 4.1 Generate a Dead Cluster
 
 ```sh
 # Deploy the sample RayCluster and wait for the head pod to be Ready.
-kubectl apply  -f historyserver/beta-v2/config/raycluster-sample.yaml
+kubectl apply -f historyserver/beta-v2/config/raycluster-sample.yaml
 kubectl wait pod -l ray.io/node-type=head --for=condition=Ready --timeout=180s
 
-# Submit a handful of tasks + an actor so collectors push real events to
-# S3. A deterministic workload beats `sleep 60` — it returns as soon as
-# the events are flushed, and it produces enough state (tasks, actors,
-# jobs) that the /tasks and /logical/actors handlers have something to
-# render in later steps.
+# Run a deterministic Ray workload so collectors push real tasks/actors/jobs.
 kubectl exec $(kubectl get pod -l ray.io/node-type=head -o name) \
   -c ray-head -- python -c "
 import ray
@@ -156,101 +132,88 @@ print('actor counts:', ray.get([c.inc.remote() for _ in range(3)]))
 print('done')
 "
 
-# Delete the RayCluster — the session is now "dead" (CR gone, events on S3).
+# Delete the RayCluster (a dead session).
 kubectl delete -f historyserver/beta-v2/config/raycluster-sample.yaml
 
-# Discover the session name via the historyserver's /clusters endpoint.
-# This lists BOTH live and dead cluster sessions — dead sessions carry
-# the real session_* name you'll feed into /enter_cluster below.
+# Discover the session name. /clusters lists both live and dead sessions;
+# dead sessions carry the `session_*` name you'll feed into /enter_cluster.
 curl -sS http://localhost:8080/clusters
 ```
 
-### 5.2 Time the cold path (first call — Pipeline runs synchronously)
+### 4.2 Cold Path
+
+Enter a cluster for the first time:
 
 ```sh
-# Replace <session> with the value from step 5.1.
+# Replace <session> with the value from §4.1.
 time curl -s -o /dev/null \
   http://localhost:8080/enter_cluster/default/ray-beta-sample/<session>
 ```
 
-Expect this to take seconds: K8s probe + event parse + S3 PUT.
+> [!NOTE] Pipeline runs synchronously. Expect this to take seconds: K8s probe + event parse + S3 PUT.
 
 Verify the snapshot landed in MinIO:
 
 ```sh
+# Replace <session> with the value from §4.1.
 kubectl -n minio-dev exec -it deploy/minio -- \
-    mc ls local/ray-historyserver/log/ray-beta-sample_default/<session>/processed/
+  mc ls local/ray-historyserver/log/ray-beta-sample_default/<session>/processed/
+
 # Should list session.json
 ```
 
-### 5.3 Time the warm path (second call — LRU hit)
+### 4.3 Warm Path
+
+Enter the same cluster again:
 
 ```sh
+# Replace <session> with the value from §4.1.
 time curl -s -o /dev/null \
   http://localhost:8080/enter_cluster/default/ray-beta-sample/<session>
 ```
 
-Expect < 10 ms (cache hit; no S3 round-trip; no Pipeline execution).
+> [!NOTE] Expect `< 10 ms` (LRU cache hit; no S3 round-trip; no Pipeline execution).
 
-### 5.4 Check coalescing (N parallel cold calls → one Pipeline run)
+### 4.4 Singleflight Coalescing
+
+Execute N parallel cold calls:
 
 ```sh
-# 10 parallel cold calls for a different dead session.
+# 10 parallel cold calls for another dead session.
 for i in $(seq 1 10); do
   curl -s -o /dev/null \
     http://localhost:8080/enter_cluster/default/other-cluster/<session> &
 done
 wait
 
-# Scrape the counter and confirm we deduped:
+# Confirm dedup happened (only one Pipeline runs):
 curl -s http://localhost:8080/metrics | grep singleflight_dedup_total
 # Non-zero means at least one group coalesced.
 ```
 
-### 5.5 Watch lazy-mode metrics
+### 4.5 Lazy-Mode Metrics
 
 ```sh
-curl -s http://localhost:8080/metrics | grep -E \
-  'enter_cluster|singleflight|session|cache_' \
+curl -s http://localhost:8080/metrics \
+  | grep -E 'enter_cluster|singleflight|session|cache_' \
   | grep -v '^#'
 ```
 
 Useful signals:
 
-- `server_enter_cluster_duration_seconds_*` — cold-path latency histogram.
-- `server_enter_cluster_total{status="ok"|"error"}` — success/failure rate.
-- `server_singleflight_dedup_total` — coalesced-caller count.
-- `server_cache_hits_total` / `server_cache_misses_total` — LRU ratio.
-- `processor_sessions_processed_total` — lazy Pipeline execution count.
+- `server_enter_cluster_duration_seconds_*` — cold-path latency histogram
+- `server_enter_cluster_total{status="ok"|"error"}` — success / failure rate
+- `server_singleflight_dedup_total` — coalesced-caller count
+- `server_cache_hits_total` / `server_cache_misses_total` — LRU ratio
+- `processor_sessions_processed_total` — lazy Pipeline execution count
 
-### 5.6 Tail logs
+### 4.6 Tail Logs
 
 ```sh
 kubectl logs -f -l app=historyserver-beta-v2 --tail=50
 ```
 
-You should see one `wrote snapshot for <cluster>_<ns>/<session>` line per
-first-time cold-path call and nothing else for warm-path calls.
+You should see one `wrote snapshot for <cluster>_<ns>/<session>` line per first-time cold-path call and nothing else
+for warm-path calls.
 
----
-
-## 6. Production notes
-
-- See `config/README.md` for prerequisites, credential wiring, and the
-  full apply flow.
-- Rolling updates are safe: snapshots are immutable at the S3 layer
-  (skip-if-exists guarantees it), so replicas racing to PUT the same
-  session converge to the same bytes.
-- Each replica owns an independent LRU + singleflight group — at most one
-  Pipeline run per replica per session concurrently. Cross-replica dedup
-  is a non-goal in this PoC (see `beta_poc.md` §9).
-
----
-
-## 7. Non-goals and risks
-
-See `../beta_poc.md` §8 risks and §9 non-goals. Summary:
-
-- No admin endpoint to force snapshot rebuild. Snapshots are immutable.
-- No cross-replica singleflight. Accepted: worst case = duplicate PUTs.
-- Live-cluster partial snapshots are explicitly out of scope.
+## 5. Integration with Ray Dashboard
