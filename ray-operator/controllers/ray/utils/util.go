@@ -1102,6 +1102,8 @@ func IsHTTPRouteEqual(existing, desired *gwv1.HTTPRoute) bool {
 
 // IsGatewayEqual checks if the existing Gateway matches the desired Gateway.
 // This check only compares the fields explicitly managed by the RayService controller.
+// If the controller starts managing additional Gateway fields in the future,
+// this function must be updated accordingly.
 func IsGatewayEqual(existing, desired *gwv1.Gateway) bool {
 	if existing == nil || desired == nil {
 		return existing == desired
