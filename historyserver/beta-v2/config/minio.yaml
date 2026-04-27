@@ -1,0 +1,122 @@
+# MinIO dev backend for the History Server.
+#
+# NOT for production:
+#   - Credentials are hardcoded (`minioadmin:minioadmin`); change before any non-dev use.
+#   - Storage is ephemeral (no PVC); see the commented block below.
+#   - No TLS; clients set `S3DISABLE_SSL=true`.
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: minio-dev
+---
+# 1. Secrets for MinIO server login.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: minio-creds
+  namespace: minio-dev
+type: Opaque
+stringData:
+  rootUser: minioadmin      # CHANGE THIS
+  rootPassword: minioadmin  # CHANGE THIS
+---
+# 1b. Client-side Secret consumed by the historyserver Deployment.
+#     Must live in the same namespace as the Deployment.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: historyserver-beta-v2-s3
+  namespace: default
+type: Opaque
+stringData:
+  access_key: minioadmin    # CHANGE THIS (keep in sync with minio-creds.rootUser)
+  secret_key: minioadmin    # CHANGE THIS (keep in sync with minio-creds.rootPassword)
+#---
+## 2. Storage (PVC) — uncomment for persistent MinIO data across pod restarts.
+#apiVersion: v1
+#kind: PersistentVolumeClaim
+#metadata:
+#  name: minio-pvc
+#  namespace: minio-dev
+#spec:
+#  accessModes:
+#    - ReadWriteOnce
+#  resources:
+#    requests:
+#      storage: 10Gi
+---
+# 3. Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: minio
+  namespace: minio-dev
+  labels:
+    app: minio
+spec:
+  replicas: 1
+  # Recreate (not RollingUpdate): the emptyDir volume is pod-local; two
+  # pods briefly co-existing during rollout would each hold distinct data dirs.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: minio
+  template:
+    metadata:
+      labels:
+        app: minio
+    spec:
+      containers:
+      - name: minio
+        image: minio/minio:latest
+        args: ["server", "/data", "--console-address", ":9001"]
+        env:
+        - name: MINIO_ROOT_USER
+          valueFrom:
+            secretKeyRef:
+              name: minio-creds
+              key: rootUser
+        - name: MINIO_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: minio-creds
+              key: rootPassword
+        ports:
+        - containerPort: 9000
+          name: api
+        - containerPort: 9001
+          name: console
+        volumeMounts:
+        - name: data
+          mountPath: /data
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "256Mi"
+          limits:
+            cpu: "500m"
+            memory: "1Gi"
+      volumes:
+      - name: data
+        emptyDir:
+          sizeLimit: 2Gi
+---
+# 4. Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: minio-service
+  namespace: minio-dev
+spec:
+  selector:
+    app: minio
+  ports:
+    - name: api
+      port: 9000
+      targetPort: 9000
+    - name: console
+      port: 9001
+      targetPort: 9001
+  type: ClusterIP # Change to LoadBalancer if on Cloud/MetalLB

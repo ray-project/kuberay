@@ -1,0 +1,147 @@
+# Deployment + Service + PDB for the History Server.
+#
+# replicas=1 is the dev/PoC default. Scaling up is safe: snapshots in
+# object storage are immutable via skip-if-exists; each pod owns its own
+# LRU + singleflight. K8s API access is read-only.
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: historyserver-beta-v2
+  namespace: default
+automountServiceAccountToken: true
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: historyserver-beta-v2
+  namespace: default
+  labels:
+    app: historyserver-beta-v2
+spec:
+  selector:
+    app: historyserver-beta-v2
+  ports:
+  - protocol: TCP
+    name: http
+    port: 30080
+    targetPort: 8080
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: historyserver-beta-v2
+  namespace: default
+  labels:
+    app: historyserver-beta-v2
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: historyserver-beta-v2
+  template:
+    metadata:
+      labels:
+        app: historyserver-beta-v2
+    spec:
+      serviceAccountName: historyserver-beta-v2
+      containers:
+      - name: historyserver
+        image: historyserver-beta-v2-historyserver:v0.1.0
+        imagePullPolicy: IfNotPresent
+        command:
+        - historyserver
+        - --runtime-class-name=s3
+        - --ray-root-dir=log
+        - --runtime-class-config-path=/var/collector-config/data
+        - --dashboard-dir=/dashboard
+        ports:
+        - containerPort: 8080
+          name: http
+        # Probes are served by /readz (ready when HTTP listener is up) and
+        # /livez (registered in pkg/server/router.go).
+        #
+        # /enter_cluster cold-path latency: a Pipeline run can take seconds.
+        # /livez does no snapshot work and stays responsive, so the kubelet
+        # won't restart us during slow snapshot generation.
+        livenessProbe:
+          httpGet:
+            path: /livez
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 20
+          timeoutSeconds: 3
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /readz
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 2
+          failureThreshold: 2
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 10001
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: ["ALL"]
+        # S3 credentials are marked optional so MinIO dev setups (env-sourced
+        # keys from configmap-s3.yaml) still work without a Secret present.
+        env:
+        - name: S3DISABLE_SSL
+          value: "true"
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: historyserver-beta-v2-s3
+              key: access_key
+              optional: true
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: historyserver-beta-v2-s3
+              key: secret_key
+              optional: true
+        - name: S3_BUCKET
+          value: "ray-historyserver"
+        - name: S3_ENDPOINT
+          value: "minio-service.minio-dev:9000"
+        - name: S3_REGION
+          value: "test"
+        - name: S3FORCE_PATH_STYLE
+          value: "true"
+        volumeMounts:
+        - name: collector-config
+          mountPath: /var/collector-config
+          readOnly: true
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "256Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+      volumes:
+      - name: collector-config
+        configMap:
+          name: historyserver-beta-v2-runtime-config
+---
+# PodDisruptionBudget: keeps the object in place so scaling up only requires
+# bumping minAvailable.
+#
+# minAvailable=0 because replicas=1: minAvailable=1 with one replica would
+# deadlock voluntary disruption (drain etc.). When you scale to N>1, set
+# minAvailable=N-1.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: historyserver-beta-v2
+  namespace: default
+spec:
+  minAvailable: 0
+  selector:
+    matchLabels:
+      app: historyserver-beta-v2
