@@ -1413,8 +1413,8 @@ func (r *RayServiceReconciler) checkIfNeedTargetCapacityUpdate(ctx context.Conte
 	} else if pendingTargetCapacity < 100 || pendingTrafficRoutedPercent < 100 {
 		return true, "Pending RayCluster has not finished scaling up."
 	}
-	return true, "Active RayCluster TargetCapacity has not finished scaling down."
-	// During rollback, the goal is active pendingTarget Capacity → 100, pending pendingTarget Capacity → 0.
+
+	// During rollback, the goal is activeTargetCapacity → 100, pendingTargetCapacity → 0.
 	if meta.IsStatusConditionTrue(rayServiceInstance.Status.Conditions, string(rayv1.RollbackInProgress)) {
 		if activeTargetCapacity == 100 && pendingTargetCapacity == 0 {
 			return false, "Rollback complete: all traffic has been restored to the active cluster."
@@ -1429,7 +1429,6 @@ func (r *RayServiceReconciler) checkIfNeedTargetCapacityUpdate(ctx context.Conte
 	}
 	return true, "Active RayCluster TargetCapacity has not finished scaling down."
 }
-
 
 // applyServeTargetCapacity updates the target_capacity for a given RayCluster's Serve applications.
 func (r *RayServiceReconciler) applyServeTargetCapacity(ctx context.Context, rayServiceInstance *rayv1.RayService, rayClusterInstance *rayv1.RayCluster, rayDashboardClient dashboardclient.RayDashboardClientInterface, goalTargetCapacity int32) error {
@@ -2089,17 +2088,14 @@ func (r *RayServiceReconciler) reconcileRollbackState(ctx context.Context, raySe
 	}
 
 	// Case 2: The goal spec diverges from the pending cluster.
-	// This happens if the user reverted to the original spec, or if they submitted a 3rd entirely new spec mid-upgrade.
-	// In all divergence cases, we must first safely route all traffic back to the original cluster before allowing
-// Case 2: The goal spec diverges from the pending cluster.
-// This covers two sub-cases:
-//   2.1: The user reverted to the original spec (targetHash == originalHash).
-//        The pending cluster is no longer needed, so we roll back to the active cluster.
-//   2.2: The user submitted a 3rd entirely new spec mid-upgrade (targetHash != originalHash && targetHash != pendingHash).
-//        The pending cluster doesn't match the new goal either, so we must first roll back
-//        to the active cluster, clean up the pending cluster, and then start a fresh upgrade.
-// In both sub-cases, we must safely route all traffic back to the original cluster before
-// allowing a new cluster to be spun up.
+	// This covers two sub-cases:
+	//   2.1: The user reverted to the original spec (targetHash == originalHash).
+	//        The pending cluster is no longer needed, so we roll back to the active cluster.
+	//   2.2: The user submitted a 3rd entirely new spec mid-upgrade (targetHash != originalHash && targetHash != pendingHash).
+	//        The pending cluster doesn't match the new goal either, so we must first roll back
+	//        to the active cluster, clean up the pending cluster, and then start a fresh upgrade.
+	// In both sub-cases, we must safely route all traffic back to the original cluster before
+	// allowing a new cluster to be spun up.
 	if !isRollbackInProgress {
 		logger.Info("Goal state has changed during upgrade. Initiating safe rollback to the original cluster.", "targetHash", targetHash, "originalHash", originalHash, "pendingHash", pendingHash)
 		setCondition(rayServiceInstance, rayv1.RollbackInProgress, metav1.ConditionTrue, rayv1.TargetClusterChanged, "Goal state changed mid-upgrade, rolling back to original cluster.")
