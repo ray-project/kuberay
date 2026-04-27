@@ -1,26 +1,7 @@
-// Package main is the entrypoint for the History Server v2 beta-v2 HTTP
-// daemon. beta-v2 collapses the beta "historyserver + eventprocessor" pair
-// into a single binary: the HS serves Ray Dashboard-shaped API calls AND
-// drives the per-session snapshot pipeline on demand via a Supervisor when
-// /enter_cluster hits a dead session. See historyserver/beta_poc.md §3 for
-// the motivation and §1 for the three-layer idempotency guarantee that
-// makes single-binary safe.
-//
-// Constructor tree (lazy mode):
-//  1. flags -> parsed
-//  2. backend config JSON -> reader + writer (ReaderRegistry / WriterRegistry)
-//  3. ClientManager -> used by getClusters to enumerate live RayClusters
-//  4. SnapshotLoader -> LRU over storage reader
-//  5. serverCtx -> SIGINT/SIGTERM-aware ctx for Supervisor closure & shutdown
-//  6. k8s client.Client (+ *rest.Config) -> shared by Pipeline.isDead and
-//     productionProxyResolver. Built ourselves (not borrowed from
-//     ClientManager) because ClientManager's internal clients/configs are
-//     unexported and beta-v2's spec forbids modifying v1.
-//  7. Pipeline -> (reader, writer, k8sClient, rayRootDir)
-//  8. Supervisor -> (pipeline, loader, serverCtx)
-//  9. Server -> (loader, supervisor, reader, cm, dashboardDir, useKubeProxy)
-//  10. productionProxyResolver -> reuses k8sClient + cfg.Host above.
-//  11. signal handling -> bridge serverCtx.Done() to srv.Run(stop).
+// Package main is the entrypoint for the History Server HTTP daemon.
+// It runs as a single binary that serves Ray Dashboard-shaped API calls
+// and drives the per-session snapshot pipeline on demand via a Supervisor
+// when /enter_cluster hits a dead session.
 package main
 
 import (
@@ -52,18 +33,15 @@ import (
 	"github.com/ray-project/kuberay/historyserver/pkg/historyserver"
 )
 
-// rayDashboardPort mirrors v1 getClusterSvcInfo (router.go:1820). The Ray
-// Dashboard listens on 8265 regardless of deployment; this is a Ray constant.
+// rayDashboardPort is fixed by Ray.
 const rayDashboardPort = 8265
 
-// httpClientTimeout bounds a single proxied dashboard round-trip. Matches
-// the order of v1 behavior (no explicit timeout) but we add 60s as a
-// safety net so a misbehaving upstream cannot wedge a handler forever.
+// httpClientTimeout bounds a single proxied dashboard round-trip — a safety
+// net so a misbehaving upstream cannot wedge a handler forever.
 const httpClientTimeout = 60 * time.Second
 
 func main() {
 	// ===== Flags =====
-	// Mirrors beta HS flags + rayRootDir (now used by Pipeline.writeSnapshot).
 	var (
 		runtimeClassName       string
 		rayRootDir             string
@@ -115,8 +93,7 @@ func main() {
 	if err != nil {
 		logrus.Fatalf("create reader: %v", err)
 	}
-	// Writes are global (not tied to a specific pod/session) so we populate
-	// only RootDir — same pattern beta's eventprocessor used.
+	// Writes are global (not tied to a specific pod/session) so only RootDir is set.
 	collectorCfg := &collectortypes.RayCollectorConfig{RootDir: rayRootDir}
 	writer, err := writerFactory(collectorCfg, jsonData)
 	if err != nil {
@@ -124,8 +101,6 @@ func main() {
 	}
 
 	// ===== ClientManager (for getClusters) =====
-	// v1 abstraction designed for multi-cluster federation with partial-failure
-	// tolerance (one cluster's List failure logs and continues)
 	cm, err := historyserver.NewClientManager(kubeconfigs, useKubernetesProxy)
 	if err != nil {
 		logrus.Fatalf("client manager: %v", err)
@@ -170,8 +145,7 @@ func main() {
 	})
 
 	// ===== HTTP client for the reverse proxy =====
-	// PoC uses a plain http.Client; useKubernetesProxy=true ideally needs a
-	// kube-aware RoundTripper (deferred — see v1 NewServerHandler).
+	// Plain http.Client; useKubernetesProxy=true ideally needs a kube-aware RoundTripper.
 	httpClient := &http.Client{Timeout: httpClientTimeout}
 	srv.SetHTTPClient(httpClient)
 
@@ -191,12 +165,7 @@ func main() {
 
 // buildK8sClient constructs a controller-runtime client.Client with the
 // rayv1 scheme registered, returning the underlying *rest.Config so callers
-// that need cfg.Host (e.g. the production ProxyResolver) can pull it without
-// rebuilding the config. Pattern lifted from beta/cmd/eventprocessor/main.go:167.
-//
-// Note: we intentionally build this instead of calling ClientManager
-// methods because ClientManager.clients / .configs are unexported and
-// beta-v2's spec forbids modifying v1.
+// that need cfg.Host (e.g. ProxyResolver) can reuse it.
 func buildK8sClient(kubeconfigs string, useKubeProxy bool) (client.Client, *rest.Config, error) {
 	var cfg *rest.Config
 	var err error
@@ -226,21 +195,15 @@ func buildK8sClient(kubeconfigs string, useKubeProxy bool) (client.Client, *rest
 }
 
 // productionProxyResolver implements server.ProxyResolver by querying K8s
-// for the RayCluster CR and returning its head-service info. Body is a
-// port of v1 getClusterSvcInfo (router.go:1806) adapted from
-// []client.Client to a single client, and returning the v2 server.ServiceInfo
-// shape instead of v1 historyserver.ServiceInfo.
+// for the RayCluster CR and returning its head-service info.
 type productionProxyResolver struct {
 	k8sClient     client.Client
 	apiServerHost string
 }
 
 // ResolveHead looks up the RayCluster by (namespace, name), derives the
-// head service name from Status.Head.ServiceName (set by the ray-operator),
-// and returns a ServiceInfo with the Ray Dashboard port (8265).
-//
-// Error taxonomy matches v1 verbatim so UX of the live-proxy path stays
-// identical between v1, beta, and beta-v2.
+// head service name from Status.Head.ServiceName, and returns a ServiceInfo
+// with the Ray Dashboard port.
 func (p *productionProxyResolver) ResolveHead(ctx context.Context, namespace, name string) (server.ServiceInfo, error) {
 	if p.k8sClient == nil {
 		return server.ServiceInfo{}, errors.New("No available kubernetes config found")
@@ -260,9 +223,8 @@ func (p *productionProxyResolver) ResolveHead(ctx context.Context, namespace, na
 	}, nil
 }
 
-// APIServerHost returns the kube-apiserver base URL for useKubeProxy=true
-// targetURL construction. Empty means "fall back to in-cluster DNS" — the
-// server already handles that path in buildProxyTargetURL.
+// APIServerHost returns the kube-apiserver base URL for useKubeProxy mode.
+// Empty means "fall back to in-cluster DNS".
 func (p *productionProxyResolver) APIServerHost() string {
 	return p.apiServerHost
 }

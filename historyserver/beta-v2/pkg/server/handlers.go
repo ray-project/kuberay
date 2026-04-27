@@ -1,22 +1,3 @@
-// Package server contains the HTTP layer of the History Server v2 beta.
-//
-// handlers.go wires HTTP requests to snapshot reads and reuses the formatters
-// from formatters.go to produce Ray Dashboard-compatible JSON responses.
-//
-// Handler dispatch pattern for every endpoint:
-//  1. extractCookies — fail fast with 400 if any of the three cookies is missing.
-//  2. If session_name == "live", defer to redirectRequest (live reverse proxy,
-//     implemented in server.go).
-//  3. Otherwise, loader.Load(clusterNameID, sessionName):
-//     - ErrSnapshotNotFound → 503 + Retry-After: 600 (dead session whose
-//     snapshot has not yet been written by the processor; retry in 10 min).
-//     - other error         → 500 (unexpected).
-//  4. Pull the relevant sub-map from the snapshot, apply query-param filters
-//     that v1 supports, run formatters, and write the response envelope.
-//
-// Design note: Server.loader is typed as the small snapshotLoader interface
-// rather than *SnapshotLoader so that tests can inject a fake. The concrete
-// *SnapshotLoader from cache.go satisfies the interface.
 package server
 
 import (
@@ -43,59 +24,31 @@ import (
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
-// timelineNow is the current-time source used by getTasksTimeline's download
-// filename. Pulled out as a variable so tests can freeze it — the production
-// value is time.Now and does not need to be set.
+// timelineNow is the time source for getTasksTimeline's download filename.
 var timelineNow = time.Now
 
-// Cookie keys and the live-session sentinel. Values mirror the v1
-// historyserver/pkg/historyserver/router.go constants (COOKIE_*). Keeping the
-// same names on the wire lets the Ray Dashboard frontend switch between v1
-// and v2 without cookie changes.
 const (
 	cookieClusterNameKey      = "cluster_name"
 	cookieClusterNamespaceKey = "cluster_namespace"
 	cookieSessionNameKey      = "session_name"
-	// liveSessionSentinel is the cookie value the v1 listClusters writes for
-	// live (still-running) clusters. Handlers proxy to Ray Dashboard for this
-	// value instead of reading a snapshot.
+
+	// liveSessionSentinel is the cookie value used for live (still-running)
+	// clusters. Handlers proxy to Ray Dashboard for this value instead of
+	// reading a snapshot.
 	liveSessionSentinel = "live"
 
 	// retryAfterSecondsOnMissingSnapshot is the Retry-After value (seconds)
-	// returned to clients for dead-but-unsnapped sessions. 600s matches the
-	// processor tick interval — by the next tick the snapshot is expected.
+	// returned to clients for dead-but-unsnapped sessions.
 	retryAfterSecondsOnMissingSnapshot = "600"
 )
 
-// snapshotLoader is the narrow interface the handlers depend on. *SnapshotLoader
-// (defined in cache.go) satisfies it. Tests inject fakes that track calls and
-// return ErrSnapshotNotFound without touching storage.
+// snapshotLoader is the narrow interface the handlers depend on.
+// *SnapshotLoader (cache.go) satisfies it.
 type snapshotLoader interface {
 	Load(clusterNameID, sessionName string) (*snapshot.SessionSnapshot, error)
 }
 
 // Server is the HTTP handler container for the v2 History Server.
-//
-// Fields:
-//   - loader       : narrow snapshotLoader interface — tests can inject fakes.
-//   - reader       : storage backend for endpoints that still read raw files
-//     (e.g. getTimezone reads fetched_endpoints/ directly, mirroring v1).
-//   - clientManager: v1 ClientManager — used by getClusters to enumerate live
-//     RayClusters via its exported ListRayClusters method.
-//   - proxyResolver: wired in main (Wave 4) to resolve head-service info and
-//     the kube-apiserver host used by redirectRequest. Separated from
-//     clientManager because v1 ClientManager's controller-runtime client is
-//     private and this beta cannot modify v1 to expose it.
-//   - dashboardDir : filesystem path to static Dashboard assets (reserved for
-//     future homepage/index.html routes; unused by the current handler set).
-//   - dashboardAddr: optional override. Empty means "derive from ClientManager".
-//   - useKubeProxy : if true, proxy through the Kubernetes API server; else
-//     connect directly through in-cluster service discovery.
-//   - httpClient   : used by redirectRequest to forward proxied requests. Its
-//     RoundTripper is kube-aware when useKubeProxy=true; main supplies the
-//     configured client via SetHTTPClient before Run. Simple clients also
-//     work (SetHTTPClient omitted) for direct DNS mode.
-//   - httpServer   : populated by Run() so Shutdown() can close the listener.
 type Server struct {
 	loader        snapshotLoader
 	supervisor    *Supervisor
@@ -103,22 +56,15 @@ type Server struct {
 	clientManager *historyserver.ClientManager
 	proxyResolver ProxyResolver
 	dashboardDir  string
-	dashboardAddr string
-	useKubeProxy  bool
-	httpClient    *http.Client
+	dashboardAddr string       // optional override; empty means "derive from clientManager".
+	useKubeProxy  bool         // proxy through kube-apiserver vs in-cluster DNS.
+	httpClient    *http.Client // nil → redirectRequest returns 501.
 	httpServer    *http.Server
 }
 
 // NewServer creates a Server wired to a *SnapshotLoader and the dependencies
 // required for live-session proxying and the dead-session file endpoints.
-//
-// The ProxyResolver and custom httpClient are injected separately (via
-// SetProxyResolver / SetHTTPClient) because v1 ClientManager hides its
-// controller-runtime fields — main.go builds the proxy wiring from a fresh
-// rest.Config and calls the setters. See ProxyResolver's doc for rationale.
-//
-// When httpClient is nil after construction a plain default client is used,
-// which is sufficient for in-cluster DNS mode.
+// SetProxyResolver and SetHTTPClient inject the proxy wiring after construction.
 func NewServer(
 	loader *SnapshotLoader,
 	supervisor *Supervisor,
@@ -129,43 +75,30 @@ func NewServer(
 ) *Server {
 	return &Server{
 		loader: loader,
-		// supervisor is optional: tests that never exercise /enter_cluster
-		// (e.g. legacy handler tests) leave it nil, in which case the
-		// enterCluster handler falls back to the beta cookie-only behavior
-		// — set the cookies and return 200 without blocking. WHY: beta-v2
-		// keeps legacy tests green and also tolerates a degraded-mode
-		// deployment where the processor path is disabled for debugging.
+		// supervisor is optional; nil falls back to cookie-only behavior in enterCluster.
 		supervisor:    supervisor,
 		reader:        reader,
 		clientManager: cm,
 		dashboardDir:  dashboardDir,
 		useKubeProxy:  useKubeProxy,
-		// httpClient stays nil until SetHTTPClient is called; redirectRequest
-		// short-circuits to 501 in that case — matching W6 test expectations.
 	}
 }
 
-// SetHTTPClient wires the *http.Client redirectRequest uses to proxy live
-// traffic. Intended to be called from main after constructing a kube-aware
-// RoundTripper (see v1 NewServerHandler for reference).
+// SetHTTPClient wires the *http.Client redirectRequest uses to proxy live traffic.
 func (s *Server) SetHTTPClient(c *http.Client) {
 	s.httpClient = c
 }
 
-// newServerWithLoader is an internal constructor used by tests to inject a
-// fake snapshotLoader. Production code uses NewServer.
+// newServerWithLoader is the test-only constructor for injecting a fake snapshotLoader.
 func newServerWithLoader(loader snapshotLoader) *Server {
 	return &Server{loader: loader}
 }
 
 // --- cookie & error helpers ---------------------------------------------------
 
-// extractCookies reads the three cookies written by /enter_cluster (v1 sets
-// them in router.go: cluster_name, cluster_namespace, session_name).
+// extractCookies reads the three cookies written by /enter_cluster.
 //
-// Returns:
-//   - clusterNameID = "{name}_{namespace}" (the on-disk folder prefix used by
-//     storage.StorageReader.GetContent; matches v1 clusterNameID composition).
+//   - clusterNameID = "{name}_{namespace}" (storage folder prefix).
 //   - sessionName   = the cookie value, or "live" for running clusters.
 //   - ok == false if any cookie is missing (caller should 400).
 func extractCookies(req *restful.Request) (clusterNameID, sessionName string, ok bool) {
@@ -188,8 +121,7 @@ func extractCookies(req *restful.Request) (clusterNameID, sessionName string, ok
 }
 
 // extractSessionKey returns (clusterNameID, sessionName, clusterSessionKey).
-// clusterSessionKey is the "{name}_{ns}_{session}" form used by internal maps
-// (snapshot.SessionKey and v1 ClusterTaskMap/ClusterActorMap keys).
+// clusterSessionKey is the "{name}_{ns}_{session}" form used as snapshot.SessionKey.
 func extractSessionKey(req *restful.Request) (clusterNameID, sessionName, clusterSessionKey string, ok bool) {
 	clusterNameCookie, err := req.Request.Cookie(cookieClusterNameKey)
 	if err != nil {
@@ -210,8 +142,7 @@ func extractSessionKey(req *restful.Request) (clusterNameID, sessionName, cluste
 	return name + "_" + ns, sess, utils.BuildClusterSessionKey(name, ns, sess), true
 }
 
-// writeMissingCookies centralizes the 400 response so every handler says the
-// same thing. Body phrasing deliberately matches v1 CookieHandle for parity.
+// writeMissingCookies writes the canonical 400 response for missing cookies.
 func writeMissingCookies(resp *restful.Response) {
 	resp.WriteErrorString(http.StatusBadRequest,
 		"required cookies missing: cluster_name, cluster_namespace, session_name")
@@ -219,13 +150,9 @@ func writeMissingCookies(resp *restful.Response) {
 
 // handleMissingSnapshot maps loader errors to HTTP responses.
 //
-//	ErrSnapshotNotFound → 503 Service Unavailable + Retry-After: 600
-//	    (The cluster is dead but the processor has not yet written the
-//	    snapshot; the frontend should retry after the next tick.)
-//	other error         → 500 Internal Server Error.
-//
-// This is the single source of truth for that classification; every handler
-// routes through it so behavior is consistent across endpoints.
+//   - ErrSnapshotNotFound: 503 + Retry-After: 600 (dead session whose
+//     snapshot has not yet been written).
+//   - other error: 500 Internal Server Error.
 func (s *Server) handleMissingSnapshot(resp *restful.Response, err error) {
 	if errors.Is(err, ErrSnapshotNotFound) {
 		metrics.MissingSnapshot503.Inc()
@@ -237,11 +164,6 @@ func (s *Server) handleMissingSnapshot(resp *restful.Response, err error) {
 	logrus.Errorf("handleMissingSnapshot: unexpected loader error: %v", err)
 	resp.WriteErrorString(http.StatusInternalServerError, err.Error())
 }
-
-// redirectRequest is implemented in server.go (W8). It reverse-proxies
-// live-session requests to the Ray Dashboard on the head pod. Declared here
-// only via the *Server method-set; the body lives in server.go so the HTTP
-// lifecycle and proxy concerns are co-located.
 
 // writeJSON serializes v as JSON and writes it, setting Content-Type.
 func writeJSON(resp *restful.Response, v interface{}) {
@@ -296,7 +218,6 @@ func (s *Server) getTasks(req *restful.Request, resp *restful.Response) {
 		formatted = append(formatted, formatTaskForResponse(t, opts.Detail))
 	}
 
-	// Envelope matches v1 RespTasksInfo exactly.
 	response := map[string]interface{}{
 		"result": true,
 		"msg":    "",
@@ -315,8 +236,7 @@ func (s *Server) getTasks(req *restful.Request, resp *restful.Response) {
 }
 
 // flattenTasks converts the snapshot's taskID -> []attempt map into a flat
-// []Task slice (one element per attempt), which is what ApplyTaskFilters and
-// the formatters expect. Matches v1's GetTasks shape.
+// []Task slice (one element per attempt) for filters and formatters.
 func flattenTasks(byID map[string][]eventtypes.Task) []eventtypes.Task {
 	total := 0
 	for _, attempts := range byID {
@@ -331,9 +251,7 @@ func flattenTasks(byID map[string][]eventtypes.Task) []eventtypes.Task {
 
 // --- getTaskSummarize: GET /api/v0/tasks/summarize ---------------------------
 
-// getTaskSummarize implements summary_by=func_name (the default Dashboard path).
-// summary_by=lineage requires utils.ToSummaryByLineage plus Actors; both are
-// wired. Matches v1 response envelope.
+// getTaskSummarize implements summary_by=func_name (default) and summary_by=lineage.
 func (s *Server) getTaskSummarize(req *restful.Request, resp *restful.Response) {
 	clusterNameID, sessionName, _, ok := extractSessionKey(req)
 	if !ok {
@@ -351,7 +269,7 @@ func (s *Server) getTaskSummarize(req *restful.Request, resp *restful.Response) 
 		return
 	}
 	summaryBy := req.QueryParameter("summary_by")
-	// For summary, maximize entries to minimize data loss — mirrors v1.
+	// Maximize entries for the summary to minimize data loss.
 	opts.Limit = utils.RayMaxLimitFromAPIServer
 
 	snap, err := s.loader.Load(clusterNameID, sessionName)
@@ -407,15 +325,13 @@ func (s *Server) getTaskSummarize(req *restful.Request, resp *restful.Response) 
 // --- getTasksTimeline: GET /api/v0/tasks/timeline ----------------------------
 
 // getTasksTimeline returns Chrome-Tracing-Format events for the Dashboard's
-// Timeline view. Logic ported from v1 EventHandler.GetTasksTimeline (see
-// timeline.go:generateTimelineFromSnapshot for details). Response is a bare
-// JSON array — the frontend parses it directly; no envelope.
+// Timeline view (see timeline.go:generateTimelineFromSnapshot). Response is
+// a bare JSON array — the frontend parses it directly; no envelope.
 //
 // Query params:
-//   - job_id  : optional filter; empty means all jobs in the session.
+//   - job_id: optional filter; empty means all jobs in the session.
 //   - download: "1" sets Content-Disposition so the browser saves the array
-//     as a .json file. Filename includes job_id and the current timestamp,
-//     matching v1.
+//     as a .json file. Filename includes job_id and the current timestamp.
 func (s *Server) getTasksTimeline(req *restful.Request, resp *restful.Response) {
 	clusterNameID, sessionName, _, ok := extractSessionKey(req)
 	if !ok {
@@ -443,9 +359,8 @@ func (s *Server) getTasksTimeline(req *restful.Request, resp *restful.Response) 
 		return
 	}
 
-	// Download header mirrors v1 router.go:2080. The time layout is the same
-	// 2006-01-02_15-04-05 pattern — changing it would break any tooling that
-	// matches on filename.
+	// Download header layout: changing the time pattern would break any tooling
+	// that matches on filename.
 	if req.QueryParameter("download") == "1" {
 		nowStr := timelineNow().Format("2006-01-02_15-04-05")
 		filename := fmt.Sprintf("timeline-%s.json", nowStr)
@@ -479,7 +394,7 @@ func (s *Server) getLogicalActors(req *restful.Request, resp *restful.Response) 
 		return
 	}
 
-	// Keyed by hex actor ID to match v1 and Ray Dashboard frontend.
+	// Keyed by hex actor ID to match the Ray Dashboard frontend.
 	formatted := make(map[string]interface{}, len(snap.Actors))
 	for _, actor := range snap.Actors {
 		actorIDHex, _ := utils.ConvertBase64ToHex(actor.ActorID)
@@ -517,9 +432,8 @@ func (s *Server) getLogicalActor(req *restful.Request, resp *restful.Response) {
 		return
 	}
 
-	// Lookup logic mirrors v1 GetActorByID: direct base64 key, then fall back
-	// to a linear scan converting each actor's base64 ID to hex for comparison.
-	// The O(n) fallback is a known limitation; fix tracked in v1 PR #4563.
+	// Direct base64 key first; fall back to a linear scan converting each
+	// actor's base64 ID to hex (O(n), known limitation; fix tracked in v1 PR #4563).
 	actor, found := snap.Actors[actorID]
 	if !found {
 		for _, a := range snap.Actors {
@@ -569,7 +483,7 @@ func (s *Server) getJobs(req *restful.Request, resp *restful.Response) {
 		return
 	}
 
-	// v1 returns a bare JSON array (no envelope) for the jobs listing.
+	// Bare JSON array (no envelope), matching the Dashboard's expectation.
 	formatted := make([]interface{}, 0, len(snap.Jobs))
 	for _, job := range snap.Jobs {
 		formatted = append(formatted, formatJobForResponse(job))
@@ -600,8 +514,7 @@ func (s *Server) getJob(req *restful.Request, resp *restful.Response) {
 
 	job, found := snap.Jobs[jobID]
 	if !found {
-		// v1 writes plain text with 200 in this case; match it verbatim so the
-		// frontend behaves the same way.
+		// Plain text with 200 (not 404 JSON) — frontend depends on this shape.
 		if _, werr := resp.Write([]byte(fmt.Sprintf("Job %s does not exist", jobID))); werr != nil {
 			logrus.Errorf("getJob: write not-found body failed: %v", werr)
 		}
@@ -612,7 +525,7 @@ func (s *Server) getJob(req *restful.Request, resp *restful.Response) {
 
 // --- getNodes: GET /nodes ----------------------------------------------------
 
-// getNodes supports view=summary (default) and view=hostNameList, matching v1.
+// getNodes supports view=summary (default) and view=hostNameList.
 func (s *Server) getNodes(req *restful.Request, resp *restful.Response) {
 	clusterNameID, sessionName, _, ok := extractSessionKey(req)
 	if !ok {
@@ -643,10 +556,8 @@ func (s *Server) getNodes(req *restful.Request, resp *restful.Response) {
 	}
 }
 
-// writeNodesSummary replicates v1 getNodesSummary against a snapshot node map.
-// The response uses the latest state transition as the "current" snapshot for
-// each node — for dead sessions that is the final state, which is what users
-// of historical data care about.
+// writeNodesSummary uses the latest state transition as each node's "current"
+// snapshot — for dead sessions that is the final state.
 func writeNodesSummary(nodeMap map[string]eventtypes.Node, sessionName string, resp *restful.Response) {
 	summary := make([]map[string]interface{}, 0, len(nodeMap))
 	nodeLogicalResources := make(map[string]string)
@@ -677,9 +588,9 @@ func writeNodesSummary(nodeMap map[string]eventtypes.Node, sessionName string, r
 	writeJSON(resp, response)
 }
 
-// writeNodesHostNameList returns hostnames for ALIVE nodes. Fallback order
-// matches v1: Hostname -> NodeName -> NodeID (Ray does not yet populate the
-// first two; see ray-project/ray#60129).
+// writeNodesHostNameList returns hostnames for ALIVE nodes. Fallback:
+// Hostname → NodeName → NodeID.
+// Ref: https://github.com/ray-project/ray/issues/60129
 func writeNodesHostNameList(nodeMap map[string]eventtypes.Node, resp *restful.Response) {
 	hostNameList := make([]string, 0)
 	for _, node := range nodeMap {
@@ -711,9 +622,8 @@ func writeNodesHostNameList(nodeMap map[string]eventtypes.Node, resp *restful.Re
 
 // --- getNode: GET /nodes/{node_id} -------------------------------------------
 
-// getNode returns a single node with its actors filled in (the Dashboard
-// frontend renders actors on the NodeDetail page, so we filter snap.Actors
-// by NodeID here — same pattern as v1).
+// getNode returns a single node with its scheduled actors filled in. The
+// Dashboard's NodeDetail page expects actors filtered by NodeID.
 func (s *Server) getNode(req *restful.Request, resp *restful.Response) {
 	clusterNameID, sessionName, _, ok := extractSessionKey(req)
 	if !ok {
@@ -751,7 +661,7 @@ func (s *Server) getNode(req *restful.Request, resp *restful.Response) {
 	}
 	detail := nodeSummaryReplay[len(nodeSummaryReplay)-1]
 
-	// Fill actors scheduled on this node (keyed by hex actor ID, matching v1).
+	// Fill actors scheduled on this node (keyed by hex actor ID).
 	nodeActors := make(map[string]interface{})
 	for _, actor := range snap.Actors {
 		nodeIDHex, _ := utils.ConvertBase64ToHex(actor.Address.NodeID)
@@ -774,10 +684,9 @@ func (s *Server) getNode(req *restful.Request, resp *restful.Response) {
 
 // --- getEvents: GET /events --------------------------------------------------
 
-// getEvents returns log events — either all events grouped by job_id (no
-// job_id param) or a single job's events (job_id param present, possibly
-// empty). The empty-job_id branch matches v1 which distinguishes "param not
-// given" from "param given but empty".
+// getEvents returns log events: all events grouped by job_id (when no job_id
+// param) or one job's events (when job_id is set, including empty string —
+// "param not given" and "param given but empty" are distinct).
 func (s *Server) getEvents(req *restful.Request, resp *restful.Response) {
 	clusterNameID, sessionName, _, ok := extractSessionKey(req)
 	if !ok {
@@ -838,26 +747,22 @@ func (s *Server) getEvents(req *restful.Request, resp *restful.Response) {
 // --- getNodeLogs: GET /api/v0/logs -------------------------------------------
 
 // getNodeLogs lists log files for a node, grouped by Ray's component-type
-// categorization. Snapshot-independent — reads directly from storage via
-// ListFiles. Mirrors v1 pkg/historyserver/router.go:1066 + _getNodeLogs.
+// categorization. Snapshot-independent — reads directly from storage.
 //
 // Query params:
-//   - node_id : hex node ID (subdirectory under logs/). Validated against
-//     path-traversal (fs.ValidPath) — same guard as v1.
-//   - glob    : double-star-capable glob pattern. When the pattern contains a
-//     directory prefix (e.g. "logs/raylet*") it is split so the base directory
-//     narrows the ListFiles call and the leaf pattern is matched per file.
+//   - node_id: hex node ID (subdirectory under logs/). Path-traversal guarded.
+//   - glob: double-star-capable glob pattern. Directory prefixes (e.g.
+//     "logs/raylet*") narrow the ListFiles call; the leaf pattern matches
+//     per file.
 //
 // Errors:
-//   - Missing cookies     → 400
-//   - Live session        → proxy
-//   - Path traversal      → 400
-//   - Glob match failure  → 400
-//   - Missing s.reader    → 500 (wiring bug; should be present in production)
+//   - Missing cookies, path traversal, glob match failure: 400.
+//   - Live session: proxy.
+//   - Missing s.reader: 500.
 //
-// The response envelope matches v1 exactly: a "data.result" object keyed by
-// component category (worker_out, worker_err, core_worker, driver, raylet,
-// gcs_server, internal, autoscaler, agent, dashboard) — frontend keys on it.
+// The response is a "data.result" object keyed by component category
+// (worker_out, worker_err, core_worker, driver, raylet, gcs_server, internal,
+// autoscaler, agent, dashboard).
 func (s *Server) getNodeLogs(req *restful.Request, resp *restful.Response) {
 	clusterNameID, sessionName, ok := extractCookies(req)
 	if !ok {
@@ -881,9 +786,8 @@ func (s *Server) getNodeLogs(req *restful.Request, resp *restful.Response) {
 		return
 	}
 
-	// Split the glob pattern just like v1 — "logs/raylet*" becomes
-	// base="logs", pattern="raylet*" so ListFiles operates on the narrower
-	// directory and Match only considers leaf file names.
+	// Split the glob: "logs/raylet*" → base="logs", pattern="raylet*" so
+	// ListFiles narrows the directory and Match works on leaf file names.
 	var folder, glob string
 	if rawGlob := req.QueryParameter("glob"); rawGlob != "" {
 		base, pattern := doublestar.SplitPattern(rawGlob)
@@ -910,9 +814,7 @@ func (s *Server) getNodeLogs(req *restful.Request, resp *restful.Response) {
 	}
 }
 
-// listNodeLogFiles is the helper that does the storage reads and assembles the
-// JSON body for getNodeLogs. Pulled out so it can be unit-tested without the
-// HTTP layer. Port of v1 _getNodeLogs in pkg/historyserver/reader.go:73.
+// listNodeLogFiles assembles the JSON body for getNodeLogs.
 func (s *Server) listNodeLogFiles(clusterNameID, sessionName, nodeID, folder, glob string) ([]byte, error) {
 	logPath := path.Join(sessionName, utils.RAY_SESSIONDIR_LOGDIR_NAME, nodeID)
 	if folder != "" {
@@ -953,10 +855,9 @@ func (s *Server) listNodeLogFiles(clusterNameID, sessionName, nodeID, folder, gl
 	return json.Marshal(envelope)
 }
 
-// listFilesRecursive walks a directory tree from s.reader, returning all leaf
-// files with paths relative to the starting dir. Directories are identified
-// by a trailing "/" in ListFiles output (storage backend convention).
-// Ported from v1 ServerHandler.listFilesRecursive.
+// listFilesRecursive walks a directory tree, returning all leaf files with
+// paths relative to the starting dir. Directories are marked by a trailing
+// "/" in ListFiles output.
 func (s *Server) listFilesRecursive(clusterID, dir string) []string {
 	entries := s.reader.ListFiles(clusterID, dir)
 	var result []string
@@ -974,10 +875,8 @@ func (s *Server) listFilesRecursive(clusterID, dir string) []string {
 	return result
 }
 
-// categorizeLogFiles sorts log file names into Ray's component buckets. The
-// order of the switch matters — "log_monitor" must be checked before "monitor"
-// because the former contains the latter as a substring. Ported verbatim from
-// v1 pkg/historyserver/reader.go:142.
+// categorizeLogFiles sorts log file names into Ray's component buckets.
+// Switch order matters: "log_monitor" must be checked before "monitor".
 func categorizeLogFiles(files []string) map[string][]string {
 	result := make(map[string][]string)
 	for _, f := range files {
@@ -1011,10 +910,8 @@ func categorizeLogFiles(files []string) map[string][]string {
 
 // --- getClusterMetadata: GET /api/v0/cluster_metadata ------------------------
 
-// getClusterMetadata streams the body of fetched_endpoints/<key> verbatim to
-// the caller. Snapshot-independent — the collector writes the Ray Dashboard's
-// /api/v0/cluster_metadata response into this file when the cluster is alive;
-// on replay we return it as-is. Mirrors v1 router.go:920.
+// getClusterMetadata streams fetched_endpoints/<key> verbatim. Snapshot-
+// independent — the collector wrote it during live operation; we return as-is.
 func (s *Server) getClusterMetadata(req *restful.Request, resp *restful.Response) {
 	clusterNameID, sessionName, ok := extractCookies(req)
 	if !ok {
@@ -1054,18 +951,17 @@ func (s *Server) getClusterMetadata(req *restful.Request, resp *restful.Response
 // --- getClusterStatus: GET /api/cluster_status -------------------------------
 
 // getClusterStatus returns the autoscaler status block the Ray Dashboard
-// renders on the cluster-overview page. Mirrors v1 router.go:820.
+// renders on the cluster-overview page.
 //
 // Two modes:
-//   - format=1  → {"clusterStatus": "<Ray-formatted multi-line text>"} by
-//     loading snap + per-node debug_state.txt and invoking the ported
-//     builder in cluster_status.go. This is the mode the Dashboard uses.
-//   - anything else → an empty ClusterStatusData envelope, matching v1.
+//   - format=1: returns {"clusterStatus": "<Ray-formatted multi-line text>"}
+//     by loading snap + per-node debug_state.txt and invoking
+//     buildFormattedClusterStatus. This is the mode the Dashboard uses.
+//   - anything else: returns an empty ClusterStatusData envelope.
 //
-// Snapshot + raw-file hybrid: the node counts come from debug_state.txt (for
-// parity with live Ray output), while failed-nodes and pending-demands come
-// from the snapshot (the only source for historical state transitions and
-// task states in dead clusters).
+// The format=1 path is hybrid: node counts come from debug_state.txt (for
+// parity with live Ray output), failed nodes and pending demands come from
+// the snapshot.
 func (s *Server) getClusterStatus(req *restful.Request, resp *restful.Response) {
 	clusterNameID, sessionName, ok := extractCookies(req)
 	if !ok {
@@ -1079,8 +975,8 @@ func (s *Server) getClusterStatus(req *restful.Request, resp *restful.Response) 
 
 	format := req.QueryParameter("format")
 	if format != "1" {
-		// v1 parity: the empty envelope is what the frontend currently
-		// ignores when format != "1". Do not pull the snapshot here.
+		// Do not pull the snapshot in this branch — frontend ignores the response
+		// when format != "1".
 		writeJSON(resp, map[string]interface{}{
 			"result": true,
 			"msg":    "Got cluster status.",
@@ -1115,10 +1011,8 @@ func (s *Server) getClusterStatus(req *restful.Request, resp *restful.Response) 
 	})
 }
 
-// getNodeLog is the unified singular-log endpoint (GET /api/v0/logs/{media_type}),
-// dispatching to a file-read or stream handler based on the path parameter.
-// Matches the contract Ray Dashboard uses when the user clicks an individual
-// log file. Plan §8 row: "/api/v0/logs/{media}".
+// getNodeLog is the unified singular-log endpoint that dispatches to a
+// file-read or stream handler based on media_type.
 func (s *Server) getNodeLog(req *restful.Request, resp *restful.Response) {
 	mediaType := req.PathParameter("media_type")
 	switch mediaType {
@@ -1132,14 +1026,9 @@ func (s *Server) getNodeLog(req *restful.Request, resp *restful.Response) {
 	}
 }
 
-// getNodeLogFile returns the content of a specific log file from object storage.
-//
-// Scope for PoC: requires `node_id` + `filename` query params (the simple case
-// Ray Dashboard uses most). task_id / actor_id / pid-based resolution (which
-// v1 supports) is left as a TODO — those need snapshot lookups plus the
-// TaskLogInfo.{StdoutFile,StderrFile} fields that are only present for some
-// task types. Callers passing only task_id/actor_id get a 400 with a clear
-// message so the frontend can fall back to its own resolution.
+// getNodeLogFile returns the content of a specific log file from object
+// storage. Requires node_id + filename query params. task_id / actor_id /
+// pid-based resolution returns 400 — callers must resolve client-side.
 func (s *Server) getNodeLogFile(req *restful.Request, resp *restful.Response) {
 	clusterNameID, sessionName, ok := extractCookies(req)
 	if !ok {
@@ -1160,9 +1049,8 @@ func (s *Server) getNodeLogFile(req *restful.Request, resp *restful.Response) {
 	taskID := req.QueryParameter("task_id")
 	actorID := req.QueryParameter("actor_id")
 
-	// v1 supports resolving node_id+filename from task_id / actor_id by looking
-	// at TaskLogInfo on the stored task. PoC punts: tell the caller to resolve
-	// client-side (Ray Dashboard already has this code path).
+	// task_id / actor_id resolution is not implemented; caller must pass
+	// node_id + filename directly.
 	if (taskID != "" || actorID != "") && (nodeID == "" || filename == "") {
 		resp.WriteErrorString(http.StatusBadRequest,
 			"task_id / actor_id resolution not yet implemented in beta; "+
@@ -1200,9 +1088,8 @@ func (s *Server) getNodeLogFile(req *restful.Request, resp *restful.Response) {
 		return
 	}
 
-	// Content-Disposition to trigger browser download when caller passes
-	// download_filename. Mirrors v1 getNodeLogFile behavior so Ray Dashboard's
-	// "download log" button continues to work.
+	// Content-Disposition triggers browser download when download_filename is
+	// set; backs Ray Dashboard's "download log" button.
 	if df := req.QueryParameter("download_filename"); df != "" {
 		disposition := mime.FormatMediaType("attachment", map[string]string{"filename": df})
 		if disposition == "" {
@@ -1216,10 +1103,8 @@ func (s *Server) getNodeLogFile(req *restful.Request, resp *restful.Response) {
 	}
 }
 
-// getNodeLogStream: Ray Dashboard uses this for live tail via SSE. For dead
-// clusters we have no tail (snapshot is immutable) — return 501 with a clear
-// message that streaming is only meaningful on live clusters. For live
-// clusters the cookie dispatch above already forwards to Ray Dashboard.
+// getNodeLogStream returns 501 for dead clusters (snapshots are immutable;
+// no tail). Live clusters are dispatched to Ray Dashboard upstream.
 func (s *Server) getNodeLogStream(req *restful.Request, resp *restful.Response) {
 	_, sessionName, ok := extractCookies(req)
 	if !ok {

@@ -1,16 +1,3 @@
-// Package server — Chrome-trace timeline generation from a SessionSnapshot.
-//
-// timeline.go ports v1 EventHandler.GetTasksTimeline (in
-// pkg/eventserver/eventserver.go:1293) so v2 can emit Chrome Tracing-formatted
-// timeline events purely from a snapshot, with no dependency on the live
-// EventHandler. The generated JSON is consumed by the Ray Dashboard's
-// "Timeline" tab via GET /api/v0/tasks/timeline.
-//
-// Design note: the algorithm is a verbatim port of v1's — walk filtered tasks,
-// assign stable PID per Node IP and stable TID per (Node IP, componentType:ID),
-// emit metadata "M" events for process_name/thread_name, then one "X" event
-// per profile entry. Behavior parity matters because the frontend parses the
-// response with a fixed schema; divergence would break the Timeline view.
 package server
 
 import (
@@ -22,25 +9,20 @@ import (
 )
 
 // generateTimelineFromSnapshot builds the Chrome Tracing Format payload used
-// by Ray Dashboard's timeline view. jobID, if non-empty, filters tasks so the
-// response only contains events for one job; empty string yields all jobs.
+// by Ray Dashboard's timeline view. jobID, if non-empty, filters tasks to a
+// single job; an empty string yields all jobs.
 //
-// Returns an empty (but non-nil) slice when the snapshot holds no tasks with
-// profile data so json.Marshal produces "[]" instead of "null", matching v1.
-//
-// The function is package-private on purpose — handlers.go is the only caller
-// and tests live in the same package.
+// Returns an empty (but non-nil) slice when no tasks carry profile data so
+// json.Marshal produces "[]" instead of "null".
 func generateTimelineFromSnapshot(snap *snapshot.SessionSnapshot, jobID string) []eventtypes.ChromeTraceEvent {
 	events := []eventtypes.ChromeTraceEvent{}
 	if snap == nil {
 		return events
 	}
 
-	// Step 1: flatten snapshot.Tasks (taskID -> []attempt) into []Task and keep
-	// only entries that (a) match jobID when provided, (b) carry profile data,
-	// (c) have a supported componentType, and (d) have a known NodeIPAddress.
-	// Mirrors v1's filter chain so the downstream PID/TID allocation produces
-	// the same (nodeIP, componentID) universe.
+	// Step 1: flatten attempts into []Task and keep only those with profile
+	// data, a supported componentType, a node IP, and (when jobID is set) a
+	// matching job.
 	filteredTasks := make([]eventtypes.Task, 0)
 	for _, attempts := range snap.Tasks {
 		for _, task := range attempts {
@@ -50,9 +32,7 @@ func generateTimelineFromSnapshot(snap *snapshot.SessionSnapshot, jobID string) 
 			if task.ProfileData == nil || len(task.ProfileData.Events) == 0 {
 				continue
 			}
-			// Only "worker" and "driver" are valid components for the Ray
-			// profiling payload — everything else is ignored (consistent with
-			// ray-project/ray profiling.py).
+			// Ray's profiling payload only uses "worker" and "driver" (ray-project/ray profiling.py).
 			componentType := task.ProfileData.ComponentType
 			if componentType != "worker" && componentType != "driver" {
 				continue
@@ -68,10 +48,8 @@ func generateTimelineFromSnapshot(snap *snapshot.SessionSnapshot, jobID string) 
 		return events
 	}
 
-	// Step 2: allocate a deterministic PID per node IP and a deterministic TID
-	// per (nodeIP, componentType:componentID) pair. Tracked across the full
-	// task set so every trace event can reference the same PID/TID as its
-	// metadata entry.
+	// Step 2: assign a deterministic PID per node IP and TID per
+	// (nodeIP, componentType:componentID), reused across all events.
 	nodeIPToPID := make(map[string]int)
 	nodeIPToClusterIDToTID := make(map[string]map[string]int)
 	pidCounter := 0
@@ -91,8 +69,8 @@ func generateTimelineFromSnapshot(snap *snapshot.SessionSnapshot, jobID string) 
 		}
 	}
 
-	// Step 3: emit process_name + thread_name metadata events (Phase = "M").
-	// The Chrome tracing viewer uses these to label rows.
+	// Step 3: emit process_name/thread_name metadata events ("M") that the
+	// Chrome tracing viewer uses to label rows.
 	for nodeIP, pid := range nodeIPToPID {
 		events = append(events, eventtypes.ChromeTraceEvent{
 			Name:  "process_name",
@@ -118,9 +96,7 @@ func generateTimelineFromSnapshot(snap *snapshot.SessionSnapshot, jobID string) 
 		}
 	}
 
-	// Step 4: emit one complete event (Phase = "X") per ProfileEventRaw. The
-	// loop mirrors v1 line-for-line; see eventserver.go:1373 for the reference
-	// implementation.
+	// Step 4: emit one complete event ("X") per ProfileEventRaw.
 	for _, task := range filteredTasks {
 		nodeIP := task.ProfileData.NodeIPAddress
 		clusterID := task.ProfileData.ComponentType + ":" + task.ProfileData.ComponentID
@@ -140,24 +116,20 @@ func generateTimelineFromSnapshot(snap *snapshot.SessionSnapshot, jobID string) 
 		}
 
 		for _, profEvent := range task.ProfileData.Events {
-			// Ray emits timestamps in nanoseconds; Chrome Tracing wants
-			// microseconds. Divide as float so sub-microsecond fractions are
-			// preserved (matches v1).
+			// Ray emits ns; Chrome Tracing wants us. Float division preserves
+			// sub-microsecond fractions.
 			startTimeUs := float64(profEvent.StartTime) / 1000.0
 			durationUs := float64(profEvent.EndTime-profEvent.StartTime) / 1000.0
 
-			// Best-effort extraData parse — if malformed, we fall through with
-			// extraData == nil and lose the "name"/"task_id" overrides but
-			// keep the structural event. v1 silently ignores the error too.
+			// Best-effort parse: a malformed extraData drops the name/task_id
+			// overrides but the structural event is still emitted.
 			var extraData map[string]interface{}
 			if profEvent.ExtraData != "" {
 				_ = json.Unmarshal([]byte(profEvent.ExtraData), &extraData)
 			}
 
-			// taskID + funcOrClassName fallback chain, mirroring v1:
-			//   1) task.TaskID / task.FuncOrClassName
-			//   2) task.GetFuncName() if FuncOrClassName is empty
-			//   3) extraData["task_id"] override (typically hex-form)
+			// taskID/funcOrClassName fallback: TaskID + FuncOrClassName, then
+			// GetFuncName(), then extraData["task_id"] override.
 			taskIDForArgs := task.TaskID
 			funcOrClassName := task.FuncOrClassName
 			if funcOrClassName == "" {
@@ -169,9 +141,8 @@ func generateTimelineFromSnapshot(snap *snapshot.SessionSnapshot, jobID string) 
 				}
 			}
 
-			// Build args. actor_id is explicitly `nil` (not absent) to match
-			// v1's JSON shape — Ray Dashboard frontend relies on the key
-			// existing even when the task is not actor-owned.
+			// actor_id is explicitly nil (not absent) — Ray Dashboard relies on
+			// the key being present.
 			actorID := extractActorIDFromTaskID(taskIDForArgs)
 			args := map[string]interface{}{
 				"task_id":            taskIDForArgs,
@@ -184,8 +155,7 @@ func generateTimelineFromSnapshot(snap *snapshot.SessionSnapshot, jobID string) 
 				args["actor_id"] = actorID
 			}
 
-			// Overall "task::<func>" events get a human-friendly display name
-			// pulled from extraData (v1 behavior).
+			// task::<func> events get a human-friendly display name from extraData.
 			eventName := profEvent.EventName
 			displayName := profEvent.EventName
 			if strings.HasPrefix(profEvent.EventName, taskPrefix) && extraData != nil {

@@ -1,33 +1,3 @@
-// Package server — cluster-status computation for the v2 beta History Server.
-//
-// cluster_status.go ports v1 pkg/historyserver/cluster_status.go +
-// debug_state.go so v2 can reconstruct Ray's "autoscaler status" block purely
-// from a SessionSnapshot (nodes / tasks / actors) and per-node
-// debug_state.txt files read directly from object storage. No EventHandler,
-// no K8s, no live scheduler queue — a dead session's final-state picture.
-//
-// Why a port and not an import: implementation_plan §Phase 4.2 mandates the
-// beta package not take a build-time dependency on v1 historyserver (which is
-// slated for deprecation). We reproduce the logic 1:1 for shape parity — the
-// Ray Dashboard frontend parses the output as plain text, so divergence in
-// formatting would immediately manifest as a regression.
-//
-// Data flow:
-//
-//	snap.Nodes ────────────┐
-//	snap.Tasks  ──────────┐ │
-//	snap.Actors ─────────┐│ │
-//	                     ││ │
-//	                     vv v
-//	       ┌───────────────────────────┐       ┌──────────────────────┐
-//	       │  clusterStatusBuilder     │<──────│ debug_state.txt per  │
-//	       │  (Active/Idle nodes,      │       │ node (raw S3 read)   │
-//	       │  Total/Used resources,    │       └──────────────────────┘
-//	       │  FailedNodes, Demands)    │
-//	       └──────────┬────────────────┘
-//	                  │ FormatStatus()
-//	                  v
-//	          "======== Autoscaler status: ... ========" string
 package server
 
 import (
@@ -49,8 +19,8 @@ import (
 )
 
 const (
-	// Ray scales resource values as int64 = actual × 10000 (FixedPoint format).
-	// Ported from v1 pkg/historyserver/debug_state.go; mirrors src/ray/common/constants.h.
+	// Ray scales resource values as int64 = actual × 10000 (FixedPoint format;
+	// src/ray/common/constants.h).
 	rayResourceScale = 10000.0
 
 	// Formatting constants. Must match Ray's util.py output exactly so the
@@ -62,18 +32,16 @@ const (
 	maxFailuresDisplayed = 20
 )
 
+// Regexes for Ray-produced text in debug_state.txt; formats are stable
+// because Ray emits them.
 var (
-	// reNodeGroup / reTotal / reAvailable / reResourceKV mirror v1 exactly.
-	// The formats are Ray-produced text so the regexes cannot drift.
 	reNodeGroup  = regexp.MustCompile(`"ray\.io/node-group"\s*:\s*"([^"]+)"`)
 	reTotal      = regexp.MustCompile(`"total"\s*:\s*\{([^}]+)\}`)
 	reAvailable  = regexp.MustCompile(`"available"\s*:\s*\{([^}]+)\}`)
 	reResourceKV = regexp.MustCompile(`([a-zA-Z0-9_:./\-]+):\s*\[([0-9,\s]+)\]`)
 )
 
-// nodeDebugState is the parsed form of a single node's debug_state.txt. The
-// shape mirrors v1 NodeDebugState; we keep the struct package-private since no
-// caller outside cluster_status.go needs it.
+// nodeDebugState is the parsed form of a single node's debug_state.txt.
 type nodeDebugState struct {
 	NodeID    string
 	NodeName  string
@@ -83,8 +51,7 @@ type nodeDebugState struct {
 	Available map[string]float64
 }
 
-// getUsedResources calculates used = max(0, total - available) per resource.
-// Matches v1 NodeDebugState.GetUsedResources.
+// getUsedResources returns max(0, total - available) per resource.
 func (s *nodeDebugState) getUsedResources() map[string]float64 {
 	used := make(map[string]float64, len(s.Total))
 	for key, total := range s.Total {
@@ -93,14 +60,13 @@ func (s *nodeDebugState) getUsedResources() map[string]float64 {
 	return used
 }
 
-// resourceDemand represents a pending resource request + count. Copied from v1.
+// resourceDemand represents a pending resource request and its count.
 type resourceDemand struct {
 	Resources map[string]float64
 	Count     int
 }
 
-// failedNode captures a node that transitioned to DEAD with a non-expected
-// reason. Fields mirror v1 FailedNode.
+// failedNode captures a node that transitioned to DEAD with a non-expected reason.
 type failedNode struct {
 	NodeID        string
 	NodeIPAddress string
@@ -109,9 +75,7 @@ type failedNode struct {
 	Timestamp     time.Time
 }
 
-// clusterStatusBuilder accumulates all inputs needed to emit FormatStatus.
-// It is intentionally a value-receiver-mutating builder (not a pipeline of
-// pure functions) so the call sequence matches v1 character-for-character.
+// clusterStatusBuilder accumulates the inputs needed to emit FormatStatus.
 type clusterStatusBuilder struct {
 	ActiveNodes    map[string]int
 	IdleNodes      map[string]int
@@ -131,12 +95,8 @@ func newClusterStatusBuilder() *clusterStatusBuilder {
 	}
 }
 
-// buildFormattedClusterStatus is the top-level helper invoked by getClusterStatus
-// when ?format=1. It reads debug_state.txt for every node in the session,
-// merges in snapshot-derived data, and returns the Ray-formatted status block.
-//
-// Inputs are passed explicitly (not via *Server) so tests can drive it with a
-// fake storage reader.
+// buildFormattedClusterStatus reads debug_state.txt for every node and merges
+// it with snapshot data into the Ray-formatted status block.
 func buildFormattedClusterStatus(
 	reader readerLike,
 	snap *snapshot.SessionSnapshot,
@@ -144,16 +104,13 @@ func buildFormattedClusterStatus(
 ) string {
 	builder := newClusterStatusBuilder()
 
-	// Step 1: enumerate node IDs by listing the logs/ directory. v1 uses the
-	// same technique (router.go:873). The directory listing doubles as the
-	// authoritative node roster because every alive node writes debug_state.txt
-	// there.
+	// Step 1: enumerate node IDs by listing logs/. The directory listing is
+	// the authoritative node roster — every alive node writes debug_state.txt.
 	logsPath := path.Join(sessionName, utils.RAY_SESSIONDIR_LOGDIR_NAME)
 	nodeIDs := reader.ListFiles(clusterNameID, logsPath)
 
-	// Step 2: parse each debug_state.txt and fold it into the builder. Failure
-	// to parse one file is not fatal — v1 silently skips it too, which is the
-	// correct posture for historical (possibly truncated) data.
+	// Step 2: parse each debug_state.txt and fold it into the builder. Skipping
+	// unparseable files is intentional for historical (possibly truncated) data.
 	for _, nodeID := range nodeIDs {
 		// ListFiles returns directory entries; strip a trailing "/" if present.
 		nodeID = strings.TrimSuffix(nodeID, "/")
@@ -170,10 +127,9 @@ func buildFormattedClusterStatus(
 		builder.addNodeFromDebugState(state)
 	}
 
-	// Step 3: compute the cluster's "last active" timestamp. Prefer the latest
-	// EndTime from tasks / actors (observed activity), otherwise fall back to
-	// the session start time embedded in sessionName. If neither is available
-	// leave Timestamp zero — the formatter prints "time unknown" in that case.
+	// Step 3: pick the cluster's "last active" timestamp — latest task/actor
+	// EndTime, then session start time from sessionName, else zero (formatter
+	// prints "time unknown").
 	tasks := flattenTasks(snap.Tasks)
 	actors := make([]eventtypes.Actor, 0, len(snap.Actors))
 	for _, a := range snap.Actors {
@@ -193,18 +149,18 @@ func buildFormattedClusterStatus(
 	return builder.formatStatus()
 }
 
-// readerLike is the subset of storage.StorageReader the cluster-status logic
-// uses. Narrowing the dependency makes it trivial to inject a fake in tests.
+// readerLike is the subset of storage.StorageReader the cluster-status logic uses.
 type readerLike interface {
 	ListFiles(clusterID, dir string) []string
 	GetContent(clusterID, fileName string) io.Reader
 }
 
-// --- debug_state.txt parsing (ported from v1) --------------------------------
+// --- debug_state.txt parsing -------------------------------------------------
 
-// parseDebugState reads Ray's debug_state.txt and extracts node metadata +
-// cluster resource scheduler state. The file is emitted by Ray's Raylet
-// (ClusterResourceScheduler::DebugString); the line we care about looks like
+// parseDebugState reads Ray's debug_state.txt and extracts node metadata
+// and the cluster resource scheduler state. The file is emitted by Ray's
+// Raylet (ClusterResourceScheduler::DebugString); the line we parse looks
+// like:
 //
 //	cluster_resource_scheduler state:
 //	Local id: <id> Local resources: { ... "total":{...}, "available":{...} ... }
@@ -335,8 +291,7 @@ func (b *clusterStatusBuilder) addFailedNodesFromNodes(nodes map[string]eventtyp
 				continue
 			}
 
-			// node-group label is the Ray autoscaler identity; fall back to
-			// node ID when the collector didn't capture node-group labels.
+			// node-group label is the autoscaler identity; fall back to node ID when missing.
 			nodeType := node.Labels["ray.io/node-group"]
 			if nodeType == "" {
 				nodeType = node.NodeID
@@ -501,15 +456,13 @@ func parseSessionTimestamp(sessionName string) time.Time {
 
 // --- formatting helpers -------------------------------------------------------
 
-// sortedKeys returns the map's keys in lexicographic order. Generic so the
-// same helper works for map[string]int and map[string]float64.
+// sortedKeys returns the map's keys in lexicographic order.
 func sortedKeys[V any](m map[string]V) []string {
 	return slices.Sorted(maps.Keys(m))
 }
 
-// formatResourceValue formats a single resource value matching Python's behavior.
-// Memory resources are shown as human-readable bytes (via formatMemory — already
-// ported into beta formatters.go), all others use minimum-digits numeric form.
+// formatResourceValue formats a single resource value matching Python's
+// behavior: memory resources via formatMemory, others via formatPythonFloat.
 func formatResourceValue(resource string, value float64) string {
 	if strings.Contains(strings.ToLower(resource), "memory") {
 		return formatMemory(value)
@@ -539,9 +492,8 @@ func formatPythonFloat(value float64) string {
 	return strconv.FormatFloat(value, 'f', -1, 64)
 }
 
-// formatStatus emits the final block. Ported from v1 FormatStatus; see that
-// file for the section-by-section rationale (timestamp, node groups, failures,
-// resources, pending demands).
+// formatStatus emits the final autoscaler status block (timestamp, node
+// groups, failures, resources, pending demands).
 func (b *clusterStatusBuilder) formatStatus() string {
 	var sb strings.Builder
 
@@ -575,8 +527,7 @@ func (b *clusterStatusBuilder) formatStatus() string {
 	}
 
 	sb.WriteString("Pending:\n")
-	// Pending nodes would come from autoscaler events; not yet exported — v1
-	// displays the same placeholder.
+	// Pending nodes come from autoscaler events; not yet exported.
 	sb.WriteString(" (unavailable in history server)\n")
 
 	sb.WriteString("Recent failures:\n")
@@ -621,7 +572,7 @@ func (b *clusterStatusBuilder) formatStatus() string {
 
 	sb.WriteString("Pending Demands:\n")
 	if len(b.PendingDemands) == 0 {
-		// NOTE: Bug-for-bug match with alpha. If alpha gets fixed, we should fix this too.
+		// NOTE: Bug-for-bug match with v1. If v1 gets fixed, we should fix this too.
 		sb.WriteString(" (no resource demands)")
 	} else {
 		for _, demand := range b.PendingDemands {

@@ -1,18 +1,9 @@
-// Package processor implements the per-session pipeline used by the History
-// Server v2 beta-v2 (lazy mode). Each session is first classified (live vs
-// dead) by querying the Kubernetes API for the owning RayCluster CR, then —
-// if dead and not already snapshotted — its raw events are parsed into a
-// SessionSnapshot and persisted to object storage.
+// Package processor implements the per-session pipeline that classifies a
+// session as live or dead and, when dead, parses raw events into a
+// SessionSnapshot persisted to object storage.
 //
-// Pipeline.ProcessSession is driven on-demand by the HTTP Supervisor
-// (pkg/server/enter_cluster.go) when /enter_cluster hits a dead session.
-//
-// Design references:
-//   - historyserver/beta_poc.md §4 (exported ProcessSession signature)
-//   - historyserver/beta_poc.md §8 risk #1 (why ctx.Err() between steps)
-//   - historyserver/beta/implementation_plan.md §5 (state machine, unchanged)
-//   - historyserver/beta/implementation_plan.md §9 decision #5 (why K8s API,
-//     not marker file)
+// Pipeline.ProcessSession is driven on-demand by the HTTP Supervisor when
+// /enter_cluster hits a dead session.
 package processor
 
 import (
@@ -38,58 +29,46 @@ import (
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
-// SessionStatus is ProcessSession's outcome classification. Supervisor
-// uses it for per-status metric labels. Success statuses (Live /
-// AlreadySnapped / Processed) always return nil error; all others pair
-// with a non-nil error.
+// SessionStatus is ProcessSession's outcome classification. Success statuses
+// (Live, AlreadySnapped, Processed) return a nil error; all others pair with
+// a non-nil error.
 type SessionStatus int
 
 const (
-	// SessionStatusLive — RayCluster CR is still present; session intentionally
-	// skipped. Not an error. Supervisor will not PUT a snapshot.
+	// SessionStatusLive means the RayCluster CR is still present and the
+	// session is intentionally skipped.
 	SessionStatusLive SessionStatus = iota
-	// SessionStatusAlreadySnapped — snapshot already exists in storage; the
-	// skip-if-exists guard fired. Not an error.
+	// SessionStatusAlreadySnapped means a snapshot already exists in storage.
 	SessionStatusAlreadySnapped
-	// SessionStatusProcessed — events parsed and snapshot written successfully.
-	// The returned *SessionSnapshot is non-nil only for this status so the
-	// caller (Supervisor) can Prime the loader's LRU without an extra S3 GET.
+	// SessionStatusProcessed means events were parsed and the snapshot was
+	// written. The returned *SessionSnapshot is non-nil only for this status.
 	SessionStatusProcessed
-	// SessionStatusK8sProbeErr — K8s API Get on the RayCluster CR returned a
-	// non-NotFound error (e.g. API server outage). State unknown; retry later.
+	// SessionStatusK8sProbeErr means the K8s Get returned a non-NotFound
+	// error and the cluster state is unknown.
 	SessionStatusK8sProbeErr
-	// SessionStatusEventsErr — event parsing failed. Most likely a malformed
-	// event file; surfaces for operator attention.
+	// SessionStatusEventsErr means event parsing failed.
 	SessionStatusEventsErr
-	// SessionStatusSnapshotWriteErr — object-store PUT failed. A subsequent
-	// /enter_cluster call re-drives the pipeline; skip-if-exists still permits
-	// the write since a failed PUT leaves no object behind.
+	// SessionStatusSnapshotWriteErr means the object-store PUT failed.
 	SessionStatusSnapshotWriteErr
-	// SessionStatusCanceled — ctx was canceled mid-pipeline (client
-	// disconnect or shutdown). Separated from the *Err statuses so it stays
-	// out of the SessionErrors alerting signal — client cancellation in
-	// lazy mode is benign, not pageable.
+	// SessionStatusCanceled means ctx was canceled mid-pipeline; not an *Err
+	// status.
 	SessionStatusCanceled
 )
 
-// Pipeline processes a single Ray session end-to-end:
-// dead detection, skip-if-exists, event parsing, snapshot write.
-// It is stateless across sessions and safe for concurrent use.
+// Pipeline processes a single Ray session end-to-end: dead detection,
+// skip-if-exists, event parsing, and snapshot write. It is stateless across
+// sessions and safe for concurrent use.
 type Pipeline struct {
 	reader    storage.StorageReader
 	writer    storage.StorageWriter
 	k8sClient client.Client
 
-	// rootDir is the object-store prefix (e.g. "log") that v1's StorageReader
-	// auto-prepends in GetContent but StorageWriter.WriteFile does NOT. We
-	// prepend it manually in writeSnapshot so the written key matches what
-	// the reader will later look up. See pkg/storage/s3/s3.go: WriteFile vs
-	// GetContent for the asymmetry.
+	// rootDir is the storage prefix prepended on writes to mirror reader layout.
 	rootDir string
 }
 
-// NewPipeline constructs a Pipeline. The three collaborators must be
-// non-nil. rootDir is the storage prefix; empty = no prefix.
+// NewPipeline constructs a Pipeline. All collaborators must be non-nil; an
+// empty rootDir means no prefix.
 func NewPipeline(reader storage.StorageReader, writer storage.StorageWriter, k8sClient client.Client, rootDir string) *Pipeline {
 	return &Pipeline{
 		reader:    reader,
@@ -99,23 +78,17 @@ func NewPipeline(reader storage.StorageReader, writer storage.StorageWriter, k8s
 	}
 }
 
-// ProcessSession processes one session end-to-end. Returns
-// (SessionStatus, *SessionSnapshot, error):
+// ProcessSession processes one session end-to-end and returns the outcome
+// classification, the built snapshot (when applicable), and an error.
 //
-//   - (Live,            nil,  nil): intentional no-op; caller moves on.
-//   - (AlreadySnapped,  nil,  nil): skip-if-exists fired; caller moves on.
-//   - (Processed,       snap, nil): snapshot built AND written. snap is the
-//     pointer callers may Prime into the LRU; it is the exact object
-//     persisted to S3. Never nil when status == Processed.
-//   - (K8sProbeErr / EventsErr / SnapshotWriteErr, nil, non-nil err):
-//     a real failure; Supervisor bubbles this to HTTP 500.
-//   - (Canceled,        nil,  ctx.Err()): ctx was canceled between steps
-//     (e.g. HTTP client disconnected).
+//   - (Live, nil, nil): no-op; caller moves on.
+//   - (AlreadySnapped, nil, nil): skip-if-exists fired; caller moves on.
+//   - (Processed, snap, nil): snapshot built and written; snap is the exact
+//     object persisted and is never nil for this status.
+//   - (K8sProbeErr | EventsErr | SnapshotWriteErr, nil, err): real failure.
+//   - (Canceled, nil, ctx.Err()): ctx was canceled between steps.
 //
-// ctx is polled at each step boundary (v1 storage layer is not context-aware).
-// Granularity is coarse — fine for lazy mode's goal of releasing the HTTP goroutine
-// on client disconnect. See beta_poc.md §8 risk #1.
-//
+// ctx is polled at each step boundary; cancellation surfaces as Canceled.
 // Wall time is always recorded to metrics.SessionDuration regardless of outcome.
 func (p *Pipeline) ProcessSession(ctx context.Context, session utils.ClusterInfo) (SessionStatus, *snapshot.SessionSnapshot, error) {
 	start := time.Now()
@@ -123,24 +96,16 @@ func (p *Pipeline) ProcessSession(ctx context.Context, session utils.ClusterInfo
 
 	clusterNameID := session.Name + "_" + session.Namespace
 
-	// Early ctx check: a request that was already canceled before we even
-	// started (e.g. Supervisor follower whose client hung up while waiting
-	// on the singleflight winner) must not spend a K8s API call.
+	// Fast-fail if the request was canceled before we started.
 	if err := ctx.Err(); err != nil {
 		return SessionStatusCanceled, nil, err
 	}
 
-	// Step 1: Dead detection via K8s API.
-	// NotFound == dead (CR deleted). Other errors are propagated so the
-	// caller logs them and retries on a subsequent request; we never treat
-	// an unknown K8s state as "dead" because that would incorrectly
-	// snapshot a live cluster mid-outage.
+	// Step 1: dead detection. NotFound means dead; other errors propagate.
+	// Treating unknown state as dead would snapshot a live cluster.
 	dead, err := p.isDead(ctx, session)
 	if err != nil {
-		// Distinguish ctx cancellation from real API errors. controller-
-		// runtime's Get returns a wrapped ctx.Err() when the caller's ctx
-		// is done; surfacing that as Canceled (not K8sProbeErr) keeps
-		// operator alerting noise-free.
+		// Distinguish ctx cancellation from real API errors to keep alerting noise-free.
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return SessionStatusCanceled, nil, ctxErr
 		}
@@ -150,9 +115,7 @@ func (p *Pipeline) ProcessSession(ctx context.Context, session utils.ClusterInfo
 		return SessionStatusLive, nil, nil
 	}
 
-	// Step 2: Skip-if-exists. Snapshots are immutable; once written, we
-	// never overwrite. A nil reader from GetContent means the object is
-	// absent.
+	// Step 2: skip-if-exists. Snapshots are immutable.
 	if err := ctx.Err(); err != nil {
 		return SessionStatusCanceled, nil, err
 	}
@@ -160,11 +123,7 @@ func (p *Pipeline) ProcessSession(ctx context.Context, session utils.ClusterInfo
 		return SessionStatusAlreadySnapped, nil, nil
 	}
 
-	// Step 3: Parse raw events into a fresh per-call EventHandler so a Supervisor
-	// handling multiple sessions concurrently does not share handler state across them.
-	//
-	// ProcessSingleSession does not accept ctx, so cancellation cannot interrupt mid-file
-	// This is accepted because a single session's event files are bounded in size.
+	// Step 3: parse events with a fresh handler per call (no cross-session state).
 	if err := ctx.Err(); err != nil {
 		return SessionStatusCanceled, nil, err
 	}
@@ -176,9 +135,8 @@ func (p *Pipeline) ProcessSession(ctx context.Context, session utils.ClusterInfo
 		return SessionStatusEventsErr, nil, fmt.Errorf("process events for %s/%s: %w", session.Namespace, session.Name, err)
 	}
 
-	// Step 4: Serialize handler state into the snapshot schema and PUT.
-	// We return the built *SessionSnapshot so Supervisor can Prime the LRU,
-	// avoiding a redundant S3 GET right after a successful write.
+	// Step 4: serialize and PUT. The returned *SessionSnapshot lets the caller
+	// prime the LRU.
 	if err := ctx.Err(); err != nil {
 		return SessionStatusCanceled, nil, err
 	}
@@ -194,16 +152,9 @@ func (p *Pipeline) ProcessSession(ctx context.Context, session utils.ClusterInfo
 
 // isDead queries the Kubernetes API for the owning RayCluster CR.
 //
-// Return semantics:
-//   - (true,  nil): CR is absent -> the cluster is dead.
-//   - (false, nil): CR exists    -> the cluster is live.
-//   - (false, err): other error  -> state is unknown; caller must skip
-//     this session for this call and retry later.
-//
-// Why K8s API not a collector-written marker file: collectors run in
-// every Ray pod; any pod SIGTERM (rolling update, autoscale, drain)
-// would falsely mark a live cluster dead. The CR is deleted only at
-// true end-of-life. See implementation_plan.md §9 decision #5.
+//   - (true,  nil): CR is absent; the cluster is dead.
+//   - (false, nil): CR exists; the cluster is live.
+//   - (false, err): unknown state; caller should skip and retry later.
 func (p *Pipeline) isDead(ctx context.Context, session utils.ClusterInfo) (bool, error) {
 	rc := &rayv1.RayCluster{}
 	err := p.k8sClient.Get(ctx, k8stypes.NamespacedName{
@@ -219,26 +170,18 @@ func (p *Pipeline) isDead(ctx context.Context, session utils.ClusterInfo) (bool,
 	return false, nil
 }
 
-// snapshotExists returns true if object storage already holds the session's
-// processed snapshot. A nil io.Reader from GetContent is the storage layer's
-// way of saying "absent".
+// snapshotExists reports whether the session's snapshot already exists in
+// storage.
 func (p *Pipeline) snapshotExists(clusterNameID, sessionName string) bool {
 	return p.reader.GetContent(clusterNameID, snapshot.SnapshotPath(sessionName)) != nil
 }
 
-// writeSnapshot marshals the SessionSnapshot and performs a single PUT.
-// Object-store PUTs (S3, GCS, Azure blob) are atomic at the object level, so
-// a crash mid-PUT cannot leave a partially-written object; a subsequent
-// /enter_cluster call's skip-if-exists will then re-drive the write.
+// writeSnapshot marshals snap and performs a single atomic PUT.
 func (p *Pipeline) writeSnapshot(clusterNameID, sessionName string, snap *snapshot.SessionSnapshot) error {
 	body, err := json.Marshal(snap)
 	if err != nil {
 		return fmt.Errorf("marshal snapshot for %s/%s: %w", clusterNameID, sessionName, err)
 	}
-	// v1 StorageWriter.WriteFile takes the full absolute key (no auto-prepend),
-	// while StorageReader.GetContent internally prepends rootDir + clusterId.
-	// Mirror GetContent's layout here so a subsequent Load finds the object:
-	//   key = {rootDir}/{clusterNameID}/{snapshot.SnapshotPath(sessionName)}
 	dst := path.Join(p.rootDir, clusterNameID, snapshot.SnapshotPath(sessionName))
 	if err := p.writer.WriteFile(dst, bytes.NewReader(body)); err != nil {
 		return fmt.Errorf("write snapshot %s: %w", dst, err)
@@ -247,11 +190,9 @@ func (p *Pipeline) writeSnapshot(clusterNameID, sessionName string, snap *snapsh
 	return nil
 }
 
-// buildSnapshotFromHandler flattens the handler's per-map state into the
-// SessionSnapshot schema. We use the handler's public getters (which
-// internally take the appropriate locks and return deep copies), so this
-// function is safe to call even if other goroutines still hold a reference
-// to the handler.
+// buildSnapshotFromHandler flattens handler state into a SessionSnapshot. It
+// uses the handler's getters, which lock and return deep copies, so callers
+// may still hold a reference to the handler.
 func buildSnapshotFromHandler(h *eventserver.EventHandler, session utils.ClusterInfo) *snapshot.SessionSnapshot {
 	key := utils.BuildClusterSessionKey(session.Name, session.Namespace, session.SessionName)
 
@@ -270,10 +211,6 @@ func buildSnapshotFromHandler(h *eventserver.EventHandler, session utils.Cluster
 
 // groupTasksByID re-nests the flat []Task returned by EventHandler.GetTasks
 // into the map[taskID][]attempt shape expected by SessionSnapshot.Tasks.
-//
-// GetTasks already returns one entry per (taskID, attempt) pair — we just
-// group by TaskID so the output matches v1's conceptual "TaskMap" layout
-// without us having to reach into the handler's private locks.
 func groupTasksByID(tasks []types.Task) map[string][]types.Task {
 	if len(tasks) == 0 {
 		return map[string][]types.Task{}

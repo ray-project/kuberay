@@ -1,11 +1,8 @@
-// Package snapshot defines the SessionSnapshot format that the History Server
-// v2 beta processor writes to object storage for each dead Ray session.
+// Package snapshot defines the SessionSnapshot format persisted to object
+// storage for each dead Ray session.
 //
-// A SessionSnapshot is the serialized form of what v1 keeps in per-pod in-memory
-// maps (Tasks / Actors / Jobs / Nodes / LogEvents). Once a session's RayCluster
-// CR is deleted, the processor builds a single immutable snapshot and persists
-// it at {clusterNameID}/{session}/processed/session.json. History Server pods
-// then serve that file as a stateless reader.
+// A SessionSnapshot is the immutable, serialized state of a session's
+// processed events; History Server pods serve it as a stateless reader.
 package snapshot
 
 import (
@@ -20,23 +17,22 @@ import (
 type SessionSnapshot struct {
 	// SessionKey is "{name}_{ns}_{session}" (see utils.BuildClusterSessionKey).
 	SessionKey string `json:"sessionKey"`
-	// GeneratedAt is the UTC timestamp at which the processor built this snapshot.
+	// GeneratedAt is the UTC timestamp when this snapshot was built.
 	GeneratedAt time.Time `json:"generatedAt"`
 
-	Tasks     map[string][]types.Task `json:"tasks"`     // taskID -> []attempt
-	Actors    map[string]types.Actor  `json:"actors"`    // actorID -> Actor
-	Jobs      map[string]types.Job    `json:"jobs"`      // jobID -> Job
-	Nodes     map[string]types.Node   `json:"nodes"`     // nodeID -> Node
-	LogEvents LogEventPayload         `json:"logEvents"` // for /events endpoint
+	Tasks     map[string][]types.Task `json:"tasks"`  // taskID -> []attempt
+	Actors    map[string]types.Actor  `json:"actors"` // actorID -> Actor
+	Jobs      map[string]types.Job    `json:"jobs"`   // jobID -> Job
+	Nodes     map[string]types.Node   `json:"nodes"`  // nodeID -> Node
+	LogEvents LogEventPayload         `json:"logEvents"`
 }
 
-// LogEventPayload carries the log events grouped by job_id. This mirrors the
-// shape used by the v1 /events endpoint (Ray Dashboard compatibility).
+// LogEventPayload carries log events grouped by job ID.
 type LogEventPayload struct {
 	ByJobID map[string][]types.LogEvent `json:"byJobId"`
 }
 
-// Storage path convention constants for the processed snapshot file.
+// Path constants for the processed snapshot file.
 const (
 	ProcessedDir = "processed"
 	SnapshotFile = "session.json"

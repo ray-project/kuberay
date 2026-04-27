@@ -1,13 +1,3 @@
-// Package server contains the HTTP layer of the v2 beta History Server.
-//
-// formatters.go holds response-shaping helpers copied verbatim from v1's
-// historyserver/pkg/historyserver/router.go. These are pure functions that
-// transform internal types (from pkg/eventserver/types) into the JSON schema
-// expected by the Ray Dashboard frontend.
-//
-// We copy (rather than import) per plan §Phase 4.2, so v2 stays decoupled
-// from v1's historyserver package (which is expected to be deprecated once
-// v2 stabilizes).
 package server
 
 import (
@@ -21,12 +11,10 @@ import (
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
-// taskPrefix is extracted to avoid hard-coded "task::" usage.
-// Copied from v1 historyserver/pkg/eventserver/eventserver.go:34 because
-// getChromeTraceColor depends on it.
+// taskPrefix is the prefix Ray uses for overall task events ("task::<func>").
 const taskPrefix = "task::"
 
-// formatJobForResponse will convert eventtypes.Job to the format expected by Ray Dashboard
+// formatJobForResponse converts eventtypes.Job to the JSON shape expected by Ray Dashboard.
 func formatJobForResponse(job eventtypes.Job) map[string]interface{} {
 	// If SubmissionID is empty, try to get it from metadata
 	submissionID := job.SubmissionID
@@ -36,9 +24,8 @@ func formatJobForResponse(job eventtypes.Job) map[string]interface{} {
 		}
 	}
 
-	// Determine job status. Prefer the latest StatusTransition (most accurate),
-	// then fall back to job.Status from the definition event, then infer from State.
-	// Frontend uses status for filtering and display:
+	// Determine job status: prefer the latest StatusTransition, fall back to
+	// job.Status, then infer from State.
 	// Ref: https://github.com/ray-project/ray/blob/beae3b3f94/python/ray/dashboard/client/src/pages/job/hook/useJobList.ts#L12
 	status := string(job.Status)
 	if len(job.StatusTransitions) > 0 {
@@ -95,9 +82,9 @@ func formatJobForResponse(job eventtypes.Job) map[string]interface{} {
 	return result
 }
 
-// formatActorForResponse converts an eventtypes.Actor to the format expected by Ray Dashboard.
-// Uses camelCase keys and hex-encoded IDs to match the Ray Dashboard API format.
-// Ref: ActorDetail type https://github.com/ray-project/ray/blob/a8fdb50e72/python/ray/dashboard/client/src/type/actor.ts#L18-L69
+// formatActorForResponse converts an eventtypes.Actor to the Ray Dashboard
+// API format (camelCase keys, hex-encoded IDs).
+// Ref: https://github.com/ray-project/ray/blob/a8fdb50e72/python/ray/dashboard/client/src/type/actor.ts#L18-L69
 func formatActorForResponse(actor eventtypes.Actor) map[string]interface{} {
 	// Convert Base64 IDs to Hex format for Dashboard API compatibility
 	actorIDHex, _ := utils.ConvertBase64ToHex(actor.ActorID)
@@ -132,7 +119,7 @@ func formatActorForResponse(actor eventtypes.Actor) map[string]interface{} {
 		"reprName":      actor.ReprName,
 		"callSite":      actor.CallSite,
 		"isDetached":    actor.IsDetached,
-		"rayNamespace":  actor.RayNamespace,
+		"rayNamespace": actor.RayNamespace,
 		"labelSelector": actor.LabelSelector,
 	}
 
@@ -148,15 +135,9 @@ func formatActorForResponse(actor eventtypes.Actor) map[string]interface{} {
 }
 
 // summarizeTasksByFuncName groups tasks by function name and counts by state.
-//
-// The Ray Dashboard frontend always calls this API with a job_id filter
-// (e.g. filter_keys=job_id&filter_predicates=%3D&filter_values={jobId}),
-// so the summary only includes tasks belonging to that specific job.
-// Internal Ray tasks like _StatsActor (used by Ray Data) belong to a different
-// job and are excluded by the filter before reaching this function.
-// Ref: https://github.com/ray-project/ray/blob/777f37f002c14bd4c587f4d095b85c62690647de/python/ray/dashboard/client/src/service/job.ts
-//
-// Ray API source code: https://github.com/ray-project/ray/blob/777f37f002c14bd4c587f4d095b85c62690647de/python/ray/util/state/common.py#L1035-L1064
+// The Dashboard always calls this with a job_id filter, so internal Ray
+// tasks belonging to a different job (e.g. _StatsActor) never reach here.
+// Ref: https://github.com/ray-project/ray/blob/777f37f002c14bd4c587f4d095b85c62690647de/python/ray/util/state/common.py#L1035-L1064
 func summarizeTasksByFuncName(tasks []eventtypes.Task) *utils.TaskSummariesByFuncName {
 	summary := make(map[string]*utils.TaskSummaryPerFuncOrClassName)
 	totalTasks := 0
@@ -166,17 +147,11 @@ func summarizeTasksByFuncName(tasks []eventtypes.Task) *utils.TaskSummariesByFun
 	for _, task := range tasks {
 		funcName := task.GetFuncName()
 		if funcName == "" {
-			// Skip tasks without a function name. This can happen when we've received
-			// a TASK_LIFECYCLE_EVENT but not yet the corresponding TASK_DEFINITION_EVENT,
-			// since only the definition event carries the FunctionDescriptor (TaskFunc/ActorFunc).
-			//
-			// Unlike the live Ray Dashboard (which reads complete TaskInfo from GCS in a single object),
-			// the history server ingests definition and lifecycle as separate events that may arrive
-			// out of order. A task missing its definition also lacks TaskType, so it cannot contribute
-			// to totalTasks/totalActorTasks/totalActorScheduled counts either.
-			//
-			// We skip rather than using a fallback like "unknown" to keep the summary clean for the
-			// Dashboard frontend, which does not expect such a synthetic key.
+			// Skip tasks without a function name. The definition and lifecycle events
+			// arrive separately, so a task may have lifecycle but no definition (and
+			// thus no FunctionDescriptor or TaskType yet). Using a fallback like
+			// "unknown" would pollute the summary with a synthetic key the Dashboard
+			// does not expect.
 			// Ref: https://github.com/ray-project/ray/blob/777f37f002c14bd4c587f4d095b85c62690647de/python/ray/util/state/common.py#L1049
 			continue
 		}
@@ -189,8 +164,8 @@ func summarizeTasksByFuncName(tasks []eventtypes.Task) *utils.TaskSummariesByFun
 			}
 		}
 
-		// Use "NIL" for empty state to match Ray's behavior: when a task has no lifecycle events,
-		// Ray's protobuf_to_task_state_dict defaults to "NIL" (protobuf TaskStatus enum value 0).
+		// "NIL" matches Ray's default for tasks with no lifecycle events
+		// (protobuf TaskStatus enum value 0).
 		// Ref: https://github.com/ray-project/ray/blob/777f37f002c14bd4c587f4d095b85c62690647de/python/ray/util/state/common.py#L1688-L1691
 		state := string(task.State)
 		if state == "" {
@@ -218,9 +193,9 @@ func summarizeTasksByFuncName(tasks []eventtypes.Task) *utils.TaskSummariesByFun
 	}
 }
 
-// formatTaskForResponse formats a task data result of a single task attempt for the response.
-// The schema aligns with the Ray Dashboard API.
-// Ref: https://github.com/ray-project/ray/blob/d0b1d151d8ea964a711e451d0ae736f8bf95b629/python/ray/util/state/common.py#L730-L819.
+// formatTaskForResponse formats a single task attempt for the Ray Dashboard
+// task API response.
+// Ref: https://github.com/ray-project/ray/blob/d0b1d151d8ea964a711e451d0ae736f8bf95b629/python/ray/util/state/common.py#L730-L819
 func formatTaskForResponse(task eventtypes.Task, detail bool) map[string]interface{} {
 	// TODO(jwj): Maybe define result schema in types.go.
 	result := map[string]interface{}{
@@ -252,7 +227,7 @@ func formatTaskForResponse(task eventtypes.Task, detail bool) map[string]interfa
 		runtimeEnvInfoObj := map[string]interface{}{
 			"serialized_runtime_env": task.SerializedRuntimeEnv,
 			// RuntimeEnvUris and RuntimeEnvConfig are never populated on the Ray side.
-			// Ref: https://github.com/ray-project/ray/blob/50c715e79c5ca93118e1280f3842a1946b2cddac/src/ray/core_worker/task_event_buffer.cc#L189-L237.
+			// Ref: https://github.com/ray-project/ray/blob/50c715e79c5ca93118e1280f3842a1946b2cddac/src/ray/core_worker/task_event_buffer.cc#L189-L237
 			"runtime_env_config": map[string]interface{}{
 				"setup_timeout_seconds": 600,
 				"eager_install":         true,
@@ -277,7 +252,7 @@ func formatTaskForResponse(task eventtypes.Task, detail bool) map[string]interfa
 		}
 		result["events"] = events
 		// TODO(jwj): Support profiling_data after TASK_PROFILE_EVENT is supported.
-		// Ref: https://github.com/ray-project/ray/blob/d0b1d151d8ea964a711e451d0ae736f8bf95b629/python/ray/util/state/common.py#L1616-L1622.
+		// Ref: https://github.com/ray-project/ray/blob/d0b1d151d8ea964a711e451d0ae736f8bf95b629/python/ray/util/state/common.py#L1616-L1622
 		// result["profiling_data"] = task.ProfilingData
 		result["task_log_info"] = task.TaskLogInfo
 		if task.RayErrorInfo != nil {
@@ -321,11 +296,10 @@ func formatTaskForResponse(task eventtypes.Task, detail bool) map[string]interfa
 	return result
 }
 
-// formatNodeSummaryReplayForResp formats a node summary replay of a single node for the response.
-// Fields must match the Ray Dashboard frontend NodeDetail type to avoid TypeError crashes.
-// Ref: NodeDetail.tsx (loadAvg, networkSpeed, cmdline, disk, workers, actors):
-//
-//	https://github.com/ray-project/ray/blob/8a7b47bc5c/python/ray/dashboard/client/src/pages/node/NodeDetail.tsx#L65-L233
+// formatNodeSummaryReplayForResp formats one node's summary replay for the
+// response. Fields must match the Ray Dashboard NodeDetail type to avoid
+// TypeError crashes on the frontend.
+// Ref: https://github.com/ray-project/ray/blob/8a7b47bc5c/python/ray/dashboard/client/src/pages/node/NodeDetail.tsx#L65-L233
 func formatNodeSummaryReplayForResp(node eventtypes.Node, sessionName string) []map[string]interface{} {
 	nodeId := node.NodeID
 	nodeIpAddress := node.NodeIPAddress
@@ -338,8 +312,8 @@ func formatNodeSummaryReplayForResp(node eventtypes.Node, sessionName string) []
 	rayletSocketName := fmt.Sprintf("/tmp/ray/%s/sockets/raylet", sessionName)
 	objectStoreSocketName := fmt.Sprintf("/tmp/ray/%s/sockets/plasma_store", sessionName)
 
-	// Handle the start timestamp of the node.
-	// Ref: https://github.com/ray-project/ray/blob/f953f199b5d68d47c07c865c5ebcd2333d49f365/src/ray/protobuf/gcs.proto#L345-L346.
+	// Start timestamp from Ray NodeInfo protobuf.
+	// Ref: https://github.com/ray-project/ray/blob/f953f199b5d68d47c07c865c5ebcd2333d49f365/src/ray/protobuf/gcs.proto#L345-L346
 	var startTimestamp int64
 	if !node.StartTimestamp.IsZero() {
 		startTimestamp = node.StartTimestamp.UnixMilli()
@@ -367,10 +341,10 @@ func formatNodeSummaryReplayForResp(node eventtypes.Node, sessionName string) []
 			}
 		}
 
-		// Host-level metrics (cpus, mem, shm, bootTime, disk, gpus, tpus) are not available
-		// from Ray Base Events. These metrics can be obtained from Prometheus/Grafana when
-		// Ray metrics are enabled. For historical replay, we use placeholder values.
-		// Format must match the Ray Dashboard API schema expected by the frontend.
+		// Host-level metrics (cpus, mem, shm, bootTime, disk, gpus, tpus) are not
+		// available from Ray Base Events; they require Prometheus/Grafana with
+		// Ray metrics enabled. For historical replay we use placeholder values
+		// matching the Dashboard's expected schema.
 		nodeSummarySnapshot := map[string]interface{}{
 			"t":            transitionTimestamp,
 			"now":          transitionTimestamp,
@@ -425,7 +399,7 @@ func formatNodeSummaryReplayForResp(node eventtypes.Node, sessionName string) []
 	return nodeSummaryReplay
 }
 
-// formatNodeResourceReplayForResp formats a node resource replay of a single node for the response.
+// formatNodeResourceReplayForResp formats one node's resource replay for the response.
 func formatNodeResourceReplayForResp(node eventtypes.Node) []map[string]interface{} {
 	nodeResourceReplay := make([]map[string]interface{}, 0)
 	for _, tr := range node.StateTransitions {
@@ -470,8 +444,9 @@ func convertResourcesToAPISchema(resources map[string]float64) map[string]float6
 	return convertedResources
 }
 
-// composeStateMessage composes a state message based on the death reason and message for a node state transition in DEAD state.
-// Ref: https://github.com/ray-project/ray/blob/f953f199b5d68d47c07c865c5ebcd2333d49f365/python/ray/dashboard/utils.py#L738-L765.
+// composeStateMessage builds the state message for a node DEAD transition
+// from its death reason and message.
+// Ref: https://github.com/ray-project/ray/blob/f953f199b5d68d47c07c865c5ebcd2333d49f365/python/ray/dashboard/utils.py#L738-L765
 func composeStateMessage(deathReason string, deathReasonMessage string) string {
 	var stateMessage string
 	if deathReason == string(eventtypes.EXPECTED_TERMINATION) {
@@ -496,9 +471,9 @@ func composeStateMessage(deathReason string, deathReasonMessage string) string {
 	return stateMessage
 }
 
-// constructResourceString constructs a resource string based on the resources in state transition.
-// Note that we skip processing the placement group.
-// Ref: https://github.com/ray-project/ray/blob/f953f199b5d68d47c07c865c5ebcd2333d49f365/python/ray/autoscaler/_private/util.py#L643-L665.
+// constructResourceString builds the human-readable resource string from a
+// state transition. Placement group entries are skipped.
+// Ref: https://github.com/ray-project/ray/blob/f953f199b5d68d47c07c865c5ebcd2333d49f365/python/ray/autoscaler/_private/util.py#L643-L665
 func constructResourceString(resources map[string]float64) string {
 	resourceKeys := make([]string, 0, len(resources))
 	for k := range resources {
@@ -554,17 +529,15 @@ func formatMemory(memBytes float64) string {
 	return fmt.Sprintf("%dB", int(memBytes))
 }
 
-// getChromeTraceColor maps event names to Chrome trace colors
-// Based on Ray's _default_color_mapping in profiling.py.
-// Copied verbatim from v1 historyserver/pkg/eventserver/eventserver.go:1467.
+// getChromeTraceColor maps event names to Chrome trace colors based on
+// Ray's _default_color_mapping in profiling.py.
 func getChromeTraceColor(eventName string) string {
 	// Handle task::xxx pattern (overall task event)
 	if strings.HasPrefix(eventName, taskPrefix) {
 		return "generic_work"
 	}
 
-	// Direct mapping for known event names
-	// This logic follows Ray's profiling implementation:
+	// Direct mapping; follows Ray's profiling implementation:
 	// https://github.com/ray-project/ray/blob/68d01c4c48a59c7768ec9c2359a1859966c446b6/python/ray/_private/profiling.py#L25
 	switch eventName {
 	case "task:deserialize_arguments":
@@ -592,18 +565,14 @@ func getChromeTraceColor(eventName string) string {
 	}
 }
 
-// extractActorIDFromTaskID extracts the ActorID from a TaskID following Ray's ID specification.
+// extractActorIDFromTaskID extracts the ActorID from a TaskID following
+// Ray's ID specification (src/ray/design_docs/id_specification.md):
+//   - TaskID: 8B unique + 16B ActorID (24 bytes / 48 hex chars).
+//   - ActorID: 12B unique + 4B JobID (16 bytes / 32 hex chars).
 //
-// Design doc: src/ray/design_docs/id_specification.md
-// - TaskID: 8B unique + 16B ActorID (total 24 bytes = 48 hex chars)
-// - ActorID: 12B unique + 4B JobID (total 16 bytes = 32 hex chars)
-//
-// For a 48-character hex TaskID, the last 32 hex characters (bytes 16–48)
-// correspond to the ActorID. This function further checks the "unique" portion
-// of the ActorID (first 24 hex chars) and returns an empty string if it is all Fs,
-// which indicates normal/driver tasks with no associated actor.
-//
-// Copied verbatim from v1 historyserver/pkg/eventserver/eventserver.go:1512.
+// The last 32 hex chars of a 48-char TaskID are the ActorID. Returns an
+// empty string when the ActorID's "unique" portion is all Fs, which marks
+// normal/driver tasks with no associated actor.
 func extractActorIDFromTaskID(taskIDHex string) string {
 	if len(taskIDHex) != 48 {
 		return "" // can't process if encoded in base64
