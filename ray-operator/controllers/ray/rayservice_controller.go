@@ -2076,7 +2076,15 @@ func (r *RayServiceReconciler) reconcileRollbackState(ctx context.Context, raySe
 	// Case 2: The goal spec diverges from the pending cluster.
 	// This happens if the user reverted to the original spec, or if they submitted a 3rd entirely new spec mid-upgrade.
 	// In all divergence cases, we must first safely route all traffic back to the original cluster before allowing
-	// a new cluster to be spun up.
+// Case 2: The goal spec diverges from the pending cluster.
+// This covers two sub-cases:
+//   2.1: The user reverted to the original spec (targetHash == originalHash).
+//        The pending cluster is no longer needed, so we roll back to the active cluster.
+//   2.2: The user submitted a 3rd entirely new spec mid-upgrade (targetHash != originalHash && targetHash != pendingHash).
+//        The pending cluster doesn't match the new goal either, so we must first roll back
+//        to the active cluster, clean up the pending cluster, and then start a fresh upgrade.
+// In both sub-cases, we must safely route all traffic back to the original cluster before
+// allowing a new cluster to be spun up.
 	if !isRollbackInProgress {
 		logger.Info("Goal state has changed during upgrade. Initiating safe rollback to the original cluster.", "targetHash", targetHash, "originalHash", originalHash, "pendingHash", pendingHash)
 		setCondition(rayServiceInstance, rayv1.RollbackInProgress, metav1.ConditionTrue, rayv1.TargetClusterChanged, "Goal state changed mid-upgrade, rolling back to original cluster.")
