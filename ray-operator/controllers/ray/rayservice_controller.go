@@ -1408,12 +1408,6 @@ func (r *RayServiceReconciler) checkIfNeedTargetCapacityUpdate(ctx context.Conte
 	pendingTargetCapacity := int(*pendingRayServiceStatus.TargetCapacity)
 	pendingTrafficRoutedPercent := int(*pendingRayServiceStatus.TrafficRoutedPercent)
 
-	if activeTargetCapacity == 0 && pendingTargetCapacity == 100 {
-		return false, "All traffic has migrated to the upgraded cluster and NewClusterWithIncrementalUpgrade is complete."
-	} else if pendingTargetCapacity < 100 || pendingTrafficRoutedPercent < 100 {
-		return true, "Pending RayCluster has not finished scaling up."
-	}
-
 	// During rollback, the goal is activeTargetCapacity → 100, pendingTargetCapacity → 0.
 	if meta.IsStatusConditionTrue(rayServiceInstance.Status.Conditions, string(rayv1.RollbackInProgress)) {
 		if activeTargetCapacity == 100 && pendingTargetCapacity == 0 {
