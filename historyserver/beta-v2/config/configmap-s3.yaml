@@ -1,21 +1,14 @@
-# Sample backend config ConfigMap (S3 / MinIO). Edit for your actual backend.
+# Sample backend config ConfigMap for S3 / MinIO. Edit for your actual backend.
 #
-# The beta-v2 historyserver pod mounts this ConfigMap at
-# /var/collector-config and passes the file path via --runtime-class-config-path.
-# The JSON is parsed by the reader/writer factory registered under
-# --runtime-class-name (see pkg/collector/registry.go). beta-v2 is a single
-# binary, so unlike beta there is no second (eventprocessor) consumer of
-# this ConfigMap.
+# Mounted at /var/collector-config; the pod passes the file via
+# --runtime-class-config-path and the reader/writer factory selected by
+# --runtime-class-name parses it.
 #
-# IMPORTANT — JSON key convention (see pkg/storage/s3/config.go):
-#   - Keys are camelCase with "s3" prefix: s3Bucket / s3Endpoint / s3Region
-#   - Boolean flags (s3ForcePathStyle, s3DisableSSL) MUST be JSON strings
-#     ("true" / "false"), not booleans — the code does `.(string) == "true"`.
-#   - If the JSON has any non-empty value, it OVERRIDES all S3_* env vars
-#     (len(jd)==0 branch is env fallback). Treat this as all-or-nothing.
-#
-# For GCS / Azure Blob / Aliyun OSS, mirror this file but swap the keys per
-# the backend-specific struct in pkg/collector/<backend>/types.go.
+# JSON key convention (see pkg/storage/s3/config.go):
+#   - Keys are camelCase with "s3" prefix.
+#   - Boolean flags MUST be JSON strings ("true"/"false"), not booleans —
+#     the parser uses `.(string) == "true"`.
+#   - Any non-empty value here OVERRIDES all S3_* env vars (all-or-nothing).
 ---
 apiVersion: v1
 kind: ConfigMap

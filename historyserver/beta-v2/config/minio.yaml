@@ -1,20 +1,8 @@
-# History Server v2 beta-v2: MinIO dev backend.
-#
-# Mirrors the layout of historyserver/config/minio.yaml (v1) so operators
-# already familiar with v1 see a near-identical surface. Two differences:
-#
-#   1. Add the `historyserver-beta-v2-s3` Secret (in the `default` namespace)
-#      consumed by beta-v2/config/historyserver.yaml. beta-v2 is a single
-#      binary, so there is no separate eventprocessor consumer (beta had two).
-#
-#   2. Keys on the client-side Secret are `access_key` / `secret_key` to
-#      match what the beta-v2 Deployment references via `secretKeyRef`.
+# MinIO dev backend for the History Server.
 #
 # NOT for production:
-#   - Credentials are hardcoded (`minioadmin:minioadmin`) with a CHANGE THIS
-#     reminder — same posture as v1.
-#   - Storage is ephemeral (no PVC); the PVC block is left commented so a
-#     developer can opt in without re-writing the Deployment.
+#   - Credentials are hardcoded (`minioadmin:minioadmin`); change before any non-dev use.
+#   - Storage is ephemeral (no PVC); see the commented block below.
 #   - No TLS; clients set `S3DISABLE_SSL=true`.
 ---
 apiVersion: v1
@@ -22,7 +10,7 @@ kind: Namespace
 metadata:
   name: minio-dev
 ---
-# 1. Secrets for MinIO server login (mirrors v1).
+# 1. Secrets for MinIO server login.
 apiVersion: v1
 kind: Secret
 metadata:
@@ -33,9 +21,8 @@ stringData:
   rootUser: minioadmin      # CHANGE THIS
   rootPassword: minioadmin  # CHANGE THIS
 ---
-# 1b. Client-side Secret referenced by the beta-v2 historyserver Deployment.
-#     Same values as minio-creds above; separate object because it must live
-#     in the client Deployment's namespace (default).
+# 1b. Client-side Secret consumed by the historyserver Deployment.
+#     Must live in the same namespace as the Deployment.
 apiVersion: v1
 kind: Secret
 metadata:
@@ -69,9 +56,8 @@ metadata:
     app: minio
 spec:
   replicas: 1
-  # Recreate (not RollingUpdate) because the emptyDir volume is pod-local —
-  # two pods briefly co-existing during a rollout would each hold distinct
-  # data directories, a race condition we want to avoid.
+  # Recreate (not RollingUpdate): the emptyDir volume is pod-local; two
+  # pods briefly co-existing during rollout would each hold distinct data dirs.
   strategy:
     type: Recreate
   selector:

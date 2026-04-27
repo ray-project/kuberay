@@ -1,29 +1,8 @@
-# History Server v2 beta-v2: historyserver Deployment + Service.
+# Deployment + Service + PDB for the History Server.
 #
-# beta-v2 is a single-binary daemon that both serves HTTP API calls and
-# drives the per-session snapshot pipeline on demand via an internal
-# Supervisor (see historyserver/beta_poc.md §3). There is no separate
-# eventprocessor Deployment — the Pipeline runs inside this pod as a
-# goroutine whenever /enter_cluster is visited for a dead session.
-#
-# Why replicas=1 (PoC default):
-#   - Keeps the dev/demo footprint minimal so one-machine kind clusters fit.
-#   - beta-v2 is safe to run at replicas>1 (snapshots in S3 are immutable
-#     via skip-if-exists; each pod owns its own LRU + singleflight; the
-#     worst-case cross-replica race is a redundant idempotent Pipeline
-#     execution). Bump replicas directly for production — no other changes
-#     needed. See beta_poc.md §9 ("分散式 singleflight 可接受 [to be
-#     added later]") for the multi-replica trade-off.
-#   - K8s API usage is read-only (List for /clusters, Get for
-#     redirectRequest live proxy, Get for Pipeline.isDead) — no write race.
-#
-# Why rolling updates are safe even though Pipeline writes to S3:
-#   - skip-if-exists: a pod mid-write whose new pod version starts another
-#     Pipeline for the same session — the second PUT is a no-op when the
-#     first completes. If the old pod crashes mid-write, the new pod re-
-#     drives; S3 never sees a partial object.
-#   - beta-v2 keeps beta's "replicas=1 Recreate for eventprocessor" -> N/A
-#     because there is no separate eventprocessor anymore.
+# replicas=1 is the dev/PoC default. Scaling up is safe: snapshots in
+# object storage are immutable via skip-if-exists; each pod owns its own
+# LRU + singleflight. K8s API access is read-only.
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -80,15 +59,12 @@ spec:
         ports:
         - containerPort: 8080
           name: http
-        # Probes use endpoints registered by beta-v2/pkg/server/router.go.
-        # /readz: serves traffic as soon as HTTP listener is up.
-        # /livez: process restarts if handler hangs > failureThreshold * period.
+        # Probes are served by /readz (ready when HTTP listener is up) and
+        # /livez (registered in pkg/server/router.go).
         #
-        # Note on /enter_cluster latency vs. liveness: a cold-path Pipeline
-        # run can take a few seconds (List + parse + PUT). /livez probes
-        # are cheap (no snapshot work), so they stay responsive even while
-        # /enter_cluster is blocked — the kubelet won't restart us just
-        # because one user triggered a slow snapshot.
+        # /enter_cluster cold-path latency: a Pipeline run can take seconds.
+        # /livez does no snapshot work and stays responsive, so the kubelet
+        # won't restart us during slow snapshot generation.
         livenessProbe:
           httpGet:
             path: /livez
@@ -112,11 +88,8 @@ spec:
           readOnlyRootFilesystem: true
           capabilities:
             drop: ["ALL"]
-        # Env block absorbs both the beta historyserver AND the beta
-        # eventprocessor env, because beta-v2 does both jobs in one pod.
-        # S3 credentials are marked optional so MinIO dev setups (which
-        # use env-sourced keys from configmap-s3.yaml) still work without
-        # a Secret present.
+        # S3 credentials are marked optional so MinIO dev setups (env-sourced
+        # keys from configmap-s3.yaml) still work without a Secret present.
         env:
         - name: S3DISABLE_SSL
           value: "true"
@@ -156,14 +129,12 @@ spec:
         configMap:
           name: historyserver-beta-v2-runtime-config
 ---
-# PodDisruptionBudget: during voluntary disruption (node drain, cluster
-# upgrade), keep at least one replica up so users don't see total outage.
+# PodDisruptionBudget: keeps the object in place so scaling up only requires
+# bumping minAvailable.
 #
-# WHY minAvailable=0 with replicas=1: at the current PoC replica count a
-# minAvailable=1 PDB would deadlock any voluntary disruption (node drain
-# etc.) because there is no second pod to satisfy it. We keep the PDB
-# object in place so scaling up (e.g. replicas: 3) just requires bumping
-# minAvailable here; deleting the PDB would be harder to re-introduce.
+# minAvailable=0 because replicas=1: minAvailable=1 with one replica would
+# deadlock voluntary disruption (drain etc.). When you scale to N>1, set
+# minAvailable=N-1.
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
