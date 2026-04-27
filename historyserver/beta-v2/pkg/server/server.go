@@ -240,7 +240,7 @@ func (s *Server) getClusters(req *restful.Request, resp *restful.Response) {
 // getTimezone returns the timezone offset for the session. Read directly
 // from the fetched_endpoints metadata, not the snapshot pipeline.
 func (s *Server) getTimezone(req *restful.Request, resp *restful.Response) {
-	clusterNameID, sessionName, ok := extractCookies(req)
+	clusterNameID, sessionName, _, ok := readSessionCookies(req)
 	if !ok {
 		writeMissingCookies(resp)
 		return

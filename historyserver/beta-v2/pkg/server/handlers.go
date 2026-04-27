@@ -96,33 +96,9 @@ func newServerWithLoader(loader snapshotLoader) *Server {
 
 // --- cookie & error helpers ---------------------------------------------------
 
-// extractCookies reads the three cookies written by /enter_cluster.
-//
-//   - clusterNameID = "{name}_{namespace}" (storage folder prefix).
-//   - sessionName   = the cookie value, or "live" for running clusters.
-//   - ok == false if any cookie is missing (caller should 400).
-func extractCookies(req *restful.Request) (clusterNameID, sessionName string, ok bool) {
-	clusterNameCookie, err := req.Request.Cookie(cookieClusterNameKey)
-	if err != nil {
-		return "", "", false
-	}
-	clusterNamespaceCookie, err := req.Request.Cookie(cookieClusterNamespaceKey)
-	if err != nil {
-		return "", "", false
-	}
-	sessionNameCookie, err := req.Request.Cookie(cookieSessionNameKey)
-	if err != nil {
-		return "", "", false
-	}
-	if clusterNameCookie.Value == "" || clusterNamespaceCookie.Value == "" || sessionNameCookie.Value == "" {
-		return "", "", false
-	}
-	return clusterNameCookie.Value + "_" + clusterNamespaceCookie.Value, sessionNameCookie.Value, true
-}
-
-// extractSessionKey returns (clusterNameID, sessionName, clusterSessionKey).
+// readSessionCookies returns (clusterNameID, sessionName, clusterSessionKey).
 // clusterSessionKey is the "{name}_{ns}_{session}" form used as snapshot.SessionKey.
-func extractSessionKey(req *restful.Request) (clusterNameID, sessionName, clusterSessionKey string, ok bool) {
+func readSessionCookies(req *restful.Request) (clusterNameID, sessionName, clusterSessionKey string, ok bool) {
 	clusterNameCookie, err := req.Request.Cookie(cookieClusterNameKey)
 	if err != nil {
 		return "", "", "", false
@@ -185,7 +161,7 @@ func writeJSON(resp *restful.Response, v interface{}) {
 // The snapshot stores Tasks as taskID -> []attempt (one entry per TaskAttempt);
 // flatten, apply ParseOptionsFromReq + ApplyTaskFilters, then format.
 func (s *Server) getTasks(req *restful.Request, resp *restful.Response) {
-	clusterNameID, sessionName, _, ok := extractSessionKey(req)
+	clusterNameID, sessionName, _, ok := readSessionCookies(req)
 	if !ok {
 		writeMissingCookies(resp)
 		return
@@ -253,7 +229,7 @@ func flattenTasks(byID map[string][]eventtypes.Task) []eventtypes.Task {
 
 // getTaskSummarize implements summary_by=func_name (default) and summary_by=lineage.
 func (s *Server) getTaskSummarize(req *restful.Request, resp *restful.Response) {
-	clusterNameID, sessionName, _, ok := extractSessionKey(req)
+	clusterNameID, sessionName, _, ok := readSessionCookies(req)
 	if !ok {
 		writeMissingCookies(resp)
 		return
@@ -333,7 +309,7 @@ func (s *Server) getTaskSummarize(req *restful.Request, resp *restful.Response) 
 //   - download: "1" sets Content-Disposition so the browser saves the array
 //     as a .json file. Filename includes job_id and the current timestamp.
 func (s *Server) getTasksTimeline(req *restful.Request, resp *restful.Response) {
-	clusterNameID, sessionName, _, ok := extractSessionKey(req)
+	clusterNameID, sessionName, _, ok := readSessionCookies(req)
 	if !ok {
 		writeMissingCookies(resp)
 		return
@@ -378,7 +354,7 @@ func (s *Server) getTasksTimeline(req *restful.Request, resp *restful.Response) 
 // --- getLogicalActors: GET /logical/actors -----------------------------------
 
 func (s *Server) getLogicalActors(req *restful.Request, resp *restful.Response) {
-	clusterNameID, sessionName, _, ok := extractSessionKey(req)
+	clusterNameID, sessionName, _, ok := readSessionCookies(req)
 	if !ok {
 		writeMissingCookies(resp)
 		return
@@ -414,7 +390,7 @@ func (s *Server) getLogicalActors(req *restful.Request, resp *restful.Response) 
 // --- getLogicalActor: GET /logical/actors/{single_actor} ---------------------
 
 func (s *Server) getLogicalActor(req *restful.Request, resp *restful.Response) {
-	clusterNameID, sessionName, _, ok := extractSessionKey(req)
+	clusterNameID, sessionName, _, ok := readSessionCookies(req)
 	if !ok {
 		writeMissingCookies(resp)
 		return
@@ -467,7 +443,7 @@ func (s *Server) getLogicalActor(req *restful.Request, resp *restful.Response) {
 // --- getJobs: GET /api/jobs/ --------------------------------------------------
 
 func (s *Server) getJobs(req *restful.Request, resp *restful.Response) {
-	clusterNameID, sessionName, _, ok := extractSessionKey(req)
+	clusterNameID, sessionName, _, ok := readSessionCookies(req)
 	if !ok {
 		writeMissingCookies(resp)
 		return
@@ -494,7 +470,7 @@ func (s *Server) getJobs(req *restful.Request, resp *restful.Response) {
 // --- getJob: GET /api/jobs/{job_id} ------------------------------------------
 
 func (s *Server) getJob(req *restful.Request, resp *restful.Response) {
-	clusterNameID, sessionName, _, ok := extractSessionKey(req)
+	clusterNameID, sessionName, _, ok := readSessionCookies(req)
 	if !ok {
 		writeMissingCookies(resp)
 		return
@@ -527,7 +503,7 @@ func (s *Server) getJob(req *restful.Request, resp *restful.Response) {
 
 // getNodes supports view=summary (default) and view=hostNameList.
 func (s *Server) getNodes(req *restful.Request, resp *restful.Response) {
-	clusterNameID, sessionName, _, ok := extractSessionKey(req)
+	clusterNameID, sessionName, _, ok := readSessionCookies(req)
 	if !ok {
 		writeMissingCookies(resp)
 		return
@@ -625,7 +601,7 @@ func writeNodesHostNameList(nodeMap map[string]eventtypes.Node, resp *restful.Re
 // getNode returns a single node with its scheduled actors filled in. The
 // Dashboard's NodeDetail page expects actors filtered by NodeID.
 func (s *Server) getNode(req *restful.Request, resp *restful.Response) {
-	clusterNameID, sessionName, _, ok := extractSessionKey(req)
+	clusterNameID, sessionName, _, ok := readSessionCookies(req)
 	if !ok {
 		writeMissingCookies(resp)
 		return
@@ -688,7 +664,7 @@ func (s *Server) getNode(req *restful.Request, resp *restful.Response) {
 // param) or one job's events (when job_id is set, including empty string —
 // "param not given" and "param given but empty" are distinct).
 func (s *Server) getEvents(req *restful.Request, resp *restful.Response) {
-	clusterNameID, sessionName, _, ok := extractSessionKey(req)
+	clusterNameID, sessionName, _, ok := readSessionCookies(req)
 	if !ok {
 		writeMissingCookies(resp)
 		return
@@ -764,7 +740,7 @@ func (s *Server) getEvents(req *restful.Request, resp *restful.Response) {
 // (worker_out, worker_err, core_worker, driver, raylet, gcs_server, internal,
 // autoscaler, agent, dashboard).
 func (s *Server) getNodeLogs(req *restful.Request, resp *restful.Response) {
-	clusterNameID, sessionName, ok := extractCookies(req)
+	clusterNameID, sessionName, _, ok := readSessionCookies(req)
 	if !ok {
 		writeMissingCookies(resp)
 		return
@@ -913,7 +889,7 @@ func categorizeLogFiles(files []string) map[string][]string {
 // getClusterMetadata streams fetched_endpoints/<key> verbatim. Snapshot-
 // independent — the collector wrote it during live operation; we return as-is.
 func (s *Server) getClusterMetadata(req *restful.Request, resp *restful.Response) {
-	clusterNameID, sessionName, ok := extractCookies(req)
+	clusterNameID, sessionName, _, ok := readSessionCookies(req)
 	if !ok {
 		writeMissingCookies(resp)
 		return
@@ -963,7 +939,7 @@ func (s *Server) getClusterMetadata(req *restful.Request, resp *restful.Response
 // parity with live Ray output), failed nodes and pending demands come from
 // the snapshot.
 func (s *Server) getClusterStatus(req *restful.Request, resp *restful.Response) {
-	clusterNameID, sessionName, ok := extractCookies(req)
+	clusterNameID, sessionName, _, ok := readSessionCookies(req)
 	if !ok {
 		writeMissingCookies(resp)
 		return
@@ -1030,7 +1006,7 @@ func (s *Server) getNodeLog(req *restful.Request, resp *restful.Response) {
 // storage. Requires node_id + filename query params. task_id / actor_id /
 // pid-based resolution returns 400 — callers must resolve client-side.
 func (s *Server) getNodeLogFile(req *restful.Request, resp *restful.Response) {
-	clusterNameID, sessionName, ok := extractCookies(req)
+	clusterNameID, sessionName, _, ok := readSessionCookies(req)
 	if !ok {
 		writeMissingCookies(resp)
 		return
@@ -1106,7 +1082,7 @@ func (s *Server) getNodeLogFile(req *restful.Request, resp *restful.Response) {
 // getNodeLogStream returns 501 for dead clusters (snapshots are immutable;
 // no tail). Live clusters are dispatched to Ray Dashboard upstream.
 func (s *Server) getNodeLogStream(req *restful.Request, resp *restful.Response) {
-	_, sessionName, ok := extractCookies(req)
+	_, sessionName, _, ok := readSessionCookies(req)
 	if !ok {
 		writeMissingCookies(resp)
 		return
