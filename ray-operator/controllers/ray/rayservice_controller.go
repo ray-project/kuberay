@@ -1414,7 +1414,22 @@ func (r *RayServiceReconciler) checkIfNeedTargetCapacityUpdate(ctx context.Conte
 		return true, "Pending RayCluster has not finished scaling up."
 	}
 	return true, "Active RayCluster TargetCapacity has not finished scaling down."
+	// During rollback, the goal is active pendingTarget Capacity → 100, pending pendingTarget Capacity → 0.
+	if meta.IsStatusConditionTrue(rayServiceInstance.Status.Conditions, string(rayv1.RollbackInProgress)) {
+		if activeTargetCapacity == 100 && pendingTargetCapacity == 0 {
+			return false, "Rollback complete: all traffic has been restored to the active cluster."
+		}
+		return true, "Rollback in progress: traffic is being restored to the active cluster."
+	}
+
+	if activeTargetCapacity == 0 && pendingTargetCapacity == 100 {
+		return false, "All traffic has migrated to the upgraded cluster and NewClusterWithIncrementalUpgrade is complete."
+	} else if pendingTargetCapacity < 100 || pendingTrafficRoutedPercent < 100 {
+		return true, "Pending RayCluster has not finished scaling up."
+	}
+	return true, "Active RayCluster TargetCapacity has not finished scaling down."
 }
+
 
 // applyServeTargetCapacity updates the target_capacity for a given RayCluster's Serve applications.
 func (r *RayServiceReconciler) applyServeTargetCapacity(ctx context.Context, rayServiceInstance *rayv1.RayService, rayClusterInstance *rayv1.RayCluster, rayDashboardClient dashboardclient.RayDashboardClientInterface, goalTargetCapacity int32) error {
