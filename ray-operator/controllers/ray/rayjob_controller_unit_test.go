@@ -428,7 +428,7 @@ func TestCreateNewK8sJob_PropagatesLabelsToSubmitterPodTemplate(t *testing.T) {
 	podLabels := createdJob.Spec.Template.Labels
 	assert.Equal(t, "test-rayjob", podLabels[utils.RayOriginatedFromCRNameLabelKey],
 		"Pod template should have ray.io/originated-from-cr-name label")
-	assert.Equal(t, string(utils.RayJobCRD), podLabels[utils.RayOriginatedFromCRDLabelKey],
+	assert.Equal(t, utils.RayOriginatedFromCRDLabelValue(utils.RayJobCRD), podLabels[utils.RayOriginatedFromCRDLabelKey],
 		"Pod template should have ray.io/originated-from-crd label")
 	assert.Equal(t, utils.ComponentName, podLabels[utils.KubernetesCreatedByLabelKey],
 		"Pod template should have app.kubernetes.io/created-by label")

@@ -446,5 +446,6 @@ const (
 	DeletedNetworkPolicy        K8sEventType = "DeletedNetworkPolicy"
 	FailedToCreateNetworkPolicy K8sEventType = "FailedToCreateNetworkPolicy"
 	FailedToUpdateNetworkPolicy K8sEventType = "FailedToUpdateNetworkPolicy"
+	FailedToDeleteNetworkPolicy K8sEventType = "FailedToDeleteNetworkPolicy"
 	NetworkPolicyNameCollision  K8sEventType = "NetworkPolicyNameCollision"
 )

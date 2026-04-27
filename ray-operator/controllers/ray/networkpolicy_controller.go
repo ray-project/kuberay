@@ -50,17 +50,13 @@ func getAllowAllRayJobSubmitters() bool {
 
 // getOperatorNamespace returns the namespace the operator is running in.
 // It reads from the in-cluster service account namespace file first, then
-// falls back to the POD_NAMESPACE environment variable, and finally to "default"
-// which matches both the Helm and Kustomize deployment defaults.
+// falls back to "default" which matches both the Helm and Kustomize deployment defaults.
 func getOperatorNamespace() string {
 	if ns, err := os.ReadFile(utils.InClusterNamespacePath); err == nil {
 		return strings.TrimSpace(string(ns))
 	}
-	if ns := os.Getenv("POD_NAMESPACE"); ns != "" {
-		return ns
-	}
 	ctrl.Log.WithName("networkpolicy-controller").Info(
-		"Unable to determine operator namespace from service account or POD_NAMESPACE env var, falling back to 'default'")
+		"Unable to determine operator namespace from service account, falling back to 'default'")
 	return "default"
 }
 
@@ -139,7 +135,7 @@ func (r *NetworkPolicyController) createOrUpdateNetworkPolicy(ctx context.Contex
 					"NetworkPolicy %s/%s already exists and is not owned by this RayCluster, network isolation will not be applied. "+
 						"Rename the existing NetworkPolicy or use a different RayCluster name to avoid the collision",
 					networkPolicy.Namespace, networkPolicy.Name)
-				return nil
+				return fmt.Errorf("NetworkPolicy %s/%s already exists and is not owned by this RayCluster", networkPolicy.Namespace, networkPolicy.Name)
 			}
 
 			if reflect.DeepEqual(existing.Spec, networkPolicy.Spec) && reflect.DeepEqual(existing.Labels, networkPolicy.Labels) {
@@ -448,6 +444,8 @@ func (r *NetworkPolicyController) cleanupNetworkPoliciesIfNeeded(ctx context.Con
 			logger.V(1).Info("Head NetworkPolicy exists but is not owned by this RayCluster, skipping deletion", "name", headName)
 		} else if err := r.Delete(ctx, headNetworkPolicy); err != nil {
 			logger.Error(err, "Failed to delete head NetworkPolicy", "name", headName)
+			r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.FailedToDeleteNetworkPolicy),
+				"Failed to delete NetworkPolicy %s/%s: %v", instance.Namespace, headName, err)
 			return ctrl.Result{}, err
 		} else {
 			logger.Info("Deleted head NetworkPolicy", "name", headName)
@@ -468,6 +466,8 @@ func (r *NetworkPolicyController) cleanupNetworkPoliciesIfNeeded(ctx context.Con
 			logger.V(1).Info("Worker NetworkPolicy exists but is not owned by this RayCluster, skipping deletion", "name", workerName)
 		} else if err := r.Delete(ctx, workerNetworkPolicy); err != nil {
 			logger.Error(err, "Failed to delete worker NetworkPolicy", "name", workerName)
+			r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.FailedToDeleteNetworkPolicy),
+				"Failed to delete NetworkPolicy %s/%s: %v", instance.Namespace, workerName, err)
 			return ctrl.Result{}, err
 		} else {
 			logger.Info("Deleted worker NetworkPolicy", "name", workerName)
