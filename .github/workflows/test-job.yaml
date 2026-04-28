@@ -409,3 +409,27 @@ jobs:
       - name: Test
         run: go test ./pkg/... -race -parallel 4
         working-directory: ${{env.working-directory}}
+
+  build_historyserver:
+    env:
+      working-directory: ./historyserver
+    name: Build historyserver (unit tests)
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: v1.25
+
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v2
+        with:
+          ref: ${{github.event.pull_request.head.sha}}
+
+      - name: Get dependencies
+        run: go mod download
+        working-directory: ${{env.working-directory}}
+
+      - name: Test
+        run: go test ./pkg/... ./cmd/... -race
+        working-directory: ${{env.working-directory}}
