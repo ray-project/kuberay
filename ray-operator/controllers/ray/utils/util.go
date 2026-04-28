@@ -1028,13 +1028,59 @@ func HasSubmitter(rayJobInstance *rayv1.RayJob) bool {
 }
 
 // IsHTTPRouteEqual checks if the existing HTTPRoute matches the desired HTTPRoute.
+// This check only compares the fields explicitly managed by the RayService controller.
 func IsHTTPRouteEqual(existing, desired *gwv1.HTTPRoute) bool {
+	if existing == nil || desired == nil {
+		return existing == desired
+	}
+
+	// Compare Hostnames. Treat nil and empty slice as equivalent to avoid false positives
+	// caused by renormalization from the API server or the Gateway implementation.
+	if len(existing.Spec.Hostnames) != len(desired.Spec.Hostnames) {
+		return false
+	}
+	if len(existing.Spec.Hostnames) > 0 && !reflect.DeepEqual(existing.Spec.Hostnames, desired.Spec.Hostnames) {
+		return false
+	}
+
+	// Compare ParentRefs
+	if len(existing.Spec.ParentRefs) != len(desired.Spec.ParentRefs) {
+		return false
+	}
+	for i := range desired.Spec.ParentRefs {
+		eRef := existing.Spec.ParentRefs[i]
+		dRef := desired.Spec.ParentRefs[i]
+
+		if string(eRef.Name) != string(dRef.Name) ||
+			string(ptr.Deref(eRef.Namespace, "")) != string(ptr.Deref(dRef.Namespace, "")) {
+			return false
+		}
+	}
+
+	// Compare Rules
 	if len(existing.Spec.Rules) != len(desired.Spec.Rules) {
 		return false
 	}
 
 	for i := range desired.Spec.Rules {
-		if len(existing.Spec.Rules[i].BackendRefs) != len(desired.Spec.Rules[i].BackendRefs) {
+		eRule := existing.Spec.Rules[i]
+		dRule := desired.Spec.Rules[i]
+
+		// Compare Matches
+		if !reflect.DeepEqual(eRule.Matches, dRule.Matches) {
+			return false
+		}
+
+		// Compare Filters. Treat nil and empty slice as equivalent to avoid false positives
+		// caused by renormalization from the API server or the Gateway implementation.
+		if len(eRule.Filters) != len(dRule.Filters) {
+			return false
+		}
+		if len(eRule.Filters) > 0 && !reflect.DeepEqual(eRule.Filters, dRule.Filters) {
+			return false
+		}
+
+		if len(eRule.BackendRefs) != len(dRule.BackendRefs) {
 			return false
 		}
 
@@ -1044,10 +1090,41 @@ func IsHTTPRouteEqual(existing, desired *gwv1.HTTPRoute) bool {
 
 			// Only compare the fields the controller updates.
 			if string(existingRef.Name) != string(desiredRef.Name) ||
+				string(ptr.Deref(existingRef.Namespace, "")) != string(ptr.Deref(desiredRef.Namespace, "")) ||
 				ptr.Deref(existingRef.Weight, 1) != ptr.Deref(desiredRef.Weight, 1) ||
 				ptr.Deref(existingRef.Port, 0) != ptr.Deref(desiredRef.Port, 0) {
 				return false
 			}
+		}
+	}
+	return true
+}
+
+// IsGatewayEqual checks if the existing Gateway matches the desired Gateway.
+// This check only compares the fields explicitly managed by the RayService controller.
+// If the controller starts managing additional Gateway fields in the future,
+// this function must be updated accordingly.
+func IsGatewayEqual(existing, desired *gwv1.Gateway) bool {
+	if existing == nil || desired == nil {
+		return existing == desired
+	}
+
+	if string(existing.Spec.GatewayClassName) != string(desired.Spec.GatewayClassName) {
+		return false
+	}
+
+	// Compare Listeners. RayService controller sets Name, Protocol, and Port on each Listener.
+	if len(existing.Spec.Listeners) != len(desired.Spec.Listeners) {
+		return false
+	}
+	for i := range desired.Spec.Listeners {
+		eL := existing.Spec.Listeners[i]
+		dL := desired.Spec.Listeners[i]
+
+		if string(eL.Name) != string(dL.Name) ||
+			eL.Protocol != dL.Protocol ||
+			eL.Port != dL.Port {
+			return false
 		}
 	}
 	return true
