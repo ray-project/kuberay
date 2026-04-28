@@ -221,7 +221,7 @@ func TestStoreEvent(t *testing.T) {
 			},
 			eventMap: map[string]any{
 				"eventType":   "UNKNOWN_TYPE",
-				"clusterName": "c1",
+				"clusterName": testClusterName1,
 			},
 			wantErr:          false,
 			wantClusterCount: 0,
@@ -231,7 +231,7 @@ func TestStoreEvent(t *testing.T) {
 			initialState: &types.ClusterTaskMap{
 				ClusterTaskMap: make(map[string]*types.TaskMap),
 			},
-			eventMap:          makeTaskEventMap(testTaskName1, testNodeID1, testTaskID1, "cluster1", 0),
+			eventMap:          makeTaskEventMap(testTaskName1, testNodeID1, testTaskID1, testClusterName1, 0),
 			wantErr:           false,
 			wantClusterCount:  1,
 			wantTaskInCluster: testClusterName1,
