@@ -14,17 +14,21 @@ import (
 // Test fixtures: pure-hex IDs so normalizeIDToHex is identity.
 // Use lowercase to match production hex output and avoid map-key collision.
 const (
-    testTaskID1      = "aaaaffff1234"
-    testTaskID2      = "bbbbffff5678"
-    testNodeID1      = "ccccffff9012"
-    testNodeID2      = "ddddffff3456"
+	testTaskID1      = "aaaaffff1234"
+	testTaskID2      = "bbbbffff5678"
+	testNodeID1      = "ccccffff9012"
+	testNodeID2      = "ddddffff3456"
 	testWorkerID1    = "eeeeffff7890"
 	testJobID1       = "ffffaaaa4321"
-    testActorID1     = "aaaabbbb6789"
-    testClusterName1 = "cluster1"
+	testActorID1     = "aaaabbbb6789"
+	testClusterName1 = "cluster1"
 	testClusterName2 = "cluster2"
-    testTaskName1    = "Name_12345"
-    testTaskName2    = "Name_54321"
+	testTaskName1    = "Name_12345"
+	testTaskName2    = "Name_54321"
+	testBase64ID1    = "AgAAAA=="
+	testBase64ID2    = "AwAAAA=="
+	testHexID1       = "02000000"
+	testHexID2       = "03000000"
 )
 
 func makeTaskEventMap(taskName, nodeId, taskID, cluster string, attempt int) map[string]any {
@@ -292,6 +296,25 @@ func TestStoreEvent(t *testing.T) {
 					TaskName:    testTaskName1,
 					NodeID:      testNodeID1,
 					TaskAttempt: 2,
+				},
+			},
+		},
+		{
+			name: "task event - base64 ID is normalized to hex",
+			initialState: &types.ClusterTaskMap{
+				ClusterTaskMap: make(map[string]*types.TaskMap),
+			},
+			eventMap:          makeTaskEventMap(testTaskName1, testBase64ID1, testBase64ID2, testClusterName1, 0),
+			wantErr:           false,
+			wantClusterCount:  1,
+			wantTaskInCluster: testClusterName1,
+			wantTaskID:        testHexID2,
+			wantTasks: []types.Task{
+				{
+					TaskID:      testHexID2,
+					TaskName:    testTaskName1,
+					NodeID:      testHexID1,
+					TaskAttempt: 0,
 				},
 			},
 		},
