@@ -22,7 +22,6 @@ const (
 	testJobID1       = "ffffaaaa4321"
 	testActorID1     = "aaaabbbb6789"
 	testClusterName1 = "cluster1"
-	testClusterName2 = "cluster2"
 	testTaskName1    = "Name_12345"
 	testTaskName2    = "Name_54321"
 	testBase64ID1    = "AgAAAA=="
