@@ -28,6 +28,10 @@ const (
 	testBase64ID2    = "AwAAAA=="
 	testHexID1       = "02000000" // hex for base64 "AgAAAA=="
 	testHexID2       = "03000000" // hex for base64 "AwAAAA=="
+	testUpperHexID1  = "ABCDEF01"
+	testUpperHexID2  = "ABCDEF02"
+	testLowerHexID1  = "abcdef01"
+	testLowerHexID2  = "abcdef02"
 )
 
 func makeTaskEventMap(taskName, nodeId, taskID, cluster string, attempt int) map[string]any {
@@ -313,6 +317,44 @@ func TestStoreEvent(t *testing.T) {
 					TaskID:      testHexID2,
 					TaskName:    testTaskName1,
 					NodeID:      testHexID1,
+					TaskAttempt: 0,
+				},
+			},
+		},
+		{
+			name: "task event - uppercase hex IDs normalized to lowercase",
+			initialState: &types.ClusterTaskMap{
+				ClusterTaskMap: make(map[string]*types.TaskMap),
+			},
+			eventMap:          makeTaskEventMap(testTaskName1, testUpperHexID1, testUpperHexID2, testClusterName1, 0),
+			wantErr:           false,
+			wantClusterCount:  1,
+			wantTaskInCluster: testClusterName1,
+			wantTaskID:        testLowerHexID2,
+			wantTasks: []types.Task{
+				{
+					TaskID:      testLowerHexID2,
+					TaskName:    testTaskName1,
+					NodeID:      testLowerHexID1,
+					TaskAttempt: 0,
+				},
+			},
+		},
+		{
+			name: "task event - lowercase hex IDs are returned as-is",
+			initialState: &types.ClusterTaskMap{
+				ClusterTaskMap: make(map[string]*types.TaskMap),
+			},
+			eventMap:          makeTaskEventMap(testTaskName1, testLowerHexID1, testLowerHexID2, testClusterName1, 0),
+			wantErr:           false,
+			wantClusterCount:  1,
+			wantTaskInCluster: testClusterName1,
+			wantTaskID:        testLowerHexID2,
+			wantTasks: []types.Task{
+				{
+					TaskID:      testLowerHexID2,
+					TaskName:    testTaskName1,
+					NodeID:      testLowerHexID1,
 					TaskAttempt: 0,
 				},
 			},
