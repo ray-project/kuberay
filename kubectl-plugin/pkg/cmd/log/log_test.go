@@ -551,7 +551,7 @@ func createFakeTarFileWithManyFiles(n int) (*bytes.Buffer, error) {
 	}
 
 	for i := range n {
-		body := []byte(fmt.Sprintf("content of file %d\n", i))
+		body := fmt.Appendf(nil, "content of file %d\n", i)
 		if err := tw.WriteHeader(&tar.Header{
 			Typeflag: tar.TypeReg,
 			Name:     fmt.Sprintf("file%04d.txt", i),
