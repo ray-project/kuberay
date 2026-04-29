@@ -2535,7 +2535,7 @@ func Test_IsRayContainerPastWaiting(t *testing.T) {
 			expected: false,
 		},
 		{
-			name: "ray container is waiting after a non-zero exit code previously",
+			name: "ray container with last state is not nil",
 			pod: corev1.Pod{
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{{Name: "ray-head"}},
@@ -2545,6 +2545,11 @@ func Test_IsRayContainerPastWaiting(t *testing.T) {
 						Name: "ray-head",
 						State: corev1.ContainerState{
 							Waiting: &corev1.ContainerStateWaiting{Reason: "CrashLoopBackOff"},
+						},
+						LastTerminationState: corev1.ContainerState{
+							Terminated: &corev1.ContainerStateTerminated{
+								ExitCode: 127,
+							},
 						},
 					}},
 				},
