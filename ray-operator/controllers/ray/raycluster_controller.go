@@ -1267,7 +1267,7 @@ func isRayContainerPastWaiting(pod corev1.Pod) bool {
 	for _, containerStatus := range pod.Status.ContainerStatuses {
 		if containerStatus.Name == rayContainerName {
 			return containerStatus.State.Running != nil || containerStatus.State.Terminated != nil ||
-				(containerStatus.State.Waiting != nil && containerStatus.State.Waiting.Reason == "CrashLoopBackOff")
+				containerStatus.LastTerminationState.Terminated != nil
 		}
 	}
 	// If the Ray container status isn't found, it hasn't started yet.
