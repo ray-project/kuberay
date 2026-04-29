@@ -59,11 +59,14 @@ func testAzureBlobUploadOnGracefulShutdown(test Test, g *WithT, namespace *corev
 
 	_ = ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 
-	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, namespace.Name)
+	clusterStoragePrefix := utils.ClusterRef{
+		Namespace: namespace.Name,
+		Name:      rayCluster.Name,
+	}.StoragePrefix()
 	sessionID := GetSessionIDFromHeadPod(test, g, rayCluster)
 	headNodeID := GetNodeIDFromPod(test, g, HeadPod(test, rayCluster), "ray-head")
 	workerNodeID := GetNodeIDFromPod(test, g, FirstWorkerPod(test, rayCluster), "ray-worker")
-	sessionPrefix := fmt.Sprintf("log/%s/%s/", clusterNameID, sessionID)
+	sessionPrefix := fmt.Sprintf("log/%s/%s/", clusterStoragePrefix, sessionID)
 
 	err := test.Client().Ray().RayV1().
 		RayClusters(rayCluster.Namespace).
@@ -85,11 +88,14 @@ func testAzureBlobSeparatesFilesBySession(test Test, g *WithT, namespace *corev1
 
 	_ = ApplyRayJobAndWaitForCompletion(test, g, namespace, rayCluster)
 
-	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, namespace.Name)
+	clusterStoragePrefix := utils.ClusterRef{
+		Namespace: namespace.Name,
+		Name:      rayCluster.Name,
+	}.StoragePrefix()
 	sessionID := GetSessionIDFromHeadPod(test, g, rayCluster)
 	headNodeID := GetNodeIDFromPod(test, g, HeadPod(test, rayCluster), "ray-head")
 	workerNodeID := GetNodeIDFromPod(test, g, FirstWorkerPod(test, rayCluster), "ray-worker")
-	sessionPrefix := fmt.Sprintf("log/%s/%s/", clusterNameID, sessionID)
+	sessionPrefix := fmt.Sprintf("log/%s/%s/", clusterStoragePrefix, sessionID)
 
 	killContainerAndWaitForRestart(test, g, HeadPod(test, rayCluster), "ray-head")
 	killContainerAndWaitForRestart(test, g, FirstWorkerPod(test, rayCluster), "ray-worker")
@@ -109,8 +115,11 @@ func testAzureBlobResumesUploadsOnRestart(test Test, g *WithT, namespace *corev1
 
 	dummySessionID := fmt.Sprintf("test-recovery-session-%s", namespace.Name)
 	dummyNodeID := fmt.Sprintf("head-node-%s", namespace.Name)
-	clusterNameID := fmt.Sprintf("%s_%s", rayCluster.Name, namespace.Name)
-	sessionPrefix := fmt.Sprintf("log/%s/%s/", clusterNameID, dummySessionID)
+	clusterStoragePrefix := utils.ClusterRef{
+		Namespace: namespace.Name,
+		Name:      rayCluster.Name,
+	}.StoragePrefix()
+	sessionPrefix := fmt.Sprintf("log/%s/%s/", clusterStoragePrefix, dummySessionID)
 
 	headPod, err := GetHeadPod(test, rayCluster)
 	g.Expect(err).NotTo(HaveOccurred())

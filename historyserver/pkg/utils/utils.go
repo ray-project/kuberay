@@ -37,37 +37,18 @@ func EndpointPathToStorageKey(endpointPath string) string {
 
 var regex = regexp.MustCompile(SESSION_ID_REGEX)
 
-func GetLogDirByNameID(ossHistorySeverDir, rayClusterNameNamespace, rayNodeID, sessionId string) string {
-	return fmt.Sprintf("%s/", path.Clean(path.Join(ossHistorySeverDir, rayClusterNameNamespace, sessionId, RAY_SESSIONDIR_LOGDIR_NAME, rayNodeID)))
+// GetLogDirByNameID returns the per-node log directory under the storage root:
+// "{namespace}/{name}/{session}/logs/{nodeID}/"
+func GetLogDirByNameID(rootDir string, session ClusterSessionRef, rayNodeID string) string {
+	return fmt.Sprintf("%s/", path.Clean(path.Join(rootDir, session.StoragePrefix(), RAY_SESSIONDIR_LOGDIR_NAME, rayNodeID)))
 }
 
-const (
-	// connector is the separator for creating flat storage keys.
-	//
-	// Design Philosophy:
-	// - Format: "{clusterName}_{namespace}" for router/historyserver/collector
-	//
-	// Why "_" instead of "/"?
-	// Using "/" would create a hierarchical path like "namespace/cluster/session/..."
-	// which requires multiple ListObjects API calls to traverse:
-	//   1. First list all clusters under a namespace
-	//   2. Then list contents of the target cluster
-	//
-	// Using "_" creates a flat path like "namespace_cluster/session/..."
-	// which allows direct access with a single ListObjects call.
-	//
-	// Why this is SAFE for parsing:
-	// - Kubernetes namespace follows DNS-1123 label spec
-	// - DNS-1123 only allows: lowercase letters, digits, and hyphens (-)
-	// - Namespace CANNOT contain "_", so we can unambiguously split from the LAST "_"
-	//
-	// DO NOT CHANGE: Would break existing stored data paths
-	connector = "_"
-)
-
-func AppendRayClusterNameNamespace(rayClusterName, rayClusterNamespace string) string {
-	return fmt.Sprintf("%s%s%s", rayClusterName, connector, rayClusterNamespace)
-}
+// TODO(jwj): Align inMemoryKeyConnector with the storage layout?
+// inMemoryKeyConnector is the separator used by BuildClusterSessionKey to
+// produce the in-memory map key "{name}_{namespace}_{session}". This is only
+// used for in-memory lookups and is intentionally separate from the on-disk
+// storage layout (see ClusterRef.StoragePrefix).
+const inMemoryKeyConnector = "_"
 
 func GetSessionDir() (string, error) {
 	for i := 0; i < 12; i++ {
@@ -148,7 +129,7 @@ func IsHexNil(hexStr string) (bool, error) {
 // Format: "{clusterName}_{namespace}_{sessionName}"
 // Example: "raycluster-historyserver_default_session_2026-01-11_19-38-40"
 func BuildClusterSessionKey(clusterName, namespace, sessionName string) string {
-	return clusterName + connector + namespace + connector + sessionName
+	return clusterName + inMemoryKeyConnector + namespace + inMemoryKeyConnector + sessionName
 }
 
 // GetDateTimeFromSessionID will convert sessionID string i.e. `session_2026-01-27_10-52-59_373533_1` to time.Time

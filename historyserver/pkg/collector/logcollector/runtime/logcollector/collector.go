@@ -100,10 +100,11 @@ func (r *RayLogHandler) processSessionLatestLogs() {
 	sessionID := filepath.Base(sessionRealDir)
 	if r.IsHead {
 		metadir := path.Join(r.RootDir, "metadir")
-		metafile := path.Clean(metadir + "/" + fmt.Sprintf("%s/%v",
-			utils.AppendRayClusterNameNamespace(r.RayClusterName, r.RayClusterNamespace),
-			path.Base(sessionID),
-		))
+		session := utils.ClusterSessionRef{
+			ClusterRef:  utils.ClusterRef{Namespace: r.RayClusterNamespace, Name: r.RayClusterName},
+			SessionName: sessionID,
+		}
+		metafile := path.Clean(path.Join(metadir, session.StoragePrefix()))
 		if err := r.Writer.CreateDirectory(path.Dir(metafile)); err != nil {
 			logrus.Errorf("CreateObjectIfNotExist %s error %v", metadir, err)
 			return
@@ -180,7 +181,11 @@ func (r *RayLogHandler) processSessionLatestLogFile(absoluteLogPathName, session
 	subdir, _ := filepath.Split(relativePath)
 
 	// Build the object name using the standard path structure
-	logDir := utils.GetLogDirByNameID(r.RootDir, utils.AppendRayClusterNameNamespace(r.RayClusterName, r.RayClusterNamespace), nodeID, sessionID)
+	session := utils.ClusterSessionRef{
+		ClusterRef:  utils.ClusterRef{Namespace: r.RayClusterNamespace, Name: r.RayClusterName},
+		SessionName: sessionID,
+	}
+	logDir := utils.GetLogDirByNameID(r.RootDir, session, nodeID)
 
 	if subdir != "" && subdir != "." {
 		// Remove trailing separator if present
@@ -449,10 +454,11 @@ func (r *RayLogHandler) processSessionPrevLogs(sessionDir string) {
 	logrus.Infof("Processing all node logs for session: %s", sessionID)
 	if r.IsHead {
 		metadir := path.Join(r.RootDir, "metadir")
-		metafile := path.Clean(metadir + "/" + fmt.Sprintf("%s/%v",
-			utils.AppendRayClusterNameNamespace(r.RayClusterName, r.RayClusterNamespace),
-			path.Base(sessionID),
-		))
+		session := utils.ClusterSessionRef{
+			ClusterRef:  utils.ClusterRef{Namespace: r.RayClusterNamespace, Name: r.RayClusterName},
+			SessionName: sessionID,
+		}
+		metafile := path.Clean(path.Join(metadir, session.StoragePrefix()))
 		if err := r.Writer.CreateDirectory(path.Dir(metafile)); err != nil {
 			logrus.Errorf("CreateObjectIfNotExist %s error %v", metadir, err)
 			return
@@ -614,7 +620,11 @@ func (r *RayLogHandler) processPrevLogFile(absoluteLogPathName, localLogDir, ses
 	subdir, _ := filepath.Split(relativePath)
 
 	// Build the object name using the standard path structure
-	logDir := utils.GetLogDirByNameID(r.RootDir, utils.AppendRayClusterNameNamespace(r.RayClusterName, r.RayClusterNamespace), nodeID, sessionID)
+	session := utils.ClusterSessionRef{
+		ClusterRef:  utils.ClusterRef{Namespace: r.RayClusterNamespace, Name: r.RayClusterName},
+		SessionName: sessionID,
+	}
+	logDir := utils.GetLogDirByNameID(r.RootDir, session, nodeID)
 
 	if subdir != "" && subdir != "." {
 		// Remove trailing separator if present
@@ -697,9 +707,10 @@ func (r *RayLogHandler) processPrevLogFile(absoluteLogPathName, localLogDir, ses
 // for example:
 // metadir/
 //
-//	my-cluster_abc123/
-//		session_2024-12-15_10-30-45_123456    ← Empty file! The path itself is the information
-//		session_2024-12-15_14-20-10_789012
+//	default/                                    ← namespace
+//		my-cluster/                             ← cluster name
+//			session_2024-12-15_10-30-45_123456  ← Empty file! The path itself is the information
+//			session_2024-12-15_14-20-10_789012
 func (r *RayLogHandler) WatchSessionLatestLoops() {
 	sessionLatestDir := utils.GetTmpRayRoot()
 	sessionLatestSymlink := filepath.Join(sessionLatestDir, "session_latest")
@@ -746,10 +757,11 @@ func (r *RayLogHandler) WatchSessionLatestLoops() {
 			if event.Op&(fsnotify.Create|fsnotify.Write) != 0 {
 				sessionID := filepath.Base(event.Name)
 				metadir := path.Join(r.RootDir, "metadir")
-				metafile := path.Clean(metadir + "/" + fmt.Sprintf("%s/%v",
-					utils.AppendRayClusterNameNamespace(r.RayClusterName, r.RayClusterNamespace),
-					path.Base(sessionID),
-				))
+				session := utils.ClusterSessionRef{
+					ClusterRef:  utils.ClusterRef{Namespace: r.RayClusterNamespace, Name: r.RayClusterName},
+					SessionName: sessionID,
+				}
+				metafile := path.Clean(path.Join(metadir, session.StoragePrefix()))
 				if err := r.Writer.CreateDirectory(path.Dir(metafile)); err != nil {
 					logrus.Errorf("CreateObjectIfNotExist %s error %v", metadir, err)
 					return
