@@ -2266,6 +2266,81 @@ func TestIsGatewayEqual(t *testing.T) {
 			},
 			expected: true,
 		},
+		{
+			name: "Equal Gateways with matching addresses",
+			existing: &gwv1.Gateway{
+				Spec: gwv1.GatewaySpec{
+					GatewayClassName: "test-class",
+					Addresses: []gwv1.GatewaySpecAddress{
+						{Type: ptr.To(gwv1.AddressType(gwv1.IPAddressType)), Value: "192.168.1.100"},
+					},
+					Listeners: []gwv1.Listener{
+						{Name: "http", Protocol: gwv1.HTTPProtocolType, Port: 80},
+					},
+				},
+			},
+			desired: &gwv1.Gateway{
+				Spec: gwv1.GatewaySpec{
+					GatewayClassName: "test-class",
+					Addresses: []gwv1.GatewaySpecAddress{
+						{Type: ptr.To(gwv1.AddressType(gwv1.IPAddressType)), Value: "192.168.1.100"},
+					},
+					Listeners: []gwv1.Listener{
+						{Name: "http", Protocol: gwv1.HTTPProtocolType, Port: 80},
+					},
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "Different address values are not equal",
+			existing: &gwv1.Gateway{
+				Spec: gwv1.GatewaySpec{
+					GatewayClassName: "test-class",
+					Addresses: []gwv1.GatewaySpecAddress{
+						{Type: ptr.To(gwv1.AddressType(gwv1.IPAddressType)), Value: "192.168.1.100"},
+					},
+					Listeners: []gwv1.Listener{
+						{Name: "http", Protocol: gwv1.HTTPProtocolType, Port: 80},
+					},
+				},
+			},
+			desired: &gwv1.Gateway{
+				Spec: gwv1.GatewaySpec{
+					GatewayClassName: "test-class",
+					Addresses: []gwv1.GatewaySpecAddress{
+						{Type: ptr.To(gwv1.AddressType(gwv1.IPAddressType)), Value: "10.0.0.1"},
+					},
+					Listeners: []gwv1.Listener{
+						{Name: "http", Protocol: gwv1.HTTPProtocolType, Port: 80},
+					},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "Different address counts are not equal",
+			existing: &gwv1.Gateway{
+				Spec: gwv1.GatewaySpec{
+					GatewayClassName: "test-class",
+					Addresses: []gwv1.GatewaySpecAddress{
+						{Type: ptr.To(gwv1.AddressType(gwv1.IPAddressType)), Value: "192.168.1.100"},
+					},
+					Listeners: []gwv1.Listener{
+						{Name: "http", Protocol: gwv1.HTTPProtocolType, Port: 80},
+					},
+				},
+			},
+			desired: &gwv1.Gateway{
+				Spec: gwv1.GatewaySpec{
+					GatewayClassName: "test-class",
+					Listeners: []gwv1.Listener{
+						{Name: "http", Protocol: gwv1.HTTPProtocolType, Port: 80},
+					},
+				},
+			},
+			expected: false,
+		},
 	}
 
 	for _, tt := range tests {
