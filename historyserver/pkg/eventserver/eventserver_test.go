@@ -26,8 +26,8 @@ const (
 	testTaskName2    = "Name_54321"
 	testBase64ID1    = "AgAAAA=="
 	testBase64ID2    = "AwAAAA=="
-	testHexID1       = "02000000"
-	testHexID2       = "03000000"
+	testHexID1       = "02000000" // hex for base64 "AgAAAA=="
+	testHexID2       = "03000000" // hex for base64 "AwAAAA=="
 )
 
 func makeTaskEventMap(taskName, nodeId, taskID, cluster string, attempt int) map[string]any {
