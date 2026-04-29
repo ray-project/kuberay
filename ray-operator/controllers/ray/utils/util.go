@@ -1122,7 +1122,7 @@ func IsGatewayEqual(existing, desired *gwv1.Gateway) bool {
 		for i := range desired.Spec.Addresses {
 			ea := existing.Spec.Addresses[i]
 			da := desired.Spec.Addresses[i]
-			if ea.Type != da.Type || ea.Value != da.Value {
+			if ptr.Deref(ea.Type, "") != ptr.Deref(da.Type, "") || ea.Value != da.Value {
 				return false
 			}
 		}
