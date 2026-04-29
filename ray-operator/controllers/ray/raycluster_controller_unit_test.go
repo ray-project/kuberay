@@ -2891,8 +2891,6 @@ func Test_RedisCleanupCustomResources(t *testing.T) {
 		name          string
 		cpuAnnotation string
 		memAnnotation string
-		setCPU        bool
-		setMem        bool
 		expectedCPU   string
 		expectedMem   string
 	}{
@@ -2900,8 +2898,6 @@ func Test_RedisCleanupCustomResources(t *testing.T) {
 			name:          "Valid custom resources are used",
 			cpuAnnotation: "500m",
 			memAnnotation: "512Mi",
-			setCPU:        true,
-			setMem:        true,
 			expectedCPU:   "500m",
 			expectedMem:   "512Mi",
 		},
@@ -2909,8 +2905,6 @@ func Test_RedisCleanupCustomResources(t *testing.T) {
 			name:          "Invalid CPU falls back to default",
 			cpuAnnotation: "invalid",
 			memAnnotation: "512Mi",
-			setCPU:        true,
-			setMem:        true,
 			expectedCPU:   "200m",
 			expectedMem:   "512Mi",
 		},
@@ -2918,15 +2912,11 @@ func Test_RedisCleanupCustomResources(t *testing.T) {
 			name:          "Invalid memory falls back to default",
 			cpuAnnotation: "500m",
 			memAnnotation: "invalid",
-			setCPU:        true,
-			setMem:        true,
 			expectedCPU:   "500m",
 			expectedMem:   "256Mi",
 		},
 		{
 			name:        "No annotations uses defaults",
-			setCPU:      false,
-			setMem:      false,
 			expectedCPU: "200m",
 			expectedMem: "256Mi",
 		},
@@ -2935,10 +2925,10 @@ func Test_RedisCleanupCustomResources(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			cluster := gcsFTEnabledCluster.DeepCopy()
-			if tc.setCPU {
+			if tc.cpuAnnotation != "" {
 				cluster.Annotations[utils.RayGCSFTRedisCleanupJobCPUAnnotationKey] = tc.cpuAnnotation
 			}
-			if tc.setMem {
+			if tc.memAnnotation != "" {
 				cluster.Annotations[utils.RayGCSFTRedisCleanupJobMemoryAnnotationKey] = tc.memAnnotation
 			}
 
