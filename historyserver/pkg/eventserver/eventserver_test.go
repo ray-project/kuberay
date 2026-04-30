@@ -13,25 +13,32 @@ import (
 
 // Test fixtures: pure-hex IDs so normalizeIDToHex is identity.
 // Use lowercase to match production hex output and avoid map-key collision.
+// ID fixtures follow Ray's ID specification
+// ref: https://github.com/ray-project/ray/blob/f229d5376eb87b09a3fa0b991323450de84df890/src/ray/design_docs/id_specification.md
 const (
-	testTaskID1      = "aaaaffff1234"
-	testTaskID2      = "bbbbffff5678"
-	testNodeID1      = "ccccffff9012"
-	testNodeID2      = "ddddffff3456"
-	testWorkerID1    = "eeeeffff7890"
-	testJobID1       = "ffffaaaa4321"
-	testActorID1     = "aaaabbbb6789"
+	testJobID1    = "aaaabbbb"                                                 // 4B hex
+	testActorID1  = "aaaabbbb1234aaaabbbb1234" + testJobID1                    // 12B unique hex prefix
+	testTaskID1   = "ccccdddd5678cccc" + testActorID1                          // 8B unique hex prefix
+	testTaskID2   = "ccccdddd9012dddd" + testActorID1                          // 8B unique hex prefix
+	testNodeID1   = "eeeeffff1234eeeeffff1234eeeeffff1234eeeeffff1234eeeeffff" // 28B Node hex ID
+	testNodeID2   = "eeeeffff9012eeeeffff9012eeeeffff9012eeeeffff9012eeeeffff" // 28B Node hex ID
+	testWorkerID1 = "eeeeffff0000eeeeffff0000eeeeffff0000eeeeffff0000eeeeffff" // 28B Worker hex ID
+
+	// Upper and Lower case pairs to verify normalization to lowercase hex
+	testUpperNodeID1 = "AAAABBBB1234AAAABBBB1234AAAABBBB1234AAAABBBB1234AAAABBBB" // 28B Upper Node hex ID
+	testLowerNodeID1 = "aaaabbbb1234aaaabbbb1234aaaabbbb1234aaaabbbb1234aaaabbbb" // 28B Lower Node hex ID
+	testUpperTaskID1 = "AAAABBBB5678AAAABBBB5678AAAABBBB5678AAAABBBB5678"         // 24B Upper Task hex ID
+	testLowerTaskID1 = "aaaabbbb5678aaaabbbb5678aaaabbbb5678aaaabbbb5678"         // 24B Lower Task hex ID
+
 	testClusterName1 = "cluster1"
 	testTaskName1    = "Name_12345"
 	testTaskName2    = "Name_54321"
-	testBase64ID1    = "AgAAAA=="
-	testBase64ID2    = "AwAAAA=="
-	testHexID1       = "02000000" // hex for base64 "AgAAAA=="
-	testHexID2       = "03000000" // hex for base64 "AwAAAA=="
-	testUpperHexID1  = "ABCDEF01"
-	testUpperHexID2  = "ABCDEF02"
-	testLowerHexID1  = "abcdef01"
-	testLowerHexID2  = "abcdef02"
+
+	// Base64 and Hex pairs to verify normalization of base64 to hex
+	testBase64ID1 = "AgAAAA=="
+	testBase64ID2 = "AwAAAA=="
+	testHexID1    = "02000000" // hex for base64 "AgAAAA=="
+	testHexID2    = "03000000" // hex for base64 "AwAAAA=="
 )
 
 func makeTaskEventMap(taskName, nodeId, taskID, cluster string, attempt int) map[string]any {
@@ -326,16 +333,16 @@ func TestStoreEvent(t *testing.T) {
 			initialState: &types.ClusterTaskMap{
 				ClusterTaskMap: make(map[string]*types.TaskMap),
 			},
-			eventMap:          makeTaskEventMap(testTaskName1, testUpperHexID1, testUpperHexID2, testClusterName1, 0),
+			eventMap:          makeTaskEventMap(testTaskName1, testUpperNodeID1, testUpperTaskID1, testClusterName1, 0),
 			wantErr:           false,
 			wantClusterCount:  1,
 			wantTaskInCluster: testClusterName1,
-			wantTaskID:        testLowerHexID2,
+			wantTaskID:        testLowerTaskID1,
 			wantTasks: []types.Task{
 				{
-					TaskID:      testLowerHexID2,
+					TaskID:      testLowerTaskID1,
 					TaskName:    testTaskName1,
-					NodeID:      testLowerHexID1,
+					NodeID:      testLowerNodeID1,
 					TaskAttempt: 0,
 				},
 			},
@@ -345,16 +352,16 @@ func TestStoreEvent(t *testing.T) {
 			initialState: &types.ClusterTaskMap{
 				ClusterTaskMap: make(map[string]*types.TaskMap),
 			},
-			eventMap:          makeTaskEventMap(testTaskName1, testLowerHexID1, testLowerHexID2, testClusterName1, 0),
+			eventMap:          makeTaskEventMap(testTaskName1, testLowerNodeID1, testLowerTaskID1, testClusterName1, 0),
 			wantErr:           false,
 			wantClusterCount:  1,
 			wantTaskInCluster: testClusterName1,
-			wantTaskID:        testLowerHexID2,
+			wantTaskID:        testLowerTaskID1,
 			wantTasks: []types.Task{
 				{
-					TaskID:      testLowerHexID2,
+					TaskID:      testLowerTaskID1,
 					TaskName:    testTaskName1,
-					NodeID:      testLowerHexID1,
+					NodeID:      testLowerNodeID1,
 					TaskAttempt: 0,
 				},
 			},
