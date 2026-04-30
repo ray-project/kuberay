@@ -11,11 +11,11 @@ import (
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
-// Test fixtures: pure-hex IDs so normalizeIDToHex is identity.
-// Use lowercase to match production hex output and avoid map-key collision.
 // ID fixtures follow Ray's ID specification
 // ref: https://github.com/ray-project/ray/blob/f229d5376eb87b09a3fa0b991323450de84df890/src/ray/design_docs/id_specification.md
 const (
+        // Pure-hex IDs to verify normalizeIDToHex is identity.
+        // Use lowercase to match production hex output and avoid map-key collision.
 	testJobID1    = "aaaabbbb"                                                 // 4B hex
 	testActorID1  = "aaaabbbb1234aaaabbbb1234" + testJobID1                    // 12B unique hex prefix
 	testTaskID1   = "ccccdddd5678cccc" + testActorID1                          // 8B unique hex prefix
