@@ -112,6 +112,8 @@ type AuthOptions struct {
 // To override these defaults (e.g. on GKE Autopilot), set the following annotations on the RayCluster:
 //   - ray.io/gcs-ft-redis-cleanup-job-cpu-resource: CPU request/limit (e.g. "500m")
 //   - ray.io/gcs-ft-redis-cleanup-job-memory-resource: memory request/limit (e.g. "512Mi")
+//
+// See https://github.com/ray-project/kuberay/issues/4721 for more details.
 type GcsFaultToleranceOptions struct {
 	// +optional
 	RedisUsername *RedisCredential `json:"redisUsername,omitempty"`
