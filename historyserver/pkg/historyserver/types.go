@@ -31,13 +31,17 @@ type GetLogFileOptions struct {
 }
 
 // TODO(jwj): Can be extracted to a task-specific interface, e.g., TaskSummaryProvider.
-type TaskDataResult struct {
+type BaseStateAPIResult struct {
 	Total                 int                      `json:"total"`
 	NumAfterTruncation    int                      `json:"num_after_truncation"`
 	NumFiltered           int                      `json:"num_filtered"`
 	Result                []map[string]interface{} `json:"result"`
 	PartialFailureWarning string                   `json:"partial_failure_warning"`
 	Warnings              []string                 `json:"warnings"`
+}
+
+type TaskDataResult struct {
+	BaseStateAPIResult
 }
 
 type TaskData struct {
@@ -48,6 +52,20 @@ type RespTasksInfo struct {
 	Result bool     `json:"result"`
 	Msg    string   `json:"msg"`
 	Data   TaskData `json:"data"`
+}
+
+type NodeDataResult struct {
+	BaseStateAPIResult
+}
+
+type NodeData struct {
+	Result NodeDataResult `json:"result"`
+}
+
+type RespNodesInfo struct {
+	Result bool     `json:"result"`
+	Msg    string   `json:"msg"`
+	Data   NodeData `json:"data"`
 }
 
 type ReplyActorInfo struct {
