@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"errors"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -49,21 +48,19 @@ func testEnterClusterInfo() utils.ClusterInfo {
 	}
 }
 
-func newTestLoader(t *testing.T) (*SnapshotLoader, *fakeStorageReader) {
+func newTestLoader(t *testing.T) *SnapshotLoader {
 	t.Helper()
-	reader := newFakeStorageReader()
-	loader, err := NewSnapshotLoader(reader, 0)
+	loader, err := NewSnapshotLoader(0)
 	if err != nil {
 		t.Fatalf("NewSnapshotLoader: %v", err)
 	}
-	return loader, reader
+	return loader
 }
 
-// TestEnsure_SnapshotCached_NoPipelineCall is the Layer-1 happy path: the
-// LRU already has the snapshot (either because a prior call Primed it, or
-// because it was fetched via Load earlier). Ensure must NOT invoke Pipeline.
+// TestEnsure_SnapshotCached_NoPipelineCall is the LRU happy path: the
+// snapshot was Primed by a prior call. Ensure must NOT invoke Pipeline.
 func TestEnsure_SnapshotCached_NoPipelineCall(t *testing.T) {
-	loader, _ := newTestLoader(t)
+	loader := newTestLoader(t)
 	info := testEnterClusterInfo()
 	clusterNameID := info.Name + "_" + info.Namespace
 
@@ -80,41 +77,11 @@ func TestEnsure_SnapshotCached_NoPipelineCall(t *testing.T) {
 	}
 }
 
-// TestEnsure_SnapshotInS3_NoPipelineCall is the Layer-2 path: LRU cold, but
-// S3 has the object (a sibling replica already wrote it, or the cache was
-// evicted). Ensure must hydrate via Load and NOT invoke Pipeline.
-func TestEnsure_SnapshotInS3_NoPipelineCall(t *testing.T) {
-	loader, reader := newTestLoader(t)
-	info := testEnterClusterInfo()
-	clusterNameID := info.Name + "_" + info.Namespace
-
-	// Plant the JSON blob where fetch() will find it — same shape
-	// buildSnapshotFromHandler would have produced on the other replica.
-	reader.put(clusterNameID, snapshot.SnapshotPath(info.SessionName),
-		makeSnapshotBlob(t, "from-s3"))
-
-	fp := &fakePipeline{}
-	sup := NewSupervisor(fp, loader, context.Background())
-
-	if err := sup.Ensure(context.Background(), info); err != nil {
-		t.Fatalf("Ensure: %v", err)
-	}
-	if got := fp.callCount(); got != 0 {
-		t.Fatalf("expected Pipeline to NOT be called when S3 has the object; got %d calls", got)
-	}
-	// Follow-up Load should now be a pure LRU hit — Load's own insertion
-	// after a successful miss+fetch takes care of that.
-	if _, err := loader.Load(clusterNameID, info.SessionName); err != nil {
-		t.Fatalf("subsequent Load: %v", err)
-	}
-}
-
-// TestEnsure_Missing_PipelineRuns_AndPrimes is the Layer-3 happy path: no
-// snapshot in LRU or S3, so Pipeline runs, PUTs a snapshot, and Ensure
-// Primes the result into the LRU. Verified via a follow-up Load against a
-// reader that NEVER held the blob — so a cache miss would blow up the test.
+// TestEnsure_Missing_PipelineRuns_AndPrimes is the cold path: no snapshot
+// in the LRU, so Pipeline runs and Ensure Primes the result. Verified via a
+// follow-up Load — a cache miss would blow up the test.
 func TestEnsure_Missing_PipelineRuns_AndPrimes(t *testing.T) {
-	loader, reader := newTestLoader(t)
+	loader := newTestLoader(t)
 	info := testEnterClusterInfo()
 	clusterNameID := info.Name + "_" + info.Namespace
 
@@ -133,54 +100,12 @@ func TestEnsure_Missing_PipelineRuns_AndPrimes(t *testing.T) {
 		t.Fatalf("expected Pipeline to be called exactly once; got %d", got)
 	}
 
-	// Reader has no blob -> if Prime was missed, this Load would fall
-	// through to ErrSnapshotNotFound. A successful hit proves the Prime.
 	got, err := loader.Load(clusterNameID, info.SessionName)
 	if err != nil {
 		t.Fatalf("Load after Ensure should be cache-hit but got err: %v", err)
 	}
 	if got != built {
 		t.Fatalf("expected Load to return the primed pointer; got %p want %p", got, built)
-	}
-	// Reader should have been touched exactly once (the initial Layer-2
-	// miss that triggered Pipeline). Prime bypasses the reader entirely.
-	if reader.totalCalls() != 1 {
-		t.Fatalf("expected reader to be touched only by the initial Layer-2 miss; got %d", reader.totalCalls())
-	}
-}
-
-// TestEnsure_LoaderTransientError_Propagates verifies the conservative
-// Layer-2 policy: a non-NotFound error from loader.Load must NOT trigger
-// Pipeline — it must bubble to the caller as an error. WHY: a transient
-// S3 glitch should fail-fast instead of triggering a costly K8s probe +
-// event-parse storm (beta_poc.md Q1 answer).
-func TestEnsure_LoaderTransientError_Propagates(t *testing.T) {
-	info := testEnterClusterInfo()
-
-	transient := errors.New("simulated S3 connection refused")
-
-	// A reader that returns a reader with a corrupt body -> Load's
-	// io.ReadAll or json.Unmarshal returns an "other" error. The exact
-	// error string doesn't matter; we just need it to NOT be
-	// ErrSnapshotNotFound.
-	reader := &flakyReader{err: transient}
-	loader, err := NewSnapshotLoader(reader, 0)
-	if err != nil {
-		t.Fatalf("NewSnapshotLoader: %v", err)
-	}
-
-	fp := &fakePipeline{}
-	sup := NewSupervisor(fp, loader, context.Background())
-
-	err = sup.Ensure(context.Background(), info)
-	if err == nil {
-		t.Fatalf("expected an error, got nil")
-	}
-	if !errors.Is(err, transient) {
-		t.Fatalf("expected wrapped transient error, got: %v", err)
-	}
-	if got := fp.callCount(); got != 0 {
-		t.Fatalf("expected Pipeline to NOT be called on transient loader error; got %d calls", got)
 	}
 }
 
@@ -189,7 +114,7 @@ func TestEnsure_LoaderTransientError_Propagates(t *testing.T) {
 // at most 1 Pipeline invocation. We verify both the coalescing and the
 // SingleflightDedupTotal metric increment.
 func TestEnsure_ConcurrentCallers_PipelineOnce(t *testing.T) {
-	loader, _ := newTestLoader(t)
+	loader := newTestLoader(t)
 	info := testEnterClusterInfo()
 
 	// A barrier the test uses to hold Pipeline inside ProcessSession while
@@ -238,7 +163,7 @@ func TestEnsure_ConcurrentCallers_PipelineOnce(t *testing.T) {
 // a follower whose ctx is canceled mid-wait must return ctx.Err() promptly
 // without blocking on the winner. The winner keeps running.
 func TestEnsure_ContextCanceled_ReleasesFollower(t *testing.T) {
-	loader, _ := newTestLoader(t)
+	loader := newTestLoader(t)
 	info := testEnterClusterInfo()
 
 	// Winner blocks until the test explicitly lets it finish — so the
@@ -284,7 +209,7 @@ func TestEnsure_ContextCanceled_ReleasesFollower(t *testing.T) {
 // No snapshot is Primed — frontend handlers go through redirectRequest for
 // live sessions, so there is nothing for us to cache.
 func TestEnsure_Live_ReturnsOK_NoSnapshot(t *testing.T) {
-	loader, _ := newTestLoader(t)
+	loader := newTestLoader(t)
 	info := testEnterClusterInfo()
 	clusterNameID := info.Name + "_" + info.Namespace
 
@@ -304,10 +229,10 @@ func TestEnsure_Live_ReturnsOK_NoSnapshot(t *testing.T) {
 }
 
 // TestEnsure_PipelineError_Propagates verifies that a real pipeline error
-// (K8sProbeErr / EventsErr / SnapshotWriteErr) surfaces through Ensure
-// unchanged so the handler can return 500.
+// (K8sProbeErr / EventsErr) surfaces through Ensure unchanged so the
+// handler can return 500.
 func TestEnsure_PipelineError_Propagates(t *testing.T) {
-	loader, _ := newTestLoader(t)
+	loader := newTestLoader(t)
 	info := testEnterClusterInfo()
 
 	boom := errors.New("k8s probe exploded")
@@ -332,7 +257,7 @@ func TestEnsure_PipelineError_Propagates(t *testing.T) {
 // leave the Supervisor untouched. WHY: live sessions are served via
 // redirectRequest, so snapshot work is meaningless for them.
 func TestEnterClusterHandler_LiveSession_SkipsSupervisor(t *testing.T) {
-	loader, _ := newTestLoader(t)
+	loader := newTestLoader(t)
 	fp := &fakePipeline{}
 	sup := NewSupervisor(fp, loader, context.Background())
 
@@ -356,7 +281,7 @@ func TestEnterClusterHandler_LiveSession_SkipsSupervisor(t *testing.T) {
 // lazy-mode blocking contract: Supervisor.Ensure is invoked and must
 // return before the handler writes 200.
 func TestEnterClusterHandler_DeadSession_BlocksOnSupervisor(t *testing.T) {
-	loader, _ := newTestLoader(t)
+	loader := newTestLoader(t)
 	built := &snapshot.SessionSnapshot{SessionKey: "built-by-pipeline"}
 	fp := &fakePipeline{
 		fn: func(_ context.Context, _ utils.ClusterInfo) (processor.SessionStatus, *snapshot.SessionSnapshot, error) {
@@ -396,7 +321,7 @@ func TestEnterClusterHandler_DeadSession_BlocksOnSupervisor(t *testing.T) {
 // TestEnterClusterHandler_SupervisorError_Returns500 verifies that a
 // Pipeline failure propagates to the HTTP layer as a 500.
 func TestEnterClusterHandler_SupervisorError_Returns500(t *testing.T) {
-	loader, _ := newTestLoader(t)
+	loader := newTestLoader(t)
 	boom := errors.New("k8s probe exploded")
 	fp := &fakePipeline{
 		fn: func(_ context.Context, _ utils.ClusterInfo) (processor.SessionStatus, *snapshot.SessionSnapshot, error) {
@@ -427,26 +352,3 @@ func restfulContainerFor(s *Server) *restful.Container {
 	s.RegisterRouter(c)
 	return c
 }
-
-// flakyReader is a storage.StorageReader whose GetContent returns a
-// non-nil io.Reader that always fails on Read. This simulates an S3
-// connection that accepts the open but drops the response body mid-stream,
-// producing a non-NotFound "other" error inside SnapshotLoader.fetch —
-// exactly the class of error Supervisor's conservative policy must
-// propagate without invoking Pipeline.
-type flakyReader struct {
-	err error
-}
-
-func (f *flakyReader) List() []utils.ClusterInfo             { return nil }
-func (f *flakyReader) ListFiles(_ string, _ string) []string { return nil }
-func (f *flakyReader) GetContent(_ string, _ string) io.Reader {
-	return &erroringReader{err: f.err}
-}
-
-// erroringReader is a one-shot io.Reader whose Read always returns an
-// injected error. Paired with flakyReader so fetch()'s io.ReadAll fails
-// with a wrapped, non-NotFound error.
-type erroringReader struct{ err error }
-
-func (e *erroringReader) Read(_ []byte) (int, error) { return 0, e.err }

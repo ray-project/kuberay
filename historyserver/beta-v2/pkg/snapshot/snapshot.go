@@ -1,19 +1,20 @@
-// Package snapshot defines the SessionSnapshot format persisted to object
-// storage for each dead Ray session.
+// Package snapshot defines the SessionSnapshot format held in memory for
+// each dead Ray session.
 //
-// A SessionSnapshot is the immutable, serialized state of a session's
-// processed events; History Server pods serve it as a stateless reader.
+// A SessionSnapshot is the in-memory representation of a session's
+// processed event state; History Server pods build it on demand from the
+// raw event files when /enter_cluster hits a dead session and serve it
+// from an LRU cache thereafter.
 package snapshot
 
 import (
-	"path"
 	"time"
 
 	"github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
 )
 
-// SessionSnapshot is the persisted, stateless representation of a single
-// dead Ray session's processed event state.
+// SessionSnapshot is the in-memory representation of a single dead Ray
+// session's processed event state.
 type SessionSnapshot struct {
 	// SessionKey is "{name}_{ns}_{session}" (see utils.BuildClusterSessionKey).
 	SessionKey string `json:"sessionKey"`
@@ -30,18 +31,4 @@ type SessionSnapshot struct {
 // LogEventPayload carries log events grouped by job ID.
 type LogEventPayload struct {
 	ByJobID map[string][]types.LogEvent `json:"byJobId"`
-}
-
-// Path constants for the processed snapshot file.
-const (
-	ProcessedDir = "processed"
-	SnapshotFile = "session.json"
-)
-
-// SnapshotPath returns the path (relative to the cluster root "{name}_{ns}/")
-// at which a session's snapshot file lives:
-//
-//	{sessionName}/processed/session.json
-func SnapshotPath(sessionName string) string {
-	return path.Join(sessionName, ProcessedDir, SnapshotFile)
 }

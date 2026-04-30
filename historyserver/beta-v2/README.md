@@ -53,12 +53,12 @@ What each test file focuses on:
 
 | File | Focus |
 |---|---|
-| `pkg/processor/session_test.go` | Pipeline state machine: Live / AlreadySnapped / Processed / EventsErr / SnapshotWriteErr / Canceled. |
-| `pkg/server/cache_test.go` | LRU hit/miss, fetch errors, `Prime` semantics + nil guard. |
+| `pkg/processor/session_test.go` | Pipeline state machine: Live / Processed / K8sProbeErr / Canceled. |
+| `pkg/server/cache_test.go` | LRU hit/miss, `Prime` semantics + nil guard, eviction. |
 | `pkg/server/enter_cluster_test.go` | Supervisor singleflight dedup, follower ctx-cancel release, Pipeline status routing. |
 | `pkg/server/handlers_test.go` | Tasks / actor / timeline / nodelogs / cluster_metadata / cluster_status happy + error paths. |
 | `pkg/server/server_test.go` | Route registration, cookie writes, proxy URL shapes, `redirectRequest` 501 short-circuit. |
-| `pkg/snapshot/snapshot_test.go` | Schema round-trip + `SnapshotPath`. |
+| `pkg/snapshot/snapshot_test.go` | Schema round-trip. |
 | `pkg/metrics/metrics_test.go` | Counter increments + `/metrics` exposition smoke. |
 
 ### 2.2 Build the Binary
@@ -150,21 +150,12 @@ time curl -s -o /dev/null \
   http://localhost:8080/enter_cluster/default/ray-beta-sample/<session>
 ```
 
-> [!NOTE] Pipeline runs synchronously. Expect this to take seconds: K8s probe + event parse + S3 PUT.
-
-Verify the snapshot landed in MinIO:
-
-```sh
-# Replace <session> with the value from §4.1.
-kubectl -n minio-dev exec -it deploy/minio -- \
-  mc ls local/ray-historyserver/log/ray-beta-sample_default/<session>/processed/
-
-# Should list session.json
-```
+> [!NOTE] Pipeline runs synchronously. Expect this to take seconds: K8s probe + event parse. The built snapshot is held
+in the per-replica LRU only; it is **not** persisted to object storage.
 
 ### 4.3 Warm Path
 
-Enter the same cluster again:
+Enter the same cluster again on the same replica:
 
 ```sh
 # Replace <session> with the value from §4.1.
@@ -172,7 +163,8 @@ time curl -s -o /dev/null \
   http://localhost:8080/enter_cluster/default/ray-beta-sample/<session>
 ```
 
-> [!NOTE] Expect `< 10 ms` (LRU cache hit; no S3 round-trip; no Pipeline execution).
+> [!NOTE] Expect `< 10 ms` (LRU cache hit; no Pipeline execution). If the LRU has evicted this session, or another
+replica handles the request, the cold path will run again.
 
 ### 4.4 Singleflight Coalescing
 
@@ -213,7 +205,7 @@ Useful signals:
 kubectl logs -f -l app=historyserver-beta-v2 --tail=50
 ```
 
-You should see one `wrote snapshot for <cluster>_<ns>/<session>` line per first-time cold-path call and nothing else
-for warm-path calls.
+Cold-path calls log the K8s probe and event parse; warm-path calls
+(LRU hit) produce no Pipeline log lines.
 
 ## 5. Integration with Ray Dashboard

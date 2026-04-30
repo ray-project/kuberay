@@ -76,28 +76,18 @@ func main() {
 		}
 	}
 
-	// ===== Reader + Writer from registries =====
-	// Reader: used by snapshot handlers AND by the lazy-mode Pipeline
-	// (Layer-2 S3 GET inside snapshotExists).
-	// Writer: used by Pipeline.writeSnapshot for the skip-if-exists PUT.
+	// ===== Reader from registry =====
+	// Reader is used by snapshot handlers (file-backed endpoints) and by the
+	// Pipeline (event-file reads during parse). The collector writes raw
+	// events; the Pipeline only reads them.
 	readerFactory, ok := collector.GetReaderRegistry()[runtimeClassName]
 	if !ok {
 		logrus.Fatalf("unsupported runtime-class-name for reader: %s", runtimeClassName)
-	}
-	writerFactory, ok := collector.GetWriterRegistry()[runtimeClassName]
-	if !ok {
-		logrus.Fatalf("unsupported runtime-class-name for writer: %s", runtimeClassName)
 	}
 	hsConfig := &collectortypes.RayHistoryServerConfig{RootDir: rayRootDir}
 	reader, err := readerFactory(hsConfig, jsonData)
 	if err != nil {
 		logrus.Fatalf("create reader: %v", err)
-	}
-	// Writes are global (not tied to a specific pod/session) so only RootDir is set.
-	collectorCfg := &collectortypes.RayCollectorConfig{RootDir: rayRootDir}
-	writer, err := writerFactory(collectorCfg, jsonData)
-	if err != nil {
-		logrus.Fatalf("create writer: %v", err)
 	}
 
 	// ===== ClientManager (for getClusters) =====
@@ -107,7 +97,7 @@ func main() {
 	}
 
 	// ===== SnapshotLoader =====
-	loader, err := server.NewSnapshotLoader(reader, cacheSize)
+	loader, err := server.NewSnapshotLoader(cacheSize)
 	if err != nil {
 		logrus.Fatalf("snapshot loader: %v", err)
 	}
@@ -128,9 +118,7 @@ func main() {
 	}
 
 	// ===== Pipeline & Supervisor =====
-	// rayRootDir is passed so writeSnapshot prepends it when generating S3
-	// keys, matching what the reader's GetContent auto-prepends on read.
-	pipeline := processor.NewPipeline(reader, writer, k8sClient, rayRootDir)
+	pipeline := processor.NewPipeline(reader, k8sClient)
 	supervisor := server.NewSupervisor(pipeline, loader, serverCtx)
 
 	// ===== Server =====

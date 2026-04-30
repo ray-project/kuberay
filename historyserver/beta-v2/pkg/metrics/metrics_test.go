@@ -80,15 +80,11 @@ func TestHandler_Serves(t *testing.T) {
 	// CounterVec / HistogramVec children.
 	SessionsProcessed.Inc()
 	SessionsSkipped.WithLabelValues("live").Inc()
-	SessionsSkipped.WithLabelValues("already_snapped").Inc()
 	SessionDuration.Observe(0.25)
 	SessionErrors.WithLabelValues("k8s_probe").Inc()
 	SessionErrors.WithLabelValues("events").Inc()
-	SessionErrors.WithLabelValues("snapshot_write").Inc()
 	CacheHits.Inc()
 	CacheMisses.Inc()
-	SnapshotFetchErrors.WithLabelValues("not_found").Inc()
-	SnapshotFetchErrors.WithLabelValues("other").Inc()
 	MissingSnapshot503.Inc()
 	EnterClusterTotal.WithLabelValues("ok").Inc()
 	EnterClusterTotal.WithLabelValues("error").Inc()
@@ -111,7 +107,6 @@ func TestHandler_Serves(t *testing.T) {
 		"processor_session_errors_total",
 		"server_cache_hits_total",
 		"server_cache_misses_total",
-		"server_snapshot_fetch_errors_total",
 		"server_missing_snapshot_503_total",
 		"server_enter_cluster_total",
 		"server_enter_cluster_duration_seconds",
@@ -123,14 +118,16 @@ func TestHandler_Serves(t *testing.T) {
 		}
 	}
 
-	// Negative assertions: the three ticker-only metrics must NOT appear.
-	// WHY this matters: if someone copies a metric back without updating
-	// the semantic, dashboards built on the old name would silently show
-	// bogus data.
+	// Negative assertions: the three ticker-only metrics (alpha) and the
+	// snapshot-fetch metric (write-back-era; retired alongside the S3 GET
+	// fallback) must NOT appear. WHY this matters: if someone copies a
+	// metric back without updating the semantic, dashboards built on the
+	// old name would silently show bogus data.
 	removed := []string{
 		"processor_sessions_scanned_total",
 		"processor_last_tick_timestamp_seconds",
 		"processor_orphan_sessions",
+		"server_snapshot_fetch_errors_total",
 	}
 	for _, name := range removed {
 		if strings.Contains(body, name) {

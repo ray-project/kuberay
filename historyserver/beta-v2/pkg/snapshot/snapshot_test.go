@@ -79,16 +79,3 @@ func TestFullRoundtrip(t *testing.T) {
 		t.Fatalf("roundtrip mismatch\noriginal=%+v\ndecoded =%+v", original, decoded)
 	}
 }
-
-// TestSnapshotPath is a golden test for the storage path convention. Changing
-// this contract breaks compatibility with snapshots already on S3, so pin it
-// explicitly.
-func TestSnapshotPath(t *testing.T) {
-	const sessionName = "session_2025_04_22_10_00_00"
-	const want = "session_2025_04_22_10_00_00/processed/session.json"
-
-	got := SnapshotPath(sessionName)
-	if got != want {
-		t.Fatalf("SnapshotPath(%q) = %q, want %q", sessionName, got, want)
-	}
-}

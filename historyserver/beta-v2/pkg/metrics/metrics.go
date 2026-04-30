@@ -15,24 +15,23 @@ import (
 
 var (
 	// SessionsProcessed counts sessions whose Pipeline returned
-	// SessionStatusProcessed (snapshot written). Live / already-snapped
+	// SessionStatusProcessed (events parsed into a SessionSnapshot). Live
 	// outcomes go to SessionsSkipped instead.
 	SessionsProcessed = promauto.NewCounter(prometheus.CounterOpts{
 		Name: "processor_sessions_processed_total",
-		Help: "Sessions that completed ProcessSingleSession and had a snapshot written.",
+		Help: "Sessions whose events were parsed into a SessionSnapshot.",
 	})
 
 	// SessionsSkipped counts sessions the pipeline intentionally passed on.
-	// reason="live"            -> RayCluster CR still present.
-	// reason="already_snapped" -> snapshot object already exists in storage.
+	// reason="live" -> RayCluster CR still present.
 	SessionsSkipped = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "processor_sessions_skipped_total",
 		Help: "Sessions skipped by the pipeline, labeled by reason.",
 	}, []string{"reason"})
 
 	// SessionDuration records the wall time of a single ProcessSession call.
-	// Exponential buckets (0.1s..~51s) cover both fast skips (~ms) and full
-	// parse + S3 write (~seconds) without saturation.
+	// Exponential buckets (0.1s..~51s) cover fast skips (~ms) and full
+	// parse runs (~seconds) without saturation.
 	SessionDuration = promauto.NewHistogram(prometheus.HistogramOpts{
 		Name:    "processor_session_duration_seconds",
 		Help:    "Wall time of ProcessSession.",
@@ -46,7 +45,7 @@ var (
 	// on-call; Pipeline returns SessionStatusCanceled without hitting this.
 	SessionErrors = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "processor_session_errors_total",
-		Help: "Pipeline errors, labeled by pipeline stage (k8s_probe / events / snapshot_write).",
+		Help: "Pipeline errors, labeled by pipeline stage (k8s_probe / events).",
 	}, []string{"stage"})
 )
 
@@ -59,22 +58,12 @@ var (
 		Help: "Snapshot loader cache hits.",
 	})
 
-	// CacheMisses counts snapshot-loader LRU misses (every miss triggers
-	// exactly one storage fetch; see cache.go).
+	// CacheMisses counts snapshot-loader LRU misses. A miss surfaces as
+	// ErrSnapshotNotFound; the Supervisor rebuilds via Pipeline + Prime.
 	CacheMisses = promauto.NewCounter(prometheus.CounterOpts{
 		Name: "server_cache_misses_total",
 		Help: "Snapshot loader cache misses.",
 	})
-
-	// SnapshotFetchErrors counts storage fetch failures by kind:
-	//   kind="not_found" -> ErrSnapshotNotFound; expected for dead-but-unsnapped
-	//                       sessions, served as 503.
-	//   kind="other"     -> read/decode failures; Supervisor treats these as
-	//                       transient (no Pipeline retry), surfaced as 500.
-	SnapshotFetchErrors = promauto.NewCounterVec(prometheus.CounterOpts{
-		Name: "server_snapshot_fetch_errors_total",
-		Help: "Errors fetching snapshots from storage.",
-	}, []string{"kind"})
 
 	// MissingSnapshot503 counts 503 responses returned by handleMissingSnapshot.
 	// Fires when a handler is hit without a prior /enter_cluster (e.g. a link

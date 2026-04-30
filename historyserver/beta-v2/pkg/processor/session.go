@@ -1,20 +1,17 @@
 // Package processor implements the per-session pipeline that classifies a
-// session as live or dead and, when dead, parses raw events into a
-// SessionSnapshot persisted to object storage.
+// session as live or dead and, when dead, parses raw events into an
+// in-memory SessionSnapshot.
 //
 // Pipeline.ProcessSession is driven on-demand by the HTTP Supervisor when
-// /enter_cluster hits a dead session.
+// /enter_cluster hits a dead session. The built snapshot is handed back to
+// the caller for LRU priming; nothing is persisted to object storage.
 package processor
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"path"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	k8stypes "k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -30,51 +27,39 @@ import (
 )
 
 // SessionStatus is ProcessSession's outcome classification. Success statuses
-// (Live, AlreadySnapped, Processed) return a nil error; all others pair with
-// a non-nil error.
+// (Live, Processed) return a nil error; all others pair with a non-nil error.
 type SessionStatus int
 
 const (
 	// SessionStatusLive means the RayCluster CR is still present and the
 	// session is intentionally skipped.
 	SessionStatusLive SessionStatus = iota
-	// SessionStatusAlreadySnapped means a snapshot already exists in storage.
-	SessionStatusAlreadySnapped
-	// SessionStatusProcessed means events were parsed and the snapshot was
-	// written. The returned *SessionSnapshot is non-nil only for this status.
+	// SessionStatusProcessed means events were parsed into a SessionSnapshot.
+	// The returned *SessionSnapshot is non-nil only for this status.
 	SessionStatusProcessed
 	// SessionStatusK8sProbeErr means the K8s Get returned a non-NotFound
 	// error and the cluster state is unknown.
 	SessionStatusK8sProbeErr
 	// SessionStatusEventsErr means event parsing failed.
 	SessionStatusEventsErr
-	// SessionStatusSnapshotWriteErr means the object-store PUT failed.
-	SessionStatusSnapshotWriteErr
 	// SessionStatusCanceled means ctx was canceled mid-pipeline; not an *Err
 	// status.
 	SessionStatusCanceled
 )
 
-// Pipeline processes a single Ray session end-to-end: dead detection,
-// skip-if-exists, event parsing, and snapshot write. It is stateless across
-// sessions and safe for concurrent use.
+// Pipeline processes a single Ray session end-to-end: dead detection and
+// event parsing. It is stateless across sessions and safe for concurrent
+// use.
 type Pipeline struct {
 	reader    storage.StorageReader
-	writer    storage.StorageWriter
 	k8sClient client.Client
-
-	// rootDir is the storage prefix prepended on writes to mirror reader layout.
-	rootDir string
 }
 
-// NewPipeline constructs a Pipeline. All collaborators must be non-nil; an
-// empty rootDir means no prefix.
-func NewPipeline(reader storage.StorageReader, writer storage.StorageWriter, k8sClient client.Client, rootDir string) *Pipeline {
+// NewPipeline constructs a Pipeline. All collaborators must be non-nil.
+func NewPipeline(reader storage.StorageReader, k8sClient client.Client) *Pipeline {
 	return &Pipeline{
 		reader:    reader,
-		writer:    writer,
 		k8sClient: k8sClient,
-		rootDir:   rootDir,
 	}
 }
 
@@ -82,10 +67,9 @@ func NewPipeline(reader storage.StorageReader, writer storage.StorageWriter, k8s
 // classification, the built snapshot (when applicable), and an error.
 //
 //   - (Live, nil, nil): no-op; caller moves on.
-//   - (AlreadySnapped, nil, nil): skip-if-exists fired; caller moves on.
-//   - (Processed, snap, nil): snapshot built and written; snap is the exact
-//     object persisted and is never nil for this status.
-//   - (K8sProbeErr | EventsErr | SnapshotWriteErr, nil, err): real failure.
+//   - (Processed, snap, nil): snapshot built; snap is the freshly-built
+//     in-memory object and is never nil for this status.
+//   - (K8sProbeErr | EventsErr, nil, err): real failure.
 //   - (Canceled, nil, ctx.Err()): ctx was canceled between steps.
 //
 // ctx is polled at each step boundary; cancellation surfaces as Canceled.
@@ -93,8 +77,6 @@ func NewPipeline(reader storage.StorageReader, writer storage.StorageWriter, k8s
 func (p *Pipeline) ProcessSession(ctx context.Context, session utils.ClusterInfo) (SessionStatus, *snapshot.SessionSnapshot, error) {
 	start := time.Now()
 	defer func() { metrics.SessionDuration.Observe(time.Since(start).Seconds()) }()
-
-	clusterNameID := session.Name + "_" + session.Namespace
 
 	// Fast-fail if the request was canceled before we started.
 	if err := ctx.Err(); err != nil {
@@ -115,15 +97,7 @@ func (p *Pipeline) ProcessSession(ctx context.Context, session utils.ClusterInfo
 		return SessionStatusLive, nil, nil
 	}
 
-	// Step 2: skip-if-exists. Snapshots are immutable.
-	if err := ctx.Err(); err != nil {
-		return SessionStatusCanceled, nil, err
-	}
-	if p.snapshotExists(clusterNameID, session.SessionName) {
-		return SessionStatusAlreadySnapped, nil, nil
-	}
-
-	// Step 3: parse events with a fresh handler per call (no cross-session state).
+	// Step 2: parse events with a fresh handler per call (no cross-session state).
 	if err := ctx.Err(); err != nil {
 		return SessionStatusCanceled, nil, err
 	}
@@ -135,18 +109,7 @@ func (p *Pipeline) ProcessSession(ctx context.Context, session utils.ClusterInfo
 		return SessionStatusEventsErr, nil, fmt.Errorf("process events for %s/%s: %w", session.Namespace, session.Name, err)
 	}
 
-	// Step 4: serialize and PUT. The returned *SessionSnapshot lets the caller
-	// prime the LRU.
-	if err := ctx.Err(); err != nil {
-		return SessionStatusCanceled, nil, err
-	}
 	snap := buildSnapshotFromHandler(h, session)
-	if err := p.writeSnapshot(clusterNameID, session.SessionName, snap); err != nil {
-		if ctxErr := ctx.Err(); ctxErr != nil {
-			return SessionStatusCanceled, nil, ctxErr
-		}
-		return SessionStatusSnapshotWriteErr, nil, err
-	}
 	return SessionStatusProcessed, snap, nil
 }
 
@@ -168,26 +131,6 @@ func (p *Pipeline) isDead(ctx context.Context, session utils.ClusterInfo) (bool,
 		return false, err
 	}
 	return false, nil
-}
-
-// snapshotExists reports whether the session's snapshot already exists in
-// storage.
-func (p *Pipeline) snapshotExists(clusterNameID, sessionName string) bool {
-	return p.reader.GetContent(clusterNameID, snapshot.SnapshotPath(sessionName)) != nil
-}
-
-// writeSnapshot marshals snap and performs a single atomic PUT.
-func (p *Pipeline) writeSnapshot(clusterNameID, sessionName string, snap *snapshot.SessionSnapshot) error {
-	body, err := json.Marshal(snap)
-	if err != nil {
-		return fmt.Errorf("marshal snapshot for %s/%s: %w", clusterNameID, sessionName, err)
-	}
-	dst := path.Join(p.rootDir, clusterNameID, snapshot.SnapshotPath(sessionName))
-	if err := p.writer.WriteFile(dst, bytes.NewReader(body)); err != nil {
-		return fmt.Errorf("write snapshot %s: %w", dst, err)
-	}
-	logrus.Infof("wrote snapshot for %s/%s (%d bytes)", clusterNameID, sessionName, len(body))
-	return nil
 }
 
 // buildSnapshotFromHandler flattens handler state into a SessionSnapshot. It

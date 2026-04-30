@@ -16,44 +16,25 @@ import (
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 
-	"github.com/ray-project/kuberay/historyserver/beta-v2/pkg/snapshot"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
-// fakeStorage is a tiny in-memory StorageReader + StorageWriter used by these
-// tests. It is intentionally minimal: only the methods the Pipeline actually
-// calls are exercised. Write routes to the same map so that a WriteFile
-// followed by GetContent round-trips, mirroring real S3 semantics.
-type fakeStorage struct {
-	mu sync.Mutex
-	// flat map whose key is the full storage path "{clusterID}/{file}"
-	contents map[string][]byte
-	// perKey counters so tests can assert no-writes / single-writes.
-	writeCalls map[string]int
+// fakeReader is a tiny in-memory StorageReader used by these tests. Only the
+// methods the Pipeline actually calls are exercised.
+type fakeReader struct {
+	mu       sync.Mutex
+	contents map[string][]byte // key = "{clusterID}/{file}"
 }
 
-func newFakeStorage() *fakeStorage {
-	return &fakeStorage{
-		contents:   map[string][]byte{},
-		writeCalls: map[string]int{},
-	}
+func newFakeReader() *fakeReader {
+	return &fakeReader{contents: map[string][]byte{}}
 }
 
-// seed pre-populates the storage as if the collector had already written
-// these bytes. Key format matches GetContent: "{clusterID}/{file}".
-func (f *fakeStorage) seed(clusterID, file string, body []byte) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.contents[clusterID+"/"+file] = body
-}
+func (f *fakeReader) List() []utils.ClusterInfo { return nil }
 
-// --- StorageReader ---
+func (f *fakeReader) ListFiles(_ string, _ string) []string { return nil }
 
-func (f *fakeStorage) List() []utils.ClusterInfo { return nil }
-
-func (f *fakeStorage) ListFiles(_ string, _ string) []string { return nil }
-
-func (f *fakeStorage) GetContent(clusterID string, fileName string) io.Reader {
+func (f *fakeReader) GetContent(clusterID string, fileName string) io.Reader {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	body, ok := f.contents[clusterID+"/"+fileName]
@@ -61,38 +42,6 @@ func (f *fakeStorage) GetContent(clusterID string, fileName string) io.Reader {
 		return nil
 	}
 	return bytes.NewReader(body)
-}
-
-// --- StorageWriter ---
-
-func (f *fakeStorage) CreateDirectory(_ string) error { return nil }
-
-func (f *fakeStorage) WriteFile(file string, reader io.ReadSeeker) error {
-	body, err := io.ReadAll(reader)
-	if err != nil {
-		return err
-	}
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.contents[file] = body
-	f.writeCalls[file]++
-	return nil
-}
-
-func (f *fakeStorage) writeCountFor(file string) int {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	return f.writeCalls[file]
-}
-
-func (f *fakeStorage) totalWrites() int {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	total := 0
-	for _, n := range f.writeCalls {
-		total += n
-	}
-	return total
 }
 
 // newScheme returns a runtime.Scheme with RayCluster registered; every test
@@ -115,29 +64,18 @@ func testSession() utils.ClusterInfo {
 	}
 }
 
-func clusterNameID(s utils.ClusterInfo) string {
-	return s.Name + "_" + s.Namespace
-}
-
-// snapshotStorageKey returns the full storage key where writeSnapshot writes
-// — "{clusterNameID}/{sessionName}/processed/session.json".
-func snapshotStorageKey(s utils.ClusterInfo) string {
-	return clusterNameID(s) + "/" + snapshot.SnapshotPath(s.SessionName)
-}
-
-// TestProcessSession_DeadNoSnapshot_Processes is the primary happy path: the
-// RayCluster CR is absent (dead), no snapshot exists yet, so the pipeline
-// must process events (possibly empty) and persist a snapshot. The second
-// call exercises skip-if-exists and also verifies the returned *snapshot
-// pointer is nil on the AlreadySnapped path (only Processed returns the
-// freshly-built snapshot).
-func TestProcessSession_DeadNoSnapshot_Processes(t *testing.T) {
-	storage := newFakeStorage()
+// TestProcessSession_DeadSession_Processes is the primary happy path: the
+// RayCluster CR is absent (dead), so the pipeline parses events and returns
+// a freshly-built SessionSnapshot. Without the legacy write-back step,
+// every call against a dead session re-parses — Pipeline alone is stateless;
+// the Supervisor's LRU + Prime is what avoids the redundancy in production.
+func TestProcessSession_DeadSession_Processes(t *testing.T) {
+	reader := newFakeReader()
 	// No CR registered with the fake client -> Get returns NotFound ->
 	// isDead returns true.
 	k8s := fake.NewClientBuilder().WithScheme(newScheme(t)).Build()
 
-	p := NewPipeline(storage, storage, k8s, "")
+	p := NewPipeline(reader, k8s)
 	session := testSession()
 
 	status, snap, err := p.ProcessSession(context.Background(), session)
@@ -147,73 +85,35 @@ func TestProcessSession_DeadNoSnapshot_Processes(t *testing.T) {
 	if status != SessionStatusProcessed {
 		t.Fatalf("expected status=Processed on first call, got %v", status)
 	}
-	// WHY assert non-nil snapshot: Supervisor relies on this pointer to
-	// Prime the LRU cache, avoiding a redundant S3 GET right after PUT.
+	// WHY assert non-nil snapshot: the Supervisor relies on this pointer to
+	// Prime the LRU cache after a successful parse.
 	if snap == nil {
 		t.Fatalf("expected non-nil snapshot pointer on Processed, got nil")
 	}
-	// Sanity: the returned snapshot matches what was persisted — its
-	// SessionKey is what buildSnapshotFromHandler computed.
 	if snap.SessionKey == "" {
 		t.Fatalf("expected SessionKey populated, got empty string")
 	}
 
-	dst := snapshotStorageKey(session)
-	if got := storage.writeCountFor(dst); got != 1 {
-		t.Fatalf("expected 1 snapshot write to %q, got %d", dst, got)
-	}
-	// Sanity: subsequent call should be a no-op (skip-if-exists), and the
-	// returned snapshot MUST be nil — AlreadySnapped is a "caller moves on"
-	// signal, not a snapshot handoff.
+	// Second call: same dead session; without write-back there is no
+	// skip-if-exists fast path — Pipeline re-parses and returns Processed
+	// again. Avoiding this redundancy in production is the Supervisor's
+	// Prime side effect, not Pipeline's responsibility.
 	status, snap, err = p.ProcessSession(context.Background(), session)
 	if err != nil {
 		t.Fatalf("ProcessSession (second call): unexpected error: %v", err)
 	}
-	if status != SessionStatusAlreadySnapped {
-		t.Fatalf("expected status=AlreadySnapped on second call, got %v", status)
+	if status != SessionStatusProcessed {
+		t.Fatalf("expected status=Processed on second call, got %v", status)
 	}
-	if snap != nil {
-		t.Fatalf("expected nil snapshot on AlreadySnapped; got %+v", snap)
-	}
-	if got := storage.writeCountFor(dst); got != 1 {
-		t.Fatalf("skip-if-exists broken: expected 1 total write, got %d", got)
-	}
-}
-
-// TestProcessSession_DeadSnapshotExists_Skips verifies that a dead session
-// with an existing snapshot is a no-op: no events are re-read, no writes
-// happen, and the returned snapshot pointer is nil.
-func TestProcessSession_DeadSnapshotExists_Skips(t *testing.T) {
-	storage := newFakeStorage()
-	session := testSession()
-	storage.seed(clusterNameID(session), snapshot.SnapshotPath(session.SessionName),
-		[]byte(`{"sessionKey":"pre-existing"}`))
-
-	// No CR -> dead.
-	k8s := fake.NewClientBuilder().WithScheme(newScheme(t)).Build()
-
-	p := NewPipeline(storage, storage, k8s, "")
-
-	status, snap, err := p.ProcessSession(context.Background(), session)
-	if err != nil {
-		t.Fatalf("ProcessSession: unexpected error: %v", err)
-	}
-	if status != SessionStatusAlreadySnapped {
-		t.Fatalf("expected status=AlreadySnapped, got %v", status)
-	}
-	if snap != nil {
-		t.Fatalf("expected nil snapshot on AlreadySnapped; got %+v", snap)
-	}
-	if got := storage.totalWrites(); got != 0 {
-		t.Fatalf("expected 0 writes when snapshot already exists, got %d", got)
+	if snap == nil {
+		t.Fatalf("expected non-nil snapshot on second Processed call, got nil")
 	}
 }
 
 // TestProcessSession_Live_Skips verifies that a live RayCluster (CR present)
-// is skipped cleanly: no events read, no snapshot written, nil snapshot
-// returned.
+// is skipped cleanly: no events read, nil snapshot returned.
 func TestProcessSession_Live_Skips(t *testing.T) {
-	storage := newFakeStorage()
+	reader := newFakeReader()
 	session := testSession()
 
 	// CR exists -> isDead returns (false, nil) -> ProcessSession returns early.
@@ -228,7 +128,7 @@ func TestProcessSession_Live_Skips(t *testing.T) {
 		WithObjects(rc).
 		Build()
 
-	p := NewPipeline(storage, storage, k8s, "")
+	p := NewPipeline(reader, k8s)
 
 	status, snap, err := p.ProcessSession(context.Background(), session)
 	if err != nil {
@@ -240,16 +140,13 @@ func TestProcessSession_Live_Skips(t *testing.T) {
 	if snap != nil {
 		t.Fatalf("expected nil snapshot on Live; got %+v", snap)
 	}
-	if got := storage.totalWrites(); got != 0 {
-		t.Fatalf("expected 0 writes for live cluster, got %d", got)
-	}
 }
 
 // TestProcessSession_K8sOtherError_Propagates verifies that non-NotFound
 // errors from the K8s API are propagated (not swallowed and mis-interpreted
 // as "dead"). The caller logs the error and retries on a subsequent request.
 func TestProcessSession_K8sOtherError_Propagates(t *testing.T) {
-	storage := newFakeStorage()
+	reader := newFakeReader()
 	session := testSession()
 
 	injected := errors.New("simulated API server outage")
@@ -262,7 +159,7 @@ func TestProcessSession_K8sOtherError_Propagates(t *testing.T) {
 		}).
 		Build()
 
-	p := NewPipeline(storage, storage, k8s, "")
+	p := NewPipeline(reader, k8s)
 
 	status, snap, err := p.ProcessSession(context.Background(), session)
 	if err == nil {
@@ -277,9 +174,6 @@ func TestProcessSession_K8sOtherError_Propagates(t *testing.T) {
 	if snap != nil {
 		t.Fatalf("expected nil snapshot on error; got %+v", snap)
 	}
-	if got := storage.totalWrites(); got != 0 {
-		t.Fatalf("expected 0 writes when K8s probe fails, got %d", got)
-	}
 }
 
 // TestProcessSession_ContextCanceled_ReturnsCanceled verifies that a
@@ -287,11 +181,11 @@ func TestProcessSession_K8sOtherError_Propagates(t *testing.T) {
 // Supervisor follower-cancel path relies on this. A distinct Canceled status
 // keeps client hang-ups out of the operator-alerting error buckets.
 func TestProcessSession_ContextCanceled_ReturnsCanceled(t *testing.T) {
-	storage := newFakeStorage()
+	reader := newFakeReader()
 	session := testSession()
 
 	k8s := fake.NewClientBuilder().WithScheme(newScheme(t)).Build()
-	p := NewPipeline(storage, storage, k8s, "")
+	p := NewPipeline(reader, k8s)
 
 	// Pre-cancel the context — first-step ctx.Err() gate must fire.
 	ctx, cancel := context.WithCancel(context.Background())
@@ -306,8 +200,5 @@ func TestProcessSession_ContextCanceled_ReturnsCanceled(t *testing.T) {
 	}
 	if snap != nil {
 		t.Fatalf("expected nil snapshot on Canceled; got %+v", snap)
-	}
-	if got := storage.totalWrites(); got != 0 {
-		t.Fatalf("expected 0 writes when ctx canceled pre-flight, got %d", got)
 	}
 }

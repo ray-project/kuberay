@@ -20,8 +20,8 @@ type sessionPipeline interface {
 }
 
 // Supervisor serves snapshots for /enter_cluster by checking the loader's
-// LRU/S3 cache layers and running the Pipeline only as a last resort.
-// Concurrent callers for the same session are coalesced via singleflight.
+// LRU and running the Pipeline on miss. Concurrent callers for the same
+// session are coalesced via singleflight.
 //
 // A single Supervisor is safe to share across all HTTP handlers for one
 // replica; its mutable state lives inside singleflight.Group.
@@ -84,21 +84,16 @@ func (s *Supervisor) Ensure(ctx context.Context, info utils.ClusterInfo) error {
 // runOnce is the singleflight winner's body. It always returns (nil, err);
 // callers care about the Prime side effect on success.
 func (s *Supervisor) runOnce(ctx context.Context, info utils.ClusterInfo, clusterNameID string) (interface{}, error) {
-	// Layer 1+2: LRU + S3 (both inside loader.Load, which primes the LRU on hit).
-	snap, err := s.loader.Load(clusterNameID, info.SessionName)
-	if err == nil {
-		_ = snap
+	// Layer 1: LRU (inside loader.Load).
+	if _, err := s.loader.Load(clusterNameID, info.SessionName); err == nil {
 		return nil, nil
-	}
-	// Bubble non-NotFound errors rather than triggering Pipeline; transient
-	// storage failures should be retried by the client.
-	if !errors.Is(err, ErrSnapshotNotFound) {
+	} else if !errors.Is(err, ErrSnapshotNotFound) {
 		return nil, fmt.Errorf("loader.Load %s/%s: %w", clusterNameID, info.SessionName, err)
 	}
 
-	// Layer 3: synchronously build + PUT under serverCtx (not the winner's
-	// request ctx) so a winner disconnect does not cancel work that followers
-	// still depend on, while SIGTERM still cancels via serverCtx.
+	// Layer 2: synchronously build under serverCtx (not the winner's request
+	// ctx) so a winner disconnect does not cancel work that followers still
+	// depend on, while SIGTERM still cancels via serverCtx.
 	status, built, perr := s.pipeline.ProcessSession(ctx, info)
 	if perr != nil {
 		// Pipeline already labeled the failure into metrics; we just propagate.
@@ -109,15 +104,9 @@ func (s *Supervisor) runOnce(ctx context.Context, info utils.ClusterInfo, cluste
 	case processor.SessionStatusProcessed:
 		metrics.SessionsProcessed.Inc()
 		if built != nil {
-			// Prime so the immediate follow-up call avoids a redundant S3 GET.
+			// Prime so the immediate follow-up handler call is an LRU hit.
 			s.loader.Prime(clusterNameID, info.SessionName, built)
 		}
-		return nil, nil
-
-	case processor.SessionStatusAlreadySnapped:
-		// Another process snapped this session between our Layer-2 check and
-		// the Pipeline call; the next Load falls through to S3 and caches it.
-		metrics.SessionsSkipped.WithLabelValues("already_snapped").Inc()
 		return nil, nil
 
 	case processor.SessionStatusLive:

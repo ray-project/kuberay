@@ -2,7 +2,6 @@ package server
 
 import (
 	"bytes"
-	"encoding/json"
 	"errors"
 	"io"
 	"sync"
@@ -14,9 +13,10 @@ import (
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
-// fakeStorageReader is a minimal storage.StorageReader used only by these
-// tests. Only GetContent is exercised; List / ListFiles return empty values
-// to satisfy the interface.
+// fakeStorageReader is a minimal storage.StorageReader retained as a shared
+// test helper for file-backed handlers (see handlers_test.go's
+// nodeLogsFakeReader). The SnapshotLoader itself is LRU-only and does not
+// touch storage; cache tests do not use this type.
 type fakeStorageReader struct {
 	mu          sync.Mutex
 	contents    map[string][]byte // key = clusterID + "|" + fileName
@@ -58,184 +58,91 @@ func (f *fakeStorageReader) GetContent(clusterID string, fileName string) io.Rea
 	return bytes.NewReader(body)
 }
 
-func (f *fakeStorageReader) totalCalls() int32 {
-	return atomic.LoadInt32(&f.calls)
-}
-
-func (f *fakeStorageReader) callsFor(clusterID, fileName string) int {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	return f.perKeyCalls[clusterID+"|"+fileName]
-}
-
-// makeSnapshotBlob creates a minimal SessionSnapshot encoded as JSON.
-func makeSnapshotBlob(t *testing.T, sessionKey string) []byte {
-	t.Helper()
-	snap := snapshot.SessionSnapshot{
+// snapWith returns a minimal snapshot pointer for use with Prime.
+func snapWith(sessionKey string) *snapshot.SessionSnapshot {
+	return &snapshot.SessionSnapshot{
 		SessionKey:  sessionKey,
 		GeneratedAt: time.Date(2026, 4, 22, 12, 0, 0, 0, time.UTC),
 	}
-	b, err := json.Marshal(snap)
-	if err != nil {
-		t.Fatalf("marshal snapshot: %v", err)
-	}
-	return b
 }
 
-// TestLoaderCacheHitReturnsSameInstance verifies that the second Load of the
-// same key returns the exact cached pointer without invoking the reader again.
-func TestLoaderCacheHitReturnsSameInstance(t *testing.T) {
-	reader := newFakeStorageReader()
-	clusterID := "cluster-a"
-	sessionName := "session-1"
-	reader.put(clusterID, snapshot.SnapshotPath(sessionName),
-		makeSnapshotBlob(t, "key-1"))
-
-	loader, err := NewSnapshotLoader(reader, 0)
+// TestLoaderPrimeThenLoad_ReturnsSameInstance verifies the canonical hot path:
+// Prime, then two Loads must each return the exact pointer that was Primed
+// (no copy, no fetch — there is no fetch).
+func TestLoaderPrimeThenLoad_ReturnsSameInstance(t *testing.T) {
+	loader, err := NewSnapshotLoader(0)
 	if err != nil {
 		t.Fatalf("NewSnapshotLoader: %v", err)
 	}
 
-	first, err := loader.Load(clusterID, sessionName)
+	primed := snapWith("key-1")
+	loader.Prime("cluster-a", "session-1", primed)
+
+	first, err := loader.Load("cluster-a", "session-1")
 	if err != nil {
 		t.Fatalf("first Load: %v", err)
 	}
-	second, err := loader.Load(clusterID, sessionName)
+	second, err := loader.Load("cluster-a", "session-1")
 	if err != nil {
 		t.Fatalf("second Load: %v", err)
 	}
-	if first != second {
-		t.Fatalf("expected same pointer on cache hit, got %p != %p", first, second)
-	}
-	if got := reader.callsFor(clusterID, snapshot.SnapshotPath(sessionName)); got != 1 {
-		t.Fatalf("expected exactly 1 GetContent call, got %d", got)
+	if first != primed || second != primed {
+		t.Fatalf("expected same pointer on cache hit, got %p / %p (want %p)", first, second, primed)
 	}
 }
 
-// TestLoaderCacheMissFetchesAndCaches verifies that a miss goes to storage,
-// and a subsequent hit does not.
-func TestLoaderCacheMissFetchesAndCaches(t *testing.T) {
-	reader := newFakeStorageReader()
-	clusterID := "cluster-b"
-	sessionName := "session-2"
-	reader.put(clusterID, snapshot.SnapshotPath(sessionName),
-		makeSnapshotBlob(t, "key-2"))
-
-	loader, err := NewSnapshotLoader(reader, 0)
+// TestLoaderColdMiss_ReturnsNotFound verifies that an LRU miss returns
+// ErrSnapshotNotFound. The Supervisor relies on this sentinel to decide
+// whether to invoke Pipeline.
+func TestLoaderColdMiss_ReturnsNotFound(t *testing.T) {
+	loader, err := NewSnapshotLoader(0)
 	if err != nil {
 		t.Fatalf("NewSnapshotLoader: %v", err)
 	}
 
-	snap, err := loader.Load(clusterID, sessionName)
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-	if snap.SessionKey != "key-2" {
-		t.Fatalf("unexpected SessionKey: got %q want %q", snap.SessionKey, "key-2")
-	}
-	if got := reader.totalCalls(); got != 1 {
-		t.Fatalf("expected 1 reader call after miss, got %d", got)
-	}
-
-	if _, err := loader.Load(clusterID, sessionName); err != nil {
-		t.Fatalf("second Load: %v", err)
-	}
-	if got := reader.totalCalls(); got != 1 {
-		t.Fatalf("expected reader calls to stay at 1 after cache hit, got %d", got)
+	if _, err := loader.Load("cluster-c", "session-3"); !errors.Is(err, ErrSnapshotNotFound) {
+		t.Fatalf("expected ErrSnapshotNotFound on cold miss, got %v", err)
 	}
 }
 
-// TestLoaderNotFoundReturnsErrAndDoesNotCache verifies the not-found contract:
-// a missing snapshot returns ErrSnapshotNotFound, and failures are not cached
-// (re-loading after the object appears must succeed).
-func TestLoaderNotFoundReturnsErrAndDoesNotCache(t *testing.T) {
-	reader := newFakeStorageReader()
-	clusterID := "cluster-c"
-	sessionName := "session-3"
-
-	loader, err := NewSnapshotLoader(reader, 0)
+// TestLoaderMissDoesNotCacheNotFound verifies that a miss is not
+// remembered: a later Prime + Load must succeed. WHY this matters: a
+// negative cache would prevent the Supervisor's Prime from ever taking
+// effect for a freshly-built session.
+func TestLoaderMissDoesNotCacheNotFound(t *testing.T) {
+	loader, err := NewSnapshotLoader(0)
 	if err != nil {
 		t.Fatalf("NewSnapshotLoader: %v", err)
 	}
 
-	if _, err := loader.Load(clusterID, sessionName); !errors.Is(err, ErrSnapshotNotFound) {
+	if _, err := loader.Load("cluster-c", "session-3"); !errors.Is(err, ErrSnapshotNotFound) {
 		t.Fatalf("expected ErrSnapshotNotFound, got %v", err)
 	}
 
-	// Simulate snapshot appearing later; subsequent Load must re-fetch and
-	// succeed (failures must not have been cached).
-	reader.put(clusterID, snapshot.SnapshotPath(sessionName),
-		makeSnapshotBlob(t, "key-3"))
+	primed := snapWith("key-3")
+	loader.Prime("cluster-c", "session-3", primed)
 
-	snap, err := loader.Load(clusterID, sessionName)
-	if err != nil {
-		t.Fatalf("Load after put: %v", err)
-	}
-	if snap.SessionKey != "key-3" {
-		t.Fatalf("unexpected SessionKey: got %q want %q", snap.SessionKey, "key-3")
-	}
-	// Two GetContent calls: one returned nil, one returned the bytes.
-	if got := reader.callsFor(clusterID, snapshot.SnapshotPath(sessionName)); got != 2 {
-		t.Fatalf("expected 2 GetContent calls, got %d", got)
-	}
-}
-
-// TestLoaderPrime_BypassesFetch verifies that after Prime plants a snapshot,
-// a subsequent Load is a pure cache hit — zero reader calls. WHY this is the
-// headline property: the Supervisor PUTs + Primes in one shot, and the next
-// handler call for the same session must not pay a redundant S3 GET.
-func TestLoaderPrime_BypassesFetch(t *testing.T) {
-	reader := newFakeStorageReader()
-	clusterID := "cluster-prime"
-	sessionName := "session-prime"
-	// Deliberately do NOT put the snapshot blob into the reader — if Prime
-	// is working, Load must never reach the reader. Any reader call would
-	// show up in totalCalls().
-
-	loader, err := NewSnapshotLoader(reader, 0)
-	if err != nil {
-		t.Fatalf("NewSnapshotLoader: %v", err)
-	}
-
-	primed := &snapshot.SessionSnapshot{
-		SessionKey:  "primed-key",
-		GeneratedAt: time.Date(2026, 4, 22, 12, 0, 0, 0, time.UTC),
-	}
-	loader.Prime(clusterID, sessionName, primed)
-
-	got, err := loader.Load(clusterID, sessionName)
+	got, err := loader.Load("cluster-c", "session-3")
 	if err != nil {
 		t.Fatalf("Load after Prime: %v", err)
 	}
 	if got != primed {
-		t.Fatalf("Load after Prime returned a different pointer; Prime handoff broken")
-	}
-	if calls := reader.totalCalls(); calls != 0 {
-		t.Fatalf("expected zero reader calls after Prime, got %d", calls)
+		t.Fatalf("Load after Prime returned a different pointer; negative cache leaked")
 	}
 }
 
 // TestLoaderPrime_OverwritesStale verifies that Prime replaces any prior
-// cached entry for the same key. Snapshots are byte-immutable in production
-// (skip-if-exists guarantees it), but the test simulates a stale-then-fresh
-// transition to prove overwrite semantics explicitly.
+// cached entry for the same key.
 func TestLoaderPrime_OverwritesStale(t *testing.T) {
-	reader := newFakeStorageReader()
-	clusterID := "cluster-overwrite"
-	sessionName := "session-overwrite"
-
-	loader, err := NewSnapshotLoader(reader, 0)
+	loader, err := NewSnapshotLoader(0)
 	if err != nil {
 		t.Fatalf("NewSnapshotLoader: %v", err)
 	}
 
-	stale := &snapshot.SessionSnapshot{SessionKey: "stale"}
-	fresh := &snapshot.SessionSnapshot{SessionKey: "fresh"}
+	loader.Prime("cluster-overwrite", "session-overwrite", snapWith("stale"))
+	loader.Prime("cluster-overwrite", "session-overwrite", snapWith("fresh"))
 
-	loader.Prime(clusterID, sessionName, stale)
-	loader.Prime(clusterID, sessionName, fresh)
-
-	got, err := loader.Load(clusterID, sessionName)
+	got, err := loader.Load("cluster-overwrite", "session-overwrite")
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
@@ -250,125 +157,68 @@ func TestLoaderPrime_OverwritesStale(t *testing.T) {
 // return (nil, nil) — which would break handler assumptions. The guard
 // ensures Load still falls through to ErrSnapshotNotFound instead.
 func TestLoaderPrime_NilIsNoOp(t *testing.T) {
-	reader := newFakeStorageReader()
-	clusterID := "cluster-nil"
-	sessionName := "session-nil"
-
-	loader, err := NewSnapshotLoader(reader, 0)
+	loader, err := NewSnapshotLoader(0)
 	if err != nil {
 		t.Fatalf("NewSnapshotLoader: %v", err)
 	}
 
-	loader.Prime(clusterID, sessionName, nil)
+	loader.Prime("cluster-nil", "session-nil", nil)
 
-	if _, err := loader.Load(clusterID, sessionName); !errors.Is(err, ErrSnapshotNotFound) {
+	if _, err := loader.Load("cluster-nil", "session-nil"); !errors.Is(err, ErrSnapshotNotFound) {
 		t.Fatalf("expected ErrSnapshotNotFound after nil Prime, got %v", err)
 	}
 }
 
 // TestLoaderLRUEviction verifies that once capacity is exceeded, the oldest
-// entry is evicted and a subsequent Load of that key re-fetches from storage.
+// Primed entry is evicted and a subsequent Load of that key returns
+// ErrSnapshotNotFound (which the Supervisor would translate into a Pipeline
+// rebuild).
 func TestLoaderLRUEviction(t *testing.T) {
-	reader := newFakeStorageReader()
-	clusterID := "cluster-d"
-	sessions := []string{"s1", "s2", "s3"}
-	for i, s := range sessions {
-		reader.put(clusterID, snapshot.SnapshotPath(s),
-			makeSnapshotBlob(t, "k"+sessions[i]))
-	}
-
-	loader, err := NewSnapshotLoader(reader, 2)
+	loader, err := NewSnapshotLoader(2)
 	if err != nil {
 		t.Fatalf("NewSnapshotLoader: %v", err)
 	}
 
-	// Fill cache with s1, s2 (cache now holds both).
-	for _, s := range sessions[:2] {
-		if _, err := loader.Load(clusterID, s); err != nil {
-			t.Fatalf("Load %q: %v", s, err)
-		}
-	}
-	// Insert s3 -> s1 is the LRU and should be evicted.
-	if _, err := loader.Load(clusterID, sessions[2]); err != nil {
-		t.Fatalf("Load s3: %v", err)
-	}
+	loader.Prime("cluster-d", "s1", snapWith("k1"))
+	loader.Prime("cluster-d", "s2", snapWith("k2"))
+	// s3 evicts s1 (LRU).
+	loader.Prime("cluster-d", "s3", snapWith("k3"))
 
-	// At this point each session has exactly 1 GetContent call.
-	for _, s := range sessions {
-		if got := reader.callsFor(clusterID, snapshot.SnapshotPath(s)); got != 1 {
-			t.Fatalf("after initial fill, expected 1 call for %q, got %d", s, got)
-		}
+	if _, err := loader.Load("cluster-d", "s1"); !errors.Is(err, ErrSnapshotNotFound) {
+		t.Fatalf("expected s1 to be evicted -> ErrSnapshotNotFound, got %v", err)
 	}
-
-	// Re-load s1: must re-fetch (evicted).
-	if _, err := loader.Load(clusterID, sessions[0]); err != nil {
-		t.Fatalf("re-load s1: %v", err)
+	if _, err := loader.Load("cluster-d", "s2"); err != nil {
+		t.Fatalf("expected s2 to still be cached, got %v", err)
 	}
-	if got := reader.callsFor(clusterID, snapshot.SnapshotPath(sessions[0])); got != 2 {
-		t.Fatalf("expected 2 calls for evicted s1, got %d", got)
-	}
-
-	// Re-load s3: still in cache, no additional fetch.
-	if _, err := loader.Load(clusterID, sessions[2]); err != nil {
-		t.Fatalf("re-load s3: %v", err)
-	}
-	if got := reader.callsFor(clusterID, snapshot.SnapshotPath(sessions[2])); got != 1 {
-		t.Fatalf("expected s3 to still be cached (1 call), got %d", got)
+	if _, err := loader.Load("cluster-d", "s3"); err != nil {
+		t.Fatalf("expected s3 to still be cached, got %v", err)
 	}
 }
 
-// TestLoaderConcurrentLoadSameKey stresses concurrent Loads of the same key
-// on an empty cache. End state: every goroutine gets a non-nil snapshot with
-// the expected SessionKey. We do NOT assert an exact number of fetches,
-// because the underlying Get/Add sequence is not atomic (LRU allows a thundering
-// herd on a cold key: one or more fetches is acceptable).
-func TestLoaderConcurrentLoadSameKey(t *testing.T) {
-	reader := newFakeStorageReader()
-	clusterID := "cluster-e"
-	sessionName := "session-hot"
-	reader.put(clusterID, snapshot.SnapshotPath(sessionName),
-		makeSnapshotBlob(t, "key-hot"))
-
-	loader, err := NewSnapshotLoader(reader, 0)
+// TestLoaderConcurrentPrimeLoad verifies that concurrent Prime/Load calls
+// are safe — golang-lru/v2 locks internally, so we only assert that the
+// final state has the snapshot present and no goroutine panicked.
+func TestLoaderConcurrentPrimeLoad(t *testing.T) {
+	loader, err := NewSnapshotLoader(0)
 	if err != nil {
 		t.Fatalf("NewSnapshotLoader: %v", err)
 	}
 
+	primed := snapWith("hot")
+	loader.Prime("cluster-e", "session-hot", primed)
+
 	const n = 10
 	var wg sync.WaitGroup
-	results := make([]*snapshot.SessionSnapshot, n)
-	errs := make([]error, n)
-	start := make(chan struct{})
-
 	for i := 0; i < n; i++ {
 		wg.Add(1)
-		go func(idx int) {
+		go func() {
 			defer wg.Done()
-			<-start
-			snap, err := loader.Load(clusterID, sessionName)
-			results[idx] = snap
-			errs[idx] = err
-		}(i)
+			// Mix Prime + Load to stress the lock.
+			loader.Prime("cluster-e", "session-hot", primed)
+			if got, err := loader.Load("cluster-e", "session-hot"); err != nil || got != primed {
+				t.Errorf("concurrent Load: got=%p err=%v want=%p", got, err, primed)
+			}
+		}()
 	}
-	close(start)
 	wg.Wait()
-
-	for i := 0; i < n; i++ {
-		if errs[i] != nil {
-			t.Fatalf("goroutine %d error: %v", i, errs[i])
-		}
-		if results[i] == nil {
-			t.Fatalf("goroutine %d got nil snapshot", i)
-		}
-		if results[i].SessionKey != "key-hot" {
-			t.Fatalf("goroutine %d unexpected SessionKey: %q", i, results[i].SessionKey)
-		}
-	}
-
-	// At least one fetch must have happened; upper bound is n (thundering herd
-	// on cold entry). Asserting >= 1 and <= n is the contract we can rely on.
-	calls := reader.callsFor(clusterID, snapshot.SnapshotPath(sessionName))
-	if calls < 1 || calls > n {
-		t.Fatalf("fetch count out of expected range [1, %d]: %d", n, calls)
-	}
 }
