@@ -127,6 +127,11 @@ spec:
                       rule: ((has(self.onSuccess) && has(self.onFailure)) || has(self.deletionRules))
                   entrypoint:
                     type: string
+                  entrypointLabelSelector:
+                    type: string
+                  entrypointMemory:
+                    format: int64
+                    type: integer
                   entrypointNumCpus:
                     type: number
                   entrypointNumGpus:

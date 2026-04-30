@@ -58,17 +58,22 @@ type RayJobSpec struct {
 	RuntimeEnvYAML string `json:"runtimeEnvYAML,omitempty"`
 	// If jobId is not set, a new jobId will be auto-generated.
 	JobId string `json:"jobId,omitempty"`
-	// EntrypointResources specifies the custom resources and quantities to reserve for the
-	// entrypoint command.
-	EntrypointResources string `json:"entrypointResources,omitempty"`
-	// TTLSecondsAfterFinished is the TTL to clean up RayCluster.
-	// It's only working when ShutdownAfterJobFinishes set to true.
-	// +kubebuilder:default:=0
-	TTLSecondsAfterFinished int32 `json:"ttlSecondsAfterFinished,omitempty"`
 	// EntrypointNumCpus specifies the number of cpus to reserve for the entrypoint command.
 	EntrypointNumCpus float32 `json:"entrypointNumCpus,omitempty"`
 	// EntrypointNumGpus specifies the number of gpus to reserve for the entrypoint command.
 	EntrypointNumGpus float32 `json:"entrypointNumGpus,omitempty"`
+	// EntrypointMemory specifies the amount of memory in bytes to reserve for the entrypoint command.
+	EntrypointMemory int64 `json:"entrypointMemory,omitempty"`
+	// EntrypointResources specifies the custom resources and quantities to reserve for the
+	// entrypoint command.
+	EntrypointResources string `json:"entrypointResources,omitempty"`
+	// EntrypointLabelSelector specifies placement constraints for the entrypoint command as a
+	// JSON-serialized label selector map.
+	EntrypointLabelSelector string `json:"entrypointLabelSelector,omitempty"`
+	// TTLSecondsAfterFinished is the TTL to clean up RayCluster.
+	// It's only working when ShutdownAfterJobFinishes set to true.
+	// +kubebuilder:default:=0
+	TTLSecondsAfterFinished int32 `json:"ttlSecondsAfterFinished,omitempty"`
 	// ShutdownAfterJobFinishes will determine whether to delete the ray cluster once rayJob succeed or failed.
 	ShutdownAfterJobFinishes bool `json:"shutdownAfterJobFinishes,omitempty"`
 	// Suspend specifies whether the RayJob controller should create a RayCluster instance

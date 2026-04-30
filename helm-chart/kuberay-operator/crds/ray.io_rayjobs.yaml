@@ -135,6 +135,11 @@ spec:
                 type: number
               entrypointNumGpus:
                 type: number
+              entrypointMemory:
+                format: int64
+                type: integer
+              entrypointLabelSelector:
+                type: string
               entrypointResources:
                 type: string
               jobId:
@@ -12562,6 +12567,11 @@ spec:
                 type: number
               entrypointNumGpus:
                 type: number
+              entrypointMemory:
+                format: int64
+                type: integer
+              entrypointLabelSelector:
+                type: string
               entrypointResources:
                 type: string
               jobId:

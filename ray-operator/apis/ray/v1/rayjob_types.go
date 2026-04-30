@@ -263,16 +263,23 @@ type RayJobSpec struct {
 	// +kubebuilder:default:=K8sJobMode
 	// +optional
 	SubmissionMode JobSubmissionMode `json:"submissionMode,omitempty"`
-	// EntrypointResources specifies the custom resources and quantities to reserve for the
-	// entrypoint command.
-	// +optional
-	EntrypointResources string `json:"entrypointResources,omitempty"`
 	// EntrypointNumCpus specifies the number of cpus to reserve for the entrypoint command.
 	// +optional
 	EntrypointNumCpus float32 `json:"entrypointNumCpus,omitempty"`
 	// EntrypointNumGpus specifies the number of gpus to reserve for the entrypoint command.
 	// +optional
 	EntrypointNumGpus float32 `json:"entrypointNumGpus,omitempty"`
+	// EntrypointMemory specifies the amount of memory in bytes to reserve for the entrypoint command.
+	// +optional
+	EntrypointMemory int64 `json:"entrypointMemory,omitempty"`
+	// EntrypointResources specifies the custom resources and quantities to reserve for the
+	// entrypoint command.
+	// +optional
+	EntrypointResources string `json:"entrypointResources,omitempty"`
+	// EntrypointLabelSelector specifies placement constraints for the entrypoint command as a
+	// JSON-serialized label selector map.
+	// +optional
+	EntrypointLabelSelector string `json:"entrypointLabelSelector,omitempty"`
 	// TTLSecondsAfterFinished is the TTL to clean up RayCluster.
 	// It's only working when ShutdownAfterJobFinishes set to true.
 	// +kubebuilder:default:=0

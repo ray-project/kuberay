@@ -36,7 +36,9 @@ func TestRayJobSidecarMode(t *testing.T) {
 				WithEntrypoint("python /home/ray/jobs/counter.py").
 				WithEntrypointNumCpus(2).
 				WithEntrypointNumGpus(2).
+				WithEntrypointMemory(1000000000).
 				WithEntrypointResources(`{"R1": 2}`).
+				WithEntrypointLabelSelector(`{"region":"us-west"}`).
 				WithRuntimeEnvYAML(`
 env_vars:
   counter_name: test_counter
