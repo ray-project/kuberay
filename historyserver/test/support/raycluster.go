@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	. "github.com/onsi/gomega"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
+	rayutils "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -21,7 +21,7 @@ func ApplyRayClusterWithCollectorWithEnvs(test Test, g *WithT, namespace *corev1
 	rayClusterFromYaml := DeserializeRayClusterYAML(test, RayClusterManifestPath)
 	rayClusterFromYaml.Namespace = namespace.Name
 
-	headContainer := &rayClusterFromYaml.Spec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex]
+	headContainer := &rayClusterFromYaml.Spec.HeadGroupSpec.Template.Spec.Containers[rayutils.RayContainerIndex]
 	if len(headContainer.Env) == 0 {
 		headContainer.Env = []corev1.EnvVar{}
 	}
@@ -34,12 +34,12 @@ func ApplyRayClusterWithCollectorWithEnvs(test Test, g *WithT, namespace *corev1
 		headContainer.Env = append(headContainer.Env, env)
 	}
 
-	// Inject namespace name as ray-cluster-id for head group collector
-	injectCollectorRayClusterID(rayClusterFromYaml.Spec.HeadGroupSpec.Template.Spec.Containers, namespace.Name)
+	// Inject namespace name as the ray-cluster-namespace for head group collector
+	injectCollectorRayClusterNamespace(rayClusterFromYaml.Spec.HeadGroupSpec.Template.Spec.Containers, namespace.Name)
 
-	// Inject namespace name as ray-cluster-id for worker group collectors
+	// Inject namespace name as the ray-cluster-namespace for worker group collectors
 	for wg := range rayClusterFromYaml.Spec.WorkerGroupSpecs {
-		injectCollectorRayClusterID(rayClusterFromYaml.Spec.WorkerGroupSpecs[wg].Template.Spec.Containers, namespace.Name)
+		injectCollectorRayClusterNamespace(rayClusterFromYaml.Spec.WorkerGroupSpecs[wg].Template.Spec.Containers, namespace.Name)
 	}
 
 	rayCluster, err := test.Client().Ray().RayV1().
@@ -59,13 +59,13 @@ func ApplyRayClusterWithCollectorWithEnvs(test Test, g *WithT, namespace *corev1
 	return rayCluster
 }
 
-// injectCollectorRayClusterID injects the ray-cluster-id argument into all collector containers.
-func injectCollectorRayClusterID(containers []corev1.Container, rayClusterID string) {
+// injectCollectorRayClusterNamespace injects the ray-cluster-namespace argument into all collector containers.
+func injectCollectorRayClusterNamespace(containers []corev1.Container, rayClusterNamespace string) {
 	for i := range containers {
 		if containers[i].Name == "collector" {
 			containers[i].Command = append(
 				containers[i].Command,
-				fmt.Sprintf("--ray-cluster-id=%s", rayClusterID),
+				fmt.Sprintf("--ray-cluster-namespace=%s", rayClusterNamespace),
 			)
 		}
 	}
@@ -77,8 +77,9 @@ func GetSessionIDFromHeadPod(test Test, g *WithT, rayCluster *rayv1.RayCluster) 
 	headPod, err := GetHeadPod(test, rayCluster)
 	g.Expect(err).NotTo(HaveOccurred())
 
-	getSessionIDCmd := `if [ -L "/tmp/ray/session_latest" ]; then
-  session_path=$(readlink /tmp/ray/session_latest)
+	getSessionIDCmd := `ray_tmp_root="${RAY_TMP_ROOT:-/tmp/ray}"
+if [ -L "${ray_tmp_root}/session_latest" ]; then
+  session_path=$(readlink "${ray_tmp_root}/session_latest")
   basename "$session_path"
 else
   echo "session_latest is not a symlink"
@@ -99,8 +100,9 @@ func GetNodeIDFromHeadPod(test Test, g *WithT, rayCluster *rayv1.RayCluster) str
 	headPod, err := GetHeadPod(test, rayCluster)
 	g.Expect(err).NotTo(HaveOccurred())
 
-	getNodeIDCmd := `if [ -f "/tmp/ray/raylet_node_id" ]; then
-  cat /tmp/ray/raylet_node_id
+	getNodeIDCmd := `ray_tmp_root="${RAY_TMP_ROOT:-/tmp/ray}"
+if [ -f "${ray_tmp_root}/raylet_node_id" ]; then
+  cat "${ray_tmp_root}/raylet_node_id"
 else
   echo "raylet_node_id not found"
   exit 1
@@ -119,8 +121,9 @@ func GetNodeIDFromPod(test Test, g *WithT, getPod func() (*corev1.Pod, error), c
 	pod, err := getPod()
 	g.Expect(err).NotTo(HaveOccurred())
 
-	getNodeIDCmd := `if [ -f "/tmp/ray/raylet_node_id" ]; then
-  cat /tmp/ray/raylet_node_id
+	getNodeIDCmd := `ray_tmp_root="${RAY_TMP_ROOT:-/tmp/ray}"
+if [ -f "${ray_tmp_root}/raylet_node_id" ]; then
+  cat "${ray_tmp_root}/raylet_node_id"
 else
   echo "raylet_node_id not found"
   exit 1

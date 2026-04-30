@@ -31,10 +31,10 @@ jobs:
       - name: GoReleaser
         uses: goreleaser/goreleaser-action@v6
         with:
-          distribution: 'goreleaser'
+          distribution: "goreleaser"
           version: latest
           args: release --clean
-          workdir: 'kubectl-plugin'
+          workdir: "kubectl-plugin"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Update new version in krew-index

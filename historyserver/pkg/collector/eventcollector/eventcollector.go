@@ -17,6 +17,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/ray-project/kuberay/historyserver/pkg/storage"
+	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
 type Event struct {
@@ -30,7 +31,7 @@ type Event struct {
 type EventCollector struct {
 	storageWriter      storage.StorageWriter
 	stopped            chan struct{}
-	clusterID          string
+	clusterNamespace   string
 	sessionDir         string
 	nodeID             string
 	clusterName        string
@@ -58,7 +59,7 @@ var eventTypesWithJobID = []string{
 	"actorDefinitionEvent",
 }
 
-func NewEventCollector(writer storage.StorageWriter, rootDir, sessionDir, nodeID, clusterName, clusterID, sessionName string) *EventCollector {
+func NewEventCollector(writer storage.StorageWriter, rootDir, sessionDir, nodeID, clusterName, clusterNamespace, sessionName string) *EventCollector {
 	collector := &EventCollector{
 		events:             make([]Event, 0),
 		storageWriter:      writer,
@@ -66,7 +67,7 @@ func NewEventCollector(writer storage.StorageWriter, rootDir, sessionDir, nodeID
 		sessionDir:         sessionDir,
 		nodeID:             nodeID,
 		clusterName:        clusterName,
-		clusterID:          clusterID,
+		clusterNamespace:   clusterNamespace,
 		sessionName:        sessionName,
 		mutex:              sync.Mutex{},
 		flushInterval:      time.Hour, // Default flush interval: 1 hour
@@ -105,9 +106,9 @@ func (ec *EventCollector) Run(stop <-chan struct{}, port int) {
 	close(ec.stopped)
 }
 
-// watchNodeIDFile watches /tmp/ray/raylet_node_id for content changes
+// watchNodeIDFile watches the configured raylet_node_id file for content changes.
 func (ec *EventCollector) watchNodeIDFile() {
-	nodeIDFilePath := "/tmp/ray/raylet_node_id"
+	nodeIDFilePath := utils.GetRayNodeIDPath()
 
 	// Create new watcher
 	watcher, err := fsnotify.NewWatcher()
@@ -122,9 +123,10 @@ func (ec *EventCollector) watchNodeIDFile() {
 	if err != nil {
 		logrus.Infof("Failed to add %s to watcher, will watch for file creation: %v", nodeIDFilePath, err)
 		// If file doesn't exist, watch parent directory
-		err = watcher.Add("/tmp/ray")
+		tmpRayRoot := utils.GetTmpRayRoot()
+		err = watcher.Add(tmpRayRoot)
 		if err != nil {
-			logrus.Errorf("Failed to watch directory /tmp/ray: %v", err)
+			logrus.Errorf("Failed to watch directory %s: %v", tmpRayRoot, err)
 			return
 		}
 	}
@@ -452,7 +454,7 @@ func (ec *EventCollector) flushNodeEventsForHour(hourKey string, events []Event)
 	// Build node event storage path using event's nodeID
 	basePath := path.Join(
 		ec.root,
-		fmt.Sprintf("%s_%s", ec.clusterName, ec.clusterID),
+		fmt.Sprintf("%s_%s", ec.clusterName, ec.clusterNamespace),
 		sessionNameToUse,
 		"node_events",
 		fmt.Sprintf("%s-%s", nodeIDToUse, hourKey))
@@ -502,7 +504,7 @@ func (ec *EventCollector) flushJobEventsForHour(jobID, hourKey string, events []
 	// Build job event storage path using event's nodeID
 	basePath := path.Join(
 		ec.root,
-		fmt.Sprintf("%s_%s", ec.clusterName, ec.clusterID),
+		fmt.Sprintf("%s_%s", ec.clusterName, ec.clusterNamespace),
 		sessionNameToUse,
 		"job_events",
 		jobID,

@@ -243,6 +243,11 @@ const (
 	DefaultLivenessProbeSuccessThreshold   = 1
 	DefaultLivenessProbeFailureThreshold   = 120
 
+	// RayHTTPClientDirectTimeoutSeconds applies to HTTP clients that send requests directly to pod IP or in-cluster Service.
+	RayHTTPClientDirectTimeoutSeconds = 2
+	// RayHTTPClientProxyTimeoutSeconds applies when requests are proxied through the Kubernetes apiserver.
+	RayHTTPClientProxyTimeoutSeconds = 10
+
 	// Ray health check related configurations
 	// Note: Since the Raylet process and the dashboard agent process are fate-sharing,
 	// only one of them needs to be checked. So, RayAgentRayletHealthPath accesses the dashboard agent's API endpoint
@@ -385,6 +390,7 @@ const (
 	InvalidRayServiceSpec           K8sEventType = "InvalidRayServiceSpec"
 	InvalidRayServiceMetadata       K8sEventType = "InvalidRayServiceMetadata"
 	RayServiceInitializingTimeout   K8sEventType = "RayServiceInitializingTimeout"
+	RollbackImpossible              K8sEventType = "RollbackImpossible"
 	UpdatedHeadPodServeLabel        K8sEventType = "UpdatedHeadPodServeLabel"
 	UpdatedGateway                  K8sEventType = "UpdatedGateway"
 	UpdatedHTTPRoute                K8sEventType = "UpdatedHTTPRoute"
