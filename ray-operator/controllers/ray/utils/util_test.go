@@ -2272,7 +2272,7 @@ func TestIsGatewayEqual(t *testing.T) {
 				Spec: gwv1.GatewaySpec{
 					GatewayClassName: "test-class",
 					Addresses: []gwv1.GatewaySpecAddress{
-						{Type: ptr.To(gwv1.AddressType(gwv1.IPAddressType)), Value: "192.168.1.100"},
+						{Type: ptr.To(gwv1.IPAddressType), Value: "192.168.1.100"},
 					},
 					Listeners: []gwv1.Listener{
 						{Name: "http", Protocol: gwv1.HTTPProtocolType, Port: 80},
@@ -2283,7 +2283,7 @@ func TestIsGatewayEqual(t *testing.T) {
 				Spec: gwv1.GatewaySpec{
 					GatewayClassName: "test-class",
 					Addresses: []gwv1.GatewaySpecAddress{
-						{Type: ptr.To(gwv1.AddressType(gwv1.IPAddressType)), Value: "192.168.1.100"},
+						{Type: ptr.To(gwv1.IPAddressType), Value: "192.168.1.100"},
 					},
 					Listeners: []gwv1.Listener{
 						{Name: "http", Protocol: gwv1.HTTPProtocolType, Port: 80},
@@ -2298,7 +2298,7 @@ func TestIsGatewayEqual(t *testing.T) {
 				Spec: gwv1.GatewaySpec{
 					GatewayClassName: "test-class",
 					Addresses: []gwv1.GatewaySpecAddress{
-						{Type: ptr.To(gwv1.AddressType(gwv1.IPAddressType)), Value: "192.168.1.100"},
+						{Type: ptr.To(gwv1.IPAddressType), Value: "192.168.1.100"},
 					},
 					Listeners: []gwv1.Listener{
 						{Name: "http", Protocol: gwv1.HTTPProtocolType, Port: 80},
@@ -2309,7 +2309,7 @@ func TestIsGatewayEqual(t *testing.T) {
 				Spec: gwv1.GatewaySpec{
 					GatewayClassName: "test-class",
 					Addresses: []gwv1.GatewaySpecAddress{
-						{Type: ptr.To(gwv1.AddressType(gwv1.IPAddressType)), Value: "10.0.0.1"},
+						{Type: ptr.To(gwv1.IPAddressType), Value: "10.0.0.1"},
 					},
 					Listeners: []gwv1.Listener{
 						{Name: "http", Protocol: gwv1.HTTPProtocolType, Port: 80},
@@ -2324,7 +2324,7 @@ func TestIsGatewayEqual(t *testing.T) {
 				Spec: gwv1.GatewaySpec{
 					GatewayClassName: "test-class",
 					Addresses: []gwv1.GatewaySpecAddress{
-						{Type: ptr.To(gwv1.AddressType(gwv1.IPAddressType)), Value: "192.168.1.100"},
+						{Type: ptr.To(gwv1.IPAddressType), Value: "192.168.1.100"},
 					},
 					Listeners: []gwv1.Listener{
 						{Name: "http", Protocol: gwv1.HTTPProtocolType, Port: 80},
