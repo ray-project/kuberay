@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"math"
 	"net/http"
 	"net/url"
 	"os"
@@ -56,29 +57,24 @@ func (f *fakeExecutor) StreamWithContext(_ context.Context, options remotecomman
 	return err
 }
 
-// createFakeTarFile creates the fake tar file that will be used for testing
-func createFakeTarFile() (*bytes.Buffer, error) {
-	// Create a buffer to hold the tar archive
+// fakeTarEntry describes a single entry to add to a fake tar archive.
+// Tests that need to exercise unusual modes (e.g. out-of-range G115
+// values) drop them in here directly.
+type fakeTarEntry struct {
+	ModTime time.Time
+	Name    string
+	Body    string
+	IsDir   bool
+	Mode    int64
+}
+
+// buildFakeTarFile writes the supplied entries to an in-memory tar
+// archive in order. Used by tests that need precise control over the
+// header layout (mode, ordering, etc.).
+func buildFakeTarFile(entries []fakeTarEntry) (*bytes.Buffer, error) {
 	tarbuff := new(bytes.Buffer)
-
-	// Create a tar writer
 	tw := tar.NewWriter(tarbuff)
-
-	// Define the files/directories to include
-	files := []struct {
-		ModTime time.Time
-		Name    string
-		Body    string
-		IsDir   bool
-		Mode    int64
-	}{
-		{time.Now(), "/", "", true, 0o755},
-		{time.Now(), "file1.txt", "This is the content of file1.txt\n", false, 0o644},
-		{time.Now(), "file2.txt", "Content of file2.txt inside subdir\n", false, 0o644},
-	}
-
-	// Add each file/directory to the tar archive
-	for _, file := range files {
+	for _, file := range entries {
 		hdr := &tar.Header{
 			Name:    file.Name,
 			Mode:    file.Mode,
@@ -90,25 +86,30 @@ func createFakeTarFile() (*bytes.Buffer, error) {
 		} else {
 			hdr.Typeflag = tar.TypeReg
 		}
-
-		// Write the header
 		if err := tw.WriteHeader(hdr); err != nil {
 			return nil, err
 		}
-
-		// Write the file content (if not a directory)
 		if !file.IsDir {
 			if _, err := tw.Write([]byte(file.Body)); err != nil {
 				return nil, err
 			}
 		}
 	}
-
-	// Close the tar writer
 	if err := tw.Close(); err != nil {
 		return nil, err
 	}
 	return tarbuff, nil
+}
+
+// createFakeTarFile creates the fake tar file that will be used for testing.
+// Kept for backwards compatibility with tests written before
+// buildFakeTarFile existed.
+func createFakeTarFile() (*bytes.Buffer, error) {
+	return buildFakeTarFile([]fakeTarEntry{
+		{time.Now(), "/", "", true, 0o755},
+		{time.Now(), "file1.txt", "This is the content of file1.txt\n", false, 0o644},
+		{time.Now(), "file2.txt", "Content of file2.txt inside subdir\n", false, 0o644},
+	})
 }
 
 type FakeRemoteExecutor struct{}
@@ -482,6 +483,78 @@ func TestDownloadRayLogFiles(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, curr.Body, string(actualContent))
 	}
+}
+
+// TestDownloadRayLogFiles_SkipsInvalidMode pins the regression for the
+// G115 fix in #4728: when an extracted tar entry has a header.Mode
+// outside the os.FileMode (uint32) range, downloadRayLogFiles must
+// skip just that entry — not abort the extraction or spin forever.
+//
+// The tar layout below interleaves a valid entry, an out-of-range
+// entry, and another valid entry so we can prove that:
+//
+//   - the bad entry is reported and skipped (no file written for it);
+//   - extraction continues past it (the post-bad valid entry still
+//     lands on disk).
+func TestDownloadRayLogFiles_SkipsInvalidMode(t *testing.T) {
+	fakeDir, err := os.MkdirTemp("", "fake-bad-mode")
+	require.NoError(t, err)
+	defer os.RemoveAll(fakeDir)
+
+	testStreams, _, _, _ := genericiooptions.NewTestIOStreams()
+	cmdFactory := cmdutil.NewFactory(genericclioptions.NewConfigFlags(true))
+
+	fakeClusterLogOptions := NewClusterLogOptions(cmdFactory, testStreams)
+	fakeClusterLogOptions.ResourceName = "test-cluster"
+	fakeClusterLogOptions.outputDir = fakeDir
+
+	// math.MaxUint32 + 1 is the smallest int64 that fails the bounds
+	// check; a real tar (e.g. constructed by a malicious server) can
+	// set Mode to anything an int64 will hold.
+	const outOfRangeMode int64 = int64(math.MaxUint32) + 1
+
+	fakeTar, err := buildFakeTarFile([]fakeTarEntry{
+		{time.Now(), "/", "", true, 0o755},
+		{time.Now(), "good_before.txt", "before\n", false, 0o644},
+		{time.Now(), "bad_mode.txt", "should be skipped\n", false, outOfRangeMode},
+		{time.Now(), "good_after.txt", "after\n", false, 0o644},
+	})
+	require.NoError(t, err)
+
+	rayHead := v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster-kuberay-head-1",
+			Namespace: "test",
+			Labels: map[string]string{
+				"ray.io/group":    "headgroup",
+				"ray.io/clusters": "test-cluster",
+			},
+		},
+		Spec: v1.PodSpec{Containers: []v1.Container{{Name: "mycontainer", Image: "nginx:latest"}}},
+		Status: v1.PodStatus{Phase: v1.PodRunning, PodIP: "10.0.0.1"},
+	}
+
+	executor, _ := fakeNewSPDYExecutor("GET", &url.URL{}, fakeTar)
+
+	err = fakeClusterLogOptions.downloadRayLogFiles(context.Background(), executor, rayHead)
+	require.NoError(t, err, "downloadRayLogFiles must not fail on a single bad-mode entry")
+
+	entries, err := os.ReadDir(fakeDir)
+	require.NoError(t, err)
+	require.Len(t, entries, 1, "exactly one pod-named subdir should be created")
+
+	files, err := os.ReadDir(filepath.Join(fakeDir, entries[0].Name()))
+	require.NoError(t, err)
+
+	// good_before + good_after should land; bad_mode should be skipped.
+	names := make([]string, 0, len(files))
+	for _, f := range files {
+		names = append(names, f.Name())
+	}
+	assert.ElementsMatch(t, []string{"good_before.txt", "good_after.txt"}, names,
+		"entries with valid header.Mode must round-trip; bad-mode entry must be skipped")
+	assert.NotContains(t, names, "bad_mode.txt",
+		"the out-of-range mode entry must not be written to disk")
 }
 
 // createTempKubeConfigFile creates a temporary kubeconfig file with the given current context.
