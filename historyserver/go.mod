@@ -1,6 +1,6 @@
 module github.com/ray-project/kuberay/historyserver
 
-go 1.26.0
+go 1.26
 
 require (
 	cloud.google.com/go/storage v1.59.2
