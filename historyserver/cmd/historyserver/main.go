@@ -38,11 +38,14 @@ func main() {
 	flag.BoolVar(&useKubernetesProxy, "use-kubernetes-proxy", false, "Use local kubeconfig instead of in-cluster config")
 	flag.Parse()
 
+	if runtimeClassName == "" {
+		logrus.Fatal("--runtime-class-name is required")
+	}
+
 	// ===== ClientManager =====
 	cliMgr, err := historyserver.NewClientManager(kubeconfigs, useKubernetesProxy)
 	if err != nil {
-		logrus.Errorf("Failed to create client manager: %v", err)
-		os.Exit(1)
+		logrus.Fatalf("client manager: %v", err)
 	}
 
 	// ===== Backend config =====
@@ -50,11 +53,10 @@ func main() {
 	if runtimeClassConfigPath != "" {
 		data, err := os.ReadFile(runtimeClassConfigPath)
 		if err != nil {
-			panic("Failed to read runtime class config " + err.Error())
+			logrus.Fatalf("read runtime-class-config: %v", err)
 		}
-		err = json.Unmarshal(data, &jsonData)
-		if err != nil {
-			panic("Failed to parse runtime class config: " + err.Error())
+		if err := json.Unmarshal(data, &jsonData); err != nil {
+			logrus.Fatalf("parse runtime-class-config: %v", err)
 		}
 	}
 
@@ -62,7 +64,7 @@ func main() {
 	registry := collector.GetReaderRegistry()
 	factory, ok := registry[runtimeClassName]
 	if !ok {
-		panic("Not supported runtime class name: " + runtimeClassName + ".")
+		logrus.Fatalf("unsupported runtime-class-name for reader: %s", runtimeClassName)
 	}
 
 	globalConfig := types.RayHistoryServerConfig{
@@ -71,7 +73,7 @@ func main() {
 
 	reader, err := factory(&globalConfig, jsonData)
 	if err != nil {
-		panic("Failed to create reader for runtime class name: " + runtimeClassName + ".")
+		logrus.Fatalf("create reader: %v", err)
 	}
 
 	// ===== EventHandler =====
@@ -97,8 +99,7 @@ func main() {
 	// ===== ServerHandler =====
 	handler, err := historyserver.NewServerHandler(&globalConfig, dashboardDir, reader, cliMgr, eventHandler, useKubernetesProxy)
 	if err != nil {
-		logrus.Errorf("Failed to create server handler: %v", err)
-		os.Exit(1)
+		logrus.Fatalf("create server handler: %v", err)
 	}
 
 	// ===== Run HTTP server =====
