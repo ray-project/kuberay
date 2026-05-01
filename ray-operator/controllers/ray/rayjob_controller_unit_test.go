@@ -30,6 +30,7 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/metrics/mocks"
 	utils "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/scheme"
+	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 )
 
 // fakeBatchScheduler implements schedulerinterface.BatchScheduler for testing.
@@ -217,6 +218,52 @@ func TestGetSubmitterTemplate(t *testing.T) {
 	envVar, found = utils.EnvVarByName(utils.RAY_JOB_SUBMISSION_ID, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Env)
 	assert.True(t, found)
 	assert.Equal(t, "test-job-id", envVar.Value)
+}
+
+func TestGetSubmitterContainerWithFeatureGate(t *testing.T) {
+	// Enable the SidecarSubmitterRestart feature gate for this test
+	features.SetFeatureGateDuringTest(t, features.SidecarSubmitterRestart, true)
+
+	rayJobInstance := &rayv1.RayJob{
+		Spec: rayv1.RayJobSpec{
+			Entrypoint:     "echo test",
+			SubmissionMode: rayv1.SidecarMode,
+			RayClusterSpec: &rayv1.RayClusterSpec{
+				HeadGroupSpec: rayv1.HeadGroupSpec{
+					Template: corev1.PodTemplateSpec{
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{
+									Image: "rayproject/ray:test",
+									Ports: []corev1.ContainerPort{
+										{
+											Name:          utils.DashboardPortName,
+											ContainerPort: utils.DefaultDashboardPort,
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		Status: rayv1.RayJobStatus{
+			DashboardURL: "http://127.0.0.1:8265",
+			JobId:        "test-job-id",
+		},
+	}
+
+	rayClusterInstance := &rayv1.RayCluster{
+		Spec: *rayJobInstance.Spec.RayClusterSpec,
+	}
+
+	container, err := getSubmitterContainer(rayJobInstance, rayClusterInstance)
+	require.NoError(t, err)
+
+	// Verify restart policy is set to OnFailure for the submitter container
+	require.NotNil(t, container.RestartPolicy)
+	assert.Equal(t, corev1.ContainerRestartPolicyOnFailure, *container.RestartPolicy)
 }
 
 func TestUpdateStatusToSuspendingIfNeeded(t *testing.T) {
