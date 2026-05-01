@@ -5,6 +5,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"os"
@@ -79,11 +80,23 @@ func main() {
 	// ===== EventHandler =====
 	eventHandler := eventserver.NewEventHandler(reader)
 
+	// ===== Server context =====
+	serverCtx, serverCancel := signal.NotifyContext(
+		context.Background(),
+		syscall.SIGINT, syscall.SIGTERM,
+	)
+	defer serverCancel()
+
 	// ===== Shutdown signaling =====
+	// Bridge serverCtx into the legacy stop channel that EventHandler.Run
+	// and ServerHandler.Run consume; both keep their existing API.
 	var wg sync.WaitGroup
-	sigChan := make(chan os.Signal, 1)
-	stop := make(chan struct{}, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	stop := make(chan struct{})
+	go func() {
+		<-serverCtx.Done()
+		logrus.Info("Received shutdown signal, initiating graceful shutdown...")
+		close(stop)
+	}()
 
 	// ===== Start EventHandler in background =====
 	wg.Add(1)
@@ -110,11 +123,7 @@ func main() {
 		logrus.Info("HTTP server shutdown complete")
 	}()
 
-	// ===== Wait for shutdown signal =====
-	<-sigChan
-	logrus.Info("Received shutdown signal, initiating graceful shutdown...")
-
-	close(stop)
+	// ===== Wait for graceful shutdown =====
 	wg.Wait()
 	logrus.Info("Graceful shutdown complete")
 }
