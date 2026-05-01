@@ -498,7 +498,7 @@ func TestTaskLifecycleEventDeduplication(t *testing.T) {
 			"clusterName": testClusterName,
 			"taskLifecycleEvent": map[string]any{
 				"taskId":           testTaskID,
-				"taskAttempt":      0,
+				"taskAttempt":      float64(0),
 				"stateTransitions": transitionsAny,
 				"nodeId":           testNodeID,
 				"workerId":         testWorkerID,
