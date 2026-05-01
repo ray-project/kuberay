@@ -1,3 +1,7 @@
+// Package main is the entrypoint for the History Server HTTP daemon.
+// It exposes Ray Dashboard-shaped API endpoints over HTTP and runs the
+// EventHandler as a background goroutine that processes raw event files
+// into in-memory state served by the API surface.
 package main
 
 import (
@@ -8,34 +12,40 @@ import (
 	"sync"
 	"syscall"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/ray-project/kuberay/historyserver/pkg/collector"
 	"github.com/ray-project/kuberay/historyserver/pkg/collector/types"
 	"github.com/ray-project/kuberay/historyserver/pkg/eventserver"
 	"github.com/ray-project/kuberay/historyserver/pkg/historyserver"
-	"github.com/sirupsen/logrus"
 )
 
 func main() {
-	runtimeClassName := ""
-	rayRootDir := ""
-	kubeconfigs := ""
-	runtimeClassConfigPath := "/var/collector-config/data"
-	dashboardDir := ""
-	useKubernetesProxy := false
-	flag.StringVar(&runtimeClassName, "runtime-class-name", "", "")
-	flag.StringVar(&rayRootDir, "ray-root-dir", "", "")
-	flag.StringVar(&kubeconfigs, "kubeconfigs", "", "")
-	flag.StringVar(&dashboardDir, "dashboard-dir", "/dashboard", "")
-	flag.StringVar(&runtimeClassConfigPath, "runtime-class-config-path", "", "") //"/var/collector-config/data"
-	flag.BoolVar(&useKubernetesProxy, "use-kubernetes-proxy", false, "")
+	// ===== Flags =====
+	var (
+		runtimeClassName       string
+		rayRootDir             string
+		kubeconfigs            string
+		dashboardDir           string
+		runtimeClassConfigPath string
+		useKubernetesProxy     bool
+	)
+	flag.StringVar(&runtimeClassName, "runtime-class-name", "", "Storage backend: s3 / gcs / azureblob / aliyunoss / localtest")
+	flag.StringVar(&rayRootDir, "ray-root-dir", "", "Root dir inside the bucket")
+	flag.StringVar(&kubeconfigs, "kubeconfigs", "", "Kubeconfig path; empty = in-cluster")
+	flag.StringVar(&dashboardDir, "dashboard-dir", "/dashboard", "Path to Ray Dashboard static assets")
+	flag.StringVar(&runtimeClassConfigPath, "runtime-class-config-path", "", "Path to backend config JSON")
+	flag.BoolVar(&useKubernetesProxy, "use-kubernetes-proxy", false, "Use local kubeconfig instead of in-cluster config")
 	flag.Parse()
 
+	// ===== ClientManager =====
 	cliMgr, err := historyserver.NewClientManager(kubeconfigs, useKubernetesProxy)
 	if err != nil {
 		logrus.Errorf("Failed to create client manager: %v", err)
 		os.Exit(1)
 	}
 
+	// ===== Backend config =====
 	jsonData := make(map[string]interface{})
 	if runtimeClassConfigPath != "" {
 		data, err := os.ReadFile(runtimeClassConfigPath)
@@ -48,6 +58,7 @@ func main() {
 		}
 	}
 
+	// ===== Reader factory =====
 	registry := collector.GetReaderRegistry()
 	factory, ok := registry[runtimeClassName]
 	if !ok {
@@ -63,17 +74,16 @@ func main() {
 		panic("Failed to create reader for runtime class name: " + runtimeClassName + ".")
 	}
 
-	// Create EventHandler with storage reader
+	// ===== EventHandler =====
 	eventHandler := eventserver.NewEventHandler(reader)
 
-	// WaitGroup to track goroutine completion
+	// ===== Shutdown signaling =====
 	var wg sync.WaitGroup
-
 	sigChan := make(chan os.Signal, 1)
 	stop := make(chan struct{}, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
-	// Start EventHandler in background goroutine
+	// ===== Start EventHandler in background =====
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -84,12 +94,14 @@ func main() {
 		logrus.Info("EventHandler shutdown complete")
 	}()
 
+	// ===== ServerHandler =====
 	handler, err := historyserver.NewServerHandler(&globalConfig, dashboardDir, reader, cliMgr, eventHandler, useKubernetesProxy)
 	if err != nil {
 		logrus.Errorf("Failed to create server handler: %v", err)
 		os.Exit(1)
 	}
 
+	// ===== Run HTTP server =====
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -97,13 +109,11 @@ func main() {
 		logrus.Info("HTTP server shutdown complete")
 	}()
 
+	// ===== Wait for shutdown signal =====
 	<-sigChan
 	logrus.Info("Received shutdown signal, initiating graceful shutdown...")
 
-	// Stop both the server and the event handler
 	close(stop)
-
-	// Wait for both goroutines to complete
 	wg.Wait()
 	logrus.Info("Graceful shutdown complete")
 }
