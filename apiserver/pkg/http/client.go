@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 
 	rpcStatus "google.golang.org/genproto/googleapis/rpc/status"
@@ -27,7 +28,10 @@ type KuberayAPIServerClient struct {
 	// Store http request handling function for unit test purpose.
 	ExecuteHttpRequest func(httpRequest *http.Request, URL string) ([]byte, *rpcStatus.Status, error)
 	baseURL            string
-	retryCfg           apiserversdkutil.RetryConfig
+	// baseURLHost is the parsed Host (host[:port]) of baseURL, used by executeRequest
+	// to verify each outbound request points at the configured server before issuing it.
+	baseURLHost string
+	retryCfg    apiserversdkutil.RetryConfig
 }
 
 type KuberayAPIServerClientError struct {
@@ -49,9 +53,17 @@ func IsNotFoundError(err error) bool {
 }
 
 func NewKuberayAPIServerClient(baseURL string, httpClient *http.Client, retryCfg apiserversdkutil.RetryConfig) *KuberayAPIServerClient {
+	// Pre-parse baseURL so executeRequest can verify each outbound request targets the
+	// configured host. A malformed baseURL leaves baseURLHost empty; executeRequest will
+	// then refuse to dispatch with a descriptive error.
+	var baseURLHost string
+	if parsed, err := url.Parse(baseURL); err == nil {
+		baseURLHost = parsed.Host
+	}
 	client := &KuberayAPIServerClient{
-		httpClient: httpClient,
-		baseURL:    baseURL,
+		httpClient:  httpClient,
+		baseURL:     baseURL,
+		baseURLHost: baseURLHost,
 		marshaler: &protojson.MarshalOptions{
 			Multiline:       true,
 			Indent:          "    ",
@@ -664,13 +676,29 @@ func (krc *KuberayAPIServerClient) executeRequest(httpRequest *http.Request, URL
 		}
 	}
 
+	// Pin every outbound request to the configured baseURL host. This both adds an explicit
+	// SSRF defense (a stray rewrite of httpRequest.URL becomes observable instead of silent)
+	// and gives gosec G704 a sanitization point so the linter no longer treats httpClient.Do
+	// as a tainted call.
+	if httpRequest.URL == nil {
+		return nil, nil, fmt.Errorf("failed to execute http request for url '%s': request URL is nil", URL)
+	}
+	if krc.baseURLHost == "" || httpRequest.URL.Host != krc.baseURLHost {
+		return nil, nil, fmt.Errorf(
+			"failed to execute http request for url '%s': request host %q does not match configured baseURL host %q",
+			URL, httpRequest.URL.Host, krc.baseURLHost)
+	}
+
 	doReq := func() ([]byte, int, error) {
 		// new ReadCloser for httpRequest body
 		if requestBodyBytes != nil {
 			httpRequest.Body = io.NopCloser(bytes.NewBuffer(requestBodyBytes))
 		}
 
-		response, err := krc.httpClient.Do(httpRequest)
+		// httpRequest.URL.Host has been verified above to equal the baseURL host configured
+		// at NewKuberayAPIServerClient time, so this is not a tainted external destination.
+		// gosec G704's taint analysis cannot model that check, hence the suppression.
+		response, err := krc.httpClient.Do(httpRequest) //nolint:gosec // URL host is validated against configured baseURL above
 		if err != nil {
 			return nil, 0, fmt.Errorf("failed to execute http request for url '%s': %w", URL, err)
 		}
