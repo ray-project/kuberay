@@ -13,7 +13,9 @@ const NamespaceProvider: React.FC<NamespaceProviderProps> = ({ children }) => {
   useEffect(() => {
     fetchRuntimeConfig().then((cfg) => {
       if (cfg.defaultNamespace) {
-        setNamespace((prev) => prev === "default" ? cfg.defaultNamespace! : prev);
+        setNamespace((prev) =>
+          prev === "default" ? cfg.defaultNamespace! : prev,
+        );
       }
     });
   }, []);
