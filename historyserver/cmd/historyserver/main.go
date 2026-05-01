@@ -1,3 +1,7 @@
+// Package main is the entrypoint for the History Server HTTP daemon.
+// It exposes Ray Dashboard-shaped API endpoints over HTTP and runs the
+// EventHandler as a background goroutine that processes raw event files
+// into in-memory state served by the API surface.
 package main
 
 import (
@@ -43,6 +47,7 @@ func main() {
 		logrus.Fatalf("Failed to create client manager: %v", err)
 	}
 
+	// ===== Backend config =====
 	jsonData := make(map[string]interface{})
 	if runtimeClassConfigPath != "" {
 		data, err := os.ReadFile(runtimeClassConfigPath)
@@ -54,6 +59,7 @@ func main() {
 		}
 	}
 
+	// ===== Reader factory =====
 	registry := collector.GetReaderRegistry()
 	factory, ok := registry[runtimeClassName]
 	if !ok {
@@ -94,6 +100,7 @@ func main() {
 		logrus.Fatalf("Failed to create server handler: %v", err)
 	}
 
+	// ===== Run HTTP server =====
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
