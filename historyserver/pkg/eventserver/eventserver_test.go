@@ -487,7 +487,7 @@ func TestTaskLifecycleEventDeduplication(t *testing.T) {
 	}
 
 	// Helper to create a TASK_LIFECYCLE_EVENT map
-	makeLifecycleEvent := func(testTaskID string, attempt int, transitions []map[string]any) map[string]any {
+	makeLifecycleEvent := func(transitions []map[string]any) map[string]any {
 		// Convert []map[string]any to []any for proper type assertion in storeEvent
 		transitionsAny := make([]any, len(transitions))
 		for i, t := range transitions {
@@ -498,7 +498,7 @@ func TestTaskLifecycleEventDeduplication(t *testing.T) {
 			"clusterName": testClusterName,
 			"taskLifecycleEvent": map[string]any{
 				"taskId":           testTaskID,
-				"taskAttempt":      float64(attempt),
+				"taskAttempt":      0,
 				"stateTransitions": transitionsAny,
 				"nodeId":           testNodeID,
 				"workerId":         testWorkerID,
@@ -650,7 +650,7 @@ func TestTaskLifecycleEventDeduplication(t *testing.T) {
 			}
 
 			// Process the lifecycle event
-			eventMap := makeLifecycleEvent(testTaskID, 0, tt.newTransitions)
+			eventMap := makeLifecycleEvent(tt.newTransitions)
 			err := h.storeEvent(eventMap)
 			if err != nil {
 				t.Fatalf("storeEvent() unexpected error: %v", err)
@@ -704,7 +704,7 @@ func TestActorLifecycleEventDeduplication(t *testing.T) {
 	}
 
 	// Helper to create an ACTOR_LIFECYCLE_EVENT map
-	makeActorLifecycleEvent := func(testActorID string, transitions []map[string]any) map[string]any {
+	makeActorLifecycleEvent := func(transitions []map[string]any) map[string]any {
 		// Convert []map[string]any to []any for proper type assertion in storeEvent
 		transitionsAny := make([]any, len(transitions))
 		for i, t := range transitions {
@@ -815,7 +815,7 @@ func TestActorLifecycleEventDeduplication(t *testing.T) {
 			}
 
 			// Process the lifecycle event
-			eventMap := makeActorLifecycleEvent(testActorID, tt.newTransitions)
+			eventMap := makeActorLifecycleEvent(tt.newTransitions)
 			err := h.storeEvent(eventMap)
 			if err != nil {
 				t.Fatalf("storeEvent() unexpected error: %v", err)
@@ -856,7 +856,7 @@ func TestDriverJobLifecycleEventDuplication(t *testing.T) {
 		}
 	}
 
-	makeDriverJobLifecycleEvent := func(testJobID string, transitions []map[string]any) map[string]any {
+	makeDriverJobLifecycleEvent := func(transitions []map[string]any) map[string]any {
 		transitionsAny := make([]any, len(transitions))
 		for i, t := range transitions {
 			transitionsAny[i] = t
@@ -984,7 +984,7 @@ func TestDriverJobLifecycleEventDuplication(t *testing.T) {
 				})
 			}
 
-			eventMap := makeDriverJobLifecycleEvent(testJobID, tt.newTransitions)
+			eventMap := makeDriverJobLifecycleEvent(tt.newTransitions)
 			err := h.storeEvent(eventMap)
 			if err != nil {
 				t.Fatalf("storeEvent() unexpected error: %v", err)
