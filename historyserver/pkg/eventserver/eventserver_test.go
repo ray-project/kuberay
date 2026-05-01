@@ -11,14 +11,14 @@ import (
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
-func makeTaskEventMap(taskName, nodeId, testTaskID, cluster string, attempt int) map[string]any {
+func makeTaskEventMap(taskName, nodeID, taskID, cluster string, attempt int) map[string]any {
 	return map[string]any{
 		"eventType":   string(types.TASK_DEFINITION_EVENT),
 		"clusterName": cluster,
 		"taskDefinitionEvent": map[string]any{
-			"taskId":      testTaskID,
+			"taskId":      taskID,
 			"taskName":    taskName,
-			"nodeId":      nodeId,
+			"nodeId":      nodeID,
 			"taskAttempt": attempt,
 		},
 	}
