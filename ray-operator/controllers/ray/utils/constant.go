@@ -94,6 +94,8 @@ const (
 	KubernetesApplicationNameLabelKey = "app.kubernetes.io/name"
 	KubernetesCreatedByLabelKey       = "app.kubernetes.io/created-by"
 
+	InClusterNamespacePath = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
+
 	// Use as separator for pod name, for example, raycluster-small-size-worker-0
 	DashSymbol = "-"
 
@@ -200,6 +202,14 @@ const (
 
 	// If set to true, the RayJob CR itself will be deleted if shutdownAfterJobFinishes is set to true. Note that all resources created by the RayJob CR will be deleted, including the K8s Job.
 	DELETE_RAYJOB_CR_AFTER_JOB_FINISHES = "DELETE_RAYJOB_CR_AFTER_JOB_FINISHES"
+
+	// If set to true, a broad NetworkPolicy ingress rule is added to network-isolated
+	// RayClusters that are NOT owned by a RayJob (i.e. clusterSelector use cases),
+	// allowing any pod with ray.io/originated-from-crd=RayJob to access the dashboard
+	// port. This flag has no effect on RayJob-owned RayClusters, which always receive
+	// a per-job submitter ingress rule based on the ownerReference. When false (default),
+	// clusterSelector-based RayJobs require the user to add explicit ingress rules.
+	ALLOW_ALL_RAYJOB_SUBMITTERS = "ALLOW_ALL_RAYJOB_SUBMITTERS"
 
 	// If `JobDeploymentStatus` does not transition to `Complete` or `Failed` within
 	// `RAYJOB_DEPLOYMENT_STATUS_TRANSITION_GRACE_PERIOD_SECONDS` seconds after `JobStatus`
@@ -435,4 +445,13 @@ const (
 	// RoleBinding list
 	CreatedRoleBinding        K8sEventType = "CreatedRoleBinding"
 	FailedToCreateRoleBinding K8sEventType = "FailedToCreateRoleBinding"
+
+	// NetworkPolicy event list
+	CreatedNetworkPolicy        K8sEventType = "CreatedNetworkPolicy"
+	UpdatedNetworkPolicy        K8sEventType = "UpdatedNetworkPolicy"
+	DeletedNetworkPolicy        K8sEventType = "DeletedNetworkPolicy"
+	FailedToCreateNetworkPolicy K8sEventType = "FailedToCreateNetworkPolicy"
+	FailedToUpdateNetworkPolicy K8sEventType = "FailedToUpdateNetworkPolicy"
+	FailedToDeleteNetworkPolicy K8sEventType = "FailedToDeleteNetworkPolicy"
+	NetworkPolicyNameCollision  K8sEventType = "NetworkPolicyNameCollision"
 )
