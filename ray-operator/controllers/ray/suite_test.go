@@ -38,6 +38,7 @@ import (
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/dashboardclient"
+	"github.com/ray-project/kuberay/ray-operator/internal/managercache"
 )
 
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to
@@ -101,8 +102,8 @@ var _ = BeforeSuite(func(ctx SpecContext) {
 	// TODO: We probably should not shorten RAYCLUSTER_DEFAULT_REQUEUE_SECONDS_ENV here just to make tests pass.
 	// Instead, we should fix the reconciliation if any unexpected happened.
 	os.Setenv(utils.RAYCLUSTER_DEFAULT_REQUEUE_SECONDS_ENV, "10")
-	selectorsByObject, err := CacheSelectors()
-	Expect(err).NotTo(HaveOccurred(), "failed to create cache selectors")
+	selectorsByObject, err := managercache.CacheByObject()
+	Expect(err).NotTo(HaveOccurred(), "failed to build manager cache ByObject")
 	mgr, err = ctrl.NewManager(cfg, ctrl.Options{
 		Scheme: scheme.Scheme,
 		Metrics: metricsserver.Options{

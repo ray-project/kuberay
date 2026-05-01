@@ -32,6 +32,7 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/metrics"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
+	"github.com/ray-project/kuberay/ray-operator/internal/managercache"
 	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 	webhooks "github.com/ray-project/kuberay/ray-operator/pkg/webhooks/v1"
 )
@@ -216,8 +217,8 @@ func main() {
 	// - the batch Jobs it creates when reconciling RayJobs (app.kubernetes.io/created-by=kuberay-operator), and
 	// - Ray-managed Pods (ray.io/node-type in head|worker|redis-cleanup).
 	// These labels are provided to the manager cache as selectors for Job and Pod resources.
-	selectorsByObject, err := ray.CacheSelectors()
-	exitOnError(err, "unable to create cache selectors")
+	selectorsByObject, err := managercache.CacheByObject()
+	exitOnError(err, "unable to build manager cache ByObject")
 	options.Cache.ByObject = selectorsByObject
 
 	if watchNamespaces := strings.Split(config.WatchNamespace, ","); len(watchNamespaces) == 1 { // It is not possible for len(watchNamespaces) == 0 to be true. The length of `strings.Split("", ",")` is still 1.

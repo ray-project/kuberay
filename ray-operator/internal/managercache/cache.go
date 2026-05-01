@@ -1,4 +1,4 @@
-package ray
+package managercache
 
 import (
 	batchv1 "k8s.io/api/batch/v1"
@@ -12,9 +12,8 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 )
 
-// CacheSelectors returns ByObject options that restrict which Job and Pod objects
-// the manager's informers watch and store in the local cache.
-func CacheSelectors() (map[client.Object]cache.ByObject, error) {
+// CacheByObject returns cache.ByObject entries that scope the manager client's Job and Pod watches.
+func CacheByObject() (map[client.Object]cache.ByObject, error) {
 	createByLabel, err := labels.NewRequirement(utils.KubernetesCreatedByLabelKey, selection.Equals, []string{utils.ComponentName})
 	if err != nil {
 		return nil, err
