@@ -1,6 +1,7 @@
 package azureblob
 
 import (
+	"fmt"
 	"os"
 	"path"
 	"path/filepath"
@@ -8,11 +9,14 @@ import (
 	"testing"
 
 	"github.com/sirupsen/logrus"
+
+	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
 func TestTrim(t *testing.T) {
-	absoluteLogPathName := " /tmp/ray/test/LLogs/events///aa/a.txt  "
-	logdir := "/tmp/ray/test/lLogs/"
+	tmpRayRoot := utils.GetTmpRayRoot()
+	absoluteLogPathName := fmt.Sprintf(" %s/test/LLogs/events/aa/a.txt  ", tmpRayRoot)
+	logdir := fmt.Sprintf("%s/test/lLogs/", tmpRayRoot)
 
 	absoluteLogPathName = strings.TrimSpace(absoluteLogPathName)
 	absoluteLogPathName = filepath.Clean(absoluteLogPathName)
@@ -30,7 +34,7 @@ func TestTrim(t *testing.T) {
 }
 
 func TestWalk(t *testing.T) {
-	watchPath := "/tmp/ray/test/LLogs/"
+	watchPath := fmt.Sprintf("%s/test/LLogs/", utils.GetTmpRayRoot())
 	filepath.Walk(watchPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			logrus.Errorf("Walk path error %v", err)
