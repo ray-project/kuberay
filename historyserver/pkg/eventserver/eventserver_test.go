@@ -17,12 +17,6 @@ const (
 	testClusterName1 = "cluster1"
 	testTaskName1    = "Name_12345"
 	testTaskName2    = "Name_54321"
-
-	// Base64 and Hex pairs to verify normalization of base64 to hex
-	testBase64ID1 = "AgAAAA=="
-	testBase64ID2 = "AwAAAA=="
-	testHexID1    = "02000000" // hex for base64 "AgAAAA=="
-	testHexID2    = "03000000" // hex for base64 "AwAAAA=="
 )
 
 func makeTaskEventMap(taskName, nodeId, taskID, cluster string, attempt int) map[string]any {
@@ -218,7 +212,14 @@ func TestStoreEvent(t *testing.T) {
 		lowerNodeID1 = "aaaabbbb1234aaaabbbb1234aaaabbbb1234aaaabbbb1234aaaabbbb" // 28B lowercase
 		upperTaskID1 = "AAAABBBB5678AAAABBBB5678AAAABBBB5678AAAABBBB5678"         // 24B uppercase
 		lowerTaskID1 = "aaaabbbb5678aaaabbbb5678aaaabbbb5678aaaabbbb5678"         // 24B lowercase
+
+		// Base64 and Hex pairs to verify normalization of base64 to hex
+		testBase64ID1 = "AgAAAA=="
+		testBase64ID2 = "AwAAAA=="
+		testHexID1    = "02000000" // hex for base64 "AgAAAA=="
+		testHexID2    = "03000000" // hex for base64 "AwAAAA=="
 	)
+
 	initialTask := types.Task{
 		TaskID:      taskID1,
 		TaskName:    testTaskName1,
