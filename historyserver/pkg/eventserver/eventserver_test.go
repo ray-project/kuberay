@@ -30,13 +30,13 @@ func TestEventProcessor(t *testing.T) {
 	// Sizes: JobID=4B, ActorID=12B unique+JobID (16B), TaskID=8B unique+ActorID (24B), NodeID/WorkerID=28B
 	const (
 		// Pure-hex IDs to verify normalizeIDToHex is identity.
-        // Use lowercase to match production hex output and avoid map-key collision.
-		testJobID       = "aaaabbbb"                                                  // 4B
-		testActorID     = "aaaabbbb1234aaaabbbb1234" + testJobID                          // 12B unique + JobID
-		testTaskID1     = "ccccdddd5678cccc" + testActorID                                // 8B unique + ActorID
-		testTaskID2     = "ccccdddd9012dddd" + testActorID                                // 8B unique + ActorID
-		testNodeID1     = "eeeeffff1234eeeeffff1234eeeeffff1234eeeeffff1234eeeeffff"  // 28B
-		testNodeID2     = "eeeeffff9012eeeeffff9012eeeeffff9012eeeeffff9012eeeeffff"  // 28B
+		// Use lowercase to match production hex output and avoid map-key collision.
+		testJobID   = "aaaabbbb"                                                 // 4B
+		testActorID = "aaaabbbb1234aaaabbbb1234" + testJobID                     // 12B unique + JobID
+		testTaskID1 = "ccccdddd5678cccc" + testActorID                           // 8B unique + ActorID
+		testTaskID2 = "ccccdddd9012dddd" + testActorID                           // 8B unique + ActorID
+		testNodeID1 = "eeeeffff1234eeeeffff1234eeeeffff1234eeeeffff1234eeeeffff" // 28B
+		testNodeID2 = "eeeeffff9012eeeeffff9012eeeeffff9012eeeeffff9012eeeeffff" // 28B
 
 		testClusterName = "cluster1"
 		testTaskName1   = "Name_12345"
@@ -198,12 +198,12 @@ func TestEventProcessor(t *testing.T) {
 func TestStoreEvent(t *testing.T) {
 	// IDs follow Ray's ID spec; see TestEventProcessor for rationale.
 	const (
-		testJobID        = "aaaabbbb"                                                  // 4B
-		testActorID      = "aaaabbbb1234aaaabbbb1234" + testJobID                          // 12B unique + JobID
-		testTaskID1      = "ccccdddd5678cccc" + testActorID                                // 8B unique + ActorID
-		testTaskID2      = "ccccdddd9012dddd" + testActorID                                // 8B unique + ActorID
-		testNodeID1      = "eeeeffff1234eeeeffff1234eeeeffff1234eeeeffff1234eeeeffff"  // 28B
-		testNodeID2      = "eeeeffff9012eeeeffff9012eeeeffff9012eeeeffff9012eeeeffff"  // 28B
+		testJobID        = "aaaabbbb"                                                 // 4B
+		testActorID      = "aaaabbbb1234aaaabbbb1234" + testJobID                     // 12B unique + JobID
+		testTaskID1      = "ccccdddd5678cccc" + testActorID                           // 8B unique + ActorID
+		testTaskID2      = "ccccdddd9012dddd" + testActorID                           // 8B unique + ActorID
+		testNodeID1      = "eeeeffff1234eeeeffff1234eeeeffff1234eeeeffff1234eeeeffff" // 28B
+		testNodeID2      = "eeeeffff9012eeeeffff9012eeeeffff9012eeeeffff9012eeeeffff" // 28B
 		testUpperNodeID1 = "AAAABBBB1234AAAABBBB1234AAAABBBB1234AAAABBBB1234AAAABBBB" // 28B uppercase
 		testLowerNodeID1 = "aaaabbbb1234aaaabbbb1234aaaabbbb1234aaaabbbb1234aaaabbbb" // 28B lowercase
 		testUpperTaskID1 = "AAAABBBB5678AAAABBBB5678AAAABBBB5678AAAABBBB5678"         // 24B uppercase
@@ -470,11 +470,11 @@ func TestStoreEvent(t *testing.T) {
 func TestTaskLifecycleEventDeduplication(t *testing.T) {
 	// IDs follow Ray's ID spec; see TestEventProcessor for rationale.
 	const (
-		testJobID       = "aaaabbbb"                                                  // 4B
-		testActorID     = "aaaabbbb1234aaaabbbb1234" + testJobID                          // 12B unique + JobID
-		testTaskID      = "ccccdddd5678cccc" + testActorID                                // 8B unique + ActorID
-		testNodeID      = "eeeeffff1234eeeeffff1234eeeeffff1234eeeeffff1234eeeeffff"  // 28B
-		testWorkerID    = "eeeeffff0000eeeeffff0000eeeeffff0000eeeeffff0000eeeeffff"  // 28B
+		testJobID       = "aaaabbbb"                                                 // 4B
+		testActorID     = "aaaabbbb1234aaaabbbb1234" + testJobID                     // 12B unique + JobID
+		testTaskID      = "ccccdddd5678cccc" + testActorID                           // 8B unique + ActorID
+		testNodeID      = "eeeeffff1234eeeeffff1234eeeeffff1234eeeeffff1234eeeeffff" // 28B
+		testWorkerID    = "eeeeffff0000eeeeffff0000eeeeffff0000eeeeffff0000eeeeffff" // 28B
 		testClusterName = "cluster1"
 	)
 
@@ -690,7 +690,7 @@ func TestTaskLifecycleEventDeduplication(t *testing.T) {
 func TestActorLifecycleEventDeduplication(t *testing.T) {
 	// IDs follow Ray's ID spec; see TestEventProcessor for rationale.
 	const (
-		testJobID       = "aaaabbbb"                         // 4B
+		testJobID       = "aaaabbbb"                             // 4B
 		testActorID     = "aaaabbbb1234aaaabbbb1234" + testJobID // 12B unique + JobID
 		testClusterName = "cluster1"
 	)
@@ -1012,11 +1012,11 @@ func TestMultipleReprocessingCycles(t *testing.T) {
 
 	// IDs follow Ray's ID spec; see TestEventProcessor for rationale.
 	const (
-		testJobID       = "aaaabbbb"                                                  // 4B
-		testActorID     = "aaaabbbb1234aaaabbbb1234" + testJobID                          // 12B unique + JobID
-		testTaskID      = "ccccdddd5678cccc" + testActorID                                // 8B unique + ActorID
-		testNodeID      = "eeeeffff1234eeeeffff1234eeeeffff1234eeeeffff1234eeeeffff"  // 28B
-		testWorkerID    = "eeeeffff0000eeeeffff0000eeeeffff0000eeeeffff0000eeeeffff"  // 28B
+		testJobID       = "aaaabbbb"                                                 // 4B
+		testActorID     = "aaaabbbb1234aaaabbbb1234" + testJobID                     // 12B unique + JobID
+		testTaskID      = "ccccdddd5678cccc" + testActorID                           // 8B unique + ActorID
+		testNodeID      = "eeeeffff1234eeeeffff1234eeeeffff1234eeeeffff1234eeeeffff" // 28B
+		testWorkerID    = "eeeeffff0000eeeeffff0000eeeeffff0000eeeeffff0000eeeeffff" // 28B
 		testClusterName = "cluster1"
 	)
 
