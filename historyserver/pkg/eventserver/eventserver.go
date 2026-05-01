@@ -1531,3 +1531,66 @@ func extractActorIDFromTaskID(taskIDHex string) string {
 
 	return actorPortion + jobPortion
 }
+
+// ProcessSingleSession reads all event files for a single session synchronously
+// and populates the handler's in-memory maps. It does not touch other sessions
+// and does not use the channel fan-out that Run() uses.
+//
+// This is a fresh, synchronous implementation — intentionally does NOT share
+// code with the processAllEvents closure inside Run(), because that closure's
+// channel-based fan-out is v1-specific and would couple v1 to v2's lifecycle.
+//
+// Errors during individual file reads are logged but do not abort the whole
+// session — matching v1's error tolerance in processAllEvents.
+func (h *EventHandler) ProcessSingleSession(clusterInfo utils.ClusterInfo) error {
+	clusterNameNamespace := clusterInfo.Name + "_" + clusterInfo.Namespace
+	clusterSessionKey := utils.BuildClusterSessionKey(clusterInfo.Name, clusterInfo.Namespace, clusterInfo.SessionName)
+
+	// Read Log Events from logs/{nodeId}/events/event_*.log
+	// This is the format used by Ray Dashboard's /events API.
+	logEventReader := NewLogEventReader(h.reader)
+	if err := logEventReader.ReadLogEvents(clusterInfo, clusterSessionKey, h.ClusterLogEventMap); err != nil {
+		logrus.Errorf("Failed to read Log Events for %s: %v", clusterSessionKey, err)
+	}
+
+	// Read RayEvents (Export Events) from node_events/ and job_events/.
+	// These are used for task/actor/job/node data APIs.
+	eventFileList := append(h.getAllJobEventFiles(clusterInfo), h.getAllNodeEventFiles(clusterInfo)...)
+	logrus.Infof("current eventFileList for cluster %s is: %v", clusterInfo.Name, eventFileList)
+
+	for _, eventFile := range eventFileList {
+		logrus.Infof("Reading event file: %s", eventFile)
+
+		eventioReader := h.reader.GetContent(clusterNameNamespace, eventFile)
+		if eventioReader == nil {
+			logrus.Errorf("Failed to get content for event file: %s, skipping", eventFile)
+			continue
+		}
+		eventbytes, err := io.ReadAll(eventioReader)
+		if err != nil {
+			logrus.Errorf("Failed to read event file: %v", err)
+			continue
+		}
+
+		var eventList []map[string]any
+		if err := json.Unmarshal(eventbytes, &eventList); err != nil {
+			logrus.Errorf("Failed to unmarshal event: %v", err)
+			continue
+		}
+
+		for _, curr := range eventList {
+			// Skip nil events (can occur with corrupted event files containing null elements).
+			// Matches Run()'s nil-tolerance at line 172.
+			if curr == nil {
+				continue
+			}
+			curr["clusterName"] = clusterSessionKey
+			if err := h.storeEvent(curr); err != nil {
+				logrus.Errorf("Failed to store event: %v", err)
+				continue
+			}
+		}
+	}
+
+	return nil
+}
