@@ -68,4 +68,13 @@ data:
     defaultContainerEnvs:
     {{- toYaml .Values.configuration.defaultContainerEnvs | nindent 4 }}
     {{- end }}
+    {{- if hasKey .Values "asyncJobInfoQueryInterval" }}
+    asyncJobInfoQueryInterval: {{ .Values.asyncJobInfoQueryInterval }}
+    {{- end }}
+    {{- if hasKey .Values "asyncJobInfoQueryWorkerSize" }}
+    asyncJobInfoQueryWorkerSize: {{ .Values.asyncJobInfoQueryWorkerSize }}
+    {{- end }}
+    {{- if hasKey .Values "asyncJobInfoQueryCacheExpiry" }}
+    asyncJobInfoQueryCacheExpiry: {{ .Values.asyncJobInfoQueryCacheExpiry }}
+    {{- end }}
 {{- end }}

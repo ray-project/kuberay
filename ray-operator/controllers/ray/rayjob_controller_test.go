@@ -117,8 +117,8 @@ func rayJobTemplate(name string, namespace string) *rayv1.RayJob {
 // This sets conditions (JobSuccessCriteriaMet and JobComplete) and
 // timestamps (StartTime, CompletionTime) required by Kubernetes 1.33+.
 func updateK8sJobToComplete(ctx context.Context, job *batchv1.Job) {
-	startTime := metav1.Now()
-	completionTime := metav1.NewTime(startTime.Add(time.Second))
+	completionTime := metav1.Now()
+	startTime := metav1.NewTime(completionTime.Add(-time.Second))
 	job.Status.Conditions = []batchv1.JobCondition{
 		{Type: batchv1.JobSuccessCriteriaMet, Status: corev1.ConditionTrue, LastTransitionTime: completionTime},
 		{Type: batchv1.JobComplete, Status: corev1.ConditionTrue, LastTransitionTime: completionTime},

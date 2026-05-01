@@ -7,8 +7,8 @@ require (
 	github.com/coder/websocket v1.8.14
 	github.com/go-logr/logr v1.4.3
 	github.com/go-logr/zapr v1.3.0
-	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/jarcoal/httpmock v1.4.1
+	github.com/maypok86/otter/v2 v2.3.0
 	github.com/onsi/ginkgo/v2 v2.27.3
 	github.com/onsi/gomega v1.38.3
 	github.com/openshift/api v0.0.0-20251214014457-bfa868a22401
