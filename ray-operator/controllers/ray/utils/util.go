@@ -884,6 +884,7 @@ func GetWeightsFromHTTPRoute(httpRoute *gwv1.HTTPRoute, rayServiceInstance *rayv
 	return
 }
 
+// GetKubernetesVersion returns the API server version
 func GetKubernetesVersion() (*version.Info, error) {
 	config, err := ctrl.GetConfig()
 	if err != nil {
@@ -902,6 +903,7 @@ func GetKubernetesVersion() (*version.Info, error) {
 	return serverVersion, nil
 }
 
+// IsK8sVersionAtLeast checks the API server version is at least v{major}.{minor}.{patch}
 func IsK8sVersionAtLeast(serverVersion *version.Info, major, minor, patch int) (bool, error) {
 	requiredVersionString := fmt.Sprintf("%d.%d.%d", major, minor, patch)
 	currentVersion, err := utilversion.ParseGeneric(serverVersion.GitVersion)
