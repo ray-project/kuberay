@@ -147,6 +147,7 @@ Apply MinIO and the History Server manifests:
 
 ```bash
 kubectl apply -f historyserver/config/minio.yaml
+kubectl apply -f historyserver/config/service_account.yaml
 kubectl apply -f historyserver/config/historyserver.yaml
 ```
 
