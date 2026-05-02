@@ -20,6 +20,7 @@ COPY pkg/historyserver/ pkg/historyserver/
 COPY pkg/storage/ pkg/storage/
 COPY pkg/utils/ pkg/utils/
 COPY pkg/eventserver/ pkg/eventserver/
+COPY pkg/snapshot/ pkg/snapshot/
 
 # Build the historyserver binary.
 COPY Makefile Makefile
