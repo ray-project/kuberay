@@ -747,11 +747,16 @@ func (s *ServerHandler) getJobs(req *restful.Request, resp *restful.Response) {
 		return
 	}
 
-	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
-	jobsMap := s.eventHandler.GetJobsMap(clusterSessionKey)
+	// Load snapshot from LRU; on miss, 503 + Retry-After.
+	clusterNameID := clusterName + "_" + clusterNamespace
+	snap, err := s.loader.Load(clusterNameID, sessionName)
+	if err != nil {
+		s.handleMissingSnapshot(resp, err)
+		return
+	}
 
-	jobs := make([]eventtypes.Job, 0, len(jobsMap))
-	for _, job := range jobsMap {
+	jobs := make([]eventtypes.Job, 0, len(snap.Jobs))
+	for _, job := range snap.Jobs {
 		jobs = append(jobs, job)
 	}
 
@@ -852,9 +857,15 @@ func (s *ServerHandler) getJob(req *restful.Request, resp *restful.Response) {
 
 	jobID := req.PathParameter("job_id")
 
-	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
-	job, found := s.eventHandler.GetJobByJobID(clusterSessionKey, jobID)
+	// Load snapshot from LRU; on miss, 503 + Retry-After.
+	clusterNameID := clusterName + "_" + clusterNamespace
+	snap, err := s.loader.Load(clusterNameID, sessionName)
+	if err != nil {
+		s.handleMissingSnapshot(resp, err)
+		return
+	}
 
+	job, found := snap.Jobs[jobID]
 	if !found {
 		responseString := fmt.Sprintf("Job %s does not exist", jobID)
 		resp.Write([]byte(responseString))
