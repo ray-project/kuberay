@@ -24,6 +24,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	eventtypes "github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
+	"github.com/ray-project/kuberay/historyserver/pkg/snapshot"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
@@ -678,7 +679,13 @@ func (s *ServerHandler) getEvents(req *restful.Request, resp *restful.Response) 
 		return
 	}
 
-	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
+	// Load snapshot from LRU; on miss, 503 + Retry-After.
+	clusterNameID := clusterName + "_" + clusterNamespace
+	snap, err := s.loader.Load(clusterNameID, sessionName)
+	if err != nil {
+		s.handleMissingSnapshot(resp, err)
+		return
+	}
 
 	// Check if job_id parameter exists in query string (even if empty)
 	// This aligns with Ray Dashboard behavior:
@@ -691,9 +698,14 @@ func (s *ServerHandler) getEvents(req *restful.Request, resp *restful.Response) 
 	var response map[string]any
 
 	if jobIDExists {
-		// Return events for a specific job
-		// Response format matches Ray Dashboard: {"result": true, "msg": "...", "data": {"jobId": "...", "events": [...]}}
-		events := s.eventHandler.ClusterLogEventMap.GetEventsByJobID(clusterSessionKey, jobID)
+		// Return events for a specific job. snap.LogEvents.ByJobID stores raw
+		// LogEvent structs; convert to camelCase API format via ToAPIResponse
+		// to match Ray Dashboard's expected shape.
+		events := make([]map[string]any, 0)
+		for _, e := range snap.LogEvents.ByJobID[jobID] {
+			ev := e // copy to avoid taking the address of the loop variable
+			events = append(events, ev.ToAPIResponse())
+		}
 		response = map[string]any{
 			"result": true,
 			"msg":    "Job events fetched.",
@@ -703,14 +715,21 @@ func (s *ServerHandler) getEvents(req *restful.Request, resp *restful.Response) 
 			},
 		}
 	} else {
-		// Return all events grouped by job_id
-		// Response format matches Ray Dashboard: {"result": true, "msg": "...", "data": {"events": {job_id: [...], ...}}}
-		events := s.eventHandler.ClusterLogEventMap.GetAllEvents(clusterSessionKey)
+		// Return all events grouped by job_id.
+		all := make(map[string][]map[string]any, len(snap.LogEvents.ByJobID))
+		for jID, evs := range snap.LogEvents.ByJobID {
+			list := make([]map[string]any, 0, len(evs))
+			for _, e := range evs {
+				ev := e
+				list = append(list, ev.ToAPIResponse())
+			}
+			all[jID] = list
+		}
 		response = map[string]any{
 			"result": true,
 			"msg":    "All events fetched.",
 			"data": map[string]any{
-				"events": events,
+				"events": all,
 			},
 		}
 	}
@@ -905,8 +924,16 @@ func (s *ServerHandler) getClusterStatus(req *restful.Request, resp *restful.Res
 	var err error
 
 	if format == "1" {
-		// Build cluster status from debug_state.txt and task/actor data
-		statusString := s.buildFormattedClusterStatus(clusterName, clusterNamespace, sessionName)
+		// Load snapshot from LRU; on miss, 503 + Retry-After.
+		clusterNameID := clusterName + "_" + clusterNamespace
+		snap, loadErr := s.loader.Load(clusterNameID, sessionName)
+		if loadErr != nil {
+			s.handleMissingSnapshot(resp, loadErr)
+			return
+		}
+
+		// Build cluster status from debug_state.txt and snapshot data
+		statusString := s.buildFormattedClusterStatus(snap, clusterName, clusterNamespace, sessionName)
 
 		response := FormattedClusterStatusResponse{
 			Result: true,
@@ -921,6 +948,7 @@ func (s *ServerHandler) getClusterStatus(req *restful.Request, resp *restful.Res
 		// Update when Ray dashboard api supports autoscaler V2 which uses
 		// GcsClient.get_cluster_status() for /api/cluster_status.
 		// Ray frontend only uses format=1, so returning empty data here is fine for now.
+		// Skip loader.Load — frontend ignores the response in this branch.
 		response := ClusterStatusResponse{
 			Result: true,
 			Msg:    "Got cluster status.",
@@ -937,8 +965,10 @@ func (s *ServerHandler) getClusterStatus(req *restful.Request, resp *restful.Res
 	resp.Write(respData)
 }
 
-// buildFormattedClusterStatus reconstructs the cluster status from debug_state.txt and pending tasks and actors
-func (s *ServerHandler) buildFormattedClusterStatus(clusterName, clusterNamespace, sessionName string) string {
+// buildFormattedClusterStatus reconstructs the cluster status from
+// debug_state.txt files (per-node) merged with snapshot data (failed
+// nodes, pending demands, last-active timestamp).
+func (s *ServerHandler) buildFormattedClusterStatus(snap *snapshot.SessionSnapshot, clusterName, clusterNamespace, sessionName string) string {
 	builder := NewClusterStatusBuilder()
 	clusterNameID := clusterName + "_" + clusterNamespace
 	logsPath := path.Join(sessionName, utils.RAY_SESSIONDIR_LOGDIR_NAME)
@@ -968,10 +998,12 @@ func (s *ServerHandler) buildFormattedClusterStatus(clusterName, clusterNamespac
 		logrus.Debugf("Found %d nodes but failed to parse any debug_state.txt for cluster %s session %s", len(nodeIDs), clusterName, sessionName)
 	}
 
-	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
-	tasks := s.eventHandler.GetTasks(clusterSessionKey)
-	actors := s.eventHandler.GetActors(clusterSessionKey)
-	nodes := s.eventHandler.GetNodeMap(clusterSessionKey)
+	// Read tasks / actors / nodes from the snapshot instead of EventHandler.
+	tasks := flattenTasks(snap.Tasks)
+	actors := make([]eventtypes.Actor, 0, len(snap.Actors))
+	for _, a := range snap.Actors {
+		actors = append(actors, a)
+	}
 
 	// Use the last timestamp from tasks/actors to represent when the cluster was last active.
 	// Fallback to session timestamp if no task/actor timestamps are available.
@@ -982,7 +1014,7 @@ func (s *ServerHandler) buildFormattedClusterStatus(clusterName, clusterNamespac
 		builder.Timestamp = ts
 	}
 
-	builder.AddFailedNodesFromNodes(nodes)
+	builder.AddFailedNodesFromNodes(snap.Nodes)
 	builder.AddPendingDemandsFromTasks(tasks)
 	builder.AddPendingDemandsFromActors(actors)
 
