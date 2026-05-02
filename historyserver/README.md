@@ -11,7 +11,10 @@ It provides a web interface to explore the history of Ray jobs, tasks, actors, a
 The History Server consists of two main components:
 
 1. **Collector**: Runs as a sidecar container in Ray clusters to collect logs and metadata
-2. **History Server**: Serves a Ray Dashboard-shaped HTTP API and ingests cluster sessions' events on demand
+2. **History Server**: Serves a Ray Dashboard-shaped HTTP API and ingests cluster sessions' events on demand.
+
+> [!INFO] Parsed sessions are held in a per-replica bounded LRU cache (capacity controlled by `--snapshot-cache-size`);
+> subsequent reads hit the cache without re-parsing.
 
 ## Building
 
@@ -68,6 +71,8 @@ The history server can be configured using command-line flags:
 - `--kubeconfigs`: Path to kubeconfig file(s) for accessing Kubernetes clusters
 - `--dashboard-dir`: Directory containing dashboard assets (default: "/dashboard")
 - `--runtime-class-config-path`: Path to runtime class configuration file
+- `--snapshot-cache-size`: LRU capacity for cached SessionSnapshots (default: 100). Each entry holds one parsed
+dead-session view; size operators based on expected session size × concurrent sessions in scope.
 
 ### Collector Configuration
 
@@ -208,8 +213,10 @@ time curl -s -o /dev/null \
 ```
 
 > [!NOTE]
-> Warm path returns immediately — Supervisor's loaded-session set fast-paths the request without re-parsing. If the HS
-> process restarts, the next visit returns to cold-path latency.
+> Warm path returns immediately — Supervisor's SnapshotLoader (LRU) fast-paths the request without re-parsing.
+> Re-parse happens on the next visit if any of: the HS process restarts, the request lands on a sibling replica
+> that hasn't loaded this session, or the LRU has evicted this session under capacity pressure (controlled by
+> `--snapshot-cache-size`).
 
 ### 5. Tail Logs
 
