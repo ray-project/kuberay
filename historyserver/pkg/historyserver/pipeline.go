@@ -3,6 +3,7 @@ package historyserver
 import (
 	"context"
 	"fmt"
+	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	k8stypes "k8s.io/apimachinery/pkg/types"
@@ -12,6 +13,8 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/ray-project/kuberay/historyserver/pkg/eventserver"
+	"github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
+	"github.com/ray-project/kuberay/historyserver/pkg/snapshot"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
@@ -23,8 +26,9 @@ const (
 	// SessionStatusLive means the RayCluster CR is still present and the
 	// session is intentionally skipped.
 	SessionStatusLive SessionStatus = iota
-	// SessionStatusProcessed means events were ingested into EventHandler's
-	// in-memory state.
+	// SessionStatusProcessed means events were ingested and a SessionSnapshot
+	// was built. The returned *SessionSnapshot is non-nil only for this
+	// status.
 	SessionStatusProcessed
 	// SessionStatusK8sProbeErr means the K8s Get returned a non-NotFound
 	// error and the cluster state is unknown.
@@ -36,9 +40,14 @@ const (
 	SessionStatusCanceled
 )
 
-// Pipeline processes a single Ray session end-to-end: dead detection and
-// event parsing. It is stateless across sessions and safe for concurrent
-// use.
+// Pipeline processes a single Ray session end-to-end: dead detection,
+// event ingestion, and SessionSnapshot building. It is stateless across
+// sessions and safe for concurrent use.
+//
+// Note: this revision keeps EventHandler shared across calls (alpha
+// inheritance) and reads its per-session view through the handler's
+// keyed getters. A future cleanup switches to fresh-per-call EventHandler
+// + reader, dropping shared maps entirely.
 type Pipeline struct {
 	handler   *eventserver.EventHandler
 	k8sClient client.Client
@@ -53,18 +62,19 @@ func NewPipeline(handler *eventserver.EventHandler, k8sClient client.Client) *Pi
 }
 
 // ProcessSession processes one session end-to-end and returns the outcome
-// classification and an error.
+// classification, the built snapshot (when applicable), and an error.
 //
-//   - (Live, nil): no-op; caller moves on.
-//   - (Processed, nil): events were ingested into EventHandler's in-memory state.
-//   - (K8sProbeErr | EventsErr, err): real failure.
-//   - (Canceled, ctx.Err()): ctx was canceled between steps.
+//   - (Live, nil, nil): no-op; caller moves on.
+//   - (Processed, snap, nil): snapshot built; snap is the freshly-built
+//     in-memory object and is never nil for this status.
+//   - (K8sProbeErr | EventsErr, nil, err): real failure.
+//   - (Canceled, nil, ctx.Err()): ctx was canceled between steps.
 //
 // ctx is polled at each step boundary; cancellation surfaces as Canceled.
-func (p *Pipeline) ProcessSession(ctx context.Context, session utils.ClusterInfo) (SessionStatus, error) {
+func (p *Pipeline) ProcessSession(ctx context.Context, session utils.ClusterInfo) (SessionStatus, *snapshot.SessionSnapshot, error) {
 	// Fast-fail if the request was canceled before we started.
 	if err := ctx.Err(); err != nil {
-		return SessionStatusCanceled, err
+		return SessionStatusCanceled, nil, err
 	}
 
 	// Step 1: dead detection. NotFound means dead; other errors propagate.
@@ -73,27 +83,30 @@ func (p *Pipeline) ProcessSession(ctx context.Context, session utils.ClusterInfo
 	if err != nil {
 		// Distinguish ctx cancellation from real API errors to keep alerting noise-free.
 		if ctxErr := ctx.Err(); ctxErr != nil {
-			return SessionStatusCanceled, ctxErr
+			return SessionStatusCanceled, nil, ctxErr
 		}
-		return SessionStatusK8sProbeErr, fmt.Errorf("k8s probe for %s/%s: %w", session.Namespace, session.Name, err)
+		return SessionStatusK8sProbeErr, nil, fmt.Errorf("k8s probe for %s/%s: %w", session.Namespace, session.Name, err)
 	}
 	if !dead {
-		return SessionStatusLive, nil
+		return SessionStatusLive, nil, nil
 	}
 
 	// Step 2: drive parsing through the shared EventHandler. Events ingest
-	// into the EventHandler's per-session in-memory maps; handlers read
-	// directly from those maps.
+	// into the EventHandler's per-session in-memory maps; we read the
+	// per-session view via keyed getters in Step 3.
 	if err := ctx.Err(); err != nil {
-		return SessionStatusCanceled, err
+		return SessionStatusCanceled, nil, err
 	}
 	if err := p.handler.ProcessSingleSession(session); err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
-			return SessionStatusCanceled, ctxErr
+			return SessionStatusCanceled, nil, ctxErr
 		}
-		return SessionStatusEventsErr, fmt.Errorf("process events for %s/%s: %w", session.Namespace, session.Name, err)
+		return SessionStatusEventsErr, nil, fmt.Errorf("process events for %s/%s: %w", session.Namespace, session.Name, err)
 	}
-	return SessionStatusProcessed, nil
+
+	// Step 3: build the SessionSnapshot from the handler's per-session view.
+	snap := buildSnapshotFromHandler(p.handler, session)
+	return SessionStatusProcessed, snap, nil
 }
 
 // isDead determines whether a session is dead by checking the RayCluster CR.
@@ -131,4 +144,36 @@ func (p *Pipeline) isDead(ctx context.Context, session utils.ClusterInfo) (bool,
 		return true, nil
 	}
 	return false, nil
+}
+
+// buildSnapshotFromHandler flattens the handler's per-session state into a
+// SessionSnapshot. It uses the handler's getters, which lock and return
+// deep copies, so callers may continue reading from the handler.
+func buildSnapshotFromHandler(h *eventserver.EventHandler, session utils.ClusterInfo) *snapshot.SessionSnapshot {
+	key := utils.BuildClusterSessionKey(session.Name, session.Namespace, session.SessionName)
+
+	return &snapshot.SessionSnapshot{
+		SessionKey:  key,
+		GeneratedAt: time.Now().UTC(),
+		Tasks:       groupTasksByID(h.GetTasks(key)),
+		Actors:      h.GetActorsMap(key),
+		Jobs:        h.GetJobsMap(key),
+		Nodes:       h.GetNodeMap(key),
+		LogEvents: snapshot.LogEventPayload{
+			ByJobID: h.ClusterLogEventMap.GetRawEventsByJobID(key),
+		},
+	}
+}
+
+// groupTasksByID re-nests the flat []Task returned by EventHandler.GetTasks
+// into the map[taskID][]attempt shape expected by SessionSnapshot.Tasks.
+func groupTasksByID(tasks []types.Task) map[string][]types.Task {
+	if len(tasks) == 0 {
+		return map[string][]types.Task{}
+	}
+	out := make(map[string][]types.Task, len(tasks))
+	for _, t := range tasks {
+		out[t.TaskID] = append(out[t.TaskID], t)
+	}
+	return out
 }

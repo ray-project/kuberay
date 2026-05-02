@@ -8,29 +8,39 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ray-project/kuberay/historyserver/pkg/snapshot"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
 // fakePipeline is a test double for sessionPipeline that lets each test
-// dictate the exact (status, error) tuple ProcessSession returns and
-// count the number of invocations.
+// dictate the exact (status, snapshot, error) tuple ProcessSession returns
+// and count the number of invocations.
 type fakePipeline struct {
 	calls int32
-	fn    func(ctx context.Context, info utils.ClusterInfo) (SessionStatus, error)
+	fn    func(ctx context.Context, info utils.ClusterInfo) (SessionStatus, *snapshot.SessionSnapshot, error)
 }
 
-func (f *fakePipeline) ProcessSession(ctx context.Context, info utils.ClusterInfo) (SessionStatus, error) {
+func (f *fakePipeline) ProcessSession(ctx context.Context, info utils.ClusterInfo) (SessionStatus, *snapshot.SessionSnapshot, error) {
 	atomic.AddInt32(&f.calls, 1)
 	if f.fn == nil {
-		return SessionStatusProcessed, nil
+		return SessionStatusProcessed, &snapshot.SessionSnapshot{SessionKey: "default"}, nil
 	}
 	return f.fn(ctx, info)
 }
 
 func (f *fakePipeline) callCount() int32 { return atomic.LoadInt32(&f.calls) }
 
-func (f *fakePipeline) setFn(fn func(ctx context.Context, info utils.ClusterInfo) (SessionStatus, error)) {
+func (f *fakePipeline) setFn(fn func(ctx context.Context, info utils.ClusterInfo) (SessionStatus, *snapshot.SessionSnapshot, error)) {
 	f.fn = fn
+}
+
+func newTestLoader(t *testing.T) *SnapshotLoader {
+	t.Helper()
+	loader, err := NewSnapshotLoader(0)
+	if err != nil {
+		t.Fatalf("NewSnapshotLoader: %v", err)
+	}
+	return loader
 }
 
 func testEnterClusterInfo() utils.ClusterInfo {
@@ -53,12 +63,12 @@ func TestEnsure_PipelineError_PropagatesAndCleans(t *testing.T) {
 	// callers must receive the same error.
 	release := make(chan struct{})
 	fp := &fakePipeline{
-		fn: func(_ context.Context, _ utils.ClusterInfo) (SessionStatus, error) {
+		fn: func(_ context.Context, _ utils.ClusterInfo) (SessionStatus, *snapshot.SessionSnapshot, error) {
 			<-release
-			return SessionStatusEventsErr, pipelineErr
+			return SessionStatusEventsErr, nil, pipelineErr
 		},
 	}
-	sup := NewSupervisor(fp, context.Background())
+	sup := NewSupervisor(fp, newTestLoader(t), context.Background())
 
 	const n = 5
 	var wg sync.WaitGroup
@@ -89,8 +99,8 @@ func TestEnsure_PipelineError_PropagatesAndCleans(t *testing.T) {
 
 	// Phase 2 — the dedup group must be cleared after the failed call;
 	// a fresh Pipeline invocation should run for the next /enter_cluster.
-	fp.setFn(func(_ context.Context, _ utils.ClusterInfo) (SessionStatus, error) {
-		return SessionStatusProcessed, nil
+	fp.setFn(func(_ context.Context, _ utils.ClusterInfo) (SessionStatus, *snapshot.SessionSnapshot, error) {
+		return SessionStatusProcessed, &snapshot.SessionSnapshot{SessionKey: "phase2"}, nil
 	})
 	if _, err := sup.Ensure(context.Background(), info); err != nil {
 		t.Fatalf("post-error retry: expected nil, got %v", err)
@@ -107,11 +117,11 @@ func TestEnsure_PipelineError_NoInternalRetry(t *testing.T) {
 	info := testEnterClusterInfo()
 	pipelineErr := errors.New("simulated parse failure")
 	fp := &fakePipeline{
-		fn: func(_ context.Context, _ utils.ClusterInfo) (SessionStatus, error) {
-			return SessionStatusEventsErr, pipelineErr
+		fn: func(_ context.Context, _ utils.ClusterInfo) (SessionStatus, *snapshot.SessionSnapshot, error) {
+			return SessionStatusEventsErr, nil, pipelineErr
 		},
 	}
-	sup := NewSupervisor(fp, context.Background())
+	sup := NewSupervisor(fp, newTestLoader(t), context.Background())
 
 	_, err := sup.Ensure(context.Background(), info)
 	if !errors.Is(err, pipelineErr) {
@@ -121,10 +131,11 @@ func TestEnsure_PipelineError_NoInternalRetry(t *testing.T) {
 		t.Fatalf("expected Pipeline called exactly 1x (no internal retry), got %d", got)
 	}
 
-	// Loaded set must be empty, which can be verified by triggering a second Ensure
-	// and confirming that Pipeline runs again.
-	fp.setFn(func(_ context.Context, _ utils.ClusterInfo) (SessionStatus, error) {
-		return SessionStatusProcessed, nil
+	// LRU must be empty for this session — verify by triggering a second
+	// Ensure and confirming that Pipeline runs again under client-driven
+	// retry (loader.Load misses, Pipeline invoked).
+	fp.setFn(func(_ context.Context, _ utils.ClusterInfo) (SessionStatus, *snapshot.SessionSnapshot, error) {
+		return SessionStatusProcessed, &snapshot.SessionSnapshot{SessionKey: "after-retry"}, nil
 	})
 	if _, err := sup.Ensure(context.Background(), info); err != nil {
 		t.Fatalf("client-driven retry: expected nil, got %v", err)
@@ -150,11 +161,14 @@ func TestEnsure_LiveAndProcessed(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			fp := &fakePipeline{
-				fn: func(_ context.Context, _ utils.ClusterInfo) (SessionStatus, error) {
-					return tc.status, nil
+				fn: func(_ context.Context, _ utils.ClusterInfo) (SessionStatus, *snapshot.SessionSnapshot, error) {
+					if tc.status == SessionStatusProcessed {
+						return tc.status, &snapshot.SessionSnapshot{SessionKey: "default"}, nil
+					}
+					return tc.status, nil, nil
 				},
 			}
-			sup := NewSupervisor(fp, context.Background())
+			sup := NewSupervisor(fp, newTestLoader(t), context.Background())
 
 			live, err := sup.Ensure(context.Background(), testEnterClusterInfo())
 			if err != nil {
@@ -168,14 +182,15 @@ func TestEnsure_LiveAndProcessed(t *testing.T) {
 }
 
 // TestEnsure_FastPath_SkipsSingleflight verifies the fast-path:
-// once a session is loaded, repeat Ensure calls must not invoke Pipeline again.
+// once a session's snapshot is in the LRU, repeat Ensure calls must not
+// invoke Pipeline again.
 func TestEnsure_FastPath_SkipsSingleflight(t *testing.T) {
 	fp := &fakePipeline{
-		fn: func(_ context.Context, _ utils.ClusterInfo) (SessionStatus, error) {
-			return SessionStatusProcessed, nil
+		fn: func(_ context.Context, _ utils.ClusterInfo) (SessionStatus, *snapshot.SessionSnapshot, error) {
+			return SessionStatusProcessed, &snapshot.SessionSnapshot{SessionKey: "default"}, nil
 		},
 	}
-	sup := NewSupervisor(fp, context.Background())
+	sup := NewSupervisor(fp, newTestLoader(t), context.Background())
 	info := testEnterClusterInfo()
 
 	// First call: cold path, Pipeline runs, session marked loaded.

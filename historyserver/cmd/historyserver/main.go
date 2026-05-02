@@ -30,6 +30,7 @@ func main() {
 		dashboardDir           string
 		runtimeClassConfigPath string
 		useKubernetesProxy     bool
+		snapshotCacheSize      int
 	)
 	flag.StringVar(&runtimeClassName, "runtime-class-name", "", "Storage backend: s3 / gcs / azureblob / aliyunoss / localtest")
 	flag.StringVar(&rayRootDir, "ray-root-dir", "", "Root dir inside the bucket")
@@ -37,6 +38,7 @@ func main() {
 	flag.StringVar(&dashboardDir, "dashboard-dir", "/dashboard", "Path to Ray Dashboard static assets")
 	flag.StringVar(&runtimeClassConfigPath, "runtime-class-config-path", "", "Path to backend config JSON")
 	flag.BoolVar(&useKubernetesProxy, "use-kubernetes-proxy", false, "Use local kubeconfig instead of in-cluster config")
+	flag.IntVar(&snapshotCacheSize, "snapshot-cache-size", historyserver.DefaultCacheSize, "LRU capacity for cached SessionSnapshots")
 	flag.Parse()
 
 	if runtimeClassName == "" {
@@ -87,9 +89,15 @@ func main() {
 	)
 	defer serverCancel()
 
+	// ===== SnapshotLoader =====
+	loader, err := historyserver.NewSnapshotLoader(snapshotCacheSize)
+	if err != nil {
+		logrus.Fatalf("snapshot loader: %v", err)
+	}
+
 	// ===== Pipeline & Supervisor =====
 	pipeline := historyserver.NewPipeline(eventHandler, cliMgr.Client())
-	supervisor := historyserver.NewSupervisor(pipeline, serverCtx)
+	supervisor := historyserver.NewSupervisor(pipeline, loader, serverCtx)
 
 	// ===== Shutdown signaling =====
 	// Bridge serverCtx into the legacy stop channel that ServerHandler.Run
@@ -103,7 +111,7 @@ func main() {
 	}()
 
 	// ===== ServerHandler =====
-	handler, err := historyserver.NewServerHandler(&globalConfig, dashboardDir, reader, cliMgr, eventHandler, supervisor, useKubernetesProxy)
+	handler, err := historyserver.NewServerHandler(&globalConfig, dashboardDir, reader, cliMgr, eventHandler, supervisor, loader, useKubernetesProxy)
 	if err != nil {
 		logrus.Fatalf("create server handler: %v", err)
 	}
