@@ -8636,6 +8636,27 @@ spec:
                 properties:
                   clusterUpgradeOptions:
                     properties:
+                      gatewayAddresses:
+                        items:
+                          properties:
+                            type:
+                              default: IPAddress
+                              maxLength: 253
+                              minLength: 1
+                              pattern: ^Hostname|IPAddress|NamedAddress|[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*\/[A-Za-z0-9\/\-._~%!$&'()*+,;=:]+$
+                              type: string
+                            value:
+                              maxLength: 253
+                              type: string
+                          type: object
+                          x-kubernetes-validations:
+                          - message: Hostname value must be empty or contain only
+                              valid characters (matching ^(\*\.)?[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$)
+                            rule: 'self.type == ''Hostname'' ? (!has(self.value) ||
+                              self.value.matches(r"""^(\*\.)?[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$""")):
+                              true'
+                        maxItems: 16
+                        type: array
                       gatewayClassName:
                         type: string
                       intervalSeconds:
