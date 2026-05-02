@@ -1,7 +1,7 @@
 // Package main is the entrypoint for the History Server HTTP daemon.
-// It exposes Ray Dashboard-shaped API endpoints over HTTP and runs the
-// EventHandler as a background goroutine that processes raw event files
-// into in-memory state served by the API surface.
+// It exposes Ray Dashboard-shaped API endpoints over HTTP and drives
+// per-session event processing on demand via a Supervisor when
+// /enter_cluster hits a dead session.
 package main
 
 import (
@@ -14,6 +14,14 @@ import (
 	"syscall"
 
 	"github.com/sirupsen/logrus"
+
+	"k8s.io/apimachinery/pkg/runtime"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 
 	"github.com/ray-project/kuberay/historyserver/pkg/collector"
 	"github.com/ray-project/kuberay/historyserver/pkg/collector/types"
@@ -87,9 +95,19 @@ func main() {
 	)
 	defer serverCancel()
 
+	// ===== K8s client (for Pipeline.isDead) =====
+	k8sClient, err := buildK8sClient(kubeconfigs, useKubernetesProxy)
+	if err != nil {
+		logrus.Fatalf("build k8s client: %v", err)
+	}
+
+	// ===== Pipeline & Supervisor =====
+	pipeline := historyserver.NewPipeline(eventHandler, k8sClient)
+	supervisor := historyserver.NewSupervisor(pipeline, serverCtx)
+
 	// ===== Shutdown signaling =====
-	// Bridge serverCtx into the legacy stop channel that EventHandler.Run
-	// and ServerHandler.Run consume; both keep their existing API.
+	// Bridge serverCtx into the legacy stop channel that ServerHandler.Run
+	// consumes; the existing chan-based API is preserved.
 	var wg sync.WaitGroup
 	stop := make(chan struct{})
 	go func() {
@@ -98,19 +116,8 @@ func main() {
 		close(stop)
 	}()
 
-	// ===== Start EventHandler in background =====
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		logrus.Info("Starting EventHandler in background...")
-		if err := eventHandler.Run(stop, 2); err != nil {
-			logrus.Errorf("EventHandler stopped with error: %v", err)
-		}
-		logrus.Info("EventHandler shutdown complete")
-	}()
-
 	// ===== ServerHandler =====
-	handler, err := historyserver.NewServerHandler(&globalConfig, dashboardDir, reader, cliMgr, eventHandler, useKubernetesProxy)
+	handler, err := historyserver.NewServerHandler(&globalConfig, dashboardDir, reader, cliMgr, eventHandler, supervisor, useKubernetesProxy)
 	if err != nil {
 		logrus.Fatalf("create server handler: %v", err)
 	}
@@ -126,4 +133,30 @@ func main() {
 	// ===== Wait for graceful shutdown =====
 	wg.Wait()
 	logrus.Info("Graceful shutdown complete")
+}
+
+// buildK8sClient constructs a controller-runtime client.Client with the
+// rayv1 scheme registered. Used by Pipeline.isDead.
+func buildK8sClient(kubeconfigs string, useKubeProxy bool) (client.Client, error) {
+	var cfg *rest.Config
+	var err error
+
+	switch {
+	case kubeconfigs != "":
+		cfg, err = clientcmd.BuildConfigFromFlags("", kubeconfigs)
+	case useKubeProxy:
+		loading := clientcmd.NewDefaultClientConfigLoadingRules()
+		cfg, err = clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loading, &clientcmd.ConfigOverrides{}).ClientConfig()
+	default:
+		cfg, err = rest.InClusterConfig()
+	}
+	if err != nil {
+		return nil, err
+	}
+	cfg.QPS = 50
+	cfg.Burst = 100
+
+	scheme := runtime.NewScheme()
+	utilruntime.Must(rayv1.AddToScheme(scheme))
+	return client.New(cfg, client.Options{Scheme: scheme})
 }

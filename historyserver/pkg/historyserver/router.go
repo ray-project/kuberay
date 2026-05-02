@@ -301,6 +301,19 @@ func routerRayClusterSet(s *ServerHandler) {
 		http.SetCookie(r2, &http.Cookie{MaxAge: 600, Path: "/", Name: COOKIE_CLUSTER_NAME_KEY, Value: name})
 		http.SetCookie(r2, &http.Cookie{MaxAge: 600, Path: "/", Name: COOKIE_CLUSTER_NAMESPACE_KEY, Value: namespace})
 		http.SetCookie(r2, &http.Cookie{MaxAge: 600, Path: "/", Name: COOKIE_SESSION_NAME_KEY, Value: session})
+
+		// For dead sessions, block until events have been ingested.
+		// The "live" sentinel skips the supervisor: live sessions
+		// are served via the reverse-proxy path.
+		if session != "live" && s.supervisor != nil {
+			info := utils.ClusterInfo{Name: name, Namespace: namespace, SessionName: session}
+			if err := s.supervisor.Ensure(r1.Request.Context(), info); err != nil {
+				logrus.Errorf("Supervisor.Ensure for %s/%s/%s: %v", namespace, name, session, err)
+				r2.WriteErrorString(http.StatusInternalServerError, err.Error())
+				return
+			}
+		}
+
 		r2.WriteJson(map[string]interface{}{
 			"result":    "success",
 			"name":      name,
