@@ -471,19 +471,23 @@ func (s *ServerHandler) getNodes(req *restful.Request, resp *restful.Response) {
 	// Parse query parameters.
 	viewParam := req.QueryParameter("view")
 
-	// Get nodes from the cluster session.
+	// Load snapshot from LRU; on miss, 503 + Retry-After.
 	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
 	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
-	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
-	nodeMap := s.eventHandler.GetNodeMap(clusterSessionKey)
+	clusterNameID := clusterName + "_" + clusterNamespace
+	snap, err := s.loader.Load(clusterNameID, sessionName)
+	if err != nil {
+		s.handleMissingSnapshot(resp, err)
+		return
+	}
 
 	// Handle different view types.
 	switch viewParam {
 	case "hostNameList":
-		s.getNodesHostNameList(nodeMap, resp)
+		s.getNodesHostNameList(snap.Nodes, resp)
 	case "summary", "":
 		// Default to summary view
-		s.getNodesSummary(nodeMap, sessionName, resp)
+		s.getNodesSummary(snap.Nodes, sessionName, resp)
 	default:
 		resp.WriteErrorString(http.StatusBadRequest, fmt.Sprintf("unsupported view parameter: %s", viewParam))
 	}
@@ -605,12 +609,16 @@ func (s *ServerHandler) getNode(req *restful.Request, resp *restful.Response) {
 		return
 	}
 
-	// Get the specified node from the cluster session.
-	// A cluster lifecycle is identified by a cluster session.
+	// Load snapshot from LRU; on miss, 503 + Retry-After.
 	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
 	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
-	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
-	targetNode, found := s.eventHandler.GetNodeByNodeID(clusterSessionKey, targetNodeId)
+	clusterNameID := clusterName + "_" + clusterNamespace
+	snap, err := s.loader.Load(clusterNameID, sessionName)
+	if err != nil {
+		s.handleMissingSnapshot(resp, err)
+		return
+	}
+	targetNode, found := snap.Nodes[targetNodeId]
 	if !found {
 		resp.WriteErrorString(http.StatusNotFound, fmt.Sprintf("node %s not found", targetNodeId))
 		return
@@ -627,12 +635,11 @@ func (s *ServerHandler) getNode(req *restful.Request, resp *restful.Response) {
 	}
 	detail := nodeSummaryReplay[len(nodeSummaryReplay)-1]
 
-	// Fill actors for this node.
+	// Fill actors for this node from the same snapshot.
 	// Frontend expects actors as {[actorId]: ActorDetail}, not an empty array.
 	// Ref: https://github.com/ray-project/ray/blob/8a7b47bc5c/python/ray/dashboard/client/src/pages/node/NodeDetail.tsx#L233
-	actorsMap := s.eventHandler.GetActorsMap(clusterSessionKey)
 	nodeActors := make(map[string]interface{})
-	for _, actor := range actorsMap {
+	for _, actor := range snap.Actors {
 		if actor.Address.NodeID == targetNodeId {
 			nodeActors[actor.ActorID] = formatActorForResponse(actor)
 		}
