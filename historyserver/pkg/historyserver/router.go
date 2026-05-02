@@ -34,7 +34,42 @@ const (
 	COOKIE_DASHBOARD_VERSION_KEY = "dashboard_version"
 
 	ATTRIBUTE_SERVICE_NAME = "cluster_service_name"
+
+	// retryAfterSecondsOnMissingSnapshot is the Retry-After value sent on
+	// 503 responses for sessions whose snapshot is not yet in the LRU.
+	// 600 matches the Ray Dashboard frontend's existing retry expectation.
+	retryAfterSecondsOnMissingSnapshot = "600"
 )
+
+// handleMissingSnapshot maps loader errors to HTTP responses.
+//
+//   - ErrSnapshotNotFound: 503 + Retry-After (dead session whose snapshot
+//     has not yet been built or has been evicted).
+//   - other error: 500 Internal Server Error.
+func (s *ServerHandler) handleMissingSnapshot(resp *restful.Response, err error) {
+	if errors.Is(err, ErrSnapshotNotFound) {
+		resp.AddHeader("Retry-After", retryAfterSecondsOnMissingSnapshot)
+		resp.WriteErrorString(http.StatusServiceUnavailable,
+			"snapshot not yet generated, retry in 10 min")
+		return
+	}
+	logrus.Errorf("handleMissingSnapshot: unexpected loader error: %v", err)
+	resp.WriteErrorString(http.StatusInternalServerError, err.Error())
+}
+
+// flattenTasks converts the snapshot's taskID -> []attempt map into a flat
+// []Task slice (one element per attempt) for filters and formatters.
+func flattenTasks(byID map[string][]eventtypes.Task) []eventtypes.Task {
+	total := 0
+	for _, attempts := range byID {
+		total += len(attempts)
+	}
+	out := make([]eventtypes.Task, 0, total)
+	for _, attempts := range byID {
+		out = append(out, attempts...)
+	}
+	return out
+}
 
 type ServiceInfo struct {
 	ServiceName string
@@ -1450,9 +1485,14 @@ func (s *ServerHandler) getTaskSummarize(req *restful.Request, resp *restful.Res
 	// Ref: https://github.com/ray-project/ray/blob/ad1b87448fec4db7ef11f1697f9bc02ae6a7ba09/python/ray/dashboard/state_aggregator.py#L569-L582
 	listAPIOptions.Limit = utils.RayMaxLimitFromAPIServer
 
-	// Get all tasks
-	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
-	tasks := s.eventHandler.GetTasks(clusterSessionKey)
+	// Load snapshot from LRU; on miss, 503 + Retry-After.
+	clusterNameID := clusterName + "_" + clusterNamespace
+	snap, err := s.loader.Load(clusterNameID, sessionName)
+	if err != nil {
+		s.handleMissingSnapshot(resp, err)
+		return
+	}
+	tasks := flattenTasks(snap.Tasks)
 
 	// Calculate the number of tasks after GCS source truncation.
 	// Since we can't access the GCS and num_status_task_events_dropped, we use num_after_truncation to approximate the total number of tasks.
@@ -1473,7 +1513,10 @@ func (s *ServerHandler) getTaskSummarize(req *restful.Request, resp *restful.Res
 	// Ref: https://github.com/ray-project/ray/blob/master/python/ray/dashboard/routes.py
 	var response interface{}
 	if summaryBy == "lineage" {
-		actors := s.eventHandler.GetActors(clusterSessionKey)
+		actors := make([]eventtypes.Actor, 0, len(snap.Actors))
+		for _, a := range snap.Actors {
+			actors = append(actors, a)
+		}
 		lineageSummary := utils.ToSummaryByLineage(tasks, actors)
 
 		response = map[string]interface{}{
@@ -1613,11 +1656,17 @@ func (s *ServerHandler) getTasks(req *restful.Request, resp *restful.Response) {
 		return
 	}
 
-	// Get tasks from the cluster session.
+	// Load snapshot from LRU; on miss, serve 503 + Retry-After so the
+	// frontend re-fires /enter_cluster.
 	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
 	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
-	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
-	tasks := s.eventHandler.GetTasks(clusterSessionKey)
+	clusterNameID := clusterName + "_" + clusterNamespace
+	snap, err := s.loader.Load(clusterNameID, sessionName)
+	if err != nil {
+		s.handleMissingSnapshot(resp, err)
+		return
+	}
+	tasks := flattenTasks(snap.Tasks)
 
 	// Calculate the number of tasks after GCS source truncation.
 	// Since we can't access the GCS and num_status_task_events_dropped, we use num_after_truncation to approximate the total number of tasks.
@@ -2073,8 +2122,13 @@ func (s *ServerHandler) getTasksTimeline(req *restful.Request, resp *restful.Res
 	jobID := req.QueryParameter("job_id")
 	download := req.QueryParameter("download")
 
-	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
-	timeline := s.eventHandler.GetTasksTimeline(clusterSessionKey, jobID)
+	clusterNameID := clusterName + "_" + clusterNamespace
+	snap, err := s.loader.Load(clusterNameID, sessionName)
+	if err != nil {
+		s.handleMissingSnapshot(resp, err)
+		return
+	}
+	timeline := generateTimelineFromSnapshot(snap, jobID)
 
 	respData, err := json.Marshal(timeline)
 	if err != nil {
