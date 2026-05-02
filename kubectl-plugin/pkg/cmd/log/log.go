@@ -434,32 +434,44 @@ func (options *ClusterLogOptions) downloadRayLogFiles(ctx context.Context, exec 
 				return fmt.Errorf("Error creating directory: %w", err)
 			}
 		case tar.TypeReg:
-			// Check for overflow: G115
+			// Fix G115: header.Mode is int64; on 32-bit platforms os.FileMode is
+			// uint32, so values outside [0, math.MaxUint32] would overflow.
+			// Skip the file and log a warning instead of silently truncating the
+			// permission bits.
 			if header.Mode < 0 || header.Mode > math.MaxUint32 {
-				fmt.Fprintf(options.ioStreams.Out, "file mode out side of acceptable value %d skipping file\n", header.Mode)
+				fmt.Fprintf(options.ioStreams.Out, "skipping file %q: mode value %d is outside the valid range for os.FileMode\n", header.Name, header.Mode)
+				header, err = tarReader.Next()
+				if header == nil && err != nil && !errors.Is(err, io.EOF) {
+					return fmt.Errorf("error while extracting tar file with error: %w", err)
+				}
+				continue
 			}
-			// Create file and write contents
-			// TODO(Follow-up): The G115 linter warning (integer overflow) was introduced in the
-			// new linter version. We are suppressing it here to maintain zero-behavior change
-			// for this version-bump PR. A separate PR will be created to properly handle
-			// invalid modes and fix a file descriptor leak in this loop.
-			outFile, err := os.OpenFile(localFilePath, os.O_CREATE|os.O_RDWR, os.FileMode(header.Mode)) // #nosec G115
-			if err != nil {
-				return fmt.Errorf("Error creating file: %w", err)
-			}
-			defer outFile.Close()
-			// This is to limit the copy size for a decompression bomb, currently set arbitrarily
-			for {
-				n, err := io.CopyN(outFile, tarReader, 1000000)
+			// Fix FD leak: use a closure so that outFile.Close() is called at the
+			// end of each loop iteration rather than when downloadRayLogFiles
+			// returns.  A defer inside a loop body only fires on function return,
+			// which would exhaust file descriptors for archives with many entries.
+			if err := func() error {
+				outFile, err := os.OpenFile(localFilePath, os.O_CREATE|os.O_RDWR, os.FileMode(header.Mode)) //#nosec G115 -- range checked above
 				if err != nil {
-					if errors.Is(err, io.EOF) {
+					return fmt.Errorf("Error creating file: %w", err)
+				}
+				defer outFile.Close()
+				// Limit individual copy size to guard against decompression bombs.
+				for {
+					n, err := io.CopyN(outFile, tarReader, 1000000)
+					if err != nil {
+						if errors.Is(err, io.EOF) {
+							break
+						}
+						return fmt.Errorf("failed while writing to file: %w", err)
+					}
+					if n == 0 {
 						break
 					}
-					return fmt.Errorf("failed while writing to file: %w", err)
 				}
-				if n == 0 {
-					break
-				}
+				return nil
+			}(); err != nil {
+				return err
 			}
 		default:
 			fmt.Printf("Ignoring unsupported file type: %b", header.Typeflag)
