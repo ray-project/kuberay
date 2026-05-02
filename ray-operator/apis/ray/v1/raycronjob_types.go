@@ -13,14 +13,15 @@ type RayCronJobSpec struct {
 	// Schedule is the cron schedule string
 	Schedule string `json:"schedule"`
 	// TimeZone is the time zone name for the given schedule. If not specified, default to the local time zone of the
-	// Kuberay Operator.
+	// Kuberay Operator. Empty string is not allowed.
 	// The bundled version of the time zone database is used.
 	// +optional
-	TimeZone *string `json:"timeZone,omitempty" protobuf:"bytes,8,opt,name=timeZone"`
+	// +kubebuilder:validation:MinLength=1
+	TimeZone *string `json:"timeZone,omitempty"`
 	// Suspend tells the controller to suspend the scheduling, it does not apply to
 	// scheduled RayJob.
 	// +optional
-	Suspend bool `json:"suspend,omitempty"`
+	Suspend *bool `json:"suspend,omitempty"`
 }
 
 // RayCronJobStatus defines the observed state of RayCronJob

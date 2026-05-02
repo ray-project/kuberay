@@ -60,7 +60,7 @@ func TestRayCronJobSuspend(t *testing.T) {
 		// Spec.Suspend should be false
 		g.Eventually(RayCronJob(test, namespace.Name, rayCronJob.Name), TestTimeoutShort).
 			Should(WithTransform(func(rayCronJob *rayv1.RayCronJob) bool {
-				return !rayCronJob.Spec.Suspend
+				return rayCronJob.Spec.Suspend == nil || !*rayCronJob.Spec.Suspend
 			}, BeTrue()))
 
 		// Jobs must start appearing now

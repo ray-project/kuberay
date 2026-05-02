@@ -12384,6 +12384,7 @@ spec:
               suspend:
                 type: boolean
               timeZone:
+                minLength: 1
                 type: string
             required:
             - jobTemplate
