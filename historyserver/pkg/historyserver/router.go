@@ -1166,13 +1166,19 @@ func (s *ServerHandler) getLogicalActors(req *restful.Request, resp *restful.Res
 		return
 	}
 
-	// Get actors from EventHandler's in-memory map
-	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
-	actorsMap := s.eventHandler.GetActorsMap(clusterSessionKey)
+	// Load snapshot from LRU; on miss, 503 + Retry-After.
+	clusterNameID := clusterName + "_" + clusterNamespace
+	snap, err := s.loader.Load(clusterNameID, sessionName)
+	if err != nil {
+		s.handleMissingSnapshot(resp, err)
+		return
+	}
 
-	// Format response to match Ray Dashboard API format
-	formattedActors := make(map[string]interface{})
-	for _, actor := range actorsMap {
+	// Format response to match Ray Dashboard API format. Actor IDs are
+	// already normalized to hex at ingestion time, so the snapshot key
+	// matches what the frontend expects.
+	formattedActors := make(map[string]interface{}, len(snap.Actors))
+	for _, actor := range snap.Actors {
 		formattedActors[actor.ActorID] = formatActorForResponse(actor)
 	}
 
@@ -1245,10 +1251,17 @@ func (s *ServerHandler) getLogicalActor(req *restful.Request, resp *restful.Resp
 
 	actorID := req.PathParameter("single_actor")
 
-	// Get actor from EventHandler's in-memory map.
-	// Actor IDs are normalized to hex at ingestion time, so lookup is by hex ID.
-	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
-	actor, found := s.eventHandler.GetActorByID(clusterSessionKey, actorID)
+	// Load snapshot from LRU; on miss, 503 + Retry-After.
+	clusterNameID := clusterName + "_" + clusterNamespace
+	snap, err := s.loader.Load(clusterNameID, sessionName)
+	if err != nil {
+		s.handleMissingSnapshot(resp, err)
+		return
+	}
+
+	// Actor IDs are normalized to hex at ingestion time, so lookup
+	// against the snapshot's hex-keyed map is direct.
+	actor, found := snap.Actors[actorID]
 
 	replyActorInfo := ReplyActorInfo{
 		Data: ActorInfoData{},
