@@ -13,7 +13,7 @@ import (
 )
 
 // CacheByObject returns cache.ByObject entries that scope the manager client's Job and Pod watches.
-func CacheByObject() (map[client.Object]cache.ByObject, error) {
+func K8sControllerRuntimeCacheSelectors() (map[client.Object]cache.ByObject, error) {
 	createByLabel, err := labels.NewRequirement(utils.KubernetesCreatedByLabelKey, selection.Equals, []string{utils.ComponentName})
 	if err != nil {
 		return nil, err

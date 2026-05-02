@@ -217,7 +217,7 @@ func main() {
 	// - the batch Jobs it creates when reconciling RayJobs (app.kubernetes.io/created-by=kuberay-operator), and
 	// - Ray-managed Pods (ray.io/node-type in head|worker|redis-cleanup).
 	// These labels are provided to the manager cache as selectors for Job and Pod resources.
-	selectorsByObject, err := managercache.CacheByObject()
+	selectorsByObject, err := managercache.K8sControllerRuntimeCacheSelectors()
 	exitOnError(err, "unable to build manager cache ByObject")
 	options.Cache.ByObject = selectorsByObject
 
