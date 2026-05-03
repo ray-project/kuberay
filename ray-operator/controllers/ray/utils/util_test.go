@@ -1084,13 +1084,13 @@ func TestIsAutoscalingEnabled(t *testing.T) {
 		},
 		"should be false when enableInTreeAutoscaling is false": {
 			spec: &rayv1.RayClusterSpec{
-				EnableInTreeAutoscaling: ptr.To(false),
+				EnableInTreeAutoscaling: new(false),
 			},
 			expected: false,
 		},
 		"should be true when enableInTreeAutoscaling is true": {
 			spec: &rayv1.RayClusterSpec{
-				EnableInTreeAutoscaling: ptr.To(true),
+				EnableInTreeAutoscaling: new(true),
 			},
 			expected: true,
 		},
@@ -1384,7 +1384,7 @@ func TestCalculateResources(t *testing.T) {
 					minReplicas: ptr.To[int32](0),
 					cpu:         "2",
 					memory:      "200Mi",
-					suspend:     ptr.To(true),
+					suspend:     new(true),
 				},
 			}),
 			expected: struct {
@@ -1506,7 +1506,7 @@ func makeHTTPRouteWithParentRef(
 					{
 						ParentRef: gwv1.ParentReference{
 							Name:      gwv1.ObjectName(parentRefName),
-							Namespace: ptr.To(gwv1.Namespace(namespace)),
+							Namespace: new(gwv1.Namespace(namespace)),
 						},
 						Conditions: []metav1.Condition{
 							{
@@ -1756,21 +1756,21 @@ func TestGetWeightsFromHTTPRoute(t *testing.T) {
 		},
 		{
 			name:            "Valid weights returned for both active and pending clusters",
-			httpRoute:       makeHTTPRoute(ptr.To(int32(80)), ptr.To(int32(20))),
+			httpRoute:       makeHTTPRoute(new(int32(80)), new(int32(20))),
 			rayService:      makeRayService(activeClusterName, pendingClusterName),
 			expectedActive:  80,
 			expectedPending: 20,
 		},
 		{
 			name:            "Valid HTTPRoute with only active cluster backend",
-			httpRoute:       makeHTTPRoute(ptr.To(int32(100)), nil),
+			httpRoute:       makeHTTPRoute(new(int32(100)), nil),
 			rayService:      makeRayService(activeClusterName, ""),
 			expectedActive:  100,
 			expectedPending: -1,
 		},
 		{
 			name:            "Valid HTTPRoute with only pending cluster backend",
-			httpRoute:       makeHTTPRoute(nil, ptr.To(int32(100))),
+			httpRoute:       makeHTTPRoute(nil, new(int32(100))),
 			rayService:      makeRayService("", pendingClusterName),
 			expectedActive:  -1,
 			expectedPending: 100,
@@ -1800,7 +1800,7 @@ func TestIsHTTPRouteEqual(t *testing.T) {
 					Rules: []gwv1.HTTPRouteRule{
 						{
 							BackendRefs: []gwv1.HTTPBackendRef{
-								{BackendRef: gwv1.BackendRef{BackendObjectReference: gwv1.BackendObjectReference{Name: "svc-a", Port: ptr.To(gwv1.PortNumber(8000))}, Weight: ptr.To(int32(100))}},
+								{BackendRef: gwv1.BackendRef{BackendObjectReference: gwv1.BackendObjectReference{Name: "svc-a", Port: ptr.To(gwv1.PortNumber(8000))}, Weight: new(int32(100))}},
 							},
 						},
 					},
@@ -1811,10 +1811,26 @@ func TestIsHTTPRouteEqual(t *testing.T) {
 					Rules: []gwv1.HTTPRouteRule{
 						{
 							BackendRefs: []gwv1.HTTPBackendRef{
-								{BackendRef: gwv1.BackendRef{BackendObjectReference: gwv1.BackendObjectReference{Name: "svc-a", Port: ptr.To(gwv1.PortNumber(8000))}, Weight: ptr.To(int32(100))}},
+								{BackendRef: gwv1.BackendRef{BackendObjectReference: gwv1.BackendObjectReference{Name: "svc-a", Port: ptr.To(gwv1.PortNumber(8000))}, Weight: new(int32(100))}},
 							},
 						},
 					},
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "Hostnames nil vs empty slice - equal",
+			existing: &gwv1.HTTPRoute{
+				Spec: gwv1.HTTPRouteSpec{
+					// Empty slice
+					Hostnames: []gwv1.Hostname{},
+				},
+			},
+			desired: &gwv1.HTTPRoute{
+				Spec: gwv1.HTTPRouteSpec{
+					// Nil slice
+					Hostnames: nil,
 				},
 			},
 			expected: true,
@@ -1872,7 +1888,7 @@ func TestIsHTTPRouteEqual(t *testing.T) {
 					Rules: []gwv1.HTTPRouteRule{
 						{
 							BackendRefs: []gwv1.HTTPBackendRef{
-								{BackendRef: gwv1.BackendRef{BackendObjectReference: gwv1.BackendObjectReference{Name: "svc-a"}, Weight: ptr.To(int32(100))}},
+								{BackendRef: gwv1.BackendRef{BackendObjectReference: gwv1.BackendObjectReference{Name: "svc-a"}, Weight: new(int32(100))}},
 							},
 						},
 					},
@@ -1883,7 +1899,7 @@ func TestIsHTTPRouteEqual(t *testing.T) {
 					Rules: []gwv1.HTTPRouteRule{
 						{
 							BackendRefs: []gwv1.HTTPBackendRef{
-								{BackendRef: gwv1.BackendRef{BackendObjectReference: gwv1.BackendObjectReference{Name: "svc-a"}, Weight: ptr.To(int32(75))}},
+								{BackendRef: gwv1.BackendRef{BackendObjectReference: gwv1.BackendObjectReference{Name: "svc-a"}, Weight: new(int32(75))}},
 							},
 						},
 					},
@@ -1917,11 +1933,344 @@ func TestIsHTTPRouteEqual(t *testing.T) {
 			},
 			expected: false,
 		},
+
+		{
+			name: "Different ParentRefs",
+			existing: &gwv1.HTTPRoute{
+				Spec: gwv1.HTTPRouteSpec{
+					CommonRouteSpec: gwv1.CommonRouteSpec{
+						ParentRefs: []gwv1.ParentReference{
+							{Name: "gateway-old"},
+						},
+					},
+				},
+			},
+			desired: &gwv1.HTTPRoute{
+				Spec: gwv1.HTTPRouteSpec{
+					CommonRouteSpec: gwv1.CommonRouteSpec{
+						ParentRefs: []gwv1.ParentReference{
+							{Name: "gateway-new"},
+						},
+					},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "Different Hostnames",
+			existing: &gwv1.HTTPRoute{
+				Spec: gwv1.HTTPRouteSpec{
+					Hostnames: []gwv1.Hostname{"example.com"},
+				},
+			},
+			desired: &gwv1.HTTPRoute{
+				Spec: gwv1.HTTPRouteSpec{
+					Hostnames: []gwv1.Hostname{"different.com"},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "Different Matches",
+			existing: &gwv1.HTTPRoute{
+				Spec: gwv1.HTTPRouteSpec{
+					Rules: []gwv1.HTTPRouteRule{
+						{
+							Matches: []gwv1.HTTPRouteMatch{
+								{Path: &gwv1.HTTPPathMatch{Value: new("/api")}},
+							},
+						},
+					},
+				},
+			},
+			desired: &gwv1.HTTPRoute{
+				Spec: gwv1.HTTPRouteSpec{
+					Rules: []gwv1.HTTPRouteRule{
+						{
+							Matches: []gwv1.HTTPRouteMatch{
+								{Path: &gwv1.HTTPPathMatch{Value: new("/v2")}},
+							},
+						},
+					},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "Different Filters",
+			existing: &gwv1.HTTPRoute{
+				Spec: gwv1.HTTPRouteSpec{
+					Rules: []gwv1.HTTPRouteRule{
+						{
+							Filters: []gwv1.HTTPRouteFilter{
+								{Type: gwv1.HTTPRouteFilterRequestHeaderModifier},
+							},
+						},
+					},
+				},
+			},
+			desired: &gwv1.HTTPRoute{
+				Spec: gwv1.HTTPRouteSpec{
+					Rules: []gwv1.HTTPRouteRule{
+						{
+							Filters: []gwv1.HTTPRouteFilter{
+								{Type: gwv1.HTTPRouteFilterRequestRedirect},
+							},
+						},
+					},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "Filters nil vs empty slice, should be equal for our check.",
+			existing: &gwv1.HTTPRoute{
+				Spec: gwv1.HTTPRouteSpec{
+					Rules: []gwv1.HTTPRouteRule{
+						{
+							// Nil slice
+							Filters: nil,
+						},
+					},
+				},
+			},
+			desired: &gwv1.HTTPRoute{
+				Spec: gwv1.HTTPRouteSpec{
+					Rules: []gwv1.HTTPRouteRule{
+						{
+							Filters: []gwv1.HTTPRouteFilter{},
+						},
+					},
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "Different Backend Namespace",
+			existing: &gwv1.HTTPRoute{
+				Spec: gwv1.HTTPRouteSpec{
+					Rules: []gwv1.HTTPRouteRule{
+						{
+							BackendRefs: []gwv1.HTTPBackendRef{
+								{BackendRef: gwv1.BackendRef{BackendObjectReference: gwv1.BackendObjectReference{Name: "svc-a", Namespace: ptr.To(gwv1.Namespace("default"))}}},
+							},
+						},
+					},
+				},
+			},
+			desired: &gwv1.HTTPRoute{
+				Spec: gwv1.HTTPRouteSpec{
+					Rules: []gwv1.HTTPRouteRule{
+						{
+							BackendRefs: []gwv1.HTTPBackendRef{
+								{BackendRef: gwv1.BackendRef{BackendObjectReference: gwv1.BackendObjectReference{Name: "svc-a", Namespace: ptr.To(gwv1.Namespace("other-ns"))}}},
+							},
+						},
+					},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "Different Backend Port",
+			existing: &gwv1.HTTPRoute{
+				Spec: gwv1.HTTPRouteSpec{
+					Rules: []gwv1.HTTPRouteRule{
+						{
+							BackendRefs: []gwv1.HTTPBackendRef{
+								{BackendRef: gwv1.BackendRef{BackendObjectReference: gwv1.BackendObjectReference{Name: "svc-a", Port: ptr.To(gwv1.PortNumber(8000))}}},
+							},
+						},
+					},
+				},
+			},
+			desired: &gwv1.HTTPRoute{
+				Spec: gwv1.HTTPRouteSpec{
+					Rules: []gwv1.HTTPRouteRule{
+						{
+							BackendRefs: []gwv1.HTTPBackendRef{
+								{BackendRef: gwv1.BackendRef{BackendObjectReference: gwv1.BackendObjectReference{Name: "svc-a", Port: ptr.To(gwv1.PortNumber(9000))}}},
+							},
+						},
+					},
+				},
+			},
+			expected: false,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := IsHTTPRouteEqual(tt.existing, tt.desired)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestIsGatewayEqual(t *testing.T) {
+	tests := []struct {
+		existing *gwv1.Gateway
+		desired  *gwv1.Gateway
+		name     string
+		expected bool
+	}{
+		{
+			name:     "Both nil",
+			existing: nil,
+			desired:  nil,
+			expected: true,
+		},
+		{
+			name:     "Existing nil",
+			desired:  &gwv1.Gateway{},
+			expected: false,
+		},
+		{
+			name:     "Desired nil",
+			existing: &gwv1.Gateway{},
+			expected: false,
+		},
+		{
+			name: "Exactly equal Gateways",
+			existing: &gwv1.Gateway{
+				Spec: gwv1.GatewaySpec{
+					GatewayClassName: "test-class",
+					Listeners: []gwv1.Listener{
+						{Name: "http", Protocol: gwv1.HTTPProtocolType, Port: 80},
+					},
+				},
+			},
+			desired: &gwv1.Gateway{
+				Spec: gwv1.GatewaySpec{
+					GatewayClassName: "test-class",
+					Listeners: []gwv1.Listener{
+						{Name: "http", Protocol: gwv1.HTTPProtocolType, Port: 80},
+					},
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "Different GatewayClassName",
+			existing: &gwv1.Gateway{
+				Spec: gwv1.GatewaySpec{
+					GatewayClassName: "test-class-old",
+				},
+			},
+			desired: &gwv1.Gateway{
+				Spec: gwv1.GatewaySpec{
+					GatewayClassName: "test-class-new",
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "Different number of Listeners",
+			existing: &gwv1.Gateway{
+				Spec: gwv1.GatewaySpec{
+					Listeners: []gwv1.Listener{
+						{Name: "http", Protocol: gwv1.HTTPProtocolType, Port: 80},
+					},
+				},
+			},
+			desired: &gwv1.Gateway{
+				Spec: gwv1.GatewaySpec{
+					Listeners: []gwv1.Listener{
+						{Name: "http", Protocol: gwv1.HTTPProtocolType, Port: 80},
+						{Name: "https", Protocol: gwv1.HTTPSProtocolType, Port: 443},
+					},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "Different Listener Name",
+			existing: &gwv1.Gateway{
+				Spec: gwv1.GatewaySpec{
+					Listeners: []gwv1.Listener{
+						{Name: "http-old", Protocol: gwv1.HTTPProtocolType, Port: 80},
+					},
+				},
+			},
+			desired: &gwv1.Gateway{
+				Spec: gwv1.GatewaySpec{
+					Listeners: []gwv1.Listener{
+						{Name: "http-new", Protocol: gwv1.HTTPProtocolType, Port: 80},
+					},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "Different Listener Protocol",
+			existing: &gwv1.Gateway{
+				Spec: gwv1.GatewaySpec{
+					Listeners: []gwv1.Listener{
+						{Name: "http", Protocol: gwv1.HTTPProtocolType, Port: 80},
+					},
+				},
+			},
+			desired: &gwv1.Gateway{
+				Spec: gwv1.GatewaySpec{
+					Listeners: []gwv1.Listener{
+						{Name: "http", Protocol: gwv1.HTTPSProtocolType, Port: 80},
+					},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "Different Listener Port",
+			existing: &gwv1.Gateway{
+				Spec: gwv1.GatewaySpec{
+					Listeners: []gwv1.Listener{
+						{Name: "http", Protocol: gwv1.HTTPProtocolType, Port: 80},
+					},
+				},
+			},
+			desired: &gwv1.Gateway{
+				Spec: gwv1.GatewaySpec{
+					Listeners: []gwv1.Listener{
+						{Name: "http", Protocol: gwv1.HTTPProtocolType, Port: 8080},
+					},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "Equal Gateways ignoring defaulted AllowedRoutes",
+			existing: &gwv1.Gateway{
+				Spec: gwv1.GatewaySpec{
+					GatewayClassName: "test-class",
+					Listeners: []gwv1.Listener{
+						{
+							Name:     "http",
+							Protocol: gwv1.HTTPProtocolType,
+							Port:     80,
+							AllowedRoutes: &gwv1.AllowedRoutes{
+								Namespaces: &gwv1.RouteNamespaces{
+									From: ptr.To(gwv1.NamespacesFromSame),
+								},
+							},
+						},
+					},
+				},
+			},
+			desired: &gwv1.Gateway{
+				Spec: gwv1.GatewaySpec{
+					GatewayClassName: "test-class",
+					Listeners: []gwv1.Listener{
+						{Name: "http", Protocol: gwv1.HTTPProtocolType, Port: 80},
+					},
+				},
+			},
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := IsGatewayEqual(tt.existing, tt.desired)
 			assert.Equal(t, tt.expected, result)
 		})
 	}
