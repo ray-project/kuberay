@@ -24,6 +24,8 @@ type RayCollectorConfig struct {
 
 	AdditionalEndpoints  []string
 	EndpointPollInterval time.Duration
+	OwnerKind            string
+	OwnerName            string
 }
 
 // ValidateRayHanderConfig is

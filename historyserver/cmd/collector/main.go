@@ -33,6 +33,8 @@ func main() {
 	eventsPort := 8080
 	pushInterval := time.Minute
 	runtimeClassConfigPath := "/var/collector-config/data"
+	ownerName := ""
+	ownerKind := ""
 
 	flag.StringVar(&role, "role", "Worker", "")
 	flag.StringVar(&runtimeClassName, "runtime-class-name", "", "")
@@ -43,8 +45,14 @@ func main() {
 	flag.IntVar(&eventsPort, "events-port", 8080, "")
 	flag.StringVar(&runtimeClassConfigPath, "runtime-class-config-path", "", "") //"/var/collector-config/data"
 	flag.DurationVar(&pushInterval, "push-interval", time.Minute, "")
+	flag.StringVar(&ownerName, "owner-name", "", "")
+	flag.StringVar(&ownerKind, "owner-kind", "", "")
 
 	flag.Parse()
+
+	if (ownerName != "" && ownerKind == "") || (ownerName == "" && ownerKind != "") {
+		panic("Both --owner-name and --owner-kind must be provided together, or both omitted.")
+	}
 
 	var additionalEndpoints []string
 	if epStr := os.Getenv("RAY_COLLECTOR_ADDITIONAL_ENDPOINTS"); epStr != "" {
@@ -108,6 +116,8 @@ func main() {
 		PushInterval:        pushInterval,
 		LogBatching:         logBatching,
 		DashboardAddress:    os.Getenv("RAY_DASHBOARD_ADDRESS"),
+		OwnerKind:           ownerKind,
+		OwnerName:           ownerName,
 
 		AdditionalEndpoints:  additionalEndpoints,
 		EndpointPollInterval: endpointPollInterval,

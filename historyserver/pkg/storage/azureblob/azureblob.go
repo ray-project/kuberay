@@ -164,7 +164,7 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 	ctx, cancel := context.WithTimeout(context.Background(), listTimeout)
 	defer cancel()
 
-	metadirPrefix := path.Join(r.RootDir, "metadir") + "/"
+	metadirPrefix := path.Join(r.RootDir, utils.METADIR_NAME) + "/"
 
 	pager := r.ContainerClient.NewListBlobsFlatPager(&container.ListBlobsFlatOptions{
 		Prefix:     &metadirPrefix,
@@ -182,34 +182,13 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 			metadirPrefix, len(resp.Segment.BlobItems))
 
 		for _, blob := range resp.Segment.BlobItems {
-			c := &utils.ClusterInfo{}
-			metaInfo := strings.Trim(strings.TrimPrefix(*blob.Name, path.Join(r.RootDir, "metadir/")), "/")
-			metas := strings.Split(metaInfo, "/")
-			if len(metas) < 2 {
-				continue
-			}
-			logrus.Infof("Process %++v", metas)
-			namespaceName := strings.Split(metas[0], "_")
-			if len(namespaceName) < 2 {
-				continue
-			}
-			c.Name = namespaceName[0]
-			c.Namespace = namespaceName[1]
-			c.SessionName = metas[1]
-			sessionInfo := strings.Split(metas[1], "_")
-			if len(sessionInfo) < 3 {
-				continue
-			}
-			date := sessionInfo[1]
-			dataTime := sessionInfo[2]
-			createTime, err := time.Parse("2006-01-02_15-04-05", date+"_"+dataTime)
+			metaInfo := strings.Trim(strings.TrimPrefix(*blob.Name, path.Join(r.RootDir, utils.METADIR_NAME)+"/"), "/")
+			c, err := utils.ParseMetaFilePath(metaInfo)
 			if err != nil {
-				logrus.Errorf("Failed to parse time %s: %v", date+"_"+dataTime, err)
+				logrus.Errorf("Failed to parse meta file path: %s, error: %v", metaInfo, err)
 				continue
 			}
-			c.CreateTimeStamp = createTime.Unix()
-			c.CreateTime = createTime.UTC().Format("2006-01-02T15:04:05Z")
-			clusters = append(clusters, *c)
+			clusters = append(clusters, c)
 		}
 	}
 
