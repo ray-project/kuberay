@@ -9,6 +9,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	"github.com/sirupsen/logrus"
 
 	"github.com/ray-project/kuberay/historyserver/pkg/eventserver"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
@@ -95,11 +96,18 @@ func (p *Pipeline) ProcessSession(ctx context.Context, session utils.ClusterInfo
 	return SessionStatusProcessed, nil
 }
 
-// isDead queries the Kubernetes API for the owning RayCluster CR.
+// isDead determines whether a session is dead by checking the RayCluster CR.
+// A session is dead if either:
+//   - the RayCluster CR is absent, or
+//   - the CR exists but was created after the queried session.
 //
-//   - (true,  nil): CR is absent; the cluster is dead.
-//   - (false, nil): CR exists; the cluster is live.
+// Returns:
+//   - (true,  nil): dead; events should be ingested.
+//   - (false, nil): live; events should be skipped.
 //   - (false, err): unknown state; caller should skip and retry later.
+//
+// TODO(jwj): Use collector-written UID or a storage-side probe for handling
+// cases in which multiple sessions exist in the same CR.
 func (p *Pipeline) isDead(ctx context.Context, session utils.ClusterInfo) (bool, error) {
 	rc := &rayv1.RayCluster{}
 	err := p.k8sClient.Get(ctx, k8stypes.NamespacedName{
@@ -111,6 +119,16 @@ func (p *Pipeline) isDead(ctx context.Context, session utils.ClusterInfo) (bool,
 	}
 	if err != nil {
 		return false, err
+	}
+
+	sessionTimestamp := ParseSessionTimestamp(session.SessionName)
+	if sessionTimestamp.IsZero() {
+		logrus.Errorf("failed to parse session timestamp for %s/%s/%s; treating as live",
+			session.Namespace, session.Name, session.SessionName)
+		return false, nil
+	}
+	if sessionTimestamp.Before(rc.CreationTimestamp.Time) {
+		return true, nil
 	}
 	return false, nil
 }
