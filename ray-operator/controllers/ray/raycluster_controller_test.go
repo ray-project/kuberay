@@ -53,7 +53,7 @@ func rayClusterTemplate(name string, namespace string) *rayv1.RayCluster {
 		VolumeSource: corev1.VolumeSource{
 			EmptyDir: &corev1.EmptyDirVolumeSource{
 				Medium:    corev1.StorageMediumMemory,
-				SizeLimit: ptr.To(resource.MustParse("1Gi")),
+				SizeLimit: new(resource.MustParse("1Gi")),
 			},
 		},
 	}
@@ -440,7 +440,7 @@ var _ = Context("Inside the default namespace", func() {
 		ctx := context.Background()
 		namespace := "default"
 		rayCluster := rayClusterTemplate("raycluster-autoscaler", namespace)
-		rayCluster.Spec.EnableInTreeAutoscaling = ptr.To(true)
+		rayCluster.Spec.EnableInTreeAutoscaling = new(true)
 		workerPods := corev1.PodList{}
 		workerFilter := common.RayClusterGroupPodsAssociationOptions(rayCluster, rayCluster.Spec.WorkerGroupSpecs[0].GroupName).ToListOptions()
 
@@ -881,7 +881,7 @@ var _ = Context("Inside the default namespace", func() {
 			ctx := context.Background()
 			namespace := "default"
 			rayCluster := rayClusterTemplate("raycluster-suspend-workergroup-autoscaler", namespace)
-			rayCluster.Spec.EnableInTreeAutoscaling = ptr.To(true)
+			rayCluster.Spec.EnableInTreeAutoscaling = new(true)
 			allPods := corev1.PodList{}
 			allFilters := common.RayClusterAllPodsAssociationOptions(rayCluster).ToListOptions()
 			workerFilters := common.RayClusterGroupPodsAssociationOptions(rayCluster, rayCluster.Spec.WorkerGroupSpecs[0].GroupName).ToListOptions()
@@ -932,7 +932,7 @@ var _ = Context("Inside the default namespace", func() {
 		rayCluster := rayClusterTemplate("raycluster-multihost", namespace)
 		numOfHosts := int32(4)
 		rayCluster.Spec.WorkerGroupSpecs[0].NumOfHosts = numOfHosts
-		rayCluster.Spec.EnableInTreeAutoscaling = ptr.To(true)
+		rayCluster.Spec.EnableInTreeAutoscaling = new(true)
 		headPods := corev1.PodList{}
 		headFilters := common.RayClusterHeadPodsAssociationOptions(rayCluster).ToListOptions()
 		numHeadPods := 1

@@ -439,11 +439,7 @@ func (options *ClusterLogOptions) downloadRayLogFiles(ctx context.Context, exec 
 				fmt.Fprintf(options.ioStreams.Out, "file mode out side of acceptable value %d skipping file\n", header.Mode)
 			}
 			// Create file and write contents
-			// TODO(Follow-up): The G115 linter warning (integer overflow) was introduced in the
-			// new linter version. We are suppressing it here to maintain zero-behavior change
-			// for this version-bump PR. A separate PR will be created to properly handle
-			// invalid modes and fix a file descriptor leak in this loop.
-			outFile, err := os.OpenFile(localFilePath, os.O_CREATE|os.O_RDWR, os.FileMode(header.Mode)) // #nosec G115
+			outFile, err := os.OpenFile(localFilePath, os.O_CREATE|os.O_RDWR, os.FileMode(header.Mode)) //nolint:gosec // overflow is guarded by bounds check above
 			if err != nil {
 				return fmt.Errorf("Error creating file: %w", err)
 			}

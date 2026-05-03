@@ -6,7 +6,7 @@ $(LOCALBIN):
 REPO_ROOT := $(shell dirname ${PWD})
 REPO_ROOT_BIN := $(REPO_ROOT)/bin
 GOLANGCI_LINT ?= $(REPO_ROOT_BIN)/golangci-lint
-GOLANGCI_LINT_VERSION ?= v2.11.3
+GOLANGCI_LINT_VERSION ?= v2.11.4
 
 # Setting SHELL to bash allows bash commands to be executed by recipes.
 # This is a requirement for 'setup-envtest.sh' in the test target.

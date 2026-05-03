@@ -488,7 +488,7 @@ func TestCalculatePodGroupParams(t *testing.T) {
 
 	t.Run("Autoscaling enabled", func(_ *testing.T) {
 		cluster := createTestRayCluster(1)
-		cluster.Spec.EnableInTreeAutoscaling = ptr.To(true)
+		cluster.Spec.EnableInTreeAutoscaling = new(true)
 
 		minMember, totalResource := scheduler.calculatePodGroupParams(&cluster.Spec)
 
@@ -883,7 +883,7 @@ func TestCleanupOnCompletion(t *testing.T) {
 			Spec: *rayJob.Spec.RayClusterSpec,
 		}
 		for i := range rayCluster.Spec.WorkerGroupSpecs {
-			rayCluster.Spec.WorkerGroupSpecs[i].Suspend = ptr.To[bool](true)
+			rayCluster.Spec.WorkerGroupSpecs[i].Suspend = new(true)
 		}
 
 		scheme := runtime.NewScheme()

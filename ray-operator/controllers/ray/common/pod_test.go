@@ -782,7 +782,7 @@ func TestBuildPod_WithEnableK8sTokenAuth(t *testing.T) {
 	cluster := instance.DeepCopy()
 	cluster.Spec.AuthOptions = &rayv1.AuthOptions{
 		Mode:               rayv1.AuthModeToken,
-		EnableK8sTokenAuth: ptr.To(true),
+		EnableK8sTokenAuth: new(true),
 	}
 
 	podName := strings.ToLower(cluster.Name + utils.DashSymbol + string(rayv1.HeadNode) + utils.DashSymbol + utils.FormatInt32(0))
@@ -817,7 +817,7 @@ func TestBuildPod_WithEnableK8sTokenAuth(t *testing.T) {
 	cluster = instance.DeepCopy()
 	cluster.Spec.AuthOptions = &rayv1.AuthOptions{
 		Mode:               rayv1.AuthModeToken,
-		EnableK8sTokenAuth: ptr.To(false),
+		EnableK8sTokenAuth: new(false),
 	}
 	podTemplateSpec = DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
 	pod = BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", false, utils.GetCRDType(""), "", nil, "")
@@ -849,7 +849,7 @@ func TestBuildPod_WithEnableK8sTokenAuth_InitContainer(t *testing.T) {
 	cluster := instance.DeepCopy()
 	cluster.Spec.AuthOptions = &rayv1.AuthOptions{
 		Mode:               rayv1.AuthModeToken,
-		EnableK8sTokenAuth: ptr.To(true),
+		EnableK8sTokenAuth: new(true),
 	}
 
 	worker := cluster.Spec.WorkerGroupSpecs[0]
@@ -1176,9 +1176,9 @@ func TestHeadPodTemplate_WithAutoscalingEnabled(t *testing.T) {
 func TestDefaultHeadPodTemplate_Autoscaling(t *testing.T) {
 	clusterNoAutoscaling := instance.DeepCopy()
 	clusterAutoscalingV1 := instance.DeepCopy()
-	clusterAutoscalingV1.Spec.EnableInTreeAutoscaling = ptr.To(true)
+	clusterAutoscalingV1.Spec.EnableInTreeAutoscaling = new(true)
 	clusterAutoscalingV2 := instance.DeepCopy()
-	clusterAutoscalingV2.Spec.EnableInTreeAutoscaling = ptr.To(true)
+	clusterAutoscalingV2.Spec.EnableInTreeAutoscaling = new(true)
 	clusterAutoscalingV2.Spec.AutoscalerOptions = &rayv1.AutoscalerOptions{
 		Version: ptr.To(rayv1.AutoscalerVersionV2),
 	}
@@ -1409,9 +1409,9 @@ func TestDefaultWorkerPodTemplateWithConfigurablePorts(t *testing.T) {
 func TestDefaultWorkerPodTemplate_Autoscaling(t *testing.T) {
 	clusterNoAutoscaling := instance.DeepCopy()
 	clusterAutoscalingV1 := instance.DeepCopy()
-	clusterAutoscalingV1.Spec.EnableInTreeAutoscaling = ptr.To(true)
+	clusterAutoscalingV1.Spec.EnableInTreeAutoscaling = new(true)
 	clusterAutoscalingV2 := instance.DeepCopy()
-	clusterAutoscalingV2.Spec.EnableInTreeAutoscaling = ptr.To(true)
+	clusterAutoscalingV2.Spec.EnableInTreeAutoscaling = new(true)
 	clusterAutoscalingV2.Spec.AutoscalerOptions = &rayv1.AutoscalerOptions{
 		Version: ptr.To(rayv1.AutoscalerVersionV2),
 	}

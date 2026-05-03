@@ -108,6 +108,12 @@ linters:
       # TODO(#4627): migrate once SMD schemas are properly generated.
       - linters: [staticcheck]
         text: "SA1019:.*NewSimpleClientset"
+      # controller-runtime deprecations from K8s 1.36 update.
+      # These require non-trivial migration and should be addressed separately.
+      - linters: [staticcheck]
+        text: "SA1019:.*GetEventRecorderFor is deprecated"
+      - linters: [staticcheck]
+        text: "SA1019:.*scheme\\.Builder is deprecated"
     generated: strict
     presets:
       - comments
