@@ -292,7 +292,7 @@ func (v *VolcanoBatchScheduler) CleanupOnCompletion(ctx context.Context, object 
 		return false, nil
 	}
 
-	var minMember int32
+	var minMembers int32
 	var totalResourceList []corev1.ResourceList
 
 	if len(rayJob.Status.RayClusterName) == 0 {
@@ -312,12 +312,12 @@ func (v *VolcanoBatchScheduler) CleanupOnCompletion(ctx context.Context, object 
 		// RayCluster exists. Recalculate based on live spec (suspended workers are automatically excluded).
 		// If the RayJob is SidecarMode, the submitter is included. Even if the submitter container has terminated, it still takes into account
 		// If it is K8sJobMode, the submitter pod is not taken into account. The completed pod doesn't have resources allocated.
-		clusterMinMember, clusterResource := v.calculatePodGroupParams(&cluster.Spec)
-		minMember = clusterMinMember
-		totalResourceList = append(totalResourceList, clusterResource)
+		clusterMinMembers, clusterMinResources := v.calculatePodGroupParams(&cluster.Spec)
+		minMembers = clusterMinMembers
+		totalResourceList = append(totalResourceList, clusterMinResources)
 	}
 
-	didUpdate, err := v.syncPodGroup(ctx, rayJob, minMember, utils.SumResourceList(totalResourceList))
+	didUpdate, err := v.syncPodGroup(ctx, rayJob, minMembers, utils.SumResourceList(totalResourceList))
 	if err != nil {
 		return false, err
 	}
