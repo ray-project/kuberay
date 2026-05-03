@@ -725,7 +725,7 @@ func ValidateRayCronJobSpec(rayCronJob *rayv1.RayCronJob) error {
 	// Validate time zone if set
 	if rayCronJob.Spec.TimeZone != nil {
 		if *rayCronJob.Spec.TimeZone == "" {
-			return fmt.Errorf("timeZone must not be empty string, omit the field to use UTC")
+			return fmt.Errorf("timeZone must not be empty string, omit the field to use the local time zone of the KubeRay operator")
 		}
 		if _, err := time.LoadLocation(*rayCronJob.Spec.TimeZone); err != nil {
 			return fmt.Errorf("invalid time zone: %w", err)
