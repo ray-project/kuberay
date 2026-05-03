@@ -298,9 +298,6 @@ func routerRayClusterSet(s *ServerHandler) {
 		name := r1.PathParameter("name")
 		namespace := r1.PathParameter("namespace")
 		session := r1.PathParameter("session")
-		http.SetCookie(r2, &http.Cookie{MaxAge: 600, Path: "/", Name: COOKIE_CLUSTER_NAME_KEY, Value: name})
-		http.SetCookie(r2, &http.Cookie{MaxAge: 600, Path: "/", Name: COOKIE_CLUSTER_NAMESPACE_KEY, Value: namespace})
-		http.SetCookie(r2, &http.Cookie{MaxAge: 600, Path: "/", Name: COOKIE_SESSION_NAME_KEY, Value: session})
 
 		// For dead sessions, block until events have been ingested.
 		// The "live" sentinel skips the supervisor: live sessions
@@ -313,6 +310,11 @@ func routerRayClusterSet(s *ServerHandler) {
 				return
 			}
 		}
+
+		// Set cookies only after a successful load (dead) or a skip (live).
+		http.SetCookie(r2, &http.Cookie{MaxAge: 600, Path: "/", Name: COOKIE_CLUSTER_NAME_KEY, Value: name})
+		http.SetCookie(r2, &http.Cookie{MaxAge: 600, Path: "/", Name: COOKIE_CLUSTER_NAMESPACE_KEY, Value: namespace})
+		http.SetCookie(r2, &http.Cookie{MaxAge: 600, Path: "/", Name: COOKIE_SESSION_NAME_KEY, Value: session})
 
 		r2.WriteJson(map[string]interface{}{
 			"result":    "success",
