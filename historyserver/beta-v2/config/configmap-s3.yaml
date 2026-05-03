@@ -1,0 +1,26 @@
+# Sample backend config ConfigMap for S3 / MinIO. Edit for your actual backend.
+#
+# Mounted at /var/collector-config; the pod passes the file via
+# --runtime-class-config-path and the reader/writer factory selected by
+# --runtime-class-name parses it.
+#
+# JSON key convention (see pkg/storage/s3/config.go):
+#   - Keys are camelCase with "s3" prefix.
+#   - Boolean flags MUST be JSON strings ("true"/"false"), not booleans —
+#     the parser uses `.(string) == "true"`.
+#   - Any non-empty value here OVERRIDES all S3_* env vars (all-or-nothing).
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: historyserver-beta-v2-runtime-config
+  namespace: default
+data:
+  data: |
+    {
+      "s3Bucket": "ray-historyserver",
+      "s3Endpoint": "minio-service.minio-dev:9000",
+      "s3Region": "test",
+      "s3ForcePathStyle": "true",
+      "s3DisableSSL": "true"
+    }
