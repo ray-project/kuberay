@@ -67,7 +67,7 @@ func TestEnsure_PipelineError_PropagatesAndCleans(t *testing.T) {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
-			errs[idx] = sup.Ensure(context.Background(), info)
+			_, errs[idx] = sup.Ensure(context.Background(), info)
 		}(i)
 	}
 
@@ -92,7 +92,7 @@ func TestEnsure_PipelineError_PropagatesAndCleans(t *testing.T) {
 	fp.setFn(func(_ context.Context, _ utils.ClusterInfo) (SessionStatus, error) {
 		return SessionStatusProcessed, nil
 	})
-	if err := sup.Ensure(context.Background(), info); err != nil {
+	if _, err := sup.Ensure(context.Background(), info); err != nil {
 		t.Fatalf("post-error retry: expected nil, got %v", err)
 	}
 	if got := fp.callCount(); got != 2 {
@@ -113,7 +113,7 @@ func TestEnsure_PipelineError_NoInternalRetry(t *testing.T) {
 	}
 	sup := NewSupervisor(fp, context.Background())
 
-	err := sup.Ensure(context.Background(), info)
+	_, err := sup.Ensure(context.Background(), info)
 	if !errors.Is(err, pipelineErr) {
 		t.Fatalf("expected Ensure to return pipelineErr, got %v", err)
 	}
@@ -126,10 +126,43 @@ func TestEnsure_PipelineError_NoInternalRetry(t *testing.T) {
 	fp.setFn(func(_ context.Context, _ utils.ClusterInfo) (SessionStatus, error) {
 		return SessionStatusProcessed, nil
 	})
-	if err := sup.Ensure(context.Background(), info); err != nil {
+	if _, err := sup.Ensure(context.Background(), info); err != nil {
 		t.Fatalf("client-driven retry: expected nil, got %v", err)
 	}
 	if got := fp.callCount(); got != 2 {
 		t.Fatalf("expected Pipeline called 2x total (1 error + 1 client retry), got %d", got)
+	}
+}
+
+// TestEnsure_LiveAndProcessed verifies Ensure surfaces the live/processed
+// distinction so the router can rewrite the session-name cookie when a live
+// cluster is reached via its real session name.
+func TestEnsure_LiveAndProcessed(t *testing.T) {
+	tests := []struct {
+		name     string
+		status   SessionStatus
+		wantLive bool
+	}{
+		{"processed -> live=false", SessionStatusProcessed, false},
+		{"live -> live=true", SessionStatusLive, true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			fp := &fakePipeline{
+				fn: func(_ context.Context, _ utils.ClusterInfo) (SessionStatus, error) {
+					return tc.status, nil
+				},
+			}
+			sup := NewSupervisor(fp, context.Background())
+
+			live, err := sup.Ensure(context.Background(), testEnterClusterInfo())
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if live != tc.wantLive {
+				t.Fatalf("live = %v, want %v", live, tc.wantLive)
+			}
+		})
 	}
 }
