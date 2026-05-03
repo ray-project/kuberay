@@ -577,10 +577,8 @@ func (s *ServerHandler) getNode(req *restful.Request, resp *restful.Response) {
 	actorsMap := s.eventHandler.GetActorsMap(clusterSessionKey)
 	nodeActors := make(map[string]interface{})
 	for _, actor := range actorsMap {
-		nodeIDHex, _ := utils.ConvertBase64ToHex(actor.Address.NodeID)
-		if nodeIDHex == targetNodeId {
-			actorIDHex, _ := utils.ConvertBase64ToHex(actor.ActorID)
-			nodeActors[actorIDHex] = formatActorForResponse(actor)
+		if actor.Address.NodeID == targetNodeId {
+			nodeActors[actor.ActorID] = formatActorForResponse(actor)
 		}
 	}
 	if detail != nil {
@@ -1119,9 +1117,7 @@ func (s *ServerHandler) getLogicalActors(req *restful.Request, resp *restful.Res
 	// Format response to match Ray Dashboard API format
 	formattedActors := make(map[string]interface{})
 	for _, actor := range actorsMap {
-		// Use hex ID as map key to match Ray Dashboard API format
-		actorIDHex, _ := utils.ConvertBase64ToHex(actor.ActorID)
-		formattedActors[actorIDHex] = formatActorForResponse(actor)
+		formattedActors[actor.ActorID] = formatActorForResponse(actor)
 	}
 
 	response := map[string]interface{}{
@@ -1145,41 +1141,30 @@ func (s *ServerHandler) getLogicalActors(req *restful.Request, resp *restful.Res
 // Uses camelCase keys and hex-encoded IDs to match the Ray Dashboard API format.
 // Ref: ActorDetail type https://github.com/ray-project/ray/blob/a8fdb50e72/python/ray/dashboard/client/src/type/actor.ts#L18-L69
 func formatActorForResponse(actor eventtypes.Actor) map[string]interface{} {
-	// Convert Base64 IDs to Hex format for Dashboard API compatibility
-	actorIDHex, _ := utils.ConvertBase64ToHex(actor.ActorID)
-	jobIDHex, _ := utils.ConvertBase64ToHex(actor.JobID)
-	nodeIDHex, _ := utils.ConvertBase64ToHex(actor.Address.NodeID)
-	workerIDHex, _ := utils.ConvertBase64ToHex(actor.Address.WorkerID)
-	placementGroupIDHex := actor.PlacementGroupID
-	if placementGroupIDHex != "" {
-		placementGroupIDHex, _ = utils.ConvertBase64ToHex(placementGroupIDHex)
-	}
-
 	result := map[string]interface{}{
-		"actorId":          actorIDHex,
-		"jobId":            jobIDHex,
-		"placementGroupId": placementGroupIDHex,
-		"state":            string(actor.State),
-		"pid":              actor.PID,
+		"actorId": actor.ActorID,
+		"jobId":   actor.JobID,
+		"state":   string(actor.State),
+		"pid":     actor.PID,
 		"address": map[string]interface{}{
-			"nodeId":    nodeIDHex,
+			"nodeId":    actor.Address.NodeID,
 			"ipAddress": actor.Address.IPAddress,
 			"port":      actor.Address.Port,
-			"workerId":  workerIDHex,
+			"workerId":  actor.Address.WorkerID,
 		},
 		"name":              actor.Name,
-		"numRestarts":       actor.NumRestarts,
+		"numRestarts":       strconv.Itoa(actor.NumRestarts),
 		"actorClass":        actor.ActorClass,
+		"className":         actor.ActorClass,
 		"requiredResources": actor.RequiredResources,
 		// Note: The key is "exitDetail" (singular), not "exitDetails" (plural). This matches
 		// the Ray Dashboard frontend TypeScript type and the live Ray Dashboard API.
 		// Ref: https://github.com/ray-project/ray/blob/a8fdb50e72/python/ray/dashboard/client/src/type/actor.ts#L33
-		"exitDetail":    actor.ExitDetails,
-		"reprName":      actor.ReprName,
-		"callSite":      actor.CallSite,
-		"isDetached":    actor.IsDetached,
-		"rayNamespace":  actor.RayNamespace,
-		"labelSelector": actor.LabelSelector,
+		"exitDetail":       actor.ExitDetails,
+		"reprName":         actor.ReprName,
+		"placementGroupId": actor.PlacementGroupID,
+		"callSite":         actor.CallSite,
+		"labelSelector":    actor.LabelSelector,
 	}
 
 	if !actor.StartTime.IsZero() {
@@ -1188,6 +1173,7 @@ func formatActorForResponse(actor eventtypes.Actor) map[string]interface{} {
 
 	if !actor.EndTime.IsZero() {
 		result["endTime"] = actor.EndTime.UnixMilli()
+		result["timestamp"] = float64(actor.EndTime.UnixMilli())
 	}
 
 	return result
@@ -1204,7 +1190,7 @@ func (s *ServerHandler) getLogicalActor(req *restful.Request, resp *restful.Resp
 	actorID := req.PathParameter("single_actor")
 
 	// Get actor from EventHandler's in-memory map.
-	// GetActorByID supports both Base64 and hex-encoded IDs.
+	// Actor IDs are normalized to hex at ingestion time, so lookup is by hex ID.
 	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
 	actor, found := s.eventHandler.GetActorByID(clusterSessionKey, actorID)
 
@@ -1834,8 +1820,8 @@ func formatNodeSummaryReplayForResp(node eventtypes.Node, sessionName string) []
 		nodeTypeName = nodeGroup
 	}
 	isHeadNode := nodeTypeName == "headgroup"
-	rayletSocketName := fmt.Sprintf("/tmp/ray/%s/sockets/raylet", sessionName)
-	objectStoreSocketName := fmt.Sprintf("/tmp/ray/%s/sockets/plasma_store", sessionName)
+	rayletSocketName := path.Join(utils.GetTmpRayRoot(), sessionName, "sockets", "raylet")
+	objectStoreSocketName := path.Join(utils.GetTmpRayRoot(), sessionName, "sockets", "plasma_store")
 
 	// Handle the start timestamp of the node.
 	// Ref: https://github.com/ray-project/ray/blob/f953f199b5d68d47c07c865c5ebcd2333d49f365/src/ray/protobuf/gcs.proto#L345-L346.

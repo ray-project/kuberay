@@ -1,13 +1,12 @@
 module github.com/ray-project/kuberay/ray-operator
 
-go 1.25.0
+go 1.26
 
 require (
 	github.com/Masterminds/semver/v3 v3.4.0
 	github.com/coder/websocket v1.8.14
 	github.com/go-logr/logr v1.4.3
 	github.com/go-logr/zapr v1.3.0
-	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/jarcoal/httpmock v1.4.1
 	github.com/onsi/ginkgo/v2 v2.27.3
 	github.com/onsi/gomega v1.38.3
@@ -15,11 +14,11 @@ require (
 	github.com/orcaman/concurrent-map/v2 v2.0.1
 	github.com/prometheus/client_golang v1.23.2
 	github.com/robfig/cron/v3 v3.0.1
-	github.com/smallnest/chanx v1.2.0
 	github.com/spf13/pflag v1.0.10
 	github.com/stretchr/testify v1.11.1
 	go.uber.org/mock v0.6.0
 	go.uber.org/zap v1.27.1
+	golang.org/x/sync v0.19.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	k8s.io/api v0.35.0
 	k8s.io/apimachinery v0.35.0
@@ -88,7 +87,6 @@ require (
 	golang.org/x/mod v0.31.0 // indirect
 	golang.org/x/net v0.48.0 // indirect
 	golang.org/x/oauth2 v0.34.0 // indirect
-	golang.org/x/sync v0.19.0 // indirect
 	golang.org/x/sys v0.39.0 // indirect
 	golang.org/x/term v0.38.0 // indirect
 	golang.org/x/text v0.32.0 // indirect

@@ -1,7 +1,6 @@
 package utils
 
 import (
-	"bytes"
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
@@ -11,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aliyun/aliyun-oss-go-sdk/oss"
 	"github.com/sirupsen/logrus"
 )
 
@@ -21,6 +19,12 @@ const (
 	DATETIME_LAYOUT                       = "2006-01-02_15-04-05.000000"
 	// The following regex shouldn't be changed unless the ray session ID changes.
 	SESSION_ID_REGEX = `session_(\d{4}-\d{2}-\d{2})_(\d{2}-\d{2}-\d{2})_(\d{6})`
+	HEX_REGEX        = `^[0-9a-fA-F]+$`
+)
+
+var (
+	sessionIDRegex = regexp.MustCompile(SESSION_ID_REGEX)
+	hexRegex       = regexp.MustCompile(HEX_REGEX)
 )
 
 // EndpointPathToStorageKey converts a Ray Dashboard API endpoint path to a
@@ -35,26 +39,6 @@ const (
 func EndpointPathToStorageKey(endpointPath string) string {
 	trimmed := strings.Trim(endpointPath, "/")
 	return "restful__" + strings.ReplaceAll(trimmed, "/", "__")
-}
-
-var regex = regexp.MustCompile(SESSION_ID_REGEX)
-
-func CreateObjectIfNotExist(bucket *oss.Bucket, obj string, options ...oss.Option) error {
-	isExist, err := bucket.IsObjectExist(obj)
-	if err != nil {
-		logrus.Errorf("Failed to check if object %s exists: %v", obj, err)
-		return err
-	}
-	if !isExist {
-		logrus.Infof("Begin to create oss object %s ...", obj)
-		err = bucket.PutObject(obj, bytes.NewReader([]byte("")), options...)
-		if err != nil {
-			logrus.Errorf("Failed to create directory '%s': %v", obj, err)
-			return err
-		}
-		logrus.Infof("Create oss object %s success", obj)
-	}
-	return nil
 }
 
 func GetLogDirByNameID(ossHistorySeverDir, rayClusterNameNamespace, rayNodeID, sessionId string) string {
@@ -90,9 +74,8 @@ func AppendRayClusterNameNamespace(rayClusterName, rayClusterNamespace string) s
 }
 
 func GetSessionDir() (string, error) {
-	session_latest_path := "/tmp/ray/session_latest"
 	for i := 0; i < 12; i++ {
-		rp, err := os.Readlink(session_latest_path)
+		rp, err := os.Readlink(GetRaySessionLatestPath())
 		if err != nil {
 			logrus.Errorf("read session_latest file error %v", err)
 			time.Sleep(time.Second * 5)
@@ -105,7 +88,7 @@ func GetSessionDir() (string, error) {
 
 func GetRayNodeID() (string, error) {
 	for i := 0; i < 12; i++ {
-		nodeidBytes, err := os.ReadFile("/tmp/ray/raylet_node_id")
+		nodeidBytes, err := os.ReadFile(GetRayNodeIDPath())
 		if err != nil {
 			logrus.Errorf("read nodeid file error %v", err)
 			time.Sleep(time.Second * 5)
@@ -123,8 +106,8 @@ func GetRayNodeID() (string, error) {
 // It tries RawURLEncoding first (Ray's default), falling back to StdEncoding if that fails.
 func ConvertBase64ToHex(id string) (string, error) {
 	// Check if already hex (only [0-9a-f])
-	if matched, _ := regexp.MatchString("^[0-9a-fA-F]+$", id); matched {
-		return id, nil
+	if hexRegex.MatchString(id) {
+		return strings.ToLower(id), nil
 	}
 
 	// Try base64 decode
@@ -174,7 +157,7 @@ func BuildClusterSessionKey(clusterName, namespace, sessionName string) string {
 
 // GetDateTimeFromSessionID will convert sessionID string i.e. `session_2026-01-27_10-52-59_373533_1` to time.Time
 func GetDateTimeFromSessionID(sessionID string) (time.Time, error) {
-	matches := regex.FindStringSubmatch(sessionID)
+	matches := sessionIDRegex.FindStringSubmatch(sessionID)
 
 	if len(matches) < 4 {
 		return time.Time{}, fmt.Errorf("Invalid session string format, expected `session_YYYY-MM-DD_HH-MM-SS_MICROSECOND` got: %s", sessionID)

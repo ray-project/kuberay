@@ -23,7 +23,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/apimachinery/pkg/util/rand"
-	"k8s.io/client-go/discovery"
 	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -882,38 +881,6 @@ func GetWeightsFromHTTPRoute(httpRoute *gwv1.HTTPRoute, rayServiceInstance *rayv
 	return
 }
 
-// Check where we are running. We are trying to distinguish here whether
-// this is vanilla kubernetes cluster or Openshift
-func GetClusterType() bool {
-	if os.Getenv(USE_INGRESS_ON_OPENSHIFT) == "true" {
-		// Environment is set to treat OpenShift cluster as Vanilla Kubernetes
-		return false
-	}
-
-	// The discovery package is used to discover APIs supported by a Kubernetes API server.
-	config, err := ctrl.GetConfig()
-	if err != nil || config == nil {
-		return false
-	}
-
-	discoveryClient, err := discovery.NewDiscoveryClientForConfig(config)
-	if err != nil || discoveryClient == nil {
-		return false
-	}
-
-	apiGroupList, err := discoveryClient.ServerGroups()
-	if err != nil {
-		return false
-	}
-
-	for _, group := range apiGroupList.Groups {
-		if strings.HasSuffix(group.Name, ".openshift.io") {
-			return true
-		}
-	}
-	return false
-}
-
 func GetContainerCommand(additionalOptions []string) []string {
 	bashOptions := []string{"c"}
 	bashOptions = append(bashOptions, additionalOptions...)
@@ -981,7 +948,7 @@ func GetRayDashboardClientFunc(ctx context.Context, mgr manager.Manager, useKube
 				Namespace: rayCluster.Namespace,
 			}
 
-			if err := mgr.GetClient().Get(context.Background(), secretKey, secret); err != nil {
+			if err := mgr.GetClient().Get(ctx, secretKey, secret); err != nil {
 				return nil, fmt.Errorf("failed to get auth secret %s/%s: %w", rayCluster.Namespace, secretName, err)
 			}
 
@@ -993,6 +960,11 @@ func GetRayDashboardClientFunc(ctx context.Context, mgr manager.Manager, useKube
 			authToken = string(tokenBytes)
 		}
 
+		httpClient := &http.Client{
+			Timeout: rayHTTPClientTimeout(useKubernetesProxy),
+		}
+		dashboardURL := fmt.Sprintf("http://%s", url)
+
 		if useKubernetesProxy {
 			var err error
 			headSvcName := rayCluster.Status.Head.ServiceName
@@ -1003,46 +975,43 @@ func GetRayDashboardClientFunc(ctx context.Context, mgr manager.Manager, useKube
 					return nil, err
 				}
 			}
-
-			dashboardClient.InitClient(
-				// Use `mgr.GetHTTPClient()` instead of `http.Client{}` so that the client has proper authentication
-				// configured to communicate with the Kubernetes API server.
-				mgr.GetHTTPClient(),
-				fmt.Sprintf("%s/api/v1/namespaces/%s/services/%s:dashboard/proxy", mgr.GetConfig().Host, rayCluster.Namespace, headSvcName),
-				authToken,
-			)
-		} else {
-			dashboardClient.InitClient(&http.Client{
-				Timeout: 2 * time.Second,
-			}, "http://"+url, authToken)
+			// Use the manager transport for TLS and API server authentication.
+			httpClient.Transport = mgr.GetHTTPClient().Transport
+			dashboardURL = fmt.Sprintf("%s/api/v1/namespaces/%s/services/%s:dashboard/proxy", mgr.GetConfig().Host, rayCluster.Namespace, headSvcName)
 		}
+		dashboardClient.InitClient(httpClient, dashboardURL, authToken)
 
-		if features.Enabled(features.AsyncJobInfoQuery) && rayCluster != nil {
-			namespacedName := types.NamespacedName{
-				Name:      rayCluster.Name,
-				Namespace: rayCluster.Namespace,
-			}
-			dashboardCachedClient := &dashboardclient.RayDashboardCacheClient{}
-			dashboardCachedClient.InitClient(ctx, namespacedName, dashboardClient)
-			return dashboardCachedClient, nil
-		}
 		return dashboardClient, nil
 	}
 }
 
 func GetRayHttpProxyClientFunc(mgr manager.Manager, useKubernetesProxy bool) func(hostIp, podNamespace, podName string, port int) RayHttpProxyClientInterface {
 	return func(hostIp, podNamespace, podName string, port int) RayHttpProxyClientInterface {
-		if useKubernetesProxy {
-			return &RayHttpProxyClient{
-				client:       mgr.GetHTTPClient(),
-				httpProxyURL: fmt.Sprintf("%s/api/v1/namespaces/%s/pods/%s:%d/proxy/", mgr.GetConfig().Host, podNamespace, podName, port),
-			}
+		httpClient := &http.Client{
+			Timeout: rayHTTPClientTimeout(useKubernetesProxy),
 		}
+		httpProxyURL := fmt.Sprintf("http://%s:%d/", hostIp, port)
+
+		if useKubernetesProxy {
+			// Use the manager's transport for TLS and API server authentication.
+			httpClient.Transport = mgr.GetHTTPClient().Transport
+			httpProxyURL = fmt.Sprintf("%s/api/v1/namespaces/%s/pods/%s:%d/proxy/", mgr.GetConfig().Host, podNamespace, podName, port)
+		}
+
 		return &RayHttpProxyClient{
-			client:       &http.Client{Timeout: 2 * time.Second},
-			httpProxyURL: fmt.Sprintf("http://%s:%d/", hostIp, port),
+			client:       httpClient,
+			httpProxyURL: httpProxyURL,
 		}
 	}
+}
+
+// rayHTTPClientTimeout returns the request deadline for Ray HTTP clients.
+// Traffic proxied through the apiserver requires a longer timeout than direct connections to pods or Services.
+func rayHTTPClientTimeout(useKubernetesProxy bool) time.Duration {
+	if useKubernetesProxy {
+		return RayHTTPClientProxyTimeoutSeconds * time.Second
+	}
+	return RayHTTPClientDirectTimeoutSeconds * time.Second
 }
 
 func HasSubmitter(rayJobInstance *rayv1.RayJob) bool {
@@ -1050,13 +1019,59 @@ func HasSubmitter(rayJobInstance *rayv1.RayJob) bool {
 }
 
 // IsHTTPRouteEqual checks if the existing HTTPRoute matches the desired HTTPRoute.
+// This check only compares the fields explicitly managed by the RayService controller.
 func IsHTTPRouteEqual(existing, desired *gwv1.HTTPRoute) bool {
+	if existing == nil || desired == nil {
+		return existing == desired
+	}
+
+	// Compare Hostnames. Treat nil and empty slice as equivalent to avoid false positives
+	// caused by renormalization from the API server or the Gateway implementation.
+	if len(existing.Spec.Hostnames) != len(desired.Spec.Hostnames) {
+		return false
+	}
+	if len(existing.Spec.Hostnames) > 0 && !reflect.DeepEqual(existing.Spec.Hostnames, desired.Spec.Hostnames) {
+		return false
+	}
+
+	// Compare ParentRefs
+	if len(existing.Spec.ParentRefs) != len(desired.Spec.ParentRefs) {
+		return false
+	}
+	for i := range desired.Spec.ParentRefs {
+		eRef := existing.Spec.ParentRefs[i]
+		dRef := desired.Spec.ParentRefs[i]
+
+		if string(eRef.Name) != string(dRef.Name) ||
+			string(ptr.Deref(eRef.Namespace, "")) != string(ptr.Deref(dRef.Namespace, "")) {
+			return false
+		}
+	}
+
+	// Compare Rules
 	if len(existing.Spec.Rules) != len(desired.Spec.Rules) {
 		return false
 	}
 
 	for i := range desired.Spec.Rules {
-		if len(existing.Spec.Rules[i].BackendRefs) != len(desired.Spec.Rules[i].BackendRefs) {
+		eRule := existing.Spec.Rules[i]
+		dRule := desired.Spec.Rules[i]
+
+		// Compare Matches
+		if !reflect.DeepEqual(eRule.Matches, dRule.Matches) {
+			return false
+		}
+
+		// Compare Filters. Treat nil and empty slice as equivalent to avoid false positives
+		// caused by renormalization from the API server or the Gateway implementation.
+		if len(eRule.Filters) != len(dRule.Filters) {
+			return false
+		}
+		if len(eRule.Filters) > 0 && !reflect.DeepEqual(eRule.Filters, dRule.Filters) {
+			return false
+		}
+
+		if len(eRule.BackendRefs) != len(dRule.BackendRefs) {
 			return false
 		}
 
@@ -1066,10 +1081,41 @@ func IsHTTPRouteEqual(existing, desired *gwv1.HTTPRoute) bool {
 
 			// Only compare the fields the controller updates.
 			if string(existingRef.Name) != string(desiredRef.Name) ||
+				string(ptr.Deref(existingRef.Namespace, "")) != string(ptr.Deref(desiredRef.Namespace, "")) ||
 				ptr.Deref(existingRef.Weight, 1) != ptr.Deref(desiredRef.Weight, 1) ||
 				ptr.Deref(existingRef.Port, 0) != ptr.Deref(desiredRef.Port, 0) {
 				return false
 			}
+		}
+	}
+	return true
+}
+
+// IsGatewayEqual checks if the existing Gateway matches the desired Gateway.
+// This check only compares the fields explicitly managed by the RayService controller.
+// If the controller starts managing additional Gateway fields in the future,
+// this function must be updated accordingly.
+func IsGatewayEqual(existing, desired *gwv1.Gateway) bool {
+	if existing == nil || desired == nil {
+		return existing == desired
+	}
+
+	if string(existing.Spec.GatewayClassName) != string(desired.Spec.GatewayClassName) {
+		return false
+	}
+
+	// Compare Listeners. RayService controller sets Name, Protocol, and Port on each Listener.
+	if len(existing.Spec.Listeners) != len(desired.Spec.Listeners) {
+		return false
+	}
+	for i := range desired.Spec.Listeners {
+		eL := existing.Spec.Listeners[i]
+		dL := desired.Spec.Listeners[i]
+
+		if string(eL.Name) != string(dL.Name) ||
+			eL.Protocol != dL.Protocol ||
+			eL.Port != dL.Port {
+			return false
 		}
 	}
 	return true

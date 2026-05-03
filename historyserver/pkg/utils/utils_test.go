@@ -41,6 +41,18 @@ func TestConvertBase64ToHex(t *testing.T) {
 			expectedHexStr: "AQAAAA_==",
 			expectError:    true,
 		},
+		{
+			scenario:       "Already hex with uppercase is normalized to lowercase",
+			base64Str:      "ABCDEF01",
+			expectedHexStr: "abcdef01",
+			expectError:    false,
+		},
+		{
+			scenario:       "Already hex with lowercase is returned as-is",
+			base64Str:      "abcdef01",
+			expectedHexStr: "abcdef01",
+			expectError:    false,
+		},
 	}
 
 	for _, tt := range tests {

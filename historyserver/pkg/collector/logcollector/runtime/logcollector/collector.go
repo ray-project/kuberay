@@ -45,8 +45,8 @@ type RayLogHandler struct {
 
 func (r *RayLogHandler) Run(stop <-chan struct{}) error {
 	// watchPath := r.LogDir
-	r.prevLogsDir = filepath.Join("/tmp", "ray", "prev-logs")
-	r.persistCompleteLogsDir = filepath.Join("/tmp", "ray", "persist-complete-logs")
+	r.prevLogsDir = utils.GetRayPrevLogsPath()
+	r.persistCompleteLogsDir = utils.GetRayPersistCompletePath()
 
 	// Initialize log file paths storage
 	r.logFilePaths = make(map[string]bool)
@@ -83,13 +83,13 @@ func (r *RayLogHandler) Run(stop <-chan struct{}) error {
 	return nil
 }
 
-// processSessionLatestLogs processes logs in /tmp/ray/session_latest/logs directory
+// processSessionLatestLogs processes logs in the configured session_latest/logs directory
 // on shutdown, using the real session ID and node ID
 func (r *RayLogHandler) processSessionLatestLogs() {
 	logrus.Info("Processing session_latest logs on shutdown...")
 
 	// Resolve the session_latest symlink to get the real session directory
-	sessionLatestDir := filepath.Join("/tmp", "ray", "session_latest")
+	sessionLatestDir := utils.GetRaySessionLatestPath()
 	sessionRealDir, err := filepath.EvalSymlinks(sessionLatestDir)
 	if err != nil {
 		logrus.Errorf("Failed to resolve session_latest symlink: %v", err)
@@ -114,8 +114,8 @@ func (r *RayLogHandler) processSessionLatestLogs() {
 		}
 	}
 
-	// Read node ID from /tmp/ray/raylet_node_id
-	nodeIDBytes, err := os.ReadFile(filepath.Join("/tmp", "ray", "raylet_node_id"))
+	// Read node ID from the configured raylet_node_id file.
+	nodeIDBytes, err := os.ReadFile(utils.GetRayNodeIDPath())
 	if err != nil {
 		logrus.Errorf("Failed to read raylet_node_id: %v", err)
 		return
@@ -168,8 +168,8 @@ func (r *RayLogHandler) processSessionLatestLogs() {
 // processSessionLatestLogFile processes a single log file from session_latest
 func (r *RayLogHandler) processSessionLatestLogFile(absoluteLogPathName, sessionID, nodeID string) error {
 	// Calculate relative path within logs directory
-	// The logsDir is /tmp/ray/session_latest/logs
-	sessionLatestDir := filepath.Join("/tmp", "ray", "session_latest")
+	// The logsDir is the configured session_latest/logs directory.
+	sessionLatestDir := utils.GetRaySessionLatestPath()
 	logsDir := filepath.Join(sessionLatestDir, utils.RAY_SESSIONDIR_LOGDIR_NAME)
 	relativePath, err := filepath.Rel(logsDir, absoluteLogPathName)
 	if err != nil {
@@ -701,7 +701,7 @@ func (r *RayLogHandler) processPrevLogFile(absoluteLogPathName, localLogDir, ses
 //		session_2024-12-15_10-30-45_123456    ← Empty file! The path itself is the information
 //		session_2024-12-15_14-20-10_789012
 func (r *RayLogHandler) WatchSessionLatestLoops() {
-	sessionLatestDir := filepath.Join("/tmp", "ray")
+	sessionLatestDir := utils.GetTmpRayRoot()
 	sessionLatestSymlink := filepath.Join(sessionLatestDir, "session_latest")
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {

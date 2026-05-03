@@ -4,7 +4,7 @@ metadata:
   name: rayjob-sample
 spec:
   # The current value is "InteractiveMode", meaning that it will wait for user to submit job and provide the job submission ID
-  submissionMode: 'InteractiveMode'
+  submissionMode: "InteractiveMode"
   runtimeEnvYAML: |
     pip:
       - emoji==2.14.0
@@ -14,7 +14,7 @@ spec:
       another_env_var: "second_env_var"
 
   rayClusterSpec:
-    rayVersion: '2.52.0' # should match the Ray version in the image of the containers
+    rayVersion: "2.52.0" # should match the Ray version in the image of the containers
     headGroupSpec:
       template:
         spec:
