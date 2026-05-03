@@ -62,6 +62,14 @@ func (s *Supervisor) Ensure(ctx context.Context, info utils.ClusterInfo) (live b
 	clusterNameID := info.Name + "_" + info.Namespace
 	key := clusterNameID + "/" + info.SessionName
 
+	// Fast-path: session is already loaded.
+	s.loadedMu.RLock()
+	_, loaded := s.loaded[key]
+	s.loadedMu.RUnlock()
+	if loaded {
+		return false, nil
+	}
+
 	// TODO(jwj): Graceful drain if needed. Currently SIGTERM immediately cancels
 	// in-flight work. If 500-during-shutdown becomes a customer pain point, switch
 	// closure to a separate runCtx with grace timer.
@@ -89,14 +97,14 @@ func (s *Supervisor) Ensure(ctx context.Context, info utils.ClusterInfo) (live b
 // runOnce is the singleflight winner's body. On success it returns a bool
 // indicating whether the session belongs to a live cluster.
 func (s *Supervisor) runOnce(ctx context.Context, info utils.ClusterInfo, key string) (bool, error) {
-	// Fast-path: session is already loaded.
+	// Keep the same fast-path for guarding against a race where loaded
+	// gets marked between caller's lookup and singleflight execution.
 	s.loadedMu.RLock()
-	_, ok := s.loaded[key]
+	_, loaded := s.loaded[key]
 	s.loadedMu.RUnlock()
-	if ok {
+	if loaded {
 		return false, nil
 	}
-
 	// Synchronously process the session raw events.
 	status, perr := s.pipeline.ProcessSession(ctx, info)
 	if perr != nil {
