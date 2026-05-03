@@ -1533,15 +1533,16 @@ func extractActorIDFromTaskID(taskIDHex string) string {
 }
 
 // ProcessSingleSession reads all event files for a single session synchronously
-// and populates the handler's in-memory maps. It does not touch other sessions
-// and does not use the channel fan-out that Run() uses.
+// and populates the handler's in-memory maps.
 //
-// This is a fresh, synchronous implementation — intentionally does NOT share
-// code with the processAllEvents closure inside Run(), because that closure's
-// channel-based fan-out is v1-specific and would couple v1 to v2's lifecycle.
+// Per-file failure handling:
+//   - GetContent/ReadAll failures are likely transient storage errors:
+//     skip this file.
+//   - json.Unmarshal/storeEvent failures are treated as corrupt-file:
+//     don't count as a hard failure since retrying won't help.
 //
-// Errors during individual file reads are logged but do not abort the whole
-// session — matching v1's error tolerance in processAllEvents.
+// TODO(jwj): Empty event file list vs ListFiles outage is ambiguous without
+// StorageReader interface surfacing errors.
 func (h *EventHandler) ProcessSingleSession(clusterInfo utils.ClusterInfo) error {
 	clusterNameNamespace := clusterInfo.Name + "_" + clusterInfo.Namespace
 	clusterSessionKey := utils.BuildClusterSessionKey(clusterInfo.Name, clusterInfo.Namespace, clusterInfo.SessionName)
@@ -1549,8 +1550,9 @@ func (h *EventHandler) ProcessSingleSession(clusterInfo utils.ClusterInfo) error
 	// Read Log Events from logs/{nodeId}/events/event_*.log
 	// This is the format used by Ray Dashboard's /events API.
 	logEventReader := NewLogEventReader(h.reader)
-	if err := logEventReader.ReadLogEvents(clusterInfo, clusterSessionKey, h.ClusterLogEventMap); err != nil {
-		logrus.Errorf("Failed to read Log Events for %s: %v", clusterSessionKey, err)
+	logEventErr := logEventReader.ReadLogEvents(clusterInfo, clusterSessionKey, h.ClusterLogEventMap)
+	if logEventErr != nil {
+		logrus.Errorf("Failed to read Log Events for %s: %v", clusterSessionKey, logEventErr)
 	}
 
 	// Read RayEvents (Export Events) from node_events/ and job_events/.
@@ -1558,6 +1560,8 @@ func (h *EventHandler) ProcessSingleSession(clusterInfo utils.ClusterInfo) error
 	eventFileList := append(h.getAllJobEventFiles(clusterInfo), h.getAllNodeEventFiles(clusterInfo)...)
 	logrus.Infof("current eventFileList for cluster %s is: %v", clusterInfo.Name, eventFileList)
 
+	rayEventsAttempted := len(eventFileList)
+	rayEventsSucceeded := 0
 	for _, eventFile := range eventFileList {
 		logrus.Infof("Reading event file: %s", eventFile)
 
@@ -1571,6 +1575,7 @@ func (h *EventHandler) ProcessSingleSession(clusterInfo utils.ClusterInfo) error
 			logrus.Errorf("Failed to read event file: %v", err)
 			continue
 		}
+		rayEventsSucceeded++
 
 		var eventList []map[string]any
 		if err := json.Unmarshal(eventbytes, &eventList); err != nil {
@@ -1578,18 +1583,27 @@ func (h *EventHandler) ProcessSingleSession(clusterInfo utils.ClusterInfo) error
 			continue
 		}
 
-		for _, curr := range eventList {
-			// Skip nil events (can occur with corrupted event files containing null elements).
-			// Matches Run()'s nil-tolerance at line 172.
-			if curr == nil {
+		for _, event := range eventList {
+			if event == nil {
 				continue
 			}
-			curr["clusterName"] = clusterSessionKey
-			if err := h.storeEvent(curr); err != nil {
+			event["clusterName"] = clusterSessionKey
+			if err := h.storeEvent(event); err != nil {
 				logrus.Errorf("Failed to store event: %v", err)
 				continue
 			}
 		}
+	}
+
+	// If every attempted file failed, treat as transient outage and surface
+	// so the session is not marked loaded.
+	if rayEventsAttempted > 0 && rayEventsSucceeded == 0 {
+		return fmt.Errorf("ingested 0 of %d RayEvent files for %s: likely transient storage outage",
+			rayEventsAttempted, clusterSessionKey)
+	}
+
+	if logEventErr != nil {
+		return fmt.Errorf("read log events for %s: %w", clusterSessionKey, logEventErr)
 	}
 
 	return nil
