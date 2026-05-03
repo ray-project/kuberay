@@ -304,10 +304,16 @@ func routerRayClusterSet(s *ServerHandler) {
 		// are served via the reverse-proxy path.
 		if session != "live" && s.supervisor != nil {
 			info := utils.ClusterInfo{Name: name, Namespace: namespace, SessionName: session}
-			if err := s.supervisor.Ensure(r1.Request.Context(), info); err != nil {
+			live, err := s.supervisor.Ensure(r1.Request.Context(), info)
+			if err != nil {
 				logrus.Errorf("Supervisor.Ensure for %s/%s/%s: %v", namespace, name, session, err)
 				r2.WriteErrorString(http.StatusInternalServerError, err.Error())
 				return
+			}
+			// If the session belongs to a live cluster, rewrite the session
+			// name cookie to "live" to avoid querying empty in-memory state.
+			if live {
+				session = "live"
 			}
 		}
 

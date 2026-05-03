@@ -47,14 +47,16 @@ func NewSupervisor(p sessionPipeline, serverCtx context.Context) *Supervisor {
 // replica or an unrecoverable error is observed. Concurrent callers
 // for the same session are coalesced via singleflight.
 //
-//   - nil: caller may proceed (loaded, just-loaded, or live).
-//   - ctx.Err() (canceled): caller's ctx died while waiting; the shared
-//     work keeps running.
-//   - other error: real failure.
-func (s *Supervisor) Ensure(ctx context.Context, info utils.ClusterInfo) error {
+// Returns:
+//   - (false, nil): events were loaded. Router serves the historical session.
+//   - (true,  nil): session belongs to a live cluster. Router rewrites the
+//     session-name cookie to "live".
+//   - (_, ctx.Err()): caller's ctx died while waiting. Shared work keeps running.
+//   - (_, other error): other error.
+func (s *Supervisor) Ensure(ctx context.Context, info utils.ClusterInfo) (live bool, err error) {
 	// Fast pre-flight: skip singleflight entirely if ctx is already dead.
 	if err := ctx.Err(); err != nil {
-		return err
+		return false, err
 	}
 
 	clusterNameID := info.Name + "_" + info.Namespace
@@ -74,29 +76,31 @@ func (s *Supervisor) Ensure(ctx context.Context, info utils.ClusterInfo) error {
 		//
 		// Do NOT sf.Forget(key) here: a racing new call would kick off a second
 		// Pipeline execution in parallel with the still-running winner.
-		return ctx.Err()
+		return false, ctx.Err()
 	case result := <-ch:
-		return result.Err
+		if result.Err != nil {
+			return false, result.Err
+		}
+		live, _ := result.Val.(bool)
+		return live, nil
 	}
 }
 
-// runOnce is the singleflight winner's body. It always returns (nil, err);
-// callers care about the loaded-set side effect on success.
-func (s *Supervisor) runOnce(ctx context.Context, info utils.ClusterInfo, key string) (interface{}, error) {
-	// Fast-path: session is already loaded on this replica.
+// runOnce is the singleflight winner's body. On success it returns a bool
+// indicating whether the session belongs to a live cluster.
+func (s *Supervisor) runOnce(ctx context.Context, info utils.ClusterInfo, key string) (bool, error) {
+	// Fast-path: session is already loaded.
 	s.loadedMu.RLock()
 	_, ok := s.loaded[key]
 	s.loadedMu.RUnlock()
 	if ok {
-		return nil, nil
+		return false, nil
 	}
 
-	// Synchronously process under serverCtx (not the winner's request
-	// ctx) so a winner disconnect does not cancel work that followers
-	// still depend on, while SIGTERM still cancels via serverCtx.
+	// Synchronously process the session raw events.
 	status, perr := s.pipeline.ProcessSession(ctx, info)
 	if perr != nil {
-		return nil, perr
+		return false, perr
 	}
 
 	switch status {
@@ -106,17 +110,15 @@ func (s *Supervisor) runOnce(ctx context.Context, info utils.ClusterInfo, key st
 		s.loadedMu.Lock()
 		s.loaded[key] = struct{}{}
 		s.loadedMu.Unlock()
-		return nil, nil
+		return false, nil
 
 	case SessionStatusLive:
-		// Live cluster: handler redirects to the live source; nothing to load.
-		// Do not mark loaded — when the cluster eventually dies, the next
-		// /enter_cluster should run the parse path.
-		return nil, nil
+		// Session belongs to a live cluster. Handler proxies to the Ray Dashboard.
+		return true, nil
 
 	default:
 		// Unreachable under the Pipeline contract; defensive guard so a future
 		// bug surfaces as a clear 500 instead of a silent success.
-		return nil, fmt.Errorf("unexpected session status %v", status)
+		return false, fmt.Errorf("unexpected session status %v", status)
 	}
 }
