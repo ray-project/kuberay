@@ -166,3 +166,33 @@ func TestEnsure_LiveAndProcessed(t *testing.T) {
 		})
 	}
 }
+
+// TestEnsure_FastPath_SkipsSingleflight verifies the fast-path:
+// once a session is loaded, repeat Ensure calls must not invoke Pipeline again.
+func TestEnsure_FastPath_SkipsSingleflight(t *testing.T) {
+	fp := &fakePipeline{
+		fn: func(_ context.Context, _ utils.ClusterInfo) (SessionStatus, error) {
+			return SessionStatusProcessed, nil
+		},
+	}
+	sup := NewSupervisor(fp, context.Background())
+	info := testEnterClusterInfo()
+
+	// First call: cold path, Pipeline runs, session marked loaded.
+	if _, err := sup.Ensure(context.Background(), info); err != nil {
+		t.Fatalf("cold-path Ensure: %v", err)
+	}
+	if got := fp.callCount(); got != 1 {
+		t.Fatalf("after cold path: callCount = %d, want 1", got)
+	}
+
+	// Subsequent calls: fast path, Pipeline must NOT be invoked again.
+	for i := 0; i < 5; i++ {
+		if _, err := sup.Ensure(context.Background(), info); err != nil {
+			t.Fatalf("fast path Ensure #%d: %v", i, err)
+		}
+	}
+	if got := fp.callCount(); got != 1 {
+		t.Fatalf("after fast path: callCount = %d, want 1 (Pipeline must not be invoked again)", got)
+	}
+}
