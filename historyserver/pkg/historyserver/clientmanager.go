@@ -21,6 +21,14 @@ type ClientManager struct {
 	clients []client.Client
 }
 
+// Client returns the primary controller-runtime client.
+func (c *ClientManager) Client() client.Client {
+	if len(c.clients) == 0 {
+		return nil
+	}
+	return c.clients[0]
+}
+
 func (c *ClientManager) ListRayClusters(ctx context.Context) ([]*rayv1.RayCluster, error) {
 	list := []*rayv1.RayCluster{}
 	for _, c := range c.clients {
