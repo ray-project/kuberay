@@ -400,6 +400,7 @@ _Appears in:_
 | --- | --- | --- | --- |
 | `jobTemplate` _[RayJobSpec](#rayjobspec)_ | JobTemplate defines the job spec that will be created by cron scheduling |  |  |
 | `schedule` _string_ | Schedule is the cron schedule string |  |  |
+| `timeZone` _string_ | TimeZone is the time zone name for the given schedule. If not specified, default to the local time zone of the<br />Kuberay Operator. Empty string is not allowed.<br />The bundled version of the time zone database is used. |  | MinLength: 1 <br /> |
 | `suspend` _boolean_ | Suspend tells the controller to suspend the scheduling, it does not apply to<br />scheduled RayJob. |  |  |
 
 

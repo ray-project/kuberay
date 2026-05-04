@@ -14,6 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	clocktesting "k8s.io/utils/clock/testing"
+	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	clientFake "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -39,7 +40,7 @@ func rayCronJobTemplate(name string, namespace string, schedule string) *rayv1.R
 								Containers: []corev1.Container{
 									{
 										Name:  "ray-head",
-										Image: "rayproject/ray:2.9.0",
+										Image: "rayproject/ray:2.52.0",
 									},
 								},
 							},
@@ -262,7 +263,7 @@ func TestRayCronJobReconcile_Suspend(t *testing.T) {
 
 	// Create RayCronJob with suspend=true
 	rayCronJob := rayCronJobTemplate("suspended-cronjob", "default", "*/5 * * * *")
-	rayCronJob.Spec.Suspend = true
+	rayCronJob.Spec.Suspend = ptr.To(true)
 
 	// Create scheme and add types
 	scheme := runtime.NewScheme()
@@ -428,6 +429,43 @@ func TestUpdateRayCronJobStatus(t *testing.T) {
 					"Status should remain unchanged. Expected: %v, Got: %v",
 					tc.oldCronJob.Status.LastScheduleTime.Time, updatedCronJob.Status.LastScheduleTime.Time)
 			}
+		})
+	}
+}
+
+func TestFormatSchedule(t *testing.T) {
+	tz := func(s string) *string { return &s }
+	tests := []struct {
+		name     string
+		schedule string
+		timeZone *string
+		expected string
+	}{
+		{
+			name:     "no timezone",
+			schedule: "*/5 * * * *",
+			timeZone: nil,
+			expected: "*/5 * * * *",
+		},
+		{
+			name:     "with timezone",
+			schedule: "0 9 * * *",
+			timeZone: tz("Asia/Taipei"),
+			expected: "TZ=Asia/Taipei 0 9 * * *",
+		},
+		{
+			name:     "with UTC timezone",
+			schedule: "0 0 * * *",
+			timeZone: tz("UTC"),
+			expected: "TZ=UTC 0 0 * * *",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cronJob := rayCronJobTemplate("test", "default", tc.schedule)
+			cronJob.Spec.TimeZone = tc.timeZone
+			assert.Equal(t, tc.expected, formatSchedule(cronJob))
 		})
 	}
 }

@@ -60,7 +60,7 @@ func TestRayCronJobSuspend(t *testing.T) {
 		// Spec.Suspend should be false
 		g.Eventually(RayCronJob(test, namespace.Name, rayCronJob.Name), TestTimeoutShort).
 			Should(WithTransform(func(rayCronJob *rayv1.RayCronJob) bool {
-				return !rayCronJob.Spec.Suspend
+				return rayCronJob.Spec.Suspend == nil || !*rayCronJob.Spec.Suspend
 			}, BeTrue()))
 
 		// Jobs must start appearing now
@@ -69,6 +69,37 @@ func TestRayCronJobSuspend(t *testing.T) {
 		}, TestTimeoutMedium).Should(BeNumerically(">", 0))
 
 		// Delete the RayCronJob
+		err = test.Client().Ray().RayV1().RayCronJobs(namespace.Name).Delete(test.Ctx(), rayCronJob.Name, metav1.DeleteOptions{})
+		g.Expect(err).NotTo(HaveOccurred())
+		LogWithTimestamp(test.T(), "Deleted RayCronJob %s/%s successfully", rayCronJob.Namespace, rayCronJob.Name)
+	})
+}
+
+func TestRayCronJobNoDuplicateRayJob(t *testing.T) {
+	test := With(t)
+	g := NewWithT(t)
+
+	namespace := test.NewTestNamespace()
+	test.T().Run("RayCronJob should not create duplicate RayJobs for the same schedule tick.", func(_ *testing.T) {
+		rayCronJobAC := rayCronJobACTemplate("no-duplicate-raycronjob", namespace.Name, "*/1 * * * *")
+		rayCronJob, err := test.Client().Ray().RayV1().RayCronJobs(namespace.Name).Apply(test.Ctx(), rayCronJobAC, TestApplyOptions)
+		g.Expect(err).NotTo(HaveOccurred())
+		LogWithTimestamp(test.T(), "Created RayCronJob %s/%s successfully", rayCronJob.Namespace, rayCronJob.Name)
+
+		rayCronJob, err = GetRayCronJob(test, rayCronJob.Namespace, rayCronJob.Name)
+		g.Expect(err).NotTo(HaveOccurred())
+		ownerUID := rayCronJob.UID
+
+		// Wait for the first RayJob to be created
+		g.Eventually(func() (int, error) {
+			return countRayJobsOwnedByUID(test.Ctx(), test.Client().Ray(), namespace.Name, ownerUID)
+		}, TestTimeoutMedium, 5*time.Second).Should(BeNumerically(">", 0))
+
+		// Consistently check that no duplicate RayJob is created within the same schedule tick
+		g.Consistently(func() (int, error) {
+			return countRayJobsOwnedByUID(test.Ctx(), test.Client().Ray(), namespace.Name, ownerUID)
+		}, 30*time.Second, 5*time.Second).Should(BeNumerically("<=", 1))
+
 		err = test.Client().Ray().RayV1().RayCronJobs(namespace.Name).Delete(test.Ctx(), rayCronJob.Name, metav1.DeleteOptions{})
 		g.Expect(err).NotTo(HaveOccurred())
 		LogWithTimestamp(test.T(), "Deleted RayCronJob %s/%s successfully", rayCronJob.Namespace, rayCronJob.Name)
