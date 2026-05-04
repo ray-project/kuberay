@@ -49,7 +49,12 @@ func NewLogEventReader(reader storage.StorageReader) *LogEventReader {
 // and stores them in the provided ClusterLogEventMap.
 //
 // Path structure in storage: {clusterName}_{namespace}/{sessionName}/logs/{nodeId}/events/event_*.log
-// This is called from eventserver.go Run() to populate events for a cluster session.
+// This is called from eventserver.go Run() (legacy hourly ticker) and from
+// ProcessSingleSession (lazy mode) to populate events for a cluster session.
+//
+// Per-file readEventFile failures are treated as likely-transient storage
+// errors. If the file list was non-empty but every file failed, surface an error
+// so the lazy-mode caller can avoid marking the session loaded.
 func (r *LogEventReader) ReadLogEvents(clusterInfo utils.ClusterInfo, clusterSessionKey string, eventStore *types.ClusterLogEventMap) error {
 	// Build cluster ID used by StorageReader
 	clusterID := clusterInfo.Name + "_" + clusterInfo.Namespace
@@ -80,6 +85,8 @@ func (r *LogEventReader) ReadLogEvents(clusterInfo utils.ClusterInfo, clusterSes
 	}
 	logrus.Debugf("Found %d node directories for cluster %s: %v", len(nodeIDs), clusterSessionKey, nodeIDs)
 
+	attempted := 0
+	succeeded := 0
 	for _, nodeID := range nodeIDs {
 		// Path: {sessionName}/logs/{nodeId}/events/
 		eventsDir := path.Join(clusterInfo.SessionName, utils.RAY_SESSIONDIR_LOGDIR_NAME, nodeID, "events")
@@ -98,13 +105,19 @@ func (r *LogEventReader) ReadLogEvents(clusterInfo utils.ClusterInfo, clusterSes
 			// Read and parse the event file
 			// Note: Duplicate events are handled by JobEventMap's deduplication using event_id as key.
 			// This matches the design of existing RayEvents reading in eventserver.go.
+			attempted++
 			if err := r.readEventFile(clusterID, eventFilePath, jobEventMap); err != nil {
 				logrus.Warnf("Failed to read event file %s: %v", eventFilePath, err)
-				// Continue with other files - failed files will be retried in the next cycle
+				continue
 			}
+			succeeded++
 		}
 	}
 
+	if attempted > 0 && succeeded == 0 {
+		return fmt.Errorf("ingested 0 of %d log event files for %s: likely transient storage outage",
+			attempted, clusterSessionKey)
+	}
 	return nil
 }
 

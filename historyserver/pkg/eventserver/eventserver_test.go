@@ -1,8 +1,6 @@
 package eventserver
 
 import (
-	"context"
-	"errors"
 	"testing"
 	"time"
 
@@ -24,159 +22,6 @@ func makeTaskEventMap(taskName, nodeId, taskID, cluster string, attempt int) map
 	}
 }
 
-func TestEventProcessor(t *testing.T) {
-	tests := []struct {
-		name string
-		// Setup
-		eventsToSend []map[string]any
-		cancelAfter  time.Duration // Time after which to cancel context (0 for no cancel)
-		closeChan    bool          // Whether to close the channel after sending events
-
-		// Expectations
-		wantErr          bool
-		expectedErrType  error // Specific error type to check (e.g., context.Canceled)
-		wantStoredEvents map[string][]types.Task
-	}{
-		{
-			name: "process multiple events then close channel",
-			eventsToSend: []map[string]any{
-				{
-					"clusterName": "cluster1",
-					"eventType":   "TASK_DEFINITION_EVENT",
-					"taskDefinitionEvent": map[string]any{
-						"taskId":      "ID_12345",
-						"taskName":    "Name_12345",
-						"nodeId":      "Nodeid_12345",
-						"taskAttempt": 2,
-					},
-				},
-				{
-					"clusterName": "cluster1",
-					"eventType":   "TASK_DEFINITION_EVENT",
-					"taskDefinitionEvent": map[string]any{
-						"taskId":      "ID_54321",
-						"taskName":    "Name_54321",
-						"nodeId":      "Nodeid_54321",
-						"taskAttempt": 1,
-					},
-				},
-			},
-			closeChan: true,
-			wantStoredEvents: map[string][]types.Task{
-				"ID_12345": {
-					{
-						TaskID:      "ID_12345",
-						TaskName:    "Name_12345",
-						NodeID:      "Nodeid_12345",
-						TaskAttempt: 2,
-					},
-				},
-				"ID_54321": {
-					{
-						TaskID:      "ID_54321",
-						TaskName:    "Name_54321",
-						NodeID:      "Nodeid_54321",
-						TaskAttempt: 1,
-					},
-				},
-			},
-		},
-		{
-			name:      "channel closed immediately",
-			closeChan: true,
-			wantErr:   false,
-		},
-		{
-			name: "context canceled",
-			eventsToSend: []map[string]any{
-				{
-					"clusterName": "cluster1",
-					"eventType":   "TASK_DEFINITION_EVENT",
-					"taskDefinitionEvent": map[string]any{
-						"taskId":      "ID_12345",
-						"taskName":    "Name_12345",
-						"nodeId":      "Nodeid_12345",
-						"taskAttempt": 2,
-					},
-				},
-			},
-			cancelAfter:     50 * time.Millisecond,
-			wantErr:         true,
-			expectedErrType: context.Canceled,
-			// Event might be processed before cancellation is detected
-			wantStoredEvents: map[string][]types.Task{
-				"ID_12345": {
-					{
-						TaskID:      "ID_12345",
-						TaskName:    "Name_12345",
-						NodeID:      "Nodeid_12345",
-						TaskAttempt: 2,
-					},
-				},
-			},
-		},
-		{
-			name:            "no events, context canceled",
-			cancelAfter:     10 * time.Millisecond,
-			wantErr:         true,
-			expectedErrType: context.Canceled,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Sending nil for reader since it won't be used anyways
-			h := NewEventHandler(nil)
-
-			// Channel buffer size a bit larger than events to avoid blocking sender in test setup
-			ch := make(chan map[string]any, len(tt.eventsToSend)+2)
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-
-			// Send events into the channel
-			go func() {
-				for _, event := range tt.eventsToSend {
-					select {
-					case ch <- event:
-					case <-ctx.Done(): // Stop sending if context is cancelled
-						return
-					}
-				}
-				if tt.closeChan {
-					close(ch)
-				}
-			}()
-
-			// Handle context cancellation if specified
-			if tt.cancelAfter > 0 {
-				go func() {
-					time.Sleep(tt.cancelAfter)
-					cancel()
-				}()
-			}
-
-			// Run the ProcessEvent
-			err := h.ProcessEvents(ctx, ch)
-
-			// Check error expectations
-			if (err != nil) != tt.wantErr {
-				t.Errorf("ProcessEvents() error = %v, wantErr %v", err, tt.wantErr)
-			}
-			if tt.expectedErrType != nil {
-				if !errors.Is(err, tt.expectedErrType) {
-					t.Errorf("ProcessEvents() error type = %T, want type %T (err: %v)", err, tt.expectedErrType, err)
-				}
-			}
-
-			// Check stored events
-			if tt.wantStoredEvents != nil {
-				if diff := cmp.Diff(tt.wantStoredEvents, h.ClusterTaskMap.ClusterTaskMap["cluster1"].TaskMap); diff != "" {
-					t.Errorf("storeEventCalls diff (-want +got):\n%s", diff)
-				}
-			}
-		})
-	}
-}
 
 func TestStoreEvent(t *testing.T) {
 	initialTask := types.Task{
@@ -707,7 +552,7 @@ func TestActorLifecycleEventDeduplication(t *testing.T) {
 			}
 
 			// Get the actor and verify
-			actor, found := h.GetActorByID("test-cluster", "actor-1")
+			actor, found := h.GetActorsMap("test-cluster")["actor-1"]
 			if !found {
 				t.Fatal("Actor not found after processing")
 			}
@@ -869,7 +714,7 @@ func TestDriverJobLifecycleEventDuplication(t *testing.T) {
 				t.Fatalf("storeEvent() unexpected error: %v", err)
 			}
 
-			job, exists := h.GetJobByJobID("test-cluster", "job-1")
+			job, exists := h.GetJobsMap("test-cluster")["job-1"]
 			if !exists {
 				t.Fatal("Job not found after processing")
 			}

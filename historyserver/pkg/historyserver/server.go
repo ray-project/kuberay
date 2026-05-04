@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/ray-project/kuberay/historyserver/pkg/collector/types"
-	"github.com/ray-project/kuberay/historyserver/pkg/eventserver"
 	"github.com/ray-project/kuberay/historyserver/pkg/storage"
 	"github.com/sirupsen/logrus"
 	"k8s.io/client-go/transport"
@@ -21,17 +20,19 @@ type ServerHandler struct {
 
 	reader        storage.StorageReader
 	clientManager *ClientManager
-	eventHandler  *eventserver.EventHandler
+	supervisor    *Supervisor
+	loader        *SnapshotLoader
 	httpClient    *http.Client
 
 	useKubernetesProxy bool
 }
 
-func NewServerHandler(c *types.RayHistoryServerConfig, dashboardDir string, reader storage.StorageReader, clientManager *ClientManager, eventHandler *eventserver.EventHandler, useKubernetesProxy bool) (*ServerHandler, error) {
+func NewServerHandler(c *types.RayHistoryServerConfig, dashboardDir string, reader storage.StorageReader, clientManager *ClientManager, supervisor *Supervisor, loader *SnapshotLoader, useKubernetesProxy bool) (*ServerHandler, error) {
 	handler := &ServerHandler{
 		reader:        reader,
 		clientManager: clientManager,
-		eventHandler:  eventHandler,
+		supervisor:    supervisor,
+		loader:        loader,
 
 		rootDir:      c.RootDir,
 		dashboardDir: dashboardDir,

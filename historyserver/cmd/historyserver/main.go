@@ -1,6 +1,11 @@
+// Package main is the entrypoint for the History Server HTTP daemon.
+// It exposes Ray Dashboard-shaped API endpoints over HTTP and drives
+// per-session event processing on demand via a Supervisor when
+// /enter_cluster hits a dead session.
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"os"
@@ -8,50 +13,60 @@ import (
 	"sync"
 	"syscall"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/ray-project/kuberay/historyserver/pkg/collector"
 	"github.com/ray-project/kuberay/historyserver/pkg/collector/types"
-	"github.com/ray-project/kuberay/historyserver/pkg/eventserver"
 	"github.com/ray-project/kuberay/historyserver/pkg/historyserver"
-	"github.com/sirupsen/logrus"
 )
 
 func main() {
-	runtimeClassName := ""
-	rayRootDir := ""
-	kubeconfigs := ""
-	runtimeClassConfigPath := "/var/collector-config/data"
-	dashboardDir := ""
-	useKubernetesProxy := false
-	flag.StringVar(&runtimeClassName, "runtime-class-name", "", "")
-	flag.StringVar(&rayRootDir, "ray-root-dir", "", "")
-	flag.StringVar(&kubeconfigs, "kubeconfigs", "", "")
-	flag.StringVar(&dashboardDir, "dashboard-dir", "/dashboard", "")
-	flag.StringVar(&runtimeClassConfigPath, "runtime-class-config-path", "", "") //"/var/collector-config/data"
-	flag.BoolVar(&useKubernetesProxy, "use-kubernetes-proxy", false, "")
+	// ===== Flags =====
+	var (
+		runtimeClassName       string
+		rayRootDir             string
+		kubeconfigs            string
+		dashboardDir           string
+		runtimeClassConfigPath string
+		useKubernetesProxy     bool
+		snapshotCacheSize      int
+	)
+	flag.StringVar(&runtimeClassName, "runtime-class-name", "", "Storage backend: s3 / gcs / azureblob / aliyunoss / localtest")
+	flag.StringVar(&rayRootDir, "ray-root-dir", "", "Root dir inside the bucket")
+	flag.StringVar(&kubeconfigs, "kubeconfigs", "", "Kubeconfig path; empty = in-cluster")
+	flag.StringVar(&dashboardDir, "dashboard-dir", "/dashboard", "Path to Ray Dashboard static assets")
+	flag.StringVar(&runtimeClassConfigPath, "runtime-class-config-path", "", "Path to backend config JSON")
+	flag.BoolVar(&useKubernetesProxy, "use-kubernetes-proxy", false, "Use local kubeconfig instead of in-cluster config")
+	flag.IntVar(&snapshotCacheSize, "snapshot-cache-size", historyserver.DefaultCacheSize, "LRU capacity for cached SessionSnapshots")
 	flag.Parse()
 
-	cliMgr, err := historyserver.NewClientManager(kubeconfigs, useKubernetesProxy)
-	if err != nil {
-		logrus.Errorf("Failed to create client manager: %v", err)
-		os.Exit(1)
+	if runtimeClassName == "" {
+		logrus.Fatal("--runtime-class-name is required")
 	}
 
+	// ===== ClientManager =====
+	cliMgr, err := historyserver.NewClientManager(kubeconfigs, useKubernetesProxy)
+	if err != nil {
+		logrus.Fatalf("client manager: %v", err)
+	}
+
+	// ===== Backend config =====
 	jsonData := make(map[string]interface{})
 	if runtimeClassConfigPath != "" {
 		data, err := os.ReadFile(runtimeClassConfigPath)
 		if err != nil {
-			panic("Failed to read runtime class config " + err.Error())
+			logrus.Fatalf("read runtime-class-config: %v", err)
 		}
-		err = json.Unmarshal(data, &jsonData)
-		if err != nil {
-			panic("Failed to parse runtime class config: " + err.Error())
+		if err := json.Unmarshal(data, &jsonData); err != nil {
+			logrus.Fatalf("parse runtime-class-config: %v", err)
 		}
 	}
 
+	// ===== Reader factory =====
 	registry := collector.GetReaderRegistry()
 	factory, ok := registry[runtimeClassName]
 	if !ok {
-		panic("Not supported runtime class name: " + runtimeClassName + ".")
+		logrus.Fatalf("unsupported runtime-class-name for reader: %s", runtimeClassName)
 	}
 
 	globalConfig := types.RayHistoryServerConfig{
@@ -60,36 +75,44 @@ func main() {
 
 	reader, err := factory(&globalConfig, jsonData)
 	if err != nil {
-		panic("Failed to create reader for runtime class name: " + runtimeClassName + ".")
+		logrus.Fatalf("create reader: %v", err)
 	}
 
-	// Create EventHandler with storage reader
-	eventHandler := eventserver.NewEventHandler(reader)
+	// ===== Server context =====
+	serverCtx, serverCancel := signal.NotifyContext(
+		context.Background(),
+		syscall.SIGINT, syscall.SIGTERM,
+	)
+	defer serverCancel()
 
-	// WaitGroup to track goroutine completion
+	// ===== SnapshotLoader =====
+	loader, err := historyserver.NewSnapshotLoader(snapshotCacheSize)
+	if err != nil {
+		logrus.Fatalf("snapshot loader: %v", err)
+	}
+
+	// ===== Pipeline & Supervisor =====
+	pipeline := historyserver.NewPipeline(reader, cliMgr.Client())
+	supervisor := historyserver.NewSupervisor(pipeline, loader, serverCtx)
+
+	// ===== Shutdown signaling =====
+	// Bridge serverCtx into the legacy stop channel that ServerHandler.Run
+	// consumes; the existing chan-based API is preserved.
 	var wg sync.WaitGroup
-
-	sigChan := make(chan os.Signal, 1)
-	stop := make(chan struct{}, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-
-	// Start EventHandler in background goroutine
-	wg.Add(1)
+	stop := make(chan struct{})
 	go func() {
-		defer wg.Done()
-		logrus.Info("Starting EventHandler in background...")
-		if err := eventHandler.Run(stop, 2); err != nil {
-			logrus.Errorf("EventHandler stopped with error: %v", err)
-		}
-		logrus.Info("EventHandler shutdown complete")
+		<-serverCtx.Done()
+		logrus.Info("Received shutdown signal, initiating graceful shutdown...")
+		close(stop)
 	}()
 
-	handler, err := historyserver.NewServerHandler(&globalConfig, dashboardDir, reader, cliMgr, eventHandler, useKubernetesProxy)
+	// ===== ServerHandler =====
+	handler, err := historyserver.NewServerHandler(&globalConfig, dashboardDir, reader, cliMgr, supervisor, loader, useKubernetesProxy)
 	if err != nil {
-		logrus.Errorf("Failed to create server handler: %v", err)
-		os.Exit(1)
+		logrus.Fatalf("create server handler: %v", err)
 	}
 
+	// ===== Run HTTP server =====
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -97,13 +120,7 @@ func main() {
 		logrus.Info("HTTP server shutdown complete")
 	}()
 
-	<-sigChan
-	logrus.Info("Received shutdown signal, initiating graceful shutdown...")
-
-	// Stop both the server and the event handler
-	close(stop)
-
-	// Wait for both goroutines to complete
+	// ===== Wait for graceful shutdown =====
 	wg.Wait()
 	logrus.Info("Graceful shutdown complete")
 }
