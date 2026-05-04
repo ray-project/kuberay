@@ -17,7 +17,6 @@ import (
 
 	"github.com/ray-project/kuberay/historyserver/pkg/collector"
 	"github.com/ray-project/kuberay/historyserver/pkg/collector/types"
-	"github.com/ray-project/kuberay/historyserver/pkg/eventserver"
 	"github.com/ray-project/kuberay/historyserver/pkg/historyserver"
 )
 
@@ -79,9 +78,6 @@ func main() {
 		logrus.Fatalf("create reader: %v", err)
 	}
 
-	// ===== EventHandler =====
-	eventHandler := eventserver.NewEventHandler(reader)
-
 	// ===== Server context =====
 	serverCtx, serverCancel := signal.NotifyContext(
 		context.Background(),
@@ -111,7 +107,7 @@ func main() {
 	}()
 
 	// ===== ServerHandler =====
-	handler, err := historyserver.NewServerHandler(&globalConfig, dashboardDir, reader, cliMgr, eventHandler, supervisor, loader, useKubernetesProxy)
+	handler, err := historyserver.NewServerHandler(&globalConfig, dashboardDir, reader, cliMgr, supervisor, loader, useKubernetesProxy)
 	if err != nil {
 		logrus.Fatalf("create server handler: %v", err)
 	}
