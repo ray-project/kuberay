@@ -131,6 +131,12 @@ spec:
                     type: number
                   entrypointNumGpus:
                     type: number
+                  entrypointMemory:
+                    type: integer
+                  entrypointLabelSelector:
+                    additionalProperties:
+                      type: string
+                    type: object
                   entrypointResources:
                     type: string
                   jobId:

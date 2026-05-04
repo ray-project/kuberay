@@ -55,13 +55,18 @@ type RayJobSpecApplyConfiguration struct {
 	// In "InteractiveMode", the KubeRay operator waits for a user to submit a job to the Ray cluster.
 	// In "SidecarMode", the KubeRay operator injects a container into the Ray head Pod that acts as the job submitter to submit the Ray job.
 	SubmissionMode *rayv1.JobSubmissionMode `json:"submissionMode,omitempty"`
-	// EntrypointResources specifies the custom resources and quantities to reserve for the
-	// entrypoint command.
-	EntrypointResources *string `json:"entrypointResources,omitempty"`
 	// EntrypointNumCpus specifies the number of cpus to reserve for the entrypoint command.
 	EntrypointNumCpus *float32 `json:"entrypointNumCpus,omitempty"`
 	// EntrypointNumGpus specifies the number of gpus to reserve for the entrypoint command.
 	EntrypointNumGpus *float32 `json:"entrypointNumGpus,omitempty"`
+	// EntrypointMemory specifies the amount of memory in bytes to reserve for the entrypoint command.
+	EntrypointMemory *int64 `json:"entrypointMemory,omitempty"`
+	// EntrypointResources specifies the custom resources and quantities to reserve for the
+	// entrypoint command.
+	EntrypointResources *string `json:"entrypointResources,omitempty"`
+	// EntrypointLabelSelector specifies placement constraints for the entrypoint command as a
+	// JSON-serialized label selector map.
+	EntrypointLabelSelector *string `json:"entrypointLabelSelector,omitempty"`
 	// TTLSecondsAfterFinished is the TTL to clean up RayCluster.
 	// It's only working when ShutdownAfterJobFinishes set to true.
 	TTLSecondsAfterFinished *int32 `json:"ttlSecondsAfterFinished,omitempty"`
@@ -203,14 +208,6 @@ func (b *RayJobSpecApplyConfiguration) WithSubmissionMode(value rayv1.JobSubmiss
 	return b
 }
 
-// WithEntrypointResources sets the EntrypointResources field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the EntrypointResources field is set to the value of the last call.
-func (b *RayJobSpecApplyConfiguration) WithEntrypointResources(value string) *RayJobSpecApplyConfiguration {
-	b.EntrypointResources = &value
-	return b
-}
-
 // WithEntrypointNumCpus sets the EntrypointNumCpus field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the EntrypointNumCpus field is set to the value of the last call.
@@ -224,6 +221,30 @@ func (b *RayJobSpecApplyConfiguration) WithEntrypointNumCpus(value float32) *Ray
 // If called multiple times, the EntrypointNumGpus field is set to the value of the last call.
 func (b *RayJobSpecApplyConfiguration) WithEntrypointNumGpus(value float32) *RayJobSpecApplyConfiguration {
 	b.EntrypointNumGpus = &value
+	return b
+}
+
+// WithEntrypointMemory sets the EntrypointMemory field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the EntrypointMemory field is set to the value of the last call.
+func (b *RayJobSpecApplyConfiguration) WithEntrypointMemory(value int64) *RayJobSpecApplyConfiguration {
+	b.EntrypointMemory = &value
+	return b
+}
+
+// WithEntrypointResources sets the EntrypointResources field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the EntrypointResources field is set to the value of the last call.
+func (b *RayJobSpecApplyConfiguration) WithEntrypointResources(value string) *RayJobSpecApplyConfiguration {
+	b.EntrypointResources = &value
+	return b
+}
+
+// WithEntrypointLabelSelector sets the EntrypointLabelSelector field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the EntrypointLabelSelector field is set to the value of the last call.
+func (b *RayJobSpecApplyConfiguration) WithEntrypointLabelSelector(value string) *RayJobSpecApplyConfiguration {
+	b.EntrypointLabelSelector = &value
 	return b
 }
 

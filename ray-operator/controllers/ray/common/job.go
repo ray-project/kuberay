@@ -113,7 +113,9 @@ func BuildJobSubmitCommand(rayJobInstance *rayv1.RayJob, submissionMode rayv1.Jo
 	entrypoint := strings.TrimSpace(rayJobInstance.Spec.Entrypoint)
 	entrypointNumCpus := rayJobInstance.Spec.EntrypointNumCpus
 	entrypointNumGpus := rayJobInstance.Spec.EntrypointNumGpus
+	entrypointMemory := rayJobInstance.Spec.EntrypointMemory
 	entrypointResources := rayJobInstance.Spec.EntrypointResources
+	entrypointLabelSelector := rayJobInstance.Spec.EntrypointLabelSelector
 
 	// In K8sJobMode, we need to avoid submitting the job twice, since the job submitter might retry.
 	// `ray job submit` alone doesn't handle duplicated submission gracefully. See https://github.com/ray-project/kuberay/issues/2154.
@@ -187,8 +189,16 @@ func BuildJobSubmitCommand(rayJobInstance *rayv1.RayJob, submissionMode rayv1.Jo
 		cmd = append(cmd, "--entrypoint-num-gpus", fmt.Sprintf("%f", entrypointNumGpus))
 	}
 
+	if entrypointMemory > 0 {
+		cmd = append(cmd, "--entrypoint-memory", fmt.Sprintf("%d", entrypointMemory))
+	}
+
 	if len(entrypointResources) > 0 {
 		cmd = append(cmd, "--entrypoint-resources", strconv.Quote(entrypointResources))
+	}
+
+	if len(entrypointLabelSelector) > 0 {
+		cmd = append(cmd, "--entrypoint-label-selector", strconv.Quote(entrypointLabelSelector))
 	}
 
 	// "--" is used to separate the entrypoint from the Ray Job CLI command and its arguments.

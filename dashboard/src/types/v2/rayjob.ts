@@ -9,10 +9,12 @@ export interface RayJobSpec {
   entrypoint: string;
   runtimeEnvYAML: string;
   jobId: string;
-  entrypointResources: string;
   ttlSecondsAfterFinished: number;
   entrypointNumCpus: number;
   entrypointNumGpus: number;
+  entrypointMemory: number;
+  entrypointResources: string;
+  entrypointLabelSelector: string;
   shutdownAfterJobFinishes: boolean;
   suspend: boolean;
 }
