@@ -89,4 +89,18 @@ func TestProcessSingleSession(t *testing.T) {
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "read log events")
 	})
+
+	t.Run("both subsystems failing yields combined error", func(t *testing.T) {
+		mock := newLogEventMockReader()
+		mock.addDir("cluster_ns", "session1/node_events/", []string{"node1-2024-01-01-00"})
+		mock.addDir("cluster_ns", "session1/job_events/", []string{})
+		mock.addDir("cluster_ns", "session1/logs", []string{"node1/"})
+		mock.addDir("cluster_ns", "session1/logs/node1/events", []string{"event_GCS.log"})
+
+		h := NewEventHandler(mock)
+		err := h.ProcessSingleSession(clusterInfo)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "ingested 0 of 1 RayEvent files")
+		assert.Contains(t, err.Error(), "read log events")
+	})
 }

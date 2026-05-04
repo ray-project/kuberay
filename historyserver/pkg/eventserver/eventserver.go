@@ -3,6 +3,7 @@ package eventserver
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"regexp"
@@ -1597,14 +1598,16 @@ func (h *EventHandler) ProcessSingleSession(clusterInfo utils.ClusterInfo) error
 
 	// If every attempted file failed, treat as transient outage and surface
 	// so the session is not marked loaded.
+	var rayEventsErrVal error
 	if rayEventsAttempted > 0 && rayEventsSucceeded == 0 {
-		return fmt.Errorf("ingested 0 of %d RayEvent files for %s: likely transient storage outage",
+		rayEventsErrVal = fmt.Errorf("ingested 0 of %d RayEvent files for %s: likely transient storage outage",
 			rayEventsAttempted, clusterSessionKey)
 	}
 
+	var logEventErrVal error
 	if logEventErr != nil {
-		return fmt.Errorf("read log events for %s: %w", clusterSessionKey, logEventErr)
+		logEventErrVal = fmt.Errorf("read log events for %s: %w", clusterSessionKey, logEventErr)
 	}
 
-	return nil
+	return errors.Join(rayEventsErrVal, logEventErrVal)
 }
