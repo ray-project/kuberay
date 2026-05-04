@@ -186,6 +186,15 @@ func routerAPI(s *ServerHandler) {
 		Produces(restful.MIME_JSON).
 		Writes("")) // Placeholder for specific return type
 
+	ws.Route(ws.GET("/v0/nodes").To(s.getV0Nodes).Filter(s.CookieHandle).
+		Doc("Get all node information for a given cluster (State API)").
+		Param(ws.QueryParameter("limit", "limit")).
+		Param(ws.QueryParameter("timeout", "timeout")).
+		Param(ws.QueryParameter("filter_keys", "filter_keys")).
+		Param(ws.QueryParameter("filter_predicates", "filter_predicates")).
+		Param(ws.QueryParameter("filter_values", "filter_values")).
+		Writes("")) // Placeholder for specific return type
+
 	// Fallback route for additional polled endpoints stored in storage by the collector.
 	// This must be registered last because go-restful matches more specific routes first.
 	ws.Route(ws.GET("/{subpath:*}").To(s.getAdditionalEndpoint).Filter(s.CookieHandle).
@@ -602,6 +611,103 @@ func (s *ServerHandler) getNode(req *restful.Request, resp *restful.Response) {
 	}
 
 	resp.Write(data)
+}
+
+func (s *ServerHandler) getV0Nodes(req *restful.Request, resp *restful.Response) {
+	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
+	if sessionName == "live" {
+		s.redirectRequest(req, resp)
+		return
+	}
+
+	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
+	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
+	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
+	nodeMap := s.eventHandler.GetNodeMap(clusterSessionKey)
+
+	nodes := make([]eventtypes.Node, 0, len(nodeMap))
+	for _, node := range nodeMap {
+		nodes = append(nodes, node)
+	}
+
+	numTotal := len(nodes)
+	numAfterTruncation := numTotal
+	numFiltered := numTotal
+
+	formattedNodes := make([]map[string]interface{}, 0, len(nodes))
+	for _, node := range nodes {
+		formattedNodes = append(formattedNodes, formatNodeForStateAPI(node))
+	}
+
+	response := RespNodesInfo{
+		Result: true,
+		Msg:    "",
+		Data: NodeData{
+			Result: NodeDataResult{
+				BaseStateAPIResult: BaseStateAPIResult{
+					Total:                 numTotal,
+					NumAfterTruncation:    numAfterTruncation,
+					NumFiltered:           numFiltered,
+					Result:                formattedNodes,
+					Warnings:              []string{},
+					PartialFailureWarning: "",
+				},
+			},
+		},
+	}
+
+	data, err := json.Marshal(response)
+	if err != nil {
+		logrus.Errorf("Failed to marshal nodes response: %v", err)
+		resp.WriteErrorString(http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	resp.Header().Set("Content-Type", "application/json")
+	resp.Write(data)
+}
+
+func formatNodeForStateAPI(node eventtypes.Node) map[string]interface{} {
+	state := "DEAD"
+	if len(node.StateTransitions) > 0 {
+		state = string(node.StateTransitions[len(node.StateTransitions)-1].State)
+	}
+
+	isHeadNode := false
+	if val, ok := node.Labels["ray.io/node-type"]; ok && val == "head" {
+		isHeadNode = true
+	}
+
+	var startTimeMs int64
+	if !node.StartTimestamp.IsZero() {
+		startTimeMs = node.StartTimestamp.UnixMilli()
+	}
+
+	result := map[string]interface{}{
+		"node_id":               node.NodeID,
+		"node_ip":               node.NodeIPAddress,
+		"node_manager_address":  node.NodeIPAddress,
+		"state":                 state,
+		"node_manager_hostname": node.Hostname,
+		"node_name":             node.NodeName,
+		"instance_id":           node.InstanceID,
+		"instance_type_name":    node.InstanceTypeName,
+		"is_head_node":          isHeadNode,
+		"labels":                node.Labels,
+		"start_time_ms":         startTimeMs,
+		"end_time_ms":           0,
+		"state_message":         "",
+	}
+
+	for i := len(node.StateTransitions) - 1; i >= 0; i-- {
+		tr := node.StateTransitions[i]
+		if tr.State == eventtypes.NODE_ALIVE && len(tr.Resources) > 0 {
+			result["resources_total"] = tr.Resources
+			break
+		}
+	}
+
+	return result
 }
 
 func (s *ServerHandler) getEvents(req *restful.Request, resp *restful.Response) {
@@ -1619,12 +1725,14 @@ func (s *ServerHandler) getTasks(req *restful.Request, resp *restful.Response) {
 		Msg:    "",
 		Data: TaskData{
 			Result: TaskDataResult{
-				Total:                 numTotal,
-				Result:                formattedTasks,
-				NumAfterTruncation:    numAfterTruncation,
-				NumFiltered:           numFiltered,
-				PartialFailureWarning: "",
-				Warnings:              nil,
+				BaseStateAPIResult: BaseStateAPIResult{
+					Total:                 numTotal,
+					Result:                formattedTasks,
+					NumAfterTruncation:    numAfterTruncation,
+					NumFiltered:           numFiltered,
+					PartialFailureWarning: "",
+					Warnings:              nil,
+				},
 			},
 		},
 	}
