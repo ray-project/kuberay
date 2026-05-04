@@ -141,9 +141,9 @@ func TestRayWorkerGroupsGetRun(t *testing.T) {
 				WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
 					{
 						GroupName:   "group-1",
-						Replicas:    ptr.To(int32(1)),
-						MinReplicas: ptr.To(int32(1)),
-						MaxReplicas: ptr.To(int32(5)),
+						Replicas:    new(int32(1)),
+						MinReplicas: new(int32(1)),
+						MaxReplicas: new(int32(5)),
 						Template:    podTemplate,
 					},
 				},
@@ -158,8 +158,8 @@ func TestRayWorkerGroupsGetRun(t *testing.T) {
 				WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
 					{
 						GroupName:   "group-2",
-						Replicas:    ptr.To(int32(1)),
-						MinReplicas: ptr.To(int32(0)),
+						Replicas:    new(int32(1)),
+						MinReplicas: new(int32(0)),
 						MaxReplicas: ptr.To(int32(math.MaxInt32)),
 						Template:    podTemplate,
 					},
@@ -175,16 +175,16 @@ func TestRayWorkerGroupsGetRun(t *testing.T) {
 				WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
 					{
 						GroupName:   "group-1",
-						Replicas:    ptr.To(int32(2)),
-						MinReplicas: ptr.To(int32(1)),
-						MaxReplicas: ptr.To(int32(4)),
+						Replicas:    new(int32(2)),
+						MinReplicas: new(int32(1)),
+						MaxReplicas: new(int32(4)),
 						Template:    podTemplate,
 					},
 					{
 						GroupName:   "group-4",
-						Replicas:    ptr.To(int32(0)),
-						MinReplicas: ptr.To(int32(0)),
-						MaxReplicas: ptr.To(int32(3)),
+						Replicas:    new(int32(0)),
+						MinReplicas: new(int32(0)),
+						MaxReplicas: new(int32(3)),
 						Template:    podTemplate,
 					},
 				},
@@ -589,7 +589,7 @@ func TestGetWorkerGroupDetails(t *testing.T) {
 					cluster:   "cluster-1",
 					spec: rayv1.WorkerGroupSpec{
 						GroupName: "group-1",
-						Replicas:  ptr.To(int32(1)),
+						Replicas:  new(int32(1)),
 					},
 				},
 			},
@@ -604,7 +604,7 @@ func TestGetWorkerGroupDetails(t *testing.T) {
 					cluster:   "cluster-1",
 					spec: rayv1.WorkerGroupSpec{
 						GroupName: "group-1",
-						Replicas:  ptr.To(int32(1)),
+						Replicas:  new(int32(1)),
 						Template:  podTemplate,
 					},
 				},
@@ -613,7 +613,7 @@ func TestGetWorkerGroupDetails(t *testing.T) {
 					cluster:   "cluster-2",
 					spec: rayv1.WorkerGroupSpec{
 						GroupName: "group-2",
-						Replicas:  ptr.To(int32(1)),
+						Replicas:  new(int32(1)),
 						Template:  podTemplate,
 					},
 				},
@@ -622,7 +622,7 @@ func TestGetWorkerGroupDetails(t *testing.T) {
 					cluster:   "cluster-1",
 					spec: rayv1.WorkerGroupSpec{
 						GroupName: "group-1",
-						Replicas:  ptr.To(int32(1)),
+						Replicas:  new(int32(1)),
 						Template:  podTemplate,
 					},
 				},

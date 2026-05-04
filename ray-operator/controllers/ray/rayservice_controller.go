@@ -426,7 +426,7 @@ func (r *RayServiceReconciler) calculateStatus(
 			activeWeight, pendingWeight := utils.GetWeightsFromHTTPRoute(httpRoute, rayServiceInstance)
 			now := metav1.Time{Time: time.Now()}
 			if activeWeight >= 0 {
-				rayServiceInstance.Status.ActiveServiceStatus.TrafficRoutedPercent = ptr.To(activeWeight)
+				rayServiceInstance.Status.ActiveServiceStatus.TrafficRoutedPercent = new(activeWeight)
 				logger.Info("Updated active TrafficRoutedPercent from HTTPRoute", "activeClusterWeight", activeWeight)
 				if activeWeight != oldActivePercent {
 					rayServiceInstance.Status.ActiveServiceStatus.LastTrafficMigratedTime = &now
@@ -434,7 +434,7 @@ func (r *RayServiceReconciler) calculateStatus(
 				}
 			}
 			if pendingWeight >= 0 && pendingCluster != nil {
-				rayServiceInstance.Status.PendingServiceStatus.TrafficRoutedPercent = ptr.To(pendingWeight)
+				rayServiceInstance.Status.PendingServiceStatus.TrafficRoutedPercent = new(pendingWeight)
 				logger.Info("Updated pending TrafficRoutedPercent from HTTPRoute", "pendingClusterWeight", pendingWeight)
 				if pendingWeight != oldPendingPercent {
 					rayServiceInstance.Status.PendingServiceStatus.LastTrafficMigratedTime = &now
@@ -478,13 +478,13 @@ func (r *RayServiceReconciler) calculateStatus(
 				// This is the case when a RayCluster is first starting for a RayService, so we should
 				// immediately scale it to full target capacity.
 				if rayServiceInstance.Status.ActiveServiceStatus.TargetCapacity == nil {
-					rayServiceInstance.Status.PendingServiceStatus.TargetCapacity = ptr.To(int32(100))
+					rayServiceInstance.Status.PendingServiceStatus.TargetCapacity = new(int32(100))
 				}
 			} else {
 				// Pending RayCluster during an upgrade should start with 0% TargetCapacity, since
 				// traffic will be gradually migrated to the new cluster.
 				if rayServiceInstance.Status.PendingServiceStatus.TargetCapacity == nil {
-					rayServiceInstance.Status.PendingServiceStatus.TargetCapacity = ptr.To(int32(0))
+					rayServiceInstance.Status.PendingServiceStatus.TargetCapacity = new(int32(0))
 				}
 			}
 		}
@@ -840,10 +840,10 @@ func (r *RayServiceReconciler) createHTTPRoute(ctx context.Context, rayServiceIn
 			BackendRef: gwv1.BackendRef{
 				BackendObjectReference: gwv1.BackendObjectReference{
 					Name:      gwv1.ObjectName(activeClusterServeSvcName),
-					Namespace: ptr.To(gwv1.Namespace(gatewayInstance.Namespace)),
-					Port:      ptr.To(activeServePort),
+					Namespace: new(gwv1.Namespace(gatewayInstance.Namespace)),
+					Port:      new(activeServePort),
 				},
-				Weight: ptr.To(activeClusterWeight),
+				Weight: new(activeClusterWeight),
 			},
 		},
 	}
@@ -857,10 +857,10 @@ func (r *RayServiceReconciler) createHTTPRoute(ctx context.Context, rayServiceIn
 			BackendRef: gwv1.BackendRef{
 				BackendObjectReference: gwv1.BackendObjectReference{
 					Name:      gwv1.ObjectName(pendingClusterServeSvcName),
-					Namespace: ptr.To(gwv1.Namespace(gatewayInstance.Namespace)),
-					Port:      ptr.To(pendingServePort),
+					Namespace: new(gwv1.Namespace(gatewayInstance.Namespace)),
+					Port:      new(pendingServePort),
 				},
-				Weight: ptr.To(pendingClusterWeight),
+				Weight: new(pendingClusterWeight),
 			},
 		})
 	}
@@ -873,7 +873,7 @@ func (r *RayServiceReconciler) createHTTPRoute(ctx context.Context, rayServiceIn
 				ParentRefs: []gwv1.ParentReference{
 					{
 						Name:      gwv1.ObjectName(gatewayInstance.Name),
-						Namespace: ptr.To(gwv1.Namespace(gatewayInstance.Namespace)),
+						Namespace: new(gwv1.Namespace(gatewayInstance.Namespace)),
 					},
 				},
 			},
@@ -883,7 +883,7 @@ func (r *RayServiceReconciler) createHTTPRoute(ctx context.Context, rayServiceIn
 						{
 							Path: &gwv1.HTTPPathMatch{
 								Type:  ptr.To(gwv1.PathMatchPathPrefix),
-								Value: ptr.To("/"),
+								Value: new("/"),
 							},
 						},
 					},
@@ -1467,9 +1467,9 @@ func (r *RayServiceReconciler) applyServeTargetCapacity(ctx context.Context, ray
 	// Update the TargetCapacity status fields.
 	switch rayClusterInstance.Name {
 	case rayServiceInstance.Status.ActiveServiceStatus.RayClusterName:
-		rayServiceInstance.Status.ActiveServiceStatus.TargetCapacity = ptr.To(goalTargetCapacity)
+		rayServiceInstance.Status.ActiveServiceStatus.TargetCapacity = new(goalTargetCapacity)
 	case rayServiceInstance.Status.PendingServiceStatus.RayClusterName:
-		rayServiceInstance.Status.PendingServiceStatus.TargetCapacity = ptr.To(goalTargetCapacity)
+		rayServiceInstance.Status.PendingServiceStatus.TargetCapacity = new(goalTargetCapacity)
 	}
 
 	return nil
@@ -1486,10 +1486,10 @@ func (r *RayServiceReconciler) reconcileServeTargetCapacity(ctx context.Context,
 
 	// Set initial TargetCapacity values if unset
 	if activeRayServiceStatus.TargetCapacity == nil {
-		activeRayServiceStatus.TargetCapacity = ptr.To(int32(100))
+		activeRayServiceStatus.TargetCapacity = new(int32(100))
 	}
 	if pendingRayServiceStatus.TargetCapacity == nil {
-		pendingRayServiceStatus.TargetCapacity = ptr.To(int32(0))
+		pendingRayServiceStatus.TargetCapacity = new(int32(0))
 	}
 
 	// Retrieve the current observed Status fields for NewClusterWithIncrementalUpgrade
