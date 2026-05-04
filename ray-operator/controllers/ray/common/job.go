@@ -128,21 +128,27 @@ func BuildJobSubmitCommand(rayJobInstance *rayv1.RayJob, submissionMode rayv1.Jo
 	jobSubmitCommand := []string{"ray", "job", "submit", "--address", address}
 	jobFollowCommand := []string{"ray", "job", "logs", "--address", address, "--follow", jobId}
 
+	// Wait until Ray Dashboard GCS is healthy before proceeding.
+	// In SidecarMode the submitter shares the head Pod's network namespace, so we
+	// probe localhost. In K8sJobMode the submitter runs in a separate Pod and must
+	// reach the dashboard through the head Service.
+	var healthURL string
 	if submissionMode == rayv1.SidecarMode {
-		// Wait until Ray Dashboard GCS is healthy before proceeding.
-		rayDashboardGCSHealthCommand := fmt.Sprintf(
-			utils.BasePythonHealthCommand,
-			port,
-			utils.RayDashboardGCSHealthPath,
-			utils.DefaultReadinessProbeFailureThreshold,
-		)
-
-		waitLoop := []string{
-			"until", rayDashboardGCSHealthCommand, ">/dev/null", "2>&1", ";",
-			"do", "echo", strconv.Quote("Waiting for Ray Dashboard GCS to become healthy at " + address + " ..."), ";", "sleep", "2", ";", "done", ";",
-		}
-		cmd = append(cmd, waitLoop...)
+		healthURL = fmt.Sprintf("http://localhost:%d/%s", port, utils.RayDashboardGCSHealthPath)
+	} else {
+		healthURL = address + "/" + utils.RayDashboardGCSHealthPath
 	}
+	rayDashboardGCSHealthCommand := fmt.Sprintf(
+		utils.BasePythonHealthCommand,
+		healthURL,
+		utils.DefaultReadinessProbeFailureThreshold,
+	)
+
+	waitLoop := []string{
+		"until", rayDashboardGCSHealthCommand, ">/dev/null", "2>&1", ";",
+		"do", "echo", strconv.Quote("Waiting for Ray Dashboard GCS to become healthy at " + address + " ..."), ";", "sleep", "2", ";", "done", ";",
+	}
+	cmd = append(cmd, waitLoop...)
 
 	// In Sidecar mode, we only support RayJob level retry, which means that the submitter retry won't happen,
 	// so we won't have to check if the job has been submitted.

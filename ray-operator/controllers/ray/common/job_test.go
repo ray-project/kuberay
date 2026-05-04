@@ -71,6 +71,10 @@ pip: ["python-multipart==0.0.6"]
 func TestBuildJobSubmitCommandWithK8sJobMode(t *testing.T) {
 	testRayJob := rayJobTemplate()
 	expected := []string{
+		"until",
+		fmt.Sprintf(utils.BasePythonHealthCommand, "http://127.0.0.1:8265/"+utils.RayDashboardGCSHealthPath, utils.DefaultReadinessProbeFailureThreshold),
+		">/dev/null", "2>&1", ";",
+		"do", "echo", strconv.Quote("Waiting for Ray Dashboard GCS to become healthy at http://127.0.0.1:8265 ..."), ";", "sleep", "2", ";", "done", ";",
 		"if",
 		"!", "ray", "job", "status", "--address", "http://127.0.0.1:8265", "testJobId", ">/dev/null", "2>&1",
 		";", "then",
@@ -108,8 +112,7 @@ func TestBuildJobSubmitCommandWithSidecarMode(t *testing.T) {
 		"until",
 		fmt.Sprintf(
 			utils.BasePythonHealthCommand,
-			utils.DefaultDashboardPort,
-			utils.RayDashboardGCSHealthPath,
+			fmt.Sprintf("http://localhost:%d/%s", utils.DefaultDashboardPort, utils.RayDashboardGCSHealthPath),
 			utils.DefaultReadinessProbeFailureThreshold,
 		),
 		">/dev/null", "2>&1", ";",
@@ -198,16 +201,16 @@ func TestBuildJobSubmitCommandWithSidecarModeCustomDashboardPort(t *testing.T) {
 	assert.NotContains(t, command[1], "wget")
 }
 
-func TestBuildJobSubmitCommandWithK8sJobModeNoSidecarHealthWaitLoop(t *testing.T) {
+func TestBuildJobSubmitCommandWithK8sJobModeHealthWaitLoop(t *testing.T) {
 	testRayJob := rayJobTemplate()
 	command, err := BuildJobSubmitCommand(testRayJob, rayv1.K8sJobMode)
 	require.NoError(t, err)
-	assert.NotContains(t, command, "until")
-	for _, arg := range command {
-		assert.NotContains(t, arg, utils.RayDashboardGCSHealthPath)
-		assert.NotContains(t, arg, "python -c")
-		assert.NotContains(t, arg, "wget")
-	}
+	require.GreaterOrEqual(t, len(command), 2)
+	assert.Equal(t, "until", command[0])
+	assert.Contains(t, command[1], "python -c")
+	assert.Contains(t, command[1], utils.RayDashboardGCSHealthPath)
+	assert.Contains(t, command[1], "127.0.0.1:8265")
+	assert.NotContains(t, command[1], "wget")
 }
 
 func TestBuildJobSubmitCommandWithK8sJobModeAndYAML(t *testing.T) {
@@ -231,6 +234,10 @@ pip: ["python-multipart==0.0.6"]
 		},
 	}
 	expected := []string{
+		"until",
+		fmt.Sprintf(utils.BasePythonHealthCommand, "http://127.0.0.1:8265/"+utils.RayDashboardGCSHealthPath, utils.DefaultReadinessProbeFailureThreshold),
+		">/dev/null", "2>&1", ";",
+		"do", "echo", strconv.Quote("Waiting for Ray Dashboard GCS to become healthy at http://127.0.0.1:8265 ..."), ";", "sleep", "2", ";", "done", ";",
 		"if",
 		"!", "ray", "job", "status", "--address", "http://127.0.0.1:8265", "testJobId", ">/dev/null", "2>&1",
 		";", "then",
@@ -255,7 +262,8 @@ pip: ["python-multipart==0.0.6"]
 		if expected[i] == "--runtime-env-json" {
 			// Decode the JSON string from the next element.
 			var expectedMap, actualMap map[string]any
-			unquoteExpected, err1 := strconv.Unquote(expected[i+1]) //nolint:gosec // loop bounds guarantee i+1 is valid
+			//nolint:gosec // G602: test invariant guarantees "--runtime-env-json" is followed by a value.
+			unquoteExpected, err1 := strconv.Unquote(expected[i+1])
 			require.NoError(t, err1)
 
 			unquotedCommand, err2 := strconv.Unquote(command[i+1])
