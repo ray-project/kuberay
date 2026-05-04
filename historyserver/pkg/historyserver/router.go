@@ -298,9 +298,30 @@ func routerRayClusterSet(s *ServerHandler) {
 		name := r1.PathParameter("name")
 		namespace := r1.PathParameter("namespace")
 		session := r1.PathParameter("session")
+
+		// For dead sessions, block until events have been ingested.
+		// The "live" sentinel skips the supervisor: live sessions
+		// are served via the reverse-proxy path.
+		if session != "live" && s.supervisor != nil {
+			info := utils.ClusterInfo{Name: name, Namespace: namespace, SessionName: session}
+			live, err := s.supervisor.Ensure(r1.Request.Context(), info)
+			if err != nil {
+				logrus.Errorf("Supervisor.Ensure for %s/%s/%s: %v", namespace, name, session, err)
+				r2.WriteErrorString(http.StatusInternalServerError, err.Error())
+				return
+			}
+			// If the session belongs to a live cluster, rewrite the session
+			// name cookie to "live" to avoid querying empty in-memory state.
+			if live {
+				session = "live"
+			}
+		}
+
+		// Set cookies only after a successful load (dead) or a skip (live).
 		http.SetCookie(r2, &http.Cookie{MaxAge: 600, Path: "/", Name: COOKIE_CLUSTER_NAME_KEY, Value: name})
 		http.SetCookie(r2, &http.Cookie{MaxAge: 600, Path: "/", Name: COOKIE_CLUSTER_NAMESPACE_KEY, Value: namespace})
 		http.SetCookie(r2, &http.Cookie{MaxAge: 600, Path: "/", Name: COOKIE_SESSION_NAME_KEY, Value: session})
+
 		r2.WriteJson(map[string]interface{}{
 			"result":    "success",
 			"name":      name,
