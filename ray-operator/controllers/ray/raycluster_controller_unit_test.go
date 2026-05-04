@@ -2870,6 +2870,98 @@ func Test_RedisCleanup(t *testing.T) {
 	}
 }
 
+func Test_RedisCleanupCustomResources(t *testing.T) {
+	setupTest(t)
+	newScheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(newScheme)
+	_ = corev1.AddToScheme(newScheme)
+	_ = batchv1.AddToScheme(newScheme)
+
+	gcsFTEnabledCluster := testRayCluster.DeepCopy()
+	if gcsFTEnabledCluster.Annotations == nil {
+		gcsFTEnabledCluster.Annotations = make(map[string]string)
+	}
+	gcsFTEnabledCluster.Annotations[utils.RayFTEnabledAnnotationKey] = "true"
+	gcsFTEnabledCluster.Spec.EnableInTreeAutoscaling = nil
+	controllerutil.AddFinalizer(gcsFTEnabledCluster, utils.GCSFaultToleranceRedisCleanupFinalizer)
+	now := metav1.Now()
+	gcsFTEnabledCluster.DeletionTimestamp = &now
+
+	tests := []struct {
+		name          string
+		cpuAnnotation string
+		memAnnotation string
+		expectedCPU   string
+		expectedMem   string
+	}{
+		{
+			name:          "Valid custom resources are used",
+			cpuAnnotation: "500m",
+			memAnnotation: "512Mi",
+			expectedCPU:   "500m",
+			expectedMem:   "512Mi",
+		},
+		{
+			name:          "Invalid CPU falls back to default",
+			cpuAnnotation: "invalid",
+			memAnnotation: "512Mi",
+			expectedCPU:   "200m",
+			expectedMem:   "512Mi",
+		},
+		{
+			name:          "Invalid memory falls back to default",
+			cpuAnnotation: "500m",
+			memAnnotation: "invalid",
+			expectedCPU:   "500m",
+			expectedMem:   "256Mi",
+		},
+		{
+			name:        "No annotations uses defaults",
+			expectedCPU: "200m",
+			expectedMem: "256Mi",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cluster := gcsFTEnabledCluster.DeepCopy()
+			if tc.cpuAnnotation != "" {
+				cluster.Annotations[utils.RayGCSFTRedisCleanupJobCPUAnnotationKey] = tc.cpuAnnotation
+			}
+			if tc.memAnnotation != "" {
+				cluster.Annotations[utils.RayGCSFTRedisCleanupJobMemoryAnnotationKey] = tc.memAnnotation
+			}
+
+			ctx := context.Background()
+			fakeClient := clientFake.NewClientBuilder().
+				WithScheme(newScheme).
+				WithRuntimeObjects(cluster.DeepCopy()).
+				WithStatusSubresource(cluster).
+				Build()
+
+			testRayClusterReconciler := &RayClusterReconciler{
+				Client:   fakeClient,
+				Recorder: &record.FakeRecorder{},
+				Scheme:   newScheme,
+			}
+
+			_, err := testRayClusterReconciler.rayClusterReconcile(ctx, cluster)
+			require.NoError(t, err)
+
+			jobList := batchv1.JobList{}
+			err = fakeClient.List(ctx, &jobList, client.InNamespace(namespaceStr))
+			require.NoError(t, err)
+			require.Len(t, jobList.Items, 1)
+
+			container := jobList.Items[0].Spec.Template.Spec.Containers[utils.RayContainerIndex]
+			assert.Equal(t, resource.MustParse(tc.expectedCPU), container.Resources.Requests[corev1.ResourceCPU])
+			assert.Equal(t, resource.MustParse(tc.expectedMem), container.Resources.Requests[corev1.ResourceMemory])
+			assert.Equal(t, resource.MustParse(tc.expectedCPU), container.Resources.Limits[corev1.ResourceCPU])
+			assert.Equal(t, resource.MustParse(tc.expectedMem), container.Resources.Limits[corev1.ResourceMemory])
+		})
+	}
+}
+
 func TestReconcile_Replicas_Optional(t *testing.T) {
 	setupTest(t)
 
