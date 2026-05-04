@@ -345,3 +345,52 @@ docker buildx build --tag quay.io/<my org>/operator:latest --tag docker.io/<my o
 * Some registry such as Quay.io dashboard displays attestation manifests as unknown platforms. Setting --provenance=false to avoid this issue.
 
 [main-dev-doc]: ../docs/development/development.md#pre-commit-hooks
+
+## Native Workload Scheduling (Gang Scheduling)
+
+The `NativeWorkloadScheduling` feature gate (alpha, default off) enables native Kubernetes gang scheduling via the `scheduling.k8s.io/v1alpha2` Workload and PodGroup APIs. This is **not** a batch scheduler plugin — it integrates directly into the RayCluster controller.
+
+For user-facing documentation, see the [native workload scheduling guide](../docs/guidance/native-workload-scheduling.md).
+
+### Architecture
+
+- All logic is in `controllers/ray/native_workload_scheduling.go` (same package as the RayCluster controller)
+- Gated by the `NativeWorkloadScheduling` feature gate + per-cluster annotation `ray.io/native-workload-scheduling: "true"`
+- `isNativeWorkloadSchedulingEnabled()` is the single guard — all code paths are no-ops when disabled
+- Mutually exclusive with `batchScheduler` configuration (validated at startup in `main.go`)
+- Touch points in `raycluster_controller.go` are minimal: one reconcile call, three `setSchedulingGroup` calls, two cleanup calls, one `.Owns()` addition
+
+### Testing locally with Kind
+
+Native workload scheduling requires Kubernetes 1.36+ with `GenericWorkload` and `GangScheduling` feature gates. No pre-built kind node images exist for 1.36 yet, so you must build one:
+
+```bash
+# Build a kind node image from K8s 1.36
+kind build node-image v1.36.0
+
+# Create the cluster with the required feature gates and alpha API
+kind create cluster --name native-sched \
+  --config ci/kind-config-native-workload-scheduling.yml
+
+# Build and load the operator image
+make docker-image IMG=kuberay/operator:latest
+kind load docker-image kuberay/operator:latest --name native-sched
+
+# Deploy with kustomize
+make deploy IMG=kuberay/operator:latest
+
+# Add the NativeWorkloadScheduling feature gate to the operator deployment
+kubectl patch deployment kuberay-operator --type='json' -p='[
+  {"op": "add", "path": "/spec/template/spec/containers/0/args/-", "value": "--feature-gates=NativeWorkloadScheduling=true"}
+]'
+```
+
+### Running tests
+
+```bash
+# Unit tests
+go test -v -run "TestReconcileNativeWorkloadScheduling|TestBuild|TestIsWorkloadStale|TestSetWorkloadScheduledCondition|TestCalculateStatus_Workload" ./controllers/ray/...
+
+# E2E tests (requires the kind cluster above with operator deployed)
+make test-e2e-native-scheduling
+```

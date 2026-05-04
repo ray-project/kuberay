@@ -142,6 +142,8 @@ featureGates:
   enabled: false
 - name: RayCronJob
   enabled: false
+- name: NativeWorkloadScheduling
+  enabled: false
 
 # Configurations for KubeRay operator metrics.
 metrics:
