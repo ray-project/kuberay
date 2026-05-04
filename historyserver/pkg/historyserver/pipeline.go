@@ -15,6 +15,7 @@ import (
 	"github.com/ray-project/kuberay/historyserver/pkg/eventserver"
 	"github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
 	"github.com/ray-project/kuberay/historyserver/pkg/snapshot"
+	"github.com/ray-project/kuberay/historyserver/pkg/storage"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
@@ -44,19 +45,16 @@ const (
 // event ingestion, and SessionSnapshot building. It is stateless across
 // sessions and safe for concurrent use.
 //
-// Note: this revision keeps EventHandler shared across calls (alpha
-// inheritance) and reads its per-session view through the handler's
-// keyed getters. A future cleanup switches to fresh-per-call EventHandler
-// + reader, dropping shared maps entirely.
+// The only long-lived per-session state is the cached snapshot.
 type Pipeline struct {
-	handler   *eventserver.EventHandler
+	reader    storage.StorageReader
 	k8sClient client.Client
 }
 
 // NewPipeline constructs a Pipeline. All collaborators must be non-nil.
-func NewPipeline(handler *eventserver.EventHandler, k8sClient client.Client) *Pipeline {
+func NewPipeline(reader storage.StorageReader, k8sClient client.Client) *Pipeline {
 	return &Pipeline{
-		handler:   handler,
+		reader:    reader,
 		k8sClient: k8sClient,
 	}
 }
@@ -91,13 +89,13 @@ func (p *Pipeline) ProcessSession(ctx context.Context, session utils.ClusterInfo
 		return SessionStatusLive, nil, nil
 	}
 
-	// Step 2: drive parsing through the shared EventHandler. Events ingest
-	// into the EventHandler's per-session in-memory maps; we read the
-	// per-session view via keyed getters in Step 3.
+	// Step 2: ingest events into a fresh (stateless) EventHandler so in-memory
+	// maps are only read once and GC'd after the snapshot is built.
 	if err := ctx.Err(); err != nil {
 		return SessionStatusCanceled, nil, err
 	}
-	if err := p.handler.ProcessSingleSession(session); err != nil {
+	handler := eventserver.NewEventHandler(p.reader)
+	if err := handler.ProcessSingleSession(session); err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return SessionStatusCanceled, nil, ctxErr
 		}
@@ -105,7 +103,7 @@ func (p *Pipeline) ProcessSession(ctx context.Context, session utils.ClusterInfo
 	}
 
 	// Step 3: build the SessionSnapshot from the handler's per-session view.
-	snap := buildSnapshotFromHandler(p.handler, session)
+	snap := buildSnapshotFromHandler(handler, session)
 	return SessionStatusProcessed, snap, nil
 }
 

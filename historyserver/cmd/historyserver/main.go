@@ -96,7 +96,7 @@ func main() {
 	}
 
 	// ===== Pipeline & Supervisor =====
-	pipeline := historyserver.NewPipeline(eventHandler, cliMgr.Client())
+	pipeline := historyserver.NewPipeline(reader, cliMgr.Client())
 	supervisor := historyserver.NewSupervisor(pipeline, loader, serverCtx)
 
 	// ===== Shutdown signaling =====
