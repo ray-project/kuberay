@@ -1834,15 +1834,24 @@ func (s *ServerHandler) CookieHandle(req *restful.Request, resp *restful.Respons
 
 // fetchClusterAndSvcInfo retrieves the RayCluster once and derives the head service info.
 // This avoids doing multiple GETs for the same cluster when auth token mode is enabled.
-func fetchClusterAndSvcInfo(clis []client.Client, name, namespace string) (ServiceInfo, *rayv1.RayCluster, error) {
+func fetchClusterAndSvcInfo(clientList []client.Client, name, namespace string) (ServiceInfo, *rayv1.RayCluster, error) {
 
-	if len(clis) == 0 {
+	if len(clientList) == 0 {
 		return ServiceInfo{}, nil, errors.New("No available kubernetes config found")
 	}
-	cli := clis[0]
-	rc := rayv1.RayCluster{}
-	err := cli.Get(context.Background(), types.NamespacedName{Namespace: namespace, Name: name}, &rc)
-	if err != nil {
+
+	// Try each client in turn and use the first one that can find the RayCluster.
+	var rc rayv1.RayCluster
+	var cli client.Client
+	found := false
+	for _, c := range clientList {
+		if err := c.Get(context.Background(), types.NamespacedName{Namespace: namespace, Name: name}, &rc); err == nil {
+			cli = c
+			found = true
+			break
+		}
+	}
+	if !found {
 		return ServiceInfo{}, nil, errors.New("RayCluster not found")
 	}
 	svcName := rc.Status.Head.ServiceName
@@ -1854,7 +1863,7 @@ func fetchClusterAndSvcInfo(clis []client.Client, name, namespace string) (Servi
 	// because users can override the port in their HeadGroupSpec.
 	port := DefaultDashboardPort
 	headSvc := corev1.Service{}
-	if err = cli.Get(context.Background(), types.NamespacedName{Namespace: namespace, Name: svcName}, &headSvc); err == nil {
+	if err := cli.Get(context.Background(), types.NamespacedName{Namespace: namespace, Name: svcName}, &headSvc); err == nil {
 		for _, p := range headSvc.Spec.Ports {
 			if p.Name == DashboardPortName {
 				port = int(p.Port)
