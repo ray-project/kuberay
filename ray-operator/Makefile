@@ -107,6 +107,14 @@ test-e2e-rayjob: manifests fmt vet ## Run e2e RayJob tests.
 sync: helm api-docs
 	./hack/update-codegen.sh
 
+.PHONY: verify-codegen
+verify-codegen: ## Verify generated client/openapi code is up to date.
+	./hack/verify-codegen.sh
+
+.PHONY: verify-generated-files
+verify-generated-files: ## Verify generated deepcopy files are up to date.
+	./hack/verify-generated-files.sh
+
 ##@ Build
 
 build: fmt vet ## Build manager binary.
