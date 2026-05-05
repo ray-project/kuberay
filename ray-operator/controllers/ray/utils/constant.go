@@ -253,9 +253,10 @@ const (
 	// only one of them needs to be checked. So, RayAgentRayletHealthPath accesses the dashboard agent's API endpoint
 	// to check the health of the Raylet process.
 	// TODO (kevin85421): Should we take the dashboard process into account?
-	RayAgentRayletHealthPath  = "api/local_raylet_healthz"
-	RayDashboardGCSHealthPath = "api/gcs_healthz"
-	RayServeProxyHealthPath   = "-/healthz"
+	RayAgentRayletHealthPath                 = "api/local_raylet_healthz"
+	RayDashboardGCSHealthPath                = "api/gcs_healthz"
+	RayDashboardGCSHealthCheckTimeoutSeconds = 10
+	RayServeProxyHealthPath                  = "-/healthz"
 	// BaseWgetHealthCommand checks a single health URL; args: timeout_sec, port, path (no leading slash).
 	// This is used for Ray versions that rely on exec probes and assume common CLI tools exist in the image.
 	BaseWgetHealthCommand = "wget --tries 1 -T %d -q -O- http://localhost:%d/%s | grep success"

@@ -141,7 +141,7 @@ func BuildJobSubmitCommand(rayJobInstance *rayv1.RayJob, submissionMode rayv1.Jo
 	rayDashboardGCSHealthCommand := fmt.Sprintf(
 		utils.BasePythonHealthCommand,
 		healthURL,
-		utils.DefaultReadinessProbeFailureThreshold,
+		utils.RayDashboardGCSHealthCheckTimeoutSeconds,
 	)
 
 	waitLoop := []string{

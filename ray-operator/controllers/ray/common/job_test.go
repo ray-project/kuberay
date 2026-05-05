@@ -72,7 +72,7 @@ func TestBuildJobSubmitCommandWithK8sJobMode(t *testing.T) {
 	testRayJob := rayJobTemplate()
 	expected := []string{
 		"until",
-		fmt.Sprintf(utils.BasePythonHealthCommand, "http://127.0.0.1:8265/"+utils.RayDashboardGCSHealthPath, utils.DefaultReadinessProbeFailureThreshold),
+		fmt.Sprintf(utils.BasePythonHealthCommand, "http://127.0.0.1:8265/"+utils.RayDashboardGCSHealthPath, utils.RayDashboardGCSHealthCheckTimeoutSeconds),
 		">/dev/null", "2>&1", ";",
 		"do", "echo", strconv.Quote("Waiting for Ray Dashboard GCS to become healthy at http://127.0.0.1:8265 ..."), ";", "sleep", "2", ";", "done", ";",
 		"if",
@@ -113,7 +113,7 @@ func TestBuildJobSubmitCommandWithSidecarMode(t *testing.T) {
 		fmt.Sprintf(
 			utils.BasePythonHealthCommand,
 			fmt.Sprintf("http://localhost:%d/%s", utils.DefaultDashboardPort, utils.RayDashboardGCSHealthPath),
-			utils.DefaultReadinessProbeFailureThreshold,
+			utils.RayDashboardGCSHealthCheckTimeoutSeconds,
 		),
 		">/dev/null", "2>&1", ";",
 		"do", "echo", strconv.Quote("Waiting for Ray Dashboard GCS to become healthy at http://127.0.0.1:8265 ..."), ";", "sleep", "2", ";", "done", ";",
@@ -235,7 +235,7 @@ pip: ["python-multipart==0.0.6"]
 	}
 	expected := []string{
 		"until",
-		fmt.Sprintf(utils.BasePythonHealthCommand, "http://127.0.0.1:8265/"+utils.RayDashboardGCSHealthPath, utils.DefaultReadinessProbeFailureThreshold),
+		fmt.Sprintf(utils.BasePythonHealthCommand, "http://127.0.0.1:8265/"+utils.RayDashboardGCSHealthPath, utils.RayDashboardGCSHealthCheckTimeoutSeconds),
 		">/dev/null", "2>&1", ";",
 		"do", "echo", strconv.Quote("Waiting for Ray Dashboard GCS to become healthy at http://127.0.0.1:8265 ..."), ";", "sleep", "2", ";", "done", ";",
 		"if",
