@@ -139,6 +139,7 @@ func setupNetworkPolicyTest(t *testing.T) {
 					Kind:       "RayJob",
 					Name:       "test-job",
 					UID:        "12345",
+					Controller: ptr.To(true),
 				},
 			},
 		},
@@ -324,7 +325,7 @@ func TestBuildHeadIngressRules(t *testing.T) {
 	operatorRule := rules[1]
 	require.Len(t, operatorRule.From, 1)
 	assert.Equal(t, map[string]string{
-		"app.kubernetes.io/component": utils.ComponentName,
+		utils.KubernetesComponentLabelKey: utils.ComponentName,
 	}, operatorRule.From[0].PodSelector.MatchLabels)
 	require.NotNil(t, operatorRule.From[0].NamespaceSelector)
 	assert.Equal(t, map[string]string{
@@ -473,32 +474,27 @@ func TestBuildHeadNetworkPolicy_CustomEgressRules(t *testing.T) {
 	assert.Equal(t, &customPort, policy.Spec.Egress[2].Ports[0].Port)
 }
 
-// TestGetHeadPort_DefaultFallback verifies the default port is returned when the container list is empty.
+// TestGetHeadPort_DefaultFallback verifies the default port is returned when rayStartParams has no override.
 func TestGetHeadPort_DefaultFallback(t *testing.T) {
 	setupNetworkPolicyTest(t)
 
 	cluster := testRayClusterBasic.DeepCopy()
-	cluster.Spec.HeadGroupSpec.Template.Spec.Containers = nil
+	cluster.Spec.HeadGroupSpec.RayStartParams = map[string]string{}
 
-	port := testNetworkPolicyController.getHeadPort(cluster, utils.DashboardPortName, utils.DefaultDashboardPort)
+	port := testNetworkPolicyController.getHeadPort(cluster, "dashboard-port", utils.DefaultDashboardPort)
 	assert.Equal(t, int32(utils.DefaultDashboardPort), port)
 }
 
-// TestGetHeadPort_CustomPort verifies that a named port found in the head container spec is returned.
+// TestGetHeadPort_CustomPort verifies that a port set via rayStartParams is returned.
 func TestGetHeadPort_CustomPort(t *testing.T) {
 	setupNetworkPolicyTest(t)
 
 	cluster := testRayClusterBasic.DeepCopy()
-	cluster.Spec.HeadGroupSpec.Template.Spec.Containers = []corev1.Container{
-		{
-			Name: "ray-head",
-			Ports: []corev1.ContainerPort{
-				{Name: utils.DashboardPortName, ContainerPort: 9265},
-			},
-		},
+	cluster.Spec.HeadGroupSpec.RayStartParams = map[string]string{
+		"dashboard-port": "9265",
 	}
 
-	port := testNetworkPolicyController.getHeadPort(cluster, utils.DashboardPortName, utils.DefaultDashboardPort)
+	port := testNetworkPolicyController.getHeadPort(cluster, "dashboard-port", utils.DefaultDashboardPort)
 	assert.Equal(t, int32(9265), port)
 }
 

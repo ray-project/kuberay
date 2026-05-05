@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"strconv"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
@@ -33,8 +34,7 @@ type NetworkPolicyController struct {
 }
 
 // NewNetworkPolicyController creates a new independent NetworkPolicy controller.
-// The operator's namespace is resolved from the in-cluster service account token,
-// falling back to the POD_NAMESPACE environment variable.
+// The operator's namespace is resolved from the in-cluster service account token.
 func NewNetworkPolicyController(mgr manager.Manager) *NetworkPolicyController {
 	return &NetworkPolicyController{
 		Client:            mgr.GetClient(),
@@ -299,8 +299,8 @@ func (r *NetworkPolicyController) buildBaseIngressRules(instance *rayv1.RayClust
 // NetworkIsolation spec.
 func (r *NetworkPolicyController) buildHeadIngressRules(instance *rayv1.RayCluster) []networkingv1.NetworkPolicyIngressRule {
 	tcpProtocol := corev1.ProtocolTCP
-	dashboardPort := intstr.FromInt32(r.getHeadPort(instance, utils.DashboardPortName, utils.DefaultDashboardPort))
-	clientPort := intstr.FromInt32(r.getHeadPort(instance, utils.ClientPortName, utils.DefaultClientPort))
+	dashboardPort := intstr.FromInt32(r.getHeadPort(instance, "dashboard-port", utils.DefaultDashboardPort))
+	clientPort := intstr.FromInt32(r.getHeadPort(instance, "ray-client-server-port", utils.DefaultClientPort))
 
 	rules := r.buildBaseIngressRules(instance)
 	rules = append(rules,
@@ -316,7 +316,7 @@ func (r *NetworkPolicyController) buildHeadIngressRules(instance *rayv1.RayClust
 				{
 					PodSelector: &metav1.LabelSelector{
 						MatchLabels: map[string]string{
-							"app.kubernetes.io/component": utils.ComponentName,
+							utils.KubernetesComponentLabelKey: utils.ComponentName,
 						},
 					},
 					NamespaceSelector: &metav1.LabelSelector{
@@ -366,7 +366,9 @@ func (r *NetworkPolicyController) buildHeadIngressRules(instance *rayv1.RayClust
 // the RayJob that owns this RayCluster, or nil if not owned by a RayJob.
 func (r *NetworkPolicyController) buildRayJobPeer(instance *rayv1.RayCluster) *networkingv1.NetworkPolicyPeer {
 	for _, ownerRef := range instance.OwnerReferences {
-		if ownerRef.Kind == "RayJob" {
+		if ownerRef.Kind == "RayJob" &&
+			ownerRef.Controller != nil && *ownerRef.Controller &&
+			strings.HasPrefix(ownerRef.APIVersion, "ray.io/") {
 			return &networkingv1.NetworkPolicyPeer{
 				PodSelector: &metav1.LabelSelector{
 					MatchLabels: map[string]string{
@@ -380,14 +382,15 @@ func (r *NetworkPolicyController) buildRayJobPeer(instance *rayv1.RayCluster) *n
 	return nil
 }
 
-// getHeadPort returns the port number for the named port in the head container,
-// falling back to defaultPort if the name is not found or no containers are defined.
-func (r *NetworkPolicyController) getHeadPort(instance *rayv1.RayCluster, portName string, defaultPort int32) int32 {
-	containers := instance.Spec.HeadGroupSpec.Template.Spec.Containers
-	if len(containers) == 0 {
-		return defaultPort
+// getHeadPort returns the port number for the given rayStartParams key,
+// falling back to defaultPort if the key is absent or not a valid integer.
+func (r *NetworkPolicyController) getHeadPort(instance *rayv1.RayCluster, rayStartParamKey string, defaultPort int32) int32 {
+	if portStr, ok := instance.Spec.HeadGroupSpec.RayStartParams[rayStartParamKey]; ok {
+		if port, err := strconv.ParseInt(portStr, 10, 32); err == nil {
+			return int32(port)
+		}
 	}
-	return utils.FindContainerPort(&containers[utils.RayContainerIndex], portName, defaultPort)
+	return defaultPort
 }
 
 // buildBaseEgressRules creates base egress rules (intra-cluster + DNS)

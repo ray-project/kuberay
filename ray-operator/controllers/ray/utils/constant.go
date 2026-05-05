@@ -96,6 +96,7 @@ const (
 	EnableRayClusterServingServiceFalse = "false"
 
 	KubernetesApplicationNameLabelKey = "app.kubernetes.io/name"
+	KubernetesComponentLabelKey       = "app.kubernetes.io/component"
 	KubernetesCreatedByLabelKey       = "app.kubernetes.io/created-by"
 
 	InClusterNamespacePath = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
