@@ -100,10 +100,19 @@ func (c *ClientManager) GetAuthTokenForRayCluster(ctx context.Context, rayCluste
 	}
 
 	// Cache miss or expired — fetch from K8s.
-	client := c.clients[0]
+	// Try each client in turn and use the first successful response.
 	secret := &corev1.Secret{}
-	err := client.Get(ctx, types.NamespacedName{Namespace: rayCluster.Namespace, Name: rayCluster.Name}, secret)
-	if err != nil {
+	var err error
+	fetched := false
+	for _, cli := range c.clients {
+		if fetchErr := cli.Get(ctx, types.NamespacedName{Namespace: rayCluster.Namespace, Name: rayCluster.Name}, secret); fetchErr == nil {
+			fetched = true
+			break
+		} else {
+			err = fetchErr
+		}
+	}
+	if !fetched {
 		return "", fmt.Errorf("failed to get auth secret %s/%s: %w", rayCluster.Namespace, rayCluster.Name, err)
 	}
 
