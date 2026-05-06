@@ -1,5 +1,5 @@
 # Image URL to use all building/pushing image targets
-GOLANGCILINT_VERSION ?= v1.59.0
+GOLANGCILINT_VERSION ?= v2.11.3
 GOBIN := $(shell go env GOPATH)/bin
 GOBIN_GOLANGCILINT := $(GOBIN)/golangci-lint
 
@@ -147,7 +147,7 @@ else
 	@{ \
 	set -e ;\
 	echo 'installing golangci-lint-$(GOLANGCILINT_VERSION)' ;\
-	go install github.com/golangci/golangci-lint/cmd/golangci-lint@$(GOLANGCILINT_VERSION) ;\
+	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCILINT_VERSION) ;\
 	echo 'Successfully installed' ;\
 	}
 endif
@@ -156,7 +156,7 @@ else
 	@{ \
 	set -e ;\
 	echo 'installing golangci-lint-$(GOLANGCILINT_VERSION)' ;\
-	go install github.com/golangci/golangci-lint/cmd/golangci-lint@$(GOLANGCILINT_VERSION) ;\
+	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCILINT_VERSION) ;\
 	echo 'Successfully installed' ;\
 	}
 endif

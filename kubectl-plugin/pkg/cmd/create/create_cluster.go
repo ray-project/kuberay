@@ -11,7 +11,6 @@ import (
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/kubectl/pkg/util/templates"
-	"k8s.io/utils/ptr"
 
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client"
@@ -295,7 +294,7 @@ func (options *CreateClusterOptions) Run(ctx context.Context, k8sClient client.C
 			},
 			WorkerGroups: []generation.WorkerGroup{
 				{
-					Name:             ptr.To("default-group"),
+					Name:             new("default-group"),
 					Replicas:         options.workerReplicas,
 					NumOfHosts:       &options.numOfHosts,
 					CPU:              &options.workerCPU,

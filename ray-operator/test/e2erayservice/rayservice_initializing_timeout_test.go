@@ -7,7 +7,6 @@ import (
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/ptr"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
@@ -71,7 +70,7 @@ func TestRayServiceInitializingTimeoutTerminalFailure(t *testing.T) {
 	// This guarantees the RayService stays in Initializing state and will timeout.
 	headPodTemplate := HeadPodTemplateApplyConfiguration()
 	// Override the image with a non-existent one to cause ImagePullBackOff
-	headPodTemplate.Spec.Containers[0].Image = ptr.To("invalid-image-does-not-exist:v1.0.0")
+	headPodTemplate.Spec.Containers[0].Image = new("invalid-image-does-not-exist:v1.0.0")
 
 	rayServiceAC := rayv1ac.RayService(rayServiceName, namespace.Name).
 		WithAnnotations(map[string]string{

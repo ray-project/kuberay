@@ -14,7 +14,6 @@ import (
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	kubefake "k8s.io/client-go/kubernetes/fake"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
-	"k8s.io/utils/ptr"
 
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util/client"
@@ -323,7 +322,7 @@ func TestResolveNamespace(t *testing.T) {
 		},
 		"should use the config namespace when no CLI namespace is provided": {
 			cliNamespace:      "",
-			configNamespace:   ptr.To("config-namespace"),
+			configNamespace:   new("config-namespace"),
 			expectedNamespace: "config-namespace",
 		},
 		"should use the CLI namespace when no config namespace is provided": {
@@ -333,12 +332,12 @@ func TestResolveNamespace(t *testing.T) {
 		},
 		"should error when the config namespace doesn't match the CLI namespace": {
 			cliNamespace:    "cli-namespace",
-			configNamespace: ptr.To("config-namespace"),
+			configNamespace: new("config-namespace"),
 			expectedError:   "the namespace in the config file \"config-namespace\" does not match the namespace \"cli-namespace\". You must pass --namespace=config-namespace to perform this operation",
 		},
 		"should use the specified namespace when it's provided in both the CLI and the config file and is the same": {
 			cliNamespace:      "my-namespace",
-			configNamespace:   ptr.To("my-namespace"),
+			configNamespace:   new("my-namespace"),
 			expectedNamespace: "my-namespace",
 		},
 	}
@@ -380,7 +379,7 @@ func TestResolveClusterName(t *testing.T) {
 		},
 		"should use the config cluster name when no CLI cluster name is provided": {
 			cliClusterName:      "",
-			configClusterName:   ptr.To("config-cluster-name"),
+			configClusterName:   new("config-cluster-name"),
 			expectedClusterName: "config-cluster-name",
 		},
 		"should use the CLI cluster name when no config cluster name is provided": {
@@ -390,12 +389,12 @@ func TestResolveClusterName(t *testing.T) {
 		},
 		"should error when the config cluster name doesn't match the CLI cluster name": {
 			cliClusterName:    "cli-cluster-name",
-			configClusterName: ptr.To("config-cluster-name"),
+			configClusterName: new("config-cluster-name"),
 			expectedError:     "the cluster name in the config file \"config-cluster-name\" does not match the cluster name \"cli-cluster-name\". You must use the same name to perform this operation",
 		},
 		"should use the specified cluster name when it's provided in both the CLI and the config file and is the same": {
 			cliClusterName:      "my-cluster-name",
-			configClusterName:   ptr.To("my-cluster-name"),
+			configClusterName:   new("my-cluster-name"),
 			expectedClusterName: "my-cluster-name",
 		},
 	}

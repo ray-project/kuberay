@@ -1084,13 +1084,13 @@ func TestIsAutoscalingEnabled(t *testing.T) {
 		},
 		"should be false when enableInTreeAutoscaling is false": {
 			spec: &rayv1.RayClusterSpec{
-				EnableInTreeAutoscaling: ptr.To(false),
+				EnableInTreeAutoscaling: new(false),
 			},
 			expected: false,
 		},
 		"should be true when enableInTreeAutoscaling is true": {
 			spec: &rayv1.RayClusterSpec{
-				EnableInTreeAutoscaling: ptr.To(true),
+				EnableInTreeAutoscaling: new(true),
 			},
 			expected: true,
 		},
@@ -1384,7 +1384,7 @@ func TestCalculateResources(t *testing.T) {
 					minReplicas: ptr.To[int32](0),
 					cpu:         "2",
 					memory:      "200Mi",
-					suspend:     ptr.To(true),
+					suspend:     new(true),
 				},
 			}),
 			expected: struct {
@@ -1506,7 +1506,7 @@ func makeHTTPRouteWithParentRef(
 					{
 						ParentRef: gwv1.ParentReference{
 							Name:      gwv1.ObjectName(parentRefName),
-							Namespace: ptr.To(gwv1.Namespace(namespace)),
+							Namespace: new(gwv1.Namespace(namespace)),
 						},
 						Conditions: []metav1.Condition{
 							{
@@ -1756,21 +1756,21 @@ func TestGetWeightsFromHTTPRoute(t *testing.T) {
 		},
 		{
 			name:            "Valid weights returned for both active and pending clusters",
-			httpRoute:       makeHTTPRoute(ptr.To(int32(80)), ptr.To(int32(20))),
+			httpRoute:       makeHTTPRoute(new(int32(80)), new(int32(20))),
 			rayService:      makeRayService(activeClusterName, pendingClusterName),
 			expectedActive:  80,
 			expectedPending: 20,
 		},
 		{
 			name:            "Valid HTTPRoute with only active cluster backend",
-			httpRoute:       makeHTTPRoute(ptr.To(int32(100)), nil),
+			httpRoute:       makeHTTPRoute(new(int32(100)), nil),
 			rayService:      makeRayService(activeClusterName, ""),
 			expectedActive:  100,
 			expectedPending: -1,
 		},
 		{
 			name:            "Valid HTTPRoute with only pending cluster backend",
-			httpRoute:       makeHTTPRoute(nil, ptr.To(int32(100))),
+			httpRoute:       makeHTTPRoute(nil, new(int32(100))),
 			rayService:      makeRayService("", pendingClusterName),
 			expectedActive:  -1,
 			expectedPending: 100,
@@ -1800,7 +1800,7 @@ func TestIsHTTPRouteEqual(t *testing.T) {
 					Rules: []gwv1.HTTPRouteRule{
 						{
 							BackendRefs: []gwv1.HTTPBackendRef{
-								{BackendRef: gwv1.BackendRef{BackendObjectReference: gwv1.BackendObjectReference{Name: "svc-a", Port: ptr.To(gwv1.PortNumber(8000))}, Weight: ptr.To(int32(100))}},
+								{BackendRef: gwv1.BackendRef{BackendObjectReference: gwv1.BackendObjectReference{Name: "svc-a", Port: ptr.To(gwv1.PortNumber(8000))}, Weight: new(int32(100))}},
 							},
 						},
 					},
@@ -1811,7 +1811,7 @@ func TestIsHTTPRouteEqual(t *testing.T) {
 					Rules: []gwv1.HTTPRouteRule{
 						{
 							BackendRefs: []gwv1.HTTPBackendRef{
-								{BackendRef: gwv1.BackendRef{BackendObjectReference: gwv1.BackendObjectReference{Name: "svc-a", Port: ptr.To(gwv1.PortNumber(8000))}, Weight: ptr.To(int32(100))}},
+								{BackendRef: gwv1.BackendRef{BackendObjectReference: gwv1.BackendObjectReference{Name: "svc-a", Port: ptr.To(gwv1.PortNumber(8000))}, Weight: new(int32(100))}},
 							},
 						},
 					},
@@ -1888,7 +1888,7 @@ func TestIsHTTPRouteEqual(t *testing.T) {
 					Rules: []gwv1.HTTPRouteRule{
 						{
 							BackendRefs: []gwv1.HTTPBackendRef{
-								{BackendRef: gwv1.BackendRef{BackendObjectReference: gwv1.BackendObjectReference{Name: "svc-a"}, Weight: ptr.To(int32(100))}},
+								{BackendRef: gwv1.BackendRef{BackendObjectReference: gwv1.BackendObjectReference{Name: "svc-a"}, Weight: new(int32(100))}},
 							},
 						},
 					},
@@ -1899,7 +1899,7 @@ func TestIsHTTPRouteEqual(t *testing.T) {
 					Rules: []gwv1.HTTPRouteRule{
 						{
 							BackendRefs: []gwv1.HTTPBackendRef{
-								{BackendRef: gwv1.BackendRef{BackendObjectReference: gwv1.BackendObjectReference{Name: "svc-a"}, Weight: ptr.To(int32(75))}},
+								{BackendRef: gwv1.BackendRef{BackendObjectReference: gwv1.BackendObjectReference{Name: "svc-a"}, Weight: new(int32(75))}},
 							},
 						},
 					},
@@ -1977,7 +1977,7 @@ func TestIsHTTPRouteEqual(t *testing.T) {
 					Rules: []gwv1.HTTPRouteRule{
 						{
 							Matches: []gwv1.HTTPRouteMatch{
-								{Path: &gwv1.HTTPPathMatch{Value: ptr.To("/api")}},
+								{Path: &gwv1.HTTPPathMatch{Value: new("/api")}},
 							},
 						},
 					},
@@ -1988,7 +1988,7 @@ func TestIsHTTPRouteEqual(t *testing.T) {
 					Rules: []gwv1.HTTPRouteRule{
 						{
 							Matches: []gwv1.HTTPRouteMatch{
-								{Path: &gwv1.HTTPPathMatch{Value: ptr.To("/v2")}},
+								{Path: &gwv1.HTTPPathMatch{Value: new("/v2")}},
 							},
 						},
 					},

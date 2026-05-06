@@ -948,7 +948,7 @@ func GetRayDashboardClientFunc(ctx context.Context, mgr manager.Manager, useKube
 				Namespace: rayCluster.Namespace,
 			}
 
-			if err := mgr.GetClient().Get(context.Background(), secretKey, secret); err != nil {
+			if err := mgr.GetClient().Get(ctx, secretKey, secret); err != nil {
 				return nil, fmt.Errorf("failed to get auth secret %s/%s: %w", rayCluster.Namespace, secretName, err)
 			}
 
@@ -981,15 +981,6 @@ func GetRayDashboardClientFunc(ctx context.Context, mgr manager.Manager, useKube
 		}
 		dashboardClient.InitClient(httpClient, dashboardURL, authToken)
 
-		if features.Enabled(features.AsyncJobInfoQuery) && rayCluster != nil {
-			namespacedName := types.NamespacedName{
-				Name:      rayCluster.Name,
-				Namespace: rayCluster.Namespace,
-			}
-			dashboardCachedClient := &dashboardclient.RayDashboardCacheClient{}
-			dashboardCachedClient.InitClient(ctx, namespacedName, dashboardClient)
-			return dashboardCachedClient, nil
-		}
 		return dashboardClient, nil
 	}
 }
