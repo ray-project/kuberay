@@ -14,9 +14,9 @@ import (
 type NetworkIsolationConfigApplyConfiguration struct {
 	// Mode controls the security level, all modes maintain the Cluster's
 	// ability for intra-node and Kuberay operator communication.
-	// - "denyAll": Denies all Ingress and Egress.
-	// - "denyAllIngress": Denies all Ingress.
-	// - "denyAllEgress": Denies all Egress.
+	// - "DenyAll": Denies all Ingress and Egress.
+	// - "DenyAllIngress": Denies all Ingress.
+	// - "DenyAllEgress": Denies all Egress.
 	Mode *string `json:"mode,omitempty"`
 	// IngressRules specifies custom ingress rules for Ray cluster pods.
 	// By default, the generated NetworkPolicy allows intra-cluster traffic

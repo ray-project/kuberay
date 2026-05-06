@@ -301,7 +301,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `mode` _string_ | Mode controls the security level, all modes maintain the Cluster's<br />ability for intra-node and Kuberay operator communication.<br />- "denyAll": Denies all Ingress and Egress.<br />- "denyAllIngress": Denies all Ingress.<br />- "denyAllEgress": Denies all Egress. | denyAll | Enum: [denyAll denyAllIngress denyAllEgress] <br /> |
+| `mode` _string_ | Mode controls the security level, all modes maintain the Cluster's<br />ability for intra-node and Kuberay operator communication.<br />- "DenyAll": Denies all Ingress and Egress.<br />- "DenyAllIngress": Denies all Ingress.<br />- "DenyAllEgress": Denies all Egress. | DenyAll | Enum: [DenyAll DenyAllIngress DenyAllEgress] <br /> |
 | `ingressRules` _[NetworkPolicyIngressRule](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#networkpolicyingressrule-v1-networking) array_ | IngressRules specifies custom ingress rules for Ray cluster pods.<br />By default, the generated NetworkPolicy allows intra-cluster traffic<br />and KubeRay operator access to dashboard and client ports. For<br />RayJob-owned clusters, the specific submitter pod is also allowed.<br />All other ingress is denied. If other external pods (e.g. a<br />clusterSelector-based RayJob submitter) need to reach the head,<br />add explicit rules here. |  |  |
 | `egressRules` _[NetworkPolicyEgressRule](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#networkpolicyegressrule-v1-networking) array_ | EgressRules specifies custom egress rules for Ray cluster pods. |  |  |
 

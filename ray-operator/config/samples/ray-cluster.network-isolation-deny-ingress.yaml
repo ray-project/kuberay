@@ -6,7 +6,7 @@ spec:
   networkIsolation:
     # Restricts all inbound traffic except intra-cluster and KubeRay operator.
     # Outbound traffic (egress) is unrestricted — pods can reach external services.
-    mode: denyAllIngress
+    mode: DenyAllIngress
     ingressRules:
     # Allow pods labelled app=ray-client to reach the Ray Serve inference endpoint.
     # The base rules only allow intra-cluster and operator access, so an explicit

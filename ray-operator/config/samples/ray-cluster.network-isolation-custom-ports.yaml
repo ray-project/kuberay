@@ -7,7 +7,7 @@ spec:
     # The operator ingress rule automatically resolves the dashboard and client
     # ports from the head container spec by name, so no additional configuration
     # is needed here even with non-default port values.
-    mode: denyAll
+    mode: DenyAll
   rayVersion: '2.52.0'
   headGroupSpec:
     rayStartParams:

@@ -143,7 +143,7 @@ var _ = Context("NetworkPolicy Controller Integration Tests", func() {
 			err := k8sClient.Get(ctx, headKey, headNetworkPolicy)
 			Expect(err).NotTo(HaveOccurred(), "Failed to get Head NetworkPolicy")
 
-			// denyAll mode — both Ingress and Egress policy types must be present.
+			// DenyAll mode — both Ingress and Egress policy types must be present.
 			Expect(headNetworkPolicy.Spec.PolicyTypes).To(ContainElement(networkingv1.PolicyTypeIngress))
 			Expect(headNetworkPolicy.Spec.PolicyTypes).To(ContainElement(networkingv1.PolicyTypeEgress))
 
@@ -311,13 +311,13 @@ var _ = Context("NetworkPolicy Controller Integration Tests", func() {
 		})
 	})
 
-	Describe("Mode denyAllIngress creates Ingress-only policies", Ordered, func() {
+	Describe("Mode DenyAllIngress creates Ingress-only policies", Ordered, func() {
 		ctx := context.Background()
 		namespace := "default"
 		rayCluster := rayClusterTemplateForNetworkPolicy("raycluster-mode-ingress", namespace)
 		rayCluster.Spec.NetworkIsolation.Mode = ptr.To(rayv1.NetworkIsolationDenyAllIngress)
 
-		It("Create a RayCluster with denyAllIngress mode", func() {
+		It("Create a RayCluster with DenyAllIngress mode", func() {
 			err := k8sClient.Create(ctx, rayCluster)
 			Expect(err).NotTo(HaveOccurred(), "Failed to create RayCluster")
 			Eventually(
@@ -355,13 +355,13 @@ var _ = Context("NetworkPolicy Controller Integration Tests", func() {
 		})
 	})
 
-	Describe("Mode denyAllEgress creates Egress-only policies", Ordered, func() {
+	Describe("Mode DenyAllEgress creates Egress-only policies", Ordered, func() {
 		ctx := context.Background()
 		namespace := "default"
 		rayCluster := rayClusterTemplateForNetworkPolicy("raycluster-mode-egress", namespace)
 		rayCluster.Spec.NetworkIsolation.Mode = ptr.To(rayv1.NetworkIsolationDenyAllEgress)
 
-		It("Create a RayCluster with denyAllEgress mode", func() {
+		It("Create a RayCluster with DenyAllEgress mode", func() {
 			err := k8sClient.Create(ctx, rayCluster)
 			Expect(err).NotTo(HaveOccurred(), "Failed to create RayCluster")
 			Eventually(
@@ -516,11 +516,12 @@ var _ = Context("NetworkPolicy Controller Integration Tests", func() {
 			}, time.Second*5, time.Millisecond*500).Should(Succeed())
 		})
 
-		It("Worker NetworkPolicy is created", func() {
-			workerKey := types.NamespacedName{Namespace: namespace, Name: rayCluster.Name + "-workers"}
-			Eventually(
-				getResourceFunc(ctx, workerKey, &networkingv1.NetworkPolicy{}),
-				time.Second*10, time.Millisecond*500).Should(Succeed(), "Worker NetworkPolicy should be created")
+		It("Worker NetworkPolicy should NOT be created when head collision causes reconcile to fail", func() {
+			workerKey := client.ObjectKey{Namespace: namespace, Name: rayCluster.Name + "-workers"}
+			Consistently(func() bool {
+				err := k8sClient.Get(ctx, workerKey, &networkingv1.NetworkPolicy{})
+				return err != nil && client.IgnoreNotFound(err) == nil
+			}, time.Second*5, time.Millisecond*500).Should(BeTrue(), "Worker NetworkPolicy must not be created when head NP collision aborts reconciliation")
 		})
 
 		It("Clean up resources", func() {
