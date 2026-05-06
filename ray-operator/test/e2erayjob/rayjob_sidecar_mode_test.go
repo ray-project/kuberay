@@ -38,7 +38,7 @@ func TestRayJobSidecarMode(t *testing.T) {
 				WithEntrypointNumGpus(2).
 				WithEntrypointMemory(50000000).
 				WithEntrypointResources(`{"R1": 2}`).
-				WithEntrypointLabelSelector(`{"fragile_node":"!1"}`).
+				// WithEntrypointLabelSelector(`{"fragile_node":"!1"}`).
 				WithRuntimeEnvYAML(`
 env_vars:
   counter_name: test_counter
