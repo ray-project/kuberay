@@ -419,7 +419,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v3
         with:
-          go-version: v1.25
+          go-version: v1.26
 
       - name: Check out code into the Go module directory
         uses: actions/checkout@v2
@@ -431,5 +431,5 @@ jobs:
         working-directory: ${{env.working-directory}}
 
       - name: Test
-        run: go test ./pkg/... ./cmd/... -race
+        run: go test ./pkg/... ./cmd/... -race -parallel 4
         working-directory: ${{env.working-directory}}
