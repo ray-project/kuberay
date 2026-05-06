@@ -477,3 +477,16 @@ const (
 	FailedToDeleteNetworkPolicy K8sEventType = "FailedToDeleteNetworkPolicy"
 	NetworkPolicyNameCollision  K8sEventType = "NetworkPolicyNameCollision"
 )
+
+// K8sEventAction describes what action the controller took when recording an event.
+type K8sEventAction string
+
+const (
+	CreateAction    K8sEventAction = "Create"
+	DeleteAction    K8sEventAction = "Delete"
+	UpdateAction    K8sEventAction = "Update"
+	ValidateAction  K8sEventAction = "Validate"
+	ReconcileAction K8sEventAction = "Reconcile"
+	CleanupAction   K8sEventAction = "Cleanup"
+	SuspendAction   K8sEventAction = "Suspend"
+)
