@@ -120,7 +120,7 @@ export GOTOOLCHAIN := $(GOVERSION)+auto
 # Run tests
 .PHONY: test
 test:
-	go test -race -v ./pkg/... ./cmd/...
+	go test -race -v ./pkg/... ./cmd/... -parallel 4
 
 .PHONY: alllint
 alllint: todolist issuelint ## Run go lint against code.
