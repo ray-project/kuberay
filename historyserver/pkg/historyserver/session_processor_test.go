@@ -87,7 +87,7 @@ func TestIsDead(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			k := newFakeK8sClient(t, tc.cr)
-			p := NewPipeline(nil, k)
+			p := NewSessionProcessor(nil, k)
 
 			info := utils.ClusterInfo{Namespace: ns, Name: name, SessionName: tc.sessionName}
 			gotDead, err := p.isDead(context.Background(), info)

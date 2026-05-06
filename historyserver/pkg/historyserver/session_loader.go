@@ -10,9 +10,9 @@ import (
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
-// sessionPipeline is the narrow subset of *Pipeline that the
+// processor is the narrow subset of *SessionProcessor that the
 // SessionLoader depends on.
-type sessionPipeline interface {
+type processor interface {
 	ProcessSession(ctx context.Context, info utils.ClusterInfo) (SessionStatus, error)
 }
 
@@ -21,7 +21,7 @@ type sessionPipeline interface {
 //
 //  1. Live cluster: skip loading; caller redirects to the Ray Dashboard.
 //  2. Dead, already loaded: fast-path; events are already in in-memory maps.
-//  3. Dead, not yet loaded: drive Pipeline to ingest events into the maps.
+//  3. Dead, not yet loaded: drive SessionProcessor to ingest events into the maps.
 //
 // Concurrent callers for the same session are coalesced via singleflight.
 //
@@ -29,7 +29,7 @@ type sessionPipeline interface {
 // replica; its mutable state lives inside singleflight.Group and the
 // loaded set.
 type SessionLoader struct {
-	pipeline  sessionPipeline
+	processor processor
 	sf        singleflight.Group
 	loadedMu  sync.RWMutex
 	loaded    map[string]struct{}
@@ -39,9 +39,9 @@ type SessionLoader struct {
 // NewSessionLoader wires a SessionLoader. All arguments must be non-nil.
 // serverCtx is the server-lifetime context used to cancel in-flight work
 // on shutdown.
-func NewSessionLoader(p sessionPipeline, serverCtx context.Context) *SessionLoader {
+func NewSessionLoader(p processor, serverCtx context.Context) *SessionLoader {
 	return &SessionLoader{
-		pipeline:  p,
+		processor: p,
 		loaded:    make(map[string]struct{}),
 		serverCtx: serverCtx,
 	}
@@ -86,7 +86,7 @@ func (s *SessionLoader) LoadSession(ctx context.Context, info utils.ClusterInfo)
 		// for the next caller of this session.
 		//
 		// Do NOT sf.Forget(key) here: a racing new call would kick off a second
-		// Pipeline execution in parallel with the still-running winner.
+		// processor execution in parallel with the still-running winner.
 		return false, ctx.Err()
 	case result := <-ch:
 		if result.Err != nil {
@@ -98,12 +98,12 @@ func (s *SessionLoader) LoadSession(ctx context.Context, info utils.ClusterInfo)
 }
 
 // doLoadSession checks if the session belongs to a live cluster and drives
-// the Pipeline to ingest events into the maps for dead sessions.
+// the processor to ingest events into the maps for dead sessions.
 //
 // Returns:
 //   - (false, nil): events loaded, either a fast-path hit or events ingested.
 //   - (true, nil): session belongs to a live cluster; not added to the loaded set.
-//   - (_, err): pipeline processing failed.
+//   - (_, err): processor failed.
 func (s *SessionLoader) doLoadSession(ctx context.Context, info utils.ClusterInfo, key string) (bool, error) {
 	// Guard against a race where loaded gets marked between the caller's
 	// lookup and singleflight execution.
@@ -114,7 +114,7 @@ func (s *SessionLoader) doLoadSession(ctx context.Context, info utils.ClusterInf
 		return false, nil
 	}
 	// Synchronously process the session raw events.
-	status, perr := s.pipeline.ProcessSession(ctx, info)
+	status, perr := s.processor.ProcessSession(ctx, info)
 	if perr != nil {
 		return false, perr
 	}
@@ -133,7 +133,7 @@ func (s *SessionLoader) doLoadSession(ctx context.Context, info utils.ClusterInf
 		return true, nil
 
 	default:
-		// Unreachable under the Pipeline contract; defensive guard so a future
+		// Unreachable under the SessionProcessor contract; defensive guard so a future
 		// bug surfaces as a clear 500 instead of a silent success.
 		return false, fmt.Errorf("unexpected session status %v", status)
 	}

@@ -31,22 +31,21 @@ const (
 	SessionStatusK8sProbeErr
 	// SessionStatusEventsErr means event parsing failed.
 	SessionStatusEventsErr
-	// SessionStatusCanceled means ctx was canceled mid-pipeline; not an *Err
+	// SessionStatusCanceled means ctx was canceled mid-processing; not an *Err
 	// status.
 	SessionStatusCanceled
 )
 
-// Pipeline processes a single Ray session end-to-end: dead detection and
-// event parsing. It is stateless across sessions and safe for concurrent
-// use.
-type Pipeline struct {
+// SessionProcessor processes a single session end-to-end: dead detection and
+// event parsing. It is stateless across sessions and safe for concurrent use.
+type SessionProcessor struct {
 	handler   *eventserver.EventHandler
 	k8sClient client.Client
 }
 
-// NewPipeline constructs a Pipeline. All collaborators must be non-nil.
-func NewPipeline(handler *eventserver.EventHandler, k8sClient client.Client) *Pipeline {
-	return &Pipeline{
+// NewSessionProcessor constructs a SessionProcessor. All collaborators must be non-nil.
+func NewSessionProcessor(handler *eventserver.EventHandler, k8sClient client.Client) *SessionProcessor {
+	return &SessionProcessor{
 		handler:   handler,
 		k8sClient: k8sClient,
 	}
@@ -61,7 +60,7 @@ func NewPipeline(handler *eventserver.EventHandler, k8sClient client.Client) *Pi
 //   - (Canceled, ctx.Err()): ctx was canceled between steps.
 //
 // ctx is polled at each step boundary; cancellation surfaces as Canceled.
-func (p *Pipeline) ProcessSession(ctx context.Context, session utils.ClusterInfo) (SessionStatus, error) {
+func (p *SessionProcessor) ProcessSession(ctx context.Context, session utils.ClusterInfo) (SessionStatus, error) {
 	// Fast-fail if the request was canceled before we started.
 	if err := ctx.Err(); err != nil {
 		return SessionStatusCanceled, err
@@ -108,7 +107,7 @@ func (p *Pipeline) ProcessSession(ctx context.Context, session utils.ClusterInfo
 //
 // TODO(jwj): Use collector-written UID or a storage-side probe for handling
 // cases in which multiple sessions exist in the same CR.
-func (p *Pipeline) isDead(ctx context.Context, session utils.ClusterInfo) (bool, error) {
+func (p *SessionProcessor) isDead(ctx context.Context, session utils.ClusterInfo) (bool, error) {
 	rc := &rayv1.RayCluster{}
 	err := p.k8sClient.Get(ctx, k8stypes.NamespacedName{
 		Namespace: session.Namespace,

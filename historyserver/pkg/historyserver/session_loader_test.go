@@ -11,15 +11,15 @@ import (
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
-// fakePipeline is a test double for sessionPipeline that lets each test
+// fakeProcessor is a test double for processor that lets each test
 // dictate the exact (status, error) tuple ProcessSession returns and
 // count the number of invocations.
-type fakePipeline struct {
+type fakeProcessor struct {
 	calls int32
 	fn    func(ctx context.Context, info utils.ClusterInfo) (SessionStatus, error)
 }
 
-func (f *fakePipeline) ProcessSession(ctx context.Context, info utils.ClusterInfo) (SessionStatus, error) {
+func (f *fakeProcessor) ProcessSession(ctx context.Context, info utils.ClusterInfo) (SessionStatus, error) {
 	atomic.AddInt32(&f.calls, 1)
 	if f.fn == nil {
 		return SessionStatusProcessed, nil
@@ -27,9 +27,9 @@ func (f *fakePipeline) ProcessSession(ctx context.Context, info utils.ClusterInf
 	return f.fn(ctx, info)
 }
 
-func (f *fakePipeline) callCount() int32 { return atomic.LoadInt32(&f.calls) }
+func (f *fakeProcessor) callCount() int32 { return atomic.LoadInt32(&f.calls) }
 
-func (f *fakePipeline) setFn(fn func(ctx context.Context, info utils.ClusterInfo) (SessionStatus, error)) {
+func (f *fakeProcessor) setFn(fn func(ctx context.Context, info utils.ClusterInfo) (SessionStatus, error)) {
 	f.fn = fn
 }
 
@@ -41,21 +41,21 @@ func testEnterClusterInfo() utils.ClusterInfo {
 	}
 }
 
-// TestLoadSession_PipelineError_PropagatesAndCleans verifies the dedup
-// behavior on the error path: when Pipeline returns an error, all
+// TestLoadSession_ProcessorError_PropagatesAndCleans verifies the dedup
+// behavior on the error path: when processor returns an error, all
 // coalesced callers see the same error AND the dedup group is cleared
 // so a subsequent call starts a fresh singleflight group.
-func TestLoadSession_PipelineError_PropagatesAndCleans(t *testing.T) {
+func TestLoadSession_ProcessorError_PropagatesAndCleans(t *testing.T) {
 	info := testEnterClusterInfo()
-	pipelineErr := errors.New("simulated parse failure")
+	processorErr := errors.New("simulated parse failure")
 
-	// Phase 1 — N concurrent callers; Pipeline errors once and all
+	// Phase 1 — N concurrent callers; processor errors once and all
 	// callers must receive the same error.
 	release := make(chan struct{})
-	fp := &fakePipeline{
+	fp := &fakeProcessor{
 		fn: func(_ context.Context, _ utils.ClusterInfo) (SessionStatus, error) {
 			<-release
-			return SessionStatusEventsErr, pipelineErr
+			return SessionStatusEventsErr, processorErr
 		},
 	}
 	sessionLoader := NewSessionLoader(fp, context.Background())
@@ -79,16 +79,16 @@ func TestLoadSession_PipelineError_PropagatesAndCleans(t *testing.T) {
 	wg.Wait()
 
 	if got := fp.callCount(); got != 1 {
-		t.Fatalf("expected exactly 1 Pipeline call (dedup applies on error path), got %d", got)
+		t.Fatalf("expected exactly 1 processor call (dedup applies on error path), got %d", got)
 	}
 	for i, err := range errs {
-		if !errors.Is(err, pipelineErr) {
-			t.Errorf("caller %d: expected error wrapping pipelineErr, got %v", i, err)
+		if !errors.Is(err, processorErr) {
+			t.Errorf("caller %d: expected error wrapping processorErr, got %v", i, err)
 		}
 	}
 
 	// Phase 2 — the dedup group must be cleared after the failed call;
-	// a fresh Pipeline invocation should run for the next /enter_cluster.
+	// a fresh processor invocation should run for the next /enter_cluster.
 	fp.setFn(func(_ context.Context, _ utils.ClusterInfo) (SessionStatus, error) {
 		return SessionStatusProcessed, nil
 	})
@@ -96,33 +96,33 @@ func TestLoadSession_PipelineError_PropagatesAndCleans(t *testing.T) {
 		t.Fatalf("post-error retry: expected nil, got %v", err)
 	}
 	if got := fp.callCount(); got != 2 {
-		t.Fatalf("expected Pipeline called 2x total (1 error + 1 retry), got %d", got)
+		t.Fatalf("expected processor called 2x total (1 error + 1 retry), got %d", got)
 	}
 }
 
-// TestLoadSession_PipelineError_NoInternalRetry verifies a Pipeline error
+// TestLoadSession_ProcessorError_NoInternalRetry verifies a processor error
 // is returned to the caller exactly once; SessionLoader does not re-invoke
-// Pipeline within the same LoadSession call.
-func TestLoadSession_PipelineError_NoInternalRetry(t *testing.T) {
+// processor within the same LoadSession call.
+func TestLoadSession_ProcessorError_NoInternalRetry(t *testing.T) {
 	info := testEnterClusterInfo()
-	pipelineErr := errors.New("simulated parse failure")
-	fp := &fakePipeline{
+	processorErr := errors.New("simulated parse failure")
+	fp := &fakeProcessor{
 		fn: func(_ context.Context, _ utils.ClusterInfo) (SessionStatus, error) {
-			return SessionStatusEventsErr, pipelineErr
+			return SessionStatusEventsErr, processorErr
 		},
 	}
 	sessionLoader := NewSessionLoader(fp, context.Background())
 
 	_, err := sessionLoader.LoadSession(context.Background(), info)
-	if !errors.Is(err, pipelineErr) {
-		t.Fatalf("expected LoadSession to return pipelineErr, got %v", err)
+	if !errors.Is(err, processorErr) {
+		t.Fatalf("expected LoadSession to return processorErr, got %v", err)
 	}
 	if got := fp.callCount(); got != 1 {
-		t.Fatalf("expected Pipeline called exactly 1x (no internal retry), got %d", got)
+		t.Fatalf("expected processor called exactly 1x (no internal retry), got %d", got)
 	}
 
 	// Loaded set must be empty, which can be verified by triggering a second LoadSession
-	// and confirming that Pipeline runs again.
+	// and confirming that processor runs again.
 	fp.setFn(func(_ context.Context, _ utils.ClusterInfo) (SessionStatus, error) {
 		return SessionStatusProcessed, nil
 	})
@@ -130,7 +130,7 @@ func TestLoadSession_PipelineError_NoInternalRetry(t *testing.T) {
 		t.Fatalf("client-driven retry: expected nil, got %v", err)
 	}
 	if got := fp.callCount(); got != 2 {
-		t.Fatalf("expected Pipeline called 2x total (1 error + 1 client retry), got %d", got)
+		t.Fatalf("expected processor called 2x total (1 error + 1 client retry), got %d", got)
 	}
 }
 
@@ -149,7 +149,7 @@ func TestLoadSession_LiveAndProcessed(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			fp := &fakePipeline{
+			fp := &fakeProcessor{
 				fn: func(_ context.Context, _ utils.ClusterInfo) (SessionStatus, error) {
 					return tc.status, nil
 				},
@@ -168,9 +168,9 @@ func TestLoadSession_LiveAndProcessed(t *testing.T) {
 }
 
 // TestLoadSession_FastPath_SkipsSingleflight verifies the fast-path:
-// once a session is loaded, repeat LoadSession calls must not invoke Pipeline again.
+// once a session is loaded, repeat LoadSession calls must not invoke processor again.
 func TestLoadSession_FastPath_SkipsSingleflight(t *testing.T) {
-	fp := &fakePipeline{
+	fp := &fakeProcessor{
 		fn: func(_ context.Context, _ utils.ClusterInfo) (SessionStatus, error) {
 			return SessionStatusProcessed, nil
 		},
@@ -178,7 +178,7 @@ func TestLoadSession_FastPath_SkipsSingleflight(t *testing.T) {
 	sessionLoader := NewSessionLoader(fp, context.Background())
 	info := testEnterClusterInfo()
 
-	// First call: cold path, Pipeline runs, session marked loaded.
+	// First call: cold path, processor runs, session marked loaded.
 	if _, err := sessionLoader.LoadSession(context.Background(), info); err != nil {
 		t.Fatalf("cold-path LoadSession: %v", err)
 	}
@@ -186,13 +186,13 @@ func TestLoadSession_FastPath_SkipsSingleflight(t *testing.T) {
 		t.Fatalf("after cold path: callCount = %d, want 1", got)
 	}
 
-	// Subsequent calls: fast path, Pipeline must NOT be invoked again.
+	// Subsequent calls: fast path, processor must NOT be invoked again.
 	for i := 0; i < 5; i++ {
 		if _, err := sessionLoader.LoadSession(context.Background(), info); err != nil {
 			t.Fatalf("fast path LoadSession #%d: %v", i, err)
 		}
 	}
 	if got := fp.callCount(); got != 1 {
-		t.Fatalf("after fast path: callCount = %d, want 1 (Pipeline must not be invoked again)", got)
+		t.Fatalf("after fast path: callCount = %d, want 1 (processor must not be invoked again)", got)
 	}
 }

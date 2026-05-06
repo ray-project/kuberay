@@ -81,8 +81,8 @@ func main() {
 	)
 	defer serverCancel()
 
-	pipeline := historyserver.NewPipeline(eventHandler, cliMgr.Client())
-	sessionLoader := historyserver.NewSessionLoader(pipeline, serverCtx)
+	processor := historyserver.NewSessionProcessor(eventHandler, cliMgr.Client())
+	sessionLoader := historyserver.NewSessionLoader(processor, serverCtx)
 
 	// Bridge serverCtx into the legacy stop channel that ServerHandler.Run
 	// consumes; the existing chan-based API is preserved.
