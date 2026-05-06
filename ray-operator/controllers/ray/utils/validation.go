@@ -295,7 +295,7 @@ func validateNetworkIsolation(spec *rayv1.RayClusterSpec) error {
 		return nil
 	}
 
-	// Resolve mode, defaulting to denyAll if not set (matches kubebuilder default).
+	// Resolve mode, defaulting to DenyAll if not set (matches kubebuilder default).
 	mode := rayv1.NetworkIsolationDenyAll
 	if ni.Mode != nil {
 		mode = *ni.Mode

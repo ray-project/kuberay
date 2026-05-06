@@ -4829,11 +4829,11 @@ spec:
                           type: object
                         type: array
                       mode:
-                        default: denyAll
+                        default: DenyAll
                         enum:
-                        - denyAll
-                        - denyAllIngress
-                        - denyAllEgress
+                        - DenyAll
+                        - DenyAllIngress
+                        - DenyAllEgress
                         type: string
                     type: object
                   rayVersion:

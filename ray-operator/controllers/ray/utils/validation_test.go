@@ -2843,25 +2843,25 @@ func TestValidateNetworkIsolation(t *testing.T) {
 		expectError bool
 	}{
 		{
-			name: "denyAllEgress with IngressRules set returns error",
+			name: "DenyAllEgress with IngressRules set returns error",
 			ni: &rayv1.NetworkIsolationConfig{
 				Mode:         ptr.To(rayv1.NetworkIsolationDenyAllEgress),
 				IngressRules: []networkingv1.NetworkPolicyIngressRule{{}},
 			},
 			expectError: true,
-			errorMsg:    `networkIsolation.ingressRules cannot be set when mode is "denyAllEgress" (ingress is not restricted)`,
+			errorMsg:    `networkIsolation.ingressRules cannot be set when mode is "DenyAllEgress" (ingress is not restricted)`,
 		},
 		{
-			name: "denyAllIngress with EgressRules set returns error",
+			name: "DenyAllIngress with EgressRules set returns error",
 			ni: &rayv1.NetworkIsolationConfig{
 				Mode:        ptr.To(rayv1.NetworkIsolationDenyAllIngress),
 				EgressRules: []networkingv1.NetworkPolicyEgressRule{{}},
 			},
 			expectError: true,
-			errorMsg:    `networkIsolation.egressRules cannot be set when mode is "denyAllIngress" (egress is not restricted)`,
+			errorMsg:    `networkIsolation.egressRules cannot be set when mode is "DenyAllIngress" (egress is not restricted)`,
 		},
 		{
-			name: "denyAll with both IngressRules and EgressRules is valid",
+			name: "DenyAll with both IngressRules and EgressRules is valid",
 			ni: &rayv1.NetworkIsolationConfig{
 				Mode:         ptr.To(rayv1.NetworkIsolationDenyAll),
 				IngressRules: []networkingv1.NetworkPolicyIngressRule{{}},

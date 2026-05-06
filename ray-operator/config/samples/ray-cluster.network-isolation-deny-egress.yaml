@@ -8,7 +8,7 @@ spec:
     # Inbound traffic (ingress) is unrestricted.
     # NOTE: pip install, RayJob submission to external endpoints, and RayServe
     # all require explicit egressRules to function.
-    mode: denyAllEgress
+    mode: DenyAllEgress
     egressRules:
     # Allow pip install / PyPI access over HTTPS
     - to:

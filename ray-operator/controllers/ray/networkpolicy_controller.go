@@ -91,7 +91,7 @@ func (r *NetworkPolicyController) Reconcile(ctx context.Context, req ctrl.Reques
 
 	logger.Info("Reconciling NetworkPolicies for RayCluster", "cluster", instance.Name, "namespace", instance.Namespace)
 
-	// Determine mode (default to denyAll)
+	// Determine mode (default to DenyAll)
 	mode := rayv1.NetworkIsolationDenyAll
 	if instance.Spec.NetworkIsolation.Mode != nil {
 		mode = *instance.Spec.NetworkIsolation.Mode

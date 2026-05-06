@@ -59,7 +59,7 @@ func setupNetworkPolicyTest(t *testing.T) {
 			Build(),
 	}
 
-	// Basic cluster — denyAll mode (default).
+	// Basic cluster — DenyAll mode (default).
 	testRayClusterBasic = &rayv1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-cluster",
@@ -82,7 +82,7 @@ func setupNetworkPolicyTest(t *testing.T) {
 		},
 	}
 
-	// Cluster configured with denyAllIngress mode.
+	// Cluster configured with DenyAllIngress mode.
 	testRayClusterDenyAllIngress = &rayv1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-cluster-ingress",
@@ -105,7 +105,7 @@ func setupNetworkPolicyTest(t *testing.T) {
 		},
 	}
 
-	// Cluster configured with denyAllEgress mode.
+	// Cluster configured with DenyAllEgress mode.
 	testRayClusterDenyAllEgress = &rayv1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-cluster-egress",
@@ -161,7 +161,7 @@ func setupNetworkPolicyTest(t *testing.T) {
 	}
 }
 
-// TestBuildHeadNetworkPolicy_DenyAll verifies the head NetworkPolicy in default denyAll mode.
+// TestBuildHeadNetworkPolicy_DenyAll verifies the head NetworkPolicy in default DenyAll mode.
 func TestBuildHeadNetworkPolicy_DenyAll(t *testing.T) {
 	setupNetworkPolicyTest(t)
 
@@ -184,7 +184,7 @@ func TestBuildHeadNetworkPolicy_DenyAll(t *testing.T) {
 		utils.RayNodeTypeLabelKey: string(rayv1.HeadNode),
 	}, policy.Spec.PodSelector.MatchLabels)
 
-	// denyAll restricts both directions.
+	// DenyAll restricts both directions.
 	assert.Contains(t, policy.Spec.PolicyTypes, networkingv1.PolicyTypeIngress)
 	assert.Contains(t, policy.Spec.PolicyTypes, networkingv1.PolicyTypeEgress)
 
@@ -195,7 +195,7 @@ func TestBuildHeadNetworkPolicy_DenyAll(t *testing.T) {
 	assert.Len(t, policy.Spec.Egress, 2)
 }
 
-// TestBuildHeadNetworkPolicy_DenyAllIngress verifies that denyAllIngress omits the Egress policy type.
+// TestBuildHeadNetworkPolicy_DenyAllIngress verifies that DenyAllIngress omits the Egress policy type.
 func TestBuildHeadNetworkPolicy_DenyAllIngress(t *testing.T) {
 	setupNetworkPolicyTest(t)
 
@@ -207,7 +207,7 @@ func TestBuildHeadNetworkPolicy_DenyAllIngress(t *testing.T) {
 	assert.Empty(t, policy.Spec.Egress)
 }
 
-// TestBuildHeadNetworkPolicy_DenyAllEgress verifies that denyAllEgress only restricts egress.
+// TestBuildHeadNetworkPolicy_DenyAllEgress verifies that DenyAllEgress only restricts egress.
 func TestBuildHeadNetworkPolicy_DenyAllEgress(t *testing.T) {
 	setupNetworkPolicyTest(t)
 
@@ -219,7 +219,7 @@ func TestBuildHeadNetworkPolicy_DenyAllEgress(t *testing.T) {
 	assert.Len(t, policy.Spec.Egress, 2)
 }
 
-// TestBuildWorkerNetworkPolicy_DenyAll verifies the worker NetworkPolicy in denyAll mode.
+// TestBuildWorkerNetworkPolicy_DenyAll verifies the worker NetworkPolicy in DenyAll mode.
 func TestBuildWorkerNetworkPolicy_DenyAll(t *testing.T) {
 	setupNetworkPolicyTest(t)
 
@@ -256,7 +256,7 @@ func TestBuildWorkerNetworkPolicy_DenyAll(t *testing.T) {
 	assert.Len(t, policy.Spec.Egress, 2)
 }
 
-// TestBuildWorkerNetworkPolicy_DenyAllIngress verifies no egress is added for denyAllIngress mode.
+// TestBuildWorkerNetworkPolicy_DenyAllIngress verifies no egress is added for DenyAllIngress mode.
 func TestBuildWorkerNetworkPolicy_DenyAllIngress(t *testing.T) {
 	setupNetworkPolicyTest(t)
 
