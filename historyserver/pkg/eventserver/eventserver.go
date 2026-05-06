@@ -1559,12 +1559,12 @@ func (h *EventHandler) ProcessSingleSession(clusterInfo utils.ClusterInfo) error
 	// Read RayEvents (Export Events) from node_events/ and job_events/.
 	// These are used for task/actor/job/node data APIs.
 	eventFileList := append(h.getAllJobEventFiles(clusterInfo), h.getAllNodeEventFiles(clusterInfo)...)
-	logrus.Infof("current eventFileList for cluster %s is: %v", clusterInfo.Name, eventFileList)
+	logrus.Debugf("current eventFileList for cluster %s is: %v", clusterInfo.Name, eventFileList)
 
 	rayEventsAttempted := len(eventFileList)
 	rayEventsSucceeded := 0
 	for _, eventFile := range eventFileList {
-		logrus.Infof("Reading event file: %s", eventFile)
+		logrus.Debugf("Reading event file: %s", eventFile)
 
 		eventioReader := h.reader.GetContent(clusterNameNamespace, eventFile)
 		if eventioReader == nil {
@@ -1604,10 +1604,5 @@ func (h *EventHandler) ProcessSingleSession(clusterInfo utils.ClusterInfo) error
 			rayEventsAttempted, clusterSessionKey)
 	}
 
-	var logEventErrVal error
-	if logEventErr != nil {
-		logEventErrVal = fmt.Errorf("read log events for %s: %w", clusterSessionKey, logEventErr)
-	}
-
-	return errors.Join(rayEventsErrVal, logEventErrVal)
+	return errors.Join(rayEventsErrVal, logEventErr)
 }

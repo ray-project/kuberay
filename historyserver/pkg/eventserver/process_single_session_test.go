@@ -87,7 +87,7 @@ func TestProcessSingleSession(t *testing.T) {
 		h := NewEventHandler(mock)
 		err := h.ProcessSingleSession(clusterInfo)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "read log events")
+		assert.Contains(t, err.Error(), "ingested 0 of 1 log event files")
 	})
 
 	t.Run("both subsystems failing yields combined error", func(t *testing.T) {
@@ -101,6 +101,6 @@ func TestProcessSingleSession(t *testing.T) {
 		err := h.ProcessSingleSession(clusterInfo)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "ingested 0 of 1 RayEvent files")
-		assert.Contains(t, err.Error(), "read log events")
+		assert.Contains(t, err.Error(), "ingested 0 of 1 log event files")
 	})
 }

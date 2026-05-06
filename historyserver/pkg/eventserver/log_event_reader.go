@@ -49,8 +49,6 @@ func NewLogEventReader(reader storage.StorageReader) *LogEventReader {
 // and stores them in the provided ClusterLogEventMap.
 //
 // Path structure in storage: {clusterName}_{namespace}/{sessionName}/logs/{nodeId}/events/event_*.log
-// This is called from eventserver.go Run() (legacy hourly ticker) and from
-// ProcessSingleSession (lazy mode) to populate events for a cluster session.
 //
 // Per-file readEventFile failures are treated as likely-transient storage
 // errors. If the file list was non-empty but every file failed, surface an error

@@ -1,7 +1,3 @@
-// Package main is the entrypoint for the History Server HTTP daemon.
-// It exposes Ray Dashboard-shaped API endpoints over HTTP and drives
-// per-session event processing on demand via a SessionLoader when
-// /enter_cluster hits a dead session.
 package main
 
 import (
@@ -22,14 +18,12 @@ import (
 )
 
 func main() {
-	var (
-		runtimeClassName       string
-		rayRootDir             string
-		kubeconfigs            string
-		dashboardDir           string
-		runtimeClassConfigPath string
-		useKubernetesProxy     bool
-	)
+	runtimeClassName := ""
+	rayRootDir := ""
+	kubeconfigs := ""
+	runtimeClassConfigPath := ""
+	dashboardDir := ""
+	useKubernetesProxy := false
 	flag.StringVar(&runtimeClassName, "runtime-class-name", "", "Storage backend: s3 / gcs / azureblob / aliyunoss / localtest")
 	flag.StringVar(&rayRootDir, "ray-root-dir", "", "Root dir inside the bucket")
 	flag.StringVar(&kubeconfigs, "kubeconfigs", "", "Kubeconfig path; empty = in-cluster")
