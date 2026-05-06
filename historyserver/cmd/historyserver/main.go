@@ -22,7 +22,6 @@ import (
 )
 
 func main() {
-	// ===== Flags =====
 	var (
 		runtimeClassName       string
 		rayRootDir             string
@@ -43,13 +42,11 @@ func main() {
 		logrus.Fatal("--runtime-class-name is required")
 	}
 
-	// ===== ClientManager =====
 	cliMgr, err := historyserver.NewClientManager(kubeconfigs, useKubernetesProxy)
 	if err != nil {
 		logrus.Fatalf("client manager: %v", err)
 	}
 
-	// ===== Backend config =====
 	jsonData := make(map[string]interface{})
 	if runtimeClassConfigPath != "" {
 		data, err := os.ReadFile(runtimeClassConfigPath)
@@ -61,7 +58,6 @@ func main() {
 		}
 	}
 
-	// ===== Reader factory =====
 	registry := collector.GetReaderRegistry()
 	factory, ok := registry[runtimeClassName]
 	if !ok {
@@ -77,21 +73,17 @@ func main() {
 		logrus.Fatalf("create reader: %v", err)
 	}
 
-	// ===== EventHandler =====
 	eventHandler := eventserver.NewEventHandler(reader)
 
-	// ===== Server context =====
 	serverCtx, serverCancel := signal.NotifyContext(
 		context.Background(),
 		syscall.SIGINT, syscall.SIGTERM,
 	)
 	defer serverCancel()
 
-	// ===== Pipeline & Supervisor =====
 	pipeline := historyserver.NewPipeline(eventHandler, cliMgr.Client())
 	supervisor := historyserver.NewSupervisor(pipeline, serverCtx)
 
-	// ===== Shutdown signaling =====
 	// Bridge serverCtx into the legacy stop channel that ServerHandler.Run
 	// consumes; the existing chan-based API is preserved.
 	var wg sync.WaitGroup
@@ -102,13 +94,11 @@ func main() {
 		close(stop)
 	}()
 
-	// ===== ServerHandler =====
 	handler, err := historyserver.NewServerHandler(&globalConfig, dashboardDir, reader, cliMgr, eventHandler, supervisor, useKubernetesProxy)
 	if err != nil {
 		logrus.Fatalf("create server handler: %v", err)
 	}
 
-	// ===== Run HTTP server =====
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -116,7 +106,6 @@ func main() {
 		logrus.Info("HTTP server shutdown complete")
 	}()
 
-	// ===== Wait for graceful shutdown =====
 	wg.Wait()
 	logrus.Info("Graceful shutdown complete")
 }
