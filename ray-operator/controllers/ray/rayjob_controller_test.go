@@ -25,6 +25,7 @@ import (
 	. "github.com/onsi/gomega"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	eventsv1 "k8s.io/api/events/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -438,14 +439,14 @@ var _ = Context("RayJob with different submission modes", func() {
 
 			It("RayJobs's JobDeploymentStatus transitions from Initializing to Running.", func() {
 				Eventually(
-					func() ([]corev1.Event, error) {
-						events := &corev1.EventList{}
-						if err := k8sClient.List(ctx, events, client.InNamespace(rayJob.Namespace)); err != nil {
+					func() ([]eventsv1.Event, error) {
+						eventList := &eventsv1.EventList{}
+						if err := k8sClient.List(ctx, eventList, client.InNamespace(rayJob.Namespace)); err != nil {
 							return nil, err
 						}
-						return events.Items, nil
+						return eventList.Items, nil
 					},
-					time.Second*3, time.Millisecond*500).Should(ContainElement(HaveField("Message", ContainSubstring("Failed to create new Kubernetes Job default/rayjob-invalid-test"))))
+					time.Second*3, time.Millisecond*500).Should(ContainElement(HaveField("Note", ContainSubstring("Failed to create new Kubernetes Job default/rayjob-invalid-test"))))
 
 				_ = k8sClient.Delete(ctx, rayJob)
 			})

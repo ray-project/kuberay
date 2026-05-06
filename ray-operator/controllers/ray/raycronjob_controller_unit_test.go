@@ -13,7 +13,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	clocktesting "k8s.io/utils/clock/testing"
 	ctrl "sigs.k8s.io/controller-runtime"
 	clientFake "sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -72,7 +72,7 @@ func TestRayCronJobReconcile_InvalidSchedule(t *testing.T) {
 		Build()
 
 	// Create fake event recorder with a channel to capture events
-	fakeRecorder := record.NewFakeRecorder(10)
+	fakeRecorder := events.NewFakeRecorder(10)
 
 	// Create reconciler
 	reconciler := &RayCronJobReconciler{
@@ -135,7 +135,7 @@ func TestRayCronJobReconcile_FirstSchedule(t *testing.T) {
 	reconciler := &RayCronJobReconciler{
 		Client:   fakeClient,
 		Scheme:   scheme,
-		Recorder: &record.FakeRecorder{},
+		Recorder: &events.FakeRecorder{},
 		clock:    fakeClock,
 	}
 
@@ -208,7 +208,7 @@ func TestRayCronJobReconcile_CreateRayJob(t *testing.T) {
 	reconciler := &RayCronJobReconciler{
 		Client:   fakeClient,
 		Scheme:   scheme,
-		Recorder: &record.FakeRecorder{},
+		Recorder: &events.FakeRecorder{},
 		clock:    fakeClock,
 	}
 
@@ -279,7 +279,7 @@ func TestRayCronJobReconcile_Suspend(t *testing.T) {
 		Build()
 
 	// Create fake event recorder with a channel to capture events
-	fakeRecorder := record.NewFakeRecorder(10)
+	fakeRecorder := events.NewFakeRecorder(10)
 
 	// Create reconciler
 	reconciler := &RayCronJobReconciler{
@@ -361,7 +361,7 @@ func TestRayCronJobReconcile_NoDuplicateOnStaleStatus(t *testing.T) {
 	reconciler := &RayCronJobReconciler{
 		Client:   fakeClient,
 		Scheme:   scheme,
-		Recorder: &record.FakeRecorder{},
+		Recorder: &events.FakeRecorder{},
 		clock:    clocktesting.NewFakeClock(fakeCurrTime),
 	}
 
@@ -461,7 +461,7 @@ func TestUpdateRayCronJobStatus(t *testing.T) {
 			reconciler := &RayCronJobReconciler{
 				Client:   fakeClient,
 				Scheme:   scheme,
-				Recorder: &record.FakeRecorder{},
+				Recorder: &events.FakeRecorder{},
 			}
 
 			// Fetch the current object from the client to get valid resourceVersion
