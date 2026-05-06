@@ -94,7 +94,8 @@ Join [Ray's Slack workspace](https://docs.google.com/forms/d/e/1FAIpQLSfAcoiLCHO
 
 KubeRay contributors are welcome to join the bi-weekly KubeRay community meetings.
 
-* Add the [Ray/KubeRay Google calendar](https://calendar.google.com/calendar/u/1?cid=Y19iZWIwYTUxZDQyZTczMTFmZWFmYTY5YjZiOTY1NjAxMTQ3ZTEzOTAxZWE0ZGU5YzA1NjFlZWQ5OTljY2FiOWM4QGdyb3VwLmNhbGVuZGFyLmdvb2dsZS5jb20) to your calendar.
+* See the KubeRay community meeting schedule on [Ray/KubeRay LFX calendar](https://zoom-lfx.platform.linuxfoundation.org/meetings/ray?view=month).
+* Join the KubeRay community meeting on [Zoom](https://zoom-lfx.platform.linuxfoundation.org/meeting/99190775938?password=96660107-f00b-4d1d-8015-d6348e911a0a).
 
 ## Security
 
