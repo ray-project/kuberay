@@ -82,6 +82,11 @@ func (r *NetworkPolicyController) Reconcile(ctx context.Context, req ctrl.Reques
 		return ctrl.Result{}, nil
 	}
 
+	if manager := utils.ManagedByExternalController(instance.Spec.ManagedBy); manager != nil {
+		logger.Info("Skipping RayCluster managed by a custom controller", "managed-by", manager)
+		return ctrl.Result{}, nil
+	}
+
 	// Check if NetworkIsolation is configured
 	if instance.Spec.NetworkIsolation == nil {
 		logger.V(1).Info("NetworkIsolation not configured for RayCluster", "cluster", instance.Name, "namespace", instance.Namespace)
