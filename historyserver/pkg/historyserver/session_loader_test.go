@@ -41,11 +41,11 @@ func testEnterClusterInfo() utils.ClusterInfo {
 	}
 }
 
-// TestEnsure_PipelineError_PropagatesAndCleans verifies the dedup
+// TestLoadSession_PipelineError_PropagatesAndCleans verifies the dedup
 // behavior on the error path: when Pipeline returns an error, all
 // coalesced callers see the same error AND the dedup group is cleared
 // so a subsequent call starts a fresh singleflight group.
-func TestEnsure_PipelineError_PropagatesAndCleans(t *testing.T) {
+func TestLoadSession_PipelineError_PropagatesAndCleans(t *testing.T) {
 	info := testEnterClusterInfo()
 	pipelineErr := errors.New("simulated parse failure")
 
@@ -58,7 +58,7 @@ func TestEnsure_PipelineError_PropagatesAndCleans(t *testing.T) {
 			return SessionStatusEventsErr, pipelineErr
 		},
 	}
-	sup := NewSupervisor(fp, context.Background())
+	sessionLoader := NewSessionLoader(fp, context.Background())
 
 	const n = 5
 	var wg sync.WaitGroup
@@ -67,11 +67,11 @@ func TestEnsure_PipelineError_PropagatesAndCleans(t *testing.T) {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
-			_, errs[idx] = sup.Ensure(context.Background(), info)
+			_, errs[idx] = sessionLoader.LoadSession(context.Background(), info)
 		}(i)
 	}
 
-	// Barrier: let all N goroutines park inside Ensure before we let
+	// Barrier: let all N goroutines park inside LoadSession before we let
 	// the winner finish. 50 ms is several orders of magnitude longer
 	// than scheduling latency yet keeps the test well under a second.
 	time.Sleep(50 * time.Millisecond)
@@ -92,7 +92,7 @@ func TestEnsure_PipelineError_PropagatesAndCleans(t *testing.T) {
 	fp.setFn(func(_ context.Context, _ utils.ClusterInfo) (SessionStatus, error) {
 		return SessionStatusProcessed, nil
 	})
-	if _, err := sup.Ensure(context.Background(), info); err != nil {
+	if _, err := sessionLoader.LoadSession(context.Background(), info); err != nil {
 		t.Fatalf("post-error retry: expected nil, got %v", err)
 	}
 	if got := fp.callCount(); got != 2 {
@@ -100,10 +100,10 @@ func TestEnsure_PipelineError_PropagatesAndCleans(t *testing.T) {
 	}
 }
 
-// TestEnsure_PipelineError_NoInternalRetry verifies a Pipeline error
-// is returned to the caller exactly once; Supervisor does not re-invoke
-// Pipeline within the same Ensure call.
-func TestEnsure_PipelineError_NoInternalRetry(t *testing.T) {
+// TestLoadSession_PipelineError_NoInternalRetry verifies a Pipeline error
+// is returned to the caller exactly once; SessionLoader does not re-invoke
+// Pipeline within the same LoadSession call.
+func TestLoadSession_PipelineError_NoInternalRetry(t *testing.T) {
 	info := testEnterClusterInfo()
 	pipelineErr := errors.New("simulated parse failure")
 	fp := &fakePipeline{
@@ -111,22 +111,22 @@ func TestEnsure_PipelineError_NoInternalRetry(t *testing.T) {
 			return SessionStatusEventsErr, pipelineErr
 		},
 	}
-	sup := NewSupervisor(fp, context.Background())
+	sessionLoader := NewSessionLoader(fp, context.Background())
 
-	_, err := sup.Ensure(context.Background(), info)
+	_, err := sessionLoader.LoadSession(context.Background(), info)
 	if !errors.Is(err, pipelineErr) {
-		t.Fatalf("expected Ensure to return pipelineErr, got %v", err)
+		t.Fatalf("expected LoadSession to return pipelineErr, got %v", err)
 	}
 	if got := fp.callCount(); got != 1 {
 		t.Fatalf("expected Pipeline called exactly 1x (no internal retry), got %d", got)
 	}
 
-	// Loaded set must be empty, which can be verified by triggering a second Ensure
+	// Loaded set must be empty, which can be verified by triggering a second LoadSession
 	// and confirming that Pipeline runs again.
 	fp.setFn(func(_ context.Context, _ utils.ClusterInfo) (SessionStatus, error) {
 		return SessionStatusProcessed, nil
 	})
-	if _, err := sup.Ensure(context.Background(), info); err != nil {
+	if _, err := sessionLoader.LoadSession(context.Background(), info); err != nil {
 		t.Fatalf("client-driven retry: expected nil, got %v", err)
 	}
 	if got := fp.callCount(); got != 2 {
@@ -134,10 +134,10 @@ func TestEnsure_PipelineError_NoInternalRetry(t *testing.T) {
 	}
 }
 
-// TestEnsure_LiveAndProcessed verifies Ensure surfaces the live/processed
+// TestLoadSession_LiveAndProcessed verifies LoadSession surfaces the live/processed
 // distinction so the router can rewrite the session-name cookie when a live
 // cluster is reached via its real session name.
-func TestEnsure_LiveAndProcessed(t *testing.T) {
+func TestLoadSession_LiveAndProcessed(t *testing.T) {
 	tests := []struct {
 		name     string
 		status   SessionStatus
@@ -154,9 +154,9 @@ func TestEnsure_LiveAndProcessed(t *testing.T) {
 					return tc.status, nil
 				},
 			}
-			sup := NewSupervisor(fp, context.Background())
+			sessionLoader := NewSessionLoader(fp, context.Background())
 
-			live, err := sup.Ensure(context.Background(), testEnterClusterInfo())
+			live, err := sessionLoader.LoadSession(context.Background(), testEnterClusterInfo())
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -167,20 +167,20 @@ func TestEnsure_LiveAndProcessed(t *testing.T) {
 	}
 }
 
-// TestEnsure_FastPath_SkipsSingleflight verifies the fast-path:
-// once a session is loaded, repeat Ensure calls must not invoke Pipeline again.
-func TestEnsure_FastPath_SkipsSingleflight(t *testing.T) {
+// TestLoadSession_FastPath_SkipsSingleflight verifies the fast-path:
+// once a session is loaded, repeat LoadSession calls must not invoke Pipeline again.
+func TestLoadSession_FastPath_SkipsSingleflight(t *testing.T) {
 	fp := &fakePipeline{
 		fn: func(_ context.Context, _ utils.ClusterInfo) (SessionStatus, error) {
 			return SessionStatusProcessed, nil
 		},
 	}
-	sup := NewSupervisor(fp, context.Background())
+	sessionLoader := NewSessionLoader(fp, context.Background())
 	info := testEnterClusterInfo()
 
 	// First call: cold path, Pipeline runs, session marked loaded.
-	if _, err := sup.Ensure(context.Background(), info); err != nil {
-		t.Fatalf("cold-path Ensure: %v", err)
+	if _, err := sessionLoader.LoadSession(context.Background(), info); err != nil {
+		t.Fatalf("cold-path LoadSession: %v", err)
 	}
 	if got := fp.callCount(); got != 1 {
 		t.Fatalf("after cold path: callCount = %d, want 1", got)
@@ -188,8 +188,8 @@ func TestEnsure_FastPath_SkipsSingleflight(t *testing.T) {
 
 	// Subsequent calls: fast path, Pipeline must NOT be invoked again.
 	for i := 0; i < 5; i++ {
-		if _, err := sup.Ensure(context.Background(), info); err != nil {
-			t.Fatalf("fast path Ensure #%d: %v", i, err)
+		if _, err := sessionLoader.LoadSession(context.Background(), info); err != nil {
+			t.Fatalf("fast path LoadSession #%d: %v", i, err)
 		}
 	}
 	if got := fp.callCount(); got != 1 {

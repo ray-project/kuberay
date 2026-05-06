@@ -9,7 +9,7 @@ import (
 )
 
 // TestProcessSingleSession exercises the lazy-mode error contract that
-// determines whether the Supervisor will mark a session as loaded.
+// determines whether the SessionLoader will mark a session as loaded.
 //
 // Contract:
 //   - Storage I/O failures (GetContent nil, io.ReadAll error) are transient;

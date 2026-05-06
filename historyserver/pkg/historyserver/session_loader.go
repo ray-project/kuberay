@@ -11,49 +11,52 @@ import (
 )
 
 // sessionPipeline is the narrow subset of *Pipeline that the
-// Supervisor depends on.
+// SessionLoader depends on.
 type sessionPipeline interface {
 	ProcessSession(ctx context.Context, info utils.ClusterInfo) (SessionStatus, error)
 }
 
-// Supervisor blocks /enter_cluster until the session's events are loaded
-// for this replica, deduping concurrent callers via singleflight.
+// SessionLoader ensures a session is ready to serve before the router
+// dispatches handler logic. There are three outcomes:
 //
-// A single Supervisor is safe to share across all HTTP handlers for one
+//  1. Live cluster: skip loading; caller redirects to the Ray Dashboard.
+//  2. Dead, already loaded: fast-path; events are already in in-memory maps.
+//  3. Dead, not yet loaded: drive Pipeline to ingest events into the maps.
+//
+// Concurrent callers for the same session are coalesced via singleflight.
+//
+// A single SessionLoader is safe to share across all HTTP handlers for one
 // replica; its mutable state lives inside singleflight.Group and the
 // loaded set.
-type Supervisor struct {
-	pipeline sessionPipeline
-	// sf coalesces concurrent Ensure calls for the same session.
-	sf singleflight.Group
-	// loaded records sessions already ingested for this replica so repeat
-	// /enter_cluster calls return without re-parsing.
+type SessionLoader struct {
+	pipeline  sessionPipeline
+	sf        singleflight.Group
 	loadedMu  sync.RWMutex
 	loaded    map[string]struct{}
 	serverCtx context.Context
 }
 
-// NewSupervisor wires a Supervisor. All arguments must be non-nil. serverCtx
-// is the server-lifetime context used to cancel in-flight work on shutdown.
-func NewSupervisor(p sessionPipeline, serverCtx context.Context) *Supervisor {
-	return &Supervisor{
+// NewSessionLoader wires a SessionLoader. All arguments must be non-nil.
+// serverCtx is the server-lifetime context used to cancel in-flight work
+// on shutdown.
+func NewSessionLoader(p sessionPipeline, serverCtx context.Context) *SessionLoader {
+	return &SessionLoader{
 		pipeline:  p,
 		loaded:    make(map[string]struct{}),
 		serverCtx: serverCtx,
 	}
 }
 
-// Ensure blocks until the session's events have been loaded for this
-// replica or an unrecoverable error is observed. Concurrent callers
-// for the same session are coalesced via singleflight.
+// LoadSession blocks until the session is ready to serve for this replica
+// or an unrecoverable error is observed. Concurrent callers for the same
+// session are coalesced via singleflight.
 //
 // Returns:
-//   - (false, nil): events were loaded. Router serves the historical session.
-//   - (true,  nil): session belongs to a live cluster. Router rewrites the
-//     session-name cookie to "live".
+//   - (false, nil): events loaded; router serves the historical session.
+//   - (true,  nil): live cluster; router rewrites the session-name cookie to "live".
 //   - (_, ctx.Err()): caller's ctx died while waiting. Shared work keeps running.
-//   - (_, other error): other error.
-func (s *Supervisor) Ensure(ctx context.Context, info utils.ClusterInfo) (live bool, err error) {
+//   - (_, other error): unrecoverable error.
+func (s *SessionLoader) LoadSession(ctx context.Context, info utils.ClusterInfo) (live bool, err error) {
 	// Fast pre-flight: skip singleflight entirely if ctx is already dead.
 	if err := ctx.Err(); err != nil {
 		return false, err
@@ -74,7 +77,7 @@ func (s *Supervisor) Ensure(ctx context.Context, info utils.ClusterInfo) (live b
 	// in-flight work. If 500-during-shutdown becomes a customer pain point, switch
 	// closure to a separate runCtx with grace timer.
 	ch := s.sf.DoChan(key, func() (interface{}, error) {
-		return s.runOnce(s.serverCtx, info, key)
+		return s.doLoadSession(s.serverCtx, info, key)
 	})
 
 	select {
@@ -94,11 +97,16 @@ func (s *Supervisor) Ensure(ctx context.Context, info utils.ClusterInfo) (live b
 	}
 }
 
-// runOnce is the singleflight winner's body. On success it returns a bool
-// indicating whether the session belongs to a live cluster.
-func (s *Supervisor) runOnce(ctx context.Context, info utils.ClusterInfo, key string) (bool, error) {
-	// Keep the same fast-path for guarding against a race where loaded
-	// gets marked between caller's lookup and singleflight execution.
+// doLoadSession checks if the session belongs to a live cluster and drives
+// the Pipeline to ingest events into the maps for dead sessions.
+//
+// Returns:
+//   - (false, nil): events loaded, either a fast-path hit or events ingested.
+//   - (true, nil): session belongs to a live cluster; not added to the loaded set.
+//   - (_, err): pipeline processing failed.
+func (s *SessionLoader) doLoadSession(ctx context.Context, info utils.ClusterInfo, key string) (bool, error) {
+	// Guard against a race where loaded gets marked between the caller's
+	// lookup and singleflight execution.
 	s.loadedMu.RLock()
 	_, loaded := s.loaded[key]
 	s.loadedMu.RUnlock()

@@ -1,6 +1,6 @@
 // Package main is the entrypoint for the History Server HTTP daemon.
 // It exposes Ray Dashboard-shaped API endpoints over HTTP and drives
-// per-session event processing on demand via a Supervisor when
+// per-session event processing on demand via a SessionLoader when
 // /enter_cluster hits a dead session.
 package main
 
@@ -82,7 +82,7 @@ func main() {
 	defer serverCancel()
 
 	pipeline := historyserver.NewPipeline(eventHandler, cliMgr.Client())
-	supervisor := historyserver.NewSupervisor(pipeline, serverCtx)
+	sessionLoader := historyserver.NewSessionLoader(pipeline, serverCtx)
 
 	// Bridge serverCtx into the legacy stop channel that ServerHandler.Run
 	// consumes; the existing chan-based API is preserved.
@@ -94,7 +94,7 @@ func main() {
 		close(stop)
 	}()
 
-	handler, err := historyserver.NewServerHandler(&globalConfig, dashboardDir, reader, cliMgr, eventHandler, supervisor, useKubernetesProxy)
+	handler, err := historyserver.NewServerHandler(&globalConfig, dashboardDir, reader, cliMgr, eventHandler, sessionLoader, useKubernetesProxy)
 	if err != nil {
 		logrus.Fatalf("create server handler: %v", err)
 	}

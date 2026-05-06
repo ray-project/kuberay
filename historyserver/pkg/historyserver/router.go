@@ -300,13 +300,13 @@ func routerRayClusterSet(s *ServerHandler) {
 		session := r1.PathParameter("session")
 
 		// For dead sessions, block until events have been ingested.
-		// The "live" sentinel skips the supervisor: live sessions
+		// The "live" sentinel skips the loader: live sessions
 		// are served via the reverse-proxy path.
-		if session != "live" && s.supervisor != nil {
+		if session != "live" && s.sessionLoader != nil {
 			info := utils.ClusterInfo{Name: name, Namespace: namespace, SessionName: session}
-			live, err := s.supervisor.Ensure(r1.Request.Context(), info)
+			live, err := s.sessionLoader.LoadSession(r1.Request.Context(), info)
 			if err != nil {
-				logrus.Errorf("Supervisor.Ensure for %s/%s/%s: %v", namespace, name, session, err)
+				logrus.Errorf("SessionLoader.LoadSession for %s/%s/%s: %v", namespace, name, session, err)
 				r2.WriteErrorString(http.StatusInternalServerError, err.Error())
 				return
 			}
