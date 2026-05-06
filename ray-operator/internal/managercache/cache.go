@@ -12,7 +12,7 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 )
 
-// CacheByObject returns cache.ByObject entries that scope the manager client's Job and Pod watches.
+// K8sControllerRuntimeCacheSelectors returns cache.ByObject entries that scope the manager client's Job and Pod watches.
 func K8sControllerRuntimeCacheSelectors() (map[client.Object]cache.ByObject, error) {
 	createByLabel, err := labels.NewRequirement(utils.KubernetesCreatedByLabelKey, selection.Equals, []string{utils.ComponentName})
 	if err != nil {
