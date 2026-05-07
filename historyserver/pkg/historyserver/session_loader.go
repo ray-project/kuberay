@@ -103,8 +103,8 @@ func (s *SessionLoader) doLoadSession(ctx context.Context, info utils.ClusterInf
 		return true, nil
 
 	default:
-		// Unreachable under the SessionProcessor contract; defensive guard so a future
-		// bug surfaces as a clear 500 instead of a silent success.
+		// Unreachable under the SessionProcessor contract; defensive guard against
+		// future SessionStatus additions.
 		return false, fmt.Errorf("unexpected session status %v", status)
 	}
 }

@@ -50,9 +50,7 @@ func NewLogEventReader(reader storage.StorageReader) *LogEventReader {
 //
 // Path structure in storage: {clusterName}_{namespace}/{sessionName}/logs/{nodeId}/events/event_*.log
 //
-// Per-file readEventFile failures are treated as likely-transient storage
-// errors. If the file list was non-empty but every file failed, surface an error
-// so the lazy-mode caller can avoid marking the session loaded.
+// Per-file readEventFile failures are treated as likely-transient storage errors.
 func (r *LogEventReader) ReadLogEvents(clusterInfo utils.ClusterInfo, clusterSessionKey string, eventStore *types.ClusterLogEventMap) error {
 	// Build cluster ID used by StorageReader
 	clusterID := clusterInfo.Name + "_" + clusterInfo.Namespace

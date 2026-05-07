@@ -310,8 +310,7 @@ func routerRayClusterSet(s *ServerHandler) {
 				r2.WriteErrorString(http.StatusInternalServerError, err.Error())
 				return
 			}
-			// If the session belongs to a live cluster, rewrite the session
-			// name cookie to "live" to avoid querying empty in-memory state.
+			// Use the "live" sentinel to avoid querying empty in-memory state.
 			if live {
 				session = "live"
 			}

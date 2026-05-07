@@ -78,8 +78,7 @@ func main() {
 	processor := historyserver.NewSessionProcessor(eventHandler, cliMgr.Client())
 	sessionLoader := historyserver.NewSessionLoader(processor, serverCtx)
 
-	// Bridge serverCtx into the legacy stop channel that ServerHandler.Run
-	// consumes; the existing chan-based API is preserved.
+	// ServerHandler.Run consumes a stop chan; bridge serverCtx into it.
 	var wg sync.WaitGroup
 	stop := make(chan struct{})
 	go func() {

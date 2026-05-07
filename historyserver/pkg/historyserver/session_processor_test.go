@@ -41,10 +41,6 @@ func rayCluster(namespace, name string, createdAt time.Time) *rayv1.RayCluster {
 	}
 }
 
-// TestIsDead exercises the dead-detection contract: a session is dead if the
-// CR is absent or if it predates the current CR's creation timestamp (the
-// recreated-same-name case). Defensive fallback for unparseable session names
-// keeps the legacy "CR exists = live" behavior.
 func TestIsDead(t *testing.T) {
 	const ns, name = "default", "raycluster-test"
 	crCreatedAt := time.Date(2026, 4, 22, 10, 0, 0, 0, time.UTC)

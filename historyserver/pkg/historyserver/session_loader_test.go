@@ -11,9 +11,7 @@ import (
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
-// fakeProcessor is a test double for processor that lets each test
-// dictate the exact (status, error) tuple ProcessSession returns and
-// count the number of invocations.
+// fakeProcessor is a configurable test double for processor.
 type fakeProcessor struct {
 	calls int32
 	fn    func(ctx context.Context, info utils.ClusterInfo) (SessionStatus, error)
@@ -41,16 +39,13 @@ func testEnterClusterInfo() utils.ClusterInfo {
 	}
 }
 
-// TestLoadSession_ProcessorError_PropagatesAndCleans verifies the dedup
-// behavior on the error path: when processor returns an error, all
-// coalesced callers see the same error AND the dedup group is cleared
-// so a subsequent call starts a fresh singleflight group.
+// TestLoadSession_ProcessorError_PropagatesAndCleans verifies that on the error
+// path, all coalesced callers see the same error and the dedup group is cleared.
 func TestLoadSession_ProcessorError_PropagatesAndCleans(t *testing.T) {
 	info := testEnterClusterInfo()
 	processorErr := errors.New("simulated parse failure")
 
-	// Phase 1 — N concurrent callers; processor errors once and all
-	// callers must receive the same error.
+	// Phase 1: error path
 	release := make(chan struct{})
 	fp := &fakeProcessor{
 		fn: func(_ context.Context, _ utils.ClusterInfo) (SessionStatus, error) {
@@ -71,9 +66,7 @@ func TestLoadSession_ProcessorError_PropagatesAndCleans(t *testing.T) {
 		}(i)
 	}
 
-	// Barrier: let all N goroutines park inside LoadSession before we let
-	// the winner finish. 50 ms is several orders of magnitude longer
-	// than scheduling latency yet keeps the test well under a second.
+	// 50ms >> scheduling latency, well under a second.
 	time.Sleep(50 * time.Millisecond)
 	close(release)
 	wg.Wait()
@@ -87,8 +80,7 @@ func TestLoadSession_ProcessorError_PropagatesAndCleans(t *testing.T) {
 		}
 	}
 
-	// Phase 2 — the dedup group must be cleared after the failed call;
-	// a fresh processor invocation should run for the next /enter_cluster.
+	// Phase 2: dedup group cleared
 	fp.setFn(func(_ context.Context, _ utils.ClusterInfo) (SessionStatus, error) {
 		return SessionStatusProcessed, nil
 	})
@@ -121,8 +113,6 @@ func TestLoadSession_ProcessorError_NoInternalRetry(t *testing.T) {
 		t.Fatalf("expected processor called exactly 1x (no internal retry), got %d", got)
 	}
 
-	// Loaded set must be empty, which can be verified by triggering a second LoadSession
-	// and confirming that processor runs again.
 	fp.setFn(func(_ context.Context, _ utils.ClusterInfo) (SessionStatus, error) {
 		return SessionStatusProcessed, nil
 	})
@@ -134,9 +124,7 @@ func TestLoadSession_ProcessorError_NoInternalRetry(t *testing.T) {
 	}
 }
 
-// TestLoadSession_LiveAndProcessed verifies LoadSession surfaces the live/processed
-// distinction so the router can rewrite the session-name cookie when a live
-// cluster is reached via its real session name.
+// TestLoadSession_LiveAndProcessed verifies LoadSession surfaces the live/processed distinction.
 func TestLoadSession_LiveAndProcessed(t *testing.T) {
 	tests := []struct {
 		name     string

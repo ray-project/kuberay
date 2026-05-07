@@ -1548,16 +1548,12 @@ func (h *EventHandler) ProcessSingleSession(ctx context.Context, clusterInfo uti
 	clusterNameNamespace := clusterInfo.Name + "_" + clusterInfo.Namespace
 	clusterSessionKey := utils.BuildClusterSessionKey(clusterInfo.Name, clusterInfo.Namespace, clusterInfo.SessionName)
 
-	// Read Log Events from logs/{nodeId}/events/event_*.log
-	// This is the format used by Ray Dashboard's /events API.
 	logEventReader := NewLogEventReader(h.reader)
 	logEventErr := logEventReader.ReadLogEvents(clusterInfo, clusterSessionKey, h.ClusterLogEventMap)
 	if logEventErr != nil {
 		logrus.Errorf("Failed to read Log Events for %s: %v", clusterSessionKey, logEventErr)
 	}
 
-	// Read RayEvents (Export Events) from node_events/ and job_events/.
-	// These are used for task/actor/job/node data APIs.
 	eventFileList := append(h.getAllJobEventFiles(clusterInfo), h.getAllNodeEventFiles(clusterInfo)...)
 	logrus.Debugf("current eventFileList for cluster %s is: %v", clusterInfo.Name, eventFileList)
 
@@ -1599,8 +1595,6 @@ func (h *EventHandler) ProcessSingleSession(ctx context.Context, clusterInfo uti
 		}
 	}
 
-	// If every attempted file failed, treat as transient outage and surface
-	// so the session is not marked loaded.
 	var rayEventsErrVal error
 	if rayEventsAttempted > 0 && rayEventsSucceeded == 0 {
 		rayEventsErrVal = fmt.Errorf("ingested 0 of %d RayEvent files for %s: likely transient storage outage",
