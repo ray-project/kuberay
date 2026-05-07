@@ -1175,8 +1175,13 @@ func TestHeadPodTemplate_WithAutoscalingEnabled(t *testing.T) {
 
 func TestDefaultHeadPodTemplate_Autoscaling(t *testing.T) {
 	clusterNoAutoscaling := instance.DeepCopy()
+	clusterAutoscalingVersionNotSet := instance.DeepCopy()
+	clusterAutoscalingVersionNotSet.Spec.EnableInTreeAutoscaling = new(true)
 	clusterAutoscalingV1 := instance.DeepCopy()
 	clusterAutoscalingV1.Spec.EnableInTreeAutoscaling = new(true)
+	clusterAutoscalingV1.Spec.AutoscalerOptions = &rayv1.AutoscalerOptions{
+		Version: ptr.To(rayv1.AutoscalerVersionV1),
+	}
 	clusterAutoscalingV2 := instance.DeepCopy()
 	clusterAutoscalingV2.Spec.EnableInTreeAutoscaling = new(true)
 	clusterAutoscalingV2.Spec.AutoscalerOptions = &rayv1.AutoscalerOptions{
@@ -1191,23 +1196,34 @@ func TestDefaultHeadPodTemplate_Autoscaling(t *testing.T) {
 		cluster                    rayv1.RayCluster
 		expectedHeadContainers     int
 		expectedAutoscalerV2EnvVar bool
+		expectedAutoscalerV1EnvVar bool
 	}{
 		"Pod template with autoscaling disabled should not have autoscaler container or other autoscaler related fields": {
 			cluster:                    *clusterNoAutoscaling,
 			expectedHeadContainers:     1,
 			expectedAutoscalerV2EnvVar: false,
+			expectedAutoscalerV1EnvVar: false,
+			expectedRestartPolicy:      "",
+		},
+		"Pod template with autoscaling version not set should not have autoscaler env var": {
+			cluster:                    *clusterAutoscalingVersionNotSet,
+			expectedHeadContainers:     2,
+			expectedAutoscalerV2EnvVar: false,
+			expectedAutoscalerV1EnvVar: false,
 			expectedRestartPolicy:      "",
 		},
 		"Pod template with autoscaling v1 enabled should the correct autoscaler v1 fields": {
 			cluster:                    *clusterAutoscalingV1,
 			expectedHeadContainers:     2,
 			expectedAutoscalerV2EnvVar: false,
+			expectedAutoscalerV1EnvVar: true,
 			expectedRestartPolicy:      "",
 		},
 		"Pod template with autoscaling v2 enabled should the correct autoscaler v2 fields": {
 			cluster:                    *clusterAutoscalingV2,
 			expectedHeadContainers:     2,
 			expectedAutoscalerV2EnvVar: true,
+			expectedAutoscalerV1EnvVar: false,
 			expectedRestartPolicy:      corev1.RestartPolicyNever,
 		},
 	}
@@ -1225,6 +1241,23 @@ func TestDefaultHeadPodTemplate_Autoscaling(t *testing.T) {
 				assert.Contains(t, podTemplateSpec.Spec.Containers[0].Env, corev1.EnvVar{
 					Name:  utils.RAY_ENABLE_AUTOSCALER_V2,
 					Value: "true",
+				})
+			} else {
+				assert.NotContains(t, podTemplateSpec.Spec.Containers[0].Env, corev1.EnvVar{
+					Name:  utils.RAY_ENABLE_AUTOSCALER_V2,
+					Value: "true",
+				})
+			}
+
+			if tc.expectedAutoscalerV1EnvVar {
+				assert.Contains(t, podTemplateSpec.Spec.Containers[0].Env, corev1.EnvVar{
+					Name:  utils.RAY_ENABLE_AUTOSCALER_V2,
+					Value: "false",
+				})
+			} else {
+				assert.NotContains(t, podTemplateSpec.Spec.Containers[0].Env, corev1.EnvVar{
+					Name:  utils.RAY_ENABLE_AUTOSCALER_V2,
+					Value: "false",
 				})
 			}
 
@@ -2180,6 +2213,62 @@ func TestSetAutoscalerV2EnvVars(t *testing.T) {
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
 			setAutoscalerV2EnvVars(tc.podTemplate)
+			assert.Equal(t, tc.expectedEnvVars, tc.podTemplate.Spec.Containers[0].Env)
+		})
+	}
+}
+
+func TestSetAutoscalerV1EnvVars(t *testing.T) {
+	tests := map[string]struct {
+		podTemplate     *corev1.PodTemplateSpec
+		expectedEnvVars []corev1.EnvVar
+	}{
+		"Pod without env vars should have autoscaler v2 env var set to false": {
+			podTemplate: &corev1.PodTemplateSpec{
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{},
+					},
+				},
+			},
+			expectedEnvVars: []corev1.EnvVar{
+				{
+					Name:  utils.RAY_ENABLE_AUTOSCALER_V2,
+					Value: "false",
+				},
+			},
+		},
+		"Pod without autoscaler v2 env var should have autoscaler v2 env var set to false": {
+			podTemplate: &corev1.PodTemplateSpec{
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Env: []corev1.EnvVar{
+								{
+									Name:  "papal",
+									Value: "conclave",
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedEnvVars: []corev1.EnvVar{
+				{
+					Name:  "papal",
+					Value: "conclave",
+				},
+				{
+					Name:  utils.RAY_ENABLE_AUTOSCALER_V2,
+					Value: "false",
+				},
+			},
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			setAutoscalerV1EnvVars(tc.podTemplate)
 			assert.Equal(t, tc.expectedEnvVars, tc.podTemplate.Spec.Containers[0].Env)
 		})
 	}
