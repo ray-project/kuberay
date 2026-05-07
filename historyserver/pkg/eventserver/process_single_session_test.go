@@ -1,6 +1,7 @@
 package eventserver
 
 import (
+	"context"
 	"testing"
 
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
@@ -33,7 +34,7 @@ func TestProcessSingleSession(t *testing.T) {
 		mock.addDir("cluster_ns", "session1/logs", []string{})
 
 		h := NewEventHandler(mock)
-		err := h.ProcessSingleSession(clusterInfo)
+		err := h.ProcessSingleSession(context.Background(), clusterInfo)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "ingested 0 of 2")
 	})
@@ -45,7 +46,7 @@ func TestProcessSingleSession(t *testing.T) {
 		mock.addDir("cluster_ns", "session1/logs", []string{})
 
 		h := NewEventHandler(mock)
-		err := h.ProcessSingleSession(clusterInfo)
+		err := h.ProcessSingleSession(context.Background(), clusterInfo)
 		require.NoError(t, err)
 	})
 
@@ -59,7 +60,7 @@ func TestProcessSingleSession(t *testing.T) {
 		mock.addDir("cluster_ns", "session1/logs", []string{})
 
 		h := NewEventHandler(mock)
-		err := h.ProcessSingleSession(clusterInfo)
+		err := h.ProcessSingleSession(context.Background(), clusterInfo)
 		require.NoError(t, err)
 	})
 
@@ -73,7 +74,7 @@ func TestProcessSingleSession(t *testing.T) {
 		mock.addDir("cluster_ns", "session1/logs", []string{})
 
 		h := NewEventHandler(mock)
-		err := h.ProcessSingleSession(clusterInfo)
+		err := h.ProcessSingleSession(context.Background(), clusterInfo)
 		require.NoError(t, err)
 	})
 
@@ -85,7 +86,7 @@ func TestProcessSingleSession(t *testing.T) {
 		mock.addDir("cluster_ns", "session1/logs/node1/events", []string{"event_GCS.log"})
 
 		h := NewEventHandler(mock)
-		err := h.ProcessSingleSession(clusterInfo)
+		err := h.ProcessSingleSession(context.Background(), clusterInfo)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "ingested 0 of 1 log event files")
 	})
@@ -98,7 +99,7 @@ func TestProcessSingleSession(t *testing.T) {
 		mock.addDir("cluster_ns", "session1/logs/node1/events", []string{"event_GCS.log"})
 
 		h := NewEventHandler(mock)
-		err := h.ProcessSingleSession(clusterInfo)
+		err := h.ProcessSingleSession(context.Background(), clusterInfo)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "ingested 0 of 1 RayEvent files")
 		assert.Contains(t, err.Error(), "ingested 0 of 1 log event files")

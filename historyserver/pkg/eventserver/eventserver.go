@@ -1544,7 +1544,7 @@ func extractActorIDFromTaskID(taskIDHex string) string {
 //
 // TODO(jwj): Empty event file list vs ListFiles outage is ambiguous without
 // StorageReader interface surfacing errors.
-func (h *EventHandler) ProcessSingleSession(clusterInfo utils.ClusterInfo) error {
+func (h *EventHandler) ProcessSingleSession(ctx context.Context, clusterInfo utils.ClusterInfo) error {
 	clusterNameNamespace := clusterInfo.Name + "_" + clusterInfo.Namespace
 	clusterSessionKey := utils.BuildClusterSessionKey(clusterInfo.Name, clusterInfo.Namespace, clusterInfo.SessionName)
 
@@ -1564,6 +1564,9 @@ func (h *EventHandler) ProcessSingleSession(clusterInfo utils.ClusterInfo) error
 	rayEventsAttempted := len(eventFileList)
 	rayEventsSucceeded := 0
 	for _, eventFile := range eventFileList {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		logrus.Debugf("Reading event file: %s", eventFile)
 
 		eventioReader := h.reader.GetContent(clusterNameNamespace, eventFile)

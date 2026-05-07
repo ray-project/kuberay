@@ -2,6 +2,7 @@ package historyserver
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -53,17 +54,10 @@ func NewSessionProcessor(handler *eventserver.EventHandler, k8sClient client.Cli
 
 // ProcessSession processes one session end-to-end and returns the session status.
 func (p *SessionProcessor) ProcessSession(ctx context.Context, session utils.ClusterInfo) (SessionStatus, error) {
-	if err := ctx.Err(); err != nil {
-		return SessionStatusCanceled, err
-	}
-
-	// Step 1: dead detection. NotFound means dead; other errors propagate.
-	// Treating unknown state as dead would snapshot a live cluster.
 	dead, err := p.isDead(ctx, session)
 	if err != nil {
-		// Distinguish ctx cancellation from real API errors to keep alerting noise-free.
-		if ctxErr := ctx.Err(); ctxErr != nil {
-			return SessionStatusCanceled, ctxErr
+		if isCtxCanceled(err) {
+			return SessionStatusCanceled, err
 		}
 		return SessionStatusClusterStateUnknown, fmt.Errorf("check cluster state for %s/%s: %w", session.Namespace, session.Name, err)
 	}
@@ -71,15 +65,9 @@ func (p *SessionProcessor) ProcessSession(ctx context.Context, session utils.Clu
 		return SessionStatusLive, nil
 	}
 
-	// Step 2: drive parsing through the shared EventHandler. Events ingest
-	// into the EventHandler's per-session in-memory maps; handlers read
-	// directly from those maps.
-	if err := ctx.Err(); err != nil {
-		return SessionStatusCanceled, err
-	}
-	if err := p.handler.ProcessSingleSession(session); err != nil {
-		if ctxErr := ctx.Err(); ctxErr != nil {
-			return SessionStatusCanceled, ctxErr
+	if err := p.handler.ProcessSingleSession(ctx, session); err != nil {
+		if isCtxCanceled(err) {
+			return SessionStatusCanceled, err
 		}
 		return SessionStatusEventsErr, fmt.Errorf("process events for %s/%s: %w", session.Namespace, session.Name, err)
 	}
@@ -116,4 +104,10 @@ func (p *SessionProcessor) isDead(ctx context.Context, session utils.ClusterInfo
 		return true, nil
 	}
 	return false, nil
+}
+
+// isCtxCanceled checks if the error is caused by context cancellation
+// or deadline exceeded.
+func isCtxCanceled(err error) bool {
+	return errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
 }
