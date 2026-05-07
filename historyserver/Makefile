@@ -42,12 +42,20 @@ GOARCH ?= $(shell go env GOARCH)
 
 all: build
 
+.PHONY: fmt
+fmt:
+	go fmt ./...
+
+.PHONY: vet
+vet:
+	go vet ./...
+
 .PHONY: clean
 clean:
 	rm -rf $(OUT_DIR)
 
 .PHONY: build
-build: buildcollector buildhistoryserver
+build: fmt vet buildcollector buildhistoryserver
 
 .PHONY: buildcollector
 buildcollector:
