@@ -61,7 +61,6 @@ func NewSessionProcessor(handler *eventserver.EventHandler, k8sClient client.Cli
 //
 // ctx is polled at each step boundary; cancellation surfaces as Canceled.
 func (p *SessionProcessor) ProcessSession(ctx context.Context, session utils.ClusterInfo) (SessionStatus, error) {
-	// Fast-fail if the request was canceled before we started.
 	if err := ctx.Err(); err != nil {
 		return SessionStatusCanceled, err
 	}

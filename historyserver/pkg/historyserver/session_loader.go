@@ -10,24 +10,13 @@ import (
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
-// processor is the narrow subset of *SessionProcessor that the
-// SessionLoader depends on.
+// processor is an interface to enable mocking SessionProcessor in tests.
 type processor interface {
 	ProcessSession(ctx context.Context, info utils.ClusterInfo) (SessionStatus, error)
 }
 
-// SessionLoader ensures a session is ready to serve before the router
-// dispatches handler logic. There are three outcomes:
-//
-//  1. Live cluster: skip loading; caller redirects to the Ray Dashboard.
-//  2. Dead, already loaded: fast-path; events are already in in-memory maps.
-//  3. Dead, not yet loaded: drive SessionProcessor to ingest events into the maps.
-//
+// SessionLoader ensures a dead session is loaded into in-memory maps.
 // Concurrent callers for the same session are coalesced via singleflight.
-//
-// A single SessionLoader is safe to share across all HTTP handlers for one
-// replica; its mutable state lives inside singleflight.Group and the
-// loaded set.
 type SessionLoader struct {
 	processor processor
 	sf        singleflight.Group
@@ -36,9 +25,7 @@ type SessionLoader struct {
 	serverCtx context.Context
 }
 
-// NewSessionLoader wires a SessionLoader. All arguments must be non-nil.
-// serverCtx is the server-lifetime context used to cancel in-flight work
-// on shutdown.
+// NewSessionLoader wires a SessionLoader.
 func NewSessionLoader(p processor, serverCtx context.Context) *SessionLoader {
 	return &SessionLoader{
 		processor: p,
@@ -82,11 +69,11 @@ func (s *SessionLoader) LoadSession(ctx context.Context, info utils.ClusterInfo)
 
 	select {
 	case <-ctx.Done():
-		// Release the caller; the winner keeps running and its result is shared
-		// for the next caller of this session.
+		// Release the caller; the shared singleflight call keeps running and
+		// its result will be available to the next caller for this session.
 		//
 		// Do NOT sf.Forget(key) here: a racing new call would kick off a second
-		// processor execution in parallel with the still-running winner.
+		// processor execution in parallel with the still-running one.
 		return false, ctx.Err()
 	case result := <-ch:
 		if result.Err != nil {
@@ -97,39 +84,29 @@ func (s *SessionLoader) LoadSession(ctx context.Context, info utils.ClusterInfo)
 	}
 }
 
-// doLoadSession checks if the session belongs to a live cluster and drives
-// the processor to ingest events into the maps for dead sessions.
-//
-// Returns:
-//   - (false, nil): events loaded, either a fast-path hit or events ingested.
-//   - (true, nil): session belongs to a live cluster; not added to the loaded set.
-//   - (_, err): processor failed.
-func (s *SessionLoader) doLoadSession(ctx context.Context, info utils.ClusterInfo, key string) (bool, error) {
-	// Guard against a race where loaded gets marked between the caller's
-	// lookup and singleflight execution.
+// doLoadSession runs the actual loading work for LoadSession under singleflight.
+// live is true when the cluster is still alive.
+func (s *SessionLoader) doLoadSession(ctx context.Context, info utils.ClusterInfo, key string) (live bool, err error) {
 	s.loadedMu.RLock()
 	_, loaded := s.loaded[key]
 	s.loadedMu.RUnlock()
 	if loaded {
 		return false, nil
 	}
-	// Synchronously process the session raw events.
-	status, perr := s.processor.ProcessSession(ctx, info)
-	if perr != nil {
-		return false, perr
+
+	status, err := s.processor.ProcessSession(ctx, info)
+	if err != nil {
+		return false, err
 	}
 
 	switch status {
 	case SessionStatusProcessed:
-		// Mark the session as loaded so subsequent /enter_cluster calls
-		// are no-ops on this replica.
 		s.loadedMu.Lock()
 		s.loaded[key] = struct{}{}
 		s.loadedMu.Unlock()
 		return false, nil
 
 	case SessionStatusLive:
-		// Session belongs to a live cluster. Handler proxies to the Ray Dashboard.
 		return true, nil
 
 	default:

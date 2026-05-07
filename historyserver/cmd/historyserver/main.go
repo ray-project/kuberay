@@ -38,24 +38,24 @@ func main() {
 
 	cliMgr, err := historyserver.NewClientManager(kubeconfigs, useKubernetesProxy)
 	if err != nil {
-		logrus.Fatalf("client manager: %v", err)
+		logrus.Fatalf("Failed to create client manager: %v", err)
 	}
 
 	jsonData := make(map[string]interface{})
 	if runtimeClassConfigPath != "" {
 		data, err := os.ReadFile(runtimeClassConfigPath)
 		if err != nil {
-			logrus.Fatalf("read runtime-class-config: %v", err)
+			logrus.Fatalf("Failed to read runtime-class-config from %s: %v", runtimeClassConfigPath, err)
 		}
 		if err := json.Unmarshal(data, &jsonData); err != nil {
-			logrus.Fatalf("parse runtime-class-config: %v", err)
+			logrus.Fatalf("Failed to parse runtime-class-config from %s: %v", runtimeClassConfigPath, err)
 		}
 	}
 
 	registry := collector.GetReaderRegistry()
 	factory, ok := registry[runtimeClassName]
 	if !ok {
-		logrus.Fatalf("unsupported runtime-class-name for reader: %s", runtimeClassName)
+		logrus.Fatalf("Unsupported runtime-class-name for reader: %s", runtimeClassName)
 	}
 
 	globalConfig := types.RayHistoryServerConfig{
@@ -64,7 +64,7 @@ func main() {
 
 	reader, err := factory(&globalConfig, jsonData)
 	if err != nil {
-		logrus.Fatalf("create reader: %v", err)
+		logrus.Fatalf("Failed to create reader for runtime class name %s: %v", runtimeClassName, err)
 	}
 
 	eventHandler := eventserver.NewEventHandler(reader)
@@ -90,7 +90,7 @@ func main() {
 
 	handler, err := historyserver.NewServerHandler(&globalConfig, dashboardDir, reader, cliMgr, eventHandler, sessionLoader, useKubernetesProxy)
 	if err != nil {
-		logrus.Fatalf("create server handler: %v", err)
+		logrus.Fatalf("Failed to create server handler: %v", err)
 	}
 
 	wg.Add(1)
