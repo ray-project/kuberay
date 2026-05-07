@@ -16,7 +16,7 @@ interface IFrontendTableProps<T extends { name: string }> {
   isLoading: boolean;
   error: {
     message: string;
-    info?: { message?: string; error?: string; Message?: string } | string;
+    info?: unknown;
   } | null;
   headCells: readonly HeadCell<T>[];
   deleteItems: (names: readonly string[]) => Promise<void>;
@@ -293,9 +293,9 @@ export const FrontendTable = <T extends { name: string }>(
                       const detail =
                         typeof error.info === "string"
                           ? error.info
-                          : error.info?.message ||
-                            error.info?.error ||
-                            error.info?.Message;
+                          : error.info !== undefined && error.info !== null
+                            ? JSON.stringify(error.info)
+                            : undefined;
                       return detail
                         ? `${error.message}: ${detail}`
                         : error.message;
