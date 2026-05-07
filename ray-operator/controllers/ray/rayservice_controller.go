@@ -29,6 +29,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -120,6 +121,46 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	if manager := utils.ManagedByExternalController(rayServiceInstance.Spec.ManagedBy); manager != nil {
 		logger.Info("Skipping RayService managed by a custom controller", "managed-by", manager)
 		return ctrl.Result{}, nil
+	}
+
+	if !rayServiceInstance.ObjectMeta.DeletionTimestamp.IsZero() {
+		logger.Info("RayService is being deleted", "DeletionTimestamp", rayServiceInstance.ObjectMeta.DeletionTimestamp)
+
+		rayClusterList := rayv1.RayClusterList{}
+		if err := r.List(ctx, &rayClusterList, common.RayServiceRayClustersAssociationOptions(rayServiceInstance).ToListOptions()...); err != nil {
+			return ctrl.Result{}, err
+		}
+
+		if len(rayClusterList.Items) > 0 {
+			logger.Info("RayClusters still exist, triggering deletion", "count", len(rayClusterList.Items))
+			for _, cluster := range rayClusterList.Items {
+				if cluster.DeletionTimestamp.IsZero() {
+					logger.Info("Deleting RayCluster", "clusterName", cluster.Name)
+					if err := r.Delete(ctx, &cluster, client.PropagationPolicy(metav1.DeletePropagationBackground)); err != nil {
+						logger.Error(err, "Failed to delete RayCluster", "clusterName", cluster.Name)
+						return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
+					}
+				}
+			}
+			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, nil
+		}
+
+		logger.Info("No RayClusters exist, removing finalizer")
+		controllerutil.RemoveFinalizer(rayServiceInstance, utils.RayServiceFinalizer)
+		if err := r.Update(ctx, rayServiceInstance); err != nil {
+			logger.Error(err, "Failed to remove finalizer for RayService")
+			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
+		}
+		return ctrl.Result{}, nil
+	}
+
+	if !controllerutil.ContainsFinalizer(rayServiceInstance, utils.RayServiceFinalizer) {
+		logger.Info("Adding finalizer to RayService", "finalizer", utils.RayServiceFinalizer)
+		controllerutil.AddFinalizer(rayServiceInstance, utils.RayServiceFinalizer)
+		if err := r.Update(ctx, rayServiceInstance); err != nil {
+			logger.Error(err, "Failed to add finalizer to RayService")
+			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
+		}
 	}
 
 	// Perform all validations and directly fail the RayService if any of the validation fails
