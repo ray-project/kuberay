@@ -213,7 +213,10 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 		mergeAutoscalerOverrides(&autoscalerContainer, instance.Spec.AutoscalerOptions)
 		podTemplate.Spec.Containers = append(podTemplate.Spec.Containers, autoscalerContainer)
 
-		if utils.IsAutoscalingV2Enabled(&instance.Spec) {
+		// The error is ignored here because the function will return false if there's an error parsing the version.
+		// For example, if the custom image is taken, there is not knowing the Ray version, it considers the feature is not valid.
+		autoscalerRestartValid, _ := utils.IsRayVersionAtLeast(headSpec.Template, utils.MinAutoscalerRestartValidVersion)
+		if !autoscalerRestartValid && utils.IsAutoscalingV2Enabled(&instance.Spec) {
 			setAutoscalerV2EnvVars(&podTemplate)
 			podTemplate.Spec.RestartPolicy = corev1.RestartPolicyNever
 		}
@@ -452,7 +455,11 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 		podTemplate.Spec.Containers[utils.RayContainerIndex].Ports = append(podTemplate.Spec.Containers[utils.RayContainerIndex].Ports, metricsPort)
 	}
 
-	if utils.IsAutoscalingEnabled(&instance.Spec) && utils.IsAutoscalingV2Enabled(&instance.Spec) {
+	// Use the headGroupSpec to determine whether the RestartPolicy should be Never or not, since the head pod is the one that runs the autoscaler.
+	// The error is ignored here because the function will return false if there's an error parsing the version.
+	// For example, if the custom image is taken, there is not knowing the Ray version, it considers the feature is not valid.
+	autoscalerRestartValid, _ := utils.IsRayVersionAtLeast(instance.Spec.HeadGroupSpec.Template, utils.MinAutoscalerRestartValidVersion)
+	if !autoscalerRestartValid && utils.IsAutoscalingEnabled(&instance.Spec) && utils.IsAutoscalingV2Enabled(&instance.Spec) {
 		podTemplate.Spec.RestartPolicy = corev1.RestartPolicyNever
 	}
 

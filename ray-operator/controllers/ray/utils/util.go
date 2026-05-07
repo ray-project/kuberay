@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"reflect"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -23,6 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/apimachinery/pkg/util/rand"
+	"k8s.io/apimachinery/pkg/util/version"
 	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -1089,6 +1091,64 @@ func IsHTTPRouteEqual(existing, desired *gwv1.HTTPRoute) bool {
 		}
 	}
 	return true
+}
+
+// rayImageVersionRegex matches a strict MAJOR.MINOR.PATCH version tag in a Ray container
+// image reference. Only the numeric triplet is captured; any suffix (pre-release, build
+// metadata, or digest) is ignored.
+// Example matches:
+//
+//	rayproject/ray:2.55.0            → "2.55.0"
+//	rayproject/ray:2.55.0-py310      → "2.55.0"
+//	rayproject/ray:2.55.0@sha256:abc → "2.55.0"
+var rayImageVersionRegex = regexp.MustCompile(`rayproject/ray:(\d+\.\d+\.\d+)`)
+
+// ParseRayVersionFromPodTemplate extracts the Ray version string from the Ray container's
+// image tag in the given PodTemplateSpec. RayContainerIndex is used to identify the Ray
+// container (always the first application container by convention).
+//
+// The image is expected to be in the form "rayproject/ray:version". An image digest
+// suffix (e.g. "@sha256:...") is stripped before the tag is extracted.
+// Returns an error if the spec has no container at RayContainerIndex, or the image has
+// no tag (or an empty tag).
+func ParseRayVersionFromPodTemplate(template corev1.PodTemplateSpec) (string, error) {
+	if len(template.Spec.Containers) <= RayContainerIndex {
+		return "", fmt.Errorf("PodTemplateSpec has no container at index %d", RayContainerIndex)
+	}
+
+	image := template.Spec.Containers[RayContainerIndex].Image
+
+	matches := rayImageVersionRegex.FindStringSubmatch(image)
+	if matches == nil {
+		return "", fmt.Errorf("ray container image %q does not contain a recognizable version tag (expected MAJOR.MINOR.PATCH)", image)
+	}
+
+	return matches[1], nil
+}
+
+// IsRayVersionAtLeast reports whether the Ray version parsed from the Ray container image
+// in the given PodTemplateSpec is at least targetVersion.
+//
+// Both the image tag and targetVersion are parsed with k8s.io/apimachinery/pkg/util/version,
+// which accepts standard semver strings (e.g. "2.46.0").
+// Returns (false, error) if either version string cannot be parsed.
+func IsRayVersionAtLeast(template corev1.PodTemplateSpec, targetVersion string) (bool, error) {
+	versionStr, err := ParseRayVersionFromPodTemplate(template)
+	if err != nil {
+		return false, err
+	}
+
+	v, err := version.ParseGeneric(versionStr)
+	if err != nil {
+		return false, fmt.Errorf("failed to parse Ray version %q: %w", versionStr, err)
+	}
+
+	minVersion, err := version.ParseGeneric(targetVersion)
+	if err != nil {
+		return false, fmt.Errorf("failed to parse minimum version %q: %w", targetVersion, err)
+	}
+
+	return v.AtLeast(minVersion), nil
 }
 
 // IsGatewayEqual checks if the existing Gateway matches the desired Gateway.
