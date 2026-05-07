@@ -50,7 +50,6 @@ clean:
 build: buildcollector buildhistoryserver
 
 .PHONY: buildcollector
-#build: alllint test
 buildcollector:
 	@echo ""
 	@echo "go build ..."
@@ -63,7 +62,6 @@ buildcollector-race:
 	CGO_ENABLED=1 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -race -v $(GO_BUILD_FLAGS) -o $(BIN_DIR)/$(BINARY_NAME_COLLECTOR) ./cmd/collector/main.go
 
 .PHONY: buildhistoryserver
-#build: alllint test
 buildhistoryserver:
 	@echo ""
 	@echo "go build ..."
