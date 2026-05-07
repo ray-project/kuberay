@@ -51,15 +51,7 @@ func NewSessionProcessor(handler *eventserver.EventHandler, k8sClient client.Cli
 	}
 }
 
-// ProcessSession processes one session end-to-end and returns the outcome
-// classification and an error.
-//
-//   - (Live, nil): no-op; caller moves on.
-//   - (Processed, nil): events were ingested into EventHandler's in-memory state.
-//   - (K8sProbeErr | EventsErr, err): real failure.
-//   - (Canceled, ctx.Err()): ctx was canceled between steps.
-//
-// ctx is polled at each step boundary; cancellation surfaces as Canceled.
+// ProcessSession processes one session end-to-end and returns the session status.
 func (p *SessionProcessor) ProcessSession(ctx context.Context, session utils.ClusterInfo) (SessionStatus, error) {
 	if err := ctx.Err(); err != nil {
 		return SessionStatusCanceled, err
@@ -98,11 +90,6 @@ func (p *SessionProcessor) ProcessSession(ctx context.Context, session utils.Clu
 // A session is dead if either:
 //   - the RayCluster CR is absent, or
 //   - the CR exists but was created after the queried session.
-//
-// Returns:
-//   - (true,  nil): dead; events should be ingested.
-//   - (false, nil): live; events should be skipped.
-//   - (false, err): unknown state; caller should skip and retry later.
 //
 // TODO(jwj): Use collector-written UID or a storage-side probe for handling
 // cases in which multiple sessions exist in the same CR.

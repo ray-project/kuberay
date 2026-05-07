@@ -34,15 +34,8 @@ func NewSessionLoader(p processor, serverCtx context.Context) *SessionLoader {
 	}
 }
 
-// LoadSession blocks until the session is ready to serve for this replica
-// or an unrecoverable error is observed. Concurrent callers for the same
-// session are coalesced via singleflight.
-//
-// Returns:
-//   - (false, nil): events loaded; router serves the historical session.
-//   - (true,  nil): live cluster; router rewrites the session-name cookie to "live".
-//   - (_, ctx.Err()): caller's ctx died while waiting. Shared work keeps running.
-//   - (_, other error): unrecoverable error.
+// LoadSession blocks until the session is ready to serve for this replica.
+// live is true when the cluster is still alive.
 func (s *SessionLoader) LoadSession(ctx context.Context, info utils.ClusterInfo) (live bool, err error) {
 	// Fast pre-flight: skip singleflight entirely if ctx is already dead.
 	if err := ctx.Err(); err != nil {
