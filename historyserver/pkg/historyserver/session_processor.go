@@ -26,9 +26,9 @@ const (
 	// SessionStatusProcessed means events were ingested into EventHandler's
 	// in-memory state.
 	SessionStatusProcessed
-	// SessionStatusK8sProbeErr means the K8s Get returned a non-NotFound
-	// error and the cluster state is unknown.
-	SessionStatusK8sProbeErr
+	// SessionStatusClusterStateUnknown means the K8s Get returned a non-NotFound
+	// error and the cluster state could not be determined.
+	SessionStatusClusterStateUnknown
 	// SessionStatusEventsErr means event parsing failed.
 	SessionStatusEventsErr
 	// SessionStatusCanceled means ctx was canceled mid-processing; not an *Err
@@ -65,7 +65,7 @@ func (p *SessionProcessor) ProcessSession(ctx context.Context, session utils.Clu
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return SessionStatusCanceled, ctxErr
 		}
-		return SessionStatusK8sProbeErr, fmt.Errorf("k8s probe for %s/%s: %w", session.Namespace, session.Name, err)
+		return SessionStatusClusterStateUnknown, fmt.Errorf("check cluster state for %s/%s: %w", session.Namespace, session.Name, err)
 	}
 	if !dead {
 		return SessionStatusLive, nil
