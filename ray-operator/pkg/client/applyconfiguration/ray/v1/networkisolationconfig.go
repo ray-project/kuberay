@@ -3,6 +3,7 @@
 package v1
 
 import (
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 )
 
@@ -10,14 +11,14 @@ import (
 // with apply.
 //
 // NetworkIsolationConfig defines network isolation settings for Ray cluster.
-// All modes maintain the cluster's ability for intra-node and KubeRay operator communication.
+// All modes maintain the cluster's ability for intra-cluster and KubeRay operator communication.
 type NetworkIsolationConfigApplyConfiguration struct {
-	// Mode controls the security level, all modes maintain the Cluster's
-	// ability for intra-node and Kuberay operator communication.
+	// Mode controls the security level, all modes maintain the cluster's
+	// ability for intra-cluster and KubeRay operator communication.
 	// - "DenyAll": Denies all Ingress and Egress.
 	// - "DenyAllIngress": Denies all Ingress.
 	// - "DenyAllEgress": Denies all Egress.
-	Mode *string `json:"mode,omitempty"`
+	Mode *rayv1.NetworkIsolationMode `json:"mode,omitempty"`
 	// IngressRules specifies custom ingress rules for Ray cluster pods.
 	// By default, the generated NetworkPolicy allows intra-cluster traffic
 	// and KubeRay operator access to dashboard and client ports. For
@@ -39,7 +40,7 @@ func NetworkIsolationConfig() *NetworkIsolationConfigApplyConfiguration {
 // WithMode sets the Mode field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Mode field is set to the value of the last call.
-func (b *NetworkIsolationConfigApplyConfiguration) WithMode(value string) *NetworkIsolationConfigApplyConfiguration {
+func (b *NetworkIsolationConfigApplyConfiguration) WithMode(value rayv1.NetworkIsolationMode) *NetworkIsolationConfigApplyConfiguration {
 	b.Mode = &value
 	return b
 }

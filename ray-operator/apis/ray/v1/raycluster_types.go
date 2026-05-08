@@ -131,28 +131,31 @@ type RedisCredential struct {
 	Value string `json:"value,omitempty"`
 }
 
+// NetworkIsolationMode is the type for network isolation mode constants.
+// +kubebuilder:validation:Enum=DenyAll;DenyAllIngress;DenyAllEgress
+type NetworkIsolationMode string
+
 // Network isolation mode constants for NetworkIsolationConfig.Mode.
 const (
 	// NetworkIsolationDenyAll denies all ingress and egress traffic.
-	NetworkIsolationDenyAll = "DenyAll"
+	NetworkIsolationDenyAll NetworkIsolationMode = "DenyAll"
 	// NetworkIsolationDenyAllIngress denies all ingress traffic.
-	NetworkIsolationDenyAllIngress = "DenyAllIngress"
+	NetworkIsolationDenyAllIngress NetworkIsolationMode = "DenyAllIngress"
 	// NetworkIsolationDenyAllEgress denies all egress traffic.
-	NetworkIsolationDenyAllEgress = "DenyAllEgress"
+	NetworkIsolationDenyAllEgress NetworkIsolationMode = "DenyAllEgress"
 )
 
 // NetworkIsolationConfig defines network isolation settings for Ray cluster.
-// All modes maintain the cluster's ability for intra-node and KubeRay operator communication.
+// All modes maintain the cluster's ability for intra-cluster and KubeRay operator communication.
 type NetworkIsolationConfig struct {
-	// Mode controls the security level, all modes maintain the Cluster's
-	// ability for intra-node and Kuberay operator communication.
+	// Mode controls the security level, all modes maintain the cluster's
+	// ability for intra-cluster and KubeRay operator communication.
 	// - "DenyAll": Denies all Ingress and Egress.
 	// - "DenyAllIngress": Denies all Ingress.
 	// - "DenyAllEgress": Denies all Egress.
 	// +optional
-	// +kubebuilder:validation:Enum=DenyAll;DenyAllIngress;DenyAllEgress
 	// +kubebuilder:default=DenyAll
-	Mode *string `json:"mode,omitempty"`
+	Mode *NetworkIsolationMode `json:"mode,omitempty"`
 
 	// IngressRules specifies custom ingress rules for Ray cluster pods.
 	// By default, the generated NetworkPolicy allows intra-cluster traffic

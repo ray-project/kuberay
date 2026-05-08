@@ -498,6 +498,49 @@ func TestGetHeadPort_CustomPort(t *testing.T) {
 	assert.Equal(t, int32(9265), port)
 }
 
+// TestBuildHeadNetworkPolicy_AutoscalingAddsAPIServerEgress verifies that the head policy
+// includes a Kubernetes API server egress rule when autoscaling is enabled and egress is restricted.
+func TestBuildHeadNetworkPolicy_AutoscalingAddsAPIServerEgress(t *testing.T) {
+	setupNetworkPolicyTest(t)
+
+	t.Setenv("KUBERNETES_SERVICE_HOST", "10.96.0.1")
+	t.Setenv("KUBERNETES_SERVICE_PORT", "443")
+
+	cluster := testRayClusterBasic.DeepCopy()
+	cluster.Spec.EnableInTreeAutoscaling = ptr.To(true)
+
+	policy := testNetworkPolicyController.buildHeadNetworkPolicy(cluster, rayv1.NetworkIsolationDenyAll)
+
+	// 3 egress rules: intra-cluster, DNS, and API server.
+	require.Len(t, policy.Spec.Egress, 3)
+
+	apiRule := policy.Spec.Egress[2]
+	require.Len(t, apiRule.To, 1)
+	require.NotNil(t, apiRule.To[0].IPBlock)
+	assert.Equal(t, "10.96.0.1/32", apiRule.To[0].IPBlock.CIDR)
+
+	require.Len(t, apiRule.Ports, 1)
+	tcpProtocol := corev1.ProtocolTCP
+	expectedPort := intstr.FromInt32(443)
+	assert.Equal(t, &tcpProtocol, apiRule.Ports[0].Protocol)
+	assert.Equal(t, &expectedPort, apiRule.Ports[0].Port)
+}
+
+// TestBuildKubeAPIServerEgressRule_IPv6 verifies correct CIDR for IPv6 API server addresses.
+func TestBuildKubeAPIServerEgressRule_IPv6(t *testing.T) {
+	setupNetworkPolicyTest(t)
+
+	t.Setenv("KUBERNETES_SERVICE_HOST", "fd00::1")
+	t.Setenv("KUBERNETES_SERVICE_PORT", "6443")
+
+	rules := testNetworkPolicyController.buildKubeAPIServerEgressRule()
+	require.Len(t, rules, 1)
+	assert.Equal(t, "fd00::1/128", rules[0].To[0].IPBlock.CIDR)
+
+	expectedPort := intstr.FromInt32(6443)
+	assert.Equal(t, &expectedPort, rules[0].Ports[0].Port)
+}
+
 // TestBuildNetworkPolicy_LongClusterName verifies NetworkPolicy names are constructed correctly for long names.
 func TestBuildNetworkPolicy_LongClusterName(t *testing.T) {
 	setupNetworkPolicyTest(t)
