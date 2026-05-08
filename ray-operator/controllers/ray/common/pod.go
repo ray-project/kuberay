@@ -216,9 +216,7 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 		if utils.IsAutoscalingV2Enabled(&instance.Spec) {
 			setAutoscalerV2EnvVars(&podTemplate)
 			podTemplate.Spec.RestartPolicy = corev1.RestartPolicyNever
-		}
-
-		if utils.IsAutoscalingV1Enabled(&instance.Spec) {
+		} else if utils.IsAutoscalingV1Enabled(&instance.Spec) {
 			setAutoscalerV1EnvVars(&podTemplate)
 		}
 	}
