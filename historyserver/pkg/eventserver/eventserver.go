@@ -1572,14 +1572,14 @@ func (h *EventHandler) ProcessSingleSession(ctx context.Context, clusterInfo uti
 		}
 		eventbytes, err := io.ReadAll(eventioReader)
 		if err != nil {
-			logrus.Errorf("Failed to read event file: %v", err)
+			logrus.Errorf("Failed to read events for file %s: %v", eventFile, err)
 			continue
 		}
 		rayEventsSucceeded++
 
 		var eventList []map[string]any
 		if err := json.Unmarshal(eventbytes, &eventList); err != nil {
-			logrus.Errorf("Failed to unmarshal event: %v", err)
+			logrus.Errorf("Failed to unmarshal events for file %s: %v", eventFile, err)
 			continue
 		}
 
@@ -1589,7 +1589,7 @@ func (h *EventHandler) ProcessSingleSession(ctx context.Context, clusterInfo uti
 			}
 			event["clusterName"] = clusterSessionKey
 			if err := h.storeEvent(event); err != nil {
-				logrus.Errorf("Failed to store event: %v", err)
+				logrus.Errorf("Failed to store events for file %s: %v", eventFile, err)
 				continue
 			}
 		}
@@ -1597,7 +1597,7 @@ func (h *EventHandler) ProcessSingleSession(ctx context.Context, clusterInfo uti
 
 	var rayEventsErrVal error
 	if rayEventsAttempted > 0 && rayEventsSucceeded == 0 {
-		rayEventsErrVal = fmt.Errorf("ingested 0 of %d RayEvent files for %s: likely transient storage outage",
+		rayEventsErrVal = fmt.Errorf("ingested 0 of %d event files for %s: likely transient storage outage",
 			rayEventsAttempted, clusterSessionKey)
 	}
 

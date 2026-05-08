@@ -27,13 +27,12 @@ const (
 	// SessionStatusProcessed means events were ingested into EventHandler's
 	// in-memory state.
 	SessionStatusProcessed
-	// SessionStatusClusterStateUnknown means the K8s Get returned a non-NotFound
-	// error and the cluster state could not be determined.
+	// SessionStatusClusterStateUnknown means the cluster state could not be
+	// determined (e.g., transient API failure).
 	SessionStatusClusterStateUnknown
 	// SessionStatusEventsErr means event parsing failed.
 	SessionStatusEventsErr
-	// SessionStatusCanceled means ctx was canceled mid-processing; not an *Err
-	// status.
+	// SessionStatusCanceled means ctx was canceled mid-processing.
 	SessionStatusCanceled
 )
 
@@ -44,7 +43,7 @@ type SessionProcessor struct {
 	k8sClient client.Client
 }
 
-// NewSessionProcessor constructs a SessionProcessor. All collaborators must be non-nil.
+// NewSessionProcessor constructs a SessionProcessor.
 func NewSessionProcessor(handler *eventserver.EventHandler, k8sClient client.Client) *SessionProcessor {
 	return &SessionProcessor{
 		handler:   handler,
@@ -52,7 +51,7 @@ func NewSessionProcessor(handler *eventserver.EventHandler, k8sClient client.Cli
 	}
 }
 
-// ProcessSession processes one session end-to-end and returns the session status.
+// ProcessSession processes one session end-to-end.
 func (p *SessionProcessor) ProcessSession(ctx context.Context, session utils.ClusterInfo) (SessionStatus, error) {
 	dead, err := p.isDead(ctx, session)
 	if err != nil {
@@ -96,7 +95,7 @@ func (p *SessionProcessor) isDead(ctx context.Context, session utils.ClusterInfo
 
 	sessionTimestamp := ParseSessionTimestamp(session.SessionName)
 	if sessionTimestamp.IsZero() {
-		logrus.Errorf("failed to parse session timestamp for %s/%s/%s; treating as live",
+		logrus.Errorf("Failed to parse session timestamp for %s/%s/%s; treating as live",
 			session.Namespace, session.Name, session.SessionName)
 		return false, nil
 	}

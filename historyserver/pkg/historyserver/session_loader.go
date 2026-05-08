@@ -77,7 +77,7 @@ func (s *SessionLoader) LoadSession(ctx context.Context, info utils.ClusterInfo)
 	}
 }
 
-// doLoadSession runs the actual loading work for LoadSession under singleflight.
+// doLoadSession is the singleflight body invoked by LoadSession.
 // live is true when the cluster is still alive.
 func (s *SessionLoader) doLoadSession(ctx context.Context, info utils.ClusterInfo, key string) (live bool, err error) {
 	s.loadedMu.RLock()

@@ -299,18 +299,17 @@ func routerRayClusterSet(s *ServerHandler) {
 		namespace := r1.PathParameter("namespace")
 		session := r1.PathParameter("session")
 
-		// For dead sessions, block until events have been ingested.
-		// The "live" sentinel skips the loader: live sessions
-		// are served via the reverse-proxy path.
-		if session != "live" && s.sessionLoader != nil {
+		if session != "live" {
 			info := utils.ClusterInfo{Name: name, Namespace: namespace, SessionName: session}
 			live, err := s.sessionLoader.LoadSession(r1.Request.Context(), info)
 			if err != nil {
-				logrus.Errorf("SessionLoader.LoadSession for %s/%s/%s: %v", namespace, name, session, err)
+				logrus.Errorf("Failed to load session %s/%s/%s: %v", namespace, name, session, err)
 				r2.WriteErrorString(http.StatusInternalServerError, err.Error())
 				return
 			}
-			// Use the "live" sentinel to avoid querying empty in-memory state.
+
+			// Users might use the complete session name to enter a live cluster,
+			// so "live" sentinel is set to avoid querying empty in-memory state.
 			if live {
 				session = "live"
 			}
