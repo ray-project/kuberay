@@ -1078,7 +1078,7 @@ func TestProcessSingleSession(t *testing.T) {
 		h := NewEventHandler(mock)
 		err := h.ProcessSingleSession(context.Background(), clusterInfo)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "ingested 0 of 1 RayEvent files")
+		assert.Contains(t, err.Error(), "ingested 0 of 1 event files")
 		assert.Contains(t, err.Error(), "ingested 0 of 1 log event files")
 	})
 }
