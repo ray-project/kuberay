@@ -183,7 +183,7 @@ func workerNetworkPolicyName(clusterName string) string {
 }
 
 // buildHeadNetworkPolicy creates a NetworkPolicy for Ray head pods
-func (r *NetworkPolicyController) buildHeadNetworkPolicy(instance *rayv1.RayCluster, mode string) *networkingv1.NetworkPolicy {
+func (r *NetworkPolicyController) buildHeadNetworkPolicy(instance *rayv1.RayCluster, mode rayv1.NetworkIsolationMode) *networkingv1.NetworkPolicy {
 	labels := map[string]string{
 		utils.RayClusterLabelKey:                instance.Name,
 		utils.KubernetesApplicationNameLabelKey: utils.ApplicationName,
@@ -206,6 +206,9 @@ func (r *NetworkPolicyController) buildHeadNetworkPolicy(instance *rayv1.RayClus
 	if mode == rayv1.NetworkIsolationDenyAll || mode == rayv1.NetworkIsolationDenyAllEgress {
 		policyTypes = append(policyTypes, networkingv1.PolicyTypeEgress)
 		egressRules = r.buildBaseEgressRules(instance)
+		if utils.IsAutoscalingEnabled(&instance.Spec) {
+			egressRules = append(egressRules, r.buildKubeAPIServerEgressRule()...)
+		}
 		egressRules = append(egressRules, instance.Spec.NetworkIsolation.EgressRules...)
 	}
 
@@ -230,7 +233,7 @@ func (r *NetworkPolicyController) buildHeadNetworkPolicy(instance *rayv1.RayClus
 }
 
 // buildWorkerNetworkPolicy creates a NetworkPolicy for Ray worker pods
-func (r *NetworkPolicyController) buildWorkerNetworkPolicy(instance *rayv1.RayCluster, mode string) *networkingv1.NetworkPolicy {
+func (r *NetworkPolicyController) buildWorkerNetworkPolicy(instance *rayv1.RayCluster, mode rayv1.NetworkIsolationMode) *networkingv1.NetworkPolicy {
 	labels := map[string]string{
 		utils.RayClusterLabelKey:                instance.Name,
 		utils.KubernetesApplicationNameLabelKey: utils.ApplicationName,
@@ -402,7 +405,7 @@ func (r *NetworkPolicyController) getHeadPort(instance *rayv1.RayCluster, raySta
 func (r *NetworkPolicyController) buildBaseEgressRules(instance *rayv1.RayCluster) []networkingv1.NetworkPolicyEgressRule {
 	udpProtocol := corev1.ProtocolUDP
 	tcpProtocol := corev1.ProtocolTCP
-	dnsPort := intstr.FromInt(53)
+	dnsPort := intstr.FromInt32(53)
 
 	rules := []networkingv1.NetworkPolicyEgressRule{
 		// Rule 1: Interpod egress (all ports)
@@ -436,6 +439,49 @@ func (r *NetworkPolicyController) buildBaseEgressRules(instance *rayv1.RayCluste
 	}
 
 	return rules
+}
+
+// buildKubeAPIServerEgressRule returns an egress rule allowing the head pod to
+// reach the Kubernetes API server. This is needed when in-tree autoscaling is
+// enabled, as the autoscaler sidecar must patch the RayCluster CR via the API.
+func (r *NetworkPolicyController) buildKubeAPIServerEgressRule() []networkingv1.NetworkPolicyEgressRule {
+	apiServerHost := os.Getenv("KUBERNETES_SERVICE_HOST")
+	apiServerPort := os.Getenv("KUBERNETES_SERVICE_PORT")
+	if apiServerHost == "" || apiServerPort == "" {
+		ctrl.Log.WithName("networkpolicy-controller").Info(
+			"KUBERNETES_SERVICE_HOST or KUBERNETES_SERVICE_PORT not set, skipping API server egress rule")
+		return nil
+	}
+
+	port, err := strconv.ParseInt(apiServerPort, 10, 32)
+	if err != nil {
+		ctrl.Log.WithName("networkpolicy-controller").Info(
+			"Failed to parse KUBERNETES_SERVICE_PORT, skipping API server egress rule", "port", apiServerPort)
+		return nil
+	}
+
+	tcpProtocol := corev1.ProtocolTCP
+	apiPort := intstr.FromInt32(int32(port))
+
+	cidr := apiServerHost + "/32"
+	if strings.Contains(apiServerHost, ":") {
+		cidr = apiServerHost + "/128"
+	}
+
+	return []networkingv1.NetworkPolicyEgressRule{
+		{
+			To: []networkingv1.NetworkPolicyPeer{
+				{
+					IPBlock: &networkingv1.IPBlock{
+						CIDR: cidr,
+					},
+				},
+			},
+			Ports: []networkingv1.NetworkPolicyPort{
+				{Protocol: &tcpProtocol, Port: &apiPort},
+			},
+		},
+	}
 }
 
 // cleanupNetworkPoliciesIfNeeded removes NetworkPolicies if they exist but NetworkIsolation is disabled

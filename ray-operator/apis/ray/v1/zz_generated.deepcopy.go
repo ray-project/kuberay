@@ -354,7 +354,7 @@ func (in *NetworkIsolationConfig) DeepCopyInto(out *NetworkIsolationConfig) {
 	*out = *in
 	if in.Mode != nil {
 		in, out := &in.Mode, &out.Mode
-		*out = new(string)
+		*out = new(NetworkIsolationMode)
 		**out = **in
 	}
 	if in.IngressRules != nil {
