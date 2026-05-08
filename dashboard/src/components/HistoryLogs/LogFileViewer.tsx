@@ -23,9 +23,17 @@ interface Props {
   onBack: () => void;
 }
 
-export const LogFileViewer: React.FC<Props> = ({ nodeId, filename, onBack }) => {
+export const LogFileViewer: React.FC<Props> = ({
+  nodeId,
+  filename,
+  onBack,
+}) => {
   const [lines, setLines] = React.useState(1000);
-  const { content, isLoading, error } = useLogFileContent(nodeId, filename, lines);
+  const { content, isLoading, error } = useLogFileContent(
+    nodeId,
+    filename,
+    lines,
+  );
   const [copied, setCopied] = React.useState(false);
 
   const handleCopy = async () => {
@@ -47,7 +55,9 @@ export const LogFileViewer: React.FC<Props> = ({ nodeId, filename, onBack }) => 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
       {/* Header */}
-      <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+      <Box
+        sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}
+      >
         <IconButton size="sm" variant="plain" onClick={onBack}>
           <ArrowBackIcon />
         </IconButton>
@@ -60,14 +70,17 @@ export const LogFileViewer: React.FC<Props> = ({ nodeId, filename, onBack }) => 
       </Box>
 
       {/* Controls */}
-      <Box sx={{ display: "flex", gap: 1.5, alignItems: "flex-end", flexWrap: "wrap" }}>
+      <Box
+        sx={{
+          display: "flex",
+          gap: 1.5,
+          alignItems: "flex-end",
+          flexWrap: "wrap",
+        }}
+      >
         <FormControl size="sm" sx={{ minWidth: 120 }}>
           <FormLabel>Lines</FormLabel>
-          <Select
-            size="sm"
-            value={lines}
-            onChange={(_, v) => v && setLines(v)}
-          >
+          <Select size="sm" value={lines} onChange={(_, v) => v && setLines(v)}>
             <Option value={100}>100</Option>
             <Option value={500}>500</Option>
             <Option value={1000}>1,000</Option>

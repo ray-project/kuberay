@@ -14,7 +14,10 @@ import {
   Typography,
 } from "@mui/joy";
 import DescriptionIcon from "@mui/icons-material/Description";
-import { useHistoryNodes, useHistoryLogFiles } from "@/hooks/api/useHistoryLogs";
+import {
+  useHistoryNodes,
+  useHistoryLogFiles,
+} from "@/hooks/api/useHistoryLogs";
 import type { HistoryNodeSummary } from "@/types/historyserver";
 
 // Display order for log categories – most useful ones first
@@ -76,17 +79,32 @@ interface Props {
 }
 
 export const HistoryLogsPanel: React.FC<Props> = ({ onSelectFile }) => {
-  const [selectedNodeId, setSelectedNodeId] = React.useState<string | null>(null);
-  const [categoryFilter, setCategoryFilter] = React.useState<string | null>(null);
+  const [selectedNodeId, setSelectedNodeId] = React.useState<string | null>(
+    null,
+  );
+  const [categoryFilter, setCategoryFilter] = React.useState<string | null>(
+    null,
+  );
   const { nodes, isLoading: nodesLoading } = useHistoryNodes();
-  const { logFiles, isLoading: logsLoading, error: logsError } =
-    useHistoryLogFiles(selectedNodeId);
+  const {
+    logFiles,
+    isLoading: logsLoading,
+    error: logsError,
+  } = useHistoryLogFiles(selectedNodeId);
 
-  // Auto-select first node when nodes load
+  // Auto-select a valid node when nodes load or the active cluster changes.
   React.useEffect(() => {
-    if (!selectedNodeId && nodes.length > 0) {
-      const firstId = nodes[0]?.raylet?.nodeId;
-      if (firstId) setSelectedNodeId(firstId);
+    const nodeIds = nodes
+      .map((node) => node.raylet?.nodeId)
+      .filter((id): id is string => Boolean(id));
+    if (selectedNodeId && nodeIds.includes(selectedNodeId)) {
+      return;
+    }
+
+    const nextNodeId = nodeIds[0] ?? null;
+    if (selectedNodeId !== nextNodeId) {
+      setSelectedNodeId(nextNodeId);
+      setCategoryFilter(null);
     }
   }, [nodes, selectedNodeId]);
 
@@ -169,9 +187,11 @@ export const HistoryLogsPanel: React.FC<Props> = ({ onSelectFile }) => {
           hoverRow
           stickyHeader
           sx={{
-            "--TableCell-headBackground": "var(--joy-palette-background-level1)",
+            "--TableCell-headBackground":
+              "var(--joy-palette-background-level1)",
             "--Table-headerUnderlineThickness": "1px",
-            "--TableRow-hoverBackground": "var(--joy-palette-background-level1)",
+            "--TableRow-hoverBackground":
+              "var(--joy-palette-background-level1)",
             "--TableCell-paddingY": "6px",
             "--TableCell-paddingX": "8px",
           }}
@@ -188,7 +208,8 @@ export const HistoryLogsPanel: React.FC<Props> = ({ onSelectFile }) => {
               <tr>
                 <td colSpan={3} style={{ textAlign: "center" }}>
                   <Typography level="body-sm" color="danger">
-                    Failed to load logs{logsError.message ? `: ${logsError.message}` : ""}
+                    Failed to load logs
+                    {logsError.message ? `: ${logsError.message}` : ""}
                   </Typography>
                 </td>
               </tr>
@@ -226,7 +247,9 @@ export const HistoryLogsPanel: React.FC<Props> = ({ onSelectFile }) => {
                   <tr
                     key={`${category}-${file}`}
                     style={{ cursor: "pointer" }}
-                    onClick={() => selectedNodeId && onSelectFile(selectedNodeId, file)}
+                    onClick={() =>
+                      selectedNodeId && onSelectFile(selectedNodeId, file)
+                    }
                   >
                     <td>
                       <Chip
@@ -238,7 +261,9 @@ export const HistoryLogsPanel: React.FC<Props> = ({ onSelectFile }) => {
                       </Chip>
                     </td>
                     <td>
-                      <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                      <Box
+                        sx={{ display: "flex", alignItems: "center", gap: 0.5 }}
+                      >
                         <DescriptionIcon
                           sx={{ fontSize: 16, color: "neutral.400" }}
                         />
@@ -248,7 +273,11 @@ export const HistoryLogsPanel: React.FC<Props> = ({ onSelectFile }) => {
                       </Box>
                     </td>
                     <td style={{ textAlign: "center" }}>
-                      <Typography level="body-xs" color="primary" fontWeight={600}>
+                      <Typography
+                        level="body-xs"
+                        color="primary"
+                        fontWeight={600}
+                      >
                         View
                       </Typography>
                     </td>

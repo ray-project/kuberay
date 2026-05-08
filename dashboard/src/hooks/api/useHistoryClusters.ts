@@ -3,6 +3,13 @@ import { historyServerFetcher } from "@/utils/fetch";
 import type { HistoryClusterInfoList } from "@/types/historyserver";
 import { config } from "@/utils/constants";
 
+const isClusterScopedHistoryKey = (key: unknown) =>
+  typeof key === "string" &&
+  (key === "/api/v0/tasks" ||
+    key === "/nodes" ||
+    key.startsWith("/api/v0/logs?") ||
+    key.startsWith("log-content:"));
+
 export const useHistoryClusters = (refreshInterval: number = 5000) => {
   const { data, error, isLoading } = useSWR<HistoryClusterInfoList | any>(
     "/clusters",
@@ -26,8 +33,7 @@ export const useHistoryClusters = (refreshInterval: number = 5000) => {
         `Failed to enter cluster: ${res.status} ${res.statusText}`,
       );
     }
-    // Clean and refresh tasks cache
-    mutate("/api/v0/tasks", undefined, { revalidate: false });
+    await mutate(isClusterScopedHistoryKey, undefined, { revalidate: false });
   };
 
   return {

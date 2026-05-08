@@ -14,7 +14,8 @@ export const useHistoryNodes = (refreshInterval: number = 0) => {
     { refreshInterval },
   );
 
-  const nodes = (data?.data?.summary ?? []) as HistoryNodesResponse["data"]["summary"];
+  const nodes = (data?.data?.summary ??
+    []) as HistoryNodesResponse["data"]["summary"];
 
   return { nodes, isLoading, error };
 };
@@ -23,7 +24,9 @@ export const useHistoryLogFiles = (
   nodeId: string | null,
   refreshInterval: number = 0,
 ) => {
-  const key = nodeId ? `/api/v0/logs?node_id=${encodeURIComponent(nodeId)}` : null;
+  const key = nodeId
+    ? `/api/v0/logs?node_id=${encodeURIComponent(nodeId)}`
+    : null;
 
   const { data, error, isLoading } = useSWR<HistoryLogsResponse | any>(
     key,
@@ -42,9 +45,7 @@ export const useLogFileContent = (
   lines: number = 1000,
 ) => {
   const { data, error, isLoading } = useSWR<string | null>(
-    nodeId && filename
-      ? `log-content:${nodeId}:${filename}:${lines}`
-      : null,
+    nodeId && filename ? `log-content:${nodeId}:${filename}:${lines}` : null,
     async () => {
       if (!nodeId || !filename) return null;
       const proxyEndpoint = (await config.getHistoryServerUrl()).proxyEndpoint;
@@ -63,7 +64,8 @@ export const useLogFileContent = (
       // The proxy wraps text in JSON (NextResponse.json), unwrap it
       const body = await res.text();
       try {
-        return JSON.parse(body) as string;
+        const parsed = JSON.parse(body);
+        return typeof parsed === "string" ? parsed : body;
       } catch {
         return body;
       }
