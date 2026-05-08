@@ -215,10 +215,11 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 
 		// The error is ignored here because the function will return false if there's an error parsing the version.
 		// For example, if the custom image is taken, there is not knowing the Ray version, it considers the feature is not valid.
-		autoscalerRestartValid, _ := utils.IsRayVersionAtLeast(headSpec.Template, utils.MinAutoscalerRestartValidVersion)
-		if !autoscalerRestartValid && utils.IsAutoscalingV2Enabled(&instance.Spec) {
+		if utils.IsAutoscalingV2Enabled(&instance.Spec) {
 			setAutoscalerV2EnvVars(&podTemplate)
-			podTemplate.Spec.RestartPolicy = corev1.RestartPolicyNever
+			if autoscalerRestartValid, _ := utils.IsRayVersionAtLeast(headSpec.Template, utils.MinAutoscalerRestartValidVersion); !autoscalerRestartValid {
+				podTemplate.Spec.RestartPolicy = corev1.RestartPolicyNever
+			}
 		}
 	}
 

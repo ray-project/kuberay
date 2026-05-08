@@ -1101,7 +1101,8 @@ func IsHTTPRouteEqual(existing, desired *gwv1.HTTPRoute) bool {
 //	rayproject/ray:2.55.0            → "2.55.0"
 //	rayproject/ray:2.55.0-py310      → "2.55.0"
 //	rayproject/ray:2.55.0@sha256:abc → "2.55.0"
-var rayImageVersionRegex = regexp.MustCompile(`rayproject/ray:(\d+\.\d+\.\d+)`)
+//	rayproject/ray:2.55                → "2.55"
+var rayImageVersionRegex = regexp.MustCompile(`rayproject/ray:(\d+\.\d+(?:\.\d+)?)`)
 
 // ParseRayVersionFromPodTemplate extracts the Ray version string from the Ray container's
 // image tag in the given PodTemplateSpec. RayContainerIndex is used to identify the Ray

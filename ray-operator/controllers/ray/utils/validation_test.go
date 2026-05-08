@@ -529,11 +529,16 @@ func TestValidateRayClusterSpecSuspendingWorkerGroup(t *testing.T) {
 }
 
 func podTemplateSpec(envVars []corev1.EnvVar, restartPolicy *corev1.RestartPolicy) corev1.PodTemplateSpec {
+	return podTemplateSpecWithImage("", envVars, restartPolicy)
+}
+
+func podTemplateSpecWithImage(image string, envVars []corev1.EnvVar, restartPolicy *corev1.RestartPolicy) corev1.PodTemplateSpec {
 	spec := corev1.PodTemplateSpec{
 		Spec: corev1.PodSpec{
 			Containers: []corev1.Container{
 				{
-					Env: envVars,
+					Image: image,
+					Env:   envVars,
 				},
 			},
 		},
@@ -664,6 +669,80 @@ func TestValidateRayClusterSpecAutoscaler(t *testing.T) {
 						GroupName: "worker-group-2",
 						Template:  podTemplateSpec(nil, ptr.To(corev1.RestartPolicyNever)),
 					},
+				},
+			},
+		},
+		// Tests for version-gated restartPolicy validation (MinAutoscalerRestartValidVersion = 2.55.0)
+		"should return error if autoscaler v2 is enabled, Ray version < 2.55.0, and head Pod has non-Never restartPolicy": {
+			spec: rayv1.RayClusterSpec{
+				EnableInTreeAutoscaling: new(true),
+				AutoscalerOptions: &rayv1.AutoscalerOptions{
+					Version: ptr.To(rayv1.AutoscalerVersionV2),
+				},
+				HeadGroupSpec: rayv1.HeadGroupSpec{
+					Template: podTemplateSpecWithImage("rayproject/ray:2.54.0", nil, ptr.To(corev1.RestartPolicyAlways)),
+				},
+			},
+			expectedErr: "restartPolicy for head Pod should be Never or unset when using autoscaler V2",
+		},
+		"should return error if autoscaler v2 is enabled, Ray version < 2.55.0, and a worker group has non-Never restartPolicy": {
+			spec: rayv1.RayClusterSpec{
+				EnableInTreeAutoscaling: new(true),
+				AutoscalerOptions: &rayv1.AutoscalerOptions{
+					Version: ptr.To(rayv1.AutoscalerVersionV2),
+				},
+				HeadGroupSpec: rayv1.HeadGroupSpec{
+					Template: podTemplateSpecWithImage("rayproject/ray:2.54.0", nil, ptr.To(corev1.RestartPolicyNever)),
+				},
+				WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+					{
+						GroupName: "worker-group-1",
+						Template:  podTemplateSpecWithImage("rayproject/ray:2.54.0", nil, ptr.To(corev1.RestartPolicyOnFailure)),
+					},
+				},
+			},
+			expectedErr: "restartPolicy for worker group worker-group-1 should be Never or unset when using autoscaler V2",
+		},
+		"should not return error if autoscaler v2 is enabled, Ray version >= 2.55.0, and head Pod has non-Never restartPolicy": {
+			spec: rayv1.RayClusterSpec{
+				EnableInTreeAutoscaling: new(true),
+				AutoscalerOptions: &rayv1.AutoscalerOptions{
+					Version: ptr.To(rayv1.AutoscalerVersionV2),
+				},
+				HeadGroupSpec: rayv1.HeadGroupSpec{
+					Template: podTemplateSpecWithImage("rayproject/ray:2.55.0", nil, ptr.To(corev1.RestartPolicyAlways)),
+				},
+			},
+		},
+		"should not return error if autoscaler v2 is enabled, Ray version >= 2.55.0, and worker groups have non-Never restartPolicy": {
+			spec: rayv1.RayClusterSpec{
+				EnableInTreeAutoscaling: new(true),
+				AutoscalerOptions: &rayv1.AutoscalerOptions{
+					Version: ptr.To(rayv1.AutoscalerVersionV2),
+				},
+				HeadGroupSpec: rayv1.HeadGroupSpec{
+					Template: podTemplateSpecWithImage("rayproject/ray:2.55.0", nil, ptr.To(corev1.RestartPolicyAlways)),
+				},
+				WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+					{
+						GroupName: "worker-group-1",
+						Template:  podTemplateSpecWithImage("rayproject/ray:2.55.0", nil, ptr.To(corev1.RestartPolicyOnFailure)),
+					},
+					{
+						GroupName: "worker-group-2",
+						Template:  podTemplateSpecWithImage("rayproject/ray:2.56.0", nil, ptr.To(corev1.RestartPolicyAlways)),
+					},
+				},
+			},
+		},
+		"should not return error if autoscaler v2 is enabled, Ray version > 2.55.0, and head Pod has non-Never restartPolicy": {
+			spec: rayv1.RayClusterSpec{
+				EnableInTreeAutoscaling: new(true),
+				AutoscalerOptions: &rayv1.AutoscalerOptions{
+					Version: ptr.To(rayv1.AutoscalerVersionV2),
+				},
+				HeadGroupSpec: rayv1.HeadGroupSpec{
+					Template: podTemplateSpecWithImage("rayproject/ray:2.60.0", nil, ptr.To(corev1.RestartPolicyOnFailure)),
 				},
 			},
 		},
