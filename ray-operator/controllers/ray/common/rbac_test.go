@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
@@ -84,4 +85,22 @@ func TestBuildRoleBindingSubjectAndRoleRefName(t *testing.T) {
 			assert.Equal(t, tc.want, got)
 		})
 	}
+}
+
+func TestBuildRoleAllowsAutoscalerToPatchRayClusterStatus(t *testing.T) {
+	cluster := &rayv1.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "raycluster-sample",
+			Namespace: "default",
+		},
+	}
+
+	role, err := BuildRole(cluster)
+	require.NoError(t, err)
+
+	assert.Contains(t, role.Rules, rbacv1.PolicyRule{
+		APIGroups: []string{"ray.io"},
+		Resources: []string{"rayclusters/status"},
+		Verbs:     []string{"patch"},
+	})
 }

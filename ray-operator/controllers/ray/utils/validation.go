@@ -234,6 +234,14 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 			return fmt.Errorf("autoscalerOptions.idleTimeoutSeconds must be non-negative, got %d", *spec.AutoscalerOptions.IdleTimeoutSeconds)
 		}
 	}
+	if spec.AutoscalerOptions != nil && spec.AutoscalerOptions.TTLSecondsAfterIdle != nil {
+		if *spec.AutoscalerOptions.TTLSecondsAfterIdle < 0 {
+			return fmt.Errorf("autoscalerOptions.ttlSecondsAfterIdle must be non-negative, got %d", *spec.AutoscalerOptions.TTLSecondsAfterIdle)
+		}
+		if !isAutoscalingEnabled {
+			return fmt.Errorf("autoscalerOptions.ttlSecondsAfterIdle requires enableInTreeAutoscaling to be true")
+		}
+	}
 
 	if IsAuthEnabled(spec) {
 		if spec.RayVersion == "" {

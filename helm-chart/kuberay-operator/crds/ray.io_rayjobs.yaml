@@ -391,6 +391,9 @@ spec:
                                 type: string
                             type: object
                         type: object
+                      ttlSecondsAfterIdle:
+                        format: int32
+                        type: integer
                       upscalingMode:
                         enum:
                         - Default
@@ -12773,6 +12776,9 @@ spec:
                                 type: string
                             type: object
                         type: object
+                      ttlSecondsAfterIdle:
+                        format: int32
+                        type: integer
                       upscalingMode:
                         enum:
                         - Default

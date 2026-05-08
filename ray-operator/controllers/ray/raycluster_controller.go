@@ -293,6 +293,15 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 		return ctrl.Result{}, nil
 	}
 
+	if cond := meta.FindStatusCondition(instance.Status.Conditions, string(rayv1.IdleTTLExpired)); cond != nil && cond.Status == metav1.ConditionTrue && isIdleTTLTerminationEnabled(instance) {
+		logger.Info("Deleting RayCluster because the idle TTL has expired", "condition", cond)
+		r.Recorder.Eventf(instance, corev1.EventTypeNormal, string(rayv1.IdleTTLExpired), "%s", cond.Message)
+		if err := r.Delete(ctx, instance); err != nil {
+			return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, client.IgnoreNotFound(err)
+		}
+		return ctrl.Result{}, nil
+	}
+
 	reconcileFuncs := []reconcileFunc{
 		r.reconcileAutoscalerServiceAccount,
 		r.reconcileAutoscalerRole,
@@ -353,6 +362,13 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 	}
 	logger.Info("Unconditional requeue after", "seconds", requeueAfterSeconds)
 	return ctrl.Result{RequeueAfter: time.Duration(requeueAfterSeconds) * time.Second}, nil
+}
+
+func isIdleTTLTerminationEnabled(instance *rayv1.RayCluster) bool {
+	return instance != nil &&
+		utils.IsAutoscalingEnabled(&instance.Spec) &&
+		instance.Spec.AutoscalerOptions != nil &&
+		instance.Spec.AutoscalerOptions.TTLSecondsAfterIdle != nil
 }
 
 func (r *RayClusterReconciler) reconcileAuthSecret(ctx context.Context, instance *rayv1.RayCluster) error {
