@@ -99,18 +99,16 @@ export const HistoryLogsPanel: React.FC<Props> = ({ onSelectFile }) => {
       .map((node) => node.raylet?.nodeId)
       .filter((id): id is string => Boolean(id));
 
-    setSelectedNodeId((previousNodeId) => {
-      if (previousNodeId && nodeIds.includes(previousNodeId)) {
-        return previousNodeId;
-      }
+    if (selectedNodeId && nodeIds.includes(selectedNodeId)) {
+      return;
+    }
 
-      const nextNodeId = nodeIds[0] ?? null;
-      if (previousNodeId !== nextNodeId) {
-        setCategoryFilter(null);
-      }
-      return nextNodeId;
-    });
-  }, [nodes]);
+    const nextNodeId = nodeIds[0] ?? null;
+    if (selectedNodeId !== nextNodeId) {
+      setSelectedNodeId(nextNodeId);
+      setCategoryFilter(null);
+    }
+  }, [nodes, selectedNodeId]);
 
   // Build sorted list of (category, files)
   const sortedCategories = React.useMemo(() => {
