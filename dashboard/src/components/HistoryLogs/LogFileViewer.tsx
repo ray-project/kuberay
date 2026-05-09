@@ -17,6 +17,8 @@ import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { useLogFileContent } from "@/hooks/api/useHistoryLogs";
 
+const SKELETON_LINE_WIDTHS = [78, 92, 64, 86, 70, 95, 82, 68, 88, 74, 90, 66];
+
 interface Props {
   nodeId: string;
   filename: string;
@@ -125,12 +127,12 @@ export const LogFileViewer: React.FC<Props> = ({
           </Box>
         ) : isLoading ? (
           <Box sx={{ p: 2 }}>
-            {Array.from({ length: 12 }).map((_, i) => (
+            {SKELETON_LINE_WIDTHS.map((width, i) => (
               <Skeleton
                 key={i}
                 animation="wave"
                 variant="text"
-                width={`${60 + Math.random() * 35}%`}
+                width={`${width}%`}
                 sx={{ mb: 0.5 }}
               />
             ))}

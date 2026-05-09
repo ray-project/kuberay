@@ -3,6 +3,7 @@
 import React from "react";
 import {
   Box,
+  Button,
   Chip,
   FormControl,
   FormLabel,
@@ -97,16 +98,19 @@ export const HistoryLogsPanel: React.FC<Props> = ({ onSelectFile }) => {
     const nodeIds = nodes
       .map((node) => node.raylet?.nodeId)
       .filter((id): id is string => Boolean(id));
-    if (selectedNodeId && nodeIds.includes(selectedNodeId)) {
-      return;
-    }
 
-    const nextNodeId = nodeIds[0] ?? null;
-    if (selectedNodeId !== nextNodeId) {
-      setSelectedNodeId(nextNodeId);
-      setCategoryFilter(null);
-    }
-  }, [nodes, selectedNodeId]);
+    setSelectedNodeId((previousNodeId) => {
+      if (previousNodeId && nodeIds.includes(previousNodeId)) {
+        return previousNodeId;
+      }
+
+      const nextNodeId = nodeIds[0] ?? null;
+      if (previousNodeId !== nextNodeId) {
+        setCategoryFilter(null);
+      }
+      return nextNodeId;
+    });
+  }, [nodes]);
 
   // Build sorted list of (category, files)
   const sortedCategories = React.useMemo(() => {
@@ -162,7 +166,7 @@ export const HistoryLogsPanel: React.FC<Props> = ({ onSelectFile }) => {
             value={categoryFilter}
             onChange={(_, v) => setCategoryFilter(v)}
           >
-            <Option value={null as any}>All</Option>
+            <Option value={null}>All</Option>
             {Object.keys(logFiles).map((cat) => (
               <Option key={cat} value={cat}>
                 {CATEGORY_LABELS[cat] || cat}
@@ -273,13 +277,19 @@ export const HistoryLogsPanel: React.FC<Props> = ({ onSelectFile }) => {
                       </Box>
                     </td>
                     <td style={{ textAlign: "center" }}>
-                      <Typography
-                        level="body-xs"
+                      <Button
+                        size="sm"
+                        variant="outlined"
                         color="primary"
-                        fontWeight={600}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (selectedNodeId) {
+                            onSelectFile(selectedNodeId, file);
+                          }
+                        }}
                       >
                         View
-                      </Typography>
+                      </Button>
                     </td>
                   </tr>
                 )),

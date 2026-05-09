@@ -6,12 +6,12 @@ import { config } from "@/utils/constants";
 const isClusterScopedHistoryKey = (key: unknown) =>
   typeof key === "string" &&
   (key === "/api/v0/tasks" ||
-    key === "/nodes" ||
+    key === "/nodes?view=summary" ||
     key.startsWith("/api/v0/logs?") ||
     key.startsWith("log-content:"));
 
 export const useHistoryClusters = (refreshInterval: number = 5000) => {
-  const { data, error, isLoading } = useSWR<HistoryClusterInfoList | any>(
+  const { data, error, isLoading } = useSWR<HistoryClusterInfoList>(
     "/clusters",
     historyServerFetcher,
     { refreshInterval },

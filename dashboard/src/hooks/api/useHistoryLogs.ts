@@ -8,8 +8,8 @@ import type {
 } from "@/types/historyserver";
 
 export const useHistoryNodes = (refreshInterval: number = 0) => {
-  const { data, error, isLoading } = useSWR<HistoryNodesResponse | any>(
-    "/nodes",
+  const { data, error, isLoading } = useSWR<HistoryNodesResponse>(
+    "/nodes?view=summary",
     historyServerFetcher,
     { refreshInterval },
   );
@@ -28,7 +28,7 @@ export const useHistoryLogFiles = (
     ? `/api/v0/logs?node_id=${encodeURIComponent(nodeId)}`
     : null;
 
-  const { data, error, isLoading } = useSWR<HistoryLogsResponse | any>(
+  const { data, error, isLoading } = useSWR<HistoryLogsResponse>(
     key,
     historyServerFetcher,
     { refreshInterval },
