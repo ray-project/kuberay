@@ -86,6 +86,7 @@ export const HistoryLogsPanel: React.FC<Props> = ({ onSelectFile }) => {
   const [categoryFilter, setCategoryFilter] = React.useState<string | null>(
     null,
   );
+  const selectedNodeIdRef = React.useRef<string | null>(null);
   const { nodes, isLoading: nodesLoading } = useHistoryNodes();
   const {
     logFiles,
@@ -93,22 +94,28 @@ export const HistoryLogsPanel: React.FC<Props> = ({ onSelectFile }) => {
     error: logsError,
   } = useHistoryLogFiles(selectedNodeId);
 
+  React.useEffect(() => {
+    selectedNodeIdRef.current = selectedNodeId;
+  }, [selectedNodeId]);
+
   // Auto-select a valid node when nodes load or the active cluster changes.
   React.useEffect(() => {
     const nodeIds = nodes
       .map((node) => node.raylet?.nodeId)
       .filter((id): id is string => Boolean(id));
+    const currentNodeId = selectedNodeIdRef.current;
 
-    if (selectedNodeId && nodeIds.includes(selectedNodeId)) {
+    if (currentNodeId && nodeIds.includes(currentNodeId)) {
       return;
     }
 
     const nextNodeId = nodeIds[0] ?? null;
-    if (selectedNodeId !== nextNodeId) {
+    if (currentNodeId !== nextNodeId) {
+      selectedNodeIdRef.current = nextNodeId;
       setSelectedNodeId(nextNodeId);
       setCategoryFilter(null);
     }
-  }, [nodes, selectedNodeId]);
+  }, [nodes]);
 
   // Build sorted list of (category, files)
   const sortedCategories = React.useMemo(() => {
@@ -141,6 +148,7 @@ export const HistoryLogsPanel: React.FC<Props> = ({ onSelectFile }) => {
             placeholder={nodesLoading ? "Loading nodes…" : "Select a node"}
             value={selectedNodeId}
             onChange={(_, v) => {
+              selectedNodeIdRef.current = v;
               setSelectedNodeId(v);
               setCategoryFilter(null);
             }}
