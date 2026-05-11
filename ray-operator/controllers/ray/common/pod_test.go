@@ -1179,7 +1179,7 @@ func TestDefaultHeadPodTemplate_Autoscaling(t *testing.T) {
 	clusterAutoscalingV1 := instance.DeepCopy()
 	clusterAutoscalingV1.Spec.EnableInTreeAutoscaling = new(true)
 
-	// clusterAutoscalingV2 uses an unparseable image tag ("custom"), so IsRayVersionAtLeast
+	// clusterAutoscalingV2 has no RayVersion set, so IsRayVersionAtLeast
 	// returns false: env var is injected AND RestartPolicy is set to Never.
 	clusterAutoscalingV2 := instance.DeepCopy()
 	clusterAutoscalingV2.Spec.EnableInTreeAutoscaling = new(true)
@@ -1194,7 +1194,7 @@ func TestDefaultHeadPodTemplate_Autoscaling(t *testing.T) {
 	clusterAutoscalingV2OldRay.Spec.AutoscalerOptions = &rayv1.AutoscalerOptions{
 		Version: ptr.To(rayv1.AutoscalerVersionV2),
 	}
-	clusterAutoscalingV2OldRay.Spec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex].Image = "rayproject/ray:2.54.0"
+	clusterAutoscalingV2OldRay.Spec.RayVersion = "2.54.0"
 
 	// clusterAutoscalingV2NewRay uses a Ray version >= MinAutoscalerRestartValidVersion (2.55.0).
 	// With the updated logic, setAutoscalerV2EnvVars is always called when AutoscalerV2 is enabled,
@@ -1204,7 +1204,7 @@ func TestDefaultHeadPodTemplate_Autoscaling(t *testing.T) {
 	clusterAutoscalingV2NewRay.Spec.AutoscalerOptions = &rayv1.AutoscalerOptions{
 		Version: ptr.To(rayv1.AutoscalerVersionV2),
 	}
-	clusterAutoscalingV2NewRay.Spec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex].Image = "rayproject/ray:2.55.0"
+	clusterAutoscalingV2NewRay.Spec.RayVersion = "2.55.0"
 	clusterAutoscalingV2NewRay.Spec.HeadGroupSpec.Template.Spec.RestartPolicy = corev1.RestartPolicyOnFailure
 
 	ctx := context.Background()
@@ -1450,7 +1450,7 @@ func TestDefaultWorkerPodTemplate_Autoscaling(t *testing.T) {
 	clusterAutoscalingV1 := instance.DeepCopy()
 	clusterAutoscalingV1.Spec.EnableInTreeAutoscaling = new(true)
 
-	// clusterAutoscalingV2 uses an unparseable image tag ("custom"), so IsRayVersionAtLeast
+	// clusterAutoscalingV2 has no RayVersion set, so IsRayVersionAtLeast
 	// returns false and RestartPolicy should be set to Never.
 	clusterAutoscalingV2 := instance.DeepCopy()
 	clusterAutoscalingV2.Spec.EnableInTreeAutoscaling = new(true)
@@ -1465,7 +1465,7 @@ func TestDefaultWorkerPodTemplate_Autoscaling(t *testing.T) {
 	clusterAutoscalingV2OldRay.Spec.AutoscalerOptions = &rayv1.AutoscalerOptions{
 		Version: ptr.To(rayv1.AutoscalerVersionV2),
 	}
-	clusterAutoscalingV2OldRay.Spec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex].Image = "rayproject/ray:2.54.0"
+	clusterAutoscalingV2OldRay.Spec.RayVersion = "2.54.0"
 
 	// clusterAutoscalingV2NewRay uses a Ray version >= MinAutoscalerRestartValidVersion (2.55.0),
 	// so autoscalerRestartValid is true and RestartPolicy should NOT be set to Never.
@@ -1474,7 +1474,7 @@ func TestDefaultWorkerPodTemplate_Autoscaling(t *testing.T) {
 	clusterAutoscalingV2NewRay.Spec.AutoscalerOptions = &rayv1.AutoscalerOptions{
 		Version: ptr.To(rayv1.AutoscalerVersionV2),
 	}
-	clusterAutoscalingV2NewRay.Spec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex].Image = "rayproject/ray:2.55.0"
+	clusterAutoscalingV2NewRay.Spec.RayVersion = "2.55.0"
 	clusterAutoscalingV2NewRay.Spec.WorkerGroupSpecs[0].Template.Spec.RestartPolicy = corev1.RestartPolicyOnFailure
 
 	ctx := context.Background()

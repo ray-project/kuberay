@@ -2276,168 +2276,77 @@ func TestIsGatewayEqual(t *testing.T) {
 	}
 }
 
-func TestParseRayVersionFromPodTemplate(t *testing.T) {
-	makePodTemplate := func(image string) corev1.PodTemplateSpec {
-		return corev1.PodTemplateSpec{
-			Spec: corev1.PodSpec{
-				Containers: []corev1.Container{
-					{Image: image},
-				},
-			},
-		}
-	}
-
-	tests := []struct {
-		name        string
-		template    corev1.PodTemplateSpec
-		wantVersion string
-		wantErr     bool
-	}{
-		{
-			name:        "standard image tag",
-			template:    makePodTemplate("rayproject/ray:2.9.0"),
-			wantVersion: "2.9.0",
-		},
-		{
-			name:        "image tag with python suffix",
-			template:    makePodTemplate("rayproject/ray:2.46.0-py310"),
-			wantVersion: "2.46.0",
-		},
-		{
-			name:        "image tag with digest",
-			template:    makePodTemplate("rayproject/ray:2.55.0@sha256:abcdef1234567890"),
-			wantVersion: "2.55.0",
-		},
-		{
-			name:        "image tag with gpu suffix",
-			template:    makePodTemplate("rayproject/ray:2.30.0-gpu"),
-			wantVersion: "2.30.0",
-		},
-		{
-			name:     "non-rayproject image",
-			template: makePodTemplate("custom-registry.io/ray:2.9.0"),
-			wantErr:  true,
-		},
-		{
-			name:     "image without version tag",
-			template: makePodTemplate("rayproject/ray:latest"),
-			wantErr:  true,
-		},
-		{
-			name:     "empty image",
-			template: makePodTemplate(""),
-			wantErr:  true,
-		},
-		{
-			name: "no containers in pod template",
-			template: corev1.PodTemplateSpec{
-				Spec: corev1.PodSpec{},
-			},
-			wantErr: true,
-		},
-		{
-			name:        "image with only major.minor (no patch)",
-			template:    makePodTemplate("rayproject/ray:2.9"),
-			wantVersion: "2.9",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := ParseRayVersionFromPodTemplate(tt.template)
-			if tt.wantErr {
-				assert.Error(t, err)
-			} else {
-				require.NoError(t, err)
-				assert.Equal(t, tt.wantVersion, got)
-			}
-		})
-	}
-}
-
 func TestIsRayVersionAtLeast(t *testing.T) {
-	makePodTemplate := func(image string) corev1.PodTemplateSpec {
-		return corev1.PodTemplateSpec{
-			Spec: corev1.PodSpec{
-				Containers: []corev1.Container{
-					{Image: image},
-				},
-			},
-		}
-	}
-
 	tests := []struct {
 		name          string
-		template      corev1.PodTemplateSpec
+		rayVersion    string
 		targetVersion string
 		want          bool
 		wantErr       bool
 	}{
 		{
 			name:          "version equal to target",
-			template:      makePodTemplate("rayproject/ray:2.9.0"),
+			rayVersion:    "2.9.0",
 			targetVersion: "2.9.0",
 			want:          true,
 		},
 		{
 			name:          "version greater than target (minor)",
-			template:      makePodTemplate("rayproject/ray:2.10.0"),
+			rayVersion:    "2.10.0",
 			targetVersion: "2.9.0",
 			want:          true,
 		},
 		{
 			name:          "version greater than target (major)",
-			template:      makePodTemplate("rayproject/ray:3.0.0"),
+			rayVersion:    "3.0.0",
 			targetVersion: "2.9.0",
 			want:          true,
 		},
 		{
 			name:          "version greater than target (patch)",
-			template:      makePodTemplate("rayproject/ray:2.9.1"),
+			rayVersion:    "2.9.1",
 			targetVersion: "2.9.0",
 			want:          true,
 		},
 		{
-			name:          "version is no patch version",
-			template:      makePodTemplate("rayproject/ray:2.9"),
+			name:          "version with no patch component",
+			rayVersion:    "2.9",
 			targetVersion: "2.9.0",
 			want:          true,
 		},
 		{
 			name:          "version less than target (minor)",
-			template:      makePodTemplate("rayproject/ray:2.8.0"),
+			rayVersion:    "2.8.0",
 			targetVersion: "2.9.0",
 			want:          false,
 		},
 		{
 			name:          "version less than target (major)",
-			template:      makePodTemplate("rayproject/ray:1.13.0"),
+			rayVersion:    "1.13.0",
 			targetVersion: "2.0.0",
 			want:          false,
 		},
 		{
-			name:          "image with suffix, version at least target",
-			template:      makePodTemplate("rayproject/ray:2.46.0-py310"),
+			name:          "version at least target",
+			rayVersion:    "2.46.0",
 			targetVersion: "2.46.0",
 			want:          true,
 		},
 		{
-			name:          "image with suffix, version below target",
-			template:      makePodTemplate("rayproject/ray:2.45.0-py310"),
+			name:          "version below target",
+			rayVersion:    "2.45.0",
 			targetVersion: "2.46.0",
 			want:          false,
 		},
 		{
-			name:          "unrecognizable image",
-			template:      makePodTemplate("custom/image:latest"),
+			name:          "empty rayVersion",
+			rayVersion:    "",
 			targetVersion: "2.9.0",
 			wantErr:       true,
 		},
 		{
-			name: "no containers",
-			template: corev1.PodTemplateSpec{
-				Spec: corev1.PodSpec{},
-			},
+			name:          "unparseable rayVersion",
+			rayVersion:    "latest",
 			targetVersion: "2.9.0",
 			wantErr:       true,
 		},
@@ -2445,7 +2354,7 @@ func TestIsRayVersionAtLeast(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := IsRayVersionAtLeast(tt.template, tt.targetVersion)
+			got, err := IsRayVersionAtLeast(tt.rayVersion, tt.targetVersion)
 			if tt.wantErr {
 				assert.Error(t, err)
 			} else {
