@@ -23,9 +23,6 @@ type ClientManager struct {
 
 // Client returns the primary controller-runtime client.
 func (c *ClientManager) Client() client.Client {
-	if len(c.clients) == 0 {
-		return nil
-	}
 	return c.clients[0]
 }
 

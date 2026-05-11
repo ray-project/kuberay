@@ -300,6 +300,11 @@ func routerRayClusterSet(s *ServerHandler) {
 		session := r1.PathParameter("session")
 
 		if session != "live" {
+			if ParseSessionTimestamp(session).IsZero() {
+				logrus.Warnf("Rejecting malformed session name: %s/%s/%s", namespace, name, session)
+				r2.WriteErrorString(http.StatusBadRequest, fmt.Sprintf("malformed session name: %q", session))
+				return
+			}
 			info := utils.ClusterInfo{Name: name, Namespace: namespace, SessionName: session}
 			live, err := s.sessionLoader.LoadSession(r1.Request.Context(), info)
 			if err != nil {

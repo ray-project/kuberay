@@ -3,7 +3,6 @@ package eventserver
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"regexp"
@@ -1548,17 +1547,19 @@ func (h *EventHandler) ProcessSingleSession(ctx context.Context, clusterInfo uti
 	clusterNameNamespace := clusterInfo.Name + "_" + clusterInfo.Namespace
 	clusterSessionKey := utils.BuildClusterSessionKey(clusterInfo.Name, clusterInfo.Namespace, clusterInfo.SessionName)
 
+	// ClusterLogEventMap backs only the /events endpoint, so log event read failures must not
+	// block marking the session as loaded and force subsequent Ray event re-processing.
 	logEventReader := NewLogEventReader(h.reader)
-	logEventErr := logEventReader.ReadLogEvents(clusterInfo, clusterSessionKey, h.ClusterLogEventMap)
-	if logEventErr != nil {
-		logrus.Errorf("Failed to read Log Events for %s: %v", clusterSessionKey, logEventErr)
+	if err := logEventReader.ReadLogEvents(clusterInfo, clusterSessionKey, h.ClusterLogEventMap); err != nil {
+		logrus.Errorf("Failed to read Log Events for %s: %v. /events endpoint will return empty data.",
+			clusterSessionKey, err)
 	}
 
 	eventFileList := append(h.getAllJobEventFiles(clusterInfo), h.getAllNodeEventFiles(clusterInfo)...)
 	logrus.Debugf("current eventFileList for cluster %s is: %v", clusterInfo.Name, eventFileList)
 
-	rayEventsAttempted := len(eventFileList)
-	rayEventsSucceeded := 0
+	rayEventsTotal := len(eventFileList)
+	rayEventsRead := 0
 	for _, eventFile := range eventFileList {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -1575,7 +1576,7 @@ func (h *EventHandler) ProcessSingleSession(ctx context.Context, clusterInfo uti
 			logrus.Errorf("Failed to read events for file %s: %v", eventFile, err)
 			continue
 		}
-		rayEventsSucceeded++
+		rayEventsRead++
 
 		var eventList []map[string]any
 		if err := json.Unmarshal(eventbytes, &eventList); err != nil {
@@ -1595,11 +1596,9 @@ func (h *EventHandler) ProcessSingleSession(ctx context.Context, clusterInfo uti
 		}
 	}
 
-	var rayEventsErrVal error
-	if rayEventsAttempted > 0 && rayEventsSucceeded == 0 {
-		rayEventsErrVal = fmt.Errorf("ingested 0 of %d event files for %s: likely transient storage outage",
-			rayEventsAttempted, clusterSessionKey)
+	if rayEventsTotal > 0 && rayEventsRead == 0 {
+		return fmt.Errorf("read 0 of %d event files for %s: likely transient storage outage",
+			rayEventsTotal, clusterSessionKey)
 	}
-
-	return errors.Join(rayEventsErrVal, logEventErr)
+	return nil
 }

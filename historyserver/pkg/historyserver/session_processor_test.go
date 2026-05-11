@@ -72,12 +72,6 @@ func TestIsDead(t *testing.T) {
 			sessionName: sessionAfterCR,
 			wantDead:    false,
 		},
-		{
-			name:        "unparseable session name -> live",
-			cr:          rayCluster(ns, name, crCreatedAt),
-			sessionName: "not-a-session-name",
-			wantDead:    false,
-		},
 	}
 
 	for _, tc := range tests {

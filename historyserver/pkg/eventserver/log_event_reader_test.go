@@ -233,7 +233,7 @@ func TestReadLogEvents(t *testing.T) {
 
 		err := reader.ReadLogEvents(clusterInfo, "cluster_ns_session1", store)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "ingested 0 of 2")
+		assert.Contains(t, err.Error(), "read 0 of 2")
 	})
 
 	t.Run("partial success does not return error", func(t *testing.T) {

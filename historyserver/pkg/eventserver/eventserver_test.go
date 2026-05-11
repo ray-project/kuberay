@@ -1013,7 +1013,7 @@ func TestProcessSingleSession(t *testing.T) {
 		h := NewEventHandler(mock)
 		err := h.ProcessSingleSession(context.Background(), clusterInfo)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "ingested 0 of 2")
+		assert.Contains(t, err.Error(), "read 0 of 2")
 	})
 
 	t.Run("empty file list returns nil (legit empty session)", func(t *testing.T) {
@@ -1055,7 +1055,7 @@ func TestProcessSingleSession(t *testing.T) {
 		require.NoError(t, err)
 	})
 
-	t.Run("ReadLogEvents error propagates even when RayEvents path is empty", func(t *testing.T) {
+	t.Run("log events failure alone does not surface as error", func(t *testing.T) {
 		mock := newLogEventMockReader()
 		mock.addDir("cluster_ns", "session1/job_events/", []string{})
 		mock.addDir("cluster_ns", "session1/node_events/", []string{})
@@ -1064,11 +1064,10 @@ func TestProcessSingleSession(t *testing.T) {
 
 		h := NewEventHandler(mock)
 		err := h.ProcessSingleSession(context.Background(), clusterInfo)
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "ingested 0 of 1 log event files")
+		require.NoError(t, err)
 	})
 
-	t.Run("both subsystems failing yields combined error", func(t *testing.T) {
+	t.Run("ray events failure surfaces; log events failure stays silent", func(t *testing.T) {
 		mock := newLogEventMockReader()
 		mock.addDir("cluster_ns", "session1/node_events/", []string{"node1-2024-01-01-00"})
 		mock.addDir("cluster_ns", "session1/job_events/", []string{})
@@ -1078,7 +1077,7 @@ func TestProcessSingleSession(t *testing.T) {
 		h := NewEventHandler(mock)
 		err := h.ProcessSingleSession(context.Background(), clusterInfo)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "ingested 0 of 1 event files")
-		assert.Contains(t, err.Error(), "ingested 0 of 1 log event files")
+		assert.Contains(t, err.Error(), "read 0 of 1 event files")
+		assert.NotContains(t, err.Error(), "log event")
 	})
 }

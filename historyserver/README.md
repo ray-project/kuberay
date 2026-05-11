@@ -208,7 +208,7 @@ time curl -s -o /dev/null \
 ```
 
 > [!NOTE]
-> Warm path returns immediately — Supervisor's loaded-session set fast-paths the request without re-parsing. If the HS
+> Warm path returns immediately — SessionLoader's loaded-session set fast-paths the request without re-parsing. If the HS
 > process restarts, the next visit returns to cold-path latency.
 
 ### 5. Tail Logs

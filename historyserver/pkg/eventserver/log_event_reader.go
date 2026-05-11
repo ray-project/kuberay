@@ -81,8 +81,8 @@ func (r *LogEventReader) ReadLogEvents(clusterInfo utils.ClusterInfo, clusterSes
 	}
 	logrus.Debugf("Found %d node directories for cluster %s: %v", len(nodeIDs), clusterSessionKey, nodeIDs)
 
-	attempted := 0
-	succeeded := 0
+	total := 0
+	read := 0
 	for _, nodeID := range nodeIDs {
 		// Path: {sessionName}/logs/{nodeId}/events/
 		eventsDir := path.Join(clusterInfo.SessionName, utils.RAY_SESSIONDIR_LOGDIR_NAME, nodeID, "events")
@@ -101,18 +101,18 @@ func (r *LogEventReader) ReadLogEvents(clusterInfo utils.ClusterInfo, clusterSes
 			// Read and parse the event file
 			// Note: Duplicate events are handled by JobEventMap's deduplication using event_id as key.
 			// This matches the design of existing RayEvents reading in eventserver.go.
-			attempted++
+			total++
 			if err := r.readEventFile(clusterID, eventFilePath, jobEventMap); err != nil {
 				logrus.Warnf("Failed to read event file %s: %v", eventFilePath, err)
 				continue
 			}
-			succeeded++
+			read++
 		}
 	}
 
-	if attempted > 0 && succeeded == 0 {
-		return fmt.Errorf("ingested 0 of %d log event files for %s: likely transient storage outage",
-			attempted, clusterSessionKey)
+	if total > 0 && read == 0 {
+		return fmt.Errorf("read 0 of %d log event files for %s: likely transient storage outage",
+			total, clusterSessionKey)
 	}
 	return nil
 }

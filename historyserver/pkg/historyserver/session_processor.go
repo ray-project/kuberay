@@ -10,7 +10,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-	"github.com/sirupsen/logrus"
 
 	"github.com/ray-project/kuberay/historyserver/pkg/eventserver"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
@@ -76,7 +75,7 @@ func (p *SessionProcessor) ProcessSession(ctx context.Context, session utils.Clu
 // isDead determines whether a session is dead by checking the RayCluster CR.
 // A session is dead if either:
 //   - the RayCluster CR is absent, or
-//   - the CR exists but was created after the queried session.
+//   - the RayCluster CR exists but was recreated with the same name.
 //
 // TODO(jwj): Use collector-written UID or a storage-side probe for handling
 // cases in which multiple sessions exist in the same CR.
@@ -94,11 +93,6 @@ func (p *SessionProcessor) isDead(ctx context.Context, session utils.ClusterInfo
 	}
 
 	sessionTimestamp := ParseSessionTimestamp(session.SessionName)
-	if sessionTimestamp.IsZero() {
-		logrus.Errorf("Failed to parse session timestamp for %s/%s/%s; treating as live",
-			session.Namespace, session.Name, session.SessionName)
-		return false, nil
-	}
 	if sessionTimestamp.Before(rc.CreationTimestamp.Time) {
 		return true, nil
 	}
