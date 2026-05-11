@@ -220,6 +220,8 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 			if autoscalerRestartValid, _ := utils.IsRayVersionAtLeast(instance.Spec.RayVersion, utils.MinAutoscalerRestartValidVersion); !autoscalerRestartValid {
 				podTemplate.Spec.RestartPolicy = corev1.RestartPolicyNever
 			}
+		} else if utils.IsAutoscalingV1Enabled(&instance.Spec) {
+			setAutoscalerV1EnvVars(&podTemplate)
 		}
 	}
 
@@ -251,6 +253,18 @@ func setAutoscalerV2EnvVars(podTemplate *corev1.PodTemplateSpec) {
 	podTemplate.Spec.Containers[utils.RayContainerIndex].Env = append(podTemplate.Spec.Containers[utils.RayContainerIndex].Env, corev1.EnvVar{
 		Name:  utils.RAY_ENABLE_AUTOSCALER_V2,
 		Value: "true",
+	})
+}
+
+// setAutoscalerV1EnvVars sets env vars for autoscaler v1 in the head node
+func setAutoscalerV1EnvVars(podTemplate *corev1.PodTemplateSpec) {
+	if podTemplate.Spec.Containers[utils.RayContainerIndex].Env == nil {
+		podTemplate.Spec.Containers[utils.RayContainerIndex].Env = []corev1.EnvVar{}
+	}
+
+	podTemplate.Spec.Containers[utils.RayContainerIndex].Env = append(podTemplate.Spec.Containers[utils.RayContainerIndex].Env, corev1.EnvVar{
+		Name:  utils.RAY_ENABLE_AUTOSCALER_V2,
+		Value: "false",
 	})
 }
 
