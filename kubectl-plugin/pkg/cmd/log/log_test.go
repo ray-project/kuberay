@@ -488,7 +488,7 @@ func TestDownloadRayLogFiles(t *testing.T) {
 // TestDownloadRayLogFiles_SkipsInvalidMode pins the regression for the
 // G115 fix in #4728: when an extracted tar entry has a header.Mode
 // outside the os.FileMode (uint32) range, downloadRayLogFiles must
-// skip just that entry — not abort the extraction or spin forever.
+// skip just that entry, not abort the extraction or spin forever.
 //
 // The tar layout below interleaves a valid entry, an out-of-range
 // entry, and another valid entry so we can prove that:
