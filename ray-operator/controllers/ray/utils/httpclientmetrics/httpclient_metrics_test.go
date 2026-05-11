@@ -1,16 +1,16 @@
 package httpclientmetrics
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"testing"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
+	dto "github.com/prometheus/client_model/go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	dto "github.com/prometheus/client_model/go"
 )
 
 func TestNormalizeEndpoint(t *testing.T) {
@@ -204,7 +204,7 @@ func TestDashboardClientHistogram(t *testing.T) {
 			mock := &mockRoundTripper{statusCode: tt.statusCode, err: tt.transportErr}
 			rt, histogram, _ := newTestInstrumentedRT(t, mock, "direct")
 
-			req, err := http.NewRequest(tt.method, "http://localhost:8265"+tt.path, nil)
+			req, err := http.NewRequestWithContext(context.Background(), tt.method, "http://localhost:8265"+tt.path, nil)
 			require.NoError(t, err)
 
 			resp, rtErr := rt.RoundTrip(req)
@@ -227,7 +227,7 @@ func TestDashboardClientHistogramModes(t *testing.T) {
 			mock := &mockRoundTripper{statusCode: 200}
 			rt, histogram, _ := newTestInstrumentedRT(t, mock, mode)
 
-			req, err := http.NewRequest("GET", "http://localhost:8265/api/serve/applications/", nil)
+			req, err := http.NewRequestWithContext(context.Background(), "GET", "http://localhost:8265/api/serve/applications/", nil)
 			require.NoError(t, err)
 
 			_, err = rt.RoundTrip(req)
@@ -243,7 +243,7 @@ func TestProxyClientHistogram(t *testing.T) {
 	mock := &mockRoundTripper{statusCode: 200}
 	rt, histogram, _ := newTestInstrumentedRT(t, mock, "direct")
 
-	req, err := http.NewRequest("GET", "http://10.0.0.1:8000/-/healthz", nil)
+	req, err := http.NewRequestWithContext(context.Background(), "GET", "http://10.0.0.1:8000/-/healthz", nil)
 	require.NoError(t, err)
 
 	_, err = rt.RoundTrip(req)
@@ -257,7 +257,7 @@ func TestProxyClientHistogramError(t *testing.T) {
 	mock := &mockRoundTripper{err: errors.New("connection refused")}
 	rt, histogram, _ := newTestInstrumentedRT(t, mock, "proxy")
 
-	req, err := http.NewRequest("GET", "http://10.0.0.1:8000/-/healthz", nil)
+	req, err := http.NewRequestWithContext(context.Background(), "GET", "http://10.0.0.1:8000/-/healthz", nil)
 	require.NoError(t, err)
 
 	_, rtErr := rt.RoundTrip(req)
@@ -271,7 +271,7 @@ func TestDashboardClientCounter(t *testing.T) {
 	mock := &mockRoundTripper{statusCode: 200}
 	rt, _, counter := newTestInstrumentedRT(t, mock, "direct")
 
-	req, err := http.NewRequest("GET", "http://localhost:8265/api/serve/applications/", nil)
+	req, err := http.NewRequestWithContext(context.Background(), "GET", "http://localhost:8265/api/serve/applications/", nil)
 	require.NoError(t, err)
 
 	// Call 3 times
@@ -282,28 +282,28 @@ func TestDashboardClientCounter(t *testing.T) {
 
 	c, err := counter.GetMetricWithLabelValues("GET", "serve_applications", "200", "direct")
 	require.NoError(t, err)
-	assert.Equal(t, float64(3), testutil.ToFloat64(c))
+	assert.InDelta(t, float64(3), testutil.ToFloat64(c), 0)
 }
 
 func TestDashboardClientCounterError(t *testing.T) {
 	mock := &mockRoundTripper{err: errors.New("timeout")}
 	rt, _, counter := newTestInstrumentedRT(t, mock, "direct")
 
-	req, err := http.NewRequest("GET", "http://localhost:8265/api/jobs/raysubmit_abc", nil)
+	req, err := http.NewRequestWithContext(context.Background(), "GET", "http://localhost:8265/api/jobs/raysubmit_abc", nil)
 	require.NoError(t, err)
 
 	_, _ = rt.RoundTrip(req)
 
 	c, err := counter.GetMetricWithLabelValues("GET", "jobs", "error", "direct")
 	require.NoError(t, err)
-	assert.Equal(t, float64(1), testutil.ToFloat64(c))
+	assert.InDelta(t, float64(1), testutil.ToFloat64(c), 0)
 }
 
 func TestProxyClientCounter(t *testing.T) {
 	mock := &mockRoundTripper{statusCode: 200}
 	rt, _, counter := newTestInstrumentedRT(t, mock, "direct")
 
-	req, err := http.NewRequest("GET", "http://10.0.0.1:8000/-/healthz", nil)
+	req, err := http.NewRequestWithContext(context.Background(), "GET", "http://10.0.0.1:8000/-/healthz", nil)
 	require.NoError(t, err)
 
 	for range 5 {
@@ -313,7 +313,7 @@ func TestProxyClientCounter(t *testing.T) {
 
 	c, err := counter.GetMetricWithLabelValues("GET", "proxy_health", "200", "direct")
 	require.NoError(t, err)
-	assert.Equal(t, float64(5), testutil.ToFloat64(c))
+	assert.InDelta(t, float64(5), testutil.ToFloat64(c), 0)
 }
 
 func TestNewInstrumentedRoundTripperNilInner(t *testing.T) {

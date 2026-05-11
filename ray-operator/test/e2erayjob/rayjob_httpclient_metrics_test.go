@@ -88,7 +88,7 @@ env_vars:
 		"Expected successful response code 200 in metrics")
 
 	// Log all matching metric lines for debugging.
-	for _, line := range strings.Split(metricsOutput, "\n") {
+	for line := range strings.SplitSeq(metricsOutput, "\n") {
 		if strings.Contains(line, "kuberay_dashboard_client") && !strings.HasPrefix(line, "#") {
 			LogWithTimestamp(test.T(), "Metric: %s", strings.TrimSpace(line))
 		}
