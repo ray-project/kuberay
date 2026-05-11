@@ -42,7 +42,24 @@ func (c *ClientManager) ListRayClusters(ctx context.Context) ([]*rayv1.RayCluste
 	return list, nil
 }
 
-func NewClientManager(kubeconfigs string, useKubernetesProxy bool) (*ClientManager, error) {
+type ClientManagerConfig struct {
+	Kubeconfigs        string
+	UseKubernetesProxy bool
+	QPS                float32
+	Burst              int
+}
+
+func NewClientManager(cfg ClientManagerConfig) (*ClientManager, error) {
+	kubeconfigs := cfg.Kubeconfigs
+	useKubernetesProxy := cfg.UseKubernetesProxy
+	qps := cfg.QPS
+	burst := cfg.Burst
+	if qps <= 0 {
+		qps = 50
+	}
+	if burst <= 0 {
+		burst = 100
+	}
 	kubeconfigList := []*rest.Config{}
 	if len(kubeconfigs) > 0 {
 		stringList := strings.Split(kubeconfigs, ",")
@@ -60,8 +77,8 @@ func NewClientManager(kubeconfigs string, useKubernetesProxy bool) (*ClientManag
 		if err != nil {
 			return nil, fmt.Errorf("failed to build config from kubeconfig: %w", err)
 		}
-		c.QPS = 50
-		c.Burst = 100
+		c.QPS = qps
+		c.Burst = burst
 		kubeconfigList = append(kubeconfigList, c)
 	} else {
 		var c *rest.Config
@@ -82,8 +99,8 @@ func NewClientManager(kubeconfigs string, useKubernetesProxy bool) (*ClientManag
 				return nil, fmt.Errorf("failed to build config from in-cluster kubeconfig: %w", err)
 			}
 		}
-		c.QPS = 50
-		c.Burst = 100
+		c.QPS = qps
+		c.Burst = burst
 		kubeconfigList = append(kubeconfigList, c)
 	}
 	scheme := runtime.NewScheme()

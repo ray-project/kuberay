@@ -17,6 +17,15 @@ import (
 	"github.com/ray-project/kuberay/historyserver/pkg/historyserver"
 )
 
+const (
+	// defaultQPS is the default QPS value for the Kubernetes API client.
+	// Aligned with ray-operator defaults (configapi.DefaultQPS).
+	defaultQPS = float64(100)
+	// defaultBurst is the default burst value for the Kubernetes API client.
+	// Aligned with ray-operator defaults (configapi.DefaultBurst).
+	defaultBurst = 200
+)
+
 func main() {
 	runtimeClassName := ""
 	rayRootDir := ""
@@ -24,6 +33,8 @@ func main() {
 	runtimeClassConfigPath := ""
 	dashboardDir := ""
 	useKubernetesProxy := false
+	qps := defaultQPS
+	burst := defaultBurst
 	sessionProcessTimeout := historyserver.DefaultSessionProcessTimeout
 	flag.StringVar(&runtimeClassName, "runtime-class-name", "", "Storage backend: s3 / gcs / azureblob / aliyunoss / localtest")
 	flag.StringVar(&rayRootDir, "ray-root-dir", "", "Root dir inside the bucket")
@@ -31,6 +42,10 @@ func main() {
 	flag.StringVar(&dashboardDir, "dashboard-dir", "/dashboard", "Path to Ray Dashboard static assets")
 	flag.StringVar(&runtimeClassConfigPath, "runtime-class-config-path", "", "Path to backend config JSON")
 	flag.BoolVar(&useKubernetesProxy, "use-kubernetes-proxy", false, "Use local kubeconfig instead of in-cluster config")
+	flag.Float64Var(&qps, "kube-api-qps", defaultQPS,
+		"The QPS value for the client communicating with the Kubernetes API server.")
+	flag.IntVar(&burst, "kube-api-burst", defaultBurst,
+		"The maximum burst for throttling requests from this client to the Kubernetes API server.")
 	flag.DurationVar(&sessionProcessTimeout, "session-process-timeout", historyserver.DefaultSessionProcessTimeout, "Timeout duration for processing and loading a single Ray cluster session.")
 	flag.Parse()
 
@@ -38,7 +53,12 @@ func main() {
 		logrus.Fatal("--runtime-class-name is required")
 	}
 
-	cliMgr, err := historyserver.NewClientManager(kubeconfigs, useKubernetesProxy)
+	cliMgr, err := historyserver.NewClientManager(historyserver.ClientManagerConfig{
+		Kubeconfigs:        kubeconfigs,
+		UseKubernetesProxy: useKubernetesProxy,
+		QPS:                float32(qps),
+		Burst:              burst,
+	})
 	if err != nil {
 		logrus.Fatalf("Failed to create client manager: %v", err)
 	}
