@@ -23,7 +23,7 @@ type HTTPLiveSessionResolver struct {
 }
 
 func NewHTTPLiveSessionResolver(cm *ClientManager, useKubernetesProxy bool) (*HTTPLiveSessionResolver, error) {
-	httpClient := &http.Client{Timeout: defaultSessionResolveTimeout}
+	httpClient := &http.Client{}
 	apiServerHost := ""
 
 	if useKubernetesProxy {
