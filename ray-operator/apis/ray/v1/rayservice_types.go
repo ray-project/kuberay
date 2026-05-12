@@ -80,7 +80,7 @@ type ClusterUpgradeOptions struct {
 	// provided. If empty, no addresses field is set on the Gateway (suitable for cloud
 	// load-balancer environments that assign addresses automatically).
 	// +optional
-	GatewayAddresses []gatewayv1.GatewayAddress `json:"gatewayAddresses,omitempty"`
+	GatewayAddresses []gatewayv1.GatewaySpecAddress `json:"gatewayAddresses,omitempty"`
 }
 
 type RayServiceUpgradeStrategy struct {

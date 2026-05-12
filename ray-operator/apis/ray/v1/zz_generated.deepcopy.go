@@ -149,7 +149,7 @@ func (in *ClusterUpgradeOptions) DeepCopyInto(out *ClusterUpgradeOptions) {
 	}
 	if in.GatewayAddresses != nil {
 		in, out := &in.GatewayAddresses, &out.GatewayAddresses
-		*out = make([]apisv1.GatewayAddress, len(*in))
+		*out = make([]apisv1.GatewaySpecAddress, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}

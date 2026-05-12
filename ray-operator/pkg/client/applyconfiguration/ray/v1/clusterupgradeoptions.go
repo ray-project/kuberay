@@ -26,7 +26,7 @@ type ClusterUpgradeOptionsApplyConfiguration struct {
 	// Gateway implementation only becomes PROGRAMMED when spec.addresses is explicitly
 	// provided. If empty, no addresses field is set on the Gateway (suitable for cloud
 	// load-balancer environments that assign addresses automatically).
-	GatewayAddresses []apisv1.GatewayAddress `json:"gatewayAddresses,omitempty"`
+	GatewayAddresses []apisv1.GatewaySpecAddress `json:"gatewayAddresses,omitempty"`
 }
 
 // ClusterUpgradeOptionsApplyConfiguration constructs a declarative configuration of the ClusterUpgradeOptions type for use with
@@ -70,7 +70,7 @@ func (b *ClusterUpgradeOptionsApplyConfiguration) WithGatewayClassName(value str
 // WithGatewayAddresses adds the given value to the GatewayAddresses field in the declarative configuration
 // and returns the receiver, so that objects can be build by chaining "With" function invocations.
 // If called multiple times, values provided by each call will be appended to the GatewayAddresses field.
-func (b *ClusterUpgradeOptionsApplyConfiguration) WithGatewayAddresses(values ...apisv1.GatewayAddress) *ClusterUpgradeOptionsApplyConfiguration {
+func (b *ClusterUpgradeOptionsApplyConfiguration) WithGatewayAddresses(values ...apisv1.GatewaySpecAddress) *ClusterUpgradeOptionsApplyConfiguration {
 	for i := range values {
 		b.GatewayAddresses = append(b.GatewayAddresses, values[i])
 	}
