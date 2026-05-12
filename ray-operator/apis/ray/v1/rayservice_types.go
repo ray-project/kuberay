@@ -2,6 +2,7 @@ package v1
 
 import (
 	corev1 "k8s.io/api/core/v1"
+	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -73,6 +74,13 @@ type ClusterUpgradeOptions struct {
 	IntervalSeconds *int32 `json:"intervalSeconds"`
 	// The name of the Gateway Class installed by the Kubernetes Cluster admin.
 	GatewayClassName string `json:"gatewayClassName"`
+	// GatewayAddresses is an optional list of addresses to set on the Gateway resource.
+	// This is required on bare-metal clusters (e.g. MetalLB + Envoy Gateway) where the
+	// Gateway implementation only becomes PROGRAMMED when spec.addresses is explicitly
+	// provided. If empty, no addresses field is set on the Gateway (suitable for cloud
+	// load-balancer environments that assign addresses automatically).
+	// +optional
+	GatewayAddresses []gatewayv1.GatewayAddress `json:"gatewayAddresses,omitempty"`
 }
 
 type RayServiceUpgradeStrategy struct {
