@@ -56,7 +56,7 @@ func (r *HTTPLiveSessionResolver) FetchSessionName(ctx context.Context, namespac
 		url = fmt.Sprintf("%s/api/v1/namespaces/%s/services/%s:dashboard/proxy%s",
 			r.apiServerHost, namespace, headSvcName, dashboardVersionEndpoint)
 	} else {
-		url = fmt.Sprintf("http://%s:8265%s", headSvcName, dashboardVersionEndpoint)
+		url = fmt.Sprintf("http://%s.%s:8265%s", headSvcName, namespace, dashboardVersionEndpoint)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
