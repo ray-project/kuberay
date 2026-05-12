@@ -15,6 +15,11 @@ import (
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
+// resolver is an interface to enable mocking HTTPLiveSessionResolver in tests.
+type resolver interface {
+	FetchSessionName(ctx context.Context, namespace, headSvcName string) (string, error)
+}
+
 // SessionStatus is ProcessSession's outcome classification. Success statuses
 // (Live, Processed) return a nil error; all others pair with a non-nil error.
 type SessionStatus int
@@ -40,13 +45,15 @@ const (
 type SessionProcessor struct {
 	handler   *eventserver.EventHandler
 	k8sClient client.Client
+	resolver  resolver
 }
 
 // NewSessionProcessor constructs a SessionProcessor.
-func NewSessionProcessor(handler *eventserver.EventHandler, k8sClient client.Client) *SessionProcessor {
+func NewSessionProcessor(handler *eventserver.EventHandler, k8sClient client.Client, r resolver) *SessionProcessor {
 	return &SessionProcessor{
 		handler:   handler,
 		k8sClient: k8sClient,
+		resolver:  r,
 	}
 }
 
@@ -72,13 +79,8 @@ func (p *SessionProcessor) ProcessSession(ctx context.Context, session utils.Clu
 	return SessionStatusProcessed, nil
 }
 
-// isDead determines whether a session is dead by checking the RayCluster CR.
-// A session is dead if either:
-//   - the RayCluster CR is absent, or
-//   - the RayCluster CR exists but was recreated with the same name.
-//
-// TODO(jwj): Use collector-written UID or a storage-side probe for handling
-// cases in which multiple sessions exist in the same CR.
+// isDead returns true when the queried session is not the one currently
+// running on the RayCluster.
 func (p *SessionProcessor) isDead(ctx context.Context, session utils.ClusterInfo) (bool, error) {
 	rc := &rayv1.RayCluster{}
 	err := p.k8sClient.Get(ctx, k8stypes.NamespacedName{
@@ -92,11 +94,16 @@ func (p *SessionProcessor) isDead(ctx context.Context, session utils.ClusterInfo
 		return false, err
 	}
 
-	sessionTimestamp := ParseSessionTimestamp(session.SessionName)
-	if sessionTimestamp.Before(rc.CreationTimestamp.Time) {
-		return true, nil
+	headSvcName := rc.Status.Head.ServiceName
+	if headSvcName == "" {
+		return false, errors.New("RayCluster head service not ready")
 	}
-	return false, nil
+
+	liveSessionName, err := p.resolver.FetchSessionName(ctx, session.Namespace, headSvcName)
+	if err != nil {
+		return false, fmt.Errorf("resolve live session: %w", err)
+	}
+	return session.SessionName != liveSessionName, nil
 }
 
 // isCtxCanceled checks if the error is caused by context cancellation

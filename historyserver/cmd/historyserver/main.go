@@ -75,7 +75,11 @@ func main() {
 	)
 	defer serverCancel()
 
-	processor := historyserver.NewSessionProcessor(eventHandler, cliMgr.Client())
+	resolver, err := historyserver.NewHTTPLiveSessionResolver(cliMgr, useKubernetesProxy)
+	if err != nil {
+		logrus.Fatalf("Failed to create live session resolver: %v", err)
+	}
+	processor := historyserver.NewSessionProcessor(eventHandler, cliMgr.Client(), resolver)
 	sessionLoader := historyserver.NewSessionLoader(processor, serverCtx)
 
 	// ServerHandler.Run consumes a stop chan; bridge serverCtx into it.
