@@ -70,8 +70,7 @@ func (r *RayClusterReconciler) reconcileNativeWorkloadScheduling(ctx context.Con
 			r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(WorkloadSchedulingInvalidSpec),
 				"RayCluster has %d worker groups, but native workload scheduling supports at most %d (%d PodGroupTemplates total, 1 reserved for head)",
 				len(instance.Spec.WorkerGroupSpecs), maxWorkerGroups, schedulingv1alpha2.WorkloadMaxPodGroupTemplates)
-			return fmt.Errorf("RayCluster %s/%s has %d worker groups, exceeding the maximum of %d for native workload scheduling",
-				instance.Namespace, instance.Name, len(instance.Spec.WorkerGroupSpecs), maxWorkerGroups)
+			return nil
 		}
 		// All other reasons (batch scheduler, autoscaling) are warnings.
 		r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(WorkloadSchedulingSkipped),

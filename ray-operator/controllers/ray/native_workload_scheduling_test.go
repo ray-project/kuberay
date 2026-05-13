@@ -278,7 +278,7 @@ func TestReconcileNativeWorkloadScheduling_SkipsWhenBatchSchedulerConfigured(t *
 	assert.Len(t, fakeRecorder.Events, 1)
 }
 
-func TestReconcileNativeWorkloadScheduling_FailsWhenMoreThan7WorkerGroups(t *testing.T) {
+func TestReconcileNativeWorkloadScheduling_SkipsWhenMoreThan7WorkerGroups(t *testing.T) {
 	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
 
 	workers := make([]rayv1.WorkerGroupSpec, 8)
@@ -293,14 +293,16 @@ func TestReconcileNativeWorkloadScheduling_FailsWhenMoreThan7WorkerGroups(t *tes
 	ctx := context.Background()
 
 	err := r.reconcileNativeWorkloadScheduling(ctx, cluster)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "exceeding the maximum of 7")
+	require.NoError(t, err)
 
 	// No Workloads should be created.
 	workloadList := &schedulingv1alpha2.WorkloadList{}
 	err = fakeClient.List(ctx, workloadList, &client.ListOptions{Namespace: "default"})
 	require.NoError(t, err)
 	assert.Empty(t, workloadList.Items)
+
+	// Should have emitted a warning event.
+	assert.Len(t, fakeRecorder.Events, 1)
 }
 
 // --- Workload construction tests ---
