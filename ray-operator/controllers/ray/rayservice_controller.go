@@ -139,6 +139,7 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 			}
 			return ctrl.Result{}, nil
 		}
+		logger.Info("Requeue RayService, waiting for RayClusters to be deleted")
 		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
 	}
 
@@ -149,6 +150,7 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 			logger.Error(err, "Failed to add finalizer to RayService")
 			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
 		}
+		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, nil
 	}
 
 	// Perform all validations and directly fail the RayService if any of the validation fails
