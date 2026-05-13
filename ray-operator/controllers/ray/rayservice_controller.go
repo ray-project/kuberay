@@ -124,34 +124,7 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	}
 
 	if !rayServiceInstance.ObjectMeta.DeletionTimestamp.IsZero() {
-		logger.Info("RayService is being deleted", "DeletionTimestamp", rayServiceInstance.ObjectMeta.DeletionTimestamp)
-
-		rayClusterList := rayv1.RayClusterList{}
-		if err := r.List(ctx, &rayClusterList, common.RayServiceRayClustersAssociationOptions(rayServiceInstance).ToListOptions()...); err != nil {
-			return ctrl.Result{}, err
-		}
-
-		if len(rayClusterList.Items) > 0 {
-			logger.Info("RayClusters still exist, triggering deletion", "count", len(rayClusterList.Items))
-			for _, cluster := range rayClusterList.Items {
-				if cluster.DeletionTimestamp.IsZero() {
-					logger.Info("Deleting RayCluster", "clusterName", cluster.Name)
-					if err := r.Delete(ctx, &cluster, client.PropagationPolicy(metav1.DeletePropagationBackground)); err != nil {
-						logger.Error(err, "Failed to delete RayCluster", "clusterName", cluster.Name)
-						return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
-					}
-				}
-			}
-			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, nil
-		}
-
-		logger.Info("No RayClusters exist, removing finalizer")
-		controllerutil.RemoveFinalizer(rayServiceInstance, utils.RayServiceFinalizer)
-		if err := r.Update(ctx, rayServiceInstance); err != nil {
-			logger.Error(err, "Failed to remove finalizer for RayService")
-			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
-		}
-		return ctrl.Result{}, nil
+		return r.reconcileRayServiceDeletion(ctx, rayServiceInstance)
 	}
 
 	if !controllerutil.ContainsFinalizer(rayServiceInstance, utils.RayServiceFinalizer) {
@@ -652,6 +625,38 @@ func (r *RayServiceReconciler) getRayServiceInstance(ctx context.Context, reques
 		return nil, err
 	}
 	return rayServiceInstance, nil
+}
+
+func (r *RayServiceReconciler) reconcileRayServiceDeletion(ctx context.Context, rayServiceInstance *rayv1.RayService) (ctrl.Result, error) {
+	logger := ctrl.LoggerFrom(ctx)
+	logger.Info("RayService is being deleted", "DeletionTimestamp", rayServiceInstance.ObjectMeta.DeletionTimestamp)
+
+	rayClusterList := rayv1.RayClusterList{}
+	if err := r.List(ctx, &rayClusterList, common.RayServiceRayClustersAssociationOptions(rayServiceInstance).ToListOptions()...); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	if len(rayClusterList.Items) > 0 {
+		logger.Info("RayClusters still exist, triggering deletion", "count", len(rayClusterList.Items))
+		for _, cluster := range rayClusterList.Items {
+			if cluster.DeletionTimestamp.IsZero() {
+				logger.Info("Deleting RayCluster", "clusterName", cluster.Name)
+				if err := r.Delete(ctx, &cluster, client.PropagationPolicy(metav1.DeletePropagationBackground)); err != nil {
+					logger.Error(err, "Failed to delete RayCluster", "clusterName", cluster.Name)
+					return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
+				}
+			}
+		}
+		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, nil
+	}
+
+	logger.Info("No RayClusters exist, removing finalizer")
+	controllerutil.RemoveFinalizer(rayServiceInstance, utils.RayServiceFinalizer)
+	if err := r.Update(ctx, rayServiceInstance); err != nil {
+		logger.Error(err, "Failed to remove finalizer for RayService")
+		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
+	}
+	return ctrl.Result{}, nil
 }
 
 func isZeroDowntimeUpgradeEnabled(ctx context.Context, upgradeStrategy *rayv1.RayServiceUpgradeStrategy) bool {
