@@ -3158,10 +3158,11 @@ func TestRayServiceFinalizer(t *testing.T) {
 				Build()
 
 			reconciler := &RayServiceReconciler{
-				Client:       fakeClient,
-				Recorder:     &record.FakeRecorder{},
-				Scheme:       newScheme,
-				ServeConfigs: lru.New(10),
+				Client:                       fakeClient,
+				Recorder:                     &record.FakeRecorder{},
+				Scheme:                       newScheme,
+				ServeConfigs:                 lru.New(10),
+				RayClusterDeletionTimestamps: cmap.New[time.Time](),
 			}
 
 			namespacedName := types.NamespacedName{Name: tt.rayService.Name, Namespace: tt.rayService.Namespace}
