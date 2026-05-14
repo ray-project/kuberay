@@ -727,6 +727,62 @@ func TestBuildPod(t *testing.T) {
 	checkContainerEnv(t, rayContainer, "TEST_DEFAULT_ENV_NAME", "TEST_ENV_VALUE")
 }
 
+func TestBuildAutoscalerContainer(t *testing.T) {
+	const autoscalerImage = "rayproject/ray:2.52.0"
+	const expectedCmd = "ray kuberay-autoscaler --cluster-name $(RAY_CLUSTER_NAME) --cluster-namespace $(RAY_CLUSTER_NAMESPACE)"
+
+	t.Run("KUBERAY_GEN_AUTOSCALER_START_CMD is always injected with the generated command", func(t *testing.T) {
+		container := BuildAutoscalerContainer(autoscalerImage)
+
+		env := getEnvVar(container, utils.KUBERAY_GEN_AUTOSCALER_START_CMD)
+		require.NotNil(t, env, "KUBERAY_GEN_AUTOSCALER_START_CMD env var should always be present")
+		assert.Equal(t, expectedCmd, env.Value)
+	})
+
+	t.Run("Default Args equal KUBERAY_GEN_AUTOSCALER_START_CMD value", func(t *testing.T) {
+		container := BuildAutoscalerContainer(autoscalerImage)
+
+		require.Len(t, container.Args, 1)
+		assert.Equal(t, expectedCmd, container.Args[0],
+			"Default Args should match KUBERAY_GEN_AUTOSCALER_START_CMD so they are consistent")
+	})
+
+	t.Run("AutoscalerOptions.Args override replaces Args but not KUBERAY_GEN_AUTOSCALER_START_CMD", func(t *testing.T) {
+		container := BuildAutoscalerContainer(autoscalerImage)
+		customArgs := []string{"ulimit -n 65536; $KUBERAY_GEN_AUTOSCALER_START_CMD"}
+		mergeAutoscalerOverrides(&container, &rayv1.AutoscalerOptions{
+			Args: customArgs,
+		})
+
+		// Args must reflect the override.
+		assert.Equal(t, customArgs, container.Args)
+
+		// KUBERAY_GEN_AUTOSCALER_START_CMD must still hold the original generated command.
+		env := getEnvVar(container, utils.KUBERAY_GEN_AUTOSCALER_START_CMD)
+		require.NotNil(t, env)
+		assert.Equal(t, expectedCmd, env.Value)
+	})
+
+	t.Run("AutoscalerOptions.Env additions do not overwrite KUBERAY_GEN_AUTOSCALER_START_CMD", func(t *testing.T) {
+		container := BuildAutoscalerContainer(autoscalerImage)
+		mergeAutoscalerOverrides(&container, &rayv1.AutoscalerOptions{
+			Env: []corev1.EnvVar{
+				{Name: "AUTOSCALER_UPDATE_INTERVAL_S", Value: "10"},
+			},
+		})
+
+		// The user-supplied env var must be present.
+		userEnv := getEnvVar(container, "AUTOSCALER_UPDATE_INTERVAL_S")
+		require.NotNil(t, userEnv)
+		assert.Equal(t, "10", userEnv.Value)
+
+		// KUBERAY_GEN_AUTOSCALER_START_CMD must still reflect the KubeRay-generated command.
+		env := getEnvVar(container, utils.KUBERAY_GEN_AUTOSCALER_START_CMD)
+		require.NotNil(t, env)
+		assert.Equal(t, expectedCmd, env.Value)
+	})
+}
+
 func TestBuildPod_WithPlasmaDirectory(t *testing.T) {
 	ctx := context.Background()
 

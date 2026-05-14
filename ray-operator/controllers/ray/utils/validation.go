@@ -240,11 +240,11 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 	// manually sets KUBERAY_GEN_AUTOSCALER_START_CMD in autoscalerOptions.env, they would
 	// silently shadow KubeRay's generated value, causing the referenced command to behave
 	// unexpectedly. Reject this combination to keep the env var KubeRay-managed.
-	if spec.AutoscalerOptions != nil && len(spec.AutoscalerOptions.Args) > 0 {
+	if spec.AutoscalerOptions != nil {
 		if EnvVarExists(KUBERAY_GEN_AUTOSCALER_START_CMD, spec.AutoscalerOptions.Env) {
-			return fmt.Errorf("autoscalerOptions.env must not contain %s when autoscalerOptions.args is set: "+
-				"%s is managed by KubeRay and injected automatically into the autoscaler container",
-				KUBERAY_GEN_AUTOSCALER_START_CMD, KUBERAY_GEN_AUTOSCALER_START_CMD)
+			return fmt.Errorf("autoscalerOptions.env must not contain %s: "+
+				"it is managed by KubeRay and injected automatically into the autoscaler container",
+				KUBERAY_GEN_AUTOSCALER_START_CMD)
 		}
 	}
 
