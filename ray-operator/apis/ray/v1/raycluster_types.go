@@ -250,6 +250,9 @@ type AutoscalerOptions struct {
 	// Optional list of volumeMounts.  This is needed for enabling TLS for the autoscaler container.
 	// +optional
 	VolumeMounts []corev1.VolumeMount `json:"volumeMounts,omitempty"`
+	// Optional to overwrite the default command of the autoscaler container. It works similar to KUBERAY_GEN_RAY_START_CMD.
+	// +optional
+	Args []string `json:"args,omitempty"`
 }
 
 // +kubebuilder:validation:Enum=Default;Aggressive;Conservative

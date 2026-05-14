@@ -235,6 +235,19 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 		}
 	}
 
+	// When autoscalerOptions.args is set, the user's custom args can reference the
+	// $KUBERAY_GEN_AUTOSCALER_START_CMD env var that KubeRay injects. If the user also
+	// manually sets KUBERAY_GEN_AUTOSCALER_START_CMD in autoscalerOptions.env, they would
+	// silently shadow KubeRay's generated value, causing the referenced command to behave
+	// unexpectedly. Reject this combination to keep the env var KubeRay-managed.
+	if spec.AutoscalerOptions != nil && len(spec.AutoscalerOptions.Args) > 0 {
+		if EnvVarExists(KUBERAY_GEN_AUTOSCALER_START_CMD, spec.AutoscalerOptions.Env) {
+			return fmt.Errorf("autoscalerOptions.env must not contain %s when autoscalerOptions.args is set: "+
+				"%s is managed by KubeRay and injected automatically into the autoscaler container",
+				KUBERAY_GEN_AUTOSCALER_START_CMD, KUBERAY_GEN_AUTOSCALER_START_CMD)
+		}
+	}
+
 	if IsAuthEnabled(spec) {
 		if spec.RayVersion == "" {
 			return fmt.Errorf("authOptions.mode is 'token' but RayVersion was not specified. Ray version 2.52.0 or later is required")
