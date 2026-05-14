@@ -30,6 +30,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -123,6 +124,36 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 		return ctrl.Result{}, nil
 	}
 
+	r.cleanUpServeConfigCache(ctx, rayServiceInstance)
+	hasRayClustersToClean, err := r.cleanUpRayClusterInstance(ctx, rayServiceInstance)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	if !rayServiceInstance.DeletionTimestamp.IsZero() {
+		if !hasRayClustersToClean {
+			logger.Info("No RayClusters exist, removing finalizer")
+			controllerutil.RemoveFinalizer(rayServiceInstance, utils.RayServiceFinalizer)
+			if err := r.Update(ctx, rayServiceInstance); err != nil {
+				logger.Error(err, "Failed to remove finalizer for RayService")
+				return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
+			}
+			return ctrl.Result{}, nil
+		}
+		logger.Info("Requeue RayService, waiting for RayClusters to be deleted")
+		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
+	}
+
+	if !controllerutil.ContainsFinalizer(rayServiceInstance, utils.RayServiceFinalizer) {
+		logger.Info("Adding finalizer to RayService", "finalizer", utils.RayServiceFinalizer)
+		controllerutil.AddFinalizer(rayServiceInstance, utils.RayServiceFinalizer)
+		if err := r.Update(ctx, rayServiceInstance); err != nil {
+			logger.Error(err, "Failed to add finalizer to RayService")
+			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
+		}
+		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, nil
+	}
+
 	// Perform all validations and directly fail the RayService if any of the validation fails
 	errType, err := validateRayService(ctx, rayServiceInstance)
 	// Immediately update the status after validation
@@ -138,12 +169,6 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, updateErr
 		}
 		return ctrl.Result{}, nil
-	}
-
-	r.cleanUpServeConfigCache(ctx, rayServiceInstance)
-	hasRayClustersToClean, err := r.cleanUpRayClusterInstance(ctx, rayServiceInstance)
-	if err != nil {
-		return ctrl.Result{}, err
 	}
 
 	// If the RayService has timed out during initialization, skip the rest of the reconciliation.
@@ -1000,6 +1025,7 @@ func (r *RayServiceReconciler) reconcileRayCluster(ctx context.Context, rayServi
 func (r *RayServiceReconciler) cleanUpRayClusterInstance(ctx context.Context, rayServiceInstance *rayv1.RayService) (bool, error) {
 	logger := ctrl.LoggerFrom(ctx)
 	rayClusterList := rayv1.RayClusterList{}
+	rayServiceIsDeleted := !rayServiceInstance.ObjectMeta.DeletionTimestamp.IsZero()
 
 	var err error
 	if err = r.List(ctx, &rayClusterList, common.RayServiceRayClustersAssociationOptions(rayServiceInstance).ToListOptions()...); err != nil {
@@ -1011,30 +1037,25 @@ func (r *RayServiceReconciler) cleanUpRayClusterInstance(ctx context.Context, ra
 	if rayServiceInstance.Spec.RayClusterDeletionDelaySeconds != nil {
 		deletionDelay = time.Duration(*rayServiceInstance.Spec.RayClusterDeletionDelaySeconds) * time.Second
 	}
+	if rayServiceIsDeleted {
+		deletionDelay = 0 * time.Second
+	}
 
 	hasRayClustersToClean := false
 	// Clean up RayCluster instances. Each instance is deleted after the configured deletion delay.
 	for _, rayClusterInstance := range rayClusterList.Items {
-		if rayClusterInstance.Name != rayServiceInstance.Status.ActiveServiceStatus.RayClusterName && rayClusterInstance.Name != rayServiceInstance.Status.PendingServiceStatus.RayClusterName {
+		if rayServiceIsDeleted || (rayClusterInstance.Name != rayServiceInstance.Status.ActiveServiceStatus.RayClusterName && rayClusterInstance.Name != rayServiceInstance.Status.PendingServiceStatus.RayClusterName) {
 			hasRayClustersToClean = true
 			cachedTimestamp, exists := r.RayClusterDeletionTimestamps.Get(rayClusterInstance.Name)
-			if !exists {
-				deletionTimestamp := metav1.Now().Add(deletionDelay)
-				r.RayClusterDeletionTimestamps.Set(rayClusterInstance.Name, deletionTimestamp)
-				logger.Info(
-					"Scheduled dangling RayCluster for deletion",
-					"rayClusterName", rayClusterInstance.Name,
-					"deletionDelay", deletionDelay.String(),
-					"deletionTimestamp", deletionTimestamp,
-				)
-			} else {
+			if exists || rayServiceIsDeleted {
 				reasonForDeletion := ""
-				if time.Now().After(cachedTimestamp) {
+				if rayServiceIsDeleted {
+					reasonForDeletion = "RayService is being deleted. Deleting RayCluster"
+				} else if time.Now().After(cachedTimestamp) {
 					reasonForDeletion = fmt.Sprintf("Deletion timestamp %s "+
 						"for RayCluster %s has passed. Deleting cluster "+
 						"immediately.", cachedTimestamp, rayClusterInstance.Name)
 				}
-
 				if reasonForDeletion != "" {
 					logger.Info("reconcileRayCluster", "delete Ray cluster", rayClusterInstance.Name, "reason", reasonForDeletion)
 					if err := r.Delete(ctx, &rayClusterInstance, client.PropagationPolicy(metav1.DeletePropagationBackground)); err != nil {
@@ -1043,6 +1064,15 @@ func (r *RayServiceReconciler) cleanUpRayClusterInstance(ctx context.Context, ra
 					}
 					r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeNormal, string(utils.DeletedRayCluster), "Deleted the RayCluster %s/%s", rayClusterInstance.Namespace, rayClusterInstance.Name)
 				}
+			} else {
+				deletionTimestamp := metav1.Now().Add(deletionDelay)
+				r.RayClusterDeletionTimestamps.Set(rayClusterInstance.Name, deletionTimestamp)
+				logger.Info(
+					"Scheduled dangling RayCluster for deletion",
+					"rayClusterName", rayClusterInstance.Name,
+					"deletionDelay", deletionDelay.String(),
+					"deletionTimestamp", deletionTimestamp,
+				)
 			}
 		}
 	}
