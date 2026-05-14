@@ -190,6 +190,10 @@ var autoscalerContainer = corev1.Container{
 			Name:  "KUBERAY_CRD_VER",
 			Value: "v1",
 		},
+		{
+			Name:  utils.KUBERAY_GEN_AUTOSCALER_START_CMD,
+			Value: "ray kuberay-autoscaler --cluster-name $(RAY_CLUSTER_NAME) --cluster-namespace $(RAY_CLUSTER_NAMESPACE)",
+		},
 	},
 	Command: []string{
 		"/bin/bash",
