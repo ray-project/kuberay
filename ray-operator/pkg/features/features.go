@@ -53,7 +53,7 @@ const (
 	// alpha: v1.7
 	//
 	// Enables per-container restart policy for SidecarMode submitter to handle transient failures.
-	// Requires Kubernetes v1.35+ since it supports ContainerRestartPolicy by default starting in v1.35.
+	// Requires Kubernetes v1.35+ since it supports ContainerRestartPolicy by default starting in v1.35 and Ray v2.54.0+.
 	SidecarSubmitterRestart featuregate.Feature = "SidecarSubmitterRestart"
 )
 
