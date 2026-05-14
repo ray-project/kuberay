@@ -268,6 +268,9 @@ const (
 	// Finalizers for RayJob
 	RayJobStopJobFinalizer = "ray.io/rayjob-finalizer"
 
+	// Finalizers for RayService
+	RayServiceFinalizer = "ray.io/rayservice-finalizer"
+
 	// RayNodeHeadGroupLabelValue is the value for the RayNodeGroupLabelKey label on a head node
 	RayNodeHeadGroupLabelValue      = "headgroup"
 	RayNodeSubmitterGroupLabelValue = "submittergroup"
