@@ -12,7 +12,9 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 )
 
-// CacheByObject returns cache.ByObject entries that scope the manager client's Job and Pod watches.
+// K8sControllerRuntimeCacheSelectors returns a map[client.Object]cache.ByObject that scopes the manager's
+// informer cache to only watch KubeRay-managed Jobs (filtered by app.kubernetes.io/created-by=kuberay-operator)
+// and Ray node Pods (filtered by ray.io/node-type in head|worker|redis-cleanup).
 func K8sControllerRuntimeCacheSelectors() (map[client.Object]cache.ByObject, error) {
 	createByLabel, err := labels.NewRequirement(utils.KubernetesCreatedByLabelKey, selection.Equals, []string{utils.ComponentName})
 	if err != nil {
