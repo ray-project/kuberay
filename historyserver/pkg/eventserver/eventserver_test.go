@@ -430,7 +430,7 @@ func TestStoreEvent(t *testing.T) {
 				}
 			}
 
-			err := h.storeEvent(tt.eventMap)
+			err := h.storeEvent(testClusterName, tt.eventMap)
 
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("storeEvent() error = %v, wantErr %v", err, tt.wantErr)
@@ -653,7 +653,7 @@ func TestTaskLifecycleEventDeduplication(t *testing.T) {
 
 			// Process the lifecycle event
 			eventMap := makeLifecycleEvent(tt.newTransitions)
-			err := h.storeEvent(eventMap)
+			err := h.storeEvent(testClusterName, eventMap)
 			if err != nil {
 				t.Fatalf("storeEvent() unexpected error: %v", err)
 			}
@@ -818,7 +818,7 @@ func TestActorLifecycleEventDeduplication(t *testing.T) {
 
 			// Process the lifecycle event
 			eventMap := makeActorLifecycleEvent(tt.newTransitions)
-			err := h.storeEvent(eventMap)
+			err := h.storeEvent(testClusterName, eventMap)
 			if err != nil {
 				t.Fatalf("storeEvent() unexpected error: %v", err)
 			}
@@ -987,7 +987,7 @@ func TestDriverJobLifecycleEventDuplication(t *testing.T) {
 			}
 
 			eventMap := makeDriverJobLifecycleEvent(tt.newTransitions)
-			err := h.storeEvent(eventMap)
+			err := h.storeEvent(testClusterName, eventMap)
 			if err != nil {
 				t.Fatalf("storeEvent() unexpected error: %v", err)
 			}
@@ -1044,7 +1044,7 @@ func TestMultipleReprocessingCycles(t *testing.T) {
 
 	// Simulate 10 hourly reprocessing cycles
 	for cycle := 0; cycle < 10; cycle++ {
-		err := h.storeEvent(eventMap)
+		err := h.storeEvent(testClusterName, eventMap)
 		if err != nil {
 			t.Fatalf("Cycle %d: storeEvent() error = %v", cycle, err)
 		}

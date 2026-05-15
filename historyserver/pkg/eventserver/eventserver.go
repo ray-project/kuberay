@@ -76,7 +76,12 @@ func (h *EventHandler) ProcessEvents(ctx context.Context, ch <-chan map[string]a
 				logrus.Warnf("Channel was closed")
 				return nil
 			}
-			if err := h.storeEvent(currEventData); err != nil {
+			clusterSessionKey, ok := currEventData["clusterName"].(string)
+			if !ok {
+				logrus.Errorf("event missing or non-string 'clusterName' field")
+				continue
+			}
+			if err := h.storeEvent(clusterSessionKey, currEventData); err != nil {
 				logrus.Errorf("Failed to store event: %v", err)
 				continue
 			}
@@ -208,8 +213,8 @@ func (h *EventHandler) Run(stop chan struct{}, numOfEventProcessors int) error {
 	return nil
 }
 
-// storeEvent unmarshals the event map into the correct actor/task struct and then stores it into the corresonding list
-func (h *EventHandler) storeEvent(eventMap map[string]any) error {
+// storeEvent unmarshals the event map into the correct actor/task struct and then stores it into the corresonding list.
+func (h *EventHandler) storeEvent(clusterSessionKey string, eventMap map[string]any) error {
 	eventTypeVal, ok := eventMap["eventType"]
 	if !ok {
 		return fmt.Errorf("event missing 'eventType' field")
@@ -219,17 +224,6 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 		return fmt.Errorf("eventType is not a string, got %T", eventTypeVal)
 	}
 	eventType := types.EventType(eventTypeStr)
-
-	// clusterSessionKey is injected during event reading (Run function) and contains
-	// the full key: "{clusterName}_{namespace}_{sessionName}"
-	clusterSessionKeyVal, ok := eventMap["clusterName"]
-	if !ok {
-		return fmt.Errorf("event missing 'clusterName' field (clusterSessionKey)")
-	}
-	clusterSessionKey, ok := clusterSessionKeyVal.(string)
-	if !ok {
-		return fmt.Errorf("clusterName is not a string, got %T", clusterSessionKeyVal)
-	}
 
 	logrus.Infof("current eventType: %v", eventType)
 	switch eventType {
@@ -1586,8 +1580,7 @@ func (h *EventHandler) ProcessSingleSession(ctx context.Context, clusterInfo uti
 			if event == nil {
 				continue
 			}
-			event["clusterName"] = clusterSessionKey
-			if err := h.storeEvent(event); err != nil {
+			if err := h.storeEvent(clusterSessionKey, event); err != nil {
 				logrus.Errorf("Failed to store events for file %s: %v", eventFile, err)
 				continue
 			}
