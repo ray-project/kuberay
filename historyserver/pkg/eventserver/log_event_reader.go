@@ -50,7 +50,7 @@ func NewLogEventReader(reader storage.StorageReader) *LogEventReader {
 //
 // Path structure in storage: {clusterName}_{namespace}/{sessionName}/logs/{nodeId}/events/event_*.log
 //
-// Per-file readEventFile failures are treated as likely-transient storage errors.
+// Return an error if any listed file fails to read (total or partial).
 func (r *LogEventReader) ReadLogEvents(clusterInfo utils.ClusterInfo, clusterSessionKey string, eventStore *types.ClusterLogEventMap) error {
 	// Build cluster ID used by StorageReader
 	clusterID := clusterInfo.Name + "_" + clusterInfo.Namespace
@@ -110,9 +110,8 @@ func (r *LogEventReader) ReadLogEvents(clusterInfo utils.ClusterInfo, clusterSes
 		}
 	}
 
-	if total > 0 && read == 0 {
-		return fmt.Errorf("read 0 of %d log event files for %s: likely transient storage outage",
-			total, clusterSessionKey)
+	if total != read {
+		return fmt.Errorf("read %d of %d log event files for %s", read, total, clusterSessionKey)
 	}
 	return nil
 }

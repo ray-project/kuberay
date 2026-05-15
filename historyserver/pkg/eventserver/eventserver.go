@@ -1535,13 +1535,7 @@ func extractActorIDFromTaskID(taskIDHex string) string {
 // ProcessSingleSession reads all event files for a single session synchronously
 // and populates the handler's in-memory maps.
 //
-// Per-file failure handling:
-//   - GetContent/ReadAll failures are likely transient storage errors:
-//     skip this file.
-//   - json.Unmarshal/storeEvent failures are treated as corrupt-file:
-//     don't count as a hard failure since retrying won't help.
-//
-// TODO(jwj): Empty event file list vs ListFiles outage is ambiguous without
+// TODO(jiangjiawei1103): Empty event file list vs ListFiles outage is ambiguous without
 // StorageReader interface surfacing errors.
 func (h *EventHandler) ProcessSingleSession(ctx context.Context, clusterInfo utils.ClusterInfo) error {
 	clusterNameNamespace := clusterInfo.Name + "_" + clusterInfo.Namespace
@@ -1551,7 +1545,7 @@ func (h *EventHandler) ProcessSingleSession(ctx context.Context, clusterInfo uti
 	// block marking the session as loaded and force subsequent Ray event re-processing.
 	logEventReader := NewLogEventReader(h.reader)
 	if err := logEventReader.ReadLogEvents(clusterInfo, clusterSessionKey, h.ClusterLogEventMap); err != nil {
-		logrus.Errorf("Failed to read Log Events for %s: %v. /events endpoint will return empty data.",
+		logrus.Errorf("Incomplete Log Events read for %s: %v. /events endpoint may serve partial data.",
 			clusterSessionKey, err)
 	}
 
@@ -1566,6 +1560,7 @@ func (h *EventHandler) ProcessSingleSession(ctx context.Context, clusterInfo uti
 		}
 		logrus.Debugf("Reading event file: %s", eventFile)
 
+		// Transient storage error: skip file.
 		eventioReader := h.reader.GetContent(clusterNameNamespace, eventFile)
 		if eventioReader == nil {
 			logrus.Errorf("Failed to get content for event file: %s, skipping", eventFile)
@@ -1578,6 +1573,7 @@ func (h *EventHandler) ProcessSingleSession(ctx context.Context, clusterInfo uti
 		}
 		rayEventsRead++
 
+		// Corrupt file: don't count as a hard failure since retrying won't help. Accept partial loss.
 		var eventList []map[string]any
 		if err := json.Unmarshal(eventbytes, &eventList); err != nil {
 			logrus.Errorf("Failed to unmarshal events for file %s: %v", eventFile, err)

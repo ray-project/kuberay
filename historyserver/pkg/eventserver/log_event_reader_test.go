@@ -236,8 +236,7 @@ func TestReadLogEvents(t *testing.T) {
 		assert.Contains(t, err.Error(), "read 0 of 2")
 	})
 
-	t.Run("partial success does not return error", func(t *testing.T) {
-		// One file readable, one missing. This is not treated as an outage.
+	t.Run("partial read surfaces error but preserves successful events", func(t *testing.T) {
 		mock := newLogEventMockReader()
 		mock.addDir("cluster_ns", "session1/logs", []string{"node1/"})
 		mock.addDir("cluster_ns", "session1/logs/node1/events", []string{"event_GCS.log", "event_RAYLET.log"})
@@ -249,7 +248,8 @@ func TestReadLogEvents(t *testing.T) {
 		clusterInfo := utils.ClusterInfo{Name: "cluster", Namespace: "ns", SessionName: "session1"}
 
 		err := reader.ReadLogEvents(clusterInfo, "cluster_ns_session1", store)
-		require.NoError(t, err)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "read 1 of 2")
 		events := store.GetAllEvents("cluster_ns_session1")
 		assert.Len(t, events["global"], 1)
 	})
