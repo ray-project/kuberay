@@ -11,8 +11,8 @@ import (
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
-// defaultSessionLoadTimeout caps how long a single cold-load can run.
-const defaultSessionLoadTimeout = 2 * time.Minute
+// DefaultSessionProcessTimeout caps how long cold-load for a single session can run.
+const DefaultSessionProcessTimeout = 2 * time.Minute
 
 // processor is an interface to enable mocking SessionProcessor in tests.
 type processor interface {
@@ -22,21 +22,21 @@ type processor interface {
 // SessionLoader ensures a dead session is loaded into in-memory maps.
 // Concurrent callers for the same session are coalesced via singleflight.
 type SessionLoader struct {
-	processor   processor
-	sf          singleflight.Group
-	loadedMu    sync.RWMutex
-	loaded      map[string]struct{}
-	serverCtx   context.Context
-	loadTimeout time.Duration
+	processor      processor
+	sf             singleflight.Group
+	loadedMu       sync.RWMutex
+	loaded         map[string]struct{}
+	serverCtx      context.Context
+	processTimeout time.Duration
 }
 
 // NewSessionLoader wires a SessionLoader.
-func NewSessionLoader(p processor, serverCtx context.Context) *SessionLoader {
+func NewSessionLoader(p processor, serverCtx context.Context, processTimeout time.Duration) *SessionLoader {
 	return &SessionLoader{
-		processor:   p,
-		loaded:      make(map[string]struct{}),
-		serverCtx:   serverCtx,
-		loadTimeout: defaultSessionLoadTimeout,
+		processor:      p,
+		loaded:         make(map[string]struct{}),
+		serverCtx:      serverCtx,
+		processTimeout: processTimeout,
 	}
 }
 
@@ -63,7 +63,7 @@ func (s *SessionLoader) LoadSession(ctx context.Context, info utils.ClusterInfo)
 	// SIGTERM, serverCtx is cancelled immediately, causing any in-flight cold-load
 	// requests to return ctx.Err() and clients to receive HTTP 500.
 	ch := s.sf.DoChan(key, func() (interface{}, error) {
-		loadCtx, cancel := context.WithTimeout(s.serverCtx, s.loadTimeout)
+		loadCtx, cancel := context.WithTimeout(s.serverCtx, s.processTimeout)
 		defer cancel()
 		return s.doLoadSession(loadCtx, info, key)
 	})

@@ -53,7 +53,7 @@ func TestLoadSession_ProcessorError_PropagatesAndCleans(t *testing.T) {
 			return SessionStatusEventsErr, processorErr
 		},
 	}
-	sessionLoader := NewSessionLoader(fp, context.Background())
+	sessionLoader := NewSessionLoader(fp, context.Background(), DefaultSessionProcessTimeout)
 
 	const n = 5
 	var wg sync.WaitGroup
@@ -103,7 +103,7 @@ func TestLoadSession_ProcessorError_NoInternalRetry(t *testing.T) {
 			return SessionStatusEventsErr, processorErr
 		},
 	}
-	sessionLoader := NewSessionLoader(fp, context.Background())
+	sessionLoader := NewSessionLoader(fp, context.Background(), DefaultSessionProcessTimeout)
 
 	_, err := sessionLoader.LoadSession(context.Background(), info)
 	if !errors.Is(err, processorErr) {
@@ -142,7 +142,7 @@ func TestLoadSession_LiveAndProcessed(t *testing.T) {
 					return tc.status, nil
 				},
 			}
-			sessionLoader := NewSessionLoader(fp, context.Background())
+			sessionLoader := NewSessionLoader(fp, context.Background(), DefaultSessionProcessTimeout)
 
 			live, err := sessionLoader.LoadSession(context.Background(), testEnterClusterInfo())
 			if err != nil {
@@ -163,7 +163,7 @@ func TestLoadSession_FastPath_SkipsSingleflight(t *testing.T) {
 			return SessionStatusProcessed, nil
 		},
 	}
-	sessionLoader := NewSessionLoader(fp, context.Background())
+	sessionLoader := NewSessionLoader(fp, context.Background(), DefaultSessionProcessTimeout)
 	info := testEnterClusterInfo()
 
 	// First call: cold path, processor runs, session marked loaded.

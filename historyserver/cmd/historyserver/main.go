@@ -24,12 +24,14 @@ func main() {
 	runtimeClassConfigPath := ""
 	dashboardDir := ""
 	useKubernetesProxy := false
+	sessionProcessTimeout := historyserver.DefaultSessionProcessTimeout
 	flag.StringVar(&runtimeClassName, "runtime-class-name", "", "Storage backend: s3 / gcs / azureblob / aliyunoss / localtest")
 	flag.StringVar(&rayRootDir, "ray-root-dir", "", "Root dir inside the bucket")
 	flag.StringVar(&kubeconfigs, "kubeconfigs", "", "Kubeconfig path; empty = in-cluster")
 	flag.StringVar(&dashboardDir, "dashboard-dir", "/dashboard", "Path to Ray Dashboard static assets")
 	flag.StringVar(&runtimeClassConfigPath, "runtime-class-config-path", "", "Path to backend config JSON")
 	flag.BoolVar(&useKubernetesProxy, "use-kubernetes-proxy", false, "Use local kubeconfig instead of in-cluster config")
+	flag.DurationVar(&sessionProcessTimeout, "session-process-timeout", historyserver.DefaultSessionProcessTimeout, "Bound how long cold-load for a single session can run.")
 	flag.Parse()
 
 	if runtimeClassName == "" {
@@ -80,7 +82,7 @@ func main() {
 		logrus.Fatalf("Failed to create live session resolver: %v", err)
 	}
 	processor := historyserver.NewSessionProcessor(eventHandler, cliMgr.Client(), resolver)
-	sessionLoader := historyserver.NewSessionLoader(processor, serverCtx)
+	sessionLoader := historyserver.NewSessionLoader(processor, serverCtx, sessionProcessTimeout)
 
 	// ServerHandler.Run consumes a stop chan; bridge serverCtx into it.
 	var wg sync.WaitGroup
