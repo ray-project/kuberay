@@ -79,7 +79,10 @@ type ClusterUpgradeOptions struct {
 	// Gateway implementation only becomes PROGRAMMED when spec.addresses is explicitly
 	// provided. If empty, no addresses field is set on the Gateway (suitable for cloud
 	// load-balancer environments that assign addresses automatically).
+	// +listType=atomic
 	// +kubebuilder:validation:MaxItems=16
+	// +kubebuilder:validation:XValidation:message="IPAddress values must be unique",rule="self.all(a1, a1.type == 'IPAddress' && has(a1.value) ? self.exists_one(a2, a2.type == a1.type && has(a2.value) && a2.value == a1.value) : true )"
+	// +kubebuilder:validation:XValidation:message="Hostname values must be unique",rule="self.all(a1, a1.type == 'Hostname'  && has(a1.value) ? self.exists_one(a2, a2.type == a1.type && has(a2.value) && a2.value == a1.value) : true )"
 	// +optional
 	GatewayAddresses []gatewayv1.GatewaySpecAddress `json:"gatewayAddresses,omitempty"`
 }
