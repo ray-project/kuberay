@@ -1560,7 +1560,8 @@ func (h *EventHandler) ProcessSingleSession(ctx context.Context, clusterInfo uti
 		}
 		logrus.Debugf("Reading event file: %s", eventFile)
 
-		// Transient storage error: skip file.
+		// GetContent and io.ReadAll failures are treated as transient storage errors:
+		// skip this file and continue.
 		eventioReader := h.reader.GetContent(clusterNameNamespace, eventFile)
 		if eventioReader == nil {
 			logrus.Errorf("Failed to get content for event file: %s, skipping", eventFile)
@@ -1573,7 +1574,8 @@ func (h *EventHandler) ProcessSingleSession(ctx context.Context, clusterInfo uti
 		}
 		rayEventsRead++
 
-		// Corrupt file: don't count as a hard failure since retrying won't help. Accept partial loss.
+		// json.Unmarshal and storeEvent failures are treated as corrupt-data errors:
+		// retrying won't fix bad bytes, accepting partial loss.
 		var eventList []map[string]any
 		if err := json.Unmarshal(eventbytes, &eventList); err != nil {
 			logrus.Errorf("Failed to unmarshal events for file %s: %v", eventFile, err)
