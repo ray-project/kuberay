@@ -667,7 +667,7 @@ func (h *EventHandler) GetTasks(clusterSessionKey string) []types.Task {
 
 	taskMap, ok := h.ClusterTaskMap.ClusterTaskMap[clusterSessionKey]
 	if !ok {
-		// TODO(jwj): Add error handling.
+		// TODO(jiangjiawei1103): Add error handling.
 		logrus.Errorf("Task map not found for cluster session: %s", clusterSessionKey)
 		return []types.Task{}
 	}
@@ -938,7 +938,7 @@ func (h *EventHandler) handleTaskLifecycleEvent(eventMap map[string]any, cluster
 	}
 	normalizeTaskIDsToHex(&currTask)
 
-	// TODO(jwj): Clarify if there must be at least one state transition. Can one task have more than one state transition?
+	// TODO(jiangjiawei1103): Clarify if there must be at least one state transition. Can one task have more than one state transition?
 	if len(currTask.StateTransitions) == 0 {
 		return fmt.Errorf("TASK_LIFECYCLE_EVENT must have at least one state transition")
 	}
@@ -974,7 +974,7 @@ func (h *EventHandler) handleTaskLifecycleEvent(eventMap map[string]any, cluster
 			return
 		}
 
-		// TODO(jwj): Before beta, the lifecycle-related fields are overwritten.
+		// TODO(jiangjiawei1103): Before beta, the lifecycle-related fields are overwritten.
 		// In beta, the complete historical replay will be supported.
 		task.RayErrorInfo = currTask.RayErrorInfo
 		if currTask.JobID != "" {

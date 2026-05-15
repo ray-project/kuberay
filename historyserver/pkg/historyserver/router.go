@@ -301,8 +301,8 @@ func routerRayClusterSet(s *ServerHandler) {
 
 		if session != "live" {
 			if ParseSessionTimestamp(session).IsZero() {
-				logrus.Warnf("Rejecting malformed session name: %s/%s/%s", namespace, name, session)
-				r2.WriteErrorString(http.StatusBadRequest, fmt.Sprintf("malformed session name: %q", session))
+				logrus.Warnf("Rejecting invalid session name: %s/%s/%s", namespace, name, session)
+				r2.WriteErrorString(http.StatusBadRequest, fmt.Sprintf("invalid session name: %q", session))
 				return
 			}
 			info := utils.ClusterInfo{Name: name, Namespace: namespace, SessionName: session}
@@ -1667,7 +1667,7 @@ func (s *ServerHandler) getTasks(req *restful.Request, resp *restful.Response) {
 // The schema aligns with the Ray Dashboard API.
 // Ref: https://github.com/ray-project/ray/blob/d0b1d151d8ea964a711e451d0ae736f8bf95b629/python/ray/util/state/common.py#L730-L819.
 func formatTaskForResponse(task eventtypes.Task, detail bool) map[string]interface{} {
-	// TODO(jwj): Maybe define result schema in types.go.
+	// TODO(jiangjiawei1103): Maybe define result schema in types.go.
 	result := map[string]interface{}{
 		"task_id":            task.TaskID,
 		"attempt_number":     task.TaskAttempt,
@@ -1721,7 +1721,7 @@ func formatTaskForResponse(task eventtypes.Task, detail bool) map[string]interfa
 			})
 		}
 		result["events"] = events
-		// TODO(jwj): Support profiling_data after TASK_PROFILE_EVENT is supported.
+		// TODO(jiangjiawei1103): Support profiling_data after TASK_PROFILE_EVENT is supported.
 		// Ref: https://github.com/ray-project/ray/blob/d0b1d151d8ea964a711e451d0ae736f8bf95b629/python/ray/util/state/common.py#L1616-L1622.
 		// result["profiling_data"] = task.ProfilingData
 		result["task_log_info"] = task.TaskLogInfo

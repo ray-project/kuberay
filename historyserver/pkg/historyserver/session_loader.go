@@ -59,9 +59,9 @@ func (s *SessionLoader) LoadSession(ctx context.Context, info utils.ClusterInfo)
 		return false, nil
 	}
 
-	// TODO(jwj): Graceful drain if needed. Currently SIGTERM immediately cancels
-	// in-flight work. If 500-during-shutdown becomes a customer pain point, switch
-	// closure to a separate runCtx with grace timer.
+	// TODO(jiangjiawei1103): No graceful drain on shutdown. When the pod receives
+	// SIGTERM, serverCtx is cancelled immediately, causing any in-flight cold-load
+	// requests to return ctx.Err() and clients to receive HTTP 500.
 	ch := s.sf.DoChan(key, func() (interface{}, error) {
 		loadCtx, cancel := context.WithTimeout(s.serverCtx, s.loadTimeout)
 		defer cancel()
