@@ -470,7 +470,7 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 		podTemplate.Spec.Containers[utils.RayContainerIndex].Ports = append(podTemplate.Spec.Containers[utils.RayContainerIndex].Ports, metricsPort)
 	}
 
-	// Use the headGroupSpec to determine whether the RestartPolicy should be Never or not, since the head pod is the one that runs the autoscaler.
+	// Use the RayVersion and autoscaler version to determine whether the RestartPolicy should be Never or not, since the head pod is the one that runs the autoscaler.
 	// The error is ignored here because the function will return false if there's an error parsing the version.
 	// For example, if rayVersion is empty or unparseable, it considers the feature is not valid.
 	autoscalerRestartValid, _ := utils.IsRayVersionAtLeast(instance.Spec.RayVersion, utils.MinAutoscalerRestartValidVersion)
