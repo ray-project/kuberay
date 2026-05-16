@@ -480,12 +480,14 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 	// Use the RayVersion and autoscaler version to determine whether the RestartPolicy should be Never or not, since the head pod is the one that runs the autoscaler.
 	// The error is ignored here because the function will return false if there's an error parsing the version.
 	// For example, if rayVersion is empty or unparseable, it considers the feature is not valid.
-	autoscalerRestartValid, err := utils.IsRayVersionAtLeast(instance.Spec.RayVersion, utils.MinAutoscalerRestartValidVersion)
-	if err != nil {
-		log.Info("Parsing ray version failed, fallback the decision of restart policy.", "rayVersion", instance.Spec.RayVersion, "error", err)
-	}
-	if !autoscalerRestartValid && utils.IsAutoscalingEnabled(&instance.Spec) && utils.IsAutoscalingV2Enabled(&instance.Spec) {
-		podTemplate.Spec.RestartPolicy = corev1.RestartPolicyNever
+
+	if utils.IsAutoscalingEnabled(&instance.Spec) && utils.IsAutoscalingV2Enabled(&instance.Spec) {
+		if autoscalerRestartValid, err := utils.IsRayVersionAtLeast(instance.Spec.RayVersion, utils.MinAutoscalerRestartValidVersion); !autoscalerRestartValid {
+			if err != nil {
+				log.Info("Parsing ray version failed, fallback the decision of restart policy.", "rayVersion", instance.Spec.RayVersion, "error", err)
+			}
+			podTemplate.Spec.RestartPolicy = corev1.RestartPolicyNever
+		}
 	}
 
 	if utils.IsAuthEnabled(&instance.Spec) {
