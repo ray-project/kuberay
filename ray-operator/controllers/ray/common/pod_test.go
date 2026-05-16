@@ -751,6 +751,22 @@ func TestBuildAutoscalerContainer(t *testing.T) {
 			"Default Args should match KUBERAY_GEN_AUTOSCALER_START_CMD so they are consistent")
 	})
 
+	t.Run("AutoscalerOptions.Command override replaces command", func(t *testing.T) {
+		container := BuildAutoscalerContainer(autoscalerImage)
+		customCMD := []string{"/bin/bash", "-lc", "--"}
+		mergeAutoscalerOverrides(&container, &rayv1.AutoscalerOptions{
+			Command: customCMD,
+		})
+
+		// Args must reflect the override.
+		assert.Equal(t, customCMD, container.Command)
+
+		// KUBERAY_GEN_AUTOSCALER_START_CMD must still hold the original generated command.
+		env := getEnvVar(container, utils.KUBERAY_GEN_AUTOSCALER_START_CMD)
+		require.NotNil(t, env)
+		assert.Equal(t, expectedCmd, env.Value)
+	})
+
 	t.Run("AutoscalerOptions.Args override replaces Args but not KUBERAY_GEN_AUTOSCALER_START_CMD", func(t *testing.T) {
 		container := BuildAutoscalerContainer(autoscalerImage)
 		customArgs := []string{"ulimit -n 65536; $KUBERAY_GEN_AUTOSCALER_START_CMD"}

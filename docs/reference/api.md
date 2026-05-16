@@ -75,7 +75,8 @@ _Appears in:_
 | `env` _[EnvVar](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#envvar-v1-core) array_ | Optional list of environment variables to set in the autoscaler container. |  |  |
 | `envFrom` _[EnvFromSource](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#envfromsource-v1-core) array_ | Optional list of sources to populate environment variables in the autoscaler container. |  |  |
 | `volumeMounts` _[VolumeMount](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#volumemount-v1-core) array_ | Optional list of volumeMounts.  This is needed for enabling TLS for the autoscaler container. |  |  |
-| `args` _string array_ | Optional to overwrite the default command of the autoscaler container. It works similar to KUBERAY_GEN_RAY_START_CMD. |  |  |
+| `command` _string array_ | Optional list overwrite the default command of the autoscaler container. It works similar to KUBERAY_GEN_RAY_START_CMD. |  |  |
+| `args` _string array_ | Optional to overwrite the default args of the autoscaler container. It works similar to KUBERAY_GEN_RAY_START_CMD. |  |  |
 
 
 #### AutoscalerVersion

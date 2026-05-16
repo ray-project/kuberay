@@ -44,7 +44,9 @@ type AutoscalerOptionsApplyConfiguration struct {
 	EnvFrom []corev1.EnvFromSource `json:"envFrom,omitempty"`
 	// Optional list of volumeMounts.  This is needed for enabling TLS for the autoscaler container.
 	VolumeMounts []corev1.VolumeMount `json:"volumeMounts,omitempty"`
-	// Optional to overwrite the default command of the autoscaler container. It works similar to KUBERAY_GEN_RAY_START_CMD.
+	// Optional list overwrite the default command of the autoscaler container. It works similar to KUBERAY_GEN_RAY_START_CMD.
+	Command []string `json:"command,omitempty"`
+	// Optional to overwrite the default args of the autoscaler container. It works similar to KUBERAY_GEN_RAY_START_CMD.
 	Args []string `json:"args,omitempty"`
 }
 
@@ -136,6 +138,16 @@ func (b *AutoscalerOptionsApplyConfiguration) WithEnvFrom(values ...corev1.EnvFr
 func (b *AutoscalerOptionsApplyConfiguration) WithVolumeMounts(values ...corev1.VolumeMount) *AutoscalerOptionsApplyConfiguration {
 	for i := range values {
 		b.VolumeMounts = append(b.VolumeMounts, values[i])
+	}
+	return b
+}
+
+// WithCommand adds the given value to the Command field in the declarative configuration
+// and returns the receiver, so that objects can be build by chaining "With" function invocations.
+// If called multiple times, values provided by each call will be appended to the Command field.
+func (b *AutoscalerOptionsApplyConfiguration) WithCommand(values ...string) *AutoscalerOptionsApplyConfiguration {
+	for i := range values {
+		b.Command = append(b.Command, values[i])
 	}
 	return b
 }

@@ -80,6 +80,10 @@ spec:
                     items:
                       type: string
                     type: array
+                  command:
+                    items:
+                      type: string
+                    type: array
                   env:
                     items:
                       properties:
