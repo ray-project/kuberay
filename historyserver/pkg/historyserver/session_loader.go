@@ -111,8 +111,8 @@ func (s *SessionLoader) doLoadSession(ctx context.Context, info utils.ClusterInf
 		return true, nil
 
 	default:
-		// Unreachable under the SessionProcessor contract; defensive guard against
-		// future SessionStatus additions.
+		// The zero-value guard prevents an uninitialized status from being silently
+		// treated as Live or Processed.
 		return false, fmt.Errorf("unexpected session status %v", status)
 	}
 }

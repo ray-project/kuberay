@@ -155,6 +155,26 @@ func TestLoadSession_LiveAndProcessed(t *testing.T) {
 	}
 }
 
+// TestLoadSession_ZeroValueStatus_DoesNotSilentlyMatchLive verifies the zero-value
+// SessionStatus (SessionStatusUnknown) surfaces an error.
+func TestLoadSession_ZeroValueStatus_DoesNotSilentlyMatchLive(t *testing.T) {
+	fp := &fakeProcessor{
+		fn: func(_ context.Context, _ utils.ClusterInfo) (SessionStatus, error) {
+			var zero SessionStatus // SessionStatusUnknown
+			return zero, nil
+		},
+	}
+	sessionLoader := NewSessionLoader(fp, context.Background(), DefaultSessionProcessTimeout)
+
+	live, err := sessionLoader.LoadSession(context.Background(), testEnterClusterInfo())
+	if err == nil {
+		t.Fatalf("expected error from zero-value status, got nil (live=%v)", live)
+	}
+	if live {
+		t.Fatalf("zero-value status must not produce live=true (got live=%v, err=%v)", live, err)
+	}
+}
+
 // TestLoadSession_FastPath_SkipsSingleflight verifies the fast-path:
 // once a session is loaded, repeat LoadSession calls must not invoke processor again.
 func TestLoadSession_FastPath_SkipsSingleflight(t *testing.T) {

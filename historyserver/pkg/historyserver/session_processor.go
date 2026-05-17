@@ -20,9 +20,11 @@ import (
 type SessionStatus int
 
 const (
+	// SessionStatusUnknown is the zero value, reserved as a defensive guard.
+	SessionStatusUnknown SessionStatus = iota
 	// SessionStatusLive means the RayCluster CR is still present and the
 	// session is intentionally skipped.
-	SessionStatusLive SessionStatus = iota
+	SessionStatusLive
 	// SessionStatusProcessed means events were ingested into EventHandler's
 	// in-memory state.
 	SessionStatusProcessed
