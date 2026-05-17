@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	. "github.com/onsi/gomega"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
@@ -99,11 +100,12 @@ func TestRayServiceSuspendResume(t *testing.T) {
 	}, TestTimeoutShort).Should(Succeed())
 }
 
-// TestRayServiceSuspendAtomic verifies that once the Suspending state has been
-// committed to status, deletion runs to completion even if Spec.Suspend is
-// flipped back to false mid-way. The RayService is expected to pass through
-// the Suspended condition before exiting suspension and recreating its owned
-// resources.
+// TestRayServiceSuspendAtomic verifies that once Suspending has been committed
+// to status, deletion runs to completion even if Spec.Suspend is flipped back
+// to false mid-way. The atomicity is proven by recording the original
+// RayCluster name and asserting it is gone and a *different* RayCluster is
+// active afterwards — this avoids depending on catching the brief window
+// where the Suspended=True condition is observable.
 func TestRayServiceSuspendAtomic(t *testing.T) {
 	test := With(t)
 	g := NewWithT(t)
@@ -119,14 +121,17 @@ func TestRayServiceSuspendAtomic(t *testing.T) {
 	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutMedium).
 		Should(WithTransform(IsRayServiceReady, BeTrue()))
 
-	LogWithTimestamp(test.T(), "Setting Spec.Suspend=true to enter Suspending")
 	rayService, err = GetRayService(test, namespace.Name, rayServiceName)
 	g.Expect(err).NotTo(HaveOccurred())
+	originalClusterName := rayService.Status.ActiveServiceStatus.RayClusterName
+	g.Expect(originalClusterName).NotTo(BeEmpty())
+
+	LogWithTimestamp(test.T(), "Setting Spec.Suspend=true to enter Suspending")
 	rayService.Spec.Suspend = true
 	_, err = test.Client().Ray().RayV1().RayServices(namespace.Name).Update(test.Ctx(), rayService, metav1.UpdateOptions{})
 	g.Expect(err).NotTo(HaveOccurred())
 
-	LogWithTimestamp(test.T(), "Waiting for the Suspending condition to be True")
+	LogWithTimestamp(test.T(), "Waiting for the Suspending condition to be True so the suspend operation is in flight")
 	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutShort).
 		Should(WithTransform(IsRayServiceSuspending, BeTrue()))
 
@@ -137,15 +142,19 @@ func TestRayServiceSuspendAtomic(t *testing.T) {
 	_, err = test.Client().Ray().RayV1().RayServices(namespace.Name).Update(test.Ctx(), rayService, metav1.UpdateOptions{})
 	g.Expect(err).NotTo(HaveOccurred())
 
-	LogWithTimestamp(test.T(), "Suspend must run to completion: expect Suspended=True to be observed despite Spec.Suspend=false")
-	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutMedium).
-		Should(WithTransform(IsRayServiceSuspended, BeTrue()))
+	LogWithTimestamp(test.T(), "Original RayCluster %s must be deleted (atomic completion)", originalClusterName)
+	g.Eventually(func() error {
+		_, err := GetRayCluster(test, namespace.Name, originalClusterName)
+		return err
+	}, TestTimeoutMedium).Should(WithTransform(errors.IsNotFound, BeTrue()))
 
-	LogWithTimestamp(test.T(), "After completing suspension, RayService should exit Suspended and become Ready again")
-	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutMedium).
-		Should(WithTransform(IsRayServiceSuspended, BeFalse()))
+	LogWithTimestamp(test.T(), "RayService should become Ready again, backed by a different RayCluster")
 	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutMedium).
 		Should(WithTransform(IsRayServiceReady, BeTrue()))
+	rayService, err = GetRayService(test, namespace.Name, rayServiceName)
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(rayService.Status.ActiveServiceStatus.RayClusterName).NotTo(BeEmpty())
+	g.Expect(rayService.Status.ActiveServiceStatus.RayClusterName).NotTo(Equal(originalClusterName))
 }
 
 // TestRayServiceCreatedSuspended verifies that a RayService created with
