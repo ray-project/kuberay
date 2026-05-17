@@ -89,8 +89,13 @@ func TestRayServiceSuspendResume(t *testing.T) {
 	LogWithTimestamp(test.T(), "Sending requests to verify the resumed RayService serves traffic again")
 	rayService, err = GetRayService(test, namespace.Name, rayServiceName)
 	g.Expect(err).NotTo(HaveOccurred())
+	// --connect-timeout/--max-time keep each curl attempt short so Eventually
+	// can actually retry — without them a single attempt can hang on TCP
+	// retransmits longer than TestTimeoutShort, fooling Eventually into
+	// reporting a timeout after one attempt.
 	curlCmd := []string{
-		"curl", "-sS", "-X", "POST", "-H", "Content-Type: application/json",
+		"curl", "-sS", "--connect-timeout", "3", "--max-time", "5",
+		"-X", "POST", "-H", "Content-Type: application/json",
 		fmt.Sprintf("%s-serve-svc.%s.svc.cluster.local:8000/fruit", rayService.Name, rayService.Namespace),
 		"-d", `["MANGO", 2]`,
 	}
