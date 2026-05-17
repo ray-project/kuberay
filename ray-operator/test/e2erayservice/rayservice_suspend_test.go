@@ -5,30 +5,12 @@ import (
 	"testing"
 
 	. "github.com/onsi/gomega"
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	rayv1ac "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/ray/v1"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
-
-// curlRayServiceFruitWithError sends the fruit-app request and returns the
-// stdout + error so Eventually can retry around the brief window after resume
-// when the K8s Service endpoint hasn't fully wired up yet.
-func curlRayServiceFruitWithError(t Test, rayService *rayv1.RayService, curlPod *corev1.Pod) (string, error) {
-	cmd := []string{
-		"curl",
-		"-sS",
-		"-X", "POST",
-		"-H", "Content-Type: application/json",
-		fmt.Sprintf("%s-serve-svc.%s.svc.cluster.local:8000/fruit", rayService.Name, rayService.Namespace),
-		"-d", `["MANGO", 2]`,
-	}
-	stdout, _, err := ExecPodCmdWithError(t, curlPod, "curl-container", cmd)
-	return stdout.String(), err
-}
 
 // TestRayServiceSuspendResume covers the happy path: set Spec.Suspend=true on a
 // Running RayService, observe that all owned resources are deleted and the
@@ -105,10 +87,15 @@ func TestRayServiceSuspendResume(t *testing.T) {
 	LogWithTimestamp(test.T(), "Sending requests to verify the resumed RayService serves traffic again")
 	rayService, err = GetRayService(test, namespace.Name, rayServiceName)
 	g.Expect(err).NotTo(HaveOccurred())
+	curlCmd := []string{
+		"curl", "-sS", "-X", "POST", "-H", "Content-Type: application/json",
+		fmt.Sprintf("%s-serve-svc.%s.svc.cluster.local:8000/fruit", rayService.Name, rayService.Namespace),
+		"-d", `["MANGO", 2]`,
+	}
 	g.Eventually(func(gg Gomega) {
-		out, err := curlRayServiceFruitWithError(test, rayService, curlPod)
+		stdout, _, err := ExecPodCmdWithError(test, curlPod, "curl-container", curlCmd)
 		gg.Expect(err).NotTo(HaveOccurred())
-		gg.Expect(out).To(Equal("6"))
+		gg.Expect(stdout.String()).To(Equal("6"))
 	}, TestTimeoutShort).Should(Succeed())
 }
 
