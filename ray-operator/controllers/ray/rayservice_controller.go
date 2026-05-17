@@ -1488,10 +1488,6 @@ func constructRayClusterForRayService(rayService *rayv1.RayService, rayClusterNa
 	// set the KubeRay version used to create the RayCluster
 	rayClusterAnnotations[utils.KubeRayVersion] = utils.KUBERAY_VERSION
 
-	// Suspend is propagated from the RayService to the RayCluster only at
-	// creation time; after the RayCluster exists, its Suspend is delegated to
-	// Kueue. See rayClusterSpecForHashing and modifyRayCluster for the
-	// counterpart that prevents Suspend from being overwritten on update.
 	clusterSpec := rayService.Spec.RayClusterSpec.DeepCopy()
 	isPendingClusterForUpgrade := utils.IsIncrementalUpgradeEnabled(&rayService.Spec) &&
 		rayService.Status.ActiveServiceStatus.RayClusterName != ""
