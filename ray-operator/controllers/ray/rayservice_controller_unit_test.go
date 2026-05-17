@@ -2762,12 +2762,11 @@ func TestReconcileRollbackState(t *testing.T) {
 	}
 }
 
-// TestShouldUpdateCluster_SuspendFlip covers ray-project/kuberay#4686: when Kueue
-// toggles RayService.Spec.RayClusterSpec.Suspend, the existing RayCluster must be
-// updated in-place. Previously shouldUpdateCluster returned false because the
-// cluster hash annotation encodes the old Suspend value, leaving the cluster
-// stuck suspended with no head pod.
-func TestShouldUpdateCluster_SuspendFlip(t *testing.T) {
+// TestShouldUpdateCluster_SuspendNotPropagated asserts that toggling
+// RayService.Spec.RayClusterSpec.Suspend after the RayCluster exists must not
+// trigger an update of the existing RayCluster, regardless of the cluster's
+// own Suspend value. (Suspend is only applied at creation time.)
+func TestShouldUpdateCluster_SuspendNotPropagated(t *testing.T) {
 	namespace := "test-namespace"
 
 	newRayService := func(suspend *bool) *rayv1.RayService {
@@ -2786,14 +2785,16 @@ func TestShouldUpdateCluster_SuspendFlip(t *testing.T) {
 	}
 
 	// newClusterFrom mirrors the annotation layout produced by
-	// constructRayClusterForRayService so the hash reflects the cluster's
-	// actual spec (including its Suspend value).
+	// constructRayClusterForRayService: the stored hash is computed from a
+	// Suspend-cleared copy of the RayService spec.
 	newClusterFrom := func(t *testing.T, service *rayv1.RayService, suspend *bool) *rayv1.RayCluster {
 		t.Helper()
-		clusterSpec := service.Spec.RayClusterSpec.DeepCopy()
-		clusterSpec.Suspend = suspend
-		hash, err := utils.GenerateHashWithoutReplicasAndWorkersToDelete(*clusterSpec)
+		hashSpec := service.Spec.RayClusterSpec.DeepCopy()
+		hashSpec.Suspend = nil
+		hash, err := utils.GenerateHashWithoutReplicasAndWorkersToDelete(*hashSpec)
 		require.NoError(t, err)
+		clusterSpec := hashSpec.DeepCopy()
+		clusterSpec.Suspend = suspend
 		return &rayv1.RayCluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-cluster",
@@ -2813,23 +2814,97 @@ func TestShouldUpdateCluster_SuspendFlip(t *testing.T) {
 		serviceSuspend  *bool
 		clusterSuspend  *bool
 		isActiveCluster bool
-		expect          bool
 	}{
-		{"pending unsuspended by Kueue: true -> false", new(false), new(true), false, true},
-		{"pending suspended by Kueue: false -> true", new(true), new(false), false, true},
-		{"active unsuspended by Kueue: true -> false", new(false), new(true), true, true},
-		{"active suspended by Kueue: false -> true", new(true), new(false), true, true},
-		{"no change, both nil", nil, nil, false, false},
-		{"no change, both false", new(false), new(false), false, false},
-		{"no change, both true", new(true), new(true), false, false},
-		{"nil vs false treated equal", nil, new(false), false, false},
+		{"pending, service true vs cluster false", new(true), new(false), false},
+		{"pending, service false vs cluster true", new(false), new(true), false},
+		{"active, service true vs cluster false", new(true), new(false), true},
+		{"active, service false vs cluster true", new(false), new(true), true},
+		{"both nil", nil, nil, false},
+		{"both false", new(false), new(false), false},
+		{"both true", new(true), new(true), false},
+		{"nil vs false", nil, new(false), false},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			service := newRayService(tt.serviceSuspend)
 			cluster := newClusterFrom(t, service, tt.clusterSuspend)
-			assert.Equal(t, tt.expect, shouldUpdateCluster(service, cluster, tt.isActiveCluster))
+			assert.False(t, shouldUpdateCluster(service, cluster, tt.isActiveCluster))
+		})
+	}
+}
+
+// TestConstructRayClusterForRayService_SuspendPropagatedAtCreation asserts
+// that Suspend on the RayService is copied onto the RayCluster at creation
+// time. Together with TestModifyRayCluster_SuspendPreserved this pins down
+// the create-only semantics.
+func TestConstructRayClusterForRayService_SuspendPropagatedAtCreation(t *testing.T) {
+	scheme := runtime.NewScheme()
+	require.NoError(t, rayv1.AddToScheme(scheme))
+
+	newService := func(suspend *bool) *rayv1.RayService {
+		return &rayv1.RayService{
+			ObjectMeta: metav1.ObjectMeta{Name: "test-service", Namespace: "test-namespace"},
+			Spec: rayv1.RayServiceSpec{
+				RayClusterSpec: rayv1.RayClusterSpec{
+					RayVersion: "2.9.0",
+					Suspend:    suspend,
+				},
+			},
+		}
+	}
+
+	tests := []struct {
+		name           string
+		serviceSuspend *bool
+		expectSuspend  *bool
+	}{
+		{"suspend true", ptr.To(true), ptr.To(true)},
+		{"suspend false", ptr.To(false), ptr.To(false)},
+		{"suspend nil", nil, nil},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cluster, err := constructRayClusterForRayService(newService(tt.serviceSuspend), "test-cluster", scheme)
+			require.NoError(t, err)
+			assert.Equal(t, tt.expectSuspend, cluster.Spec.Suspend)
+		})
+	}
+}
+
+// TestModifyRayCluster_SuspendPreserved asserts that modifyRayCluster does not
+// overwrite the existing RayCluster's Suspend value with the goal spec's
+// Suspend. Suspend is propagated only at creation time, so external owners
+// (e.g. Kueue) of Suspend on the RayCluster are not fought during updates.
+func TestModifyRayCluster_SuspendPreserved(t *testing.T) {
+	tests := []struct {
+		name            string
+		currentSuspend  *bool
+		goalSuspend     *bool
+		expectedSuspend *bool
+	}{
+		{"current nil, goal true preserves nil", nil, ptr.To(true), nil},
+		{"current false, goal true preserves false", ptr.To(false), ptr.To(true), ptr.To(false)},
+		{"current true, goal false preserves true", ptr.To(true), ptr.To(false), ptr.To(true)},
+		{"current true, goal nil preserves true", ptr.To(true), nil, ptr.To(true)},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			current := &rayv1.RayCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "c", Namespace: "ns"},
+				Spec:       rayv1.RayClusterSpec{RayVersion: "2.9.0", Suspend: tt.currentSuspend},
+			}
+			goal := &rayv1.RayCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "c", Namespace: "ns"},
+				Spec:       rayv1.RayClusterSpec{RayVersion: "2.10.0", Suspend: tt.goalSuspend},
+			}
+
+			modifyRayCluster(context.Background(), current, goal)
+			assert.Equal(t, tt.expectedSuspend, current.Spec.Suspend)
+			// Non-Suspend fields should still be overwritten by the goal.
+			assert.Equal(t, "2.10.0", current.Spec.RayVersion)
 		})
 	}
 }

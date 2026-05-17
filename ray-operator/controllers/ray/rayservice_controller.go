@@ -1140,14 +1140,6 @@ func shouldUpdateCluster(rayServiceInstance *rayv1.RayService, cluster *rayv1.Ra
 		}
 	}
 
-	if ptr.Deref(rayServiceInstance.Spec.RayClusterSpec.Suspend, false) != ptr.Deref(cluster.Spec.Suspend, false) {
-		// Suspend toggles (e.g. from Kueue admitting or preempting the workload) must be
-		// applied in-place to the existing RayCluster. Otherwise the hash comparison below
-		// selects neither the update nor the new-cluster path, and the cluster stays
-		// suspended with no head pod (ray-project/kuberay#4686).
-		return true
-	}
-
 	if isClusterSpecHashEqual(rayServiceInstance, cluster, false) {
 		// The RayCluster spec matches the cluster spec in the RayService. No need to update the cluster.
 		return false
@@ -1160,9 +1152,10 @@ func shouldUpdateCluster(rayServiceInstance *rayv1.RayService, cluster *rayv1.Ra
 func isClusterSpecHashEqual(rayServiceInstance *rayv1.RayService, cluster *rayv1.RayCluster, partial bool) bool {
 	// If `partial` is true, only compare the first `len(cluster.Spec.WorkerGroupSpecs)` worker groups in the CR spec.
 	clusterHash := cluster.ObjectMeta.Annotations[utils.HashWithoutReplicasAndWorkersToDeleteKey]
+	goalClusterSpec := rayClusterSpecForHashing(rayServiceInstance)
 	goalClusterHash := ""
 	if !partial {
-		goalClusterHash, _ = utils.GenerateHashWithoutReplicasAndWorkersToDelete(rayServiceInstance.Spec.RayClusterSpec)
+		goalClusterHash, _ = utils.GenerateHashWithoutReplicasAndWorkersToDelete(*goalClusterSpec)
 	} else {
 		// If everything is identical except for the Replicas and WorkersToDelete of
 		// the existing workergroups, and one or more new workergroups are added at the end, then update the cluster.
@@ -1170,11 +1163,10 @@ func isClusterSpecHashEqual(rayServiceInstance *rayv1.RayService, cluster *rayv1
 		if err != nil {
 			return true
 		}
-		goalNumWorkerGroups := len(rayServiceInstance.Spec.RayClusterSpec.WorkerGroupSpecs)
+		goalNumWorkerGroups := len(goalClusterSpec.WorkerGroupSpecs)
 		if goalNumWorkerGroups >= clusterNumWorkerGroups {
 
 			// Remove the new workergroup(s) from the end before calculating the hash.
-			goalClusterSpec := rayServiceInstance.Spec.RayClusterSpec.DeepCopy()
 			goalClusterSpec.WorkerGroupSpecs = goalClusterSpec.WorkerGroupSpecs[:clusterNumWorkerGroups]
 
 			// Generate the hash of the old worker group specs.
@@ -1235,8 +1227,14 @@ func modifyRayCluster(ctx context.Context, currentCluster, goalCluster *rayv1.Ra
 	}
 	logger.Info("updateRayClusterInstance", "Name", goalCluster.Name, "Namespace", goalCluster.Namespace)
 
-	// Update the fetched RayCluster with new changes
+	// Update the fetched RayCluster with new changes. Suspend is propagated
+	// from the RayService to the RayCluster only at creation time; afterwards
+	// the RayCluster's Suspend is delegated to Kueue, so we preserve the
+	// existing cluster's Suspend here instead of letting the goal spec
+	// overwrite it.
+	existingSuspend := currentCluster.Spec.Suspend
 	currentCluster.Spec = goalCluster.Spec
+	currentCluster.Spec.Suspend = existingSuspend
 
 	// Update the labels and annotations
 	currentCluster.Labels = goalCluster.Labels
@@ -1262,6 +1260,20 @@ func (r *RayServiceReconciler) createRayClusterInstance(ctx context.Context, ray
 	return rayClusterInstance, nil
 }
 
+// rayClusterSpecForHashing returns a copy of the RayService's RayClusterSpec
+// to use for hash comparisons. Fields that should not trigger reconciliation
+// of the underlying RayCluster are cleared here. Suspend is excluded because
+// the RayService controller propagates Suspend to the RayCluster only at
+// creation time; once the RayCluster exists, Suspend is delegated to Kueue
+// (or whichever external controller owns the RayCluster's queueing), and
+// later changes to RayService.Spec.RayClusterSpec.Suspend must not trigger
+// an in-place update or a new cluster preparation.
+func rayClusterSpecForHashing(rayService *rayv1.RayService) *rayv1.RayClusterSpec {
+	spec := rayService.Spec.RayClusterSpec.DeepCopy()
+	spec.Suspend = nil
+	return spec
+}
+
 func constructRayClusterForRayService(rayService *rayv1.RayService, rayClusterName string, scheme *runtime.Scheme) (*rayv1.RayCluster, error) {
 	var err error
 	rayClusterLabel := make(map[string]string)
@@ -1271,7 +1283,7 @@ func constructRayClusterForRayService(rayService *rayv1.RayService, rayClusterNa
 
 	rayClusterAnnotations := make(map[string]string)
 	maps.Copy(rayClusterAnnotations, rayService.Annotations)
-	rayClusterAnnotations[utils.HashWithoutReplicasAndWorkersToDeleteKey], err = utils.GenerateHashWithoutReplicasAndWorkersToDelete(rayService.Spec.RayClusterSpec)
+	rayClusterAnnotations[utils.HashWithoutReplicasAndWorkersToDeleteKey], err = utils.GenerateHashWithoutReplicasAndWorkersToDelete(*rayClusterSpecForHashing(rayService))
 	if err != nil {
 		return nil, err
 	}
@@ -1280,6 +1292,10 @@ func constructRayClusterForRayService(rayService *rayv1.RayService, rayClusterNa
 	// set the KubeRay version used to create the RayCluster
 	rayClusterAnnotations[utils.KubeRayVersion] = utils.KUBERAY_VERSION
 
+	// Suspend is propagated from the RayService to the RayCluster only at
+	// creation time; after the RayCluster exists, its Suspend is delegated to
+	// Kueue. See rayClusterSpecForHashing and modifyRayCluster for the
+	// counterpart that prevents Suspend from being overwritten on update.
 	clusterSpec := rayService.Spec.RayClusterSpec.DeepCopy()
 	isPendingClusterForUpgrade := utils.IsIncrementalUpgradeEnabled(&rayService.Spec) &&
 		rayService.Status.ActiveServiceStatus.RayClusterName != ""
@@ -2091,7 +2107,7 @@ func shouldCompleteIncrementalRollback(
 func (r *RayServiceReconciler) reconcileRollbackState(ctx context.Context, rayServiceInstance *rayv1.RayService, activeCluster, pendingCluster *rayv1.RayCluster) error {
 	logger := ctrl.LoggerFrom(ctx)
 
-	targetHash, err := utils.GenerateHashWithoutReplicasAndWorkersToDelete(rayServiceInstance.Spec.RayClusterSpec)
+	targetHash, err := utils.GenerateHashWithoutReplicasAndWorkersToDelete(*rayClusterSpecForHashing(rayServiceInstance))
 	if err != nil {
 		return fmt.Errorf("failed to generate hash for goal cluster spec: %w", err)
 	}
