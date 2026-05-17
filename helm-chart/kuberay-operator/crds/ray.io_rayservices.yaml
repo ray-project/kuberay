@@ -8643,6 +8643,16 @@ spec:
                               true'
                         maxItems: 16
                         type: array
+                        x-kubernetes-list-type: atomic
+                        x-kubernetes-validations:
+                        - message: IPAddress values must be unique
+                          rule: 'self.all(a1, a1.type == ''IPAddress'' && has(a1.value)
+                            ? self.exists_one(a2, a2.type == a1.type && has(a2.value)
+                            && a2.value == a1.value) : true )'
+                        - message: Hostname values must be unique
+                          rule: 'self.all(a1, a1.type == ''Hostname''  && has(a1.value)
+                            ? self.exists_one(a2, a2.type == a1.type && has(a2.value)
+                            && a2.value == a1.value) : true )'
                       gatewayClassName:
                         type: string
                       intervalSeconds:
