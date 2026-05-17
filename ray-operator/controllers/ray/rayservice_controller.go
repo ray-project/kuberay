@@ -428,12 +428,16 @@ func (r *RayServiceReconciler) handleSuspend(ctx context.Context, rayServiceInst
 		return true, ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, nil
 	}
 
-	// All resources deleted: transition to Suspended.
+	// All resources deleted: transition to Suspended. Requeue so that the
+	// next reconcile observes Spec.Suspend; this matters when the user
+	// flipped Spec.Suspend back to false mid-suspend (atomic completion put
+	// us here despite Spec.Suspend=false), since the status-only update
+	// below would not otherwise wake the controller up.
 	logger.Info("All RayService-owned resources deleted; transitioning to Suspended")
 	meta.RemoveStatusCondition(&rayServiceInstance.Status.Conditions, string(rayv1.RayServiceSuspending))
 	setCondition(rayServiceInstance, rayv1.RayServiceSuspended, metav1.ConditionTrue, rayv1.SuspendComplete, "All owned resources have been deleted.")
 	setCondition(rayServiceInstance, rayv1.RayServiceReady, metav1.ConditionFalse, rayv1.SuspendComplete, "RayService is suspended.")
-	return true, ctrl.Result{}, nil
+	return true, ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, nil
 }
 
 // deleteRayServiceOwnedResources deletes every Kubernetes resource that the
