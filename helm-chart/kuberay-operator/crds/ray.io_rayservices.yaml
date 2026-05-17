@@ -8618,6 +8618,8 @@ spec:
               serviceUnhealthySecondThreshold:
                 format: int32
                 type: integer
+              suspend:
+                type: boolean
               upgradeStrategy:
                 properties:
                   clusterUpgradeOptions:
