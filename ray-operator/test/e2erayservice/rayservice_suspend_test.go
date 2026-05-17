@@ -3,6 +3,7 @@ package e2erayservice
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -100,18 +101,20 @@ func TestRayServiceSuspendResume(t *testing.T) {
 	}, TestTimeoutShort).Should(Succeed())
 }
 
-// TestRayServiceSuspendAtomic verifies that once Suspending has been committed
-// to status, deletion runs to completion even if Spec.Suspend is flipped back
-// to false mid-way. The atomicity is proven by recording the original
-// RayCluster name and asserting it is gone and a *different* RayCluster is
-// active afterwards — this avoids depending on catching the brief window
-// where the Suspended=True condition is observable.
+// TestRayServiceSuspendAtomic verifies that once the Suspending condition has
+// been committed, the suspend operation completes atomically regardless of
+// subsequent flips on Spec.Suspend. The pattern mirrors the RayJob atomic
+// suspend test: we pin the underlying RayCluster with a synthetic finalizer
+// so deletion can't complete, then flip Spec.Suspend back and forth and
+// assert via Consistently that Suspending stays True throughout. After the
+// finalizer is removed, the deletion drains and the RayService comes back up.
 func TestRayServiceSuspendAtomic(t *testing.T) {
 	test := With(t)
 	g := NewWithT(t)
 
 	namespace := test.NewTestNamespace()
 	rayServiceName := "rayservice-suspend-atomic"
+	const deletionBlocker = "ray.io/test-suspend-block"
 
 	rayServiceAC := rayv1ac.RayService(rayServiceName, namespace.Name).WithSpec(RayServiceSampleYamlApplyConfiguration())
 	rayService, err := test.Client().Ray().RayV1().RayServices(namespace.Name).Apply(test.Ctx(), rayServiceAC, TestApplyOptions)
@@ -126,23 +129,59 @@ func TestRayServiceSuspendAtomic(t *testing.T) {
 	originalClusterName := rayService.Status.ActiveServiceStatus.RayClusterName
 	g.Expect(originalClusterName).NotTo(BeEmpty())
 
+	LogWithTimestamp(test.T(), "Adding a synthetic finalizer to RayCluster %s so deletion blocks", originalClusterName)
+	rayCluster, err := GetRayCluster(test, namespace.Name, originalClusterName)
+	g.Expect(err).NotTo(HaveOccurred())
+	rayCluster.Finalizers = append(rayCluster.Finalizers, deletionBlocker)
+	_, err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Update(test.Ctx(), rayCluster, metav1.UpdateOptions{})
+	g.Expect(err).NotTo(HaveOccurred())
+
 	LogWithTimestamp(test.T(), "Setting Spec.Suspend=true to enter Suspending")
 	rayService.Spec.Suspend = true
 	_, err = test.Client().Ray().RayV1().RayServices(namespace.Name).Update(test.Ctx(), rayService, metav1.UpdateOptions{})
 	g.Expect(err).NotTo(HaveOccurred())
 
-	LogWithTimestamp(test.T(), "Waiting for the Suspending condition to be True so the suspend operation is in flight")
+	LogWithTimestamp(test.T(), "Waiting for the Suspending condition to be True")
 	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutShort).
 		Should(WithTransform(IsRayServiceSuspending, BeTrue()))
 
-	LogWithTimestamp(test.T(), "Flipping Spec.Suspend back to false while suspend is in progress")
+	// Flipping Spec.Suspend back to false while a suspend is in flight must
+	// not unwind the Suspending state — the deletion has to complete first.
+	LogWithTimestamp(test.T(), "Flipping Spec.Suspend=false; Suspending must stay True")
+	rayService, err = GetRayService(test, namespace.Name, rayServiceName)
+	g.Expect(err).NotTo(HaveOccurred())
+	rayService.Spec.Suspend = false
+	_, err = test.Client().Ray().RayV1().RayServices(namespace.Name).Update(test.Ctx(), rayService, metav1.UpdateOptions{})
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Consistently(RayService(test, rayService.Namespace, rayService.Name), 5*time.Second, 500*time.Millisecond).
+		Should(WithTransform(IsRayServiceSuspending, BeTrue()))
+
+	// Flipping back to true is also a no-op — Suspending is already in flight.
+	LogWithTimestamp(test.T(), "Flipping Spec.Suspend=true; Suspending must stay True")
+	rayService, err = GetRayService(test, namespace.Name, rayServiceName)
+	g.Expect(err).NotTo(HaveOccurred())
+	rayService.Spec.Suspend = true
+	_, err = test.Client().Ray().RayV1().RayServices(namespace.Name).Update(test.Ctx(), rayService, metav1.UpdateOptions{})
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Consistently(RayService(test, rayService.Namespace, rayService.Name), 5*time.Second, 500*time.Millisecond).
+		Should(WithTransform(IsRayServiceSuspending, BeTrue()))
+
+	// Settle on Spec.Suspend=false so the controller resumes once the
+	// finalizer is removed and deletion finishes.
+	LogWithTimestamp(test.T(), "Settling on Spec.Suspend=false and removing the deletion-blocker finalizer")
 	rayService, err = GetRayService(test, namespace.Name, rayServiceName)
 	g.Expect(err).NotTo(HaveOccurred())
 	rayService.Spec.Suspend = false
 	_, err = test.Client().Ray().RayV1().RayServices(namespace.Name).Update(test.Ctx(), rayService, metav1.UpdateOptions{})
 	g.Expect(err).NotTo(HaveOccurred())
 
-	LogWithTimestamp(test.T(), "Original RayCluster %s must be deleted (atomic completion)", originalClusterName)
+	rayCluster, err = GetRayCluster(test, namespace.Name, originalClusterName)
+	g.Expect(err).NotTo(HaveOccurred())
+	rayCluster.Finalizers = nil
+	_, err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Update(test.Ctx(), rayCluster, metav1.UpdateOptions{})
+	g.Expect(err).NotTo(HaveOccurred())
+
+	LogWithTimestamp(test.T(), "Original RayCluster %s must be deleted after the finalizer is removed", originalClusterName)
 	g.Eventually(func() error {
 		_, err := GetRayCluster(test, namespace.Name, originalClusterName)
 		return err
