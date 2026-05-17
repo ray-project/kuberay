@@ -19,6 +19,11 @@ else
 endif
 # Kuberay API Server base URL to use in end to end tests
 E2E_API_SERVER_URL ?= http://localhost:31888
+# Export so `go test` subprocesses pick them up via os.Getenv. Without this,
+# the e2e helpers fall back to their hard-coded defaults and disagree with the
+# image preloaded into kind by `load-ray-test-image`.
+export E2E_API_SERVER_RAY_IMAGE
+export E2E_API_SERVER_URL
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (, $(shell go env GOBIN))
