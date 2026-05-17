@@ -170,9 +170,6 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 		return ctrl.Result{}, nil
 	}
 
-	// Handle Spec.Suspend. Once a suspend is in progress, complete it atomically
-	// even if Spec.Suspend is flipped back to false mid-way. handleSuspend
-	// only mutates Status; we persist the changes here in one Status().Update.
 	handled, result, err := r.handleSuspend(ctx, rayServiceInstance)
 	if updateErr := r.updateStatusIfChanged(ctx, originalRayServiceInstance, rayServiceInstance); updateErr != nil && err == nil {
 		err = updateErr
