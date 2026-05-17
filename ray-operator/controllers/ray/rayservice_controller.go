@@ -170,6 +170,20 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 		return ctrl.Result{}, nil
 	}
 
+	// Handle Spec.Suspend. Once a suspend is in progress, complete it atomically
+	// even if Spec.Suspend is flipped back to false mid-way. handleSuspend
+	// only mutates Status; we persist the changes here in one Status().Update.
+	handled, result, err := r.handleSuspend(ctx, rayServiceInstance)
+	if updateErr := r.updateStatusIfChanged(ctx, originalRayServiceInstance, rayServiceInstance); updateErr != nil && err == nil {
+		err = updateErr
+		if (result == ctrl.Result{}) {
+			result = ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}
+		}
+	}
+	if handled || err != nil {
+		return result, err
+	}
+
 	// If the RayService has timed out during initialization, skip the rest of the reconciliation.
 	// The service is in a terminal failure state - only cleanup (above) is needed.
 	// The user must delete and recreate the RayService to recover.
@@ -336,6 +350,187 @@ func validateRayService(ctx context.Context, rayServiceInstance *rayv1.RayServic
 		}
 	}
 	return "", nil
+}
+
+// handleSuspend implements the Spec.Suspend lifecycle. It mutates
+// rayServiceInstance.Status in-place; the caller persists the changes via a
+// single Status().Update.
+//
+// Returns (handled, result, err):
+//   - handled=true: handleSuspend has fully serviced this reconcile; the caller
+//     must persist status changes and return (result, err) without running the
+//     rest of the reconcile loop.
+//   - handled=false: the RayService is not (or no longer) suspended; the
+//     caller should continue with the rest of the reconcile loop, which will
+//     persist any staged status mutations at its own status-update site.
+//
+// State machine:
+//
+//	(no suspend)  --Spec.Suspend=true-->  Suspending  --owned resources deleted-->  Suspended  --Spec.Suspend=false-->  (no suspend)
+//
+// Atomicity comes from a persisted Suspending condition as the commit point.
+// The first reconcile that observes Spec.Suspend=true only stages the status
+// transition (Suspending=True + reset of ActiveServiceStatus,
+// PendingServiceStatus, NumServeEndpoints, ServiceStatus) in the same status
+// update; deletion runs on the next reconcile, once Suspending is durable. If
+// a later deletion attempt errors out or Spec.Suspend is flipped back to
+// false, Suspending stays True in storage and subsequent reconciles continue
+// the cleanup.
+func (r *RayServiceReconciler) handleSuspend(ctx context.Context, rayServiceInstance *rayv1.RayService) (bool, ctrl.Result, error) {
+	logger := ctrl.LoggerFrom(ctx)
+
+	isSuspending := meta.IsStatusConditionTrue(rayServiceInstance.Status.Conditions, string(rayv1.RayServiceSuspending))
+	isSuspended := meta.IsStatusConditionTrue(rayServiceInstance.Status.Conditions, string(rayv1.RayServiceSuspended))
+
+	// Case 1: already fully suspended.
+	if isSuspended {
+		if !rayServiceInstance.Spec.Suspend {
+			logger.Info("Spec.Suspend is false; exiting Suspended state and resuming reconcile")
+			meta.RemoveStatusCondition(&rayServiceInstance.Status.Conditions, string(rayv1.RayServiceSuspended))
+			return false, ctrl.Result{}, nil
+		}
+		// Stay suspended; nothing to reconcile.
+		return true, ctrl.Result{}, nil
+	}
+
+	// Case 2: Spec.Suspend just transitioned to true. Stage the status
+	// transition (Suspending=True + reset status fields) and return so the
+	// caller can persist it. Deletion runs on the next reconcile once
+	// Suspending is durable.
+	if !isSuspending {
+		if !rayServiceInstance.Spec.Suspend {
+			return false, ctrl.Result{}, nil
+		}
+		logger.Info("Spec.Suspend is true; committing transition to Suspending state")
+		setCondition(rayServiceInstance, rayv1.RayServiceSuspending, metav1.ConditionTrue, rayv1.SuspendRequested,
+			"Spec.Suspend is true; will delete RayClusters, Services, Gateway, and HTTPRoute owned by this RayService.")
+		setCondition(rayServiceInstance, rayv1.RayServiceReady, metav1.ConditionFalse, rayv1.SuspendInProgress, "RayService is suspending.")
+		meta.RemoveStatusCondition(&rayServiceInstance.Status.Conditions, string(rayv1.UpgradeInProgress))
+		meta.RemoveStatusCondition(&rayServiceInstance.Status.Conditions, string(rayv1.RollbackInProgress))
+		rayServiceInstance.Status.ActiveServiceStatus = rayv1.RayServiceStatus{}
+		rayServiceInstance.Status.PendingServiceStatus = rayv1.RayServiceStatus{}
+		rayServiceInstance.Status.NumServeEndpoints = 0
+		rayServiceInstance.Status.ServiceStatus = rayv1.NotRunning
+		return true, ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, nil
+	}
+
+	// Case 3: Suspending is committed in storage. Delete owned resources.
+	// Atomic: ignore Spec.Suspend here — once Suspending is persisted, the
+	// deletion always runs to completion.
+	allDeleted, err := r.deleteRayServiceOwnedResources(ctx, rayServiceInstance)
+	if err != nil {
+		return true, ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
+	}
+
+	if !allDeleted {
+		setCondition(rayServiceInstance, rayv1.RayServiceSuspending, metav1.ConditionTrue, rayv1.SuspendInProgress,
+			"Waiting for RayClusters, Services, Gateway, and HTTPRoute owned by this RayService to be deleted.")
+		return true, ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, nil
+	}
+
+	// All resources deleted: transition to Suspended.
+	logger.Info("All RayService-owned resources deleted; transitioning to Suspended")
+	meta.RemoveStatusCondition(&rayServiceInstance.Status.Conditions, string(rayv1.RayServiceSuspending))
+	setCondition(rayServiceInstance, rayv1.RayServiceSuspended, metav1.ConditionTrue, rayv1.SuspendComplete, "All owned resources have been deleted.")
+	setCondition(rayServiceInstance, rayv1.RayServiceReady, metav1.ConditionFalse, rayv1.SuspendComplete, "RayService is suspended.")
+	return true, ctrl.Result{}, nil
+}
+
+// deleteRayServiceOwnedResources deletes every Kubernetes resource that the
+// RayService controller owns: RayClusters, head/serve Services, Gateway and
+// HTTPRoute. Returns true when nothing remained to be deleted.
+func (r *RayServiceReconciler) deleteRayServiceOwnedResources(ctx context.Context, rayServiceInstance *rayv1.RayService) (bool, error) {
+	logger := ctrl.LoggerFrom(ctx)
+	allDeleted := true
+
+	// RayClusters.
+	rayClusterList := rayv1.RayClusterList{}
+	if err := r.List(ctx, &rayClusterList, common.RayServiceRayClustersAssociationOptions(rayServiceInstance).ToListOptions()...); err != nil {
+		return false, err
+	}
+	for i := range rayClusterList.Items {
+		cluster := &rayClusterList.Items[i]
+		allDeleted = false
+		if !cluster.DeletionTimestamp.IsZero() {
+			continue
+		}
+		logger.Info("Deleting RayCluster for suspend", "name", cluster.Name)
+		if err := r.Delete(ctx, cluster, client.PropagationPolicy(metav1.DeletePropagationBackground)); err != nil && !errors.IsNotFound(err) {
+			r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(utils.FailedToDeleteRayCluster),
+				"Failed to delete the RayCluster %s/%s during suspend: %v", cluster.Namespace, cluster.Name, err)
+			return false, err
+		}
+		r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeNormal, string(utils.DeletedRayCluster),
+			"Deleted the RayCluster %s/%s during suspend", cluster.Namespace, cluster.Name)
+	}
+
+	// Kubernetes Services (head + serve, including per-cluster serve services in incremental upgrade).
+	svcList := corev1.ServiceList{}
+	if err := r.List(ctx, &svcList, common.RayServiceRayClustersAssociationOptions(rayServiceInstance).ToListOptions()...); err != nil {
+		return false, err
+	}
+	for i := range svcList.Items {
+		svc := &svcList.Items[i]
+		allDeleted = false
+		if !svc.DeletionTimestamp.IsZero() {
+			continue
+		}
+		logger.Info("Deleting Service for suspend", "name", svc.Name)
+		if err := r.Delete(ctx, svc, client.PropagationPolicy(metav1.DeletePropagationBackground)); err != nil && !errors.IsNotFound(err) {
+			r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(utils.FailedToDeleteService),
+				"Failed to delete the Service %s/%s during suspend: %v", svc.Namespace, svc.Name, err)
+			return false, err
+		}
+	}
+
+	// Gateway and HTTPRoute live behind the RayServiceIncrementalUpgrade
+	// feature gate: the operator only registers gateway-api types in its
+	// scheme and ever creates these objects when the gate is on. Skip
+	// otherwise so a Get doesn't fail with "no kind is registered".
+	if features.Enabled(features.RayServiceIncrementalUpgrade) {
+		gateway := &gwv1.Gateway{}
+		if err := r.Get(ctx, common.RayServiceGatewayNamespacedName(rayServiceInstance), gateway); err == nil {
+			allDeleted = false
+			if gateway.DeletionTimestamp.IsZero() {
+				logger.Info("Deleting Gateway for suspend", "name", gateway.Name)
+				if err := r.Delete(ctx, gateway, client.PropagationPolicy(metav1.DeletePropagationBackground)); err != nil && !errors.IsNotFound(err) {
+					r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(utils.FailedToDeleteGateway),
+						"Failed to delete the Gateway %s/%s during suspend: %v", gateway.Namespace, gateway.Name, err)
+					return false, err
+				}
+			}
+		} else if !errors.IsNotFound(err) && !meta.IsNoMatchError(err) {
+			return false, err
+		}
+
+		httpRoute := &gwv1.HTTPRoute{}
+		if err := r.Get(ctx, common.RayServiceHTTPRouteNamespacedName(rayServiceInstance), httpRoute); err == nil {
+			allDeleted = false
+			if httpRoute.DeletionTimestamp.IsZero() {
+				logger.Info("Deleting HTTPRoute for suspend", "name", httpRoute.Name)
+				if err := r.Delete(ctx, httpRoute, client.PropagationPolicy(metav1.DeletePropagationBackground)); err != nil && !errors.IsNotFound(err) {
+					r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(utils.FailedToDeleteHTTPRoute),
+						"Failed to delete the HTTPRoute %s/%s during suspend: %v", httpRoute.Namespace, httpRoute.Name, err)
+					return false, err
+				}
+			}
+		} else if !errors.IsNotFound(err) && !meta.IsNoMatchError(err) {
+			return false, err
+		}
+	}
+
+	return allDeleted, nil
+}
+
+// updateStatusIfChanged persists rayServiceInstance.Status if it differs from
+// originalRayService.Status. It mirrors the status-update path used at the end
+// of Reconcile so that handleSuspend can finalize a reconcile early.
+func (r *RayServiceReconciler) updateStatusIfChanged(ctx context.Context, originalRayService, rayServiceInstance *rayv1.RayService) error {
+	if !utils.InconsistentRayServiceStatuses(originalRayService.Status, rayServiceInstance.Status) {
+		return nil
+	}
+	rayServiceInstance.Status.LastUpdateTime = &metav1.Time{Time: time.Now()}
+	return r.Status().Update(ctx, rayServiceInstance)
 }
 
 func (r *RayServiceReconciler) reconcileServicesToReadyCluster(ctx context.Context, rayServiceInstance *rayv1.RayService, rayClusterInstance *rayv1.RayCluster) (*corev1.Service, *corev1.Service, error) {
