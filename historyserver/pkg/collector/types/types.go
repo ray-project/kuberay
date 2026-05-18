@@ -24,6 +24,23 @@ type RayCollectorConfig struct {
 
 	AdditionalEndpoints  []string
 	EndpointPollInterval time.Duration
+
+	// Event collector disk-first storage configuration.
+	EventDataDir          string        // root directory for JSONL event files
+	EventRotationInterval time.Duration // time-based rotation trigger
+	EventMaxFileSizeMB    int           // size-based rotation trigger (MB)
+	EventMaxDiskMB        int           // backpressure threshold (MB)
+	// EventCompressionEnabled is a single switch that controls the entire
+	// disk-first + gzip pipeline. When true, events are written to local
+	// JSONL files and rotated/gzipped/uploaded asynchronously. When false,
+	// the local disk pipeline is bypassed entirely and events are buffered
+	// in-memory and periodically flushed (matching legacy semantics).
+	EventCompressionEnabled bool
+	// EventFlushInterval controls how often the in-memory buffer is flushed
+	// to remote storage when EventCompressionEnabled is false. Defaults to
+	// 1h to match the legacy behavior; can be set lower for more frequent
+	// writes.
+	EventFlushInterval time.Duration
 }
 
 // ValidateRayHanderConfig is
