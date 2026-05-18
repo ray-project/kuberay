@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"path"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -37,6 +38,14 @@ func main() {
 	ownerKind := ""
 	ownerName := ""
 
+	// Event collector disk-first storage flags.
+	eventDataDir := "/tmp/ray/event-data"
+	eventRotationInterval := 5 * time.Minute
+	eventMaxFileSizeMB := 100
+	eventMaxDiskMB := 200
+	eventCompressionEnabled := false
+	eventFlushInterval := time.Hour
+
 	flag.StringVar(&role, "role", "Worker", "")
 	flag.StringVar(&runtimeClassName, "runtime-class-name", "", "")
 	flag.StringVar(&rayClusterName, "ray-cluster-name", "", "")
@@ -49,10 +58,57 @@ func main() {
 	flag.StringVar(&ownerKind, "owner-kind", "", "")
 	flag.StringVar(&ownerName, "owner-name", "", "")
 
+	flag.StringVar(&eventDataDir, "event-data-dir", eventDataDir, "Root directory for JSONL event files")
+	flag.DurationVar(&eventRotationInterval, "event-rotation-interval", eventRotationInterval, "Time threshold to rotate active JSONL file")
+	flag.IntVar(&eventMaxFileSizeMB, "event-max-file-size-mb", eventMaxFileSizeMB, "Size threshold (MB) to rotate active JSONL file")
+	flag.IntVar(&eventMaxDiskMB, "event-max-disk-mb", eventMaxDiskMB, "Max total disk usage (MB) before 503 backpressure")
+	flag.BoolVar(&eventCompressionEnabled, "event-compression-enabled", eventCompressionEnabled, "Single switch: enable local disk-first storage with gzip compression before upload (false uploads plain JSONL)")
+	flag.DurationVar(&eventFlushInterval, "event-flush-interval", eventFlushInterval, "In-memory buffer flush interval used when --event-compression-enabled=false (e.g. 5m). Default 1h matches legacy behavior")
+
 	flag.Parse()
 
 	if err := validateFlags(&rayClusterName, &rayClusterNamespace, &ownerKind, &ownerName); err != nil {
 		logrus.Fatalf("Failed to validate flags: %v", err)
+	}
+
+	// Override event collector settings from environment variables if present.
+	if v := os.Getenv("RAY_COLLECTOR_EVENT_DATA_DIR"); v != "" {
+		eventDataDir = v
+	}
+	if v := os.Getenv("RAY_COLLECTOR_EVENT_ROTATION_INTERVAL"); v != "" {
+		if parsed, err := time.ParseDuration(v); err == nil && parsed > 0 {
+			eventRotationInterval = parsed
+		} else {
+			logrus.Warnf("Invalid RAY_COLLECTOR_EVENT_ROTATION_INTERVAL=%s, using default %s", v, eventRotationInterval)
+		}
+	}
+	if v := os.Getenv("RAY_COLLECTOR_EVENT_MAX_FILE_SIZE_MB"); v != "" {
+		if parsed, err := strconv.Atoi(v); err == nil && parsed > 0 {
+			eventMaxFileSizeMB = parsed
+		} else {
+			logrus.Warnf("Invalid RAY_COLLECTOR_EVENT_MAX_FILE_SIZE_MB=%s, using default %d", v, eventMaxFileSizeMB)
+		}
+	}
+	if v := os.Getenv("RAY_COLLECTOR_EVENT_MAX_DISK_MB"); v != "" {
+		if parsed, err := strconv.Atoi(v); err == nil && parsed > 0 {
+			eventMaxDiskMB = parsed
+		} else {
+			logrus.Warnf("Invalid RAY_COLLECTOR_EVENT_MAX_DISK_MB=%s, using default %d", v, eventMaxDiskMB)
+		}
+	}
+	if v := os.Getenv("RAY_COLLECTOR_EVENT_COMPRESSION_ENABLED"); v != "" {
+		if parsed, err := strconv.ParseBool(v); err == nil {
+			eventCompressionEnabled = parsed
+		} else {
+			logrus.Warnf("Invalid RAY_COLLECTOR_EVENT_COMPRESSION_ENABLED=%s, using default %v", v, eventCompressionEnabled)
+		}
+	}
+	if v := os.Getenv("RAY_COLLECTOR_EVENT_FLUSH_INTERVAL"); v != "" {
+		if parsed, err := time.ParseDuration(v); err == nil && parsed > 0 {
+			eventFlushInterval = parsed
+		} else {
+			logrus.Warnf("Invalid RAY_COLLECTOR_EVENT_FLUSH_INTERVAL=%s, using default %s", v, eventFlushInterval)
+		}
 	}
 
 	var additionalEndpoints []string
@@ -122,6 +178,13 @@ func main() {
 
 		AdditionalEndpoints:  additionalEndpoints,
 		EndpointPollInterval: endpointPollInterval,
+
+		EventDataDir:            eventDataDir,
+		EventRotationInterval:   eventRotationInterval,
+		EventMaxFileSizeMB:      eventMaxFileSizeMB,
+		EventMaxDiskMB:          eventMaxDiskMB,
+		EventCompressionEnabled: eventCompressionEnabled,
+		EventFlushInterval:      eventFlushInterval,
 	}
 	logrus.Info("Using collector config: ", globalConfig)
 
@@ -140,7 +203,14 @@ func main() {
 	// Create and initialize EventCollector
 	go func() {
 		defer wg.Done()
-		eventCollector := eventcollector.NewEventCollector(writer, rayRootDir, sessionDir, rayNodeId, rayClusterName, rayClusterNamespace, sessionName)
+		eventCollector := eventcollector.NewEventCollector(writer, rayRootDir, sessionDir, rayNodeId, rayClusterName, rayClusterNamespace, sessionName, eventcollector.Options{
+			DataDir:            eventDataDir,
+			RotationInterval:   eventRotationInterval,
+			MaxFileSizeBytes:   int64(eventMaxFileSizeMB) * 1024 * 1024,
+			MaxDiskBytes:       int64(eventMaxDiskMB) * 1024 * 1024,
+			CompressionEnabled: eventCompressionEnabled,
+			FlushInterval:      eventFlushInterval,
+		})
 		eventCollector.Run(stop, eventsPort)
 		logrus.Info("Event collector shutdown")
 	}()
