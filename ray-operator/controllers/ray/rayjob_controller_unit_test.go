@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -269,6 +270,90 @@ func TestGetSubmitterContainerWithFeatureGate(t *testing.T) {
 	// Verify restart policy is set to OnFailure for the submitter container
 	require.NotNil(t, container.RestartPolicy)
 	assert.Equal(t, corev1.ContainerRestartPolicyOnFailure, *container.RestartPolicy)
+}
+
+func TestCheckIsRestartCountExceeded(t *testing.T) {
+	tests := []struct {
+		name                 string
+		restartCount         int32
+		hasLastTermState     bool
+		annotation           string
+		envVar               string
+		expectedShouldUpdate bool
+	}{
+		{
+			name:                 "annotation and env var not set and the restart count is below default limit",
+			restartCount:         3,
+			hasLastTermState:     true,
+			expectedShouldUpdate: false,
+		},
+		{
+			name:                 "annotation and env var not set and the restart count reaches default limit",
+			restartCount:         5,
+			hasLastTermState:     true,
+			expectedShouldUpdate: true,
+		},
+		{
+			name:                 "annotation and env var not set and the last termination state is nil",
+			restartCount:         10,
+			hasLastTermState:     false,
+			expectedShouldUpdate: false,
+		},
+		{
+			name:                 "annotation overrides the default max restart count",
+			restartCount:         3,
+			hasLastTermState:     true,
+			annotation:           "2",
+			expectedShouldUpdate: true,
+		},
+		{
+			name:                 "env variable overrides the default max restart count",
+			restartCount:         3,
+			hasLastTermState:     true,
+			envVar:               "2",
+			expectedShouldUpdate: true,
+		},
+		{
+			name:                 "annotation takes precedence over env variable",
+			restartCount:         3,
+			hasLastTermState:     true,
+			annotation:           "10",
+			envVar:               "2",
+			expectedShouldUpdate: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			os.Setenv(utils.RAY_JOB_SIDECAR_SUBMITTER_MAX_RESTART_COUNT, tt.envVar)
+			defer os.Unsetenv(utils.RAY_JOB_SIDECAR_SUBMITTER_MAX_RESTART_COUNT)
+
+			containerStatus := corev1.ContainerStatus{
+				Name:         utils.SubmitterContainerName,
+				RestartCount: tt.restartCount,
+			}
+			if tt.hasLastTermState {
+				containerStatus.LastTerminationState = corev1.ContainerState{
+					Terminated: &corev1.ContainerStateTerminated{ExitCode: 1},
+				}
+			}
+			headPod := &corev1.Pod{
+				Status: corev1.PodStatus{
+					ContainerStatuses: []corev1.ContainerStatus{containerStatus},
+				},
+			}
+
+			rayJob := &rayv1.RayJob{}
+			if tt.annotation != "" {
+				rayJob.Annotations = map[string]string{
+					utils.RayJobSubmitterContainerMaxRestartCount: tt.annotation,
+				}
+			}
+
+			shouldUpdate, _ := checkIsRestartCountExceeded(headPod, rayJob)
+			assert.Equal(t, tt.expectedShouldUpdate, shouldUpdate)
+		})
+	}
 }
 
 func TestUpdateStatusToSuspendingIfNeeded(t *testing.T) {
