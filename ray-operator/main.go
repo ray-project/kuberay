@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/go-logr/zapr"
 	routev1 "github.com/openshift/api/route/v1"
@@ -71,6 +72,8 @@ func main() {
 	var enableMetrics bool
 	var qps float64
 	var burst int
+	var leaseDuration time.Duration
+	var renewDeadline time.Duration
 
 	// TODO: remove flag-based config once Configuration API graduates to v1.
 	flag.StringVar(&metricsAddr, "metrics-addr", configapi.DefaultMetricsAddr, "The address the metric endpoint binds to.")
@@ -104,6 +107,8 @@ func main() {
 	flag.BoolVar(&enableMetrics, "enable-metrics", false, "Enable the emission of control plane metrics.")
 	flag.Float64Var(&qps, "qps", float64(configapi.DefaultQPS), "The QPS value for the client communicating with the Kubernetes API server.")
 	flag.IntVar(&burst, "burst", configapi.DefaultBurst, "The maximum burst for throttling requests from this client to the Kubernetes API server.")
+	flag.DurationVar(&leaseDuration, "leader-elect-lease-duration", 60*time.Second, "Duration a non-leader candidate waits before attempting to acquire leadership.")
+	flag.DurationVar(&renewDeadline, "leader-elect-renew-deadline", 40*time.Second, "Duration the leader retries renewing the lease before giving up.")
 
 	opts := k8szap.Options{
 		TimeEncoder: zapcore.ISO8601TimeEncoder,
@@ -207,6 +212,8 @@ func main() {
 		LeaderElection:          *config.EnableLeaderElection,
 		LeaderElectionID:        "ray-operator-leader",
 		LeaderElectionNamespace: config.LeaderElectionNamespace,
+		LeaseDuration:           &leaseDuration,
+		RenewDeadline:           &renewDeadline,
 	}
 
 	// Manager Cache
