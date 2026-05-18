@@ -1,6 +1,9 @@
 package eventserver
 
 import (
+	"bufio"
+	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -20,6 +23,8 @@ import (
 type EventHandler struct {
 	reader storage.StorageReader
 
+	eventDecodingEnabled bool
+
 	ClusterTaskMap     *types.ClusterTaskMap
 	ClusterActorMap    *types.ClusterActorMap
 	ClusterJobMap      *types.ClusterJobMap
@@ -27,7 +32,7 @@ type EventHandler struct {
 	ClusterLogEventMap *types.ClusterLogEventMap // For /events API (Log Events from logs/events/)
 }
 
-var eventFilePattern = regexp.MustCompile(`-\d{4}-\d{2}-\d{2}-\d{2}$`)
+var eventFilePattern = regexp.MustCompile(`-\d{4}-\d{2}-\d{2}-\d{2}(-\d+)?(\.jsonl(\.gz)?)?$`)
 
 // taskPrefix is extracted to avoid hard-coded "task::" usage
 const taskPrefix = "task::"
@@ -37,13 +42,82 @@ func isValidEventFile(fileName string) bool {
 	if strings.HasSuffix(fileName, "/") {
 		return false
 	}
-	// Only files matching {nodeId}-{YYYY-MM-DD-HH} format are valid event files
+	// Accept both legacy files ({nodeId}-{YYYY-MM-DD-HH}) and the new
+	// disk-first JSONL files ({nodeId}-{YYYY-MM-DD-HH}.jsonl[.gz]).
 	return eventFilePattern.MatchString(fileName)
 }
 
-func NewEventHandler(reader storage.StorageReader) *EventHandler {
+// decodeEventFileBytes parses the raw bytes of an event file.
+//
+// Format auto-detection (JSON array vs JSONL) is ALWAYS enabled, regardless of
+// eventDecodingEnabled, so the historyserver remains forward-compatible with
+// new collectors that emit JSONL even when compression is disabled, and
+// backward-compatible with legacy data stored as a JSON array.
+//
+// The eventDecodingEnabled switch only controls gzip decompression:
+//   - eventDecodingEnabled=false (default): .gz files are NOT decompressed; the
+//     raw bytes will fail the JSON array / JSONL parse step and surface as an
+//     error (or be skipped by the caller).
+//   - eventDecodingEnabled=true: .gz files are transparently decompressed
+//     before parsing.
+func decodeEventFileBytes(fileName string, raw []byte, eventDecodingEnabled bool) ([]map[string]any, error) {
+	data := raw
+
+	// gzip decompression is the only behaviour gated by eventDecodingEnabled.
+	if eventDecodingEnabled && strings.HasSuffix(fileName, ".gz") {
+		gr, err := gzip.NewReader(bytes.NewReader(raw))
+		if err != nil {
+			return nil, fmt.Errorf("gzip reader for %s: %w", fileName, err)
+		}
+		defer gr.Close()
+		decompressed, err := io.ReadAll(gr)
+		if err != nil {
+			return nil, fmt.Errorf("gunzip %s: %w", fileName, err)
+		}
+		data = decompressed
+	}
+
+	trimmed := bytes.TrimLeft(data, " \t\r\n")
+	if len(trimmed) == 0 {
+		return nil, nil
+	}
+
+	// Format auto-detection is always enabled.
+	// JSON array (legacy format) starts with '['.
+	if trimmed[0] == '[' {
+		var out []map[string]any
+		if err := json.Unmarshal(data, &out); err != nil {
+			return nil, fmt.Errorf("unmarshal JSON array %s: %w", fileName, err)
+		}
+		return out, nil
+	}
+
+	// Otherwise treat as JSONL: one object per non-empty line.
+	var out []map[string]any
+	scanner := bufio.NewScanner(bytes.NewReader(data))
+	scanner.Buffer(make([]byte, 0, 64*1024), 16*1024*1024)
+	for scanner.Scan() {
+		line := bytes.TrimSpace(scanner.Bytes())
+		if len(line) == 0 {
+			continue
+		}
+		var obj map[string]any
+		if err := json.Unmarshal(line, &obj); err != nil {
+			logrus.Warnf("Skipping malformed JSONL line in %s: %v", fileName, err)
+			continue
+		}
+		out = append(out, obj)
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("scan JSONL %s: %w", fileName, err)
+	}
+	return out, nil
+}
+
+func NewEventHandler(reader storage.StorageReader, eventDecodingEnabled bool) *EventHandler {
 	return &EventHandler{
-		reader: reader,
+		reader:               reader,
+		eventDecodingEnabled: eventDecodingEnabled,
 		ClusterTaskMap: &types.ClusterTaskMap{
 			ClusterTaskMap: make(map[string]*types.TaskMap),
 		},
@@ -1415,11 +1489,11 @@ func (h *EventHandler) ProcessSingleSession(ctx context.Context, clusterInfo uti
 		}
 		rayEventsRead++
 
-		// json.Unmarshal and storeEvent failures are treated as corrupt-data errors:
+		// decodeEventFileBytes and storeEvent failures are treated as corrupt-data errors:
 		// retrying won't fix bad bytes, accepting partial loss.
-		var eventList []map[string]any
-		if err := json.Unmarshal(eventbytes, &eventList); err != nil {
-			logrus.Errorf("Failed to unmarshal events for file %s: %v", eventFile, err)
+		eventList, err := decodeEventFileBytes(eventFile, eventbytes, h.eventDecodingEnabled)
+		if err != nil {
+			logrus.Errorf("Failed to decode events for file %s: %v", eventFile, err)
 			continue
 		}
 

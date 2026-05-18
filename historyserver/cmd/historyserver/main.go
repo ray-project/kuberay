@@ -24,6 +24,7 @@ func main() {
 	runtimeClassConfigPath := ""
 	dashboardDir := ""
 	useKubernetesProxy := false
+	eventDecodingEnabled := false
 	sessionProcessTimeout := historyserver.DefaultSessionProcessTimeout
 	flag.StringVar(&runtimeClassName, "runtime-class-name", "", "Storage backend: s3 / gcs / azureblob / aliyunoss / localtest")
 	flag.StringVar(&rayRootDir, "ray-root-dir", "", "Root dir inside the bucket")
@@ -31,6 +32,7 @@ func main() {
 	flag.StringVar(&dashboardDir, "dashboard-dir", "/dashboard", "Path to Ray Dashboard static assets")
 	flag.StringVar(&runtimeClassConfigPath, "runtime-class-config-path", "", "Path to backend config JSON")
 	flag.BoolVar(&useKubernetesProxy, "use-kubernetes-proxy", false, "Use local kubeconfig instead of in-cluster config")
+	flag.BoolVar(&eventDecodingEnabled, "event-decoding-enabled", false, "Enable gzip decompression and JSON array detection for event files. When false, assumes all event files are plain JSONL.")
 	flag.DurationVar(&sessionProcessTimeout, "session-process-timeout", historyserver.DefaultSessionProcessTimeout, "Timeout duration for processing and loading a single Ray cluster session.")
 	flag.Parse()
 
@@ -69,7 +71,7 @@ func main() {
 		logrus.Fatalf("Failed to create reader for runtime class name %s: %v", runtimeClassName, err)
 	}
 
-	eventHandler := eventserver.NewEventHandler(reader)
+	eventHandler := eventserver.NewEventHandler(reader, eventDecodingEnabled)
 
 	serverCtx, serverCancel := signal.NotifyContext(
 		context.Background(),
