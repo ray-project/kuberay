@@ -1199,6 +1199,10 @@ func checkIsRestartCountExceeded(headPod *corev1.Pod, rayJob *rayv1.RayJob) (boo
 			// Only check when the container has been terminated at least once.
 			// When the submitter container fails in a CrashLoopBackOff fashion, LastTerminationState.Terminated is populated
 			if containerStatus.LastTerminationState.Terminated != nil {
+				// If the container exited successfully, we do not fail the job.
+				if containerStatus.State.Terminated != nil && containerStatus.State.Terminated.ExitCode == 0 {
+					break
+				}
 				return containerStatus.RestartCount >= maxRestartCount, &containerStatus
 			}
 			break
