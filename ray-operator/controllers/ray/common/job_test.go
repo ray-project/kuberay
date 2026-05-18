@@ -234,13 +234,13 @@ func TestBuildJobSubmitCommandWithSidecarModeAndFeatureGate(t *testing.T) {
 	// - status check (if ! ray job status ...)
 	// - --no-wait flag
 	// - job logs follow at the end
+	healthURL := fmt.Sprintf("http://localhost:%d/%s", utils.DefaultDashboardPort, utils.RayDashboardGCSHealthPath)
 	expected := []string{
 		"until",
 		fmt.Sprintf(
 			utils.BasePythonHealthCommand,
-			utils.DefaultDashboardPort,
-			utils.RayDashboardGCSHealthPath,
-			utils.DefaultReadinessProbeFailureThreshold,
+			healthURL,
+			utils.RayDashboardGCSHealthCheckTimeoutSeconds,
 		),
 		">/dev/null", "2>&1", ";",
 		"do", "echo", strconv.Quote("Waiting for Ray Dashboard GCS to become healthy at http://127.0.0.1:8265 ..."), ";", "sleep", "2", ";", "done", ";",
