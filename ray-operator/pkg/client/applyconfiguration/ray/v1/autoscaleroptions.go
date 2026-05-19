@@ -44,9 +44,9 @@ type AutoscalerOptionsApplyConfiguration struct {
 	EnvFrom []corev1.EnvFromSource `json:"envFrom,omitempty"`
 	// Optional list of volumeMounts.  This is needed for enabling TLS for the autoscaler container.
 	VolumeMounts []corev1.VolumeMount `json:"volumeMounts,omitempty"`
-	// Optional list overwrite the default command of the autoscaler container. It works similar to KUBERAY_GEN_RAY_START_CMD.
+	// Optional list overwrite the default command of the autoscaler container.
 	Command []string `json:"command,omitempty"`
-	// Optional to overwrite the default args of the autoscaler container. It works similar to KUBERAY_GEN_RAY_START_CMD.
+	// Optional to overwrite the default args of the autoscaler container.
 	Args []string `json:"args,omitempty"`
 }
 
