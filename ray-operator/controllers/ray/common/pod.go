@@ -164,6 +164,8 @@ func configureGCSFaultTolerance(podTemplate *corev1.PodTemplateSpec, instance ra
 
 // DefaultHeadPodTemplate sets the config values
 func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, headSpec rayv1.HeadGroupSpec, podName string, headPort string) corev1.PodTemplateSpec {
+	log := ctrl.LoggerFrom(ctx)
+
 	// TODO (Dmitri) The argument headPort is essentially unused;
 	// headPort is passed into setMissingRayStartParams but unused there for the head pod.
 	// To mitigate this awkwardness and reduce code redundancy, unify head and worker pod configuration logic.
@@ -215,7 +217,12 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 
 		if utils.IsAutoscalingV2Enabled(&instance.Spec) {
 			setAutoscalerV2EnvVars(&podTemplate)
-			podTemplate.Spec.RestartPolicy = corev1.RestartPolicyNever
+			if autoscalerRestartValid, err := utils.IsRayVersionAtLeast(instance.Spec.RayVersion, utils.MinAutoscalerRestartValidVersion); !autoscalerRestartValid {
+				if err != nil {
+					log.Info("Parsing ray version failed, fall back the restart policy to Never.", "rayVersion", instance.Spec.RayVersion, "error", err)
+				}
+				podTemplate.Spec.RestartPolicy = corev1.RestartPolicyNever
+			}
 		} else if utils.IsAutoscalingV1Enabled(&instance.Spec) {
 			setAutoscalerV1EnvVars(&podTemplate)
 		}
@@ -364,6 +371,8 @@ func getEnableProbesInjection() bool {
 
 // DefaultWorkerPodTemplate sets the config values
 func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, workerSpec rayv1.WorkerGroupSpec, podName string, fqdnRayIP string, headPort string, replicaGrpName string, replicaIndex int, numHostIndex int) corev1.PodTemplateSpec {
+	log := ctrl.LoggerFrom(ctx)
+
 	podTemplate := workerSpec.Template
 	podTemplate.GenerateName = podName
 	// Pods created by RayCluster should be restricted to the namespace of the RayCluster.
@@ -467,7 +476,13 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 	}
 
 	if utils.IsAutoscalingEnabled(&instance.Spec) && utils.IsAutoscalingV2Enabled(&instance.Spec) {
-		podTemplate.Spec.RestartPolicy = corev1.RestartPolicyNever
+		// Use the RayVersion and autoscaler version to determine whether the RestartPolicy should be Never or not, since the head pod is the one that runs the autoscaler.
+		if autoscalerRestartValid, err := utils.IsRayVersionAtLeast(instance.Spec.RayVersion, utils.MinAutoscalerRestartValidVersion); !autoscalerRestartValid {
+			if err != nil {
+				log.Info("Parsing ray version failed, fallback the decision of restart policy.", "rayVersion", instance.Spec.RayVersion, "error", err)
+			}
+			podTemplate.Spec.RestartPolicy = corev1.RestartPolicyNever
+		}
 	}
 
 	if utils.IsAuthEnabled(&instance.Spec) {

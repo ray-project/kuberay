@@ -2310,3 +2310,92 @@ func TestIsGatewayEqual(t *testing.T) {
 		})
 	}
 }
+
+func TestIsRayVersionAtLeast(t *testing.T) {
+	tests := []struct {
+		name          string
+		rayVersion    string
+		targetVersion string
+		want          bool
+		wantErr       bool
+	}{
+		{
+			name:          "version equal to target",
+			rayVersion:    "2.9.0",
+			targetVersion: "2.9.0",
+			want:          true,
+		},
+		{
+			name:          "version greater than target (minor)",
+			rayVersion:    "2.10.0",
+			targetVersion: "2.9.0",
+			want:          true,
+		},
+		{
+			name:          "version greater than target (major)",
+			rayVersion:    "3.0.0",
+			targetVersion: "2.9.0",
+			want:          true,
+		},
+		{
+			name:          "version greater than target (patch)",
+			rayVersion:    "2.9.1",
+			targetVersion: "2.9.0",
+			want:          true,
+		},
+		{
+			name:          "version with no patch component",
+			rayVersion:    "2.9",
+			targetVersion: "2.9.0",
+			want:          true,
+		},
+		{
+			name:          "version less than target (minor)",
+			rayVersion:    "2.8.0",
+			targetVersion: "2.9.0",
+			want:          false,
+		},
+		{
+			name:          "version less than target (major)",
+			rayVersion:    "1.13.0",
+			targetVersion: "2.0.0",
+			want:          false,
+		},
+		{
+			name:          "version at least target",
+			rayVersion:    "2.46.0",
+			targetVersion: "2.46.0",
+			want:          true,
+		},
+		{
+			name:          "version below target",
+			rayVersion:    "2.45.0",
+			targetVersion: "2.46.0",
+			want:          false,
+		},
+		{
+			name:          "empty rayVersion",
+			rayVersion:    "",
+			targetVersion: "2.9.0",
+			wantErr:       true,
+		},
+		{
+			name:          "unparseable rayVersion",
+			rayVersion:    "latest",
+			targetVersion: "2.9.0",
+			wantErr:       true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := IsRayVersionAtLeast(tt.rayVersion, tt.targetVersion)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tt.want, got)
+			}
+		})
+	}
+}

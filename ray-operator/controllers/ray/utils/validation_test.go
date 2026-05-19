@@ -667,6 +667,85 @@ func TestValidateRayClusterSpecAutoscaler(t *testing.T) {
 				},
 			},
 		},
+		// Tests for version-gated restartPolicy validation (MinAutoscalerRestartValidVersion = 2.55.0)
+		"should return error if autoscaler v2 is enabled, Ray version < 2.55.0, and head Pod has non-Never restartPolicy": {
+			spec: rayv1.RayClusterSpec{
+				RayVersion:              "2.54.0",
+				EnableInTreeAutoscaling: new(true),
+				AutoscalerOptions: &rayv1.AutoscalerOptions{
+					Version: ptr.To(rayv1.AutoscalerVersionV2),
+				},
+				HeadGroupSpec: rayv1.HeadGroupSpec{
+					Template: podTemplateSpec(nil, ptr.To(corev1.RestartPolicyAlways)),
+				},
+			},
+			expectedErr: "restartPolicy for head Pod should be Never or unset when using autoscaler V2",
+		},
+		"should return error if autoscaler v2 is enabled, Ray version < 2.55.0, and a worker group has non-Never restartPolicy": {
+			spec: rayv1.RayClusterSpec{
+				RayVersion:              "2.54.0",
+				EnableInTreeAutoscaling: new(true),
+				AutoscalerOptions: &rayv1.AutoscalerOptions{
+					Version: ptr.To(rayv1.AutoscalerVersionV2),
+				},
+				HeadGroupSpec: rayv1.HeadGroupSpec{
+					Template: podTemplateSpec(nil, ptr.To(corev1.RestartPolicyNever)),
+				},
+				WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+					{
+						GroupName: "worker-group-1",
+						Template:  podTemplateSpec(nil, ptr.To(corev1.RestartPolicyOnFailure)),
+					},
+				},
+			},
+			expectedErr: "restartPolicy for worker group worker-group-1 should be Never or unset when using autoscaler V2",
+		},
+		"should not return error if autoscaler v2 is enabled, Ray version >= 2.55.0, and head Pod has non-Never restartPolicy": {
+			spec: rayv1.RayClusterSpec{
+				RayVersion:              "2.55.0",
+				EnableInTreeAutoscaling: new(true),
+				AutoscalerOptions: &rayv1.AutoscalerOptions{
+					Version: ptr.To(rayv1.AutoscalerVersionV2),
+				},
+				HeadGroupSpec: rayv1.HeadGroupSpec{
+					Template: podTemplateSpec(nil, ptr.To(corev1.RestartPolicyAlways)),
+				},
+			},
+		},
+		"should not return error if autoscaler v2 is enabled, Ray version >= 2.55.0, and worker groups have non-Never restartPolicy": {
+			spec: rayv1.RayClusterSpec{
+				RayVersion:              "2.55.0",
+				EnableInTreeAutoscaling: new(true),
+				AutoscalerOptions: &rayv1.AutoscalerOptions{
+					Version: ptr.To(rayv1.AutoscalerVersionV2),
+				},
+				HeadGroupSpec: rayv1.HeadGroupSpec{
+					Template: podTemplateSpec(nil, ptr.To(corev1.RestartPolicyAlways)),
+				},
+				WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+					{
+						GroupName: "worker-group-1",
+						Template:  podTemplateSpec(nil, ptr.To(corev1.RestartPolicyOnFailure)),
+					},
+					{
+						GroupName: "worker-group-2",
+						Template:  podTemplateSpec(nil, ptr.To(corev1.RestartPolicyAlways)),
+					},
+				},
+			},
+		},
+		"should not return error if autoscaler v2 is enabled, Ray version > 2.55.0, and head Pod has non-Never restartPolicy": {
+			spec: rayv1.RayClusterSpec{
+				RayVersion:              "2.60.0",
+				EnableInTreeAutoscaling: new(true),
+				AutoscalerOptions: &rayv1.AutoscalerOptions{
+					Version: ptr.To(rayv1.AutoscalerVersionV2),
+				},
+				HeadGroupSpec: rayv1.HeadGroupSpec{
+					Template: podTemplateSpec(nil, ptr.To(corev1.RestartPolicyOnFailure)),
+				},
+			},
+		},
 	}
 
 	features.SetFeatureGateDuringTest(t, features.RayJobDeletionPolicy, true)

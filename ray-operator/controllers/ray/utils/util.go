@@ -23,6 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/apimachinery/pkg/util/rand"
+	"k8s.io/apimachinery/pkg/util/version"
 	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -1093,6 +1094,30 @@ func IsHTTPRouteEqual(existing, desired *gwv1.HTTPRoute) bool {
 		}
 	}
 	return true
+}
+
+// IsRayVersionAtLeast reports whether the given rayVersion (from RayClusterSpec.RayVersion)
+// is at least targetVersion.
+//
+// Both rayVersion and targetVersion are parsed with k8s.io/apimachinery/pkg/util/version,
+// which accepts standard semver strings (e.g. "2.46.0").
+// Returns (false, error) if rayVersion is empty or either version string cannot be parsed.
+func IsRayVersionAtLeast(rayVersion string, targetVersion string) (bool, error) {
+	if rayVersion == "" {
+		return false, fmt.Errorf("rayVersion is empty")
+	}
+
+	v, err := version.ParseGeneric(rayVersion)
+	if err != nil {
+		return false, fmt.Errorf("failed to parse Ray version %q: %w", rayVersion, err)
+	}
+
+	minVersion, err := version.ParseGeneric(targetVersion)
+	if err != nil {
+		return false, fmt.Errorf("failed to parse minimum version %q: %w", targetVersion, err)
+	}
+
+	return v.AtLeast(minVersion), nil
 }
 
 // IsGatewayEqual checks if the existing Gateway matches the desired Gateway.
