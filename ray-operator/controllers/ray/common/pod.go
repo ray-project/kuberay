@@ -215,8 +215,6 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 		mergeAutoscalerOverrides(&autoscalerContainer, instance.Spec.AutoscalerOptions)
 		podTemplate.Spec.Containers = append(podTemplate.Spec.Containers, autoscalerContainer)
 
-		// The error is ignored here because the function will return false if there's an error parsing the version.
-		// For example, if rayVersion is empty or unparseable, it considers the feature is not valid.
 		if utils.IsAutoscalingV2Enabled(&instance.Spec) {
 			setAutoscalerV2EnvVars(&podTemplate)
 			if autoscalerRestartValid, err := utils.IsRayVersionAtLeast(instance.Spec.RayVersion, utils.MinAutoscalerRestartValidVersion); !autoscalerRestartValid {
@@ -477,11 +475,8 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 		podTemplate.Spec.Containers[utils.RayContainerIndex].Ports = append(podTemplate.Spec.Containers[utils.RayContainerIndex].Ports, metricsPort)
 	}
 
-	// Use the RayVersion and autoscaler version to determine whether the RestartPolicy should be Never or not, since the head pod is the one that runs the autoscaler.
-	// The error is ignored here because the function will return false if there's an error parsing the version.
-	// For example, if rayVersion is empty or unparseable, it considers the feature is not valid.
-
 	if utils.IsAutoscalingEnabled(&instance.Spec) && utils.IsAutoscalingV2Enabled(&instance.Spec) {
+		// Use the RayVersion and autoscaler version to determine whether the RestartPolicy should be Never or not, since the head pod is the one that runs the autoscaler.
 		if autoscalerRestartValid, err := utils.IsRayVersionAtLeast(instance.Spec.RayVersion, utils.MinAutoscalerRestartValidVersion); !autoscalerRestartValid {
 			if err != nil {
 				log.Info("Parsing ray version failed, fallback the decision of restart policy.", "rayVersion", instance.Spec.RayVersion, "error", err)
