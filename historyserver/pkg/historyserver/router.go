@@ -294,21 +294,28 @@ func routerRayClusterSet(s *ServerHandler) {
 	defer restful.Add(ws)
 
 	ws.Path("/enter_cluster").Consumes(restful.MIME_JSON).Produces(restful.MIME_JSON).Filter(RequestLogFilter)
-	ws.Route(ws.GET("/{namespace}/{name}/{session}").To(func(r1 *restful.Request, r2 *restful.Response) {
-		name := r1.PathParameter("name")
-		namespace := r1.PathParameter("namespace")
-		session := r1.PathParameter("session")
+	enterHandler := func(r1 *restful.Request, r2 *restful.Response, namespace, name, session string) {
+		resolvedSession, found := s.findSessionInMap(namespace, name, session)
+		if !found {
+			s.listClusters(s.maxClusters)
+			resolvedSession, found = s.findSessionInMap(namespace, name, session)
+		}
 
-		if session != "live" {
-			if ParseSessionTimestamp(session).IsZero() {
-				logrus.Warnf("Rejecting invalid session name: %s/%s/%s", namespace, name, session)
-				r2.WriteErrorString(http.StatusBadRequest, fmt.Sprintf("invalid session name: %q", session))
+		if !found {
+			r2.WriteErrorString(http.StatusNotFound, fmt.Sprintf("cluster %s/%s with session %s not found", namespace, name, session))
+			return
+		}
+
+		if resolvedSession != "live" {
+			if ParseSessionTimestamp(resolvedSession).IsZero() {
+				logrus.Warnf("Rejecting invalid session name: %s/%s/%s", namespace, name, resolvedSession)
+				r2.WriteErrorString(http.StatusBadRequest, fmt.Sprintf("invalid session name: %q", resolvedSession))
 				return
 			}
-			info := utils.ClusterInfo{Name: name, Namespace: namespace, SessionName: session}
+			info := utils.ClusterInfo{Name: name, Namespace: namespace, SessionName: resolvedSession}
 			live, err := s.sessionLoader.LoadSession(r1.Request.Context(), info)
 			if err != nil {
-				logrus.Errorf("Failed to load session %s/%s/%s: %v", namespace, name, session, err)
+				logrus.Errorf("Failed to load session %s/%s/%s: %v", namespace, name, resolvedSession, err)
 				r2.WriteErrorString(http.StatusInternalServerError, err.Error())
 				return
 			}
@@ -316,27 +323,43 @@ func routerRayClusterSet(s *ServerHandler) {
 			// Users might use the complete session name to enter a live cluster,
 			// so "live" sentinel is set to avoid querying empty in-memory state.
 			if live {
-				session = "live"
+				resolvedSession = "live"
 			}
 		}
 
-		// Set cookies only after a successful load (dead) or a skip (live).
 		http.SetCookie(r2, &http.Cookie{MaxAge: 600, Path: "/", Name: COOKIE_CLUSTER_NAME_KEY, Value: name})
 		http.SetCookie(r2, &http.Cookie{MaxAge: 600, Path: "/", Name: COOKIE_CLUSTER_NAMESPACE_KEY, Value: namespace})
-		http.SetCookie(r2, &http.Cookie{MaxAge: 600, Path: "/", Name: COOKIE_SESSION_NAME_KEY, Value: session})
+		http.SetCookie(r2, &http.Cookie{MaxAge: 600, Path: "/", Name: COOKIE_SESSION_NAME_KEY, Value: resolvedSession})
 
 		r2.WriteJson(map[string]interface{}{
 			"result":    "success",
 			"name":      name,
 			"namespace": namespace,
-			"session":   session,
+			"session":   resolvedSession,
 		}, "application/json")
+	}
+
+	ws.Route(ws.GET("/{namespace}/{name}/{session}").To(func(r1 *restful.Request, r2 *restful.Response) {
+		name := r1.PathParameter("name")
+		namespace := r1.PathParameter("namespace")
+		session := r1.PathParameter("session")
+		enterHandler(r1, r2, namespace, name, session)
 	}).
 		Doc("set cookie for cluster").
 		Param(ws.PathParameter("namespace", "namespace")).
 		Param(ws.PathParameter("name", "name")).
 		Param(ws.PathParameter("session", "session")).
 		Writes("")) // Placeholder for specific return type
+
+	ws.Route(ws.GET("/{namespace}/{name}").To(func(r1 *restful.Request, r2 *restful.Response) {
+		name := r1.PathParameter("name")
+		namespace := r1.PathParameter("namespace")
+		enterHandler(r1, r2, namespace, name, "latest")
+	}).
+		Doc("set cookie for cluster (defaults session to latest)").
+		Param(ws.PathParameter("namespace", "namespace")).
+		Param(ws.PathParameter("name", "name")).
+		Writes(""))
 }
 
 func (s *ServerHandler) RegisterRouter() {
