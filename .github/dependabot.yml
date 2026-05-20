@@ -25,3 +25,13 @@ updates:
       all-dependencies: # for all other dependencies not listed above
         patterns:
           - "*"
+
+  # Maintain GitHub Actions referenced in .github/workflows/
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      all-actions:
+        patterns:
+          - "*"
