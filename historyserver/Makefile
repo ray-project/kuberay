@@ -35,36 +35,42 @@ GO_LDFLAGS += -X $(PACKAGE)/pkg.Version=$(VERSION) \
 	-X $(PACKAGE)/pkg.Branch=$(BRANCH)
 GO_BUILD_FLAGS := -ldflags '$(GO_LDFLAGS)'
 
-GOOS ?= darwin
-GOARCH ?= amd64
+GOOS ?= $(shell go env GOOS)
+GOARCH ?= $(shell go env GOARCH)
 
 .PHONY: all
 
 all: build
+
+.PHONY: fmt
+fmt:
+	go fmt ./...
+
+.PHONY: vet
+vet:
+	go vet ./...
 
 .PHONY: clean
 clean:
 	rm -rf $(OUT_DIR)
 
 .PHONY: build
-build: buildcollector buildhistoryserver
+build: fmt vet buildcollector buildhistoryserver
 
 .PHONY: buildcollector
-#build: mod alllint test
-buildcollector: mod
+buildcollector:
 	@echo ""
 	@echo "go build ..."
 	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -v $(GO_BUILD_FLAGS) -o $(BIN_DIR)/$(BINARY_NAME_COLLECTOR) ./cmd/collector/main.go
 
 .PHONY: buildcollector-race
-buildcollector-race: mod
+buildcollector-race:
 	@echo ""
 	@echo "go build with race detector..."
 	CGO_ENABLED=1 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -race -v $(GO_BUILD_FLAGS) -o $(BIN_DIR)/$(BINARY_NAME_COLLECTOR) ./cmd/collector/main.go
 
 .PHONY: buildhistoryserver
-#build: mod alllint test
-buildhistoryserver: mod
+buildhistoryserver:
 	@echo ""
 	@echo "go build ..."
 	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -v $(GO_BUILD_FLAGS) -o $(BIN_DIR)/$(BINARY_NAME) ./cmd/historyserver/main.go
@@ -74,10 +80,6 @@ simplebuild:
 	@echo ""
 	@echo "go build ..."
 	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -v $(GO_BUILD_FLAGS)  -o $(BIN_DIR)/$(BINARY_NAME)
-
-.PHONY: mod
-mod:
-	go mod tidy
 
 .PHONY: localimage-build
 localimage-build: localimage-collector localimage-historyserver
@@ -120,7 +122,7 @@ export GOTOOLCHAIN := $(GOVERSION)+auto
 # Run tests
 .PHONY: test
 test:
-	go test -race -v ./pkg/... ./cmd/...
+	go test -race -v ./pkg/... ./cmd/... -parallel 4
 
 .PHONY: alllint
 alllint: todolist issuelint ## Run go lint against code.

@@ -104,7 +104,6 @@ debugging in your own IDE. For example, you can set up `.vscode/launch.json` as 
             ],
             "env": {
                 "S3_REGION": "test",
-                // Use localhost rather than the Kubernetes service name.
                 "S3_ENDPOINT": "localhost:9000",
                 "S3_BUCKET": "ray-historyserver",
                 "AWS_ACCESS_KEY_ID": "minioadmin",

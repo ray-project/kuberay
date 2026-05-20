@@ -8,6 +8,8 @@ import (
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/cli-runtime/pkg/genericclioptions"
+	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/utils/ptr"
 
 	"github.com/ray-project/kuberay/kubectl-plugin/pkg/util"
@@ -104,10 +106,14 @@ func TestCreateWorkerGroupCommandComplete(t *testing.T) {
 			},
 		},
 		{
-			name:          "Valid input without namespace flag",
-			args:          []string{"example-group"},
-			flags:         map[string]string{},
-			expectedError: "failed to get namespace: flag accessed but not defined: namespace",
+			name: "Valid input without namespace flag",
+			args: []string{"example-group"},
+			expected: &CreateWorkerGroupOptions{
+				namespace:  "default",
+				groupName:  "example-group",
+				image:      "rayproject/ray:latest",
+				rayVersion: "latest",
+			},
 		},
 		{
 			name: "mMissing group name",
@@ -181,12 +187,24 @@ func TestCreateWorkerGroupCommandComplete(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			configFlags := genericclioptions.NewConfigFlags(true)
 			cmd := &cobra.Command{}
+			configFlags.AddFlags(cmd.Flags())
+			cmd.Flags().String(
+				"worker-ray-start-params",
+				"",
+				"ray start parameters for worker",
+			)
 			for key, value := range tt.flags {
-				cmd.Flags().String(key, value, "")
+				err := cmd.Flags().Set(key, value)
+				if err != nil {
+					require.NoError(t, err)
+				}
 			}
 
+			factory := cmdutil.NewFactory(configFlags)
 			options := &CreateWorkerGroupOptions{
+				cmdFactory: factory,
 				rayVersion: "latest",
 			}
 

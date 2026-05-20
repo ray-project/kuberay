@@ -11,20 +11,37 @@ import (
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
-func makeTaskEventMap(taskName, nodeId, taskID, cluster string, attempt int) map[string]any {
+func makeTaskEventMap(taskName, nodeID, taskID, cluster string, attempt int) map[string]any {
 	return map[string]any{
 		"eventType":   string(types.TASK_DEFINITION_EVENT),
 		"clusterName": cluster,
 		"taskDefinitionEvent": map[string]any{
 			"taskId":      taskID,
 			"taskName":    taskName,
-			"nodeId":      nodeId,
+			"nodeId":      nodeID,
 			"taskAttempt": attempt,
 		},
 	}
 }
 
 func TestEventProcessor(t *testing.T) {
+	// IDs follow Ray's ID specification:
+	// ref: https://github.com/ray-project/ray/blob/f229d5376eb87b09a3fa0b991323450de84df890/src/ray/design_docs/id_specification.md
+	// Sizes: JobID=4B, ActorID=12B unique+JobID (16B), TaskID=8B unique+ActorID (24B), NodeID/WorkerID=28B
+	const (
+		// Pure-hex IDs to verify normalizeIDToHex is identity.
+		// Use lowercase to match production hex output and avoid map-key collision.
+		testJobID   = "aaaabbbb"                                                 // 4B
+		testActorID = "aaaabbbb1234aaaabbbb1234" + testJobID                     // 12B unique + JobID
+		testTaskID1 = "ccccdddd5678cccc" + testActorID                           // 8B unique + ActorID
+		testTaskID2 = "ccccdddd9012dddd" + testActorID                           // 8B unique + ActorID
+		testNodeID1 = "eeeeffff1234eeeeffff1234eeeeffff1234eeeeffff1234eeeeffff" // 28B
+		testNodeID2 = "eeeeffff9012eeeeffff9012eeeeffff9012eeeeffff9012eeeeffff" // 28B
+
+		testClusterName = "cluster1"
+		testTaskName1   = "Name_12345"
+		testTaskName2   = "Name_54321"
+	)
 	tests := []struct {
 		name string
 		// Setup
@@ -41,41 +58,41 @@ func TestEventProcessor(t *testing.T) {
 			name: "process multiple events then close channel",
 			eventsToSend: []map[string]any{
 				{
-					"clusterName": "cluster1",
+					"clusterName": testClusterName,
 					"eventType":   "TASK_DEFINITION_EVENT",
 					"taskDefinitionEvent": map[string]any{
-						"taskId":      "ID_12345",
-						"taskName":    "Name_12345",
-						"nodeId":      "Nodeid_12345",
+						"taskId":      testTaskID1,
+						"taskName":    testTaskName1,
+						"nodeId":      testNodeID1,
 						"taskAttempt": 2,
 					},
 				},
 				{
-					"clusterName": "cluster1",
+					"clusterName": testClusterName,
 					"eventType":   "TASK_DEFINITION_EVENT",
 					"taskDefinitionEvent": map[string]any{
-						"taskId":      "ID_54321",
-						"taskName":    "Name_54321",
-						"nodeId":      "Nodeid_54321",
+						"taskId":      testTaskID2,
+						"taskName":    testTaskName2,
+						"nodeId":      testNodeID2,
 						"taskAttempt": 1,
 					},
 				},
 			},
 			closeChan: true,
 			wantStoredEvents: map[string][]types.Task{
-				"ID_12345": {
+				testTaskID1: {
 					{
-						TaskID:      "ID_12345",
-						TaskName:    "Name_12345",
-						NodeID:      "Nodeid_12345",
+						TaskID:      testTaskID1,
+						TaskName:    testTaskName1,
+						NodeID:      testNodeID1,
 						TaskAttempt: 2,
 					},
 				},
-				"ID_54321": {
+				testTaskID2: {
 					{
-						TaskID:      "ID_54321",
-						TaskName:    "Name_54321",
-						NodeID:      "Nodeid_54321",
+						TaskID:      testTaskID2,
+						TaskName:    testTaskName2,
+						NodeID:      testNodeID2,
 						TaskAttempt: 1,
 					},
 				},
@@ -90,12 +107,12 @@ func TestEventProcessor(t *testing.T) {
 			name: "context canceled",
 			eventsToSend: []map[string]any{
 				{
-					"clusterName": "cluster1",
+					"clusterName": testClusterName,
 					"eventType":   "TASK_DEFINITION_EVENT",
 					"taskDefinitionEvent": map[string]any{
-						"taskId":      "ID_12345",
-						"taskName":    "Name_12345",
-						"nodeId":      "Nodeid_12345",
+						"taskId":      testTaskID1,
+						"taskName":    testTaskName1,
+						"nodeId":      testNodeID1,
 						"taskAttempt": 2,
 					},
 				},
@@ -105,11 +122,11 @@ func TestEventProcessor(t *testing.T) {
 			expectedErrType: context.Canceled,
 			// Event might be processed before cancellation is detected
 			wantStoredEvents: map[string][]types.Task{
-				"ID_12345": {
+				testTaskID1: {
 					{
-						TaskID:      "ID_12345",
-						TaskName:    "Name_12345",
-						NodeID:      "Nodeid_12345",
+						TaskID:      testTaskID1,
+						TaskName:    testTaskName1,
+						NodeID:      testNodeID1,
 						TaskAttempt: 2,
 					},
 				},
@@ -170,7 +187,7 @@ func TestEventProcessor(t *testing.T) {
 
 			// Check stored events
 			if tt.wantStoredEvents != nil {
-				if diff := cmp.Diff(tt.wantStoredEvents, h.ClusterTaskMap.ClusterTaskMap["cluster1"].TaskMap); diff != "" {
+				if diff := cmp.Diff(tt.wantStoredEvents, h.ClusterTaskMap.ClusterTaskMap[testClusterName].TaskMap); diff != "" {
 					t.Errorf("storeEventCalls diff (-want +got):\n%s", diff)
 				}
 			}
@@ -179,10 +196,34 @@ func TestEventProcessor(t *testing.T) {
 }
 
 func TestStoreEvent(t *testing.T) {
+	// IDs follow Ray's ID spec; see TestEventProcessor for rationale.
+	const (
+		testJobID        = "aaaabbbb"                                                 // 4B
+		testActorID      = "aaaabbbb1234aaaabbbb1234" + testJobID                     // 12B unique + JobID
+		testTaskID1      = "ccccdddd5678cccc" + testActorID                           // 8B unique + ActorID
+		testTaskID2      = "ccccdddd9012dddd" + testActorID                           // 8B unique + ActorID
+		testNodeID1      = "eeeeffff1234eeeeffff1234eeeeffff1234eeeeffff1234eeeeffff" // 28B
+		testNodeID2      = "eeeeffff9012eeeeffff9012eeeeffff9012eeeeffff9012eeeeffff" // 28B
+		testUpperNodeID1 = "AAAABBBB1234AAAABBBB1234AAAABBBB1234AAAABBBB1234AAAABBBB" // 28B uppercase
+		testLowerNodeID1 = "aaaabbbb1234aaaabbbb1234aaaabbbb1234aaaabbbb1234aaaabbbb" // 28B lowercase
+		testUpperTaskID1 = "AAAABBBB5678AAAABBBB5678AAAABBBB5678AAAABBBB5678"         // 24B uppercase
+		testLowerTaskID1 = "aaaabbbb5678aaaabbbb5678aaaabbbb5678aaaabbbb5678"         // 24B lowercase
+
+		// Base64 and Hex pairs to verify normalization of base64 to hex
+		testBase64ID1 = "AgAAAA=="
+		testBase64ID2 = "AwAAAA=="
+		testHexID1    = "02000000" // hex for base64 "AgAAAA=="
+		testHexID2    = "03000000" // hex for base64 "AwAAAA=="
+
+		testClusterName = "cluster1"
+		testTaskName1   = "Name_12345"
+		testTaskName2   = "Name_54321"
+	)
+
 	initialTask := types.Task{
-		TaskID:      "taskid1",
-		TaskName:    "taskName123",
-		NodeID:      "nodeid123",
+		TaskID:      testTaskID1,
+		TaskName:    testTaskName1,
+		NodeID:      testNodeID1,
 		TaskAttempt: 0,
 	}
 	tests := []struct {
@@ -202,7 +243,7 @@ func TestStoreEvent(t *testing.T) {
 			},
 			eventMap: map[string]any{
 				"eventType":   "UNKNOWN_TYPE",
-				"clusterName": "c1",
+				"clusterName": testClusterName,
 			},
 			wantErr:          false,
 			wantClusterCount: 0,
@@ -212,16 +253,16 @@ func TestStoreEvent(t *testing.T) {
 			initialState: &types.ClusterTaskMap{
 				ClusterTaskMap: make(map[string]*types.TaskMap),
 			},
-			eventMap:          makeTaskEventMap("taskName123", "nodeid1234", "taskid1", "cluster1", 0),
+			eventMap:          makeTaskEventMap(testTaskName1, testNodeID1, testTaskID1, testClusterName, 0),
 			wantErr:           false,
 			wantClusterCount:  1,
-			wantTaskInCluster: "cluster1",
-			wantTaskID:        "taskid1",
+			wantTaskInCluster: testClusterName,
+			wantTaskID:        testTaskID1,
 			wantTasks: []types.Task{
 				{
-					TaskID:      "taskid1",
-					TaskName:    "taskName123",
-					NodeID:      "nodeid1234",
+					TaskID:      testTaskID1,
+					TaskName:    testTaskName1,
+					NodeID:      testNodeID1,
 					TaskAttempt: 0,
 				},
 			},
@@ -230,19 +271,19 @@ func TestStoreEvent(t *testing.T) {
 			name: "task event - existing cluster, new task",
 			initialState: &types.ClusterTaskMap{
 				ClusterTaskMap: map[string]*types.TaskMap{
-					"cluster1": types.NewTaskMap(),
+					testClusterName: types.NewTaskMap(),
 				},
 			},
-			eventMap:          makeTaskEventMap("taskName123", "nodeid1234", "taskid2", "cluster1", 1),
+			eventMap:          makeTaskEventMap(testTaskName2, testNodeID2, testTaskID2, testClusterName, 1),
 			wantErr:           false,
 			wantClusterCount:  1,
-			wantTaskInCluster: "cluster1",
-			wantTaskID:        "taskid2",
+			wantTaskInCluster: testClusterName,
+			wantTaskID:        testTaskID2,
 			wantTasks: []types.Task{
 				{
-					TaskID:      "taskid2",
-					TaskName:    "taskName123",
-					NodeID:      "nodeid1234",
+					TaskID:      testTaskID2,
+					TaskName:    testTaskName2,
+					NodeID:      testNodeID2,
 					TaskAttempt: 1,
 				},
 			},
@@ -251,31 +292,88 @@ func TestStoreEvent(t *testing.T) {
 			name: "task event - existing cluster and existing task with new attempt",
 			initialState: &types.ClusterTaskMap{
 				ClusterTaskMap: map[string]*types.TaskMap{
-					"cluster1": {
+					testClusterName: {
 						TaskMap: map[string][]types.Task{
-							"taskid1": {initialTask},
+							testTaskID1: {initialTask},
 						},
 					},
 				},
 			},
-			eventMap:          makeTaskEventMap("taskName123", "nodeid123", "taskid1", "cluster1", 2),
+			eventMap:          makeTaskEventMap(testTaskName1, testNodeID1, testTaskID1, testClusterName, 2),
 			wantErr:           false,
 			wantClusterCount:  1,
-			wantTaskInCluster: "cluster1",
-			wantTaskID:        "taskid1",
+			wantTaskInCluster: testClusterName,
+			wantTaskID:        testTaskID1,
 			// Now expects BOTH attempts to be stored
 			wantTasks: []types.Task{
 				{
-					TaskID:      "taskid1",
-					TaskName:    "taskName123",
-					NodeID:      "nodeid123",
+					TaskID:      testTaskID1,
+					TaskName:    testTaskName1,
+					NodeID:      testNodeID1,
 					TaskAttempt: 0,
 				},
 				{
-					TaskID:      "taskid1",
-					TaskName:    "taskName123",
-					NodeID:      "nodeid123",
+					TaskID:      testTaskID1,
+					TaskName:    testTaskName1,
+					NodeID:      testNodeID1,
 					TaskAttempt: 2,
+				},
+			},
+		},
+		{
+			name: "task event - base64 ID is normalized to hex",
+			initialState: &types.ClusterTaskMap{
+				ClusterTaskMap: make(map[string]*types.TaskMap),
+			},
+			eventMap:          makeTaskEventMap(testTaskName1, testBase64ID1, testBase64ID2, testClusterName, 0),
+			wantErr:           false,
+			wantClusterCount:  1,
+			wantTaskInCluster: testClusterName,
+			wantTaskID:        testHexID2,
+			wantTasks: []types.Task{
+				{
+					TaskID:      testHexID2,
+					TaskName:    testTaskName1,
+					NodeID:      testHexID1,
+					TaskAttempt: 0,
+				},
+			},
+		},
+		{
+			name: "task event - uppercase hex IDs normalized to lowercase",
+			initialState: &types.ClusterTaskMap{
+				ClusterTaskMap: make(map[string]*types.TaskMap),
+			},
+			eventMap:          makeTaskEventMap(testTaskName1, testUpperNodeID1, testUpperTaskID1, testClusterName, 0),
+			wantErr:           false,
+			wantClusterCount:  1,
+			wantTaskInCluster: testClusterName,
+			wantTaskID:        testLowerTaskID1,
+			wantTasks: []types.Task{
+				{
+					TaskID:      testLowerTaskID1,
+					TaskName:    testTaskName1,
+					NodeID:      testLowerNodeID1,
+					TaskAttempt: 0,
+				},
+			},
+		},
+		{
+			name: "task event - lowercase hex IDs are returned as-is",
+			initialState: &types.ClusterTaskMap{
+				ClusterTaskMap: make(map[string]*types.TaskMap),
+			},
+			eventMap:          makeTaskEventMap(testTaskName1, testLowerNodeID1, testLowerTaskID1, testClusterName, 0),
+			wantErr:           false,
+			wantClusterCount:  1,
+			wantTaskInCluster: testClusterName,
+			wantTaskID:        testLowerTaskID1,
+			wantTasks: []types.Task{
+				{
+					TaskID:      testLowerTaskID1,
+					TaskName:    testTaskName1,
+					NodeID:      testLowerNodeID1,
+					TaskAttempt: 0,
 				},
 			},
 		},
@@ -286,7 +384,7 @@ func TestStoreEvent(t *testing.T) {
 			},
 			eventMap: map[string]any{
 				"eventType":   string(types.TASK_DEFINITION_EVENT),
-				"clusterName": "c1",
+				"clusterName": testClusterName,
 			},
 			wantErr: true,
 		},
@@ -297,7 +395,7 @@ func TestStoreEvent(t *testing.T) {
 			},
 			eventMap: map[string]any{
 				"eventType":           string(types.TASK_DEFINITION_EVENT),
-				"clusterName":         "c1",
+				"clusterName":         testClusterName,
 				"taskDefinitionEvent": "not a map",
 			},
 			wantErr: true, // Marshal will fail
@@ -309,7 +407,7 @@ func TestStoreEvent(t *testing.T) {
 			},
 			eventMap: map[string]any{
 				"eventType":   string(types.TASK_DEFINITION_EVENT),
-				"clusterName": "c1",
+				"clusterName": testClusterName,
 				"taskDefinitionEvent": map[string]any{
 					"taskId":      123, // Should be string
 					"taskAttempt": 0,
@@ -370,6 +468,16 @@ func TestStoreEvent(t *testing.T) {
 // TestTaskLifecycleEventDeduplication verifies that duplicate events are correctly filtered
 // and out-of-order events are properly sorted
 func TestTaskLifecycleEventDeduplication(t *testing.T) {
+	// IDs follow Ray's ID spec; see TestEventProcessor for rationale.
+	const (
+		testJobID       = "aaaabbbb"                                                 // 4B
+		testActorID     = "aaaabbbb1234aaaabbbb1234" + testJobID                     // 12B unique + JobID
+		testTaskID      = "ccccdddd5678cccc" + testActorID                           // 8B unique + ActorID
+		testNodeID      = "eeeeffff1234eeeeffff1234eeeeffff1234eeeeffff1234eeeeffff" // 28B
+		testWorkerID    = "eeeeffff0000eeeeffff0000eeeeffff0000eeeeffff0000eeeeffff" // 28B
+		testClusterName = "cluster1"
+	)
+
 	// Helper to create a StateEvent
 	makeStateEvent := func(state types.TaskStatus, timestampNano int64) types.TaskStateTransition {
 		return types.TaskStateTransition{
@@ -379,7 +487,7 @@ func TestTaskLifecycleEventDeduplication(t *testing.T) {
 	}
 
 	// Helper to create a TASK_LIFECYCLE_EVENT map
-	makeLifecycleEvent := func(taskID string, attempt int, transitions []map[string]any) map[string]any {
+	makeLifecycleEvent := func(transitions []map[string]any) map[string]any {
 		// Convert []map[string]any to []any for proper type assertion in storeEvent
 		transitionsAny := make([]any, len(transitions))
 		for i, t := range transitions {
@@ -387,13 +495,13 @@ func TestTaskLifecycleEventDeduplication(t *testing.T) {
 		}
 		return map[string]any{
 			"eventType":   string(types.TASK_LIFECYCLE_EVENT),
-			"clusterName": "test-cluster",
+			"clusterName": testClusterName,
 			"taskLifecycleEvent": map[string]any{
-				"taskId":           taskID,
-				"taskAttempt":      float64(attempt),
+				"taskId":           testTaskID,
+				"taskAttempt":      float64(0),
 				"stateTransitions": transitionsAny,
-				"nodeId":           "node-1",
-				"workerId":         "worker-1",
+				"nodeId":           testNodeID,
+				"workerId":         testWorkerID,
 			},
 		}
 	}
@@ -531,9 +639,9 @@ func TestTaskLifecycleEventDeduplication(t *testing.T) {
 
 			// Pre-populate existing events if any
 			if len(tt.existingEvents) > 0 {
-				taskMap := h.ClusterTaskMap.GetOrCreateTaskMap("test-cluster")
-				taskMap.CreateOrMergeAttempt("task-1", 0, func(task *types.Task) {
-					task.TaskID = "task-1"
+				taskMap := h.ClusterTaskMap.GetOrCreateTaskMap(testClusterName)
+				taskMap.CreateOrMergeAttempt(testTaskID, 0, func(task *types.Task) {
+					task.TaskID = testTaskID
 					task.StateTransitions = tt.existingEvents
 					if len(tt.existingEvents) > 0 {
 						task.State = tt.existingEvents[len(tt.existingEvents)-1].State
@@ -542,18 +650,18 @@ func TestTaskLifecycleEventDeduplication(t *testing.T) {
 			}
 
 			// Process the lifecycle event
-			eventMap := makeLifecycleEvent("task-1", 0, tt.newTransitions)
+			eventMap := makeLifecycleEvent(tt.newTransitions)
 			err := h.storeEvent(eventMap)
 			if err != nil {
 				t.Fatalf("storeEvent() unexpected error: %v", err)
 			}
 
 			// Get the task and verify
-			taskMap := h.ClusterTaskMap.GetOrCreateTaskMap("test-cluster")
+			taskMap := h.ClusterTaskMap.GetOrCreateTaskMap(testClusterName)
 			taskMap.Lock()
 			defer taskMap.Unlock()
 
-			tasks, exists := taskMap.TaskMap["task-1"]
+			tasks, exists := taskMap.TaskMap[testTaskID]
 			if !exists || len(tasks) == 0 {
 				t.Fatal("Task not found after processing")
 			}
@@ -580,6 +688,13 @@ func TestTaskLifecycleEventDeduplication(t *testing.T) {
 
 // TestActorLifecycleEventDeduplication verifies that duplicate actor events are correctly filtered
 func TestActorLifecycleEventDeduplication(t *testing.T) {
+	// IDs follow Ray's ID spec; see TestEventProcessor for rationale.
+	const (
+		testJobID       = "aaaabbbb"                             // 4B
+		testActorID     = "aaaabbbb1234aaaabbbb1234" + testJobID // 12B unique + JobID
+		testClusterName = "cluster1"
+	)
+
 	// Helper to create an ActorStateEvent
 	makeActorStateEvent := func(state types.StateType, timestampNano int64) types.ActorStateEvent {
 		return types.ActorStateEvent{
@@ -589,7 +704,7 @@ func TestActorLifecycleEventDeduplication(t *testing.T) {
 	}
 
 	// Helper to create an ACTOR_LIFECYCLE_EVENT map
-	makeActorLifecycleEvent := func(actorID string, transitions []map[string]any) map[string]any {
+	makeActorLifecycleEvent := func(transitions []map[string]any) map[string]any {
 		// Convert []map[string]any to []any for proper type assertion in storeEvent
 		transitionsAny := make([]any, len(transitions))
 		for i, t := range transitions {
@@ -597,9 +712,9 @@ func TestActorLifecycleEventDeduplication(t *testing.T) {
 		}
 		return map[string]any{
 			"eventType":   string(types.ACTOR_LIFECYCLE_EVENT),
-			"clusterName": "test-cluster",
+			"clusterName": testClusterName,
 			"actorLifecycleEvent": map[string]any{
-				"actorId":          actorID,
+				"actorId":          testActorID,
 				"stateTransitions": transitionsAny,
 			},
 		}
@@ -689,9 +804,9 @@ func TestActorLifecycleEventDeduplication(t *testing.T) {
 
 			// Pre-populate existing events
 			if len(tt.existingEvents) > 0 {
-				actorMap := h.ClusterActorMap.GetOrCreateActorMap("test-cluster")
-				actorMap.CreateOrMergeActor("actor-1", func(a *types.Actor) {
-					a.ActorID = "actor-1"
+				actorMap := h.ClusterActorMap.GetOrCreateActorMap(testClusterName)
+				actorMap.CreateOrMergeActor(testActorID, func(a *types.Actor) {
+					a.ActorID = testActorID
 					a.Events = tt.existingEvents
 					if len(tt.existingEvents) > 0 {
 						a.State = tt.existingEvents[len(tt.existingEvents)-1].State
@@ -700,14 +815,14 @@ func TestActorLifecycleEventDeduplication(t *testing.T) {
 			}
 
 			// Process the lifecycle event
-			eventMap := makeActorLifecycleEvent("actor-1", tt.newTransitions)
+			eventMap := makeActorLifecycleEvent(tt.newTransitions)
 			err := h.storeEvent(eventMap)
 			if err != nil {
 				t.Fatalf("storeEvent() unexpected error: %v", err)
 			}
 
 			// Get the actor and verify
-			actor, found := h.GetActorByID("test-cluster", "actor-1")
+			actor, found := h.GetActorByID(testClusterName, testActorID)
 			if !found {
 				t.Fatal("Actor not found after processing")
 			}
@@ -728,6 +843,12 @@ func TestActorLifecycleEventDeduplication(t *testing.T) {
 // TestDriverJobLifeCycleEventDuplication tests that duplicate events are properly filtered and sorted
 // TODO(chiayi): Update once more fields are added to driver job event
 func TestDriverJobLifecycleEventDuplication(t *testing.T) {
+	// IDs follow Ray's ID spec; see TestEventProcessor for rationale.
+	const (
+		testJobID       = "aaaabbbb" // 4B
+		testClusterName = "cluster1"
+	)
+
 	makeDriverJobStateTransitionEvent := func(state types.JobState, timestampNano int64) types.JobStateTransition {
 		return types.JobStateTransition{
 			State:     state,
@@ -735,16 +856,16 @@ func TestDriverJobLifecycleEventDuplication(t *testing.T) {
 		}
 	}
 
-	makeDriverJobLifecycleEvent := func(jobID string, transitions []map[string]any) map[string]any {
+	makeDriverJobLifecycleEvent := func(transitions []map[string]any) map[string]any {
 		transitionsAny := make([]any, len(transitions))
 		for i, t := range transitions {
 			transitionsAny[i] = t
 		}
 		return map[string]any{
 			"eventType":   string(types.DRIVER_JOB_LIFECYCLE_EVENT),
-			"clusterName": "test-cluster",
+			"clusterName": testClusterName,
 			"driverJobLifecycleEvent": map[string]any{
-				"jobId":            jobID,
+				"jobId":            testJobID,
 				"stateTransitions": transitionsAny,
 			},
 		}
@@ -853,9 +974,9 @@ func TestDriverJobLifecycleEventDuplication(t *testing.T) {
 			h := NewEventHandler(nil)
 
 			if len(tt.existingTransitions) > 0 {
-				jobMap := h.ClusterJobMap.GetOrCreateJobMap("test-cluster")
-				jobMap.CreateOrMergeJob("job-1", func(job *types.Job) {
-					job.JobID = "job-1"
+				jobMap := h.ClusterJobMap.GetOrCreateJobMap(testClusterName)
+				jobMap.CreateOrMergeJob(testJobID, func(job *types.Job) {
+					job.JobID = testJobID
 					job.StateTransitions = tt.existingTransitions
 					if len(tt.existingTransitions) > 0 {
 						job.State = tt.existingTransitions[len(tt.existingTransitions)-1].State
@@ -863,13 +984,13 @@ func TestDriverJobLifecycleEventDuplication(t *testing.T) {
 				})
 			}
 
-			eventMap := makeDriverJobLifecycleEvent("job-1", tt.newTransitions)
+			eventMap := makeDriverJobLifecycleEvent(tt.newTransitions)
 			err := h.storeEvent(eventMap)
 			if err != nil {
 				t.Fatalf("storeEvent() unexpected error: %v", err)
 			}
 
-			job, exists := h.GetJobByJobID("test-cluster", "job-1")
+			job, exists := h.GetJobByJobID(testClusterName, testJobID)
 			if !exists {
 				t.Fatal("Job not found after processing")
 			}
@@ -889,6 +1010,16 @@ func TestDriverJobLifecycleEventDuplication(t *testing.T) {
 func TestMultipleReprocessingCycles(t *testing.T) {
 	h := NewEventHandler(nil)
 
+	// IDs follow Ray's ID spec; see TestEventProcessor for rationale.
+	const (
+		testJobID       = "aaaabbbb"                                                 // 4B
+		testActorID     = "aaaabbbb1234aaaabbbb1234" + testJobID                     // 12B unique + JobID
+		testTaskID      = "ccccdddd5678cccc" + testActorID                           // 8B unique + ActorID
+		testNodeID      = "eeeeffff1234eeeeffff1234eeeeffff1234eeeeffff1234eeeeffff" // 28B
+		testWorkerID    = "eeeeffff0000eeeeffff0000eeeeffff0000eeeeffff0000eeeeffff" // 28B
+		testClusterName = "cluster1"
+	)
+
 	// The same events that would be in an event file
 	// Use []any to match what storeEvent expects from JSON parsing
 	transitions := []any{
@@ -899,13 +1030,13 @@ func TestMultipleReprocessingCycles(t *testing.T) {
 
 	eventMap := map[string]any{
 		"eventType":   string(types.TASK_LIFECYCLE_EVENT),
-		"clusterName": "test-cluster",
+		"clusterName": testClusterName,
 		"taskLifecycleEvent": map[string]any{
-			"taskId":           "task-1",
+			"taskId":           testTaskID,
 			"taskAttempt":      float64(0),
 			"stateTransitions": transitions,
-			"nodeId":           "node-1",
-			"workerId":         "worker-1",
+			"nodeId":           testNodeID,
+			"workerId":         testWorkerID,
 		},
 	}
 
@@ -917,9 +1048,9 @@ func TestMultipleReprocessingCycles(t *testing.T) {
 		}
 
 		// Check event count after each cycle
-		taskMap := h.ClusterTaskMap.GetOrCreateTaskMap("test-cluster")
+		taskMap := h.ClusterTaskMap.GetOrCreateTaskMap(testClusterName)
 		taskMap.Lock()
-		tasks := taskMap.TaskMap["task-1"]
+		tasks := taskMap.TaskMap[testTaskID]
 		eventCount := len(tasks[0].StateTransitions)
 		taskMap.Unlock()
 
