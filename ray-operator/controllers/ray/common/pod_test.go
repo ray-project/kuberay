@@ -2228,6 +2228,24 @@ func TestGenerateRayStartCommand(t *testing.T) {
 			resource:       corev1.ResourceRequirements{},
 			expected:       "",
 		},
+		{
+			name:     "HeadNode with include-log-monitor=false",
+			nodeType: rayv1.HeadNode,
+			rayStartParams: map[string]string{
+				"include-log-monitor": "false",
+			},
+			resource: corev1.ResourceRequirements{},
+			expected: "ray start --head  --include-log-monitor=false ",
+		},
+		{
+			name:     "HeadNode with include-log-monitor=true",
+			nodeType: rayv1.HeadNode,
+			rayStartParams: map[string]string{
+				"include-log-monitor": "true",
+			},
+			resource: corev1.ResourceRequirements{},
+			expected: "ray start --head  --include-log-monitor=true ",
+		},
 	}
 
 	for _, tt := range tests {
