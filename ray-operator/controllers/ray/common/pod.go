@@ -1149,14 +1149,9 @@ func convertParamMap(rayStartParams map[string]string) (s string) {
 	sort.Strings(keys)
 
 	flags := new(bytes.Buffer)
-	// specialParameterOptions' arguments can be true or false.
-	// For example, --log-color can be auto | false | true.
-	// `include-log-monitor` is declared in Ray's CLI as `type=bool` (not
-	// `is_flag=True`), so the user needs to be able to pass `=false` to
-	// disable log_monitor. Without inclusion here, a value of `false` would
-	// be silently dropped, `--include-log-monitor` would not appear on the
-	// `ray start` command line, and Ray would default `include_log_monitor`
-	// to True.
+	// All `ray start` CLI flags that accept an explicit boolean value (e.g.
+	// `--flag=false`) must be listed here, otherwise a value of "false"
+	// gets silently dropped and the flag never reaches `ray start`.
 	specialParameterOptions := []string{"log-color", "include-dashboard", "include-log-monitor"}
 	for _, option := range keys {
 		argument := rayStartParams[option]
