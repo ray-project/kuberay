@@ -48,8 +48,7 @@ func (s *SessionLoader) LoadSession(ctx context.Context, info utils.ClusterInfo)
 		return false, err
 	}
 
-	clusterNameID := info.Name + "_" + info.Namespace
-	key := clusterNameID + "/" + info.SessionName
+	key := utils.BuildClusterSessionKey(info.Name, info.Namespace, info.SessionName)
 
 	// Fast-path: session is already loaded.
 	s.loadedMu.RLock()
