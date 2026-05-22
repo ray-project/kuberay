@@ -75,6 +75,8 @@ func (p *SessionProcessor) ProcessSession(ctx context.Context, session utils.Clu
 }
 
 // isDead determines if the RayCluster CR is absent.
+//
+// Known limit: An old session of a still-running RayCluster will be misclassified as live.
 func (p *SessionProcessor) isDead(ctx context.Context, session utils.ClusterInfo) (bool, error) {
 	rc := &rayv1.RayCluster{}
 	err := p.k8sClient.Get(ctx, k8stypes.NamespacedName{
