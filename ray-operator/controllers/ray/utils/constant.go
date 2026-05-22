@@ -190,8 +190,8 @@ const (
 	ENABLE_GCS_FT_REDIS_CLEANUP = "ENABLE_GCS_FT_REDIS_CLEANUP"
 
 	// RAYCLUSTER_GCS_FT_DELETION_TIMEOUT_DEFAULT is the fallback timeout (in seconds)
-	// for auto-deleting stuck RayService clusters when the FT finalizer is not
-	// removed within that duration. Override per-cluster via the
+	// for force-removing the GCS FT finalizer from a stuck RayCluster when the cleanup
+	// job has not finished within that duration. Override per-cluster via the
 	// RayClusterGCSFTDeletionTimeoutAnnotation annotation.
 	RAYCLUSTER_GCS_FT_DELETION_TIMEOUT_DEFAULT = 300 // in seconds; == 5 minutes
 

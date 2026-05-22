@@ -1732,22 +1732,6 @@ var _ = Context("Inside the default namespace", func() {
 		}
 
 		Describe("Helper function tests", func() {
-			It("Should correctly detect RayService ownership", func() {
-				cluster := rayClusterTemplate("helper-ownership-test", namespace)
-				Expect(isOwnedByRayService(cluster)).To(BeFalse())
-
-				cluster.Labels = map[string]string{
-					utils.RayOriginatedFromCRDLabelKey: utils.RayOriginatedFromCRDLabelValue(utils.RayServiceCRD),
-				}
-				Expect(isOwnedByRayService(cluster)).To(BeTrue())
-
-				cluster.Labels[utils.RayOriginatedFromCRDLabelKey] = "SomeOtherCRD"
-				Expect(isOwnedByRayService(cluster)).To(BeFalse())
-
-				cluster.Labels = nil
-				Expect(isOwnedByRayService(cluster)).To(BeFalse())
-			})
-
 			It("Should return correct deletion timeout from annotation", func() {
 				cluster := rayClusterTemplate("helper-timeout-test", namespace)
 
@@ -1773,14 +1757,11 @@ var _ = Context("Inside the default namespace", func() {
 			})
 		})
 
-		Describe("Auto-deletion for stuck RayService clusters", Ordered, func() {
+		Describe("Auto-deletion for clusters with stuck GCS FT finalizer", Ordered, func() {
 			var clusterKey = client.ObjectKey{Name: "raycluster-redis-cleanup", Namespace: namespace}
 
 			BeforeAll(func() {
 				cluster := rayClusterTemplate(clusterKey.Name, namespace)
-				cluster.Labels = map[string]string{
-					utils.RayOriginatedFromCRDLabelKey: utils.RayOriginatedFromCRDLabelValue(utils.RayServiceCRD),
-				}
 				cluster.Finalizers = []string{utils.GCSFaultToleranceRedisCleanupFinalizer}
 				Expect(k8sClient.Create(ctx, cluster)).To(Succeed())
 				Eventually(
@@ -1788,12 +1769,10 @@ var _ = Context("Inside the default namespace", func() {
 					time.Second*3, time.Millisecond*500).Should(BeNil())
 			})
 
-			It("Should have finalizer and RayService ownership after creation", func() {
+			It("Should have GCS FT finalizer after creation", func() {
 				cluster := &rayv1.RayCluster{}
 				Expect(k8sClient.Get(ctx, clusterKey, cluster)).To(Succeed())
 				Expect(cluster.Finalizers).To(ContainElement(utils.GCSFaultToleranceRedisCleanupFinalizer))
-				Expect(cluster.Labels[utils.RayOriginatedFromCRDLabelKey]).To(Equal(
-					utils.RayOriginatedFromCRDLabelValue(utils.RayServiceCRD)))
 			})
 
 			It("Should NOT auto-delete cluster before timeout", func() {
@@ -1825,7 +1804,7 @@ var _ = Context("Inside the default namespace", func() {
 				pastTime := metav1.NewTime(time.Now().Add(-20 * time.Minute))
 				cluster.DeletionTimestamp = &pastTime
 
-				result, err := newReconciler().forceDeleteStuckRayServiceCluster(ctx, cluster)
+				result, err := newReconciler().forceRemoveGCSFTFinalizer(ctx, cluster)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(result).To(Equal(ctrl.Result{}))
 
@@ -1840,28 +1819,22 @@ var _ = Context("Inside the default namespace", func() {
 			})
 		})
 
-		Describe("Auto-deletion safety for standalone clusters", func() {
-			It("Should NEVER auto-delete a standalone cluster regardless of age", func() {
-				cluster := rayClusterTemplate("raycluster-standalone", namespace)
-				// No RayService ownership label
-				cluster.Finalizers = []string{utils.GCSFaultToleranceRedisCleanupFinalizer}
+		Describe("Auto-deletion safety for clusters without the GCS FT finalizer", func() {
+			It("Should NOT trigger force-delete when the GCS FT finalizer is absent", func() {
+				cluster := rayClusterTemplate("raycluster-no-finalizer", namespace)
+				// No GCS FT finalizer — hasGCSFTFinalizer must return false
+				Expect(hasGCSFTFinalizer(cluster)).To(BeFalse())
 
-				Expect(isOwnedByRayService(cluster)).To(BeFalse())
-
-				// Even with a very old in-memory timestamp, isOwnedByRayService guards the path
+				// Even with a very old in-memory timestamp, the missing finalizer guards the path
 				pastTime := metav1.NewTime(time.Now().Add(-2 * time.Hour))
 				cluster.DeletionTimestamp = &pastTime
-
-				Expect(isOwnedByRayService(cluster)).To(BeFalse())
+				Expect(hasGCSFTFinalizer(cluster)).To(BeFalse())
 			})
 		})
 
 		Describe("Integration with Redis cleanup flow", func() {
 			It("Should detect timeout and force-delete via Reconcile when annotation timeout elapses", func() {
 				cluster := rayClusterTemplate("raycluster-integration", namespace)
-				cluster.Labels = map[string]string{
-					utils.RayOriginatedFromCRDLabelKey: utils.RayOriginatedFromCRDLabelValue(utils.RayServiceCRD),
-				}
 				// 1-second timeout so the test doesn't need to wait long
 				cluster.Annotations = map[string]string{
 					utils.RayClusterGCSFTDeletionTimeoutAnnotation: "1",

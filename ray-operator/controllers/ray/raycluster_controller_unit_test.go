@@ -3891,26 +3891,22 @@ func TestReconcilePodsWithAuthTokenSecretName(t *testing.T) {
 	}
 }
 
-func TestIsOwnedByRayService(t *testing.T) {
+func TestHasGCSFTFinalizer(t *testing.T) {
 	tests := []struct {
-		name   string
-		labels map[string]string
-		want   bool
+		name       string
+		finalizers []string
+		want       bool
 	}{
-		{name: "no labels", labels: nil, want: false},
-		{name: "RayService label", labels: map[string]string{
-			utils.RayOriginatedFromCRDLabelKey: utils.RayOriginatedFromCRDLabelValue(utils.RayServiceCRD),
-		}, want: true},
-		{name: "other CRD label", labels: map[string]string{
-			utils.RayOriginatedFromCRDLabelKey: "SomeOtherCRD",
-		}, want: false},
-		{name: "unrelated labels", labels: map[string]string{"app": "foo"}, want: false},
+		{name: "no finalizers", finalizers: nil, want: false},
+		{name: "GCS FT finalizer present", finalizers: []string{utils.GCSFaultToleranceRedisCleanupFinalizer}, want: true},
+		{name: "other finalizer only", finalizers: []string{"some-other-finalizer"}, want: false},
+		{name: "GCS FT among multiple finalizers", finalizers: []string{"other", utils.GCSFaultToleranceRedisCleanupFinalizer}, want: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cluster := &rayv1.RayCluster{}
-			cluster.Labels = tt.labels
-			assert.Equal(t, tt.want, isOwnedByRayService(cluster))
+			cluster.Finalizers = tt.finalizers
+			assert.Equal(t, tt.want, hasGCSFTFinalizer(cluster))
 		})
 	}
 }
