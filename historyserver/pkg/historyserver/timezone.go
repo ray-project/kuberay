@@ -29,6 +29,8 @@ func (s *ServerHandler) getTimezone(req *restful.Request, resp *restful.Response
 	reader, err := s.reader.GetContent(clusterNameID, endpointPath)
 	if err != nil {
 		logrus.Errorf("Failed to get timezone metadata: %v", err)
+	}
+	if err != nil || reader == nil {
 		resp.Header().Set("Content-Type", "application/json")
 		resp.Write([]byte(`{"offset":"","value":""}`))
 		return

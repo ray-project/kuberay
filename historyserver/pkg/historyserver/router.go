@@ -880,6 +880,8 @@ func (s *ServerHandler) buildFormattedClusterStatus(clusterName, clusterNamespac
 		reader, err := s.reader.GetContent(clusterNameID, debugStatePath)
 		if err != nil {
 			logrus.Debugf("No debug_state.txt found for node %s: %v", nodeID, err)
+		}
+		if err != nil || reader == nil {
 			continue
 		}
 
@@ -933,6 +935,8 @@ func (s *ServerHandler) getClusterMetadata(req *restful.Request, resp *restful.R
 	reader, err := s.reader.GetContent(clusterNameID, endpointPath)
 	if err != nil {
 		logrus.Errorf("Failed to get cluster metadata: %v", err)
+	}
+	if err != nil || reader == nil {
 		resp.WriteErrorString(http.StatusNotFound, "Cluster metadata not found")
 		return
 	}
@@ -974,6 +978,8 @@ func (s *ServerHandler) getAdditionalEndpoint(req *restful.Request, resp *restfu
 	reader, err := s.reader.GetContent(clusterNameID, endpointPath)
 	if err != nil {
 		logrus.Errorf("Failed to get additional endpoint data for %s: %v", req.Request.URL.Path, err)
+	}
+	if err != nil || reader == nil {
 		// For known frontend endpoints, return empty but valid JSON responses instead of 404.
 		// This prevents the frontend from showing error states for endpoints that may not have been
 		// collected (e.g., Serve was not enabled on the cluster).
