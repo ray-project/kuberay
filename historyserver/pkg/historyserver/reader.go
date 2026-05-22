@@ -549,9 +549,6 @@ func (s *ServerHandler) searchNodeIDHexInEventFile(rayClusterNameNamespace, file
 		logrus.Warnf("Failed to get node event file %s: %v", filePath, err)
 		return "", false
 	}
-	if reader == nil {
-		return "", false
-	}
 
 	data, err := io.ReadAll(reader)
 	if err != nil {

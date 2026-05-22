@@ -882,10 +882,6 @@ func (s *ServerHandler) buildFormattedClusterStatus(clusterName, clusterNamespac
 			logrus.Debugf("No debug_state.txt found for node %s: %v", nodeID, err)
 			continue
 		}
-		if reader == nil {
-			logrus.Debugf("No debug_state.txt found for node %s", nodeID)
-			continue
-		}
 
 		debugState, err := ParseDebugState(reader)
 		if err != nil {
@@ -940,10 +936,6 @@ func (s *ServerHandler) getClusterMetadata(req *restful.Request, resp *restful.R
 		resp.WriteErrorString(http.StatusNotFound, "Cluster metadata not found")
 		return
 	}
-	if reader == nil {
-		resp.WriteErrorString(http.StatusNotFound, "Cluster metadata not found")
-		return
-	}
 
 	data, err := io.ReadAll(reader)
 	if err != nil {
@@ -982,18 +974,6 @@ func (s *ServerHandler) getAdditionalEndpoint(req *restful.Request, resp *restfu
 	reader, err := s.reader.GetContent(clusterNameID, endpointPath)
 	if err != nil {
 		logrus.Errorf("Failed to get additional endpoint data for %s: %v", req.Request.URL.Path, err)
-		// For known frontend endpoints, return empty but valid JSON responses instead of 404.
-		// This prevents the frontend from showing error states for endpoints that may not have been
-		// collected (e.g., Serve was not enabled on the cluster).
-		if emptyResp := emptyResponseForEndpoint(req.Request.URL.Path); emptyResp != nil {
-			resp.Header().Set("Content-Type", "application/json")
-			resp.Write(emptyResp)
-			return
-		}
-		resp.WriteErrorString(http.StatusNotFound, "Endpoint data not found in storage")
-		return
-	}
-	if reader == nil {
 		// For known frontend endpoints, return empty but valid JSON responses instead of 404.
 		// This prevents the frontend from showing error states for endpoints that may not have been
 		// collected (e.g., Serve was not enabled on the cluster).

@@ -33,11 +33,6 @@ func (s *ServerHandler) getTimezone(req *restful.Request, resp *restful.Response
 		resp.Write([]byte(`{"offset":"","value":""}`))
 		return
 	}
-	if reader == nil {
-		resp.Header().Set("Content-Type", "application/json")
-		resp.Write([]byte(`{"offset":"","value":""}`))
-		return
-	}
 
 	data, err := io.ReadAll(reader)
 	if err != nil {
