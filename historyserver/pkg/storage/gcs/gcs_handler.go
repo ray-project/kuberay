@@ -189,7 +189,7 @@ func (h *RayLogsHandler) List() []utils.ClusterInfo {
 	return clusterList
 }
 
-func (h *RayLogsHandler) GetContent(clusterId string, fileName string) io.Reader {
+func (h *RayLogsHandler) GetContent(clusterId string, fileName string) (io.Reader, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
@@ -201,17 +201,17 @@ func (h *RayLogsHandler) GetContent(clusterId string, fileName string) io.Reader
 	fileAttrs, err := objectIterator.Next()
 	if err == gIterator.Done {
 		logrus.Errorf("File %s was not found in bucket for cluster %s", fileName, clusterId)
-		return nil
+		return nil, fmt.Errorf("file %s was not found in bucket for cluster %s", fileName, clusterId)
 	}
 	if err != nil {
 		logrus.Errorf("Failed when searching for file %v", err)
-		return nil
+		return nil, err
 	}
 
 	reader, err := h.StorageClient.Bucket(h.GCSBucket).Object(fileAttrs.Name).NewReader(ctx)
 	if err != nil {
 		logrus.Errorf("Failed to create reader for file: %s in cluster: %s", fileName, clusterId)
-		return nil
+		return nil, err
 	}
 	defer reader.Close()
 	// TODO(chiayi): ReadAll can potentially cause OOM error depending on the size of the file.
@@ -219,9 +219,9 @@ func (h *RayLogsHandler) GetContent(clusterId string, fileName string) io.Reader
 	data, err := io.ReadAll(reader)
 	if err != nil {
 		logrus.Errorf("Failed to get all content of the file: %s, %v", fileName, err)
-		return nil
+		return nil, err
 	}
-	return bytes.NewReader(data)
+	return bytes.NewReader(data), nil
 }
 
 func NewReader(c *types.RayHistoryServerConfig, jd map[string]interface{}) (storage.StorageReader, error) {

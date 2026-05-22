@@ -70,7 +70,7 @@ func (s *ServerHandler) listClusters(limit int) []utils.ClusterInfo {
 	return clusters
 }
 
-func (s *ServerHandler) _getNodeLogs(rayClusterNameNamespace, sessionId, nodeId, folder, glob string) ([]byte, error) {
+func (s *ServerHandler) getNodeLogs(rayClusterNameNamespace, sessionId, nodeId, folder, glob string) ([]byte, error) {
 	logPath := path.Join(sessionId, utils.RAY_SESSIONDIR_LOGDIR_NAME, nodeId)
 	if folder != "" {
 		logPath = path.Join(logPath, folder)
@@ -170,7 +170,7 @@ func categorizeLogFiles(files []string) map[string][]string {
 	return result
 }
 
-func (s *ServerHandler) _getNodeLogFile(rayClusterNameNamespace, sessionID string, options GetLogFileOptions) ([]byte, error) {
+func (s *ServerHandler) getNodeLogFile(rayClusterNameNamespace, sessionID string, options GetLogFileOptions) ([]byte, error) {
 	// Resolve node_id and filename based on options
 	nodeID, filename, err := s.resolveLogFilename(rayClusterNameNamespace, sessionID, options)
 	if err != nil {
@@ -184,7 +184,10 @@ func (s *ServerHandler) _getNodeLogFile(rayClusterNameNamespace, sessionID strin
 
 	// Build log path
 	logPath := path.Join(sessionID, utils.RAY_SESSIONDIR_LOGDIR_NAME, nodeID, filename)
-	reader := s.reader.GetContent(rayClusterNameNamespace, logPath)
+	reader, err := s.reader.GetContent(rayClusterNameNamespace, logPath)
+	if err != nil {
+		return nil, utils.NewHTTPError(fmt.Errorf("failed to get log file %s: %w", logPath, err), http.StatusNotFound)
+	}
 
 	if reader == nil {
 		return nil, utils.NewHTTPError(fmt.Errorf("log file not found: %s", logPath), http.StatusNotFound)
@@ -520,7 +523,11 @@ func (s *ServerHandler) ipToNodeId(rayClusterNameNamespace, sessionID, nodeIP st
 // searchNodeIDHexInEventFile searches for a node with the given IP in a single event file.
 // Returns (nodeIDHex, true) if found, ("", false) otherwise.
 func (s *ServerHandler) searchNodeIDHexInEventFile(rayClusterNameNamespace, filePath, nodeIP string) (string, bool) {
-	reader := s.reader.GetContent(rayClusterNameNamespace, filePath)
+	reader, err := s.reader.GetContent(rayClusterNameNamespace, filePath)
+	if err != nil {
+		logrus.Warnf("Failed to get node event file %s: %v", filePath, err)
+		return "", false
+	}
 	if reader == nil {
 		return "", false
 	}

@@ -131,7 +131,7 @@ func routerAPI(s *ServerHandler) {
 		Doc("get cluster metadata (Ray version, Python version, etc.)").
 		Writes("")) // Placeholder for specific return type
 
-	ws.Route(ws.GET("/v0/logs").To(s.getNodeLogs).Filter(s.CookieHandle).
+	ws.Route(ws.GET("/v0/logs").To(s.handleGetNodeLogs).Filter(s.CookieHandle).
 		Doc("get logs").
 		Param(ws.QueryParameter("node_id", "node_id")).
 		Param(ws.QueryParameter("glob", "glob pattern")).
@@ -874,7 +874,11 @@ func (s *ServerHandler) buildFormattedClusterStatus(clusterName, clusterNamespac
 	for _, nodeID := range nodeIDs {
 		debugStatePath := path.Join(logsPath, nodeID, "debug_state.txt")
 
-		reader := s.reader.GetContent(clusterNameID, debugStatePath)
+		reader, err := s.reader.GetContent(clusterNameID, debugStatePath)
+		if err != nil {
+			logrus.Debugf("No debug_state.txt found for node %s: %v", nodeID, err)
+			continue
+		}
 		if reader == nil {
 			logrus.Debugf("No debug_state.txt found for node %s", nodeID)
 			continue
@@ -927,7 +931,12 @@ func (s *ServerHandler) getClusterMetadata(req *restful.Request, resp *restful.R
 	clusterNameID := clusterName + "_" + clusterNamespace
 	storageKey := utils.EndpointPathToStorageKey("/api/v0/cluster_metadata")
 	endpointPath := path.Join(sessionName, utils.RAY_SESSIONDIR_FETCHED_ENDPOINTS_NAME, storageKey)
-	reader := s.reader.GetContent(clusterNameID, endpointPath)
+	reader, err := s.reader.GetContent(clusterNameID, endpointPath)
+	if err != nil {
+		logrus.Errorf("Failed to get cluster metadata: %v", err)
+		resp.WriteErrorString(http.StatusNotFound, "Cluster metadata not found")
+		return
+	}
 	if reader == nil {
 		resp.WriteErrorString(http.StatusNotFound, "Cluster metadata not found")
 		return
@@ -967,7 +976,20 @@ func (s *ServerHandler) getAdditionalEndpoint(req *restful.Request, resp *restfu
 	// RequestURI() includes query params when present, and equals URL.Path when absent.
 	storageKey := utils.EndpointPathToStorageKey(req.Request.URL.RequestURI())
 	endpointPath := path.Join(sessionName, utils.RAY_SESSIONDIR_FETCHED_ENDPOINTS_NAME, storageKey)
-	reader := s.reader.GetContent(clusterNameID, endpointPath)
+	reader, err := s.reader.GetContent(clusterNameID, endpointPath)
+	if err != nil {
+		logrus.Errorf("Failed to get additional endpoint data for %s: %v", req.Request.URL.Path, err)
+		// For known frontend endpoints, return empty but valid JSON responses instead of 404.
+		// This prevents the frontend from showing error states for endpoints that may not have been
+		// collected (e.g., Serve was not enabled on the cluster).
+		if emptyResp := emptyResponseForEndpoint(req.Request.URL.Path); emptyResp != nil {
+			resp.Header().Set("Content-Type", "application/json")
+			resp.Write(emptyResp)
+			return
+		}
+		resp.WriteErrorString(http.StatusNotFound, "Endpoint data not found in storage")
+		return
+	}
 	if reader == nil {
 		// For known frontend endpoints, return empty but valid JSON responses instead of 404.
 		// This prevents the frontend from showing error states for endpoints that may not have been
@@ -1061,7 +1083,7 @@ func ensurePlacementGroupFields(data []byte) []byte {
 	return patched
 }
 
-func (s *ServerHandler) getNodeLogs(req *restful.Request, resp *restful.Response) {
+func (s *ServerHandler) handleGetNodeLogs(req *restful.Request, resp *restful.Response) {
 	clusterNameID := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
 	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
 	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
@@ -1091,7 +1113,7 @@ func (s *ServerHandler) getNodeLogs(req *restful.Request, resp *restful.Response
 			folder = base
 		}
 	}
-	data, err := s._getNodeLogs(clusterNameID+"_"+clusterNamespace, sessionName, nodeID, folder, glob)
+	data, err := s.getNodeLogs(clusterNameID+"_"+clusterNamespace, sessionName, nodeID, folder, glob)
 	if err != nil {
 		logrus.Errorf("Error: %v", err)
 		resp.WriteError(400, err)
@@ -1217,7 +1239,7 @@ func (s *ServerHandler) getLogicalActor(req *restful.Request, resp *restful.Resp
 	resp.Write(actData)
 }
 
-func (s *ServerHandler) getNodeLogFile(req *restful.Request, resp *restful.Response) {
+func (s *ServerHandler) handleGetNodeLogFile(req *restful.Request, resp *restful.Response) {
 	clusterNameID := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
 	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
 	sessionName := req.Attribute(COOKIE_SESSION_NAME_KEY).(string)
@@ -1269,7 +1291,7 @@ func (s *ServerHandler) getNodeLogFile(req *restful.Request, resp *restful.Respo
 		options.NodeID = nodeID
 	}
 
-	content, err := s._getNodeLogFile(clusterNameID+"_"+clusterNamespace, sessionName, options)
+	content, err := s.getNodeLogFile(clusterNameID+"_"+clusterNamespace, sessionName, options)
 	if err != nil {
 		var httpErr *utils.HTTPError
 		if errors.As(err, &httpErr) {
@@ -1399,7 +1421,7 @@ func (s *ServerHandler) getNodeLog(req *restful.Request, resp *restful.Response)
 	mediaType := req.PathParameter("media_type")
 	switch mediaType {
 	case "file":
-		s.getNodeLogFile(req, resp)
+		s.handleGetNodeLogFile(req, resp)
 	case "stream":
 		s.getNodeLogStream(req, resp)
 	default:

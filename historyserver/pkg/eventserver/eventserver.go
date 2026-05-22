@@ -149,7 +149,11 @@ func (h *EventHandler) Run(stop chan struct{}, numOfEventProcessors int) error {
 					// TODO: Filter out ones that have already been read
 					logrus.Infof("Reading event file: %s", eventFile)
 
-					eventioReader := h.reader.GetContent(clusterNameNamespace, eventFile)
+					eventioReader, err := h.reader.GetContent(clusterNameNamespace, eventFile)
+					if err != nil {
+						logrus.Errorf("Failed to get content for event file: %s, skipping: %v", eventFile, err)
+						continue
+					}
 					if eventioReader == nil {
 						logrus.Errorf("Failed to get content for event file: %s, skipping", eventFile)
 						continue

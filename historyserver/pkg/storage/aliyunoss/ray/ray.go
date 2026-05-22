@@ -194,7 +194,7 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 	return clusters
 }
 
-func (r *RayLogsHandler) GetContent(clusterId string, fileName string) io.Reader {
+func (r *RayLogsHandler) GetContent(clusterId string, fileName string) (io.Reader, error) {
 	ctx := context.TODO()
 	logrus.Infof("Prepare to get object %s info ...", fileName)
 	result, err := r.OssClient.GetObject(ctx, &oss.GetObjectRequest{
@@ -214,7 +214,7 @@ func (r *RayLogsHandler) GetContent(clusterId string, fileName string) io.Reader
 				})
 				if err != nil {
 					logrus.Errorf("Failed to get object %s: %v", f, err)
-					return nil
+					return nil, err
 				}
 				found = true
 				break
@@ -222,7 +222,7 @@ func (r *RayLogsHandler) GetContent(clusterId string, fileName string) io.Reader
 		}
 		if !found {
 			logrus.Errorf("Failed to get object by list all files %s", fileName)
-			return nil
+			return nil, fmt.Errorf("failed to get object by listing all files %s", fileName)
 		}
 	}
 	defer result.Body.Close()
@@ -230,9 +230,9 @@ func (r *RayLogsHandler) GetContent(clusterId string, fileName string) io.Reader
 	data, err := io.ReadAll(result.Body)
 	if err != nil {
 		logrus.Errorf("Failed to read all data from object %s : %v", fileName, err)
-		return nil
+		return nil, err
 	}
-	return bytes.NewReader(data)
+	return bytes.NewReader(data), nil
 }
 
 func NewReader(c *types.RayHistoryServerConfig, jd map[string]interface{}) (storage.StorageReader, error) {

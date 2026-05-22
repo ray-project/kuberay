@@ -276,7 +276,10 @@ func TestGetContent(t *testing.T) {
 	_, client, bucketName := setupFakeGCS(t, initialObjects...)
 	handler := createRayLogsHandler(client, bucketName)
 
-	reader := handler.GetContent(clusterID, fileName)
+	reader, err := handler.GetContent(clusterID, fileName)
+	if err != nil {
+		t.Fatalf("GetContent(%q, %q) returned error: %v", clusterID, fileName, err)
+	}
 	if reader == nil {
 		t.Fatalf("GetContent(%q, %q) returned nil reader, expected non-nil", clusterID, fileName)
 	}

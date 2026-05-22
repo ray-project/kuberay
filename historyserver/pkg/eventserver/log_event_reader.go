@@ -112,7 +112,10 @@ func (r *LogEventReader) ReadLogEvents(clusterInfo utils.ClusterInfo, clusterSes
 // Lines exceeding maxLineLengthLimit are drained and skipped without accumulating
 // in memory, matching Ray Dashboard's _read_file() behavior in event_utils.py.
 func (r *LogEventReader) readEventFile(clusterID, filePath string, jobEventMap *types.JobEventMap) error {
-	ioReader := r.reader.GetContent(clusterID, filePath)
+	ioReader, err := r.reader.GetContent(clusterID, filePath)
+	if err != nil {
+		return fmt.Errorf("failed to get content for %s: %w", filePath, err)
+	}
 	if ioReader == nil {
 		return fmt.Errorf("failed to get content for %s", filePath)
 	}

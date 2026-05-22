@@ -217,7 +217,7 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 	return clusters
 }
 
-func (r *RayLogsHandler) GetContent(clusterId string, fileName string) io.Reader {
+func (r *RayLogsHandler) GetContent(clusterId string, fileName string) (io.Reader, error) {
 	fullPath := path.Join(r.RootDir, clusterId, fileName)
 	logrus.Infof("Prepare to get blob %s info ...", fullPath)
 
@@ -251,7 +251,7 @@ func (r *RayLogsHandler) GetContent(clusterId string, fileName string) io.Reader
 						resp.Body.Close()
 					}
 					logrus.Errorf("Failed to get blob %s: %v", f, err)
-					return nil
+					return nil, err
 				}
 				// Read body before cancelling context to avoid incomplete stream
 				defer retryCancel()
@@ -259,22 +259,22 @@ func (r *RayLogsHandler) GetContent(clusterId string, fileName string) io.Reader
 				data, err := io.ReadAll(resp.Body)
 				if err != nil {
 					logrus.Errorf("Failed to read all data from blob %s: %v", fileName, err)
-					return nil
+					return nil, err
 				}
-				return bytes.NewReader(data)
+				return bytes.NewReader(data), nil
 			}
 		}
 		logrus.Errorf("Failed to get blob by listing all files %s", fileName)
-		return nil
+		return nil, fmt.Errorf("failed to get blob by listing all files %s", fileName)
 	}
 	defer resp.Body.Close()
 
 	data, err := io.ReadAll(resp.Body)
 	if err != nil {
 		logrus.Errorf("Failed to read all data from blob %s: %v", fileName, err)
-		return nil
+		return nil, err
 	}
-	return bytes.NewReader(data)
+	return bytes.NewReader(data), nil
 }
 
 func NewReader(c *types.RayHistoryServerConfig, jd map[string]interface{}) (storage.StorageReader, error) {
