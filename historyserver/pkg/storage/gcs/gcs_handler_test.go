@@ -203,7 +203,10 @@ func TestListFiles(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			files := handler.ListFiles(tc.clusterID, tc.directory)
+			files, err := handler.ListFiles(tc.clusterID, tc.directory)
+			if err != nil {
+				t.Fatalf("ListFiles(%q, %q) returned error: %v", tc.clusterID, tc.directory, err)
+			}
 			sort.Strings(files)
 			sort.Strings(tc.expected)
 			if diff := cmp.Diff(tc.expected, files); diff != "" {

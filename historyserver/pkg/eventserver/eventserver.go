@@ -627,7 +627,10 @@ func (h *EventHandler) getAllJobEventFiles(clusterInfo utils.ClusterInfo) []stri
 	var allJobFiles []string
 	clusterNameID := clusterInfo.Name + "_" + clusterInfo.Namespace
 	jobEventDirPrefix := clusterInfo.SessionName + "/job_events/"
-	jobDirList := h.reader.ListFiles(clusterNameID, jobEventDirPrefix)
+	jobDirList, err := h.reader.ListFiles(clusterNameID, jobEventDirPrefix)
+	if err != nil {
+		logrus.Warnf("Failed to list job event dirs for cluster %s: %v", clusterNameID, err)
+	}
 
 	for _, jobDir := range jobDirList {
 		// Skip non-directory entries
@@ -635,7 +638,11 @@ func (h *EventHandler) getAllJobEventFiles(clusterInfo utils.ClusterInfo) []stri
 			continue
 		}
 		jobDirPath := jobEventDirPrefix + jobDir
-		jobFiles := h.reader.ListFiles(clusterNameID, jobDirPath)
+		jobFiles, err := h.reader.ListFiles(clusterNameID, jobDirPath)
+		if err != nil {
+			logrus.Warnf("Failed to list job event files in %s: %v", jobDirPath, err)
+			continue
+		}
 		for _, jobFile := range jobFiles {
 			if isValidEventFile(jobFile) {
 				allJobFiles = append(allJobFiles, jobDirPath+jobFile)
@@ -649,7 +656,10 @@ func (h *EventHandler) getAllJobEventFiles(clusterInfo utils.ClusterInfo) []stri
 func (h *EventHandler) getAllNodeEventFiles(clusterInfo utils.ClusterInfo) []string {
 	clusterNameID := clusterInfo.Name + "_" + clusterInfo.Namespace
 	nodeEventDirPrefix := clusterInfo.SessionName + "/node_events/"
-	nodeEventFileNames := h.reader.ListFiles(clusterNameID, nodeEventDirPrefix)
+	nodeEventFileNames, err := h.reader.ListFiles(clusterNameID, nodeEventDirPrefix)
+	if err != nil {
+		logrus.Warnf("Failed to list node event files for cluster %s: %v", clusterNameID, err)
+	}
 
 	// Filter out directories (items ending with /) and build full paths
 	var nodeEventFiles []string

@@ -87,7 +87,7 @@ func (r *RayLogsHandler) WriteFile(file string, reader io.ReadSeeker) error {
 	return err
 }
 
-func (r *RayLogsHandler) _listFiles(prefix string, delimiter string, onlyBase bool) []string {
+func (r *RayLogsHandler) _listFiles(prefix string, delimiter string, onlyBase bool) ([]string, error) {
 	files := []string{}
 
 	listInput := &s3.ListObjectsV2Input{
@@ -121,13 +121,13 @@ func (r *RayLogsHandler) _listFiles(prefix string, delimiter string, onlyBase bo
 		})
 	if err != nil {
 		logrus.Errorf("Failed to list objects from %s: %v", prefix+"/", err)
-		return []string{}
+		return []string{}, err
 	}
 
-	return files
+	return files, nil
 }
 
-func (r *RayLogsHandler) ListFiles(clusterId string, dir string) []string {
+func (r *RayLogsHandler) ListFiles(clusterId string, dir string) ([]string, error) {
 	prefix := path.Join(r.S3RootDir, clusterId, dir)
 
 	defer func() {
@@ -137,9 +137,7 @@ func (r *RayLogsHandler) ListFiles(clusterId string, dir string) []string {
 	}()
 
 	logrus.Debugf("Prepare to get list clusters info ...")
-	nodes := r._listFiles(prefix, "/", true)
-	// Note: clusters is not defined in this scope, removed sorting
-	return nodes
+	return r._listFiles(prefix, "/", true)
 }
 
 func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
@@ -220,7 +218,7 @@ func (r *RayLogsHandler) GetContent(clusterId string, fileName string) (io.Reade
 		}
 		logrus.Errorf("Failed to get object %s: %v", fullPath, err)
 		dirPath := path.Dir(fullPath)
-		allFiles := r._listFiles(dirPath, "", false)
+		allFiles, _ := r._listFiles(dirPath, "", false)
 		found := false
 		for _, f := range allFiles {
 			if path.Base(f) == path.Base(fullPath) {

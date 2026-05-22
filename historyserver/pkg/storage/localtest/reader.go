@@ -64,15 +64,15 @@ func (r *MockReader) GetContent(clusterId string, fileName string) (io.Reader, e
 	return strings.NewReader(""), nil
 }
 
-func (r *MockReader) ListFiles(clusterId string, dir string) []string {
+func (r *MockReader) ListFiles(clusterId string, dir string) ([]string, error) {
 	if clusterData, ok := r.data[clusterId]; ok {
 		files := make([]string, 0, len(clusterData))
 		for fileName := range clusterData {
 			files = append(files, fileName)
 		}
-		return files
+		return files, nil
 	}
-	return []string{}
+	return []string{}, nil
 }
 
 // NewReader creates a new StorageReader

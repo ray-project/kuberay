@@ -51,13 +51,13 @@ func (m *logEventMockReader) GetContent(clusterID string, fileName string) (io.R
 	return nil, nil
 }
 
-func (m *logEventMockReader) ListFiles(clusterID string, dir string) []string {
+func (m *logEventMockReader) ListFiles(clusterID string, dir string) ([]string, error) {
 	if cd, ok := m.dirs[clusterID]; ok {
 		if entries, ok := cd[dir]; ok {
-			return entries
+			return entries, nil
 		}
 	}
-	return []string{}
+	return []string{}, nil
 }
 
 // --- Tests ---

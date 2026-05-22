@@ -69,7 +69,7 @@ func (r *RayLogsHandler) WriteFile(file string, reader io.ReadSeeker) error {
 	return nil
 }
 
-func (r *RayLogsHandler) listBlobs(prefix string, delimiter string, onlyBase bool) []string {
+func (r *RayLogsHandler) listBlobs(prefix string, delimiter string, onlyBase bool) ([]string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), listTimeout)
 	defer cancel()
 
@@ -87,7 +87,7 @@ func (r *RayLogsHandler) listBlobs(prefix string, delimiter string, onlyBase boo
 			resp, err := pager.NextPage(ctx)
 			if err != nil {
 				logrus.Errorf("Failed to list blobs from %s: %v", prefixWithSlash, err)
-				return []string{}
+				return []string{}, err
 			}
 
 			logrus.Infof("[ListFiles]Returned blobs in %v. length of Segment.BlobItems: %v, length of Segment.BlobPrefixes: %v",
@@ -120,7 +120,7 @@ func (r *RayLogsHandler) listBlobs(prefix string, delimiter string, onlyBase boo
 			resp, err := pager.NextPage(ctx)
 			if err != nil {
 				logrus.Errorf("Failed to list blobs from %s: %v", prefixWithSlash, err)
-				return []string{}
+				return []string{}, err
 			}
 
 			logrus.Infof("[ListFiles]Returned blobs in %v. length of Segment.BlobItems: %v",
@@ -136,10 +136,10 @@ func (r *RayLogsHandler) listBlobs(prefix string, delimiter string, onlyBase boo
 		}
 	}
 
-	return files
+	return files, nil
 }
 
-func (r *RayLogsHandler) ListFiles(clusterId string, dir string) []string {
+func (r *RayLogsHandler) ListFiles(clusterId string, dir string) ([]string, error) {
 	defer func() {
 		if r := recover(); r != nil {
 			logrus.Errorf("Recovered from panic: %v", r)
@@ -236,7 +236,7 @@ func (r *RayLogsHandler) GetContent(clusterId string, fileName string) (io.Reade
 
 		// Try to find the file by listing direct children only (use delimiter)
 		dirPath := path.Dir(fullPath)
-		allFiles := r.listBlobs(dirPath, "/", false)
+		allFiles, _ := r.listBlobs(dirPath, "/", false)
 		for _, f := range allFiles {
 			// Match full path to avoid returning wrong content from nested directories
 			if f == fullPath {

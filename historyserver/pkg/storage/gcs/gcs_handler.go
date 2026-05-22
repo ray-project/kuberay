@@ -86,7 +86,7 @@ func (h *RayLogsHandler) WriteFile(file string, reader io.ReadSeeker) error {
 }
 
 // ListFiles will return all files within the directory.
-func (h *RayLogsHandler) ListFiles(clusterId string, directory string) []string {
+func (h *RayLogsHandler) ListFiles(clusterId string, directory string) ([]string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
@@ -107,7 +107,7 @@ func (h *RayLogsHandler) ListFiles(clusterId string, directory string) []string 
 		}
 		if err != nil {
 			logrus.Errorf("Bucket(%q).Objects() with query %+v: %v", h.GCSBucket, query, err)
-			return nil
+			return nil, err
 		}
 
 		// When Delimiter is used:
@@ -130,7 +130,7 @@ func (h *RayLogsHandler) ListFiles(clusterId string, directory string) []string 
 		}
 	}
 
-	return fileList
+	return fileList, nil
 }
 
 // List will return a list of ClusterInfo

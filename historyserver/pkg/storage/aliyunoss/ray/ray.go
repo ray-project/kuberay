@@ -84,7 +84,7 @@ func (r *RayLogsHandler) WriteFile(file string, reader io.ReadSeeker) error {
 	return err
 }
 
-func (r *RayLogsHandler) _listFiles(prefix string, delimiter string, onlyBase bool) []string {
+func (r *RayLogsHandler) _listFiles(prefix string, delimiter string, onlyBase bool) ([]string, error) {
 	ctx := context.Background()
 	files := []string{}
 
@@ -99,7 +99,7 @@ func (r *RayLogsHandler) _listFiles(prefix string, delimiter string, onlyBase bo
 		page, err := p.NextPage(ctx)
 		if err != nil {
 			logrus.Errorf("Failed to list objects from %s: %v", prefix+"/", err)
-			return []string{}
+			return []string{}, err
 		}
 		logrus.Infof("[ListFiles]Returned objects in %v. length of Contents: %v, length of CommonPrefixes: %v", prefix+"/", len(page.Contents),
 			len(page.CommonPrefixes))
@@ -118,10 +118,10 @@ func (r *RayLogsHandler) _listFiles(prefix string, delimiter string, onlyBase bo
 			files = append(files, objName+"/")
 		}
 	}
-	return files
+	return files, nil
 }
 
-func (r *RayLogsHandler) ListFiles(clusterId string, dir string) []string {
+func (r *RayLogsHandler) ListFiles(clusterId string, dir string) ([]string, error) {
 	prefix := path.Join(r.OssRootDir, clusterId, dir)
 
 	defer func() {
@@ -129,12 +129,8 @@ func (r *RayLogsHandler) ListFiles(clusterId string, dir string) []string {
 			fmt.Println("Recovered from panic:", r)
 		}
 	}()
-	// Initial continuation token
-	clusters := make(utils.ClusterInfoList, 0, 10)
 	logrus.Debugf("Prepare to get list clusters info ...")
-	nodes := r._listFiles(prefix, "/", true)
-	sort.Sort(clusters)
-	return nodes
+	return r._listFiles(prefix, "/", true)
 }
 
 func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
@@ -203,7 +199,7 @@ func (r *RayLogsHandler) GetContent(clusterId string, fileName string) (io.Reade
 	})
 	if err != nil {
 		logrus.Errorf("Failed to get object %s: %v", fileName, err)
-		allFiles := r._listFiles(clusterId+"/"+path.Dir(fileName), "", false)
+		allFiles, _ := r._listFiles(clusterId+"/"+path.Dir(fileName), "", false)
 		found := false
 		for _, f := range allFiles {
 			if path.Base(f) == path.Base(fileName) {

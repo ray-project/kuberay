@@ -868,7 +868,10 @@ func (s *ServerHandler) buildFormattedClusterStatus(clusterName, clusterNamespac
 	builder := NewClusterStatusBuilder()
 	clusterNameID := clusterName + "_" + clusterNamespace
 	logsPath := path.Join(sessionName, utils.RAY_SESSIONDIR_LOGDIR_NAME)
-	nodeIDs := s.reader.ListFiles(clusterNameID, logsPath)
+	nodeIDs, err := s.reader.ListFiles(clusterNameID, logsPath)
+	if err != nil {
+		logrus.Warnf("Failed to list log directories for cluster %s: %v", clusterNameID, err)
+	}
 	successCount := 0
 
 	for _, nodeID := range nodeIDs {
