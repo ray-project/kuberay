@@ -127,7 +127,6 @@ func RayServiceSampleYamlApplyConfiguration() *rayv1ac.RayServiceSpecApplyConfig
 									corev1.ResourceMemory: resource.MustParse("2Gi"),
 								}).
 								WithLimits(corev1.ResourceList{
-									corev1.ResourceCPU:    resource.MustParse("2"),
 									corev1.ResourceMemory: resource.MustParse("3Gi"),
 								})))))))
 }
