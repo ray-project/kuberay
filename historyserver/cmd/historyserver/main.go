@@ -31,7 +31,7 @@ func main() {
 	flag.StringVar(&dashboardDir, "dashboard-dir", "/dashboard", "Path to Ray Dashboard static assets")
 	flag.StringVar(&runtimeClassConfigPath, "runtime-class-config-path", "", "Path to backend config JSON")
 	flag.BoolVar(&useKubernetesProxy, "use-kubernetes-proxy", false, "Use local kubeconfig instead of in-cluster config")
-	flag.DurationVar(&sessionProcessTimeout, "session-process-timeout", historyserver.DefaultSessionProcessTimeout, "Bound how long cold-load for a single session can run.")
+	flag.DurationVar(&sessionProcessTimeout, "session-process-timeout", historyserver.DefaultSessionProcessTimeout, "Timeout duration for processing and loading a single Ray cluster session.")
 	flag.Parse()
 
 	if runtimeClassName == "" {
@@ -47,10 +47,10 @@ func main() {
 	if runtimeClassConfigPath != "" {
 		data, err := os.ReadFile(runtimeClassConfigPath)
 		if err != nil {
-			logrus.Fatalf("Failed to read runtime-class-config from %s: %v", runtimeClassConfigPath, err)
+			logrus.Fatalf("Failed to read runtime-class-config-path from %s: %v", runtimeClassConfigPath, err)
 		}
 		if err := json.Unmarshal(data, &jsonData); err != nil {
-			logrus.Fatalf("Failed to parse runtime-class-config from %s: %v", runtimeClassConfigPath, err)
+			logrus.Fatalf("Failed to parse runtime-class-config-path from %s: %v", runtimeClassConfigPath, err)
 		}
 	}
 

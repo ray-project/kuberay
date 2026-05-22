@@ -11,7 +11,7 @@ It provides a web interface to explore the history of Ray jobs, tasks, actors, a
 The History Server consists of two main components:
 
 1. **Collector**: Runs as a sidecar container in Ray clusters to collect logs and metadata
-2. **History Server**: Serves a Ray Dashboard-shaped HTTP API and ingests cluster sessions' events on demand
+2. **History Server**: Serves a Ray Dashboard compatible HTTP API and ingests cluster sessions' events on demand
 
 ## Building
 
