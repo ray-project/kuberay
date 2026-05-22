@@ -58,6 +58,10 @@ const (
 	// Ray GCS FT related annotations
 	RayFTEnabledAnnotationKey         = "ray.io/ft-enabled"
 	RayExternalStorageNSAnnotationKey = "ray.io/external-storage-namespace"
+	// RayClusterGCSFTDeletionTimeoutAnnotation overrides the default finalizer-removal
+	// timeout for a specific RayCluster (integer seconds; falls back to
+	// RAYCLUSTER_GCS_FT_DELETION_TIMEOUT_DEFAULT when absent or invalid).
+	RayClusterGCSFTDeletionTimeoutAnnotation = "ray.io/gcs-ft-deletion-timeout"
 
 	// If this annotation is set to "true", the KubeRay operator will not modify the container's command.
 	// However, the generated `ray start` command will still be stored in the container's environment variable
@@ -185,10 +189,10 @@ const (
 	// cleanup Job should be enabled. This is a feature flag for v1.0.0.
 	ENABLE_GCS_FT_REDIS_CLEANUP = "ENABLE_GCS_FT_REDIS_CLEANUP"
 
-	// This KubeRay operator environment variable is used to determine the timeout
-	// for auto-deleting stuck RayService clusters when the FT finalizer doesn't
-	// get removed for any reason.
-	RAYCLUSTER_GCS_FT_DELETION_TIMEOUT_ENV     = "RAYCLUSTER_GCS_FT_DELETION_TIMEOUT"
+	// RAYCLUSTER_GCS_FT_DELETION_TIMEOUT_DEFAULT is the fallback timeout (in seconds)
+	// for auto-deleting stuck RayService clusters when the FT finalizer is not
+	// removed within that duration. Override per-cluster via the
+	// RayClusterGCSFTDeletionTimeoutAnnotation annotation.
 	RAYCLUSTER_GCS_FT_DELETION_TIMEOUT_DEFAULT = 300 // in seconds; == 5 minutes
 
 	// This environment variable for the KubeRay operator is used to determine whether to enable
@@ -369,6 +373,7 @@ const (
 	// Redis Cleanup Job event list
 	CreatedRedisCleanupJob        K8sEventType = "CreatedRedisCleanupJob"
 	FailedToCreateRedisCleanupJob K8sEventType = "FailedToCreateRedisCleanupJob"
+	ForceDeletedStuckCluster      K8sEventType = "ForceDeletedStuckCluster"
 
 	// RayJob event list
 	InvalidRayJobSpec             K8sEventType = "InvalidRayJobSpec"
