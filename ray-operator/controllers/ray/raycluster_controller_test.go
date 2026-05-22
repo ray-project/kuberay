@@ -1837,6 +1837,7 @@ var _ = Context("Inside the default namespace", func() {
 				cluster := rayClusterTemplate("raycluster-integration", namespace)
 				// 1-second timeout so the test doesn't need to wait long
 				cluster.Annotations = map[string]string{
+					utils.RayFTEnabledAnnotationKey:                "true",
 					utils.RayClusterGCSFTDeletionTimeoutAnnotation: "1",
 				}
 				cluster.Finalizers = []string{utils.GCSFaultToleranceRedisCleanupFinalizer}
