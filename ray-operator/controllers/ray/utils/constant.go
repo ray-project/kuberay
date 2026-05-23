@@ -150,6 +150,7 @@ const (
 	RAYCLUSTER_DEFAULT_REQUEUE_SECONDS      = 300
 	KUBERAY_GEN_RAY_START_CMD               = "KUBERAY_GEN_RAY_START_CMD"
 	KUBERAY_GEN_AUTOSCALER_START_CMD        = "KUBERAY_GEN_AUTOSCALER_START_CMD"
+	RAY_START_ULIMIT_OPEN_FILES             = "RAY_START_ULIMIT_OPEN_FILES"
 
 	// Environment variables for RayJob submitter Kubernetes Job.
 	// Example: ray job submit --address=http://$RAY_DASHBOARD_ADDRESS --submission-id=$RAY_JOB_SUBMISSION_ID ...
