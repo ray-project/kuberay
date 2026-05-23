@@ -54,12 +54,6 @@ func NewClientManager(cfg ClientManagerConfig) (*ClientManager, error) {
 	useKubernetesProxy := cfg.UseKubernetesProxy
 	qps := cfg.QPS
 	burst := cfg.Burst
-	if qps <= 0 {
-		qps = 50
-	}
-	if burst <= 0 {
-		burst = 100
-	}
 	kubeconfigList := []*rest.Config{}
 	if len(kubeconfigs) > 0 {
 		stringList := strings.Split(kubeconfigs, ",")

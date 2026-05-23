@@ -141,4 +141,6 @@ require (
 	google.golang.org/grpc v1.78.0 // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.13.0 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
+	sigs.k8s.io/scheduler-plugins v0.31.8 // indirect
+	volcano.sh/apis v1.12.1 // indirect
 )
