@@ -9,7 +9,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
@@ -61,159 +60,9 @@ func NewEventHandler(reader storage.StorageReader) *EventHandler {
 	}
 }
 
-// ProcessEvents func reads the channel and then processes the event received
-func (h *EventHandler) ProcessEvents(ctx context.Context, ch <-chan map[string]any) error {
-	logrus.Infof("Starting a event processor channel")
-	for {
-		select {
-		case <-ctx.Done():
-			// TODO: The context was cancelled, either stop here or process the rest of the events and return
-			// Currently, it will just stop.
-			logrus.Warnf("Event processor context was cancelled")
-			return ctx.Err()
-		case currEventData, ok := <-ch:
-			if !ok {
-				logrus.Warnf("Channel was closed")
-				return nil
-			}
-			if err := h.storeEvent(currEventData); err != nil {
-				logrus.Errorf("Failed to store event: %v", err)
-				continue
-			}
-		}
-	}
-}
 
-// Run will start numOfEventProcessors (default to 5) processing functions and the event reader. The event reader will run once an hr,
-// which is currently how often the collector flushes.
-func (h *EventHandler) Run(stop chan struct{}, numOfEventProcessors int) error {
-	var wg sync.WaitGroup
-
-	if numOfEventProcessors == 0 {
-		numOfEventProcessors = 5
-	}
-	eventProcessorChannels := make([]chan map[string]any, numOfEventProcessors)
-	cctx := make([]context.CancelFunc, numOfEventProcessors)
-
-	for i := range numOfEventProcessors {
-		eventProcessorChannels[i] = make(chan map[string]any, 100)
-	}
-
-	for i, currEventChannel := range eventProcessorChannels {
-		wg.Add(1)
-		ctx, cancel := context.WithCancel(context.Background())
-		cctx[i] = cancel
-		go func() {
-			defer wg.Done()
-			var processor EventProcessor[map[string]any] = h
-			err := processor.ProcessEvents(ctx, currEventChannel)
-			if err == ctx.Err() {
-				logrus.Warnf("Event processor go routine %d is now closed", i)
-				return
-			}
-			if err != nil {
-				logrus.Errorf("event processor %d go routine failed %v", i, err)
-				return
-			}
-		}()
-	}
-
-	// Start reading files and sending events for processing
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		logrus.Info("Starting event file reader loop")
-
-		// Create a LogEventReader for reading logs/events/event_*.log files
-		logEventReader := NewLogEventReader(h.reader)
-
-		// Helper function to process all events
-		processAllEvents := func() {
-			clusterList := h.reader.List()
-			for _, clusterInfo := range clusterList {
-				clusterNameNamespace := clusterInfo.Name + "_" + clusterInfo.Namespace
-				clusterSessionKey := utils.BuildClusterSessionKey(clusterInfo.Name, clusterInfo.Namespace, clusterInfo.SessionName)
-
-				// Read Log Events from logs/{nodeId}/events/event_*.log
-				// This is the format used by Ray Dashboard's /events API
-				if err := logEventReader.ReadLogEvents(clusterInfo, clusterSessionKey, h.ClusterLogEventMap); err != nil {
-					logrus.Errorf("Failed to read Log Events for %s: %v", clusterSessionKey, err)
-				}
-
-				// Also read RayEvents (Export Events) from node_events/ and job_events/ for backward compatibility
-				// These are used for task/actor/job/node data APIs
-				eventFileList := append(h.getAllJobEventFiles(clusterInfo), h.getAllNodeEventFiles(clusterInfo)...)
-
-				logrus.Infof("current eventFileList for cluster %s is: %v", clusterInfo.Name, eventFileList)
-				for _, eventFile := range eventFileList {
-					// TODO: Filter out ones that have already been read
-					logrus.Infof("Reading event file: %s", eventFile)
-
-					eventioReader, err := h.reader.GetContent(clusterNameNamespace, eventFile)
-					if err != nil {
-						logrus.Errorf("Failed to get content for event file: %s, skipping: %v", eventFile, err)
-						continue
-					}
-					if eventioReader == nil {
-						logrus.Errorf("Failed to get content for event file: %s, skipping", eventFile)
-						continue
-					}
-					eventbytes, err := io.ReadAll(eventioReader)
-					if err != nil {
-						logrus.Errorf("Failed to read event file: %v", err)
-						continue
-					}
-
-					var eventList []map[string]any
-					if err := json.Unmarshal(eventbytes, &eventList); err != nil {
-						logrus.Errorf("Failed to unmarshal event: %v", err)
-						continue
-					}
-
-					// Evenly distribute events to each channel
-					for i, curr := range eventList {
-						// Skip nil events (can occur with corrupted event files containing null elements)
-						if curr == nil {
-							continue
-						}
-						curr["clusterName"] = clusterSessionKey
-						eventProcessorChannels[i%numOfEventProcessors] <- curr
-					}
-				}
-			}
-		}
-
-		// Process events immediately on startup
-		processAllEvents()
-
-		// Create a ticker for hourly processing
-		ticker := time.NewTicker(1 * time.Hour)
-		defer ticker.Stop()
-
-		for {
-			logrus.Info("Finished reading files, waiting for next cycle...")
-			select {
-			case <-stop:
-				// Received stop signal, clean up and exit
-				for i, currChan := range eventProcessorChannels {
-					close(currChan)
-					cctx[i]()
-				}
-				logrus.Info("Event processor received stop signal, exiting.")
-				return
-			case <-ticker.C:
-				// Process events every hour
-				processAllEvents()
-			}
-		}
-	}()
-
-	wg.Wait()
-	return nil
-}
-
-// storeEvent unmarshals the event map into the correct actor/task struct and then stores it into the corresonding list
-func (h *EventHandler) storeEvent(eventMap map[string]any) error {
+// storeEvent unmarshals the event map into the correct actor/task struct and then stores it into the corresonding list.
+func (h *EventHandler) storeEvent(clusterSessionKey string, eventMap map[string]any) error {
 	eventTypeVal, ok := eventMap["eventType"]
 	if !ok {
 		return fmt.Errorf("event missing 'eventType' field")
@@ -223,17 +72,6 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 		return fmt.Errorf("eventType is not a string, got %T", eventTypeVal)
 	}
 	eventType := types.EventType(eventTypeStr)
-
-	// clusterSessionKey is injected during event reading (Run function) and contains
-	// the full key: "{clusterName}_{namespace}_{sessionName}"
-	clusterSessionKeyVal, ok := eventMap["clusterName"]
-	if !ok {
-		return fmt.Errorf("event missing 'clusterName' field (clusterSessionKey)")
-	}
-	clusterSessionKey, ok := clusterSessionKeyVal.(string)
-	if !ok {
-		return fmt.Errorf("clusterName is not a string, got %T", clusterSessionKeyVal)
-	}
 
 	logrus.Infof("current eventType: %v", eventType)
 	switch eventType {
@@ -681,7 +519,7 @@ func (h *EventHandler) GetTasks(clusterSessionKey string) []types.Task {
 
 	taskMap, ok := h.ClusterTaskMap.ClusterTaskMap[clusterSessionKey]
 	if !ok {
-		// TODO(jwj): Add error handling.
+		// TODO(jiangjiawei1103): Add error handling.
 		logrus.Errorf("Task map not found for cluster session: %s", clusterSessionKey)
 		return []types.Task{}
 	}
@@ -952,7 +790,7 @@ func (h *EventHandler) handleTaskLifecycleEvent(eventMap map[string]any, cluster
 	}
 	normalizeTaskIDsToHex(&currTask)
 
-	// TODO(jwj): Clarify if there must be at least one state transition. Can one task have more than one state transition?
+	// TODO(jiangjiawei1103): Clarify if there must be at least one state transition. Can one task have more than one state transition?
 	if len(currTask.StateTransitions) == 0 {
 		return fmt.Errorf("TASK_LIFECYCLE_EVENT must have at least one state transition")
 	}
@@ -988,7 +826,7 @@ func (h *EventHandler) handleTaskLifecycleEvent(eventMap map[string]any, cluster
 			return
 		}
 
-		// TODO(jwj): Before beta, the lifecycle-related fields are overwritten.
+		// TODO(jiangjiawei1103): Before beta, the lifecycle-related fields are overwritten.
 		// In beta, the complete historical replay will be supported.
 		task.RayErrorInfo = currTask.RayErrorInfo
 		if currTask.JobID != "" {
@@ -1544,4 +1382,74 @@ func extractActorIDFromTaskID(taskIDHex string) string {
 	}
 
 	return actorPortion + jobPortion
+}
+
+// ProcessSingleSession reads all event files for a single session synchronously
+// and populates the handler's in-memory maps.
+//
+// TODO(jiangjiawei1103): Empty event file list vs ListFiles outage is ambiguous without
+// StorageReader interface surfacing errors.
+func (h *EventHandler) ProcessSingleSession(ctx context.Context, clusterInfo utils.ClusterInfo) error {
+	clusterNameNamespace := clusterInfo.Name + "_" + clusterInfo.Namespace
+	clusterSessionKey := utils.BuildClusterSessionKey(clusterInfo.Name, clusterInfo.Namespace, clusterInfo.SessionName)
+
+	// ClusterLogEventMap backs only the /events endpoint, so log event read failures must not
+	// block marking the session as loaded and force subsequent Ray event re-processing.
+	logEventReader := NewLogEventReader(h.reader)
+	if err := logEventReader.ReadLogEvents(clusterInfo, clusterSessionKey, h.ClusterLogEventMap); err != nil {
+		logrus.Errorf("Incomplete Log Events read for %s: %v. /events endpoint may serve partial data.",
+			clusterSessionKey, err)
+	}
+
+	eventFileList := append(h.getAllJobEventFiles(clusterInfo), h.getAllNodeEventFiles(clusterInfo)...)
+	logrus.Debugf("current eventFileList for cluster %s is: %v", clusterInfo.Name, eventFileList)
+
+	rayEventsTotal := len(eventFileList)
+	rayEventsRead := 0
+	for _, eventFile := range eventFileList {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		logrus.Debugf("Reading event file: %s", eventFile)
+
+		// GetContent and io.ReadAll failures are treated as transient storage errors:
+		// skip this file and continue.
+		eventioReader, err := h.reader.GetContent(clusterNameNamespace, eventFile)
+		if err != nil {
+			logrus.Errorf("Failed to get content for event file: %s, skipping: %v", eventFile, err)
+		}
+		if err != nil || eventioReader == nil {
+			continue
+		}
+		eventbytes, err := io.ReadAll(eventioReader)
+		if err != nil {
+			logrus.Errorf("Failed to read events for file %s: %v", eventFile, err)
+			continue
+		}
+		rayEventsRead++
+
+		// json.Unmarshal and storeEvent failures are treated as corrupt-data errors:
+		// retrying won't fix bad bytes, accepting partial loss.
+		var eventList []map[string]any
+		if err := json.Unmarshal(eventbytes, &eventList); err != nil {
+			logrus.Errorf("Failed to unmarshal events for file %s: %v", eventFile, err)
+			continue
+		}
+
+		for _, event := range eventList {
+			if event == nil {
+				continue
+			}
+			if err := h.storeEvent(clusterSessionKey, event); err != nil {
+				logrus.Errorf("Failed to store events for file %s: %v", eventFile, err)
+				continue
+			}
+		}
+	}
+
+	if rayEventsTotal > 0 && rayEventsRead == 0 {
+		return fmt.Errorf("read 0 of %d event files for %s: likely transient storage outage",
+			rayEventsTotal, clusterSessionKey)
+	}
+	return nil
 }

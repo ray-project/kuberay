@@ -2700,7 +2700,7 @@ func verifySingleEndpoint(test Test, g *WithT, client *http.Client, endpointURL 
 	verifySchema(test, g, respData)
 }
 
-// TODO(jwj): Make verification for node-related endpoints more robust.
+// TODO(jiangjiawei1103): Make verification for node-related endpoints more robust.
 // verifyNodesRespSchema verifies that the /nodes response is valid according to the API schema.
 // Both live and dead clusters now return the same format (flat array of latest snapshots).
 // isLive is kept for signature compatibility but no longer affects validation.
