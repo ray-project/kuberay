@@ -1128,8 +1128,14 @@ func (s *ServerHandler) handleGetNodeLogs(req *restful.Request, resp *restful.Re
 	}
 	data, err := s.getNodeLogs(clusterNameID+"_"+clusterNamespace, sessionName, nodeID, folder, glob)
 	if err != nil {
-		logrus.Errorf("Error: %v", err)
-		resp.WriteError(400, err)
+		var httpErr *utils.HTTPError
+		if errors.As(err, &httpErr) {
+			logrus.Errorf("Error listing node logs: %v", httpErr.Unwrap())
+			resp.WriteError(httpErr.StatusCode(), httpErr)
+		} else {
+			logrus.Errorf("Error listing node logs: %v", err)
+			resp.WriteError(http.StatusInternalServerError, err)
+		}
 		return
 	}
 	resp.Write(data)

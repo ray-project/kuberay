@@ -83,7 +83,7 @@ func (s *ServerHandler) getNodeLogs(rayClusterNameNamespace, sessionId, nodeId, 
 		var err error
 		matchedFiles, err = s.reader.ListFiles(rayClusterNameNamespace, logPath)
 		if err != nil {
-			return nil, err
+			return nil, utils.NewHTTPError(err, http.StatusInternalServerError)
 		}
 	} else {
 		var files []string
@@ -91,18 +91,18 @@ func (s *ServerHandler) getNodeLogs(rayClusterNameNamespace, sessionId, nodeId, 
 		if strings.Contains(glob, "**") {
 			files, err = s.listFilesRecursive(rayClusterNameNamespace, logPath)
 			if err != nil {
-				return nil, err
+				return nil, utils.NewHTTPError(err, http.StatusInternalServerError)
 			}
 		} else {
 			files, err = s.reader.ListFiles(rayClusterNameNamespace, logPath)
 			if err != nil {
-				return nil, err
+				return nil, utils.NewHTTPError(err, http.StatusInternalServerError)
 			}
 		}
 		for _, file := range files {
 			matched, err := doublestar.Match(glob, file)
 			if err != nil {
-				return []byte{}, fmt.Errorf("invalid glob pattern %q matching against %q: %w", glob, file, err)
+				return []byte{}, utils.NewHTTPError(fmt.Errorf("invalid glob pattern %q matching against %q: %w", glob, file, err), http.StatusBadRequest)
 			}
 			if matched {
 				matchedFiles = append(matchedFiles, file)
