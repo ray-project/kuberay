@@ -89,7 +89,10 @@ func (s *ServerHandler) getNodeLogs(rayClusterNameNamespace, sessionId, nodeId, 
 		var files []string
 		var err error
 		if strings.Contains(glob, "**") {
-			files = s.listFilesRecursive(rayClusterNameNamespace, logPath)
+			files, err = s.listFilesRecursive(rayClusterNameNamespace, logPath)
+			if err != nil {
+				return nil, err
+			}
 		} else {
 			files, err = s.reader.ListFiles(rayClusterNameNamespace, logPath)
 			if err != nil {
@@ -124,17 +127,19 @@ func (s *ServerHandler) getNodeLogs(rayClusterNameNamespace, sessionId, nodeId, 
 // listFilesRecursive recursively lists all files under dir,
 // returning paths relative to dir (e.g. "subdir/foo.log", "bar.out").
 // It recurses into subdirectories returned by ListFiles (identified by a trailing "/").
-func (s *ServerHandler) listFilesRecursive(clusterID, dir string) []string {
+func (s *ServerHandler) listFilesRecursive(clusterID, dir string) ([]string, error) {
 	entries, err := s.reader.ListFiles(clusterID, dir)
 	if err != nil {
-		logrus.Warnf("Failed to list files in %s: %v", dir, err)
-		return nil
+		return nil, fmt.Errorf("failed to list files in %s: %w", dir, err)
 	}
 	var result []string
 	for _, entry := range entries {
 		if strings.HasSuffix(entry, "/") {
 			subDir := path.Join(dir, entry)
-			subFiles := s.listFilesRecursive(clusterID, subDir)
+			subFiles, err := s.listFilesRecursive(clusterID, subDir)
+			if err != nil {
+				return nil, err
+			}
 			for _, f := range subFiles {
 				result = append(result, path.Join(strings.TrimSuffix(entry, "/"), f))
 			}
@@ -142,7 +147,7 @@ func (s *ServerHandler) listFilesRecursive(clusterID, dir string) []string {
 			result = append(result, entry)
 		}
 	}
-	return result
+	return result, nil
 }
 
 // categorizeLogFiles categorizes log files by component type.
