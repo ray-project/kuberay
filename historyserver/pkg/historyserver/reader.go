@@ -203,7 +203,7 @@ func (s *ServerHandler) getNodeLogFile(rayClusterNameNamespace, sessionID string
 	logPath := path.Join(sessionID, utils.RAY_SESSIONDIR_LOGDIR_NAME, nodeID, filename)
 	reader, err := s.reader.GetContent(rayClusterNameNamespace, logPath)
 	if err != nil {
-		return nil, utils.NewHTTPError(fmt.Errorf("failed to get log file %s: %w", logPath, err), http.StatusNotFound)
+		return nil, utils.NewHTTPError(fmt.Errorf("failed to get log file %s: %w", logPath, err), http.StatusInternalServerError)
 	}
 
 	if reader == nil {
