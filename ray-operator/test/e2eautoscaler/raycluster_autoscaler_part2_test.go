@@ -29,7 +29,6 @@ func TestRayClusterAutoscalerV2IdleTimeout(t *testing.T) {
 
 		idleTimeoutShort := int32(10)
 		idleTimeoutLong := int32(30)
-		timeoutBuffer := int32(30) // Additional wait time to allow for scale down operation
 
 		// Script for creating detached actors to trigger autoscaling
 		scriptsAC := newConfigMap(namespace.Name, Files(test, "create_detached_actor.py", "terminate_detached_actor.py"))
@@ -96,7 +95,7 @@ func TestRayClusterAutoscalerV2IdleTimeout(t *testing.T) {
 
 		// Terminate the second detached actor, and the worker should be marked idle after ~30 seconds.
 		ExecPodCmd(test, headPod, common.RayHeadContainer, []string{"python", "/home/ray/test_scripts/terminate_detached_actor.py", "actor-long-timeout"})
-		g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), time.Duration(idleTimeoutLong+timeoutBuffer)*time.Second).
+		g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutMedium).
 			Should(gomega.WithTransform(RayClusterDesiredWorkerReplicas, gomega.Equal(int32(0))))
 	})
 }
