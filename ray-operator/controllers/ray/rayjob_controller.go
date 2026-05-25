@@ -377,6 +377,9 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 					}
 					if err := rayDashboardClient.StopJob(ctx, rayJobInstance.Status.JobId); err != nil {
 						logger.Error(err, "Failed to stop Ray job for clusterSelector suspend")
+						r.Recorder.Eventf(rayJobInstance, corev1.EventTypeWarning, string(utils.FailedToStopRayJob),
+							"Failed to stop Ray job %s on RayJob %s/%s: %v",
+							rayJobInstance.Status.JobId, rayJobInstance.Namespace, rayJobInstance.Name, err)
 						return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 					}
 				}
