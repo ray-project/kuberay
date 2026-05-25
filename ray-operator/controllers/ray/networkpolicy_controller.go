@@ -3,11 +3,13 @@ package ray
 import (
 	"context"
 	"fmt"
+	"net/netip"
 	"os"
 	"reflect"
 	"strconv"
 	"strings"
 
+	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -17,8 +19,10 @@ import (
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
@@ -55,7 +59,7 @@ func getOperatorNamespace() string {
 	if ns, err := os.ReadFile(utils.InClusterNamespacePath); err == nil {
 		return strings.TrimSpace(string(ns))
 	}
-	ctrl.Log.WithName("networkpolicy-controller").Info(
+	ctrl.Log.WithName("controllers").WithName("NetworkPolicy").Info(
 		"Unable to determine operator namespace from service account, falling back to 'default'")
 	return "default"
 }
@@ -65,7 +69,7 @@ func getOperatorNamespace() string {
 
 // Reconcile handles RayCluster resources and creates/manages NetworkPolicies
 func (r *NetworkPolicyController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	logger := ctrl.LoggerFrom(ctx).WithName("networkpolicy-controller")
+	logger := ctrl.LoggerFrom(ctx)
 
 	// Fetch the RayCluster instance
 	instance := &rayv1.RayCluster{}
@@ -120,7 +124,7 @@ func (r *NetworkPolicyController) Reconcile(ctx context.Context, req ctrl.Reques
 
 // createOrUpdateNetworkPolicy creates or updates a NetworkPolicy
 func (r *NetworkPolicyController) createOrUpdateNetworkPolicy(ctx context.Context, instance *rayv1.RayCluster, networkPolicy *networkingv1.NetworkPolicy) error {
-	logger := ctrl.LoggerFrom(ctx).WithName("networkpolicy-controller")
+	logger := ctrl.LoggerFrom(ctx)
 
 	// Set owner reference for garbage collection
 	if err := controllerutil.SetControllerReference(instance, networkPolicy, r.Scheme); err != nil {
@@ -448,14 +452,14 @@ func (r *NetworkPolicyController) buildKubeAPIServerEgressRule() []networkingv1.
 	apiServerHost := os.Getenv("KUBERNETES_SERVICE_HOST")
 	apiServerPort := os.Getenv("KUBERNETES_SERVICE_PORT")
 	if apiServerHost == "" || apiServerPort == "" {
-		ctrl.Log.WithName("networkpolicy-controller").Info(
+		ctrl.Log.WithName("controllers").WithName("NetworkPolicy").Info(
 			"KUBERNETES_SERVICE_HOST or KUBERNETES_SERVICE_PORT not set, skipping API server egress rule")
 		return nil
 	}
 
 	port, err := strconv.ParseInt(apiServerPort, 10, 32)
 	if err != nil {
-		ctrl.Log.WithName("networkpolicy-controller").Info(
+		ctrl.Log.WithName("controllers").WithName("NetworkPolicy").Info(
 			"Failed to parse KUBERNETES_SERVICE_PORT, skipping API server egress rule", "port", apiServerPort)
 		return nil
 	}
@@ -463,10 +467,15 @@ func (r *NetworkPolicyController) buildKubeAPIServerEgressRule() []networkingv1.
 	tcpProtocol := corev1.ProtocolTCP
 	apiPort := intstr.FromInt32(int32(port))
 
-	cidr := apiServerHost + "/32"
-	if strings.Contains(apiServerHost, ":") {
-		cidr = apiServerHost + "/128"
+	addr, err := netip.ParseAddr(apiServerHost)
+	if err != nil {
+		ctrl.Log.WithName("controllers").WithName("NetworkPolicy").Info(
+			"Failed to parse KUBERNETES_SERVICE_HOST as IP, skipping API server egress rule", "host", apiServerHost)
+		return nil
 	}
+
+	prefix := netip.PrefixFrom(addr, addr.BitLen())
+	cidr := prefix.String()
 
 	return []networkingv1.NetworkPolicyEgressRule{
 		{
@@ -486,7 +495,7 @@ func (r *NetworkPolicyController) buildKubeAPIServerEgressRule() []networkingv1.
 
 // cleanupNetworkPoliciesIfNeeded removes NetworkPolicies if they exist but NetworkIsolation is disabled
 func (r *NetworkPolicyController) cleanupNetworkPoliciesIfNeeded(ctx context.Context, instance *rayv1.RayCluster) (ctrl.Result, error) {
-	logger := ctrl.LoggerFrom(ctx).WithName("networkpolicy-controller")
+	logger := ctrl.LoggerFrom(ctx)
 
 	// Try to delete head NetworkPolicy if it exists
 	headNetworkPolicy := &networkingv1.NetworkPolicy{}
@@ -541,5 +550,14 @@ func (r *NetworkPolicyController) SetupWithManager(mgr ctrl.Manager) error {
 		For(&rayv1.RayCluster{}).
 		Owns(&networkingv1.NetworkPolicy{}).
 		Named("networkpolicy").
+		WithOptions(controller.Options{
+			LogConstructor: func(request *reconcile.Request) logr.Logger {
+				logger := ctrl.Log.WithName("controllers").WithName("NetworkPolicy")
+				if request != nil {
+					logger = logger.WithValues("RayCluster", request.NamespacedName)
+				}
+				return logger
+			},
+		}).
 		Complete(r)
 }
