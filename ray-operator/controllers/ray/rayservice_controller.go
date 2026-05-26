@@ -400,7 +400,7 @@ func (r *RayServiceReconciler) handleSuspend(ctx context.Context, rayServiceInst
 		}
 		logger.Info("Spec.Suspend is true; committing transition to Suspending state")
 		setCondition(rayServiceInstance, rayv1.RayServiceSuspending, metav1.ConditionTrue, rayv1.SuspendRequested,
-			"Spec.Suspend is true; will delete RayClusters, Services, Gateway, and HTTPRoute owned by this RayService.")
+			"Spec.Suspend is true; will delete RayClusters and Services owned by this RayService.")
 		setCondition(rayServiceInstance, rayv1.RayServiceReady, metav1.ConditionFalse, rayv1.SuspendInProgress, "RayService is suspending.")
 		meta.RemoveStatusCondition(&rayServiceInstance.Status.Conditions, string(rayv1.UpgradeInProgress))
 		meta.RemoveStatusCondition(&rayServiceInstance.Status.Conditions, string(rayv1.RollbackInProgress))
@@ -421,7 +421,7 @@ func (r *RayServiceReconciler) handleSuspend(ctx context.Context, rayServiceInst
 
 	if !allDeleted {
 		setCondition(rayServiceInstance, rayv1.RayServiceSuspending, metav1.ConditionTrue, rayv1.SuspendInProgress,
-			"Waiting for RayClusters, Services, Gateway, and HTTPRoute owned by this RayService to be deleted.")
+			"Waiting for RayClusters and Services owned by this RayService to be deleted.")
 		return true, ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, nil
 	}
 
@@ -438,8 +438,8 @@ func (r *RayServiceReconciler) handleSuspend(ctx context.Context, rayServiceInst
 }
 
 // deleteRayServiceOwnedResources deletes every Kubernetes resource that the
-// RayService controller owns: RayClusters, head/serve Services, Gateway and
-// HTTPRoute. Returns true when nothing remained to be deleted.
+// RayService controller owns: RayClusters and head/serve Services. Returns
+// true when nothing remained to be deleted.
 func (r *RayServiceReconciler) deleteRayServiceOwnedResources(ctx context.Context, rayServiceInstance *rayv1.RayService) (bool, error) {
 	logger := ctrl.LoggerFrom(ctx)
 	allDeleted := true
@@ -465,7 +465,7 @@ func (r *RayServiceReconciler) deleteRayServiceOwnedResources(ctx context.Contex
 			"Deleted the RayCluster %s/%s during suspend", cluster.Namespace, cluster.Name)
 	}
 
-	// Kubernetes Services (head + serve, including per-cluster serve services in incremental upgrade).
+	// Kubernetes Services (head + serve).
 	svcList := corev1.ServiceList{}
 	if err := r.List(ctx, &svcList, common.RayServiceRayClustersAssociationOptions(rayServiceInstance).ToListOptions()...); err != nil {
 		return false, err
@@ -480,42 +480,6 @@ func (r *RayServiceReconciler) deleteRayServiceOwnedResources(ctx context.Contex
 		if err := r.Delete(ctx, svc, client.PropagationPolicy(metav1.DeletePropagationBackground)); err != nil && !errors.IsNotFound(err) {
 			r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(utils.FailedToDeleteService),
 				"Failed to delete the Service %s/%s during suspend: %v", svc.Namespace, svc.Name, err)
-			return false, err
-		}
-	}
-
-	// Gateway and HTTPRoute live behind the RayServiceIncrementalUpgrade
-	// feature gate: the operator only registers gateway-api types in its
-	// scheme and ever creates these objects when the gate is on. Skip
-	// otherwise so a Get doesn't fail with "no kind is registered".
-	if features.Enabled(features.RayServiceIncrementalUpgrade) {
-		gateway := &gwv1.Gateway{}
-		if err := r.Get(ctx, common.RayServiceGatewayNamespacedName(rayServiceInstance), gateway); err == nil {
-			allDeleted = false
-			if gateway.DeletionTimestamp.IsZero() {
-				logger.Info("Deleting Gateway for suspend", "name", gateway.Name)
-				if err := r.Delete(ctx, gateway, client.PropagationPolicy(metav1.DeletePropagationBackground)); err != nil && !errors.IsNotFound(err) {
-					r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(utils.FailedToDeleteGateway),
-						"Failed to delete the Gateway %s/%s during suspend: %v", gateway.Namespace, gateway.Name, err)
-					return false, err
-				}
-			}
-		} else if !errors.IsNotFound(err) && !meta.IsNoMatchError(err) {
-			return false, err
-		}
-
-		httpRoute := &gwv1.HTTPRoute{}
-		if err := r.Get(ctx, common.RayServiceHTTPRouteNamespacedName(rayServiceInstance), httpRoute); err == nil {
-			allDeleted = false
-			if httpRoute.DeletionTimestamp.IsZero() {
-				logger.Info("Deleting HTTPRoute for suspend", "name", httpRoute.Name)
-				if err := r.Delete(ctx, httpRoute, client.PropagationPolicy(metav1.DeletePropagationBackground)); err != nil && !errors.IsNotFound(err) {
-					r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(utils.FailedToDeleteHTTPRoute),
-						"Failed to delete the HTTPRoute %s/%s during suspend: %v", httpRoute.Namespace, httpRoute.Name, err)
-					return false, err
-				}
-			}
-		} else if !errors.IsNotFound(err) && !meta.IsNoMatchError(err) {
 			return false, err
 		}
 	}
