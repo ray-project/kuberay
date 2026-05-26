@@ -9,7 +9,7 @@ kind: RayCluster
 metadata:
   name: raycluster-mtls
 spec:
-  rayVersion: '2.52.0'
+  rayVersion: '2.55.1'
   # Enable mTLS for Ray cluster internal communication.
   # This creates a self-signed CA and issues certificates for head and worker pods.
   # mode defaults to "mTLS" when tlsOptions is set.
@@ -21,7 +21,7 @@ spec:
       spec:
         containers:
         - name: ray-head
-          image: rayproject/ray:2.52.0
+          image: rayproject/ray:2.55.1
           resources:
             limits:
               cpu: "1"
@@ -40,7 +40,7 @@ spec:
       spec:
         containers:
         - name: ray-worker
-          image: rayproject/ray:2.52.0
+          image: rayproject/ray:2.55.1
           resources:
             limits:
               cpu: "1"

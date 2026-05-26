@@ -1453,12 +1453,44 @@ func (r *RayClusterReconciler) buildHeadPod(ctx context.Context, instance rayv1.
 	logger.Info("head pod labels", "labels", podConf.Labels)
 	creatorCRDType := getCreatorCRDType(instance)
 	pod := common.BuildPod(ctx, podConf, rayv1.HeadNode, instance.Spec.HeadGroupSpec.RayStartParams, headPort, autoscalingEnabled, creatorCRDType, fqdnRayIP, r.options.DefaultContainerEnvs, instance.Spec.RayVersion)
+	if utils.IsTLSEnabled(&instance.Spec) {
+		// With mTLS, --node-ip-address is the head service FQDN (see setMissingRayStartParams).
+		// Inject loopback RAY_ADDRESS after BuildPod so ray-head and autoscaler connect to GCS
+		// via 127.0.0.1, avoiding TLS SNI failures when using the pod IP.
+		injectMTLSLoopbackRayAddress(&pod, headPort)
+	}
 	// Set raycluster instance as the owner and controller
 	if err := controllerutil.SetControllerReference(&instance, &pod, r.Scheme); err != nil {
 		logger.Error(err, "Failed to set controller reference for raycluster pod")
 	}
 
 	return pod
+}
+
+// injectMTLSLoopbackRayAddress sets RAY_ADDRESS=127.0.0.1:port on ray-head and autoscaler.
+// Called only when mTLS is enabled for the RayCluster.
+func injectMTLSLoopbackRayAddress(pod *corev1.Pod, headPort string) {
+	loopbackAddress := fmt.Sprintf("%s:%s", utils.LOCAL_HOST, headPort)
+	for i := range pod.Spec.Containers {
+		container := &pod.Spec.Containers[i]
+		if i != utils.RayContainerIndex && container.Name != common.AutoscalerContainerName {
+			continue
+		}
+		found := false
+		for j, env := range container.Env {
+			if env.Name == utils.RAY_ADDRESS {
+				container.Env[j].Value = loopbackAddress
+				found = true
+				break
+			}
+		}
+		if !found {
+			container.Env = append(container.Env, corev1.EnvVar{
+				Name:  utils.RAY_ADDRESS,
+				Value: loopbackAddress,
+			})
+		}
+	}
 }
 
 func getCreatorCRDType(instance rayv1.RayCluster) utils.CRDType {
