@@ -3054,6 +3054,86 @@ func TestReconcileServe_SkipConfigUpdateDuringRollback(t *testing.T) {
 	}
 }
 
+// validateGatewayAddressUniqueness mirrors the XValidation CEL rules on GatewayAddresses.
+// It checks that IPAddress values are unique and Hostname values are unique within the list.
+func validateGatewayAddressUniqueness(addrs []gwv1.GatewaySpecAddress) error {
+	seen := map[gwv1.AddressType]map[string]bool{}
+	for _, a := range addrs {
+		if a.Type == nil {
+			continue
+		}
+		addrType := *a.Type
+		if addrType != gwv1.IPAddressType && addrType != gwv1.HostnameAddressType {
+			continue
+		}
+		if seen[addrType] == nil {
+			seen[addrType] = map[string]bool{}
+		}
+		if seen[addrType][a.Value] {
+			return fmt.Errorf("%s values must be unique", addrType)
+		}
+		seen[addrType][a.Value] = true
+	}
+	return nil
+}
+
+func TestGatewayAddressesUniquenessValidation(t *testing.T) {
+	cases := []struct {
+		name    string
+		addrs   []gwv1.GatewaySpecAddress
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name: "unique IPs pass",
+			addrs: []gwv1.GatewaySpecAddress{
+				{Type: ptr.To(gwv1.IPAddressType), Value: "192.168.1.1"},
+				{Type: ptr.To(gwv1.IPAddressType), Value: "192.168.1.2"},
+			},
+			wantErr: false,
+		},
+		{
+			name: "duplicate IP rejected",
+			addrs: []gwv1.GatewaySpecAddress{
+				{Type: ptr.To(gwv1.IPAddressType), Value: "192.168.1.1"},
+				{Type: ptr.To(gwv1.IPAddressType), Value: "192.168.1.1"},
+			},
+			wantErr: true,
+			errMsg:  "IPAddress values must be unique",
+		},
+		{
+			name: "duplicate hostname rejected",
+			addrs: []gwv1.GatewaySpecAddress{
+				{Type: ptr.To(gwv1.HostnameAddressType), Value: "foo.example.com"},
+				{Type: ptr.To(gwv1.HostnameAddressType), Value: "foo.example.com"},
+			},
+			wantErr: true,
+			errMsg:  "Hostname values must be unique",
+		},
+		{
+			name: "same value different types pass",
+			addrs: []gwv1.GatewaySpecAddress{
+				{Type: ptr.To(gwv1.IPAddressType), Value: "192.168.1.1"},
+				{Type: ptr.To(gwv1.HostnameAddressType), Value: "192.168.1.1"},
+			},
+			wantErr: false,
+		},
+		{
+			name:    "empty list passes",
+			addrs:   []gwv1.GatewaySpecAddress{},
+			wantErr: false,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateGatewayAddressUniqueness(tc.addrs)
+			if tc.wantErr {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), tc.errMsg)
+			} else {
+				require.NoError(t, err)
+			}
 func TestRayServiceFinalizer(t *testing.T) {
 	ctx := context.TODO()
 	namespace := "test-ns"

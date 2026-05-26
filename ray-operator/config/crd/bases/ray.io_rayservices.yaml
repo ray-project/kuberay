@@ -8630,6 +8630,37 @@ spec:
                 properties:
                   clusterUpgradeOptions:
                     properties:
+                      gatewayAddresses:
+                        items:
+                          properties:
+                            type:
+                              default: IPAddress
+                              maxLength: 253
+                              minLength: 1
+                              pattern: ^Hostname|IPAddress|NamedAddress|[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*\/[A-Za-z0-9\/\-._~%!$&'()*+,;=:]+$
+                              type: string
+                            value:
+                              maxLength: 253
+                              type: string
+                          type: object
+                          x-kubernetes-validations:
+                          - message: Hostname value must be empty or contain only
+                              valid characters (matching ^(\*\.)?[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$)
+                            rule: 'self.type == ''Hostname'' ? (!has(self.value) ||
+                              self.value.matches(r"""^(\*\.)?[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$""")):
+                              true'
+                        maxItems: 16
+                        type: array
+                        x-kubernetes-list-type: atomic
+                        x-kubernetes-validations:
+                        - message: IPAddress values must be unique
+                          rule: 'self.all(a1, a1.type == ''IPAddress'' && has(a1.value)
+                            ? self.exists_one(a2, a2.type == a1.type && has(a2.value)
+                            && a2.value == a1.value) : true )'
+                        - message: Hostname values must be unique
+                          rule: 'self.all(a1, a1.type == ''Hostname''  && has(a1.value)
+                            ? self.exists_one(a2, a2.type == a1.type && has(a2.value)
+                            && a2.value == a1.value) : true )'
                       gatewayClassName:
                         type: string
                       intervalSeconds:

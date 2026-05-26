@@ -3,6 +3,7 @@ package v1
 import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
@@ -73,6 +74,17 @@ type ClusterUpgradeOptions struct {
 	IntervalSeconds *int32 `json:"intervalSeconds"`
 	// The name of the Gateway Class installed by the Kubernetes Cluster admin.
 	GatewayClassName string `json:"gatewayClassName"`
+	// GatewayAddresses is an optional list of addresses to set on the Gateway resource.
+	// This is required on bare-metal clusters (e.g. MetalLB + Envoy Gateway) where the
+	// Gateway implementation only becomes PROGRAMMED when spec.addresses is explicitly
+	// provided. If empty, no addresses field is set on the Gateway (suitable for cloud
+	// load-balancer environments that assign addresses automatically).
+	// +listType=atomic
+	// +kubebuilder:validation:MaxItems=16
+	// +kubebuilder:validation:XValidation:message="IPAddress values must be unique",rule="self.all(a1, a1.type == 'IPAddress' && has(a1.value) ? self.exists_one(a2, a2.type == a1.type && has(a2.value) && a2.value == a1.value) : true )"
+	// +kubebuilder:validation:XValidation:message="Hostname values must be unique",rule="self.all(a1, a1.type == 'Hostname'  && has(a1.value) ? self.exists_one(a2, a2.type == a1.type && has(a2.value) && a2.value == a1.value) : true )"
+	// +optional
+	GatewayAddresses []gatewayv1.GatewaySpecAddress `json:"gatewayAddresses,omitempty"`
 }
 
 type RayServiceUpgradeStrategy struct {
