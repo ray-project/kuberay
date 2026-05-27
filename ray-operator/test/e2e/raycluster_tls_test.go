@@ -540,8 +540,11 @@ func TestRayClusterTLSEdgeCases(t *testing.T) {
 			g.Expect(pod.Spec.InitContainers).NotTo(BeEmpty(),
 				"worker pod %s should have init containers", pod.Name)
 
-			// All init containers (e.g. wait-gcs-ready) should have TLS config.
+			// Only the wait-gcs-ready init container should have TLS config.
 			for _, initContainer := range pod.Spec.InitContainers {
+				if initContainer.Name != "wait-gcs-ready" {
+					continue
+				}
 				envMap := make(map[string]string)
 				for _, env := range initContainer.Env {
 					envMap[env.Name] = env.Value

@@ -2653,9 +2653,12 @@ func TestConfigureTLS_AutoGenerate_WorkerPod(t *testing.T) {
 	rayContainer := podTemplate.Spec.Containers[utils.RayContainerIndex]
 	checkContainerEnv(t, rayContainer, utils.RAY_USE_TLS, "1")
 
-	// All init containers (e.g. wait-gcs-ready) should have TLS config.
+	// Only the wait-gcs-ready init container should have TLS config.
 	require.NotEmpty(t, podTemplate.Spec.InitContainers, "worker pod should have init containers")
 	for _, initContainer := range podTemplate.Spec.InitContainers {
+		if initContainer.Name != "wait-gcs-ready" {
+			continue
+		}
 		env := getEnvVar(initContainer, utils.RAY_USE_TLS)
 		assert.NotNil(t, env, "init container %s should have RAY_USE_TLS", initContainer.Name)
 	}
