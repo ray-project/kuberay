@@ -1454,10 +1454,11 @@ func (r *RayClusterReconciler) buildHeadPod(ctx context.Context, instance rayv1.
 	creatorCRDType := getCreatorCRDType(instance)
 	pod := common.BuildPod(ctx, podConf, rayv1.HeadNode, instance.Spec.HeadGroupSpec.RayStartParams, headPort, autoscalingEnabled, creatorCRDType, fqdnRayIP, r.options.DefaultContainerEnvs, instance.Spec.RayVersion)
 	if utils.IsTLSEnabled(&instance.Spec) {
-		// With mTLS, --node-ip-address is the head service FQDN (see setMissingRayStartParams).
-		// Inject loopback RAY_ADDRESS after BuildPod so ray-head and autoscaler connect to GCS
-		// via 127.0.0.1, avoiding TLS SNI failures when using the pod IP.
-		injectMTLSLoopbackRayAddress(&pod, headPort)
+		// With mTLS, set RAY_ADDRESS to the head service FQDN so that Python clients
+		// and CLI tools connect to GCS via a hostname present in the cert's DNS SANs.
+		// Ray's canonicalize_bootstrap_address resolves 127.0.0.1 to the pod IP, which
+		// fails TLS verification. The FQDN bypasses this resolution and matches the cert.
+		injectMTLSRayAddress(&pod, fqdnRayIP, headPort)
 	}
 	// Set raycluster instance as the owner and controller
 	if err := controllerutil.SetControllerReference(&instance, &pod, r.Scheme); err != nil {
@@ -1467,10 +1468,12 @@ func (r *RayClusterReconciler) buildHeadPod(ctx context.Context, instance rayv1.
 	return pod
 }
 
-// injectMTLSLoopbackRayAddress sets RAY_ADDRESS=127.0.0.1:port on ray-head and autoscaler.
-// Called only when mTLS is enabled for the RayCluster.
-func injectMTLSLoopbackRayAddress(pod *corev1.Pod, headPort string) {
-	loopbackAddress := fmt.Sprintf("%s:%s", utils.LOCAL_HOST, headPort)
+// injectMTLSRayAddress sets RAY_ADDRESS=<FQDN>:<port> on ray-head and autoscaler.
+// Using the FQDN ensures Ray's canonicalize_bootstrap_address does not resolve
+// the address to the pod IP (which would fail TLS verification against IP SANs).
+// The FQDN is present in the certificate's DNS SANs from creation time.
+func injectMTLSRayAddress(pod *corev1.Pod, fqdnRayIP string, headPort string) {
+	fqdnAddress := fmt.Sprintf("%s:%s", fqdnRayIP, headPort)
 	for i := range pod.Spec.Containers {
 		container := &pod.Spec.Containers[i]
 		if i != utils.RayContainerIndex && container.Name != common.AutoscalerContainerName {
@@ -1479,7 +1482,7 @@ func injectMTLSLoopbackRayAddress(pod *corev1.Pod, headPort string) {
 		found := false
 		for j, env := range container.Env {
 			if env.Name == utils.RAY_ADDRESS {
-				container.Env[j].Value = loopbackAddress
+				container.Env[j].Value = fqdnAddress
 				found = true
 				break
 			}
@@ -1487,7 +1490,7 @@ func injectMTLSLoopbackRayAddress(pod *corev1.Pod, headPort string) {
 		if !found {
 			container.Env = append(container.Env, corev1.EnvVar{
 				Name:  utils.RAY_ADDRESS,
-				Value: loopbackAddress,
+				Value: fqdnAddress,
 			})
 		}
 	}
