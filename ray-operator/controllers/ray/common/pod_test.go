@@ -742,7 +742,7 @@ func TestBuildPod_WithUlimitOverride(t *testing.T) {
 	)
 
 	podName := strings.ToLower(cluster.Name + utils.DashSymbol + string(rayv1.HeadNode) + utils.DashSymbol + utils.FormatInt32(0))
-	podTemplateSpec := DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
+	podTemplateSpec := DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379", "")
 	pod := BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", false, utils.GetCRDType(""), "", nil, "")
 
 	// The generated command arg still uses ${RAY_START_ULIMIT_OPEN_FILES:-65536} because the shell resolves it at runtime.

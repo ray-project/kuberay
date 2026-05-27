@@ -386,11 +386,14 @@ func configureTLS(podTemplate *corev1.PodTemplateSpec, instance rayv1.RayCluster
 		})
 	}
 
-	// Inject env vars and volume mount into the Ray container (SetContainerTLSConfig is idempotent).
+	// Inject env vars and volume mount into the Ray container.
 	SetContainerTLSConfig(&podTemplate.Spec.Containers[utils.RayContainerIndex])
 
-	// Inject into init containers that need TLS (e.g. wait-gcs-ready).
+	// Inject into the wait-gcs-ready init container only (not user-defined init containers).
 	for i := range podTemplate.Spec.InitContainers {
+		if podTemplate.Spec.InitContainers[i].Name != "wait-gcs-ready" {
+			continue
+		}
 		SetContainerTLSConfig(&podTemplate.Spec.InitContainers[i])
 	}
 }
