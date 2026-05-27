@@ -235,6 +235,7 @@ const (
 	SuspendRequested               RayServiceConditionReason = "SuspendRequested"
 	SuspendInProgress              RayServiceConditionReason = "SuspendInProgress"
 	SuspendComplete                RayServiceConditionReason = "SuspendComplete"
+	RayServiceResumed              RayServiceConditionReason = "RayServiceResumed"
 )
 
 // +kubebuilder:object:root=true

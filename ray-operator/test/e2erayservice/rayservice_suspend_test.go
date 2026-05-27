@@ -7,8 +7,10 @@ import (
 
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	rayv1ac "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/ray/v1"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
@@ -50,6 +52,20 @@ func TestRayServiceSuspendResume(t *testing.T) {
 	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutMedium).
 		Should(WithTransform(IsRayServiceSuspended, BeTrue()))
 
+	// The Suspending condition must be retained as False with reason
+	// SuspendComplete, not removed. Verifies the K8s-API-convention guarantee
+	// that lastTransitionTime / reason / message are preserved across the
+	// Suspending → Suspended transition.
+	LogWithTimestamp(test.T(), "Asserting Suspending condition is retained as False with SuspendComplete reason")
+	g.Eventually(func(gg Gomega) {
+		rs, err := GetRayService(test, namespace.Name, rayServiceName)
+		gg.Expect(err).NotTo(HaveOccurred())
+		cond := meta.FindStatusCondition(rs.Status.Conditions, string(rayv1.RayServiceSuspending))
+		gg.Expect(cond).NotTo(BeNil(), "Suspending condition should be retained as False, not removed")
+		gg.Expect(cond.Status).To(Equal(metav1.ConditionFalse))
+		gg.Expect(cond.Reason).To(Equal(string(rayv1.SuspendComplete)))
+	}, TestTimeoutShort).Should(Succeed())
+
 	LogWithTimestamp(test.T(), "Asserting status fields are reset and all owned resources are gone")
 	g.Eventually(func(gg Gomega) {
 		rs, err := GetRayService(test, namespace.Name, rayServiceName)
@@ -85,6 +101,20 @@ func TestRayServiceSuspendResume(t *testing.T) {
 		Should(WithTransform(IsRayServiceReady, BeTrue()))
 	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutShort).
 		Should(WithTransform(IsRayServiceSuspended, BeFalse()))
+
+	// The Suspended condition must be retained as False with reason
+	// RayServiceResumed, not removed. Verifies that exiting the Suspended
+	// state preserves lastTransitionTime / reason / message instead of
+	// dropping the condition.
+	LogWithTimestamp(test.T(), "Asserting Suspended condition is retained as False with RayServiceResumed reason")
+	g.Eventually(func(gg Gomega) {
+		rs, err := GetRayService(test, namespace.Name, rayServiceName)
+		gg.Expect(err).NotTo(HaveOccurred())
+		cond := meta.FindStatusCondition(rs.Status.Conditions, string(rayv1.RayServiceSuspended))
+		gg.Expect(cond).NotTo(BeNil(), "Suspended condition should be retained as False, not removed")
+		gg.Expect(cond.Status).To(Equal(metav1.ConditionFalse))
+		gg.Expect(cond.Reason).To(Equal(string(rayv1.RayServiceResumed)))
+	}, TestTimeoutShort).Should(Succeed())
 
 	LogWithTimestamp(test.T(), "Sending requests to verify the resumed RayService serves traffic again")
 	rayService, err = GetRayService(test, namespace.Name, rayServiceName)
