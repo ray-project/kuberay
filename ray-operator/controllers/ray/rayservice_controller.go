@@ -410,8 +410,10 @@ func (r *RayServiceReconciler) handleSuspend(ctx context.Context, rayServiceInst
 		setCondition(rayServiceInstance, rayv1.RayServiceSuspending, metav1.ConditionTrue, rayv1.SuspendRequested,
 			"Spec.Suspend is true; will delete RayClusters and Services owned by this RayService.")
 		setCondition(rayServiceInstance, rayv1.RayServiceReady, metav1.ConditionFalse, rayv1.SuspendInProgress, "RayService is suspending.")
-		meta.RemoveStatusCondition(&rayServiceInstance.Status.Conditions, string(rayv1.UpgradeInProgress))
-		meta.RemoveStatusCondition(&rayServiceInstance.Status.Conditions, string(rayv1.RollbackInProgress))
+		setCondition(rayServiceInstance, rayv1.UpgradeInProgress, metav1.ConditionFalse, rayv1.SuspendInProgress,
+			"No upgrade in progress.")
+		setCondition(rayServiceInstance, rayv1.RollbackInProgress, metav1.ConditionFalse, rayv1.SuspendInProgress,
+			"No rollback in progress.")
 		rayServiceInstance.Status.ActiveServiceStatus = rayv1.RayServiceStatus{}
 		rayServiceInstance.Status.PendingServiceStatus = rayv1.RayServiceStatus{}
 		rayServiceInstance.Status.NumServeEndpoints = 0
@@ -443,6 +445,10 @@ func (r *RayServiceReconciler) handleSuspend(ctx context.Context, rayServiceInst
 		"All owned resources have been deleted.")
 	setCondition(rayServiceInstance, rayv1.RayServiceSuspended, metav1.ConditionTrue, rayv1.SuspendComplete, "All owned resources have been deleted.")
 	setCondition(rayServiceInstance, rayv1.RayServiceReady, metav1.ConditionFalse, rayv1.SuspendComplete, "RayService is suspended.")
+	setCondition(rayServiceInstance, rayv1.UpgradeInProgress, metav1.ConditionFalse, rayv1.SuspendComplete,
+		"No upgrade in progress.")
+	setCondition(rayServiceInstance, rayv1.RollbackInProgress, metav1.ConditionFalse, rayv1.SuspendComplete,
+		"No rollback in progress.")
 	return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, nil
 }
 

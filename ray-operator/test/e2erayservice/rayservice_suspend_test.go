@@ -52,18 +52,24 @@ func TestRayServiceSuspendResume(t *testing.T) {
 	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutMedium).
 		Should(WithTransform(IsRayServiceSuspended, BeTrue()))
 
-	// The Suspending condition must be retained as False with reason
-	// SuspendComplete, not removed. Verifies the K8s-API-convention guarantee
-	// that lastTransitionTime / reason / message are preserved across the
-	// Suspending → Suspended transition.
-	LogWithTimestamp(test.T(), "Asserting Suspending condition is retained as False with SuspendComplete reason")
+	// Once Suspended is reached, Suspending / UpgradeInProgress /
+	// RollbackInProgress must all be present as False with reason
+	// SuspendComplete (not removed, and not stuck on the stale
+	// SuspendInProgress reason from when suspend started).
+	LogWithTimestamp(test.T(), "Asserting Suspending / UpgradeInProgress / RollbackInProgress are all retained as False with SuspendComplete reason")
 	g.Eventually(func(gg Gomega) {
 		rs, err := GetRayService(test, namespace.Name, rayServiceName)
 		gg.Expect(err).NotTo(HaveOccurred())
-		cond := meta.FindStatusCondition(rs.Status.Conditions, string(rayv1.RayServiceSuspending))
-		gg.Expect(cond).NotTo(BeNil(), "Suspending condition should be retained as False, not removed")
-		gg.Expect(cond.Status).To(Equal(metav1.ConditionFalse))
-		gg.Expect(cond.Reason).To(Equal(string(rayv1.SuspendComplete)))
+		for _, ctype := range []rayv1.RayServiceConditionType{
+			rayv1.RayServiceSuspending,
+			rayv1.UpgradeInProgress,
+			rayv1.RollbackInProgress,
+		} {
+			cond := meta.FindStatusCondition(rs.Status.Conditions, string(ctype))
+			gg.Expect(cond).NotTo(BeNil(), "%s condition should be retained as False, not removed", ctype)
+			gg.Expect(cond.Status).To(Equal(metav1.ConditionFalse), "%s should be False", ctype)
+			gg.Expect(cond.Reason).To(Equal(string(rayv1.SuspendComplete)), "%s reason should be SuspendComplete", ctype)
+		}
 	}, TestTimeoutShort).Should(Succeed())
 
 	LogWithTimestamp(test.T(), "Asserting status fields are reset and all owned resources are gone")
