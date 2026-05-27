@@ -16,5 +16,3 @@ nodes:
     apiServer:
       certSANs:
         - "docker"
-- role: worker
-  image: kindest/node:v1.29.0
