@@ -12,6 +12,9 @@ set -eo pipefail
 # reference $KUBERAY_TEST_RAY_IMAGE without a default and would fail under -u
 # when the variable is not set (e.g. in the non-release path).
 
+echo "Installing cert-manager (required for RayClusterMTLS auto-generate e2e tests)"
+make certmanager
+
 if [ "$IS_FROM_RAY_RELEASE_AUTOMATION" = 1 ]; then
     helm repo update
     echo "Installing helm chart with test override values (feature gates enabled as needed)"
