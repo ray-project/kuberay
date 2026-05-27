@@ -6,6 +6,9 @@
 # released version from helm as actual users might. Ray ci is also always expected
 # to kick off from the release branch so tests should match up accordingly.
 
+echo "Installing cert-manager (required for RayClusterMTLS auto-generate e2e tests)"
+make certmanager
+
 if [ "$IS_FROM_RAY_RELEASE_AUTOMATION" = 1 ]; then
     helm repo update
     echo "Installing helm chart with test override values (feature gates enabled as needed)"
