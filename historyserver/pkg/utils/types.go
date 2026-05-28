@@ -1,11 +1,31 @@
 package utils
 
+type SessionStatus string
+
+const (
+	SessionStatusInProgress SessionStatus = "in_progress"
+	SessionStatusCompleted  SessionStatus = "completed"
+	SessionStatusTerminated SessionStatus = "terminated"
+	SessionStatusUnknown    SessionStatus = "unknown"
+)
+
+type MetaJson struct {
+	SessionName      string        `json:"session_name"`
+	ClusterID        string        `json:"cluster_id"`
+	ClusterNamespace string        `json:"cluster_namespace"`
+	StartTime        int64         `json:"start_time"`
+	EndTime          int64         `json:"end_time"`
+	Status           SessionStatus `json:"status"`
+}
+
 type ClusterInfo struct {
-	Name            string `json:"name"`
-	Namespace       string `json:"namespace"`
-	SessionName     string `json:"sessionName"`
-	CreateTime      string `json:"createTime"`
-	CreateTimeStamp int64  `json:"createTimeStamp"`
+	Name            string        `json:"name"`
+	Namespace       string        `json:"namespace"`
+	SessionName     string        `json:"sessionName"`
+	CreateTime      string        `json:"createTime"`
+	CreateTimeStamp int64         `json:"createTimeStamp"`
+	Status          SessionStatus `json:"status,omitempty"`
+	EndTime         int64         `json:"endTime,omitempty"`
 }
 
 type ClusterInfoList []ClusterInfo

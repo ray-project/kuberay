@@ -1,6 +1,7 @@
 package localtest
 
 import (
+	"fmt"
 	"io"
 	"strings"
 
@@ -13,6 +14,7 @@ import (
 type MockReader struct {
 	data     map[string]map[string]string
 	clusters []utils.ClusterInfo
+	metas    map[string]*utils.MetaJson
 }
 
 // NewMockReader creates a new mock reader
@@ -46,6 +48,7 @@ func NewMockReader() *MockReader {
 	return &MockReader{
 		clusters: clusters,
 		data:     data,
+		metas:    make(map[string]*utils.MetaJson),
 	}
 }
 
@@ -73,6 +76,13 @@ func (r *MockReader) ListFiles(clusterId string, dir string) []string {
 		return files
 	}
 	return []string{}
+}
+
+func (r *MockReader) ReadMeta(path string) (*utils.MetaJson, error) {
+	if meta, ok := r.metas[path]; ok {
+		return meta, nil
+	}
+	return nil, fmt.Errorf("meta not found: %s", path)
 }
 
 // NewReader creates a new StorageReader

@@ -72,6 +72,8 @@ func (r *RayLogHandler) Run(stop <-chan struct{}) error {
 	<-stop
 	logrus.Info("Received stop signal, processing all logs...")
 	r.processSessionLatestLogs()
+	// Update meta.json to mark the session as completed
+	r.updateMetaJsonOnShutdown()
 	// Perform one final poll of additional endpoints before shutting down.
 	// This must happen before close(r.ShutdownChan) because pollSingleEndpoint
 	// uses ShutdownChan to cancel in-flight HTTP requests.
@@ -85,6 +87,39 @@ func (r *RayLogHandler) Run(stop <-chan struct{}) error {
 
 // processSessionLatestLogs processes logs in the configured session_latest/logs directory
 // on shutdown, using the real session ID and node ID
+
+// updateMetaJsonOnShutdown updates the session's meta.json to mark it as completed.
+func (r *RayLogHandler) updateMetaJsonOnShutdown() {
+	sessionLatestDir := utils.GetRaySessionLatestPath()
+	sessionRealDir, err := filepath.EvalSymlinks(sessionLatestDir)
+	if err != nil {
+		logrus.Errorf("Failed to resolve session_latest symlink for meta.json update: %v", err)
+		return
+	}
+	sessionName := filepath.Base(sessionRealDir)
+	metaPath := utils.MetadirMetaJsonPath(r.RootDir, r.RayClusterName, r.RayClusterNamespace, sessionName)
+
+	startTime, err := utils.GetDateTimeFromSessionID(sessionName)
+	var startUnix int64
+	if err == nil {
+		startUnix = startTime.Unix()
+	}
+
+	meta := utils.MetaJson{
+		SessionName:      sessionName,
+		ClusterID:        r.RayClusterName,
+		ClusterNamespace: r.RayClusterNamespace,
+		StartTime:        startUnix,
+		EndTime:          time.Now().Unix(),
+		Status:           utils.SessionStatusCompleted,
+	}
+	if err := r.Writer.WriteMeta(metaPath, meta); err != nil {
+		logrus.Errorf("Failed to update meta.json on shutdown %s: %v", metaPath, err)
+	} else {
+		logrus.Infof("Updated meta.json to completed for session %s", sessionName)
+	}
+}
+
 func (r *RayLogHandler) processSessionLatestLogs() {
 	logrus.Info("Processing session_latest logs on shutdown...")
 
@@ -111,6 +146,25 @@ func (r *RayLogHandler) processSessionLatestLogs() {
 		if err := r.Writer.WriteFile(metafile, strings.NewReader("")); err != nil {
 			logrus.Errorf("CreateObjectIfNotExist %s error %v", metafile, err)
 			return
+		}
+
+		// Write meta.json for session lifecycle tracking
+		sessionBase := path.Base(sessionID)
+		metaPath := utils.MetadirMetaJsonPath(r.RootDir, r.RayClusterName, r.RayClusterNamespace, sessionBase)
+		startTime, parseErr := utils.GetDateTimeFromSessionID(sessionBase)
+		var startUnix int64
+		if parseErr == nil {
+			startUnix = startTime.Unix()
+		}
+		meta := utils.MetaJson{
+			SessionName:      sessionBase,
+			ClusterID:        r.RayClusterName,
+			ClusterNamespace: r.RayClusterNamespace,
+			StartTime:        startUnix,
+			Status:           utils.SessionStatusInProgress,
+		}
+		if err := r.Writer.WriteMeta(metaPath, meta); err != nil {
+			logrus.Errorf("Failed to write meta.json %s: %v", metaPath, err)
 		}
 	}
 
@@ -461,6 +515,25 @@ func (r *RayLogHandler) processSessionPrevLogs(sessionDir string) {
 			logrus.Errorf("CreateObjectIfNotExist %s error %v", metafile, err)
 			return
 		}
+
+		// Write meta.json for session lifecycle tracking
+		sessionBase := path.Base(sessionID)
+		metaPath := utils.MetadirMetaJsonPath(r.RootDir, r.RayClusterName, r.RayClusterNamespace, sessionBase)
+		startTime, parseErr := utils.GetDateTimeFromSessionID(sessionBase)
+		var startUnix int64
+		if parseErr == nil {
+			startUnix = startTime.Unix()
+		}
+		meta := utils.MetaJson{
+			SessionName:      sessionBase,
+			ClusterID:        r.RayClusterName,
+			ClusterNamespace: r.RayClusterNamespace,
+			StartTime:        startUnix,
+			Status:           utils.SessionStatusInProgress,
+		}
+		if err := r.Writer.WriteMeta(metaPath, meta); err != nil {
+			logrus.Errorf("Failed to write meta.json %s: %v", metaPath, err)
+		}
 	}
 
 	// Walk through all node directories under this session
@@ -746,8 +819,9 @@ func (r *RayLogHandler) WatchSessionLatestLoops() {
 			if event.Op&(fsnotify.Create|fsnotify.Write) != 0 {
 				sessionID := filepath.Base(event.Name)
 				metadir := path.Join(r.RootDir, "metadir")
+				clusterKey := utils.AppendRayClusterNameNamespace(r.RayClusterName, r.RayClusterNamespace)
 				metafile := path.Clean(metadir + "/" + fmt.Sprintf("%s/%v",
-					utils.AppendRayClusterNameNamespace(r.RayClusterName, r.RayClusterNamespace),
+					clusterKey,
 					path.Base(sessionID),
 				))
 				if err := r.Writer.CreateDirectory(path.Dir(metafile)); err != nil {
@@ -757,6 +831,25 @@ func (r *RayLogHandler) WatchSessionLatestLoops() {
 				if err := r.Writer.WriteFile(metafile, strings.NewReader("")); err != nil {
 					logrus.Errorf("CreateObjectIfNotExist %s error %v", metafile, err)
 					return
+				}
+
+				// Write meta.json for session lifecycle tracking
+				sessionBase := path.Base(sessionID)
+				metaPath := utils.MetadirMetaJsonPath(r.RootDir, r.RayClusterName, r.RayClusterNamespace, sessionBase)
+				startTime, parseErr := utils.GetDateTimeFromSessionID(sessionBase)
+				var startUnix int64
+				if parseErr == nil {
+					startUnix = startTime.Unix()
+				}
+				meta := utils.MetaJson{
+					SessionName:      sessionBase,
+					ClusterID:        r.RayClusterName,
+					ClusterNamespace: r.RayClusterNamespace,
+					StartTime:        startUnix,
+					Status:           utils.SessionStatusInProgress,
+				}
+				if err := r.Writer.WriteMeta(metaPath, meta); err != nil {
+					logrus.Errorf("Failed to write meta.json %s: %v", metaPath, err)
 				}
 			}
 		case err, ok := <-watcher.Errors:

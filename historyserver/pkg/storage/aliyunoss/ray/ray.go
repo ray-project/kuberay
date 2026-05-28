@@ -3,6 +3,7 @@ package ray
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -82,6 +83,36 @@ func (r *RayLogsHandler) WriteFile(file string, reader io.ReadSeeker) error {
 		Body:   reader,
 	})
 	return err
+}
+
+func (r *RayLogsHandler) WriteMeta(path string, meta utils.MetaJson) error {
+	data, err := json.Marshal(meta)
+	if err != nil {
+		return fmt.Errorf("failed to marshal meta json: %w", err)
+	}
+	return r.WriteFile(path, bytes.NewReader(data))
+}
+
+func (r *RayLogsHandler) ReadMeta(path string) (*utils.MetaJson, error) {
+	result, err := r.OssClient.GetObject(context.TODO(), &oss.GetObjectRequest{
+		Bucket: oss.Ptr(r.OssBucket),
+		Key:    oss.Ptr(path),
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer result.Body.Close()
+
+	data, err := io.ReadAll(result.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read meta json: %w", err)
+	}
+
+	var meta utils.MetaJson
+	if err := json.Unmarshal(data, &meta); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal meta json: %w", err)
+	}
+	return &meta, nil
 }
 
 func (r *RayLogsHandler) _listFiles(prefix string, delimiter string, onlyBase bool) []string {
@@ -170,12 +201,22 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 				if len(metas) < 2 {
 					continue
 				}
+				// Skip meta.json files — these are handled via ReadMeta
+				if strings.HasSuffix(metas[1], utils.MetadirMetaJsonSuffix) {
+					continue
+				}
 				logrus.Infof("Process %++v", metas)
 				namespaceName := strings.Split(metas[0], "_")
+				if len(namespaceName) < 2 {
+					continue
+				}
 				c.Name = namespaceName[0]
 				c.Namespace = namespaceName[1]
 				c.SessionName = metas[1]
 				sessionInfo := strings.Split(metas[1], "_")
+				if len(sessionInfo) < 3 {
+					continue
+				}
 				date := sessionInfo[1]
 				dataTime := sessionInfo[2]
 				createTime, err := time.Parse("2006-01-02_15-04-05", date+"_"+dataTime)
@@ -185,6 +226,14 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 				}
 				c.CreateTimeStamp = createTime.Unix()
 				c.CreateTime = createTime.UTC().Format(("2006-01-02T15:04:05Z"))
+
+				// Enrich with meta.json data if available
+				metaPath := path.Join(r.OssRootDir, "metadir", metas[0], metas[1]+utils.MetadirMetaJsonSuffix)
+				if meta, err := r.ReadMeta(metaPath); err == nil {
+					c.Status = meta.Status
+					c.EndTime = meta.EndTime
+				}
+
 				clusters = append(clusters, *c)
 			}
 		}

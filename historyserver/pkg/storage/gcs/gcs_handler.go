@@ -3,6 +3,7 @@ package gcs
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -85,6 +86,36 @@ func (h *RayLogsHandler) WriteFile(file string, reader io.ReadSeeker) error {
 	return nil
 }
 
+func (h *RayLogsHandler) WriteMeta(path string, meta utils.MetaJson) error {
+	data, err := json.Marshal(meta)
+	if err != nil {
+		return fmt.Errorf("failed to marshal meta json: %w", err)
+	}
+	return h.WriteFile(path, bytes.NewReader(data))
+}
+
+func (h *RayLogsHandler) ReadMeta(path string) (*utils.MetaJson, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	reader, err := h.StorageClient.Bucket(h.GCSBucket).Object(path).NewReader(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer reader.Close()
+
+	data, err := io.ReadAll(reader)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read meta json: %w", err)
+	}
+
+	var meta utils.MetaJson
+	if err := json.Unmarshal(data, &meta); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal meta json: %w", err)
+	}
+	return &meta, nil
+}
+
 // ListFiles will return all files within the directory.
 func (h *RayLogsHandler) ListFiles(clusterId string, directory string) []string {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
@@ -164,6 +195,10 @@ func (h *RayLogsHandler) List() []utils.ClusterInfo {
 			logrus.Errorf("Unable to properly parse cluster metadir path with fullpath: %s", fullObjectPath)
 			continue
 		}
+		// Skip meta.json files — these are handled via ReadMeta
+		if strings.HasSuffix(metaInfo[1], utils.MetadirMetaJsonSuffix) {
+			continue
+		}
 		clusterMeta := strings.Split(metaInfo[0], "_")
 		if len(clusterMeta) != 2 {
 			logrus.Errorf("Unable to get cluster name and namespace from directory: %s", metaInfo[0])
@@ -180,6 +215,14 @@ func (h *RayLogsHandler) List() []utils.ClusterInfo {
 		}
 		cluster.CreateTimeStamp = datetime.Unix()
 		cluster.CreateTime = datetime.UTC().Format(("2006-01-02T15:04:05Z"))
+
+		// Enrich with meta.json data if available
+		metaPath := utils.MetadirMetaJsonPath(h.RootDir, cluster.Name, cluster.Namespace, metaInfo[1])
+		metaPath = strings.TrimPrefix(metaPath, "/")
+		if meta, err := h.ReadMeta(metaPath); err == nil {
+			cluster.Status = meta.Status
+			cluster.EndTime = meta.EndTime
+		}
 
 		logrus.Infof("Parsed cluster %s for session %s to list", cluster.Name, cluster.SessionName)
 		clusterList = append(clusterList, *cluster)

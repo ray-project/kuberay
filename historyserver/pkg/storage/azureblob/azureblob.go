@@ -3,6 +3,7 @@ package azureblob
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -67,6 +68,38 @@ func (r *RayLogsHandler) WriteFile(file string, reader io.ReadSeeker) error {
 	}
 
 	return nil
+}
+
+func (r *RayLogsHandler) WriteMeta(path string, meta utils.MetaJson) error {
+	data, err := json.Marshal(meta)
+	if err != nil {
+		return fmt.Errorf("failed to marshal meta json: %w", err)
+	}
+	return r.WriteFile(path, bytes.NewReader(data))
+}
+
+func (r *RayLogsHandler) ReadMeta(path string) (*utils.MetaJson, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), downloadTimeout)
+	defer cancel()
+
+	blobClient := r.ContainerClient.NewBlockBlobClient(path)
+	resp, err := blobClient.DownloadStream(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	body := resp.Body
+	defer body.Close()
+
+	data, err := io.ReadAll(body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read meta json: %w", err)
+	}
+
+	var meta utils.MetaJson
+	if err := json.Unmarshal(data, &meta); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal meta json: %w", err)
+	}
+	return &meta, nil
 }
 
 func (r *RayLogsHandler) listBlobs(prefix string, delimiter string, onlyBase bool) []string {
@@ -188,6 +221,10 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 			if len(metas) < 2 {
 				continue
 			}
+			// Skip meta.json files — these are handled via ReadMeta
+			if strings.HasSuffix(metas[1], utils.MetadirMetaJsonSuffix) {
+				continue
+			}
 			logrus.Infof("Process %++v", metas)
 			namespaceName := strings.Split(metas[0], "_")
 			if len(namespaceName) < 2 {
@@ -209,6 +246,14 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 			}
 			c.CreateTimeStamp = createTime.Unix()
 			c.CreateTime = createTime.UTC().Format("2006-01-02T15:04:05Z")
+
+			// Enrich with meta.json data if available
+			metaPath := path.Join(r.RootDir, "metadir", metas[0], metas[1]+utils.MetadirMetaJsonSuffix)
+			if meta, err := r.ReadMeta(metaPath); err == nil {
+				c.Status = meta.Status
+				c.EndTime = meta.EndTime
+			}
+
 			clusters = append(clusters, *c)
 		}
 	}

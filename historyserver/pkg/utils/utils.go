@@ -73,6 +73,16 @@ func AppendRayClusterNameNamespace(rayClusterName, rayClusterNamespace string) s
 	return fmt.Sprintf("%s%s%s", rayClusterName, connector, rayClusterNamespace)
 }
 
+// MetadirMetaJsonPath constructs the object key for a session's meta.json file.
+// The meta.json is stored alongside the metadir marker with a ".meta.json" suffix.
+func MetadirMetaJsonPath(rootDir, rayClusterName, rayClusterNamespace, sessionName string) string {
+	clusterKey := AppendRayClusterNameNamespace(rayClusterName, rayClusterNamespace)
+	return path.Clean(path.Join(rootDir, "metadir", clusterKey, sessionName+".meta.json"))
+}
+
+// MetadirMetaJsonSuffix is the suffix appended to session names for meta.json files.
+const MetadirMetaJsonSuffix = ".meta.json"
+
 func GetSessionDir() (string, error) {
 	for i := 0; i < 12; i++ {
 		rp, err := os.Readlink(GetRaySessionLatestPath())
