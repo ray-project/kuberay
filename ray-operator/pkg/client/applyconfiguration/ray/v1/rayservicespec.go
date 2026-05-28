@@ -37,10 +37,8 @@ type RayServiceSpecApplyConfiguration struct {
 	// Therefore, the head Pod's endpoint will not be added to the Kubernetes Serve service.
 	ExcludeHeadPodFromServeSvc *bool `json:"excludeHeadPodFromServeSvc,omitempty"`
 	// Suspend indicates whether the RayService should suspend its execution. When set to true,
-	// all Kubernetes resources owned by the RayService controller (RayClusters, Kubernetes
-	// Services, and — when the RayServiceIncrementalUpgrade feature gate is enabled — the
-	// Gateway and HTTPRoute) will be deleted. Setting it back to false will allow the RayService
-	// controller to recreate the resources.
+	// all Kubernetes resources owned by the RayService controller will be deleted. Setting it
+	// back to false will allow the RayService controller to recreate the resources.
 	Suspend *bool `json:"suspend,omitempty"`
 }
 
