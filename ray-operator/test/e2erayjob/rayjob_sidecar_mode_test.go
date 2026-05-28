@@ -38,7 +38,7 @@ func TestRayJobSidecarMode(t *testing.T) {
 				WithEntrypointNumGpus(2).
 				WithEntrypointMemory(50000000).
 				WithEntrypointResources(`{"R1": 2}`).
-				// WithEntrypointLabelSelector(`{"fragile_node":"!1"}`).
+				WithEntrypointLabelSelector(`{"workload-type":"driver"}`).
 				WithRuntimeEnvYAML(`
 env_vars:
   counter_name: test_counter
@@ -47,6 +47,7 @@ env_vars:
 				WithRayClusterSpec(rayv1ac.RayClusterSpec().
 					WithRayVersion(GetRayVersion()).
 					WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
+						WithLabels(map[string]string{"workload-type": "driver"}).
 						WithRayStartParams(map[string]string{
 							"dashboard-host": "0.0.0.0",
 							"num-gpus":       "4",
