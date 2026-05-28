@@ -40,15 +40,23 @@ func TestRayServiceSuspendDuringIncrementalUpgrade(t *testing.T) {
 	interval := new(int32(1))
 	maxSurge := new(int32(100))
 
-	rayService, httpRoute, gatewayIP := bootstrapIncrementalRayService(
+	rayService, httpRoute, _ := bootstrapIncrementalRayService(
 		test, g, namespace.Name, rayServiceName, stepSize, interval, maxSurge, defaultIncrementalUpgradeServeConfigV2)
 	gatewayName := fmt.Sprintf("%s-gateway", rayServiceName)
+	// Curl through the backing Istio Service's cluster DNS rather than the
+	// LoadBalancer-assigned external IP. The DNS handle is stable across
+	// Gateway recreation (Istio names the backing Deployment + Service
+	// `<gateway-name>-istio` in the Gateway's namespace), so the assertions
+	// after Spec.Suspend cycles through don't need to re-resolve a possibly-
+	// new external IP. The traffic still flows through the Gateway envoy
+	// pods and exercises the HTTPRoute / weighted-backend routing.
+	gatewayHost := fmt.Sprintf("%s-istio.%s.svc.cluster.local", gatewayName, namespace.Name)
 
 	// Sanity-check that the service is wired up through the Gateway before
 	// touching Spec.Suspend.
 	curlPod, err := CreateCurlPod(g, test, CurlPodName, CurlContainerName, namespace.Name)
 	g.Expect(err).NotTo(HaveOccurred())
-	stdout, _ := CurlRayServiceGateway(test, gatewayIP, curlPod, CurlContainerName, http.MethodPost, "/fruit", `["MANGO", 2]`)
+	stdout, _ := CurlRayServiceGateway(test, gatewayHost, curlPod, CurlContainerName, http.MethodPost, "/fruit", `["MANGO", 2]`)
 	g.Expect(stdout.String()).To(Equal("6"))
 
 	// Trigger an incremental upgrade so both active and pending RayClusters
@@ -129,20 +137,30 @@ func TestRayServiceSuspendDuringIncrementalUpgrade(t *testing.T) {
 		return utils.IsHTTPRouteReady(gw, route), nil
 	}, TestTimeoutMedium).Should(BeTrue())
 
-	// Re-resolve the Gateway IP — it may differ from the pre-suspend IP
-	// since MetalLB hands out a fresh address when the Gateway is recreated.
-	resumedGateway, err := GetGateway(test, namespace.Name, gatewayName)
-	g.Expect(err).NotTo(HaveOccurred())
-	resumedGatewayIP := GetGatewayIP(resumedGateway)
-	g.Expect(resumedGatewayIP).NotTo(BeEmpty())
-
 	// Resume runs against the upgraded spec — incrementalUpgrade() bumped
 	// MangoStand price 3→4 via the API before Spec.Suspend was flipped, so
 	// (MANGO, 2) -> 8, not 6. This also doubles as a check that resume
 	// applied the upgraded spec rather than reviving the pre-upgrade state.
+	//
+	// Use ExecPodCmdWithError + per-attempt --connect-timeout / --max-time
+	// inside Eventually rather than CurlRayServiceGateway: the latter
+	// require.NoError's on non-zero curl exits and would break out of the
+	// retry loop. There is a brief window after Gateway reaches
+	// Programmed=True where the new backing Service's ClusterIP is live
+	// but envoy hasn't finished loading the HTTPRoute config via xDS —
+	// Eventually rides through that.
 	LogWithTimestamp(test.T(), "Verifying the resumed RayService serves traffic through the recreated Gateway with the upgraded spec")
+	curlCmd := []string{
+		"curl", "-sS", "--connect-timeout", "3", "--max-time", "5",
+		"-X", "POST",
+		"-H", "Connection: close",
+		"-H", "Content-Type: application/json",
+		fmt.Sprintf("http://%s/fruit", gatewayHost),
+		"-d", `["MANGO", 2]`,
+	}
 	g.Eventually(func(gg Gomega) {
-		stdout, _ := CurlRayServiceGateway(test, resumedGatewayIP, curlPod, CurlContainerName, http.MethodPost, "/fruit", `["MANGO", 2]`)
+		stdout, _, err := ExecPodCmdWithError(test, curlPod, CurlContainerName, curlCmd)
+		gg.Expect(err).NotTo(HaveOccurred())
 		gg.Expect(stdout.String()).To(Equal("8"))
 	}, TestTimeoutMedium).Should(Succeed())
 }
