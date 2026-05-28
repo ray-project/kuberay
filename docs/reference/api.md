@@ -507,7 +507,7 @@ _Appears in:_
 | `serveConfigV2` _string_ | Important: Run "make" to regenerate code after modifying this file<br />Defines the applications and deployments to deploy, should be a YAML multi-line scalar string. |  |  |
 | `rayClusterConfig` _[RayClusterSpec](#rayclusterspec)_ |  |  |  |
 | `excludeHeadPodFromServeSvc` _boolean_ | If the field is set to true, the value of the label `ray.io/serve` on the head Pod should always be false.<br />Therefore, the head Pod's endpoint will not be added to the Kubernetes Serve service. |  |  |
-| `suspend` _boolean_ | Suspend indicates whether the RayService should suspend its execution. When set to true,<br />all Kubernetes resources owned by the RayService controller (RayClusters and Kubernetes<br />Services) will be deleted. Setting it back to false will allow the RayService controller<br />to recreate the resources. |  |  |
+| `suspend` _boolean_ | Suspend indicates whether the RayService should suspend its execution. When set to true,<br />all Kubernetes resources owned by the RayService controller (RayClusters, Kubernetes<br />Services, and — when the RayServiceIncrementalUpgrade feature gate is enabled — the<br />Gateway and HTTPRoute) will be deleted. Setting it back to false will allow the RayService<br />controller to recreate the resources. |  |  |
 
 
 
