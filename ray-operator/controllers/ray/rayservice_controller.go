@@ -408,7 +408,7 @@ func (r *RayServiceReconciler) handleSuspend(ctx context.Context, rayServiceInst
 		}
 		logger.Info("Spec.Suspend is true; committing transition to Suspending state")
 		setCondition(rayServiceInstance, rayv1.RayServiceSuspending, metav1.ConditionTrue, rayv1.SuspendRequested,
-			"Spec.Suspend is true; will delete RayClusters, Services, Gateway, and HTTPRoute owned by this RayService.")
+			"Spec.Suspend is true; will delete all Kubernetes resources owned by this RayService.")
 		setCondition(rayServiceInstance, rayv1.RayServiceReady, metav1.ConditionFalse, rayv1.SuspendInProgress, "RayService is suspending.")
 		setCondition(rayServiceInstance, rayv1.UpgradeInProgress, metav1.ConditionFalse, rayv1.SuspendInProgress,
 			"No upgrade in progress.")
@@ -431,7 +431,7 @@ func (r *RayServiceReconciler) handleSuspend(ctx context.Context, rayServiceInst
 
 	if !allDeleted {
 		setCondition(rayServiceInstance, rayv1.RayServiceSuspending, metav1.ConditionTrue, rayv1.SuspendInProgress,
-			"Waiting for RayClusters, Services, Gateway, and HTTPRoute owned by this RayService to be deleted.")
+			"Waiting for all Kubernetes resources owned by this RayService to be deleted.")
 		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, nil
 	}
 
