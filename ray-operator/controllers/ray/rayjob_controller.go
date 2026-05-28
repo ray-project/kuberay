@@ -1086,15 +1086,19 @@ func (r *RayJobReconciler) checkSubmitterAndUpdateStatusIfNeeded(ctx context.Con
 				}
 			}
 		} else {
-			shouldUpdate, submitterContainerStatus = checkIsRestartCountExceeded(headPod, rayJob)
+			shouldUpdate, submitterContainerStatus = checkIsRestartCountExceeded(headPod)
 			if shouldUpdate {
 				logger.Info("The submitter sidecar container has exceeded the max restart count. Attempting to transition the status to `Failed`.",
 					"Submitter sidecar container", submitterContainerStatus.Name,
 					"RestartCount", submitterContainerStatus.RestartCount)
 				rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusFailed
-				rayJob.Status.Reason = rayv1.SubmissionFailed
-				rayJob.Status.Message = fmt.Sprintf("Ray head pod submitter container %s terminated due to exceeding max restart count",
-					submitterContainerStatus.Name)
+				if rayJob.Status.JobStatus == rayv1.JobStatusFailed {
+					rayJob.Status.Reason = rayv1.AppFailed
+				} else {
+					rayJob.Status.Reason = rayv1.SubmissionFailed
+					rayJob.Status.Message = fmt.Sprintf("Ray head pod submitter container %s terminated due to exceeding max restart count",
+						submitterContainerStatus.Name)
+				}
 			}
 		}
 
@@ -1178,22 +1182,7 @@ func checkSidecarContainerStatus(headPod *corev1.Pod) (bool, *corev1.ContainerSt
 	return false, nil
 }
 
-func checkIsRestartCountExceeded(headPod *corev1.Pod, rayJob *rayv1.RayJob) (bool, *corev1.ContainerStatus) {
-	var maxRestartCount int32
-	// check annotation if it is set
-	maxRestartCountString, exist := rayJob.Annotations[utils.RayJobSubmitterContainerMaxRestartCount]
-	if !exist {
-		// check env variable if the annotation is not set
-		maxRestartCountString = os.Getenv(utils.RAY_JOB_SIDECAR_SUBMITTER_MAX_RESTART_COUNT)
-	}
-	// ParseInt with bitSize=32 ensures the value fits in int32
-	maxRestartCountInt64, err := strconv.ParseInt(maxRestartCountString, 10, 32)
-	if err != nil {
-		// use default max restart count if neither annotation nor env variable is present
-		maxRestartCount = utils.DEFAULT_SIDECAR_SUBMITTER_MAX_RESTART_COUNT
-	} else {
-		maxRestartCount = int32(maxRestartCountInt64)
-	}
+func checkIsRestartCountExceeded(headPod *corev1.Pod) (bool, *corev1.ContainerStatus) {
 	for _, containerStatus := range headPod.Status.ContainerStatuses {
 		if containerStatus.Name == utils.SubmitterContainerName {
 			// Only check when the container has been terminated at least once.
@@ -1203,7 +1192,8 @@ func checkIsRestartCountExceeded(headPod *corev1.Pod, rayJob *rayv1.RayJob) (boo
 				if containerStatus.State.Terminated != nil && containerStatus.State.Terminated.ExitCode == 0 {
 					break
 				}
-				return containerStatus.RestartCount >= maxRestartCount, &containerStatus
+				// TODO (justinyeh1995) the restart limit is hardcoded to 2. In a follow-up pr, we should algin the restart count with Spec.SubmitterConfig.BackoffLimit
+				return containerStatus.RestartCount >= 2, &containerStatus
 			}
 			break
 		}
