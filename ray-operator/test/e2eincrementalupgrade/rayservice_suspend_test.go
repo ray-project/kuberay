@@ -14,19 +14,6 @@ import (
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
 
-// TestRayServiceSuspendDuringIncrementalUpgrade verifies that Spec.Suspend
-// cleans up the resources unique to incremental upgrade — the Gateway and
-// HTTPRoute — alongside the RayClusters and Services it already tears down
-// for the zero-downtime path. Suspend is triggered mid-upgrade so both
-// active and pending RayClusters exist, exercising the most demanding
-// teardown path. After resume, the controller must recreate the full set
-// of resources (Gateway + HTTPRoute + RayCluster + Services) and the
-// service must serve traffic through the Gateway again.
-//
-// BlueGreen (stepSize=100, interval=1, maxSurge=100) is used because it is
-// the fastest of the upgrade combinations and we are not exercising the
-// stepwise migration here — only the tear-down/recreate behavior of
-// Spec.Suspend.
 func TestRayServiceSuspendDuringIncrementalUpgrade(t *testing.T) {
 	features.SetFeatureGateDuringTest(t, features.RayServiceIncrementalUpgrade, true)
 
@@ -141,14 +128,6 @@ func TestRayServiceSuspendDuringIncrementalUpgrade(t *testing.T) {
 	// MangoStand price 3→4 via the API before Spec.Suspend was flipped, so
 	// (MANGO, 2) -> 8, not 6. This also doubles as a check that resume
 	// applied the upgraded spec rather than reviving the pre-upgrade state.
-	//
-	// Use ExecPodCmdWithError + per-attempt --connect-timeout / --max-time
-	// inside Eventually rather than CurlRayServiceGateway: the latter
-	// require.NoError's on non-zero curl exits and would break out of the
-	// retry loop. There is a brief window after Gateway reaches
-	// Programmed=True where the new backing Service's ClusterIP is live
-	// but envoy hasn't finished loading the HTTPRoute config via xDS —
-	// Eventually rides through that.
 	LogWithTimestamp(test.T(), "Verifying the resumed RayService serves traffic through the recreated Gateway with the upgraded spec")
 	curlCmd := []string{
 		"curl", "-sS", "--connect-timeout", "3", "--max-time", "5",
