@@ -262,7 +262,7 @@ func TestRayClusterTLSAutoGenerate(t *testing.T) {
 				fmt.Sprintf("ray job status --address http://127.0.0.1:8265 %s", submissionID),
 			}
 			stdout, _ := ExecPodCmd(test, headPod, headPod.Spec.Containers[utils.RayContainerIndex].Name, statusCmd)
-			gg.Expect(stdout.String()).To(ContainSubstring("SUCCEEDED"))
+			gg.Expect(stdout.String()).To(ContainSubstring("succeeded"))
 		}, TestTimeoutMedium).Should(Succeed())
 
 		LogWithTimestamp(t, "Ray job submission succeeded with mTLS for cluster %s", clusterName)
