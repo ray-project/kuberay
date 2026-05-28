@@ -23,9 +23,9 @@ func TestRayServiceSuspendDuringIncrementalUpgrade(t *testing.T) {
 	namespace := test.NewTestNamespace()
 	rayServiceName := "suspend-incremental-rayservice"
 
-	stepSize := new(int32(100))
-	interval := new(int32(1))
-	maxSurge := new(int32(100))
+	stepSize := new(int32(25))
+	interval := new(int32(20))
+	maxSurge := new(int32(30))
 
 	rayService, httpRoute, _ := bootstrapIncrementalRayService(
 		test, g, namespace.Name, rayServiceName, stepSize, interval, maxSurge, defaultIncrementalUpgradeServeConfigV2)
@@ -52,13 +52,20 @@ func TestRayServiceSuspendDuringIncrementalUpgrade(t *testing.T) {
 	g.Eventually(incrementalUpgrade(test, namespace.Name, rayServiceName), TestTimeoutShort).Should(Succeed())
 	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutMedium).
 		Should(WithTransform(IsRayServiceUpgrading, BeTrue()))
-	g.Eventually(func() string {
+
+	LogWithTimestamp(test.T(), "Waiting until active and pending RayClusters coexist before flipping Spec.Suspend=true")
+	g.Eventually(func(gg Gomega) {
 		rs, err := GetRayService(test, namespace.Name, rayServiceName)
-		if err != nil {
-			return ""
-		}
-		return rs.Status.PendingServiceStatus.RayClusterName
-	}, TestTimeoutMedium).ShouldNot(BeEmpty())
+		gg.Expect(err).NotTo(HaveOccurred())
+		gg.Expect(rs.Status.ActiveServiceStatus.RayClusterName).NotTo(BeEmpty(), "active cluster name should be set")
+		gg.Expect(rs.Status.PendingServiceStatus.RayClusterName).NotTo(BeEmpty(), "pending cluster name should be set")
+
+		rcList, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).List(test.Ctx(), metav1.ListOptions{
+			LabelSelector: utils.RayOriginatedFromCRNameLabelKey + "=" + rayServiceName,
+		})
+		gg.Expect(err).NotTo(HaveOccurred())
+		gg.Expect(rcList.Items).To(HaveLen(2), "both active and pending RayClusters should exist concurrently before suspend")
+	}, TestTimeoutMedium).Should(Succeed())
 
 	LogWithTimestamp(test.T(), "Setting Spec.Suspend=true while incremental upgrade is in progress")
 	rayService, err = GetRayService(test, namespace.Name, rayServiceName)
