@@ -500,6 +500,8 @@ func (r *RayServiceReconciler) deleteRayServiceOwnedResources(ctx context.Contex
 				"Failed to delete the Service %s/%s during suspend: %v", svc.Namespace, svc.Name, err)
 			return false, err
 		}
+		r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeNormal, string(utils.DeletedService),
+			"Deleted the Service %s/%s during suspend", svc.Namespace, svc.Name)
 	}
 
 	// Gateway and HTTPRoute live behind the RayServiceIncrementalUpgrade
@@ -519,6 +521,8 @@ func (r *RayServiceReconciler) deleteRayServiceOwnedResources(ctx context.Contex
 						"Failed to delete the Gateway %s/%s during suspend: %v", gateway.Namespace, gateway.Name, err)
 					return false, err
 				}
+				r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeNormal, string(utils.DeletedGateway),
+					"Deleted the Gateway %s/%s during suspend", gateway.Namespace, gateway.Name)
 			}
 		} else if !errors.IsNotFound(err) && !meta.IsNoMatchError(err) {
 			return false, err
@@ -534,6 +538,8 @@ func (r *RayServiceReconciler) deleteRayServiceOwnedResources(ctx context.Contex
 						"Failed to delete the HTTPRoute %s/%s during suspend: %v", httpRoute.Namespace, httpRoute.Name, err)
 					return false, err
 				}
+				r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeNormal, string(utils.DeletedHTTPRoute),
+					"Deleted the HTTPRoute %s/%s during suspend", httpRoute.Namespace, httpRoute.Name)
 			}
 		} else if !errors.IsNotFound(err) && !meta.IsNoMatchError(err) {
 			return false, err
