@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	eventtypes "github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
-	"github.com/ray-project/kuberay/historyserver/pkg/snapshot"
 )
 
 // taskPrefix is extracted to avoid hard-coded "task::" usage when matching
@@ -18,7 +17,7 @@ const taskPrefix = "task::"
 //
 // Returns an empty (but non-nil) slice when no tasks carry profile data so
 // json.Marshal produces "[]" instead of "null".
-func generateTimelineFromSnapshot(snap *snapshot.SessionSnapshot, jobID string) []eventtypes.ChromeTraceEvent {
+func generateTimelineFromSnapshot(snap *SessionSnapshot, jobID string) []eventtypes.ChromeTraceEvent {
 	events := []eventtypes.ChromeTraceEvent{}
 	if snap == nil {
 		return events

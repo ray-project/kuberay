@@ -68,8 +68,6 @@ The history server can be configured using command-line flags:
 - `--kubeconfigs`: Path to kubeconfig file(s) for accessing Kubernetes clusters
 - `--dashboard-dir`: Directory containing dashboard assets (default: "/dashboard")
 - `--runtime-class-config-path`: Path to runtime class configuration file
-- `--snapshot-cache-size`: LRU capacity for cached SessionSnapshots (default: 100). Each entry holds one parsed
-dead-session view; size operators based on expected session size × concurrent sessions in scope.
 
 ### Collector Configuration
 

@@ -1,4 +1,4 @@
-package snapshot
+package historyserver
 
 import (
 	"encoding/json"
@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
+	eventtypes "github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
 )
 
 // TestEmptyRoundtrip verifies that an empty SessionSnapshot marshals and
@@ -40,23 +40,23 @@ func TestFullRoundtrip(t *testing.T) {
 	original := SessionSnapshot{
 		SessionKey:  "raycluster_default_session_2026_04_22",
 		GeneratedAt: time.Date(2026, 4, 22, 10, 0, 0, 0, time.UTC),
-		Tasks: map[string][]types.Task{
+		Tasks: map[string][]eventtypes.Task{
 			"task-1": {
 				{TaskID: "task-1", TaskAttempt: 0, JobID: "job-1"},
 				{TaskID: "task-1", TaskAttempt: 1, JobID: "job-1"},
 			},
 		},
-		Actors: map[string]types.Actor{
+		Actors: map[string]eventtypes.Actor{
 			"actor-1": {ActorID: "actor-1", JobID: "job-1"},
 		},
-		Jobs: map[string]types.Job{
+		Jobs: map[string]eventtypes.Job{
 			"job-1": {JobID: "job-1", EntryPoint: "python main.py"},
 		},
-		Nodes: map[string]types.Node{
+		Nodes: map[string]eventtypes.Node{
 			"node-1": {NodeID: "node-1", NodeIPAddress: "10.0.0.1"},
 		},
 		LogEvents: LogEventPayload{
-			ByJobID: map[string][]types.LogEvent{
+			ByJobID: map[string][]eventtypes.LogEvent{
 				"job-1": {
 					{EventID: "evt-1", Message: "hello", Severity: "INFO"},
 				},

@@ -14,7 +14,6 @@ import (
 
 	"github.com/ray-project/kuberay/historyserver/pkg/eventserver"
 	eventtypes "github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
-	"github.com/ray-project/kuberay/historyserver/pkg/snapshot"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
@@ -56,7 +55,7 @@ func NewSessionProcessor(handler *eventserver.EventHandler, k8sClient client.Cli
 }
 
 // ProcessSession processes one session end-to-end.
-func (p *SessionProcessor) ProcessSession(ctx context.Context, session utils.ClusterInfo) (SessionStatus, *snapshot.SessionSnapshot, error) {
+func (p *SessionProcessor) ProcessSession(ctx context.Context, session utils.ClusterInfo) (SessionStatus, *SessionSnapshot, error) {
 	dead, err := p.isDead(ctx, session)
 	if err != nil {
 		if isCtxCanceled(err) {
@@ -80,16 +79,16 @@ func (p *SessionProcessor) ProcessSession(ctx context.Context, session utils.Clu
 }
 
 // buildSnapshotFromHandler builds a SessionSnapshot from the handler's per-session state.
-func buildSnapshotFromHandler(h *eventserver.EventHandler, session utils.ClusterInfo) *snapshot.SessionSnapshot {
+func buildSnapshotFromHandler(h *eventserver.EventHandler, session utils.ClusterInfo) *SessionSnapshot {
 	key := utils.BuildClusterSessionKey(session.Name, session.Namespace, session.SessionName)
-	return &snapshot.SessionSnapshot{
+	return &SessionSnapshot{
 		SessionKey:  key,
 		GeneratedAt: time.Now().UTC(),
 		Tasks:       groupTasksByID(h.GetTasks(key)),
 		Actors:      h.GetActorsMap(key),
 		Jobs:        h.GetJobsMap(key),
 		Nodes:       h.GetNodeMap(key),
-		LogEvents: snapshot.LogEventPayload{
+		LogEvents: LogEventPayload{
 			ByJobID: h.ClusterLogEventMap.GetRawEventsByJobID(key),
 		},
 	}

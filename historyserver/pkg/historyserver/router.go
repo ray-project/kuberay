@@ -24,7 +24,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	eventtypes "github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
-	"github.com/ray-project/kuberay/historyserver/pkg/snapshot"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
@@ -963,7 +962,7 @@ func (s *ServerHandler) getClusterStatus(req *restful.Request, resp *restful.Res
 // buildFormattedClusterStatus reconstructs the cluster status from
 // debug_state.txt files (per-node) merged with snapshot data (failed
 // nodes, pending demands, last-active timestamp).
-func (s *ServerHandler) buildFormattedClusterStatus(snap *snapshot.SessionSnapshot, clusterName, clusterNamespace, sessionName string) string {
+func (s *ServerHandler) buildFormattedClusterStatus(snap *SessionSnapshot, clusterName, clusterNamespace, sessionName string) string {
 	builder := NewClusterStatusBuilder()
 	clusterNameID := clusterName + "_" + clusterNamespace
 	logsPath := path.Join(sessionName, utils.RAY_SESSIONDIR_LOGDIR_NAME)
