@@ -726,6 +726,11 @@ func validateLegacyDeletionPolicies(rayJob *rayv1.RayJob) error {
 
 // ValidateRayCronJobSpec validates the RayCronJob specification
 func ValidateRayCronJobSpec(rayCronJob *rayv1.RayCronJob) error {
+	// Bound the name so the deterministic child RayJob name (getRayJobName) stays valid.
+	if len(rayCronJob.Name) > MaxRayCronJobNameLength {
+		return fmt.Errorf("RayCronJob name should be no more than %d characters", MaxRayCronJobNameLength)
+	}
+
 	// Validate cron schedule format
 	if _, err := cron.ParseStandard(rayCronJob.Spec.Schedule); err != nil {
 		return fmt.Errorf("invalid cron schedule: %w", err)
