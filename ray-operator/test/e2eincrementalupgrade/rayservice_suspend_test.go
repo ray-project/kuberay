@@ -136,9 +136,13 @@ func TestRayServiceSuspendDuringIncrementalUpgrade(t *testing.T) {
 	resumedGatewayIP := GetGatewayIP(resumedGateway)
 	g.Expect(resumedGatewayIP).NotTo(BeEmpty())
 
-	LogWithTimestamp(test.T(), "Verifying the resumed RayService serves traffic through the recreated Gateway")
+	// Resume runs against the upgraded spec — incrementalUpgrade() bumped
+	// MangoStand price 3→4 via the API before Spec.Suspend was flipped, so
+	// (MANGO, 2) -> 8, not 6. This also doubles as a check that resume
+	// applied the upgraded spec rather than reviving the pre-upgrade state.
+	LogWithTimestamp(test.T(), "Verifying the resumed RayService serves traffic through the recreated Gateway with the upgraded spec")
 	g.Eventually(func(gg Gomega) {
 		stdout, _ := CurlRayServiceGateway(test, resumedGatewayIP, curlPod, CurlContainerName, http.MethodPost, "/fruit", `["MANGO", 2]`)
-		gg.Expect(stdout.String()).To(Equal("6"))
+		gg.Expect(stdout.String()).To(Equal("8"))
 	}, TestTimeoutMedium).Should(Succeed())
 }
