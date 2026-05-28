@@ -461,7 +461,7 @@ func TestTaskLifecycleEventDeduplication(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			h := NewEventHandler(nil)
+			h := NewEventHandler(nil, true)
 
 			// Pre-populate existing events if any
 			if len(tt.existingEvents) > 0 {
@@ -625,7 +625,7 @@ func TestActorLifecycleEventDeduplication(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			h := NewEventHandler(nil)
+			h := NewEventHandler(nil, true)
 
 			// Pre-populate existing events
 			if len(tt.existingEvents) > 0 {
@@ -795,7 +795,7 @@ func TestDriverJobLifecycleEventDuplication(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			h := NewEventHandler(nil)
+			h := NewEventHandler(nil, true)
 
 			if len(tt.existingTransitions) > 0 {
 				jobMap := h.ClusterJobMap.GetOrCreateJobMap(testClusterName)
@@ -832,7 +832,7 @@ func TestDriverJobLifecycleEventDuplication(t *testing.T) {
 
 // TestMultipleReprocessingCycles simulates hourly reprocessing and verifies no memory growth
 func TestMultipleReprocessingCycles(t *testing.T) {
-	h := NewEventHandler(nil)
+	h := NewEventHandler(nil, true)
 
 	// IDs follow Ray's ID spec; see TestStoreEvent for rationale.
 	const (
@@ -962,7 +962,7 @@ func TestProcessSingleSession(t *testing.T) {
 			[]string{"node1-2024-01-01-00"})
 		mock.addDir("cluster_ns", "session1/logs", []string{})
 
-		h := NewEventHandler(mock)
+		h := NewEventHandler(mock, true)
 		err := h.ProcessSingleSession(context.Background(), clusterInfo)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "read 0 of 2")
@@ -974,7 +974,7 @@ func TestProcessSingleSession(t *testing.T) {
 		mock.addDir("cluster_ns", "session1/node_events/", []string{})
 		mock.addDir("cluster_ns", "session1/logs", []string{})
 
-		h := NewEventHandler(mock)
+		h := NewEventHandler(mock, true)
 		err := h.ProcessSingleSession(context.Background(), clusterInfo)
 		require.NoError(t, err)
 	})
@@ -988,7 +988,7 @@ func TestProcessSingleSession(t *testing.T) {
 		mock.addDir("cluster_ns", "session1/job_events/", []string{})
 		mock.addDir("cluster_ns", "session1/logs", []string{})
 
-		h := NewEventHandler(mock)
+		h := NewEventHandler(mock, true)
 		err := h.ProcessSingleSession(context.Background(), clusterInfo)
 		require.NoError(t, err)
 	})
@@ -1002,7 +1002,7 @@ func TestProcessSingleSession(t *testing.T) {
 		mock.addDir("cluster_ns", "session1/job_events/", []string{})
 		mock.addDir("cluster_ns", "session1/logs", []string{})
 
-		h := NewEventHandler(mock)
+		h := NewEventHandler(mock, true)
 		err := h.ProcessSingleSession(context.Background(), clusterInfo)
 		require.NoError(t, err)
 	})
@@ -1014,7 +1014,7 @@ func TestProcessSingleSession(t *testing.T) {
 		mock.addDir("cluster_ns", "session1/logs", []string{"node1/"})
 		mock.addDir("cluster_ns", "session1/logs/node1/events", []string{"event_GCS.log"})
 
-		h := NewEventHandler(mock)
+		h := NewEventHandler(mock, true)
 		err := h.ProcessSingleSession(context.Background(), clusterInfo)
 		require.NoError(t, err)
 	})
@@ -1026,7 +1026,7 @@ func TestProcessSingleSession(t *testing.T) {
 		mock.addDir("cluster_ns", "session1/logs", []string{"node1/"})
 		mock.addDir("cluster_ns", "session1/logs/node1/events", []string{"event_GCS.log"})
 
-		h := NewEventHandler(mock)
+		h := NewEventHandler(mock, true)
 		err := h.ProcessSingleSession(context.Background(), clusterInfo)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "read 0 of 1 event files")
