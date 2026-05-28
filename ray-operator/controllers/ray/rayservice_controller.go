@@ -504,12 +504,6 @@ func (r *RayServiceReconciler) deleteRayServiceOwnedResources(ctx context.Contex
 			"Deleted the Service %s/%s during suspend", svc.Namespace, svc.Name)
 	}
 
-	// Gateway and HTTPRoute live behind the RayServiceIncrementalUpgrade
-	// feature gate: the operator only registers gateway-api types in its
-	// scheme and ever creates these objects when the gate is on. Skip
-	// otherwise so a Get doesn't fail with "no kind is registered" — and
-	// tolerate meta.IsNoMatchError at runtime in case the gate was flipped
-	// on after the manager started without the CRDs installed.
 	if features.Enabled(features.RayServiceIncrementalUpgrade) {
 		gateway := &gwv1.Gateway{}
 		if err := r.Get(ctx, common.RayServiceGatewayNamespacedName(rayServiceInstance), gateway); err == nil {
