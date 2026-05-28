@@ -170,9 +170,9 @@ func categorizeLogFiles(files []string) map[string][]string {
 	return result
 }
 
-func (s *ServerHandler) _getNodeLogFile(rayClusterNameNamespace, sessionID string, options GetLogFileOptions) ([]byte, error) {
+func (s *ServerHandler) _getNodeLogFile(snapshotKey, rayClusterNameNamespace, sessionID string, options GetLogFileOptions) ([]byte, error) {
 	// Resolve node_id and filename based on options
-	nodeID, filename, err := s.resolveLogFilename(rayClusterNameNamespace, sessionID, options)
+	nodeID, filename, err := s.resolveLogFilename(snapshotKey, rayClusterNameNamespace, sessionID, options)
 	if err != nil {
 		// Preserve HTTPError status code if already set, otherwise use BadRequest
 		var httpErr *utils.HTTPError
@@ -259,7 +259,7 @@ func (s *ServerHandler) _getNodeLogFile(rayClusterNameNamespace, sessionID strin
 // resolveLogFilename resolves the log file node_id and filename based on the provided options.
 // This mirrors Ray Dashboard's resolve_filename logic.
 // The sessionID parameter is required for task_id resolution to search worker log files.
-func (s *ServerHandler) resolveLogFilename(clusterNameID, sessionID string, options GetLogFileOptions) (nodeID, filename string, err error) {
+func (s *ServerHandler) resolveLogFilename(snapshotKey, clusterNameID, sessionID string, options GetLogFileOptions) (nodeID, filename string, err error) {
 	// If filename is explicitly provided, use it and ignore suffix
 	if options.Filename != "" {
 		if options.NodeID == "" {
@@ -275,12 +275,12 @@ func (s *ServerHandler) resolveLogFilename(clusterNameID, sessionID string, opti
 
 	// If task_id is provided, resolve from task events
 	if options.TaskID != "" {
-		return s.resolveTaskLogFilename(clusterNameID, sessionID, options.TaskID, options.AttemptNumber, options.Suffix)
+		return s.resolveTaskLogFilename(snapshotKey, clusterNameID, sessionID, options.TaskID, options.AttemptNumber, options.Suffix)
 	}
 
 	// If actor_id is provided, resolve from actor events
 	if options.ActorID != "" {
-		return s.resolveActorLogFilename(clusterNameID, sessionID, options.ActorID, options.Suffix)
+		return s.resolveActorLogFilename(snapshotKey, clusterNameID, sessionID, options.ActorID, options.Suffix)
 	}
 
 	// If pid is provided, resolve worker log file
@@ -321,10 +321,10 @@ func (s *ServerHandler) resolvePidLogFilename(clusterNameID, sessionID, nodeID s
 // resolveTaskLogFilename resolves log file for a task by querying task events.
 // This mirrors Ray Dashboard's _resolve_task_filename logic.
 // The sessionID parameter is required for searching worker log files when task_log_info is not available.
-func (s *ServerHandler) resolveTaskLogFilename(clusterNameID, sessionID, taskID string, attemptNumber int, suffix string) (nodeID, filename string, err error) {
-	snap, err := s.loader.Load(clusterNameID, sessionID)
-	if err != nil {
-		return "", "", fmt.Errorf("load snapshot for %s/%s: %w", clusterNameID, sessionID, err)
+func (s *ServerHandler) resolveTaskLogFilename(snapshotKey, clusterNameID, sessionID, taskID string, attemptNumber int, suffix string) (nodeID, filename string, err error) {
+	snap, ok := s.sessionLoader.GetSnapshot(snapshotKey)
+	if !ok {
+		return "", "", fmt.Errorf("snapshot not found for %s", snapshotKey)
 	}
 
 	taskAttempts, found := snap.Tasks[taskID]
@@ -401,10 +401,10 @@ func (s *ServerHandler) resolveTaskLogFilename(clusterNameID, sessionID, taskID 
 
 // resolveActorLogFilename resolves log file for an actor by querying actor events.
 // This mirrors Ray Dashboard's _resolve_actor_filename logic.
-func (s *ServerHandler) resolveActorLogFilename(clusterNameID, sessionID, actorID, suffix string) (nodeID, filename string, err error) {
-	snap, err := s.loader.Load(clusterNameID, sessionID)
-	if err != nil {
-		return "", "", fmt.Errorf("load snapshot for %s/%s: %w", clusterNameID, sessionID, err)
+func (s *ServerHandler) resolveActorLogFilename(snapshotKey, clusterNameID, sessionID, actorID, suffix string) (nodeID, filename string, err error) {
+	snap, ok := s.sessionLoader.GetSnapshot(snapshotKey)
+	if !ok {
+		return "", "", fmt.Errorf("snapshot not found for %s", snapshotKey)
 	}
 
 	actor, found := snap.Actors[actorID]

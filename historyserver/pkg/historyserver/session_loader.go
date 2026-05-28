@@ -3,45 +3,59 @@ package historyserver
 import (
 	"context"
 	"fmt"
-	"sync"
 	"time"
 
+	lru "github.com/hashicorp/golang-lru/v2"
 	"golang.org/x/sync/singleflight"
 
+	"github.com/ray-project/kuberay/historyserver/pkg/snapshot"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
-// DefaultSessionProcessTimeout caps how long cold-load for a single session can run.
-const DefaultSessionProcessTimeout = 2 * time.Minute
+const (
+	// DefaultSessionProcessTimeout caps how long cold-load for a single session can run.
+	DefaultSessionProcessTimeout = 2 * time.Minute
+	// DefaultSessionCacheSize is the LRU capacity for dead-session snapshots.
+	DefaultSessionCacheSize = 100
+)
 
 // processor is an interface to enable mocking SessionProcessor in tests.
 type processor interface {
-	ProcessSession(ctx context.Context, info utils.ClusterInfo) (SessionStatus, error)
+	ProcessSession(ctx context.Context, info utils.ClusterInfo) (SessionStatus, *snapshot.SessionSnapshot, error)
 }
 
-// SessionLoader ensures a dead session is loaded into in-memory maps.
-// Concurrent callers for the same session are coalesced via singleflight.
+// SessionLoader caches dead-session snapshots in an LRU and triggers session
+// processing on cache miss. Concurrent callers for the same session are
+// coalesced via singleflight.
 type SessionLoader struct {
 	processor      processor
+	cache          *lru.Cache[string, *snapshot.SessionSnapshot]
 	sf             singleflight.Group
-	loadedMu       sync.RWMutex
-	loaded         map[string]struct{}
 	serverCtx      context.Context
 	processTimeout time.Duration
 }
 
 // NewSessionLoader wires a SessionLoader.
-func NewSessionLoader(p processor, serverCtx context.Context, processTimeout time.Duration) *SessionLoader {
+func NewSessionLoader(p processor, serverCtx context.Context, processTimeout time.Duration, cacheSize int) *SessionLoader {
+	c, err := lru.New[string, *snapshot.SessionSnapshot](cacheSize)
+	if err != nil {
+		panic(fmt.Sprintf("NewSessionLoader: invalid cacheSize=%d: %v", cacheSize, err))
+	}
 	return &SessionLoader{
 		processor:      p,
-		loaded:         make(map[string]struct{}),
+		cache:          c,
 		serverCtx:      serverCtx,
 		processTimeout: processTimeout,
 	}
 }
 
-// LoadSession blocks until the session is ready to serve for this replica.
-// live is true when the cluster is still alive.
+// GetSnapshot returns the cached snapshot for a dead session.
+func (s *SessionLoader) GetSnapshot(key string) (*snapshot.SessionSnapshot, bool) {
+	return s.cache.Get(key)
+}
+
+// LoadSession blocks until a dead session is processed and cached or an
+// unrecoverable error is observed.
 func (s *SessionLoader) LoadSession(ctx context.Context, info utils.ClusterInfo) (live bool, err error) {
 	// Fast pre-flight: skip singleflight entirely if ctx is already dead.
 	if err := ctx.Err(); err != nil {
@@ -49,12 +63,7 @@ func (s *SessionLoader) LoadSession(ctx context.Context, info utils.ClusterInfo)
 	}
 
 	key := utils.BuildClusterSessionKey(info.Name, info.Namespace, info.SessionName)
-
-	// Fast-path: session is already loaded.
-	s.loadedMu.RLock()
-	_, loaded := s.loaded[key]
-	s.loadedMu.RUnlock()
-	if loaded {
+	if _, ok := s.cache.Get(key); ok {
 		return false, nil
 	}
 
@@ -69,8 +78,8 @@ func (s *SessionLoader) LoadSession(ctx context.Context, info utils.ClusterInfo)
 
 	select {
 	case <-ctx.Done():
-		// Release the caller; the shared singleflight call keeps running and
-		// its result will be available to the next caller for this session.
+		// Release the caller; the singleflight winner keeps running and its
+		// result will be cached for the next caller for this session.
 		//
 		// Do NOT sf.Forget(key) here: a racing new call would kick off a second
 		// processor execution in parallel with the still-running one.
@@ -87,23 +96,21 @@ func (s *SessionLoader) LoadSession(ctx context.Context, info utils.ClusterInfo)
 // doLoadSession is the singleflight body invoked by LoadSession.
 // live is true when the cluster is still alive.
 func (s *SessionLoader) doLoadSession(ctx context.Context, info utils.ClusterInfo, key string) (live bool, err error) {
-	s.loadedMu.RLock()
-	_, loaded := s.loaded[key]
-	s.loadedMu.RUnlock()
-	if loaded {
+	if _, ok := s.cache.Get(key); ok {
 		return false, nil
 	}
 
-	status, err := s.processor.ProcessSession(ctx, info)
+	status, snap, err := s.processor.ProcessSession(ctx, info)
 	if err != nil {
 		return false, err
 	}
 
 	switch status {
 	case SessionStatusProcessed:
-		s.loadedMu.Lock()
-		s.loaded[key] = struct{}{}
-		s.loadedMu.Unlock()
+		if snap == nil {
+			return false, fmt.Errorf("unexpected nil snapshot for session status %v", status)
+		}
+		s.prime(key, snap)
 		return false, nil
 
 	case SessionStatusLive:
@@ -114,4 +121,9 @@ func (s *SessionLoader) doLoadSession(ctx context.Context, info utils.ClusterInf
 		// treated as Live or Processed.
 		return false, fmt.Errorf("unexpected session status %v", status)
 	}
+}
+
+// prime inserts a dead-session snapshot into the cache.
+func (s *SessionLoader) prime(key string, snap *snapshot.SessionSnapshot) {
+	s.cache.Add(key, snap)
 }

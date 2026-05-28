@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	k8stypes "k8s.io/apimachinery/pkg/types"
@@ -12,6 +13,8 @@ import (
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 
 	"github.com/ray-project/kuberay/historyserver/pkg/eventserver"
+	eventtypes "github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
+	"github.com/ray-project/kuberay/historyserver/pkg/snapshot"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
@@ -53,25 +56,56 @@ func NewSessionProcessor(handler *eventserver.EventHandler, k8sClient client.Cli
 }
 
 // ProcessSession processes one session end-to-end.
-func (p *SessionProcessor) ProcessSession(ctx context.Context, session utils.ClusterInfo) (SessionStatus, error) {
+func (p *SessionProcessor) ProcessSession(ctx context.Context, session utils.ClusterInfo) (SessionStatus, *snapshot.SessionSnapshot, error) {
 	dead, err := p.isDead(ctx, session)
 	if err != nil {
 		if isCtxCanceled(err) {
-			return SessionStatusCanceled, err
+			return SessionStatusCanceled, nil, err
 		}
-		return SessionStatusClusterStateUnknown, fmt.Errorf("check cluster state for %s/%s: %w", session.Namespace, session.Name, err)
+		return SessionStatusClusterStateUnknown, nil, fmt.Errorf("check cluster state for %s/%s: %w", session.Namespace, session.Name, err)
 	}
 	if !dead {
-		return SessionStatusLive, nil
+		return SessionStatusLive, nil, nil
 	}
 
 	if err := p.handler.ProcessSingleSession(ctx, session); err != nil {
 		if isCtxCanceled(err) {
-			return SessionStatusCanceled, err
+			return SessionStatusCanceled, nil, err
 		}
-		return SessionStatusEventsErr, fmt.Errorf("process events for %s/%s: %w", session.Namespace, session.Name, err)
+		return SessionStatusEventsErr, nil, fmt.Errorf("process events for %s/%s: %w", session.Namespace, session.Name, err)
 	}
-	return SessionStatusProcessed, nil
+
+	snap := buildSnapshotFromHandler(p.handler, session)
+	return SessionStatusProcessed, snap, nil
+}
+
+// buildSnapshotFromHandler builds a SessionSnapshot from the handler's per-session state.
+func buildSnapshotFromHandler(h *eventserver.EventHandler, session utils.ClusterInfo) *snapshot.SessionSnapshot {
+	key := utils.BuildClusterSessionKey(session.Name, session.Namespace, session.SessionName)
+	return &snapshot.SessionSnapshot{
+		SessionKey:  key,
+		GeneratedAt: time.Now().UTC(),
+		Tasks:       groupTasksByID(h.GetTasks(key)),
+		Actors:      h.GetActorsMap(key),
+		Jobs:        h.GetJobsMap(key),
+		Nodes:       h.GetNodeMap(key),
+		LogEvents: snapshot.LogEventPayload{
+			ByJobID: h.ClusterLogEventMap.GetRawEventsByJobID(key),
+		},
+	}
+}
+
+// groupTasksByID re-nests the flat []Task returned by EventHandler.GetTasks
+// into the map[taskID][]attempt shape expected by SessionSnapshot.Tasks.
+func groupTasksByID(tasks []eventtypes.Task) map[string][]eventtypes.Task {
+	if len(tasks) == 0 {
+		return map[string][]eventtypes.Task{}
+	}
+	out := make(map[string][]eventtypes.Task, len(tasks))
+	for _, t := range tasks {
+		out[t.TaskID] = append(out[t.TaskID], t)
+	}
+	return out
 }
 
 // isDead determines if the RayCluster CR is absent.
