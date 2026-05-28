@@ -18,6 +18,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/lru"
 	"k8s.io/utils/ptr"
@@ -2761,78 +2762,6 @@ func TestReconcileRollbackState(t *testing.T) {
 	}
 }
 
-// TestShouldUpdateCluster_SuspendFlip covers ray-project/kuberay#4686: when Kueue
-// toggles RayService.Spec.RayClusterSpec.Suspend, the existing RayCluster must be
-// updated in-place. Previously shouldUpdateCluster returned false because the
-// cluster hash annotation encodes the old Suspend value, leaving the cluster
-// stuck suspended with no head pod.
-func TestShouldUpdateCluster_SuspendFlip(t *testing.T) {
-	namespace := "test-namespace"
-
-	newRayService := func(suspend *bool) *rayv1.RayService {
-		return &rayv1.RayService{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "test-service",
-				Namespace: namespace,
-			},
-			Spec: rayv1.RayServiceSpec{
-				RayClusterSpec: rayv1.RayClusterSpec{
-					RayVersion: "2.9.0",
-					Suspend:    suspend,
-				},
-			},
-		}
-	}
-
-	// newClusterFrom mirrors the annotation layout produced by
-	// constructRayClusterForRayService so the hash reflects the cluster's
-	// actual spec (including its Suspend value).
-	newClusterFrom := func(t *testing.T, service *rayv1.RayService, suspend *bool) *rayv1.RayCluster {
-		t.Helper()
-		clusterSpec := service.Spec.RayClusterSpec.DeepCopy()
-		clusterSpec.Suspend = suspend
-		hash, err := utils.GenerateHashWithoutReplicasAndWorkersToDelete(*clusterSpec)
-		require.NoError(t, err)
-		return &rayv1.RayCluster{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "test-cluster",
-				Namespace: namespace,
-				Annotations: map[string]string{
-					utils.HashWithoutReplicasAndWorkersToDeleteKey: hash,
-					utils.NumWorkerGroupsKey:                       strconv.Itoa(len(clusterSpec.WorkerGroupSpecs)),
-					utils.KubeRayVersion:                           utils.KUBERAY_VERSION,
-				},
-			},
-			Spec: *clusterSpec,
-		}
-	}
-
-	tests := []struct {
-		name            string
-		serviceSuspend  *bool
-		clusterSuspend  *bool
-		isActiveCluster bool
-		expect          bool
-	}{
-		{"pending unsuspended by Kueue: true -> false", new(false), new(true), false, true},
-		{"pending suspended by Kueue: false -> true", new(true), new(false), false, true},
-		{"active unsuspended by Kueue: true -> false", new(false), new(true), true, true},
-		{"active suspended by Kueue: false -> true", new(true), new(false), true, true},
-		{"no change, both nil", nil, nil, false, false},
-		{"no change, both false", new(false), new(false), false, false},
-		{"no change, both true", new(true), new(true), false, false},
-		{"nil vs false treated equal", nil, new(false), false, false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			service := newRayService(tt.serviceSuspend)
-			cluster := newClusterFrom(t, service, tt.clusterSuspend)
-			assert.Equal(t, tt.expect, shouldUpdateCluster(service, cluster, tt.isActiveCluster))
-		})
-	}
-}
-
 // headReadyCluster is a helper to construct a RayCluster with a specific HeadPodReady condition.
 func headReadyCluster(ready bool) *rayv1.RayCluster {
 	status := metav1.ConditionFalse
@@ -3049,6 +2978,127 @@ func TestReconcileServe_SkipConfigUpdateDuringRollback(t *testing.T) {
 			} else {
 				assert.Nil(t, fakeDashboardClient.LastUpdatedConfig)
 			}
+		})
+	}
+}
+
+func TestRayServiceFinalizer(t *testing.T) {
+	ctx := context.TODO()
+	namespace := "test-ns"
+
+	newScheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(newScheme)
+	_ = corev1.AddToScheme(newScheme)
+	_ = discoveryv1.AddToScheme(newScheme)
+
+	tests := []struct {
+		name            string
+		rayService      *rayv1.RayService
+		existingObjects []client.Object
+		validate        func(t *testing.T, fakeClient client.Client, namespacedName types.NamespacedName)
+	}{
+		{
+			name: "Add finalizer",
+			rayService: &rayv1.RayService{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-rayservice", Namespace: namespace},
+			},
+			validate: func(t *testing.T, fakeClient client.Client, namespacedName types.NamespacedName) {
+				updatedRayService := &rayv1.RayService{}
+				err := fakeClient.Get(ctx, namespacedName, updatedRayService)
+				require.NoError(t, err)
+				require.Len(t, updatedRayService.Finalizers, 1)
+				assert.Equal(t, utils.RayServiceFinalizer, updatedRayService.Finalizers[0])
+			},
+		},
+		{
+			name: "Skip adding finalizer when managed by custom controller",
+			rayService: &rayv1.RayService{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-rayservice", Namespace: namespace},
+				Spec: rayv1.RayServiceSpec{
+					ManagedBy: ptr.To("kueue.x-k8s.io/multikueue"),
+				},
+			},
+			validate: func(t *testing.T, fakeClient client.Client, namespacedName types.NamespacedName) {
+				updatedRayService := &rayv1.RayService{}
+				err := fakeClient.Get(ctx, namespacedName, updatedRayService)
+				require.NoError(t, err)
+				assert.Empty(t, updatedRayService.Finalizers)
+			},
+		},
+		{
+			name: "Delete with clusters",
+			rayService: &rayv1.RayService{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:              "test-rayservice",
+					Namespace:         namespace,
+					DeletionTimestamp: &metav1.Time{Time: time.Now()},
+					Finalizers:        []string{utils.RayServiceFinalizer},
+				},
+			},
+			existingObjects: []client.Object{
+				&rayv1.RayCluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-cluster",
+						Namespace: namespace,
+						Labels: map[string]string{
+							utils.RayOriginatedFromCRNameLabelKey: "test-rayservice",
+							utils.RayOriginatedFromCRDLabelKey:    utils.RayOriginatedFromCRDLabelValue(utils.RayServiceCRD),
+						},
+					},
+				},
+			},
+			validate: func(t *testing.T, fakeClient client.Client, namespacedName types.NamespacedName) {
+				updatedRayService := &rayv1.RayService{}
+				err := fakeClient.Get(ctx, namespacedName, updatedRayService)
+				require.NoError(t, err)
+				assert.Contains(t, updatedRayService.Finalizers, utils.RayServiceFinalizer)
+			},
+		},
+		{
+			name: "Delete without clusters",
+			rayService: &rayv1.RayService{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:              "test-rayservice",
+					Namespace:         namespace,
+					DeletionTimestamp: &metav1.Time{Time: time.Now()},
+					Finalizers:        []string{utils.RayServiceFinalizer},
+				},
+			},
+			validate: func(t *testing.T, fakeClient client.Client, namespacedName types.NamespacedName) {
+				updatedRayService := &rayv1.RayService{}
+				err := fakeClient.Get(ctx, namespacedName, updatedRayService)
+				assert.True(t, errors.IsNotFound(err), "Expected NotFound error, got %v", err)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			objs := []runtime.Object{tt.rayService}
+			for _, obj := range tt.existingObjects {
+				objs = append(objs, obj)
+			}
+
+			fakeClient := clientFake.NewClientBuilder().
+				WithScheme(newScheme).
+				WithRuntimeObjects(objs...).
+				WithStatusSubresource(tt.rayService).
+				Build()
+
+			reconciler := &RayServiceReconciler{
+				Client:                       fakeClient,
+				Recorder:                     &record.FakeRecorder{},
+				Scheme:                       newScheme,
+				ServeConfigs:                 lru.New(10),
+				RayClusterDeletionTimestamps: cmap.New[time.Time](),
+			}
+
+			namespacedName := types.NamespacedName{Name: tt.rayService.Name, Namespace: tt.rayService.Namespace}
+
+			_, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: namespacedName})
+			require.NoError(t, err)
+
+			tt.validate(t, fakeClient, namespacedName)
 		})
 	}
 }

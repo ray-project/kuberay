@@ -81,8 +81,12 @@ test-e2e-autoscaler: manifests fmt vet ## Run e2e autoscaler tests.
 	go test -timeout 30m -v $(WHAT)
 
 test-e2e-rayservice: WHAT ?= ./test/e2erayservice
-test-e2e-rayservice: manifests fmt vet ## Run e2e RayService tests.
-	go test -timeout 30m -v $(WHAT)
+test-e2e-rayservice: manifests fmt vet ## Run e2e RayService tests (excluding suspend tests, which have their own target).
+	go test -timeout 30m -v -skip Suspend $(WHAT)
+
+test-e2e-rayservice-suspend: WHAT ?= ./test/e2erayservice
+test-e2e-rayservice-suspend: manifests fmt vet ## Run e2e RayService suspend tests.
+	go test -timeout 30m -v -run Suspend $(WHAT)
 
 test-e2e-upgrade: WHAT ?= ./test/e2eupgrade
 test-e2e-upgrade: manifests fmt vet ## Run e2e operator upgrade tests.

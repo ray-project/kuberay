@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -139,12 +138,6 @@ func withRayImage() contextOption {
 		rayImage := os.Getenv("E2E_API_SERVER_RAY_IMAGE")
 		if strings.TrimSpace(rayImage) == "" {
 			rayImage = RayImage + "-py310"
-		}
-		// detect if we are running on arm64 machine, most likely apple silicon
-		// the os name is not checked as it also possible that it might be linux
-		// also check if the image does not have the `-aarch64` suffix
-		if runtime.GOARCH == "arm64" && !strings.HasSuffix(rayImage, "-aarch64") {
-			rayImage = rayImage + "-aarch64"
 		}
 		testingContext.rayImage = rayImage
 		return nil
