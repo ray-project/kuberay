@@ -101,11 +101,6 @@ jobs:
         run: |
           cd apiserver && make docker-image -e IMG=kuberay/apiserver:local
 
-      - name: Build Docker image (security-proxy)
-        if: steps.list-changed.outputs.changed == 'true' && matrix.chart == 'kuberay-apiserver'
-        run: |
-          cd experimental && make docker-image -e IMG=kuberay/security-proxy:local
-
       - name: Load image to kind cluster (kuberay-operator)
         if: steps.list-changed.outputs.changed == 'true' && matrix.chart == 'kuberay-operator'
         run: |

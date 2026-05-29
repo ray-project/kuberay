@@ -4,7 +4,6 @@ updates:
   # Maintain go dependencies for sub-projects
   - package-ecosystem: "gomod"
     directories:
-      - "/experimental"
       - "/ray-operator"
       - "/apiserver"
       - "/kubectl-plugin"
