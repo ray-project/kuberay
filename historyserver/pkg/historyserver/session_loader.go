@@ -36,17 +36,17 @@ type SessionLoader struct {
 }
 
 // NewSessionLoader wires a SessionLoader.
-func NewSessionLoader(p processor, serverCtx context.Context, processTimeout time.Duration, cacheSize int) *SessionLoader {
+func NewSessionLoader(p processor, serverCtx context.Context, processTimeout time.Duration, cacheSize int) (*SessionLoader, error) {
 	c, err := lru.New[string, *eventserver.SessionSnapshot](cacheSize)
 	if err != nil {
-		panic(fmt.Sprintf("NewSessionLoader: invalid cacheSize=%d: %v", cacheSize, err))
+		return nil, fmt.Errorf("failed to create LRU cache: %w", err)
 	}
 	return &SessionLoader{
 		processor:      p,
 		cache:          c,
 		serverCtx:      serverCtx,
 		processTimeout: processTimeout,
-	}
+	}, nil
 }
 
 // GetSnapshot returns the cached snapshot for a dead session.

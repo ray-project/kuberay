@@ -83,7 +83,10 @@ func main() {
 	defer serverCancel()
 
 	processor := historyserver.NewSessionProcessor(eventHandler, cliMgr.Client())
-	sessionLoader := historyserver.NewSessionLoader(processor, serverCtx, sessionProcessTimeout, sessionCacheSize)
+	sessionLoader, err := historyserver.NewSessionLoader(processor, serverCtx, sessionProcessTimeout, sessionCacheSize)
+	if err != nil {
+		logrus.Fatalf("Failed to create session loader: %v", err)
+	}
 
 	// ServerHandler.Run consumes a stop chan; bridge serverCtx into it.
 	var wg sync.WaitGroup
