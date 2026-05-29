@@ -502,7 +502,7 @@ func (h *EventHandler) getAllNodeEventFiles(clusterInfo utils.ClusterInfo) []str
 
 // GetTasks returns a slice of thread-safe deep copies of all task attempts for a given cluster session.
 // Deep copy ensures the returned data is safe to use after the lock is released.
-func (h *EventHandler) GetTasks(clusterSessionKey string) []types.Task {
+func (h *EventHandler) getTasks(clusterSessionKey string) []types.Task {
 	h.ClusterTaskMap.RLock()
 	defer h.ClusterTaskMap.RUnlock()
 
@@ -596,7 +596,7 @@ func (h *EventHandler) GetActorByID(clusterName, actorID string) (types.Actor, b
 }
 
 // GetActorsMap returns a thread-safe deep copy of all actors as a map for a given cluster
-func (h *EventHandler) GetActorsMap(clusterName string) map[string]types.Actor {
+func (h *EventHandler) getActorsMap(clusterName string) map[string]types.Actor {
 	h.ClusterActorMap.RLock()
 	defer h.ClusterActorMap.RUnlock()
 
@@ -615,7 +615,7 @@ func (h *EventHandler) GetActorsMap(clusterName string) map[string]types.Actor {
 	return actors
 }
 
-func (h *EventHandler) GetJobsMap(clusterName string) map[string]types.Job {
+func (h *EventHandler) getJobsMap(clusterName string) map[string]types.Job {
 	h.ClusterJobMap.RLock()
 	defer h.ClusterJobMap.RUnlock()
 
@@ -1073,7 +1073,7 @@ func normalizeActorIDsToHex(actor *types.Actor) {
 }
 
 // GetNodeMap returns a thread-safe deep copy of all nodes for a given cluster session.
-func (h *EventHandler) GetNodeMap(clusterSessionID string) map[string]types.Node {
+func (h *EventHandler) getNodeMap(clusterSessionID string) map[string]types.Node {
 	h.ClusterNodeMap.RLock()
 	defer h.ClusterNodeMap.RUnlock()
 

@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ray-project/kuberay/historyserver/pkg/eventserver"
 	eventtypes "github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
@@ -34,7 +35,7 @@ func TestResolveTaskLogFilename_SnapshotLookup(t *testing.T) {
 
 	t.Run("task not in snapshot returns task-not-found", func(t *testing.T) {
 		sl := newTestSessionLoader(t, &fakeProcessor{}, 0)
-		sl.prime(snapshotKey, &SessionSnapshot{
+		sl.prime(snapshotKey, &eventserver.SessionSnapshot{
 			SessionKey: snapshotKey,
 			Tasks:      map[string][]eventtypes.Task{},
 		})
@@ -51,7 +52,7 @@ func TestResolveTaskLogFilename_SnapshotLookup(t *testing.T) {
 
 	t.Run("attempt mismatch returns attempt-not-found", func(t *testing.T) {
 		sl := newTestSessionLoader(t, &fakeProcessor{}, 0)
-		sl.prime(snapshotKey, &SessionSnapshot{
+		sl.prime(snapshotKey, &eventserver.SessionSnapshot{
 			SessionKey: snapshotKey,
 			Tasks: map[string][]eventtypes.Task{
 				"task1": {{TaskID: "task1", TaskAttempt: 0}},
@@ -95,7 +96,7 @@ func TestResolveActorLogFilename_SnapshotLookup(t *testing.T) {
 
 	t.Run("actor not in snapshot returns actor-not-found", func(t *testing.T) {
 		sl := newTestSessionLoader(t, &fakeProcessor{}, 0)
-		sl.prime(snapshotKey, &SessionSnapshot{
+		sl.prime(snapshotKey, &eventserver.SessionSnapshot{
 			SessionKey: snapshotKey,
 			Actors:     map[string]eventtypes.Actor{},
 		})

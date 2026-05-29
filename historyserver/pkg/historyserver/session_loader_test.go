@@ -8,26 +8,27 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ray-project/kuberay/historyserver/pkg/eventserver"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
 // fakeProcessor is a configurable test double for processor.
 type fakeProcessor struct {
 	calls int32
-	fn    func(ctx context.Context, info utils.ClusterInfo) (SessionStatus, *SessionSnapshot, error)
+	fn    func(ctx context.Context, info utils.ClusterInfo) (SessionStatus, *eventserver.SessionSnapshot, error)
 }
 
-func (f *fakeProcessor) ProcessSession(ctx context.Context, info utils.ClusterInfo) (SessionStatus, *SessionSnapshot, error) {
+func (f *fakeProcessor) ProcessSession(ctx context.Context, info utils.ClusterInfo) (SessionStatus, *eventserver.SessionSnapshot, error) {
 	atomic.AddInt32(&f.calls, 1)
 	if f.fn == nil {
-		return SessionStatusProcessed, &SessionSnapshot{}, nil
+		return SessionStatusProcessed, &eventserver.SessionSnapshot{}, nil
 	}
 	return f.fn(ctx, info)
 }
 
 func (f *fakeProcessor) callCount() int32 { return atomic.LoadInt32(&f.calls) }
 
-func (f *fakeProcessor) setFn(fn func(ctx context.Context, info utils.ClusterInfo) (SessionStatus, *SessionSnapshot, error)) {
+func (f *fakeProcessor) setFn(fn func(ctx context.Context, info utils.ClusterInfo) (SessionStatus, *eventserver.SessionSnapshot, error)) {
 	f.fn = fn
 }
 
@@ -48,8 +49,8 @@ func testEnterClusterInfo() utils.ClusterInfo {
 }
 
 // snapWith returns a minimal snapshot pointer for cache seeding.
-func snapWith(sessionKey string) *SessionSnapshot {
-	return &SessionSnapshot{
+func snapWith(sessionKey string) *eventserver.SessionSnapshot {
+	return &eventserver.SessionSnapshot{
 		SessionKey:  sessionKey,
 		GeneratedAt: time.Date(2026, 4, 22, 12, 0, 0, 0, time.UTC),
 	}
@@ -64,7 +65,7 @@ func TestLoadSession_ProcessorError_PropagatesAndCleans(t *testing.T) {
 	// Phase 1: error path
 	release := make(chan struct{})
 	fp := &fakeProcessor{
-		fn: func(_ context.Context, _ utils.ClusterInfo) (SessionStatus, *SessionSnapshot, error) {
+		fn: func(_ context.Context, _ utils.ClusterInfo) (SessionStatus, *eventserver.SessionSnapshot, error) {
 			<-release
 			return SessionStatusEventsErr, nil, processorErr
 		},
@@ -97,8 +98,8 @@ func TestLoadSession_ProcessorError_PropagatesAndCleans(t *testing.T) {
 	}
 
 	// Phase 2: dedup group cleared
-	fp.setFn(func(_ context.Context, _ utils.ClusterInfo) (SessionStatus, *SessionSnapshot, error) {
-		return SessionStatusProcessed, &SessionSnapshot{}, nil
+	fp.setFn(func(_ context.Context, _ utils.ClusterInfo) (SessionStatus, *eventserver.SessionSnapshot, error) {
+		return SessionStatusProcessed, &eventserver.SessionSnapshot{}, nil
 	})
 	if _, err := sessionLoader.LoadSession(context.Background(), info); err != nil {
 		t.Fatalf("post-error retry: expected nil, got %v", err)
@@ -115,7 +116,7 @@ func TestLoadSession_ProcessorError_NoInternalRetry(t *testing.T) {
 	info := testEnterClusterInfo()
 	processorErr := errors.New("simulated parse failure")
 	fp := &fakeProcessor{
-		fn: func(_ context.Context, _ utils.ClusterInfo) (SessionStatus, *SessionSnapshot, error) {
+		fn: func(_ context.Context, _ utils.ClusterInfo) (SessionStatus, *eventserver.SessionSnapshot, error) {
 			return SessionStatusEventsErr, nil, processorErr
 		},
 	}
@@ -129,8 +130,8 @@ func TestLoadSession_ProcessorError_NoInternalRetry(t *testing.T) {
 		t.Fatalf("expected processor called exactly 1x (no internal retry), got %d", got)
 	}
 
-	fp.setFn(func(_ context.Context, _ utils.ClusterInfo) (SessionStatus, *SessionSnapshot, error) {
-		return SessionStatusProcessed, &SessionSnapshot{}, nil
+	fp.setFn(func(_ context.Context, _ utils.ClusterInfo) (SessionStatus, *eventserver.SessionSnapshot, error) {
+		return SessionStatusProcessed, &eventserver.SessionSnapshot{}, nil
 	})
 	if _, err := sessionLoader.LoadSession(context.Background(), info); err != nil {
 		t.Fatalf("client-driven retry: expected nil, got %v", err)
@@ -154,10 +155,10 @@ func TestLoadSession_LiveAndProcessed(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			fp := &fakeProcessor{
-				fn: func(_ context.Context, _ utils.ClusterInfo) (SessionStatus, *SessionSnapshot, error) {
-					var built *SessionSnapshot
+				fn: func(_ context.Context, _ utils.ClusterInfo) (SessionStatus, *eventserver.SessionSnapshot, error) {
+					var built *eventserver.SessionSnapshot
 					if tc.status == SessionStatusProcessed {
-						built = &SessionSnapshot{}
+						built = &eventserver.SessionSnapshot{}
 					}
 					return tc.status, built, nil
 				},
@@ -179,7 +180,7 @@ func TestLoadSession_LiveAndProcessed(t *testing.T) {
 // SessionStatus (SessionStatusUnknown) surfaces an error.
 func TestLoadSession_ZeroValueStatus_DoesNotSilentlyMatchLive(t *testing.T) {
 	fp := &fakeProcessor{
-		fn: func(_ context.Context, _ utils.ClusterInfo) (SessionStatus, *SessionSnapshot, error) {
+		fn: func(_ context.Context, _ utils.ClusterInfo) (SessionStatus, *eventserver.SessionSnapshot, error) {
 			var zero SessionStatus // SessionStatusUnknown
 			return zero, nil, nil
 		},
@@ -199,8 +200,8 @@ func TestLoadSession_ZeroValueStatus_DoesNotSilentlyMatchLive(t *testing.T) {
 // once a session is loaded, repeat LoadSession calls must not invoke processor again.
 func TestLoadSession_FastPath_SkipsSingleflight(t *testing.T) {
 	fp := &fakeProcessor{
-		fn: func(_ context.Context, _ utils.ClusterInfo) (SessionStatus, *SessionSnapshot, error) {
-			return SessionStatusProcessed, &SessionSnapshot{}, nil
+		fn: func(_ context.Context, _ utils.ClusterInfo) (SessionStatus, *eventserver.SessionSnapshot, error) {
+			return SessionStatusProcessed, &eventserver.SessionSnapshot{}, nil
 		},
 	}
 	sessionLoader := newTestSessionLoader(t, fp, 0)

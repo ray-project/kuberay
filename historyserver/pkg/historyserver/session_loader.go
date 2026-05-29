@@ -8,6 +8,7 @@ import (
 	lru "github.com/hashicorp/golang-lru/v2"
 	"golang.org/x/sync/singleflight"
 
+	"github.com/ray-project/kuberay/historyserver/pkg/eventserver"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
@@ -20,7 +21,7 @@ const (
 
 // processor is an interface to enable mocking SessionProcessor in tests.
 type processor interface {
-	ProcessSession(ctx context.Context, info utils.ClusterInfo) (SessionStatus, *SessionSnapshot, error)
+	ProcessSession(ctx context.Context, info utils.ClusterInfo) (SessionStatus, *eventserver.SessionSnapshot, error)
 }
 
 // SessionLoader caches dead-session snapshots in an LRU and triggers session
@@ -28,7 +29,7 @@ type processor interface {
 // coalesced via singleflight.
 type SessionLoader struct {
 	processor      processor
-	cache          *lru.Cache[string, *SessionSnapshot]
+	cache          *lru.Cache[string, *eventserver.SessionSnapshot]
 	sf             singleflight.Group
 	serverCtx      context.Context
 	processTimeout time.Duration
@@ -36,7 +37,7 @@ type SessionLoader struct {
 
 // NewSessionLoader wires a SessionLoader.
 func NewSessionLoader(p processor, serverCtx context.Context, processTimeout time.Duration, cacheSize int) *SessionLoader {
-	c, err := lru.New[string, *SessionSnapshot](cacheSize)
+	c, err := lru.New[string, *eventserver.SessionSnapshot](cacheSize)
 	if err != nil {
 		panic(fmt.Sprintf("NewSessionLoader: invalid cacheSize=%d: %v", cacheSize, err))
 	}
@@ -49,7 +50,7 @@ func NewSessionLoader(p processor, serverCtx context.Context, processTimeout tim
 }
 
 // GetSnapshot returns the cached snapshot for a dead session.
-func (s *SessionLoader) GetSnapshot(key string) (*SessionSnapshot, bool) {
+func (s *SessionLoader) GetSnapshot(key string) (*eventserver.SessionSnapshot, bool) {
 	return s.cache.Get(key)
 }
 
@@ -123,6 +124,6 @@ func (s *SessionLoader) doLoadSession(ctx context.Context, info utils.ClusterInf
 }
 
 // prime inserts a dead-session snapshot into the cache.
-func (s *SessionLoader) prime(key string, snap *SessionSnapshot) {
+func (s *SessionLoader) prime(key string, snap *eventserver.SessionSnapshot) {
 	s.cache.Add(key, snap)
 }
