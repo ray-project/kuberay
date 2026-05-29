@@ -52,7 +52,7 @@ func testEnterClusterInfo() utils.ClusterInfo {
 	}
 }
 
-// testSnapshot builds a minimal cached snapshot.
+// testSnapshot builds a minimal snapshot.
 func testSnapshot(clusterSessionKey string) *eventserver.SessionSnapshot {
 	return &eventserver.SessionSnapshot{
 		SessionKey:  clusterSessionKey,
@@ -230,15 +230,15 @@ func TestLoadSession_FastPath_SkipsSingleflight(t *testing.T) {
 	}
 }
 
-// TestGetSnapshot_PrimeThenGet verifies the canonical hot path:
-// prime, then two Gets each return the exact pointer that was Primed.
-func TestGetSnapshot_PrimeThenGet(t *testing.T) {
+// TestGetSnapshot_PutThenGet verifies the canonical hot path:
+// putSnapshot, then two Gets each return the exact pointer that was stored.
+func TestGetSnapshot_PutThenGet(t *testing.T) {
 	info := testEnterClusterInfo()
 	clusterSessionKey := utils.BuildClusterSessionKey(info.Name, info.Namespace, info.SessionName)
 
 	sl := newTestSessionLoader(t, &fakeProcessor{}, 0)
-	primed := testSnapshot(clusterSessionKey)
-	sl.prime(clusterSessionKey, primed)
+	stored := testSnapshot(clusterSessionKey)
+	sl.putSnapshot(clusterSessionKey, stored)
 
 	first, ok := sl.GetSnapshot(clusterSessionKey)
 	if !ok {
@@ -248,8 +248,8 @@ func TestGetSnapshot_PrimeThenGet(t *testing.T) {
 	if !ok {
 		t.Fatal("second GetSnapshot: ok=false")
 	}
-	if first != primed || second != primed {
-		t.Fatalf("expected same pointer on cache hit, got %p / %p (want %p)", first, second, primed)
+	if first != stored || second != stored {
+		t.Fatalf("expected same pointer on cache hit, got %p / %p (want %p)", first, second, stored)
 	}
 }
 
@@ -265,8 +265,8 @@ func TestGetSnapshot_ColdMiss(t *testing.T) {
 	}
 }
 
-// TestGetSnapshot_PrimeOverwrites verifies that prime replaces any prior entry.
-func TestGetSnapshot_PrimeOverwrites(t *testing.T) {
+// TestGetSnapshot_PutOverwrites verifies that putSnapshot replaces any prior entry.
+func TestGetSnapshot_PutOverwrites(t *testing.T) {
 	info := testEnterClusterInfo()
 	clusterSessionKey := utils.BuildClusterSessionKey(info.Name, info.Namespace, info.SessionName)
 
@@ -275,20 +275,20 @@ func TestGetSnapshot_PrimeOverwrites(t *testing.T) {
 	fresh := testSnapshot(clusterSessionKey)
 
 	sl := newTestSessionLoader(t, &fakeProcessor{}, 0)
-	sl.prime(clusterSessionKey, stale)
-	sl.prime(clusterSessionKey, fresh)
+	sl.putSnapshot(clusterSessionKey, stale)
+	sl.putSnapshot(clusterSessionKey, fresh)
 
 	got, ok := sl.GetSnapshot(clusterSessionKey)
 	if !ok {
 		t.Fatal("Get: ok=false")
 	}
 	if got != fresh {
-		t.Fatalf("prime did not overwrite; got %p, want %p", got, fresh)
+		t.Fatalf("putSnapshot did not overwrite; got %p, want %p", got, fresh)
 	}
 }
 
 // TestGetSnapshot_LRUEviction verifies that once capacity is exceeded, the
-// oldest Primed entry is evicted and GetSnapshot for that key returns ok=false.
+// oldest cached entry is evicted and GetSnapshot for that key returns ok=false.
 func TestGetSnapshot_LRUEviction(t *testing.T) {
 	info := testEnterClusterInfo()
 	k1 := utils.BuildClusterSessionKey(info.Name, info.Namespace, "session_2026-04-22_10-00-00_000000_1")
@@ -296,10 +296,10 @@ func TestGetSnapshot_LRUEviction(t *testing.T) {
 	k3 := utils.BuildClusterSessionKey(info.Name, info.Namespace, "session_2026-04-22_12-00-00_000000_1")
 
 	sl := newTestSessionLoader(t, &fakeProcessor{}, 2)
-	sl.prime(k1, testSnapshot(k1))
-	sl.prime(k2, testSnapshot(k2))
+	sl.putSnapshot(k1, testSnapshot(k1))
+	sl.putSnapshot(k2, testSnapshot(k2))
 	// Third session evicts the first (LRU).
-	sl.prime(k3, testSnapshot(k3))
+	sl.putSnapshot(k3, testSnapshot(k3))
 
 	if _, ok := sl.GetSnapshot(k1); ok {
 		t.Fatal("expected first session to be evicted")

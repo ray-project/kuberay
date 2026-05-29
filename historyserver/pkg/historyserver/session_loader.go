@@ -110,7 +110,7 @@ func (s *SessionLoader) doLoadSession(ctx context.Context, info utils.ClusterInf
 		if snap == nil {
 			return false, fmt.Errorf("unexpected nil snapshot for session status %v", status)
 		}
-		s.prime(clusterSessionKey, snap)
+		s.putSnapshot(clusterSessionKey, snap)
 		return false, nil
 
 	case SessionStatusLive:
@@ -123,7 +123,7 @@ func (s *SessionLoader) doLoadSession(ctx context.Context, info utils.ClusterInf
 	}
 }
 
-// prime inserts a dead-session snapshot into the cache.
-func (s *SessionLoader) prime(clusterSessionKey string, snap *eventserver.SessionSnapshot) {
+// putSnapshot stores a dead-session snapshot in the LRU cache.
+func (s *SessionLoader) putSnapshot(clusterSessionKey string, snap *eventserver.SessionSnapshot) {
 	s.cache.Add(clusterSessionKey, snap)
 }
