@@ -14,7 +14,6 @@ import (
 	"strings"
 
 	"github.com/bmatcuk/doublestar/v4"
-	"github.com/ray-project/kuberay/historyserver/pkg/eventserver"
 	eventtypes "github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
 	"github.com/sirupsen/logrus"
 
@@ -319,6 +318,19 @@ func (s *ServerHandler) resolvePidLogFilename(clusterNameID, sessionID, nodeID s
 	return "", "", utils.NewHTTPError(fmt.Errorf("log file not found for pid %d in path %s", pid, logPath), http.StatusNotFound)
 }
 
+func taskAttemptsByID(tasks []eventtypes.Task, taskID string) ([]eventtypes.Task, bool) {
+	var attempts []eventtypes.Task
+	for _, t := range tasks {
+		if t.TaskID == taskID {
+			attempts = append(attempts, t)
+		}
+	}
+	if len(attempts) == 0 {
+		return nil, false
+	}
+	return attempts, true
+}
+
 // resolveTaskLogFilename resolves log file for a task by querying task events.
 // This mirrors Ray Dashboard's _resolve_task_filename logic.
 // The sessionID parameter is required for searching worker log files when task_log_info is not available.
@@ -328,7 +340,7 @@ func (s *ServerHandler) resolveTaskLogFilename(clusterSessionKey, clusterNameID,
 		return "", "", fmt.Errorf("snapshot not found for %s", clusterSessionKey)
 	}
 
-	taskAttempts, found := eventserver.TaskAttemptsByID(snap.Tasks, taskID)
+	taskAttempts, found := taskAttemptsByID(snap.Tasks, taskID)
 	if !found {
 		return "", "", fmt.Errorf("task not found: task_id=%s", taskID)
 	}

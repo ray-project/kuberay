@@ -33,17 +33,3 @@ func (h *EventHandler) BuildSnapshot(session utils.ClusterInfo) *SessionSnapshot
 		LogEventsByJobID: h.getLogEventsByJobID(clusterSessionKey),
 	}
 }
-
-// TaskAttemptsByID returns all attempts for taskID from a flat task list.
-func TaskAttemptsByID(tasks []types.Task, taskID string) ([]types.Task, bool) {
-	var attempts []types.Task
-	for _, t := range tasks {
-		if t.TaskID == taskID {
-			attempts = append(attempts, t)
-		}
-	}
-	if len(attempts) == 0 {
-		return nil, false
-	}
-	return attempts, true
-}
