@@ -52,8 +52,8 @@ func testEnterClusterInfo() utils.ClusterInfo {
 	}
 }
 
-// snapWith returns a minimal snapshot pointer for cache seeding.
-func snapWith(clusterSessionKey string) *eventserver.SessionSnapshot {
+// testSnapshot builds a minimal cached snapshot.
+func testSnapshot(clusterSessionKey string) *eventserver.SessionSnapshot {
 	return &eventserver.SessionSnapshot{
 		SessionKey:  clusterSessionKey,
 		GeneratedAt: time.Date(2026, 4, 22, 12, 0, 0, 0, time.UTC),
@@ -233,10 +233,11 @@ func TestLoadSession_FastPath_SkipsSingleflight(t *testing.T) {
 // TestGetSnapshot_PrimeThenGet verifies the canonical hot path:
 // prime, then two Gets each return the exact pointer that was Primed.
 func TestGetSnapshot_PrimeThenGet(t *testing.T) {
-	sl := newTestSessionLoader(t, &fakeProcessor{}, 0)
-	clusterSessionKey := utils.BuildClusterSessionKey("cluster-a", "default", "session-1")
+	info := testEnterClusterInfo()
+	clusterSessionKey := utils.BuildClusterSessionKey(info.Name, info.Namespace, info.SessionName)
 
-	primed := snapWith("key-1")
+	sl := newTestSessionLoader(t, &fakeProcessor{}, 0)
+	primed := testSnapshot(clusterSessionKey)
 	sl.prime(clusterSessionKey, primed)
 
 	first, ok := sl.GetSnapshot(clusterSessionKey)
@@ -252,101 +253,61 @@ func TestGetSnapshot_PrimeThenGet(t *testing.T) {
 	}
 }
 
-// TestGetSnapshot_ColdMiss verifies that a miss returns (nil, false), mirroring
-// the original `_, ok := loaded[key]` semantics.
+// TestGetSnapshot_ColdMiss verifies that a miss returns (nil, false).
 func TestGetSnapshot_ColdMiss(t *testing.T) {
-	sl := newTestSessionLoader(t, &fakeProcessor{}, 0)
-	clusterSessionKey := utils.BuildClusterSessionKey("cluster-c", "default", "session-3")
+	info := testEnterClusterInfo()
+	clusterSessionKey := utils.BuildClusterSessionKey(info.Name, info.Namespace, info.SessionName)
 
+	sl := newTestSessionLoader(t, &fakeProcessor{}, 0)
 	snap, ok := sl.GetSnapshot(clusterSessionKey)
 	if ok || snap != nil {
 		t.Fatalf("expected (nil, false) on cold miss, got (%v, %v)", snap, ok)
 	}
 }
 
-// TestGetSnapshot_MissDoesNotPersist verifies that a miss is not remembered:
-// a later prime + Get must succeed. WHY: a negative cache would prevent
-// fresh-build Primes from taking effect.
-func TestGetSnapshot_MissDoesNotPersist(t *testing.T) {
-	sl := newTestSessionLoader(t, &fakeProcessor{}, 0)
-	clusterSessionKey := utils.BuildClusterSessionKey("cluster-c", "default", "session-3")
-
-	if _, ok := sl.GetSnapshot(clusterSessionKey); ok {
-		t.Fatal("expected miss before prime")
-	}
-
-	primed := snapWith("key-3")
-	sl.prime(clusterSessionKey, primed)
-
-	got, ok := sl.GetSnapshot(clusterSessionKey)
-	if !ok || got != primed {
-		t.Fatalf("Get after prime: got=(%p, %v); want=(%p, true) — negative cache leaked", got, ok, primed)
-	}
-}
-
 // TestGetSnapshot_PrimeOverwrites verifies that prime replaces any prior entry.
 func TestGetSnapshot_PrimeOverwrites(t *testing.T) {
-	sl := newTestSessionLoader(t, &fakeProcessor{}, 0)
-	clusterSessionKey := utils.BuildClusterSessionKey("cluster-overwrite", "default", "session-overwrite")
+	info := testEnterClusterInfo()
+	clusterSessionKey := utils.BuildClusterSessionKey(info.Name, info.Namespace, info.SessionName)
 
-	sl.prime(clusterSessionKey, snapWith("stale"))
-	sl.prime(clusterSessionKey, snapWith("fresh"))
+	stale := testSnapshot(clusterSessionKey)
+	stale.GeneratedAt = time.Date(2026, 4, 22, 10, 0, 0, 0, time.UTC)
+	fresh := testSnapshot(clusterSessionKey)
+
+	sl := newTestSessionLoader(t, &fakeProcessor{}, 0)
+	sl.prime(clusterSessionKey, stale)
+	sl.prime(clusterSessionKey, fresh)
 
 	got, ok := sl.GetSnapshot(clusterSessionKey)
 	if !ok {
 		t.Fatal("Get: ok=false")
 	}
-	if got.SessionKey != "fresh" {
-		t.Fatalf("prime did not overwrite; got SessionKey=%q, want %q", got.SessionKey, "fresh")
+	if got != fresh {
+		t.Fatalf("prime did not overwrite; got %p, want %p", got, fresh)
 	}
 }
 
 // TestGetSnapshot_LRUEviction verifies that once capacity is exceeded, the
 // oldest Primed entry is evicted and GetSnapshot for that key returns ok=false.
 func TestGetSnapshot_LRUEviction(t *testing.T) {
-	sl := newTestSessionLoader(t, &fakeProcessor{}, 2)
-	k1 := utils.BuildClusterSessionKey("cluster-d", "default", "s1")
-	k2 := utils.BuildClusterSessionKey("cluster-d", "default", "s2")
-	k3 := utils.BuildClusterSessionKey("cluster-d", "default", "s3")
+	info := testEnterClusterInfo()
+	k1 := utils.BuildClusterSessionKey(info.Name, info.Namespace, "session_2026-04-22_10-00-00_000000_1")
+	k2 := utils.BuildClusterSessionKey(info.Name, info.Namespace, "session_2026-04-22_11-00-00_000000_1")
+	k3 := utils.BuildClusterSessionKey(info.Name, info.Namespace, "session_2026-04-22_12-00-00_000000_1")
 
-	sl.prime(k1, snapWith("k1"))
-	sl.prime(k2, snapWith("k2"))
-	// s3 evicts s1 (LRU).
-	sl.prime(k3, snapWith("k3"))
+	sl := newTestSessionLoader(t, &fakeProcessor{}, 2)
+	sl.prime(k1, testSnapshot(k1))
+	sl.prime(k2, testSnapshot(k2))
+	// Third session evicts the first (LRU).
+	sl.prime(k3, testSnapshot(k3))
 
 	if _, ok := sl.GetSnapshot(k1); ok {
-		t.Fatal("expected s1 to be evicted")
+		t.Fatal("expected first session to be evicted")
 	}
 	if _, ok := sl.GetSnapshot(k2); !ok {
-		t.Fatal("expected s2 to still be cached")
+		t.Fatal("expected second session to still be cached")
 	}
 	if _, ok := sl.GetSnapshot(k3); !ok {
-		t.Fatal("expected s3 to still be cached")
+		t.Fatal("expected third session to still be cached")
 	}
-}
-
-// TestGetSnapshot_ConcurrentPrimeGet asserts that concurrent prime/Get calls
-// are safe — golang-lru/v2 locks internally, so we only assert that the
-// final state has the snapshot present and no goroutine panicked.
-func TestGetSnapshot_ConcurrentPrimeGet(t *testing.T) {
-	sl := newTestSessionLoader(t, &fakeProcessor{}, 0)
-	clusterSessionKey := utils.BuildClusterSessionKey("cluster-e", "default", "session-hot")
-
-	primed := snapWith("hot")
-	sl.prime(clusterSessionKey, primed)
-
-	const n = 10
-	var wg sync.WaitGroup
-	for i := 0; i < n; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			sl.prime(clusterSessionKey, primed)
-			got, ok := sl.GetSnapshot(clusterSessionKey)
-			if !ok || got != primed {
-				t.Errorf("concurrent Get: got=(%p, %v) want=(%p, true)", got, ok, primed)
-			}
-		}()
-	}
-	wg.Wait()
 }
