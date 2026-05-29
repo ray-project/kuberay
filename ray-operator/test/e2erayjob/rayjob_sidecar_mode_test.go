@@ -377,6 +377,9 @@ env_vars:
 		g.Expect(containerID).ToNot(BeEmpty(), "Submitter's container ID should not be empty")
 		LogWithTimestamp(test.T(), "Found submitter container ID: %s", containerID)
 
+		// Record job id before restart
+		initialJobID := rayJob.Status.JobId
+
 		// stop the container with docker exec
 		kindNodeName := headPod.Spec.NodeName
 		cmd := exec.CommandContext(test.Ctx(), "docker", "exec", kindNodeName, "crictl", "stop", containerID)
@@ -405,6 +408,14 @@ env_vars:
 		rayJob, err = GetRayJob(test, rayJob.Namespace, rayJob.Name)
 		g.Expect(err).NotTo(HaveOccurred())
 		LogWithTimestamp(test.T(), "RayJob status after stopping submitter: jobStatus=%s deploymentStatus=%s", rayJob.Status.JobStatus, rayJob.Status.JobDeploymentStatus)
+
+		// Verify there is no duplicate submission by checking the job id with initialJobID
+		g.Consistently(func() string {
+			rayjob, err := GetRayJob(test, rayJob.Namespace, rayJob.Name)
+			g.Expect(err).NotTo(HaveOccurred())
+			return rayjob.Status.JobId
+		}, TestTimeoutShort, 2*time.Second).Should(Equal(initialJobID))
+		LogWithTimestamp(test.T(), "RayJob JobID remains %s, there is no duplicate submission", initialJobID)
 
 		// Verify RayJob does not transition to Failed
 		g.Consistently(RayJob(test, rayJob.Namespace, rayJob.Name), TestTimeoutShort, 2*time.Second).
