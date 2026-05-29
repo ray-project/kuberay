@@ -10,11 +10,10 @@ import (
 )
 
 // TestEmptyRoundtrip verifies that an empty SessionSnapshot marshals and
-// unmarshals back to an equal struct. This pins the JSON field names (a
-// breaking wire-format change would flip this test).
+// unmarshals back to an equal struct.
 func TestEmptyRoundtrip(t *testing.T) {
 	original := SessionSnapshot{
-		SessionKey:  "empty_default_session_0",
+		SessionKey:  "raycluster-historyserver_default_session_2026-01-11_19-38-40",
 		GeneratedAt: time.Date(2026, 4, 22, 10, 0, 0, 0, time.UTC),
 	}
 
@@ -34,11 +33,10 @@ func TestEmptyRoundtrip(t *testing.T) {
 }
 
 // TestFullRoundtrip populates all five maps with at least one entry and
-// verifies the snapshot survives a JSON roundtrip intact. This test is
-// not about deep field coverage (types themselves have their own tests).
+// verifies the snapshot survives a JSON roundtrip intact.
 func TestFullRoundtrip(t *testing.T) {
 	original := SessionSnapshot{
-		SessionKey:  "raycluster_default_session_2026_04_22",
+		SessionKey:  "raycluster-historyserver_default_session_2026-01-11_19-38-40",
 		GeneratedAt: time.Date(2026, 4, 22, 10, 0, 0, 0, time.UTC),
 		Tasks: []types.Task{
 			{TaskID: "task-1", TaskAttempt: 0, JobID: "job-1"},
