@@ -1337,6 +1337,12 @@ func (s *ServerHandler) getNodeLogFile(req *restful.Request, resp *restful.Respo
 		return
 	}
 
+	clusterSessionKey := utils.BuildClusterSessionKey(clusterNameID, clusterNamespace, sessionName)
+	if _, ok := s.sessionLoader.GetSnapshot(clusterSessionKey); !ok {
+		s.handleMissingSnapshot(resp)
+		return
+	}
+
 	// Only resolve node_ip to node_id from stored events for dead cluster
 	if options.NodeID == "" && options.NodeIP != "" {
 		nodeID, err := s.ipToNodeId(clusterNameID+"_"+clusterNamespace, sessionName, options.NodeIP)
@@ -1348,7 +1354,6 @@ func (s *ServerHandler) getNodeLogFile(req *restful.Request, resp *restful.Respo
 		options.NodeID = nodeID
 	}
 
-	clusterSessionKey := utils.BuildClusterSessionKey(clusterNameID, clusterNamespace, sessionName)
 	content, err := s._getNodeLogFile(clusterSessionKey, clusterNameID+"_"+clusterNamespace, sessionName, options)
 	if err != nil {
 		var httpErr *utils.HTTPError
