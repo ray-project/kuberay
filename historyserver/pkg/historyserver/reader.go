@@ -318,7 +318,7 @@ func (s *ServerHandler) resolvePidLogFilename(clusterNameID, sessionID, nodeID s
 	return "", "", utils.NewHTTPError(fmt.Errorf("log file not found for pid %d in path %s", pid, logPath), http.StatusNotFound)
 }
 
-func taskAttemptsByID(tasks []eventtypes.Task, taskID string) ([]eventtypes.Task, bool) {
+func getTasksByID(tasks []eventtypes.Task, taskID string) ([]eventtypes.Task, bool) {
 	var attempts []eventtypes.Task
 	for _, t := range tasks {
 		if t.TaskID == taskID {
@@ -340,7 +340,7 @@ func (s *ServerHandler) resolveTaskLogFilename(clusterSessionKey, clusterNameID,
 		return "", "", fmt.Errorf("snapshot not found for %s", clusterSessionKey)
 	}
 
-	taskAttempts, found := taskAttemptsByID(snap.Tasks, taskID)
+	taskAttempts, found := getTasksByID(snap.Tasks, taskID)
 	if !found {
 		return "", "", fmt.Errorf("task not found: task_id=%s", taskID)
 	}
