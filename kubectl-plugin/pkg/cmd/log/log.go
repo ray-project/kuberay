@@ -437,7 +437,7 @@ func (options *ClusterLogOptions) downloadRayLogFiles(ctx context.Context, exec 
 				continue
 			}
 			// Create file and write contents
-			outFile, err := os.OpenFile(localFilePath, os.O_CREATE|os.O_RDWR, os.FileMode(header.Mode)) //nolint:gosec // G115: bounds check above
+			outFile, err := os.OpenFile(localFilePath, os.O_CREATE|os.O_RDWR, os.FileMode(header.Mode))
 			if err != nil {
 				return fmt.Errorf("Error creating file: %w", err)
 			}
