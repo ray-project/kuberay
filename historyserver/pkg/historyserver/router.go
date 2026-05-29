@@ -608,7 +608,7 @@ func (s *ServerHandler) getNode(req *restful.Request, resp *restful.Response) {
 	}
 	detail := nodeSummaryReplay[len(nodeSummaryReplay)-1]
 
-	// Fill actors for this node from the same snapshot.
+	// Fill actors for this node.
 	// Frontend expects actors as {[actorId]: ActorDetail}, not an empty array.
 	// Ref: https://github.com/ray-project/ray/blob/8a7b47bc5c/python/ray/dashboard/client/src/pages/node/NodeDetail.tsx#L233
 	nodeActors := make(map[string]interface{})
@@ -916,7 +916,6 @@ func (s *ServerHandler) getClusterStatus(req *restful.Request, resp *restful.Res
 		// Update when Ray dashboard api supports autoscaler V2 which uses
 		// GcsClient.get_cluster_status() for /api/cluster_status.
 		// Ray frontend only uses format=1, so returning empty data here is fine for now.
-		// Skip loader.Load — frontend ignores the response in this branch.
 		response := ClusterStatusResponse{
 			Result: true,
 			Msg:    "Got cluster status.",
@@ -933,9 +932,7 @@ func (s *ServerHandler) getClusterStatus(req *restful.Request, resp *restful.Res
 	resp.Write(respData)
 }
 
-// buildFormattedClusterStatus reconstructs the cluster status from
-// debug_state.txt files (per-node) merged with snapshot data (failed
-// nodes, pending demands, last-active timestamp).
+// buildFormattedClusterStatus reconstructs the cluster status from debug_state.txt and pending tasks and actors
 func (s *ServerHandler) buildFormattedClusterStatus(snap *eventserver.SessionSnapshot, clusterName, clusterNamespace, sessionName string) string {
 	builder := NewClusterStatusBuilder()
 	clusterNameID := clusterName + "_" + clusterNamespace
@@ -966,7 +963,7 @@ func (s *ServerHandler) buildFormattedClusterStatus(snap *eventserver.SessionSna
 		logrus.Debugf("Found %d nodes but failed to parse any debug_state.txt for cluster %s session %s", len(nodeIDs), clusterName, sessionName)
 	}
 
-	// Read tasks / actors / nodes from the snapshot instead of EventHandler.
+	nodes := snap.Nodes
 	tasks := snap.Tasks
 	actors := make([]eventtypes.Actor, 0, len(snap.Actors))
 	for _, a := range snap.Actors {
@@ -982,7 +979,7 @@ func (s *ServerHandler) buildFormattedClusterStatus(snap *eventserver.SessionSna
 		builder.Timestamp = ts
 	}
 
-	builder.AddFailedNodesFromNodes(snap.Nodes)
+	builder.AddFailedNodesFromNodes(nodes)
 	builder.AddPendingDemandsFromTasks(tasks)
 	builder.AddPendingDemandsFromActors(actors)
 
@@ -1191,9 +1188,7 @@ func (s *ServerHandler) getLogicalActors(req *restful.Request, resp *restful.Res
 		return
 	}
 
-	// Format response to match Ray Dashboard API format. Actor IDs are
-	// already normalized to hex at ingestion time, so the snapshot key
-	// matches what the frontend expects.
+	// Format response to match Ray Dashboard API format
 	formattedActors := make(map[string]interface{}, len(snap.Actors))
 	for _, actor := range snap.Actors {
 		formattedActors[actor.ActorID] = formatActorForResponse(actor)
@@ -1275,8 +1270,7 @@ func (s *ServerHandler) getLogicalActor(req *restful.Request, resp *restful.Resp
 		return
 	}
 
-	// Actor IDs are normalized to hex at ingestion time, so lookup
-	// against the snapshot's hex-keyed map is direct.
+	// Actor IDs are normalized to hex at ingestion time, so lookup is by hex ID.
 	actor, found := snap.Actors[actorID]
 
 	replyActorInfo := ReplyActorInfo{
@@ -1354,7 +1348,6 @@ func (s *ServerHandler) getNodeLogFile(req *restful.Request, resp *restful.Respo
 		options.NodeID = nodeID
 	}
 
-	// clusterNameID is the bare cluster name (cookie value) — see line 1336.
 	clusterSessionKey := utils.BuildClusterSessionKey(clusterNameID, clusterNamespace, sessionName)
 	content, err := s._getNodeLogFile(clusterSessionKey, clusterNameID+"_"+clusterNamespace, sessionName, options)
 	if err != nil {
