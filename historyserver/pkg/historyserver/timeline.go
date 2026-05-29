@@ -8,33 +8,34 @@ import (
 	eventtypes "github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
 )
 
-// taskPrefix is extracted to avoid hard-coded "task::" usage when matching
-// Ray's task event names.
-const taskPrefix = "task::"
-
-// generateTimelineFromSnapshot builds the Chrome Tracing Format payload used
-// by Ray Dashboard's timeline view. jobID, if non-empty, filters tasks to a
-// single job; an empty string yields all jobs.
-//
-// Returns an empty (but non-nil) slice when no tasks carry profile data so
-// json.Marshal produces "[]" instead of "null".
-func generateTimelineFromSnapshot(snap *eventserver.SessionSnapshot, jobID string) []eventtypes.ChromeTraceEvent {
-	events := []eventtypes.ChromeTraceEvent{}
-	if snap == nil {
-		return events
+// getTasksTimeline returns timeline data in Chrome Tracing Format.
+// Output format matches Ray Dashboard's /api/v0/tasks/timeline endpoint.
+func getTasksTimeline(snap *eventserver.SessionSnapshot, jobID string) []eventtypes.ChromeTraceEvent {
+	var tasks []eventtypes.Task
+	if snap != nil {
+		if jobID != "" {
+			for _, task := range snap.Tasks {
+				if task.JobID == jobID {
+					tasks = append(tasks, task)
+				}
+			}
+		} else {
+			tasks = snap.Tasks
+		}
 	}
 
-	// Step 1: keep only attempts with profile data, a supported componentType,
-	// a node IP, and (when jobID is set) a matching job.
-	filteredTasks := make([]eventtypes.Task, 0)
-	for _, task := range snap.Tasks {
-		if jobID != "" && task.JobID != jobID {
-			continue
-		}
+	if len(tasks) == 0 {
+		return []eventtypes.ChromeTraceEvent{}
+	}
+
+	events := []eventtypes.ChromeTraceEvent{}
+
+	filteredTasks := make([]eventtypes.Task, 0, len(tasks))
+	for _, task := range tasks {
 		if task.ProfileData == nil || len(task.ProfileData.Events) == 0 {
 			continue
 		}
-		// Ray's profiling payload only uses "worker" and "driver" (ray-project/ray profiling.py).
+		// Only include worker and driver components (consistent with Ray's profiling implementation in profiling.py)
 		componentType := task.ProfileData.ComponentType
 		if componentType != "worker" && componentType != "driver" {
 			continue
@@ -45,17 +46,15 @@ func generateTimelineFromSnapshot(snap *eventserver.SessionSnapshot, jobID strin
 		filteredTasks = append(filteredTasks, task)
 	}
 
-	if len(filteredTasks) == 0 {
-		return events
-	}
-
-	// Step 2: assign a deterministic PID per node IP and TID per
-	// (nodeIP, componentType:componentID), reused across all events.
+	// Build PID/TID mappings
+	// PID: Node IP -> numeric ID
+	// TID: clusterID (componentType:componentId) -> globally unique numeric ID
 	nodeIPToPID := make(map[string]int)
-	nodeIPToClusterIDToTID := make(map[string]map[string]int)
+	nodeIPToClusterIDToTID := make(map[string]map[string]int) // nodeIP -> clusterID (componentType:componentId) -> tid
 	pidCounter := 0
 	tidCounter := 0
 
+	// First pass: collect all unique nodes and workers
 	for _, task := range filteredTasks {
 		nodeIP := task.ProfileData.NodeIPAddress
 		clusterID := task.ProfileData.ComponentType + ":" + task.ProfileData.ComponentID
@@ -70,8 +69,7 @@ func generateTimelineFromSnapshot(snap *eventserver.SessionSnapshot, jobID strin
 		}
 	}
 
-	// Step 3: emit process_name/thread_name metadata events ("M") that the
-	// Chrome tracing viewer uses to label rows.
+	// Generate process_name and thread_name metadata events
 	for nodeIP, pid := range nodeIPToPID {
 		events = append(events, eventtypes.ChromeTraceEvent{
 			Name:  "process_name",
@@ -97,7 +95,7 @@ func generateTimelineFromSnapshot(snap *eventserver.SessionSnapshot, jobID strin
 		}
 	}
 
-	// Step 4: emit one complete event ("X") per ProfileEventRaw.
+	// Generate trace events from ProfileData
 	for _, task := range filteredTasks {
 		nodeIP := task.ProfileData.NodeIPAddress
 		clusterID := task.ProfileData.ComponentType + ":" + task.ProfileData.ComponentID
@@ -111,39 +109,41 @@ func generateTimelineFromSnapshot(snap *eventserver.SessionSnapshot, jobID strin
 			tidVal := tid
 			tidPtr = &tidVal
 		} else {
-			// Defensive: first pass should have populated this; skip rather
-			// than emit a null-TID event that the viewer would drop.
+			// This shouldn't happen if first pass worked correctly,
+			// but skip to avoid null TID
 			continue
 		}
 
 		for _, profEvent := range task.ProfileData.Events {
-			// Ray emits ns; Chrome Tracing wants us. Float division preserves
-			// sub-microsecond fractions.
+			// Convert nanoseconds to microseconds
 			startTimeUs := float64(profEvent.StartTime) / 1000.0
 			durationUs := float64(profEvent.EndTime-profEvent.StartTime) / 1000.0
 
-			// Best-effort parse: a malformed extraData drops the name/task_id
-			// overrides but the structural event is still emitted.
+			// Parse extraData for additional fields
 			var extraData map[string]interface{}
 			if profEvent.ExtraData != "" {
-				_ = json.Unmarshal([]byte(profEvent.ExtraData), &extraData)
+				json.Unmarshal([]byte(profEvent.ExtraData), &extraData)
 			}
 
-			// taskID/funcOrClassName fallback: TaskID + FuncOrClassName, then
-			// GetFuncName(), then extraData["task_id"] override.
+			// Determine task_id and func_or_class_name
 			taskIDForArgs := task.TaskID
 			funcOrClassName := task.FuncOrClassName
+
+			// Fallback to GetFuncName() if FuncOrClassName is empty
+			// This ensures consistency with Ray's profiling.py which uses task["func_or_class_name"]
+			// from TASK_DEFINITION_EVENT, and handles cases where TASK_PROFILE_EVENT is missing
 			if funcOrClassName == "" {
 				funcOrClassName = task.GetFuncName()
 			}
+
+			// Try to get from extraData if available (for hex format task_id)
 			if extraData != nil {
 				if tid, ok := extraData["task_id"].(string); ok && tid != "" {
 					taskIDForArgs = tid
 				}
 			}
 
-			// actor_id is explicitly nil (not absent) — Ray Dashboard relies on
-			// the key being present.
+			// Build args
 			actorID := extractActorIDFromTaskID(taskIDForArgs)
 			args := map[string]interface{}{
 				"task_id":            taskIDForArgs,
@@ -152,21 +152,24 @@ func generateTimelineFromSnapshot(snap *eventserver.SessionSnapshot, jobID strin
 				"func_or_class_name": funcOrClassName,
 				"actor_id":           nil,
 			}
+
 			if actorID != "" {
 				args["actor_id"] = actorID
 			}
 
-			// task::<func> events get a human-friendly display name from extraData.
+			// Determine event name for display
 			eventName := profEvent.EventName
 			displayName := profEvent.EventName
-			if strings.HasPrefix(profEvent.EventName, taskPrefix) && extraData != nil {
+
+			// For overall task events like "task::slow_task", use the full name from extraData
+			if strings.HasPrefix(profEvent.EventName, "task::") && extraData != nil {
 				if name, ok := extraData["name"].(string); ok && name != "" {
 					displayName = name
 					args["name"] = name
 				}
 			}
 
-			events = append(events, eventtypes.ChromeTraceEvent{
+			traceEvent := eventtypes.ChromeTraceEvent{
 				Category:  eventName,
 				Name:      displayName,
 				PID:       pid,
@@ -176,23 +179,26 @@ func generateTimelineFromSnapshot(snap *eventserver.SessionSnapshot, jobID strin
 				Color:     getChromeTraceColor(eventName),
 				Args:      args,
 				Phase:     "X",
-			})
+			}
+
+			events = append(events, traceEvent)
 		}
 	}
 
 	return events
 }
 
-// getChromeTraceColor maps event names to Chrome trace colors.
-// Based on Ray's _default_color_mapping in profiling.py.
-//
-// Duplicated from pkg/eventserver/eventserver.go (private there) so the
-// snapshot-based timeline path stays in this package; the two copies must
-// be kept in sync until eventserver's private copy is retired.
+// getChromeTraceColor maps event names to Chrome trace colors
+// Based on Ray's _default_color_mapping in profiling.py
 func getChromeTraceColor(eventName string) string {
-	if strings.HasPrefix(eventName, taskPrefix) {
+	// Handle task::xxx pattern (overall task event)
+	if strings.HasPrefix(eventName, "task::") {
 		return "generic_work"
 	}
+
+	// Direct mapping for known event names
+	// This logic follows Ray's profiling implementation:
+	// https://github.com/ray-project/ray/blob/68d01c4c48a59c7768ec9c2359a1859966c446b6/python/ray/_private/profiling.py#L25
 	switch eventName {
 	case "task:deserialize_arguments":
 		return "rail_load"
@@ -219,26 +225,25 @@ func getChromeTraceColor(eventName string) string {
 	}
 }
 
-// extractActorIDFromTaskID extracts the ActorID from a TaskID following Ray's
-// ID specification.
+// extractActorIDFromTaskID extracts the ActorID from a TaskID following Ray's ID specification.
 //
-//   - TaskID: 8B unique + 16B ActorID (total 24 bytes = 48 hex chars)
-//   - ActorID: 12B unique + 4B JobID (total 16 bytes = 32 hex chars)
+// Design doc: src/ray/design_docs/id_specification.md
+// - TaskID: 8B unique + 16B ActorID (total 24 bytes = 48 hex chars)
+// - ActorID: 12B unique + 4B JobID (total 16 bytes = 32 hex chars)
 //
 // For a 48-character hex TaskID, the last 32 hex characters (bytes 16–48)
-// correspond to the ActorID. The "unique" portion (first 24 hex chars) is
-// all-Fs for normal/driver tasks with no associated actor; in that case an
-// empty string is returned.
-//
-// Duplicated from pkg/eventserver/eventserver.go.
+// correspond to the ActorID. This function further checks the "unique" portion
+// of the ActorID (first 24 hex chars) and returns an empty string if it is all Fs,
+// which indicates normal/driver tasks with no associated actor.
 func extractActorIDFromTaskID(taskIDHex string) string {
 	if len(taskIDHex) != 48 {
-		return ""
+		return "" // can't process if encoded in base64
 	}
 
-	actorPortion := taskIDHex[16:40]
-	jobPortion := taskIDHex[40:48]
+	actorPortion := taskIDHex[16:40] // 24 chars for actor id (12 bytes)
+	jobPortion := taskIDHex[40:48]   // 8 chars for job id (4 bytes)
 
+	// Check if all Fs (no actor)
 	if strings.ToLower(actorPortion) == "ffffffffffffffffffffffff" {
 		return ""
 	}

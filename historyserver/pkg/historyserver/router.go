@@ -670,8 +670,8 @@ func (s *ServerHandler) getEvents(req *restful.Request, resp *restful.Response) 
 
 	if jobIDExists {
 		events := make([]map[string]any, 0)
-		for _, e := range snap.LogEventsByJobID[jobID] {
-			events = append(events, e.ToAPIResponse())
+		for _, logEvent := range snap.LogEventsByJobID[jobID] {
+			events = append(events, logEvent.ToAPIResponse())
 		}
 		response = map[string]any{
 			"result": true,
@@ -682,19 +682,19 @@ func (s *ServerHandler) getEvents(req *restful.Request, resp *restful.Response) 
 			},
 		}
 	} else {
-		all := make(map[string][]map[string]any, len(snap.LogEventsByJobID))
-		for jID, evs := range snap.LogEventsByJobID {
-			list := make([]map[string]any, 0, len(evs))
-			for _, e := range evs {
-				list = append(list, e.ToAPIResponse())
+		events := make(map[string][]map[string]any, len(snap.LogEventsByJobID))
+		for jobID, logEvents := range snap.LogEventsByJobID {
+			eventList := make([]map[string]any, 0, len(logEvents))
+			for _, logEvent := range logEvents {
+				eventList = append(eventList, logEvent.ToAPIResponse())
 			}
-			all[jID] = list
+			events[jobID] = eventList
 		}
 		response = map[string]any{
 			"result": true,
 			"msg":    "All events fetched.",
 			"data": map[string]any{
-				"events": all,
+				"events": events,
 			},
 		}
 	}
@@ -2148,7 +2148,7 @@ func (s *ServerHandler) getTasksTimeline(req *restful.Request, resp *restful.Res
 		s.handleMissingSnapshot(resp)
 		return
 	}
-	timeline := generateTimelineFromSnapshot(snap, jobID)
+	timeline := getTasksTimeline(snap, jobID)
 
 	respData, err := json.Marshal(timeline)
 	if err != nil {
