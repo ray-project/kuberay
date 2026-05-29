@@ -13,11 +13,11 @@ type SessionSnapshot struct {
 	// GeneratedAt is the UTC timestamp when this snapshot was built.
 	GeneratedAt time.Time `json:"generatedAt"`
 
-	Tasks     map[string][]types.Task `json:"tasks"`
-	Actors    map[string]types.Actor  `json:"actors"`
-	Jobs      map[string]types.Job    `json:"jobs"`
-	Nodes     map[string]types.Node   `json:"nodes"`
-	LogEvents LogEventPayload         `json:"logEvents"`
+	Tasks     []types.Task           `json:"tasks"`
+	Actors    map[string]types.Actor `json:"actors"`
+	Jobs      map[string]types.Job   `json:"jobs"`
+	Nodes     map[string]types.Node  `json:"nodes"`
+	LogEvents LogEventPayload        `json:"logEvents"`
 }
 
 // LogEventPayload carries log events grouped by job ID.
@@ -31,7 +31,7 @@ func (h *EventHandler) BuildSnapshot(session utils.ClusterInfo) *SessionSnapshot
 	return &SessionSnapshot{
 		SessionKey:  clusterSessionKey,
 		GeneratedAt: time.Now().UTC(),
-		Tasks:       groupTasksByID(h.getTasks(clusterSessionKey)),
+		Tasks:       h.getTasks(clusterSessionKey),
 		Actors:      h.getActorsMap(clusterSessionKey),
 		Jobs:        h.getJobsMap(clusterSessionKey),
 		Nodes:       h.getNodeMap(clusterSessionKey),
@@ -41,15 +41,16 @@ func (h *EventHandler) BuildSnapshot(session utils.ClusterInfo) *SessionSnapshot
 	}
 }
 
-// groupTasksByID re-nests the flat []Task returned by getTasks into the
-// map[taskID][]attempt shape expected by SessionSnapshot.Tasks.
-func groupTasksByID(tasks []types.Task) map[string][]types.Task {
-	if len(tasks) == 0 {
-		return map[string][]types.Task{}
-	}
-	out := make(map[string][]types.Task, len(tasks))
+// TaskAttemptsByID returns all attempts for taskID from a flat task list.
+func TaskAttemptsByID(tasks []types.Task, taskID string) ([]types.Task, bool) {
+	var attempts []types.Task
 	for _, t := range tasks {
-		out[t.TaskID] = append(out[t.TaskID], t)
+		if t.TaskID == taskID {
+			attempts = append(attempts, t)
+		}
 	}
-	return out
+	if len(attempts) == 0 {
+		return nil, false
+	}
+	return attempts, true
 }

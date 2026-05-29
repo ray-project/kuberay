@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/bmatcuk/doublestar/v4"
+	"github.com/ray-project/kuberay/historyserver/pkg/eventserver"
 	eventtypes "github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
 	"github.com/sirupsen/logrus"
 
@@ -327,7 +328,7 @@ func (s *ServerHandler) resolveTaskLogFilename(clusterSessionKey, clusterNameID,
 		return "", "", fmt.Errorf("snapshot not found for %s", clusterSessionKey)
 	}
 
-	taskAttempts, found := snap.Tasks[taskID]
+	taskAttempts, found := eventserver.TaskAttemptsByID(snap.Tasks, taskID)
 	if !found {
 		return "", "", fmt.Errorf("task not found: task_id=%s", taskID)
 	}

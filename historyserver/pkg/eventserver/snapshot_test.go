@@ -40,11 +40,9 @@ func TestFullRoundtrip(t *testing.T) {
 	original := SessionSnapshot{
 		SessionKey:  "raycluster_default_session_2026_04_22",
 		GeneratedAt: time.Date(2026, 4, 22, 10, 0, 0, 0, time.UTC),
-		Tasks: map[string][]types.Task{
-			"task-1": {
-				{TaskID: "task-1", TaskAttempt: 0, JobID: "job-1"},
-				{TaskID: "task-1", TaskAttempt: 1, JobID: "job-1"},
-			},
+		Tasks: []types.Task{
+			{TaskID: "task-1", TaskAttempt: 0, JobID: "job-1"},
+			{TaskID: "task-1", TaskAttempt: 1, JobID: "job-1"},
 		},
 		Actors: map[string]types.Actor{
 			"actor-1": {ActorID: "actor-1", JobID: "job-1"},

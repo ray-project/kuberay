@@ -24,28 +24,25 @@ func generateTimelineFromSnapshot(snap *eventserver.SessionSnapshot, jobID strin
 		return events
 	}
 
-	// Step 1: flatten attempts into []Task and keep only those with profile
-	// data, a supported componentType, a node IP, and (when jobID is set) a
-	// matching job.
+	// Step 1: keep only attempts with profile data, a supported componentType,
+	// a node IP, and (when jobID is set) a matching job.
 	filteredTasks := make([]eventtypes.Task, 0)
-	for _, attempts := range snap.Tasks {
-		for _, task := range attempts {
-			if jobID != "" && task.JobID != jobID {
-				continue
-			}
-			if task.ProfileData == nil || len(task.ProfileData.Events) == 0 {
-				continue
-			}
-			// Ray's profiling payload only uses "worker" and "driver" (ray-project/ray profiling.py).
-			componentType := task.ProfileData.ComponentType
-			if componentType != "worker" && componentType != "driver" {
-				continue
-			}
-			if task.ProfileData.NodeIPAddress == "" {
-				continue
-			}
-			filteredTasks = append(filteredTasks, task)
+	for _, task := range snap.Tasks {
+		if jobID != "" && task.JobID != jobID {
+			continue
 		}
+		if task.ProfileData == nil || len(task.ProfileData.Events) == 0 {
+			continue
+		}
+		// Ray's profiling payload only uses "worker" and "driver" (ray-project/ray profiling.py).
+		componentType := task.ProfileData.ComponentType
+		if componentType != "worker" && componentType != "driver" {
+			continue
+		}
+		if task.ProfileData.NodeIPAddress == "" {
+			continue
+		}
+		filteredTasks = append(filteredTasks, task)
 	}
 
 	if len(filteredTasks) == 0 {

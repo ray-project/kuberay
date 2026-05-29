@@ -37,24 +37,10 @@ const (
 	ATTRIBUTE_SERVICE_NAME = "cluster_service_name"
 )
 
-// handleMissingSnapshot responds 503 when the session snapshot is not in the LRU
+// handleMissingSnapshot responds 503 when the session snapshot is not in the cache.
 func (s *ServerHandler) handleMissingSnapshot(resp *restful.Response) {
 	resp.WriteErrorString(http.StatusServiceUnavailable,
 		"session snapshot not in cache; reload via /enter_cluster")
-}
-
-// flattenTasks converts the snapshot's taskID -> []attempt map into a flat
-// []Task slice (one element per attempt) for filters and formatters.
-func flattenTasks(byID map[string][]eventtypes.Task) []eventtypes.Task {
-	total := 0
-	for _, attempts := range byID {
-		total += len(attempts)
-	}
-	out := make([]eventtypes.Task, 0, total)
-	for _, attempts := range byID {
-		out = append(out, attempts...)
-	}
-	return out
 }
 
 type ServiceInfo struct {
@@ -981,7 +967,7 @@ func (s *ServerHandler) buildFormattedClusterStatus(snap *eventserver.SessionSna
 	}
 
 	// Read tasks / actors / nodes from the snapshot instead of EventHandler.
-	tasks := flattenTasks(snap.Tasks)
+	tasks := snap.Tasks
 	actors := make([]eventtypes.Actor, 0, len(snap.Actors))
 	for _, a := range snap.Actors {
 		actors = append(actors, a)
@@ -1536,7 +1522,7 @@ func (s *ServerHandler) getTaskSummarize(req *restful.Request, resp *restful.Res
 		s.handleMissingSnapshot(resp)
 		return
 	}
-	tasks := flattenTasks(snap.Tasks)
+	tasks := snap.Tasks
 
 	// Calculate the number of tasks after GCS source truncation.
 	// Since we can't access the GCS and num_status_task_events_dropped, we use num_after_truncation to approximate the total number of tasks.
@@ -1708,7 +1694,7 @@ func (s *ServerHandler) getTasks(req *restful.Request, resp *restful.Response) {
 		s.handleMissingSnapshot(resp)
 		return
 	}
-	tasks := flattenTasks(snap.Tasks)
+	tasks := snap.Tasks
 
 	// Calculate the number of tasks after GCS source truncation.
 	// Since we can't access the GCS and num_status_task_events_dropped, we use num_after_truncation to approximate the total number of tasks.

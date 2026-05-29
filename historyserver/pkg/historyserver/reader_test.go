@@ -37,7 +37,7 @@ func TestResolveTaskLogFilename_SnapshotLookup(t *testing.T) {
 		sl := newTestSessionLoader(t, &fakeProcessor{}, 0)
 		sl.prime(clusterSessionKey, &eventserver.SessionSnapshot{
 			SessionKey: clusterSessionKey,
-			Tasks:      map[string][]eventtypes.Task{},
+			Tasks:      nil,
 		})
 		s := &ServerHandler{sessionLoader: sl}
 
@@ -54,9 +54,7 @@ func TestResolveTaskLogFilename_SnapshotLookup(t *testing.T) {
 		sl := newTestSessionLoader(t, &fakeProcessor{}, 0)
 		sl.prime(clusterSessionKey, &eventserver.SessionSnapshot{
 			SessionKey: clusterSessionKey,
-			Tasks: map[string][]eventtypes.Task{
-				"task1": {{TaskID: "task1", TaskAttempt: 0}},
-			},
+			Tasks: []eventtypes.Task{{TaskID: "task1", TaskAttempt: 0}},
 		})
 		s := &ServerHandler{sessionLoader: sl}
 
