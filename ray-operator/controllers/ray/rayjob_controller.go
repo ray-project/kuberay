@@ -1096,7 +1096,7 @@ func (r *RayJobReconciler) checkSubmitterAndUpdateStatusIfNeeded(ctx context.Con
 					rayJob.Status.Reason = rayv1.AppFailed
 				} else {
 					rayJob.Status.Reason = rayv1.SubmissionFailed
-					rayJob.Status.Message = fmt.Sprintf("Ray head pod submitter container %s terminated due to exceeding max restart count",
+					rayJob.Status.Message = fmt.Sprintf("Ray head pod submitter container %s terminated after exceeding the maximum restart count",
 						submitterContainerStatus.Name)
 				}
 			}
