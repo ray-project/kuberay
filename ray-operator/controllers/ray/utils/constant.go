@@ -407,9 +407,14 @@ const (
 	FailedToUpdateTargetCapacity    K8sEventType = "FailedToUpdateTargetCapacity"
 	FailedToCreateGateway           K8sEventType = "FailedToCreateGateway"
 	FailedToUpdateGateway           K8sEventType = "FailedToUpdateGateway"
+	FailedToDeleteGateway           K8sEventType = "FailedToDeleteGateway"
 	FailedToCreateHTTPRoute         K8sEventType = "FailedToCreateHTTPRoute"
 	FailedToUpdateHTTPRoute         K8sEventType = "FailedToUpdateHTTPRoute"
+	FailedToDeleteHTTPRoute         K8sEventType = "FailedToDeleteHTTPRoute"
 	FailedToDeleteService           K8sEventType = "FailedToDeleteService"
+	DeletedGateway                  K8sEventType = "DeletedGateway"
+	DeletedHTTPRoute                K8sEventType = "DeletedHTTPRoute"
+	DeletedService                  K8sEventType = "DeletedService"
 
 	// Generic Pod event list
 	DeletedPod                  K8sEventType = "DeletedPod"
