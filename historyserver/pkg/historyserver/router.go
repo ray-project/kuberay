@@ -35,19 +35,12 @@ const (
 	COOKIE_DASHBOARD_VERSION_KEY = "dashboard_version"
 
 	ATTRIBUTE_SERVICE_NAME = "cluster_service_name"
-
-	// retryAfterSecondsOnMissingSnapshot is the Retry-After value sent on
-	// 503 responses for sessions whose snapshot is not yet in the LRU.
-	// 600 matches the Ray Dashboard frontend's existing retry expectation.
-	retryAfterSecondsOnMissingSnapshot = "600"
 )
 
-// handleMissingSnapshot responds 503 + Retry-After when the cache does not
-// have a snapshot for the requested session.
+// handleMissingSnapshot responds 503 when the session snapshot is not in the LRU
 func (s *ServerHandler) handleMissingSnapshot(resp *restful.Response) {
-	resp.AddHeader("Retry-After", retryAfterSecondsOnMissingSnapshot)
 	resp.WriteErrorString(http.StatusServiceUnavailable,
-		"snapshot not yet generated, retry in 10 min")
+		"session snapshot not in cache; reload via /enter_cluster")
 }
 
 // flattenTasks converts the snapshot's taskID -> []attempt map into a flat
@@ -467,7 +460,6 @@ func (s *ServerHandler) getNodes(req *restful.Request, resp *restful.Response) {
 	// Parse query parameters.
 	viewParam := req.QueryParameter("view")
 
-	// Load snapshot from LRU; on miss, 503 + Retry-After.
 	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
 	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
 	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
@@ -605,7 +597,6 @@ func (s *ServerHandler) getNode(req *restful.Request, resp *restful.Response) {
 		return
 	}
 
-	// Load snapshot from LRU; on miss, 503 + Retry-After.
 	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
 	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
 	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
@@ -674,7 +665,6 @@ func (s *ServerHandler) getEvents(req *restful.Request, resp *restful.Response) 
 		return
 	}
 
-	// Load snapshot from LRU; on miss, 503 + Retry-After.
 	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
 	snap, ok := s.sessionLoader.GetSnapshot(clusterSessionKey)
 	if !ok {
@@ -768,7 +758,6 @@ func (s *ServerHandler) getJobs(req *restful.Request, resp *restful.Response) {
 		return
 	}
 
-	// Load snapshot from LRU; on miss, 503 + Retry-After.
 	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
 	snap, ok := s.sessionLoader.GetSnapshot(clusterSessionKey)
 	if !ok {
@@ -878,7 +867,6 @@ func (s *ServerHandler) getJob(req *restful.Request, resp *restful.Response) {
 
 	jobID := req.PathParameter("job_id")
 
-	// Load snapshot from LRU; on miss, 503 + Retry-After.
 	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
 	snap, ok := s.sessionLoader.GetSnapshot(clusterSessionKey)
 	if !ok {
@@ -919,7 +907,6 @@ func (s *ServerHandler) getClusterStatus(req *restful.Request, resp *restful.Res
 	var err error
 
 	if format == "1" {
-		// Load snapshot from LRU; on miss, 503 + Retry-After.
 		clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
 		snap, ok := s.sessionLoader.GetSnapshot(clusterSessionKey)
 		if !ok {
@@ -1211,7 +1198,6 @@ func (s *ServerHandler) getLogicalActors(req *restful.Request, resp *restful.Res
 		return
 	}
 
-	// Load snapshot from LRU; on miss, 503 + Retry-After.
 	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
 	snap, ok := s.sessionLoader.GetSnapshot(clusterSessionKey)
 	if !ok {
@@ -1296,7 +1282,6 @@ func (s *ServerHandler) getLogicalActor(req *restful.Request, resp *restful.Resp
 
 	actorID := req.PathParameter("single_actor")
 
-	// Load snapshot from LRU; on miss, 503 + Retry-After.
 	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
 	snap, ok := s.sessionLoader.GetSnapshot(clusterSessionKey)
 	if !ok {
@@ -1545,7 +1530,6 @@ func (s *ServerHandler) getTaskSummarize(req *restful.Request, resp *restful.Res
 	// Ref: https://github.com/ray-project/ray/blob/ad1b87448fec4db7ef11f1697f9bc02ae6a7ba09/python/ray/dashboard/state_aggregator.py#L569-L582
 	listAPIOptions.Limit = utils.RayMaxLimitFromAPIServer
 
-	// Load snapshot from LRU; on miss, 503 + Retry-After.
 	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
 	snap, ok := s.sessionLoader.GetSnapshot(clusterSessionKey)
 	if !ok {
@@ -1716,8 +1700,6 @@ func (s *ServerHandler) getTasks(req *restful.Request, resp *restful.Response) {
 		return
 	}
 
-	// Load snapshot from LRU; on miss, serve 503 + Retry-After so the
-	// frontend re-fires /enter_cluster.
 	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
 	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
 	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
