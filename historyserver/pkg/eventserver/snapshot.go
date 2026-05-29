@@ -27,16 +27,16 @@ type LogEventPayload struct {
 
 // BuildSnapshot builds a SessionSnapshot from the handler's per-session state.
 func (h *EventHandler) BuildSnapshot(session utils.ClusterInfo) *SessionSnapshot {
-	key := utils.BuildClusterSessionKey(session.Name, session.Namespace, session.SessionName)
+	clusterSessionKey := utils.BuildClusterSessionKey(session.Name, session.Namespace, session.SessionName)
 	return &SessionSnapshot{
-		SessionKey:  key,
+		SessionKey:  clusterSessionKey,
 		GeneratedAt: time.Now().UTC(),
-		Tasks:       groupTasksByID(h.getTasks(key)),
-		Actors:      h.getActorsMap(key),
-		Jobs:        h.getJobsMap(key),
-		Nodes:       h.getNodeMap(key),
+		Tasks:       groupTasksByID(h.getTasks(clusterSessionKey)),
+		Actors:      h.getActorsMap(clusterSessionKey),
+		Jobs:        h.getJobsMap(clusterSessionKey),
+		Nodes:       h.getNodeMap(clusterSessionKey),
 		LogEvents: LogEventPayload{
-			ByJobID: h.ClusterLogEventMap.GetRawEventsByJobID(key),
+			ByJobID: h.ClusterLogEventMap.GetRawEventsByJobID(clusterSessionKey),
 		},
 	}
 }

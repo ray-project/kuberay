@@ -470,8 +470,8 @@ func (s *ServerHandler) getNodes(req *restful.Request, resp *restful.Response) {
 	// Load snapshot from LRU; on miss, 503 + Retry-After.
 	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
 	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
-	key := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
-	snap, ok := s.sessionLoader.GetSnapshot(key)
+	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
+	snap, ok := s.sessionLoader.GetSnapshot(clusterSessionKey)
 	if !ok {
 		s.handleMissingSnapshot(resp)
 		return
@@ -608,8 +608,8 @@ func (s *ServerHandler) getNode(req *restful.Request, resp *restful.Response) {
 	// Load snapshot from LRU; on miss, 503 + Retry-After.
 	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
 	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
-	key := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
-	snap, ok := s.sessionLoader.GetSnapshot(key)
+	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
+	snap, ok := s.sessionLoader.GetSnapshot(clusterSessionKey)
 	if !ok {
 		s.handleMissingSnapshot(resp)
 		return
@@ -675,8 +675,8 @@ func (s *ServerHandler) getEvents(req *restful.Request, resp *restful.Response) 
 	}
 
 	// Load snapshot from LRU; on miss, 503 + Retry-After.
-	key := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
-	snap, ok := s.sessionLoader.GetSnapshot(key)
+	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
+	snap, ok := s.sessionLoader.GetSnapshot(clusterSessionKey)
 	if !ok {
 		s.handleMissingSnapshot(resp)
 		return
@@ -769,8 +769,8 @@ func (s *ServerHandler) getJobs(req *restful.Request, resp *restful.Response) {
 	}
 
 	// Load snapshot from LRU; on miss, 503 + Retry-After.
-	key := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
-	snap, ok := s.sessionLoader.GetSnapshot(key)
+	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
+	snap, ok := s.sessionLoader.GetSnapshot(clusterSessionKey)
 	if !ok {
 		s.handleMissingSnapshot(resp)
 		return
@@ -879,8 +879,8 @@ func (s *ServerHandler) getJob(req *restful.Request, resp *restful.Response) {
 	jobID := req.PathParameter("job_id")
 
 	// Load snapshot from LRU; on miss, 503 + Retry-After.
-	key := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
-	snap, ok := s.sessionLoader.GetSnapshot(key)
+	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
+	snap, ok := s.sessionLoader.GetSnapshot(clusterSessionKey)
 	if !ok {
 		s.handleMissingSnapshot(resp)
 		return
@@ -920,8 +920,8 @@ func (s *ServerHandler) getClusterStatus(req *restful.Request, resp *restful.Res
 
 	if format == "1" {
 		// Load snapshot from LRU; on miss, 503 + Retry-After.
-		key := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
-		snap, ok := s.sessionLoader.GetSnapshot(key)
+		clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
+		snap, ok := s.sessionLoader.GetSnapshot(clusterSessionKey)
 		if !ok {
 			s.handleMissingSnapshot(resp)
 			return
@@ -1212,8 +1212,8 @@ func (s *ServerHandler) getLogicalActors(req *restful.Request, resp *restful.Res
 	}
 
 	// Load snapshot from LRU; on miss, 503 + Retry-After.
-	key := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
-	snap, ok := s.sessionLoader.GetSnapshot(key)
+	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
+	snap, ok := s.sessionLoader.GetSnapshot(clusterSessionKey)
 	if !ok {
 		s.handleMissingSnapshot(resp)
 		return
@@ -1297,8 +1297,8 @@ func (s *ServerHandler) getLogicalActor(req *restful.Request, resp *restful.Resp
 	actorID := req.PathParameter("single_actor")
 
 	// Load snapshot from LRU; on miss, 503 + Retry-After.
-	key := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
-	snap, ok := s.sessionLoader.GetSnapshot(key)
+	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
+	snap, ok := s.sessionLoader.GetSnapshot(clusterSessionKey)
 	if !ok {
 		s.handleMissingSnapshot(resp)
 		return
@@ -1384,8 +1384,8 @@ func (s *ServerHandler) getNodeLogFile(req *restful.Request, resp *restful.Respo
 	}
 
 	// clusterNameID is the bare cluster name (cookie value) — see line 1336.
-	snapshotKey := utils.BuildClusterSessionKey(clusterNameID, clusterNamespace, sessionName)
-	content, err := s._getNodeLogFile(snapshotKey, clusterNameID+"_"+clusterNamespace, sessionName, options)
+	clusterSessionKey := utils.BuildClusterSessionKey(clusterNameID, clusterNamespace, sessionName)
+	content, err := s._getNodeLogFile(clusterSessionKey, clusterNameID+"_"+clusterNamespace, sessionName, options)
 	if err != nil {
 		var httpErr *utils.HTTPError
 		if errors.As(err, &httpErr) {
@@ -1546,8 +1546,8 @@ func (s *ServerHandler) getTaskSummarize(req *restful.Request, resp *restful.Res
 	listAPIOptions.Limit = utils.RayMaxLimitFromAPIServer
 
 	// Load snapshot from LRU; on miss, 503 + Retry-After.
-	key := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
-	snap, ok := s.sessionLoader.GetSnapshot(key)
+	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
+	snap, ok := s.sessionLoader.GetSnapshot(clusterSessionKey)
 	if !ok {
 		s.handleMissingSnapshot(resp)
 		return
@@ -1720,8 +1720,8 @@ func (s *ServerHandler) getTasks(req *restful.Request, resp *restful.Response) {
 	// frontend re-fires /enter_cluster.
 	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
 	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
-	key := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
-	snap, ok := s.sessionLoader.GetSnapshot(key)
+	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
+	snap, ok := s.sessionLoader.GetSnapshot(clusterSessionKey)
 	if !ok {
 		s.handleMissingSnapshot(resp)
 		return
@@ -2182,8 +2182,8 @@ func (s *ServerHandler) getTasksTimeline(req *restful.Request, resp *restful.Res
 	jobID := req.QueryParameter("job_id")
 	download := req.QueryParameter("download")
 
-	key := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
-	snap, ok := s.sessionLoader.GetSnapshot(key)
+	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
+	snap, ok := s.sessionLoader.GetSnapshot(clusterSessionKey)
 	if !ok {
 		s.handleMissingSnapshot(resp)
 		return

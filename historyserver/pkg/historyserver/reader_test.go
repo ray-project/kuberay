@@ -18,13 +18,13 @@ func TestResolveTaskLogFilename_SnapshotLookup(t *testing.T) {
 		sessionID        = "session_2026-04-22_10-00-00_000000_1"
 		clusterNameID    = clusterName + "_" + clusterNamespace
 	)
-	snapshotKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionID)
+	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionID)
 
 	t.Run("snapshot missing returns not-found error", func(t *testing.T) {
 		sl := newTestSessionLoader(t, &fakeProcessor{}, 0)
 		s := &ServerHandler{sessionLoader: sl}
 
-		_, _, err := s.resolveTaskLogFilename(snapshotKey, clusterNameID, sessionID, "task1", 0, "out")
+		_, _, err := s.resolveTaskLogFilename(clusterSessionKey, clusterNameID, sessionID, "task1", 0, "out")
 		if err == nil {
 			t.Fatalf("expected error, got nil")
 		}
@@ -35,13 +35,13 @@ func TestResolveTaskLogFilename_SnapshotLookup(t *testing.T) {
 
 	t.Run("task not in snapshot returns task-not-found", func(t *testing.T) {
 		sl := newTestSessionLoader(t, &fakeProcessor{}, 0)
-		sl.prime(snapshotKey, &eventserver.SessionSnapshot{
-			SessionKey: snapshotKey,
+		sl.prime(clusterSessionKey, &eventserver.SessionSnapshot{
+			SessionKey: clusterSessionKey,
 			Tasks:      map[string][]eventtypes.Task{},
 		})
 		s := &ServerHandler{sessionLoader: sl}
 
-		_, _, err := s.resolveTaskLogFilename(snapshotKey, clusterNameID, sessionID, "missing-task", 0, "out")
+		_, _, err := s.resolveTaskLogFilename(clusterSessionKey, clusterNameID, sessionID, "missing-task", 0, "out")
 		if err == nil {
 			t.Fatalf("expected error, got nil")
 		}
@@ -52,15 +52,15 @@ func TestResolveTaskLogFilename_SnapshotLookup(t *testing.T) {
 
 	t.Run("attempt mismatch returns attempt-not-found", func(t *testing.T) {
 		sl := newTestSessionLoader(t, &fakeProcessor{}, 0)
-		sl.prime(snapshotKey, &eventserver.SessionSnapshot{
-			SessionKey: snapshotKey,
+		sl.prime(clusterSessionKey, &eventserver.SessionSnapshot{
+			SessionKey: clusterSessionKey,
 			Tasks: map[string][]eventtypes.Task{
 				"task1": {{TaskID: "task1", TaskAttempt: 0}},
 			},
 		})
 		s := &ServerHandler{sessionLoader: sl}
 
-		_, _, err := s.resolveTaskLogFilename(snapshotKey, clusterNameID, sessionID, "task1", 99, "out")
+		_, _, err := s.resolveTaskLogFilename(clusterSessionKey, clusterNameID, sessionID, "task1", 99, "out")
 		if err == nil {
 			t.Fatalf("expected error, got nil")
 		}
@@ -79,13 +79,13 @@ func TestResolveActorLogFilename_SnapshotLookup(t *testing.T) {
 		sessionID        = "session_2026-04-22_10-00-00_000000_1"
 		clusterNameID    = clusterName + "_" + clusterNamespace
 	)
-	snapshotKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionID)
+	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionID)
 
 	t.Run("snapshot missing returns not-found error", func(t *testing.T) {
 		sl := newTestSessionLoader(t, &fakeProcessor{}, 0)
 		s := &ServerHandler{sessionLoader: sl}
 
-		_, _, err := s.resolveActorLogFilename(snapshotKey, clusterNameID, sessionID, "actor1", "out")
+		_, _, err := s.resolveActorLogFilename(clusterSessionKey, clusterNameID, sessionID, "actor1", "out")
 		if err == nil {
 			t.Fatalf("expected error, got nil")
 		}
@@ -96,13 +96,13 @@ func TestResolveActorLogFilename_SnapshotLookup(t *testing.T) {
 
 	t.Run("actor not in snapshot returns actor-not-found", func(t *testing.T) {
 		sl := newTestSessionLoader(t, &fakeProcessor{}, 0)
-		sl.prime(snapshotKey, &eventserver.SessionSnapshot{
-			SessionKey: snapshotKey,
+		sl.prime(clusterSessionKey, &eventserver.SessionSnapshot{
+			SessionKey: clusterSessionKey,
 			Actors:     map[string]eventtypes.Actor{},
 		})
 		s := &ServerHandler{sessionLoader: sl}
 
-		_, _, err := s.resolveActorLogFilename(snapshotKey, clusterNameID, sessionID, "missing-actor", "out")
+		_, _, err := s.resolveActorLogFilename(clusterSessionKey, clusterNameID, sessionID, "missing-actor", "out")
 		if err == nil {
 			t.Fatalf("expected error, got nil")
 		}

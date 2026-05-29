@@ -50,8 +50,8 @@ func NewSessionLoader(p processor, serverCtx context.Context, processTimeout tim
 }
 
 // GetSnapshot returns the cached snapshot for a dead session.
-func (s *SessionLoader) GetSnapshot(key string) (*eventserver.SessionSnapshot, bool) {
-	return s.cache.Get(key)
+func (s *SessionLoader) GetSnapshot(clusterSessionKey string) (*eventserver.SessionSnapshot, bool) {
+	return s.cache.Get(clusterSessionKey)
 }
 
 // LoadSession blocks until a dead session is processed and cached or an
@@ -62,18 +62,18 @@ func (s *SessionLoader) LoadSession(ctx context.Context, info utils.ClusterInfo)
 		return false, err
 	}
 
-	key := utils.BuildClusterSessionKey(info.Name, info.Namespace, info.SessionName)
-	if _, ok := s.cache.Get(key); ok {
+	clusterSessionKey := utils.BuildClusterSessionKey(info.Name, info.Namespace, info.SessionName)
+	if _, ok := s.cache.Get(clusterSessionKey); ok {
 		return false, nil
 	}
 
 	// TODO(jiangjiawei1103): No graceful drain on shutdown. When the pod receives
 	// SIGTERM, serverCtx is cancelled immediately, causing any in-flight cold-load
 	// requests to return ctx.Err() and clients to receive HTTP 500.
-	ch := s.sf.DoChan(key, func() (interface{}, error) {
+	ch := s.sf.DoChan(clusterSessionKey, func() (interface{}, error) {
 		loadCtx, cancel := context.WithTimeout(s.serverCtx, s.processTimeout)
 		defer cancel()
-		return s.doLoadSession(loadCtx, info, key)
+		return s.doLoadSession(loadCtx, info, clusterSessionKey)
 	})
 
 	select {
@@ -81,7 +81,7 @@ func (s *SessionLoader) LoadSession(ctx context.Context, info utils.ClusterInfo)
 		// Release the caller; the singleflight winner keeps running and its
 		// result will be cached for the next caller for this session.
 		//
-		// Do NOT sf.Forget(key) here: a racing new call would kick off a second
+		// Do NOT sf.Forget(clusterSessionKey) here: a racing new call would kick off a second
 		// processor execution in parallel with the still-running one.
 		return false, ctx.Err()
 	case result := <-ch:
@@ -95,8 +95,8 @@ func (s *SessionLoader) LoadSession(ctx context.Context, info utils.ClusterInfo)
 
 // doLoadSession is the singleflight body invoked by LoadSession.
 // live is true when the cluster is still alive.
-func (s *SessionLoader) doLoadSession(ctx context.Context, info utils.ClusterInfo, key string) (live bool, err error) {
-	if _, ok := s.cache.Get(key); ok {
+func (s *SessionLoader) doLoadSession(ctx context.Context, info utils.ClusterInfo, clusterSessionKey string) (live bool, err error) {
+	if _, ok := s.cache.Get(clusterSessionKey); ok {
 		return false, nil
 	}
 
@@ -110,7 +110,7 @@ func (s *SessionLoader) doLoadSession(ctx context.Context, info utils.ClusterInf
 		if snap == nil {
 			return false, fmt.Errorf("unexpected nil snapshot for session status %v", status)
 		}
-		s.prime(key, snap)
+		s.prime(clusterSessionKey, snap)
 		return false, nil
 
 	case SessionStatusLive:
@@ -124,6 +124,6 @@ func (s *SessionLoader) doLoadSession(ctx context.Context, info utils.ClusterInf
 }
 
 // prime inserts a dead-session snapshot into the cache.
-func (s *SessionLoader) prime(key string, snap *eventserver.SessionSnapshot) {
-	s.cache.Add(key, snap)
+func (s *SessionLoader) prime(clusterSessionKey string, snap *eventserver.SessionSnapshot) {
+	s.cache.Add(clusterSessionKey, snap)
 }

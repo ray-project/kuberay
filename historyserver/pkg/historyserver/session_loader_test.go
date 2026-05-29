@@ -37,7 +37,11 @@ func newTestSessionLoader(t *testing.T, p processor, cacheSize int) *SessionLoad
 	if cacheSize <= 0 {
 		cacheSize = DefaultSessionCacheSize
 	}
-	return NewSessionLoader(p, context.Background(), DefaultSessionProcessTimeout, cacheSize)
+	sl, err := NewSessionLoader(p, context.Background(), DefaultSessionProcessTimeout, cacheSize)
+	if err != nil {
+		t.Fatalf("NewSessionLoader: %v", err)
+	}
+	return sl
 }
 
 func testEnterClusterInfo() utils.ClusterInfo {
@@ -49,9 +53,9 @@ func testEnterClusterInfo() utils.ClusterInfo {
 }
 
 // snapWith returns a minimal snapshot pointer for cache seeding.
-func snapWith(sessionKey string) *eventserver.SessionSnapshot {
+func snapWith(clusterSessionKey string) *eventserver.SessionSnapshot {
 	return &eventserver.SessionSnapshot{
-		SessionKey:  sessionKey,
+		SessionKey:  clusterSessionKey,
 		GeneratedAt: time.Date(2026, 4, 22, 12, 0, 0, 0, time.UTC),
 	}
 }
@@ -230,16 +234,16 @@ func TestLoadSession_FastPath_SkipsSingleflight(t *testing.T) {
 // prime, then two Gets each return the exact pointer that was Primed.
 func TestGetSnapshot_PrimeThenGet(t *testing.T) {
 	sl := newTestSessionLoader(t, &fakeProcessor{}, 0)
-	key := utils.BuildClusterSessionKey("cluster-a", "default", "session-1")
+	clusterSessionKey := utils.BuildClusterSessionKey("cluster-a", "default", "session-1")
 
 	primed := snapWith("key-1")
-	sl.prime(key, primed)
+	sl.prime(clusterSessionKey, primed)
 
-	first, ok := sl.GetSnapshot(key)
+	first, ok := sl.GetSnapshot(clusterSessionKey)
 	if !ok {
 		t.Fatal("first GetSnapshot: ok=false")
 	}
-	second, ok := sl.GetSnapshot(key)
+	second, ok := sl.GetSnapshot(clusterSessionKey)
 	if !ok {
 		t.Fatal("second GetSnapshot: ok=false")
 	}
@@ -252,9 +256,9 @@ func TestGetSnapshot_PrimeThenGet(t *testing.T) {
 // the original `_, ok := loaded[key]` semantics.
 func TestGetSnapshot_ColdMiss(t *testing.T) {
 	sl := newTestSessionLoader(t, &fakeProcessor{}, 0)
-	key := utils.BuildClusterSessionKey("cluster-c", "default", "session-3")
+	clusterSessionKey := utils.BuildClusterSessionKey("cluster-c", "default", "session-3")
 
-	snap, ok := sl.GetSnapshot(key)
+	snap, ok := sl.GetSnapshot(clusterSessionKey)
 	if ok || snap != nil {
 		t.Fatalf("expected (nil, false) on cold miss, got (%v, %v)", snap, ok)
 	}
@@ -265,16 +269,16 @@ func TestGetSnapshot_ColdMiss(t *testing.T) {
 // fresh-build Primes from taking effect.
 func TestGetSnapshot_MissDoesNotPersist(t *testing.T) {
 	sl := newTestSessionLoader(t, &fakeProcessor{}, 0)
-	key := utils.BuildClusterSessionKey("cluster-c", "default", "session-3")
+	clusterSessionKey := utils.BuildClusterSessionKey("cluster-c", "default", "session-3")
 
-	if _, ok := sl.GetSnapshot(key); ok {
+	if _, ok := sl.GetSnapshot(clusterSessionKey); ok {
 		t.Fatal("expected miss before prime")
 	}
 
 	primed := snapWith("key-3")
-	sl.prime(key, primed)
+	sl.prime(clusterSessionKey, primed)
 
-	got, ok := sl.GetSnapshot(key)
+	got, ok := sl.GetSnapshot(clusterSessionKey)
 	if !ok || got != primed {
 		t.Fatalf("Get after prime: got=(%p, %v); want=(%p, true) — negative cache leaked", got, ok, primed)
 	}
@@ -283,12 +287,12 @@ func TestGetSnapshot_MissDoesNotPersist(t *testing.T) {
 // TestGetSnapshot_PrimeOverwrites verifies that prime replaces any prior entry.
 func TestGetSnapshot_PrimeOverwrites(t *testing.T) {
 	sl := newTestSessionLoader(t, &fakeProcessor{}, 0)
-	key := utils.BuildClusterSessionKey("cluster-overwrite", "default", "session-overwrite")
+	clusterSessionKey := utils.BuildClusterSessionKey("cluster-overwrite", "default", "session-overwrite")
 
-	sl.prime(key, snapWith("stale"))
-	sl.prime(key, snapWith("fresh"))
+	sl.prime(clusterSessionKey, snapWith("stale"))
+	sl.prime(clusterSessionKey, snapWith("fresh"))
 
-	got, ok := sl.GetSnapshot(key)
+	got, ok := sl.GetSnapshot(clusterSessionKey)
 	if !ok {
 		t.Fatal("Get: ok=false")
 	}
@@ -326,10 +330,10 @@ func TestGetSnapshot_LRUEviction(t *testing.T) {
 // final state has the snapshot present and no goroutine panicked.
 func TestGetSnapshot_ConcurrentPrimeGet(t *testing.T) {
 	sl := newTestSessionLoader(t, &fakeProcessor{}, 0)
-	key := utils.BuildClusterSessionKey("cluster-e", "default", "session-hot")
+	clusterSessionKey := utils.BuildClusterSessionKey("cluster-e", "default", "session-hot")
 
 	primed := snapWith("hot")
-	sl.prime(key, primed)
+	sl.prime(clusterSessionKey, primed)
 
 	const n = 10
 	var wg sync.WaitGroup
@@ -337,8 +341,8 @@ func TestGetSnapshot_ConcurrentPrimeGet(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			sl.prime(key, primed)
-			got, ok := sl.GetSnapshot(key)
+			sl.prime(clusterSessionKey, primed)
+			got, ok := sl.GetSnapshot(clusterSessionKey)
 			if !ok || got != primed {
 				t.Errorf("concurrent Get: got=(%p, %v) want=(%p, true)", got, ok, primed)
 			}
