@@ -305,20 +305,12 @@ env_vars:
 	})
 
 	test.T().Run("RayJob Sidecar Mode should restart submitter container on non-zero exit", func(t *testing.T) {
-		k8sVersion, err := utils.GetKubernetesVersion()
-		g.Expect(err).NotTo(HaveOccurred())
-
-		isAtLeast, err := utils.IsK8sVersionAtLeast(k8sVersion, 1, 35, 0)
-		g.Expect(err).NotTo(HaveOccurred())
-		if !isAtLeast {
-			t.Skip("k8s version < 1.35, SidecarSubmitterRestart not supported")
-		}
-
 		// Check if the SidecarSubmitterRestart feature gate is enabled by inspecting the operator's args directly, rather than inferring from the container spec.
+		// The k8s version >= 1.35 is already verified at operator startup (see main.go), so we only need to check the feature gate here.
 		var sidecarSubmitterRestartEnabled bool
 		// Search all namespaces since the operator may be deployed in any namespace
 		operatorDeploymentList, err := test.Client().Core().AppsV1().Deployments("").List(t.Context(), metav1.ListOptions{
-			LabelSelector: "app.kubernetes.io/name=kuberay,app.kubernetes.io/component=kuberay-operator",
+			LabelSelector: "app.kubernetes.io/component=kuberay-operator",
 		})
 		g.Expect(err).NotTo(HaveOccurred())
 		// Assuming there should only be one kuberay-operator in the cluster
