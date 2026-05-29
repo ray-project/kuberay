@@ -318,7 +318,7 @@ env_vars:
 		var sidecarSubmitterRestartEnabled bool
 		// Search all namespaces since the operator may be deployed in any namespace
 		operatorDeploymentList, err := test.Client().Core().AppsV1().Deployments("").List(t.Context(), metav1.ListOptions{
-			LabelSelector: "app.kubernetes.io/name=kuberay-operator",
+			LabelSelector: "app.kubernetes.io/name=kuberay,app.kubernetes.io/component=kuberay-operator",
 		})
 		g.Expect(err).NotTo(HaveOccurred())
 		// Assuming there should only be one kuberay-operator in the cluster
