@@ -215,7 +215,7 @@ func TestListFiles(t *testing.T) {
 
 func TestList(t *testing.T) {
 	// RootDir is "ray_historyserver"
-	// Path format: {RootDir}/metadir/{ClusterName}_{Namespace}/{SessionName}
+	// Path format: {RootDir}/cluster-metadata/{ClusterKey}/{SessionName}
 	ts := time.Now().UTC()
 	sessionID := "session_" + ts.Format("2006-01-02_15-04-05_000000")
 
@@ -223,14 +223,28 @@ func TestList(t *testing.T) {
 		{
 			ObjectAttrs: fakestorage.ObjectAttrs{
 				BucketName: "test-bucket",
-				Name:       "ray_historyserver/metadir/mycluster1_default/" + sessionID,
+				Name:       "ray_historyserver/cluster-metadata/raycluster/defaultns_mycluster1/" + sessionID,
 			},
 			Content: []byte(""),
 		},
 		{
 			ObjectAttrs: fakestorage.ObjectAttrs{
 				BucketName: "test-bucket",
-				Name:       "ray_historyserver/metadir/mycluster2_testns/" + sessionID,
+				Name:       "ray_historyserver/cluster-metadata/raycluster/testns_mycluster2/" + sessionID,
+			},
+			Content: []byte(""),
+		},
+		{
+			ObjectAttrs: fakestorage.ObjectAttrs{
+				BucketName: "test-bucket",
+				Name:       "ray_historyserver/cluster-metadata/rayjob/defaultns_myrayjob_mycluster3/" + sessionID,
+			},
+			Content: []byte(""),
+		},
+		{
+			ObjectAttrs: fakestorage.ObjectAttrs{
+				BucketName: "test-bucket",
+				Name:       "ray_historyserver/cluster-metadata/rayservice/defaultns_myraysvc_mycluster4/" + sessionID,
 			},
 			Content: []byte(""),
 		},
@@ -239,8 +253,10 @@ func TestList(t *testing.T) {
 	handler := createRayLogsHandler(client, bucketName)
 
 	expected := []utils.ClusterInfo{
-		{Name: "mycluster1", Namespace: "default", SessionName: sessionID, CreateTimeStamp: ts.Unix(), CreateTime: ts.UTC().Format("2006-01-02T15:04:05Z")},
+		{Name: "mycluster1", Namespace: "defaultns", SessionName: sessionID, CreateTimeStamp: ts.Unix(), CreateTime: ts.UTC().Format("2006-01-02T15:04:05Z")},
 		{Name: "mycluster2", Namespace: "testns", SessionName: sessionID, CreateTimeStamp: ts.Unix(), CreateTime: ts.UTC().Format("2006-01-02T15:04:05Z")},
+		{Name: "mycluster3", OwnerKind: "rayjob", OwnerName: "myrayjob", Namespace: "defaultns", SessionName: sessionID, CreateTimeStamp: ts.Unix(), CreateTime: ts.UTC().Format("2006-01-02T15:04:05Z")},
+		{Name: "mycluster4", OwnerKind: "rayservice", OwnerName: "myraysvc", Namespace: "defaultns", SessionName: sessionID, CreateTimeStamp: ts.Unix(), CreateTime: ts.UTC().Format("2006-01-02T15:04:05Z")},
 	}
 
 	result := handler.List()

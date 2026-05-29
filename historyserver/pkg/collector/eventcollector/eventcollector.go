@@ -452,12 +452,9 @@ func (ec *EventCollector) flushNodeEventsForHour(hourKey string, events []Event)
 	}
 
 	// Build node event storage path using event's nodeID
-	basePath := path.Join(
-		ec.root,
-		fmt.Sprintf("%s_%s", ec.clusterName, ec.clusterNamespace),
-		sessionNameToUse,
-		"node_events",
-		fmt.Sprintf("%s-%s", nodeIDToUse, hourKey))
+	sessionPath := path.Clean(path.Join(ec.root, utils.AppendRayClusterNameNamespace(ec.clusterName, ec.clusterNamespace), sessionNameToUse))
+
+	basePath := path.Join(sessionPath, "node_events", fmt.Sprintf("%s-%s", nodeIDToUse, hourKey))
 
 	// Ensure storage directory exists
 	dir := path.Dir(basePath)
@@ -502,13 +499,9 @@ func (ec *EventCollector) flushJobEventsForHour(jobID, hourKey string, events []
 	}
 
 	// Build job event storage path using event's nodeID
-	basePath := path.Join(
-		ec.root,
-		fmt.Sprintf("%s_%s", ec.clusterName, ec.clusterNamespace),
-		sessionNameToUse,
-		"job_events",
-		jobID,
-		fmt.Sprintf("%s-%s", nodeIDToUse, hourKey))
+	sessionPath := path.Clean(path.Join(ec.root, utils.AppendRayClusterNameNamespace(ec.clusterName, ec.clusterNamespace), sessionNameToUse))
+
+	basePath := path.Join(sessionPath, "job_events", jobID, fmt.Sprintf("%s-%s", nodeIDToUse, hourKey))
 
 	// Ensure storage directory exists
 	dir := path.Dir(basePath)

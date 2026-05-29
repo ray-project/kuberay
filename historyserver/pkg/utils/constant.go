@@ -5,7 +5,13 @@ import (
 	"path/filepath"
 )
 
-const defaultTmpRayRoot = "/tmp/ray"
+const (
+	defaultTmpRayRoot = "/tmp/ray"
+
+	RAYJOB_OBJECT_DIR = "rayjob"
+	RAYSERVICE_OBJECT_DIR = "rayservice"
+	RAYCLUSTER_OBJECT_DIR = "raycluster"
+)
 
 func GetTmpRayRoot() string {
 	if tmpRoot := os.Getenv("RAY_TMP_ROOT"); tmpRoot != "" {
