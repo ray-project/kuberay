@@ -1192,7 +1192,7 @@ func checkIsRestartCountExceeded(headPod *corev1.Pod) (bool, *corev1.ContainerSt
 				if containerStatus.State.Terminated != nil && containerStatus.State.Terminated.ExitCode == 0 {
 					break
 				}
-				// TODO (justinyeh1995) the restart limit is hardcoded to 2. In a follow-up pr, we should algin the restart count with Spec.SubmitterConfig.BackoffLimit
+				// TODO (justinyeh1995) the restart limit is hardcoded to 2. In a follow-up pr, we should align the restart count with Spec.SubmitterConfig.BackoffLimit
 				return containerStatus.RestartCount >= 2, &containerStatus
 			}
 			break
