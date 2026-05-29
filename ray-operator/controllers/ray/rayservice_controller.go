@@ -504,7 +504,7 @@ func (r *RayServiceReconciler) deleteRayServiceOwnedResources(ctx context.Contex
 			"Deleted the Service %s/%s during suspend", svc.Namespace, svc.Name)
 	}
 
-	if features.Enabled(features.RayServiceIncrementalUpgrade) {
+	if utils.IsIncrementalUpgradeEnabled(&rayServiceInstance.Spec) {
 		gateway := &gwv1.Gateway{}
 		if err := r.Get(ctx, common.RayServiceGatewayNamespacedName(rayServiceInstance), gateway); err == nil {
 			allDeleted = false
