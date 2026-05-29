@@ -18,6 +18,8 @@ import (
 )
 
 func main() {
+	logrus.SetReportCaller(true)
+
 	runtimeClassName := ""
 	rayRootDir := ""
 	kubeconfigs := ""

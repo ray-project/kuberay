@@ -24,6 +24,8 @@ import (
 const runtimeClassConfigPath = "/var/collector-config/data"
 
 func main() {
+	logrus.SetReportCaller(true)
+
 	role := ""
 	runtimeClassName := ""
 	rayClusterName := ""
