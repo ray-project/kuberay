@@ -518,7 +518,7 @@ func (r *RayServiceReconciler) deleteRayServiceOwnedResources(ctx context.Contex
 				r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeNormal, string(utils.DeletedGateway),
 					"Deleted the Gateway %s/%s during suspend", gateway.Namespace, gateway.Name)
 			}
-		} else if !errors.IsNotFound(err) && !meta.IsNoMatchError(err) {
+		} else if !errors.IsNotFound(err) {
 			return false, err
 		}
 
@@ -535,7 +535,7 @@ func (r *RayServiceReconciler) deleteRayServiceOwnedResources(ctx context.Contex
 				r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeNormal, string(utils.DeletedHTTPRoute),
 					"Deleted the HTTPRoute %s/%s during suspend", httpRoute.Namespace, httpRoute.Name)
 			}
-		} else if !errors.IsNotFound(err) && !meta.IsNoMatchError(err) {
+		} else if !errors.IsNotFound(err) {
 			return false, err
 		}
 	}
