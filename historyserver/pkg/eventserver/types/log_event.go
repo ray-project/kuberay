@@ -333,12 +333,8 @@ func (s *LogEventStore) GetEventsByJobID(clusterSessionKey, jobID string) []map[
 	return m.GetEventsByJobID(jobID)
 }
 
-// GetRawEventsByJobID returns the LogEvents for a cluster session grouped by
-// job_id, in their raw (non-camelCased) form.
-//
-// Beta snapshot pipeline needs the original struct representation so it can
-// be re-serialized as JSON and later re-hydrated into typed objects.
-func (s *LogEventStore) GetRawEventsByJobID(clusterSessionKey string) map[string][]LogEvent {
+// GetLogEventsByJobID returns a deep copy of stored log events grouped by job ID.
+func (s *LogEventStore) GetLogEventsByJobID(clusterSessionKey string) map[string][]LogEvent {
 	s.mu.RLock()
 	m, ok := s.sessions[clusterSessionKey]
 	s.mu.RUnlock()

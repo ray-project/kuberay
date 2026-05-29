@@ -669,13 +669,9 @@ func (s *ServerHandler) getEvents(req *restful.Request, resp *restful.Response) 
 	var response map[string]any
 
 	if jobIDExists {
-		// Return events for a specific job. snap.LogEvents.ByJobID stores raw
-		// LogEvent structs; convert to camelCase API format via ToAPIResponse
-		// to match Ray Dashboard's expected shape.
 		events := make([]map[string]any, 0)
-		for _, e := range snap.LogEvents.ByJobID[jobID] {
-			ev := e // copy to avoid taking the address of the loop variable
-			events = append(events, ev.ToAPIResponse())
+		for _, e := range snap.LogEventsByJobID[jobID] {
+			events = append(events, e.ToAPIResponse())
 		}
 		response = map[string]any{
 			"result": true,
@@ -686,13 +682,11 @@ func (s *ServerHandler) getEvents(req *restful.Request, resp *restful.Response) 
 			},
 		}
 	} else {
-		// Return all events grouped by job_id.
-		all := make(map[string][]map[string]any, len(snap.LogEvents.ByJobID))
-		for jID, evs := range snap.LogEvents.ByJobID {
+		all := make(map[string][]map[string]any, len(snap.LogEventsByJobID))
+		for jID, evs := range snap.LogEventsByJobID {
 			list := make([]map[string]any, 0, len(evs))
 			for _, e := range evs {
-				ev := e
-				list = append(list, ev.ToAPIResponse())
+				list = append(list, e.ToAPIResponse())
 			}
 			all[jID] = list
 		}

@@ -53,11 +53,9 @@ func TestFullRoundtrip(t *testing.T) {
 		Nodes: map[string]types.Node{
 			"node-1": {NodeID: "node-1", NodeIPAddress: "10.0.0.1"},
 		},
-		LogEvents: LogEventPayload{
-			ByJobID: map[string][]types.LogEvent{
-				"job-1": {
-					{EventID: "evt-1", Message: "hello", Severity: "INFO"},
-				},
+		LogEventsByJobID: map[string][]types.LogEvent{
+			"job-1": {
+				{EventID: "evt-1", Message: "hello", Severity: "INFO"},
 			},
 		},
 	}

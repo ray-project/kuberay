@@ -634,6 +634,11 @@ func (h *EventHandler) getJobsMap(clusterName string) map[string]types.Job {
 	return jobs
 }
 
+// getLogEventsByJobID returns log events grouped by job ID.
+func (h *EventHandler) getLogEventsByJobID(clusterSessionKey string) map[string][]types.LogEvent {
+	return h.ClusterLogEventMap.GetLogEventsByJobID(clusterSessionKey)
+}
+
 func (h *EventHandler) GetJobByJobID(clusterName, jobID string) (types.Job, bool) {
 	h.ClusterJobMap.RLock()
 	defer h.ClusterJobMap.RUnlock()
