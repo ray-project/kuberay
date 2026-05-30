@@ -12,6 +12,7 @@ import (
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 
 	"github.com/ray-project/kuberay/historyserver/pkg/eventserver"
+	"github.com/ray-project/kuberay/historyserver/pkg/storage"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
@@ -40,14 +41,14 @@ const (
 // SessionProcessor processes a single session end-to-end: dead detection and
 // event parsing. It is stateless across sessions and safe for concurrent use.
 type SessionProcessor struct {
-	handler   *eventserver.EventHandler
+	reader    storage.StorageReader
 	k8sClient client.Client
 }
 
 // NewSessionProcessor constructs a SessionProcessor.
-func NewSessionProcessor(handler *eventserver.EventHandler, k8sClient client.Client) *SessionProcessor {
+func NewSessionProcessor(reader storage.StorageReader, k8sClient client.Client) *SessionProcessor {
 	return &SessionProcessor{
-		handler:   handler,
+		reader:    reader,
 		k8sClient: k8sClient,
 	}
 }
@@ -65,14 +66,16 @@ func (p *SessionProcessor) ProcessSession(ctx context.Context, session utils.Clu
 		return SessionStatusLive, nil, nil
 	}
 
-	if err := p.handler.ProcessSingleSession(ctx, session); err != nil {
+	// Use per-call EventHandler so ingestion maps become GC-eligible once the snapshot is built.
+	h := eventserver.NewEventHandler(p.reader)
+	if err := h.ProcessSingleSession(ctx, session); err != nil {
 		if isCtxCanceled(err) {
 			return SessionStatusCanceled, nil, err
 		}
 		return SessionStatusEventsErr, nil, fmt.Errorf("process events for %s/%s: %w", session.Namespace, session.Name, err)
 	}
 
-	return SessionStatusProcessed, p.handler.BuildSnapshot(session), nil
+	return SessionStatusProcessed, h.BuildSnapshot(session), nil
 }
 
 // isDead determines if the RayCluster CR is absent.

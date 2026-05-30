@@ -13,7 +13,6 @@ import (
 
 	"github.com/ray-project/kuberay/historyserver/pkg/collector"
 	"github.com/ray-project/kuberay/historyserver/pkg/collector/types"
-	"github.com/ray-project/kuberay/historyserver/pkg/eventserver"
 	"github.com/ray-project/kuberay/historyserver/pkg/historyserver"
 )
 
@@ -74,15 +73,13 @@ func main() {
 		logrus.Fatalf("Failed to create reader for runtime class name %s: %v", runtimeClassName, err)
 	}
 
-	eventHandler := eventserver.NewEventHandler(reader)
-
 	serverCtx, serverCancel := signal.NotifyContext(
 		context.Background(),
 		syscall.SIGINT, syscall.SIGTERM,
 	)
 	defer serverCancel()
 
-	processor := historyserver.NewSessionProcessor(eventHandler, cliMgr.Client())
+	processor := historyserver.NewSessionProcessor(reader, cliMgr.Client())
 	sessionLoader, err := historyserver.NewSessionLoader(processor, serverCtx, sessionProcessTimeout, sessionCacheSize)
 	if err != nil {
 		logrus.Fatalf("Failed to create session loader: %v", err)
@@ -97,7 +94,7 @@ func main() {
 		close(stop)
 	}()
 
-	handler, err := historyserver.NewServerHandler(&globalConfig, dashboardDir, reader, cliMgr, eventHandler, sessionLoader, useKubernetesProxy)
+	handler, err := historyserver.NewServerHandler(&globalConfig, dashboardDir, reader, cliMgr, sessionLoader, useKubernetesProxy)
 	if err != nil {
 		logrus.Fatalf("Failed to create server handler: %v", err)
 	}
