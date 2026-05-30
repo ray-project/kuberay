@@ -56,9 +56,9 @@ func (s *SessionLoader) GetSnapshot(clusterSessionKey string) (*eventserver.Sess
 	if !ok {
 		return nil, false
 	}
-	copy := *cached
-	copy.Tasks = append([]eventtypes.Task(nil), cached.Tasks...)
-	return &copy, true
+	out := *cached
+	out.Tasks = append([]eventtypes.Task(nil), cached.Tasks...)
+	return &out, true
 }
 
 // LoadSession blocks until a dead session is processed and cached or an

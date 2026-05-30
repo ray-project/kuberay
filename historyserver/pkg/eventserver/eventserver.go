@@ -566,7 +566,7 @@ func (h *EventHandler) getJobsMap(clusterName string) map[string]types.Job {
 	return jobs
 }
 
-// getLogEventsByJobID returns log events grouped by job ID.
+// getLogEventsByJobID returns a thread-safe deep copy of log events grouped by job ID.
 func (h *EventHandler) getLogEventsByJobID(clusterSessionKey string) map[string][]types.LogEvent {
 	return h.ClusterLogEventMap.GetLogEventsByJobID(clusterSessionKey)
 }

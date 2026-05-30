@@ -52,6 +52,38 @@ func (e *LogEvent) GetJobID() string {
 	return "global"
 }
 
+func (e LogEvent) DeepCopy() LogEvent {
+	cp := e
+	cp.CustomFields = cloneMapAny(e.CustomFields)
+	return cp
+}
+
+func cloneMapAny(m map[string]any) map[string]any {
+	if m == nil {
+		return nil
+	}
+	out := make(map[string]any, len(m))
+	for k, v := range m {
+		out[k] = cloneAny(v)
+	}
+	return out
+}
+
+func cloneAny(v any) any {
+	switch typed := v.(type) {
+	case map[string]any:
+		return cloneMapAny(typed)
+	case []any:
+		out := make([]any, len(typed))
+		for i, item := range typed {
+			out[i] = cloneAny(item)
+		}
+		return out
+	default:
+		return v
+	}
+}
+
 // RestoreNewline restores escaped newlines in the message field.
 // This matches Ray Dashboard's _restore_newline() function in event_utils.py.
 func (e *LogEvent) RestoreNewline() {
@@ -350,7 +382,7 @@ func (s *LogEventStore) GetLogEventsByJobID(clusterSessionKey string) map[string
 	for jobID, eventMap := range m.events {
 		events := make([]LogEvent, 0, len(eventMap))
 		for _, e := range eventMap {
-			events = append(events, *e)
+			events = append(events, e.DeepCopy())
 		}
 		sort.Slice(events, func(i, j int) bool {
 			return timestampLess(events[i].Timestamp, events[j].Timestamp)
