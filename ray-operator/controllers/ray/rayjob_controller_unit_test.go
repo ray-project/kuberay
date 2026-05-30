@@ -331,7 +331,7 @@ func TestCheckIsRestartCountExceeded(t *testing.T) {
 				},
 			}
 
-			shouldUpdate, _ := checkIsRestartCountExceeded(headPod)
+			shouldUpdate, _ := checkIsRestartCountExceeded(headPod, 2)
 			assert.Equal(t, tt.expectedShouldUpdate, shouldUpdate)
 		})
 	}

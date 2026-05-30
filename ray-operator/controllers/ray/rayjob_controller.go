@@ -1086,7 +1086,11 @@ func (r *RayJobReconciler) checkSubmitterAndUpdateStatusIfNeeded(ctx context.Con
 				}
 			}
 		} else {
-			shouldUpdate, submitterContainerStatus = checkIsRestartCountExceeded(headPod)
+			submitterBackoffLimit := int32(2)
+			if rayJob.Spec.SubmitterConfig != nil && rayJob.Spec.SubmitterConfig.BackoffLimit != nil {
+				submitterBackoffLimit = *rayJob.Spec.SubmitterConfig.BackoffLimit
+			}
+			shouldUpdate, submitterContainerStatus = checkIsRestartCountExceeded(headPod, submitterBackoffLimit)
 			if shouldUpdate {
 				logger.Info("The submitter sidecar container has exceeded the max restart count. Attempting to transition the status to `Failed`.",
 					"Submitter sidecar container", submitterContainerStatus.Name,
@@ -1182,7 +1186,7 @@ func checkSidecarContainerStatus(headPod *corev1.Pod) (bool, *corev1.ContainerSt
 	return false, nil
 }
 
-func checkIsRestartCountExceeded(headPod *corev1.Pod) (bool, *corev1.ContainerStatus) {
+func checkIsRestartCountExceeded(headPod *corev1.Pod, backoffLimit int32) (bool, *corev1.ContainerStatus) {
 	for _, containerStatus := range headPod.Status.ContainerStatuses {
 		if containerStatus.Name == utils.SubmitterContainerName {
 			// Only check when the container has been terminated at least once.
@@ -1192,8 +1196,7 @@ func checkIsRestartCountExceeded(headPod *corev1.Pod) (bool, *corev1.ContainerSt
 				if containerStatus.State.Terminated != nil && containerStatus.State.Terminated.ExitCode == 0 {
 					break
 				}
-				// TODO (justinyeh1995) the restart limit is hardcoded to 2. In a follow-up pr, we should align the restart count with Spec.SubmitterConfig.BackoffLimit
-				return containerStatus.RestartCount >= 2, &containerStatus
+				return containerStatus.RestartCount >= backoffLimit, &containerStatus
 			}
 			break
 		}
