@@ -3,12 +3,14 @@ package historyserver
 import (
 	"context"
 	"errors"
+	"sort"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/ray-project/kuberay/historyserver/pkg/eventserver"
+	eventtypes "github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
@@ -231,7 +233,7 @@ func TestLoadSession_FastPath_SkipsSingleflight(t *testing.T) {
 }
 
 // TestGetSnapshot_PutThenGet verifies the canonical hot path:
-// putSnapshot, then two Gets each return the exact pointer that was stored.
+// putSnapshot, then GetSnapshot returns a snapshot with matching content.
 func TestGetSnapshot_PutThenGet(t *testing.T) {
 	info := testEnterClusterInfo()
 	clusterSessionKey := utils.BuildClusterSessionKey(info.Name, info.Namespace, info.SessionName)
@@ -240,16 +242,12 @@ func TestGetSnapshot_PutThenGet(t *testing.T) {
 	stored := testSnapshot(clusterSessionKey)
 	sl.putSnapshot(clusterSessionKey, stored)
 
-	first, ok := sl.GetSnapshot(clusterSessionKey)
+	got, ok := sl.GetSnapshot(clusterSessionKey)
 	if !ok {
-		t.Fatal("first GetSnapshot: ok=false")
+		t.Fatal("GetSnapshot: ok=false")
 	}
-	second, ok := sl.GetSnapshot(clusterSessionKey)
-	if !ok {
-		t.Fatal("second GetSnapshot: ok=false")
-	}
-	if first != stored || second != stored {
-		t.Fatalf("expected same pointer on cache hit, got %p / %p (want %p)", first, second, stored)
+	if got.SessionKey != stored.SessionKey {
+		t.Fatalf("SessionKey: got %q, want %q", got.SessionKey, stored.SessionKey)
 	}
 }
 
@@ -282,8 +280,36 @@ func TestGetSnapshot_PutOverwrites(t *testing.T) {
 	if !ok {
 		t.Fatal("Get: ok=false")
 	}
-	if got != fresh {
-		t.Fatalf("putSnapshot did not overwrite; got %p, want %p", got, fresh)
+	if !got.GeneratedAt.Equal(fresh.GeneratedAt) {
+		t.Fatalf("putSnapshot did not overwrite; GeneratedAt = %v, want %v", got.GeneratedAt, fresh.GeneratedAt)
+	}
+}
+
+// TestGetSnapshot_TasksIsPerRequest verifies that mutating the slice returned
+// by one GetSnapshot call must not affect another concurrent reader of the same
+// cached entry.
+func TestGetSnapshot_TasksIsPerRequest(t *testing.T) {
+	info := testEnterClusterInfo()
+	key := utils.BuildClusterSessionKey(info.Name, info.Namespace, info.SessionName)
+
+	sl := newTestSessionLoader(t, &fakeProcessor{}, 0)
+	sl.putSnapshot(key, &eventserver.SessionSnapshot{
+		SessionKey: key,
+		Tasks:      []eventtypes.Task{{TaskID: "c"}, {TaskID: "a"}, {TaskID: "b"}},
+	})
+
+	first, _ := sl.GetSnapshot(key)
+	second, _ := sl.GetSnapshot(key)
+
+	sort.Slice(first.Tasks, func(i, j int) bool {
+		return first.Tasks[i].TaskID < first.Tasks[j].TaskID
+	})
+
+	wantOriginal := []string{"c", "a", "b"}
+	for i, task := range second.Tasks {
+		if task.TaskID != wantOriginal[i] {
+			t.Fatalf("second.Tasks[%d].TaskID = %q, want %q (mutation leaked)", i, task.TaskID, wantOriginal[i])
+		}
 	}
 }
 

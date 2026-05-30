@@ -7,7 +7,9 @@ import (
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
-// SessionSnapshot is the in-memory representation of a dead session's processed event state.
+// SessionSnapshot is the in-memory representation of a dead session's processed
+// event state. The same *SessionSnapshot is shared by all concurrent handlers.
+// To avoid races, handlers MUST treat all fields as read-only.
 type SessionSnapshot struct {
 	SessionKey string `json:"sessionKey"`
 	// GeneratedAt is the UTC timestamp when this snapshot was built.

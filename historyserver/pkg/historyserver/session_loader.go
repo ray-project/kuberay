@@ -9,6 +9,7 @@ import (
 	"golang.org/x/sync/singleflight"
 
 	"github.com/ray-project/kuberay/historyserver/pkg/eventserver"
+	eventtypes "github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
@@ -49,9 +50,15 @@ func NewSessionLoader(p processor, serverCtx context.Context, processTimeout tim
 	}, nil
 }
 
-// GetSnapshot returns the cached snapshot for a dead session.
+// GetSnapshot returns a per-request view of the cached snapshot.
 func (s *SessionLoader) GetSnapshot(clusterSessionKey string) (*eventserver.SessionSnapshot, bool) {
-	return s.cache.Get(clusterSessionKey)
+	cached, ok := s.cache.Get(clusterSessionKey)
+	if !ok {
+		return nil, false
+	}
+	copy := *cached
+	copy.Tasks = append([]eventtypes.Task(nil), cached.Tasks...)
+	return &copy, true
 }
 
 // LoadSession blocks until a dead session is processed and cached or an
