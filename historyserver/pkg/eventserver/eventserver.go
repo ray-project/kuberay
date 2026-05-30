@@ -527,74 +527,6 @@ func (h *EventHandler) getTasks(clusterSessionKey string) []types.Task {
 	return allTasks
 }
 
-// GetTaskByID returns all attempts for a specific task ID in a given cluster.
-// Returns a slice of tasks representing all attempts, sorted by attempt number is not guaranteed.
-func (h *EventHandler) GetTaskByID(clusterName, taskID string) ([]types.Task, bool) {
-	h.ClusterTaskMap.RLock()
-	defer h.ClusterTaskMap.RUnlock()
-
-	taskMap, ok := h.ClusterTaskMap.ClusterTaskMap[clusterName]
-	if !ok {
-		return nil, false
-	}
-
-	taskMap.Lock()
-	defer taskMap.Unlock()
-
-	attempts, ok := taskMap.TaskMap[taskID]
-	if !ok || len(attempts) == 0 {
-		return nil, false
-	}
-	// Return a deep copy to avoid data race
-	result := make([]types.Task, len(attempts))
-	for i, task := range attempts {
-		result[i] = task.DeepCopy()
-	}
-	return result, true
-}
-
-// GetActors returns a thread-safe deep copy of all actors for a given cluster
-func (h *EventHandler) GetActors(clusterName string) []types.Actor {
-	h.ClusterActorMap.RLock()
-	defer h.ClusterActorMap.RUnlock()
-
-	actorMap, ok := h.ClusterActorMap.ClusterActorMap[clusterName]
-	if !ok {
-		return []types.Actor{}
-	}
-
-	actorMap.Lock()
-	defer actorMap.Unlock()
-
-	actors := make([]types.Actor, 0, len(actorMap.ActorMap))
-	for _, actor := range actorMap.ActorMap {
-		actors = append(actors, actor.DeepCopy())
-	}
-	return actors
-}
-
-// GetActorByID returns a specific actor by ID for a given cluster
-func (h *EventHandler) GetActorByID(clusterName, actorID string) (types.Actor, bool) {
-	h.ClusterActorMap.RLock()
-	defer h.ClusterActorMap.RUnlock()
-
-	actorMap, ok := h.ClusterActorMap.ClusterActorMap[clusterName]
-	if !ok {
-		return types.Actor{}, false
-	}
-
-	actorMap.Lock()
-	defer actorMap.Unlock()
-
-	// Actor IDs are normalized to hex at ingestion time (normalizeActorIDsToHex),
-	// so direct lookup by hex ID always succeeds.
-	actor, ok := actorMap.ActorMap[actorID]
-	if !ok {
-		return types.Actor{}, false
-	}
-	return actor.DeepCopy(), true
-}
-
 // GetActorsMap returns a thread-safe deep copy of all actors as a map for a given cluster
 func (h *EventHandler) getActorsMap(clusterName string) map[string]types.Actor {
 	h.ClusterActorMap.RLock()
@@ -637,25 +569,6 @@ func (h *EventHandler) getJobsMap(clusterName string) map[string]types.Job {
 // getLogEventsByJobID returns log events grouped by job ID.
 func (h *EventHandler) getLogEventsByJobID(clusterSessionKey string) map[string][]types.LogEvent {
 	return h.ClusterLogEventMap.GetLogEventsByJobID(clusterSessionKey)
-}
-
-func (h *EventHandler) GetJobByJobID(clusterName, jobID string) (types.Job, bool) {
-	h.ClusterJobMap.RLock()
-	defer h.ClusterJobMap.RUnlock()
-
-	jobMap, ok := h.ClusterJobMap.ClusterJobMap[clusterName]
-	if !ok {
-		return types.Job{}, false
-	}
-
-	jobMap.Lock()
-	defer jobMap.Unlock()
-
-	job, ok := jobMap.JobMap[jobID]
-	if !ok {
-		return types.Job{}, false
-	}
-	return job.DeepCopy(), true
 }
 
 // handleTaskDefinitionEvent processes TASK_DEFINITION_EVENT or ACTOR_TASK_DEFINITION_EVENT and preserves the task attempt ordering.
@@ -1095,26 +1008,6 @@ func (h *EventHandler) getNodeMap(clusterSessionID string) map[string]types.Node
 		nodes[id] = node.DeepCopy()
 	}
 	return nodes
-}
-
-// GetNodeByNodeID returns a node by node ID for a given cluster session.
-func (h *EventHandler) GetNodeByNodeID(clusterSessionID, nodeID string) (types.Node, bool) {
-	h.ClusterNodeMap.RLock()
-	defer h.ClusterNodeMap.RUnlock()
-
-	nodeMap, ok := h.ClusterNodeMap.ClusterNodeMap[clusterSessionID]
-	if !ok {
-		return types.Node{}, false
-	}
-
-	nodeMap.Lock()
-	defer nodeMap.Unlock()
-
-	node, ok := nodeMap.NodeMap[nodeID]
-	if !ok {
-		return types.Node{}, false
-	}
-	return node.DeepCopy(), true
 }
 
 // ProcessSingleSession reads all event files for a single session synchronously
