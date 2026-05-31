@@ -1758,7 +1758,7 @@ var _ = Context("Inside the default namespace", func() {
 		})
 
 		Describe("Auto-deletion for clusters with stuck GCS FT finalizer", Ordered, func() {
-			var clusterKey = client.ObjectKey{Name: "raycluster-redis-cleanup", Namespace: namespace}
+			clusterKey := client.ObjectKey{Name: "raycluster-redis-cleanup", Namespace: namespace}
 
 			BeforeAll(func() {
 				cluster := rayClusterTemplate(clusterKey.Name, namespace)
@@ -1766,7 +1766,7 @@ var _ = Context("Inside the default namespace", func() {
 				Expect(k8sClient.Create(ctx, cluster)).To(Succeed())
 				Eventually(
 					getResourceFunc(ctx, clusterKey, cluster),
-					time.Second*3, time.Millisecond*500).Should(BeNil())
+					time.Second*3, time.Millisecond*500).Should(Succeed())
 			})
 
 			It("Should have GCS FT finalizer after creation", func() {
@@ -1857,7 +1857,7 @@ var _ = Context("Inside the default namespace", func() {
 
 				Eventually(
 					getResourceFunc(ctx, clusterKey, cluster),
-					time.Second*3, time.Millisecond*500).Should(BeNil())
+					time.Second*3, time.Millisecond*500).Should(Succeed())
 
 				// Trigger deletion; server stamps DeletionTimestamp = now
 				Expect(k8sClient.Delete(ctx, cluster)).To(Succeed())
