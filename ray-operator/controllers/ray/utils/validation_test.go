@@ -2454,6 +2454,37 @@ func TestValidateRayCronJobSpec(t *testing.T) {
 			expectError: true,
 			errorMsg:    "invalid RayJob template",
 		},
+		{
+			name: "RayCronJob name too long",
+			cronJob: &rayv1.RayCronJob{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      strings.Repeat("a", MaxRayCronJobNameLength+1),
+					Namespace: "default",
+				},
+				Spec: rayv1.RayCronJobSpec{
+					Schedule: "*/5 * * * *",
+					JobTemplate: rayv1.RayJobSpec{
+						Entrypoint: "python test.py",
+						RayClusterSpec: &rayv1.RayClusterSpec{
+							HeadGroupSpec: rayv1.HeadGroupSpec{
+								Template: corev1.PodTemplateSpec{
+									Spec: corev1.PodSpec{
+										Containers: []corev1.Container{
+											{
+												Name:  "ray-head",
+												Image: "rayproject/ray:2.9.0",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectError: true,
+			errorMsg:    "RayCronJob name should be no more than",
+		},
 	}
 
 	for _, tc := range tests {
