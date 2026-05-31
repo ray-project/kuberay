@@ -17,7 +17,6 @@ There is also a wealth of open-source implementations, for example,
 [oauth2-proxy](https://github.com/oauth2-proxy/oauth2-proxy) and many commercial
 offerings.
 
-
 ## Installation
 
 ### Set `security.proxy.tag`
