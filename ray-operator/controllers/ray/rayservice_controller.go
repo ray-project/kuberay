@@ -390,6 +390,7 @@ func (r *RayServiceReconciler) handleSuspend(ctx context.Context, rayServiceInst
 	if isSuspended {
 		if !rayServiceInstance.Spec.Suspend {
 			logger.Info("Spec.Suspend is false; exiting Suspended state and resuming reconcile")
+			bumpObservedGeneration(rayServiceInstance)
 			setCondition(rayServiceInstance, rayv1.RayServiceSuspended, metav1.ConditionFalse, rayv1.RayServiceResumed,
 				"Spec.Suspend is false; RayService has resumed.")
 			return ctrl.Result{}, nil
@@ -407,6 +408,7 @@ func (r *RayServiceReconciler) handleSuspend(ctx context.Context, rayServiceInst
 			return ctrl.Result{}, nil
 		}
 		logger.Info("Spec.Suspend is true; committing transition to Suspending state")
+		bumpObservedGeneration(rayServiceInstance)
 		setCondition(rayServiceInstance, rayv1.RayServiceSuspending, metav1.ConditionTrue, rayv1.SuspendRequested,
 			"Spec.Suspend is true; will delete all Kubernetes resources owned by this RayService.")
 		setCondition(rayServiceInstance, rayv1.RayServiceReady, metav1.ConditionFalse, rayv1.SuspendInProgress, "RayService is suspending.")
@@ -430,6 +432,7 @@ func (r *RayServiceReconciler) handleSuspend(ctx context.Context, rayServiceInst
 	}
 
 	if !allDeleted {
+		bumpObservedGeneration(rayServiceInstance)
 		setCondition(rayServiceInstance, rayv1.RayServiceSuspending, metav1.ConditionTrue, rayv1.SuspendInProgress,
 			"Waiting for all Kubernetes resources owned by this RayService to be deleted.")
 		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, nil
@@ -441,6 +444,7 @@ func (r *RayServiceReconciler) handleSuspend(ctx context.Context, rayServiceInst
 	// us here despite Spec.Suspend=false), since the status-only update
 	// below would not otherwise wake the controller up.
 	logger.Info("All RayService-owned resources deleted; transitioning to Suspended")
+	bumpObservedGeneration(rayServiceInstance)
 	setCondition(rayServiceInstance, rayv1.RayServiceSuspending, metav1.ConditionFalse, rayv1.SuspendComplete,
 		"All owned resources have been deleted.")
 	setCondition(rayServiceInstance, rayv1.RayServiceSuspended, metav1.ConditionTrue, rayv1.SuspendComplete, "All owned resources have been deleted.")
@@ -804,6 +808,15 @@ func calculateConditions(ctx context.Context, r *RayServiceReconciler, rayServic
 			setCondition(rayServiceInstance, rayv1.UpgradeInProgress, metav1.ConditionUnknown, rayv1.NoActiveCluster, "No active Ray cluster exists, and the RayService is not initializing. Please open a GitHub issue in the KubeRay repository.")
 		}
 	}
+}
+
+// bumpObservedGeneration updates status.observedGeneration for reconcile paths that
+// mutate status without running calculateStatus.
+func bumpObservedGeneration(rayServiceInstance *rayv1.RayService) {
+	if rayServiceInstance.Status.ObservedGeneration == rayServiceInstance.ObjectMeta.Generation {
+		return
+	}
+	rayServiceInstance.Status.ObservedGeneration = rayServiceInstance.ObjectMeta.Generation
 }
 
 func setCondition(rayServiceInstance *rayv1.RayService, conditionType rayv1.RayServiceConditionType, status metav1.ConditionStatus, reason rayv1.RayServiceConditionReason, message string) {

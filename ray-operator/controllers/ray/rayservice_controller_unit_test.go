@@ -3102,3 +3102,76 @@ func TestRayServiceFinalizer(t *testing.T) {
 		})
 	}
 }
+
+func TestBumpObservedGeneration(t *testing.T) {
+	t.Run("updates when behind metadata generation", func(t *testing.T) {
+		rs := &rayv1.RayService{
+			ObjectMeta: metav1.ObjectMeta{Generation: 7},
+			Status:     rayv1.RayServiceStatuses{ObservedGeneration: 3},
+		}
+		bumpObservedGeneration(rs)
+		assert.Equal(t, int64(7), rs.Status.ObservedGeneration)
+	})
+
+	t.Run("no-op when already current", func(t *testing.T) {
+		rs := &rayv1.RayService{
+			ObjectMeta: metav1.ObjectMeta{Generation: 7},
+			Status:     rayv1.RayServiceStatuses{ObservedGeneration: 7},
+		}
+		bumpObservedGeneration(rs)
+		assert.Equal(t, int64(7), rs.Status.ObservedGeneration)
+	})
+}
+
+func TestHandleSuspendObservedGeneration(t *testing.T) {
+	ctx := context.Background()
+	reconciler := &RayServiceReconciler{}
+
+	t.Run("entering Suspending bumps observedGeneration on conditions", func(t *testing.T) {
+		rs := &rayv1.RayService{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:       "rayservice",
+				Namespace:  "default",
+				Generation: 5,
+			},
+			Spec: rayv1.RayServiceSpec{Suspend: true},
+			Status: rayv1.RayServiceStatuses{
+				ObservedGeneration: 2,
+			},
+		}
+
+		_, err := reconciler.handleSuspend(ctx, rs)
+		require.NoError(t, err)
+		assert.Equal(t, int64(5), rs.Status.ObservedGeneration)
+
+		suspending := meta.FindStatusCondition(rs.Status.Conditions, string(rayv1.RayServiceSuspending))
+		require.NotNil(t, suspending)
+		assert.Equal(t, metav1.ConditionTrue, suspending.Status)
+		assert.Equal(t, int64(5), suspending.ObservedGeneration)
+	})
+
+	t.Run("idle Suspended does not bump observedGeneration", func(t *testing.T) {
+		rs := &rayv1.RayService{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:       "rayservice",
+				Namespace:  "default",
+				Generation: 9,
+			},
+			Spec: rayv1.RayServiceSpec{Suspend: true},
+			Status: rayv1.RayServiceStatuses{
+				ObservedGeneration: 4,
+				Conditions: []metav1.Condition{
+					{
+						Type:   string(rayv1.RayServiceSuspended),
+						Status: metav1.ConditionTrue,
+						Reason: string(rayv1.SuspendComplete),
+					},
+				},
+			},
+		}
+
+		_, err := reconciler.handleSuspend(ctx, rs)
+		require.NoError(t, err)
+		assert.Equal(t, int64(4), rs.Status.ObservedGeneration)
+	})
+}
