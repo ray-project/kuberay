@@ -2573,8 +2573,7 @@ func TestMarkFailedIfInitializingTimedOut(t *testing.T) {
 // TestHandleSuspendResumeResetsReadyToInitializing verifies that resuming a
 // RayService from the Suspended state resets the RayServiceReady condition
 // back to Reason=Initializing with a fresh LastTransitionTime, so that
-// markFailedOnInitializingTimeout can fire on the resumed attempt. See
-// ray-project/kuberay#4892.
+// markFailedOnInitializingTimeout can fire on the resumed attempt.
 func TestHandleSuspendResumeResetsReadyToInitializing(t *testing.T) {
 	newScheme := runtime.NewScheme()
 	_ = rayv1.AddToScheme(newScheme)
@@ -2645,7 +2644,7 @@ func TestHandleSuspendResumeResetsReadyToInitializing(t *testing.T) {
 	require.NotNil(t, readyCond, "RayServiceReady condition must exist after resume")
 
 	assert.Equal(t, string(rayv1.RayServiceInitializing), readyCond.Reason,
-		"RayServiceReady reason must be Initializing on resume; otherwise initializing-timeout will not fire (#4892)")
+		"RayServiceReady reason must be Initializing on resume; otherwise initializing-timeout will not fire")
 
 	assert.WithinDuration(t, time.Now(), readyCond.LastTransitionTime.Time, 5*time.Second,
 		"RayServiceReady LastTransitionTime must reset on resume; otherwise initializing-timeout will use the stale suspend timestamp")
