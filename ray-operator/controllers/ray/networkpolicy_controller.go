@@ -11,6 +11,7 @@ import (
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -66,6 +67,7 @@ func getOperatorNamespace() string {
 
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=get;list;watch;create;update;delete;patch
 // +kubebuilder:rbac:groups=ray.io,resources=rayclusters,verbs=get;list;watch
+// +kubebuilder:rbac:groups=discovery.k8s.io,resources=endpointslices,verbs=list
 
 // Reconcile handles RayCluster resources and creates/manages NetworkPolicies
 func (r *NetworkPolicyController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -107,7 +109,7 @@ func (r *NetworkPolicyController) Reconcile(ctx context.Context, req ctrl.Reques
 	}
 
 	// Create or update head NetworkPolicy
-	headNetworkPolicy := r.buildHeadNetworkPolicy(instance, mode)
+	headNetworkPolicy := r.buildHeadNetworkPolicy(ctx, instance, mode)
 	if err := r.createOrUpdateNetworkPolicy(ctx, instance, headNetworkPolicy); err != nil {
 		return ctrl.Result{}, err
 	}
@@ -187,7 +189,7 @@ func workerNetworkPolicyName(clusterName string) string {
 }
 
 // buildHeadNetworkPolicy creates a NetworkPolicy for Ray head pods
-func (r *NetworkPolicyController) buildHeadNetworkPolicy(instance *rayv1.RayCluster, mode rayv1.NetworkIsolationMode) *networkingv1.NetworkPolicy {
+func (r *NetworkPolicyController) buildHeadNetworkPolicy(ctx context.Context, instance *rayv1.RayCluster, mode rayv1.NetworkIsolationMode) *networkingv1.NetworkPolicy {
 	labels := map[string]string{
 		utils.RayClusterLabelKey:                instance.Name,
 		utils.KubernetesApplicationNameLabelKey: utils.ApplicationName,
@@ -211,7 +213,7 @@ func (r *NetworkPolicyController) buildHeadNetworkPolicy(instance *rayv1.RayClus
 		policyTypes = append(policyTypes, networkingv1.PolicyTypeEgress)
 		egressRules = r.buildBaseEgressRules(instance)
 		if utils.IsAutoscalingEnabled(&instance.Spec) {
-			egressRules = append(egressRules, r.buildKubeAPIServerEgressRule()...)
+			egressRules = append(egressRules, r.buildKubeAPIServerEgressRule(ctx)...)
 		}
 		egressRules = append(egressRules, instance.Spec.NetworkIsolation.EgressRules...)
 	}
@@ -448,47 +450,72 @@ func (r *NetworkPolicyController) buildBaseEgressRules(instance *rayv1.RayCluste
 // buildKubeAPIServerEgressRule returns an egress rule allowing the head pod to
 // reach the Kubernetes API server. This is needed when in-tree autoscaling is
 // enabled, as the autoscaler sidecar must patch the RayCluster CR via the API.
-func (r *NetworkPolicyController) buildKubeAPIServerEgressRule() []networkingv1.NetworkPolicyEgressRule {
-	apiServerHost := os.Getenv("KUBERNETES_SERVICE_HOST")
-	apiServerPort := os.Getenv("KUBERNETES_SERVICE_PORT")
-	if apiServerHost == "" || apiServerPort == "" {
-		ctrl.Log.WithName("controllers").WithName("NetworkPolicy").Info(
-			"KUBERNETES_SERVICE_HOST or KUBERNETES_SERVICE_PORT not set, skipping API server egress rule")
-		return nil
-	}
+//
+// Endpoint IPs are fetched from the default/kubernetes EndpointSlice rather
+// than the KUBERNETES_SERVICE_HOST env var (which holds the Service ClusterIP).
+// Most CNIs enforce NetworkPolicy after DNAT has already translated the
+// ClusterIP to a real node IP, so an ipBlock rule using the ClusterIP would
+// never match. Using endpoint IPs ensures the rule works post-DNAT.
+//
+// NOTE: This still won't work for Cilium with default settings, which ignores
+// ipBlock CIDR rules for intra-cluster IPs. Cilium users should either use
+// CiliumNetworkPolicy with toEntities: [kube-apiserver], or enable
+// policyCIDRMatchMode: nodes in Cilium's Helm values.
+func (r *NetworkPolicyController) buildKubeAPIServerEgressRule(ctx context.Context) []networkingv1.NetworkPolicyEgressRule {
+	logger := ctrl.LoggerFrom(ctx)
 
-	port, err := strconv.ParseInt(apiServerPort, 10, 32)
-	if err != nil {
-		ctrl.Log.WithName("controllers").WithName("NetworkPolicy").Info(
-			"Failed to parse KUBERNETES_SERVICE_PORT, skipping API server egress rule", "port", apiServerPort)
+	sliceList := &discoveryv1.EndpointSliceList{}
+	if err := r.List(ctx, sliceList,
+		client.InNamespace("default"),
+		client.MatchingLabels{discoveryv1.LabelServiceName: "kubernetes"},
+	); err != nil {
+		logger.Info("Unable to list EndpointSlices for default/kubernetes, skipping API server egress rule", "error", err)
 		return nil
 	}
 
 	tcpProtocol := corev1.ProtocolTCP
-	apiPort := intstr.FromInt32(int32(port))
+	var peers []networkingv1.NetworkPolicyPeer
+	var ports []networkingv1.NetworkPolicyPort
 
-	addr, err := netip.ParseAddr(apiServerHost)
-	if err != nil {
-		ctrl.Log.WithName("controllers").WithName("NetworkPolicy").Info(
-			"Failed to parse KUBERNETES_SERVICE_HOST as IP, skipping API server egress rule", "host", apiServerHost)
+	for i := range sliceList.Items {
+		slice := &sliceList.Items[i]
+		for _, ep := range slice.Endpoints {
+			for _, addr := range ep.Addresses {
+				ip, err := netip.ParseAddr(addr)
+				if err != nil {
+					logger.Info("Skipping unparseable API server endpoint IP", "ip", addr, "error", err)
+					continue
+				}
+				cidr := netip.PrefixFrom(ip, ip.BitLen()).String()
+				peers = append(peers, networkingv1.NetworkPolicyPeer{
+					IPBlock: &networkingv1.IPBlock{CIDR: cidr},
+				})
+			}
+		}
+		for _, p := range slice.Ports {
+			proto := corev1.ProtocolTCP
+			if p.Protocol != nil {
+				proto = *p.Protocol
+			}
+			if proto == corev1.ProtocolTCP && p.Port != nil {
+				port := intstr.FromInt32(*p.Port)
+				ports = append(ports, networkingv1.NetworkPolicyPort{
+					Protocol: &tcpProtocol,
+					Port:     &port,
+				})
+			}
+		}
+	}
+
+	if len(peers) == 0 || len(ports) == 0 {
+		logger.Info("No usable addresses/ports in default/kubernetes EndpointSlices, skipping API server egress rule")
 		return nil
 	}
 
-	prefix := netip.PrefixFrom(addr, addr.BitLen())
-	cidr := prefix.String()
-
 	return []networkingv1.NetworkPolicyEgressRule{
 		{
-			To: []networkingv1.NetworkPolicyPeer{
-				{
-					IPBlock: &networkingv1.IPBlock{
-						CIDR: cidr,
-					},
-				},
-			},
-			Ports: []networkingv1.NetworkPolicyPort{
-				{Protocol: &tcpProtocol, Port: &apiPort},
-			},
+			To:    peers,
+			Ports: ports,
 		},
 	}
 }
