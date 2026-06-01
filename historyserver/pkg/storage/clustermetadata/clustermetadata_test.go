@@ -78,9 +78,14 @@ func TestDecodePath(t *testing.T) {
 			expectErr:   true,
 		},
 		{
-			name:            "valid owner kind - mixed case",
-			filePath:        "cluster-metadata/rayservice/defaultns_myservice_mycluster3/session_2024-05-15_10-30-55_123456",
-			expectErr:       false,
+			name:      "invalid decode - raycluster with 3 meta parts",
+			filePath:  "cluster-metadata/raycluster/defaultns_myservice_mycluster3/session_2024-05-15_10-30-55_123456",
+			expectErr: true,
+		},
+		{
+			name:        "valid owner kind - mixed case",
+			filePath:    "cluster-metadata/RaYSerVice/defaultns_myservice_mycluster3/session_2024-05-15_10-30-55_123456",
+			expectErr:   false,
 			expected: utils.ClusterInfo{
 				Namespace:       "defaultns",
 				OwnerKind:       "rayservice",
@@ -90,11 +95,6 @@ func TestDecodePath(t *testing.T) {
 				CreateTimeStamp: time.Date(2024, time.May, 15, 10, 30, 55, 123456000, time.UTC).Unix(),
 				CreateTime:      "2024-05-15T10:30:55Z",
 			},
-		},
-		{
-			name:      "invalid decode - raycluster with 3 meta parts",
-			filePath:  "cluster-metadata/raycluster/defaultns_myservice_mycluster3/session_2024-05-15_10-30-55_123456",
-			expectErr: true,
 		},
 		{
 			name:      "unsupported owner kind",
@@ -206,6 +206,13 @@ func TestEncodePath(t *testing.T) {
 			rootDir:   "",
 			sessionID: "session-789",
 			want:      "cluster-metadata/raycluster/ns_cluster/session-789",
+		},
+		{
+			name:      "job with owner kind details in inconsistent case",
+			info:      utils.ClusterInfo{OwnerKind: "RaYjOb", OwnerName: "job1", Namespace: "ns", Name: "cluster"},
+			rootDir:   "",
+			sessionID: "session-456",
+			want:      "cluster-metadata/rayjob/ns_job1_cluster/session-456",
 		},
 	}
 

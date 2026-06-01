@@ -8,9 +8,11 @@ import (
 const (
 	defaultTmpRayRoot = "/tmp/ray"
 
-	RAYJOB_OBJECT_DIR = "rayjob"
-	RAYSERVICE_OBJECT_DIR = "rayservice"
-	RAYCLUSTER_OBJECT_DIR = "raycluster"
+	// Lowercase, normalized CRD kinds. Used both as the comparison key
+	// for ToLower(OwnerKind) and as the cluster-metadata path subdir segment.
+	RayJobKind     = "rayjob"
+	RayServiceKind = "rayservice"
+	RayClusterKind = "raycluster"
 )
 
 func GetTmpRayRoot() string {
