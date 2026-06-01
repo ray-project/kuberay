@@ -7,6 +7,7 @@ import (
 
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
@@ -416,11 +417,11 @@ func TestRayClusterTLSEdgeCases(t *testing.T) {
 		// Verify all TLS secrets are garbage-collected via ownerRef.
 		g.Eventually(func(gg Gomega) {
 			_, err := test.Client().Core().CoreV1().Secrets(namespace.Name).Get(test.Ctx(), caSecretName, metav1.GetOptions{})
-			gg.Expect(err).To(HaveOccurred(), "CA secret should be cleaned up after RayCluster deletion")
+			gg.Expect(k8serrors.IsNotFound(err)).To(BeTrue(), "CA secret should be cleaned up after RayCluster deletion")
 			_, err = test.Client().Core().CoreV1().Secrets(namespace.Name).Get(test.Ctx(), headSecretName, metav1.GetOptions{})
-			gg.Expect(err).To(HaveOccurred(), "head secret should be cleaned up after RayCluster deletion")
+			gg.Expect(k8serrors.IsNotFound(err)).To(BeTrue(), "head secret should be cleaned up after RayCluster deletion")
 			_, err = test.Client().Core().CoreV1().Secrets(namespace.Name).Get(test.Ctx(), workerSecretName, metav1.GetOptions{})
-			gg.Expect(err).To(HaveOccurred(), "worker secret should be cleaned up after RayCluster deletion")
+			gg.Expect(k8serrors.IsNotFound(err)).To(BeTrue(), "worker secret should be cleaned up after RayCluster deletion")
 		}, TestTimeoutMedium).Should(Succeed())
 
 		LogWithTimestamp(t, "Cert-manager resources cleaned up after deletion of cluster %s", clusterName)
@@ -460,7 +461,7 @@ func TestRayClusterTLSEdgeCases(t *testing.T) {
 		// Wait for RayCluster to be gone so reconciliation has run.
 		g.Eventually(func(gg Gomega) {
 			_, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Get(test.Ctx(), clusterName, metav1.GetOptions{})
-			gg.Expect(err).To(HaveOccurred(), "RayCluster should be deleted")
+			gg.Expect(k8serrors.IsNotFound(err)).To(BeTrue(), "RayCluster should be deleted")
 		}, TestTimeoutMedium).Should(Succeed())
 
 		// User secret must still exist (operator never deletes BYOC secrets).
