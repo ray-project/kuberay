@@ -78,6 +78,8 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &rayv1.ServeDeploymentStatusApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("SubmitterConfig"):
 		return &rayv1.SubmitterConfigApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("TLSOptions"):
+		return &rayv1.TLSOptionsApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("WorkerGroupSpec"):
 		return &rayv1.WorkerGroupSpecApplyConfiguration{}
 
