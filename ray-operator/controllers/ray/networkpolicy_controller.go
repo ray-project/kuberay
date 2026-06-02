@@ -475,6 +475,8 @@ func (r *NetworkPolicyController) buildKubeAPIServerEgressRule(ctx context.Conte
 
 	tcpProtocol := corev1.ProtocolTCP
 	var peers []networkingv1.NetworkPolicyPeer
+	seenCIDRs := make(map[string]struct{})
+	seenPorts := make(map[int32]struct{})
 	var ports []networkingv1.NetworkPolicyPort
 
 	for i := range sliceList.Items {
@@ -487,6 +489,10 @@ func (r *NetworkPolicyController) buildKubeAPIServerEgressRule(ctx context.Conte
 					continue
 				}
 				cidr := netip.PrefixFrom(ip, ip.BitLen()).String()
+				if _, exists := seenCIDRs[cidr]; exists {
+					continue
+				}
+				seenCIDRs[cidr] = struct{}{}
 				peers = append(peers, networkingv1.NetworkPolicyPeer{
 					IPBlock: &networkingv1.IPBlock{CIDR: cidr},
 				})
@@ -498,6 +504,10 @@ func (r *NetworkPolicyController) buildKubeAPIServerEgressRule(ctx context.Conte
 				proto = *p.Protocol
 			}
 			if proto == corev1.ProtocolTCP && p.Port != nil {
+				if _, exists := seenPorts[*p.Port]; exists {
+					continue
+				}
+				seenPorts[*p.Port] = struct{}{}
 				port := intstr.FromInt32(*p.Port)
 				ports = append(ports, networkingv1.NetworkPolicyPort{
 					Protocol: &tcpProtocol,
