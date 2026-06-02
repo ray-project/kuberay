@@ -149,6 +149,8 @@ const (
 	RAYCLUSTER_DEFAULT_REQUEUE_SECONDS_ENV  = "RAYCLUSTER_DEFAULT_REQUEUE_SECONDS_ENV"
 	RAYCLUSTER_DEFAULT_REQUEUE_SECONDS      = 300
 	KUBERAY_GEN_RAY_START_CMD               = "KUBERAY_GEN_RAY_START_CMD"
+	KUBERAY_GEN_AUTOSCALER_START_CMD        = "KUBERAY_GEN_AUTOSCALER_START_CMD"
+	RAY_START_ULIMIT_OPEN_FILES             = "RAY_START_ULIMIT_OPEN_FILES"
 
 	// Environment variables for RayJob submitter Kubernetes Job.
 	// Example: ray job submit --address=http://$RAY_DASHBOARD_ADDRESS --submission-id=$RAY_JOB_SUBMISSION_ID ...
@@ -253,19 +255,23 @@ const (
 	// only one of them needs to be checked. So, RayAgentRayletHealthPath accesses the dashboard agent's API endpoint
 	// to check the health of the Raylet process.
 	// TODO (kevin85421): Should we take the dashboard process into account?
-	RayAgentRayletHealthPath  = "api/local_raylet_healthz"
-	RayDashboardGCSHealthPath = "api/gcs_healthz"
-	RayServeProxyHealthPath   = "-/healthz"
+	RayAgentRayletHealthPath                 = "api/local_raylet_healthz"
+	RayDashboardGCSHealthPath                = "api/gcs_healthz"
+	RayDashboardGCSHealthCheckTimeoutSeconds = 10
+	RayServeProxyHealthPath                  = "-/healthz"
 	// BaseWgetHealthCommand checks a single health URL; args: timeout_sec, port, path (no leading slash).
 	// This is used for Ray versions that rely on exec probes and assume common CLI tools exist in the image.
 	BaseWgetHealthCommand = "wget --tries 1 -T %d -q -O- http://localhost:%d/%s | grep success"
-	// BasePythonHealthCommand checks a single health URL; args: port, path (no leading slash), timeout_sec.
+	// BasePythonHealthCommand checks a single health URL; args: url, timeout_sec.
 	// This is used when wget is not available (e.g. slim Ray images).
-	BasePythonHealthCommand = `python -c "import urllib.request; r=urllib.request.urlopen('http://localhost:%d/%s', timeout=%d); exit(0 if b'success' in r.read() else 1)"`
+	BasePythonHealthCommand = `python -c "import urllib.request; r=urllib.request.urlopen('%s', timeout=%d); exit(0 if b'success' in r.read() else 1)"`
 	RayNodeHealthPath       = "/api/healthz"
 
 	// Finalizers for RayJob
 	RayJobStopJobFinalizer = "ray.io/rayjob-finalizer"
+
+	// Finalizers for RayService
+	RayServiceFinalizer = "ray.io/rayservice-finalizer"
 
 	// RayNodeHeadGroupLabelValue is the value for the RayNodeGroupLabelKey label on a head node
 	RayNodeHeadGroupLabelValue      = "headgroup"
@@ -295,6 +301,10 @@ const (
 	// MaxRayJobNameLength is the maximum RayJob name to make sure it pass the RayCluster validation
 	// Minus 6 since we append 6 characters to the RayJob name to create the cluster (GenerateRayClusterName).
 	MaxRayJobNameLength = MaxRayClusterNameLength - 6
+	// MaxRayCronJobNameLength is the maximum RayCronJob name to make sure its child RayJob passes
+	// validation. Minus 11 for the "-<minuteHash>" suffix (dash + up to a 10-digit Unix-minute hash)
+	// appended to create the child RayJob name (getRayJobName).
+	MaxRayCronJobNameLength = MaxRayJobNameLength - 11
 )
 
 type ServiceType string
@@ -390,6 +400,7 @@ const (
 	InvalidRayServiceSpec           K8sEventType = "InvalidRayServiceSpec"
 	InvalidRayServiceMetadata       K8sEventType = "InvalidRayServiceMetadata"
 	RayServiceInitializingTimeout   K8sEventType = "RayServiceInitializingTimeout"
+	RollbackImpossible              K8sEventType = "RollbackImpossible"
 	UpdatedHeadPodServeLabel        K8sEventType = "UpdatedHeadPodServeLabel"
 	UpdatedGateway                  K8sEventType = "UpdatedGateway"
 	UpdatedHTTPRoute                K8sEventType = "UpdatedHTTPRoute"
@@ -400,8 +411,14 @@ const (
 	FailedToUpdateTargetCapacity    K8sEventType = "FailedToUpdateTargetCapacity"
 	FailedToCreateGateway           K8sEventType = "FailedToCreateGateway"
 	FailedToUpdateGateway           K8sEventType = "FailedToUpdateGateway"
+	FailedToDeleteGateway           K8sEventType = "FailedToDeleteGateway"
 	FailedToCreateHTTPRoute         K8sEventType = "FailedToCreateHTTPRoute"
 	FailedToUpdateHTTPRoute         K8sEventType = "FailedToUpdateHTTPRoute"
+	FailedToDeleteHTTPRoute         K8sEventType = "FailedToDeleteHTTPRoute"
+	FailedToDeleteService           K8sEventType = "FailedToDeleteService"
+	DeletedGateway                  K8sEventType = "DeletedGateway"
+	DeletedHTTPRoute                K8sEventType = "DeletedHTTPRoute"
+	DeletedService                  K8sEventType = "DeletedService"
 
 	// Generic Pod event list
 	DeletedPod                  K8sEventType = "DeletedPod"

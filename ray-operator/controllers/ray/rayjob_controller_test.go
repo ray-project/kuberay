@@ -532,7 +532,15 @@ var _ = Context("RayJob with different submission modes", func() {
 				Expect(err).NotTo(HaveOccurred(), "failed to get Kubernetes Job")
 			})
 
-			It("RayJobs's JobDeploymentStatus transitions from Running to Complete.", func() {
+			It("RayJobs's JobDeploymentStatus transitions from Running to Complete and RayJob is deleted when DELETE_RAYJOB_CR_AFTER_JOB_FINISHES is set.", func() {
+				// Set the env var before the RayJob transitions to Complete so that
+				// handleShutdownAfterJobFinishes sees it on the first reconciliation
+				// after the job finishes. Setting it after the transition is racy because
+				// the reconciler may have already processed the shutdown path without
+				// the env var, returning with no requeue.
+				os.Setenv(utils.DELETE_RAYJOB_CR_AFTER_JOB_FINISHES, "true")
+				defer os.Unsetenv(utils.DELETE_RAYJOB_CR_AFTER_JOB_FINISHES)
+
 				// Update fake dashboard client to return job info with "Succeeded" status.
 				getJobInfo := func(context.Context, string) (*utiltypes.RayJobInfo, error) { //nolint:unparam // This is a mock function so parameters are required
 					return &utiltypes.RayJobInfo{JobStatus: rayv1.JobStatusSucceeded, EndTime: uint64(time.Now().UnixMilli())}, nil
@@ -553,19 +561,11 @@ var _ = Context("RayJob with different submission modes", func() {
 
 				updateK8sJobToComplete(ctx, job)
 
-				// RayJob transitions to Complete.
-				Eventually(
-					getRayJobDeploymentStatus(ctx, rayJob),
-					time.Second*5, time.Millisecond*500).Should(Equal(rayv1.JobDeploymentStatusComplete), "jobDeploymentStatus = %v", rayJob.Status.JobDeploymentStatus)
-			})
-
-			It("If DELETE_RAYJOB_CR_AFTER_JOB_FINISHES environement variable is set, RayJob should be deleted.", func() {
-				os.Setenv(utils.DELETE_RAYJOB_CR_AFTER_JOB_FINISHES, "true")
-				defer os.Unsetenv(utils.DELETE_RAYJOB_CR_AFTER_JOB_FINISHES)
+				// RayJob transitions to Complete and is then deleted because DELETE_RAYJOB_CR_AFTER_JOB_FINISHES is set.
 				Eventually(
 					func() bool {
 						return apierrors.IsNotFound(getResourceFunc(ctx, client.ObjectKey{Name: rayJob.Name, Namespace: namespace}, rayJob)())
-					}, time.Second*3, time.Millisecond*500).Should(BeTrue())
+					}, time.Second*10, time.Millisecond*500).Should(BeTrue())
 			})
 		})
 
@@ -574,7 +574,7 @@ var _ = Context("RayJob with different submission modes", func() {
 			namespace := "default"
 			activeDeadlineSeconds := int32(3)
 			rayJob := rayJobTemplate("rayjob-deadline", namespace)
-			rayJob.Spec.ActiveDeadlineSeconds = ptr.To(activeDeadlineSeconds)
+			rayJob.Spec.ActiveDeadlineSeconds = new(activeDeadlineSeconds)
 
 			It("Verify RayJob spec", func() {
 				// In this test, RayJob passes through the following states: New -> Initializing -> Complete (because of ActiveDeadlineSeconds).

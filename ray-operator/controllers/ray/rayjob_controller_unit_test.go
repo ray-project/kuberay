@@ -3,6 +3,7 @@ package ray
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math"
 	"strings"
 	"testing"
@@ -18,16 +19,34 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
-	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	clientFake "sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler"
+	schedulerinterface "github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler/interface"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/metrics/mocks"
 	utils "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/scheme"
+	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 )
+
+// fakeBatchScheduler implements schedulerinterface.BatchScheduler for testing.
+type fakeBatchScheduler struct {
+	schedulerinterface.DefaultBatchScheduler
+	cleanupCalled    bool
+	cleanupObject    metav1.Object
+	cleanupDidUpdate bool
+	cleanupErr       error
+}
+
+func (f *fakeBatchScheduler) CleanupOnCompletion(_ context.Context, object metav1.Object) (bool, error) {
+	f.cleanupCalled = true
+	f.cleanupObject = object
+	return f.cleanupDidUpdate, f.cleanupErr
+}
 
 func TestCreateRayJobSubmitterIfNeed(t *testing.T) {
 	newScheme := runtime.NewScheme()
@@ -170,13 +189,18 @@ func TestGetSubmitterTemplate(t *testing.T) {
 	submitterTemplate, err = getSubmitterTemplate(rayJobInstanceWithTemplate, rayClusterInstance)
 	require.NoError(t, err)
 	assert.Equal(t, []string{"/bin/bash", "-ce", "--"}, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Command)
-	assert.Equal(t, []string{"if ! ray job status --address http://test-url test-job-id >/dev/null 2>&1 ; then ray job submit --address http://test-url --no-wait --submission-id test-job-id -- echo no quote 'single quote' \"double quote\" ; fi ; ray job logs --address http://test-url --follow test-job-id"}, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Args)
+	expectedK8sJobModeArgs := []string{
+		"until " + fmt.Sprintf(utils.BasePythonHealthCommand, "http://test-url/"+utils.RayDashboardGCSHealthPath, utils.RayDashboardGCSHealthCheckTimeoutSeconds) +
+			" >/dev/null 2>&1 ; do echo \"Waiting for Ray Dashboard GCS to become healthy at http://test-url ...\" ; sleep 2 ; done ; " +
+			"if ! ray job status --address http://test-url test-job-id >/dev/null 2>&1 ; then ray job submit --address http://test-url --no-wait --submission-id test-job-id -- echo no quote 'single quote' \"double quote\" ; fi ; ray job logs --address http://test-url --follow test-job-id",
+	}
+	assert.Equal(t, expectedK8sJobModeArgs, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Args)
 
 	// Test 3: User did not provide template, should use the image of the Ray Head
 	submitterTemplate, err = getSubmitterTemplate(rayJobInstanceWithoutTemplate, rayClusterInstance)
 	require.NoError(t, err)
 	assert.Equal(t, []string{"/bin/bash", "-ce", "--"}, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Command)
-	assert.Equal(t, []string{"if ! ray job status --address http://test-url test-job-id >/dev/null 2>&1 ; then ray job submit --address http://test-url --no-wait --submission-id test-job-id -- echo no quote 'single quote' \"double quote\" ; fi ; ray job logs --address http://test-url --follow test-job-id"}, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Args)
+	assert.Equal(t, expectedK8sJobModeArgs, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Args)
 	assert.Equal(t, "rayproject/ray:custom-version", submitterTemplate.Spec.Containers[utils.RayContainerIndex].Image)
 
 	// Test 4: Check default PYTHONUNBUFFERED setting
@@ -199,6 +223,118 @@ func TestGetSubmitterTemplate(t *testing.T) {
 	envVar, found = utils.EnvVarByName(utils.RAY_JOB_SUBMISSION_ID, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Env)
 	assert.True(t, found)
 	assert.Equal(t, "test-job-id", envVar.Value)
+}
+
+func TestGetSubmitterContainerWithFeatureGate(t *testing.T) {
+	// Enable the SidecarSubmitterRestart feature gate for this test
+	features.SetFeatureGateDuringTest(t, features.SidecarSubmitterRestart, true)
+
+	rayJobInstance := &rayv1.RayJob{
+		Spec: rayv1.RayJobSpec{
+			Entrypoint:     "echo test",
+			SubmissionMode: rayv1.SidecarMode,
+			RayClusterSpec: &rayv1.RayClusterSpec{
+				HeadGroupSpec: rayv1.HeadGroupSpec{
+					Template: corev1.PodTemplateSpec{
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{
+									Image: "rayproject/ray:test",
+									Ports: []corev1.ContainerPort{
+										{
+											Name:          utils.DashboardPortName,
+											ContainerPort: utils.DefaultDashboardPort,
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		Status: rayv1.RayJobStatus{
+			DashboardURL: "http://127.0.0.1:8265",
+			JobId:        "test-job-id",
+		},
+	}
+
+	rayClusterInstance := &rayv1.RayCluster{
+		Spec: *rayJobInstance.Spec.RayClusterSpec,
+	}
+
+	container, err := getSubmitterContainer(rayJobInstance, rayClusterInstance)
+	require.NoError(t, err)
+
+	// Verify restart policy is set to OnFailure for the submitter container
+	require.NotNil(t, container.RestartPolicy)
+	assert.Equal(t, corev1.ContainerRestartPolicyOnFailure, *container.RestartPolicy)
+}
+
+func TestCheckIsRestartCountExceeded(t *testing.T) {
+	tests := []struct {
+		name                 string
+		restartCount         int32
+		existCode            int32
+		hasTermState         bool
+		hasLastTermState     bool
+		expectedShouldUpdate bool
+	}{
+		{
+			name:                 "restart count below limit of 2",
+			restartCount:         1,
+			existCode:            1,
+			hasTermState:         true,
+			hasLastTermState:     true,
+			expectedShouldUpdate: false,
+		},
+		{
+			name:                 "restart count at limit of 2",
+			restartCount:         2,
+			existCode:            1,
+			hasTermState:         true,
+			hasLastTermState:     true,
+			expectedShouldUpdate: true,
+		},
+		{
+			name:                 "successful exit should not trigger failure",
+			restartCount:         3,
+			existCode:            0,
+			hasTermState:         true,
+			hasLastTermState:     true,
+			expectedShouldUpdate: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			containerStatus := corev1.ContainerStatus{
+				Name:         utils.SubmitterContainerName,
+				RestartCount: tt.restartCount,
+			}
+
+			if tt.hasTermState {
+				containerStatus.State = corev1.ContainerState{
+					Terminated: &corev1.ContainerStateTerminated{ExitCode: tt.existCode},
+				}
+			}
+
+			if tt.hasLastTermState {
+				containerStatus.LastTerminationState = corev1.ContainerState{
+					Terminated: &corev1.ContainerStateTerminated{ExitCode: 1},
+				}
+			}
+
+			headPod := &corev1.Pod{
+				Status: corev1.PodStatus{
+					ContainerStatuses: []corev1.ContainerStatus{containerStatus},
+				},
+			}
+
+			shouldUpdate, _ := checkIsRestartCountExceeded(headPod, 2)
+			assert.Equal(t, tt.expectedShouldUpdate, shouldUpdate)
+		})
+	}
 }
 
 func TestUpdateStatusToSuspendingIfNeeded(t *testing.T) {
@@ -577,7 +713,7 @@ func TestEmitRayJobExecutionDuration(t *testing.T) {
 			name: "non-terminal to retrying state should emit metrics",
 			originalRayJobStatus: rayv1.RayJobStatus{
 				JobDeploymentStatus: rayv1.JobDeploymentStatusRunning,
-				Failed:              ptr.To(int32(2)),
+				Failed:              new(int32(2)),
 			},
 			rayJobStatus: rayv1.RayJobStatus{
 				JobDeploymentStatus: rayv1.JobDeploymentStatusRetrying,
@@ -637,7 +773,7 @@ func TestGetSubmitterTemplate_WithEnableK8sTokenAuth(t *testing.T) {
 		Spec: rayv1.RayClusterSpec{
 			AuthOptions: &rayv1.AuthOptions{
 				Mode:               rayv1.AuthModeToken,
-				EnableK8sTokenAuth: ptr.To(true),
+				EnableK8sTokenAuth: new(true),
 			},
 			HeadGroupSpec: rayv1.HeadGroupSpec{
 				Template: corev1.PodTemplateSpec{
@@ -675,4 +811,135 @@ func TestGetSubmitterTemplate_WithEnableK8sTokenAuth(t *testing.T) {
 		}
 	}
 	assert.True(t, foundVolumeMount, "Submitter container should have the ray-token volume mount")
+}
+
+func TestBatchSchedulerOnCompletionCalledWhenRayJobComplete(t *testing.T) {
+	tests := []struct {
+		name                string
+		jobDeploymentStatus rayv1.JobDeploymentStatus
+		cleanupDidUpdate    bool
+		cleanupErr          error
+		expectCleanupCalled bool
+		expectCleanupEvent  string
+	}{
+		{
+			name:                "Complete status - cleanup performed successfully",
+			jobDeploymentStatus: rayv1.JobDeploymentStatusComplete,
+			cleanupDidUpdate:    true,
+			cleanupErr:          nil,
+			expectCleanupCalled: true,
+			expectCleanupEvent:  string(utils.BatchSchedulerCleanedUp),
+		},
+		{
+			name:                "Complete status - cleanup no-op (no resources to clean)",
+			jobDeploymentStatus: rayv1.JobDeploymentStatusComplete,
+			cleanupDidUpdate:    false,
+			cleanupErr:          nil,
+			expectCleanupCalled: true,
+			expectCleanupEvent:  "",
+		},
+		{
+			name:                "Complete status - cleanup returns error",
+			jobDeploymentStatus: rayv1.JobDeploymentStatusComplete,
+			cleanupDidUpdate:    false,
+			cleanupErr:          errors.New("cleanup failed"),
+			expectCleanupCalled: true,
+			expectCleanupEvent:  string(utils.FailedToCleanupBatchScheduler),
+		},
+		{
+			name:                "Failed status - cleanup performed successfully",
+			jobDeploymentStatus: rayv1.JobDeploymentStatusFailed,
+			cleanupDidUpdate:    true,
+			cleanupErr:          nil,
+			expectCleanupCalled: true,
+			expectCleanupEvent:  string(utils.BatchSchedulerCleanedUp),
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			newScheme := runtime.NewScheme()
+			_ = rayv1.AddToScheme(newScheme)
+
+			rayJob := &rayv1.RayJob{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-rayjob",
+					Namespace: "default",
+				},
+				Spec: rayv1.RayJobSpec{
+					Entrypoint: "echo hello",
+					RayClusterSpec: &rayv1.RayClusterSpec{
+						HeadGroupSpec: rayv1.HeadGroupSpec{
+							Template: corev1.PodTemplateSpec{
+								Spec: corev1.PodSpec{
+									Containers: []corev1.Container{
+										{
+											Name:  "ray-head",
+											Image: "rayproject/ray:latest",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				Status: rayv1.RayJobStatus{
+					JobDeploymentStatus: tc.jobDeploymentStatus,
+					JobStatus:           rayv1.JobStatusSucceeded,
+					RayClusterName:      "test-raycluster",
+				},
+			}
+
+			fakeClient := clientFake.NewClientBuilder().
+				WithScheme(newScheme).
+				WithRuntimeObjects(rayJob).
+				WithStatusSubresource(rayJob).
+				Build()
+
+			fakeScheduler := &fakeBatchScheduler{
+				cleanupDidUpdate: tc.cleanupDidUpdate,
+				cleanupErr:       tc.cleanupErr,
+			}
+			schedulerManager := batchscheduler.NewSchedulerManagerForTest(fakeScheduler)
+
+			recorder := record.NewFakeRecorder(100)
+
+			reconciler := &RayJobReconciler{
+				Client:   fakeClient,
+				Recorder: recorder,
+				Scheme:   newScheme,
+				options: RayJobReconcilerOptions{
+					BatchSchedulerManager: schedulerManager,
+				},
+			}
+
+			ctx := context.Background()
+			_, err := reconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Name:      rayJob.Name,
+					Namespace: rayJob.Namespace,
+				},
+			})
+			// The Reconcile should not return an error for terminal states
+			require.NoError(t, err)
+
+			// Verify CleanupOnCompletion was called
+			assert.True(t, fakeScheduler.cleanupCalled, "CleanupOnCompletion should have been called when RayJob is in %s status", tc.jobDeploymentStatus)
+			assert.Equal(t, rayJob.Name, fakeScheduler.cleanupObject.GetName(), "CleanupOnCompletion should receive the correct RayJob object")
+			assert.Equal(t, rayJob.Namespace, fakeScheduler.cleanupObject.GetNamespace(), "CleanupOnCompletion should receive the correct RayJob namespace")
+
+			// Verify the expected event was emitted
+			if tc.expectCleanupEvent != "" {
+				var foundEvent bool
+				for len(recorder.Events) > 0 {
+					event := <-recorder.Events
+					if strings.Contains(event, tc.expectCleanupEvent) {
+						foundEvent = true
+						break
+					}
+				}
+				assert.True(t, foundEvent, "Expected event %q to be emitted", tc.expectCleanupEvent)
+			}
+		})
+	}
 }

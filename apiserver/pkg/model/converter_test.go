@@ -10,7 +10,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/ptr"
 
 	util "github.com/ray-project/kuberay/apiserver/pkg/util"
 	api "github.com/ray-project/kuberay/proto/go_client"
@@ -290,11 +289,11 @@ var ClusterSpecAutoscalerTest = rayv1api.RayCluster{
 		WorkerGroupSpecs: []rayv1api.WorkerGroupSpec{
 			workerSpecTest,
 		},
-		EnableInTreeAutoscaling: ptr.To(true),
+		EnableInTreeAutoscaling: new(true),
 		AutoscalerOptions: &rayv1api.AutoscalerOptions{
-			IdleTimeoutSeconds: ptr.To(int32(60)),
-			UpscalingMode:      (*rayv1api.UpscalingMode)(ptr.To("Default")),
-			ImagePullPolicy:    (*corev1.PullPolicy)(ptr.To("Always")),
+			IdleTimeoutSeconds: new(int32(60)),
+			UpscalingMode:      (*rayv1api.UpscalingMode)(new("Default")),
+			ImagePullPolicy:    (*corev1.PullPolicy)(new("Always")),
 			Resources: &corev1.ResourceRequirements{
 				Requests: corev1.ResourceList{
 					corev1.ResourceCPU:    resource.MustParse("500m"),
@@ -425,10 +424,10 @@ var ServiceV2Test = rayv1api.RayService{
 }
 
 var autoscalerOptions = &rayv1api.AutoscalerOptions{
-	IdleTimeoutSeconds: ptr.To(int32(60)),
-	UpscalingMode:      (*rayv1api.UpscalingMode)(ptr.To("Default")),
-	Image:              ptr.To("Some Image"),
-	ImagePullPolicy:    (*corev1.PullPolicy)(ptr.To("Always")),
+	IdleTimeoutSeconds: new(int32(60)),
+	UpscalingMode:      (*rayv1api.UpscalingMode)(new("Default")),
+	Image:              new("Some Image"),
+	ImagePullPolicy:    (*corev1.PullPolicy)(new("Always")),
 	Env: []corev1.EnvVar{
 		{
 			Name:  "n1",
@@ -456,13 +455,13 @@ var autoscalerOptions = &rayv1api.AutoscalerOptions{
 			Name:             "vmount1",
 			MountPath:        "path1",
 			ReadOnly:         false,
-			MountPropagation: (*corev1.MountPropagationMode)(ptr.To("None")),
+			MountPropagation: (*corev1.MountPropagationMode)(new("None")),
 		},
 		{
 			Name:             "vmount2",
 			MountPath:        "path2",
 			ReadOnly:         true,
-			MountPropagation: (*corev1.MountPropagationMode)(ptr.To("HostToContainer")),
+			MountPropagation: (*corev1.MountPropagationMode)(new("HostToContainer")),
 		},
 	},
 	Resources: &corev1.ResourceRequirements{

@@ -23,6 +23,9 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/apimachinery/pkg/util/rand"
+	utilversion "k8s.io/apimachinery/pkg/util/version"
+	"k8s.io/apimachinery/pkg/version"
+	"k8s.io/client-go/discovery"
 	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -749,6 +752,10 @@ func IsAutoscalingV2Enabled(spec *rayv1.RayClusterSpec) bool {
 	return spec != nil && spec.AutoscalerOptions != nil && spec.AutoscalerOptions.Version != nil && *spec.AutoscalerOptions.Version == rayv1.AutoscalerVersionV2
 }
 
+func IsAutoscalingV1Enabled(spec *rayv1.RayClusterSpec) bool {
+	return spec != nil && spec.AutoscalerOptions != nil && spec.AutoscalerOptions.Version != nil && *spec.AutoscalerOptions.Version == rayv1.AutoscalerVersionV1
+}
+
 // Check if the RayCluster has GCS fault tolerance enabled.
 func IsGCSFaultToleranceEnabled(spec *rayv1.RayClusterSpec, annotations map[string]string) bool {
 	v, ok := annotations[RayFTEnabledAnnotationKey]
@@ -881,6 +888,39 @@ func GetWeightsFromHTTPRoute(httpRoute *gwv1.HTTPRoute, rayServiceInstance *rayv
 	return
 }
 
+// GetKubernetesVersion returns the API server version
+func GetKubernetesVersion() (*version.Info, error) {
+	config, err := ctrl.GetConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	discoveryClient, err := discovery.NewDiscoveryClientForConfig(config)
+	if err != nil {
+		return nil, err
+	}
+
+	serverVersion, err := discoveryClient.ServerVersion()
+	if err != nil {
+		return nil, err
+	}
+	return serverVersion, nil
+}
+
+// IsK8sVersionAtLeast checks the API server version is at least v{major}.{minor}.{patch}
+func IsK8sVersionAtLeast(serverVersion *version.Info, major, minor, patch int) (bool, error) {
+	requiredVersionString := fmt.Sprintf("%d.%d.%d", major, minor, patch)
+	currentVersion, err := utilversion.ParseGeneric(serverVersion.GitVersion)
+	if err != nil {
+		return false, err
+	}
+	requiredVersion, err := utilversion.ParseGeneric(requiredVersionString)
+	if err != nil {
+		return false, err
+	}
+	return currentVersion.AtLeast(requiredVersion), nil
+}
+
 func GetContainerCommand(additionalOptions []string) []string {
 	bashOptions := []string{"c"}
 	bashOptions = append(bashOptions, additionalOptions...)
@@ -948,7 +988,7 @@ func GetRayDashboardClientFunc(ctx context.Context, mgr manager.Manager, useKube
 				Namespace: rayCluster.Namespace,
 			}
 
-			if err := mgr.GetClient().Get(context.Background(), secretKey, secret); err != nil {
+			if err := mgr.GetClient().Get(ctx, secretKey, secret); err != nil {
 				return nil, fmt.Errorf("failed to get auth secret %s/%s: %w", rayCluster.Namespace, secretName, err)
 			}
 
@@ -981,15 +1021,6 @@ func GetRayDashboardClientFunc(ctx context.Context, mgr manager.Manager, useKube
 		}
 		dashboardClient.InitClient(httpClient, dashboardURL, authToken)
 
-		if features.Enabled(features.AsyncJobInfoQuery) && rayCluster != nil {
-			namespacedName := types.NamespacedName{
-				Name:      rayCluster.Name,
-				Namespace: rayCluster.Namespace,
-			}
-			dashboardCachedClient := &dashboardclient.RayDashboardCacheClient{}
-			dashboardCachedClient.InitClient(ctx, namespacedName, dashboardClient)
-			return dashboardCachedClient, nil
-		}
 		return dashboardClient, nil
 	}
 }
@@ -1028,13 +1059,59 @@ func HasSubmitter(rayJobInstance *rayv1.RayJob) bool {
 }
 
 // IsHTTPRouteEqual checks if the existing HTTPRoute matches the desired HTTPRoute.
+// This check only compares the fields explicitly managed by the RayService controller.
 func IsHTTPRouteEqual(existing, desired *gwv1.HTTPRoute) bool {
+	if existing == nil || desired == nil {
+		return existing == desired
+	}
+
+	// Compare Hostnames. Treat nil and empty slice as equivalent to avoid false positives
+	// caused by renormalization from the API server or the Gateway implementation.
+	if len(existing.Spec.Hostnames) != len(desired.Spec.Hostnames) {
+		return false
+	}
+	if len(existing.Spec.Hostnames) > 0 && !reflect.DeepEqual(existing.Spec.Hostnames, desired.Spec.Hostnames) {
+		return false
+	}
+
+	// Compare ParentRefs
+	if len(existing.Spec.ParentRefs) != len(desired.Spec.ParentRefs) {
+		return false
+	}
+	for i := range desired.Spec.ParentRefs {
+		eRef := existing.Spec.ParentRefs[i]
+		dRef := desired.Spec.ParentRefs[i]
+
+		if string(eRef.Name) != string(dRef.Name) ||
+			string(ptr.Deref(eRef.Namespace, "")) != string(ptr.Deref(dRef.Namespace, "")) {
+			return false
+		}
+	}
+
+	// Compare Rules
 	if len(existing.Spec.Rules) != len(desired.Spec.Rules) {
 		return false
 	}
 
 	for i := range desired.Spec.Rules {
-		if len(existing.Spec.Rules[i].BackendRefs) != len(desired.Spec.Rules[i].BackendRefs) {
+		eRule := existing.Spec.Rules[i]
+		dRule := desired.Spec.Rules[i]
+
+		// Compare Matches
+		if !reflect.DeepEqual(eRule.Matches, dRule.Matches) {
+			return false
+		}
+
+		// Compare Filters. Treat nil and empty slice as equivalent to avoid false positives
+		// caused by renormalization from the API server or the Gateway implementation.
+		if len(eRule.Filters) != len(dRule.Filters) {
+			return false
+		}
+		if len(eRule.Filters) > 0 && !reflect.DeepEqual(eRule.Filters, dRule.Filters) {
+			return false
+		}
+
+		if len(eRule.BackendRefs) != len(dRule.BackendRefs) {
 			return false
 		}
 
@@ -1044,10 +1121,41 @@ func IsHTTPRouteEqual(existing, desired *gwv1.HTTPRoute) bool {
 
 			// Only compare the fields the controller updates.
 			if string(existingRef.Name) != string(desiredRef.Name) ||
+				string(ptr.Deref(existingRef.Namespace, "")) != string(ptr.Deref(desiredRef.Namespace, "")) ||
 				ptr.Deref(existingRef.Weight, 1) != ptr.Deref(desiredRef.Weight, 1) ||
 				ptr.Deref(existingRef.Port, 0) != ptr.Deref(desiredRef.Port, 0) {
 				return false
 			}
+		}
+	}
+	return true
+}
+
+// IsGatewayEqual checks if the existing Gateway matches the desired Gateway.
+// This check only compares the fields explicitly managed by the RayService controller.
+// If the controller starts managing additional Gateway fields in the future,
+// this function must be updated accordingly.
+func IsGatewayEqual(existing, desired *gwv1.Gateway) bool {
+	if existing == nil || desired == nil {
+		return existing == desired
+	}
+
+	if string(existing.Spec.GatewayClassName) != string(desired.Spec.GatewayClassName) {
+		return false
+	}
+
+	// Compare Listeners. RayService controller sets Name, Protocol, and Port on each Listener.
+	if len(existing.Spec.Listeners) != len(desired.Spec.Listeners) {
+		return false
+	}
+	for i := range desired.Spec.Listeners {
+		eL := existing.Spec.Listeners[i]
+		dL := desired.Spec.Listeners[i]
+
+		if string(eL.Name) != string(dL.Name) ||
+			eL.Protocol != dL.Protocol ||
+			eL.Port != dL.Port {
+			return false
 		}
 	}
 	return true

@@ -1,7 +1,5 @@
 package e2eincrementalupgrade
 
-import "k8s.io/utils/ptr"
-
 // These parameters control capacity scaling and gradual traffic migration during the upgrade.
 type incrementalUpgradeParams struct {
 	Name     string
@@ -41,7 +39,7 @@ var incrementalUpgradeCombinations = []incrementalUpgradeParams{
 
 // ptrs returns (*stepSize, *interval, *maxSurge) for use with the RayService bootstrap helper.
 func (p incrementalUpgradeParams) ptrs() (*int32, *int32, *int32) {
-	return ptr.To(p.StepSize), ptr.To(p.Interval), ptr.To(p.MaxSurge)
+	return new(p.StepSize), new(p.Interval), new(p.MaxSurge)
 }
 
 // The following defines the Serve configurations for different types of incremental upgrade tests, including:

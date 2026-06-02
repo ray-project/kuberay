@@ -250,6 +250,12 @@ type AutoscalerOptions struct {
 	// Optional list of volumeMounts.  This is needed for enabling TLS for the autoscaler container.
 	// +optional
 	VolumeMounts []corev1.VolumeMount `json:"volumeMounts,omitempty"`
+	// Optional list overwrite the default command of the autoscaler container.
+	// +optional
+	Command []string `json:"command,omitempty"`
+	// Optional to overwrite the default args of the autoscaler container.
+	// +optional
+	Args []string `json:"args,omitempty"`
 }
 
 // +kubebuilder:validation:Enum=Default;Aggressive;Conservative
@@ -430,10 +436,6 @@ type RayClusterList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []RayCluster `json:"items"`
-}
-
-func init() {
-	SchemeBuilder.Register(&RayCluster{}, &RayClusterList{})
 }
 
 type EventReason string

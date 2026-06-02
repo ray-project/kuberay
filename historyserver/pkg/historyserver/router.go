@@ -298,9 +298,33 @@ func routerRayClusterSet(s *ServerHandler) {
 		name := r1.PathParameter("name")
 		namespace := r1.PathParameter("namespace")
 		session := r1.PathParameter("session")
+
+		if session != "live" {
+			if ParseSessionTimestamp(session).IsZero() {
+				logrus.Warnf("Rejecting invalid session name: %s/%s/%s", namespace, name, session)
+				r2.WriteErrorString(http.StatusBadRequest, fmt.Sprintf("invalid session name: %q", session))
+				return
+			}
+			info := utils.ClusterInfo{Name: name, Namespace: namespace, SessionName: session}
+			live, err := s.sessionLoader.LoadSession(r1.Request.Context(), info)
+			if err != nil {
+				logrus.Errorf("Failed to load session %s/%s/%s: %v", namespace, name, session, err)
+				r2.WriteErrorString(http.StatusInternalServerError, err.Error())
+				return
+			}
+
+			// Users might use the complete session name to enter a live cluster,
+			// so "live" sentinel is set to avoid querying empty in-memory state.
+			if live {
+				session = "live"
+			}
+		}
+
+		// Set cookies only after a successful load (dead) or a skip (live).
 		http.SetCookie(r2, &http.Cookie{MaxAge: 600, Path: "/", Name: COOKIE_CLUSTER_NAME_KEY, Value: name})
 		http.SetCookie(r2, &http.Cookie{MaxAge: 600, Path: "/", Name: COOKIE_CLUSTER_NAMESPACE_KEY, Value: namespace})
 		http.SetCookie(r2, &http.Cookie{MaxAge: 600, Path: "/", Name: COOKIE_SESSION_NAME_KEY, Value: session})
+
 		r2.WriteJson(map[string]interface{}{
 			"result":    "success",
 			"name":      name,
@@ -1643,7 +1667,7 @@ func (s *ServerHandler) getTasks(req *restful.Request, resp *restful.Response) {
 // The schema aligns with the Ray Dashboard API.
 // Ref: https://github.com/ray-project/ray/blob/d0b1d151d8ea964a711e451d0ae736f8bf95b629/python/ray/util/state/common.py#L730-L819.
 func formatTaskForResponse(task eventtypes.Task, detail bool) map[string]interface{} {
-	// TODO(jwj): Maybe define result schema in types.go.
+	// TODO(jiangjiawei1103): Maybe define result schema in types.go.
 	result := map[string]interface{}{
 		"task_id":            task.TaskID,
 		"attempt_number":     task.TaskAttempt,
@@ -1697,7 +1721,7 @@ func formatTaskForResponse(task eventtypes.Task, detail bool) map[string]interfa
 			})
 		}
 		result["events"] = events
-		// TODO(jwj): Support profiling_data after TASK_PROFILE_EVENT is supported.
+		// TODO(jiangjiawei1103): Support profiling_data after TASK_PROFILE_EVENT is supported.
 		// Ref: https://github.com/ray-project/ray/blob/d0b1d151d8ea964a711e451d0ae736f8bf95b629/python/ray/util/state/common.py#L1616-L1622.
 		// result["profiling_data"] = task.ProfilingData
 		result["task_log_info"] = task.TaskLogInfo
@@ -1820,8 +1844,8 @@ func formatNodeSummaryReplayForResp(node eventtypes.Node, sessionName string) []
 		nodeTypeName = nodeGroup
 	}
 	isHeadNode := nodeTypeName == "headgroup"
-	rayletSocketName := fmt.Sprintf("/tmp/ray/%s/sockets/raylet", sessionName)
-	objectStoreSocketName := fmt.Sprintf("/tmp/ray/%s/sockets/plasma_store", sessionName)
+	rayletSocketName := path.Join(utils.GetTmpRayRoot(), sessionName, "sockets", "raylet")
+	objectStoreSocketName := path.Join(utils.GetTmpRayRoot(), sessionName, "sockets", "plasma_store")
 
 	// Handle the start timestamp of the node.
 	// Ref: https://github.com/ray-project/ray/blob/f953f199b5d68d47c07c865c5ebcd2333d49f365/src/ray/protobuf/gcs.proto#L345-L346.

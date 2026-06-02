@@ -7,7 +7,6 @@ import (
 	"maps"
 	"math"
 	"os"
-	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -30,6 +29,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -95,8 +95,8 @@ func NewRayServiceReconciler(ctx context.Context, mgr manager.Manager, provider 
 // +kubebuilder:rbac:groups=core,resources=services/proxy,verbs=get;update;patch
 // +kubebuilder:rbac:groups=coordination.k8s.io,resources=leases,verbs=get;list;create;update
 // +kubebuilder:rbac:groups=core,resources=serviceaccounts,verbs=get;list;watch;create;delete
-// +kubebuilder:rbac:groups="gateway.networking.k8s.io",resources=gateways,verbs=get;list;watch;create;update;
-// +kubebuilder:rbac:groups="gateway.networking.k8s.io",resources=httproutes,verbs=get;list;watch;create;update;
+// +kubebuilder:rbac:groups="gateway.networking.k8s.io",resources=gateways,verbs=get;list;watch;create;update;delete
+// +kubebuilder:rbac:groups="gateway.networking.k8s.io",resources=httproutes,verbs=get;list;watch;create;update;delete
 // +kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=roles,verbs=get;list;watch;create;delete;update
 // +kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=rolebindings,verbs=get;list;watch;create;delete
 // +kubebuilder:rbac:groups=discovery.k8s.io,resources=endpointslices,verbs=get;list;watch
@@ -123,6 +123,36 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 		return ctrl.Result{}, nil
 	}
 
+	r.cleanUpServeConfigCache(ctx, rayServiceInstance)
+	hasRayClustersToClean, err := r.cleanUpRayClusterInstance(ctx, rayServiceInstance)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	if !rayServiceInstance.DeletionTimestamp.IsZero() {
+		if !hasRayClustersToClean {
+			logger.Info("No RayClusters exist, removing finalizer")
+			controllerutil.RemoveFinalizer(rayServiceInstance, utils.RayServiceFinalizer)
+			if err := r.Update(ctx, rayServiceInstance); err != nil {
+				logger.Error(err, "Failed to remove finalizer for RayService")
+				return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
+			}
+			return ctrl.Result{}, nil
+		}
+		logger.Info("Requeue RayService, waiting for RayClusters to be deleted")
+		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
+	}
+
+	if !controllerutil.ContainsFinalizer(rayServiceInstance, utils.RayServiceFinalizer) {
+		logger.Info("Adding finalizer to RayService", "finalizer", utils.RayServiceFinalizer)
+		controllerutil.AddFinalizer(rayServiceInstance, utils.RayServiceFinalizer)
+		if err := r.Update(ctx, rayServiceInstance); err != nil {
+			logger.Error(err, "Failed to add finalizer to RayService")
+			return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
+		}
+		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, nil
+	}
+
 	// Perform all validations and directly fail the RayService if any of the validation fails
 	errType, err := validateRayService(ctx, rayServiceInstance)
 	// Immediately update the status after validation
@@ -140,10 +170,15 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 		return ctrl.Result{}, nil
 	}
 
-	r.cleanUpServeConfigCache(ctx, rayServiceInstance)
-	hasRayClustersToClean, err := r.cleanUpRayClusterInstance(ctx, rayServiceInstance)
-	if err != nil {
-		return ctrl.Result{}, err
+	result, err := r.handleSuspend(ctx, rayServiceInstance)
+	if updateErr := r.updateStatusIfChanged(ctx, originalRayServiceInstance, rayServiceInstance); updateErr != nil && err == nil {
+		err = updateErr
+		if (result == ctrl.Result{}) {
+			result = ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}
+		}
+	}
+	if err != nil || suspendIsOperative(rayServiceInstance) {
+		return result, err
 	}
 
 	// If the RayService has timed out during initialization, skip the rest of the reconciliation.
@@ -169,9 +204,14 @@ func (r *RayServiceReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	if utils.IsIncrementalUpgradeEnabled(&rayServiceInstance.Spec) {
 		// If an upgrade is in progress, check if rollback is necessary.
 		isUpgradeInProgress := meta.IsStatusConditionTrue(rayServiceInstance.Status.Conditions, string(rayv1.UpgradeInProgress))
-		if isUpgradeInProgress && activeRayClusterInstance != nil && pendingRayClusterInstance != nil {
-			if err := r.reconcileRollbackState(ctx, rayServiceInstance, activeRayClusterInstance, pendingRayClusterInstance); err != nil {
-				return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
+		if isUpgradeInProgress {
+			if activeRayClusterInstance == nil {
+				logger.Info("Cannot initiate rollback: active cluster not found")
+				r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(utils.RollbackImpossible), "Active cluster not found, rollback cannot be initiated")
+			} else if pendingRayClusterInstance != nil {
+				if err := r.reconcileRollbackState(ctx, rayServiceInstance, activeRayClusterInstance, pendingRayClusterInstance); err != nil {
+					return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
+				}
 			}
 		}
 	}
@@ -309,6 +349,211 @@ func validateRayService(ctx context.Context, rayServiceInstance *rayv1.RayServic
 	return "", nil
 }
 
+// suspendIsOperative reports whether the suspend state machine currently
+// owns this reconcile pass. When true, Reconcile must short-circuit after
+// persisting status: running the rest of the loop would either re-create
+// resources that handleSuspend tore down or overwrite the conditions it
+// staged.
+//
+// Reading Suspending / Suspended is the canonical "is suspend driving?"
+// check because those two conditions must only be mutated by handleSuspend
+// (and are the source of truth for the suspend state machine after it
+// returns). Do not write to them from anywhere else.
+func suspendIsOperative(rayServiceInstance *rayv1.RayService) bool {
+	return meta.IsStatusConditionTrue(rayServiceInstance.Status.Conditions, string(rayv1.RayServiceSuspending)) ||
+		meta.IsStatusConditionTrue(rayServiceInstance.Status.Conditions, string(rayv1.RayServiceSuspended))
+}
+
+// handleSuspend implements the Spec.Suspend lifecycle. It mutates
+// rayServiceInstance.Status in-place; the caller persists the changes via a
+// single Status().Update.
+//
+// State machine:
+//
+//	(no suspend)  --Spec.Suspend=true-->  Suspending  --owned resources deleted-->  Suspended  --Spec.Suspend=false-->  (no suspend)
+//
+// Atomicity comes from a persisted Suspending condition as the commit point.
+// The first reconcile that observes Spec.Suspend=true only stages the status
+// transition (Suspending=True + reset of ActiveServiceStatus,
+// PendingServiceStatus, NumServeEndpoints, ServiceStatus) in the same status
+// update; deletion runs on the next reconcile, once Suspending is durable. If
+// a later deletion attempt errors out or Spec.Suspend is flipped back to
+// false, Suspending stays True in storage and subsequent reconciles continue
+// the cleanup.
+func (r *RayServiceReconciler) handleSuspend(ctx context.Context, rayServiceInstance *rayv1.RayService) (ctrl.Result, error) {
+	logger := ctrl.LoggerFrom(ctx)
+
+	isSuspending := meta.IsStatusConditionTrue(rayServiceInstance.Status.Conditions, string(rayv1.RayServiceSuspending))
+	isSuspended := meta.IsStatusConditionTrue(rayServiceInstance.Status.Conditions, string(rayv1.RayServiceSuspended))
+
+	// Case 1: already fully suspended.
+	if isSuspended {
+		if !rayServiceInstance.Spec.Suspend {
+			logger.Info("Spec.Suspend is false; exiting Suspended state and resuming reconcile")
+			setCondition(rayServiceInstance, rayv1.RayServiceSuspended, metav1.ConditionFalse, rayv1.RayServiceResumed,
+				"Spec.Suspend is false; RayService has resumed.")
+			return ctrl.Result{}, nil
+		}
+		// Stay suspended; nothing to reconcile.
+		return ctrl.Result{}, nil
+	}
+
+	// Case 2: Spec.Suspend just transitioned to true. Stage the status
+	// transition (Suspending=True + reset status fields) and return so the
+	// caller can persist it. Deletion runs on the next reconcile once
+	// Suspending is durable.
+	if !isSuspending {
+		if !rayServiceInstance.Spec.Suspend {
+			return ctrl.Result{}, nil
+		}
+		logger.Info("Spec.Suspend is true; committing transition to Suspending state")
+		setCondition(rayServiceInstance, rayv1.RayServiceSuspending, metav1.ConditionTrue, rayv1.SuspendRequested,
+			"Spec.Suspend is true; will delete all Kubernetes resources owned by this RayService.")
+		setCondition(rayServiceInstance, rayv1.RayServiceReady, metav1.ConditionFalse, rayv1.SuspendInProgress, "RayService is suspending.")
+		setCondition(rayServiceInstance, rayv1.UpgradeInProgress, metav1.ConditionFalse, rayv1.SuspendInProgress,
+			"No upgrade in progress.")
+		setCondition(rayServiceInstance, rayv1.RollbackInProgress, metav1.ConditionFalse, rayv1.SuspendInProgress,
+			"No rollback in progress.")
+		rayServiceInstance.Status.ActiveServiceStatus = rayv1.RayServiceStatus{}
+		rayServiceInstance.Status.PendingServiceStatus = rayv1.RayServiceStatus{}
+		rayServiceInstance.Status.NumServeEndpoints = 0
+		rayServiceInstance.Status.ServiceStatus = rayv1.NotRunning
+		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, nil
+	}
+
+	// Case 3: Suspending is committed in storage. Delete owned resources.
+	// Atomic: ignore Spec.Suspend here — once Suspending is persisted, the
+	// deletion always runs to completion.
+	allDeleted, err := r.deleteRayServiceOwnedResources(ctx, rayServiceInstance)
+	if err != nil {
+		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, err
+	}
+
+	if !allDeleted {
+		setCondition(rayServiceInstance, rayv1.RayServiceSuspending, metav1.ConditionTrue, rayv1.SuspendInProgress,
+			"Waiting for all Kubernetes resources owned by this RayService to be deleted.")
+		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, nil
+	}
+
+	// All resources deleted: transition to Suspended. Requeue so that the
+	// next reconcile observes Spec.Suspend; this matters when the user
+	// flipped Spec.Suspend back to false mid-suspend (atomic completion put
+	// us here despite Spec.Suspend=false), since the status-only update
+	// below would not otherwise wake the controller up.
+	logger.Info("All RayService-owned resources deleted; transitioning to Suspended")
+	setCondition(rayServiceInstance, rayv1.RayServiceSuspending, metav1.ConditionFalse, rayv1.SuspendComplete,
+		"All owned resources have been deleted.")
+	setCondition(rayServiceInstance, rayv1.RayServiceSuspended, metav1.ConditionTrue, rayv1.SuspendComplete, "All owned resources have been deleted.")
+	setCondition(rayServiceInstance, rayv1.RayServiceReady, metav1.ConditionFalse, rayv1.SuspendComplete, "RayService is suspended.")
+	setCondition(rayServiceInstance, rayv1.UpgradeInProgress, metav1.ConditionFalse, rayv1.SuspendComplete,
+		"No upgrade in progress.")
+	setCondition(rayServiceInstance, rayv1.RollbackInProgress, metav1.ConditionFalse, rayv1.SuspendComplete,
+		"No rollback in progress.")
+	return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, nil
+}
+
+// deleteRayServiceOwnedResources deletes every Kubernetes resource that the
+// RayService controller owns: RayClusters, head/serve Services, and — when
+// RayServiceIncrementalUpgrade is enabled — the Gateway and HTTPRoute.
+// Per-cluster serve Services used by incremental upgrade are owned by their
+// RayCluster, so they are garbage-collected when the cluster is deleted above.
+// Returns true when nothing remained to be deleted.
+func (r *RayServiceReconciler) deleteRayServiceOwnedResources(ctx context.Context, rayServiceInstance *rayv1.RayService) (bool, error) {
+	logger := ctrl.LoggerFrom(ctx)
+	allDeleted := true
+
+	// RayClusters.
+	rayClusterList := rayv1.RayClusterList{}
+	if err := r.List(ctx, &rayClusterList, common.RayServiceRayClustersAssociationOptions(rayServiceInstance).ToListOptions()...); err != nil {
+		return false, err
+	}
+	for i := range rayClusterList.Items {
+		cluster := &rayClusterList.Items[i]
+		allDeleted = false
+		if !cluster.DeletionTimestamp.IsZero() {
+			continue
+		}
+		logger.Info("Deleting RayCluster for suspend", "name", cluster.Name)
+		if err := r.Delete(ctx, cluster, client.PropagationPolicy(metav1.DeletePropagationBackground)); err != nil && !errors.IsNotFound(err) {
+			r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(utils.FailedToDeleteRayCluster),
+				"Failed to delete the RayCluster %s/%s during suspend: %v", cluster.Namespace, cluster.Name, err)
+			return false, err
+		}
+		r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeNormal, string(utils.DeletedRayCluster),
+			"Deleted the RayCluster %s/%s during suspend", cluster.Namespace, cluster.Name)
+	}
+
+	// Kubernetes Services (head + serve).
+	svcList := corev1.ServiceList{}
+	if err := r.List(ctx, &svcList, common.RayServiceRayClustersAssociationOptions(rayServiceInstance).ToListOptions()...); err != nil {
+		return false, err
+	}
+	for i := range svcList.Items {
+		svc := &svcList.Items[i]
+		allDeleted = false
+		if !svc.DeletionTimestamp.IsZero() {
+			continue
+		}
+		logger.Info("Deleting Service for suspend", "name", svc.Name)
+		if err := r.Delete(ctx, svc, client.PropagationPolicy(metav1.DeletePropagationBackground)); err != nil && !errors.IsNotFound(err) {
+			r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(utils.FailedToDeleteService),
+				"Failed to delete the Service %s/%s during suspend: %v", svc.Namespace, svc.Name, err)
+			return false, err
+		}
+		r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeNormal, string(utils.DeletedService),
+			"Deleted the Service %s/%s during suspend", svc.Namespace, svc.Name)
+	}
+
+	if utils.IsIncrementalUpgradeEnabled(&rayServiceInstance.Spec) {
+		gateway := &gwv1.Gateway{}
+		if err := r.Get(ctx, common.RayServiceGatewayNamespacedName(rayServiceInstance), gateway); err == nil {
+			allDeleted = false
+			if gateway.DeletionTimestamp.IsZero() {
+				logger.Info("Deleting Gateway for suspend", "name", gateway.Name)
+				if err := r.Delete(ctx, gateway, client.PropagationPolicy(metav1.DeletePropagationBackground)); err != nil && !errors.IsNotFound(err) {
+					r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(utils.FailedToDeleteGateway),
+						"Failed to delete the Gateway %s/%s during suspend: %v", gateway.Namespace, gateway.Name, err)
+					return false, err
+				}
+				r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeNormal, string(utils.DeletedGateway),
+					"Deleted the Gateway %s/%s during suspend", gateway.Namespace, gateway.Name)
+			}
+		} else if !errors.IsNotFound(err) {
+			return false, err
+		}
+
+		httpRoute := &gwv1.HTTPRoute{}
+		if err := r.Get(ctx, common.RayServiceHTTPRouteNamespacedName(rayServiceInstance), httpRoute); err == nil {
+			allDeleted = false
+			if httpRoute.DeletionTimestamp.IsZero() {
+				logger.Info("Deleting HTTPRoute for suspend", "name", httpRoute.Name)
+				if err := r.Delete(ctx, httpRoute, client.PropagationPolicy(metav1.DeletePropagationBackground)); err != nil && !errors.IsNotFound(err) {
+					r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(utils.FailedToDeleteHTTPRoute),
+						"Failed to delete the HTTPRoute %s/%s during suspend: %v", httpRoute.Namespace, httpRoute.Name, err)
+					return false, err
+				}
+				r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeNormal, string(utils.DeletedHTTPRoute),
+					"Deleted the HTTPRoute %s/%s during suspend", httpRoute.Namespace, httpRoute.Name)
+			}
+		} else if !errors.IsNotFound(err) {
+			return false, err
+		}
+	}
+
+	return allDeleted, nil
+}
+
+// updateStatusIfChanged persists rayServiceInstance.Status if it differs from
+// originalRayService.Status. It mirrors the status-update path used at the end
+// of Reconcile so that handleSuspend can finalize a reconcile early.
+func (r *RayServiceReconciler) updateStatusIfChanged(ctx context.Context, originalRayService, rayServiceInstance *rayv1.RayService) error {
+	if !utils.InconsistentRayServiceStatuses(originalRayService.Status, rayServiceInstance.Status) {
+		return nil
+	}
+	rayServiceInstance.Status.LastUpdateTime = &metav1.Time{Time: time.Now()}
+	return r.Status().Update(ctx, rayServiceInstance)
+}
+
 func (r *RayServiceReconciler) reconcileServicesToReadyCluster(ctx context.Context, rayServiceInstance *rayv1.RayService, rayClusterInstance *rayv1.RayCluster) (*corev1.Service, *corev1.Service, error) {
 	// Create K8s services if they don't exist. If they do exist, update the services to point to the RayCluster passed in.
 	headSvc, err := r.reconcileServices(ctx, rayServiceInstance, rayClusterInstance, utils.HeadService)
@@ -350,7 +595,13 @@ func reconcilePromotionAndServingStatus(ctx context.Context, headSvc, serveSvc *
 		// An incremental upgrade is complete when the active cluster has 0% capacity and the pending cluster has
 		// 100% of the traffic. We can't promote the pending cluster until traffic has been fully migrated.
 		if meta.IsStatusConditionTrue(rayServiceInstance.Status.Conditions, string(rayv1.UpgradeInProgress)) {
-			if utils.IsIncrementalUpgradeComplete(rayServiceInstance, pendingCluster) {
+			isRollbackInProgress := meta.IsStatusConditionTrue(rayServiceInstance.Status.Conditions, string(rayv1.RollbackInProgress))
+
+			// Do not promote the pending cluster during a rollback. Traffic is being
+			// shifted back to the active cluster, so the pending cluster must not
+			// become the new active even if its TargetCapacity and TrafficRoutedPercent
+			// reach the promotion thresholds.
+			if !isRollbackInProgress && utils.IsIncrementalUpgradeComplete(rayServiceInstance, pendingCluster) {
 				shouldPromote = true
 				logger.Info("Incremental upgrade completed, triggering promotion.", "rayService", rayServiceInstance.Name)
 			}
@@ -416,7 +667,7 @@ func (r *RayServiceReconciler) calculateStatus(
 			activeWeight, pendingWeight := utils.GetWeightsFromHTTPRoute(httpRoute, rayServiceInstance)
 			now := metav1.Time{Time: time.Now()}
 			if activeWeight >= 0 {
-				rayServiceInstance.Status.ActiveServiceStatus.TrafficRoutedPercent = ptr.To(activeWeight)
+				rayServiceInstance.Status.ActiveServiceStatus.TrafficRoutedPercent = new(activeWeight)
 				logger.Info("Updated active TrafficRoutedPercent from HTTPRoute", "activeClusterWeight", activeWeight)
 				if activeWeight != oldActivePercent {
 					rayServiceInstance.Status.ActiveServiceStatus.LastTrafficMigratedTime = &now
@@ -424,7 +675,7 @@ func (r *RayServiceReconciler) calculateStatus(
 				}
 			}
 			if pendingWeight >= 0 && pendingCluster != nil {
-				rayServiceInstance.Status.PendingServiceStatus.TrafficRoutedPercent = ptr.To(pendingWeight)
+				rayServiceInstance.Status.PendingServiceStatus.TrafficRoutedPercent = new(pendingWeight)
 				logger.Info("Updated pending TrafficRoutedPercent from HTTPRoute", "pendingClusterWeight", pendingWeight)
 				if pendingWeight != oldPendingPercent {
 					rayServiceInstance.Status.PendingServiceStatus.LastTrafficMigratedTime = &now
@@ -440,13 +691,7 @@ func (r *RayServiceReconciler) calculateStatus(
 		activeStatus := &rayServiceInstance.Status.ActiveServiceStatus
 		pendingStatus := &rayServiceInstance.Status.PendingServiceStatus
 
-		// A rollback is complete when the active cluster is back at 100% TargetCapacity and TrafficRoutedPercent,
-		// and the pending cluster is at 0% TargetCapacity and TrafficRoutedPercent.
-		if ptr.Deref(activeStatus.TargetCapacity, -1) == 100 &&
-			ptr.Deref(activeStatus.TrafficRoutedPercent, -1) == 100 &&
-			ptr.Deref(pendingStatus.TargetCapacity, -1) == 0 &&
-			ptr.Deref(pendingStatus.TrafficRoutedPercent, -1) == 0 {
-
+		if shouldCompleteIncrementalRollback(activeStatus, pendingStatus, pendingCluster) {
 			logger.Info("Rollback to original cluster is complete. Cleaning up pending cluster from prior upgrade.")
 
 			// Clear the RayService pending service status to clean up the pending cluster.
@@ -474,13 +719,13 @@ func (r *RayServiceReconciler) calculateStatus(
 				// This is the case when a RayCluster is first starting for a RayService, so we should
 				// immediately scale it to full target capacity.
 				if rayServiceInstance.Status.ActiveServiceStatus.TargetCapacity == nil {
-					rayServiceInstance.Status.PendingServiceStatus.TargetCapacity = ptr.To(int32(100))
+					rayServiceInstance.Status.PendingServiceStatus.TargetCapacity = new(int32(100))
 				}
-			} else if meta.IsStatusConditionTrue(rayServiceInstance.Status.Conditions, string(rayv1.UpgradeInProgress)) {
+			} else {
 				// Pending RayCluster during an upgrade should start with 0% TargetCapacity, since
 				// traffic will be gradually migrated to the new cluster.
 				if rayServiceInstance.Status.PendingServiceStatus.TargetCapacity == nil {
-					rayServiceInstance.Status.PendingServiceStatus.TargetCapacity = ptr.To(int32(0))
+					rayServiceInstance.Status.PendingServiceStatus.TargetCapacity = new(int32(0))
 				}
 			}
 		}
@@ -705,7 +950,7 @@ func (r *RayServiceReconciler) reconcileGateway(ctx context.Context, rayServiceI
 	}
 
 	// If Gateway already exists, check if update is needed to reach desired state
-	if !reflect.DeepEqual(existingGateway.Spec, desiredGateway.Spec) {
+	if !utils.IsGatewayEqual(existingGateway, desiredGateway) {
 		logger.Info("Updating existing Gateway", "name", existingGateway.Name)
 		existingGateway.Spec = desiredGateway.Spec
 		if err := r.Update(ctx, existingGateway); err != nil {
@@ -836,10 +1081,10 @@ func (r *RayServiceReconciler) createHTTPRoute(ctx context.Context, rayServiceIn
 			BackendRef: gwv1.BackendRef{
 				BackendObjectReference: gwv1.BackendObjectReference{
 					Name:      gwv1.ObjectName(activeClusterServeSvcName),
-					Namespace: ptr.To(gwv1.Namespace(gatewayInstance.Namespace)),
-					Port:      ptr.To(activeServePort),
+					Namespace: new(gwv1.Namespace(gatewayInstance.Namespace)),
+					Port:      new(activeServePort),
 				},
-				Weight: ptr.To(activeClusterWeight),
+				Weight: new(activeClusterWeight),
 			},
 		},
 	}
@@ -853,10 +1098,10 @@ func (r *RayServiceReconciler) createHTTPRoute(ctx context.Context, rayServiceIn
 			BackendRef: gwv1.BackendRef{
 				BackendObjectReference: gwv1.BackendObjectReference{
 					Name:      gwv1.ObjectName(pendingClusterServeSvcName),
-					Namespace: ptr.To(gwv1.Namespace(gatewayInstance.Namespace)),
-					Port:      ptr.To(pendingServePort),
+					Namespace: new(gwv1.Namespace(gatewayInstance.Namespace)),
+					Port:      new(pendingServePort),
 				},
-				Weight: ptr.To(pendingClusterWeight),
+				Weight: new(pendingClusterWeight),
 			},
 		})
 	}
@@ -869,7 +1114,7 @@ func (r *RayServiceReconciler) createHTTPRoute(ctx context.Context, rayServiceIn
 				ParentRefs: []gwv1.ParentReference{
 					{
 						Name:      gwv1.ObjectName(gatewayInstance.Name),
-						Namespace: ptr.To(gwv1.Namespace(gatewayInstance.Namespace)),
+						Namespace: new(gwv1.Namespace(gatewayInstance.Namespace)),
 					},
 				},
 			},
@@ -879,7 +1124,7 @@ func (r *RayServiceReconciler) createHTTPRoute(ctx context.Context, rayServiceIn
 						{
 							Path: &gwv1.HTTPPathMatch{
 								Type:  ptr.To(gwv1.PathMatchPathPrefix),
-								Value: ptr.To("/"),
+								Value: new("/"),
 							},
 						},
 					},
@@ -1000,6 +1245,7 @@ func (r *RayServiceReconciler) reconcileRayCluster(ctx context.Context, rayServi
 func (r *RayServiceReconciler) cleanUpRayClusterInstance(ctx context.Context, rayServiceInstance *rayv1.RayService) (bool, error) {
 	logger := ctrl.LoggerFrom(ctx)
 	rayClusterList := rayv1.RayClusterList{}
+	rayServiceIsDeleted := !rayServiceInstance.ObjectMeta.DeletionTimestamp.IsZero()
 
 	var err error
 	if err = r.List(ctx, &rayClusterList, common.RayServiceRayClustersAssociationOptions(rayServiceInstance).ToListOptions()...); err != nil {
@@ -1011,30 +1257,25 @@ func (r *RayServiceReconciler) cleanUpRayClusterInstance(ctx context.Context, ra
 	if rayServiceInstance.Spec.RayClusterDeletionDelaySeconds != nil {
 		deletionDelay = time.Duration(*rayServiceInstance.Spec.RayClusterDeletionDelaySeconds) * time.Second
 	}
+	if rayServiceIsDeleted {
+		deletionDelay = 0 * time.Second
+	}
 
 	hasRayClustersToClean := false
 	// Clean up RayCluster instances. Each instance is deleted after the configured deletion delay.
 	for _, rayClusterInstance := range rayClusterList.Items {
-		if rayClusterInstance.Name != rayServiceInstance.Status.ActiveServiceStatus.RayClusterName && rayClusterInstance.Name != rayServiceInstance.Status.PendingServiceStatus.RayClusterName {
+		if rayServiceIsDeleted || (rayClusterInstance.Name != rayServiceInstance.Status.ActiveServiceStatus.RayClusterName && rayClusterInstance.Name != rayServiceInstance.Status.PendingServiceStatus.RayClusterName) {
 			hasRayClustersToClean = true
 			cachedTimestamp, exists := r.RayClusterDeletionTimestamps.Get(rayClusterInstance.Name)
-			if !exists {
-				deletionTimestamp := metav1.Now().Add(deletionDelay)
-				r.RayClusterDeletionTimestamps.Set(rayClusterInstance.Name, deletionTimestamp)
-				logger.Info(
-					"Scheduled dangling RayCluster for deletion",
-					"rayClusterName", rayClusterInstance.Name,
-					"deletionDelay", deletionDelay.String(),
-					"deletionTimestamp", deletionTimestamp,
-				)
-			} else {
+			if exists || rayServiceIsDeleted {
 				reasonForDeletion := ""
-				if time.Now().After(cachedTimestamp) {
+				if rayServiceIsDeleted {
+					reasonForDeletion = "RayService is being deleted. Deleting RayCluster"
+				} else if time.Now().After(cachedTimestamp) {
 					reasonForDeletion = fmt.Sprintf("Deletion timestamp %s "+
 						"for RayCluster %s has passed. Deleting cluster "+
 						"immediately.", cachedTimestamp, rayClusterInstance.Name)
 				}
-
 				if reasonForDeletion != "" {
 					logger.Info("reconcileRayCluster", "delete Ray cluster", rayClusterInstance.Name, "reason", reasonForDeletion)
 					if err := r.Delete(ctx, &rayClusterInstance, client.PropagationPolicy(metav1.DeletePropagationBackground)); err != nil {
@@ -1043,6 +1284,15 @@ func (r *RayServiceReconciler) cleanUpRayClusterInstance(ctx context.Context, ra
 					}
 					r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeNormal, string(utils.DeletedRayCluster), "Deleted the RayCluster %s/%s", rayClusterInstance.Namespace, rayClusterInstance.Name)
 				}
+			} else {
+				deletionTimestamp := metav1.Now().Add(deletionDelay)
+				r.RayClusterDeletionTimestamps.Set(rayClusterInstance.Name, deletionTimestamp)
+				logger.Info(
+					"Scheduled dangling RayCluster for deletion",
+					"rayClusterName", rayClusterInstance.Name,
+					"deletionDelay", deletionDelay.String(),
+					"deletionTimestamp", deletionTimestamp,
+				)
 			}
 		}
 	}
@@ -1118,9 +1368,10 @@ func shouldUpdateCluster(rayServiceInstance *rayv1.RayService, cluster *rayv1.Ra
 func isClusterSpecHashEqual(rayServiceInstance *rayv1.RayService, cluster *rayv1.RayCluster, partial bool) bool {
 	// If `partial` is true, only compare the first `len(cluster.Spec.WorkerGroupSpecs)` worker groups in the CR spec.
 	clusterHash := cluster.ObjectMeta.Annotations[utils.HashWithoutReplicasAndWorkersToDeleteKey]
+	goalClusterSpec := rayClusterSpecForHashing(rayServiceInstance)
 	goalClusterHash := ""
 	if !partial {
-		goalClusterHash, _ = utils.GenerateHashWithoutReplicasAndWorkersToDelete(rayServiceInstance.Spec.RayClusterSpec)
+		goalClusterHash, _ = utils.GenerateHashWithoutReplicasAndWorkersToDelete(*goalClusterSpec)
 	} else {
 		// If everything is identical except for the Replicas and WorkersToDelete of
 		// the existing workergroups, and one or more new workergroups are added at the end, then update the cluster.
@@ -1128,11 +1379,10 @@ func isClusterSpecHashEqual(rayServiceInstance *rayv1.RayService, cluster *rayv1
 		if err != nil {
 			return true
 		}
-		goalNumWorkerGroups := len(rayServiceInstance.Spec.RayClusterSpec.WorkerGroupSpecs)
+		goalNumWorkerGroups := len(goalClusterSpec.WorkerGroupSpecs)
 		if goalNumWorkerGroups >= clusterNumWorkerGroups {
 
 			// Remove the new workergroup(s) from the end before calculating the hash.
-			goalClusterSpec := rayServiceInstance.Spec.RayClusterSpec.DeepCopy()
 			goalClusterSpec.WorkerGroupSpecs = goalClusterSpec.WorkerGroupSpecs[:clusterNumWorkerGroups]
 
 			// Generate the hash of the old worker group specs.
@@ -1193,8 +1443,14 @@ func modifyRayCluster(ctx context.Context, currentCluster, goalCluster *rayv1.Ra
 	}
 	logger.Info("updateRayClusterInstance", "Name", goalCluster.Name, "Namespace", goalCluster.Namespace)
 
-	// Update the fetched RayCluster with new changes
+	// Update the fetched RayCluster with new changes. Suspend is propagated
+	// from the RayService to the RayCluster only at creation time; afterwards
+	// the RayCluster's Suspend is delegated to Kueue, so we preserve the
+	// existing cluster's Suspend here instead of letting the goal spec
+	// overwrite it.
+	existingSuspend := currentCluster.Spec.Suspend
 	currentCluster.Spec = goalCluster.Spec
+	currentCluster.Spec.Suspend = existingSuspend
 
 	// Update the labels and annotations
 	currentCluster.Labels = goalCluster.Labels
@@ -1220,6 +1476,20 @@ func (r *RayServiceReconciler) createRayClusterInstance(ctx context.Context, ray
 	return rayClusterInstance, nil
 }
 
+// rayClusterSpecForHashing returns a copy of the RayService's RayClusterSpec
+// to use for hash comparisons. Fields that should not trigger reconciliation
+// of the underlying RayCluster are cleared here. Suspend is excluded because
+// the RayService controller propagates Suspend to the RayCluster only at
+// creation time; once the RayCluster exists, Suspend is delegated to Kueue
+// (or whichever external controller owns the RayCluster's queueing), and
+// later changes to RayService.Spec.RayClusterSpec.Suspend must not trigger
+// an in-place update or a new cluster preparation.
+func rayClusterSpecForHashing(rayService *rayv1.RayService) *rayv1.RayClusterSpec {
+	spec := rayService.Spec.RayClusterSpec.DeepCopy()
+	spec.Suspend = nil
+	return spec
+}
+
 func constructRayClusterForRayService(rayService *rayv1.RayService, rayClusterName string, scheme *runtime.Scheme) (*rayv1.RayCluster, error) {
 	var err error
 	rayClusterLabel := make(map[string]string)
@@ -1229,7 +1499,7 @@ func constructRayClusterForRayService(rayService *rayv1.RayService, rayClusterNa
 
 	rayClusterAnnotations := make(map[string]string)
 	maps.Copy(rayClusterAnnotations, rayService.Annotations)
-	rayClusterAnnotations[utils.HashWithoutReplicasAndWorkersToDeleteKey], err = utils.GenerateHashWithoutReplicasAndWorkersToDelete(rayService.Spec.RayClusterSpec)
+	rayClusterAnnotations[utils.HashWithoutReplicasAndWorkersToDeleteKey], err = utils.GenerateHashWithoutReplicasAndWorkersToDelete(*rayClusterSpecForHashing(rayService))
 	if err != nil {
 		return nil, err
 	}
@@ -1396,6 +1666,14 @@ func (r *RayServiceReconciler) checkIfNeedTargetCapacityUpdate(ctx context.Conte
 	pendingTargetCapacity := int(*pendingRayServiceStatus.TargetCapacity)
 	pendingTrafficRoutedPercent := int(*pendingRayServiceStatus.TrafficRoutedPercent)
 
+	// During rollback, the goal is activeTargetCapacity → 100, pendingTargetCapacity → 0.
+	if meta.IsStatusConditionTrue(rayServiceInstance.Status.Conditions, string(rayv1.RollbackInProgress)) {
+		if activeTargetCapacity == 100 && pendingTargetCapacity == 0 {
+			return false, "Rollback complete: all traffic has been restored to the active cluster."
+		}
+		return true, "Rollback in progress: traffic is being restored to the active cluster."
+	}
+
 	if activeTargetCapacity == 0 && pendingTargetCapacity == 100 {
 		return false, "All traffic has migrated to the upgraded cluster and NewClusterWithIncrementalUpgrade is complete."
 	} else if pendingTargetCapacity < 100 || pendingTrafficRoutedPercent < 100 {
@@ -1447,9 +1725,9 @@ func (r *RayServiceReconciler) applyServeTargetCapacity(ctx context.Context, ray
 	// Update the TargetCapacity status fields.
 	switch rayClusterInstance.Name {
 	case rayServiceInstance.Status.ActiveServiceStatus.RayClusterName:
-		rayServiceInstance.Status.ActiveServiceStatus.TargetCapacity = ptr.To(goalTargetCapacity)
+		rayServiceInstance.Status.ActiveServiceStatus.TargetCapacity = new(goalTargetCapacity)
 	case rayServiceInstance.Status.PendingServiceStatus.RayClusterName:
-		rayServiceInstance.Status.PendingServiceStatus.TargetCapacity = ptr.To(goalTargetCapacity)
+		rayServiceInstance.Status.PendingServiceStatus.TargetCapacity = new(goalTargetCapacity)
 	}
 
 	return nil
@@ -1466,10 +1744,10 @@ func (r *RayServiceReconciler) reconcileServeTargetCapacity(ctx context.Context,
 
 	// Set initial TargetCapacity values if unset
 	if activeRayServiceStatus.TargetCapacity == nil {
-		activeRayServiceStatus.TargetCapacity = ptr.To(int32(100))
+		activeRayServiceStatus.TargetCapacity = new(int32(100))
 	}
 	if pendingRayServiceStatus.TargetCapacity == nil {
-		pendingRayServiceStatus.TargetCapacity = ptr.To(int32(0))
+		pendingRayServiceStatus.TargetCapacity = new(int32(0))
 	}
 
 	// Retrieve the current observed Status fields for NewClusterWithIncrementalUpgrade
@@ -1735,12 +2013,20 @@ func (r *RayServiceReconciler) reconcileServe(ctx context.Context, rayServiceIns
 	isActiveCluster := rayClusterInstance.Name == rayServiceInstance.Status.ActiveServiceStatus.RayClusterName
 	isIncrementalUpgradeInProgress := utils.IsIncrementalUpgradeEnabled(&rayServiceInstance.Spec) &&
 		meta.IsStatusConditionTrue(rayServiceInstance.Status.Conditions, string(rayv1.UpgradeInProgress))
+	isRollbackInProgress := utils.IsIncrementalUpgradeEnabled(&rayServiceInstance.Spec) &&
+		meta.IsStatusConditionTrue(rayServiceInstance.Status.Conditions, string(rayv1.RollbackInProgress))
 
-	if isActiveCluster && isIncrementalUpgradeInProgress {
+	if isActiveCluster && isIncrementalUpgradeInProgress && !isRollbackInProgress {
 		// Skip updating the Serve config for the Active cluster during NewClusterWithIncrementalUpgrade. The updated
 		// Serve config is applied to the pending RayService's RayCluster.
 		skipConfigUpdate = true
 		logger.Info("Blocking new Serve config submission for Active cluster during upgrade.", "clusterName", rayClusterInstance.Name)
+	} else if !isActiveCluster && isRollbackInProgress {
+		// During rollback, the pending cluster is being scaled down and phased out.
+		// We skip updating its Serve config to prevent unnecessary disruptive redeployments,
+		// since its only goal is to drain traffic while the active cluster takes over.
+		skipConfigUpdate = true
+		logger.Info("Blocking new Serve config submission for Pending cluster during rollback.", "clusterName", rayClusterInstance.Name)
 	}
 
 	cachedServeConfigV2 := r.getServeConfigFromCache(rayServiceInstance, rayClusterInstance.Name)
@@ -2008,11 +2294,32 @@ func (r *RayServiceReconciler) reconcilePerClusterServeService(ctx context.Conte
 	return err
 }
 
+func shouldCompleteIncrementalRollback(
+	activeStatus *rayv1.RayServiceStatus,
+	pendingStatus *rayv1.RayServiceStatus,
+	pendingCluster *rayv1.RayCluster,
+) bool {
+	// Check if the pending cluster is healthy enough to receive scale-down API calls.
+	// If the pending cluster is unhealthy and the active cluster has 100% of traffic
+	// routed to it, we should complete the rollback.
+	pendingClusterHealthy := pendingCluster != nil &&
+		meta.IsStatusConditionTrue(pendingCluster.Status.Conditions, string(rayv1.HeadPodReady))
+
+	// A rollback is complete when the active cluster is back at 100% TargetCapacity and TrafficRoutedPercent,
+	// and either:
+	// - The pending cluster has been fully scaled down (TargetCapacity and TrafficRoutedPercent are both 0), or
+	// - The pending cluster is unhealthy (head Pod not ready)
+	return ptr.Deref(activeStatus.TargetCapacity, -1) == 100 &&
+		ptr.Deref(activeStatus.TrafficRoutedPercent, -1) == 100 &&
+		(!pendingClusterHealthy || (ptr.Deref(pendingStatus.TargetCapacity, -1) == 0 &&
+			ptr.Deref(pendingStatus.TrafficRoutedPercent, -1) == 0))
+}
+
 // reconcileRollbackState determines whether to initiate a rollback by setting the RollbackInProgress condition.
 func (r *RayServiceReconciler) reconcileRollbackState(ctx context.Context, rayServiceInstance *rayv1.RayService, activeCluster, pendingCluster *rayv1.RayCluster) error {
 	logger := ctrl.LoggerFrom(ctx)
 
-	targetHash, err := utils.GenerateHashWithoutReplicasAndWorkersToDelete(rayServiceInstance.Spec.RayClusterSpec)
+	targetHash, err := utils.GenerateHashWithoutReplicasAndWorkersToDelete(*rayClusterSpecForHashing(rayServiceInstance))
 	if err != nil {
 		return fmt.Errorf("failed to generate hash for goal cluster spec: %w", err)
 	}
@@ -2033,9 +2340,14 @@ func (r *RayServiceReconciler) reconcileRollbackState(ctx context.Context, raySe
 	}
 
 	// Case 2: The goal spec diverges from the pending cluster.
-	// This happens if the user reverted to the original spec, or if they submitted a 3rd entirely new spec mid-upgrade.
-	// In all divergence cases, we must first safely route all traffic back to the original cluster before allowing
-	// a new cluster to be spun up.
+	// This covers two sub-cases:
+	//   2.1: The user reverted to the original spec (targetHash == originalHash).
+	//        The pending cluster is no longer needed, so we roll back to the active cluster.
+	//   2.2: The user submitted a 3rd entirely new spec mid-upgrade (targetHash != originalHash && targetHash != pendingHash).
+	//        The pending cluster doesn't match the new goal either, so we must first roll back
+	//        to the active cluster, clean up the pending cluster, and then start a fresh upgrade.
+	// In both sub-cases, we must safely route all traffic back to the original cluster before
+	// allowing a new cluster to be spun up.
 	if !isRollbackInProgress {
 		logger.Info("Goal state has changed during upgrade. Initiating safe rollback to the original cluster.", "targetHash", targetHash, "originalHash", originalHash, "pendingHash", pendingHash)
 		setCondition(rayServiceInstance, rayv1.RollbackInProgress, metav1.ConditionTrue, rayv1.TargetClusterChanged, "Goal state changed mid-upgrade, rolling back to original cluster.")

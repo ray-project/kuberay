@@ -75,6 +75,8 @@ _Appears in:_
 | `env` _[EnvVar](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#envvar-v1-core) array_ | Optional list of environment variables to set in the autoscaler container. |  |  |
 | `envFrom` _[EnvFromSource](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#envfromsource-v1-core) array_ | Optional list of sources to populate environment variables in the autoscaler container. |  |  |
 | `volumeMounts` _[VolumeMount](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#volumemount-v1-core) array_ | Optional list of volumeMounts.  This is needed for enabling TLS for the autoscaler container. |  |  |
+| `command` _string array_ | Optional list overwrite the default command of the autoscaler container. |  |  |
+| `args` _string array_ | Optional to overwrite the default args of the autoscaler container. |  |  |
 
 
 #### AutoscalerVersion
@@ -500,6 +502,7 @@ _Appears in:_
 | `serveConfigV2` _string_ | Important: Run "make" to regenerate code after modifying this file<br />Defines the applications and deployments to deploy, should be a YAML multi-line scalar string. |  |  |
 | `rayClusterConfig` _[RayClusterSpec](#rayclusterspec)_ |  |  |  |
 | `excludeHeadPodFromServeSvc` _boolean_ | If the field is set to true, the value of the label `ray.io/serve` on the head Pod should always be false.<br />Therefore, the head Pod's endpoint will not be added to the Kubernetes Serve service. |  |  |
+| `suspend` _boolean_ | Suspend indicates whether the RayService should suspend its execution. When set to true,<br />all Kubernetes resources owned by the RayService controller will be deleted. Setting it<br />back to false will allow the RayService controller to recreate the resources. |  |  |
 
 
 
@@ -585,7 +588,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `backoffLimit` _integer_ | BackoffLimit of the submitter k8s job. |  |  |
+| `backoffLimit` _integer_ | BackoffLimit of the submitter. In K8sJobMode, this is the K8s Job backoffLimit.<br />In SidecarMode with SidecarSubmitterRestart enabled, this is the maximum container restart count. |  |  |
 
 
 #### UpscalingMode

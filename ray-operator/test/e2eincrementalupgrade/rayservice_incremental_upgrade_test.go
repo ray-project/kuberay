@@ -14,7 +14,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/ptr"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
@@ -345,9 +344,9 @@ func TestRayServiceIncrementalUpgradeRollback(t *testing.T) {
 	rayServiceName := "rollback-rayservice"
 
 	// Create a RayService with IncrementalUpgrade enabled
-	stepSize := ptr.To(int32(25))
-	interval := ptr.To(int32(10))
-	maxSurge := ptr.To(int32(50))
+	stepSize := new(int32(25))
+	interval := new(int32(10))
+	maxSurge := new(int32(50))
 	serveConfigV2 := defaultIncrementalUpgradeServeConfigV2
 
 	_, httpRoute, _ := bootstrapIncrementalRayService(test, g, namespace.Name, rayServiceName, stepSize, interval, maxSurge, serveConfigV2)

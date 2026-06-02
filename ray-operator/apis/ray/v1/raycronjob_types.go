@@ -50,7 +50,3 @@ type RayCronJobList struct {
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []RayCronJob `json:"items"`
 }
-
-func init() {
-	SchemeBuilder.Register(&RayCronJob{}, &RayCronJobList{})
-}

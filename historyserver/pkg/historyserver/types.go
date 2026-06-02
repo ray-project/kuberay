@@ -30,7 +30,7 @@ type GetLogFileOptions struct {
 	Suffix string
 }
 
-// TODO(jwj): Can be extracted to a task-specific interface, e.g., TaskSummaryProvider.
+// TODO(jiangjiawei1103): Can be extracted to a task-specific interface, e.g., TaskSummaryProvider.
 type TaskDataResult struct {
 	Total                 int                      `json:"total"`
 	NumAfterTruncation    int                      `json:"num_after_truncation"`

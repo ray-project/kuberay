@@ -127,6 +127,7 @@ func incrementalUpgradeRayServiceApplyConfiguration(
 	serveConfigV2 serveConfigV2,
 ) *rayv1ac.RayServiceSpecApplyConfiguration {
 	return rayv1ac.RayServiceSpec().
+		WithRayClusterDeletionDelaySeconds(0). // Delete the dangling cluster immediately to prevent CI test timeouts
 		WithUpgradeStrategy(rayv1ac.RayServiceUpgradeStrategy().
 			WithType(rayv1.RayServiceNewClusterWithIncrementalUpgrade).
 			WithClusterUpgradeOptions(

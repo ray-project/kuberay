@@ -17,6 +17,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/ray-project/kuberay/historyserver/pkg/storage"
+	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
 type Event struct {
@@ -105,9 +106,9 @@ func (ec *EventCollector) Run(stop <-chan struct{}, port int) {
 	close(ec.stopped)
 }
 
-// watchNodeIDFile watches /tmp/ray/raylet_node_id for content changes
+// watchNodeIDFile watches the configured raylet_node_id file for content changes.
 func (ec *EventCollector) watchNodeIDFile() {
-	nodeIDFilePath := "/tmp/ray/raylet_node_id"
+	nodeIDFilePath := utils.GetRayNodeIDPath()
 
 	// Create new watcher
 	watcher, err := fsnotify.NewWatcher()
@@ -122,9 +123,10 @@ func (ec *EventCollector) watchNodeIDFile() {
 	if err != nil {
 		logrus.Infof("Failed to add %s to watcher, will watch for file creation: %v", nodeIDFilePath, err)
 		// If file doesn't exist, watch parent directory
-		err = watcher.Add("/tmp/ray")
+		tmpRayRoot := utils.GetTmpRayRoot()
+		err = watcher.Add(tmpRayRoot)
 		if err != nil {
-			logrus.Errorf("Failed to watch directory /tmp/ray: %v", err)
+			logrus.Errorf("Failed to watch directory %s: %v", tmpRayRoot, err)
 			return
 		}
 	}
@@ -450,12 +452,9 @@ func (ec *EventCollector) flushNodeEventsForHour(hourKey string, events []Event)
 	}
 
 	// Build node event storage path using event's nodeID
-	basePath := path.Join(
-		ec.root,
-		fmt.Sprintf("%s_%s", ec.clusterName, ec.clusterNamespace),
-		sessionNameToUse,
-		"node_events",
-		fmt.Sprintf("%s-%s", nodeIDToUse, hourKey))
+	sessionPath := path.Clean(path.Join(ec.root, utils.AppendRayClusterNameNamespace(ec.clusterName, ec.clusterNamespace), sessionNameToUse))
+
+	basePath := path.Join(sessionPath, "node_events", fmt.Sprintf("%s-%s", nodeIDToUse, hourKey))
 
 	// Ensure storage directory exists
 	dir := path.Dir(basePath)
@@ -500,13 +499,9 @@ func (ec *EventCollector) flushJobEventsForHour(jobID, hourKey string, events []
 	}
 
 	// Build job event storage path using event's nodeID
-	basePath := path.Join(
-		ec.root,
-		fmt.Sprintf("%s_%s", ec.clusterName, ec.clusterNamespace),
-		sessionNameToUse,
-		"job_events",
-		jobID,
-		fmt.Sprintf("%s-%s", nodeIDToUse, hourKey))
+	sessionPath := path.Clean(path.Join(ec.root, utils.AppendRayClusterNameNamespace(ec.clusterName, ec.clusterNamespace), sessionNameToUse))
+
+	basePath := path.Join(sessionPath, "job_events", jobID, fmt.Sprintf("%s-%s", nodeIDToUse, hourKey))
 
 	// Ensure storage directory exists
 	dir := path.Dir(basePath)
