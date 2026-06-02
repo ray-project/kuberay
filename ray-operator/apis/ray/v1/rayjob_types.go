@@ -187,7 +187,8 @@ const (
 )
 
 type SubmitterConfig struct {
-	// BackoffLimit of the submitter k8s job.
+	// BackoffLimit of the submitter. In K8sJobMode, this is the K8s Job backoffLimit.
+	// In SidecarMode with SidecarSubmitterRestart enabled, this is the maximum container restart count.
 	// +optional
 	BackoffLimit *int32 `json:"backoffLimit,omitempty"`
 }

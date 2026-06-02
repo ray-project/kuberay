@@ -593,7 +593,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `backoffLimit` _integer_ | BackoffLimit of the submitter k8s job. |  |  |
+| `backoffLimit` _integer_ | BackoffLimit of the submitter. In K8sJobMode, this is the K8s Job backoffLimit.<br />In SidecarMode with SidecarSubmitterRestart enabled, this is the maximum container restart count. |  |  |
 
 
 #### UpscalingMode

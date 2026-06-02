@@ -83,7 +83,7 @@
   image: golang:1.26-bookworm
   commands:
     - source .buildkite/setup-env.sh
-    - kind create cluster --wait 900s --config ./ci/kind-config-buildkite-1-29.yml
+    - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
     - kubectl config set clusters.kind-kind.server https://docker:6443
 
     # Install MetalLB for LoadBalancer IPs on Kind
