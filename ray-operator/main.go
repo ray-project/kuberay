@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -381,7 +382,10 @@ func certManagerAPIAvailable(restConfig *rest.Config) bool {
 	}
 	_, resources, err := discoveryClient.ServerGroupsAndResources()
 	if err != nil {
-		return false
+		var partialErr *discovery.ErrGroupDiscoveryFailed
+		if !errors.As(err, &partialErr) {
+			return false
+		}
 	}
 	for _, r := range resources {
 		if r.GroupVersion == "cert-manager.io/v1" {
