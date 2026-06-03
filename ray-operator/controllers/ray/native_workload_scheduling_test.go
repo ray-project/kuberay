@@ -206,6 +206,40 @@ func TestReconcileNativeWorkloadScheduling_SkipsWhenAnnotationMissing(t *testing
 	assert.Empty(t, workloadList.Items)
 }
 
+func TestReconcileNativeWorkloadScheduling_CleansUpWhenAnnotationRemoved(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
+
+	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
+	cluster.Annotations = nil
+	s := newTestScheme()
+	existingWorkload := &schedulingv1alpha2.Workload{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "default",
+			Labels:    map[string]string{utils.RayClusterLabelKey: "test-cluster"},
+		},
+	}
+	existingPodGroup := &schedulingv1alpha2.PodGroup{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       "test-cluster-head",
+			Namespace:  "default",
+			Labels:     map[string]string{utils.RayClusterLabelKey: "test-cluster"},
+			Finalizers: []string{podGroupProtectionFinalizer},
+		},
+	}
+	fakeClient := clientFake.NewClientBuilder().WithScheme(s).WithObjects(existingWorkload, existingPodGroup).Build()
+	r := newReconciler(fakeClient, s, record.NewFakeRecorder(10))
+	ctx := context.Background()
+
+	err := r.reconcileNativeWorkloadScheduling(ctx, cluster)
+	require.NoError(t, err)
+
+	err = fakeClient.Get(ctx, types.NamespacedName{Name: "test-cluster", Namespace: "default"}, &schedulingv1alpha2.Workload{})
+	assert.True(t, apierrors.IsNotFound(err), "Workload should be deleted when annotation is removed")
+	err = fakeClient.Get(ctx, types.NamespacedName{Name: "test-cluster-head", Namespace: "default"}, &schedulingv1alpha2.PodGroup{})
+	assert.True(t, apierrors.IsNotFound(err), "PodGroup should be deleted when annotation is removed")
+}
+
 func TestReconcileNativeWorkloadScheduling_SkipsWhenFeatureGateDisabled(t *testing.T) {
 	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, false)
 
@@ -223,6 +257,39 @@ func TestReconcileNativeWorkloadScheduling_SkipsWhenFeatureGateDisabled(t *testi
 	err = fakeClient.List(ctx, workloadList, &client.ListOptions{Namespace: "default"})
 	require.NoError(t, err)
 	assert.Empty(t, workloadList.Items)
+}
+
+func TestReconcileNativeWorkloadScheduling_FeatureGateDisabledDoesNotCleanup(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, false)
+
+	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
+	cluster.Annotations = nil
+	s := newTestScheme()
+	existingWorkload := &schedulingv1alpha2.Workload{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "default",
+			Labels:    map[string]string{utils.RayClusterLabelKey: "test-cluster"},
+		},
+	}
+	existingPodGroup := &schedulingv1alpha2.PodGroup{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster-head",
+			Namespace: "default",
+			Labels:    map[string]string{utils.RayClusterLabelKey: "test-cluster"},
+		},
+	}
+	fakeClient := clientFake.NewClientBuilder().WithScheme(s).WithObjects(existingWorkload, existingPodGroup).Build()
+	r := newReconciler(fakeClient, s, record.NewFakeRecorder(10))
+	ctx := context.Background()
+
+	err := r.reconcileNativeWorkloadScheduling(ctx, cluster)
+	require.NoError(t, err)
+
+	err = fakeClient.Get(ctx, types.NamespacedName{Name: "test-cluster", Namespace: "default"}, &schedulingv1alpha2.Workload{})
+	require.NoError(t, err)
+	err = fakeClient.Get(ctx, types.NamespacedName{Name: "test-cluster-head", Namespace: "default"}, &schedulingv1alpha2.PodGroup{})
+	require.NoError(t, err)
 }
 
 func TestReconcileNativeWorkloadScheduling_SkipsWhenAutoscalingEnabled(t *testing.T) {

@@ -294,7 +294,7 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 		logger.Info("RayCluster is being deleted, cleaning up native scheduling resources")
 		// Clean up Workload/PodGroups explicitly rather than relying on garbage collection
 		// because PodGroups may have a scheduler-added finalizer that blocks GC deletion.
-		if isNativeWorkloadSchedulingEnabled(instance) {
+		if shouldCleanupNativeWorkloadSchedulingResources() {
 			if err := r.deleteNativeWorkloadSchedulingResources(ctx, instance); err != nil {
 				return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 			}
@@ -639,7 +639,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 	statusConditionGateEnabled := features.Enabled(features.RayClusterStatusConditions)
 	if suspendStatus == rayv1.RayClusterSuspending ||
 		(!statusConditionGateEnabled && instance.Spec.Suspend != nil && *instance.Spec.Suspend) {
-		if isNativeWorkloadSchedulingEnabled(instance) {
+		if shouldCleanupNativeWorkloadSchedulingResources() {
 			if err := r.deleteNativeWorkloadSchedulingResources(ctx, instance); err != nil {
 				return err
 			}
@@ -670,7 +670,7 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 	// Check if pods need to be recreated with Recreate upgradeStrategy
 	if r.shouldRecreatePodsForUpgrade(ctx, instance) {
 		logger.Info("RayCluster spec changed with Recreate upgradeStrategy, deleting all pods")
-		if isNativeWorkloadSchedulingEnabled(instance) {
+		if shouldCleanupNativeWorkloadSchedulingResources() {
 			if err := r.deleteNativeWorkloadSchedulingResources(ctx, instance); err != nil {
 				return err
 			}

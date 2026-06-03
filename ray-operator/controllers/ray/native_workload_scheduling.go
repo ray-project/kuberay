@@ -63,6 +63,9 @@ func (r *RayClusterReconciler) reconcileNativeWorkloadScheduling(ctx context.Con
 
 	if skipReason := r.nativeSchedulingSkipReason(instance); skipReason != skipReasonNone {
 		if skipReason == skipReasonDisabled {
+			if shouldCleanupNativeWorkloadSchedulingResources() {
+				return r.deleteNativeWorkloadSchedulingResources(ctx, instance)
+			}
 			return nil
 		}
 		if skipReason == skipReasonTooManyWorkerGroups {
@@ -289,6 +292,12 @@ func podGroupName(clusterName, templateName string) string {
 func isNativeWorkloadSchedulingEnabled(instance *rayv1.RayCluster) bool {
 	return features.Enabled(features.NativeWorkloadScheduling) &&
 		instance.Annotations[NativeWorkloadSchedulingAnnotation] == "true"
+}
+
+// shouldCleanupNativeWorkloadSchedulingResources returns true when the operator is configured
+// to manage native scheduling resources, even if a particular RayCluster is no longer opted in.
+func shouldCleanupNativeWorkloadSchedulingResources() bool {
+	return features.Enabled(features.NativeWorkloadScheduling)
 }
 
 // shouldSetSchedulingGroup returns true when native scheduling is active and
