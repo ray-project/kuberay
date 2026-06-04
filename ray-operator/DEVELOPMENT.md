@@ -362,11 +362,13 @@ For user-facing documentation, see the [native workload scheduling guide](../doc
 
 ### Testing locally with Kind
 
-Native workload scheduling requires Kubernetes 1.36+ with `GenericWorkload` and `GangScheduling` feature gates. No pre-built kind node images exist for 1.36 yet, so you must build one:
+Native workload scheduling requires Kubernetes 1.36+ with `GenericWorkload` and `GangScheduling` feature gates. The kind config uses the published `kindest/node:v1.36.1` image:
 
 ```bash
-# Build a kind node image from K8s 1.36
-kind build node-image v1.36.0
+# Install kind v0.32.0 or newer
+curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.32.0/kind-linux-amd64
+chmod +x ./kind
+sudo mv ./kind /usr/local/bin/kind
 
 # Create the cluster with the required feature gates and alpha API
 kind create cluster --name native-sched \

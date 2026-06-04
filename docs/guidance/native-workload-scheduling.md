@@ -202,15 +202,17 @@ Your Kubernetes cluster is either older than 1.36 or the `GenericWorkload` featu
 To test native workload scheduling locally with [kind](https://kind.sigs.k8s.io/), you need a Kubernetes 1.36+ node image with the required feature gates:
 
 ```bash
-# Build the kind node image from a K8s 1.36 release
-kind build node-image v1.36.0
+# Install kind v0.32.0 or newer, which supports the published K8s 1.36 node image.
+curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.32.0/kind-linux-amd64
+chmod +x ./kind
+sudo mv ./kind /usr/local/bin/kind
 
 # Create the cluster with the required feature gates
 kind create cluster --name native-sched \
   --config ci/kind-config-native-workload-scheduling.yml
 ```
 
-The [`ci/kind-config-native-workload-scheduling.yml`](../../ci/kind-config-native-workload-scheduling.yml) config enables `GenericWorkload` on the apiserver/controller-manager, `GangScheduling` on the scheduler, and serves the `scheduling.k8s.io/v1alpha2` alpha API.
+The [`ci/kind-config-native-workload-scheduling.yml`](../../ci/kind-config-native-workload-scheduling.yml) config uses the published `kindest/node:v1.36.1` image, enables `GenericWorkload` on the apiserver/controller-manager, enables `GangScheduling` on the scheduler, and serves the `scheduling.k8s.io/v1alpha2` alpha API.
 
 Then deploy the operator with the feature gate enabled:
 
