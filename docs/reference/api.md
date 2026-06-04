@@ -260,10 +260,50 @@ _Appears in:_
 | `template` _[PodTemplateSpec](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#podtemplatespec-v1-core)_ | Template is the exact pod template used in K8s deployments, statefulsets, etc. |  |  |
 | `headService` _[Service](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#service-v1-core)_ | HeadService is the Kubernetes service of the head pod. |  |  |
 | `enableIngress` _boolean_ | EnableIngress indicates whether operator should create ingress object for head service or not. |  |  |
+| `ingressHost` _string_ | IngressHost sets rules[0].host on the generated ingress. |  |  |
+| `ingressPath` _string_ | IngressPath sets rules[0].http.paths[0].path on the generated ingress. |  |  |
+| `ingressPathType` _[IngressPathType](#ingresspathtype)_ | IngressPathType sets rules[0].http.paths[0].pathType on the generated ingress. |  | Enum: [Exact Prefix ImplementationSpecific] <br /> |
+| `ingressTLS` _[IngressTLSConfig](#ingresstlsconfig) array_ | IngressTLS sets spec.tls entries on the generated ingress. |  |  |
 | `resources` _object (keys:string, values:string)_ | Resources specifies the resource quantities for the head group.<br />These values override the resources passed to `rayStartParams` for the group, but<br />have no effect on the resources set at the K8s Pod container level. |  |  |
 | `labels` _object (keys:string, values:string)_ | Labels specifies the Ray node labels for the head group.<br />These labels will also be added to the Pods of this head group and override the `--labels`<br />argument passed to `rayStartParams`. |  |  |
 | `rayStartParams` _object (keys:string, values:string)_ | RayStartParams are the params of the start command: node-manager-port, object-store-memory, ... |  |  |
 | `serviceType` _[ServiceType](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#servicetype-v1-core)_ | ServiceType is Kubernetes service type of the head service. it will be used by the workers to connect to the head pod |  |  |
+
+
+#### IngressPathType
+
+_Underlying type:_ _string_
+
+
+
+_Validation:_
+- Enum: [Exact Prefix ImplementationSpecific]
+
+_Appears in:_
+- [HeadGroupSpec](#headgroupspec)
+
+| Field | Description |
+| --- | --- |
+| `Exact` |  |
+| `Prefix` |  |
+| `ImplementationSpecific` |  |
+
+
+#### IngressTLSConfig
+
+
+
+IngressTLSConfig defines a TLS entry for the generated ingress.
+
+
+
+_Appears in:_
+- [HeadGroupSpec](#headgroupspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `hosts` _string array_ | Hosts is a list of hosts included in the TLS certificate. |  |  |
+| `secretName` _string_ | SecretName is the name of the secret used to terminate TLS. |  |  |
 
 
 

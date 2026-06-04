@@ -204,6 +204,18 @@ type HeadGroupSpec struct {
 	// EnableIngress indicates whether operator should create ingress object for head service or not.
 	// +optional
 	EnableIngress *bool `json:"enableIngress,omitempty"`
+	// IngressHost sets rules[0].host on the generated ingress.
+	// +optional
+	IngressHost *string `json:"ingressHost,omitempty"`
+	// IngressPath sets rules[0].http.paths[0].path on the generated ingress.
+	// +optional
+	IngressPath *string `json:"ingressPath,omitempty"`
+	// IngressPathType sets rules[0].http.paths[0].pathType on the generated ingress.
+	// +optional
+	IngressPathType *IngressPathType `json:"ingressPathType,omitempty"`
+	// IngressTLS sets spec.tls entries on the generated ingress.
+	// +optional
+	IngressTLS []IngressTLSConfig `json:"ingressTLS,omitempty"`
 	// Resources specifies the resource quantities for the head group.
 	// These values override the resources passed to `rayStartParams` for the group, but
 	// have no effect on the resources set at the K8s Pod container level.
@@ -220,6 +232,25 @@ type HeadGroupSpec struct {
 	// ServiceType is Kubernetes service type of the head service. it will be used by the workers to connect to the head pod
 	// +optional
 	ServiceType corev1.ServiceType `json:"serviceType,omitempty"`
+}
+
+// +kubebuilder:validation:Enum=Exact;Prefix;ImplementationSpecific
+type IngressPathType string
+
+const (
+	IngressPathTypeExact                  IngressPathType = "Exact"
+	IngressPathTypePrefix                 IngressPathType = "Prefix"
+	IngressPathTypeImplementationSpecific IngressPathType = "ImplementationSpecific"
+)
+
+// IngressTLSConfig defines a TLS entry for the generated ingress.
+type IngressTLSConfig struct {
+	// Hosts is a list of hosts included in the TLS certificate.
+	// +optional
+	Hosts []string `json:"hosts,omitempty"`
+	// SecretName is the name of the secret used to terminate TLS.
+	// +optional
+	SecretName string `json:"secretName,omitempty"`
 }
 
 // WorkerGroupSpec are the specs for the worker pods
