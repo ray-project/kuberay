@@ -40,6 +40,15 @@ func BuildIngressForHeadService(ctx context.Context, cluster rayv1.RayCluster) (
 	}
 
 	pathType := networkingv1.PathTypeExact
+	if cluster.Spec.HeadGroupSpec.IngressPathType != nil {
+		pathType = networkingv1.PathType(*cluster.Spec.HeadGroupSpec.IngressPathType)
+	}
+
+	path := "/" + cluster.Name + "/(.*)"
+	if cluster.Spec.HeadGroupSpec.IngressPath != nil {
+		path = *cluster.Spec.HeadGroupSpec.IngressPath
+	}
+
 	servicePorts := getServicePorts(cluster)
 	dashboardPort := int32(utils.DefaultDashboardPort)
 	if port, ok := servicePorts["dashboard"]; ok {
@@ -52,7 +61,7 @@ func BuildIngressForHeadService(ctx context.Context, cluster rayv1.RayCluster) (
 	}
 	paths := []networkingv1.HTTPIngressPath{
 		{
-			Path:     "/" + cluster.Name + "/(.*)",
+			Path:     path,
 			PathType: &pathType,
 			Backend: networkingv1.IngressBackend{
 				Service: &networkingv1.IngressServiceBackend{
@@ -65,6 +74,17 @@ func BuildIngressForHeadService(ctx context.Context, cluster rayv1.RayCluster) (
 		},
 	}
 
+	rule := networkingv1.IngressRule{
+		IngressRuleValue: networkingv1.IngressRuleValue{
+			HTTP: &networkingv1.HTTPIngressRuleValue{
+				Paths: paths,
+			},
+		},
+	}
+	if cluster.Spec.HeadGroupSpec.IngressHost != nil {
+		rule.Host = *cluster.Spec.HeadGroupSpec.IngressHost
+	}
+
 	ingress := &networkingv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        utils.GenerateIngressName(cluster.Name),
@@ -73,16 +93,18 @@ func BuildIngressForHeadService(ctx context.Context, cluster rayv1.RayCluster) (
 			Annotations: annotation,
 		},
 		Spec: networkingv1.IngressSpec{
-			Rules: []networkingv1.IngressRule{
-				{
-					IngressRuleValue: networkingv1.IngressRuleValue{
-						HTTP: &networkingv1.HTTPIngressRuleValue{
-							Paths: paths,
-						},
-					},
-				},
-			},
+			Rules: []networkingv1.IngressRule{rule},
 		},
+	}
+
+	if len(cluster.Spec.HeadGroupSpec.IngressTLS) > 0 {
+		ingress.Spec.TLS = make([]networkingv1.IngressTLS, 0, len(cluster.Spec.HeadGroupSpec.IngressTLS))
+		for _, tls := range cluster.Spec.HeadGroupSpec.IngressTLS {
+			ingress.Spec.TLS = append(ingress.Spec.TLS, networkingv1.IngressTLS{
+				Hosts:      tls.Hosts,
+				SecretName: tls.SecretName,
+			})
+		}
 	}
 
 	// Get ingress class name from rayCluster annotations. this is a required field to use ingress.

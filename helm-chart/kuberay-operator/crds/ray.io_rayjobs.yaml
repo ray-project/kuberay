@@ -797,6 +797,27 @@ spec:
                                 type: object
                             type: object
                         type: object
+                      ingressHost:
+                        type: string
+                      ingressPath:
+                        type: string
+                      ingressPathType:
+                        enum:
+                        - Exact
+                        - Prefix
+                        - ImplementationSpecific
+                        type: string
+                      ingressTLS:
+                        items:
+                          properties:
+                            hosts:
+                              items:
+                                type: string
+                              type: array
+                            secretName:
+                              type: string
+                          type: object
+                        type: array
                       labels:
                         additionalProperties:
                           type: string

@@ -38,8 +38,10 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &rayv1.HeadGroupSpecApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("HeadInfo"):
 		return &rayv1.HeadInfoApplyConfiguration{}
-	case v1.SchemeGroupVersion.WithKind("NetworkPolicyConfig"):
-		return &rayv1.NetworkPolicyConfigApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("IngressTLSConfig"):
+		return &rayv1.IngressTLSConfigApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("NetworkIsolationConfig"):
+		return &rayv1.NetworkIsolationConfigApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("NetworkPolicyRules"):
 		return &rayv1.NetworkPolicyRulesApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("RayCluster"):
