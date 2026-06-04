@@ -492,7 +492,21 @@ func (r *RayClusterReconciler) reconcileIngressKubernetes(ctx context.Context, i
 	}
 
 	if len(headIngresses.Items) == 1 {
-		logger.Info("reconcileIngresses", "head service ingress found", headIngresses.Items[0].Name)
+		existingIngress := &headIngresses.Items[0]
+		desiredIngress, err := common.BuildIngressForHeadService(ctx, *instance)
+		if err != nil {
+			return err
+		}
+
+		if ingressNeedsUpdate(existingIngress, desiredIngress) {
+			if err := r.Update(ctx, existingIngress); err != nil {
+				r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.FailedToCreateIngress), "Failed updating ingress %s/%s, %v", existingIngress.Namespace, existingIngress.Name, err)
+				return err
+			}
+			logger.Info("reconcileIngresses", "head service ingress updated", existingIngress.Name)
+		} else {
+			logger.Info("reconcileIngresses", "head service ingress found", existingIngress.Name)
+		}
 		return nil
 	}
 
@@ -512,6 +526,27 @@ func (r *RayClusterReconciler) reconcileIngressKubernetes(ctx context.Context, i
 	}
 
 	return nil
+}
+
+func ingressNeedsUpdate(existingIngress, desiredIngress *networkingv1.Ingress) bool {
+	updated := false
+
+	if !maps.Equal(existingIngress.Labels, desiredIngress.Labels) {
+		existingIngress.Labels = maps.Clone(desiredIngress.Labels)
+		updated = true
+	}
+
+	if !maps.Equal(existingIngress.Annotations, desiredIngress.Annotations) {
+		existingIngress.Annotations = maps.Clone(desiredIngress.Annotations)
+		updated = true
+	}
+
+	if !reflect.DeepEqual(existingIngress.Spec, desiredIngress.Spec) {
+		existingIngress.Spec = desiredIngress.Spec
+		updated = true
+	}
+
+	return updated
 }
 
 // Return nil only when the head service successfully created or already exists.
