@@ -4,15 +4,11 @@
   commands:
     - source .buildkite/setup-env.sh
 
-    # Install a kind version that supports Kubernetes 1.36
-    - echo "--- Installing kind v0.27.0 (required for K8s 1.36 support)"
-    - curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.27.0/kind-linux-amd64
+    # Install a kind version that supports the published Kubernetes 1.36 node image.
+    - echo "--- Installing kind v0.32.0 (required for K8s 1.36 support)"
+    - curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.32.0/kind-linux-amd64
     - chmod +x ./kind
     - mv ./kind /usr/local/bin/kind
-
-    # Build the kind node image for K8s 1.36 with GenericWorkload and GangScheduling
-    - echo "--- Building kind node image for K8s 1.36"
-    - kind build node-image --image kindest/node:v1.36.0 v1.36.0
 
     # Create the kind cluster with native scheduling feature gates
     - kind create cluster --wait 900s --config ./ci/kind-config-buildkite-native-scheduling.yml
