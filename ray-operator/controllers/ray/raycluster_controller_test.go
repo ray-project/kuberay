@@ -21,11 +21,14 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"testing"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -1884,3 +1887,96 @@ var _ = Context("Inside the default namespace", func() {
 		})
 	})
 })
+
+func TestIngressNeedsUpdateAppliesDesiredFields(t *testing.T) {
+	exact := networkingv1.PathTypeExact
+	prefix := networkingv1.PathTypePrefix
+
+	existing := &networkingv1.Ingress{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "sample-head-ingress",
+			Namespace: "default",
+			Labels: map[string]string{
+				"ray.io/cluster": "sample",
+			},
+			Annotations: map[string]string{
+				"nginx.ingress.kubernetes.io/rewrite-target": "/$1",
+			},
+		},
+		Spec: networkingv1.IngressSpec{
+			Rules: []networkingv1.IngressRule{
+				{
+					Host: "old.example.com",
+					IngressRuleValue: networkingv1.IngressRuleValue{
+						HTTP: &networkingv1.HTTPIngressRuleValue{Paths: []networkingv1.HTTPIngressPath{{Path: "/sample/(.*)", PathType: &exact}}},
+					},
+				},
+			},
+		},
+	}
+
+	desired := &networkingv1.Ingress{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "sample-head-ingress",
+			Namespace: "default",
+			Labels: map[string]string{
+				"ray.io/cluster": "sample",
+				"extra":          "label",
+			},
+			Annotations: map[string]string{
+				"nginx.ingress.kubernetes.io/ssl-redirect": "true",
+			},
+		},
+		Spec: networkingv1.IngressSpec{
+			Rules: []networkingv1.IngressRule{
+				{
+					Host: "new.example.com",
+					IngressRuleValue: networkingv1.IngressRuleValue{
+						HTTP: &networkingv1.HTTPIngressRuleValue{Paths: []networkingv1.HTTPIngressPath{{Path: "/dashboard", PathType: &prefix}}},
+					},
+				},
+			},
+			TLS: []networkingv1.IngressTLS{{Hosts: []string{"new.example.com"}, SecretName: "ray-tls"}},
+		},
+	}
+
+	updated := ingressNeedsUpdate(existing, desired)
+
+	assert.True(t, updated)
+	assert.Equal(t, desired.Labels, existing.Labels)
+	assert.Equal(t, desired.Annotations, existing.Annotations)
+	assert.Equal(t, desired.Spec, existing.Spec)
+}
+
+func TestIngressNeedsUpdateNoopWhenEqual(t *testing.T) {
+	prefix := networkingv1.PathTypePrefix
+	existing := &networkingv1.Ingress{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "sample-head-ingress",
+			Namespace: "default",
+			Labels: map[string]string{
+				"ray.io/cluster": "sample",
+			},
+			Annotations: map[string]string{
+				"nginx.ingress.kubernetes.io/ssl-redirect": "true",
+			},
+		},
+		Spec: networkingv1.IngressSpec{
+			Rules: []networkingv1.IngressRule{
+				{
+					Host: "new.example.com",
+					IngressRuleValue: networkingv1.IngressRuleValue{
+						HTTP: &networkingv1.HTTPIngressRuleValue{Paths: []networkingv1.HTTPIngressPath{{Path: "/dashboard", PathType: &prefix}}},
+					},
+				},
+			},
+			TLS: []networkingv1.IngressTLS{{Hosts: []string{"new.example.com"}, SecretName: "ray-tls"}},
+		},
+	}
+
+	desired := existing.DeepCopy()
+
+	updated := ingressNeedsUpdate(existing, desired)
+
+	assert.False(t, updated)
+}
