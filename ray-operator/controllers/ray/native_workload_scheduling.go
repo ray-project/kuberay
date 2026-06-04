@@ -68,16 +68,28 @@ func (r *RayClusterReconciler) reconcileNativeWorkloadScheduling(ctx context.Con
 			}
 			return nil
 		}
-		if skipReason == skipReasonTooManyWorkerGroups {
-			maxWorkerGroups := schedulingv1alpha2.WorkloadMaxPodGroupTemplates - 1
-			r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(WorkloadSchedulingInvalidSpec),
-				"RayCluster has %d worker groups, but native workload scheduling supports at most %d (%d PodGroupTemplates total, 1 reserved for head)",
-				len(instance.Spec.WorkerGroupSpecs), maxWorkerGroups, schedulingv1alpha2.WorkloadMaxPodGroupTemplates)
-			return nil
+		// Detect stale resources before cleanup so we can emit a one-time warning.
+		// After cleanup the Workload is gone, so subsequent reconciles skip the event.
+		hadResources := false
+		if err := r.Get(ctx, types.NamespacedName{Name: instance.Name, Namespace: instance.Namespace}, &schedulingv1alpha2.Workload{}); err == nil {
+			hadResources = true
 		}
-		// All other reasons (batch scheduler, autoscaling) are warnings.
-		r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(WorkloadSchedulingSkipped),
-			"Skipping native workload scheduling: %s", string(skipReason))
+		if shouldCleanupNativeWorkloadSchedulingResources() {
+			if err := r.deleteNativeWorkloadSchedulingResources(ctx, instance); err != nil {
+				return err
+			}
+		}
+		if hadResources {
+			if skipReason == skipReasonTooManyWorkerGroups {
+				maxWorkerGroups := schedulingv1alpha2.WorkloadMaxPodGroupTemplates - 1
+				r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(WorkloadSchedulingInvalidSpec),
+					"RayCluster has %d worker groups, but native workload scheduling supports at most %d (%d PodGroupTemplates total, 1 reserved for head)",
+					len(instance.Spec.WorkerGroupSpecs), maxWorkerGroups, schedulingv1alpha2.WorkloadMaxPodGroupTemplates)
+			} else {
+				r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(WorkloadSchedulingSkipped),
+					"Skipping native workload scheduling: %s", string(skipReason))
+			}
+		}
 		return nil
 	}
 
@@ -404,6 +416,8 @@ func (r *RayClusterReconciler) deleteNativeWorkloadSchedulingResources(ctx conte
 		if controllerutil.RemoveFinalizer(pg, podGroupProtectionFinalizer) {
 			if err := r.Update(ctx, pg); err != nil {
 				if !errors.IsNotFound(err) {
+					r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(FailedToDeletePodGroup),
+						"Failed to remove finalizer from PodGroup %s/%s: %v", pg.Namespace, pg.Name, err)
 					return fmt.Errorf("failed to remove finalizer from PodGroup %s/%s: %w", pg.Namespace, pg.Name, err)
 				}
 			}
@@ -453,12 +467,17 @@ func (r *RayClusterReconciler) setWorkloadScheduledCondition(ctx context.Context
 		meta.RemoveStatusCondition(&instance.Status.Conditions, string(rayv1.RayClusterWorkloadScheduled))
 		return
 	}
+	if r.nativeSchedulingSkipReason(instance) != skipReasonNone {
+		meta.RemoveStatusCondition(&instance.Status.Conditions, string(rayv1.RayClusterWorkloadScheduled))
+		return
+	}
+
+	logger := ctrl.LoggerFrom(ctx)
 
 	workload := &schedulingv1alpha2.Workload{}
 	err := r.Get(ctx, types.NamespacedName{Name: instance.Name, Namespace: instance.Namespace}, workload)
 	if err != nil {
 		if !errors.IsNotFound(err) {
-			logger := ctrl.LoggerFrom(ctx)
 			logger.V(1).Info("Failed to get Workload for condition check", "error", err)
 		}
 		meta.SetStatusCondition(&instance.Status.Conditions, metav1.Condition{
@@ -468,6 +487,41 @@ func (r *RayClusterReconciler) setWorkloadScheduledCondition(ctx context.Context
 			Message: "Workload has not been created yet",
 		})
 		return
+	}
+	if workload.DeletionTimestamp != nil {
+		meta.SetStatusCondition(&instance.Status.Conditions, metav1.Condition{
+			Type:    string(rayv1.RayClusterWorkloadScheduled),
+			Status:  metav1.ConditionFalse,
+			Reason:  rayv1.WorkloadPending,
+			Message: "Workload or PodGroups are being deleted",
+		})
+		return
+	}
+
+	for _, pgSpec := range buildPodGroupSpecs(instance) {
+		podGroup := &schedulingv1alpha2.PodGroup{}
+		err := r.Get(ctx, types.NamespacedName{Name: podGroupName(instance.Name, pgSpec.templateName), Namespace: instance.Namespace}, podGroup)
+		if err != nil {
+			if !errors.IsNotFound(err) {
+				logger.V(1).Info("Failed to get PodGroup for condition check", "template", pgSpec.templateName, "error", err)
+			}
+			meta.SetStatusCondition(&instance.Status.Conditions, metav1.Condition{
+				Type:    string(rayv1.RayClusterWorkloadScheduled),
+				Status:  metav1.ConditionFalse,
+				Reason:  rayv1.WorkloadPending,
+				Message: "Workload or PodGroups have not been created yet",
+			})
+			return
+		}
+		if podGroup.DeletionTimestamp != nil {
+			meta.SetStatusCondition(&instance.Status.Conditions, metav1.Condition{
+				Type:    string(rayv1.RayClusterWorkloadScheduled),
+				Status:  metav1.ConditionFalse,
+				Reason:  rayv1.WorkloadPending,
+				Message: "Workload or PodGroups are being deleted",
+			})
+			return
+		}
 	}
 
 	meta.SetStatusCondition(&instance.Status.Conditions, metav1.Condition{

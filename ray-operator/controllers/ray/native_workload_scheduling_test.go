@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -80,6 +81,53 @@ func newWorkerGroup(name string, replicas int32) rayv1.WorkerGroupSpec {
 			},
 		},
 	}
+}
+
+func newTestNativeSchedulingObjects(podGroupNames ...string) []client.Object {
+	objects := []client.Object{
+		&schedulingv1alpha2.Workload{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-cluster",
+				Namespace: "default",
+				Labels:    map[string]string{utils.RayClusterLabelKey: "test-cluster"},
+			},
+		},
+	}
+
+	for _, name := range podGroupNames {
+		objects = append(objects, &schedulingv1alpha2.PodGroup{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: "default",
+				Labels:    map[string]string{utils.RayClusterLabelKey: "test-cluster"},
+			},
+		})
+	}
+
+	return objects
+}
+
+func assertNativeSchedulingResourcesDeleted(ctx context.Context, t *testing.T, c client.Client) {
+	t.Helper()
+
+	err := c.Get(ctx, types.NamespacedName{Name: "test-cluster", Namespace: "default"}, &schedulingv1alpha2.Workload{})
+	assert.True(t, apierrors.IsNotFound(err), "Workload should be deleted")
+
+	podGroupList := &schedulingv1alpha2.PodGroupList{}
+	err = c.List(ctx, podGroupList, client.InNamespace("default"), client.MatchingLabels{utils.RayClusterLabelKey: "test-cluster"})
+	require.NoError(t, err)
+	assert.Empty(t, podGroupList.Items, "PodGroups should be deleted")
+}
+
+func assertEventContains(t *testing.T, recorder *record.FakeRecorder, expected string) {
+	t.Helper()
+
+	for len(recorder.Events) > 0 {
+		if strings.Contains(<-recorder.Events, expected) {
+			return
+		}
+	}
+	assert.Failf(t, "expected event not recorded", "expected event containing %q", expected)
 }
 
 func newReconciler(fakeClient client.Client, s *runtime.Scheme, recorder record.EventRecorder, opts ...RayClusterReconcilerOptions) *RayClusterReconciler {
@@ -298,7 +346,8 @@ func TestReconcileNativeWorkloadScheduling_SkipsWhenAutoscalingEnabled(t *testin
 	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
 	cluster.Spec.EnableInTreeAutoscaling = new(true)
 	s := newTestScheme()
-	fakeClient := clientFake.NewClientBuilder().WithScheme(s).Build()
+	objects := newTestNativeSchedulingObjects("test-cluster-head")
+	fakeClient := clientFake.NewClientBuilder().WithScheme(s).WithObjects(objects...).Build()
 	fakeRecorder := record.NewFakeRecorder(10)
 	r := newReconciler(fakeClient, s, fakeRecorder)
 	ctx := context.Background()
@@ -306,14 +355,8 @@ func TestReconcileNativeWorkloadScheduling_SkipsWhenAutoscalingEnabled(t *testin
 	err := r.reconcileNativeWorkloadScheduling(ctx, cluster)
 	require.NoError(t, err)
 
-	// No Workloads should be created.
-	workloadList := &schedulingv1alpha2.WorkloadList{}
-	err = fakeClient.List(ctx, workloadList, &client.ListOptions{Namespace: "default"})
-	require.NoError(t, err)
-	assert.Empty(t, workloadList.Items)
-
-	// Should have emitted a warning event.
-	assert.Len(t, fakeRecorder.Events, 1)
+	assertNativeSchedulingResourcesDeleted(ctx, t, fakeClient)
+	assertEventContains(t, fakeRecorder, string(WorkloadSchedulingSkipped))
 }
 
 func TestReconcileNativeWorkloadScheduling_SkipsWhenBatchSchedulerConfigured(t *testing.T) {
@@ -321,7 +364,8 @@ func TestReconcileNativeWorkloadScheduling_SkipsWhenBatchSchedulerConfigured(t *
 
 	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
 	s := newTestScheme()
-	fakeClient := clientFake.NewClientBuilder().WithScheme(s).Build()
+	objects := newTestNativeSchedulingObjects("test-cluster-head")
+	fakeClient := clientFake.NewClientBuilder().WithScheme(s).WithObjects(objects...).Build()
 	fakeRecorder := record.NewFakeRecorder(10)
 	// Create a SchedulerManager with a real non-default batch scheduler (yunikorn).
 	batchMgr, err := batchscheduler.NewSchedulerManager(context.Background(),
@@ -335,14 +379,8 @@ func TestReconcileNativeWorkloadScheduling_SkipsWhenBatchSchedulerConfigured(t *
 	err = r.reconcileNativeWorkloadScheduling(ctx, cluster)
 	require.NoError(t, err)
 
-	// No Workloads should be created.
-	workloadList := &schedulingv1alpha2.WorkloadList{}
-	err = fakeClient.List(ctx, workloadList, &client.ListOptions{Namespace: "default"})
-	require.NoError(t, err)
-	assert.Empty(t, workloadList.Items)
-
-	// Should have emitted a warning event.
-	assert.Len(t, fakeRecorder.Events, 1)
+	assertNativeSchedulingResourcesDeleted(ctx, t, fakeClient)
+	assertEventContains(t, fakeRecorder, string(WorkloadSchedulingSkipped))
 }
 
 func TestReconcileNativeWorkloadScheduling_SkipsWhenMoreThan7WorkerGroups(t *testing.T) {
@@ -354,7 +392,8 @@ func TestReconcileNativeWorkloadScheduling_SkipsWhenMoreThan7WorkerGroups(t *tes
 	}
 	cluster := newTestRayCluster(workers...)
 	s := newTestScheme()
-	fakeClient := clientFake.NewClientBuilder().WithScheme(s).Build()
+	objects := newTestNativeSchedulingObjects("test-cluster-head")
+	fakeClient := clientFake.NewClientBuilder().WithScheme(s).WithObjects(objects...).Build()
 	fakeRecorder := record.NewFakeRecorder(10)
 	r := newReconciler(fakeClient, s, fakeRecorder)
 	ctx := context.Background()
@@ -362,14 +401,8 @@ func TestReconcileNativeWorkloadScheduling_SkipsWhenMoreThan7WorkerGroups(t *tes
 	err := r.reconcileNativeWorkloadScheduling(ctx, cluster)
 	require.NoError(t, err)
 
-	// No Workloads should be created.
-	workloadList := &schedulingv1alpha2.WorkloadList{}
-	err = fakeClient.List(ctx, workloadList, &client.ListOptions{Namespace: "default"})
-	require.NoError(t, err)
-	assert.Empty(t, workloadList.Items)
-
-	// Should have emitted a warning event.
-	assert.Len(t, fakeRecorder.Events, 1)
+	assertNativeSchedulingResourcesDeleted(ctx, t, fakeClient)
+	assertEventContains(t, fakeRecorder, string(WorkloadSchedulingInvalidSpec))
 }
 
 // --- Workload construction tests ---
@@ -1358,6 +1391,41 @@ func TestDeleteNativeWorkloadSchedulingResources_NotFoundIsNoop(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestDeleteNativeWorkloadSchedulingResources_PodGroupFinalizerRemovalFailure(t *testing.T) {
+	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
+	s := newTestScheme()
+
+	pg := &schedulingv1alpha2.PodGroup{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       "test-cluster-head",
+			Namespace:  "default",
+			Labels:     map[string]string{utils.RayClusterLabelKey: "test-cluster"},
+			Finalizers: []string{podGroupProtectionFinalizer},
+		},
+	}
+
+	fakeClient := clientFake.NewClientBuilder().WithScheme(s).
+		WithObjects(pg).
+		WithInterceptorFuncs(interceptor.Funcs{
+			Update: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
+				if _, ok := obj.(*schedulingv1alpha2.PodGroup); ok {
+					return fmt.Errorf("simulated PodGroup update error")
+				}
+				return c.Update(ctx, obj, opts...)
+			},
+		}).Build()
+	fakeRecorder := record.NewFakeRecorder(10)
+	r := newReconciler(fakeClient, s, fakeRecorder)
+	ctx := context.Background()
+
+	err := r.deleteNativeWorkloadSchedulingResources(ctx, cluster)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to remove finalizer from PodGroup")
+
+	event := <-fakeRecorder.Events
+	assert.Contains(t, event, string(FailedToDeletePodGroup))
+}
+
 func TestDeleteNativeWorkloadSchedulingResources_PodGroupDeleteFailure(t *testing.T) {
 	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
 	s := newTestScheme()
@@ -1846,6 +1914,87 @@ func TestReconcilePods_RecreateUpgradeDeletesNativeSchedulingResources(t *testin
 	assert.Empty(t, pgList.Items, "PodGroups should be deleted on recreate upgrade")
 }
 
+func TestReconcilePods_DeletesPodsBeforeNativeSchedulingResources(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
+	features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, false)
+
+	tests := []struct {
+		name  string
+		setup func(*rayv1.RayCluster)
+	}{
+		{
+			name: "suspend",
+			setup: func(cluster *rayv1.RayCluster) {
+				suspend := true
+				cluster.Spec.Suspend = &suspend
+			},
+		},
+		{
+			name: "recreate upgrade",
+			setup: func(cluster *rayv1.RayCluster) {
+				recreate := rayv1.RayClusterRecreate
+				cluster.Spec.UpgradeStrategy = &rayv1.RayClusterUpgradeStrategy{Type: &recreate}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cluster := newTestRayCluster(newWorkerGroup("workers", 3))
+			tt.setup(cluster)
+
+			headPod := &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cluster-head-pod",
+					Namespace: "default",
+					Labels: map[string]string{
+						utils.RayClusterLabelKey:  "test-cluster",
+						utils.RayNodeTypeLabelKey: string(rayv1.HeadNode),
+					},
+					Annotations: map[string]string{
+						utils.UpgradeStrategyRecreateHashKey: "stale-hash-value",
+						utils.KubeRayVersion:                 utils.KUBERAY_VERSION,
+					},
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{{Name: "ray-head", Image: "rayproject/ray:latest"}},
+				},
+			}
+
+			objects := append(newTestNativeSchedulingObjects("test-cluster-head"), headPod)
+			deleteOrder := make([]string, 0, 3)
+			s := newTestScheme()
+			fakeClient := clientFake.NewClientBuilder().WithScheme(s).
+				WithObjects(objects...).WithInterceptorFuncs(interceptor.Funcs{
+				DeleteAllOf: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.DeleteAllOfOption) error {
+					if _, ok := obj.(*corev1.Pod); ok {
+						deleteOrder = append(deleteOrder, "pods")
+					}
+					return c.DeleteAllOf(ctx, obj, opts...)
+				},
+				Delete: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.DeleteOption) error {
+					switch obj.(type) {
+					case *schedulingv1alpha2.PodGroup:
+						deleteOrder = append(deleteOrder, "podgroup")
+					case *schedulingv1alpha2.Workload:
+						deleteOrder = append(deleteOrder, "workload")
+					}
+					return c.Delete(ctx, obj, opts...)
+				},
+			}).Build()
+			r := newReconciler(fakeClient, s, record.NewFakeRecorder(20))
+			ctx := context.Background()
+
+			err := r.reconcilePods(ctx, cluster)
+			require.NoError(t, err)
+
+			require.Len(t, deleteOrder, 3)
+			assert.Equal(t, "pods", deleteOrder[0])
+			assert.ElementsMatch(t, []string{"podgroup", "workload"}, deleteOrder[1:])
+		})
+	}
+}
+
 func TestReconcilePods_ResumeRecreatesNativeSchedulingResources(t *testing.T) {
 	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
 	features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, false)
@@ -1883,22 +2032,14 @@ func TestReconcilePods_ResumeRecreatesNativeSchedulingResources(t *testing.T) {
 
 // --- WorkloadScheduled condition tests ---
 
-func TestSetWorkloadScheduledCondition_TrueWhenWorkloadExists(t *testing.T) {
+func TestSetWorkloadScheduledCondition_TrueWhenWorkloadAndPodGroupsExist(t *testing.T) {
 	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
 	features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, true)
 
 	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
 	s := newTestScheme()
-
-	// Pre-create a Workload so the condition check finds it.
-	workload := &schedulingv1alpha2.Workload{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-cluster",
-			Namespace: "default",
-			Labels:    map[string]string{utils.RayClusterLabelKey: "test-cluster"},
-		},
-	}
-	fakeClient := clientFake.NewClientBuilder().WithScheme(s).WithObjects(workload).Build()
+	objects := newTestNativeSchedulingObjects("test-cluster-head", "test-cluster-worker-workers")
+	fakeClient := clientFake.NewClientBuilder().WithScheme(s).WithObjects(objects...).Build()
 	r := newReconciler(fakeClient, s, record.NewFakeRecorder(10))
 	ctx := context.Background()
 
@@ -1908,6 +2049,25 @@ func TestSetWorkloadScheduledCondition_TrueWhenWorkloadExists(t *testing.T) {
 	require.NotNil(t, cond, "WorkloadScheduled condition should be set")
 	assert.Equal(t, metav1.ConditionTrue, cond.Status)
 	assert.Equal(t, rayv1.WorkloadReady, cond.Reason)
+}
+
+func TestSetWorkloadScheduledCondition_FalseWhenPodGroupDoesNotExist(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
+	features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, true)
+
+	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
+	s := newTestScheme()
+	objects := newTestNativeSchedulingObjects("test-cluster-head")
+	fakeClient := clientFake.NewClientBuilder().WithScheme(s).WithObjects(objects...).Build()
+	r := newReconciler(fakeClient, s, record.NewFakeRecorder(10))
+	ctx := context.Background()
+
+	r.setWorkloadScheduledCondition(ctx, cluster, "")
+
+	cond := meta.FindStatusCondition(cluster.Status.Conditions, string(rayv1.RayClusterWorkloadScheduled))
+	require.NotNil(t, cond, "WorkloadScheduled condition should be set")
+	assert.Equal(t, metav1.ConditionFalse, cond.Status)
+	assert.Equal(t, rayv1.WorkloadPending, cond.Reason)
 }
 
 func TestSetWorkloadScheduledCondition_FalseWhenWorkloadDoesNotExist(t *testing.T) {
@@ -1928,6 +2088,100 @@ func TestSetWorkloadScheduledCondition_FalseWhenWorkloadDoesNotExist(t *testing.
 	require.NotNil(t, cond, "WorkloadScheduled condition should be set")
 	assert.Equal(t, metav1.ConditionFalse, cond.Status)
 	assert.Equal(t, rayv1.WorkloadPending, cond.Reason)
+}
+
+func TestSetWorkloadScheduledCondition_FalseWhenWorkloadBeingDeleted(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
+	features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, true)
+
+	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
+	s := newTestScheme()
+	now := metav1.Now()
+	workload := &schedulingv1alpha2.Workload{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              "test-cluster",
+			Namespace:         "default",
+			Labels:            map[string]string{utils.RayClusterLabelKey: "test-cluster"},
+			DeletionTimestamp: &now,
+			Finalizers:        []string{"fake-finalizer"}, // required for DeletionTimestamp to be accepted
+		},
+	}
+	fakeClient := clientFake.NewClientBuilder().WithScheme(s).WithObjects(workload).Build()
+	r := newReconciler(fakeClient, s, record.NewFakeRecorder(10))
+	ctx := context.Background()
+
+	r.setWorkloadScheduledCondition(ctx, cluster, "")
+
+	cond := meta.FindStatusCondition(cluster.Status.Conditions, string(rayv1.RayClusterWorkloadScheduled))
+	require.NotNil(t, cond, "WorkloadScheduled condition should be set")
+	assert.Equal(t, metav1.ConditionFalse, cond.Status)
+	assert.Equal(t, rayv1.WorkloadPending, cond.Reason)
+	assert.Contains(t, cond.Message, "being deleted")
+}
+
+func TestSetWorkloadScheduledCondition_FalseWhenPodGroupBeingDeleted(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
+	features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, true)
+
+	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
+	s := newTestScheme()
+	now := metav1.Now()
+	// Workload is healthy, but one PodGroup is being deleted.
+	objects := []client.Object{
+		&schedulingv1alpha2.Workload{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-cluster",
+				Namespace: "default",
+				Labels:    map[string]string{utils.RayClusterLabelKey: "test-cluster"},
+			},
+		},
+		&schedulingv1alpha2.PodGroup{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-cluster-head",
+				Namespace: "default",
+				Labels:    map[string]string{utils.RayClusterLabelKey: "test-cluster"},
+			},
+		},
+		&schedulingv1alpha2.PodGroup{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:              "test-cluster-worker-workers",
+				Namespace:         "default",
+				Labels:            map[string]string{utils.RayClusterLabelKey: "test-cluster"},
+				DeletionTimestamp: &now,
+				Finalizers:        []string{"fake-finalizer"},
+			},
+		},
+	}
+	fakeClient := clientFake.NewClientBuilder().WithScheme(s).WithObjects(objects...).Build()
+	r := newReconciler(fakeClient, s, record.NewFakeRecorder(10))
+	ctx := context.Background()
+
+	r.setWorkloadScheduledCondition(ctx, cluster, "")
+
+	cond := meta.FindStatusCondition(cluster.Status.Conditions, string(rayv1.RayClusterWorkloadScheduled))
+	require.NotNil(t, cond, "WorkloadScheduled condition should be set")
+	assert.Equal(t, metav1.ConditionFalse, cond.Status)
+	assert.Equal(t, rayv1.WorkloadPending, cond.Reason)
+	assert.Contains(t, cond.Message, "being deleted")
+}
+
+func TestReconcileNativeWorkloadScheduling_NoEventWhenNoStaleResources(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
+
+	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
+	cluster.Spec.EnableInTreeAutoscaling = new(true) // trigger skip
+	s := newTestScheme()
+	// No pre-existing Workload/PodGroups — nothing to clean up.
+	fakeClient := clientFake.NewClientBuilder().WithScheme(s).Build()
+	fakeRecorder := record.NewFakeRecorder(10)
+	r := newReconciler(fakeClient, s, fakeRecorder)
+	ctx := context.Background()
+
+	err := r.reconcileNativeWorkloadScheduling(ctx, cluster)
+	require.NoError(t, err)
+
+	// No events should be emitted because there were no stale resources.
+	assert.Empty(t, fakeRecorder.Events, "No events should be emitted when there are no stale resources to clean up")
 }
 
 func TestSetWorkloadScheduledCondition_NotSetWhenFeatureGateDisabled(t *testing.T) {
@@ -1961,6 +2215,30 @@ func TestSetWorkloadScheduledCondition_NotSetWhenAnnotationMissing(t *testing.T)
 
 	cond := meta.FindStatusCondition(cluster.Status.Conditions, string(rayv1.RayClusterWorkloadScheduled))
 	assert.Nil(t, cond, "WorkloadScheduled condition should not be set when annotation is missing")
+}
+
+func TestSetWorkloadScheduledCondition_RemovedWhenSchedulingSkipped(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
+	features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, true)
+
+	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
+	cluster.Spec.EnableInTreeAutoscaling = new(true)
+	meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
+		Type:    string(rayv1.RayClusterWorkloadScheduled),
+		Status:  metav1.ConditionTrue,
+		Reason:  rayv1.WorkloadReady,
+		Message: "Workload and PodGroups have been created",
+	})
+	s := newTestScheme()
+	objects := newTestNativeSchedulingObjects("test-cluster-head", "test-cluster-worker-workers")
+	fakeClient := clientFake.NewClientBuilder().WithScheme(s).WithObjects(objects...).Build()
+	r := newReconciler(fakeClient, s, record.NewFakeRecorder(10))
+	ctx := context.Background()
+
+	r.setWorkloadScheduledCondition(ctx, cluster, "")
+
+	cond := meta.FindStatusCondition(cluster.Status.Conditions, string(rayv1.RayClusterWorkloadScheduled))
+	assert.Nil(t, cond, "WorkloadScheduled condition should be removed when native scheduling is skipped")
 }
 
 func TestSetWorkloadScheduledCondition_RemovedWhenSuspended(t *testing.T) {
@@ -2018,15 +2296,6 @@ func TestCalculateStatus_WorkloadScheduledConditionSetWhenBothGatesEnabled(t *te
 	cluster := newTestRayCluster(newWorkerGroup("workers", 1))
 	s := newTestScheme()
 
-	// Create a Workload so the condition check finds it.
-	workload := &schedulingv1alpha2.Workload{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-cluster",
-			Namespace: "default",
-			Labels:    map[string]string{utils.RayClusterLabelKey: "test-cluster"},
-		},
-	}
-
 	// Create a head service so calculateStatus's updateEndpoints/updateHeadInfo succeed.
 	headService := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
@@ -2043,7 +2312,8 @@ func TestCalculateStatus_WorkloadScheduledConditionSetWhenBothGatesEnabled(t *te
 		},
 	}
 
-	fakeClient := clientFake.NewClientBuilder().WithScheme(s).WithObjects(workload, headService).Build()
+	objects := append(newTestNativeSchedulingObjects("test-cluster-head", "test-cluster-worker-workers"), headService)
+	fakeClient := clientFake.NewClientBuilder().WithScheme(s).WithObjects(objects...).Build()
 	r := newReconciler(fakeClient, s, record.NewFakeRecorder(10))
 	ctx := context.Background()
 

@@ -639,16 +639,16 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 	statusConditionGateEnabled := features.Enabled(features.RayClusterStatusConditions)
 	if suspendStatus == rayv1.RayClusterSuspending ||
 		(!statusConditionGateEnabled && instance.Spec.Suspend != nil && *instance.Spec.Suspend) {
-		if shouldCleanupNativeWorkloadSchedulingResources() {
-			if err := r.deleteNativeWorkloadSchedulingResources(ctx, instance); err != nil {
-				return err
-			}
-		}
 		if _, err := r.deleteAllPods(ctx, common.RayClusterAllPodsAssociationOptions(instance)); err != nil {
 			r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.FailedToDeletePodCollection),
 				"Failed deleting Pods due to suspension for RayCluster %s/%s, %v",
 				instance.Namespace, instance.Name, err)
 			return errstd.Join(utils.ErrFailedDeleteAllPods, err)
+		}
+		if shouldCleanupNativeWorkloadSchedulingResources() {
+			if err := r.deleteNativeWorkloadSchedulingResources(ctx, instance); err != nil {
+				return err
+			}
 		}
 
 		r.Recorder.Eventf(instance, corev1.EventTypeNormal, string(utils.DeletedPod),
@@ -670,16 +670,16 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 	// Check if pods need to be recreated with Recreate upgradeStrategy
 	if r.shouldRecreatePodsForUpgrade(ctx, instance) {
 		logger.Info("RayCluster spec changed with Recreate upgradeStrategy, deleting all pods")
-		if shouldCleanupNativeWorkloadSchedulingResources() {
-			if err := r.deleteNativeWorkloadSchedulingResources(ctx, instance); err != nil {
-				return err
-			}
-		}
 		if _, err := r.deleteAllPods(ctx, common.RayClusterAllPodsAssociationOptions(instance)); err != nil {
 			r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.FailedToDeletePodCollection),
 				"Failed deleting Pods due to spec change with Recreate upgradeStrategy for RayCluster %s/%s, %v",
 				instance.Namespace, instance.Name, err)
 			return errstd.Join(utils.ErrFailedDeleteAllPods, err)
+		}
+		if shouldCleanupNativeWorkloadSchedulingResources() {
+			if err := r.deleteNativeWorkloadSchedulingResources(ctx, instance); err != nil {
+				return err
+			}
 		}
 		r.rayClusterScaleExpectation.Delete(instance.Name, instance.Namespace)
 		r.Recorder.Eventf(instance, corev1.EventTypeNormal, string(utils.DeletedPod),
