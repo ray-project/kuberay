@@ -40,13 +40,17 @@ type NetworkPolicyController struct {
 
 // NewNetworkPolicyController creates a new independent NetworkPolicy controller.
 // The operator's namespace is resolved from the in-cluster service account token.
-func NewNetworkPolicyController(mgr manager.Manager) *NetworkPolicyController {
+func NewNetworkPolicyController(mgr manager.Manager) (*NetworkPolicyController, error) {
+	ns, err := getOperatorNamespace()
+	if err != nil {
+		return nil, err
+	}
 	return &NetworkPolicyController{
 		Client:            mgr.GetClient(),
 		Scheme:            mgr.GetScheme(),
 		Recorder:          mgr.GetEventRecorderFor("networkpolicy-controller"),
-		OperatorNamespace: getOperatorNamespace(),
-	}
+		OperatorNamespace: ns,
+	}, nil
 }
 
 func getAllowAllRayJobSubmitters() bool {
@@ -54,15 +58,13 @@ func getAllowAllRayJobSubmitters() bool {
 }
 
 // getOperatorNamespace returns the namespace the operator is running in.
-// It reads from the in-cluster service account namespace file first, then
-// falls back to "default" which matches both the Helm and Kustomize deployment defaults.
-func getOperatorNamespace() string {
-	if ns, err := os.ReadFile(utils.InClusterNamespacePath); err == nil {
-		return strings.TrimSpace(string(ns))
+// It reads from the in-cluster service account namespace file.
+func getOperatorNamespace() (string, error) {
+	ns, err := os.ReadFile(utils.InClusterNamespacePath)
+	if err != nil {
+		return "", fmt.Errorf("unable to determine operator namespace from service account at %s: %w", utils.InClusterNamespacePath, err)
 	}
-	ctrl.Log.WithName("controllers").WithName("NetworkPolicy").Info(
-		"Unable to determine operator namespace from service account, falling back to 'default'")
-	return "default"
+	return strings.TrimSpace(string(ns)), nil
 }
 
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=get;list;watch;create;update;delete;patch
