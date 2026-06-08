@@ -282,13 +282,23 @@ rules:
   - networking.k8s.io
   resources:
   - ingresses
-  - networkpolicies
   verbs:
   - create
   - delete
   - get
   - list
   - patch
+  - update
+  - watch
+- apiGroups:
+  - networking.k8s.io
+  resources:
+  - networkpolicies
+  verbs:
+  - create
+  - delete
+  - get
+  - list
   - update
   - watch
 - apiGroups:
