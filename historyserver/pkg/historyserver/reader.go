@@ -51,12 +51,19 @@ func (s *ServerHandler) listClusters(limit int) []utils.ClusterInfo {
 	liveClusterNames := []string{}
 	liveClusterInfos := []utils.ClusterInfo{}
 	for _, liveCluster := range liveClusters {
+		var ownerKind, ownerName string
+		if len(liveCluster.OwnerReferences) > 0 {
+			ownerKind = strings.ToLower(liveCluster.OwnerReferences[0].Kind)
+			ownerName = liveCluster.OwnerReferences[0].Name
+		}
 		liveClusterInfo := utils.ClusterInfo{
 			Name:            liveCluster.Name,
 			Namespace:       liveCluster.Namespace,
 			CreateTime:      liveCluster.CreationTimestamp.String(),
 			CreateTimeStamp: liveCluster.CreationTimestamp.Unix(),
 			SessionName:     "live",
+			OwnerKind:       ownerKind,
+			OwnerName:       ownerName,
 		}
 		liveClusterInfos = append(liveClusterInfos, liveClusterInfo)
 		liveClusterNames = append(liveClusterNames, liveCluster.Name)
