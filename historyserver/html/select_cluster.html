@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ray History Server - Select Session</title>
+    <!-- Tailwind CSS for premium UI matching Ray Dashboard -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React and Babel via CDN -->
+    <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body class="bg-[#0e1117] text-slate-200 min-h-screen font-sans antialiased">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        function App() {
+            const [clusters, setClusters] = React.useState([]);
+            const [loading, setLoading] = React.useState(true);
+            const [error, setError] = React.useState(null);
+
+            React.useEffect(() => {
+                fetch('/clusters')
+                    .then(res => {
+                        if (!res.ok) {
+                            throw new Error(`${res.status}: ${res.statusText || 'Error'}`);
+                        }
+                        return res.json();
+                    })
+                    .then(data => {
+                        setClusters(data || []);
+                        setLoading(false);
+                    })
+                    .catch(err => {
+                        setError(err.message || "500: Internal Server Error");
+                        setLoading(false);
+                    });
+            }, []);
+
+            const enterCluster = (namespace, name, session) => {
+                fetch(`/enter_cluster/${namespace}/${name}/${session}`)
+                    .then(res => {
+                        if (!res.ok) throw new Error(`${res.status}: ${res.statusText || 'Error'}`);
+                        return res.json();
+                    })
+                    .then(data => {
+                        if (data.result === 'success') {
+                            window.location.href = '/#/overview';
+                        } else {
+                            setError(data.message || "500: Error entering cluster session");
+                        }
+                    })
+                    .catch(err => setError(err.message || "500: Communication Error"));
+            };
+
+            if (error) {
+                return <div class="p-4 font-mono text-sm text-slate-300">{error}</div>;
+            }
+
+            return (
+                <div class="min-h-screen bg-[#0e1117] flex flex-col">
+                    <main class="flex-1 max-w-7xl w-full mx-auto px-6 py-8">
+                        <div class="mb-6">
+                            <h1 class="text-sm font-medium text-slate-300 tracking-wide">
+                                KubeRay History Server
+                            </h1>
+                        </div>
+
+                        {/* Dark blue info banner */}
+                        <div class="bg-[#031b30] border border-blue-900/80 rounded-md p-3 mb-8 flex items-center space-x-2.5 text-xs text-blue-200 shadow-sm">
+                            <svg class="w-4 h-4 text-blue-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <circle cx="12" cy="12" r="10" stroke-width="2"></circle>
+                                <path d="M12 16v-4M12 8h.01" stroke-width="2" stroke-linecap="round"></path>
+                            </svg>
+                            <span>Select a cluster to view its historical dashboard.</span>
+                        </div>
+
+                        {loading ? (
+                            <div class="flex justify-center py-16">
+                                <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+                            </div>
+                        ) : (
+                            <div class="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+                                {clusters.map((c, i) => (
+                                    <div key={i} class="bg-[#18181b] border border-zinc-800 rounded-md p-5 flex flex-col justify-between hover:border-zinc-700 transition-colors shadow-lg">
+                                        <div class="mb-6">
+                                            <h3
+                                                onClick={() => enterCluster(c.namespace, c.name, c.sessionName)}
+                                                class="text-blue-500 font-medium text-base mb-3 break-all cursor-pointer hover:underline"
+                                            >
+                                                {c.name}
+                                            </h3>
+                                            <div class="text-xs text-zinc-400 space-y-1.5 font-sans">
+                                                <p class="break-all">Namespace: {c.namespace}</p>
+                                                {c.sessionName && <p class="break-all font-mono">Session: {c.sessionName}</p>}
+                                                {c.createTime && <p class="break-all">Created: {c.createTime}</p>}
+                                                {(c.ownerKind || c.ownerName) && (
+                                                    <p class="break-all">
+                                                        Owner: {c.ownerKind ? `[${c.ownerKind}] ` : ''}{c.ownerName || ''}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <button
+                                            onClick={() => enterCluster(c.namespace, c.name, c.sessionName)}
+                                            class="w-full py-2 bg-blue-500 hover:bg-blue-600 text-white rounded text-xs font-bold uppercase tracking-wider transition-colors shadow-sm"
+                                        >
+                                            Enter Cluster
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </main>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
