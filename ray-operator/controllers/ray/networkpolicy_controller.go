@@ -316,11 +316,10 @@ func (r *NetworkPolicyController) buildBaseIngressRules(instance *rayv1.RayClust
 func (r *NetworkPolicyController) buildHeadIngressRules(instance *rayv1.RayCluster) []networkingv1.NetworkPolicyIngressRule {
 	tcpProtocol := corev1.ProtocolTCP
 	dashboardPort := intstr.FromInt32(r.getHeadPort(instance, "dashboard-port", utils.DefaultDashboardPort))
-	clientPort := intstr.FromInt32(r.getHeadPort(instance, "ray-client-server-port", utils.DefaultClientPort))
 
 	rules := r.buildBaseIngressRules(instance)
 	rules = append(rules,
-		// KubeRay operator access to dashboard and client ports.
+		// KubeRay operator access to dashboard port.
 		// Only app.kubernetes.io/component is used because app.kubernetes.io/name
 		// differs between deployment methods (kustomize sets "kuberay", Helm sets
 		// "kuberay-operator"), whereas component is "kuberay-operator" in both.
@@ -344,7 +343,6 @@ func (r *NetworkPolicyController) buildHeadIngressRules(instance *rayv1.RayClust
 			},
 			Ports: []networkingv1.NetworkPolicyPort{
 				{Protocol: &tcpProtocol, Port: &dashboardPort},
-				{Protocol: &tcpProtocol, Port: &clientPort},
 			},
 		},
 	)

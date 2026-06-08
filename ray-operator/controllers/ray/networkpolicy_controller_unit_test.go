@@ -334,11 +334,9 @@ func TestBuildHeadIngressRules(t *testing.T) {
 	assert.Equal(t, map[string]string{
 		corev1.LabelMetadataName: "kuberay-system",
 	}, operatorRule.From[0].NamespaceSelector.MatchLabels, "Namespace selector must restrict to operator namespace")
-	require.Len(t, operatorRule.Ports, 2)
+	require.Len(t, operatorRule.Ports, 1)
 	dashboardPort := intstr.FromInt32(utils.DefaultDashboardPort)
-	clientPort := intstr.FromInt32(utils.DefaultClientPort)
 	assert.Equal(t, &dashboardPort, operatorRule.Ports[0].Port)
-	assert.Equal(t, &clientPort, operatorRule.Ports[1].Port)
 }
 
 // TestBuildRayJobPeer verifies that buildRayJobPeer returns a peer for RayJob-owned clusters
