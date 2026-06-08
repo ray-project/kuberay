@@ -141,7 +141,7 @@ var _ = BeforeSuite(func(ctx SpecContext) {
 	features.SetFeatureGateDuringTest(GinkgoTB(), features.RayClusterNetworkIsolation, true)
 	networkPolicyController, err := NewNetworkPolicyController(mgr)
 	Expect(err).NotTo(HaveOccurred(), "failed to create NetworkPolicy controller")
-	err = networkPolicyController.SetupWithManager(mgr)
+	err = networkPolicyController.SetupWithManager(mgr, 1)
 	Expect(err).NotTo(HaveOccurred(), "failed to setup NetworkPolicy controller")
 
 	go func() {
