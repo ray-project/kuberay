@@ -139,7 +139,9 @@ var _ = BeforeSuite(func(ctx SpecContext) {
 	Expect(err).NotTo(HaveOccurred(), "failed to setup RayJob controller")
 
 	features.SetFeatureGateDuringTest(GinkgoTB(), features.RayClusterNetworkIsolation, true)
-	err = NewNetworkPolicyController(mgr).SetupWithManager(mgr)
+	networkPolicyController, err := NewNetworkPolicyController(mgr)
+	Expect(err).NotTo(HaveOccurred(), "failed to create NetworkPolicy controller")
+	err = networkPolicyController.SetupWithManager(mgr)
 	Expect(err).NotTo(HaveOccurred(), "failed to setup NetworkPolicy controller")
 
 	go func() {

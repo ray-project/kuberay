@@ -332,8 +332,10 @@ func main() {
 
 	if features.Enabled(features.RayClusterNetworkIsolation) {
 		setupLog.Info("RayClusterNetworkIsolation feature gate is enabled, starting NetworkPolicy controller")
-		exitOnError(ray.NewNetworkPolicyController(mgr).SetupWithManager(mgr),
-			"unable to create controller", "controller", "NetworkPolicy")
+		networkPolicyController, err := ray.NewNetworkPolicyController(mgr)
+		exitOnError(err, "unable to create controller", "controller", "NetworkPolicy")
+		exitOnError(networkPolicyController.SetupWithManager(mgr),
+			"unable to setup controller", "controller", "NetworkPolicy")
 	} else {
 		setupLog.Info("RayClusterNetworkIsolation feature gate is disabled, skipping NetworkPolicy controller setup")
 	}
