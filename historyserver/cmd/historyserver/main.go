@@ -11,12 +11,16 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	configapi "github.com/ray-project/kuberay/ray-operator/apis/config/v1alpha1"
-
 	"github.com/ray-project/kuberay/historyserver/pkg/collector"
 	"github.com/ray-project/kuberay/historyserver/pkg/collector/types"
 	"github.com/ray-project/kuberay/historyserver/pkg/eventserver"
 	"github.com/ray-project/kuberay/historyserver/pkg/historyserver"
+)
+
+const (
+	// Aligned with ray-operator defaults (see ray-operator/apis/config/v1alpha1/defaults.go).
+	defaultKubeAPIQPS   = float64(100)
+	defaultKubeAPIBurst = 200
 )
 
 func main() {
@@ -26,8 +30,8 @@ func main() {
 	runtimeClassConfigPath := ""
 	dashboardDir := ""
 	useKubernetesProxy := false
-	qps := configapi.DefaultQPS
-	burst := configapi.DefaultBurst
+	qps := defaultKubeAPIQPS
+	burst := defaultKubeAPIBurst
 	sessionProcessTimeout := historyserver.DefaultSessionProcessTimeout
 	flag.StringVar(&runtimeClassName, "runtime-class-name", "", "Storage backend: s3 / gcs / azureblob / aliyunoss / localtest")
 	flag.StringVar(&rayRootDir, "ray-root-dir", "", "Root dir inside the bucket")
@@ -35,9 +39,9 @@ func main() {
 	flag.StringVar(&dashboardDir, "dashboard-dir", "/dashboard", "Path to Ray Dashboard static assets")
 	flag.StringVar(&runtimeClassConfigPath, "runtime-class-config-path", "", "Path to backend config JSON")
 	flag.BoolVar(&useKubernetesProxy, "use-kubernetes-proxy", false, "Use local kubeconfig instead of in-cluster config")
-	flag.Float64Var(&qps, "kube-api-qps", configapi.DefaultQPS,
+	flag.Float64Var(&qps, "kube-api-qps", defaultKubeAPIQPS,
 		"The QPS value for the client communicating with the Kubernetes API server.")
-	flag.IntVar(&burst, "kube-api-burst", configapi.DefaultBurst,
+	flag.IntVar(&burst, "kube-api-burst", defaultKubeAPIBurst,
 		"The maximum burst for throttling requests from this client to the Kubernetes API server.")
 	flag.DurationVar(&sessionProcessTimeout, "session-process-timeout", historyserver.DefaultSessionProcessTimeout, "Timeout duration for processing and loading a single Ray cluster session.")
 	flag.Parse()
