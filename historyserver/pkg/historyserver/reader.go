@@ -14,10 +14,10 @@ import (
 	"strings"
 
 	"github.com/bmatcuk/doublestar/v4"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"github.com/ray-project/kuberay/historyserver/pkg/compression"
 	eventtypes "github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
 	"github.com/sirupsen/logrus"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
