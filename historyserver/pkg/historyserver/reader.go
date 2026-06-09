@@ -99,6 +99,14 @@ func (s *ServerHandler) findSessionInMap(namespace, name, session string) (strin
 		if len(list) == 0 {
 			return "", false
 		}
+		if session == "latest" || session == "" {
+			for _, c := range list {
+				if c.SessionName == "live" {
+					return "live", true
+				}
+			}
+			return list[0].SessionName, true
+		}
 		for _, c := range list {
 			if c.SessionName == session {
 				return c.SessionName, true
