@@ -55,6 +55,8 @@ func (s *SessionLoader) GetSnapshot(clusterSessionKey string) (*eventserver.Sess
 	if !ok {
 		return nil, false
 	}
+	// Renew the TTL so active debug sessions are not evicted.
+	s.cache.Add(clusterSessionKey, cached)
 	out := *cached
 	out.Tasks = append([]eventtypes.Task(nil), cached.Tasks...)
 	return &out, true

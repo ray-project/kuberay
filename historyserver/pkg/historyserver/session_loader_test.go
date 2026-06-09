@@ -348,9 +348,32 @@ func TestGetSnapshot_TTLExpiry(t *testing.T) {
 		t.Fatal("expected snapshot to be cached right after put")
 	}
 
-	// Gone once the TTL elapses.
 	time.Sleep(80 * time.Millisecond)
 	if _, ok := sl.GetSnapshot(key); ok {
 		t.Fatal("expected snapshot to be evicted after TTL expiry")
+	}
+}
+
+// TestGetSnapshot_SlidingTTLRenewal verifies that repeated GetSnapshot calls
+// keep a cached entry alive until idle TTL expiry.
+func TestGetSnapshot_SlidingTTLRenewal(t *testing.T) {
+	info := testEnterClusterInfo()
+	key := utils.BuildClusterSessionKey(info.Name, info.Namespace, info.SessionName)
+
+	const ttl = 30 * time.Millisecond
+	sl := NewSessionLoader(&fakeProcessor{}, context.Background(), DefaultSessionProcessTimeout, DefaultSessionCacheSize, ttl)
+	sl.putSnapshot(key, testSnapshot(key))
+
+	deadline := time.Now().Add(100 * time.Millisecond)
+	for time.Now().Before(deadline) {
+		if _, ok := sl.GetSnapshot(key); !ok {
+			t.Fatal("expected snapshot to stay cached while being accessed")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	time.Sleep(80 * time.Millisecond)
+	if _, ok := sl.GetSnapshot(key); ok {
+		t.Fatal("expected snapshot to expire after idle period")
 	}
 }
