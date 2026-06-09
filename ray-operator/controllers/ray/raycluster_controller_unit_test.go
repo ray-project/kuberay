@@ -3890,3 +3890,57 @@ func TestReconcilePodsWithAuthTokenSecretName(t *testing.T) {
 		assert.True(t, authTokenEnvFound, "Auth token env var with provided secret name not found")
 	}
 }
+
+func TestHasGCSFTFinalizer(t *testing.T) {
+	tests := []struct {
+		name       string
+		finalizers []string
+		want       bool
+	}{
+		{name: "no finalizers", finalizers: nil, want: false},
+		{name: "GCS FT finalizer present", finalizers: []string{utils.GCSFaultToleranceRedisCleanupFinalizer}, want: true},
+		{name: "other finalizer only", finalizers: []string{"some-other-finalizer"}, want: false},
+		{name: "GCS FT among multiple finalizers", finalizers: []string{"other", utils.GCSFaultToleranceRedisCleanupFinalizer}, want: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cluster := &rayv1.RayCluster{}
+			cluster.Finalizers = tt.finalizers
+			assert.Equal(t, tt.want, hasGCSFTFinalizer(cluster))
+		})
+	}
+}
+
+func TestGetGCSFTDeletionTimeout(t *testing.T) {
+	defaultTimeout := time.Duration(utils.RAYCLUSTER_GCS_FT_DELETION_TIMEOUT_DEFAULT) * time.Second
+
+	tests := []struct {
+		name        string
+		annotations map[string]string
+		want        time.Duration
+	}{
+		{name: "no annotation returns default", annotations: nil, want: defaultTimeout},
+		{name: "valid annotation", annotations: map[string]string{
+			utils.RayClusterGCSFTDeletionTimeoutAnnotation: "120",
+		}, want: 120 * time.Second},
+		{name: "non-numeric annotation falls back to default", annotations: map[string]string{
+			utils.RayClusterGCSFTDeletionTimeoutAnnotation: "not-a-number",
+		}, want: defaultTimeout},
+		{name: "zero annotation falls back to default", annotations: map[string]string{
+			utils.RayClusterGCSFTDeletionTimeoutAnnotation: "0",
+		}, want: defaultTimeout},
+		{name: "negative annotation falls back to default", annotations: map[string]string{
+			utils.RayClusterGCSFTDeletionTimeoutAnnotation: "-5",
+		}, want: defaultTimeout},
+		{name: "1-second annotation (minimum valid)", annotations: map[string]string{
+			utils.RayClusterGCSFTDeletionTimeoutAnnotation: "1",
+		}, want: 1 * time.Second},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cluster := &rayv1.RayCluster{}
+			cluster.Annotations = tt.annotations
+			assert.Equal(t, tt.want, getGCSFTDeletionTimeout(cluster))
+		})
+	}
+}
