@@ -13,8 +13,6 @@ type ClusterInfo struct {
 type ClusterKey struct {
 	Namespace string
 	Name      string
-	OwnerKind string
-	OwnerName string
 }
 
 type ClusterInfoList []ClusterInfo

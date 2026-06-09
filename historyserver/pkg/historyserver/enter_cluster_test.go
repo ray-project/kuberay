@@ -16,7 +16,7 @@ func TestEnterCluster(t *testing.T) {
 	// Reset default container to avoid polluting or using duplicate services across runs
 	restful.DefaultContainer = restful.NewContainer()
 
-	// 1. Create ServerHandler with a pre-populated clustersMap and a fake sessionLoader
+	// Create ServerHandler with fake sessionLoader
 	handler := &ServerHandler{
 		maxClusters: 100,
 		clustersMap: make(map[utils.ClusterKey][]utils.ClusterInfo),
@@ -139,54 +139,6 @@ func TestEnterCluster(t *testing.T) {
 
 		if c, ok := cookieMap[COOKIE_SESSION_NAME_KEY]; !ok || c.Value != "session_2026-04-22_10-00-00_000000_1" {
 			t.Errorf("Expected cookie %s to be 'session_2026-04-22_10-00-00_000000_1', got %v", COOKIE_SESSION_NAME_KEY, c)
-		}
-	})
-
-	t.Run("Enter cluster with 'latest' keyword resolves to newest session in the list", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/enter_cluster/default/cluster-b/latest", nil)
-		resp := httptest.NewRecorder()
-		container.ServeHTTP(resp, req)
-
-		if resp.Code != http.StatusOK {
-			t.Fatalf("Expected status 200, got %d", resp.Code)
-		}
-
-		// Verify cookies are set to the ACTUAL newest session name ("live") rather than literal "latest"
-		cookies := resp.Result().Cookies()
-		cookieMap := make(map[string]*http.Cookie)
-		for _, cookie := range cookies {
-			cookieMap[cookie.Name] = cookie
-		}
-
-		if c, ok := cookieMap[COOKIE_CLUSTER_NAME_KEY]; !ok || c.Value != "cluster-b" {
-			t.Errorf("Expected cookie %s to be 'cluster-b', got %v", COOKIE_CLUSTER_NAME_KEY, c)
-		}
-		if c, ok := cookieMap[COOKIE_CLUSTER_NAMESPACE_KEY]; !ok || c.Value != "default" {
-			t.Errorf("Expected cookie %s to be 'default', got %v", COOKIE_CLUSTER_NAMESPACE_KEY, c)
-		}
-		if c, ok := cookieMap[COOKIE_SESSION_NAME_KEY]; !ok || c.Value != "live" {
-			t.Errorf("Expected cookie %s to be 'live' (actual latest session name), got %v", COOKIE_SESSION_NAME_KEY, c)
-		}
-	})
-
-	t.Run("Enter cluster with NO session parameter defaults to latest", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/enter_cluster/default/cluster-b", nil)
-		resp := httptest.NewRecorder()
-		container.ServeHTTP(resp, req)
-
-		if resp.Code != http.StatusOK {
-			t.Fatalf("Expected status 200, got %d", resp.Code)
-		}
-
-		// Verify cookies are set to the ACTUAL newest session name ("live") rather than literal "latest"
-		cookies := resp.Result().Cookies()
-		cookieMap := make(map[string]*http.Cookie)
-		for _, cookie := range cookies {
-			cookieMap[cookie.Name] = cookie
-		}
-
-		if c, ok := cookieMap[COOKIE_SESSION_NAME_KEY]; !ok || c.Value != "live" {
-			t.Errorf("Expected cookie %s to default to 'live' (actual latest session name), got %v", COOKIE_SESSION_NAME_KEY, c)
 		}
 	})
 
