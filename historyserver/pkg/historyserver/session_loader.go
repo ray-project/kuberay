@@ -18,7 +18,7 @@ const (
 	DefaultSessionProcessTimeout = 2 * time.Minute
 	// DefaultSessionCacheSize is the LRU capacity for dead-session snapshots.
 	DefaultSessionCacheSize = 100
-	// DefaultSessionCacheTTL is how long a dead-session snapshot stays cached before it expires.
+	// DefaultSessionCacheTTL is how long a dead-session snapshot stays cached after last access.
 	// 0 disables expiry, leaving LRU capacity (cacheSize) as the only bound.
 	DefaultSessionCacheTTL time.Duration = 0
 )
