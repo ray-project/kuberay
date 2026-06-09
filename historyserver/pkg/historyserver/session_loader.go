@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	lru "github.com/hashicorp/golang-lru/v2"
+	"github.com/hashicorp/golang-lru/v2/expirable"
 	"golang.org/x/sync/singleflight"
 
 	"github.com/ray-project/kuberay/historyserver/pkg/eventserver"
@@ -18,6 +18,9 @@ const (
 	DefaultSessionProcessTimeout = 2 * time.Minute
 	// DefaultSessionCacheSize is the LRU capacity for dead-session snapshots.
 	DefaultSessionCacheSize = 100
+	// DefaultSessionCacheTTL is how long a dead-session snapshot stays cached before it expires.
+	// 0 disables expiry, leaving LRU capacity (cacheSize) as the only bound.
+	DefaultSessionCacheTTL time.Duration = 0
 )
 
 // processor is an interface to enable mocking SessionProcessor in tests.
@@ -25,29 +28,25 @@ type processor interface {
 	ProcessSession(ctx context.Context, info utils.ClusterInfo) (SessionStatus, *eventserver.SessionSnapshot, error)
 }
 
-// SessionLoader caches dead-session snapshots in an LRU and triggers session
-// processing on cache miss. Concurrent callers for the same session are
-// coalesced via singleflight.
+// SessionLoader caches dead-session snapshots in a size-bounded LRU with optional
+// TTL expiry and triggers session processing on cache miss. Concurrent callers
+// for the same session are coalesced via singleflight.
 type SessionLoader struct {
 	processor      processor
-	cache          *lru.Cache[string, *eventserver.SessionSnapshot]
+	cache          *expirable.LRU[string, *eventserver.SessionSnapshot]
 	sf             singleflight.Group
 	serverCtx      context.Context
 	processTimeout time.Duration
 }
 
 // NewSessionLoader wires a SessionLoader.
-func NewSessionLoader(p processor, serverCtx context.Context, processTimeout time.Duration, cacheSize int) (*SessionLoader, error) {
-	c, err := lru.New[string, *eventserver.SessionSnapshot](cacheSize)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create LRU cache: %w", err)
-	}
+func NewSessionLoader(p processor, serverCtx context.Context, processTimeout time.Duration, cacheSize int, cacheTTL time.Duration) *SessionLoader {
 	return &SessionLoader{
 		processor:      p,
-		cache:          c,
+		cache:          expirable.NewLRU[string, *eventserver.SessionSnapshot](cacheSize, nil, cacheTTL),
 		serverCtx:      serverCtx,
 		processTimeout: processTimeout,
-	}, nil
+	}
 }
 
 // GetSnapshot returns a per-request view of the cached snapshot.

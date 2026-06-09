@@ -25,6 +25,7 @@ func main() {
 	useKubernetesProxy := false
 	sessionProcessTimeout := historyserver.DefaultSessionProcessTimeout
 	sessionCacheSize := historyserver.DefaultSessionCacheSize
+	sessionCacheTTL := historyserver.DefaultSessionCacheTTL
 	flag.StringVar(&runtimeClassName, "runtime-class-name", "", "Storage backend: s3 / gcs / azureblob / aliyunoss / localtest")
 	flag.StringVar(&rayRootDir, "ray-root-dir", "", "Root dir inside the bucket")
 	flag.StringVar(&kubeconfigs, "kubeconfigs", "", "Kubeconfig path; empty = in-cluster")
@@ -33,6 +34,7 @@ func main() {
 	flag.BoolVar(&useKubernetesProxy, "use-kubernetes-proxy", false, "Use local kubeconfig instead of in-cluster config")
 	flag.DurationVar(&sessionProcessTimeout, "session-process-timeout", historyserver.DefaultSessionProcessTimeout, "Timeout duration for processing and loading a single Ray cluster session.")
 	flag.IntVar(&sessionCacheSize, "session-cache-size", historyserver.DefaultSessionCacheSize, "Max number of dead-session snapshots held in the LRU cache.")
+	flag.DurationVar(&sessionCacheTTL, "session-cache-ttl", historyserver.DefaultSessionCacheTTL, "How long a dead-session snapshot stays cached before it expires. 0 disables TTL.")
 	flag.Parse()
 
 	if runtimeClassName == "" {
@@ -40,6 +42,9 @@ func main() {
 	}
 	if sessionCacheSize <= 0 {
 		logrus.Fatalf("--session-cache-size must be > 0, got %d", sessionCacheSize)
+	}
+	if sessionCacheTTL < 0 {
+		logrus.Fatalf("--session-cache-ttl must be >= 0, got %s", sessionCacheTTL)
 	}
 
 	cliMgr, err := historyserver.NewClientManager(kubeconfigs, useKubernetesProxy)
@@ -80,10 +85,7 @@ func main() {
 	defer serverCancel()
 
 	processor := historyserver.NewSessionProcessor(reader, cliMgr.Client())
-	sessionLoader, err := historyserver.NewSessionLoader(processor, serverCtx, sessionProcessTimeout, sessionCacheSize)
-	if err != nil {
-		logrus.Fatalf("Failed to create session loader: %v", err)
-	}
+	sessionLoader := historyserver.NewSessionLoader(processor, serverCtx, sessionProcessTimeout, sessionCacheSize, sessionCacheTTL)
 
 	// ServerHandler.Run consumes a stop chan; bridge serverCtx into it.
 	var wg sync.WaitGroup

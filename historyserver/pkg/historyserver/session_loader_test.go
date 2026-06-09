@@ -39,11 +39,7 @@ func newTestSessionLoader(t *testing.T, p processor, cacheSize int) *SessionLoad
 	if cacheSize <= 0 {
 		cacheSize = DefaultSessionCacheSize
 	}
-	sl, err := NewSessionLoader(p, context.Background(), DefaultSessionProcessTimeout, cacheSize)
-	if err != nil {
-		t.Fatalf("NewSessionLoader: %v", err)
-	}
-	return sl
+	return NewSessionLoader(p, context.Background(), DefaultSessionProcessTimeout, cacheSize, DefaultSessionCacheTTL)
 }
 
 func testEnterClusterInfo() utils.ClusterInfo {
@@ -335,5 +331,26 @@ func TestGetSnapshot_LRUEviction(t *testing.T) {
 	}
 	if _, ok := sl.GetSnapshot(k3); !ok {
 		t.Fatal("expected third session to still be cached")
+	}
+}
+
+// TestGetSnapshot_TTLExpiry verifies that when a TTL is set, a cached snapshot
+// expires after the TTL elapses and GetSnapshot returns ok=false.
+func TestGetSnapshot_TTLExpiry(t *testing.T) {
+	info := testEnterClusterInfo()
+	key := utils.BuildClusterSessionKey(info.Name, info.Namespace, info.SessionName)
+
+	const ttl = 30 * time.Millisecond
+	sl := NewSessionLoader(&fakeProcessor{}, context.Background(), DefaultSessionProcessTimeout, DefaultSessionCacheSize, ttl)
+	sl.putSnapshot(key, testSnapshot(key))
+
+	if _, ok := sl.GetSnapshot(key); !ok {
+		t.Fatal("expected snapshot to be cached right after put")
+	}
+
+	// Gone once the TTL elapses.
+	time.Sleep(80 * time.Millisecond)
+	if _, ok := sl.GetSnapshot(key); ok {
+		t.Fatal("expected snapshot to be evicted after TTL expiry")
 	}
 }
