@@ -276,11 +276,15 @@ func routerHealthz(s *ServerHandler) {
 }
 
 func routerSelectCluster(s *ServerHandler) {
-	http.HandleFunc("/select_cluster", func(w http.ResponseWriter, r *http.Request) {
+	handler := func(w http.ResponseWriter, r *http.Request) {
 		logrus.Infof("Serving cluster selector page: %s %s", r.Method, r.URL.String())
 		w.Header().Set("Content-Type", "text/html")
 		w.Write([]byte(html.ClusterSelectorHTML))
-	})
+	}
+	http.HandleFunc("/select_cluster", handler)
+	http.HandleFunc("/select_cluster/", handler)
+	http.HandleFunc("/select_clusters", handler)
+	http.HandleFunc("/select_clusters/", handler)
 }
 
 func routerLogical(s *ServerHandler) {
