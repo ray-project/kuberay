@@ -19,6 +19,8 @@
             const [clusters, setClusters] = React.useState([]);
             const [loading, setLoading] = React.useState(true);
             const [error, setError] = React.useState(null);
+            const [search, setSearch] = React.useState('');
+            const [entering, setEntering] = React.useState(null);
 
             React.useEffect(() => {
                 fetch('/clusters')
@@ -39,6 +41,10 @@
             }, []);
 
             const enterCluster = (namespace, name, session) => {
+                if (entering) return; // In-flight lock to prevent parallel click races
+                setEntering(`${namespace}/${name}/${session}`);
+                setError(null);
+
                 fetch(`/enter_cluster/${namespace}/${name}/${session}`)
                     .then(res => {
                         if (!res.ok) throw new Error(`${res.status}: ${res.statusText || 'Error'}`);
@@ -49,67 +55,182 @@
                             window.location.href = '/#/overview';
                         } else {
                             setError(data.message || "500: Error entering cluster session");
+                            setEntering(null);
                         }
                     })
-                    .catch(err => setError(err.message || "500: Communication Error"));
+                    .catch(err => {
+                        setError(err.message || "500: Communication Error");
+                        setEntering(null);
+                    });
             };
 
             if (error) {
-                return <div class="p-4 font-mono text-sm text-slate-300">{error}</div>;
+                return <div class="p-4 font-mono text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg m-6">{error}</div>;
             }
 
-            return (
-                <div class="min-h-screen bg-[#0e1117] flex flex-col">
-                    <main class="flex-1 max-w-7xl w-full mx-auto px-6 py-8">
-                        <div class="mb-6">
-                            <h1 class="text-sm font-medium text-slate-300 tracking-wide">
-                                KubeRay History Server
-                            </h1>
-                        </div>
+            const filteredClusters = clusters.filter(c => {
+                const query = search.toLowerCase();
+                return c.name?.toLowerCase().includes(query) ||
+                       c.namespace?.toLowerCase().includes(query) ||
+                       c.sessionName?.toLowerCase().includes(query) ||
+                       c.ownerName?.toLowerCase().includes(query);
+            });
 
-                        {/* Dark blue info banner */}
-                        <div class="bg-[#031b30] border border-blue-900/80 rounded-md p-3 mb-8 flex items-center space-x-2.5 text-xs text-blue-200 shadow-sm">
-                            <svg class="w-4 h-4 text-blue-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <circle cx="12" cy="12" r="10" stroke-width="2"></circle>
-                                <path d="M12 16v-4M12 8h.01" stroke-width="2" stroke-linecap="round"></path>
-                            </svg>
-                            <span>Select a cluster to view its historical dashboard.</span>
+            return (
+                <div class="min-h-screen bg-[#0e1117] flex flex-col font-sans text-slate-200">
+                    <main class="flex-1 max-w-7xl w-full mx-auto px-6 py-10">
+                        {/* Title and Top bar */}
+                        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+                            <div>
+                                <h1 class="text-xl font-bold text-white tracking-tight">
+                                    Ray History Server
+                                </h1>
+                                <p class="text-xs text-slate-400 mt-1.5">
+                                    Select a cluster session to replay and explore its historical Ray dashboard.
+                                </p>
+                            </div>
+
+                            {/* Search Box */}
+                            <div class="relative w-full md:w-80">
+                                <svg class="absolute left-3.5 top-3 h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                </svg>
+                                <input
+                                    type="text"
+                                    placeholder="Filter clusters or sessions..."
+                                    value={search}
+                                    onChange={(e) => setSearch(e.target.value)}
+                                    class="w-full pl-10 pr-4 py-2.5 bg-[#16181f] border border-slate-800 text-xs text-white rounded-lg focus:outline-none focus:border-blue-500 transition-colors shadow-inner"
+                                />
+                            </div>
                         </div>
 
                         {loading ? (
-                            <div class="flex justify-center py-16">
-                                <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+                            <div class="flex flex-col items-center justify-center py-24 space-y-4">
+                                <div class="animate-spin rounded-full h-10 w-10 border-2 border-blue-500 border-t-transparent"></div>
+                                <p class="text-xs text-slate-400 animate-pulse font-mono tracking-wider">Scanning historical Ray sessions...</p>
                             </div>
                         ) : (
-                            <div class="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
-                                {clusters.map((c, i) => (
-                                    <div key={i} class="bg-[#18181b] border border-zinc-800 rounded-md p-5 flex flex-col justify-between hover:border-zinc-700 transition-colors shadow-lg">
-                                        <div class="mb-6">
-                                            <h3
-                                                onClick={() => enterCluster(c.namespace, c.name, c.sessionName)}
-                                                class="text-blue-500 font-medium text-base mb-3 break-all cursor-pointer hover:underline"
-                                            >
-                                                {c.name}
-                                            </h3>
-                                            <div class="text-xs text-zinc-400 space-y-1.5 font-sans">
-                                                <p class="break-all">Namespace: {c.namespace}</p>
-                                                {c.sessionName && <p class="break-all font-mono">Session: {c.sessionName}</p>}
-                                                {c.createTime && <p class="break-all">Created: {c.createTime}</p>}
-                                                {(c.ownerKind || c.ownerName) && (
-                                                    <p class="break-all">
-                                                        Owner: {c.ownerKind ? `[${c.ownerKind}] ` : ''}{c.ownerName || ''}
-                                                    </p>
-                                                )}
-                                            </div>
-                                        </div>
-                                        <button
-                                            onClick={() => enterCluster(c.namespace, c.name, c.sessionName)}
-                                            class="w-full py-2 bg-blue-500 hover:bg-blue-600 text-white rounded text-xs font-bold uppercase tracking-wider transition-colors shadow-sm"
-                                        >
-                                            Enter Cluster
-                                        </button>
-                                    </div>
-                                ))}
+                            <div class="bg-[#14161e] border border-slate-800/80 rounded-xl shadow-2xl overflow-hidden transition-all">
+                                <div class="overflow-x-auto">
+                                    <table class="table-fixed w-full text-left border-collapse">
+                                        <thead>
+                                            <tr class="bg-[#1a1d27] border-b border-slate-800/80 text-[11px] uppercase tracking-wider text-slate-400 font-semibold">
+                                                <th class="py-4 px-6 w-[23%]">Cluster Name</th>
+                                                <th class="py-4 px-6 w-[14%]">Namespace</th>
+                                                <th class="py-4 px-6 w-[15%]">Session Status</th>
+                                                <th class="py-4 px-6 w-[15%]">Owner</th>
+                                                <th class="py-4 px-6 w-[16%]">Created At</th>
+                                                <th class="py-4 px-6 w-[17%] text-right">Action</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="divide-y divide-slate-800/60 text-xs">
+                                            {filteredClusters.length === 0 ? (
+                                                <tr>
+                                                    <td colSpan="6" class="py-20 text-center text-slate-400">
+                                                        <div class="flex flex-col items-center justify-center space-y-3">
+                                                            <svg class="w-12 h-12 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+                                                            </svg>
+                                                            <span class="text-sm font-medium text-slate-300">No cluster sessions found</span>
+                                                            <span class="text-xs text-slate-500">We couldn't find any session matching your query &ldquo;{search}&rdquo;.</span>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            ) : (
+                                                filteredClusters.map((c, i) => {
+                                                    const isLive = c.sessionName === 'live';
+                                                    const clusterId = `${c.namespace}/${c.name}/${c.sessionName}`;
+                                                    const isThisEntering = entering === clusterId;
+                                                    const isAnyEntering = Boolean(entering);
+
+                                                    return (
+                                                        <tr key={i} class={`transition-colors group ${isAnyEntering ? 'opacity-70 bg-transparent' : 'hover:bg-[#191c26]/80'}`}>
+                                                            <td class="py-4 px-6 font-medium text-white break-words">
+                                                                <div class="flex items-start space-x-2.5">
+                                                                    <div class={`w-2 h-2 rounded-full flex-shrink-0 mt-1.5 ${isLive ? 'bg-emerald-500 animate-pulse' : 'bg-blue-500'}`}></div>
+                                                                    <span
+                                                                        onClick={() => enterCluster(c.namespace, c.name, c.sessionName)}
+                                                                        class={`break-words text-sm font-semibold transition-colors ${isAnyEntering ? 'text-slate-400 cursor-default' : 'group-hover:text-blue-400 cursor-pointer hover:underline'}`}
+                                                                    >
+                                                                        {c.name}
+                                                                    </span>
+                                                                </div>
+                                                            </td>
+                                                            <td class="py-4 px-6 font-mono text-xs break-words">
+                                                                <span class="px-2.5 py-1 bg-slate-800/80 text-slate-300 border border-slate-700/60 rounded shadow-sm break-words inline-block">
+                                                                    {c.namespace}
+                                                                </span>
+                                                            </td>
+                                                            <td class="py-4 px-6 font-mono text-xs break-words">
+                                                                {isLive ? (
+                                                                    <span class="inline-flex items-center space-x-1.5 px-2.5 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full">
+                                                                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0"></span>
+                                                                        <span>Live</span>
+                                                                    </span>
+                                                                ) : (
+                                                                    <span class="inline-flex items-center space-x-1.5 px-2.5 py-1 bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded font-mono break-words inline-block">
+                                                                        <span class="w-1.5 h-1.5 rounded-full bg-amber-500 flex-shrink-0 inline-block"></span>
+                                                                        <span class="break-words ml-1.5">{c.sessionName || 'Replay'}</span>
+                                                                    </span>
+                                                                )}
+                                                            </td>
+                                                            <td class="py-4 px-6 text-xs text-slate-300 break-words">
+                                                                {c.ownerKind || c.ownerName ? (
+                                                                    <div class="flex items-start space-x-1.5 break-words">
+                                                                        {c.ownerKind && (
+                                                                            <span class="uppercase tracking-wider px-1.5 py-0.5 bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 rounded font-mono text-[10px] flex-shrink-0 mt-0.5">
+                                                                                {c.ownerKind}
+                                                                            </span>
+                                                                        )}
+                                                                        <span class="break-words font-medium text-slate-300">{c.ownerName || '—'}</span>
+                                                                    </div>
+                                                                ) : (
+                                                                    <span class="text-slate-500">—</span>
+                                                                )}
+                                                            </td>
+                                                            <td class="py-4 px-6 text-xs text-slate-400 font-mono break-words">
+                                                                {c.createTime || '—'}
+                                                            </td>
+                                                            <td class="py-4 px-6 text-right whitespace-nowrap">
+                                                                <button
+                                                                    disabled={isAnyEntering}
+                                                                    onClick={() => enterCluster(c.namespace, c.name, c.sessionName)}
+                                                                    class={`inline-flex items-center justify-center space-x-1.5 px-3 py-2 text-white text-xs font-bold rounded-lg transition-all w-full max-w-[160px] ${
+                                                                        isThisEntering
+                                                                            ? 'bg-emerald-600 cursor-wait animate-pulse shadow-lg shadow-emerald-600/20'
+                                                                            : isAnyEntering
+                                                                                ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700/40 shadow-none'
+                                                                                : 'bg-blue-600 hover:bg-blue-500 transform group-hover:translate-x-0.5 shadow-lg shadow-blue-600/20 cursor-pointer'
+                                                                    }`}
+                                                                >
+                                                                    {isThisEntering ? (
+                                                                        <div class="flex items-center space-x-1.5 justify-center w-full">
+                                                                            <div class="animate-spin rounded-full h-3.5 w-3.5 border-2 border-white border-t-transparent flex-shrink-0"></div>
+                                                                            <span class="whitespace-nowrap">Opening...</span>
+                                                                        </div>
+                                                                    ) : (
+                                                                        <div class="flex items-center space-x-1.5 justify-center w-full">
+                                                                            <span class="whitespace-nowrap">Open Dashboard</span>
+                                                                            <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/>
+                                                                            </svg>
+                                                                        </div>
+                                                                    )}
+                                                                </button>
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                {/* Footer Info */}
+                                <div class="bg-[#11131a] px-6 py-3 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-500 font-sans">
+                                    <span>Showing {filteredClusters.length} of {clusters.length} available sessions</span>
+                                    <span>KubeRay Cluster Selector API</span>
+                                </div>
                             </div>
                         )}
                     </main>
