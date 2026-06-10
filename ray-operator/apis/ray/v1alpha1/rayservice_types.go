@@ -120,7 +120,3 @@ type RayServiceList struct {
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []RayService `json:"items"`
 }
-
-func init() {
-	SchemeBuilder.Register(&RayService{}, &RayServiceList{})
-}

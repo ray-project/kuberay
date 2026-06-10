@@ -236,6 +236,14 @@ func IsRayServiceRollingBack(service *rayv1.RayService) bool {
 	return meta.IsStatusConditionTrue(service.Status.Conditions, string(rayv1.RollbackInProgress))
 }
 
+func IsRayServiceSuspending(service *rayv1.RayService) bool {
+	return meta.IsStatusConditionTrue(service.Status.Conditions, string(rayv1.RayServiceSuspending))
+}
+
+func IsRayServiceSuspended(service *rayv1.RayService) bool {
+	return meta.IsStatusConditionTrue(service.Status.Conditions, string(rayv1.RayServiceSuspended))
+}
+
 func RayServicesNumEndPoints(service *rayv1.RayService) int32 {
 	return service.Status.NumServeEndpoints
 }

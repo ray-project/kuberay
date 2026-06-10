@@ -636,8 +636,9 @@ func BuildPod(ctx context.Context, podTemplateSpec corev1.PodTemplateSpec, rayNo
 		cmd += convertCmdToString(pod.Spec.Containers[utils.RayContainerIndex].Args)
 	}
 
-	// Increase the open file descriptor limit of the `ray start` process and its child processes to 65536.
-	ulimitCmd := "ulimit -n 65536"
+	// Increase the open file descriptor limit of the `ray start` process and its child processes.
+	// If RAY_START_ULIMIT_OPEN_FILES is set, use its value; otherwise, fallback to 65536.
+	ulimitCmd := fmt.Sprintf("ulimit -n ${%s:-65536}", utils.RAY_START_ULIMIT_OPEN_FILES)
 	// Generate the `ray start` command.
 	rayStartCmd := generateRayStartCommand(ctx, rayNodeType, rayStartParams, pod.Spec.Containers[utils.RayContainerIndex].Resources)
 
