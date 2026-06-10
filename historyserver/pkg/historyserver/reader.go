@@ -17,6 +17,7 @@ import (
 	"github.com/ray-project/kuberay/historyserver/pkg/compression"
 	eventtypes "github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
 	"github.com/sirupsen/logrus"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
@@ -52,9 +53,9 @@ func (s *ServerHandler) listClusters(limit int) []utils.ClusterInfo {
 	liveClusterInfos := []utils.ClusterInfo{}
 	for _, liveCluster := range liveClusters {
 		var ownerKind, ownerName string
-		if len(liveCluster.OwnerReferences) > 0 {
-			ownerKind = strings.ToLower(liveCluster.OwnerReferences[0].Kind)
-			ownerName = liveCluster.OwnerReferences[0].Name
+		if ownerRef := metav1.GetControllerOf(liveCluster); ownerRef != nil {
+			ownerKind = strings.ToLower(ownerRef.Kind)
+			ownerName = ownerRef.Name
 		}
 		liveClusterInfo := utils.ClusterInfo{
 			Name:            liveCluster.Name,
