@@ -33,7 +33,7 @@ type RayCronJobStatus struct {
 //+kubebuilder:subresource:status
 //+kubebuilder:printcolumn:name="schedule",type=string,JSONPath=".spec.schedule",priority=0
 //+kubebuilder:printcolumn:name="timezone",type=string,JSONPath=".spec.timeZone",priority=0
-//+kubebuilder:printcolumn:name="last schedule",type=string,JSONPath=".status.lastScheduleTime",priority=0
+//+kubebuilder:printcolumn:name="last schedule",type=date,JSONPath=".status.lastScheduleTime",priority=0
 //+kubebuilder:printcolumn:name="age",type="date",JSONPath=".metadata.creationTimestamp",priority=0
 //+kubebuilder:printcolumn:name="suspend",type=boolean,JSONPath=".spec.suspend",priority=0
 
