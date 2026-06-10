@@ -41,7 +41,6 @@ func main() {
 	eventMaxFileSizeMB := 100
 	eventMaxDiskMB := 200
 	eventCompressionEnabled := false
-	eventFlushInterval := time.Hour
 
 	flag.StringVar(&role, "role", "Worker", "")
 	flag.StringVar(&runtimeClassName, "runtime-class-name", "", "")
@@ -57,8 +56,7 @@ func main() {
 	flag.DurationVar(&eventRotationInterval, "event-rotation-interval", eventRotationInterval, "Time threshold to rotate active JSONL file")
 	flag.IntVar(&eventMaxFileSizeMB, "event-max-file-size-mb", eventMaxFileSizeMB, "Size threshold (MB) to rotate active JSONL file")
 	flag.IntVar(&eventMaxDiskMB, "event-max-disk-mb", eventMaxDiskMB, "Max total disk usage (MB) before 503 backpressure")
-	flag.BoolVar(&eventCompressionEnabled, "event-compression-enabled", eventCompressionEnabled, "Single switch: enable local disk-first storage with gzip compression before upload (false uploads plain JSONL)")
-	flag.DurationVar(&eventFlushInterval, "event-flush-interval", eventFlushInterval, "In-memory buffer flush interval used when --event-compression-enabled=false (e.g. 5m). Default 1h matches legacy behavior")
+	flag.BoolVar(&eventCompressionEnabled, "event-compression-enabled", eventCompressionEnabled, "Enable gzip compression when uploading rotated JSONL files to remote storage (false uploads plain JSONL)")
 
 	flag.Parse()
 
@@ -92,13 +90,6 @@ func main() {
 			eventCompressionEnabled = parsed
 		} else {
 			logrus.Warnf("Invalid RAY_COLLECTOR_EVENT_COMPRESSION_ENABLED=%s, using default %v", v, eventCompressionEnabled)
-		}
-	}
-	if v := os.Getenv("RAY_COLLECTOR_EVENT_FLUSH_INTERVAL"); v != "" {
-		if parsed, err := time.ParseDuration(v); err == nil && parsed > 0 {
-			eventFlushInterval = parsed
-		} else {
-			logrus.Warnf("Invalid RAY_COLLECTOR_EVENT_FLUSH_INTERVAL=%s, using default %s", v, eventFlushInterval)
 		}
 	}
 
@@ -173,7 +164,6 @@ func main() {
 		EventMaxFileSizeMB:      eventMaxFileSizeMB,
 		EventMaxDiskMB:          eventMaxDiskMB,
 		EventCompressionEnabled: eventCompressionEnabled,
-		EventFlushInterval:      eventFlushInterval,
 	}
 	logrus.Info("Using collector config: ", globalConfig)
 
@@ -198,7 +188,6 @@ func main() {
 			MaxFileSizeBytes:   int64(eventMaxFileSizeMB) * 1024 * 1024,
 			MaxDiskBytes:       int64(eventMaxDiskMB) * 1024 * 1024,
 			CompressionEnabled: eventCompressionEnabled,
-			FlushInterval:      eventFlushInterval,
 		})
 		eventCollector.Run(stop, eventsPort)
 		logrus.Info("Event collector shutdown")

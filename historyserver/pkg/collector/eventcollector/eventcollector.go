@@ -2,7 +2,6 @@ package eventcollector
 
 import (
 	"bufio"
-	"bytes"
 	"compress/gzip"
 	"encoding/json"
 	"fmt"
@@ -30,7 +29,6 @@ const (
 	defaultRotationInterval = 5 * time.Minute
 	defaultMaxFileSizeBytes = int64(100) * 1024 * 1024
 	defaultMaxDiskBytes     = int64(200) * 1024 * 1024
-	defaultFlushInterval    = time.Hour
 
 	rotationCheckInterval = 30 * time.Second
 	diskReconcileInterval = 1 * time.Minute
@@ -48,16 +46,11 @@ type Options struct {
 	RotationInterval time.Duration
 	MaxFileSizeBytes int64
 	MaxDiskBytes     int64
-	// CompressionEnabled is a single switch that controls the entire
-	// disk-first + gzip pipeline. When true, events are written to local
-	// JSONL files and rotated/gzipped/uploaded asynchronously. When false,
-	// events are buffered in-memory and periodically flushed to remote
-	// storage (legacy semantics).
+	// CompressionEnabled controls whether rotated JSONL files are gzipped
+	// before being uploaded to remote storage. When false, plain JSONL files
+	// are uploaded as-is. Events are always written to local disk first
+	// regardless of this setting.
 	CompressionEnabled bool
-	// FlushInterval controls how often the in-memory buffer is flushed when
-	// CompressionEnabled is false. Defaults to 1h (legacy behavior). Set
-	// lower for more frequent writes.
-	FlushInterval time.Duration
 }
 
 // eventTypesWithJobID enumerates event types whose payload carries a jobId.
@@ -91,19 +84,7 @@ type activeFileState struct {
 	createdAt   time.Time
 }
 
-// memEvent is the in-memory record used when CompressionEnabled is false.
-// Mirrors the legacy Event struct: captures the event payload along with the
-// nodeID/session snapshot taken at arrival time, so that periodic flushes
-// preserve the original sender attribution even if the collector's current
-// nodeID later changes.
-type memEvent struct {
-	data        map[string]interface{}
-	timestamp   time.Time
-	sessionName string
-	nodeID      string
-}
-
-// rotationTask describes a rotated JSONL file ready for compression + upload.
+// rotationTask describes a rotated JSONL file ready for upload.
 type rotationTask struct {
 	jsonlPath   string
 	category    string
@@ -135,16 +116,11 @@ type EventCollector struct {
 	maxFileSizeBytes   int64
 	maxDiskBytes       int64
 	compressionEnabled bool
-	flushInterval      time.Duration
 
 	writeMu       sync.Mutex
 	activeFiles   map[string]*activeFileState
 	rotationQueue chan rotationTask
 	totalDiskUsed atomic.Int64
-
-	// memEvents is the in-memory buffer used when compressionEnabled is
-	// false. Protected by writeMu.
-	memEvents []memEvent
 
 	workersWG sync.WaitGroup
 }
@@ -167,9 +143,6 @@ func NewEventCollector(
 	if opts.MaxDiskBytes <= 0 {
 		opts.MaxDiskBytes = defaultMaxDiskBytes
 	}
-	if opts.FlushInterval <= 0 {
-		opts.FlushInterval = defaultFlushInterval
-	}
 
 	collector := &EventCollector{
 		storageWriter:      writer,
@@ -188,7 +161,6 @@ func NewEventCollector(
 		maxFileSizeBytes:   opts.MaxFileSizeBytes,
 		maxDiskBytes:       opts.MaxDiskBytes,
 		compressionEnabled: opts.CompressionEnabled,
-		flushInterval:      opts.FlushInterval,
 		activeFiles:        make(map[string]*activeFileState),
 		rotationQueue:      make(chan rotationTask, rotationQueueSize),
 	}
@@ -199,18 +171,16 @@ func NewEventCollector(
 	return collector
 }
 
-// Run starts the HTTP server, rotation loop, compression/upload worker and
-// disk reconciler. It blocks until stop is closed.
+// Run starts the HTTP server, rotation loop, upload worker and disk
+// reconciler. It blocks until stop is closed.
 func (ec *EventCollector) Run(stop <-chan struct{}, port int) {
-	if ec.compressionEnabled {
-		if err := os.MkdirAll(ec.dataDir, 0o755); err != nil {
-			logrus.Errorf("Failed to create event data dir %s: %v", ec.dataDir, err)
-		}
-
-		// Initialize disk usage counter + resume any files left from a prior run.
-		ec.initDiskUsage()
-		ec.resumePendingFiles()
+	if err := os.MkdirAll(ec.dataDir, 0o755); err != nil {
+		logrus.Errorf("Failed to create event data dir %s: %v", ec.dataDir, err)
 	}
+
+	// Initialize disk usage counter + resume any files left from a prior run.
+	ec.initDiskUsage()
+	ec.resumePendingFiles()
 
 	ws := new(restful.WebService)
 	ws.Path("/v1")
@@ -224,35 +194,21 @@ func (ec *EventCollector) Run(stop <-chan struct{}, port int) {
 		logrus.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", port), nil))
 	}()
 
-	if ec.compressionEnabled {
-		ec.workersWG.Add(1)
-		go ec.rotationLoop()
+	ec.workersWG.Add(1)
+	go ec.rotationLoop()
 
-		ec.workersWG.Add(1)
-		go ec.compressionUploadWorker()
+	ec.workersWG.Add(1)
+	go ec.compressionUploadWorker()
 
-		ec.workersWG.Add(1)
-		go ec.diskReconcileLoop()
-	} else {
-		logrus.Infof("Compression disabled: using in-memory buffer with flush interval %s", ec.flushInterval)
-		ec.workersWG.Add(1)
-		go ec.periodicMemFlushLoop()
-	}
+	ec.workersWG.Add(1)
+	go ec.diskReconcileLoop()
 
 	<-stop
 	logrus.Info("Received stop signal, draining events to storage")
 
-	// Signal workers to shut down. When the disk pipeline is active, rotate
-	// remaining active files so the upload worker can drain them. When the
-	// in-memory buffer is active, flush whatever is still buffered before
-	// stopping so no events are lost.
-	if ec.compressionEnabled {
-		ec.rotateAllFiles()
-		close(ec.stopped)
-	} else {
-		ec.flushAllMemEvents()
-		close(ec.stopped)
-	}
+	// Rotate remaining active files so the upload worker can drain them.
+	ec.rotateAllFiles()
+	close(ec.stopped)
 
 	ec.workersWG.Wait()
 }
@@ -310,22 +266,8 @@ func (ec *EventCollector) watchNodeIDFile() {
 			oldNodeID := ec.currentNodeID
 			logrus.Infof("Node ID changed from %s to %s, flushing/rotating events", oldNodeID, newNodeID)
 			ec.currentNodeID = newNodeID
-			if ec.compressionEnabled {
-				ec.rotateAllFilesLocked()
-				ec.writeMu.Unlock()
-			} else {
-				// Mirror legacy behavior: split buffered events by nodeID,
-				// flush those owned by the old nodeID, keep the ones already
-				// tagged with the new nodeID, drop anything else.
-				toFlush, dropped := ec.partitionMemEventsForNodeChangeLocked(oldNodeID, newNodeID)
-				ec.writeMu.Unlock()
-				if dropped > 0 {
-					logrus.Warnf("Dropped %d buffered events with stale nodeID during node change", dropped)
-				}
-				if len(toFlush) > 0 {
-					go ec.flushMemEventsInternal(toFlush)
-				}
-			}
+			ec.rotateAllFilesLocked()
+			ec.writeMu.Unlock()
 
 		case err, ok := <-watcher.Errors:
 			if !ok {
@@ -339,13 +281,12 @@ func (ec *EventCollector) watchNodeIDFile() {
 	}
 }
 
-// PersistEvents is the HTTP handler for POST /v1/events. When compression
-// is enabled it appends events to local JSONL files (rotated and uploaded
-// asynchronously). When compression is disabled it bypasses local disk and
-// uploads each request's events directly to remote storage.
+// PersistEvents is the HTTP handler for POST /v1/events. Events are always
+// appended to local JSONL files which are rotated and uploaded to remote
+// storage asynchronously.
 func (ec *EventCollector) PersistEvents(req *restful.Request, resp *restful.Response) {
 	// Disk pressure only applies when the local disk pipeline is in use.
-	if ec.compressionEnabled && ec.underDiskPressure() {
+	if ec.underDiskPressure() {
 		resp.AddHeader("Retry-After", "10")
 		resp.WriteErrorString(http.StatusServiceUnavailable, "event collector under disk pressure")
 		return
@@ -362,11 +303,6 @@ func (ec *EventCollector) PersistEvents(req *restful.Request, resp *restful.Resp
 	if err := json.Unmarshal(body, &eventDatas); err != nil {
 		logrus.Errorf("Failed to unmarshal event: %v", err)
 		resp.WriteError(http.StatusBadRequest, err)
-		return
-	}
-
-	if !ec.compressionEnabled {
-		ec.persistEventsBuffered(eventDatas, resp)
 		return
 	}
 
@@ -445,200 +381,6 @@ func (ec *EventCollector) PersistEvents(req *restful.Request, resp *restful.Resp
 	}
 
 	resp.WriteHeader(http.StatusOK)
-}
-
-// persistEventsBuffered validates events and appends them to the in-memory
-// buffer. Used when CompressionEnabled is false. The buffer is flushed to
-// remote storage by periodicMemFlushLoop on the configured FlushInterval,
-// on node ID change, or on shutdown. This mirrors the legacy semantics:
-// events are grouped per (category, hour, nodeID, sessionName) at flush time
-// and uploaded as a JSON array to {root}/{cluster}_{ns}/{session}/{category}/
-// {nodeID}-{hour}.
-func (ec *EventCollector) persistEventsBuffered(eventDatas []map[string]interface{}, resp *restful.Response) {
-	for _, eventData := range eventDatas {
-		timestampStr, ok := eventData["timestamp"].(string)
-		if !ok {
-			logrus.Errorf("Event timestamp not found or not a string")
-			resp.WriteError(http.StatusBadRequest, fmt.Errorf("timestamp not found"))
-			return
-		}
-		sessionNameStr, ok := eventData["sessionName"].(string)
-		if !ok {
-			logrus.Errorf("Event sessionName not found or not a string")
-			resp.WriteError(http.StatusBadRequest, fmt.Errorf("sessionName not found"))
-			return
-		}
-		ts, err := time.Parse(time.RFC3339Nano, timestampStr)
-		if err != nil {
-			logrus.Errorf("Failed to parse timestamp: %v", err)
-			resp.WriteError(http.StatusBadRequest, err)
-			return
-		}
-
-		// Snapshot currentNodeID inside the lock per-event to match the
-		// legacy behavior, so that a nodeID change mid-batch correctly
-		// attributes earlier events to the old node.
-		ec.writeMu.Lock()
-		ec.memEvents = append(ec.memEvents, memEvent{
-			data:        eventData,
-			timestamp:   ts,
-			sessionName: sessionNameStr,
-			nodeID:      ec.currentNodeID,
-		})
-		ec.writeMu.Unlock()
-	}
-
-	resp.WriteHeader(http.StatusOK)
-}
-
-// periodicMemFlushLoop drains the in-memory buffer on a fixed interval.
-// Only started when CompressionEnabled is false.
-func (ec *EventCollector) periodicMemFlushLoop() {
-	defer ec.workersWG.Done()
-	ticker := time.NewTicker(ec.flushInterval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ticker.C:
-			ec.flushAllMemEvents()
-		case <-ec.stopped:
-			return
-		}
-	}
-}
-
-// flushAllMemEvents snapshots and uploads everything currently buffered.
-func (ec *EventCollector) flushAllMemEvents() {
-	ec.writeMu.Lock()
-	if len(ec.memEvents) == 0 {
-		ec.writeMu.Unlock()
-		return
-	}
-	toFlush := make([]memEvent, len(ec.memEvents))
-	copy(toFlush, ec.memEvents)
-	ec.memEvents = ec.memEvents[:0]
-	ec.writeMu.Unlock()
-
-	ec.flushMemEventsInternal(toFlush)
-}
-
-// partitionMemEventsForNodeChangeLocked splits the buffer on node-id change:
-// events tagged with oldNodeID are returned for immediate flush, events
-// tagged with newNodeID are retained for the next flush cycle, anything
-// else is dropped. Must be called with writeMu held.
-func (ec *EventCollector) partitionMemEventsForNodeChangeLocked(oldNodeID, newNodeID string) (toFlush []memEvent, dropped int) {
-	if len(ec.memEvents) == 0 {
-		return nil, 0
-	}
-	remaining := ec.memEvents[:0]
-	for _, evt := range ec.memEvents {
-		switch evt.nodeID {
-		case oldNodeID:
-			toFlush = append(toFlush, evt)
-		case newNodeID:
-			remaining = append(remaining, evt)
-		default:
-			dropped++
-		}
-	}
-	ec.memEvents = remaining
-	return toFlush, dropped
-}
-
-// flushMemEventsInternal groups events by (category, hour, nodeID,
-// sessionName) and uploads each group as a JSON array. Mirrors the legacy
-// flushEventsInternal grouping rules.
-func (ec *EventCollector) flushMemEventsInternal(events []memEvent) {
-	if len(events) == 0 {
-		return
-	}
-
-	type bucket struct {
-		category    string
-		hourKey     string
-		nodeID      string
-		sessionName string
-		events      []memEvent
-	}
-	buckets := make(map[string]*bucket)
-	for _, evt := range events {
-		hourKey := evt.timestamp.Truncate(time.Hour).Format("2006-01-02-15")
-		category := ec.categorize(evt.data)
-		key := category + "|" + hourKey + "|" + evt.nodeID + "|" + evt.sessionName
-		b, ok := buckets[key]
-		if !ok {
-			b = &bucket{
-				category:    category,
-				hourKey:     hourKey,
-				nodeID:      evt.nodeID,
-				sessionName: evt.sessionName,
-			}
-			buckets[key] = b
-		}
-		b.events = append(b.events, evt)
-	}
-
-	var wg sync.WaitGroup
-	for _, b := range buckets {
-		wg.Add(1)
-		go func(b *bucket) {
-			defer wg.Done()
-			if err := ec.uploadMemBucket(b.category, b.hourKey, b.nodeID, b.sessionName, b.events); err != nil {
-				logrus.Errorf("Failed to upload bucket %s/%s: %v", b.category, b.hourKey, err)
-			}
-		}(b)
-	}
-	wg.Wait()
-
-	logrus.Infof("Flushed %d buffered events across %d buckets", len(events), len(buckets))
-}
-
-// uploadMemBucket serializes a single bucket to a JSON array and uploads it
-// to the legacy storage key format (no extension, no nano suffix).
-func (ec *EventCollector) uploadMemBucket(category, hourKey, nodeID, sessionName string, events []memEvent) error {
-	if sessionName == "" {
-		sessionName = ec.sessionName
-	}
-	if nodeID == "" {
-		nodeID = ec.nodeID
-	}
-
-	payload := make([]map[string]interface{}, len(events))
-	for i, e := range events {
-		payload[i] = e.data
-	}
-	data, err := json.Marshal(payload)
-	if err != nil {
-		return fmt.Errorf("marshal bucket: %w", err)
-	}
-
-	key := ec.buildLegacyEventStorageKey(category, hourKey, nodeID, sessionName, time.Now())
-	if err := ec.storageWriter.CreateDirectory(path.Dir(key)); err != nil {
-		return fmt.Errorf("create remote dir %s: %w", path.Dir(key), err)
-	}
-	if err := ec.storageWriter.WriteFile(key, bytes.NewReader(data)); err != nil {
-		return fmt.Errorf("upload %s: %w", key, err)
-	}
-	logrus.Infof("Flushed %d events to %s", len(events), key)
-	return nil
-}
-
-// buildLegacyEventStorageKey constructs the remote storage key in the
-// legacy format (no extension), used by the in-memory buffered path.
-// A UnixNano timestamp suffix is appended to the file name so that
-// multiple flushes within the same hour do not overwrite each other:
-//
-//	Node events: {root}/{clusterName}_{namespace}/{sessionName}/node_events/{nodeID}-{hour}-{unixNano}
-//	Job events:  {root}/{clusterName}_{namespace}/{sessionName}/job_events/{jobID}/{nodeID}-{hour}-{unixNano}
-func (ec *EventCollector) buildLegacyEventStorageKey(category, hourKey, nodeID, sessionName string, ts time.Time) string {
-	return path.Join(
-		ec.root,
-		ec.clusterKey(),
-		sessionName,
-		category,
-		fmt.Sprintf("%s-%s-%d", nodeID, hourKey, ts.UnixNano()),
-	)
 }
 
 // categorize determines the storage category path for an event.
@@ -797,7 +539,8 @@ func (ec *EventCollector) rotateFileLocked(category string) error {
 	return nil
 }
 
-// compressionUploadWorker drains rotationQueue.
+// compressionUploadWorker drains rotationQueue, optionally compressing
+// rotated files before uploading them to remote storage.
 func (ec *EventCollector) compressionUploadWorker() {
 	defer ec.workersWG.Done()
 
@@ -823,7 +566,7 @@ func (ec *EventCollector) compressionUploadWorker() {
 	}
 }
 
-// processRotatedFile gzips the file (unless disabled), uploads it, then
+// processRotatedFile optionally gzips the file, uploads it, then
 // cleans up the local copies.
 func (ec *EventCollector) processRotatedFile(task rotationTask) {
 	uploadPath := task.jsonlPath
