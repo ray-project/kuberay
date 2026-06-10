@@ -11,7 +11,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/clock"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -118,10 +117,16 @@ func (r *RayCronJobReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 		return ctrl.Result{}, err
 	}
 	if err := r.Create(ctx, rayJob); err != nil {
-		logger.Error(err, "Failed to create RayJob from RayCronJob")
-		return ctrl.Result{}, err
+		if !errors.IsAlreadyExists(err) {
+			logger.Error(err, "Failed to create RayJob from RayCronJob")
+			return ctrl.Result{}, err
+		}
+		// The deterministic name means a RayJob for this tick already exists, so a previous
+		// reconcile already scheduled it. Treat as success and still advance LastScheduleTime.
+		logger.Info("RayJob for this tick already exists, skipping creation", "rayJobName", rayJob.Name, "namespace", rayJob.Namespace)
+	} else {
+		logger.Info("Successfully created RayJob", "rayJobName", rayJob.Name, "namespace", rayJob.Namespace)
 	}
-	logger.Info("Successfully created RayJob", "rayJobName", rayJob.Name, "namespace", rayJob.Namespace)
 	rayCronJobInstance.Status.LastScheduleTime = &metav1.Time{Time: now}
 
 	// Set next schedule time
@@ -152,10 +157,20 @@ func (r *RayCronJobReconciler) updateRayCronJobStatus(ctx context.Context, oldRa
 	return nil
 }
 
+func getTimeHashInMinutes(scheduledTime time.Time) int64 {
+	return scheduledTime.Unix() / 60
+}
+
+// getRayJobName builds a deterministic child name so a repeated Create for the same tick
+// collides with AlreadyExists instead of creating a duplicate (matches batch/v1 CronJob).
+func getRayJobName(cronJobName string, scheduledTime time.Time) string {
+	return fmt.Sprintf("%s-%d", cronJobName, getTimeHashInMinutes(scheduledTime))
+}
+
 func (r *RayCronJobReconciler) constructRayJob(cronJob *rayv1.RayCronJob, expectedTimestamp time.Time) (*rayv1.RayJob, error) {
 	rayJob := &rayv1.RayJob{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      fmt.Sprintf("%s-%s", cronJob.Name, rand.String(5)),
+			Name:      getRayJobName(cronJob.Name, expectedTimestamp),
 			Namespace: cronJob.Namespace,
 			Labels: map[string]string{
 				utils.RayCronJobNameLabelKey: cronJob.Name,

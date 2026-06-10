@@ -236,6 +236,19 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 		}
 	}
 
+	// When autoscalerOptions.args is set, the user's custom args can reference the
+	// $KUBERAY_GEN_AUTOSCALER_START_CMD env var that KubeRay injects. If the user also
+	// manually sets KUBERAY_GEN_AUTOSCALER_START_CMD in autoscalerOptions.env, they would
+	// silently shadow KubeRay's generated value, causing the referenced command to behave
+	// unexpectedly. Reject this combination to keep the env var KubeRay-managed.
+	if spec.AutoscalerOptions != nil {
+		if EnvVarExists(KUBERAY_GEN_AUTOSCALER_START_CMD, spec.AutoscalerOptions.Env) {
+			return fmt.Errorf("autoscalerOptions.env must not contain %s: "+
+				"it is managed by KubeRay and injected automatically into the autoscaler container",
+				KUBERAY_GEN_AUTOSCALER_START_CMD)
+		}
+	}
+
 	if IsAuthEnabled(spec) {
 		if spec.RayVersion == "" {
 			return fmt.Errorf("authOptions.mode is 'token' but RayVersion was not specified. Ray version 2.52.0 or later is required")
@@ -714,6 +727,11 @@ func validateLegacyDeletionPolicies(rayJob *rayv1.RayJob) error {
 
 // ValidateRayCronJobSpec validates the RayCronJob specification
 func ValidateRayCronJobSpec(rayCronJob *rayv1.RayCronJob) error {
+	// Bound the name so the deterministic child RayJob name (getRayJobName) stays valid.
+	if len(rayCronJob.Name) > MaxRayCronJobNameLength {
+		return fmt.Errorf("RayCronJob name should be no more than %d characters", MaxRayCronJobNameLength)
+	}
+
 	// Validate cron schedule format
 	if strings.Contains(rayCronJob.Spec.Schedule, "TZ") {
 		return fmt.Errorf("cannot use TZ or CRON_TZ in schedule, use timeZone field instead")

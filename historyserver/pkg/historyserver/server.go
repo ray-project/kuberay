@@ -22,16 +22,18 @@ type ServerHandler struct {
 	reader        storage.StorageReader
 	clientManager *ClientManager
 	eventHandler  *eventserver.EventHandler
+	sessionLoader *SessionLoader
 	httpClient    *http.Client
 
 	useKubernetesProxy bool
 }
 
-func NewServerHandler(c *types.RayHistoryServerConfig, dashboardDir string, reader storage.StorageReader, clientManager *ClientManager, eventHandler *eventserver.EventHandler, useKubernetesProxy bool) (*ServerHandler, error) {
+func NewServerHandler(c *types.RayHistoryServerConfig, dashboardDir string, reader storage.StorageReader, clientManager *ClientManager, eventHandler *eventserver.EventHandler, sessionLoader *SessionLoader, useKubernetesProxy bool) (*ServerHandler, error) {
 	handler := &ServerHandler{
 		reader:        reader,
 		clientManager: clientManager,
 		eventHandler:  eventHandler,
+		sessionLoader: sessionLoader,
 
 		rootDir:      c.RootDir,
 		dashboardDir: dashboardDir,

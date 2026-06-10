@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -1084,13 +1085,13 @@ func TestIsAutoscalingEnabled(t *testing.T) {
 		},
 		"should be false when enableInTreeAutoscaling is false": {
 			spec: &rayv1.RayClusterSpec{
-				EnableInTreeAutoscaling: ptr.To(false),
+				EnableInTreeAutoscaling: new(false),
 			},
 			expected: false,
 		},
 		"should be true when enableInTreeAutoscaling is true": {
 			spec: &rayv1.RayClusterSpec{
-				EnableInTreeAutoscaling: ptr.To(true),
+				EnableInTreeAutoscaling: new(true),
 			},
 			expected: true,
 		},
@@ -1135,6 +1136,41 @@ func TestIsAutoscalingV2Enabled(t *testing.T) {
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
 			assert.Equal(t, tc.expected, IsAutoscalingV2Enabled(tc.spec))
+		})
+	}
+}
+
+func TestIsAutoscalingV1Enabled(t *testing.T) {
+	tests := map[string]struct {
+		spec     *rayv1.RayClusterSpec
+		expected bool
+	}{
+		"should be false when spec is nil": {
+			spec:     nil,
+			expected: false,
+		},
+		"should be false when autoscaler options is nil": {
+			spec: &rayv1.RayClusterSpec{
+				AutoscalerOptions: nil,
+			},
+			expected: false,
+		},
+		"should be false when autoscaler options is not v1": {
+			spec: &rayv1.RayClusterSpec{
+				AutoscalerOptions: &rayv1.AutoscalerOptions{Version: ptr.To(rayv1.AutoscalerVersionV2)},
+			},
+			expected: false,
+		},
+		"should be true when autoscaler options is v1": {
+			spec: &rayv1.RayClusterSpec{
+				AutoscalerOptions: &rayv1.AutoscalerOptions{Version: ptr.To(rayv1.AutoscalerVersionV1)},
+			},
+			expected: true,
+		},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, IsAutoscalingV1Enabled(tc.spec))
 		})
 	}
 }
@@ -1384,7 +1420,7 @@ func TestCalculateResources(t *testing.T) {
 					minReplicas: ptr.To[int32](0),
 					cpu:         "2",
 					memory:      "200Mi",
-					suspend:     ptr.To(true),
+					suspend:     new(true),
 				},
 			}),
 			expected: struct {
@@ -1506,7 +1542,7 @@ func makeHTTPRouteWithParentRef(
 					{
 						ParentRef: gwv1.ParentReference{
 							Name:      gwv1.ObjectName(parentRefName),
-							Namespace: ptr.To(gwv1.Namespace(namespace)),
+							Namespace: new(gwv1.Namespace(namespace)),
 						},
 						Conditions: []metav1.Condition{
 							{
@@ -1756,21 +1792,21 @@ func TestGetWeightsFromHTTPRoute(t *testing.T) {
 		},
 		{
 			name:            "Valid weights returned for both active and pending clusters",
-			httpRoute:       makeHTTPRoute(ptr.To(int32(80)), ptr.To(int32(20))),
+			httpRoute:       makeHTTPRoute(new(int32(80)), new(int32(20))),
 			rayService:      makeRayService(activeClusterName, pendingClusterName),
 			expectedActive:  80,
 			expectedPending: 20,
 		},
 		{
 			name:            "Valid HTTPRoute with only active cluster backend",
-			httpRoute:       makeHTTPRoute(ptr.To(int32(100)), nil),
+			httpRoute:       makeHTTPRoute(new(int32(100)), nil),
 			rayService:      makeRayService(activeClusterName, ""),
 			expectedActive:  100,
 			expectedPending: -1,
 		},
 		{
 			name:            "Valid HTTPRoute with only pending cluster backend",
-			httpRoute:       makeHTTPRoute(nil, ptr.To(int32(100))),
+			httpRoute:       makeHTTPRoute(nil, new(int32(100))),
 			rayService:      makeRayService("", pendingClusterName),
 			expectedActive:  -1,
 			expectedPending: 100,
@@ -1800,7 +1836,7 @@ func TestIsHTTPRouteEqual(t *testing.T) {
 					Rules: []gwv1.HTTPRouteRule{
 						{
 							BackendRefs: []gwv1.HTTPBackendRef{
-								{BackendRef: gwv1.BackendRef{BackendObjectReference: gwv1.BackendObjectReference{Name: "svc-a", Port: ptr.To(gwv1.PortNumber(8000))}, Weight: ptr.To(int32(100))}},
+								{BackendRef: gwv1.BackendRef{BackendObjectReference: gwv1.BackendObjectReference{Name: "svc-a", Port: ptr.To(gwv1.PortNumber(8000))}, Weight: new(int32(100))}},
 							},
 						},
 					},
@@ -1811,7 +1847,7 @@ func TestIsHTTPRouteEqual(t *testing.T) {
 					Rules: []gwv1.HTTPRouteRule{
 						{
 							BackendRefs: []gwv1.HTTPBackendRef{
-								{BackendRef: gwv1.BackendRef{BackendObjectReference: gwv1.BackendObjectReference{Name: "svc-a", Port: ptr.To(gwv1.PortNumber(8000))}, Weight: ptr.To(int32(100))}},
+								{BackendRef: gwv1.BackendRef{BackendObjectReference: gwv1.BackendObjectReference{Name: "svc-a", Port: ptr.To(gwv1.PortNumber(8000))}, Weight: new(int32(100))}},
 							},
 						},
 					},
@@ -1888,7 +1924,7 @@ func TestIsHTTPRouteEqual(t *testing.T) {
 					Rules: []gwv1.HTTPRouteRule{
 						{
 							BackendRefs: []gwv1.HTTPBackendRef{
-								{BackendRef: gwv1.BackendRef{BackendObjectReference: gwv1.BackendObjectReference{Name: "svc-a"}, Weight: ptr.To(int32(100))}},
+								{BackendRef: gwv1.BackendRef{BackendObjectReference: gwv1.BackendObjectReference{Name: "svc-a"}, Weight: new(int32(100))}},
 							},
 						},
 					},
@@ -1899,7 +1935,7 @@ func TestIsHTTPRouteEqual(t *testing.T) {
 					Rules: []gwv1.HTTPRouteRule{
 						{
 							BackendRefs: []gwv1.HTTPBackendRef{
-								{BackendRef: gwv1.BackendRef{BackendObjectReference: gwv1.BackendObjectReference{Name: "svc-a"}, Weight: ptr.To(int32(75))}},
+								{BackendRef: gwv1.BackendRef{BackendObjectReference: gwv1.BackendObjectReference{Name: "svc-a"}, Weight: new(int32(75))}},
 							},
 						},
 					},
@@ -1977,7 +2013,7 @@ func TestIsHTTPRouteEqual(t *testing.T) {
 					Rules: []gwv1.HTTPRouteRule{
 						{
 							Matches: []gwv1.HTTPRouteMatch{
-								{Path: &gwv1.HTTPPathMatch{Value: ptr.To("/api")}},
+								{Path: &gwv1.HTTPPathMatch{Value: new("/api")}},
 							},
 						},
 					},
@@ -1988,7 +2024,7 @@ func TestIsHTTPRouteEqual(t *testing.T) {
 					Rules: []gwv1.HTTPRouteRule{
 						{
 							Matches: []gwv1.HTTPRouteMatch{
-								{Path: &gwv1.HTTPPathMatch{Value: ptr.To("/v2")}},
+								{Path: &gwv1.HTTPPathMatch{Value: new("/v2")}},
 							},
 						},
 					},
@@ -2272,6 +2308,70 @@ func TestIsGatewayEqual(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result := IsGatewayEqual(tt.existing, tt.desired)
 			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestIsJobFinished(t *testing.T) {
+	makeJob := func(conditions ...batchv1.JobCondition) *batchv1.Job {
+		return &batchv1.Job{Status: batchv1.JobStatus{Conditions: conditions}}
+	}
+	cond := func(t batchv1.JobConditionType, s corev1.ConditionStatus) batchv1.JobCondition {
+		return batchv1.JobCondition{Type: t, Status: s}
+	}
+
+	tests := []struct {
+		name         string
+		job          *batchv1.Job
+		wantType     batchv1.JobConditionType
+		wantFinished bool
+	}{
+		{
+			name:         "no conditions",
+			job:          makeJob(),
+			wantFinished: false,
+		},
+		{
+			name:         "complete",
+			job:          makeJob(cond(batchv1.JobComplete, corev1.ConditionTrue)),
+			wantType:     batchv1.JobComplete,
+			wantFinished: true,
+		},
+		{
+			name:         "failed",
+			job:          makeJob(cond(batchv1.JobFailed, corev1.ConditionTrue)),
+			wantType:     batchv1.JobFailed,
+			wantFinished: true,
+		},
+		{
+			name:         "failure target only (activeDeadlineSeconds window before Failed appears)",
+			job:          makeJob(cond(batchv1.JobFailureTarget, corev1.ConditionTrue)),
+			wantType:     batchv1.JobFailed,
+			wantFinished: true,
+		},
+		{
+			name:         "failure target false status is not finished",
+			job:          makeJob(cond(batchv1.JobFailureTarget, corev1.ConditionFalse)),
+			wantFinished: false,
+		},
+		{
+			name: "failure target then failed",
+			job: makeJob(
+				cond(batchv1.JobFailureTarget, corev1.ConditionTrue),
+				cond(batchv1.JobFailed, corev1.ConditionTrue),
+			),
+			wantType:     batchv1.JobFailed,
+			wantFinished: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotType, gotFinished := IsJobFinished(tt.job)
+			assert.Equal(t, tt.wantFinished, gotFinished)
+			if tt.wantFinished {
+				assert.Equal(t, tt.wantType, gotType)
+			}
 		})
 	}
 }

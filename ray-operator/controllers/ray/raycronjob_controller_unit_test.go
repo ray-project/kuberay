@@ -2,6 +2,7 @@ package ray
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -316,6 +317,75 @@ func TestRayCronJobReconcile_Suspend(t *testing.T) {
 	default:
 		t.Error("Expected a suspend event to be recorded, but none was found")
 	}
+}
+
+func TestGetRayJobName_Deterministic(t *testing.T) {
+	tick := time.Date(2024, 1, 1, 0, 5, 0, 0, time.UTC)
+
+	// The suffix is the whole-minute Unix timestamp, so the same name + tick always yields
+	// the same child name. A duplicate Create for the same tick then collides (AlreadyExists)
+	// instead of producing a second RayJob.
+	name := getRayJobName("test-cronjob", tick)
+	assert.Equal(t, fmt.Sprintf("test-cronjob-%d", tick.Unix()/60), name)
+
+	// Different ticks must yield different names so consecutive scheduled runs don't collide.
+	nextTick := time.Date(2024, 1, 1, 0, 10, 0, 0, time.UTC)
+	assert.NotEqual(t, name, getRayJobName("test-cronjob", nextTick))
+}
+
+// TestRayCronJobReconcile_NoDuplicateOnStaleStatus reproduces the race in
+// https://github.com/ray-project/kuberay/issues/4849: the controller reconciles the same
+// scheduled tick twice before the LastScheduleTime status write is observed (informer-cache
+// lag). The second pass reads a stale LastScheduleTime, passes the schedule gate, and must
+// NOT create a second child RayJob for the same tick.
+func TestRayCronJobReconcile_NoDuplicateOnStaleStatus(t *testing.T) {
+	ctx := context.Background()
+
+	cronSchedule := "*/5 * * * *" // Every 5 minutes
+	staleLastSchedule := metav1.NewTime(time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC))
+	// now is just past the 00:05:00 tick so the tick is due in both passes.
+	fakeCurrTime := time.Date(2024, 1, 1, 0, 5, 30, 0, time.UTC)
+
+	rayCronJob := rayCronJobTemplate("test-cronjob", "default", cronSchedule)
+	rayCronJob.Status = rayv1.RayCronJobStatus{LastScheduleTime: &staleLastSchedule}
+
+	scheme := runtime.NewScheme()
+	require.NoError(t, rayv1.AddToScheme(scheme))
+	require.NoError(t, corev1.AddToScheme(scheme))
+
+	fakeClient := clientFake.NewClientBuilder().
+		WithScheme(scheme).
+		WithRuntimeObjects(rayCronJob).
+		WithStatusSubresource(rayCronJob).
+		Build()
+
+	reconciler := &RayCronJobReconciler{
+		Client:   fakeClient,
+		Scheme:   scheme,
+		Recorder: &record.FakeRecorder{},
+		clock:    clocktesting.NewFakeClock(fakeCurrTime),
+	}
+
+	request := ctrl.Request{NamespacedName: types.NamespacedName{Name: "test-cronjob", Namespace: "default"}}
+
+	// Pass 1: schedules the tick and (in the real controller) writes LastScheduleTime.
+	_, err := reconciler.Reconcile(ctx, request)
+	require.NoError(t, err)
+
+	// Simulate informer-cache lag: pass 1's status write is not yet observable, so reset
+	// LastScheduleTime back to its stale value before pass 2 reads it.
+	cronJobForReset := &rayv1.RayCronJob{}
+	require.NoError(t, fakeClient.Get(ctx, request.NamespacedName, cronJobForReset))
+	cronJobForReset.Status.LastScheduleTime = &staleLastSchedule
+	require.NoError(t, fakeClient.Status().Update(ctx, cronJobForReset))
+
+	// Pass 2: reads the stale LastScheduleTime and passes the schedule gate again.
+	_, err = reconciler.Reconcile(ctx, request)
+	require.NoError(t, err)
+
+	rayJobList := &rayv1.RayJobList{}
+	require.NoError(t, fakeClient.List(ctx, rayJobList))
+	assert.Len(t, rayJobList.Items, 1, "the same scheduled tick must produce exactly one child RayJob")
 }
 
 func TestUpdateRayCronJobStatus(t *testing.T) {

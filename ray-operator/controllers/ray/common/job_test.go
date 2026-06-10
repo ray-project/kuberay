@@ -12,6 +12,7 @@ import (
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
+	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 )
 
 func rayJobTemplate() *rayv1.RayJob {
@@ -71,6 +72,10 @@ pip: ["python-multipart==0.0.6"]
 func TestBuildJobSubmitCommandWithK8sJobMode(t *testing.T) {
 	testRayJob := rayJobTemplate()
 	expected := []string{
+		"until",
+		fmt.Sprintf(utils.BasePythonHealthCommand, "http://127.0.0.1:8265/"+utils.RayDashboardGCSHealthPath, utils.RayDashboardGCSHealthCheckTimeoutSeconds),
+		">/dev/null", "2>&1", ";",
+		"do", "echo", strconv.Quote("Waiting for Ray Dashboard GCS to become healthy at http://127.0.0.1:8265 ..."), ";", "sleep", "2", ";", "done", ";",
 		"if",
 		"!", "ray", "job", "status", "--address", "http://127.0.0.1:8265", "testJobId", ">/dev/null", "2>&1",
 		";", "then",
@@ -108,9 +113,8 @@ func TestBuildJobSubmitCommandWithSidecarMode(t *testing.T) {
 		"until",
 		fmt.Sprintf(
 			utils.BasePythonHealthCommand,
-			utils.DefaultDashboardPort,
-			utils.RayDashboardGCSHealthPath,
-			utils.DefaultReadinessProbeFailureThreshold,
+			fmt.Sprintf("http://localhost:%d/%s", utils.DefaultDashboardPort, utils.RayDashboardGCSHealthPath),
+			utils.RayDashboardGCSHealthCheckTimeoutSeconds,
 		),
 		">/dev/null", "2>&1", ";",
 		"do", "echo", strconv.Quote("Waiting for Ray Dashboard GCS to become healthy at http://127.0.0.1:8265 ..."), ";", "sleep", "2", ";", "done", ";",
@@ -198,16 +202,64 @@ func TestBuildJobSubmitCommandWithSidecarModeCustomDashboardPort(t *testing.T) {
 	assert.NotContains(t, command[1], "wget")
 }
 
-func TestBuildJobSubmitCommandWithK8sJobModeNoSidecarHealthWaitLoop(t *testing.T) {
+func TestBuildJobSubmitCommandWithK8sJobModeHealthWaitLoop(t *testing.T) {
 	testRayJob := rayJobTemplate()
 	command, err := BuildJobSubmitCommand(testRayJob, rayv1.K8sJobMode)
 	require.NoError(t, err)
-	assert.NotContains(t, command, "until")
-	for _, arg := range command {
-		assert.NotContains(t, arg, utils.RayDashboardGCSHealthPath)
-		assert.NotContains(t, arg, "python -c")
-		assert.NotContains(t, arg, "wget")
+	require.GreaterOrEqual(t, len(command), 2)
+	assert.Equal(t, "until", command[0])
+	assert.Contains(t, command[1], "python -c")
+	assert.Contains(t, command[1], utils.RayDashboardGCSHealthPath)
+	assert.Contains(t, command[1], "127.0.0.1:8265")
+	assert.NotContains(t, command[1], "wget")
+}
+
+func TestBuildJobSubmitCommandWithSidecarModeAndFeatureGate(t *testing.T) {
+	// Enable the SidecarSubmitterRestart feature gate for this test
+	features.SetFeatureGateDuringTest(t, features.SidecarSubmitterRestart, true)
+
+	testRayJob := rayJobTemplate()
+	testRayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers = []corev1.Container{
+		{
+			Ports: []corev1.ContainerPort{
+				{
+					Name:          utils.DashboardPortName,
+					ContainerPort: utils.DefaultDashboardPort,
+				},
+			},
+		},
 	}
+
+	// With SidecarSubmitterRestart enabled, the command should include:
+	// - status check (if ! ray job status ...)
+	// - --no-wait flag
+	// - job logs follow at the end
+	healthURL := fmt.Sprintf("http://localhost:%d/%s", utils.DefaultDashboardPort, utils.RayDashboardGCSHealthPath)
+	expected := []string{
+		"until",
+		fmt.Sprintf(
+			utils.BasePythonHealthCommand,
+			healthURL,
+			utils.RayDashboardGCSHealthCheckTimeoutSeconds,
+		),
+		">/dev/null", "2>&1", ";",
+		"do", "echo", strconv.Quote("Waiting for Ray Dashboard GCS to become healthy at http://127.0.0.1:8265 ..."), ";", "sleep", "2", ";", "done", ";",
+		"if", "!", "ray", "job", "status", "--address", "http://127.0.0.1:8265", "testJobId", ">/dev/null", "2>&1", ";", "then",
+		"ray", "job", "submit", "--address", "http://127.0.0.1:8265", "--no-wait",
+		"--runtime-env-json", strconv.Quote(`{"test":"test"}`),
+		"--metadata-json", strconv.Quote(`{"testKey":"testValue"}`),
+		"--submission-id", "testJobId",
+		"--entrypoint-num-cpus", "1.000000",
+		"--entrypoint-num-gpus", "0.500000",
+		"--entrypoint-resources", strconv.Quote(`{"Custom_1": 1, "Custom_2": 5.5}`),
+		"--",
+		"echo no quote 'single quote' \"double quote\"",
+		";", "fi", ";",
+		"ray", "job", "logs", "--address", "http://127.0.0.1:8265", "--follow", "testJobId",
+	}
+	command, err := BuildJobSubmitCommand(testRayJob, rayv1.SidecarMode)
+	require.NoError(t, err)
+	assert.Equal(t, expected, command)
 }
 
 func TestBuildJobSubmitCommandWithK8sJobModeAndYAML(t *testing.T) {
@@ -231,6 +283,10 @@ pip: ["python-multipart==0.0.6"]
 		},
 	}
 	expected := []string{
+		"until",
+		fmt.Sprintf(utils.BasePythonHealthCommand, "http://127.0.0.1:8265/"+utils.RayDashboardGCSHealthPath, utils.RayDashboardGCSHealthCheckTimeoutSeconds),
+		">/dev/null", "2>&1", ";",
+		"do", "echo", strconv.Quote("Waiting for Ray Dashboard GCS to become healthy at http://127.0.0.1:8265 ..."), ";", "sleep", "2", ";", "done", ";",
 		"if",
 		"!", "ray", "job", "status", "--address", "http://127.0.0.1:8265", "testJobId", ">/dev/null", "2>&1",
 		";", "then",

@@ -16,6 +16,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/ray-project/kuberay/historyserver/pkg/storage"
+	"github.com/ray-project/kuberay/historyserver/pkg/storage/clustermetadata"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
@@ -30,6 +31,8 @@ type RayLogHandler struct {
 	LogDir                 string
 	RayNodeName            string
 	RayClusterNamespace    string
+	OwnerKind              string
+	OwnerName              string
 	RootDir                string
 	SessionDir             string
 	prevLogsDir            string
@@ -99,17 +102,21 @@ func (r *RayLogHandler) processSessionLatestLogs() {
 	// Extract the real session ID from the resolved path
 	sessionID := filepath.Base(sessionRealDir)
 	if r.IsHead {
-		metadir := path.Join(r.RootDir, "metadir")
-		metafile := path.Clean(metadir + "/" + fmt.Sprintf("%s/%v",
-			utils.AppendRayClusterNameNamespace(r.RayClusterName, r.RayClusterNamespace),
-			path.Base(sessionID),
-		))
+		metafile := clustermetadata.EncodePath(
+			utils.ClusterInfo{
+				Name:      r.RayClusterName,
+				Namespace: r.RayClusterNamespace,
+				OwnerKind: r.OwnerKind,
+				OwnerName: r.OwnerName},
+			r.RootDir,
+			sessionID,
+		)
 		if err := r.Writer.CreateDirectory(path.Dir(metafile)); err != nil {
-			logrus.Errorf("CreateObjectIfNotExist %s error %v", metadir, err)
+			logrus.Errorf("Failed to create directory %s error %v", path.Dir(metafile), err)
 			return
 		}
 		if err := r.Writer.WriteFile(metafile, strings.NewReader("")); err != nil {
-			logrus.Errorf("CreateObjectIfNotExist %s error %v", metafile, err)
+			logrus.Errorf("Failed to write session file %s error %v", metafile, err)
 			return
 		}
 	}
@@ -448,17 +455,20 @@ func (r *RayLogHandler) processSessionPrevLogs(sessionDir string) {
 	sessionID := parts[0]
 	logrus.Infof("Processing all node logs for session: %s", sessionID)
 	if r.IsHead {
-		metadir := path.Join(r.RootDir, "metadir")
-		metafile := path.Clean(metadir + "/" + fmt.Sprintf("%s/%v",
-			utils.AppendRayClusterNameNamespace(r.RayClusterName, r.RayClusterNamespace),
-			path.Base(sessionID),
-		))
+		metafile := clustermetadata.EncodePath(
+			utils.ClusterInfo{
+				Name:      r.RayClusterName,
+				Namespace: r.RayClusterNamespace,
+				OwnerKind: r.OwnerKind,
+				OwnerName: r.OwnerName},
+			r.RootDir,
+			sessionID)
 		if err := r.Writer.CreateDirectory(path.Dir(metafile)); err != nil {
-			logrus.Errorf("CreateObjectIfNotExist %s error %v", metadir, err)
+			logrus.Errorf("Failed to create directory %s error %v", path.Dir(metafile), err)
 			return
 		}
 		if err := r.Writer.WriteFile(metafile, strings.NewReader("")); err != nil {
-			logrus.Errorf("CreateObjectIfNotExist %s error %v", metafile, err)
+			logrus.Errorf("Failed to write session file %s error %v", metafile, err)
 			return
 		}
 	}
@@ -689,14 +699,9 @@ func (r *RayLogHandler) processPrevLogFile(absoluteLogPathName, localLogDir, ses
 	return nil
 }
 
-// meta-dir only stores metadata indicating which clusters have been saved.
-// As long as worker logs are uploaded normally and head writes the metadata,
-// the cluster can be viewed.
 // Any session change triggers sessiondir updates on all head and worker nodes,
 // so we only need to update from one node.
 // for example:
-// metadir/
-//
 //	my-cluster_abc123/
 //		session_2024-12-15_10-30-45_123456    ← Empty file! The path itself is the information
 //		session_2024-12-15_14-20-10_789012
@@ -745,17 +750,21 @@ func (r *RayLogHandler) WatchSessionLatestLoops() {
 			// Handle changes to the symlink
 			if event.Op&(fsnotify.Create|fsnotify.Write) != 0 {
 				sessionID := filepath.Base(event.Name)
-				metadir := path.Join(r.RootDir, "metadir")
-				metafile := path.Clean(metadir + "/" + fmt.Sprintf("%s/%v",
-					utils.AppendRayClusterNameNamespace(r.RayClusterName, r.RayClusterNamespace),
-					path.Base(sessionID),
-				))
+				metafile := clustermetadata.EncodePath(
+					utils.ClusterInfo{
+						Name:      r.RayClusterName,
+						Namespace: r.RayClusterNamespace,
+						OwnerKind: r.OwnerKind,
+						OwnerName: r.OwnerName},
+					r.RootDir,
+					sessionID,
+				)
 				if err := r.Writer.CreateDirectory(path.Dir(metafile)); err != nil {
-					logrus.Errorf("CreateObjectIfNotExist %s error %v", metadir, err)
+					logrus.Errorf("Failed to create directory %s error %v", path.Dir(metafile), err)
 					return
 				}
 				if err := r.Writer.WriteFile(metafile, strings.NewReader("")); err != nil {
-					logrus.Errorf("CreateObjectIfNotExist %s error %v", metafile, err)
+					logrus.Errorf("Failed to write session file %s error %v", metafile, err)
 					return
 				}
 			}

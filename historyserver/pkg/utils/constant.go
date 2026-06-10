@@ -5,7 +5,15 @@ import (
 	"path/filepath"
 )
 
-const defaultTmpRayRoot = "/tmp/ray"
+const (
+	defaultTmpRayRoot = "/tmp/ray"
+
+	// Lowercase, normalized CRD kinds. Used both as the comparison key
+	// for ToLower(OwnerKind) and as the cluster-metadata path subdir segment.
+	RayJobKind     = "rayjob"
+	RayServiceKind = "rayservice"
+	RayClusterKind = "raycluster"
+)
 
 func GetTmpRayRoot() string {
 	if tmpRoot := os.Getenv("RAY_TMP_ROOT"); tmpRoot != "" {

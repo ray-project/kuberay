@@ -2,7 +2,6 @@ package v1alpha1
 
 import (
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/utils/ptr"
 )
 
 const (
@@ -32,7 +31,7 @@ func SetDefaults_Configuration(cfg *Configuration) {
 	}
 
 	if cfg.EnableLeaderElection == nil {
-		cfg.EnableLeaderElection = ptr.To(DefaultEnableLeaderElection)
+		cfg.EnableLeaderElection = new(DefaultEnableLeaderElection)
 	}
 
 	if cfg.ReconcileConcurrency == 0 {
@@ -40,10 +39,10 @@ func SetDefaults_Configuration(cfg *Configuration) {
 	}
 
 	if cfg.QPS == nil {
-		cfg.QPS = ptr.To(DefaultQPS)
+		cfg.QPS = new(DefaultQPS)
 	}
 
 	if cfg.Burst == nil {
-		cfg.Burst = ptr.To(DefaultBurst)
+		cfg.Burst = new(DefaultBurst)
 	}
 }

@@ -190,6 +190,10 @@ var autoscalerContainer = corev1.Container{
 			Name:  "KUBERAY_CRD_VER",
 			Value: "v1",
 		},
+		{
+			Name:  utils.KUBERAY_GEN_AUTOSCALER_START_CMD,
+			Value: "ray kuberay-autoscaler --cluster-name $(RAY_CLUSTER_NAME) --cluster-namespace $(RAY_CLUSTER_NAMESPACE)",
+		},
 	},
 	Command: []string{
 		"/bin/bash",
@@ -715,7 +719,7 @@ func TestBuildPod(t *testing.T) {
 	workerRayStartCommandEnv := getEnvVar(rayContainer, utils.KUBERAY_GEN_RAY_START_CMD)
 	assert.Contains(t, workerRayStartCommandEnv.Value, "ray start")
 
-	expectedCommandArg := splitAndSort("ulimit -n 65536; ray start --block --dashboard-agent-listen-port=52365 --memory=1073741824 --num-cpus=1 --num-gpus=3 --address=raycluster-sample-head-svc.default.svc.cluster.local:6379 --port=6379 --metrics-export-port=8080")
+	expectedCommandArg := splitAndSort("ulimit -n ${RAY_START_ULIMIT_OPEN_FILES:-65536}; ray start --block --dashboard-agent-listen-port=52365 --memory=1073741824 --num-cpus=1 --num-gpus=3 --address=raycluster-sample-head-svc.default.svc.cluster.local:6379 --port=6379 --metrics-export-port=8080")
 	actualCommandArg := splitAndSort(pod.Spec.Containers[0].Args[0])
 	assert.Equal(t, expectedCommandArg, actualCommandArg)
 
@@ -725,6 +729,102 @@ func TestBuildPod(t *testing.T) {
 
 	// Test default environment variables injection in ray pods
 	checkContainerEnv(t, rayContainer, "TEST_DEFAULT_ENV_NAME", "TEST_ENV_VALUE")
+}
+
+func TestBuildPod_WithUlimitOverride(t *testing.T) {
+	cluster := instance.DeepCopy()
+	ctx := context.Background()
+
+	// Add RAY_START_ULIMIT_OPEN_FILES to container env
+	cluster.Spec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex].Env = append(
+		cluster.Spec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex].Env,
+		corev1.EnvVar{Name: utils.RAY_START_ULIMIT_OPEN_FILES, Value: "1048576"},
+	)
+
+	podName := strings.ToLower(cluster.Name + utils.DashSymbol + string(rayv1.HeadNode) + utils.DashSymbol + utils.FormatInt32(0))
+	podTemplateSpec := DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
+	pod := BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", false, utils.GetCRDType(""), "", nil, "")
+
+	// The generated command arg still uses ${RAY_START_ULIMIT_OPEN_FILES:-65536} because the shell resolves it at runtime.
+	expectedCommandArg := splitAndSort("ulimit -n ${RAY_START_ULIMIT_OPEN_FILES:-65536}; ray start --head --block --dashboard-agent-listen-port=52365 --memory=1073741824 --num-cpus=1 --metrics-export-port=8080 --dashboard-host=0.0.0.0")
+	actualCommandArg := splitAndSort(pod.Spec.Containers[0].Args[0])
+	assert.Equal(t, expectedCommandArg, actualCommandArg)
+
+	// Verify that the environment variable exists in the container.
+	rayContainer := pod.Spec.Containers[utils.RayContainerIndex]
+	checkContainerEnv(t, rayContainer, utils.RAY_START_ULIMIT_OPEN_FILES, "1048576")
+}
+
+func TestBuildAutoscalerContainer(t *testing.T) {
+	const autoscalerImage = "rayproject/ray:2.52.0"
+	const expectedCmd = "ray kuberay-autoscaler --cluster-name $(RAY_CLUSTER_NAME) --cluster-namespace $(RAY_CLUSTER_NAMESPACE)"
+
+	t.Run("KUBERAY_GEN_AUTOSCALER_START_CMD is always injected with the generated command", func(t *testing.T) {
+		container := BuildAutoscalerContainer(autoscalerImage)
+
+		env := getEnvVar(container, utils.KUBERAY_GEN_AUTOSCALER_START_CMD)
+		require.NotNil(t, env, "KUBERAY_GEN_AUTOSCALER_START_CMD env var should always be present")
+		assert.Equal(t, expectedCmd, env.Value)
+	})
+
+	t.Run("Default Args equal KUBERAY_GEN_AUTOSCALER_START_CMD value", func(t *testing.T) {
+		container := BuildAutoscalerContainer(autoscalerImage)
+
+		require.Len(t, container.Args, 1)
+		assert.Equal(t, expectedCmd, container.Args[0],
+			"Default Args should match KUBERAY_GEN_AUTOSCALER_START_CMD so they are consistent")
+	})
+
+	t.Run("AutoscalerOptions.Command override replaces command", func(t *testing.T) {
+		container := BuildAutoscalerContainer(autoscalerImage)
+		customCMD := []string{"/bin/bash", "-lc", "--"}
+		mergeAutoscalerOverrides(&container, &rayv1.AutoscalerOptions{
+			Command: customCMD,
+		})
+
+		// Args must reflect the override.
+		assert.Equal(t, customCMD, container.Command)
+
+		// KUBERAY_GEN_AUTOSCALER_START_CMD must still hold the original generated command.
+		env := getEnvVar(container, utils.KUBERAY_GEN_AUTOSCALER_START_CMD)
+		require.NotNil(t, env)
+		assert.Equal(t, expectedCmd, env.Value)
+	})
+
+	t.Run("AutoscalerOptions.Args override replaces Args but not KUBERAY_GEN_AUTOSCALER_START_CMD", func(t *testing.T) {
+		container := BuildAutoscalerContainer(autoscalerImage)
+		customArgs := []string{"ulimit -n 65536; $KUBERAY_GEN_AUTOSCALER_START_CMD"}
+		mergeAutoscalerOverrides(&container, &rayv1.AutoscalerOptions{
+			Args: customArgs,
+		})
+
+		// Args must reflect the override.
+		assert.Equal(t, customArgs, container.Args)
+
+		// KUBERAY_GEN_AUTOSCALER_START_CMD must still hold the original generated command.
+		env := getEnvVar(container, utils.KUBERAY_GEN_AUTOSCALER_START_CMD)
+		require.NotNil(t, env)
+		assert.Equal(t, expectedCmd, env.Value)
+	})
+
+	t.Run("AutoscalerOptions.Env additions do not overwrite KUBERAY_GEN_AUTOSCALER_START_CMD", func(t *testing.T) {
+		container := BuildAutoscalerContainer(autoscalerImage)
+		mergeAutoscalerOverrides(&container, &rayv1.AutoscalerOptions{
+			Env: []corev1.EnvVar{
+				{Name: "AUTOSCALER_UPDATE_INTERVAL_S", Value: "10"},
+			},
+		})
+
+		// The user-supplied env var must be present.
+		userEnv := getEnvVar(container, "AUTOSCALER_UPDATE_INTERVAL_S")
+		require.NotNil(t, userEnv)
+		assert.Equal(t, "10", userEnv.Value)
+
+		// KUBERAY_GEN_AUTOSCALER_START_CMD must still reflect the KubeRay-generated command.
+		env := getEnvVar(container, utils.KUBERAY_GEN_AUTOSCALER_START_CMD)
+		require.NotNil(t, env)
+		assert.Equal(t, expectedCmd, env.Value)
+	})
 }
 
 func TestBuildPod_WithPlasmaDirectory(t *testing.T) {
@@ -782,7 +882,7 @@ func TestBuildPod_WithEnableK8sTokenAuth(t *testing.T) {
 	cluster := instance.DeepCopy()
 	cluster.Spec.AuthOptions = &rayv1.AuthOptions{
 		Mode:               rayv1.AuthModeToken,
-		EnableK8sTokenAuth: ptr.To(true),
+		EnableK8sTokenAuth: new(true),
 	}
 
 	podName := strings.ToLower(cluster.Name + utils.DashSymbol + string(rayv1.HeadNode) + utils.DashSymbol + utils.FormatInt32(0))
@@ -817,7 +917,7 @@ func TestBuildPod_WithEnableK8sTokenAuth(t *testing.T) {
 	cluster = instance.DeepCopy()
 	cluster.Spec.AuthOptions = &rayv1.AuthOptions{
 		Mode:               rayv1.AuthModeToken,
-		EnableK8sTokenAuth: ptr.To(false),
+		EnableK8sTokenAuth: new(false),
 	}
 	podTemplateSpec = DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
 	pod = BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", false, utils.GetCRDType(""), "", nil, "")
@@ -849,7 +949,7 @@ func TestBuildPod_WithEnableK8sTokenAuth_InitContainer(t *testing.T) {
 	cluster := instance.DeepCopy()
 	cluster.Spec.AuthOptions = &rayv1.AuthOptions{
 		Mode:               rayv1.AuthModeToken,
-		EnableK8sTokenAuth: ptr.To(true),
+		EnableK8sTokenAuth: new(true),
 	}
 
 	worker := cluster.Spec.WorkerGroupSpecs[0]
@@ -908,7 +1008,7 @@ func TestBuildPod_WithNoCPULimits(t *testing.T) {
 	podName := strings.ToLower(cluster.Name + utils.DashSymbol + string(rayv1.HeadNode) + utils.DashSymbol + utils.FormatInt32(0))
 	podTemplateSpec := DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
 	pod := BuildPod(ctx, podTemplateSpec, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", false, utils.GetCRDType(""), "", nil, "")
-	expectedCommandArg := splitAndSort("ulimit -n 65536; ray start --head --block --dashboard-agent-listen-port=52365 --memory=1073741824 --num-cpus=2 --metrics-export-port=8080 --dashboard-host=0.0.0.0")
+	expectedCommandArg := splitAndSort("ulimit -n ${RAY_START_ULIMIT_OPEN_FILES:-65536}; ray start --head --block --dashboard-agent-listen-port=52365 --memory=1073741824 --num-cpus=2 --metrics-export-port=8080 --dashboard-host=0.0.0.0")
 	actualCommandArg := splitAndSort(pod.Spec.Containers[0].Args[0])
 	assert.Equal(t, expectedCommandArg, actualCommandArg)
 
@@ -918,7 +1018,7 @@ func TestBuildPod_WithNoCPULimits(t *testing.T) {
 	fqdnRayIP := utils.GenerateFQDNServiceName(ctx, *cluster, cluster.Namespace)
 	podTemplateSpec = DefaultWorkerPodTemplate(ctx, *cluster, worker, podName, fqdnRayIP, "6379", "", 0, 0)
 	pod = BuildPod(ctx, podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, "6379", false, utils.GetCRDType(""), fqdnRayIP, nil, "")
-	expectedCommandArg = splitAndSort("ulimit -n 65536; ray start --block --dashboard-agent-listen-port=52365 --memory=1073741824 --num-cpus=2 --num-gpus=3 --address=raycluster-sample-head-svc.default.svc.cluster.local:6379 --port=6379 --metrics-export-port=8080")
+	expectedCommandArg = splitAndSort("ulimit -n ${RAY_START_ULIMIT_OPEN_FILES:-65536}; ray start --block --dashboard-agent-listen-port=52365 --memory=1073741824 --num-cpus=2 --num-gpus=3 --address=raycluster-sample-head-svc.default.svc.cluster.local:6379 --port=6379 --metrics-export-port=8080")
 	actualCommandArg = splitAndSort(pod.Spec.Containers[0].Args[0])
 	assert.Equal(t, expectedCommandArg, actualCommandArg)
 }
@@ -1175,10 +1275,15 @@ func TestHeadPodTemplate_WithAutoscalingEnabled(t *testing.T) {
 
 func TestDefaultHeadPodTemplate_Autoscaling(t *testing.T) {
 	clusterNoAutoscaling := instance.DeepCopy()
+	clusterAutoscalingVersionNotSet := instance.DeepCopy()
+	clusterAutoscalingVersionNotSet.Spec.EnableInTreeAutoscaling = new(true)
 	clusterAutoscalingV1 := instance.DeepCopy()
-	clusterAutoscalingV1.Spec.EnableInTreeAutoscaling = ptr.To(true)
+	clusterAutoscalingV1.Spec.EnableInTreeAutoscaling = new(true)
+	clusterAutoscalingV1.Spec.AutoscalerOptions = &rayv1.AutoscalerOptions{
+		Version: ptr.To(rayv1.AutoscalerVersionV1),
+	}
 	clusterAutoscalingV2 := instance.DeepCopy()
-	clusterAutoscalingV2.Spec.EnableInTreeAutoscaling = ptr.To(true)
+	clusterAutoscalingV2.Spec.EnableInTreeAutoscaling = new(true)
 	clusterAutoscalingV2.Spec.AutoscalerOptions = &rayv1.AutoscalerOptions{
 		Version: ptr.To(rayv1.AutoscalerVersionV2),
 	}
@@ -1191,23 +1296,34 @@ func TestDefaultHeadPodTemplate_Autoscaling(t *testing.T) {
 		cluster                    rayv1.RayCluster
 		expectedHeadContainers     int
 		expectedAutoscalerV2EnvVar bool
+		expectedAutoscalerV1EnvVar bool
 	}{
 		"Pod template with autoscaling disabled should not have autoscaler container or other autoscaler related fields": {
 			cluster:                    *clusterNoAutoscaling,
 			expectedHeadContainers:     1,
 			expectedAutoscalerV2EnvVar: false,
+			expectedAutoscalerV1EnvVar: false,
+			expectedRestartPolicy:      "",
+		},
+		"Pod template with autoscaling version not set should not have autoscaler env var": {
+			cluster:                    *clusterAutoscalingVersionNotSet,
+			expectedHeadContainers:     2,
+			expectedAutoscalerV2EnvVar: false,
+			expectedAutoscalerV1EnvVar: false,
 			expectedRestartPolicy:      "",
 		},
 		"Pod template with autoscaling v1 enabled should the correct autoscaler v1 fields": {
 			cluster:                    *clusterAutoscalingV1,
 			expectedHeadContainers:     2,
 			expectedAutoscalerV2EnvVar: false,
+			expectedAutoscalerV1EnvVar: true,
 			expectedRestartPolicy:      "",
 		},
 		"Pod template with autoscaling v2 enabled should the correct autoscaler v2 fields": {
 			cluster:                    *clusterAutoscalingV2,
 			expectedHeadContainers:     2,
 			expectedAutoscalerV2EnvVar: true,
+			expectedAutoscalerV1EnvVar: false,
 			expectedRestartPolicy:      corev1.RestartPolicyNever,
 		},
 	}
@@ -1225,6 +1341,23 @@ func TestDefaultHeadPodTemplate_Autoscaling(t *testing.T) {
 				assert.Contains(t, podTemplateSpec.Spec.Containers[0].Env, corev1.EnvVar{
 					Name:  utils.RAY_ENABLE_AUTOSCALER_V2,
 					Value: "true",
+				})
+			} else {
+				assert.NotContains(t, podTemplateSpec.Spec.Containers[0].Env, corev1.EnvVar{
+					Name:  utils.RAY_ENABLE_AUTOSCALER_V2,
+					Value: "true",
+				})
+			}
+
+			if tc.expectedAutoscalerV1EnvVar {
+				assert.Contains(t, podTemplateSpec.Spec.Containers[0].Env, corev1.EnvVar{
+					Name:  utils.RAY_ENABLE_AUTOSCALER_V2,
+					Value: "false",
+				})
+			} else {
+				assert.NotContains(t, podTemplateSpec.Spec.Containers[0].Env, corev1.EnvVar{
+					Name:  utils.RAY_ENABLE_AUTOSCALER_V2,
+					Value: "false",
 				})
 			}
 
@@ -1409,9 +1542,9 @@ func TestDefaultWorkerPodTemplateWithConfigurablePorts(t *testing.T) {
 func TestDefaultWorkerPodTemplate_Autoscaling(t *testing.T) {
 	clusterNoAutoscaling := instance.DeepCopy()
 	clusterAutoscalingV1 := instance.DeepCopy()
-	clusterAutoscalingV1.Spec.EnableInTreeAutoscaling = ptr.To(true)
+	clusterAutoscalingV1.Spec.EnableInTreeAutoscaling = new(true)
 	clusterAutoscalingV2 := instance.DeepCopy()
-	clusterAutoscalingV2.Spec.EnableInTreeAutoscaling = ptr.To(true)
+	clusterAutoscalingV2.Spec.EnableInTreeAutoscaling = new(true)
 	clusterAutoscalingV2.Spec.AutoscalerOptions = &rayv1.AutoscalerOptions{
 		Version: ptr.To(rayv1.AutoscalerVersionV2),
 	}
@@ -2119,6 +2252,24 @@ func TestGenerateRayStartCommand(t *testing.T) {
 			resource:       corev1.ResourceRequirements{},
 			expected:       "",
 		},
+		{
+			name:     "HeadNode with include-log-monitor=false",
+			nodeType: rayv1.HeadNode,
+			rayStartParams: map[string]string{
+				"include-log-monitor": "false",
+			},
+			resource: corev1.ResourceRequirements{},
+			expected: "ray start --head  --include-log-monitor=false ",
+		},
+		{
+			name:     "HeadNode with include-log-monitor=true",
+			nodeType: rayv1.HeadNode,
+			rayStartParams: map[string]string{
+				"include-log-monitor": "true",
+			},
+			resource: corev1.ResourceRequirements{},
+			expected: "ray start --head  --include-log-monitor=true ",
+		},
 	}
 
 	for _, tt := range tests {
@@ -2180,6 +2331,62 @@ func TestSetAutoscalerV2EnvVars(t *testing.T) {
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
 			setAutoscalerV2EnvVars(tc.podTemplate)
+			assert.Equal(t, tc.expectedEnvVars, tc.podTemplate.Spec.Containers[0].Env)
+		})
+	}
+}
+
+func TestSetAutoscalerV1EnvVars(t *testing.T) {
+	tests := map[string]struct {
+		podTemplate     *corev1.PodTemplateSpec
+		expectedEnvVars []corev1.EnvVar
+	}{
+		"Pod without env vars should have autoscaler v2 env var set to false": {
+			podTemplate: &corev1.PodTemplateSpec{
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{},
+					},
+				},
+			},
+			expectedEnvVars: []corev1.EnvVar{
+				{
+					Name:  utils.RAY_ENABLE_AUTOSCALER_V2,
+					Value: "false",
+				},
+			},
+		},
+		"Pod without autoscaler v2 env var should have autoscaler v2 env var set to false": {
+			podTemplate: &corev1.PodTemplateSpec{
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Env: []corev1.EnvVar{
+								{
+									Name:  "papal",
+									Value: "conclave",
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedEnvVars: []corev1.EnvVar{
+				{
+					Name:  "papal",
+					Value: "conclave",
+				},
+				{
+					Name:  utils.RAY_ENABLE_AUTOSCALER_V2,
+					Value: "false",
+				},
+			},
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			setAutoscalerV1EnvVars(tc.podTemplate)
 			assert.Equal(t, tc.expectedEnvVars, tc.podTemplate.Spec.Containers[0].Env)
 		})
 	}

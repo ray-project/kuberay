@@ -3,6 +3,7 @@ package ray
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math"
 	"strings"
 	"testing"
@@ -18,7 +19,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
-	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	clientFake "sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
@@ -30,6 +30,7 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/metrics/mocks"
 	utils "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/scheme"
+	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 )
 
 // fakeBatchScheduler implements schedulerinterface.BatchScheduler for testing.
@@ -188,13 +189,18 @@ func TestGetSubmitterTemplate(t *testing.T) {
 	submitterTemplate, err = getSubmitterTemplate(rayJobInstanceWithTemplate, rayClusterInstance)
 	require.NoError(t, err)
 	assert.Equal(t, []string{"/bin/bash", "-ce", "--"}, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Command)
-	assert.Equal(t, []string{"if ! ray job status --address http://test-url test-job-id >/dev/null 2>&1 ; then ray job submit --address http://test-url --no-wait --submission-id test-job-id -- echo no quote 'single quote' \"double quote\" ; fi ; ray job logs --address http://test-url --follow test-job-id"}, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Args)
+	expectedK8sJobModeArgs := []string{
+		"until " + fmt.Sprintf(utils.BasePythonHealthCommand, "http://test-url/"+utils.RayDashboardGCSHealthPath, utils.RayDashboardGCSHealthCheckTimeoutSeconds) +
+			" >/dev/null 2>&1 ; do echo \"Waiting for Ray Dashboard GCS to become healthy at http://test-url ...\" ; sleep 2 ; done ; " +
+			"if ! ray job status --address http://test-url test-job-id >/dev/null 2>&1 ; then ray job submit --address http://test-url --no-wait --submission-id test-job-id -- echo no quote 'single quote' \"double quote\" ; fi ; ray job logs --address http://test-url --follow test-job-id",
+	}
+	assert.Equal(t, expectedK8sJobModeArgs, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Args)
 
 	// Test 3: User did not provide template, should use the image of the Ray Head
 	submitterTemplate, err = getSubmitterTemplate(rayJobInstanceWithoutTemplate, rayClusterInstance)
 	require.NoError(t, err)
 	assert.Equal(t, []string{"/bin/bash", "-ce", "--"}, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Command)
-	assert.Equal(t, []string{"if ! ray job status --address http://test-url test-job-id >/dev/null 2>&1 ; then ray job submit --address http://test-url --no-wait --submission-id test-job-id -- echo no quote 'single quote' \"double quote\" ; fi ; ray job logs --address http://test-url --follow test-job-id"}, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Args)
+	assert.Equal(t, expectedK8sJobModeArgs, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Args)
 	assert.Equal(t, "rayproject/ray:custom-version", submitterTemplate.Spec.Containers[utils.RayContainerIndex].Image)
 
 	// Test 4: Check default PYTHONUNBUFFERED setting
@@ -217,6 +223,118 @@ func TestGetSubmitterTemplate(t *testing.T) {
 	envVar, found = utils.EnvVarByName(utils.RAY_JOB_SUBMISSION_ID, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Env)
 	assert.True(t, found)
 	assert.Equal(t, "test-job-id", envVar.Value)
+}
+
+func TestGetSubmitterContainerWithFeatureGate(t *testing.T) {
+	// Enable the SidecarSubmitterRestart feature gate for this test
+	features.SetFeatureGateDuringTest(t, features.SidecarSubmitterRestart, true)
+
+	rayJobInstance := &rayv1.RayJob{
+		Spec: rayv1.RayJobSpec{
+			Entrypoint:     "echo test",
+			SubmissionMode: rayv1.SidecarMode,
+			RayClusterSpec: &rayv1.RayClusterSpec{
+				HeadGroupSpec: rayv1.HeadGroupSpec{
+					Template: corev1.PodTemplateSpec{
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{
+									Image: "rayproject/ray:test",
+									Ports: []corev1.ContainerPort{
+										{
+											Name:          utils.DashboardPortName,
+											ContainerPort: utils.DefaultDashboardPort,
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		Status: rayv1.RayJobStatus{
+			DashboardURL: "http://127.0.0.1:8265",
+			JobId:        "test-job-id",
+		},
+	}
+
+	rayClusterInstance := &rayv1.RayCluster{
+		Spec: *rayJobInstance.Spec.RayClusterSpec,
+	}
+
+	container, err := getSubmitterContainer(rayJobInstance, rayClusterInstance)
+	require.NoError(t, err)
+
+	// Verify restart policy is set to OnFailure for the submitter container
+	require.NotNil(t, container.RestartPolicy)
+	assert.Equal(t, corev1.ContainerRestartPolicyOnFailure, *container.RestartPolicy)
+}
+
+func TestCheckIsRestartCountExceeded(t *testing.T) {
+	tests := []struct {
+		name                 string
+		restartCount         int32
+		existCode            int32
+		hasTermState         bool
+		hasLastTermState     bool
+		expectedShouldUpdate bool
+	}{
+		{
+			name:                 "restart count below limit of 2",
+			restartCount:         1,
+			existCode:            1,
+			hasTermState:         true,
+			hasLastTermState:     true,
+			expectedShouldUpdate: false,
+		},
+		{
+			name:                 "restart count at limit of 2",
+			restartCount:         2,
+			existCode:            1,
+			hasTermState:         true,
+			hasLastTermState:     true,
+			expectedShouldUpdate: true,
+		},
+		{
+			name:                 "successful exit should not trigger failure",
+			restartCount:         3,
+			existCode:            0,
+			hasTermState:         true,
+			hasLastTermState:     true,
+			expectedShouldUpdate: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			containerStatus := corev1.ContainerStatus{
+				Name:         utils.SubmitterContainerName,
+				RestartCount: tt.restartCount,
+			}
+
+			if tt.hasTermState {
+				containerStatus.State = corev1.ContainerState{
+					Terminated: &corev1.ContainerStateTerminated{ExitCode: tt.existCode},
+				}
+			}
+
+			if tt.hasLastTermState {
+				containerStatus.LastTerminationState = corev1.ContainerState{
+					Terminated: &corev1.ContainerStateTerminated{ExitCode: 1},
+				}
+			}
+
+			headPod := &corev1.Pod{
+				Status: corev1.PodStatus{
+					ContainerStatuses: []corev1.ContainerStatus{containerStatus},
+				},
+			}
+
+			shouldUpdate, _ := checkIsRestartCountExceeded(headPod, 2)
+			assert.Equal(t, tt.expectedShouldUpdate, shouldUpdate)
+		})
+	}
 }
 
 func TestUpdateStatusToSuspendingIfNeeded(t *testing.T) {
@@ -595,7 +713,7 @@ func TestEmitRayJobExecutionDuration(t *testing.T) {
 			name: "non-terminal to retrying state should emit metrics",
 			originalRayJobStatus: rayv1.RayJobStatus{
 				JobDeploymentStatus: rayv1.JobDeploymentStatusRunning,
-				Failed:              ptr.To(int32(2)),
+				Failed:              new(int32(2)),
 			},
 			rayJobStatus: rayv1.RayJobStatus{
 				JobDeploymentStatus: rayv1.JobDeploymentStatusRetrying,
@@ -655,7 +773,7 @@ func TestGetSubmitterTemplate_WithEnableK8sTokenAuth(t *testing.T) {
 		Spec: rayv1.RayClusterSpec{
 			AuthOptions: &rayv1.AuthOptions{
 				Mode:               rayv1.AuthModeToken,
-				EnableK8sTokenAuth: ptr.To(true),
+				EnableK8sTokenAuth: new(true),
 			},
 			HeadGroupSpec: rayv1.HeadGroupSpec{
 				Template: corev1.PodTemplateSpec{

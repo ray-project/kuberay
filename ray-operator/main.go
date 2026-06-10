@@ -12,17 +12,14 @@ import (
 	"go.uber.org/zap/zapcore"
 	"gopkg.in/natefinch/lumberjack.v2"
 	batchv1 "k8s.io/api/batch/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
-	"k8s.io/apimachinery/pkg/selection"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	k8szap "sigs.k8s.io/controller-runtime/pkg/log/zap"
 	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
@@ -35,6 +32,7 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/batchscheduler"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/metrics"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
+	"github.com/ray-project/kuberay/ray-operator/internal/managercache"
 	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 	webhooks "github.com/ray-project/kuberay/ray-operator/pkg/webhooks/v1"
 )
@@ -196,6 +194,30 @@ func main() {
 		utilruntime.Must(gwv1.Install(scheme))
 	}
 
+	// Although ContainerRestartPolicy is introduced in Kubernetes v1.34 as an alpha feature, which requires
+	// manually enabling the ContainerRestartRules feature gate, it becomes beta in v1.35.
+	// We require v1.35+ to avoid asking users to opt in to a separate K8s feature gate.
+	// NOTE: this checks the API server version only. Please make sure worker nodes are also v1.35+,
+	// as kubelets are allowed to be up to 3 minor versions older per the Kubernetes version skew policy.
+	// If ContainerRestartRules is not enabled on a kubelet, the per-container restart policy on the
+	// submitter container will be ignored. In this scenario, if the submitter container exit on failure,
+	// a 30-second timeout will be applied by the operator and could incorrectly mark the RayJob as Failed
+	// even if the Ray job is still running.
+	if features.Enabled(features.SidecarSubmitterRestart) {
+		serverVersion, err := utils.GetKubernetesVersion()
+		if err != nil {
+			exitOnError(err, "SidecarSubmitterRestart feature gate enabled but unable to detect K8s version. Feature requires K8s 1.35+.")
+		}
+		isAtLeast, err := utils.IsK8sVersionAtLeast(serverVersion, 1, 35, 0)
+		if err != nil {
+			exitOnError(err, "Failed to compare K8s version.")
+		}
+		if !isAtLeast {
+			exitOnError(fmt.Errorf("current version %s is below 1.35", serverVersion.GitVersion),
+				"SidecarSubmitterRestart feature gate requires K8s 1.35+")
+		}
+	}
+
 	// Manager options
 	options := ctrl.Options{
 		Cache: cache.Options{
@@ -215,11 +237,12 @@ func main() {
 	// Set the informers label selectors to narrow the scope of the resources being watched and cached.
 	// This improves the scalability of the system, both for KubeRay itself by reducing the size of the
 	// informers cache, and for the API server / etcd, by reducing the number of watch events.
-	// For example, KubeRay is only interested in the batch Jobs it creates when reconciling RayJobs,
-	// so the controller sets the app.kubernetes.io/created-by=kuberay-operator label on any Job it creates,
-	// and that label is provided to the manager cache as a selector for Job resources.
-	selectorsByObject, err := cacheSelectors()
-	exitOnError(err, "unable to create cache selectors")
+	// For example, KubeRay is only interested in:
+	// - the batch Jobs it creates when reconciling RayJobs (app.kubernetes.io/created-by=kuberay-operator), and
+	// - Ray-managed Pods (ray.io/node-type in head|worker|redis-cleanup).
+	// These labels are provided to the manager cache as selectors for Job and Pod resources.
+	selectorsByObject, err := managercache.K8sControllerRuntimeCacheSelectors()
+	exitOnError(err, "unable to build manager cache ByObject")
 	options.Cache.ByObject = selectorsByObject
 
 	if watchNamespaces := strings.Split(config.WatchNamespace, ","); len(watchNamespaces) == 1 { // It is not possible for len(watchNamespaces) == 0 to be true. The length of `strings.Split("", ",")` is still 1.
@@ -313,18 +336,6 @@ func main() {
 
 	setupLog.Info("starting manager")
 	exitOnError(mgr.Start(ctx), "problem running manager")
-}
-
-func cacheSelectors() (map[client.Object]cache.ByObject, error) {
-	label, err := labels.NewRequirement(utils.KubernetesCreatedByLabelKey, selection.Equals, []string{utils.ComponentName})
-	if err != nil {
-		return nil, err
-	}
-	selector := labels.NewSelector().Add(*label)
-
-	return map[client.Object]cache.ByObject{
-		&batchv1.Job{}: {Label: selector},
-	}, nil
 }
 
 func exitOnError(err error, msg string, keysAndValues ...any) {
