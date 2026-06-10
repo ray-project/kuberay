@@ -110,10 +110,14 @@ func TestRayCronJobReconcile_FirstSchedule(t *testing.T) {
 
 	// Set up test parameters
 	cronSchedule := "*/5 * * * *" // Every 5 minutes
-	fakeCurrTime := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	// creationTime=00:00, fakeCurrTime=00:05:30; scheduleTime=Next(00:00)=00:05 ≤ now -> job created
+	// nextScheduleTime=Next(00:05)=00:10, requeueAt=00:10-00:05:30=4m30s (positive)
+	fakeCurrTime := time.Date(2024, 1, 1, 0, 5, 30, 0, time.UTC)
+	creationTime := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 
 	// Create valid RayCronJob
 	rayCronJob := rayCronJobTemplate("test-cronjob", "default", cronSchedule)
+	rayCronJob.CreationTimestamp = metav1.NewTime(creationTime)
 
 	// Create scheme and add types
 	scheme := runtime.NewScheme()
@@ -152,17 +156,18 @@ func TestRayCronJobReconcile_FirstSchedule(t *testing.T) {
 	require.NoError(t, err)
 	assert.Positive(t, result.RequeueAfter, "Should requeue for next schedule")
 
-	// Parse the cron schedule to get the expected next schedule time
-	schedule, err := cron.ParseStandard(cronSchedule)
+	// scheduleTime = Next(creationTime) = 00:05; nextScheduleTime = Next(scheduleTime) = 00:10
+	parsedSchedule, err := cron.ParseStandard(cronSchedule)
 	require.NoError(t, err, "Test cron schedule should be valid")
-	expectedNextSchedule := schedule.Next(fakeCurrTime)
+	expectedScheduleTime := parsedSchedule.Next(creationTime)
+	expectedNextSchedule := parsedSchedule.Next(expectedScheduleTime)
 	expectedRequeueAfter := expectedNextSchedule.Sub(fakeCurrTime)
 
-	// Verify the requeue time matches the cron schedule
+	// Verify the requeue time is Next(scheduleTime) - now, keeping ticks aligned
 	assert.Equal(t, expectedRequeueAfter, result.RequeueAfter,
-		"RequeueAfter should match the time until next schedule based on cron expression")
+		"RequeueAfter should be Next(scheduleTime) - now so the controller wakes at the next tick boundary")
 
-	// Check that LastScheduleTime was set to current time
+	// Check that LastScheduleTime was set to the scheduleTime
 	updatedCronJob := &rayv1.RayCronJob{}
 	err = fakeClient.Get(ctx, types.NamespacedName{
 		Name:      "test-cronjob",
@@ -170,9 +175,9 @@ func TestRayCronJobReconcile_FirstSchedule(t *testing.T) {
 	}, updatedCronJob)
 	require.NoError(t, err)
 	assert.NotNil(t, updatedCronJob.Status.LastScheduleTime)
-	assert.True(t, fakeCurrTime.Equal(updatedCronJob.Status.LastScheduleTime.Time),
-		"LastScheduleTime should be set to current time. Expected: %v, Got: %v",
-		fakeCurrTime, updatedCronJob.Status.LastScheduleTime.Time)
+	assert.True(t, expectedScheduleTime.Equal(updatedCronJob.Status.LastScheduleTime.Time),
+		"LastScheduleTime should be set to the scheduleTime. Expected: %v, Got: %v",
+		expectedScheduleTime, updatedCronJob.Status.LastScheduleTime.Time)
 }
 
 func TestRayCronJobReconcile_CreateRayJob(t *testing.T) {
@@ -180,7 +185,9 @@ func TestRayCronJobReconcile_CreateRayJob(t *testing.T) {
 
 	// Set up test parameters
 	cronSchedule := "*/5 * * * *" // Every 5 minutes
-	fakeCurrTime := time.Date(2024, 1, 1, 0, 10, 0, 0, time.UTC)
+	// lastScheduleTime=00:00, now=00:05:30; scheduleTime=Next(00:00)=00:05 ≤ now -> job created
+	// nextScheduleTime=Next(00:05)=00:10, requeueAt=00:10-00:05:30=4m30s (positive)
+	fakeCurrTime := time.Date(2024, 1, 1, 0, 5, 30, 0, time.UTC)
 	lastScheduleTime := metav1.NewTime(time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC))
 
 	rayCronJob := rayCronJobTemplate("test-cronjob", "default", cronSchedule)
@@ -225,15 +232,16 @@ func TestRayCronJobReconcile_CreateRayJob(t *testing.T) {
 	require.NoError(t, err)
 	assert.Positive(t, result.RequeueAfter, "Should requeue for next schedule")
 
-	// Parse the cron schedule to get the expected next schedule time
-	schedule, err := cron.ParseStandard(cronSchedule)
+	// scheduleTime=Next(lastScheduleTime)=00:05; nextScheduleTime=Next(scheduleTime)=00:10
+	parsedSchedule, err := cron.ParseStandard(cronSchedule)
 	require.NoError(t, err, "Test cron schedule should be valid")
-	expectedNextSchedule := schedule.Next(fakeCurrTime)
+	expectedScheduleTime := parsedSchedule.Next(lastScheduleTime.Time)
+	expectedNextSchedule := parsedSchedule.Next(expectedScheduleTime)
 	expectedRequeueAfter := expectedNextSchedule.Sub(fakeCurrTime)
 
-	// Verify the requeue time matches the cron schedule
+	// Verify the requeue time is Next(scheduleTime) - now
 	assert.Equal(t, expectedRequeueAfter, result.RequeueAfter,
-		"RequeueAfter should match the time until next schedule based on cron expression")
+		"RequeueAfter should be Next(scheduleTime) - now")
 
 	// Verify a RayJob was created
 	rayJobList := &rayv1.RayJobList{}
@@ -246,7 +254,7 @@ func TestRayCronJobReconcile_CreateRayJob(t *testing.T) {
 	assert.Equal(t, "test-cronjob", rayJob.Labels["ray.io/cronjob-name"])
 	assert.Equal(t, "python test.py", rayJob.Spec.Entrypoint)
 
-	// Verify LastScheduleTime was updated to current time
+	// Verify LastScheduleTime was updated to scheduleTime
 	updatedCronJob := &rayv1.RayCronJob{}
 	err = fakeClient.Get(ctx, types.NamespacedName{
 		Name:      "test-cronjob",
@@ -254,9 +262,9 @@ func TestRayCronJobReconcile_CreateRayJob(t *testing.T) {
 	}, updatedCronJob)
 	require.NoError(t, err)
 	assert.NotNil(t, updatedCronJob.Status.LastScheduleTime)
-	assert.True(t, fakeCurrTime.Equal(updatedCronJob.Status.LastScheduleTime.Time),
-		"LastScheduleTime should be updated to current time after creating job. Expected: %v, Got: %v",
-		fakeCurrTime, updatedCronJob.Status.LastScheduleTime.Time)
+	assert.True(t, expectedScheduleTime.Equal(updatedCronJob.Status.LastScheduleTime.Time),
+		"LastScheduleTime should be set to scheduleTime. Expected: %v, Got: %v",
+		expectedScheduleTime, updatedCronJob.Status.LastScheduleTime.Time)
 }
 
 func TestRayCronJobReconcile_Suspend(t *testing.T) {

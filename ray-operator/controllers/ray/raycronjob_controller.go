@@ -127,10 +127,10 @@ func (r *RayCronJobReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	} else {
 		logger.Info("Successfully created RayJob", "rayJobName", rayJob.Name, "namespace", rayJob.Namespace)
 	}
-	rayCronJobInstance.Status.LastScheduleTime = &metav1.Time{Time: now}
+	rayCronJobInstance.Status.LastScheduleTime = &metav1.Time{Time: scheduleTime}
 
 	// Set next schedule time
-	nextScheduleTime := schedule.Next(now)
+	nextScheduleTime := schedule.Next(scheduleTime)
 	requeueAt := nextScheduleTime.Sub(now)
 	logger.Info("Schedule timing", "now", now, "nextScheduledTime", nextScheduleTime, "requeueAfter", requeueAt)
 
