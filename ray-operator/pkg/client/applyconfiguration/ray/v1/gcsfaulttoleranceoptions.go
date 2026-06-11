@@ -11,6 +11,15 @@ type GcsFaultToleranceOptionsApplyConfiguration struct {
 	RedisPassword            *RedisCredentialApplyConfiguration `json:"redisPassword,omitempty"`
 	ExternalStorageNamespace *string                            `json:"externalStorageNamespace,omitempty"`
 	RedisAddress             *string                            `json:"redisAddress,omitempty"`
+	// EnableActivePassiveHead enables active-passive high availability for the GCS.
+	// If enabled, KubeRay will provision a standby head node to ensure quick recovery.
+	EnableActivePassiveHead *bool `json:"enableActivePassiveHead,omitempty"`
+	// LeaderElectionLeaseDurationSeconds is the duration that non-leader candidates wait before forcing leadership acquisition.
+	LeaderElectionLeaseDurationSeconds *int32 `json:"leaderElectionLeaseDurationSeconds,omitempty"`
+	// LeaderElectionRenewDeadlineSeconds is the acting leader's bounded deadline for executing consecutive renewal sequences.
+	LeaderElectionRenewDeadlineSeconds *int32 `json:"leaderElectionRenewDeadlineSeconds,omitempty"`
+	// LeaderElectionRetryPeriodSeconds is the duration clients wait between sequential resource acquisition attempts.
+	LeaderElectionRetryPeriodSeconds *int32 `json:"leaderElectionRetryPeriodSeconds,omitempty"`
 }
 
 // GcsFaultToleranceOptionsApplyConfiguration constructs a declarative configuration of the GcsFaultToleranceOptions type for use with
@@ -48,5 +57,37 @@ func (b *GcsFaultToleranceOptionsApplyConfiguration) WithExternalStorageNamespac
 // If called multiple times, the RedisAddress field is set to the value of the last call.
 func (b *GcsFaultToleranceOptionsApplyConfiguration) WithRedisAddress(value string) *GcsFaultToleranceOptionsApplyConfiguration {
 	b.RedisAddress = &value
+	return b
+}
+
+// WithEnableActivePassiveHead sets the EnableActivePassiveHead field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the EnableActivePassiveHead field is set to the value of the last call.
+func (b *GcsFaultToleranceOptionsApplyConfiguration) WithEnableActivePassiveHead(value bool) *GcsFaultToleranceOptionsApplyConfiguration {
+	b.EnableActivePassiveHead = &value
+	return b
+}
+
+// WithLeaderElectionLeaseDurationSeconds sets the LeaderElectionLeaseDurationSeconds field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the LeaderElectionLeaseDurationSeconds field is set to the value of the last call.
+func (b *GcsFaultToleranceOptionsApplyConfiguration) WithLeaderElectionLeaseDurationSeconds(value int32) *GcsFaultToleranceOptionsApplyConfiguration {
+	b.LeaderElectionLeaseDurationSeconds = &value
+	return b
+}
+
+// WithLeaderElectionRenewDeadlineSeconds sets the LeaderElectionRenewDeadlineSeconds field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the LeaderElectionRenewDeadlineSeconds field is set to the value of the last call.
+func (b *GcsFaultToleranceOptionsApplyConfiguration) WithLeaderElectionRenewDeadlineSeconds(value int32) *GcsFaultToleranceOptionsApplyConfiguration {
+	b.LeaderElectionRenewDeadlineSeconds = &value
+	return b
+}
+
+// WithLeaderElectionRetryPeriodSeconds sets the LeaderElectionRetryPeriodSeconds field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the LeaderElectionRetryPeriodSeconds field is set to the value of the last call.
+func (b *GcsFaultToleranceOptionsApplyConfiguration) WithLeaderElectionRetryPeriodSeconds(value int32) *GcsFaultToleranceOptionsApplyConfiguration {
+	b.LeaderElectionRetryPeriodSeconds = &value
 	return b
 }
