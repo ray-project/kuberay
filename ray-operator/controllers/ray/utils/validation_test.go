@@ -319,6 +319,129 @@ func TestValidateRayClusterSpecEmbeddedGCSFeatureGate(t *testing.T) {
 	require.NoError(t, ValidateRayClusterSpec(spec, nil))
 }
 
+func TestValidateGcsActivePassiveHead(t *testing.T) {
+	enabled := true
+	disabled := false
+	ptr := func(v int32) *int32 { return &v }
+
+	tests := []struct {
+		options      *rayv1.GcsFaultToleranceOptions
+		name         string
+		errorMessage string
+		gateEnabled  bool
+		expectError  bool
+	}{
+		{
+			name:        "nil options",
+			options:     nil,
+			gateEnabled: true,
+		},
+		{
+			name:        "activePassiveHead not set",
+			options:     &rayv1.GcsFaultToleranceOptions{RedisAddress: "redis:6379"},
+			gateEnabled: true,
+		},
+		{
+			name: "disabled",
+			options: &rayv1.GcsFaultToleranceOptions{
+				ActivePassiveHead: &rayv1.ActivePassiveHeadOptions{Enable: &disabled},
+			},
+			gateEnabled: true,
+		},
+		{
+			name: "feature gate disabled",
+			options: &rayv1.GcsFaultToleranceOptions{
+				RedisAddress:      "redis:6379",
+				ActivePassiveHead: &rayv1.ActivePassiveHeadOptions{Enable: &enabled},
+			},
+			gateEnabled:  false,
+			expectError:  true,
+			errorMessage: "activePassiveHead.enable requires the GCSFaultToleranceActivePassiveHead feature gate to be enabled",
+		},
+		{
+			name: "rocksdb backend not supported",
+			options: &rayv1.GcsFaultToleranceOptions{
+				Backend:           rayv1.GcsFTBackendRocksDB,
+				ActivePassiveHead: &rayv1.ActivePassiveHeadOptions{Enable: &enabled},
+			},
+			gateEnabled:  true,
+			expectError:  true,
+			errorMessage: "activePassiveHead is only supported with the 'redis' backend",
+		},
+		{
+			name: "empty redis address",
+			options: &rayv1.GcsFaultToleranceOptions{
+				ActivePassiveHead: &rayv1.ActivePassiveHeadOptions{Enable: &enabled},
+			},
+			gateEnabled:  true,
+			expectError:  true,
+			errorMessage: "redisAddress must be configured when activePassiveHead.enable is true",
+		},
+		{
+			name: "leaseDuration not greater than renewDeadline",
+			options: &rayv1.GcsFaultToleranceOptions{
+				RedisAddress: "redis:6379",
+				ActivePassiveHead: &rayv1.ActivePassiveHeadOptions{
+					Enable:               &enabled,
+					LeaseDurationSeconds: ptr(10),
+					RenewDeadlineSeconds: ptr(10),
+				},
+			},
+			gateEnabled:  true,
+			expectError:  true,
+			errorMessage: "activePassiveHead.leaseDurationSeconds must be greater than activePassiveHead.renewDeadlineSeconds",
+		},
+		{
+			name: "renewDeadline not greater than retryPeriod",
+			options: &rayv1.GcsFaultToleranceOptions{
+				RedisAddress: "redis:6379",
+				ActivePassiveHead: &rayv1.ActivePassiveHeadOptions{
+					Enable:               &enabled,
+					RenewDeadlineSeconds: ptr(5),
+					RetryPeriodSeconds:   ptr(5),
+				},
+			},
+			gateEnabled:  true,
+			expectError:  true,
+			errorMessage: "activePassiveHead.renewDeadlineSeconds must be greater than activePassiveHead.retryPeriodSeconds",
+		},
+		{
+			name: "valid with defaults",
+			options: &rayv1.GcsFaultToleranceOptions{
+				RedisAddress:      "redis:6379",
+				ActivePassiveHead: &rayv1.ActivePassiveHeadOptions{Enable: &enabled},
+			},
+			gateEnabled: true,
+		},
+		{
+			name: "valid with explicit values",
+			options: &rayv1.GcsFaultToleranceOptions{
+				RedisAddress: "redis:6379",
+				ActivePassiveHead: &rayv1.ActivePassiveHeadOptions{
+					Enable:               &enabled,
+					LeaseDurationSeconds: ptr(20),
+					RenewDeadlineSeconds: ptr(15),
+					RetryPeriodSeconds:   ptr(3),
+				},
+			},
+			gateEnabled: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			features.SetFeatureGateDuringTest(t, features.GCSFaultToleranceActivePassiveHead, tt.gateEnabled)
+			err := ValidateGcsActivePassiveHead(tt.options)
+			if tt.expectError {
+				require.Error(t, err)
+				assert.EqualError(t, err, tt.errorMessage)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
 func TestValidateGcsFaultToleranceEmbeddedReservedVolume(t *testing.T) {
 	features.SetFeatureGateDuringTest(t, features.GCSFaultToleranceEmbeddedStorage, true)
 	// The operator reserves the "gcs-storage" volume name and the /data/gcs

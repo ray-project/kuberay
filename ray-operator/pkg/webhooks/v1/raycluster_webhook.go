@@ -57,6 +57,10 @@ func (w *RayClusterWebhook) validateRayCluster(rayCluster *rayv1.RayCluster) err
 		allErrs = append(allErrs, err)
 	}
 
+	if err := w.validateGcsFTOptions(rayCluster); err != nil {
+		allErrs = append(allErrs, err)
+	}
+
 	if len(allErrs) == 0 {
 		return nil
 	}
@@ -74,6 +78,23 @@ func (w *RayClusterWebhook) validateWorkerGroups(rayCluster *rayv1.RayCluster) *
 			return field.Invalid(field.NewPath("spec").Child("workerGroupSpecs").Index(i), workerGroup, "worker group names must be unique")
 		}
 		workerGroupNames[workerGroup.GroupName] = true
+	}
+
+	return nil
+}
+
+func (w *RayClusterWebhook) validateGcsFTOptions(rayCluster *rayv1.RayCluster) *field.Error {
+	ftOpts := rayCluster.Spec.GcsFaultToleranceOptions
+	if ftOpts == nil {
+		return nil
+	}
+
+	if err := utils.ValidateGcsActivePassiveHead(ftOpts); err != nil {
+		return field.Invalid(
+			field.NewPath("spec").Child("gcsFaultToleranceOptions").Child("activePassiveHead"),
+			ftOpts.ActivePassiveHead,
+			err.Error(),
+		)
 	}
 
 	return nil

@@ -330,6 +330,27 @@ spec:
                     type: boolean
                   gcsFaultToleranceOptions:
                     properties:
+                      activePassiveHead:
+                        properties:
+                          enable:
+                            default: false
+                            type: boolean
+                          leaseDurationSeconds:
+                            default: 15
+                            format: int32
+                            minimum: 1
+                            type: integer
+                          renewDeadlineSeconds:
+                            default: 10
+                            format: int32
+                            minimum: 1
+                            type: integer
+                          retryPeriodSeconds:
+                            default: 2
+                            format: int32
+                            minimum: 1
+                            type: integer
+                        type: object
                       backend:
                         enum:
                         - redis
