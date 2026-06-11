@@ -42,22 +42,22 @@ func (m *logEventMockReader) addDir(clusterID, dirPath string, entries []string)
 
 func (m *logEventMockReader) List() []utils.ClusterInfo { return nil }
 
-func (m *logEventMockReader) GetContent(clusterID string, fileName string) io.Reader {
+func (m *logEventMockReader) GetContent(clusterID string, fileName string) (io.Reader, error) {
 	if cd, ok := m.files[clusterID]; ok {
 		if content, ok := cd[fileName]; ok {
-			return strings.NewReader(content)
+			return strings.NewReader(content), nil
 		}
 	}
-	return nil
+	return nil, nil
 }
 
-func (m *logEventMockReader) ListFiles(clusterID string, dir string) []string {
+func (m *logEventMockReader) ListFiles(clusterID string, dir string) ([]string, error) {
 	if cd, ok := m.dirs[clusterID]; ok {
 		if entries, ok := cd[dir]; ok {
-			return entries
+			return entries, nil
 		}
 	}
-	return []string{}
+	return []string{}, nil
 }
 
 // --- Tests ---

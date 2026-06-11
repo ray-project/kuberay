@@ -203,7 +203,10 @@ func TestListFiles(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			files := handler.ListFiles(tc.clusterID, tc.directory)
+			files, err := handler.ListFiles(tc.clusterID, tc.directory)
+			if err != nil {
+				t.Fatalf("ListFiles(%q, %q) returned error: %v", tc.clusterID, tc.directory, err)
+			}
 			sort.Strings(files)
 			sort.Strings(tc.expected)
 			if diff := cmp.Diff(tc.expected, files); diff != "" {
@@ -292,7 +295,10 @@ func TestGetContent(t *testing.T) {
 	_, client, bucketName := setupFakeGCS(t, initialObjects...)
 	handler := createRayLogsHandler(client, bucketName)
 
-	reader := handler.GetContent(clusterID, fileName)
+	reader, err := handler.GetContent(clusterID, fileName)
+	if err != nil {
+		t.Fatalf("GetContent(%q, %q) returned error: %v", clusterID, fileName, err)
+	}
 	if reader == nil {
 		t.Fatalf("GetContent(%q, %q) returned nil reader, expected non-nil", clusterID, fileName)
 	}

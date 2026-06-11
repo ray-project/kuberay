@@ -63,7 +63,10 @@ func (r *LogEventReader) ReadLogEvents(clusterInfo utils.ClusterInfo, clusterSes
 
 	// List all items under logs/ to find node directories
 	// Note: ListFiles returns base names only (e.g., "node1/", "node2/")
-	nodeEntries := r.reader.ListFiles(clusterID, logsBaseDir)
+	nodeEntries, err := r.reader.ListFiles(clusterID, logsBaseDir)
+	if err != nil {
+		return fmt.Errorf("failed to list node directories for cluster %s: %w", clusterID, err)
+	}
 
 	// Filter to get node IDs (only directories end with "/")
 	// This matches the pattern used in eventserver.go getAllJobEventFiles()
@@ -87,7 +90,11 @@ func (r *LogEventReader) ReadLogEvents(clusterInfo utils.ClusterInfo, clusterSes
 		// Path: {sessionName}/logs/{nodeId}/events/
 		eventsDir := path.Join(clusterInfo.SessionName, utils.RAY_SESSIONDIR_LOGDIR_NAME, nodeID, "events")
 		// Note: ListFiles returns base names only (e.g., "event_GCS.log")
-		eventFileNames := r.reader.ListFiles(clusterID, eventsDir)
+		eventFileNames, err := r.reader.ListFiles(clusterID, eventsDir)
+		if err != nil {
+			logrus.Warnf("Failed to list event files in %s: %v", eventsDir, err)
+			continue
+		}
 
 		for _, fileName := range eventFileNames {
 			// Only process event_*.log files
@@ -120,7 +127,10 @@ func (r *LogEventReader) ReadLogEvents(clusterInfo utils.ClusterInfo, clusterSes
 // Lines exceeding maxLineLengthLimit are drained and skipped without accumulating
 // in memory, matching Ray Dashboard's _read_file() behavior in event_utils.py.
 func (r *LogEventReader) readEventFile(clusterID, filePath string, jobEventMap *types.JobEventMap) error {
-	ioReader := r.reader.GetContent(clusterID, filePath)
+	ioReader, err := r.reader.GetContent(clusterID, filePath)
+	if err != nil {
+		return fmt.Errorf("failed to get content for %s: %w", filePath, err)
+	}
 	if ioReader == nil {
 		return fmt.Errorf("failed to get content for %s", filePath)
 	}

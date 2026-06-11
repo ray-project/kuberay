@@ -60,6 +60,7 @@ func NewEventHandler(reader storage.StorageReader) *EventHandler {
 	}
 }
 
+
 // storeEvent unmarshals the event map into the correct actor/task struct and then stores it into the corresonding list.
 func (h *EventHandler) storeEvent(clusterSessionKey string, eventMap map[string]any) error {
 	eventTypeVal, ok := eventMap["eventType"]
@@ -464,7 +465,10 @@ func (h *EventHandler) getAllJobEventFiles(clusterInfo utils.ClusterInfo) []stri
 	var allJobFiles []string
 	clusterNameID := clusterInfo.Name + "_" + clusterInfo.Namespace
 	jobEventDirPrefix := clusterInfo.SessionName + "/job_events/"
-	jobDirList := h.reader.ListFiles(clusterNameID, jobEventDirPrefix)
+	jobDirList, err := h.reader.ListFiles(clusterNameID, jobEventDirPrefix)
+	if err != nil {
+		logrus.Warnf("Failed to list job event dirs for cluster %s: %v", clusterNameID, err)
+	}
 
 	for _, jobDir := range jobDirList {
 		// Skip non-directory entries
@@ -472,7 +476,11 @@ func (h *EventHandler) getAllJobEventFiles(clusterInfo utils.ClusterInfo) []stri
 			continue
 		}
 		jobDirPath := jobEventDirPrefix + jobDir
-		jobFiles := h.reader.ListFiles(clusterNameID, jobDirPath)
+		jobFiles, err := h.reader.ListFiles(clusterNameID, jobDirPath)
+		if err != nil {
+			logrus.Warnf("Failed to list job event files in %s: %v", jobDirPath, err)
+			continue
+		}
 		for _, jobFile := range jobFiles {
 			if isValidEventFile(jobFile) {
 				allJobFiles = append(allJobFiles, jobDirPath+jobFile)
@@ -486,7 +494,10 @@ func (h *EventHandler) getAllJobEventFiles(clusterInfo utils.ClusterInfo) []stri
 func (h *EventHandler) getAllNodeEventFiles(clusterInfo utils.ClusterInfo) []string {
 	clusterNameID := clusterInfo.Name + "_" + clusterInfo.Namespace
 	nodeEventDirPrefix := clusterInfo.SessionName + "/node_events/"
-	nodeEventFileNames := h.reader.ListFiles(clusterNameID, nodeEventDirPrefix)
+	nodeEventFileNames, err := h.reader.ListFiles(clusterNameID, nodeEventDirPrefix)
+	if err != nil {
+		logrus.Warnf("Failed to list node event files for cluster %s: %v", clusterNameID, err)
+	}
 
 	// Filter out directories (items ending with /) and build full paths
 	var nodeEventFiles []string
@@ -1403,9 +1414,11 @@ func (h *EventHandler) ProcessSingleSession(ctx context.Context, clusterInfo uti
 
 		// GetContent and io.ReadAll failures are treated as transient storage errors:
 		// skip this file and continue.
-		eventioReader := h.reader.GetContent(clusterNameNamespace, eventFile)
-		if eventioReader == nil {
-			logrus.Errorf("Failed to get content for event file: %s, skipping", eventFile)
+		eventioReader, err := h.reader.GetContent(clusterNameNamespace, eventFile)
+		if err != nil {
+			logrus.Errorf("Failed to get content for event file: %s, skipping: %v", eventFile, err)
+		}
+		if err != nil || eventioReader == nil {
 			continue
 		}
 		eventbytes, err := io.ReadAll(eventioReader)
