@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ray-project/kuberay/historyserver/pkg/compression"
 	"github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
 	"github.com/ray-project/kuberay/historyserver/pkg/storage"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
@@ -27,7 +28,7 @@ type EventHandler struct {
 	ClusterLogEventMap *types.ClusterLogEventMap // For /events API (Log Events from logs/events/)
 }
 
-var eventFilePattern = regexp.MustCompile(`-\d{4}-\d{2}-\d{2}-\d{2}$`)
+var eventFilePattern = regexp.MustCompile(`-\d{4}-\d{2}-\d{2}-\d{2}(\.gz)?$`)
 
 // taskPrefix is extracted to avoid hard-coded "task::" usage
 const taskPrefix = "task::"
@@ -1401,14 +1402,28 @@ func (h *EventHandler) ProcessSingleSession(ctx context.Context, clusterInfo uti
 		}
 		logrus.Debugf("Reading event file: %s", eventFile)
 
-		// GetContent and io.ReadAll failures are treated as transient storage errors:
-		// skip this file and continue.
-		eventioReader := h.reader.GetContent(clusterNameNamespace, eventFile)
+		var eventioReader io.Reader
+		if strings.HasSuffix(eventFile, ".gz") {
+			rc, err := compression.ReadCompressedContent(h.reader, clusterNameNamespace, eventFile)
+			if err != nil {
+				logrus.Errorf("Failed to decompress event file %s: %v", eventFile, err)
+				continue
+			}
+			eventioReader = rc
+		} else {
+			eventioReader = h.reader.GetContent(clusterNameNamespace, eventFile)
+		}
+
 		if eventioReader == nil {
 			logrus.Errorf("Failed to get content for event file: %s, skipping", eventFile)
 			continue
 		}
+
 		eventbytes, err := io.ReadAll(eventioReader)
+		if closer, ok := eventioReader.(io.Closer); ok {
+			closer.Close()
+		}
+
 		if err != nil {
 			logrus.Errorf("Failed to read events for file %s: %v", eventFile, err)
 			continue
