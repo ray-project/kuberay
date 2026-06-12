@@ -2570,6 +2570,86 @@ func TestMarkFailedIfInitializingTimedOut(t *testing.T) {
 	}
 }
 
+// TestHandleSuspendResumeResetsReadyToInitializing verifies that resuming a
+// RayService from the Suspended state resets the RayServiceReady condition
+// back to Reason=Initializing with a fresh LastTransitionTime, so that
+// markFailedOnInitializingTimeout can fire on the resumed attempt.
+func TestHandleSuspendResumeResetsReadyToInitializing(t *testing.T) {
+	newScheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(newScheme)
+	_ = corev1.AddToScheme(newScheme)
+
+	// Stale timestamp from the suspend transition. If the resume path does
+	// not refresh LastTransitionTime on RayServiceReady, the
+	// initializing-timeout check will compare against this old time and
+	// either fire instantly or never re-arm correctly.
+	suspendTime := metav1.NewTime(time.Now().Add(-1 * time.Hour))
+
+	rs := &rayv1.RayService{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-rayservice",
+			Namespace: "default",
+		},
+		Spec: rayv1.RayServiceSpec{
+			Suspend: false,
+		},
+		Status: rayv1.RayServiceStatuses{
+			Conditions: []metav1.Condition{
+				{
+					Type:               string(rayv1.RayServiceSuspended),
+					Status:             metav1.ConditionTrue,
+					Reason:             string(rayv1.SuspendComplete),
+					LastTransitionTime: suspendTime,
+				},
+				{
+					Type:               string(rayv1.RayServiceSuspending),
+					Status:             metav1.ConditionFalse,
+					Reason:             string(rayv1.SuspendComplete),
+					LastTransitionTime: suspendTime,
+				},
+				{
+					Type:               string(rayv1.RayServiceReady),
+					Status:             metav1.ConditionFalse,
+					Reason:             string(rayv1.SuspendComplete),
+					LastTransitionTime: suspendTime,
+				},
+				{
+					Type:               string(rayv1.UpgradeInProgress),
+					Status:             metav1.ConditionFalse,
+					Reason:             string(rayv1.SuspendComplete),
+					LastTransitionTime: suspendTime,
+				},
+				{
+					Type:               string(rayv1.RollbackInProgress),
+					Status:             metav1.ConditionFalse,
+					Reason:             string(rayv1.SuspendComplete),
+					LastTransitionTime: suspendTime,
+				},
+			},
+		},
+	}
+
+	ctx := context.TODO()
+	fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).Build()
+	r := &RayServiceReconciler{
+		Client:   fakeClient,
+		Scheme:   scheme.Scheme,
+		Recorder: record.NewFakeRecorder(10),
+	}
+
+	_, err := r.handleSuspend(ctx, rs)
+	require.NoError(t, err)
+
+	readyCond := meta.FindStatusCondition(rs.Status.Conditions, string(rayv1.RayServiceReady))
+	require.NotNil(t, readyCond, "RayServiceReady condition must exist after resume")
+
+	assert.Equal(t, string(rayv1.RayServiceInitializing), readyCond.Reason,
+		"RayServiceReady reason must be Initializing on resume; otherwise initializing-timeout will not fire")
+
+	assert.WithinDuration(t, time.Now(), readyCond.LastTransitionTime.Time, 5*time.Second,
+		"RayServiceReady LastTransitionTime must reset on resume; otherwise initializing-timeout will use the stale suspend timestamp")
+}
+
 func Test_RayServiceReconcileManagedBy(t *testing.T) {
 	newScheme := runtime.NewScheme()
 	_ = rayv1.AddToScheme(newScheme)

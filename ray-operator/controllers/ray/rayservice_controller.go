@@ -392,6 +392,12 @@ func (r *RayServiceReconciler) handleSuspend(ctx context.Context, rayServiceInst
 			logger.Info("Spec.Suspend is false; exiting Suspended state and resuming reconcile")
 			setCondition(rayServiceInstance, rayv1.RayServiceSuspended, metav1.ConditionFalse, rayv1.RayServiceResumed,
 				"Spec.Suspend is false; RayService has resumed.")
+			// Re-arm the initializing-timeout for the resumed attempt.
+			// Remove + Set forces a fresh LastTransitionTime because
+			// meta.SetStatusCondition only refreshes it when Status changes.
+			meta.RemoveStatusCondition(&rayServiceInstance.Status.Conditions, string(rayv1.RayServiceReady))
+			setCondition(rayServiceInstance, rayv1.RayServiceReady, metav1.ConditionFalse, rayv1.RayServiceInitializing,
+				"RayService is initializing after resuming from suspend.")
 			return ctrl.Result{}, nil
 		}
 		// Stay suspended; nothing to reconcile.
