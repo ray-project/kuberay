@@ -119,8 +119,9 @@ func TestRayServiceInitializingTimeoutTerminalFailure(t *testing.T) {
 		"PendingServiceStatus.RayClusterName should be cleared after timeout")
 
 	// Verify ObservedGeneration is set
-	g.Expect(rayService.Status.ObservedGeneration).To(Equal(initialGeneration),
-		"ObservedGeneration should match the initial generation")
+	expectedGeneration := initialGeneration + 1
+	g.Expect(rayService.Status.ObservedGeneration).To(Equal(expectedGeneration),
+		"ObservedGeneration should be the initial generation + 1 after adding finalizer")
 
 	// Step 3: Update the RayService with valid config to test terminal failure behavior
 	LogWithTimestamp(test.T(), "Updating RayService spec with valid configuration to test terminal failure persistence")

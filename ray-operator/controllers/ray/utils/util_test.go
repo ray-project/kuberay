@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -1923,6 +1924,70 @@ func TestIsHTTPRouteEqual(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result := IsHTTPRouteEqual(tt.existing, tt.desired)
 			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestIsJobFinished(t *testing.T) {
+	makeJob := func(conditions ...batchv1.JobCondition) *batchv1.Job {
+		return &batchv1.Job{Status: batchv1.JobStatus{Conditions: conditions}}
+	}
+	cond := func(t batchv1.JobConditionType, s corev1.ConditionStatus) batchv1.JobCondition {
+		return batchv1.JobCondition{Type: t, Status: s}
+	}
+
+	tests := []struct {
+		name         string
+		job          *batchv1.Job
+		wantType     batchv1.JobConditionType
+		wantFinished bool
+	}{
+		{
+			name:         "no conditions",
+			job:          makeJob(),
+			wantFinished: false,
+		},
+		{
+			name:         "complete",
+			job:          makeJob(cond(batchv1.JobComplete, corev1.ConditionTrue)),
+			wantType:     batchv1.JobComplete,
+			wantFinished: true,
+		},
+		{
+			name:         "failed",
+			job:          makeJob(cond(batchv1.JobFailed, corev1.ConditionTrue)),
+			wantType:     batchv1.JobFailed,
+			wantFinished: true,
+		},
+		{
+			name:         "failure target only (activeDeadlineSeconds window before Failed appears)",
+			job:          makeJob(cond(batchv1.JobFailureTarget, corev1.ConditionTrue)),
+			wantType:     batchv1.JobFailed,
+			wantFinished: true,
+		},
+		{
+			name:         "failure target false status is not finished",
+			job:          makeJob(cond(batchv1.JobFailureTarget, corev1.ConditionFalse)),
+			wantFinished: false,
+		},
+		{
+			name: "failure target then failed",
+			job: makeJob(
+				cond(batchv1.JobFailureTarget, corev1.ConditionTrue),
+				cond(batchv1.JobFailed, corev1.ConditionTrue),
+			),
+			wantType:     batchv1.JobFailed,
+			wantFinished: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotType, gotFinished := IsJobFinished(tt.job)
+			assert.Equal(t, tt.wantFinished, gotFinished)
+			if tt.wantFinished {
+				assert.Equal(t, tt.wantType, gotType)
+			}
 		})
 	}
 }
