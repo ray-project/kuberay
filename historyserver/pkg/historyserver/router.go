@@ -23,6 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/ray-project/kuberay/historyserver/html"
 	eventtypes "github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
@@ -252,7 +253,6 @@ func routerAPI(s *ServerHandler) {
 // }
 
 func routerHealthz(s *ServerHandler) {
-
 	http.HandleFunc("/readz", func(w http.ResponseWriter, r *http.Request) {
 		logrus.Infof("Received request: %s %s", r.Method, r.URL.String())
 		w.Header().Set("Content-Type", "text/plain")
@@ -266,6 +266,14 @@ func routerHealthz(s *ServerHandler) {
 		logrus.Debugf("request /livez")
 	})
 
+}
+
+func routerSelectCluster(s *ServerHandler) {
+	http.HandleFunc("/select_cluster", func(w http.ResponseWriter, r *http.Request) {
+		logrus.Infof("Serving cluster selector page: %s %s", r.Method, r.URL.String())
+		w.Header().Set("Content-Type", "text/html")
+		w.Write([]byte(html.ClusterSelectorHTML))
+	})
 }
 
 func routerLogical(s *ServerHandler) {
@@ -361,6 +369,7 @@ func (s *ServerHandler) RegisterRouter() {
 	routerNodes(s)
 	routerEvents(s)
 	routerAPI(s)
+	routerSelectCluster(s)
 	// routerRoot(s)
 	// routerHomepage(s)
 	routerHealthz(s)
