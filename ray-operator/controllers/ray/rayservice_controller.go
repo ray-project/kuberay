@@ -432,7 +432,6 @@ func (r *RayServiceReconciler) handleSuspend(ctx context.Context, rayServiceInst
 	}
 
 	if !allDeleted {
-		rayServiceInstance.Status.ObservedGeneration = rayServiceInstance.ObjectMeta.Generation
 		setCondition(rayServiceInstance, rayv1.RayServiceSuspending, metav1.ConditionTrue, rayv1.SuspendInProgress,
 			"Waiting for all Kubernetes resources owned by this RayService to be deleted.")
 		return ctrl.Result{RequeueAfter: ServiceDefaultRequeueDuration}, nil
@@ -444,7 +443,6 @@ func (r *RayServiceReconciler) handleSuspend(ctx context.Context, rayServiceInst
 	// us here despite Spec.Suspend=false), since the status-only update
 	// below would not otherwise wake the controller up.
 	logger.Info("All RayService-owned resources deleted; transitioning to Suspended")
-	rayServiceInstance.Status.ObservedGeneration = rayServiceInstance.ObjectMeta.Generation
 	setCondition(rayServiceInstance, rayv1.RayServiceSuspending, metav1.ConditionFalse, rayv1.SuspendComplete,
 		"All owned resources have been deleted.")
 	setCondition(rayServiceInstance, rayv1.RayServiceSuspended, metav1.ConditionTrue, rayv1.SuspendComplete, "All owned resources have been deleted.")
