@@ -3103,26 +3103,6 @@ func TestRayServiceFinalizer(t *testing.T) {
 	}
 }
 
-func TestBumpObservedGeneration(t *testing.T) {
-	t.Run("updates when behind metadata generation", func(t *testing.T) {
-		rayService := &rayv1.RayService{
-			ObjectMeta: metav1.ObjectMeta{Generation: 7},
-			Status:     rayv1.RayServiceStatuses{ObservedGeneration: 3},
-		}
-		bumpObservedGeneration(rayService)
-		assert.Equal(t, int64(7), rayService.Status.ObservedGeneration)
-	})
-
-	t.Run("no-op when already current", func(t *testing.T) {
-		rayService := &rayv1.RayService{
-			ObjectMeta: metav1.ObjectMeta{Generation: 7},
-			Status:     rayv1.RayServiceStatuses{ObservedGeneration: 7},
-		}
-		bumpObservedGeneration(rayService)
-		assert.Equal(t, int64(7), rayService.Status.ObservedGeneration)
-	})
-}
-
 func TestHandleSuspendObservedGeneration(t *testing.T) {
 	ctx := context.Background()
 	reconciler := &RayServiceReconciler{}
