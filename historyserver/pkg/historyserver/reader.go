@@ -208,9 +208,9 @@ func categorizeLogFiles(files []string) map[string][]string {
 	return result
 }
 
-func (s *ServerHandler) _getNodeLogFile(rayClusterNameNamespace, sessionID string, options GetLogFileOptions) ([]byte, error) {
+func (s *ServerHandler) _getNodeLogFile(clusterSessionKey, rayClusterNameNamespace, sessionID string, options GetLogFileOptions) ([]byte, error) {
 	// Resolve node_id and filename based on options
-	nodeID, filename, err := s.resolveLogFilename(rayClusterNameNamespace, sessionID, options)
+	nodeID, filename, err := s.resolveLogFilename(clusterSessionKey, rayClusterNameNamespace, sessionID, options)
 	if err != nil {
 		// Preserve HTTPError status code if already set, otherwise use BadRequest
 		var httpErr *utils.HTTPError
@@ -297,7 +297,7 @@ func (s *ServerHandler) _getNodeLogFile(rayClusterNameNamespace, sessionID strin
 // resolveLogFilename resolves the log file node_id and filename based on the provided options.
 // This mirrors Ray Dashboard's resolve_filename logic.
 // The sessionID parameter is required for task_id resolution to search worker log files.
-func (s *ServerHandler) resolveLogFilename(clusterNameID, sessionID string, options GetLogFileOptions) (nodeID, filename string, err error) {
+func (s *ServerHandler) resolveLogFilename(clusterSessionKey, clusterNameID, sessionID string, options GetLogFileOptions) (nodeID, filename string, err error) {
 	// If filename is explicitly provided, use it and ignore suffix
 	if options.Filename != "" {
 		if options.NodeID == "" {
@@ -313,12 +313,12 @@ func (s *ServerHandler) resolveLogFilename(clusterNameID, sessionID string, opti
 
 	// If task_id is provided, resolve from task events
 	if options.TaskID != "" {
-		return s.resolveTaskLogFilename(clusterNameID, sessionID, options.TaskID, options.AttemptNumber, options.Suffix)
+		return s.resolveTaskLogFilename(clusterSessionKey, clusterNameID, sessionID, options.TaskID, options.AttemptNumber, options.Suffix)
 	}
 
 	// If actor_id is provided, resolve from actor events
 	if options.ActorID != "" {
-		return s.resolveActorLogFilename(clusterNameID, sessionID, options.ActorID, options.Suffix)
+		return s.resolveActorLogFilename(clusterSessionKey, clusterNameID, sessionID, options.ActorID, options.Suffix)
 	}
 
 	// If pid is provided, resolve worker log file
@@ -356,17 +356,29 @@ func (s *ServerHandler) resolvePidLogFilename(clusterNameID, sessionID, nodeID s
 	return "", "", utils.NewHTTPError(fmt.Errorf("log file not found for pid %d in path %s", pid, logPath), http.StatusNotFound)
 }
 
+func getTasksByID(tasks []eventtypes.Task, taskID string) ([]eventtypes.Task, bool) {
+	var attempts []eventtypes.Task
+	for _, t := range tasks {
+		if t.TaskID == taskID {
+			attempts = append(attempts, t)
+		}
+	}
+	if len(attempts) == 0 {
+		return nil, false
+	}
+	return attempts, true
+}
+
 // resolveTaskLogFilename resolves log file for a task by querying task events.
 // This mirrors Ray Dashboard's _resolve_task_filename logic.
 // The sessionID parameter is required for searching worker log files when task_log_info is not available.
-func (s *ServerHandler) resolveTaskLogFilename(clusterNameID, sessionID, taskID string, attemptNumber int, suffix string) (nodeID, filename string, err error) {
-	// Construct full cluster session key for event lookup
-	// We append the sessionID to the clusterNameID (which is "name_namespace")
-	// to match the key format used by utils.BuildClusterSessionKey.
-	fullKey := fmt.Sprintf("%s_%s", clusterNameID, sessionID)
+func (s *ServerHandler) resolveTaskLogFilename(clusterSessionKey, clusterNameID, sessionID, taskID string, attemptNumber int, suffix string) (nodeID, filename string, err error) {
+	snap, ok := s.sessionLoader.GetSnapshot(clusterSessionKey)
+	if !ok {
+		return "", "", fmt.Errorf("snapshot not found for %s", clusterSessionKey)
+	}
 
-	// Get task attempts by task ID
-	taskAttempts, found := s.eventHandler.GetTaskByID(fullKey, taskID)
+	taskAttempts, found := getTasksByID(snap.Tasks, taskID)
 	if !found {
 		return "", "", fmt.Errorf("task not found: task_id=%s", taskID)
 	}
@@ -440,14 +452,13 @@ func (s *ServerHandler) resolveTaskLogFilename(clusterNameID, sessionID, taskID 
 
 // resolveActorLogFilename resolves log file for an actor by querying actor events.
 // This mirrors Ray Dashboard's _resolve_actor_filename logic.
-func (s *ServerHandler) resolveActorLogFilename(clusterNameID, sessionID, actorID, suffix string) (nodeID, filename string, err error) {
-	// Construct full cluster session key for event lookup
-	// We append the sessionID to the clusterNameID (which is "name_namespace")
-	// to match the key format used by utils.BuildClusterSessionKey.
-	fullKey := fmt.Sprintf("%s_%s", clusterNameID, sessionID)
+func (s *ServerHandler) resolveActorLogFilename(clusterSessionKey, clusterNameID, sessionID, actorID, suffix string) (nodeID, filename string, err error) {
+	snap, ok := s.sessionLoader.GetSnapshot(clusterSessionKey)
+	if !ok {
+		return "", "", fmt.Errorf("snapshot not found for %s", clusterSessionKey)
+	}
 
-	// Get actor by actor ID
-	actor, found := s.eventHandler.GetActorByID(fullKey, actorID)
+	actor, found := snap.Actors[actorID]
 	if !found {
 		return "", "", fmt.Errorf("actor not found: actor_id=%s", actorID)
 	}

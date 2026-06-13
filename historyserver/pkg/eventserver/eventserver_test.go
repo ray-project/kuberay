@@ -647,7 +647,7 @@ func TestActorLifecycleEventDeduplication(t *testing.T) {
 			}
 
 			// Get the actor and verify
-			actor, found := h.GetActorByID(testClusterName, testActorID)
+			actor, found := h.getActorsMap(testClusterName)[testActorID]
 			if !found {
 				t.Fatal("Actor not found after processing")
 			}
@@ -814,7 +814,7 @@ func TestDriverJobLifecycleEventDuplication(t *testing.T) {
 				t.Fatalf("storeEvent() unexpected error: %v", err)
 			}
 
-			job, exists := h.GetJobByJobID(testClusterName, testJobID)
+			job, exists := h.getJobsMap(testClusterName)[testJobID]
 			if !exists {
 				t.Fatal("Job not found after processing")
 			}
