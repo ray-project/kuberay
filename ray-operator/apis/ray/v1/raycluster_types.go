@@ -2,6 +2,7 @@ package v1
 
 import (
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -42,6 +43,11 @@ type RayClusterSpec struct {
 	// GcsFaultToleranceOptions for enabling GCS FT
 	// +optional
 	GcsFaultToleranceOptions *GcsFaultToleranceOptions `json:"gcsFaultToleranceOptions,omitempty"`
+	// NetworkIsolation specifies optional configuration for network isolation.
+	// When set, NetworkPolicies will be created to control traffic to/from Ray pods.
+	// The reconciler always ensures intra-cluster and KubeRay operator communication is permitted.
+	// +optional
+	NetworkIsolation *NetworkIsolationConfig `json:"networkIsolation,omitempty"`
 	// HeadGroupSpec is the spec for the head pod
 	HeadGroupSpec HeadGroupSpec `json:"headGroupSpec"`
 	// RayVersion is used to determine the command for the Kubernetes Job managed by RayJob
@@ -123,6 +129,47 @@ type RedisCredential struct {
 	ValueFrom *corev1.EnvVarSource `json:"valueFrom,omitempty"`
 	// +optional
 	Value string `json:"value,omitempty"`
+}
+
+// NetworkIsolationMode is the type for network isolation mode constants.
+// +kubebuilder:validation:Enum=DenyAll;DenyAllIngress;DenyAllEgress
+type NetworkIsolationMode string
+
+// Network isolation mode constants for NetworkIsolationConfig.Mode.
+const (
+	// NetworkIsolationDenyAll denies all ingress and egress traffic.
+	NetworkIsolationDenyAll NetworkIsolationMode = "DenyAll"
+	// NetworkIsolationDenyAllIngress denies all ingress traffic.
+	NetworkIsolationDenyAllIngress NetworkIsolationMode = "DenyAllIngress"
+	// NetworkIsolationDenyAllEgress denies all egress traffic.
+	NetworkIsolationDenyAllEgress NetworkIsolationMode = "DenyAllEgress"
+)
+
+// NetworkIsolationConfig defines network isolation settings for Ray cluster.
+// All modes maintain the cluster's ability for intra-cluster and KubeRay operator communication.
+type NetworkIsolationConfig struct {
+	// Mode controls the security level, all modes maintain the cluster's
+	// ability for intra-cluster and KubeRay operator communication.
+	// - "DenyAll": Denies all Ingress and Egress.
+	// - "DenyAllIngress": Denies all Ingress.
+	// - "DenyAllEgress": Denies all Egress.
+	// +optional
+	// +kubebuilder:default=DenyAll
+	Mode *NetworkIsolationMode `json:"mode,omitempty"`
+
+	// IngressRules specifies custom ingress rules for Ray cluster pods.
+	// By default, the generated NetworkPolicy allows intra-cluster traffic
+	// and KubeRay operator access to dashboard and client ports. For
+	// RayJob-owned clusters, the specific submitter pod is also allowed.
+	// All other ingress is denied. If other external pods (e.g. a
+	// clusterSelector-based RayJob submitter) need to reach the head,
+	// add explicit rules here.
+	// +optional
+	IngressRules []networkingv1.NetworkPolicyIngressRule `json:"ingressRules,omitempty"`
+
+	// EgressRules specifies custom egress rules for Ray cluster pods.
+	// +optional
+	EgressRules []networkingv1.NetworkPolicyEgressRule `json:"egressRules,omitempty"`
 }
 
 // HeadGroupSpec are the spec for the head pod

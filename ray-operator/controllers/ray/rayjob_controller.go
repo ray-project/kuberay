@@ -577,6 +577,13 @@ func getSubmitterTemplate(rayJobInstance *rayv1.RayJob, rayClusterInstance *rayv
 		common.AddRayTokenVolume(&submitterTemplate.Spec)
 	}
 
+	if submitterTemplate.Labels == nil {
+		submitterTemplate.Labels = make(map[string]string)
+	}
+	submitterTemplate.Labels[utils.RayOriginatedFromCRNameLabelKey] = rayJobInstance.Name
+	submitterTemplate.Labels[utils.RayOriginatedFromCRDLabelKey] = utils.RayOriginatedFromCRDLabelValue(utils.RayJobCRD)
+	submitterTemplate.Labels[utils.KubernetesCreatedByLabelKey] = utils.ComponentName
+
 	return submitterTemplate, nil
 }
 
