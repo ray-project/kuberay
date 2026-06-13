@@ -3,8 +3,11 @@
 package v1
 
 import (
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	internal "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/internal"
 	apismetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
+	managedfields "k8s.io/apimachinery/pkg/util/managedfields"
 	metav1 "k8s.io/client-go/applyconfigurations/meta/v1"
 )
 
@@ -28,6 +31,47 @@ func RayService(name, namespace string) *RayServiceApplyConfiguration {
 	b.WithKind("RayService")
 	b.WithAPIVersion("ray.io/v1")
 	return b
+}
+
+// ExtractRayServiceFrom extracts the applied configuration owned by fieldManager from
+// rayService for the specified subresource. Pass an empty string for subresource to extract
+// the main resource. Common subresources include "status", "scale", etc.
+// rayService must be a unmodified RayService API object that was retrieved from the Kubernetes API.
+// ExtractRayServiceFrom provides a way to perform a extract/modify-in-place/apply workflow.
+// Note that an extracted apply configuration will contain fewer fields than what the fieldManager previously
+// applied if another fieldManager has updated or force applied any of the previously applied fields.
+func ExtractRayServiceFrom(rayService *rayv1.RayService, fieldManager string, subresource string) (*RayServiceApplyConfiguration, error) {
+	b := &RayServiceApplyConfiguration{}
+	err := managedfields.ExtractInto(rayService, internal.Parser().Type("com.github.ray-project.kuberay.ray-operator.apis.ray.v1.RayService"), fieldManager, b, subresource)
+	if err != nil {
+		return nil, err
+	}
+	b.WithName(rayService.Name)
+	b.WithNamespace(rayService.Namespace)
+
+	b.WithKind("RayService")
+	b.WithAPIVersion("ray.io/v1")
+	return b, nil
+}
+
+// ExtractRayService extracts the applied configuration owned by fieldManager from
+// rayService. If no managedFields are found in rayService for fieldManager, a
+// RayServiceApplyConfiguration is returned with only the Name, Namespace (if applicable),
+// APIVersion and Kind populated. It is possible that no managed fields were found for because other
+// field managers have taken ownership of all the fields previously owned by fieldManager, or because
+// the fieldManager never owned fields any fields.
+// rayService must be a unmodified RayService API object that was retrieved from the Kubernetes API.
+// ExtractRayService provides a way to perform a extract/modify-in-place/apply workflow.
+// Note that an extracted apply configuration will contain fewer fields than what the fieldManager previously
+// applied if another fieldManager has updated or force applied any of the previously applied fields.
+func ExtractRayService(rayService *rayv1.RayService, fieldManager string) (*RayServiceApplyConfiguration, error) {
+	return ExtractRayServiceFrom(rayService, fieldManager, "")
+}
+
+// ExtractRayServiceStatus extracts the applied configuration owned by fieldManager from
+// rayService for the status subresource.
+func ExtractRayServiceStatus(rayService *rayv1.RayService, fieldManager string) (*RayServiceApplyConfiguration, error) {
+	return ExtractRayServiceFrom(rayService, fieldManager, "status")
 }
 
 func (b RayServiceApplyConfiguration) IsApplyConfiguration() {}

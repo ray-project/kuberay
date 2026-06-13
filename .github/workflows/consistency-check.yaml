@@ -32,11 +32,11 @@ jobs:
 
       - name: Verify Codegen
         working-directory: ./ray-operator
-        run: ./hack/verify-codegen.sh
+        run: make verify-codegen
 
       - name: Verify Generated Files
         working-directory: ./ray-operator
-        run: ./hack/verify-generated-files.sh
+        run: make verify-generated-files
 
   # Check consistency between types.go and generated API reference.
   ray-operator-verify-api-docs:
