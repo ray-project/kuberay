@@ -2041,6 +2041,99 @@ func TestRayClusterProvisionedCondition(t *testing.T) {
 	assert.Equal(t, rayv1.AllPodRunningAndReadyFirstTime, rayClusterProvisionedCondition.Reason)
 }
 
+func TestRayClusterProvisionedWithAutoscaling(t *testing.T) {
+	setupTest(t)
+	assert.True(t, features.Enabled(features.RayClusterStatusConditions))
+
+	newScheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(newScheme)
+	_ = corev1.AddToScheme(newScheme)
+
+	ReadyStatus := corev1.PodStatus{
+		Phase: corev1.PodRunning,
+		Conditions: []corev1.PodCondition{
+			{
+				Type:   corev1.PodReady,
+				Status: corev1.ConditionTrue,
+			},
+		},
+	}
+
+	PendingStatus := corev1.PodStatus{
+		Phase: corev1.PodPending,
+	}
+
+	headPod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "headNode",
+			Namespace: namespaceStr,
+			Labels: map[string]string{
+				utils.RayClusterLabelKey:  instanceName,
+				utils.RayNodeTypeLabelKey: string(rayv1.HeadNode),
+			},
+		},
+	}
+
+	workerPod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "workerNode-0",
+			Namespace: namespaceStr,
+			Labels: map[string]string{
+				utils.RayClusterLabelKey:   instanceName,
+				utils.RayNodeTypeLabelKey:  string(rayv1.WorkerNode),
+				utils.RayNodeGroupLabelKey: groupNameStr,
+			},
+		},
+	}
+
+	// Simulate a Pending worker from autoscaler scale-up
+	pendingWorkerPod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "workerNode-1",
+			Namespace: namespaceStr,
+			Labels: map[string]string{
+				utils.RayClusterLabelKey:   instanceName,
+				utils.RayNodeTypeLabelKey:  string(rayv1.WorkerNode),
+				utils.RayNodeGroupLabelKey: groupNameStr,
+			},
+		},
+		Status: PendingStatus,
+	}
+
+	runtimeObjects := append([]runtime.Object{headPod, workerPod, pendingWorkerPod}, testServices...)
+	fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
+	ctx := context.Background()
+	r := &RayClusterReconciler{
+		Client:   fakeClient,
+		Recorder: &record.FakeRecorder{},
+		Scheme:   scheme.Scheme,
+	}
+
+	// Create a RayCluster with autoscaling enabled, replicas: 0, minReplicas: 1
+	autoscalingCluster := testRayCluster.DeepCopy()
+	autoscalingCluster.Spec.WorkerGroupSpecs[0].Replicas = ptr.To[int32](0)
+	autoscalingCluster.Spec.WorkerGroupSpecs[0].MinReplicas = ptr.To[int32](1)
+	autoscalingCluster.Spec.WorkerGroupSpecs[0].MaxReplicas = ptr.To[int32](20)
+
+	// Head is ready, one worker is ready, one worker is pending (autoscaler scaling up).
+	// With the old logic, CheckAllPodsRunning would fail because of the pending pod.
+	// With the new logic, ReadyWorkerReplicas(1) >= MinWorkerReplicas(1) should pass.
+	headPod.Status = ReadyStatus
+	workerPod.Status = ReadyStatus
+	_ = fakeClient.Status().Update(ctx, headPod)
+	_ = fakeClient.Status().Update(ctx, workerPod)
+
+	autoscalingCluster, _ = r.calculateStatus(ctx, autoscalingCluster, nil)
+
+	// RayClusterProvisioned should be True because head + minReplicas workers are ready
+	rayClusterProvisionedCondition := meta.FindStatusCondition(autoscalingCluster.Status.Conditions, string(rayv1.RayClusterProvisioned))
+	assert.Equal(t, metav1.ConditionTrue, rayClusterProvisionedCondition.Status)
+	assert.Equal(t, rayv1.AllPodRunningAndReadyFirstTime, rayClusterProvisionedCondition.Reason)
+
+	// State should be Ready
+	assert.Equal(t, rayv1.Ready, autoscalingCluster.Status.State)
+}
+
 func TestStateTransitionTimes_NoStateChange(t *testing.T) {
 	setupTest(t)
 
