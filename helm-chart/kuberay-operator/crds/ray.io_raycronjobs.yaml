@@ -20,9 +20,12 @@ spec:
     - jsonPath: .spec.schedule
       name: schedule
       type: string
+    - jsonPath: .spec.timeZone
+      name: timezone
+      type: string
     - jsonPath: .status.lastScheduleTime
       name: last schedule
-      type: string
+      type: date
     - jsonPath: .metadata.creationTimestamp
       name: age
       type: date
@@ -12367,6 +12370,9 @@ spec:
                 type: string
               suspend:
                 type: boolean
+              timeZone:
+                minLength: 1
+                type: string
             required:
             - jobTemplate
             - schedule
