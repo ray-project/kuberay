@@ -371,8 +371,14 @@ func ConvertRayJobToReq(rayJob *rayv1.RayJob) (*utiltypes.RayJobRequest, error) 
 	}
 	req.NumCpus = rayJob.Spec.EntrypointNumCpus
 	req.NumGpus = rayJob.Spec.EntrypointNumGpus
+	req.Memory = rayJob.Spec.EntrypointMemory
 	if rayJob.Spec.EntrypointResources != "" {
 		if err := json.Unmarshal([]byte(rayJob.Spec.EntrypointResources), &req.Resources); err != nil {
+			return nil, err
+		}
+	}
+	if rayJob.Spec.EntrypointLabelSelector != "" {
+		if err := json.Unmarshal([]byte(rayJob.Spec.EntrypointLabelSelector), &req.LabelSelector); err != nil {
 			return nil, err
 		}
 	}
