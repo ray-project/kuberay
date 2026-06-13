@@ -63,6 +63,11 @@ func (in *AutoscalerOptions) DeepCopyInto(out *AutoscalerOptions) {
 		*out = new(int32)
 		**out = **in
 	}
+	if in.TTLSecondsAfterIdle != nil {
+		in, out := &in.TTLSecondsAfterIdle, &out.TTLSecondsAfterIdle
+		*out = new(int32)
+		**out = **in
+	}
 	if in.UpscalingMode != nil {
 		in, out := &in.UpscalingMode, &out.UpscalingMode
 		*out = new(UpscalingMode)

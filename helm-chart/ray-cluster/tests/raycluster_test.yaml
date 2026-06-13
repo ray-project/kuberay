@@ -40,6 +40,7 @@ tests:
         autoscalerOptions:
           upscalingMode: Default
           idleTimeoutSeconds: 60
+          ttlSecondsAfterIdle: 1800
           imagePullPolicy: IfNotPresent
           env:
             - name: ENV_KEY
@@ -71,6 +72,7 @@ tests:
           value:
             upscalingMode: Default
             idleTimeoutSeconds: 60
+            ttlSecondsAfterIdle: 1800
             imagePullPolicy: IfNotPresent
             env:
               - name: ENV_KEY

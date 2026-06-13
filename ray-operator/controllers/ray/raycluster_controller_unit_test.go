@@ -3438,6 +3438,101 @@ func Test_ReconcileManagedBy(t *testing.T) {
 	}
 }
 
+func Test_ReconcileDeletesRayClusterWhenIdleTTLExpired(t *testing.T) {
+	setupTest(t)
+	ctx := context.Background()
+	newScheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(newScheme)
+	_ = corev1.AddToScheme(newScheme)
+
+	cluster := testRayCluster.DeepCopy()
+	cluster.Spec.EnableInTreeAutoscaling = new(true)
+	cluster.Spec.AutoscalerOptions = &rayv1.AutoscalerOptions{
+		TTLSecondsAfterIdle: new(int32(1800)),
+	}
+	cluster.Status.Conditions = []metav1.Condition{
+		{
+			Type:    string(rayv1.IdleTTLExpired),
+			Status:  metav1.ConditionTrue,
+			Reason:  "ClusterIdlePastTTL",
+			Message: "Cluster idle for 1823s exceeds ttlSecondsAfterIdle=1800s",
+		},
+	}
+
+	fakeClient := clientFake.NewClientBuilder().
+		WithScheme(newScheme).
+		WithObjects(cluster).
+		WithStatusSubresource(cluster).
+		Build()
+	recorder := record.NewFakeRecorder(1)
+	reconciler := &RayClusterReconciler{
+		Client:                     fakeClient,
+		Recorder:                   recorder,
+		Scheme:                     newScheme,
+		rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
+	}
+
+	result, err := reconciler.rayClusterReconcile(ctx, cluster)
+	require.NoError(t, err)
+	assert.Zero(t, result.RequeueAfter)
+
+	deletedCluster := &rayv1.RayCluster{}
+	err = fakeClient.Get(ctx, types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace}, deletedCluster)
+	assert.True(t, k8serrors.IsNotFound(err))
+
+	event := <-recorder.Events
+	assert.Contains(t, event, string(rayv1.IdleTTLExpired))
+	assert.Contains(t, event, "Cluster idle for 1823s exceeds ttlSecondsAfterIdle=1800s")
+}
+
+func TestIsIdleTTLTerminationEnabled(t *testing.T) {
+	testCases := map[string]struct {
+		mutate  func(*rayv1.RayCluster)
+		enabled bool
+	}{
+		"enabled": {
+			mutate: func(cluster *rayv1.RayCluster) {
+				cluster.Spec.EnableInTreeAutoscaling = new(true)
+				cluster.Spec.AutoscalerOptions = &rayv1.AutoscalerOptions{
+					TTLSecondsAfterIdle: new(int32(1800)),
+				}
+			},
+			enabled: true,
+		},
+		"autoscaling disabled": {
+			mutate: func(cluster *rayv1.RayCluster) {
+				cluster.Spec.EnableInTreeAutoscaling = new(false)
+				cluster.Spec.AutoscalerOptions = &rayv1.AutoscalerOptions{
+					TTLSecondsAfterIdle: new(int32(1800)),
+				}
+			},
+			enabled: false,
+		},
+		"ttl unset": {
+			mutate: func(cluster *rayv1.RayCluster) {
+				cluster.Spec.EnableInTreeAutoscaling = new(true)
+				cluster.Spec.AutoscalerOptions = &rayv1.AutoscalerOptions{}
+			},
+			enabled: false,
+		},
+		"autoscaler options unset": {
+			mutate: func(cluster *rayv1.RayCluster) {
+				cluster.Spec.EnableInTreeAutoscaling = new(true)
+				cluster.Spec.AutoscalerOptions = nil
+			},
+			enabled: false,
+		},
+	}
+
+	for name, tc := range testCases {
+		t.Run(name, func(t *testing.T) {
+			cluster := testRayCluster.DeepCopy()
+			tc.mutate(cluster)
+			assert.Equal(t, tc.enabled, isIdleTTLTerminationEnabled(cluster))
+		})
+	}
+}
+
 func TestEmitRayClusterProvisionedDuration(t *testing.T) {
 	clusterName := "test-ray-cluster"
 	clusterNamespace := "default"

@@ -2311,6 +2311,47 @@ func TestValidateRayClusterSpec_IdleTimeoutSeconds(t *testing.T) {
 			}(),
 			expectedErr: "autoscalerOptions.idleTimeoutSeconds must be non-negative, got -10",
 		},
+		"Valid: AutoscalerOptions with ttlSecondsAfterIdle": {
+			spec: func() rayv1.RayClusterSpec {
+				s := createSpec()
+				s.AutoscalerOptions = &rayv1.AutoscalerOptions{
+					TTLSecondsAfterIdle: new(int32(1800)),
+				}
+				return s
+			}(),
+			expectedErr: "",
+		},
+		"Valid: AutoscalerOptions with zero ttlSecondsAfterIdle": {
+			spec: func() rayv1.RayClusterSpec {
+				s := createSpec()
+				s.AutoscalerOptions = &rayv1.AutoscalerOptions{
+					TTLSecondsAfterIdle: new(int32(0)),
+				}
+				return s
+			}(),
+			expectedErr: "",
+		},
+		"Invalid: AutoscalerOptions with negative ttlSecondsAfterIdle": {
+			spec: func() rayv1.RayClusterSpec {
+				s := createSpec()
+				s.AutoscalerOptions = &rayv1.AutoscalerOptions{
+					TTLSecondsAfterIdle: new(int32(-10)),
+				}
+				return s
+			}(),
+			expectedErr: "autoscalerOptions.ttlSecondsAfterIdle must be non-negative, got -10",
+		},
+		"Invalid: AutoscalerOptions with ttlSecondsAfterIdle and autoscaling disabled": {
+			spec: func() rayv1.RayClusterSpec {
+				s := createSpec()
+				s.EnableInTreeAutoscaling = new(false)
+				s.AutoscalerOptions = &rayv1.AutoscalerOptions{
+					TTLSecondsAfterIdle: new(int32(1800)),
+				}
+				return s
+			}(),
+			expectedErr: "autoscalerOptions.ttlSecondsAfterIdle requires enableInTreeAutoscaling to be true",
+		},
 		"Valid: AutoscalerOptions without idleTimeoutSeconds": {
 			spec: func() rayv1.RayClusterSpec {
 				s := createSpec()

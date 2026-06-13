@@ -72,6 +72,8 @@ head:
     # upscalingMode: Default
     # idleTimeoutSeconds is the number of seconds to wait before scaling down a worker pod which is not using Ray resources.
     # idleTimeoutSeconds: 60
+    # ttlSecondsAfterIdle is the number of seconds to wait before deleting an idle RayCluster.
+    # ttlSecondsAfterIdle: 1800
     # imagePullPolicy optionally overrides the autoscaler container's default image pull policy (IfNotPresent).
     # imagePullPolicy: IfNotPresent
     # Optionally specify the autoscaler container's securityContext.

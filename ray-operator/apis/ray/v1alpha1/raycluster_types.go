@@ -84,6 +84,9 @@ type AutoscalerOptions struct {
 	// IdleTimeoutSeconds is the number of seconds to wait before scaling down a worker pod which is not using Ray resources.
 	// Defaults to 60 (one minute). It is not read by the KubeRay operator but by the Ray autoscaler.
 	IdleTimeoutSeconds *int32 `json:"idleTimeoutSeconds,omitempty"`
+	// TTLSecondsAfterIdle is the number of seconds to wait before deleting an idle RayCluster.
+	// The Ray autoscaler observes cluster idleness and reports the IdleTTLExpired status condition. The KubeRay operator deletes the RayCluster when the condition is true.
+	TTLSecondsAfterIdle *int32 `json:"ttlSecondsAfterIdle,omitempty"`
 	// UpscalingMode is "Conservative", "Default", or "Aggressive."
 	// Conservative: Upscaling is rate-limited; the number of pending worker pods is at most the size of the Ray cluster.
 	// Default: Upscaling is not rate-limited.
