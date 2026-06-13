@@ -55,6 +55,13 @@ const (
 	// Enables per-container restart policy for SidecarMode submitter to handle transient failures.
 	// Requires Kubernetes v1.35+ since it supports ContainerRestartPolicy by default starting in v1.35 and Ray v2.54.0+.
 	SidecarSubmitterRestart featuregate.Feature = "SidecarSubmitterRestart"
+
+	// owner: @marosset
+	// rep: N/A
+	// alpha: v1.6
+	//
+	// Enables native Kubernetes gang scheduling via scheduling.k8s.io/v1alpha2 Workload and PodGroup APIs.
+	NativeWorkloadScheduling featuregate.Feature = "NativeWorkloadScheduling"
 )
 
 func init() {
@@ -68,6 +75,7 @@ var defaultFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
 	RayServiceIncrementalUpgrade: {Default: false, PreRelease: featuregate.Alpha},
 	RayCronJob:                   {Default: false, PreRelease: featuregate.Alpha},
 	SidecarSubmitterRestart:      {Default: false, PreRelease: featuregate.Alpha},
+	NativeWorkloadScheduling:     {Default: false, PreRelease: featuregate.Alpha},
 }
 
 // SetFeatureGateDuringTest is a helper method to override feature gates in tests.
