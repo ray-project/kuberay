@@ -11,7 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	"k8s.io/utils/clock"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -30,7 +30,7 @@ const (
 type RayCronJobReconciler struct {
 	client.Client
 	Scheme   *runtime.Scheme
-	Recorder record.EventRecorder
+	Recorder events.EventRecorder
 	clock    clock.Clock
 }
 
@@ -39,7 +39,7 @@ func NewRayCronJobReconciler(mgr ctrl.Manager) *RayCronJobReconciler {
 	return &RayCronJobReconciler{
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
-		Recorder: mgr.GetEventRecorderFor("raycronjob-controller"),
+		Recorder: mgr.GetEventRecorder("raycronjob-controller"),
 		clock:    clock.RealClock{},
 	}
 }
@@ -48,7 +48,7 @@ func NewRayCronJobReconciler(mgr ctrl.Manager) *RayCronJobReconciler {
 //+kubebuilder:rbac:groups=ray.io,resources=raycronjobs/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=ray.io,resources=raycronjobs/finalizers,verbs=update
 //+kubebuilder:rbac:groups=ray.io,resources=rayjobs,verbs=create
-//+kubebuilder:rbac:groups=core,resources=events,verbs=create;patch
+//+kubebuilder:rbac:groups=events.k8s.io,resources=events,verbs=create;watch;update;patch
 
 // [WARNING]: There MUST be a newline after kubebuilder markers.
 // Reconcile reads that state of a RayCronJob object and makes changes based on it
@@ -76,7 +76,7 @@ func (r *RayCronJobReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 
 	// validate RayCronJob
 	if err := utils.ValidateRayCronJobSpec(rayCronJobInstance); err != nil {
-		r.Recorder.Eventf(rayCronJobInstance, corev1.EventTypeWarning, string(utils.InvalidRayCronJobSpec),
+		r.Recorder.Eventf(rayCronJobInstance, nil, corev1.EventTypeWarning, string(utils.InvalidRayCronJobSpec), string(utils.ValidateAction),
 			"%s/%s: %v", rayCronJobInstance.Namespace, rayCronJobInstance.Name, err)
 		return ctrl.Result{}, nil
 	}
@@ -84,7 +84,7 @@ func (r *RayCronJobReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	// check if the Suspend is set
 	if rayCronJobInstance.Spec.Suspend {
 		logger.V(1).Info("RayCronJob suspended, no new RayJobs will be created.")
-		r.Recorder.Eventf(rayCronJobInstance, corev1.EventTypeNormal, string(utils.SuspendedRayCronJob),
+		r.Recorder.Eventf(rayCronJobInstance, nil, corev1.EventTypeNormal, string(utils.SuspendedRayCronJob), string(utils.SuspendAction),
 			"RayCronJob suspended, no new RayJobs will be created")
 		return ctrl.Result{}, nil
 	}
