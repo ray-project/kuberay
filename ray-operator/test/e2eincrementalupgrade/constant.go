@@ -115,5 +115,5 @@ const highRPSServeConfigV2 serveConfigV2 = `applications:
           max_ongoing_requests: 6
           upscale_delay_s: 0.5
         ray_actor_options:
-          num_cpus: 2
+          num_cpus: 1
 `
