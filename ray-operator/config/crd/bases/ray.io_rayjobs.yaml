@@ -12384,6 +12384,9 @@ spec:
                 type: string
               jobStatus:
                 type: string
+              jobStatusQueryStartTime:
+                format: date-time
+                type: string
               message:
                 type: string
               observedGeneration:

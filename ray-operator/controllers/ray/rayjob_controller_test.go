@@ -17,6 +17,7 @@ package ray
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"strings"
 	"time"
@@ -3834,6 +3835,82 @@ var _ = Context("RayJob with different submission modes", func() {
 					func() bool {
 						return apierrors.IsNotFound(k8sClient.Get(ctx, client.ObjectKey{Name: rayJob.Name, Namespace: namespace}, rayJob))
 					}, time.Second*5, time.Millisecond*500).Should(BeTrue())
+			})
+		})
+	})
+
+	Context("RayJob job status query timeout", func() {
+		transitionRayJobToRunning := func(ctx context.Context, rayJob *rayv1.RayJob, rayCluster *rayv1.RayCluster, namespace string) {
+			err := k8sClient.Create(ctx, rayJob)
+			Expect(err).NotTo(HaveOccurred())
+			Eventually(
+				getRayJobDeploymentStatus(ctx, rayJob),
+				time.Second*3, time.Millisecond*500).Should(Equal(rayv1.JobDeploymentStatusInitializing))
+			Eventually(
+				getResourceFunc(ctx, client.ObjectKey{Name: rayJob.Status.RayClusterName, Namespace: namespace}, rayCluster),
+				time.Second*3, time.Millisecond*500).Should(Succeed())
+			updateHeadPodToRunningAndReady(ctx, rayJob.Status.RayClusterName, namespace)
+			updateWorkerPodsToRunningAndReady(ctx, rayJob.Status.RayClusterName, namespace)
+			Eventually(
+				getClusterState(ctx, namespace, rayCluster.Name),
+				time.Second*3, time.Millisecond*500).Should(Equal(rayv1.Ready))
+			Eventually(
+				getRayJobDeploymentStatus(ctx, rayJob),
+				time.Second*3, time.Millisecond*500).Should(Equal(rayv1.JobDeploymentStatusRunning))
+		}
+
+		assertJobStatusQueryTimeoutExceeded := func(ctx context.Context, rayJob *rayv1.RayJob, namespace string) {
+			getJobInfo := func(_ context.Context, _ string) (*utiltypes.RayJobInfo, error) {
+				return nil, fmt.Errorf("connection refused")
+			}
+			fakeRayDashboardClient.GetJobInfoMock.Store(&getJobInfo)
+			defer fakeRayDashboardClient.GetJobInfoMock.Store(nil)
+
+			Expect(k8sClient.Get(ctx, client.ObjectKey{Name: rayJob.Name, Namespace: namespace}, rayJob)).Should(Succeed())
+			pastTime := metav1.NewTime(time.Now().Add(-10 * time.Minute))
+			rayJob.Status.JobStatusQueryStartTime = &pastTime
+			rayJob.Status.JobStatus = rayv1.JobStatusRunning
+			Expect(k8sClient.Status().Update(ctx, rayJob)).Should(Succeed())
+
+			Eventually(
+				getRayJobDeploymentStatus(ctx, rayJob),
+				time.Second*5, time.Millisecond*500).Should(Equal(rayv1.JobDeploymentStatusFailed))
+			Eventually(func() (rayv1.JobFailedReason, error) {
+				if err := k8sClient.Get(ctx, client.ObjectKey{Name: rayJob.Name, Namespace: namespace}, rayJob); err != nil {
+					return "", err
+				}
+				return rayJob.Status.Reason, nil
+			}, time.Second*5, time.Millisecond*500).Should(Equal(rayv1.JobStatusQueryTimeoutExceeded))
+		}
+
+		Describe("K8sJobMode", Ordered, func() {
+			ctx := context.Background()
+			namespace := "default"
+			rayJob := rayJobTemplate("rayjob-query-timeout-k8s", namespace)
+			rayCluster := &rayv1.RayCluster{}
+
+			It("Create RayJob and transition to Running", func() {
+				transitionRayJobToRunning(ctx, rayJob, rayCluster, namespace)
+			})
+
+			It("Transitions to Failed when job status queries exceed timeout", func() {
+				assertJobStatusQueryTimeoutExceeded(ctx, rayJob, namespace)
+			})
+		})
+
+		Describe("HTTPMode", Ordered, func() {
+			ctx := context.Background()
+			namespace := "default"
+			rayJob := rayJobTemplate("rayjob-query-timeout-http", namespace)
+			rayJob.Spec.SubmissionMode = rayv1.HTTPMode
+			rayCluster := &rayv1.RayCluster{}
+
+			It("Create RayJob and transition to Running", func() {
+				transitionRayJobToRunning(ctx, rayJob, rayCluster, namespace)
+			})
+
+			It("Transitions to Failed when job status queries exceed timeout", func() {
+				assertJobStatusQueryTimeoutExceeded(ctx, rayJob, namespace)
 			})
 		})
 	})

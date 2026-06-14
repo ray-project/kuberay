@@ -300,9 +300,25 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			if errors.IsBadRequest(err) {
 				if rayJobInstance.Spec.SubmissionMode == rayv1.HTTPMode {
 					logger.Info("The Ray job was not found. Submit a Ray job via an HTTP request.", "JobId", rayJobInstance.Status.JobId)
-					if _, err := rayDashboardClient.SubmitJob(ctx, rayJobInstance); err != nil {
-						logger.Error(err, "Failed to submit the Ray job", "JobId", rayJobInstance.Status.JobId)
-						return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+					if shouldTrackRayJobCheckStatus(rayJobInstance) {
+						timedOut, needsStatusPersist := checkJobStatusQueryStatus(ctx, rayJobInstance, err)
+						if timedOut || needsStatusPersist {
+							break
+						}
+					}
+					if _, submitErr := rayDashboardClient.SubmitJob(ctx, rayJobInstance); submitErr != nil {
+						logger.Error(submitErr, "Failed to submit the Ray job", "JobId", rayJobInstance.Status.JobId)
+						timedOut, needsStatusPersist := checkJobStatusQueryStatus(ctx, rayJobInstance, submitErr)
+						if timedOut || needsStatusPersist {
+							break
+						}
+						return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
+					}
+					if shouldTrackRayJobCheckStatus(rayJobInstance) {
+						timedOut, needsStatusPersist := checkJobStatusQueryStatus(ctx, rayJobInstance, err)
+						if timedOut || needsStatusPersist {
+							break
+						}
 					}
 					return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 				}
@@ -316,8 +332,14 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			}
 
 			logger.Error(err, "Failed to get job info", "JobId", rayJobInstance.Status.JobId)
-			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+			timedOut, needsStatusPersist := checkJobStatusQueryStatus(ctx, rayJobInstance, err)
+			if timedOut || needsStatusPersist {
+				break
+			}
+			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 		}
+
+		rayJobInstance.Status.JobStatusQueryStartTime = nil
 
 		// If the JobStatus is in a terminal status, such as SUCCEEDED, FAILED, or STOPPED, it is impossible for the Ray job
 		// to transition to any other. Additionally, RayJob does not currently support retries. Hence, we can mark the RayJob
@@ -385,6 +407,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		rayJobInstance.Status.Message = ""
 		rayJobInstance.Status.Reason = ""
 		rayJobInstance.Status.RayJobStatusInfo = rayv1.RayJobStatusInfo{}
+		rayJobInstance.Status.JobStatusQueryStartTime = nil
 		// Reset the JobStatus to JobStatusNew and transition the JobDeploymentStatus to `Suspended`.
 		rayJobInstance.Status.JobStatus = rayv1.JobStatusNew
 
@@ -1256,6 +1279,47 @@ func checkSubmitterFinishedTimeoutAndUpdateStatusIfNeeded(ctx context.Context, r
 	rayJob.Status.Message = fmt.Sprintf("The RayJob submitter finished at %v but the ray job did not reach terminal state within %v",
 		finishedAt.Format(time.DateTime), DefaultSubmitterFinishedTimeout)
 	return true
+}
+
+func getJobStatusQueryTimeoutSeconds() int {
+	timeoutSeconds, err := strconv.Atoi(os.Getenv(utils.RAYJOB_STATUS_QUERY_TIMEOUT_SECONDS))
+	if err != nil || timeoutSeconds <= 0 {
+		return utils.DEFAULT_RAYJOB_STATUS_QUERY_TIMEOUT_SECONDS
+	}
+	return timeoutSeconds
+}
+
+// Returns whether a GetJobInfo failure should count toward the status-check timeout (skips the first 404 before job status is known).
+func shouldTrackRayJobCheckStatus(rayJob *rayv1.RayJob) bool {
+	if rayJob.Status.JobStatusQueryStartTime != nil {
+		return true
+	}
+	return rayJob.Status.JobStatus != "" && rayJob.Status.JobStatus != rayv1.JobStatusNew
+}
+
+// Invoked when a GetJobInfo failure occurs, checks if the timeout has been exceeded and updates the status if needed.
+func checkJobStatusQueryStatus(ctx context.Context, rayJob *rayv1.RayJob, err error) (timedOut bool, needsStatusPersist bool) {
+	logger := ctrl.LoggerFrom(ctx)
+	timeout := time.Duration(getJobStatusQueryTimeoutSeconds()) * time.Second
+	now := time.Now()
+
+	if rayJob.Status.JobStatusQueryStartTime == nil {
+		rayJob.Status.JobStatusQueryStartTime = &metav1.Time{Time: now}
+		logger.Error(err, "Job status query began failing.", "JobId", rayJob.Status.JobId)
+		return false, true
+	}
+
+	startTime := rayJob.Status.JobStatusQueryStartTime.Time
+	if now.After(startTime.Add(timeout)) {
+		logger.Error(err, "Job status query timeout exceeded.", "JobId", rayJob.Status.JobId, "JobStatusQueryStartTime", startTime, "timeoutSeconds", timeout.Seconds())
+		rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusFailed
+		rayJob.Status.Reason = rayv1.JobStatusQueryTimeoutExceeded
+		rayJob.Status.Message = fmt.Sprintf("Job status queries have been failing since %v; exceeded timeout of %ds: %v",
+			startTime.Format(time.DateTime), int(timeout.Seconds()), err)
+		return true, true
+	}
+
+	return false, false
 }
 
 func checkTransitionGracePeriodAndUpdateStatusIfNeeded(ctx context.Context, rayJob *rayv1.RayJob) bool {

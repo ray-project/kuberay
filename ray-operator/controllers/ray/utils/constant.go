@@ -223,6 +223,11 @@ const (
 	RAYJOB_DEPLOYMENT_STATUS_TRANSITION_GRACE_PERIOD_SECONDS         = "RAYJOB_DEPLOYMENT_STATUS_TRANSITION_GRACE_PERIOD_SECONDS"
 	DEFAULT_RAYJOB_DEPLOYMENT_STATUS_TRANSITION_GRACE_PERIOD_SECONDS = 300
 
+	// If job status queries keep failing for longer than
+	// RAYJOB_STATUS_QUERY_TIMEOUT_SECONDS, KubeRay will transition the RayJob to Failed.
+	RAYJOB_STATUS_QUERY_TIMEOUT_SECONDS         = "RAYJOB_STATUS_QUERY_TIMEOUT_SECONDS"
+	DEFAULT_RAYJOB_STATUS_QUERY_TIMEOUT_SECONDS = 300
+
 	// This environment variable for the KubeRay operator determines whether to enable
 	// a login shell by passing the -l option to the container command /bin/bash.
 	// The -l flag was added by default before KubeRay v1.4.0, but it is no longer added
