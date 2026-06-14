@@ -1063,15 +1063,15 @@ func TestValidateRayJobSpec(t *testing.T) {
 			expectError: false,
 		},
 		{
-			name: "the ClusterSelector mode doesn't support the suspend operation",
+			name: "clusterSelector RayJob may be suspended when shutdownAfterJobFinishes is true",
 			spec: rayv1.RayJobSpec{
 				Suspend:                  true,
 				ShutdownAfterJobFinishes: true,
 				ClusterSelector: map[string]string{
-					"key": "value",
+					"ray.io/cluster": "my-cluster",
 				},
 			},
-			expectError: true,
+			expectError: false,
 		},
 		{
 			name: "failed to unmarshal RuntimeEnvYAML",
