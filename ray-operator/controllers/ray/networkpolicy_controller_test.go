@@ -169,8 +169,9 @@ var _ = Context("NetworkPolicy Controller Integration Tests", func() {
 				},
 			}))
 
-			// 2 base egress rules: intra-cluster and DNS.
-			Expect(headNetworkPolicy.Spec.Egress).To(HaveLen(2), "Should have 2 base egress rules")
+			// 1 base egress rule: intra-cluster only (DNS is no longer baked in;
+			// users add a scoped DNS rule via EgressRules on DenyAll/DenyAllEgress).
+			Expect(headNetworkPolicy.Spec.Egress).To(HaveLen(1), "Should have 1 base egress rule")
 
 			// Egress Rule 0: intra-cluster — no ports (allows all).
 			intraClusterEgress := headNetworkPolicy.Spec.Egress[0]
@@ -181,14 +182,6 @@ var _ = Context("NetworkPolicy Controller Integration Tests", func() {
 					MatchLabels: map[string]string{utils.RayClusterLabelKey: rayCluster.Name},
 				},
 			}))
-
-			// Egress Rule 1: DNS — UDP+TCP port 53, no destination restriction.
-			dnsEgress := headNetworkPolicy.Spec.Egress[1]
-			Expect(dnsEgress.To).To(BeEmpty(), "DNS rule should not restrict destinations")
-			Expect(dnsEgress.Ports).To(HaveLen(2))
-			dnsPort := intstr.FromInt(53)
-			Expect(dnsEgress.Ports[0].Port).To(Equal(&dnsPort))
-			Expect(dnsEgress.Ports[1].Port).To(Equal(&dnsPort))
 		})
 
 		It("Worker NetworkPolicy targets worker pods with intra-cluster ingress", func() {

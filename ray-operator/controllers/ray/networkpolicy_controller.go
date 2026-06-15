@@ -3,7 +3,6 @@ package ray
 import (
 	"context"
 	"fmt"
-	"net/netip"
 	"os"
 	"reflect"
 	"strconv"
@@ -11,7 +10,6 @@ import (
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
-	discoveryv1 "k8s.io/api/discovery/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -55,10 +53,6 @@ func NewNetworkPolicyController(mgr manager.Manager) (*NetworkPolicyController, 
 	}, nil
 }
 
-func getAllowAllRayJobSubmitters() bool {
-	return os.Getenv(utils.ALLOW_ALL_RAYJOB_SUBMITTERS) == "true"
-}
-
 // getOperatorNamespace returns the namespace the operator is running in.
 // It reads from the in-cluster service account namespace file.
 func getOperatorNamespace() (string, error) {
@@ -71,7 +65,6 @@ func getOperatorNamespace() (string, error) {
 
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=get;list;watch;create;update;delete
 // +kubebuilder:rbac:groups=ray.io,resources=rayclusters,verbs=get;list;watch
-// +kubebuilder:rbac:groups=discovery.k8s.io,resources=endpointslices,verbs=list
 
 // Reconcile handles RayCluster resources and creates/manages NetworkPolicies
 func (r *NetworkPolicyController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -113,7 +106,7 @@ func (r *NetworkPolicyController) Reconcile(ctx context.Context, req ctrl.Reques
 	}
 
 	// Create or update head NetworkPolicy
-	headNetworkPolicy := r.buildHeadNetworkPolicy(ctx, instance, mode)
+	headNetworkPolicy := r.buildHeadNetworkPolicy(instance, mode)
 	if err := r.createOrUpdateNetworkPolicy(ctx, instance, headNetworkPolicy); err != nil {
 		return ctrl.Result{}, err
 	}
@@ -193,7 +186,7 @@ func workerNetworkPolicyName(clusterName string) string {
 }
 
 // buildHeadNetworkPolicy creates a NetworkPolicy for Ray head pods
-func (r *NetworkPolicyController) buildHeadNetworkPolicy(ctx context.Context, instance *rayv1.RayCluster, mode rayv1.NetworkIsolationMode) *networkingv1.NetworkPolicy {
+func (r *NetworkPolicyController) buildHeadNetworkPolicy(instance *rayv1.RayCluster, mode rayv1.NetworkIsolationMode) *networkingv1.NetworkPolicy {
 	labels := map[string]string{
 		utils.RayClusterLabelKey:                instance.Name,
 		utils.KubernetesApplicationNameLabelKey: utils.ApplicationName,
@@ -216,9 +209,6 @@ func (r *NetworkPolicyController) buildHeadNetworkPolicy(ctx context.Context, in
 	if mode == rayv1.NetworkIsolationDenyAll || mode == rayv1.NetworkIsolationDenyAllEgress {
 		policyTypes = append(policyTypes, networkingv1.PolicyTypeEgress)
 		egressRules = r.buildBaseEgressRules(instance)
-		if utils.IsAutoscalingEnabled(&instance.Spec) {
-			egressRules = append(egressRules, r.buildKubeAPIServerEgressRule(ctx)...)
-		}
 		egressRules = append(egressRules, instance.Spec.NetworkIsolation.EgressRules...)
 	}
 
@@ -308,13 +298,11 @@ func (r *NetworkPolicyController) buildBaseIngressRules(instance *rayv1.RayClust
 
 // buildHeadIngressRules returns the full set of base ingress rules for the head
 // NetworkPolicy: intra-cluster communication and KubeRay operator access.
-// For RayJob-owned clusters, a per-job submitter rule is added via buildRayJobPeer.
+// For RayJob-owned clusters using K8sJobMode, a per-job submitter rule is added via buildRayJobPeer.
 // For RayClusters that are NOT owned by a RayJob (e.g. clusterSelector use cases),
-// the ALLOW_ALL_RAYJOB_SUBMITTERS env var can be set to true to add a broad rule
-// allowing all KubeRay-created RayJob submitters in the namespace. This env var
-// has no effect on RayJob-owned RayClusters.
-// Users who need other external access must add explicit IngressRules in the
-// NetworkIsolation spec.
+// users must allow their submitter pods explicitly via NetworkIsolation.IngressRules
+// (e.g. a podSelector matching the submitterPodTemplate labels). Users who need any
+// other external access must likewise add explicit IngressRules in the spec.
 func (r *NetworkPolicyController) buildHeadIngressRules(instance *rayv1.RayCluster) []networkingv1.NetworkPolicyIngressRule {
 	tcpProtocol := corev1.ProtocolTCP
 	dashboardPort := intstr.FromInt32(r.getHeadPort(instance, "dashboard-port", utils.DefaultDashboardPort))
@@ -357,30 +345,24 @@ func (r *NetworkPolicyController) buildHeadIngressRules(instance *rayv1.RayClust
 				{Protocol: &tcpProtocol, Port: &dashboardPort},
 			},
 		})
-	} else if getAllowAllRayJobSubmitters() {
-		// Not owned by a RayJob: opt-in broad rule for clusterSelector use cases.
-		rules = append(rules, networkingv1.NetworkPolicyIngressRule{
-			From: []networkingv1.NetworkPolicyPeer{
-				{
-					PodSelector: &metav1.LabelSelector{
-						MatchLabels: map[string]string{
-							utils.RayOriginatedFromCRDLabelKey: utils.RayOriginatedFromCRDLabelValue(utils.RayJobCRD),
-						},
-					},
-				},
-			},
-			Ports: []networkingv1.NetworkPolicyPort{
-				{Protocol: &tcpProtocol, Port: &dashboardPort},
-			},
-		})
 	}
 
 	return rules
 }
 
 // buildRayJobPeer returns a NetworkPolicyPeer matching the submitter pod for
-// the RayJob that owns this RayCluster, or nil if not owned by a RayJob.
+// the RayJob that owns this RayCluster, or nil if not applicable.
+//
+// Only K8sJobMode creates a standalone submitter Job pod that must reach the head
+// dashboard from outside the cluster. Other submission modes (Sidecar, Interactive,
+// HTTP) have no such pod — Sidecar runs inside the head pod (covered by the
+// intra-cluster rule) and the others submit out-of-band — so no submitter ingress
+// rule is needed. The submission mode label is stamped on the RayCluster by the
+// RayJob controller (see constructRayClusterForRayJob).
 func (r *NetworkPolicyController) buildRayJobPeer(instance *rayv1.RayCluster) *networkingv1.NetworkPolicyPeer {
+	if instance.Labels[utils.RayJobSubmissionModeLabelKey] != string(rayv1.K8sJobMode) {
+		return nil
+	}
 	for _, ownerRef := range instance.OwnerReferences {
 		if ownerRef.Kind == "RayJob" &&
 			ownerRef.Controller != nil && *ownerRef.Controller &&
@@ -409,14 +391,17 @@ func (r *NetworkPolicyController) getHeadPort(instance *rayv1.RayCluster, raySta
 	return defaultPort
 }
 
-// buildBaseEgressRules creates base egress rules (intra-cluster + DNS)
+// buildBaseEgressRules creates the base egress rule allowing intra-cluster
+// pod-to-pod communication. DNS egress is intentionally NOT baked in: the
+// operator does not assume how the cluster's DNS is deployed.
+//
+// IMPORTANT: under DenyAll/DenyAllEgress this denies DNS by default. Ray workers
+// reach the head via its service FQDN (see GenerateFQDNServiceName), so users
+// MUST add a DNS egress rule via NetworkIsolation.EgressRules or the cluster will
+// fail to start. See the network-isolation-deny-all sample.
 func (r *NetworkPolicyController) buildBaseEgressRules(instance *rayv1.RayCluster) []networkingv1.NetworkPolicyEgressRule {
-	udpProtocol := corev1.ProtocolUDP
-	tcpProtocol := corev1.ProtocolTCP
-	dnsPort := intstr.FromInt32(53)
-
-	rules := []networkingv1.NetworkPolicyEgressRule{
-		// Rule 1: Interpod egress (all ports)
+	return []networkingv1.NetworkPolicyEgressRule{
+		// Intra-cluster egress (all ports) to pods in the same RayCluster.
 		{
 			To: []networkingv1.NetworkPolicyPeer{
 				{
@@ -428,106 +413,6 @@ func (r *NetworkPolicyController) buildBaseEgressRules(instance *rayv1.RayCluste
 				},
 			},
 			// No Ports specified = allow all ports
-		},
-		// Rule 2: DNS egress (port 53) to any destination.
-		// Not namespace-restricted so clusters with non-standard DNS deployments
-		// (e.g. custom CoreDNS, cloud-provider DNS) are not broken.
-		{
-			Ports: []networkingv1.NetworkPolicyPort{
-				{
-					Protocol: &udpProtocol,
-					Port:     &dnsPort,
-				},
-				{
-					Protocol: &tcpProtocol,
-					Port:     &dnsPort,
-				},
-			},
-		},
-	}
-
-	return rules
-}
-
-// buildKubeAPIServerEgressRule returns an egress rule allowing the head pod to
-// reach the Kubernetes API server. This is needed when in-tree autoscaling is
-// enabled, as the autoscaler sidecar must patch the RayCluster CR via the API.
-//
-// Endpoint IPs are fetched from the default/kubernetes EndpointSlice rather
-// than the KUBERNETES_SERVICE_HOST env var (which holds the Service ClusterIP).
-// Most CNIs enforce NetworkPolicy after DNAT has already translated the
-// ClusterIP to a real node IP, so an ipBlock rule using the ClusterIP would
-// never match. Using endpoint IPs ensures the rule works post-DNAT.
-//
-// NOTE: This still won't work for Cilium with default settings, which ignores
-// ipBlock CIDR rules for intra-cluster IPs. Cilium users should either use
-// CiliumNetworkPolicy with toEntities: [kube-apiserver], or enable
-// policyCIDRMatchMode: nodes in Cilium's Helm values.
-func (r *NetworkPolicyController) buildKubeAPIServerEgressRule(ctx context.Context) []networkingv1.NetworkPolicyEgressRule {
-	logger := ctrl.LoggerFrom(ctx)
-
-	sliceList := &discoveryv1.EndpointSliceList{}
-	if err := r.List(ctx, sliceList,
-		client.InNamespace("default"),
-		client.MatchingLabels{discoveryv1.LabelServiceName: "kubernetes"},
-	); err != nil {
-		logger.Info("Unable to list EndpointSlices for default/kubernetes, skipping API server egress rule", "error", err)
-		return nil
-	}
-
-	tcpProtocol := corev1.ProtocolTCP
-	var peers []networkingv1.NetworkPolicyPeer
-	seenCIDRs := make(map[string]struct{})
-	seenPorts := make(map[int32]struct{})
-	var ports []networkingv1.NetworkPolicyPort
-
-	for i := range sliceList.Items {
-		slice := &sliceList.Items[i]
-		for _, ep := range slice.Endpoints {
-			for _, addr := range ep.Addresses {
-				ip, err := netip.ParseAddr(addr)
-				if err != nil {
-					logger.Info("Skipping unparseable API server endpoint IP", "ip", addr, "error", err)
-					continue
-				}
-				cidr := netip.PrefixFrom(ip, ip.BitLen()).String()
-				if _, exists := seenCIDRs[cidr]; exists {
-					continue
-				}
-				seenCIDRs[cidr] = struct{}{}
-				peers = append(peers, networkingv1.NetworkPolicyPeer{
-					IPBlock: &networkingv1.IPBlock{CIDR: cidr},
-				})
-			}
-		}
-		for _, p := range slice.Ports {
-			proto := corev1.ProtocolTCP
-			if p.Protocol != nil {
-				proto = *p.Protocol
-			}
-			if proto == corev1.ProtocolTCP && p.Port != nil {
-				if _, exists := seenPorts[*p.Port]; exists {
-					continue
-				}
-				seenPorts[*p.Port] = struct{}{}
-				port := intstr.FromInt32(*p.Port)
-				ports = append(ports, networkingv1.NetworkPolicyPort{
-					Protocol: &tcpProtocol,
-					Port:     &port,
-				})
-			}
-		}
-	}
-
-	if len(peers) == 0 || len(ports) == 0 {
-		logger.Info("No usable addresses/ports in default/kubernetes EndpointSlices, skipping API server egress rule")
-		return nil
-	}
-
-	return []networkingv1.NetworkPolicyEgressRule{
-		{
-			To:    peers,
-			Ports: ports,
 		},
 	}
 }

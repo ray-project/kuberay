@@ -11,23 +11,29 @@ import (
 // with apply.
 //
 // NetworkIsolationConfig defines network isolation settings for Ray cluster.
-// All modes maintain the cluster's ability for intra-cluster and KubeRay operator communication.
+// All modes permit intra-cluster pod-to-pod traffic and KubeRay operator access.
+// DNS egress is not included automatically; see EgressRules for why it must be
+// added under DenyAll/DenyAllEgress.
 type NetworkIsolationConfigApplyConfiguration struct {
-	// Mode controls the security level, all modes maintain the cluster's
-	// ability for intra-cluster and KubeRay operator communication.
+	// Mode controls the security level. All modes permit intra-cluster pod-to-pod
+	// traffic and KubeRay operator access (DNS egress excluded, see EgressRules).
 	// - "DenyAll": Denies all Ingress and Egress.
 	// - "DenyAllIngress": Denies all Ingress.
 	// - "DenyAllEgress": Denies all Egress.
 	Mode *rayv1.NetworkIsolationMode `json:"mode,omitempty"`
 	// IngressRules specifies custom ingress rules for Ray cluster pods.
 	// By default, the generated NetworkPolicy allows intra-cluster traffic
-	// and KubeRay operator access to dashboard and client ports. For
-	// RayJob-owned clusters, the specific submitter pod is also allowed.
-	// All other ingress is denied. If other external pods (e.g. a
-	// clusterSelector-based RayJob submitter) need to reach the head,
-	// add explicit rules here.
+	// and KubeRay operator access to the dashboard port. For RayJob-owned
+	// clusters using K8sJobMode, the submitter pod is also allowed. All other
+	// ingress is denied. If other external pods (e.g. a clusterSelector-based
+	// RayJob submitter) need to reach the head, add explicit rules here.
 	IngressRules []networkingv1.NetworkPolicyIngressRule `json:"ingressRules,omitempty"`
 	// EgressRules specifies custom egress rules for Ray cluster pods.
+	// By default, the generated NetworkPolicy only allows intra-cluster egress.
+	// DNS egress is NOT added automatically: under DenyAll/DenyAllEgress you MUST
+	// add a DNS rule here (e.g. to kube-system pods labelled k8s-app=kube-dns on
+	// port 53), because Ray workers reach the head via its service FQDN and cannot
+	// resolve it without DNS. See the network-isolation-deny-all sample.
 	EgressRules []networkingv1.NetworkPolicyEgressRule `json:"egressRules,omitempty"`
 }
 

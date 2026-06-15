@@ -16,7 +16,6 @@ limitations under the License.
 package ray
 
 import (
-	"context"
 	"strings"
 	"testing"
 
@@ -24,7 +23,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
-	discoveryv1 "k8s.io/api/discovery/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -53,7 +51,6 @@ func setupNetworkPolicyTest(t *testing.T) {
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
 	testScheme := runtime.NewScheme()
-	_ = discoveryv1.AddToScheme(testScheme)
 	testNetworkPolicyController = &NetworkPolicyController{
 		Scheme:            testScheme,
 		OperatorNamespace: "kuberay-system",
@@ -131,11 +128,14 @@ func setupNetworkPolicyTest(t *testing.T) {
 		},
 	}
 
-	// Cluster owned by a RayJob.
+	// Cluster owned by a RayJob (K8sJobMode — has a standalone submitter pod).
 	testRayClusterWithRayJob = &rayv1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-cluster-rayjob",
 			Namespace: "default",
+			Labels: map[string]string{
+				utils.RayJobSubmissionModeLabelKey: string(rayv1.K8sJobMode),
+			},
 			OwnerReferences: []metav1.OwnerReference{
 				{
 					APIVersion: "ray.io/v1",
@@ -168,7 +168,7 @@ func setupNetworkPolicyTest(t *testing.T) {
 func TestBuildHeadNetworkPolicy_DenyAll(t *testing.T) {
 	setupNetworkPolicyTest(t)
 
-	policy := testNetworkPolicyController.buildHeadNetworkPolicy(context.Background(), testRayClusterBasic, rayv1.NetworkIsolationDenyAll)
+	policy := testNetworkPolicyController.buildHeadNetworkPolicy(testRayClusterBasic, rayv1.NetworkIsolationDenyAll)
 
 	assert.Equal(t, "test-cluster-head", policy.Name)
 	assert.Equal(t, "default", policy.Namespace)
@@ -194,15 +194,15 @@ func TestBuildHeadNetworkPolicy_DenyAll(t *testing.T) {
 	// 2 base ingress rules: intra-cluster and operator access.
 	assert.Len(t, policy.Spec.Ingress, 2)
 
-	// 2 base egress rules: intra-cluster and DNS.
-	assert.Len(t, policy.Spec.Egress, 2)
+	// 1 base egress rule: intra-cluster only (DNS no longer baked in).
+	assert.Len(t, policy.Spec.Egress, 1)
 }
 
 // TestBuildHeadNetworkPolicy_DenyAllIngress verifies that DenyAllIngress omits the Egress policy type.
 func TestBuildHeadNetworkPolicy_DenyAllIngress(t *testing.T) {
 	setupNetworkPolicyTest(t)
 
-	policy := testNetworkPolicyController.buildHeadNetworkPolicy(context.Background(), testRayClusterDenyAllIngress, rayv1.NetworkIsolationDenyAllIngress)
+	policy := testNetworkPolicyController.buildHeadNetworkPolicy(testRayClusterDenyAllIngress, rayv1.NetworkIsolationDenyAllIngress)
 
 	assert.Contains(t, policy.Spec.PolicyTypes, networkingv1.PolicyTypeIngress)
 	assert.NotContains(t, policy.Spec.PolicyTypes, networkingv1.PolicyTypeEgress)
@@ -214,12 +214,12 @@ func TestBuildHeadNetworkPolicy_DenyAllIngress(t *testing.T) {
 func TestBuildHeadNetworkPolicy_DenyAllEgress(t *testing.T) {
 	setupNetworkPolicyTest(t)
 
-	policy := testNetworkPolicyController.buildHeadNetworkPolicy(context.Background(), testRayClusterDenyAllEgress, rayv1.NetworkIsolationDenyAllEgress)
+	policy := testNetworkPolicyController.buildHeadNetworkPolicy(testRayClusterDenyAllEgress, rayv1.NetworkIsolationDenyAllEgress)
 
 	assert.NotContains(t, policy.Spec.PolicyTypes, networkingv1.PolicyTypeIngress)
 	assert.Contains(t, policy.Spec.PolicyTypes, networkingv1.PolicyTypeEgress)
 	assert.Empty(t, policy.Spec.Ingress)
-	assert.Len(t, policy.Spec.Egress, 2)
+	assert.Len(t, policy.Spec.Egress, 1)
 }
 
 // TestBuildWorkerNetworkPolicy_DenyAll verifies the worker NetworkPolicy in DenyAll mode.
@@ -255,8 +255,8 @@ func TestBuildWorkerNetworkPolicy_DenyAll(t *testing.T) {
 		policy.Spec.Ingress[0].From[0].PodSelector.MatchLabels)
 	assert.Empty(t, policy.Spec.Ingress[0].Ports)
 
-	// 2 base egress rules: intra-cluster and DNS.
-	assert.Len(t, policy.Spec.Egress, 2)
+	// 1 base egress rule: intra-cluster only (DNS no longer baked in).
+	assert.Len(t, policy.Spec.Egress, 1)
 }
 
 // TestBuildWorkerNetworkPolicy_DenyAllIngress verifies no egress is added for DenyAllIngress mode.
@@ -348,11 +348,17 @@ func TestBuildRayJobPeer(t *testing.T) {
 	assert.Nil(t, peer, "Standalone cluster should not have a RayJob peer")
 
 	peer = testNetworkPolicyController.buildRayJobPeer(testRayClusterWithRayJob)
-	require.NotNil(t, peer, "RayJob-owned cluster should have a RayJob peer")
+	require.NotNil(t, peer, "K8sJobMode RayJob-owned cluster should have a RayJob peer")
 	assert.Equal(t, map[string]string{
 		utils.RayOriginatedFromCRNameLabelKey: "test-job",
 		utils.RayOriginatedFromCRDLabelKey:    utils.RayOriginatedFromCRDLabelValue(utils.RayJobCRD),
 	}, peer.PodSelector.MatchLabels)
+
+	// Non-K8sJobMode RayJob-owned cluster: no standalone submitter pod, so no peer.
+	sidecarCluster := testRayClusterWithRayJob.DeepCopy()
+	sidecarCluster.Labels[utils.RayJobSubmissionModeLabelKey] = string(rayv1.SidecarMode)
+	peer = testNetworkPolicyController.buildRayJobPeer(sidecarCluster)
+	assert.Nil(t, peer, "Non-K8sJobMode RayJob-owned cluster should not have a RayJob peer")
 }
 
 // TestBuildHeadIngressRules_WithRayJobOwner verifies that a RayJob-owned cluster gets
@@ -374,31 +380,12 @@ func TestBuildHeadIngressRules_WithRayJobOwner(t *testing.T) {
 	assert.Equal(t, &dashboardPort, submitterRule.Ports[0].Port)
 }
 
-// TestBuildHeadIngressRules_AllowAllRayJobSubmitters verifies the broad submitter rule
-// when ALLOW_ALL_RAYJOB_SUBMITTERS is enabled.
-func TestBuildHeadIngressRules_AllowAllRayJobSubmitters(t *testing.T) {
-	setupNetworkPolicyTest(t)
-	t.Setenv(utils.ALLOW_ALL_RAYJOB_SUBMITTERS, "true")
-
-	rules := testNetworkPolicyController.buildHeadIngressRules(testRayClusterBasic)
-	require.Len(t, rules, 3)
-
-	submitterRule := rules[2]
-	require.Len(t, submitterRule.From, 1)
-	assert.Equal(t, map[string]string{
-		utils.RayOriginatedFromCRDLabelKey: utils.RayOriginatedFromCRDLabelValue(utils.RayJobCRD),
-	}, submitterRule.From[0].PodSelector.MatchLabels)
-	require.Len(t, submitterRule.Ports, 1)
-	dashboardPort := intstr.FromInt32(utils.DefaultDashboardPort)
-	assert.Equal(t, &dashboardPort, submitterRule.Ports[0].Port)
-}
-
-// TestBuildBaseEgressRules verifies the 2 base egress rules (intra-cluster + DNS).
+// TestBuildBaseEgressRules verifies the single base egress rule (intra-cluster only).
 func TestBuildBaseEgressRules(t *testing.T) {
 	setupNetworkPolicyTest(t)
 
 	rules := testNetworkPolicyController.buildBaseEgressRules(testRayClusterBasic)
-	require.Len(t, rules, 2)
+	require.Len(t, rules, 1)
 
 	// Rule 0: intra-cluster egress — no ports, pod selector matching the cluster label.
 	intraClusterRule := rules[0]
@@ -406,17 +393,6 @@ func TestBuildBaseEgressRules(t *testing.T) {
 	assert.Equal(t, map[string]string{utils.RayClusterLabelKey: "test-cluster"},
 		intraClusterRule.To[0].PodSelector.MatchLabels)
 	assert.Empty(t, intraClusterRule.Ports, "Intra-cluster egress must allow all ports (no Ports field)")
-
-	// Rule 1: DNS egress — UDP+TCP port 53, no namespace restriction.
-	dnsRule := rules[1]
-	assert.Empty(t, dnsRule.To, "DNS rule must not restrict destination namespaces")
-
-	require.Len(t, dnsRule.Ports, 2)
-	dnsPort := intstr.FromInt(53)
-	assert.Equal(t, &dnsPort, dnsRule.Ports[0].Port)
-	assert.Equal(t, &dnsPort, dnsRule.Ports[1].Port)
-	protocols := []corev1.Protocol{*dnsRule.Ports[0].Protocol, *dnsRule.Ports[1].Protocol}
-	assert.ElementsMatch(t, []corev1.Protocol{corev1.ProtocolUDP, corev1.ProtocolTCP}, protocols)
 }
 
 // TestBuildHeadNetworkPolicy_WithRayJob verifies that a RayJob-owned cluster gets
@@ -424,7 +400,7 @@ func TestBuildBaseEgressRules(t *testing.T) {
 func TestBuildHeadNetworkPolicy_WithRayJob(t *testing.T) {
 	setupNetworkPolicyTest(t)
 
-	policy := testNetworkPolicyController.buildHeadNetworkPolicy(context.Background(), testRayClusterWithRayJob, rayv1.NetworkIsolationDenyAll)
+	policy := testNetworkPolicyController.buildHeadNetworkPolicy(testRayClusterWithRayJob, rayv1.NetworkIsolationDenyAll)
 
 	require.Len(t, policy.Spec.Ingress, 3)
 }
@@ -444,7 +420,7 @@ func TestBuildHeadNetworkPolicy_CustomIngressRules(t *testing.T) {
 		},
 	}
 
-	policy := testNetworkPolicyController.buildHeadNetworkPolicy(context.Background(), cluster, rayv1.NetworkIsolationDenyAll)
+	policy := testNetworkPolicyController.buildHeadNetworkPolicy(cluster, rayv1.NetworkIsolationDenyAll)
 
 	// 2 base + 1 custom = 3.
 	require.Len(t, policy.Spec.Ingress, 3)
@@ -467,12 +443,12 @@ func TestBuildHeadNetworkPolicy_CustomEgressRules(t *testing.T) {
 		},
 	}
 
-	policy := testNetworkPolicyController.buildHeadNetworkPolicy(context.Background(), cluster, rayv1.NetworkIsolationDenyAll)
+	policy := testNetworkPolicyController.buildHeadNetworkPolicy(cluster, rayv1.NetworkIsolationDenyAll)
 
-	// 2 base egress + 1 custom = 3.
-	require.Len(t, policy.Spec.Egress, 3)
-	require.Len(t, policy.Spec.Egress[2].Ports, 1)
-	assert.Equal(t, &customPort, policy.Spec.Egress[2].Ports[0].Port)
+	// 1 base egress + 1 custom = 2.
+	require.Len(t, policy.Spec.Egress, 2)
+	require.Len(t, policy.Spec.Egress[1].Ports, 1)
+	assert.Equal(t, &customPort, policy.Spec.Egress[1].Ports[0].Port)
 }
 
 // TestGetHeadPort_DefaultFallback verifies the default port is returned when rayStartParams has no override.
@@ -499,65 +475,6 @@ func TestGetHeadPort_CustomPort(t *testing.T) {
 	assert.Equal(t, int32(9265), port)
 }
 
-// TestBuildHeadNetworkPolicy_AutoscalingAddsAPIServerEgress verifies that the head policy
-// includes a Kubernetes API server egress rule when autoscaling is enabled and egress is restricted.
-func TestBuildHeadNetworkPolicy_AutoscalingAddsAPIServerEgress(t *testing.T) {
-	setupNetworkPolicyTest(t)
-
-	testNetworkPolicyController.Client = clientFake.NewClientBuilder().
-		WithScheme(testNetworkPolicyController.Scheme).
-		WithRuntimeObjects(&discoveryv1.EndpointSlice{
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace: "default", Name: "kubernetes",
-				Labels: map[string]string{discoveryv1.LabelServiceName: "kubernetes"},
-			},
-			Endpoints: []discoveryv1.Endpoint{{Addresses: []string{"192.168.1.10"}}},
-			Ports:     []discoveryv1.EndpointPort{{Port: ptr.To[int32](6443), Protocol: ptr.To(corev1.ProtocolTCP)}},
-		}).Build()
-
-	cluster := testRayClusterBasic.DeepCopy()
-	cluster.Spec.EnableInTreeAutoscaling = ptr.To(true)
-
-	policy := testNetworkPolicyController.buildHeadNetworkPolicy(context.Background(), cluster, rayv1.NetworkIsolationDenyAll)
-
-	// 3 egress rules: intra-cluster, DNS, and API server.
-	require.Len(t, policy.Spec.Egress, 3)
-
-	apiRule := policy.Spec.Egress[2]
-	require.Len(t, apiRule.To, 1)
-	require.NotNil(t, apiRule.To[0].IPBlock)
-	assert.Equal(t, "192.168.1.10/32", apiRule.To[0].IPBlock.CIDR)
-
-	require.Len(t, apiRule.Ports, 1)
-	tcpProtocol := corev1.ProtocolTCP
-	expectedPort := intstr.FromInt32(6443)
-	assert.Equal(t, &tcpProtocol, apiRule.Ports[0].Protocol)
-	assert.Equal(t, &expectedPort, apiRule.Ports[0].Port)
-}
-
-// TestBuildKubeAPIServerEgressRule_IPv6 verifies correct CIDR for IPv6 API server addresses.
-func TestBuildKubeAPIServerEgressRule_IPv6(t *testing.T) {
-	setupNetworkPolicyTest(t)
-
-	testNetworkPolicyController.Client = clientFake.NewClientBuilder().
-		WithScheme(testNetworkPolicyController.Scheme).
-		WithRuntimeObjects(&discoveryv1.EndpointSlice{
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace: "default", Name: "kubernetes",
-				Labels: map[string]string{discoveryv1.LabelServiceName: "kubernetes"},
-			},
-			Endpoints: []discoveryv1.Endpoint{{Addresses: []string{"fd00::1"}}},
-			Ports:     []discoveryv1.EndpointPort{{Port: ptr.To[int32](6443), Protocol: ptr.To(corev1.ProtocolTCP)}},
-		}).Build()
-
-	rules := testNetworkPolicyController.buildKubeAPIServerEgressRule(context.Background())
-	require.Len(t, rules, 1)
-	assert.Equal(t, "fd00::1/128", rules[0].To[0].IPBlock.CIDR)
-
-	expectedPort := intstr.FromInt32(6443)
-	assert.Equal(t, &expectedPort, rules[0].Ports[0].Port)
-}
-
 // TestBuildNetworkPolicy_LongClusterName verifies NetworkPolicy names are constructed correctly for long names.
 func TestBuildNetworkPolicy_LongClusterName(t *testing.T) {
 	setupNetworkPolicyTest(t)
@@ -565,7 +482,7 @@ func TestBuildNetworkPolicy_LongClusterName(t *testing.T) {
 	cluster := testRayClusterBasic.DeepCopy()
 	cluster.Name = strings.Repeat("a", utils.MaxRayClusterNameLength)
 
-	headPolicy := testNetworkPolicyController.buildHeadNetworkPolicy(context.Background(), cluster, rayv1.NetworkIsolationDenyAll)
+	headPolicy := testNetworkPolicyController.buildHeadNetworkPolicy(cluster, rayv1.NetworkIsolationDenyAll)
 	workerPolicy := testNetworkPolicyController.buildWorkerNetworkPolicy(cluster, rayv1.NetworkIsolationDenyAll)
 
 	assert.Equal(t, cluster.Name+"-head", headPolicy.Name)

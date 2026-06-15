@@ -28,10 +28,6 @@ AuthMode describes the authentication mode for the Ray cluster.
 _Appears in:_
 - [AuthOptions](#authoptions)
 
-| Field | Description |
-| --- | --- |
-| `disabled` | AuthModeDisabled disables authentication.<br /> |
-| `token` | AuthModeToken enables token-based authentication.<br /> |
 
 
 #### AuthOptions
@@ -47,7 +43,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `enableK8sTokenAuth` _boolean_ | EnableK8sTokenAuth enables Kubernetes-delegated token authentication.<br />When true, the RAY_ENABLE_K8S_TOKEN_AUTH environment variable is set to "true"<br />across all Ray Pods, and Ray will delegate authentication to the K8s API server.<br />NOTE: The Kubernetes ServiceAccount token mounted to Raylets must be granted<br />the `ray:write` custom verb via RBAC for this to function correctly.<br />WARNING: This feature is intended for standalone RayCluster objects and is<br />currently unsupported for RayJob or RayService resources. |  |  |
+| `enableK8sTokenAuth` _boolean_ | EnableK8sTokenAuth enables Kubernetes-delegated token authentication.<br />When true, the RAY_ENABLE_K8S_TOKEN_AUTH environment variable is set to "true"<br />across all Ray Pods, and Ray will delegate authentication to the K8s API server.<br /><br />NOTE: The Kubernetes ServiceAccount token mounted to Raylets must be granted<br />the `ray:write` custom verb via RBAC for this to function correctly.<br /><br />WARNING: This feature is intended for standalone RayCluster objects and is<br />currently unsupported for RayJob or RayService resources. |  |  |
 | `secretName` _string_ | SecretName is the name of the Secret that contains the authentication token.<br />If set, KubeRay will skip generating a Secret object per RayCluster containing a token.<br />The Secret must have a data key `auth_token` that contains the value of the token. |  |  |
 | `mode` _[AuthMode](#authmode)_ | Mode specifies the authentication mode.<br />Supported values are "disabled" and "token".<br />Defaults to "token". |  | Enum: [disabled token] <br /> |
 
@@ -91,10 +87,6 @@ _Validation:_
 _Appears in:_
 - [AutoscalerOptions](#autoscaleroptions)
 
-| Field | Description |
-| --- | --- |
-| `v1` |  |
-| `v2` |  |
 
 
 #### ClusterUpgradeOptions
@@ -164,12 +156,6 @@ _Appears in:_
 - [DeletionPolicy](#deletionpolicy)
 - [DeletionRule](#deletionrule)
 
-| Field | Description |
-| --- | --- |
-| `DeleteCluster` |  |
-| `DeleteWorkers` |  |
-| `DeleteSelf` |  |
-| `DeleteNone` |  |
 
 
 #### DeletionRule
@@ -197,14 +183,17 @@ _Appears in:_
 DeletionStrategy configures automated cleanup after the RayJob reaches a terminal state.
 Two mutually exclusive styles are supported:
 
+
 	Legacy: provide both onSuccess and onFailure (deprecated; removal planned for 1.6.0). May be combined with shutdownAfterJobFinishes and (optionally) global TTLSecondsAfterFinished.
 	Rules: provide deletionRules (non-empty list). Rules mode is incompatible with shutdownAfterJobFinishes, legacy fields, and the global TTLSecondsAfterFinished (use per‑rule condition.ttlSeconds instead).
+
 
 Semantics:
   - A non-empty deletionRules selects rules mode; empty lists are treated as unset.
   - Legacy requires both onSuccess and onFailure; specifying only one is invalid.
   - Global TTLSecondsAfterFinished > 0 requires shutdownAfterJobFinishes=true; therefore it cannot be used with rules mode or with legacy alone (no shutdown).
   - Feature gate RayJobDeletionPolicy must be enabled when this block is present.
+
 
 Validation:
   - CRD XValidations prevent mixing legacy fields with deletionRules and enforce legacy completeness.
@@ -279,12 +268,6 @@ _Underlying type:_ _string_
 _Appears in:_
 - [RayJobSpec](#rayjobspec)
 
-| Field | Description |
-| --- | --- |
-| `K8sJobMode` |  |
-| `HTTPMode` |  |
-| `InteractiveMode` |  |
-| `SidecarMode` |  |
 
 
 #### NetworkIsolationConfig
@@ -292,7 +275,9 @@ _Appears in:_
 
 
 NetworkIsolationConfig defines network isolation settings for Ray cluster.
-All modes maintain the cluster's ability for intra-cluster and KubeRay operator communication.
+All modes permit intra-cluster pod-to-pod traffic and KubeRay operator access.
+DNS egress is not included automatically; see EgressRules for why it must be
+added under DenyAll/DenyAllEgress.
 
 
 
@@ -301,9 +286,9 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `mode` _[NetworkIsolationMode](#networkisolationmode)_ | Mode controls the security level, all modes maintain the cluster's<br />ability for intra-cluster and KubeRay operator communication.<br />- "DenyAll": Denies all Ingress and Egress.<br />- "DenyAllIngress": Denies all Ingress.<br />- "DenyAllEgress": Denies all Egress. | DenyAll | Enum: [DenyAll DenyAllIngress DenyAllEgress] <br /> |
-| `ingressRules` _[NetworkPolicyIngressRule](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#networkpolicyingressrule-v1-networking) array_ | IngressRules specifies custom ingress rules for Ray cluster pods.<br />By default, the generated NetworkPolicy allows intra-cluster traffic<br />and KubeRay operator access to dashboard and client ports. For<br />RayJob-owned clusters, the specific submitter pod is also allowed.<br />All other ingress is denied. If other external pods (e.g. a<br />clusterSelector-based RayJob submitter) need to reach the head,<br />add explicit rules here. |  |  |
-| `egressRules` _[NetworkPolicyEgressRule](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#networkpolicyegressrule-v1-networking) array_ | EgressRules specifies custom egress rules for Ray cluster pods. |  |  |
+| `mode` _[NetworkIsolationMode](#networkisolationmode)_ | Mode controls the security level. All modes permit intra-cluster pod-to-pod<br />traffic and KubeRay operator access (DNS egress excluded, see EgressRules).<br />- "DenyAll": Denies all Ingress and Egress.<br />- "DenyAllIngress": Denies all Ingress.<br />- "DenyAllEgress": Denies all Egress. | DenyAll | Enum: [DenyAll DenyAllIngress DenyAllEgress] <br /> |
+| `ingressRules` _[NetworkPolicyIngressRule](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#networkpolicyingressrule-v1-networking) array_ | IngressRules specifies custom ingress rules for Ray cluster pods.<br />By default, the generated NetworkPolicy allows intra-cluster traffic<br />and KubeRay operator access to the dashboard port. For RayJob-owned<br />clusters using K8sJobMode, the submitter pod is also allowed. All other<br />ingress is denied. If other external pods (e.g. a clusterSelector-based<br />RayJob submitter) need to reach the head, add explicit rules here. |  |  |
+| `egressRules` _[NetworkPolicyEgressRule](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#networkpolicyegressrule-v1-networking) array_ | EgressRules specifies custom egress rules for Ray cluster pods.<br />By default, the generated NetworkPolicy only allows intra-cluster egress.<br />DNS egress is NOT added automatically: under DenyAll/DenyAllEgress you MUST<br />add a DNS rule here (e.g. to kube-system pods labelled k8s-app=kube-dns on<br />port 53), because Ray workers reach the head via its service FQDN and cannot<br />resolve it without DNS. See the network-isolation-deny-all sample. |  |  |
 
 
 #### NetworkIsolationMode
@@ -318,11 +303,6 @@ _Validation:_
 _Appears in:_
 - [NetworkIsolationConfig](#networkisolationconfig)
 
-| Field | Description |
-| --- | --- |
-| `DenyAll` | NetworkIsolationDenyAll denies all ingress and egress traffic.<br /> |
-| `DenyAllIngress` | NetworkIsolationDenyAllIngress denies all ingress traffic.<br /> |
-| `DenyAllEgress` | NetworkIsolationDenyAllEgress denies all egress traffic.<br /> |
 
 
 #### RayCluster
@@ -368,7 +348,7 @@ _Appears in:_
 | `headServiceAnnotations` _object (keys:string, values:string)_ |  |  |  |
 | `enableInTreeAutoscaling` _boolean_ | EnableInTreeAutoscaling indicates whether operator should create in tree autoscaling configs |  |  |
 | `gcsFaultToleranceOptions` _[GcsFaultToleranceOptions](#gcsfaulttoleranceoptions)_ | GcsFaultToleranceOptions for enabling GCS FT |  |  |
-| `networkIsolation` _[NetworkIsolationConfig](#networkisolationconfig)_ | NetworkIsolation specifies optional configuration for network isolation.<br />When set, NetworkPolicies will be created to control traffic to/from Ray pods.<br />The reconciler always ensures intra-cluster and KubeRay operator communication is permitted. |  |  |
+| `networkIsolation` _[NetworkIsolationConfig](#networkisolationconfig)_ | NetworkIsolation specifies optional configuration for network isolation.<br />When set, NetworkPolicies will be created to control traffic to/from Ray pods.<br />The reconciler always permits intra-cluster pod-to-pod traffic and KubeRay<br />operator access. Note: under DenyAll/DenyAllEgress, DNS egress is not added<br />automatically; since Ray pods reach the head via its service FQDN, you must<br />allow DNS egress via EgressRules or the cluster will fail to start. |  |  |
 | `headGroupSpec` _[HeadGroupSpec](#headgroupspec)_ | HeadGroupSpec is the spec for the head pod |  |  |
 | `rayVersion` _string_ | RayVersion is used to determine the command for the Kubernetes Job managed by RayJob |  |  |
 | `workerGroupSpecs` _[WorkerGroupSpec](#workergroupspec) array_ | WorkerGroupSpecs are the specs for the worker pods |  |  |
@@ -402,10 +382,6 @@ _Validation:_
 _Appears in:_
 - [RayClusterUpgradeStrategy](#rayclusterupgradestrategy)
 
-| Field | Description |
-| --- | --- |
-| `Recreate` | During upgrade, Recreate strategy will delete all existing pods before creating new ones<br /> |
-| `None` | No new pod will be created while the strategy is set to None<br /> |
 
 
 #### RayCronJob
@@ -579,11 +555,6 @@ _Underlying type:_ _string_
 _Appears in:_
 - [RayServiceUpgradeStrategy](#rayserviceupgradestrategy)
 
-| Field | Description |
-| --- | --- |
-| `NewClusterWithIncrementalUpgrade` | During upgrade, NewClusterWithIncrementalUpgrade strategy will create an upgraded cluster to gradually scale<br />and migrate traffic to using Gateway API.<br /> |
-| `NewCluster` | During upgrade, NewCluster strategy will create new upgraded cluster and switch to it when it becomes ready<br /> |
-| `None` | No new cluster will be created while the strategy is set to None<br /> |
 
 
 #### RedisCredential
