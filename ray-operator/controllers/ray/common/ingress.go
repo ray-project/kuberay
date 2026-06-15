@@ -96,6 +96,7 @@ func BuildIngressForHeadService(ctx context.Context, cluster rayv1.RayCluster) (
 		},
 		Spec: networkingv1.IngressSpec{
 			Rules: []networkingv1.IngressRule{rule},
+			TLS:   []networkingv1.IngressTLS{},
 		},
 	}
 
