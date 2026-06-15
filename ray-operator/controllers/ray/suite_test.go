@@ -39,7 +39,6 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/dashboardclient"
 	"github.com/ray-project/kuberay/ray-operator/internal/managercache"
-	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 )
 
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to
@@ -53,8 +52,6 @@ var (
 
 	fakeRayDashboardClient *utils.FakeRayDashboardClient
 	fakeRayHttpProxyClient *utils.FakeRayHttpProxyClient
-
-	networkPolicyControllerEnabled bool
 )
 
 type TestClientProvider struct{}
@@ -139,16 +136,6 @@ var _ = BeforeSuite(func(ctx SpecContext) {
 	rayJobOptions := RayJobReconcilerOptions{}
 	err = NewRayJobReconciler(ctx, mgr, rayJobOptions, testClientProvider).SetupWithManager(mgr, 1)
 	Expect(err).NotTo(HaveOccurred(), "failed to setup RayJob controller")
-
-	features.SetFeatureGateDuringTest(GinkgoTB(), features.RayClusterNetworkIsolation, true)
-	networkPolicyController, err := NewNetworkPolicyController(mgr)
-	if err != nil {
-		ctrl.Log.Info("NetworkPolicy controller not available in test environment (no in-cluster namespace), skipping", "error", err)
-	} else {
-		err = networkPolicyController.SetupWithManager(mgr, 1)
-		Expect(err).NotTo(HaveOccurred(), "failed to setup NetworkPolicy controller")
-		networkPolicyControllerEnabled = true
-	}
 
 	go func() {
 		err = mgr.Start(ctrl.SetupSignalHandler())
