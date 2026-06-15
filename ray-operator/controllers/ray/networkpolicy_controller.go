@@ -304,11 +304,6 @@ func (r *NetworkPolicyController) buildBaseIngressRules(instance *rayv1.RayClust
 // other external access must likewise add explicit IngressRules in the spec.
 func (r *NetworkPolicyController) buildHeadIngressRules(instance *rayv1.RayCluster) []networkingv1.NetworkPolicyIngressRule {
 	tcpProtocol := corev1.ProtocolTCP
-	// Match the dashboard port the operator/submitter actually reach: their traffic
-	// goes through the head Service, whose targetPort is the head container port
-	// (see common.getPortsFromCluster); Ingress and OpenShift Route resolve it the
-	// same way. So the NetworkPolicy must allow the container port, not the
-	// rayStartParams value. Users are responsible for keeping the two in sync.
 	headContainer := &instance.Spec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex]
 	dashboardPort := intstr.FromInt32(utils.FindContainerPort(headContainer, utils.DashboardPortName, utils.DefaultDashboardPort))
 
