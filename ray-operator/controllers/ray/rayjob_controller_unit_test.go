@@ -999,40 +999,36 @@ func TestGetJobStatusQueryTimeoutSeconds(t *testing.T) {
 	assert.Equal(t, utils.DEFAULT_RAYJOB_STATUS_QUERY_TIMEOUT_SECONDS, getJobStatusQueryTimeoutSeconds())
 }
 
-func TestShouldTrackRayJobCheckStatus(t *testing.T) {
-	rayJob := &rayv1.RayJob{}
-	assert.False(t, shouldTrackRayJobCheckStatus(rayJob))
-
-	rayJob.Status.JobStatus = rayv1.JobStatusRunning
-	assert.True(t, shouldTrackRayJobCheckStatus(rayJob))
-
-	rayJob.Status.JobStatus = rayv1.JobStatusNew
-	rayJob.Status.JobStatusQueryStartFailingTime = &metav1.Time{Time: time.Now()}
-	assert.True(t, shouldTrackRayJobCheckStatus(rayJob))
-}
-
-func TestCheckJobStatusQueryStatus(t *testing.T) {
+func TestRecordJobStatusQueryFailure(t *testing.T) {
 	ctx := context.Background()
 	rayJob := &rayv1.RayJob{
 		Status: rayv1.RayJobStatus{JobId: "test-job"},
 	}
 	testErr := errors.New("connection refused")
 
-	timedOut, needsPersist := checkJobStatusQueryStatus(ctx, rayJob, testErr)
-	assert.False(t, timedOut)
+	needsPersist := recordJobStatusQueryFailure(ctx, rayJob, testErr)
 	assert.True(t, needsPersist)
 	assert.NotNil(t, rayJob.Status.JobStatusQueryStartFailingTime)
 
-	timedOut, needsPersist = checkJobStatusQueryStatus(ctx, rayJob, testErr)
-	assert.False(t, timedOut)
+	needsPersist = recordJobStatusQueryFailure(ctx, rayJob, testErr)
 	assert.False(t, needsPersist)
+}
+
+func TestCheckJobStatusQueryTimeoutAndUpdateStatusIfNeeded(t *testing.T) {
+	ctx := context.Background()
+	rayJob := &rayv1.RayJob{
+		Status: rayv1.RayJobStatus{JobId: "test-job"},
+	}
+
+	assert.False(t, checkJobStatusQueryTimeoutAndUpdateStatusIfNeeded(ctx, rayJob))
+
+	rayJob.Status.JobStatusQueryStartFailingTime = &metav1.Time{Time: time.Now()}
+	assert.False(t, checkJobStatusQueryTimeoutAndUpdateStatusIfNeeded(ctx, rayJob))
 
 	t.Setenv(utils.RAYJOB_STATUS_QUERY_TIMEOUT_SECONDS, "1")
 	rayJob.Status.JobStatusQueryStartFailingTime = &metav1.Time{Time: time.Now().Add(-2 * time.Second)}
-	timedOut, needsPersist = checkJobStatusQueryStatus(ctx, rayJob, testErr)
-	assert.True(t, timedOut)
-	assert.True(t, needsPersist)
+	assert.True(t, checkJobStatusQueryTimeoutAndUpdateStatusIfNeeded(ctx, rayJob))
 	assert.Equal(t, rayv1.JobDeploymentStatusFailed, rayJob.Status.JobDeploymentStatus)
 	assert.Equal(t, rayv1.JobStatusQueryTimeoutExceeded, rayJob.Status.Reason)
-	assert.Contains(t, rayJob.Status.Message, "connection refused")
+	assert.Contains(t, rayJob.Status.Message, "exceeded timeout of 1s")
 }
