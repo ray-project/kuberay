@@ -451,28 +451,43 @@ func TestBuildHeadNetworkPolicy_CustomEgressRules(t *testing.T) {
 	assert.Equal(t, &customPort, policy.Spec.Egress[1].Ports[0].Port)
 }
 
-// TestGetHeadPort_DefaultFallback verifies the default port is returned when rayStartParams has no override.
-func TestGetHeadPort_DefaultFallback(t *testing.T) {
+// TestBuildHeadIngressRules_DashboardPortFromContainer verifies the operator ingress
+// rule targets the dashboard port resolved from the head container's named port
+// (matching how the head Service routes traffic), NOT from rayStartParams.
+func TestBuildHeadIngressRules_DashboardPortFromContainer(t *testing.T) {
 	setupNetworkPolicyTest(t)
 
 	cluster := testRayClusterBasic.DeepCopy()
-	cluster.Spec.HeadGroupSpec.RayStartParams = map[string]string{}
+	cluster.Spec.HeadGroupSpec.Template.Spec.Containers[utils.RayContainerIndex].Ports = []corev1.ContainerPort{
+		{Name: utils.DashboardPortName, ContainerPort: 9000},
+	}
+	// rayStartParams sets a different value to prove it is NOT the source.
+	cluster.Spec.HeadGroupSpec.RayStartParams = map[string]string{"dashboard-port": "9265"}
 
-	port := testNetworkPolicyController.getHeadPort(cluster, "dashboard-port", utils.DefaultDashboardPort)
-	assert.Equal(t, int32(utils.DefaultDashboardPort), port)
+	rules := testNetworkPolicyController.buildHeadIngressRules(cluster)
+	require.Len(t, rules, 2)
+
+	// rules[1] is the operator rule; its port must be the container port (9000).
+	operatorRule := rules[1]
+	require.Len(t, operatorRule.Ports, 1)
+	expectedPort := intstr.FromInt32(9000)
+	assert.Equal(t, &expectedPort, operatorRule.Ports[0].Port, "must use the container port, not rayStartParams")
 }
 
-// TestGetHeadPort_CustomPort verifies that a port set via rayStartParams is returned.
-func TestGetHeadPort_CustomPort(t *testing.T) {
+// TestBuildHeadIngressRules_DashboardPortDefault verifies the default dashboard port
+// is used when the head container declares no "dashboard" named port.
+func TestBuildHeadIngressRules_DashboardPortDefault(t *testing.T) {
 	setupNetworkPolicyTest(t)
 
-	cluster := testRayClusterBasic.DeepCopy()
-	cluster.Spec.HeadGroupSpec.RayStartParams = map[string]string{
-		"dashboard-port": "9265",
-	}
+	cluster := testRayClusterBasic.DeepCopy() // head container declares no ports
 
-	port := testNetworkPolicyController.getHeadPort(cluster, "dashboard-port", utils.DefaultDashboardPort)
-	assert.Equal(t, int32(9265), port)
+	rules := testNetworkPolicyController.buildHeadIngressRules(cluster)
+	require.Len(t, rules, 2)
+
+	operatorRule := rules[1]
+	require.Len(t, operatorRule.Ports, 1)
+	expectedPort := intstr.FromInt32(utils.DefaultDashboardPort)
+	assert.Equal(t, &expectedPort, operatorRule.Ports[0].Port)
 }
 
 // TestBuildNetworkPolicy_LongClusterName verifies NetworkPolicy names are constructed correctly for long names.
