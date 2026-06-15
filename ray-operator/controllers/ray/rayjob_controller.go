@@ -545,9 +545,10 @@ func checkBackoffLimitAndUpdateStatusIfNeeded(ctx context.Context, rayJob *rayv1
 	rayJob.Status.Succeeded = new(succeededCount)
 
 	if rayJob.Status.JobDeploymentStatus == rayv1.JobDeploymentStatusFailed && rayJob.Spec.BackoffLimit != nil && *rayJob.Status.Failed < *rayJob.Spec.BackoffLimit+1 {
-		if rayJob.Status.Reason == rayv1.DeadlineExceeded {
+		if rayJob.Status.Reason == rayv1.DeadlineExceeded || rayJob.Status.Reason == rayv1.JobStatusQueryTimeoutExceeded {
 			logger.Info(
-				"RayJob is not eligible for retry due to failure with DeadlineExceeded",
+				"RayJob is not eligible for retry due to failure with DeadlineExceeded or JobStatusQueryTimeoutExceeded",
+				"reason", rayJob.Status.Reason,
 				"backoffLimit", *rayJob.Spec.BackoffLimit,
 				"succeeded", *rayJob.Status.Succeeded,
 				"failed", *rayJob.Status.Failed,
@@ -920,13 +921,14 @@ func (r *RayJobReconciler) updateRayJobStatus(ctx context.Context, oldRayJob *ra
 	logger.Info("updateRayJobStatus", "oldRayJobStatus", oldRayJobStatus, "newRayJobStatus", newRayJobStatus)
 
 	rayClusterStatusChanged := utils.InconsistentRayClusterStatus(oldRayJobStatus.RayClusterStatus, newRayJobStatus.RayClusterStatus)
+	jobStatusQueryStartTimeChanged := jobStatusQueryStartTimeChanged(oldRayJobStatus.JobStatusQueryStartTime, newRayJobStatus.JobStatusQueryStartTime)
 
 	// If a status field is crucial for the RayJob state machine, it MUST be
 	// updated with a distinct JobStatus or JobDeploymentStatus value.
 	if oldRayJobStatus.JobStatus != newRayJobStatus.JobStatus ||
 		oldRayJobStatus.JobDeploymentStatus != newRayJobStatus.JobDeploymentStatus ||
-		rayClusterStatusChanged {
-
+		rayClusterStatusChanged ||
+		jobStatusQueryStartTimeChanged {
 		if rayv1.IsJobDeploymentTerminal(newRayJobStatus.JobDeploymentStatus) {
 			newRayJob.Status.EndTime = &metav1.Time{Time: time.Now()}
 		}
@@ -1320,6 +1322,16 @@ func checkJobStatusQueryStatus(ctx context.Context, rayJob *rayv1.RayJob, err er
 	}
 
 	return false, false
+}
+
+func jobStatusQueryStartTimeChanged(oldTime, newTime *metav1.Time) bool {
+	if oldTime == nil && newTime == nil {
+		return false
+	}
+	if oldTime == nil || newTime == nil {
+		return true
+	}
+	return !oldTime.Time.Equal(newTime.Time)
 }
 
 func checkTransitionGracePeriodAndUpdateStatusIfNeeded(ctx context.Context, rayJob *rayv1.RayJob) bool {

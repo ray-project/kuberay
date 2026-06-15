@@ -3883,6 +3883,42 @@ var _ = Context("RayJob with different submission modes", func() {
 			}, time.Second*5, time.Millisecond*500).Should(Equal(rayv1.JobStatusQueryTimeoutExceeded))
 		}
 
+		assertJobStatusQueryStartTimePersisted := func(ctx context.Context, rayJob *rayv1.RayJob, namespace string) {
+			getJobInfo := func(_ context.Context, _ string) (*utiltypes.RayJobInfo, error) {
+				return nil, fmt.Errorf("connection refused")
+			}
+			fakeRayDashboardClient.GetJobInfoMock.Store(&getJobInfo)
+			defer fakeRayDashboardClient.GetJobInfoMock.Store(nil)
+
+			Eventually(func() (*metav1.Time, error) {
+				if err := k8sClient.Get(ctx, client.ObjectKey{Name: rayJob.Name, Namespace: namespace}, rayJob); err != nil {
+					return nil, err
+				}
+				return rayJob.Status.JobStatusQueryStartTime, nil
+			}, time.Second*10, time.Millisecond*500).ShouldNot(BeNil())
+		}
+
+		assertJobStatusQueryTimeoutExceededOrganically := func(ctx context.Context, rayJob *rayv1.RayJob, namespace string) {
+			os.Setenv(utils.RAYJOB_STATUS_QUERY_TIMEOUT_SECONDS, "1")
+			defer os.Unsetenv(utils.RAYJOB_STATUS_QUERY_TIMEOUT_SECONDS)
+
+			getJobInfo := func(_ context.Context, _ string) (*utiltypes.RayJobInfo, error) {
+				return nil, fmt.Errorf("connection refused")
+			}
+			fakeRayDashboardClient.GetJobInfoMock.Store(&getJobInfo)
+			defer fakeRayDashboardClient.GetJobInfoMock.Store(nil)
+
+			Eventually(
+				getRayJobDeploymentStatus(ctx, rayJob),
+				time.Second*15, time.Millisecond*500).Should(Equal(rayv1.JobDeploymentStatusFailed))
+			Eventually(func() (rayv1.JobFailedReason, error) {
+				if err := k8sClient.Get(ctx, client.ObjectKey{Name: rayJob.Name, Namespace: namespace}, rayJob); err != nil {
+					return "", err
+				}
+				return rayJob.Status.Reason, nil
+			}, time.Second*15, time.Millisecond*500).Should(Equal(rayv1.JobStatusQueryTimeoutExceeded))
+		}
+
 		Describe("K8sJobMode", Ordered, func() {
 			ctx := context.Background()
 			namespace := "default"
@@ -3891,6 +3927,10 @@ var _ = Context("RayJob with different submission modes", func() {
 
 			It("Create RayJob and transition to Running", func() {
 				transitionRayJobToRunning(ctx, rayJob, rayCluster, namespace)
+			})
+
+			It("Persists JobStatusQueryStartTime on first query failure", func() {
+				assertJobStatusQueryStartTimePersisted(ctx, rayJob, namespace)
 			})
 
 			It("Transitions to Failed when job status queries exceed timeout", func() {
@@ -3909,8 +3949,12 @@ var _ = Context("RayJob with different submission modes", func() {
 				transitionRayJobToRunning(ctx, rayJob, rayCluster, namespace)
 			})
 
-			It("Transitions to Failed when job status queries exceed timeout", func() {
-				assertJobStatusQueryTimeoutExceeded(ctx, rayJob, namespace)
+			It("Persists JobStatusQueryStartTime on first query failure", func() {
+				assertJobStatusQueryStartTimePersisted(ctx, rayJob, namespace)
+			})
+
+			It("Transitions to Failed when job status queries exceed timeout organically", func() {
+				assertJobStatusQueryTimeoutExceededOrganically(ctx, rayJob, namespace)
 			})
 		})
 	})
