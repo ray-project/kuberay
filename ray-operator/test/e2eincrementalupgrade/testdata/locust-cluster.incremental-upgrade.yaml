@@ -6,6 +6,7 @@ metadata:
 spec:
   rayVersion: '2.52.0'
   headGroupSpec:
+    rayStartParams: {}
     template:
       spec:
         containers:

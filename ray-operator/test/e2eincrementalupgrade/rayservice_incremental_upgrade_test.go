@@ -622,10 +622,11 @@ func TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust(t *testing.T) {
 				rayService, err = GetRayService(test, namespace.Name, rayServiceName)
 				g.Expect(err).NotTo(HaveOccurred())
 
-				if tc.Sequence == SeqABAB {
+				switch tc.Sequence {
+				case SeqABAB:
 					LogWithTimestamp(test.T(), "Canceling rollback for RayService %s/%s (Spec B)", rayService.Namespace, rayService.Name)
 					rayService.Spec = *specB
-				} else if tc.Sequence == SeqABAC {
+				case SeqABAC:
 					LogWithTimestamp(test.T(), "Third spec for RayService %s/%s (Spec C)", rayService.Namespace, rayService.Name)
 					rayService.Spec = *specB
 					rayService.Spec.RayClusterSpec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests[corev1.ResourceCPU] = resource.MustParse("600m") // Spec C
@@ -664,11 +665,12 @@ func TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust(t *testing.T) {
 			g.Expect(err).NotTo(HaveOccurred())
 			finalCPUReq := finalCluster.Spec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests[corev1.ResourceCPU]
 
-			if tc.Sequence == SeqABA {
+			switch tc.Sequence {
+			case SeqABA:
 				g.Expect(finalCPUReq).To(Equal(originalSpec.RayClusterSpec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests[corev1.ResourceCPU]))
-			} else if tc.Sequence == SeqABAB {
+			case SeqABAB:
 				g.Expect(finalCPUReq).To(Equal(resource.MustParse("500m")))
-			} else if tc.Sequence == SeqABAC {
+			case SeqABAC:
 				g.Expect(finalCPUReq).To(Equal(resource.MustParse("600m")))
 			}
 		})
