@@ -333,7 +333,7 @@ const (
 	// The period of time that the RPS must be greater than or equal to the threshold to be considered steady state.
 	locustWarmupStableWindowSeconds = 15
 	// The maximum duration to wait for the Locust to reach the steady state.
-	locustWarmupTimeout = 300 * time.Second
+	locustWarmupTimeout = 120 * time.Second
 )
 
 // warmupLocust waits for Locust to ramp up and enter the steady state before triggering upgrade.
