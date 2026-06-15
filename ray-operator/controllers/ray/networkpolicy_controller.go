@@ -146,6 +146,7 @@ func (r *NetworkPolicyController) createOrUpdateNetworkPolicy(ctx context.Contex
 				return fmt.Errorf("NetworkPolicy %s/%s already exists and is not owned by this RayCluster", networkPolicy.Namespace, networkPolicy.Name)
 			}
 
+			normalizeNetworkPolicyPorts(&networkPolicy.Spec)
 			if reflect.DeepEqual(existing.Spec, networkPolicy.Spec) && reflect.DeepEqual(existing.Labels, networkPolicy.Labels) {
 				logger.V(1).Info("NetworkPolicy already up to date, skipping update", "name", networkPolicy.Name)
 				return nil
@@ -414,6 +415,27 @@ func (r *NetworkPolicyController) buildBaseEgressRules(instance *rayv1.RayCluste
 			},
 			// No Ports specified = allow all ports
 		},
+	}
+}
+
+// normalizeNetworkPolicyPorts defaults nil Protocol fields to TCP, matching the
+// API server's defaulting behavior. This prevents spurious updates when users
+// omit the protocol in custom ingress/egress rules.
+func normalizeNetworkPolicyPorts(spec *networkingv1.NetworkPolicySpec) {
+	tcp := corev1.ProtocolTCP
+	for i := range spec.Ingress {
+		for j := range spec.Ingress[i].Ports {
+			if spec.Ingress[i].Ports[j].Protocol == nil {
+				spec.Ingress[i].Ports[j].Protocol = &tcp
+			}
+		}
+	}
+	for i := range spec.Egress {
+		for j := range spec.Egress[i].Ports {
+			if spec.Egress[i].Ports[j].Protocol == nil {
+				spec.Egress[i].Ports[j].Protocol = &tcp
+			}
+		}
 	}
 }
 
