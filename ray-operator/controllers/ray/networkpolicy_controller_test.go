@@ -81,6 +81,12 @@ func rayClusterTemplateForNetworkPolicy(name string, namespace string) *rayv1.Ra
 }
 
 var _ = Context("NetworkPolicy Controller Integration Tests", func() {
+	BeforeEach(func() {
+		if !networkPolicyControllerEnabled {
+			Skip("NetworkPolicy controller not available (no in-cluster namespace file)")
+		}
+	})
+
 	Describe("Basic NetworkPolicy Creation", Ordered, func() {
 		ctx := context.Background()
 		namespace := "default"

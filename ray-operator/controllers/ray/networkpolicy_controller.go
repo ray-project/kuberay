@@ -54,12 +54,8 @@ func NewNetworkPolicyController(mgr manager.Manager) (*NetworkPolicyController, 
 }
 
 // getOperatorNamespace returns the namespace the operator is running in.
-// It first checks the OPERATOR_NAMESPACE env var (useful for local dev and tests),
-// then falls back to the in-cluster service account namespace file.
+// It reads from the in-cluster service account namespace file.
 func getOperatorNamespace() (string, error) {
-	if ns := os.Getenv("OPERATOR_NAMESPACE"); ns != "" {
-		return ns, nil
-	}
 	ns, err := os.ReadFile(utils.InClusterNamespacePath)
 	if err != nil {
 		return "", fmt.Errorf("unable to determine operator namespace from service account at %s: %w", utils.InClusterNamespacePath, err)
