@@ -340,10 +340,10 @@ type RayJobStatus struct {
 	// RayClusterStatus is the status of the RayCluster running the job.
 	// +optional
 	RayClusterStatus RayClusterStatus `json:"rayClusterStatus,omitempty"`
-	// JobStatusQueryStartTime records when job status queries first began failing.
+	// JobStatusQueryStartFailingTime records when job status queries first began failing.
 	// Cleared on a successful query. Used to enforce a cumulative job status query timeout window.
 	// +optional
-	JobStatusQueryStartTime *metav1.Time `json:"jobStatusQueryStartTime,omitempty"`
+	JobStatusQueryStartFailingTime *metav1.Time `json:"jobStatusQueryStartTime,omitempty"`
 
 	// observedGeneration is the most recent generation observed for this RayJob. It corresponds to the
 	// RayJob's generation, which is updated on mutation by the API Server.

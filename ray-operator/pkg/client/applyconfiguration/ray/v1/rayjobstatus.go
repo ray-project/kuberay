@@ -35,9 +35,9 @@ type RayJobStatusApplyConfiguration struct {
 	Failed *int32 `json:"failed,omitempty"`
 	// RayClusterStatus is the status of the RayCluster running the job.
 	RayClusterStatus *RayClusterStatusApplyConfiguration `json:"rayClusterStatus,omitempty"`
-	// JobStatusQueryStartTime records when job status queries first began failing.
+	// JobStatusQueryStartFailingTime records when job status queries first began failing.
 	// Cleared on a successful query. Used to enforce a cumulative job status query timeout window.
-	JobStatusQueryStartTime *metav1.Time `json:"jobStatusQueryStartTime,omitempty"`
+	JobStatusQueryStartFailingTime *metav1.Time `json:"jobStatusQueryStartTime,omitempty"`
 	// observedGeneration is the most recent generation observed for this RayJob. It corresponds to the
 	// RayJob's generation, which is updated on mutation by the API Server.
 	ObservedGeneration *int64 `json:"observedGeneration,omitempty"`
@@ -153,11 +153,11 @@ func (b *RayJobStatusApplyConfiguration) WithRayClusterStatus(value *RayClusterS
 	return b
 }
 
-// WithJobStatusQueryStartTime sets the JobStatusQueryStartTime field in the declarative configuration to the given value
+// WithJobStatusQueryStartFailingTime sets the JobStatusQueryStartFailingTime field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the JobStatusQueryStartTime field is set to the value of the last call.
-func (b *RayJobStatusApplyConfiguration) WithJobStatusQueryStartTime(value metav1.Time) *RayJobStatusApplyConfiguration {
-	b.JobStatusQueryStartTime = &value
+// If called multiple times, the JobStatusQueryStartFailingTime field is set to the value of the last call.
+func (b *RayJobStatusApplyConfiguration) WithJobStatusQueryStartFailingTime(value metav1.Time) *RayJobStatusApplyConfiguration {
+	b.JobStatusQueryStartFailingTime = &value
 	return b
 }
 
