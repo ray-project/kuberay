@@ -3,7 +3,6 @@
 package v1
 
 import (
-	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	apicorev1 "k8s.io/api/core/v1"
 	corev1 "k8s.io/client-go/applyconfigurations/core/v1"
 )
@@ -19,14 +18,8 @@ type HeadGroupSpecApplyConfiguration struct {
 	HeadService *apicorev1.Service `json:"headService,omitempty"`
 	// EnableIngress indicates whether operator should create ingress object for head service or not.
 	EnableIngress *bool `json:"enableIngress,omitempty"`
-	// IngressHost sets rules[0].host on the generated ingress.
-	IngressHost *string `json:"ingressHost,omitempty"`
-	// IngressPath sets rules[0].http.paths[0].path on the generated ingress.
-	IngressPath *string `json:"ingressPath,omitempty"`
-	// IngressPathType sets rules[0].http.paths[0].pathType on the generated ingress.
-	IngressPathType *rayv1.IngressPathType `json:"ingressPathType,omitempty"`
-	// IngressTLS sets spec.tls entries on the generated ingress.
-	IngressTLS []IngressTLSConfigApplyConfiguration `json:"ingressTLS,omitempty"`
+	// IngressConfig specifies optional ingress configuration for the head service dashboard.
+	IngressConfig *HeadIngressSpecApplyConfiguration `json:"ingressConfig,omitempty"`
 	// Resources specifies the resource quantities for the head group.
 	// These values override the resources passed to `rayStartParams` for the group, but
 	// have no effect on the resources set at the K8s Pod container level.
@@ -71,40 +64,11 @@ func (b *HeadGroupSpecApplyConfiguration) WithEnableIngress(value bool) *HeadGro
 	return b
 }
 
-// WithIngressHost sets the IngressHost field in the declarative configuration to the given value
+// WithIngressConfig sets the IngressConfig field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the IngressHost field is set to the value of the last call.
-func (b *HeadGroupSpecApplyConfiguration) WithIngressHost(value string) *HeadGroupSpecApplyConfiguration {
-	b.IngressHost = &value
-	return b
-}
-
-// WithIngressPath sets the IngressPath field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the IngressPath field is set to the value of the last call.
-func (b *HeadGroupSpecApplyConfiguration) WithIngressPath(value string) *HeadGroupSpecApplyConfiguration {
-	b.IngressPath = &value
-	return b
-}
-
-// WithIngressPathType sets the IngressPathType field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the IngressPathType field is set to the value of the last call.
-func (b *HeadGroupSpecApplyConfiguration) WithIngressPathType(value rayv1.IngressPathType) *HeadGroupSpecApplyConfiguration {
-	b.IngressPathType = &value
-	return b
-}
-
-// WithIngressTLS adds the given value to the IngressTLS field in the declarative configuration
-// and returns the receiver, so that objects can be build by chaining "With" function invocations.
-// If called multiple times, values provided by each call will be appended to the IngressTLS field.
-func (b *HeadGroupSpecApplyConfiguration) WithIngressTLS(values ...*IngressTLSConfigApplyConfiguration) *HeadGroupSpecApplyConfiguration {
-	for i := range values {
-		if values[i] == nil {
-			panic("nil value passed to WithIngressTLS")
-		}
-		b.IngressTLS = append(b.IngressTLS, *values[i])
-	}
+// If called multiple times, the IngressConfig field is set to the value of the last call.
+func (b *HeadGroupSpecApplyConfiguration) WithIngressConfig(value *HeadIngressSpecApplyConfiguration) *HeadGroupSpecApplyConfiguration {
+	b.IngressConfig = value
 	return b
 }
 

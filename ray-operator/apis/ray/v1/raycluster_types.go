@@ -204,18 +204,9 @@ type HeadGroupSpec struct {
 	// EnableIngress indicates whether operator should create ingress object for head service or not.
 	// +optional
 	EnableIngress *bool `json:"enableIngress,omitempty"`
-	// IngressHost sets rules[0].host on the generated ingress.
+	// IngressConfig specifies optional ingress configuration for the head service dashboard.
 	// +optional
-	IngressHost *string `json:"ingressHost,omitempty"`
-	// IngressPath sets rules[0].http.paths[0].path on the generated ingress.
-	// +optional
-	IngressPath *string `json:"ingressPath,omitempty"`
-	// IngressPathType sets rules[0].http.paths[0].pathType on the generated ingress.
-	// +optional
-	IngressPathType *IngressPathType `json:"ingressPathType,omitempty"`
-	// IngressTLS sets spec.tls entries on the generated ingress.
-	// +optional
-	IngressTLS []IngressTLSConfig `json:"ingressTLS,omitempty"`
+	IngressConfig *HeadIngressSpec `json:"ingressConfig,omitempty"`
 	// Resources specifies the resource quantities for the head group.
 	// These values override the resources passed to `rayStartParams` for the group, but
 	// have no effect on the resources set at the K8s Pod container level.
@@ -242,6 +233,22 @@ const (
 	IngressPathTypePrefix                 IngressPathType = "Prefix"
 	IngressPathTypeImplementationSpecific IngressPathType = "ImplementationSpecific"
 )
+
+// HeadIngressSpec defines the host, path, and TLS configuration for the ingress generated for the head group.
+type HeadIngressSpec struct {
+	// Host sets rules[0].host on the generated ingress.
+	// +optional
+	Host *string `json:"host,omitempty"`
+	// Path sets rules[0].http.paths[0].path on the generated ingress.
+	// +optional
+	Path *string `json:"path,omitempty"`
+	// PathType sets rules[0].http.paths[0].pathType on the generated ingress.
+	// +optional
+	PathType *IngressPathType `json:"pathType,omitempty"`
+	// TLS sets spec.tls entries on the generated ingress.
+	// +optional
+	TLS []IngressTLSConfig `json:"tls,omitempty"`
+}
 
 // IngressTLSConfig defines a TLS entry for the generated ingress.
 type IngressTLSConfig struct {
