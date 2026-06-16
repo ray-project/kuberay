@@ -11,7 +11,6 @@
 # This example uses L4s on GKE with Qwen 3.5 for illustrative purposes only.
 # The high throughput routing can be used with any model, accelerators,
 # resources, and workloads.
----
 apiVersion: ray.io/v1
 kind: RayService
 metadata:
@@ -59,13 +58,13 @@ spec:
               name: serve
             env:
             - name: RAY_SERVE_ENABLE_HA_PROXY
-              value: "1"
+              value: '1'
             - name: RAY_SERVE_THROUGHPUT_OPTIMIZED
-              value: "1"
+              value: '1'
             - name: RAY_SERVE_LLM_ENABLE_DIRECT_STREAMING
-              value: "1"
+              value: '1'
             - name: VLLM_USE_RAY_V2_EXECUTOR_BACKEND
-              value: "1"
+              value: '1'
             - name: HUGGING_FACE_HUB_TOKEN
               valueFrom:
                 secretKeyRef:
@@ -82,13 +81,13 @@ spec:
             image: rayproject/ray-llm:2.56.0-py312-cu130
             env:
             - name: RAY_SERVE_ENABLE_HA_PROXY
-              value: "1"
+              value: '1'
             - name: RAY_SERVE_THROUGHPUT_OPTIMIZED
-              value: "1"
+              value: '1'
             - name: RAY_SERVE_LLM_ENABLE_DIRECT_STREAMING
-              value: "1"
+              value: '1'
             - name: VLLM_USE_RAY_V2_EXECUTOR_BACKEND
-              value: "1"
+              value: '1'
             - name: HUGGING_FACE_HUB_TOKEN
               valueFrom:
                 secretKeyRef:
