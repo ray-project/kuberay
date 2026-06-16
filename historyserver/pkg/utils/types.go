@@ -6,6 +6,13 @@ type ClusterInfo struct {
 	SessionName     string `json:"sessionName"`
 	CreateTime      string `json:"createTime"`
 	CreateTimeStamp int64  `json:"createTimeStamp"`
+	OwnerKind       string `json:"ownerKind,omitempty"`
+	OwnerName       string `json:"ownerName,omitempty"`
+}
+
+type ClusterKey struct {
+	Namespace string
+	Name      string
 }
 
 type ClusterInfoList []ClusterInfo

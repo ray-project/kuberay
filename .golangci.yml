@@ -112,8 +112,6 @@ linters:
       # These require non-trivial migration and should be addressed separately.
       - linters: [staticcheck]
         text: "SA1019:.*GetEventRecorderFor is deprecated"
-      - linters: [staticcheck]
-        text: "SA1019:.*scheme\\.Builder is deprecated"
     generated: strict
     presets:
       - comments

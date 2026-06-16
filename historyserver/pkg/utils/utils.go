@@ -66,11 +66,11 @@ const (
 	// - Namespace CANNOT contain "_", so we can unambiguously split from the LAST "_"
 	//
 	// DO NOT CHANGE: Would break existing stored data paths
-	connector = "_"
+	Connector = "_"
 )
 
 func AppendRayClusterNameNamespace(rayClusterName, rayClusterNamespace string) string {
-	return fmt.Sprintf("%s%s%s", rayClusterName, connector, rayClusterNamespace)
+	return fmt.Sprintf("%s%s%s", rayClusterName, Connector, rayClusterNamespace)
 }
 
 func GetSessionDir() (string, error) {
@@ -152,7 +152,7 @@ func IsHexNil(hexStr string) (bool, error) {
 // Format: "{clusterName}_{namespace}_{sessionName}"
 // Example: "raycluster-historyserver_default_session_2026-01-11_19-38-40"
 func BuildClusterSessionKey(clusterName, namespace, sessionName string) string {
-	return clusterName + connector + namespace + connector + sessionName
+	return clusterName + Connector + namespace + Connector + sessionName
 }
 
 // GetDateTimeFromSessionID will convert sessionID string i.e. `session_2026-01-27_10-52-59_373533_1` to time.Time

@@ -30,6 +30,7 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/metrics/mocks"
 	utils "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/scheme"
+	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 )
 
 // fakeBatchScheduler implements schedulerinterface.BatchScheduler for testing.
@@ -222,6 +223,118 @@ func TestGetSubmitterTemplate(t *testing.T) {
 	envVar, found = utils.EnvVarByName(utils.RAY_JOB_SUBMISSION_ID, submitterTemplate.Spec.Containers[utils.RayContainerIndex].Env)
 	assert.True(t, found)
 	assert.Equal(t, "test-job-id", envVar.Value)
+}
+
+func TestGetSubmitterContainerWithFeatureGate(t *testing.T) {
+	// Enable the SidecarSubmitterRestart feature gate for this test
+	features.SetFeatureGateDuringTest(t, features.SidecarSubmitterRestart, true)
+
+	rayJobInstance := &rayv1.RayJob{
+		Spec: rayv1.RayJobSpec{
+			Entrypoint:     "echo test",
+			SubmissionMode: rayv1.SidecarMode,
+			RayClusterSpec: &rayv1.RayClusterSpec{
+				HeadGroupSpec: rayv1.HeadGroupSpec{
+					Template: corev1.PodTemplateSpec{
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{
+									Image: "rayproject/ray:test",
+									Ports: []corev1.ContainerPort{
+										{
+											Name:          utils.DashboardPortName,
+											ContainerPort: utils.DefaultDashboardPort,
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		Status: rayv1.RayJobStatus{
+			DashboardURL: "http://127.0.0.1:8265",
+			JobId:        "test-job-id",
+		},
+	}
+
+	rayClusterInstance := &rayv1.RayCluster{
+		Spec: *rayJobInstance.Spec.RayClusterSpec,
+	}
+
+	container, err := getSubmitterContainer(rayJobInstance, rayClusterInstance)
+	require.NoError(t, err)
+
+	// Verify restart policy is set to OnFailure for the submitter container
+	require.NotNil(t, container.RestartPolicy)
+	assert.Equal(t, corev1.ContainerRestartPolicyOnFailure, *container.RestartPolicy)
+}
+
+func TestCheckIsRestartCountExceeded(t *testing.T) {
+	tests := []struct {
+		name                 string
+		restartCount         int32
+		existCode            int32
+		hasTermState         bool
+		hasLastTermState     bool
+		expectedShouldUpdate bool
+	}{
+		{
+			name:                 "restart count below limit of 2",
+			restartCount:         1,
+			existCode:            1,
+			hasTermState:         true,
+			hasLastTermState:     true,
+			expectedShouldUpdate: false,
+		},
+		{
+			name:                 "restart count at limit of 2",
+			restartCount:         2,
+			existCode:            1,
+			hasTermState:         true,
+			hasLastTermState:     true,
+			expectedShouldUpdate: true,
+		},
+		{
+			name:                 "successful exit should not trigger failure",
+			restartCount:         3,
+			existCode:            0,
+			hasTermState:         true,
+			hasLastTermState:     true,
+			expectedShouldUpdate: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			containerStatus := corev1.ContainerStatus{
+				Name:         utils.SubmitterContainerName,
+				RestartCount: tt.restartCount,
+			}
+
+			if tt.hasTermState {
+				containerStatus.State = corev1.ContainerState{
+					Terminated: &corev1.ContainerStateTerminated{ExitCode: tt.existCode},
+				}
+			}
+
+			if tt.hasLastTermState {
+				containerStatus.LastTerminationState = corev1.ContainerState{
+					Terminated: &corev1.ContainerStateTerminated{ExitCode: 1},
+				}
+			}
+
+			headPod := &corev1.Pod{
+				Status: corev1.PodStatus{
+					ContainerStatuses: []corev1.ContainerStatus{containerStatus},
+				},
+			}
+
+			shouldUpdate, _ := checkIsRestartCountExceeded(headPod, 2)
+			assert.Equal(t, tt.expectedShouldUpdate, shouldUpdate)
+		})
+	}
 }
 
 func TestUpdateStatusToSuspendingIfNeeded(t *testing.T) {

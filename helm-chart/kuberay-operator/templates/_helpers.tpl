@@ -266,6 +266,7 @@ rules:
   - httproutes
   verbs:
   - create
+  - delete
   - get
   - list
   - update

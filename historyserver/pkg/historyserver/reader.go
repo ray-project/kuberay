@@ -67,7 +67,45 @@ func (s *ServerHandler) listClusters(limit int) []utils.ClusterInfo {
 		clusters = clusters[:limit]
 	}
 	clusters = append(liveClusterInfos, clusters...)
+
+	clustersMap := make(map[utils.ClusterKey][]utils.ClusterInfo)
+	for _, c := range clusters {
+		key := utils.ClusterKey{
+			Namespace: c.Namespace,
+			Name:      c.Name,
+		}
+		clustersMap[key] = append(clustersMap[key], c)
+	}
+
+	for key := range clustersMap {
+		sort.Sort(utils.ClusterInfoList(clustersMap[key]))
+	}
+
+	s.mu.Lock()
+	s.clustersMap = clustersMap
+	s.mu.Unlock()
+
 	return clusters
+}
+
+func (s *ServerHandler) findSessionInMap(namespace, name, session string) (string, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	key := utils.ClusterKey{
+		Namespace: namespace,
+		Name:      name,
+	}
+	if list, ok := s.clustersMap[key]; ok {
+		if len(list) == 0 {
+			return "", false
+		}
+		for _, c := range list {
+			if c.SessionName == session {
+				return c.SessionName, true
+			}
+		}
+	}
+	return "", false
 }
 
 func (s *ServerHandler) _getNodeLogs(rayClusterNameNamespace, sessionId, nodeId, folder, glob string) ([]byte, error) {
