@@ -625,20 +625,24 @@ func TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust(t *testing.T) {
 					g.Expect(*active).Should(BeNumerically(">", 0))
 				}, TestTimeoutShort).Should(Succeed())
 
-				rayService, err = GetRayService(test, namespace.Name, rayServiceName)
-				g.Expect(err).NotTo(HaveOccurred())
+				g.Eventually(func() error {
+					rayService, err = GetRayService(test, namespace.Name, rayServiceName)
+					if err != nil {
+						return err
+					}
 
-				switch tc.Sequence {
-				case SeqABAB:
-					LogWithTimestamp(test.T(), "Canceling rollback for RayService %s/%s (Spec B)", rayService.Namespace, rayService.Name)
-					rayService.Spec = *specB
-				case SeqABAC:
-					LogWithTimestamp(test.T(), "Third spec for RayService %s/%s (Spec C)", rayService.Namespace, rayService.Name)
-					rayService.Spec = *specB
-					rayService.Spec.RayClusterSpec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests[corev1.ResourceCPU] = resource.MustParse("600m") // Spec C
-				}
-				_, err = test.Client().Ray().RayV1().RayServices(namespace.Name).Update(test.Ctx(), rayService, metav1.UpdateOptions{})
-				g.Expect(err).NotTo(HaveOccurred())
+					switch tc.Sequence {
+					case SeqABAB:
+						LogWithTimestamp(test.T(), "Canceling rollback for RayService %s/%s (Spec B)", rayService.Namespace, rayService.Name)
+						rayService.Spec = *specB
+					case SeqABAC:
+						LogWithTimestamp(test.T(), "Third spec for RayService %s/%s (Spec C)", rayService.Namespace, rayService.Name)
+						rayService.Spec = *specB
+						rayService.Spec.RayClusterSpec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests[corev1.ResourceCPU] = resource.MustParse("600m") // Spec C
+					}
+					_, err = test.Client().Ray().RayV1().RayServices(namespace.Name).Update(test.Ctx(), rayService, metav1.UpdateOptions{})
+					return err
+				}, TestTimeoutShort).Should(Succeed())
 			}
 
 			// Phase 6: Ensure the upgrade/rollback operation is fully complete:
