@@ -117,10 +117,13 @@ if args.run_time is not None:
 proc = subprocess.Popen(master_locust_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
 import threading
+stopped_intentionally = False
 def poll_stop():
+    global stopped_intentionally
     while proc.poll() is None:
         if os.path.exists("/tmp/stop_locust"):
             print("Stopping locust gracefully...")
+            stopped_intentionally = True
             proc.terminate()
             break
         time.sleep(1)
@@ -142,4 +145,6 @@ assert num_failures == 0, f"num_failures: {num_failures}"
 assert num_requests != 0, f"num_requests: {num_requests}"
 
 print("returncode:", proc.returncode)
+if stopped_intentionally:
+    sys.exit(0)
 sys.exit(proc.returncode)
