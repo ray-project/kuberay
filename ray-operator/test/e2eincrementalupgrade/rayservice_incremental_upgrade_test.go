@@ -301,6 +301,15 @@ func TestRayServiceIncrementalUpgradeWithLocust(t *testing.T) {
 				return err
 			})
 
+			defer func() {
+				LogWithTimestamp(test.T(), "Stopping Locust load test")
+				ExecPodCmd(test, locustHeadPod, common.RayHeadContainer, []string{"touch", "/tmp/stop_locust"})
+				err := eg.Wait()
+				if err != nil && !test.T().Failed() {
+					test.T().Errorf("Locust load test failed: %v", err)
+				}
+			}()
+
 			// Allow Locust to ramp up and send traffic to the old cluster before triggering upgrade.
 			err = warmupLocust(test, locustHeadPod, locustWarmupRPSThreshold, locustWarmupStableWindowSeconds, locustWarmupTimeout)
 			g.Expect(err).NotTo(HaveOccurred())
@@ -316,10 +325,7 @@ func TestRayServiceIncrementalUpgradeWithLocust(t *testing.T) {
 			LogWithTimestamp(test.T(), "Waiting for RayService %s/%s UpgradeInProgress condition to be false", namespace.Name, rayServiceName)
 			g.Eventually(RayService(test, namespace.Name, rayServiceName), TestTimeoutMedium).Should(WithTransform(IsRayServiceUpgrading, BeFalse()))
 
-			LogWithTimestamp(test.T(), "Stopping Locust load test")
-			ExecPodCmd(test, locustHeadPod, common.RayHeadContainer, []string{"touch", "/tmp/stop_locust"})
-			LogWithTimestamp(test.T(), "Waiting for Locust load test goroutine to finish")
-			g.Expect(eg.Wait()).NotTo(HaveOccurred(), "Locust load test failed")
+
 
 			LogWithTimestamp(test.T(), "Validating remaining traffic is routed to the new cluster after upgrade completes")
 			curlPod, err := CreateCurlPod(g, test, CurlPodName, CurlContainerName, namespace.Name)
@@ -527,6 +533,15 @@ func TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust(t *testing.T) {
 				return err
 			})
 
+			defer func() {
+				LogWithTimestamp(test.T(), "Stopping Locust load test")
+				ExecPodCmd(test, locustHeadPod, common.RayHeadContainer, []string{"touch", "/tmp/stop_locust"})
+				err := eg.Wait()
+				if err != nil && !test.T().Failed() {
+					test.T().Errorf("Locust load test failed: %v", err)
+				}
+			}()
+
 			err = warmupLocust(test, locustHeadPod, locustWarmupRPSThreshold, locustWarmupStableWindowSeconds, locustWarmupTimeout)
 			g.Expect(err).NotTo(HaveOccurred())
 
@@ -671,11 +686,7 @@ func TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust(t *testing.T) {
 				g.Expect(*active).Should(Equal(int32(100)))
 			}, TestTimeoutLong).Should(Succeed())
 
-			// Wait for locust to finish and check for errors
-			LogWithTimestamp(test.T(), "Stopping Locust load test")
-			ExecPodCmd(test, locustHeadPod, common.RayHeadContainer, []string{"touch", "/tmp/stop_locust"})
-			LogWithTimestamp(test.T(), "Waiting for Locust load test goroutine to finish")
-			g.Expect(eg.Wait()).NotTo(HaveOccurred(), "Locust load test failed")
+
 
 			// Check resources on the final active cluster based on the sequence
 			svc, err := GetRayService(test, namespace.Name, rayServiceName)
