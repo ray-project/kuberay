@@ -290,19 +290,13 @@ func TestRayServiceIncrementalUpgradeWithLocust(t *testing.T) {
 			// Phase 3: Start Locust in a background goroutine targeting Gateway IP
 			locustHost := fmt.Sprintf("http://%s", gatewayIP)
 
-			locustRunTime := "180s"
-			if params.Name == "ConservativeGradual" {
-				locustRunTime = "300s"
-			}
-
 			eg, _ := errgroup.WithContext(test.Ctx())
 			eg.Go(func() error {
-				LogWithTimestamp(test.T(), "Starting Locust load test against %s for %s", locustHost, locustRunTime)
+				LogWithTimestamp(test.T(), "Starting Locust load test against %s", locustHost)
 				_, _, err := ExecPodCmdWithError(test, locustHeadPod, common.RayHeadContainer, []string{
 					"python", "/locust-runner/locust_runner.py",
 					"-f", "/locustfile/locustfile.py",
 					"--host", locustHost,
-					"--run-time", locustRunTime,
 				})
 				return err
 			})
@@ -322,6 +316,8 @@ func TestRayServiceIncrementalUpgradeWithLocust(t *testing.T) {
 			LogWithTimestamp(test.T(), "Waiting for RayService %s/%s UpgradeInProgress condition to be false", namespace.Name, rayServiceName)
 			g.Eventually(RayService(test, namespace.Name, rayServiceName), TestTimeoutMedium).Should(WithTransform(IsRayServiceUpgrading, BeFalse()))
 
+			LogWithTimestamp(test.T(), "Stopping Locust load test")
+			ExecPodCmd(test, locustHeadPod, common.RayHeadContainer, []string{"touch", "/tmp/stop_locust"})
 			LogWithTimestamp(test.T(), "Waiting for Locust load test goroutine to finish")
 			g.Expect(eg.Wait()).NotTo(HaveOccurred(), "Locust load test failed")
 
@@ -512,19 +508,13 @@ func TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust(t *testing.T) {
 
 			// Phase 3: Start Locust in a background goroutine targeting Gateway IP
 			locustHost := fmt.Sprintf("http://%s", gatewayIP)
-			locustRunTime := "180s"
-			if tc.Name == "CancelRollback" || tc.Name == "ThirdSpec" {
-				locustRunTime = "300s"
-			}
-
 			eg, _ := errgroup.WithContext(test.Ctx())
 			eg.Go(func() error {
-				LogWithTimestamp(test.T(), "Starting Locust load test against %s for %s", locustHost, locustRunTime)
+				LogWithTimestamp(test.T(), "Starting Locust load test against %s", locustHost)
 				_, _, err := ExecPodCmdWithError(test, locustHeadPod, common.RayHeadContainer, []string{
 					"python", "/locust-runner/locust_runner.py",
 					"-f", "/locustfile/locustfile.py",
 					"--host", locustHost,
-					"--run-time", locustRunTime,
 				})
 				return err
 			})
@@ -562,6 +552,10 @@ func TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust(t *testing.T) {
 				if tc.TriggerStage == TriggerBeforeTraffic {
 					// For BlueGreen (StepSize=100), we trigger rollback while the pending cluster is being created,
 					// before any traffic is shifted.
+					pending := svc.Status.PendingServiceStatus.TrafficRoutedPercent
+					if pending != nil {
+						g.Expect(*pending).Should(Equal(int32(0)))
+					}
 					return
 				}
 
@@ -666,6 +660,8 @@ func TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust(t *testing.T) {
 			}, TestTimeoutLong).Should(Succeed())
 
 			// Wait for locust to finish and check for errors
+			LogWithTimestamp(test.T(), "Stopping Locust load test")
+			ExecPodCmd(test, locustHeadPod, common.RayHeadContainer, []string{"touch", "/tmp/stop_locust"})
 			LogWithTimestamp(test.T(), "Waiting for Locust load test goroutine to finish")
 			g.Expect(eg.Wait()).NotTo(HaveOccurred(), "Locust load test failed")
 

@@ -115,6 +115,18 @@ print(f"Locust command: {master_locust_cmd}")
 if args.run_time is not None:
     master_locust_cmd += [f"--run-time={args.run_time}"]
 proc = subprocess.Popen(master_locust_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+import threading
+def poll_stop():
+    while proc.poll() is None:
+        if os.path.exists("/tmp/stop_locust"):
+            print("Stopping locust gracefully...")
+            proc.terminate()
+            break
+        time.sleep(1)
+
+threading.Thread(target=poll_stop, daemon=True).start()
+
 stdout, stderr = proc.communicate()
 
 print("STDOUT:", stdout.decode())
