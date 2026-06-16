@@ -53,7 +53,7 @@ if not os.path.exists(HTML_RESULTS_DIR):
 # Required locust args: -f, -u, -r, --host, and any custom locustfile args
 base_locust_cmd = [
     "locust",
-    "--headless",
+    "--autostart",
     f"--html={HTML_RESULTS_DIR}/{args.html}",
     f"--csv={HTML_RESULTS_DIR}/test",
     *locust_args,
@@ -108,7 +108,6 @@ for _ in tqdm(wait_for_locust_workers(start_refs), total=num_locust_workers):
 master_locust_cmd = base_locust_cmd + [
     "--master",
     f"--expect-workers={num_locust_workers}",
-    "--json",
 ]
 print(f"Locust command: {master_locust_cmd}")
 
@@ -117,15 +116,79 @@ if args.run_time is not None:
 proc = subprocess.Popen(master_locust_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
 import threading
+import urllib.request
+import urllib.error
+
 stopped_intentionally = False
+
+def validate_and_stop():
+    try:
+        if stopped_intentionally:
+            print("Stopping locust gracefully via REST API...")
+            try:
+                urllib.request.urlopen("http://localhost:8089/stop")
+            except Exception as e:
+                print(f"Warning: failed to call /stop: {e}")
+
+        # Give locust time to finish any in-flight requests and sync worker stats
+        time.sleep(2)
+
+        print("Fetching final stats via REST API...")
+        # Retry fetching stats up to 5 times in case the web server is slow to respond
+        stats = []
+        for _ in range(5):
+            try:
+                req = urllib.request.Request("http://localhost:8089/stats/requests")
+                with urllib.request.urlopen(req) as response:
+                    data = json.loads(response.read().decode())
+                    stats = data.get("stats", [])
+                    break
+            except Exception as e:
+                print(f"Warning: failed to fetch stats via REST API: {e}")
+                time.sleep(1)
+
+        assert len(stats) > 0, "No stats found or failed to fetch stats"
+
+        num_failures = 0
+        num_requests = 0
+        for row in stats:
+            if row.get("name") == "Aggregated" or row.get("Name") == "Aggregated":
+                num_failures = int(row.get("num_failures", 0))
+                num_requests = int(row.get("num_requests", 0))
+
+        assert num_failures == 0, f"num_failures: {num_failures}"
+        assert num_requests != 0, f"num_requests: {num_requests}"
+        print(f"Validation passed: {num_requests} requests, 0 failures.")
+
+    except Exception as e:
+        print(f"Validation failed: {e}")
+        os._exit(1)
+
+    finally:
+        try:
+            proc.terminate()
+        except Exception:
+            pass
+
 def poll_stop():
     global stopped_intentionally
     while proc.poll() is None:
         if os.path.exists("/tmp/stop_locust"):
-            print("Stopping locust gracefully...")
             stopped_intentionally = True
-            proc.terminate()
+            validate_and_stop()
             break
+
+        try:
+            req = urllib.request.Request("http://localhost:8089/stats/requests")
+            with urllib.request.urlopen(req) as response:
+                data = json.loads(response.read().decode())
+                if data.get("state") == "stopped":
+                    print("Locust stopped naturally due to run-time limit.")
+                    validate_and_stop()
+                    break
+        except Exception:
+            pass
+
         time.sleep(1)
 
 threading.Thread(target=poll_stop, daemon=True).start()
@@ -134,15 +197,6 @@ stdout, stderr = proc.communicate()
 
 print("STDOUT:", stdout.decode())
 print("STDERR:", stderr.decode())
-
-data = json.loads(stdout.decode())
-assert len(data) == 1, f"data_len: {len(data)}"
-
-num_failures = data[0]["num_failures"]
-num_requests = data[0]["num_requests"]
-
-assert num_failures == 0, f"num_failures: {num_failures}"
-assert num_requests != 0, f"num_requests: {num_requests}"
 
 print("returncode:", proc.returncode)
 if stopped_intentionally:
