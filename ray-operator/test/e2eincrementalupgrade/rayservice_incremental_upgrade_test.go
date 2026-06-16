@@ -325,8 +325,6 @@ func TestRayServiceIncrementalUpgradeWithLocust(t *testing.T) {
 			LogWithTimestamp(test.T(), "Waiting for RayService %s/%s UpgradeInProgress condition to be false", namespace.Name, rayServiceName)
 			g.Eventually(RayService(test, namespace.Name, rayServiceName), TestTimeoutMedium).Should(WithTransform(IsRayServiceUpgrading, BeFalse()))
 
-
-
 			LogWithTimestamp(test.T(), "Validating remaining traffic is routed to the new cluster after upgrade completes")
 			curlPod, err := CreateCurlPod(g, test, CurlPodName, CurlContainerName, namespace.Name)
 			g.Expect(err).NotTo(HaveOccurred())
@@ -685,8 +683,6 @@ func TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust(t *testing.T) {
 				g.Expect(active).NotTo(BeNil())
 				g.Expect(*active).Should(Equal(int32(100)))
 			}, TestTimeoutLong).Should(Succeed())
-
-
 
 			// Check resources on the final active cluster based on the sequence
 			svc, err := GetRayService(test, namespace.Name, rayServiceName)
