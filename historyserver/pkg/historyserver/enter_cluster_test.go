@@ -44,10 +44,16 @@ func TestEnterCluster(t *testing.T) {
 
 	// Single session cluster
 	keyA := utils.ClusterKey{
-		Namespace: "default",
-		Name:      "cluster-a",
+		Namespace:    "default",
+		ResourceType: "raycluster",
+		ResourceName: "cluster-a",
 	}
-	handler.clustersMap[keyA] = []utils.ClusterInfo{
+	keyAOwner := utils.ClusterKey{
+		Namespace:    "default",
+		ResourceType: "rayjob",
+		ResourceName: "job-a",
+	}
+	clusterAInfo := []utils.ClusterInfo{
 		{
 			Namespace:   "default",
 			Name:        "cluster-a",
@@ -56,11 +62,14 @@ func TestEnterCluster(t *testing.T) {
 			OwnerName:   "job-a",
 		},
 	}
+	handler.clustersMap[keyA] = clusterAInfo
+	handler.clustersMap[keyAOwner] = clusterAInfo
 
 	// Multi-session cluster (past session AND live session)
 	keyB := utils.ClusterKey{
-		Namespace: "default",
-		Name:      "cluster-b",
+		Namespace:    "default",
+		ResourceType: "raycluster",
+		ResourceName: "cluster-b",
 	}
 	handler.clustersMap[keyB] = []utils.ClusterInfo{
 		{
@@ -83,8 +92,9 @@ func TestEnterCluster(t *testing.T) {
 
 	// Cluster with session that is resolved but will trigger live resolution
 	keyC := utils.ClusterKey{
-		Namespace: "default",
-		Name:      "cluster-c",
+		Namespace:    "default",
+		ResourceType: "raycluster",
+		ResourceName: "cluster-c",
 	}
 	handler.clustersMap[keyC] = []utils.ClusterInfo{
 		{
@@ -98,8 +108,9 @@ func TestEnterCluster(t *testing.T) {
 
 	// Cluster with invalid session format
 	keyD := utils.ClusterKey{
-		Namespace: "default",
-		Name:      "cluster-d",
+		Namespace:    "default",
+		ResourceType: "raycluster",
+		ResourceName: "cluster-d",
 	}
 	handler.clustersMap[keyD] = []utils.ClusterInfo{
 		{
@@ -246,6 +257,52 @@ func TestEnterCluster(t *testing.T) {
 			t.Errorf("Expected cookie %s to default to 'live' (actual latest session name), got %v", COOKIE_SESSION_NAME_KEY, c)
 		}
 	})
+
+	t.Run("Enter cluster using path routing by resourceKind, resourceName, and session", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/enter_cluster/default/RayJob/job-a/session_2026-04-22_10-00-00_000000_1", nil)
+		resp := httptest.NewRecorder()
+		container.ServeHTTP(resp, req)
+
+		if resp.Code != http.StatusOK {
+			t.Fatalf("Expected status 200, got %d", resp.Code)
+		}
+
+		cookies := resp.Result().Cookies()
+		cookieMap := make(map[string]*http.Cookie)
+		for _, cookie := range cookies {
+			cookieMap[cookie.Name] = cookie
+		}
+
+		if c, ok := cookieMap[COOKIE_CLUSTER_NAME_KEY]; !ok || c.Value != "cluster-a" {
+			t.Errorf("Expected cookie %s to be 'cluster-a', got %v", COOKIE_CLUSTER_NAME_KEY, c)
+		}
+		if c, ok := cookieMap[COOKIE_SESSION_NAME_KEY]; !ok || c.Value != "session_2026-04-22_10-00-00_000000_1" {
+			t.Errorf("Expected cookie %s to be 'session_2026-04-22_10-00-00_000000_1', got %v", COOKIE_SESSION_NAME_KEY, c)
+		}
+	})
+
+	t.Run("Enter cluster using path routing by resourceKind and resourceName with trailing slash defaults to latest", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/enter_cluster/default/RayJob/job-a/", nil)
+		resp := httptest.NewRecorder()
+		container.ServeHTTP(resp, req)
+
+		if resp.Code != http.StatusOK {
+			t.Fatalf("Expected status 200, got %d", resp.Code)
+		}
+
+		cookies := resp.Result().Cookies()
+		cookieMap := make(map[string]*http.Cookie)
+		for _, cookie := range cookies {
+			cookieMap[cookie.Name] = cookie
+		}
+
+		if c, ok := cookieMap[COOKIE_CLUSTER_NAME_KEY]; !ok || c.Value != "cluster-a" {
+			t.Errorf("Expected cookie %s to be 'cluster-a', got %v", COOKIE_CLUSTER_NAME_KEY, c)
+		}
+		if c, ok := cookieMap[COOKIE_SESSION_NAME_KEY]; !ok || c.Value != "session_2026-04-22_10-00-00_000000_1" {
+			t.Errorf("Expected cookie %s to be 'session_2026-04-22_10-00-00_000000_1', got %v", COOKIE_SESSION_NAME_KEY, c)
+		}
+	})
 }
 
 type mockStorageReader struct {
@@ -297,7 +354,7 @@ func TestEnterClusterLatestRefreshesCache(t *testing.T) {
 	}
 
 	// Preset cache with an OLD state of the cluster (only has session_1)
-	key := utils.ClusterKey{Namespace: "default", Name: "cluster-refresh"}
+	key := utils.ClusterKey{Namespace: "default", ResourceType: "raycluster", ResourceName: "cluster-refresh"}
 	handler.clustersMap[key] = []utils.ClusterInfo{
 		{
 			Namespace:       "default",
@@ -368,8 +425,9 @@ func TestEnterClusterLatestPrioritizesLive(t *testing.T) {
 	}
 
 	key := utils.ClusterKey{
-		Namespace: "default",
-		Name:      "cluster-prioritize-live",
+		Namespace:    "default",
+		ResourceType: "raycluster",
+		ResourceName: "cluster-prioritize-live",
 	}
 
 	// Preset cache where the live session has timestamp 1000,

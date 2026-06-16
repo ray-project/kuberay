@@ -31,6 +31,8 @@ const (
 	COOKIE_CLUSTER_NAME_KEY      = "cluster_name"
 	COOKIE_CLUSTER_NAMESPACE_KEY = "cluster_namespace"
 	COOKIE_SESSION_NAME_KEY      = "session_name"
+	COOKIE_OWNER_KIND_KEY        = "owner_kind"
+	COOKIE_OWNER_NAME_KEY        = "owner_name"
 	COOKIE_DASHBOARD_VERSION_KEY = "dashboard_version"
 
 	ATTRIBUTE_SERVICE_NAME = "cluster_service_name"
@@ -294,24 +296,27 @@ func routerRayClusterSet(s *ServerHandler) {
 	defer restful.Add(ws)
 
 	ws.Path("/enter_cluster").Consumes(restful.MIME_JSON).Produces(restful.MIME_JSON).Filter(RequestLogFilter)
-	enterHandler := func(r1 *restful.Request, r2 *restful.Response, namespace, name, session string) {
-		if session == "latest" || session == "" {
+	enterHandler := func(r1 *restful.Request, r2 *restful.Response, namespace, resourceType, resourceName, session string, filters ...SessionFilter) {
+		if session == "latest" {
 			if s.clientManager != nil && s.reader != nil {
 				s.listClusters(s.maxClusters)
 			}
 		}
-		resolvedSession, found := s.findSessionInMap(namespace, name, session)
-		if !found && session != "latest" && session != "" {
+		resolvedClusterInfo, found := s.findSessionInMap(namespace, resourceType, resourceName, session, filters...)
+		if !found {
 			if s.clientManager != nil && s.reader != nil {
 				s.listClusters(s.maxClusters)
 			}
-			resolvedSession, found = s.findSessionInMap(namespace, name, session)
+			resolvedClusterInfo, found = s.findSessionInMap(namespace, resourceType, resourceName, session, filters...)
 		}
 
 		if !found {
-			r2.WriteErrorString(http.StatusNotFound, fmt.Sprintf("cluster %s/%s with session %s not found", namespace, name, session))
+			r2.WriteErrorString(http.StatusNotFound, fmt.Sprintf("cluster not found"))
 			return
 		}
+
+		name := resolvedClusterInfo.Name
+		resolvedSession := resolvedClusterInfo.SessionName
 
 		if resolvedSession != "live" {
 			if ParseSessionTimestamp(resolvedSession).IsZero() {
@@ -319,8 +324,7 @@ func routerRayClusterSet(s *ServerHandler) {
 				r2.WriteErrorString(http.StatusBadRequest, fmt.Sprintf("invalid session name: %q", resolvedSession))
 				return
 			}
-			info := utils.ClusterInfo{Name: name, Namespace: namespace, SessionName: resolvedSession}
-			live, err := s.sessionLoader.LoadSession(r1.Request.Context(), info)
+			live, err := s.sessionLoader.LoadSession(r1.Request.Context(), resolvedClusterInfo)
 			if err != nil {
 				logrus.Errorf("Failed to load session %s/%s/%s: %v", namespace, name, resolvedSession, err)
 				r2.WriteErrorString(http.StatusInternalServerError, err.Error())
@@ -337,6 +341,8 @@ func routerRayClusterSet(s *ServerHandler) {
 		http.SetCookie(r2, &http.Cookie{MaxAge: 600, Path: "/", Name: COOKIE_CLUSTER_NAME_KEY, Value: name})
 		http.SetCookie(r2, &http.Cookie{MaxAge: 600, Path: "/", Name: COOKIE_CLUSTER_NAMESPACE_KEY, Value: namespace})
 		http.SetCookie(r2, &http.Cookie{MaxAge: 600, Path: "/", Name: COOKIE_SESSION_NAME_KEY, Value: resolvedSession})
+		http.SetCookie(r2, &http.Cookie{MaxAge: 600, Path: "/", Name: COOKIE_OWNER_KIND_KEY, Value: resolvedClusterInfo.OwnerKind})
+		http.SetCookie(r2, &http.Cookie{MaxAge: 600, Path: "/", Name: COOKIE_OWNER_NAME_KEY, Value: resolvedClusterInfo.OwnerName})
 
 		r2.WriteJson(map[string]interface{}{
 			"result":    "success",
@@ -346,17 +352,77 @@ func routerRayClusterSet(s *ServerHandler) {
 		}, "application/json")
 	}
 
-	ws.Route(ws.GET("/{namespace}/{name}/{session}").To(func(r1 *restful.Request, r2 *restful.Response) {
+	ws.Route(ws.GET("/{namespace}/{name}").To(func(r1 *restful.Request, r2 *restful.Response) {
 		name := r1.PathParameter("name")
 		namespace := r1.PathParameter("namespace")
-		session := r1.PathParameter("session")
-		enterHandler(r1, r2, namespace, name, session)
+		enterHandler(r1, r2, namespace, utils.RayClusterKind, name, "latest")
+	}).
+		Doc("set cookie for cluster (defaults session to latest)").
+		Param(ws.PathParameter("namespace", "namespace")).
+		Param(ws.PathParameter("name", "name")).
+		Writes(""))
+
+	ws.Route(ws.GET("/{namespace}/{clusterNameOrKind}/{sessionOrKindName}").To(func(r1 *restful.Request, r2 *restful.Response) {
+		namespace := r1.PathParameter("namespace")
+		clusterNameOrKind := r1.PathParameter("clusterNameOrKind")
+		sessionOrKindName := r1.PathParameter("sessionOrKindName")
+
+		k := strings.ToLower(clusterNameOrKind)
+		if k == utils.RayJobKind || k == utils.RayServiceKind || k == utils.RayClusterKind {
+			enterHandler(r1, r2, namespace, clusterNameOrKind, sessionOrKindName, "latest")
+		} else {
+			enterHandler(r1, r2, namespace, utils.RayClusterKind, clusterNameOrKind, sessionOrKindName)
+		}
 	}).
 		Doc("set cookie for cluster").
 		Param(ws.PathParameter("namespace", "namespace")).
-		Param(ws.PathParameter("name", "name")).
+		Param(ws.PathParameter("clusterNameOrKind", "clusterNameOrKind")).
+		Param(ws.PathParameter("sessionOrKindName", "sessionOrKindName")).
+		Writes(""))
+
+	ws.Route(ws.GET("/{namespace}/{resourceKind}/{resourceName}/{sessionOrClusterName}").To(func(r1 *restful.Request, r2 *restful.Response) {
+		namespace := r1.PathParameter("namespace")
+		resourceKind := r1.PathParameter("resourceKind")
+		resourceName := r1.PathParameter("resourceName")
+		sessionOrCluster := r1.PathParameter("sessionOrClusterName")
+
+		if strings.HasPrefix(sessionOrCluster, "session_") || sessionOrCluster == "latest" || sessionOrCluster == "live" {
+			// sessionOrCluster is session if it starts with "session_".
+			enterHandler(r1, r2, namespace, resourceKind, resourceName, sessionOrCluster)
+		} else {
+			// sessionOrCluster is cluster name if it does not start with "session_".
+			filter := SessionFilter{
+				ExpectedClusterName: sessionOrCluster,
+			}
+			enterHandler(r1, r2, namespace, resourceKind, resourceName, "latest", filter)
+		}
+	}).
+		Doc("set cookie for cluster (4 parameters)").
+		Param(ws.PathParameter("namespace", "namespace")).
+		Param(ws.PathParameter("resourceKind", "resourceKind")).
+		Param(ws.PathParameter("resourceName", "resourceName")).
+		Param(ws.PathParameter("sessionOrClusterName", "sessionOrClusterName")).
+		Writes(""))
+
+	ws.Route(ws.GET("/{namespace}/{ownerKind}/{ownerName}/{rayClusterName}/{session}").To(func(r1 *restful.Request, r2 *restful.Response) {
+		namespace := r1.PathParameter("namespace")
+		ownerKind := r1.PathParameter("ownerKind")
+		ownerName := r1.PathParameter("ownerName")
+		session := r1.PathParameter("session")
+		rayClusterName := r1.PathParameter("rayClusterName")
+
+		filter := SessionFilter{
+			ExpectedClusterName: rayClusterName,
+		}
+		enterHandler(r1, r2, namespace, ownerKind, ownerName, session, filter)
+	}).
+		Doc("set cookie for cluster by ownerKind, ownerName, and rayClusterName (with trailing slash)").
+		Param(ws.PathParameter("namespace", "namespace")).
+		Param(ws.PathParameter("ownerKind", "ownerKind")).
+		Param(ws.PathParameter("ownerName", "ownerName")).
+		Param(ws.PathParameter("rayClusterName", "rayClusterName")).
 		Param(ws.PathParameter("session", "session")).
-		Writes("")) // Placeholder for specific return type
+		Writes(""))
 }
 
 func (s *ServerHandler) RegisterRouter() {
@@ -1805,15 +1871,35 @@ func (s *ServerHandler) CookieHandle(req *restful.Request, resp *restful.Respons
 		return
 	}
 
+	// It is okay for owner to be empty but they should still be available
+	ownerKind, err := req.Request.Cookie(COOKIE_OWNER_KIND_KEY)
+	if err != nil {
+		ownerKind = &http.Cookie{Name: COOKIE_OWNER_KIND_KEY, Value: ""}
+	}
+	ownerName, err := req.Request.Cookie(COOKIE_OWNER_NAME_KEY)
+	if err != nil {
+		ownerName = &http.Cookie{Name: COOKIE_OWNER_NAME_KEY, Value: ""}
+	}
+
 	// Validate cookie values to prevent path traversal attacks
 	if !fs.ValidPath(clusterName.Value) || !fs.ValidPath(clusterNamespace.Value) || !fs.ValidPath(sessionName.Value) {
 		resp.WriteHeaderAndEntity(http.StatusBadRequest, fmt.Sprintf("invalid cookie values: path traversal not allowed (cluster_name=%s, cluster_namespace=%s, session_name=%s)", clusterName.Value, clusterNamespace.Value, sessionName.Value))
+		return
+	}
+	if ownerKind.Value != "" && !fs.ValidPath(ownerKind.Value) {
+		resp.WriteHeaderAndEntity(http.StatusBadRequest, fmt.Sprintf("invalid cookie values: path traversal not allowed (owner_kind=%s)", ownerKind.Value))
+		return
+	}
+	if ownerName.Value != "" && !fs.ValidPath(ownerName.Value) {
+		resp.WriteHeaderAndEntity(http.StatusBadRequest, fmt.Sprintf("invalid cookie values: path traversal not allowed (owner_name=%s)", ownerName.Value))
 		return
 	}
 
 	http.SetCookie(resp, &http.Cookie{MaxAge: 600, Path: "/", Name: COOKIE_CLUSTER_NAME_KEY, Value: clusterName.Value})
 	http.SetCookie(resp, &http.Cookie{MaxAge: 600, Path: "/", Name: COOKIE_CLUSTER_NAMESPACE_KEY, Value: clusterNamespace.Value})
 	http.SetCookie(resp, &http.Cookie{MaxAge: 600, Path: "/", Name: COOKIE_SESSION_NAME_KEY, Value: sessionName.Value})
+	http.SetCookie(resp, &http.Cookie{MaxAge: 600, Path: "/", Name: COOKIE_OWNER_KIND_KEY, Value: ownerKind.Value})
+	http.SetCookie(resp, &http.Cookie{MaxAge: 600, Path: "/", Name: COOKIE_OWNER_NAME_KEY, Value: ownerName.Value})
 
 	if sessionName.Value == "live" {
 		// Always query K8s to get the service name to prevent SSRF attacks.
@@ -1829,6 +1915,8 @@ func (s *ServerHandler) CookieHandle(req *restful.Request, resp *restful.Respons
 	req.SetAttribute(COOKIE_CLUSTER_NAME_KEY, clusterName.Value)
 	req.SetAttribute(COOKIE_SESSION_NAME_KEY, sessionName.Value)
 	req.SetAttribute(COOKIE_CLUSTER_NAMESPACE_KEY, clusterNamespace.Value)
+	req.SetAttribute(COOKIE_OWNER_KIND_KEY, ownerKind.Value)
+	req.SetAttribute(COOKIE_OWNER_NAME_KEY, ownerName.Value)
 	logrus.Infof("Request URL %s", req.Request.URL.String())
 	chain.ProcessFilter(req, resp)
 }
