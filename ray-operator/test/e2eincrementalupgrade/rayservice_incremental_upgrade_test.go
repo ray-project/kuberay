@@ -360,11 +360,15 @@ func TestRayServiceIncrementalUpgradeRollback(t *testing.T) {
 
 	// Trigger an incremental upgrade through a change to the RayCluster spec.
 	LogWithTimestamp(test.T(), "Triggering an upgrade for RayService %s/%s", rayService.Namespace, rayService.Name)
-	rayService, err = GetRayService(test, namespace.Name, rayServiceName)
-	g.Expect(err).NotTo(HaveOccurred())
-	rayService.Spec.RayClusterSpec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests[corev1.ResourceCPU] = resource.MustParse("500m")
-	_, err = test.Client().Ray().RayV1().RayServices(namespace.Name).Update(test.Ctx(), rayService, metav1.UpdateOptions{})
-	g.Expect(err).NotTo(HaveOccurred())
+	g.Eventually(func() error {
+		rayService, err = GetRayService(test, namespace.Name, rayServiceName)
+		if err != nil {
+			return err
+		}
+		rayService.Spec.RayClusterSpec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests[corev1.ResourceCPU] = resource.MustParse("500m")
+		_, err = test.Client().Ray().RayV1().RayServices(namespace.Name).Update(test.Ctx(), rayService, metav1.UpdateOptions{})
+		return err
+	}, TestTimeoutShort).Should(Succeed())
 
 	LogWithTimestamp(test.T(), "Waiting for RayService %s/%s UpgradeInProgress condition to be true", rayService.Namespace, rayService.Name)
 	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutShort).Should(WithTransform(IsRayServiceUpgrading, BeTrue()))
@@ -385,11 +389,15 @@ func TestRayServiceIncrementalUpgradeRollback(t *testing.T) {
 
 	// Trigger a rollback by updating the spec back to the original version.
 	LogWithTimestamp(test.T(), "Triggering a rollback for RayService %s/%s", rayService.Namespace, rayService.Name)
-	rayService, err = GetRayService(test, namespace.Name, rayServiceName)
-	g.Expect(err).NotTo(HaveOccurred())
-	rayService.Spec = *originalSpec
-	_, err = test.Client().Ray().RayV1().RayServices(namespace.Name).Update(test.Ctx(), rayService, metav1.UpdateOptions{})
-	g.Expect(err).NotTo(HaveOccurred())
+	g.Eventually(func() error {
+		rayService, err = GetRayService(test, namespace.Name, rayServiceName)
+		if err != nil {
+			return err
+		}
+		rayService.Spec = *originalSpec
+		_, err = test.Client().Ray().RayV1().RayServices(namespace.Name).Update(test.Ctx(), rayService, metav1.UpdateOptions{})
+		return err
+	}, TestTimeoutShort).Should(Succeed())
 
 	// Verify that the controller enters the rollback state.
 	LogWithTimestamp(test.T(), "Waiting for RayService %s/%s RollbackInProgress condition to be true", rayService.Namespace, rayService.Name)
