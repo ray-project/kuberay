@@ -290,13 +290,19 @@ func TestRayServiceIncrementalUpgradeWithLocust(t *testing.T) {
 			// Phase 3: Start Locust in a background goroutine targeting Gateway IP
 			locustHost := fmt.Sprintf("http://%s", gatewayIP)
 
+			locustRunTime := "180s"
+			if params.Name == "ConservativeGradual" {
+				locustRunTime = "300s"
+			}
+
 			eg, _ := errgroup.WithContext(test.Ctx())
 			eg.Go(func() error {
-				LogWithTimestamp(test.T(), "Starting Locust load test against %s", locustHost)
+				LogWithTimestamp(test.T(), "Starting Locust load test against %s for %s", locustHost, locustRunTime)
 				_, _, err := ExecPodCmdWithError(test, locustHeadPod, common.RayHeadContainer, []string{
 					"python", "/locust-runner/locust_runner.py",
 					"-f", "/locustfile/locustfile.py",
 					"--host", locustHost,
+					"--run-time", locustRunTime,
 				})
 				return err
 			})
@@ -445,16 +451,29 @@ func TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust(t *testing.T) {
 		TriggerLate          RollbackTrigger = "Late"
 	)
 
+	type RollbackSequence string
+	const (
+		SeqABA  RollbackSequence = "A->B->A"
+		SeqABAB RollbackSequence = "A->B->A->B"
+		SeqABAC RollbackSequence = "A->B->A->C"
+	)
+
 	type rollbackTestCase struct {
 		Name         string
+		Sequence     RollbackSequence
 		Strategy     incrementalUpgradeParams
 		TriggerStage RollbackTrigger
 		CrashPending bool
 	}
 
 	rollbackMatrix := []rollbackTestCase{
-		{Name: "BasicRollback", Strategy: incrementalUpgradeParams{Name: "Standard", MaxSurge: 50, StepSize: 25, Interval: 2}, TriggerStage: TriggerMiddle},
-		{Name: "FastRollback", Strategy: incrementalUpgradeParams{Name: "BlueGreen", MaxSurge: 100, StepSize: 100, Interval: 1}, TriggerStage: TriggerBeforeTraffic},
+		{Name: "BasicRollback", Sequence: SeqABA, Strategy: incrementalUpgradeParams{Name: "Standard", MaxSurge: 50, StepSize: 25, Interval: 2}, TriggerStage: TriggerMiddle},
+		{Name: "CancelRollback", Sequence: SeqABAB, Strategy: incrementalUpgradeParams{Name: "Conservative", MaxSurge: 25, StepSize: 5, Interval: 10}, TriggerStage: TriggerMiddle},
+		{Name: "ThirdSpec", Sequence: SeqABAC, Strategy: incrementalUpgradeParams{Name: "Conservative", MaxSurge: 25, StepSize: 5, Interval: 10}, TriggerStage: TriggerMiddle},
+		{Name: "UnhealthyPendingCluster", Sequence: SeqABA, Strategy: incrementalUpgradeParams{Name: "Standard", MaxSurge: 50, StepSize: 25, Interval: 2}, TriggerStage: TriggerLate, CrashPending: true},
+		{Name: "EarlyRollback", Sequence: SeqABA, Strategy: incrementalUpgradeParams{Name: "Standard", MaxSurge: 50, StepSize: 25, Interval: 2}, TriggerStage: TriggerEarly},
+		{Name: "LateRollback", Sequence: SeqABA, Strategy: incrementalUpgradeParams{Name: "Standard", MaxSurge: 50, StepSize: 25, Interval: 2}, TriggerStage: TriggerLate},
+		{Name: "FastRollback", Sequence: SeqABA, Strategy: incrementalUpgradeParams{Name: "BlueGreen", MaxSurge: 100, StepSize: 100, Interval: 1}, TriggerStage: TriggerBeforeTraffic},
 	}
 
 	for _, tc := range rollbackMatrix {
@@ -493,13 +512,19 @@ func TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust(t *testing.T) {
 
 			// Phase 3: Start Locust in a background goroutine targeting Gateway IP
 			locustHost := fmt.Sprintf("http://%s", gatewayIP)
+			locustRunTime := "180s"
+			if tc.Name == "CancelRollback" || tc.Name == "ThirdSpec" {
+				locustRunTime = "300s"
+			}
+
 			eg, _ := errgroup.WithContext(test.Ctx())
 			eg.Go(func() error {
-				LogWithTimestamp(test.T(), "Starting Locust load test against %s", locustHost)
+				LogWithTimestamp(test.T(), "Starting Locust load test against %s for %s", locustHost, locustRunTime)
 				_, _, err := ExecPodCmdWithError(test, locustHeadPod, common.RayHeadContainer, []string{
 					"python", "/locust-runner/locust_runner.py",
 					"-f", "/locustfile/locustfile.py",
 					"--host", locustHost,
+					"--run-time", locustRunTime,
 				})
 				return err
 			})
@@ -519,6 +544,8 @@ func TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust(t *testing.T) {
 				_, err = test.Client().Ray().RayV1().RayServices(namespace.Name).Update(test.Ctx(), rayService, metav1.UpdateOptions{})
 				return err
 			}, TestTimeoutShort).Should(Succeed())
+
+			specB := rayService.Spec.DeepCopy()
 
 			g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutShort).Should(WithTransform(IsRayServiceUpgrading, BeTrue()))
 
@@ -587,6 +614,39 @@ func TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust(t *testing.T) {
 				g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutShort).Should(WithTransform(IsRayServiceRollingBack, BeTrue()))
 			}
 
+			// Handle sequence branches for more complex rollback scenarios
+			// For scenarios involving a Cancel Rollback (SeqABAB) or a Third Spec (SeqABAC),
+			// we wait until the rollback has started progressing (indicated by active traffic increasing)
+			// and then submit another spec update to observe how KubeRay adapts.
+			// - SeqABAB: We re-apply Spec B. Because the pending cluster already matches Spec B,
+			//   KubeRay should cancel the rollback and resume migrating traffic to Spec B.
+			// - SeqABAC: We apply a brand new Spec C. KubeRay should abandon the rollback to Spec A,
+			//   clean up Spec B, and start provisioning Spec C as the new target.
+			if tc.Sequence == SeqABAB || tc.Sequence == SeqABAC {
+				g.Eventually(func(g Gomega) {
+					svc, err := GetRayService(test, namespace.Name, rayServiceName)
+					g.Expect(err).NotTo(HaveOccurred())
+					active := svc.Status.ActiveServiceStatus.TrafficRoutedPercent
+					g.Expect(active).NotTo(BeNil())
+					g.Expect(*active).Should(BeNumerically(">", 0))
+				}, TestTimeoutShort).Should(Succeed())
+
+				rayService, err = GetRayService(test, namespace.Name, rayServiceName)
+				g.Expect(err).NotTo(HaveOccurred())
+
+				switch tc.Sequence {
+				case SeqABAB:
+					LogWithTimestamp(test.T(), "Canceling rollback for RayService %s/%s (Spec B)", rayService.Namespace, rayService.Name)
+					rayService.Spec = *specB
+				case SeqABAC:
+					LogWithTimestamp(test.T(), "Third spec for RayService %s/%s (Spec C)", rayService.Namespace, rayService.Name)
+					rayService.Spec = *specB
+					rayService.Spec.RayClusterSpec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests[corev1.ResourceCPU] = resource.MustParse("600m") // Spec C
+				}
+				_, err = test.Client().Ray().RayV1().RayServices(namespace.Name).Update(test.Ctx(), rayService, metav1.UpdateOptions{})
+				g.Expect(err).NotTo(HaveOccurred())
+			}
+
 			// Phase 6: Ensure the upgrade/rollback operation is fully complete:
 			// 1. The UpgradeInProgress condition is completely cleared (False).
 			// 2. The RollbackInProgress condition is completely cleared (False).
@@ -617,7 +677,14 @@ func TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust(t *testing.T) {
 			g.Expect(err).NotTo(HaveOccurred())
 			finalCPUReq := finalCluster.Spec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests[corev1.ResourceCPU]
 
-			g.Expect(finalCPUReq).To(Equal(originalSpec.RayClusterSpec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests[corev1.ResourceCPU]))
+			switch tc.Sequence {
+			case SeqABA:
+				g.Expect(finalCPUReq).To(Equal(originalSpec.RayClusterSpec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests[corev1.ResourceCPU]))
+			case SeqABAB:
+				g.Expect(finalCPUReq).To(Equal(resource.MustParse("500m")))
+			case SeqABAC:
+				g.Expect(finalCPUReq).To(Equal(resource.MustParse("600m")))
+			}
 		})
 	}
 }
