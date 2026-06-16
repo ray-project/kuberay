@@ -21,6 +21,7 @@ import (
 
 	"github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
 	"github.com/ray-project/kuberay/historyserver/pkg/storage"
+	"github.com/ray-project/kuberay/historyserver/pkg/storage/clusterlogs"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 	"github.com/sirupsen/logrus"
 )
@@ -53,60 +54,46 @@ func NewLogEventReader(reader storage.StorageReader) *LogEventReader {
 // Return an error if any listed file fails to read (total or partial).
 func (r *LogEventReader) ReadLogEvents(clusterInfo utils.ClusterInfo, clusterSessionKey string, eventStore *types.ClusterLogEventMap) error {
 	// Build cluster ID used by StorageReader
-	clusterID := clusterInfo.Name + "_" + clusterInfo.Namespace
+	// Build cluster ID (clusterLogPathPrefix) used by StorageReader
+	clusterLogPathPrefix := clusterlogs.Prefix("", clusterInfo.OwnerKind, clusterInfo.OwnerName, clusterInfo.Namespace, clusterInfo.Name)
 
 	// Get or create the JobEventMap for this cluster session
 	jobEventMap := eventStore.GetOrCreateJobEventMap(clusterSessionKey)
 
-	// Path: {sessionName}/logs/
-	logsBaseDir := path.Join(clusterInfo.SessionName, utils.RAY_SESSIONDIR_LOGDIR_NAME)
-
-	// List all items under logs/ to find node directories
-	// Note: ListFiles returns base names only (e.g., "node1/", "node2/")
-	nodeEntries := r.reader.ListFiles(clusterID, logsBaseDir)
-
-	// Filter to get node IDs (only directories end with "/")
-	// This matches the pattern used in eventserver.go getAllJobEventFiles()
+	// Find candidate nodes under {sessionName}/
 	var nodeIDs []string
-	for _, entry := range nodeEntries {
-		// Skip non-directory entries (files don't end with "/")
-		if !strings.HasSuffix(entry, "/") {
-			continue
-		}
-		// Remove trailing "/" to get node ID
-		nodeID := strings.TrimSuffix(entry, "/")
-		if nodeID != "" {
-			nodeIDs = append(nodeIDs, nodeID)
+	for _, entry := range r.reader.ListFiles(clusterLogPathPrefix, clusterInfo.SessionName) {
+		if strings.HasSuffix(entry, "/") {
+			nodeID := strings.TrimSuffix(entry, "/")
+			if nodeID != "" {
+				nodeIDs = append(nodeIDs, nodeID)
+			}
 		}
 	}
-	logrus.Debugf("Found %d node directories for cluster %s: %v", len(nodeIDs), clusterSessionKey, nodeIDs)
+	logrus.Debugf("Found candidate node directories for cluster %s: %v", clusterSessionKey, nodeIDs)
 
 	total := 0
 	read := 0
 	for _, nodeID := range nodeIDs {
-		// Path: {sessionName}/logs/{nodeId}/events/
-		eventsDir := path.Join(clusterInfo.SessionName, utils.RAY_SESSIONDIR_LOGDIR_NAME, nodeID, "events")
-		// Note: ListFiles returns base names only (e.g., "event_GCS.log")
-		eventFileNames := r.reader.ListFiles(clusterID, eventsDir)
-
-		for _, fileName := range eventFileNames {
-			// Only process event_*.log files
-			if !strings.HasPrefix(fileName, "event_") || !strings.HasSuffix(fileName, ".log") {
-				continue
+		// Candidate events dirs: hierarchical (<sessionName>/<nodeId>/logs/events) and flat (<sessionName>/logs/<nodeId>/events)
+		candidateEventsDirs := []string{
+			path.Join(clusterlogs.RelLogsDir(clusterInfo.SessionName, nodeID), "events"),
+			path.Join(clusterInfo.SessionName, utils.RAY_SESSIONDIR_LOGDIR_NAME, nodeID, "events"),
+		}
+		for _, eventsDir := range candidateEventsDirs {
+			eventFileNames := r.reader.ListFiles(clusterLogPathPrefix, eventsDir)
+			for _, fileName := range eventFileNames {
+				if !strings.HasPrefix(fileName, "event_") || !strings.HasSuffix(fileName, ".log") {
+					continue
+				}
+				eventFilePath := path.Join(eventsDir, fileName)
+				total++
+				if err := r.readEventFile(clusterLogPathPrefix, eventFilePath, jobEventMap); err != nil {
+					logrus.Warnf("Failed to read event file %s: %v", eventFilePath, err)
+					continue
+				}
+				read++
 			}
-
-			// Build full path relative to clusterID for GetContent
-			eventFilePath := path.Join(clusterInfo.SessionName, utils.RAY_SESSIONDIR_LOGDIR_NAME, nodeID, "events", fileName)
-
-			// Read and parse the event file
-			// Note: Duplicate events are handled by JobEventMap's deduplication using event_id as key.
-			// This matches the design of existing RayEvents reading in eventserver.go.
-			total++
-			if err := r.readEventFile(clusterID, eventFilePath, jobEventMap); err != nil {
-				logrus.Warnf("Failed to read event file %s: %v", eventFilePath, err)
-				continue
-			}
-			read++
 		}
 	}
 
