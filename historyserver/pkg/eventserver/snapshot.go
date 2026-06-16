@@ -1,8 +1,6 @@
 package eventserver
 
 import (
-	"time"
-
 	"github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
@@ -12,8 +10,6 @@ import (
 // To avoid races, handlers MUST treat all fields as read-only.
 type SessionSnapshot struct {
 	SessionKey string `json:"sessionKey"`
-	// GeneratedAt is the UTC timestamp when this snapshot was built.
-	GeneratedAt time.Time `json:"generatedAt"`
 
 	Tasks            []types.Task                `json:"tasks"`
 	Actors           map[string]types.Actor      `json:"actors"`
@@ -27,7 +23,6 @@ func (h *EventHandler) BuildSnapshot(session utils.ClusterInfo) *SessionSnapshot
 	clusterSessionKey := utils.BuildClusterSessionKey(session.Name, session.Namespace, session.SessionName)
 	return &SessionSnapshot{
 		SessionKey:       clusterSessionKey,
-		GeneratedAt:      time.Now().UTC(),
 		Tasks:            h.getTasks(clusterSessionKey),
 		Actors:           h.getActorsMap(clusterSessionKey),
 		Jobs:             h.getJobsMap(clusterSessionKey),

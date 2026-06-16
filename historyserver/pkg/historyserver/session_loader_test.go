@@ -53,8 +53,7 @@ func testEnterClusterInfo() utils.ClusterInfo {
 // testSnapshot builds a minimal snapshot.
 func testSnapshot(clusterSessionKey string) *eventserver.SessionSnapshot {
 	return &eventserver.SessionSnapshot{
-		SessionKey:  clusterSessionKey,
-		GeneratedAt: time.Date(2026, 4, 22, 12, 0, 0, 0, time.UTC),
+		SessionKey: clusterSessionKey,
 	}
 }
 
@@ -265,8 +264,9 @@ func TestGetSnapshot_PutOverwrites(t *testing.T) {
 	clusterSessionKey := utils.BuildClusterSessionKey(info.Name, info.Namespace, info.SessionName)
 
 	stale := testSnapshot(clusterSessionKey)
-	stale.GeneratedAt = time.Date(2026, 4, 22, 10, 0, 0, 0, time.UTC)
+	stale.Tasks = []eventtypes.Task{{TaskID: "stale-task"}}
 	fresh := testSnapshot(clusterSessionKey)
+	fresh.Tasks = []eventtypes.Task{{TaskID: "fresh-task"}}
 
 	sl := newTestSessionLoader(t, &fakeProcessor{}, 0)
 	sl.putSnapshot(clusterSessionKey, stale)
@@ -276,8 +276,8 @@ func TestGetSnapshot_PutOverwrites(t *testing.T) {
 	if !ok {
 		t.Fatal("Get: ok=false")
 	}
-	if !got.GeneratedAt.Equal(fresh.GeneratedAt) {
-		t.Fatalf("putSnapshot did not overwrite; GeneratedAt = %v, want %v", got.GeneratedAt, fresh.GeneratedAt)
+	if len(got.Tasks) != 1 || got.Tasks[0].TaskID != "fresh-task" {
+		t.Fatalf("putSnapshot did not overwrite; got tasks = %#v, want fresh snapshot", got.Tasks)
 	}
 }
 
