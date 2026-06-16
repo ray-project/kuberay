@@ -16,6 +16,7 @@ import (
 	"github.com/ray-project/kuberay/historyserver/pkg/compression"
 	"github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
 	"github.com/ray-project/kuberay/historyserver/pkg/storage"
+	"github.com/ray-project/kuberay/historyserver/pkg/storage/clusterlogs"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
@@ -460,24 +461,37 @@ func (h *EventHandler) storeEvent(clusterSessionKey string, eventMap map[string]
 	return nil
 }
 
+func (h *EventHandler) getClusterLogPathPrefix(clusterInfo utils.ClusterInfo) string {
+	return clusterlogs.Prefix("", clusterInfo.OwnerKind, clusterInfo.OwnerName, clusterInfo.Namespace, clusterInfo.Name)
+}
+
 // getAllJobEventFiles get all the job event files for the given cluster.
-// Assuming that the events file object follow the format root/clustername/sessionid/job_events/{job-*}/*
 func (h *EventHandler) getAllJobEventFiles(clusterInfo utils.ClusterInfo) []string {
 	var allJobFiles []string
-	clusterNameID := clusterInfo.Name + "_" + clusterInfo.Namespace
-	jobEventDirPrefix := clusterInfo.SessionName + "/job_events/"
-	jobDirList := h.reader.ListFiles(clusterNameID, jobEventDirPrefix)
+	clusterLogPathPrefix := h.getClusterLogPathPrefix(clusterInfo)
 
-	for _, jobDir := range jobDirList {
-		// Skip non-directory entries
-		if !strings.HasSuffix(jobDir, "/") {
-			continue
+	// Check candidate prefixes: both flat (<sessionName>/job_events/) and hierarchical (<nodeName>/<sessionName>/job_events/)
+	var candidatePrefixes []string
+	candidatePrefixes = append(candidatePrefixes, clusterInfo.SessionName+"/job_events/")
+	for _, rawEntry := range h.reader.ListFiles(clusterLogPathPrefix, clusterInfo.SessionName) {
+		if strings.HasSuffix(rawEntry, "/") {
+			nodeName := strings.TrimSuffix(rawEntry, "/")
+			candidatePrefixes = append(candidatePrefixes, clusterlogs.RelJobEventsDir(clusterInfo.SessionName, nodeName, "")+"/")
 		}
-		jobDirPath := jobEventDirPrefix + jobDir
-		jobFiles := h.reader.ListFiles(clusterNameID, jobDirPath)
-		for _, jobFile := range jobFiles {
-			if isValidEventFile(jobFile) {
-				allJobFiles = append(allJobFiles, jobDirPath+jobFile)
+	}
+
+	for _, jobEventDirPrefix := range candidatePrefixes {
+		jobDirList := h.reader.ListFiles(clusterLogPathPrefix, jobEventDirPrefix)
+		for _, jobDir := range jobDirList {
+			if !strings.HasSuffix(jobDir, "/") {
+				continue
+			}
+			jobDirPath := jobEventDirPrefix + jobDir
+			jobFiles := h.reader.ListFiles(clusterLogPathPrefix, jobDirPath)
+			for _, jobFile := range jobFiles {
+				if isValidEventFile(jobFile) {
+					allJobFiles = append(allJobFiles, jobDirPath+jobFile)
+				}
 			}
 		}
 	}
@@ -486,17 +500,25 @@ func (h *EventHandler) getAllJobEventFiles(clusterInfo utils.ClusterInfo) []stri
 
 // getAllNodeEventFiles retrieves all node event files for the given cluster
 func (h *EventHandler) getAllNodeEventFiles(clusterInfo utils.ClusterInfo) []string {
-	clusterNameID := clusterInfo.Name + "_" + clusterInfo.Namespace
-	nodeEventDirPrefix := clusterInfo.SessionName + "/node_events/"
-	nodeEventFileNames := h.reader.ListFiles(clusterNameID, nodeEventDirPrefix)
+	clusterLogPathPrefix := h.getClusterLogPathPrefix(clusterInfo)
 
-	// Filter out directories (items ending with /) and build full paths
+	var candidatePrefixes []string
+	candidatePrefixes = append(candidatePrefixes, clusterInfo.SessionName+"/node_events/")
+	for _, rawEntry := range h.reader.ListFiles(clusterLogPathPrefix, clusterInfo.SessionName) {
+		if strings.HasSuffix(rawEntry, "/") {
+			nodeName := strings.TrimSuffix(rawEntry, "/")
+			candidatePrefixes = append(candidatePrefixes, clusterlogs.RelNodeEventsDir(clusterInfo.SessionName, nodeName)+"/")
+		}
+	}
+
 	var nodeEventFiles []string
-	for _, fileName := range nodeEventFileNames {
-		// Skip directories
-		if isValidEventFile(fileName) {
-			fullPath := nodeEventDirPrefix + fileName
-			nodeEventFiles = append(nodeEventFiles, fullPath)
+	for _, nodeEventDirPrefix := range candidatePrefixes {
+		nodeEventFileNames := h.reader.ListFiles(clusterLogPathPrefix, nodeEventDirPrefix)
+		for _, fileName := range nodeEventFileNames {
+			if isValidEventFile(fileName) {
+				fullPath := nodeEventDirPrefix + fileName
+				nodeEventFiles = append(nodeEventFiles, fullPath)
+			}
 		}
 	}
 	return nodeEventFiles
@@ -1018,7 +1040,7 @@ func (h *EventHandler) getNodeMap(clusterSessionID string) map[string]types.Node
 // TODO(jiangjiawei1103): Empty event file list vs ListFiles outage is ambiguous without
 // StorageReader interface surfacing errors.
 func (h *EventHandler) ProcessSingleSession(ctx context.Context, clusterInfo utils.ClusterInfo) error {
-	clusterNameNamespace := clusterInfo.Name + "_" + clusterInfo.Namespace
+	clusterLogPathPrefix := h.getClusterLogPathPrefix(clusterInfo)
 	clusterSessionKey := utils.BuildClusterSessionKey(clusterInfo.Name, clusterInfo.Namespace, clusterInfo.SessionName)
 
 	// ClusterLogEventMap backs only the /events endpoint, so log event read failures must not
@@ -1042,14 +1064,14 @@ func (h *EventHandler) ProcessSingleSession(ctx context.Context, clusterInfo uti
 
 		var eventioReader io.Reader
 		if strings.HasSuffix(eventFile, ".gz") {
-			rc, err := compression.ReadCompressedContent(h.reader, clusterNameNamespace, eventFile)
+			rc, err := compression.ReadCompressedContent(h.reader, clusterLogPathPrefix, eventFile)
 			if err != nil {
 				logrus.Errorf("Failed to decompress event file %s: %v", eventFile, err)
 				continue
 			}
 			eventioReader = rc
 		} else {
-			eventioReader = h.reader.GetContent(clusterNameNamespace, eventFile)
+			eventioReader = h.reader.GetContent(clusterLogPathPrefix, eventFile)
 		}
 
 		if eventioReader == nil {

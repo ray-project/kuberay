@@ -11,8 +11,9 @@ type ClusterInfo struct {
 }
 
 type ClusterKey struct {
-	Namespace string
-	Name      string
+	Namespace    string
+	ResourceType string
+	ResourceName string
 }
 
 type ClusterInfoList []ClusterInfo
