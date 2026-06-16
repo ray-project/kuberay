@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/emicklei/go-restful/v3"
+	"github.com/ray-project/kuberay/historyserver/pkg/eventserver"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
@@ -24,17 +25,17 @@ func TestEnterCluster(t *testing.T) {
 
 	// Setup fake processor for sessionLoader
 	fp := &fakeProcessor{
-		fn: func(ctx context.Context, info utils.ClusterInfo) (SessionStatus, error) {
+		fn: func(ctx context.Context, info utils.ClusterInfo) (SessionStatus, *eventserver.SessionSnapshot, error) {
 			if info.SessionName == "session_2026-04-22_10-00-00_000000_1" {
-				return SessionStatusProcessed, nil
+				return SessionStatusProcessed, &eventserver.SessionSnapshot{}, nil
 			}
 			if info.SessionName == "session_2026-04-22_10-00-00_000000_2_live" {
-				return SessionStatusLive, nil
+				return SessionStatusLive, nil, nil
 			}
-			return SessionStatusEventsErr, fmt.Errorf("unknown session")
+			return SessionStatusEventsErr, nil, fmt.Errorf("unknown session")
 		},
 	}
-	handler.sessionLoader = NewSessionLoader(fp, context.Background(), DefaultSessionProcessTimeout)
+	handler.sessionLoader = NewSessionLoader(fp, context.Background(), DefaultSessionProcessTimeout, DefaultSessionCacheSize, DefaultSessionCacheTTL)
 
 	// Single session cluster
 	keyA := utils.ClusterKey{
