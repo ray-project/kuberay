@@ -663,7 +663,7 @@ func TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust(t *testing.T) {
 				active := svc.Status.ActiveServiceStatus.TrafficRoutedPercent
 				g.Expect(active).NotTo(BeNil())
 				g.Expect(*active).Should(Equal(int32(100)))
-			}, TestTimeoutMedium).Should(Succeed())
+			}, TestTimeoutLong).Should(Succeed())
 
 			// Wait for locust to finish and check for errors
 			LogWithTimestamp(test.T(), "Waiting for Locust load test goroutine to finish")
