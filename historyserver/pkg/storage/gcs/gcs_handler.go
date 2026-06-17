@@ -91,7 +91,15 @@ func (h *RayLogsHandler) WriteMeta(path string, meta utils.MetaJson) error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal meta json: %w", err)
 	}
-	return h.WriteFile(path, bytes.NewReader(data))
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	writer := h.StorageClient.Bucket(h.GCSBucket).Object(path).NewWriter(ctx)
+	writer.ContentType = "application/json"
+	if _, err := io.Copy(writer, bytes.NewReader(data)); err != nil {
+		return fmt.Errorf("GCS Client failed to write meta json: %v", err)
+	}
+	return writer.Close()
 }
 
 func (h *RayLogsHandler) ReadMeta(path string) (*utils.MetaJson, error) {
@@ -199,13 +207,11 @@ func (h *RayLogsHandler) List() []utils.ClusterInfo {
 		if strings.HasSuffix(metaInfo[1], utils.MetadirMetaJsonSuffix) {
 			continue
 		}
-		clusterMeta := strings.Split(metaInfo[0], "_")
-		if len(clusterMeta) != 2 {
+		cluster.Name, cluster.Namespace = utils.ParseClusterKey(metaInfo[0])
+		if cluster.Namespace == "" {
 			logrus.Errorf("Unable to get cluster name and namespace from directory: %s", metaInfo[0])
 			continue
 		}
-		cluster.Name = clusterMeta[0]
-		cluster.Namespace = clusterMeta[1]
 
 		cluster.SessionName = metaInfo[1]
 		datetime, err := utils.GetDateTimeFromSessionID(metaInfo[1])

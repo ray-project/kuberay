@@ -90,7 +90,13 @@ func (r *RayLogsHandler) WriteMeta(path string, meta utils.MetaJson) error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal meta json: %w", err)
 	}
-	return r.WriteFile(path, bytes.NewReader(data))
+	_, err = r.OssClient.PutObject(context.TODO(), &oss.PutObjectRequest{
+		Bucket:      oss.Ptr(r.OssBucket),
+		Key:         oss.Ptr(path),
+		Body:        bytes.NewReader(data),
+		ContentType: oss.Ptr("application/json"),
+	})
+	return err
 }
 
 func (r *RayLogsHandler) ReadMeta(path string) (*utils.MetaJson, error) {
@@ -206,12 +212,10 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 					continue
 				}
 				logrus.Infof("Process %++v", metas)
-				namespaceName := strings.Split(metas[0], "_")
-				if len(namespaceName) < 2 {
+				c.Name, c.Namespace = utils.ParseClusterKey(metas[0])
+				if c.Namespace == "" {
 					continue
 				}
-				c.Name = namespaceName[0]
-				c.Namespace = namespaceName[1]
 				c.SessionName = metas[1]
 				sessionInfo := strings.Split(metas[1], "_")
 				if len(sessionInfo) < 3 {
@@ -228,7 +232,7 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 				c.CreateTime = createTime.UTC().Format(("2006-01-02T15:04:05Z"))
 
 				// Enrich with meta.json data if available
-				metaPath := path.Join(r.OssRootDir, "metadir", metas[0], metas[1]+utils.MetadirMetaJsonSuffix)
+				metaPath := utils.MetadirMetaJsonPath(r.OssRootDir, c.Name, c.Namespace, metas[1])
 				if meta, err := r.ReadMeta(metaPath); err == nil {
 					c.Status = meta.Status
 					c.EndTime = meta.EndTime

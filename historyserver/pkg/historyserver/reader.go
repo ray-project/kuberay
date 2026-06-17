@@ -47,9 +47,16 @@ func (s *ServerHandler) listClusters(limit int) []utils.ClusterInfo {
 	logrus.Debugf("Prepare to get list clusters info ...")
 	ctx := context.Background()
 	liveClusters, _ := s.clientManager.ListRayClusters(ctx)
+
+	// Build a set of live cluster keys for crash detection.
+	// Key format: "namespace/name" (K8s-style, distinct from the storage key
+	// format "name_namespace" produced by utils.AppendRayClusterNameNamespace).
+	liveKeySet := make(map[string]bool, len(liveClusters))
 	liveClusterNames := []string{}
 	liveClusterInfos := []utils.ClusterInfo{}
 	for _, liveCluster := range liveClusters {
+		key := liveCluster.Namespace + "/" + liveCluster.Name
+		liveKeySet[key] = true
 		liveClusterInfo := utils.ClusterInfo{
 			Name:            liveCluster.Name,
 			Namespace:       liveCluster.Namespace,
@@ -62,6 +69,18 @@ func (s *ServerHandler) listClusters(limit int) []utils.ClusterInfo {
 	}
 	logrus.Infof("live clusters: %v", liveClusterNames)
 	clusters := s.reader.List()
+
+	// Crash detection: a session recorded as in_progress whose RayCluster CR
+	// no longer exists is inferred as terminated. This is a read-time inference
+	// only (no write-back to storage) and uses data already fetched above.
+	for i := range clusters {
+		if clusters[i].Status == utils.SessionStatusInProgress {
+			key := clusters[i].Namespace + "/" + clusters[i].Name
+			if !liveKeySet[key] {
+				clusters[i].Status = utils.SessionStatusTerminated
+			}
+		}
+	}
 	sort.Sort(utils.ClusterInfoList(clusters))
 	if limit > 0 && limit < len(clusters) {
 		clusters = clusters[:limit]

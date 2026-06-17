@@ -22,12 +22,14 @@ func NewMockReader() *MockReader {
 	clusters := []utils.ClusterInfo{
 		{
 			Name:            "cluster-1",
+			Namespace:       "default",
 			SessionName:     "session_2023-01-01_00-00-00_000000",
 			CreateTime:      "2023-01-01T00:00:00Z",
 			CreateTimeStamp: 1672531200000,
 		},
 		{
 			Name:            "cluster-2",
+			Namespace:       "default",
 			SessionName:     "session_2023-01-02_00-00-00_000000",
 			CreateTime:      "2023-01-02T00:00:00Z",
 			CreateTimeStamp: 1672617600000,
@@ -45,16 +47,41 @@ func NewMockReader() *MockReader {
 		},
 	}
 
+	metas := map[string]*utils.MetaJson{
+		"metadir/cluster-1_default/session_2023-01-01_00-00-00_000000.meta.json": {
+			SessionName:      "session_2023-01-01_00-00-00_000000",
+			ClusterID:        "cluster-1",
+			ClusterNamespace: "default",
+			Status:           utils.SessionStatusCompleted,
+			EndTime:          1672534800,
+		},
+		"metadir/cluster-2_default/session_2023-01-02_00-00-00_000000.meta.json": {
+			SessionName:      "session_2023-01-02_00-00-00_000000",
+			ClusterID:        "cluster-2",
+			ClusterNamespace: "default",
+			Status:           utils.SessionStatusInProgress,
+		},
+	}
+
 	return &MockReader{
 		clusters: clusters,
 		data:     data,
-		metas:    make(map[string]*utils.MetaJson),
+		metas:    metas,
 	}
 }
 
-// List returns all available files from backend
+// List returns all available files from backend, enriched with meta.json data
 func (r *MockReader) List() []utils.ClusterInfo {
-	return r.clusters
+	result := make([]utils.ClusterInfo, len(r.clusters))
+	copy(result, r.clusters)
+	for i := range result {
+		metaPath := utils.MetadirMetaJsonPath("", result[i].Name, result[i].Namespace, result[i].SessionName)
+		if meta, err := r.ReadMeta(metaPath); err == nil {
+			result[i].Status = meta.Status
+			result[i].EndTime = meta.EndTime
+		}
+	}
+	return result
 }
 
 // GetContent returns content for a specific file

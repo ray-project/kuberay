@@ -16,6 +16,9 @@ type MetaJson struct {
 	StartTime        int64         `json:"start_time"`
 	EndTime          int64         `json:"end_time"`
 	Status           SessionStatus `json:"status"`
+	// RayStatus captures the latest Ray resource status/condition at termination time.
+	// Populated on a best-effort basis from the Ray dashboard during collector shutdown.
+	RayStatus string `json:"ray_status,omitempty"`
 }
 
 type ClusterInfo struct {

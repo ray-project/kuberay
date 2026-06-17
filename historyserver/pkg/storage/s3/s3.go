@@ -97,6 +97,7 @@ func (r *RayLogsHandler) WriteMeta(path string, meta utils.MetaJson) error {
 		Bucket: aws.String(r.S3Bucket),
 		Key:    aws.String(path),
 		Body:   bytes.NewReader(data),
+		ContentType: aws.String("application/json"),
 	})
 	return err
 }
@@ -213,12 +214,10 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 						continue
 					}
 					logrus.Infof("Process %++v", metas)
-					namespaceName := strings.Split(metas[0], "_")
-					if len(namespaceName) < 2 {
+					c.Name, c.Namespace = utils.ParseClusterKey(metas[0])
+					if c.Namespace == "" {
 						continue
 					}
-					c.Name = namespaceName[0]
-					c.Namespace = namespaceName[1]
 					c.SessionName = metas[1]
 					sessionInfo := strings.Split(metas[1], "_")
 					if len(sessionInfo) < 3 {
@@ -235,7 +234,7 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 					c.CreateTime = createTime.UTC().Format(("2006-01-02T15:04:05Z"))
 
 					// Enrich with meta.json data if available
-					metaPath := path.Join(r.S3RootDir, "metadir", metas[0], metas[1]+utils.MetadirMetaJsonSuffix)
+					metaPath := utils.MetadirMetaJsonPath(r.S3RootDir, c.Name, c.Namespace, metas[1])
 					if meta, err := r.ReadMeta(metaPath); err == nil {
 						c.Status = meta.Status
 						c.EndTime = meta.EndTime
