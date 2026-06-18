@@ -46,7 +46,7 @@ func GetLogDirByNameID(ossHistorySeverDir, rayClusterNameNamespace, rayNodeID, s
 }
 
 const (
-	// connector is the separator for creating flat storage keys.
+	// Connector is the separator for creating flat storage keys.
 	//
 	// Design Philosophy:
 	// - Format: "{clusterName}_{namespace}" for router/historyserver/collector
@@ -72,28 +72,6 @@ const (
 func AppendRayClusterNameNamespace(rayClusterName, rayClusterNamespace string) string {
 	return fmt.Sprintf("%s%s%s", rayClusterName, Connector, rayClusterNamespace)
 }
-
-// ParseClusterKey splits a storage key produced by AppendRayClusterNameNamespace
-// back into (clusterName, namespace). It splits from the last "_" because
-// Kubernetes namespaces follow DNS-1123 and cannot contain "_", while cluster
-// names may.
-func ParseClusterKey(clusterKey string) (name, namespace string) {
-	i := strings.LastIndex(clusterKey, connector)
-	if i < 0 {
-		return clusterKey, ""
-	}
-	return clusterKey[:i], clusterKey[i+len(connector):]
-}
-
-// MetadirMetaJsonPath constructs the object key for a session's meta.json file.
-// The meta.json is stored alongside the metadir marker with a ".meta.json" suffix.
-func MetadirMetaJsonPath(rootDir, rayClusterName, rayClusterNamespace, sessionName string) string {
-	clusterKey := AppendRayClusterNameNamespace(rayClusterName, rayClusterNamespace)
-	return path.Clean(path.Join(rootDir, "metadir", clusterKey, sessionName+".meta.json"))
-}
-
-// MetadirMetaJsonSuffix is the suffix appended to session names for meta.json files.
-const MetadirMetaJsonSuffix = ".meta.json"
 
 func GetSessionDir() (string, error) {
 	for i := 0; i < 12; i++ {

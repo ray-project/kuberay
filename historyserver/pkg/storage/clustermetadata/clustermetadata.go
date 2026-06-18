@@ -91,6 +91,12 @@ func DecodePath(filePath string, rootDir string) (utils.ClusterInfo, error) {
 	return c, nil
 }
 
+// MetaJsonPath returns the storage path for a session's meta.json file,
+alongside the session marker.
+func MetaJsonPath(info utils.ClusterInfo, rootDir, sessionID string) string {
+	return EncodePath(info, rootDir, sessionID) + ".meta.json"
+}
+
 // Prefix returns the root directory prefix.
 func Prefix(rootDir string) string {
 	if rootDir == "" {

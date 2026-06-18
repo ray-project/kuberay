@@ -106,7 +106,12 @@ func (r *RayLogHandler) updateMetaJsonOnShutdown() {
 		return
 	}
 	sessionName := filepath.Base(sessionRealDir)
-	metaPath := utils.MetadirMetaJsonPath(r.RootDir, r.RayClusterName, r.RayClusterNamespace, sessionName)
+	metaPath := clustermetadata.MetaJsonPath(utils.ClusterInfo{
+		Name:      r.RayClusterName,
+		Namespace: r.RayClusterNamespace,
+		OwnerKind: r.OwnerKind,
+		OwnerName: r.OwnerName,
+	}, r.RootDir, sessionName)
 
 	startTime, err := utils.GetDateTimeFromSessionID(sessionName)
 	var startUnix int64
@@ -168,7 +173,12 @@ func (r *RayLogHandler) fetchRayStatusOnShutdown() string {
 // Called only when a new session is first discovered (WatchSessionLatestLoops).
 func (r *RayLogHandler) writeMetaJsonInProgress(sessionID string) {
 	sessionBase := path.Base(sessionID)
-	metaPath := utils.MetadirMetaJsonPath(r.RootDir, r.RayClusterName, r.RayClusterNamespace, sessionBase)
+	metaPath := clustermetadata.MetaJsonPath(utils.ClusterInfo{
+		Name:      r.RayClusterName,
+		Namespace: r.RayClusterNamespace,
+		OwnerKind: r.OwnerKind,
+		OwnerName: r.OwnerName,
+	}, r.RootDir, sessionBase)
 	startTime, parseErr := utils.GetDateTimeFromSessionID(sessionBase)
 	var startUnix int64
 	if parseErr == nil {

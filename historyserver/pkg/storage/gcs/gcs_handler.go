@@ -198,41 +198,19 @@ func (h *RayLogsHandler) List() []utils.ClusterInfo {
 			return nil
 		}
 
-		fullObjectPath := objectAttr.Name
-		metaInfo := strings.Split(strings.TrimPrefix(fullObjectPath, pathPrefix), "/")
-		if len(metaInfo) != 2 {
-			logrus.Errorf("Unable to properly parse cluster metadir path with fullpath: %s", fullObjectPath)
-			continue
-		}
-		// Skip meta.json files — these are handled via ReadMeta
-		if strings.HasSuffix(metaInfo[1], utils.MetadirMetaJsonSuffix) {
-			continue
-		}
-		cluster.Name, cluster.Namespace = utils.ParseClusterKey(metaInfo[0])
-		if cluster.Namespace == "" {
-			logrus.Errorf("Unable to get cluster name and namespace from directory: %s", metaInfo[0])
-			continue
-		}
-
-		cluster.SessionName = metaInfo[1]
-		datetime, err := utils.GetDateTimeFromSessionID(metaInfo[1])
 		c, err := clustermetadata.DecodePath(objectAttr.Name, h.RootDir)
 		if err != nil {
-			logrus.Errorf("Failed to parse meta file path: %s, error: %v", objectAttr.Name, err)
 			continue
 		}
 
 		// Enrich with meta.json data if available
-		metaPath := utils.MetadirMetaJsonPath(h.RootDir, cluster.Name, cluster.Namespace, metaInfo[1])
+		metaPath := clustermetadata.MetaJsonPath(c, h.RootDir, c.SessionName)
 		metaPath = strings.TrimPrefix(metaPath, "/")
-		if meta, err := h.ReadMeta(metaPath); err == nil {
-			cluster.Status = meta.Status
-			cluster.EndTime = meta.EndTime
+		if meta, metaErr := h.ReadMeta(metaPath); metaErr == nil {
+			c.Status = meta.Status
+			c.EndTime = meta.EndTime
 		}
 
-		logrus.Infof("Parsed cluster %s for session %s to list", cluster.Name, cluster.SessionName)
-		clusterList = append(clusterList, *cluster)
-		logrus.Infof("Parsed cluster %s for session %s to list", c.Name, c.SessionName)
 		clusterList = append(clusterList, c)
 	}
 

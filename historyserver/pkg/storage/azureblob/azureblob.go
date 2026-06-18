@@ -230,45 +230,18 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 			prefix, len(resp.Segment.BlobItems))
 
 		for _, blob := range resp.Segment.BlobItems {
-			c := &utils.ClusterInfo{}
-			metaInfo := strings.Trim(strings.TrimPrefix(*blob.Name, path.Join(r.RootDir, "metadir/")), "/")
-			metas := strings.Split(metaInfo, "/")
-			if len(metas) < 2 {
-				continue
-			}
-			// Skip meta.json files — these are handled via ReadMeta
-			if strings.HasSuffix(metas[1], utils.MetadirMetaJsonSuffix) {
-				continue
-			}
-			logrus.Infof("Process %++v", metas)
-			c.Name, c.Namespace = utils.ParseClusterKey(metas[0])
-			if c.Namespace == "" {
-				continue
-			}
-			c.SessionName = metas[1]
-			sessionInfo := strings.Split(metas[1], "_")
-			if len(sessionInfo) < 3 {
-				continue
-			}
-			date := sessionInfo[1]
-			dataTime := sessionInfo[2]
-			createTime, err := time.Parse("2006-01-02_15-04-05", date+"_"+dataTime)
 			c, err := clustermetadata.DecodePath(*blob.Name, r.RootDir)
 			if err != nil {
-				logrus.Errorf("Failed to parse meta file path: %s, error: %v", *blob.Name, err)
 				continue
 			}
-			c.CreateTimeStamp = createTime.Unix()
-			c.CreateTime = createTime.UTC().Format("2006-01-02T15:04:05Z")
 
 			// Enrich with meta.json data if available
-			metaPath := utils.MetadirMetaJsonPath(r.RootDir, c.Name, c.Namespace, metas[1])
+			metaPath := clustermetadata.MetaJsonPath(c, r.RootDir, c.SessionName)
 			if meta, err := r.ReadMeta(metaPath); err == nil {
 				c.Status = meta.Status
 				c.EndTime = meta.EndTime
 			}
 
-			clusters = append(clusters, *c)
 			clusters = append(clusters, c)
 		}
 	}

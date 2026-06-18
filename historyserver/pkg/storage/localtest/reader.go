@@ -7,6 +7,7 @@ import (
 
 	"github.com/ray-project/kuberay/historyserver/pkg/collector/types"
 	"github.com/ray-project/kuberay/historyserver/pkg/storage"
+	"github.com/ray-project/kuberay/historyserver/pkg/storage/clustermetadata"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
@@ -48,14 +49,14 @@ func NewMockReader() *MockReader {
 	}
 
 	metas := map[string]*utils.MetaJson{
-		"metadir/cluster-1_default/session_2023-01-01_00-00-00_000000.meta.json": {
+		"cluster-metadata/raycluster/default_cluster-1/session_2023-01-01_00-00-00_000000.meta.json": {
 			SessionName:      "session_2023-01-01_00-00-00_000000",
 			ClusterID:        "cluster-1",
 			ClusterNamespace: "default",
 			Status:           utils.SessionStatusCompleted,
 			EndTime:          1672534800,
 		},
-		"metadir/cluster-2_default/session_2023-01-02_00-00-00_000000.meta.json": {
+		"cluster-metadata/raycluster/default_cluster-2/session_2023-01-02_00-00-00_000000.meta.json": {
 			SessionName:      "session_2023-01-02_00-00-00_000000",
 			ClusterID:        "cluster-2",
 			ClusterNamespace: "default",
@@ -75,7 +76,7 @@ func (r *MockReader) List() []utils.ClusterInfo {
 	result := make([]utils.ClusterInfo, len(r.clusters))
 	copy(result, r.clusters)
 	for i := range result {
-		metaPath := utils.MetadirMetaJsonPath("", result[i].Name, result[i].Namespace, result[i].SessionName)
+		metaPath := clustermetadata.MetaJsonPath(result[i], "", result[i].SessionName)
 		if meta, err := r.ReadMeta(metaPath); err == nil {
 			result[i].Status = meta.Status
 			result[i].EndTime = meta.EndTime
