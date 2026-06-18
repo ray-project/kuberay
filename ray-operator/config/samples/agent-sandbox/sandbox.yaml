@@ -47,27 +47,27 @@ spec:
     matchLabels:
       app: python-runtime-pool
   policyTypes:
-    - Egress
+  - Egress
   egress:
-    - to:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: kube-system
-          podSelector:
-            matchLabels:
-              k8s-app: kube-dns
-      ports:
-        - protocol: UDP
-          port: 53
-        - protocol: TCP
-          port: 53
-    # GKE NodeLocal DNSCache (link-local) — present on Autopilot,
-    # optional on Standard. Harmless to ship either way.
-    - to:
-        - ipBlock:
-            cidr: 169.254.20.10/32
-      ports:
-        - protocol: UDP
-          port: 53
-        - protocol: TCP
-          port: 53
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+      podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+  # GKE NodeLocal DNSCache (link-local) — present on Autopilot,
+  # optional on Standard. Harmless to ship either way.
+  - to:
+    - ipBlock:
+        cidr: 169.254.20.10/32
+    ports:
+      - protocol: UDP
+        port: 53
+      - protocol: TCP
+        port: 53
