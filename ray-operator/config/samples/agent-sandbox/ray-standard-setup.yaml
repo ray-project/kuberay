@@ -18,7 +18,7 @@ spec:
       template:
         spec:
           containers:
-          - image: rayproject/ray:2.49.0-py310
+          - image: rayproject/ray:2.55.0
             name: ray-head
             ports:
             - containerPort: 6379
