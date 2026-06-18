@@ -2,7 +2,6 @@ apiVersion: extensions.agents.x-k8s.io/v1alpha1
 kind: SandboxTemplate
 metadata:
   name: python-runtime-sandbox
-  namespace: default
 spec:
   envVarsInjectionPolicy: Disallowed
   # Unmanaged because we apply our own NetworkPolicy below.
@@ -43,7 +42,6 @@ apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: python-runtime-pool-restrict-egress
-  namespace: default
 spec:
   podSelector:
     matchLabels:
