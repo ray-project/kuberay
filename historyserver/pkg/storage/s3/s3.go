@@ -37,6 +37,7 @@ import (
 
 	"github.com/ray-project/kuberay/historyserver/pkg/collector/types"
 	"github.com/ray-project/kuberay/historyserver/pkg/storage"
+	"github.com/ray-project/kuberay/historyserver/pkg/storage/clustermetadata"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
@@ -189,10 +190,12 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 	clusters := make(utils.ClusterInfoList, 0, 10)
 	logrus.Debugf("Prepare to get list clusters info ...")
 
+	prefix := clustermetadata.Prefix(r.S3RootDir)
+
 	getClusters := func() {
 		listInput := &s3.ListObjectsV2Input{
 			Bucket:    aws.String(r.S3Bucket),
-			Prefix:    aws.String(path.Join(r.S3RootDir, "metadir") + "/"),
+			Prefix:    aws.String(prefix),
 			MaxKeys:   aws.Int64(100),
 			Delimiter: aws.String(""),
 		}
@@ -200,7 +203,7 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 		err := r.S3Client.ListObjectsV2Pages(listInput,
 			func(page *s3.ListObjectsV2Output, lastPage bool) bool {
 				logrus.Infof("[List]Returned objects in %v. length of page.Contents: %v, length of page.CommonPrefixes: %v",
-					path.Join(r.S3RootDir, "metadir")+"/", len(page.Contents), len(page.CommonPrefixes))
+					prefix, len(page.Contents), len(page.CommonPrefixes))
 
 				for _, object := range page.Contents {
 					c := &utils.ClusterInfo{}
@@ -226,8 +229,9 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 					date := sessionInfo[1]
 					dataTime := sessionInfo[2]
 					createTime, err := time.Parse("2006-01-02_15-04-05", date+"_"+dataTime)
+					c, err := clustermetadata.DecodePath(*object.Key, r.S3RootDir)
 					if err != nil {
-						logrus.Errorf("Failed to parse time %s: %v", date+"_"+dataTime, err)
+						logrus.Errorf("Failed to parse meta file path: %s, error: %v", *object.Key, err)
 						continue
 					}
 					c.CreateTimeStamp = createTime.Unix()
@@ -241,11 +245,13 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 					}
 
 					clusters = append(clusters, *c)
+					logrus.Infof("Parsed cluster %s for session %s to list", c.Name, c.SessionName)
+					clusters = append(clusters, c)
 				}
 				return true
 			})
 		if err != nil {
-			logrus.Errorf("Failed to list objects from %s: %v", path.Join(r.S3RootDir, "metadir")+"/", err)
+			logrus.Errorf("Failed to list objects from %s: %v", prefix, err)
 			return
 		}
 	}

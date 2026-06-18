@@ -202,10 +202,6 @@ type RayClusterList struct {
 	Items           []RayCluster `json:"items"`
 }
 
-func init() {
-	SchemeBuilder.Register(&RayCluster{}, &RayClusterList{})
-}
-
 type EventReason string
 
 const (

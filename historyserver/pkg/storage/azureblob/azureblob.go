@@ -22,6 +22,7 @@ import (
 
 	"github.com/ray-project/kuberay/historyserver/pkg/collector/types"
 	"github.com/ray-project/kuberay/historyserver/pkg/storage"
+	"github.com/ray-project/kuberay/historyserver/pkg/storage/clustermetadata"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
@@ -211,22 +212,22 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 	ctx, cancel := context.WithTimeout(context.Background(), listTimeout)
 	defer cancel()
 
-	metadirPrefix := path.Join(r.RootDir, "metadir") + "/"
+	prefix := clustermetadata.Prefix(r.RootDir)
 
 	pager := r.ContainerClient.NewListBlobsFlatPager(&container.ListBlobsFlatOptions{
-		Prefix:     &metadirPrefix,
+		Prefix:     &prefix,
 		MaxResults: to32(100),
 	})
 
 	for pager.More() {
 		resp, err := pager.NextPage(ctx)
 		if err != nil {
-			logrus.Errorf("Failed to list blobs from %s: %v", metadirPrefix, err)
+			logrus.Errorf("Failed to list blobs from %s: %v", prefix, err)
 			break
 		}
 
 		logrus.Infof("[List]Returned blobs in %v. length of Segment.BlobItems: %v",
-			metadirPrefix, len(resp.Segment.BlobItems))
+			prefix, len(resp.Segment.BlobItems))
 
 		for _, blob := range resp.Segment.BlobItems {
 			c := &utils.ClusterInfo{}
@@ -252,8 +253,9 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 			date := sessionInfo[1]
 			dataTime := sessionInfo[2]
 			createTime, err := time.Parse("2006-01-02_15-04-05", date+"_"+dataTime)
+			c, err := clustermetadata.DecodePath(*blob.Name, r.RootDir)
 			if err != nil {
-				logrus.Errorf("Failed to parse time %s: %v", date+"_"+dataTime, err)
+				logrus.Errorf("Failed to parse meta file path: %s, error: %v", *blob.Name, err)
 				continue
 			}
 			c.CreateTimeStamp = createTime.Unix()
@@ -267,6 +269,7 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 			}
 
 			clusters = append(clusters, *c)
+			clusters = append(clusters, c)
 		}
 	}
 

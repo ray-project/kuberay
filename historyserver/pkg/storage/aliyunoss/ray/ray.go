@@ -19,6 +19,7 @@ import (
 	"github.com/ray-project/kuberay/historyserver/pkg/collector/types"
 	"github.com/ray-project/kuberay/historyserver/pkg/storage"
 	"github.com/ray-project/kuberay/historyserver/pkg/storage/aliyunoss/rrsa"
+	"github.com/ray-project/kuberay/historyserver/pkg/storage/clustermetadata"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
@@ -184,10 +185,12 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 	clusters := make(utils.ClusterInfoList, 0, 10)
 	logrus.Debugf("Prepare to get list clusters info ...")
 
+	prefix := clustermetadata.Prefix(r.OssRootDir)
+
 	getClusters := func() {
 		p := r.OssClient.NewListObjectsV2Paginator(&oss.ListObjectsV2Request{
 			Bucket:    oss.Ptr(r.OssBucket),
-			Prefix:    oss.Ptr(path.Join(r.OssRootDir, "metadir") + "/"),
+			Prefix:    oss.Ptr(prefix),
 			Delimiter: oss.Ptr(""),
 			MaxKeys:   100,
 		})
@@ -195,10 +198,10 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 		for p.HasNext() {
 			page, err := p.NextPage(ctx)
 			if err != nil {
-				logrus.Errorf("Failed to list objects from %s: %v", path.Join(r.OssRootDir, "metadir")+"/", err)
+				logrus.Errorf("Failed to list objects from %s: %v", prefix, err)
 				return
 			}
-			logrus.Infof("[List]Returned objects in %v. length of Contents: %v, length of CommonPrefixes: %v", path.Join(r.OssRootDir, "metadir")+"/", len(page.Contents),
+			logrus.Infof("[List]Returned objects in %v. length of Contents: %v, length of CommonPrefixes: %v", prefix, len(page.Contents),
 				len(page.CommonPrefixes))
 			for _, objects := range page.Contents {
 				c := &utils.ClusterInfo{}
@@ -224,8 +227,9 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 				date := sessionInfo[1]
 				dataTime := sessionInfo[2]
 				createTime, err := time.Parse("2006-01-02_15-04-05", date+"_"+dataTime)
+				c, err := clustermetadata.DecodePath(*objects.Key, r.OssRootDir)
 				if err != nil {
-					logrus.Errorf("Failed to parse time %s: %v", date+"_"+dataTime, err)
+					logrus.Errorf("Failed to parse meta file path: %s, error: %v", *objects.Key, err)
 					continue
 				}
 				c.CreateTimeStamp = createTime.Unix()
@@ -239,6 +243,7 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 				}
 
 				clusters = append(clusters, *c)
+				clusters = append(clusters, c)
 			}
 		}
 	}

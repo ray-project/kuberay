@@ -16,6 +16,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+const (
+	// Aligned with ray-operator defaults:
+	// https://github.com/ray-project/kuberay/blob/178e6c91/ray-operator/apis/config/v1alpha1/defaults.go#L12-L13
+	DefaultKubeAPIQPS   = float64(100)
+	DefaultKubeAPIBurst = 200
+)
+
 type ClientManager struct {
 	configs []*rest.Config
 	clients []client.Client
@@ -42,7 +49,18 @@ func (c *ClientManager) ListRayClusters(ctx context.Context) ([]*rayv1.RayCluste
 	return list, nil
 }
 
-func NewClientManager(kubeconfigs string, useKubernetesProxy bool) (*ClientManager, error) {
+type ClientManagerConfig struct {
+	Kubeconfigs        string
+	UseKubernetesProxy bool
+	QPS                float32
+	Burst              int
+}
+
+func NewClientManager(cfg ClientManagerConfig) (*ClientManager, error) {
+	kubeconfigs := cfg.Kubeconfigs
+
+	var c *rest.Config
+	var err error
 	kubeconfigList := []*rest.Config{}
 	if len(kubeconfigs) > 0 {
 		stringList := strings.Split(kubeconfigs, ",")
@@ -56,17 +74,12 @@ func NewClientManager(kubeconfigs string, useKubernetesProxy bool) (*ClientManag
 			return nil, fmt.Errorf("kubeconfig is empty")
 		}
 
-		c, err := clientcmd.BuildConfigFromFlags("", stringList[0])
+		c, err = clientcmd.BuildConfigFromFlags("", stringList[0])
 		if err != nil {
 			return nil, fmt.Errorf("failed to build config from kubeconfig: %w", err)
 		}
-		c.QPS = 50
-		c.Burst = 100
-		kubeconfigList = append(kubeconfigList, c)
 	} else {
-		var c *rest.Config
-		var err error
-		if useKubernetesProxy {
+		if cfg.UseKubernetesProxy {
 			// Load Kubernetes REST config from default kubeconfig locations (KUBECONFIG environment variable or ~/.kube/config)
 			// without interactive prompts.
 			loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
@@ -82,10 +95,11 @@ func NewClientManager(kubeconfigs string, useKubernetesProxy bool) (*ClientManag
 				return nil, fmt.Errorf("failed to build config from in-cluster kubeconfig: %w", err)
 			}
 		}
-		c.QPS = 50
-		c.Burst = 100
-		kubeconfigList = append(kubeconfigList, c)
 	}
+	c.QPS = cfg.QPS
+	c.Burst = cfg.Burst
+	kubeconfigList = append(kubeconfigList, c)
+
 	scheme := runtime.NewScheme()
 	utilruntime.Must(rayv1.AddToScheme(scheme))
 	clientList := []client.Client{}
