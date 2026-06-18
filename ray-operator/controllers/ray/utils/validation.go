@@ -301,14 +301,24 @@ func validateNetworkIsolation(spec *rayv1.RayClusterSpec) error {
 		mode = *ni.Mode
 	}
 
-	// Ingress rules are only meaningful when ingress is being denied.
-	if mode == rayv1.NetworkIsolationDenyAllEgress && len(ni.IngressRules) > 0 {
-		return fmt.Errorf("networkIsolation.ingressRules cannot be set when mode is %q (ingress is not restricted)", mode)
+	// Validate head rules against mode.
+	if ni.Head != nil {
+		if mode == rayv1.NetworkIsolationDenyAllEgress && len(ni.Head.IngressRules) > 0 {
+			return fmt.Errorf("networkIsolation.head.ingressRules cannot be set when mode is %q (ingress is not restricted)", mode)
+		}
+		if mode == rayv1.NetworkIsolationDenyAllIngress && len(ni.Head.EgressRules) > 0 {
+			return fmt.Errorf("networkIsolation.head.egressRules cannot be set when mode is %q (egress is not restricted)", mode)
+		}
 	}
 
-	// Egress rules are only meaningful when egress is being denied.
-	if mode == rayv1.NetworkIsolationDenyAllIngress && len(ni.EgressRules) > 0 {
-		return fmt.Errorf("networkIsolation.egressRules cannot be set when mode is %q (egress is not restricted)", mode)
+	// Validate worker rules against mode.
+	if ni.Worker != nil {
+		if mode == rayv1.NetworkIsolationDenyAllEgress && len(ni.Worker.IngressRules) > 0 {
+			return fmt.Errorf("networkIsolation.worker.ingressRules cannot be set when mode is %q (ingress is not restricted)", mode)
+		}
+		if mode == rayv1.NetworkIsolationDenyAllIngress && len(ni.Worker.EgressRules) > 0 {
+			return fmt.Errorf("networkIsolation.worker.egressRules cannot be set when mode is %q (egress is not restricted)", mode)
+		}
 	}
 
 	return nil

@@ -2843,35 +2843,74 @@ func TestValidateNetworkIsolation(t *testing.T) {
 		expectError bool
 	}{
 		{
-			name: "DenyAllEgress with IngressRules set returns error",
+			name: "DenyAllEgress with head IngressRules set returns error",
 			ni: &rayv1.NetworkIsolationConfig{
-				Mode:         ptr.To(rayv1.NetworkIsolationDenyAllEgress),
-				IngressRules: []networkingv1.NetworkPolicyIngressRule{{}},
+				Mode: ptr.To(rayv1.NetworkIsolationDenyAllEgress),
+				Head: &rayv1.NetworkPolicyRules{
+					IngressRules: []networkingv1.NetworkPolicyIngressRule{{}},
+				},
 			},
 			expectError: true,
-			errorMsg:    `networkIsolation.ingressRules cannot be set when mode is "DenyAllEgress" (ingress is not restricted)`,
+			errorMsg:    `networkIsolation.head.ingressRules cannot be set when mode is "DenyAllEgress" (ingress is not restricted)`,
 		},
 		{
-			name: "DenyAllIngress with EgressRules set returns error",
+			name: "DenyAllEgress with worker IngressRules set returns error",
 			ni: &rayv1.NetworkIsolationConfig{
-				Mode:        ptr.To(rayv1.NetworkIsolationDenyAllIngress),
-				EgressRules: []networkingv1.NetworkPolicyEgressRule{{}},
+				Mode: ptr.To(rayv1.NetworkIsolationDenyAllEgress),
+				Worker: &rayv1.NetworkPolicyRules{
+					IngressRules: []networkingv1.NetworkPolicyIngressRule{{}},
+				},
 			},
 			expectError: true,
-			errorMsg:    `networkIsolation.egressRules cannot be set when mode is "DenyAllIngress" (egress is not restricted)`,
+			errorMsg:    `networkIsolation.worker.ingressRules cannot be set when mode is "DenyAllEgress" (ingress is not restricted)`,
 		},
 		{
-			name: "DenyAll with both IngressRules and EgressRules is valid",
+			name: "DenyAllIngress with head EgressRules set returns error",
 			ni: &rayv1.NetworkIsolationConfig{
-				Mode:         ptr.To(rayv1.NetworkIsolationDenyAll),
-				IngressRules: []networkingv1.NetworkPolicyIngressRule{{}},
-				EgressRules:  []networkingv1.NetworkPolicyEgressRule{{}},
+				Mode: ptr.To(rayv1.NetworkIsolationDenyAllIngress),
+				Head: &rayv1.NetworkPolicyRules{
+					EgressRules: []networkingv1.NetworkPolicyEgressRule{{}},
+				},
+			},
+			expectError: true,
+			errorMsg:    `networkIsolation.head.egressRules cannot be set when mode is "DenyAllIngress" (egress is not restricted)`,
+		},
+		{
+			name: "DenyAllIngress with worker EgressRules set returns error",
+			ni: &rayv1.NetworkIsolationConfig{
+				Mode: ptr.To(rayv1.NetworkIsolationDenyAllIngress),
+				Worker: &rayv1.NetworkPolicyRules{
+					EgressRules: []networkingv1.NetworkPolicyEgressRule{{}},
+				},
+			},
+			expectError: true,
+			errorMsg:    `networkIsolation.worker.egressRules cannot be set when mode is "DenyAllIngress" (egress is not restricted)`,
+		},
+		{
+			name: "DenyAll with both head and worker rules is valid",
+			ni: &rayv1.NetworkIsolationConfig{
+				Mode: ptr.To(rayv1.NetworkIsolationDenyAll),
+				Head: &rayv1.NetworkPolicyRules{
+					IngressRules: []networkingv1.NetworkPolicyIngressRule{{}},
+					EgressRules:  []networkingv1.NetworkPolicyEgressRule{{}},
+				},
+				Worker: &rayv1.NetworkPolicyRules{
+					IngressRules: []networkingv1.NetworkPolicyIngressRule{{}},
+					EgressRules:  []networkingv1.NetworkPolicyEgressRule{{}},
+				},
 			},
 			expectError: false,
 		},
 		{
 			name:        "nil NetworkIsolation is valid",
 			ni:          nil,
+			expectError: false,
+		},
+		{
+			name: "mode only with no head or worker rules is valid",
+			ni: &rayv1.NetworkIsolationConfig{
+				Mode: ptr.To(rayv1.NetworkIsolationDenyAll),
+			},
 			expectError: false,
 		},
 	}

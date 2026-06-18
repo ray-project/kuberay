@@ -44,11 +44,11 @@ type RayClusterSpec struct {
 	// +optional
 	GcsFaultToleranceOptions *GcsFaultToleranceOptions `json:"gcsFaultToleranceOptions,omitempty"`
 	// NetworkIsolation specifies optional configuration for network isolation.
-	// When set, NetworkPolicies will be created to control traffic to/from Ray pods.
+	// When set, separate NetworkPolicies are created for head and worker pods.
 	// The reconciler always permits intra-cluster pod-to-pod traffic and KubeRay
 	// operator access. Note: under DenyAll/DenyAllEgress, DNS egress is not added
 	// automatically; since Ray pods reach the head via its service FQDN, you must
-	// allow DNS egress via EgressRules or the cluster will fail to start.
+	// allow DNS egress via Head/Worker EgressRules or the cluster will fail to start.
 	// +optional
 	NetworkIsolation *NetworkIsolationConfig `json:"networkIsolation,omitempty"`
 	// HeadGroupSpec is the spec for the head pod
@@ -150,8 +150,8 @@ const (
 
 // NetworkIsolationConfig defines network isolation settings for Ray cluster.
 // All modes permit intra-cluster pod-to-pod traffic and KubeRay operator access.
-// DNS egress is not included automatically; see EgressRules for why it must be
-// added under DenyAll/DenyAllEgress.
+// DNS egress is not included automatically; see NetworkPolicyRules.EgressRules
+// for why it must be added under DenyAll/DenyAllEgress.
 type NetworkIsolationConfig struct {
 	// Mode controls the security level. All modes permit intra-cluster pod-to-pod
 	// traffic and KubeRay operator access (DNS egress excluded, see EgressRules).
@@ -162,17 +162,29 @@ type NetworkIsolationConfig struct {
 	// +kubebuilder:default=DenyAll
 	Mode *NetworkIsolationMode `json:"mode,omitempty"`
 
-	// IngressRules specifies custom ingress rules for Ray cluster pods.
-	// By default, the generated NetworkPolicy allows intra-cluster traffic
-	// and KubeRay operator access to the dashboard port. For RayJob-owned
-	// clusters using K8sJobMode, the submitter pod is also allowed. All other
-	// ingress is denied. If other external pods (e.g. a clusterSelector-based
-	// RayJob submitter) need to reach the head, add explicit rules here.
+	// Head specifies custom NetworkPolicy rules applied only to the head pod's policy.
+	// The base head policy always allows intra-cluster traffic, KubeRay operator
+	// access to the dashboard port, and (for K8sJobMode RayJob-owned clusters)
+	// the submitter pod. Rules here are appended to those base rules.
+	// +optional
+	Head *NetworkPolicyRules `json:"head,omitempty"`
+
+	// Worker specifies custom NetworkPolicy rules applied only to worker pods' policy.
+	// The base worker policy always allows intra-cluster traffic.
+	// Rules here are appended to that base rule.
+	// +optional
+	Worker *NetworkPolicyRules `json:"worker,omitempty"`
+}
+
+// NetworkPolicyRules defines custom ingress and egress rules for a NetworkPolicy.
+type NetworkPolicyRules struct {
+	// IngressRules specifies custom ingress rules appended to the base policy.
+	// Only meaningful when the mode includes ingress denial (DenyAll or DenyAllIngress).
 	// +optional
 	IngressRules []networkingv1.NetworkPolicyIngressRule `json:"ingressRules,omitempty"`
 
-	// EgressRules specifies custom egress rules for Ray cluster pods.
-	// By default, the generated NetworkPolicy only allows intra-cluster egress.
+	// EgressRules specifies custom egress rules appended to the base policy.
+	// Only meaningful when the mode includes egress denial (DenyAll or DenyAllEgress).
 	// DNS egress is NOT added automatically: under DenyAll/DenyAllEgress you MUST
 	// add a DNS rule here (e.g. to kube-system pods labeled k8s-app=kube-dns on
 	// port 53), because Ray workers reach the head via its service FQDN and cannot

@@ -4,7 +4,6 @@ package v1
 
 import (
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-	networkingv1 "k8s.io/api/networking/v1"
 )
 
 // NetworkIsolationConfigApplyConfiguration represents a declarative configuration of the NetworkIsolationConfig type for use
@@ -12,8 +11,8 @@ import (
 //
 // NetworkIsolationConfig defines network isolation settings for Ray cluster.
 // All modes permit intra-cluster pod-to-pod traffic and KubeRay operator access.
-// DNS egress is not included automatically; see EgressRules for why it must be
-// added under DenyAll/DenyAllEgress.
+// DNS egress is not included automatically; see NetworkPolicyRules.EgressRules
+// for why it must be added under DenyAll/DenyAllEgress.
 type NetworkIsolationConfigApplyConfiguration struct {
 	// Mode controls the security level. All modes permit intra-cluster pod-to-pod
 	// traffic and KubeRay operator access (DNS egress excluded, see EgressRules).
@@ -21,20 +20,10 @@ type NetworkIsolationConfigApplyConfiguration struct {
 	// - "DenyAllIngress": Denies all Ingress.
 	// - "DenyAllEgress": Denies all Egress.
 	Mode *rayv1.NetworkIsolationMode `json:"mode,omitempty"`
-	// IngressRules specifies custom ingress rules for Ray cluster pods.
-	// By default, the generated NetworkPolicy allows intra-cluster traffic
-	// and KubeRay operator access to the dashboard port. For RayJob-owned
-	// clusters using K8sJobMode, the submitter pod is also allowed. All other
-	// ingress is denied. If other external pods (e.g. a clusterSelector-based
-	// RayJob submitter) need to reach the head, add explicit rules here.
-	IngressRules []networkingv1.NetworkPolicyIngressRule `json:"ingressRules,omitempty"`
-	// EgressRules specifies custom egress rules for Ray cluster pods.
-	// By default, the generated NetworkPolicy only allows intra-cluster egress.
-	// DNS egress is NOT added automatically: under DenyAll/DenyAllEgress you MUST
-	// add a DNS rule here (e.g. to kube-system pods labeled k8s-app=kube-dns on
-	// port 53), because Ray workers reach the head via its service FQDN and cannot
-	// resolve it without DNS. See the network-isolation-deny-all sample.
-	EgressRules []networkingv1.NetworkPolicyEgressRule `json:"egressRules,omitempty"`
+	// Head specifies custom NetworkPolicy rules applied only to the head pod's policy.
+	Head *NetworkPolicyRulesApplyConfiguration `json:"head,omitempty"`
+	// Worker specifies custom NetworkPolicy rules applied only to worker pods' policy.
+	Worker *NetworkPolicyRulesApplyConfiguration `json:"worker,omitempty"`
 }
 
 // NetworkIsolationConfigApplyConfiguration constructs a declarative configuration of the NetworkIsolationConfig type for use with
@@ -51,22 +40,18 @@ func (b *NetworkIsolationConfigApplyConfiguration) WithMode(value rayv1.NetworkI
 	return b
 }
 
-// WithIngressRules adds the given value to the IngressRules field in the declarative configuration
-// and returns the receiver, so that objects can be build by chaining "With" function invocations.
-// If called multiple times, values provided by each call will be appended to the IngressRules field.
-func (b *NetworkIsolationConfigApplyConfiguration) WithIngressRules(values ...networkingv1.NetworkPolicyIngressRule) *NetworkIsolationConfigApplyConfiguration {
-	for i := range values {
-		b.IngressRules = append(b.IngressRules, values[i])
-	}
+// WithHead sets the Head field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the Head field is set to the value of the last call.
+func (b *NetworkIsolationConfigApplyConfiguration) WithHead(value *NetworkPolicyRulesApplyConfiguration) *NetworkIsolationConfigApplyConfiguration {
+	b.Head = value
 	return b
 }
 
-// WithEgressRules adds the given value to the EgressRules field in the declarative configuration
-// and returns the receiver, so that objects can be build by chaining "With" function invocations.
-// If called multiple times, values provided by each call will be appended to the EgressRules field.
-func (b *NetworkIsolationConfigApplyConfiguration) WithEgressRules(values ...networkingv1.NetworkPolicyEgressRule) *NetworkIsolationConfigApplyConfiguration {
-	for i := range values {
-		b.EgressRules = append(b.EgressRules, values[i])
-	}
+// WithWorker sets the Worker field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the Worker field is set to the value of the last call.
+func (b *NetworkIsolationConfigApplyConfiguration) WithWorker(value *NetworkPolicyRulesApplyConfiguration) *NetworkIsolationConfigApplyConfiguration {
+	b.Worker = value
 	return b
 }

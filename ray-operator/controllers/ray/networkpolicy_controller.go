@@ -185,14 +185,18 @@ func (r *NetworkPolicyController) buildHeadNetworkPolicy(instance *rayv1.RayClus
 	if mode == rayv1.NetworkIsolationDenyAll || mode == rayv1.NetworkIsolationDenyAllIngress {
 		policyTypes = append(policyTypes, networkingv1.PolicyTypeIngress)
 		ingressRules = r.buildHeadIngressRules(instance)
-		ingressRules = append(ingressRules, instance.Spec.NetworkIsolation.IngressRules...)
+		if instance.Spec.NetworkIsolation.Head != nil {
+			ingressRules = append(ingressRules, instance.Spec.NetworkIsolation.Head.IngressRules...)
+		}
 	}
 
 	// Only restrict egress when mode includes egress denial.
 	if mode == rayv1.NetworkIsolationDenyAll || mode == rayv1.NetworkIsolationDenyAllEgress {
 		policyTypes = append(policyTypes, networkingv1.PolicyTypeEgress)
 		egressRules = r.buildBaseEgressRules(instance)
-		egressRules = append(egressRules, instance.Spec.NetworkIsolation.EgressRules...)
+		if instance.Spec.NetworkIsolation.Head != nil {
+			egressRules = append(egressRules, instance.Spec.NetworkIsolation.Head.EgressRules...)
+		}
 	}
 
 	return &networkingv1.NetworkPolicy{
@@ -231,14 +235,18 @@ func (r *NetworkPolicyController) buildWorkerNetworkPolicy(instance *rayv1.RayCl
 	if mode == rayv1.NetworkIsolationDenyAll || mode == rayv1.NetworkIsolationDenyAllIngress {
 		policyTypes = append(policyTypes, networkingv1.PolicyTypeIngress)
 		ingressRules = r.buildBaseIngressRules(instance)
-		ingressRules = append(ingressRules, instance.Spec.NetworkIsolation.IngressRules...)
+		if instance.Spec.NetworkIsolation.Worker != nil {
+			ingressRules = append(ingressRules, instance.Spec.NetworkIsolation.Worker.IngressRules...)
+		}
 	}
 
 	// Only restrict egress when mode includes egress denial.
 	if mode == rayv1.NetworkIsolationDenyAll || mode == rayv1.NetworkIsolationDenyAllEgress {
 		policyTypes = append(policyTypes, networkingv1.PolicyTypeEgress)
 		egressRules = r.buildBaseEgressRules(instance)
-		egressRules = append(egressRules, instance.Spec.NetworkIsolation.EgressRules...)
+		if instance.Spec.NetworkIsolation.Worker != nil {
+			egressRules = append(egressRules, instance.Spec.NetworkIsolation.Worker.EgressRules...)
+		}
 	}
 
 	return &networkingv1.NetworkPolicy{
@@ -284,7 +292,9 @@ func (r *NetworkPolicyController) buildBaseIngressRules(instance *rayv1.RayClust
 // submitter rule. Operator access is intentionally omitted here — platforms that need
 // it should inject it via spec.networkIsolation.ingressRules (e.g. via a mutating webhook).
 // For RayClusters that are NOT owned by a RayJob (e.g. clusterSelector use cases),
-// users must allow their submitter pods explicitly via NetworkIsolation.IngressRules.
+// users must allow their submitter pods explicitly via NetworkIsolation.Head.IngressRules
+// (e.g. a podSelector matching the submitterPodTemplate labels). Users who need any
+// other external access must likewise add explicit rules in Head.IngressRules.
 func (r *NetworkPolicyController) buildHeadIngressRules(instance *rayv1.RayCluster) []networkingv1.NetworkPolicyIngressRule {
 	tcpProtocol := corev1.ProtocolTCP
 	dashboardPort := intstr.FromInt32(r.getHeadPort(instance, "dashboard-port", utils.DefaultDashboardPort))
@@ -351,8 +361,8 @@ func (r *NetworkPolicyController) getHeadPort(instance *rayv1.RayCluster, raySta
 //
 // IMPORTANT: under DenyAll/DenyAllEgress this denies DNS by default. Ray workers
 // reach the head via its service FQDN (see GenerateFQDNServiceName), so users
-// MUST add a DNS egress rule via NetworkIsolation.EgressRules or the cluster will
-// fail to start. See the network-isolation-deny-all sample.
+// MUST add a DNS egress rule via Head.EgressRules / Worker.EgressRules or the
+// cluster will fail to start. See the network-isolation-deny-all sample.
 func (r *NetworkPolicyController) buildBaseEgressRules(instance *rayv1.RayCluster) []networkingv1.NetworkPolicyEgressRule {
 	return []networkingv1.NetworkPolicyEgressRule{
 		// Intra-cluster egress (all ports) to pods in the same RayCluster.

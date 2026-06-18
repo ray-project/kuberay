@@ -3,9 +3,9 @@ kind: RayCluster
 metadata:
   name: raycluster-deny-all
 spec:
-  # NetworkIsolation makes the operator create head/worker NetworkPolicies.
+  # NetworkIsolation makes the operator create separate head/worker NetworkPolicies.
   # Intra-cluster pod-to-pod and KubeRay operator traffic are always allowed;
-  # everything else is denied unless you add it via ingressRules / egressRules below.
+  # everything else is denied unless you add it via head/worker rules below.
   #
   # mode options:
   #   DenyAll        - deny both ingress and egress (this sample)
@@ -30,76 +30,91 @@ spec:
   #
   # To enable autoscaling under NetworkIsolation, you must do BOTH:
   #   1. set enableInTreeAutoscaling: true   (uncomment the line below)
-  #   2. uncomment the api-server egress rule in egressRules
+  #   2. uncomment the api-server egress rule in head.egressRules
   #      (the operator no longer adds it; see per-CNI details above)
   # enableInTreeAutoscaling: true   # <- uncomment to enable (default off)
   networkIsolation:
     mode: DenyAll
-    # ingressRules (optional): the base policy already allows intra-cluster traffic,
-    # KubeRay operator access to the dashboard port, and (for K8sJobMode RayJob-owned
-    # clusters) the submitter pod. Add custom ingress here if other pods must reach
-    # the cluster. Examples:
-    #
-    # Allow Prometheus (in the "prometheus" namespace) to scrape metrics:
-    #   ingressRules:
-    #   - from:
-    #     - namespaceSelector:
-    #         matchLabels:
-    #           kubernetes.io/metadata.name: prometheus
-    #     ports:
-    #     - { port: 8080, protocol: TCP }
-    #
-    # clusterSelector RayJob (K8sJobMode only): the RayCluster is NOT owned by the
-    # RayJob, so the operator cannot add a submitter rule automatically. In K8sJobMode
-    # KubeRay stamps the submitter pod with stable identity labels, so match those
-    # directly (replace "my-rayjob" with your RayJob's name). Other submission modes
-    # (Sidecar/HTTP/Interactive) have no standalone submitter pod, so no rule is needed:
-    #   ingressRules:
-    #   - from:
-    #     - podSelector:
-    #         matchLabels:
-    #           ray.io/originated-from-cr-name: my-rayjob
-    #           ray.io/originated-from-crd: RayJob
-    #     ports:
-    #     - { port: 8265, protocol: TCP }
-    egressRules:
-    # DNS is REQUIRED under DenyAll/DenyAllEgress. The operator does NOT add DNS
-    # egress, but Ray workers reach the head via its service FQDN
-    # (raycluster-<name>-head-svc.<namespace>.svc.cluster.local), so without a DNS
-    # rule they cannot resolve the head and the cluster never starts.
-    #
-    # The kube-system / k8s-app=kube-dns selector below matches the default
-    # in-cluster CoreDNS on kind v1.35.0. There is no universal default — set this
-    # to match YOUR cluster's DNS (its namespace, its pod labels, or an ipBlock)
-    # before applying.
-    - to:
-      - namespaceSelector:
-          matchLabels:
-            kubernetes.io/metadata.name: kube-system
-        podSelector:
-          matchLabels:
-            k8s-app: kube-dns
-      ports:
-      - port: 53
-        protocol: UDP
-      - port: 53
-        protocol: TCP
-        # Allow pip install / PyPI access over HTTPS (uncomment if your jobs need it):
-        # - to:
-        #   - ipBlock:
-        #       cidr: 0.0.0.0/0
-        #   ports:
-        #   - { port: 443, protocol: TCP }
-        # API-server egress — REQUIRED when enableInTreeAutoscaling is true (the operator
-        # does NOT add it; see the header for per-CNI details). Find your endpoint IP with:
-        #   kubectl get endpointslices -n default -l kubernetes.io/service-name=kubernetes
-        # then uncomment and set the CIDR/port below. (Cilium: use a CiliumNetworkPolicy
-        # with toEntities: [kube-apiserver] instead — not expressible here.)
-        # - to:
-        #   - ipBlock:
-        #       cidr: 10.0.0.1/32   # your default/kubernetes endpoint IP, NOT the ClusterIP
-        #   ports:
-        #   - { port: 6443, protocol: TCP }   # your API server port (often 443 or 6443)
+    # Head rules: applied only to the head pod's NetworkPolicy.
+    # The base head policy already allows intra-cluster traffic, KubeRay operator
+    # access to the dashboard port, and (for K8sJobMode RayJob-owned clusters)
+    # the submitter pod.
+    head:
+      # ingressRules (optional): add custom ingress if other pods must reach the head.
+      # Examples:
+      #
+      # Allow Prometheus (in the "prometheus" namespace) to scrape metrics:
+      #   ingressRules:
+      #   - from:
+      #     - namespaceSelector:
+      #         matchLabels:
+      #           kubernetes.io/metadata.name: prometheus
+      #     ports:
+      #     - { port: 8080, protocol: TCP }
+      #
+      # clusterSelector RayJob (K8sJobMode only): the RayCluster is NOT owned by the
+      # RayJob, so the operator cannot add a submitter rule automatically. In K8sJobMode
+      # KubeRay stamps the submitter pod with stable identity labels, so match those
+      # directly (replace "my-rayjob" with your RayJob's name). Other submission modes
+      # (Sidecar/HTTP/Interactive) have no standalone submitter pod, so no rule is needed:
+      #   ingressRules:
+      #   - from:
+      #     - podSelector:
+      #         matchLabels:
+      #           ray.io/originated-from-cr-name: my-rayjob
+      #           ray.io/originated-from-crd: RayJob
+      #     ports:
+      #     - { port: 8265, protocol: TCP }
+      egressRules:
+      # DNS is REQUIRED under DenyAll/DenyAllEgress. The operator does NOT add DNS
+      # egress, but Ray workers reach the head via its service FQDN
+      # (raycluster-<name>-head-svc.<namespace>.svc.cluster.local), so without a DNS
+      # rule they cannot resolve the head and the cluster never starts.
+      - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+        ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+          # API-server egress — REQUIRED when enableInTreeAutoscaling is true (the operator
+          # does NOT add it; see the header for per-CNI details). Find your endpoint IP with:
+          #   kubectl get endpointslices -n default -l kubernetes.io/service-name=kubernetes
+          # then uncomment and set the CIDR/port below. (Cilium: use a CiliumNetworkPolicy
+          # with toEntities: [kube-apiserver] instead — not expressible here.)
+          # - to:
+          #   - ipBlock:
+          #       cidr: 10.0.0.1/32   # your default/kubernetes endpoint IP, NOT the ClusterIP
+          #   ports:
+          #   - { port: 6443, protocol: TCP }   # your API server port (often 443 or 6443)
+    # Worker rules: applied only to worker pods' NetworkPolicy.
+    # The base worker policy only allows intra-cluster traffic.
+    worker:
+      egressRules:
+      # DNS is also required for workers (they resolve the head service FQDN).
+      - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+        ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+          # Allow pip install / PyPI access over HTTPS (uncomment if your jobs need it):
+          # - to:
+          #   - ipBlock:
+          #       cidr: 0.0.0.0/0
+          #   ports:
+          #   - { port: 443, protocol: TCP }
   rayVersion: '2.52.0'
   headGroupSpec:
     rayStartParams: {}
