@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/bmatcuk/doublestar/v4"
+	"github.com/ray-project/kuberay/historyserver/pkg/compression"
 	eventtypes "github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
 	"github.com/sirupsen/logrus"
 
@@ -569,9 +570,25 @@ func (s *ServerHandler) ipToNodeId(rayClusterNameNamespace, sessionID, nodeIP st
 // searchNodeIDHexInEventFile searches for a node with the given IP in a single event file.
 // Returns (nodeIDHex, true) if found, ("", false) otherwise.
 func (s *ServerHandler) searchNodeIDHexInEventFile(rayClusterNameNamespace, filePath, nodeIP string) (string, bool) {
-	reader := s.reader.GetContent(rayClusterNameNamespace, filePath)
+	var reader io.Reader
+	var err error
+	if strings.HasSuffix(filePath, ".gz") {
+		var rc io.ReadCloser
+		rc, err = compression.ReadCompressedContent(s.reader, rayClusterNameNamespace, filePath)
+		if err != nil {
+			logrus.Warnf("Failed to decompress node event file %s: %v", filePath, err)
+			return "", false
+		}
+		reader = rc
+	} else {
+		reader = s.reader.GetContent(rayClusterNameNamespace, filePath)
+	}
+
 	if reader == nil {
 		return "", false
+	}
+	if closer, ok := reader.(io.Closer); ok {
+		defer closer.Close()
 	}
 
 	data, err := io.ReadAll(reader)
