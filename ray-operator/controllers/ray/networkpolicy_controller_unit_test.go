@@ -52,8 +52,7 @@ func setupNetworkPolicyTest(t *testing.T) {
 
 	testScheme := runtime.NewScheme()
 	testNetworkPolicyController = &NetworkPolicyController{
-		Scheme:            testScheme,
-		OperatorNamespace: "kuberay-system",
+		Scheme: testScheme,
 		Client: clientFake.NewClientBuilder().
 			WithScheme(testScheme).
 			Build(),
@@ -191,8 +190,8 @@ func TestBuildHeadNetworkPolicy_DenyAll(t *testing.T) {
 	assert.Contains(t, policy.Spec.PolicyTypes, networkingv1.PolicyTypeIngress)
 	assert.Contains(t, policy.Spec.PolicyTypes, networkingv1.PolicyTypeEgress)
 
-	// 2 base ingress rules: intra-cluster and operator access.
-	assert.Len(t, policy.Spec.Ingress, 2)
+	// 1 base ingress rule: intra-cluster only (operator access removed, injected via webhook).
+	assert.Len(t, policy.Spec.Ingress, 1)
 
 	// 1 base egress rule: intra-cluster only (DNS no longer baked in).
 	assert.Len(t, policy.Spec.Egress, 1)
@@ -206,7 +205,7 @@ func TestBuildHeadNetworkPolicy_DenyAllIngress(t *testing.T) {
 
 	assert.Contains(t, policy.Spec.PolicyTypes, networkingv1.PolicyTypeIngress)
 	assert.NotContains(t, policy.Spec.PolicyTypes, networkingv1.PolicyTypeEgress)
-	assert.Len(t, policy.Spec.Ingress, 2)
+	assert.Len(t, policy.Spec.Ingress, 1)
 	assert.Empty(t, policy.Spec.Egress)
 }
 
@@ -308,13 +307,14 @@ func TestBuildBaseIngressRules(t *testing.T) {
 	assert.Empty(t, intraClusterRule.Ports, "Intra-cluster rule must allow all ports (no Ports field)")
 }
 
-// TestBuildHeadIngressRules verifies the 2 head-specific base ingress rules:
-// intra-cluster and operator access.
+// TestBuildHeadIngressRules verifies the head base ingress rules: intra-cluster only.
+// The operator access rule is intentionally absent — platforms inject it via
+// spec.networkIsolation.ingressRules (e.g. a mutating webhook).
 func TestBuildHeadIngressRules(t *testing.T) {
 	setupNetworkPolicyTest(t)
 
 	rules := testNetworkPolicyController.buildHeadIngressRules(testRayClusterBasic)
-	require.Len(t, rules, 2)
+	require.Len(t, rules, 1)
 
 	// Rule 0: intra-cluster — no ports, pod selector matching the cluster label.
 	intraClusterRule := rules[0]
@@ -322,21 +322,6 @@ func TestBuildHeadIngressRules(t *testing.T) {
 	assert.Equal(t, map[string]string{utils.RayClusterLabelKey: "test-cluster"},
 		intraClusterRule.From[0].PodSelector.MatchLabels)
 	assert.Empty(t, intraClusterRule.Ports, "Intra-cluster rule must allow all ports (no Ports field)")
-
-	// Rule 1: operator — two ports (dashboard + client), operator pod selector with
-	// namespace selector restricted to the operator's namespace.
-	operatorRule := rules[1]
-	require.Len(t, operatorRule.From, 1)
-	assert.Equal(t, map[string]string{
-		utils.KubernetesComponentLabelKey: utils.ComponentName,
-	}, operatorRule.From[0].PodSelector.MatchLabels)
-	require.NotNil(t, operatorRule.From[0].NamespaceSelector)
-	assert.Equal(t, map[string]string{
-		corev1.LabelMetadataName: "kuberay-system",
-	}, operatorRule.From[0].NamespaceSelector.MatchLabels, "Namespace selector must restrict to operator namespace")
-	require.Len(t, operatorRule.Ports, 1)
-	dashboardPort := intstr.FromInt32(utils.DefaultDashboardPort)
-	assert.Equal(t, &dashboardPort, operatorRule.Ports[0].Port)
 }
 
 // TestBuildRayJobPeer verifies that buildRayJobPeer returns a peer for RayJob-owned clusters
@@ -362,14 +347,14 @@ func TestBuildRayJobPeer(t *testing.T) {
 }
 
 // TestBuildHeadIngressRules_WithRayJobOwner verifies that a RayJob-owned cluster gets
-// a per-job submitter ingress rule (3 rules total).
+// a per-job submitter ingress rule (2 rules total: intra-cluster + submitter).
 func TestBuildHeadIngressRules_WithRayJobOwner(t *testing.T) {
 	setupNetworkPolicyTest(t)
 
 	rules := testNetworkPolicyController.buildHeadIngressRules(testRayClusterWithRayJob)
-	require.Len(t, rules, 3)
+	require.Len(t, rules, 2)
 
-	submitterRule := rules[2]
+	submitterRule := rules[1]
 	require.Len(t, submitterRule.From, 1)
 	assert.Equal(t, map[string]string{
 		utils.RayOriginatedFromCRNameLabelKey: "test-job",

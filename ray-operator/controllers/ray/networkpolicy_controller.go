@@ -3,7 +3,6 @@ package ray
 import (
 	"context"
 	"fmt"
-	"os"
 	"reflect"
 	"strconv"
 	"strings"
@@ -33,34 +32,17 @@ import (
 // resources and manages NetworkPolicies for them.
 type NetworkPolicyController struct {
 	client.Client
-	Scheme            *runtime.Scheme
-	Recorder          record.EventRecorder
-	OperatorNamespace string
+	Scheme   *runtime.Scheme
+	Recorder record.EventRecorder
 }
 
 // NewNetworkPolicyController creates a new independent NetworkPolicy controller.
-// The operator's namespace is resolved from the in-cluster service account token.
 func NewNetworkPolicyController(mgr manager.Manager) (*NetworkPolicyController, error) {
-	ns, err := getOperatorNamespace()
-	if err != nil {
-		return nil, err
-	}
 	return &NetworkPolicyController{
-		Client:            mgr.GetClient(),
-		Scheme:            mgr.GetScheme(),
-		Recorder:          mgr.GetEventRecorderFor("networkpolicy-controller"),
-		OperatorNamespace: ns,
+		Client:   mgr.GetClient(),
+		Scheme:   mgr.GetScheme(),
+		Recorder: mgr.GetEventRecorderFor("networkpolicy-controller"),
 	}, nil
-}
-
-// getOperatorNamespace returns the namespace the operator is running in.
-// It reads from the in-cluster service account namespace file.
-func getOperatorNamespace() (string, error) {
-	ns, err := os.ReadFile(utils.InClusterNamespacePath)
-	if err != nil {
-		return "", fmt.Errorf("unable to determine operator namespace from service account at %s: %w", utils.InClusterNamespacePath, err)
-	}
-	return strings.TrimSpace(string(ns)), nil
 }
 
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=get;list;watch;create;update;delete
@@ -297,46 +279,17 @@ func (r *NetworkPolicyController) buildBaseIngressRules(instance *rayv1.RayClust
 	}
 }
 
-// buildHeadIngressRules returns the full set of base ingress rules for the head
-// NetworkPolicy: intra-cluster communication and KubeRay operator access.
-// For RayJob-owned clusters using K8sJobMode, a per-job submitter rule is added via buildRayJobPeer.
+// buildHeadIngressRules returns the base ingress rules for the head NetworkPolicy:
+// intra-cluster communication, and (for K8sJobMode RayJob-owned clusters) the per-job
+// submitter rule. Operator access is intentionally omitted here — platforms that need
+// it should inject it via spec.networkIsolation.ingressRules (e.g. via a mutating webhook).
 // For RayClusters that are NOT owned by a RayJob (e.g. clusterSelector use cases),
-// users must allow their submitter pods explicitly via NetworkIsolation.IngressRules
-// (e.g. a podSelector matching the submitterPodTemplate labels). Users who need any
-// other external access must likewise add explicit IngressRules in the spec.
+// users must allow their submitter pods explicitly via NetworkIsolation.IngressRules.
 func (r *NetworkPolicyController) buildHeadIngressRules(instance *rayv1.RayCluster) []networkingv1.NetworkPolicyIngressRule {
 	tcpProtocol := corev1.ProtocolTCP
 	dashboardPort := intstr.FromInt32(r.getHeadPort(instance, "dashboard-port", utils.DefaultDashboardPort))
 
 	rules := r.buildBaseIngressRules(instance)
-	rules = append(rules,
-		// KubeRay operator access to dashboard port.
-		// Only app.kubernetes.io/component is used because app.kubernetes.io/name
-		// differs between deployment methods (kustomize sets "kuberay", Helm sets
-		// "kuberay-operator"), whereas component is "kuberay-operator" in both.
-		// NamespaceSelector restricts to the operator's namespace using the
-		// immutable kubernetes.io/metadata.name label (available since K8s 1.21)
-		// to prevent label-spoofing from user-supplied RayCluster pod labels.
-		networkingv1.NetworkPolicyIngressRule{
-			From: []networkingv1.NetworkPolicyPeer{
-				{
-					PodSelector: &metav1.LabelSelector{
-						MatchLabels: map[string]string{
-							utils.KubernetesComponentLabelKey: utils.ComponentName,
-						},
-					},
-					NamespaceSelector: &metav1.LabelSelector{
-						MatchLabels: map[string]string{
-							corev1.LabelMetadataName: r.OperatorNamespace,
-						},
-					},
-				},
-			},
-			Ports: []networkingv1.NetworkPolicyPort{
-				{Protocol: &tcpProtocol, Port: &dashboardPort},
-			},
-		},
-	)
 
 	if peer := r.buildRayJobPeer(instance); peer != nil {
 		// Owned by a RayJob: allow the specific submitter pod.
