@@ -149,12 +149,12 @@ const (
 )
 
 // NetworkIsolationConfig defines network isolation settings for Ray cluster.
-// All modes permit intra-cluster pod-to-pod traffic and KubeRay operator access.
+// All modes permit intra-cluster pod-to-pod traffic.
 // DNS egress is not included automatically; see NetworkPolicyRules.EgressRules
 // for why it must be added under DenyAll/DenyAllEgress.
 type NetworkIsolationConfig struct {
 	// Mode controls the security level. All modes permit intra-cluster pod-to-pod
-	// traffic and KubeRay operator access (DNS egress excluded, see EgressRules).
+	// traffic (DNS egress excluded, see EgressRules).
 	// - "DenyAll": Denies all Ingress and Egress.
 	// - "DenyAllIngress": Denies all Ingress.
 	// - "DenyAllEgress": Denies all Egress.
@@ -163,9 +163,10 @@ type NetworkIsolationConfig struct {
 	Mode *NetworkIsolationMode `json:"mode,omitempty"`
 
 	// Head specifies custom NetworkPolicy rules applied only to the head pod's policy.
-	// The base head policy always allows intra-cluster traffic, KubeRay operator
-	// access to the dashboard port, and (for K8sJobMode RayJob-owned clusters)
-	// the submitter pod. Rules here are appended to those base rules.
+	// The base head policy always allows intra-cluster traffic and (for K8sJobMode
+	// RayJob-owned clusters) the submitter pod. Rules here are appended to those
+	// base rules. Platforms that need operator dashboard access should add it here
+	// (e.g. via a mutating webhook).
 	// +optional
 	Head *NetworkPolicyRules `json:"head,omitempty"`
 

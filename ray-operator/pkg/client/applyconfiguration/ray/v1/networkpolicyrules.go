@@ -12,12 +12,18 @@ import (
 // NetworkPolicyRules defines custom ingress and egress rules for a NetworkPolicy.
 type NetworkPolicyRulesApplyConfiguration struct {
 	// IngressRules specifies custom ingress rules appended to the base policy.
+	// Only meaningful when the mode includes ingress denial (DenyAll or DenyAllIngress).
 	IngressRules []networkingv1.NetworkPolicyIngressRule `json:"ingressRules,omitempty"`
 	// EgressRules specifies custom egress rules appended to the base policy.
+	// Only meaningful when the mode includes egress denial (DenyAll or DenyAllEgress).
+	// DNS egress is NOT added automatically: under DenyAll/DenyAllEgress you MUST
+	// add a DNS rule here (e.g. to kube-system pods labeled k8s-app=kube-dns on
+	// port 53), because Ray workers reach the head via its service FQDN and cannot
+	// resolve it without DNS. See the network-isolation-deny-all sample.
 	EgressRules []networkingv1.NetworkPolicyEgressRule `json:"egressRules,omitempty"`
 }
 
-// NetworkPolicyRules constructs a declarative configuration of the NetworkPolicyRules type for use with
+// NetworkPolicyRulesApplyConfiguration constructs a declarative configuration of the NetworkPolicyRules type for use with
 // apply.
 func NetworkPolicyRules() *NetworkPolicyRulesApplyConfiguration {
 	return &NetworkPolicyRulesApplyConfiguration{}

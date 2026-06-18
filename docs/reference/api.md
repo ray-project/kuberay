@@ -292,9 +292,9 @@ _Appears in:_
 
 
 NetworkIsolationConfig defines network isolation settings for Ray cluster.
-All modes permit intra-cluster pod-to-pod traffic and KubeRay operator access.
-DNS egress is not included automatically; see EgressRules for why it must be
-added under DenyAll/DenyAllEgress.
+All modes permit intra-cluster pod-to-pod traffic.
+DNS egress is not included automatically; see NetworkPolicyRules.EgressRules
+for why it must be added under DenyAll/DenyAllEgress.
 
 
 
@@ -303,9 +303,9 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `mode` _[NetworkIsolationMode](#networkisolationmode)_ | Mode controls the security level. All modes permit intra-cluster pod-to-pod<br />traffic and KubeRay operator access (DNS egress excluded, see EgressRules).<br />- "DenyAll": Denies all Ingress and Egress.<br />- "DenyAllIngress": Denies all Ingress.<br />- "DenyAllEgress": Denies all Egress. | DenyAll | Enum: [DenyAll DenyAllIngress DenyAllEgress] <br /> |
-| `ingressRules` _[NetworkPolicyIngressRule](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#networkpolicyingressrule-v1-networking) array_ | IngressRules specifies custom ingress rules for Ray cluster pods.<br />By default, the generated NetworkPolicy allows intra-cluster traffic<br />and KubeRay operator access to the dashboard port. For RayJob-owned<br />clusters using K8sJobMode, the submitter pod is also allowed. All other<br />ingress is denied. If other external pods (e.g. a clusterSelector-based<br />RayJob submitter) need to reach the head, add explicit rules here. |  |  |
-| `egressRules` _[NetworkPolicyEgressRule](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#networkpolicyegressrule-v1-networking) array_ | EgressRules specifies custom egress rules for Ray cluster pods.<br />By default, the generated NetworkPolicy only allows intra-cluster egress.<br />DNS egress is NOT added automatically: under DenyAll/DenyAllEgress you MUST<br />add a DNS rule here (e.g. to kube-system pods labeled k8s-app=kube-dns on<br />port 53), because Ray workers reach the head via its service FQDN and cannot<br />resolve it without DNS. See the network-isolation-deny-all sample. |  |  |
+| `mode` _[NetworkIsolationMode](#networkisolationmode)_ | Mode controls the security level. All modes permit intra-cluster pod-to-pod<br />traffic (DNS egress excluded, see EgressRules).<br />- "DenyAll": Denies all Ingress and Egress.<br />- "DenyAllIngress": Denies all Ingress.<br />- "DenyAllEgress": Denies all Egress. | DenyAll | Enum: [DenyAll DenyAllIngress DenyAllEgress] <br /> |
+| `head` _[NetworkPolicyRules](#networkpolicyrules)_ | Head specifies custom NetworkPolicy rules applied only to the head pod's policy.<br />The base head policy always allows intra-cluster traffic and (for K8sJobMode<br />RayJob-owned clusters) the submitter pod. Rules here are appended to those<br />base rules. Platforms that need operator dashboard access should add it here<br />(e.g. via a mutating webhook). |  |  |
+| `worker` _[NetworkPolicyRules](#networkpolicyrules)_ | Worker specifies custom NetworkPolicy rules applied only to worker pods' policy.<br />The base worker policy always allows intra-cluster traffic.<br />Rules here are appended to that base rule. |  |  |
 
 
 #### NetworkIsolationMode
@@ -325,6 +325,23 @@ _Appears in:_
 | `DenyAll` | NetworkIsolationDenyAll denies all ingress and egress traffic.<br /> |
 | `DenyAllIngress` | NetworkIsolationDenyAllIngress denies all ingress traffic.<br /> |
 | `DenyAllEgress` | NetworkIsolationDenyAllEgress denies all egress traffic.<br /> |
+
+
+#### NetworkPolicyRules
+
+
+
+NetworkPolicyRules defines custom ingress and egress rules for a NetworkPolicy.
+
+
+
+_Appears in:_
+- [NetworkIsolationConfig](#networkisolationconfig)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `ingressRules` _[NetworkPolicyIngressRule](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#networkpolicyingressrule-v1-networking) array_ | IngressRules specifies custom ingress rules appended to the base policy.<br />Only meaningful when the mode includes ingress denial (DenyAll or DenyAllIngress). |  |  |
+| `egressRules` _[NetworkPolicyEgressRule](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#networkpolicyegressrule-v1-networking) array_ | EgressRules specifies custom egress rules appended to the base policy.<br />Only meaningful when the mode includes egress denial (DenyAll or DenyAllEgress).<br />DNS egress is NOT added automatically: under DenyAll/DenyAllEgress you MUST<br />add a DNS rule here (e.g. to kube-system pods labeled k8s-app=kube-dns on<br />port 53), because Ray workers reach the head via its service FQDN and cannot<br />resolve it without DNS. See the network-isolation-deny-all sample. |  |  |
 
 
 #### RayCluster
@@ -370,7 +387,7 @@ _Appears in:_
 | `headServiceAnnotations` _object (keys:string, values:string)_ |  |  |  |
 | `enableInTreeAutoscaling` _boolean_ | EnableInTreeAutoscaling indicates whether operator should create in tree autoscaling configs |  |  |
 | `gcsFaultToleranceOptions` _[GcsFaultToleranceOptions](#gcsfaulttoleranceoptions)_ | GcsFaultToleranceOptions for enabling GCS FT |  |  |
-| `networkIsolation` _[NetworkIsolationConfig](#networkisolationconfig)_ | NetworkIsolation specifies optional configuration for network isolation.<br />When set, NetworkPolicies will be created to control traffic to/from Ray pods.<br />The reconciler always permits intra-cluster pod-to-pod traffic and KubeRay<br />operator access. Note: under DenyAll/DenyAllEgress, DNS egress is not added<br />automatically; since Ray pods reach the head via its service FQDN, you must<br />allow DNS egress via EgressRules or the cluster will fail to start. |  |  |
+| `networkIsolation` _[NetworkIsolationConfig](#networkisolationconfig)_ | NetworkIsolation specifies optional configuration for network isolation.<br />When set, separate NetworkPolicies are created for head and worker pods.<br />The reconciler always permits intra-cluster pod-to-pod traffic and KubeRay<br />operator access. Note: under DenyAll/DenyAllEgress, DNS egress is not added<br />automatically; since Ray pods reach the head via its service FQDN, you must<br />allow DNS egress via Head/Worker EgressRules or the cluster will fail to start. |  |  |
 | `headGroupSpec` _[HeadGroupSpec](#headgroupspec)_ | HeadGroupSpec is the spec for the head pod |  |  |
 | `rayVersion` _string_ | RayVersion is used to determine the command for the Kubernetes Job managed by RayJob |  |  |
 | `workerGroupSpecs` _[WorkerGroupSpec](#workergroupspec) array_ | WorkerGroupSpecs are the specs for the worker pods |  |  |

@@ -290,7 +290,7 @@ func (r *NetworkPolicyController) buildBaseIngressRules(instance *rayv1.RayClust
 // buildHeadIngressRules returns the base ingress rules for the head NetworkPolicy:
 // intra-cluster communication, and (for K8sJobMode RayJob-owned clusters) the per-job
 // submitter rule. Operator access is intentionally omitted here — platforms that need
-// it should inject it via spec.networkIsolation.ingressRules (e.g. via a mutating webhook).
+// it should inject it via spec.networkIsolation.head.ingressRules (e.g. via a mutating webhook).
 // For RayClusters that are NOT owned by a RayJob (e.g. clusterSelector use cases),
 // users must allow their submitter pods explicitly via NetworkIsolation.Head.IngressRules
 // (e.g. a podSelector matching the submitterPodTemplate labels). Users who need any

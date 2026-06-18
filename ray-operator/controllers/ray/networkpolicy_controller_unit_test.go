@@ -311,7 +311,7 @@ func TestBuildBaseIngressRules(t *testing.T) {
 
 // TestBuildHeadIngressRules verifies the head base ingress rules: intra-cluster only.
 // The operator access rule is intentionally absent — platforms inject it via
-// spec.networkIsolation.ingressRules (e.g. a mutating webhook).
+// spec.networkIsolation.head.ingressRules (e.g. a mutating webhook).
 func TestBuildHeadIngressRules(t *testing.T) {
 	setupNetworkPolicyTest(t)
 
@@ -383,13 +383,13 @@ func TestBuildBaseEgressRules(t *testing.T) {
 }
 
 // TestBuildHeadNetworkPolicy_WithRayJob verifies that a RayJob-owned cluster gets
-// 3 ingress rules: 2 base + 1 per-job submitter.
+// 2 ingress rules: intra-cluster + per-job submitter.
 func TestBuildHeadNetworkPolicy_WithRayJob(t *testing.T) {
 	setupNetworkPolicyTest(t)
 
 	policy := testNetworkPolicyController.buildHeadNetworkPolicy(testRayClusterWithRayJob, rayv1.NetworkIsolationDenyAll)
 
-	require.Len(t, policy.Spec.Ingress, 3)
+	require.Len(t, policy.Spec.Ingress, 2)
 }
 
 // TestBuildHeadNetworkPolicy_CustomIngressRules verifies that custom Head.IngressRules are appended after base rules.
@@ -411,10 +411,10 @@ func TestBuildHeadNetworkPolicy_CustomIngressRules(t *testing.T) {
 
 	policy := testNetworkPolicyController.buildHeadNetworkPolicy(cluster, rayv1.NetworkIsolationDenyAll)
 
-	// 2 base + 1 custom = 3.
-	require.Len(t, policy.Spec.Ingress, 3)
-	require.Len(t, policy.Spec.Ingress[2].Ports, 1)
-	assert.Equal(t, &customPort, policy.Spec.Ingress[2].Ports[0].Port)
+	// 1 base intra-cluster + 1 custom = 2.
+	require.Len(t, policy.Spec.Ingress, 2)
+	require.Len(t, policy.Spec.Ingress[1].Ports, 1)
+	assert.Equal(t, &customPort, policy.Spec.Ingress[1].Ports[0].Port)
 }
 
 // TestBuildHeadNetworkPolicy_CustomEgressRules verifies that custom Head.EgressRules are appended after base egress.
