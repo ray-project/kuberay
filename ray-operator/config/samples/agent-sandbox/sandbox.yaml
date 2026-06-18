@@ -67,7 +67,7 @@ spec:
     - ipBlock:
         cidr: 169.254.20.10/32
     ports:
-      - protocol: UDP
-        port: 53
-      - protocol: TCP
-        port: 53
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
