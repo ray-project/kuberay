@@ -5,25 +5,13 @@ metadata:
   namespace: default
 spec:
   envVarsInjectionPolicy: Disallowed
-  # Unmanaged because we apply our own NetworkPolicy below. We don't want
-  # the controller to also create a Secure Default — ours is stricter
-  # (default-deny everything except DNS) and the two policies would just
-  # union into the looser of the two (K8s NetworkPolicy semantics).
+  # Unmanaged because we apply our own NetworkPolicy below.
   networkPolicyManagement: Unmanaged
   podTemplate:
-    # The Agent Sandbox controller propagates these labels to every
-    # warm-pool pod. The NetworkPolicy below uses `app: ray-native-pool`
-    # to target them — the controller's own labels are opaque hashes
-    # (agents.x-k8s.io/warm-pool-sandbox=<hash>) that would be fragile
-    # to hard-code in a public example.
     metadata:
       labels:
         app: python-runtime-pool
     spec:
-      # Untrusted code inside the sandbox MUST NOT be able to read a
-      # ServiceAccount token and call the K8s API. The Agent Sandbox SDK
-      # runs in the Ray worker (outside the sandbox); the worker's
-      # ServiceAccount is where the K8s API permissions live (Step 4).
       automountServiceAccountToken: false
       runtimeClassName: gvisor
       containers:
@@ -63,9 +51,6 @@ spec:
   policyTypes:
     - Egress
   egress:
-    # Allow DNS to kube-dns so name resolution still works (so the
-    # read_gke_metadata snippet hits the BLOCKED-AT-LAYER-4 timeout
-    # path rather than failing earlier at NXDOMAIN).
     - to:
         - namespaceSelector:
             matchLabels:
