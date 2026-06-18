@@ -54,7 +54,7 @@ class SandboxExecutor:
             self.sandbox.files.write(name, code)
             t0 = time.time()
             res = self.sandbox.commands.run(f"python {name}", timeout=timeout)
-            
+
             return {
                 "name": name,
                 "exit_code": res.exit_code,
@@ -76,7 +76,7 @@ class SandboxExecutor:
 
 def main() -> int:
     ray.init()
-    
+
     NUM_EXECUTORS = 2
     executors = []
 
@@ -85,12 +85,12 @@ def main() -> int:
         executors = [SandboxExecutor.remote(worker_id=i) for i in range(NUM_EXECUTORS)]
 
         print(f"Dispatching {len(CODE_SNIPPETS)} code executors...")
-        
+
         futures = [
             executors[i % NUM_EXECUTORS].execute.remote(name, code)
             for i, (name, code) in enumerate(CODE_SNIPPETS)
         ]
-        
+
         results = ray.get(futures)
 
         print("\n--- Execution Results ---")
@@ -110,7 +110,7 @@ def main() -> int:
                 ray.get([e.cleanup.remote() for e in executors])
             except Exception as e:
                 print(f"Cleanup error: {e}", file=sys.stderr)
-        
+
         ray.shutdown()
         print("Done.")
 
