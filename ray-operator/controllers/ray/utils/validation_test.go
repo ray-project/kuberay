@@ -1074,6 +1074,18 @@ func TestValidateRayJobSpec(t *testing.T) {
 			expectError: false,
 		},
 		{
+			name: "clusterSelector RayJob with suspend and fixed JobId is invalid",
+			spec: rayv1.RayJobSpec{
+				Suspend:                  true,
+				JobId:                    "my-fixed-id",
+				ShutdownAfterJobFinishes: true,
+				ClusterSelector: map[string]string{
+					"ray.io/cluster": "my-cluster",
+				},
+			},
+			expectError: true,
+		},
+		{
 			name: "failed to unmarshal RuntimeEnvYAML",
 			spec: rayv1.RayJobSpec{
 				RuntimeEnvYAML: "invalid_yaml_str",

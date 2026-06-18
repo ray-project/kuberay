@@ -331,6 +331,9 @@ func ValidateRayJobSpec(rayJob *rayv1.RayJob) error {
 		if rayJob.Spec.BackoffLimit != nil && *rayJob.Spec.BackoffLimit > 0 {
 			return fmt.Errorf("The RayJob spec is invalid: BackoffLimit is incompatible with ClusterSelector mode")
 		}
+		if rayJob.Spec.Suspend && rayJob.Spec.JobId != "" {
+			return fmt.Errorf("The RayJob spec is invalid: setting a fixed JobId with suspend in ClusterSelector mode is not supported because the same job ID cannot be re-submitted to the Ray cluster after resume")
+		}
 	}
 
 	// InteractiveMode does not support backoffLimit > 1.
