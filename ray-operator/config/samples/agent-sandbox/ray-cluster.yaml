@@ -2,15 +2,12 @@ apiVersion: ray.io/v1
 kind: RayJob
 metadata:
   name: agent-sandbox-code-execution-demo
-  namespace: default
 spec:
   entrypoint: python ray-operator/config/samples/agent-sandbox/sandboxed_code_execution.py
-
   runtimeEnvYAML: |
     pip:
       - k8s-agent-sandbox
     working_dir: "https://github.com/ray-project/kuberay/archive/master.zip"
-
   rayClusterSpec:
     headGroupSpec:
       rayStartParams:
@@ -34,22 +31,6 @@ spec:
               limits:
                 cpu: "2"
                 memory: "4Gi"
-            readinessProbe:
-              httpGet:
-                path: /api/gcs_healthz
-                port: 8265
-              initialDelaySeconds: 10
-              periodSeconds: 10
-              timeoutSeconds: 5
-              failureThreshold: 10
-            livenessProbe:
-              httpGet:
-                path: /api/gcs_healthz
-                port: 8265
-              initialDelaySeconds: 15
-              periodSeconds: 10
-              timeoutSeconds: 5
-              failureThreshold: 10
     workerGroupSpecs:
     - groupName: sandbox-executor-workers
       replicas: 2
