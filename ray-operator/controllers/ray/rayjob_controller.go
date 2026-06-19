@@ -312,6 +312,11 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 						}
 						return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 					}
+					// Dashboard is reachable again; clear a stale failure timer from prior outages.
+					if rayJobInstance.Status.JobStatusCheckFailureStartTime != nil {
+						rayJobInstance.Status.JobStatusCheckFailureStartTime = nil
+						break
+					}
 					return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 				}
 				// finishedAt will only be set if submitter finished

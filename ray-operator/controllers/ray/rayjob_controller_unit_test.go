@@ -510,6 +510,48 @@ func TestUpdateRayJobStatusPersistsJobStatusCheckFailureStartTime(t *testing.T) 
 	assert.WithinDuration(t, startTime.Time, newRayJob.Status.JobStatusCheckFailureStartTime.Time, time.Second)
 }
 
+func TestUpdateRayJobStatusClearsJobStatusCheckFailureStartTime(t *testing.T) {
+	newScheme := runtime.NewScheme()
+	require.NoError(t, rayv1.AddToScheme(newScheme))
+
+	startTime := metav1.NewTime(time.Now())
+	oldRayJob := &rayv1.RayJob{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-rayjob",
+			Namespace: "default",
+		},
+		Status: rayv1.RayJobStatus{
+			JobDeploymentStatus:            rayv1.JobDeploymentStatusRunning,
+			JobStatus:                      rayv1.JobStatusRunning,
+			JobStatusCheckFailureStartTime: &startTime,
+		},
+	}
+
+	fakeClient := clientFake.NewClientBuilder().
+		WithScheme(newScheme).
+		WithRuntimeObjects(oldRayJob).
+		WithStatusSubresource(oldRayJob).Build()
+	ctx := context.Background()
+
+	newRayJob := &rayv1.RayJob{}
+	err := fakeClient.Get(ctx, types.NamespacedName{Namespace: oldRayJob.Namespace, Name: oldRayJob.Name}, newRayJob)
+	require.NoError(t, err)
+	newRayJob.Status.JobStatusCheckFailureStartTime = nil
+
+	testRayJobReconciler := &RayJobReconciler{
+		Client:   fakeClient,
+		Recorder: &record.FakeRecorder{},
+		Scheme:   newScheme,
+	}
+
+	err = testRayJobReconciler.updateRayJobStatus(ctx, oldRayJob, newRayJob)
+	require.NoError(t, err)
+
+	err = fakeClient.Get(ctx, types.NamespacedName{Namespace: newRayJob.Namespace, Name: newRayJob.Name}, newRayJob)
+	require.NoError(t, err)
+	assert.Nil(t, newRayJob.Status.JobStatusCheckFailureStartTime)
+}
+
 func TestFailedToCreateRayJobSubmitterEvent(t *testing.T) {
 	rayJob := &rayv1.RayJob{
 		ObjectMeta: metav1.ObjectMeta{
