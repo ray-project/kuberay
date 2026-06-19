@@ -479,3 +479,43 @@ func TestBuildNetworkPolicy_LongClusterName(t *testing.T) {
 	assert.Equal(t, cluster.Name+"-head", headPolicy.Name)
 	assert.Equal(t, cluster.Name+"-workers", workerPolicy.Name)
 }
+
+// TestBuildHeadNetworkPolicy_WorkerRulesNotLeaked verifies that worker-specific
+// IngressRules are not applied to the head NetworkPolicy.
+func TestBuildHeadNetworkPolicy_WorkerRulesNotLeaked(t *testing.T) {
+	setupNetworkPolicyTest(t)
+
+	customPort := intstr.FromInt32(9999)
+	tcpProto := corev1.ProtocolTCP
+	cluster := testRayClusterBasic.DeepCopy()
+	cluster.Spec.NetworkIsolation.Worker = &rayv1.NetworkPolicyRules{
+		IngressRules: []networkingv1.NetworkPolicyIngressRule{
+			{Ports: []networkingv1.NetworkPolicyPort{{Protocol: &tcpProto, Port: &customPort}}},
+		},
+	}
+
+	policy := testNetworkPolicyController.buildHeadNetworkPolicy(cluster, rayv1.NetworkIsolationDenyAll)
+
+	// Head NP must only have the intra-cluster base rule — no worker rules.
+	require.Len(t, policy.Spec.Ingress, 1)
+}
+
+// TestBuildWorkerNetworkPolicy_HeadRulesNotLeaked verifies that head-specific
+// IngressRules are not applied to the worker NetworkPolicy.
+func TestBuildWorkerNetworkPolicy_HeadRulesNotLeaked(t *testing.T) {
+	setupNetworkPolicyTest(t)
+
+	customPort := intstr.FromInt32(9999)
+	tcpProto := corev1.ProtocolTCP
+	cluster := testRayClusterBasic.DeepCopy()
+	cluster.Spec.NetworkIsolation.Head = &rayv1.NetworkPolicyRules{
+		IngressRules: []networkingv1.NetworkPolicyIngressRule{
+			{Ports: []networkingv1.NetworkPolicyPort{{Protocol: &tcpProto, Port: &customPort}}},
+		},
+	}
+
+	policy := testNetworkPolicyController.buildWorkerNetworkPolicy(cluster, rayv1.NetworkIsolationDenyAll)
+
+	// Worker NP must only have the intra-cluster base rule — no head rules.
+	require.Len(t, policy.Spec.Ingress, 1)
+}
