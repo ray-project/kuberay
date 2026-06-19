@@ -303,18 +303,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			// If the Ray job was not found, GetJobInfo returns a BadRequest error.
 			if errors.IsBadRequest(err) {
 				if rayJobInstance.Spec.SubmissionMode == rayv1.HTTPMode {
-					logger.Info("The Ray job was not found. Submit a Ray job via an HTTP request.", "JobId", rayJobInstance.Status.JobId)
-					if _, submitErr := rayDashboardClient.SubmitJob(ctx, rayJobInstance); submitErr != nil {
-						logger.Error(submitErr, "Failed to submit the Ray job", "JobId", rayJobInstance.Status.JobId)
-						// HTTPMode is the only mode where the operator submits the job, which we should track failure.
-						if recordJobStatusCheckFailure(ctx, rayJobInstance, submitErr) {
-							break
-						}
-						return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
-					}
-					// Dashboard is reachable again; clear a stale failure timer from prior outages.
-					if rayJobInstance.Status.JobStatusCheckFailureStartTime != nil {
-						rayJobInstance.Status.JobStatusCheckFailureStartTime = nil
+					if reconcileHTTPModeJobNotFound(ctx, rayJobInstance, rayDashboardClient, err) {
 						break
 					}
 					return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
@@ -1287,6 +1276,43 @@ func getJobStatusCheckTimeoutSeconds() int {
 		return utils.DEFAULT_RAYJOB_STATUS_CHECK_TIMEOUT_SECONDS
 	}
 	return timeoutSeconds
+}
+
+func isAwaitingInitialJobStatus(rayJob *rayv1.RayJob) bool {
+	return rayJob.Status.JobStatus == "" || rayJob.Status.JobStatus == rayv1.JobStatusNew
+}
+
+// Clears JobStatusCheckFailureStartTime. Returns whether status should be persisted.
+func clearJobStatusCheckFailureTimer(rayJob *rayv1.RayJob) bool {
+	if rayJob.Status.JobStatusCheckFailureStartTime == nil {
+		return false
+	}
+	rayJob.Status.JobStatusCheckFailureStartTime = nil
+	return true
+}
+
+// Util function to handle GetJobInfo 404 in HTTP mode: resubmit the job and update the status-check failure timer.
+// Returns whether status should be persisted.
+func reconcileHTTPModeJobNotFound(
+	ctx context.Context,
+	rayJob *rayv1.RayJob,
+	rayDashboardClient dashboardclient.RayDashboardClientInterface,
+	notFoundErr error,
+) bool {
+	logger := ctrl.LoggerFrom(ctx)
+	logger.Info("The Ray job was not found. Submit a Ray job via an HTTP request.", "JobId", rayJob.Status.JobId)
+
+	needsStatusPersist := isAwaitingInitialJobStatus(rayJob) && clearJobStatusCheckFailureTimer(rayJob)
+
+	if _, submitErr := rayDashboardClient.SubmitJob(ctx, rayJob); submitErr != nil {
+		logger.Error(submitErr, "Failed to submit the Ray job", "JobId", rayJob.Status.JobId)
+		return needsStatusPersist || recordJobStatusCheckFailure(ctx, rayJob, submitErr)
+	}
+
+	if !isAwaitingInitialJobStatus(rayJob) {
+		return recordJobStatusCheckFailure(ctx, rayJob, notFoundErr) || needsStatusPersist
+	}
+	return needsStatusPersist
 }
 
 // Records the first job status check failure timestamp.
