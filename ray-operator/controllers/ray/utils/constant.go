@@ -58,6 +58,10 @@ const (
 	// Ray GCS FT related annotations
 	RayFTEnabledAnnotationKey         = "ray.io/ft-enabled"
 	RayExternalStorageNSAnnotationKey = "ray.io/external-storage-namespace"
+	// RayClusterGCSFTDeletionTimeoutAnnotation overrides the default finalizer-removal
+	// timeout for a specific RayCluster (integer seconds; falls back to
+	// RAYCLUSTER_GCS_FT_DELETION_TIMEOUT_DEFAULT when absent or invalid).
+	RayClusterGCSFTDeletionTimeoutAnnotation = "ray.io/gcs-ft-deletion-timeout"
 
 	// If this annotation is set to "true", the KubeRay operator will not modify the container's command.
 	// However, the generated `ray start` command will still be stored in the container's environment variable
@@ -149,6 +153,8 @@ const (
 	RAYCLUSTER_DEFAULT_REQUEUE_SECONDS_ENV  = "RAYCLUSTER_DEFAULT_REQUEUE_SECONDS_ENV"
 	RAYCLUSTER_DEFAULT_REQUEUE_SECONDS      = 300
 	KUBERAY_GEN_RAY_START_CMD               = "KUBERAY_GEN_RAY_START_CMD"
+	KUBERAY_GEN_AUTOSCALER_START_CMD        = "KUBERAY_GEN_AUTOSCALER_START_CMD"
+	RAY_START_ULIMIT_OPEN_FILES             = "RAY_START_ULIMIT_OPEN_FILES"
 
 	// Environment variables for RayJob submitter Kubernetes Job.
 	// Example: ray job submit --address=http://$RAY_DASHBOARD_ADDRESS --submission-id=$RAY_JOB_SUBMISSION_ID ...
@@ -184,6 +190,12 @@ const (
 	// This KubeRay operator environment variable is used to determine if the Redis
 	// cleanup Job should be enabled. This is a feature flag for v1.0.0.
 	ENABLE_GCS_FT_REDIS_CLEANUP = "ENABLE_GCS_FT_REDIS_CLEANUP"
+
+	// RAYCLUSTER_GCS_FT_DELETION_TIMEOUT_DEFAULT is the fallback timeout (in seconds)
+	// for force-removing the GCS FT finalizer from a stuck RayCluster when the cleanup
+	// job has not finished within that duration. Override per-cluster via the
+	// RayClusterGCSFTDeletionTimeoutAnnotation annotation.
+	RAYCLUSTER_GCS_FT_DELETION_TIMEOUT_DEFAULT = 300 // in seconds; == 5 minutes
 
 	// This environment variable for the KubeRay operator is used to determine whether to enable
 	// the injection of readiness and liveness probes into Ray head and worker containers.
@@ -302,6 +314,10 @@ const (
 
 	// MinAutoscalerRestartValidVersion is the minimum Ray image version that supports the feature of autoscaler restart.
 	MinAutoscalerRestartValidVersion = "2.55.0"
+	// MaxRayCronJobNameLength is the maximum RayCronJob name to make sure its child RayJob passes
+	// validation. Minus 11 for the "-<minuteHash>" suffix (dash + up to a 10-digit Unix-minute hash)
+	// appended to create the child RayJob name (getRayJobName).
+	MaxRayCronJobNameLength = MaxRayJobNameLength - 11
 )
 
 type ServiceType string
@@ -366,6 +382,7 @@ const (
 	// Redis Cleanup Job event list
 	CreatedRedisCleanupJob        K8sEventType = "CreatedRedisCleanupJob"
 	FailedToCreateRedisCleanupJob K8sEventType = "FailedToCreateRedisCleanupJob"
+	ForceDeletedStuckCluster      K8sEventType = "ForceDeletedStuckCluster"
 
 	// RayJob event list
 	InvalidRayJobSpec             K8sEventType = "InvalidRayJobSpec"
@@ -408,8 +425,14 @@ const (
 	FailedToUpdateTargetCapacity    K8sEventType = "FailedToUpdateTargetCapacity"
 	FailedToCreateGateway           K8sEventType = "FailedToCreateGateway"
 	FailedToUpdateGateway           K8sEventType = "FailedToUpdateGateway"
+	FailedToDeleteGateway           K8sEventType = "FailedToDeleteGateway"
 	FailedToCreateHTTPRoute         K8sEventType = "FailedToCreateHTTPRoute"
 	FailedToUpdateHTTPRoute         K8sEventType = "FailedToUpdateHTTPRoute"
+	FailedToDeleteHTTPRoute         K8sEventType = "FailedToDeleteHTTPRoute"
+	FailedToDeleteService           K8sEventType = "FailedToDeleteService"
+	DeletedGateway                  K8sEventType = "DeletedGateway"
+	DeletedHTTPRoute                K8sEventType = "DeletedHTTPRoute"
+	DeletedService                  K8sEventType = "DeletedService"
 
 	// Generic Pod event list
 	DeletedPod                  K8sEventType = "DeletedPod"

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"os"
@@ -8,50 +9,79 @@ import (
 	"sync"
 	"syscall"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/ray-project/kuberay/historyserver/pkg/collector"
 	"github.com/ray-project/kuberay/historyserver/pkg/collector/types"
-	"github.com/ray-project/kuberay/historyserver/pkg/eventserver"
 	"github.com/ray-project/kuberay/historyserver/pkg/historyserver"
-	"github.com/sirupsen/logrus"
 )
 
 func main() {
 	runtimeClassName := ""
 	rayRootDir := ""
 	kubeconfigs := ""
-	runtimeClassConfigPath := "/var/collector-config/data"
+	runtimeClassConfigPath := ""
 	dashboardDir := ""
 	useKubernetesProxy := false
-	flag.StringVar(&runtimeClassName, "runtime-class-name", "", "")
-	flag.StringVar(&rayRootDir, "ray-root-dir", "", "")
-	flag.StringVar(&kubeconfigs, "kubeconfigs", "", "")
-	flag.StringVar(&dashboardDir, "dashboard-dir", "/dashboard", "")
-	flag.StringVar(&runtimeClassConfigPath, "runtime-class-config-path", "", "") //"/var/collector-config/data"
-	flag.BoolVar(&useKubernetesProxy, "use-kubernetes-proxy", false, "")
+	qps := historyserver.DefaultKubeAPIQPS
+	burst := historyserver.DefaultKubeAPIBurst
+	sessionProcessTimeout := historyserver.DefaultSessionProcessTimeout
+	sessionCacheSize := historyserver.DefaultSessionCacheSize
+	sessionCacheTTL := historyserver.DefaultSessionCacheTTL
+	flag.StringVar(&runtimeClassName, "runtime-class-name", "", "Storage backend: s3 / gcs / azureblob / aliyunoss / localtest")
+	flag.StringVar(&rayRootDir, "ray-root-dir", "", "Root dir inside the bucket")
+	flag.StringVar(&kubeconfigs, "kubeconfigs", "", "Kubeconfig path; empty = in-cluster")
+	flag.StringVar(&dashboardDir, "dashboard-dir", "/dashboard", "Path to Ray Dashboard static assets")
+	flag.StringVar(&runtimeClassConfigPath, "runtime-class-config-path", "", "Path to backend config JSON")
+	flag.BoolVar(&useKubernetesProxy, "use-kubernetes-proxy", false, "Use local kubeconfig instead of in-cluster config")
+	flag.Float64Var(&qps, "kube-api-qps", historyserver.DefaultKubeAPIQPS, "The QPS value for the client communicating with the Kubernetes API server.")
+	flag.IntVar(&burst, "kube-api-burst", historyserver.DefaultKubeAPIBurst, "The maximum burst for throttling requests from this client to the Kubernetes API server.")
+	flag.DurationVar(&sessionProcessTimeout, "session-process-timeout", historyserver.DefaultSessionProcessTimeout, "Timeout duration for processing and loading a single Ray cluster session.")
+	flag.IntVar(&sessionCacheSize, "session-cache-size", historyserver.DefaultSessionCacheSize, "Max number of dead-session snapshots held in the LRU cache.")
+	flag.DurationVar(&sessionCacheTTL, "session-cache-ttl", historyserver.DefaultSessionCacheTTL, "How long a dead-session snapshot stays cached after last access. 0 disables TTL.")
 	flag.Parse()
 
-	cliMgr, err := historyserver.NewClientManager(kubeconfigs, useKubernetesProxy)
+	if runtimeClassName == "" {
+		logrus.Fatal("--runtime-class-name is required")
+	}
+	if qps <= 0 {
+		logrus.Fatalf("--kube-api-qps must be > 0, got %v", qps)
+	}
+	if burst <= 0 {
+		logrus.Fatalf("--kube-api-burst must be > 0, got %d", burst)
+	}
+	if sessionCacheSize <= 0 {
+		logrus.Fatalf("--session-cache-size must be > 0, got %d", sessionCacheSize)
+	}
+	if sessionCacheTTL < 0 {
+		logrus.Fatalf("--session-cache-ttl must be >= 0, got %s", sessionCacheTTL)
+	}
+
+	cliMgr, err := historyserver.NewClientManager(historyserver.ClientManagerConfig{
+		Kubeconfigs:        kubeconfigs,
+		UseKubernetesProxy: useKubernetesProxy,
+		QPS:                float32(qps),
+		Burst:              burst,
+	})
 	if err != nil {
-		logrus.Errorf("Failed to create client manager: %v", err)
-		os.Exit(1)
+		logrus.Fatalf("Failed to create client manager: %v", err)
 	}
 
 	jsonData := make(map[string]interface{})
 	if runtimeClassConfigPath != "" {
 		data, err := os.ReadFile(runtimeClassConfigPath)
 		if err != nil {
-			panic("Failed to read runtime class config " + err.Error())
+			logrus.Fatalf("Failed to read runtime-class-config-path from %s: %v", runtimeClassConfigPath, err)
 		}
-		err = json.Unmarshal(data, &jsonData)
-		if err != nil {
-			panic("Failed to parse runtime class config: " + err.Error())
+		if err := json.Unmarshal(data, &jsonData); err != nil {
+			logrus.Fatalf("Failed to parse runtime-class-config-path from %s: %v", runtimeClassConfigPath, err)
 		}
 	}
 
 	registry := collector.GetReaderRegistry()
 	factory, ok := registry[runtimeClassName]
 	if !ok {
-		panic("Not supported runtime class name: " + runtimeClassName + ".")
+		logrus.Fatalf("Unsupported runtime-class-name for reader: %s", runtimeClassName)
 	}
 
 	globalConfig := types.RayHistoryServerConfig{
@@ -60,34 +90,30 @@ func main() {
 
 	reader, err := factory(&globalConfig, jsonData)
 	if err != nil {
-		panic("Failed to create reader for runtime class name: " + runtimeClassName + ".")
+		logrus.Fatalf("Failed to create reader for runtime class name %s: %v", runtimeClassName, err)
 	}
 
-	// Create EventHandler with storage reader
-	eventHandler := eventserver.NewEventHandler(reader)
+	serverCtx, serverCancel := signal.NotifyContext(
+		context.Background(),
+		syscall.SIGINT, syscall.SIGTERM,
+	)
+	defer serverCancel()
 
-	// WaitGroup to track goroutine completion
+	processor := historyserver.NewSessionProcessor(reader, cliMgr.Client())
+	sessionLoader := historyserver.NewSessionLoader(processor, serverCtx, sessionProcessTimeout, sessionCacheSize, sessionCacheTTL)
+
+	// ServerHandler.Run consumes a stop chan; bridge serverCtx into it.
 	var wg sync.WaitGroup
-
-	sigChan := make(chan os.Signal, 1)
-	stop := make(chan struct{}, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-
-	// Start EventHandler in background goroutine
-	wg.Add(1)
+	stop := make(chan struct{})
 	go func() {
-		defer wg.Done()
-		logrus.Info("Starting EventHandler in background...")
-		if err := eventHandler.Run(stop, 2); err != nil {
-			logrus.Errorf("EventHandler stopped with error: %v", err)
-		}
-		logrus.Info("EventHandler shutdown complete")
+		<-serverCtx.Done()
+		logrus.Info("Received shutdown signal, initiating graceful shutdown...")
+		close(stop)
 	}()
 
-	handler, err := historyserver.NewServerHandler(&globalConfig, dashboardDir, reader, cliMgr, eventHandler, useKubernetesProxy)
+	handler, err := historyserver.NewServerHandler(&globalConfig, dashboardDir, reader, cliMgr, sessionLoader, useKubernetesProxy)
 	if err != nil {
-		logrus.Errorf("Failed to create server handler: %v", err)
-		os.Exit(1)
+		logrus.Fatalf("Failed to create server handler: %v", err)
 	}
 
 	wg.Add(1)
@@ -97,13 +123,6 @@ func main() {
 		logrus.Info("HTTP server shutdown complete")
 	}()
 
-	<-sigChan
-	logrus.Info("Received shutdown signal, initiating graceful shutdown...")
-
-	// Stop both the server and the event handler
-	close(stop)
-
-	// Wait for both goroutines to complete
 	wg.Wait()
 	logrus.Info("Graceful shutdown complete")
 }

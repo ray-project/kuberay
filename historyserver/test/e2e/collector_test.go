@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"compress/gzip"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -593,11 +594,27 @@ func loadRayEventsFromS3(s3Client *s3.S3, bucket string, prefix string) ([]rayEv
 		}
 
 		var fileEvents []rayEvent
-		if err := json.NewDecoder(content.Body).Decode(&fileEvents); err != nil {
-			content.Body.Close()
-			return nil, fmt.Errorf("failed to decode Ray events from %s: %w", fileKey, err)
+		var reader io.Reader = content.Body
+		var gzReader *gzip.Reader
+		if strings.HasSuffix(fileKey, ".gz") {
+			var err error
+			gzReader, err = gzip.NewReader(content.Body)
+			if err != nil {
+				content.Body.Close()
+				return nil, fmt.Errorf("failed to create gzip reader for %s: %w", fileKey, err)
+			}
+			reader = gzReader
+		}
+
+		decodeErr := json.NewDecoder(reader).Decode(&fileEvents)
+		if gzReader != nil {
+			gzReader.Close()
 		}
 		content.Body.Close()
+
+		if decodeErr != nil {
+			return nil, fmt.Errorf("failed to decode Ray events from %s: %w", fileKey, decodeErr)
+		}
 
 		events = append(events, fileEvents...)
 	}

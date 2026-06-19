@@ -1,7 +1,6 @@
 package eventcollector
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -16,6 +15,7 @@ import (
 	"github.com/fsnotify/fsnotify"
 	"github.com/sirupsen/logrus"
 
+	"github.com/ray-project/kuberay/historyserver/pkg/compression"
 	"github.com/ray-project/kuberay/historyserver/pkg/storage"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
@@ -437,8 +437,6 @@ func (ec *EventCollector) flushNodeEventsForHour(hourKey string, events []Event)
 		return fmt.Errorf("failed to marshal node events: %w", err)
 	}
 
-	reader := bytes.NewReader(data)
-
 	// Use sessionName from event, not config
 	sessionNameToUse := ec.sessionName // Default to configured sessionName
 	if len(events) > 0 && events[0].SessionName != "" {
@@ -452,12 +450,9 @@ func (ec *EventCollector) flushNodeEventsForHour(hourKey string, events []Event)
 	}
 
 	// Build node event storage path using event's nodeID
-	basePath := path.Join(
-		ec.root,
-		fmt.Sprintf("%s_%s", ec.clusterName, ec.clusterNamespace),
-		sessionNameToUse,
-		"node_events",
-		fmt.Sprintf("%s-%s", nodeIDToUse, hourKey))
+	sessionPath := path.Clean(path.Join(ec.root, utils.AppendRayClusterNameNamespace(ec.clusterName, ec.clusterNamespace), sessionNameToUse))
+
+	basePath := path.Join(sessionPath, "node_events", fmt.Sprintf("%s-%s.gz", nodeIDToUse, hourKey))
 
 	// Ensure storage directory exists
 	dir := path.Dir(basePath)
@@ -466,8 +461,9 @@ func (ec *EventCollector) flushNodeEventsForHour(hourKey string, events []Event)
 	}
 
 	// Write event file
-	if err := ec.storageWriter.WriteFile(basePath, reader); err != nil {
-		return fmt.Errorf("failed to write node events file %s: %w", basePath, err)
+	writeErr := compression.WriteCompressedBytes(ec.storageWriter, basePath, data)
+	if writeErr != nil {
+		return fmt.Errorf("failed to write node events file %s: %w", basePath, writeErr)
 	}
 
 	logrus.Infof("Successfully flushed %d node events for hour %s to %s, context: %s", len(events), hourKey, basePath, string(data))
@@ -487,8 +483,6 @@ func (ec *EventCollector) flushJobEventsForHour(jobID, hourKey string, events []
 		return fmt.Errorf("failed to marshal job events: %w", err)
 	}
 
-	reader := bytes.NewReader(data)
-
 	// Use sessionName from event, not config
 	sessionNameToUse := ec.sessionName // Default to configured sessionName
 	if len(events) > 0 && events[0].SessionName != "" {
@@ -502,13 +496,9 @@ func (ec *EventCollector) flushJobEventsForHour(jobID, hourKey string, events []
 	}
 
 	// Build job event storage path using event's nodeID
-	basePath := path.Join(
-		ec.root,
-		fmt.Sprintf("%s_%s", ec.clusterName, ec.clusterNamespace),
-		sessionNameToUse,
-		"job_events",
-		jobID,
-		fmt.Sprintf("%s-%s", nodeIDToUse, hourKey))
+	sessionPath := path.Clean(path.Join(ec.root, utils.AppendRayClusterNameNamespace(ec.clusterName, ec.clusterNamespace), sessionNameToUse))
+
+	basePath := path.Join(sessionPath, "job_events", jobID, fmt.Sprintf("%s-%s.gz", nodeIDToUse, hourKey))
 
 	// Ensure storage directory exists
 	dir := path.Dir(basePath)
@@ -517,8 +507,9 @@ func (ec *EventCollector) flushJobEventsForHour(jobID, hourKey string, events []
 	}
 
 	// Write event file
-	if err := ec.storageWriter.WriteFile(basePath, reader); err != nil {
-		return fmt.Errorf("failed to write job events file %s: %w", basePath, err)
+	writeErr := compression.WriteCompressedBytes(ec.storageWriter, basePath, data)
+	if writeErr != nil {
+		return fmt.Errorf("failed to write job events file %s: %w", basePath, writeErr)
 	}
 
 	logrus.Infof("Successfully flushed %d job events for job %s hour %s to %s", len(events), jobID, hourKey, basePath)

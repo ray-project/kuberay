@@ -2762,78 +2762,6 @@ func TestReconcileRollbackState(t *testing.T) {
 	}
 }
 
-// TestShouldUpdateCluster_SuspendFlip covers ray-project/kuberay#4686: when Kueue
-// toggles RayService.Spec.RayClusterSpec.Suspend, the existing RayCluster must be
-// updated in-place. Previously shouldUpdateCluster returned false because the
-// cluster hash annotation encodes the old Suspend value, leaving the cluster
-// stuck suspended with no head pod.
-func TestShouldUpdateCluster_SuspendFlip(t *testing.T) {
-	namespace := "test-namespace"
-
-	newRayService := func(suspend *bool) *rayv1.RayService {
-		return &rayv1.RayService{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "test-service",
-				Namespace: namespace,
-			},
-			Spec: rayv1.RayServiceSpec{
-				RayClusterSpec: rayv1.RayClusterSpec{
-					RayVersion: "2.9.0",
-					Suspend:    suspend,
-				},
-			},
-		}
-	}
-
-	// newClusterFrom mirrors the annotation layout produced by
-	// constructRayClusterForRayService so the hash reflects the cluster's
-	// actual spec (including its Suspend value).
-	newClusterFrom := func(t *testing.T, service *rayv1.RayService, suspend *bool) *rayv1.RayCluster {
-		t.Helper()
-		clusterSpec := service.Spec.RayClusterSpec.DeepCopy()
-		clusterSpec.Suspend = suspend
-		hash, err := utils.GenerateHashWithoutReplicasAndWorkersToDelete(*clusterSpec)
-		require.NoError(t, err)
-		return &rayv1.RayCluster{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "test-cluster",
-				Namespace: namespace,
-				Annotations: map[string]string{
-					utils.HashWithoutReplicasAndWorkersToDeleteKey: hash,
-					utils.NumWorkerGroupsKey:                       strconv.Itoa(len(clusterSpec.WorkerGroupSpecs)),
-					utils.KubeRayVersion:                           utils.KUBERAY_VERSION,
-				},
-			},
-			Spec: *clusterSpec,
-		}
-	}
-
-	tests := []struct {
-		name            string
-		serviceSuspend  *bool
-		clusterSuspend  *bool
-		isActiveCluster bool
-		expect          bool
-	}{
-		{"pending unsuspended by Kueue: true -> false", new(false), new(true), false, true},
-		{"pending suspended by Kueue: false -> true", new(true), new(false), false, true},
-		{"active unsuspended by Kueue: true -> false", new(false), new(true), true, true},
-		{"active suspended by Kueue: false -> true", new(true), new(false), true, true},
-		{"no change, both nil", nil, nil, false, false},
-		{"no change, both false", new(false), new(false), false, false},
-		{"no change, both true", new(true), new(true), false, false},
-		{"nil vs false treated equal", nil, new(false), false, false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			service := newRayService(tt.serviceSuspend)
-			cluster := newClusterFrom(t, service, tt.clusterSuspend)
-			assert.Equal(t, tt.expect, shouldUpdateCluster(service, cluster, tt.isActiveCluster))
-		})
-	}
-}
-
 // headReadyCluster is a helper to construct a RayCluster with a specific HeadPodReady condition.
 func headReadyCluster(ready bool) *rayv1.RayCluster {
 	status := metav1.ConditionFalse
@@ -3173,4 +3101,57 @@ func TestRayServiceFinalizer(t *testing.T) {
 			tt.validate(t, fakeClient, namespacedName)
 		})
 	}
+}
+
+func TestHandleSuspendObservedGeneration(t *testing.T) {
+	ctx := context.Background()
+	reconciler := &RayServiceReconciler{}
+
+	t.Run("entering Suspending bumps observedGeneration on conditions", func(t *testing.T) {
+		rayService := &rayv1.RayService{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:       "rayservice",
+				Namespace:  "default",
+				Generation: 5,
+			},
+			Spec: rayv1.RayServiceSpec{Suspend: true},
+			Status: rayv1.RayServiceStatuses{
+				ObservedGeneration: 2,
+			},
+		}
+
+		_, err := reconciler.handleSuspend(ctx, rayService)
+		require.NoError(t, err)
+		assert.Equal(t, int64(5), rayService.Status.ObservedGeneration)
+
+		suspending := meta.FindStatusCondition(rayService.Status.Conditions, string(rayv1.RayServiceSuspending))
+		require.NotNil(t, suspending)
+		assert.Equal(t, metav1.ConditionTrue, suspending.Status)
+		assert.Equal(t, int64(5), suspending.ObservedGeneration)
+	})
+
+	t.Run("idle Suspended does not bump observedGeneration", func(t *testing.T) {
+		rayService := &rayv1.RayService{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:       "rayservice",
+				Namespace:  "default",
+				Generation: 9,
+			},
+			Spec: rayv1.RayServiceSpec{Suspend: true},
+			Status: rayv1.RayServiceStatuses{
+				ObservedGeneration: 4,
+				Conditions: []metav1.Condition{
+					{
+						Type:   string(rayv1.RayServiceSuspended),
+						Status: metav1.ConditionTrue,
+						Reason: string(rayv1.SuspendComplete),
+					},
+				},
+			},
+		}
+
+		_, err := reconciler.handleSuspend(ctx, rayService)
+		require.NoError(t, err)
+		assert.Equal(t, int64(4), rayService.Status.ObservedGeneration)
+	})
 }

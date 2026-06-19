@@ -1,20 +1,22 @@
 package eventserver
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
-	"errors"
 	"testing"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func makeTaskEventMap(taskName, nodeID, taskID, cluster string, attempt int) map[string]any {
+func makeTaskEventMap(taskName, nodeID, taskID string, attempt int) map[string]any {
 	return map[string]any{
-		"eventType":   string(types.TASK_DEFINITION_EVENT),
-		"clusterName": cluster,
+		"eventType": string(types.TASK_DEFINITION_EVENT),
 		"taskDefinitionEvent": map[string]any{
 			"taskId":      taskID,
 			"taskName":    taskName,
@@ -24,179 +26,10 @@ func makeTaskEventMap(taskName, nodeID, taskID, cluster string, attempt int) map
 	}
 }
 
-func TestEventProcessor(t *testing.T) {
+func TestStoreEvent(t *testing.T) {
 	// IDs follow Ray's ID specification:
 	// ref: https://github.com/ray-project/ray/blob/f229d5376eb87b09a3fa0b991323450de84df890/src/ray/design_docs/id_specification.md
 	// Sizes: JobID=4B, ActorID=12B unique+JobID (16B), TaskID=8B unique+ActorID (24B), NodeID/WorkerID=28B
-	const (
-		// Pure-hex IDs to verify normalizeIDToHex is identity.
-		// Use lowercase to match production hex output and avoid map-key collision.
-		testJobID   = "aaaabbbb"                                                 // 4B
-		testActorID = "aaaabbbb1234aaaabbbb1234" + testJobID                     // 12B unique + JobID
-		testTaskID1 = "ccccdddd5678cccc" + testActorID                           // 8B unique + ActorID
-		testTaskID2 = "ccccdddd9012dddd" + testActorID                           // 8B unique + ActorID
-		testNodeID1 = "eeeeffff1234eeeeffff1234eeeeffff1234eeeeffff1234eeeeffff" // 28B
-		testNodeID2 = "eeeeffff9012eeeeffff9012eeeeffff9012eeeeffff9012eeeeffff" // 28B
-
-		testClusterName = "cluster1"
-		testTaskName1   = "Name_12345"
-		testTaskName2   = "Name_54321"
-	)
-	tests := []struct {
-		name string
-		// Setup
-		eventsToSend []map[string]any
-		cancelAfter  time.Duration // Time after which to cancel context (0 for no cancel)
-		closeChan    bool          // Whether to close the channel after sending events
-
-		// Expectations
-		wantErr          bool
-		expectedErrType  error // Specific error type to check (e.g., context.Canceled)
-		wantStoredEvents map[string][]types.Task
-	}{
-		{
-			name: "process multiple events then close channel",
-			eventsToSend: []map[string]any{
-				{
-					"clusterName": testClusterName,
-					"eventType":   "TASK_DEFINITION_EVENT",
-					"taskDefinitionEvent": map[string]any{
-						"taskId":      testTaskID1,
-						"taskName":    testTaskName1,
-						"nodeId":      testNodeID1,
-						"taskAttempt": 2,
-					},
-				},
-				{
-					"clusterName": testClusterName,
-					"eventType":   "TASK_DEFINITION_EVENT",
-					"taskDefinitionEvent": map[string]any{
-						"taskId":      testTaskID2,
-						"taskName":    testTaskName2,
-						"nodeId":      testNodeID2,
-						"taskAttempt": 1,
-					},
-				},
-			},
-			closeChan: true,
-			wantStoredEvents: map[string][]types.Task{
-				testTaskID1: {
-					{
-						TaskID:      testTaskID1,
-						TaskName:    testTaskName1,
-						NodeID:      testNodeID1,
-						TaskAttempt: 2,
-					},
-				},
-				testTaskID2: {
-					{
-						TaskID:      testTaskID2,
-						TaskName:    testTaskName2,
-						NodeID:      testNodeID2,
-						TaskAttempt: 1,
-					},
-				},
-			},
-		},
-		{
-			name:      "channel closed immediately",
-			closeChan: true,
-			wantErr:   false,
-		},
-		{
-			name: "context canceled",
-			eventsToSend: []map[string]any{
-				{
-					"clusterName": testClusterName,
-					"eventType":   "TASK_DEFINITION_EVENT",
-					"taskDefinitionEvent": map[string]any{
-						"taskId":      testTaskID1,
-						"taskName":    testTaskName1,
-						"nodeId":      testNodeID1,
-						"taskAttempt": 2,
-					},
-				},
-			},
-			cancelAfter:     50 * time.Millisecond,
-			wantErr:         true,
-			expectedErrType: context.Canceled,
-			// Event might be processed before cancellation is detected
-			wantStoredEvents: map[string][]types.Task{
-				testTaskID1: {
-					{
-						TaskID:      testTaskID1,
-						TaskName:    testTaskName1,
-						NodeID:      testNodeID1,
-						TaskAttempt: 2,
-					},
-				},
-			},
-		},
-		{
-			name:            "no events, context canceled",
-			cancelAfter:     10 * time.Millisecond,
-			wantErr:         true,
-			expectedErrType: context.Canceled,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Sending nil for reader since it won't be used anyways
-			h := NewEventHandler(nil)
-
-			// Channel buffer size a bit larger than events to avoid blocking sender in test setup
-			ch := make(chan map[string]any, len(tt.eventsToSend)+2)
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-
-			// Send events into the channel
-			go func() {
-				for _, event := range tt.eventsToSend {
-					select {
-					case ch <- event:
-					case <-ctx.Done(): // Stop sending if context is cancelled
-						return
-					}
-				}
-				if tt.closeChan {
-					close(ch)
-				}
-			}()
-
-			// Handle context cancellation if specified
-			if tt.cancelAfter > 0 {
-				go func() {
-					time.Sleep(tt.cancelAfter)
-					cancel()
-				}()
-			}
-
-			// Run the ProcessEvent
-			err := h.ProcessEvents(ctx, ch)
-
-			// Check error expectations
-			if (err != nil) != tt.wantErr {
-				t.Errorf("ProcessEvents() error = %v, wantErr %v", err, tt.wantErr)
-			}
-			if tt.expectedErrType != nil {
-				if !errors.Is(err, tt.expectedErrType) {
-					t.Errorf("ProcessEvents() error type = %T, want type %T (err: %v)", err, tt.expectedErrType, err)
-				}
-			}
-
-			// Check stored events
-			if tt.wantStoredEvents != nil {
-				if diff := cmp.Diff(tt.wantStoredEvents, h.ClusterTaskMap.ClusterTaskMap[testClusterName].TaskMap); diff != "" {
-					t.Errorf("storeEventCalls diff (-want +got):\n%s", diff)
-				}
-			}
-		})
-	}
-}
-
-func TestStoreEvent(t *testing.T) {
-	// IDs follow Ray's ID spec; see TestEventProcessor for rationale.
 	const (
 		testJobID        = "aaaabbbb"                                                 // 4B
 		testActorID      = "aaaabbbb1234aaaabbbb1234" + testJobID                     // 12B unique + JobID
@@ -242,8 +75,7 @@ func TestStoreEvent(t *testing.T) {
 				ClusterTaskMap: make(map[string]*types.TaskMap),
 			},
 			eventMap: map[string]any{
-				"eventType":   "UNKNOWN_TYPE",
-				"clusterName": testClusterName,
+				"eventType": "UNKNOWN_TYPE",
 			},
 			wantErr:          false,
 			wantClusterCount: 0,
@@ -253,7 +85,7 @@ func TestStoreEvent(t *testing.T) {
 			initialState: &types.ClusterTaskMap{
 				ClusterTaskMap: make(map[string]*types.TaskMap),
 			},
-			eventMap:          makeTaskEventMap(testTaskName1, testNodeID1, testTaskID1, testClusterName, 0),
+			eventMap:          makeTaskEventMap(testTaskName1, testNodeID1, testTaskID1, 0),
 			wantErr:           false,
 			wantClusterCount:  1,
 			wantTaskInCluster: testClusterName,
@@ -274,7 +106,7 @@ func TestStoreEvent(t *testing.T) {
 					testClusterName: types.NewTaskMap(),
 				},
 			},
-			eventMap:          makeTaskEventMap(testTaskName2, testNodeID2, testTaskID2, testClusterName, 1),
+			eventMap:          makeTaskEventMap(testTaskName2, testNodeID2, testTaskID2, 1),
 			wantErr:           false,
 			wantClusterCount:  1,
 			wantTaskInCluster: testClusterName,
@@ -299,7 +131,7 @@ func TestStoreEvent(t *testing.T) {
 					},
 				},
 			},
-			eventMap:          makeTaskEventMap(testTaskName1, testNodeID1, testTaskID1, testClusterName, 2),
+			eventMap:          makeTaskEventMap(testTaskName1, testNodeID1, testTaskID1, 2),
 			wantErr:           false,
 			wantClusterCount:  1,
 			wantTaskInCluster: testClusterName,
@@ -325,7 +157,7 @@ func TestStoreEvent(t *testing.T) {
 			initialState: &types.ClusterTaskMap{
 				ClusterTaskMap: make(map[string]*types.TaskMap),
 			},
-			eventMap:          makeTaskEventMap(testTaskName1, testBase64ID1, testBase64ID2, testClusterName, 0),
+			eventMap:          makeTaskEventMap(testTaskName1, testBase64ID1, testBase64ID2, 0),
 			wantErr:           false,
 			wantClusterCount:  1,
 			wantTaskInCluster: testClusterName,
@@ -344,7 +176,7 @@ func TestStoreEvent(t *testing.T) {
 			initialState: &types.ClusterTaskMap{
 				ClusterTaskMap: make(map[string]*types.TaskMap),
 			},
-			eventMap:          makeTaskEventMap(testTaskName1, testUpperNodeID1, testUpperTaskID1, testClusterName, 0),
+			eventMap:          makeTaskEventMap(testTaskName1, testUpperNodeID1, testUpperTaskID1, 0),
 			wantErr:           false,
 			wantClusterCount:  1,
 			wantTaskInCluster: testClusterName,
@@ -363,7 +195,7 @@ func TestStoreEvent(t *testing.T) {
 			initialState: &types.ClusterTaskMap{
 				ClusterTaskMap: make(map[string]*types.TaskMap),
 			},
-			eventMap:          makeTaskEventMap(testTaskName1, testLowerNodeID1, testLowerTaskID1, testClusterName, 0),
+			eventMap:          makeTaskEventMap(testTaskName1, testLowerNodeID1, testLowerTaskID1, 0),
 			wantErr:           false,
 			wantClusterCount:  1,
 			wantTaskInCluster: testClusterName,
@@ -383,8 +215,7 @@ func TestStoreEvent(t *testing.T) {
 				ClusterTaskMap: make(map[string]*types.TaskMap),
 			},
 			eventMap: map[string]any{
-				"eventType":   string(types.TASK_DEFINITION_EVENT),
-				"clusterName": testClusterName,
+				"eventType": string(types.TASK_DEFINITION_EVENT),
 			},
 			wantErr: true,
 		},
@@ -395,7 +226,6 @@ func TestStoreEvent(t *testing.T) {
 			},
 			eventMap: map[string]any{
 				"eventType":           string(types.TASK_DEFINITION_EVENT),
-				"clusterName":         testClusterName,
 				"taskDefinitionEvent": "not a map",
 			},
 			wantErr: true, // Marshal will fail
@@ -406,8 +236,7 @@ func TestStoreEvent(t *testing.T) {
 				ClusterTaskMap: make(map[string]*types.TaskMap),
 			},
 			eventMap: map[string]any{
-				"eventType":   string(types.TASK_DEFINITION_EVENT),
-				"clusterName": testClusterName,
+				"eventType": string(types.TASK_DEFINITION_EVENT),
 				"taskDefinitionEvent": map[string]any{
 					"taskId":      123, // Should be string
 					"taskAttempt": 0,
@@ -428,7 +257,7 @@ func TestStoreEvent(t *testing.T) {
 				}
 			}
 
-			err := h.storeEvent(tt.eventMap)
+			err := h.storeEvent(testClusterName, tt.eventMap)
 
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("storeEvent() error = %v, wantErr %v", err, tt.wantErr)
@@ -468,7 +297,7 @@ func TestStoreEvent(t *testing.T) {
 // TestTaskLifecycleEventDeduplication verifies that duplicate events are correctly filtered
 // and out-of-order events are properly sorted
 func TestTaskLifecycleEventDeduplication(t *testing.T) {
-	// IDs follow Ray's ID spec; see TestEventProcessor for rationale.
+	// IDs follow Ray's ID spec; see TestStoreEvent for rationale.
 	const (
 		testJobID       = "aaaabbbb"                                                 // 4B
 		testActorID     = "aaaabbbb1234aaaabbbb1234" + testJobID                     // 12B unique + JobID
@@ -494,8 +323,7 @@ func TestTaskLifecycleEventDeduplication(t *testing.T) {
 			transitionsAny[i] = t
 		}
 		return map[string]any{
-			"eventType":   string(types.TASK_LIFECYCLE_EVENT),
-			"clusterName": testClusterName,
+			"eventType": string(types.TASK_LIFECYCLE_EVENT),
 			"taskLifecycleEvent": map[string]any{
 				"taskId":           testTaskID,
 				"taskAttempt":      float64(0),
@@ -651,7 +479,7 @@ func TestTaskLifecycleEventDeduplication(t *testing.T) {
 
 			// Process the lifecycle event
 			eventMap := makeLifecycleEvent(tt.newTransitions)
-			err := h.storeEvent(eventMap)
+			err := h.storeEvent(testClusterName, eventMap)
 			if err != nil {
 				t.Fatalf("storeEvent() unexpected error: %v", err)
 			}
@@ -688,7 +516,7 @@ func TestTaskLifecycleEventDeduplication(t *testing.T) {
 
 // TestActorLifecycleEventDeduplication verifies that duplicate actor events are correctly filtered
 func TestActorLifecycleEventDeduplication(t *testing.T) {
-	// IDs follow Ray's ID spec; see TestEventProcessor for rationale.
+	// IDs follow Ray's ID spec; see TestStoreEvent for rationale.
 	const (
 		testJobID       = "aaaabbbb"                             // 4B
 		testActorID     = "aaaabbbb1234aaaabbbb1234" + testJobID // 12B unique + JobID
@@ -711,8 +539,7 @@ func TestActorLifecycleEventDeduplication(t *testing.T) {
 			transitionsAny[i] = t
 		}
 		return map[string]any{
-			"eventType":   string(types.ACTOR_LIFECYCLE_EVENT),
-			"clusterName": testClusterName,
+			"eventType": string(types.ACTOR_LIFECYCLE_EVENT),
 			"actorLifecycleEvent": map[string]any{
 				"actorId":          testActorID,
 				"stateTransitions": transitionsAny,
@@ -816,13 +643,13 @@ func TestActorLifecycleEventDeduplication(t *testing.T) {
 
 			// Process the lifecycle event
 			eventMap := makeActorLifecycleEvent(tt.newTransitions)
-			err := h.storeEvent(eventMap)
+			err := h.storeEvent(testClusterName, eventMap)
 			if err != nil {
 				t.Fatalf("storeEvent() unexpected error: %v", err)
 			}
 
 			// Get the actor and verify
-			actor, found := h.GetActorByID(testClusterName, testActorID)
+			actor, found := h.getActorsMap(testClusterName)[testActorID]
 			if !found {
 				t.Fatal("Actor not found after processing")
 			}
@@ -843,7 +670,7 @@ func TestActorLifecycleEventDeduplication(t *testing.T) {
 // TestDriverJobLifeCycleEventDuplication tests that duplicate events are properly filtered and sorted
 // TODO(chiayi): Update once more fields are added to driver job event
 func TestDriverJobLifecycleEventDuplication(t *testing.T) {
-	// IDs follow Ray's ID spec; see TestEventProcessor for rationale.
+	// IDs follow Ray's ID spec; see TestStoreEvent for rationale.
 	const (
 		testJobID       = "aaaabbbb" // 4B
 		testClusterName = "cluster1"
@@ -862,8 +689,7 @@ func TestDriverJobLifecycleEventDuplication(t *testing.T) {
 			transitionsAny[i] = t
 		}
 		return map[string]any{
-			"eventType":   string(types.DRIVER_JOB_LIFECYCLE_EVENT),
-			"clusterName": testClusterName,
+			"eventType": string(types.DRIVER_JOB_LIFECYCLE_EVENT),
 			"driverJobLifecycleEvent": map[string]any{
 				"jobId":            testJobID,
 				"stateTransitions": transitionsAny,
@@ -985,12 +811,12 @@ func TestDriverJobLifecycleEventDuplication(t *testing.T) {
 			}
 
 			eventMap := makeDriverJobLifecycleEvent(tt.newTransitions)
-			err := h.storeEvent(eventMap)
+			err := h.storeEvent(testClusterName, eventMap)
 			if err != nil {
 				t.Fatalf("storeEvent() unexpected error: %v", err)
 			}
 
-			job, exists := h.GetJobByJobID(testClusterName, testJobID)
+			job, exists := h.getJobsMap(testClusterName)[testJobID]
 			if !exists {
 				t.Fatal("Job not found after processing")
 			}
@@ -1010,7 +836,7 @@ func TestDriverJobLifecycleEventDuplication(t *testing.T) {
 func TestMultipleReprocessingCycles(t *testing.T) {
 	h := NewEventHandler(nil)
 
-	// IDs follow Ray's ID spec; see TestEventProcessor for rationale.
+	// IDs follow Ray's ID spec; see TestStoreEvent for rationale.
 	const (
 		testJobID       = "aaaabbbb"                                                 // 4B
 		testActorID     = "aaaabbbb1234aaaabbbb1234" + testJobID                     // 12B unique + JobID
@@ -1029,8 +855,7 @@ func TestMultipleReprocessingCycles(t *testing.T) {
 	}
 
 	eventMap := map[string]any{
-		"eventType":   string(types.TASK_LIFECYCLE_EVENT),
-		"clusterName": testClusterName,
+		"eventType": string(types.TASK_LIFECYCLE_EVENT),
 		"taskLifecycleEvent": map[string]any{
 			"taskId":           testTaskID,
 			"taskAttempt":      float64(0),
@@ -1042,7 +867,7 @@ func TestMultipleReprocessingCycles(t *testing.T) {
 
 	// Simulate 10 hourly reprocessing cycles
 	for cycle := 0; cycle < 10; cycle++ {
-		err := h.storeEvent(eventMap)
+		err := h.storeEvent(testClusterName, eventMap)
 		if err != nil {
 			t.Fatalf("Cycle %d: storeEvent() error = %v", cycle, err)
 		}
@@ -1125,4 +950,137 @@ func TestNormalizeActorIDsToHex(t *testing.T) {
 	if actor.Address.WorkerID != expectedHex {
 		t.Errorf("Address.WorkerID = %q, want %q", actor.Address.WorkerID, expectedHex)
 	}
+}
+
+func TestProcessSingleSession(t *testing.T) {
+	clusterInfo := utils.ClusterInfo{Name: "cluster", Namespace: "ns", SessionName: "session1"}
+
+	t.Run("returns error when every listed file fails I/O", func(t *testing.T) {
+		mock := newLogEventMockReader()
+		mock.addDir("cluster_ns", "session1/job_events/", []string{"job-01000000/"})
+		mock.addDir("cluster_ns", "session1/job_events/job-01000000/",
+			[]string{"01000000-2024-01-01-00.gz"})
+		mock.addDir("cluster_ns", "session1/node_events/",
+			[]string{"node1-2024-01-01-00.gz"})
+		mock.addDir("cluster_ns", "session1/logs", []string{})
+
+		h := NewEventHandler(mock)
+		err := h.ProcessSingleSession(context.Background(), clusterInfo)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "read 0 of 2")
+	})
+
+	t.Run("empty file list returns nil (legit empty session)", func(t *testing.T) {
+		mock := newLogEventMockReader()
+		mock.addDir("cluster_ns", "session1/job_events/", []string{})
+		mock.addDir("cluster_ns", "session1/node_events/", []string{})
+		mock.addDir("cluster_ns", "session1/logs", []string{})
+
+		h := NewEventHandler(mock)
+		err := h.ProcessSingleSession(context.Background(), clusterInfo)
+		require.NoError(t, err)
+	})
+
+	t.Run("partial success does not return error", func(t *testing.T) {
+		mock := newLogEventMockReader()
+		mock.addDir("cluster_ns", "session1/node_events/",
+			[]string{"node1-2024-01-01-00.gz", "node2-2024-01-01-00.gz"})
+
+		var buf bytes.Buffer
+		gw := gzip.NewWriter(&buf)
+		_, err := gw.Write([]byte(`[{"eventType":"NODE_DEFINITION_EVENT","nodeDefinitionEvent":{"nodeId":"YWJjZA=="}}]`))
+		require.NoError(t, err)
+		require.NoError(t, gw.Close())
+
+		mock.addFile("cluster_ns", "session1/node_events/node1-2024-01-01-00.gz", buf.String())
+		mock.addDir("cluster_ns", "session1/job_events/", []string{})
+		mock.addDir("cluster_ns", "session1/logs", []string{})
+
+		h := NewEventHandler(mock)
+		err = h.ProcessSingleSession(context.Background(), clusterInfo)
+		require.NoError(t, err)
+	})
+
+	t.Run("all corrupt JSON does not return error", func(t *testing.T) {
+		mock := newLogEventMockReader()
+		mock.addDir("cluster_ns", "session1/node_events/",
+			[]string{"node1-2024-01-01-00.gz", "node2-2024-01-01-00.gz"})
+
+		var buf bytes.Buffer
+		gw := gzip.NewWriter(&buf)
+		_, err := gw.Write([]byte("this is not json"))
+		require.NoError(t, err)
+		require.NoError(t, gw.Close())
+
+		mock.addFile("cluster_ns", "session1/node_events/node1-2024-01-01-00.gz", buf.String())
+		mock.addFile("cluster_ns", "session1/node_events/node2-2024-01-01-00.gz", buf.String())
+		mock.addDir("cluster_ns", "session1/job_events/", []string{})
+		mock.addDir("cluster_ns", "session1/logs", []string{})
+
+		h := NewEventHandler(mock)
+		err = h.ProcessSingleSession(context.Background(), clusterInfo)
+		require.NoError(t, err)
+	})
+
+	t.Run("log events failure alone does not surface as error", func(t *testing.T) {
+		mock := newLogEventMockReader()
+		mock.addDir("cluster_ns", "session1/job_events/", []string{})
+		mock.addDir("cluster_ns", "session1/node_events/", []string{})
+		mock.addDir("cluster_ns", "session1/logs", []string{"node1/"})
+		mock.addDir("cluster_ns", "session1/logs/node1/events", []string{"event_GCS.log"})
+
+		h := NewEventHandler(mock)
+		err := h.ProcessSingleSession(context.Background(), clusterInfo)
+		require.NoError(t, err)
+	})
+
+	t.Run("ray events failure surfaces; log events failure stays silent", func(t *testing.T) {
+		mock := newLogEventMockReader()
+		mock.addDir("cluster_ns", "session1/node_events/", []string{"node1-2024-01-01-00.gz"})
+		mock.addDir("cluster_ns", "session1/job_events/", []string{})
+		mock.addDir("cluster_ns", "session1/logs", []string{"node1/"})
+		mock.addDir("cluster_ns", "session1/logs/node1/events", []string{"event_GCS.log"})
+
+		h := NewEventHandler(mock)
+		err := h.ProcessSingleSession(context.Background(), clusterInfo)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "read 0 of 1 event files")
+		assert.NotContains(t, err.Error(), "log event")
+	})
+
+	t.Run("transparent decompression of compressed .gz files and reading uncompressed legacy files", func(t *testing.T) {
+		mock := newLogEventMockReader()
+		mock.addDir("cluster_ns", "session1/node_events/",
+			[]string{"node1-2024-01-01-00.gz", "node2-2024-01-01-00"})
+
+		// 1. Compress node1 event file
+		var buf bytes.Buffer
+		gw := gzip.NewWriter(&buf)
+		_, err := gw.Write([]byte(`[{"eventType":"NODE_DEFINITION_EVENT","nodeDefinitionEvent":{"nodeId":"YWJjZA=="}}]`))
+		require.NoError(t, err)
+		require.NoError(t, gw.Close())
+		mock.addFile("cluster_ns", "session1/node_events/node1-2024-01-01-00.gz", buf.String())
+
+		// 2. Keep node2 event file uncompressed
+		mock.addFile("cluster_ns", "session1/node_events/node2-2024-01-01-00",
+			`[{"eventType":"NODE_DEFINITION_EVENT","nodeDefinitionEvent":{"nodeId":"ZWZnaA=="}}]`)
+
+		mock.addDir("cluster_ns", "session1/job_events/", []string{})
+		mock.addDir("cluster_ns", "session1/logs", []string{})
+
+		h := NewEventHandler(mock)
+		err = h.ProcessSingleSession(context.Background(), clusterInfo)
+		require.NoError(t, err)
+
+		nodeMap := h.GetNodeMap("cluster_ns_session1")
+		assert.Len(t, nodeMap, 2)
+
+		// "YWJjZA==" -> hex "61626364" (abcd)
+		_, ok := nodeMap["61626364"]
+		assert.True(t, ok, "node1 (compressed) should be successfully loaded")
+
+		// "ZWZnaA==" -> hex "65666768" (efgh)
+		_, ok = nodeMap["65666768"]
+		assert.True(t, ok, "node2 (uncompressed) should be successfully loaded")
+	})
 }

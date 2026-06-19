@@ -746,6 +746,49 @@ func TestValidateRayClusterSpecAutoscaler(t *testing.T) {
 				},
 			},
 		},
+		fmt.Sprintf("should return error if %s is set in autoscalerOptions.env (args also set)", KUBERAY_GEN_AUTOSCALER_START_CMD): {
+			spec: rayv1.RayClusterSpec{
+				EnableInTreeAutoscaling: new(true),
+				AutoscalerOptions: &rayv1.AutoscalerOptions{
+					Args: []string{"my-custom-autoscaler-cmd"},
+					Env: []corev1.EnvVar{
+						{
+							Name:  KUBERAY_GEN_AUTOSCALER_START_CMD,
+							Value: "ray kuberay-autoscaler --cluster-name foo --cluster-namespace bar",
+						},
+					},
+				},
+				HeadGroupSpec: rayv1.HeadGroupSpec{
+					Template: podTemplateSpec(nil, nil),
+				},
+			},
+			expectedErr: fmt.Sprintf(
+				"autoscalerOptions.env must not contain %s: "+
+					"it is managed by KubeRay and injected automatically into the autoscaler container",
+				KUBERAY_GEN_AUTOSCALER_START_CMD),
+		},
+		fmt.Sprintf("should return error if %s is set in autoscalerOptions.env even when autoscalerOptions.args is absent", KUBERAY_GEN_AUTOSCALER_START_CMD): {
+			spec: rayv1.RayClusterSpec{
+				EnableInTreeAutoscaling: new(true),
+				AutoscalerOptions: &rayv1.AutoscalerOptions{
+					// No Args — KUBERAY_GEN_AUTOSCALER_START_CMD is always KubeRay-managed,
+					// so it must never be set by the user regardless of whether Args is present.
+					Env: []corev1.EnvVar{
+						{
+							Name:  KUBERAY_GEN_AUTOSCALER_START_CMD,
+							Value: "ray kuberay-autoscaler --cluster-name foo --cluster-namespace bar",
+						},
+					},
+				},
+				HeadGroupSpec: rayv1.HeadGroupSpec{
+					Template: podTemplateSpec(nil, nil),
+				},
+			},
+			expectedErr: fmt.Sprintf(
+				"autoscalerOptions.env must not contain %s: "+
+					"it is managed by KubeRay and injected automatically into the autoscaler container",
+				KUBERAY_GEN_AUTOSCALER_START_CMD),
+		},
 	}
 
 	features.SetFeatureGateDuringTest(t, features.RayJobDeletionPolicy, true)
@@ -2489,6 +2532,37 @@ func TestValidateRayCronJobSpec(t *testing.T) {
 			},
 			expectError: true,
 			errorMsg:    "invalid RayJob template",
+		},
+		{
+			name: "RayCronJob name too long",
+			cronJob: &rayv1.RayCronJob{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      strings.Repeat("a", MaxRayCronJobNameLength+1),
+					Namespace: "default",
+				},
+				Spec: rayv1.RayCronJobSpec{
+					Schedule: "*/5 * * * *",
+					JobTemplate: rayv1.RayJobSpec{
+						Entrypoint: "python test.py",
+						RayClusterSpec: &rayv1.RayClusterSpec{
+							HeadGroupSpec: rayv1.HeadGroupSpec{
+								Template: corev1.PodTemplateSpec{
+									Spec: corev1.PodSpec{
+										Containers: []corev1.Container{
+											{
+												Name:  "ray-head",
+												Image: "rayproject/ray:2.9.0",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectError: true,
+			errorMsg:    "RayCronJob name should be no more than",
 		},
 	}
 

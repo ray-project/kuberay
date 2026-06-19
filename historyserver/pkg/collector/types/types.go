@@ -18,6 +18,8 @@ type RayCollectorConfig struct {
 	Role                string
 	RayClusterName      string
 	RayClusterNamespace string
+	OwnerKind           string
+	OwnerName           string
 	LogBatching         int
 	PushInterval        time.Duration
 	DashboardAddress    string

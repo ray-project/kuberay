@@ -23,7 +23,9 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/apimachinery/pkg/util/rand"
-	"k8s.io/apimachinery/pkg/util/version"
+	utilversion "k8s.io/apimachinery/pkg/util/version"
+	"k8s.io/apimachinery/pkg/version"
+	"k8s.io/client-go/discovery"
 	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -685,6 +687,11 @@ func IsJobFinished(j *batchv1.Job) (batchv1.JobConditionType, bool) {
 		if (c.Type == batchv1.JobComplete || c.Type == batchv1.JobFailed) && c.Status == corev1.ConditionTrue {
 			return c.Type, true
 		}
+		// FailureTarget appears ~tens-of-seconds before JobFailed when activeDeadlineSeconds
+		// is exceeded; treat it as a failed terminal state to avoid stalling the reconciler.
+		if c.Type == batchv1.JobFailureTarget && c.Status == corev1.ConditionTrue {
+			return batchv1.JobFailed, true
+		}
 	}
 	return "", false
 }
@@ -884,6 +891,39 @@ func GetWeightsFromHTTPRoute(httpRoute *gwv1.HTTPRoute, rayServiceInstance *rayv
 	}
 
 	return
+}
+
+// GetKubernetesVersion returns the API server version
+func GetKubernetesVersion() (*version.Info, error) {
+	config, err := ctrl.GetConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	discoveryClient, err := discovery.NewDiscoveryClientForConfig(config)
+	if err != nil {
+		return nil, err
+	}
+
+	serverVersion, err := discoveryClient.ServerVersion()
+	if err != nil {
+		return nil, err
+	}
+	return serverVersion, nil
+}
+
+// IsK8sVersionAtLeast checks the API server version is at least v{major}.{minor}.{patch}
+func IsK8sVersionAtLeast(serverVersion *version.Info, major, minor, patch int) (bool, error) {
+	requiredVersionString := fmt.Sprintf("%d.%d.%d", major, minor, patch)
+	currentVersion, err := utilversion.ParseGeneric(serverVersion.GitVersion)
+	if err != nil {
+		return false, err
+	}
+	requiredVersion, err := utilversion.ParseGeneric(requiredVersionString)
+	if err != nil {
+		return false, err
+	}
+	return currentVersion.AtLeast(requiredVersion), nil
 }
 
 func GetContainerCommand(additionalOptions []string) []string {
@@ -1107,12 +1147,12 @@ func IsRayVersionAtLeast(rayVersion string, targetVersion string) (bool, error) 
 		return false, fmt.Errorf("rayVersion is empty")
 	}
 
-	v, err := version.ParseGeneric(rayVersion)
+	v, err := utilversion.ParseGeneric(rayVersion)
 	if err != nil {
 		return false, fmt.Errorf("failed to parse Ray version %q: %w", rayVersion, err)
 	}
 
-	minVersion, err := version.ParseGeneric(targetVersion)
+	minVersion, err := utilversion.ParseGeneric(targetVersion)
 	if err != nil {
 		return false, fmt.Errorf("failed to parse minimum version %q: %w", targetVersion, err)
 	}
