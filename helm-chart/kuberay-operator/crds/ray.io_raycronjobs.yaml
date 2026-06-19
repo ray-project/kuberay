@@ -290,6 +290,9 @@ spec:
                             type: string
                           imagePullPolicy:
                             type: string
+                          noDriverTimeoutSeconds:
+                            format: int32
+                            type: integer
                           resources:
                             properties:
                               claims:

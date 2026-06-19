@@ -8,6 +8,7 @@ import (
 
 	"github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
 
@@ -588,4 +589,49 @@ func TestRayClusterAutoscalerGCSFT(t *testing.T) {
 			g.Expect(err).NotTo(gomega.HaveOccurred())
 		})
 	}
+}
+
+func TestRayClusterNoDriverTimeoutTermination(t *testing.T) {
+	// The no-driver termination feature is only supported by the V2 Autoscaler.
+	tc := tests[1]
+	t.Run(tc.name, func(t *testing.T) {
+		test := With(t)
+		g := gomega.NewWithT(t)
+
+		// Create a namespace
+		namespace := test.NewTestNamespace()
+
+		rayClusterSpecAC := rayv1ac.RayClusterSpec().
+			WithEnableInTreeAutoscaling(true).
+			WithRayVersion("ray:2.56.0.5d2c4e-py310"). // Hard coding to a Ray version that supports the no-driver timeout termination feature
+			WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
+				WithRayStartParams(map[string]string{"num-cpus": "0"}).
+				WithTemplate(tc.HeadPodTemplateGetter())).
+			WithWorkerGroupSpecs(rayv1ac.WorkerGroupSpec().
+				WithReplicas(0).
+				WithMinReplicas(0).
+				WithGroupName("small-group").
+				WithRayStartParams(map[string]string{"num-cpus": "1"}).
+				WithTemplate(tc.WorkerPodTemplateGetter())).
+			WithAutoscalerOptions(rayv1ac.AutoscalerOptions().
+				WithNoDriverTimeoutSeconds(30))
+		rayClusterAC := rayv1ac.RayCluster("ray-cluster-no-driver", namespace.Name).
+			WithSpec(rayClusterSpecAC)
+
+		rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
+		g.Expect(err).NotTo(gomega.HaveOccurred())
+		LogWithTimestamp(test.T(), "Created RayCluster %s/%s successfully", rayCluster.Namespace, rayCluster.Name)
+
+		// Wait for RayCluster to become ready
+		g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutMedium).
+			Should(gomega.WithTransform(RayClusterState, gomega.Equal(rayv1.Ready)))
+
+		// With no driver ever attached, the v2 autoscaler sets the ray.io/no-driver-ttl-expired
+		// annotation after noDriverTimeoutSeconds and the operator deletes the RayCluster.
+		LogWithTimestamp(test.T(), "Waiting for RayCluster %s/%s to be deleted after noDriverTimeoutSeconds", rayCluster.Namespace, rayCluster.Name)
+		g.Eventually(func(gg gomega.Gomega) {
+			_, err := GetRayCluster(test, rayCluster.Namespace, rayCluster.Name)
+			gg.Expect(errors.IsNotFound(err)).To(gomega.BeTrue())
+		}, TestTimeoutMedium).Should(gomega.Succeed())
+	})
 }

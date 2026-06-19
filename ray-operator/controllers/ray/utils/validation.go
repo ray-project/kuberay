@@ -235,6 +235,19 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 		}
 	}
 
+	// Validate AutoscalerOptions.NoDriverTimeoutSeconds (works only with v2 autoscaler)
+	if spec.AutoscalerOptions != nil && spec.AutoscalerOptions.NoDriverTimeoutSeconds != nil {
+		if *spec.AutoscalerOptions.NoDriverTimeoutSeconds < 0 {
+			return fmt.Errorf("autoscalerOptions.noDriverTimeoutSeconds must be non-negative, got %d", *spec.AutoscalerOptions.NoDriverTimeoutSeconds)
+		}
+		if !isAutoscalingEnabled {
+			return fmt.Errorf("autoscalerOptions.noDriverTimeoutSeconds requires enableInTreeAutoscaling to be true")
+		}
+		if IsAutoscalingV1Enabled(spec) {
+			return fmt.Errorf("autoscalerOptions.noDriverTimeoutSeconds is only supported by autoscaler v2, but autoscaler v1 is configured")
+		}
+	}
+
 	// When autoscalerOptions.args is set, the user's custom args can reference the
 	// $KUBERAY_GEN_AUTOSCALER_START_CMD env var that KubeRay injects. If the user also
 	// manually sets KUBERAY_GEN_AUTOSCALER_START_CMD in autoscalerOptions.env, they would
@@ -365,6 +378,9 @@ func ValidateRayJobSpec(rayJob *rayv1.RayJob) error {
 		if IsK8sAuthEnabled(rayJob.Spec.RayClusterSpec.AuthOptions) {
 			return fmt.Errorf("The RayJob spec is invalid: K8s token auth mode is currently not supported for RayJob")
 		}
+		if rayJob.Spec.RayClusterSpec.AutoscalerOptions != nil && rayJob.Spec.RayClusterSpec.AutoscalerOptions.NoDriverTimeoutSeconds != nil {
+			return fmt.Errorf("The RayJob spec is invalid: autoscalerOptions.noDriverTimeoutSeconds is not supported for RayJob")
+		}
 		if err := ValidateRayClusterSpec(rayJob.Spec.RayClusterSpec, rayJob.Annotations); err != nil {
 			return fmt.Errorf("The RayJob spec is invalid: %w", err)
 		}
@@ -439,6 +455,10 @@ func validateInitializingTimeout(annotations map[string]string) error {
 func ValidateRayServiceSpec(rayService *rayv1.RayService) error {
 	if IsK8sAuthEnabled(rayService.Spec.RayClusterSpec.AuthOptions) {
 		return fmt.Errorf("The RayService spec is invalid: K8s token auth mode is currently not supported for RayService")
+	}
+
+	if rayService.Spec.RayClusterSpec.AutoscalerOptions != nil && rayService.Spec.RayClusterSpec.AutoscalerOptions.NoDriverTimeoutSeconds != nil {
+		return fmt.Errorf("The RayService spec is invalid: autoscalerOptions.noDriverTimeoutSeconds is not supported for RayService")
 	}
 
 	if err := ValidateRayClusterSpec(&rayService.Spec.RayClusterSpec, rayService.Annotations); err != nil {
