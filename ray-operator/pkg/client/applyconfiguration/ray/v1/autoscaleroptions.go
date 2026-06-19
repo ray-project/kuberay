@@ -26,6 +26,10 @@ type AutoscalerOptionsApplyConfiguration struct {
 	// IdleTimeoutSeconds is the number of seconds to wait before scaling down a worker pod which is not using Ray resources.
 	// Defaults to 60 (one minute). It is not read by the KubeRay operator but by the Ray autoscaler.
 	IdleTimeoutSeconds *int32 `json:"idleTimeoutSeconds,omitempty"`
+	// NoDriverTimeoutSeconds is the number of seconds to wait after the last driver disconnects before triggering RayCluster deletion.
+	// The autoscaler v2 tracks driver activity and, when no driver has been attached for this duration, sets the
+	// `ray.io/no-driver-ttl-expired` annotation on the RayCluster. The KubeRay operator then deletes the RayCluster.
+	NoDriverTimeoutSeconds *int32 `json:"noDriverTimeoutSeconds,omitempty"`
 	// UpscalingMode is "Conservative", "Default", or "Aggressive."
 	// Conservative: Upscaling is rate-limited; the number of pending worker pods is at most the size of the Ray cluster.
 	// Default: Upscaling is not rate-limited.
@@ -93,6 +97,14 @@ func (b *AutoscalerOptionsApplyConfiguration) WithSecurityContext(value corev1.S
 // If called multiple times, the IdleTimeoutSeconds field is set to the value of the last call.
 func (b *AutoscalerOptionsApplyConfiguration) WithIdleTimeoutSeconds(value int32) *AutoscalerOptionsApplyConfiguration {
 	b.IdleTimeoutSeconds = &value
+	return b
+}
+
+// WithNoDriverTimeoutSeconds sets the NoDriverTimeoutSeconds field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the NoDriverTimeoutSeconds field is set to the value of the last call.
+func (b *AutoscalerOptionsApplyConfiguration) WithNoDriverTimeoutSeconds(value int32) *AutoscalerOptionsApplyConfiguration {
+	b.NoDriverTimeoutSeconds = &value
 	return b
 }
 
