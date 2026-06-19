@@ -14,6 +14,7 @@ COPY main.go main.go
 COPY apis/ apis/
 COPY controllers/ controllers/
 COPY pkg/features pkg/features
+COPY pkg/tls pkg/tls
 COPY pkg/utils pkg/utils
 COPY pkg/webhooks pkg/webhooks
 COPY rayjob-submitter/ rayjob-submitter/
