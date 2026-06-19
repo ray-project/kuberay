@@ -259,7 +259,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			break
 		}
 
-		if shouldUpdate := checkJobStatusQueryTimeoutAndUpdateStatusIfNeeded(ctx, rayJobInstance); shouldUpdate {
+		if shouldUpdate := checkJobStatusCheckTimeoutAndUpdateStatusIfNeeded(ctx, rayJobInstance); shouldUpdate {
 			break
 		}
 
@@ -307,7 +307,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 					if _, submitErr := rayDashboardClient.SubmitJob(ctx, rayJobInstance); submitErr != nil {
 						logger.Error(submitErr, "Failed to submit the Ray job", "JobId", rayJobInstance.Status.JobId)
 						// HTTPMode is the only mode where the operator submits the job, which we should track failure.
-						if recordJobStatusQueryFailure(ctx, rayJobInstance, submitErr) {
+						if recordJobStatusCheckFailure(ctx, rayJobInstance, submitErr) {
 							break
 						}
 						return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
@@ -325,14 +325,14 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			}
 
 			logger.Error(err, "Failed to get job info", "JobId", rayJobInstance.Status.JobId)
-			if recordJobStatusQueryFailure(ctx, rayJobInstance, err) {
+			if recordJobStatusCheckFailure(ctx, rayJobInstance, err) {
 				break
 			}
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 		}
 
-		// Reset the job status query start failing time when the job status query succeeds.
-		rayJobInstance.Status.JobStatusQueryStartFailingTime = nil
+		// Reset JobStatusCheckFailureStartTime when the job status check succeeds.
+		rayJobInstance.Status.JobStatusCheckFailureStartTime = nil
 
 		// If the JobStatus is in a terminal status, such as SUCCEEDED, FAILED, or STOPPED, it is impossible for the Ray job
 		// to transition to any other. Additionally, RayJob does not currently support retries. Hence, we can mark the RayJob
@@ -400,7 +400,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		rayJobInstance.Status.Message = ""
 		rayJobInstance.Status.Reason = ""
 		rayJobInstance.Status.RayJobStatusInfo = rayv1.RayJobStatusInfo{}
-		rayJobInstance.Status.JobStatusQueryStartFailingTime = nil
+		rayJobInstance.Status.JobStatusCheckFailureStartTime = nil
 		// Reset the JobStatus to JobStatusNew and transition the JobDeploymentStatus to `Suspended`.
 		rayJobInstance.Status.JobStatus = rayv1.JobStatusNew
 
@@ -538,9 +538,9 @@ func checkBackoffLimitAndUpdateStatusIfNeeded(ctx context.Context, rayJob *rayv1
 	rayJob.Status.Succeeded = new(succeededCount)
 
 	if rayJob.Status.JobDeploymentStatus == rayv1.JobDeploymentStatusFailed && rayJob.Spec.BackoffLimit != nil && *rayJob.Status.Failed < *rayJob.Spec.BackoffLimit+1 {
-		if rayJob.Status.Reason == rayv1.DeadlineExceeded || rayJob.Status.Reason == rayv1.JobStatusQueryTimeoutExceeded {
+		if rayJob.Status.Reason == rayv1.DeadlineExceeded || rayJob.Status.Reason == rayv1.JobStatusCheckTimeoutExceeded {
 			logger.Info(
-				"RayJob is not eligible for retry due to failure with DeadlineExceeded or JobStatusQueryTimeoutExceeded",
+				"RayJob is not eligible for retry due to failure with DeadlineExceeded or JobStatusCheckTimeoutExceeded",
 				"reason", rayJob.Status.Reason,
 				"backoffLimit", *rayJob.Spec.BackoffLimit,
 				"succeeded", *rayJob.Status.Succeeded,
@@ -914,14 +914,14 @@ func (r *RayJobReconciler) updateRayJobStatus(ctx context.Context, oldRayJob *ra
 	logger.Info("updateRayJobStatus", "oldRayJobStatus", oldRayJobStatus, "newRayJobStatus", newRayJobStatus)
 
 	rayClusterStatusChanged := utils.InconsistentRayClusterStatus(oldRayJobStatus.RayClusterStatus, newRayJobStatus.RayClusterStatus)
-	jobStatusQueryStartFailingTimeChanged := jobStatusQueryStartFailingTimeChanged(oldRayJobStatus.JobStatusQueryStartFailingTime, newRayJobStatus.JobStatusQueryStartFailingTime)
+	jobStatusCheckFailureStartTimeChanged := jobStatusCheckFailureStartTimeChanged(oldRayJobStatus.JobStatusCheckFailureStartTime, newRayJobStatus.JobStatusCheckFailureStartTime)
 
 	// If a status field is crucial for the RayJob state machine, it MUST be
 	// updated with a distinct JobStatus or JobDeploymentStatus value.
 	if oldRayJobStatus.JobStatus != newRayJobStatus.JobStatus ||
 		oldRayJobStatus.JobDeploymentStatus != newRayJobStatus.JobDeploymentStatus ||
 		rayClusterStatusChanged ||
-		jobStatusQueryStartFailingTimeChanged {
+		jobStatusCheckFailureStartTimeChanged {
 		if rayv1.IsJobDeploymentTerminal(newRayJobStatus.JobDeploymentStatus) {
 			newRayJob.Status.EndTime = &metav1.Time{Time: time.Now()}
 		}
@@ -1276,48 +1276,48 @@ func checkSubmitterFinishedTimeoutAndUpdateStatusIfNeeded(ctx context.Context, r
 	return true
 }
 
-func getJobStatusQueryTimeoutSeconds() int {
-	timeoutSeconds, err := strconv.Atoi(os.Getenv(utils.RAYJOB_STATUS_QUERY_TIMEOUT_SECONDS))
+func getJobStatusCheckTimeoutSeconds() int {
+	timeoutSeconds, err := strconv.Atoi(os.Getenv(utils.RAYJOB_STATUS_CHECK_TIMEOUT_SECONDS))
 	if err != nil || timeoutSeconds <= 0 {
-		return utils.DEFAULT_RAYJOB_STATUS_QUERY_TIMEOUT_SECONDS
+		return utils.DEFAULT_RAYJOB_STATUS_CHECK_TIMEOUT_SECONDS
 	}
 	return timeoutSeconds
 }
 
-// Records the first job status query failure timestamp.
+// Records the first job status check failure timestamp.
 // Returns whether the timestamp was set and the status should be persisted.
-func recordJobStatusQueryFailure(ctx context.Context, rayJob *rayv1.RayJob, err error) bool {
-	if rayJob.Status.JobStatusQueryStartFailingTime != nil {
+func recordJobStatusCheckFailure(ctx context.Context, rayJob *rayv1.RayJob, err error) bool {
+	if rayJob.Status.JobStatusCheckFailureStartTime != nil {
 		return false
 	}
 
 	logger := ctrl.LoggerFrom(ctx)
-	rayJob.Status.JobStatusQueryStartFailingTime = &metav1.Time{Time: time.Now()}
-	logger.Error(err, "Job status query began failing.", "JobId", rayJob.Status.JobId)
+	rayJob.Status.JobStatusCheckFailureStartTime = &metav1.Time{Time: time.Now()}
+	logger.Error(err, "Job status check began failing.", "JobId", rayJob.Status.JobId)
 	return true
 }
 
-func checkJobStatusQueryTimeoutAndUpdateStatusIfNeeded(ctx context.Context, rayJob *rayv1.RayJob) bool {
+func checkJobStatusCheckTimeoutAndUpdateStatusIfNeeded(ctx context.Context, rayJob *rayv1.RayJob) bool {
 	logger := ctrl.LoggerFrom(ctx)
-	if rayJob.Status.JobStatusQueryStartFailingTime == nil {
+	if rayJob.Status.JobStatusCheckFailureStartTime == nil {
 		return false
 	}
 
-	timeout := time.Duration(getJobStatusQueryTimeoutSeconds()) * time.Second
-	startTime := rayJob.Status.JobStatusQueryStartFailingTime.Time
+	timeout := time.Duration(getJobStatusCheckTimeoutSeconds()) * time.Second
+	startTime := rayJob.Status.JobStatusCheckFailureStartTime.Time
 	if time.Now().Before(startTime.Add(timeout)) {
 		return false
 	}
 
-	logger.Info("Job status query timeout exceeded.", "JobId", rayJob.Status.JobId, "JobStatusQueryStartFailingTime", startTime, "timeoutSeconds", timeout.Seconds())
+	logger.Info("Job status check timeout exceeded.", "JobId", rayJob.Status.JobId, "JobStatusCheckFailureStartTime", startTime, "timeoutSeconds", timeout.Seconds())
 	rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusFailed
-	rayJob.Status.Reason = rayv1.JobStatusQueryTimeoutExceeded
-	rayJob.Status.Message = fmt.Sprintf("Job status queries have been failing since %v; exceeded timeout of %ds",
+	rayJob.Status.Reason = rayv1.JobStatusCheckTimeoutExceeded
+	rayJob.Status.Message = fmt.Sprintf("Job status checks have been failing since %v; exceeded timeout of %ds",
 		startTime.Format(time.DateTime), int(timeout.Seconds()))
 	return true
 }
 
-func jobStatusQueryStartFailingTimeChanged(oldTime, newTime *metav1.Time) bool {
+func jobStatusCheckFailureStartTimeChanged(oldTime, newTime *metav1.Time) bool {
 	if oldTime == nil && newTime == nil {
 		return false
 	}

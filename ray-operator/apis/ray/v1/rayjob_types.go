@@ -73,7 +73,7 @@ const (
 	PreRunningDeadlineExceeded                       JobFailedReason = "PreRunningDeadlineExceeded"
 	AppFailed                                        JobFailedReason = "AppFailed"
 	JobDeploymentStatusTransitionGracePeriodExceeded JobFailedReason = "JobDeploymentStatusTransitionGracePeriodExceeded"
-	JobStatusQueryTimeoutExceeded                    JobFailedReason = "JobStatusQueryTimeoutExceeded"
+	JobStatusCheckTimeoutExceeded                    JobFailedReason = "JobStatusCheckTimeoutExceeded"
 	ValidationFailed                                 JobFailedReason = "ValidationFailed"
 )
 
@@ -340,10 +340,11 @@ type RayJobStatus struct {
 	// RayClusterStatus is the status of the RayCluster running the job.
 	// +optional
 	RayClusterStatus RayClusterStatus `json:"rayClusterStatus,omitempty"`
-	// JobStatusQueryStartFailingTime records when job status queries first began failing.
-	// Cleared on a successful query. Used to enforce a cumulative job status query timeout window.
+	// JobStatusCheckFailureStartTime is set on the first failure to observe job status via the
+	// Ray dashboard (GetJobInfo, or SubmitJob in HTTP mode). Cleared on a successful GetJobInfo.
+	// Used with RAYJOB_STATUS_CHECK_TIMEOUT_SECONDS to enforce a cumulative timeout window.
 	// +optional
-	JobStatusQueryStartFailingTime *metav1.Time `json:"jobStatusQueryStartFailingTime,omitempty"`
+	JobStatusCheckFailureStartTime *metav1.Time `json:"jobStatusCheckFailureStartTime,omitempty"`
 
 	// observedGeneration is the most recent generation observed for this RayJob. It corresponds to the
 	// RayJob's generation, which is updated on mutation by the API Server.

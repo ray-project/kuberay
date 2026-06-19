@@ -12384,7 +12384,7 @@ spec:
                 type: string
               jobStatus:
                 type: string
-              jobStatusQueryStartFailingTime:
+              jobStatusCheckFailureStartTime:
                 format: date-time
                 type: string
               message:

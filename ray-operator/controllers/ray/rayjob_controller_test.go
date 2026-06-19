@@ -3859,7 +3859,7 @@ var _ = Context("RayJob with different submission modes", func() {
 				time.Second*3, time.Millisecond*500).Should(Equal(rayv1.JobDeploymentStatusRunning))
 		}
 
-		assertJobStatusQueryTimeoutExceeded := func(ctx context.Context, rayJob *rayv1.RayJob, namespace string) {
+		assertJobStatusCheckTimeoutExceeded := func(ctx context.Context, rayJob *rayv1.RayJob, namespace string) {
 			getJobInfo := func(_ context.Context, _ string) (*utiltypes.RayJobInfo, error) {
 				return nil, fmt.Errorf("connection refused")
 			}
@@ -3868,7 +3868,7 @@ var _ = Context("RayJob with different submission modes", func() {
 
 			Expect(k8sClient.Get(ctx, client.ObjectKey{Name: rayJob.Name, Namespace: namespace}, rayJob)).Should(Succeed())
 			pastTime := metav1.NewTime(time.Now().Add(-10 * time.Minute))
-			rayJob.Status.JobStatusQueryStartFailingTime = &pastTime
+			rayJob.Status.JobStatusCheckFailureStartTime = &pastTime
 			rayJob.Status.JobStatus = rayv1.JobStatusRunning
 			Expect(k8sClient.Status().Update(ctx, rayJob)).Should(Succeed())
 
@@ -3880,10 +3880,10 @@ var _ = Context("RayJob with different submission modes", func() {
 					return "", err
 				}
 				return rayJob.Status.Reason, nil
-			}, time.Second*5, time.Millisecond*500).Should(Equal(rayv1.JobStatusQueryTimeoutExceeded))
+			}, time.Second*5, time.Millisecond*500).Should(Equal(rayv1.JobStatusCheckTimeoutExceeded))
 		}
 
-		assertJobStatusQueryStartFailingTimePersisted := func(ctx context.Context, rayJob *rayv1.RayJob, namespace string) {
+		assertJobStatusCheckFailureStartTimePersisted := func(ctx context.Context, rayJob *rayv1.RayJob, namespace string) {
 			getJobInfo := func(_ context.Context, _ string) (*utiltypes.RayJobInfo, error) {
 				return nil, fmt.Errorf("connection refused")
 			}
@@ -3894,13 +3894,13 @@ var _ = Context("RayJob with different submission modes", func() {
 				if err := k8sClient.Get(ctx, client.ObjectKey{Name: rayJob.Name, Namespace: namespace}, rayJob); err != nil {
 					return nil, err
 				}
-				return rayJob.Status.JobStatusQueryStartFailingTime, nil
+				return rayJob.Status.JobStatusCheckFailureStartTime, nil
 			}, time.Second*10, time.Millisecond*500).ShouldNot(BeNil())
 		}
 
-		assertJobStatusQueryTimeoutExceededOrganically := func(ctx context.Context, rayJob *rayv1.RayJob, namespace string) {
-			os.Setenv(utils.RAYJOB_STATUS_QUERY_TIMEOUT_SECONDS, "1")
-			defer os.Unsetenv(utils.RAYJOB_STATUS_QUERY_TIMEOUT_SECONDS)
+		assertJobStatusCheckTimeoutExceededOrganically := func(ctx context.Context, rayJob *rayv1.RayJob, namespace string) {
+			os.Setenv(utils.RAYJOB_STATUS_CHECK_TIMEOUT_SECONDS, "1")
+			defer os.Unsetenv(utils.RAYJOB_STATUS_CHECK_TIMEOUT_SECONDS)
 
 			getJobInfo := func(_ context.Context, _ string) (*utiltypes.RayJobInfo, error) {
 				return nil, fmt.Errorf("connection refused")
@@ -3916,7 +3916,7 @@ var _ = Context("RayJob with different submission modes", func() {
 					return "", err
 				}
 				return rayJob.Status.Reason, nil
-			}, time.Second*15, time.Millisecond*500).Should(Equal(rayv1.JobStatusQueryTimeoutExceeded))
+			}, time.Second*15, time.Millisecond*500).Should(Equal(rayv1.JobStatusCheckTimeoutExceeded))
 		}
 
 		Describe("K8sJobMode", Ordered, func() {
@@ -3929,12 +3929,12 @@ var _ = Context("RayJob with different submission modes", func() {
 				transitionRayJobToRunning(ctx, rayJob, rayCluster, namespace)
 			})
 
-			It("Persists JobStatusQueryStartFailingTime on first query failure", func() {
-				assertJobStatusQueryStartFailingTimePersisted(ctx, rayJob, namespace)
+			It("Persists JobStatusCheckFailureStartTime on first status check failure", func() {
+				assertJobStatusCheckFailureStartTimePersisted(ctx, rayJob, namespace)
 			})
 
-			It("Transitions to Failed when job status queries exceed timeout", func() {
-				assertJobStatusQueryTimeoutExceeded(ctx, rayJob, namespace)
+			It("Transitions to Failed when job status checks exceed timeout", func() {
+				assertJobStatusCheckTimeoutExceeded(ctx, rayJob, namespace)
 			})
 		})
 
@@ -3949,12 +3949,12 @@ var _ = Context("RayJob with different submission modes", func() {
 				transitionRayJobToRunning(ctx, rayJob, rayCluster, namespace)
 			})
 
-			It("Persists JobStatusQueryStartFailingTime on first query failure", func() {
-				assertJobStatusQueryStartFailingTimePersisted(ctx, rayJob, namespace)
+			It("Persists JobStatusCheckFailureStartTime on first status check failure", func() {
+				assertJobStatusCheckFailureStartTimePersisted(ctx, rayJob, namespace)
 			})
 
-			It("Transitions to Failed when job status queries exceed timeout organically", func() {
-				assertJobStatusQueryTimeoutExceededOrganically(ctx, rayJob, namespace)
+			It("Transitions to Failed when job status checks exceed timeout organically", func() {
+				assertJobStatusCheckTimeoutExceededOrganically(ctx, rayJob, namespace)
 			})
 		})
 	})

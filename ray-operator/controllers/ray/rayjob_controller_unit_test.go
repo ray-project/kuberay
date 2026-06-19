@@ -467,7 +467,7 @@ func TestUpdateRayJobStatus(t *testing.T) {
 	}
 }
 
-func TestUpdateRayJobStatusPersistsJobStatusQueryStartFailingTime(t *testing.T) {
+func TestUpdateRayJobStatusPersistsJobStatusCheckFailureStartTime(t *testing.T) {
 	newScheme := runtime.NewScheme()
 	require.NoError(t, rayv1.AddToScheme(newScheme))
 
@@ -493,7 +493,7 @@ func TestUpdateRayJobStatusPersistsJobStatusQueryStartFailingTime(t *testing.T) 
 	require.NoError(t, err)
 
 	startTime := metav1.NewTime(time.Now())
-	newRayJob.Status.JobStatusQueryStartFailingTime = &startTime
+	newRayJob.Status.JobStatusCheckFailureStartTime = &startTime
 
 	testRayJobReconciler := &RayJobReconciler{
 		Client:   fakeClient,
@@ -506,8 +506,8 @@ func TestUpdateRayJobStatusPersistsJobStatusQueryStartFailingTime(t *testing.T) 
 
 	err = fakeClient.Get(ctx, types.NamespacedName{Namespace: newRayJob.Namespace, Name: newRayJob.Name}, newRayJob)
 	require.NoError(t, err)
-	require.NotNil(t, newRayJob.Status.JobStatusQueryStartFailingTime)
-	assert.WithinDuration(t, startTime.Time, newRayJob.Status.JobStatusQueryStartFailingTime.Time, time.Second)
+	require.NotNil(t, newRayJob.Status.JobStatusCheckFailureStartTime)
+	assert.WithinDuration(t, startTime.Time, newRayJob.Status.JobStatusCheckFailureStartTime.Time, time.Second)
 }
 
 func TestFailedToCreateRayJobSubmitterEvent(t *testing.T) {
@@ -988,47 +988,47 @@ func TestBatchSchedulerOnCompletionCalledWhenRayJobComplete(t *testing.T) {
 	}
 }
 
-func TestGetJobStatusQueryTimeoutSeconds(t *testing.T) {
-	t.Setenv(utils.RAYJOB_STATUS_QUERY_TIMEOUT_SECONDS, "120")
-	assert.Equal(t, 120, getJobStatusQueryTimeoutSeconds())
+func TestGetJobStatusCheckTimeoutSeconds(t *testing.T) {
+	t.Setenv(utils.RAYJOB_STATUS_CHECK_TIMEOUT_SECONDS, "120")
+	assert.Equal(t, 120, getJobStatusCheckTimeoutSeconds())
 
-	t.Setenv(utils.RAYJOB_STATUS_QUERY_TIMEOUT_SECONDS, "invalid")
-	assert.Equal(t, utils.DEFAULT_RAYJOB_STATUS_QUERY_TIMEOUT_SECONDS, getJobStatusQueryTimeoutSeconds())
+	t.Setenv(utils.RAYJOB_STATUS_CHECK_TIMEOUT_SECONDS, "invalid")
+	assert.Equal(t, utils.DEFAULT_RAYJOB_STATUS_CHECK_TIMEOUT_SECONDS, getJobStatusCheckTimeoutSeconds())
 
-	os.Unsetenv(utils.RAYJOB_STATUS_QUERY_TIMEOUT_SECONDS)
-	assert.Equal(t, utils.DEFAULT_RAYJOB_STATUS_QUERY_TIMEOUT_SECONDS, getJobStatusQueryTimeoutSeconds())
+	os.Unsetenv(utils.RAYJOB_STATUS_CHECK_TIMEOUT_SECONDS)
+	assert.Equal(t, utils.DEFAULT_RAYJOB_STATUS_CHECK_TIMEOUT_SECONDS, getJobStatusCheckTimeoutSeconds())
 }
 
-func TestRecordJobStatusQueryFailure(t *testing.T) {
+func TestRecordJobStatusCheckFailure(t *testing.T) {
 	ctx := context.Background()
 	rayJob := &rayv1.RayJob{
 		Status: rayv1.RayJobStatus{JobId: "test-job"},
 	}
 	testErr := errors.New("connection refused")
 
-	needsPersist := recordJobStatusQueryFailure(ctx, rayJob, testErr)
+	needsPersist := recordJobStatusCheckFailure(ctx, rayJob, testErr)
 	assert.True(t, needsPersist)
-	assert.NotNil(t, rayJob.Status.JobStatusQueryStartFailingTime)
+	assert.NotNil(t, rayJob.Status.JobStatusCheckFailureStartTime)
 
-	needsPersist = recordJobStatusQueryFailure(ctx, rayJob, testErr)
+	needsPersist = recordJobStatusCheckFailure(ctx, rayJob, testErr)
 	assert.False(t, needsPersist)
 }
 
-func TestCheckJobStatusQueryTimeoutAndUpdateStatusIfNeeded(t *testing.T) {
+func TestCheckJobStatusCheckTimeoutAndUpdateStatusIfNeeded(t *testing.T) {
 	ctx := context.Background()
 	rayJob := &rayv1.RayJob{
 		Status: rayv1.RayJobStatus{JobId: "test-job"},
 	}
 
-	assert.False(t, checkJobStatusQueryTimeoutAndUpdateStatusIfNeeded(ctx, rayJob))
+	assert.False(t, checkJobStatusCheckTimeoutAndUpdateStatusIfNeeded(ctx, rayJob))
 
-	rayJob.Status.JobStatusQueryStartFailingTime = &metav1.Time{Time: time.Now()}
-	assert.False(t, checkJobStatusQueryTimeoutAndUpdateStatusIfNeeded(ctx, rayJob))
+	rayJob.Status.JobStatusCheckFailureStartTime = &metav1.Time{Time: time.Now()}
+	assert.False(t, checkJobStatusCheckTimeoutAndUpdateStatusIfNeeded(ctx, rayJob))
 
-	t.Setenv(utils.RAYJOB_STATUS_QUERY_TIMEOUT_SECONDS, "1")
-	rayJob.Status.JobStatusQueryStartFailingTime = &metav1.Time{Time: time.Now().Add(-2 * time.Second)}
-	assert.True(t, checkJobStatusQueryTimeoutAndUpdateStatusIfNeeded(ctx, rayJob))
+	t.Setenv(utils.RAYJOB_STATUS_CHECK_TIMEOUT_SECONDS, "1")
+	rayJob.Status.JobStatusCheckFailureStartTime = &metav1.Time{Time: time.Now().Add(-2 * time.Second)}
+	assert.True(t, checkJobStatusCheckTimeoutAndUpdateStatusIfNeeded(ctx, rayJob))
 	assert.Equal(t, rayv1.JobDeploymentStatusFailed, rayJob.Status.JobDeploymentStatus)
-	assert.Equal(t, rayv1.JobStatusQueryTimeoutExceeded, rayJob.Status.Reason)
+	assert.Equal(t, rayv1.JobStatusCheckTimeoutExceeded, rayJob.Status.Reason)
 	assert.Contains(t, rayJob.Status.Message, "exceeded timeout of 1s")
 }

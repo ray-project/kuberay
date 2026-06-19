@@ -782,8 +782,8 @@ func (in *RayJobStatus) DeepCopyInto(out *RayJobStatus) {
 		**out = **in
 	}
 	in.RayClusterStatus.DeepCopyInto(&out.RayClusterStatus)
-	if in.JobStatusQueryStartFailingTime != nil {
-		in, out := &in.JobStatusQueryStartFailingTime, &out.JobStatusQueryStartFailingTime
+	if in.JobStatusCheckFailureStartTime != nil {
+		in, out := &in.JobStatusCheckFailureStartTime, &out.JobStatusCheckFailureStartTime
 		*out = (*in).DeepCopy()
 	}
 }

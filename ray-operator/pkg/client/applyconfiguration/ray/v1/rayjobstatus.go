@@ -35,9 +35,9 @@ type RayJobStatusApplyConfiguration struct {
 	Failed *int32 `json:"failed,omitempty"`
 	// RayClusterStatus is the status of the RayCluster running the job.
 	RayClusterStatus *RayClusterStatusApplyConfiguration `json:"rayClusterStatus,omitempty"`
-	// JobStatusQueryStartFailingTime records when job status queries first began failing.
-	// Cleared on a successful query. Used to enforce a cumulative job status query timeout window.
-	JobStatusQueryStartFailingTime *metav1.Time `json:"jobStatusQueryStartFailingTime,omitempty"`
+	// JobStatusCheckFailureStartTime is set on the first failure to observe job status via the
+	// Ray dashboard (GetJobInfo, or SubmitJob in HTTP mode). Cleared on a successful GetJobInfo.
+	JobStatusCheckFailureStartTime *metav1.Time `json:"jobStatusCheckFailureStartTime,omitempty"`
 	// observedGeneration is the most recent generation observed for this RayJob. It corresponds to the
 	// RayJob's generation, which is updated on mutation by the API Server.
 	ObservedGeneration *int64 `json:"observedGeneration,omitempty"`
@@ -153,11 +153,11 @@ func (b *RayJobStatusApplyConfiguration) WithRayClusterStatus(value *RayClusterS
 	return b
 }
 
-// WithJobStatusQueryStartFailingTime sets the JobStatusQueryStartFailingTime field in the declarative configuration to the given value
+// WithJobStatusCheckFailureStartTime sets the JobStatusCheckFailureStartTime field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the JobStatusQueryStartFailingTime field is set to the value of the last call.
-func (b *RayJobStatusApplyConfiguration) WithJobStatusQueryStartFailingTime(value metav1.Time) *RayJobStatusApplyConfiguration {
-	b.JobStatusQueryStartFailingTime = &value
+// If called multiple times, the JobStatusCheckFailureStartTime field is set to the value of the last call.
+func (b *RayJobStatusApplyConfiguration) WithJobStatusCheckFailureStartTime(value metav1.Time) *RayJobStatusApplyConfiguration {
+	b.JobStatusCheckFailureStartTime = &value
 	return b
 }
 
