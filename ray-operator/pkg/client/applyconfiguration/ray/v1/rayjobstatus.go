@@ -37,7 +37,7 @@ type RayJobStatusApplyConfiguration struct {
 	RayClusterStatus *RayClusterStatusApplyConfiguration `json:"rayClusterStatus,omitempty"`
 	// JobStatusQueryStartFailingTime records when job status queries first began failing.
 	// Cleared on a successful query. Used to enforce a cumulative job status query timeout window.
-	JobStatusQueryStartFailingTime *metav1.Time `json:"jobStatusQueryStartTime,omitempty"`
+	JobStatusQueryStartFailingTime *metav1.Time `json:"jobStatusQueryStartFailingTime,omitempty"`
 	// observedGeneration is the most recent generation observed for this RayJob. It corresponds to the
 	// RayJob's generation, which is updated on mutation by the API Server.
 	ObservedGeneration *int64 `json:"observedGeneration,omitempty"`
