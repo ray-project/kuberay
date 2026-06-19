@@ -8,10 +8,11 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
-	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
+	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
 func makeTaskEventMap(taskName, nodeID, taskID string, attempt int) map[string]any {
@@ -1072,7 +1073,7 @@ func TestProcessSingleSession(t *testing.T) {
 		err = h.ProcessSingleSession(context.Background(), clusterInfo)
 		require.NoError(t, err)
 
-		nodeMap := h.GetNodeMap("cluster_ns_session1")
+		nodeMap := h.getNodeMap("cluster_ns_session1")
 		assert.Len(t, nodeMap, 2)
 
 		// "YWJjZA==" -> hex "61626364" (abcd)
