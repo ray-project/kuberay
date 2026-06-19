@@ -764,6 +764,10 @@ func IsAutoscalingV1Enabled(spec *rayv1.RayClusterSpec) bool {
 	return spec != nil && spec.AutoscalerOptions != nil && spec.AutoscalerOptions.Version != nil && *spec.AutoscalerOptions.Version == rayv1.AutoscalerVersionV1
 }
 
+func IsNoDriverTimeoutTerminationEnabled(spec *rayv1.RayClusterSpec) bool {
+	return IsAutoscalingEnabled(spec) && spec.AutoscalerOptions != nil && spec.AutoscalerOptions.NoDriverTimeoutSeconds != nil
+}
+
 // Check if the RayCluster has GCS fault tolerance enabled.
 func IsGCSFaultToleranceEnabled(spec *rayv1.RayClusterSpec, annotations map[string]string) bool {
 	v, ok := annotations[RayFTEnabledAnnotationKey]
