@@ -38,7 +38,7 @@ import (
 // 4. Wait for the Gateway object to be ready (Accepted and Programmed conditions are True)
 // 5. Wait for the corresponding HTTPRoute object to be ready (Accepted and ResolvedRefs conditions are True)
 // 6. Create a Curl pod to test traffic routing through Gateway to RayService and wait for it to be ready
-// 7. Validate RayService is serving traffic by sending requests through Gateway external IP
+// 7. Validate RayService is serving traffic by sending requests through the Gateway in-cluster DNS name
 // 8. Modify the RayCluster spec to trigger upgrade and change the RayService serve config to update the serve deployment
 //   - NOTE: Incremental upgrade is triggered by RayCluster spec changes, not serve config changes
 //
@@ -70,16 +70,16 @@ func TestRayServiceIncrementalUpgrade(t *testing.T) {
 			serveConfigV2 := defaultIncrementalUpgradeServeConfigV2
 
 			// Create RayService with IncrementalUpgrade enabled and wait for key components to be ready
-			rayService, httpRoute, gatewayIP := bootstrapIncrementalRayService(test, g, namespace.Name, rayServiceName, stepSize, interval, maxSurge, serveConfigV2)
+			rayService, httpRoute, gatewayHost := bootstrapIncrementalRayService(test, g, namespace.Name, rayServiceName, stepSize, interval, maxSurge, serveConfigV2)
 
 			// Create curl pod to test traffic routing through Gateway to RayService
 			curlPod, err := CreateCurlPod(g, test, CurlPodName, CurlContainerName, namespace.Name)
 			g.Expect(err).NotTo(HaveOccurred())
 
 			LogWithTimestamp(test.T(), "Verifying RayService is serving traffic")
-			stdout, _ := CurlRayServiceGateway(test, gatewayIP, curlPod, CurlContainerName, http.MethodPost, "/fruit", `["MANGO", 2]`)
+			stdout, _ := CurlRayServiceGateway(test, gatewayHost, curlPod, CurlContainerName, http.MethodPost, "/fruit", `["MANGO", 2]`)
 			g.Expect(stdout.String()).To(Equal("6"))
-			stdout, _ = CurlRayServiceGateway(test, gatewayIP, curlPod, CurlContainerName, http.MethodPost, "/calc", `["MUL", 3]`)
+			stdout, _ = CurlRayServiceGateway(test, gatewayHost, curlPod, CurlContainerName, http.MethodPost, "/calc", `["MUL", 3]`)
 			g.Expect(stdout.String()).To(Equal("15 pizzas please!"))
 
 			LogWithTimestamp(test.T(), "Triggering incremental upgrade by modifying RayCluster spec and updating serve deployment by changing RayService serve config")
@@ -148,7 +148,7 @@ func TestRayServiceIncrementalUpgrade(t *testing.T) {
 				}, TestTimeoutMedium).Should(Succeed())
 
 				// Behavior 2: Both old and new versions served traffic during the upgrade and no requests are dropped
-				stdout, _ := CurlRayServiceGateway(test, gatewayIP, curlPod, CurlContainerName, http.MethodPost, "/fruit", `["MANGO", 2]`)
+				stdout, _ := CurlRayServiceGateway(test, gatewayHost, curlPod, CurlContainerName, http.MethodPost, "/fruit", `["MANGO", 2]`)
 				response := stdout.String()
 				g.Expect(response).To(Or(Equal("6"), Equal("8")), "Response should be from the old or new app version during the upgrade")
 				if response == "6" {
@@ -209,7 +209,7 @@ func TestRayServiceIncrementalUpgrade(t *testing.T) {
 			g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutShort).Should(WithTransform(IsRayServiceUpgrading, BeFalse()))
 
 			LogWithTimestamp(test.T(), "Verifying RayService uses updated ServeConfig after upgrade completes")
-			stdout, _ = CurlRayServiceGateway(test, gatewayIP, curlPod, CurlContainerName, http.MethodPost, "/fruit", `["MANGO", 2]`)
+			stdout, _ = CurlRayServiceGateway(test, gatewayHost, curlPod, CurlContainerName, http.MethodPost, "/fruit", `["MANGO", 2]`)
 			g.Expect(stdout.String()).To(Equal("8"))
 		})
 	}
@@ -236,7 +236,7 @@ func TestRayServiceIncrementalUpgrade(t *testing.T) {
 // 5. Wait for the corresponding HTTPRoute object to be ready (Accepted and ResolvedRefs conditions are True)
 // 6. Create a ConfigMap with Locust runner script
 // 7. Deploy a head-only Locust RayCluster and install Locust in the head Pod
-// 8. Start Locust in a background goroutine targeting Gateway IP
+// 8. Start Locust in a background goroutine targeting the Gateway in-cluster DNS name
 // 9. Wait for Locust to ramp up and enter the steady state
 // 10. Modify the RayCluster spec to trigger upgrade and change the RayService serve config to update the serve deployment
 //   - NOTE: Incremental upgrade is triggered by RayCluster spec changes, not serve config changes
@@ -260,7 +260,7 @@ func TestRayServiceIncrementalUpgradeWithLocust(t *testing.T) {
 			serveConfigV2 := highRPSServeConfigV2
 
 			// Phase 1: Create RayService with incremental upgrade and wait for key components to be ready
-			_, _, gatewayIP := bootstrapIncrementalRayService(test, g, namespace.Name, rayServiceName, stepSize, interval, maxSurge, serveConfigV2)
+			_, _, gatewayHost := bootstrapIncrementalRayService(test, g, namespace.Name, rayServiceName, stepSize, interval, maxSurge, serveConfigV2)
 
 			// Phase 2: Deploy Locust RayCluster and install Locust
 			// TODO(jwj): Extract a helper for cross-module reusability (rayservice_ha_test.go) if needed.
@@ -287,8 +287,8 @@ func TestRayServiceIncrementalUpgradeWithLocust(t *testing.T) {
 
 			ExecPodCmd(test, locustHeadPod, common.RayHeadContainer, []string{"pip", "install", "locust==2.32.10"})
 
-			// Phase 3: Start Locust in a background goroutine targeting Gateway IP
-			locustHost := fmt.Sprintf("http://%s", gatewayIP)
+			// Phase 3: Start Locust in a background goroutine targeting the Gateway in-cluster DNS name
+			locustHost := fmt.Sprintf("http://%s", gatewayHost)
 
 			eg, _ := errgroup.WithContext(test.Ctx())
 			eg.Go(func() error {
@@ -323,7 +323,7 @@ func TestRayServiceIncrementalUpgradeWithLocust(t *testing.T) {
 			curlPod, err := CreateCurlPod(g, test, CurlPodName, CurlContainerName, namespace.Name)
 			g.Expect(err).NotTo(HaveOccurred())
 
-			stdout, _ := CurlRayServiceGateway(test, gatewayIP, curlPod, CurlContainerName, http.MethodGet, "/test", "")
+			stdout, _ := CurlRayServiceGateway(test, gatewayHost, curlPod, CurlContainerName, http.MethodGet, "/test", "")
 			var resp struct {
 				Status string `json:"status"`
 			}

@@ -35,7 +35,7 @@ import (
 //   - maxSurge: The percentage of capacity (Serve replicas) to add to the new cluster in each scaling step.
 //   - serveConfigV2: The Serve config V2 to use for the RayService.
 //
-// Returns the RayService, HTTPRoute, and Gateway IP.
+// Returns the RayService, HTTPRoute, and in-cluster Gateway host DNS name.
 func bootstrapIncrementalRayService(
 	test Test,
 	g *WithT,
@@ -43,7 +43,7 @@ func bootstrapIncrementalRayService(
 	rayServiceName string,
 	stepSize, interval, maxSurge *int32,
 	serveConfigV2 serveConfigV2,
-) (rayService *rayv1.RayService, httpRoute *gwv1.HTTPRoute, gatewayIP string) {
+) (rayService *rayv1.RayService, httpRoute *gwv1.HTTPRoute, gatewayHost string) {
 	var err error
 	rayServiceAC := rayv1ac.RayService(rayServiceName, namespace).
 		WithSpec(incrementalUpgradeRayServiceApplyConfiguration(stepSize, interval, maxSurge, serveConfigV2))
@@ -75,8 +75,8 @@ func bootstrapIncrementalRayService(
 		return utils.IsHTTPRouteReady(gateway, httpRoute), err
 	}, TestTimeoutMedium).Should(BeTrue())
 
-	gatewayIP = GetGatewayIP(gateway)
-	g.Expect(gatewayIP).NotTo(BeEmpty())
+	gatewayHost = GetGatewayHost(gateway)
+	g.Expect(gatewayHost).NotTo(BeEmpty())
 
 	return
 }
@@ -100,7 +100,7 @@ const (
 // This method currently supports POST and GET methods.
 func CurlRayServiceGateway(
 	t Test,
-	gatewayIP string,
+	gatewayHost string,
 	curlPod *corev1.Pod,
 	curlPodContainerName,
 	method,
@@ -113,7 +113,7 @@ func CurlRayServiceGateway(
 		"-X", method,
 		"-H", "Connection: close", // avoid re-using the same connection for test
 		"-H", "Content-Type: application/json",
-		fmt.Sprintf("http://%s%s", gatewayIP, rayServicePath),
+		fmt.Sprintf("http://%s%s", gatewayHost, rayServicePath),
 	}
 	if body != "" {
 		cmd = append(cmd, "-d", body)
@@ -180,18 +180,15 @@ func incrementalUpgradeRayServiceApplyConfiguration(
 		)
 }
 
-// GetGatewayIP retrieves the external IP for a Gateway object
-func GetGatewayIP(gateway *gwv1.Gateway) string {
+// GetGatewayHost returns the in-cluster DNS name for the Istio-managed
+// service backing the Gateway. Istio names both the Deployment and the
+// Service "<gateway-name>-istio" in the same namespace as the Gateway,
+// so pods inside the cluster can reach it without a LoadBalancer IP.
+func GetGatewayHost(gateway *gwv1.Gateway) string {
 	if gateway == nil {
 		return ""
 	}
-	for _, addr := range gateway.Status.Addresses {
-		if addr.Type == nil || *addr.Type == gwv1.IPAddressType {
-			return addr.Value
-		}
-	}
-
-	return ""
+	return fmt.Sprintf("%s-istio.%s.svc.cluster.local", gateway.Name, gateway.Namespace)
 }
 
 // incrementalUpgrade is a wrapper around triggerIncrementalUpgrade that returns a function that can be used with g.Eventually.
