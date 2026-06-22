@@ -4,7 +4,7 @@ metadata:
   name: raycluster-deny-all
 spec:
   # NetworkIsolation makes the operator create separate head/worker NetworkPolicies.
-  # Intra-cluster pod-to-pod and KubeRay operator traffic are always allowed;
+  # Intra-cluster pod-to-pod is always allowed;
   # everything else is denied unless you add it via head/worker rules below.
   #
   # mode options:
@@ -82,16 +82,16 @@ spec:
           protocol: UDP
         - port: 53
           protocol: TCP
-          # API-server egress — REQUIRED when enableInTreeAutoscaling is true (the operator
-          # does NOT add it; see the header for per-CNI details). Find your endpoint IP with:
-          #   kubectl get endpointslices -n default -l kubernetes.io/service-name=kubernetes
-          # then uncomment and set the CIDR/port below. (Cilium: use a CiliumNetworkPolicy
-          # with toEntities: [kube-apiserver] instead — not expressible here.)
-          # - to:
-          #   - ipBlock:
-          #       cidr: 10.0.0.1/32   # your default/kubernetes endpoint IP, NOT the ClusterIP
-          #   ports:
-          #   - { port: 6443, protocol: TCP }   # your API server port (often 443 or 6443)
+      # API-server egress — REQUIRED when enableInTreeAutoscaling is true (the operator
+      # does NOT add it; see the header for per-CNI details). Find your endpoint IP with:
+      #   kubectl get endpointslices -n default -l kubernetes.io/service-name=kubernetes
+      # then uncomment and set the CIDR/port below. (Cilium: use a CiliumNetworkPolicy
+      # with toEntities: [kube-apiserver] instead — not expressible here.)
+      # - to:
+      #   - ipBlock:
+      #       cidr: 10.0.0.1/32   # your default/kubernetes endpoint IP, NOT the ClusterIP
+      #   ports:
+      #   - { port: 6443, protocol: TCP }   # your API server port (often 443 or 6443)
     # Worker rules: applied only to worker pods' NetworkPolicy.
     # The base worker policy only allows intra-cluster traffic.
     worker:
@@ -109,12 +109,12 @@ spec:
           protocol: UDP
         - port: 53
           protocol: TCP
-          # Allow pip install / PyPI access over HTTPS (uncomment if your jobs need it):
-          # - to:
-          #   - ipBlock:
-          #       cidr: 0.0.0.0/0
-          #   ports:
-          #   - { port: 443, protocol: TCP }
+      # Allow pip install / PyPI access over HTTPS (uncomment if your jobs need it):
+      # - to:
+      #   - ipBlock:
+      #       cidr: 0.0.0.0/0
+      #   ports:
+      #   - { port: 443, protocol: TCP }
   rayVersion: '2.52.0'
   headGroupSpec:
     rayStartParams: {}

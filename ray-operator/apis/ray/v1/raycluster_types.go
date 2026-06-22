@@ -45,8 +45,8 @@ type RayClusterSpec struct {
 	GcsFaultToleranceOptions *GcsFaultToleranceOptions `json:"gcsFaultToleranceOptions,omitempty"`
 	// NetworkIsolation specifies optional configuration for network isolation.
 	// When set, separate NetworkPolicies are created for head and worker pods.
-	// The reconciler always permits intra-cluster pod-to-pod traffic and KubeRay
-	// operator access. Note: under DenyAll/DenyAllEgress, DNS egress is not added
+	// The reconciler always permits intra-cluster pod-to-pod traffic.
+	// Note: under DenyAll/DenyAllEgress, DNS egress is not added
 	// automatically; since Ray pods reach the head via its service FQDN, you must
 	// allow DNS egress via Head/Worker EgressRules or the cluster will fail to start.
 	// +optional
