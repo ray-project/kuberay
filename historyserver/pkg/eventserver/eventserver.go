@@ -11,11 +11,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/ray-project/kuberay/historyserver/pkg/compression"
 	"github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
 	"github.com/ray-project/kuberay/historyserver/pkg/storage"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
-	"github.com/sirupsen/logrus"
 )
 
 type EventHandler struct {
@@ -991,7 +992,7 @@ func normalizeActorIDsToHex(actor *types.Actor) {
 	actor.Address.WorkerID = normalizeIDToHex(actor.Address.WorkerID)
 }
 
-// GetNodeMap returns a thread-safe deep copy of all nodes for a given cluster session.
+// getNodeMap returns a thread-safe deep copy of all nodes for a given cluster session.
 func (h *EventHandler) getNodeMap(clusterSessionID string) map[string]types.Node {
 	h.ClusterNodeMap.RLock()
 	defer h.ClusterNodeMap.RUnlock()
