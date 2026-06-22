@@ -81,8 +81,8 @@ Once enabled and opted in, a RayCluster is scheduled as a single gang:
   install or run.
 - **Editing and scaling.** Changing worker groups or replica counts is picked up automatically — the gang requirement
   is updated to match the new cluster shape.
-- **Suspend and resume.** Suspending a RayCluster deletes its pods but keeps the Workload and PodGroup in place;
-  resuming reuses them so the recreated pods rejoin the same gang.
+- **Suspend and resume.** Suspending a RayCluster deletes its pods and the Kubernetes Services that expose them, but
+  keeps the Workload and PodGroup in place; resuming reuses them so the recreated pods rejoin the same gang.
 - **Cleanup.** The scheduling resources are garbage collected automatically when the RayCluster is deleted.
 
 You can confirm a cluster is being gang scheduled by checking that its pods carry a scheduling group:

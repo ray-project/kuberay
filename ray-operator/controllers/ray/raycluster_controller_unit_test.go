@@ -22,6 +22,8 @@ import (
 	"math"
 	"os"
 	"reflect"
+	goruntime "runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"testing"
@@ -1158,6 +1160,432 @@ func TestReconcileHeadlessService(t *testing.T) {
 	assert.Len(t, serviceList.Items, 1, "Service list len is wrong")
 }
 
+// withSuspend builds the RayCluster shapes the suspend lifecycle actually produces.
+// Conditions take an explicit status instead of being removed, because that is what
+// the controller persists: a resumed RayCluster still carries a RayClusterSuspended
+// condition, only with its status flipped to False.
+func withSuspend(cluster *rayv1.RayCluster, suspend bool, conditions map[rayv1.RayClusterConditionType]metav1.ConditionStatus) *rayv1.RayCluster {
+	suspended := cluster.DeepCopy()
+	suspended.Spec.Suspend = new(suspend)
+	for condition, status := range conditions {
+		meta.SetStatusCondition(&suspended.Status.Conditions, metav1.Condition{
+			Type:   string(condition),
+			Reason: string(condition),
+			Status: status,
+		})
+	}
+	return suspended
+}
+
+func TestRayClusterSuspendPredicates(t *testing.T) {
+	setupTest(t)
+
+	tests := []struct {
+		name             string
+		condition        rayv1.RayClusterConditionType
+		suspend          bool
+		gateEnabled      bool
+		wantCommitted    bool
+		wantDeletesSvcs  bool
+		wantBlocksCreate bool
+	}{
+		{
+			// The reconcile that first observes .Spec.Suspend must not delete anything:
+			// RayClusterSuspending is the commit point and is not persisted yet. This is
+			// what makes the suspend operation atomic.
+			name:             "gate enabled, suspend requested but not yet committed",
+			suspend:          true,
+			gateEnabled:      true,
+			wantCommitted:    false,
+			wantDeletesSvcs:  false,
+			wantBlocksCreate: true,
+		},
+		{
+			name:             "gate enabled, suspending",
+			condition:        rayv1.RayClusterSuspending,
+			suspend:          true,
+			gateEnabled:      true,
+			wantCommitted:    true,
+			wantDeletesSvcs:  true,
+			wantBlocksCreate: true,
+		},
+		{
+			// Pods cannot come back on their own once suspended, but a Service can still
+			// be present - suspended by an operator that predates this cleanup, or
+			// re-created behind the controller's back - so the Service teardown stays
+			// armed while the Pod teardown does not.
+			name:             "gate enabled, suspended",
+			condition:        rayv1.RayClusterSuspended,
+			suspend:          true,
+			gateEnabled:      true,
+			wantCommitted:    false,
+			wantDeletesSvcs:  true,
+			wantBlocksCreate: true,
+		},
+		{
+			name:             "gate enabled, not suspended",
+			suspend:          false,
+			gateEnabled:      true,
+			wantCommitted:    false,
+			wantDeletesSvcs:  false,
+			wantBlocksCreate: false,
+		},
+		{
+			// Without the status conditions there is no commit point to wait for, so
+			// .Spec.Suspend drives the deletion directly.
+			name:             "gate disabled, suspend requested",
+			suspend:          true,
+			gateEnabled:      false,
+			wantCommitted:    true,
+			wantDeletesSvcs:  true,
+			wantBlocksCreate: true,
+		},
+		{
+			name:             "gate disabled, stale Suspended condition, resumed",
+			condition:        rayv1.RayClusterSuspended,
+			suspend:          false,
+			gateEnabled:      false,
+			wantCommitted:    false,
+			wantDeletesSvcs:  false,
+			wantBlocksCreate: false,
+		},
+		{
+			name:             "gate disabled, not suspended",
+			suspend:          false,
+			gateEnabled:      false,
+			wantCommitted:    false,
+			wantDeletesSvcs:  false,
+			wantBlocksCreate: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, tc.gateEnabled)
+
+			conditions := map[rayv1.RayClusterConditionType]metav1.ConditionStatus{}
+			if tc.condition != "" {
+				conditions[tc.condition] = metav1.ConditionTrue
+			}
+			cluster := withSuspend(testRayCluster, tc.suspend, conditions)
+
+			assert.Equal(t, tc.wantCommitted, rayClusterSuspendCommitted(cluster))
+			assert.Equal(t, tc.wantDeletesSvcs, rayClusterSuspendDeletesServices(cluster))
+			assert.Equal(t, tc.wantBlocksCreate, rayClusterSuspendBlocksCreation(cluster))
+		})
+	}
+}
+
+// TestRayClusterSuspendPredicatesIgnoreClearedConditions guards a trap: since a
+// cleared condition is kept with a False status rather than dropped, predicates that
+// looked for its presence would leave every RayCluster that has ever been suspended
+// permanently unable to rebuild itself.
+func TestRayClusterSuspendPredicatesIgnoreClearedConditions(t *testing.T) {
+	setupTest(t)
+	features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, true)
+
+	cluster := withSuspend(testRayCluster, false, map[rayv1.RayClusterConditionType]metav1.ConditionStatus{
+		rayv1.RayClusterSuspending: metav1.ConditionFalse,
+		rayv1.RayClusterSuspended:  metav1.ConditionFalse,
+	})
+
+	require.NotEmpty(t, cluster.Status.Conditions, "the cleared conditions must remain in the array")
+	assert.False(t, rayClusterSuspendCommitted(cluster))
+	assert.False(t, rayClusterSuspendDeletesServices(cluster))
+	assert.False(t, rayClusterSuspendBlocksCreation(cluster))
+}
+
+// TestReconcileServicesOnSuspend covers the Service teardown that brings RayCluster
+// suspension in line with the other KubeRay CRs.
+func TestReconcileServicesOnSuspend(t *testing.T) {
+	setupTest(t)
+
+	newScheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(newScheme)
+	_ = corev1.AddToScheme(newScheme)
+
+	// Configured so that all three kinds of Service exist.
+	baseCluster := testRayCluster.DeepCopy()
+	baseCluster.UID = "raycluster-uid"
+	baseCluster.Annotations = map[string]string{utils.EnableServeServiceKey: utils.EnableServeServiceTrue}
+	baseCluster.Spec.WorkerGroupSpecs[0].NumOfHosts = 4
+
+	suspending := map[rayv1.RayClusterConditionType]metav1.ConditionStatus{rayv1.RayClusterSuspending: metav1.ConditionTrue}
+	suspended := map[rayv1.RayClusterConditionType]metav1.ConditionStatus{rayv1.RayClusterSuspended: metav1.ConditionTrue}
+	resumed := map[rayv1.RayClusterConditionType]metav1.ConditionStatus{rayv1.RayClusterSuspended: metav1.ConditionFalse}
+
+	ctx := context.TODO()
+
+	newReconciler := func(fakeClient client.Client, recorder events.EventRecorderLogger) *RayClusterReconciler {
+		return &RayClusterReconciler{
+			Client:                     fakeClient,
+			Recorder:                   recorder,
+			Scheme:                     scheme.Scheme,
+			rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
+		}
+	}
+
+	reconcileServices := func(t *testing.T, r *RayClusterReconciler, cluster *rayv1.RayCluster) {
+		t.Helper()
+		require.NoError(t, r.reconcileHeadService(ctx, cluster))
+		require.NoError(t, r.reconcileServeService(ctx, cluster))
+		require.NoError(t, r.reconcileHeadlessService(ctx, cluster))
+	}
+
+	serviceNames := func(t *testing.T, fakeClient client.Client, namespace string) []string {
+		t.Helper()
+		services := corev1.ServiceList{}
+		require.NoError(t, fakeClient.List(ctx, &services, client.InNamespace(namespace)))
+		names := make([]string, 0, len(services.Items))
+		for _, svc := range services.Items {
+			names = append(names, svc.Name)
+		}
+		return names
+	}
+
+	t.Run("suspending deletes the head, serve and headless Services", func(t *testing.T) {
+		features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, true)
+
+		cluster := baseCluster.DeepCopy()
+		fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(cluster).Build()
+		r := newReconciler(fakeClient, &events.FakeRecorder{})
+
+		reconcileServices(t, r, cluster)
+		require.Len(t, serviceNames(t, fakeClient, cluster.Namespace), 3, "a running RayCluster should own three Services")
+
+		reconcileServices(t, r, withSuspend(cluster, true, suspending))
+		assert.Empty(t, serviceNames(t, fakeClient, cluster.Namespace), "suspending should delete all owned Services")
+	})
+
+	t.Run("a RayCluster suspended before this cleanup existed converges", func(t *testing.T) {
+		features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, true)
+
+		cluster := baseCluster.DeepCopy()
+		fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(cluster).Build()
+		r := newReconciler(fakeClient, &events.FakeRecorder{})
+
+		reconcileServices(t, r, cluster)
+		require.Len(t, serviceNames(t, fakeClient, cluster.Namespace), 3)
+
+		// The cluster is long past the suspending phase, so a teardown armed only by
+		// RayClusterSuspending would never reach these Services.
+		reconcileServices(t, r, withSuspend(cluster, true, suspended))
+		assert.Empty(t, serviceNames(t, fakeClient, cluster.Namespace))
+	})
+
+	t.Run("suspending is idempotent once the Services are gone", func(t *testing.T) {
+		features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, true)
+
+		cluster := withSuspend(baseCluster, true, suspending)
+		fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(cluster).Build()
+		r := newReconciler(fakeClient, &events.FakeRecorder{})
+
+		reconcileServices(t, r, cluster)
+		assert.Empty(t, serviceNames(t, fakeClient, cluster.Namespace))
+	})
+
+	t.Run("a suspended RayCluster does not re-create the Services", func(t *testing.T) {
+		features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, true)
+
+		cluster := withSuspend(baseCluster, true, suspended)
+		fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(cluster).Build()
+		r := newReconciler(fakeClient, &events.FakeRecorder{})
+
+		reconcileServices(t, r, cluster)
+		assert.Empty(t, serviceNames(t, fakeClient, cluster.Namespace))
+	})
+
+	t.Run("suspend requested but not yet committed keeps the Services", func(t *testing.T) {
+		features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, true)
+
+		cluster := baseCluster.DeepCopy()
+		fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(cluster).Build()
+		r := newReconciler(fakeClient, &events.FakeRecorder{})
+
+		reconcileServices(t, r, cluster)
+		require.Len(t, serviceNames(t, fakeClient, cluster.Namespace), 3)
+
+		// The spec asks for suspension but nothing has committed to it yet, so the user
+		// can still change their mind at no cost.
+		reconcileServices(t, r, withSuspend(cluster, true, nil))
+		assert.Len(t, serviceNames(t, fakeClient, cluster.Namespace), 3, "deletion must wait for the RayClusterSuspending commit point")
+	})
+
+	t.Run("without the status conditions .Spec.Suspend deletes the Services", func(t *testing.T) {
+		features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, false)
+
+		cluster := baseCluster.DeepCopy()
+		fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(cluster).Build()
+		r := newReconciler(fakeClient, &events.FakeRecorder{})
+
+		reconcileServices(t, r, cluster)
+		require.Len(t, serviceNames(t, fakeClient, cluster.Namespace), 3)
+
+		reconcileServices(t, r, withSuspend(cluster, true, nil))
+		assert.Empty(t, serviceNames(t, fakeClient, cluster.Namespace))
+	})
+
+	t.Run("resuming re-creates the Services only after the Suspended condition is cleared", func(t *testing.T) {
+		features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, true)
+
+		cluster := withSuspend(baseCluster, true, suspended)
+		fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(cluster).Build()
+		r := newReconciler(fakeClient, &events.FakeRecorder{})
+
+		reconcileServices(t, r, cluster)
+		require.Empty(t, serviceNames(t, fakeClient, cluster.Namespace))
+
+		// A resume is observed one reconcile before it is recorded, and nothing may come
+		// back during that gap.
+		reconcileServices(t, r, withSuspend(baseCluster, false, suspended))
+		require.Empty(t, serviceNames(t, fakeClient, cluster.Namespace), "the Services must not return before the condition is cleared")
+
+		// Now that the status agrees, the Services return.
+		reconcileServices(t, r, withSuspend(baseCluster, false, resumed))
+		assert.Len(t, serviceNames(t, fakeClient, cluster.Namespace), 3)
+	})
+
+	t.Run("does not delete a serve Service this RayCluster does not manage", func(t *testing.T) {
+		features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, true)
+
+		// During an incremental upgrade the RayService controller parents a serve Service
+		// to the RayCluster under this same name, without the annotation. Ownership is
+		// not enough to tell the two apart, so the annotation has to.
+		cluster := baseCluster.DeepCopy()
+		delete(cluster.Annotations, utils.EnableServeServiceKey)
+		foreignServeService := &corev1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      utils.GenerateServeServiceName(cluster.Name),
+				Namespace: cluster.Namespace,
+			},
+		}
+		require.NoError(t, controllerutil.SetControllerReference(cluster, foreignServeService, scheme.Scheme))
+		fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(cluster, foreignServeService).Build()
+		r := newReconciler(fakeClient, &events.FakeRecorder{})
+
+		reconcileServices(t, r, withSuspend(cluster, true, suspending))
+		assert.Equal(t, []string{foreignServeService.Name}, serviceNames(t, fakeClient, cluster.Namespace))
+	})
+
+	t.Run("does not delete Services this RayCluster does not own", func(t *testing.T) {
+		features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, true)
+
+		// Wearing KubeRay's labels is enough to be adopted, but adopting is not owning.
+		cluster := baseCluster.DeepCopy()
+		foreignHeadService := &corev1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "not-created-by-kuberay",
+				Namespace: cluster.Namespace,
+				Labels:    common.HeadServiceLabels(*cluster),
+			},
+		}
+		fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(cluster, foreignHeadService).Build()
+		r := newReconciler(fakeClient, &events.FakeRecorder{})
+
+		reconcileServices(t, r, withSuspend(cluster, true, suspending))
+		assert.Equal(t, []string{foreignHeadService.Name}, serviceNames(t, fakeClient, cluster.Namespace))
+	})
+
+	t.Run("reports a failed deletion instead of silently leaving the Service behind", func(t *testing.T) {
+		features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, true)
+
+		cluster := baseCluster.DeepCopy()
+		rejectDeletes := false
+		fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(cluster).
+			WithInterceptorFuncs(interceptor.Funcs{
+				Delete: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.DeleteOption) error {
+					if rejectDeletes {
+						return k8serrors.NewInternalError(errors.New("delete rejected"))
+					}
+					return c.Delete(ctx, obj, opts...)
+				},
+			}).Build()
+		recorder := events.NewFakeRecorder(10)
+		r := newReconciler(fakeClient, recorder)
+
+		reconcileServices(t, r, cluster)
+		require.Len(t, serviceNames(t, fakeClient, cluster.Namespace), 3)
+		drainEvents(recorder)
+
+		rejectDeletes = true
+		err := r.reconcileHeadService(ctx, withSuspend(cluster, true, suspending))
+		require.Error(t, err, "a failed Service deletion must not be reported as success")
+		assert.Contains(t, collectEvents(recorder), string(utils.FailedToDeleteService))
+		assert.Len(t, serviceNames(t, fakeClient, cluster.Namespace), 3, "the Service is still there")
+	})
+
+	t.Run("records an event for each deleted Service", func(t *testing.T) {
+		features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, true)
+
+		cluster := baseCluster.DeepCopy()
+		fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(cluster).Build()
+		recorder := events.NewFakeRecorder(10)
+		r := newReconciler(fakeClient, recorder)
+
+		reconcileServices(t, r, cluster)
+		require.Len(t, serviceNames(t, fakeClient, cluster.Namespace), 3)
+		drainEvents(recorder)
+
+		reconcileServices(t, r, withSuspend(cluster, true, suspending))
+		recorded := collectEvents(recorder)
+		assert.Equal(t, 3, strings.Count(recorded, string(utils.DeletedService)), "one DeletedService event per Service, got: %s", recorded)
+	})
+
+	t.Run("does not re-delete a Service that is already terminating", func(t *testing.T) {
+		features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, true)
+
+		cluster := baseCluster.DeepCopy()
+		deletes := 0
+		fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(cluster).
+			WithInterceptorFuncs(interceptor.Funcs{
+				Delete: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.DeleteOption) error {
+					deletes++
+					return c.Delete(ctx, obj, opts...)
+				},
+			}).Build()
+		r := newReconciler(fakeClient, &events.FakeRecorder{})
+		require.NoError(t, r.reconcileHeadService(ctx, cluster))
+
+		// Leave the Service terminating but not gone, the way a load balancer waits on
+		// its cloud controller to release the external address.
+		services := corev1.ServiceList{}
+		require.NoError(t, fakeClient.List(ctx, &services, common.RayClusterHeadServiceListOptions(cluster)...))
+		require.Len(t, services.Items, 1)
+		headService := services.Items[0]
+		headService.Finalizers = []string{"service.k8s.io/load-balancer-cleanup"}
+		require.NoError(t, fakeClient.Update(ctx, &headService))
+		require.NoError(t, fakeClient.Delete(ctx, &headService))
+		require.NoError(t, fakeClient.Get(ctx, client.ObjectKeyFromObject(&headService), &headService))
+		require.False(t, headService.DeletionTimestamp.IsZero(), "the head Service should be terminating")
+
+		deletes = 0
+		require.NoError(t, r.reconcileHeadService(ctx, withSuspend(cluster, true, suspending)))
+		assert.Zero(t, deletes, "a terminating Service must not be deleted again")
+	})
+}
+
+func drainEvents(recorder *events.FakeRecorder) {
+	for {
+		select {
+		case <-recorder.Events:
+		default:
+			return
+		}
+	}
+}
+
+func collectEvents(recorder *events.FakeRecorder) string {
+	var recorded []string
+	for {
+		select {
+		case event := <-recorder.Events:
+			recorded = append(recorded, event)
+		default:
+			return strings.Join(recorded, "\n")
+		}
+	}
+}
+
 func getNotFailedPodItemNum(podList corev1.PodList) int {
 	count := 0
 	for _, aPod := range podList.Items {
@@ -1330,7 +1758,7 @@ func TestUpdateEndpoints(t *testing.T) {
 		Scheme:   scheme.Scheme,
 	}
 
-	if err := testRayClusterReconciler.updateEndpoints(ctx, testRayCluster); err != nil {
+	if err := testRayClusterReconciler.updateEndpoints(ctx, testRayCluster, false); err != nil {
 		t.Errorf("updateEndpoints failed: %v", err)
 	}
 
@@ -1439,11 +1867,12 @@ func TestGetHeadServiceIPAndName(t *testing.T) {
 	}
 
 	tests := []struct {
-		name         string
-		expectedIP   string
-		expectedName string
-		services     []runtime.Object
-		returnsError bool
+		name                string
+		expectedIP          string
+		expectedName        string
+		services            []runtime.Object
+		headServiceOptional bool
+		returnsError        bool
 	}{
 		{
 			name:         "get expected Service IP if there's one head Service",
@@ -1460,11 +1889,29 @@ func TestGetHeadServiceIPAndName(t *testing.T) {
 			returnsError: true,
 		},
 		{
+			// The absence is expected, so it must not cost the caller its status write.
+			name:                "get empty head Service info if the head Service is optional",
+			services:            []runtime.Object{},
+			expectedIP:          "",
+			expectedName:        "",
+			headServiceOptional: true,
+			returnsError:        false,
+		},
+		{
 			name:         "get error if there's more than one head Service",
 			services:     append(testServices, extraHeadService),
 			expectedIP:   "",
 			expectedName: "",
 			returnsError: true,
+		},
+		{
+			// Ambiguity is a real problem either way.
+			name:                "get error if there's more than one head Service even when optional",
+			services:            append(testServices, extraHeadService),
+			expectedIP:          "",
+			expectedName:        "",
+			headServiceOptional: true,
+			returnsError:        true,
 		},
 	}
 
@@ -1478,7 +1925,7 @@ func TestGetHeadServiceIPAndName(t *testing.T) {
 				rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
 			}
 
-			ip, name, err := testRayClusterReconciler.getHeadServiceIPAndName(context.TODO(), testRayCluster)
+			ip, name, err := testRayClusterReconciler.getHeadServiceIPAndName(context.TODO(), testRayCluster, tc.headServiceOptional)
 			if tc.returnsError {
 				require.Error(t, err, "getHeadServiceIPAndName should return error")
 			} else {
@@ -1508,7 +1955,7 @@ func TestGetHeadServiceIPAndNameOnHeadlessService(t *testing.T) {
 		Scheme:   scheme.Scheme,
 	}
 
-	ip, name, err := testRayClusterReconciler.getHeadServiceIPAndName(context.TODO(), testRayCluster)
+	ip, name, err := testRayClusterReconciler.getHeadServiceIPAndName(context.TODO(), testRayCluster, false)
 
 	require.NoError(t, err)
 	assert.Equal(t, headNodeIP, ip, "getHeadServiceIPAndName returned unexpected IP")
@@ -4656,4 +5103,298 @@ func TestReconcile_TLSAutoGenerate_RejectsWithoutCertManager(t *testing.T) {
 		}
 	}
 	assert.True(t, foundEvent, "expected a warning event about cert-manager")
+}
+
+func TestCalculateStatusSuspendWaitsForOwnedServices(t *testing.T) {
+	setupTest(t)
+
+	newScheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(newScheme)
+	_ = corev1.AddToScheme(newScheme)
+
+	suspending := map[rayv1.RayClusterConditionType]metav1.ConditionStatus{rayv1.RayClusterSuspending: metav1.ConditionTrue}
+
+	// Configured so that all three kinds of Service exist.
+	baseCluster := testRayCluster.DeepCopy()
+	baseCluster.UID = "raycluster-uid"
+	baseCluster.Annotations = map[string]string{utils.EnableServeServiceKey: utils.EnableServeServiceTrue}
+	baseCluster.Spec.WorkerGroupSpecs[0].NumOfHosts = 4
+
+	ctx := context.Background()
+
+	own := func(t *testing.T, svc *corev1.Service) *corev1.Service {
+		t.Helper()
+		require.NoError(t, controllerutil.SetControllerReference(baseCluster, svc, scheme.Scheme))
+		return svc
+	}
+	headService := func(t *testing.T) *corev1.Service {
+		t.Helper()
+		svc, err := common.BuildServiceForHeadPod(ctx, *baseCluster, nil, nil)
+		require.NoError(t, err)
+		svc.Spec.ClusterIP = "aaa.bbb.ccc.ddd"
+		return own(t, svc)
+	}
+	serveService := func(t *testing.T) *corev1.Service {
+		t.Helper()
+		svc, err := common.BuildServeServiceForRayCluster(ctx, *baseCluster)
+		require.NoError(t, err)
+		return own(t, svc)
+	}
+	headlessService := func(t *testing.T) *corev1.Service {
+		t.Helper()
+		return own(t, common.BuildHeadlessServiceForRayCluster(*baseCluster))
+	}
+
+	newReconciler := func(objects ...runtime.Object) *RayClusterReconciler {
+		return &RayClusterReconciler{
+			Client:   clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(objects...).Build(),
+			Recorder: &events.FakeRecorder{},
+			Scheme:   scheme.Scheme,
+		}
+	}
+
+	// Each kind of owned Service has to hold the suspension open on its own. One that
+	// does not is a Service the state machine would stop waiting for.
+	for _, tc := range []struct {
+		build func(*testing.T) *corev1.Service
+		name  string
+	}{
+		{name: "head", build: headService},
+		{name: "serve", build: serveService},
+		{name: "headless", build: headlessService},
+	} {
+		t.Run("the "+tc.name+" Service alone holds the suspension open", func(t *testing.T) {
+			features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, true)
+
+			cluster := withSuspend(baseCluster, true, suspending)
+
+			r := newReconciler(cluster, tc.build(t))
+			newInstance, err := r.calculateStatus(ctx, cluster, nil)
+			require.NoError(t, err)
+			assert.True(t, meta.IsStatusConditionTrue(newInstance.Status.Conditions, string(rayv1.RayClusterSuspending)))
+			assert.False(t, meta.IsStatusConditionTrue(newInstance.Status.Conditions, string(rayv1.RayClusterSuspended)))
+		})
+	}
+
+	t.Run("the suspension completes once every owned Service is gone", func(t *testing.T) {
+		features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, true)
+
+		cluster := withSuspend(baseCluster, true, suspending)
+
+		r := newReconciler(cluster)
+		newInstance, err := r.calculateStatus(ctx, cluster, nil)
+		require.NoError(t, err)
+		assert.False(t, meta.IsStatusConditionTrue(newInstance.Status.Conditions, string(rayv1.RayClusterSuspending)))
+		assert.True(t, meta.IsStatusConditionTrue(newInstance.Status.Conditions, string(rayv1.RayClusterSuspended)))
+	})
+
+	t.Run("a Service on its way out still holds the suspension open", func(t *testing.T) {
+		features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, true)
+
+		// A cluster that was running arrives here already provisioned.
+		cluster := withSuspend(baseCluster, true, map[rayv1.RayClusterConditionType]metav1.ConditionStatus{
+			rayv1.RayClusterSuspending:  metav1.ConditionTrue,
+			rayv1.RayClusterProvisioned: metav1.ConditionTrue,
+		})
+
+		// A LoadBalancer Service commonly stays terminating while its finalizer runs.
+		terminating := headService(t)
+		terminating.Finalizers = []string{"service.kubernetes.io/load-balancer-cleanup"}
+		r := newReconciler(cluster, terminating)
+		require.NoError(t, r.Delete(ctx, terminating))
+		lingering := &corev1.Service{}
+		require.NoError(t, r.Get(ctx, client.ObjectKeyFromObject(terminating), lingering))
+		require.False(t, lingering.DeletionTimestamp.IsZero(), "the fixture must be terminating, not gone")
+
+		newInstance, err := r.calculateStatus(ctx, cluster, nil)
+		require.NoError(t, err)
+		assert.False(t, meta.IsStatusConditionTrue(newInstance.Status.Conditions, string(rayv1.RayClusterSuspended)))
+		// Provisioned describes the Pods, which are already gone.
+		assert.False(t, meta.IsStatusConditionTrue(newInstance.Status.Conditions, string(rayv1.RayClusterProvisioned)))
+	})
+
+	t.Run("the blocking Services are named in the Suspending condition", func(t *testing.T) {
+		features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, true)
+
+		// A stalled suspension has to say which Service it is waiting on.
+		cluster := withSuspend(baseCluster, true, suspending)
+
+		r := newReconciler(cluster, headService(t))
+		newInstance, err := r.calculateStatus(ctx, cluster, nil)
+		require.NoError(t, err)
+		condition := meta.FindStatusCondition(newInstance.Status.Conditions, string(rayv1.RayClusterSuspending))
+		require.NotNil(t, condition)
+		assert.Equal(t, metav1.ConditionTrue, condition.Status)
+		assert.Contains(t, condition.Message, "head")
+	})
+
+	t.Run("a missing head Service is still an error outside a suspension", func(t *testing.T) {
+		features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, true)
+
+		// The head Service is only optional while the suspension explains its absence.
+		cluster := baseCluster.DeepCopy()
+
+		r := newReconciler(cluster)
+		_, err := r.calculateStatus(ctx, cluster, nil)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "unable to find head service")
+	})
+
+	t.Run("a cluster suspended before this teardown gives up its Suspended condition", func(t *testing.T) {
+		features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, true)
+
+		// An operator that predates the Service teardown leaves a suspended cluster whose
+		// Services are still there. Reporting Suspended would claim a teardown that has
+		// not happened, and would let a resume run straight into them.
+		suspended := map[rayv1.RayClusterConditionType]metav1.ConditionStatus{rayv1.RayClusterSuspended: metav1.ConditionTrue}
+		cluster := withSuspend(baseCluster, true, suspended)
+
+		terminating := headService(t)
+		terminating.Finalizers = []string{"service.kubernetes.io/load-balancer-cleanup"}
+		r := newReconciler(cluster, terminating)
+		require.NoError(t, r.Delete(ctx, terminating))
+
+		newInstance, err := r.calculateStatus(ctx, cluster, nil)
+		require.NoError(t, err)
+		assert.False(t, meta.IsStatusConditionTrue(newInstance.Status.Conditions, string(rayv1.RayClusterSuspended)))
+		condition := meta.FindStatusCondition(newInstance.Status.Conditions, string(rayv1.RayClusterSuspending))
+		require.NotNil(t, condition)
+		assert.Equal(t, metav1.ConditionTrue, condition.Status)
+		assert.Contains(t, condition.Message, "head")
+	})
+
+	t.Run("a resume still clears the Suspended condition once the Services are gone", func(t *testing.T) {
+		features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, true)
+
+		suspended := map[rayv1.RayClusterConditionType]metav1.ConditionStatus{rayv1.RayClusterSuspended: metav1.ConditionTrue}
+		cluster := withSuspend(baseCluster, false, suspended)
+
+		r := newReconciler(cluster)
+		newInstance, err := r.calculateStatus(ctx, cluster, nil)
+		require.NoError(t, err)
+		assert.False(t, meta.IsStatusConditionTrue(newInstance.Status.Conditions, string(rayv1.RayClusterSuspended)))
+		assert.False(t, meta.IsStatusConditionTrue(newInstance.Status.Conditions, string(rayv1.RayClusterSuspending)))
+	})
+
+	t.Run("the serve Service is ignored without the annotation", func(t *testing.T) {
+		features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, true)
+
+		// During an incremental upgrade the RayService controller parents a serve Service
+		// to the RayCluster under this same name, without the annotation. Suspension does
+		// not delete that one, so it must not wait for it either.
+		cluster := withSuspend(baseCluster, true, suspending)
+		delete(cluster.Annotations, utils.EnableServeServiceKey)
+
+		r := newReconciler(cluster, serveService(t))
+		newInstance, err := r.calculateStatus(ctx, cluster, nil)
+		require.NoError(t, err)
+		assert.True(t, meta.IsStatusConditionTrue(newInstance.Status.Conditions, string(rayv1.RayClusterSuspended)))
+	})
+
+	t.Run("a Service this RayCluster does not own never holds up the suspension", func(t *testing.T) {
+		features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, true)
+
+		cluster := withSuspend(baseCluster, true, suspending)
+
+		// A Service that only matches the labels is adopted but not owned. Suspension
+		// does not delete it, so it must not be waited for either.
+		foreign := headService(t)
+		foreign.OwnerReferences[0].UID = "a-different-raycluster-uid"
+
+		r := newReconciler(cluster, foreign)
+		newInstance, err := r.calculateStatus(ctx, cluster, nil)
+		require.NoError(t, err)
+		assert.True(t, meta.IsStatusConditionTrue(newInstance.Status.Conditions, string(rayv1.RayClusterSuspended)))
+	})
+
+	// Kueue reads .Status.State to decide when to release the reserved quota, so this
+	// pins the timing the operator promises it.
+	for _, tc := range []struct {
+		name string
+		gate bool
+	}{
+		{name: "with the status conditions", gate: true},
+		{name: "without the status conditions", gate: false},
+	} {
+		t.Run(".Status.State is not gated on the Services, "+tc.name, func(t *testing.T) {
+			features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, tc.gate)
+
+			cluster := withSuspend(baseCluster, true, suspending)
+
+			r := newReconciler(cluster, headService(t))
+			newInstance, err := r.calculateStatus(ctx, cluster, nil)
+			require.NoError(t, err)
+			assert.Equal(t, rayv1.Suspended, newInstance.Status.State,
+				"the Pods are gone, so Kueue must be free to release the quota")
+		})
+	}
+}
+
+func TestSuspendAwareReconcileFuncsOrdering(t *testing.T) {
+	setupTest(t)
+
+	r := &RayClusterReconciler{}
+	name := func(fn reconcileFunc) string {
+		full := goruntime.FuncForPC(reflect.ValueOf(fn).Pointer()).Name()
+		return full[strings.LastIndex(full, ".")+1:]
+	}
+	indexOf := func(t *testing.T, funcs []reconcileFunc, want string) int {
+		t.Helper()
+		for i, fn := range funcs {
+			if strings.HasPrefix(name(fn), want) {
+				return i
+			}
+		}
+		t.Fatalf("%s is not in the reconcile order", want)
+		return -1
+	}
+
+	t.Run("creation reconciles the Pods last", func(t *testing.T) {
+		funcs := r.suspendAwareReconcileFuncs(testRayCluster.DeepCopy())
+		assert.Equal(t, len(funcs)-1, indexOf(t, funcs, "reconcilePods"),
+			"a Pod may only start once the resources it references exist")
+	})
+
+	t.Run("a committed suspend reconciles the teardown first", func(t *testing.T) {
+		features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, true)
+
+		suspending := map[rayv1.RayClusterConditionType]metav1.ConditionStatus{rayv1.RayClusterSuspending: metav1.ConditionTrue}
+		funcs := r.suspendAwareReconcileFuncs(withSuspend(testRayCluster, true, suspending))
+
+		// The caller stops at the first error, so an unrelated failure placed ahead of
+		// the teardown would strand the suspension.
+		pods := indexOf(t, funcs, "reconcilePods")
+		assert.Equal(t, 0, pods, "freeing the Pods is what suspending is for")
+		for _, svc := range []string{"reconcileHeadService", "reconcileHeadlessService", "reconcileServeService"} {
+			for _, mayFail := range []string{
+				"reconcileAutoscalerServiceAccount",
+				"reconcileAutoscalerRole",
+				"reconcileAutoscalerRoleBinding",
+				"reconcileIngress",
+				"reconcileAuthSecret",
+				"reconcileGCSStoragePVC",
+			} {
+				assert.Less(t, indexOf(t, funcs, svc), indexOf(t, funcs, mayFail),
+					"%s must be torn down before %s can fail the pass", svc, mayFail)
+			}
+		}
+	})
+
+	t.Run("both orders reconcile the same resources", func(t *testing.T) {
+		features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, true)
+
+		suspending := map[rayv1.RayClusterConditionType]metav1.ConditionStatus{rayv1.RayClusterSuspending: metav1.ConditionTrue}
+		names := func(funcs []reconcileFunc) []string {
+			out := make([]string, 0, len(funcs))
+			for _, fn := range funcs {
+				out = append(out, name(fn))
+			}
+			sort.Strings(out)
+			return out
+		}
+		assert.Equal(t,
+			names(r.suspendAwareReconcileFuncs(testRayCluster.DeepCopy())),
+			names(r.suspendAwareReconcileFuncs(withSuspend(testRayCluster, true, suspending))),
+			"reordering must not drop or add a reconciler")
+	})
 }

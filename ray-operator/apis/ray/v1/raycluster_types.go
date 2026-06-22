@@ -19,7 +19,10 @@ type RayClusterSpec struct {
 	// +optional
 	AuthOptions *AuthOptions `json:"authOptions,omitempty"`
 	// Suspend indicates whether a RayCluster should be suspended.
-	// A suspended RayCluster will have head pods and worker pods deleted.
+	// A suspended RayCluster has its head and worker Pods deleted, along with the
+	// Kubernetes Services that expose them. Resuming the RayCluster recreates them.
+	// The Services are recreated rather than preserved, so a ClusterIP, NodePort or
+	// LoadBalancer address assigned to one does not survive a suspend and resume.
 	// +optional
 	Suspend *bool `json:"suspend,omitempty"`
 	// ManagedBy is an optional configuration for the controller or entity that manages a RayCluster.
@@ -560,7 +563,10 @@ type ClusterState string
 const (
 	Ready ClusterState = "ready"
 	// Failed is deprecated, but we keep it to avoid compilation errors in projects that import the KubeRay Golang module.
-	Failed    ClusterState = "failed"
+	Failed ClusterState = "failed"
+	// Suspended is set once the Pods of a suspending RayCluster are deleted. It does not
+	// wait for the owned Services, so it can be reached while the RayClusterSuspended
+	// condition still reports the teardown as in progress.
 	Suspended ClusterState = "suspended"
 )
 
@@ -660,7 +666,7 @@ const (
 	RayClusterReplicaFailure RayClusterConditionType = "ReplicaFailure"
 	// RayClusterSuspending is set to true when a user sets .Spec.Suspend to true, ensuring the atomicity of the suspend operation.
 	RayClusterSuspending RayClusterConditionType = "RayClusterSuspending"
-	// RayClusterSuspended is set to true when all Pods belonging to a suspending RayCluster are deleted. Note that RayClusterSuspending and RayClusterSuspended cannot both be true at the same time.
+	// RayClusterSuspended is set to true when all Pods and owned Services belonging to a suspending RayCluster are deleted. Note that RayClusterSuspending and RayClusterSuspended cannot both be true at the same time.
 	RayClusterSuspended RayClusterConditionType = "RayClusterSuspended"
 )
 

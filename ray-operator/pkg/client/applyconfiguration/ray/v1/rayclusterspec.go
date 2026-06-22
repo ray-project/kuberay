@@ -14,7 +14,10 @@ type RayClusterSpecApplyConfiguration struct {
 	// AuthOptions specifies the authentication options for the RayCluster.
 	AuthOptions *AuthOptionsApplyConfiguration `json:"authOptions,omitempty"`
 	// Suspend indicates whether a RayCluster should be suspended.
-	// A suspended RayCluster will have head pods and worker pods deleted.
+	// A suspended RayCluster has its head and worker Pods deleted, along with the
+	// Kubernetes Services that expose them. Resuming the RayCluster recreates them.
+	// The Services are recreated rather than preserved, so a ClusterIP, NodePort or
+	// LoadBalancer address assigned to one does not survive a suspend and resume.
 	Suspend *bool `json:"suspend,omitempty"`
 	// ManagedBy is an optional configuration for the controller or entity that manages a RayCluster.
 	// The value must be either 'ray.io/kuberay-operator' or 'kueue.x-k8s.io/multikueue'.
