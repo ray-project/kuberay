@@ -46,7 +46,7 @@ func waitForGatewayReady(test Test, g *WithT, namespace, gatewayName string) *gw
 		gateway.Annotations = map[string]string{}
 	}
 	gateway.Annotations[gatewayServiceTypeAnnotation] = e2eGatewayServiceType
-	gateway, err = test.Client().Gateway().GatewayV1().Gateways(namespace).Update(
+	_, err = test.Client().Gateway().GatewayV1().Gateways(namespace).Update(
 		test.Ctx(), gateway, metav1.UpdateOptions{})
 	g.Expect(err).NotTo(HaveOccurred())
 
