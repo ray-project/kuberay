@@ -216,16 +216,12 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 		}
 
 		if IsAutoscalingV2Enabled(spec) {
-			// The error is ignored here because the function will return false if there's an error parsing the version.
-			// For example, if rayVersion is empty or unparseable, it considers the feature is not valid.
-			autoscalerRestartValid, _ := IsRayVersionAtLeast(spec.RayVersion, MinAutoscalerRestartValidVersion)
-
-			if !autoscalerRestartValid && spec.HeadGroupSpec.Template.Spec.RestartPolicy != "" && spec.HeadGroupSpec.Template.Spec.RestartPolicy != corev1.RestartPolicyNever {
+			if spec.HeadGroupSpec.Template.Spec.RestartPolicy != "" && spec.HeadGroupSpec.Template.Spec.RestartPolicy != corev1.RestartPolicyNever {
 				return fmt.Errorf("restartPolicy for head Pod should be Never or unset when using autoscaler V2")
 			}
 
 			for _, workerGroup := range spec.WorkerGroupSpecs {
-				if !autoscalerRestartValid && workerGroup.Template.Spec.RestartPolicy != "" && workerGroup.Template.Spec.RestartPolicy != corev1.RestartPolicyNever {
+				if workerGroup.Template.Spec.RestartPolicy != "" && workerGroup.Template.Spec.RestartPolicy != corev1.RestartPolicyNever {
 					return fmt.Errorf("restartPolicy for worker group %s should be Never or unset when using autoscaler V2", workerGroup.GroupName)
 				}
 			}
