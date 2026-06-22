@@ -23,6 +23,43 @@ import (
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
 
+const (
+	gatewayServiceTypeAnnotation = "networking.istio.io/service-type"
+	// e2eGatewayServiceType is the Istio Gateway backing-service type for e2e tests.
+	// Kind has no LoadBalancer controller, so the default LoadBalancer Gateway never
+	// becomes Programmed. ClusterIP satisfies Programmed=True; curls use GetGatewayHost().
+	e2eGatewayServiceType = "ClusterIP"
+)
+
+// waitForGatewayReady waits for the Gateway CR, annotates it for in-cluster e2e, then waits
+// until IsGatewayReady (Accepted and Programmed).
+func waitForGatewayReady(test Test, g *WithT, namespace, gatewayName string) *gwv1.Gateway {
+	LogWithTimestamp(test.T(), "Waiting for Gateway %s/%s to exist", namespace, gatewayName)
+	g.Eventually(Gateway(test, namespace, gatewayName), TestTimeoutMedium).ShouldNot(BeNil())
+
+	gateway, err := GetGateway(test, namespace, gatewayName)
+	g.Expect(err).NotTo(HaveOccurred())
+
+	LogWithTimestamp(test.T(), "Annotating Gateway %s/%s with %s=%s",
+		namespace, gatewayName, gatewayServiceTypeAnnotation, e2eGatewayServiceType)
+	if gateway.Annotations == nil {
+		gateway.Annotations = map[string]string{}
+	}
+	gateway.Annotations[gatewayServiceTypeAnnotation] = e2eGatewayServiceType
+	gateway, err = test.Client().Gateway().GatewayV1().Gateways(namespace).Update(
+		test.Ctx(), gateway, metav1.UpdateOptions{})
+	g.Expect(err).NotTo(HaveOccurred())
+
+	LogWithTimestamp(test.T(), "Waiting for Gateway %s/%s to be ready", namespace, gatewayName)
+	g.Eventually(Gateway(test, namespace, gatewayName), TestTimeoutMedium).
+		Should(WithTransform(utils.IsGatewayReady, BeTrue()))
+
+	gateway, err = GetGateway(test, namespace, gatewayName)
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(gateway).NotTo(BeNil())
+	return gateway
+}
+
 // bootstrapIncrementalRayService creates a RayService with incremental upgrade enabled
 // and waits for all required components to be ready, including:
 //   - RayService
@@ -56,14 +93,7 @@ func bootstrapIncrementalRayService(
 		Should(WithTransform(IsRayServiceReady, BeTrue()))
 
 	gatewayName := fmt.Sprintf("%s-gateway", rayServiceName)
-	LogWithTimestamp(test.T(), "Waiting for Gateway %s/%s to be ready", rayService.Namespace, gatewayName)
-	g.Eventually(Gateway(test, rayService.Namespace, gatewayName), TestTimeoutMedium).
-		Should(WithTransform(utils.IsGatewayReady, BeTrue()))
-
-	var gateway *gwv1.Gateway
-	gateway, err = GetGateway(test, rayService.Namespace, gatewayName)
-	g.Expect(err).NotTo(HaveOccurred())
-	g.Expect(gateway).NotTo(BeNil())
+	gateway := waitForGatewayReady(test, g, rayService.Namespace, gatewayName)
 
 	httpRouteName := fmt.Sprintf("%s-httproute", rayServiceName)
 	LogWithTimestamp(test.T(), "Waiting for HTTPRoute %s/%s to be ready", rayService.Namespace, httpRouteName)
