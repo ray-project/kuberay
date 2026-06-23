@@ -303,7 +303,7 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			// If the Ray job was not found, GetJobInfo returns a BadRequest error.
 			if errors.IsBadRequest(err) {
 				if rayJobInstance.Spec.SubmissionMode == rayv1.HTTPMode {
-					if reconcileHTTPModeJobNotFound(ctx, rayJobInstance, rayDashboardClient, err) {
+					if reconcileHTTPModeJobNotFound(ctx, rayJobInstance, rayDashboardClient) {
 						break
 					}
 					return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
@@ -1278,10 +1278,6 @@ func getJobStatusCheckTimeoutSeconds() int {
 	return timeoutSeconds
 }
 
-func isAwaitingInitialJobStatus(rayJob *rayv1.RayJob) bool {
-	return rayJob.Status.JobStatus == "" || rayJob.Status.JobStatus == rayv1.JobStatusNew
-}
-
 // Clears JobStatusCheckFailureStartTime. Returns whether status should be persisted.
 func clearJobStatusCheckFailureTimer(rayJob *rayv1.RayJob) bool {
 	if rayJob.Status.JobStatusCheckFailureStartTime == nil {
@@ -1291,28 +1287,22 @@ func clearJobStatusCheckFailureTimer(rayJob *rayv1.RayJob) bool {
 	return true
 }
 
-// Util function to handle GetJobInfo 404 in HTTP mode: resubmit the job and update the status-check failure timer.
+// reconcileHTTPModeJobNotFound handles GetJobInfo 404 in HTTP mode by resubmitting the job.
 // Returns whether status should be persisted.
 func reconcileHTTPModeJobNotFound(
 	ctx context.Context,
 	rayJob *rayv1.RayJob,
 	rayDashboardClient dashboardclient.RayDashboardClientInterface,
-	notFoundErr error,
 ) bool {
 	logger := ctrl.LoggerFrom(ctx)
 	logger.Info("The Ray job was not found. Submit a Ray job via an HTTP request.", "JobId", rayJob.Status.JobId)
 
-	needsStatusPersist := isAwaitingInitialJobStatus(rayJob) && clearJobStatusCheckFailureTimer(rayJob)
-
 	if _, submitErr := rayDashboardClient.SubmitJob(ctx, rayJob); submitErr != nil {
 		logger.Error(submitErr, "Failed to submit the Ray job", "JobId", rayJob.Status.JobId)
-		return needsStatusPersist || recordJobStatusCheckFailure(ctx, rayJob, submitErr)
+		return recordJobStatusCheckFailure(ctx, rayJob, submitErr)
 	}
 
-	if !isAwaitingInitialJobStatus(rayJob) {
-		return recordJobStatusCheckFailure(ctx, rayJob, notFoundErr) || needsStatusPersist
-	}
-	return needsStatusPersist
+	return clearJobStatusCheckFailureTimer(rayJob)
 }
 
 // Records the first job status check failure timestamp.
