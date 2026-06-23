@@ -40,6 +40,7 @@ import (
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/expectations"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/ray-project/kuberay/ray-operator/pkg/features"
 	"github.com/ray-project/kuberay/ray-operator/test/support"
@@ -1725,9 +1726,10 @@ var _ = Context("Inside the default namespace", func() {
 
 		newReconciler := func() *RayClusterReconciler {
 			return &RayClusterReconciler{
-				Client:   k8sClient,
-				Scheme:   k8sClient.Scheme(),
-				Recorder: record.NewFakeRecorder(10),
+				Client:                     k8sClient,
+				Scheme:                     k8sClient.Scheme(),
+				Recorder:                   record.NewFakeRecorder(10),
+				rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(k8sClient),
 			}
 		}
 

@@ -35,9 +35,8 @@ type RayJobStatusApplyConfiguration struct {
 	Failed *int32 `json:"failed,omitempty"`
 	// RayClusterStatus is the status of the RayCluster running the job.
 	RayClusterStatus *RayClusterStatusApplyConfiguration `json:"rayClusterStatus,omitempty"`
-	// JobStatusCheckFailureStartTime is set on the first failure to observe job status via the
-	// Ray dashboard (GetJobInfo, or SubmitJob in HTTP mode). Cleared on a successful GetJobInfo.
-	// Used with RAYJOB_STATUS_CHECK_TIMEOUT_SECONDS to enforce a cumulative timeout window.
+	// JobStatusCheckFailureStartTime is set when job status checks via the Ray Dashboard started failing.
+	// Reset on a successful check. JobDeploymentStatus transitions to 'Failed' after RAYJOB_STATUS_CHECK_TIMEOUT_SECONDS
 	JobStatusCheckFailureStartTime *metav1.Time `json:"jobStatusCheckFailureStartTime,omitempty"`
 	// observedGeneration is the most recent generation observed for this RayJob. It corresponds to the
 	// RayJob's generation, which is updated on mutation by the API Server.

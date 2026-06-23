@@ -341,7 +341,7 @@ type RayJobStatus struct {
 	// +optional
 	RayClusterStatus RayClusterStatus `json:"rayClusterStatus,omitempty"`
 	// JobStatusCheckFailureStartTime is set when job status checks via the Ray Dashboard started failing.
-    // Reset on a successful check. JobDeploymentStatus transitions to 'Failed' after RAYJOB_STATUS_CHECK_TIMEOUT_SECONDS
+	// Reset on a successful check. JobDeploymentStatus transitions to 'Failed' after RAYJOB_STATUS_CHECK_TIMEOUT_SECONDS
 	// +optional
 	JobStatusCheckFailureStartTime *metav1.Time `json:"jobStatusCheckFailureStartTime,omitempty"`
 
