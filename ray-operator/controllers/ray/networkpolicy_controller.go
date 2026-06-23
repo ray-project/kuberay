@@ -36,7 +36,6 @@ type NetworkPolicyController struct {
 	Recorder record.EventRecorder
 }
 
-// NewNetworkPolicyController creates a new independent NetworkPolicy controller.
 func NewNetworkPolicyController(mgr manager.Manager) (*NetworkPolicyController, error) {
 	return &NetworkPolicyController{
 		Client:   mgr.GetClient(),
@@ -48,7 +47,6 @@ func NewNetworkPolicyController(mgr manager.Manager) (*NetworkPolicyController, 
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=get;list;watch;create;update;delete
 // +kubebuilder:rbac:groups=ray.io,resources=rayclusters,verbs=get;list;watch
 
-// Reconcile handles RayCluster resources and creates/manages NetworkPolicies
 func (r *NetworkPolicyController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := ctrl.LoggerFrom(ctx)
 
@@ -98,7 +96,6 @@ func (r *NetworkPolicyController) Reconcile(ctx context.Context, req ctrl.Reques
 	return ctrl.Result{}, nil
 }
 
-// createOrUpdateNetworkPolicy creates or updates a NetworkPolicy
 func (r *NetworkPolicyController) createOrUpdateNetworkPolicy(ctx context.Context, instance *rayv1.RayCluster, networkPolicy *networkingv1.NetworkPolicy) error {
 	logger := ctrl.LoggerFrom(ctx)
 
@@ -162,7 +159,6 @@ func workerNetworkPolicyName(clusterName string) string {
 	return fmt.Sprintf("%s-workers", clusterName)
 }
 
-// buildHeadNetworkPolicy creates a NetworkPolicy for Ray head pods
 func (r *NetworkPolicyController) buildHeadNetworkPolicy(instance *rayv1.RayCluster, mode rayv1.NetworkIsolationMode) *networkingv1.NetworkPolicy {
 	labels := map[string]string{
 		utils.RayClusterLabelKey:                instance.Name,
@@ -213,7 +209,6 @@ func (r *NetworkPolicyController) buildHeadNetworkPolicy(instance *rayv1.RayClus
 	}
 }
 
-// buildWorkerNetworkPolicy creates a NetworkPolicy for Ray worker pods
 func (r *NetworkPolicyController) buildWorkerNetworkPolicy(instance *rayv1.RayCluster, mode rayv1.NetworkIsolationMode) *networkingv1.NetworkPolicy {
 	labels := map[string]string{
 		utils.RayClusterLabelKey:                instance.Name,
@@ -447,7 +442,6 @@ func (r *NetworkPolicyController) cleanupNetworkPoliciesIfNeeded(ctx context.Con
 	return ctrl.Result{}, nil
 }
 
-// SetupWithManager sets up the controller with the Manager
 func (r *NetworkPolicyController) SetupWithManager(mgr ctrl.Manager, reconcileConcurrency int) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&rayv1.RayCluster{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
