@@ -377,6 +377,17 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 		}
 
+		// Clean up batch scheduler resources (e.g. zero out the Volcano PodGroup) now that the
+		// RayCluster is gone. The PodGroup is owned by the RayJob, not the RayCluster, so it is not
+		// garbage-collected when the cluster is deleted; without this it keeps holding queue
+		// resources while the RayJob is suspended. Must run before Status.RayClusterName is reset
+		// below, since CleanupOnCompletion relies on it to locate the PodGroup. Requeue on failure
+		// so the cleanup is retried while still in the Suspending status, rather than leaking the
+		// PodGroup once the status transitions to Suspended (which is no longer requeued).
+		if err := r.cleanupBatchSchedulerResources(ctx, rayJobInstance); err != nil {
+			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+		}
+
 		// Reset the RayCluster and Ray job related status.
 		rayJobInstance.Status.RayClusterStatus = rayv1.RayClusterStatus{}
 		rayJobInstance.Status.RayClusterName = ""
@@ -1550,29 +1561,39 @@ func (r *RayJobReconciler) isDeletionActionCompleted(ctx context.Context, rayJob
 	return false, fmt.Errorf("unknown deletion policy for completion check: %s", policy)
 }
 
-// batchSchedulerOnCompletion performs cleanup of batch scheduler resources when a RayJob reaches complete/failed status.
-func (r *RayJobReconciler) batchSchedulerOnCompletion(ctx context.Context, rayJobInstance *rayv1.RayJob) {
-	logger := ctrl.LoggerFrom(ctx)
+// cleanupBatchSchedulerResources cleans up batch scheduler resources (e.g., zeroes out the Volcano
+// PodGroup) for the given RayJob and returns an error if the cleanup failed. Callers that must
+// guarantee the resources are released (e.g., suspend) should requeue on error; callers handling a
+// terminal state can swallow the error via batchSchedulerOnCompletion.
+func (r *RayJobReconciler) cleanupBatchSchedulerResources(ctx context.Context, rayJobInstance *rayv1.RayJob) error {
+	if r.options.BatchSchedulerManager == nil {
+		return nil
+	}
 
-	// Clean up batch scheduler resources (e.g., delete Volcano PodGroup)
-	if r.options.BatchSchedulerManager != nil {
-		scheduler, err := r.options.BatchSchedulerManager.GetScheduler()
-		if err != nil {
-			logger.Error(err, "Failed to get batch scheduler")
-			// Don't block the reconciliation on scheduler errors, just log the error
-		} else {
-			didUpdate, err := scheduler.CleanupOnCompletion(ctx, rayJobInstance)
-			if err != nil {
-				logger.Error(err, "Failed to cleanup batch scheduler resources")
-				r.Recorder.Eventf(rayJobInstance, corev1.EventTypeWarning, string(utils.FailedToCleanupBatchScheduler),
-					"Failed to cleanup batch scheduler resources for RayJob %s/%s: %v", rayJobInstance.Namespace, rayJobInstance.Name, err)
-				// Don't block the reconciliation on cleanup failures, just log the error
-			} else if didUpdate {
-				// emit event if cleanup was performed
-				r.Recorder.Eventf(rayJobInstance, corev1.EventTypeNormal, string(utils.BatchSchedulerCleanedUp),
-					"Cleaned up batch scheduler resources for RayJob %s/%s", rayJobInstance.Namespace, rayJobInstance.Name)
-			}
-		}
+	scheduler, err := r.options.BatchSchedulerManager.GetScheduler()
+	if err != nil {
+		return fmt.Errorf("failed to get batch scheduler: %w", err)
+	}
+
+	didUpdate, err := scheduler.CleanupOnCompletion(ctx, rayJobInstance)
+	if err != nil {
+		r.Recorder.Eventf(rayJobInstance, corev1.EventTypeWarning, string(utils.FailedToCleanupBatchScheduler),
+			"Failed to cleanup batch scheduler resources for RayJob %s/%s: %v", rayJobInstance.Namespace, rayJobInstance.Name, err)
+		return fmt.Errorf("failed to cleanup batch scheduler resources: %w", err)
+	}
+	if didUpdate {
+		r.Recorder.Eventf(rayJobInstance, corev1.EventTypeNormal, string(utils.BatchSchedulerCleanedUp),
+			"Cleaned up batch scheduler resources for RayJob %s/%s", rayJobInstance.Namespace, rayJobInstance.Name)
+	}
+	return nil
+}
+
+// batchSchedulerOnCompletion performs cleanup of batch scheduler resources when a RayJob reaches
+// complete/failed status. Cleanup failures are logged but not propagated, since a terminal RayJob
+// will not be requeued.
+func (r *RayJobReconciler) batchSchedulerOnCompletion(ctx context.Context, rayJobInstance *rayv1.RayJob) {
+	if err := r.cleanupBatchSchedulerResources(ctx, rayJobInstance); err != nil {
+		ctrl.LoggerFrom(ctx).Error(err, "Failed to cleanup batch scheduler resources")
 	}
 }
 

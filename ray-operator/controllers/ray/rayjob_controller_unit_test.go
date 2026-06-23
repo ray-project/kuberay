@@ -943,3 +943,136 @@ func TestBatchSchedulerOnCompletionCalledWhenRayJobComplete(t *testing.T) {
 		})
 	}
 }
+
+// TestBatchSchedulerCleanupCalledWhenRayJobSuspending verifies that batch scheduler resources are
+// cleaned up when a RayJob is suspended/retrying. Unlike the terminal (Complete/Failed) path, the
+// suspend path must requeue on cleanup failure rather than swallow the error, otherwise the PodGroup
+// would leak once the status transitions to Suspended (which is no longer requeued).
+func TestBatchSchedulerCleanupCalledWhenRayJobSuspending(t *testing.T) {
+	tests := []struct {
+		name                string
+		jobDeploymentStatus rayv1.JobDeploymentStatus
+		expectedStatus      rayv1.JobDeploymentStatus
+		cleanupErr          error
+		cleanupDidUpdate    bool
+		expectReconcileErr  bool
+		expectCleanupEvent  string
+	}{
+		{
+			name:                "Suspending - cleanup succeeds, transitions to Suspended",
+			jobDeploymentStatus: rayv1.JobDeploymentStatusSuspending,
+			expectedStatus:      rayv1.JobDeploymentStatusSuspended,
+			cleanupDidUpdate:    true,
+			expectCleanupEvent:  string(utils.BatchSchedulerCleanedUp),
+		},
+		{
+			name:                "Retrying - cleanup succeeds, transitions to New",
+			jobDeploymentStatus: rayv1.JobDeploymentStatusRetrying,
+			expectedStatus:      rayv1.JobDeploymentStatusNew,
+			cleanupDidUpdate:    true,
+			expectCleanupEvent:  string(utils.BatchSchedulerCleanedUp),
+		},
+		{
+			name:                "Suspending - cleanup fails, requeues and stays Suspending",
+			jobDeploymentStatus: rayv1.JobDeploymentStatusSuspending,
+			expectedStatus:      rayv1.JobDeploymentStatusSuspending,
+			cleanupErr:          errors.New("cleanup failed"),
+			expectReconcileErr:  true,
+			expectCleanupEvent:  string(utils.FailedToCleanupBatchScheduler),
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			newScheme := runtime.NewScheme()
+			_ = rayv1.AddToScheme(newScheme)
+			_ = batchv1.AddToScheme(newScheme)
+
+			rayJob := &rayv1.RayJob{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-rayjob",
+					Namespace: "default",
+				},
+				Spec: rayv1.RayJobSpec{
+					Entrypoint: "echo hello",
+					RayClusterSpec: &rayv1.RayClusterSpec{
+						HeadGroupSpec: rayv1.HeadGroupSpec{
+							Template: corev1.PodTemplateSpec{
+								Spec: corev1.PodSpec{
+									Containers: []corev1.Container{
+										{
+											Name:  "ray-head",
+											Image: "rayproject/ray:latest",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				Status: rayv1.RayJobStatus{
+					JobDeploymentStatus: tc.jobDeploymentStatus,
+					// The RayCluster and submitter Job are intentionally absent from the fake client,
+					// so deleteClusterResources/deleteSubmitterJob treat them as already deleted and
+					// the reconcile proceeds to the batch scheduler cleanup.
+					RayClusterName: "test-raycluster",
+				},
+			}
+
+			fakeClient := clientFake.NewClientBuilder().
+				WithScheme(newScheme).
+				WithRuntimeObjects(rayJob).
+				WithStatusSubresource(rayJob).
+				Build()
+
+			fakeScheduler := &fakeBatchScheduler{
+				cleanupDidUpdate: tc.cleanupDidUpdate,
+				cleanupErr:       tc.cleanupErr,
+			}
+			schedulerManager := batchscheduler.NewSchedulerManagerForTest(fakeScheduler)
+
+			recorder := record.NewFakeRecorder(100)
+
+			reconciler := &RayJobReconciler{
+				Client:   fakeClient,
+				Recorder: recorder,
+				Scheme:   newScheme,
+				options: RayJobReconcilerOptions{
+					BatchSchedulerManager: schedulerManager,
+				},
+			}
+
+			ctx := context.Background()
+			_, err := reconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Name:      rayJob.Name,
+					Namespace: rayJob.Namespace,
+				},
+			})
+			if tc.expectReconcileErr {
+				require.Error(t, err, "Reconcile should requeue with an error when cleanup fails during suspend")
+			} else {
+				require.NoError(t, err)
+			}
+
+			assert.True(t, fakeScheduler.cleanupCalled, "CleanupOnCompletion should have been called when RayJob is in %s status", tc.jobDeploymentStatus)
+			assert.Equal(t, rayJob.Name, fakeScheduler.cleanupObject.GetName(), "CleanupOnCompletion should receive the correct RayJob object")
+
+			updated := &rayv1.RayJob{}
+			require.NoError(t, fakeClient.Get(ctx, types.NamespacedName{Name: rayJob.Name, Namespace: rayJob.Namespace}, updated))
+			assert.Equal(t, tc.expectedStatus, updated.Status.JobDeploymentStatus)
+
+			if tc.expectCleanupEvent != "" {
+				var foundEvent bool
+				for len(recorder.Events) > 0 {
+					event := <-recorder.Events
+					if strings.Contains(event, tc.expectCleanupEvent) {
+						foundEvent = true
+						break
+					}
+				}
+				assert.True(t, foundEvent, "Expected event %q to be emitted", tc.expectCleanupEvent)
+			}
+		})
+	}
+}
