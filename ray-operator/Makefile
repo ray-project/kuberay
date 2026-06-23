@@ -106,7 +106,7 @@ test-sampleyaml: manifests fmt vet
 
 test-e2e-rayjob: WHAT ?= ./test/e2erayjob
 test-e2e-rayjob: manifests fmt vet ## Run e2e RayJob tests.
-	go test -timeout 45m -v $(WHAT)
+	go test -timeout 30m -v $(WHAT)
 
 sync: helm api-docs
 	./hack/update-codegen.sh
