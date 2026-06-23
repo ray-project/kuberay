@@ -338,6 +338,100 @@ func TestCheckIsRestartCountExceeded(t *testing.T) {
 	}
 }
 
+func TestCheckSidecarSubmitterFailedAndUpdateStatus(t *testing.T) {
+	reconciler := &RayJobReconciler{}
+	ctx := context.Background()
+
+	headPodWithSubmitterState := func(state corev1.ContainerState) *corev1.Pod {
+		return &corev1.Pod{
+			Status: corev1.PodStatus{
+				ContainerStatuses: []corev1.ContainerStatus{
+					{Name: utils.SubmitterContainerName, State: state},
+				},
+			},
+		}
+	}
+	initializingRayJob := func() *rayv1.RayJob {
+		return &rayv1.RayJob{
+			Spec:   rayv1.RayJobSpec{SubmissionMode: rayv1.SidecarMode},
+			Status: rayv1.RayJobStatus{JobDeploymentStatus: rayv1.JobDeploymentStatusInitializing},
+		}
+	}
+
+	t.Run("submitter terminated non-zero is detected during Initializing -> Failed/SubmissionFailed", func(t *testing.T) {
+		rayJob := initializingRayJob()
+		headPod := headPodWithSubmitterState(corev1.ContainerState{
+			Terminated: &corev1.ContainerStateTerminated{ExitCode: 1, Reason: "Error"},
+		})
+
+		shouldUpdate := reconciler.checkSidecarSubmitterFailedAndUpdateStatus(ctx, rayJob, headPod)
+
+		assert.True(t, shouldUpdate)
+		assert.Equal(t, rayv1.JobDeploymentStatusFailed, rayJob.Status.JobDeploymentStatus)
+		assert.Equal(t, rayv1.SubmissionFailed, rayJob.Status.Reason)
+	})
+
+	t.Run("submitter terminated non-zero with JobStatus already Failed -> AppFailed", func(t *testing.T) {
+		rayJob := initializingRayJob()
+		rayJob.Status.JobStatus = rayv1.JobStatusFailed
+		headPod := headPodWithSubmitterState(corev1.ContainerState{
+			Terminated: &corev1.ContainerStateTerminated{ExitCode: 1, Reason: "Error"},
+		})
+
+		shouldUpdate := reconciler.checkSidecarSubmitterFailedAndUpdateStatus(ctx, rayJob, headPod)
+
+		assert.True(t, shouldUpdate)
+		assert.Equal(t, rayv1.JobDeploymentStatusFailed, rayJob.Status.JobDeploymentStatus)
+		assert.Equal(t, rayv1.AppFailed, rayJob.Status.Reason)
+	})
+
+	t.Run("submitter terminated with zero exit -> no update", func(t *testing.T) {
+		rayJob := initializingRayJob()
+		headPod := headPodWithSubmitterState(corev1.ContainerState{
+			Terminated: &corev1.ContainerStateTerminated{ExitCode: 0},
+		})
+
+		shouldUpdate := reconciler.checkSidecarSubmitterFailedAndUpdateStatus(ctx, rayJob, headPod)
+
+		assert.False(t, shouldUpdate)
+		assert.Equal(t, rayv1.JobDeploymentStatusInitializing, rayJob.Status.JobDeploymentStatus)
+	})
+
+	t.Run("submitter still running -> no update", func(t *testing.T) {
+		rayJob := initializingRayJob()
+		headPod := headPodWithSubmitterState(corev1.ContainerState{
+			Running: &corev1.ContainerStateRunning{},
+		})
+
+		shouldUpdate := reconciler.checkSidecarSubmitterFailedAndUpdateStatus(ctx, rayJob, headPod)
+
+		assert.False(t, shouldUpdate)
+		assert.Equal(t, rayv1.JobDeploymentStatusInitializing, rayJob.Status.JobDeploymentStatus)
+	})
+
+	t.Run("feature gate enabled routes to restart-count check", func(t *testing.T) {
+		features.SetFeatureGateDuringTest(t, features.SidecarSubmitterRestart, true)
+		rayJob := initializingRayJob()
+		headPod := &corev1.Pod{
+			Status: corev1.PodStatus{
+				ContainerStatuses: []corev1.ContainerStatus{
+					{
+						Name:                 utils.SubmitterContainerName,
+						RestartCount:         2,
+						State:                corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{ExitCode: 1}},
+						LastTerminationState: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{ExitCode: 1}},
+					},
+				},
+			},
+		}
+
+		shouldUpdate := reconciler.checkSidecarSubmitterFailedAndUpdateStatus(ctx, rayJob, headPod)
+
+		assert.True(t, shouldUpdate)
+		assert.Equal(t, rayv1.JobDeploymentStatusFailed, rayJob.Status.JobDeploymentStatus)
+	})
+}
+
 func TestUpdateStatusToSuspendingIfNeeded(t *testing.T) {
 	newScheme := runtime.NewScheme()
 	_ = rayv1.AddToScheme(newScheme)
