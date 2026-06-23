@@ -209,9 +209,20 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			if headPod, err = common.GetRayClusterHeadPod(ctx, r.Client, rayClusterInstance); err != nil {
 				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 			}
-			if headPod != nil && r.checkSidecarSubmitterFailedAndUpdateStatus(ctx, rayJobInstance, headPod) {
-				rayJobInstance.Status.RayClusterStatus = rayClusterInstance.Status
-				break
+			if headPod != nil {
+				// If the submitter sidecar container has failed, best-effort poll the actual Ray job
+				// status from the dashboard before deciding the failure reason. During `Initializing`
+				// the controller has not yet polled the job status (that only happens in `Running`),
+				// so without this the reason would always be `SubmissionFailed`. Polling lets a genuine
+				// application failure be reported as `AppFailed`. The poll is a no-op on any error so the
+				// reason falls back to `SubmissionFailed` when the job status can't be determined.
+				if checkSidecarSubmitterFailed(rayJobInstance, headPod) {
+					r.pollJobStatusForSidecarFailure(ctx, rayJobInstance, rayClusterInstance)
+				}
+				if r.checkSidecarSubmitterFailedAndUpdateStatus(ctx, rayJobInstance, headPod) {
+					rayJobInstance.Status.RayClusterStatus = rayClusterInstance.Status
+					break
+				}
 			}
 		}
 
@@ -1147,6 +1158,65 @@ func getJobFinishedCondition(job *batchv1.Job) *batchv1.JobCondition {
 		}
 	}
 	return nil
+}
+
+// checkSidecarSubmitterFailed reports whether the submitter sidecar container has failed, without
+// mutating the RayJob status. It uses the same detection logic as
+// checkSidecarSubmitterFailedAndUpdateStatus so the two stay in sync.
+func checkSidecarSubmitterFailed(rayJob *rayv1.RayJob, headPod *corev1.Pod) bool {
+	var failed bool
+	if !features.Enabled(features.SidecarSubmitterRestart) {
+		failed, _ = checkSidecarContainerStatus(headPod)
+	} else {
+		submitterBackoffLimit := int32(2)
+		if rayJob.Spec.SubmitterConfig != nil && rayJob.Spec.SubmitterConfig.BackoffLimit != nil {
+			submitterBackoffLimit = *rayJob.Spec.SubmitterConfig.BackoffLimit
+		}
+		failed, _ = checkIsRestartCountExceeded(headPod, submitterBackoffLimit)
+	}
+	return failed
+}
+
+// pollJobStatusForSidecarFailure does a best-effort poll of the actual Ray job status from the
+// dashboard and updates rayJob.Status.JobStatus. It is used during `Initializing` when the submitter
+// sidecar has failed, so that checkSidecarSubmitterFailedAndUpdateStatus can map a genuine
+// application failure to `AppFailed` rather than always reporting `SubmissionFailed`.
+//
+// This is best-effort: on ANY error (no dashboardClientFunc, empty JobId, URL build failure,
+// dashboard unreachable, or job not found) it leaves rayJob.Status.JobStatus untouched, so the
+// reason falls back to `SubmissionFailed`.
+func (r *RayJobReconciler) pollJobStatusForSidecarFailure(ctx context.Context, rayJob *rayv1.RayJob, rayClusterInstance *rayv1.RayCluster) {
+	logger := ctrl.LoggerFrom(ctx)
+	// Guard so the pure helper's unit tests (which construct &RayJobReconciler{} without a
+	// dashboardClientFunc) are unaffected, and skip when there is no submission id to query.
+	if r.dashboardClientFunc == nil || rayClusterInstance == nil || rayJob.Status.JobId == "" {
+		return
+	}
+
+	clientURL := rayJob.Status.DashboardURL
+	if clientURL == "" {
+		url, err := utils.FetchHeadServiceURL(ctx, r.Client, rayClusterInstance, utils.DashboardPortName)
+		if err != nil || url == "" {
+			logger.Info("pollJobStatusForSidecarFailure: failed to fetch dashboard URL; falling back to SubmissionFailed", "error", err)
+			return
+		}
+		clientURL = url
+	}
+
+	rayDashboardClient, err := r.dashboardClientFunc(rayClusterInstance, clientURL)
+	if err != nil {
+		logger.Info("pollJobStatusForSidecarFailure: failed to build dashboard client; falling back to SubmissionFailed", "error", err)
+		return
+	}
+
+	jobInfo, err := rayDashboardClient.GetJobInfo(ctx, rayJob.Status.JobId)
+	if err != nil || jobInfo == nil {
+		logger.Info("pollJobStatusForSidecarFailure: failed to get job info; falling back to SubmissionFailed", "JobId", rayJob.Status.JobId, "error", err)
+		return
+	}
+
+	logger.Info("pollJobStatusForSidecarFailure: polled Ray job status after submitter failure", "JobId", rayJob.Status.JobId, "JobStatus", jobInfo.JobStatus)
+	rayJob.Status.JobStatus = jobInfo.JobStatus
 }
 
 func (r *RayJobReconciler) checkSidecarSubmitterFailedAndUpdateStatus(ctx context.Context, rayJob *rayv1.RayJob, headPod *corev1.Pod) bool {
