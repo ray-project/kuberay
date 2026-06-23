@@ -106,6 +106,7 @@ func TestRayServiceSuspendDuringIncrementalUpgrade(t *testing.T) {
 	// Gateway and HTTPRoute must come back, and the resumed Gateway must
 	// serve traffic again so we know the network path is fully restored
 	// rather than just the K8s objects re-existing.
+	setGatewayServiceType(test, g, namespace.Name, gatewayName)
 	waitForGatewayReady(test, g, namespace.Name, gatewayName)
 
 	LogWithTimestamp(test.T(), "Waiting for HTTPRoute %s/%s to be ready again", namespace.Name, httpRoute.Name)

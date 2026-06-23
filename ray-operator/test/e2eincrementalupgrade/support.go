@@ -31,9 +31,8 @@ const (
 	e2eGatewayServiceType = "ClusterIP"
 )
 
-// waitForGatewayReady waits for the Gateway CR, annotates it for in-cluster e2e, then waits
-// until IsGatewayReady (Accepted and Programmed).
-func waitForGatewayReady(test Test, g *WithT, namespace, gatewayName string) *gwv1.Gateway {
+// setGatewayServiceType waits for the Gateway CR and annotates it for in-cluster e2e.
+func setGatewayServiceType(test Test, g *WithT, namespace, gatewayName string) {
 	LogWithTimestamp(test.T(), "Waiting for Gateway %s/%s to exist", namespace, gatewayName)
 	g.Eventually(Gateway(test, namespace, gatewayName), TestTimeoutMedium).ShouldNot(BeNil())
 
@@ -49,12 +48,15 @@ func waitForGatewayReady(test Test, g *WithT, namespace, gatewayName string) *gw
 	_, err = test.Client().Gateway().GatewayV1().Gateways(namespace).Update(
 		test.Ctx(), gateway, metav1.UpdateOptions{})
 	g.Expect(err).NotTo(HaveOccurred())
+}
 
+// waitForGatewayReady waits until IsGatewayReady (Accepted and Programmed).
+func waitForGatewayReady(test Test, g *WithT, namespace, gatewayName string) *gwv1.Gateway {
 	LogWithTimestamp(test.T(), "Waiting for Gateway %s/%s to be ready", namespace, gatewayName)
 	g.Eventually(Gateway(test, namespace, gatewayName), TestTimeoutMedium).
 		Should(WithTransform(utils.IsGatewayReady, BeTrue()))
 
-	gateway, err = GetGateway(test, namespace, gatewayName)
+	gateway, err := GetGateway(test, namespace, gatewayName)
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(gateway).NotTo(BeNil())
 	return gateway
@@ -93,6 +95,7 @@ func bootstrapIncrementalRayService(
 		Should(WithTransform(IsRayServiceReady, BeTrue()))
 
 	gatewayName := fmt.Sprintf("%s-gateway", rayServiceName)
+	setGatewayServiceType(test, g, rayService.Namespace, gatewayName)
 	gateway := waitForGatewayReady(test, g, rayService.Namespace, gatewayName)
 
 	httpRouteName := fmt.Sprintf("%s-httproute", rayServiceName)
