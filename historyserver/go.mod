@@ -14,6 +14,7 @@ require (
 	github.com/emicklei/go-restful/v3 v3.13.0
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/fsouza/fake-gcs-server v1.53.1
+	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/onsi/gomega v1.38.2
 	github.com/ray-project/kuberay/ray-operator v1.5.1
 	github.com/sirupsen/logrus v1.9.3

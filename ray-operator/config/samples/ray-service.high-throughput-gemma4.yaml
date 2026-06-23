@@ -7,27 +7,33 @@
 # - RAY_SERVE_LLM_ENABLE_DIRECT_STREAMING=1
 # - VLLM_USE_RAY_V2_EXECUTOR_BACKEND=1
 #
-# ...which should be set on both the head and workers.
-# This example uses L4s on GKE with Qwen 3.5 for illustrative purposes only.
-# The high throughput routing can be used with any model, accelerators,
-# resources, and workloads.
+# This example serves Gemma 4 E2B on NVIDIA B200s, as benchmarked with GKE.
 apiVersion: ray.io/v1
 kind: RayService
 metadata:
-  name: qwen-35-4b
+  name: ray-gemma4-e2b-it
 spec:
   serveConfigV2: |
     applications:
     - name: llm_app
       import_path: ray.serve.llm:build_openai_app
+      route_prefix: "/"
       args:
         llm_configs:
-            - model_loading_config:
-                model_id: qwen-3.5-4b
-                model_source: Qwen/Qwen3.5-4b
-              accelerator_type: L4
-              deployment_config:
-                num_replicas: 4
+          - model_loading_config:
+              model_id: gemma4-e2b-it
+              model_source: google/gemma-4-E2B-it
+            accelerator_type: B200
+            engine_kwargs:
+              enable_auto_tool_choice: true
+              # You may want to set a larger max model len to support caching
+              # longer context windows if needed.
+              max_model_len: 4096
+              reasoning_parser: gemma4
+              tensor_parallel_size: 1
+              tool_call_parser: gemma4
+            deployment_config:
+              num_replicas: 8  # Should match the number of GPUs available.
   rayClusterConfig:
     rayVersion: 2.56.0
     headGroupSpec:
@@ -37,15 +43,12 @@ spec:
       template:
         spec:
           containers:
-          - name: ray-head
+          - name: ray-node
             image: rayproject/ray-llm:2.56.0-py312-cu130
             resources:
-              limits:
-                memory: 8Gi
-                ephemeral-storage: 32Gi
               requests:
-                cpu: '2'
-                memory: 8Gi
+                cpu: '4'
+                memory: 16Gi
                 ephemeral-storage: 32Gi
             ports:
             - containerPort: 6379
@@ -71,14 +74,16 @@ spec:
                   name: hf-secret
                   key: hf_api_token
     workerGroupSpecs:
-    - replicas: 4
+    - replicas: 1
       groupName: gpu-group
       rayStartParams: {}
       template:
+        metadata:
         spec:
           containers:
           - name: llm
             image: rayproject/ray-llm:2.56.0-py312-cu130
+            imagePullPolicy: Always
             env:
             - name: RAY_SERVE_ENABLE_HA_PROXY
               value: '1'
@@ -95,12 +100,22 @@ spec:
                   key: hf_api_token
             resources:
               limits:
-                nvidia.com/gpu: '1'
-                ephemeral-storage: 24Gi
+                nvidia.com/gpu: '8'
               requests:
-                cpu: '6'
-                memory: 24Gi
-                nvidia.com/gpu: '1'
-                ephemeral-storage: 24Gi
+                nvidia.com/gpu: '8'
+                cpu: '128'
+                memory: 512Gi
+                ephemeral-storage: 256Gi
+            volumeMounts:
+            - mountPath: /dev/shm
+              name: dshm
           nodeSelector:
-            cloud.google.com/gke-accelerator: nvidia-l4
+            cloud.google.com/gke-accelerator: nvidia-b200
+          tolerations:
+          - key: nvidia.com/gpu
+            operator: Exists
+            effect: NoSchedule
+          volumes:
+          - name: dshm
+            emptyDir:
+              medium: Memory

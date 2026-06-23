@@ -3102,3 +3102,56 @@ func TestRayServiceFinalizer(t *testing.T) {
 		})
 	}
 }
+
+func TestHandleSuspendObservedGeneration(t *testing.T) {
+	ctx := context.Background()
+	reconciler := &RayServiceReconciler{}
+
+	t.Run("entering Suspending bumps observedGeneration on conditions", func(t *testing.T) {
+		rayService := &rayv1.RayService{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:       "rayservice",
+				Namespace:  "default",
+				Generation: 5,
+			},
+			Spec: rayv1.RayServiceSpec{Suspend: true},
+			Status: rayv1.RayServiceStatuses{
+				ObservedGeneration: 2,
+			},
+		}
+
+		_, err := reconciler.handleSuspend(ctx, rayService)
+		require.NoError(t, err)
+		assert.Equal(t, int64(5), rayService.Status.ObservedGeneration)
+
+		suspending := meta.FindStatusCondition(rayService.Status.Conditions, string(rayv1.RayServiceSuspending))
+		require.NotNil(t, suspending)
+		assert.Equal(t, metav1.ConditionTrue, suspending.Status)
+		assert.Equal(t, int64(5), suspending.ObservedGeneration)
+	})
+
+	t.Run("idle Suspended does not bump observedGeneration", func(t *testing.T) {
+		rayService := &rayv1.RayService{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:       "rayservice",
+				Namespace:  "default",
+				Generation: 9,
+			},
+			Spec: rayv1.RayServiceSpec{Suspend: true},
+			Status: rayv1.RayServiceStatuses{
+				ObservedGeneration: 4,
+				Conditions: []metav1.Condition{
+					{
+						Type:   string(rayv1.RayServiceSuspended),
+						Status: metav1.ConditionTrue,
+						Reason: string(rayv1.SuspendComplete),
+					},
+				},
+			},
+		}
+
+		_, err := reconciler.handleSuspend(ctx, rayService)
+		require.NoError(t, err)
+		assert.Equal(t, int64(4), rayService.Status.ObservedGeneration)
+	})
+}

@@ -17,6 +17,7 @@ COPY pkg/collector/ pkg/collector/
 COPY pkg/storage/ pkg/storage/
 COPY pkg/utils/ pkg/utils/
 COPY pkg/eventserver/ pkg/eventserver/
+COPY pkg/compression/ pkg/compression/
 
 # Build the collector binary.
 COPY Makefile Makefile
