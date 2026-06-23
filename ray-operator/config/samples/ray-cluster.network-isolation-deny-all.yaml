@@ -36,7 +36,7 @@ spec:
   networkIsolation:
     mode: DenyAll
     # Head rules: applied only to the head pod's NetworkPolicy.
-    # The base head policy already allows intra-cluster traffic, KubeRay operator
+    # The base head policy already allows intra-cluster traffic,
     # access to the dashboard port, and (for K8sJobMode RayJob-owned clusters)
     # the submitter pod.
     head:

@@ -52,7 +52,6 @@ func NewNetworkPolicyController(mgr manager.Manager) (*NetworkPolicyController, 
 func (r *NetworkPolicyController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := ctrl.LoggerFrom(ctx)
 
-	// Fetch the RayCluster instance
 	instance := &rayv1.RayCluster{}
 	if err := r.Get(ctx, req.NamespacedName, instance); err != nil {
 		if errors.IsNotFound(err) {
@@ -62,7 +61,6 @@ func (r *NetworkPolicyController) Reconcile(ctx context.Context, req ctrl.Reques
 		return ctrl.Result{}, err
 	}
 
-	// Check if RayCluster is being deleted
 	if instance.DeletionTimestamp != nil {
 		return ctrl.Result{}, nil
 	}
@@ -72,7 +70,6 @@ func (r *NetworkPolicyController) Reconcile(ctx context.Context, req ctrl.Reques
 		return ctrl.Result{}, nil
 	}
 
-	// Check if NetworkIsolation is configured
 	if instance.Spec.NetworkIsolation == nil {
 		logger.V(1).Info("NetworkIsolation not configured for RayCluster", "cluster", instance.Name, "namespace", instance.Namespace)
 		// If NetworkPolicies exist but NetworkIsolation is removed, clean them up
@@ -87,13 +84,11 @@ func (r *NetworkPolicyController) Reconcile(ctx context.Context, req ctrl.Reques
 		mode = *instance.Spec.NetworkIsolation.Mode
 	}
 
-	// Create or update head NetworkPolicy
 	headNetworkPolicy := r.buildHeadNetworkPolicy(instance, mode)
 	if err := r.createOrUpdateNetworkPolicy(ctx, instance, headNetworkPolicy); err != nil {
 		return ctrl.Result{}, err
 	}
 
-	// Create or update worker NetworkPolicy
 	workerNetworkPolicy := r.buildWorkerNetworkPolicy(instance, mode)
 	if err := r.createOrUpdateNetworkPolicy(ctx, instance, workerNetworkPolicy); err != nil {
 		return ctrl.Result{}, err
@@ -112,7 +107,6 @@ func (r *NetworkPolicyController) createOrUpdateNetworkPolicy(ctx context.Contex
 		return err
 	}
 
-	// Try to create the NetworkPolicy
 	if err := r.Create(ctx, networkPolicy); err != nil {
 		if errors.IsAlreadyExists(err) {
 			existing := &networkingv1.NetworkPolicy{}
