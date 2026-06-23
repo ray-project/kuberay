@@ -133,11 +133,17 @@ func BuildJobSubmitCommand(rayJobInstance *rayv1.RayJob, submissionMode rayv1.Jo
 	// In SidecarMode the submitter shares the head Pod's network namespace, so we
 	// probe localhost. In K8sJobMode the submitter runs in a separate Pod and must
 	// reach the dashboard through the head Service.
+	healthPath := utils.RayDashboardGCSHealthPath
+	healthWaitMsg := "Waiting for Ray Dashboard GCS to become healthy at "
+	if submissionMode == rayv1.SidecarMode && features.Enabled(features.SidecarWaitForHeadSchedulable) {
+		healthPath = utils.RayNodeSchedulableHealthPath
+		healthWaitMsg = "Waiting for Ray head node to become schedulable at "
+	}
 	var healthURL string
 	if submissionMode == rayv1.SidecarMode {
-		healthURL = fmt.Sprintf("http://localhost:%d/%s", port, utils.RayDashboardGCSHealthPath)
+		healthURL = fmt.Sprintf("http://localhost:%d/%s", port, healthPath)
 	} else {
-		healthURL = address + "/" + utils.RayDashboardGCSHealthPath
+		healthURL = address + "/" + healthPath
 	}
 	rayDashboardGCSHealthCommand := fmt.Sprintf(
 		utils.BasePythonHealthCommand,
@@ -147,7 +153,7 @@ func BuildJobSubmitCommand(rayJobInstance *rayv1.RayJob, submissionMode rayv1.Jo
 
 	waitLoop := []string{
 		"until", rayDashboardGCSHealthCommand, ">/dev/null", "2>&1", ";",
-		"do", "echo", strconv.Quote("Waiting for Ray Dashboard GCS to become healthy at " + address + " ..."), ";", "sleep", "2", ";", "done", ";",
+		"do", "echo", strconv.Quote(healthWaitMsg + address + " ..."), ";", "sleep", "2", ";", "done", ";",
 	}
 	cmd = append(cmd, waitLoop...)
 

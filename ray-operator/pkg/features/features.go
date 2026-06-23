@@ -56,6 +56,13 @@ const (
 	// Requires Kubernetes v1.35+ since it supports ContainerRestartPolicy by default starting in v1.35 and Ray v2.54.0+.
 	SidecarSubmitterRestart featuregate.Feature = "SidecarSubmitterRestart"
 
+	// owner: @tmrtmrtmrtmr
+	// rep: N/A
+	// alpha: v1.7
+	//
+	// Makes the SidecarMode submitter wait until the head node is schedulable before submitting.
+	SidecarWaitForHeadSchedulable featuregate.Feature = "SidecarWaitForHeadSchedulable"
+
 	// owner: @chipspeak @kryanbeane
 	// rep: N/A
 	// alpha: v1.7
@@ -69,13 +76,14 @@ func init() {
 }
 
 var defaultFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
-	RayClusterStatusConditions:   {Default: true, PreRelease: featuregate.Beta},
-	RayJobDeletionPolicy:         {Default: true, PreRelease: featuregate.Beta},
-	RayMultiHostIndexing:         {Default: true, PreRelease: featuregate.Beta},
-	RayServiceIncrementalUpgrade: {Default: false, PreRelease: featuregate.Alpha},
-	RayCronJob:                   {Default: false, PreRelease: featuregate.Alpha},
-	SidecarSubmitterRestart:      {Default: false, PreRelease: featuregate.Alpha},
-	RayClusterNetworkIsolation:   {Default: false, PreRelease: featuregate.Alpha},
+	RayClusterStatusConditions:    {Default: true, PreRelease: featuregate.Beta},
+	RayJobDeletionPolicy:          {Default: true, PreRelease: featuregate.Beta},
+	RayMultiHostIndexing:          {Default: true, PreRelease: featuregate.Beta},
+	RayServiceIncrementalUpgrade:  {Default: false, PreRelease: featuregate.Alpha},
+	RayCronJob:                    {Default: false, PreRelease: featuregate.Alpha},
+	SidecarSubmitterRestart:       {Default: false, PreRelease: featuregate.Alpha},
+	SidecarWaitForHeadSchedulable: {Default: false, PreRelease: featuregate.Alpha},
+	RayClusterNetworkIsolation:    {Default: false, PreRelease: featuregate.Alpha},
 }
 
 // SetFeatureGateDuringTest is a helper method to override feature gates in tests.
