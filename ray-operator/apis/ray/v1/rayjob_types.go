@@ -340,9 +340,8 @@ type RayJobStatus struct {
 	// RayClusterStatus is the status of the RayCluster running the job.
 	// +optional
 	RayClusterStatus RayClusterStatus `json:"rayClusterStatus,omitempty"`
-	// JobStatusCheckFailureStartTime is set on the first failure to observe job status via the
-	// Ray dashboard (GetJobInfo, or SubmitJob in HTTP mode). Cleared on a successful GetJobInfo.
-	// Used with RAYJOB_STATUS_CHECK_TIMEOUT_SECONDS to enforce a cumulative timeout window.
+	// JobStatusCheckFailureStartTime is set when job status checks via the Ray Dashboard started failing.
+    // Reset on a successful check. JobDeploymentStatus transitions to 'Failed' after RAYJOB_STATUS_CHECK_TIMEOUT_SECONDS
 	// +optional
 	JobStatusCheckFailureStartTime *metav1.Time `json:"jobStatusCheckFailureStartTime,omitempty"`
 
