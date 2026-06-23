@@ -377,13 +377,6 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 		}
 
-		// Clean up batch scheduler resources (e.g. zero out the Volcano PodGroup) now that the
-		// RayCluster is gone. The PodGroup is owned by the RayJob, not the RayCluster, so it is not
-		// garbage-collected when the cluster is deleted; without this it keeps holding queue
-		// resources while the RayJob is suspended. Must run before Status.RayClusterName is reset
-		// below, since CleanupOnCompletion relies on it to locate the PodGroup. Requeue on failure
-		// so the cleanup is retried while still in the Suspending status, rather than leaking the
-		// PodGroup once the status transitions to Suspended (which is no longer requeued).
 		if err := r.cleanupBatchSchedulerResources(ctx, rayJobInstance); err != nil {
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 		}
@@ -415,7 +408,11 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		// The RayJob is already suspended, we should not requeue it.
 		return ctrl.Result{}, nil
 	case rayv1.JobDeploymentStatusComplete, rayv1.JobDeploymentStatusFailed:
-		defer r.batchSchedulerOnCompletion(ctx, rayJobInstance)
+		defer func() {
+			if err := r.cleanupBatchSchedulerResources(ctx, rayJobInstance); err != nil {
+				logger.Error(err, "Failed to cleanup batch scheduler resources")
+			}
+		}()
 
 		// The RayJob has reached a terminal state. Handle the cleanup and deletion logic.
 		// If the RayJob uses an existing RayCluster, we must not delete it.
@@ -1563,8 +1560,7 @@ func (r *RayJobReconciler) isDeletionActionCompleted(ctx context.Context, rayJob
 
 // cleanupBatchSchedulerResources cleans up batch scheduler resources (e.g., zeroes out the Volcano
 // PodGroup) for the given RayJob and returns an error if the cleanup failed. Callers that must
-// guarantee the resources are released (e.g., suspend) should requeue on error; callers handling a
-// terminal state can swallow the error via batchSchedulerOnCompletion.
+// guarantee the resources are released (e.g., suspend) should requeue on error.
 func (r *RayJobReconciler) cleanupBatchSchedulerResources(ctx context.Context, rayJobInstance *rayv1.RayJob) error {
 	if r.options.BatchSchedulerManager == nil {
 		return nil
@@ -1586,15 +1582,6 @@ func (r *RayJobReconciler) cleanupBatchSchedulerResources(ctx context.Context, r
 			"Cleaned up batch scheduler resources for RayJob %s/%s", rayJobInstance.Namespace, rayJobInstance.Name)
 	}
 	return nil
-}
-
-// batchSchedulerOnCompletion performs cleanup of batch scheduler resources when a RayJob reaches
-// complete/failed status. Cleanup failures are logged but not propagated, since a terminal RayJob
-// will not be requeued.
-func (r *RayJobReconciler) batchSchedulerOnCompletion(ctx context.Context, rayJobInstance *rayv1.RayJob) {
-	if err := r.cleanupBatchSchedulerResources(ctx, rayJobInstance); err != nil {
-		ctrl.LoggerFrom(ctx).Error(err, "Failed to cleanup batch scheduler resources")
-	}
 }
 
 // selectMostImpactfulRule finds the rule with the most destructive policy from a given list.
