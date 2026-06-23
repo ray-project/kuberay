@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 
@@ -2832,4 +2833,123 @@ func TestValidateRayClusterSpec_Auth(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestValidateNetworkIsolation(t *testing.T) {
+	tests := []struct {
+		ni          *rayv1.NetworkIsolationConfig
+		name        string
+		errorMsg    string
+		expectError bool
+	}{
+		{
+			name: "DenyAllEgress with head IngressRules set returns error",
+			ni: &rayv1.NetworkIsolationConfig{
+				Mode: ptr.To(rayv1.NetworkIsolationDenyAllEgress),
+				Head: &rayv1.NetworkPolicyRules{
+					IngressRules: []networkingv1.NetworkPolicyIngressRule{{}},
+				},
+			},
+			expectError: true,
+			errorMsg:    `networkIsolation.head.ingressRules cannot be set when mode is "DenyAllEgress" (ingress is not restricted)`,
+		},
+		{
+			name: "DenyAllEgress with worker IngressRules set returns error",
+			ni: &rayv1.NetworkIsolationConfig{
+				Mode: ptr.To(rayv1.NetworkIsolationDenyAllEgress),
+				Worker: &rayv1.NetworkPolicyRules{
+					IngressRules: []networkingv1.NetworkPolicyIngressRule{{}},
+				},
+			},
+			expectError: true,
+			errorMsg:    `networkIsolation.worker.ingressRules cannot be set when mode is "DenyAllEgress" (ingress is not restricted)`,
+		},
+		{
+			name: "DenyAllIngress with head EgressRules set returns error",
+			ni: &rayv1.NetworkIsolationConfig{
+				Mode: ptr.To(rayv1.NetworkIsolationDenyAllIngress),
+				Head: &rayv1.NetworkPolicyRules{
+					EgressRules: []networkingv1.NetworkPolicyEgressRule{{}},
+				},
+			},
+			expectError: true,
+			errorMsg:    `networkIsolation.head.egressRules cannot be set when mode is "DenyAllIngress" (egress is not restricted)`,
+		},
+		{
+			name: "DenyAllIngress with worker EgressRules set returns error",
+			ni: &rayv1.NetworkIsolationConfig{
+				Mode: ptr.To(rayv1.NetworkIsolationDenyAllIngress),
+				Worker: &rayv1.NetworkPolicyRules{
+					EgressRules: []networkingv1.NetworkPolicyEgressRule{{}},
+				},
+			},
+			expectError: true,
+			errorMsg:    `networkIsolation.worker.egressRules cannot be set when mode is "DenyAllIngress" (egress is not restricted)`,
+		},
+		{
+			name: "DenyAll with both head and worker rules is valid",
+			ni: &rayv1.NetworkIsolationConfig{
+				Mode: ptr.To(rayv1.NetworkIsolationDenyAll),
+				Head: &rayv1.NetworkPolicyRules{
+					IngressRules: []networkingv1.NetworkPolicyIngressRule{{}},
+					EgressRules:  []networkingv1.NetworkPolicyEgressRule{{}},
+				},
+				Worker: &rayv1.NetworkPolicyRules{
+					IngressRules: []networkingv1.NetworkPolicyIngressRule{{}},
+					EgressRules:  []networkingv1.NetworkPolicyEgressRule{{}},
+				},
+			},
+			expectError: false,
+		},
+		{
+			name:        "nil NetworkIsolation is valid",
+			ni:          nil,
+			expectError: false,
+		},
+		{
+			name: "mode only with no head or worker rules is valid",
+			ni: &rayv1.NetworkIsolationConfig{
+				Mode: ptr.To(rayv1.NetworkIsolationDenyAll),
+			},
+			expectError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			spec := &rayv1.RayClusterSpec{NetworkIsolation: tt.ni}
+			err := validateNetworkIsolation(spec)
+			if tt.expectError {
+				require.Error(t, err)
+				assert.EqualError(t, err, tt.errorMsg)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestValidateRayClusterSpec_NetworkIsolationRequiresFeatureGate(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.RayClusterNetworkIsolation, false)
+	cluster := &rayv1.RayCluster{
+		Spec: rayv1.RayClusterSpec{
+			NetworkIsolation: &rayv1.NetworkIsolationConfig{
+				Mode: ptr.To(rayv1.NetworkIsolationDenyAll),
+			},
+			HeadGroupSpec: rayv1.HeadGroupSpec{
+				Template: podTemplateSpec(nil, nil),
+			},
+			WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+				{
+					GroupName:   "worker-group",
+					Template:    podTemplateSpec(nil, nil),
+					MinReplicas: ptr.To(int32(1)),
+					MaxReplicas: ptr.To(int32(1)),
+				},
+			},
+		},
+	}
+	err := ValidateRayClusterSpec(&cluster.Spec, cluster.Annotations)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "RayClusterNetworkIsolation")
 }
