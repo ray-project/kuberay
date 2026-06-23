@@ -106,7 +106,7 @@ test-sampleyaml: manifests fmt vet
 
 test-e2e-rayjob: WHAT ?= ./test/e2erayjob
 test-e2e-rayjob: manifests fmt vet ## Run e2e RayJob tests.
-	go test -timeout 45m -v $(WHAT)
+	go test -timeout 30m -v $(WHAT)
 
 test-e2e-kubernetes-was-v1alpha2: WHAT ?= ./test/e2ekuberneteswas
 test-e2e-kubernetes-was-v1alpha2: manifests fmt vet ## Run e2e Kubernetes WAS v1alpha2 tests.
