@@ -12,6 +12,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
 	"k8s.io/utils/ptr"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
@@ -38,8 +39,8 @@ func setGatewayServiceType(test Test, g *WithT, namespace, gatewayName string) {
 
 	LogWithTimestamp(test.T(), "Annotating Gateway %s/%s with %s=%s",
 		namespace, gatewayName, gatewayServiceTypeAnnotation, e2eGatewayServiceType)
-	patch := []byte(fmt.Sprintf(`{"metadata":{"annotations":{%q:%q}}}`,
-		gatewayServiceTypeAnnotation, e2eGatewayServiceType))
+	patch := fmt.Appendf(nil, `{"metadata":{"annotations":{%q:%q}}}`,
+		gatewayServiceTypeAnnotation, e2eGatewayServiceType)
 	g.Eventually(func() error {
 		_, err := test.Client().Gateway().GatewayV1().Gateways(namespace).
 			Patch(test.Ctx(), gatewayName, types.MergePatchType, patch, metav1.PatchOptions{})
