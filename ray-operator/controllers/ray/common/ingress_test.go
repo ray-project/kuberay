@@ -108,6 +108,10 @@ func TestBuildIngressForHeadService(t *testing.T) {
 	for _, path := range paths {
 		assert.Equal(t, headSvcName, path.Backend.Service.Name)
 	}
+
+	// default path and pathType should work out of the box (no rewrite/regex required)
+	assert.Equal(t, "/", paths[0].Path)
+	assert.Equal(t, networkingv1.PathTypePrefix, *paths[0].PathType)
 }
 
 func TestBuildIngressForHeadServiceWithIngressFields(t *testing.T) {
