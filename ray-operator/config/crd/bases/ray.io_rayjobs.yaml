@@ -4680,6 +4680,10 @@ spec:
                           default: 1
                           format: int32
                           type: integer
+                        priority:
+                          default: 0
+                          format: int32
+                          type: integer
                         rayStartParams:
                           additionalProperties:
                             type: string
