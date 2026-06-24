@@ -41,12 +41,12 @@ func BuildIngressForHeadService(ctx context.Context, cluster rayv1.RayCluster) (
 
 	ingressSpec := cluster.Spec.HeadGroupSpec.IngressSpec
 
-	pathType := networkingv1.PathTypeExact
+	pathType := networkingv1.PathTypePrefix
 	if ingressSpec != nil && ingressSpec.PathType != nil {
 		pathType = networkingv1.PathType(*ingressSpec.PathType)
 	}
 
-	path := "/" + cluster.Name + "/(.*)"
+	path := "/"
 	if ingressSpec != nil && ingressSpec.Path != nil {
 		path = *ingressSpec.Path
 	}
