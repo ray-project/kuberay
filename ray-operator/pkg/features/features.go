@@ -63,6 +63,10 @@ const (
 	// Enables NetworkPolicy-based network isolation for RayClusters (spec.networkIsolation).
 	RayClusterNetworkIsolation featuregate.Feature = "RayClusterNetworkIsolation"
 
+	// owner: @chipspeak @kryanbeane
+	// rep: N/A
+	// alpha: v1.7
+	//
 	// Enables mTLS (spec.tlsOptions) for RayClusters via cert-manager.
 	RayClusterMTLS featuregate.Feature = "RayClusterMTLS"
 )

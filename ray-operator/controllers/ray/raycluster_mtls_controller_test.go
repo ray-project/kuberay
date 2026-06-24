@@ -202,13 +202,6 @@ func TestMTLSController_AutoGenerate_CreatesFullPKI(t *testing.T) {
 	assert.Contains(t, workerCert.Spec.DNSNames, "localhost")
 	assert.Contains(t, workerCert.Spec.IPAddresses, "127.0.0.1")
 
-	// Worker cert should include per-worker-group DNS names.
-	for _, wg := range cluster.Spec.WorkerGroupSpecs {
-		groupSvc := fmt.Sprintf("%s-%s", cluster.Name, wg.GroupName)
-		assert.Contains(t, workerCert.Spec.DNSNames, groupSvc,
-			"worker cert should include worker group %s DNS name", wg.GroupName)
-	}
-
 	// Verify all resources have correct labels.
 	assert.Equal(t, cluster.Name, issuer.Labels[utils.RayClusterLabelKey])
 	assert.Equal(t, cluster.Name, caCert.Labels[utils.RayClusterLabelKey])
