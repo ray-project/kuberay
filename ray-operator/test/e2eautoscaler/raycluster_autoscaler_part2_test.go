@@ -2,7 +2,6 @@ package e2eautoscaler
 
 import (
 	"context"
-	"fmt"
 	"slices"
 	"testing"
 	"time"
@@ -11,12 +10,10 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
-	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	rayv1ac "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/ray/v1"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
@@ -604,20 +601,27 @@ func TestRayClusterNoDriverTimeoutTermination(t *testing.T) {
 		// Create a namespace
 		namespace := test.NewTestNamespace()
 
+		// Use a Ray image that supports no-driver cluster termination.
+		rayImage := "rayproject/ray:2.56.0.5d2c4e-py310"
+		headTemplate := tc.HeadPodTemplateGetter()
+		headTemplate.Spec.Containers[0].WithImage(rayImage)
+		workerTemplate := tc.WorkerPodTemplateGetter()
+		workerTemplate.Spec.Containers[0].WithImage(rayImage)
+
 		rayClusterSpecAC := rayv1ac.RayClusterSpec().
 			WithEnableInTreeAutoscaling(true).
-			WithRayVersion(GetRayVersion()).
+			WithRayVersion("2.56.0").
 			WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
 				WithRayStartParams(map[string]string{"num-cpus": "0"}).
-				WithTemplate(tc.HeadPodTemplateGetter())).
+				WithTemplate(headTemplate)).
 			WithWorkerGroupSpecs(rayv1ac.WorkerGroupSpec().
 				WithReplicas(0).
 				WithMinReplicas(0).
 				WithGroupName("small-group").
 				WithRayStartParams(map[string]string{"num-cpus": "1"}).
-				WithTemplate(tc.WorkerPodTemplateGetter())).
+				WithTemplate(workerTemplate)).
 			WithAutoscalerOptions(rayv1ac.AutoscalerOptions().
-				WithNoDriverTimeoutSeconds(3600))
+				WithNoDriverTimeoutSeconds(30))
 		rayClusterAC := rayv1ac.RayCluster("ray-cluster-no-driver", namespace.Name).
 			WithSpec(rayClusterSpecAC)
 
@@ -629,15 +633,10 @@ func TestRayClusterNoDriverTimeoutTermination(t *testing.T) {
 		g.Eventually(RayCluster(test, rayCluster.Namespace, rayCluster.Name), TestTimeoutMedium).
 			Should(gomega.WithTransform(RayClusterState, gomega.Equal(rayv1.Ready)))
 
-		// Simulate the v2 autoscaler reporting no driver attached past the timeout
-		// KubeRay e2e covers the operator's behavior
-		LogWithTimestamp(test.T(), "Setting %s annotation on RayCluster %s/%s", utils.NoDriverTTLExpiredAnnotationKey, rayCluster.Namespace, rayCluster.Name)
-		patch := fmt.Appendf(nil, `{"metadata":{"annotations":{%q:"true"}}}`, utils.NoDriverTTLExpiredAnnotationKey)
-		_, err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Patch(test.Ctx(), rayCluster.Name, types.MergePatchType, patch, metav1.PatchOptions{})
-		g.Expect(err).NotTo(gomega.HaveOccurred())
+		// With no driver ever attached, the v2 autoscaler sets the ray.io/no-driver-ttl-expired
+		// annotation after noDriverTimeoutSeconds and the operator deletes the RayCluster.
+		LogWithTimestamp(test.T(), "Waiting for RayCluster %s/%s to be deleted after noDriverTimeoutSeconds", rayCluster.Namespace, rayCluster.Name)
 
-		// The operator observes the annotation and deletes the RayCluster.
-		LogWithTimestamp(test.T(), "Waiting for RayCluster %s/%s to be deleted", rayCluster.Namespace, rayCluster.Name)
 		g.Eventually(func(gg gomega.Gomega) {
 			_, err := GetRayCluster(test, rayCluster.Namespace, rayCluster.Name)
 			gg.Expect(errors.IsNotFound(err)).To(gomega.BeTrue())

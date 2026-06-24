@@ -734,6 +734,7 @@ func TestValidateRayClusterSpec_NoDriverTimeoutSeconds(t *testing.T) {
 	createSpec := func() rayv1.RayClusterSpec {
 		return rayv1.RayClusterSpec{
 			EnableInTreeAutoscaling: new(true),
+			RayVersion:              "2.56.0",
 			HeadGroupSpec: rayv1.HeadGroupSpec{
 				Template: podTemplateSpec(nil, nil),
 			},
@@ -806,6 +807,17 @@ func TestValidateRayClusterSpec_NoDriverTimeoutSeconds(t *testing.T) {
 				return s
 			}(),
 			expectedErr: "autoscalerOptions.noDriverTimeoutSeconds is only supported by autoscaler v2, but autoscaler v1 is configured",
+		},
+		"Invalid: noDriverTimeoutSeconds with Ray version below minimum": {
+			spec: func() rayv1.RayClusterSpec {
+				s := createSpec()
+				s.RayVersion = "2.55.0"
+				s.AutoscalerOptions = &rayv1.AutoscalerOptions{
+					NoDriverTimeoutSeconds: new(int32(600)),
+				}
+				return s
+			}(),
+			expectedErr: "autoscalerOptions.noDriverTimeoutSeconds requires minimum Ray version 2.56.0, got 2.55.0",
 		},
 	}
 

@@ -246,6 +246,16 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 		if IsAutoscalingV1Enabled(spec) {
 			return fmt.Errorf("autoscalerOptions.noDriverTimeoutSeconds is only supported by autoscaler v2, but autoscaler v1 is configured")
 		}
+
+		rayVersion, err := version.ParseGeneric(spec.RayVersion)
+		if err != nil {
+			return fmt.Errorf("autoscalerOptions.noDriverTimeoutSeconds is set but RayVersion format is invalid: %s, %w", spec.RayVersion, err)
+		}
+		// Require minimum Ray version 2.56.0
+		minVersion := version.MustParseGeneric("2.56.0")
+		if rayVersion.LessThan(minVersion) {
+			return fmt.Errorf("autoscalerOptions.noDriverTimeoutSeconds requires minimum Ray version 2.56.0, got %s", spec.RayVersion)
+		}
 	}
 
 	// When autoscalerOptions.args is set, the user's custom args can reference the
