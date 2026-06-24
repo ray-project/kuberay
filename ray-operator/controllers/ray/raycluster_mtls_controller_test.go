@@ -137,12 +137,12 @@ func TestMTLSController_AutoGenerate_CreatesFullPKI(t *testing.T) {
 	// First call adds the mTLS finalizer and requeues.
 	result, err := r.Reconcile(ctx, req)
 	require.NoError(t, err)
-	assert.NotZero(t, result.RequeueAfter, "should requeue after adding finalizer")
+	assert.Equal(t, mtlsDefaultRequeueDuration, result.RequeueAfter, "should requeue after adding finalizer")
 
 	// Second call creates resources but certs aren't ready yet.
 	result, err = r.Reconcile(ctx, req)
 	require.NoError(t, err)
-	assert.NotZero(t, result.RequeueAfter, "should requeue when certs not ready")
+	assert.Equal(t, mtlsDefaultRequeueDuration, result.RequeueAfter, "should requeue when certs not ready")
 
 	// Simulate cert-manager marking certificates as ready.
 	markMTLSCertificatesReady(ctx, t, r, cluster)
@@ -390,10 +390,10 @@ func TestMTLSController_CertReadinessBlocksReconciliation(t *testing.T) {
 	ctx := context.Background()
 	req := ctrl.Request{NamespacedName: types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace}}
 
-	// First reconcile adds the finalizer.
+	// First reconcile adds the finalizer and requeues.
 	result, err := r.Reconcile(ctx, req)
 	require.NoError(t, err)
-	assert.NotZero(t, result.RequeueAfter, "should requeue after adding finalizer")
+	assert.Equal(t, mtlsDefaultRequeueDuration, result.RequeueAfter, "should requeue after adding finalizer")
 
 	// Second reconcile creates resources but should requeue (certs not ready).
 	result, err = r.Reconcile(ctx, req)

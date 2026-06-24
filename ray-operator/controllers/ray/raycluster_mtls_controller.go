@@ -117,7 +117,7 @@ func (r *RayClusterMTLSController) Reconcile(ctx context.Context, req ctrl.Reque
 			}
 			logger.Info("Added mTLS finalizer for auto-generated secret cleanup")
 			// Re-reconcile after the finalizer update takes effect.
-			return ctrl.Result{Requeue: true}, nil
+			return ctrl.Result{RequeueAfter: mtlsDefaultRequeueDuration}, nil
 		}
 	}
 
