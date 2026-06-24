@@ -176,6 +176,34 @@ func GetWorkerPods(t Test, rayCluster *rayv1.RayCluster) ([]corev1.Pod, error) {
 	return pods.Items, err
 }
 
+func PodPhase(pod corev1.Pod) corev1.PodPhase {
+	return pod.Status.Phase
+}
+
+func RateLimitedReplicas(t Test, rayCluster *rayv1.RayCluster, limit int32) bool {
+	// The number of new launches must be less than or equal to the size of the RayCluster.
+	// The minimum number of pending launches is 5 regardless of RayCluster size and upscaling_speed.
+	var initialScale int32
+	g := NewWithT(t.T())
+
+	// Wait for the autoscaler to make its FIRST scaling decision (replicas > 0)
+	g.Eventually(func() int32 {
+		cluster, err := GetRayCluster(t, rayCluster.Namespace, rayCluster.Name)
+		if err != nil {
+			return 0
+		}
+
+		replicas := GetRayClusterWorkerGroupReplicaSum(cluster)
+		if replicas > 0 {
+			initialScale = replicas
+		}
+		return replicas
+	}, TestTimeoutMedium).Should(BeNumerically(">", 0))
+
+	// Return true if the requested batch was properly rate-limited
+	return initialScale <= limit
+}
+
 func GetAllPods(t Test, rayCluster *rayv1.RayCluster) ([]corev1.Pod, error) {
 	pods, err := t.Client().Core().CoreV1().Pods(rayCluster.Namespace).List(
 		t.Ctx(),
