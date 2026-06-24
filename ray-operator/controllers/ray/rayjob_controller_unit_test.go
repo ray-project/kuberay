@@ -948,7 +948,7 @@ func TestBatchSchedulerOnCompletionCalledWhenRayJobComplete(t *testing.T) {
 // cleaned up when a RayJob is suspended/retrying. Unlike the terminal (Complete/Failed) path, the
 // suspend path must requeue on cleanup failure rather than swallow the error, otherwise the PodGroup
 // would leak once the status transitions to Suspended (which is no longer requeued).
-func TestBatchSchedulerCleanupCalledWhenRayJobSuspending(t *testing.T) {
+func TestBatchSchedulerCleanupCalledWhenRayJobSuspendingOrRetrying(t *testing.T) {
 	tests := []struct {
 		name                string
 		jobDeploymentStatus rayv1.JobDeploymentStatus
@@ -976,6 +976,14 @@ func TestBatchSchedulerCleanupCalledWhenRayJobSuspending(t *testing.T) {
 			name:                "Suspending - cleanup fails, requeues and stays Suspending",
 			jobDeploymentStatus: rayv1.JobDeploymentStatusSuspending,
 			expectedStatus:      rayv1.JobDeploymentStatusSuspending,
+			cleanupErr:          errors.New("cleanup failed"),
+			expectReconcileErr:  true,
+			expectCleanupEvent:  string(utils.FailedToCleanupBatchScheduler),
+		},
+		{
+			name:                "Retrying - cleanup fails, requeues and stays Retrying",
+			jobDeploymentStatus: rayv1.JobDeploymentStatusRetrying,
+			expectedStatus:      rayv1.JobDeploymentStatusRetrying,
 			cleanupErr:          errors.New("cleanup failed"),
 			expectReconcileErr:  true,
 			expectCleanupEvent:  string(utils.FailedToCleanupBatchScheduler),
@@ -1050,12 +1058,12 @@ func TestBatchSchedulerCleanupCalledWhenRayJobSuspending(t *testing.T) {
 				},
 			})
 			if tc.expectReconcileErr {
-				require.Error(t, err, "Reconcile should requeue with an error when cleanup fails during suspend")
+				require.Error(t, err, "Reconcile should requeue with an error when cleanup fails during suspend/retry")
 			} else {
 				require.NoError(t, err)
 			}
 
-			assert.True(t, fakeScheduler.cleanupCalled, "CleanupOnCompletion should have been called when RayJob is in %s status", tc.jobDeploymentStatus)
+			require.True(t, fakeScheduler.cleanupCalled, "CleanupOnCompletion should have been called when RayJob is in %s status", tc.jobDeploymentStatus)
 			assert.Equal(t, rayJob.Name, fakeScheduler.cleanupObject.GetName(), "CleanupOnCompletion should receive the correct RayJob object")
 
 			updated := &rayv1.RayJob{}
