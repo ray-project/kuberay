@@ -260,30 +260,11 @@ _Appears in:_
 | `template` _[PodTemplateSpec](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#podtemplatespec-v1-core)_ | Template is the exact pod template used in K8s deployments, statefulsets, etc. |  |  |
 | `headService` _[Service](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#service-v1-core)_ | HeadService is the Kubernetes service of the head pod. |  |  |
 | `enableIngress` _boolean_ | EnableIngress indicates whether operator should create ingress object for head service or not. |  |  |
-| `ingressConfig` _[HeadIngressSpec](#headingressspec)_ | IngressConfig specifies optional ingress configuration for the head service dashboard. |  |  |
+| `ingressSpec` _[IngressSpec](#ingressspec)_ | IngressSpec specifies optional ingress configuration for the head service. |  |  |
 | `resources` _object (keys:string, values:string)_ | Resources specifies the resource quantities for the head group.<br />These values override the resources passed to `rayStartParams` for the group, but<br />have no effect on the resources set at the K8s Pod container level. |  |  |
 | `labels` _object (keys:string, values:string)_ | Labels specifies the Ray node labels for the head group.<br />These labels will also be added to the Pods of this head group and override the `--labels`<br />argument passed to `rayStartParams`. |  |  |
 | `rayStartParams` _object (keys:string, values:string)_ | RayStartParams are the params of the start command: node-manager-port, object-store-memory, ... |  |  |
 | `serviceType` _[ServiceType](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#servicetype-v1-core)_ | ServiceType is Kubernetes service type of the head service. it will be used by the workers to connect to the head pod |  |  |
-
-
-#### HeadIngressSpec
-
-
-
-HeadIngressSpec defines the host, path, and TLS configuration for the ingress generated for the head group.
-
-
-
-_Appears in:_
-- [HeadGroupSpec](#headgroupspec)
-
-| Field | Description | Default | Validation |
-| --- | --- | --- | --- |
-| `host` _string_ | Host sets rules[0].host on the generated ingress. |  |  |
-| `path` _string_ | Path sets rules[0].http.paths[0].path on the generated ingress. |  |  |
-| `pathType` _[IngressPathType](#ingresspathtype)_ | PathType sets rules[0].http.paths[0].pathType on the generated ingress. |  | Enum: [Exact Prefix ImplementationSpecific] <br /> |
-| `tls` _[IngressTLS](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#ingresstls-v1-networking) array_ | TLS sets spec.tls entries on the generated ingress. |  |  |
 
 
 #### IngressPathType
@@ -296,13 +277,32 @@ _Validation:_
 - Enum: [Exact Prefix ImplementationSpecific]
 
 _Appears in:_
-- [HeadIngressSpec](#headingressspec)
+- [IngressSpec](#ingressspec)
 
 | Field | Description |
 | --- | --- |
 | `Exact` |  |
 | `Prefix` |  |
 | `ImplementationSpecific` |  |
+
+
+#### IngressSpec
+
+
+
+IngressSpec defines the host, path, and TLS configuration for the ingress generated for the head group.
+
+
+
+_Appears in:_
+- [HeadGroupSpec](#headgroupspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `host` _string_ | Host sets rules[0].host on the generated ingress. |  |  |
+| `path` _string_ | Path sets rules[0].http.paths[0].path on the generated ingress. |  |  |
+| `pathType` _[IngressPathType](#ingresspathtype)_ | PathType sets rules[0].http.paths[0].pathType on the generated ingress. |  | Enum: [Exact Prefix ImplementationSpecific] <br /> |
+| `tls` _[IngressTLS](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#ingresstls-v1-networking) array_ | TLS sets spec.tls entries on the generated ingress. |  |  |
 
 
 

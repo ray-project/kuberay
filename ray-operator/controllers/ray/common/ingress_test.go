@@ -116,7 +116,7 @@ func TestBuildIngressForHeadServiceWithIngressFields(t *testing.T) {
 	pathType := rayv1.IngressPathTypePrefix
 
 	cluster := instanceWithIngressEnabled.DeepCopy()
-	cluster.Spec.HeadGroupSpec.IngressConfig = &rayv1.HeadIngressSpec{
+	cluster.Spec.HeadGroupSpec.IngressSpec = &rayv1.IngressSpec{
 		Host:     &host,
 		Path:     &path,
 		PathType: &pathType,
