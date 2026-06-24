@@ -283,7 +283,7 @@ _Appears in:_
 | `host` _string_ | Host sets rules[0].host on the generated ingress. |  |  |
 | `path` _string_ | Path sets rules[0].http.paths[0].path on the generated ingress. |  |  |
 | `pathType` _[IngressPathType](#ingresspathtype)_ | PathType sets rules[0].http.paths[0].pathType on the generated ingress. |  | Enum: [Exact Prefix ImplementationSpecific] <br /> |
-| `tls` _[IngressTLSConfig](#ingresstlsconfig) array_ | TLS sets spec.tls entries on the generated ingress. |  |  |
+| `tls` _[IngressTLS](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#ingresstls-v1-networking) array_ | TLS sets spec.tls entries on the generated ingress. |  |  |
 
 
 #### IngressPathType
@@ -303,23 +303,6 @@ _Appears in:_
 | `Exact` |  |
 | `Prefix` |  |
 | `ImplementationSpecific` |  |
-
-
-#### IngressTLSConfig
-
-
-
-IngressTLSConfig defines a TLS entry for the generated ingress.
-
-
-
-_Appears in:_
-- [HeadIngressSpec](#headingressspec)
-
-| Field | Description | Default | Validation |
-| --- | --- | --- | --- |
-| `hosts` _string array_ | Hosts is a list of hosts included in the TLS certificate. |  |  |
-| `secretName` _string_ | SecretName is the name of the secret used to terminate TLS. |  |  |
 
 
 

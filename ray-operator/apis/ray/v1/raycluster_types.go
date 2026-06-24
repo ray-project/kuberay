@@ -247,17 +247,7 @@ type HeadIngressSpec struct {
 	PathType *IngressPathType `json:"pathType,omitempty"`
 	// TLS sets spec.tls entries on the generated ingress.
 	// +optional
-	TLS []IngressTLSConfig `json:"tls,omitempty"`
-}
-
-// IngressTLSConfig defines a TLS entry for the generated ingress.
-type IngressTLSConfig struct {
-	// Hosts is a list of hosts included in the TLS certificate.
-	// +optional
-	Hosts []string `json:"hosts,omitempty"`
-	// SecretName is the name of the secret used to terminate TLS.
-	// +optional
-	SecretName string `json:"secretName,omitempty"`
+	TLS []networkingv1.IngressTLS `json:"tls,omitempty"`
 }
 
 // WorkerGroupSpec are the specs for the worker pods

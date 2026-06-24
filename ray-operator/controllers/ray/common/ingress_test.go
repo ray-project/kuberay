@@ -120,7 +120,7 @@ func TestBuildIngressForHeadServiceWithIngressFields(t *testing.T) {
 		Host:     &host,
 		Path:     &path,
 		PathType: &pathType,
-		TLS: []rayv1.IngressTLSConfig{
+		TLS: []networkingv1.IngressTLS{
 			{
 				Hosts:      []string{host},
 				SecretName: "ray-tls",
