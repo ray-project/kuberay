@@ -26,6 +26,10 @@ type WorkerGroupSpecApplyConfiguration struct {
 	// IdleTimeoutSeconds denotes the number of seconds to wait before the v2 autoscaler terminates an idle worker pod of this type.
 	// This value is only used with the Ray Autoscaler enabled and defaults to the value set by the AutoscalingConfig if not specified for this worker group.
 	IdleTimeoutSeconds *int32 `json:"idleTimeoutSeconds,omitempty"`
+	// Priority influences which worker group the autoscaler prefers when multiple
+	// groups can satisfy the same resource demand. Higher priority groups are
+	// preferred for scale-up. Only honored by Ray Autoscaler v2.
+	Priority *int32 `json:"priority,omitempty"`
 	// Resources specifies the resource quantities for this worker group.
 	// These values override the resources passed to `rayStartParams` for the group, but
 	// have no effect on the resources set at the K8s Pod container level.
@@ -95,6 +99,14 @@ func (b *WorkerGroupSpecApplyConfiguration) WithMaxReplicas(value int32) *Worker
 // If called multiple times, the IdleTimeoutSeconds field is set to the value of the last call.
 func (b *WorkerGroupSpecApplyConfiguration) WithIdleTimeoutSeconds(value int32) *WorkerGroupSpecApplyConfiguration {
 	b.IdleTimeoutSeconds = &value
+	return b
+}
+
+// WithPriority sets the Priority field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the Priority field is set to the value of the last call.
+func (b *WorkerGroupSpecApplyConfiguration) WithPriority(value int32) *WorkerGroupSpecApplyConfiguration {
+	b.Priority = &value
 	return b
 }
 

@@ -2388,6 +2388,141 @@ func TestValidateRayClusterSpec_IdleTimeoutSeconds(t *testing.T) {
 	}
 }
 
+func TestValidateRayClusterSpec_Priority(t *testing.T) {
+	// Util function to create a RayCluster spec.
+	createSpec := func() rayv1.RayClusterSpec {
+		return rayv1.RayClusterSpec{
+			EnableInTreeAutoscaling: new(true),
+			HeadGroupSpec: rayv1.HeadGroupSpec{
+				Template: podTemplateSpec(nil, nil),
+			},
+		}
+	}
+
+	tests := map[string]struct {
+		expectedErr string
+		spec        rayv1.RayClusterSpec
+	}{
+		"Valid: Worker group with priority and v2 spec field": {
+			spec: func() rayv1.RayClusterSpec {
+				s := createSpec()
+				s.AutoscalerOptions = &rayv1.AutoscalerOptions{
+					Version: ptr.To(rayv1.AutoscalerVersionV2),
+				}
+				s.WorkerGroupSpecs = []rayv1.WorkerGroupSpec{
+					{
+						GroupName:   "worker-group-1",
+						Template:    podTemplateSpec(nil, nil),
+						Priority:    ptr.To(int32(1)),
+						MinReplicas: new(int32(0)),
+						MaxReplicas: new(int32(10)),
+					},
+				}
+				return s
+			}(),
+			expectedErr: "",
+		},
+		"Valid: Worker group with priority and v2 env var": {
+			spec: func() rayv1.RayClusterSpec {
+				s := createSpec()
+				s.HeadGroupSpec.Template = podTemplateSpec([]corev1.EnvVar{
+					{Name: RAY_ENABLE_AUTOSCALER_V2, Value: "1"},
+				}, nil)
+				s.WorkerGroupSpecs = []rayv1.WorkerGroupSpec{
+					{
+						GroupName:   "worker-group-1",
+						Template:    podTemplateSpec(nil, nil),
+						Priority:    ptr.To(int32(1)),
+						MinReplicas: new(int32(0)),
+						MaxReplicas: new(int32(10)),
+					},
+				}
+				return s
+			}(),
+			expectedErr: "",
+		},
+		"Valid: Worker group with zero priority and v2 disabled": {
+			spec: func() rayv1.RayClusterSpec {
+				s := createSpec()
+				s.WorkerGroupSpecs = []rayv1.WorkerGroupSpec{
+					{
+						GroupName:   "worker-group-1",
+						Template:    podTemplateSpec(nil, nil),
+						Priority:    ptr.To(int32(0)),
+						MinReplicas: new(int32(0)),
+						MaxReplicas: new(int32(10)),
+					},
+				}
+				return s
+			}(),
+			expectedErr: "",
+		},
+		"Valid: Worker group without priority and v2 disabled": {
+			spec: func() rayv1.RayClusterSpec {
+				s := createSpec()
+				s.WorkerGroupSpecs = []rayv1.WorkerGroupSpec{
+					{
+						GroupName:   "worker-group-1",
+						Template:    podTemplateSpec(nil, nil),
+						Priority:    nil,
+						MinReplicas: new(int32(0)),
+						MaxReplicas: new(int32(10)),
+					},
+				}
+				return s
+			}(),
+			expectedErr: "",
+		},
+		"Invalid: Worker group priority without v2": {
+			spec: func() rayv1.RayClusterSpec {
+				s := createSpec()
+				s.WorkerGroupSpecs = []rayv1.WorkerGroupSpec{
+					{
+						GroupName:   "worker-group-1",
+						Template:    podTemplateSpec(nil, nil),
+						Priority:    ptr.To(int32(1)),
+						MinReplicas: new(int32(0)),
+						MaxReplicas: new(int32(10)),
+					},
+				}
+				return s
+			}(),
+			expectedErr: "worker group worker-group-1: priority is set to 1, but autoscaler v2 is not enabled. Priority is only supported with autoscaler v2 enabled",
+		},
+		"Invalid: Worker group priority with invalid env var": {
+			spec: func() rayv1.RayClusterSpec {
+				s := createSpec()
+				s.HeadGroupSpec.Template = podTemplateSpec([]corev1.EnvVar{
+					{Name: RAY_ENABLE_AUTOSCALER_V2, Value: "false"},
+				}, nil)
+				s.WorkerGroupSpecs = []rayv1.WorkerGroupSpec{
+					{
+						GroupName:   "worker-group-1",
+						Template:    podTemplateSpec(nil, nil),
+						Priority:    ptr.To(int32(2)),
+						MinReplicas: new(int32(0)),
+						MaxReplicas: new(int32(10)),
+					},
+				}
+				return s
+			}(),
+			expectedErr: "worker group worker-group-1: priority is set to 2, but autoscaler v2 is not enabled. Priority is only supported with autoscaler v2 enabled",
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			err := ValidateRayClusterSpec(&tc.spec, nil)
+			if tc.expectedErr != "" {
+				require.Error(t, err)
+				require.EqualError(t, err, tc.expectedErr)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
 func TestValidateRayCronJobSpec(t *testing.T) {
 	tests := []struct {
 		cronJob     *rayv1.RayCronJob
