@@ -493,18 +493,17 @@ func (r *RayClusterReconciler) reconcileIngressKubernetes(ctx context.Context, i
 		return err
 	}
 
-	if len(headIngresses.Items) == 1 {
-		existingIngress := &headIngresses.Items[0]
-
-		// Only manage Ingresses that are owned by this RayCluster. Another Ingress
-		// in the namespace may carry the ray.io/cluster label without being created
-		// by the operator (e.g. one a user wrote by hand); updating it here would
-		// clobber the user's configuration with the dashboard Ingress spec.
-		if !metav1.IsControlledBy(existingIngress, instance) {
-			logger.Info("reconcileIngresses", "skipping Ingress not owned by this RayCluster", existingIngress.Name)
-			return nil
+	// Only act on the Ingress we own; the ray.io/cluster label alone can also
+	// match Ingresses created outside the operator, which we must not modify.
+	var existingIngress *networkingv1.Ingress
+	for i := range headIngresses.Items {
+		if metav1.IsControlledBy(&headIngresses.Items[i], instance) {
+			existingIngress = &headIngresses.Items[i]
+			break
 		}
+	}
 
+	if existingIngress != nil {
 		desiredIngress, err := common.BuildIngressForHeadService(ctx, *instance)
 		if err != nil {
 			return err
@@ -522,22 +521,17 @@ func (r *RayClusterReconciler) reconcileIngressKubernetes(ctx context.Context, i
 		return nil
 	}
 
-	if len(headIngresses.Items) == 0 {
-		ingress, err := common.BuildIngressForHeadService(ctx, *instance)
-		if err != nil {
-			return err
-		}
-
-		if err := ctrl.SetControllerReference(instance, ingress, r.Scheme); err != nil {
-			return err
-		}
-
-		if err := r.createHeadIngress(ctx, ingress, instance); err != nil {
-			return err
-		}
+	// No Ingress owned by this RayCluster exists yet; create one.
+	ingress, err := common.BuildIngressForHeadService(ctx, *instance)
+	if err != nil {
+		return err
 	}
 
-	return nil
+	if err := ctrl.SetControllerReference(instance, ingress, r.Scheme); err != nil {
+		return err
+	}
+
+	return r.createHeadIngress(ctx, ingress, instance)
 }
 
 func ingressNeedsUpdate(existingIngress, desiredIngress *networkingv1.Ingress) bool {
