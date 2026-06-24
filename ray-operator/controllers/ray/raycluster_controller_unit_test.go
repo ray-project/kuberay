@@ -3987,10 +3987,85 @@ func TestReconcileIngressKubernetesSkipsUnownedIngress(t *testing.T) {
 	err := r.reconcileIngressKubernetes(ctx, cluster)
 	require.NoError(t, err)
 
+	// The user-owned Ingress must be left untouched (not clobbered).
 	updated := &networkingv1.Ingress{}
 	err = fakeClient.Get(ctx, types.NamespacedName{Name: userIngress.Name, Namespace: userIngress.Namespace}, updated)
 	require.NoError(t, err)
 	assert.Equal(t, userIngress.Spec, updated.Spec, "operator must not modify an Ingress it does not own")
+
+	// Since no owned Ingress existed, the operator should create its own instead
+	// of adopting the user's Ingress.
+	allIngresses := &networkingv1.IngressList{}
+	err = fakeClient.List(ctx, allIngresses, client.InNamespace(cluster.Namespace))
+	require.NoError(t, err)
+	var ownedCount int
+	for i := range allIngresses.Items {
+		if metav1.IsControlledBy(&allIngresses.Items[i], cluster) {
+			ownedCount++
+		}
+	}
+	assert.Equal(t, 1, ownedCount, "operator should create exactly one Ingress it owns when none existed yet")
+}
+
+func TestReconcileIngressKubernetesUpdatesOwnedIngressAmongUnowned(t *testing.T) {
+	setupTest(t)
+
+	newScheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(newScheme)
+	_ = networkingv1.AddToScheme(newScheme)
+
+	cluster := testRayCluster.DeepCopy()
+	cluster.UID = "raycluster-uid"
+
+	// The owned dashboard Ingress, with a stale spec.
+	ownedIngress, err := common.BuildIngressForHeadService(context.TODO(), *cluster)
+	require.NoError(t, err)
+	require.NoError(t, controllerutil.SetControllerReference(cluster, ownedIngress, newScheme))
+	ownedIngress.Spec.Rules[0].Host = "stale-host.example.com"
+
+	// A second, user-created Ingress that shares the ray.io/cluster label.
+	userIngress := &networkingv1.Ingress{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "user-owned-ingress",
+			Namespace: cluster.Namespace,
+			Labels: map[string]string{
+				utils.RayClusterLabelKey: cluster.Name,
+			},
+		},
+		Spec: networkingv1.IngressSpec{
+			Rules: []networkingv1.IngressRule{
+				{Host: "user-defined-host.example.com"},
+			},
+		},
+	}
+
+	runtimeObjects := []runtime.Object{cluster, ownedIngress, userIngress}
+	fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
+	ctx := context.TODO()
+
+	r := &RayClusterReconciler{
+		Client:   fakeClient,
+		Recorder: &record.FakeRecorder{},
+		Scheme:   newScheme,
+	}
+
+	err = r.reconcileIngressKubernetes(ctx, cluster)
+	require.NoError(t, err)
+
+	desired, err := common.BuildIngressForHeadService(ctx, *cluster)
+	require.NoError(t, err)
+
+	// The owned Ingress must be reconciled even though another labeled Ingress exists.
+	updatedOwned := &networkingv1.Ingress{}
+	err = fakeClient.Get(ctx, types.NamespacedName{Name: ownedIngress.Name, Namespace: ownedIngress.Namespace}, updatedOwned)
+	require.NoError(t, err)
+	assert.Equal(t, desired.Spec.Rules, updatedOwned.Spec.Rules, "owned Ingress must be reconciled even when other labeled Ingresses exist")
+
+	// The user's Ingress must remain untouched.
+	updatedUser := &networkingv1.Ingress{}
+	err = fakeClient.Get(ctx, types.NamespacedName{Name: userIngress.Name, Namespace: userIngress.Namespace}, updatedUser)
+	require.NoError(t, err)
+	assert.Equal(t, userIngress.Spec, updatedUser.Spec, "operator must not modify an Ingress it does not own")
 }
 
 func TestReconcileIngressKubernetesUpdatesOwnedIngress(t *testing.T) {
