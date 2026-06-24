@@ -311,6 +311,9 @@ const (
 	// MaxRayJobNameLength is the maximum RayJob name to make sure it pass the RayCluster validation
 	// Minus 6 since we append 6 characters to the RayJob name to create the cluster (GenerateRayClusterName).
 	MaxRayJobNameLength = MaxRayClusterNameLength - 6
+
+	// MinAutoscalerRestartValidVersion is the minimum Ray image version that supports the feature of autoscaler restart.
+	MinAutoscalerRestartValidVersion = "2.55.0"
 	// MaxRayCronJobNameLength is the maximum RayCronJob name to make sure its child RayJob passes
 	// validation. Minus 11 for the "-<minuteHash>" suffix (dash + up to a 10-digit Unix-minute hash)
 	// appended to create the child RayJob name (getRayJobName).
