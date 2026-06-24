@@ -101,13 +101,8 @@ func BuildIngressForHeadService(ctx context.Context, cluster rayv1.RayCluster) (
 	}
 
 	if ingressConfig != nil && len(ingressConfig.TLS) > 0 {
-		ingress.Spec.TLS = make([]networkingv1.IngressTLS, 0, len(ingressConfig.TLS))
-		for _, tls := range ingressConfig.TLS {
-			ingress.Spec.TLS = append(ingress.Spec.TLS, networkingv1.IngressTLS{
-				Hosts:      tls.Hosts,
-				SecretName: tls.SecretName,
-			})
-		}
+		ingress.Spec.TLS = make([]networkingv1.IngressTLS, len(ingressConfig.TLS))
+		copy(ingress.Spec.TLS, ingressConfig.TLS)
 	}
 
 	// Get ingress class name from rayCluster annotations. this is a required field to use ingress.

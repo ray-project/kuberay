@@ -709,6 +709,7 @@ spec:
                                   items:
                                     type: string
                                   type: array
+                                  x-kubernetes-list-type: atomic
                                 secretName:
                                   type: string
                               type: object

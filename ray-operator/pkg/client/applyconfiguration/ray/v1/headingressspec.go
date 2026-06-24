@@ -4,6 +4,7 @@ package v1
 
 import (
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 )
 
 // HeadIngressSpecApplyConfiguration represents a declarative configuration of the HeadIngressSpec type for use
@@ -18,7 +19,7 @@ type HeadIngressSpecApplyConfiguration struct {
 	// PathType sets rules[0].http.paths[0].pathType on the generated ingress.
 	PathType *rayv1.IngressPathType `json:"pathType,omitempty"`
 	// TLS sets spec.tls entries on the generated ingress.
-	TLS []IngressTLSConfigApplyConfiguration `json:"tls,omitempty"`
+	TLS []networkingv1.IngressTLS `json:"tls,omitempty"`
 }
 
 // HeadIngressSpecApplyConfiguration constructs a declarative configuration of the HeadIngressSpec type for use with
@@ -54,12 +55,9 @@ func (b *HeadIngressSpecApplyConfiguration) WithPathType(value rayv1.IngressPath
 // WithTLS adds the given value to the TLS field in the declarative configuration
 // and returns the receiver, so that objects can be build by chaining "With" function invocations.
 // If called multiple times, values provided by each call will be appended to the TLS field.
-func (b *HeadIngressSpecApplyConfiguration) WithTLS(values ...*IngressTLSConfigApplyConfiguration) *HeadIngressSpecApplyConfiguration {
+func (b *HeadIngressSpecApplyConfiguration) WithTLS(values ...networkingv1.IngressTLS) *HeadIngressSpecApplyConfiguration {
 	for i := range values {
-		if values[i] == nil {
-			panic("nil value passed to WithTLS")
-		}
-		b.TLS = append(b.TLS, *values[i])
+		b.TLS = append(b.TLS, values[i])
 	}
 	return b
 }
