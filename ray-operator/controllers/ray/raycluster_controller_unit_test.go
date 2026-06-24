@@ -3949,6 +3949,8 @@ func TestGetGCSFTDeletionTimeout(t *testing.T) {
 }
 
 func TestReconcile_TLSAutoGenerate_RejectsWithoutCertManager(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.RayClusterMTLS, true)
+
 	cluster := &rayv1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "tls-cluster",
@@ -4000,6 +4002,8 @@ func TestReconcile_TLSAutoGenerate_RejectsWithoutCertManager(t *testing.T) {
 }
 
 func TestReconcile_TLSBYOC_AllowedWithoutCertManager(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.RayClusterMTLS, true)
+
 	cluster := &rayv1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "tls-byoc-cluster",
