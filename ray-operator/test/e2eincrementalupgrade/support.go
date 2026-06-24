@@ -36,18 +36,15 @@ func setGatewayServiceType(test Test, g *WithT, namespace, gatewayName string) {
 	LogWithTimestamp(test.T(), "Waiting for Gateway %s/%s to exist", namespace, gatewayName)
 	g.Eventually(Gateway(test, namespace, gatewayName), TestTimeoutMedium).ShouldNot(BeNil())
 
-	gateway, err := GetGateway(test, namespace, gatewayName)
-	g.Expect(err).NotTo(HaveOccurred())
-
 	LogWithTimestamp(test.T(), "Annotating Gateway %s/%s with %s=%s",
 		namespace, gatewayName, gatewayServiceTypeAnnotation, e2eGatewayServiceType)
-	if gateway.Annotations == nil {
-		gateway.Annotations = map[string]string{}
-	}
-	gateway.Annotations[gatewayServiceTypeAnnotation] = e2eGatewayServiceType
-	_, err = test.Client().Gateway().GatewayV1().Gateways(namespace).Update(
-		test.Ctx(), gateway, metav1.UpdateOptions{})
-	g.Expect(err).NotTo(HaveOccurred())
+	patch := []byte(fmt.Sprintf(`{"metadata":{"annotations":{%q:%q}}}`,
+		gatewayServiceTypeAnnotation, e2eGatewayServiceType))
+	g.Eventually(func() error {
+		_, err := test.Client().Gateway().GatewayV1().Gateways(namespace).
+			Patch(test.Ctx(), gatewayName, types.MergePatchType, patch, metav1.PatchOptions{})
+		return err
+	}, TestTimeoutShort).Should(Succeed())
 }
 
 // waitForGatewayReady waits until IsGatewayReady (Accepted and Programmed).
