@@ -39,16 +39,16 @@ func BuildIngressForHeadService(ctx context.Context, cluster rayv1.RayCluster) (
 		}
 	}
 
-	ingressConfig := cluster.Spec.HeadGroupSpec.IngressConfig
+	ingressSpec := cluster.Spec.HeadGroupSpec.IngressSpec
 
 	pathType := networkingv1.PathTypeExact
-	if ingressConfig != nil && ingressConfig.PathType != nil {
-		pathType = networkingv1.PathType(*ingressConfig.PathType)
+	if ingressSpec != nil && ingressSpec.PathType != nil {
+		pathType = networkingv1.PathType(*ingressSpec.PathType)
 	}
 
 	path := "/" + cluster.Name + "/(.*)"
-	if ingressConfig != nil && ingressConfig.Path != nil {
-		path = *ingressConfig.Path
+	if ingressSpec != nil && ingressSpec.Path != nil {
+		path = *ingressSpec.Path
 	}
 
 	servicePorts := getServicePorts(cluster)
@@ -83,8 +83,8 @@ func BuildIngressForHeadService(ctx context.Context, cluster rayv1.RayCluster) (
 			},
 		},
 	}
-	if ingressConfig != nil && ingressConfig.Host != nil {
-		rule.Host = *ingressConfig.Host
+	if ingressSpec != nil && ingressSpec.Host != nil {
+		rule.Host = *ingressSpec.Host
 	}
 
 	ingress := &networkingv1.Ingress{
@@ -100,9 +100,9 @@ func BuildIngressForHeadService(ctx context.Context, cluster rayv1.RayCluster) (
 		},
 	}
 
-	if ingressConfig != nil && len(ingressConfig.TLS) > 0 {
-		ingress.Spec.TLS = make([]networkingv1.IngressTLS, len(ingressConfig.TLS))
-		copy(ingress.Spec.TLS, ingressConfig.TLS)
+	if ingressSpec != nil && len(ingressSpec.TLS) > 0 {
+		ingress.Spec.TLS = make([]networkingv1.IngressTLS, len(ingressSpec.TLS))
+		copy(ingress.Spec.TLS, ingressSpec.TLS)
 	}
 
 	// Get ingress class name from rayCluster annotations. this is a required field to use ingress.

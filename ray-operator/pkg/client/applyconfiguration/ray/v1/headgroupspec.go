@@ -18,8 +18,8 @@ type HeadGroupSpecApplyConfiguration struct {
 	HeadService *apicorev1.Service `json:"headService,omitempty"`
 	// EnableIngress indicates whether operator should create ingress object for head service or not.
 	EnableIngress *bool `json:"enableIngress,omitempty"`
-	// IngressConfig specifies optional ingress configuration for the head service dashboard.
-	IngressConfig *HeadIngressSpecApplyConfiguration `json:"ingressConfig,omitempty"`
+	// IngressSpec specifies optional ingress configuration for the head service.
+	IngressSpec *IngressSpecApplyConfiguration `json:"ingressSpec,omitempty"`
 	// Resources specifies the resource quantities for the head group.
 	// These values override the resources passed to `rayStartParams` for the group, but
 	// have no effect on the resources set at the K8s Pod container level.
@@ -64,11 +64,11 @@ func (b *HeadGroupSpecApplyConfiguration) WithEnableIngress(value bool) *HeadGro
 	return b
 }
 
-// WithIngressConfig sets the IngressConfig field in the declarative configuration to the given value
+// WithIngressSpec sets the IngressSpec field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the IngressConfig field is set to the value of the last call.
-func (b *HeadGroupSpecApplyConfiguration) WithIngressConfig(value *HeadIngressSpecApplyConfiguration) *HeadGroupSpecApplyConfiguration {
-	b.IngressConfig = value
+// If called multiple times, the IngressSpec field is set to the value of the last call.
+func (b *HeadGroupSpecApplyConfiguration) WithIngressSpec(value *IngressSpecApplyConfiguration) *HeadGroupSpecApplyConfiguration {
+	b.IngressSpec = value
 	return b
 }
 

@@ -204,9 +204,9 @@ type HeadGroupSpec struct {
 	// EnableIngress indicates whether operator should create ingress object for head service or not.
 	// +optional
 	EnableIngress *bool `json:"enableIngress,omitempty"`
-	// IngressConfig specifies optional ingress configuration for the head service dashboard.
+	// IngressSpec specifies optional ingress configuration for the head service.
 	// +optional
-	IngressConfig *HeadIngressSpec `json:"ingressConfig,omitempty"`
+	IngressSpec *IngressSpec `json:"ingressSpec,omitempty"`
 	// Resources specifies the resource quantities for the head group.
 	// These values override the resources passed to `rayStartParams` for the group, but
 	// have no effect on the resources set at the K8s Pod container level.
@@ -234,8 +234,8 @@ const (
 	IngressPathTypeImplementationSpecific IngressPathType = "ImplementationSpecific"
 )
 
-// HeadIngressSpec defines the host, path, and TLS configuration for the ingress generated for the head group.
-type HeadIngressSpec struct {
+// IngressSpec defines the host, path, and TLS configuration for the ingress generated for the head group.
+type IngressSpec struct {
 	// Host sets rules[0].host on the generated ingress.
 	// +optional
 	Host *string `json:"host,omitempty"`

@@ -690,7 +690,7 @@ spec:
                                 type: object
                             type: object
                         type: object
-                      ingressConfig:
+                      ingressSpec:
                         properties:
                           host:
                             type: string
