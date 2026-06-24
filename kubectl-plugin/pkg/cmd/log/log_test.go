@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -482,6 +483,185 @@ func TestDownloadRayLogFiles(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, curr.Body, string(actualContent))
 	}
+}
+
+// createFakeTarFileWithInvalidMode creates a tar archive that contains one regular file
+// with a header.Mode value outside the valid [0, math.MaxUint32] range (negative).
+// This exercises the G115 overflow-guard path added in the fix.
+func createFakeTarFileWithInvalidMode() (*bytes.Buffer, error) {
+	tarbuff := new(bytes.Buffer)
+	tw := tar.NewWriter(tarbuff)
+
+	// A valid directory entry so the archive is well-formed.
+	if err := tw.WriteHeader(&tar.Header{
+		Typeflag: tar.TypeDir,
+		Name:     "/",
+		Mode:     0o755,
+	}); err != nil {
+		return nil, err
+	}
+
+	// A regular file whose Mode is negative – this triggers the G115 overflow guard.
+	body := []byte("should be skipped")
+	if err := tw.WriteHeader(&tar.Header{
+		Typeflag: tar.TypeReg,
+		Name:     "bad-mode-file.txt",
+		Mode:     -1, // invalid: negative value overflows uint32
+		Size:     int64(len(body)),
+	}); err != nil {
+		return nil, err
+	}
+	if _, err := tw.Write(body); err != nil {
+		return nil, err
+	}
+
+	// A normal file that should still be extracted after the bad one is skipped.
+	body2 := []byte("hello from valid file\n")
+	if err := tw.WriteHeader(&tar.Header{
+		Typeflag: tar.TypeReg,
+		Name:     "valid-file.txt",
+		Mode:     0o644,
+		Size:     int64(len(body2)),
+	}); err != nil {
+		return nil, err
+	}
+	if _, err := tw.Write(body2); err != nil {
+		return nil, err
+	}
+
+	if err := tw.Close(); err != nil {
+		return nil, err
+	}
+	return tarbuff, nil
+}
+
+// createFakeTarFileWithManyFiles creates a tar archive with n regular files.
+// Used to verify that the FD-leak fix keeps all file descriptors closed during
+// the loop (i.e. no "too many open files" error).
+func createFakeTarFileWithManyFiles(n int) (*bytes.Buffer, error) {
+	tarbuff := new(bytes.Buffer)
+	tw := tar.NewWriter(tarbuff)
+
+	if err := tw.WriteHeader(&tar.Header{
+		Typeflag: tar.TypeDir,
+		Name:     "/",
+		Mode:     0o755,
+	}); err != nil {
+		return nil, err
+	}
+
+	for i := range n {
+		body := fmt.Appendf(nil, "content of file %d\n", i)
+		if err := tw.WriteHeader(&tar.Header{
+			Typeflag: tar.TypeReg,
+			Name:     fmt.Sprintf("file%04d.txt", i),
+			Mode:     0o644,
+			Size:     int64(len(body)),
+		}); err != nil {
+			return nil, err
+		}
+		if _, err := tw.Write(body); err != nil {
+			return nil, err
+		}
+	}
+
+	if err := tw.Close(); err != nil {
+		return nil, err
+	}
+	return tarbuff, nil
+}
+
+// TestDownloadRayLogFiles_SkipsFileWithInvalidMode is a regression test for the
+// G115 integer-overflow fix.  A tar entry whose header.Mode is outside the
+// valid [0, math.MaxUint32] range must be skipped with a warning; the
+// subsequent valid entry must still be extracted normally.
+func TestDownloadRayLogFiles_SkipsFileWithInvalidMode(t *testing.T) {
+	fakeDir := t.TempDir()
+
+	testStreams, _, out, _ := genericiooptions.NewTestIOStreams()
+	cmdFactory := cmdutil.NewFactory(genericclioptions.NewConfigFlags(true))
+
+	opts := NewClusterLogOptions(cmdFactory, testStreams)
+	opts.ResourceName = "test-cluster"
+	opts.outputDir = fakeDir
+
+	fakeTar, err := createFakeTarFileWithInvalidMode()
+	require.NoError(t, err)
+
+	rayHead := v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster-kuberay-head-1",
+			Namespace: "test",
+		},
+		Spec: v1.PodSpec{
+			Containers: []v1.Container{{Name: "mycontainer", Image: "nginx:latest"}},
+		},
+	}
+
+	executor, _ := fakeNewSPDYExecutor("GET", &url.URL{}, fakeTar)
+	err = opts.downloadRayLogFiles(context.Background(), executor, rayHead)
+	require.NoError(t, err, "downloadRayLogFiles must not return an error for an out-of-range mode")
+
+	// The warning message must have been printed.
+	assert.Contains(t, out.String(), "skipping file",
+		"a warning must be printed for the file with the invalid mode")
+
+	// The bad file must NOT have been created.
+	badPath := filepath.Join(fakeDir, rayHead.Name, "bad-mode-file.txt")
+	_, statErr := os.Stat(badPath)
+	assert.True(t, os.IsNotExist(statErr),
+		"bad-mode-file.txt must not be created when mode is out of range")
+
+	// The valid file that follows the bad one MUST have been created.
+	validPath := filepath.Join(fakeDir, rayHead.Name, "valid-file.txt")
+	content, readErr := os.ReadFile(validPath)
+	require.NoError(t, readErr, "valid-file.txt must be created even after a skipped entry")
+	assert.Equal(t, "hello from valid file\n", string(content))
+}
+
+// TestDownloadRayLogFiles_NoFDLeakWithManyFiles is a regression test for the
+// file-descriptor leak fix.  Before the fix, defer outFile.Close() inside the
+// loop body deferred all closes until function return; with a large archive
+// this exhausted the per-process FD limit and returned "too many open files".
+// The test extracts 300 files – well above the typical per-process soft limit
+// of 256 on macOS and comfortably above the default 1024 on Linux when the
+// test binary itself already holds several descriptors.
+func TestDownloadRayLogFiles_NoFDLeakWithManyFiles(t *testing.T) {
+	const fileCount = 300
+
+	fakeDir := t.TempDir()
+	testStreams, _, _, _ := genericiooptions.NewTestIOStreams()
+	cmdFactory := cmdutil.NewFactory(genericclioptions.NewConfigFlags(true))
+
+	opts := NewClusterLogOptions(cmdFactory, testStreams)
+	opts.ResourceName = "test-cluster"
+	opts.outputDir = fakeDir
+
+	fakeTar, err := createFakeTarFileWithManyFiles(fileCount)
+	require.NoError(t, err)
+
+	rayHead := v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster-kuberay-head-1",
+			Namespace: "test",
+		},
+		Spec: v1.PodSpec{
+			Containers: []v1.Container{{Name: "mycontainer", Image: "nginx:latest"}},
+		},
+	}
+
+	executor, _ := fakeNewSPDYExecutor("GET", &url.URL{}, fakeTar)
+
+	// Must not return an error ("too many open files" would surface here).
+	err = opts.downloadRayLogFiles(context.Background(), executor, rayHead)
+	require.NoError(t, err, "downloadRayLogFiles must not exhaust file descriptors")
+
+	// Verify all files were actually written.
+	podDir := filepath.Join(fakeDir, rayHead.Name)
+	entries, err := os.ReadDir(podDir)
+	require.NoError(t, err)
+	assert.Len(t, entries, fileCount,
+		"all %d files must be extracted without FD exhaustion", fileCount)
 }
 
 // createTempKubeConfigFile creates a temporary kubeconfig file with the given current context.
