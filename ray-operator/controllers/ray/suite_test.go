@@ -49,6 +49,7 @@ var (
 	k8sClient client.Client
 	mgr       ctrl.Manager
 	testEnv   *envtest.Environment
+	cancelMgr context.CancelFunc
 
 	fakeRayDashboardClient *utils.FakeRayDashboardClient
 	fakeRayHttpProxyClient *utils.FakeRayHttpProxyClient
@@ -137,15 +138,17 @@ var _ = BeforeSuite(func(ctx SpecContext) {
 	err = NewRayJobReconciler(ctx, mgr, rayJobOptions, testClientProvider).SetupWithManager(mgr, 1)
 	Expect(err).NotTo(HaveOccurred(), "failed to setup RayJob controller")
 
+	var mgrCtx context.Context
+	mgrCtx, cancelMgr = context.WithCancel(context.Background())
 	go func() {
-		err = mgr.Start(ctrl.SetupSignalHandler())
+		err = mgr.Start(mgrCtx)
 		Expect(err).ToNot(HaveOccurred())
 	}()
 })
 
 var _ = AfterSuite(func() {
 	By("tearing down the test environment")
-
+	cancelMgr()
 	// NOTE(simon): the error is ignored because it gets raised in macOS due
 	// to a harmless timeout error.
 	_ = testEnv.Stop()
