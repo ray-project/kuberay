@@ -495,6 +495,16 @@ func (r *RayClusterReconciler) reconcileIngressKubernetes(ctx context.Context, i
 
 	if len(headIngresses.Items) == 1 {
 		existingIngress := &headIngresses.Items[0]
+
+		// Only manage Ingresses that are owned by this RayCluster. Another Ingress
+		// in the namespace may carry the ray.io/cluster label without being created
+		// by the operator (e.g. one a user wrote by hand); updating it here would
+		// clobber the user's configuration with the dashboard Ingress spec.
+		if !metav1.IsControlledBy(existingIngress, instance) {
+			logger.Info("reconcileIngresses", "skipping Ingress not owned by this RayCluster", existingIngress.Name)
+			return nil
+		}
+
 		desiredIngress, err := common.BuildIngressForHeadService(ctx, *instance)
 		if err != nil {
 			return err
