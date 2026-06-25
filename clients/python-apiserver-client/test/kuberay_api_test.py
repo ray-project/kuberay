@@ -1,3 +1,5 @@
+# (C) Copyright IBM Corp. 2024.
+
 import time
 
 from configmaps import ConfigmapsManager
