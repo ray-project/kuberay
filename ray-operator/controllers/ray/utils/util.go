@@ -853,6 +853,13 @@ func GetRayServiceClusterUpgradeOptions(spec *rayv1.RayServiceSpec) *rayv1.Clust
 	return nil
 }
 
+// AdoptsExistingHTTPRoute reports whether HTTPRouteName is set, i.e. the operator patches an
+// existing HTTPRoute instead of creating its own.
+func AdoptsExistingHTTPRoute(spec *rayv1.RayServiceSpec) bool {
+	options := GetRayServiceClusterUpgradeOptions(spec)
+	return options != nil && options.HTTPRouteName != ""
+}
+
 // IsIncrementalUpgradeComplete checks if the conditions for completing an incremental upgrade are met.
 func IsIncrementalUpgradeComplete(rayServiceInstance *rayv1.RayService, pendingCluster *rayv1.RayCluster) bool {
 	return pendingCluster != nil &&
@@ -1065,6 +1072,25 @@ func HasSubmitter(rayJobInstance *rayv1.RayJob) bool {
 
 // IsHTTPRouteEqual checks if the existing HTTPRoute matches the desired HTTPRoute.
 // This check only compares the fields explicitly managed by the RayService controller.
+// BackendRefsEqual compares two HTTPBackendRef slices on the fields the controller manages
+// (Name, Namespace, Weight, Port).
+func BackendRefsEqual(existing, desired []gwv1.HTTPBackendRef) bool {
+	if len(existing) != len(desired) {
+		return false
+	}
+	for i := range desired {
+		existingRef := existing[i]
+		desiredRef := desired[i]
+		if string(existingRef.Name) != string(desiredRef.Name) ||
+			string(ptr.Deref(existingRef.Namespace, "")) != string(ptr.Deref(desiredRef.Namespace, "")) ||
+			ptr.Deref(existingRef.Weight, 1) != ptr.Deref(desiredRef.Weight, 1) ||
+			ptr.Deref(existingRef.Port, 0) != ptr.Deref(desiredRef.Port, 0) {
+			return false
+		}
+	}
+	return true
+}
+
 func IsHTTPRouteEqual(existing, desired *gwv1.HTTPRoute) bool {
 	if existing == nil || desired == nil {
 		return existing == desired

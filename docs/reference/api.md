@@ -113,7 +113,8 @@ _Appears in:_
 | `maxSurgePercent` _integer_ | The capacity of serve requests the upgraded cluster should scale to handle each interval.<br />Defaults to 100%. | 100 |  |
 | `stepSizePercent` _integer_ | The percentage of traffic to switch to the upgraded RayCluster at a set interval after scaling by MaxSurgePercent.<br />StepSizePercent must be less than or equal to MaxSurgePercent. |  |  |
 | `intervalSeconds` _integer_ | The interval in seconds between transferring StepSize traffic from the old to new RayCluster. |  |  |
-| `gatewayClassName` _string_ | The name of the Gateway Class installed by the Kubernetes Cluster admin. |  |  |
+| `gatewayClassName` _string_ | GatewayClassName is the name of the GatewayClass installed by the Kubernetes cluster admin.<br />When set, the operator creates and manages a dedicated Gateway named "<rayservice-name>-gateway"<br />and its own HTTPRoute for this RayService. Exactly one of GatewayClassName or HTTPRouteName must be set. |  |  |
+| `httpRouteName` _string_ | HTTPRouteName references an existing HTTPRoute (in the RayService namespace) that the operator<br />adopts: it patches only the backendRefs of the route's first rule to perform the incremental<br />traffic migration, while leaving hostnames, parentRefs, matches and metadata untouched. The<br />operator neither creates nor deletes this route, and derives the Gateway from the route's<br />parentRefs. Use this when the Gateway and HTTPRoute are managed externally (e.g. by Helm/GitOps)<br />and the operator may only adjust traffic weights. This is an alternative to specifying a Gateway;<br />exactly one of GatewayClassName or HTTPRouteName must be set. |  |  |
 
 
 #### DeletionCondition

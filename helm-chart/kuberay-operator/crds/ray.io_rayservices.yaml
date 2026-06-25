@@ -9014,6 +9014,8 @@ spec:
                     properties:
                       gatewayClassName:
                         type: string
+                      httpRouteName:
+                        type: string
                       intervalSeconds:
                         format: int32
                         type: integer
@@ -9025,7 +9027,6 @@ spec:
                         format: int32
                         type: integer
                     required:
-                    - gatewayClassName
                     - intervalSeconds
                     - stepSizePercent
                     type: object

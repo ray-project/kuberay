@@ -2005,6 +2005,7 @@ func TestValidateClusterUpgradeOptions(t *testing.T) {
 		intervalSeconds   *int32
 		name              string
 		gatewayClassName  string
+		httpRouteName     string
 		spec              rayv1.RayServiceSpec
 		enableAutoscaling bool
 		expectError       bool
@@ -2068,10 +2069,29 @@ func TestValidateClusterUpgradeOptions(t *testing.T) {
 			expectError:       true,
 		},
 		{
-			name:              "missing GatewayClassName",
+			name:              "missing GatewayClassName and HTTPRouteName",
 			maxSurgePercent:   new(int32(50)),
 			stepSizePercent:   new(int32(50)),
 			intervalSeconds:   new(int32(10)),
+			enableAutoscaling: true,
+			expectError:       true,
+		},
+		{
+			name:              "valid config adopting existing HTTPRoute",
+			maxSurgePercent:   new(int32(50)),
+			stepSizePercent:   new(int32(50)),
+			intervalSeconds:   new(int32(10)),
+			httpRouteName:     "my-app-route",
+			enableAutoscaling: true,
+			expectError:       false,
+		},
+		{
+			name:              "both GatewayClassName and HTTPRouteName set",
+			maxSurgePercent:   new(int32(50)),
+			stepSizePercent:   new(int32(50)),
+			intervalSeconds:   new(int32(10)),
+			gatewayClassName:  "istio",
+			httpRouteName:     "my-app-route",
 			enableAutoscaling: true,
 			expectError:       true,
 		},
@@ -2080,7 +2100,7 @@ func TestValidateClusterUpgradeOptions(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var upgradeStrategy *rayv1.RayServiceUpgradeStrategy
-			if tt.maxSurgePercent != nil || tt.stepSizePercent != nil || tt.intervalSeconds != nil || tt.gatewayClassName != "" {
+			if tt.maxSurgePercent != nil || tt.stepSizePercent != nil || tt.intervalSeconds != nil || tt.gatewayClassName != "" || tt.httpRouteName != "" {
 				upgradeStrategy = &rayv1.RayServiceUpgradeStrategy{
 					Type: ptr.To(rayv1.RayServiceNewClusterWithIncrementalUpgrade),
 					ClusterUpgradeOptions: &rayv1.ClusterUpgradeOptions{
@@ -2088,6 +2108,7 @@ func TestValidateClusterUpgradeOptions(t *testing.T) {
 						StepSizePercent:  tt.stepSizePercent,
 						IntervalSeconds:  tt.intervalSeconds,
 						GatewayClassName: tt.gatewayClassName,
+						HTTPRouteName:    tt.httpRouteName,
 					},
 				}
 			} else if tt.expectError {

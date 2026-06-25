@@ -524,6 +524,11 @@ func (r *RayServiceReconciler) deleteRayServiceOwnedResources(ctx context.Contex
 			return false, err
 		}
 
+		// An adopted, externally managed HTTPRoute must never be deleted by the operator.
+		if utils.AdoptsExistingHTTPRoute(&rayServiceInstance.Spec) {
+			return allDeleted, nil
+		}
+
 		httpRoute := &gwv1.HTTPRoute{}
 		if err := r.Get(ctx, common.RayServiceHTTPRouteNamespacedName(rayServiceInstance), httpRoute); err == nil {
 			allDeleted = false
@@ -893,6 +898,12 @@ func (r *RayServiceReconciler) createGateway(rayServiceInstance *rayv1.RayServic
 		return nil, errstd.New("Missing RayService ClusterUpgradeOptions during upgrade.")
 	}
 
+	// No Gateway is managed unless a GatewayClassName is set (e.g. when adopting an HTTPRoute).
+	// A nil return tells reconcileGateway to skip.
+	if options.GatewayClassName == "" {
+		return nil, nil
+	}
+
 	gatewayName := rayServiceInstance.Name + "-gateway"
 	// Define the desired Gateway object
 	rayServiceGateway := &gwv1.Gateway{
@@ -1033,6 +1044,107 @@ func (r *RayServiceReconciler) calculateTrafficRoutedPercent(ctx context.Context
 	return activeClusterWeight, pendingClusterWeight, nil
 }
 
+// buildServeBackendRefs returns the weighted backendRefs for the active and pending RayClusters'
+// per-cluster Serve services. The bool is false when there is no active RayCluster yet.
+func (r *RayServiceReconciler) buildServeBackendRefs(ctx context.Context, rayServiceInstance *rayv1.RayService, isPendingClusterReady bool) ([]gwv1.HTTPBackendRef, bool, error) {
+	logger := ctrl.LoggerFrom(ctx)
+
+	activeRayCluster, err := r.getRayClusterByNamespacedName(ctx, common.RayServiceActiveRayClusterNamespacedName(rayServiceInstance))
+	if err != nil && !errors.IsNotFound(err) {
+		logger.Error(err, "Failed to retrieve active RayCluster")
+		return nil, false, err
+	}
+	if activeRayCluster == nil {
+		return nil, false, nil
+	}
+
+	pendingRayCluster, err := r.getRayClusterByNamespacedName(ctx, common.RayServicePendingRayClusterNamespacedName(rayServiceInstance))
+	if err != nil && !errors.IsNotFound(err) {
+		logger.Error(err, "Failed to retrieve pending RayCluster.")
+		return nil, false, err
+	}
+
+	activeClusterWeight, pendingClusterWeight, err := r.calculateTrafficRoutedPercent(ctx, rayServiceInstance, isPendingClusterReady)
+	if err != nil {
+		logger.Info("Failed to reconcile TrafficRoutedPercent for active and pending clusters.")
+		return nil, false, err
+	}
+
+	activeClusterServeSvcName := utils.GenerateServeServiceName(activeRayCluster.Name)
+	activeServePort := common.GetServePort(activeRayCluster)
+
+	backendRefs := []gwv1.HTTPBackendRef{
+		{
+			BackendRef: gwv1.BackendRef{
+				BackendObjectReference: gwv1.BackendObjectReference{
+					Name:      gwv1.ObjectName(activeClusterServeSvcName),
+					Namespace: new(gwv1.Namespace(rayServiceInstance.Namespace)),
+					Port:      new(activeServePort),
+				},
+				Weight: new(activeClusterWeight),
+			},
+		},
+	}
+
+	if pendingRayCluster != nil {
+		logger.Info("Pending RayCluster exists. Including it in HTTPRoute.", "RayCluster", pendingRayCluster.Name)
+		pendingClusterServeSvcName := utils.GenerateServeServiceName(pendingRayCluster.Name)
+		pendingServePort := common.GetServePort(pendingRayCluster)
+
+		backendRefs = append(backendRefs, gwv1.HTTPBackendRef{
+			BackendRef: gwv1.BackendRef{
+				BackendObjectReference: gwv1.BackendObjectReference{
+					Name:      gwv1.ObjectName(pendingClusterServeSvcName),
+					Namespace: new(gwv1.Namespace(rayServiceInstance.Namespace)),
+					Port:      new(pendingServePort),
+				},
+				Weight: new(pendingClusterWeight),
+			},
+		})
+	}
+
+	return backendRefs, true, nil
+}
+
+// reconcileAdoptedHTTPRoute patches only the backendRefs of an existing HTTPRoute (referenced by
+// HTTPRouteName). It does not create, own or delete the route. The route must already exist.
+func (r *RayServiceReconciler) reconcileAdoptedHTTPRoute(ctx context.Context, rayServiceInstance *rayv1.RayService, isPendingClusterReady bool) (*gwv1.HTTPRoute, error) {
+	logger := ctrl.LoggerFrom(ctx)
+
+	backendRefs, ok, err := r.buildServeBackendRefs(ctx, rayServiceInstance, isPendingClusterReady)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		logger.Info("Active RayCluster not found, skipping adopted HTTPRoute reconciliation.")
+		return nil, nil
+	}
+
+	existingHTTPRoute := &gwv1.HTTPRoute{}
+	if err := r.Get(ctx, common.RayServiceHTTPRouteNamespacedName(rayServiceInstance), existingHTTPRoute); err != nil {
+		// In adopt mode the HTTPRoute must be pre-created (e.g. by Helm/GitOps).
+		return nil, err
+	}
+	if len(existingHTTPRoute.Spec.Rules) == 0 {
+		return nil, errstd.New("adopted HTTPRoute has no rules whose backendRefs can be patched")
+	}
+
+	// Patch only the backendRefs of the first rule, preserving everything else the external owner set.
+	if !utils.BackendRefsEqual(existingHTTPRoute.Spec.Rules[0].BackendRefs, backendRefs) {
+		logger.Info("Patching backendRefs of adopted HTTPRoute", "name", existingHTTPRoute.Name)
+		existingHTTPRoute.Spec.Rules[0].BackendRefs = backendRefs
+		if err := r.Update(ctx, existingHTTPRoute); err != nil {
+			r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(utils.FailedToUpdateHTTPRoute),
+				"Failed to update the adopted HTTPRoute %s/%s: %v", existingHTTPRoute.Namespace, existingHTTPRoute.Name, err)
+			return nil, err
+		}
+		r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeNormal, string(utils.UpdatedHTTPRoute),
+			"Patched backendRefs of the adopted HTTPRoute %s/%s", existingHTTPRoute.Namespace, existingHTTPRoute.Name)
+	}
+
+	return existingHTTPRoute, nil
+}
+
 // createHTTPRoute creates a desired HTTPRoute object for RayService incremental upgrade.
 //
 // The function performs the following operations:
@@ -1051,66 +1163,18 @@ func (r *RayServiceReconciler) createHTTPRoute(ctx context.Context, rayServiceIn
 		return nil, err
 	}
 
-	// Retrieve the active RayCluster
-	activeRayCluster, err := r.getRayClusterByNamespacedName(ctx, common.RayServiceActiveRayClusterNamespacedName(rayServiceInstance))
-	if err != nil && !errors.IsNotFound(err) {
-		logger.Error(err, "Failed to retrieve active RayCluster")
+	backendRefs, ok, err := r.buildServeBackendRefs(ctx, rayServiceInstance, isPendingClusterReady)
+	if err != nil {
 		return nil, err
 	}
-	if activeRayCluster == nil {
+	if !ok {
 		logger.Info("Active RayCluster not found, skipping HTTPRoute creation.")
 		return nil, nil
 	}
 
-	// Attempt to retrieve pending RayCluster
-	pendingRayCluster, err := r.getRayClusterByNamespacedName(ctx, common.RayServicePendingRayClusterNamespacedName(rayServiceInstance))
-	if err != nil && !errors.IsNotFound(err) {
-		logger.Error(err, "Failed to retrieve pending RayCluster.")
-		return nil, err
-	}
-
-	activeClusterWeight, pendingClusterWeight, err := r.calculateTrafficRoutedPercent(ctx, rayServiceInstance, isPendingClusterReady)
-	if err != nil {
-		logger.Info("Failed to reconcile TrafficRoutedPercent for active and pending clusters.")
-		return nil, err
-	}
-
-	activeClusterServeSvcName := utils.GenerateServeServiceName(activeRayCluster.Name)
-	activeServePort := common.GetServePort(activeRayCluster)
-
-	backendRefs := []gwv1.HTTPBackendRef{
-		{
-			BackendRef: gwv1.BackendRef{
-				BackendObjectReference: gwv1.BackendObjectReference{
-					Name:      gwv1.ObjectName(activeClusterServeSvcName),
-					Namespace: new(gwv1.Namespace(gatewayInstance.Namespace)),
-					Port:      new(activeServePort),
-				},
-				Weight: new(activeClusterWeight),
-			},
-		},
-	}
-
-	if pendingRayCluster != nil {
-		logger.Info("Pending RayCluster exists. Including it in HTTPRoute.", "RayCluster", pendingRayCluster.Name)
-		pendingClusterServeSvcName := utils.GenerateServeServiceName(pendingRayCluster.Name)
-		pendingServePort := common.GetServePort(pendingRayCluster)
-
-		backendRefs = append(backendRefs, gwv1.HTTPBackendRef{
-			BackendRef: gwv1.BackendRef{
-				BackendObjectReference: gwv1.BackendObjectReference{
-					Name:      gwv1.ObjectName(pendingClusterServeSvcName),
-					Namespace: new(gwv1.Namespace(gatewayInstance.Namespace)),
-					Port:      new(pendingServePort),
-				},
-				Weight: new(pendingClusterWeight),
-			},
-		})
-	}
-
 	httpRouteName := rayServiceInstance.Name + "-httproute"
 	desiredHTTPRoute := &gwv1.HTTPRoute{
-		ObjectMeta: metav1.ObjectMeta{Name: httpRouteName, Namespace: gatewayInstance.Namespace},
+		ObjectMeta: metav1.ObjectMeta{Name: httpRouteName, Namespace: rayServiceInstance.Namespace},
 		Spec: gwv1.HTTPRouteSpec{
 			CommonRouteSpec: gwv1.CommonRouteSpec{
 				ParentRefs: []gwv1.ParentReference{
@@ -1143,6 +1207,11 @@ func (r *RayServiceReconciler) createHTTPRoute(ctx context.Context, rayServiceIn
 func (r *RayServiceReconciler) reconcileHTTPRoute(ctx context.Context, rayServiceInstance *rayv1.RayService, isPendingClusterReady bool) (*gwv1.HTTPRoute, error) {
 	logger := ctrl.LoggerFrom(ctx)
 	var err error
+
+	// Adopt an externally-managed HTTPRoute (patch backendRefs only) when HTTPRouteName is set.
+	if utils.AdoptsExistingHTTPRoute(&rayServiceInstance.Spec) {
+		return r.reconcileAdoptedHTTPRoute(ctx, rayServiceInstance, isPendingClusterReady)
+	}
 
 	desiredHTTPRoute, err := r.createHTTPRoute(ctx, rayServiceInstance, isPendingClusterReady)
 	if err != nil {
@@ -1640,18 +1709,31 @@ func (r *RayServiceReconciler) checkIfNeedTargetCapacityUpdate(ctx context.Conte
 		return false, "Both active and pending RayCluster instances are required for NewClusterWithIncrementalUpgrade."
 	}
 
-	// Validate Gateway and HTTPRoute objects are ready
+	// Validate Gateway and HTTPRoute objects are ready. The HTTPRoute is fetched first so that, in
+	// adopt mode, the Gateway can be derived from the route's parentRefs.
+	httpRouteInstance := &gwv1.HTTPRoute{}
+	if err := r.Get(ctx, common.RayServiceHTTPRouteNamespacedName(rayServiceInstance), httpRouteInstance); err != nil {
+		return false, fmt.Sprintf("Failed to retrieve HTTPRoute for RayService: %v", err)
+	}
+
+	gatewayNamespacedName := common.RayServiceGatewayNamespacedName(rayServiceInstance)
+	if utils.AdoptsExistingHTTPRoute(&rayServiceInstance.Spec) {
+		if len(httpRouteInstance.Spec.ParentRefs) == 0 {
+			return false, "Adopted HTTPRoute has no parentRefs from which to derive the Gateway."
+		}
+		parentRef := httpRouteInstance.Spec.ParentRefs[0]
+		gatewayNamespacedName = types.NamespacedName{
+			Name:      string(parentRef.Name),
+			Namespace: string(ptr.Deref(parentRef.Namespace, gwv1.Namespace(rayServiceInstance.Namespace))),
+		}
+	}
+
 	gatewayInstance := &gwv1.Gateway{}
-	if err := r.Get(ctx, common.RayServiceGatewayNamespacedName(rayServiceInstance), gatewayInstance); err != nil {
+	if err := r.Get(ctx, gatewayNamespacedName, gatewayInstance); err != nil {
 		return false, fmt.Sprintf("Failed to retrieve Gateway for RayService: %v", err)
 	}
 	if !utils.IsGatewayReady(gatewayInstance) {
 		return false, "Gateway for RayService NewClusterWithIncrementalUpgrade is not ready."
-	}
-
-	httpRouteInstance := &gwv1.HTTPRoute{}
-	if err := r.Get(ctx, common.RayServiceHTTPRouteNamespacedName(rayServiceInstance), httpRouteInstance); err != nil {
-		return false, fmt.Sprintf("Failed to retrieve HTTPRoute for RayService: %v", err)
 	}
 	if !utils.IsHTTPRouteReady(gatewayInstance, httpRouteInstance) {
 		return false, "HTTPRoute for RayService NewClusterWithIncrementalUpgrade is not ready."
