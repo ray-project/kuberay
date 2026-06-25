@@ -485,10 +485,9 @@ func CalculateDesiredResources(cluster *rayv1.RayCluster) corev1.ResourceList {
 			continue
 		}
 		podResource := CalculatePodResource(nodeGroup.Template.Spec)
-		calculateReplicaResource(&podResource, nodeGroup.NumOfHosts)
-		for i := int32(0); i < *nodeGroup.Replicas; i++ {
-			desiredResourcesList = append(desiredResourcesList, podResource)
-		}
+		replicas := ptr.Deref(nodeGroup.Replicas, int32(0))
+		calculatePodResources(&podResource, int64(nodeGroup.NumOfHosts)*int64(replicas))
+		desiredResourcesList = append(desiredResourcesList, podResource)
 	}
 	return SumResourceList(desiredResourcesList)
 }
@@ -502,23 +501,21 @@ func CalculateMinResources(cluster *rayv1.RayCluster) corev1.ResourceList {
 			continue
 		}
 		podResource := CalculatePodResource(nodeGroup.Template.Spec)
-		calculateReplicaResource(&podResource, nodeGroup.NumOfHosts)
 		minReplicas := ptr.Deref(nodeGroup.MinReplicas, int32(0))
-		for range minReplicas {
-			minResourcesList = append(minResourcesList, podResource)
-		}
+		calculatePodResources(&podResource, int64(nodeGroup.NumOfHosts)*int64(minReplicas))
+		minResourcesList = append(minResourcesList, podResource)
 	}
 	return SumResourceList(minResourcesList)
 }
 
-// calculateReplicaResource adjusts the resource quantities in a given ResourceList
+// calculatePodResources adjusts the resource quantities in a given ResourceList
 // to account for the specified number of hosts. It multiplies each resource quantity
 // in the ResourceList by the number of hosts.
 //
 // Note: This function modifies the provided ResourceList in place.
-func calculateReplicaResource(podResource *corev1.ResourceList, numOfHosts int32) {
+func calculatePodResources(podResource *corev1.ResourceList, numPods int64) {
 	for name, quantity := range *podResource {
-		quantity.Mul(int64(numOfHosts))
+		quantity.Mul(numPods)
 		(*podResource)[name] = quantity
 	}
 }
