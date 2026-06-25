@@ -10,6 +10,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -92,6 +93,10 @@ type rotationTask struct {
 	nodeID      string
 	createdAt   time.Time
 	size        int64
+	// extOverride, when non-empty, forces the remote key extension instead of
+	// deriving it from ec.compressionEnabled. Used during resume to preserve the
+	// original file type.
+	extOverride string
 }
 
 // EventCollector persists events to local disk as JSONL and asynchronously
@@ -116,6 +121,8 @@ type EventCollector struct {
 	maxFileSizeBytes   int64
 	maxDiskBytes       int64
 	compressionEnabled bool
+
+	draining atomic.Bool // set during shutdown to reject new events
 
 	writeMu       sync.Mutex
 	activeFiles   map[string]*activeFileState
@@ -206,6 +213,9 @@ func (ec *EventCollector) Run(stop <-chan struct{}, port int) {
 	<-stop
 	logrus.Info("Received stop signal, draining events to storage")
 
+	// Reject new events before rotating so no writes slip in after the final rotation.
+	ec.draining.Store(true)
+
 	// Rotate remaining active files so the upload worker can drain them.
 	ec.rotateAllFiles()
 	close(ec.stopped)
@@ -285,6 +295,12 @@ func (ec *EventCollector) watchNodeIDFile() {
 // appended to local JSONL files which are rotated and uploaded to remote
 // storage asynchronously.
 func (ec *EventCollector) PersistEvents(req *restful.Request, resp *restful.Response) {
+	if ec.draining.Load() {
+		resp.AddHeader("Retry-After", "5")
+		resp.WriteErrorString(http.StatusServiceUnavailable, "event collector is shutting down")
+		return
+	}
+
 	// Disk pressure only applies when the local disk pipeline is in use.
 	if ec.underDiskPressure() {
 		resp.AddHeader("Retry-After", "10")
@@ -306,11 +322,14 @@ func (ec *EventCollector) PersistEvents(req *restful.Request, resp *restful.Resp
 		return
 	}
 
-	ec.writeMu.Lock()
-	defer ec.writeMu.Unlock()
-
-	touchedWriters := make(map[*activeFileState]struct{})
-
+	// Phase 1: validate and marshal all events before writing anything,
+	// so a mid-batch validation error cannot leave partial data on disk.
+	type preparedEvent struct {
+		sessionName string
+		category    string
+		line        []byte
+	}
+	prepared := make([]preparedEvent, 0, len(eventDatas))
 	for _, eventData := range eventDatas {
 		timestampStr, ok := eventData["timestamp"].(string)
 		if !ok {
@@ -330,33 +349,45 @@ func (ec *EventCollector) PersistEvents(req *restful.Request, resp *restful.Resp
 			return
 		}
 
-		// Session change: rotate all active files, then continue with the new session.
-		if ec.currentSessionName != sessionNameStr {
-			logrus.Infof("Session name changed from %s to %s, rotating active files", ec.currentSessionName, sessionNameStr)
-			ec.rotateAllFilesLocked()
-			ec.currentSessionName = sessionNameStr
-			touchedWriters = make(map[*activeFileState]struct{})
-		}
-
-		// Enrich event with the current node ID (matches prior behavior).
 		eventData["_nodeId"] = ec.currentNodeID
-
 		category := ec.categorize(eventData)
 
 		line, err := json.Marshal(eventData)
 		if err != nil {
 			logrus.Errorf("Failed to marshal event: %v", err)
-			continue
+			resp.WriteError(http.StatusInternalServerError, fmt.Errorf("marshal event: %w", err))
+			return
 		}
 
-		state, err := ec.getOrCreateActiveFileLocked(category, sessionNameStr)
+		prepared = append(prepared, preparedEvent{
+			sessionName: sessionNameStr,
+			category:    category,
+			line:        line,
+		})
+	}
+
+	// Phase 2: write all validated events under the lock.
+	ec.writeMu.Lock()
+	defer ec.writeMu.Unlock()
+
+	touchedWriters := make(map[*activeFileState]struct{})
+
+	for _, pe := range prepared {
+		if ec.currentSessionName != pe.sessionName {
+			logrus.Infof("Session name changed from %s to %s, rotating active files", ec.currentSessionName, pe.sessionName)
+			ec.rotateAllFilesLocked()
+			ec.currentSessionName = pe.sessionName
+			touchedWriters = make(map[*activeFileState]struct{})
+		}
+
+		state, err := ec.getOrCreateActiveFileLocked(pe.category, pe.sessionName)
 		if err != nil {
-			logrus.Errorf("Failed to open active file for %s: %v", category, err)
+			logrus.Errorf("Failed to open active file for %s: %v", pe.category, err)
 			resp.WriteError(http.StatusInternalServerError, err)
 			return
 		}
 
-		n, err := state.writer.Write(line)
+		n, err := state.writer.Write(pe.line)
 		if err != nil {
 			logrus.Errorf("Failed to write event to %s: %v", state.path, err)
 			resp.WriteError(http.StatusInternalServerError, err)
@@ -377,6 +408,8 @@ func (ec *EventCollector) PersistEvents(req *restful.Request, resp *restful.Resp
 	for state := range touchedWriters {
 		if err := state.writer.Flush(); err != nil {
 			logrus.Errorf("Failed to flush %s: %v", state.path, err)
+			resp.WriteError(http.StatusInternalServerError, fmt.Errorf("flush %s: %w", state.path, err))
+			return
 		}
 	}
 
@@ -644,9 +677,12 @@ func (ec *EventCollector) buildEventStorageKey(task rotationTask) string {
 		nodeID = ec.nodeID
 	}
 
-	ext := ".jsonl"
-	if ec.compressionEnabled {
-		ext = ".jsonl.gz"
+	ext := task.extOverride
+	if ext == "" {
+		ext = ".jsonl"
+		if ec.compressionEnabled {
+			ext = ".jsonl.gz"
+		}
 	}
 
 	fileName := fmt.Sprintf("%s-%s-%d%s", nodeID, hour, task.createdAt.UnixNano(), ext)
@@ -692,6 +728,8 @@ func (ec *EventCollector) initDiskUsage() {
 // resumePendingFiles enqueues any files left behind by a prior run for upload.
 // Pre-existing .jsonl files are treated as rotated (already-closed) and
 // compressed+uploaded. Pre-existing .jsonl.gz files are re-uploaded directly.
+// When both a .jsonl and its .jsonl.gz exist (failed cleanup), only the .gz is
+// uploaded to avoid duplicates.
 //
 // Directory layout: {clusterKey}/{sessionName}/{category}/{file}
 func (ec *EventCollector) resumePendingFiles() {
@@ -701,11 +739,19 @@ func (ec *EventCollector) resumePendingFiles() {
 		return
 	}
 
+	type pendingFile struct {
+		path     string
+		info     os.FileInfo
+		category string
+		session  string
+	}
+
+	// First pass: collect all event files.
+	gzFiles := make(map[string]pendingFile)   // keyed by base path without .gz
+	jsonlFiles := make(map[string]pendingFile) // keyed by full path
+
 	_ = filepath.Walk(clusterRoot, func(p string, info os.FileInfo, err error) error {
-		if err != nil {
-			return nil
-		}
-		if info.IsDir() {
+		if err != nil || info.IsDir() {
 			return nil
 		}
 
@@ -713,7 +759,6 @@ func (ec *EventCollector) resumePendingFiles() {
 		if err != nil {
 			return nil
 		}
-		// rel is like "{sessionName}/node_events/<file>" or "{sessionName}/job_events/<jobID>/<file>".
 		parts := strings.Split(filepath.ToSlash(rel), "/")
 		if len(parts) < 3 {
 			return nil
@@ -733,31 +778,59 @@ func (ec *EventCollector) resumePendingFiles() {
 			return nil
 		}
 
-		name := info.Name()
-		nodeID := nodeIDFromFileName(name)
-		task := rotationTask{
-			jsonlPath:   p,
-			category:    category,
-			sessionName: sessionName,
-			nodeID:      nodeID,
-			createdAt:   info.ModTime(),
-			size:        info.Size(),
-		}
+		pf := pendingFile{path: p, info: info, category: category, session: sessionName}
 
+		name := info.Name()
 		switch {
 		case strings.HasSuffix(name, ".jsonl.gz"):
-			// Already compressed: upload as-is by pretending the jsonlPath is the .gz
-			// and disabling further compression for this task.
-			go ec.uploadOnly(task, p)
+			basePath := strings.TrimSuffix(p, ".gz")
+			gzFiles[basePath] = pf
 		case strings.HasSuffix(name, ".jsonl"):
-			select {
-			case ec.rotationQueue <- task:
-			default:
-				logrus.Warnf("rotation queue full during resume, deferring %s", p)
-			}
+			jsonlFiles[p] = pf
 		}
 		return nil
 	})
+
+	// Second pass: process files, skipping .jsonl when a .jsonl.gz already exists.
+	for basePath, pf := range gzFiles {
+		delete(jsonlFiles, basePath) // skip the .jsonl counterpart
+
+		nodeID := nodeIDFromFileName(pf.info.Name())
+		task := rotationTask{
+			jsonlPath:   pf.path,
+			category:    pf.category,
+			sessionName: pf.session,
+			nodeID:      nodeID,
+			createdAt:   createdAtFromFileName(pf.info.Name(), pf.info.ModTime()),
+			size:        pf.info.Size(),
+			extOverride: ".jsonl.gz",
+		}
+		go ec.uploadOnly(task, pf.path)
+	}
+
+	for _, pf := range jsonlFiles {
+		nodeID := nodeIDFromFileName(pf.info.Name())
+		task := rotationTask{
+			jsonlPath:   pf.path,
+			category:    pf.category,
+			sessionName: pf.session,
+			nodeID:      nodeID,
+			createdAt:   createdAtFromFileName(pf.info.Name(), pf.info.ModTime()),
+			size:        pf.info.Size(),
+		}
+		select {
+		case ec.rotationQueue <- task:
+		default:
+			logrus.Warnf("rotation queue full during resume, scheduling retry for %s", pf.path)
+			go func(t rotationTask) {
+				time.Sleep(5 * time.Second)
+				select {
+				case ec.rotationQueue <- t:
+				case <-ec.stopped:
+				}
+			}(task)
+		}
+	}
 }
 
 // uploadOnly uploads a pre-existing compressed file to remote storage and
@@ -888,4 +961,21 @@ func nodeIDFromFileName(name string) string {
 		return ""
 	}
 	return base[:idx]
+}
+
+// createdAtFromFileName parses the UnixNano timestamp embedded in filenames
+// like "{nodeId}_{unixNano}.jsonl[.gz]". Falls back to fallback if parsing fails.
+func createdAtFromFileName(name string, fallback time.Time) time.Time {
+	base := strings.TrimSuffix(name, ".gz")
+	base = strings.TrimSuffix(base, ".jsonl")
+
+	idx := strings.LastIndex(base, "_")
+	if idx < 0 || idx >= len(base)-1 {
+		return fallback
+	}
+	nanos, err := strconv.ParseInt(base[idx+1:], 10, 64)
+	if err != nil {
+		return fallback
+	}
+	return time.Unix(0, nanos)
 }
