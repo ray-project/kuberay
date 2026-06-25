@@ -322,31 +322,40 @@ func (ec *EventCollector) PersistEvents(req *restful.Request, resp *restful.Resp
 		return
 	}
 
-	// Phase 1: validate and marshal all events before writing anything,
-	// so a mid-batch validation error cannot leave partial data on disk.
-	type preparedEvent struct {
-		sessionName string
-		category    string
-		line        []byte
-	}
-	prepared := make([]preparedEvent, 0, len(eventDatas))
+	// Phase 1: validate all events before acquiring the lock, so a
+	// mid-batch validation error cannot leave partial data on disk.
 	for _, eventData := range eventDatas {
-		timestampStr, ok := eventData["timestamp"].(string)
-		if !ok {
+		if _, ok := eventData["timestamp"].(string); !ok {
 			logrus.Errorf("Event timestamp not found or not a string")
 			resp.WriteError(http.StatusBadRequest, fmt.Errorf("timestamp not found"))
 			return
 		}
-		sessionNameStr, ok := eventData["sessionName"].(string)
-		if !ok {
+		if _, ok := eventData["sessionName"].(string); !ok {
 			logrus.Errorf("Event sessionName not found or not a string")
 			resp.WriteError(http.StatusBadRequest, fmt.Errorf("sessionName not found"))
 			return
 		}
-		if _, err := time.Parse(time.RFC3339Nano, timestampStr); err != nil {
+		if _, err := time.Parse(time.RFC3339Nano, eventData["timestamp"].(string)); err != nil {
 			logrus.Errorf("Failed to parse timestamp: %v", err)
 			resp.WriteError(http.StatusBadRequest, err)
 			return
+		}
+	}
+
+	// Phase 2: enrich, marshal, and write all validated events under the lock.
+	ec.writeMu.Lock()
+	defer ec.writeMu.Unlock()
+
+	touchedWriters := make(map[*activeFileState]struct{})
+
+	for _, eventData := range eventDatas {
+		sessionNameStr := eventData["sessionName"].(string)
+
+		if ec.currentSessionName != sessionNameStr {
+			logrus.Infof("Session name changed from %s to %s, rotating active files", ec.currentSessionName, sessionNameStr)
+			ec.rotateAllFilesLocked()
+			ec.currentSessionName = sessionNameStr
+			touchedWriters = make(map[*activeFileState]struct{})
 		}
 
 		eventData["_nodeId"] = ec.currentNodeID
@@ -359,35 +368,14 @@ func (ec *EventCollector) PersistEvents(req *restful.Request, resp *restful.Resp
 			return
 		}
 
-		prepared = append(prepared, preparedEvent{
-			sessionName: sessionNameStr,
-			category:    category,
-			line:        line,
-		})
-	}
-
-	// Phase 2: write all validated events under the lock.
-	ec.writeMu.Lock()
-	defer ec.writeMu.Unlock()
-
-	touchedWriters := make(map[*activeFileState]struct{})
-
-	for _, pe := range prepared {
-		if ec.currentSessionName != pe.sessionName {
-			logrus.Infof("Session name changed from %s to %s, rotating active files", ec.currentSessionName, pe.sessionName)
-			ec.rotateAllFilesLocked()
-			ec.currentSessionName = pe.sessionName
-			touchedWriters = make(map[*activeFileState]struct{})
-		}
-
-		state, err := ec.getOrCreateActiveFileLocked(pe.category, pe.sessionName)
+		state, err := ec.getOrCreateActiveFileLocked(category, sessionNameStr)
 		if err != nil {
-			logrus.Errorf("Failed to open active file for %s: %v", pe.category, err)
+			logrus.Errorf("Failed to open active file for %s: %v", category, err)
 			resp.WriteError(http.StatusInternalServerError, err)
 			return
 		}
 
-		n, err := state.writer.Write(pe.line)
+		n, err := state.writer.Write(line)
 		if err != nil {
 			logrus.Errorf("Failed to write event to %s: %v", state.path, err)
 			resp.WriteError(http.StatusInternalServerError, err)
