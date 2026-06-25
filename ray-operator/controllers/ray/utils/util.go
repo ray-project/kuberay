@@ -978,7 +978,7 @@ func FetchHeadServiceURL(ctx context.Context, cli client.Client, rayCluster *ray
 	return headServiceURL, nil
 }
 
-func GetRayDashboardClientFunc(ctx context.Context, mgr manager.Manager, useKubernetesProxy bool) func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error) {
+func GetRayDashboardClientFunc(ctx context.Context, mgr manager.Manager, useKubernetesProxy bool, enableMetrics bool) func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error) {
 	return func(rayCluster *rayv1.RayCluster, url string) (dashboardclient.RayDashboardClientInterface, error) {
 		dashboardClient := &dashboardclient.RayDashboardClient{}
 		var authToken string
@@ -1027,14 +1027,17 @@ func GetRayDashboardClientFunc(ctx context.Context, mgr manager.Manager, useKube
 			httpClient.Transport = mgr.GetHTTPClient().Transport
 			dashboardURL = fmt.Sprintf("%s/api/v1/namespaces/%s/services/%s:dashboard/proxy", mgr.GetConfig().Host, rayCluster.Namespace, headSvcName)
 		}
-		httpClient.Transport = httpclientmetrics.NewInstrumentedRoundTripper(httpClient.Transport, httpclientmetrics.ClientTypeDashboard, mode)
+		if enableMetrics {
+			histogram, counter := httpclientmetrics.DashboardClientMetrics()
+			httpClient.Transport = httpclientmetrics.NewInstrumentedRoundTripper(httpClient.Transport, histogram, counter, mode)
+		}
 		dashboardClient.InitClient(httpClient, dashboardURL, authToken)
 
 		return dashboardClient, nil
 	}
 }
 
-func GetRayHttpProxyClientFunc(mgr manager.Manager, useKubernetesProxy bool) func(hostIp, podNamespace, podName string, port int) RayHttpProxyClientInterface {
+func GetRayHttpProxyClientFunc(mgr manager.Manager, useKubernetesProxy bool, enableMetrics bool) func(hostIp, podNamespace, podName string, port int) RayHttpProxyClientInterface {
 	return func(hostIp, podNamespace, podName string, port int) RayHttpProxyClientInterface {
 		httpClient := &http.Client{
 			Timeout: rayHTTPClientTimeout(useKubernetesProxy),
@@ -1048,7 +1051,10 @@ func GetRayHttpProxyClientFunc(mgr manager.Manager, useKubernetesProxy bool) fun
 			httpClient.Transport = mgr.GetHTTPClient().Transport
 			httpProxyURL = fmt.Sprintf("%s/api/v1/namespaces/%s/pods/%s:%d/proxy/", mgr.GetConfig().Host, podNamespace, podName, port)
 		}
-		httpClient.Transport = httpclientmetrics.NewInstrumentedRoundTripper(httpClient.Transport, httpclientmetrics.ClientTypeProxy, mode)
+		if enableMetrics {
+			histogram, counter := httpclientmetrics.ProxyClientMetrics()
+			httpClient.Transport = httpclientmetrics.NewInstrumentedRoundTripper(httpClient.Transport, histogram, counter, mode)
+		}
 
 		return &RayHttpProxyClient{
 			client:       httpClient,
