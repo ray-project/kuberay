@@ -27,6 +27,12 @@ type ClusterUpgradeOptionsApplyConfiguration struct {
 	// and the operator may only adjust traffic weights. This is an alternative to specifying a Gateway;
 	// exactly one of GatewayClassName or HTTPRouteName must be set.
 	HTTPRouteName *string `json:"httpRouteName,omitempty"`
+	// HTTPRouteInProgressLabels are labels the operator sets on the adopted HTTPRoute while it is
+	// actively splitting traffic during an upgrade, and removes once traffic collapses back to a
+	// single cluster. They let a GitOps controller (e.g. Argo CD) ignore the operator's temporary
+	// backendRef edits only while an upgrade is in progress, then resume reconciling the route.
+	// Only valid together with HTTPRouteName.
+	HTTPRouteInProgressLabels map[string]string `json:"httpRouteInProgressLabels,omitempty"`
 }
 
 // ClusterUpgradeOptionsApplyConfiguration constructs a declarative configuration of the ClusterUpgradeOptions type for use with
@@ -72,5 +78,19 @@ func (b *ClusterUpgradeOptionsApplyConfiguration) WithGatewayClassName(value str
 // If called multiple times, the HTTPRouteName field is set to the value of the last call.
 func (b *ClusterUpgradeOptionsApplyConfiguration) WithHTTPRouteName(value string) *ClusterUpgradeOptionsApplyConfiguration {
 	b.HTTPRouteName = &value
+	return b
+}
+
+// WithHTTPRouteInProgressLabels puts the entries into the HTTPRouteInProgressLabels field in the declarative configuration
+// and returns the receiver, so that objects can be build by chaining "With" function invocations.
+// If called multiple times, the entries provided by each call will be put on the HTTPRouteInProgressLabels field,
+// overwriting an existing map entries in HTTPRouteInProgressLabels field with the same key.
+func (b *ClusterUpgradeOptionsApplyConfiguration) WithHTTPRouteInProgressLabels(entries map[string]string) *ClusterUpgradeOptionsApplyConfiguration {
+	if b.HTTPRouteInProgressLabels == nil && len(entries) > 0 {
+		b.HTTPRouteInProgressLabels = make(map[string]string, len(entries))
+	}
+	for k, v := range entries {
+		b.HTTPRouteInProgressLabels[k] = v
+	}
 	return b
 }

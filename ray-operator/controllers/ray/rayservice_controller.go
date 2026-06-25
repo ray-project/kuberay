@@ -1129,20 +1129,59 @@ func (r *RayServiceReconciler) reconcileAdoptedHTTPRoute(ctx context.Context, ra
 		return nil, errstd.New("adopted HTTPRoute has no rules whose backendRefs can be patched")
 	}
 
+	// The route is "in progress" while it is split across more than one cluster. Stamp the
+	// configured labels during that window (so a GitOps controller can ignore our backendRef edits)
+	// and remove them once traffic collapses back to a single cluster.
+	options := utils.GetRayServiceClusterUpgradeOptions(&rayServiceInstance.Spec)
+	inProgress := len(backendRefs) > 1
+	labelsChanged := applyInProgressLabels(existingHTTPRoute, options.HTTPRouteInProgressLabels, inProgress)
+
 	// Patch only the backendRefs of the first rule, preserving everything else the external owner set.
-	if !utils.BackendRefsEqual(existingHTTPRoute.Spec.Rules[0].BackendRefs, backendRefs) {
-		logger.Info("Patching backendRefs of adopted HTTPRoute", "name", existingHTTPRoute.Name)
+	backendRefsChanged := !utils.BackendRefsEqual(existingHTTPRoute.Spec.Rules[0].BackendRefs, backendRefs)
+	if backendRefsChanged {
 		existingHTTPRoute.Spec.Rules[0].BackendRefs = backendRefs
+	}
+
+	if backendRefsChanged || labelsChanged {
+		logger.Info("Updating adopted HTTPRoute", "name", existingHTTPRoute.Name, "backendRefsChanged", backendRefsChanged, "labelsChanged", labelsChanged)
 		if err := r.Update(ctx, existingHTTPRoute); err != nil {
 			r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeWarning, string(utils.FailedToUpdateHTTPRoute),
 				"Failed to update the adopted HTTPRoute %s/%s: %v", existingHTTPRoute.Namespace, existingHTTPRoute.Name, err)
 			return nil, err
 		}
 		r.Recorder.Eventf(rayServiceInstance, corev1.EventTypeNormal, string(utils.UpdatedHTTPRoute),
-			"Patched backendRefs of the adopted HTTPRoute %s/%s", existingHTTPRoute.Namespace, existingHTTPRoute.Name)
+			"Updated the adopted HTTPRoute %s/%s", existingHTTPRoute.Namespace, existingHTTPRoute.Name)
 	}
 
 	return existingHTTPRoute, nil
+}
+
+// applyInProgressLabels adds the given labels to the HTTPRoute when an upgrade is in progress, or
+// removes those keys otherwise. It returns whether the route's labels were modified.
+func applyInProgressLabels(httpRoute *gwv1.HTTPRoute, labels map[string]string, inProgress bool) bool {
+	if len(labels) == 0 {
+		return false
+	}
+	changed := false
+	if inProgress {
+		if httpRoute.Labels == nil {
+			httpRoute.Labels = map[string]string{}
+		}
+		for k, v := range labels {
+			if httpRoute.Labels[k] != v {
+				httpRoute.Labels[k] = v
+				changed = true
+			}
+		}
+	} else {
+		for k := range labels {
+			if _, ok := httpRoute.Labels[k]; ok {
+				delete(httpRoute.Labels, k)
+				changed = true
+			}
+		}
+	}
+	return changed
 }
 
 // createHTTPRoute creates a desired HTTPRoute object for RayService incremental upgrade.

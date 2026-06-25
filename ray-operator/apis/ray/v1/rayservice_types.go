@@ -85,6 +85,13 @@ type ClusterUpgradeOptions struct {
 	// exactly one of GatewayClassName or HTTPRouteName must be set.
 	// +optional
 	HTTPRouteName string `json:"httpRouteName,omitempty"`
+	// HTTPRouteInProgressLabels are labels the operator sets on the adopted HTTPRoute while it is
+	// actively splitting traffic during an upgrade, and removes once traffic collapses back to a
+	// single cluster. They let a GitOps controller (e.g. Argo CD) ignore the operator's temporary
+	// backendRef edits only while an upgrade is in progress, then resume reconciling the route.
+	// Only valid together with HTTPRouteName.
+	// +optional
+	HTTPRouteInProgressLabels map[string]string `json:"httpRouteInProgressLabels,omitempty"`
 }
 
 type RayServiceUpgradeStrategy struct {

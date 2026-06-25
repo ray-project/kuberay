@@ -553,6 +553,10 @@ func ValidateClusterUpgradeOptions(rayService *rayv1.RayService) error {
 		return fmt.Errorf("exactly one of gatewayClassName or httpRouteName is required for NewClusterWithIncrementalUpgrade")
 	}
 
+	if len(options.HTTPRouteInProgressLabels) > 0 && !hasHTTPRouteName {
+		return fmt.Errorf("httpRouteInProgressLabels can only be set together with httpRouteName")
+	}
+
 	return nil
 }
 

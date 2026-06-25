@@ -9014,6 +9014,10 @@ spec:
                     properties:
                       gatewayClassName:
                         type: string
+                      httpRouteInProgressLabels:
+                        additionalProperties:
+                          type: string
+                        type: object
                       httpRouteName:
                         type: string
                       intervalSeconds:
