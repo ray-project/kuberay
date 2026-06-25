@@ -1,23 +1,12 @@
 package httpclientmetrics
 
 import (
-	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-)
-
-// ClientType identifies which Ray HTTP client is being instrumented.
-type ClientType string
-
-const (
-	// ClientTypeDashboard instruments the Ray dashboard API client.
-	ClientTypeDashboard ClientType = "dashboard"
-	// ClientTypeProxy instruments the Ray Serve proxy health-check client.
-	ClientTypeProxy ClientType = "proxy"
 )
 
 // Mode describes how the operator reaches the Ray component.
@@ -75,6 +64,16 @@ func RegisterMetrics(reg prometheus.Registerer) {
 	reg.MustRegister(proxyClientRequestsTotal)
 }
 
+// DashboardClientMetrics returns the collectors used for Ray dashboard client requests.
+func DashboardClientMetrics() (*prometheus.HistogramVec, *prometheus.CounterVec) {
+	return dashboardClientRequestDuration, dashboardClientRequestsTotal
+}
+
+// ProxyClientMetrics returns the collectors used for Ray Serve proxy client requests.
+func ProxyClientMetrics() (*prometheus.HistogramVec, *prometheus.CounterVec) {
+	return proxyClientRequestDuration, proxyClientRequestsTotal
+}
+
 // instrumentedRoundTripper wraps an http.RoundTripper to record request
 // duration and count metrics for outbound HTTP calls to Ray components.
 type instrumentedRoundTripper struct {
@@ -86,21 +85,12 @@ type instrumentedRoundTripper struct {
 
 // NewInstrumentedRoundTripper returns a new http.RoundTripper that records
 // latency and request count metrics.
-func NewInstrumentedRoundTripper(inner http.RoundTripper, clientType ClientType, mode Mode) http.RoundTripper {
+func NewInstrumentedRoundTripper(inner http.RoundTripper, histogram *prometheus.HistogramVec, counter *prometheus.CounterVec, mode Mode) http.RoundTripper {
 	if inner == nil {
 		inner = http.DefaultTransport
 	}
-	var histogram *prometheus.HistogramVec
-	var counter *prometheus.CounterVec
-	switch clientType {
-	case ClientTypeDashboard:
-		histogram = dashboardClientRequestDuration
-		counter = dashboardClientRequestsTotal
-	case ClientTypeProxy:
-		histogram = proxyClientRequestDuration
-		counter = proxyClientRequestsTotal
-	default:
-		panic(fmt.Sprintf("unknown clientType: %q", clientType))
+	if histogram == nil || counter == nil {
+		return inner
 	}
 	return &instrumentedRoundTripper{
 		inner:     inner,
@@ -135,8 +125,9 @@ func (t *instrumentedRoundTripper) RoundTrip(req *http.Request) (*http.Response,
 func normalizeEndpoint(urlPath string) string {
 	// Strip Kubernetes API server proxy prefix if present.
 	// e.g., /api/v1/namespaces/default/services/svc:dashboard/proxy/api/jobs/id
-	if idx := strings.Index(urlPath, "/proxy/"); idx != -1 {
-		urlPath = urlPath[idx+len("/proxy"):]
+	const kubernetesProxyPathSegment = "/proxy/"
+	if idx := strings.LastIndex(urlPath, kubernetesProxyPathSegment); idx != -1 {
+		urlPath = urlPath[idx+len(kubernetesProxyPathSegment)-1:]
 	}
 
 	if strings.HasPrefix(urlPath, "/api/serve/") {

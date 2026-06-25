@@ -32,6 +32,29 @@ func Pods(t Test, namespace string, options ...Option[*metav1.ListOptions]) func
 	}
 }
 
+// GetReadyOperatorPod returns a running and ready kuberay-operator pod with a pod IP.
+func GetReadyOperatorPod(g *gomega.WithT, t Test) *corev1.Pod {
+	var operatorPod *corev1.Pod
+	g.Eventually(func(g gomega.Gomega) bool {
+		operatorPods, err := t.Client().Core().CoreV1().Pods("").List(t.Ctx(), metav1.ListOptions{
+			LabelSelector: "app.kubernetes.io/component=kuberay-operator",
+		})
+		g.Expect(err).NotTo(gomega.HaveOccurred())
+
+		for i := range operatorPods.Items {
+			pod := &operatorPods.Items[i]
+			if IsPodRunningAndReady(pod) && pod.Status.PodIP != "" {
+				operatorPod = pod.DeepCopy()
+				return true
+			}
+		}
+		return false
+	}, TestTimeoutShort).Should(gomega.BeTrue(), "no kuberay-operator pod was running, ready, and assigned a PodIP")
+
+	LogWithTimestamp(t.T(), "Found ready operator pod %s/%s", operatorPod.Namespace, operatorPod.Name)
+	return operatorPod
+}
+
 func storeAllPodLogs(t Test, namespace *corev1.Namespace) {
 	t.T().Helper()
 

@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	. "github.com/onsi/gomega"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	rayv1ac "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/ray/v1"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
@@ -37,15 +36,8 @@ func TestRayServiceHTTPClientMetrics(t *testing.T) {
 	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutMedium).
 		Should(WithTransform(IsRayServiceReady, BeTrue()))
 
-	// Find the operator pod.
-	operatorPods, err := test.Client().Core().CoreV1().Pods("").List(test.Ctx(), metav1.ListOptions{
-		LabelSelector: "app.kubernetes.io/component=kuberay-operator",
-	})
-	g.Expect(err).NotTo(HaveOccurred())
-	g.Expect(operatorPods.Items).NotTo(BeEmpty(), "kuberay-operator pod not found")
-
-	operatorPod := operatorPods.Items[0]
-	LogWithTimestamp(test.T(), "Found operator pod %s/%s", operatorPod.Namespace, operatorPod.Name)
+	// Find a ready operator pod to scrape metrics.
+	operatorPod := GetReadyOperatorPod(g, test)
 
 	// Create a curl pod to scrape the operator's metrics endpoint from within the cluster.
 	curlPodName := "metrics-curl-pod"
