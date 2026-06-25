@@ -55,6 +55,15 @@ const (
 	// Enables per-container restart policy for SidecarMode submitter to handle transient failures.
 	// Requires Kubernetes v1.35+ since it supports ContainerRestartPolicy by default starting in v1.35 and Ray v2.54.0+.
 	SidecarSubmitterRestart featuregate.Feature = "SidecarSubmitterRestart"
+
+	// owner: N/A
+	// rep: N/A
+	// alpha: v1.8
+	//
+	// When enabled, the RestartPolicy for head and worker pods is no longer forced to Never
+	// when autoscaler V2 is active, allowing users to set any RestartPolicy they prefer.
+	// The validation that enforces RestartPolicy=Never when using autoscaler V2 is also skipped.
+	AutoscalerFlexibleRestartPolicy featuregate.Feature = "AutoscalerFlexibleRestartPolicy"
 )
 
 func init() {
@@ -62,12 +71,13 @@ func init() {
 }
 
 var defaultFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
-	RayClusterStatusConditions:   {Default: true, PreRelease: featuregate.Beta},
-	RayJobDeletionPolicy:         {Default: true, PreRelease: featuregate.Beta},
-	RayMultiHostIndexing:         {Default: true, PreRelease: featuregate.Beta},
-	RayServiceIncrementalUpgrade: {Default: false, PreRelease: featuregate.Alpha},
-	RayCronJob:                   {Default: false, PreRelease: featuregate.Alpha},
-	SidecarSubmitterRestart:      {Default: false, PreRelease: featuregate.Alpha},
+	RayClusterStatusConditions:      {Default: true, PreRelease: featuregate.Beta},
+	RayJobDeletionPolicy:            {Default: true, PreRelease: featuregate.Beta},
+	RayMultiHostIndexing:            {Default: true, PreRelease: featuregate.Beta},
+	RayServiceIncrementalUpgrade:    {Default: false, PreRelease: featuregate.Alpha},
+	RayCronJob:                      {Default: false, PreRelease: featuregate.Alpha},
+	SidecarSubmitterRestart:         {Default: false, PreRelease: featuregate.Alpha},
+	AutoscalerFlexibleRestartPolicy: {Default: false, PreRelease: featuregate.Alpha},
 }
 
 // SetFeatureGateDuringTest is a helper method to override feature gates in tests.

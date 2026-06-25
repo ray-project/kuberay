@@ -215,7 +215,7 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 			return fmt.Errorf("both .spec.autoscalerOptions.version and head Pod env var %s are set, please only use the former", RAY_ENABLE_AUTOSCALER_V2)
 		}
 
-		if IsAutoscalingV2Enabled(spec) {
+		if IsAutoscalingV2Enabled(spec) && !features.Enabled(features.AutoscalerFlexibleRestartPolicy) {
 			if spec.HeadGroupSpec.Template.Spec.RestartPolicy != "" && spec.HeadGroupSpec.Template.Spec.RestartPolicy != corev1.RestartPolicyNever {
 				return fmt.Errorf("restartPolicy for head Pod should be Never or unset when using autoscaler V2")
 			}
