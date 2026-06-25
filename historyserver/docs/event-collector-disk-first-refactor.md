@@ -2,9 +2,15 @@
 
 ## 1. Overview
 
-The event collector uses a **disk-first storage pipeline**: all events received via `POST /v1/events` are immediately appended to local JSONL files, which are periodically rotated, optionally compressed, and uploaded to remote storage. There is no in-memory buffering path — every event hits disk before it leaves the collector.
+The event collector uses a **disk-first storage pipeline**: all events
+received via `POST /v1/events` are immediately appended to local JSONL
+files, which are periodically rotated, optionally compressed, and
+uploaded to remote storage. There is no in-memory buffering path —
+every event hits disk before it leaves the collector.
 
-The `--event-compression-enabled` flag controls **only whether rotated files are gzipped before upload**. It does not affect the write path, rotation logic, or disk pressure enforcement.
+The `--event-compression-enabled` flag controls **only whether rotated
+files are gzipped before upload**. It does not affect the write path,
+rotation logic, or disk pressure enforcement.
 
 ### Key Design Decisions
 
@@ -19,7 +25,7 @@ The `--event-compression-enabled` flag controls **only whether rotated files are
 
 ### 2.1 Data Flow
 
-```
+```text
 POST /v1/events (PersistEvents)
        │
        ▼
@@ -77,7 +83,7 @@ Five conditions trigger file rotation (close current JSONL → enqueue for uploa
 | # | Trigger | Condition | Source |
 |---|---------|-----------|--------|
 | 1 | **Time-based** | File age ≥ `--event-rotation-interval` (default 5 min) | `rotationLoop` → `checkRotation()` |
-| 2 | **Size-based** | File size ≥ `--event-max-file-size-mb` (default 100 MB) | Same check, `||` with time |
+| 2 | **Size-based** | File size ≥ `--event-max-file-size-mb` (default 100 MB) | Same check, `\|\|` with time |
 | 3 | **Session change** | Incoming `sessionName` ≠ current session | `PersistEvents()` — synchronous |
 | 4 | **Node ID change** | `raylet_node_id` file content changes | `watchNodeIDFile()` via fsnotify |
 | 5 | **Graceful shutdown** | `stop` channel closed | `Run()` → `rotateAllFiles()` |
@@ -88,7 +94,7 @@ When the rotation queue is full (256 tasks), a retry goroutine sleeps 5 s and re
 
 When `totalDiskUsed ≥ --event-max-disk-mb × 0.8` (watermark), `POST /v1/events` returns:
 
-```
+```text
 HTTP/1.1 503 Service Unavailable
 Retry-After: 10
 ```
@@ -142,7 +148,7 @@ On startup, `resumePendingFiles()` walks the data directory for leftover files f
 
 ### 4.1 Key Format
 
-```
+```text
 {root}/{cluster}_{namespace}/{session}/{category}/{nodeID}-{hour}-{unixNano}{ext}
 ```
 
@@ -159,7 +165,7 @@ On startup, `resumePendingFiles()` walks the data directory for leftover files f
 
 ### 4.2 Example Directory Tree
 
-```
+```text
 history/raycluster_default/session_2026-05-25_23-57-32_105179_1/
 ├── node_events/
 │   ├── e0b640ed...-2026-05-26-06-1779778962997018939.jsonl
@@ -186,7 +192,9 @@ history/raycluster_default/session_2026-05-25_23-57-32_105179_1/
 
 ## 5. End-to-End Verification
 
-The following evidence was collected on a remote Kubernetes cluster to validate the full pipeline: collector → OSS storage → historyserver query.
+The following evidence was collected on a remote Kubernetes cluster
+to validate the full pipeline: collector → OSS storage →
+historyserver query.
 
 ### 5.1 Environment
 
@@ -207,7 +215,7 @@ The following evidence was collected on a remote Kubernetes cluster to validate 
 <details>
 <summary>OSS file structure (from HistoryServer ListFiles logs)</summary>
 
-```
+```text
 log/raycluster-historyserver_default/session_2026-05-25_23-57-32_105179_1/
 ├── logs/
 │   ├── 2bf074fd.../events/  (5 files: event_CORE_WORKER_*, event_RAYLET)
@@ -280,7 +288,7 @@ During verification, a bug was discovered in the Aliyun OSS storage implementati
 <details>
 <summary>Before fix — ListFiles vs GetObject path mismatch</summary>
 
-```
+```text
 # ListFiles succeeds (has log/ prefix)
 "[ListFiles]Returned objects in log/raycluster-historyserver_default/session_.../logs/..."
 
@@ -296,7 +304,7 @@ During verification, a bug was discovered in the Aliyun OSS storage implementati
 <details>
 <summary>After fix — paths consistent</summary>
 
-```
+```text
 # GetObject succeeds (has log/ prefix)
 "Prepare to get object log/raycluster-historyserver_default/session_.../logs/.../event_CORE_WORKER_1044.log"
 # Event loading succeeds
@@ -351,4 +359,8 @@ During verification, a bug was discovered in the Aliyun OSS storage implementati
 | `go test ./pkg/collector/eventcollector/` | 18/18 pass |
 | `go test ./pkg/eventserver/...` | All pass |
 
-Retained tests cover: helper functions, gzip compression, disk accounting, JSONL file creation, rotation (empty file drop, size trigger, session change), disk pressure rejection, end-to-end persist + upload (compressed and uncompressed), storage key format, and atomic counter types.
+Retained tests cover: helper functions, gzip compression, disk
+accounting, JSONL file creation, rotation (empty file drop, size
+trigger, session change), disk pressure rejection, end-to-end
+persist + upload (compressed and uncompressed), storage key format,
+and atomic counter types.

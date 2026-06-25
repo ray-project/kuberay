@@ -525,5 +525,3 @@ func TestAtomicInt64Type(t *testing.T) {
 	x.Store(5)
 	assert.Equal(t, int64(5), x.Load())
 }
-
-
