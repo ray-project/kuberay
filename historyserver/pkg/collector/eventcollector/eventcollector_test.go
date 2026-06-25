@@ -319,7 +319,6 @@ func TestPersistEvents_AppendsJSONLToDisk(t *testing.T) {
 	var m map[string]interface{}
 	require.NoError(t, json.Unmarshal([]byte(lines[0]), &m))
 	assert.Equal(t, "e1", m["eventId"])
-	assert.Equal(t, "node-1", m["_nodeId"])
 
 	// Job file exists and has one line.
 	jobBytes, err := os.ReadFile(jobState.path)

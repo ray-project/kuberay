@@ -358,7 +358,6 @@ func (ec *EventCollector) PersistEvents(req *restful.Request, resp *restful.Resp
 			touchedWriters = make(map[*activeFileState]struct{})
 		}
 
-		eventData["_nodeId"] = ec.currentNodeID
 		category := ec.categorize(eventData)
 
 		line, err := json.Marshal(eventData)
