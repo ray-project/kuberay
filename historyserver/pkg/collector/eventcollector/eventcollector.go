@@ -182,7 +182,7 @@ func NewEventCollector(
 // reconciler. It blocks until stop is closed.
 func (ec *EventCollector) Run(stop <-chan struct{}, port int) {
 	if err := os.MkdirAll(ec.dataDir, 0o755); err != nil {
-		logrus.Errorf("Failed to create event data dir %s: %v", ec.dataDir, err)
+		logrus.Fatalf("Failed to create event data dir %s: %v", ec.dataDir, err)
 	}
 
 	// Initialize disk usage counter + resume any files left from a prior run.
@@ -342,11 +342,30 @@ func (ec *EventCollector) PersistEvents(req *restful.Request, resp *restful.Resp
 		}
 	}
 
-	// Phase 2: enrich, marshal, and write all validated events under the lock.
+	// Phase 2: marshal and write all validated events under the lock.
 	ec.writeMu.Lock()
 	defer ec.writeMu.Unlock()
 
 	touchedWriters := make(map[*activeFileState]struct{})
+	var writeErr error
+
+	// Best-effort flush on any exit path so on-disk state stays consistent
+	// with state.size / totalDiskUsed accounting.
+	defer func() {
+		for state := range touchedWriters {
+			if err := state.writer.Flush(); err != nil {
+				logrus.Errorf("Failed to flush %s: %v", state.path, err)
+				if writeErr == nil {
+					writeErr = fmt.Errorf("flush %s: %w", state.path, err)
+				}
+			}
+		}
+		if writeErr != nil {
+			resp.WriteError(http.StatusInternalServerError, writeErr)
+		} else {
+			resp.WriteHeader(http.StatusOK)
+		}
+	}()
 
 	for _, eventData := range eventDatas {
 		sessionNameStr := eventData["sessionName"].(string)
@@ -363,27 +382,27 @@ func (ec *EventCollector) PersistEvents(req *restful.Request, resp *restful.Resp
 		line, err := json.Marshal(eventData)
 		if err != nil {
 			logrus.Errorf("Failed to marshal event: %v", err)
-			resp.WriteError(http.StatusInternalServerError, fmt.Errorf("marshal event: %w", err))
+			writeErr = fmt.Errorf("marshal event: %w", err)
 			return
 		}
 
 		state, err := ec.getOrCreateActiveFileLocked(category, sessionNameStr)
 		if err != nil {
 			logrus.Errorf("Failed to open active file for %s: %v", category, err)
-			resp.WriteError(http.StatusInternalServerError, err)
+			writeErr = err
 			return
 		}
 
 		n, err := state.writer.Write(line)
 		if err != nil {
 			logrus.Errorf("Failed to write event to %s: %v", state.path, err)
-			resp.WriteError(http.StatusInternalServerError, err)
+			writeErr = err
 			return
 		}
 		m, err := state.writer.WriteString("\n")
 		if err != nil {
 			logrus.Errorf("Failed to write newline to %s: %v", state.path, err)
-			resp.WriteError(http.StatusInternalServerError, err)
+			writeErr = err
 			return
 		}
 		written := int64(n + m)
@@ -391,16 +410,6 @@ func (ec *EventCollector) PersistEvents(req *restful.Request, resp *restful.Resp
 		ec.totalDiskUsed.Add(written)
 		touchedWriters[state] = struct{}{}
 	}
-
-	for state := range touchedWriters {
-		if err := state.writer.Flush(); err != nil {
-			logrus.Errorf("Failed to flush %s: %v", state.path, err)
-			resp.WriteError(http.StatusInternalServerError, fmt.Errorf("flush %s: %w", state.path, err))
-			return
-		}
-	}
-
-	resp.WriteHeader(http.StatusOK)
 }
 
 // categorize determines the storage category path for an event.
@@ -517,8 +526,10 @@ func (ec *EventCollector) rotateFileLocked(category string) error {
 	}
 	delete(ec.activeFiles, category)
 
+	flushFailed := false
 	if err := state.writer.Flush(); err != nil {
 		logrus.Errorf("Failed to flush %s before rotation: %v", state.path, err)
+		flushFailed = true
 	}
 	if err := state.file.Sync(); err != nil {
 		logrus.Warnf("Failed to sync %s before rotation: %v", state.path, err)
@@ -527,12 +538,23 @@ func (ec *EventCollector) rotateFileLocked(category string) error {
 		logrus.Errorf("Failed to close %s before rotation: %v", state.path, err)
 	}
 
-	// Empty file: drop it without uploading to avoid useless uploads.
-	if state.size == 0 {
+	// Use actual on-disk size — if flush failed, state.size includes bytes
+	// that never made it to disk.
+	diskSize := state.size
+	if info, err := os.Stat(state.path); err == nil {
+		diskSize = info.Size()
+	}
+
+	if diskSize == 0 {
 		if err := os.Remove(state.path); err != nil && !os.IsNotExist(err) {
 			logrus.Warnf("Failed to remove empty rotated file %s: %v", state.path, err)
 		}
 		return nil
+	}
+
+	if flushFailed {
+		logrus.Warnf("Skipping upload of %s: flush failed, on-disk content may be incomplete", state.path)
+		return fmt.Errorf("flush failed for %s, file retained for manual recovery", state.path)
 	}
 
 	task := rotationTask{
