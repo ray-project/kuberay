@@ -1,16 +1,19 @@
 package localtest
 
 import (
+	"encoding/json"
 	"io"
 
 	"github.com/ray-project/kuberay/historyserver/pkg/collector/types"
 	"github.com/ray-project/kuberay/historyserver/pkg/storage"
+	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
 // MockWriter is a mock implementation of the StorageWriter interface
 type MockWriter struct {
 	directories map[string]bool
 	files       map[string]string // filePath -> content
+	metaJsons   map[string]string // metaPath -> JSON string
 }
 
 // NewMockWriter creates a new mock writer
@@ -18,6 +21,7 @@ func NewMockWriter() *MockWriter {
 	return &MockWriter{
 		directories: make(map[string]bool),
 		files:       make(map[string]string),
+		metaJsons:   make(map[string]string),
 	}
 }
 
@@ -35,6 +39,16 @@ func (w *MockWriter) WriteFile(file string, reader io.ReadSeeker) error {
 	}
 
 	w.files[file] = string(content)
+	return nil
+}
+
+// WriteMeta writes a meta.json file (mock implementation)
+func (w *MockWriter) WriteMeta(path string, meta utils.MetaJson) error {
+	data, err := json.Marshal(meta)
+	if err != nil {
+		return err
+	}
+	w.metaJsons[path] = string(data)
 	return nil
 }
 
