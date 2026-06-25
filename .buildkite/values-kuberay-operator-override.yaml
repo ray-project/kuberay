@@ -9,6 +9,9 @@
 # Usage examples:
 #   helm install kuberay-operator kuberay/kuberay-operator -f ../.buildkite/values-kuberay-operator-override.yaml
 #   (add or remove feature gates below as e2e scenarios expand)
+metrics:
+  enabled: true
+
 featureGates:
   - name: RayClusterStatusConditions
     enabled: true
