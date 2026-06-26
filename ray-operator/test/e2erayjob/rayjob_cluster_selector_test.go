@@ -126,7 +126,6 @@ env_vars:
 				WithClusterSelector(map[string]string{utils.RayClusterLabelKey: rayCluster.Name}).
 				WithEntrypoint("python /home/ray/jobs/long_running.py").
 				WithShutdownAfterJobFinishes(true).
-				WithSubmissionMode(rayv1.HTTPMode).
 				WithSubmitterPodTemplate(JobSubmitterPodTemplateApplyConfiguration()))
 
 		rayJob, err := test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
