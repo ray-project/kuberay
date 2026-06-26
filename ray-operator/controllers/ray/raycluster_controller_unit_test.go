@@ -19,6 +19,7 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"math"
 	"os"
 	"reflect"
@@ -4072,6 +4073,63 @@ func TestReconcile_TLSBYOC_AllowedWithoutCertManager(t *testing.T) {
 	default:
 		// No events -- expected for BYOC mode passing the guard.
 	}
+}
+
+func TestReconcile_MTLSFinalizerRemovedWhenControllerInactive(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.RayClusterMTLS, false)
+
+	now := metav1.Now()
+	cluster := &rayv1.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              "tls-del-cluster",
+			Namespace:         "default",
+			UID:               "test-uid-12345678",
+			DeletionTimestamp: &now,
+			Finalizers:        []string{utils.MTLSCleanupFinalizer},
+		},
+		Spec: rayv1.RayClusterSpec{
+			TLSOptions: &rayv1.TLSOptions{},
+			HeadGroupSpec: rayv1.HeadGroupSpec{
+				RayStartParams: map[string]string{"dashboard-host": "0.0.0.0"},
+				Template: corev1.PodTemplateSpec{
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{{Name: "ray-head", Image: "rayproject/ray:latest"}},
+					},
+				},
+			},
+		},
+	}
+
+	headSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fmt.Sprintf("%s-%s", utils.RayHeadSecretPrefix, cluster.Name),
+			Namespace: "default",
+		},
+	}
+
+	s := newMTLSTestScheme()
+	fakeClient := clientFake.NewClientBuilder().
+		WithScheme(s).
+		WithRuntimeObjects(cluster, headSecret).
+		WithStatusSubresource(cluster).
+		Build()
+
+	r := &RayClusterReconciler{
+		Client:   fakeClient,
+		Scheme:   s,
+		Recorder: record.NewFakeRecorder(10),
+		options:  RayClusterReconcilerOptions{CertManagerAvailable: true},
+	}
+
+	result, err := r.Reconcile(context.Background(), ctrl.Request{
+		NamespacedName: types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, ctrl.Result{}, result)
+
+	updated := &rayv1.RayCluster{}
+	err = fakeClient.Get(context.Background(), types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace}, updated)
+	assert.True(t, k8serrors.IsNotFound(err), "cluster should be fully deleted after finalizer removal")
 }
 
 func TestInjectMTLSLoopbackRayAddress(t *testing.T) {

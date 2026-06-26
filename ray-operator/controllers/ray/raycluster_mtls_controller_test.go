@@ -247,16 +247,19 @@ func TestMTLSController_AutoGenerate_UpdatesIPAddresses(t *testing.T) {
 	cluster := newMTLSTestCluster("test-cluster")
 	cluster.Spec.TLSOptions = &rayv1.TLSOptions{}
 
-	pod := &corev1.Pod{
+	headPod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-cluster-head-0",
 			Namespace: "default",
-			Labels:    map[string]string{utils.RayClusterLabelKey: cluster.Name},
+			Labels: map[string]string{
+				utils.RayClusterLabelKey:  cluster.Name,
+				utils.RayNodeTypeLabelKey: string(rayv1.HeadNode),
+			},
 		},
 		Status: corev1.PodStatus{PodIP: "10.244.0.5"},
 	}
 
-	r := newMTLSController(t, cluster, pod)
+	r := newMTLSController(t, cluster, headPod)
 	ctx := context.Background()
 	req := ctrl.Request{NamespacedName: types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace}}
 
@@ -267,7 +270,7 @@ func TestMTLSController_AutoGenerate_UpdatesIPAddresses(t *testing.T) {
 	_, err = r.Reconcile(ctx, req)
 	require.NoError(t, err)
 
-	// Verify head certificate includes the pod IP.
+	// Verify head certificate includes the head pod IP only.
 	headCert := &certmanagerv1.Certificate{}
 	err = r.Get(ctx, types.NamespacedName{
 		Name:      fmt.Sprintf("%s-%s", utils.RayHeadCertPrefix, cluster.Name),
@@ -277,16 +280,19 @@ func TestMTLSController_AutoGenerate_UpdatesIPAddresses(t *testing.T) {
 	assert.Contains(t, headCert.Spec.IPAddresses, "10.244.0.5")
 	assert.Contains(t, headCert.Spec.IPAddresses, "127.0.0.1")
 
-	// Simulate scale-up: add a second pod.
-	pod2 := &corev1.Pod{
+	// Simulate scale-up: add a worker pod.
+	workerPod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-cluster-worker-0",
 			Namespace: "default",
-			Labels:    map[string]string{utils.RayClusterLabelKey: cluster.Name},
+			Labels: map[string]string{
+				utils.RayClusterLabelKey:  cluster.Name,
+				utils.RayNodeTypeLabelKey: string(rayv1.WorkerNode),
+			},
 		},
 		Status: corev1.PodStatus{PodIP: "10.244.0.6"},
 	}
-	require.NoError(t, r.Create(ctx, pod2))
+	require.NoError(t, r.Create(ctx, workerPod))
 
 	_, err = r.Reconcile(ctx, req)
 	require.NoError(t, err)
@@ -297,8 +303,17 @@ func TestMTLSController_AutoGenerate_UpdatesIPAddresses(t *testing.T) {
 	}, headCert)
 	require.NoError(t, err)
 	assert.Contains(t, headCert.Spec.IPAddresses, "10.244.0.5")
-	assert.Contains(t, headCert.Spec.IPAddresses, "10.244.0.6",
-		"head cert should be updated with the new pod IP after scale-up")
+	assert.NotContains(t, headCert.Spec.IPAddresses, "10.244.0.6",
+		"head cert should not include worker pod IPs")
+
+	workerCert := &certmanagerv1.Certificate{}
+	err = r.Get(ctx, types.NamespacedName{
+		Name:      fmt.Sprintf("%s-%s", utils.RayWorkerCertPrefix, cluster.Name),
+		Namespace: "default",
+	}, workerCert)
+	require.NoError(t, err)
+	assert.Contains(t, workerCert.Spec.IPAddresses, "10.244.0.6",
+		"worker cert should be updated with the new worker pod IP after scale-up")
 }
 
 func TestMTLSController_Disabled_IsNoOp(t *testing.T) {
