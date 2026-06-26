@@ -14,6 +14,8 @@ import (
 	"strings"
 	"time"
 
+	certmanagerv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
+	cmmeta "github.com/cert-manager/cert-manager/pkg/apis/meta/v1"
 	"github.com/go-logr/logr"
 	routev1 "github.com/openshift/api/route/v1"
 	batchv1 "k8s.io/api/batch/v1"
@@ -1615,8 +1617,9 @@ func (r *RayClusterReconciler) buildRedisCleanupJob(ctx context.Context, instanc
 }
 
 // checkMTLSSecretsReady verifies TLS secrets exist and contain the required keys.
-// In BYOC mode, checks the user-provided secret. In auto-generate mode, checks
-// both head and worker secrets created by cert-manager via the mTLS controller.
+// In BYOC mode, checks the user-provided secret. In auto-generate mode, also verifies
+// that the cert-manager Certificate objects are Ready at the current generation, preventing
+// pod creation while cert-manager is reissuing certificates (e.g. after a SAN update).
 func (r *RayClusterReconciler) checkMTLSSecretsReady(ctx context.Context, instance *rayv1.RayCluster) error {
 	var secretNames []string
 	if utils.IsTLSBYOC(&instance.Spec) {
@@ -1628,6 +1631,33 @@ func (r *RayClusterReconciler) checkMTLSSecretsReady(ctx context.Context, instan
 		secretNames = []string{
 			utils.GetTLSSecretName(instance.Name, rayv1.HeadNode),
 			utils.GetTLSSecretName(instance.Name, rayv1.WorkerNode),
+		}
+		// In auto-generate mode, also verify cert-manager has finished (re)issuing the
+		// certificates at the current generation. This prevents pods from being created
+		// while an older secret is still mounted during a SAN reissue (e.g. after a pod
+		// IP is added). Checking ObservedGeneration on the condition ensures Ready=True
+		// reflects the current spec, not a previous generation.
+		certNames := []string{
+			fmt.Sprintf("%s-%s", utils.RayHeadCertPrefix, instance.Name),
+			fmt.Sprintf("%s-%s", utils.RayWorkerCertPrefix, instance.Name),
+		}
+		for _, certName := range certNames {
+			cert := &certmanagerv1.Certificate{}
+			if err := r.Get(ctx, client.ObjectKey{Name: certName, Namespace: instance.Namespace}, cert); err != nil {
+				return fmt.Errorf("certificate %s not found: %w", certName, err)
+			}
+			ready := false
+			for _, cond := range cert.Status.Conditions {
+				if cond.Type == certmanagerv1.CertificateConditionReady &&
+					cond.Status == cmmeta.ConditionTrue &&
+					cond.ObservedGeneration == cert.Generation {
+					ready = true
+					break
+				}
+			}
+			if !ready {
+				return fmt.Errorf("certificate %s is not ready at current generation %d", certName, cert.Generation)
+			}
 		}
 	}
 

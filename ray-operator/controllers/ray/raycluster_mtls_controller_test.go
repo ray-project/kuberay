@@ -105,8 +105,9 @@ func markMTLSCertificatesReady(ctx context.Context, t *testing.T, r *RayClusterM
 		require.NoError(t, err)
 		cert.Status.Conditions = []certmanagerv1.CertificateCondition{
 			{
-				Type:   certmanagerv1.CertificateConditionReady,
-				Status: cmmeta.ConditionTrue,
+				Type:               certmanagerv1.CertificateConditionReady,
+				Status:             cmmeta.ConditionTrue,
+				ObservedGeneration: cert.Generation,
 			},
 		}
 		require.NoError(t, r.Status().Update(ctx, cert))
@@ -703,10 +704,33 @@ func TestCertificateNeedsUpdate(t *testing.T) {
 
 // --- checkMTLSSecretsReady tests (in main reconciler) ---
 
+// newReadyCertificate creates a cert-manager Certificate with Ready=True at generation 1,
+// matching the ObservedGeneration check in checkMTLSSecretsReady / isCertificateReady.
+func newReadyCertificate(name string) *certmanagerv1.Certificate {
+	const gen int64 = 1
+	cert := &certmanagerv1.Certificate{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       name,
+			Namespace:  "default",
+			Generation: gen,
+		},
+	}
+	cert.Status.Conditions = []certmanagerv1.CertificateCondition{
+		{
+			Type:               certmanagerv1.CertificateConditionReady,
+			Status:             cmmeta.ConditionTrue,
+			ObservedGeneration: gen,
+		},
+	}
+	return cert
+}
+
 func TestCheckMTLSSecretsReady_AutoGenerate_SecretsPresent(t *testing.T) {
 	cluster := newMTLSTestCluster("test-cluster")
 	cluster.Spec.TLSOptions = &rayv1.TLSOptions{}
 
+	headCert := newReadyCertificate(fmt.Sprintf("%s-%s", utils.RayHeadCertPrefix, cluster.Name))
+	workerCert := newReadyCertificate(fmt.Sprintf("%s-%s", utils.RayWorkerCertPrefix, cluster.Name))
 	headSecret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("%s-%s", utils.RayHeadSecretPrefix, cluster.Name),
@@ -733,23 +757,58 @@ func TestCheckMTLSSecretsReady_AutoGenerate_SecretsPresent(t *testing.T) {
 	s := newMTLSTestScheme()
 	fakeClient := clientFake.NewClientBuilder().
 		WithScheme(s).
-		WithRuntimeObjects(cluster, headSecret, workerSecret).
+		WithStatusSubresource(&certmanagerv1.Certificate{}).
+		WithRuntimeObjects(cluster, headCert, workerCert, headSecret, workerSecret).
+		Build()
+	// Patch status so ObservedGeneration is persisted on the fake client.
+	require.NoError(t, fakeClient.Status().Update(context.Background(), headCert))
+	require.NoError(t, fakeClient.Status().Update(context.Background(), workerCert))
+	r := &RayClusterReconciler{Client: fakeClient, Scheme: s}
+
+	err := r.checkMTLSSecretsReady(context.Background(), cluster)
+	assert.NoError(t, err, "should succeed when all secrets and ready certificates are present")
+}
+
+func TestCheckMTLSSecretsReady_AutoGenerate_CertNotReady(t *testing.T) {
+	cluster := newMTLSTestCluster("test-cluster")
+	cluster.Spec.TLSOptions = &rayv1.TLSOptions{}
+
+	// Certificate exists but is not yet ready (e.g. reissuing after a SAN update).
+	headCert := &certmanagerv1.Certificate{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       fmt.Sprintf("%s-%s", utils.RayHeadCertPrefix, cluster.Name),
+			Namespace:  "default",
+			Generation: 2,
+		},
+	}
+
+	s := newMTLSTestScheme()
+	fakeClient := clientFake.NewClientBuilder().
+		WithScheme(s).
+		WithRuntimeObjects(cluster, headCert).
 		Build()
 	r := &RayClusterReconciler{Client: fakeClient, Scheme: s}
 
 	err := r.checkMTLSSecretsReady(context.Background(), cluster)
-	assert.NoError(t, err, "should succeed when all secrets present with correct keys")
+	require.Error(t, err, "should fail when certificate is not ready")
+	assert.Contains(t, err.Error(), "not ready")
 }
 
 func TestCheckMTLSSecretsReady_AutoGenerate_SecretMissing(t *testing.T) {
 	cluster := newMTLSTestCluster("test-cluster")
 	cluster.Spec.TLSOptions = &rayv1.TLSOptions{}
 
+	headCert := newReadyCertificate(fmt.Sprintf("%s-%s", utils.RayHeadCertPrefix, cluster.Name))
+	workerCert := newReadyCertificate(fmt.Sprintf("%s-%s", utils.RayWorkerCertPrefix, cluster.Name))
+
 	s := newMTLSTestScheme()
 	fakeClient := clientFake.NewClientBuilder().
 		WithScheme(s).
-		WithRuntimeObjects(cluster).
+		WithStatusSubresource(&certmanagerv1.Certificate{}).
+		WithRuntimeObjects(cluster, headCert, workerCert).
 		Build()
+	require.NoError(t, fakeClient.Status().Update(context.Background(), headCert))
+	require.NoError(t, fakeClient.Status().Update(context.Background(), workerCert))
 	r := &RayClusterReconciler{Client: fakeClient, Scheme: s}
 
 	err := r.checkMTLSSecretsReady(context.Background(), cluster)
@@ -761,6 +820,8 @@ func TestCheckMTLSSecretsReady_AutoGenerate_SecretMissingKey(t *testing.T) {
 	cluster := newMTLSTestCluster("test-cluster")
 	cluster.Spec.TLSOptions = &rayv1.TLSOptions{}
 
+	headCert := newReadyCertificate(fmt.Sprintf("%s-%s", utils.RayHeadCertPrefix, cluster.Name))
+	workerCert := newReadyCertificate(fmt.Sprintf("%s-%s", utils.RayWorkerCertPrefix, cluster.Name))
 	// Head secret missing ca.crt key.
 	headSecret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -787,8 +848,11 @@ func TestCheckMTLSSecretsReady_AutoGenerate_SecretMissingKey(t *testing.T) {
 	s := newMTLSTestScheme()
 	fakeClient := clientFake.NewClientBuilder().
 		WithScheme(s).
-		WithRuntimeObjects(cluster, headSecret, workerSecret).
+		WithStatusSubresource(&certmanagerv1.Certificate{}).
+		WithRuntimeObjects(cluster, headCert, workerCert, headSecret, workerSecret).
 		Build()
+	require.NoError(t, fakeClient.Status().Update(context.Background(), headCert))
+	require.NoError(t, fakeClient.Status().Update(context.Background(), workerCert))
 	r := &RayClusterReconciler{Client: fakeClient, Scheme: s}
 
 	err := r.checkMTLSSecretsReady(context.Background(), cluster)
