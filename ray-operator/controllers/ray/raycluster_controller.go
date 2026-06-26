@@ -548,6 +548,14 @@ func ingressNeedsUpdate(existingIngress, desiredIngress *networkingv1.Ingress) b
 		updated = true
 	}
 
+	// When the RayCluster does not request an ingress class, the DefaultIngressClass
+	// admission plugin may set spec.ingressClassName on the live Ingress. We have no
+	// opinion in that case, so adopt the existing value instead of clearing it; doing
+	// otherwise would drop the class and thrash with the API server every reconcile.
+	if desiredIngress.Spec.IngressClassName == nil {
+		desiredIngress.Spec.IngressClassName = existingIngress.Spec.IngressClassName
+	}
+
 	if !reflect.DeepEqual(existingIngress.Spec, desiredIngress.Spec) {
 		existingIngress.Spec = desiredIngress.Spec
 		updated = true
