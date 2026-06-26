@@ -22,7 +22,7 @@ func TestRayJobWithClusterSelector(t *testing.T) {
 	namespace := test.NewTestNamespace()
 
 	// Job scripts
-	jobsAC := NewConfigMap(namespace.Name, Files(test, "counter.py", "fail.py"))
+	jobsAC := NewConfigMap(namespace.Name, Files(test, "counter.py", "fail.py", "long_running.py"))
 	jobs, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), jobsAC, TestApplyOptions)
 	g.Expect(err).NotTo(HaveOccurred())
 	LogWithTimestamp(test.T(), "Created ConfigMap %s/%s successfully", jobs.Namespace, jobs.Name)
