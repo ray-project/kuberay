@@ -640,11 +640,16 @@ func leafCertKeyUsages() []certmanagerv1.KeyUsage {
 	}
 }
 
-// isCertificateReady returns true if the certificate has a Ready=True condition.
+// isCertificateReady returns true only when the Certificate's Ready condition is True
+// AND the condition reflects the current generation of the spec. Checking
+// ObservedGeneration on the condition prevents treating a stale Ready=True as sufficient
+// immediately after a SAN update (e.g. adding a pod IP), before cert-manager has
+// reissued the Secret.
 func isCertificateReady(cert *certmanagerv1.Certificate) bool {
 	for _, cond := range cert.Status.Conditions {
 		if cond.Type == certmanagerv1.CertificateConditionReady {
-			return cond.Status == cmmeta.ConditionTrue
+			return cond.Status == cmmeta.ConditionTrue &&
+				cond.ObservedGeneration == cert.Generation
 		}
 	}
 	return false

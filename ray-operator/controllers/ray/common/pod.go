@@ -210,6 +210,8 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 		}
 
 		// Configure mTLS env vars and volume mount for the autoscaler sidecar.
+		// validateTLSOptions rejects forbidden TLS env vars in autoscalerOptions.env,
+		// preventing the user from overriding these via the merge below.
 		if utils.IsTLSEnabled(&instance.Spec) {
 			SetContainerTLSConfig(&autoscalerContainer)
 		}
