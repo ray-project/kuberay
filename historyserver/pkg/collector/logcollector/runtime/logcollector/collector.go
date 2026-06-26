@@ -77,12 +77,6 @@ func (r *RayLogHandler) Run(stop <-chan struct{}) error {
 	<-stop
 	logrus.Info("Received stop signal, processing all logs...")
 	r.processSessionLatestLogs()
-	// Update meta.json to mark the session as completed.
-	// Only the head collector owns the session-wide meta.json — worker
-	// collectors must not overwrite it on shutdown.
-	if r.IsHead {
-		r.updateMetaJsonOnShutdown()
-	}
 	// Perform one final poll of additional endpoints before shutting down.
 	// This must happen before close(r.ShutdownChan) because pollSingleEndpoint
 	// uses ShutdownChan to cancel in-flight HTTP requests.
@@ -90,6 +84,15 @@ func (r *RayLogHandler) Run(stop <-chan struct{}) error {
 		r.processAdditionalEndpoints()
 	}
 	close(r.ShutdownChan)
+	// Update meta.json to mark the session as completed.
+	// Must happen after ShutdownChan is closed so that WatchSessionLatestLoops
+	// has exited — a late fsnotify event could otherwise overwrite the
+	// completed status back to in_progress.
+	// Only the head collector owns the session-wide meta.json — worker
+	// collectors must not overwrite it on shutdown.
+	if r.IsHead {
+		r.updateMetaJsonOnShutdown()
+	}
 
 	return nil
 }
