@@ -528,7 +528,7 @@ func calculateReplicaResource(podResource *corev1.ResourceList, numOfHosts int32
 func CalculatePodResource(podSpec corev1.PodSpec) corev1.ResourceList {
 	podResource := corev1.ResourceList{}
 	for _, container := range podSpec.Containers {
-		containerResource := container.Resources.Requests
+		containerResource := container.Resources.Requests.DeepCopy()
 		if containerResource == nil {
 			containerResource = corev1.ResourceList{}
 		}
