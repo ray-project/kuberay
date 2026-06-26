@@ -24,7 +24,9 @@ import (
 
 type RayLogHandler struct {
 	Writer                 storage.StorageWriter
+	Reader                 storage.StorageReader // optional: for finalizing previous in_progress sessions
 	LogFiles               chan string
+	finalizedPrev          bool
 	HttpClient             *http.Client
 	ShutdownChan           chan struct{}
 	logFilePaths           map[string]bool
@@ -193,6 +195,54 @@ func (r *RayLogHandler) writeMetaJsonInProgress(sessionID string) {
 	}
 	if err := r.Writer.WriteMeta(metaPath, meta); err != nil {
 		logrus.Errorf("Failed to write meta.json %s: %v", metaPath, err)
+	}
+
+	// Finalize any previous sessions for the same cluster that are still
+	// stuck in_progress (e.g. from a killed previous collector).
+	r.finalizePreviousSessions(sessionBase)
+}
+
+// finalizePreviousSessions scans all stored clusters and finalizes any
+// in_progress sessions for the same cluster (namespace + name) that are
+// NOT the current session.
+func (r *RayLogHandler) finalizePreviousSessions(currentSession string) {
+	if r.Reader == nil || r.finalizedPrev {
+		return
+	}
+	r.finalizedPrev = true
+
+	clusters := r.Reader.List()
+	for _, c := range clusters {
+		if c.Namespace != r.RayClusterNamespace || c.Name != r.RayClusterName {
+			continue
+		}
+		if c.SessionName == currentSession {
+			continue
+		}
+		if c.Status != utils.SessionStatusInProgress {
+			continue
+		}
+
+		metaPath := clustermetadata.MetaJsonPath(utils.ClusterInfo{
+			Name:      c.Name,
+			Namespace: c.Namespace,
+			OwnerKind: c.OwnerKind,
+			OwnerName: c.OwnerName,
+		}, r.RootDir, c.SessionName)
+
+		meta := utils.MetaJson{
+			SessionName:      c.SessionName,
+			ClusterID:        c.Name,
+			ClusterNamespace: c.Namespace,
+			StartTime:        c.CreateTimeStamp,
+			EndTime:          time.Now().Unix(),
+			Status:           utils.SessionStatusCompleted,
+		}
+		if err := r.Writer.WriteMeta(metaPath, meta); err != nil {
+			logrus.Errorf("Failed to finalize previous session %s: %v", c.SessionName, err)
+		} else {
+			logrus.Infof("Finalized previous session %s (was in_progress, now completed)", c.SessionName)
+		}
 	}
 }
 
