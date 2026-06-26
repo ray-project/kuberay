@@ -2134,7 +2134,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum by (le, ray_endpoint, mode) (rate(kuberay_dashboard_client_request_duration_seconds_bucket[5m])))",
+          "expr": "histogram_quantile(0.95, sum by (le, ray_endpoint, mode) (rate(kuberay_dashboard_client_request_duration_seconds_bucket{namespace=\"$ControllerNamespace\", pod=\"$ControllerPod\"}[5m])))",
           "legendFormat": "{{ray_endpoint}} ({{mode}})",
           "refId": "A"
         },
@@ -2144,7 +2144,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum by (le, ray_endpoint, mode) (rate(kuberay_proxy_client_request_duration_seconds_bucket[5m])))",
+          "expr": "histogram_quantile(0.95, sum by (le, ray_endpoint, mode) (rate(kuberay_proxy_client_request_duration_seconds_bucket{namespace=\"$ControllerNamespace\", pod=\"$ControllerPod\"}[5m])))",
           "legendFormat": "{{ray_endpoint}} ({{mode}})",
           "refId": "B"
         }
@@ -2223,7 +2223,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (ray_endpoint, method) (rate(kuberay_dashboard_client_requests_total[5m]))",
+          "expr": "sum by (ray_endpoint, method) (rate(kuberay_dashboard_client_requests_total{namespace=\"$ControllerNamespace\", pod=\"$ControllerPod\"}[5m]))",
           "legendFormat": "{{method}} {{ray_endpoint}}",
           "refId": "A"
         },
@@ -2233,7 +2233,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (ray_endpoint, method) (rate(kuberay_proxy_client_requests_total[5m]))",
+          "expr": "sum by (ray_endpoint, method) (rate(kuberay_proxy_client_requests_total{namespace=\"$ControllerNamespace\", pod=\"$ControllerPod\"}[5m]))",
           "legendFormat": "{{method}} {{ray_endpoint}}",
           "refId": "B"
         }
@@ -2312,7 +2312,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (code, mode) (rate(kuberay_dashboard_client_requests_total[5m]))",
+          "expr": "sum by (code, mode) (rate(kuberay_dashboard_client_requests_total{namespace=\"$ControllerNamespace\", pod=\"$ControllerPod\"}[5m]))",
           "legendFormat": "dashboard {{code}} ({{mode}})",
           "refId": "A"
         },
@@ -2322,7 +2322,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (code, mode) (rate(kuberay_proxy_client_requests_total[5m]))",
+          "expr": "sum by (code, mode) (rate(kuberay_proxy_client_requests_total{namespace=\"$ControllerNamespace\", pod=\"$ControllerPod\"}[5m]))",
           "legendFormat": "proxy {{code}} ({{mode}})",
           "refId": "B"
         }
