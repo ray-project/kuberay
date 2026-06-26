@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/ray-project/kuberay/historyserver/pkg/collector/logcollector/runtime/logcollector"
 	"github.com/ray-project/kuberay/historyserver/pkg/collector/types"
 	"github.com/ray-project/kuberay/historyserver/pkg/storage"
@@ -16,18 +18,18 @@ import (
 
 func NewCollector(config *types.RayCollectorConfig, writer storage.StorageWriter) RayLogCollector {
 	handler := logcollector.RayLogHandler{
-		IsHead: config.Role == "Head",
-		LogFiles:   make(chan string),
+		IsHead:   config.Role == "Head",
+		LogFiles: make(chan string),
 
 		RootDir:    config.RootDir,
 		SessionDir: config.SessionDir,
 
-		RayClusterName: config.RayClusterName,
-		RayClusterID:   config.RayClusterID,
-		RayNodeName:    config.RayNodeName,
+		RayClusterName:      config.RayClusterName,
+		RayClusterNamespace: config.RayClusterNamespace,
+		RayNodeName:         config.RayNodeName,
 
-		LogBatching:      config.LogBatching,
-		PushInterval:     config.PushInterval,
+		LogBatching:          config.LogBatching,
+		PushInterval:         config.PushInterval,
 		DashboardAddress:     config.DashboardAddress,
 		AdditionalEndpoints:  config.AdditionalEndpoints,
 		EndpointPollInterval: config.EndpointPollInterval,
@@ -42,11 +44,16 @@ func NewCollector(config *types.RayCollectorConfig, writer storage.StorageWriter
 		Writer:       writer,
 		ShutdownChan: make(chan struct{}),
 	}
+
+	handler.OwnerKind = config.OwnerKind
+	handler.OwnerName = config.OwnerName
+	if handler.OwnerKind != "" && handler.OwnerName != "" {
+		logrus.Infof("The associated owner resource is: %s/%s", handler.OwnerKind, handler.OwnerName)
+	}
+
 	logDir := strings.TrimSpace(filepath.Join(config.SessionDir, utils.RAY_SESSIONDIR_LOGDIR_NAME))
 	handler.LogDir = logDir
-	// clusterRootDir uses flat key format (name_id) for S3/OSS performance optimization.
-	// See utils.connector for the design rationale.
-	clusterRootDir := fmt.Sprintf("%s/", path.Clean(path.Join(handler.RootDir, handler.RayClusterName+"_"+handler.RayClusterID)))
+	clusterRootDir := fmt.Sprintf("%s/", path.Clean(path.Join(handler.RootDir, utils.AppendRayClusterNameNamespace(handler.RayClusterName, handler.RayClusterNamespace))))
 	handler.ClusterDir = clusterRootDir
 
 	return &handler

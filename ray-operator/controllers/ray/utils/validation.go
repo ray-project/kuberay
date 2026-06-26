@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	_ "time/tzdata" // For RayCronJob time zone support
 
 	"github.com/robfig/cron/v3"
 	corev1 "k8s.io/api/core/v1"
@@ -235,6 +236,19 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 		}
 	}
 
+	// When autoscalerOptions.args is set, the user's custom args can reference the
+	// $KUBERAY_GEN_AUTOSCALER_START_CMD env var that KubeRay injects. If the user also
+	// manually sets KUBERAY_GEN_AUTOSCALER_START_CMD in autoscalerOptions.env, they would
+	// silently shadow KubeRay's generated value, causing the referenced command to behave
+	// unexpectedly. Reject this combination to keep the env var KubeRay-managed.
+	if spec.AutoscalerOptions != nil {
+		if EnvVarExists(KUBERAY_GEN_AUTOSCALER_START_CMD, spec.AutoscalerOptions.Env) {
+			return fmt.Errorf("autoscalerOptions.env must not contain %s: "+
+				"it is managed by KubeRay and injected automatically into the autoscaler container",
+				KUBERAY_GEN_AUTOSCALER_START_CMD)
+		}
+	}
+
 	if IsAuthEnabled(spec) {
 		if spec.RayVersion == "" {
 			return fmt.Errorf("authOptions.mode is 'token' but RayVersion was not specified. Ray version 2.52.0 or later is required")
@@ -263,6 +277,48 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 	} else {
 		if IsK8sAuthEnabled(spec.AuthOptions) {
 			return fmt.Errorf("authOptions.enableK8sTokenAuth is enabled but authOptions.mode not set to 'token'")
+		}
+	}
+
+	// Validate NetworkIsolation configuration if set.
+	if spec.NetworkIsolation != nil && !features.Enabled(features.RayClusterNetworkIsolation) {
+		return fmt.Errorf("spec.networkIsolation requires the RayClusterNetworkIsolation feature gate to be enabled")
+	}
+	return validateNetworkIsolation(spec)
+}
+
+// validateNetworkIsolation checks that the NetworkIsolation config is internally consistent.
+// For example, ingress rules should only be specified when ingress is being denied,
+// and egress rules should only be specified when egress is being denied.
+func validateNetworkIsolation(spec *rayv1.RayClusterSpec) error {
+	ni := spec.NetworkIsolation
+	if ni == nil {
+		return nil
+	}
+
+	// Resolve mode, defaulting to DenyAll if not set (matches kubebuilder default).
+	mode := rayv1.NetworkIsolationDenyAll
+	if ni.Mode != nil {
+		mode = *ni.Mode
+	}
+
+	// Validate head rules against mode.
+	if ni.Head != nil {
+		if mode == rayv1.NetworkIsolationDenyAllEgress && len(ni.Head.IngressRules) > 0 {
+			return fmt.Errorf("networkIsolation.head.ingressRules cannot be set when mode is %q (ingress is not restricted)", mode)
+		}
+		if mode == rayv1.NetworkIsolationDenyAllIngress && len(ni.Head.EgressRules) > 0 {
+			return fmt.Errorf("networkIsolation.head.egressRules cannot be set when mode is %q (egress is not restricted)", mode)
+		}
+	}
+
+	// Validate worker rules against mode.
+	if ni.Worker != nil {
+		if mode == rayv1.NetworkIsolationDenyAllEgress && len(ni.Worker.IngressRules) > 0 {
+			return fmt.Errorf("networkIsolation.worker.ingressRules cannot be set when mode is %q (ingress is not restricted)", mode)
+		}
+		if mode == rayv1.NetworkIsolationDenyAllIngress && len(ni.Worker.EgressRules) > 0 {
+			return fmt.Errorf("networkIsolation.worker.egressRules cannot be set when mode is %q (egress is not restricted)", mode)
 		}
 	}
 
@@ -477,6 +533,10 @@ func ValidateClusterUpgradeOptions(rayService *rayv1.RayService) error {
 
 	if options.StepSizePercent == nil || *options.StepSizePercent < 0 || *options.StepSizePercent > 100 {
 		return fmt.Errorf("stepSizePercent must be between 0 and 100")
+	}
+
+	if *options.StepSizePercent > *options.MaxSurgePercent {
+		return fmt.Errorf("stepSizePercent must be less than or equal to maxSurgePercent")
 	}
 
 	if options.IntervalSeconds == nil || *options.IntervalSeconds <= 0 {
@@ -709,9 +769,27 @@ func validateLegacyDeletionPolicies(rayJob *rayv1.RayJob) error {
 
 // ValidateRayCronJobSpec validates the RayCronJob specification
 func ValidateRayCronJobSpec(rayCronJob *rayv1.RayCronJob) error {
+	// Bound the name so the deterministic child RayJob name (getRayJobName) stays valid.
+	if len(rayCronJob.Name) > MaxRayCronJobNameLength {
+		return fmt.Errorf("RayCronJob name should be no more than %d characters", MaxRayCronJobNameLength)
+	}
+
 	// Validate cron schedule format
+	if strings.Contains(rayCronJob.Spec.Schedule, "TZ") {
+		return fmt.Errorf("cannot use TZ or CRON_TZ in schedule, use timeZone field instead")
+	}
 	if _, err := cron.ParseStandard(rayCronJob.Spec.Schedule); err != nil {
 		return fmt.Errorf("invalid cron schedule: %w", err)
+	}
+
+	// Validate time zone if set
+	if rayCronJob.Spec.TimeZone != nil {
+		if *rayCronJob.Spec.TimeZone == "" {
+			return fmt.Errorf("timeZone must not be empty string, omit the field to use the local time zone of the KubeRay operator")
+		}
+		if _, err := time.LoadLocation(*rayCronJob.Spec.TimeZone); err != nil {
+			return fmt.Errorf("invalid time zone: %w", err)
+		}
 	}
 
 	// Validate the ray job spec

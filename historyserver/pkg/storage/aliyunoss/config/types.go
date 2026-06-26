@@ -21,9 +21,9 @@ type GlobalConfig struct {
 
 type RayMetaHanderConfig struct {
 	GlobalConfig
-	RayClusterName string
-	RayClusterID   string
-	OSSExpireHour  int
+	RayClusterName      string
+	RayClusterNamespace string
+	OSSExpireHour       int
 }
 
 type RayHistoryServerConfig struct {

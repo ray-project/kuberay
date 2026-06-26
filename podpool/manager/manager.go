@@ -54,6 +54,10 @@ func NewCachePodManager(nodeName, operatingSys, arch string, kubeClient kubernet
 	return manager, nil
 }
 
+func (m *CachePodManager) ConfigureNode(context.Context, *corev1.Node) {
+	// TODO: Implement node configuration logic
+}
+
 // CreatePod implements the PodLifecycleHandler interface
 func (m *CachePodManager) CreatePod(ctx context.Context, pod *corev1.Pod) error {
 	ctx, span := trace.StartSpan(ctx, "CreatePod")

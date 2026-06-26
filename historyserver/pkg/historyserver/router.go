@@ -23,6 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/ray-project/kuberay/historyserver/pkg/eventserver"
 	eventtypes "github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
@@ -35,6 +36,12 @@ const (
 
 	ATTRIBUTE_SERVICE_NAME = "cluster_service_name"
 )
+
+// handleMissingSnapshot responds 503 when the session snapshot is not in the cache.
+func (s *ServerHandler) handleMissingSnapshot(resp *restful.Response) {
+	resp.WriteErrorString(http.StatusServiceUnavailable,
+		"session snapshot not in cache; reload via /enter_cluster")
+}
 
 type ServiceInfo struct {
 	ServiceName string
@@ -294,19 +301,58 @@ func routerRayClusterSet(s *ServerHandler) {
 	defer restful.Add(ws)
 
 	ws.Path("/enter_cluster").Consumes(restful.MIME_JSON).Produces(restful.MIME_JSON).Filter(RequestLogFilter)
-	ws.Route(ws.GET("/{namespace}/{name}/{session}").To(func(r1 *restful.Request, r2 *restful.Response) {
-		name := r1.PathParameter("name")
-		namespace := r1.PathParameter("namespace")
-		session := r1.PathParameter("session")
+	enterHandler := func(r1 *restful.Request, r2 *restful.Response, namespace, name, session string) {
+		resolvedSession, found := s.findSessionInMap(namespace, name, session)
+		if !found {
+			if s.clientManager != nil && s.reader != nil {
+				s.listClusters(s.maxClusters)
+			}
+			resolvedSession, found = s.findSessionInMap(namespace, name, session)
+		}
+
+		if !found {
+			r2.WriteErrorString(http.StatusNotFound, fmt.Sprintf("cluster %s/%s with session %s not found", namespace, name, session))
+			return
+		}
+
+		if resolvedSession != "live" {
+			if ParseSessionTimestamp(resolvedSession).IsZero() {
+				logrus.Warnf("Rejecting invalid session name: %s/%s/%s", namespace, name, resolvedSession)
+				r2.WriteErrorString(http.StatusBadRequest, fmt.Sprintf("invalid session name: %q", resolvedSession))
+				return
+			}
+			info := utils.ClusterInfo{Name: name, Namespace: namespace, SessionName: resolvedSession}
+			live, err := s.sessionLoader.LoadSession(r1.Request.Context(), info)
+			if err != nil {
+				logrus.Errorf("Failed to load session %s/%s/%s: %v", namespace, name, resolvedSession, err)
+				r2.WriteErrorString(http.StatusInternalServerError, err.Error())
+				return
+			}
+
+			// Users might use the complete session name to enter a live cluster,
+			// so "live" sentinel is set to avoid querying empty in-memory state.
+			if live {
+				resolvedSession = "live"
+			}
+		}
+
 		http.SetCookie(r2, &http.Cookie{MaxAge: 600, Path: "/", Name: COOKIE_CLUSTER_NAME_KEY, Value: name})
 		http.SetCookie(r2, &http.Cookie{MaxAge: 600, Path: "/", Name: COOKIE_CLUSTER_NAMESPACE_KEY, Value: namespace})
-		http.SetCookie(r2, &http.Cookie{MaxAge: 600, Path: "/", Name: COOKIE_SESSION_NAME_KEY, Value: session})
+		http.SetCookie(r2, &http.Cookie{MaxAge: 600, Path: "/", Name: COOKIE_SESSION_NAME_KEY, Value: resolvedSession})
+
 		r2.WriteJson(map[string]interface{}{
 			"result":    "success",
 			"name":      name,
 			"namespace": namespace,
-			"session":   session,
+			"session":   resolvedSession,
 		}, "application/json")
+	}
+
+	ws.Route(ws.GET("/{namespace}/{name}/{session}").To(func(r1 *restful.Request, r2 *restful.Response) {
+		name := r1.PathParameter("name")
+		namespace := r1.PathParameter("namespace")
+		session := r1.PathParameter("session")
+		enterHandler(r1, r2, namespace, name, session)
 	}).
 		Doc("set cookie for cluster").
 		Param(ws.PathParameter("namespace", "namespace")).
@@ -415,19 +461,22 @@ func (s *ServerHandler) getNodes(req *restful.Request, resp *restful.Response) {
 	// Parse query parameters.
 	viewParam := req.QueryParameter("view")
 
-	// Get nodes from the cluster session.
 	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
 	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
 	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
-	nodeMap := s.eventHandler.GetNodeMap(clusterSessionKey)
+	snap, ok := s.sessionLoader.GetSnapshot(clusterSessionKey)
+	if !ok {
+		s.handleMissingSnapshot(resp)
+		return
+	}
 
 	// Handle different view types.
 	switch viewParam {
 	case "hostNameList":
-		s.getNodesHostNameList(nodeMap, resp)
+		s.getNodesHostNameList(snap.Nodes, resp)
 	case "summary", "":
 		// Default to summary view
-		s.getNodesSummary(nodeMap, sessionName, resp)
+		s.getNodesSummary(snap.Nodes, sessionName, resp)
 	default:
 		resp.WriteErrorString(http.StatusBadRequest, fmt.Sprintf("unsupported view parameter: %s", viewParam))
 	}
@@ -549,12 +598,15 @@ func (s *ServerHandler) getNode(req *restful.Request, resp *restful.Response) {
 		return
 	}
 
-	// Get the specified node from the cluster session.
-	// A cluster lifecycle is identified by a cluster session.
 	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
 	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
 	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
-	targetNode, found := s.eventHandler.GetNodeByNodeID(clusterSessionKey, targetNodeId)
+	snap, ok := s.sessionLoader.GetSnapshot(clusterSessionKey)
+	if !ok {
+		s.handleMissingSnapshot(resp)
+		return
+	}
+	targetNode, found := snap.Nodes[targetNodeId]
 	if !found {
 		resp.WriteErrorString(http.StatusNotFound, fmt.Sprintf("node %s not found", targetNodeId))
 		return
@@ -574,13 +626,10 @@ func (s *ServerHandler) getNode(req *restful.Request, resp *restful.Response) {
 	// Fill actors for this node.
 	// Frontend expects actors as {[actorId]: ActorDetail}, not an empty array.
 	// Ref: https://github.com/ray-project/ray/blob/8a7b47bc5c/python/ray/dashboard/client/src/pages/node/NodeDetail.tsx#L233
-	actorsMap := s.eventHandler.GetActorsMap(clusterSessionKey)
 	nodeActors := make(map[string]interface{})
-	for _, actor := range actorsMap {
-		nodeIDHex, _ := utils.ConvertBase64ToHex(actor.Address.NodeID)
-		if nodeIDHex == targetNodeId {
-			actorIDHex, _ := utils.ConvertBase64ToHex(actor.ActorID)
-			nodeActors[actorIDHex] = formatActorForResponse(actor)
+	for _, actor := range snap.Actors {
+		if actor.Address.NodeID == targetNodeId {
+			nodeActors[actor.ActorID] = formatActorForResponse(actor)
 		}
 	}
 	if detail != nil {
@@ -618,6 +667,11 @@ func (s *ServerHandler) getEvents(req *restful.Request, resp *restful.Response) 
 	}
 
 	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
+	snap, ok := s.sessionLoader.GetSnapshot(clusterSessionKey)
+	if !ok {
+		s.handleMissingSnapshot(resp)
+		return
+	}
 
 	// Check if job_id parameter exists in query string (even if empty)
 	// This aligns with Ray Dashboard behavior:
@@ -630,9 +684,10 @@ func (s *ServerHandler) getEvents(req *restful.Request, resp *restful.Response) 
 	var response map[string]any
 
 	if jobIDExists {
-		// Return events for a specific job
-		// Response format matches Ray Dashboard: {"result": true, "msg": "...", "data": {"jobId": "...", "events": [...]}}
-		events := s.eventHandler.ClusterLogEventMap.GetEventsByJobID(clusterSessionKey, jobID)
+		events := make([]map[string]any, 0)
+		for _, logEvent := range snap.LogEventsByJobID[jobID] {
+			events = append(events, logEvent.ToAPIResponse())
+		}
 		response = map[string]any{
 			"result": true,
 			"msg":    "Job events fetched.",
@@ -642,9 +697,14 @@ func (s *ServerHandler) getEvents(req *restful.Request, resp *restful.Response) 
 			},
 		}
 	} else {
-		// Return all events grouped by job_id
-		// Response format matches Ray Dashboard: {"result": true, "msg": "...", "data": {"events": {job_id: [...], ...}}}
-		events := s.eventHandler.ClusterLogEventMap.GetAllEvents(clusterSessionKey)
+		events := make(map[string][]map[string]any, len(snap.LogEventsByJobID))
+		for jobID, logEvents := range snap.LogEventsByJobID {
+			eventList := make([]map[string]any, 0, len(logEvents))
+			for _, logEvent := range logEvents {
+				eventList = append(eventList, logEvent.ToAPIResponse())
+			}
+			events[jobID] = eventList
+		}
 		response = map[string]any{
 			"result": true,
 			"msg":    "All events fetched.",
@@ -694,10 +754,14 @@ func (s *ServerHandler) getJobs(req *restful.Request, resp *restful.Response) {
 	}
 
 	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
-	jobsMap := s.eventHandler.GetJobsMap(clusterSessionKey)
+	snap, ok := s.sessionLoader.GetSnapshot(clusterSessionKey)
+	if !ok {
+		s.handleMissingSnapshot(resp)
+		return
+	}
 
-	jobs := make([]eventtypes.Job, 0, len(jobsMap))
-	for _, job := range jobsMap {
+	jobs := make([]eventtypes.Job, 0, len(snap.Jobs))
+	for _, job := range snap.Jobs {
 		jobs = append(jobs, job)
 	}
 
@@ -799,8 +863,13 @@ func (s *ServerHandler) getJob(req *restful.Request, resp *restful.Response) {
 	jobID := req.PathParameter("job_id")
 
 	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
-	job, found := s.eventHandler.GetJobByJobID(clusterSessionKey, jobID)
+	snap, ok := s.sessionLoader.GetSnapshot(clusterSessionKey)
+	if !ok {
+		s.handleMissingSnapshot(resp)
+		return
+	}
 
+	job, found := snap.Jobs[jobID]
 	if !found {
 		responseString := fmt.Sprintf("Job %s does not exist", jobID)
 		resp.Write([]byte(responseString))
@@ -833,8 +902,15 @@ func (s *ServerHandler) getClusterStatus(req *restful.Request, resp *restful.Res
 	var err error
 
 	if format == "1" {
-		// Build cluster status from debug_state.txt and task/actor data
-		statusString := s.buildFormattedClusterStatus(clusterName, clusterNamespace, sessionName)
+		clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
+		snap, ok := s.sessionLoader.GetSnapshot(clusterSessionKey)
+		if !ok {
+			s.handleMissingSnapshot(resp)
+			return
+		}
+
+		// Build cluster status from debug_state.txt and snapshot data
+		statusString := s.buildFormattedClusterStatus(snap, clusterName, clusterNamespace, sessionName)
 
 		response := FormattedClusterStatusResponse{
 			Result: true,
@@ -866,7 +942,7 @@ func (s *ServerHandler) getClusterStatus(req *restful.Request, resp *restful.Res
 }
 
 // buildFormattedClusterStatus reconstructs the cluster status from debug_state.txt and pending tasks and actors
-func (s *ServerHandler) buildFormattedClusterStatus(clusterName, clusterNamespace, sessionName string) string {
+func (s *ServerHandler) buildFormattedClusterStatus(snap *eventserver.SessionSnapshot, clusterName, clusterNamespace, sessionName string) string {
 	builder := NewClusterStatusBuilder()
 	clusterNameID := clusterName + "_" + clusterNamespace
 	logsPath := path.Join(sessionName, utils.RAY_SESSIONDIR_LOGDIR_NAME)
@@ -896,10 +972,12 @@ func (s *ServerHandler) buildFormattedClusterStatus(clusterName, clusterNamespac
 		logrus.Debugf("Found %d nodes but failed to parse any debug_state.txt for cluster %s session %s", len(nodeIDs), clusterName, sessionName)
 	}
 
-	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
-	tasks := s.eventHandler.GetTasks(clusterSessionKey)
-	actors := s.eventHandler.GetActors(clusterSessionKey)
-	nodes := s.eventHandler.GetNodeMap(clusterSessionKey)
+	nodes := snap.Nodes
+	tasks := snap.Tasks
+	actors := make([]eventtypes.Actor, 0, len(snap.Actors))
+	for _, a := range snap.Actors {
+		actors = append(actors, a)
+	}
 
 	// Use the last timestamp from tasks/actors to represent when the cluster was last active.
 	// Fallback to session timestamp if no task/actor timestamps are available.
@@ -1112,16 +1190,17 @@ func (s *ServerHandler) getLogicalActors(req *restful.Request, resp *restful.Res
 		return
 	}
 
-	// Get actors from EventHandler's in-memory map
 	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
-	actorsMap := s.eventHandler.GetActorsMap(clusterSessionKey)
+	snap, ok := s.sessionLoader.GetSnapshot(clusterSessionKey)
+	if !ok {
+		s.handleMissingSnapshot(resp)
+		return
+	}
 
 	// Format response to match Ray Dashboard API format
-	formattedActors := make(map[string]interface{})
-	for _, actor := range actorsMap {
-		// Use hex ID as map key to match Ray Dashboard API format
-		actorIDHex, _ := utils.ConvertBase64ToHex(actor.ActorID)
-		formattedActors[actorIDHex] = formatActorForResponse(actor)
+	formattedActors := make(map[string]interface{}, len(snap.Actors))
+	for _, actor := range snap.Actors {
+		formattedActors[actor.ActorID] = formatActorForResponse(actor)
 	}
 
 	response := map[string]interface{}{
@@ -1145,41 +1224,30 @@ func (s *ServerHandler) getLogicalActors(req *restful.Request, resp *restful.Res
 // Uses camelCase keys and hex-encoded IDs to match the Ray Dashboard API format.
 // Ref: ActorDetail type https://github.com/ray-project/ray/blob/a8fdb50e72/python/ray/dashboard/client/src/type/actor.ts#L18-L69
 func formatActorForResponse(actor eventtypes.Actor) map[string]interface{} {
-	// Convert Base64 IDs to Hex format for Dashboard API compatibility
-	actorIDHex, _ := utils.ConvertBase64ToHex(actor.ActorID)
-	jobIDHex, _ := utils.ConvertBase64ToHex(actor.JobID)
-	nodeIDHex, _ := utils.ConvertBase64ToHex(actor.Address.NodeID)
-	workerIDHex, _ := utils.ConvertBase64ToHex(actor.Address.WorkerID)
-	placementGroupIDHex := actor.PlacementGroupID
-	if placementGroupIDHex != "" {
-		placementGroupIDHex, _ = utils.ConvertBase64ToHex(placementGroupIDHex)
-	}
-
 	result := map[string]interface{}{
-		"actorId":          actorIDHex,
-		"jobId":            jobIDHex,
-		"placementGroupId": placementGroupIDHex,
-		"state":            string(actor.State),
-		"pid":              actor.PID,
+		"actorId": actor.ActorID,
+		"jobId":   actor.JobID,
+		"state":   string(actor.State),
+		"pid":     actor.PID,
 		"address": map[string]interface{}{
-			"nodeId":    nodeIDHex,
+			"nodeId":    actor.Address.NodeID,
 			"ipAddress": actor.Address.IPAddress,
 			"port":      actor.Address.Port,
-			"workerId":  workerIDHex,
+			"workerId":  actor.Address.WorkerID,
 		},
 		"name":              actor.Name,
-		"numRestarts":       actor.NumRestarts,
+		"numRestarts":       strconv.Itoa(actor.NumRestarts),
 		"actorClass":        actor.ActorClass,
+		"className":         actor.ActorClass,
 		"requiredResources": actor.RequiredResources,
 		// Note: The key is "exitDetail" (singular), not "exitDetails" (plural). This matches
 		// the Ray Dashboard frontend TypeScript type and the live Ray Dashboard API.
 		// Ref: https://github.com/ray-project/ray/blob/a8fdb50e72/python/ray/dashboard/client/src/type/actor.ts#L33
-		"exitDetail":    actor.ExitDetails,
-		"reprName":      actor.ReprName,
-		"callSite":      actor.CallSite,
-		"isDetached":    actor.IsDetached,
-		"rayNamespace":  actor.RayNamespace,
-		"labelSelector": actor.LabelSelector,
+		"exitDetail":       actor.ExitDetails,
+		"reprName":         actor.ReprName,
+		"placementGroupId": actor.PlacementGroupID,
+		"callSite":         actor.CallSite,
+		"labelSelector":    actor.LabelSelector,
 	}
 
 	if !actor.StartTime.IsZero() {
@@ -1188,6 +1256,7 @@ func formatActorForResponse(actor eventtypes.Actor) map[string]interface{} {
 
 	if !actor.EndTime.IsZero() {
 		result["endTime"] = actor.EndTime.UnixMilli()
+		result["timestamp"] = float64(actor.EndTime.UnixMilli())
 	}
 
 	return result
@@ -1203,10 +1272,15 @@ func (s *ServerHandler) getLogicalActor(req *restful.Request, resp *restful.Resp
 
 	actorID := req.PathParameter("single_actor")
 
-	// Get actor from EventHandler's in-memory map.
-	// GetActorByID supports both Base64 and hex-encoded IDs.
 	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
-	actor, found := s.eventHandler.GetActorByID(clusterSessionKey, actorID)
+	snap, ok := s.sessionLoader.GetSnapshot(clusterSessionKey)
+	if !ok {
+		s.handleMissingSnapshot(resp)
+		return
+	}
+
+	// Actor IDs are normalized to hex at ingestion time, so lookup is by hex ID.
+	actor, found := snap.Actors[actorID]
 
 	replyActorInfo := ReplyActorInfo{
 		Data: ActorInfoData{},
@@ -1272,6 +1346,12 @@ func (s *ServerHandler) getNodeLogFile(req *restful.Request, resp *restful.Respo
 		return
 	}
 
+	clusterSessionKey := utils.BuildClusterSessionKey(clusterNameID, clusterNamespace, sessionName)
+	if _, ok := s.sessionLoader.GetSnapshot(clusterSessionKey); !ok {
+		s.handleMissingSnapshot(resp)
+		return
+	}
+
 	// Only resolve node_ip to node_id from stored events for dead cluster
 	if options.NodeID == "" && options.NodeIP != "" {
 		nodeID, err := s.ipToNodeId(clusterNameID+"_"+clusterNamespace, sessionName, options.NodeIP)
@@ -1283,7 +1363,7 @@ func (s *ServerHandler) getNodeLogFile(req *restful.Request, resp *restful.Respo
 		options.NodeID = nodeID
 	}
 
-	content, err := s._getNodeLogFile(clusterNameID+"_"+clusterNamespace, sessionName, options)
+	content, err := s._getNodeLogFile(clusterSessionKey, clusterNameID+"_"+clusterNamespace, sessionName, options)
 	if err != nil {
 		var httpErr *utils.HTTPError
 		if errors.As(err, &httpErr) {
@@ -1443,9 +1523,13 @@ func (s *ServerHandler) getTaskSummarize(req *restful.Request, resp *restful.Res
 	// Ref: https://github.com/ray-project/ray/blob/ad1b87448fec4db7ef11f1697f9bc02ae6a7ba09/python/ray/dashboard/state_aggregator.py#L569-L582
 	listAPIOptions.Limit = utils.RayMaxLimitFromAPIServer
 
-	// Get all tasks
 	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
-	tasks := s.eventHandler.GetTasks(clusterSessionKey)
+	snap, ok := s.sessionLoader.GetSnapshot(clusterSessionKey)
+	if !ok {
+		s.handleMissingSnapshot(resp)
+		return
+	}
+	tasks := snap.Tasks
 
 	// Calculate the number of tasks after GCS source truncation.
 	// Since we can't access the GCS and num_status_task_events_dropped, we use num_after_truncation to approximate the total number of tasks.
@@ -1466,7 +1550,10 @@ func (s *ServerHandler) getTaskSummarize(req *restful.Request, resp *restful.Res
 	// Ref: https://github.com/ray-project/ray/blob/master/python/ray/dashboard/routes.py
 	var response interface{}
 	if summaryBy == "lineage" {
-		actors := s.eventHandler.GetActors(clusterSessionKey)
+		actors := make([]eventtypes.Actor, 0, len(snap.Actors))
+		for _, a := range snap.Actors {
+			actors = append(actors, a)
+		}
 		lineageSummary := utils.ToSummaryByLineage(tasks, actors)
 
 		response = map[string]interface{}{
@@ -1606,11 +1693,15 @@ func (s *ServerHandler) getTasks(req *restful.Request, resp *restful.Response) {
 		return
 	}
 
-	// Get tasks from the cluster session.
 	clusterName := req.Attribute(COOKIE_CLUSTER_NAME_KEY).(string)
 	clusterNamespace := req.Attribute(COOKIE_CLUSTER_NAMESPACE_KEY).(string)
 	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
-	tasks := s.eventHandler.GetTasks(clusterSessionKey)
+	snap, ok := s.sessionLoader.GetSnapshot(clusterSessionKey)
+	if !ok {
+		s.handleMissingSnapshot(resp)
+		return
+	}
+	tasks := snap.Tasks
 
 	// Calculate the number of tasks after GCS source truncation.
 	// Since we can't access the GCS and num_status_task_events_dropped, we use num_after_truncation to approximate the total number of tasks.
@@ -1657,7 +1748,7 @@ func (s *ServerHandler) getTasks(req *restful.Request, resp *restful.Response) {
 // The schema aligns with the Ray Dashboard API.
 // Ref: https://github.com/ray-project/ray/blob/d0b1d151d8ea964a711e451d0ae736f8bf95b629/python/ray/util/state/common.py#L730-L819.
 func formatTaskForResponse(task eventtypes.Task, detail bool) map[string]interface{} {
-	// TODO(jwj): Maybe define result schema in types.go.
+	// TODO(jiangjiawei1103): Maybe define result schema in types.go.
 	result := map[string]interface{}{
 		"task_id":            task.TaskID,
 		"attempt_number":     task.TaskAttempt,
@@ -1711,7 +1802,7 @@ func formatTaskForResponse(task eventtypes.Task, detail bool) map[string]interfa
 			})
 		}
 		result["events"] = events
-		// TODO(jwj): Support profiling_data after TASK_PROFILE_EVENT is supported.
+		// TODO(jiangjiawei1103): Support profiling_data after TASK_PROFILE_EVENT is supported.
 		// Ref: https://github.com/ray-project/ray/blob/d0b1d151d8ea964a711e451d0ae736f8bf95b629/python/ray/util/state/common.py#L1616-L1622.
 		// result["profiling_data"] = task.ProfilingData
 		result["task_log_info"] = task.TaskLogInfo
@@ -1834,8 +1925,8 @@ func formatNodeSummaryReplayForResp(node eventtypes.Node, sessionName string) []
 		nodeTypeName = nodeGroup
 	}
 	isHeadNode := nodeTypeName == "headgroup"
-	rayletSocketName := fmt.Sprintf("/tmp/ray/%s/sockets/raylet", sessionName)
-	objectStoreSocketName := fmt.Sprintf("/tmp/ray/%s/sockets/plasma_store", sessionName)
+	rayletSocketName := path.Join(utils.GetTmpRayRoot(), sessionName, "sockets", "raylet")
+	objectStoreSocketName := path.Join(utils.GetTmpRayRoot(), sessionName, "sockets", "plasma_store")
 
 	// Handle the start timestamp of the node.
 	// Ref: https://github.com/ray-project/ray/blob/f953f199b5d68d47c07c865c5ebcd2333d49f365/src/ray/protobuf/gcs.proto#L345-L346.
@@ -2067,7 +2158,12 @@ func (s *ServerHandler) getTasksTimeline(req *restful.Request, resp *restful.Res
 	download := req.QueryParameter("download")
 
 	clusterSessionKey := utils.BuildClusterSessionKey(clusterName, clusterNamespace, sessionName)
-	timeline := s.eventHandler.GetTasksTimeline(clusterSessionKey, jobID)
+	snap, ok := s.sessionLoader.GetSnapshot(clusterSessionKey)
+	if !ok {
+		s.handleMissingSnapshot(resp)
+		return
+	}
+	timeline := getTasksTimeline(snap, jobID)
 
 	respData, err := json.Marshal(timeline)
 	if err != nil {

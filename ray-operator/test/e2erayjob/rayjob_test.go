@@ -11,7 +11,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/ptr"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray"
@@ -349,7 +348,7 @@ env_vars:
 		_, err = test.Client().Ray().RayV1().RayJobs(namespace.Name).Apply(test.Ctx(), rayJobAC, TestApplyOptions)
 		g.Expect(err).To(HaveOccurred())
 		g.Eventually(RayJob(test, *rayJobAC.Namespace, *rayJobAC.Name)).
-			Should(WithTransform(RayJobManagedBy, Equal(ptr.To("kueue.x-k8s.io/multikueue"))))
+			Should(WithTransform(RayJobManagedBy, Equal(new("kueue.x-k8s.io/multikueue"))))
 
 		// Refresh the RayJob status and assert it has not been updated
 		g.Eventually(RayJob(test, rayJob.Namespace, rayJob.Name)).
@@ -582,7 +581,7 @@ env_vars:
 		// Use an invalid image to force ImagePullBackOff on the head pod, guaranteeing the RayCluster never becomes Ready and the RayJob
 		// stays in Initializing long enough for the TTL to fire.
 		invalidImageOpt := func(spec *rayv1ac.RayClusterSpecApplyConfiguration) *rayv1ac.RayClusterSpecApplyConfiguration {
-			spec.HeadGroupSpec.Template.Spec.Containers[0].Image = ptr.To("invalid-image-does-not-exist:v1.0.0")
+			spec.HeadGroupSpec.Template.Spec.Containers[0].Image = new("invalid-image-does-not-exist:v1.0.0")
 			return spec
 		}
 

@@ -66,7 +66,7 @@ type TaskStatus string
 // The following statuses follow a rough chronological order of transition.
 // For typical order of states, please refer to:
 // https://github.com/ray-project/ray/blob/d0b1d151d8ea964a711e451d0ae736f8bf95b629/src/ray/protobuf/common.proto#L884-L899.
-// TODO(jwj): Each entity (actor, task, job, node) should have its own const def with entity name prepended to avoid conflicts.
+// TODO(jiangjiawei1103): Each entity (actor, task, job, node) should have its own const def with entity name prepended to avoid conflicts.
 const (
 	NIL                                        TaskStatus = "NIL"
 	PENDING_ARGS_AVAIL                         TaskStatus = "PENDING_ARGS_AVAIL"
@@ -154,7 +154,7 @@ type Task struct {
 	ActorReprName *string `json:"actorReprName,omitempty"`
 
 	// TaskLogInfo is just added at https://github.com/ray-project/ray/pull/60287.
-	// TODO(jwj): Add support for TaskLogInfo.
+	// TODO(jiangjiawei1103): Add support for TaskLogInfo.
 	TaskLogInfo *TaskLogInfo `json:"taskLogInfo,omitempty"`
 
 	State        TaskStatus
@@ -163,27 +163,26 @@ type Task struct {
 	EndTime      time.Time
 }
 
-// TaskProfileEventDTO represents the structure of TASK_PROFILE_EVENT from Ray Event Export API
-// DTO (Data Transfer Object)
+// TaskProfileEvents represents the structure of TASK_PROFILE_EVENT from Ray Event Export API
 // Note: Ray API uses "attemptNumber" for TASK_PROFILE_EVENT, but "taskAttempt"
 // for TASK_LIFECYCLE_EVENT and TASK_DEFINITION_EVENT
-type TaskProfileEventDTO struct {
-	TaskID        string           `json:"taskId"`
-	AttemptNumber int              `json:"attemptNumber"`
-	JobID         string           `json:"jobId"`
-	ProfileEvents ProfileEventsDTO `json:"profileEvents"`
+type TaskProfileEvents struct {
+	TaskID        string        `json:"taskId"`
+	AttemptNumber int           `json:"attemptNumber"`
+	JobID         string        `json:"jobId"`
+	ProfileEvents ProfileEvents `json:"profileEvents"`
 }
 
-// ProfileEventsDTO contains component and event information
-type ProfileEventsDTO struct {
-	ComponentID   string            `json:"componentId"`
-	ComponentType string            `json:"componentType"`
-	NodeIPAddress string            `json:"nodeIpAddress"`
-	Events        []ProfileEventDTO `json:"events"`
+// ProfileEvents contains component and event information
+type ProfileEvents struct {
+	ComponentID   string              `json:"componentId"`
+	ComponentType string              `json:"componentType"`
+	NodeIPAddress string              `json:"nodeIpAddress"`
+	Events        []ProfileEventEntry `json:"events"`
 }
 
-// ProfileEventDTO represents a single profile event within ProfileEvents
-type ProfileEventDTO struct {
+// ProfileEventEntry represents a single profile event within Spans
+type ProfileEventEntry struct {
 	EventName string `json:"eventName"`
 	StartTime string `json:"startTime"`
 	EndTime   string `json:"endTime"`
@@ -333,7 +332,7 @@ func (t *Task) GetLastState() TaskStatus {
 // Ref: https://github.com/ray-project/ray/blob/d0b1d151d8ea964a711e451d0ae736f8bf95b629/src/ray/protobuf/gcs_service.proto#L795-L859.
 // For all filterable fields, please refer to:
 // Ref: https://github.com/ray-project/ray/blob/d0b1d151d8ea964a711e451d0ae736f8bf95b629/python/ray/util/state/common.py#L730-L819.
-// TODO(jwj): Define object-specific filterable fields (e.g., Actor, Node).
+// TODO(jiangjiawei1103): Define object-specific filterable fields (e.g., Actor, Node).
 func (t *Task) GetFilterableFieldValue(filterKey string) string {
 	switch filterKey {
 	case "task_type":

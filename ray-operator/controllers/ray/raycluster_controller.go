@@ -48,22 +48,10 @@ import (
 
 type reconcileFunc func(context.Context, *rayv1.RayCluster) error
 
-var (
-	DefaultRequeueDuration = 2 * time.Second
-
-	// Definition of a index field for pod name
-	podUIDIndexField = "metadata.uid"
-)
+var DefaultRequeueDuration = 2 * time.Second
 
 // NewReconciler returns a new reconcile.Reconciler
-func NewReconciler(ctx context.Context, mgr manager.Manager, options RayClusterReconcilerOptions) *RayClusterReconciler {
-	if err := mgr.GetFieldIndexer().IndexField(ctx, &corev1.Pod{}, podUIDIndexField, func(rawObj client.Object) []string {
-		pod := rawObj.(*corev1.Pod)
-		return []string{string(pod.UID)}
-	}); err != nil {
-		panic(err)
-	}
-
+func NewReconciler(mgr manager.Manager, options RayClusterReconcilerOptions) *RayClusterReconciler {
 	return &RayClusterReconciler{
 		Client:                     mgr.GetClient(),
 		Scheme:                     mgr.GetScheme(),
@@ -89,6 +77,7 @@ type RayClusterReconcilerOptions struct {
 	WorkerSidecarContainers  []corev1.Container
 	DefaultContainerEnvs     []corev1.EnvVar
 	IsOpenShift              bool
+	UseIngressOnOpenShift    bool
 }
 
 // Reconcile reads that state of the cluster for a RayCluster object and makes changes based on it
@@ -248,6 +237,16 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 			redisCleanupJobs := batchv1.JobList{}
 			if err := r.List(ctx, &redisCleanupJobs, filterLabels...); err != nil {
 				return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
+			}
+
+			// Check finalizer timeout for RayService FT clusters and set requeue flag
+			if hasGCSFTFinalizer(instance) {
+				deletionAge := time.Since(instance.DeletionTimestamp.Time)
+				// This is to handle edge cases where the finalizer doesn't get removed,
+				// thus preventing release of resource quotas.
+				if deletionAge >= getGCSFTDeletionTimeout(instance) {
+					return r.forceRemoveGCSFTFinalizer(ctx, instance)
+				}
 			}
 
 			if len(redisCleanupJobs.Items) != 0 {
@@ -432,6 +431,14 @@ func generateRandomToken(length int) (string, error) {
 	return base64.StdEncoding.EncodeToString(bytes), nil
 }
 
+// shouldCreateOpenShiftRoute determines if an OpenShift Route should be created based on cluster type and configuration.
+// Uses the stored values from reconciler options (no function calls during reconciliation).
+// TODO: Remove once Gateway API support is mature and Route-based dashboard access is no longer needed.
+// See: https://github.com/ray-project/kuberay/pull/4365#issuecomment-4143407845
+func (r *RayClusterReconciler) shouldCreateOpenShiftRoute() bool {
+	return r.options.IsOpenShift && !r.options.UseIngressOnOpenShift
+}
+
 func (r *RayClusterReconciler) reconcileIngress(ctx context.Context, instance *rayv1.RayCluster) error {
 	logger := ctrl.LoggerFrom(ctx)
 	logger.Info("Reconciling Ingress")
@@ -439,11 +446,9 @@ func (r *RayClusterReconciler) reconcileIngress(ctx context.Context, instance *r
 		return nil
 	}
 
-	if r.options.IsOpenShift {
-		// This is open shift - create route
+	if r.shouldCreateOpenShiftRoute() {
 		return r.reconcileRouteOpenShift(ctx, instance)
 	}
-	// plain vanilla kubernetes - create ingress
 	return r.reconcileIngressKubernetes(ctx, instance)
 }
 
@@ -541,14 +546,13 @@ func (r *RayClusterReconciler) reconcileHeadService(ctx context.Context, instanc
 		// We may consider deprecating this field when we bump the CRD version.
 		maps.Copy(annotations, instance.Spec.HeadServiceAnnotations)
 		headSvc, err := common.BuildServiceForHeadPod(ctx, *instance, labels, annotations)
+		if err != nil {
+			return err
+		}
 		// TODO (kevin85421): Provide a detailed and actionable error message. For example, which port is missing?
 		if len(headSvc.Spec.Ports) == 0 {
 			logger.Info("Ray head service does not have any ports set up.", "serviceSpecification", headSvc.Spec)
 			return fmt.Errorf("ray head service does not have any ports set up. Service specification: %v", headSvc.Spec)
-		}
-
-		if err != nil {
-			return err
 		}
 
 		if err := r.createService(ctx, headSvc, instance); err != nil {
@@ -2017,4 +2021,48 @@ func setDefaults(instance *rayv1.RayCluster) {
 			instance.Spec.WorkerGroupSpecs[i].RayStartParams = map[string]string{}
 		}
 	}
+}
+
+// hasGCSFTFinalizer reports whether the GCS fault-tolerance Redis cleanup finalizer is
+// present on the cluster.
+func hasGCSFTFinalizer(cluster *rayv1.RayCluster) bool {
+	return controllerutil.ContainsFinalizer(cluster, utils.GCSFaultToleranceRedisCleanupFinalizer)
+}
+
+// getGCSFTDeletionTimeout returns the timeout after which the GCS FT finalizer is
+// force-removed from a stuck RayCluster.
+// The value is read from the RayClusterGCSFTDeletionTimeoutAnnotation annotation on the
+// cluster (integer seconds). If the annotation is absent or cannot be parsed, the default
+// of RAYCLUSTER_GCS_FT_DELETION_TIMEOUT_DEFAULT seconds is used.
+func getGCSFTDeletionTimeout(cluster *rayv1.RayCluster) time.Duration {
+	if annotationVal, exists := cluster.Annotations[utils.RayClusterGCSFTDeletionTimeoutAnnotation]; exists {
+		if timeoutSeconds, err := strconv.Atoi(annotationVal); err == nil && timeoutSeconds > 0 {
+			return time.Duration(timeoutSeconds) * time.Second
+		}
+	}
+	return utils.RAYCLUSTER_GCS_FT_DELETION_TIMEOUT_DEFAULT * time.Second
+}
+
+// forceRemoveGCSFTFinalizer forcibly removes the GCS FT Redis cleanup finalizer when the
+// cleanup job has been stuck past the configured timeout, unblocking cluster deletion.
+func (r *RayClusterReconciler) forceRemoveGCSFTFinalizer(ctx context.Context, instance *rayv1.RayCluster) (ctrl.Result, error) {
+	logger := ctrl.LoggerFrom(ctx)
+	deletionAge := time.Since(instance.DeletionTimestamp.Time)
+
+	logger.Info("Force-removing GCS FT finalizer — Redis cleanup job stuck past timeout",
+		"cluster", instance.Name, "deletionAge", deletionAge,
+		"timeout", getGCSFTDeletionTimeout(instance))
+
+	// Remove finalizer to allow deletion to proceed
+	controllerutil.RemoveFinalizer(instance, utils.GCSFaultToleranceRedisCleanupFinalizer)
+	if err := r.Update(ctx, instance); err != nil {
+		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
+	}
+
+	storageNamespace := instance.Annotations[utils.RayExternalStorageNSAnnotationKey]
+	r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.ForceDeletedStuckCluster),
+		"Force-removed GCS FT finalizer after %v due to Redis cleanup timeout; Redis storage namespace %q may need manual cleanup",
+		deletionAge, storageNamespace)
+
+	return ctrl.Result{}, nil // No requeue - deletion proceeds naturally
 }

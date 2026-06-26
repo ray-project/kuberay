@@ -15,12 +15,14 @@ type RayCollectorConfig struct {
 	SessionDir  string
 	RayNodeName string
 
-	Role             string
-	RayClusterName   string
-	RayClusterID     string
-	LogBatching      int
-	PushInterval     time.Duration
-	DashboardAddress string
+	Role                string
+	RayClusterName      string
+	RayClusterNamespace string
+	OwnerKind           string
+	OwnerName           string
+	LogBatching         int
+	PushInterval        time.Duration
+	DashboardAddress    string
 
 	AdditionalEndpoints  []string
 	EndpointPollInterval time.Duration
@@ -38,16 +40,16 @@ func ValidateRayHanderConfig(c *RayCollectorConfig, fldpath *field.Path) field.E
 	if len(c.RayNodeName) == 0 {
 		allErrs = append(allErrs, field.Invalid(fldpath, c.RayNodeName, "ray_node_name must be set"))
 	}
-	if len(c.RayClusterID) == 0 {
-		allErrs = append(allErrs, field.Invalid(fldpath, c.RayClusterID, "ray_cluster_id must be set"))
+	if len(c.RayClusterNamespace) == 0 {
+		allErrs = append(allErrs, field.Invalid(fldpath, c.RayClusterNamespace, "ray_cluster_namespace must be set"))
 	}
 
 	if c.Role == "Head" {
 		if len(c.RayClusterName) == 0 {
 			allErrs = append(allErrs, field.Invalid(fldpath, c.RayClusterName, "ray_cluster_name must be set"))
 		}
-		if len(c.RayClusterID) == 0 {
-			allErrs = append(allErrs, field.Invalid(fldpath, c.RayClusterID, "ray_cluster_id must be set"))
+		if len(c.RayClusterNamespace) == 0 {
+			allErrs = append(allErrs, field.Invalid(fldpath, c.RayClusterNamespace, "ray_cluster_namespace must be set"))
 		}
 	}
 	return allErrs

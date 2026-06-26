@@ -212,7 +212,7 @@ func testLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.Names
 	client := CreateHTTPClientWithCookieJar(g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 
-	nodeID := GetOneOfNodeID(g, client, historyServerURL, true)
+	nodeID := GetOneOfNodeID(g, client, historyServerURL, false)
 	filename := "raylet.out"
 
 	logFileTestCases := []struct {
@@ -925,8 +925,8 @@ func getAllEligibleActorIDs(g *WithT, client *http.Client, historyServerURL stri
 	err = json.Unmarshal(body, &result)
 	g.Expect(err).NotTo(HaveOccurred())
 
-	// Extract actor_id from response
-	// Response format: {"result": true, "msg": "...", "data": {"actors": {actor_id: {...}, ...}}}
+	// Extract actorId from response
+	// Response format: {"result": true, "msg": "...", "data": {"actors": {actorId: {...}, ...}}}
 	data, ok := result["data"].(map[string]interface{})
 	g.Expect(ok).To(BeTrue(), "response should have 'data' field")
 
@@ -1023,7 +1023,7 @@ func testLogStreamEndpoint(test Test, g *WithT, namespace *corev1.Namespace, s3C
 	client := CreateHTTPClientWithCookieJar(g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 
-	nodeID := GetOneOfNodeID(g, client, historyServerURL, true)
+	nodeID := GetOneOfNodeID(g, client, historyServerURL, false)
 	filename := "raylet.out"
 	streamURL := fmt.Sprintf("%s%s?node_id=%s&filename=%s", historyServerURL, EndpointLogsStream, nodeID, filename)
 
@@ -1255,7 +1255,11 @@ func testNodeLogsEndpointDeadCluster(test Test, g *WithT, namespace *corev1.Name
 		// glob=events/event_JOBS* should match only event_JOBS.log inside the events/ subdirectory.
 		// Expected response:
 		//   {"data":{"result":{"internal":["event_JOBS.log"]}},"msg":"","result":true}
-		logsURL := fmt.Sprintf("%s%s?node_id=%s&glob=%s", historyServerURL, EndpointLogs, nodeID, url.QueryEscape("events/event_JOBS*"))
+		//
+		// Always use the head node ID to avoid flakiness since events/event_JOBS.log is only present on the head node.
+		// Ref: https://github.com/ray-project/ray/blob/20eae5b1/python/ray/dashboard/modules/job/job_head.py#L397-L399
+		headNodeID := GetOneOfNodeID(g, client, historyServerURL, true)
+		logsURL := fmt.Sprintf("%s%s?node_id=%s&glob=%s", historyServerURL, EndpointLogs, headNodeID, url.QueryEscape("events/event_JOBS*"))
 		resp, err := client.Get(logsURL)
 		g.Expect(err).NotTo(HaveOccurred())
 		defer resp.Body.Close()
@@ -1621,7 +1625,7 @@ func testLogicalActorsEndpointDeadCluster(test Test, g *WithT, namespace *corev1
 			gg.Expect(ok).To(BeTrue())
 			gg.Expect(len(actors)).To(BeNumerically(">", 0), "should have at least one actor")
 
-			// Verify actor schema matches formatActorForResponse format (camelCase keys, hex IDs)
+			// Verify actor schema matches formatActorForResponse format
 			for _, actorData := range actors {
 				actor, ok := actorData.(map[string]any)
 				gg.Expect(ok).To(BeTrue(), "actor should be a map")
@@ -1662,13 +1666,13 @@ func testLogicalActorsEndpointDeadCluster(test Test, g *WithT, namespace *corev1
 			gg.Expect(result["result"]).To(Equal(true))
 			gg.Expect(result["msg"]).To(Equal("Actor fetched."))
 
-			// Verify data.detail exists and contains actor_id
+			// Verify data.detail exists and contains actorId
 			data, ok := result["data"].(map[string]any)
 			gg.Expect(ok).To(BeTrue())
 			detail, ok := data["detail"].(map[string]any)
 			gg.Expect(ok).To(BeTrue())
 
-			// Verify actor schema matches formatActorForResponse format (camelCase keys, hex IDs)
+			// Verify actor schema matches formatActorForResponse format
 			gg.Expect(detail["actorId"]).To(Equal(actorID))
 			gg.Expect(detail["jobId"]).NotTo(BeNil())
 			gg.Expect(detail["state"]).NotTo(BeNil())
@@ -2696,7 +2700,7 @@ func verifySingleEndpoint(test Test, g *WithT, client *http.Client, endpointURL 
 	verifySchema(test, g, respData)
 }
 
-// TODO(jwj): Make verification for node-related endpoints more robust.
+// TODO(jiangjiawei1103): Make verification for node-related endpoints more robust.
 // verifyNodesRespSchema verifies that the /nodes response is valid according to the API schema.
 // Both live and dead clusters now return the same format (flat array of latest snapshots).
 // isLive is kept for signature compatibility but no longer affects validation.

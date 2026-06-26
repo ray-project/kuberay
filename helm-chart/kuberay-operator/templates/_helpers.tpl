@@ -266,6 +266,7 @@ rules:
   - httproutes
   verbs:
   - create
+  - delete
   - get
   - list
   - update
@@ -277,6 +278,17 @@ rules:
   verbs:
   - get
   - list
+  - watch
+- apiGroups:
+  - networking.k8s.io
+  resources:
+  - networkpolicies
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - update
   - watch
 - apiGroups:
   - ray.io

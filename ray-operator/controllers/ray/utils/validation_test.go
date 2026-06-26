@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 
@@ -396,8 +397,8 @@ func TestValidateRayClusterSpecEmptyContainers(t *testing.T) {
 	}
 	workerGroupSpecWithOneContainer := rayv1.WorkerGroupSpec{
 		Template:    podTemplateSpec(nil, nil),
-		MinReplicas: ptr.To(int32(0)),
-		MaxReplicas: ptr.To(int32(5)),
+		MinReplicas: new(int32(0)),
+		MaxReplicas: new(int32(5)),
 	}
 	headGroupSpecWithNoContainers := *headGroupSpecWithOneContainer.DeepCopy()
 	headGroupSpecWithNoContainers.Template.Spec.Containers = []corev1.Container{}
@@ -463,10 +464,10 @@ func TestValidateRayClusterSpecSuspendingWorkerGroup(t *testing.T) {
 	workerGroupSpecSuspended := rayv1.WorkerGroupSpec{
 		GroupName:   "worker-group-1",
 		Template:    podTemplateSpec(nil, nil),
-		MinReplicas: ptr.To(int32(0)),
-		MaxReplicas: ptr.To(int32(5)),
+		MinReplicas: new(int32(0)),
+		MaxReplicas: new(int32(5)),
 	}
-	workerGroupSpecSuspended.Suspend = ptr.To(true)
+	workerGroupSpecSuspended.Suspend = new(true)
 
 	tests := []struct {
 		rayCluster   *rayv1.RayCluster
@@ -505,7 +506,7 @@ func TestValidateRayClusterSpecSuspendingWorkerGroup(t *testing.T) {
 				Spec: rayv1.RayClusterSpec{
 					HeadGroupSpec:           headGroupSpec,
 					WorkerGroupSpecs:        []rayv1.WorkerGroupSpec{workerGroupSpecSuspended},
-					EnableInTreeAutoscaling: ptr.To(true),
+					EnableInTreeAutoscaling: new(true),
 				},
 			},
 			featureGate:  true,
@@ -553,7 +554,7 @@ func TestValidateRayClusterSpecAutoscaler(t *testing.T) {
 	}{
 		"should return error if autoscaler is enabled and any worker group is suspended": {
 			spec: rayv1.RayClusterSpec{
-				EnableInTreeAutoscaling: ptr.To(true),
+				EnableInTreeAutoscaling: new(true),
 				HeadGroupSpec: rayv1.HeadGroupSpec{
 					Template: podTemplateSpec(nil, nil),
 				},
@@ -561,7 +562,7 @@ func TestValidateRayClusterSpecAutoscaler(t *testing.T) {
 					{
 						GroupName: "worker-group-1",
 						Template:  podTemplateSpec(nil, nil),
-						Suspend:   ptr.To(true),
+						Suspend:   new(true),
 					},
 				},
 			},
@@ -569,7 +570,7 @@ func TestValidateRayClusterSpecAutoscaler(t *testing.T) {
 		},
 		fmt.Sprintf("should return error if %s env var is set to '1' when autoscaler is disabled", RAY_ENABLE_AUTOSCALER_V2): {
 			spec: rayv1.RayClusterSpec{
-				EnableInTreeAutoscaling: ptr.To(false),
+				EnableInTreeAutoscaling: new(false),
 				HeadGroupSpec: rayv1.HeadGroupSpec{
 					Template: podTemplateSpec([]corev1.EnvVar{
 						{
@@ -583,7 +584,7 @@ func TestValidateRayClusterSpecAutoscaler(t *testing.T) {
 		},
 		fmt.Sprintf("should return error if %s env var is set to 'true' when autoscaler is disabled", RAY_ENABLE_AUTOSCALER_V2): {
 			spec: rayv1.RayClusterSpec{
-				EnableInTreeAutoscaling: ptr.To(false),
+				EnableInTreeAutoscaling: new(false),
 				HeadGroupSpec: rayv1.HeadGroupSpec{
 					Template: podTemplateSpec([]corev1.EnvVar{
 						{
@@ -597,7 +598,7 @@ func TestValidateRayClusterSpecAutoscaler(t *testing.T) {
 		},
 		fmt.Sprintf("should return error if autoscaler v2 is enabled and head Pod has env var %s", RAY_ENABLE_AUTOSCALER_V2): {
 			spec: rayv1.RayClusterSpec{
-				EnableInTreeAutoscaling: ptr.To(true),
+				EnableInTreeAutoscaling: new(true),
 				AutoscalerOptions: &rayv1.AutoscalerOptions{
 					Version: ptr.To(rayv1.AutoscalerVersionV2),
 				},
@@ -614,7 +615,7 @@ func TestValidateRayClusterSpecAutoscaler(t *testing.T) {
 		},
 		"should return error if autoscaler v2 is enabled and head Pod has a restartPolicy other than Never or unset": {
 			spec: rayv1.RayClusterSpec{
-				EnableInTreeAutoscaling: ptr.To(true),
+				EnableInTreeAutoscaling: new(true),
 				AutoscalerOptions: &rayv1.AutoscalerOptions{
 					Version: ptr.To(rayv1.AutoscalerVersionV2),
 				},
@@ -626,7 +627,7 @@ func TestValidateRayClusterSpecAutoscaler(t *testing.T) {
 		},
 		"should return error if autoscaler v2 is enabled and a worker group has a restartPolicy other than Never or unset": {
 			spec: rayv1.RayClusterSpec{
-				EnableInTreeAutoscaling: ptr.To(true),
+				EnableInTreeAutoscaling: new(true),
 				AutoscalerOptions: &rayv1.AutoscalerOptions{
 					Version: ptr.To(rayv1.AutoscalerVersionV2),
 				},
@@ -648,7 +649,7 @@ func TestValidateRayClusterSpecAutoscaler(t *testing.T) {
 		},
 		"should not return error if autoscaler configs are valid": {
 			spec: rayv1.RayClusterSpec{
-				EnableInTreeAutoscaling: ptr.To(true),
+				EnableInTreeAutoscaling: new(true),
 				AutoscalerOptions: &rayv1.AutoscalerOptions{
 					Version: ptr.To(rayv1.AutoscalerVersionV2),
 				},
@@ -666,6 +667,49 @@ func TestValidateRayClusterSpecAutoscaler(t *testing.T) {
 					},
 				},
 			},
+		},
+		fmt.Sprintf("should return error if %s is set in autoscalerOptions.env (args also set)", KUBERAY_GEN_AUTOSCALER_START_CMD): {
+			spec: rayv1.RayClusterSpec{
+				EnableInTreeAutoscaling: new(true),
+				AutoscalerOptions: &rayv1.AutoscalerOptions{
+					Args: []string{"my-custom-autoscaler-cmd"},
+					Env: []corev1.EnvVar{
+						{
+							Name:  KUBERAY_GEN_AUTOSCALER_START_CMD,
+							Value: "ray kuberay-autoscaler --cluster-name foo --cluster-namespace bar",
+						},
+					},
+				},
+				HeadGroupSpec: rayv1.HeadGroupSpec{
+					Template: podTemplateSpec(nil, nil),
+				},
+			},
+			expectedErr: fmt.Sprintf(
+				"autoscalerOptions.env must not contain %s: "+
+					"it is managed by KubeRay and injected automatically into the autoscaler container",
+				KUBERAY_GEN_AUTOSCALER_START_CMD),
+		},
+		fmt.Sprintf("should return error if %s is set in autoscalerOptions.env even when autoscalerOptions.args is absent", KUBERAY_GEN_AUTOSCALER_START_CMD): {
+			spec: rayv1.RayClusterSpec{
+				EnableInTreeAutoscaling: new(true),
+				AutoscalerOptions: &rayv1.AutoscalerOptions{
+					// No Args — KUBERAY_GEN_AUTOSCALER_START_CMD is always KubeRay-managed,
+					// so it must never be set by the user regardless of whether Args is present.
+					Env: []corev1.EnvVar{
+						{
+							Name:  KUBERAY_GEN_AUTOSCALER_START_CMD,
+							Value: "ray kuberay-autoscaler --cluster-name foo --cluster-namespace bar",
+						},
+					},
+				},
+				HeadGroupSpec: rayv1.HeadGroupSpec{
+					Template: podTemplateSpec(nil, nil),
+				},
+			},
+			expectedErr: fmt.Sprintf(
+				"autoscalerOptions.env must not contain %s: "+
+					"it is managed by KubeRay and injected automatically into the autoscaler container",
+				KUBERAY_GEN_AUTOSCALER_START_CMD),
 		},
 	}
 
@@ -698,8 +742,8 @@ func TestValidateRayClusterSpec_Resources(t *testing.T) {
 				{
 					GroupName:   "worker-group",
 					Template:    podTemplateSpec(nil, nil),
-					MinReplicas: ptr.To(int32(0)),
-					MaxReplicas: ptr.To(int32(5)),
+					MinReplicas: new(int32(0)),
+					MaxReplicas: new(int32(5)),
 				},
 			},
 		}
@@ -781,8 +825,8 @@ func TestValidateRayClusterSpec_Labels(t *testing.T) {
 				{
 					GroupName:   "worker-group",
 					Template:    podTemplateSpec(nil, nil),
-					MinReplicas: ptr.To(int32(0)),
-					MaxReplicas: ptr.To(int32(5)),
+					MinReplicas: new(int32(0)),
+					MaxReplicas: new(int32(5)),
 				},
 			},
 		}
@@ -924,7 +968,7 @@ func TestValidateRayClusterSpecRayVersionForAuth(t *testing.T) {
 				},
 				AuthOptions: &rayv1.AuthOptions{
 					Mode:               rayv1.AuthModeToken,
-					EnableK8sTokenAuth: ptr.To(tt.enableK8sTokenAuth),
+					EnableK8sTokenAuth: new(tt.enableK8sTokenAuth),
 				},
 			}
 			err := ValidateRayClusterSpec(spec, nil)
@@ -1183,7 +1227,7 @@ func TestValidateRayJobSpec(t *testing.T) {
 				RayClusterSpec: &rayv1.RayClusterSpec{
 					AuthOptions: &rayv1.AuthOptions{
 						Mode:               rayv1.AuthModeToken,
-						EnableK8sTokenAuth: ptr.To(true),
+						EnableK8sTokenAuth: new(true),
 					},
 				},
 			},
@@ -1255,7 +1299,7 @@ func TestValidateRayJobSpecWithFeatureGate(t *testing.T) {
 						Policy: ptr.To(rayv1.DeleteWorkers),
 					},
 				}, RayClusterSpec: &rayv1.RayClusterSpec{
-					EnableInTreeAutoscaling: ptr.To(true),
+					EnableInTreeAutoscaling: new(true),
 					HeadGroupSpec:           headGroupSpecWithOneContainer,
 				},
 			},
@@ -1529,7 +1573,7 @@ func TestValidateRayJobSpecWithFeatureGate(t *testing.T) {
 					},
 				},
 				RayClusterSpec: &rayv1.RayClusterSpec{
-					EnableInTreeAutoscaling: ptr.To(true),
+					EnableInTreeAutoscaling: new(true),
 					HeadGroupSpec:           headGroupSpecWithOneContainer,
 				},
 			},
@@ -1857,7 +1901,7 @@ func TestValidateRayServiceSpec(t *testing.T) {
 				RayClusterSpec: rayv1.RayClusterSpec{
 					AuthOptions: &rayv1.AuthOptions{
 						Mode:               rayv1.AuthModeToken,
-						EnableK8sTokenAuth: ptr.To(true),
+						EnableK8sTokenAuth: new(true),
 					},
 				},
 			},
@@ -1967,18 +2011,18 @@ func TestValidateClusterUpgradeOptions(t *testing.T) {
 	}{
 		{
 			name:              "valid config",
-			maxSurgePercent:   ptr.To(int32(50)),
-			stepSizePercent:   ptr.To(int32(50)),
-			intervalSeconds:   ptr.To(int32(10)),
+			maxSurgePercent:   new(int32(50)),
+			stepSizePercent:   new(int32(50)),
+			intervalSeconds:   new(int32(10)),
 			gatewayClassName:  "istio",
 			enableAutoscaling: true,
 			expectError:       false,
 		},
 		{
 			name:              "missing autoscaler",
-			maxSurgePercent:   ptr.To(int32(50)),
-			stepSizePercent:   ptr.To(int32(50)),
-			intervalSeconds:   ptr.To(int32(10)),
+			maxSurgePercent:   new(int32(50)),
+			stepSizePercent:   new(int32(50)),
+			intervalSeconds:   new(int32(10)),
 			gatewayClassName:  "istio",
 			enableAutoscaling: false,
 			expectError:       true,
@@ -1990,35 +2034,44 @@ func TestValidateClusterUpgradeOptions(t *testing.T) {
 		},
 		{
 			name:              "invalid MaxSurgePercent",
-			maxSurgePercent:   ptr.To(int32(200)),
-			stepSizePercent:   ptr.To(int32(50)),
-			intervalSeconds:   ptr.To(int32(10)),
+			maxSurgePercent:   new(int32(200)),
+			stepSizePercent:   new(int32(50)),
+			intervalSeconds:   new(int32(10)),
 			gatewayClassName:  "istio",
 			enableAutoscaling: true,
 			expectError:       true,
 		},
 		{
 			name:              "missing StepSizePercent",
-			maxSurgePercent:   ptr.To(int32(50)),
-			intervalSeconds:   ptr.To(int32(10)),
+			maxSurgePercent:   new(int32(50)),
+			intervalSeconds:   new(int32(10)),
+			gatewayClassName:  "istio",
+			enableAutoscaling: true,
+			expectError:       true,
+		},
+		{
+			name:              "invalid StepSizePercent (greater than MaxSurgePercent)",
+			maxSurgePercent:   new(int32(50)),
+			stepSizePercent:   new(int32(75)),
+			intervalSeconds:   new(int32(10)),
 			gatewayClassName:  "istio",
 			enableAutoscaling: true,
 			expectError:       true,
 		},
 		{
 			name:              "invalid IntervalSeconds",
-			maxSurgePercent:   ptr.To(int32(50)),
-			stepSizePercent:   ptr.To(int32(50)),
-			intervalSeconds:   ptr.To(int32(0)),
+			maxSurgePercent:   new(int32(50)),
+			stepSizePercent:   new(int32(50)),
+			intervalSeconds:   new(int32(0)),
 			gatewayClassName:  "istio",
 			enableAutoscaling: true,
 			expectError:       true,
 		},
 		{
 			name:              "missing GatewayClassName",
-			maxSurgePercent:   ptr.To(int32(50)),
-			stepSizePercent:   ptr.To(int32(50)),
-			intervalSeconds:   ptr.To(int32(10)),
+			maxSurgePercent:   new(int32(50)),
+			stepSizePercent:   new(int32(50)),
+			intervalSeconds:   new(int32(10)),
 			enableAutoscaling: true,
 			expectError:       true,
 		},
@@ -2044,7 +2097,7 @@ func TestValidateClusterUpgradeOptions(t *testing.T) {
 			}
 
 			rayClusterSpec := *createBasicRayClusterSpec()
-			rayClusterSpec.EnableInTreeAutoscaling = ptr.To(tt.enableAutoscaling)
+			rayClusterSpec.EnableInTreeAutoscaling = new(tt.enableAutoscaling)
 
 			rayService := &rayv1.RayService{
 				Spec: rayv1.RayServiceSpec{
@@ -2067,7 +2120,7 @@ func TestValidateRayClusterSpec_IdleTimeoutSeconds(t *testing.T) {
 	// Util function to create a RayCluster spec.
 	createSpec := func() rayv1.RayClusterSpec {
 		return rayv1.RayClusterSpec{
-			EnableInTreeAutoscaling: ptr.To(true),
+			EnableInTreeAutoscaling: new(true),
 			HeadGroupSpec: rayv1.HeadGroupSpec{
 				Template: podTemplateSpec(nil, nil),
 			},
@@ -2089,9 +2142,9 @@ func TestValidateRayClusterSpec_IdleTimeoutSeconds(t *testing.T) {
 					{
 						GroupName:          "worker-group-1",
 						Template:           podTemplateSpec(nil, nil),
-						IdleTimeoutSeconds: ptr.To(int32(60)),
-						MinReplicas:        ptr.To(int32(0)),
-						MaxReplicas:        ptr.To(int32(10)),
+						IdleTimeoutSeconds: new(int32(60)),
+						MinReplicas:        new(int32(0)),
+						MaxReplicas:        new(int32(10)),
 					},
 				}
 				return s
@@ -2108,9 +2161,9 @@ func TestValidateRayClusterSpec_IdleTimeoutSeconds(t *testing.T) {
 					{
 						GroupName:          "worker-group-1",
 						Template:           podTemplateSpec(nil, nil),
-						IdleTimeoutSeconds: ptr.To(int32(60)),
-						MinReplicas:        ptr.To(int32(0)),
-						MaxReplicas:        ptr.To(int32(10)),
+						IdleTimeoutSeconds: new(int32(60)),
+						MinReplicas:        new(int32(0)),
+						MaxReplicas:        new(int32(10)),
 					},
 				}
 				return s
@@ -2127,9 +2180,9 @@ func TestValidateRayClusterSpec_IdleTimeoutSeconds(t *testing.T) {
 					{
 						GroupName:          "worker-group-1",
 						Template:           podTemplateSpec(nil, nil),
-						IdleTimeoutSeconds: ptr.To(int32(0)),
-						MinReplicas:        ptr.To(int32(0)),
-						MaxReplicas:        ptr.To(int32(10)),
+						IdleTimeoutSeconds: new(int32(0)),
+						MinReplicas:        new(int32(0)),
+						MaxReplicas:        new(int32(10)),
 					},
 				}
 				return s
@@ -2146,9 +2199,9 @@ func TestValidateRayClusterSpec_IdleTimeoutSeconds(t *testing.T) {
 					{
 						GroupName:          "worker-group-1",
 						Template:           podTemplateSpec(nil, nil),
-						IdleTimeoutSeconds: ptr.To(int32(-10)),
-						MinReplicas:        ptr.To(int32(0)),
-						MaxReplicas:        ptr.To(int32(10)),
+						IdleTimeoutSeconds: new(int32(-10)),
+						MinReplicas:        new(int32(0)),
+						MaxReplicas:        new(int32(10)),
 					},
 				}
 				return s
@@ -2162,9 +2215,9 @@ func TestValidateRayClusterSpec_IdleTimeoutSeconds(t *testing.T) {
 					{
 						GroupName:          "worker-group-1",
 						Template:           podTemplateSpec(nil, nil),
-						IdleTimeoutSeconds: ptr.To(int32(60)),
-						MinReplicas:        ptr.To(int32(0)),
-						MaxReplicas:        ptr.To(int32(10)),
+						IdleTimeoutSeconds: new(int32(60)),
+						MinReplicas:        new(int32(0)),
+						MaxReplicas:        new(int32(10)),
 					},
 				}
 				return s
@@ -2181,9 +2234,9 @@ func TestValidateRayClusterSpec_IdleTimeoutSeconds(t *testing.T) {
 					{
 						GroupName:          "worker-group-1",
 						Template:           podTemplateSpec(nil, nil),
-						IdleTimeoutSeconds: ptr.To(int32(60)),
-						MinReplicas:        ptr.To(int32(0)),
-						MaxReplicas:        ptr.To(int32(10)),
+						IdleTimeoutSeconds: new(int32(60)),
+						MinReplicas:        new(int32(0)),
+						MaxReplicas:        new(int32(10)),
 					},
 				}
 				return s
@@ -2197,8 +2250,8 @@ func TestValidateRayClusterSpec_IdleTimeoutSeconds(t *testing.T) {
 					{
 						GroupName:   "worker-group-1",
 						Template:    podTemplateSpec(nil, nil),
-						MinReplicas: ptr.To(int32(0)),
-						MaxReplicas: ptr.To(int32(10)),
+						MinReplicas: new(int32(0)),
+						MaxReplicas: new(int32(10)),
 					},
 				}
 				return s
@@ -2212,7 +2265,7 @@ func TestValidateRayClusterSpec_IdleTimeoutSeconds(t *testing.T) {
 				s := createSpec()
 				s.AutoscalerOptions = &rayv1.AutoscalerOptions{
 					Version:            ptr.To(rayv1.AutoscalerVersionV2),
-					IdleTimeoutSeconds: ptr.To(int32(120)),
+					IdleTimeoutSeconds: new(int32(120)),
 				}
 				return s
 			}(),
@@ -2223,7 +2276,7 @@ func TestValidateRayClusterSpec_IdleTimeoutSeconds(t *testing.T) {
 				s := createSpec()
 				s.AutoscalerOptions = &rayv1.AutoscalerOptions{
 					Version:            ptr.To(rayv1.AutoscalerVersionV1),
-					IdleTimeoutSeconds: ptr.To(int32(120)),
+					IdleTimeoutSeconds: new(int32(120)),
 				}
 				return s
 			}(),
@@ -2233,7 +2286,7 @@ func TestValidateRayClusterSpec_IdleTimeoutSeconds(t *testing.T) {
 			spec: func() rayv1.RayClusterSpec {
 				s := createSpec()
 				s.AutoscalerOptions = &rayv1.AutoscalerOptions{
-					IdleTimeoutSeconds: ptr.To(int32(120)),
+					IdleTimeoutSeconds: new(int32(120)),
 				}
 				return s
 			}(),
@@ -2243,7 +2296,7 @@ func TestValidateRayClusterSpec_IdleTimeoutSeconds(t *testing.T) {
 			spec: func() rayv1.RayClusterSpec {
 				s := createSpec()
 				s.AutoscalerOptions = &rayv1.AutoscalerOptions{
-					IdleTimeoutSeconds: ptr.To(int32(0)),
+					IdleTimeoutSeconds: new(int32(0)),
 				}
 				return s
 			}(),
@@ -2253,7 +2306,7 @@ func TestValidateRayClusterSpec_IdleTimeoutSeconds(t *testing.T) {
 			spec: func() rayv1.RayClusterSpec {
 				s := createSpec()
 				s.AutoscalerOptions = &rayv1.AutoscalerOptions{
-					IdleTimeoutSeconds: ptr.To(int32(-10)),
+					IdleTimeoutSeconds: new(int32(-10)),
 				}
 				return s
 			}(),
@@ -2317,7 +2370,7 @@ func TestValidateRayCronJobSpec(t *testing.T) {
 										Containers: []corev1.Container{
 											{
 												Name:  "ray-head",
-												Image: "rayproject/ray:2.9.0",
+												Image: "rayproject/ray:2.52.0",
 											},
 										},
 									},
@@ -2347,7 +2400,7 @@ func TestValidateRayCronJobSpec(t *testing.T) {
 										Containers: []corev1.Container{
 											{
 												Name:  "ray-head",
-												Image: "rayproject/ray:2.9.0",
+												Image: "rayproject/ray:2.52.0",
 											},
 										},
 									},
@@ -2401,6 +2454,193 @@ func TestValidateRayCronJobSpec(t *testing.T) {
 			},
 			expectError: true,
 			errorMsg:    "invalid RayJob template",
+		},
+		{
+			name: "Valid schedule with valid timezone",
+			cronJob: &rayv1.RayCronJob{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cronjob",
+					Namespace: "default",
+				},
+				Spec: rayv1.RayCronJobSpec{
+					Schedule: "0 9 * * *",
+					TimeZone: ptr.To("Asia/Taipei"),
+					JobTemplate: rayv1.RayJobSpec{
+						Entrypoint: "python test.py",
+						RayClusterSpec: &rayv1.RayClusterSpec{
+							HeadGroupSpec: rayv1.HeadGroupSpec{
+								Template: corev1.PodTemplateSpec{
+									Spec: corev1.PodSpec{
+										Containers: []corev1.Container{
+											{
+												Name:  "ray-head",
+												Image: "rayproject/ray:2.52.0",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "Valid schedule with UTC timezone",
+			cronJob: &rayv1.RayCronJob{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cronjob",
+					Namespace: "default",
+				},
+				Spec: rayv1.RayCronJobSpec{
+					Schedule: "0 0 * * *",
+					TimeZone: ptr.To("UTC"),
+					JobTemplate: rayv1.RayJobSpec{
+						Entrypoint: "python test.py",
+						RayClusterSpec: &rayv1.RayClusterSpec{
+							HeadGroupSpec: rayv1.HeadGroupSpec{
+								Template: corev1.PodTemplateSpec{
+									Spec: corev1.PodSpec{
+										Containers: []corev1.Container{
+											{
+												Name:  "ray-head",
+												Image: "rayproject/ray:2.52.0",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "Invalid timezone",
+			cronJob: &rayv1.RayCronJob{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cronjob",
+					Namespace: "default",
+				},
+				Spec: rayv1.RayCronJobSpec{
+					Schedule: "*/5 * * * *",
+					TimeZone: ptr.To("Invalid/Zone"),
+					JobTemplate: rayv1.RayJobSpec{
+						Entrypoint: "python test.py",
+						RayClusterSpec: &rayv1.RayClusterSpec{
+							HeadGroupSpec: rayv1.HeadGroupSpec{
+								Template: corev1.PodTemplateSpec{
+									Spec: corev1.PodSpec{
+										Containers: []corev1.Container{
+											{
+												Name:  "ray-head",
+												Image: "rayproject/ray:2.52.0",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectError: true,
+			errorMsg:    "invalid time zone",
+		},
+		{
+			name: "Schedule with TZ= prefix is rejected",
+			cronJob: &rayv1.RayCronJob{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cronjob",
+					Namespace: "default",
+				},
+				Spec: rayv1.RayCronJobSpec{
+					Schedule: "TZ=UTC */5 * * * *",
+					JobTemplate: rayv1.RayJobSpec{
+						Entrypoint: "python test.py",
+						RayClusterSpec: &rayv1.RayClusterSpec{
+							HeadGroupSpec: rayv1.HeadGroupSpec{
+								Template: corev1.PodTemplateSpec{
+									Spec: corev1.PodSpec{
+										Containers: []corev1.Container{
+											{
+												Name:  "ray-head",
+												Image: "rayproject/ray:2.52.0",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectError: true,
+			errorMsg:    "cannot use TZ or CRON_TZ in schedule",
+		},
+		{
+			name: "Schedule with CRON_TZ= prefix is rejected",
+			cronJob: &rayv1.RayCronJob{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cronjob",
+					Namespace: "default",
+				},
+				Spec: rayv1.RayCronJobSpec{
+					Schedule: "CRON_TZ=UTC */5 * * * *",
+					JobTemplate: rayv1.RayJobSpec{
+						Entrypoint: "python test.py",
+						RayClusterSpec: &rayv1.RayClusterSpec{
+							HeadGroupSpec: rayv1.HeadGroupSpec{
+								Template: corev1.PodTemplateSpec{
+									Spec: corev1.PodSpec{
+										Containers: []corev1.Container{
+											{
+												Name:  "ray-head",
+												Image: "rayproject/ray:2.52.0",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectError: true,
+			errorMsg:    "cannot use TZ or CRON_TZ in schedule",
+		},
+		{
+			name: "RayCronJob name too long",
+			cronJob: &rayv1.RayCronJob{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      strings.Repeat("a", MaxRayCronJobNameLength+1),
+					Namespace: "default",
+				},
+				Spec: rayv1.RayCronJobSpec{
+					Schedule: "*/5 * * * *",
+					JobTemplate: rayv1.RayJobSpec{
+						Entrypoint: "python test.py",
+						RayClusterSpec: &rayv1.RayClusterSpec{
+							HeadGroupSpec: rayv1.HeadGroupSpec{
+								Template: corev1.PodTemplateSpec{
+									Spec: corev1.PodSpec{
+										Containers: []corev1.Container{
+											{
+												Name:  "ray-head",
+												Image: "rayproject/ray:2.9.0",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectError: true,
+			errorMsg:    "RayCronJob name should be no more than",
 		},
 	}
 
@@ -2521,7 +2761,7 @@ func TestValidateRayClusterUpgradeOptions(t *testing.T) {
 func TestValidateRayClusterSpec_WorkerGroupReplicaValidation(t *testing.T) {
 	createSpec := func() rayv1.RayClusterSpec {
 		return rayv1.RayClusterSpec{
-			EnableInTreeAutoscaling: ptr.To(false),
+			EnableInTreeAutoscaling: new(false),
 			HeadGroupSpec: rayv1.HeadGroupSpec{
 				Template: podTemplateSpec(nil, nil),
 			},
@@ -2542,8 +2782,8 @@ func TestValidateRayClusterSpec_WorkerGroupReplicaValidation(t *testing.T) {
 					{
 						GroupName:   "worker-group-3",
 						Template:    podTemplateSpec(nil, nil),
-						MinReplicas: ptr.To(int32(5)),
-						MaxReplicas: ptr.To(int32(3)),
+						MinReplicas: new(int32(5)),
+						MaxReplicas: new(int32(3)),
 					},
 				}
 				return s
@@ -2560,9 +2800,9 @@ func TestValidateRayClusterSpec_WorkerGroupReplicaValidation(t *testing.T) {
 					{
 						GroupName:   "worker-group-3",
 						Template:    podTemplateSpec(nil, nil),
-						Replicas:    ptr.To(int32(1)),
-						MinReplicas: ptr.To(int32(2)),
-						MaxReplicas: ptr.To(int32(5)),
+						Replicas:    new(int32(1)),
+						MinReplicas: new(int32(2)),
+						MaxReplicas: new(int32(5)),
 					},
 				}
 				return s
@@ -2578,7 +2818,7 @@ func TestValidateRayClusterSpec_WorkerGroupReplicaValidation(t *testing.T) {
 						GroupName:   "worker-group-3",
 						Template:    podTemplateSpec(nil, nil),
 						MinReplicas: nil,
-						MaxReplicas: ptr.To(int32(5)),
+						MaxReplicas: new(int32(5)),
 					},
 				}
 				return s
@@ -2594,7 +2834,7 @@ func TestValidateRayClusterSpec_WorkerGroupReplicaValidation(t *testing.T) {
 					{
 						GroupName:   "worker-group-3",
 						Template:    podTemplateSpec(nil, nil),
-						MinReplicas: ptr.To(int32(1)),
+						MinReplicas: new(int32(1)),
 						MaxReplicas: nil,
 					},
 				}
@@ -2624,12 +2864,12 @@ func TestValidateRayClusterSpec_WorkerGroupReplicaValidation(t *testing.T) {
 			name: "minReplicas is negative",
 			spec: func() rayv1.RayClusterSpec {
 				s := createSpec()
-				s.EnableInTreeAutoscaling = ptr.To(true)
+				s.EnableInTreeAutoscaling = new(true)
 				s.WorkerGroupSpecs = []rayv1.WorkerGroupSpec{
 					{
 						GroupName:   "worker-group-3",
 						Template:    podTemplateSpec(nil, nil),
-						MinReplicas: ptr.To(int32(-1)),
+						MinReplicas: new(int32(-1)),
 					},
 				}
 				return s
@@ -2641,12 +2881,12 @@ func TestValidateRayClusterSpec_WorkerGroupReplicaValidation(t *testing.T) {
 			name: "maxReplicas is negative",
 			spec: func() rayv1.RayClusterSpec {
 				s := createSpec()
-				s.EnableInTreeAutoscaling = ptr.To(true)
+				s.EnableInTreeAutoscaling = new(true)
 				s.WorkerGroupSpecs = []rayv1.WorkerGroupSpec{
 					{
 						GroupName:   "worker-group-3",
 						Template:    podTemplateSpec(nil, nil),
-						MaxReplicas: ptr.To(int32(-1)),
+						MaxReplicas: new(int32(-1)),
 					},
 				}
 				return s
@@ -2658,7 +2898,7 @@ func TestValidateRayClusterSpec_WorkerGroupReplicaValidation(t *testing.T) {
 			name: "valid when autoscaling enabled",
 			spec: func() rayv1.RayClusterSpec {
 				s := createSpec()
-				s.EnableInTreeAutoscaling = ptr.To(true)
+				s.EnableInTreeAutoscaling = new(true)
 				s.WorkerGroupSpecs = []rayv1.WorkerGroupSpec{
 					{
 						GroupName: "worker-group-3",
@@ -2695,8 +2935,8 @@ func TestValidateRayClusterSpec_Auth(t *testing.T) {
 			name: "enableK8sTokenAuth=true and secretName set",
 			authOptions: &rayv1.AuthOptions{
 				Mode:               rayv1.AuthModeToken,
-				EnableK8sTokenAuth: ptr.To(true),
-				SecretName:         ptr.To("my-secret"),
+				EnableK8sTokenAuth: new(true),
+				SecretName:         new("my-secret"),
 			},
 			expectError: true,
 			errorMsg:    "authOptions.enableK8sTokenAuth is enabled and authOptions.secretName is also set",
@@ -2705,7 +2945,7 @@ func TestValidateRayClusterSpec_Auth(t *testing.T) {
 			name: "enableK8sTokenAuth=true and secretName unset",
 			authOptions: &rayv1.AuthOptions{
 				Mode:               rayv1.AuthModeToken,
-				EnableK8sTokenAuth: ptr.To(true),
+				EnableK8sTokenAuth: new(true),
 			},
 			expectError: false,
 		},
@@ -2713,7 +2953,7 @@ func TestValidateRayClusterSpec_Auth(t *testing.T) {
 			name: "enableK8sTokenAuth=false and secretName set",
 			authOptions: &rayv1.AuthOptions{
 				Mode:       rayv1.AuthModeToken,
-				SecretName: ptr.To("my-secret"),
+				SecretName: new("my-secret"),
 			},
 			expectError: false,
 		},
@@ -2732,8 +2972,8 @@ func TestValidateRayClusterSpec_Auth(t *testing.T) {
 						{
 							GroupName:   "worker-group",
 							Template:    podTemplateSpec(nil, nil),
-							MinReplicas: ptr.To(int32(1)),
-							MaxReplicas: ptr.To(int32(1)),
+							MinReplicas: new(int32(1)),
+							MaxReplicas: new(int32(1)),
 						},
 					},
 				},
@@ -2749,4 +2989,123 @@ func TestValidateRayClusterSpec_Auth(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestValidateNetworkIsolation(t *testing.T) {
+	tests := []struct {
+		ni          *rayv1.NetworkIsolationConfig
+		name        string
+		errorMsg    string
+		expectError bool
+	}{
+		{
+			name: "DenyAllEgress with head IngressRules set returns error",
+			ni: &rayv1.NetworkIsolationConfig{
+				Mode: ptr.To(rayv1.NetworkIsolationDenyAllEgress),
+				Head: &rayv1.NetworkPolicyRules{
+					IngressRules: []networkingv1.NetworkPolicyIngressRule{{}},
+				},
+			},
+			expectError: true,
+			errorMsg:    `networkIsolation.head.ingressRules cannot be set when mode is "DenyAllEgress" (ingress is not restricted)`,
+		},
+		{
+			name: "DenyAllEgress with worker IngressRules set returns error",
+			ni: &rayv1.NetworkIsolationConfig{
+				Mode: ptr.To(rayv1.NetworkIsolationDenyAllEgress),
+				Worker: &rayv1.NetworkPolicyRules{
+					IngressRules: []networkingv1.NetworkPolicyIngressRule{{}},
+				},
+			},
+			expectError: true,
+			errorMsg:    `networkIsolation.worker.ingressRules cannot be set when mode is "DenyAllEgress" (ingress is not restricted)`,
+		},
+		{
+			name: "DenyAllIngress with head EgressRules set returns error",
+			ni: &rayv1.NetworkIsolationConfig{
+				Mode: ptr.To(rayv1.NetworkIsolationDenyAllIngress),
+				Head: &rayv1.NetworkPolicyRules{
+					EgressRules: []networkingv1.NetworkPolicyEgressRule{{}},
+				},
+			},
+			expectError: true,
+			errorMsg:    `networkIsolation.head.egressRules cannot be set when mode is "DenyAllIngress" (egress is not restricted)`,
+		},
+		{
+			name: "DenyAllIngress with worker EgressRules set returns error",
+			ni: &rayv1.NetworkIsolationConfig{
+				Mode: ptr.To(rayv1.NetworkIsolationDenyAllIngress),
+				Worker: &rayv1.NetworkPolicyRules{
+					EgressRules: []networkingv1.NetworkPolicyEgressRule{{}},
+				},
+			},
+			expectError: true,
+			errorMsg:    `networkIsolation.worker.egressRules cannot be set when mode is "DenyAllIngress" (egress is not restricted)`,
+		},
+		{
+			name: "DenyAll with both head and worker rules is valid",
+			ni: &rayv1.NetworkIsolationConfig{
+				Mode: ptr.To(rayv1.NetworkIsolationDenyAll),
+				Head: &rayv1.NetworkPolicyRules{
+					IngressRules: []networkingv1.NetworkPolicyIngressRule{{}},
+					EgressRules:  []networkingv1.NetworkPolicyEgressRule{{}},
+				},
+				Worker: &rayv1.NetworkPolicyRules{
+					IngressRules: []networkingv1.NetworkPolicyIngressRule{{}},
+					EgressRules:  []networkingv1.NetworkPolicyEgressRule{{}},
+				},
+			},
+			expectError: false,
+		},
+		{
+			name:        "nil NetworkIsolation is valid",
+			ni:          nil,
+			expectError: false,
+		},
+		{
+			name: "mode only with no head or worker rules is valid",
+			ni: &rayv1.NetworkIsolationConfig{
+				Mode: ptr.To(rayv1.NetworkIsolationDenyAll),
+			},
+			expectError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			spec := &rayv1.RayClusterSpec{NetworkIsolation: tt.ni}
+			err := validateNetworkIsolation(spec)
+			if tt.expectError {
+				require.Error(t, err)
+				assert.EqualError(t, err, tt.errorMsg)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestValidateRayClusterSpec_NetworkIsolationRequiresFeatureGate(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.RayClusterNetworkIsolation, false)
+	cluster := &rayv1.RayCluster{
+		Spec: rayv1.RayClusterSpec{
+			NetworkIsolation: &rayv1.NetworkIsolationConfig{
+				Mode: ptr.To(rayv1.NetworkIsolationDenyAll),
+			},
+			HeadGroupSpec: rayv1.HeadGroupSpec{
+				Template: podTemplateSpec(nil, nil),
+			},
+			WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+				{
+					GroupName:   "worker-group",
+					Template:    podTemplateSpec(nil, nil),
+					MinReplicas: ptr.To(int32(1)),
+					MaxReplicas: ptr.To(int32(1)),
+				},
+			},
+		},
+	}
+	err := ValidateRayClusterSpec(&cluster.Spec, cluster.Annotations)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "RayClusterNetworkIsolation")
 }

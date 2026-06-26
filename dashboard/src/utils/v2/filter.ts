@@ -33,7 +33,8 @@ export const filterJobs = (
       // Type filter for Batch API
       if (typeFilter == 1) {
         // Check if it's a Batch API job by looking at labels
-        const labels = job.clusterSpec.headGroupSpec.template.metadata?.labels;
+        const labels =
+          job.clusterSpec?.headGroupSpec?.template?.metadata?.labels;
         if (
           !labels ||
           labels["mlp.rbx.com/component"] !== "rayllmbatchinference"

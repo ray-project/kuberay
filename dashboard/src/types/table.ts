@@ -51,5 +51,5 @@ export interface JobRow {
   rayClusterName: string;
   submissionMode: string;
   rayVersion: string;
-  clusterSpec: RayClusterSpec;
+  clusterSpec?: RayClusterSpec;
 }

@@ -6,7 +6,7 @@ spec:
   enableInTreeAutoscaling: true
   authOptions:
     mode: token
-  rayVersion: '2.53.0'
+  rayVersion: "2.53.0"
   headGroupSpec:
     rayStartParams: {}
     template:

@@ -341,7 +341,7 @@ func setupTest(t *testing.T) {
 			},
 			WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
 				{
-					Replicas:    ptr.To(expectReplicaNum),
+					Replicas:    new(expectReplicaNum),
 					MinReplicas: ptr.To[int32](0),
 					MaxReplicas: ptr.To[int32](10000),
 					NumOfHosts:  expectNumOfHostNum,
@@ -1784,7 +1784,7 @@ func TestCalculateStatusWithoutDesiredReplicas(t *testing.T) {
 func TestCalculateStatusWithSuspendedWorkerGroups(t *testing.T) {
 	setupTest(t)
 
-	testRayCluster.Spec.WorkerGroupSpecs[0].Suspend = ptr.To(true)
+	testRayCluster.Spec.WorkerGroupSpecs[0].Suspend = new(true)
 	testRayCluster.Spec.WorkerGroupSpecs[0].MinReplicas = ptr.To[int32](100)
 	testRayCluster.Spec.WorkerGroupSpecs[0].MaxReplicas = ptr.To[int32](100)
 	testRayCluster.Spec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests = corev1.ResourceList{
@@ -2878,7 +2878,7 @@ func TestReconcile_Replicas_Optional(t *testing.T) {
 	assert.Len(t, testRayCluster.Spec.WorkerGroupSpecs, 1, "This test assumes only one worker group.")
 
 	// Disable autoscaling so that the random Pod deletion is enabled.
-	testRayCluster.Spec.EnableInTreeAutoscaling = ptr.To(false)
+	testRayCluster.Spec.EnableInTreeAutoscaling = new(false)
 	testRayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete = []string{}
 
 	tests := []struct {
@@ -2973,7 +2973,7 @@ func TestReconcile_Multihost_Replicas(t *testing.T) {
 
 	// Disable autoscaling so that the random Pod deletion is enabled.
 	// Set `NumOfHosts` to 4 to specify multi-host group
-	testRayCluster.Spec.EnableInTreeAutoscaling = ptr.To(false)
+	testRayCluster.Spec.EnableInTreeAutoscaling = new(false)
 	testRayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete = []string{}
 	testRayCluster.Spec.WorkerGroupSpecs[0].NumOfHosts = 4
 
@@ -3070,7 +3070,7 @@ func TestReconcile_NumOfHosts(t *testing.T) {
 
 	// Disable autoscaling so that the random Pod deletion is enabled.
 	// Set `Replicas` to 1 and clear `WorkersToDelete`
-	testRayCluster.Spec.EnableInTreeAutoscaling = ptr.To(false)
+	testRayCluster.Spec.EnableInTreeAutoscaling = new(false)
 	testRayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete = []string{}
 	testRayCluster.Spec.WorkerGroupSpecs[0].Replicas = ptr.To[int32](1)
 
@@ -3392,15 +3392,15 @@ func Test_ReconcileManagedBy(t *testing.T) {
 			shouldReconcile: true,
 		},
 		{
-			managedBy: ptr.To(""),
+			managedBy: new(""),
 			name:      "ManagedBy field empty",
 		},
 		{
-			managedBy: ptr.To(MultiKueueController),
+			managedBy: new(MultiKueueController),
 			name:      "ManagedBy field to external allowed controller",
 		},
 		{
-			managedBy: ptr.To("controller.com/invalid"),
+			managedBy: new("controller.com/invalid"),
 			name:      "ManagedBy field to external not allowed controller",
 		},
 	}
@@ -3409,7 +3409,7 @@ func Test_ReconcileManagedBy(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := context.Background()
 			cluster := testRayCluster.DeepCopy()
-			cluster.Spec.EnableInTreeAutoscaling = ptr.To(false)
+			cluster.Spec.EnableInTreeAutoscaling = new(false)
 			cluster.Status = rayv1.RayClusterStatus{}
 			cluster.Spec.ManagedBy = tc.managedBy
 			runtimeObjects := []runtime.Object{cluster}
@@ -3596,7 +3596,7 @@ func TestReconcile_AuthSecret_SkipWhenK8sTokenAuthEnabled(t *testing.T) {
 
 	testRayCluster.Spec.AuthOptions = &rayv1.AuthOptions{
 		Mode:               rayv1.AuthModeToken,
-		EnableK8sTokenAuth: ptr.To(true),
+		EnableK8sTokenAuth: new(true),
 	}
 
 	fakeClient := clientFake.NewClientBuilder().WithRuntimeObjects(testPods...).Build()
@@ -3888,5 +3888,59 @@ func TestReconcilePodsWithAuthTokenSecretName(t *testing.T) {
 			}
 		}
 		assert.True(t, authTokenEnvFound, "Auth token env var with provided secret name not found")
+	}
+}
+
+func TestHasGCSFTFinalizer(t *testing.T) {
+	tests := []struct {
+		name       string
+		finalizers []string
+		want       bool
+	}{
+		{name: "no finalizers", finalizers: nil, want: false},
+		{name: "GCS FT finalizer present", finalizers: []string{utils.GCSFaultToleranceRedisCleanupFinalizer}, want: true},
+		{name: "other finalizer only", finalizers: []string{"some-other-finalizer"}, want: false},
+		{name: "GCS FT among multiple finalizers", finalizers: []string{"other", utils.GCSFaultToleranceRedisCleanupFinalizer}, want: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cluster := &rayv1.RayCluster{}
+			cluster.Finalizers = tt.finalizers
+			assert.Equal(t, tt.want, hasGCSFTFinalizer(cluster))
+		})
+	}
+}
+
+func TestGetGCSFTDeletionTimeout(t *testing.T) {
+	defaultTimeout := time.Duration(utils.RAYCLUSTER_GCS_FT_DELETION_TIMEOUT_DEFAULT) * time.Second
+
+	tests := []struct {
+		name        string
+		annotations map[string]string
+		want        time.Duration
+	}{
+		{name: "no annotation returns default", annotations: nil, want: defaultTimeout},
+		{name: "valid annotation", annotations: map[string]string{
+			utils.RayClusterGCSFTDeletionTimeoutAnnotation: "120",
+		}, want: 120 * time.Second},
+		{name: "non-numeric annotation falls back to default", annotations: map[string]string{
+			utils.RayClusterGCSFTDeletionTimeoutAnnotation: "not-a-number",
+		}, want: defaultTimeout},
+		{name: "zero annotation falls back to default", annotations: map[string]string{
+			utils.RayClusterGCSFTDeletionTimeoutAnnotation: "0",
+		}, want: defaultTimeout},
+		{name: "negative annotation falls back to default", annotations: map[string]string{
+			utils.RayClusterGCSFTDeletionTimeoutAnnotation: "-5",
+		}, want: defaultTimeout},
+		{name: "1-second annotation (minimum valid)", annotations: map[string]string{
+			utils.RayClusterGCSFTDeletionTimeoutAnnotation: "1",
+		}, want: 1 * time.Second},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cluster := &rayv1.RayCluster{}
+			cluster.Annotations = tt.annotations
+			assert.Equal(t, tt.want, getGCSFTDeletionTimeout(cluster))
+		})
 	}
 }

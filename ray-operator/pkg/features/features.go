@@ -48,12 +48,20 @@ const (
 	// Enables RayCronJob controller for scheduled RayJob execution.
 	RayCronJob featuregate.Feature = "RayCronJob"
 
-	// owner: @fscnick
+	// owner: @justinyeh1995
 	// rep: N/A
-	// alpha: v1.6
+	// alpha: v1.7
 	//
-	// Enables asynchronous job info querying.
-	AsyncJobInfoQuery featuregate.Feature = "AsyncJobInfoQuery"
+	// Enables per-container restart policy for SidecarMode submitter to handle transient failures.
+	// Requires Kubernetes v1.35+ since it supports ContainerRestartPolicy by default starting in v1.35 and Ray v2.54.0+.
+	SidecarSubmitterRestart featuregate.Feature = "SidecarSubmitterRestart"
+
+	// owner: @chipspeak @kryanbeane
+	// rep: N/A
+	// alpha: v1.7
+	//
+	// Enables NetworkPolicy-based network isolation for RayClusters (spec.networkIsolation).
+	RayClusterNetworkIsolation featuregate.Feature = "RayClusterNetworkIsolation"
 )
 
 func init() {
@@ -66,7 +74,8 @@ var defaultFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
 	RayMultiHostIndexing:         {Default: true, PreRelease: featuregate.Beta},
 	RayServiceIncrementalUpgrade: {Default: false, PreRelease: featuregate.Alpha},
 	RayCronJob:                   {Default: false, PreRelease: featuregate.Alpha},
-	AsyncJobInfoQuery:            {Default: false, PreRelease: featuregate.Alpha},
+	SidecarSubmitterRestart:      {Default: false, PreRelease: featuregate.Alpha},
+	RayClusterNetworkIsolation:   {Default: false, PreRelease: featuregate.Alpha},
 }
 
 // SetFeatureGateDuringTest is a helper method to override feature gates in tests.

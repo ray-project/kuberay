@@ -11,7 +11,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/clock"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -83,7 +82,7 @@ func (r *RayCronJobReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	}
 
 	// check if the Suspend is set
-	if rayCronJobInstance.Spec.Suspend {
+	if rayCronJobInstance.Spec.Suspend != nil && *rayCronJobInstance.Spec.Suspend {
 		logger.V(1).Info("RayCronJob suspended, no new RayJobs will be created.")
 		r.Recorder.Eventf(rayCronJobInstance, corev1.EventTypeNormal, string(utils.SuspendedRayCronJob),
 			"RayCronJob suspended, no new RayJobs will be created")
@@ -91,7 +90,7 @@ func (r *RayCronJobReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 	}
 
 	// Parse the schedule after validation
-	schedule, err := cron.ParseStandard(rayCronJobInstance.Spec.Schedule)
+	schedule, err := cron.ParseStandard(formatSchedule(rayCronJobInstance))
 	if err != nil {
 		// This should not happen as validation already checked the schedule
 		logger.Error(err, "Failed to parse validated cron schedule")
@@ -118,19 +117,24 @@ func (r *RayCronJobReconciler) Reconcile(ctx context.Context, request ctrl.Reque
 		return ctrl.Result{}, err
 	}
 	if err := r.Create(ctx, rayJob); err != nil {
-		logger.Error(err, "Failed to create RayJob from RayCronJob")
-		return ctrl.Result{}, err
+		if !errors.IsAlreadyExists(err) {
+			logger.Error(err, "Failed to create RayJob from RayCronJob")
+			return ctrl.Result{}, err
+		}
+		// The deterministic name means a RayJob for this tick already exists, so a previous
+		// reconcile already scheduled it. Treat as success and still advance LastScheduleTime.
+		logger.Info("RayJob for this tick already exists, skipping creation", "rayJobName", rayJob.Name, "namespace", rayJob.Namespace)
+	} else {
+		logger.Info("Successfully created RayJob", "rayJobName", rayJob.Name, "namespace", rayJob.Namespace)
 	}
-	logger.Info("Successfully created RayJob", "rayJobName", rayJob.Name, "namespace", rayJob.Namespace)
-	rayCronJobInstance.Status.LastScheduleTime = &metav1.Time{Time: now}
+	rayCronJobInstance.Status.LastScheduleTime = &metav1.Time{Time: scheduleTime}
 
 	// Set next schedule time
-	nextScheduleTime := schedule.Next(now)
+	nextScheduleTime := schedule.Next(scheduleTime)
 	requeueAt := nextScheduleTime.Sub(now)
 	logger.Info("Schedule timing", "now", now, "nextScheduledTime", nextScheduleTime, "requeueAfter", requeueAt)
 
-	// This is the only place where we update the RayCronJob status. This will directly
-	// update the ScheduleStatus to ValidationFailed if there's validation error
+	// This is the only place where we update the RayCronJob status. This will only update the RayCronJob status if LastScheduleTime has changed.
 	if err = r.updateRayCronJobStatus(ctx, originalRayCronJobInstance, rayCronJobInstance); err != nil {
 		logger.Info("Failed to update RayCronJob status", "error", err)
 		return ctrl.Result{RequeueAfter: RayCronJobDefaultRequeueDuration}, err
@@ -153,10 +157,20 @@ func (r *RayCronJobReconciler) updateRayCronJobStatus(ctx context.Context, oldRa
 	return nil
 }
 
+func getTimeHashInMinutes(scheduledTime time.Time) int64 {
+	return scheduledTime.Unix() / 60
+}
+
+// getRayJobName builds a deterministic child name so a repeated Create for the same tick
+// collides with AlreadyExists instead of creating a duplicate (matches batch/v1 CronJob).
+func getRayJobName(cronJobName string, scheduledTime time.Time) string {
+	return fmt.Sprintf("%s-%d", cronJobName, getTimeHashInMinutes(scheduledTime))
+}
+
 func (r *RayCronJobReconciler) constructRayJob(cronJob *rayv1.RayCronJob, expectedTimestamp time.Time) (*rayv1.RayJob, error) {
 	rayJob := &rayv1.RayJob{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      fmt.Sprintf("%s-%s", cronJob.Name, rand.String(5)),
+			Name:      getRayJobName(cronJob.Name, expectedTimestamp),
 			Namespace: cronJob.Namespace,
 			Labels: map[string]string{
 				utils.RayCronJobNameLabelKey: cronJob.Name,
@@ -180,7 +194,6 @@ func (r *RayCronJobReconciler) constructRayJob(cronJob *rayv1.RayCronJob, expect
 func (r *RayCronJobReconciler) SetupWithManager(mgr ctrl.Manager, reconcileConcurrency int) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&rayv1.RayCronJob{}).
-		Owns(&rayv1.RayJob{}).
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: reconcileConcurrency,
 			LogConstructor: func(request *reconcile.Request) logr.Logger {
@@ -192,4 +205,13 @@ func (r *RayCronJobReconciler) SetupWithManager(mgr ctrl.Manager, reconcileConcu
 			},
 		}).
 		Complete(r)
+}
+
+// formatSchedule formats the schedule string based on schedule and time zone in RayCronJob Spec
+func formatSchedule(cronJob *rayv1.RayCronJob) string {
+	if cronJob.Spec.TimeZone != nil {
+		return fmt.Sprintf("TZ=%s %s", *cronJob.Spec.TimeZone, cronJob.Spec.Schedule)
+	}
+
+	return cronJob.Spec.Schedule
 }

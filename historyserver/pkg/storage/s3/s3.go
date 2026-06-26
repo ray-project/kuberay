@@ -36,22 +36,23 @@ import (
 
 	"github.com/ray-project/kuberay/historyserver/pkg/collector/types"
 	"github.com/ray-project/kuberay/historyserver/pkg/storage"
+	"github.com/ray-project/kuberay/historyserver/pkg/storage/clustermetadata"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
 type RayLogsHandler struct {
-	S3Client       *s3.S3
-	LogFiles       chan string
-	HttpClient     *http.Client
-	S3Bucket       string
-	SessionDir     string
-	S3RootDir      string
-	LogDir         string
-	RayClusterName string
-	RayClusterID   string
-	RayNodeName    string
-	LogBatching    int
-	PushInterval   time.Duration
+	S3Client            *s3.S3
+	LogFiles            chan string
+	HttpClient          *http.Client
+	S3Bucket            string
+	SessionDir          string
+	S3RootDir           string
+	LogDir              string
+	RayClusterName      string
+	RayClusterNamespace string
+	RayNodeName         string
+	LogBatching         int
+	PushInterval        time.Duration
 }
 
 func (r *RayLogsHandler) CreateDirectory(d string) error {
@@ -152,10 +153,12 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 	clusters := make(utils.ClusterInfoList, 0, 10)
 	logrus.Debugf("Prepare to get list clusters info ...")
 
+	prefix := clustermetadata.Prefix(r.S3RootDir)
+
 	getClusters := func() {
 		listInput := &s3.ListObjectsV2Input{
 			Bucket:    aws.String(r.S3Bucket),
-			Prefix:    aws.String(path.Join(r.S3RootDir, "metadir") + "/"),
+			Prefix:    aws.String(prefix),
 			MaxKeys:   aws.Int64(100),
 			Delimiter: aws.String(""),
 		}
@@ -163,39 +166,21 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 		err := r.S3Client.ListObjectsV2Pages(listInput,
 			func(page *s3.ListObjectsV2Output, lastPage bool) bool {
 				logrus.Infof("[List]Returned objects in %v. length of page.Contents: %v, length of page.CommonPrefixes: %v",
-					path.Join(r.S3RootDir, "metadir")+"/", len(page.Contents), len(page.CommonPrefixes))
+					prefix, len(page.Contents), len(page.CommonPrefixes))
 
 				for _, object := range page.Contents {
-					c := &utils.ClusterInfo{}
-					metaInfo := strings.Trim(strings.TrimPrefix(*object.Key, path.Join(r.S3RootDir, "metadir/")), "/")
-					metas := strings.Split(metaInfo, "/")
-					if len(metas) < 2 {
-						continue
-					}
-					logrus.Infof("Process %++v", metas)
-					namespaceName := strings.Split(metas[0], "_")
-					if len(namespaceName) < 2 {
-						continue
-					}
-					c.Name = namespaceName[0]
-					c.Namespace = namespaceName[1]
-					c.SessionName = metas[1]
-					sessionInfo := strings.Split(metas[1], "_")
-					date := sessionInfo[1]
-					dataTime := sessionInfo[2]
-					createTime, err := time.Parse("2006-01-02_15-04-05", date+"_"+dataTime)
+					c, err := clustermetadata.DecodePath(*object.Key, r.S3RootDir)
 					if err != nil {
-						logrus.Errorf("Failed to parse time %s: %v", date+"_"+dataTime, err)
+						logrus.Errorf("Failed to parse meta file path: %s, error: %v", *object.Key, err)
 						continue
 					}
-					c.CreateTimeStamp = createTime.Unix()
-					c.CreateTime = createTime.UTC().Format(("2006-01-02T15:04:05Z"))
-					clusters = append(clusters, *c)
+					logrus.Infof("Parsed cluster %s for session %s to list", c.Name, c.SessionName)
+					clusters = append(clusters, c)
 				}
 				return true
 			})
 		if err != nil {
-			logrus.Errorf("Failed to list objects from %s: %v", path.Join(r.S3RootDir, "metadir")+"/", err)
+			logrus.Errorf("Failed to list objects from %s: %v", prefix, err)
 			return
 		}
 	}
@@ -339,9 +324,16 @@ func New(c *config) (*RayLogsHandler, error) {
 		Timeout: 5 * time.Second,
 	}
 
+	// Only use static credentials when explicitly provided; otherwise let the
+	// SDK fall back to the default credential chain (IRSA, instance role, etc.).
+	var creds *credentials.Credentials
+	if c.AccessKeyID != "" {
+		creds = credentials.NewStaticCredentials(c.AccessKeyID, c.SecretAccessKey, c.SessionToken)
+	}
+
 	// Create AWS session
 	sess, err := session.NewSession(&aws.Config{
-		Credentials:      credentials.NewStaticCredentials(c.S3ID, c.S3Secret, c.S3Token),
+		Credentials:      creds,
 		Endpoint:         aws.String(c.S3Endpoint),
 		Region:           aws.String(c.S3Region),
 		HTTPClient:       httpClient,
@@ -368,15 +360,15 @@ func New(c *config) (*RayLogsHandler, error) {
 	logrus.Infof("Clean logdir is %s", logdir)
 
 	return &RayLogsHandler{
-		S3Client:       s3Client,
-		S3Bucket:       c.S3Bucket,
-		SessionDir:     sessionDir,
-		S3RootDir:      c.RootDir,
-		LogDir:         logdir,
-		LogFiles:       make(chan string, 100),
-		RayClusterName: c.RayClusterName,
-		RayClusterID:   c.RayClusterID,
-		RayNodeName:    c.RayNodeName,
+		S3Client:            s3Client,
+		S3Bucket:            c.S3Bucket,
+		SessionDir:          sessionDir,
+		S3RootDir:           c.RootDir,
+		LogDir:              logdir,
+		LogFiles:            make(chan string, 100),
+		RayClusterName:      c.RayClusterName,
+		RayClusterNamespace: c.RayClusterNamespace,
+		RayNodeName:         c.RayNodeName,
 		HttpClient: &http.Client{
 			Transport: &http.Transport{
 				MaxIdleConns:        100,

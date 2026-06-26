@@ -7,6 +7,7 @@ import (
 )
 
 type config struct {
+	OSSRegion   string
 	OSSEndpoint string
 	OSSBucket   string
 	types.RayCollectorConfig
@@ -15,9 +16,11 @@ type config struct {
 func (c *config) complete(rcc *types.RayCollectorConfig, jd map[string]interface{}) {
 	c.RayCollectorConfig = *rcc
 	if len(jd) == 0 {
+		c.OSSRegion = os.Getenv("OSS_REGION")
 		c.OSSBucket = os.Getenv("OSS_BUCKET")
 		c.OSSEndpoint = os.Getenv("OSS_ENDPOINT")
 	} else {
+		c.OSSRegion = jd["ossRegion"].(string)
 		c.OSSBucket = jd["ossBucket"].(string)
 		c.OSSEndpoint = jd["ossEndpoint"].(string)
 	}
@@ -28,9 +31,11 @@ func (c *config) completeHSConfig(rcc *types.RayHistoryServerConfig, jd map[stri
 		RootDir: rcc.RootDir,
 	}
 	if len(jd) == 0 {
+		c.OSSRegion = os.Getenv("OSS_REGION")
 		c.OSSBucket = os.Getenv("OSS_BUCKET")
 		c.OSSEndpoint = os.Getenv("OSS_ENDPOINT")
 	} else {
+		c.OSSRegion = jd["ossRegion"].(string)
 		c.OSSBucket = jd["ossBucket"].(string)
 		c.OSSEndpoint = jd["ossEndpoint"].(string)
 	}

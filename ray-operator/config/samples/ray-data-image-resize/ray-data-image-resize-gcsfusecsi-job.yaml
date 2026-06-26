@@ -17,7 +17,7 @@ spec:
   rayClusterSpec:
     headGroupSpec:
       rayStartParams:
-        disable-usage-stats: 'true'
+        disable-usage-stats: "true"
       template:
         metadata:
           annotations:
@@ -62,9 +62,9 @@ spec:
                 # replace the bucketName to the Google Cloud Storage bucket of your choice. For non-public bucket, ensure access control is setup for the pod by following https://cloud.google.com/kubernetes-engine/docs/how-to/persistent-volumes/cloud-storage-fuse-csi-driver#authentication
                 bucketName: ray-images
                 mountOptions: implicit-dirs,anonymous-access,uid=1000,gid=100,metadata-cache:ttl-secs:-1,metadata-cache:stat-cache-max-size-mb:-1,metadata-cache:type-cache-max-size-mb:-1
-                skipCSIBucketAccessCheck: 'true'
+                skipCSIBucketAccessCheck: "true"
             name: gcs-fuse-csi-ephemeral
-    rayVersion: 2.52.0
+    rayVersion: "2.52.0"
     workerGroupSpecs:
     - groupName: worker-group
       maxReplicas: 3
@@ -74,10 +74,10 @@ spec:
       template:
         metadata:
           annotations:
-            gke-gcsfuse/cpu-limit: '0'
-            gke-gcsfuse/ephemeral-storage-limit: '0'
-            gke-gcsfuse/memory-limit: '0'
-            gke-gcsfuse/volumes: 'true'
+            gke-gcsfuse/cpu-limit: "0"
+            gke-gcsfuse/ephemeral-storage-limit: "0"
+            gke-gcsfuse/memory-limit: "0"
+            gke-gcsfuse/volumes: "true"
         spec:
           containers:
           - image: rayproject/ray:2.52.0
@@ -105,5 +105,5 @@ spec:
                 # replace the bucketName to the Google Cloud Storage bucket of your choice. For non-public bucket, ensure access control is setup for the pod by following https://cloud.google.com/kubernetes-engine/docs/how-to/persistent-volumes/cloud-storage-fuse-csi-driver#authentication
                 bucketName: ray-images
                 mountOptions: implicit-dirs,anonymous-access,uid=1000,gid=100,metadata-cache:ttl-secs:-1,metadata-cache:stat-cache-max-size-mb:-1,metadata-cache:type-cache-max-size-mb:-1
-                skipCSIBucketAccessCheck: 'true'
+                skipCSIBucketAccessCheck: "true"
             name: gcs-fuse-csi-ephemeral

@@ -58,6 +58,10 @@ const (
 	// Ray GCS FT related annotations
 	RayFTEnabledAnnotationKey         = "ray.io/ft-enabled"
 	RayExternalStorageNSAnnotationKey = "ray.io/external-storage-namespace"
+	// RayClusterGCSFTDeletionTimeoutAnnotation overrides the default finalizer-removal
+	// timeout for a specific RayCluster (integer seconds; falls back to
+	// RAYCLUSTER_GCS_FT_DELETION_TIMEOUT_DEFAULT when absent or invalid).
+	RayClusterGCSFTDeletionTimeoutAnnotation = "ray.io/gcs-ft-deletion-timeout"
 
 	// If this annotation is set to "true", the KubeRay operator will not modify the container's command.
 	// However, the generated `ray start` command will still be stored in the container's environment variable
@@ -149,6 +153,8 @@ const (
 	RAYCLUSTER_DEFAULT_REQUEUE_SECONDS_ENV  = "RAYCLUSTER_DEFAULT_REQUEUE_SECONDS_ENV"
 	RAYCLUSTER_DEFAULT_REQUEUE_SECONDS      = 300
 	KUBERAY_GEN_RAY_START_CMD               = "KUBERAY_GEN_RAY_START_CMD"
+	KUBERAY_GEN_AUTOSCALER_START_CMD        = "KUBERAY_GEN_AUTOSCALER_START_CMD"
+	RAY_START_ULIMIT_OPEN_FILES             = "RAY_START_ULIMIT_OPEN_FILES"
 
 	// Environment variables for RayJob submitter Kubernetes Job.
 	// Example: ray job submit --address=http://$RAY_DASHBOARD_ADDRESS --submission-id=$RAY_JOB_SUBMISSION_ID ...
@@ -185,6 +191,12 @@ const (
 	// cleanup Job should be enabled. This is a feature flag for v1.0.0.
 	ENABLE_GCS_FT_REDIS_CLEANUP = "ENABLE_GCS_FT_REDIS_CLEANUP"
 
+	// RAYCLUSTER_GCS_FT_DELETION_TIMEOUT_DEFAULT is the fallback timeout (in seconds)
+	// for force-removing the GCS FT finalizer from a stuck RayCluster when the cleanup
+	// job has not finished within that duration. Override per-cluster via the
+	// RayClusterGCSFTDeletionTimeoutAnnotation annotation.
+	RAYCLUSTER_GCS_FT_DELETION_TIMEOUT_DEFAULT = 300 // in seconds; == 5 minutes
+
 	// This environment variable for the KubeRay operator is used to determine whether to enable
 	// the injection of readiness and liveness probes into Ray head and worker containers.
 	// Enabling this feature contributes to the robustness of Ray clusters. It is currently a feature
@@ -210,6 +222,11 @@ const (
 	// `ray job submit` process in the Kubernetes Job submitter from exiting.
 	RAYJOB_DEPLOYMENT_STATUS_TRANSITION_GRACE_PERIOD_SECONDS         = "RAYJOB_DEPLOYMENT_STATUS_TRANSITION_GRACE_PERIOD_SECONDS"
 	DEFAULT_RAYJOB_DEPLOYMENT_STATUS_TRANSITION_GRACE_PERIOD_SECONDS = 300
+
+	// If job status checks keep failing for longer than
+	/// RAYJOB_STATUS_CHECK_TIMEOUT_SECONDS, KubeRay will transition the RayJob's JobDeploymentStatus to Failed.
+	RAYJOB_STATUS_CHECK_TIMEOUT_SECONDS         = "RAYJOB_STATUS_CHECK_TIMEOUT_SECONDS"
+	DEFAULT_RAYJOB_STATUS_CHECK_TIMEOUT_SECONDS = 300
 
 	// This environment variable for the KubeRay operator determines whether to enable
 	// a login shell by passing the -l option to the container command /bin/bash.
@@ -243,24 +260,33 @@ const (
 	DefaultLivenessProbeSuccessThreshold   = 1
 	DefaultLivenessProbeFailureThreshold   = 120
 
+	// RayHTTPClientDirectTimeoutSeconds applies to HTTP clients that send requests directly to pod IP or in-cluster Service.
+	RayHTTPClientDirectTimeoutSeconds = 2
+	// RayHTTPClientProxyTimeoutSeconds applies when requests are proxied through the Kubernetes apiserver.
+	RayHTTPClientProxyTimeoutSeconds = 10
+
 	// Ray health check related configurations
 	// Note: Since the Raylet process and the dashboard agent process are fate-sharing,
 	// only one of them needs to be checked. So, RayAgentRayletHealthPath accesses the dashboard agent's API endpoint
 	// to check the health of the Raylet process.
 	// TODO (kevin85421): Should we take the dashboard process into account?
-	RayAgentRayletHealthPath  = "api/local_raylet_healthz"
-	RayDashboardGCSHealthPath = "api/gcs_healthz"
-	RayServeProxyHealthPath   = "-/healthz"
+	RayAgentRayletHealthPath                 = "api/local_raylet_healthz"
+	RayDashboardGCSHealthPath                = "api/gcs_healthz"
+	RayDashboardGCSHealthCheckTimeoutSeconds = 10
+	RayServeProxyHealthPath                  = "-/healthz"
 	// BaseWgetHealthCommand checks a single health URL; args: timeout_sec, port, path (no leading slash).
 	// This is used for Ray versions that rely on exec probes and assume common CLI tools exist in the image.
 	BaseWgetHealthCommand = "wget --tries 1 -T %d -q -O- http://localhost:%d/%s | grep success"
-	// BasePythonHealthCommand checks a single health URL; args: port, path (no leading slash), timeout_sec.
+	// BasePythonHealthCommand checks a single health URL; args: url, timeout_sec.
 	// This is used when wget is not available (e.g. slim Ray images).
-	BasePythonHealthCommand = `python -c "import urllib.request; r=urllib.request.urlopen('http://localhost:%d/%s', timeout=%d); exit(0 if b'success' in r.read() else 1)"`
+	BasePythonHealthCommand = `python -c "import urllib.request; r=urllib.request.urlopen('%s', timeout=%d); exit(0 if b'success' in r.read() else 1)"`
 	RayNodeHealthPath       = "/api/healthz"
 
 	// Finalizers for RayJob
 	RayJobStopJobFinalizer = "ray.io/rayjob-finalizer"
+
+	// Finalizers for RayService
+	RayServiceFinalizer = "ray.io/rayservice-finalizer"
 
 	// RayNodeHeadGroupLabelValue is the value for the RayNodeGroupLabelKey label on a head node
 	RayNodeHeadGroupLabelValue      = "headgroup"
@@ -290,6 +316,10 @@ const (
 	// MaxRayJobNameLength is the maximum RayJob name to make sure it pass the RayCluster validation
 	// Minus 6 since we append 6 characters to the RayJob name to create the cluster (GenerateRayClusterName).
 	MaxRayJobNameLength = MaxRayClusterNameLength - 6
+	// MaxRayCronJobNameLength is the maximum RayCronJob name to make sure its child RayJob passes
+	// validation. Minus 11 for the "-<minuteHash>" suffix (dash + up to a 10-digit Unix-minute hash)
+	// appended to create the child RayJob name (getRayJobName).
+	MaxRayCronJobNameLength = MaxRayJobNameLength - 11
 )
 
 type ServiceType string
@@ -354,6 +384,7 @@ const (
 	// Redis Cleanup Job event list
 	CreatedRedisCleanupJob        K8sEventType = "CreatedRedisCleanupJob"
 	FailedToCreateRedisCleanupJob K8sEventType = "FailedToCreateRedisCleanupJob"
+	ForceDeletedStuckCluster      K8sEventType = "ForceDeletedStuckCluster"
 
 	// RayJob event list
 	InvalidRayJobSpec             K8sEventType = "InvalidRayJobSpec"
@@ -385,6 +416,7 @@ const (
 	InvalidRayServiceSpec           K8sEventType = "InvalidRayServiceSpec"
 	InvalidRayServiceMetadata       K8sEventType = "InvalidRayServiceMetadata"
 	RayServiceInitializingTimeout   K8sEventType = "RayServiceInitializingTimeout"
+	RollbackImpossible              K8sEventType = "RollbackImpossible"
 	UpdatedHeadPodServeLabel        K8sEventType = "UpdatedHeadPodServeLabel"
 	UpdatedGateway                  K8sEventType = "UpdatedGateway"
 	UpdatedHTTPRoute                K8sEventType = "UpdatedHTTPRoute"
@@ -395,8 +427,14 @@ const (
 	FailedToUpdateTargetCapacity    K8sEventType = "FailedToUpdateTargetCapacity"
 	FailedToCreateGateway           K8sEventType = "FailedToCreateGateway"
 	FailedToUpdateGateway           K8sEventType = "FailedToUpdateGateway"
+	FailedToDeleteGateway           K8sEventType = "FailedToDeleteGateway"
 	FailedToCreateHTTPRoute         K8sEventType = "FailedToCreateHTTPRoute"
 	FailedToUpdateHTTPRoute         K8sEventType = "FailedToUpdateHTTPRoute"
+	FailedToDeleteHTTPRoute         K8sEventType = "FailedToDeleteHTTPRoute"
+	FailedToDeleteService           K8sEventType = "FailedToDeleteService"
+	DeletedGateway                  K8sEventType = "DeletedGateway"
+	DeletedHTTPRoute                K8sEventType = "DeletedHTTPRoute"
+	DeletedService                  K8sEventType = "DeletedService"
 
 	// Generic Pod event list
 	DeletedPod                  K8sEventType = "DeletedPod"
@@ -429,4 +467,13 @@ const (
 	// RoleBinding list
 	CreatedRoleBinding        K8sEventType = "CreatedRoleBinding"
 	FailedToCreateRoleBinding K8sEventType = "FailedToCreateRoleBinding"
+
+	// NetworkPolicy event list
+	CreatedNetworkPolicy        K8sEventType = "CreatedNetworkPolicy"
+	UpdatedNetworkPolicy        K8sEventType = "UpdatedNetworkPolicy"
+	DeletedNetworkPolicy        K8sEventType = "DeletedNetworkPolicy"
+	FailedToCreateNetworkPolicy K8sEventType = "FailedToCreateNetworkPolicy"
+	FailedToUpdateNetworkPolicy K8sEventType = "FailedToUpdateNetworkPolicy"
+	FailedToDeleteNetworkPolicy K8sEventType = "FailedToDeleteNetworkPolicy"
+	NetworkPolicyNameCollision  K8sEventType = "NetworkPolicyNameCollision"
 )

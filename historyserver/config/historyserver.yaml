@@ -36,11 +36,11 @@ spec:
         env:
           - name: S3DISABLE_SSL
             value: "true"
-          - name: AWS_S3ID
+          - name: AWS_ACCESS_KEY_ID
             value: minioadmin
-          - name: AWS_S3SECRET
+          - name: AWS_SECRET_ACCESS_KEY
             value: minioadmin
-          - name: AWS_S3TOKEN
+          - name: AWS_SESSION_TOKEN
             value: ""
           - name: S3_BUCKET
             value: "ray-historyserver"

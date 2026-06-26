@@ -60,7 +60,7 @@ spec:
           - name: Router
             num_replicas: 1
   rayClusterConfig:
-    rayVersion: '2.52.0' # should match the Ray version in the image of the containers
+    rayVersion: "2.52.0" # should match the Ray version in the image of the containers
     ######################headGroupSpecs#################################
     # Ray head pod template.
     headGroupSpec:

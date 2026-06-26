@@ -1,6 +1,7 @@
 package ray
 
 import (
+	"fmt"
 	"os"
 	"path"
 	"path/filepath"
@@ -8,11 +9,14 @@ import (
 	"testing"
 
 	"github.com/sirupsen/logrus"
+
+	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
 func TestTrim(t *testing.T) {
-	absoluteLogPathName := " /tmp/ray/test/LLogs/events///aa/a.txt  "
-	logdir := "/tmp/ray/test/lLogs/"
+	tmpRayRoot := utils.GetTmpRayRoot()
+	absoluteLogPathName := fmt.Sprintf(" %s/test/LLogs/events/aa/a.txt  ", tmpRayRoot)
+	logdir := fmt.Sprintf("%s/test/lLogs/", tmpRayRoot)
 
 	absoluteLogPathName = strings.TrimSpace(absoluteLogPathName)
 	absoluteLogPathName = filepath.Clean(absoluteLogPathName)
@@ -30,8 +34,23 @@ func TestTrim(t *testing.T) {
 	t.Logf("test_path_join [%s]", test_path_join)
 }
 
+func TestGetContentPathComparison(t *testing.T) {
+	// fileName is a full path like the caller passes
+	fileName := "session_2026-04-09_06-41-42_754637_1/logs/abc123/events/event_RAYLET.log"
+	// f is a full key returned by _listFiles (onlyBase=false)
+	f := "session_2026-04-09_06-41-42_754637_1/logs/abc123/events/event_RAYLET.log"
+
+	if path.Base(f) != path.Base(fileName) {
+		t.Errorf("expected path.Base(%q) == path.Base(%q)", f, fileName)
+	}
+	// Verify old buggy comparison would fail
+	if path.Base(f) == fileName {
+		t.Errorf("old comparison should not match: path.Base(%q) == %q", f, fileName)
+	}
+}
+
 func TestWalk(t *testing.T) {
-	watchPath := "/tmp/ray/test/LLogs/"
+	watchPath := fmt.Sprintf("%s/test/LLogs/", utils.GetTmpRayRoot())
 	filepath.Walk(watchPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			logrus.Errorf("Walk path error %v", err)

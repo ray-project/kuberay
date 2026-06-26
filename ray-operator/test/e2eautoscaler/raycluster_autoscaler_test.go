@@ -6,7 +6,6 @@ import (
 
 	"github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/ptr"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/common"
@@ -307,7 +306,7 @@ func TestRayClusterAutoscalerMinReplicasUpdate(t *testing.T) {
 			// Update minReplicas from 0 to 2
 			rayCluster, err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Get(test.Ctx(), rayCluster.Name, metav1.GetOptions{})
 			g.Expect(err).NotTo(gomega.HaveOccurred())
-			rayCluster.Spec.WorkerGroupSpecs[0].MinReplicas = ptr.To(int32(2))
+			rayCluster.Spec.WorkerGroupSpecs[0].MinReplicas = new(int32(2))
 			rayCluster, err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Update(test.Ctx(), rayCluster, metav1.UpdateOptions{})
 			g.Expect(err).NotTo(gomega.HaveOccurred())
 			LogWithTimestamp(test.T(), "Updated RayCluster %s/%s successfully", rayCluster.Namespace, rayCluster.Name)
@@ -410,7 +409,7 @@ func TestRayClusterAutoscalerMaxReplicasUpdate(t *testing.T) {
 				// Update maxReplicas
 				rayCluster, err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Get(test.Ctx(), rayCluster.Name, metav1.GetOptions{})
 				g.Expect(err).NotTo(gomega.HaveOccurred())
-				rayCluster.Spec.WorkerGroupSpecs[0].MaxReplicas = ptr.To(rtc.updatedMax)
+				rayCluster.Spec.WorkerGroupSpecs[0].MaxReplicas = new(rtc.updatedMax)
 				rayCluster, err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Update(test.Ctx(), rayCluster, metav1.UpdateOptions{})
 				g.Expect(err).NotTo(gomega.HaveOccurred())
 

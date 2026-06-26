@@ -9,13 +9,14 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
+	"github.com/sirupsen/logrus"
+
+	"github.com/ray-project/kuberay/historyserver/pkg/compression"
 	"github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
 	"github.com/ray-project/kuberay/historyserver/pkg/storage"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
-	"github.com/sirupsen/logrus"
 )
 
 type EventHandler struct {
@@ -28,7 +29,10 @@ type EventHandler struct {
 	ClusterLogEventMap *types.ClusterLogEventMap // For /events API (Log Events from logs/events/)
 }
 
-var eventFilePattern = regexp.MustCompile(`-\d{4}-\d{2}-\d{2}-\d{2}$`)
+var eventFilePattern = regexp.MustCompile(`-\d{4}-\d{2}-\d{2}-\d{2}(\.gz)?$`)
+
+// taskPrefix is extracted to avoid hard-coded "task::" usage
+const taskPrefix = "task::"
 
 func isValidEventFile(fileName string) bool {
 	// Skip directories
@@ -58,155 +62,8 @@ func NewEventHandler(reader storage.StorageReader) *EventHandler {
 	}
 }
 
-// ProcessEvents func reads the channel and then processes the event received
-func (h *EventHandler) ProcessEvents(ctx context.Context, ch <-chan map[string]any) error {
-	logrus.Infof("Starting a event processor channel")
-	for {
-		select {
-		case <-ctx.Done():
-			// TODO: The context was cancelled, either stop here or process the rest of the events and return
-			// Currently, it will just stop.
-			logrus.Warnf("Event processor context was cancelled")
-			return ctx.Err()
-		case currEventData, ok := <-ch:
-			if !ok {
-				logrus.Warnf("Channel was closed")
-				return nil
-			}
-			if err := h.storeEvent(currEventData); err != nil {
-				logrus.Errorf("Failed to store event: %v", err)
-				continue
-			}
-		}
-	}
-}
-
-// Run will start numOfEventProcessors (default to 5) processing functions and the event reader. The event reader will run once an hr,
-// which is currently how often the collector flushes.
-func (h *EventHandler) Run(stop chan struct{}, numOfEventProcessors int) error {
-	var wg sync.WaitGroup
-
-	if numOfEventProcessors == 0 {
-		numOfEventProcessors = 5
-	}
-	eventProcessorChannels := make([]chan map[string]any, numOfEventProcessors)
-	cctx := make([]context.CancelFunc, numOfEventProcessors)
-
-	for i := range numOfEventProcessors {
-		eventProcessorChannels[i] = make(chan map[string]any, 100)
-	}
-
-	for i, currEventChannel := range eventProcessorChannels {
-		wg.Add(1)
-		ctx, cancel := context.WithCancel(context.Background())
-		cctx[i] = cancel
-		go func() {
-			defer wg.Done()
-			var processor EventProcessor[map[string]any] = h
-			err := processor.ProcessEvents(ctx, currEventChannel)
-			if err == ctx.Err() {
-				logrus.Warnf("Event processor go routine %d is now closed", i)
-				return
-			}
-			if err != nil {
-				logrus.Errorf("event processor %d go routine failed %v", i, err)
-				return
-			}
-		}()
-	}
-
-	// Start reading files and sending events for processing
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		logrus.Info("Starting event file reader loop")
-
-		// Create a LogEventReader for reading logs/events/event_*.log files
-		logEventReader := NewLogEventReader(h.reader)
-
-		// Helper function to process all events
-		processAllEvents := func() {
-			clusterList := h.reader.List()
-			for _, clusterInfo := range clusterList {
-				clusterNameNamespace := clusterInfo.Name + "_" + clusterInfo.Namespace
-				clusterSessionKey := utils.BuildClusterSessionKey(clusterInfo.Name, clusterInfo.Namespace, clusterInfo.SessionName)
-
-				// Read Log Events from logs/{nodeId}/events/event_*.log
-				// This is the format used by Ray Dashboard's /events API
-				if err := logEventReader.ReadLogEvents(clusterInfo, clusterSessionKey, h.ClusterLogEventMap); err != nil {
-					logrus.Errorf("Failed to read Log Events for %s: %v", clusterSessionKey, err)
-				}
-
-				// Also read RayEvents (Export Events) from node_events/ and job_events/ for backward compatibility
-				// These are used for task/actor/job/node data APIs
-				eventFileList := append(h.getAllJobEventFiles(clusterInfo), h.getAllNodeEventFiles(clusterInfo)...)
-
-				logrus.Infof("current eventFileList for cluster %s is: %v", clusterInfo.Name, eventFileList)
-				for _, eventFile := range eventFileList {
-					// TODO: Filter out ones that have already been read
-					logrus.Infof("Reading event file: %s", eventFile)
-
-					eventioReader := h.reader.GetContent(clusterNameNamespace, eventFile)
-					if eventioReader == nil {
-						logrus.Errorf("Failed to get content for event file: %s, skipping", eventFile)
-						continue
-					}
-					eventbytes, err := io.ReadAll(eventioReader)
-					if err != nil {
-						logrus.Errorf("Failed to read event file: %v", err)
-						continue
-					}
-
-					var eventList []map[string]any
-					if err := json.Unmarshal(eventbytes, &eventList); err != nil {
-						logrus.Errorf("Failed to unmarshal event: %v", err)
-						continue
-					}
-
-					// Evenly distribute events to each channel
-					for i, curr := range eventList {
-						// Skip nil events (can occur with corrupted event files containing null elements)
-						if curr == nil {
-							continue
-						}
-						curr["clusterName"] = clusterSessionKey
-						eventProcessorChannels[i%numOfEventProcessors] <- curr
-					}
-				}
-			}
-		}
-
-		// Process events immediately on startup
-		processAllEvents()
-
-		// Create a ticker for hourly processing
-		ticker := time.NewTicker(1 * time.Hour)
-		defer ticker.Stop()
-
-		for {
-			logrus.Info("Finished reading files, waiting for next cycle...")
-			select {
-			case <-stop:
-				// Received stop signal, clean up and exit
-				for i, currChan := range eventProcessorChannels {
-					close(currChan)
-					cctx[i]()
-				}
-				logrus.Info("Event processor received stop signal, exiting.")
-				return
-			case <-ticker.C:
-				// Process events every hour
-				processAllEvents()
-			}
-		}
-	}()
-
-	wg.Wait()
-	return nil
-}
-
-// storeEvent unmarshals the event map into the correct actor/task struct and then stores it into the corresonding list
-func (h *EventHandler) storeEvent(eventMap map[string]any) error {
+// storeEvent unmarshals the event map into the correct actor/task struct and then stores it into the corresonding list.
+func (h *EventHandler) storeEvent(clusterSessionKey string, eventMap map[string]any) error {
 	eventTypeVal, ok := eventMap["eventType"]
 	if !ok {
 		return fmt.Errorf("event missing 'eventType' field")
@@ -216,17 +73,6 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 		return fmt.Errorf("eventType is not a string, got %T", eventTypeVal)
 	}
 	eventType := types.EventType(eventTypeStr)
-
-	// clusterSessionKey is injected during event reading (Run function) and contains
-	// the full key: "{clusterName}_{namespace}_{sessionName}"
-	clusterSessionKeyVal, ok := eventMap["clusterName"]
-	if !ok {
-		return fmt.Errorf("event missing 'clusterName' field (clusterSessionKey)")
-	}
-	clusterSessionKey, ok := clusterSessionKeyVal.(string)
-	if !ok {
-		return fmt.Errorf("clusterName is not a string, got %T", clusterSessionKeyVal)
-	}
 
 	logrus.Infof("current eventType: %v", eventType)
 	switch eventType {
@@ -248,6 +94,8 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 		if err := json.Unmarshal(jsonActorDefinition, &currActor); err != nil {
 			return err
 		}
+
+		normalizeActorIDsToHex(&currActor)
 
 		// Use CreateOrMergeActor pattern (same as Task)
 		actorMap := h.ClusterActorMap.GetOrCreateActorMap(clusterSessionKey)
@@ -284,6 +132,7 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 		}
 
 		actorId, _ := lifecycleEvent["actorId"].(string)
+		actorId = normalizeIDToHex(actorId)
 		transitions, _ := lifecycleEvent["stateTransitions"].([]any)
 
 		if len(transitions) == 0 || actorId == "" {
@@ -302,6 +151,10 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 			nodeId, _ := tr["nodeId"].(string)
 			workerId, _ := tr["workerId"].(string)
 			reprName, _ := tr["reprName"].(string)
+
+			// Convert IDs from base64 to hex
+			nodeId = normalizeIDToHex(nodeId)
+			workerId = normalizeIDToHex(workerId)
 
 			var timestamp time.Time
 			if timestampStr != "" {
@@ -599,117 +452,7 @@ func (h *EventHandler) storeEvent(eventMap map[string]any) error {
 	case types.NODE_LIFECYCLE_EVENT:
 		return h.handleNodeLifecycleEvent(eventMap, clusterSessionKey)
 	case types.TASK_PROFILE_EVENT:
-		taskProfileEvent, ok := eventMap["taskProfileEvents"]
-		if !ok {
-			return fmt.Errorf("event does not have 'taskProfileEvents'")
-		}
-		jsonBytes, err := json.Marshal(taskProfileEvent)
-		if err != nil {
-			return err
-		}
-
-		var profileData types.TaskProfileEventDTO
-		if err := json.Unmarshal(jsonBytes, &profileData); err != nil {
-			logrus.Errorf("Failed to unmarshal TASK_PROFILE_EVENT: %v", err)
-			return err
-		}
-
-		if profileData.TaskID == "" || len(profileData.ProfileEvents.Events) == 0 {
-			logrus.Debugf("TASK_PROFILE_EVENT has no taskId or events, skipping")
-			return nil
-		}
-
-		// Convert events to ProfileEventRaw format
-		var rawEvents = make([]types.ProfileEventRaw, 0, len(profileData.ProfileEvents.Events))
-		for _, e := range profileData.ProfileEvents.Events {
-			startTime, err := strconv.ParseInt(e.StartTime, 10, 64)
-			if err != nil {
-				logrus.Warnf("Failed to parse StartTime '%s': %v", e.StartTime, err)
-				continue
-			}
-			endTime, err := strconv.ParseInt(e.EndTime, 10, 64)
-			if err != nil {
-				logrus.Warnf("Failed to parse EndTime '%s': %v", e.EndTime, err)
-				continue
-			}
-
-			rawEvents = append(rawEvents, types.ProfileEventRaw{
-				EventName: e.EventName,
-				StartTime: startTime,
-				EndTime:   endTime,
-				ExtraData: e.ExtraData,
-			})
-		}
-		// Convert IDs from base64 to hex before merge (consistent with JOB_DEFINITION_EVENT pattern)
-		profileData.TaskID, err = utils.ConvertBase64ToHex(profileData.TaskID)
-		if err != nil {
-			logrus.Errorf("Failed to convert TaskID from base64 to Hex, will use base64: %v", err)
-		}
-		profileData.JobID, err = utils.ConvertBase64ToHex(profileData.JobID)
-		if err != nil {
-			logrus.Errorf("Failed to convert JobID from base64 to Hex, will use base64: %v", err)
-		}
-		profileData.ProfileEvents.ComponentID, err = utils.ConvertBase64ToHex(profileData.ProfileEvents.ComponentID)
-		if err != nil {
-			logrus.Errorf("Failed to convert ComponentID from base64 to Hex, will use base64: %v", err)
-		}
-
-		taskMap := h.ClusterTaskMap.GetOrCreateTaskMap(clusterSessionKey)
-		taskMap.CreateOrMergeAttempt(profileData.TaskID, profileData.AttemptNumber, func(t *types.Task) {
-			// Ensure core identifiers are set
-			if t.TaskID == "" {
-				t.TaskID = profileData.TaskID
-			}
-			if t.JobID == "" {
-				t.JobID = profileData.JobID
-			}
-
-			// Set AttemptNumber to match the attempt we're merging into
-			t.TaskAttempt = profileData.AttemptNumber
-
-			// Initialize ProfileData if not exists
-			if t.ProfileData == nil {
-				t.ProfileData = &types.ProfileData{
-					ComponentID:   profileData.ProfileEvents.ComponentID,
-					ComponentType: profileData.ProfileEvents.ComponentType,
-					NodeIPAddress: profileData.ProfileEvents.NodeIPAddress,
-				}
-			}
-
-			// Merge events with deduplication based on (eventName, startTime, endTime)
-			type eventKey struct {
-				EventName string
-				StartTime int64
-				EndTime   int64
-			}
-			existingKeys := make(map[eventKey]struct{}, len(t.ProfileData.Events)+len(rawEvents))
-			for _, e := range t.ProfileData.Events {
-				existingKeys[eventKey{e.EventName, e.StartTime, e.EndTime}] = struct{}{}
-			}
-			for _, e := range rawEvents {
-				key := eventKey{e.EventName, e.StartTime, e.EndTime}
-				if _, ok := existingKeys[key]; !ok {
-					t.ProfileData.Events = append(t.ProfileData.Events, e)
-					existingKeys[key] = struct{}{}
-				}
-			}
-
-			// Extract func_or_class_name from extraData if available
-			for _, e := range rawEvents {
-				if strings.HasPrefix(e.EventName, "task::") && e.ExtraData != "" {
-					var extra map[string]interface{}
-					if err := json.Unmarshal([]byte(e.ExtraData), &extra); err == nil {
-						if name, ok := extra["name"].(string); ok && name != "" {
-							// For actor methods, name might be just "increment" or "get_count"
-							// But eventName has the full form like "task::Counter.increment"
-							// Use eventName to get the full func_or_class_name
-							t.FuncOrClassName = strings.TrimPrefix(e.EventName, "task::")
-						}
-					}
-				}
-			}
-		})
-
+		return h.handleTaskProfileEvent(eventMap, clusterSessionKey)
 	default:
 		logrus.Infof("Event not supported, skipping: %v", eventMap)
 	}
@@ -761,13 +504,13 @@ func (h *EventHandler) getAllNodeEventFiles(clusterInfo utils.ClusterInfo) []str
 
 // GetTasks returns a slice of thread-safe deep copies of all task attempts for a given cluster session.
 // Deep copy ensures the returned data is safe to use after the lock is released.
-func (h *EventHandler) GetTasks(clusterSessionKey string) []types.Task {
+func (h *EventHandler) getTasks(clusterSessionKey string) []types.Task {
 	h.ClusterTaskMap.RLock()
 	defer h.ClusterTaskMap.RUnlock()
 
 	taskMap, ok := h.ClusterTaskMap.ClusterTaskMap[clusterSessionKey]
 	if !ok {
-		// TODO(jwj): Add error handling.
+		// TODO(jiangjiawei1103): Add error handling.
 		logrus.Errorf("Task map not found for cluster session: %s", clusterSessionKey)
 		return []types.Task{}
 	}
@@ -786,114 +529,8 @@ func (h *EventHandler) GetTasks(clusterSessionKey string) []types.Task {
 	return allTasks
 }
 
-// GetTaskByID returns all attempts for a specific task ID in a given cluster.
-// Returns a slice of tasks representing all attempts, sorted by attempt number is not guaranteed.
-func (h *EventHandler) GetTaskByID(clusterName, taskID string) ([]types.Task, bool) {
-	h.ClusterTaskMap.RLock()
-	defer h.ClusterTaskMap.RUnlock()
-
-	taskMap, ok := h.ClusterTaskMap.ClusterTaskMap[clusterName]
-	if !ok {
-		return nil, false
-	}
-
-	taskMap.Lock()
-	defer taskMap.Unlock()
-
-	attempts, ok := taskMap.TaskMap[taskID]
-	if !ok || len(attempts) == 0 {
-		return nil, false
-	}
-	// Return a deep copy to avoid data race
-	result := make([]types.Task, len(attempts))
-	for i, task := range attempts {
-		result[i] = task.DeepCopy()
-	}
-	return result, true
-}
-
-// GetTasksByJobID returns all tasks (including all attempts) for a given job ID in a cluster.
-func (h *EventHandler) GetTasksByJobID(clusterName, jobID string) []types.Task {
-	h.ClusterTaskMap.RLock()
-	defer h.ClusterTaskMap.RUnlock()
-
-	taskMap, ok := h.ClusterTaskMap.ClusterTaskMap[clusterName]
-	if !ok {
-		return []types.Task{}
-	}
-
-	taskMap.Lock()
-	defer taskMap.Unlock()
-
-	var tasks []types.Task
-	for _, attempts := range taskMap.TaskMap {
-		for _, task := range attempts {
-			if task.JobID == jobID {
-				tasks = append(tasks, task.DeepCopy())
-			}
-		}
-	}
-	return tasks
-}
-
-// GetActors returns a thread-safe deep copy of all actors for a given cluster
-func (h *EventHandler) GetActors(clusterName string) []types.Actor {
-	h.ClusterActorMap.RLock()
-	defer h.ClusterActorMap.RUnlock()
-
-	actorMap, ok := h.ClusterActorMap.ClusterActorMap[clusterName]
-	if !ok {
-		return []types.Actor{}
-	}
-
-	actorMap.Lock()
-	defer actorMap.Unlock()
-
-	actors := make([]types.Actor, 0, len(actorMap.ActorMap))
-	for _, actor := range actorMap.ActorMap {
-		actors = append(actors, actor.DeepCopy())
-	}
-	return actors
-}
-
-// GetActorByID returns a specific actor by ID for a given cluster
-func (h *EventHandler) GetActorByID(clusterName, actorID string) (types.Actor, bool) {
-	h.ClusterActorMap.RLock()
-	defer h.ClusterActorMap.RUnlock()
-
-	actorMap, ok := h.ClusterActorMap.ClusterActorMap[clusterName]
-	if !ok {
-		return types.Actor{}, false
-	}
-
-	actorMap.Lock()
-	defer actorMap.Unlock()
-
-	// Try direct lookup first (Base64 key).
-	actor, ok := actorMap.ActorMap[actorID]
-	if ok {
-		return actor.DeepCopy(), true
-	}
-
-	// If not found, the caller may have passed a hex-encoded ID (from the frontend).
-	// The frontend calls /logical/actors/{actorId} with hex IDs returned by formatActorForResponse.
-	// Ref: https://github.com/ray-project/ray/blob/27d3d81d47/python/ray/dashboard/client/src/service/actor.ts#L24-L25
-	//
-	// This O(n) scan is a known performance limitation. The proper fix is to normalize
-	// actor IDs to hex at ingestion time (see PR #4563), which would make the direct
-	// map lookup above always succeed. This fallback will be removed after that change.
-	for _, a := range actorMap.ActorMap {
-		hexID, err := utils.ConvertBase64ToHex(a.ActorID)
-		if err == nil && hexID == actorID {
-			return a.DeepCopy(), true
-		}
-	}
-
-	return types.Actor{}, false
-}
-
 // GetActorsMap returns a thread-safe deep copy of all actors as a map for a given cluster
-func (h *EventHandler) GetActorsMap(clusterName string) map[string]types.Actor {
+func (h *EventHandler) getActorsMap(clusterName string) map[string]types.Actor {
 	h.ClusterActorMap.RLock()
 	defer h.ClusterActorMap.RUnlock()
 
@@ -912,7 +549,7 @@ func (h *EventHandler) GetActorsMap(clusterName string) map[string]types.Actor {
 	return actors
 }
 
-func (h *EventHandler) GetJobsMap(clusterName string) map[string]types.Job {
+func (h *EventHandler) getJobsMap(clusterName string) map[string]types.Job {
 	h.ClusterJobMap.RLock()
 	defer h.ClusterJobMap.RUnlock()
 
@@ -931,23 +568,9 @@ func (h *EventHandler) GetJobsMap(clusterName string) map[string]types.Job {
 	return jobs
 }
 
-func (h *EventHandler) GetJobByJobID(clusterName, jobID string) (types.Job, bool) {
-	h.ClusterJobMap.RLock()
-	defer h.ClusterJobMap.RUnlock()
-
-	jobMap, ok := h.ClusterJobMap.ClusterJobMap[clusterName]
-	if !ok {
-		return types.Job{}, false
-	}
-
-	jobMap.Lock()
-	defer jobMap.Unlock()
-
-	job, ok := jobMap.JobMap[jobID]
-	if !ok {
-		return types.Job{}, false
-	}
-	return job.DeepCopy(), true
+// getLogEventsByJobID returns a thread-safe deep copy of log events grouped by job ID.
+func (h *EventHandler) getLogEventsByJobID(clusterSessionKey string) map[string][]types.LogEvent {
+	return h.ClusterLogEventMap.GetLogEventsByJobID(clusterSessionKey)
 }
 
 // handleTaskDefinitionEvent processes TASK_DEFINITION_EVENT or ACTOR_TASK_DEFINITION_EVENT and preserves the task attempt ordering.
@@ -1052,7 +675,7 @@ func (h *EventHandler) handleTaskLifecycleEvent(eventMap map[string]any, cluster
 	}
 	normalizeTaskIDsToHex(&currTask)
 
-	// TODO(jwj): Clarify if there must be at least one state transition. Can one task have more than one state transition?
+	// TODO(jiangjiawei1103): Clarify if there must be at least one state transition. Can one task have more than one state transition?
 	if len(currTask.StateTransitions) == 0 {
 		return fmt.Errorf("TASK_LIFECYCLE_EVENT must have at least one state transition")
 	}
@@ -1088,7 +711,7 @@ func (h *EventHandler) handleTaskLifecycleEvent(eventMap map[string]any, cluster
 			return
 		}
 
-		// TODO(jwj): Before beta, the lifecycle-related fields are overwritten.
+		// TODO(jiangjiawei1103): Before beta, the lifecycle-related fields are overwritten.
 		// In beta, the complete historical replay will be supported.
 		task.RayErrorInfo = currTask.RayErrorInfo
 		if currTask.JobID != "" {
@@ -1212,6 +835,134 @@ func (h *EventHandler) handleNodeLifecycleEvent(eventMap map[string]any, cluster
 	return nil
 }
 
+func (h *EventHandler) handleTaskProfileEvent(eventMap map[string]any, clusterSessionKey string) error {
+	taskProfileEvent, ok := eventMap["taskProfileEvents"]
+	if !ok {
+		return fmt.Errorf("event does not have 'taskProfileEvents'")
+	}
+	jsonBytes, err := json.Marshal(taskProfileEvent)
+	if err != nil {
+		return err
+	}
+
+	var profileData types.TaskProfileEvents
+	if err := json.Unmarshal(jsonBytes, &profileData); err != nil {
+		logrus.Errorf("Failed to unmarshal TASK_PROFILE_EVENT: %v", err)
+		return err
+	}
+
+	if profileData.TaskID == "" || len(profileData.ProfileEvents.Events) == 0 {
+		logrus.Debugf("TASK_PROFILE_EVENT has no taskId or events, skipping")
+		return nil
+	}
+
+	// Convert events to ProfileEventRaw format
+	var rawEvents = make([]types.ProfileEventRaw, 0, len(profileData.ProfileEvents.Events))
+	for _, e := range profileData.ProfileEvents.Events {
+		startTime, err := strconv.ParseInt(e.StartTime, 10, 64)
+		if err != nil {
+			logrus.Warnf("Failed to parse StartTime '%s': %v", e.StartTime, err)
+			continue
+		}
+		endTime, err := strconv.ParseInt(e.EndTime, 10, 64)
+		if err != nil {
+			logrus.Warnf("Failed to parse EndTime '%s': %v", e.EndTime, err)
+			continue
+		}
+
+		rawEvents = append(rawEvents, types.ProfileEventRaw{
+			EventName: e.EventName,
+			StartTime: startTime,
+			EndTime:   endTime,
+			ExtraData: e.ExtraData,
+		})
+	}
+	// Convert IDs from base64 to hex before merge (consistent with JOB_DEFINITION_EVENT pattern)
+	profileData.TaskID, err = utils.ConvertBase64ToHex(profileData.TaskID)
+	if err != nil {
+		logrus.Errorf("Failed to convert TaskID from base64 to Hex, will use base64: %v", err)
+	}
+	profileData.JobID, err = utils.ConvertBase64ToHex(profileData.JobID)
+	if err != nil {
+		logrus.Errorf("Failed to convert JobID from base64 to Hex, will use base64: %v", err)
+	}
+	profileData.ProfileEvents.ComponentID, err = utils.ConvertBase64ToHex(profileData.ProfileEvents.ComponentID)
+	if err != nil {
+		logrus.Errorf("Failed to convert ComponentID from base64 to Hex, will use base64: %v", err)
+	}
+
+	taskMap := h.ClusterTaskMap.GetOrCreateTaskMap(clusterSessionKey)
+	taskMap.CreateOrMergeAttempt(profileData.TaskID, profileData.AttemptNumber, func(t *types.Task) {
+		// Ensure core identifiers are set
+		if t.TaskID == "" {
+			t.TaskID = profileData.TaskID
+		}
+		if t.JobID == "" {
+			t.JobID = profileData.JobID
+		}
+
+		// Set AttemptNumber to match the attempt we're merging into
+		t.TaskAttempt = profileData.AttemptNumber
+
+		// Initialize ProfileData if not exists
+		if t.ProfileData == nil {
+			t.ProfileData = &types.ProfileData{
+				ComponentID:   profileData.ProfileEvents.ComponentID,
+				ComponentType: profileData.ProfileEvents.ComponentType,
+				NodeIPAddress: profileData.ProfileEvents.NodeIPAddress,
+			}
+		}
+
+		// Merge events with deduplication based on (eventName, startTime, endTime)
+		type eventKey struct {
+			EventName string
+			StartTime int64
+			EndTime   int64
+		}
+		existingKeys := make(map[eventKey]struct{}, len(t.ProfileData.Events)+len(rawEvents))
+		for _, e := range t.ProfileData.Events {
+			existingKeys[eventKey{e.EventName, e.StartTime, e.EndTime}] = struct{}{}
+		}
+		for _, e := range rawEvents {
+			key := eventKey{e.EventName, e.StartTime, e.EndTime}
+			if _, ok := existingKeys[key]; !ok {
+				t.ProfileData.Events = append(t.ProfileData.Events, e)
+				existingKeys[key] = struct{}{}
+			}
+		}
+
+		// Extract func_or_class_name from extraData if available
+		for _, e := range rawEvents {
+			if strings.HasPrefix(e.EventName, taskPrefix) && e.ExtraData != "" {
+				var extra map[string]interface{}
+				if err := json.Unmarshal([]byte(e.ExtraData), &extra); err == nil {
+					if name, ok := extra["name"].(string); ok && name != "" {
+						// For actor methods, name might be just "increment" or "get_count"
+						// But eventName has the full form like "task::Counter.increment"
+						// Use eventName to get the full func_or_class_name
+						t.FuncOrClassName = strings.TrimPrefix(e.EventName, taskPrefix)
+					}
+				}
+			}
+		}
+	})
+	return nil
+}
+
+// normalizeIDToHex converts a single base64-encoded Ray ID to hex
+func normalizeIDToHex(base64ID string) string {
+	if base64ID == "" {
+		return ""
+	}
+
+	hexID, err := utils.ConvertBase64ToHex(base64ID)
+	if err != nil {
+		logrus.Errorf("Failed to convert ID from base64 to hex, keeping original: %v", err)
+		return base64ID
+	}
+	return hexID
+}
+
 // normalizeTaskIDsToHex converts base64-encoded Ray IDs in task-related events:
 //   - TASK_DEFINITION_EVENT
 //   - ACTOR_TASK_DEFINITION_EVENT
@@ -1219,30 +970,30 @@ func (h *EventHandler) handleNodeLifecycleEvent(eventMap map[string]any, cluster
 //
 // to hex so stored tasks match the live cluster API schema.
 func normalizeTaskIDsToHex(task *types.Task) {
-	normalize := func(base64ID string) string {
-		if base64ID == "" {
-			return ""
-		}
-
-		hexID, err := utils.ConvertBase64ToHex(base64ID)
-		if err != nil {
-			logrus.Errorf("Failed to convert ID from base64 to hex, keeping original: %v", err)
-			return base64ID
-		}
-		return hexID
-	}
-
-	task.TaskID = normalize(task.TaskID)
-	task.ActorID = normalize(task.ActorID)
-	task.JobID = normalize(task.JobID)
-	task.ParentTaskID = normalize(task.ParentTaskID)
-	task.PlacementGroupID = normalize(task.PlacementGroupID)
-	task.NodeID = normalize(task.NodeID)
-	task.WorkerID = normalize(task.WorkerID)
+	task.TaskID = normalizeIDToHex(task.TaskID)
+	task.ActorID = normalizeIDToHex(task.ActorID)
+	task.JobID = normalizeIDToHex(task.JobID)
+	task.ParentTaskID = normalizeIDToHex(task.ParentTaskID)
+	task.PlacementGroupID = normalizeIDToHex(task.PlacementGroupID)
+	task.NodeID = normalizeIDToHex(task.NodeID)
+	task.WorkerID = normalizeIDToHex(task.WorkerID)
 }
 
-// GetNodeMap returns a thread-safe deep copy of all nodes for a given cluster session.
-func (h *EventHandler) GetNodeMap(clusterSessionID string) map[string]types.Node {
+// normalizeActorIDsToHex converts base64-encoded Ray IDs in actor events:
+//   - ACTOR_DEFINITION_EVENT
+//
+// to hex so stored actors match the live cluster API schema.
+// Note: ACTOR_LIFECYCLE_EVENT IDs are normalized inline at parse time.
+func normalizeActorIDsToHex(actor *types.Actor) {
+	actor.ActorID = normalizeIDToHex(actor.ActorID)
+	actor.JobID = normalizeIDToHex(actor.JobID)
+	actor.PlacementGroupID = normalizeIDToHex(actor.PlacementGroupID)
+	actor.Address.NodeID = normalizeIDToHex(actor.Address.NodeID)
+	actor.Address.WorkerID = normalizeIDToHex(actor.Address.WorkerID)
+}
+
+// getNodeMap returns a thread-safe deep copy of all nodes for a given cluster session.
+func (h *EventHandler) getNodeMap(clusterSessionID string) map[string]types.Node {
 	h.ClusterNodeMap.RLock()
 	defer h.ClusterNodeMap.RUnlock()
 
@@ -1261,267 +1012,84 @@ func (h *EventHandler) GetNodeMap(clusterSessionID string) map[string]types.Node
 	return nodes
 }
 
-// GetNodeByNodeID returns a node by node ID for a given cluster session.
-func (h *EventHandler) GetNodeByNodeID(clusterSessionID, nodeID string) (types.Node, bool) {
-	h.ClusterNodeMap.RLock()
-	defer h.ClusterNodeMap.RUnlock()
+// ProcessSingleSession reads all event files for a single session synchronously
+// and populates the handler's in-memory maps.
+//
+// TODO(jiangjiawei1103): Empty event file list vs ListFiles outage is ambiguous without
+// StorageReader interface surfacing errors.
+func (h *EventHandler) ProcessSingleSession(ctx context.Context, clusterInfo utils.ClusterInfo) error {
+	clusterNameNamespace := clusterInfo.Name + "_" + clusterInfo.Namespace
+	clusterSessionKey := utils.BuildClusterSessionKey(clusterInfo.Name, clusterInfo.Namespace, clusterInfo.SessionName)
 
-	nodeMap, ok := h.ClusterNodeMap.ClusterNodeMap[clusterSessionID]
-	if !ok {
-		return types.Node{}, false
+	// ClusterLogEventMap backs only the /events endpoint, so log event read failures must not
+	// block marking the session as loaded and force subsequent Ray event re-processing.
+	logEventReader := NewLogEventReader(h.reader)
+	if err := logEventReader.ReadLogEvents(clusterInfo, clusterSessionKey, h.ClusterLogEventMap); err != nil {
+		logrus.Errorf("Incomplete Log Events read for %s: %v. /events endpoint may serve partial data.",
+			clusterSessionKey, err)
 	}
 
-	nodeMap.Lock()
-	defer nodeMap.Unlock()
+	eventFileList := append(h.getAllJobEventFiles(clusterInfo), h.getAllNodeEventFiles(clusterInfo)...)
+	logrus.Debugf("current eventFileList for cluster %s is: %v", clusterInfo.Name, eventFileList)
 
-	node, ok := nodeMap.NodeMap[nodeID]
-	if !ok {
-		return types.Node{}, false
-	}
-	return node.DeepCopy(), true
-}
-
-// GetTasksTimeline returns timeline data in Chrome Tracing Format
-// Output format matches Ray Dashboard's /api/v0/tasks/timeline endpoint
-func (h *EventHandler) GetTasksTimeline(clusterName string, jobID string) []types.ChromeTraceEvent {
-	var tasks []types.Task
-	if jobID != "" {
-		tasks = h.GetTasksByJobID(clusterName, jobID)
-	} else {
-		tasks = h.GetTasks(clusterName)
-	}
-
-	if len(tasks) == 0 {
-		return []types.ChromeTraceEvent{}
-	}
-
-	events := []types.ChromeTraceEvent{}
-
-	// Build PID/TID mappings
-	// PID: Node IP -> numeric ID
-	// TID: clusterID (componentType:componentId) -> numeric ID per node
-	nodeIPToPID := make(map[string]int)
-	nodeIPToClusterIDToTID := make(map[string]map[string]int) // nodeIP -> clusterID (componentType:componentId) -> tid
-	pidCounter := 0
-	tidCounters := make(map[string]int) // per-node tid counter
-
-	// First pass: collect all unique nodes and workers
-	for _, task := range tasks {
-		if task.ProfileData == nil || len(task.ProfileData.Events) == 0 {
-			continue
+	rayEventsTotal := len(eventFileList)
+	rayEventsRead := 0
+	for _, eventFile := range eventFileList {
+		if err := ctx.Err(); err != nil {
+			return err
 		}
-		// Only include worker and driver components (consistent with Ray's profiling implementation in profiling.py)
-		componentType := task.ProfileData.ComponentType
-		if componentType != "worker" && componentType != "driver" {
-			continue
-		}
+		logrus.Debugf("Reading event file: %s", eventFile)
 
-		nodeIP := task.ProfileData.NodeIPAddress
-		clusterID := task.ProfileData.ComponentType + ":" + task.ProfileData.ComponentID
-
-		if nodeIP == "" {
-			continue
-		}
-		if _, exists := nodeIPToPID[nodeIP]; !exists {
-			nodeIPToPID[nodeIP] = pidCounter
-			pidCounter++
-			nodeIPToClusterIDToTID[nodeIP] = make(map[string]int)
-			tidCounters[nodeIP] = 0
-		}
-
-		if _, exists := nodeIPToClusterIDToTID[nodeIP][clusterID]; !exists {
-			nodeIPToClusterIDToTID[nodeIP][clusterID] = tidCounters[nodeIP]
-			tidCounters[nodeIP]++
-		}
-	}
-
-	// Generate process_name and thread_name metadata events
-	for nodeIP, pid := range nodeIPToPID {
-		events = append(events, types.ChromeTraceEvent{
-			Name:  "process_name",
-			PID:   pid,
-			TID:   nil,
-			Phase: "M",
-			Args: map[string]interface{}{
-				"name": "Node " + nodeIP,
-			},
-		})
-
-		for clusterID, tid := range nodeIPToClusterIDToTID[nodeIP] {
-			tidVal := tid
-			events = append(events, types.ChromeTraceEvent{
-				Name:  "thread_name",
-				PID:   pid,
-				TID:   &tidVal,
-				Phase: "M",
-				Args: map[string]interface{}{
-					"name": clusterID,
-				},
-			})
-		}
-	}
-
-	// Generate trace events from ProfileData
-	for _, task := range tasks {
-		if task.ProfileData == nil || len(task.ProfileData.Events) == 0 {
-			continue
-		}
-		// Only include worker and driver components (consistent with Ray's profiling implementation in profiling.py)
-		componentType := task.ProfileData.ComponentType
-		if componentType != "worker" && componentType != "driver" {
-			continue
-		}
-
-		nodeIP := task.ProfileData.NodeIPAddress
-		clusterID := task.ProfileData.ComponentType + ":" + task.ProfileData.ComponentID
-
-		pid, ok := nodeIPToPID[nodeIP]
-		if !ok {
-			continue
-		}
-		var tidPtr *int
-		if tid, ok := nodeIPToClusterIDToTID[nodeIP][clusterID]; ok {
-			tidVal := tid
-			tidPtr = &tidVal
+		var eventioReader io.Reader
+		if strings.HasSuffix(eventFile, ".gz") {
+			rc, err := compression.ReadCompressedContent(h.reader, clusterNameNamespace, eventFile)
+			if err != nil {
+				logrus.Errorf("Failed to decompress event file %s: %v", eventFile, err)
+				continue
+			}
+			eventioReader = rc
 		} else {
-			// This shouldn't happen if first pass worked correctly,
-			// but skip to avoid null TID
+			eventioReader = h.reader.GetContent(clusterNameNamespace, eventFile)
+		}
+
+		if eventioReader == nil {
+			logrus.Errorf("Failed to get content for event file: %s, skipping", eventFile)
 			continue
 		}
 
-		for _, profEvent := range task.ProfileData.Events {
-			// Convert nanoseconds to microseconds
-			startTimeUs := float64(profEvent.StartTime) / 1000.0
-			durationUs := float64(profEvent.EndTime-profEvent.StartTime) / 1000.0
+		eventbytes, err := io.ReadAll(eventioReader)
+		if closer, ok := eventioReader.(io.Closer); ok {
+			closer.Close()
+		}
 
-			// Parse extraData for additional fields
-			var extraData map[string]interface{}
-			if profEvent.ExtraData != "" {
-				json.Unmarshal([]byte(profEvent.ExtraData), &extraData)
+		if err != nil {
+			logrus.Errorf("Failed to read events for file %s: %v", eventFile, err)
+			continue
+		}
+		rayEventsRead++
+
+		// json.Unmarshal and storeEvent failures are treated as corrupt-data errors:
+		// retrying won't fix bad bytes, accepting partial loss.
+		var eventList []map[string]any
+		if err := json.Unmarshal(eventbytes, &eventList); err != nil {
+			logrus.Errorf("Failed to unmarshal events for file %s: %v", eventFile, err)
+			continue
+		}
+
+		for _, event := range eventList {
+			if event == nil {
+				continue
 			}
-
-			// Determine task_id and func_or_class_name
-			taskIDForArgs := task.TaskID
-			funcOrClassName := task.FuncOrClassName
-
-			// Fallback to GetFuncName() if FuncOrClassName is empty
-			// This ensures consistency with Ray's profiling.py which uses task["func_or_class_name"]
-			// from TASK_DEFINITION_EVENT, and handles cases where TASK_PROFILE_EVENT is missing
-			if funcOrClassName == "" {
-				funcOrClassName = task.GetFuncName()
+			if err := h.storeEvent(clusterSessionKey, event); err != nil {
+				logrus.Errorf("Failed to store events for file %s: %v", eventFile, err)
+				continue
 			}
-
-			// Try to get from extraData if available (for hex format task_id)
-			if extraData != nil {
-				if tid, ok := extraData["task_id"].(string); ok && tid != "" {
-					taskIDForArgs = tid
-				}
-			}
-
-			// Build args
-			actorID := extractActorIDFromTaskID(taskIDForArgs)
-			args := map[string]interface{}{
-				"task_id":            taskIDForArgs,
-				"job_id":             task.JobID,
-				"attempt_number":     task.TaskAttempt,
-				"func_or_class_name": funcOrClassName,
-				"actor_id":           nil,
-			}
-
-			if actorID != "" {
-				args["actor_id"] = actorID
-			}
-
-			// Determine event name for display
-			eventName := profEvent.EventName
-			displayName := profEvent.EventName
-
-			// For overall task events like "task::slow_task", use the full name from extraData
-			if strings.HasPrefix(profEvent.EventName, "task::") && extraData != nil {
-				if name, ok := extraData["name"].(string); ok && name != "" {
-					displayName = name
-					args["name"] = name
-				}
-			}
-
-			traceEvent := types.ChromeTraceEvent{
-				Category:  eventName,
-				Name:      displayName,
-				PID:       pid,
-				TID:       tidPtr,
-				Timestamp: &startTimeUs,
-				Duration:  &durationUs,
-				Color:     getChromeTraceColor(eventName),
-				Args:      args,
-				Phase:     "X",
-			}
-
-			events = append(events, traceEvent)
 		}
 	}
 
-	return events
-}
-
-// getChromeTraceColor maps event names to Chrome trace colors
-// Based on Ray's _default_color_mapping in profiling.py
-func getChromeTraceColor(eventName string) string {
-	// Handle task::xxx pattern (overall task event)
-	if strings.HasPrefix(eventName, "task::") {
-		return "generic_work"
+	if rayEventsTotal > 0 && rayEventsRead == 0 {
+		return fmt.Errorf("read 0 of %d event files for %s: likely transient storage outage",
+			rayEventsTotal, clusterSessionKey)
 	}
-
-	// Direct mapping for known event names
-	// This logic follows Ray's profiling implementation:
-	// https://github.com/ray-project/ray/blob/68d01c4c48a59c7768ec9c2359a1859966c446b6/python/ray/_private/profiling.py#L25
-	switch eventName {
-	case "task:deserialize_arguments":
-		return "rail_load"
-	case "task:execute":
-		return "rail_animation"
-	case "task:store_outputs":
-		return "rail_idle"
-	case "task:submit_task", "task":
-		return "rail_response"
-	case "worker_idle":
-		return "cq_build_abandoned"
-	case "ray.get":
-		return "good"
-	case "ray.put":
-		return "terrible"
-	case "ray.wait":
-		return "vsync_highlight_color"
-	case "submit_task":
-		return "background_memory_dump"
-	case "wait_for_function", "fetch_and_run_function", "register_remote_function":
-		return "detailed_memory_dump"
-	default:
-		return "generic_work"
-	}
-}
-
-// extractActorIDFromTaskID extracts the ActorID from a TaskID following Ray's ID specification.
-//
-// Design doc: src/ray/design_docs/id_specification.md
-// - TaskID: 8B unique + 16B ActorID (total 24 bytes = 48 hex chars)
-// - ActorID: 12B unique + 4B JobID (total 16 bytes = 32 hex chars)
-//
-// For a 48-character hex TaskID, the last 32 hex characters (bytes 16–48)
-// correspond to the ActorID. This function further checks the "unique" portion
-// of the ActorID (first 24 hex chars) and returns an empty string if it is all Fs,
-// which indicates normal/driver tasks with no associated actor.
-func extractActorIDFromTaskID(taskIDHex string) string {
-	if len(taskIDHex) != 48 {
-		return "" // can't process if encoded in base64
-	}
-
-	actorPortion := taskIDHex[16:40] // 24 chars for actor id (12 bytes)
-	jobPortion := taskIDHex[40:48]   // 8 chars for job id (4 bytes)
-
-	// Check if all Fs (no actor)
-	if strings.ToLower(actorPortion) == "ffffffffffffffffffffffff" {
-		return ""
-	}
-
-	return actorPortion + jobPortion
+	return nil
 }

@@ -1,9 +1,11 @@
 package e2e
 
 import (
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -16,6 +18,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
+	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 	. "github.com/ray-project/kuberay/historyserver/test/support"
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
@@ -103,8 +106,8 @@ func testAzureBlobSeparatesFilesBySession(test Test, g *WithT, namespace *corev1
 func testAzureBlobResumesUploadsOnRestart(test Test, g *WithT, namespace *corev1.Namespace, azureClient *azblob.Client) {
 	rayCluster := PrepareAzureBlobTestEnv(test, g, namespace, azureClient)
 
-	prevLogsBaseDir := "/tmp/ray/prev-logs"
-	persistCompleteBaseDir := "/tmp/ray/persist-complete-logs"
+	prevLogsBaseDir := utils.GetRayPrevLogsPath()
+	persistCompleteBaseDir := utils.GetRayPersistCompletePath()
 
 	dummySessionID := fmt.Sprintf("test-recovery-session-%s", namespace.Name)
 	dummyNodeID := fmt.Sprintf("head-node-%s", namespace.Name)
@@ -292,7 +295,22 @@ func loadRayEventsFromAzureBlob(containerClient *container.Client, prefix string
 			}
 
 			var fileEvents []rayEvent
-			decodeErr := json.NewDecoder(downloadResp.Body).Decode(&fileEvents)
+			var reader io.Reader = downloadResp.Body
+			var gzReader *gzip.Reader
+			if strings.HasSuffix(*blob.Name, ".gz") {
+				var err error
+				gzReader, err = gzip.NewReader(downloadResp.Body)
+				if err != nil {
+					downloadResp.Body.Close()
+					return nil, fmt.Errorf("failed to create gzip reader for %s: %w", *blob.Name, err)
+				}
+				reader = gzReader
+			}
+
+			decodeErr := json.NewDecoder(reader).Decode(&fileEvents)
+			if gzReader != nil {
+				gzReader.Close()
+			}
 			downloadResp.Body.Close()
 
 			if decodeErr != nil {

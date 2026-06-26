@@ -140,7 +140,7 @@ func TestScanAndProcess(t *testing.T) {
 		persistCompleteLogsDir: filepath.Join(baseDir, "persist-complete-logs"),
 		ShutdownChan:           make(chan struct{}),
 		RayClusterName:         "test-cluster",
-		RayClusterID:           "cluster-123",
+		RayClusterNamespace:    "cluster-123",
 	}
 
 	sessionID := "session-lifecycle"

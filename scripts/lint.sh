@@ -6,8 +6,6 @@ dirs_to_lint="ray-operator kubectl-plugin apiserver apiserversdk"
 
 for dir in $dirs_to_lint; do
   pushd "$dir"
-  # Exclude the SA1019 check which checks the usage of deprecated fields
-  # via the linters.settings.staticcheck.checks configuration in .golangci.yaml.
   golangci-lint run --fix --timeout 10m0s
   popd
 done

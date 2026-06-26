@@ -15,6 +15,7 @@ import (
 	gstorage "cloud.google.com/go/storage"
 	"github.com/ray-project/kuberay/historyserver/pkg/collector/types"
 	"github.com/ray-project/kuberay/historyserver/pkg/storage"
+	"github.com/ray-project/kuberay/historyserver/pkg/storage/clustermetadata"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 	"github.com/sirupsen/logrus"
 	gIterator "google.golang.org/api/iterator"
@@ -27,14 +28,14 @@ const (
 )
 
 type RayLogsHandler struct {
-	GCSBucket      string
-	LogFiles       chan string
-	RootDir        string
-	SessionDir     string
-	RayClusterName string
-	RayClusterID   string
-	RayNodeName    string
-	LogBatching    int
+	GCSBucket           string
+	LogFiles            chan string
+	RootDir             string
+	SessionDir          string
+	RayClusterName      string
+	RayClusterNamespace string
+	RayNodeName         string
+	LogBatching         int
 
 	StorageClient *gstorage.Client
 	PushInterval  time.Duration
@@ -140,14 +141,14 @@ func (h *RayLogsHandler) List() []utils.ClusterInfo {
 
 	clusterList := make(utils.ClusterInfoList, 0, 20)
 	bucket := h.StorageClient.Bucket(h.GCSBucket)
-	pathPrefix := strings.TrimPrefix(path.Join(h.RootDir, "metadir"), "/") + "/"
+	prefix := clustermetadata.Prefix(h.RootDir)
+	pathPrefix := strings.TrimPrefix(prefix, "/")
 	query := &gstorage.Query{
 		// Match with only non-directory objects
 		MatchGlob: pathPrefix + "**/*[!/]",
 	}
 	objectIterator := bucket.Objects(ctx, query)
 	for {
-		cluster := &utils.ClusterInfo{}
 		objectAttr, err := objectIterator.Next()
 		if err == gIterator.Done {
 			logrus.Infof("Finished iterating through gcs objects")
@@ -158,31 +159,14 @@ func (h *RayLogsHandler) List() []utils.ClusterInfo {
 			return nil
 		}
 
-		fullObjectPath := objectAttr.Name
-		metaInfo := strings.Split(strings.TrimPrefix(fullObjectPath, pathPrefix), "/")
-		if len(metaInfo) != 2 {
-			logrus.Errorf("Unable to properly parse cluster metadir path with fullpath: %s", fullObjectPath)
-			continue
-		}
-		clusterMeta := strings.Split(metaInfo[0], "_")
-		if len(clusterMeta) != 2 {
-			logrus.Errorf("Unable to get cluster name and namespace from directory: %s", metaInfo[0])
-			continue
-		}
-		cluster.Name = clusterMeta[0]
-		cluster.Namespace = clusterMeta[1]
-
-		cluster.SessionName = metaInfo[1]
-		datetime, err := utils.GetDateTimeFromSessionID(metaInfo[1])
+		c, err := clustermetadata.DecodePath(objectAttr.Name, h.RootDir)
 		if err != nil {
-			logrus.Errorf("Failed to get date time from the given sessionID: %s, error: %v", metaInfo[1], err)
+			logrus.Errorf("Failed to parse meta file path: %s, error: %v", objectAttr.Name, err)
 			continue
 		}
-		cluster.CreateTimeStamp = datetime.Unix()
-		cluster.CreateTime = datetime.UTC().Format(("2006-01-02T15:04:05Z"))
 
-		logrus.Infof("Parsed cluster %s for session %s to list", cluster.Name, cluster.SessionName)
-		clusterList = append(clusterList, *cluster)
+		logrus.Infof("Parsed cluster %s for session %s to list", c.Name, c.SessionName)
+		clusterList = append(clusterList, c)
 	}
 
 	sort.Sort(clusterList)
@@ -276,15 +260,15 @@ func New(c *config) (*RayLogsHandler, error) {
 	}
 
 	return &RayLogsHandler{
-		StorageClient:  storageClient,
-		GCSBucket:      c.Bucket,
-		RayClusterName: c.RayClusterName,
-		RayClusterID:   c.RayClusterID,
-		RootDir:        c.RootDir,
-		LogFiles:       make(chan string, 100),
-		LogBatching:    c.LogBatching,
-		RayNodeName:    c.RayNodeName,
-		SessionDir:     c.SessionDir,
-		PushInterval:   c.PushInterval,
+		StorageClient:       storageClient,
+		GCSBucket:           c.Bucket,
+		RayClusterName:      c.RayClusterName,
+		RayClusterNamespace: c.RayClusterNamespace,
+		RootDir:             c.RootDir,
+		LogFiles:            make(chan string, 100),
+		LogBatching:         c.LogBatching,
+		RayNodeName:         c.RayNodeName,
+		SessionDir:          c.SessionDir,
+		PushInterval:        c.PushInterval,
 	}, nil
 }

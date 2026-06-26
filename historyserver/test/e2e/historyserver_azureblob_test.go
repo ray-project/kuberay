@@ -94,7 +94,7 @@ func testAzureLogFileEndpointLiveCluster(test Test, g *WithT, namespace *corev1.
 	client := CreateHTTPClientWithCookieJar(g)
 	setClusterContext(test, g, client, historyServerURL, namespace.Name, rayCluster.Name, clusterInfo.SessionName)
 
-	nodeID := GetOneOfNodeID(g, client, historyServerURL, true)
+	nodeID := GetOneOfNodeID(g, client, historyServerURL, false)
 
 	test.T().Run("should return log content", func(t *testing.T) {
 		VerifyLogFileEndpointReturnsContent(test, NewWithT(t), client, historyServerURL, nodeID)

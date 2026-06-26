@@ -18,7 +18,7 @@ const (
 type Address struct {
 	NodeID    string
 	IPAddress string
-	Port      string
+	Port      int
 	WorkerID  string
 }
 

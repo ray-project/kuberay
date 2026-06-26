@@ -5,7 +5,7 @@ metadata:
 spec:
   # rayClusterSpec specifies the RayCluster instance to be created by the RayJob controller.
   rayClusterSpec:
-    rayVersion: '2.52.0' # should match the Ray version in the image of the containers
+    rayVersion: "2.52.0" # should match the Ray version in the image of the containers
     # Ray head pod template
     headGroupSpec:
       # The `rayStartParams` are used to configure the `ray start` command.
