@@ -413,11 +413,16 @@ func configureTLS(podTemplate *corev1.PodTemplateSpec, instance rayv1.RayCluster
 		certPath := utils.RayTLSCertMountPath + "/tls.crt"
 		waitScript := fmt.Sprintf(`POD_IP="${MY_POD_IP}"
 CERT="%s"
-echo "Waiting for TLS cert to include IP SAN for ${POD_IP}..."
+DEADLINE=$(( $(date +%%s) + 300 ))
+echo "Waiting for TLS cert to include IP SAN for ${POD_IP} (timeout 300s)..."
 while true; do
   if openssl x509 -in "${CERT}" -noout -text 2>/dev/null | grep -q "IP Address:${POD_IP}"; then
     echo "TLS cert now includes IP SAN for ${POD_IP}"
     exit 0
+  fi
+  if [ "$(date +%%s)" -ge "${DEADLINE}" ]; then
+    echo "Timed out waiting for IP SAN ${POD_IP} in TLS cert; cert-manager may not have reissued the certificate" >&2
+    exit 1
   fi
   echo "IP SAN for ${POD_IP} not yet in cert, retrying in 5s..."
   sleep 5
