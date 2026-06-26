@@ -347,6 +347,7 @@ func (ec *EventCollector) PersistEvents(req *restful.Request, resp *restful.Resp
 	defer ec.writeMu.Unlock()
 
 	touchedWriters := make(map[*activeFileState]struct{})
+	pendingDiskBytes := make(map[*activeFileState]int64)
 	var writeErr error
 
 	// Best-effort flush on any exit path so on-disk state stays consistent
@@ -358,6 +359,8 @@ func (ec *EventCollector) PersistEvents(req *restful.Request, resp *restful.Resp
 				if writeErr == nil {
 					writeErr = fmt.Errorf("flush %s: %w", state.path, err)
 				}
+			} else {
+				ec.totalDiskUsed.Add(pendingDiskBytes[state])
 			}
 		}
 		if writeErr != nil {
@@ -407,7 +410,7 @@ func (ec *EventCollector) PersistEvents(req *restful.Request, resp *restful.Resp
 		}
 		written := int64(n + m)
 		state.size += written
-		ec.totalDiskUsed.Add(written)
+		pendingDiskBytes[state] += written
 		touchedWriters[state] = struct{}{}
 	}
 }
@@ -553,8 +556,23 @@ func (ec *EventCollector) rotateFileLocked(category string) error {
 	}
 
 	if flushFailed {
-		logrus.Warnf("Skipping upload of %s: flush failed, on-disk content may be incomplete", state.path)
-		return fmt.Errorf("flush failed for %s, file retained for manual recovery", state.path)
+		logrus.Warnf("Flush failed for %s; scheduling delayed upload of on-disk content (%d bytes)", state.path, diskSize)
+		task := rotationTask{
+			jsonlPath:   state.path,
+			category:    state.category,
+			sessionName: state.sessionName,
+			nodeID:      state.nodeID,
+			createdAt:   state.createdAt,
+			size:        diskSize,
+		}
+		go func(t rotationTask) {
+			time.Sleep(5 * time.Second)
+			select {
+			case ec.rotationQueue <- t:
+			case <-ec.stopped:
+			}
+		}(task)
+		return fmt.Errorf("flush failed for %s, queued for delayed upload", state.path)
 	}
 
 	task := rotationTask{
