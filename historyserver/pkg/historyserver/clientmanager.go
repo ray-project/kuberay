@@ -48,10 +48,10 @@ func (c *ClientManager) ListRayClusters(ctx context.Context) ([]*rayv1.RayCluste
 			list = append(list, &rayCluster)
 		}
 	}
-	// If every client failed, return an error so callers can distinguish
-	// "no clusters exist" from "API unreachable".
-	if len(errs) > 0 && len(list) == 0 && len(errs) == len(c.clients) {
-		return list, fmt.Errorf("all %d client(s) failed to list RayClusters", len(errs))
+	// If any client failed, return an error so callers skip crash detection
+	// rather than reasoning over an incomplete live set.
+	if len(errs) > 0 {
+		return list, fmt.Errorf("%d of %d client(s) failed to list RayClusters", len(errs), len(c.clients))
 	}
 	return list, nil
 }
