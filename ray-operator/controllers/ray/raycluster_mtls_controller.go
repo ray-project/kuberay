@@ -384,8 +384,9 @@ func (r *RayClusterMTLSController) reconcileCAIssuer(ctx context.Context, instan
 }
 
 // reconcileHeadCertificate creates or updates the head node leaf certificate.
-// Pod IPs are collected and injected into the certificate SANs so Ray's gRPC
-// TLS hostname verification succeeds when workers connect to the head.
+// Only head pod IPs are added as IP SANs — worker IPs are not included, since
+// workers reach the head via the service DNS name (already a DNS SAN). This
+// prevents a worker scale event from triggering a head cert reissue.
 func (r *RayClusterMTLSController) reconcileHeadCertificate(ctx context.Context, instance *rayv1.RayCluster) error {
 	certName := fmt.Sprintf("%s-%s", utils.RayHeadCertPrefix, instance.Name)
 	secretName := fmt.Sprintf("%s-%s", utils.RayHeadSecretPrefix, instance.Name)
@@ -394,7 +395,7 @@ func (r *RayClusterMTLSController) reconcileHeadCertificate(ctx context.Context,
 		return err
 	}
 
-	podIPs, err := r.getPodIPs(ctx, instance)
+	podIPs, err := r.getPodIPs(ctx, instance, rayv1.HeadNode)
 	if err != nil {
 		return err
 	}
@@ -464,13 +465,14 @@ func (r *RayClusterMTLSController) reconcileHeadCertificate(ctx context.Context,
 }
 
 // reconcileWorkerCertificate creates or updates the worker node leaf certificate.
-// All worker pods share this single certificate. Pod IPs are included in the SANs
-// so Ray's gRPC TLS hostname verification succeeds for inter-node communication.
+// All worker pods share this single certificate. Only worker pod IPs are included
+// in the SANs; the head IP is not needed here since GCS connects to workers by
+// pod IP, not by the head service address.
 func (r *RayClusterMTLSController) reconcileWorkerCertificate(ctx context.Context, instance *rayv1.RayCluster) error {
 	certName := fmt.Sprintf("%s-%s", utils.RayWorkerCertPrefix, instance.Name)
 	secretName := fmt.Sprintf("%s-%s", utils.RayWorkerSecretPrefix, instance.Name)
 
-	podIPs, err := r.getPodIPs(ctx, instance)
+	podIPs, err := r.getPodIPs(ctx, instance, rayv1.WorkerNode)
 	if err != nil {
 		return err
 	}
@@ -545,13 +547,15 @@ func (r *RayClusterMTLSController) reconcileWorkerCertificate(ctx context.Contex
 	return nil
 }
 
-// getPodIPs collects all pod IPs for the RayCluster by listing pods
-// with the ray.io/cluster label matching the cluster name.
-func (r *RayClusterMTLSController) getPodIPs(ctx context.Context, instance *rayv1.RayCluster) ([]string, error) {
+// getPodIPs collects pod IPs for the given node type within the RayCluster.
+// Filtering by node type prevents worker IPs from appearing in the head cert
+// (which would trigger a cert reissue on every worker scale event) and vice versa.
+func (r *RayClusterMTLSController) getPodIPs(ctx context.Context, instance *rayv1.RayCluster, nodeType rayv1.RayNodeType) ([]string, error) {
 	pods := &corev1.PodList{}
 	if err := r.List(ctx, pods, client.InNamespace(instance.Namespace),
 		client.MatchingLabels(map[string]string{
-			utils.RayClusterLabelKey: instance.Name,
+			utils.RayClusterLabelKey:  instance.Name,
+			utils.RayNodeTypeLabelKey: string(nodeType),
 		})); err != nil {
 		return nil, err
 	}
