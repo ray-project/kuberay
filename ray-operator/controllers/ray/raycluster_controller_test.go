@@ -27,6 +27,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -1977,4 +1978,73 @@ func TestIngressNeedsUpdateNoopWhenEqual(t *testing.T) {
 	updated := ingressNeedsUpdate(existing, desired)
 
 	assert.False(t, updated)
+}
+
+func TestIngressNeedsUpdatePreservesDefaultedIngressClassName(t *testing.T) {
+	prefix := networkingv1.PathTypePrefix
+	rules := []networkingv1.IngressRule{
+		{
+			Host: "ray.example.com",
+			IngressRuleValue: networkingv1.IngressRuleValue{
+				HTTP: &networkingv1.HTTPIngressRuleValue{Paths: []networkingv1.HTTPIngressPath{{Path: "/", PathType: &prefix}}},
+			},
+		},
+	}
+
+	// The live Ingress has spec.ingressClassName set by the DefaultIngressClass
+	// admission plugin, while the desired object (the RayCluster did not request a
+	// class) leaves it nil.
+	existing := &networkingv1.Ingress{
+		ObjectMeta: metav1.ObjectMeta{Name: "sample-head-ingress", Namespace: "default"},
+		Spec: networkingv1.IngressSpec{
+			IngressClassName: ptr.To("nginx"),
+			Rules:            rules,
+		},
+	}
+	desired := &networkingv1.Ingress{
+		ObjectMeta: metav1.ObjectMeta{Name: "sample-head-ingress", Namespace: "default"},
+		Spec: networkingv1.IngressSpec{
+			Rules: rules,
+		},
+	}
+
+	updated := ingressNeedsUpdate(existing, desired)
+
+	assert.False(t, updated, "should not update when the only difference is an admission-defaulted ingress class")
+	require.NotNil(t, existing.Spec.IngressClassName)
+	assert.Equal(t, "nginx", *existing.Spec.IngressClassName, "the defaulted ingress class must be preserved")
+}
+
+func TestIngressNeedsUpdateOverridesIngressClassNameWhenRequested(t *testing.T) {
+	prefix := networkingv1.PathTypePrefix
+	rules := []networkingv1.IngressRule{
+		{
+			Host: "ray.example.com",
+			IngressRuleValue: networkingv1.IngressRuleValue{
+				HTTP: &networkingv1.HTTPIngressRuleValue{Paths: []networkingv1.HTTPIngressPath{{Path: "/", PathType: &prefix}}},
+			},
+		},
+	}
+
+	// When the RayCluster does request a class, it must win over the live value.
+	existing := &networkingv1.Ingress{
+		ObjectMeta: metav1.ObjectMeta{Name: "sample-head-ingress", Namespace: "default"},
+		Spec: networkingv1.IngressSpec{
+			IngressClassName: ptr.To("nginx"),
+			Rules:            rules,
+		},
+	}
+	desired := &networkingv1.Ingress{
+		ObjectMeta: metav1.ObjectMeta{Name: "sample-head-ingress", Namespace: "default"},
+		Spec: networkingv1.IngressSpec{
+			IngressClassName: ptr.To("traefik"),
+			Rules:            rules,
+		},
+	}
+
+	updated := ingressNeedsUpdate(existing, desired)
+
+	assert.True(t, updated)
+	require.NotNil(t, existing.Spec.IngressClassName)
+	assert.Equal(t, "traefik", *existing.Spec.IngressClassName, "an explicitly requested ingress class must override the live value")
 }
