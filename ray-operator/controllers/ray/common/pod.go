@@ -416,6 +416,12 @@ CERT="%s"
 DEADLINE=$(( $(date +%%s) + 300 ))
 echo "Waiting for TLS cert to include IP SAN for ${POD_IP} (timeout 300s)..."
 while true; do
+  if [ -z "${POD_IP}" ]; then
+    echo "Pod IP not yet assigned, retrying in 5s..."
+    sleep 5
+    POD_IP="${MY_POD_IP}"
+    continue
+  fi
   if openssl x509 -in "${CERT}" -noout -text 2>/dev/null | grep -q "IP Address:${POD_IP}"; then
     echo "TLS cert now includes IP SAN for ${POD_IP}"
     exit 0
