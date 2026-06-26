@@ -4073,3 +4073,59 @@ func TestReconcile_TLSBYOC_AllowedWithoutCertManager(t *testing.T) {
 		// No events -- expected for BYOC mode passing the guard.
 	}
 }
+
+func TestInjectMTLSLoopbackRayAddress(t *testing.T) {
+	headPort := "6379"
+	wantAddr := "127.0.0.1:" + headPort
+
+	tests := []struct {
+		name       string
+		containers []corev1.Container
+		wantAddrs  map[string]string // container name → expected RAY_ADDRESS value
+	}{
+		{
+			name: "sets loopback on ray-head and autoscaler, skips other containers",
+			containers: []corev1.Container{
+				{Name: "ray-head"},
+				{Name: common.AutoscalerContainerName},
+				{Name: "sidecar"},
+			},
+			wantAddrs: map[string]string{
+				"ray-head":                     wantAddr,
+				common.AutoscalerContainerName: wantAddr,
+				"sidecar":                      "", // must not be modified
+			},
+		},
+		{
+			name: "overwrites an existing RAY_ADDRESS on ray-head",
+			containers: []corev1.Container{
+				{
+					Name: "ray-head",
+					Env:  []corev1.EnvVar{{Name: utils.RAY_ADDRESS, Value: "old-fqdn:6379"}},
+				},
+			},
+			wantAddrs: map[string]string{"ray-head": wantAddr},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pod := &corev1.Pod{Spec: corev1.PodSpec{Containers: tt.containers}}
+			injectMTLSLoopbackRayAddress(pod, headPort)
+			for _, c := range pod.Spec.Containers {
+				want, checked := tt.wantAddrs[c.Name]
+				if !checked {
+					continue
+				}
+				got := ""
+				for _, e := range c.Env {
+					if e.Name == utils.RAY_ADDRESS {
+						got = e.Value
+						break
+					}
+				}
+				assert.Equal(t, want, got, "container %q RAY_ADDRESS mismatch", c.Name)
+			}
+		})
+	}
+}

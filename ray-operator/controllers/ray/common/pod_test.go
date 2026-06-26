@@ -2624,6 +2624,49 @@ func TestConfigureTLS_AutoGenerate_HeadPod(t *testing.T) {
 	require.NotNil(t, tlsMount, "TLS volume mount should be added to Ray container")
 	assert.Equal(t, utils.RayTLSCertMountPath, tlsMount.MountPath)
 	assert.True(t, tlsMount.ReadOnly)
+
+	// wait-for-tls-ip-san must be the first init container on head pods (auto-generate only).
+	require.NotEmpty(t, podTemplate.Spec.InitContainers, "head pod should have init containers when TLS is enabled")
+	assert.Equal(t, "wait-for-tls-ip-san", podTemplate.Spec.InitContainers[0].Name,
+		"wait-for-tls-ip-san must be the first init container to run before wait-gcs-ready")
+	waitInit := podTemplate.Spec.InitContainers[0]
+	// Must have access to the TLS cert.
+	hasTLSMount := false
+	for _, vm := range waitInit.VolumeMounts {
+		if vm.Name == utils.RayTLSVolumeName {
+			hasTLSMount = true
+			break
+		}
+	}
+	assert.True(t, hasTLSMount, "wait-for-tls-ip-san should mount the TLS volume")
+	// Must receive MY_POD_IP from the downward API.
+	hasPodIPEnv := false
+	for _, e := range waitInit.Env {
+		if e.Name == "MY_POD_IP" && e.ValueFrom != nil &&
+			e.ValueFrom.FieldRef != nil && e.ValueFrom.FieldRef.FieldPath == "status.podIP" {
+			hasPodIPEnv = true
+			break
+		}
+	}
+	assert.True(t, hasPodIPEnv, "wait-for-tls-ip-san should receive MY_POD_IP via downward API")
+}
+
+// TestConfigureTLS_AutoGenerate_HeadPod_BYOC verifies that the wait-for-tls-ip-san init
+// container is NOT injected in BYOC mode (user-provided cert), because we cannot assume
+// openssl is available or that the cert will ever gain an IP SAN.
+func TestConfigureTLS_AutoGenerate_HeadPod_BYOC(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.RayClusterMTLS, true)
+	cluster := instance.DeepCopy()
+	secretName := "user-provided-tls-cert"
+	cluster.Spec.TLSOptions = &rayv1.TLSOptions{CertificateSecretName: &secretName}
+	ctx := context.Background()
+
+	podTemplate := DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, "test-head", "6379", "")
+
+	for _, ic := range podTemplate.Spec.InitContainers {
+		assert.NotEqual(t, "wait-for-tls-ip-san", ic.Name,
+			"BYOC mode must not inject wait-for-tls-ip-san (user controls cert SANs)")
+	}
 }
 
 func TestConfigureTLS_AutoGenerate_WorkerPod(t *testing.T) {
@@ -2653,8 +2696,14 @@ func TestConfigureTLS_AutoGenerate_WorkerPod(t *testing.T) {
 	rayContainer := podTemplate.Spec.Containers[utils.RayContainerIndex]
 	checkContainerEnv(t, rayContainer, utils.RAY_USE_TLS, "1")
 
-	// Only the wait-gcs-ready init container should have TLS config.
+	// wait-for-tls-ip-san must be the first init container on worker pods. GCS connects back
+	// to each worker's raylet using the worker's pod IP; if the cert doesn't yet list that IP
+	// the TLS handshake fails and GCS marks the worker dead, causing the RayJob to fail.
 	require.NotEmpty(t, podTemplate.Spec.InitContainers, "worker pod should have init containers")
+	assert.Equal(t, "wait-for-tls-ip-san", podTemplate.Spec.InitContainers[0].Name,
+		"wait-for-tls-ip-san must be the first init container on worker pods")
+
+	// wait-gcs-ready should still have TLS config.
 	for _, initContainer := range podTemplate.Spec.InitContainers {
 		if initContainer.Name != "wait-gcs-ready" {
 			continue

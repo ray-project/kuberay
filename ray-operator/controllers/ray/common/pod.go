@@ -396,6 +396,68 @@ func configureTLS(podTemplate *corev1.PodTemplateSpec, instance rayv1.RayCluster
 		}
 		SetContainerTLSConfig(&podTemplate.Spec.InitContainers[i])
 	}
+
+	// Prepend an init container that waits until cert-manager has added the pod's IP to the
+	// certificate as an IP SAN. Required for both head and worker pods:
+	//   - Head: ensures the cert has the pod IP before GCS starts, so the autoscaler sidecar
+	//     and connecting workers are not hit by a TLS SAN mismatch on first connection.
+	//   - Worker: GCS (on the head) connects back to each worker's raylet using the worker's
+	//     pod IP. If the worker cert does not yet list that IP the TLS handshake fails, GCS
+	//     marks the worker dead, and the RayJob fails. Relying on KubeRay pod recreation is
+	//     not sufficient because the RayJob itself fails before a retry can succeed.
+	// BYOC mode is excluded: the user controls the cert, so we cannot assume openssl is
+	// available or that the cert will ever gain an IP SAN.
+	if !utils.IsTLSBYOC(&instance.Spec) {
+		certPath := utils.RayTLSCertMountPath + "/tls.crt"
+		waitScript := fmt.Sprintf(`POD_IP="${MY_POD_IP}"
+CERT="%s"
+echo "Waiting for TLS cert to include IP SAN for ${POD_IP}..."
+while true; do
+  if openssl x509 -in "${CERT}" -noout -text 2>/dev/null | grep -q "IP Address:${POD_IP}"; then
+    echo "TLS cert now includes IP SAN for ${POD_IP}"
+    exit 0
+  fi
+  echo "IP SAN for ${POD_IP} not yet in cert, retrying in 5s..."
+  sleep 5
+done`, certPath)
+
+		waitInitContainer := corev1.Container{
+			Name:            "wait-for-tls-ip-san",
+			Image:           podTemplate.Spec.Containers[utils.RayContainerIndex].Image,
+			ImagePullPolicy: podTemplate.Spec.Containers[utils.RayContainerIndex].ImagePullPolicy,
+			Command:         []string{"sh", "-c"},
+			Args:            []string{waitScript},
+			Env: []corev1.EnvVar{
+				{
+					Name: "MY_POD_IP",
+					ValueFrom: &corev1.EnvVarSource{
+						FieldRef: &corev1.ObjectFieldSelector{
+							FieldPath: "status.podIP",
+						},
+					},
+				},
+			},
+			VolumeMounts: []corev1.VolumeMount{
+				{
+					Name:      utils.RayTLSVolumeName,
+					MountPath: utils.RayTLSCertMountPath,
+					ReadOnly:  true,
+				},
+			},
+			Resources: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("50m"),
+					corev1.ResourceMemory: resource.MustParse("64Mi"),
+				},
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("50m"),
+					corev1.ResourceMemory: resource.MustParse("64Mi"),
+				},
+			},
+		}
+		// Prepend so it runs before wait-gcs-ready.
+		podTemplate.Spec.InitContainers = append([]corev1.Container{waitInitContainer}, podTemplate.Spec.InitContainers...)
+	}
 }
 
 // SetContainerTLSConfig adds TLS environment variables and volume mount to a container.
