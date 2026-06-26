@@ -439,6 +439,8 @@ const (
 	// Ingress event list
 	CreatedIngress        K8sEventType = "CreatedIngress"
 	FailedToCreateIngress K8sEventType = "FailedToCreateIngress"
+	UpdatedIngress        K8sEventType = "UpdatedIngress"
+	FailedToUpdateIngress K8sEventType = "FailedToUpdateIngress"
 
 	// Route event list
 	CreatedRoute        K8sEventType = "CreatedRoute"
