@@ -498,6 +498,9 @@ func CalculateMinResources(cluster *rayv1.RayCluster) corev1.ResourceList {
 	headPodResource := CalculatePodResource(cluster.Spec.HeadGroupSpec.Template.Spec)
 	minResourcesList = append(minResourcesList, headPodResource)
 	for _, nodeGroup := range cluster.Spec.WorkerGroupSpecs {
+		if nodeGroup.Suspend != nil && *nodeGroup.Suspend {
+			continue
+		}
 		podResource := CalculatePodResource(nodeGroup.Template.Spec)
 		calculateReplicaResource(&podResource, nodeGroup.NumOfHosts)
 		minReplicas := ptr.Deref(nodeGroup.MinReplicas, int32(0))
