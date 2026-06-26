@@ -329,6 +329,16 @@ func main() {
 	} else {
 		setupLog.Info("RayCronJob feature gate is disabled, skipping RayCronJob controller setup")
 	}
+
+	if features.Enabled(features.RayClusterNetworkIsolation) {
+		setupLog.Info("RayClusterNetworkIsolation feature gate is enabled, starting NetworkPolicy controller")
+		networkPolicyController, err := ray.NewNetworkPolicyController(mgr)
+		exitOnError(err, "unable to create controller", "controller", "NetworkPolicy")
+		exitOnError(networkPolicyController.SetupWithManager(mgr, config.ReconcileConcurrency),
+			"unable to setup controller", "controller", "NetworkPolicy")
+	} else {
+		setupLog.Info("RayClusterNetworkIsolation feature gate is disabled, skipping NetworkPolicy controller setup")
+	}
 	// +kubebuilder:scaffold:builder
 
 	exitOnError(mgr.AddHealthzCheck("healthz", healthz.Ping), "unable to set up health check")
