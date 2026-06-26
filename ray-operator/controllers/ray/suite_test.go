@@ -46,12 +46,13 @@ import (
 // http://onsi.github.io/ginkgo/ to learn more about Ginkgo.
 
 var (
-	cfg       *rest.Config
-	k8sClient client.Client
-	mgr       ctrl.Manager
-	testEnv   *envtest.Environment
-	cancelMgr context.CancelFunc
-	mgrDone   = make(chan struct{})
+	cfg         *rest.Config
+	k8sClient   client.Client
+	mgr         ctrl.Manager
+	testEnv     *envtest.Environment
+	cancelMgr   context.CancelFunc
+	mgrDone     = make(chan struct{})
+	mgrStartErr error
 
 	fakeRayDashboardClient *utils.FakeRayDashboardClient
 	fakeRayHttpProxyClient *utils.FakeRayHttpProxyClient
@@ -144,9 +145,7 @@ var _ = BeforeSuite(func(ctx SpecContext) {
 	mgrCtx, cancelMgr = context.WithCancel(context.Background())
 	go func() {
 		defer close(mgrDone)
-		if startErr := mgr.Start(mgrCtx); startErr != nil && !errors.Is(startErr, context.Canceled) {
-			Expect(startErr).ToNot(HaveOccurred())
-		}
+		mgrStartErr = mgr.Start(mgrCtx)
 	}()
 })
 
@@ -157,6 +156,13 @@ var _ = AfterSuite(func() {
 	// otherwise in-flight reconcilers will encounter connection errors during
 	// teardown, producing a non-zero exit code even when all specs pass.
 	<-mgrDone
+	// Check the manager's exit error here (in the main goroutine) rather than
+	// inside the background goroutine. Calling Expect from a non-Ginkgo goroutine
+	// can panic after the suite finishes, causing a spurious FAIL even when all
+	// specs pass. context.Canceled is expected when cancelMgr() is called.
+	if mgrStartErr != nil && !errors.Is(mgrStartErr, context.Canceled) {
+		Expect(mgrStartErr).ToNot(HaveOccurred(), "manager exited with unexpected error")
+	}
 	// NOTE(simon): the error is ignored because it gets raised in macOS due
 	// to a harmless timeout error.
 	_ = testEnv.Stop()
