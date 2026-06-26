@@ -12764,6 +12764,9 @@ spec:
                 type: string
               jobStatus:
                 type: string
+              jobStatusCheckFailureStartTime:
+                format: date-time
+                type: string
               message:
                 type: string
               observedGeneration:
