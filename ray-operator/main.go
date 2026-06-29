@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -34,6 +35,7 @@ import (
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/ray-project/kuberay/ray-operator/internal/managercache"
 	"github.com/ray-project/kuberay/ray-operator/pkg/features"
+	pkgtls "github.com/ray-project/kuberay/ray-operator/pkg/tls"
 	webhooks "github.com/ray-project/kuberay/ray-operator/pkg/webhooks/v1"
 )
 
@@ -264,6 +266,14 @@ func main() {
 	restConfig.UserAgent = userAgent
 	restConfig.QPS = float32(*config.QPS)
 	restConfig.Burst = *config.Burst
+
+	tlsResult, err := pkgtls.Resolve(context.Background(), restConfig)
+	if err != nil {
+		setupLog.Error(err, "unable to resolve TLS configuration")
+		os.Exit(1)
+	}
+	options.Metrics.TLSOpts = tlsResult.TLSOpts
+
 	mgr, err := ctrl.NewManager(restConfig, options)
 	exitOnError(err, "unable to start manager")
 
