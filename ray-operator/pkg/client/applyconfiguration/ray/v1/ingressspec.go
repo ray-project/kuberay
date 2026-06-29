@@ -12,16 +12,18 @@ import (
 //
 // IngressSpec defines the host, path, and TLS configuration for the ingress generated for the head group.
 type IngressSpecApplyConfiguration struct {
-	// Host sets rules[0].host on the generated ingress.
+	// Host is the fully-qualified domain name used to route external traffic to the
+	// Ray head dashboard. When unset, the generated ingress rule matches any host.
 	Host *string `json:"host,omitempty"`
-	// Path sets rules[0].http.paths[0].path on the generated ingress.
-	// Defaults to "/", which routes all traffic on the host to the dashboard.
+	// Path is the HTTP path that routes to the Ray head dashboard.
+	// When unset, the operator defaults it to "/", which routes all traffic on the
+	// host to the dashboard.
 	Path *string `json:"path,omitempty"`
-	// PathType sets rules[0].http.paths[0].pathType on the generated ingress.
-	// Defaults to "Prefix", which works out of the box without a rewrite-target
-	// annotation or controller-specific regex support.
+	// PathType is the path matching mode applied to Path.
+	// When unset, the operator defaults it to "Prefix", which works out of the box
+	// without a rewrite-target annotation or controller-specific regex support.
 	PathType *rayv1.IngressPathType `json:"pathType,omitempty"`
-	// TLS sets spec.tls entries on the generated ingress.
+	// TLS configures TLS termination for the generated ingress.
 	TLS []networkingv1.IngressTLS `json:"tls,omitempty"`
 }
 
