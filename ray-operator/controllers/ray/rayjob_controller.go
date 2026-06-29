@@ -360,17 +360,6 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		// cleaned up at all. To keep the atomicity, if a RayJob is in the `Suspending` status, we should delete all of its
 		// associated resources and then transition the status to `Suspended` no matter the value of the `suspend` flag.
 
-		// RayJob targets an existing RayCluster: stop the Ray job via the dashboard API; do not delete the cluster.
-		if len(rayJobInstance.Spec.ClusterSelector) != 0 {
-			if result, err := r.suspendClusterSelectorRayJob(ctx, rayJobInstance); err != nil || result != nil {
-				if result != nil {
-					return *result, err
-				}
-				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
-			}
-			break
-		}
-
 		// TODO (kevin85421): Currently, Ray doesn't have a best practice to stop a Ray job gracefully. At this moment,
 		// KubeRay doesn't stop the Ray job before suspending the RayJob. If users want to stop the Ray job by SIGTERM,
 		// users need to set the Pod's preStop hook by themselves.
@@ -388,16 +377,22 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 		}
 
-		// Reset the RayCluster and Ray job related status.
-		rayJobInstance.Status.RayClusterStatus = rayv1.RayClusterStatus{}
-		rayJobInstance.Status.RayClusterName = ""
-		rayJobInstance.Status.DashboardURL = ""
+		// Reset the Ray job related status.
 		rayJobInstance.Status.JobId = ""
 		rayJobInstance.Status.Message = ""
 		rayJobInstance.Status.Reason = ""
 		rayJobInstance.Status.RayJobStatusInfo = rayv1.RayJobStatusInfo{}
-		// Reset the JobStatus to JobStatusNew and transition the JobDeploymentStatus to `Suspended`.
-		rayJobInstance.Status.JobStatus = rayv1.JobStatusNew
+
+		if len(rayJobInstance.Spec.ClusterSelector) > 0 {
+			// clusterSelector mode: preserve RayClusterName and DashboardURL for re-submission on resume.
+			rayJobInstance.Status.JobStatus = rayv1.JobStatusStopped
+		} else {
+			// Owned cluster mode: clear all cluster-related status since the cluster is deleted.
+			rayJobInstance.Status.RayClusterStatus = rayv1.RayClusterStatus{}
+			rayJobInstance.Status.RayClusterName = ""
+			rayJobInstance.Status.DashboardURL = ""
+			rayJobInstance.Status.JobStatus = rayv1.JobStatusNew
+		}
 
 		if rayJobInstance.Status.JobDeploymentStatus == rayv1.JobDeploymentStatusSuspending {
 			rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusSuspended
@@ -779,82 +774,38 @@ func (r *RayJobReconciler) deleteSubmitterJob(ctx context.Context, rayJobInstanc
 	return isJobDeleted, nil
 }
 
-// suspendClusterSelectorRayJob handles the suspend transition for RayJobs that target an existing
-// RayCluster via clusterSelector. It stops the running Ray job via the dashboard API and cleans up
-// the submitter Job (if K8sJobMode), but leaves the cluster intact.
-// Returns (nil, nil) on success. On failure or when waiting for deletion, returns a non-nil result.
-func (r *RayJobReconciler) suspendClusterSelectorRayJob(ctx context.Context, rayJobInstance *rayv1.RayJob) (*ctrl.Result, error) {
-	logger := ctrl.LoggerFrom(ctx)
-
-	if rayJobInstance.Status.DashboardURL != "" && rayJobInstance.Status.JobId != "" {
-		rayClusterNamespacedName := common.RayJobRayClusterNamespacedName(rayJobInstance)
-		rayClusterInstance := &rayv1.RayCluster{}
-		if err := r.Get(ctx, rayClusterNamespacedName, rayClusterInstance); err != nil {
-			if !errors.IsNotFound(err) {
-				result := ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}
-				return &result, err
-			}
-			logger.Info("RayCluster not found during clusterSelector suspend; continuing", "RayCluster", rayClusterNamespacedName)
-		} else {
-			rayDashboardClient, err := r.dashboardClientFunc(rayClusterInstance, rayJobInstance.Status.DashboardURL)
-			if err != nil {
-				result := ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}
-				return &result, err
-			}
-			if err := rayDashboardClient.StopJob(ctx, rayJobInstance.Status.JobId); err != nil {
-				logger.Error(err, "Failed to stop Ray job for clusterSelector suspend")
-				r.Recorder.Eventf(rayJobInstance, corev1.EventTypeWarning, string(utils.FailedToStopRayJob),
-					"Failed to stop Ray job %s on RayJob %s/%s: %v",
-					rayJobInstance.Status.JobId, rayJobInstance.Namespace, rayJobInstance.Name, err)
-				result := ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}
-				return &result, err
-			}
-		}
-	}
-
-	if rayJobInstance.Spec.SubmissionMode == rayv1.K8sJobMode {
-		isJobDeleted, err := r.deleteSubmitterJob(ctx, rayJobInstance)
-		if err != nil {
-			result := ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}
-			return &result, err
-		}
-		if !isJobDeleted {
-			result := ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}
-			return &result, nil
-		}
-	}
-
-	rayJobInstance.Status.JobStatus = rayv1.JobStatusStopped
-	rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusSuspended
-	rayJobInstance.Status.JobId = ""
-	rayJobInstance.Status.Message = ""
-	rayJobInstance.Status.Reason = ""
-	rayJobInstance.Status.RayJobStatusInfo = rayv1.RayJobStatusInfo{}
-	return nil, nil
-}
-
-// deleteClusterResources deletes the RayCluster associated with the RayJob to release the compute resources.
+// deleteClusterResources handles cluster-level cleanup during suspend/retry.
+// For owned clusters, it deletes the RayCluster. For clusterSelector jobs, it stops
+// the running Ray job via the dashboard API while leaving the cluster intact.
 func (r *RayJobReconciler) deleteClusterResources(ctx context.Context, rayJobInstance *rayv1.RayJob) (bool, error) {
 	logger := ctrl.LoggerFrom(ctx)
-
-	if len(rayJobInstance.Spec.ClusterSelector) > 0 {
-		logger.Info("RayJob is using an existing RayCluster via clusterSelector; skipping resource deletion.", "RayClusterSelector", rayJobInstance.Spec.ClusterSelector)
-		return true, nil
-	}
-
 	clusterIdentifier := common.RayJobRayClusterNamespacedName(rayJobInstance)
 
 	var isClusterDeleted bool
 	cluster := rayv1.RayCluster{}
 	if err := r.Get(ctx, clusterIdentifier, &cluster); err != nil {
 		if errors.IsNotFound(err) {
-			// If the cluster is not found, it means the cluster has been already deleted.
-			// Don't return error to make this function idempotent.
 			isClusterDeleted = true
 			logger.Info("The associated RayCluster for RayJob has been already deleted and it can not be found", "RayCluster", clusterIdentifier)
 		} else {
 			return false, err
 		}
+	} else if len(rayJobInstance.Spec.ClusterSelector) > 0 {
+		// clusterSelector mode: stop the Ray job via the dashboard API; do not delete the cluster.
+		if rayJobInstance.Status.DashboardURL != "" && rayJobInstance.Status.JobId != "" {
+			rayDashboardClient, err := r.dashboardClientFunc(&cluster, rayJobInstance.Status.DashboardURL)
+			if err != nil {
+				return false, err
+			}
+			if err := rayDashboardClient.StopJob(ctx, rayJobInstance.Status.JobId); err != nil {
+				logger.Error(err, "Failed to stop Ray job for clusterSelector suspend")
+				r.Recorder.Eventf(rayJobInstance, corev1.EventTypeWarning, string(utils.FailedToStopRayJob),
+					"Failed to stop Ray job %s on RayJob %s/%s: %v",
+					rayJobInstance.Status.JobId, rayJobInstance.Namespace, rayJobInstance.Name, err)
+				return false, err
+			}
+		}
+		isClusterDeleted = true
 	} else {
 		if !cluster.DeletionTimestamp.IsZero() {
 			logger.Info("The deletion of the associated RayCluster for RayJob is ongoing.", "RayCluster", cluster.Name)
