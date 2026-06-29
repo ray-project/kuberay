@@ -491,27 +491,98 @@ func (r *RayClusterReconciler) reconcileIngressKubernetes(ctx context.Context, i
 		return err
 	}
 
-	if len(headIngresses.Items) == 1 {
-		logger.Info("reconcileIngresses", "head service ingress found", headIngresses.Items[0].Name)
-		return nil
+	// Only act on the Ingress we own; the ray.io/cluster label alone can also
+	// match Ingresses created outside the operator, which we must not modify.
+	var existingIngress *networkingv1.Ingress
+	for i := range headIngresses.Items {
+		if metav1.IsControlledBy(&headIngresses.Items[i], instance) {
+			existingIngress = &headIngresses.Items[i]
+			break
+		}
 	}
 
-	if len(headIngresses.Items) == 0 {
-		ingress, err := common.BuildIngressForHeadService(ctx, *instance)
+	// Fall back to a lookup by the deterministic Ingress name in case the owned
+	// Ingress's labels drifted and it was missed by the label selector above.
+	// This keeps reconciliation robust without resurrecting a duplicate Ingress.
+	if existingIngress == nil {
+		candidate := &networkingv1.Ingress{}
+		key := types.NamespacedName{Name: utils.GenerateIngressName(instance.Name), Namespace: instance.Namespace}
+		switch err := r.Get(ctx, key, candidate); {
+		case err == nil:
+			if !metav1.IsControlledBy(candidate, instance) {
+				// An Ingress with our generated name already exists but is not owned
+				// by this RayCluster. Surface the collision via an event instead of
+				// silently swallowing the AlreadyExists error on create, and leave the
+				// user's Ingress untouched.
+				logger.Info("reconcileIngresses", "skipping Ingress not owned by this RayCluster", candidate.Name)
+				r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.FailedToCreateIngress), "Ingress %s/%s already exists and is not owned by this RayCluster; not modifying it", candidate.Namespace, candidate.Name)
+				return nil
+			}
+			existingIngress = candidate
+		case !errors.IsNotFound(err):
+			return err
+		}
+	}
+
+	if existingIngress != nil {
+		desiredIngress, err := common.BuildIngressForHeadService(ctx, *instance)
 		if err != nil {
 			return err
 		}
 
-		if err := ctrl.SetControllerReference(instance, ingress, r.Scheme); err != nil {
-			return err
+		if ingressNeedsUpdate(existingIngress, desiredIngress) {
+			if err := r.Update(ctx, existingIngress); err != nil {
+				r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.FailedToUpdateIngress), "Failed updating ingress %s/%s, %v", existingIngress.Namespace, existingIngress.Name, err)
+				return err
+			}
+			r.Recorder.Eventf(instance, corev1.EventTypeNormal, string(utils.UpdatedIngress), "Updated ingress %s/%s", existingIngress.Namespace, existingIngress.Name)
+			logger.Info("reconcileIngresses", "head service ingress updated", existingIngress.Name)
+		} else {
+			logger.Info("reconcileIngresses", "head service ingress found", existingIngress.Name)
 		}
-
-		if err := r.createHeadIngress(ctx, ingress, instance); err != nil {
-			return err
-		}
+		return nil
 	}
 
-	return nil
+	// No Ingress owned by this RayCluster exists yet; create one.
+	ingress, err := common.BuildIngressForHeadService(ctx, *instance)
+	if err != nil {
+		return err
+	}
+
+	if err := ctrl.SetControllerReference(instance, ingress, r.Scheme); err != nil {
+		return err
+	}
+
+	return r.createHeadIngress(ctx, ingress, instance)
+}
+
+func ingressNeedsUpdate(existingIngress, desiredIngress *networkingv1.Ingress) bool {
+	updated := false
+
+	if !maps.Equal(existingIngress.Labels, desiredIngress.Labels) {
+		existingIngress.Labels = maps.Clone(desiredIngress.Labels)
+		updated = true
+	}
+
+	if !maps.Equal(existingIngress.Annotations, desiredIngress.Annotations) {
+		existingIngress.Annotations = maps.Clone(desiredIngress.Annotations)
+		updated = true
+	}
+
+	// When the RayCluster does not request an ingress class, the DefaultIngressClass
+	// admission plugin may set spec.ingressClassName on the live Ingress. We have no
+	// opinion in that case, so adopt the existing value instead of clearing it; doing
+	// otherwise would drop the class and thrash with the API server every reconcile.
+	if desiredIngress.Spec.IngressClassName == nil {
+		desiredIngress.Spec.IngressClassName = existingIngress.Spec.IngressClassName
+	}
+
+	if !reflect.DeepEqual(existingIngress.Spec, desiredIngress.Spec) {
+		existingIngress.Spec = desiredIngress.Spec
+		updated = true
+	}
+
+	return updated
 }
 
 // Return nil only when the head service successfully created or already exists.

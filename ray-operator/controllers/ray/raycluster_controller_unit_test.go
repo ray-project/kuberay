@@ -34,6 +34,7 @@ import (
 	"go.uber.org/mock/gomock"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -3942,5 +3943,265 @@ func TestGetGCSFTDeletionTimeout(t *testing.T) {
 			cluster.Annotations = tt.annotations
 			assert.Equal(t, tt.want, getGCSFTDeletionTimeout(cluster))
 		})
+	}
+}
+
+func TestReconcileIngressKubernetesSkipsUnownedIngress(t *testing.T) {
+	setupTest(t)
+
+	newScheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(newScheme)
+	_ = networkingv1.AddToScheme(newScheme)
+
+	cluster := testRayCluster.DeepCopy()
+	cluster.UID = "raycluster-uid"
+
+	// An Ingress that carries the ray.io/cluster label (so it matches the
+	// operator's label selector) but is NOT owned by this RayCluster, e.g. one a
+	// user created by hand. The operator must leave it untouched.
+	userIngress := &networkingv1.Ingress{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "user-owned-ingress",
+			Namespace: cluster.Namespace,
+			Labels: map[string]string{
+				utils.RayClusterLabelKey: cluster.Name,
+			},
+		},
+		Spec: networkingv1.IngressSpec{
+			Rules: []networkingv1.IngressRule{
+				{Host: "user-defined-host.example.com"},
+			},
+		},
+	}
+
+	runtimeObjects := []runtime.Object{cluster, userIngress}
+	fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
+	ctx := context.TODO()
+
+	r := &RayClusterReconciler{
+		Client:   fakeClient,
+		Recorder: &record.FakeRecorder{},
+		Scheme:   newScheme,
+	}
+
+	err := r.reconcileIngressKubernetes(ctx, cluster)
+	require.NoError(t, err)
+
+	// The user-owned Ingress must be left untouched (not clobbered).
+	updated := &networkingv1.Ingress{}
+	err = fakeClient.Get(ctx, types.NamespacedName{Name: userIngress.Name, Namespace: userIngress.Namespace}, updated)
+	require.NoError(t, err)
+	assert.Equal(t, userIngress.Spec, updated.Spec, "operator must not modify an Ingress it does not own")
+
+	// Since no owned Ingress existed, the operator should create its own instead
+	// of adopting the user's Ingress.
+	allIngresses := &networkingv1.IngressList{}
+	err = fakeClient.List(ctx, allIngresses, client.InNamespace(cluster.Namespace))
+	require.NoError(t, err)
+	var ownedCount int
+	for i := range allIngresses.Items {
+		if metav1.IsControlledBy(&allIngresses.Items[i], cluster) {
+			ownedCount++
+		}
+	}
+	assert.Equal(t, 1, ownedCount, "operator should create exactly one Ingress it owns when none existed yet")
+}
+
+func TestReconcileIngressKubernetesUpdatesOwnedIngressAmongUnowned(t *testing.T) {
+	setupTest(t)
+
+	newScheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(newScheme)
+	_ = networkingv1.AddToScheme(newScheme)
+
+	cluster := testRayCluster.DeepCopy()
+	cluster.UID = "raycluster-uid"
+
+	// The owned dashboard Ingress, with a stale spec.
+	ownedIngress, err := common.BuildIngressForHeadService(context.TODO(), *cluster)
+	require.NoError(t, err)
+	require.NoError(t, controllerutil.SetControllerReference(cluster, ownedIngress, newScheme))
+	ownedIngress.Spec.Rules[0].Host = "stale-host.example.com"
+
+	// A second, user-created Ingress that shares the ray.io/cluster label.
+	userIngress := &networkingv1.Ingress{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "user-owned-ingress",
+			Namespace: cluster.Namespace,
+			Labels: map[string]string{
+				utils.RayClusterLabelKey: cluster.Name,
+			},
+		},
+		Spec: networkingv1.IngressSpec{
+			Rules: []networkingv1.IngressRule{
+				{Host: "user-defined-host.example.com"},
+			},
+		},
+	}
+
+	runtimeObjects := []runtime.Object{cluster, ownedIngress, userIngress}
+	fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
+	ctx := context.TODO()
+
+	r := &RayClusterReconciler{
+		Client:   fakeClient,
+		Recorder: &record.FakeRecorder{},
+		Scheme:   newScheme,
+	}
+
+	err = r.reconcileIngressKubernetes(ctx, cluster)
+	require.NoError(t, err)
+
+	desired, err := common.BuildIngressForHeadService(ctx, *cluster)
+	require.NoError(t, err)
+
+	// The owned Ingress must be reconciled even though another labeled Ingress exists.
+	updatedOwned := &networkingv1.Ingress{}
+	err = fakeClient.Get(ctx, types.NamespacedName{Name: ownedIngress.Name, Namespace: ownedIngress.Namespace}, updatedOwned)
+	require.NoError(t, err)
+	assert.Equal(t, desired.Spec.Rules, updatedOwned.Spec.Rules, "owned Ingress must be reconciled even when other labeled Ingresses exist")
+
+	// The user's Ingress must remain untouched.
+	updatedUser := &networkingv1.Ingress{}
+	err = fakeClient.Get(ctx, types.NamespacedName{Name: userIngress.Name, Namespace: userIngress.Namespace}, updatedUser)
+	require.NoError(t, err)
+	assert.Equal(t, userIngress.Spec, updatedUser.Spec, "operator must not modify an Ingress it does not own")
+}
+
+func TestReconcileIngressKubernetesUpdatesOwnedIngress(t *testing.T) {
+	setupTest(t)
+
+	newScheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(newScheme)
+	_ = networkingv1.AddToScheme(newScheme)
+
+	cluster := testRayCluster.DeepCopy()
+	cluster.UID = "raycluster-uid"
+
+	// Seed an Ingress that IS owned by this RayCluster but has a stale spec; the
+	// operator should reconcile it back to the desired dashboard configuration.
+	ownedIngress, err := common.BuildIngressForHeadService(context.TODO(), *cluster)
+	require.NoError(t, err)
+	require.NoError(t, controllerutil.SetControllerReference(cluster, ownedIngress, newScheme))
+	ownedIngress.Spec.Rules[0].Host = "stale-host.example.com"
+
+	runtimeObjects := []runtime.Object{cluster, ownedIngress}
+	fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
+	ctx := context.TODO()
+
+	r := &RayClusterReconciler{
+		Client:   fakeClient,
+		Recorder: &record.FakeRecorder{},
+		Scheme:   newScheme,
+	}
+
+	err = r.reconcileIngressKubernetes(ctx, cluster)
+	require.NoError(t, err)
+
+	desired, err := common.BuildIngressForHeadService(ctx, *cluster)
+	require.NoError(t, err)
+
+	updated := &networkingv1.Ingress{}
+	err = fakeClient.Get(ctx, types.NamespacedName{Name: ownedIngress.Name, Namespace: ownedIngress.Namespace}, updated)
+	require.NoError(t, err)
+	assert.Equal(t, desired.Spec.Rules, updated.Spec.Rules, "operator must reconcile an Ingress it owns back to the desired spec")
+}
+
+func TestReconcileIngressKubernetesFindsOwnedIngressByNameWhenLabelsDrift(t *testing.T) {
+	setupTest(t)
+
+	newScheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(newScheme)
+	_ = networkingv1.AddToScheme(newScheme)
+
+	cluster := testRayCluster.DeepCopy()
+	cluster.UID = "raycluster-uid"
+
+	// An owned Ingress whose ray.io/cluster label has drifted (removed), so the
+	// label selector won't return it. The operator should still find it by its
+	// deterministic name and reconcile it instead of creating a duplicate.
+	ownedIngress, err := common.BuildIngressForHeadService(context.TODO(), *cluster)
+	require.NoError(t, err)
+	require.NoError(t, controllerutil.SetControllerReference(cluster, ownedIngress, newScheme))
+	delete(ownedIngress.Labels, utils.RayClusterLabelKey)
+	ownedIngress.Spec.Rules[0].Host = "stale-host.example.com"
+
+	runtimeObjects := []runtime.Object{cluster, ownedIngress}
+	fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
+	ctx := context.TODO()
+
+	r := &RayClusterReconciler{
+		Client:   fakeClient,
+		Recorder: &record.FakeRecorder{},
+		Scheme:   newScheme,
+	}
+
+	err = r.reconcileIngressKubernetes(ctx, cluster)
+	require.NoError(t, err)
+
+	// No duplicate Ingress should have been created.
+	allIngresses := &networkingv1.IngressList{}
+	require.NoError(t, fakeClient.List(ctx, allIngresses, client.InNamespace(cluster.Namespace)))
+	assert.Len(t, allIngresses.Items, 1, "operator must not create a duplicate when the owned Ingress is found by name")
+
+	// The existing owned Ingress should have been reconciled to the desired spec.
+	desired, err := common.BuildIngressForHeadService(ctx, *cluster)
+	require.NoError(t, err)
+	updated := &networkingv1.Ingress{}
+	err = fakeClient.Get(ctx, types.NamespacedName{Name: ownedIngress.Name, Namespace: ownedIngress.Namespace}, updated)
+	require.NoError(t, err)
+	assert.Equal(t, desired.Spec.Rules, updated.Spec.Rules, "owned Ingress found by name must be reconciled to the desired spec")
+}
+
+func TestReconcileIngressKubernetesSkipsUnownedIngressWithGeneratedName(t *testing.T) {
+	setupTest(t)
+
+	newScheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(newScheme)
+	_ = networkingv1.AddToScheme(newScheme)
+
+	cluster := testRayCluster.DeepCopy()
+	cluster.UID = "raycluster-uid"
+
+	// A user-created Ingress that happens to use the operator's generated name but
+	// is not owned by the RayCluster and does not carry the label. The operator
+	// must not adopt or modify it, and must surface the collision via an event
+	// rather than silently swallowing an AlreadyExists error on create.
+	userIngress := &networkingv1.Ingress{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      utils.GenerateIngressName(cluster.Name),
+			Namespace: cluster.Namespace,
+		},
+		Spec: networkingv1.IngressSpec{
+			Rules: []networkingv1.IngressRule{{Host: "user-defined-host.example.com"}},
+		},
+	}
+
+	runtimeObjects := []runtime.Object{cluster, userIngress}
+	fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
+	ctx := context.TODO()
+
+	recorder := record.NewFakeRecorder(10)
+	r := &RayClusterReconciler{
+		Client:   fakeClient,
+		Recorder: recorder,
+		Scheme:   newScheme,
+	}
+
+	err := r.reconcileIngressKubernetes(ctx, cluster)
+	require.NoError(t, err)
+
+	updated := &networkingv1.Ingress{}
+	err = fakeClient.Get(ctx, types.NamespacedName{Name: userIngress.Name, Namespace: userIngress.Namespace}, updated)
+	require.NoError(t, err)
+	assert.Equal(t, userIngress.Spec, updated.Spec, "operator must not modify an unowned Ingress that shares its generated name")
+
+	// The collision must be surfaced via a warning event, not silently ignored.
+	select {
+	case event := <-recorder.Events:
+		assert.Contains(t, event, string(utils.FailedToCreateIngress))
+		assert.Contains(t, event, "not owned by this RayCluster")
+	default:
+		t.Fatal("expected a warning event for the ingress name collision, but none was recorded")
 	}
 }
