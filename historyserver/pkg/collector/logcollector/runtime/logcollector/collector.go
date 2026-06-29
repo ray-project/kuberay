@@ -702,6 +702,7 @@ func (r *RayLogHandler) processPrevLogFile(absoluteLogPathName, localLogDir, ses
 // Any session change triggers sessiondir updates on all head and worker nodes,
 // so we only need to update from one node.
 // for example:
+//
 //	my-cluster_abc123/
 //		session_2024-12-15_10-30-45_123456    ← Empty file! The path itself is the information
 //		session_2024-12-15_14-20-10_789012
