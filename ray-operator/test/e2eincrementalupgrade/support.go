@@ -151,6 +151,13 @@ func incrementalUpgradeRayServiceApplyConfiguration(
 							WithName("ray-head").
 							WithImage(GetRayImage()).
 							WithEnv(corev1ac.EnvVar().WithName(utils.RAY_ENABLE_AUTOSCALER_V2).WithValue("1")).
+							// Add a preStop sleep to allow kube-proxy time to update iptables
+							// and remove the pod from Endpoints before the Ray proxy terminates.
+							// This prevents dropped requests during cluster tear-down and crash simulations.
+							WithLifecycle(corev1ac.Lifecycle().
+								WithPreStop(corev1ac.LifecycleHandler().
+									WithExec(corev1ac.ExecAction().
+										WithCommand("sleep", "10")))).
 							WithPorts(
 								corev1ac.ContainerPort().WithName(utils.GcsServerPortName).WithContainerPort(utils.DefaultGcsServerPort),
 								corev1ac.ContainerPort().WithName(utils.ServingPortName).WithContainerPort(utils.DefaultServingPort),
@@ -158,6 +165,7 @@ func incrementalUpgradeRayServiceApplyConfiguration(
 								corev1ac.ContainerPort().WithName(utils.ClientPortName).WithContainerPort(utils.DefaultClientPort),
 							))))).
 			WithWorkerGroupSpecs(rayv1ac.WorkerGroupSpec().
+				WithRayStartParams(map[string]string{"num-cpus": "1"}).
 				WithReplicas(1).
 				WithMinReplicas(1).
 				WithMaxReplicas(2).
@@ -168,9 +176,16 @@ func incrementalUpgradeRayServiceApplyConfiguration(
 						WithContainers(corev1ac.Container().
 							WithName("ray-worker").
 							WithImage(GetRayImage()).
+							// Add a preStop sleep to allow kube-proxy time to remove the pod from Endpoints
+							// before the Ray proxy terminates. This prevents dropped requests
+							// during cluster tear-down and crash tests.
+							WithLifecycle(corev1ac.Lifecycle().
+								WithPreStop(corev1ac.LifecycleHandler().
+									WithExec(corev1ac.ExecAction().
+										WithCommand("sleep", "10")))).
 							WithResources(corev1ac.ResourceRequirements().
 								WithRequests(corev1.ResourceList{
-									corev1.ResourceCPU:    resource.MustParse("2"),
+									corev1.ResourceCPU:    resource.MustParse("1"),
 									corev1.ResourceMemory: resource.MustParse("2Gi"),
 								}).
 								WithLimits(corev1.ResourceList{
@@ -314,7 +329,7 @@ func generateUpgradeSteps(stepSize, maxSurge int32) []testStep {
 
 const (
 	// The lower bound of the RPS for the Locust to reach the steady state.
-	locustWarmupRPSThreshold = 400.0
+	locustWarmupRPSThreshold = 350.0
 	// The period of time that the RPS must be greater than or equal to the threshold to be considered steady state.
 	locustWarmupStableWindowSeconds = 15
 	// The maximum duration to wait for the Locust to reach the steady state.

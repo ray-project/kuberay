@@ -301,6 +301,15 @@ func TestRayServiceIncrementalUpgradeWithLocust(t *testing.T) {
 				return err
 			})
 
+			defer func() {
+				LogWithTimestamp(test.T(), "Stopping Locust load test")
+				ExecPodCmd(test, locustHeadPod, common.RayHeadContainer, []string{"touch", "/tmp/stop_locust"})
+				err := eg.Wait()
+				if err != nil && !test.T().Failed() {
+					test.T().Errorf("Locust load test failed: %v", err)
+				}
+			}()
+
 			// Allow Locust to ramp up and send traffic to the old cluster before triggering upgrade.
 			err = warmupLocust(test, locustHeadPod, locustWarmupRPSThreshold, locustWarmupStableWindowSeconds, locustWarmupTimeout)
 			g.Expect(err).NotTo(HaveOccurred())
@@ -315,9 +324,6 @@ func TestRayServiceIncrementalUpgradeWithLocust(t *testing.T) {
 			// Since no additional validation is needed during the upgrade, we use a longer timeout.
 			LogWithTimestamp(test.T(), "Waiting for RayService %s/%s UpgradeInProgress condition to be false", namespace.Name, rayServiceName)
 			g.Eventually(RayService(test, namespace.Name, rayServiceName), TestTimeoutMedium).Should(WithTransform(IsRayServiceUpgrading, BeFalse()))
-
-			LogWithTimestamp(test.T(), "Waiting for Locust load test goroutine to finish")
-			g.Expect(eg.Wait()).NotTo(HaveOccurred(), "Locust load test failed")
 
 			LogWithTimestamp(test.T(), "Validating remaining traffic is routed to the new cluster after upgrade completes")
 			curlPod, err := CreateCurlPod(g, test, CurlPodName, CurlContainerName, namespace.Name)
@@ -358,11 +364,15 @@ func TestRayServiceIncrementalUpgradeRollback(t *testing.T) {
 
 	// Trigger an incremental upgrade through a change to the RayCluster spec.
 	LogWithTimestamp(test.T(), "Triggering an upgrade for RayService %s/%s", rayService.Namespace, rayService.Name)
-	rayService, err = GetRayService(test, namespace.Name, rayServiceName)
-	g.Expect(err).NotTo(HaveOccurred())
-	rayService.Spec.RayClusterSpec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests[corev1.ResourceCPU] = resource.MustParse("500m")
-	_, err = test.Client().Ray().RayV1().RayServices(namespace.Name).Update(test.Ctx(), rayService, metav1.UpdateOptions{})
-	g.Expect(err).NotTo(HaveOccurred())
+	g.Eventually(func() error {
+		rayService, err = GetRayService(test, namespace.Name, rayServiceName)
+		if err != nil {
+			return err
+		}
+		rayService.Spec.RayClusterSpec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests[corev1.ResourceCPU] = resource.MustParse("500m")
+		_, err = test.Client().Ray().RayV1().RayServices(namespace.Name).Update(test.Ctx(), rayService, metav1.UpdateOptions{})
+		return err
+	}, TestTimeoutShort).Should(Succeed())
 
 	LogWithTimestamp(test.T(), "Waiting for RayService %s/%s UpgradeInProgress condition to be true", rayService.Namespace, rayService.Name)
 	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutShort).Should(WithTransform(IsRayServiceUpgrading, BeTrue()))
@@ -383,11 +393,15 @@ func TestRayServiceIncrementalUpgradeRollback(t *testing.T) {
 
 	// Trigger a rollback by updating the spec back to the original version.
 	LogWithTimestamp(test.T(), "Triggering a rollback for RayService %s/%s", rayService.Namespace, rayService.Name)
-	rayService, err = GetRayService(test, namespace.Name, rayServiceName)
-	g.Expect(err).NotTo(HaveOccurred())
-	rayService.Spec = *originalSpec
-	_, err = test.Client().Ray().RayV1().RayServices(namespace.Name).Update(test.Ctx(), rayService, metav1.UpdateOptions{})
-	g.Expect(err).NotTo(HaveOccurred())
+	g.Eventually(func() error {
+		rayService, err = GetRayService(test, namespace.Name, rayServiceName)
+		if err != nil {
+			return err
+		}
+		rayService.Spec = *originalSpec
+		_, err = test.Client().Ray().RayV1().RayServices(namespace.Name).Update(test.Ctx(), rayService, metav1.UpdateOptions{})
+		return err
+	}, TestTimeoutShort).Should(Succeed())
 
 	// Verify that the controller enters the rollback state.
 	LogWithTimestamp(test.T(), "Waiting for RayService %s/%s RollbackInProgress condition to be true", rayService.Namespace, rayService.Name)
@@ -430,4 +444,262 @@ func TestRayServiceIncrementalUpgradeRollback(t *testing.T) {
 			}
 			return len(route.Spec.Rules[0].BackendRefs)
 		}, Equal(1)))
+}
+
+// TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust tests the rollback and cancel rollback scenarios
+// of the RayService incremental upgrade under Locust load.
+func TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.RayServiceIncrementalUpgrade, true)
+
+	type RollbackTrigger string
+	const (
+		TriggerBeforeTraffic RollbackTrigger = "BeforeTraffic"
+		TriggerEarly         RollbackTrigger = "Early"
+		TriggerMiddle        RollbackTrigger = "Middle"
+		TriggerLate          RollbackTrigger = "Late"
+	)
+
+	type RollbackSequence string
+	const (
+		SeqABA  RollbackSequence = "A->B->A"
+		SeqABAB RollbackSequence = "A->B->A->B"
+		SeqABAC RollbackSequence = "A->B->A->C"
+	)
+
+	type rollbackTestCase struct {
+		Name         string
+		Sequence     RollbackSequence
+		Strategy     incrementalUpgradeParams
+		TriggerStage RollbackTrigger
+		CrashPending bool
+	}
+
+	rollbackMatrix := []rollbackTestCase{
+		{Name: "BasicRollback", Sequence: SeqABA, Strategy: incrementalUpgradeParams{Name: "Standard", MaxSurge: 50, StepSize: 25, Interval: 2}, TriggerStage: TriggerMiddle},
+		{Name: "CancelRollback", Sequence: SeqABAB, Strategy: incrementalUpgradeParams{Name: "Conservative", MaxSurge: 25, StepSize: 5, Interval: 10}, TriggerStage: TriggerMiddle},
+		{Name: "ThirdSpec", Sequence: SeqABAC, Strategy: incrementalUpgradeParams{Name: "Conservative", MaxSurge: 25, StepSize: 5, Interval: 10}, TriggerStage: TriggerMiddle},
+		{Name: "UnhealthyPendingCluster", Sequence: SeqABA, Strategy: incrementalUpgradeParams{Name: "Standard", MaxSurge: 50, StepSize: 25, Interval: 2}, TriggerStage: TriggerLate, CrashPending: true},
+		{Name: "EarlyRollback", Sequence: SeqABA, Strategy: incrementalUpgradeParams{Name: "Standard", MaxSurge: 50, StepSize: 25, Interval: 2}, TriggerStage: TriggerEarly},
+		{Name: "LateRollback", Sequence: SeqABA, Strategy: incrementalUpgradeParams{Name: "Standard", MaxSurge: 50, StepSize: 25, Interval: 2}, TriggerStage: TriggerLate},
+		{Name: "FastRollback", Sequence: SeqABA, Strategy: incrementalUpgradeParams{Name: "BlueGreen", MaxSurge: 100, StepSize: 100, Interval: 1}, TriggerStage: TriggerBeforeTraffic},
+	}
+
+	for _, tc := range rollbackMatrix {
+		t.Run(tc.Name, func(t *testing.T) {
+			test := With(t)
+			g := NewWithT(t)
+
+			namespace := test.NewTestNamespace()
+			rayServiceName := "rollback-rayservice"
+			stepSize, interval, maxSurge := tc.Strategy.ptrs()
+			serveConfigV2 := highRPSServeConfigV2
+
+			// Phase 1: Create RayService with incremental upgrade and wait for key components to be ready
+			rayService, _, gatewayIP := bootstrapIncrementalRayService(test, g, namespace.Name, rayServiceName, stepSize, interval, maxSurge, serveConfigV2)
+
+			// Save original spec (Spec A)
+			originalSpec := rayService.Spec.DeepCopy()
+
+			// Phase 2: Deploy Locust RayCluster and install Locust
+			locustYamlFile := "testdata/locust-cluster.incremental-upgrade.yaml"
+			configMapAC := newLocustRunnerConfigMapAC(namespace.Name, Files(test, "locust_runner.py"))
+			_, err := test.Client().Core().CoreV1().ConfigMaps(namespace.Name).Apply(test.Ctx(), configMapAC, TestApplyOptions)
+			g.Expect(err).NotTo(HaveOccurred())
+
+			KubectlApplyYAML(test, locustYamlFile, namespace.Name)
+			locustCluster, err := GetRayCluster(test, namespace.Name, "locust-cluster")
+			g.Expect(err).NotTo(HaveOccurred())
+
+			g.Eventually(RayCluster(test, locustCluster.Namespace, locustCluster.Name), TestTimeoutMedium).
+				Should(WithTransform(RayClusterState, Equal(rayv1.Ready)))
+
+			locustHeadPod, err := GetHeadPod(test, locustCluster)
+			g.Expect(err).NotTo(HaveOccurred())
+
+			ExecPodCmd(test, locustHeadPod, common.RayHeadContainer, []string{"pip", "install", "locust==2.32.10"})
+
+			// Phase 3: Start Locust in a background goroutine targeting Gateway IP
+			locustHost := fmt.Sprintf("http://%s", gatewayIP)
+			eg, _ := errgroup.WithContext(test.Ctx())
+			eg.Go(func() error {
+				LogWithTimestamp(test.T(), "Starting Locust load test against %s", locustHost)
+				_, _, err := ExecPodCmdWithError(test, locustHeadPod, common.RayHeadContainer, []string{
+					"python", "/locust-runner/locust_runner.py",
+					"-f", "/locustfile/locustfile.py",
+					"--host", locustHost,
+				})
+				return err
+			})
+
+			defer func() {
+				LogWithTimestamp(test.T(), "Stopping Locust load test")
+				ExecPodCmd(test, locustHeadPod, common.RayHeadContainer, []string{"touch", "/tmp/stop_locust"})
+				err := eg.Wait()
+				if err != nil && !test.T().Failed() {
+					test.T().Errorf("Locust load test failed: %v", err)
+				}
+			}()
+
+			err = warmupLocust(test, locustHeadPod, locustWarmupRPSThreshold, locustWarmupStableWindowSeconds, locustWarmupTimeout)
+			g.Expect(err).NotTo(HaveOccurred())
+
+			// Phase 4: Trigger incremental upgrade (A -> B)
+			LogWithTimestamp(test.T(), "Triggering an upgrade for RayService %s/%s (Spec B)", rayService.Namespace, rayService.Name)
+			g.Eventually(func() error {
+				rayService, err = GetRayService(test, namespace.Name, rayServiceName)
+				if err != nil {
+					return err
+				}
+				// Create Spec B by modifying CPU request
+				rayService.Spec.RayClusterSpec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests[corev1.ResourceCPU] = resource.MustParse("500m")
+				_, err = test.Client().Ray().RayV1().RayServices(namespace.Name).Update(test.Ctx(), rayService, metav1.UpdateOptions{})
+				return err
+			}, TestTimeoutShort).Should(Succeed())
+
+			specB := rayService.Spec.DeepCopy()
+
+			g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutShort).Should(WithTransform(IsRayServiceUpgrading, BeTrue()))
+
+			// Wait for the trigger condition
+			LogWithTimestamp(test.T(), "Waiting for trigger condition: %s", tc.TriggerStage)
+			var pendingClusterName string
+			g.Eventually(func(g Gomega) {
+				svc, err := GetRayService(test, namespace.Name, rayServiceName)
+				g.Expect(err).NotTo(HaveOccurred())
+
+				pendingClusterName = svc.Status.PendingServiceStatus.RayClusterName
+				g.Expect(pendingClusterName).NotTo(BeEmpty())
+
+				if tc.TriggerStage == TriggerBeforeTraffic {
+					// For BlueGreen (StepSize=100), we trigger rollback while the pending cluster is being created,
+					// before any traffic is shifted.
+					pending := svc.Status.PendingServiceStatus.TrafficRoutedPercent
+					if pending != nil {
+						g.Expect(*pending).Should(Equal(int32(0)))
+					}
+					return
+				}
+
+				pending := svc.Status.PendingServiceStatus.TrafficRoutedPercent
+				g.Expect(pending).NotTo(BeNil())
+
+				switch tc.TriggerStage {
+				case TriggerEarly:
+					g.Expect(*pending).Should(BeNumerically(">", 0))
+					g.Expect(*pending).Should(BeNumerically("<=", 30))
+				case TriggerMiddle:
+					g.Expect(*pending).Should(BeNumerically(">=", 30))
+					g.Expect(*pending).Should(BeNumerically("<=", 70))
+				case TriggerLate:
+					g.Expect(*pending).Should(BeNumerically(">=", 70))
+					g.Expect(*pending).Should(BeNumerically("<", 100))
+				}
+			}, TestTimeoutMedium).Should(Succeed())
+
+			if tc.CrashPending {
+				LogWithTimestamp(test.T(), "Crashing pending cluster worker pod for %s", pendingClusterName)
+				g.Eventually(func() error {
+					// Find and delete a worker pod of the pending cluster
+					podList, err := test.Client().Core().CoreV1().Pods(namespace.Name).List(test.Ctx(), metav1.ListOptions{
+						LabelSelector: fmt.Sprintf("ray.io/cluster=%s,ray.io/node-type=worker", pendingClusterName),
+					})
+					if err != nil {
+						return err
+					}
+					if len(podList.Items) == 0 {
+						return fmt.Errorf("no worker pods found yet")
+					}
+					return test.Client().Core().CoreV1().Pods(namespace.Name).Delete(test.Ctx(), podList.Items[0].Name, metav1.DeleteOptions{})
+				}, TestTimeoutMedium).Should(Succeed())
+			}
+
+			// Phase 5: Trigger rollback (B -> A)
+			LogWithTimestamp(test.T(), "Triggering a rollback for RayService %s/%s (Spec A)", rayService.Namespace, rayService.Name)
+			g.Eventually(func() error {
+				rayService, err = GetRayService(test, namespace.Name, rayServiceName)
+				if err != nil {
+					return err
+				}
+				rayService.Spec = *originalSpec
+				_, err = test.Client().Ray().RayV1().RayServices(namespace.Name).Update(test.Ctx(), rayService, metav1.UpdateOptions{})
+				return err
+			}, TestTimeoutShort).Should(Succeed())
+
+			if tc.TriggerStage != TriggerBeforeTraffic {
+				g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutShort).Should(WithTransform(IsRayServiceRollingBack, BeTrue()))
+			}
+
+			// Handle sequence branches for more complex rollback scenarios
+			// For scenarios involving a Cancel Rollback (SeqABAB) or a Third Spec (SeqABAC),
+			// we wait until the rollback has started progressing (indicated by active traffic increasing)
+			// and then submit another spec update to observe how KubeRay adapts.
+			// - SeqABAB: We re-apply Spec B. Because the pending cluster already matches Spec B,
+			//   KubeRay should cancel the rollback and resume migrating traffic to Spec B.
+			// - SeqABAC: We apply a brand new Spec C. KubeRay should abandon the rollback to Spec A,
+			//   clean up Spec B, and start provisioning Spec C as the new target.
+			if tc.Sequence == SeqABAB || tc.Sequence == SeqABAC {
+				g.Eventually(func(g Gomega) {
+					svc, err := GetRayService(test, namespace.Name, rayServiceName)
+					g.Expect(err).NotTo(HaveOccurred())
+					active := svc.Status.ActiveServiceStatus.TrafficRoutedPercent
+					g.Expect(active).NotTo(BeNil())
+					g.Expect(*active).Should(BeNumerically(">", 0))
+				}, TestTimeoutShort).Should(Succeed())
+
+				g.Eventually(func() error {
+					rayService, err = GetRayService(test, namespace.Name, rayServiceName)
+					if err != nil {
+						return err
+					}
+
+					switch tc.Sequence {
+					case SeqABAB:
+						LogWithTimestamp(test.T(), "Canceling rollback for RayService %s/%s (Spec B)", rayService.Namespace, rayService.Name)
+						rayService.Spec = *specB
+					case SeqABAC:
+						LogWithTimestamp(test.T(), "Third spec for RayService %s/%s (Spec C)", rayService.Namespace, rayService.Name)
+						rayService.Spec = *specB
+						rayService.Spec.RayClusterSpec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests[corev1.ResourceCPU] = resource.MustParse("600m") // Spec C
+					}
+					_, err = test.Client().Ray().RayV1().RayServices(namespace.Name).Update(test.Ctx(), rayService, metav1.UpdateOptions{})
+					return err
+				}, TestTimeoutShort).Should(Succeed())
+			}
+
+			// Phase 6: Ensure the upgrade/rollback operation is fully complete:
+			// 1. The UpgradeInProgress condition is completely cleared (False).
+			// 2. The RollbackInProgress condition is completely cleared (False).
+			// 3. The pending cluster has been deleted, meaning its name field is empty.
+			// 4. The active cluster serves 100% of the traffic.
+			LogWithTimestamp(test.T(), "Waiting for RayService %s/%s to converge", namespace.Name, rayServiceName)
+			g.Eventually(func(g Gomega) {
+				svc, err := GetRayService(test, namespace.Name, rayServiceName)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(IsRayServiceUpgrading(svc)).To(BeFalse())
+				g.Expect(IsRayServiceRollingBack(svc)).To(BeFalse())
+				g.Expect(svc.Status.PendingServiceStatus.RayClusterName).To(BeEmpty())
+
+				active := svc.Status.ActiveServiceStatus.TrafficRoutedPercent
+				g.Expect(active).NotTo(BeNil())
+				g.Expect(*active).Should(Equal(int32(100)))
+			}, TestTimeoutLong).Should(Succeed())
+
+			// Check resources on the final active cluster based on the sequence
+			svc, err := GetRayService(test, namespace.Name, rayServiceName)
+			g.Expect(err).NotTo(HaveOccurred())
+			finalClusterName := svc.Status.ActiveServiceStatus.RayClusterName
+			finalCluster, err := GetRayCluster(test, namespace.Name, finalClusterName)
+			g.Expect(err).NotTo(HaveOccurred())
+			finalCPUReq := finalCluster.Spec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests[corev1.ResourceCPU]
+
+			switch tc.Sequence {
+			case SeqABA:
+				g.Expect(finalCPUReq).To(Equal(originalSpec.RayClusterSpec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests[corev1.ResourceCPU]))
+			case SeqABAB:
+				g.Expect(finalCPUReq).To(Equal(resource.MustParse("500m")))
+			case SeqABAC:
+				g.Expect(finalCPUReq).To(Equal(resource.MustParse("600m")))
+			}
+		})
+	}
 }
