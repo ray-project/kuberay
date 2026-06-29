@@ -305,6 +305,15 @@ tests:
         path: spec.template.spec.containers[?(@.name=="kuberay-operator")].args
         content: "--burst=150"
 
+  - it: Should enable Kubernetes WAS v1alpha2 batch scheduler when configured
+    set:
+      batchScheduler:
+        name: kubernetes-was-v1alpha2
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[?(@.name=="kuberay-operator")].args
+          content: "--batch-scheduler=kubernetes-was-v1alpha2"
+
   - it: Should add config volume and volumeMount when configuration is enabled
     set:
       configuration:
