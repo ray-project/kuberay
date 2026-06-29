@@ -3,8 +3,11 @@
 package v1
 
 import (
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	internal "github.com/ray-project/kuberay/ray-operator/pkg/client/applyconfiguration/internal"
 	apismetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
+	managedfields "k8s.io/apimachinery/pkg/util/managedfields"
 	metav1 "k8s.io/client-go/applyconfigurations/meta/v1"
 )
 
@@ -30,6 +33,47 @@ func RayCluster(name, namespace string) *RayClusterApplyConfiguration {
 	b.WithKind("RayCluster")
 	b.WithAPIVersion("ray.io/v1")
 	return b
+}
+
+// ExtractRayClusterFrom extracts the applied configuration owned by fieldManager from
+// rayCluster for the specified subresource. Pass an empty string for subresource to extract
+// the main resource. Common subresources include "status", "scale", etc.
+// rayCluster must be a unmodified RayCluster API object that was retrieved from the Kubernetes API.
+// ExtractRayClusterFrom provides a way to perform a extract/modify-in-place/apply workflow.
+// Note that an extracted apply configuration will contain fewer fields than what the fieldManager previously
+// applied if another fieldManager has updated or force applied any of the previously applied fields.
+func ExtractRayClusterFrom(rayCluster *rayv1.RayCluster, fieldManager string, subresource string) (*RayClusterApplyConfiguration, error) {
+	b := &RayClusterApplyConfiguration{}
+	err := managedfields.ExtractInto(rayCluster, internal.Parser().Type("com.github.ray-project.kuberay.ray-operator.apis.ray.v1.RayCluster"), fieldManager, b, subresource)
+	if err != nil {
+		return nil, err
+	}
+	b.WithName(rayCluster.Name)
+	b.WithNamespace(rayCluster.Namespace)
+
+	b.WithKind("RayCluster")
+	b.WithAPIVersion("ray.io/v1")
+	return b, nil
+}
+
+// ExtractRayCluster extracts the applied configuration owned by fieldManager from
+// rayCluster. If no managedFields are found in rayCluster for fieldManager, a
+// RayClusterApplyConfiguration is returned with only the Name, Namespace (if applicable),
+// APIVersion and Kind populated. It is possible that no managed fields were found for because other
+// field managers have taken ownership of all the fields previously owned by fieldManager, or because
+// the fieldManager never owned fields any fields.
+// rayCluster must be a unmodified RayCluster API object that was retrieved from the Kubernetes API.
+// ExtractRayCluster provides a way to perform a extract/modify-in-place/apply workflow.
+// Note that an extracted apply configuration will contain fewer fields than what the fieldManager previously
+// applied if another fieldManager has updated or force applied any of the previously applied fields.
+func ExtractRayCluster(rayCluster *rayv1.RayCluster, fieldManager string) (*RayClusterApplyConfiguration, error) {
+	return ExtractRayClusterFrom(rayCluster, fieldManager, "")
+}
+
+// ExtractRayClusterStatus extracts the applied configuration owned by fieldManager from
+// rayCluster for the status subresource.
+func ExtractRayClusterStatus(rayCluster *rayv1.RayCluster, fieldManager string) (*RayClusterApplyConfiguration, error) {
+	return ExtractRayClusterFrom(rayCluster, fieldManager, "status")
 }
 
 func (b RayClusterApplyConfiguration) IsApplyConfiguration() {}

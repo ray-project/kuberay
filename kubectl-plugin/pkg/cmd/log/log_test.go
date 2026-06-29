@@ -593,7 +593,7 @@ func TestGCPLogLink(t *testing.T) {
 			options.namespace = "default"
 			options.link = "gke"
 
-			fakeKubeClient := k8s_fake.NewSimpleClientset()
+			fakeKubeClient := k8s_fake.NewClientset()
 			if tc.headPods != nil {
 				for _, pod := range tc.headPods.Items {
 					_, err := fakeKubeClient.CoreV1().Pods("default").Create(context.TODO(), &pod, metav1.CreateOptions{})
