@@ -27,6 +27,7 @@ func main() {
 	burst := historyserver.DefaultKubeAPIBurst
 	sessionProcessTimeout := historyserver.DefaultSessionProcessTimeout
 	sessionCacheSize := historyserver.DefaultSessionCacheSize
+	sessionCacheMaxBytes := historyserver.DefaultSessionCacheMaxBytes
 	sessionCacheTTL := historyserver.DefaultSessionCacheTTL
 	flag.StringVar(&runtimeClassName, "runtime-class-name", "", "Storage backend: s3 / gcs / azureblob / aliyunoss / localtest")
 	flag.StringVar(&rayRootDir, "ray-root-dir", "", "Root dir inside the bucket")
@@ -38,6 +39,7 @@ func main() {
 	flag.IntVar(&burst, "kube-api-burst", historyserver.DefaultKubeAPIBurst, "The maximum burst for throttling requests from this client to the Kubernetes API server.")
 	flag.DurationVar(&sessionProcessTimeout, "session-process-timeout", historyserver.DefaultSessionProcessTimeout, "Timeout duration for processing and loading a single Ray cluster session.")
 	flag.IntVar(&sessionCacheSize, "session-cache-size", historyserver.DefaultSessionCacheSize, "Max number of dead-session snapshots held in the LRU cache.")
+	flag.IntVar(&sessionCacheMaxBytes, "session-cache-max-bytes", historyserver.DefaultSessionCacheMaxBytes, "Max total bytes of cached dead-session snapshots. 0 disables the byte bound.")
 	flag.DurationVar(&sessionCacheTTL, "session-cache-ttl", historyserver.DefaultSessionCacheTTL, "How long a dead-session snapshot stays cached after last access. 0 disables TTL.")
 	flag.Parse()
 
@@ -52,6 +54,9 @@ func main() {
 	}
 	if sessionCacheSize <= 0 {
 		logrus.Fatalf("--session-cache-size must be > 0, got %d", sessionCacheSize)
+	}
+	if sessionCacheMaxBytes < 0 {
+		logrus.Fatalf("--session-cache-max-bytes must be >= 0, got %d", sessionCacheMaxBytes)
 	}
 	if sessionCacheTTL < 0 {
 		logrus.Fatalf("--session-cache-ttl must be >= 0, got %s", sessionCacheTTL)
@@ -100,7 +105,7 @@ func main() {
 	defer serverCancel()
 
 	processor := historyserver.NewSessionProcessor(reader, cliMgr.Client())
-	sessionLoader := historyserver.NewSessionLoader(processor, serverCtx, sessionProcessTimeout, sessionCacheSize, sessionCacheTTL)
+	sessionLoader := historyserver.NewSessionLoader(processor, serverCtx, sessionProcessTimeout, sessionCacheSize, sessionCacheMaxBytes, sessionCacheTTL)
 
 	// ServerHandler.Run consumes a stop chan; bridge serverCtx into it.
 	var wg sync.WaitGroup
