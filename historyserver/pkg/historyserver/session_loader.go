@@ -196,6 +196,9 @@ func (s *SessionLoader) totalBytes() int {
 }
 
 // encodeSnapshot serializes a snapshot to its cached byte form.
+//
+// Use JSON, not gob since snapshots have map[string]any CustomFields and gob requires
+// registering concrete types and fails to round-trip the arbitrary nested values reliably.
 func encodeSnapshot(snap *eventserver.SessionSnapshot) ([]byte, error) {
 	return json.Marshal(snap)
 }
