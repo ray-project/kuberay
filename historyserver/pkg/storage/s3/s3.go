@@ -18,6 +18,7 @@ package s3
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -86,6 +87,42 @@ func (r *RayLogsHandler) WriteFile(file string, reader io.ReadSeeker) error {
 		Body:   reader,
 	})
 	return err
+}
+
+func (r *RayLogsHandler) WriteMeta(path string, meta utils.MetaJson) error {
+	data, err := json.Marshal(meta)
+	if err != nil {
+		return fmt.Errorf("failed to marshal meta json: %w", err)
+	}
+	_, err = r.S3Client.PutObject(&s3.PutObjectInput{
+		Bucket:      aws.String(r.S3Bucket),
+		Key:         aws.String(path),
+		Body:        bytes.NewReader(data),
+		ContentType: aws.String("application/json"),
+	})
+	return err
+}
+
+func (r *RayLogsHandler) ReadMeta(path string) (*utils.MetaJson, error) {
+	result, err := r.S3Client.GetObject(&s3.GetObjectInput{
+		Bucket: aws.String(r.S3Bucket),
+		Key:    aws.String(path),
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer result.Body.Close()
+
+	data, err := io.ReadAll(result.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read meta json: %w", err)
+	}
+
+	var meta utils.MetaJson
+	if err := json.Unmarshal(data, &meta); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal meta json: %w", err)
+	}
+	return &meta, nil
 }
 
 func (r *RayLogsHandler) _listFiles(prefix string, delimiter string, onlyBase bool) []string {
@@ -169,12 +206,23 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 					prefix, len(page.Contents), len(page.CommonPrefixes))
 
 				for _, object := range page.Contents {
+					// Skip meta.json files — they are not session markers
+					if strings.HasSuffix(*object.Key, ".meta.json") {
+						continue
+					}
 					c, err := clustermetadata.DecodePath(*object.Key, r.S3RootDir)
 					if err != nil {
 						logrus.Errorf("Failed to parse meta file path: %s, error: %v", *object.Key, err)
 						continue
 					}
-					logrus.Infof("Parsed cluster %s for session %s to list", c.Name, c.SessionName)
+
+					// Enrich with meta.json data if available
+					metaPath := clustermetadata.MetaJsonPath(c, r.S3RootDir, c.SessionName)
+					if meta, metaErr := r.ReadMeta(metaPath); metaErr == nil {
+						c.Status = meta.Status
+						c.EndTime = meta.EndTime
+					}
+
 					clusters = append(clusters, c)
 				}
 				return true

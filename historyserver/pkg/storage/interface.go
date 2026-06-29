@@ -10,6 +10,7 @@ import (
 type StorageWriter interface {
 	CreateDirectory(path string) error
 	WriteFile(file string, reader io.ReadSeeker) error
+	WriteMeta(path string, meta utils.MetaJson) error
 }
 
 // HistoryServer create readers for each storage runtime
@@ -23,4 +24,6 @@ type StorageReader interface {
 	GetContent(clusterId string, fileName string) io.Reader
 
 	ListFiles(clusterId string, dir string) []string
+
+	ReadMeta(path string) (*utils.MetaJson, error)
 }

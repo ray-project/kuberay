@@ -1,11 +1,13 @@
 package localtest
 
 import (
+	"fmt"
 	"io"
 	"strings"
 
 	"github.com/ray-project/kuberay/historyserver/pkg/collector/types"
 	"github.com/ray-project/kuberay/historyserver/pkg/storage"
+	"github.com/ray-project/kuberay/historyserver/pkg/storage/clustermetadata"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
@@ -13,6 +15,7 @@ import (
 type MockReader struct {
 	data     map[string]map[string]string
 	clusters []utils.ClusterInfo
+	metas    map[string]*utils.MetaJson
 }
 
 // NewMockReader creates a new mock reader
@@ -20,12 +23,14 @@ func NewMockReader() *MockReader {
 	clusters := []utils.ClusterInfo{
 		{
 			Name:            "cluster-1",
+			Namespace:       "default",
 			SessionName:     "session_2023-01-01_00-00-00_000000",
 			CreateTime:      "2023-01-01T00:00:00Z",
 			CreateTimeStamp: 1672531200000,
 		},
 		{
 			Name:            "cluster-2",
+			Namespace:       "default",
 			SessionName:     "session_2023-01-02_00-00-00_000000",
 			CreateTime:      "2023-01-02T00:00:00Z",
 			CreateTimeStamp: 1672617600000,
@@ -43,15 +48,41 @@ func NewMockReader() *MockReader {
 		},
 	}
 
+	metas := map[string]*utils.MetaJson{
+		"cluster-metadata/raycluster/default_cluster-1/session_2023-01-01_00-00-00_000000.meta.json": {
+			SessionName:      "session_2023-01-01_00-00-00_000000",
+			ClusterID:        "cluster-1",
+			ClusterNamespace: "default",
+			Status:           utils.SessionStatusCompleted,
+			EndTime:          1672534800,
+		},
+		"cluster-metadata/raycluster/default_cluster-2/session_2023-01-02_00-00-00_000000.meta.json": {
+			SessionName:      "session_2023-01-02_00-00-00_000000",
+			ClusterID:        "cluster-2",
+			ClusterNamespace: "default",
+			Status:           utils.SessionStatusInProgress,
+		},
+	}
+
 	return &MockReader{
 		clusters: clusters,
 		data:     data,
+		metas:    metas,
 	}
 }
 
-// List returns all available files from backend
+// List returns all available files from backend, enriched with meta.json data
 func (r *MockReader) List() []utils.ClusterInfo {
-	return r.clusters
+	result := make([]utils.ClusterInfo, len(r.clusters))
+	copy(result, r.clusters)
+	for i := range result {
+		metaPath := clustermetadata.MetaJsonPath(result[i], "", result[i].SessionName)
+		if meta, err := r.ReadMeta(metaPath); err == nil {
+			result[i].Status = meta.Status
+			result[i].EndTime = meta.EndTime
+		}
+	}
+	return result
 }
 
 // GetContent returns content for a specific file
@@ -73,6 +104,13 @@ func (r *MockReader) ListFiles(clusterId string, dir string) []string {
 		return files
 	}
 	return []string{}
+}
+
+func (r *MockReader) ReadMeta(path string) (*utils.MetaJson, error) {
+	if meta, ok := r.metas[path]; ok {
+		return meta, nil
+	}
+	return nil, fmt.Errorf("meta not found: %s", path)
 }
 
 // NewReader creates a new StorageReader

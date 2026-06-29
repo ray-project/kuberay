@@ -2,6 +2,7 @@ package eventserver
 
 import (
 	"bufio"
+	"fmt"
 	"io"
 	"strings"
 	"testing"
@@ -58,6 +59,10 @@ func (m *logEventMockReader) ListFiles(clusterID string, dir string) []string {
 		}
 	}
 	return []string{}
+}
+
+func (m *logEventMockReader) ReadMeta(path string) (*utils.MetaJson, error) {
+	return nil, fmt.Errorf("not implemented")
 }
 
 // --- Tests ---

@@ -3,6 +3,7 @@ package ray
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -83,6 +84,42 @@ func (r *RayLogsHandler) WriteFile(file string, reader io.ReadSeeker) error {
 		Body:   reader,
 	})
 	return err
+}
+
+func (r *RayLogsHandler) WriteMeta(path string, meta utils.MetaJson) error {
+	data, err := json.Marshal(meta)
+	if err != nil {
+		return fmt.Errorf("failed to marshal meta json: %w", err)
+	}
+	_, err = r.OssClient.PutObject(context.TODO(), &oss.PutObjectRequest{
+		Bucket:      oss.Ptr(r.OssBucket),
+		Key:         oss.Ptr(path),
+		Body:        bytes.NewReader(data),
+		ContentType: oss.Ptr("application/json"),
+	})
+	return err
+}
+
+func (r *RayLogsHandler) ReadMeta(path string) (*utils.MetaJson, error) {
+	result, err := r.OssClient.GetObject(context.TODO(), &oss.GetObjectRequest{
+		Bucket: oss.Ptr(r.OssBucket),
+		Key:    oss.Ptr(path),
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer result.Body.Close()
+
+	data, err := io.ReadAll(result.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read meta json: %w", err)
+	}
+
+	var meta utils.MetaJson
+	if err := json.Unmarshal(data, &meta); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal meta json: %w", err)
+	}
+	return &meta, nil
 }
 
 func (r *RayLogsHandler) _listFiles(prefix string, delimiter string, onlyBase bool) []string {
@@ -167,11 +204,23 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 			logrus.Infof("[List]Returned objects in %v. length of Contents: %v, length of CommonPrefixes: %v", prefix, len(page.Contents),
 				len(page.CommonPrefixes))
 			for _, objects := range page.Contents {
+				// Skip meta.json files — they are not session markers
+				if strings.HasSuffix(*objects.Key, ".meta.json") {
+					continue
+				}
 				c, err := clustermetadata.DecodePath(*objects.Key, r.OssRootDir)
 				if err != nil {
 					logrus.Errorf("Failed to parse meta file path: %s, error: %v", *objects.Key, err)
 					continue
 				}
+
+				// Enrich with meta.json data if available
+				metaPath := clustermetadata.MetaJsonPath(c, r.OssRootDir, c.SessionName)
+				if meta, metaErr := r.ReadMeta(metaPath); metaErr == nil {
+					c.Status = meta.Status
+					c.EndTime = meta.EndTime
+				}
+
 				clusters = append(clusters, c)
 			}
 		}
