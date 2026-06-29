@@ -86,12 +86,6 @@
     - kind create cluster --wait 900s --config ./ci/kind-config-buildkite.yml
     - kubectl config set clusters.kind-kind.server https://docker:6443
 
-    # Install MetalLB for LoadBalancer IPs on Kind
-    - echo "--- Installing MetalLB"
-    - kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.13.12/config/manifests/metallb-native.yaml
-    - kubectl wait --namespace metallb-system --for=condition=ready pod --selector=app=metallb --timeout=90s
-    - kubectl apply -f ray-operator/config/samples/gateway-api/metallb-config.yaml
-
     # Install Gateway API CRDs (Required for Incremental Upgrade)
     - kubectl apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml
 
