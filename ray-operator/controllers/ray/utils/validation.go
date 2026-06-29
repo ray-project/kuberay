@@ -543,8 +543,18 @@ func ValidateClusterUpgradeOptions(rayService *rayv1.RayService) error {
 		return fmt.Errorf("intervalSeconds must be greater than 0")
 	}
 
-	if options.GatewayClassName == "" {
-		return fmt.Errorf("gatewayClassName is required for NewClusterWithIncrementalUpgrade")
+	// Exactly one of the following must be set:
+	//   - GatewayClassName: operator creates and manages a Gateway and its own HTTPRoute.
+	//   - HTTPRouteName: operator adopts an existing HTTPRoute and only patches its backendRefs
+	//     (the Gateway is derived from the route's parentRefs).
+	hasGatewayClass := options.GatewayClassName != ""
+	hasHTTPRouteName := options.HTTPRouteName != ""
+	if hasGatewayClass == hasHTTPRouteName {
+		return fmt.Errorf("exactly one of gatewayClassName or httpRouteName is required for NewClusterWithIncrementalUpgrade")
+	}
+
+	if len(options.HTTPRouteInProgressLabels) > 0 && !hasHTTPRouteName {
+		return fmt.Errorf("httpRouteInProgressLabels can only be set together with httpRouteName")
 	}
 
 	return nil

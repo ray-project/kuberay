@@ -12,6 +12,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	clientFake "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -208,6 +209,40 @@ func TestRayServicePendingRayClusterNamespacedName(t *testing.T) {
 	result := RayServicePendingRayClusterNamespacedName(rayService)
 	if !reflect.DeepEqual(result, expected) {
 		t.Errorf("Expected %v, got %v", expected, result)
+	}
+}
+
+func TestRayServiceHTTPRouteNamespacedName(t *testing.T) {
+	tests := []struct {
+		upgradeStrategy *rayv1.RayServiceUpgradeStrategy
+		name            string
+		expected        types.NamespacedName
+	}{
+		{
+			name:            "operator-managed HTTPRoute (no HTTPRouteName)",
+			upgradeStrategy: nil,
+			expected:        types.NamespacedName{Namespace: "default", Name: "my-rayservice-httproute"},
+		},
+		{
+			name: "adopted HTTPRoute",
+			upgradeStrategy: &rayv1.RayServiceUpgradeStrategy{
+				Type: ptr.To(rayv1.RayServiceNewClusterWithIncrementalUpgrade),
+				ClusterUpgradeOptions: &rayv1.ClusterUpgradeOptions{
+					HTTPRouteName: "my-app-route",
+				},
+			},
+			expected: types.NamespacedName{Namespace: "default", Name: "my-app-route"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rayService := &rayv1.RayService{
+				ObjectMeta: metav1.ObjectMeta{Name: "my-rayservice", Namespace: "default"},
+				Spec:       rayv1.RayServiceSpec{UpgradeStrategy: tt.upgradeStrategy},
+			}
+			assert.Equal(t, tt.expected, RayServiceHTTPRouteNamespacedName(rayService))
+		})
 	}
 }
 
