@@ -299,10 +299,10 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `host` _string_ | Host sets rules[0].host on the generated ingress. |  |  |
-| `path` _string_ | Path sets rules[0].http.paths[0].path on the generated ingress.<br />Defaults to "/", which routes all traffic on the host to the dashboard. |  |  |
-| `pathType` _[IngressPathType](#ingresspathtype)_ | PathType sets rules[0].http.paths[0].pathType on the generated ingress.<br />Defaults to "Prefix", which works out of the box without a rewrite-target<br />annotation or controller-specific regex support. |  | Enum: [Exact Prefix ImplementationSpecific] <br /> |
-| `tls` _[IngressTLS](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#ingresstls-v1-networking) array_ | TLS sets spec.tls entries on the generated ingress. |  |  |
+| `host` _string_ | Host is the fully-qualified domain name used to route external traffic to the<br />Ray head dashboard. When unset, the generated ingress rule matches any host. |  |  |
+| `path` _string_ | Path is the HTTP path that routes to the Ray head dashboard.<br />When unset, the operator defaults it to "/", which routes all traffic on the<br />host to the dashboard. |  |  |
+| `pathType` _[IngressPathType](#ingresspathtype)_ | PathType is the path matching mode applied to Path.<br />When unset, the operator defaults it to "Prefix", which works out of the box<br />without a rewrite-target annotation or controller-specific regex support. |  | Enum: [Exact Prefix ImplementationSpecific] <br /> |
+| `tls` _[IngressTLS](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#ingresstls-v1-networking) array_ | TLS configures TLS termination for the generated ingress. |  |  |
 
 
 
