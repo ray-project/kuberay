@@ -272,6 +272,7 @@ const (
 	// TODO (kevin85421): Should we take the dashboard process into account?
 	RayAgentRayletHealthPath                 = "api/local_raylet_healthz"
 	RayDashboardGCSHealthPath                = "api/gcs_healthz"
+	RayNodeSchedulableHealthPath             = "api/node_schedulable_healthz"
 	RayDashboardGCSHealthCheckTimeoutSeconds = 10
 	RayServeProxyHealthPath                  = "-/healthz"
 	// BaseWgetHealthCommand checks a single health URL; args: timeout_sec, port, path (no leading slash).
