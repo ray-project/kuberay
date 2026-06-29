@@ -49,6 +49,8 @@ var (
 	k8sClient client.Client
 	mgr       ctrl.Manager
 	testEnv   *envtest.Environment
+	cancelMgr context.CancelFunc
+	mgrDone   = make(chan struct{})
 
 	fakeRayDashboardClient *utils.FakeRayDashboardClient
 	fakeRayHttpProxyClient *utils.FakeRayHttpProxyClient
@@ -137,15 +139,21 @@ var _ = BeforeSuite(func(ctx SpecContext) {
 	err = NewRayJobReconciler(ctx, mgr, rayJobOptions, testClientProvider).SetupWithManager(mgr, 1)
 	Expect(err).NotTo(HaveOccurred(), "failed to setup RayJob controller")
 
+	var mgrCtx context.Context
+	mgrCtx, cancelMgr = context.WithCancel(context.Background())
 	go func() {
-		err = mgr.Start(ctrl.SetupSignalHandler())
-		Expect(err).ToNot(HaveOccurred())
+		defer close(mgrDone)
+		_ = mgr.Start(mgrCtx)
 	}()
 })
 
 var _ = AfterSuite(func() {
 	By("tearing down the test environment")
-
+	cancelMgr()
+	// Wait for the manager goroutine to finish before stopping the API server,
+	// otherwise in-flight reconcilers will encounter connection errors during
+	// teardown, producing a non-zero exit code even when all specs pass.
+	<-mgrDone
 	// NOTE(simon): the error is ignored because it gets raised in macOS due
 	// to a harmless timeout error.
 	_ = testEnv.Stop()

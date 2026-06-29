@@ -156,6 +156,26 @@ const (
 	KUBERAY_GEN_AUTOSCALER_START_CMD        = "KUBERAY_GEN_AUTOSCALER_START_CMD"
 	RAY_START_ULIMIT_OPEN_FILES             = "RAY_START_ULIMIT_OPEN_FILES"
 
+	// TLS-related environment variables for Ray. See: https://docs.ray.io/en/latest/ray-core/configure.html#tls-authentication
+	RAY_USE_TLS         = "RAY_USE_TLS"
+	RAY_TLS_SERVER_CERT = "RAY_TLS_SERVER_CERT"
+	RAY_TLS_SERVER_KEY  = "RAY_TLS_SERVER_KEY"
+	RAY_TLS_CA_CERT     = "RAY_TLS_CA_CERT"
+
+	// TLS volume and mount path constants for certificate mounting into Ray pods.
+	RayTLSVolumeName    = "ray-tls"
+	RayTLSCertMountPath = "/etc/ray/tls"
+
+	// cert-manager resource naming prefixes for auto-generated PKI resources.
+	RaySelfSignedIssuerPrefix = "ray-selfsigned-issuer"
+	RayCACertificatePrefix    = "ray-ca-certificate"
+	RayCAIssuerPrefix         = "ray-ca-issuer"
+	RayHeadCertPrefix         = "ray-head-cert"
+	RayWorkerCertPrefix       = "ray-worker-cert"
+	RayHeadSecretPrefix       = "ray-head-secret"
+	RayWorkerSecretPrefix     = "ray-worker-secret" //nolint:gosec // G101 -- secret name prefix, not a credential
+	RayCASecretPrefix         = "ca-secret"
+
 	// Environment variables for RayJob submitter Kubernetes Job.
 	// Example: ray job submit --address=http://$RAY_DASHBOARD_ADDRESS --submission-id=$RAY_JOB_SUBMISSION_ID ...
 	RAY_DASHBOARD_ADDRESS = "RAY_DASHBOARD_ADDRESS"
@@ -287,6 +307,9 @@ const (
 
 	// Finalizers for RayService
 	RayServiceFinalizer = "ray.io/rayservice-finalizer"
+	// MTLSCleanupFinalizer prevents the RayCluster from being deleted before the mTLS
+	// controller has cleaned up auto-generated cert-manager secrets.
+	MTLSCleanupFinalizer = "ray.io/mtls-cleanup"
 
 	// RayNodeHeadGroupLabelValue is the value for the RayNodeGroupLabelKey label on a head node
 	RayNodeHeadGroupLabelValue      = "headgroup"
@@ -476,4 +499,16 @@ const (
 	FailedToUpdateNetworkPolicy K8sEventType = "FailedToUpdateNetworkPolicy"
 	FailedToDeleteNetworkPolicy K8sEventType = "FailedToDeleteNetworkPolicy"
 	NetworkPolicyNameCollision  K8sEventType = "NetworkPolicyNameCollision"
+
+	// mTLS event list
+	MTLSPKIReady                K8sEventType = "MTLSPKIReady"
+	MTLSCertsNotReady           K8sEventType = "MTLSCertsNotReady"
+	MTLSSecretsCleanedUp        K8sEventType = "MTLSSecretsCleanedUp"
+	MTLSFailedToReconcile       K8sEventType = "MTLSFailedToReconcile"
+	MTLSCertificatesUpdated     K8sEventType = "MTLSCertificatesUpdated"
+	MTLSBYOCSecretValid         K8sEventType = "MTLSBYOCSecretValid"        //nolint:gosec // G101 -- event type name, not a credential
+	MTLSBYOCSecretNotFound      K8sEventType = "MTLSBYOCSecretNotFound"     //nolint:gosec // G101 -- event type name, not a credential
+	MTLSBYOCSecretInvalid       K8sEventType = "MTLSBYOCSecretInvalid"      //nolint:gosec // G101 -- event type name, not a credential
+	MTLSFailedToCleanupSecrets  K8sEventType = "MTLSFailedToCleanupSecrets" //nolint:gosec // G101 -- event type name, not a credential
+	MTLSCertificateExpiringSoon K8sEventType = "MTLSCertificateExpiringSoon"
 )

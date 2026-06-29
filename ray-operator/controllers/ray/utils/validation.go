@@ -284,7 +284,13 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 	if spec.NetworkIsolation != nil && !features.Enabled(features.RayClusterNetworkIsolation) {
 		return fmt.Errorf("spec.networkIsolation requires the RayClusterNetworkIsolation feature gate to be enabled")
 	}
-	return validateNetworkIsolation(spec)
+	if err := validateNetworkIsolation(spec); err != nil {
+		return err
+	}
+
+	// Validate TLS configuration if set. When the RayClusterMTLS gate is off, tlsOptions is
+	// ignored at runtime (see IsTLSEnabled) rather than blocking reconciliation.
+	return validateTLSOptions(spec)
 }
 
 // validateNetworkIsolation checks that the NetworkIsolation config is internally consistent.
@@ -319,6 +325,67 @@ func validateNetworkIsolation(spec *rayv1.RayClusterSpec) error {
 		}
 		if mode == rayv1.NetworkIsolationDenyAllIngress && len(ni.Worker.EgressRules) > 0 {
 			return fmt.Errorf("networkIsolation.worker.egressRules cannot be set when mode is %q (egress is not restricted)", mode)
+		}
+	}
+
+	return nil
+}
+
+// validateTLSOptions checks that the TLS config is internally consistent.
+// It prevents users from setting TLS environment variables manually when TLS is enabled,
+// and validates BYOC certificate secret names if provided.
+func validateTLSOptions(spec *rayv1.RayClusterSpec) error {
+	if !IsTLSEnabled(spec) {
+		return nil
+	}
+
+	// Validate BYOC fields: if CertificateSecretName is set it must be non-empty.
+	if spec.TLSOptions.CertificateSecretName != nil && *spec.TLSOptions.CertificateSecretName == "" {
+		return fmt.Errorf("tlsOptions.certificateSecretName must be non-empty when set")
+	}
+	// WorkerCertificateSecretName is optional but must be non-empty when set.
+	if spec.TLSOptions.WorkerCertificateSecretName != nil && *spec.TLSOptions.WorkerCertificateSecretName == "" {
+		return fmt.Errorf("tlsOptions.workerCertificateSecretName must be non-empty when set")
+	}
+	// WorkerCertificateSecretName requires CertificateSecretName to also be set.
+	if spec.TLSOptions.WorkerCertificateSecretName != nil && spec.TLSOptions.CertificateSecretName == nil {
+		return fmt.Errorf("tlsOptions.workerCertificateSecretName requires certificateSecretName to also be set")
+	}
+
+	// Prevent conflict: user should not set any operator-managed TLS env vars when TLS is enabled.
+	forbiddenEnvVars := []string{RAY_USE_TLS, RAY_TLS_SERVER_CERT, RAY_TLS_SERVER_KEY, RAY_TLS_CA_CERT}
+
+	if len(spec.HeadGroupSpec.Template.Spec.Containers) > 0 {
+		headContainer := spec.HeadGroupSpec.Template.Spec.Containers[RayContainerIndex]
+		for _, envName := range forbiddenEnvVars {
+			if EnvVarExists(envName, headContainer.Env) {
+				return fmt.Errorf("cannot set %s environment variable in head Pod when tlsOptions is set "+
+					"- the operator manages TLS configuration automatically", envName)
+			}
+		}
+	}
+
+	for i := range spec.WorkerGroupSpecs {
+		worker := &spec.WorkerGroupSpecs[i]
+		if len(worker.Template.Spec.Containers) > 0 {
+			workerContainer := worker.Template.Spec.Containers[RayContainerIndex]
+			for _, envName := range forbiddenEnvVars {
+				if EnvVarExists(envName, workerContainer.Env) {
+					return fmt.Errorf("cannot set %s environment variable in worker group %q when tlsOptions is set "+
+						"- the operator manages TLS configuration automatically", envName, worker.GroupName)
+				}
+			}
+		}
+	}
+
+	// Prevent conflict in autoscalerOptions.env: user-supplied env vars are appended after
+	// operator-managed TLS vars, so duplicates would silently override them at runtime.
+	if spec.AutoscalerOptions != nil {
+		for _, envName := range forbiddenEnvVars {
+			if EnvVarExists(envName, spec.AutoscalerOptions.Env) {
+				return fmt.Errorf("cannot set %s environment variable in autoscalerOptions.env when tlsOptions is set "+
+					"- the operator manages TLS configuration for the autoscaler automatically", envName)
+			}
 		}
 	}
 
