@@ -2639,16 +2639,16 @@ func TestConfigureTLS_AutoGenerate_HeadPod(t *testing.T) {
 		}
 	}
 	assert.True(t, hasTLSMount, "wait-for-tls-ip-san should mount the TLS volume")
-	// Must receive MY_POD_IP from the downward API.
+	// Must receive POD_IP from the downward API.
 	hasPodIPEnv := false
 	for _, e := range waitInit.Env {
-		if e.Name == "MY_POD_IP" && e.ValueFrom != nil &&
+		if e.Name == "POD_IP" && e.ValueFrom != nil &&
 			e.ValueFrom.FieldRef != nil && e.ValueFrom.FieldRef.FieldPath == "status.podIP" {
 			hasPodIPEnv = true
 			break
 		}
 	}
-	assert.True(t, hasPodIPEnv, "wait-for-tls-ip-san should receive MY_POD_IP via downward API")
+	assert.True(t, hasPodIPEnv, "wait-for-tls-ip-san should receive POD_IP via downward API")
 }
 
 // TestConfigureTLS_AutoGenerate_HeadPod_BYOC verifies that the wait-for-tls-ip-san init

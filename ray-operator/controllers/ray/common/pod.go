@@ -411,18 +411,16 @@ func configureTLS(podTemplate *corev1.PodTemplateSpec, instance rayv1.RayCluster
 	// available or that the cert will ever gain an IP SAN.
 	if !utils.IsTLSBYOC(&instance.Spec) {
 		certPath := utils.RayTLSCertMountPath + "/tls.crt"
-		waitScript := fmt.Sprintf(`POD_IP="${MY_POD_IP}"
-CERT="%s"
+		waitScript := fmt.Sprintf(`CERT="%s"
 DEADLINE=$(( $(date +%%s) + 300 ))
 echo "Waiting for TLS cert to include IP SAN for ${POD_IP} (timeout 300s)..."
 while true; do
   if [ -z "${POD_IP}" ]; then
     echo "Pod IP not yet assigned, retrying in 5s..."
     sleep 5
-    POD_IP="${MY_POD_IP}"
     continue
   fi
-  if openssl x509 -in "${CERT}" -noout -text 2>/dev/null | grep -q "IP Address:${POD_IP}"; then
+  if openssl x509 -in "${CERT}" -noout -text 2>/dev/null | grep -qE "IP Address:${POD_IP}([^0-9.]|$)"; then
     echo "TLS cert now includes IP SAN for ${POD_IP}"
     exit 0
   fi
@@ -442,7 +440,7 @@ done`, certPath)
 			Args:            []string{waitScript},
 			Env: []corev1.EnvVar{
 				{
-					Name: "MY_POD_IP",
+					Name: "POD_IP",
 					ValueFrom: &corev1.EnvVarSource{
 						FieldRef: &corev1.ObjectFieldSelector{
 							FieldPath: "status.podIP",
