@@ -68,7 +68,7 @@ logging:
 # by the customized scheduler.
 #  * "enabled" is the legacy option and will be deprecated soon.
 #  * "name" is the standard option, expecting a scheduler name, supported values are
-#    "default", "volcano", "yunikorn", and "scheduler-plugins".
+#    "default", "volcano", "yunikorn", "kai-scheduler", "kubernetes-was-v1alpha2", and "scheduler-plugins".
 #
 # Note: "enabled" and "name" should not be set at the same time. If both are set, an error will be thrown.
 #
@@ -93,11 +93,15 @@ logging:
 #       batchScheduler:
 #         name: kai-scheduler
 
+#  6. Use Kubernetes workload-aware scheduling with scheduling.k8s.io/v1alpha2
+#       batchScheduler:
+#         name: kubernetes-was-v1alpha2
+
 batchScheduler:
   # Deprecated. This option will be removed in the future.
   # Note, for backwards compatibility. When it sets to true, it enables volcano scheduler integration.
   enabled: false
-  # Set the customized scheduler name, supported values are "volcano", "yunikorn", "kai-scheduler" or "scheduler-plugins", do not set
+  # Set the customized scheduler name, supported values are "volcano", "yunikorn", "kai-scheduler", "kubernetes-was-v1alpha2", or "scheduler-plugins", do not set
   # "batchScheduler.enabled=true" at the same time as it will override this option.
   name: ""
 
