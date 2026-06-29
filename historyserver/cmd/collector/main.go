@@ -180,8 +180,8 @@ func validateFlags(rayClusterName, rayClusterNamespace, ownerKind, ownerName *st
 	if (*ownerName != "" && *ownerKind == "") || (*ownerName == "" && *ownerKind != "") {
 		return fmt.Errorf("both --owner-name and --owner-kind must be provided together, or both omitted")
 	}
-	if *ownerKind != "" && *ownerKind != utils.RAYJOB_OBJECT_DIR && *ownerKind != utils.RAYSERVICE_OBJECT_DIR {
-		return fmt.Errorf("unsupported owner-kind: %q. Supported kinds are 'rayjob' or 'rayservice'", *ownerKind)
+	if *ownerKind != "" && *ownerKind != utils.RayJobKind && *ownerKind != utils.RayServiceKind {
+		return fmt.Errorf("unsupported owner-kind: %q. Supported kinds are %q or %q", *ownerKind, utils.RayJobKind, utils.RayServiceKind)
 	}
 	if *ownerName != "" {
 		if errs := validation.IsDNS1123Subdomain(*ownerName); len(errs) > 0 {

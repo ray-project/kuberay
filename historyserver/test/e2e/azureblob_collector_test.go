@@ -1,9 +1,11 @@
 package e2e
 
 import (
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -293,7 +295,22 @@ func loadRayEventsFromAzureBlob(containerClient *container.Client, prefix string
 			}
 
 			var fileEvents []rayEvent
-			decodeErr := json.NewDecoder(downloadResp.Body).Decode(&fileEvents)
+			var reader io.Reader = downloadResp.Body
+			var gzReader *gzip.Reader
+			if strings.HasSuffix(*blob.Name, ".gz") {
+				var err error
+				gzReader, err = gzip.NewReader(downloadResp.Body)
+				if err != nil {
+					downloadResp.Body.Close()
+					return nil, fmt.Errorf("failed to create gzip reader for %s: %w", *blob.Name, err)
+				}
+				reader = gzReader
+			}
+
+			decodeErr := json.NewDecoder(reader).Decode(&fileEvents)
+			if gzReader != nil {
+				gzReader.Close()
+			}
 			downloadResp.Body.Close()
 
 			if decodeErr != nil {

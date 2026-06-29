@@ -390,6 +390,7 @@ func (r *RayServiceReconciler) handleSuspend(ctx context.Context, rayServiceInst
 	if isSuspended {
 		if !rayServiceInstance.Spec.Suspend {
 			logger.Info("Spec.Suspend is false; exiting Suspended state and resuming reconcile")
+			rayServiceInstance.Status.ObservedGeneration = rayServiceInstance.ObjectMeta.Generation
 			setCondition(rayServiceInstance, rayv1.RayServiceSuspended, metav1.ConditionFalse, rayv1.RayServiceResumed,
 				"Spec.Suspend is false; RayService has resumed.")
 			return ctrl.Result{}, nil
@@ -407,6 +408,7 @@ func (r *RayServiceReconciler) handleSuspend(ctx context.Context, rayServiceInst
 			return ctrl.Result{}, nil
 		}
 		logger.Info("Spec.Suspend is true; committing transition to Suspending state")
+		rayServiceInstance.Status.ObservedGeneration = rayServiceInstance.ObjectMeta.Generation
 		setCondition(rayServiceInstance, rayv1.RayServiceSuspending, metav1.ConditionTrue, rayv1.SuspendRequested,
 			"Spec.Suspend is true; will delete all Kubernetes resources owned by this RayService.")
 		setCondition(rayServiceInstance, rayv1.RayServiceReady, metav1.ConditionFalse, rayv1.SuspendInProgress, "RayService is suspending.")

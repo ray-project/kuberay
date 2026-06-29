@@ -259,6 +259,10 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			break
 		}
 
+		if shouldUpdate := checkJobStatusCheckTimeoutAndUpdateStatusIfNeeded(ctx, rayJobInstance); shouldUpdate {
+			break
+		}
+
 		var rayClusterInstance *rayv1.RayCluster
 		// TODO (kevin85421): Maybe we only need to `get` the RayCluster because the RayCluster should have been created
 		// before transitioning the status from `Initializing` to `Running`.
@@ -299,10 +303,8 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			// If the Ray job was not found, GetJobInfo returns a BadRequest error.
 			if errors.IsBadRequest(err) {
 				if rayJobInstance.Spec.SubmissionMode == rayv1.HTTPMode {
-					logger.Info("The Ray job was not found. Submit a Ray job via an HTTP request.", "JobId", rayJobInstance.Status.JobId)
-					if _, err := rayDashboardClient.SubmitJob(ctx, rayJobInstance); err != nil {
-						logger.Error(err, "Failed to submit the Ray job", "JobId", rayJobInstance.Status.JobId)
-						return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+					if reconcileHTTPModeJobNotFound(ctx, rayJobInstance, rayDashboardClient) {
+						break
 					}
 					return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 				}
@@ -313,11 +315,18 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 					rayJobInstance.Status.Message = "Submitter completed but Ray job not found in RayCluster."
 					break
 				}
+				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 			}
 
 			logger.Error(err, "Failed to get job info", "JobId", rayJobInstance.Status.JobId)
-			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+			if recordJobStatusCheckFailure(ctx, rayJobInstance, err) {
+				break
+			}
+			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 		}
+
+		// Reset JobStatusCheckFailureStartTime when the job status check succeeds.
+		rayJobInstance.Status.JobStatusCheckFailureStartTime = nil
 
 		// If the JobStatus is in a terminal status, such as SUCCEEDED, FAILED, or STOPPED, it is impossible for the Ray job
 		// to transition to any other. Additionally, RayJob does not currently support retries. Hence, we can mark the RayJob
@@ -377,11 +386,16 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, nil
 		}
 
+		if err := r.cleanupBatchSchedulerResources(ctx, rayJobInstance); err != nil {
+			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
+		}
+
 		// Reset the Ray job related status.
 		rayJobInstance.Status.JobId = ""
 		rayJobInstance.Status.Message = ""
 		rayJobInstance.Status.Reason = ""
 		rayJobInstance.Status.RayJobStatusInfo = rayv1.RayJobStatusInfo{}
+		rayJobInstance.Status.JobStatusCheckFailureStartTime = nil
 
 		if len(rayJobInstance.Spec.ClusterSelector) > 0 {
 			// clusterSelector mode: preserve RayClusterName and DashboardURL for re-submission on resume.
@@ -410,7 +424,11 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		// The RayJob is already suspended, we should not requeue it.
 		return ctrl.Result{}, nil
 	case rayv1.JobDeploymentStatusComplete, rayv1.JobDeploymentStatusFailed:
-		defer r.batchSchedulerOnCompletion(ctx, rayJobInstance)
+		defer func() {
+			if err := r.cleanupBatchSchedulerResources(ctx, rayJobInstance); err != nil {
+				logger.Error(err, "Failed to cleanup batch scheduler resources")
+			}
+		}()
 
 		// The RayJob has reached a terminal state. Handle the cleanup and deletion logic.
 		// If the RayJob uses an existing RayCluster, we must not delete it.
@@ -528,9 +546,10 @@ func checkBackoffLimitAndUpdateStatusIfNeeded(ctx context.Context, rayJob *rayv1
 	rayJob.Status.Succeeded = new(succeededCount)
 
 	if rayJob.Status.JobDeploymentStatus == rayv1.JobDeploymentStatusFailed && rayJob.Spec.BackoffLimit != nil && *rayJob.Status.Failed < *rayJob.Spec.BackoffLimit+1 {
-		if rayJob.Status.Reason == rayv1.DeadlineExceeded {
+		if rayJob.Status.Reason == rayv1.DeadlineExceeded || rayJob.Status.Reason == rayv1.JobStatusCheckTimeoutExceeded {
 			logger.Info(
-				"RayJob is not eligible for retry due to failure with DeadlineExceeded",
+				"RayJob is not eligible for retry due to failure with DeadlineExceeded or JobStatusCheckTimeoutExceeded",
+				"reason", rayJob.Status.Reason,
 				"backoffLimit", *rayJob.Spec.BackoffLimit,
 				"succeeded", *rayJob.Status.Succeeded,
 				"failed", *rayJob.Status.Failed,
@@ -582,6 +601,13 @@ func getSubmitterTemplate(rayJobInstance *rayv1.RayJob, rayClusterInstance *rayv
 	if rayClusterInstance != nil && utils.IsK8sAuthEnabled(rayClusterInstance.Spec.AuthOptions) {
 		common.AddRayTokenVolume(&submitterTemplate.Spec)
 	}
+
+	if submitterTemplate.Labels == nil {
+		submitterTemplate.Labels = make(map[string]string)
+	}
+	submitterTemplate.Labels[utils.RayOriginatedFromCRNameLabelKey] = rayJobInstance.Name
+	submitterTemplate.Labels[utils.RayOriginatedFromCRDLabelKey] = utils.RayOriginatedFromCRDLabelValue(utils.RayJobCRD)
+	submitterTemplate.Labels[utils.KubernetesCreatedByLabelKey] = utils.ComponentName
 
 	return submitterTemplate, nil
 }
@@ -913,13 +939,14 @@ func (r *RayJobReconciler) updateRayJobStatus(ctx context.Context, oldRayJob *ra
 	logger.Info("updateRayJobStatus", "oldRayJobStatus", oldRayJobStatus, "newRayJobStatus", newRayJobStatus)
 
 	rayClusterStatusChanged := utils.InconsistentRayClusterStatus(oldRayJobStatus.RayClusterStatus, newRayJobStatus.RayClusterStatus)
+	jobStatusCheckFailureStartTimeChanged := jobStatusCheckFailureStartTimeChanged(oldRayJobStatus.JobStatusCheckFailureStartTime, newRayJobStatus.JobStatusCheckFailureStartTime)
 
 	// If a status field is crucial for the RayJob state machine, it MUST be
 	// updated with a distinct JobStatus or JobDeploymentStatus value.
 	if oldRayJobStatus.JobStatus != newRayJobStatus.JobStatus ||
 		oldRayJobStatus.JobDeploymentStatus != newRayJobStatus.JobDeploymentStatus ||
-		rayClusterStatusChanged {
-
+		rayClusterStatusChanged ||
+		jobStatusCheckFailureStartTimeChanged {
 		if rayv1.IsJobDeploymentTerminal(newRayJobStatus.JobDeploymentStatus) {
 			newRayJob.Status.EndTime = &metav1.Time{Time: time.Now()}
 		}
@@ -1274,6 +1301,84 @@ func checkSubmitterFinishedTimeoutAndUpdateStatusIfNeeded(ctx context.Context, r
 	return true
 }
 
+func getJobStatusCheckTimeoutSeconds() int {
+	timeoutSeconds, err := strconv.Atoi(os.Getenv(utils.RAYJOB_STATUS_CHECK_TIMEOUT_SECONDS))
+	if err != nil || timeoutSeconds <= 0 {
+		return utils.DEFAULT_RAYJOB_STATUS_CHECK_TIMEOUT_SECONDS
+	}
+	return timeoutSeconds
+}
+
+// Clears JobStatusCheckFailureStartTime. Returns whether status should be persisted.
+func clearJobStatusCheckFailureTimer(rayJob *rayv1.RayJob) bool {
+	if rayJob.Status.JobStatusCheckFailureStartTime == nil {
+		return false
+	}
+	rayJob.Status.JobStatusCheckFailureStartTime = nil
+	return true
+}
+
+// reconcileHTTPModeJobNotFound handles GetJobInfo 404 in HTTP mode by resubmitting the job.
+// Returns whether status should be persisted.
+func reconcileHTTPModeJobNotFound(
+	ctx context.Context,
+	rayJob *rayv1.RayJob,
+	rayDashboardClient dashboardclient.RayDashboardClientInterface,
+) bool {
+	logger := ctrl.LoggerFrom(ctx)
+	logger.Info("The Ray job was not found. Submit a Ray job via an HTTP request.", "JobId", rayJob.Status.JobId)
+
+	if _, submitErr := rayDashboardClient.SubmitJob(ctx, rayJob); submitErr != nil {
+		logger.Error(submitErr, "Failed to submit the Ray job", "JobId", rayJob.Status.JobId)
+		return recordJobStatusCheckFailure(ctx, rayJob, submitErr)
+	}
+
+	return clearJobStatusCheckFailureTimer(rayJob)
+}
+
+// Records the first job status check failure timestamp.
+// Returns whether the timestamp was set and the status should be persisted.
+func recordJobStatusCheckFailure(ctx context.Context, rayJob *rayv1.RayJob, err error) bool {
+	if rayJob.Status.JobStatusCheckFailureStartTime != nil {
+		return false
+	}
+
+	logger := ctrl.LoggerFrom(ctx)
+	rayJob.Status.JobStatusCheckFailureStartTime = &metav1.Time{Time: time.Now()}
+	logger.Error(err, "Job status check began failing.", "JobId", rayJob.Status.JobId)
+	return true
+}
+
+func checkJobStatusCheckTimeoutAndUpdateStatusIfNeeded(ctx context.Context, rayJob *rayv1.RayJob) bool {
+	logger := ctrl.LoggerFrom(ctx)
+	if rayJob.Status.JobStatusCheckFailureStartTime == nil {
+		return false
+	}
+
+	timeout := time.Duration(getJobStatusCheckTimeoutSeconds()) * time.Second
+	startTime := rayJob.Status.JobStatusCheckFailureStartTime.Time
+	if time.Now().Before(startTime.Add(timeout)) {
+		return false
+	}
+
+	logger.Info("Job status check timeout exceeded.", "JobId", rayJob.Status.JobId, "JobStatusCheckFailureStartTime", startTime, "timeoutSeconds", timeout.Seconds())
+	rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusFailed
+	rayJob.Status.Reason = rayv1.JobStatusCheckTimeoutExceeded
+	rayJob.Status.Message = fmt.Sprintf("Job status checks have been failing since %v; exceeded timeout of %ds",
+		startTime.Format(time.DateTime), int(timeout.Seconds()))
+	return true
+}
+
+func jobStatusCheckFailureStartTimeChanged(oldTime, newTime *metav1.Time) bool {
+	if oldTime == nil && newTime == nil {
+		return false
+	}
+	if oldTime == nil || newTime == nil {
+		return true
+	}
+	return !oldTime.Time.Equal(newTime.Time)
+}
+
 func checkTransitionGracePeriodAndUpdateStatusIfNeeded(ctx context.Context, rayJob *rayv1.RayJob) bool {
 	logger := ctrl.LoggerFrom(ctx)
 	if rayv1.IsJobTerminal(rayJob.Status.JobStatus) && rayJob.Status.JobDeploymentStatus == rayv1.JobDeploymentStatusRunning {
@@ -1566,30 +1671,30 @@ func (r *RayJobReconciler) isDeletionActionCompleted(ctx context.Context, rayJob
 	return false, fmt.Errorf("unknown deletion policy for completion check: %s", policy)
 }
 
-// batchSchedulerOnCompletion performs cleanup of batch scheduler resources when a RayJob reaches complete/failed status.
-func (r *RayJobReconciler) batchSchedulerOnCompletion(ctx context.Context, rayJobInstance *rayv1.RayJob) {
-	logger := ctrl.LoggerFrom(ctx)
-
-	// Clean up batch scheduler resources (e.g., delete Volcano PodGroup)
-	if r.options.BatchSchedulerManager != nil {
-		scheduler, err := r.options.BatchSchedulerManager.GetScheduler()
-		if err != nil {
-			logger.Error(err, "Failed to get batch scheduler")
-			// Don't block the reconciliation on scheduler errors, just log the error
-		} else {
-			didUpdate, err := scheduler.CleanupOnCompletion(ctx, rayJobInstance)
-			if err != nil {
-				logger.Error(err, "Failed to cleanup batch scheduler resources")
-				r.Recorder.Eventf(rayJobInstance, corev1.EventTypeWarning, string(utils.FailedToCleanupBatchScheduler),
-					"Failed to cleanup batch scheduler resources for RayJob %s/%s: %v", rayJobInstance.Namespace, rayJobInstance.Name, err)
-				// Don't block the reconciliation on cleanup failures, just log the error
-			} else if didUpdate {
-				// emit event if cleanup was performed
-				r.Recorder.Eventf(rayJobInstance, corev1.EventTypeNormal, string(utils.BatchSchedulerCleanedUp),
-					"Cleaned up batch scheduler resources for RayJob %s/%s", rayJobInstance.Namespace, rayJobInstance.Name)
-			}
-		}
+// cleanupBatchSchedulerResources cleans up batch scheduler resources (e.g., zeroes out the Volcano
+// PodGroup) for the given RayJob and returns an error if the cleanup failed. Callers that must
+// guarantee the resources are released (e.g., suspend) should requeue on error.
+func (r *RayJobReconciler) cleanupBatchSchedulerResources(ctx context.Context, rayJobInstance *rayv1.RayJob) error {
+	if r.options.BatchSchedulerManager == nil {
+		return nil
 	}
+
+	scheduler, err := r.options.BatchSchedulerManager.GetScheduler()
+	if err != nil {
+		return fmt.Errorf("failed to get batch scheduler: %w", err)
+	}
+
+	didUpdate, err := scheduler.CleanupOnCompletion(ctx, rayJobInstance)
+	if err != nil {
+		r.Recorder.Eventf(rayJobInstance, corev1.EventTypeWarning, string(utils.FailedToCleanupBatchScheduler),
+			"Failed to cleanup batch scheduler resources for RayJob %s/%s: %v", rayJobInstance.Namespace, rayJobInstance.Name, err)
+		return fmt.Errorf("failed to cleanup batch scheduler resources: %w", err)
+	}
+	if didUpdate {
+		r.Recorder.Eventf(rayJobInstance, corev1.EventTypeNormal, string(utils.BatchSchedulerCleanedUp),
+			"Cleaned up batch scheduler resources for RayJob %s/%s", rayJobInstance.Namespace, rayJobInstance.Name)
+	}
+	return nil
 }
 
 // selectMostImpactfulRule finds the rule with the most destructive policy from a given list.

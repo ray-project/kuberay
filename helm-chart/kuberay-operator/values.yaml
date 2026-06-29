@@ -267,6 +267,10 @@ env:
 # KubeRay will update JobDeploymentStatus directly.
 # - name: RAYJOB_DEPLOYMENT_STATUS_TRANSITION_GRACE_PERIOD_SECONDS
 #   value: "300"
+# If job status checks keep failing for longer than this timeout in seconds,
+# KubeRay will transition the RayJob's JobDeploymentStatus to Failed. Default is 300.
+# - name: RAYJOB_STATUS_CHECK_TIMEOUT_SECONDS
+#   value: "300"
 
 # -- Resource requests and limits for containers.
 resources:

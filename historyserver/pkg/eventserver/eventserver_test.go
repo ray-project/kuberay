@@ -1,15 +1,18 @@
 package eventserver
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
 	"testing"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
-	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
+	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
 func makeTaskEventMap(taskName, nodeID, taskID string, attempt int) map[string]any {
@@ -647,7 +650,7 @@ func TestActorLifecycleEventDeduplication(t *testing.T) {
 			}
 
 			// Get the actor and verify
-			actor, found := h.GetActorByID(testClusterName, testActorID)
+			actor, found := h.getActorsMap(testClusterName)[testActorID]
 			if !found {
 				t.Fatal("Actor not found after processing")
 			}
@@ -814,7 +817,7 @@ func TestDriverJobLifecycleEventDuplication(t *testing.T) {
 				t.Fatalf("storeEvent() unexpected error: %v", err)
 			}
 
-			job, exists := h.GetJobByJobID(testClusterName, testJobID)
+			job, exists := h.getJobsMap(testClusterName)[testJobID]
 			if !exists {
 				t.Fatal("Job not found after processing")
 			}
@@ -957,9 +960,9 @@ func TestProcessSingleSession(t *testing.T) {
 		mock := newLogEventMockReader()
 		mock.addDir("cluster_ns", "session1/job_events/", []string{"job-01000000/"})
 		mock.addDir("cluster_ns", "session1/job_events/job-01000000/",
-			[]string{"01000000-2024-01-01-00"})
+			[]string{"01000000-2024-01-01-00.gz"})
 		mock.addDir("cluster_ns", "session1/node_events/",
-			[]string{"node1-2024-01-01-00"})
+			[]string{"node1-2024-01-01-00.gz"})
 		mock.addDir("cluster_ns", "session1/logs", []string{})
 
 		h := NewEventHandler(mock)
@@ -982,28 +985,41 @@ func TestProcessSingleSession(t *testing.T) {
 	t.Run("partial success does not return error", func(t *testing.T) {
 		mock := newLogEventMockReader()
 		mock.addDir("cluster_ns", "session1/node_events/",
-			[]string{"node1-2024-01-01-00", "node2-2024-01-01-00"})
-		mock.addFile("cluster_ns", "session1/node_events/node1-2024-01-01-00",
-			`[{"eventType":"NODE_DEFINITION_EVENT","nodeDefinitionEvent":{"nodeId":"YWJjZA=="}}]`)
+			[]string{"node1-2024-01-01-00.gz", "node2-2024-01-01-00.gz"})
+
+		var buf bytes.Buffer
+		gw := gzip.NewWriter(&buf)
+		_, err := gw.Write([]byte(`[{"eventType":"NODE_DEFINITION_EVENT","nodeDefinitionEvent":{"nodeId":"YWJjZA=="}}]`))
+		require.NoError(t, err)
+		require.NoError(t, gw.Close())
+
+		mock.addFile("cluster_ns", "session1/node_events/node1-2024-01-01-00.gz", buf.String())
 		mock.addDir("cluster_ns", "session1/job_events/", []string{})
 		mock.addDir("cluster_ns", "session1/logs", []string{})
 
 		h := NewEventHandler(mock)
-		err := h.ProcessSingleSession(context.Background(), clusterInfo)
+		err = h.ProcessSingleSession(context.Background(), clusterInfo)
 		require.NoError(t, err)
 	})
 
 	t.Run("all corrupt JSON does not return error", func(t *testing.T) {
 		mock := newLogEventMockReader()
 		mock.addDir("cluster_ns", "session1/node_events/",
-			[]string{"node1-2024-01-01-00", "node2-2024-01-01-00"})
-		mock.addFile("cluster_ns", "session1/node_events/node1-2024-01-01-00", "this is not json")
-		mock.addFile("cluster_ns", "session1/node_events/node2-2024-01-01-00", "neither is this")
+			[]string{"node1-2024-01-01-00.gz", "node2-2024-01-01-00.gz"})
+
+		var buf bytes.Buffer
+		gw := gzip.NewWriter(&buf)
+		_, err := gw.Write([]byte("this is not json"))
+		require.NoError(t, err)
+		require.NoError(t, gw.Close())
+
+		mock.addFile("cluster_ns", "session1/node_events/node1-2024-01-01-00.gz", buf.String())
+		mock.addFile("cluster_ns", "session1/node_events/node2-2024-01-01-00.gz", buf.String())
 		mock.addDir("cluster_ns", "session1/job_events/", []string{})
 		mock.addDir("cluster_ns", "session1/logs", []string{})
 
 		h := NewEventHandler(mock)
-		err := h.ProcessSingleSession(context.Background(), clusterInfo)
+		err = h.ProcessSingleSession(context.Background(), clusterInfo)
 		require.NoError(t, err)
 	})
 
@@ -1021,7 +1037,7 @@ func TestProcessSingleSession(t *testing.T) {
 
 	t.Run("ray events failure surfaces; log events failure stays silent", func(t *testing.T) {
 		mock := newLogEventMockReader()
-		mock.addDir("cluster_ns", "session1/node_events/", []string{"node1-2024-01-01-00"})
+		mock.addDir("cluster_ns", "session1/node_events/", []string{"node1-2024-01-01-00.gz"})
 		mock.addDir("cluster_ns", "session1/job_events/", []string{})
 		mock.addDir("cluster_ns", "session1/logs", []string{"node1/"})
 		mock.addDir("cluster_ns", "session1/logs/node1/events", []string{"event_GCS.log"})
@@ -1031,5 +1047,41 @@ func TestProcessSingleSession(t *testing.T) {
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "read 0 of 1 event files")
 		assert.NotContains(t, err.Error(), "log event")
+	})
+
+	t.Run("transparent decompression of compressed .gz files and reading uncompressed legacy files", func(t *testing.T) {
+		mock := newLogEventMockReader()
+		mock.addDir("cluster_ns", "session1/node_events/",
+			[]string{"node1-2024-01-01-00.gz", "node2-2024-01-01-00"})
+
+		// 1. Compress node1 event file
+		var buf bytes.Buffer
+		gw := gzip.NewWriter(&buf)
+		_, err := gw.Write([]byte(`[{"eventType":"NODE_DEFINITION_EVENT","nodeDefinitionEvent":{"nodeId":"YWJjZA=="}}]`))
+		require.NoError(t, err)
+		require.NoError(t, gw.Close())
+		mock.addFile("cluster_ns", "session1/node_events/node1-2024-01-01-00.gz", buf.String())
+
+		// 2. Keep node2 event file uncompressed
+		mock.addFile("cluster_ns", "session1/node_events/node2-2024-01-01-00",
+			`[{"eventType":"NODE_DEFINITION_EVENT","nodeDefinitionEvent":{"nodeId":"ZWZnaA=="}}]`)
+
+		mock.addDir("cluster_ns", "session1/job_events/", []string{})
+		mock.addDir("cluster_ns", "session1/logs", []string{})
+
+		h := NewEventHandler(mock)
+		err = h.ProcessSingleSession(context.Background(), clusterInfo)
+		require.NoError(t, err)
+
+		nodeMap := h.getNodeMap("cluster_ns_session1")
+		assert.Len(t, nodeMap, 2)
+
+		// "YWJjZA==" -> hex "61626364" (abcd)
+		_, ok := nodeMap["61626364"]
+		assert.True(t, ok, "node1 (compressed) should be successfully loaded")
+
+		// "ZWZnaA==" -> hex "65666768" (efgh)
+		_, ok = nodeMap["65666768"]
+		assert.True(t, ok, "node2 (uncompressed) should be successfully loaded")
 	})
 }
