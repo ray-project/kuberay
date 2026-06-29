@@ -1470,6 +1470,39 @@ func TestCalculateResources(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "Head pod with worker group having max possible replicas",
+			cluster: createRayClusterTemplate(headStruct, []struct {
+				replicas    *int32
+				minReplicas *int32
+				suspend     *bool
+				cpu         string
+				memory      string
+				numOfHosts  int32
+			}{
+				{
+					numOfHosts:  1,
+					replicas:    ptr.To[int32](2147483647),
+					minReplicas: ptr.To[int32](2147483647),
+					cpu:         "1",
+					memory:      "0",
+					suspend:     nil,
+				},
+			}),
+			expected: struct {
+				desiredResources corev1.ResourceList
+				minResources     corev1.ResourceList
+			}{
+				desiredResources: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("2147483648"),
+					corev1.ResourceMemory: resource.MustParse("100Mi"),
+				},
+				minResources: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("2147483648"),
+					corev1.ResourceMemory: resource.MustParse("100Mi"),
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {
