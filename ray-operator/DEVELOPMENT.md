@@ -345,3 +345,41 @@ docker buildx build --tag quay.io/<my org>/operator:latest --tag docker.io/<my o
 * Some registry such as Quay.io dashboard displays attestation manifests as unknown platforms. Setting --provenance=false to avoid this issue.
 
 [main-dev-doc]: ../docs/development/development.md#pre-commit-hooks
+
+## Kubernetes Workload-Aware Scheduling v1alpha2
+
+The `kubernetes-was-v1alpha2` batch scheduler plugin enables Kubernetes workload-aware gang scheduling through the `scheduling.k8s.io/v1alpha2` Workload and PodGroup APIs. It uses the Kubernetes default scheduler and is configured with `--batch-scheduler=kubernetes-was-v1alpha2`; there is no KubeRay feature gate or per-RayCluster annotation.
+
+For user-facing documentation, see the [Kubernetes WAS v1alpha2 guide](../docs/guidance/kubernetes-was-v1alpha2.md).
+
+### Testing locally with Kind
+
+Kubernetes WAS v1alpha2 requires Kubernetes 1.36+ with `GenericWorkload` enabled on the API server and controller manager, `scheduling.k8s.io/v1alpha2` served by the API server, and `GangScheduling` enabled on kube-scheduler. The kind config uses the published `kindest/node:v1.36.1` image:
+
+```bash
+# Install kind v0.32.0 or newer.
+curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.32.0/kind-linux-amd64
+chmod +x ./kind
+sudo mv ./kind /usr/local/bin/kind
+
+# Create the cluster with the required feature gates and alpha API.
+kind create cluster --name kubernetes-was-v1alpha2 \
+  --config ../ci/kind-config-kubernetes-was-v1alpha2.yml
+
+# Build and load the operator image.
+make docker-image IMG=kuberay/operator:latest
+kind load docker-image kuberay/operator:latest --name kubernetes-was-v1alpha2
+
+# Deploy with the Kubernetes WAS v1alpha2 batch scheduler enabled.
+make deploy-kubernetes-was-v1alpha2 IMG=kuberay/operator:latest
+```
+
+### Running tests
+
+```bash
+# Unit tests.
+make test WHAT='./apis/config/v1alpha1 ./controllers/ray/batchscheduler/... ./controllers/ray'
+
+# E2E tests. Requires the kind cluster above with the operator deployed.
+make test-e2e-kubernetes-was-v1alpha2
+```
