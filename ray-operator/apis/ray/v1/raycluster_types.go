@@ -245,6 +245,12 @@ type WorkerGroupSpec struct {
 	// This value is only used with the Ray Autoscaler enabled and defaults to the value set by the AutoscalingConfig if not specified for this worker group.
 	// +optional
 	IdleTimeoutSeconds *int32 `json:"idleTimeoutSeconds,omitempty"`
+	// Priority influences which worker group the autoscaler prefers when multiple
+	// groups can satisfy the same resource demand. Higher priority groups are
+	// preferred for scale-up. Only honored by Ray Autoscaler v2.
+	// +kubebuilder:default:=0
+	// +optional
+	Priority *int32 `json:"priority,omitempty"`
 	// Resources specifies the resource quantities for this worker group.
 	// These values override the resources passed to `rayStartParams` for the group, but
 	// have no effect on the resources set at the K8s Pod container level.
