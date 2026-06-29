@@ -58,6 +58,10 @@ func (s *ServerHandler) listClusters(limit int) []utils.ClusterInfo {
 			CreateTimeStamp: liveCluster.CreationTimestamp.Unix(),
 			SessionName:     "live",
 		}
+		if len(liveCluster.OwnerReferences) > 0 {
+			liveClusterInfo.OwnerKind = liveCluster.OwnerReferences[0].Kind
+			liveClusterInfo.OwnerName = liveCluster.OwnerReferences[0].Name
+		}
 		liveClusterInfos = append(liveClusterInfos, liveClusterInfo)
 		liveClusterNames = append(liveClusterNames, liveCluster.Name)
 	}
@@ -71,11 +75,22 @@ func (s *ServerHandler) listClusters(limit int) []utils.ClusterInfo {
 
 	clustersMap := make(map[utils.ClusterKey][]utils.ClusterInfo)
 	for _, c := range clusters {
-		key := utils.ClusterKey{
-			Namespace: c.Namespace,
-			Name:      c.Name,
+		resourceType := strings.ToLower(c.OwnerKind)
+		resourceName := c.OwnerName
+		if resourceType == utils.RayJobKind || resourceType == utils.RayServiceKind {
+			ownerKey := utils.ClusterKey{
+				Namespace:    c.Namespace,
+				ResourceType: resourceType,
+				ResourceName: resourceName,
+			}
+			clustersMap[ownerKey] = append(clustersMap[ownerKey], c)
 		}
-		clustersMap[key] = append(clustersMap[key], c)
+		clusterKey := utils.ClusterKey{
+			Namespace:    c.Namespace,
+			ResourceType: utils.RayClusterKind,
+			ResourceName: c.Name,
+		}
+		clustersMap[clusterKey] = append(clustersMap[clusterKey], c)
 	}
 
 	for key := range clustersMap {
@@ -89,24 +104,59 @@ func (s *ServerHandler) listClusters(limit int) []utils.ClusterInfo {
 	return clusters
 }
 
-func (s *ServerHandler) findSessionInMap(namespace, name, session string) (string, bool) {
+type SessionFilter struct {
+	ExpectedClusterName string
+}
+
+func matchesFilter(c utils.ClusterInfo, filter SessionFilter) bool {
+	if filter.ExpectedClusterName != "" && !strings.EqualFold(c.Name, filter.ExpectedClusterName) {
+		return false
+	}
+	return true
+}
+
+// findSessionInMap looks up a cluster session by resource type and resource name, with optional filtering.
+// Returns (ClusterInfo, found).
+func (s *ServerHandler) findSessionInMap(namespace, resourceType, resourceName, session string, filters ...SessionFilter) (utils.ClusterInfo, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+
 	key := utils.ClusterKey{
-		Namespace: namespace,
-		Name:      name,
+		Namespace:    namespace,
+		ResourceType: strings.ToLower(resourceType),
+		ResourceName: resourceName,
 	}
-	if list, ok := s.clustersMap[key]; ok {
-		if len(list) == 0 {
-			return "", false
-		}
+
+	list, ok := s.clustersMap[key]
+	if !ok || len(list) == 0 {
+		return utils.ClusterInfo{}, false
+	}
+
+	var filter SessionFilter
+	if len(filters) > 0 {
+		filter = filters[0]
+	}
+
+	if session == "latest" {
 		for _, c := range list {
-			if c.SessionName == session {
-				return c.SessionName, true
+			if c.SessionName == "live" && matchesFilter(c, filter) {
+				return c, true
 			}
 		}
+		for _, c := range list {
+			if matchesFilter(c, filter) {
+				return c, true
+			}
+		}
+		return utils.ClusterInfo{}, false
 	}
-	return "", false
+
+	for _, c := range list {
+		if c.SessionName == session && matchesFilter(c, filter) {
+			return c, true
+		}
+	}
+	return utils.ClusterInfo{}, false
 }
 
 func (s *ServerHandler) _getNodeLogs(rayClusterNameNamespace, sessionId, nodeId, folder, glob string) ([]byte, error) {
