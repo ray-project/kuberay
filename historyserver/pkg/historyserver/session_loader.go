@@ -147,7 +147,9 @@ func (s *SessionLoader) doLoadSession(ctx context.Context, info utils.ClusterInf
 		if snap == nil {
 			return false, fmt.Errorf("unexpected nil snapshot for session status %v", status)
 		}
-		s.putSnapshot(clusterSessionKey, snap)
+		if err := s.putSnapshot(clusterSessionKey, snap); err != nil {
+			return false, err
+		}
 		return false, nil
 
 	case SessionStatusLive:
@@ -161,17 +163,18 @@ func (s *SessionLoader) doLoadSession(ctx context.Context, info utils.ClusterInf
 }
 
 // putSnapshot stores encoded session snapshot bytes in the LRU cache.
-func (s *SessionLoader) putSnapshot(clusterSessionKey string, snap *eventserver.SessionSnapshot) {
+func (s *SessionLoader) putSnapshot(clusterSessionKey string, snap *eventserver.SessionSnapshot) error {
 	encoded, err := encodeSnapshot(snap)
 	if err != nil {
-		logrus.Errorf("Failed to encode snapshot for session %q; skipping cache: %v", clusterSessionKey, err)
-		return
+		logrus.Errorf("Failed to encode snapshot for session %q: %v", clusterSessionKey, err)
+		return fmt.Errorf("encode snapshot for session %q: %w", clusterSessionKey, err)
 	}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.cache.Add(clusterSessionKey, encoded)
 	s.evictToByteBudget()
+	return nil
 }
 
 // evictToByteBudget evicts LRU entries until the total cached bytes < maxBytes.
