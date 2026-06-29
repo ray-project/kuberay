@@ -7,9 +7,9 @@ metadata:
   labels:
     {{- include "ray-cluster.labels" . | nindent 4 }}
 spec:
-  {{- if .Values.podDisruptionBudget.minAvailable }}
+  {{- if not (kindIs "invalid" .Values.podDisruptionBudget.minAvailable) }}
   minAvailable: {{ .Values.podDisruptionBudget.minAvailable }}
-  {{- else if .Values.podDisruptionBudget.maxUnavailable }}
+  {{- else if and (not (kindIs "invalid" .Values.podDisruptionBudget.maxUnavailable)) (ne (toString .Values.podDisruptionBudget.maxUnavailable) "") }}
   maxUnavailable: {{ .Values.podDisruptionBudget.maxUnavailable }}
   {{- end }}
   selector:

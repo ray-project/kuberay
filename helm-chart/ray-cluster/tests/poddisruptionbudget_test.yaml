@@ -43,6 +43,31 @@ tests:
       - notExists:
           path: spec.minAvailable
 
+  - it: Should render `minAvailable` when set to `0`
+    set:
+      podDisruptionBudget:
+        enabled: true
+        minAvailable: 0
+    asserts:
+      - equal:
+          path: spec.minAvailable
+          value: 0
+      - notExists:
+          path: spec.maxUnavailable
+
+  - it: Should render `maxUnavailable` when set to `0`
+    set:
+      podDisruptionBudget:
+        enabled: true
+        minAvailable: null
+        maxUnavailable: 0
+    asserts:
+      - equal:
+          path: spec.maxUnavailable
+          value: 0
+      - notExists:
+          path: spec.minAvailable
+
   - it: Should prefer `minAvailable` when both are set
     set:
       podDisruptionBudget:
