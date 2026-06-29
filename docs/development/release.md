@@ -75,7 +75,22 @@ See the next section for more details on each step.
 
 ---
 
-### Step 2: Update KubeRay Version References
+### Step 2a: Update KubeRay Version References
+
+> **Claude Code users:** Steps 2a–2b are packaged as the `bump-helm-charts`
+> skill (in `.claude/skills/bump-helm-charts/`), so you can let Claude make these
+> edits and review the diff instead of touching each file by hand.
+
+```text
+> /bump-helm-charts
+# …or just describe the task and Claude picks up the skill automatically:
+> Bump the KubeRay Helm charts to 1.4.0 for the release-1.4 branch.
+```
+
+Claude edits the seven source-of-truth files below, updates the nine hardcoded
+README versions (Step 2b), runs `make -C helm-chart helm-docs`, and shows you the
+diff. Always review it and run the Step 2b verification before opening the PR —
+the manual steps below remain authoritative.
 
 On the release branch (`release-1.4` in this example), update all references to the KubeRay version number (e.g., `1.4.0`).
 
@@ -91,6 +106,42 @@ Update the version in the following files:
 
 Open a PR to the release branch with these changes.
 Refer to a previous version bump PR for guidance, like [PR #3071](https://github.com/ray-project/kuberay/pull/3071/files).
+
+### Step 2b: Update the versions shown in chart READMEs
+
+Besides the source-of-truth files above, several chart READMEs **hardcode** a
+version string that is shown to users (e.g. `helm install ... --version X.Y.Z`).
+These do not update automatically and must be bumped to the new version too.
+
+> Chart `README.md` files are generated. Edit the `README.md.gotmpl` template,
+> then run `make -C helm-chart helm-docs` to regenerate the `README.md`. Never
+> hand-edit a `README.md`.
+
+Bump every occurrence of the old version in these `.gotmpl` files:
+
+| File | Reference | What it points to |
+| --- | --- | --- |
+| `helm-chart/kuberay-apiserver/README.md.gotmpl` | `--version X.Y.Z` (×2) and the `helm ls` example `kuberay-apiserver-X.Y.Z` | apiserver chart version (3 spots) |
+| `helm-chart/ray-cluster/README.md.gotmpl` | `# Step 3` comment + `helm install kuberay-operator ... --version X.Y.Z` | kuberay-operator chart version (2 spots) |
+| `helm-chart/ray-cluster/README.md.gotmpl` | `helm install raycluster ... --version X.Y.Z` (×2) | ray-cluster chart version (2 spots) |
+| `helm-chart/kuberay-operator/README.md.gotmpl` | `targetRevision: vX.Y.Z` (×2) | git tag for the Argo CD examples |
+
+Note: `kuberay-operator`'s own install/version strings use
+`{{ template "chart.version" . }}` and update automatically — leave them as is.
+
+After editing the templates:
+
+```bash
+make -C helm-chart helm-docs   # regenerate README.md from the templates
+pre-commit run --all-files     # the helm-docs-built hook verifies they match
+```
+
+**Example:** [PR #4924](https://github.com/ray-project/kuberay/pull/4924/files)
+bumped these for the `1.6.2` release:
+
+* `kuberay-apiserver`: `--version 1.4.2` → `--version 1.6.2` (and the `helm ls` line)
+* `ray-cluster`: `kuberay-operator`/`ray-cluster` `--version 1.1.0` → `1.6.2`
+* `kuberay-operator`: `targetRevision: v1.0.0-rc.0` → `targetRevision: v1.6.2`
 
 ---
 
