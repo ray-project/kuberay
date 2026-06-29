@@ -64,18 +64,31 @@ func (s *SessionLoader) GetSnapshot(clusterSessionKey string) (*eventserver.Sess
 	if !ok {
 		return nil, false
 	}
-	// Renew the TTL so active debug sessions are not evicted.
-	s.cache.Add(clusterSessionKey, encoded)
+	s.renewTTL(clusterSessionKey, encoded)
 
 	snap, err := decodeSnapshot(encoded)
 	if err != nil {
 		// A corrupt entry should be impossible since we encoded it ourselves.
 		// If it ever happens, report a miss so it can be re-processed.
 		logrus.Errorf("Dropping corrupt cache entry for session %q: %v", clusterSessionKey, err)
+		s.mu.Lock()
 		s.cache.Remove(clusterSessionKey)
+		s.mu.Unlock()
 		return nil, false
 	}
 	return snap, true
+}
+
+// renewTTL extends ExpiresAt for a cache hit.
+//
+// Must not re-insert after a concurrent byte eviction.
+func (s *SessionLoader) renewTTL(clusterSessionKey string, encoded []byte) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, stillCached := s.cache.Peek(clusterSessionKey); !stillCached {
+		return
+	}
+	s.cache.Add(clusterSessionKey, encoded)
 }
 
 // LoadSession blocks until a dead session is processed and cached or an
