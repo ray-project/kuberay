@@ -49,6 +49,15 @@ helm version
   helm install kuberay-operator .
   ```
 
+- Install with Kubernetes WAS v1alpha2 batch scheduling
+
+  Kubernetes WAS v1alpha2 requires Kubernetes 1.36+ with the `scheduling.k8s.io/v1alpha2` API served by the API server, `GenericWorkload` enabled on the API server and controller manager, and `GangScheduling` enabled on kube-scheduler.
+
+  ```sh
+  helm install kuberay-operator . \
+    --set batchScheduler.name=kubernetes-was-v1alpha2
+  ```
+
 - Install KubeRay operator without installing CRDs
   - In some cases, the installation of the CRDs and the installation of the operator may require
     different levels of admin permissions, so these two installations could be handled as different
