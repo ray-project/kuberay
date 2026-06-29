@@ -35,17 +35,41 @@ func TestTrim(t *testing.T) {
 }
 
 func TestGetContentPathComparison(t *testing.T) {
-	// fileName is a full path like the caller passes
+	handler := &RayLogsHandler{OssRootDir: "tmp"}
+	clusterID := "dlc1hphloqj7jax0_quotaf5jxu1uzuel"
 	fileName := "session_2026-04-09_06-41-42_754637_1/logs/abc123/events/event_RAYLET.log"
-	// f is a full key returned by _listFiles (onlyBase=false)
-	f := "session_2026-04-09_06-41-42_754637_1/logs/abc123/events/event_RAYLET.log"
+	fullPath := handler.objectKey(clusterID, fileName)
+	// f is a full root-dir-inclusive key returned by _listFiles (onlyBase=false).
+	f := "tmp/dlc1hphloqj7jax0_quotaf5jxu1uzuel/session_2026-04-09_06-41-42_754637_1/logs/abc123/events/event_RAYLET.log"
 
-	if path.Base(f) != path.Base(fileName) {
-		t.Errorf("expected path.Base(%q) == path.Base(%q)", f, fileName)
+	if path.Base(f) != path.Base(fullPath) {
+		t.Errorf("expected path.Base(%q) == path.Base(%q)", f, fullPath)
 	}
-	// Verify old buggy comparison would fail
-	if path.Base(f) == fileName {
-		t.Errorf("old comparison should not match: path.Base(%q) == %q", f, fileName)
+}
+
+func TestObjectKeyIncludesRootDir(t *testing.T) {
+	handler := &RayLogsHandler{OssRootDir: "tmp"}
+	clusterID := "dlc1hphloqj7jax0_quotaf5jxu1uzuel"
+	fileName := "session_2026-05-08_18-35-06_774618_1/logs/events/event_CORE_WORKER_256.log"
+
+	got := handler.objectKey(clusterID, fileName)
+	want := "tmp/dlc1hphloqj7jax0_quotaf5jxu1uzuel/session_2026-05-08_18-35-06_774618_1/logs/events/event_CORE_WORKER_256.log"
+
+	if got != want {
+		t.Fatalf("objectKey() = %q, want %q", got, want)
+	}
+}
+
+func TestObjectDirIncludesRootDir(t *testing.T) {
+	handler := &RayLogsHandler{OssRootDir: "tmp"}
+	clusterID := "dlc1hphloqj7jax0_quotaf5jxu1uzuel"
+	fileName := "session_2026-05-08_18-35-06_774618_1/logs/events/event_CORE_WORKER_256.log"
+
+	got := handler.objectDir(clusterID, fileName)
+	want := "tmp/dlc1hphloqj7jax0_quotaf5jxu1uzuel/session_2026-05-08_18-35-06_774618_1/logs/events"
+
+	if got != want {
+		t.Fatalf("objectDir() = %q, want %q", got, want)
 	}
 }
 
