@@ -394,6 +394,7 @@ const (
 	DeletedRayJobSubmitter        K8sEventType = "DeletedRayJobSubmitter"
 	FailedToCreateRayJobSubmitter K8sEventType = "FailedToCreateRayJobSubmitter"
 	FailedToDeleteRayJobSubmitter K8sEventType = "FailedToDeleteRayJobSubmitter"
+	FailedToStopRayJob            K8sEventType = "FailedToStopRayJob"
 	CreatedRayCluster             K8sEventType = "CreatedRayCluster"
 	UpdatedRayCluster             K8sEventType = "UpdatedRayCluster"
 	DeletedRayCluster             K8sEventType = "DeletedRayCluster"

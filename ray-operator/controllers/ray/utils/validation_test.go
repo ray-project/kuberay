@@ -1064,12 +1064,24 @@ func TestValidateRayJobSpec(t *testing.T) {
 			expectError: false,
 		},
 		{
-			name: "the ClusterSelector mode doesn't support the suspend operation",
+			name: "clusterSelector RayJob may be suspended when shutdownAfterJobFinishes is true",
 			spec: rayv1.RayJobSpec{
 				Suspend:                  true,
 				ShutdownAfterJobFinishes: true,
 				ClusterSelector: map[string]string{
-					"key": "value",
+					"ray.io/cluster": "my-cluster",
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "clusterSelector RayJob with suspend and fixed JobId is invalid",
+			spec: rayv1.RayJobSpec{
+				Suspend:                  true,
+				JobId:                    "my-fixed-id",
+				ShutdownAfterJobFinishes: true,
+				ClusterSelector: map[string]string{
+					"ray.io/cluster": "my-cluster",
 				},
 			},
 			expectError: true,

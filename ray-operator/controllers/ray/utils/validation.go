@@ -360,9 +360,6 @@ func ValidateRayJobSpec(rayJob *rayv1.RayJob) error {
 	}
 
 	isClusterSelectorMode := len(rayJob.Spec.ClusterSelector) != 0
-	if rayJob.Spec.Suspend && isClusterSelectorMode {
-		return fmt.Errorf("The RayJob spec is invalid: the ClusterSelector mode doesn't support the suspend operation")
-	}
 	if rayJob.Spec.RayClusterSpec == nil && !isClusterSelectorMode {
 		return fmt.Errorf("The RayJob spec is invalid: one of RayClusterSpec or ClusterSelector must be set")
 	}
@@ -376,6 +373,9 @@ func ValidateRayJobSpec(rayJob *rayv1.RayJob) error {
 		}
 		if rayJob.Spec.BackoffLimit != nil && *rayJob.Spec.BackoffLimit > 0 {
 			return fmt.Errorf("The RayJob spec is invalid: BackoffLimit is incompatible with ClusterSelector mode")
+		}
+		if rayJob.Spec.Suspend && rayJob.Spec.JobId != "" {
+			return fmt.Errorf("The RayJob spec is invalid: setting a fixed JobId with suspend in ClusterSelector mode is not supported because the same job ID cannot be re-submitted to the Ray cluster after resume")
 		}
 	}
 
