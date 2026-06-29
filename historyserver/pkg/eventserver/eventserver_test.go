@@ -652,7 +652,8 @@ func TestActorLifecycleEventDeduplication(t *testing.T) {
 			}
 
 			// Get the actor and verify
-			actor, found := h.BuildSnapshot(clusterInfo).Actors[testActorID]
+			snap := h.BuildSnapshot(clusterInfo)
+			actor, found := snap.Actors[testActorID]
 			if !found {
 				t.Fatal("Actor not found after processing")
 			}
@@ -819,7 +820,8 @@ func TestDriverJobLifecycleEventDuplication(t *testing.T) {
 				t.Fatalf("storeEvent() unexpected error: %v", err)
 			}
 
-			job, exists := h.BuildSnapshot(clusterInfo).Jobs[testJobID]
+			snap := h.BuildSnapshot(clusterInfo)
+			job, exists := snap.Jobs[testJobID]
 			if !exists {
 				t.Fatal("Job not found after processing")
 			}
@@ -1075,15 +1077,15 @@ func TestProcessSingleSession(t *testing.T) {
 		err = h.ProcessSingleSession(context.Background(), clusterInfo)
 		require.NoError(t, err)
 
-		nodes := h.BuildSnapshot(clusterInfo).Nodes
-		assert.Len(t, nodes, 2)
+		snap := h.BuildSnapshot(clusterInfo)
+		assert.Len(t, snap.Nodes, 2)
 
 		// "YWJjZA==" -> hex "61626364" (abcd)
-		_, ok := nodes["61626364"]
+		_, ok := snap.Nodes["61626364"]
 		assert.True(t, ok, "node1 (compressed) should be successfully loaded")
 
 		// "ZWZnaA==" -> hex "65666768" (efgh)
-		_, ok = nodes["65666768"]
+		_, ok = snap.Nodes["65666768"]
 		assert.True(t, ok, "node2 (uncompressed) should be successfully loaded")
 	})
 }
