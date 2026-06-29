@@ -10,3 +10,4 @@ spec:
       - name: kuberay-operator
         args:
         - --feature-gates=RayClusterStatusConditions=true,RayJobDeletionPolicy=true,RayMultiHostIndexing=true,RayCronJob=true,RayServiceIncrementalUpgrade=true,SidecarSubmitterRestart=true
+        - --enable-metrics=true
