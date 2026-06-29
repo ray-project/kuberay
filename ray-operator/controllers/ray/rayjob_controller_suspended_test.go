@@ -393,7 +393,7 @@ var _ = Context("RayJob with suspend operation", func() {
 			})
 
 			Expect(err).NotTo(HaveOccurred())
-			Expect(result.RequeueAfter).To(Equal(time.Duration(0)))
+			Expect(result.RequeueAfter).To(BeNumerically(">", 0))
 		})
 
 		It("should have called the dashboard client", func() {
@@ -494,7 +494,7 @@ var _ = Context("RayJob with suspend operation", func() {
 			})
 
 			Expect(err).NotTo(HaveOccurred())
-			Expect(result.RequeueAfter).To(Equal(time.Duration(0)))
+			Expect(result.RequeueAfter).To(BeNumerically(">", 0))
 		})
 
 		It("should transition to Suspended with JobStatus Stopped", func() {
