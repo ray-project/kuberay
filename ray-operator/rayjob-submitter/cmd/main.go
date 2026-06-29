@@ -18,11 +18,13 @@ import (
 
 func main() {
 	var (
-		runtimeEnvJson      string
-		metadataJson        string
-		entrypointResources string
-		entrypointNumCpus   float32
-		entrypointNumGpus   float32
+		runtimeEnvJson          string
+		metadataJson            string
+		entrypointResources     string
+		entrypointNumCpus       float32
+		entrypointNumGpus       float32
+		entrypointMemory        int64
+		entrypointLabelSelector string
 	)
 
 	flag.StringVar(&runtimeEnvJson, "runtime-env-json", "", "JSON-serialized runtime_env dictionary.")
@@ -30,6 +32,8 @@ func main() {
 	flag.StringVar(&entrypointResources, "entrypoint-resources", "", "a JSON-serialized dictionary mapping resource name to resource quantity describing resources to reserve for the entrypoint command, separately from any tasks or actors that are launched by it.")
 	flag.Float32Var(&entrypointNumCpus, "entrypoint-num-cpus", 0.0, "the quantity of CPU cores to reserve for the entrypoint command, separately from any tasks or actors that are launched by it.")
 	flag.Float32Var(&entrypointNumGpus, "entrypoint-num-gpus", 0.0, "the quantity of GPU cores to reserve for the entrypoint command, separately from any tasks or actors that are launched by it.")
+	flag.Int64Var(&entrypointMemory, "entrypoint-memory", 0, "the amount of memory in bytes to reserve for the entrypoint command, separately from any tasks or actors that are launched by it.")
+	flag.StringVar(&entrypointLabelSelector, "entrypoint-label-selector", "", "a JSON-serialized dictionary mapping label keys to selector strings describing placement constraints for the entrypoint command.")
 	flag.Parse()
 
 	address := os.Getenv("RAY_DASHBOARD_ADDRESS")
@@ -46,6 +50,7 @@ func main() {
 		SubmissionId: submissionId,
 		NumCpus:      entrypointNumCpus,
 		NumGpus:      entrypointNumGpus,
+		Memory:       entrypointMemory,
 	}
 	if len(runtimeEnvJson) > 0 {
 		if err := json.Unmarshal([]byte(runtimeEnvJson), &req.RuntimeEnv); err != nil {
@@ -59,6 +64,11 @@ func main() {
 	}
 	if len(entrypointResources) > 0 {
 		if err := json.Unmarshal([]byte(entrypointResources), &req.Resources); err != nil {
+			exitOnError(err)
+		}
+	}
+	if len(entrypointLabelSelector) > 0 {
+		if err := json.Unmarshal([]byte(entrypointLabelSelector), &req.LabelSelector); err != nil {
 			exitOnError(err)
 		}
 	}

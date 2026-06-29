@@ -26,13 +26,15 @@ type RayJobInfo struct {
 // Reference to https://docs.ray.io/en/latest/cluster/running-applications/job-submission/rest.html#ray-job-rest-api-spec
 // Reference to https://github.com/ray-project/ray/blob/cfbf98c315cfb2710c56039a3c96477d196de049/dashboard/modules/job/common.py#L325-L353
 type RayJobRequest struct {
-	RuntimeEnv   RuntimeEnvType     `json:"runtime_env,omitempty"`
-	Metadata     map[string]string  `json:"metadata,omitempty"`
-	Resources    map[string]float32 `json:"entrypoint_resources,omitempty"`
-	Entrypoint   string             `json:"entrypoint"`
-	SubmissionId string             `json:"submission_id,omitempty"`
-	NumCpus      float32            `json:"entrypoint_num_cpus,omitempty"`
-	NumGpus      float32            `json:"entrypoint_num_gpus,omitempty"`
+	RuntimeEnv    RuntimeEnvType     `json:"runtime_env,omitempty"`
+	Metadata      map[string]string  `json:"metadata,omitempty"`
+	Resources     map[string]float32 `json:"entrypoint_resources,omitempty"`
+	Entrypoint    string             `json:"entrypoint"`
+	SubmissionId  string             `json:"submission_id,omitempty"`
+	NumCpus       float32            `json:"entrypoint_num_cpus,omitempty"`
+	NumGpus       float32            `json:"entrypoint_num_gpus,omitempty"`
+	Memory        int64              `json:"entrypoint_memory,omitempty"`
+	LabelSelector map[string]string  `json:"entrypoint_label_selector,omitempty"`
 }
 
 type RayJobResponse struct {
