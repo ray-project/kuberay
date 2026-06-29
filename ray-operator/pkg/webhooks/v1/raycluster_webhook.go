@@ -57,6 +57,10 @@ func (w *RayClusterWebhook) validateRayCluster(rayCluster *rayv1.RayCluster) err
 		allErrs = append(allErrs, err)
 	}
 
+	if err := w.validateGcsFTOptions(rayCluster); err != nil {
+		allErrs = append(allErrs, err)
+	}
+
 	if len(allErrs) == 0 {
 		return nil
 	}
@@ -74,6 +78,76 @@ func (w *RayClusterWebhook) validateWorkerGroups(rayCluster *rayv1.RayCluster) *
 			return field.Invalid(field.NewPath("spec").Child("workerGroupSpecs").Index(i), workerGroup, "worker group names must be unique")
 		}
 		workerGroupNames[workerGroup.GroupName] = true
+	}
+
+	return nil
+}
+
+func (w *RayClusterWebhook) validateGcsFTOptions(rayCluster *rayv1.RayCluster) *field.Error {
+	ftOpts := rayCluster.Spec.GcsFaultToleranceOptions
+	if ftOpts == nil {
+		return nil
+	}
+
+	if ftOpts.EnableActivePassiveHead == nil || !*ftOpts.EnableActivePassiveHead {
+		if ftOpts.LeaderElectionLeaseDurationSeconds != nil ||
+			ftOpts.LeaderElectionRenewDeadlineSeconds != nil ||
+			ftOpts.LeaderElectionRetryPeriodSeconds != nil {
+			return field.Invalid(
+				field.NewPath("spec").Child("gcsFaultToleranceOptions"),
+				ftOpts,
+				"leader election lease parameters (lease duration, renew deadline, retry period) can only be configured when enableActivePassiveHead is true",
+			)
+		}
+		return nil
+	}
+
+	if ftOpts.RedisAddress == "" {
+		return field.Invalid(
+			field.NewPath("spec").Child("gcsFaultToleranceOptions").Child("redisAddress"),
+			ftOpts.RedisAddress,
+			"redisAddress must be configured when enableActivePassiveHead is true",
+		)
+	}
+
+	if (ftOpts.LeaderElectionLeaseDurationSeconds != nil && *ftOpts.LeaderElectionLeaseDurationSeconds <= 0) ||
+		(ftOpts.LeaderElectionRenewDeadlineSeconds != nil && *ftOpts.LeaderElectionRenewDeadlineSeconds <= 0) ||
+		(ftOpts.LeaderElectionRetryPeriodSeconds != nil && *ftOpts.LeaderElectionRetryPeriodSeconds <= 0) {
+		return field.Invalid(
+			field.NewPath("spec").Child("gcsFaultToleranceOptions"),
+			ftOpts,
+			"leader election lease parameters (lease duration, renew deadline, retry period) must be greater than 0",
+		)
+	}
+
+	leaseDuration := int32(15) // default
+	if ftOpts.LeaderElectionLeaseDurationSeconds != nil {
+		leaseDuration = *ftOpts.LeaderElectionLeaseDurationSeconds
+	}
+
+	renewDeadline := int32(10) // default
+	if ftOpts.LeaderElectionRenewDeadlineSeconds != nil {
+		renewDeadline = *ftOpts.LeaderElectionRenewDeadlineSeconds
+	}
+
+	retryPeriod := int32(2) // default
+	if ftOpts.LeaderElectionRetryPeriodSeconds != nil {
+		retryPeriod = *ftOpts.LeaderElectionRetryPeriodSeconds
+	}
+
+	if leaseDuration <= renewDeadline {
+		return field.Invalid(
+			field.NewPath("spec").Child("gcsFaultToleranceOptions").Child("leaderElectionLeaseDurationSeconds"),
+			leaseDuration,
+			"leaderElectionLeaseDurationSeconds must be greater than leaderElectionRenewDeadlineSeconds",
+		)
+	}
+	if renewDeadline <= retryPeriod {
+		return field.Invalid(
+			field.NewPath("spec").Child("gcsFaultToleranceOptions").Child("leaderElectionRenewDeadlineSeconds"),
+			renewDeadline,
+			"leaderElectionRenewDeadlineSeconds must be greater than leaderElectionRetryPeriodSeconds",
+		)
 	}
 
 	return nil

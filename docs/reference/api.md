@@ -242,6 +242,10 @@ _Appears in:_
 | `redisPassword` _[RedisCredential](#rediscredential)_ |  |  |  |
 | `externalStorageNamespace` _string_ |  |  |  |
 | `redisAddress` _string_ |  |  |  |
+| `enableActivePassiveHead` _boolean_ | EnableActivePassiveHead enables active-passive high availability for the GCS.<br />If enabled, KubeRay will provision a standby head node to ensure quick recovery. | false |  |
+| `leaderElectionLeaseDurationSeconds` _integer_ | LeaderElectionLeaseDurationSeconds is the duration that non-leader candidates wait before forcing leadership acquisition. |  |  |
+| `leaderElectionRenewDeadlineSeconds` _integer_ | LeaderElectionRenewDeadlineSeconds is the acting leader's bounded deadline for executing consecutive renewal sequences. |  |  |
+| `leaderElectionRetryPeriodSeconds` _integer_ | LeaderElectionRetryPeriodSeconds is the duration clients wait between sequential resource acquisition attempts. |  |  |
 
 
 #### HeadGroupSpec
