@@ -35,7 +35,7 @@ func TestEnterCluster(t *testing.T) {
 			return SessionStatusEventsErr, nil, fmt.Errorf("unknown session")
 		},
 	}
-	handler.sessionLoader = NewSessionLoader(fp, context.Background(), DefaultSessionProcessTimeout, DefaultSessionCacheSize, DefaultSessionCacheTTL)
+	handler.sessionLoader = NewSessionLoader(fp, context.Background(), DefaultSessionProcessTimeout, DefaultSessionCacheSize, DefaultSessionCacheMaxBytes, DefaultSessionCacheTTL)
 
 	// Single session cluster
 	keyA := utils.ClusterKey{
