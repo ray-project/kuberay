@@ -23,8 +23,14 @@ const (
 	// DefaultSessionCacheTTL is how long a dead-session snapshot stays cached after last access.
 	// 0 disables expiry.
 	DefaultSessionCacheTTL time.Duration = 0
-	// DefaultSessionCacheMaxBytes is the max total bytes of cached dead-session snapshots.
-	// 0 disables the byte bound; defaulted to 256 MiB.
+	// DefaultSessionCacheMaxBytes bounds the total bytes of cached dead-session snapshots.
+	// 0 disables the byte bound.
+	//
+	// This is a soft bound on the idle resident cache, not a hard cap on process memory.
+	// Real usage can exceed it in three ways:
+	//   - add-then-evict: cache momentarily holds oldTotal + newEntry
+	//   - one large session: a single snapshot bigger than the whole budget is kept
+	//   - per-request decode: every GET unmarshals cached bytes into a full *SessionSnapshot
 	DefaultSessionCacheMaxBytes = 256 << 20
 )
 
@@ -225,11 +231,4 @@ func decodeSnapshot(encoded []byte) (*eventserver.SessionSnapshot, error) {
 		return nil, err
 	}
 	return &snap, nil
-}
-
-// CacheStats reports the number of sessions and the total bytes held by the cache.
-func (s *SessionLoader) CacheStats() (int, int) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.cache.Len(), s.totalBytes()
 }

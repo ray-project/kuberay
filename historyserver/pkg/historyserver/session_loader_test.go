@@ -384,32 +384,6 @@ func TestGetSnapshot_SlidingTTLRenewal(t *testing.T) {
 	requireSnapshotCached(t, sl, key, false)
 }
 
-// TestCacheStats_TracksEntriesAndBytes verifies CacheStats reports the entry
-// count and the exact sum of encoded snapshot lengths.
-func TestCacheStats_TracksEntriesAndBytes(t *testing.T) {
-	sl := newTestLoader(t, &fakeProcessor{}, loaderTestConfig{})
-
-	if entries, total := sl.CacheStats(); entries != 0 || total != 0 {
-		t.Fatalf("empty cache: got (entries=%d, bytes=%d), want (0, 0)", entries, total)
-	}
-
-	key1 := testClusterSessionKey()
-	s1 := richSnapshot(key1)
-	sl.putSnapshot(key1, s1)
-	enc1, _ := encodeSnapshot(s1)
-	if entries, total := sl.CacheStats(); entries != 1 || total != len(enc1) {
-		t.Fatalf("after 1 put: got (entries=%d, bytes=%d), want (1, %d)", entries, total, len(enc1))
-	}
-
-	key2 := testClusterSessionKeyFor("session_2026-04-22_11-00-00_000000_1")
-	s2 := richSnapshot(key2)
-	sl.putSnapshot(key2, s2)
-	enc2, _ := encodeSnapshot(s2)
-	if entries, total := sl.CacheStats(); entries != 2 || total != len(enc1)+len(enc2) {
-		t.Fatalf("after 2 puts: got (entries=%d, bytes=%d), want (2, %d)", entries, total, len(enc1)+len(enc2))
-	}
-}
-
 // TestCache_ByteBudgetEviction verifies that exceeding maxBytes evicts the
 // LRU entries until the cache is back under budget.
 func TestCache_ByteBudgetEviction(t *testing.T) {
@@ -428,7 +402,7 @@ func TestCache_ByteBudgetEviction(t *testing.T) {
 
 	requireSnapshotCached(t, sl, olderKey, false)
 	requireSnapshotCached(t, sl, newerKey, true)
-	if entries, total := sl.CacheStats(); entries != 1 || total > maxBytes {
+	if entries, total := sl.cache.Len(), sl.totalBytes(); entries != 1 || total > maxBytes {
 		t.Fatalf("after byte-budget eviction: got (entries=%d, bytes=%d), want (1, <=%d)", entries, total, maxBytes)
 	}
 }
