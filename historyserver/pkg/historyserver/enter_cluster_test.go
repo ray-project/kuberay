@@ -35,7 +35,7 @@ func TestEnterCluster(t *testing.T) {
 			return SessionStatusEventsErr, nil, fmt.Errorf("unknown session")
 		},
 	}
-	handler.sessionLoader = NewSessionLoader(fp, context.Background(), DefaultSessionProcessTimeout, DefaultSessionCacheSize, DefaultSessionCacheTTL)
+	handler.sessionLoader = NewSessionLoader(fp, DefaultSessionProcessTimeout, DefaultSessionCacheSize, DefaultSessionCacheTTL)
 
 	// Single session cluster
 	keyA := utils.ClusterKey{
@@ -108,7 +108,7 @@ func TestEnterCluster(t *testing.T) {
 	sort.Sort(utils.ClusterInfoList(handler.clustersMap[keyB]))
 
 	// Register actual router
-	routerRayClusterSet(handler)
+	routerRayClusterSet(handler, context.Background())
 
 	container := restful.DefaultContainer
 

@@ -43,8 +43,8 @@ func NewServerHandler(c *types.RayHistoryServerConfig, dashboardDir string, read
 		maxClusters: 100,
 	}
 
-	if len(clientManager.configs) > 0 {
-		k8sRestConfig := clientManager.configs[0]
+	if clientManager.config != nil {
+		k8sRestConfig := clientManager.config
 		if useKubernetesProxy {
 			transportConfig, err := k8sRestConfig.TransportConfig()
 			if err != nil {
@@ -73,8 +73,8 @@ func NewServerHandler(c *types.RayHistoryServerConfig, dashboardDir string, read
 	return handler, nil
 }
 
-func (s *ServerHandler) Run(stop <-chan struct{}) error {
-	s.RegisterRouter()
+func (s *ServerHandler) Run(ctx context.Context) error {
+	s.RegisterRouter(ctx)
 	port := ":8080"
 	server := &http.Server{
 		Addr:         port,             // Listen address
@@ -91,14 +91,14 @@ func (s *ServerHandler) Run(stop <-chan struct{}) error {
 		logrus.Infof("Server stopped gracefully")
 	}()
 
-	<-stop
-	logrus.Warnf("Receive stop single, so stop ray history server")
-	// Create a context with 1 second timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	<-ctx.Done()
+	logrus.Info("Received shutdown signal, initiating graceful shutdown...")
+	// Give in-flight requests a brief window to drain before forcing shutdown.
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 
 	// Shutdown the server
-	if err := server.Shutdown(ctx); err != nil {
+	if err := server.Shutdown(shutdownCtx); err != nil {
 		log.Fatalf("Ray HistoryServer forced to shutdown: %v", err)
 	}
 	return nil

@@ -24,29 +24,26 @@ const (
 )
 
 type ClientManager struct {
-	configs []*rest.Config
-	clients []client.Client
+	config *rest.Config
+	client client.Client
 }
 
-// Client returns the primary controller-runtime client.
+// Client returns the controller-runtime client.
 func (c *ClientManager) Client() client.Client {
-	return c.clients[0]
+	return c.client
 }
 
 func (c *ClientManager) ListRayClusters(ctx context.Context) ([]*rayv1.RayCluster, error) {
-	list := []*rayv1.RayCluster{}
-	for _, c := range c.clients {
-		listOfRayCluster := rayv1.RayClusterList{}
-		err := c.List(ctx, &listOfRayCluster)
-		if err != nil {
-			logrus.Errorf("Failed to list RayClusters: %v", err)
-			continue
-		}
-		for _, rayCluster := range listOfRayCluster.Items {
-			list = append(list, &rayCluster)
-		}
+	var clusterList rayv1.RayClusterList
+	if err := c.client.List(ctx, &clusterList); err != nil {
+		logrus.Errorf("Failed to list RayClusters: %v", err)
+		return nil, err
 	}
-	return list, nil
+	clusters := make([]*rayv1.RayCluster, 0, len(clusterList.Items))
+	for i := range clusterList.Items {
+		clusters = append(clusters, &clusterList.Items[i])
+	}
+	return clusters, nil
 }
 
 type ClientManagerConfig struct {
@@ -59,9 +56,8 @@ type ClientManagerConfig struct {
 func NewClientManager(cfg ClientManagerConfig) (*ClientManager, error) {
 	kubeconfigs := cfg.Kubeconfigs
 
-	var c *rest.Config
+	var restConfig *rest.Config
 	var err error
-	kubeconfigList := []*rest.Config{}
 	if len(kubeconfigs) > 0 {
 		stringList := strings.Split(kubeconfigs, ",")
 		if len(stringList) > 1 {
@@ -74,7 +70,7 @@ func NewClientManager(cfg ClientManagerConfig) (*ClientManager, error) {
 			return nil, fmt.Errorf("kubeconfig is empty")
 		}
 
-		c, err = clientcmd.BuildConfigFromFlags("", stringList[0])
+		restConfig, err = clientcmd.BuildConfigFromFlags("", stringList[0])
 		if err != nil {
 			return nil, fmt.Errorf("failed to build config from kubeconfig: %w", err)
 		}
@@ -85,43 +81,32 @@ func NewClientManager(cfg ClientManagerConfig) (*ClientManager, error) {
 			loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
 			configOverrides := &clientcmd.ConfigOverrides{}
 			clientConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, configOverrides)
-			c, err = clientConfig.ClientConfig()
+			restConfig, err = clientConfig.ClientConfig()
 			if err != nil {
 				return nil, fmt.Errorf("failed to load default kubeconfig in Kubernetes proxy mode: %w", err)
 			}
 		} else {
-			c, err = rest.InClusterConfig()
+			restConfig, err = rest.InClusterConfig()
 			if err != nil {
 				return nil, fmt.Errorf("failed to build config from in-cluster kubeconfig: %w", err)
 			}
 		}
 	}
-	c.QPS = cfg.QPS
-	c.Burst = cfg.Burst
-	kubeconfigList = append(kubeconfigList, c)
+	restConfig.QPS = cfg.QPS
+	restConfig.Burst = cfg.Burst
 
 	scheme := runtime.NewScheme()
 	utilruntime.Must(rayv1.AddToScheme(scheme))
-	clientList := []client.Client{}
-	for _, config := range kubeconfigList {
-		c, err := client.New(config, client.Options{
-			Scheme: scheme,
-		})
-		if err != nil {
-			logrus.Errorf("Failed to create client: %v", err)
-			continue
-		}
-		clientList = append(clientList, c)
+	cli, err := client.New(restConfig, client.Options{
+		Scheme: scheme,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create client: %w", err)
 	}
 
-	if len(clientList) == 0 {
-		return nil, fmt.Errorf("failed to create any client")
-	}
-
-	logrus.Infof("create client manager successfully, clients: %v", len(clientList))
-	clientManager := &ClientManager{
-		configs: kubeconfigList,
-		clients: clientList,
-	}
-	return clientManager, nil
+	logrus.Info("create client manager successfully")
+	return &ClientManager{
+		config: restConfig,
+		client: cli,
+	}, nil
 }

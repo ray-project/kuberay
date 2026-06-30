@@ -296,7 +296,7 @@ func routerLogical(s *ServerHandler) {
 
 }
 
-func routerRayClusterSet(s *ServerHandler) {
+func routerRayClusterSet(s *ServerHandler, serverCtx context.Context) {
 	ws := new(restful.WebService)
 	defer restful.Add(ws)
 
@@ -322,7 +322,7 @@ func routerRayClusterSet(s *ServerHandler) {
 				return
 			}
 			info := utils.ClusterInfo{Name: name, Namespace: namespace, SessionName: resolvedSession}
-			live, err := s.sessionLoader.LoadSession(r1.Request.Context(), info)
+			live, err := s.sessionLoader.LoadSession(r1.Request.Context(), serverCtx, info)
 			if err != nil {
 				logrus.Errorf("Failed to load session %s/%s/%s: %v", namespace, name, resolvedSession, err)
 				r2.WriteErrorString(http.StatusInternalServerError, err.Error())
@@ -361,8 +361,8 @@ func routerRayClusterSet(s *ServerHandler) {
 		Writes("")) // Placeholder for specific return type
 }
 
-func (s *ServerHandler) RegisterRouter() {
-	routerRayClusterSet(s)
+func (s *ServerHandler) RegisterRouter(serverCtx context.Context) {
+	routerRayClusterSet(s, serverCtx)
 	routerClusters(s)
 	routerTimezone(s)
 	routerNodes(s)
@@ -381,7 +381,7 @@ func (s *ServerHandler) redirectRequest(req *restful.Request, resp *restful.Resp
 	if s.useKubernetesProxy {
 		// Use Kubernetes API server proxy to access the in-cluster RayDashboard services.
 		targetURL = fmt.Sprintf("%s/api/v1/namespaces/%s/services/%s:dashboard/proxy%s",
-			s.clientManager.configs[0].Host,
+			s.clientManager.config.Host,
 			svcInfo.Namespace,
 			svcInfo.ServiceName,
 			req.Request.URL.String())
@@ -1880,7 +1880,7 @@ func (s *ServerHandler) CookieHandle(req *restful.Request, resp *restful.Respons
 		// Always query K8s to get the service name to prevent SSRF attacks.
 		// Do not trust user-provided cookies for service name.
 		// TODO: here might be a bottleneck if there are many requests in the future.
-		svcInfo, err := getClusterSvcInfo(s.clientManager.clients, clusterName.Value, clusterNamespace.Value)
+		svcInfo, err := getClusterSvcInfo(s.clientManager.Client(), clusterName.Value, clusterNamespace.Value)
 		if err != nil {
 			resp.WriteHeaderAndEntity(http.StatusBadRequest, err.Error())
 			return
@@ -1894,11 +1894,10 @@ func (s *ServerHandler) CookieHandle(req *restful.Request, resp *restful.Respons
 	chain.ProcessFilter(req, resp)
 }
 
-func getClusterSvcInfo(clis []client.Client, name, namespace string) (ServiceInfo, error) {
-	if len(clis) == 0 {
+func getClusterSvcInfo(cli client.Client, name, namespace string) (ServiceInfo, error) {
+	if cli == nil {
 		return ServiceInfo{}, errors.New("No available kubernetes config found")
 	}
-	cli := clis[0]
 	rc := rayv1.RayCluster{}
 	err := cli.Get(context.Background(), types.NamespacedName{Namespace: namespace, Name: name}, &rc)
 	if err != nil {
