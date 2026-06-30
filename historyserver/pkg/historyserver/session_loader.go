@@ -189,17 +189,15 @@ func (s *SessionLoader) evictToByteBudget() {
 	if s.maxBytes <= 0 {
 		return
 	}
-	total := s.totalBytes()
-	for total > s.maxBytes && s.cache.Len() > 1 {
-		_, evicted, ok := s.cache.RemoveOldest()
-		if !ok {
+	// Recompute after each removal: RemoveOldest may drop TTL-expired entries that totalBytes skips.
+	for s.totalBytes() > s.maxBytes && s.cache.Len() > 1 {
+		if _, _, ok := s.cache.RemoveOldest(); !ok {
 			logrus.Errorf("byte-budget eviction stalled: RemoveOldest failed with %d entries, %d bytes (budget %d)",
-				s.cache.Len(), total, s.maxBytes)
+				s.cache.Len(), s.totalBytes(), s.maxBytes)
 			break
 		}
-		total -= len(evicted)
 	}
-	if total > s.maxBytes {
+	if total := s.totalBytes(); total > s.maxBytes {
 		if s.cache.Len() == 1 {
 			logrus.Warnf("single cached snapshot exceeds byte budget (%d > %d bytes); keeping it", total, s.maxBytes)
 		} else {
