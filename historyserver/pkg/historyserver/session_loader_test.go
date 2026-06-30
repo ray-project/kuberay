@@ -473,6 +473,18 @@ func TestSnapshotCache_RoundTripPreservesData(t *testing.T) {
 	if !reflect.DeepEqual(wantCF, gotCF) {
 		t.Fatalf("CustomFields round-trip mismatch:\n want=%#v\n  got=%#v", wantCF, gotCF)
 	}
+
+	wantTask, gotTask := snap.Tasks[0], got.Tasks[0]
+	if gotTask.State != wantTask.State ||
+		!gotTask.CreationTime.Equal(wantTask.CreationTime) ||
+		!gotTask.StartTime.Equal(wantTask.StartTime) ||
+		!gotTask.EndTime.Equal(wantTask.EndTime) {
+		t.Fatalf("Task derived fields lost in round-trip:\n want=%+v\n  got=%+v", wantTask, gotTask)
+	}
+	if got.Actors["actor-e2e-cafe"].State != snap.Actors["actor-e2e-cafe"].State {
+		t.Fatalf("Actor.State lost in round-trip: want=%q got=%q",
+			snap.Actors["actor-e2e-cafe"].State, got.Actors["actor-e2e-cafe"].State)
+	}
 }
 
 // richSnapshot builds a snapshot exercising all five session states.
@@ -483,11 +495,19 @@ func richSnapshot(clusterSessionKey string) *eventserver.SessionSnapshot {
 	return &eventserver.SessionSnapshot{
 		SessionKey: clusterSessionKey,
 		Tasks: []eventtypes.Task{
-			{TaskID: "task-e2e-1111", TaskAttempt: 0, JobID: "job-e2e-aaaa", TaskName: "café-task-名前", RequiredResources: map[string]float64{"CPU": 2}},
+			{
+				TaskID: "task-e2e-1111", TaskAttempt: 0, JobID: "job-e2e-aaaa",
+				TaskName: "task-e2e-name", RequiredResources: map[string]float64{"CPU": 2},
+				// Set derived lifecycle fields so the round-trip test proves they survive encoding/decoding.
+				State:        eventtypes.RUNNING,
+				CreationTime: time.Unix(1770635700, 0).UTC(),
+				StartTime:    time.Unix(1770635705, 0).UTC(),
+				EndTime:      time.Unix(1770635710, 0).UTC(),
+			},
 			{TaskID: "task-e2e-2222", TaskAttempt: 1, JobID: "job-e2e-aaaa"},
 		},
 		Actors: map[string]eventtypes.Actor{
-			"actor-e2e-cafe": {ActorID: "actor-e2e-cafe", JobID: "job-e2e-aaaa", ActorClass: "MyActor", Name: "actorname-e2e", NumRestarts: 3},
+			"actor-e2e-cafe": {ActorID: "actor-e2e-cafe", JobID: "job-e2e-aaaa", ActorClass: "MyActor", Name: "actorname-e2e", NumRestarts: 3, State: eventtypes.ALIVE},
 		},
 		Jobs: map[string]eventtypes.Job{
 			"job-e2e-aaaa": {JobID: "job-e2e-aaaa", SubmissionID: "sub-e2e-bbbb", JobType: "SUBMISSION", EntryPoint: "python main.py", RuntimeEnv: map[string]string{"pip": "ray"}},
