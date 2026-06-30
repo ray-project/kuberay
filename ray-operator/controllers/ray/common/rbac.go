@@ -54,6 +54,11 @@ func BuildRole(cluster *rayv1.RayCluster) (*rbacv1.Role, error) {
 				Resources: []string{"rayclusters"},
 				Verbs:     []string{"get", "patch"},
 			},
+			{
+				APIGroups: []string{"ray.io"},
+				Resources: []string{"rayclusters/status"},
+				Verbs:     []string{"patch"},
+			},
 		},
 	}
 

@@ -296,6 +296,10 @@ type AutoscalerOptions struct {
 	// Defaults to 60 (one minute). It is not read by the KubeRay operator but by the Ray autoscaler.
 	// +optional
 	IdleTimeoutSeconds *int32 `json:"idleTimeoutSeconds,omitempty"`
+	// TTLSecondsAfterIdle is the number of seconds to wait before deleting an idle RayCluster.
+	// The Ray autoscaler observes cluster idleness and reports the IdleTTLExpired status condition. The KubeRay operator deletes the RayCluster when the condition is true.
+	// +optional
+	TTLSecondsAfterIdle *int32 `json:"ttlSecondsAfterIdle,omitempty"`
 	// UpscalingMode is "Conservative", "Default", or "Aggressive."
 	// Conservative: Upscaling is rate-limited; the number of pending worker pods is at most the size of the Ray cluster.
 	// Default: Upscaling is not rate-limited.
@@ -446,6 +450,8 @@ const (
 	RayClusterSuspending RayClusterConditionType = "RayClusterSuspending"
 	// RayClusterSuspended is set to true when all Pods belonging to a suspending RayCluster are deleted. Note that RayClusterSuspending and RayClusterSuspended cannot both be true at the same time.
 	RayClusterSuspended RayClusterConditionType = "RayClusterSuspended"
+	// IdleTTLExpired is set to true by the Ray autoscaler when the cluster has been idle longer than spec.autoscalerOptions.ttlSecondsAfterIdle.
+	IdleTTLExpired RayClusterConditionType = "IdleTTLExpired"
 )
 
 // HeadInfo gives info about head
