@@ -43,9 +43,11 @@ type processor interface {
 // TTL expiry and triggers session processing on cache miss. Concurrent callers
 // for the same session are coalesced via singleflight.
 type SessionLoader struct {
-	processor      processor
-	cache          *expirable.LRU[string, []byte]
-	maxBytes       int
+	processor processor
+	cache     *expirable.LRU[string, []byte]
+	maxBytes  int
+	// mu guards only the byte-budget read-modify-write; expirable.LRU is
+	// independently thread-safe. A lone Get/Add/Peek does not need mu.
 	mu             sync.Mutex
 	sf             singleflight.Group
 	serverCtx      context.Context

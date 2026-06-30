@@ -292,29 +292,58 @@ func TestGetSnapshot_PutOverwrites(t *testing.T) {
 	}
 }
 
-// TestGetSnapshot_MapsArePerRequest verifies every section is an independent copy
-// per request, so one reader's mutation cannot leak to another.
-func TestGetSnapshot_MapsArePerRequest(t *testing.T) {
+// TestGetSnapshot_ConcurrentReadsAreThreadSafe verifies the thread-safety
+// of the byte cache under data race detection (-race).
+func TestGetSnapshot_ConcurrentReadsAreThreadSafe(t *testing.T) {
 	key := testClusterSessionKey()
 
 	sl := newTestLoader(t, &fakeProcessor{}, loaderTestConfig{})
 	sl.putSnapshot(key, richSnapshot(key))
-	first, _ := sl.GetSnapshot(key)
-	second, _ := sl.GetSnapshot(key)
 
-	first.Actors["actor-e2e-cafe"] = eventtypes.Actor{ActorID: "MUTATED"}
-	delete(first.Nodes, "node-e2e-dead")
-	first.Jobs["injected"] = eventtypes.Job{}
+	const goroutines = 50
+	var wg sync.WaitGroup
 
-	if second.Actors["actor-e2e-cafe"].ActorID != "actor-e2e-cafe" {
-		t.Fatal("Actors map leaked across requests")
+	for i := 0; i < goroutines; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := sl.putSnapshot(key, richSnapshot(key)); err != nil {
+				t.Errorf("putSnapshot: %v", err)
+			}
+		}()
 	}
-	if _, ok := second.Nodes["node-e2e-dead"]; !ok {
-		t.Fatal("Nodes map leaked across requests")
+
+	for i := 0; i < goroutines; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			mine, ok := sl.GetSnapshot(key)
+			if !ok {
+				t.Errorf("GetSnapshot: unexpected miss")
+				return
+			}
+			mine.Actors["actor-e2e-cafe"] = eventtypes.Actor{ActorID: "MUTATED"}
+			delete(mine.Nodes, "node-e2e-dead")
+			mine.Jobs["injected"] = eventtypes.Job{}
+
+			fresh, ok := sl.GetSnapshot(key)
+			if !ok {
+				t.Errorf("GetSnapshot: unexpected miss on re-read")
+				return
+			}
+			if fresh.Actors["actor-e2e-cafe"].ActorID != "actor-e2e-cafe" {
+				t.Errorf("Actors map leaked across requests")
+			}
+			if _, ok := fresh.Nodes["node-e2e-dead"]; !ok {
+				t.Errorf("Nodes map leaked across requests")
+			}
+			if _, ok := fresh.Jobs["injected"]; ok {
+				t.Errorf("Jobs map leaked across requests")
+			}
+		}()
 	}
-	if _, ok := second.Jobs["injected"]; ok {
-		t.Fatal("Jobs map leaked across requests")
-	}
+
+	wg.Wait()
 }
 
 // TestGetSnapshot_CorruptEntry_TreatedAsMiss verifies that a non-decodable cache
