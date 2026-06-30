@@ -64,7 +64,7 @@ func (s *SessionLoader) GetSnapshot(clusterSessionKey string) (*eventserver.Sess
 	if !ok {
 		return nil, false
 	}
-	s.renewTTL(clusterSessionKey, encoded)
+	s.renewTTL(clusterSessionKey)
 
 	snap, err := decodeSnapshot(encoded)
 	if err != nil {
@@ -82,13 +82,12 @@ func (s *SessionLoader) GetSnapshot(clusterSessionKey string) (*eventserver.Sess
 // renewTTL extends ExpiresAt for a cache hit.
 //
 // Must not re-insert after a concurrent byte eviction.
-func (s *SessionLoader) renewTTL(clusterSessionKey string, encoded []byte) {
+func (s *SessionLoader) renewTTL(clusterSessionKey string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if _, stillCached := s.cache.Peek(clusterSessionKey); !stillCached {
-		return
+	if v, ok := s.cache.Peek(clusterSessionKey); ok {
+		s.cache.Add(clusterSessionKey, v)
 	}
-	s.cache.Add(clusterSessionKey, encoded)
 }
 
 // LoadSession blocks until a dead session is processed and cached or an
