@@ -303,6 +303,20 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 		return ctrl.Result{}, nil
 	}
 
+	// When the cluster has had no user driver attached for longer than spec.autoscalerOptions.noDriverTimeoutSeconds,
+	// the Ray autoscaler v2 sets the `ray.io/no-driver-ttl-expired` annotation.
+	if utils.IsNoDriverTimeoutTerminationEnabled(&instance.Spec) && instance.Annotations[utils.NoDriverTTLExpiredAnnotationKey] == "true" {
+		logger.Info("Deleting RayCluster because no user driver has been attached for longer than noDriverTimeoutSeconds",
+			"noDriverTimeoutSeconds", *instance.Spec.AutoscalerOptions.NoDriverTimeoutSeconds)
+		r.Recorder.Eventf(instance, corev1.EventTypeNormal, string(utils.DeletedRayClusterNoDriverTimeout),
+			"Deleting RayCluster %s/%s because no user driver has been attached for longer than noDriverTimeoutSeconds=%d",
+			instance.Namespace, instance.Name, *instance.Spec.AutoscalerOptions.NoDriverTimeoutSeconds)
+		if err := r.Delete(ctx, instance); err != nil {
+			return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, client.IgnoreNotFound(err)
+		}
+		return ctrl.Result{}, nil
+	}
+
 	reconcileFuncs := []reconcileFunc{
 		r.reconcileAutoscalerServiceAccount,
 		r.reconcileAutoscalerRole,
