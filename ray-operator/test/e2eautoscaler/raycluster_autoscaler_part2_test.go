@@ -602,7 +602,7 @@ func TestRayClusterNoDriverTimeoutTermination(t *testing.T) {
 		namespace := test.NewTestNamespace()
 
 		// Use a Ray image that supports no-driver cluster termination.
-		rayImage := "rayproject/ray:2.56.0.5d2c4e-py310"
+		rayImage := "rayproject/ray:2.56.0"
 		headTemplate := tc.HeadPodTemplateGetter()
 		headTemplate.Spec.Containers[0].WithImage(rayImage)
 		workerTemplate := tc.WorkerPodTemplateGetter()
