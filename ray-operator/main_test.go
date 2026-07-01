@@ -262,7 +262,7 @@ reconcileConcurrency: 100
 	}
 }
 
-func Test_validateNativeWorkloadSchedulingConfig(t *testing.T) {
+func Test_validateK8sWorkloadSchedulingConfig(t *testing.T) {
 	tests := []struct {
 		name                 string
 		featureGateEnabled   bool
@@ -280,7 +280,7 @@ func Test_validateNativeWorkloadSchedulingConfig(t *testing.T) {
 			wantErr:              false,
 		},
 		{
-			name:                 "only NativeWorkloadScheduling enabled — no conflict",
+			name:                 "only K8sWorkloadScheduling enabled — no conflict",
 			featureGateEnabled:   true,
 			enableBatchScheduler: false,
 			batchScheduler:       "",
@@ -309,7 +309,7 @@ func Test_validateNativeWorkloadSchedulingConfig(t *testing.T) {
 		},
 		// Negative cases: error expected (mutually exclusive)
 		{
-			name:                 "NativeWorkloadScheduling + EnableBatchScheduler — mutually exclusive",
+			name:                 "K8sWorkloadScheduling + EnableBatchScheduler — mutually exclusive",
 			featureGateEnabled:   true,
 			enableBatchScheduler: true,
 			batchScheduler:       "",
@@ -317,7 +317,7 @@ func Test_validateNativeWorkloadSchedulingConfig(t *testing.T) {
 			errContains:          "mutually exclusive",
 		},
 		{
-			name:                 "NativeWorkloadScheduling + BatchScheduler=volcano — mutually exclusive",
+			name:                 "K8sWorkloadScheduling + BatchScheduler=volcano — mutually exclusive",
 			featureGateEnabled:   true,
 			enableBatchScheduler: false,
 			batchScheduler:       "volcano",
@@ -325,7 +325,7 @@ func Test_validateNativeWorkloadSchedulingConfig(t *testing.T) {
 			errContains:          "mutually exclusive",
 		},
 		{
-			name:                 "NativeWorkloadScheduling + BatchScheduler=yunikorn — mutually exclusive",
+			name:                 "K8sWorkloadScheduling + BatchScheduler=yunikorn — mutually exclusive",
 			featureGateEnabled:   true,
 			enableBatchScheduler: false,
 			batchScheduler:       "yunikorn",
@@ -333,7 +333,7 @@ func Test_validateNativeWorkloadSchedulingConfig(t *testing.T) {
 			errContains:          "mutually exclusive",
 		},
 		{
-			name:                 "NativeWorkloadScheduling + BatchScheduler=kai-scheduler — mutually exclusive",
+			name:                 "K8sWorkloadScheduling + BatchScheduler=kai-scheduler — mutually exclusive",
 			featureGateEnabled:   true,
 			enableBatchScheduler: false,
 			batchScheduler:       "kai-scheduler",
@@ -341,7 +341,7 @@ func Test_validateNativeWorkloadSchedulingConfig(t *testing.T) {
 			errContains:          "mutually exclusive",
 		},
 		{
-			name:                 "NativeWorkloadScheduling + EnableBatchScheduler + BatchScheduler — mutually exclusive",
+			name:                 "K8sWorkloadScheduling + EnableBatchScheduler + BatchScheduler — mutually exclusive",
 			featureGateEnabled:   true,
 			enableBatchScheduler: true,
 			batchScheduler:       "volcano",
@@ -352,14 +352,14 @@ func Test_validateNativeWorkloadSchedulingConfig(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, tt.featureGateEnabled)
+			features.SetFeatureGateDuringTest(t, features.K8sWorkloadScheduling, tt.featureGateEnabled)
 
 			config := configapi.Configuration{
 				EnableBatchScheduler: tt.enableBatchScheduler,
 				BatchScheduler:       tt.batchScheduler,
 			}
 
-			err := validateNativeWorkloadSchedulingConfig(config)
+			err := validateK8sWorkloadSchedulingConfig(config)
 
 			if tt.wantErr {
 				if err == nil {

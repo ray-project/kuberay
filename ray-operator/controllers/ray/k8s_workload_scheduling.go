@@ -20,8 +20,8 @@ import (
 )
 
 const (
-	// Annotation used to opt-in a RayCluster to native workload scheduling.
-	NativeWorkloadSchedulingAnnotation = "ray.io/native-workload-scheduling"
+	// Annotation used to opt-in a RayCluster to k8s workload scheduling.
+	K8sWorkloadSchedulingAnnotation = "ray.io/k8s-workload-scheduling"
 
 	// podGroupProtectionFinalizer is the finalizer added by the Kubernetes scheduler to PodGroups
 	// when the GangScheduling feature gate is enabled on the scheduler (alpha in K8s 1.35).
@@ -30,7 +30,7 @@ const (
 	podGroupProtectionFinalizer = "scheduling.k8s.io/podgroup-protection"
 )
 
-// schedulingSkipReason is a typed reason for skipping native workload scheduling.
+// schedulingSkipReason is a typed reason for skipping k8s workload scheduling.
 type schedulingSkipReason string
 
 const (
@@ -41,7 +41,7 @@ const (
 	skipReasonTooManyWorkerGroups schedulingSkipReason = "too many worker groups"
 )
 
-// Event reasons used for native workload scheduling operations.
+// Event reasons used for k8s workload scheduling operations.
 const (
 	CreatedWorkload               utils.K8sEventType = "CreatedWorkload"
 	CreatedPodGroup               utils.K8sEventType = "CreatedPodGroup"
@@ -55,27 +55,41 @@ const (
 	WorkloadSchedulingInvalidSpec utils.K8sEventType = "WorkloadSchedulingInvalidSpec"
 )
 
-// reconcileNativeWorkloadScheduling creates Workload and PodGroup resources for a RayCluster
-// when the NativeWorkloadScheduling feature gate is enabled and the cluster has the opt-in annotation.
+// reconcileK8sWorkloadScheduling creates Workload and PodGroup resources for a RayCluster
+// when the K8sWorkloadScheduling feature gate is enabled and the cluster has the opt-in annotation.
 // This must be called before pod creation so that pods can reference the PodGroups via schedulingGroup.
-func (r *RayClusterReconciler) reconcileNativeWorkloadScheduling(ctx context.Context, instance *rayv1.RayCluster) error {
+func (r *RayClusterReconciler) reconcileK8sWorkloadScheduling(ctx context.Context, instance *rayv1.RayCluster) error {
 	logger := ctrl.LoggerFrom(ctx)
 
-	if skipReason := r.nativeSchedulingSkipReason(instance); skipReason != skipReasonNone {
+	if skipReason := r.k8sWorkloadSchedulingSkipReason(instance); skipReason != skipReasonNone {
 		if skipReason == skipReasonDisabled {
+			if shouldCleanupK8sWorkloadSchedulingResources() {
+				return r.deleteK8sWorkloadSchedulingResources(ctx, instance)
+			}
 			return nil
 		}
-		if skipReason == skipReasonTooManyWorkerGroups {
-			maxWorkerGroups := schedulingv1alpha2.WorkloadMaxPodGroupTemplates - 1
-			r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(WorkloadSchedulingInvalidSpec),
-				"RayCluster has %d worker groups, but native workload scheduling supports at most %d (%d PodGroupTemplates total, 1 reserved for head)",
-				len(instance.Spec.WorkerGroupSpecs), maxWorkerGroups, schedulingv1alpha2.WorkloadMaxPodGroupTemplates)
-			return fmt.Errorf("RayCluster %s/%s has %d worker groups, exceeding the maximum of %d for native workload scheduling",
-				instance.Namespace, instance.Name, len(instance.Spec.WorkerGroupSpecs), maxWorkerGroups)
+		// Detect stale resources before cleanup so we can emit a one-time warning.
+		// After cleanup the Workload is gone, so subsequent reconciles skip the event.
+		hadResources := false
+		if err := r.Get(ctx, types.NamespacedName{Name: instance.Name, Namespace: instance.Namespace}, &schedulingv1alpha2.Workload{}); err == nil {
+			hadResources = true
 		}
-		// All other reasons (batch scheduler, autoscaling) are warnings.
-		r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(WorkloadSchedulingSkipped),
-			"Skipping native workload scheduling: %s", string(skipReason))
+		if shouldCleanupK8sWorkloadSchedulingResources() {
+			if err := r.deleteK8sWorkloadSchedulingResources(ctx, instance); err != nil {
+				return err
+			}
+		}
+		if hadResources {
+			if skipReason == skipReasonTooManyWorkerGroups {
+				maxWorkerGroups := schedulingv1alpha2.WorkloadMaxPodGroupTemplates - 1
+				r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(WorkloadSchedulingInvalidSpec),
+					"RayCluster has %d worker groups, but k8s workload scheduling supports at most %d (%d PodGroupTemplates total, 1 reserved for head)",
+					len(instance.Spec.WorkerGroupSpecs), maxWorkerGroups, schedulingv1alpha2.WorkloadMaxPodGroupTemplates)
+			} else {
+				r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(WorkloadSchedulingSkipped),
+					"Skipping k8s workload scheduling: %s", string(skipReason))
+			}
+		}
 		return nil
 	}
 
@@ -101,7 +115,7 @@ func (r *RayClusterReconciler) reconcileNativeWorkloadScheduling(ctx context.Con
 		}
 		if isWorkloadStale(existing, instance) {
 			logger.Info("Workload is stale, deleting and recreating", "name", workload.Name)
-			if err := r.deleteNativeWorkloadSchedulingResources(ctx, instance); err != nil {
+			if err := r.deleteK8sWorkloadSchedulingResources(ctx, instance); err != nil {
 				return err
 			}
 			// Rebuild to get a clean object — the original may have stale metadata from a failed Create.
@@ -285,24 +299,30 @@ func podGroupName(clusterName, templateName string) string {
 	return clusterName + "-" + templateName
 }
 
-// isNativeWorkloadSchedulingEnabled returns true when both the feature gate and the per-cluster
+// isK8sWorkloadSchedulingEnabled returns true when both the feature gate and the per-cluster
 // opt-in annotation are set.
-func isNativeWorkloadSchedulingEnabled(instance *rayv1.RayCluster) bool {
-	return features.Enabled(features.NativeWorkloadScheduling) &&
-		instance.Annotations[NativeWorkloadSchedulingAnnotation] == "true"
+func isK8sWorkloadSchedulingEnabled(instance *rayv1.RayCluster) bool {
+	return features.Enabled(features.K8sWorkloadScheduling) &&
+		instance.Annotations[K8sWorkloadSchedulingAnnotation] == "true"
 }
 
-// shouldSetSchedulingGroup returns true when native scheduling is active and
+// shouldCleanupK8sWorkloadSchedulingResources returns true when the operator is configured
+// to manage k8s workload scheduling resources, even if a particular RayCluster is no longer opted in.
+func shouldCleanupK8sWorkloadSchedulingResources() bool {
+	return features.Enabled(features.K8sWorkloadScheduling)
+}
+
+// shouldSetSchedulingGroup returns true when k8s workload scheduling is active and
 // Workload/PodGroup resources will actually be created (i.e. no skip conditions).
 func (r *RayClusterReconciler) shouldSetSchedulingGroup(instance *rayv1.RayCluster) bool {
-	return r.nativeSchedulingSkipReason(instance) == skipReasonNone
+	return r.k8sWorkloadSchedulingSkipReason(instance) == skipReasonNone
 }
 
-// nativeSchedulingSkipReason returns a schedulingSkipReason indicating why native workload
+// k8sWorkloadSchedulingSkipReason returns a schedulingSkipReason indicating why k8s workload
 // scheduling should be skipped for this RayCluster, or skipReasonNone if it should proceed.
-// It is used by both reconcileNativeWorkloadScheduling and shouldSetSchedulingGroup.
-func (r *RayClusterReconciler) nativeSchedulingSkipReason(instance *rayv1.RayCluster) schedulingSkipReason {
-	if !isNativeWorkloadSchedulingEnabled(instance) {
+// It is used by both reconcileK8sWorkloadScheduling and shouldSetSchedulingGroup.
+func (r *RayClusterReconciler) k8sWorkloadSchedulingSkipReason(instance *rayv1.RayCluster) schedulingSkipReason {
+	if !isK8sWorkloadSchedulingEnabled(instance) {
 		return skipReasonDisabled
 	}
 	if r.options.BatchSchedulerManager != nil {
@@ -375,9 +395,9 @@ func schedulingPoliciesMatch(a, b schedulingv1alpha2.PodGroupSchedulingPolicy) b
 	return false
 }
 
-// deleteNativeWorkloadSchedulingResources deletes the Workload and all PodGroups owned by
+// deleteK8sWorkloadSchedulingResources deletes the Workload and all PodGroups owned by
 // the given RayCluster. NotFound errors are treated as no-ops.
-func (r *RayClusterReconciler) deleteNativeWorkloadSchedulingResources(ctx context.Context, instance *rayv1.RayCluster) error {
+func (r *RayClusterReconciler) deleteK8sWorkloadSchedulingResources(ctx context.Context, instance *rayv1.RayCluster) error {
 	logger := ctrl.LoggerFrom(ctx)
 
 	// Delete all PodGroups owned by this RayCluster.
@@ -396,6 +416,8 @@ func (r *RayClusterReconciler) deleteNativeWorkloadSchedulingResources(ctx conte
 		if controllerutil.RemoveFinalizer(pg, podGroupProtectionFinalizer) {
 			if err := r.Update(ctx, pg); err != nil {
 				if !errors.IsNotFound(err) {
+					r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(FailedToDeletePodGroup),
+						"Failed to remove finalizer from PodGroup %s/%s: %v", pg.Namespace, pg.Name, err)
 					return fmt.Errorf("failed to remove finalizer from PodGroup %s/%s: %w", pg.Namespace, pg.Name, err)
 				}
 			}
@@ -436,21 +458,26 @@ func (r *RayClusterReconciler) deleteNativeWorkloadSchedulingResources(ctx conte
 }
 
 // setWorkloadScheduledCondition sets the WorkloadScheduled condition on the RayCluster status.
-// When native workload scheduling is enabled and the cluster is not suspended, the condition
-// reflects whether the Workload resource has been created. When native scheduling is not enabled
+// When k8s workload scheduling is enabled and the cluster is not suspended, the condition
+// reflects whether the Workload resource has been created. When k8s workload scheduling is not enabled
 // or the cluster is suspended/suspending, the condition is removed entirely rather than set to
 // False because the condition is not meaningful when scheduling resources do not exist.
 func (r *RayClusterReconciler) setWorkloadScheduledCondition(ctx context.Context, instance *rayv1.RayCluster, suspendStatus rayv1.RayClusterConditionType) {
-	if !isNativeWorkloadSchedulingEnabled(instance) || suspendStatus == rayv1.RayClusterSuspended || suspendStatus == rayv1.RayClusterSuspending {
+	if !isK8sWorkloadSchedulingEnabled(instance) || suspendStatus == rayv1.RayClusterSuspended || suspendStatus == rayv1.RayClusterSuspending {
 		meta.RemoveStatusCondition(&instance.Status.Conditions, string(rayv1.RayClusterWorkloadScheduled))
 		return
 	}
+	if r.k8sWorkloadSchedulingSkipReason(instance) != skipReasonNone {
+		meta.RemoveStatusCondition(&instance.Status.Conditions, string(rayv1.RayClusterWorkloadScheduled))
+		return
+	}
+
+	logger := ctrl.LoggerFrom(ctx)
 
 	workload := &schedulingv1alpha2.Workload{}
 	err := r.Get(ctx, types.NamespacedName{Name: instance.Name, Namespace: instance.Namespace}, workload)
 	if err != nil {
 		if !errors.IsNotFound(err) {
-			logger := ctrl.LoggerFrom(ctx)
 			logger.V(1).Info("Failed to get Workload for condition check", "error", err)
 		}
 		meta.SetStatusCondition(&instance.Status.Conditions, metav1.Condition{
@@ -460,6 +487,41 @@ func (r *RayClusterReconciler) setWorkloadScheduledCondition(ctx context.Context
 			Message: "Workload has not been created yet",
 		})
 		return
+	}
+	if workload.DeletionTimestamp != nil {
+		meta.SetStatusCondition(&instance.Status.Conditions, metav1.Condition{
+			Type:    string(rayv1.RayClusterWorkloadScheduled),
+			Status:  metav1.ConditionFalse,
+			Reason:  rayv1.WorkloadPending,
+			Message: "Workload or PodGroups are being deleted",
+		})
+		return
+	}
+
+	for _, pgSpec := range buildPodGroupSpecs(instance) {
+		podGroup := &schedulingv1alpha2.PodGroup{}
+		err := r.Get(ctx, types.NamespacedName{Name: podGroupName(instance.Name, pgSpec.templateName), Namespace: instance.Namespace}, podGroup)
+		if err != nil {
+			if !errors.IsNotFound(err) {
+				logger.V(1).Info("Failed to get PodGroup for condition check", "template", pgSpec.templateName, "error", err)
+			}
+			meta.SetStatusCondition(&instance.Status.Conditions, metav1.Condition{
+				Type:    string(rayv1.RayClusterWorkloadScheduled),
+				Status:  metav1.ConditionFalse,
+				Reason:  rayv1.WorkloadPending,
+				Message: "Workload or PodGroups have not been created yet",
+			})
+			return
+		}
+		if podGroup.DeletionTimestamp != nil {
+			meta.SetStatusCondition(&instance.Status.Conditions, metav1.Condition{
+				Type:    string(rayv1.RayClusterWorkloadScheduled),
+				Status:  metav1.ConditionFalse,
+				Reason:  rayv1.WorkloadPending,
+				Message: "Workload or PodGroups are being deleted",
+			})
+			return
+		}
 	}
 
 	meta.SetStatusCondition(&instance.Status.Conditions, metav1.Condition{

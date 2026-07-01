@@ -1,4 +1,4 @@
-package e2enativescheduling
+package e2ek8sworkloadscheduling
 
 import (
 	"testing"
@@ -17,14 +17,14 @@ import (
 	. "github.com/ray-project/kuberay/ray-operator/test/support"
 )
 
-func TestNativeScheduling_CreatesWorkloadAndPodGroups(t *testing.T) {
+func TestK8sScheduling_CreatesWorkloadAndPodGroups(t *testing.T) {
 	test := With(t)
 	g := NewWithT(t)
 
 	namespace := test.NewTestNamespace()
 
-	rayClusterAC := rayv1ac.RayCluster("native-sched", namespace.Name).
-		WithAnnotations(map[string]string{"ray.io/native-workload-scheduling": "true"}).
+	rayClusterAC := rayv1ac.RayCluster("k8s-workload-scheduling", namespace.Name).
+		WithAnnotations(map[string]string{"ray.io/k8s-workload-scheduling": "true"}).
 		WithSpec(NewRayClusterSpec())
 
 	rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
@@ -105,14 +105,14 @@ func TestNativeScheduling_CreatesWorkloadAndPodGroups(t *testing.T) {
 		}, BeTrue()))
 }
 
-func TestNativeScheduling_PodSchedulingGroup(t *testing.T) {
+func TestK8sScheduling_PodSchedulingGroup(t *testing.T) {
 	test := With(t)
 	g := NewWithT(t)
 
 	namespace := test.NewTestNamespace()
 
 	rayClusterAC := rayv1ac.RayCluster("sched-group", namespace.Name).
-		WithAnnotations(map[string]string{"ray.io/native-workload-scheduling": "true"}).
+		WithAnnotations(map[string]string{"ray.io/k8s-workload-scheduling": "true"}).
 		WithSpec(NewRayClusterSpec())
 
 	rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
@@ -140,14 +140,14 @@ func TestNativeScheduling_PodSchedulingGroup(t *testing.T) {
 	}
 }
 
-func TestNativeScheduling_MultipleWorkerGroups(t *testing.T) {
+func TestK8sScheduling_MultipleWorkerGroups(t *testing.T) {
 	test := With(t)
 	g := NewWithT(t)
 
 	namespace := test.NewTestNamespace()
 
 	rayClusterAC := rayv1ac.RayCluster("multi-wg", namespace.Name).
-		WithAnnotations(map[string]string{"ray.io/native-workload-scheduling": "true"}).
+		WithAnnotations(map[string]string{"ray.io/k8s-workload-scheduling": "true"}).
 		WithSpec(rayv1ac.RayClusterSpec().
 			WithRayVersion(GetRayVersion()).
 			WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
@@ -216,14 +216,14 @@ func TestNativeScheduling_MultipleWorkerGroups(t *testing.T) {
 	}
 }
 
-func TestNativeScheduling_Events(t *testing.T) {
+func TestK8sScheduling_Events(t *testing.T) {
 	test := With(t)
 	g := NewWithT(t)
 
 	namespace := test.NewTestNamespace()
 
 	rayClusterAC := rayv1ac.RayCluster("sched-events", namespace.Name).
-		WithAnnotations(map[string]string{"ray.io/native-workload-scheduling": "true"}).
+		WithAnnotations(map[string]string{"ray.io/k8s-workload-scheduling": "true"}).
 		WithSpec(NewRayClusterSpec())
 
 	rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
@@ -242,19 +242,19 @@ func TestNativeScheduling_Events(t *testing.T) {
 		Should(HaveLen(2))
 }
 
-func TestNativeScheduling_NoAnnotation(t *testing.T) {
+func TestK8sScheduling_NoAnnotation(t *testing.T) {
 	test := With(t)
 	g := NewWithT(t)
 
 	namespace := test.NewTestNamespace()
 
-	// Create a RayCluster without the native scheduling annotation.
+	// Create a RayCluster without the k8s workload scheduling annotation.
 	rayClusterAC := rayv1ac.RayCluster("no-annotation", namespace.Name).
 		WithSpec(NewRayClusterSpec())
 
 	rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
 	g.Expect(err).NotTo(HaveOccurred())
-	LogWithTimestamp(test.T(), "Created RayCluster %s/%s without native scheduling annotation", rayCluster.Namespace, rayCluster.Name)
+	LogWithTimestamp(test.T(), "Created RayCluster %s/%s without k8s workload scheduling annotation", rayCluster.Namespace, rayCluster.Name)
 
 	LogWithTimestamp(test.T(), "Waiting for RayCluster %s/%s to become ready", rayCluster.Namespace, rayCluster.Name)
 	g.Eventually(RayCluster(test, namespace.Name, rayCluster.Name), TestTimeoutMedium).
@@ -273,20 +273,20 @@ func TestNativeScheduling_NoAnnotation(t *testing.T) {
 	g.Expect(headPod.Spec.SchedulingGroup).To(BeNil())
 }
 
-func TestNativeScheduling_AutoscalingSkipped(t *testing.T) {
+func TestK8sScheduling_AutoscalingSkipped(t *testing.T) {
 	test := With(t)
 	g := NewWithT(t)
 
 	namespace := test.NewTestNamespace()
 
-	// Create a RayCluster with autoscaling + native scheduling annotation.
+	// Create a RayCluster with autoscaling + k8s workload scheduling annotation.
 	rayClusterAC := rayv1ac.RayCluster("autoscale-skip", namespace.Name).
-		WithAnnotations(map[string]string{"ray.io/native-workload-scheduling": "true"}).
+		WithAnnotations(map[string]string{"ray.io/k8s-workload-scheduling": "true"}).
 		WithSpec(NewRayClusterSpec().WithEnableInTreeAutoscaling(true))
 
 	rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
 	g.Expect(err).NotTo(HaveOccurred())
-	LogWithTimestamp(test.T(), "Created RayCluster %s/%s with autoscaling + native scheduling", rayCluster.Namespace, rayCluster.Name)
+	LogWithTimestamp(test.T(), "Created RayCluster %s/%s with autoscaling + k8s workload scheduling", rayCluster.Namespace, rayCluster.Name)
 
 	// Wait for the cluster to start reconciling (HeadPodReady condition appears).
 	LogWithTimestamp(test.T(), "Waiting for RayCluster %s/%s to start reconciling", rayCluster.Namespace, rayCluster.Name)
@@ -301,20 +301,20 @@ func TestNativeScheduling_AutoscalingSkipped(t *testing.T) {
 	_, err = GetWorkload(test, namespace.Name, rayCluster.Name)
 	g.Expect(errors.IsNotFound(err)).To(BeTrue(), "expected NotFound for Workload, got: %v", err)
 
-	// Verify head pod does not have schedulingGroup set (autoscaling skipped native scheduling).
+	// Verify head pod does not have schedulingGroup set (autoscaling skipped k8s workload scheduling).
 	headPod, err := GetHeadPod(test, rayCluster)
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(headPod.Spec.SchedulingGroup).To(BeNil(), "head pod should not have schedulingGroup when autoscaling is enabled")
 }
 
-func TestNativeScheduling_GangSchedules(t *testing.T) {
+func TestK8sScheduling_GangSchedules(t *testing.T) {
 	test := With(t)
 	g := NewWithT(t)
 
 	namespace := test.NewTestNamespace()
 
 	rayClusterAC := rayv1ac.RayCluster("gang-sched", namespace.Name).
-		WithAnnotations(map[string]string{"ray.io/native-workload-scheduling": "true"}).
+		WithAnnotations(map[string]string{"ray.io/k8s-workload-scheduling": "true"}).
 		WithSpec(NewRayClusterSpec())
 
 	rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
@@ -349,14 +349,14 @@ func TestNativeScheduling_GangSchedules(t *testing.T) {
 		}, BeTrue()))
 }
 
-func TestNativeScheduling_OwnerReferenceGC(t *testing.T) {
+func TestK8sScheduling_OwnerReferenceGC(t *testing.T) {
 	test := With(t)
 	g := NewWithT(t)
 
 	namespace := test.NewTestNamespace()
 
 	rayClusterAC := rayv1ac.RayCluster("gc-test", namespace.Name).
-		WithAnnotations(map[string]string{"ray.io/native-workload-scheduling": "true"}).
+		WithAnnotations(map[string]string{"ray.io/k8s-workload-scheduling": "true"}).
 		WithSpec(NewRayClusterSpec())
 
 	rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
@@ -390,14 +390,14 @@ func TestNativeScheduling_OwnerReferenceGC(t *testing.T) {
 	g.Eventually(PodGroups(test, namespace.Name), TestTimeoutShort).Should(BeEmpty())
 }
 
-func TestNativeScheduling_Idempotent(t *testing.T) {
+func TestK8sScheduling_Idempotent(t *testing.T) {
 	test := With(t)
 	g := NewWithT(t)
 
 	namespace := test.NewTestNamespace()
 
 	rayClusterAC := rayv1ac.RayCluster("idempotent", namespace.Name).
-		WithAnnotations(map[string]string{"ray.io/native-workload-scheduling": "true"}).
+		WithAnnotations(map[string]string{"ray.io/k8s-workload-scheduling": "true"}).
 		WithSpec(NewRayClusterSpec())
 
 	rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
@@ -418,14 +418,14 @@ func TestNativeScheduling_Idempotent(t *testing.T) {
 	g.Consistently(PodGroups(test, namespace.Name), 10*time.Second, time.Second).Should(HaveLen(2))
 }
 
-func TestNativeScheduling_SuspendDeletesResources(t *testing.T) {
+func TestK8sScheduling_SuspendDeletesResources(t *testing.T) {
 	test := With(t)
 	g := NewWithT(t)
 
 	namespace := test.NewTestNamespace()
 
 	rayClusterAC := rayv1ac.RayCluster("suspend-del", namespace.Name).
-		WithAnnotations(map[string]string{"ray.io/native-workload-scheduling": "true"}).
+		WithAnnotations(map[string]string{"ray.io/k8s-workload-scheduling": "true"}).
 		WithSpec(NewRayClusterSpec())
 
 	rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
@@ -483,14 +483,14 @@ func TestNativeScheduling_SuspendDeletesResources(t *testing.T) {
 		ShouldNot(BeEmpty())
 }
 
-func TestNativeScheduling_ResumeRecreatesResources(t *testing.T) {
+func TestK8sScheduling_ResumeRecreatesResources(t *testing.T) {
 	test := With(t)
 	g := NewWithT(t)
 
 	namespace := test.NewTestNamespace()
 
 	rayClusterAC := rayv1ac.RayCluster("resume-rec", namespace.Name).
-		WithAnnotations(map[string]string{"ray.io/native-workload-scheduling": "true"}).
+		WithAnnotations(map[string]string{"ray.io/k8s-workload-scheduling": "true"}).
 		WithSpec(NewRayClusterSpec())
 
 	rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
@@ -578,14 +578,14 @@ func TestNativeScheduling_ResumeRecreatesResources(t *testing.T) {
 	}
 }
 
-func TestNativeScheduling_ScaleUpRecreatesWorkload(t *testing.T) {
+func TestK8sScheduling_ScaleUpRecreatesWorkload(t *testing.T) {
 	test := With(t)
 	g := NewWithT(t)
 
 	namespace := test.NewTestNamespace()
 
 	rayClusterAC := rayv1ac.RayCluster("scale-up", namespace.Name).
-		WithAnnotations(map[string]string{"ray.io/native-workload-scheduling": "true"}).
+		WithAnnotations(map[string]string{"ray.io/k8s-workload-scheduling": "true"}).
 		WithSpec(NewRayClusterSpec())
 
 	rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
@@ -650,7 +650,7 @@ func TestNativeScheduling_ScaleUpRecreatesWorkload(t *testing.T) {
 	}, TestTimeoutShort).Should(Equal(int32(3)))
 }
 
-func TestNativeScheduling_ScaleDownRecreatesWorkload(t *testing.T) {
+func TestK8sScheduling_ScaleDownRecreatesWorkload(t *testing.T) {
 	test := With(t)
 	g := NewWithT(t)
 
@@ -658,7 +658,7 @@ func TestNativeScheduling_ScaleDownRecreatesWorkload(t *testing.T) {
 
 	// Start with 3 replicas so we can scale down.
 	rayClusterAC := rayv1ac.RayCluster("scale-down", namespace.Name).
-		WithAnnotations(map[string]string{"ray.io/native-workload-scheduling": "true"}).
+		WithAnnotations(map[string]string{"ray.io/k8s-workload-scheduling": "true"}).
 		WithSpec(rayv1ac.RayClusterSpec().
 			WithRayVersion(GetRayVersion()).
 			WithHeadGroupSpec(rayv1ac.HeadGroupSpec().
@@ -730,14 +730,14 @@ func TestNativeScheduling_ScaleDownRecreatesWorkload(t *testing.T) {
 	}, TestTimeoutShort).Should(Equal(int32(1)))
 }
 
-func TestNativeScheduling_AddWorkerGroupRecreatesWorkload(t *testing.T) {
+func TestK8sScheduling_AddWorkerGroupRecreatesWorkload(t *testing.T) {
 	test := With(t)
 	g := NewWithT(t)
 
 	namespace := test.NewTestNamespace()
 
 	rayClusterAC := rayv1ac.RayCluster("add-wg", namespace.Name).
-		WithAnnotations(map[string]string{"ray.io/native-workload-scheduling": "true"}).
+		WithAnnotations(map[string]string{"ray.io/k8s-workload-scheduling": "true"}).
 		WithSpec(NewRayClusterSpec())
 
 	rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
@@ -797,14 +797,14 @@ func TestNativeScheduling_AddWorkerGroupRecreatesWorkload(t *testing.T) {
 	g.Expect(err).NotTo(HaveOccurred())
 }
 
-func TestNativeScheduling_WorkloadScheduledCondition(t *testing.T) {
+func TestK8sScheduling_WorkloadScheduledCondition(t *testing.T) {
 	test := With(t)
 	g := NewWithT(t)
 
 	namespace := test.NewTestNamespace()
 
 	rayClusterAC := rayv1ac.RayCluster("cond-test", namespace.Name).
-		WithAnnotations(map[string]string{"ray.io/native-workload-scheduling": "true"}).
+		WithAnnotations(map[string]string{"ray.io/k8s-workload-scheduling": "true"}).
 		WithSpec(NewRayClusterSpec())
 
 	rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
@@ -824,19 +824,19 @@ func TestNativeScheduling_WorkloadScheduledCondition(t *testing.T) {
 		)))
 }
 
-func TestNativeScheduling_WorkloadScheduledConditionAbsentWhenDisabled(t *testing.T) {
+func TestK8sScheduling_WorkloadScheduledConditionAbsentWhenDisabled(t *testing.T) {
 	test := With(t)
 	g := NewWithT(t)
 
 	namespace := test.NewTestNamespace()
 
-	// Create a RayCluster without the native scheduling annotation.
+	// Create a RayCluster without the k8s workload scheduling annotation.
 	rayClusterAC := rayv1ac.RayCluster("no-cond", namespace.Name).
 		WithSpec(NewRayClusterSpec())
 
 	rayCluster, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
 	g.Expect(err).NotTo(HaveOccurred())
-	LogWithTimestamp(test.T(), "Created RayCluster %s/%s without native scheduling annotation", rayCluster.Namespace, rayCluster.Name)
+	LogWithTimestamp(test.T(), "Created RayCluster %s/%s without k8s workload scheduling annotation", rayCluster.Namespace, rayCluster.Name)
 
 	// Wait for cluster to become ready.
 	g.Eventually(RayCluster(test, namespace.Name, rayCluster.Name), TestTimeoutMedium).

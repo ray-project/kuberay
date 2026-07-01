@@ -450,7 +450,7 @@ const (
 	// RayClusterSuspended is set to true when all Pods belonging to a suspending RayCluster are deleted. Note that RayClusterSuspending and RayClusterSuspended cannot both be true at the same time.
 	RayClusterSuspended RayClusterConditionType = "RayClusterSuspended"
 	// RayClusterWorkloadScheduled indicates whether the Workload and PodGroup resources have been
-	// successfully created for a RayCluster with native workload scheduling enabled.
+	// successfully created for a RayCluster with k8s workload scheduling enabled.
 	RayClusterWorkloadScheduled RayClusterConditionType = "WorkloadScheduled"
 )
 

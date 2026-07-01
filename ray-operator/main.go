@@ -194,7 +194,7 @@ func main() {
 	}
 	features.LogFeatureGates(setupLog)
 
-	if err := validateNativeWorkloadSchedulingConfig(config); err != nil {
+	if err := validateK8sWorkloadSchedulingConfig(config); err != nil {
 		exitOnError(err, "startup validation failed")
 	}
 
@@ -273,9 +273,9 @@ func main() {
 	restConfig.QPS = float32(*config.QPS)
 	restConfig.Burst = *config.Burst
 
-	if features.Enabled(features.NativeWorkloadScheduling) {
+	if features.Enabled(features.K8sWorkloadScheduling) {
 		if err := checkSchedulingV1alpha2Available(restConfig); err != nil {
-			exitOnError(err, "NativeWorkloadScheduling feature gate is enabled but scheduling.k8s.io/v1alpha2 API is not available. "+
+			exitOnError(err, "K8sWorkloadScheduling feature gate is enabled but scheduling.k8s.io/v1alpha2 API is not available. "+
 				"Ensure Kubernetes 1.36+ with GenericWorkload feature gate enabled.")
 		}
 	}
@@ -371,11 +371,11 @@ func exitOnError(err error, msg string, keysAndValues ...any) {
 	}
 }
 
-// validateNativeWorkloadSchedulingConfig checks that the NativeWorkloadScheduling feature gate
+// validateK8sWorkloadSchedulingConfig checks that the K8sWorkloadScheduling feature gate
 // is not enabled alongside a batch scheduler configuration, since the two are mutually exclusive.
-func validateNativeWorkloadSchedulingConfig(config configapi.Configuration) error {
-	if features.Enabled(features.NativeWorkloadScheduling) && (config.EnableBatchScheduler || len(config.BatchScheduler) > 0) {
-		return fmt.Errorf("NativeWorkloadScheduling feature gate and batchScheduler configuration are mutually exclusive")
+func validateK8sWorkloadSchedulingConfig(config configapi.Configuration) error {
+	if features.Enabled(features.K8sWorkloadScheduling) && (config.EnableBatchScheduler || len(config.BatchScheduler) > 0) {
+		return fmt.Errorf("K8sWorkloadScheduling feature gate and batchScheduler configuration are mutually exclusive")
 	}
 	return nil
 }

@@ -1,7 +1,7 @@
 ## ============================================================================
-## Kustomize overlay: native-scheduling (local dev / CI e2e only)
+## Kustomize overlay: k8s-workload-scheduling (local dev / CI e2e only)
 ## ----------------------------------------------------------------------------
-## Purpose: Deploy the operator with the NativeWorkloadScheduling feature gate
+## Purpose: Deploy the operator with the K8sWorkloadScheduling feature gate
 ## enabled, on top of the standard test-overrides overlay.
 ## Requires Kubernetes 1.36+ with GenericWorkload and GangScheduling enabled.
 ## ============================================================================

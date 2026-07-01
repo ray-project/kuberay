@@ -404,10 +404,10 @@ tests:
           path: spec.template.spec.containers[?(@.name=="kuberay-operator")].args
           content: "--burst=200"
 
-  - it: Should succeed when NativeWorkloadScheduling feature gate is enabled
+  - it: Should succeed when K8sWorkloadScheduling feature gate is enabled
     set:
       featureGates:
-        - name: NativeWorkloadScheduling
+        - name: K8sWorkloadScheduling
           enabled: true
     asserts:
       - containsDocument:

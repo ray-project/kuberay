@@ -67,8 +67,8 @@ const (
 	// rep: N/A
 	// alpha: v1.6
 	//
-	// Enables native Kubernetes gang scheduling via scheduling.k8s.io/v1alpha2 Workload and PodGroup APIs.
-	NativeWorkloadScheduling featuregate.Feature = "NativeWorkloadScheduling"
+	// Enables built-in Kubernetes gang scheduling via scheduling.k8s.io/v1alpha2 Workload and PodGroup APIs.
+	K8sWorkloadScheduling featuregate.Feature = "K8sWorkloadScheduling"
 )
 
 func init() {
@@ -83,7 +83,7 @@ var defaultFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
 	RayCronJob:                   {Default: false, PreRelease: featuregate.Alpha},
 	SidecarSubmitterRestart:      {Default: false, PreRelease: featuregate.Alpha},
 	RayClusterNetworkIsolation:   {Default: false, PreRelease: featuregate.Alpha},
-	NativeWorkloadScheduling:     {Default: false, PreRelease: featuregate.Alpha},
+	K8sWorkloadScheduling:        {Default: false, PreRelease: featuregate.Alpha},
 }
 
 // SetFeatureGateDuringTest is a helper method to override feature gates in tests.

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -43,7 +44,7 @@ func newTestRayCluster(workerGroups ...rayv1.WorkerGroupSpec) *rayv1.RayCluster 
 			Namespace: "default",
 			UID:       types.UID("test-uid"),
 			Annotations: map[string]string{
-				NativeWorkloadSchedulingAnnotation: "true",
+				K8sWorkloadSchedulingAnnotation: "true",
 			},
 		},
 		Spec: rayv1.RayClusterSpec{
@@ -82,6 +83,53 @@ func newWorkerGroup(name string, replicas int32) rayv1.WorkerGroupSpec {
 	}
 }
 
+func newTestK8sSchedulingObjects(podGroupNames ...string) []client.Object {
+	objects := []client.Object{
+		&schedulingv1alpha2.Workload{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-cluster",
+				Namespace: "default",
+				Labels:    map[string]string{utils.RayClusterLabelKey: "test-cluster"},
+			},
+		},
+	}
+
+	for _, name := range podGroupNames {
+		objects = append(objects, &schedulingv1alpha2.PodGroup{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: "default",
+				Labels:    map[string]string{utils.RayClusterLabelKey: "test-cluster"},
+			},
+		})
+	}
+
+	return objects
+}
+
+func assertK8sWorkloadSchedulingResourcesDeleted(ctx context.Context, t *testing.T, c client.Client) {
+	t.Helper()
+
+	err := c.Get(ctx, types.NamespacedName{Name: "test-cluster", Namespace: "default"}, &schedulingv1alpha2.Workload{})
+	assert.True(t, apierrors.IsNotFound(err), "Workload should be deleted")
+
+	podGroupList := &schedulingv1alpha2.PodGroupList{}
+	err = c.List(ctx, podGroupList, client.InNamespace("default"), client.MatchingLabels{utils.RayClusterLabelKey: "test-cluster"})
+	require.NoError(t, err)
+	assert.Empty(t, podGroupList.Items, "PodGroups should be deleted")
+}
+
+func assertEventContains(t *testing.T, recorder *record.FakeRecorder, expected string) {
+	t.Helper()
+
+	for len(recorder.Events) > 0 {
+		if strings.Contains(<-recorder.Events, expected) {
+			return
+		}
+	}
+	assert.Failf(t, "expected event not recorded", "expected event containing %q", expected)
+}
+
 func newReconciler(fakeClient client.Client, s *runtime.Scheme, recorder record.EventRecorder, opts ...RayClusterReconcilerOptions) *RayClusterReconciler {
 	var options RayClusterReconcilerOptions
 	if len(opts) > 0 {
@@ -98,8 +146,8 @@ func newReconciler(fakeClient client.Client, s *runtime.Scheme, recorder record.
 
 // --- Reconcile behavior tests ---
 
-func TestReconcileNativeWorkloadScheduling_CreatesWorkloadAndPodGroups(t *testing.T) {
-	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
+func TestReconcileK8sWorkloadScheduling_CreatesWorkloadAndPodGroups(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.K8sWorkloadScheduling, true)
 
 	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
 	s := newTestScheme()
@@ -107,7 +155,7 @@ func TestReconcileNativeWorkloadScheduling_CreatesWorkloadAndPodGroups(t *testin
 	r := newReconciler(fakeClient, s, record.NewFakeRecorder(10))
 	ctx := context.Background()
 
-	err := r.reconcileNativeWorkloadScheduling(ctx, cluster)
+	err := r.reconcileK8sWorkloadScheduling(ctx, cluster)
 	require.NoError(t, err)
 
 	// Verify Workload was created.
@@ -128,8 +176,8 @@ func TestReconcileNativeWorkloadScheduling_CreatesWorkloadAndPodGroups(t *testin
 	require.NoError(t, err)
 }
 
-func TestReconcileNativeWorkloadScheduling_MultipleWorkerGroups(t *testing.T) {
-	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
+func TestReconcileK8sWorkloadScheduling_MultipleWorkerGroups(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.K8sWorkloadScheduling, true)
 
 	cluster := newTestRayCluster(
 		newWorkerGroup("cpu-workers", 2),
@@ -141,7 +189,7 @@ func TestReconcileNativeWorkloadScheduling_MultipleWorkerGroups(t *testing.T) {
 	r := newReconciler(fakeClient, s, record.NewFakeRecorder(10))
 	ctx := context.Background()
 
-	err := r.reconcileNativeWorkloadScheduling(ctx, cluster)
+	err := r.reconcileK8sWorkloadScheduling(ctx, cluster)
 	require.NoError(t, err)
 
 	// Verify Workload has 4 templates (1 head + 3 worker groups).
@@ -158,8 +206,8 @@ func TestReconcileNativeWorkloadScheduling_MultipleWorkerGroups(t *testing.T) {
 	}
 }
 
-func TestReconcileNativeWorkloadScheduling_Idempotent(t *testing.T) {
-	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
+func TestReconcileK8sWorkloadScheduling_Idempotent(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.K8sWorkloadScheduling, true)
 
 	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
 	s := newTestScheme()
@@ -168,9 +216,9 @@ func TestReconcileNativeWorkloadScheduling_Idempotent(t *testing.T) {
 	ctx := context.Background()
 
 	// Call twice — second call should succeed (AlreadyExists is a no-op).
-	err := r.reconcileNativeWorkloadScheduling(ctx, cluster)
+	err := r.reconcileK8sWorkloadScheduling(ctx, cluster)
 	require.NoError(t, err)
-	err = r.reconcileNativeWorkloadScheduling(ctx, cluster)
+	err = r.reconcileK8sWorkloadScheduling(ctx, cluster)
 	require.NoError(t, err)
 
 	// Verify still only one Workload.
@@ -186,8 +234,8 @@ func TestReconcileNativeWorkloadScheduling_Idempotent(t *testing.T) {
 	assert.Len(t, pgList.Items, 2)
 }
 
-func TestReconcileNativeWorkloadScheduling_SkipsWhenAnnotationMissing(t *testing.T) {
-	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
+func TestReconcileK8sWorkloadScheduling_SkipsWhenAnnotationMissing(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.K8sWorkloadScheduling, true)
 
 	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
 	cluster.Annotations = nil // No annotation
@@ -196,7 +244,7 @@ func TestReconcileNativeWorkloadScheduling_SkipsWhenAnnotationMissing(t *testing
 	r := newReconciler(fakeClient, s, record.NewFakeRecorder(10))
 	ctx := context.Background()
 
-	err := r.reconcileNativeWorkloadScheduling(ctx, cluster)
+	err := r.reconcileK8sWorkloadScheduling(ctx, cluster)
 	require.NoError(t, err)
 
 	// No Workloads should be created.
@@ -206,8 +254,42 @@ func TestReconcileNativeWorkloadScheduling_SkipsWhenAnnotationMissing(t *testing
 	assert.Empty(t, workloadList.Items)
 }
 
-func TestReconcileNativeWorkloadScheduling_SkipsWhenFeatureGateDisabled(t *testing.T) {
-	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, false)
+func TestReconcileK8sWorkloadScheduling_CleansUpWhenAnnotationRemoved(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.K8sWorkloadScheduling, true)
+
+	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
+	cluster.Annotations = nil
+	s := newTestScheme()
+	existingWorkload := &schedulingv1alpha2.Workload{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "default",
+			Labels:    map[string]string{utils.RayClusterLabelKey: "test-cluster"},
+		},
+	}
+	existingPodGroup := &schedulingv1alpha2.PodGroup{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       "test-cluster-head",
+			Namespace:  "default",
+			Labels:     map[string]string{utils.RayClusterLabelKey: "test-cluster"},
+			Finalizers: []string{podGroupProtectionFinalizer},
+		},
+	}
+	fakeClient := clientFake.NewClientBuilder().WithScheme(s).WithObjects(existingWorkload, existingPodGroup).Build()
+	r := newReconciler(fakeClient, s, record.NewFakeRecorder(10))
+	ctx := context.Background()
+
+	err := r.reconcileK8sWorkloadScheduling(ctx, cluster)
+	require.NoError(t, err)
+
+	err = fakeClient.Get(ctx, types.NamespacedName{Name: "test-cluster", Namespace: "default"}, &schedulingv1alpha2.Workload{})
+	assert.True(t, apierrors.IsNotFound(err), "Workload should be deleted when annotation is removed")
+	err = fakeClient.Get(ctx, types.NamespacedName{Name: "test-cluster-head", Namespace: "default"}, &schedulingv1alpha2.PodGroup{})
+	assert.True(t, apierrors.IsNotFound(err), "PodGroup should be deleted when annotation is removed")
+}
+
+func TestReconcileK8sWorkloadScheduling_SkipsWhenFeatureGateDisabled(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.K8sWorkloadScheduling, false)
 
 	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
 	s := newTestScheme()
@@ -215,7 +297,7 @@ func TestReconcileNativeWorkloadScheduling_SkipsWhenFeatureGateDisabled(t *testi
 	r := newReconciler(fakeClient, s, record.NewFakeRecorder(10))
 	ctx := context.Background()
 
-	err := r.reconcileNativeWorkloadScheduling(ctx, cluster)
+	err := r.reconcileK8sWorkloadScheduling(ctx, cluster)
 	require.NoError(t, err)
 
 	// No Workloads should be created.
@@ -225,36 +307,65 @@ func TestReconcileNativeWorkloadScheduling_SkipsWhenFeatureGateDisabled(t *testi
 	assert.Empty(t, workloadList.Items)
 }
 
-func TestReconcileNativeWorkloadScheduling_SkipsWhenAutoscalingEnabled(t *testing.T) {
-	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
+func TestReconcileK8sWorkloadScheduling_FeatureGateDisabledDoesNotCleanup(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.K8sWorkloadScheduling, false)
+
+	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
+	cluster.Annotations = nil
+	s := newTestScheme()
+	existingWorkload := &schedulingv1alpha2.Workload{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "default",
+			Labels:    map[string]string{utils.RayClusterLabelKey: "test-cluster"},
+		},
+	}
+	existingPodGroup := &schedulingv1alpha2.PodGroup{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster-head",
+			Namespace: "default",
+			Labels:    map[string]string{utils.RayClusterLabelKey: "test-cluster"},
+		},
+	}
+	fakeClient := clientFake.NewClientBuilder().WithScheme(s).WithObjects(existingWorkload, existingPodGroup).Build()
+	r := newReconciler(fakeClient, s, record.NewFakeRecorder(10))
+	ctx := context.Background()
+
+	err := r.reconcileK8sWorkloadScheduling(ctx, cluster)
+	require.NoError(t, err)
+
+	err = fakeClient.Get(ctx, types.NamespacedName{Name: "test-cluster", Namespace: "default"}, &schedulingv1alpha2.Workload{})
+	require.NoError(t, err)
+	err = fakeClient.Get(ctx, types.NamespacedName{Name: "test-cluster-head", Namespace: "default"}, &schedulingv1alpha2.PodGroup{})
+	require.NoError(t, err)
+}
+
+func TestReconcileK8sWorkloadScheduling_SkipsWhenAutoscalingEnabled(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.K8sWorkloadScheduling, true)
 
 	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
 	cluster.Spec.EnableInTreeAutoscaling = new(true)
 	s := newTestScheme()
-	fakeClient := clientFake.NewClientBuilder().WithScheme(s).Build()
+	objects := newTestK8sSchedulingObjects("test-cluster-head")
+	fakeClient := clientFake.NewClientBuilder().WithScheme(s).WithObjects(objects...).Build()
 	fakeRecorder := record.NewFakeRecorder(10)
 	r := newReconciler(fakeClient, s, fakeRecorder)
 	ctx := context.Background()
 
-	err := r.reconcileNativeWorkloadScheduling(ctx, cluster)
+	err := r.reconcileK8sWorkloadScheduling(ctx, cluster)
 	require.NoError(t, err)
 
-	// No Workloads should be created.
-	workloadList := &schedulingv1alpha2.WorkloadList{}
-	err = fakeClient.List(ctx, workloadList, &client.ListOptions{Namespace: "default"})
-	require.NoError(t, err)
-	assert.Empty(t, workloadList.Items)
-
-	// Should have emitted a warning event.
-	assert.Len(t, fakeRecorder.Events, 1)
+	assertK8sWorkloadSchedulingResourcesDeleted(ctx, t, fakeClient)
+	assertEventContains(t, fakeRecorder, string(WorkloadSchedulingSkipped))
 }
 
-func TestReconcileNativeWorkloadScheduling_SkipsWhenBatchSchedulerConfigured(t *testing.T) {
-	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
+func TestReconcileK8sWorkloadScheduling_SkipsWhenBatchSchedulerConfigured(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.K8sWorkloadScheduling, true)
 
 	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
 	s := newTestScheme()
-	fakeClient := clientFake.NewClientBuilder().WithScheme(s).Build()
+	objects := newTestK8sSchedulingObjects("test-cluster-head")
+	fakeClient := clientFake.NewClientBuilder().WithScheme(s).WithObjects(objects...).Build()
 	fakeRecorder := record.NewFakeRecorder(10)
 	// Create a SchedulerManager with a real non-default batch scheduler (yunikorn).
 	batchMgr, err := batchscheduler.NewSchedulerManager(context.Background(),
@@ -265,21 +376,15 @@ func TestReconcileNativeWorkloadScheduling_SkipsWhenBatchSchedulerConfigured(t *
 	})
 	ctx := context.Background()
 
-	err = r.reconcileNativeWorkloadScheduling(ctx, cluster)
+	err = r.reconcileK8sWorkloadScheduling(ctx, cluster)
 	require.NoError(t, err)
 
-	// No Workloads should be created.
-	workloadList := &schedulingv1alpha2.WorkloadList{}
-	err = fakeClient.List(ctx, workloadList, &client.ListOptions{Namespace: "default"})
-	require.NoError(t, err)
-	assert.Empty(t, workloadList.Items)
-
-	// Should have emitted a warning event.
-	assert.Len(t, fakeRecorder.Events, 1)
+	assertK8sWorkloadSchedulingResourcesDeleted(ctx, t, fakeClient)
+	assertEventContains(t, fakeRecorder, string(WorkloadSchedulingSkipped))
 }
 
-func TestReconcileNativeWorkloadScheduling_FailsWhenMoreThan7WorkerGroups(t *testing.T) {
-	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
+func TestReconcileK8sWorkloadScheduling_SkipsWhenMoreThan7WorkerGroups(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.K8sWorkloadScheduling, true)
 
 	workers := make([]rayv1.WorkerGroupSpec, 8)
 	for i := range workers {
@@ -287,26 +392,23 @@ func TestReconcileNativeWorkloadScheduling_FailsWhenMoreThan7WorkerGroups(t *tes
 	}
 	cluster := newTestRayCluster(workers...)
 	s := newTestScheme()
-	fakeClient := clientFake.NewClientBuilder().WithScheme(s).Build()
+	objects := newTestK8sSchedulingObjects("test-cluster-head")
+	fakeClient := clientFake.NewClientBuilder().WithScheme(s).WithObjects(objects...).Build()
 	fakeRecorder := record.NewFakeRecorder(10)
 	r := newReconciler(fakeClient, s, fakeRecorder)
 	ctx := context.Background()
 
-	err := r.reconcileNativeWorkloadScheduling(ctx, cluster)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "exceeding the maximum of 7")
-
-	// No Workloads should be created.
-	workloadList := &schedulingv1alpha2.WorkloadList{}
-	err = fakeClient.List(ctx, workloadList, &client.ListOptions{Namespace: "default"})
+	err := r.reconcileK8sWorkloadScheduling(ctx, cluster)
 	require.NoError(t, err)
-	assert.Empty(t, workloadList.Items)
+
+	assertK8sWorkloadSchedulingResourcesDeleted(ctx, t, fakeClient)
+	assertEventContains(t, fakeRecorder, string(WorkloadSchedulingInvalidSpec))
 }
 
 // --- Workload construction tests ---
 
 func TestBuildWorkload_HeadTemplateUsesBasicPolicy(t *testing.T) {
-	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
+	features.SetFeatureGateDuringTest(t, features.K8sWorkloadScheduling, true)
 
 	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
 	s := newTestScheme()
@@ -325,7 +427,7 @@ func TestBuildWorkload_HeadTemplateUsesBasicPolicy(t *testing.T) {
 }
 
 func TestBuildWorkload_WorkerTemplateUsesGangPolicy(t *testing.T) {
-	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
+	features.SetFeatureGateDuringTest(t, features.K8sWorkloadScheduling, true)
 
 	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
 	s := newTestScheme()
@@ -345,7 +447,7 @@ func TestBuildWorkload_WorkerTemplateUsesGangPolicy(t *testing.T) {
 }
 
 func TestBuildWorkload_MinCountMatchesDesiredReplicas(t *testing.T) {
-	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
+	features.SetFeatureGateDuringTest(t, features.K8sWorkloadScheduling, true)
 
 	cluster := newTestRayCluster(
 		newWorkerGroup("small", 2),
@@ -364,7 +466,7 @@ func TestBuildWorkload_MinCountMatchesDesiredReplicas(t *testing.T) {
 }
 
 func TestBuildWorkload_MinCountWithNumOfHosts2(t *testing.T) {
-	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
+	features.SetFeatureGateDuringTest(t, features.K8sWorkloadScheduling, true)
 
 	wg := newWorkerGroup("multi-host", 3)
 	wg.NumOfHosts = 2
@@ -383,7 +485,7 @@ func TestBuildWorkload_MinCountWithNumOfHosts2(t *testing.T) {
 }
 
 func TestBuildWorkload_SuspendedWorkerGroupMinCount0(t *testing.T) {
-	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
+	features.SetFeatureGateDuringTest(t, features.K8sWorkloadScheduling, true)
 
 	wg := newWorkerGroup("suspended-group", 3)
 	wg.Suspend = new(true)
@@ -403,7 +505,7 @@ func TestBuildWorkload_SuspendedWorkerGroupMinCount0(t *testing.T) {
 }
 
 func TestBuildWorkload_MinReplicas0UsesBasicPolicy(t *testing.T) {
-	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
+	features.SetFeatureGateDuringTest(t, features.K8sWorkloadScheduling, true)
 
 	wg := newWorkerGroup("zero-min", 0)
 	wg.MinReplicas = new(int32(0))
@@ -425,7 +527,7 @@ func TestBuildWorkload_MinReplicas0UsesBasicPolicy(t *testing.T) {
 // --- OwnerReference tests ---
 
 func TestBuildWorkload_OwnerReference(t *testing.T) {
-	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
+	features.SetFeatureGateDuringTest(t, features.K8sWorkloadScheduling, true)
 
 	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
 	s := newTestScheme()
@@ -446,7 +548,7 @@ func TestBuildWorkload_OwnerReference(t *testing.T) {
 }
 
 func TestBuildPodGroup_OwnerReference(t *testing.T) {
-	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
+	features.SetFeatureGateDuringTest(t, features.K8sWorkloadScheduling, true)
 
 	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
 	s := newTestScheme()
@@ -472,7 +574,7 @@ func TestBuildPodGroup_OwnerReference(t *testing.T) {
 // --- PodGroup construction tests ---
 
 func TestBuildPodGroup_TemplateRef(t *testing.T) {
-	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
+	features.SetFeatureGateDuringTest(t, features.K8sWorkloadScheduling, true)
 
 	cluster := newTestRayCluster()
 	s := newTestScheme()
@@ -492,7 +594,7 @@ func TestBuildPodGroup_TemplateRef(t *testing.T) {
 }
 
 func TestBuildPodGroup_PolicyCopied(t *testing.T) {
-	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
+	features.SetFeatureGateDuringTest(t, features.K8sWorkloadScheduling, true)
 
 	cluster := newTestRayCluster()
 	s := newTestScheme()
@@ -513,7 +615,7 @@ func TestBuildPodGroup_PolicyCopied(t *testing.T) {
 // --- Workload spec tests ---
 
 func TestBuildWorkload_ControllerRef(t *testing.T) {
-	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
+	features.SetFeatureGateDuringTest(t, features.K8sWorkloadScheduling, true)
 
 	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
 	s := newTestScheme()
@@ -530,7 +632,7 @@ func TestBuildWorkload_ControllerRef(t *testing.T) {
 }
 
 func TestBuildWorkload_Labels(t *testing.T) {
-	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
+	features.SetFeatureGateDuringTest(t, features.K8sWorkloadScheduling, true)
 
 	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
 	s := newTestScheme()
@@ -544,7 +646,7 @@ func TestBuildWorkload_Labels(t *testing.T) {
 }
 
 func TestBuildPodGroup_Labels(t *testing.T) {
-	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
+	features.SetFeatureGateDuringTest(t, features.K8sWorkloadScheduling, true)
 
 	cluster := newTestRayCluster()
 	s := newTestScheme()
@@ -620,9 +722,9 @@ func TestPodGroupName(t *testing.T) {
 	}
 }
 
-// --- isNativeWorkloadSchedulingEnabled tests ---
+// --- isK8sWorkloadSchedulingEnabled tests ---
 
-func TestIsNativeWorkloadSchedulingEnabled(t *testing.T) {
+func TestIsK8sWorkloadSchedulingEnabled(t *testing.T) {
 	tests := []struct {
 		name        string
 		featureGate bool
@@ -637,18 +739,18 @@ func TestIsNativeWorkloadSchedulingEnabled(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, tt.featureGate)
+			features.SetFeatureGateDuringTest(t, features.K8sWorkloadScheduling, tt.featureGate)
 			cluster := &rayv1.RayCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{
-						NativeWorkloadSchedulingAnnotation: tt.annotation,
+						K8sWorkloadSchedulingAnnotation: tt.annotation,
 					},
 				},
 			}
 			if tt.annotation == "" {
 				cluster.Annotations = nil
 			}
-			assert.Equal(t, tt.expected, isNativeWorkloadSchedulingEnabled(cluster))
+			assert.Equal(t, tt.expected, isK8sWorkloadSchedulingEnabled(cluster))
 		})
 	}
 }
@@ -672,11 +774,11 @@ func TestShouldSetSchedulingGroup(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, tt.featureGate)
+			features.SetFeatureGateDuringTest(t, features.K8sWorkloadScheduling, tt.featureGate)
 			cluster := &rayv1.RayCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{
-						NativeWorkloadSchedulingAnnotation: tt.annotation,
+						K8sWorkloadSchedulingAnnotation: tt.annotation,
 					},
 				},
 			}
@@ -816,8 +918,8 @@ func TestBuildPodGroupSpecs_MultipleWorkerGroups(t *testing.T) {
 
 // --- Boundary condition tests ---
 
-func TestReconcileNativeWorkloadScheduling_Exactly7WorkerGroups(t *testing.T) {
-	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
+func TestReconcileK8sWorkloadScheduling_Exactly7WorkerGroups(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.K8sWorkloadScheduling, true)
 
 	workers := make([]rayv1.WorkerGroupSpec, 7)
 	for i := range workers {
@@ -829,7 +931,7 @@ func TestReconcileNativeWorkloadScheduling_Exactly7WorkerGroups(t *testing.T) {
 	r := newReconciler(fakeClient, s, record.NewFakeRecorder(20))
 	ctx := context.Background()
 
-	err := r.reconcileNativeWorkloadScheduling(ctx, cluster)
+	err := r.reconcileK8sWorkloadScheduling(ctx, cluster)
 	require.NoError(t, err)
 
 	// Should create 1 Workload with 8 templates (1 head + 7 workers).
@@ -875,8 +977,8 @@ func TestBuildPodGroup_SetControllerReferenceError(t *testing.T) {
 	assert.Nil(t, pg)
 }
 
-func TestReconcileNativeWorkloadScheduling_WorkloadCreateFailure(t *testing.T) {
-	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
+func TestReconcileK8sWorkloadScheduling_WorkloadCreateFailure(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.K8sWorkloadScheduling, true)
 
 	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
 	s := newTestScheme()
@@ -893,7 +995,7 @@ func TestReconcileNativeWorkloadScheduling_WorkloadCreateFailure(t *testing.T) {
 	r := newReconciler(fakeClient, s, fakeRecorder)
 	ctx := context.Background()
 
-	err := r.reconcileNativeWorkloadScheduling(ctx, cluster)
+	err := r.reconcileK8sWorkloadScheduling(ctx, cluster)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "simulated API server error")
 
@@ -903,8 +1005,8 @@ func TestReconcileNativeWorkloadScheduling_WorkloadCreateFailure(t *testing.T) {
 	assert.Contains(t, event, string(FailedToCreateWorkload))
 }
 
-func TestReconcileNativeWorkloadScheduling_PodGroupCreateFailure(t *testing.T) {
-	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
+func TestReconcileK8sWorkloadScheduling_PodGroupCreateFailure(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.K8sWorkloadScheduling, true)
 
 	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
 	s := newTestScheme()
@@ -921,7 +1023,7 @@ func TestReconcileNativeWorkloadScheduling_PodGroupCreateFailure(t *testing.T) {
 	r := newReconciler(fakeClient, s, fakeRecorder)
 	ctx := context.Background()
 
-	err := r.reconcileNativeWorkloadScheduling(ctx, cluster)
+	err := r.reconcileK8sWorkloadScheduling(ctx, cluster)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "simulated PodGroup creation error")
 
@@ -937,7 +1039,7 @@ func TestReconcileNativeWorkloadScheduling_PodGroupCreateFailure(t *testing.T) {
 // --- Controller integration tests: schedulingGroup on pods ---
 
 func TestCreateHeadPod_SetsSchedulingGroup(t *testing.T) {
-	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
+	features.SetFeatureGateDuringTest(t, features.K8sWorkloadScheduling, true)
 
 	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
 	s := newTestScheme()
@@ -959,7 +1061,7 @@ func TestCreateHeadPod_SetsSchedulingGroup(t *testing.T) {
 }
 
 func TestCreateWorkerPod_SetsSchedulingGroup(t *testing.T) {
-	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
+	features.SetFeatureGateDuringTest(t, features.K8sWorkloadScheduling, true)
 
 	worker := newWorkerGroup("gpu-workers", 3)
 	cluster := newTestRayCluster(worker)
@@ -982,7 +1084,7 @@ func TestCreateWorkerPod_SetsSchedulingGroup(t *testing.T) {
 }
 
 func TestCreateWorkerPodWithIndex_SetsSchedulingGroup(t *testing.T) {
-	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
+	features.SetFeatureGateDuringTest(t, features.K8sWorkloadScheduling, true)
 
 	worker := newWorkerGroup("tpu-workers", 2)
 	cluster := newTestRayCluster(worker)
@@ -1006,10 +1108,10 @@ func TestCreateWorkerPodWithIndex_SetsSchedulingGroup(t *testing.T) {
 
 func TestCreateHeadPod_NoSchedulingGroupWhenDisabled(t *testing.T) {
 	// Feature gate enabled but annotation missing
-	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
+	features.SetFeatureGateDuringTest(t, features.K8sWorkloadScheduling, true)
 
 	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
-	delete(cluster.Annotations, NativeWorkloadSchedulingAnnotation)
+	delete(cluster.Annotations, K8sWorkloadSchedulingAnnotation)
 	s := newTestScheme()
 	fakeClient := clientFake.NewClientBuilder().WithScheme(s).Build()
 	r := newReconciler(fakeClient, s, record.NewFakeRecorder(10))
@@ -1028,7 +1130,7 @@ func TestCreateHeadPod_NoSchedulingGroupWhenDisabled(t *testing.T) {
 }
 
 func TestCreateWorkerPod_NoSchedulingGroupWhenFeatureGateDisabled(t *testing.T) {
-	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, false)
+	features.SetFeatureGateDuringTest(t, features.K8sWorkloadScheduling, false)
 
 	worker := newWorkerGroup("workers", 3)
 	cluster := newTestRayCluster(worker)
@@ -1050,11 +1152,11 @@ func TestCreateWorkerPod_NoSchedulingGroupWhenFeatureGateDisabled(t *testing.T) 
 }
 
 func TestCreateWorkerPodWithIndex_NoSchedulingGroupWhenDisabled(t *testing.T) {
-	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
+	features.SetFeatureGateDuringTest(t, features.K8sWorkloadScheduling, true)
 
 	worker := newWorkerGroup("tpu-workers", 2)
 	cluster := newTestRayCluster(worker)
-	delete(cluster.Annotations, NativeWorkloadSchedulingAnnotation)
+	delete(cluster.Annotations, K8sWorkloadSchedulingAnnotation)
 	s := newTestScheme()
 	fakeClient := clientFake.NewClientBuilder().WithScheme(s).Build()
 	r := newReconciler(fakeClient, s, record.NewFakeRecorder(10))
@@ -1227,9 +1329,9 @@ func TestSchedulingPoliciesMatch(t *testing.T) {
 	}
 }
 
-// --- deleteNativeWorkloadSchedulingResources tests ---
+// --- deleteK8sWorkloadSchedulingResources tests ---
 
-func TestDeleteNativeWorkloadSchedulingResources_DeletesAll(t *testing.T) {
+func TestDeleteK8sWorkloadSchedulingResources_DeletesAll(t *testing.T) {
 	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
 	s := newTestScheme()
 
@@ -1262,7 +1364,7 @@ func TestDeleteNativeWorkloadSchedulingResources_DeletesAll(t *testing.T) {
 	r := newReconciler(fakeClient, s, fakeRecorder)
 	ctx := context.Background()
 
-	err := r.deleteNativeWorkloadSchedulingResources(ctx, cluster)
+	err := r.deleteK8sWorkloadSchedulingResources(ctx, cluster)
 	require.NoError(t, err)
 
 	// Verify Workload is deleted.
@@ -1276,7 +1378,7 @@ func TestDeleteNativeWorkloadSchedulingResources_DeletesAll(t *testing.T) {
 	assert.Empty(t, pgList.Items, "All PodGroups should be deleted")
 }
 
-func TestDeleteNativeWorkloadSchedulingResources_NotFoundIsNoop(t *testing.T) {
+func TestDeleteK8sWorkloadSchedulingResources_NotFoundIsNoop(t *testing.T) {
 	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
 	s := newTestScheme()
 	// No pre-existing resources.
@@ -1285,11 +1387,46 @@ func TestDeleteNativeWorkloadSchedulingResources_NotFoundIsNoop(t *testing.T) {
 	r := newReconciler(fakeClient, s, fakeRecorder)
 	ctx := context.Background()
 
-	err := r.deleteNativeWorkloadSchedulingResources(ctx, cluster)
+	err := r.deleteK8sWorkloadSchedulingResources(ctx, cluster)
 	require.NoError(t, err)
 }
 
-func TestDeleteNativeWorkloadSchedulingResources_PodGroupDeleteFailure(t *testing.T) {
+func TestDeleteK8sWorkloadSchedulingResources_PodGroupFinalizerRemovalFailure(t *testing.T) {
+	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
+	s := newTestScheme()
+
+	pg := &schedulingv1alpha2.PodGroup{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       "test-cluster-head",
+			Namespace:  "default",
+			Labels:     map[string]string{utils.RayClusterLabelKey: "test-cluster"},
+			Finalizers: []string{podGroupProtectionFinalizer},
+		},
+	}
+
+	fakeClient := clientFake.NewClientBuilder().WithScheme(s).
+		WithObjects(pg).
+		WithInterceptorFuncs(interceptor.Funcs{
+			Update: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
+				if _, ok := obj.(*schedulingv1alpha2.PodGroup); ok {
+					return fmt.Errorf("simulated PodGroup update error")
+				}
+				return c.Update(ctx, obj, opts...)
+			},
+		}).Build()
+	fakeRecorder := record.NewFakeRecorder(10)
+	r := newReconciler(fakeClient, s, fakeRecorder)
+	ctx := context.Background()
+
+	err := r.deleteK8sWorkloadSchedulingResources(ctx, cluster)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to remove finalizer from PodGroup")
+
+	event := <-fakeRecorder.Events
+	assert.Contains(t, event, string(FailedToDeletePodGroup))
+}
+
+func TestDeleteK8sWorkloadSchedulingResources_PodGroupDeleteFailure(t *testing.T) {
 	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
 	s := newTestScheme()
 
@@ -1315,7 +1452,7 @@ func TestDeleteNativeWorkloadSchedulingResources_PodGroupDeleteFailure(t *testin
 	r := newReconciler(fakeClient, s, fakeRecorder)
 	ctx := context.Background()
 
-	err := r.deleteNativeWorkloadSchedulingResources(ctx, cluster)
+	err := r.deleteK8sWorkloadSchedulingResources(ctx, cluster)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "simulated PodGroup delete error")
 
@@ -1324,7 +1461,7 @@ func TestDeleteNativeWorkloadSchedulingResources_PodGroupDeleteFailure(t *testin
 	assert.Contains(t, event, string(FailedToDeletePodGroup))
 }
 
-func TestDeleteNativeWorkloadSchedulingResources_WorkloadDeleteFailure(t *testing.T) {
+func TestDeleteK8sWorkloadSchedulingResources_WorkloadDeleteFailure(t *testing.T) {
 	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
 	s := newTestScheme()
 
@@ -1350,7 +1487,7 @@ func TestDeleteNativeWorkloadSchedulingResources_WorkloadDeleteFailure(t *testin
 	r := newReconciler(fakeClient, s, fakeRecorder)
 	ctx := context.Background()
 
-	err := r.deleteNativeWorkloadSchedulingResources(ctx, cluster)
+	err := r.deleteK8sWorkloadSchedulingResources(ctx, cluster)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "simulated Workload delete error")
 
@@ -1359,7 +1496,7 @@ func TestDeleteNativeWorkloadSchedulingResources_WorkloadDeleteFailure(t *testin
 	assert.Contains(t, event, string(FailedToDeleteWorkload))
 }
 
-func TestDeleteNativeWorkloadSchedulingResources_ListFailure(t *testing.T) {
+func TestDeleteK8sWorkloadSchedulingResources_ListFailure(t *testing.T) {
 	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
 	s := newTestScheme()
 
@@ -1376,12 +1513,12 @@ func TestDeleteNativeWorkloadSchedulingResources_ListFailure(t *testing.T) {
 	r := newReconciler(fakeClient, s, fakeRecorder)
 	ctx := context.Background()
 
-	err := r.deleteNativeWorkloadSchedulingResources(ctx, cluster)
+	err := r.deleteK8sWorkloadSchedulingResources(ctx, cluster)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to list PodGroups")
 }
 
-func TestDeleteNativeWorkloadSchedulingResources_RemovesSchedulerFinalizer(t *testing.T) {
+func TestDeleteK8sWorkloadSchedulingResources_RemovesSchedulerFinalizer(t *testing.T) {
 	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
 	s := newTestScheme()
 
@@ -1401,7 +1538,7 @@ func TestDeleteNativeWorkloadSchedulingResources_RemovesSchedulerFinalizer(t *te
 	r := newReconciler(fakeClient, s, fakeRecorder)
 	ctx := context.Background()
 
-	err := r.deleteNativeWorkloadSchedulingResources(ctx, cluster)
+	err := r.deleteK8sWorkloadSchedulingResources(ctx, cluster)
 	require.NoError(t, err)
 
 	// PodGroup should be deleted (not stuck in deleting state).
@@ -1409,8 +1546,8 @@ func TestDeleteNativeWorkloadSchedulingResources_RemovesSchedulerFinalizer(t *te
 	assert.True(t, apierrors.IsNotFound(err), "PodGroup with finalizer should be deleted after stripping finalizer")
 }
 
-func TestReconcileNativeWorkloadScheduling_PodGroupDeletionTimestampReturnsError(t *testing.T) {
-	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
+func TestReconcileK8sWorkloadScheduling_PodGroupDeletionTimestampReturnsError(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.K8sWorkloadScheduling, true)
 
 	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
 	s := newTestScheme()
@@ -1451,13 +1588,13 @@ func TestReconcileNativeWorkloadScheduling_PodGroupDeletionTimestampReturnsError
 	r := newReconciler(fakeClient, s, fakeRecorder)
 	ctx := context.Background()
 
-	err := r.reconcileNativeWorkloadScheduling(ctx, cluster)
+	err := r.reconcileK8sWorkloadScheduling(ctx, cluster)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "is being deleted (finalizer pending)")
 }
 
-func TestReconcileNativeWorkloadScheduling_GetFailureAfterAlreadyExists(t *testing.T) {
-	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
+func TestReconcileK8sWorkloadScheduling_GetFailureAfterAlreadyExists(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.K8sWorkloadScheduling, true)
 
 	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
 	s := newTestScheme()
@@ -1485,7 +1622,7 @@ func TestReconcileNativeWorkloadScheduling_GetFailureAfterAlreadyExists(t *testi
 	r := newReconciler(fakeClient, s, fakeRecorder)
 	ctx := context.Background()
 
-	err := r.reconcileNativeWorkloadScheduling(ctx, cluster)
+	err := r.reconcileK8sWorkloadScheduling(ctx, cluster)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to get existing Workload")
 }
@@ -1493,7 +1630,7 @@ func TestReconcileNativeWorkloadScheduling_GetFailureAfterAlreadyExists(t *testi
 // --- Reconcile drift detection integration tests ---
 
 func TestReconcile_StaleWorkloadRecreated(t *testing.T) {
-	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
+	features.SetFeatureGateDuringTest(t, features.K8sWorkloadScheduling, true)
 
 	// Start with 1 worker group with 3 replicas.
 	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
@@ -1527,7 +1664,7 @@ func TestReconcile_StaleWorkloadRecreated(t *testing.T) {
 	r := newReconciler(fakeClient, s, fakeRecorder)
 	ctx := context.Background()
 
-	err := r.reconcileNativeWorkloadScheduling(ctx, cluster)
+	err := r.reconcileK8sWorkloadScheduling(ctx, cluster)
 	require.NoError(t, err)
 
 	// Verify the Workload was recreated with the correct minCount.
@@ -1547,7 +1684,7 @@ func TestReconcile_StaleWorkloadRecreated(t *testing.T) {
 }
 
 func TestReconcile_UpToDateWorkloadNotRecreated(t *testing.T) {
-	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
+	features.SetFeatureGateDuringTest(t, features.K8sWorkloadScheduling, true)
 
 	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
 	s := newTestScheme()
@@ -1557,7 +1694,7 @@ func TestReconcile_UpToDateWorkloadNotRecreated(t *testing.T) {
 	ctx := context.Background()
 
 	// First reconcile — creates everything.
-	err := r.reconcileNativeWorkloadScheduling(ctx, cluster)
+	err := r.reconcileK8sWorkloadScheduling(ctx, cluster)
 	require.NoError(t, err)
 
 	workload := &schedulingv1alpha2.Workload{}
@@ -1567,7 +1704,7 @@ func TestReconcile_UpToDateWorkloadNotRecreated(t *testing.T) {
 	originalRV := workload.ResourceVersion
 
 	// Second reconcile — should not recreate.
-	err = r.reconcileNativeWorkloadScheduling(ctx, cluster)
+	err = r.reconcileK8sWorkloadScheduling(ctx, cluster)
 	require.NoError(t, err)
 
 	err = fakeClient.Get(ctx, types.NamespacedName{Name: "test-cluster", Namespace: "default"}, workload)
@@ -1577,7 +1714,7 @@ func TestReconcile_UpToDateWorkloadNotRecreated(t *testing.T) {
 }
 
 func TestReconcile_StaleWorkloadWorkerGroupAdded(t *testing.T) {
-	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
+	features.SetFeatureGateDuringTest(t, features.K8sWorkloadScheduling, true)
 
 	// Cluster now has 2 worker groups.
 	cluster := newTestRayCluster(newWorkerGroup("cpu", 2), newWorkerGroup("gpu", 4))
@@ -1604,7 +1741,7 @@ func TestReconcile_StaleWorkloadWorkerGroupAdded(t *testing.T) {
 	r := newReconciler(fakeClient, s, fakeRecorder)
 	ctx := context.Background()
 
-	err := r.reconcileNativeWorkloadScheduling(ctx, cluster)
+	err := r.reconcileK8sWorkloadScheduling(ctx, cluster)
 	require.NoError(t, err)
 
 	// Verify Workload has 3 templates now (head + cpu + gpu).
@@ -1622,8 +1759,8 @@ func TestReconcile_StaleWorkloadWorkerGroupAdded(t *testing.T) {
 
 // --- reconcilePods lifecycle tests (suspend / recreate paths) ---
 
-func TestReconcilePods_SuspendDeletesNativeSchedulingResources(t *testing.T) {
-	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
+func TestReconcilePods_SuspendDeletesK8sWorkloadSchedulingResources(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.K8sWorkloadScheduling, true)
 	features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, false)
 
 	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
@@ -1675,18 +1812,18 @@ func TestReconcilePods_SuspendDeletesNativeSchedulingResources(t *testing.T) {
 	assert.Empty(t, pgList.Items, "PodGroups should be deleted on suspend")
 }
 
-func TestReconcilePods_SuspendSkipsDeletionWhenNativeSchedulingDisabled(t *testing.T) {
-	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, false)
+func TestReconcilePods_SuspendSkipsDeletionWhenK8sWorkloadSchedulingDisabled(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.K8sWorkloadScheduling, false)
 	features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, false)
 
 	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
-	delete(cluster.Annotations, NativeWorkloadSchedulingAnnotation)
+	delete(cluster.Annotations, K8sWorkloadSchedulingAnnotation)
 	suspend := true
 	cluster.Spec.Suspend = &suspend
 
 	s := newTestScheme()
 
-	// Pre-create resources — they should NOT be deleted since native scheduling is disabled.
+	// Pre-create resources — they should NOT be deleted since k8s workload scheduling is disabled.
 	workload := &schedulingv1alpha2.Workload{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-cluster",
@@ -1706,11 +1843,11 @@ func TestReconcilePods_SuspendSkipsDeletionWhenNativeSchedulingDisabled(t *testi
 
 	// Verify Workload still exists.
 	err = fakeClient.Get(ctx, types.NamespacedName{Name: "test-cluster", Namespace: "default"}, &schedulingv1alpha2.Workload{})
-	assert.NoError(t, err, "Workload should still exist when native scheduling is disabled")
+	assert.NoError(t, err, "Workload should still exist when k8s workload scheduling is disabled")
 }
 
-func TestReconcilePods_RecreateUpgradeDeletesNativeSchedulingResources(t *testing.T) {
-	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
+func TestReconcilePods_RecreateUpgradeDeletesK8sWorkloadSchedulingResources(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.K8sWorkloadScheduling, true)
 	features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, false)
 
 	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
@@ -1777,8 +1914,89 @@ func TestReconcilePods_RecreateUpgradeDeletesNativeSchedulingResources(t *testin
 	assert.Empty(t, pgList.Items, "PodGroups should be deleted on recreate upgrade")
 }
 
-func TestReconcilePods_ResumeRecreatesNativeSchedulingResources(t *testing.T) {
-	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
+func TestReconcilePods_DeletesPodsBeforeK8sWorkloadSchedulingResources(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.K8sWorkloadScheduling, true)
+	features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, false)
+
+	tests := []struct {
+		name  string
+		setup func(*rayv1.RayCluster)
+	}{
+		{
+			name: "suspend",
+			setup: func(cluster *rayv1.RayCluster) {
+				suspend := true
+				cluster.Spec.Suspend = &suspend
+			},
+		},
+		{
+			name: "recreate upgrade",
+			setup: func(cluster *rayv1.RayCluster) {
+				recreate := rayv1.RayClusterRecreate
+				cluster.Spec.UpgradeStrategy = &rayv1.RayClusterUpgradeStrategy{Type: &recreate}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cluster := newTestRayCluster(newWorkerGroup("workers", 3))
+			tt.setup(cluster)
+
+			headPod := &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cluster-head-pod",
+					Namespace: "default",
+					Labels: map[string]string{
+						utils.RayClusterLabelKey:  "test-cluster",
+						utils.RayNodeTypeLabelKey: string(rayv1.HeadNode),
+					},
+					Annotations: map[string]string{
+						utils.UpgradeStrategyRecreateHashKey: "stale-hash-value",
+						utils.KubeRayVersion:                 utils.KUBERAY_VERSION,
+					},
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{{Name: "ray-head", Image: "rayproject/ray:latest"}},
+				},
+			}
+
+			objects := append(newTestK8sSchedulingObjects("test-cluster-head"), headPod)
+			deleteOrder := make([]string, 0, 3)
+			s := newTestScheme()
+			fakeClient := clientFake.NewClientBuilder().WithScheme(s).
+				WithObjects(objects...).WithInterceptorFuncs(interceptor.Funcs{
+				DeleteAllOf: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.DeleteAllOfOption) error {
+					if _, ok := obj.(*corev1.Pod); ok {
+						deleteOrder = append(deleteOrder, "pods")
+					}
+					return c.DeleteAllOf(ctx, obj, opts...)
+				},
+				Delete: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.DeleteOption) error {
+					switch obj.(type) {
+					case *schedulingv1alpha2.PodGroup:
+						deleteOrder = append(deleteOrder, "podgroup")
+					case *schedulingv1alpha2.Workload:
+						deleteOrder = append(deleteOrder, "workload")
+					}
+					return c.Delete(ctx, obj, opts...)
+				},
+			}).Build()
+			r := newReconciler(fakeClient, s, record.NewFakeRecorder(20))
+			ctx := context.Background()
+
+			err := r.reconcilePods(ctx, cluster)
+			require.NoError(t, err)
+
+			require.Len(t, deleteOrder, 3)
+			assert.Equal(t, "pods", deleteOrder[0])
+			assert.ElementsMatch(t, []string{"podgroup", "workload"}, deleteOrder[1:])
+		})
+	}
+}
+
+func TestReconcilePods_ResumeRecreatesK8sWorkloadSchedulingResources(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.K8sWorkloadScheduling, true)
 	features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, false)
 
 	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
@@ -1814,22 +2032,14 @@ func TestReconcilePods_ResumeRecreatesNativeSchedulingResources(t *testing.T) {
 
 // --- WorkloadScheduled condition tests ---
 
-func TestSetWorkloadScheduledCondition_TrueWhenWorkloadExists(t *testing.T) {
-	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
+func TestSetWorkloadScheduledCondition_TrueWhenWorkloadAndPodGroupsExist(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.K8sWorkloadScheduling, true)
 	features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, true)
 
 	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
 	s := newTestScheme()
-
-	// Pre-create a Workload so the condition check finds it.
-	workload := &schedulingv1alpha2.Workload{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-cluster",
-			Namespace: "default",
-			Labels:    map[string]string{utils.RayClusterLabelKey: "test-cluster"},
-		},
-	}
-	fakeClient := clientFake.NewClientBuilder().WithScheme(s).WithObjects(workload).Build()
+	objects := newTestK8sSchedulingObjects("test-cluster-head", "test-cluster-worker-workers")
+	fakeClient := clientFake.NewClientBuilder().WithScheme(s).WithObjects(objects...).Build()
 	r := newReconciler(fakeClient, s, record.NewFakeRecorder(10))
 	ctx := context.Background()
 
@@ -1841,8 +2051,27 @@ func TestSetWorkloadScheduledCondition_TrueWhenWorkloadExists(t *testing.T) {
 	assert.Equal(t, rayv1.WorkloadReady, cond.Reason)
 }
 
+func TestSetWorkloadScheduledCondition_FalseWhenPodGroupDoesNotExist(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.K8sWorkloadScheduling, true)
+	features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, true)
+
+	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
+	s := newTestScheme()
+	objects := newTestK8sSchedulingObjects("test-cluster-head")
+	fakeClient := clientFake.NewClientBuilder().WithScheme(s).WithObjects(objects...).Build()
+	r := newReconciler(fakeClient, s, record.NewFakeRecorder(10))
+	ctx := context.Background()
+
+	r.setWorkloadScheduledCondition(ctx, cluster, "")
+
+	cond := meta.FindStatusCondition(cluster.Status.Conditions, string(rayv1.RayClusterWorkloadScheduled))
+	require.NotNil(t, cond, "WorkloadScheduled condition should be set")
+	assert.Equal(t, metav1.ConditionFalse, cond.Status)
+	assert.Equal(t, rayv1.WorkloadPending, cond.Reason)
+}
+
 func TestSetWorkloadScheduledCondition_FalseWhenWorkloadDoesNotExist(t *testing.T) {
-	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
+	features.SetFeatureGateDuringTest(t, features.K8sWorkloadScheduling, true)
 	features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, true)
 
 	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
@@ -1861,8 +2090,102 @@ func TestSetWorkloadScheduledCondition_FalseWhenWorkloadDoesNotExist(t *testing.
 	assert.Equal(t, rayv1.WorkloadPending, cond.Reason)
 }
 
+func TestSetWorkloadScheduledCondition_FalseWhenWorkloadBeingDeleted(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.K8sWorkloadScheduling, true)
+	features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, true)
+
+	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
+	s := newTestScheme()
+	now := metav1.Now()
+	workload := &schedulingv1alpha2.Workload{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              "test-cluster",
+			Namespace:         "default",
+			Labels:            map[string]string{utils.RayClusterLabelKey: "test-cluster"},
+			DeletionTimestamp: &now,
+			Finalizers:        []string{"fake-finalizer"}, // required for DeletionTimestamp to be accepted
+		},
+	}
+	fakeClient := clientFake.NewClientBuilder().WithScheme(s).WithObjects(workload).Build()
+	r := newReconciler(fakeClient, s, record.NewFakeRecorder(10))
+	ctx := context.Background()
+
+	r.setWorkloadScheduledCondition(ctx, cluster, "")
+
+	cond := meta.FindStatusCondition(cluster.Status.Conditions, string(rayv1.RayClusterWorkloadScheduled))
+	require.NotNil(t, cond, "WorkloadScheduled condition should be set")
+	assert.Equal(t, metav1.ConditionFalse, cond.Status)
+	assert.Equal(t, rayv1.WorkloadPending, cond.Reason)
+	assert.Contains(t, cond.Message, "being deleted")
+}
+
+func TestSetWorkloadScheduledCondition_FalseWhenPodGroupBeingDeleted(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.K8sWorkloadScheduling, true)
+	features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, true)
+
+	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
+	s := newTestScheme()
+	now := metav1.Now()
+	// Workload is healthy, but one PodGroup is being deleted.
+	objects := []client.Object{
+		&schedulingv1alpha2.Workload{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-cluster",
+				Namespace: "default",
+				Labels:    map[string]string{utils.RayClusterLabelKey: "test-cluster"},
+			},
+		},
+		&schedulingv1alpha2.PodGroup{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-cluster-head",
+				Namespace: "default",
+				Labels:    map[string]string{utils.RayClusterLabelKey: "test-cluster"},
+			},
+		},
+		&schedulingv1alpha2.PodGroup{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:              "test-cluster-worker-workers",
+				Namespace:         "default",
+				Labels:            map[string]string{utils.RayClusterLabelKey: "test-cluster"},
+				DeletionTimestamp: &now,
+				Finalizers:        []string{"fake-finalizer"},
+			},
+		},
+	}
+	fakeClient := clientFake.NewClientBuilder().WithScheme(s).WithObjects(objects...).Build()
+	r := newReconciler(fakeClient, s, record.NewFakeRecorder(10))
+	ctx := context.Background()
+
+	r.setWorkloadScheduledCondition(ctx, cluster, "")
+
+	cond := meta.FindStatusCondition(cluster.Status.Conditions, string(rayv1.RayClusterWorkloadScheduled))
+	require.NotNil(t, cond, "WorkloadScheduled condition should be set")
+	assert.Equal(t, metav1.ConditionFalse, cond.Status)
+	assert.Equal(t, rayv1.WorkloadPending, cond.Reason)
+	assert.Contains(t, cond.Message, "being deleted")
+}
+
+func TestReconcileK8sWorkloadScheduling_NoEventWhenNoStaleResources(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.K8sWorkloadScheduling, true)
+
+	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
+	cluster.Spec.EnableInTreeAutoscaling = new(true) // trigger skip
+	s := newTestScheme()
+	// No pre-existing Workload/PodGroups — nothing to clean up.
+	fakeClient := clientFake.NewClientBuilder().WithScheme(s).Build()
+	fakeRecorder := record.NewFakeRecorder(10)
+	r := newReconciler(fakeClient, s, fakeRecorder)
+	ctx := context.Background()
+
+	err := r.reconcileK8sWorkloadScheduling(ctx, cluster)
+	require.NoError(t, err)
+
+	// No events should be emitted because there were no stale resources.
+	assert.Empty(t, fakeRecorder.Events, "No events should be emitted when there are no stale resources to clean up")
+}
+
 func TestSetWorkloadScheduledCondition_NotSetWhenFeatureGateDisabled(t *testing.T) {
-	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, false)
+	features.SetFeatureGateDuringTest(t, features.K8sWorkloadScheduling, false)
 	features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, true)
 
 	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
@@ -1878,7 +2201,7 @@ func TestSetWorkloadScheduledCondition_NotSetWhenFeatureGateDisabled(t *testing.
 }
 
 func TestSetWorkloadScheduledCondition_NotSetWhenAnnotationMissing(t *testing.T) {
-	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
+	features.SetFeatureGateDuringTest(t, features.K8sWorkloadScheduling, true)
 	features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, true)
 
 	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
@@ -1894,8 +2217,32 @@ func TestSetWorkloadScheduledCondition_NotSetWhenAnnotationMissing(t *testing.T)
 	assert.Nil(t, cond, "WorkloadScheduled condition should not be set when annotation is missing")
 }
 
+func TestSetWorkloadScheduledCondition_RemovedWhenSchedulingSkipped(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.K8sWorkloadScheduling, true)
+	features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, true)
+
+	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
+	cluster.Spec.EnableInTreeAutoscaling = new(true)
+	meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
+		Type:    string(rayv1.RayClusterWorkloadScheduled),
+		Status:  metav1.ConditionTrue,
+		Reason:  rayv1.WorkloadReady,
+		Message: "Workload and PodGroups have been created",
+	})
+	s := newTestScheme()
+	objects := newTestK8sSchedulingObjects("test-cluster-head", "test-cluster-worker-workers")
+	fakeClient := clientFake.NewClientBuilder().WithScheme(s).WithObjects(objects...).Build()
+	r := newReconciler(fakeClient, s, record.NewFakeRecorder(10))
+	ctx := context.Background()
+
+	r.setWorkloadScheduledCondition(ctx, cluster, "")
+
+	cond := meta.FindStatusCondition(cluster.Status.Conditions, string(rayv1.RayClusterWorkloadScheduled))
+	assert.Nil(t, cond, "WorkloadScheduled condition should be removed when k8s workload scheduling is skipped")
+}
+
 func TestSetWorkloadScheduledCondition_RemovedWhenSuspended(t *testing.T) {
-	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
+	features.SetFeatureGateDuringTest(t, features.K8sWorkloadScheduling, true)
 	features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, true)
 
 	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
@@ -1918,7 +2265,7 @@ func TestSetWorkloadScheduledCondition_RemovedWhenSuspended(t *testing.T) {
 }
 
 func TestSetWorkloadScheduledCondition_RemovedWhenSuspending(t *testing.T) {
-	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
+	features.SetFeatureGateDuringTest(t, features.K8sWorkloadScheduling, true)
 	features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, true)
 
 	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
@@ -1943,20 +2290,11 @@ func TestSetWorkloadScheduledCondition_RemovedWhenSuspending(t *testing.T) {
 // --- calculateStatus integration tests ---
 
 func TestCalculateStatus_WorkloadScheduledConditionSetWhenBothGatesEnabled(t *testing.T) {
-	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
+	features.SetFeatureGateDuringTest(t, features.K8sWorkloadScheduling, true)
 	features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, true)
 
 	cluster := newTestRayCluster(newWorkerGroup("workers", 1))
 	s := newTestScheme()
-
-	// Create a Workload so the condition check finds it.
-	workload := &schedulingv1alpha2.Workload{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-cluster",
-			Namespace: "default",
-			Labels:    map[string]string{utils.RayClusterLabelKey: "test-cluster"},
-		},
-	}
 
 	// Create a head service so calculateStatus's updateEndpoints/updateHeadInfo succeed.
 	headService := &corev1.Service{
@@ -1974,7 +2312,8 @@ func TestCalculateStatus_WorkloadScheduledConditionSetWhenBothGatesEnabled(t *te
 		},
 	}
 
-	fakeClient := clientFake.NewClientBuilder().WithScheme(s).WithObjects(workload, headService).Build()
+	objects := append(newTestK8sSchedulingObjects("test-cluster-head", "test-cluster-worker-workers"), headService)
+	fakeClient := clientFake.NewClientBuilder().WithScheme(s).WithObjects(objects...).Build()
 	r := newReconciler(fakeClient, s, record.NewFakeRecorder(10))
 	ctx := context.Background()
 
@@ -1988,7 +2327,7 @@ func TestCalculateStatus_WorkloadScheduledConditionSetWhenBothGatesEnabled(t *te
 }
 
 func TestCalculateStatus_WorkloadScheduledConditionNotSetWhenStatusConditionsGateDisabled(t *testing.T) {
-	features.SetFeatureGateDuringTest(t, features.NativeWorkloadScheduling, true)
+	features.SetFeatureGateDuringTest(t, features.K8sWorkloadScheduling, true)
 	features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, false)
 
 	cluster := newTestRayCluster(newWorkerGroup("workers", 1))

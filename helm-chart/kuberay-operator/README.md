@@ -181,7 +181,7 @@ spec:
 | featureGates[3].enabled | bool | `false` |  |
 | featureGates[4].name | string | `"RayCronJob"` |  |
 | featureGates[4].enabled | bool | `false` |  |
-| featureGates[5].name | string | `"NativeWorkloadScheduling"` |  |
+| featureGates[5].name | string | `"K8sWorkloadScheduling"` |  |
 | featureGates[5].enabled | bool | `false` |  |
 | metrics.enabled | bool | `true` | Whether KubeRay operator should emit control plane metrics. |
 | metrics.serviceMonitor.enabled | bool | `false` | Enable a prometheus ServiceMonitor |

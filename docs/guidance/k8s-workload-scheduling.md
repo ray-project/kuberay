@@ -1,16 +1,16 @@
 <!-- markdownlint-disable MD013 -->
-# Native Workload Scheduling (Gang Scheduling)
+# K8s Workload Scheduling (Gang Scheduling)
 
-This guide explains how to use KubeRay's native Kubernetes gang scheduling integration, which ensures that all pods in a RayCluster worker group are either entirely schedulable or not scheduled at all.
+This guide explains how to use KubeRay's built-in Kubernetes gang scheduling integration, which ensures that all pods in a RayCluster worker group are either entirely schedulable or not scheduled at all.
 
 ## Overview
 
 Distributed AI/ML workloads on Kubernetes can suffer from partial scheduling: some pods in a group get scheduled and hold expensive GPU nodes idle while waiting for the remaining pods,
 or partially scheduled groups block other workloads indefinitely (livelock). Gang scheduling solves this by treating a group of pods as an atomic unit.
 
-KubeRay integrates with the **native** Kubernetes gang scheduling APIs (`scheduling.k8s.io/v1alpha2`) introduced in [KEP-4671](https://github.com/kubernetes/enhancements/tree/master/keps/sig-scheduling/4671-gang-scheduling)
+KubeRay integrates with the **built-in** Kubernetes gang scheduling APIs (`scheduling.k8s.io/v1alpha2`) introduced in [KEP-4671](https://github.com/kubernetes/enhancements/tree/master/keps/sig-scheduling/4671-gang-scheduling)
 and [KEP-5832](https://github.com/kubernetes/enhancements/tree/master/keps/sig-scheduling/5832-decouple-podgroup-api).
-"Native" means this gang scheduling is built into the default Kubernetes scheduler (kube-scheduler) starting in Kubernetes 1.36, unlike other external solutions (Volcano, YuniKorn, etc.) which replace or wrap the default scheduler.
+"Built-in" means this gang scheduling is part of the default Kubernetes scheduler (kube-scheduler) starting in Kubernetes 1.36, unlike other external solutions (Volcano, YuniKorn, etc.) which replace or wrap the default scheduler.
 
 When enabled, the KubeRay operator creates `Workload` and `PodGroup` resources for each RayCluster and sets `spec.schedulingGroup` on every pod, linking it to the appropriate PodGroup.
 The Kubernetes scheduler then evaluates each worker group as a gang — all pods in the group must be schedulable before any of them are scheduled.
@@ -22,7 +22,7 @@ The Kubernetes scheduler then evaluates each worker group as a gang — all pods
   - `scheduling.k8s.io/v1alpha2=true` in the apiserver's **runtime-config** — serves the alpha API (alpha APIs are off by default)
   - `GenericWorkload=true` on the **kube-controller-manager**
   - `GangScheduling=true` on the **kube-scheduler** — enables the gang scheduling plugin that processes `schedulingGroup` on pods
-- **KubeRay operator** with the `NativeWorkloadScheduling` feature gate enabled
+- **KubeRay operator** with the `K8sWorkloadScheduling` feature gate enabled
 
 ## Enabling the Feature
 
@@ -30,17 +30,17 @@ Start with a Kubernetes 1.36+ cluster with the required feature gates (`GenericW
 
 ### 1. Enable the KubeRay operator feature gate
 
-Pass the `NativeWorkloadScheduling` feature gate when starting the operator:
+Pass the `K8sWorkloadScheduling` feature gate when starting the operator:
 
 ```bash
---feature-gates=NativeWorkloadScheduling=true
+--feature-gates=K8sWorkloadScheduling=true
 ```
 
 With Helm:
 
 ```yaml
 featureGates:
-  - name: NativeWorkloadScheduling
+  - name: K8sWorkloadScheduling
     enabled: true
 ```
 
@@ -48,13 +48,13 @@ Or via `--set`:
 
 ```bash
 helm install kuberay-operator kuberay/kuberay-operator \
-  --set featureGates[0].name=NativeWorkloadScheduling \
+  --set featureGates[0].name=K8sWorkloadScheduling \
   --set featureGates[0].enabled=true
 ```
 
 ### 2. Opt-in per RayCluster
 
-Add the `ray.io/native-workload-scheduling: "true"` annotation to each RayCluster that should use gang scheduling:
+Add the `ray.io/k8s-workload-scheduling: "true"` annotation to each RayCluster that should use gang scheduling:
 
 ```yaml
 apiVersion: ray.io/v1
@@ -62,7 +62,7 @@ kind: RayCluster
 metadata:
   name: my-cluster
   annotations:
-    ray.io/native-workload-scheduling: "true"
+    ray.io/k8s-workload-scheduling: "true"
 spec:
   headGroupSpec:
     rayStartParams:
@@ -125,17 +125,17 @@ When the `RayClusterStatusConditions` feature gate is also enabled, the operator
 | `WorkloadScheduled` | `True` | `WorkloadReady` | Workload and PodGroups have been created |
 | `WorkloadScheduled` | `False` | `WorkloadPending` | Workload has not been created yet |
 
-The condition is removed when the cluster is suspended or when native scheduling is not enabled.
+The condition is removed when the cluster is suspended or when k8s workload scheduling is not enabled.
 
 ## Limitations
 
 > **Note**: This feature is in early alpha. Both the Kubernetes `scheduling.k8s.io/v1alpha2` API and the KubeRay integration are under active development. Notably, autoscaling is not supported — only fixed-size worker groups are compatible.
 
-- **No autoscaling support**: RayClusters with autoscaling enabled (`enableInTreeAutoscaling: true`) will skip native scheduling with a warning event. Fixed-size worker groups only.
+- **No autoscaling support**: RayClusters with autoscaling enabled (`enableInTreeAutoscaling: true`) will skip k8s workload scheduling with a warning event. Fixed-size worker groups only.
 - **Max 7 worker groups**: The `scheduling.k8s.io/v1alpha2` API allows at most 8 PodGroupTemplates per Workload (1 reserved for the head group).
 - **Per-worker-group atomicity only**: Each worker group is scheduled as an independent gang. There is no cross-worker-group atomicity (e.g., "schedule all GPU workers AND all CPU workers or none").
 - **Mutually exclusive with batch schedulers**: Cannot be used together with `batchScheduler` configuration (Volcano, YuniKorn, etc.). The operator will refuse to start if both are enabled.
-- **Immutable `schedulingGroup` on pods**: The `spec.schedulingGroup` field on pods is immutable. If you enable native scheduling on an already-running cluster, existing pods will not get `schedulingGroup` set. New pods (from scale-up, recreation, or suspend/resume) will be correctly configured.
+- **Immutable `schedulingGroup` on pods**: The `spec.schedulingGroup` field on pods is immutable. If you enable k8s workload scheduling on an already-running cluster, existing pods will not get `schedulingGroup` set. New pods (from scale-up, recreation, or suspend/resume) will be correctly configured.
 - **Requires Kubernetes 1.36+**: The `scheduling.k8s.io/v1alpha2` API is not available in earlier versions.
 
 ## Troubleshooting
@@ -176,10 +176,10 @@ Ensure **both** `GenericWorkload` (apiserver) and `GangScheduling` (scheduler) f
 If you see an error like:
 
 ```text
-NativeWorkloadScheduling feature gate and batchScheduler configuration are mutually exclusive
+K8sWorkloadScheduling feature gate and batchScheduler configuration are mutually exclusive
 ```
 
-The operator has both native scheduling and a batch scheduler (Volcano, YuniKorn, etc.) configured. Disable one of them.
+The operator has both k8s workload scheduling and a batch scheduler (Volcano, YuniKorn, etc.) configured. Disable one of them.
 
 If you see:
 
@@ -193,13 +193,13 @@ Your Kubernetes cluster is either older than 1.36 or the `GenericWorkload` featu
 
 | Event | Meaning |
 |-------|---------|
-| `WorkloadSchedulingSkipped` | Native scheduling was skipped because autoscaling is enabled or a batch scheduler is configured |
+| `WorkloadSchedulingSkipped` | K8s workload scheduling was skipped because autoscaling is enabled or a batch scheduler is configured |
 | `WorkloadSchedulingInvalidSpec` | Too many worker groups (>7) |
 | `FailedToCreateWorkload` / `FailedToCreatePodGroup` | API error creating scheduling resources |
 
 ## Setting Up a Local Test Cluster
 
-To test native workload scheduling locally with [kind](https://kind.sigs.k8s.io/), you need a Kubernetes 1.36+ node image with the required feature gates:
+To test k8s workload scheduling locally with [kind](https://kind.sigs.k8s.io/), you need a Kubernetes 1.36+ node image with the required feature gates:
 
 ```bash
 # Install kind v0.32.0 or newer, which supports the published K8s 1.36 node image.
@@ -208,17 +208,17 @@ chmod +x ./kind
 sudo mv ./kind /usr/local/bin/kind
 
 # Create the cluster with the required feature gates
-kind create cluster --name native-sched \
-  --config ci/kind-config-native-workload-scheduling.yml
+kind create cluster --name k8s-workload-scheduling \
+  --config ci/kind-config-k8s-workload-scheduling.yml
 ```
 
-The [`ci/kind-config-native-workload-scheduling.yml`](../../ci/kind-config-native-workload-scheduling.yml) config uses the published `kindest/node:v1.36.1` image, enables `GenericWorkload` on the apiserver/controller-manager, enables `GangScheduling` on the scheduler, and serves the `scheduling.k8s.io/v1alpha2` alpha API.
+The [`ci/kind-config-k8s-workload-scheduling.yml`](../../ci/kind-config-k8s-workload-scheduling.yml) config uses the published `kindest/node:v1.36.1` image, enables `GenericWorkload` on the apiserver/controller-manager, enables `GangScheduling` on the scheduler, and serves the `scheduling.k8s.io/v1alpha2` alpha API.
 
 Then deploy the operator with the feature gate enabled:
 
 ```bash
 cd ray-operator
 make docker-image IMG=kuberay/operator:latest
-kind load docker-image kuberay/operator:latest --name native-sched
-make deploy-native-scheduling IMG=kuberay/operator:latest
+kind load docker-image kuberay/operator:latest --name k8s-workload-scheduling
+make deploy-k8s-workload-scheduling IMG=kuberay/operator:latest
 ```
