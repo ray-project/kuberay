@@ -39,6 +39,7 @@ const (
       "serveDeployment": "rayServeDeploymentDashboard",
       "serveLlm": "rayServeLlmDashboard",
       "data": "rayDataDashboard",
+      "dataLlm": "rayDataLlmDashboard",
       "train": "rayTrainDashboard"
     },
     "dashboardDatasource": "Prometheus",
