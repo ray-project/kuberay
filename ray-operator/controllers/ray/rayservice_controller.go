@@ -398,6 +398,9 @@ func (r *RayServiceReconciler) handleSuspend(ctx context.Context, rayServiceInst
 			meta.RemoveStatusCondition(&rayServiceInstance.Status.Conditions, string(rayv1.RayServiceReady))
 			setCondition(rayServiceInstance, rayv1.RayServiceReady, metav1.ConditionFalse, rayv1.RayServiceInitializing,
 				"RayService is initializing after resuming from suspend.")
+			meta.RemoveStatusCondition(&rayServiceInstance.Status.Conditions, string(rayv1.UpgradeInProgress))
+			setCondition(rayServiceInstance, rayv1.UpgradeInProgress, metav1.ConditionFalse, rayv1.RayServiceInitializing,
+				"RayService is initializing after resuming from suspend.")
 			return ctrl.Result{}, nil
 		}
 		// Stay suspended; nothing to reconcile.

@@ -2648,6 +2648,15 @@ func TestHandleSuspendResumeResetsReadyToInitializing(t *testing.T) {
 
 	assert.WithinDuration(t, time.Now(), readyCond.LastTransitionTime.Time, 5*time.Second,
 		"RayServiceReady LastTransitionTime must reset on resume; otherwise initializing-timeout will use the stale suspend timestamp")
+
+	upgradeCond := meta.FindStatusCondition(rs.Status.Conditions, string(rayv1.UpgradeInProgress))
+	require.NotNil(t, upgradeCond, "UpgradeInProgress condition must exist after resume")
+
+	assert.Equal(t, string(rayv1.RayServiceInitializing), upgradeCond.Reason,
+		"UpgradeInProgress reason must be Initializing on resume; otherwise calculateConditions may set it to NoActiveCluster")
+
+	assert.WithinDuration(t, time.Now(), upgradeCond.LastTransitionTime.Time, 5*time.Second,
+		"UpgradeInProgress LastTransitionTime must reset on resume")
 }
 
 func Test_RayServiceReconcileManagedBy(t *testing.T) {
