@@ -26,7 +26,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
@@ -55,7 +55,7 @@ func NewReconciler(mgr manager.Manager, options RayClusterReconcilerOptions) *Ra
 	return &RayClusterReconciler{
 		Client:                     mgr.GetClient(),
 		Scheme:                     mgr.GetScheme(),
-		Recorder:                   mgr.GetEventRecorderFor("raycluster-controller"),
+		Recorder:                   mgr.GetEventRecorder("raycluster-controller"),
 		rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(mgr.GetClient()),
 		options:                    options,
 	}
@@ -65,7 +65,7 @@ func NewReconciler(mgr manager.Manager, options RayClusterReconcilerOptions) *Ra
 type RayClusterReconciler struct {
 	client.Client
 	Scheme                     *k8sruntime.Scheme
-	Recorder                   record.EventRecorder
+	Recorder                   events.EventRecorder
 	rayClusterScaleExpectation expectations.RayClusterScaleExpectation
 	options                    RayClusterReconcilerOptions
 }
@@ -86,7 +86,7 @@ type RayClusterReconcilerOptions struct {
 // +kubebuilder:rbac:groups=ray.io,resources=rayclusters,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=ray.io,resources=rayclusters/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=ray.io,resources=rayclusters/finalizers,verbs=update
-// +kubebuilder:rbac:groups=core,resources=events,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=events.k8s.io,resources=events,verbs=create;patch
 // +kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch;create;update;patch;delete;deletecollection
 // +kubebuilder:rbac:groups=core,resources=pods/status,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=pods/resize,verbs=patch
@@ -158,28 +158,28 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 
 	if err := utils.ValidateRayClusterMetadata(instance.ObjectMeta); err != nil {
 		logger.Error(err, "The RayCluster metadata is invalid")
-		r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.InvalidRayClusterMetadata),
+		r.Recorder.Eventf(instance, nil, corev1.EventTypeWarning, string(utils.InvalidRayClusterMetadata), string(utils.ValidateAction),
 			"The RayCluster metadata is invalid %s/%s: %v", instance.Namespace, instance.Name, err)
 		return ctrl.Result{}, nil
 	}
 
 	if err := utils.ValidateRayClusterSpec(&instance.Spec, instance.Annotations); err != nil {
 		logger.Error(err, "The RayCluster spec is invalid")
-		r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.InvalidRayClusterSpec),
+		r.Recorder.Eventf(instance, nil, corev1.EventTypeWarning, string(utils.InvalidRayClusterSpec), string(utils.ValidateAction),
 			"The RayCluster spec is invalid %s/%s: %v", instance.Namespace, instance.Name, err)
 		return ctrl.Result{}, nil
 	}
 
 	if err := utils.ValidateRayClusterUpgradeOptions(instance); err != nil {
 		logger.Error(err, "The RayCluster UpgradeStrategy is invalid")
-		r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.InvalidRayClusterSpec),
+		r.Recorder.Eventf(instance, nil, corev1.EventTypeWarning, string(utils.InvalidRayClusterSpec), string(utils.ValidateAction),
 			"The RayCluster UpgradeStrategy is invalid %s/%s: %v", instance.Namespace, instance.Name, err)
 		return ctrl.Result{}, nil
 	}
 
 	if err := utils.ValidateRayClusterStatus(instance); err != nil {
 		logger.Error(err, "The RayCluster status is invalid")
-		r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.InvalidRayClusterStatus),
+		r.Recorder.Eventf(instance, nil, corev1.EventTypeWarning, string(utils.InvalidRayClusterStatus), string(utils.ValidateAction),
 			"The RayCluster status is invalid %s/%s, %v", instance.Namespace, instance.Name, err)
 		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 	}
@@ -287,12 +287,12 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 					logger.Info("Redis cleanup Job already exists. Requeue the RayCluster CR.")
 					return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, nil
 				}
-				r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.FailedToCreateRedisCleanupJob),
+				r.Recorder.Eventf(instance, nil, corev1.EventTypeWarning, string(utils.FailedToCreateRedisCleanupJob), string(utils.CreateAction),
 					"Failed to create Redis cleanup Job %s/%s, %v", redisCleanupJob.Namespace, redisCleanupJob.Name, err)
 				return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 			}
 			logger.Info("Created Redis cleanup Job", "name", redisCleanupJob.Name)
-			r.Recorder.Eventf(instance, corev1.EventTypeNormal, string(utils.CreatedRedisCleanupJob),
+			r.Recorder.Eventf(instance, nil, corev1.EventTypeNormal, string(utils.CreatedRedisCleanupJob), string(utils.CreateAction),
 				"Created Redis cleanup Job %s/%s", redisCleanupJob.Namespace, redisCleanupJob.Name)
 			return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, nil
 		}
@@ -641,13 +641,13 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 	if suspendStatus == rayv1.RayClusterSuspending ||
 		(!statusConditionGateEnabled && instance.Spec.Suspend != nil && *instance.Spec.Suspend) {
 		if _, err := r.deleteAllPods(ctx, common.RayClusterAllPodsAssociationOptions(instance)); err != nil {
-			r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.FailedToDeletePodCollection),
+			r.Recorder.Eventf(instance, nil, corev1.EventTypeWarning, string(utils.FailedToDeletePodCollection), string(utils.DeleteAction),
 				"Failed deleting Pods due to suspension for RayCluster %s/%s, %v",
 				instance.Namespace, instance.Name, err)
 			return errstd.Join(utils.ErrFailedDeleteAllPods, err)
 		}
 
-		r.Recorder.Eventf(instance, corev1.EventTypeNormal, string(utils.DeletedPod),
+		r.Recorder.Eventf(instance, nil, corev1.EventTypeNormal, string(utils.DeletedPod), string(utils.DeleteAction),
 			"Deleted Pods for RayCluster %s/%s due to suspension",
 			instance.Namespace, instance.Name)
 		return nil
@@ -667,13 +667,13 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 	if r.shouldRecreatePodsForUpgrade(ctx, instance) {
 		logger.Info("RayCluster spec changed with Recreate upgradeStrategy, deleting all pods")
 		if _, err := r.deleteAllPods(ctx, common.RayClusterAllPodsAssociationOptions(instance)); err != nil {
-			r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.FailedToDeletePodCollection),
+			r.Recorder.Eventf(instance, nil, corev1.EventTypeWarning, string(utils.FailedToDeletePodCollection), string(utils.DeleteAction),
 				"Failed deleting Pods due to spec change with Recreate upgradeStrategy for RayCluster %s/%s, %v",
 				instance.Namespace, instance.Name, err)
 			return errstd.Join(utils.ErrFailedDeleteAllPods, err)
 		}
 		r.rayClusterScaleExpectation.Delete(instance.Name, instance.Namespace)
-		r.Recorder.Eventf(instance, corev1.EventTypeNormal, string(utils.DeletedPod),
+		r.Recorder.Eventf(instance, nil, corev1.EventTypeNormal, string(utils.DeletedPod), string(utils.DeleteAction),
 			"Deleted all Pods for RayCluster %s/%s due to spec change with Recreate upgradeStrategy",
 			instance.Namespace, instance.Name)
 		return nil
@@ -709,13 +709,13 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 		logger.Info("reconcilePods", "head Pod", headPod.Name, "shouldDelete", shouldDelete, "reason", reason)
 		if shouldDelete {
 			if err := r.Delete(ctx, &headPod); err != nil {
-				r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.FailedToDeleteHeadPod),
+				r.Recorder.Eventf(instance, nil, corev1.EventTypeWarning, string(utils.FailedToDeleteHeadPod), string(utils.DeleteAction),
 					"Failed deleting head Pod %s/%s; Pod status: %s; Pod restart policy: %s; Ray container terminated status: %v, %v",
 					headPod.Namespace, headPod.Name, headPod.Status.Phase, headPod.Spec.RestartPolicy, getRayContainerStateTerminated(headPod), err)
 				return errstd.Join(utils.ErrFailedDeleteHeadPod, err)
 			}
 			r.rayClusterScaleExpectation.ExpectScalePod(headPod.Namespace, instance.Name, expectations.HeadGroup, headPod.Name, expectations.Delete)
-			r.Recorder.Eventf(instance, corev1.EventTypeNormal, string(utils.DeletedHeadPod),
+			r.Recorder.Eventf(instance, nil, corev1.EventTypeNormal, string(utils.DeletedHeadPod), string(utils.DeleteAction),
 				"Deleted head Pod %s/%s; Pod status: %s; Pod restart policy: %s; Ray container terminated status: %v",
 				headPod.Namespace, headPod.Name, headPod.Status.Phase, headPod.Spec.RestartPolicy, getRayContainerStateTerminated(headPod))
 			return errstd.New(reason)
@@ -775,11 +775,11 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 		// Delete all workers if worker group is suspended and skip reconcile
 		if worker.Suspend != nil && *worker.Suspend {
 			if _, err := r.deleteAllPods(ctx, common.RayClusterGroupPodsAssociationOptions(instance, worker.GroupName)); err != nil {
-				r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.FailedToDeleteWorkerPodCollection),
+				r.Recorder.Eventf(instance, nil, corev1.EventTypeWarning, string(utils.FailedToDeleteWorkerPodCollection), string(utils.DeleteAction),
 					"Failed deleting worker Pods for suspended group %s in RayCluster %s/%s, %v", worker.GroupName, instance.Namespace, instance.Name, err)
 				return errstd.Join(utils.ErrFailedDeleteWorkerPod, err)
 			}
-			r.Recorder.Eventf(instance, corev1.EventTypeNormal, string(utils.DeletedWorkerPod),
+			r.Recorder.Eventf(instance, nil, corev1.EventTypeNormal, string(utils.DeletedWorkerPod), string(utils.DeleteAction),
 				"Deleted all pods for suspended worker group %s in RayCluster %s/%s", worker.GroupName, instance.Namespace, instance.Name)
 			continue
 		}
@@ -804,13 +804,13 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 				numDeletedUnhealthyWorkerPods++
 				deletedWorkers[workerPod.Name] = deleted
 				if err := r.Delete(ctx, &workerPod); err != nil {
-					r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.FailedToDeleteWorkerPod),
+					r.Recorder.Eventf(instance, nil, corev1.EventTypeWarning, string(utils.FailedToDeleteWorkerPod), string(utils.DeleteAction),
 						"Failed deleting worker Pod %s/%s; Pod status: %s; Pod restart policy: %s; Ray container terminated status: %v, %v",
 						workerPod.Namespace, workerPod.Name, workerPod.Status.Phase, workerPod.Spec.RestartPolicy, getRayContainerStateTerminated(workerPod), err)
 					return errstd.Join(utils.ErrFailedDeleteWorkerPod, err)
 				}
 				r.rayClusterScaleExpectation.ExpectScalePod(workerPod.Namespace, instance.Name, worker.GroupName, workerPod.Name, expectations.Delete)
-				r.Recorder.Eventf(instance, corev1.EventTypeNormal, string(utils.DeletedWorkerPod),
+				r.Recorder.Eventf(instance, nil, corev1.EventTypeNormal, string(utils.DeletedWorkerPod), string(utils.DeleteAction),
 					"Deleted worker Pod %s/%s; Pod status: %s; Pod restart policy: %s; Ray container terminated status: %v",
 					workerPod.Namespace, workerPod.Name, workerPod.Status.Phase, workerPod.Spec.RestartPolicy, getRayContainerStateTerminated(workerPod))
 			}
@@ -832,14 +832,14 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 			if err := r.Delete(ctx, &pod); err != nil {
 				if !errors.IsNotFound(err) {
 					logger.Info("reconcilePods", "Fail to delete Pod", pod.Name, "error", err)
-					r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.FailedToDeleteWorkerPod), "Failed deleting pod %s/%s, %v", pod.Namespace, pod.Name, err)
+					r.Recorder.Eventf(instance, nil, corev1.EventTypeWarning, string(utils.FailedToDeleteWorkerPod), string(utils.DeleteAction), "Failed deleting pod %s/%s, %v", pod.Namespace, pod.Name, err)
 					return errstd.Join(utils.ErrFailedDeleteWorkerPod, err)
 				}
 				logger.Info("reconcilePods", "The worker Pod has already been deleted", pod.Name)
 			} else {
 				r.rayClusterScaleExpectation.ExpectScalePod(pod.Namespace, instance.Name, worker.GroupName, pod.Name, expectations.Delete)
 				deletedWorkers[pod.Name] = deleted
-				r.Recorder.Eventf(instance, corev1.EventTypeNormal, string(utils.DeletedWorkerPod), "Deleted pod %s/%s", pod.Namespace, pod.Name)
+				r.Recorder.Eventf(instance, nil, corev1.EventTypeNormal, string(utils.DeletedWorkerPod), string(utils.DeleteAction), "Deleted pod %s/%s", pod.Namespace, pod.Name)
 			}
 		}
 		worker.ScaleStrategy.WorkersToDelete = []string{}
@@ -928,13 +928,13 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 					logger.Info("Randomly deleting Pod", "progress", fmt.Sprintf("%d / %d", i+1, randomlyRemovedWorkers), "with name", randomPodToDelete.Name)
 					if err := r.Delete(ctx, &randomPodToDelete); err != nil {
 						if !errors.IsNotFound(err) {
-							r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.FailedToDeleteWorkerPod), "Failed deleting Pod %s/%s, %v", randomPodToDelete.Namespace, randomPodToDelete.Name, err)
+							r.Recorder.Eventf(instance, nil, corev1.EventTypeWarning, string(utils.FailedToDeleteWorkerPod), string(utils.DeleteAction), "Failed deleting Pod %s/%s, %v", randomPodToDelete.Namespace, randomPodToDelete.Name, err)
 							return errstd.Join(utils.ErrFailedDeleteWorkerPod, err)
 						}
 						logger.Info("reconcilePods", "The worker Pod has already been deleted", randomPodToDelete.Name)
 					}
 					r.rayClusterScaleExpectation.ExpectScalePod(randomPodToDelete.Namespace, instance.Name, worker.GroupName, randomPodToDelete.Name, expectations.Delete)
-					r.Recorder.Eventf(instance, corev1.EventTypeNormal, string(utils.DeletedWorkerPod), "Deleted Pod %s/%s", randomPodToDelete.Namespace, randomPodToDelete.Name)
+					r.Recorder.Eventf(instance, nil, corev1.EventTypeNormal, string(utils.DeletedWorkerPod), string(utils.DeleteAction), "Deleted Pod %s/%s", randomPodToDelete.Namespace, randomPodToDelete.Name)
 				}
 			} else {
 				logger.Info("Random Pod deletion is disabled for the cluster. The only decision-maker for Pod deletions is Autoscaler.")
@@ -953,13 +953,13 @@ func (r *RayClusterReconciler) deletePods(ctx context.Context, instance *rayv1.R
 			if errors.IsNotFound(err) {
 				continue
 			}
-			r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.FailedToDeleteWorkerPod),
+			r.Recorder.Eventf(instance, nil, corev1.EventTypeWarning, string(utils.FailedToDeleteWorkerPod), string(utils.DeleteAction),
 				"Failed deleting worker Pod %s/%s for group %s; Pod status: %s; Pod restart policy: %s; Ray container terminated status: %v, %v",
 				pod.Namespace, pod.Name, groupName, pod.Status.Phase, pod.Spec.RestartPolicy, getRayContainerStateTerminated(pod), err)
 			return errstd.Join(utils.ErrFailedDeleteWorkerPod, err)
 		}
 		r.rayClusterScaleExpectation.ExpectScalePod(pod.Namespace, instance.Name, groupName, pod.Name, expectations.Delete)
-		r.Recorder.Eventf(instance, corev1.EventTypeNormal, string(utils.DeletedWorkerPod),
+		r.Recorder.Eventf(instance, nil, corev1.EventTypeNormal, string(utils.DeletedWorkerPod), string(utils.DeleteAction),
 			"Deleted worker Pod %s/%s for group %s: %s", pod.Namespace, pod.Name, groupName, reason)
 	}
 	return nil
@@ -1271,11 +1271,11 @@ func (r *RayClusterReconciler) createHeadIngress(ctx context.Context, ingress *n
 			logger.Info("Ingress already exists, no need to create")
 			return nil
 		}
-		r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.FailedToCreateIngress), "Failed creating ingress %s/%s, %v", ingress.Namespace, ingress.Name, err)
+		r.Recorder.Eventf(instance, nil, corev1.EventTypeWarning, string(utils.FailedToCreateIngress), string(utils.CreateAction), "Failed creating ingress %s/%s, %v", ingress.Namespace, ingress.Name, err)
 		return err
 	}
 	logger.Info("Created ingress for RayCluster", "name", ingress.Name)
-	r.Recorder.Eventf(instance, corev1.EventTypeNormal, string(utils.CreatedIngress), "Created ingress %s/%s", ingress.Namespace, ingress.Name)
+	r.Recorder.Eventf(instance, nil, corev1.EventTypeNormal, string(utils.CreatedIngress), string(utils.CreateAction), "Created ingress %s/%s", ingress.Namespace, ingress.Name)
 	return nil
 }
 
@@ -1290,11 +1290,11 @@ func (r *RayClusterReconciler) createHeadRoute(ctx context.Context, route *route
 			logger.Info("Route already exists, no need to create")
 			return nil
 		}
-		r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.FailedToCreateRoute), "Failed creating route %s/%s, %v", route.Namespace, route.Name, err)
+		r.Recorder.Eventf(instance, nil, corev1.EventTypeWarning, string(utils.FailedToCreateRoute), string(utils.CreateAction), "Failed creating route %s/%s, %v", route.Namespace, route.Name, err)
 		return err
 	}
 	logger.Info("Created route for RayCluster", "name", route.Name)
-	r.Recorder.Eventf(instance, corev1.EventTypeNormal, string(utils.CreatedRoute), "Created route %s/%s", route.Namespace, route.Name)
+	r.Recorder.Eventf(instance, nil, corev1.EventTypeNormal, string(utils.CreatedRoute), string(utils.CreateAction), "Created route %s/%s", route.Namespace, route.Name)
 	return nil
 }
 
@@ -1306,11 +1306,11 @@ func (r *RayClusterReconciler) createService(ctx context.Context, svc *corev1.Se
 	}
 
 	if err := r.Create(ctx, svc); err != nil {
-		r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.FailedToCreateService), "Failed creating service %s/%s, %v", svc.Namespace, svc.Name, err)
+		r.Recorder.Eventf(instance, nil, corev1.EventTypeWarning, string(utils.FailedToCreateService), string(utils.CreateAction), "Failed creating service %s/%s, %v", svc.Namespace, svc.Name, err)
 		return err
 	}
 	logger.Info("Created service for RayCluster", "name", svc.Name)
-	r.Recorder.Eventf(instance, corev1.EventTypeNormal, string(utils.CreatedService), "Created service %s/%s", svc.Namespace, svc.Name)
+	r.Recorder.Eventf(instance, nil, corev1.EventTypeNormal, string(utils.CreatedService), string(utils.CreateAction), "Created service %s/%s", svc.Namespace, svc.Name)
 	return nil
 }
 
@@ -1337,12 +1337,12 @@ func (r *RayClusterReconciler) createHeadPod(ctx context.Context, instance rayv1
 	}
 
 	if err := r.Create(ctx, &pod); err != nil {
-		r.Recorder.Eventf(&instance, corev1.EventTypeWarning, string(utils.FailedToCreateHeadPod), "Failed to create head Pod %s/%s, %v", pod.Namespace, pod.Name, err)
+		r.Recorder.Eventf(&instance, nil, corev1.EventTypeWarning, string(utils.FailedToCreateHeadPod), string(utils.CreateAction), "Failed to create head Pod %s/%s, %v", pod.Namespace, pod.Name, err)
 		return err
 	}
 	r.rayClusterScaleExpectation.ExpectScalePod(pod.Namespace, instance.Name, expectations.HeadGroup, pod.Name, expectations.Create)
 	logger.Info("Created head Pod for RayCluster", "name", pod.Name)
-	r.Recorder.Eventf(&instance, corev1.EventTypeNormal, string(utils.CreatedHeadPod), "Created head Pod %s/%s", pod.Namespace, pod.Name)
+	r.Recorder.Eventf(&instance, nil, corev1.EventTypeNormal, string(utils.CreatedHeadPod), string(utils.CreateAction), "Created head Pod %s/%s", pod.Namespace, pod.Name)
 	return nil
 }
 
@@ -1361,12 +1361,12 @@ func (r *RayClusterReconciler) createWorkerPod(ctx context.Context, instance ray
 
 	replica := pod
 	if err := r.Create(ctx, &replica); err != nil {
-		r.Recorder.Eventf(&instance, corev1.EventTypeWarning, string(utils.FailedToCreateWorkerPod), "Failed to create worker Pod for the cluster %s/%s, %v", instance.Namespace, instance.Name, err)
+		r.Recorder.Eventf(&instance, nil, corev1.EventTypeWarning, string(utils.FailedToCreateWorkerPod), string(utils.CreateAction), "Failed to create worker Pod for the cluster %s/%s, %v", instance.Namespace, instance.Name, err)
 		return err
 	}
 	r.rayClusterScaleExpectation.ExpectScalePod(replica.Namespace, instance.Name, worker.GroupName, replica.Name, expectations.Create)
 	logger.Info("Created worker Pod for RayCluster", "name", replica.Name)
-	r.Recorder.Eventf(&instance, corev1.EventTypeNormal, string(utils.CreatedWorkerPod), "Created worker Pod %s/%s", replica.Namespace, replica.Name)
+	r.Recorder.Eventf(&instance, nil, corev1.EventTypeNormal, string(utils.CreatedWorkerPod), string(utils.CreateAction), "Created worker Pod %s/%s", replica.Namespace, replica.Name)
 	return nil
 }
 
@@ -1385,12 +1385,12 @@ func (r *RayClusterReconciler) createWorkerPodWithIndex(ctx context.Context, ins
 
 	replica := pod
 	if err := r.Create(ctx, &replica); err != nil {
-		r.Recorder.Eventf(&instance, corev1.EventTypeWarning, string(utils.FailedToCreateWorkerPod), "Failed to create worker Pod for the cluster %s/%s, %v", instance.Namespace, instance.Name, err)
+		r.Recorder.Eventf(&instance, nil, corev1.EventTypeWarning, string(utils.FailedToCreateWorkerPod), string(utils.CreateAction), "Failed to create worker Pod for the cluster %s/%s, %v", instance.Namespace, instance.Name, err)
 		return err
 	}
 	r.rayClusterScaleExpectation.ExpectScalePod(replica.Namespace, instance.Name, worker.GroupName, replica.Name, expectations.Create)
 	logger.Info("Created worker Pod for RayCluster", "name", replica.Name)
-	r.Recorder.Eventf(&instance, corev1.EventTypeNormal, string(utils.CreatedWorkerPod), "Created worker Pod %s/%s", replica.Namespace, replica.Name)
+	r.Recorder.Eventf(&instance, nil, corev1.EventTypeNormal, string(utils.CreatedWorkerPod), string(utils.CreateAction), "Created worker Pod %s/%s", replica.Namespace, replica.Name)
 	return nil
 }
 
@@ -1838,7 +1838,7 @@ func (r *RayClusterReconciler) reconcileAutoscalerServiceAccount(ctx context.Con
 				"However, ServiceAccount %s is not found. Please create one. See the PR description of https://github.com/ray-project/kuberay/pull/1128 for more details.", namespacedName.Name)
 
 			logger.Error(err, actionableMessage)
-			r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.AutoscalerServiceAccountNotFound), "Failed to reconcile RayCluster %s/%s. %s", instance.Namespace, instance.Name, actionableMessage)
+			r.Recorder.Eventf(instance, nil, corev1.EventTypeWarning, string(utils.AutoscalerServiceAccountNotFound), string(utils.ValidateAction), "Failed to reconcile RayCluster %s/%s. %s", instance.Namespace, instance.Name, actionableMessage)
 			return err
 		}
 
@@ -1861,11 +1861,11 @@ func (r *RayClusterReconciler) reconcileAutoscalerServiceAccount(ctx context.Con
 				logger.Info("Pod service account already exist, no need to create")
 				return nil
 			}
-			r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.FailedToCreateServiceAccount), "Failed creating service account %s/%s, %v", serviceAccount.Namespace, serviceAccount.Name, err)
+			r.Recorder.Eventf(instance, nil, corev1.EventTypeWarning, string(utils.FailedToCreateServiceAccount), string(utils.CreateAction), "Failed creating service account %s/%s, %v", serviceAccount.Namespace, serviceAccount.Name, err)
 			return err
 		}
 		logger.Info("Created service account for Ray Autoscaler", "name", serviceAccount.Name)
-		r.Recorder.Eventf(instance, corev1.EventTypeNormal, string(utils.CreatedServiceAccount), "Created service account %s/%s", serviceAccount.Namespace, serviceAccount.Name)
+		r.Recorder.Eventf(instance, nil, corev1.EventTypeNormal, string(utils.CreatedServiceAccount), string(utils.CreateAction), "Created service account %s/%s", serviceAccount.Namespace, serviceAccount.Name)
 		return nil
 	}
 
@@ -1903,11 +1903,11 @@ func (r *RayClusterReconciler) reconcileAutoscalerRole(ctx context.Context, inst
 				logger.Info("role already exist, no need to create")
 				return nil
 			}
-			r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.FailedToCreateRole), "Failed creating role %s/%s, %v", role.Namespace, role.Name, err)
+			r.Recorder.Eventf(instance, nil, corev1.EventTypeWarning, string(utils.FailedToCreateRole), string(utils.CreateAction), "Failed creating role %s/%s, %v", role.Namespace, role.Name, err)
 			return err
 		}
 		logger.Info("Created role for Ray Autoscaler", "name", role.Name)
-		r.Recorder.Eventf(instance, corev1.EventTypeNormal, string(utils.CreatedRole), "Created role %s/%s", role.Namespace, role.Name)
+		r.Recorder.Eventf(instance, nil, corev1.EventTypeNormal, string(utils.CreatedRole), string(utils.CreateAction), "Created role %s/%s", role.Namespace, role.Name)
 		return nil
 	}
 
@@ -1945,11 +1945,11 @@ func (r *RayClusterReconciler) reconcileAutoscalerRoleBinding(ctx context.Contex
 				logger.Info("role binding already exist, no need to create")
 				return nil
 			}
-			r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.FailedToCreateRoleBinding), "Failed creating role binding %s/%s, %v", roleBinding.Namespace, roleBinding.Name, err)
+			r.Recorder.Eventf(instance, nil, corev1.EventTypeWarning, string(utils.FailedToCreateRoleBinding), string(utils.CreateAction), "Failed creating role binding %s/%s, %v", roleBinding.Namespace, roleBinding.Name, err)
 			return err
 		}
 		logger.Info("Created role binding for Ray Autoscaler", "name", roleBinding.Name)
-		r.Recorder.Eventf(instance, corev1.EventTypeNormal, string(utils.CreatedRoleBinding), "Created role binding %s/%s", roleBinding.Namespace, roleBinding.Name)
+		r.Recorder.Eventf(instance, nil, corev1.EventTypeNormal, string(utils.CreatedRoleBinding), string(utils.CreateAction), "Created role binding %s/%s", roleBinding.Namespace, roleBinding.Name)
 		return nil
 	}
 
@@ -2060,7 +2060,7 @@ func (r *RayClusterReconciler) forceRemoveGCSFTFinalizer(ctx context.Context, in
 	}
 
 	storageNamespace := instance.Annotations[utils.RayExternalStorageNSAnnotationKey]
-	r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.ForceDeletedStuckCluster),
+	r.Recorder.Eventf(instance, nil, corev1.EventTypeWarning, string(utils.ForceDeletedStuckCluster), string(utils.CleanupAction),
 		"Force-removed GCS FT finalizer after %v due to Redis cleanup timeout; Redis storage namespace %q may need manual cleanup",
 		deletionAge, storageNamespace)
 
