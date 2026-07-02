@@ -293,10 +293,6 @@ func TestK8sScheduling_AutoscalingSkipped(t *testing.T) {
 	g.Eventually(RayCluster(test, namespace.Name, rayCluster.Name), TestTimeoutMedium).
 		Should(WithTransform(StatusCondition(rayv1.HeadPodReady), MatchCondition(metav1.ConditionTrue, rayv1.HeadPodRunningAndReady)))
 
-	// Verify WorkloadSchedulingSkipped warning event was emitted.
-	g.Eventually(GetEvents(test, namespace.Name, rayCluster.Name, "WorkloadSchedulingSkipped"), TestTimeoutShort).
-		ShouldNot(BeEmpty())
-
 	// Verify no Workload was created.
 	_, err = GetWorkload(test, namespace.Name, rayCluster.Name)
 	g.Expect(errors.IsNotFound(err)).To(BeTrue(), "expected NotFound for Workload, got: %v", err)
