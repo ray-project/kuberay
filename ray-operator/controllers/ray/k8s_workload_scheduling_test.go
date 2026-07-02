@@ -1391,6 +1391,30 @@ func TestDeleteK8sWorkloadSchedulingResources_NotFoundIsNoop(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestDeleteK8sWorkloadSchedulingResources_APINotServedIsNoop(t *testing.T) {
+	// Simulate the scheduling.k8s.io/v1alpha2 API not being served (e.g. the operator's
+	// K8sWorkloadScheduling feature gate was never enabled, or the API is disabled on the
+	// cluster). The List call returns a NoMatch error, which must be treated as a no-op so
+	// that RayCluster deletion is never blocked.
+	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
+	s := newTestScheme()
+	fakeClient := clientFake.NewClientBuilder().WithScheme(s).
+		WithInterceptorFuncs(interceptor.Funcs{
+			List: func(ctx context.Context, c client.WithWatch, list client.ObjectList, opts ...client.ListOption) error {
+				if _, ok := list.(*schedulingv1alpha2.PodGroupList); ok {
+					return &meta.NoKindMatchError{}
+				}
+				return c.List(ctx, list, opts...)
+			},
+		}).Build()
+	fakeRecorder := record.NewFakeRecorder(10)
+	r := newReconciler(fakeClient, s, fakeRecorder)
+	ctx := context.Background()
+
+	err := r.deleteK8sWorkloadSchedulingResources(ctx, cluster)
+	require.NoError(t, err)
+}
+
 func TestDeleteK8sWorkloadSchedulingResources_PodGroupFinalizerRemovalFailure(t *testing.T) {
 	cluster := newTestRayCluster(newWorkerGroup("workers", 3))
 	s := newTestScheme()

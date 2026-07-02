@@ -406,6 +406,13 @@ func (r *RayClusterReconciler) deleteK8sWorkloadSchedulingResources(ctx context.
 		client.InNamespace(instance.Namespace),
 		client.MatchingLabels{utils.RayClusterLabelKey: instance.Name},
 	); err != nil {
+		// If the scheduling.k8s.io/v1alpha2 API is not served (e.g. the operator's
+		// K8sWorkloadScheduling feature gate was never enabled, or the API is disabled
+		// on the cluster), there are no scheduling resources to clean up. Treat this as a
+		// no-op so that RayCluster deletion is never blocked.
+		if meta.IsNoMatchError(err) {
+			return nil
+		}
 		return fmt.Errorf("failed to list PodGroups for RayCluster %s/%s: %w", instance.Namespace, instance.Name, err)
 	}
 	for i := range podGroupList.Items {

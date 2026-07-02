@@ -302,12 +302,15 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 
 	if instance.DeletionTimestamp != nil && !instance.DeletionTimestamp.IsZero() {
 		logger.Info("RayCluster is being deleted, cleaning up k8s workload scheduling resources")
-		// Clean up Workload/PodGroups explicitly rather than relying on garbage collection
-		// because PodGroups may have a scheduler-added finalizer that blocks GC deletion.
-		if shouldCleanupK8sWorkloadSchedulingResources() {
-			if err := r.deleteK8sWorkloadSchedulingResources(ctx, instance); err != nil {
-				return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
-			}
+		// Always clean up Workload/PodGroups explicitly rather than relying on garbage
+		// collection, because PodGroups may have a scheduler-added finalizer that blocks GC
+		// deletion and would leave the RayCluster stuck in Terminating. This runs regardless
+		// of the K8sWorkloadScheduling feature gate: if the gate was disabled after the
+		// resources were created, gating the cleanup here would strand the cluster.
+		// deleteK8sWorkloadSchedulingResources is a no-op when no scheduling resources (or
+		// the scheduling API itself) exist.
+		if err := r.deleteK8sWorkloadSchedulingResources(ctx, instance); err != nil {
+			return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
 		}
 		return ctrl.Result{}, nil
 	}
