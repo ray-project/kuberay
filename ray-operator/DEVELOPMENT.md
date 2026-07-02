@@ -345,3 +345,49 @@ docker buildx build --tag quay.io/<my org>/operator:latest --tag docker.io/<my o
 * Some registry such as Quay.io dashboard displays attestation manifests as unknown platforms. Setting --provenance=false to avoid this issue.
 
 [main-dev-doc]: ../docs/development/development.md#pre-commit-hooks
+
+## K8s Workload Scheduling (Gang Scheduling)
+
+The `K8sWorkloadScheduling` feature gate (alpha, default off) enables built-in Kubernetes gang scheduling via the `scheduling.k8s.io/v1alpha2` Workload and PodGroup APIs. This is **not** a batch scheduler plugin — it integrates directly into the RayCluster controller.
+
+For user-facing documentation, see the [k8s workload scheduling guide](../docs/guidance/k8s-workload-scheduling.md).
+
+### Architecture
+
+* All logic is in `controllers/ray/k8s_workload_scheduling.go` (same package as the RayCluster controller)
+* Gated by the `K8sWorkloadScheduling` feature gate + per-cluster annotation `ray.io/k8s-workload-scheduling: "true"`
+* `isK8sWorkloadSchedulingEnabled()` is the single guard — all code paths are no-ops when disabled
+* Mutually exclusive with `batchScheduler` configuration (validated at startup in `main.go`)
+* Touch points in `raycluster_controller.go` are minimal: one reconcile call, three `setSchedulingGroup` calls, two cleanup calls, one `.Owns()` addition
+
+### Testing locally with Kind
+
+K8s workload scheduling requires Kubernetes 1.36+ with `GenericWorkload` and `GangScheduling` feature gates. The kind config uses the published `kindest/node:v1.36.1` image:
+
+```bash
+# Install kind v0.32.0 or newer
+curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.32.0/kind-linux-amd64
+chmod +x ./kind
+sudo mv ./kind /usr/local/bin/kind
+
+# Create the cluster with the required feature gates and alpha API
+kind create cluster --name k8s-workload-scheduling \
+  --config ci/kind-config-k8s-workload-scheduling.yml
+
+# Build and load the operator image
+make docker-image IMG=kuberay/operator:latest
+kind load docker-image kuberay/operator:latest --name k8s-workload-scheduling
+
+# Deploy with K8sWorkloadScheduling feature gate enabled
+make deploy-k8s-workload-scheduling IMG=kuberay/operator:latest
+```
+
+### Running tests
+
+```bash
+# Unit tests
+go test -v -run "TestReconcileK8sWorkloadScheduling|TestBuild|TestIsWorkloadStale|TestSetWorkloadScheduledCondition|TestCalculateStatus_Workload" ./controllers/ray/...
+
+# E2E tests (requires the kind cluster above with operator deployed)
+make test-e2e-k8s-workload-scheduling
+```
