@@ -2,6 +2,10 @@
 
 package v1
 
+import (
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+)
+
 // TLSOptionsApplyConfiguration represents a declarative configuration of the TLSOptions type for use
 // with apply.
 //
@@ -9,9 +13,10 @@ package v1
 // When TLSOptions is nil, TLS is disabled. When set, the operator configures
 // TLS on head and worker pods according to the selected mode.
 type TLSOptionsApplyConfiguration struct {
-	// Mode controls the TLS security level.
-	// - "mTLS": Enables mutual TLS (client & server authentication).
-	Mode *string `json:"mode,omitempty"`
+	// Mode selects the TLS security mode.
+	// Supported values: "MutualTLS" (mutual TLS, client & server authentication).
+	// Defaults to "MutualTLS".
+	Mode *rayv1.TLSMode `json:"mode,omitempty"`
 	// CertificateSecretName is a user-provided Kubernetes Secret containing
 	// tls.crt, tls.key, and ca.crt for the head node (and workers, if
 	// WorkerCertificateSecretName is not set).
@@ -45,7 +50,7 @@ func TLSOptions() *TLSOptionsApplyConfiguration {
 // WithMode sets the Mode field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Mode field is set to the value of the last call.
-func (b *TLSOptionsApplyConfiguration) WithMode(value string) *TLSOptionsApplyConfiguration {
+func (b *TLSOptionsApplyConfiguration) WithMode(value rayv1.TLSMode) *TLSOptionsApplyConfiguration {
 	b.Mode = &value
 	return b
 }

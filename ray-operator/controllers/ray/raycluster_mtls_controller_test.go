@@ -187,10 +187,9 @@ func TestMTLSController_AutoGenerate_CreatesFullPKI(t *testing.T) {
 		Namespace: "default",
 	}, headCert)
 	require.NoError(t, err, "head certificate should be created")
-	headSvcName, err := utils.GenerateHeadServiceName(utils.RayClusterCRD, cluster.Spec, cluster.Name)
-	require.NoError(t, err)
+	headFQDN := utils.GenerateFQDNServiceName(ctx, *cluster, cluster.Namespace)
 	assert.Contains(t, headCert.Spec.DNSNames, "localhost")
-	assert.Contains(t, headCert.Spec.DNSNames, headSvcName)
+	assert.Contains(t, headCert.Spec.DNSNames, headFQDN)
 	assert.Contains(t, headCert.Spec.IPAddresses, "127.0.0.1")
 
 	// Verify worker certificate was created with correct DNS names.
@@ -365,7 +364,11 @@ func TestMTLSController_DeleteTLSSecrets(t *testing.T) {
 	}
 }
 
-func TestMTLSController_WorkerCertHasWildcardDNS(t *testing.T) {
+// TestMTLSController_WorkerCertHasLocalhostOnly verifies that worker certificates
+// use only "localhost" as a DNS SAN. Worker-to-head communication goes via the head
+// pod IP (covered by IP SANs), and worker pods don't serve DNS-addressable endpoints
+// that require wildcard headless-service entries.
+func TestMTLSController_WorkerCertHasLocalhostOnly(t *testing.T) {
 	cluster := newMTLSTestCluster("wc-cluster")
 	cluster.Spec.TLSOptions = &rayv1.TLSOptions{}
 
@@ -387,15 +390,16 @@ func TestMTLSController_WorkerCertHasWildcardDNS(t *testing.T) {
 	}, workerCert)
 	require.NoError(t, err)
 
+	assert.Contains(t, workerCert.Spec.DNSNames, "localhost")
 	workerSvcName := fmt.Sprintf("%s-%s", cluster.Name, utils.HeadlessServiceSuffix)
-	assert.Contains(t, workerCert.Spec.DNSNames, workerSvcName)
-	assert.Contains(t, workerCert.Spec.DNSNames,
-		fmt.Sprintf("*.%s.%s.svc", workerSvcName, cluster.Namespace))
-	assert.Contains(t, workerCert.Spec.DNSNames,
-		fmt.Sprintf("*.%s.%s.svc.cluster.local", workerSvcName, cluster.Namespace))
+	assert.NotContains(t, workerCert.Spec.DNSNames, workerSvcName,
+		"GCS connects to workers via pod IP (IP SANs), not via headless service DNS")
 	assert.NotContains(t, workerCert.Spec.DNSNames,
-		fmt.Sprintf("*-worker-*.%s.svc", cluster.Namespace),
-		"no per-group or *-worker-* services exist in KubeRay")
+		fmt.Sprintf("*.%s.%s.svc", workerSvcName, cluster.Namespace),
+		"wildcard headless-service DNS SANs are not needed")
+	assert.NotContains(t, workerCert.Spec.DNSNames,
+		fmt.Sprintf("*.%s.%s.svc.cluster.local", workerSvcName, cluster.Namespace),
+		"wildcard headless-service DNS SANs are not needed")
 }
 
 func TestMTLSController_CertReadinessBlocksReconciliation(t *testing.T) {

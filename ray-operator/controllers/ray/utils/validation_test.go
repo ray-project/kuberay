@@ -2963,7 +2963,7 @@ func TestValidateRayClusterSpec_Auth(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			cluster := &rayv1.RayCluster{
 				Spec: rayv1.RayClusterSpec{
-					RayVersion:  "2.55.0",
+					RayVersion:  "2.55.0", // Required for checks
 					AuthOptions: tt.authOptions,
 					HeadGroupSpec: rayv1.HeadGroupSpec{
 						Template: podTemplateSpec(nil, nil),
@@ -3247,4 +3247,19 @@ func TestValidateTLSOptions(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestValidateRayClusterSpec_TLSOptionsRequiresFeatureGate(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.RayClusterMTLS, false)
+	cluster := &rayv1.RayCluster{
+		Spec: rayv1.RayClusterSpec{
+			TLSOptions: &rayv1.TLSOptions{},
+			HeadGroupSpec: rayv1.HeadGroupSpec{
+				Template: podTemplateSpec(nil, nil),
+			},
+		},
+	}
+	err := ValidateRayClusterSpec(&cluster.Spec, cluster.Annotations)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "RayClusterMTLS")
 }

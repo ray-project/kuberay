@@ -656,6 +656,22 @@ _Appears in:_
 | `backoffLimit` _integer_ | BackoffLimit of the submitter. In K8sJobMode, this is the K8s Job backoffLimit.<br />In SidecarMode with SidecarSubmitterRestart enabled, this is the maximum container restart count. |  |  |
 
 
+#### TLSMode
+
+_Underlying type:_ _string_
+
+TLSMode selects the TLS security level for a RayCluster.
+
+
+
+_Appears in:_
+- [TLSOptions](#tlsoptions)
+
+| Field | Description |
+| --- | --- |
+| `MutualTLS` | TLSModeMutual enables mutual TLS (client & server authentication).<br /> |
+
+
 #### TLSOptions
 
 
@@ -671,7 +687,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `mode` _string_ | Mode controls the TLS security level.<br />- "mTLS": Enables mutual TLS (client & server authentication). | mTLS | Enum: [mTLS] <br /> |
+| `mode` _[TLSMode](#tlsmode)_ | Mode selects the TLS security mode.<br />Supported values: "MutualTLS" (mutual TLS, client & server authentication).<br />Defaults to "MutualTLS". | MutualTLS | Enum: [MutualTLS] <br /> |
 | `certificateSecretName` _string_ | CertificateSecretName is a user-provided Kubernetes Secret containing<br />tls.crt, tls.key, and ca.crt for the head node (and workers, if<br />WorkerCertificateSecretName is not set).<br />When WorkerCertificateSecretName is also set, this secret is mounted only<br />on head pods. When WorkerCertificateSecretName is omitted, this single secret<br />is mounted on both head and worker pods (shared-secret BYOC mode).<br />The certificate SANs must cover the head node identities<br />(head service DNS, pod IPs or wildcards, localhost, 127.0.0.1).<br />When set, the operator skips cert-manager PKI and mounts this secret directly. |  |  |
 | `workerCertificateSecretName` _string_ | WorkerCertificateSecretName is an optional user-provided Kubernetes Secret<br />containing tls.crt, tls.key, and ca.crt for worker nodes.<br />When set, workers use this secret instead of CertificateSecretName, giving<br />head and worker pods separate TLS identities. This prevents a compromised<br />worker key from impersonating the head node at the TLS layer.<br />The certificate SANs must cover worker node identities<br />(worker pod IPs or wildcards). Both secrets must share the same CA. |  |  |
 

@@ -377,10 +377,6 @@ func (r *RayClusterMTLSController) reconcileCAIssuer(ctx context.Context, instan
 func (r *RayClusterMTLSController) reconcileHeadCertificate(ctx context.Context, instance *rayv1.RayCluster) error {
 	certName := fmt.Sprintf("%s-%s", utils.RayHeadCertPrefix, instance.Name)
 	secretName := fmt.Sprintf("%s-%s", utils.RayHeadSecretPrefix, instance.Name)
-	headSvcName, err := utils.GenerateHeadServiceName(utils.RayClusterCRD, instance.Spec, instance.Name)
-	if err != nil {
-		return err
-	}
 
 	podIPs, err := r.getPodIPs(ctx, instance, rayv1.HeadNode)
 	if err != nil {
@@ -389,10 +385,8 @@ func (r *RayClusterMTLSController) reconcileHeadCertificate(ctx context.Context,
 
 	desiredLabels := tlsResourceLabels(instance.Name, "head-certificate")
 	desiredDNSNames := uniqueStrings([]string{
-		headSvcName,
 		"localhost",
-		fmt.Sprintf("%s.%s.svc", headSvcName, instance.Namespace),
-		fmt.Sprintf("%s.%s.svc.cluster.local", headSvcName, instance.Namespace),
+		utils.GenerateFQDNServiceName(ctx, *instance, instance.Namespace),
 	})
 	sort.Strings(desiredDNSNames)
 	desiredIPAddresses := normalizeIPs(podIPs)
@@ -464,22 +458,8 @@ func (r *RayClusterMTLSController) reconcileWorkerCertificate(ctx context.Contex
 		return err
 	}
 
-	// The only worker-related service KubeRay creates is the headless service
-	// ({cluster}-headless) used for multi-host peer discovery. Head-to-worker
-	// connections use pod IPs directly, so the DNS SANs only need the headless
-	// service name and a wildcard for its subdomain records.
-	workerSvcName := fmt.Sprintf("%s-%s", instance.Name, utils.HeadlessServiceSuffix)
-	dnsNames := []string{
-		workerSvcName,
-		"localhost",
-		fmt.Sprintf("%s.%s.svc", workerSvcName, instance.Namespace),
-		fmt.Sprintf("%s.%s.svc.cluster.local", workerSvcName, instance.Namespace),
-		fmt.Sprintf("*.%s.%s.svc", workerSvcName, instance.Namespace),
-		fmt.Sprintf("*.%s.%s.svc.cluster.local", workerSvcName, instance.Namespace),
-	}
-
 	desiredLabels := tlsResourceLabels(instance.Name, "worker-certificate")
-	desiredDNSNames := uniqueStrings(dnsNames)
+	desiredDNSNames := uniqueStrings([]string{"localhost"})
 	sort.Strings(desiredDNSNames)
 	desiredIPAddresses := normalizeIPs(podIPs)
 

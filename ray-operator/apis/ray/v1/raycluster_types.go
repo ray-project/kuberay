@@ -67,16 +67,25 @@ type RayClusterSpec struct {
 	WorkerGroupSpecs []WorkerGroupSpec `json:"workerGroupSpecs,omitempty"`
 }
 
+// TLSMode selects the TLS security level for a RayCluster.
+type TLSMode string
+
+const (
+	// TLSModeMutual enables mutual TLS (client & server authentication).
+	TLSModeMutual TLSMode = "MutualTLS"
+)
+
 // TLSOptions configures TLS encryption for the RayCluster.
 // When TLSOptions is nil, TLS is disabled. When set, the operator configures
 // TLS on head and worker pods according to the selected mode.
 type TLSOptions struct {
-	// Mode controls the TLS security level.
-	// - "mTLS": Enables mutual TLS (client & server authentication).
+	// Mode selects the TLS security mode.
+	// Supported values: "MutualTLS" (mutual TLS, client & server authentication).
+	// Defaults to "MutualTLS".
+	// +kubebuilder:validation:Enum=MutualTLS
+	// +kubebuilder:default=MutualTLS
 	// +optional
-	// +kubebuilder:validation:Enum=mTLS
-	// +kubebuilder:default=mTLS
-	Mode *string `json:"mode,omitempty"`
+	Mode TLSMode `json:"mode,omitempty"`
 
 	// CertificateSecretName is a user-provided Kubernetes Secret containing
 	// tls.crt, tls.key, and ca.crt for the head node (and workers, if

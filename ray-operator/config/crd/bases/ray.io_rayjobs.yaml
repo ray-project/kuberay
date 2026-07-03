@@ -5033,9 +5033,9 @@ spec:
                       certificateSecretName:
                         type: string
                       mode:
-                        default: mTLS
+                        default: MutualTLS
                         enum:
-                        - mTLS
+                        - MutualTLS
                         type: string
                       workerCertificateSecretName:
                         type: string

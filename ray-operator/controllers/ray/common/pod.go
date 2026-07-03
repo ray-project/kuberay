@@ -212,6 +212,13 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 		// Configure mTLS env vars and volume mount for the autoscaler sidecar.
 		// validateTLSOptions rejects forbidden TLS env vars in autoscalerOptions.env,
 		// preventing the user from overriding these via the merge below.
+		//
+		// GCS address alignment: the autoscaler co-located in the head pod reaches GCS
+		// via localhost (127.0.0.1) or the head pod IP. Both are always present in the
+		// head certificate SANs — 127.0.0.1 is added unconditionally, and the pod IP
+		// SAN is guaranteed by the wait-for-tls-ip-san init container (injected by
+		// configureTLS below) before any containers, including this sidecar, start.
+		// No additional RAY_ADDRESS injection is required.
 		if utils.IsTLSEnabled(&instance.Spec) {
 			SetContainerTLSConfig(&autoscalerContainer)
 		}

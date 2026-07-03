@@ -288,8 +288,9 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 		return err
 	}
 
-	// Validate TLS configuration if set. When the RayClusterMTLS gate is off, tlsOptions is
-	// ignored at runtime (see IsTLSEnabled) rather than blocking reconciliation.
+	if spec.TLSOptions != nil && !features.Enabled(features.RayClusterMTLS) {
+		return fmt.Errorf("spec.tlsOptions requires the RayClusterMTLS feature gate to be enabled")
+	}
 	return validateTLSOptions(spec)
 }
 

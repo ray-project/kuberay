@@ -1464,53 +1464,12 @@ func (r *RayClusterReconciler) buildHeadPod(ctx context.Context, instance rayv1.
 	logger.Info("head pod labels", "labels", podConf.Labels)
 	creatorCRDType := getCreatorCRDType(instance)
 	pod := common.BuildPod(ctx, podConf, rayv1.HeadNode, instance.Spec.HeadGroupSpec.RayStartParams, headPort, autoscalingEnabled, creatorCRDType, fqdnRayIP, r.options.DefaultContainerEnvs, instance.Spec.RayVersion)
-	if utils.IsTLSEnabled(&instance.Spec) {
-		// Set RAY_ADDRESS=127.0.0.1:<port> on ray-head and autoscaler. The autoscaler
-		// sidecar runs in the same pod and can always reach GCS via loopback. 127.0.0.1
-		// is present in the head certificate's IP SANs from creation time, so TLS
-		// verification succeeds regardless of whether pod IPs have been added to the cert.
-		// The wait-for-tls-ip-san init container (injected by configureTLS) further
-		// ensures the pod IP SAN is present before GCS starts, covering the case where
-		// canonicalize_bootstrap_address resolves loopback to the pod IP.
-		injectMTLSLoopbackRayAddress(&pod, headPort)
-	}
 	// Set raycluster instance as the owner and controller
 	if err := controllerutil.SetControllerReference(&instance, &pod, r.Scheme); err != nil {
 		logger.Error(err, "Failed to set controller reference for raycluster pod")
 	}
 
 	return pod
-}
-
-// injectMTLSLoopbackRayAddress sets RAY_ADDRESS=127.0.0.1:<port> on ray-head and autoscaler.
-// The autoscaler sidecar runs in the same pod as the head, so loopback always reaches GCS.
-// 127.0.0.1 is present in the head certificate's IP SANs from creation time, which means
-// TLS succeeds even before pod IPs are added to the cert. This also fixes in-tree autoscaling:
-// the kuberay-autoscaler sidecar connects to GCS via loopback with a cert SAN that is
-// always valid, avoiding the race where canonicalize_bootstrap_address resolves the address
-// to a pod IP that may not yet appear in the cert.
-func injectMTLSLoopbackRayAddress(pod *corev1.Pod, headPort string) {
-	loopbackAddress := fmt.Sprintf("127.0.0.1:%s", headPort)
-	for i := range pod.Spec.Containers {
-		container := &pod.Spec.Containers[i]
-		if i != utils.RayContainerIndex && container.Name != common.AutoscalerContainerName {
-			continue
-		}
-		found := false
-		for j, env := range container.Env {
-			if env.Name == utils.RAY_ADDRESS {
-				container.Env[j].Value = loopbackAddress
-				found = true
-				break
-			}
-		}
-		if !found {
-			container.Env = append(container.Env, corev1.EnvVar{
-				Name:  utils.RAY_ADDRESS,
-				Value: loopbackAddress,
-			})
-		}
-	}
 }
 
 func getCreatorCRDType(instance rayv1.RayCluster) utils.CRDType {

@@ -309,7 +309,7 @@ const (
 	RayServiceFinalizer = "ray.io/rayservice-finalizer"
 	// MTLSCleanupFinalizer prevents the RayCluster from being deleted before the mTLS
 	// controller has cleaned up auto-generated cert-manager secrets.
-	MTLSCleanupFinalizer = "ray.io/mtls-cleanup"
+	MTLSCleanupFinalizer = "ray.io/mtls-cleanup-finalizer"
 
 	// RayNodeHeadGroupLabelValue is the value for the RayNodeGroupLabelKey label on a head node
 	RayNodeHeadGroupLabelValue      = "headgroup"
