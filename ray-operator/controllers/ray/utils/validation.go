@@ -379,6 +379,18 @@ func ValidateRayJobSpec(rayJob *rayv1.RayJob) error {
 		}
 	}
 
+	if rayJob.Spec.RetryRayClusterStrategy == rayv1.ReuseRayCluster {
+		if rayJob.Spec.SubmissionMode != rayv1.HTTPMode {
+			return fmt.Errorf("The RayJob spec is invalid: ReuseRayCluster retry strategy is only supported in HTTPMode")
+		}
+		if rayJob.Spec.JobId != "" {
+			return fmt.Errorf("The RayJob spec is invalid: ReuseRayCluster retry strategy is incompatible with a user-specified jobId")
+		}
+		if isClusterSelectorMode {
+			return fmt.Errorf("The RayJob spec is invalid: ReuseRayCluster retry strategy is incompatible with ClusterSelector mode")
+		}
+	}
+
 	// InteractiveMode does not support backoffLimit > 1.
 	// When a RayJob fails (e.g., due to a missing script) and retries,
 	// spec.JobId remains set, causing the new job to incorrectly transition

@@ -364,6 +364,23 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			rayJobInstance.Status.RayJobStatusInfo.EndTime = &metav1.Time{Time: time.UnixMilli(utils.SafeUint64ToInt64(jobInfo.EndTime))}
 		}
 	case rayv1.JobDeploymentStatusSuspending, rayv1.JobDeploymentStatusRetrying:
+		// ReuseRayCluster only applies to the Retrying state. A Suspending RayJob may carry the same
+		// spec fields, so the status guard is required to avoid skipping cleanup during suspension.
+		if rayJobInstance.Status.JobDeploymentStatus == rayv1.JobDeploymentStatusRetrying && shouldReuseRayCluster(rayJobInstance) {
+			// ReuseRayCluster: keep the RayCluster (Status.RayClusterName, DashboardURL) so that
+			// RayCluster-level recovery can take effect, and only re-submit the Ray job. Reset the
+			// job-level status and clear Status.JobId so that initRayJobStatusIfNeed mints a new
+			// submission id; this avoids colliding with the previous (terminal) job's submission id.
+			// The previous job is guaranteed terminal because we only reach Retrying from Failed.
+			rayJobInstance.Status.JobId = ""
+			rayJobInstance.Status.JobStatus = rayv1.JobStatusNew
+			rayJobInstance.Status.Reason = ""
+			rayJobInstance.Status.Message = ""
+			rayJobInstance.Status.RayJobStatusInfo = rayv1.RayJobStatusInfo{}
+			rayJobInstance.Status.JobStatusCheckFailureStartTime = nil
+			rayJobInstance.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusNew
+			break
+		}
 		// The `suspend` operation should be atomic. In other words, if users set the `suspend` flag to true and then immediately
 		// set it back to false, either all of the RayJob's associated resources should be cleaned up, or no resources should be
 		// cleaned up at all. To keep the atomicity, if a RayJob is in the `Suspending` status, we should delete all of its
@@ -511,6 +528,13 @@ func cleanUpRayJobMetrics(rayJobMetricsManager *metrics.RayJobMetricsManager, ra
 		return
 	}
 	rayJobMetricsManager.DeleteRayJobMetrics(rayJobName, rayJobNamespace)
+}
+
+// shouldReuseRayCluster reports whether a RayJob retry should reuse the existing RayCluster
+// and only re-submit the Ray job, instead of deleting and recreating the RayCluster.
+func shouldReuseRayCluster(rayJob *rayv1.RayJob) bool {
+	return rayJob.Spec.RetryRayClusterStrategy == rayv1.ReuseRayCluster &&
+		rayJob.Spec.SubmissionMode == rayv1.HTTPMode
 }
 
 // checkBackoffLimitAndUpdateStatusIfNeeded determines if a RayJob is eligible for retry based on the configured backoff limit,
