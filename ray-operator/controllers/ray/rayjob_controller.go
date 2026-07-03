@@ -204,17 +204,20 @@ func (r *RayJobReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
 		}
 
-		// Check the current status of RayCluster before submitting.
-		if clientURL := rayJobInstance.Status.DashboardURL; clientURL == "" {
-			if rayClusterInstance.Status.State != rayv1.Ready {
-				logger.Info("Wait for the RayCluster.Status.State to be ready before submitting the job.", "RayCluster", rayClusterInstance.Name, "State", rayClusterInstance.Status.State)
-				// The nonready RayCluster status should be reflected in the RayJob's status.
-				// Breaking from the switch statement will drop directly to the status update code
-				// and return a default requeue duration and no error.
-				rayJobInstance.Status.RayClusterStatus = rayClusterInstance.Status
-				break
-			}
+		// Check the current status of RayCluster before submitting. This must run regardless of
+		// whether Status.DashboardURL is already set: on a ReuseRayCluster retry the DashboardURL
+		// is preserved from the previous run, so gating this check on an empty DashboardURL would
+		// let the RayJob advance to Running and hit the dashboard before the reused cluster is ready.
+		if rayClusterInstance.Status.State != rayv1.Ready {
+			logger.Info("Wait for the RayCluster.Status.State to be ready before submitting the job.", "RayCluster", rayClusterInstance.Name, "State", rayClusterInstance.Status.State)
+			// The nonready RayCluster status should be reflected in the RayJob's status.
+			// Breaking from the switch statement will drop directly to the status update code
+			// and return a default requeue duration and no error.
+			rayJobInstance.Status.RayClusterStatus = rayClusterInstance.Status
+			break
+		}
 
+		if clientURL := rayJobInstance.Status.DashboardURL; clientURL == "" {
 			if clientURL, err = utils.FetchHeadServiceURL(ctx, r.Client, rayClusterInstance, utils.DashboardPortName); err != nil || clientURL == "" {
 				logger.Error(err, "Failed to get the dashboard URL after the RayCluster is ready!", "RayCluster", rayClusterInstance.Name)
 				return ctrl.Result{RequeueAfter: RayJobDefaultRequeueDuration}, err
