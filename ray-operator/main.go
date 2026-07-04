@@ -324,7 +324,7 @@ func main() {
 			exitOnError(ray.NewRayClusterMTLSController(mgr).SetupWithManager(mgr),
 				"unable to create controller", "controller", "RayClusterMTLS")
 		} else {
-			setupLog.Info("cert-manager API not found; mTLS controller disabled (RayClusters with tlsOptions and no CertificateSecretName will not get auto-generated certs)")
+			setupLog.Info("cert-manager API not found; mTLS controller disabled (RayClusters with tlsOptions set will not get auto-generated certs)")
 		}
 	} else {
 		setupLog.Info("RayClusterMTLS feature gate is disabled, skipping mTLS controller setup")
