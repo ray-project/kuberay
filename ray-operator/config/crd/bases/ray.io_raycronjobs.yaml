@@ -5029,14 +5029,10 @@ spec:
                         type: boolean
                       tlsOptions:
                         properties:
-                          certificateSecretName:
-                            type: string
                           mode:
                             default: MutualTLS
                             enum:
                             - MutualTLS
-                            type: string
-                          workerCertificateSecretName:
                             type: string
                         type: object
                       upgradeStrategy:

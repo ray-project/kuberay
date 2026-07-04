@@ -183,13 +183,10 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 		return ctrl.Result{}, nil
 	}
 
-	// Fail fast when auto-generate mTLS is requested but cert-manager is not installed.
-	// BYOC mode is always allowed since the user manages their own certificates.
-	if utils.IsTLSEnabled(&instance.Spec) && !utils.IsTLSBYOC(&instance.Spec) && !r.options.CertManagerAvailable {
-		err := fmt.Errorf("tlsOptions requires cert-manager for auto-generated certificates, " +
-			"but cert-manager is not installed; install cert-manager or use BYOC mode " +
-			"by setting spec.tlsOptions.certificateSecretName")
-		logger.Error(err, "cert-manager not available for mTLS auto-generate")
+	// Fail fast when mTLS is requested but cert-manager is not installed.
+	if utils.IsTLSEnabled(&instance.Spec) && !r.options.CertManagerAvailable {
+		err := fmt.Errorf("tlsOptions requires cert-manager, but cert-manager is not installed")
+		logger.Error(err, "cert-manager not available for mTLS")
 		r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.InvalidRayClusterSpec),
 			"The RayCluster spec is invalid %s/%s: %v", instance.Namespace, instance.Name, err)
 		return ctrl.Result{}, nil
@@ -1608,51 +1605,39 @@ func (r *RayClusterReconciler) handleMTLSCleanupFinalizerOnDeletion(ctx context.
 	return ctrl.Result{}, nil
 }
 
-// checkMTLSSecretsReady verifies TLS secrets exist and contain the required keys.
-// In BYOC mode, checks the user-provided secret. In auto-generate mode, also verifies
-// that the cert-manager Certificate objects are Ready at the current generation, preventing
-// pod creation while cert-manager is reissuing certificates (e.g. after a SAN update).
+// checkMTLSSecretsReady verifies that cert-manager has finished (re)issuing the TLS
+// certificates at the current generation and that the resulting secrets exist and contain
+// the required keys. This prevents pods from being created while an older secret is still
+// mounted during a SAN reissue (e.g. after a pod IP is added). Checking ObservedGeneration
+// on the condition ensures Ready=True reflects the current spec, not a previous generation.
 func (r *RayClusterReconciler) checkMTLSSecretsReady(ctx context.Context, instance *rayv1.RayCluster) error {
-	var secretNames []string
-	if utils.IsTLSBYOC(&instance.Spec) {
-		secretNames = []string{*instance.Spec.TLSOptions.CertificateSecretName}
-		if w := instance.Spec.TLSOptions.WorkerCertificateSecretName; w != nil && *w != "" {
-			secretNames = append(secretNames, *w)
+	certNames := []string{
+		fmt.Sprintf("%s-%s", utils.RayHeadCertPrefix, instance.Name),
+		fmt.Sprintf("%s-%s", utils.RayWorkerCertPrefix, instance.Name),
+	}
+	for _, certName := range certNames {
+		cert := &certmanagerv1.Certificate{}
+		if err := r.Get(ctx, client.ObjectKey{Name: certName, Namespace: instance.Namespace}, cert); err != nil {
+			return fmt.Errorf("certificate %s not found: %w", certName, err)
 		}
-	} else {
-		secretNames = []string{
-			utils.GetTLSSecretName(instance.Name, rayv1.HeadNode),
-			utils.GetTLSSecretName(instance.Name, rayv1.WorkerNode),
+		ready := false
+		for _, cond := range cert.Status.Conditions {
+			if cond.Type == certmanagerv1.CertificateConditionReady &&
+				cond.Status == cmmeta.ConditionTrue &&
+				cond.ObservedGeneration == cert.Generation {
+				ready = true
+				break
+			}
 		}
-		// In auto-generate mode, also verify cert-manager has finished (re)issuing the
-		// certificates at the current generation. This prevents pods from being created
-		// while an older secret is still mounted during a SAN reissue (e.g. after a pod
-		// IP is added). Checking ObservedGeneration on the condition ensures Ready=True
-		// reflects the current spec, not a previous generation.
-		certNames := []string{
-			fmt.Sprintf("%s-%s", utils.RayHeadCertPrefix, instance.Name),
-			fmt.Sprintf("%s-%s", utils.RayWorkerCertPrefix, instance.Name),
-		}
-		for _, certName := range certNames {
-			cert := &certmanagerv1.Certificate{}
-			if err := r.Get(ctx, client.ObjectKey{Name: certName, Namespace: instance.Namespace}, cert); err != nil {
-				return fmt.Errorf("certificate %s not found: %w", certName, err)
-			}
-			ready := false
-			for _, cond := range cert.Status.Conditions {
-				if cond.Type == certmanagerv1.CertificateConditionReady &&
-					cond.Status == cmmeta.ConditionTrue &&
-					cond.ObservedGeneration == cert.Generation {
-					ready = true
-					break
-				}
-			}
-			if !ready {
-				return fmt.Errorf("certificate %s is not ready at current generation %d", certName, cert.Generation)
-			}
+		if !ready {
+			return fmt.Errorf("certificate %s is not ready at current generation %d", certName, cert.Generation)
 		}
 	}
 
+	secretNames := []string{
+		utils.GetTLSSecretName(instance.Name, rayv1.HeadNode),
+		utils.GetTLSSecretName(instance.Name, rayv1.WorkerNode),
+	}
 	requiredKeys := []string{"tls.crt", "tls.key", "ca.crt"}
 	for _, secretName := range secretNames {
 		secret := &corev1.Secret{}

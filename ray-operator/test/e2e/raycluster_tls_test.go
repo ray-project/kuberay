@@ -427,49 +427,6 @@ func TestRayClusterTLSEdgeCases(t *testing.T) {
 		LogWithTimestamp(t, "Cert-manager resources cleaned up after deletion of cluster %s", clusterName)
 	})
 
-	// BYOC (Bring Your Own Certificate): user-provided secret must never be deleted by the operator.
-	t.Run("mTLS BYOC cluster deletion leaves user secret intact", func(t *testing.T) {
-		t.Parallel()
-		g := NewWithT(t)
-
-		byocSecretName := "byoc-e2e-user-secret" // #nosec G101 -- test variable name, not a credential
-		// Placeholder cert data; BYOC only requires the keys to exist. Cluster may not become Ready.
-		userSecret := &corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{Name: byocSecretName, Namespace: namespace.Name},
-			Data: map[string][]byte{
-				"tls.crt": []byte("placeholder-cert"),
-				"tls.key": []byte("placeholder-key"),
-				"ca.crt":  []byte("placeholder-ca"),
-			},
-		}
-		_, err := test.Client().Core().CoreV1().Secrets(namespace.Name).Create(test.Ctx(), userSecret, metav1.CreateOptions{})
-		g.Expect(err).NotTo(HaveOccurred())
-		LogWithTimestamp(t, "Created BYOC user secret %s", byocSecretName)
-
-		clusterName := "tls-byoc-delete"
-		spec := NewRayClusterSpec().
-			WithTLSOptions(rayv1ac.TLSOptions().WithCertificateSecretName(byocSecretName))
-		rayClusterAC := rayv1ac.RayCluster(clusterName, namespace.Name).WithSpec(spec)
-		_, err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
-		g.Expect(err).NotTo(HaveOccurred())
-		LogWithTimestamp(t, "Created BYOC RayCluster %s", clusterName)
-
-		// Delete the RayCluster. Operator must not delete the user's secret.
-		err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Delete(test.Ctx(), clusterName, metav1.DeleteOptions{})
-		g.Expect(err).NotTo(HaveOccurred())
-
-		// Wait for RayCluster to be gone so reconciliation has run.
-		g.Eventually(func(gg Gomega) {
-			_, err := test.Client().Ray().RayV1().RayClusters(namespace.Name).Get(test.Ctx(), clusterName, metav1.GetOptions{})
-			gg.Expect(k8serrors.IsNotFound(err)).To(BeTrue(), "RayCluster should be deleted")
-		}, TestTimeoutMedium).Should(Succeed())
-
-		// User secret must still exist (operator never deletes BYOC secrets).
-		_, err = test.Client().Core().CoreV1().Secrets(namespace.Name).Get(test.Ctx(), byocSecretName, metav1.GetOptions{})
-		g.Expect(err).NotTo(HaveOccurred(), "BYOC user secret %s must still exist after RayCluster deletion", byocSecretName)
-		LogWithTimestamp(t, "BYOC user secret %s intact after cluster deletion", byocSecretName)
-	})
-
 	t.Run("mTLS with autoscaler enabled", func(t *testing.T) {
 		if !certManagerAvailable(test) {
 			t.Skip("cert-manager CRDs not found; skipping auto-generate mTLS test")

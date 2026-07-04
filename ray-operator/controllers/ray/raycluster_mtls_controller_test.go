@@ -15,7 +15,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
-	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	clientFake "sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -445,167 +444,6 @@ func TestMTLSController_CertReadinessBlocksReconciliation(t *testing.T) {
 	assert.Equal(t, mtlsPeriodicCheckDuration, result.RequeueAfter, "should schedule periodic check when all ready")
 }
 
-// --- BYOC mode tests ---
-
-func TestMTLSController_BYOC_ValidSecret(t *testing.T) {
-	cluster := newMTLSTestCluster("byoc-cluster")
-	cluster.Spec.TLSOptions = &rayv1.TLSOptions{
-		CertificateSecretName: ptr.To("my-tls-secret"),
-	}
-
-	userSecret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Name: "my-tls-secret", Namespace: "default"},
-		Data: map[string][]byte{
-			"tls.crt": []byte("cert-data"),
-			"tls.key": []byte("key-data"),
-			"ca.crt":  []byte("ca-data"),
-		},
-	}
-
-	r := newMTLSController(t, cluster, userSecret)
-	ctx := context.Background()
-
-	result, err := r.Reconcile(ctx, ctrl.Request{
-		NamespacedName: types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace},
-	})
-	require.NoError(t, err)
-	assert.Equal(t, mtlsPeriodicCheckDuration, result.RequeueAfter, "should schedule periodic check for BYOC")
-
-	// Verify no cert-manager resources were created.
-	issuerList := &certmanagerv1.IssuerList{}
-	require.NoError(t, r.List(ctx, issuerList, client.InNamespace("default")))
-	assert.Empty(t, issuerList.Items, "BYOC mode should not create cert-manager issuers")
-
-	certList := &certmanagerv1.CertificateList{}
-	require.NoError(t, r.List(ctx, certList, client.InNamespace("default")))
-	assert.Empty(t, certList.Items, "BYOC mode should not create cert-manager certificates")
-}
-
-func TestMTLSController_BYOC_MissingSecret(t *testing.T) {
-	cluster := newMTLSTestCluster("byoc-missing")
-	cluster.Spec.TLSOptions = &rayv1.TLSOptions{
-		CertificateSecretName: ptr.To("missing-secret"),
-	}
-
-	r := newMTLSController(t, cluster)
-	ctx := context.Background()
-
-	result, err := r.Reconcile(ctx, ctrl.Request{
-		NamespacedName: types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace},
-	})
-	require.NoError(t, err)
-	assert.Equal(t, mtlsDefaultRequeueDuration, result.RequeueAfter, "should requeue when BYOC secret missing")
-}
-
-func TestMTLSController_BYOC_SecretMissingKey(t *testing.T) {
-	cluster := newMTLSTestCluster("byoc-partial")
-	cluster.Spec.TLSOptions = &rayv1.TLSOptions{
-		CertificateSecretName: ptr.To("partial-secret"),
-	}
-
-	partialSecret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Name: "partial-secret", Namespace: "default"},
-		Data: map[string][]byte{
-			"tls.crt": []byte("cert-data"),
-			"tls.key": []byte("key-data"),
-			// missing ca.crt
-		},
-	}
-
-	r := newMTLSController(t, cluster, partialSecret)
-	ctx := context.Background()
-
-	result, err := r.Reconcile(ctx, ctrl.Request{
-		NamespacedName: types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace},
-	})
-	require.NoError(t, err)
-	assert.Equal(t, mtlsDefaultRequeueDuration, result.RequeueAfter, "should requeue when BYOC secret missing keys")
-}
-
-func TestMTLSController_BYOC_DeletionDoesNotDeleteUserSecret(t *testing.T) {
-	now := metav1.Now()
-	cluster := newMTLSTestCluster("byoc-del")
-	cluster.Spec.TLSOptions = &rayv1.TLSOptions{
-		CertificateSecretName: ptr.To("my-company-cert"),
-	}
-	cluster.DeletionTimestamp = &now
-	cluster.Finalizers = []string{"test-finalizer"}
-
-	userSecret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Name: "my-company-cert", Namespace: "default"},
-		Data: map[string][]byte{
-			"tls.crt": []byte("cert"), "tls.key": []byte("key"), "ca.crt": []byte("ca"),
-		},
-	}
-
-	r := newMTLSController(t, cluster, userSecret)
-	ctx := context.Background()
-
-	_, err := r.Reconcile(ctx, ctrl.Request{
-		NamespacedName: types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace},
-	})
-	require.NoError(t, err)
-
-	// User's secret must still exist after reconciliation during deletion.
-	err = r.Get(ctx, types.NamespacedName{Name: "my-company-cert", Namespace: "default"}, &corev1.Secret{})
-	require.NoError(t, err, "BYOC secret should NOT be deleted when RayCluster is deleted")
-}
-
-func TestMTLSController_BYOC_SeparateHeadWorkerSecrets(t *testing.T) {
-	cluster := newMTLSTestCluster("byoc-separate")
-	cluster.Spec.TLSOptions = &rayv1.TLSOptions{
-		CertificateSecretName:       ptr.To("my-head-secret"),
-		WorkerCertificateSecretName: ptr.To("my-worker-secret"),
-	}
-
-	headSecret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Name: "my-head-secret", Namespace: "default"},
-		Data: map[string][]byte{
-			"tls.crt": []byte("head-cert"), "tls.key": []byte("head-key"), "ca.crt": []byte("ca"),
-		},
-	}
-	workerSecret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Name: "my-worker-secret", Namespace: "default"},
-		Data: map[string][]byte{
-			"tls.crt": []byte("worker-cert"), "tls.key": []byte("worker-key"), "ca.crt": []byte("ca"),
-		},
-	}
-
-	r := newMTLSController(t, cluster, headSecret, workerSecret)
-	ctx := context.Background()
-
-	result, err := r.Reconcile(ctx, ctrl.Request{
-		NamespacedName: types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace},
-	})
-	require.NoError(t, err)
-	assert.Equal(t, mtlsPeriodicCheckDuration, result.RequeueAfter, "should schedule periodic check for BYOC with separate secrets")
-}
-
-func TestMTLSController_BYOC_SeparateSecrets_WorkerMissing(t *testing.T) {
-	cluster := newMTLSTestCluster("byoc-worker-missing")
-	cluster.Spec.TLSOptions = &rayv1.TLSOptions{
-		CertificateSecretName:       ptr.To("my-head-secret"),
-		WorkerCertificateSecretName: ptr.To("my-worker-secret"),
-	}
-
-	// Only create the head secret; worker secret is missing.
-	headSecret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Name: "my-head-secret", Namespace: "default"},
-		Data: map[string][]byte{
-			"tls.crt": []byte("head-cert"), "tls.key": []byte("head-key"), "ca.crt": []byte("ca"),
-		},
-	}
-
-	r := newMTLSController(t, cluster, headSecret)
-	ctx := context.Background()
-
-	result, err := r.Reconcile(ctx, ctrl.Request{
-		NamespacedName: types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace},
-	})
-	require.NoError(t, err)
-	assert.Equal(t, mtlsDefaultRequeueDuration, result.RequeueAfter, "should requeue when BYOC worker secret is missing")
-}
-
 func TestMTLSController_DeletionWithDisabledMTLS_RemovesFinalizer(t *testing.T) {
 	now := metav1.Now()
 	cluster := newMTLSTestCluster("disabled-del")
@@ -877,33 +715,6 @@ func TestCheckMTLSSecretsReady_AutoGenerate_SecretMissingKey(t *testing.T) {
 	err := r.checkMTLSSecretsReady(context.Background(), cluster)
 	require.Error(t, err, "should fail when secret is missing a required key")
 	assert.Contains(t, err.Error(), "ca.crt")
-}
-
-func TestCheckMTLSSecretsReady_BYOC(t *testing.T) {
-	features.SetFeatureGateDuringTest(t, features.RayClusterMTLS, true)
-	cluster := newMTLSTestCluster("test-cluster")
-	cluster.Spec.TLSOptions = &rayv1.TLSOptions{
-		CertificateSecretName: ptr.To("my-cert"),
-	}
-
-	userSecret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Name: "my-cert", Namespace: "default"},
-		Data: map[string][]byte{
-			"tls.crt": []byte("cert"),
-			"tls.key": []byte("key"),
-			"ca.crt":  []byte("ca"),
-		},
-	}
-
-	s := newMTLSTestScheme()
-	fakeClient := clientFake.NewClientBuilder().
-		WithScheme(s).
-		WithRuntimeObjects(cluster, userSecret).
-		Build()
-	r := &RayClusterReconciler{Client: fakeClient, Scheme: s}
-
-	err := r.checkMTLSSecretsReady(context.Background(), cluster)
-	assert.NoError(t, err, "BYOC mode should succeed with valid user-provided secret")
 }
 
 // --- podHasMTLSConfiguration tests ---

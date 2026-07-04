@@ -365,7 +365,7 @@ func SetContainerTokenAuthEnvVars(clusterName string, container *corev1.Containe
 }
 
 // configureTLS injects mTLS configuration into the pod template.
-// Mounts the TLS secret (cert-manager generated or BYOC) and sets TLS environment variables.
+// Mounts the cert-manager generated TLS secret and sets TLS environment variables.
 // Idempotent: skips adding the TLS volume if one with RayTLSVolumeName already exists.
 func configureTLS(podTemplate *corev1.PodTemplateSpec, instance rayv1.RayCluster, rayNodeType rayv1.RayNodeType) {
 	if !utils.IsTLSEnabled(&instance.Spec) {
@@ -374,7 +374,7 @@ func configureTLS(podTemplate *corev1.PodTemplateSpec, instance rayv1.RayCluster
 
 	// Get the TLS secret name. In BYOC mode, the same user-provided secret is used
 	// for both head and worker. In auto-generate mode, cert-manager creates separate secrets.
-	secretName := utils.GetTLSSecretName(instance.Name, rayNodeType, instance.Spec)
+	secretName := utils.GetTLSSecretName(instance.Name, rayNodeType)
 
 	// Add the TLS volume if not already present (avoid duplicates on re-entry).
 	hasTLSVolume := false
@@ -414,11 +414,9 @@ func configureTLS(podTemplate *corev1.PodTemplateSpec, instance rayv1.RayCluster
 	//     pod IP. If the worker cert does not yet list that IP the TLS handshake fails, GCS
 	//     marks the worker dead, and the RayJob fails. Relying on KubeRay pod recreation is
 	//     not sufficient because the RayJob itself fails before a retry can succeed.
-	// BYOC mode is excluded: the user controls the cert, so we cannot assume openssl is
-	// available or that the cert will ever gain an IP SAN.
-	if !utils.IsTLSBYOC(&instance.Spec) {
-		certPath := utils.RayTLSCertMountPath + "/tls.crt"
-		waitScript := fmt.Sprintf(`CERT="%s"
+	// TODO: IPv6 pod IPs — the grep pattern below assumes IPv4 dot-decimal notation.
+	certPath := utils.RayTLSCertMountPath + "/tls.crt"
+	waitScript := fmt.Sprintf(`CERT="%s"
 DEADLINE=$(( $(date +%%s) + 300 ))
 echo "Waiting for TLS cert to include IP SAN for ${POD_IP} (timeout 300s)..."
 while true; do
@@ -439,43 +437,42 @@ while true; do
   sleep 5
 done`, certPath)
 
-		waitInitContainer := corev1.Container{
-			Name:            "wait-for-tls-ip-san",
-			Image:           podTemplate.Spec.Containers[utils.RayContainerIndex].Image,
-			ImagePullPolicy: podTemplate.Spec.Containers[utils.RayContainerIndex].ImagePullPolicy,
-			Command:         []string{"sh", "-c"},
-			Args:            []string{waitScript},
-			Env: []corev1.EnvVar{
-				{
-					Name: "POD_IP",
-					ValueFrom: &corev1.EnvVarSource{
-						FieldRef: &corev1.ObjectFieldSelector{
-							FieldPath: "status.podIP",
-						},
+	waitInitContainer := corev1.Container{
+		Name:            "wait-for-tls-ip-san",
+		Image:           podTemplate.Spec.Containers[utils.RayContainerIndex].Image,
+		ImagePullPolicy: podTemplate.Spec.Containers[utils.RayContainerIndex].ImagePullPolicy,
+		Command:         []string{"sh", "-c"},
+		Args:            []string{waitScript},
+		Env: []corev1.EnvVar{
+			{
+				Name: "POD_IP",
+				ValueFrom: &corev1.EnvVarSource{
+					FieldRef: &corev1.ObjectFieldSelector{
+						FieldPath: "status.podIP",
 					},
 				},
 			},
-			VolumeMounts: []corev1.VolumeMount{
-				{
-					Name:      utils.RayTLSVolumeName,
-					MountPath: utils.RayTLSCertMountPath,
-					ReadOnly:  true,
-				},
+		},
+		VolumeMounts: []corev1.VolumeMount{
+			{
+				Name:      utils.RayTLSVolumeName,
+				MountPath: utils.RayTLSCertMountPath,
+				ReadOnly:  true,
 			},
-			Resources: corev1.ResourceRequirements{
-				Limits: corev1.ResourceList{
-					corev1.ResourceCPU:    resource.MustParse("50m"),
-					corev1.ResourceMemory: resource.MustParse("64Mi"),
-				},
-				Requests: corev1.ResourceList{
-					corev1.ResourceCPU:    resource.MustParse("50m"),
-					corev1.ResourceMemory: resource.MustParse("64Mi"),
-				},
+		},
+		Resources: corev1.ResourceRequirements{
+			Limits: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("50m"),
+				corev1.ResourceMemory: resource.MustParse("64Mi"),
 			},
-		}
-		// Prepend so it runs before wait-gcs-ready.
-		podTemplate.Spec.InitContainers = append([]corev1.Container{waitInitContainer}, podTemplate.Spec.InitContainers...)
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("50m"),
+				corev1.ResourceMemory: resource.MustParse("64Mi"),
+			},
+		},
 	}
+	// Prepend so it runs before wait-gcs-ready.
+	podTemplate.Spec.InitContainers = append([]corev1.Container{waitInitContainer}, podTemplate.Spec.InitContainers...)
 }
 
 // SetContainerTLSConfig adds TLS environment variables and volume mount to a container.

@@ -2651,24 +2651,6 @@ func TestConfigureTLS_AutoGenerate_HeadPod(t *testing.T) {
 	assert.True(t, hasPodIPEnv, "wait-for-tls-ip-san should receive POD_IP via downward API")
 }
 
-// TestConfigureTLS_AutoGenerate_HeadPod_BYOC verifies that the wait-for-tls-ip-san init
-// container is NOT injected in BYOC mode (user-provided cert), because we cannot assume
-// openssl is available or that the cert will ever gain an IP SAN.
-func TestConfigureTLS_AutoGenerate_HeadPod_BYOC(t *testing.T) {
-	features.SetFeatureGateDuringTest(t, features.RayClusterMTLS, true)
-	cluster := instance.DeepCopy()
-	secretName := "user-provided-tls-cert"
-	cluster.Spec.TLSOptions = &rayv1.TLSOptions{CertificateSecretName: &secretName}
-	ctx := context.Background()
-
-	podTemplate := DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, "test-head", "6379", "")
-
-	for _, ic := range podTemplate.Spec.InitContainers {
-		assert.NotEqual(t, "wait-for-tls-ip-san", ic.Name,
-			"BYOC mode must not inject wait-for-tls-ip-san (user controls cert SANs)")
-	}
-}
-
 func TestConfigureTLS_AutoGenerate_WorkerPod(t *testing.T) {
 	features.SetFeatureGateDuringTest(t, features.RayClusterMTLS, true)
 	cluster := instance.DeepCopy()

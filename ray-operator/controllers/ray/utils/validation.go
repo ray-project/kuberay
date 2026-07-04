@@ -333,24 +333,10 @@ func validateNetworkIsolation(spec *rayv1.RayClusterSpec) error {
 }
 
 // validateTLSOptions checks that the TLS config is internally consistent.
-// It prevents users from setting TLS environment variables manually when TLS is enabled,
-// and validates BYOC certificate secret names if provided.
+// It prevents users from setting TLS environment variables manually when TLS is enabled.
 func validateTLSOptions(spec *rayv1.RayClusterSpec) error {
 	if !IsTLSEnabled(spec) {
 		return nil
-	}
-
-	// Validate BYOC fields: if CertificateSecretName is set it must be non-empty.
-	if spec.TLSOptions.CertificateSecretName != nil && *spec.TLSOptions.CertificateSecretName == "" {
-		return fmt.Errorf("tlsOptions.certificateSecretName must be non-empty when set")
-	}
-	// WorkerCertificateSecretName is optional but must be non-empty when set.
-	if spec.TLSOptions.WorkerCertificateSecretName != nil && *spec.TLSOptions.WorkerCertificateSecretName == "" {
-		return fmt.Errorf("tlsOptions.workerCertificateSecretName must be non-empty when set")
-	}
-	// WorkerCertificateSecretName requires CertificateSecretName to also be set.
-	if spec.TLSOptions.WorkerCertificateSecretName != nil && spec.TLSOptions.CertificateSecretName == nil {
-		return fmt.Errorf("tlsOptions.workerCertificateSecretName requires certificateSecretName to also be set")
 	}
 
 	// Prevent conflict: user should not set any operator-managed TLS env vars when TLS is enabled.

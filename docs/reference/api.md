@@ -677,8 +677,10 @@ _Appears in:_
 
 
 TLSOptions configures TLS encryption for the RayCluster.
-When TLSOptions is nil, TLS is disabled. When set, the operator configures
-TLS on head and worker pods according to the selected mode.
+When TLSOptions is nil, TLS is disabled. When set, the operator uses
+cert-manager to automatically provision a full PKI (self-signed CA, head
+and worker leaf certificates) and keeps certificates up to date as pod IPs
+change during autoscaling.
 
 
 
@@ -688,8 +690,6 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `mode` _[TLSMode](#tlsmode)_ | Mode selects the TLS security mode.<br />Supported values: "MutualTLS" (mutual TLS, client & server authentication).<br />Defaults to "MutualTLS". | MutualTLS | Enum: [MutualTLS] <br /> |
-| `certificateSecretName` _string_ | CertificateSecretName is a user-provided Kubernetes Secret containing<br />tls.crt, tls.key, and ca.crt for the head node (and workers, if<br />WorkerCertificateSecretName is not set).<br />When WorkerCertificateSecretName is also set, this secret is mounted only<br />on head pods. When WorkerCertificateSecretName is omitted, this single secret<br />is mounted on both head and worker pods (shared-secret BYOC mode).<br />The certificate SANs must cover the head node identities<br />(head service DNS, pod IPs or wildcards, localhost, 127.0.0.1).<br />When set, the operator skips cert-manager PKI and mounts this secret directly. |  |  |
-| `workerCertificateSecretName` _string_ | WorkerCertificateSecretName is an optional user-provided Kubernetes Secret<br />containing tls.crt, tls.key, and ca.crt for worker nodes.<br />When set, workers use this secret instead of CertificateSecretName, giving<br />head and worker pods separate TLS identities. This prevents a compromised<br />worker key from impersonating the head node at the TLS layer.<br />The certificate SANs must cover worker node identities<br />(worker pod IPs or wildcards). Both secrets must share the same CA. |  |  |
 
 
 #### UpscalingMode

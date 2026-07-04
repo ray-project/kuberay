@@ -10,35 +10,15 @@ import (
 // with apply.
 //
 // TLSOptions configures TLS encryption for the RayCluster.
-// When TLSOptions is nil, TLS is disabled. When set, the operator configures
-// TLS on head and worker pods according to the selected mode.
+// When TLSOptions is nil, TLS is disabled. When set, the operator uses
+// cert-manager to automatically provision a full PKI (self-signed CA, head
+// and worker leaf certificates) and keeps certificates up to date as pod IPs
+// change during autoscaling.
 type TLSOptionsApplyConfiguration struct {
 	// Mode selects the TLS security mode.
 	// Supported values: "MutualTLS" (mutual TLS, client & server authentication).
 	// Defaults to "MutualTLS".
 	Mode *rayv1.TLSMode `json:"mode,omitempty"`
-	// CertificateSecretName is a user-provided Kubernetes Secret containing
-	// tls.crt, tls.key, and ca.crt for the head node (and workers, if
-	// WorkerCertificateSecretName is not set).
-	//
-	// When WorkerCertificateSecretName is also set, this secret is mounted only
-	// on head pods. When WorkerCertificateSecretName is omitted, this single secret
-	// is mounted on both head and worker pods (shared-secret BYOC mode).
-	//
-	// The certificate SANs must cover the head node identities
-	// (head service DNS, pod IPs or wildcards, localhost, 127.0.0.1).
-	// When set, the operator skips cert-manager PKI and mounts this secret directly.
-	CertificateSecretName *string `json:"certificateSecretName,omitempty"`
-	// WorkerCertificateSecretName is an optional user-provided Kubernetes Secret
-	// containing tls.crt, tls.key, and ca.crt for worker nodes.
-	//
-	// When set, workers use this secret instead of CertificateSecretName, giving
-	// head and worker pods separate TLS identities. This prevents a compromised
-	// worker key from impersonating the head node at the TLS layer.
-	//
-	// The certificate SANs must cover worker node identities
-	// (worker pod IPs or wildcards). Both secrets must share the same CA.
-	WorkerCertificateSecretName *string `json:"workerCertificateSecretName,omitempty"`
 }
 
 // TLSOptionsApplyConfiguration constructs a declarative configuration of the TLSOptions type for use with
@@ -52,21 +32,5 @@ func TLSOptions() *TLSOptionsApplyConfiguration {
 // If called multiple times, the Mode field is set to the value of the last call.
 func (b *TLSOptionsApplyConfiguration) WithMode(value rayv1.TLSMode) *TLSOptionsApplyConfiguration {
 	b.Mode = &value
-	return b
-}
-
-// WithCertificateSecretName sets the CertificateSecretName field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the CertificateSecretName field is set to the value of the last call.
-func (b *TLSOptionsApplyConfiguration) WithCertificateSecretName(value string) *TLSOptionsApplyConfiguration {
-	b.CertificateSecretName = &value
-	return b
-}
-
-// WithWorkerCertificateSecretName sets the WorkerCertificateSecretName field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the WorkerCertificateSecretName field is set to the value of the last call.
-func (b *TLSOptionsApplyConfiguration) WithWorkerCertificateSecretName(value string) *TLSOptionsApplyConfiguration {
-	b.WorkerCertificateSecretName = &value
 	return b
 }

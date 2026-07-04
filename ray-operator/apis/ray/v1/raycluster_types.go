@@ -76,8 +76,10 @@ const (
 )
 
 // TLSOptions configures TLS encryption for the RayCluster.
-// When TLSOptions is nil, TLS is disabled. When set, the operator configures
-// TLS on head and worker pods according to the selected mode.
+// When TLSOptions is nil, TLS is disabled. When set, the operator uses
+// cert-manager to automatically provision a full PKI (self-signed CA, head
+// and worker leaf certificates) and keeps certificates up to date as pod IPs
+// change during autoscaling.
 type TLSOptions struct {
 	// Mode selects the TLS security mode.
 	// Supported values: "MutualTLS" (mutual TLS, client & server authentication).
@@ -86,32 +88,6 @@ type TLSOptions struct {
 	// +kubebuilder:default=MutualTLS
 	// +optional
 	Mode TLSMode `json:"mode,omitempty"`
-
-	// CertificateSecretName is a user-provided Kubernetes Secret containing
-	// tls.crt, tls.key, and ca.crt for the head node (and workers, if
-	// WorkerCertificateSecretName is not set).
-	//
-	// When WorkerCertificateSecretName is also set, this secret is mounted only
-	// on head pods. When WorkerCertificateSecretName is omitted, this single secret
-	// is mounted on both head and worker pods (shared-secret BYOC mode).
-	//
-	// The certificate SANs must cover the head node identities
-	// (head service DNS, pod IPs or wildcards, localhost, 127.0.0.1).
-	// When set, the operator skips cert-manager PKI and mounts this secret directly.
-	// +optional
-	CertificateSecretName *string `json:"certificateSecretName,omitempty"`
-
-	// WorkerCertificateSecretName is an optional user-provided Kubernetes Secret
-	// containing tls.crt, tls.key, and ca.crt for worker nodes.
-	//
-	// When set, workers use this secret instead of CertificateSecretName, giving
-	// head and worker pods separate TLS identities. This prevents a compromised
-	// worker key from impersonating the head node at the TLS layer.
-	//
-	// The certificate SANs must cover worker node identities
-	// (worker pod IPs or wildcards). Both secrets must share the same CA.
-	// +optional
-	WorkerCertificateSecretName *string `json:"workerCertificateSecretName,omitempty"`
 }
 
 // +kubebuilder:validation:Enum=Recreate;None

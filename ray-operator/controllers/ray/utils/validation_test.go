@@ -3141,40 +3141,6 @@ func TestValidateTLSOptions(t *testing.T) {
 			},
 		},
 		{
-			name: "TLS enabled, BYOC with certificateSecretName - valid",
-			modify: func(s *rayv1.RayClusterSpec) {
-				s.TLSOptions = &rayv1.TLSOptions{CertificateSecretName: ptr.To("my-secret")}
-			},
-		},
-		{
-			name: "TLS enabled, BYOC with empty certificateSecretName - error",
-			modify: func(s *rayv1.RayClusterSpec) {
-				s.TLSOptions = &rayv1.TLSOptions{CertificateSecretName: ptr.To("")}
-			},
-			expectError: true,
-			errorMsg:    "tlsOptions.certificateSecretName must be non-empty when set",
-		},
-		{
-			name: "BYOC with separate head and worker secrets - valid",
-			modify: func(s *rayv1.RayClusterSpec) {
-				s.TLSOptions = &rayv1.TLSOptions{
-					CertificateSecretName:       ptr.To("head-secret"),
-					WorkerCertificateSecretName: ptr.To("worker-secret"),
-				}
-			},
-		},
-		{
-			name: "BYOC with empty workerCertificateSecretName - error",
-			modify: func(s *rayv1.RayClusterSpec) {
-				s.TLSOptions = &rayv1.TLSOptions{
-					CertificateSecretName:       ptr.To("head-secret"),
-					WorkerCertificateSecretName: ptr.To(""),
-				}
-			},
-			expectError: true,
-			errorMsg:    "tlsOptions.workerCertificateSecretName must be non-empty when set",
-		},
-		{
 			name: "RAY_USE_TLS in head container - error",
 			modify: func(s *rayv1.RayClusterSpec) {
 				s.TLSOptions = &rayv1.TLSOptions{}

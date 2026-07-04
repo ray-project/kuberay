@@ -79,18 +79,14 @@ func (r *RayClusterMTLSController) Reconcile(ctx context.Context, req ctrl.Reque
 	// never be removed and the RayCluster would be stuck in Terminating.
 	if instance.DeletionTimestamp != nil && !instance.DeletionTimestamp.IsZero() {
 		if controllerutil.ContainsFinalizer(instance, utils.MTLSCleanupFinalizer) {
-			// Only delete secrets in auto-generate mode; BYOC secrets belong to the user.
-			if !utils.IsTLSBYOC(&instance.Spec) {
-				if err := r.deleteTLSSecrets(ctx, instance); err != nil {
-					logger.Error(err, "Failed to delete TLS secrets during RayCluster deletion")
-					r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.MTLSFailedToCleanupSecrets),
-						"Failed to clean up mTLS secrets: %v", err)
-					return ctrl.Result{RequeueAfter: mtlsDefaultRequeueDuration}, err
-				}
-				r.Recorder.Event(instance, corev1.EventTypeNormal, string(utils.MTLSSecretsCleanedUp),
-					"Auto-generated mTLS secrets deleted")
+			if err := r.deleteTLSSecrets(ctx, instance); err != nil {
+				logger.Error(err, "Failed to delete TLS secrets during RayCluster deletion")
+				r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.MTLSFailedToCleanupSecrets),
+					"Failed to clean up mTLS secrets: %v", err)
+				return ctrl.Result{RequeueAfter: mtlsDefaultRequeueDuration}, err
 			}
-			// Remove the finalizer to unblock deletion.
+			r.Recorder.Event(instance, corev1.EventTypeNormal, string(utils.MTLSSecretsCleanedUp),
+				"Auto-generated mTLS secrets deleted")
 			controllerutil.RemoveFinalizer(instance, utils.MTLSCleanupFinalizer)
 			if err := r.Update(ctx, instance); err != nil {
 				logger.Error(err, "Failed to remove mTLS finalizer")
@@ -107,26 +103,16 @@ func (r *RayClusterMTLSController) Reconcile(ctx context.Context, req ctrl.Reque
 	}
 
 	// Ensure the finalizer is present so we get a chance to clean up secrets before deletion.
-	// Only needed for auto-generate mode; BYOC secrets are user-managed and never deleted.
-	if !utils.IsTLSBYOC(&instance.Spec) {
-		if !controllerutil.ContainsFinalizer(instance, utils.MTLSCleanupFinalizer) {
-			controllerutil.AddFinalizer(instance, utils.MTLSCleanupFinalizer)
-			if err := r.Update(ctx, instance); err != nil {
-				logger.Error(err, "Failed to add mTLS finalizer")
-				return ctrl.Result{}, err
-			}
-			logger.Info("Added mTLS finalizer for auto-generated secret cleanup")
-			// Re-reconcile after the finalizer update takes effect.
-			return ctrl.Result{RequeueAfter: mtlsDefaultRequeueDuration}, nil
+	if !controllerutil.ContainsFinalizer(instance, utils.MTLSCleanupFinalizer) {
+		controllerutil.AddFinalizer(instance, utils.MTLSCleanupFinalizer)
+		if err := r.Update(ctx, instance); err != nil {
+			logger.Error(err, "Failed to add mTLS finalizer")
+			return ctrl.Result{}, err
 		}
+		logger.Info("Added mTLS finalizer for secret cleanup")
+		return ctrl.Result{RequeueAfter: mtlsDefaultRequeueDuration}, nil
 	}
 
-	// BYOC mode: user provides their own certificate secret. No cert-manager PKI needed.
-	if utils.IsTLSBYOC(&instance.Spec) {
-		return r.handleBYOC(ctx, instance, logger)
-	}
-
-	// Auto-generate mode: create full cert-manager PKI chain.
 	return r.handleAutoGenerate(ctx, instance, logger)
 }
 
@@ -175,51 +161,10 @@ func (r *RayClusterMTLSController) handleAutoGenerate(ctx context.Context, insta
 	return ctrl.Result{RequeueAfter: mtlsPeriodicCheckDuration}, nil
 }
 
-// handleBYOC validates the user-provided certificate secret(s) exist and contain the required keys.
-// When WorkerCertificateSecretName is set, both head and worker secrets are validated.
-// No cert-manager resources are created. The user's secrets are never deleted by the operator.
-func (r *RayClusterMTLSController) handleBYOC(ctx context.Context, instance *rayv1.RayCluster, logger logr.Logger) (ctrl.Result, error) {
-	// Build the list of secrets to validate: head (always) + worker (if separate).
-	secretNames := []string{*instance.Spec.TLSOptions.CertificateSecretName}
-	if w := instance.Spec.TLSOptions.WorkerCertificateSecretName; w != nil && *w != "" {
-		secretNames = append(secretNames, *w)
-	}
-
-	for _, secretName := range secretNames {
-		logger.Info("BYOC mTLS mode: verifying user-provided secret", "secret", secretName)
-
-		secret := &corev1.Secret{}
-		if err := r.Get(ctx, client.ObjectKey{Name: secretName, Namespace: instance.Namespace}, secret); err != nil {
-			if errors.IsNotFound(err) {
-				logger.Info("BYOC secret not found, will requeue", "secret", secretName)
-				r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.MTLSBYOCSecretNotFound),
-					"BYOC mTLS secret %q not found; waiting for it to be created", secretName)
-				return ctrl.Result{RequeueAfter: mtlsDefaultRequeueDuration}, nil
-			}
-			return ctrl.Result{}, err
-		}
-
-		for _, key := range []string{"tls.crt", "tls.key", "ca.crt"} {
-			if _, ok := secret.Data[key]; !ok {
-				logger.Info("BYOC secret missing required key", "secret", secretName, "key", key)
-				r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.MTLSBYOCSecretInvalid),
-					"BYOC mTLS secret %q is missing required key %q", secretName, key)
-				return ctrl.Result{RequeueAfter: mtlsDefaultRequeueDuration}, nil
-			}
-		}
-	}
-
-	logger.Info("BYOC mTLS secret(s) valid", "secrets", secretNames)
-	r.Recorder.Eventf(instance, corev1.EventTypeNormal, string(utils.MTLSBYOCSecretValid),
-		"BYOC mTLS secret(s) %v are valid", secretNames)
-	return ctrl.Result{RequeueAfter: mtlsPeriodicCheckDuration}, nil
-}
-
-// deleteTLSSecrets deletes the auto-generated cert-manager TLS Secrets for this RayCluster.
+// deleteTLSSecrets deletes the cert-manager TLS Secrets managed by the operator for this RayCluster.
 // Issuers and Certificates cascade-delete via owner references, but cert-manager may not
 // set owner references on Secrets (depends on --enable-certificate-owner-ref flag), so we
-// delete them explicitly. Only targets the operator's auto-generated secret names (CA, head,
-// worker); user-provided BYOC secrets with custom names are never touched.
+// delete them explicitly.
 func (r *RayClusterMTLSController) deleteTLSSecrets(ctx context.Context, instance *rayv1.RayCluster) error {
 	return utils.DeleteMTLSAutoGeneratedSecrets(ctx, r.Client, instance)
 }
