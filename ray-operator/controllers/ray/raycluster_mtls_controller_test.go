@@ -92,8 +92,8 @@ func newMTLSController(t *testing.T, objs ...client.Object) *RayClusterMTLSContr
 func markMTLSCertificatesReady(ctx context.Context, t *testing.T, r *RayClusterMTLSController, cluster *rayv1.RayCluster) {
 	t.Helper()
 	certNames := []string{
-		fmt.Sprintf("%s-%s", utils.RayHeadCertPrefix, cluster.Name),
-		fmt.Sprintf("%s-%s", utils.RayWorkerCertPrefix, cluster.Name),
+		utils.GetTLSCertName(cluster.Name, rayv1.HeadNode),
+		utils.GetTLSCertName(cluster.Name, rayv1.WorkerNode),
 	}
 	for _, name := range certNames {
 		cert := &certmanagerv1.Certificate{}
@@ -154,7 +154,7 @@ func TestMTLSController_AutoGenerate_CreatesFullPKI(t *testing.T) {
 	// Verify self-signed issuer was created.
 	issuer := &certmanagerv1.Issuer{}
 	err = r.Get(ctx, types.NamespacedName{
-		Name:      fmt.Sprintf("%s-%s", utils.RaySelfSignedIssuerPrefix, cluster.Name),
+		Name:      utils.GetSelfSignedIssuerName(cluster.Name),
 		Namespace: "default",
 	}, issuer)
 	require.NoError(t, err, "self-signed issuer should be created")
@@ -163,7 +163,7 @@ func TestMTLSController_AutoGenerate_CreatesFullPKI(t *testing.T) {
 	// Verify CA certificate was created.
 	caCert := &certmanagerv1.Certificate{}
 	err = r.Get(ctx, types.NamespacedName{
-		Name:      fmt.Sprintf("%s-%s", utils.RayCACertificatePrefix, cluster.Name),
+		Name:      utils.GetCACertName(cluster.Name),
 		Namespace: "default",
 	}, caCert)
 	require.NoError(t, err, "CA certificate should be created")
@@ -173,7 +173,7 @@ func TestMTLSController_AutoGenerate_CreatesFullPKI(t *testing.T) {
 	// Verify CA issuer was created.
 	caIssuer := &certmanagerv1.Issuer{}
 	err = r.Get(ctx, types.NamespacedName{
-		Name:      fmt.Sprintf("%s-%s", utils.RayCAIssuerPrefix, cluster.Name),
+		Name:      utils.GetCAIssuerName(cluster.Name),
 		Namespace: "default",
 	}, caIssuer)
 	require.NoError(t, err, "CA issuer should be created")
@@ -182,7 +182,7 @@ func TestMTLSController_AutoGenerate_CreatesFullPKI(t *testing.T) {
 	// Verify head certificate was created with correct DNS names.
 	headCert := &certmanagerv1.Certificate{}
 	err = r.Get(ctx, types.NamespacedName{
-		Name:      fmt.Sprintf("%s-%s", utils.RayHeadCertPrefix, cluster.Name),
+		Name:      utils.GetTLSCertName(cluster.Name, rayv1.HeadNode),
 		Namespace: "default",
 	}, headCert)
 	require.NoError(t, err, "head certificate should be created")
@@ -194,7 +194,7 @@ func TestMTLSController_AutoGenerate_CreatesFullPKI(t *testing.T) {
 	// Verify worker certificate was created with correct DNS names.
 	workerCert := &certmanagerv1.Certificate{}
 	err = r.Get(ctx, types.NamespacedName{
-		Name:      fmt.Sprintf("%s-%s", utils.RayWorkerCertPrefix, cluster.Name),
+		Name:      utils.GetTLSCertName(cluster.Name, rayv1.WorkerNode),
 		Namespace: "default",
 	}, workerCert)
 	require.NoError(t, err, "worker certificate should be created")
@@ -271,7 +271,7 @@ func TestMTLSController_AutoGenerate_UpdatesIPAddresses(t *testing.T) {
 	// Verify head certificate includes the head pod IP only.
 	headCert := &certmanagerv1.Certificate{}
 	err = r.Get(ctx, types.NamespacedName{
-		Name:      fmt.Sprintf("%s-%s", utils.RayHeadCertPrefix, cluster.Name),
+		Name:      utils.GetTLSCertName(cluster.Name, rayv1.HeadNode),
 		Namespace: "default",
 	}, headCert)
 	require.NoError(t, err)
@@ -296,7 +296,7 @@ func TestMTLSController_AutoGenerate_UpdatesIPAddresses(t *testing.T) {
 	require.NoError(t, err)
 
 	err = r.Get(ctx, types.NamespacedName{
-		Name:      fmt.Sprintf("%s-%s", utils.RayHeadCertPrefix, cluster.Name),
+		Name:      utils.GetTLSCertName(cluster.Name, rayv1.HeadNode),
 		Namespace: "default",
 	}, headCert)
 	require.NoError(t, err)
@@ -306,7 +306,7 @@ func TestMTLSController_AutoGenerate_UpdatesIPAddresses(t *testing.T) {
 
 	workerCert := &certmanagerv1.Certificate{}
 	err = r.Get(ctx, types.NamespacedName{
-		Name:      fmt.Sprintf("%s-%s", utils.RayWorkerCertPrefix, cluster.Name),
+		Name:      utils.GetTLSCertName(cluster.Name, rayv1.WorkerNode),
 		Namespace: "default",
 	}, workerCert)
 	require.NoError(t, err)
@@ -344,10 +344,10 @@ func TestMTLSController_DeleteTLSSecrets(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: utils.GetCASecretName(cluster.Name, cluster.UID), Namespace: "default"},
 	}
 	headSecret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s-%s", utils.RayHeadSecretPrefix, cluster.Name), Namespace: "default"},
+		ObjectMeta: metav1.ObjectMeta{Name: utils.GetTLSSecretName(cluster.Name, rayv1.HeadNode), Namespace: "default"},
 	}
 	workerSecret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s-%s", utils.RayWorkerSecretPrefix, cluster.Name), Namespace: "default"},
+		ObjectMeta: metav1.ObjectMeta{Name: utils.GetTLSSecretName(cluster.Name, rayv1.WorkerNode), Namespace: "default"},
 	}
 
 	r := newMTLSController(t, cluster, caSecret, headSecret, workerSecret)
@@ -384,7 +384,7 @@ func TestMTLSController_WorkerCertHasLocalhostOnly(t *testing.T) {
 
 	workerCert := &certmanagerv1.Certificate{}
 	err = r.Get(ctx, types.NamespacedName{
-		Name:      fmt.Sprintf("%s-%s", utils.RayWorkerCertPrefix, cluster.Name),
+		Name:      utils.GetTLSCertName(cluster.Name, rayv1.WorkerNode),
 		Namespace: "default",
 	}, workerCert)
 	require.NoError(t, err)
@@ -422,7 +422,7 @@ func TestMTLSController_CertReadinessBlocksReconciliation(t *testing.T) {
 	// Resources should still be created.
 	headCert := &certmanagerv1.Certificate{}
 	err = r.Get(ctx, types.NamespacedName{
-		Name:      fmt.Sprintf("%s-%s", utils.RayHeadCertPrefix, cluster.Name),
+		Name:      utils.GetTLSCertName(cluster.Name, rayv1.HeadNode),
 		Namespace: "default",
 	}, headCert)
 	require.NoError(t, err, "head certificate should be created")
@@ -480,10 +480,10 @@ func TestMTLSController_AutoGenerate_DeletionCleansUpSecrets(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: utils.GetCASecretName(cluster.Name, cluster.UID), Namespace: "default"},
 	}
 	headSecret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s-%s", utils.RayHeadSecretPrefix, cluster.Name), Namespace: "default"},
+		ObjectMeta: metav1.ObjectMeta{Name: utils.GetTLSSecretName(cluster.Name, rayv1.HeadNode), Namespace: "default"},
 	}
 	workerSecret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s-%s", utils.RayWorkerSecretPrefix, cluster.Name), Namespace: "default"},
+		ObjectMeta: metav1.ObjectMeta{Name: utils.GetTLSSecretName(cluster.Name, rayv1.WorkerNode), Namespace: "default"},
 	}
 
 	r := newMTLSController(t, cluster, caSecret, headSecret, workerSecret)
@@ -586,11 +586,11 @@ func TestCheckMTLSSecretsReady_AutoGenerate_SecretsPresent(t *testing.T) {
 	cluster := newMTLSTestCluster("test-cluster")
 	cluster.Spec.TLSOptions = &rayv1.TLSOptions{}
 
-	headCert := newReadyCertificate(fmt.Sprintf("%s-%s", utils.RayHeadCertPrefix, cluster.Name))
-	workerCert := newReadyCertificate(fmt.Sprintf("%s-%s", utils.RayWorkerCertPrefix, cluster.Name))
+	headCert := newReadyCertificate(utils.GetTLSCertName(cluster.Name, rayv1.HeadNode))
+	workerCert := newReadyCertificate(utils.GetTLSCertName(cluster.Name, rayv1.WorkerNode))
 	headSecret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      fmt.Sprintf("%s-%s", utils.RayHeadSecretPrefix, cluster.Name),
+			Name:      utils.GetTLSSecretName(cluster.Name, rayv1.HeadNode),
 			Namespace: "default",
 		},
 		Data: map[string][]byte{
@@ -601,7 +601,7 @@ func TestCheckMTLSSecretsReady_AutoGenerate_SecretsPresent(t *testing.T) {
 	}
 	workerSecret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      fmt.Sprintf("%s-%s", utils.RayWorkerSecretPrefix, cluster.Name),
+			Name:      utils.GetTLSSecretName(cluster.Name, rayv1.WorkerNode),
 			Namespace: "default",
 		},
 		Data: map[string][]byte{
@@ -633,7 +633,7 @@ func TestCheckMTLSSecretsReady_AutoGenerate_CertNotReady(t *testing.T) {
 	// Certificate exists but is not yet ready (e.g. reissuing after a SAN update).
 	headCert := &certmanagerv1.Certificate{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:       fmt.Sprintf("%s-%s", utils.RayHeadCertPrefix, cluster.Name),
+			Name:       utils.GetTLSCertName(cluster.Name, rayv1.HeadNode),
 			Namespace:  "default",
 			Generation: 2,
 		},
@@ -655,8 +655,8 @@ func TestCheckMTLSSecretsReady_AutoGenerate_SecretMissing(t *testing.T) {
 	cluster := newMTLSTestCluster("test-cluster")
 	cluster.Spec.TLSOptions = &rayv1.TLSOptions{}
 
-	headCert := newReadyCertificate(fmt.Sprintf("%s-%s", utils.RayHeadCertPrefix, cluster.Name))
-	workerCert := newReadyCertificate(fmt.Sprintf("%s-%s", utils.RayWorkerCertPrefix, cluster.Name))
+	headCert := newReadyCertificate(utils.GetTLSCertName(cluster.Name, rayv1.HeadNode))
+	workerCert := newReadyCertificate(utils.GetTLSCertName(cluster.Name, rayv1.WorkerNode))
 
 	s := newMTLSTestScheme()
 	fakeClient := clientFake.NewClientBuilder().
@@ -677,12 +677,12 @@ func TestCheckMTLSSecretsReady_AutoGenerate_SecretMissingKey(t *testing.T) {
 	cluster := newMTLSTestCluster("test-cluster")
 	cluster.Spec.TLSOptions = &rayv1.TLSOptions{}
 
-	headCert := newReadyCertificate(fmt.Sprintf("%s-%s", utils.RayHeadCertPrefix, cluster.Name))
-	workerCert := newReadyCertificate(fmt.Sprintf("%s-%s", utils.RayWorkerCertPrefix, cluster.Name))
+	headCert := newReadyCertificate(utils.GetTLSCertName(cluster.Name, rayv1.HeadNode))
+	workerCert := newReadyCertificate(utils.GetTLSCertName(cluster.Name, rayv1.WorkerNode))
 	// Head secret missing ca.crt key.
 	headSecret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      fmt.Sprintf("%s-%s", utils.RayHeadSecretPrefix, cluster.Name),
+			Name:      utils.GetTLSSecretName(cluster.Name, rayv1.HeadNode),
 			Namespace: "default",
 		},
 		Data: map[string][]byte{
@@ -692,7 +692,7 @@ func TestCheckMTLSSecretsReady_AutoGenerate_SecretMissingKey(t *testing.T) {
 	}
 	workerSecret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      fmt.Sprintf("%s-%s", utils.RayWorkerSecretPrefix, cluster.Name),
+			Name:      utils.GetTLSSecretName(cluster.Name, rayv1.WorkerNode),
 			Namespace: "default",
 		},
 		Data: map[string][]byte{

@@ -1612,8 +1612,8 @@ func (r *RayClusterReconciler) handleMTLSCleanupFinalizerOnDeletion(ctx context.
 // on the condition ensures Ready=True reflects the current spec, not a previous generation.
 func (r *RayClusterReconciler) checkMTLSSecretsReady(ctx context.Context, instance *rayv1.RayCluster) error {
 	certNames := []string{
-		fmt.Sprintf("%s-%s", utils.RayHeadCertPrefix, instance.Name),
-		fmt.Sprintf("%s-%s", utils.RayWorkerCertPrefix, instance.Name),
+		utils.GetTLSCertName(instance.Name, rayv1.HeadNode),
+		utils.GetTLSCertName(instance.Name, rayv1.WorkerNode),
 	}
 	for _, certName := range certNames {
 		cert := &certmanagerv1.Certificate{}

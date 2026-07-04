@@ -2603,7 +2603,7 @@ func TestConfigureTLS_AutoGenerate_HeadPod(t *testing.T) {
 	}
 	require.NotNil(t, tlsVolume, "TLS volume should be added")
 	require.NotNil(t, tlsVolume.Secret, "auto-generate mode should use Secret volume")
-	expectedSecret := fmt.Sprintf("%s-%s", utils.RayHeadSecretPrefix, cluster.Name)
+	expectedSecret := utils.GetTLSSecretName(cluster.Name, rayv1.HeadNode)
 	assert.Equal(t, expectedSecret, tlsVolume.Secret.SecretName)
 
 	// Verify TLS env vars on Ray container.
@@ -2671,7 +2671,7 @@ func TestConfigureTLS_AutoGenerate_WorkerPod(t *testing.T) {
 	}
 	require.NotNil(t, tlsVolume, "TLS volume should be added")
 	require.NotNil(t, tlsVolume.Secret, "auto-generate mode should use Secret volume")
-	expectedSecret := fmt.Sprintf("%s-%s", utils.RayWorkerSecretPrefix, cluster.Name)
+	expectedSecret := utils.GetTLSSecretName(cluster.Name, rayv1.WorkerNode)
 	assert.Equal(t, expectedSecret, tlsVolume.Secret.SecretName)
 
 	// Verify TLS env vars on Ray container.

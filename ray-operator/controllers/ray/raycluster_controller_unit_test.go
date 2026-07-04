@@ -19,7 +19,6 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
-	"fmt"
 	"math"
 	"os"
 	"reflect"
@@ -4029,7 +4028,7 @@ func TestReconcile_MTLSFinalizerRemovedWhenControllerInactive(t *testing.T) {
 
 	headSecret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      fmt.Sprintf("%s-%s", utils.RayHeadSecretPrefix, cluster.Name),
+			Name:      utils.GetTLSSecretName(cluster.Name, rayv1.HeadNode),
 			Namespace: "default",
 		},
 	}

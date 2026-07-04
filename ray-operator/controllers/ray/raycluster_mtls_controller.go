@@ -171,7 +171,7 @@ func (r *RayClusterMTLSController) deleteTLSSecrets(ctx context.Context, instanc
 
 // reconcileSelfSignedIssuer creates or updates the self-signed issuer used to bootstrap the CA.
 func (r *RayClusterMTLSController) reconcileSelfSignedIssuer(ctx context.Context, instance *rayv1.RayCluster) error {
-	issuerName := fmt.Sprintf("%s-%s", utils.RaySelfSignedIssuerPrefix, instance.Name)
+	issuerName := utils.GetSelfSignedIssuerName(instance.Name)
 	desiredLabels := tlsResourceLabels(instance.Name, "selfsigned-issuer")
 	desiredSpec := certmanagerv1.IssuerSpec{
 		IssuerConfig: certmanagerv1.IssuerConfig{
@@ -212,7 +212,7 @@ func (r *RayClusterMTLSController) reconcileSelfSignedIssuer(ctx context.Context
 
 // reconcileCACertificate creates or updates the root CA certificate signed by the self-signed issuer.
 func (r *RayClusterMTLSController) reconcileCACertificate(ctx context.Context, instance *rayv1.RayCluster) error {
-	certName := fmt.Sprintf("%s-%s", utils.RayCACertificatePrefix, instance.Name)
+	certName := utils.GetCACertName(instance.Name)
 	caSecretName := utils.GetCASecretName(instance.Name, instance.UID)
 	desiredLabels := tlsResourceLabels(instance.Name, "ca-certificate")
 	desiredSpec := certmanagerv1.CertificateSpec{
@@ -234,7 +234,7 @@ func (r *RayClusterMTLSController) reconcileCACertificate(ctx context.Context, i
 			certmanagerv1.UsageCRLSign,
 		},
 		IssuerRef: cmmeta.IssuerReference{
-			Name:  fmt.Sprintf("%s-%s", utils.RaySelfSignedIssuerPrefix, instance.Name),
+			Name:  utils.GetSelfSignedIssuerName(instance.Name),
 			Kind:  "Issuer",
 			Group: "cert-manager.io",
 		},
@@ -273,7 +273,7 @@ func (r *RayClusterMTLSController) reconcileCACertificate(ctx context.Context, i
 
 // reconcileCAIssuer creates or updates the issuer backed by the generated CA certificate's secret.
 func (r *RayClusterMTLSController) reconcileCAIssuer(ctx context.Context, instance *rayv1.RayCluster) error {
-	issuerName := fmt.Sprintf("%s-%s", utils.RayCAIssuerPrefix, instance.Name)
+	issuerName := utils.GetCAIssuerName(instance.Name)
 	caSecretName := utils.GetCASecretName(instance.Name, instance.UID)
 	desiredLabels := tlsResourceLabels(instance.Name, "ca-issuer")
 	desiredSpec := certmanagerv1.IssuerSpec{
@@ -320,8 +320,8 @@ func (r *RayClusterMTLSController) reconcileCAIssuer(ctx context.Context, instan
 // workers reach the head via the service DNS name (already a DNS SAN). This
 // prevents a worker scale event from triggering a head cert reissue.
 func (r *RayClusterMTLSController) reconcileHeadCertificate(ctx context.Context, instance *rayv1.RayCluster) error {
-	certName := fmt.Sprintf("%s-%s", utils.RayHeadCertPrefix, instance.Name)
-	secretName := fmt.Sprintf("%s-%s", utils.RayHeadSecretPrefix, instance.Name)
+	certName := utils.GetTLSCertName(instance.Name, rayv1.HeadNode)
+	secretName := utils.GetTLSSecretName(instance.Name, rayv1.HeadNode)
 
 	podIPs, err := r.getPodIPs(ctx, instance, rayv1.HeadNode)
 	if err != nil {
@@ -349,7 +349,7 @@ func (r *RayClusterMTLSController) reconcileHeadCertificate(ctx context.Context,
 		IPAddresses: desiredIPAddresses,
 		Usages:      leafCertKeyUsages(),
 		IssuerRef: cmmeta.IssuerReference{
-			Name:  fmt.Sprintf("%s-%s", utils.RayCAIssuerPrefix, instance.Name),
+			Name:  utils.GetCAIssuerName(instance.Name),
 			Kind:  "Issuer",
 			Group: "cert-manager.io",
 		},
@@ -395,8 +395,8 @@ func (r *RayClusterMTLSController) reconcileHeadCertificate(ctx context.Context,
 // in the SANs; the head IP is not needed here since GCS connects to workers by
 // pod IP, not by the head service address.
 func (r *RayClusterMTLSController) reconcileWorkerCertificate(ctx context.Context, instance *rayv1.RayCluster) error {
-	certName := fmt.Sprintf("%s-%s", utils.RayWorkerCertPrefix, instance.Name)
-	secretName := fmt.Sprintf("%s-%s", utils.RayWorkerSecretPrefix, instance.Name)
+	certName := utils.GetTLSCertName(instance.Name, rayv1.WorkerNode)
+	secretName := utils.GetTLSSecretName(instance.Name, rayv1.WorkerNode)
 
 	podIPs, err := r.getPodIPs(ctx, instance, rayv1.WorkerNode)
 	if err != nil {
@@ -418,7 +418,7 @@ func (r *RayClusterMTLSController) reconcileWorkerCertificate(ctx context.Contex
 		IPAddresses: desiredIPAddresses,
 		Usages:      leafCertKeyUsages(),
 		IssuerRef: cmmeta.IssuerReference{
-			Name:  fmt.Sprintf("%s-%s", utils.RayCAIssuerPrefix, instance.Name),
+			Name:  utils.GetCAIssuerName(instance.Name),
 			Kind:  "Issuer",
 			Group: "cert-manager.io",
 		},
@@ -484,8 +484,8 @@ func (r *RayClusterMTLSController) getPodIPs(ctx context.Context, instance *rayv
 // have been issued and are in Ready state.
 func (r *RayClusterMTLSController) checkTLSCertificatesReady(ctx context.Context, instance *rayv1.RayCluster) (bool, error) {
 	certNames := []string{
-		fmt.Sprintf("%s-%s", utils.RayHeadCertPrefix, instance.Name),
-		fmt.Sprintf("%s-%s", utils.RayWorkerCertPrefix, instance.Name),
+		utils.GetTLSCertName(instance.Name, rayv1.HeadNode),
+		utils.GetTLSCertName(instance.Name, rayv1.WorkerNode),
 	}
 	for _, name := range certNames {
 		cert := &certmanagerv1.Certificate{}
@@ -505,9 +505,9 @@ func (r *RayClusterMTLSController) checkTLSCertificatesReady(ctx context.Context
 // every reconcile without flooding the event stream.
 func (r *RayClusterMTLSController) checkTLSCertificateExpiry(ctx context.Context, instance *rayv1.RayCluster) {
 	certNames := []string{
-		fmt.Sprintf("%s-%s", utils.RayHeadCertPrefix, instance.Name),
-		fmt.Sprintf("%s-%s", utils.RayWorkerCertPrefix, instance.Name),
-		fmt.Sprintf("%s-%s", utils.RayCACertificatePrefix, instance.Name),
+		utils.GetTLSCertName(instance.Name, rayv1.HeadNode),
+		utils.GetTLSCertName(instance.Name, rayv1.WorkerNode),
+		utils.GetCACertName(instance.Name),
 	}
 	for _, name := range certNames {
 		cert := &certmanagerv1.Certificate{}
