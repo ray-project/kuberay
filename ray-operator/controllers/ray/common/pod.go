@@ -442,6 +442,7 @@ done`, certPath)
 		ImagePullPolicy: podTemplate.Spec.Containers[utils.RayContainerIndex].ImagePullPolicy,
 		Command:         []string{"sh", "-c"},
 		Args:            []string{waitScript},
+		SecurityContext: podTemplate.Spec.Containers[utils.RayContainerIndex].SecurityContext.DeepCopy(),
 		Env: []corev1.EnvVar{
 			{
 				Name: "POD_IP",
