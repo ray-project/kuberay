@@ -1391,11 +1391,11 @@ func TestHandleRayClusterValidationError(t *testing.T) {
 	assert.NotNil(t, updated.Status.LastUpdateTime)
 	assert.True(t, meta.IsStatusConditionPresentAndEqual(
 		updated.Status.Conditions,
-		string(rayv1.RayClusterProvisioned),
+		string(rayv1.RayClusterValid),
 		metav1.ConditionFalse,
 	))
 
-	cond := meta.FindStatusCondition(updated.Status.Conditions, string(rayv1.RayClusterProvisioned))
+	cond := meta.FindStatusCondition(updated.Status.Conditions, string(rayv1.RayClusterValid))
 	require.NotNil(t, cond)
 	assert.Equal(t, rayv1.RayClusterValidationFailed, cond.Reason)
 	assert.Equal(t, validationErr.Error(), cond.Message)
@@ -1466,7 +1466,7 @@ func TestRayClusterReconcile_InvalidSpecUpdatesValidationStatus(t *testing.T) {
 	require.NoError(t, fakeClient.Get(ctx, namespacedName, &updated))
 
 	assert.Equal(t, cluster.Generation, updated.Status.ObservedGeneration)
-	cond := meta.FindStatusCondition(updated.Status.Conditions, string(rayv1.RayClusterProvisioned))
+	cond := meta.FindStatusCondition(updated.Status.Conditions, string(rayv1.RayClusterValid))
 	require.NotNil(t, cond)
 	assert.Equal(t, metav1.ConditionFalse, cond.Status)
 	assert.Equal(t, rayv1.RayClusterValidationFailed, cond.Reason)

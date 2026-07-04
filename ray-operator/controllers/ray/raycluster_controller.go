@@ -1557,24 +1557,27 @@ func (r *RayClusterReconciler) handleRayClusterValidationError(ctx context.Conte
 	// Record the event
 	r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(eventType), eventMessageFmt, instance.Namespace, instance.Name, validationErr.Error())
 
+	// When status conditions are disabled, validation failure is reported via Events only.
+	if !features.Enabled(features.RayClusterStatusConditions) {
+		return ctrl.Result{}, nil
+	}
+
 	original := instance.DeepCopy()
 	newInstance := instance.DeepCopy()
 
-	// Record that the controller processed this spec generation
+	// Record that the controller processed this spec generation.
 	newInstance.Status.ObservedGeneration = newInstance.ObjectMeta.Generation
 
 	timeNow := metav1.Now()
 	newInstance.Status.LastUpdateTime = &timeNow
 
-	if features.Enabled(features.RayClusterStatusConditions) {
-		meta.SetStatusCondition(&newInstance.Status.Conditions, metav1.Condition{
-			Type:               string(rayv1.RayClusterProvisioned),
-			Status:             metav1.ConditionFalse,
-			Reason:             rayv1.RayClusterValidationFailed,
-			Message:            validationErr.Error(),
-			ObservedGeneration: newInstance.Generation,
-		})
-	}
+	meta.SetStatusCondition(&newInstance.Status.Conditions, metav1.Condition{
+		Type:               string(rayv1.RayClusterValid),
+		Status:             metav1.ConditionFalse,
+		Reason:             rayv1.RayClusterValidationFailed,
+		Message:            validationErr.Error(),
+		ObservedGeneration: newInstance.Generation,
+	})
 
 	_, updateErr := r.updateRayClusterStatus(ctx, original, newInstance)
 	if updateErr != nil {
@@ -1596,6 +1599,13 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 
 	statusConditionGateEnabled := features.Enabled(features.RayClusterStatusConditions)
 	if statusConditionGateEnabled {
+		meta.SetStatusCondition(&newInstance.Status.Conditions, metav1.Condition{
+			Type:               string(rayv1.RayClusterValid),
+			Status:             metav1.ConditionTrue,
+			Reason:             rayv1.RayClusterSpecValid,
+			Message:            "RayCluster metadata and spec are valid",
+			ObservedGeneration: newInstance.Generation,
+		})
 		if reconcileErr != nil {
 			if reason := utils.RayClusterReplicaFailureReason(reconcileErr); reason != "" {
 				meta.SetStatusCondition(&newInstance.Status.Conditions, metav1.Condition{
