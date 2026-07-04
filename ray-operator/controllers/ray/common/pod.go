@@ -417,14 +417,13 @@ func configureTLS(podTemplate *corev1.PodTemplateSpec, instance rayv1.RayCluster
 	// TODO: IPv6 pod IPs — the grep pattern below assumes IPv4 dot-decimal notation.
 	certPath := utils.RayTLSCertMountPath + "/tls.crt"
 	waitScript := fmt.Sprintf(`CERT="%s"
+if [ -z "${POD_IP}" ]; then
+  echo "POD_IP is empty; downward API env vars are resolved once at container start — exiting so kubelet restarts the init container" >&2
+  exit 1
+fi
 DEADLINE=$(( $(date +%%s) + 300 ))
 echo "Waiting for TLS cert to include IP SAN for ${POD_IP} (timeout 300s)..."
 while true; do
-  if [ -z "${POD_IP}" ]; then
-    echo "Pod IP not yet assigned, retrying in 5s..."
-    sleep 5
-    continue
-  fi
   if openssl x509 -in "${CERT}" -noout -text 2>/dev/null | grep -qE "IP Address:${POD_IP}([^0-9.]|$)"; then
     echo "TLS cert now includes IP SAN for ${POD_IP}"
     exit 0
