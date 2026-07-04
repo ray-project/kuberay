@@ -690,15 +690,6 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 		}
 	}
 
-	// Block pod creation until mTLS secrets are ready (created by the mTLS controller).
-	// Checked after suspend handling so suspension is not blocked by cert reissue windows.
-	if utils.IsTLSEnabled(&instance.Spec) {
-		if err := r.checkMTLSSecretsReady(ctx, instance); err != nil {
-			logger.Info("mTLS secrets not ready yet, requeuing", "error", err.Error())
-			return fmt.Errorf("mTLS secrets not ready: %w", err)
-		}
-	}
-
 	// Check if pods need to be recreated with Recreate upgradeStrategy
 	if r.shouldRecreatePodsForUpgrade(ctx, instance) {
 		logger.Info("RayCluster spec changed with Recreate upgradeStrategy, deleting all pods")
@@ -782,6 +773,12 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 		}
 		// Create head Pod if it does not exist.
 		logger.Info("reconcilePods: Found 0 head Pods; creating a head Pod for the RayCluster.")
+		if utils.IsTLSEnabled(&instance.Spec) {
+			if err := r.checkMTLSSecretsReady(ctx, instance); err != nil {
+				logger.Info("mTLS secrets not ready, requeuing before head pod creation", "error", err.Error())
+				return fmt.Errorf("mTLS secrets not ready: %w", err)
+			}
+		}
 		if err := r.createHeadPod(ctx, *instance, clusterHash); err != nil {
 			return errstd.Join(utils.ErrFailedCreateHeadPod, err)
 		}
@@ -919,6 +916,12 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 		if diff > 0 {
 			// pods need to be added
 			logger.Info("reconcilePods", "Number workers to add", diff, "Worker group", worker.GroupName)
+			if utils.IsTLSEnabled(&instance.Spec) {
+				if err := r.checkMTLSSecretsReady(ctx, instance); err != nil {
+					logger.Info("mTLS secrets not ready, requeuing before worker pod creation", "error", err.Error())
+					return fmt.Errorf("mTLS secrets not ready: %w", err)
+				}
+			}
 			if features.Enabled(features.RayMultiHostIndexing) {
 				newReplicaIndex := 0
 				// create all workers of this group
@@ -1132,6 +1135,12 @@ func (r *RayClusterReconciler) reconcileMultiHostWorkerGroup(ctx context.Context
 	logger.Info("Reconciling multi-host group", "group", worker.GroupName, "expectedReplicas", numExpectedReplicas, "runningReplicas", numRunningReplicas, "replicasToCreate", replicasToCreate, "inUseIndices", validReplicaIndices)
 	if replicasToCreate > 0 {
 		logger.Info("Scaling up multi-host group", "group", worker.GroupName, "replicasToCreate", replicasToCreate)
+		if utils.IsTLSEnabled(&instance.Spec) {
+			if err := r.checkMTLSSecretsReady(ctx, instance); err != nil {
+				logger.Info("mTLS secrets not ready, requeuing before multi-host worker pod creation", "error", err.Error())
+				return fmt.Errorf("mTLS secrets not ready: %w", err)
+			}
+		}
 		newReplicaIndex := 0 // Find the next available index starting from 0
 		for range replicasToCreate {
 			for validReplicaIndices[newReplicaIndex] {
