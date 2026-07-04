@@ -15,7 +15,6 @@ import (
 	"time"
 
 	certmanagerv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
-	cmmeta "github.com/cert-manager/cert-manager/pkg/apis/meta/v1"
 	"github.com/go-logr/logr"
 	routev1 "github.com/openshift/api/route/v1"
 	batchv1 "k8s.io/api/batch/v1"
@@ -1620,16 +1619,7 @@ func (r *RayClusterReconciler) checkMTLSSecretsReady(ctx context.Context, instan
 		if err := r.Get(ctx, client.ObjectKey{Name: certName, Namespace: instance.Namespace}, cert); err != nil {
 			return fmt.Errorf("certificate %s not found: %w", certName, err)
 		}
-		ready := false
-		for _, cond := range cert.Status.Conditions {
-			if cond.Type == certmanagerv1.CertificateConditionReady &&
-				cond.Status == cmmeta.ConditionTrue &&
-				cond.ObservedGeneration == cert.Generation {
-				ready = true
-				break
-			}
-		}
-		if !ready {
+		if !isCertificateReady(cert) {
 			return fmt.Errorf("certificate %s is not ready at current generation %d", certName, cert.Generation)
 		}
 	}
