@@ -1316,6 +1316,163 @@ func TestReconcile_UpdateClusterReason(t *testing.T) {
 	assert.Equal(t, cluster.Status.Reason, reason, "Cluster reason should be updated")
 }
 
+func TestHandleRayClusterValidationError(t *testing.T) {
+	setupTest(t)
+	features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, true)
+
+	newScheme := runtime.NewScheme()
+	require.NoError(t, rayv1.AddToScheme(newScheme))
+
+	cluster := &rayv1.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       "invalid-raycluster",
+			Namespace:  namespaceStr,
+			Generation: 3,
+		},
+		Spec: rayv1.RayClusterSpec{
+			HeadGroupSpec: rayv1.HeadGroupSpec{
+				Template: corev1.PodTemplateSpec{
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{Name: "ray-head", Image: support.GetRayImage()},
+						},
+					},
+				},
+			},
+			WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+				{
+					GroupName:   groupNameStr,
+					Replicas:    ptr.To[int32](1),
+					MinReplicas: ptr.To[int32](10),
+					MaxReplicas: ptr.To[int32](1),
+					Template: corev1.PodTemplateSpec{
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{Name: "ray-worker", Image: support.GetRayImage()},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	fakeClient := clientFake.NewClientBuilder().
+		WithScheme(newScheme).
+		WithObjects(cluster).
+		WithStatusSubresource(cluster).
+		Build()
+
+	r := &RayClusterReconciler{
+		Client:                     fakeClient,
+		Recorder:                   &record.FakeRecorder{},
+		Scheme:                     newScheme,
+		rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
+	}
+
+	validationErr := errors.New("worker group " + groupNameStr + " has minReplicas 10 greater than maxReplicas 1")
+	ctx := context.Background()
+
+	result, err := r.handleRayClusterValidationError(
+		ctx,
+		cluster,
+		validationErr,
+		utils.InvalidRayClusterSpec,
+		"The RayCluster spec is invalid %s/%s: %v",
+	)
+	require.NoError(t, err)
+	assert.Zero(t, result.RequeueAfter)
+
+	namespacedName := types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace}
+	var updated rayv1.RayCluster
+	require.NoError(t, fakeClient.Get(ctx, namespacedName, &updated))
+
+	assert.Equal(t, cluster.Generation, updated.Status.ObservedGeneration)
+	assert.NotNil(t, updated.Status.LastUpdateTime)
+	assert.True(t, meta.IsStatusConditionPresentAndEqual(
+		updated.Status.Conditions,
+		string(rayv1.RayClusterProvisioned),
+		metav1.ConditionFalse,
+	))
+
+	cond := meta.FindStatusCondition(updated.Status.Conditions, string(rayv1.RayClusterProvisioned))
+	require.NotNil(t, cond)
+	assert.Equal(t, rayv1.RayClusterValidationFailed, cond.Reason)
+	assert.Equal(t, validationErr.Error(), cond.Message)
+	assert.Equal(t, cluster.Generation, cond.ObservedGeneration)
+}
+
+func TestRayClusterReconcile_InvalidSpecUpdatesValidationStatus(t *testing.T) {
+	setupTest(t)
+	features.SetFeatureGateDuringTest(t, features.RayClusterStatusConditions, true)
+
+	newScheme := runtime.NewScheme()
+	require.NoError(t, rayv1.AddToScheme(newScheme))
+
+	cluster := &rayv1.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       "invalid-raycluster-reconcile",
+			Namespace:  namespaceStr,
+			Generation: 2,
+		},
+		Spec: rayv1.RayClusterSpec{
+			HeadGroupSpec: rayv1.HeadGroupSpec{
+				Template: corev1.PodTemplateSpec{
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{Name: "ray-head", Image: support.GetRayImage()},
+						},
+					},
+				},
+			},
+			WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+				{
+					GroupName:   groupNameStr,
+					Replicas:    ptr.To[int32](1),
+					MinReplicas: ptr.To[int32](10),
+					MaxReplicas: ptr.To[int32](1),
+					Template: corev1.PodTemplateSpec{
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{Name: "ray-worker", Image: support.GetRayImage()},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	fakeClient := clientFake.NewClientBuilder().
+		WithScheme(newScheme).
+		WithObjects(cluster).
+		WithStatusSubresource(cluster).
+		Build()
+
+	r := &RayClusterReconciler{
+		Client:                     fakeClient,
+		Recorder:                   &record.FakeRecorder{},
+		Scheme:                     newScheme,
+		rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
+	}
+
+	ctx := context.Background()
+	result, err := r.rayClusterReconcile(ctx, cluster)
+	require.NoError(t, err)
+	assert.Zero(t, result.RequeueAfter)
+
+	namespacedName := types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace}
+	var updated rayv1.RayCluster
+	require.NoError(t, fakeClient.Get(ctx, namespacedName, &updated))
+
+	assert.Equal(t, cluster.Generation, updated.Status.ObservedGeneration)
+	cond := meta.FindStatusCondition(updated.Status.Conditions, string(rayv1.RayClusterProvisioned))
+	require.NotNil(t, cond)
+	assert.Equal(t, metav1.ConditionFalse, cond.Status)
+	assert.Equal(t, rayv1.RayClusterValidationFailed, cond.Reason)
+	assert.Contains(t, cond.Message, "minReplicas 10 greater than maxReplicas 1")
+}
+
 func TestUpdateEndpoints(t *testing.T) {
 	setupTest(t)
 
