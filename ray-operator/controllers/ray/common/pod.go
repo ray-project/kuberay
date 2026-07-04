@@ -414,33 +414,62 @@ func configureTLS(podTemplate *corev1.PodTemplateSpec, instance rayv1.RayCluster
 	//     pod IP. If the worker cert does not yet list that IP the TLS handshake fails, GCS
 	//     marks the worker dead, and the RayJob fails. Relying on KubeRay pod recreation is
 	//     not sufficient because the RayJob itself fails before a retry can succeed.
-	// TODO: IPv6 pod IPs — the grep pattern below assumes IPv4 dot-decimal notation.
 	certPath := utils.RayTLSCertMountPath + "/tls.crt"
-	waitScript := fmt.Sprintf(`CERT="%s"
-if [ -z "${POD_IP}" ]; then
-  echo "POD_IP is empty; downward API env vars are resolved once at container start — exiting so kubelet restarts the init container" >&2
-  exit 1
-fi
-DEADLINE=$(( $(date +%%s) + 300 ))
-echo "Waiting for TLS cert to include IP SAN for ${POD_IP} (timeout 300s)..."
-while true; do
-  if openssl x509 -in "${CERT}" -noout -text 2>/dev/null | grep -qE "IP Address:${POD_IP}([^0-9.]|$)"; then
-    echo "TLS cert now includes IP SAN for ${POD_IP}"
-    exit 0
-  fi
-  if [ "$(date +%%s)" -ge "${DEADLINE}" ]; then
-    echo "Timed out waiting for IP SAN ${POD_IP} in TLS cert; cert-manager may not have reissued the certificate" >&2
-    exit 1
-  fi
-  echo "IP SAN for ${POD_IP} not yet in cert, retrying in 5s..."
-  sleep 5
-done`, certPath)
+	// Use Python ipaddress for canonical IP comparison: openssl displays IPv6 in expanded
+	// uppercase (e.g. FD00:10:244:0:0:0:0:5) while status.podIP is compressed lowercase
+	// (e.g. fd00:10:244::5), so string grep cannot reliably match IPv6 SANs.
+	waitScript := fmt.Sprintf(`import ipaddress, os, subprocess, sys, time
+
+cert = %q
+pod_ip_str = os.environ.get("POD_IP", "")
+if not pod_ip_str:
+    print("POD_IP is empty; downward API env vars are resolved once at container start — exiting so kubelet restarts the init container", file=sys.stderr)
+    sys.exit(1)
+
+try:
+    pod_ip = ipaddress.ip_address(pod_ip_str)
+except ValueError:
+    print(f"Invalid POD_IP: {pod_ip_str}", file=sys.stderr)
+    sys.exit(1)
+
+deadline = time.time() + 300
+print(f"Waiting for TLS cert to include IP SAN for {pod_ip} (timeout 300s)...")
+
+def cert_has_pod_ip():
+    result = subprocess.run(
+        ["openssl", "x509", "-in", cert, "-noout", "-text"],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        return False
+    for line in result.stdout.splitlines():
+        if "IP Address:" not in line:
+            continue
+        for segment in line.split("IP Address:")[1:]:
+            addr_str = segment.split(",")[0].strip()
+            try:
+                if ipaddress.ip_address(addr_str) == pod_ip:
+                    return True
+            except ValueError:
+                pass
+    return False
+
+while True:
+    if cert_has_pod_ip():
+        print(f"TLS cert now includes IP SAN for {pod_ip}")
+        sys.exit(0)
+    if time.time() >= deadline:
+        print(f"Timed out waiting for IP SAN {pod_ip} in TLS cert; cert-manager may not have reissued the certificate", file=sys.stderr)
+        sys.exit(1)
+    print(f"IP SAN for {pod_ip} not yet in cert, retrying in 5s...")
+    time.sleep(5)
+`, certPath)
 
 	waitInitContainer := corev1.Container{
 		Name:            "wait-for-tls-ip-san",
 		Image:           podTemplate.Spec.Containers[utils.RayContainerIndex].Image,
 		ImagePullPolicy: podTemplate.Spec.Containers[utils.RayContainerIndex].ImagePullPolicy,
-		Command:         []string{"sh", "-c"},
+		Command:         []string{"python", "-c"},
 		Args:            []string{waitScript},
 		SecurityContext: podTemplate.Spec.Containers[utils.RayContainerIndex].SecurityContext.DeepCopy(),
 		Env: []corev1.EnvVar{
@@ -1148,15 +1177,6 @@ func setMissingRayStartParams(ctx context.Context, rayStartParams map[string]str
 	}
 
 	if nodeType == rayv1.HeadNode {
-		// Set node-ip-address to the head service FQDN so the head node advertises its
-		// stable service address instead of the pod IP. This avoids a TLS SAN race condition
-		// when mTLS is enabled: certs are created before pods exist, so the initial cert only
-		// contains DNS SANs and 127.0.0.1. Using the FQDN ensures GCS connections match a
-		// DNS SAN that is present from the start.
-		if _, ok := rayStartParams["node-ip-address"]; !ok && fqdnRayIP != "" {
-			rayStartParams["node-ip-address"] = fqdnRayIP
-		}
-
 		// Allow incoming connections from all network interfaces for the dashboard by default.
 		// The default value of `dashboard-host` is `localhost` which is not accessible from outside the head Pod.
 		if _, ok := rayStartParams["dashboard-host"]; !ok {
