@@ -107,7 +107,6 @@ func verifyNoTLSVolume(g Gomega, pod *corev1.Pod) {
 
 func TestRayClusterTLSAutoGenerate(t *testing.T) {
 	test := With(t)
-	g := NewWithT(t)
 
 	if !certManagerAvailable(test) {
 		t.Skip("cert-manager CRDs not found; skipping TLS auto-generate e2e test")
@@ -268,16 +267,12 @@ func TestRayClusterTLSAutoGenerate(t *testing.T) {
 
 		LogWithTimestamp(t, "Ray job submission succeeded with mTLS for cluster %s", clusterName)
 	})
-
-	_ = test
-	_ = g
 }
 
 // --- Test: Edge Cases ---
 
 func TestRayClusterTLSEdgeCases(t *testing.T) {
 	test := With(t)
-	g := NewWithT(t)
 
 	namespace := test.NewTestNamespace()
 
@@ -526,7 +521,4 @@ func TestRayClusterTLSEdgeCases(t *testing.T) {
 
 		LogWithTimestamp(t, "Init container TLS configuration verified for cluster %s", clusterName)
 	})
-
-	_ = test
-	_ = g
 }
