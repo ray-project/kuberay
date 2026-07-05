@@ -1180,21 +1180,53 @@ func getJobFinishedCondition(job *batchv1.Job) *batchv1.JobCondition {
 	return nil
 }
 
-// checkSidecarSubmitterFailed reports whether the submitter sidecar container has failed, without
-// mutating the RayJob status. It uses the same detection logic as
-// checkSidecarSubmitterFailedAndUpdateStatus so the two stay in sync.
-func checkSidecarSubmitterFailed(rayJob *rayv1.RayJob, headPod *corev1.Pod) bool {
-	var failed bool
+// detectSidecarSubmitterFailure detects if the submitter sidecar container has failed and returns
+// the container status if it has. It handles both the non-restart and restart modes based on
+// the SidecarSubmitterRestart feature gate. The third return value indicates whether the failure
+// is due to exceeding the restart count.
+func detectSidecarSubmitterFailure(rayJob *rayv1.RayJob, headPod *corev1.Pod) (bool, *corev1.ContainerStatus, bool) {
 	if !features.Enabled(features.SidecarSubmitterRestart) {
-		failed, _ = checkSidecarContainerStatus(headPod)
-	} else {
-		submitterBackoffLimit := int32(2)
-		if rayJob.Spec.SubmitterConfig != nil && rayJob.Spec.SubmitterConfig.BackoffLimit != nil {
-			submitterBackoffLimit = *rayJob.Spec.SubmitterConfig.BackoffLimit
-		}
-		failed, _ = checkIsRestartCountExceeded(headPod, submitterBackoffLimit)
+		failed, containerStatus := checkSidecarContainerStatus(headPod)
+		return failed, containerStatus, false
 	}
+	submitterBackoffLimit := int32(2)
+	if rayJob.Spec.SubmitterConfig != nil && rayJob.Spec.SubmitterConfig.BackoffLimit != nil {
+		submitterBackoffLimit = *rayJob.Spec.SubmitterConfig.BackoffLimit
+	}
+	failed, containerStatus := checkIsRestartCountExceeded(headPod, submitterBackoffLimit)
+	return failed, containerStatus, failed
+}
+
+// checkSidecarSubmitterFailed reports whether the submitter sidecar container has failed, without
+// mutating the RayJob status.
+func checkSidecarSubmitterFailed(rayJob *rayv1.RayJob, headPod *corev1.Pod) bool {
+	failed, _, _ := detectSidecarSubmitterFailure(rayJob, headPod)
 	return failed
+}
+
+// updateStatusForSidecarSubmitterFailure updates the RayJob status when the submitter sidecar container
+// has failed. It determines the failure reason (AppFailed vs SubmissionFailed) based on the JobStatus.
+// isRestartCountExceeded indicates whether the failure is due to exceeding the restart count.
+func (r *RayJobReconciler) updateStatusForSidecarSubmitterFailure(ctx context.Context, rayJob *rayv1.RayJob, submitterContainerStatus *corev1.ContainerStatus, isRestartCountExceeded bool) {
+	logger := ctrl.LoggerFrom(ctx)
+	rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusFailed
+	if rayJob.Status.JobStatus == rayv1.JobStatusFailed {
+		rayJob.Status.Reason = rayv1.AppFailed
+	} else {
+		rayJob.Status.Reason = rayv1.SubmissionFailed
+		if isRestartCountExceeded {
+			rayJob.Status.Message = fmt.Sprintf("Ray head pod submitter container %s terminated after exceeding the maximum restart count",
+				submitterContainerStatus.Name)
+			logger.Info("The submitter sidecar container has exceeded the max restart count. Attempting to transition the status to `Failed`.",
+				"Submitter sidecar container", submitterContainerStatus.Name,
+				"RestartCount", submitterContainerStatus.RestartCount)
+		} else {
+			rayJob.Status.Message = fmt.Sprintf("Ray head pod container %s terminated with exit code %d: %s",
+				submitterContainerStatus.Name, submitterContainerStatus.State.Terminated.ExitCode, submitterContainerStatus.State.Terminated.Reason)
+			logger.Info("The submitter sidecar container has failed. Attempting to transition the status to `Failed`.",
+				"Submitter sidecar container", submitterContainerStatus.Name, "Reason", submitterContainerStatus.State.Terminated.Reason, "Message", submitterContainerStatus.State.Terminated.Message)
+		}
+	}
 }
 
 // pollJobStatusForSidecarFailure does a best-effort poll of the actual Ray job status from the
@@ -1240,42 +1272,9 @@ func (r *RayJobReconciler) pollJobStatusForSidecarFailure(ctx context.Context, r
 }
 
 func (r *RayJobReconciler) checkSidecarSubmitterFailedAndUpdateStatus(ctx context.Context, rayJob *rayv1.RayJob, headPod *corev1.Pod) bool {
-	logger := ctrl.LoggerFrom(ctx)
-	var shouldUpdate bool
-	var submitterContainerStatus *corev1.ContainerStatus
-	if !features.Enabled(features.SidecarSubmitterRestart) {
-		shouldUpdate, submitterContainerStatus = checkSidecarContainerStatus(headPod)
-		if shouldUpdate {
-			logger.Info("The submitter sidecar container has failed. Attempting to transition the status to `Failed`.",
-				"Submitter sidecar container", submitterContainerStatus.Name, "Reason", submitterContainerStatus.State.Terminated.Reason, "Message", submitterContainerStatus.State.Terminated.Message)
-			rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusFailed
-			if rayJob.Status.JobStatus == rayv1.JobStatusFailed {
-				rayJob.Status.Reason = rayv1.AppFailed
-			} else {
-				rayJob.Status.Reason = rayv1.SubmissionFailed
-				rayJob.Status.Message = fmt.Sprintf("Ray head pod container %s terminated with exit code %d: %s",
-					submitterContainerStatus.Name, submitterContainerStatus.State.Terminated.ExitCode, submitterContainerStatus.State.Terminated.Reason)
-			}
-		}
-	} else {
-		submitterBackoffLimit := int32(2)
-		if rayJob.Spec.SubmitterConfig != nil && rayJob.Spec.SubmitterConfig.BackoffLimit != nil {
-			submitterBackoffLimit = *rayJob.Spec.SubmitterConfig.BackoffLimit
-		}
-		shouldUpdate, submitterContainerStatus = checkIsRestartCountExceeded(headPod, submitterBackoffLimit)
-		if shouldUpdate {
-			logger.Info("The submitter sidecar container has exceeded the max restart count. Attempting to transition the status to `Failed`.",
-				"Submitter sidecar container", submitterContainerStatus.Name,
-				"RestartCount", submitterContainerStatus.RestartCount)
-			rayJob.Status.JobDeploymentStatus = rayv1.JobDeploymentStatusFailed
-			if rayJob.Status.JobStatus == rayv1.JobStatusFailed {
-				rayJob.Status.Reason = rayv1.AppFailed
-			} else {
-				rayJob.Status.Reason = rayv1.SubmissionFailed
-				rayJob.Status.Message = fmt.Sprintf("Ray head pod submitter container %s terminated after exceeding the maximum restart count",
-					submitterContainerStatus.Name)
-			}
-		}
+	shouldUpdate, submitterContainerStatus, isRestartCountExceeded := detectSidecarSubmitterFailure(rayJob, headPod)
+	if shouldUpdate {
+		r.updateStatusForSidecarSubmitterFailure(ctx, rayJob, submitterContainerStatus, isRestartCountExceeded)
 	}
 	return shouldUpdate
 }
