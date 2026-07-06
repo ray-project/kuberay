@@ -338,7 +338,7 @@ func TestMTLSController_Disabled_IsNoOp(t *testing.T) {
 	require.NoError(t, err, "resources should not be deleted when mTLS is simply disabled")
 }
 
-func TestMTLSController_DeleteTLSSecrets(t *testing.T) {
+func TestMTLSController_DeleteTLSResources(t *testing.T) {
 	cluster := newMTLSTestCluster("del-cluster")
 	caSecret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{Name: utils.GetCASecretName(cluster.Name, cluster.UID), Namespace: "default"},
@@ -349,17 +349,31 @@ func TestMTLSController_DeleteTLSSecrets(t *testing.T) {
 	workerSecret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{Name: utils.GetTLSSecretName(cluster.Name, rayv1.WorkerNode), Namespace: "default"},
 	}
+	headCert := &certmanagerv1.Certificate{
+		ObjectMeta: metav1.ObjectMeta{Name: utils.GetTLSCertName(cluster.Name, rayv1.HeadNode), Namespace: "default"},
+	}
+	workerCert := &certmanagerv1.Certificate{
+		ObjectMeta: metav1.ObjectMeta{Name: utils.GetTLSCertName(cluster.Name, rayv1.WorkerNode), Namespace: "default"},
+	}
+	caCert := &certmanagerv1.Certificate{
+		ObjectMeta: metav1.ObjectMeta{Name: utils.GetCACertName(cluster.Name), Namespace: "default"},
+	}
 
-	r := newMTLSController(t, cluster, caSecret, headSecret, workerSecret)
+	r := newMTLSController(t, cluster, caSecret, headSecret, workerSecret, headCert, workerCert, caCert)
 	ctx := context.Background()
 
-	err := r.deleteTLSSecrets(ctx, cluster)
+	err := r.deleteTLSResources(ctx, cluster)
 	require.NoError(t, err)
 
 	for _, secret := range []*corev1.Secret{caSecret, headSecret, workerSecret} {
 		err = r.Get(ctx, types.NamespacedName{Name: secret.Name, Namespace: secret.Namespace}, &corev1.Secret{})
 		require.Error(t, err, "secret %s should be deleted", secret.Name)
 		assert.True(t, errors.IsNotFound(err), "secret %s should be deleted", secret.Name)
+	}
+	for _, cert := range []*certmanagerv1.Certificate{headCert, workerCert, caCert} {
+		err = r.Get(ctx, types.NamespacedName{Name: cert.Name, Namespace: cert.Namespace}, &certmanagerv1.Certificate{})
+		require.Error(t, err, "certificate %s should be deleted", cert.Name)
+		assert.True(t, errors.IsNotFound(err), "certificate %s should be deleted", cert.Name)
 	}
 }
 

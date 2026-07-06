@@ -1241,3 +1241,26 @@ func IsGatewayEqual(existing, desired *gwv1.Gateway) bool {
 	}
 	return true
 }
+
+// StripTLSFromPod removes the ray-tls volume, its volume mount, and all Ray TLS
+// environment variables from the Ray container at RayContainerIndex. Use this for
+// pods that must run without mTLS (e.g. the Redis cleanup Job), where the TLS
+// secrets may no longer exist at pod scheduling time.
+func StripTLSFromPod(pod *corev1.Pod) {
+	tlsEnvVars := map[string]bool{
+		"RAY_USE_TLS":         true,
+		"RAY_TLS_SERVER_CERT": true,
+		"RAY_TLS_SERVER_KEY":  true,
+		"RAY_TLS_CA_CERT":     true,
+	}
+	pod.Spec.Volumes = slices.DeleteFunc(pod.Spec.Volumes, func(v corev1.Volume) bool {
+		return v.Name == "ray-tls"
+	})
+	c := &pod.Spec.Containers[RayContainerIndex]
+	c.Env = slices.DeleteFunc(c.Env, func(e corev1.EnvVar) bool {
+		return tlsEnvVars[e.Name]
+	})
+	c.VolumeMounts = slices.DeleteFunc(c.VolumeMounts, func(vm corev1.VolumeMount) bool {
+		return vm.Name == "ray-tls"
+	})
+}

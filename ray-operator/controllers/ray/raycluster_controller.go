@@ -1522,6 +1522,13 @@ func (r *RayClusterReconciler) buildRedisCleanupJob(ctx context.Context, instanc
 	pod.Spec.InitContainers = slices.DeleteFunc(pod.Spec.InitContainers, func(c corev1.Container) bool {
 		return c.Name == "wait-for-tls-ip-san"
 	})
+
+	// Strip TLS configuration from the cleanup pod. During cluster deletion the mTLS
+	// controller's finalizer deletes the TLS secrets before the cleanup Job runs, so
+	// kubelet cannot mount the ray-tls volume and the pod stays in ContainerCreating.
+	// The Redis cleanup script connects directly to Redis and does not need mTLS.
+	utils.StripTLSFromPod(&pod)
+
 	pod.Spec.Containers[utils.RayContainerIndex].Command = utils.GetContainerCommand([]string{})
 	pod.Spec.Containers[utils.RayContainerIndex].Args = []string{
 		"echo \"To get more information about manually deleting the storage namespace in Redis and removing the RayCluster's finalizer, please check https://docs.ray.io/en/master/cluster/kubernetes/user-guides/kuberay-gcs-ft.html for more details.\" && " +
