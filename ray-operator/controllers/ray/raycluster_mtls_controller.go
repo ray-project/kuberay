@@ -14,6 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -615,23 +616,10 @@ func certificateNeedsUpdate(existing, desired *certmanagerv1.CertificateSpec) bo
 
 // normalizeIPs returns a sorted, de-duplicated set of IPs. Always includes 127.0.0.1.
 func normalizeIPs(podIPs []string) []string {
-	seen := make(map[string]struct{}, len(podIPs)+1)
-	out := make([]string, 0, len(podIPs)+1)
-	for _, ip := range podIPs {
-		if ip == "" {
-			continue
-		}
-		if _, ok := seen[ip]; ok {
-			continue
-		}
-		seen[ip] = struct{}{}
-		out = append(out, ip)
-	}
-	if _, ok := seen["127.0.0.1"]; !ok {
-		out = append(out, "127.0.0.1")
-	}
-	sort.Strings(out)
-	return out
+	s := sets.New(podIPs...)
+	s.Delete("")
+	s.Insert("127.0.0.1")
+	return sets.List(s)
 }
 
 // uniqueStrings returns the input with duplicates removed, preserving order.
