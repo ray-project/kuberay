@@ -338,45 +338,6 @@ func TestMTLSController_Disabled_IsNoOp(t *testing.T) {
 	require.NoError(t, err, "resources should not be deleted when mTLS is simply disabled")
 }
 
-func TestMTLSController_DeleteTLSResources(t *testing.T) {
-	cluster := newMTLSTestCluster("del-cluster")
-	caSecret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Name: utils.GetCASecretName(cluster.Name, cluster.UID), Namespace: "default"},
-	}
-	headSecret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Name: utils.GetTLSSecretName(cluster.Name, rayv1.HeadNode), Namespace: "default"},
-	}
-	workerSecret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Name: utils.GetTLSSecretName(cluster.Name, rayv1.WorkerNode), Namespace: "default"},
-	}
-	headCert := &certmanagerv1.Certificate{
-		ObjectMeta: metav1.ObjectMeta{Name: utils.GetTLSCertName(cluster.Name, rayv1.HeadNode), Namespace: "default"},
-	}
-	workerCert := &certmanagerv1.Certificate{
-		ObjectMeta: metav1.ObjectMeta{Name: utils.GetTLSCertName(cluster.Name, rayv1.WorkerNode), Namespace: "default"},
-	}
-	caCert := &certmanagerv1.Certificate{
-		ObjectMeta: metav1.ObjectMeta{Name: utils.GetCACertName(cluster.Name), Namespace: "default"},
-	}
-
-	r := newMTLSController(t, cluster, caSecret, headSecret, workerSecret, headCert, workerCert, caCert)
-	ctx := context.Background()
-
-	err := r.deleteTLSResources(ctx, cluster)
-	require.NoError(t, err)
-
-	for _, secret := range []*corev1.Secret{caSecret, headSecret, workerSecret} {
-		err = r.Get(ctx, types.NamespacedName{Name: secret.Name, Namespace: secret.Namespace}, &corev1.Secret{})
-		require.Error(t, err, "secret %s should be deleted", secret.Name)
-		assert.True(t, errors.IsNotFound(err), "secret %s should be deleted", secret.Name)
-	}
-	for _, cert := range []*certmanagerv1.Certificate{headCert, workerCert, caCert} {
-		err = r.Get(ctx, types.NamespacedName{Name: cert.Name, Namespace: cert.Namespace}, &certmanagerv1.Certificate{})
-		require.Error(t, err, "certificate %s should be deleted", cert.Name)
-		assert.True(t, errors.IsNotFound(err), "certificate %s should be deleted", cert.Name)
-	}
-}
-
 // TestMTLSController_WorkerCertHasLocalhostOnly verifies that worker certificates
 // use only "localhost" as a DNS SAN. Worker-to-head communication goes via the head
 // pod IP (covered by IP SANs), and worker pods don't serve DNS-addressable endpoints
@@ -458,13 +419,12 @@ func TestMTLSController_CertReadinessBlocksReconciliation(t *testing.T) {
 	assert.Equal(t, mtlsPeriodicCheckDuration, result.RequeueAfter, "should schedule periodic check when all ready")
 }
 
-func TestMTLSController_DeletionWithDisabledMTLS_RemovesFinalizer(t *testing.T) {
+func TestMTLSController_DeletionIsNoop(t *testing.T) {
 	now := metav1.Now()
-	cluster := newMTLSTestCluster("disabled-del")
-	// mTLS was previously enabled (finalizer present) but user disabled it before deleting.
-	cluster.Spec.TLSOptions = nil
+	cluster := newMTLSTestCluster("del-noop")
+	cluster.Spec.TLSOptions = &rayv1.TLSOptions{}
 	cluster.DeletionTimestamp = &now
-	cluster.Finalizers = []string{utils.MTLSCleanupFinalizer}
+	cluster.Finalizers = []string{"some-other-finalizer"}
 
 	r := newMTLSController(t, cluster)
 	ctx := context.Background()
@@ -473,55 +433,92 @@ func TestMTLSController_DeletionWithDisabledMTLS_RemovesFinalizer(t *testing.T) 
 		NamespacedName: types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace},
 	})
 	require.NoError(t, err)
-	assert.Zero(t, result.RequeueAfter, "should not requeue after finalizer removal")
-
-	// The cluster should be fully deleted (fake client removes it when last finalizer is removed
-	// and DeletionTimestamp is set).
-	updatedCluster := &rayv1.RayCluster{}
-	err = r.Get(ctx, types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace}, updatedCluster)
-	assert.True(t, errors.IsNotFound(err), "cluster should be fully deleted after finalizer removal with disabled mTLS")
+	assert.Equal(t, ctrl.Result{}, result, "deletion should be a no-op for the mTLS controller")
 }
 
-func TestMTLSController_AutoGenerate_DeletionCleansUpSecrets(t *testing.T) {
-	now := metav1.Now()
-	cluster := newMTLSTestCluster("auto-del")
+func TestMTLSController_SecretGetsOwnerRefToCertificate(t *testing.T) {
+	cluster := newMTLSTestCluster("owner-ref-test")
 	cluster.Spec.TLSOptions = &rayv1.TLSOptions{}
-	cluster.DeletionTimestamp = &now
-	// Simulate that the finalizer was previously added during normal reconciliation.
-	cluster.Finalizers = []string{utils.MTLSCleanupFinalizer}
 
-	caSecret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Name: utils.GetCASecretName(cluster.Name, cluster.UID), Namespace: "default"},
+	cert := &certmanagerv1.Certificate{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      utils.GetTLSCertName(cluster.Name, rayv1.HeadNode),
+			Namespace: "default",
+			UID:       "cert-uid-abc123",
+		},
+		Spec: certmanagerv1.CertificateSpec{
+			SecretName: utils.GetTLSSecretName(cluster.Name, rayv1.HeadNode),
+		},
 	}
-	headSecret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Name: utils.GetTLSSecretName(cluster.Name, rayv1.HeadNode), Namespace: "default"},
-	}
-	workerSecret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Name: utils.GetTLSSecretName(cluster.Name, rayv1.WorkerNode), Namespace: "default"},
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      utils.GetTLSSecretName(cluster.Name, rayv1.HeadNode),
+			Namespace: "default",
+		},
 	}
 
-	r := newMTLSController(t, cluster, caSecret, headSecret, workerSecret)
+	r := newMTLSController(t, cluster, cert, secret)
 	ctx := context.Background()
 
-	result, err := r.Reconcile(ctx, ctrl.Request{
-		NamespacedName: types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace},
-	})
-	require.NoError(t, err)
-	assert.Zero(t, result.RequeueAfter, "should not requeue after cleanup")
+	require.NoError(t, r.ensureSecretOwnedByCertificate(ctx, cert))
 
-	// All auto-generated secrets should be deleted.
-	for _, secret := range []*corev1.Secret{caSecret, headSecret, workerSecret} {
-		err = r.Get(ctx, types.NamespacedName{Name: secret.Name, Namespace: secret.Namespace}, &corev1.Secret{})
-		require.Error(t, err, "secret %s should be deleted", secret.Name)
-		assert.True(t, errors.IsNotFound(err), "secret %s should be deleted", secret.Name)
+	updated := &corev1.Secret{}
+	require.NoError(t, r.Get(ctx, types.NamespacedName{Name: secret.Name, Namespace: secret.Namespace}, updated))
+
+	var found bool
+	for _, ref := range updated.OwnerReferences {
+		if ref.UID == cert.UID {
+			found = true
+			assert.Equal(t, "Certificate", ref.Kind)
+			assert.Equal(t, cert.Name, ref.Name)
+			assert.NotNil(t, ref.BlockOwnerDeletion)
+			assert.True(t, *ref.BlockOwnerDeletion)
+		}
+	}
+	assert.True(t, found, "secret should have owner reference to the Certificate")
+}
+
+func TestMTLSController_SecretOwnerRefIdempotent(t *testing.T) {
+	cluster := newMTLSTestCluster("owner-ref-idem")
+	cluster.Spec.TLSOptions = &rayv1.TLSOptions{}
+
+	blockOwnerDeletion := true
+	cert := &certmanagerv1.Certificate{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      utils.GetTLSCertName(cluster.Name, rayv1.HeadNode),
+			Namespace: "default",
+			UID:       "cert-uid-idem",
+		},
+		Spec: certmanagerv1.CertificateSpec{
+			SecretName: utils.GetTLSSecretName(cluster.Name, rayv1.HeadNode),
+		},
+	}
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      utils.GetTLSSecretName(cluster.Name, rayv1.HeadNode),
+			Namespace: "default",
+			OwnerReferences: []metav1.OwnerReference{
+				{UID: cert.UID, Name: cert.Name, Kind: "Certificate", APIVersion: certmanagerv1.SchemeGroupVersion.String(), BlockOwnerDeletion: &blockOwnerDeletion},
+			},
+		},
 	}
 
-	// After removing the last finalizer with DeletionTimestamp set, Kubernetes (and the
-	// fake client) deletes the object. Verify the cluster is gone, which proves the
-	// finalizer was removed successfully.
-	updatedCluster := &rayv1.RayCluster{}
-	err = r.Get(ctx, types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace}, updatedCluster)
-	assert.True(t, errors.IsNotFound(err), "cluster should be fully deleted after finalizer removal")
+	r := newMTLSController(t, cluster, cert, secret)
+	ctx := context.Background()
+
+	// Call twice — should not error or duplicate the owner ref.
+	require.NoError(t, r.ensureSecretOwnedByCertificate(ctx, cert))
+	require.NoError(t, r.ensureSecretOwnedByCertificate(ctx, cert))
+
+	updated := &corev1.Secret{}
+	require.NoError(t, r.Get(ctx, types.NamespacedName{Name: secret.Name, Namespace: secret.Namespace}, updated))
+	count := 0
+	for _, ref := range updated.OwnerReferences {
+		if ref.UID == cert.UID {
+			count++
+		}
+	}
+	assert.Equal(t, 1, count, "owner reference should not be duplicated")
 }
 
 // --- Utility function tests ---

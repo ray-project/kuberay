@@ -51,21 +51,19 @@ func NewRayClusterMTLSController(mgr ctrl.Manager) *RayClusterMTLSController {
 }
 
 // +kubebuilder:rbac:groups=ray.io,resources=rayclusters,verbs=get;list;watch;update
-// +kubebuilder:rbac:groups=ray.io,resources=rayclusters/finalizers,verbs=update
+
 // +kubebuilder:rbac:groups=cert-manager.io,resources=issuers,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=cert-manager.io,resources=certificates,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=cert-manager.io,resources=certificates/status,verbs=get
-// +kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;delete
+// +kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;update;patch
 // +kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch
 
 // Reconcile handles mTLS certificate lifecycle for a RayCluster.
 // Cert-manager Issuers and Certificates are owned by the RayCluster via controller
 // references, so Kubernetes garbage collection handles their deletion automatically.
-// Secrets are cleaned up explicitly because cert-manager may not set owner references
-// on them (depends on the --enable-certificate-owner-ref flag).
+// Each Certificate's Secret is patched with an owner reference to its Certificate so
+// that Secrets are also GC'd when the Certificate is deleted (no finalizer needed).
 func (r *RayClusterMTLSController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	logger := ctrl.LoggerFrom(ctx)
-
 	instance := &rayv1.RayCluster{}
 	if err := r.Get(ctx, req.NamespacedName, instance); err != nil {
 		if errors.IsNotFound(err) {
@@ -74,27 +72,7 @@ func (r *RayClusterMTLSController) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{}, err
 	}
 
-	// Handle deletion first, regardless of whether mTLS is currently enabled.
-	// A user may have disabled TLS (set tlsOptions to nil) before deleting the cluster.
-	// Without handling deletion before the TLS check, the finalizer would
-	// never be removed and the RayCluster would be stuck in Terminating.
 	if instance.DeletionTimestamp != nil && !instance.DeletionTimestamp.IsZero() {
-		if controllerutil.ContainsFinalizer(instance, utils.MTLSCleanupFinalizer) {
-			if err := r.deleteTLSResources(ctx, instance); err != nil {
-				logger.Error(err, "Failed to delete TLS resources during RayCluster deletion")
-				r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.MTLSFailedToCleanupSecrets),
-					"Failed to clean up mTLS resources: %v", err)
-				return ctrl.Result{RequeueAfter: mtlsDefaultRequeueDuration}, err
-			}
-			r.Recorder.Event(instance, corev1.EventTypeNormal, string(utils.MTLSSecretsCleanedUp),
-				"Auto-generated mTLS certificates and secrets deleted")
-			controllerutil.RemoveFinalizer(instance, utils.MTLSCleanupFinalizer)
-			if err := r.Update(ctx, instance); err != nil {
-				logger.Error(err, "Failed to remove mTLS finalizer")
-				return ctrl.Result{}, err
-			}
-			logger.Info("Removed mTLS finalizer after secret cleanup")
-		}
 		return ctrl.Result{}, nil
 	}
 
@@ -103,18 +81,7 @@ func (r *RayClusterMTLSController) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{}, nil
 	}
 
-	// Ensure the finalizer is present so we get a chance to clean up secrets before deletion.
-	if !controllerutil.ContainsFinalizer(instance, utils.MTLSCleanupFinalizer) {
-		controllerutil.AddFinalizer(instance, utils.MTLSCleanupFinalizer)
-		if err := r.Update(ctx, instance); err != nil {
-			logger.Error(err, "Failed to add mTLS finalizer")
-			return ctrl.Result{}, err
-		}
-		logger.Info("Added mTLS finalizer for secret cleanup")
-		return ctrl.Result{RequeueAfter: mtlsDefaultRequeueDuration}, nil
-	}
-
-	return r.handleAutoGenerate(ctx, instance, logger)
+	return r.handleAutoGenerate(ctx, instance, ctrl.LoggerFrom(ctx))
 }
 
 // handleAutoGenerate creates the full cert-manager PKI chain (self-signed issuer,
@@ -162,30 +129,37 @@ func (r *RayClusterMTLSController) handleAutoGenerate(ctx context.Context, insta
 	return ctrl.Result{RequeueAfter: mtlsPeriodicCheckDuration}, nil
 }
 
-// deleteTLSResources deletes the cert-manager Certificates and their backing Secrets for
-// this RayCluster. Issuers and Certificates cascade-delete via owner references, but we
-// delete Certificates explicitly first so cert-manager stops reconciling them before we
-// delete the Secrets. Without this ordering, cert-manager sees its Secret deleted while
-// the Certificate still exists and immediately re-issues the Secret, leaving an orphaned
-// Secret after the Certificate is eventually garbage-collected.
+// ensureSecretOwnedByCertificate patches the Secret created by cert-manager so that it
+// has an owner reference to its Certificate. This ensures the Secret is automatically
+// garbage-collected when the Certificate is deleted (which itself is GC'd when the
+// RayCluster is deleted), without needing an explicit cleanup finalizer.
 //
-// Secrets are deleted explicitly because cert-manager only sets owner references on them
-// when --enable-certificate-owner-ref is configured.
-func (r *RayClusterMTLSController) deleteTLSResources(ctx context.Context, instance *rayv1.RayCluster) error {
-	certNames := []string{
-		utils.GetTLSCertName(instance.Name, rayv1.HeadNode),
-		utils.GetTLSCertName(instance.Name, rayv1.WorkerNode),
-		utils.GetCACertName(instance.Name),
-	}
-	for _, certName := range certNames {
-		cert := &certmanagerv1.Certificate{
-			ObjectMeta: metav1.ObjectMeta{Name: certName, Namespace: instance.Namespace},
+// If the Secret does not yet exist (cert-manager hasn't issued it), this is a no-op;
+// the next reconcile will retry.
+func (r *RayClusterMTLSController) ensureSecretOwnedByCertificate(ctx context.Context, cert *certmanagerv1.Certificate) error {
+	secret := &corev1.Secret{}
+	if err := r.Get(ctx, client.ObjectKey{Name: cert.Spec.SecretName, Namespace: cert.Namespace}, secret); err != nil {
+		if errors.IsNotFound(err) {
+			return nil
 		}
-		if err := r.Delete(ctx, cert); err != nil && !errors.IsNotFound(err) {
-			return fmt.Errorf("failed to delete Certificate %s: %w", certName, err)
+		return err
+	}
+
+	for _, ref := range secret.OwnerReferences {
+		if ref.UID == cert.UID {
+			return nil
 		}
 	}
-	return utils.DeleteMTLSAutoGeneratedSecrets(ctx, r.Client, instance)
+
+	blockOwnerDeletion := true
+	secret.OwnerReferences = append(secret.OwnerReferences, metav1.OwnerReference{
+		APIVersion:         certmanagerv1.SchemeGroupVersion.String(),
+		Kind:               "Certificate",
+		Name:               cert.Name,
+		UID:                cert.UID,
+		BlockOwnerDeletion: &blockOwnerDeletion,
+	})
+	return r.Update(ctx, secret)
 }
 
 // reconcileSelfSignedIssuer creates or updates the self-signed issuer used to bootstrap the CA.
@@ -285,9 +259,11 @@ func (r *RayClusterMTLSController) reconcileCACertificate(ctx context.Context, i
 		if err := controllerutil.SetControllerReference(instance, existing, r.Scheme); err != nil {
 			return err
 		}
-		return r.Update(ctx, existing)
+		if err := r.Update(ctx, existing); err != nil {
+			return err
+		}
 	}
-	return nil
+	return r.ensureSecretOwnedByCertificate(ctx, existing)
 }
 
 // reconcileCAIssuer creates or updates the issuer backed by the generated CA certificate's secret.
@@ -404,9 +380,11 @@ func (r *RayClusterMTLSController) reconcileHeadCertificate(ctx context.Context,
 		logger.Info("Updating head certificate", "certificate", certName, "ipAddresses", desiredIPAddresses)
 		r.Recorder.Eventf(instance, corev1.EventTypeNormal, string(utils.MTLSCertificatesUpdated),
 			"Updated head certificate SANs (IPs: %v)", desiredIPAddresses)
-		return r.Update(ctx, existing)
+		if err := r.Update(ctx, existing); err != nil {
+			return err
+		}
 	}
-	return nil
+	return r.ensureSecretOwnedByCertificate(ctx, existing)
 }
 
 // reconcileWorkerCertificate creates or updates the worker node leaf certificate.
@@ -473,9 +451,11 @@ func (r *RayClusterMTLSController) reconcileWorkerCertificate(ctx context.Contex
 		logger.Info("Updating worker certificate", "certificate", certName, "ipAddresses", desiredIPAddresses)
 		r.Recorder.Eventf(instance, corev1.EventTypeNormal, string(utils.MTLSCertificatesUpdated),
 			"Updated worker certificate SANs (IPs: %v)", desiredIPAddresses)
-		return r.Update(ctx, existing)
+		if err := r.Update(ctx, existing); err != nil {
+			return err
+		}
 	}
-	return nil
+	return r.ensureSecretOwnedByCertificate(ctx, existing)
 }
 
 // getPodIPs collects pod IPs for the given node type within the RayCluster.

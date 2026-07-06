@@ -307,10 +307,6 @@ const (
 
 	// Finalizers for RayService
 	RayServiceFinalizer = "ray.io/rayservice-finalizer"
-	// MTLSCleanupFinalizer prevents the RayCluster from being deleted before the mTLS
-	// controller has cleaned up auto-generated cert-manager secrets.
-	MTLSCleanupFinalizer = "ray.io/mtls-cleanup-finalizer"
-
 	// RayNodeHeadGroupLabelValue is the value for the RayNodeGroupLabelKey label on a head node
 	RayNodeHeadGroupLabelValue      = "headgroup"
 	RayNodeSubmitterGroupLabelValue = "submittergroup"
@@ -503,9 +499,7 @@ const (
 	// mTLS event list
 	MTLSPKIReady                K8sEventType = "MTLSPKIReady"
 	MTLSCertsNotReady           K8sEventType = "MTLSCertsNotReady"
-	MTLSSecretsCleanedUp        K8sEventType = "MTLSSecretsCleanedUp"
 	MTLSFailedToReconcile       K8sEventType = "MTLSFailedToReconcile"
 	MTLSCertificatesUpdated     K8sEventType = "MTLSCertificatesUpdated"
-	MTLSFailedToCleanupSecrets  K8sEventType = "MTLSFailedToCleanupSecrets" //nolint:gosec // G101 -- event type name, not a credential
 	MTLSCertificateExpiringSoon K8sEventType = "MTLSCertificateExpiringSoon"
 )
