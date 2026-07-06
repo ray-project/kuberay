@@ -122,7 +122,8 @@ type EventCollector struct {
 	maxDiskBytes       int64
 	compressionEnabled bool
 
-	draining atomic.Bool // set during shutdown to reject new events
+	draining   atomic.Bool    // set during shutdown to reject new events
+	inflightWG sync.WaitGroup // tracks in-flight PersistEvents handlers
 
 	writeMu       sync.Mutex
 	activeFiles   map[string]*activeFileState
@@ -216,8 +217,15 @@ func (ec *EventCollector) Run(stop <-chan struct{}, port int) {
 	// Reject new events before rotating so no writes slip in after the final rotation.
 	ec.draining.Store(true)
 
-	// Rotate remaining active files so the upload worker can drain them.
-	ec.rotateAllFiles()
+	// Wait for handlers that passed the draining check to finish, so none can
+	// create a fresh active file after the final rotation below.
+	ec.inflightWG.Wait()
+
+	// Rotate remaining active files so the upload worker can drain them. Use
+	// blocking enqueue so a burst of active files larger than the queue is not
+	// dropped: the upload worker is still consuming here (ec.stopped is still
+	// open), so the sends make progress.
+	ec.rotateAllFilesForShutdown()
 	close(ec.stopped)
 
 	ec.workersWG.Wait()
@@ -301,6 +309,19 @@ func (ec *EventCollector) PersistEvents(req *restful.Request, resp *restful.Resp
 		return
 	}
 
+	// Register as in-flight, then re-check draining. Shutdown sets draining and
+	// then waits on inflightWG before rotating: registering before the second
+	// check guarantees this handler either bails here (shutdown already began)
+	// or is awaited by shutdown, so it can never create a fresh active file
+	// after the final rotation.
+	ec.inflightWG.Add(1)
+	defer ec.inflightWG.Done()
+	if ec.draining.Load() {
+		resp.AddHeader("Retry-After", "5")
+		resp.WriteErrorString(http.StatusServiceUnavailable, "event collector is shutting down")
+		return
+	}
+
 	// Disk pressure only applies when the local disk pipeline is in use.
 	if ec.underDiskPressure() {
 		resp.AddHeader("Retry-After", "10")
@@ -375,6 +396,17 @@ func (ec *EventCollector) PersistEvents(req *restful.Request, resp *restful.Resp
 
 		if ec.currentSessionName != sessionNameStr {
 			logrus.Infof("Session name changed from %s to %s, rotating active files", ec.currentSessionName, sessionNameStr)
+			// Account for bytes already written to the current session's files
+			// before rotation flushes and hands them to the upload worker. The
+			// deferred accounting below only covers writers still in
+			// touchedWriters, and rotateAllFilesLocked closes these writers so
+			// the defer can no longer flush them. Without this, the bytes are
+			// never added to totalDiskUsed while processRotatedFile still
+			// subtracts them on cleanup, drifting the counter negative.
+			for state := range touchedWriters {
+				ec.totalDiskUsed.Add(pendingDiskBytes[state])
+				delete(pendingDiskBytes, state)
+			}
 			ec.rotateAllFilesLocked()
 			ec.currentSessionName = sessionNameStr
 			touchedWriters = make(map[*activeFileState]struct{})
@@ -497,32 +529,66 @@ func (ec *EventCollector) checkRotation() {
 	now := time.Now()
 	for category, state := range ec.activeFiles {
 		if now.Sub(state.createdAt) >= ec.rotationInterval || state.size >= ec.maxFileSizeBytes {
-			if err := ec.rotateFileLocked(category); err != nil {
+			if err := ec.rotateFileLocked(category, false); err != nil {
 				logrus.Errorf("Failed to rotate %s: %v", category, err)
 			}
 		}
 	}
 }
 
-// rotateAllFiles rotates every active file. Safe to call from any goroutine.
-func (ec *EventCollector) rotateAllFiles() {
-	ec.writeMu.Lock()
-	defer ec.writeMu.Unlock()
-	ec.rotateAllFilesLocked()
-}
-
 // rotateAllFilesLocked rotates every active file. Must be called with writeMu held.
 func (ec *EventCollector) rotateAllFilesLocked() {
 	for category := range ec.activeFiles {
-		if err := ec.rotateFileLocked(category); err != nil {
+		if err := ec.rotateFileLocked(category, false); err != nil {
 			logrus.Errorf("Failed to rotate %s: %v", category, err)
 		}
 	}
 }
 
+// rotateAllFilesForShutdown rotates every active file, blocking until each
+// rotated file is enqueued for upload. Unlike the periodic path it never drops
+// tasks when the queue is momentarily full — the upload worker is still running
+// during shutdown, so blocking sends drain and make room.
+func (ec *EventCollector) rotateAllFilesForShutdown() {
+	ec.writeMu.Lock()
+	defer ec.writeMu.Unlock()
+	for category := range ec.activeFiles {
+		if err := ec.rotateFileLocked(category, true); err != nil {
+			logrus.Errorf("Failed to rotate %s during shutdown: %v", category, err)
+		}
+	}
+}
+
+// enqueueRotationTask hands a rotated file to the upload worker. When blocking
+// is true it waits for queue space (or shutdown); otherwise it drops to a
+// delayed-retry goroutine when the queue is full.
+func (ec *EventCollector) enqueueRotationTask(task rotationTask, blocking bool) {
+	if blocking {
+		select {
+		case ec.rotationQueue <- task:
+		case <-ec.stopped:
+		}
+		return
+	}
+	select {
+	case ec.rotationQueue <- task:
+	default:
+		logrus.Warnf("rotation queue full, scheduling retry for %s", task.jsonlPath)
+		go func(t rotationTask) {
+			time.Sleep(5 * time.Second)
+			select {
+			case ec.rotationQueue <- t:
+			case <-ec.stopped:
+			}
+		}(task)
+	}
+}
+
 // rotateFileLocked closes the active file for a category and queues it for
-// compression + upload. Must be called with writeMu held.
-func (ec *EventCollector) rotateFileLocked(category string) error {
+// compression + upload. Must be called with writeMu held. When blocking is
+// true the enqueue waits for queue space instead of dropping to a retry
+// goroutine (used during shutdown).
+func (ec *EventCollector) rotateFileLocked(category string, blocking bool) error {
 	state, ok := ec.activeFiles[category]
 	if !ok {
 		return nil
@@ -565,13 +631,17 @@ func (ec *EventCollector) rotateFileLocked(category string) error {
 			createdAt:   state.createdAt,
 			size:        diskSize,
 		}
-		go func(t rotationTask) {
-			time.Sleep(5 * time.Second)
-			select {
-			case ec.rotationQueue <- t:
-			case <-ec.stopped:
-			}
-		}(task)
+		if blocking {
+			ec.enqueueRotationTask(task, true)
+		} else {
+			go func(t rotationTask) {
+				time.Sleep(5 * time.Second)
+				select {
+				case ec.rotationQueue <- t:
+				case <-ec.stopped:
+				}
+			}(task)
+		}
 		return fmt.Errorf("flush failed for %s, queued for delayed upload", state.path)
 	}
 
@@ -584,18 +654,7 @@ func (ec *EventCollector) rotateFileLocked(category string) error {
 		size:        state.size,
 	}
 
-	select {
-	case ec.rotationQueue <- task:
-	default:
-		logrus.Warnf("rotation queue full, scheduling retry for %s", state.path)
-		go func(t rotationTask) {
-			time.Sleep(5 * time.Second)
-			select {
-			case ec.rotationQueue <- t:
-			case <-ec.stopped:
-			}
-		}(task)
-	}
+	ec.enqueueRotationTask(task, blocking)
 	return nil
 }
 
@@ -662,7 +721,26 @@ func (ec *EventCollector) processRotatedFile(task rotationTask) {
 	if err := ec.storageWriter.WriteFile(key, f); err != nil {
 		f.Close()
 		logrus.Errorf("Failed to upload %s to %s: %v", uploadPath, key, err)
-		// Keep both local files for retry on next restart.
+		// Drop any compressed artifact so a retry regenerates it cleanly and
+		// its size is not double-counted in totalDiskUsed.
+		if compressedPath != "" {
+			if info, err := os.Stat(compressedPath); err == nil {
+				ec.totalDiskUsed.Add(-info.Size())
+			}
+			if err := os.Remove(compressedPath); err != nil && !os.IsNotExist(err) {
+				logrus.Warnf("Failed to remove %s after failed upload: %v", compressedPath, err)
+			}
+		}
+		// Re-enqueue for retry instead of waiting for a process restart; a
+		// long-running collector would otherwise never retry and the local
+		// files would pin totalDiskUsed until disk pressure rejects events.
+		go func(t rotationTask) {
+			time.Sleep(5 * time.Second)
+			select {
+			case ec.rotationQueue <- t:
+			case <-ec.stopped:
+			}
+		}(task)
 		return
 	}
 	f.Close()
@@ -934,17 +1012,30 @@ func gzipFile(src, dst string) error {
 	if err != nil {
 		return err
 	}
-	defer out.Close()
+
+	// On any failure after creation, remove the partial output so a later
+	// resumePendingFiles run does not prefer a truncated .gz over its valid
+	// .jsonl source and upload corrupt data.
+	cleanup := func(cause error) error {
+		out.Close()
+		if rmErr := os.Remove(dst); rmErr != nil && !os.IsNotExist(rmErr) {
+			logrus.Warnf("Failed to remove partial gzip %s: %v", dst, rmErr)
+		}
+		return cause
+	}
 
 	gz := gzip.NewWriter(out)
 	if _, err := io.Copy(gz, in); err != nil {
 		gz.Close()
-		return err
+		return cleanup(err)
 	}
 	if err := gz.Close(); err != nil {
-		return err
+		return cleanup(err)
 	}
-	return out.Sync()
+	if err := out.Sync(); err != nil {
+		return cleanup(err)
+	}
+	return out.Close()
 }
 
 // dirSize returns the total byte size of files under root.

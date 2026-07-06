@@ -33,7 +33,7 @@ func TestIsValidEventFile(t *testing.T) {
 
 func TestDecodeEventFileBytes_JSONArrayLegacy(t *testing.T) {
 	raw := []byte(`[{"eventId":"a","x":1},{"eventId":"b","x":2}]`)
-	out, err := decodeEventFileBytes("node-2026-05-13-10", raw)
+	out, err := DecodeEventFileBytes("node-2026-05-13-10", raw)
 	require.NoError(t, err)
 	require.Len(t, out, 2)
 	assert.Equal(t, "a", out[0]["eventId"])
@@ -46,7 +46,7 @@ func TestDecodeEventFileBytes_JSONLPlain(t *testing.T) {
 
 {"eventId":"c"}
 `)
-	out, err := decodeEventFileBytes("node-2026-05-13-10.jsonl", raw)
+	out, err := DecodeEventFileBytes("node-2026-05-13-10.jsonl", raw)
 	require.NoError(t, err)
 	require.Len(t, out, 3)
 	assert.Equal(t, "a", out[0]["eventId"])
@@ -55,7 +55,7 @@ func TestDecodeEventFileBytes_JSONLPlain(t *testing.T) {
 }
 
 func TestDecodeEventFileBytes_EmptyBytes(t *testing.T) {
-	out, err := decodeEventFileBytes("empty.jsonl", []byte{})
+	out, err := DecodeEventFileBytes("empty.jsonl", []byte{})
 	require.NoError(t, err)
 	assert.Nil(t, out)
 }
@@ -65,7 +65,7 @@ func TestDecodeEventFileBytes_MalformedJSONLLinesSkipped(t *testing.T) {
 not a json line
 {"eventId":"b"}
 `)
-	out, err := decodeEventFileBytes("malformed.jsonl", raw)
+	out, err := DecodeEventFileBytes("malformed.jsonl", raw)
 	require.NoError(t, err)
 	require.Len(t, out, 2)
 	assert.Equal(t, "a", out[0]["eventId"])

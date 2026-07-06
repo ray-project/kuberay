@@ -255,7 +255,7 @@ func TestRotateFileLocked_EmptyFileIsDropped(t *testing.T) {
 	require.NoError(t, err)
 
 	jsonlPath := state.path
-	require.NoError(t, ec.rotateFileLocked(categoryNodeEvents))
+	require.NoError(t, ec.rotateFileLocked(categoryNodeEvents, false))
 
 	// Empty file should be removed, and no rotation task should have been queued.
 	_, err = os.Stat(jsonlPath)

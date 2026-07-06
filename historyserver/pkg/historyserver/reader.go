@@ -15,6 +15,7 @@ import (
 
 	"github.com/bmatcuk/doublestar/v4"
 	"github.com/ray-project/kuberay/historyserver/pkg/compression"
+	"github.com/ray-project/kuberay/historyserver/pkg/eventserver"
 	eventtypes "github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
 	"github.com/sirupsen/logrus"
 
@@ -597,9 +598,11 @@ func (s *ServerHandler) searchNodeIDHexInEventFile(rayClusterNameNamespace, file
 		return "", false
 	}
 
-	var events []map[string]interface{}
-	if err := json.Unmarshal(data, &events); err != nil {
-		logrus.Warnf("Failed to unmarshal node events from %s: %v", filePath, err)
+	// Auto-detect JSON array (legacy) vs JSONL (new collector) so node_ip
+	// lookups work against both formats.
+	events, err := eventserver.DecodeEventFileBytes(filePath, data)
+	if err != nil {
+		logrus.Warnf("Failed to decode node events from %s: %v", filePath, err)
 		return "", false
 	}
 
