@@ -726,13 +726,8 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 			"Ray container terminated status", getRayContainerStateTerminated(headPod))
 
 		shouldDelete, reason := shouldDeletePod(headPod, rayv1.HeadNode)
-		if !shouldDelete && utils.IsTLSEnabled(&instance.Spec) && !podHasMTLSConfiguration(&headPod) {
-			shouldDelete = true
-			reason = "mTLS is enabled but pod doesn't have mTLS configuration, needs recreation"
-		}
-		if !shouldDelete && !utils.IsTLSEnabled(&instance.Spec) && podHasMTLSConfiguration(&headPod) {
-			shouldDelete = true
-			reason = "mTLS is disabled but pod has mTLS configuration, needs recreation"
+		if !shouldDelete {
+			shouldDelete, reason = mtlsRecreationNeeded(&headPod, &instance.Spec)
 		}
 		logger.Info("reconcilePods", "head Pod", headPod.Name, "shouldDelete", shouldDelete, "reason", reason)
 		if shouldDelete {
@@ -833,13 +828,8 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 		numDeletedUnhealthyWorkerPods := 0
 		for _, workerPod := range workerPods.Items {
 			shouldDelete, reason := shouldDeletePod(workerPod, rayv1.WorkerNode)
-			if !shouldDelete && utils.IsTLSEnabled(&instance.Spec) && !podHasMTLSConfiguration(&workerPod) {
-				shouldDelete = true
-				reason = "mTLS is enabled but pod doesn't have mTLS configuration, needs recreation"
-			}
-			if !shouldDelete && !utils.IsTLSEnabled(&instance.Spec) && podHasMTLSConfiguration(&workerPod) {
-				shouldDelete = true
-				reason = "mTLS is disabled but pod has mTLS configuration, needs recreation"
+			if !shouldDelete {
+				shouldDelete, reason = mtlsRecreationNeeded(&workerPod, &instance.Spec)
 			}
 			logger.Info("reconcilePods", "worker Pod", workerPod.Name, "shouldDelete", shouldDelete, "reason", reason)
 			if shouldDelete {
@@ -1048,13 +1038,8 @@ func (r *RayClusterReconciler) reconcileMultiHostWorkerGroup(ctx context.Context
 			continue
 		}
 		shouldDelete, reason := shouldDeletePod(pod, rayv1.WorkerNode)
-		if !shouldDelete && utils.IsTLSEnabled(&instance.Spec) && !podHasMTLSConfiguration(&pod) {
-			shouldDelete = true
-			reason = "mTLS is enabled but pod doesn't have mTLS configuration, needs recreation"
-		}
-		if !shouldDelete && !utils.IsTLSEnabled(&instance.Spec) && podHasMTLSConfiguration(&pod) {
-			shouldDelete = true
-			reason = "mTLS is disabled but pod has mTLS configuration, needs recreation"
+		if !shouldDelete {
+			shouldDelete, reason = mtlsRecreationNeeded(&pod, &instance.Spec)
 		}
 		if shouldDelete {
 			replicaName := pod.Labels[utils.RayWorkerReplicaNameKey]
@@ -1647,9 +1632,24 @@ func (r *RayClusterReconciler) checkMTLSSecretsReady(ctx context.Context, instan
 	return nil
 }
 
+// mtlsRecreationNeeded returns true and a reason if the pod's mTLS state
+// disagrees with the cluster spec. Only active when the RayClusterMTLS feature
+// gate is enabled, so manually-configured TLS clusters are unaffected.
+func mtlsRecreationNeeded(pod *corev1.Pod, spec *rayv1.RayClusterSpec) (bool, string) {
+	if !features.Enabled(features.RayClusterMTLS) {
+		return false, ""
+	}
+	if utils.IsTLSEnabled(spec) && !podHasMTLSConfiguration(pod) {
+		return true, "mTLS is enabled but pod doesn't have mTLS configuration, needs recreation"
+	}
+	if !utils.IsTLSEnabled(spec) && podHasMTLSConfiguration(pod) {
+		return true, "mTLS is disabled but pod has mTLS configuration, needs recreation"
+	}
+	return false, ""
+}
+
 // podHasMTLSConfiguration checks whether a pod has mTLS configured by verifying
-// it has the ray-tls volume and RAY_USE_TLS=1 env var. Used to detect pods that
-// need recreation when mTLS is enabled after initial pod creation.
+// it has the ray-tls volume and RAY_USE_TLS=1 env var.
 func podHasMTLSConfiguration(pod *corev1.Pod) bool {
 	hasTLSVolume := false
 	for _, vol := range pod.Spec.Volumes {
