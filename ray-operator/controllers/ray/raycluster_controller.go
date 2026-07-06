@@ -157,24 +157,15 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 	setDefaults(instance)
 
 	if err := utils.ValidateRayClusterMetadata(instance.ObjectMeta); err != nil {
-		logger.Error(err, "The RayCluster metadata is invalid")
-		r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.InvalidRayClusterMetadata),
-			"The RayCluster metadata is invalid %s/%s: %v", instance.Namespace, instance.Name, err)
-		return ctrl.Result{}, nil
+		return r.handleRayClusterValidationError(ctx, instance, err, utils.InvalidRayClusterMetadata, "The RayCluster metadata is invalid %s/%s: %v")
 	}
 
 	if err := utils.ValidateRayClusterSpec(&instance.Spec, instance.Annotations); err != nil {
-		logger.Error(err, "The RayCluster spec is invalid")
-		r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.InvalidRayClusterSpec),
-			"The RayCluster spec is invalid %s/%s: %v", instance.Namespace, instance.Name, err)
-		return ctrl.Result{}, nil
+		return r.handleRayClusterValidationError(ctx, instance, err, utils.InvalidRayClusterSpec, "The RayCluster spec is invalid %s/%s: %v")
 	}
 
 	if err := utils.ValidateRayClusterUpgradeOptions(instance); err != nil {
-		logger.Error(err, "The RayCluster UpgradeStrategy is invalid")
-		r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.InvalidRayClusterSpec),
-			"The RayCluster UpgradeStrategy is invalid %s/%s: %v", instance.Namespace, instance.Name, err)
-		return ctrl.Result{}, nil
+		return r.handleRayClusterValidationError(ctx, instance, err, utils.InvalidRayClusterSpec, "The RayCluster UpgradeStrategy is invalid %s/%s: %v")
 	}
 
 	if err := utils.ValidateRayClusterStatus(instance); err != nil {
@@ -1559,6 +1550,43 @@ func (r *RayClusterReconciler) SetupWithManager(mgr ctrl.Manager, reconcileConcu
 		Complete(r)
 }
 
+func (r *RayClusterReconciler) handleRayClusterValidationError(ctx context.Context, instance *rayv1.RayCluster, validationErr error, eventType utils.K8sEventType, eventMessageFmt string) (ctrl.Result, error) {
+	logger := ctrl.LoggerFrom(ctx)
+	logger.Error(validationErr, "RayCluster validation failed")
+
+	// Record the event
+	r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(eventType), eventMessageFmt, instance.Namespace, instance.Name, validationErr.Error())
+
+	// When status conditions are disabled, validation failure is reported via Events only.
+	if !features.Enabled(features.RayClusterStatusConditions) {
+		return ctrl.Result{}, nil
+	}
+
+	original := instance.DeepCopy()
+	newInstance := instance.DeepCopy()
+
+	// Record that the controller processed this spec generation.
+	newInstance.Status.ObservedGeneration = newInstance.ObjectMeta.Generation
+
+	timeNow := metav1.Now()
+	newInstance.Status.LastUpdateTime = &timeNow
+
+	meta.SetStatusCondition(&newInstance.Status.Conditions, metav1.Condition{
+		Type:               string(rayv1.RayClusterValid),
+		Status:             metav1.ConditionFalse,
+		Reason:             rayv1.RayClusterValidationFailed,
+		Message:            validationErr.Error(),
+		ObservedGeneration: newInstance.Generation,
+	})
+
+	_, updateErr := r.updateRayClusterStatus(ctx, original, newInstance)
+	if updateErr != nil {
+		logger.Error(updateErr, "Failed to update RayCluster status after validation error")
+		return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, updateErr
+	}
+	return ctrl.Result{}, nil
+}
+
 func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *rayv1.RayCluster, reconcileErr error) (*rayv1.RayCluster, error) {
 	// TODO: Replace this log and use reconcileErr to set the condition field.
 	logger := ctrl.LoggerFrom(ctx)
@@ -1571,6 +1599,13 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 
 	statusConditionGateEnabled := features.Enabled(features.RayClusterStatusConditions)
 	if statusConditionGateEnabled {
+		meta.SetStatusCondition(&newInstance.Status.Conditions, metav1.Condition{
+			Type:               string(rayv1.RayClusterValid),
+			Status:             metav1.ConditionTrue,
+			Reason:             rayv1.RayClusterSpecValid,
+			Message:            "RayCluster metadata and spec are valid",
+			ObservedGeneration: newInstance.Generation,
+		})
 		if reconcileErr != nil {
 			if reason := utils.RayClusterReplicaFailureReason(reconcileErr); reason != "" {
 				meta.SetStatusCondition(&newInstance.Status.Conditions, metav1.Condition{

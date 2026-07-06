@@ -430,11 +430,15 @@ const (
 	RayClusterPodsProvisioning     = "RayClusterPodsProvisioning"
 	HeadPodNotFound                = "HeadPodNotFound"
 	HeadPodRunningAndReady         = "HeadPodRunningAndReady"
+	RayClusterValidationFailed     = "ValidationFailed"
+	RayClusterSpecValid            = "Valid"
 	// UnknownReason says that the reason for the condition is unknown.
 	UnknownReason = "Unknown"
 )
 
 const (
+	// RayClusterValid indicates whether the RayCluster metadata and spec pass controller validation.
+	RayClusterValid RayClusterConditionType = "Valid"
 	// RayClusterProvisioned indicates whether all Ray Pods are ready for the first time.
 	// After RayClusterProvisioned is set to true for the first time, it will not change anymore.
 	RayClusterProvisioned RayClusterConditionType = "RayClusterProvisioned"
