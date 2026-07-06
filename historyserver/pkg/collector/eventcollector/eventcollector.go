@@ -953,6 +953,16 @@ func (ec *EventCollector) uploadOnly(task rotationTask, gzPath string) {
 	if err := ec.storageWriter.WriteFile(key, f); err != nil {
 		f.Close()
 		logrus.Errorf("Failed to resume upload %s to %s: %v", gzPath, key, err)
+		// Retry after a backoff instead of leaving the file on disk until the
+		// next pod restart, mirroring processRotatedFile. A transient remote
+		// error would otherwise pin totalDiskUsed and trigger 503 backpressure.
+		go func(t rotationTask, p string) {
+			select {
+			case <-time.After(5 * time.Second):
+				ec.uploadOnly(t, p)
+			case <-ec.stopped:
+			}
+		}(task, gzPath)
 		return
 	}
 	f.Close()
