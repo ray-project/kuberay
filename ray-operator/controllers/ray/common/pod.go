@@ -413,16 +413,33 @@ func configureTLS(podTemplate *corev1.PodTemplateSpec, instance rayv1.RayCluster
 	//     pod IP. If the worker cert does not yet list that IP the TLS handshake fails, GCS
 	//     marks the worker dead, and the RayJob fails. Relying on KubeRay pod recreation is
 	//     not sufficient because the RayJob itself fails before a retry can succeed.
+	// If OpenSSL is not available, use Python to check the certificate.
 	certPath := utils.RayTLSCertMountPath + "/tls.crt"
 	waitScript := fmt.Sprintf(`CERT="%s"
 if [ -z "${POD_IP}" ]; then
   echo "POD_IP is empty; downward API env vars are resolved once at container start — exiting so kubelet restarts the init container" >&2
   exit 1
 fi
+PYTHON3=$(command -v python3 2>/dev/null)
+cert_has_ip() {
+  if command -v openssl >/dev/null 2>&1; then
+    openssl x509 -in "${CERT}" -noout -text 2>/dev/null | grep -qE "IP Address:${POD_IP}([^0-9.]|$)"
+  elif [ -n "${PYTHON3}" ]; then
+    "${PYTHON3}" -c "
+import ssl, sys
+cert = ssl._ssl._test_decode_cert('${CERT}')
+sans = [v for t, v in cert.get('subjectAltName', ()) if t == 'IP Address']
+sys.exit(0 if '${POD_IP}' in sans else 1)
+"
+  else
+    echo "Neither openssl nor python3 found; cannot verify IP SAN" >&2
+    exit 1
+  fi
+}
 DEADLINE=$(( $(date +%%s) + 300 ))
 echo "Waiting for TLS cert to include IP SAN for ${POD_IP} (timeout 300s)..."
 while true; do
-  if openssl x509 -in "${CERT}" -noout -text 2>/dev/null | grep -qE "IP Address:${POD_IP}([^0-9.]|$)"; then
+  if cert_has_ip; then
     echo "TLS cert now includes IP SAN for ${POD_IP}"
     exit 0
   fi
