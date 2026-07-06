@@ -1047,7 +1047,16 @@ func (r *RayClusterReconciler) reconcileMultiHostWorkerGroup(ctx context.Context
 		if _, alreadyDeleted := deletedPods[pod.Name]; alreadyDeleted {
 			continue
 		}
-		if shouldDelete, reason := shouldDeletePod(pod, rayv1.WorkerNode); shouldDelete {
+		shouldDelete, reason := shouldDeletePod(pod, rayv1.WorkerNode)
+		if !shouldDelete && utils.IsTLSEnabled(&instance.Spec) && !podHasMTLSConfiguration(&pod) {
+			shouldDelete = true
+			reason = "mTLS is enabled but pod doesn't have mTLS configuration, needs recreation"
+		}
+		if !shouldDelete && !utils.IsTLSEnabled(&instance.Spec) && podHasMTLSConfiguration(&pod) {
+			shouldDelete = true
+			reason = "mTLS is disabled but pod has mTLS configuration, needs recreation"
+		}
+		if shouldDelete {
 			replicaName := pod.Labels[utils.RayWorkerReplicaNameKey]
 			podsToDelete, ok := replicaMap[replicaName]
 			if !ok {
