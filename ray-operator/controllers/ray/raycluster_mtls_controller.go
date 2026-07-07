@@ -145,20 +145,9 @@ func (r *RayClusterMTLSController) ensureSecretOwnedByCertificate(ctx context.Co
 		return err
 	}
 
-	for _, ref := range secret.OwnerReferences {
-		if ref.UID == cert.UID {
-			return nil
-		}
+	if err := controllerutil.SetOwnerReference(cert, secret, r.Scheme); err != nil {
+		return err
 	}
-
-	blockOwnerDeletion := true
-	secret.OwnerReferences = append(secret.OwnerReferences, metav1.OwnerReference{
-		APIVersion:         certmanagerv1.SchemeGroupVersion.String(),
-		Kind:               "Certificate",
-		Name:               cert.Name,
-		UID:                cert.UID,
-		BlockOwnerDeletion: &blockOwnerDeletion,
-	})
 	return r.Update(ctx, secret)
 }
 
