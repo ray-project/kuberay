@@ -150,7 +150,7 @@ func (r *RayClusterMTLSController) ensureSecretOwnedByCertificate(ctx context.Co
 		return err
 	}
 
-	if err := controllerutil.SetOwnerReference(cert, secret, r.Scheme); err != nil {
+	if err := controllerutil.SetOwnerReference(cert, secret, r.Scheme, controllerutil.WithBlockOwnerDeletion(true)); err != nil {
 		return err
 	}
 	return r.Update(ctx, secret)
