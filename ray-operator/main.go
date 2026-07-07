@@ -270,16 +270,6 @@ func main() {
 	restConfig.QPS = float32(*config.QPS)
 	restConfig.Burst = *config.Burst
 
-	// Check if cert-manager API is available before registering the mTLS controller.
-	// If cert-manager is not installed, the controller's Certificate/Issuer cache would
-	// never sync and the manager would fail to start (e.g. in E2E environments without cert-manager).
-	certManagerAvailable := false
-	if features.Enabled(features.RayClusterMTLS) {
-		var err error
-		certManagerAvailable, err = certManagerAPIAvailable(restConfig)
-		exitOnError(err, "unable to determine cert-manager API availability")
-	}
-
 	mgr, err := ctrl.NewManager(restConfig, options)
 	exitOnError(err, "unable to start manager")
 
@@ -310,6 +300,15 @@ func main() {
 	// See: https://github.com/ray-project/kuberay/pull/4365#issuecomment-4143407845
 	isOpenShift, err := utils.IsOpenShiftCluster(restConfig)
 	exitOnError(err, "unable to detect cluster type (OpenShift vs Kubernetes)")
+
+	// Check if cert-manager API is available before registering the mTLS controller.
+	// If cert-manager is not installed, the controller's Certificate/Issuer cache would
+	// never sync and the manager would fail to start (e.g. in E2E environments without cert-manager).
+	certManagerAvailable := false
+	if features.Enabled(features.RayClusterMTLS) {
+		certManagerAvailable, err = certManagerAPIAvailable(restConfig)
+		exitOnError(err, "unable to determine cert-manager API availability")
+	}
 
 	rayClusterOptions := ray.RayClusterReconcilerOptions{
 		HeadSidecarContainers:    config.HeadSidecarContainers,
