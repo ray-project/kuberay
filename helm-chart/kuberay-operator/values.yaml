@@ -154,7 +154,7 @@ metrics:
     interval: 30s
     # -- When true, honorLabels preserves the metric’s labels when they collide with the target’s labels.
     honorLabels: true
-    # -- Additional labels to add to the ServiceMonitor's metadata. Prometheus uses these labels (via its `serviceMonitorSelector`) to discover which ServiceMonitors to scrape, e.g. `release: prometheus` for the kube-prometheus-stack chart.
+    # -- Additional labels to add to the ServiceMonitor's metadata.
     additionalLabels: {}
       #  release: prometheus
     # -- Prometheus ServiceMonitor namespace
