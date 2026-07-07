@@ -371,13 +371,24 @@ func validateTLSOptions(spec *rayv1.RayClusterSpec) error {
 		}
 	}
 
-	// Prevent conflict in autoscalerOptions.env: user-supplied env vars are appended after
+	// Prevent conflict in autoscalerOptions: user-supplied env vars are appended after
 	// operator-managed TLS vars, so duplicates would silently override them at runtime.
+	// Volume mounts at the managed TLS path have the same risk.
 	if spec.AutoscalerOptions != nil {
 		for _, envName := range forbiddenEnvVars {
 			if EnvVarExists(envName, spec.AutoscalerOptions.Env) {
 				return fmt.Errorf("cannot set %s environment variable in autoscalerOptions.env when tlsOptions is set "+
 					"- the operator manages TLS configuration for the autoscaler automatically", envName)
+			}
+		}
+		for _, m := range spec.AutoscalerOptions.VolumeMounts {
+			if m.Name == RayTLSVolumeName {
+				return fmt.Errorf("cannot use volume mount named %q in autoscalerOptions.volumeMounts when tlsOptions is set "+
+					"- the operator manages TLS configuration automatically", RayTLSVolumeName)
+			}
+			if m.MountPath == RayTLSCertMountPath {
+				return fmt.Errorf("cannot use volume mount at path %q in autoscalerOptions.volumeMounts when tlsOptions is set "+
+					"- the operator manages TLS configuration automatically", RayTLSCertMountPath)
 			}
 		}
 	}

@@ -3252,6 +3252,32 @@ func TestValidateTLSOptions(t *testing.T) {
 			},
 			expectError: false,
 		},
+		{
+			name: "conflicting TLS volume name in autoscalerOptions - error",
+			modify: func(s *rayv1.RayClusterSpec) {
+				s.TLSOptions = &rayv1.TLSOptions{}
+				s.AutoscalerOptions = &rayv1.AutoscalerOptions{
+					VolumeMounts: []corev1.VolumeMount{
+						{Name: RayTLSVolumeName, MountPath: "/some/path"},
+					},
+				}
+			},
+			expectError: true,
+			errorMsg:    "cannot use volume mount named",
+		},
+		{
+			name: "conflicting TLS mount path in autoscalerOptions - error",
+			modify: func(s *rayv1.RayClusterSpec) {
+				s.TLSOptions = &rayv1.TLSOptions{}
+				s.AutoscalerOptions = &rayv1.AutoscalerOptions{
+					VolumeMounts: []corev1.VolumeMount{
+						{Name: "custom-tls", MountPath: RayTLSCertMountPath},
+					},
+				}
+			},
+			expectError: true,
+			errorMsg:    "cannot use volume mount at path",
+		},
 	}
 
 	for _, tt := range tests {
