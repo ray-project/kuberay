@@ -152,7 +152,6 @@ rules:
   resources:
   - events
   - pods/status
-  - secrets
   - services
   verbs:
   - create
@@ -193,6 +192,16 @@ rules:
 - apiGroups:
   - ""
   resources:
+  - secrets
+  verbs:
+  - create
+  - get
+  - list
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
   - serviceaccounts
   verbs:
   - create
@@ -228,10 +237,8 @@ rules:
   - issuers
   verbs:
   - create
-  - delete
   - get
   - list
-  - patch
   - update
   - watch
 - apiGroups:
