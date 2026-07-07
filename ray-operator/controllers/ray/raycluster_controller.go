@@ -299,12 +299,6 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 					logger.Info("Redis cleanup Job already exists. Requeue the RayCluster CR.")
 					return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, nil
 				}
-				// Namespace may be terminating (e.g. E2E test teardown). Do not treat as reconciler error.
-				if errors.IsForbidden(err) && strings.Contains(err.Error(), "being terminated") {
-					logger.Info("Namespace is terminating; skipping Redis cleanup Job creation, will requeue",
-						"namespace", instance.Namespace)
-					return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, nil
-				}
 				r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.FailedToCreateRedisCleanupJob),
 					"Failed to create Redis cleanup Job %s/%s, %v", redisCleanupJob.Namespace, redisCleanupJob.Name, err)
 				return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
