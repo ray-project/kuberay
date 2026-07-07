@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -14,6 +13,7 @@ import (
 	"go.uber.org/zap/zapcore"
 	"gopkg.in/natefinch/lumberjack.v2"
 	batchv1 "k8s.io/api/batch/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -273,7 +273,12 @@ func main() {
 	// Check if cert-manager API is available before registering the mTLS controller.
 	// If cert-manager is not installed, the controller's Certificate/Issuer cache would
 	// never sync and the manager would fail to start (e.g. in E2E environments without cert-manager).
-	certManagerAvailable := certManagerAPIAvailable(restConfig)
+	certManagerAvailable := false
+	if features.Enabled(features.RayClusterMTLS) {
+		var err error
+		certManagerAvailable, err = certManagerAPIAvailable(restConfig)
+		exitOnError(err, "unable to determine cert-manager API availability")
+	}
 
 	mgr, err := ctrl.NewManager(restConfig, options)
 	exitOnError(err, "unable to start manager")
@@ -372,27 +377,22 @@ func main() {
 	exitOnError(mgr.Start(ctx), "problem running manager")
 }
 
-// certManagerAPIAvailable returns true if the cert-manager.io/v1 API (Certificate, Issuer) is
-// available in the cluster. Used to avoid registering the mTLS controller when cert-manager
-// is not installed, which would cause manager startup to time out waiting for the Certificate cache to sync.
-func certManagerAPIAvailable(restConfig *rest.Config) bool {
+// certManagerAPIAvailable returns true if the cert-manager.io/v1 API is
+// available in the cluster. Used to avoid registering the mTLS controller when
+// cert-manager is not installed, which would cause manager startup to time out
+// waiting for the Certificate cache to sync.
+func certManagerAPIAvailable(restConfig *rest.Config) (bool, error) {
 	discoveryClient, err := discovery.NewDiscoveryClientForConfig(restConfig)
-	if err != nil || discoveryClient == nil {
-		return false
-	}
-	_, resources, err := discoveryClient.ServerGroupsAndResources()
 	if err != nil {
-		var partialErr *discovery.ErrGroupDiscoveryFailed
-		if !errors.As(err, &partialErr) {
-			return false
-		}
+		return false, err
 	}
-	for _, r := range resources {
-		if r.GroupVersion == "cert-manager.io/v1" {
-			return true
+	if _, err := discoveryClient.ServerResourcesForGroupVersion(certmanagerv1.SchemeGroupVersion.String()); err != nil {
+		if apierrors.IsNotFound(err) {
+			return false, nil
 		}
+		return false, err
 	}
-	return false
+	return true, nil
 }
 
 func exitOnError(err error, msg string, keysAndValues ...any) {
