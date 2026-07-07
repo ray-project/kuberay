@@ -466,6 +466,10 @@ func (r *RayClusterMTLSController) getPodIPs(ctx context.Context, instance *rayv
 	}
 	var podIPs []string
 	for _, pod := range pods.Items {
+		if !pod.DeletionTimestamp.IsZero() ||
+			pod.Status.Phase == corev1.PodSucceeded || pod.Status.Phase == corev1.PodFailed {
+			continue
+		}
 		if pod.Status.PodIP != "" {
 			podIPs = append(podIPs, pod.Status.PodIP)
 		}
