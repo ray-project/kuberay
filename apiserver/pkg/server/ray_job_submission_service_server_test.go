@@ -121,7 +121,7 @@ func TestGetRayClusterURL(t *testing.T) {
 			// Mock ray cluster client
 			mockClusterClient := client.NewMockClusterClientInterface(ctrl)
 			// create fake ray cluster
-			fakeClient := fakeclientset.NewSimpleClientset(tc.rayCluster)
+			fakeClient := fakeclientset.NewClientset(tc.rayCluster)
 			fakeRayCluster := fakeClient.RayV1().RayClusters(tc.rayCluster.Namespace)
 			mockClusterClient.EXPECT().RayClusterClient(tc.rayCluster.Namespace).Return(fakeRayCluster).MinTimes(1).MaxTimes(2)
 			mockClientManager.EXPECT().ClusterClient().Return(mockClusterClient).MinTimes(1).MaxTimes(2)
