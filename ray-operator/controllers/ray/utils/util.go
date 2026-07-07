@@ -465,7 +465,7 @@ func CalculateReadyReplicas(pods corev1.PodList) int32 {
 func CalculateAvailableReplicas(pods corev1.PodList) int32 {
 	count := int32(0)
 	for _, pod := range pods.Items {
-		if val, ok := pod.Labels["ray.io/node-type"]; !ok || val != string(rayv1.WorkerNode) {
+		if val, ok := pod.Labels[RayNodeTypeLabelKey]; !ok || val != string(rayv1.WorkerNode) {
 			continue
 		}
 		if pod.Status.Phase == corev1.PodRunning {
