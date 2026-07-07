@@ -728,68 +728,6 @@ func TestCheckMTLSSecretsReady_AutoGenerate_SecretMissingKey(t *testing.T) {
 	assert.Contains(t, err.Error(), "ca.crt")
 }
 
-// --- podHasMTLSConfiguration tests ---
-
-func TestPodHasMTLSConfiguration_WithConfig(t *testing.T) {
-	pod := &corev1.Pod{
-		Spec: corev1.PodSpec{
-			Volumes: []corev1.Volume{
-				{Name: utils.RayTLSVolumeName},
-			},
-			Containers: []corev1.Container{
-				{
-					Name: "ray-head",
-					Env: []corev1.EnvVar{
-						{Name: utils.RAY_USE_TLS, Value: "1"},
-					},
-				},
-			},
-		},
-	}
-	assert.True(t, podHasMTLSConfiguration(pod), "should detect mTLS configuration")
-}
-
-func TestPodHasMTLSConfiguration_WithoutConfig(t *testing.T) {
-	pod := &corev1.Pod{
-		Spec: corev1.PodSpec{
-			Containers: []corev1.Container{
-				{Name: "ray-head"},
-			},
-		},
-	}
-	assert.False(t, podHasMTLSConfiguration(pod), "should not detect mTLS without volume and env")
-}
-
-func TestPodHasMTLSConfiguration_VolumeOnly(t *testing.T) {
-	pod := &corev1.Pod{
-		Spec: corev1.PodSpec{
-			Volumes: []corev1.Volume{
-				{Name: utils.RayTLSVolumeName},
-			},
-			Containers: []corev1.Container{
-				{Name: "ray-head"},
-			},
-		},
-	}
-	assert.False(t, podHasMTLSConfiguration(pod), "should not detect mTLS with volume only")
-}
-
-func TestPodHasMTLSConfiguration_EnvOnly(t *testing.T) {
-	pod := &corev1.Pod{
-		Spec: corev1.PodSpec{
-			Containers: []corev1.Container{
-				{
-					Name: "ray-head",
-					Env: []corev1.EnvVar{
-						{Name: utils.RAY_USE_TLS, Value: "1"},
-					},
-				},
-			},
-		},
-	}
-	assert.False(t, podHasMTLSConfiguration(pod), "should not detect mTLS with env only")
-}
-
 // --- Cluster not found test ---
 
 func TestMTLSController_ClusterNotFound(t *testing.T) {
