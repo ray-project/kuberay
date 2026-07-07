@@ -76,6 +76,11 @@ func (r *RayClusterMTLSController) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{}, nil
 	}
 
+	if manager := utils.ManagedByExternalController(instance.Spec.ManagedBy); manager != nil {
+		ctrl.LoggerFrom(ctx).Info("Skipping RayCluster managed by a custom controller", "managed-by", manager)
+		return ctrl.Result{}, nil
+	}
+
 	// mTLS not enabled: nothing to do.
 	if !utils.IsTLSEnabled(&instance.Spec) {
 		return ctrl.Result{}, nil
