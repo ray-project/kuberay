@@ -333,7 +333,7 @@ func validateNetworkIsolation(spec *rayv1.RayClusterSpec) error {
 }
 
 // validateTLSOptions checks that the TLS config is internally consistent.
-// It prevents users from setting TLS environment variables manually when TLS is enabled.
+// It prevents users from setting TLS environment variables or volume mounts manually when TLS is enabled.
 func validateTLSOptions(spec *rayv1.RayClusterSpec) error {
 	if !IsTLSEnabled(spec) {
 		return nil
@@ -350,6 +350,9 @@ func validateTLSOptions(spec *rayv1.RayClusterSpec) error {
 					"- the operator manages TLS configuration automatically", envName)
 			}
 		}
+		if err := validateNoConflictingTLSVolumeMount(headContainer, "head Pod"); err != nil {
+			return err
+		}
 	}
 
 	for i := range spec.WorkerGroupSpecs {
@@ -361,6 +364,9 @@ func validateTLSOptions(spec *rayv1.RayClusterSpec) error {
 					return fmt.Errorf("cannot set %s environment variable in worker group %q when tlsOptions is set "+
 						"- the operator manages TLS configuration automatically", envName, worker.GroupName)
 				}
+			}
+			if err := validateNoConflictingTLSVolumeMount(workerContainer, fmt.Sprintf("worker group %q", worker.GroupName)); err != nil {
+				return err
 			}
 		}
 	}
@@ -376,6 +382,22 @@ func validateTLSOptions(spec *rayv1.RayClusterSpec) error {
 		}
 	}
 
+	return nil
+}
+
+// validateNoConflictingTLSVolumeMount returns an error if the container already has a volume
+// mount that conflicts with the operator-managed TLS mount (same name or same mount path).
+func validateNoConflictingTLSVolumeMount(container corev1.Container, location string) error {
+	for _, m := range container.VolumeMounts {
+		if m.Name == RayTLSVolumeName {
+			return fmt.Errorf("cannot use volume mount named %q in %s when tlsOptions is set "+
+				"- the operator manages TLS configuration automatically", RayTLSVolumeName, location)
+		}
+		if m.MountPath == RayTLSCertMountPath {
+			return fmt.Errorf("cannot use volume mount at path %q in %s when tlsOptions is set "+
+				"- the operator manages TLS configuration automatically", RayTLSCertMountPath, location)
+		}
+	}
 	return nil
 }
 

@@ -3198,6 +3198,60 @@ func TestValidateTLSOptions(t *testing.T) {
 			expectError: true,
 			errorMsg:    "cannot set RAY_TLS_CA_CERT",
 		},
+		{
+			name: "conflicting TLS volume name in head container - error",
+			modify: func(s *rayv1.RayClusterSpec) {
+				s.TLSOptions = &rayv1.TLSOptions{}
+				s.HeadGroupSpec.Template.Spec.Containers[0].VolumeMounts = []corev1.VolumeMount{
+					{Name: RayTLSVolumeName, MountPath: "/some/path"},
+				}
+			},
+			expectError: true,
+			errorMsg:    "cannot use volume mount named",
+		},
+		{
+			name: "conflicting TLS mount path in head container - error",
+			modify: func(s *rayv1.RayClusterSpec) {
+				s.TLSOptions = &rayv1.TLSOptions{}
+				s.HeadGroupSpec.Template.Spec.Containers[0].VolumeMounts = []corev1.VolumeMount{
+					{Name: "custom-tls", MountPath: RayTLSCertMountPath},
+				}
+			},
+			expectError: true,
+			errorMsg:    "cannot use volume mount at path",
+		},
+		{
+			name: "conflicting TLS volume name in worker container - error",
+			modify: func(s *rayv1.RayClusterSpec) {
+				s.TLSOptions = &rayv1.TLSOptions{}
+				s.WorkerGroupSpecs = []rayv1.WorkerGroupSpec{{
+					GroupName: "wg",
+					Template: corev1.PodTemplateSpec{
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{{
+								Name:  "ray-worker",
+								Image: "rayproject/ray:latest",
+								VolumeMounts: []corev1.VolumeMount{
+									{Name: RayTLSVolumeName, MountPath: "/some/path"},
+								},
+							}},
+						},
+					},
+				}}
+			},
+			expectError: true,
+			errorMsg:    "cannot use volume mount named",
+		},
+		{
+			name: "non-conflicting volume mount in head container - valid",
+			modify: func(s *rayv1.RayClusterSpec) {
+				s.TLSOptions = &rayv1.TLSOptions{}
+				s.HeadGroupSpec.Template.Spec.Containers[0].VolumeMounts = []corev1.VolumeMount{
+					{Name: "user-volume", MountPath: "/user/path"},
+				}
+			},
+			expectError: false,
+		},
 	}
 
 	for _, tt := range tests {
