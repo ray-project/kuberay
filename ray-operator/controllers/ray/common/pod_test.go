@@ -2629,7 +2629,7 @@ func TestConfigureTLS_AutoGenerate_HeadPod(t *testing.T) {
 	// wait-for-tls-ip-san must be the first init container on head pods (auto-generate only).
 	require.NotEmpty(t, podTemplate.Spec.InitContainers, "head pod should have init containers when TLS is enabled")
 	assert.Equal(t, "wait-for-tls-ip-san", podTemplate.Spec.InitContainers[0].Name,
-		"wait-for-tls-ip-san must be the first init container to run before wait-gcs-ready")
+		"wait-for-tls-ip-san must be the first init container")
 	waitInit := podTemplate.Spec.InitContainers[0]
 	// Must have access to the TLS cert.
 	hasTLSMount := false
