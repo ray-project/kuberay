@@ -234,7 +234,6 @@ rules:
   - cert-manager.io
   resources:
   - certificates
-  - issuers
   verbs:
   - create
   - get
@@ -247,6 +246,15 @@ rules:
   - certificates/status
   verbs:
   - get
+- apiGroups:
+  - cert-manager.io
+  resources:
+  - issuers
+  verbs:
+  - create
+  - get
+  - list
+  - watch
 - apiGroups:
   - coordination.k8s.io
   resources:

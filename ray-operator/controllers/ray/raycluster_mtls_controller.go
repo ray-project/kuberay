@@ -52,7 +52,7 @@ func NewRayClusterMTLSController(mgr ctrl.Manager) *RayClusterMTLSController {
 
 // +kubebuilder:rbac:groups=ray.io,resources=rayclusters,verbs=get;list;watch;update
 
-// +kubebuilder:rbac:groups=cert-manager.io,resources=issuers,verbs=get;list;watch;create;update
+// +kubebuilder:rbac:groups=cert-manager.io,resources=issuers,verbs=get;list;watch;create
 // +kubebuilder:rbac:groups=cert-manager.io,resources=certificates,verbs=get;list;watch;create;update
 // +kubebuilder:rbac:groups=cert-manager.io,resources=certificates/status,verbs=get
 // +kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;update
@@ -156,16 +156,10 @@ func (r *RayClusterMTLSController) ensureSecretOwnedByCertificate(ctx context.Co
 	return r.Update(ctx, secret)
 }
 
-// reconcileSelfSignedIssuer creates or updates the self-signed issuer used to bootstrap the CA.
+// reconcileSelfSignedIssuer creates the self-signed issuer used to bootstrap the CA if it does not exist.
+// The issuer spec is static once created so no update is needed.
 func (r *RayClusterMTLSController) reconcileSelfSignedIssuer(ctx context.Context, instance *rayv1.RayCluster) error {
 	issuerName := utils.GetSelfSignedIssuerName(instance.Name)
-	desiredLabels := tlsResourceLabels(instance.Name, "selfsigned-issuer")
-	desiredSpec := certmanagerv1.IssuerSpec{
-		IssuerConfig: certmanagerv1.IssuerConfig{
-			SelfSigned: &certmanagerv1.SelfSignedIssuer{},
-		},
-	}
-
 	existing := &certmanagerv1.Issuer{}
 	err := r.Get(ctx, client.ObjectKey{Name: issuerName, Namespace: instance.Namespace}, existing)
 	if err != nil {
@@ -176,23 +170,18 @@ func (r *RayClusterMTLSController) reconcileSelfSignedIssuer(ctx context.Context
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      issuerName,
 				Namespace: instance.Namespace,
-				Labels:    desiredLabels,
+				Labels:    tlsResourceLabels(instance.Name, "selfsigned-issuer"),
 			},
-			Spec: desiredSpec,
+			Spec: certmanagerv1.IssuerSpec{
+				IssuerConfig: certmanagerv1.IssuerConfig{
+					SelfSigned: &certmanagerv1.SelfSignedIssuer{},
+				},
+			},
 		}
 		if err := controllerutil.SetControllerReference(instance, issuer, r.Scheme); err != nil {
 			return err
 		}
 		return r.Create(ctx, issuer)
-	}
-
-	if !reflect.DeepEqual(existing.Labels, desiredLabels) || !reflect.DeepEqual(existing.Spec, desiredSpec) {
-		existing.Labels = desiredLabels
-		existing.Spec = desiredSpec
-		if err := controllerutil.SetControllerReference(instance, existing, r.Scheme); err != nil {
-			return err
-		}
-		return r.Update(ctx, existing)
 	}
 	return nil
 }
@@ -260,19 +249,10 @@ func (r *RayClusterMTLSController) reconcileCACertificate(ctx context.Context, i
 	return r.ensureSecretOwnedByCertificate(ctx, existing)
 }
 
-// reconcileCAIssuer creates or updates the issuer backed by the generated CA certificate's secret.
+// reconcileCAIssuer creates the issuer backed by the generated CA certificate's secret if it does not exist.
+// The issuer spec is static once created (keyed on RayCluster UID) so no update is needed.
 func (r *RayClusterMTLSController) reconcileCAIssuer(ctx context.Context, instance *rayv1.RayCluster) error {
 	issuerName := utils.GetCAIssuerName(instance.Name)
-	caSecretName := utils.GetCASecretName(instance.Name, instance.UID)
-	desiredLabels := tlsResourceLabels(instance.Name, "ca-issuer")
-	desiredSpec := certmanagerv1.IssuerSpec{
-		IssuerConfig: certmanagerv1.IssuerConfig{
-			CA: &certmanagerv1.CAIssuer{
-				SecretName: caSecretName,
-			},
-		},
-	}
-
 	existing := &certmanagerv1.Issuer{}
 	err := r.Get(ctx, client.ObjectKey{Name: issuerName, Namespace: instance.Namespace}, existing)
 	if err != nil {
@@ -283,23 +263,20 @@ func (r *RayClusterMTLSController) reconcileCAIssuer(ctx context.Context, instan
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      issuerName,
 				Namespace: instance.Namespace,
-				Labels:    desiredLabels,
+				Labels:    tlsResourceLabels(instance.Name, "ca-issuer"),
 			},
-			Spec: desiredSpec,
+			Spec: certmanagerv1.IssuerSpec{
+				IssuerConfig: certmanagerv1.IssuerConfig{
+					CA: &certmanagerv1.CAIssuer{
+						SecretName: utils.GetCASecretName(instance.Name, instance.UID),
+					},
+				},
+			},
 		}
 		if err := controllerutil.SetControllerReference(instance, issuer, r.Scheme); err != nil {
 			return err
 		}
 		return r.Create(ctx, issuer)
-	}
-
-	if !reflect.DeepEqual(existing.Labels, desiredLabels) || !reflect.DeepEqual(existing.Spec, desiredSpec) {
-		existing.Labels = desiredLabels
-		existing.Spec = desiredSpec
-		if err := controllerutil.SetControllerReference(instance, existing, r.Scheme); err != nil {
-			return err
-		}
-		return r.Update(ctx, existing)
 	}
 	return nil
 }
