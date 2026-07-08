@@ -2686,14 +2686,16 @@ func TestConfigureTLS_AutoGenerate_WorkerPod(t *testing.T) {
 	assert.Equal(t, "wait-for-tls-ip-san", podTemplate.Spec.InitContainers[0].Name,
 		"wait-for-tls-ip-san must be the first init container on worker pods")
 
-	// wait-gcs-ready should still have TLS config.
-	for _, initContainer := range podTemplate.Spec.InitContainers {
-		if initContainer.Name != "wait-gcs-ready" {
-			continue
+	// wait-gcs-ready should exist and have TLS config.
+	var gcsReadyContainer *corev1.Container
+	for i := range podTemplate.Spec.InitContainers {
+		if podTemplate.Spec.InitContainers[i].Name == "wait-gcs-ready" {
+			gcsReadyContainer = &podTemplate.Spec.InitContainers[i]
+			break
 		}
-		env := getEnvVar(initContainer, utils.RAY_USE_TLS)
-		assert.NotNil(t, env, "init container %s should have RAY_USE_TLS", initContainer.Name)
 	}
+	require.NotNil(t, gcsReadyContainer, "worker pod should have wait-gcs-ready init container")
+	assert.NotNil(t, getEnvVar(*gcsReadyContainer, utils.RAY_USE_TLS), "wait-gcs-ready should have RAY_USE_TLS")
 }
 
 func TestConfigureTLS_AutoscalerContainer(t *testing.T) {
