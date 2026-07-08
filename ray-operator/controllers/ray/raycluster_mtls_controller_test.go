@@ -134,12 +134,12 @@ func TestMTLSController_AutoGenerate_CreatesFullPKI(t *testing.T) {
 	ctx := context.Background()
 	req := ctrl.Request{NamespacedName: types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace}}
 
-	// First call adds the mTLS finalizer and requeues.
+	// First call creates PKI resources; certs aren't ready yet so it requeues.
 	result, err := r.Reconcile(ctx, req)
 	require.NoError(t, err)
-	assert.Equal(t, mtlsDefaultRequeueDuration, result.RequeueAfter, "should requeue after adding finalizer")
+	assert.Equal(t, mtlsDefaultRequeueDuration, result.RequeueAfter, "should requeue when certs not ready")
 
-	// Second call creates resources but certs aren't ready yet.
+	// Second call: resources already exist, certs still not ready.
 	result, err = r.Reconcile(ctx, req)
 	require.NoError(t, err)
 	assert.Equal(t, mtlsDefaultRequeueDuration, result.RequeueAfter, "should requeue when certs not ready")
