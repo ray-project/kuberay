@@ -1028,8 +1028,8 @@ func GetRayDashboardClientFunc(ctx context.Context, mgr manager.Manager, useKube
 			dashboardURL = fmt.Sprintf("%s/api/v1/namespaces/%s/services/%s:dashboard/proxy", mgr.GetConfig().Host, rayCluster.Namespace, headSvcName)
 		}
 		if enableMetrics {
-			histogram, counter := httpclientmetrics.DashboardClientMetrics()
-			httpClient.Transport = httpclientmetrics.NewInstrumentedRoundTripper(httpClient.Transport, histogram, counter, mode)
+			histogram := httpclientmetrics.DashboardClientMetrics()
+			httpClient.Transport = httpclientmetrics.NewInstrumentedRoundTripper(httpClient.Transport, histogram, mode)
 		}
 		dashboardClient.InitClient(httpClient, dashboardURL, authToken)
 
@@ -1052,8 +1052,8 @@ func GetRayHttpProxyClientFunc(mgr manager.Manager, useKubernetesProxy bool, ena
 			httpProxyURL = fmt.Sprintf("%s/api/v1/namespaces/%s/pods/%s:%d/proxy/", mgr.GetConfig().Host, podNamespace, podName, port)
 		}
 		if enableMetrics {
-			histogram, counter := httpclientmetrics.ProxyClientMetrics()
-			httpClient.Transport = httpclientmetrics.NewInstrumentedRoundTripper(httpClient.Transport, histogram, counter, mode)
+			histogram := httpclientmetrics.ServeClientMetrics()
+			httpClient.Transport = httpclientmetrics.NewInstrumentedRoundTripper(httpClient.Transport, histogram, mode)
 		}
 
 		return &RayHttpProxyClient{

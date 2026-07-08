@@ -52,14 +52,12 @@ func TestRayServiceHTTPClientMetrics(t *testing.T) {
 	g.Expect(stderr.String()).To(BeEmpty(), "curl stderr should be empty; metrics scrape may have failed")
 	metricsOutput := stdout.String()
 
-	// Assert all 4 metrics are present.
+	// Assert all histogram metrics are present.
 	expectedMetrics := []string{
 		"kuberay_dashboard_client_request_duration_seconds_bucket",
 		"kuberay_dashboard_client_request_duration_seconds_count",
-		"kuberay_dashboard_client_requests_total",
-		"kuberay_proxy_client_request_duration_seconds_bucket",
-		"kuberay_proxy_client_request_duration_seconds_count",
-		"kuberay_proxy_client_requests_total",
+		"kuberay_serve_client_request_duration_seconds_bucket",
+		"kuberay_serve_client_request_duration_seconds_count",
 	}
 
 	for _, metric := range expectedMetrics {
@@ -70,17 +68,22 @@ func TestRayServiceHTTPClientMetrics(t *testing.T) {
 	// Assert expected endpoint labels appear.
 	g.Expect(metricsOutput).To(ContainSubstring(`ray_endpoint="serve_applications"`),
 		"Expected serve_applications ray_endpoint label from GetServeDetails/UpdateDeployments calls")
-	g.Expect(metricsOutput).To(ContainSubstring(`ray_endpoint="proxy_health"`),
-		"Expected proxy_health ray_endpoint label from CheckProxyActorHealth calls")
+	g.Expect(metricsOutput).To(ContainSubstring(`ray_endpoint="serve_proxy_health"`),
+		"Expected serve_proxy_health ray_endpoint label from CheckProxyActorHealth calls")
 
 	// Assert successful response codes appear.
 	g.Expect(metricsOutput).To(ContainSubstring(`code="200"`),
 		"Expected successful response code 200 in metrics")
 
-	// Log all matching metric lines for debugging.
-	for line := range strings.SplitSeq(metricsOutput, "\n") {
-		if (strings.Contains(line, "kuberay_dashboard_client") || strings.Contains(line, "kuberay_proxy_client")) && !strings.HasPrefix(line, "#") {
-			LogWithTimestamp(test.T(), "Metric: %s", strings.TrimSpace(line))
+	// Log matching metric lines for debugging only when the test fails.
+	test.T().Cleanup(func() {
+		if !test.T().Failed() {
+			return
 		}
-	}
+		for line := range strings.SplitSeq(metricsOutput, "\n") {
+			if (strings.Contains(line, "kuberay_dashboard_client") || strings.Contains(line, "kuberay_serve_client")) && !strings.HasPrefix(line, "#") {
+				LogWithTimestamp(test.T(), "Metric: %s", strings.TrimSpace(line))
+			}
+		}
+	})
 }

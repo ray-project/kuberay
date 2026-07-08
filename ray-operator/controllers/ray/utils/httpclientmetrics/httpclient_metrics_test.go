@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/testutil"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -19,34 +18,34 @@ func TestNormalizeEndpoint(t *testing.T) {
 		urlPath  string
 		expected string
 	}{
-		{"serve applications", "/api/serve/applications/", "serve_applications"},
-		{"jobs list", "/api/jobs/", "jobs"},
-		{"job info with ID", "/api/jobs/raysubmit_abc123", "jobs"},
-		{"job logs", "/api/jobs/raysubmit_abc123/logs", "jobs"},
-		{"job stop", "/api/jobs/raysubmit_abc123/stop", "jobs"},
-		{"job delete", "/api/jobs/raysubmit_abc123", "jobs"},
-		{"proxy health", "/-/healthz", "proxy_health"},
-		{"unknown path", "/unknown/path", "unknown"},
-		{"empty path", "", "unknown"},
+		{"serve applications", "/api/serve/applications/", endpointServeApplications},
+		{"jobs list", "/api/jobs/", endpointJobs},
+		{"job info with ID", "/api/jobs/raysubmit_abc123", endpointJobs},
+		{"job logs", "/api/jobs/raysubmit_abc123/logs", endpointJobs},
+		{"job stop", "/api/jobs/raysubmit_abc123/stop", endpointJobs},
+		{"job delete", "/api/jobs/raysubmit_abc123", endpointJobs},
+		{"proxy health", "/-/healthz", endpointServeProxyHealth},
+		{"unknown path", "/unknown/path", endpointUnknown},
+		{"empty path", "", endpointUnknown},
 		{
 			"k8s proxy prefix with jobs",
 			"/api/v1/namespaces/default/services/svc:dashboard/proxy/api/jobs/raysubmit_abc123",
-			"jobs",
+			endpointJobs,
 		},
 		{
 			"k8s proxy prefix with namespace named proxy",
 			"/api/v1/namespaces/proxy/services/svc:dashboard/proxy/api/jobs/raysubmit_abc123",
-			"jobs",
+			endpointJobs,
 		},
 		{
 			"k8s proxy prefix with serve",
 			"/api/v1/namespaces/default/services/svc:dashboard/proxy/api/serve/applications/",
-			"serve_applications",
+			endpointServeApplications,
 		},
 		{
 			"k8s pod proxy prefix with healthz",
 			"/api/v1/namespaces/default/pods/pod-name:8000/proxy/-/healthz",
-			"proxy_health",
+			endpointServeProxyHealth,
 		},
 	}
 
@@ -71,31 +70,23 @@ func (m *mockRoundTripper) RoundTrip(_ *http.Request) (*http.Response, error) {
 	return &http.Response{StatusCode: m.statusCode}, nil
 }
 
-func newTestMetrics(t *testing.T) (histogram *prometheus.HistogramVec, counter *prometheus.CounterVec) {
+func newTestMetrics(t *testing.T) *prometheus.HistogramVec {
 	t.Helper()
-	histogram = prometheus.NewHistogramVec(
+	return prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Name:    t.Name() + "_request_duration_seconds",
 			Help:    "Test histogram.",
-			Buckets: []float64{0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.0, 5.0, 10.0, 15.0},
+			Buckets: []float64{0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.0, 5.0, 10.0},
 		},
 		[]string{"method", "ray_endpoint", "code", "mode"},
 	)
-	counter = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: t.Name() + "_requests_total",
-			Help: "Test counter.",
-		},
-		[]string{"method", "ray_endpoint", "code", "mode"},
-	)
-	return histogram, counter
 }
 
-func newTestInstrumentedRT(t *testing.T, inner http.RoundTripper, mode string) (http.RoundTripper, *prometheus.HistogramVec, *prometheus.CounterVec) {
+func newTestInstrumentedRT(t *testing.T, inner http.RoundTripper, mode string) (http.RoundTripper, *prometheus.HistogramVec) {
 	t.Helper()
-	histogram, counter := newTestMetrics(t)
-	rt := NewInstrumentedRoundTripper(inner, histogram, counter, Mode(mode))
-	return rt, histogram, counter
+	histogram := newTestMetrics(t)
+	rt := NewInstrumentedRoundTripper(inner, histogram, Mode(mode))
+	return rt, histogram
 }
 
 // getHistogramSampleCount retrieves the sample count from a histogram observer.
@@ -127,7 +118,7 @@ func TestInstrumentedRoundTripper_RecordsHistogram(t *testing.T) {
 			path:           "/api/serve/applications/",
 			statusCode:     200,
 			expectedCode:   "200",
-			expectedEP:     "serve_applications",
+			expectedEP:     endpointServeApplications,
 			expectedMethod: "GET",
 		},
 		{
@@ -136,7 +127,7 @@ func TestInstrumentedRoundTripper_RecordsHistogram(t *testing.T) {
 			path:           "/api/serve/applications/",
 			statusCode:     200,
 			expectedCode:   "200",
-			expectedEP:     "serve_applications",
+			expectedEP:     endpointServeApplications,
 			expectedMethod: "PUT",
 		},
 		{
@@ -145,7 +136,7 @@ func TestInstrumentedRoundTripper_RecordsHistogram(t *testing.T) {
 			path:           "/api/jobs/raysubmit_abc",
 			statusCode:     200,
 			expectedCode:   "200",
-			expectedEP:     "jobs",
+			expectedEP:     endpointJobs,
 			expectedMethod: "GET",
 		},
 		{
@@ -154,7 +145,7 @@ func TestInstrumentedRoundTripper_RecordsHistogram(t *testing.T) {
 			path:           "/api/jobs/",
 			statusCode:     200,
 			expectedCode:   "200",
-			expectedEP:     "jobs",
+			expectedEP:     endpointJobs,
 			expectedMethod: "POST",
 		},
 		{
@@ -163,7 +154,7 @@ func TestInstrumentedRoundTripper_RecordsHistogram(t *testing.T) {
 			path:           "/api/jobs/raysubmit_abc",
 			statusCode:     200,
 			expectedCode:   "200",
-			expectedEP:     "jobs",
+			expectedEP:     endpointJobs,
 			expectedMethod: "DELETE",
 		},
 		{
@@ -172,7 +163,7 @@ func TestInstrumentedRoundTripper_RecordsHistogram(t *testing.T) {
 			path:           "/api/jobs/raysubmit_abc",
 			statusCode:     500,
 			expectedCode:   "500",
-			expectedEP:     "jobs",
+			expectedEP:     endpointJobs,
 			expectedMethod: "GET",
 		},
 		{
@@ -181,7 +172,7 @@ func TestInstrumentedRoundTripper_RecordsHistogram(t *testing.T) {
 			path:           "/api/jobs/raysubmit_abc",
 			statusCode:     404,
 			expectedCode:   "404",
-			expectedEP:     "jobs",
+			expectedEP:     endpointJobs,
 			expectedMethod: "GET",
 		},
 		{
@@ -190,7 +181,7 @@ func TestInstrumentedRoundTripper_RecordsHistogram(t *testing.T) {
 			path:           "/-/healthz",
 			statusCode:     200,
 			expectedCode:   "200",
-			expectedEP:     "proxy_health",
+			expectedEP:     endpointServeProxyHealth,
 			expectedMethod: "GET",
 		},
 	}
@@ -198,7 +189,7 @@ func TestInstrumentedRoundTripper_RecordsHistogram(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mock := &mockRoundTripper{statusCode: tt.statusCode, err: tt.transportErr}
-			rt, histogram, _ := newTestInstrumentedRT(t, mock, "direct")
+			rt, histogram := newTestInstrumentedRT(t, mock, "direct")
 
 			req, err := http.NewRequestWithContext(context.Background(), tt.method, "http://localhost:8265"+tt.path, nil)
 			require.NoError(t, err)
@@ -221,7 +212,7 @@ func TestInstrumentedRoundTripper_Modes(t *testing.T) {
 	for _, mode := range []string{"direct", "proxy"} {
 		t.Run("mode_"+mode, func(t *testing.T) {
 			mock := &mockRoundTripper{statusCode: 200}
-			rt, histogram, _ := newTestInstrumentedRT(t, mock, mode)
+			rt, histogram := newTestInstrumentedRT(t, mock, mode)
 
 			req, err := http.NewRequestWithContext(context.Background(), "GET", "http://localhost:8265/api/serve/applications/", nil)
 			require.NoError(t, err)
@@ -229,7 +220,7 @@ func TestInstrumentedRoundTripper_Modes(t *testing.T) {
 			_, err = rt.RoundTrip(req)
 			require.NoError(t, err)
 
-			count := getHistogramSampleCount(t, histogram, "GET", "serve_applications", "200", mode)
+			count := getHistogramSampleCount(t, histogram, "GET", endpointServeApplications, "200", mode)
 			assert.Equal(t, uint64(1), count)
 		})
 	}
@@ -237,7 +228,7 @@ func TestInstrumentedRoundTripper_Modes(t *testing.T) {
 
 func TestInstrumentedRoundTripper_TransportError(t *testing.T) {
 	mock := &mockRoundTripper{err: errors.New("context deadline exceeded")}
-	rt, histogram, _ := newTestInstrumentedRT(t, mock, "proxy")
+	rt, histogram := newTestInstrumentedRT(t, mock, "proxy")
 
 	req, err := http.NewRequestWithContext(context.Background(), "GET", "http://localhost:8265/api/serve/applications/", nil)
 	require.NoError(t, err)
@@ -245,15 +236,17 @@ func TestInstrumentedRoundTripper_TransportError(t *testing.T) {
 	_, rtErr := rt.RoundTrip(req)
 	require.Error(t, rtErr)
 
-	count := getHistogramSampleCount(t, histogram, "GET", "serve_applications", "error", "proxy")
+	// The histogram must record the failed request with code="error" so that its
+	// _count series accounts for transport failures in error-rate calculations.
+	count := getHistogramSampleCount(t, histogram, "GET", endpointServeApplications, "error", "proxy")
 	assert.Equal(t, uint64(1), count)
 }
 
-func TestInstrumentedRoundTripper_CounterIncrement(t *testing.T) {
+func TestInstrumentedRoundTripper_RequestCount(t *testing.T) {
 	tests := []struct {
 		name           string
 		url            string
-		calls          int
+		calls          uint64
 		expectedEP     string
 		expectedCode   string
 		expectedMethod string
@@ -262,7 +255,7 @@ func TestInstrumentedRoundTripper_CounterIncrement(t *testing.T) {
 			name:           "serve applications",
 			url:            "http://localhost:8265/api/serve/applications/",
 			calls:          3,
-			expectedEP:     "serve_applications",
+			expectedEP:     endpointServeApplications,
 			expectedCode:   "200",
 			expectedMethod: "GET",
 		},
@@ -270,7 +263,7 @@ func TestInstrumentedRoundTripper_CounterIncrement(t *testing.T) {
 			name:           "proxy health",
 			url:            "http://10.0.0.1:8000/-/healthz",
 			calls:          5,
-			expectedEP:     "proxy_health",
+			expectedEP:     endpointServeProxyHealth,
 			expectedCode:   "200",
 			expectedMethod: "GET",
 		},
@@ -279,7 +272,7 @@ func TestInstrumentedRoundTripper_CounterIncrement(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mock := &mockRoundTripper{statusCode: 200}
-			rt, _, counter := newTestInstrumentedRT(t, mock, "direct")
+			rt, histogram := newTestInstrumentedRT(t, mock, "direct")
 
 			req, err := http.NewRequestWithContext(context.Background(), tt.expectedMethod, tt.url, nil)
 			require.NoError(t, err)
@@ -289,21 +282,58 @@ func TestInstrumentedRoundTripper_CounterIncrement(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			c, err := counter.GetMetricWithLabelValues(tt.expectedMethod, tt.expectedEP, tt.expectedCode, "direct")
-			require.NoError(t, err)
-			assert.InDelta(t, float64(tt.calls), testutil.ToFloat64(c), 0)
+			// The histogram's _count series yields the total request count.
+			count := getHistogramSampleCount(t, histogram, tt.expectedMethod, tt.expectedEP, tt.expectedCode, "direct")
+			assert.Equal(t, tt.calls, count)
 		})
 	}
 }
 
 func TestNewInstrumentedRoundTripperNilInner(t *testing.T) {
-	histogram, counter := newTestMetrics(t)
-	rt := NewInstrumentedRoundTripper(nil, histogram, counter, ModeDirect)
+	histogram := newTestMetrics(t)
+	rt := NewInstrumentedRoundTripper(nil, histogram, ModeDirect)
 	assert.NotNil(t, rt)
 }
 
 func TestNewInstrumentedRoundTripperNoopsWithoutCollectors(t *testing.T) {
 	inner := &mockRoundTripper{statusCode: 200}
-	rt := NewInstrumentedRoundTripper(inner, nil, nil, ModeDirect)
+	rt := NewInstrumentedRoundTripper(inner, nil, ModeDirect)
 	assert.Same(t, inner, rt)
+}
+
+func TestRegisterMetrics(t *testing.T) {
+	reg := prometheus.NewRegistry()
+	require.NotPanics(t, func() { RegisterMetrics(reg) })
+	assertHistogramsRegistered(t, reg)
+}
+
+// TestRegisterMetricsWithDefaultRegisterer mirrors the API server wiring, which
+// registers with prometheus.DefaultRegisterer and exposes metrics via
+// promhttp.Handler() (backed by prometheus.DefaultGatherer).
+func TestRegisterMetricsWithDefaultRegisterer(t *testing.T) {
+	require.NotPanics(t, func() { RegisterMetrics(prometheus.DefaultRegisterer) })
+	assertHistogramsRegistered(t, prometheus.DefaultGatherer)
+}
+
+// assertHistogramsRegistered records one observation on each histogram and
+// verifies both metric families are emitted by the given gatherer.
+func assertHistogramsRegistered(t *testing.T, gatherer prometheus.Gatherer) {
+	t.Helper()
+	dashboardClientRequestDuration.WithLabelValues("GET", endpointJobs, "200", string(ModeDirect)).Observe(0.01)
+	serveClientRequestDuration.WithLabelValues("GET", endpointServeProxyHealth, "200", string(ModeDirect)).Observe(0.01)
+
+	families, err := gatherer.Gather()
+	require.NoError(t, err)
+
+	registered := make(map[string]bool)
+	for _, mf := range families {
+		registered[mf.GetName()] = true
+	}
+
+	for _, name := range []string{
+		"kuberay_dashboard_client_request_duration_seconds",
+		"kuberay_serve_client_request_duration_seconds",
+	} {
+		assert.True(t, registered[name], "expected metric %q to be registered", name)
+	}
 }

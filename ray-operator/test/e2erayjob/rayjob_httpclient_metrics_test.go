@@ -68,8 +68,6 @@ env_vars:
 	// Assert dashboard client metrics for the jobs endpoint are present.
 	g.Expect(metricsOutput).To(ContainSubstring("kuberay_dashboard_client_request_duration_seconds_count"),
 		"Dashboard client histogram count should be present")
-	g.Expect(metricsOutput).To(ContainSubstring("kuberay_dashboard_client_requests_total"),
-		"Dashboard client counter should be present")
 
 	// Assert the jobs endpoint label appears (from SubmitJob / GetJobInfo calls).
 	g.Expect(metricsOutput).To(ContainSubstring(`ray_endpoint="jobs"`),
@@ -79,10 +77,15 @@ env_vars:
 	g.Expect(metricsOutput).To(ContainSubstring(`code="200"`),
 		"Expected successful response code 200 in metrics")
 
-	// Log all matching metric lines for debugging.
-	for line := range strings.SplitSeq(metricsOutput, "\n") {
-		if strings.Contains(line, "kuberay_dashboard_client") && !strings.HasPrefix(line, "#") {
-			LogWithTimestamp(test.T(), "Metric: %s", strings.TrimSpace(line))
+	// Log matching metric lines for debugging only when the test fails.
+	test.T().Cleanup(func() {
+		if !test.T().Failed() {
+			return
 		}
-	}
+		for line := range strings.SplitSeq(metricsOutput, "\n") {
+			if strings.Contains(line, "kuberay_dashboard_client") && !strings.HasPrefix(line, "#") {
+				LogWithTimestamp(test.T(), "Metric: %s", strings.TrimSpace(line))
+			}
+		}
+	})
 }

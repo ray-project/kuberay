@@ -17,6 +17,7 @@ import (
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/cors"
 	"google.golang.org/grpc"
@@ -33,6 +34,7 @@ import (
 	"github.com/ray-project/kuberay/apiserver/pkg/util"
 	"github.com/ray-project/kuberay/apiserversdk"
 	api "github.com/ray-project/kuberay/proto/go_client"
+	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils/httpclientmetrics"
 )
 
 var (
@@ -116,6 +118,10 @@ func startRPCServer(resourceManager *manager.ResourceManager, grpcTimeout time.D
 	// This is to enable `grpc_server_handling_seconds`, otherwise we won't have latency metrics.
 	// see https://github.com/grpc-ecosystem/go-grpc-prometheus/blob/master/README.md#histograms for details.
 	grpc_prometheus.EnableHandlingTimeHistogram()
+	// Register the Ray HTTP client metrics so instrumented outbound requests are exposed on /metrics.
+	if *collectMetricsFlag {
+		httpclientmetrics.RegisterMetrics(prometheus.DefaultRegisterer)
+	}
 	if err := s.Serve(listener); err != nil {
 		klog.Fatalf("Failed to serve gRPC listener: %v", err)
 	}
