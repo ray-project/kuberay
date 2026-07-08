@@ -78,6 +78,13 @@ const (
 	//
 	// Enables mTLS (spec.tlsOptions) for RayClusters via cert-manager.
 	RayClusterMTLS featuregate.Feature = "RayClusterMTLS"
+
+	// owner: @chiayi @Future-Outlier
+	// rep: N/A
+	// alpha: v1.7
+	//
+	// Enables RayCluster history server collector sidecar injection (spec.historyServerOptions).
+	RayClusterHistoryServer featuregate.Feature = "RayClusterHistoryServer"
 )
 
 func init() {
@@ -94,6 +101,7 @@ var defaultFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
 	RayClusterNetworkPolicy:          {Default: false, PreRelease: featuregate.Alpha},
 	GCSFaultToleranceEmbeddedStorage: {Default: false, PreRelease: featuregate.Alpha},
 	RayClusterMTLS:                   {Default: false, PreRelease: featuregate.Alpha},
+	RayClusterHistoryServer:          {Default: false, PreRelease: featuregate.Alpha},
 }
 
 // SetFeatureGateDuringTest is a helper method to override feature gates in tests.
