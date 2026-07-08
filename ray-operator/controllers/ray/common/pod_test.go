@@ -2568,6 +2568,7 @@ func TestUpdateRayStartParamsResources(t *testing.T) {
 }
 
 func TestConfigureTLS_Disabled(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.RayClusterMTLS, true)
 	cluster := instance.DeepCopy()
 	// TLSOptions is nil by default => TLS disabled.
 	ctx := context.Background()
