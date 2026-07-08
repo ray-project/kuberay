@@ -194,6 +194,30 @@ const (
 	// GCSStorageDefaultSize is the default size of the operator-managed GCS storage PVC.
 	GCSStorageDefaultSize = "1Gi"
 
+	// Environment variables for History Server collector.
+	POD_IP                                                                       = "POD_IP"
+	RAY_ROLE                                                                     = "RAY_ROLE"
+	OWNER_KIND                                                                   = "OWNER_KIND"
+	OWNER_NAME                                                                   = "OWNER_NAME"
+	STORAGE_BACKEND                                                              = "STORAGE_BACKEND"
+	GCS_BUCKET                                                                   = "GCS_BUCKET"
+	S3_BUCKET                                                                    = "S3_BUCKET"
+	S3_ENDPOINT                                                                  = "S3_ENDPOINT"
+	S3_REGION                                                                    = "S3_REGION"
+	AZURE_STORAGE_CONTAINER                                                      = "AZURE_STORAGE_CONTAINER"
+	AZURE_STORAGE_CONNECTION_STRING                                              = "AZURE_STORAGE_CONNECTION_STRING"
+	AZURE_STORAGE_ACCOUNT_URL                                                    = "AZURE_STORAGE_ACCOUNT_URL"
+	AZURE_STORAGE_AUTH_MODE                                                      = "AZURE_STORAGE_AUTH_MODE"
+	ALIYUN_BUCKET                                                                = "OSS_BUCKET"
+	ALIYUN_ENDPOINT                                                              = "OSS_ENDPOINT"
+	ALIYUN_REGION                                                                = "OSS_REGION"
+	RAY_ENABLE_RAY_EVENT                                                         = "RAY_enable_ray_event"
+	RAY_ENABLE_CORE_WORKER_RAY_EVENT_TO_AGGREGATOR                               = "RAY_enable_core_worker_ray_event_to_aggregator"
+	RAY_DASHBOARD_AGGREGATOR_AGENT_EVENTS_EXPORT_ADDR                            = "RAY_DASHBOARD_AGGREGATOR_AGENT_EVENTS_EXPORT_ADDR"
+	RAY_DASHBOARD_AGGREGATOR_AGENT_EXPOSABLE_EVENT_TYPES                         = "RAY_DASHBOARD_AGGREGATOR_AGENT_EXPOSABLE_EVENT_TYPES"
+	RAY_DASHBOARD_AGGREGATOR_AGENT_PUBLISHER_HTTP_ENDPOINT_EXPOSABLE_EVENT_TYPES = "RAY_DASHBOARD_AGGREGATOR_AGENT_PUBLISHER_HTTP_ENDPOINT_EXPOSABLE_EVENT_TYPES"
+	DEFAULT_RAY_EXPOSABLE_EVENT_TYPES                                            = "TASK_DEFINITION_EVENT,TASK_LIFECYCLE_EVENT,ACTOR_TASK_DEFINITION_EVENT,TASK_PROFILE_EVENT,DRIVER_JOB_DEFINITION_EVENT,DRIVER_JOB_LIFECYCLE_EVENT,ACTOR_DEFINITION_EVENT,ACTOR_LIFECYCLE_EVENT,NODE_DEFINITION_EVENT,NODE_LIFECYCLE_EVENT"
+
 	// This KubeRay operator environment variable is used to determine if random Pod
 	// deletion should be enabled. Note that this only takes effect when autoscaling
 	// is enabled for the RayCluster. This is a feature flag for v0.6.0, and will be
@@ -307,6 +331,9 @@ const (
 
 	// SubmitterContainerName is the default name of the job submit container injected into the head Pod in SidecarMode.
 	SubmitterContainerName = "ray-job-submitter"
+
+	// CollectorContainerName is the default name of the history server collector container.
+	CollectorContainerName = "ray-history-collector"
 
 	// KUBERAY_VERSION is the build version of KubeRay.
 	// The version is included in the RAY_USAGE_STATS_EXTRA_TAGS environment variable

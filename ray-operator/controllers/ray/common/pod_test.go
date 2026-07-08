@@ -2646,3 +2646,125 @@ func TestUpdateRayStartParamsResources(t *testing.T) {
 		})
 	}
 }
+
+func TestBuildCollectorContainerAndPodInjection(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.RayClusterHistoryServer, true)
+	ctx := context.Background()
+	cluster := &rayv1.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "default",
+			Labels: map[string]string{
+				utils.RayOriginatedFromCRDLabelKey:    "RayJob",
+				utils.RayOriginatedFromCRNameLabelKey: "test-rayjob",
+			},
+		},
+		Spec: rayv1.RayClusterSpec{
+			HistoryServerOptions: &rayv1.HistoryServerOptions{
+				CollectorOptions: &rayv1.CollectorOptions{
+					Image: ptr.To("quay.io/kuberay/collector:latest"),
+					Env: []corev1.EnvVar{
+						{Name: "STORAGE_BACKEND", Value: "GCS"},
+						{Name: "GCS_BUCKET", Value: "my-bucket"},
+					},
+				},
+			},
+			HeadGroupSpec: rayv1.HeadGroupSpec{
+				RayStartParams: map[string]string{},
+				Template: corev1.PodTemplateSpec{
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{Name: "ray-head", Image: "rayproject/ray:latest"},
+						},
+					},
+				},
+			},
+			WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+				{
+					GroupName:      "worker-group",
+					RayStartParams: map[string]string{},
+					Template: corev1.PodTemplateSpec{
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{Name: "ray-worker", Image: "rayproject/ray:latest"},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	fqdnRayIP := "test-cluster-head-svc.default.svc.cluster.local"
+	container := BuildCollectorContainer(cluster.Spec.HistoryServerOptions.CollectorOptions, rayv1.HeadNode, cluster.Name, cluster.Namespace, fqdnRayIP, cluster.Labels)
+	assert.Equal(t, utils.CollectorContainerName, container.Name)
+	assert.Equal(t, "quay.io/kuberay/collector:latest", container.Image)
+	assert.True(t, utils.EnvVarExists("POD_IP", container.Env))
+	assert.True(t, utils.EnvVarExists("FQ_RAY_IP", container.Env))
+	assert.True(t, utils.EnvVarExists("RAY_CLUSTER_NAME", container.Env))
+	assert.True(t, utils.EnvVarExists("RAY_CLUSTER_NAMESPACE", container.Env))
+	assert.True(t, utils.EnvVarExists("RAY_ROLE", container.Env))
+	ownerKindEnv, ok := utils.EnvVarByName("OWNER_KIND", container.Env)
+	assert.True(t, ok)
+	assert.Equal(t, "RayJob", ownerKindEnv.Value)
+	ownerNameEnv, ok := utils.EnvVarByName("OWNER_NAME", container.Env)
+	assert.True(t, ok)
+	assert.Equal(t, "test-rayjob", ownerNameEnv.Value)
+	assert.True(t, utils.EnvVarExists("STORAGE_BACKEND", container.Env))
+	assert.True(t, utils.EnvVarExists("GCS_BUCKET", container.Env))
+	dashboardAddrEnv, ok := utils.EnvVarByName(utils.RAY_DASHBOARD_ADDRESS, container.Env)
+	assert.True(t, ok)
+	assert.Equal(t, "http://localhost:8265", dashboardAddrEnv.Value)
+
+	// Test DefaultHeadPodTemplate injection and BuildPod volume mounting
+	headPodTemplate := DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, "pod-head", "6379")
+	assert.Len(t, headPodTemplate.Spec.Containers, 2)
+	assert.Equal(t, utils.CollectorContainerName, headPodTemplate.Spec.Containers[1].Name)
+
+	headPod := BuildPod(ctx, headPodTemplate, rayv1.HeadNode, cluster.Spec.HeadGroupSpec.RayStartParams, "6379", false, utils.RayJobCRD, fqdnRayIP, nil, "")
+	assert.True(t, utils.VolumeExists(RayLogVolumeName, headPod.Spec.Volumes))
+	assert.True(t, utils.VolumeMountExists(RayLogVolumeName, headPod.Spec.Containers[utils.RayContainerIndex].VolumeMounts))
+	assert.True(t, utils.VolumeMountExists(RayLogVolumeName, headPod.Spec.Containers[1].VolumeMounts))
+	assert.True(t, utils.EnvVarExists(utils.RAY_DASHBOARD_ADDRESS, headPod.Spec.Containers[1].Env))
+	eventEnableEnv, ok := utils.EnvVarByName(utils.RAY_ENABLE_RAY_EVENT, headPod.Spec.Containers[utils.RayContainerIndex].Env)
+	assert.True(t, ok)
+	assert.Equal(t, "true", eventEnableEnv.Value)
+	coreWorkerEventEnv, ok := utils.EnvVarByName(utils.RAY_ENABLE_CORE_WORKER_RAY_EVENT_TO_AGGREGATOR, headPod.Spec.Containers[utils.RayContainerIndex].Env)
+	assert.True(t, ok)
+	assert.Equal(t, "true", coreWorkerEventEnv.Value)
+	eventExportEnv, ok := utils.EnvVarByName(utils.RAY_DASHBOARD_AGGREGATOR_AGENT_EVENTS_EXPORT_ADDR, headPod.Spec.Containers[utils.RayContainerIndex].Env)
+	assert.True(t, ok)
+	assert.Equal(t, "http://localhost:8080/v1/events", eventExportEnv.Value)
+	eventTypesEnv, ok := utils.EnvVarByName(utils.RAY_DASHBOARD_AGGREGATOR_AGENT_EXPOSABLE_EVENT_TYPES, headPod.Spec.Containers[utils.RayContainerIndex].Env)
+	assert.True(t, ok)
+	assert.Equal(t, utils.DEFAULT_RAY_EXPOSABLE_EVENT_TYPES, eventTypesEnv.Value)
+	eventTypesV2Env, ok := utils.EnvVarByName(utils.RAY_DASHBOARD_AGGREGATOR_AGENT_PUBLISHER_HTTP_ENDPOINT_EXPOSABLE_EVENT_TYPES, headPod.Spec.Containers[utils.RayContainerIndex].Env)
+	assert.True(t, ok)
+	assert.Equal(t, utils.DEFAULT_RAY_EXPOSABLE_EVENT_TYPES, eventTypesV2Env.Value)
+
+	// Test DefaultWorkerPodTemplate injection and BuildPod volume mounting
+	workerPodTemplate := DefaultWorkerPodTemplate(ctx, *cluster, cluster.Spec.WorkerGroupSpecs[0], "pod-worker", fqdnRayIP, "6379", "group-1", 0, 0)
+	assert.Len(t, workerPodTemplate.Spec.Containers, 2)
+	assert.Equal(t, utils.CollectorContainerName, workerPodTemplate.Spec.Containers[1].Name)
+
+	workerPod := BuildPod(ctx, workerPodTemplate, rayv1.WorkerNode, cluster.Spec.WorkerGroupSpecs[0].RayStartParams, "6379", false, utils.RayJobCRD, fqdnRayIP, nil, "")
+	assert.True(t, utils.VolumeExists(RayLogVolumeName, workerPod.Spec.Volumes))
+	assert.True(t, utils.VolumeMountExists(RayLogVolumeName, workerPod.Spec.Containers[utils.RayContainerIndex].VolumeMounts))
+	assert.True(t, utils.VolumeMountExists(RayLogVolumeName, workerPod.Spec.Containers[1].VolumeMounts))
+	assert.False(t, utils.EnvVarExists(utils.RAY_DASHBOARD_ADDRESS, workerPod.Spec.Containers[1].Env))
+	workerEventEnableEnv, ok := utils.EnvVarByName(utils.RAY_ENABLE_RAY_EVENT, workerPod.Spec.Containers[utils.RayContainerIndex].Env)
+	assert.True(t, ok)
+	assert.Equal(t, "true", workerEventEnableEnv.Value)
+	workerCoreWorkerEventEnv, ok := utils.EnvVarByName(utils.RAY_ENABLE_CORE_WORKER_RAY_EVENT_TO_AGGREGATOR, workerPod.Spec.Containers[utils.RayContainerIndex].Env)
+	assert.True(t, ok)
+	assert.Equal(t, "true", workerCoreWorkerEventEnv.Value)
+	workerEventExportEnv, ok := utils.EnvVarByName(utils.RAY_DASHBOARD_AGGREGATOR_AGENT_EVENTS_EXPORT_ADDR, workerPod.Spec.Containers[utils.RayContainerIndex].Env)
+	assert.True(t, ok)
+	assert.Equal(t, "http://localhost:8080/v1/events", workerEventExportEnv.Value)
+	workerEventTypesEnv, ok := utils.EnvVarByName(utils.RAY_DASHBOARD_AGGREGATOR_AGENT_EXPOSABLE_EVENT_TYPES, workerPod.Spec.Containers[utils.RayContainerIndex].Env)
+	assert.True(t, ok)
+	assert.Equal(t, utils.DEFAULT_RAY_EXPOSABLE_EVENT_TYPES, workerEventTypesEnv.Value)
+	workerEventTypesV2Env, ok := utils.EnvVarByName(utils.RAY_DASHBOARD_AGGREGATOR_AGENT_PUBLISHER_HTTP_ENDPOINT_EXPOSABLE_EVENT_TYPES, workerPod.Spec.Containers[utils.RayContainerIndex].Env)
+	assert.True(t, ok)
+	assert.Equal(t, utils.DEFAULT_RAY_EXPOSABLE_EVENT_TYPES, workerEventTypesV2Env.Value)
+}

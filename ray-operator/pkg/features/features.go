@@ -71,6 +71,13 @@ const (
 	// (GcsFaultToleranceOptions.Backend: rocksdb). Mirrors the alpha status of the
 	// corresponding Ray Core feature (ray-project/ray#63657).
 	GCSFaultToleranceEmbeddedStorage featuregate.Feature = "GCSFaultToleranceEmbeddedStorage"
+
+	// owner: @chiayi @Future-Outlier
+	// rep: N/A
+	// alpha: v1.7
+	//
+	// Enables RayCluster history server collector sidecar injection (spec.historyServerOptions).
+	RayClusterHistoryServer featuregate.Feature = "RayClusterHistoryServer"
 )
 
 func init() {
@@ -86,6 +93,7 @@ var defaultFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
 	SidecarSubmitterRestart:          {Default: false, PreRelease: featuregate.Alpha},
 	RayClusterNetworkPolicy:          {Default: false, PreRelease: featuregate.Alpha},
 	GCSFaultToleranceEmbeddedStorage: {Default: false, PreRelease: featuregate.Alpha},
+	RayClusterHistoryServer:          {Default: false, PreRelease: featuregate.Alpha},
 }
 
 // SetFeatureGateDuringTest is a helper method to override feature gates in tests.

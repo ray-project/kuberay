@@ -261,6 +261,30 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 		}
 	}
 
+	if spec.HistoryServerOptions != nil {
+		if !features.Enabled(features.RayClusterHistoryServer) {
+			return fmt.Errorf("RayClusterHistoryServer feature gate is not enabled")
+		}
+		if spec.HistoryServerOptions.CollectorOptions == nil {
+			return fmt.Errorf("historyServerOptions.collectorOptions must be set")
+		}
+		if err := validateCollectorOptions(spec.HistoryServerOptions.CollectorOptions); err != nil {
+			return err
+		}
+		for _, headPodContainer := range spec.HeadGroupSpec.Template.Spec.Containers {
+			if headPodContainer.Name == CollectorContainerName {
+				return fmt.Errorf("head pod template must not define a container with name '%s' when history server collector options are enabled", CollectorContainerName)
+			}
+		}
+		for _, workerGroup := range spec.WorkerGroupSpecs {
+			for _, workerPodContainer := range workerGroup.Template.Spec.Containers {
+				if workerPodContainer.Name == CollectorContainerName {
+					return fmt.Errorf("worker group %s pod template must not define a container with name '%s' when history server collector options are enabled", workerGroup.GroupName, CollectorContainerName)
+				}
+			}
+		}
+	}
+
 	if IsAuthEnabled(spec) {
 		if spec.RayVersion == "" {
 			return fmt.Errorf("authOptions.mode is 'token' but RayVersion was not specified. Ray version 2.52.0 or later is required")
@@ -886,4 +910,86 @@ func validateWorkerGroupIdleTimeout(workerGroup rayv1.WorkerGroupSpec, spec *ray
 	}
 
 	return fmt.Errorf("worker group %s: idleTimeoutSeconds is set, but autoscaler v2 is not enabled. Please set .spec.autoscalerOptions.version to 'v2' (or set %s environment variable to 'true' in the head pod if using KubeRay < 1.4.0)", workerGroup.GroupName, RAY_ENABLE_AUTOSCALER_V2)
+}
+
+func validateCollectorOptions(collectorOpts *rayv1.CollectorOptions) error {
+	if collectorOpts == nil {
+		return nil
+	}
+	if collectorOpts.Image == nil || *collectorOpts.Image == "" {
+		return fmt.Errorf("historyServerOptions.collectorOptions.image must be set")
+	}
+
+	envMap := make(map[string]corev1.EnvVar)
+	for _, env := range collectorOpts.Env {
+		envMap[env.Name] = env
+	}
+
+	hasValue := func(name string) bool {
+		env, exists := envMap[name]
+		return exists && (env.Value != "" || env.ValueFrom != nil)
+	}
+
+	forbiddenEnvVars := []string{
+		POD_IP,
+		FQ_RAY_IP,
+		RAY_CLUSTER_NAME,
+		RAY_CLUSTER_NAMESPACE,
+		RAY_ROLE,
+		OWNER_KIND,
+		OWNER_NAME,
+	}
+
+	for _, name := range forbiddenEnvVars {
+		if _, exists := envMap[name]; exists {
+			return fmt.Errorf("historyServerOptions.collectorOptions.env must not contain %s: it is managed by KubeRay and injected automatically into the collector container", name)
+		}
+	}
+
+	backendEnv, ok := envMap[STORAGE_BACKEND]
+	if !ok || backendEnv.Value == "" {
+		return fmt.Errorf("%s environment variable must be set with a literal string value in historyServerOptions.collectorOptions.env", STORAGE_BACKEND)
+	}
+
+	switch strings.ToUpper(backendEnv.Value) {
+	case "GCS":
+		if !hasValue(GCS_BUCKET) {
+			return fmt.Errorf("%s environment variable must be set when %s is GCS", GCS_BUCKET, STORAGE_BACKEND)
+		}
+	case "S3":
+		if !hasValue(S3_REGION) {
+			return fmt.Errorf("%s environment variable must be set when %s is S3", S3_REGION, STORAGE_BACKEND)
+		}
+	case "AZUREBLOB":
+		authMode := ""
+		if env, exists := envMap[AZURE_STORAGE_AUTH_MODE]; exists && env.Value != "" {
+			authMode = strings.ToLower(strings.TrimSpace(env.Value))
+		}
+		switch authMode {
+		case "connection_string":
+			if !hasValue(AZURE_STORAGE_CONNECTION_STRING) {
+				return fmt.Errorf("%s environment variable must be set when %s is AZUREBLOB and %s is connection_string", AZURE_STORAGE_CONNECTION_STRING, STORAGE_BACKEND, AZURE_STORAGE_AUTH_MODE)
+			}
+		case "workload_identity", "default":
+			if !hasValue(AZURE_STORAGE_ACCOUNT_URL) {
+				return fmt.Errorf("%s environment variable must be set when %s is AZUREBLOB and %s is %s", AZURE_STORAGE_ACCOUNT_URL, STORAGE_BACKEND, AZURE_STORAGE_AUTH_MODE, authMode)
+			}
+		default:
+			if !hasValue(AZURE_STORAGE_CONNECTION_STRING) && !hasValue(AZURE_STORAGE_ACCOUNT_URL) {
+				return fmt.Errorf("either %s or %s environment variable must be set when %s is AZUREBLOB", AZURE_STORAGE_CONNECTION_STRING, AZURE_STORAGE_ACCOUNT_URL, STORAGE_BACKEND)
+			}
+		}
+	case "ALIYUNOSS":
+		if !hasValue(ALIYUN_BUCKET) {
+			return fmt.Errorf("%s environment variable must be set when %s is ALIYUNOSS", ALIYUN_BUCKET, STORAGE_BACKEND)
+		}
+		if !hasValue(ALIYUN_ENDPOINT) {
+			return fmt.Errorf("%s environment variable must be set when %s is ALIYUNOSS", ALIYUN_ENDPOINT, STORAGE_BACKEND)
+		}
+		if !hasValue(ALIYUN_REGION) {
+			return fmt.Errorf("%s environment variable must be set when %s is ALIYUNOSS", ALIYUN_REGION, STORAGE_BACKEND)
+		}
+	}
+
+	return nil
 }
