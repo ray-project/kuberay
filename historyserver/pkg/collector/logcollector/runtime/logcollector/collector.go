@@ -39,11 +39,26 @@ type RayLogHandler struct {
 	persistCompleteLogsDir string
 	PushInterval           time.Duration
 	LogBatching            int
-	filePathMu             sync.Mutex
 	IsHead                 bool
 	DashboardAddress       string
 	AdditionalEndpoints    []string
 	EndpointPollInterval   time.Duration
+	mu                     sync.RWMutex
+}
+
+func (r *RayLogHandler) GetRayNodeName() string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.RayNodeName
+}
+
+func (r *RayLogHandler) SetRayNodeName(newNodeID string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.RayNodeName != newNodeID {
+		logrus.Infof("RayLogHandler: updated node ID: %s -> %s", r.RayNodeName, newNodeID)
+		r.RayNodeName = newNodeID
+	}
 }
 
 func (r *RayLogHandler) Run(stop <-chan struct{}) error {
@@ -65,6 +80,7 @@ func (r *RayLogHandler) Run(stop <-chan struct{}) error {
 	// After scanning, it watches for new directories and files. This ensures incomplete
 	// uploads from previous runs are resumed.
 	go r.WatchPrevLogsLoops()
+	go r.PollActiveSessionChanges()
 	if r.IsHead {
 		go r.WatchSessionLatestLoops() // Watch session_latest symlink changes
 		go r.FetchAndStoreClusterMetadata()
@@ -121,13 +137,8 @@ func (r *RayLogHandler) processSessionLatestLogs() {
 		}
 	}
 
-	// Read node ID from the configured raylet_node_id file.
-	nodeIDBytes, err := os.ReadFile(utils.GetRayNodeIDPath())
-	if err != nil {
-		logrus.Errorf("Failed to read raylet_node_id: %v", err)
-		return
-	}
-	nodeID := strings.TrimSpace(string(nodeIDBytes))
+	// Use already discovered node ID (RayNodeName) instead of retrying network requests during shutdown
+	nodeID := strings.TrimSpace(r.GetRayNodeName())
 
 	// Process logs in session_latest/logs
 	logsDir := filepath.Join(sessionLatestDir, utils.RAY_SESSIONDIR_LOGDIR_NAME)
@@ -702,6 +713,7 @@ func (r *RayLogHandler) processPrevLogFile(absoluteLogPathName, localLogDir, ses
 // Any session change triggers sessiondir updates on all head and worker nodes,
 // so we only need to update from one node.
 // for example:
+//
 //	my-cluster_abc123/
 //		session_2024-12-15_10-30-45_123456    ← Empty file! The path itself is the information
 //		session_2024-12-15_14-20-10_789012
@@ -774,6 +786,63 @@ func (r *RayLogHandler) WatchSessionLatestLoops() {
 				return
 			}
 			logrus.Errorf("Session latest watcher error: %v", err)
+		}
+	}
+}
+
+// Polls if the active session changes, when it does, it moves the old session logs to a prev-logs/ folder.
+func (r *RayLogHandler) PollActiveSessionChanges() {
+	tmpRayRoot := utils.GetTmpRayRoot()
+	symlinkPath := filepath.Join(tmpRayRoot, "session_latest")
+
+	var lastResolvedDir string
+	currentActiveDir, err := filepath.EvalSymlinks(symlinkPath)
+	if err == nil && currentActiveDir != "" {
+		if r.SessionDir != "" && currentActiveDir != r.SessionDir {
+			logrus.Infof("PollActiveSessionChanges: detected startup session change from %s to %s. Relocating startup session logs.", r.SessionDir, currentActiveDir)
+			if err := utils.MoveLeftoverSessionLogs(currentActiveDir, r.RayNodeName); err != nil {
+				logrus.Warnf("PollActiveSessionChanges: failed to relocate startup session logs: %v. Retrying on next poll tick.", err)
+				lastResolvedDir = r.SessionDir
+			} else {
+				lastResolvedDir = currentActiveDir
+			}
+		} else {
+			lastResolvedDir = currentActiveDir
+		}
+	} else {
+		logrus.Warnf("PollActiveSessionChanges: failed to resolve initial session_latest target: %v. Falling back to startup SessionDir %s", err, r.SessionDir)
+		lastResolvedDir = r.SessionDir
+	}
+
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	logrus.Infof("Started polling active session changes at: %s (initial target: %s)", symlinkPath, lastResolvedDir)
+	for {
+		select {
+		case <-r.ShutdownChan:
+			logrus.Info("PollActiveSessionChanges: stopping active session poller")
+			return
+		case <-ticker.C:
+			if freshNodeID, err := utils.FetchCurrentNodeID(); err == nil && freshNodeID != "" {
+				if hexID, err := utils.ConvertBase64ToHex(freshNodeID); err == nil && hexID != "" {
+					r.SetRayNodeName(hexID)
+				}
+			}
+
+			newResolvedDir, err := filepath.EvalSymlinks(symlinkPath)
+			if err != nil || newResolvedDir == "" {
+				continue
+			}
+
+			if lastResolvedDir != "" && newResolvedDir != lastResolvedDir {
+				logrus.Infof("PollActiveSessionChanges: session changed from %s to %s. Relocating old logs.", lastResolvedDir, newResolvedDir)
+				if err := utils.MoveLeftoverSessionLogs(newResolvedDir, r.GetRayNodeName()); err != nil {
+					logrus.Warnf("PollActiveSessionChanges: failed to relocate leftover session logs from %s to %s: %v. Retrying on next tick.", lastResolvedDir, newResolvedDir, err)
+					continue
+				}
+			}
+			lastResolvedDir = newResolvedDir
 		}
 	}
 }

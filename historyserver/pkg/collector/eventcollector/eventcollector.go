@@ -5,14 +5,12 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"path"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/emicklei/go-restful/v3"
-	"github.com/fsnotify/fsnotify"
 	"github.com/sirupsen/logrus"
 
 	"github.com/ray-project/kuberay/historyserver/pkg/compression"
@@ -76,10 +74,34 @@ func NewEventCollector(writer storage.StorageWriter, rootDir, sessionDir, nodeID
 		currentNodeID:      nodeID,      // Initialize with configured nodeID
 	}
 
-	// Start goroutine to watch nodeID file changes
-	go collector.watchNodeIDFile()
-
 	return collector
+}
+
+func (ec *EventCollector) UpdateNodeID(newNodeID string) {
+	ec.mutex.Lock()
+	if ec.currentNodeID != newNodeID {
+		logrus.Infof("EventCollector: node ID changed from %s to %s. Flushing %d buffered events", ec.currentNodeID, newNodeID, len(ec.events))
+		var eventsToFlush []Event
+		if len(ec.events) > 0 {
+			eventsToFlush = make([]Event, len(ec.events))
+			copy(eventsToFlush, ec.events)
+			ec.events = ec.events[:0]
+		}
+		ec.currentNodeID = newNodeID
+		ec.mutex.Unlock()
+
+		if len(eventsToFlush) > 0 {
+			ec.flushEventsInternal(eventsToFlush)
+		}
+		return
+	}
+	ec.mutex.Unlock()
+}
+
+func (ec *EventCollector) GetNodeID() string {
+	ec.mutex.Lock()
+	defer ec.mutex.Unlock()
+	return ec.currentNodeID
 }
 
 func (ec *EventCollector) Run(stop <-chan struct{}, port int) {
@@ -104,99 +126,6 @@ func (ec *EventCollector) Run(stop <-chan struct{}, port int) {
 	logrus.Info("Received stop signal, flushing events to storage")
 	ec.flushEvents()
 	close(ec.stopped)
-}
-
-// watchNodeIDFile watches the configured raylet_node_id file for content changes.
-func (ec *EventCollector) watchNodeIDFile() {
-	nodeIDFilePath := utils.GetRayNodeIDPath()
-
-	// Create new watcher
-	watcher, err := fsnotify.NewWatcher()
-	if err != nil {
-		logrus.Errorf("Failed to create file watcher: %v", err)
-		return
-	}
-	defer watcher.Close()
-
-	// Add file to watch list
-	err = watcher.Add(nodeIDFilePath)
-	if err != nil {
-		logrus.Infof("Failed to add %s to watcher, will watch for file creation: %v", nodeIDFilePath, err)
-		// If file doesn't exist, watch parent directory
-		tmpRayRoot := utils.GetTmpRayRoot()
-		err = watcher.Add(tmpRayRoot)
-		if err != nil {
-			logrus.Errorf("Failed to watch directory %s: %v", tmpRayRoot, err)
-			return
-		}
-	}
-
-	for {
-		select {
-		case event, ok := <-watcher.Events:
-			if !ok {
-				return
-			}
-
-			// Check if this is the target file
-			if event.Name == nodeIDFilePath && (event.Op&fsnotify.Write == fsnotify.Write || event.Op&fsnotify.Create == fsnotify.Create) {
-				// Read file content
-				content, err := os.ReadFile(nodeIDFilePath)
-				if err != nil {
-					logrus.Errorf("Failed to read node ID file %s: %v", nodeIDFilePath, err)
-					continue
-				}
-
-				// Trim whitespace
-				newNodeID := strings.TrimSpace(string(content))
-				if newNodeID == "" {
-					continue
-				}
-
-				// Check if nodeID changed
-				ec.mutex.Lock()
-				if ec.currentNodeID != newNodeID {
-					oldNodeID := ec.currentNodeID
-					logrus.Infof("Node ID changed from %s to %s, flushing events", oldNodeID, newNodeID)
-
-					// Update current nodeID
-					ec.currentNodeID = newNodeID
-
-					// Collect events with same nodeID
-					var eventsToFlush []Event
-					var remainingEvents []Event
-					for _, event := range ec.events {
-						if event.NodeID == oldNodeID {
-							eventsToFlush = append(eventsToFlush, event)
-						} else if event.NodeID == newNodeID {
-							remainingEvents = append(remainingEvents, event)
-						} else {
-							logrus.Errorf("Drop event with nodeId %v, event: %v", event.NodeID, event.Data)
-						}
-					}
-
-					// Update event list, keep only events with different nodeID
-					ec.events = remainingEvents
-					ec.mutex.Unlock()
-
-					// Flush events with same nodeID
-					if len(eventsToFlush) > 0 {
-						go ec.flushEventsInternal(eventsToFlush)
-					}
-					continue
-				}
-				ec.mutex.Unlock()
-			}
-		case err, ok := <-watcher.Errors:
-			if !ok {
-				return
-			}
-			logrus.Errorf("File watcher error: %v", err)
-		case <-ec.stopped:
-			logrus.Info("Event collector stopped, exiting node ID watcher")
-			return
-		}
-	}
 }
 
 func (ec *EventCollector) PersistEvents(req *restful.Request, resp *restful.Response) {
@@ -243,7 +172,7 @@ func (ec *EventCollector) PersistEvents(req *restful.Request, resp *restful.Resp
 			Data:        eventData,
 			Timestamp:   timestamp,
 			SessionName: sessionNameStr,
-			NodeID:      ec.currentNodeID, // Store currentNodeID when event arrived
+			NodeID:      ec.currentNodeID, // Store currentNodeID when event arrived (under lock)
 		}
 		ec.events = append(ec.events, event)
 
@@ -276,12 +205,21 @@ func (ec *EventCollector) PersistEvents(req *restful.Request, resp *restful.Resp
 }
 
 func (ec *EventCollector) periodicFlush() {
-	ticker := time.NewTicker(ec.flushInterval)
-	defer ticker.Stop()
+	flushTicker := time.NewTicker(ec.flushInterval)
+	// Periodic node ID update with shorter interval to handle frequent node restarts
+	nodeIDTicker := time.NewTicker(5 * time.Second)
+	defer flushTicker.Stop()
+	defer nodeIDTicker.Stop()
 
 	for {
 		select {
-		case <-ticker.C:
+		case <-nodeIDTicker.C:
+			if freshNodeID, err := utils.FetchCurrentNodeID(); err == nil && freshNodeID != "" {
+				if hexID, err := utils.ConvertBase64ToHex(freshNodeID); err == nil && hexID != "" {
+					ec.UpdateNodeID(hexID)
+				}
+			}
+		case <-flushTicker.C:
 			logrus.Info("Periodic flush triggered")
 			ec.flushEvents()
 		case <-ec.stopped:

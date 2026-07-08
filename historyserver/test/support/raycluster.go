@@ -95,39 +95,14 @@ fi`
 	return sessionID
 }
 
-// GetNodeIDFromHeadPod retrieves the nodeID from the Ray head pod by reading /tmp/ray/raylet_node_id.
-func GetNodeIDFromHeadPod(test Test, g *WithT, rayCluster *rayv1.RayCluster) string {
-	headPod, err := GetHeadPod(test, rayCluster)
-	g.Expect(err).NotTo(HaveOccurred())
-
-	getNodeIDCmd := `ray_tmp_root="${RAY_TMP_ROOT:-/tmp/ray}"
-if [ -f "${ray_tmp_root}/raylet_node_id" ]; then
-  cat "${ray_tmp_root}/raylet_node_id"
-else
-  echo "raylet_node_id not found"
-  exit 1
-fi`
-	output, _ := ExecPodCmd(test, headPod, "ray-head", []string{"sh", "-c", getNodeIDCmd})
-
-	nodeID := strings.TrimSpace(output.String())
-	LogWithTimestamp(test.T(), "Retrieved nodeID: %s", nodeID)
-	g.Expect(nodeID).NotTo(BeEmpty(), "nodeID should not be empty")
-
-	return nodeID
-}
-
-// GetNodeIDFromPod retrieves the nodeID from the Ray head or worker pod by reading /tmp/ray/raylet_node_id.
+// GetNodeIDFromPod retrieves the nodeID from the Ray head or worker pod by extracting
+// the --node_id argument from the active raylet process command line.
 func GetNodeIDFromPod(test Test, g *WithT, getPod func() (*corev1.Pod, error), containerName string) string {
 	pod, err := getPod()
 	g.Expect(err).NotTo(HaveOccurred())
 
-	getNodeIDCmd := `ray_tmp_root="${RAY_TMP_ROOT:-/tmp/ray}"
-if [ -f "${ray_tmp_root}/raylet_node_id" ]; then
-  cat "${ray_tmp_root}/raylet_node_id"
-else
-  echo "raylet_node_id not found"
-  exit 1
-fi`
+	// Extract node_id from raylet process arguments as history server retrieves node_id programmatically via HTTP API.
+	getNodeIDCmd := `ps -ef | grep raylet | grep -v grep | sed -n 's/.*--node_id=\([^ ]*\).*/\1/p'`
 	output, _ := ExecPodCmd(test, pod, containerName, []string{"sh", "-c", getNodeIDCmd})
 
 	// Parse output to extract the nodeID.

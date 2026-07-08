@@ -196,7 +196,6 @@ func TestScanAndProcess(t *testing.T) {
 	// Signal the background goroutine to exit gracefully
 	close(handler.ShutdownChan)
 }
-
 // TestProcessLogs_SkipSymlinks verifies that symlinks are skipped during directory scanning in prev-logs (processPrevLogsDir).
 func TestProcessLogs_SkipSymlinks(t *testing.T) {
 	baseDir, cleanup := setupRayTestEnvironment(t)
@@ -238,4 +237,114 @@ func TestProcessLogs_SkipSymlinks(t *testing.T) {
 		}
 	}
 	mockWriter.mu.Unlock()
+}
+
+func TestPollActiveSessionChanges(t *testing.T) {
+	g := NewWithT(t)
+	baseDir := t.TempDir()
+
+	originalTmpRoot := os.Getenv("RAY_TMP_ROOT")
+	defer os.Setenv("RAY_TMP_ROOT", originalTmpRoot)
+	os.Setenv("RAY_TMP_ROOT", baseDir)
+
+	handler := &RayLogHandler{
+		SessionDir:             filepath.Join(baseDir, "session_2026-07-08_15-00-00_123456_1"),
+		prevLogsDir:            filepath.Join(baseDir, "prev-logs"),
+		persistCompleteLogsDir: filepath.Join(baseDir, "persist-complete-logs"),
+		ShutdownChan:           make(chan struct{}),
+		RayClusterName:         "test-cluster",
+		RayClusterNamespace:    "cluster-123",
+		RayNodeName:            "node-1",
+	}
+
+	sessionNameA := "session_2026-07-08_15-00-00_123456_1"
+	sessionDirA := filepath.Join(baseDir, sessionNameA)
+	logsDirA := filepath.Join(sessionDirA, "logs")
+	createTestLogFile(t, filepath.Join(logsDirA, "raylet.out"), "log content A")
+
+	symlinkPath := filepath.Join(baseDir, "session_latest")
+	if err := os.Symlink(sessionNameA, symlinkPath); err != nil {
+		t.Fatalf("failed to create symlink: %v", err)
+	}
+
+	go handler.PollActiveSessionChanges()
+
+	time.Sleep(500 * time.Millisecond)
+
+	sessionNameB := "session_2026-07-08_16-00-00_123456_1"
+	sessionDirB := filepath.Join(baseDir, sessionNameB)
+	logsDirB := filepath.Join(sessionDirB, "logs")
+	createTestLogFile(t, filepath.Join(logsDirB, "raylet.out"), "log content B")
+
+	os.Remove(symlinkPath)
+	if err := os.Symlink(sessionNameB, symlinkPath); err != nil {
+		t.Fatalf("failed to create symlink: %v", err)
+	}
+
+	expectedPrevLogsDir := filepath.Join(handler.prevLogsDir, sessionNameA, handler.RayNodeName, "logs")
+	g.Eventually(func() bool {
+		_, err := os.Stat(filepath.Join(expectedPrevLogsDir, "raylet.out"))
+		return err == nil
+	}, 5*time.Second, 100*time.Millisecond).Should(BeTrue(), "Logs from session_A should be moved to prev-logs")
+
+	_, err := os.Stat(filepath.Join(logsDirA, "raylet.out"))
+	g.Expect(os.IsNotExist(err)).To(BeTrue(), "Original logs in session_A/logs should be deleted (moved)")
+
+	close(handler.ShutdownChan)
+}
+
+func TestPollActiveSessionChanges_MultipleIntermediateSessions(t *testing.T) {
+	g := NewWithT(t)
+	baseDir := t.TempDir()
+
+	originalTmpRoot := os.Getenv("RAY_TMP_ROOT")
+	defer os.Setenv("RAY_TMP_ROOT", originalTmpRoot)
+	os.Setenv("RAY_TMP_ROOT", baseDir)
+
+	handler := &RayLogHandler{
+		SessionDir:             filepath.Join(baseDir, "session_2026-07-08_15-00-00_123456_1"),
+		prevLogsDir:            filepath.Join(baseDir, "prev-logs"),
+		persistCompleteLogsDir: filepath.Join(baseDir, "persist-complete-logs"),
+		ShutdownChan:           make(chan struct{}),
+		RayClusterName:         "test-cluster",
+		RayClusterNamespace:    "cluster-123",
+		RayNodeName:            "node-1",
+	}
+
+	sessionNameA := "session_2026-07-08_15-00-00_123456_1"
+	sessionDirA := filepath.Join(baseDir, sessionNameA)
+	createTestLogFile(t, filepath.Join(sessionDirA, "logs", "raylet.out"), "log content A")
+
+	symlinkPath := filepath.Join(baseDir, "session_latest")
+	if err := os.Symlink(sessionNameA, symlinkPath); err != nil {
+		t.Fatalf("failed to create symlink: %v", err)
+	}
+
+	go handler.PollActiveSessionChanges()
+	time.Sleep(200 * time.Millisecond)
+
+	// Simulate rapid restart: session B created (intermediate), then session C created before next ticker poll
+	sessionNameB := "session_2026-07-08_15-30-00_123456_1"
+	sessionDirB := filepath.Join(baseDir, sessionNameB)
+	createTestLogFile(t, filepath.Join(sessionDirB, "logs", "raylet.out"), "log content B")
+
+	sessionNameC := "session_2026-07-08_16-00-00_123456_1"
+	sessionDirC := filepath.Join(baseDir, sessionNameC)
+	createTestLogFile(t, filepath.Join(sessionDirC, "logs", "raylet.out"), "log content C")
+
+	os.Remove(symlinkPath)
+	if err := os.Symlink(sessionNameC, symlinkPath); err != nil {
+		t.Fatalf("failed to create symlink: %v", err)
+	}
+
+	expectedPrevLogsA := filepath.Join(handler.prevLogsDir, sessionNameA, handler.RayNodeName, "logs")
+	expectedPrevLogsB := filepath.Join(handler.prevLogsDir, sessionNameB, handler.RayNodeName, "logs")
+
+	g.Eventually(func() bool {
+		_, errA := os.Stat(filepath.Join(expectedPrevLogsA, "raylet.out"))
+		_, errB := os.Stat(filepath.Join(expectedPrevLogsB, "raylet.out"))
+		return errA == nil && errB == nil
+	}, 6*time.Second, 100*time.Millisecond).Should(BeTrue(), "Logs from both session_A and intermediate session_B should be moved to prev-logs")
+
+	close(handler.ShutdownChan)
 }

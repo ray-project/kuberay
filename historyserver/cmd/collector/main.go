@@ -22,8 +22,6 @@ import (
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
-const runtimeClassConfigPath = "/var/collector-config/data"
-
 func main() {
 	role := ""
 	runtimeClassName := ""
@@ -33,9 +31,9 @@ func main() {
 	logBatching := 1000
 	eventsPort := 8080
 	pushInterval := time.Minute
-	runtimeClassConfigPath := "/var/collector-config/data"
 	ownerKind := ""
 	ownerName := ""
+	runtimeClassConfigPath := "/var/collector-config/data"
 
 	flag.StringVar(&role, "role", "Worker", "")
 	flag.StringVar(&runtimeClassName, "runtime-class-name", "", "")
@@ -50,6 +48,31 @@ func main() {
 	flag.StringVar(&ownerName, "owner-name", "", "")
 
 	flag.Parse()
+
+	if val := os.Getenv("RAY_CLUSTER_NAME"); val != "" {
+		rayClusterName = val
+	}
+	if val := os.Getenv("RAY_CLUSTER_NAMESPACE"); val != "" {
+		rayClusterNamespace = val
+	}
+	if val := os.Getenv("RAY_ROLE"); val != "" {
+		role = val
+	}
+	if val := os.Getenv("OWNER_KIND"); val != "" {
+		ownerKind = val
+	}
+	if val := os.Getenv("OWNER_NAME"); val != "" {
+		ownerName = val
+	}
+	role = strings.TrimSpace(role)
+	// Check incase users manually set role env var
+	if strings.EqualFold(role, "head") {
+		role = "Head"
+	} else if strings.EqualFold(role, "worker") {
+		role = "Worker"
+	} else {
+		panic("Invalid role: " + role + ", must be Head or Worker")
+	}
 
 	if err := validateFlags(&rayClusterName, &rayClusterNamespace, &ownerKind, &ownerName); err != nil {
 		logrus.Fatalf("Failed to validate flags: %v", err)
@@ -77,29 +100,23 @@ func main() {
 		endpointPollInterval = parsed
 	}
 
-	sessionDir, err := utils.GetSessionDir()
-	if err != nil {
-		panic("Failed to get session dir: " + err.Error())
-	}
-
-	rayNodeId, err := utils.GetRayNodeID()
-	if err != nil {
-		panic("Failed to get ray node id: " + err.Error())
-	}
-
-	sessionName := path.Base(sessionDir)
-
 	jsonData := make(map[string]interface{})
 	if runtimeClassConfigPath != "" {
 		data, err := os.ReadFile(runtimeClassConfigPath)
 		if err != nil {
-			panic("Failed to read runtime class config " + err.Error())
+			panic(fmt.Sprintf("Failed to read runtime class config from %s: %v", runtimeClassConfigPath, err))
 		}
-		err = json.Unmarshal(data, &jsonData)
-		if err != nil {
-			panic("Failed to parse runtime class config: " + err.Error())
+		if err := json.Unmarshal(data, &jsonData); err != nil {
+			panic(fmt.Sprintf("Failed to parse runtime class config from %s: %v", runtimeClassConfigPath, err))
 		}
 	}
+
+	if val := os.Getenv("STORAGE_BACKEND"); val != "" {
+		runtimeClassName = val
+	} else if val := os.Getenv("RUNTIME_CLASS_NAME"); val != "" {
+		runtimeClassName = val
+	}
+	runtimeClassName = strings.ToLower(runtimeClassName)
 
 	registry := collector.GetWriterRegistry()
 	factory, ok := registry[runtimeClassName]
@@ -107,9 +124,30 @@ func main() {
 		panic("Not supported runtime class name: " + runtimeClassName + " for role: " + role + ".")
 	}
 
+	rayNodeId, err := utils.GetNodeRayIDWithFQIP()
+	if err != nil {
+		panic("Failed to get ray node id via HTTP endpoint: " + err.Error())
+	}
+
+	rayNodeId, err = utils.ConvertBase64ToHex(rayNodeId)
+	if err != nil {
+		panic("Failed to normalize ray node id to hex: " + err.Error())
+	}
+
+	activeSessionDir, err := utils.GetSessionDir()
+	if err != nil {
+		panic("Failed to get active session dir after discovering node id: " + err.Error())
+	}
+
+	if err := utils.MoveLeftoverSessionLogs(activeSessionDir, rayNodeId); err != nil {
+		logrus.Warnf("Failed to relocate leftover session logs at startup: %v", err)
+	}
+
+	sessionName := path.Base(activeSessionDir)
+
 	globalConfig := types.RayCollectorConfig{
 		RootDir:             rayRootDir,
-		SessionDir:          sessionDir,
+		SessionDir:          activeSessionDir,
 		RayNodeName:         rayNodeId,
 		Role:                role,
 		RayClusterName:      rayClusterName,
@@ -140,7 +178,7 @@ func main() {
 	// Create and initialize EventCollector
 	go func() {
 		defer wg.Done()
-		eventCollector := eventcollector.NewEventCollector(writer, rayRootDir, sessionDir, rayNodeId, rayClusterName, rayClusterNamespace, sessionName)
+		eventCollector := eventcollector.NewEventCollector(writer, rayRootDir, activeSessionDir, rayNodeId, rayClusterName, rayClusterNamespace, sessionName)
 		eventCollector.Run(stop, eventsPort)
 		logrus.Info("Event collector shutdown")
 	}()
