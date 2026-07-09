@@ -432,7 +432,6 @@ func TestRayServiceIncrementalUpgradeRollback(t *testing.T) {
 		}, Equal(1)))
 }
 
-// of the RayService incremental upgrade under Locust load.
 func TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust(t *testing.T) {
 	features.SetFeatureGateDuringTest(t, features.RayServiceIncrementalUpgrade, true)
 
@@ -477,7 +476,7 @@ func TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust(t *testing.T) {
 			stepSize, interval, maxSurge := tc.Strategy.ptrs()
 			serveConfigV2 := highRPSServeConfigV2
 
-			// Phase 1: Create RayService with incremental upgrade and wait for it to be ready
+			// Step 1: Create RayService with incremental upgrade and wait for it to be ready
 			rayService, _, gatewayIP := bootstrapIncrementalRayService(test, g, namespace.Name, rayServiceName, stepSize, interval, maxSurge, serveConfigV2)
 
 			// Save original spec (Spec A)
@@ -517,7 +516,7 @@ func TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust(t *testing.T) {
 			err = warmupLocust(test, locustHeadPod, locustWarmupRPSThreshold, locustWarmupStableWindowSeconds, locustWarmupTimeout)
 			g.Expect(err).NotTo(HaveOccurred())
 
-			// Phase 4: Trigger incremental upgrade (A -> B)
+			// Step 4: Trigger incremental upgrade (A -> B)
 			LogWithTimestamp(test.T(), "Triggering an upgrade for RayService %s/%s (Spec B)", rayService.Namespace, rayService.Name)
 			rayService, err = GetRayService(test, namespace.Name, rayServiceName)
 			g.Expect(err).NotTo(HaveOccurred())
@@ -566,7 +565,7 @@ func TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust(t *testing.T) {
 				}
 			}, TestTimeoutMedium).Should(Succeed())
 
-			// Phase 5: Trigger rollback (B -> A)
+			// Step 5: Trigger rollback (B -> A)
 			LogWithTimestamp(test.T(), "Triggering a rollback for RayService %s/%s (Spec A)", rayService.Namespace, rayService.Name)
 			activeBeforeRollback := int32(0)
 			if rayService.Status.ActiveServiceStatus.TrafficRoutedPercent != nil {
@@ -586,7 +585,7 @@ func TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust(t *testing.T) {
 			// Handle sequence branches for more complex rollback scenarios
 			// For scenarios involving a Cancel Rollback (SeqABAB) or a Third Spec (SeqABAC),
 			// we wait until the rollback has started progressing (indicated by active traffic increasing)
-			// and then submit another spec update to observe how KubeRay adapts.
+			// and then submit another spec update.
 			// - SeqABAB: We re-apply Spec B. Because the pending cluster already matches Spec B,
 			//   KubeRay should cancel the rollback and resume migrating traffic to Spec B.
 			// - SeqABAC: We apply a brand new Spec C. KubeRay should abandon the rollback to Spec A,
@@ -616,9 +615,9 @@ func TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust(t *testing.T) {
 				g.Expect(err).NotTo(HaveOccurred())
 			}
 
-			// Phase 6: Ensure the upgrade/rollback operation is fully complete:
-			// 1. The UpgradeInProgress condition is completely cleared (False).
-			// 2. The RollbackInProgress condition is completely cleared (False).
+			// Step 6: Ensure the upgrade/rollback operation is fully complete:
+			// 1. The UpgradeInProgress condition is cleared (False).
+			// 2. The RollbackInProgress condition is cleared (False).
 			// 3. The pending cluster has been deleted, meaning its name field is empty.
 			// 4. The active cluster serves 100% of the traffic.
 			LogWithTimestamp(test.T(), "Waiting for RayService %s/%s to converge", namespace.Name, rayServiceName)
