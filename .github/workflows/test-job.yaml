@@ -15,7 +15,7 @@ jobs:
     name: Lint (pre-commit)
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v6
       - uses: actions/setup-node@v6
         with:
@@ -41,7 +41,7 @@ jobs:
           go-version: v1.26
 
       - name: Check out code into the Go module directory
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           # When checking out the repository that
           # triggered a workflow, this defaults to the reference or SHA for that event.
@@ -146,7 +146,7 @@ jobs:
           go-version: v1.26
 
       - name: Check out code into the Go module directory
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{github.event.pull_request.head.sha}}
 
@@ -175,7 +175,7 @@ jobs:
         go-version: v1.26
 
     - name: Check out code into the Go module directory
-      uses: actions/checkout@v6
+      uses: actions/checkout@v7
       with:
         # When checking out the repository that
         # triggered a workflow, this defaults to the reference or SHA for that event.
@@ -288,7 +288,7 @@ jobs:
           go-version: v1.26
 
       - name: Check out code into the Go module directory
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           # When checking out the repository that
           # triggered a workflow, this defaults to the reference or SHA for that event.
@@ -319,7 +319,7 @@ jobs:
           go-version: v1.26
 
       - name: Check out code into the Go module directory
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{github.event.pull_request.head.sha}}
 
