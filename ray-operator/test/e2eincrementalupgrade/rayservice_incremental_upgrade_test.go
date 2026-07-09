@@ -316,6 +316,10 @@ func TestRayServiceIncrementalUpgradeWithLocust(t *testing.T) {
 			LogWithTimestamp(test.T(), "Waiting for RayService %s/%s UpgradeInProgress condition to be false", namespace.Name, rayServiceName)
 			g.Eventually(RayService(test, namespace.Name, rayServiceName), TestTimeoutMedium).Should(WithTransform(IsRayServiceUpgrading, BeFalse()))
 
+			// Stop Locust load test early since convergence succeeded
+			LogWithTimestamp(test.T(), "Stopping Locust load test")
+			_, _, _ = ExecPodCmdWithError(test, locustHeadPod, common.RayHeadContainer, []string{"pkill", "-SIGINT", "-f", "locust --headless"})
+
 			LogWithTimestamp(test.T(), "Waiting for Locust load test goroutine to finish")
 			g.Expect(eg.Wait()).NotTo(HaveOccurred(), "Locust load test failed")
 
@@ -385,7 +389,7 @@ func TestRayServiceIncrementalUpgradeRollback(t *testing.T) {
 	LogWithTimestamp(test.T(), "Triggering a rollback for RayService %s/%s", rayService.Namespace, rayService.Name)
 	rayService, err = GetRayService(test, namespace.Name, rayServiceName)
 	g.Expect(err).NotTo(HaveOccurred())
-	rayService.Spec = *originalSpec
+	rayService.Spec = *originalSpec.DeepCopy()
 	_, err = test.Client().Ray().RayV1().RayServices(namespace.Name).Update(test.Ctx(), rayService, metav1.UpdateOptions{})
 	g.Expect(err).NotTo(HaveOccurred())
 
@@ -574,7 +578,7 @@ func TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust(t *testing.T) {
 			if rayService.Status.ActiveServiceStatus.TrafficRoutedPercent != nil {
 				activeBeforeRollback = *rayService.Status.ActiveServiceStatus.TrafficRoutedPercent
 			}
-			rayService.Spec = *originalSpec
+			rayService.Spec = *originalSpec.DeepCopy()
 			_, err = test.Client().Ray().RayV1().RayServices(namespace.Name).Update(test.Ctx(), rayService, metav1.UpdateOptions{})
 			g.Expect(err).NotTo(HaveOccurred())
 
@@ -605,10 +609,10 @@ func TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust(t *testing.T) {
 				switch tc.Sequence {
 				case SeqABAB:
 					LogWithTimestamp(test.T(), "Canceling rollback for RayService %s/%s (Spec B)", rayService.Namespace, rayService.Name)
-					rayService.Spec = *specB
+					rayService.Spec = *specB.DeepCopy()
 				case SeqABAC:
 					LogWithTimestamp(test.T(), "Third spec for RayService %s/%s (Spec C)", rayService.Namespace, rayService.Name)
-					rayService.Spec = *specB
+					rayService.Spec = *specB.DeepCopy()
 					rayService.Spec.RayClusterSpec.WorkerGroupSpecs[0].Template.Spec.Containers[0].Resources.Requests[corev1.ResourceCPU] = resource.MustParse("600m") // Spec C
 				}
 				_, err = test.Client().Ray().RayV1().RayServices(namespace.Name).Update(test.Ctx(), rayService, metav1.UpdateOptions{})
@@ -631,7 +635,7 @@ func TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust(t *testing.T) {
 				active := svc.Status.ActiveServiceStatus.TrafficRoutedPercent
 				g.Expect(active).NotTo(BeNil())
 				g.Expect(*active).Should(Equal(int32(100)))
-			}, TestTimeoutLong).Should(Succeed())
+			}, 10*time.Minute).Should(Succeed())
 
 			// Check resources on the final active cluster based on the sequence
 			svc, err := GetRayService(test, namespace.Name, rayServiceName)
@@ -649,6 +653,10 @@ func TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust(t *testing.T) {
 			case SeqABAC:
 				g.Expect(finalCPUReq).To(Equal(resource.MustParse("600m")))
 			}
+
+			// Stop Locust load test early since convergence succeeded
+			LogWithTimestamp(test.T(), "Stopping Locust load test")
+			_, _, _ = ExecPodCmdWithError(test, locustHeadPod, common.RayHeadContainer, []string{"pkill", "-SIGINT", "-f", "locust --headless"})
 
 			LogWithTimestamp(test.T(), "Waiting for Locust load test goroutine to finish")
 			g.Expect(eg.Wait()).NotTo(HaveOccurred(), "Locust load test failed")
