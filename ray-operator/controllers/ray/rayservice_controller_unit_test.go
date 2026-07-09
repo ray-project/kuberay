@@ -2704,32 +2704,44 @@ func TestReconcileRollbackState(t *testing.T) {
 	tests := []struct {
 		name                 string
 		rayServiceSpec       rayv1.RayClusterSpec
+		pendingHashOverride  string
 		isRollbackInProgress bool
 		expectRollbackStatus bool
 	}{
 		{
 			name:                 "Normal RayService upgrade, goal matches pending",
 			rayServiceSpec:       *updatedSpec,
+			pendingHashOverride:  updatedHash,
 			isRollbackInProgress: false,
 			expectRollbackStatus: false,
 		},
 		{
 			name:                 "RayService Spec changed, initiate rollback",
 			rayServiceSpec:       baseSpec,
+			pendingHashOverride:  updatedHash,
 			isRollbackInProgress: false,
 			expectRollbackStatus: true,
 		},
 		{
 			name:                 "Rollback in progress, continues rolling back",
 			rayServiceSpec:       baseSpec,
+			pendingHashOverride:  updatedHash,
 			isRollbackInProgress: true,
 			expectRollbackStatus: true,
 		},
 		{
 			name:                 "Rollback canceled, user updated spec back to pending",
 			rayServiceSpec:       *updatedSpec,
+			pendingHashOverride:  updatedHash,
 			isRollbackInProgress: true,
 			expectRollbackStatus: false,
+		},
+		{
+			name:                 "Fast rollback: Goal matches active, but pending already updated to match active",
+			rayServiceSpec:       baseSpec,
+			pendingHashOverride:  baseHash,
+			isRollbackInProgress: false,
+			expectRollbackStatus: true,
 		},
 	}
 
@@ -2749,11 +2761,14 @@ func TestReconcileRollbackState(t *testing.T) {
 				setCondition(rayService, rayv1.RollbackInProgress, metav1.ConditionTrue, rayv1.TargetClusterChanged, "rolling back")
 			}
 
+			testPendingCluster := pendingCluster.DeepCopy()
+			testPendingCluster.Annotations[utils.HashWithoutReplicasAndWorkersToDeleteKey] = tt.pendingHashOverride
+
 			reconciler := RayServiceReconciler{
 				Recorder: events.NewFakeRecorder(1),
 			}
 
-			err := reconciler.reconcileRollbackState(ctx, rayService, activeCluster, pendingCluster)
+			err := reconciler.reconcileRollbackState(ctx, rayService, activeCluster, testPendingCluster)
 			require.NoError(t, err)
 
 			isCurrentlyRollingBack := meta.IsStatusConditionTrue(rayService.Status.Conditions, string(rayv1.RollbackInProgress))
