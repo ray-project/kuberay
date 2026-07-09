@@ -158,7 +158,6 @@ func incrementalUpgradeRayServiceApplyConfiguration(
 								corev1ac.ContainerPort().WithName(utils.ClientPortName).WithContainerPort(utils.DefaultClientPort),
 							))))).
 			WithWorkerGroupSpecs(rayv1ac.WorkerGroupSpec().
-				WithRayStartParams(map[string]string{"num-cpus": "1"}).
 				WithReplicas(1).
 				WithMinReplicas(1).
 				WithMaxReplicas(2).
@@ -171,7 +170,7 @@ func incrementalUpgradeRayServiceApplyConfiguration(
 							WithImage(GetRayImage()).
 							WithResources(corev1ac.ResourceRequirements().
 								WithRequests(corev1.ResourceList{
-									corev1.ResourceCPU:    resource.MustParse("1"),
+									corev1.ResourceCPU:    resource.MustParse("2"),
 									corev1.ResourceMemory: resource.MustParse("2Gi"),
 								}).
 								WithLimits(corev1.ResourceList{
