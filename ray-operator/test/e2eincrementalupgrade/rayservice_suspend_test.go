@@ -68,15 +68,11 @@ func TestRayServiceSuspendDuringIncrementalUpgrade(t *testing.T) {
 	}, TestTimeoutMedium).Should(Succeed())
 
 	LogWithTimestamp(test.T(), "Setting Spec.Suspend=true while incremental upgrade is in progress")
-	g.Eventually(func() error {
-		rayService, err = GetRayService(test, namespace.Name, rayServiceName)
-		if err != nil {
-			return err
-		}
-		rayService.Spec.Suspend = true
-		_, err = test.Client().Ray().RayV1().RayServices(namespace.Name).Update(test.Ctx(), rayService, metav1.UpdateOptions{})
-		return err
-	}, TestTimeoutShort).Should(Succeed())
+	rayService, err = GetRayService(test, namespace.Name, rayServiceName)
+	g.Expect(err).NotTo(HaveOccurred())
+	rayService.Spec.Suspend = true
+	_, err = test.Client().Ray().RayV1().RayServices(namespace.Name).Update(test.Ctx(), rayService, metav1.UpdateOptions{})
+	g.Expect(err).NotTo(HaveOccurred())
 
 	LogWithTimestamp(test.T(), "Waiting for the Suspended condition to be True")
 	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutMedium).
@@ -104,15 +100,11 @@ func TestRayServiceSuspendDuringIncrementalUpgrade(t *testing.T) {
 	}, TestTimeoutMedium).Should(Succeed())
 
 	LogWithTimestamp(test.T(), "Setting Spec.Suspend=false; the controller must recreate Gateway, HTTPRoute, RayCluster, and Services")
-	g.Eventually(func() error {
-		rayService, err = GetRayService(test, namespace.Name, rayServiceName)
-		if err != nil {
-			return err
-		}
-		rayService.Spec.Suspend = false
-		_, err = test.Client().Ray().RayV1().RayServices(namespace.Name).Update(test.Ctx(), rayService, metav1.UpdateOptions{})
-		return err
-	}, TestTimeoutShort).Should(Succeed())
+	rayService, err = GetRayService(test, namespace.Name, rayServiceName)
+	g.Expect(err).NotTo(HaveOccurred())
+	rayService.Spec.Suspend = false
+	_, err = test.Client().Ray().RayV1().RayServices(namespace.Name).Update(test.Ctx(), rayService, metav1.UpdateOptions{})
+	g.Expect(err).NotTo(HaveOccurred())
 
 	g.Eventually(RayService(test, rayService.Namespace, rayService.Name), TestTimeoutMedium).
 		Should(WithTransform(IsRayServiceReady, BeTrue()))

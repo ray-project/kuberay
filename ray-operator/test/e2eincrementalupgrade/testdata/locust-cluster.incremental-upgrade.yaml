@@ -6,7 +6,6 @@ metadata:
 spec:
   rayVersion: '2.52.0'
   headGroupSpec:
-    rayStartParams: {}
     template:
       spec:
         containers:
@@ -66,7 +65,7 @@ data:
 
     class StagesShape(LoadTestShape):
         stages = [
-            {"duration": 3600, "users": 10, "spawn_rate": 10},
+            {"duration": 300, "users": 10, "spawn_rate": 10},
         ]
 
         def tick(self):
