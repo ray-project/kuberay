@@ -567,13 +567,13 @@ func TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust(t *testing.T) {
 
 			// Step 5: Trigger rollback (B -> A)
 			LogWithTimestamp(test.T(), "Triggering a rollback for RayService %s/%s (Spec A)", rayService.Namespace, rayService.Name)
+			rayService, err = GetRayService(test, namespace.Name, rayServiceName)
+			g.Expect(err).NotTo(HaveOccurred())
+
 			activeBeforeRollback := int32(0)
 			if rayService.Status.ActiveServiceStatus.TrafficRoutedPercent != nil {
 				activeBeforeRollback = *rayService.Status.ActiveServiceStatus.TrafficRoutedPercent
 			}
-
-			rayService, err = GetRayService(test, namespace.Name, rayServiceName)
-			g.Expect(err).NotTo(HaveOccurred())
 			rayService.Spec = *originalSpec
 			_, err = test.Client().Ray().RayV1().RayServices(namespace.Name).Update(test.Ctx(), rayService, metav1.UpdateOptions{})
 			g.Expect(err).NotTo(HaveOccurred())
