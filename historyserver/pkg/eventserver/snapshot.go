@@ -55,5 +55,11 @@ func reconcileTasksOfFinishedJobs(snapshot *SessionSnapshot) {
 		}
 		task.State = types.FAILED
 		task.EndTime = job.EndTime
+		// Append the FAILED transition so the task's serialized state history
+		// (stateTransitions) ends in the same state as the top-level State.
+		task.StateTransitions = append(task.StateTransitions, types.TaskStateTransition{
+			State:     types.FAILED,
+			Timestamp: job.EndTime,
+		})
 	}
 }

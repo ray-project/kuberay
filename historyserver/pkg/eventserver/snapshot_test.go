@@ -161,4 +161,16 @@ func TestBuildSnapshotTasksOfFinishedJob(t *testing.T) {
 	if !task.EndTime.Equal(jobFinished) {
 		t.Errorf("BuildSnapshot() task end time = %v, want job end time %v", task.EndTime, jobFinished)
 	}
+	// The serialized state history must end in the same state as the
+	// top-level State field.
+	if len(task.StateTransitions) == 0 {
+		t.Fatalf("BuildSnapshot() task has no state transitions, want a trailing %s transition", types.FAILED)
+	}
+	lastTransition := task.StateTransitions[len(task.StateTransitions)-1]
+	if lastTransition.State != types.FAILED {
+		t.Errorf("BuildSnapshot() last task state transition = %s, want %s", lastTransition.State, types.FAILED)
+	}
+	if !lastTransition.Timestamp.Equal(jobFinished) {
+		t.Errorf("BuildSnapshot() last task state transition timestamp = %v, want job end time %v", lastTransition.Timestamp, jobFinished)
+	}
 }
