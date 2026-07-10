@@ -99,6 +99,18 @@ func validateRayGroupLabels(groupName string, rayStartParams, labels map[string]
 	return nil
 }
 
+func validateRayStartParams(rayStartParams map[string]string) error {
+	dangerousChars := []string{";", "|", "&", "$", "<", ">", "`", "\n", "\r"}
+	for key, value := range rayStartParams {
+		for _, char := range dangerousChars {
+			if strings.Contains(value, char) {
+				return fmt.Errorf("rayStartParam %s contains forbidden shell metacharacter: %q", key, char)
+			}
+		}
+	}
+	return nil
+}
+
 // Validation for invalid Ray Cluster configurations.
 func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]string) error {
 	if len(spec.HeadGroupSpec.Template.Spec.Containers) == 0 {
@@ -109,6 +121,9 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 		return err
 	}
 	if err := validateRayGroupLabels("Head", spec.HeadGroupSpec.RayStartParams, spec.HeadGroupSpec.Labels); err != nil {
+		return err
+	}
+	if err := validateRayStartParams(spec.HeadGroupSpec.RayStartParams); err != nil {
 		return err
 	}
 
@@ -140,6 +155,9 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 			return err
 		}
 		if err := validateRayGroupLabels(workerGroup.GroupName, workerGroup.RayStartParams, workerGroup.Labels); err != nil {
+			return err
+		}
+		if err := validateRayStartParams(workerGroup.RayStartParams); err != nil {
 			return err
 		}
 		if err := validateWorkerGroupIdleTimeout(workerGroup, spec); err != nil {
