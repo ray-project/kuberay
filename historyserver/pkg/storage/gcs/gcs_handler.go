@@ -199,7 +199,7 @@ func (h *RayLogsHandler) List() []utils.ClusterInfo {
 			return nil
 		}
 
-		// Skip meta.json files — they are not session markers
+		// Skip meta.json files - they are not session markers
 		if strings.HasSuffix(objectAttr.Name, ".meta.json") {
 			continue
 		}

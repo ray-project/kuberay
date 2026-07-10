@@ -204,7 +204,7 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 			logrus.Infof("[List]Returned objects in %v. length of Contents: %v, length of CommonPrefixes: %v", prefix, len(page.Contents),
 				len(page.CommonPrefixes))
 			for _, objects := range page.Contents {
-				// Skip meta.json files — they are not session markers
+				// Skip meta.json files - they are not session markers
 				if strings.HasSuffix(*objects.Key, ".meta.json") {
 					continue
 				}

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/blob"
@@ -72,10 +73,6 @@ func (r *RayLogsHandler) WriteFile(file string, reader io.ReadSeeker) error {
 	return nil
 }
 
-func ptrString(s string) *string {
-	return &s
-}
-
 func (r *RayLogsHandler) WriteMeta(path string, meta utils.MetaJson) error {
 	data, err := json.Marshal(meta)
 	if err != nil {
@@ -87,7 +84,7 @@ func (r *RayLogsHandler) WriteMeta(path string, meta utils.MetaJson) error {
 	blobClient := r.ContainerClient.NewBlockBlobClient(path)
 	_, err = blobClient.UploadStream(ctx, bytes.NewReader(data), &azblob.UploadStreamOptions{
 		HTTPHeaders: &blob.HTTPHeaders{
-			BlobContentType: ptrString("application/json"),
+			BlobContentType: to.Ptr("application/json"),
 		},
 	})
 	return err
@@ -230,7 +227,7 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 			prefix, len(resp.Segment.BlobItems))
 
 		for _, blob := range resp.Segment.BlobItems {
-			// Skip meta.json files — they are not session markers
+			// Skip meta.json files - they are not session markers
 			if strings.HasSuffix(*blob.Name, ".meta.json") {
 				continue
 			}

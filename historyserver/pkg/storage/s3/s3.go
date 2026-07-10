@@ -206,7 +206,7 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 					prefix, len(page.Contents), len(page.CommonPrefixes))
 
 				for _, object := range page.Contents {
-					// Skip meta.json files — they are not session markers
+					// Skip meta.json files - they are not session markers
 					if strings.HasSuffix(*object.Key, ".meta.json") {
 						continue
 					}
