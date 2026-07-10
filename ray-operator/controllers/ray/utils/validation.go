@@ -100,7 +100,7 @@ func validateRayGroupLabels(groupName string, rayStartParams, labels map[string]
 }
 
 func validateRayStartParams(rayStartParams map[string]string) error {
-	dangerousChars := []string{";", "|", "&", "$", "<", ">", "`", "\n", "\r"}
+	dangerousChars := []string{";", "|", "&", "$(", "<", ">", "`", "\n", "\r"}
 	for key, value := range rayStartParams {
 		for _, char := range dangerousChars {
 			if strings.Contains(value, char) {
