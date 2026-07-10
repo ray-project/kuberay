@@ -320,6 +320,10 @@ func main() {
 	if os.Getenv("ENABLE_WEBHOOKS") == "true" {
 		exitOnError(webhooks.SetupRayClusterWebhookWithManager(mgr),
 			"unable to create webhook", "webhook", "RayCluster")
+		exitOnError(webhooks.SetupRayJobWebhookWithManager(mgr),
+			"unable to create webhook", "webhook", "RayJob")
+		exitOnError(webhooks.SetupRayServiceWebhookWithManager(mgr),
+			"unable to create webhook", "webhook", "RayService")
 	}
 
 	if features.Enabled(features.RayCronJob) {
