@@ -186,35 +186,12 @@ func (r *RayClusterMTLSController) reconcileSelfSignedIssuer(ctx context.Context
 	return nil
 }
 
-// reconcileCACertificate creates or updates the root CA certificate signed by the self-signed issuer.
+// reconcileCACertificate creates the root CA certificate signed by the self-signed issuer if it does not exist.
+// The CA cert spec is static once created so no update is needed, avoiding spurious re-issuance due to
+// reflect.DeepEqual disagreeing with cert-manager's internal field normalization.
 func (r *RayClusterMTLSController) reconcileCACertificate(ctx context.Context, instance *rayv1.RayCluster) error {
 	certName := utils.GetCACertName(instance.Name)
 	caSecretName := utils.GetCASecretName(instance.Name, instance.UID)
-	desiredLabels := tlsResourceLabels(instance.Name, "ca-certificate")
-	desiredSpec := certmanagerv1.CertificateSpec{
-		SecretName: caSecretName,
-		IsCA:       true,
-		CommonName: fmt.Sprintf("ray-ca-%s", instance.Name),
-		PrivateKey: &certmanagerv1.CertificatePrivateKey{
-			Algorithm: certmanagerv1.RSAKeyAlgorithm,
-			Size:      4096,
-		},
-		Duration: &metav1.Duration{
-			Duration: 24 * time.Hour * 3650, // ~10 years
-		},
-		RenewBefore: &metav1.Duration{
-			Duration: 24 * time.Hour * 30, // 30 days before expiry
-		},
-		Usages: []certmanagerv1.KeyUsage{
-			certmanagerv1.UsageCertSign,
-			certmanagerv1.UsageCRLSign,
-		},
-		IssuerRef: cmmeta.IssuerReference{
-			Name:  utils.GetSelfSignedIssuerName(instance.Name),
-			Kind:  "Issuer",
-			Group: "cert-manager.io",
-		},
-	}
 
 	existing := &certmanagerv1.Certificate{}
 	err := r.Get(ctx, client.ObjectKey{Name: certName, Namespace: instance.Namespace}, existing)
@@ -226,25 +203,37 @@ func (r *RayClusterMTLSController) reconcileCACertificate(ctx context.Context, i
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      certName,
 				Namespace: instance.Namespace,
-				Labels:    desiredLabels,
+				Labels:    tlsResourceLabels(instance.Name, "ca-certificate"),
 			},
-			Spec: desiredSpec,
+			Spec: certmanagerv1.CertificateSpec{
+				SecretName: caSecretName,
+				IsCA:       true,
+				CommonName: fmt.Sprintf("ray-ca-%s", instance.Name),
+				PrivateKey: &certmanagerv1.CertificatePrivateKey{
+					Algorithm: certmanagerv1.RSAKeyAlgorithm,
+					Size:      4096,
+				},
+				Duration: &metav1.Duration{
+					Duration: 24 * time.Hour * 3650, // ~10 years
+				},
+				RenewBefore: &metav1.Duration{
+					Duration: 24 * time.Hour * 30, // 30 days before expiry
+				},
+				Usages: []certmanagerv1.KeyUsage{
+					certmanagerv1.UsageCertSign,
+					certmanagerv1.UsageCRLSign,
+				},
+				IssuerRef: cmmeta.IssuerReference{
+					Name:  utils.GetSelfSignedIssuerName(instance.Name),
+					Kind:  "Issuer",
+					Group: "cert-manager.io",
+				},
+			},
 		}
 		if err := controllerutil.SetControllerReference(instance, cert, r.Scheme); err != nil {
 			return err
 		}
 		return r.Create(ctx, cert)
-	}
-
-	if !reflect.DeepEqual(existing.Labels, desiredLabels) || !reflect.DeepEqual(existing.Spec, desiredSpec) {
-		existing.Labels = desiredLabels
-		existing.Spec = desiredSpec
-		if err := controllerutil.SetControllerReference(instance, existing, r.Scheme); err != nil {
-			return err
-		}
-		if err := r.Update(ctx, existing); err != nil {
-			return err
-		}
 	}
 	return r.ensureSecretOwnedByCertificate(ctx, existing)
 }
