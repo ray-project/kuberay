@@ -279,6 +279,9 @@ func TestMTLSController_AutoGenerate_UpdatesIPAddresses(t *testing.T) {
 	assert.Contains(t, headCert.Spec.IPAddresses, "127.0.0.1")
 
 	// Simulate scale-up: add a worker pod.
+	// A finalizer is added so that a subsequent Delete call sets DeletionTimestamp
+	// without immediately removing the pod from the API server, letting us test
+	// the terminating-pod filter in the SAN reconciliation.
 	workerPod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-cluster-worker-0",
@@ -287,6 +290,7 @@ func TestMTLSController_AutoGenerate_UpdatesIPAddresses(t *testing.T) {
 				utils.RayClusterLabelKey:  cluster.Name,
 				utils.RayNodeTypeLabelKey: string(rayv1.WorkerNode),
 			},
+			Finalizers: []string{"test/hold"},
 		},
 		Status: corev1.PodStatus{PodIP: "10.244.0.6"},
 	}
@@ -312,6 +316,22 @@ func TestMTLSController_AutoGenerate_UpdatesIPAddresses(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, workerCert.Spec.IPAddresses, "10.244.0.6",
 		"worker cert should be updated with the new worker pod IP after scale-up")
+
+	// Simulate scale-down: deleting the pod while the finalizer is still present causes
+	// envtest to set DeletionTimestamp without removing the pod from the store, so we
+	// can verify that terminating pods are excluded from certificate SANs.
+	require.NoError(t, r.Delete(ctx, workerPod))
+
+	_, err = r.Reconcile(ctx, req)
+	require.NoError(t, err)
+
+	err = r.Get(ctx, types.NamespacedName{
+		Name:      utils.GetTLSCertName(cluster.Name, rayv1.WorkerNode),
+		Namespace: "default",
+	}, workerCert)
+	require.NoError(t, err)
+	assert.NotContains(t, workerCert.Spec.IPAddresses, "10.244.0.6",
+		"worker cert should not include IP of a terminating pod after scale-down")
 }
 
 func TestMTLSController_Disabled_IsNoOp(t *testing.T) {

@@ -2678,6 +2678,20 @@ func TestConfigureTLS_AutoGenerate_WorkerPod(t *testing.T) {
 	// Verify TLS env vars on Ray container.
 	rayContainer := podTemplate.Spec.Containers[utils.RayContainerIndex]
 	checkContainerEnv(t, rayContainer, utils.RAY_USE_TLS, "1")
+	checkContainerEnv(t, rayContainer, utils.RAY_TLS_SERVER_CERT, utils.RayTLSCertMountPath+"/tls.crt")
+	checkContainerEnv(t, rayContainer, utils.RAY_TLS_SERVER_KEY, utils.RayTLSCertMountPath+"/tls.key")
+	checkContainerEnv(t, rayContainer, utils.RAY_TLS_CA_CERT, utils.RayTLSCertMountPath+"/ca.crt")
+	// Verify TLS volume mount on Ray container.
+	var tlsMount *corev1.VolumeMount
+	for i := range rayContainer.VolumeMounts {
+		if rayContainer.VolumeMounts[i].Name == utils.RayTLSVolumeName {
+			tlsMount = &rayContainer.VolumeMounts[i]
+			break
+		}
+	}
+	require.NotNil(t, tlsMount, "TLS volume mount should be added to Ray container")
+	assert.Equal(t, utils.RayTLSCertMountPath, tlsMount.MountPath)
+	assert.True(t, tlsMount.ReadOnly)
 
 	// wait-for-tls-ip-san must be the first init container on worker pods. GCS connects back
 	// to each worker's raylet using the worker's pod IP; if the cert doesn't yet list that IP
@@ -2720,6 +2734,9 @@ func TestConfigureTLS_AutoscalerContainer(t *testing.T) {
 	// Verify TLS env vars on autoscaler container.
 	env := getEnvVar(*autoscalerContainer, utils.RAY_USE_TLS)
 	assert.NotNil(t, env, "autoscaler container should have RAY_USE_TLS")
+	checkContainerEnv(t, *autoscalerContainer, utils.RAY_TLS_SERVER_CERT, utils.RayTLSCertMountPath+"/tls.crt")
+	checkContainerEnv(t, *autoscalerContainer, utils.RAY_TLS_SERVER_KEY, utils.RayTLSCertMountPath+"/tls.key")
+	checkContainerEnv(t, *autoscalerContainer, utils.RAY_TLS_CA_CERT, utils.RayTLSCertMountPath+"/ca.crt")
 
 	// Verify TLS volume mount on autoscaler container.
 	var tlsMount *corev1.VolumeMount
