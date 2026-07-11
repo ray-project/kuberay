@@ -1177,6 +1177,8 @@ func (s *ServerHandler) getNodeLogs(req *restful.Request, resp *restful.Response
 		resp.WriteError(400, err)
 		return
 	}
+	resp.Header().Set("Content-Type", "application/json")
+	resp.Header().Set("X-Content-Type-Options", "nosniff")
 	resp.Write(data)
 }
 
@@ -1391,6 +1393,8 @@ func (s *ServerHandler) getNodeLogFile(req *restful.Request, resp *restful.Respo
 		resp.AddHeader("Content-Disposition", disposition)
 	}
 
+	resp.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	resp.Header().Set("X-Content-Type-Options", "nosniff")
 	resp.Write(content)
 }
 
