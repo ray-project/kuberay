@@ -100,11 +100,14 @@ func validateRayGroupLabels(groupName string, rayStartParams, labels map[string]
 }
 
 func validateRayStartParams(rayStartParams map[string]string) error {
-	dangerousChars := []string{";", "|", "&", "$(", "<", ">", "`", "\n", "\r"}
+	dangerousChars := []string{";", "|", "&", "$(", "<", ">", "`", "\n", "\r", "$'"}
 	for key, value := range rayStartParams {
 		for _, char := range dangerousChars {
+			if strings.Contains(key, char) {
+				return fmt.Errorf("rayStartParam key %q contains forbidden shell metacharacter: %q", key, char)
+			}
 			if strings.Contains(value, char) {
-				return fmt.Errorf("rayStartParam %s contains forbidden shell metacharacter: %q", key, char)
+				return fmt.Errorf("rayStartParam value for key %q contains forbidden shell metacharacter: %q", key, char)
 			}
 		}
 	}
