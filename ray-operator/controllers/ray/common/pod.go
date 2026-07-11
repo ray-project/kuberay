@@ -1141,11 +1141,6 @@ func getSortedResourceKeys(resourceLimits corev1.ResourceList) []string {
 	return sortedResourceKeys
 }
 
-// escapeBashArgument safely escapes a string to be used as a bash argument.
-// It wraps the string in single quotes and safely escapes inner single quotes.
-func escapeBashArgument(arg string) string {
-	return fmt.Sprintf("'%s'", strings.ReplaceAll(arg, "'", "'\\''"))
-}
 
 func convertParamMap(rayStartParams map[string]string) (s string) {
 	// Order rayStartParams keys for consistent ray start command flags generation
@@ -1169,7 +1164,7 @@ func convertParamMap(rayStartParams map[string]string) (s string) {
 			}
 		} else {
 			// parameterOption: require arguments to be provided along with the option.
-			fmt.Fprintf(flags, " --%s=%s ", option, escapeBashArgument(argument))
+			fmt.Fprintf(flags, " --%s=%s ", option, argument)
 		}
 	}
 	return flags.String()
