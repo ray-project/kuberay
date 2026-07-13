@@ -213,44 +213,51 @@ func BuildJobSubmitCommand(rayJobInstance *rayv1.RayJob, submissionMode rayv1.Jo
 
 // GetSubmitterTemplate creates a default submitter template for the Ray job.
 func GetSubmitterTemplate(rayJobSpec *rayv1.RayJobSpec, rayClusterSpec *rayv1.RayClusterSpec) corev1.PodTemplateSpec {
-	defaultSubmitterPodTemplate := corev1.PodTemplateSpec{
-		Spec: corev1.PodSpec{
-			Containers:    []corev1.Container{GetDefaultSubmitterContainer(rayClusterSpec)},
-			RestartPolicy: corev1.RestartPolicyNever,
-		},
-	}
+	defaultContainer := GetDefaultSubmitterContainer(rayClusterSpec)
 
-	var userSubmitterPodTemplate corev1.PodTemplateSpec
-	if rayJobSpec.SubmitterPodTemplate != nil {
-		userSubmitterPodTemplate = *rayJobSpec.SubmitterPodTemplate.DeepCopy()
-
-		if len(userSubmitterPodTemplate.ObjectMeta.Labels) > 0 {
-			defaultSubmitterPodTemplate.ObjectMeta.Labels = userSubmitterPodTemplate.ObjectMeta.Labels
-		}
-		if len(userSubmitterPodTemplate.ObjectMeta.Annotations) > 0 {
-			defaultSubmitterPodTemplate.ObjectMeta.Annotations = userSubmitterPodTemplate.ObjectMeta.Annotations
-		}
-		if len(userSubmitterPodTemplate.Spec.Containers) > 0 {
-			if len(userSubmitterPodTemplate.Spec.Containers[0].Resources.Requests) > 0 {
-				defaultSubmitterPodTemplate.Spec.Containers[0].Resources.Requests = userSubmitterPodTemplate.Spec.Containers[0].Resources.Requests
-			}
-			if len(userSubmitterPodTemplate.Spec.Containers[0].Resources.Limits) > 0 {
-				defaultSubmitterPodTemplate.Spec.Containers[0].Resources.Limits = userSubmitterPodTemplate.Spec.Containers[0].Resources.Limits
-			}
-			if userSubmitterPodTemplate.Spec.Containers[0].Image != "" {
-				defaultSubmitterPodTemplate.Spec.Containers[0].Image = userSubmitterPodTemplate.Spec.Containers[0].Image
-			}
-		}
-
-		if userSubmitterPodTemplate.Spec.Tolerations != nil {
-			defaultSubmitterPodTemplate.Spec.Tolerations = userSubmitterPodTemplate.Spec.Tolerations
-		}
-		if userSubmitterPodTemplate.Spec.NodeSelector != nil {
-			defaultSubmitterPodTemplate.Spec.NodeSelector = userSubmitterPodTemplate.Spec.NodeSelector
+	// If no user template is provided, return the defaults
+	if rayJobSpec.SubmitterPodTemplate == nil {
+		return corev1.PodTemplateSpec{
+			Spec: corev1.PodSpec{
+				Containers:    []corev1.Container{defaultContainer},
+				RestartPolicy: corev1.RestartPolicyNever,
+			},
 		}
 	}
 
-	return defaultSubmitterPodTemplate
+	// Start with a deep copy of the user's template to preserve all their custom fields
+	// (like Volumes, Env, Command, Tolerations, Labels, Annotations, etc.)
+	finalTemplate := *rayJobSpec.SubmitterPodTemplate.DeepCopy()
+
+	// Always enforce RestartPolicy: Never
+	finalTemplate.Spec.RestartPolicy = corev1.RestartPolicyNever
+
+	// Ensure there is at least one container
+	if len(finalTemplate.Spec.Containers) == 0 {
+		finalTemplate.Spec.Containers = []corev1.Container{defaultContainer}
+	} else {
+		userContainer := &finalTemplate.Spec.Containers[0]
+
+		// Always enforce the KubeRay default container name
+		userContainer.Name = defaultContainer.Name
+
+		//  Fallback to default image if user omitted it
+		if userContainer.Image == "" {
+			userContainer.Image = defaultContainer.Image
+		}
+
+		// Fallback to default Requests if user omitted them
+		if len(userContainer.Resources.Requests) == 0 {
+			userContainer.Resources.Requests = defaultContainer.Resources.Requests
+		}
+
+		// Fallback to default Limits if user omitted them
+		if len(userContainer.Resources.Limits) == 0 {
+			userContainer.Resources.Limits = defaultContainer.Resources.Limits
+		}
+	}
+
+	return finalTemplate
 }
 
 // GetDefaultSubmitterContainer creates a default submitter container for the Ray job.
