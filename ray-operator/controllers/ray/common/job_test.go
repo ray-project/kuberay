@@ -509,6 +509,11 @@ func TestGetSubmitterPodTemplate(t *testing.T) {
 			Containers: []corev1.Container{
 				{
 					Image: "rayproject/ray:test-submitter-template",
+					Resources: corev1.ResourceRequirements{
+						Requests: corev1.ResourceList{
+							corev1.ResourceCPU: resource.MustParse("250m"),
+						},
+					},
 				},
 			},
 		},
@@ -519,6 +524,7 @@ func TestGetSubmitterPodTemplate(t *testing.T) {
 	assert.Equal(t, "true", template.ObjectMeta.Labels["my-label"])
 	assert.Equal(t, "true", template.ObjectMeta.Annotations["my-annotation"])
 
-	assert.Equal(t, resource.MustParse("500m"), template.Spec.Containers[0].Resources.Requests[corev1.ResourceCPU])
-	assert.Equal(t, resource.MustParse("200Mi"), template.Spec.Containers[0].Resources.Requests[corev1.ResourceMemory])
+	assert.Equal(t, resource.MustParse("250m"), template.Spec.Containers[0].Resources.Requests[corev1.ResourceCPU])
+	assert.Equal(t, resource.MustParse("1"), template.Spec.Containers[0].Resources.Limits[corev1.ResourceCPU])
+	assert.Equal(t, resource.MustParse("1Gi"), template.Spec.Containers[0].Resources.Limits[corev1.ResourceMemory])
 }

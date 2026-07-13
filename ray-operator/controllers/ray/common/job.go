@@ -231,8 +231,11 @@ func GetSubmitterTemplate(rayJobSpec *rayv1.RayJobSpec, rayClusterSpec *rayv1.Ra
 			defaultSubmitterPodTemplate.ObjectMeta.Annotations = userSubmitterPodTemplate.ObjectMeta.Annotations
 		}
 		if len(userSubmitterPodTemplate.Spec.Containers) > 0 {
-			if len(userSubmitterPodTemplate.Spec.Containers[0].Resources.Requests) > 0 || len(userSubmitterPodTemplate.Spec.Containers[0].Resources.Limits) > 0 {
-				defaultSubmitterPodTemplate.Spec.Containers[0].Resources = userSubmitterPodTemplate.Spec.Containers[0].Resources
+			if len(userSubmitterPodTemplate.Spec.Containers[0].Resources.Requests) > 0 {
+				defaultSubmitterPodTemplate.Spec.Containers[0].Resources.Requests = userSubmitterPodTemplate.Spec.Containers[0].Resources.Requests
+			}
+			if len(userSubmitterPodTemplate.Spec.Containers[0].Resources.Limits) > 0 {
+				defaultSubmitterPodTemplate.Spec.Containers[0].Resources.Limits = userSubmitterPodTemplate.Spec.Containers[0].Resources.Limits
 			}
 			if userSubmitterPodTemplate.Spec.Containers[0].Image != "" {
 				defaultSubmitterPodTemplate.Spec.Containers[0].Image = userSubmitterPodTemplate.Spec.Containers[0].Image
