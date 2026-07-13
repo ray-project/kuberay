@@ -213,17 +213,41 @@ func BuildJobSubmitCommand(rayJobInstance *rayv1.RayJob, submissionMode rayv1.Jo
 
 // GetSubmitterTemplate creates a default submitter template for the Ray job.
 func GetSubmitterTemplate(rayJobSpec *rayv1.RayJobSpec, rayClusterSpec *rayv1.RayClusterSpec) corev1.PodTemplateSpec {
-	if rayJobSpec.SubmitterPodTemplate != nil {
-		return *rayJobSpec.SubmitterPodTemplate.DeepCopy()
-	}
-	return corev1.PodTemplateSpec{
+	defaultSubmitterPodTemplate := corev1.PodTemplateSpec{
 		Spec: corev1.PodSpec{
-			Containers: []corev1.Container{
-				GetDefaultSubmitterContainer(rayClusterSpec),
-			},
+			Containers:    []corev1.Container{GetDefaultSubmitterContainer(rayClusterSpec)},
 			RestartPolicy: corev1.RestartPolicyNever,
 		},
 	}
+
+	var userSubmitterPodTemplate corev1.PodTemplateSpec
+	if rayJobSpec.SubmitterPodTemplate != nil {
+		userSubmitterPodTemplate = *rayJobSpec.SubmitterPodTemplate.DeepCopy()
+
+		if len(userSubmitterPodTemplate.ObjectMeta.Labels) > 0 {
+			defaultSubmitterPodTemplate.ObjectMeta.Labels = userSubmitterPodTemplate.ObjectMeta.Labels
+		}
+		if len(userSubmitterPodTemplate.ObjectMeta.Annotations) > 0 {
+			defaultSubmitterPodTemplate.ObjectMeta.Annotations = userSubmitterPodTemplate.ObjectMeta.Annotations
+		}
+		if len(userSubmitterPodTemplate.Spec.Containers) > 0 {
+			if len(userSubmitterPodTemplate.Spec.Containers[0].Resources.Requests) > 0 || len(userSubmitterPodTemplate.Spec.Containers[0].Resources.Limits) > 0 {
+				defaultSubmitterPodTemplate.Spec.Containers[0].Resources = userSubmitterPodTemplate.Spec.Containers[0].Resources
+			}
+			if userSubmitterPodTemplate.Spec.Containers[0].Image != "" {
+				defaultSubmitterPodTemplate.Spec.Containers[0].Image = userSubmitterPodTemplate.Spec.Containers[0].Image
+			}
+		}
+
+		if userSubmitterPodTemplate.Spec.Tolerations != nil {
+			defaultSubmitterPodTemplate.Spec.Tolerations = userSubmitterPodTemplate.Spec.Tolerations
+		}
+		if userSubmitterPodTemplate.Spec.NodeSelector != nil {
+			defaultSubmitterPodTemplate.Spec.NodeSelector = userSubmitterPodTemplate.Spec.NodeSelector
+		}
+	}
+
+	return defaultSubmitterPodTemplate
 }
 
 // GetDefaultSubmitterContainer creates a default submitter container for the Ray job.
