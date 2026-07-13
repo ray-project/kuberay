@@ -1510,6 +1510,14 @@ func constructRayClusterForRayService(rayService *rayv1.RayService, rayClusterNa
 	// set the KubeRay version used to create the RayCluster
 	rayClusterAnnotations[utils.KubeRayVersion] = utils.KUBERAY_VERSION
 
+	// Propagate the Serve config's `proxy_location` to the RayCluster so that Pod construction,
+	// which only sees the RayCluster, knows whether worker Pods run a Serve proxy. Without this,
+	// workers get a Serve proxy readiness check even when `proxy_location: HeadOnly` leaves no
+	// proxy on workers, making every worker permanently unready. See issue #4994.
+	if proxyLocation := getServeProxyLocation(rayService.Spec.ServeConfigV2); proxyLocation != "" {
+		rayClusterAnnotations[utils.RayServeProxyLocationAnnotationKey] = proxyLocation
+	}
+
 	clusterSpec := rayService.Spec.RayClusterSpec.DeepCopy()
 	isPendingClusterForUpgrade := utils.IsIncrementalUpgradeEnabled(&rayService.Spec) &&
 		rayService.Status.ActiveServiceStatus.RayClusterName != ""
@@ -1537,6 +1545,20 @@ func constructRayClusterForRayService(rayService *rayv1.RayService, rayClusterNa
 	}
 
 	return rayCluster, nil
+}
+
+// getServeProxyLocation extracts the top-level `proxy_location` field from the
+// multi-application Serve config (serveConfigV2). It returns "" if the field is unset
+// or the config cannot be parsed; malformed configs are surfaced to the user later,
+// when the config is submitted to the Ray dashboard.
+func getServeProxyLocation(serveConfigV2 string) string {
+	serveConfig := struct {
+		ProxyLocation string `json:"proxy_location"`
+	}{}
+	if err := yaml.Unmarshal([]byte(serveConfigV2), &serveConfig); err != nil {
+		return ""
+	}
+	return serveConfig.ProxyLocation
 }
 
 func checkIfNeedSubmitServeApplications(cachedServeConfigV2 string, serveConfigV2 string, serveApplications map[string]rayv1.AppStatus) (bool, string) {

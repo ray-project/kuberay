@@ -928,6 +928,65 @@ func TestCalculateConditions(t *testing.T) {
 	}
 }
 
+func TestConstructRayClusterForRayServiceProxyLocationAnnotation(t *testing.T) {
+	// The Serve config's top-level proxy_location must be propagated to the RayCluster as an
+	// annotation so that Pod construction can skip the Serve proxy readiness check and serve
+	// label on worker Pods when workers run no proxy. See issue #4994.
+	tests := []struct {
+		name               string
+		serveConfigV2      string
+		expectedAnnotation string
+	}{
+		{
+			name: "proxy_location HeadOnly",
+			serveConfigV2: `
+proxy_location: HeadOnly
+applications:
+  - name: app1
+    import_path: app:graph
+`,
+			expectedAnnotation: "HeadOnly",
+		},
+		{
+			name: "proxy_location unset",
+			serveConfigV2: `
+applications:
+  - name: app1
+    import_path: app:graph
+`,
+			expectedAnnotation: "",
+		},
+		{
+			name:               "malformed Serve config",
+			serveConfigV2:      "{{ not yaml",
+			expectedAnnotation: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rayService := rayv1.RayService{
+				Spec: rayv1.RayServiceSpec{
+					ServeConfigV2: tt.serveConfigV2,
+					RayClusterSpec: rayv1.RayClusterSpec{
+						WorkerGroupSpecs: []rayv1.WorkerGroupSpec{{GroupName: "worker-group-1"}},
+					},
+				},
+			}
+			rayService.Name = "test-service"
+			rayService.Namespace = "test-namespace"
+			rayCluster, err := constructRayClusterForRayService(&rayService, "test-cluster", scheme.Scheme)
+			require.NoError(t, err)
+
+			if tt.expectedAnnotation == "" {
+				assert.NotContains(t, rayCluster.Annotations, utils.RayServeProxyLocationAnnotationKey)
+			} else {
+				assert.Equal(t, tt.expectedAnnotation, rayCluster.Annotations[utils.RayServeProxyLocationAnnotationKey])
+			}
+		})
+	}
+}
+
 func TestConstructRayClusterForRayService(t *testing.T) {
 	tests := []struct {
 		name       string

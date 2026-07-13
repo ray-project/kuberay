@@ -1111,6 +1111,32 @@ func TestBuildPod_WithCreatedByRayService(t *testing.T) {
 	utils.EnvVarExists(utils.RAY_TIMEOUT_MS_TASK_WAIT_FOR_DEATH_INFO, pod.Spec.Containers[utils.RayContainerIndex].Env)
 }
 
+func TestBuildPod_WithCreatedByRayServiceProxyDisabledOnWorkers(t *testing.T) {
+	// When the Serve config's proxy_location is HeadOnly (or Disabled), worker Pods run no
+	// Serve proxy: they must not get the Serve proxy readiness check, and they must not carry
+	// the ray.io/serve=true label that would add them to the serve service. See issue #4994.
+	ctx := context.Background()
+
+	cluster := instance.DeepCopy()
+	cluster.Annotations = map[string]string{
+		utils.RayServeProxyLocationAnnotationKey: utils.ServeProxyLocationHeadOnly,
+	}
+	worker := cluster.Spec.WorkerGroupSpecs[0]
+	podName := cluster.Name + utils.DashSymbol + string(rayv1.WorkerNode) + utils.DashSymbol + worker.GroupName + utils.DashSymbol + utils.FormatInt32(0)
+	fqdnRayIP := utils.GenerateFQDNServiceName(ctx, *cluster, cluster.Namespace)
+	podTemplateSpec := DefaultWorkerPodTemplate(ctx, *cluster, worker, podName, fqdnRayIP, "6379", "", 0, 0)
+	pod := BuildPod(ctx, podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, "6379", false, utils.RayServiceCRD, fqdnRayIP, nil, "")
+
+	val, ok := pod.Labels[utils.RayClusterServingServiceLabelKey]
+	assert.True(t, ok, "Expected serve label is not present")
+	assert.Equal(t, utils.EnableRayClusterServingServiceFalse, val, "proxy-less worker must not be selected by the serve service")
+
+	rayContainer := pod.Spec.Containers[utils.RayContainerIndex]
+	assert.NotNil(t, rayContainer.ReadinessProbe.Exec)
+	assert.NotContains(t, strings.Join(rayContainer.ReadinessProbe.Exec.Command, " "), utils.RayServeProxyHealthPath,
+		"proxy-less worker readiness probe must not check the Serve proxy")
+}
+
 func TestBuildPod_WithLoginBash(t *testing.T) {
 	tests := []struct {
 		name            string
@@ -1974,7 +2000,7 @@ func TestInitLivenessAndReadinessProbe(t *testing.T) {
 
 	rayContainer.LivenessProbe = &httpGetProbe
 	rayContainer.ReadinessProbe = &httpGetProbe
-	initLivenessAndReadinessProbe(rayContainer, rayv1.HeadNode, "", rayStartParams, "")
+	initLivenessAndReadinessProbe(rayContainer, rayv1.HeadNode, "", rayStartParams, "", false)
 	assert.NotNil(t, rayContainer.LivenessProbe.HTTPGet)
 	assert.NotNil(t, rayContainer.ReadinessProbe.HTTPGet)
 	assert.Nil(t, rayContainer.LivenessProbe.Exec)
@@ -1985,7 +2011,7 @@ func TestInitLivenessAndReadinessProbe(t *testing.T) {
 	// implying that an additional serve health check will be added to the readiness probe.
 	rayContainer.LivenessProbe = nil
 	rayContainer.ReadinessProbe = nil
-	initLivenessAndReadinessProbe(rayContainer, rayv1.WorkerNode, utils.RayServiceCRD, rayStartParams, "")
+	initLivenessAndReadinessProbe(rayContainer, rayv1.WorkerNode, utils.RayServiceCRD, rayStartParams, "", false)
 	assert.NotNil(t, rayContainer.LivenessProbe.Exec)
 	assert.NotNil(t, rayContainer.ReadinessProbe.Exec)
 	assert.NotContains(t, strings.Join(rayContainer.LivenessProbe.Exec.Command, " "), utils.RayServeProxyHealthPath)
@@ -1998,7 +2024,7 @@ func TestInitLivenessAndReadinessProbe(t *testing.T) {
 	// implying that an additional serve health check will be added to the readiness probe.
 	rayContainer.LivenessProbe = nil
 	rayContainer.ReadinessProbe = nil
-	initLivenessAndReadinessProbe(rayContainer, rayv1.HeadNode, utils.RayServiceCRD, rayStartParams, "")
+	initLivenessAndReadinessProbe(rayContainer, rayv1.HeadNode, utils.RayServiceCRD, rayStartParams, "", false)
 	assert.NotNil(t, rayContainer.LivenessProbe.Exec)
 	assert.NotNil(t, rayContainer.ReadinessProbe.Exec)
 	// head pod should not have Ray Serve proxy health probes
@@ -2014,7 +2040,7 @@ func TestInitLivenessAndReadinessProbe(t *testing.T) {
 		"dashboard-agent-listen-port": "8266",
 		"dashboard-port":              "8365",
 	}
-	initLivenessAndReadinessProbe(rayContainer, rayv1.HeadNode, utils.RayClusterCRD, customRayStartParams, "")
+	initLivenessAndReadinessProbe(rayContainer, rayv1.HeadNode, utils.RayClusterCRD, customRayStartParams, "", false)
 	assert.NotNil(t, rayContainer.LivenessProbe.Exec)
 	assert.NotNil(t, rayContainer.ReadinessProbe.Exec)
 
@@ -2032,7 +2058,7 @@ func TestInitLivenessAndReadinessProbe(t *testing.T) {
 	workerRayStartParams := map[string]string{
 		"dashboard-agent-listen-port": "9000",
 	}
-	initLivenessAndReadinessProbe(rayContainer, rayv1.WorkerNode, utils.RayClusterCRD, workerRayStartParams, "")
+	initLivenessAndReadinessProbe(rayContainer, rayv1.WorkerNode, utils.RayClusterCRD, workerRayStartParams, "", false)
 	assert.NotNil(t, rayContainer.LivenessProbe.Exec)
 	assert.NotNil(t, rayContainer.ReadinessProbe.Exec)
 
@@ -2056,11 +2082,23 @@ func TestInitLivenessAndReadinessProbe(t *testing.T) {
 	rayServiceWorkerParams := map[string]string{
 		"dashboard-agent-listen-port": "8500",
 	}
-	initLivenessAndReadinessProbe(rayContainer, rayv1.WorkerNode, utils.RayServiceCRD, rayServiceWorkerParams, "")
+	initLivenessAndReadinessProbe(rayContainer, rayv1.WorkerNode, utils.RayServiceCRD, rayServiceWorkerParams, "", false)
 	rayServiceReadinessCommand := strings.Join(rayContainer.ReadinessProbe.Exec.Command, " ")
 	assert.Contains(t, rayServiceReadinessCommand, ":8500", "RayService worker should use custom dashboard-agent-listen-port")
 	assert.Contains(t, rayServiceReadinessCommand, utils.RayServeProxyHealthPath, "RayService worker should include serve proxy health check")
 	assert.Equal(t, int32(utils.ServeReadinessProbeFailureThreshold), rayContainer.ReadinessProbe.FailureThreshold, "RayService worker should have correct failure threshold")
+
+	// Test 7: RayService worker whose cluster runs no Serve proxy on workers
+	// (proxy_location: HeadOnly or Disabled). The readiness probe must only check
+	// raylet health, like a plain RayCluster worker. See issue #4994.
+	rayContainer.LivenessProbe = nil
+	rayContainer.ReadinessProbe = nil
+	initLivenessAndReadinessProbe(rayContainer, rayv1.WorkerNode, utils.RayServiceCRD, rayStartParams, "", true)
+	assert.NotNil(t, rayContainer.ReadinessProbe.Exec)
+	assert.NotContains(t, strings.Join(rayContainer.ReadinessProbe.Exec.Command, " "), utils.RayServeProxyHealthPath,
+		"proxy-less RayService worker must not check the Serve proxy in its readiness probe")
+	assert.Equal(t, int32(utils.DefaultReadinessProbeFailureThreshold), rayContainer.ReadinessProbe.FailureThreshold,
+		"proxy-less RayService worker should keep the default failure threshold")
 
 	// Test 8: Test invalid port values (should fall back to defaults)
 	rayContainer.LivenessProbe = nil
@@ -2069,7 +2107,7 @@ func TestInitLivenessAndReadinessProbe(t *testing.T) {
 		"dashboard-agent-listen-port": "invalid-port",
 		"dashboard-port":              "not-a-number",
 	}
-	initLivenessAndReadinessProbe(rayContainer, rayv1.HeadNode, utils.RayClusterCRD, invalidPortParams, "")
+	initLivenessAndReadinessProbe(rayContainer, rayv1.HeadNode, utils.RayClusterCRD, invalidPortParams, "", false)
 
 	invalidPortLivenessCommand := strings.Join(rayContainer.LivenessProbe.Exec.Command, " ")
 
@@ -2081,7 +2119,7 @@ func TestInitLivenessAndReadinessProbe(t *testing.T) {
 	rayContainer.LivenessProbe = nil
 	rayContainer.ReadinessProbe = nil
 	// Verify head node has http probes and no exec probes.
-	initLivenessAndReadinessProbe(rayContainer, rayv1.HeadNode, utils.RayClusterCRD, rayStartParams, "2.53.0")
+	initLivenessAndReadinessProbe(rayContainer, rayv1.HeadNode, utils.RayClusterCRD, rayStartParams, "2.53.0", false)
 	assert.NotNil(t, rayContainer.LivenessProbe.HTTPGet)
 	assert.NotNil(t, rayContainer.ReadinessProbe.HTTPGet)
 	assert.Nil(t, rayContainer.LivenessProbe.Exec)
@@ -2092,7 +2130,7 @@ func TestInitLivenessAndReadinessProbe(t *testing.T) {
 	// Worker nodes also should have only http probes.
 	rayContainer.LivenessProbe = nil
 	rayContainer.ReadinessProbe = nil
-	initLivenessAndReadinessProbe(rayContainer, rayv1.WorkerNode, utils.RayClusterCRD, rayStartParams, "2.53.0")
+	initLivenessAndReadinessProbe(rayContainer, rayv1.WorkerNode, utils.RayClusterCRD, rayStartParams, "2.53.0", false)
 	assert.Nil(t, rayContainer.LivenessProbe.Exec)
 	assert.Nil(t, rayContainer.ReadinessProbe.Exec)
 	assert.NotNil(t, rayContainer.LivenessProbe.HTTPGet)
@@ -2101,17 +2139,24 @@ func TestInitLivenessAndReadinessProbe(t *testing.T) {
 	// Ray Serve workers still use exec probes for readiness to check the proxy actor.
 	rayContainer.LivenessProbe = nil
 	rayContainer.ReadinessProbe = nil
-	initLivenessAndReadinessProbe(rayContainer, rayv1.WorkerNode, utils.RayServiceCRD, rayStartParams, "2.53.0")
+	initLivenessAndReadinessProbe(rayContainer, rayv1.WorkerNode, utils.RayServiceCRD, rayStartParams, "2.53.0", false)
 	assert.NotNil(t, rayContainer.LivenessProbe.HTTPGet)
 	assert.Nil(t, rayContainer.LivenessProbe.Exec)
 	assert.Nil(t, rayContainer.ReadinessProbe.HTTPGet)
 	assert.NotNil(t, rayContainer.ReadinessProbe.Exec)
 	assert.Contains(t, strings.Join(rayContainer.ReadinessProbe.Exec.Command, " "), utils.RayServeProxyHealthPath)
 
+	// Ray Serve workers keep the unified HTTP health check when no proxy runs on workers.
+	rayContainer.LivenessProbe = nil
+	rayContainer.ReadinessProbe = nil
+	initLivenessAndReadinessProbe(rayContainer, rayv1.WorkerNode, utils.RayServiceCRD, rayStartParams, "2.53.0", true)
+	assert.NotNil(t, rayContainer.ReadinessProbe.HTTPGet)
+	assert.Nil(t, rayContainer.ReadinessProbe.Exec)
+
 	// Versions parsed below 2.53 must use exec probes.
 	rayContainer.LivenessProbe = nil
 	rayContainer.ReadinessProbe = nil
-	initLivenessAndReadinessProbe(rayContainer, rayv1.HeadNode, utils.RayClusterCRD, rayStartParams, "2.52.0")
+	initLivenessAndReadinessProbe(rayContainer, rayv1.HeadNode, utils.RayClusterCRD, rayStartParams, "2.52.0", false)
 	assert.NotNil(t, rayContainer.LivenessProbe.Exec)
 	assert.NotNil(t, rayContainer.ReadinessProbe.Exec)
 }

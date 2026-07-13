@@ -767,6 +767,15 @@ func IsGCSFaultToleranceEnabled(spec *rayv1.RayClusterSpec, annotations map[stri
 	return (ok && strings.ToLower(v) == "true") || spec.GcsFaultToleranceOptions != nil
 }
 
+// IsServeProxyDisabledOnWorkers returns true if the Serve config's `proxy_location`
+// (propagated via the RayServeProxyLocationAnnotationKey annotation) means worker Pods
+// run no Serve proxy: "HeadOnly" (proxy only on the head) or "Disabled" (no proxy at all).
+func IsServeProxyDisabledOnWorkers(annotations map[string]string) bool {
+	proxyLocation := annotations[RayServeProxyLocationAnnotationKey]
+	return strings.EqualFold(proxyLocation, ServeProxyLocationHeadOnly) ||
+		strings.EqualFold(proxyLocation, ServeProxyLocationDisabled)
+}
+
 // IsAuthEnabled returns whether Ray auth is enabled.
 func IsAuthEnabled(spec *rayv1.RayClusterSpec) bool {
 	return spec.AuthOptions != nil && spec.AuthOptions.Mode == rayv1.AuthModeToken
