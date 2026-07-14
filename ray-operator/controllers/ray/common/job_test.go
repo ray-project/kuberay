@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -260,6 +261,35 @@ func TestBuildJobSubmitCommandWithSidecarModeAndFeatureGate(t *testing.T) {
 	command, err := BuildJobSubmitCommand(testRayJob, rayv1.SidecarMode)
 	require.NoError(t, err)
 	assert.Equal(t, expected, command)
+}
+
+func TestBuildJobSubmitCommandWithSidecarModeWaitForHeadSchedulable(t *testing.T) {
+	testRayJob := rayJobTemplate()
+	testRayJob.Spec.RayClusterSpec.HeadGroupSpec.Template.Spec.Containers = []corev1.Container{
+		{
+			Ports: []corev1.ContainerPort{
+				{
+					Name:          utils.DashboardPortName,
+					ContainerPort: utils.DefaultDashboardPort,
+				},
+			},
+		},
+	}
+
+	// Gate off (default): wait on GCS health, not node-schedulable.
+	commandGateOff, err := BuildJobSubmitCommand(testRayJob, rayv1.SidecarMode)
+	require.NoError(t, err)
+	joinedOff := strings.Join(commandGateOff, " ")
+	assert.Contains(t, joinedOff, utils.RayDashboardGCSHealthPath)
+	assert.NotContains(t, joinedOff, utils.RayNodeSchedulableHealthPath)
+
+	// Gate on: node-schedulable wait replaces the GCS wait (it subsumes GCS health).
+	features.SetFeatureGateDuringTest(t, features.SidecarWaitForHeadSchedulable, true)
+	commandGateOn, err := BuildJobSubmitCommand(testRayJob, rayv1.SidecarMode)
+	require.NoError(t, err)
+	joinedOn := strings.Join(commandGateOn, " ")
+	assert.Contains(t, joinedOn, utils.RayNodeSchedulableHealthPath)
+	assert.NotContains(t, joinedOn, utils.RayDashboardGCSHealthPath)
 }
 
 func TestBuildJobSubmitCommandWithK8sJobModeAndYAML(t *testing.T) {
