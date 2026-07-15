@@ -519,7 +519,7 @@ func TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust(t *testing.T) {
 			err = warmupLocust(test, locustHeadPod, locustWarmupRPSThreshold, locustWarmupStableWindowSeconds, locustWarmupTimeout)
 			g.Expect(err).NotTo(HaveOccurred())
 
-			// Step 4: Trigger incremental upgrade (A -> B)
+			// Phase 4: Trigger incremental upgrade (A -> B)
 			LogWithTimestamp(test.T(), "Triggering an upgrade for RayService %s/%s (Spec B)", rayService.Namespace, rayService.Name)
 			rayService, err = GetRayService(test, namespace.Name, rayServiceName)
 			g.Expect(err).NotTo(HaveOccurred())
