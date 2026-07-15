@@ -444,6 +444,9 @@ func TestCache_ByteBudgetKeepsOversizedSoleEntry(t *testing.T) {
 	sl.putSnapshot(key, richSnapshot(key))
 
 	requireSnapshotCached(t, sl, key, true)
+	if entries, total := sl.cache.Len(), sl.totalBytes(); entries != 1 || total <= sl.maxBytes {
+		t.Fatalf("oversized sole entry: got (entries=%d, bytes=%d), want (1, >%d)", entries, total, sl.maxBytes)
+	}
 }
 
 // TestSnapshotCache_RoundTripPreservesData verifies the encode/decode round-trip
