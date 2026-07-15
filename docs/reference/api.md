@@ -244,6 +244,23 @@ _Appears in:_
 | `redisAddress` _string_ |  |  |  |
 
 
+#### GracefulTerminationOptions
+
+
+
+GracefulTerminationOptions contains configs for graceful Pod termination.
+
+
+
+_Appears in:_
+- [RayClusterSpec](#rayclusterspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `terminationGracePeriodSeconds` _integer_ | TerminationGracePeriodSeconds is set on the head and worker Pod specs<br />if not already specified by the user's own pod template. Defaults to<br />30 seconds if unset. |  |  |
+| `drainDeadlineSeconds` _integer_ | DrainDeadlineSeconds is passed to `ray drain-node` as<br />`--deadline-remaining-seconds`, an advisory deadline for Ray's own<br />scheduler (Ray does not self-enforce it; Kubernetes'<br />terminationGracePeriodSeconds is what actually bounds the wait).<br />Defaults to TerminationGracePeriodSeconds if unset. |  |  |
+
+
 #### HeadGroupSpec
 
 
@@ -387,6 +404,7 @@ _Appears in:_
 | `headServiceAnnotations` _object (keys:string, values:string)_ |  |  |  |
 | `enableInTreeAutoscaling` _boolean_ | EnableInTreeAutoscaling indicates whether operator should create in tree autoscaling configs |  |  |
 | `gcsFaultToleranceOptions` _[GcsFaultToleranceOptions](#gcsfaulttoleranceoptions)_ | GcsFaultToleranceOptions for enabling GCS FT |  |  |
+| `gracefulTerminationOptions` _[GracefulTerminationOptions](#gracefulterminationoptions)_ | GracefulTerminationOptions configures graceful Pod termination for the<br />head and worker Pods: a terminationGracePeriodSeconds and a preStop<br />hook that asks Ray's own GCS to drain the node (the same drain RPC<br />Ray's own autoscaler uses) before Kubernetes sends SIGTERM, so<br />already-running tasks get a chance to finish instead of being killed<br />the instant the Pod is scheduled for deletion. Never overrides a<br />terminationGracePeriodSeconds or preStop hook already present in the<br />user's own pod template. |  |  |
 | `networkIsolation` _[NetworkIsolationConfig](#networkisolationconfig)_ | NetworkIsolation specifies optional configuration for network isolation.<br />When set, separate NetworkPolicies are created for head and worker pods.<br />The reconciler always permits intra-cluster pod-to-pod traffic.<br />Note: under DenyAll/DenyAllEgress, DNS egress is not added<br />automatically; since Ray pods reach the head via its service FQDN, you must<br />allow DNS egress via Head/Worker EgressRules or the cluster will fail to start. |  |  |
 | `headGroupSpec` _[HeadGroupSpec](#headgroupspec)_ | HeadGroupSpec is the spec for the head pod |  |  |
 | `rayVersion` _string_ | RayVersion is used to determine the command for the Kubernetes Job managed by RayJob |  |  |

@@ -1242,6 +1242,58 @@ func TestIsGCSFaultToleranceEnabled(t *testing.T) {
 	}
 }
 
+func TestIsGracefulTerminationEnabled(t *testing.T) {
+	tests := []struct {
+		name     string
+		instance rayv1.RayCluster
+		expected bool
+	}{
+		{
+			name: "ray.io/graceful-termination-enabled is true",
+			instance: rayv1.RayCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						RayGracefulTerminationEnabledAnnotationKey: "true",
+					},
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "ray.io/graceful-termination-enabled is not set and GracefulTerminationOptions is set",
+			instance: rayv1.RayCluster{
+				Spec: rayv1.RayClusterSpec{
+					GracefulTerminationOptions: &rayv1.GracefulTerminationOptions{},
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "ray.io/graceful-termination-enabled is false",
+			instance: rayv1.RayCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						RayGracefulTerminationEnabledAnnotationKey: "false",
+					},
+				},
+			},
+			expected: false,
+		},
+		{
+			name:     "neither annotation nor GracefulTerminationOptions is set",
+			instance: rayv1.RayCluster{},
+			expected: false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			result := IsGracefulTerminationEnabled(&test.instance.Spec, test.instance.Annotations)
+			assert.Equal(t, test.expected, result)
+		})
+	}
+}
+
 func createPodSpec(cpu, memory string) corev1.PodSpec {
 	return corev1.PodSpec{
 		Containers: []corev1.Container{

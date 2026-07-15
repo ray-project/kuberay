@@ -36,11 +36,17 @@ const (
 	AllowSlowStorageEnvVar = "RAY_OBJECT_STORE_ALLOW_SLOW_STORAGE"
 	// If set to true, kuberay auto injects an init container waiting for ray GCS.
 	// If false, you will need to inject your own init container to ensure ray GCS is up before the ray workers start.
-	EnableInitContainerInjectionEnvKey = "ENABLE_INIT_CONTAINER_INJECTION"
-	NeuronCoreContainerResourceName    = "aws.amazon.com/neuroncore"
-	NeuronCoreRayResourceName          = "neuron_cores"
-	TPUContainerResourceName           = "google.com/tpu"
-	TPURayResourceName                 = "TPU"
+	EnableInitContainerInjectionEnvKey         = "ENABLE_INIT_CONTAINER_INJECTION"
+	NeuronCoreContainerResourceName            = "aws.amazon.com/neuroncore"
+	NeuronCoreRayResourceName                  = "neuron_cores"
+	TPUContainerResourceName                   = "google.com/tpu"
+	TPURayResourceName                         = "TPU"
+	defaultTerminationGracePeriodSeconds int64 = 30
+	// drainCliSafetyMarginSeconds is subtracted from the drain deadline
+	// passed to `ray drain-node` itself (via `timeout`) so the CLI call
+	// cannot silently consume the whole terminationGracePeriodSeconds
+	// budget if the underlying GCS RPC hangs.
+	drainCliSafetyMarginSeconds int64 = 2
 )
 
 var customAcceleratorToRayResourceMap = map[string]string{
@@ -162,6 +168,92 @@ func configureGCSFaultTolerance(podTemplate *corev1.PodTemplateSpec, instance ra
 	}
 }
 
+// configureGracefulTermination sets terminationGracePeriodSeconds and a
+// preStop hook that asks Ray's own GCS to drain the node - via the same
+// DrainNode/DrainRaylet RPC pair Ray's own autoscaler already uses to
+// gracefully remove a node it has decided to scale down - before Kubernetes
+// sends SIGTERM. Already-running tasks are left to finish; the raylet only
+// shuts down once it observes the node has gone idle, or the deadline
+// passed to `ray drain-node` elapses, whichever comes first.
+//
+// Never overrides a terminationGracePeriodSeconds or preStop hook already
+// present in the user's own pod template. Note that both `podTemplate` and
+// `instance` will be modified.
+func configureGracefulTermination(podTemplate *corev1.PodTemplateSpec, instance rayv1.RayCluster) {
+	if !utils.IsGracefulTerminationEnabled(&instance.Spec, instance.Annotations) {
+		return
+	}
+
+	gracePeriodSeconds := defaultTerminationGracePeriodSeconds
+	drainDeadlineSeconds := defaultTerminationGracePeriodSeconds
+	if opts := instance.Spec.GracefulTerminationOptions; opts != nil {
+		if opts.TerminationGracePeriodSeconds != nil {
+			gracePeriodSeconds = *opts.TerminationGracePeriodSeconds
+			drainDeadlineSeconds = gracePeriodSeconds
+		}
+		if opts.DrainDeadlineSeconds != nil {
+			drainDeadlineSeconds = *opts.DrainDeadlineSeconds
+		}
+	}
+
+	if podTemplate.Spec.TerminationGracePeriodSeconds == nil {
+		podTemplate.Spec.TerminationGracePeriodSeconds = &gracePeriodSeconds
+	}
+
+	rayContainer := &podTemplate.Spec.Containers[utils.RayContainerIndex]
+	if rayContainer.Lifecycle != nil && rayContainer.Lifecycle.PreStop != nil {
+		// The user's own pod template already configures a preStop hook;
+		// never overwrite it.
+		return
+	}
+
+	// `ray drain-node` does not self-enforce `--deadline-remaining-seconds`
+	// (the deadline is advisory to Ray's own scheduler only), so each call
+	// below is individually wrapped in `timeout` - this is what actually
+	// bounds it, independent of Kubernetes' own grace period enforcement.
+	cliTimeoutSeconds := drainDeadlineSeconds - drainCliSafetyMarginSeconds
+	if cliTimeoutSeconds < 1 {
+		cliTimeoutSeconds = drainDeadlineSeconds
+	}
+
+	// `DRAIN_NODE_REASON_IDLE_TERMINATION` is the only reason the raylet
+	// will actually check node idleness for (node_manager.cc,
+	// HandleDrainRaylet): if the node is not yet idle, the request is
+	// *rejected* (not queued) and the CLI exits non-zero, so the caller is
+	// expected to retry. `DRAIN_NODE_REASON_PREEMPTION`, by contrast, is
+	// unconditionally accepted and immediately cancels every lease on the
+	// node - including currently-running ones - so it does not wait for
+	// anything. To actually give an in-flight task a chance to finish
+	// before the node drains, the hook polls IDLE_TERMINATION until it's
+	// accepted (the node went idle) or the budget runs out, and only then
+	// falls back to a forced, non-rejectable PREEMPTION drain so the
+	// eviction is never blocked past the configured deadline.
+	reasonMessage := "Kubernetes-initiated Pod termination"
+	perAttemptTimeoutSeconds := min(int64(5), cliTimeoutSeconds)
+	drainScript := fmt.Sprintf(
+		`end=$(( $(date +%%s) + %d ));
+while [ "$(date +%%s)" -lt "$end" ]; do
+  if timeout %ds ray drain-node --reason DRAIN_NODE_REASON_IDLE_TERMINATION --reason-message %q --deadline-remaining-seconds %d >/dev/null 2>&1; then
+    exit 0;
+  fi;
+  sleep 2;
+done;
+timeout %ds ray drain-node --reason DRAIN_NODE_REASON_PREEMPTION --reason-message %q --deadline-remaining-seconds %d || true`,
+		cliTimeoutSeconds,
+		perAttemptTimeoutSeconds, reasonMessage, drainDeadlineSeconds,
+		perAttemptTimeoutSeconds, reasonMessage, drainDeadlineSeconds,
+	)
+
+	if rayContainer.Lifecycle == nil {
+		rayContainer.Lifecycle = &corev1.Lifecycle{}
+	}
+	rayContainer.Lifecycle.PreStop = &corev1.LifecycleHandler{
+		Exec: &corev1.ExecAction{
+			Command: []string{"sh", "-c", drainScript},
+		},
+	}
+}
+
 // DefaultHeadPodTemplate sets the config values
 func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, headSpec rayv1.HeadGroupSpec, podName string, headPort string) corev1.PodTemplateSpec {
 	// TODO (Dmitri) The argument headPort is essentially unused;
@@ -222,6 +314,7 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 	}
 
 	configureGCSFaultTolerance(&podTemplate, instance, rayv1.HeadNode)
+	configureGracefulTermination(&podTemplate, instance)
 
 	// If the metrics port does not exist in the Ray container, add a default one for Prometheus.
 	isMetricsPortExists := utils.FindContainerPort(&podTemplate.Spec.Containers[utils.RayContainerIndex], utils.MetricsPortName, -1) != -1
@@ -455,6 +548,7 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 
 	initTemplateAnnotations(instance, &podTemplate)
 	configureGCSFaultTolerance(&podTemplate, instance, rayv1.WorkerNode)
+	configureGracefulTermination(&podTemplate, instance)
 
 	// If the metrics port does not exist in the Ray container, add a default one for Prometheus.
 	isMetricsPortExists := utils.FindContainerPort(&podTemplate.Spec.Containers[utils.RayContainerIndex], utils.MetricsPortName, -1) != -1

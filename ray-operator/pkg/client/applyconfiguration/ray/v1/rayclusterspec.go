@@ -30,6 +30,15 @@ type RayClusterSpecApplyConfiguration struct {
 	EnableInTreeAutoscaling *bool `json:"enableInTreeAutoscaling,omitempty"`
 	// GcsFaultToleranceOptions for enabling GCS FT
 	GcsFaultToleranceOptions *GcsFaultToleranceOptionsApplyConfiguration `json:"gcsFaultToleranceOptions,omitempty"`
+	// GracefulTerminationOptions configures graceful Pod termination for the
+	// head and worker Pods: a terminationGracePeriodSeconds and a preStop
+	// hook that asks Ray's own GCS to drain the node (the same drain RPC
+	// Ray's own autoscaler uses) before Kubernetes sends SIGTERM, so
+	// already-running tasks get a chance to finish instead of being killed
+	// the instant the Pod is scheduled for deletion. Never overrides a
+	// terminationGracePeriodSeconds or preStop hook already present in the
+	// user's own pod template.
+	GracefulTerminationOptions *GracefulTerminationOptionsApplyConfiguration `json:"gracefulTerminationOptions,omitempty"`
 	// NetworkIsolation specifies optional configuration for network isolation.
 	// When set, separate NetworkPolicies are created for head and worker pods.
 	// The reconciler always permits intra-cluster pod-to-pod traffic.
@@ -118,6 +127,14 @@ func (b *RayClusterSpecApplyConfiguration) WithEnableInTreeAutoscaling(value boo
 // If called multiple times, the GcsFaultToleranceOptions field is set to the value of the last call.
 func (b *RayClusterSpecApplyConfiguration) WithGcsFaultToleranceOptions(value *GcsFaultToleranceOptionsApplyConfiguration) *RayClusterSpecApplyConfiguration {
 	b.GcsFaultToleranceOptions = value
+	return b
+}
+
+// WithGracefulTerminationOptions sets the GracefulTerminationOptions field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the GracefulTerminationOptions field is set to the value of the last call.
+func (b *RayClusterSpecApplyConfiguration) WithGracefulTerminationOptions(value *GracefulTerminationOptionsApplyConfiguration) *RayClusterSpecApplyConfiguration {
+	b.GracefulTerminationOptions = value
 	return b
 }
 

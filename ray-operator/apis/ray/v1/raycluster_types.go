@@ -43,6 +43,16 @@ type RayClusterSpec struct {
 	// GcsFaultToleranceOptions for enabling GCS FT
 	// +optional
 	GcsFaultToleranceOptions *GcsFaultToleranceOptions `json:"gcsFaultToleranceOptions,omitempty"`
+	// GracefulTerminationOptions configures graceful Pod termination for the
+	// head and worker Pods: a terminationGracePeriodSeconds and a preStop
+	// hook that asks Ray's own GCS to drain the node (the same drain RPC
+	// Ray's own autoscaler uses) before Kubernetes sends SIGTERM, so
+	// already-running tasks get a chance to finish instead of being killed
+	// the instant the Pod is scheduled for deletion. Never overrides a
+	// terminationGracePeriodSeconds or preStop hook already present in the
+	// user's own pod template.
+	// +optional
+	GracefulTerminationOptions *GracefulTerminationOptions `json:"gracefulTerminationOptions,omitempty"`
 	// NetworkIsolation specifies optional configuration for network isolation.
 	// When set, separate NetworkPolicies are created for head and worker pods.
 	// The reconciler always permits intra-cluster pod-to-pod traffic.
@@ -132,6 +142,22 @@ type RedisCredential struct {
 	ValueFrom *corev1.EnvVarSource `json:"valueFrom,omitempty"`
 	// +optional
 	Value string `json:"value,omitempty"`
+}
+
+// GracefulTerminationOptions contains configs for graceful Pod termination.
+type GracefulTerminationOptions struct {
+	// TerminationGracePeriodSeconds is set on the head and worker Pod specs
+	// if not already specified by the user's own pod template. Defaults to
+	// 30 seconds if unset.
+	// +optional
+	TerminationGracePeriodSeconds *int64 `json:"terminationGracePeriodSeconds,omitempty"`
+	// DrainDeadlineSeconds is passed to `ray drain-node` as
+	// `--deadline-remaining-seconds`, an advisory deadline for Ray's own
+	// scheduler (Ray does not self-enforce it; Kubernetes'
+	// terminationGracePeriodSeconds is what actually bounds the wait).
+	// Defaults to TerminationGracePeriodSeconds if unset.
+	// +optional
+	DrainDeadlineSeconds *int64 `json:"drainDeadlineSeconds,omitempty"`
 }
 
 // NetworkIsolationMode is the type for network isolation mode constants.

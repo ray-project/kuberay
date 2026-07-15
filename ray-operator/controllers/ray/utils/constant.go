@@ -63,6 +63,11 @@ const (
 	// RAYCLUSTER_GCS_FT_DELETION_TIMEOUT_DEFAULT when absent or invalid).
 	RayClusterGCSFTDeletionTimeoutAnnotation = "ray.io/gcs-ft-deletion-timeout"
 
+	// RayGracefulTerminationEnabledAnnotationKey is the annotation escape hatch
+	// for enabling graceful Pod termination without setting the structured
+	// spec.gracefulTerminationOptions field.
+	RayGracefulTerminationEnabledAnnotationKey = "ray.io/graceful-termination-enabled"
+
 	// If this annotation is set to "true", the KubeRay operator will not modify the container's command.
 	// However, the generated `ray start` command will still be stored in the container's environment variable
 	// `KUBERAY_GEN_RAY_START_CMD`.

@@ -767,6 +767,14 @@ func IsGCSFaultToleranceEnabled(spec *rayv1.RayClusterSpec, annotations map[stri
 	return (ok && strings.ToLower(v) == "true") || spec.GcsFaultToleranceOptions != nil
 }
 
+// IsGracefulTerminationEnabled checks if the RayCluster has graceful Pod
+// termination enabled, either via the annotation escape hatch or the
+// structured spec field.
+func IsGracefulTerminationEnabled(spec *rayv1.RayClusterSpec, annotations map[string]string) bool {
+	v, ok := annotations[RayGracefulTerminationEnabledAnnotationKey]
+	return (ok && strings.ToLower(v) == "true") || spec.GracefulTerminationOptions != nil
+}
+
 // IsAuthEnabled returns whether Ray auth is enabled.
 func IsAuthEnabled(spec *rayv1.RayClusterSpec) bool {
 	return spec.AuthOptions != nil && spec.AuthOptions.Mode == rayv1.AuthModeToken

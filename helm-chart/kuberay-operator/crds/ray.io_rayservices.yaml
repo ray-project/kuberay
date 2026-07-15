@@ -491,6 +491,15 @@ spec:
                     required:
                     - redisAddress
                     type: object
+                  gracefulTerminationOptions:
+                    properties:
+                      drainDeadlineSeconds:
+                        format: int64
+                        type: integer
+                      terminationGracePeriodSeconds:
+                        format: int64
+                        type: integer
+                    type: object
                   headGroupSpec:
                     properties:
                       enableIngress:
