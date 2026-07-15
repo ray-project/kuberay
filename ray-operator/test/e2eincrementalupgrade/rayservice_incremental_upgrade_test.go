@@ -479,7 +479,7 @@ func TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust(t *testing.T) {
 			stepSize, interval, maxSurge := tc.Strategy.ptrs()
 			serveConfigV2 := highRPSServeConfigV2
 
-			// Step 1: Create RayService with incremental upgrade and wait for it to be ready
+			// Phase 1: Create RayService with incremental upgrade and wait for it to be ready
 			rayService, _, gatewayIP := bootstrapIncrementalRayService(test, g, namespace.Name, rayServiceName, stepSize, interval, maxSurge, serveConfigV2)
 
 			// Save original spec (Spec A)
