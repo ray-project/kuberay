@@ -568,7 +568,7 @@ func TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust(t *testing.T) {
 				}
 			}, TestTimeoutMedium).Should(Succeed())
 
-			// Step 5: Trigger rollback (B -> A)
+			// Phase 5: Trigger rollback (B -> A)
 			LogWithTimestamp(test.T(), "Triggering a rollback for RayService %s/%s (Spec A)", rayService.Namespace, rayService.Name)
 			rayService, err = GetRayService(test, namespace.Name, rayServiceName)
 			g.Expect(err).NotTo(HaveOccurred())
