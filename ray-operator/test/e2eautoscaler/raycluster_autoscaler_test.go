@@ -143,7 +143,7 @@ func TestRayClusterAutoscalerWithFakeGPU(t *testing.T) {
 
 func TestRayClusterAutoscalerWithFakeTPU(t *testing.T) {
 	// Enable the below multi-host indexing feature, even on single-host, to ensure
-	// stablity on TPU which commonly run in SPMD configurations.
+	// stability on TPU which commonly run in SPMD configurations.
 	features.SetFeatureGateDuringTest(t, features.RayMultiHostIndexing, true)
 
 	tpuTestCases := []struct {
