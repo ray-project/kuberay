@@ -300,6 +300,19 @@ func TestRayServiceIncrementalUpgradeWithLocust(t *testing.T) {
 				})
 				return err
 			})
+			defer func() {
+				LogWithTimestamp(test.T(), "Stopping Locust load test")
+				_, _, _ = ExecPodCmdWithError(
+					test,
+					locustHeadPod,
+					common.RayHeadContainer,
+					[]string{"pkill", "-SIGINT", "-f", "locust --headless"},
+				)
+				LogWithTimestamp(test.T(), "Waiting for Locust load test goroutine to finish")
+				if err := eg.Wait(); err != nil && !test.T().Failed() {
+					test.T().Errorf("Locust load test failed: %v", err)
+				}
+			}()
 
 			// Allow Locust to ramp up and send traffic to the old cluster before triggering upgrade.
 			err = warmupLocust(test, locustHeadPod, locustWarmupRPSThreshold, locustWarmupStableWindowSeconds, locustWarmupTimeout)
@@ -315,13 +328,6 @@ func TestRayServiceIncrementalUpgradeWithLocust(t *testing.T) {
 			// Since no additional validation is needed during the upgrade, we use a longer timeout.
 			LogWithTimestamp(test.T(), "Waiting for RayService %s/%s UpgradeInProgress condition to be false", namespace.Name, rayServiceName)
 			g.Eventually(RayService(test, namespace.Name, rayServiceName), TestTimeoutMedium).Should(WithTransform(IsRayServiceUpgrading, BeFalse()))
-
-			// Stop Locust load test early since convergence succeeded
-			LogWithTimestamp(test.T(), "Stopping Locust load test")
-			_, _, _ = ExecPodCmdWithError(test, locustHeadPod, common.RayHeadContainer, []string{"pkill", "-SIGINT", "-f", "locust --headless"})
-
-			LogWithTimestamp(test.T(), "Waiting for Locust load test goroutine to finish")
-			g.Expect(eg.Wait()).NotTo(HaveOccurred(), "Locust load test failed")
 
 			LogWithTimestamp(test.T(), "Validating remaining traffic is routed to the new cluster after upgrade completes")
 			curlPod, err := CreateCurlPod(g, test, CurlPodName, CurlContainerName, namespace.Name)
@@ -515,6 +521,19 @@ func TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust(t *testing.T) {
 				})
 				return err
 			})
+			defer func() {
+				LogWithTimestamp(test.T(), "Stopping Locust load test")
+				_, _, _ = ExecPodCmdWithError(
+					test,
+					locustHeadPod,
+					common.RayHeadContainer,
+					[]string{"pkill", "-SIGINT", "-f", "locust --headless"},
+				)
+				LogWithTimestamp(test.T(), "Waiting for Locust load test goroutine to finish")
+				if err := eg.Wait(); err != nil && !test.T().Failed() {
+					test.T().Errorf("Locust load test failed: %v", err)
+				}
+			}()
 
 			err = warmupLocust(test, locustHeadPod, locustWarmupRPSThreshold, locustWarmupStableWindowSeconds, locustWarmupTimeout)
 			g.Expect(err).NotTo(HaveOccurred())
@@ -652,13 +671,6 @@ func TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust(t *testing.T) {
 			case SeqABAC:
 				g.Expect(finalCPUReq).To(Equal(resource.MustParse("600m")))
 			}
-
-			// Stop Locust load test early since convergence succeeded
-			LogWithTimestamp(test.T(), "Stopping Locust load test")
-			_, _, _ = ExecPodCmdWithError(test, locustHeadPod, common.RayHeadContainer, []string{"pkill", "-SIGINT", "-f", "locust --headless"})
-
-			LogWithTimestamp(test.T(), "Waiting for Locust load test goroutine to finish")
-			g.Expect(eg.Wait()).NotTo(HaveOccurred(), "Locust load test failed")
 		})
 	}
 }
