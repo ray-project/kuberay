@@ -618,7 +618,7 @@ func TestRayServiceIncrementalUpgradeRollbackMatrixWithLocust(t *testing.T) {
 				g.Expect(err).NotTo(HaveOccurred())
 			}
 
-			// Step 6: Ensure the upgrade/rollback operation is fully complete:
+			// Phase 6: Ensure the upgrade/rollback operation is fully complete:
 			// 1. The UpgradeInProgress condition is cleared (False).
 			// 2. The RollbackInProgress condition is cleared (False).
 			// 3. The pending cluster has been deleted, meaning its name field is empty.
