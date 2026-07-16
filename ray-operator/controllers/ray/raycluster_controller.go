@@ -498,7 +498,7 @@ func (r *RayClusterReconciler) reconcileIngressKubernetes(ctx context.Context, i
 			// silently swallowing the AlreadyExists error on create, and leave the
 			// user's Ingress untouched.
 			logger.Info("reconcileIngresses", "skipping Ingress not owned by this RayCluster", candidate.Name)
-			r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.FailedToCreateIngress), "Ingress %s/%s already exists and is not owned by this RayCluster; not modifying it", candidate.Namespace, candidate.Name)
+			r.Recorder.Eventf(instance, nil, corev1.EventTypeWarning, string(utils.FailedToCreateIngress), string(utils.CreateAction), "Ingress %s/%s already exists and is not owned by this RayCluster; not modifying it", candidate.Namespace, candidate.Name)
 			return nil
 		}
 		existingIngress = candidate
@@ -514,10 +514,10 @@ func (r *RayClusterReconciler) reconcileIngressKubernetes(ctx context.Context, i
 
 		if ingressNeedsUpdate(existingIngress, desiredIngress) {
 			if err := r.Update(ctx, existingIngress); err != nil {
-				r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.FailedToUpdateIngress), "Failed updating ingress %s/%s, %v", existingIngress.Namespace, existingIngress.Name, err)
+				r.Recorder.Eventf(instance, nil, corev1.EventTypeWarning, string(utils.FailedToUpdateIngress), string(utils.UpdateAction), "Failed updating ingress %s/%s, %v", existingIngress.Namespace, existingIngress.Name, err)
 				return err
 			}
-			r.Recorder.Eventf(instance, corev1.EventTypeNormal, string(utils.UpdatedIngress), "Updated ingress %s/%s", existingIngress.Namespace, existingIngress.Name)
+			r.Recorder.Eventf(instance, nil, corev1.EventTypeNormal, string(utils.UpdatedIngress), string(utils.UpdateAction), "Updated ingress %s/%s", existingIngress.Namespace, existingIngress.Name)
 			logger.Info("reconcileIngresses", "head service ingress updated", existingIngress.Name)
 		} else {
 			logger.Info("reconcileIngresses", "head service ingress found", existingIngress.Name)

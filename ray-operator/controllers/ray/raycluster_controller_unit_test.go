@@ -4073,7 +4073,7 @@ func TestReconcileIngressKubernetesSkipsUnownedIngress(t *testing.T) {
 
 	r := &RayClusterReconciler{
 		Client:   fakeClient,
-		Recorder: &record.FakeRecorder{},
+		Recorder: &events.FakeRecorder{},
 		Scheme:   newScheme,
 	}
 
@@ -4138,7 +4138,7 @@ func TestReconcileIngressKubernetesUpdatesOwnedIngressAmongUnowned(t *testing.T)
 
 	r := &RayClusterReconciler{
 		Client:   fakeClient,
-		Recorder: &record.FakeRecorder{},
+		Recorder: &events.FakeRecorder{},
 		Scheme:   newScheme,
 	}
 
@@ -4184,7 +4184,7 @@ func TestReconcileIngressKubernetesUpdatesOwnedIngress(t *testing.T) {
 
 	r := &RayClusterReconciler{
 		Client:   fakeClient,
-		Recorder: &record.FakeRecorder{},
+		Recorder: &events.FakeRecorder{},
 		Scheme:   newScheme,
 	}
 
@@ -4225,7 +4225,7 @@ func TestReconcileIngressKubernetesFindsOwnedIngressByNameWhenLabelsDrift(t *tes
 
 	r := &RayClusterReconciler{
 		Client:   fakeClient,
-		Recorder: &record.FakeRecorder{},
+		Recorder: &events.FakeRecorder{},
 		Scheme:   newScheme,
 	}
 
@@ -4274,7 +4274,7 @@ func TestReconcileIngressKubernetesSkipsUnownedIngressWithGeneratedName(t *testi
 	fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
 	ctx := context.TODO()
 
-	recorder := record.NewFakeRecorder(10)
+	recorder := events.NewFakeRecorder(10)
 	r := &RayClusterReconciler{
 		Client:   fakeClient,
 		Recorder: recorder,
