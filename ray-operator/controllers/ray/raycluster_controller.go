@@ -487,43 +487,23 @@ func (r *RayClusterReconciler) reconcileRouteOpenShift(ctx context.Context, inst
 
 func (r *RayClusterReconciler) reconcileIngressKubernetes(ctx context.Context, instance *rayv1.RayCluster) error {
 	logger := ctrl.LoggerFrom(ctx)
-	headIngresses := networkingv1.IngressList{}
-	filterLabels := common.RayClusterNetworkResourcesOptions(instance).ToListOptions()
-	if err := r.List(ctx, &headIngresses, filterLabels...); err != nil {
-		return err
-	}
-
-	// Only act on the Ingress we own; the ray.io/cluster label alone can also
-	// match Ingresses created outside the operator, which we must not modify.
 	var existingIngress *networkingv1.Ingress
-	for i := range headIngresses.Items {
-		if metav1.IsControlledBy(&headIngresses.Items[i], instance) {
-			existingIngress = &headIngresses.Items[i]
-			break
+	candidate := &networkingv1.Ingress{}
+	key := types.NamespacedName{Name: utils.GenerateIngressName(instance.Name), Namespace: instance.Namespace}
+	switch err := r.Get(ctx, key, candidate); {
+	case err == nil:
+		if !metav1.IsControlledBy(candidate, instance) {
+			// An Ingress with our generated name already exists but is not owned
+			// by this RayCluster. Surface the collision via an event instead of
+			// silently swallowing the AlreadyExists error on create, and leave the
+			// user's Ingress untouched.
+			logger.Info("reconcileIngresses", "skipping Ingress not owned by this RayCluster", candidate.Name)
+			r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.FailedToCreateIngress), "Ingress %s/%s already exists and is not owned by this RayCluster; not modifying it", candidate.Namespace, candidate.Name)
+			return nil
 		}
-	}
-
-	// Fall back to a lookup by the deterministic Ingress name in case the owned
-	// Ingress's labels drifted and it was missed by the label selector above.
-	// This keeps reconciliation robust without resurrecting a duplicate Ingress.
-	if existingIngress == nil {
-		candidate := &networkingv1.Ingress{}
-		key := types.NamespacedName{Name: utils.GenerateIngressName(instance.Name), Namespace: instance.Namespace}
-		switch err := r.Get(ctx, key, candidate); {
-		case err == nil:
-			if !metav1.IsControlledBy(candidate, instance) {
-				// An Ingress with our generated name already exists but is not owned
-				// by this RayCluster. Surface the collision via an event instead of
-				// silently swallowing the AlreadyExists error on create, and leave the
-				// user's Ingress untouched.
-				logger.Info("reconcileIngresses", "skipping Ingress not owned by this RayCluster", candidate.Name)
-				r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.FailedToCreateIngress), "Ingress %s/%s already exists and is not owned by this RayCluster; not modifying it", candidate.Namespace, candidate.Name)
-				return nil
-			}
-			existingIngress = candidate
-		case !errors.IsNotFound(err):
-			return err
-		}
+		existingIngress = candidate
+	case !errors.IsNotFound(err):
+		return err
 	}
 
 	if existingIngress != nil {
