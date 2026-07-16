@@ -523,7 +523,7 @@ func TestConfigureGracefulTermination(t *testing.T) {
 		configureGracefulTermination(podTemplate, cluster)
 
 		require.NotNil(t, podTemplate.Spec.TerminationGracePeriodSeconds)
-		assert.Equal(t, defaultTerminationGracePeriodSeconds, *podTemplate.Spec.TerminationGracePeriodSeconds)
+		assert.Equal(t, utils.DefaultTerminationGracePeriodSeconds, *podTemplate.Spec.TerminationGracePeriodSeconds)
 
 		container := podTemplate.Spec.Containers[utils.RayContainerIndex]
 		require.NotNil(t, container.Lifecycle)
@@ -556,6 +556,46 @@ func TestConfigureGracefulTermination(t *testing.T) {
 		cmd := podTemplate.Spec.Containers[utils.RayContainerIndex].Lifecycle.PreStop.Exec.Command[2]
 		assert.Contains(t, cmd, "--deadline-remaining-seconds 45")
 		assert.Contains(t, cmd, "end=$(( $(date +%s) + 43 ))")
+	})
+
+	t.Run("drainDeadlineSeconds beyond the grace period is clamped", func(t *testing.T) {
+		// terminationGracePeriodSeconds is left unset (defaults to 30), but
+		// drainDeadlineSeconds asks for far more than that. Kubelet would
+		// kill the preStop hook (and the container) at 30s regardless of
+		// what the drain script's own loop thinks its deadline is, so the
+		// script must never be built with a budget it can't actually use.
+		cluster := buildCluster(nil, &rayv1.GracefulTerminationOptions{
+			DrainDeadlineSeconds: ptr.To(int64(120)),
+		})
+		podTemplate := cluster.Spec.HeadGroupSpec.Template.DeepCopy()
+
+		configureGracefulTermination(podTemplate, cluster)
+
+		require.NotNil(t, podTemplate.Spec.TerminationGracePeriodSeconds)
+		assert.Equal(t, utils.DefaultTerminationGracePeriodSeconds, *podTemplate.Spec.TerminationGracePeriodSeconds)
+
+		cmd := podTemplate.Spec.Containers[utils.RayContainerIndex].Lifecycle.PreStop.Exec.Command[2]
+		assert.Contains(t, cmd, "--deadline-remaining-seconds 30")
+		assert.Contains(t, cmd, "end=$(( $(date +%s) + 28 ))")
+	})
+
+	t.Run("drain deadline honors an existing pod-template grace period", func(t *testing.T) {
+		// The user set terminationGracePeriodSeconds directly on their own
+		// pod template (not via GracefulTerminationOptions). The drain loop
+		// should get to use the Pod's real budget, not silently fall back
+		// to the 30s default and leave most of a 300s grace period unused.
+		cluster := buildCluster(map[string]string{utils.RayGracefulTerminationEnabledAnnotationKey: "true"}, nil)
+		podTemplate := cluster.Spec.HeadGroupSpec.Template.DeepCopy()
+		podTemplate.Spec.TerminationGracePeriodSeconds = ptr.To(int64(300))
+
+		configureGracefulTermination(podTemplate, cluster)
+
+		require.NotNil(t, podTemplate.Spec.TerminationGracePeriodSeconds)
+		assert.Equal(t, int64(300), *podTemplate.Spec.TerminationGracePeriodSeconds)
+
+		cmd := podTemplate.Spec.Containers[utils.RayContainerIndex].Lifecycle.PreStop.Exec.Command[2]
+		assert.Contains(t, cmd, "--deadline-remaining-seconds 300")
+		assert.Contains(t, cmd, "end=$(( $(date +%s) + 298 ))")
 	})
 
 	t.Run("never overwrites an existing terminationGracePeriodSeconds", func(t *testing.T) {
@@ -599,7 +639,7 @@ func TestConfigureGracefulTermination(t *testing.T) {
 		configureGracefulTermination(podTemplate, cluster)
 
 		require.NotNil(t, podTemplate.Spec.TerminationGracePeriodSeconds)
-		assert.Equal(t, defaultTerminationGracePeriodSeconds, *podTemplate.Spec.TerminationGracePeriodSeconds)
+		assert.Equal(t, utils.DefaultTerminationGracePeriodSeconds, *podTemplate.Spec.TerminationGracePeriodSeconds)
 		assert.NotNil(t, podTemplate.Spec.Containers[utils.RayContainerIndex].Lifecycle.PreStop)
 	})
 }

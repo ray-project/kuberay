@@ -1294,6 +1294,69 @@ func TestIsGracefulTerminationEnabled(t *testing.T) {
 	}
 }
 
+func TestResolveGracefulTerminationSeconds(t *testing.T) {
+	tests := []struct {
+		podSpec           *corev1.PodSpec
+		opts              *rayv1.GracefulTerminationOptions
+		name              string
+		wantGracePeriod   int64
+		wantDrainDeadline int64
+	}{
+		{
+			name:              "nothing set falls back to the default",
+			podSpec:           &corev1.PodSpec{},
+			opts:              nil,
+			wantGracePeriod:   DefaultTerminationGracePeriodSeconds,
+			wantDrainDeadline: DefaultTerminationGracePeriodSeconds,
+		},
+		{
+			name:    "GracefulTerminationOptions sets both",
+			podSpec: &corev1.PodSpec{},
+			opts: &rayv1.GracefulTerminationOptions{
+				TerminationGracePeriodSeconds: ptr.To(int64(90)),
+				DrainDeadlineSeconds:          ptr.To(int64(45)),
+			},
+			wantGracePeriod:   90,
+			wantDrainDeadline: 45,
+		},
+		{
+			name:    "drainDeadlineSeconds defaults to the grace period when unset",
+			podSpec: &corev1.PodSpec{},
+			opts: &rayv1.GracefulTerminationOptions{
+				TerminationGracePeriodSeconds: ptr.To(int64(90)),
+			},
+			wantGracePeriod:   90,
+			wantDrainDeadline: 90,
+		},
+		{
+			name:    "a pre-existing pod-template grace period wins over GracefulTerminationOptions",
+			podSpec: &corev1.PodSpec{TerminationGracePeriodSeconds: ptr.To(int64(300))},
+			opts: &rayv1.GracefulTerminationOptions{
+				TerminationGracePeriodSeconds: ptr.To(int64(90)),
+			},
+			wantGracePeriod:   300,
+			wantDrainDeadline: 300,
+		},
+		{
+			name:    "drainDeadlineSeconds beyond the grace period is returned unclamped",
+			podSpec: &corev1.PodSpec{},
+			opts: &rayv1.GracefulTerminationOptions{
+				DrainDeadlineSeconds: ptr.To(int64(120)),
+			},
+			wantGracePeriod:   DefaultTerminationGracePeriodSeconds,
+			wantDrainDeadline: 120,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			gracePeriod, drainDeadline := ResolveGracefulTerminationSeconds(test.podSpec, test.opts)
+			assert.Equal(t, test.wantGracePeriod, gracePeriod)
+			assert.Equal(t, test.wantDrainDeadline, drainDeadline)
+		})
+	}
+}
+
 func createPodSpec(cpu, memory string) corev1.PodSpec {
 	return corev1.PodSpec{
 		Containers: []corev1.Container{

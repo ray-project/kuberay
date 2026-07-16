@@ -67,6 +67,10 @@ const (
 	// for enabling graceful Pod termination without setting the structured
 	// spec.gracefulTerminationOptions field.
 	RayGracefulTerminationEnabledAnnotationKey = "ray.io/graceful-termination-enabled"
+	// DefaultTerminationGracePeriodSeconds is the terminationGracePeriodSeconds
+	// applied to head/worker Pods when graceful termination is enabled and
+	// neither the user's own pod template nor GracefulTerminationOptions sets one.
+	DefaultTerminationGracePeriodSeconds int64 = 30
 
 	// If this annotation is set to "true", the KubeRay operator will not modify the container's command.
 	// However, the generated `ray start` command will still be stored in the container's environment variable

@@ -36,12 +36,11 @@ const (
 	AllowSlowStorageEnvVar = "RAY_OBJECT_STORE_ALLOW_SLOW_STORAGE"
 	// If set to true, kuberay auto injects an init container waiting for ray GCS.
 	// If false, you will need to inject your own init container to ensure ray GCS is up before the ray workers start.
-	EnableInitContainerInjectionEnvKey         = "ENABLE_INIT_CONTAINER_INJECTION"
-	NeuronCoreContainerResourceName            = "aws.amazon.com/neuroncore"
-	NeuronCoreRayResourceName                  = "neuron_cores"
-	TPUContainerResourceName                   = "google.com/tpu"
-	TPURayResourceName                         = "TPU"
-	defaultTerminationGracePeriodSeconds int64 = 30
+	EnableInitContainerInjectionEnvKey = "ENABLE_INIT_CONTAINER_INJECTION"
+	NeuronCoreContainerResourceName    = "aws.amazon.com/neuroncore"
+	NeuronCoreRayResourceName          = "neuron_cores"
+	TPUContainerResourceName           = "google.com/tpu"
+	TPURayResourceName                 = "TPU"
 	// drainCliSafetyMarginSeconds is subtracted from the drain deadline
 	// passed to `ray drain-node` itself (via `timeout`) so the CLI call
 	// cannot silently consume the whole terminationGracePeriodSeconds
@@ -184,17 +183,7 @@ func configureGracefulTermination(podTemplate *corev1.PodTemplateSpec, instance 
 		return
 	}
 
-	gracePeriodSeconds := defaultTerminationGracePeriodSeconds
-	drainDeadlineSeconds := defaultTerminationGracePeriodSeconds
-	if opts := instance.Spec.GracefulTerminationOptions; opts != nil {
-		if opts.TerminationGracePeriodSeconds != nil {
-			gracePeriodSeconds = *opts.TerminationGracePeriodSeconds
-			drainDeadlineSeconds = gracePeriodSeconds
-		}
-		if opts.DrainDeadlineSeconds != nil {
-			drainDeadlineSeconds = *opts.DrainDeadlineSeconds
-		}
-	}
+	gracePeriodSeconds, drainDeadlineSeconds := utils.ResolveGracefulTerminationSeconds(&podTemplate.Spec, instance.Spec.GracefulTerminationOptions)
 
 	if podTemplate.Spec.TerminationGracePeriodSeconds == nil {
 		podTemplate.Spec.TerminationGracePeriodSeconds = &gracePeriodSeconds
@@ -205,6 +194,18 @@ func configureGracefulTermination(podTemplate *corev1.PodTemplateSpec, instance 
 		// The user's own pod template already configures a preStop hook;
 		// never overwrite it.
 		return
+	}
+
+	// A drainDeadlineSeconds beyond the Pod's own terminationGracePeriodSeconds
+	// can never be honored - kubelet kills the preStop hook, and the
+	// container right after it, once terminationGracePeriodSeconds elapses,
+	// regardless of where the drain loop below is. The validating webhook
+	// (pkg/webhooks/v1/raycluster_webhook.go) rejects this misconfiguration
+	// outright when webhooks are enabled; this clamp is the fallback for
+	// installs that don't run them, so the drain loop's own budget can never
+	// silently outlive the grace period it executes inside.
+	if drainDeadlineSeconds > gracePeriodSeconds {
+		drainDeadlineSeconds = gracePeriodSeconds
 	}
 
 	// `ray drain-node` does not self-enforce `--deadline-remaining-seconds`

@@ -775,6 +775,40 @@ func IsGracefulTerminationEnabled(spec *rayv1.RayClusterSpec, annotations map[st
 	return (ok && strings.ToLower(v) == "true") || spec.GracefulTerminationOptions != nil
 }
 
+// ResolveGracefulTerminationSeconds computes the effective
+// terminationGracePeriodSeconds and drain-deadline (both in seconds) that
+// graceful Pod termination will use for podSpec, given the RayCluster-level
+// GracefulTerminationOptions. A terminationGracePeriodSeconds already set on
+// podSpec always wins, since the Pod builder never overrides a value the
+// user set directly; otherwise opts.TerminationGracePeriodSeconds is used,
+// falling back to DefaultTerminationGracePeriodSeconds. drainDeadlineSeconds
+// defaults to the resolved grace period unless opts.DrainDeadlineSeconds is
+// set.
+//
+// The two are returned unclamped relative to each other on purpose: the
+// validating webhook needs the raw values to reject a drainDeadlineSeconds
+// that exceeds the grace period it would run inside (kubelet kills the
+// preStop hook, and the container right after it, once
+// terminationGracePeriodSeconds elapses regardless of drain progress, so
+// that combination can never be honored). Callers that must never produce
+// an invalid Pod even without the webhook enabled - namely the Pod builder
+// - are responsible for clamping the returned drainDeadlineSeconds to
+// gracePeriodSeconds themselves.
+func ResolveGracefulTerminationSeconds(podSpec *corev1.PodSpec, opts *rayv1.GracefulTerminationOptions) (gracePeriodSeconds, drainDeadlineSeconds int64) {
+	gracePeriodSeconds = DefaultTerminationGracePeriodSeconds
+	if podSpec != nil && podSpec.TerminationGracePeriodSeconds != nil {
+		gracePeriodSeconds = *podSpec.TerminationGracePeriodSeconds
+	} else if opts != nil && opts.TerminationGracePeriodSeconds != nil {
+		gracePeriodSeconds = *opts.TerminationGracePeriodSeconds
+	}
+
+	drainDeadlineSeconds = gracePeriodSeconds
+	if opts != nil && opts.DrainDeadlineSeconds != nil {
+		drainDeadlineSeconds = *opts.DrainDeadlineSeconds
+	}
+	return gracePeriodSeconds, drainDeadlineSeconds
+}
+
 // IsAuthEnabled returns whether Ray auth is enabled.
 func IsAuthEnabled(spec *rayv1.RayClusterSpec) bool {
 	return spec.AuthOptions != nil && spec.AuthOptions.Mode == rayv1.AuthModeToken
