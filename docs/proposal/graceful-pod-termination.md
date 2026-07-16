@@ -360,7 +360,40 @@ intended behavior — Kubernetes sends `SIGTERM` at
 block eviction past budget" principle established in the Flink graceful-
 eviction work this document deliberately does not otherwise borrow from
 structurally, because the principle itself is sound independent of which
-system it's applied to.
+system it's applied to. This is also the case for a task that simply runs
+longer than the configured budget: it is forcibly preempted at the
+deadline and Ray retries it from scratch, same outcome as today's baseline
+— the only difference is it was given `drainDeadlineSeconds` of runway
+first instead of none. Sizing the grace period to the workload's realistic
+task duration (a joint call for whoever owns the cluster and whoever owns
+the workload — this document imposes no ceiling on
+`terminationGracePeriodSeconds` itself) is what determines whether that
+case is common or rare; it is not something this mechanism can solve on
+its own. Application-level checkpointing and §3.4's PDB (which, for
+evictions that go through the K8s Eviction API, blocks the eviction from
+being attempted at all rather than racing a fixed countdown) are the
+complementary tools for workloads whose task duration can't be bounded by
+any single grace period.
+
+**`drainDeadlineSeconds` set beyond the effective
+`terminationGracePeriodSeconds`.** Since `drainDeadlineSeconds` is
+independently settable from `terminationGracePeriodSeconds` (§4), and the
+effective grace period can also come from a value the user already set
+directly on the pod template rather than from
+`GracefulTerminationOptions`, it's possible to configure a drain budget
+kubelet will never actually let the hook use — it kills the `preStop`
+process, and the container right behind it, the moment
+`terminationGracePeriodSeconds` elapses, regardless of where the drain
+loop is. Caught two ways: `utils.ResolveGracefulTerminationSeconds`
+(`util.go`) resolves both values with the same precedence the Pod builder
+itself uses (a pre-existing pod-template grace period wins over
+`GracefulTerminationOptions`, which wins over the 30s default), and the
+`RayCluster` validating webhook (`raycluster_webhook.go`) rejects the
+combination outright at admission time when webhooks are enabled;
+`common.configureGracefulTermination` also clamps `drainDeadlineSeconds`
+down to the effective grace period defensively, so an install that
+doesn't run the webhook still gets a Pod that behaves correctly rather
+than one whose preStop hook is silently truncated mid-drain.
 
 **`ray drain-node` / `GcsClient.drain_node` API instability.** Both are
 explicitly unstable (`hidden=True`, no public-API guarantee, §2). This is
@@ -407,15 +440,23 @@ graceful-eviction work — unit tests are necessary but not sufficient.
 
 ### 7.1 Unit and static checks (done)
 
-`TestConfigureGracefulTermination` and `TestIsGracefulTerminationEnabled`
+`TestConfigureGracefulTermination`, `TestIsGracefulTerminationEnabled`, and
+`TestResolveGracefulTerminationSeconds`
 (`controllers/ray/common/pod_test.go`, `controllers/ray/utils/util_test.go`)
 cover: the feature is a no-op when disabled; `terminationGracePeriodSeconds`
 defaults to 30s and is never overwritten if the user's own pod template
 already sets it; the `preStop` script is never overwritten if one already
 exists; custom `terminationGracePeriodSeconds`/`drainDeadlineSeconds`
 values flow through to the generated script correctly; the mechanism
-applies identically to head and worker Pods. `go vet`, `gofmt`, and
-`golangci-lint` are clean on every touched file.
+applies identically to head and worker Pods; a `drainDeadlineSeconds`
+beyond the effective grace period is clamped rather than silently
+producing a script kubelet will truncate mid-drain; a grace period the
+user set directly on the pod template (bypassing
+`GracefulTerminationOptions` entirely) still drives the drain budget
+correctly. The `RayCluster` webhook suite (`raycluster_webhook_test.go`,
+Ginkgo/envtest) additionally covers the admission-time rejection of a
+`drainDeadlineSeconds` that exceeds the effective grace period. `go vet`,
+`gofmt`, and `golangci-lint` are clean on every touched file.
 
 ### 7.2 E2E on a real `kind` + KubeRay cluster (done) — the evidence that matters
 
@@ -478,6 +519,76 @@ was when evicted - a task 90% done when evicted wastes 90% of its work in
 the baseline case and 0% with this change, as long as the remaining work
 fits inside the configured grace budget (§5 covers what happens when it
 doesn't).
+
+### 7.2.1 A longer task, evicted close to its own deadline (done)
+
+The first scenario uses a 15s task against a 20s budget - comfortable
+headroom. To check the mechanism still holds with a task that consumes
+almost the entire configured grace period, not just a few seconds of it,
+the same `kind` cluster ran a second, independent pair of experiments: a
+**4-minute** (240s) `@ray.remote` task, `gracefulTerminationOptions` set
+to `{terminationGracePeriodSeconds: 240, drainDeadlineSeconds: 240}`, and
+`kubectl delete pod` issued at **3:50 (230s) into the task - 10 seconds
+before it would finish on its own**. Same head/worker shape as §7.2
+(zero-CPU head, single-CPU worker, so the task is guaranteed to land on
+the worker), same `kind` cluster, task progress logged every 20s so the
+run is independently verifiable from the raw log, not just the summary
+below.
+
+**Baseline (no `gracefulTerminationOptions`, default 30s grace period, no
+`preStop` hook):**
+
+```
+10:16:33  driver submits task
+10:16:34  task starts on worker (ip=10.244.0.9)
+10:20:15  task log: "TASK RUNNING t+220s" (last line before the delete)
+10:20:23  kubectl delete pod issued (230s / 3:50 into the task)
+10:20:25  pod already gone (~2s - no preStop hook, nothing slows SIGTERM)
+          raylet: "Task slow_task failed... node it was running on is
+          dead or unavailable. There are 3 retries remaining"
+10:20:36  Ray's retry starts the task over on a NEW worker Pod
+          (ip=10.244.0.11) - the 230s of already-completed work is gone
+10:24:37  second attempt finishes (full 240s, from zero)
+10:24:38  driver gets the result
+```
+
+Total wall-clock: **~485s (8:05)** for a 240s task - almost exactly double
+the task's own duration, because the last 10 seconds of a finished attempt
+were thrown away just as completely as the first 10 would have been.
+
+**With graceful termination enabled** (`terminationGracePeriodSeconds:
+240`, `drainDeadlineSeconds: 240`), identical task, identical delete
+timing:
+
+```
+10:09:42  driver submits task
+10:09:43  task starts on worker (ip=10.244.0.6, pid=179)
+10:13:24  task log: "TASK RUNNING t+220s" (last line before the delete)
+10:13:32  kubectl delete pod issued (230s / 3:50 into the task)
+10:13:32-10:13:48  pod stays Running (not Terminating-and-killed) - the
+          preStop loop is polling DRAIN_NODE_REASON_IDLE_TERMINATION every
+          2s and being rejected while the task is still running
+10:13:44  task finishes, in place, same worker (ip=10.244.0.6, pid=179
+          unchanged - not a new Pod, not a new process)
+10:13:45  driver gets the result
+10:13:50  pod actually terminates (idle-check succeeds once the task is
+          done, script exits 0, SIGTERM follows - roughly 18s after the
+          delete was issued, well inside the 240s budget)
+```
+
+Total wall-clock: **~243s (4:03)** - the task's own 240s plus about 3
+seconds of overhead. No failure, no retry, no rescheduling, despite the
+Pod being evicted 10 seconds before the task's natural finish.
+
+**~2.0x faster wall-clock, and - the number that actually matters for
+cost, not just latency - 230 seconds of already-completed compute thrown
+away and fully redone in the baseline versus zero in the graceful case.**
+Both experiments used the same driver script, the same delete-at-3:50
+timing, and the same cluster; only `gracefulTerminationOptions` differs
+between them. Meanwhile the RayCluster controller had already scheduled a
+replacement worker Pod to restore the desired replica count in both runs -
+the drain mechanism protects the in-flight task, it does not stall the
+cluster's own self-healing.
 
 ### 7.3 Still to do before this feature graduates past opt-in
 
