@@ -27,6 +27,7 @@ import (
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
+	eventsv1 "k8s.io/api/events/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/util/retry"
@@ -426,17 +427,20 @@ var _ = Context("RayService env tests", func() {
 			})
 
 			It("Should create an UpdatedServeApplications event", func() {
-				var eventList corev1.EventList
-				listOpts := []client.ListOption{
-					client.InNamespace(rayService.Namespace),
-					client.MatchingFields{
-						"involvedObject.uid": string(rayService.UID),
-						"reason":             string(utils.UpdatedServeApplications),
-					},
-				}
-				err := k8sClient.List(ctx, &eventList, listOpts...)
-				Expect(err).NotTo(HaveOccurred(), "failed to list events")
-				Expect(eventList.Items).To(HaveLen(1))
+				Eventually(func() bool {
+					var eventList eventsv1.EventList
+					err := k8sClient.List(ctx, &eventList, client.InNamespace(rayService.Namespace))
+					if err != nil {
+						return false
+					}
+					for _, event := range eventList.Items {
+						if event.Regarding.UID == rayService.UID &&
+							event.Reason == string(utils.UpdatedServeApplications) {
+							return true
+						}
+					}
+					return false
+				}, time.Second*10, time.Millisecond*500).Should(BeTrue())
 			})
 
 			It("Refresh RayService", func() {

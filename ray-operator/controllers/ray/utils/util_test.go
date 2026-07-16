@@ -1296,6 +1296,31 @@ func createRayClusterTemplate(
 	return cluster
 }
 
+func TestCalculatePodResourceDoesNotMutateInput(t *testing.T) {
+	podSpec := corev1.PodSpec{
+		Containers: []corev1.Container{
+			{
+				Resources: corev1.ResourceRequirements{
+					Requests: corev1.ResourceList{
+						corev1.ResourceCPU: resource.MustParse("1"),
+					},
+					Limits: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("1"),
+						corev1.ResourceMemory: resource.MustParse("200Mi"),
+					},
+				},
+			},
+		},
+	}
+	wantRequests := podSpec.Containers[0].Resources.Requests.DeepCopy()
+
+	got := CalculatePodResource(podSpec)
+
+	assert.Equal(t, "1", got.Cpu().String())
+	assert.Equal(t, "200Mi", got.Memory().String())
+	assert.Equal(t, wantRequests, podSpec.Containers[0].Resources.Requests)
+}
+
 func TestCalculateResources(t *testing.T) {
 	headStruct := struct {
 		cpu    string
@@ -1433,6 +1458,72 @@ func TestCalculateResources(t *testing.T) {
 				},
 				minResources: corev1.ResourceList{
 					corev1.ResourceCPU:    resource.MustParse("1"),
+					corev1.ResourceMemory: resource.MustParse("100Mi"),
+				},
+			},
+		},
+		{
+			name: "Head pod with suspended worker group with min replicas",
+			cluster: createRayClusterTemplate(headStruct, []struct {
+				replicas    *int32
+				minReplicas *int32
+				suspend     *bool
+				cpu         string
+				memory      string
+				numOfHosts  int32
+			}{
+				{
+					numOfHosts:  1,
+					replicas:    ptr.To[int32](3),
+					minReplicas: ptr.To[int32](2),
+					cpu:         "4",
+					memory:      "200Mi",
+					suspend:     new(true),
+				},
+			}),
+			expected: struct {
+				desiredResources corev1.ResourceList
+				minResources     corev1.ResourceList
+			}{
+				desiredResources: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("1"),
+					corev1.ResourceMemory: resource.MustParse("100Mi"),
+				},
+				minResources: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("1"),
+					corev1.ResourceMemory: resource.MustParse("100Mi"),
+				},
+			},
+		},
+		{
+			name: "Head pod with worker group having max possible replicas",
+			cluster: createRayClusterTemplate(headStruct, []struct {
+				replicas    *int32
+				minReplicas *int32
+				suspend     *bool
+				cpu         string
+				memory      string
+				numOfHosts  int32
+			}{
+				{
+					numOfHosts:  1,
+					replicas:    ptr.To[int32](2147483647),
+					minReplicas: ptr.To[int32](2147483647),
+					cpu:         "1",
+					memory:      "0",
+					suspend:     nil,
+				},
+			}),
+			expected: struct {
+				desiredResources corev1.ResourceList
+				minResources     corev1.ResourceList
+			}{
+				desiredResources: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("2147483648"),
+					corev1.ResourceMemory: resource.MustParse("100Mi"),
+				},
+				minResources: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("2147483648"),
 					corev1.ResourceMemory: resource.MustParse("100Mi"),
 				},
 			},

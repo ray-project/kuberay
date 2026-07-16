@@ -34,12 +34,18 @@ DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" > /dev/null && pwd)"
 # https://github.com/prometheus-community/helm-charts/tree/kube-prometheus-stack-48.2.1/charts/kube-prometheus-stack
 kubectl create namespace prometheus-system
 
-# Conditionally create grafana dashboards configmap based on the --auto-load-dashboard flag
+# Conditionally create grafana dashboards configmap based on the --auto-load-dashboard flag.
+# Each dashboard is loaded into its own ConfigMap. Bundling every dashboard into a
+# single ConfigMap exceeds the ~1MB Kubernetes object size limit once the dashboards
+# grow (e.g. Ray 2.56+), so we create one ConfigMap per dashboard file instead.
 if [[ "$AUTO_LOAD_DASHBOARD" == "true" ]]; then
-  kubectl create configmap grafana-dashboards --from-file="$DIR/../../config/grafana/" --dry-run=client -o yaml | sed -e '/^metadata:/ a\
+  for dashboard in "$DIR"/../../config/grafana/*.json; do
+    configmap_name="grafana-dashboard-$(basename "${dashboard%.json}" | tr '[:upper:]_' '[:lower:]-')"
+    kubectl create configmap "$configmap_name" --from-file="$dashboard" --dry-run=client -o yaml | sed -e '/^metadata:/ a\
   namespace: prometheus-system\
   labels:\
     grafana_dashboard: "1"' | kubectl create -f -
+  done
 fi
 
 helm --namespace prometheus-system install prometheus prometheus-community/kube-prometheus-stack --version 48.2.1 -f "${DIR}"/overrides.yaml

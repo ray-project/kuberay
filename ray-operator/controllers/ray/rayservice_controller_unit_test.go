@@ -19,7 +19,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	"k8s.io/utils/lru"
 	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -139,7 +139,7 @@ func TestIsHeadPodRunningAndReady(t *testing.T) {
 	// Initialize RayService reconciler.
 	r := &RayServiceReconciler{
 		Client:   fakeClient,
-		Recorder: &record.FakeRecorder{},
+		Recorder: &events.FakeRecorder{},
 		Scheme:   scheme.Scheme,
 	}
 
@@ -220,7 +220,7 @@ func TestReconcileServices_UpdateService(t *testing.T) {
 	// Initialize RayCluster reconciler.
 	r := &RayServiceReconciler{
 		Client:   fakeClient,
-		Recorder: &record.FakeRecorder{},
+		Recorder: &events.FakeRecorder{},
 		Scheme:   scheme.Scheme,
 	}
 
@@ -304,7 +304,7 @@ func TestFetchHeadServiceURL(t *testing.T) {
 	ctx := context.TODO()
 	r := RayServiceReconciler{
 		Client:   fakeClient,
-		Recorder: &record.FakeRecorder{},
+		Recorder: &events.FakeRecorder{},
 		Scheme:   scheme.Scheme,
 	}
 
@@ -473,7 +473,7 @@ func TestReconcileRayCluster_CreatePendingCluster(t *testing.T) {
 	r := RayServiceReconciler{
 		Client:   fakeClient,
 		Scheme:   newScheme,
-		Recorder: record.NewFakeRecorder(1),
+		Recorder: events.NewFakeRecorder(1),
 	}
 
 	activeRayCluster, pendingRayCluster, err := r.reconcileRayCluster(ctx, &rayService)
@@ -550,7 +550,7 @@ func TestReconcileRayCluster_UpdateActiveCluster(t *testing.T) {
 			r := RayServiceReconciler{
 				Client:   fakeClient,
 				Scheme:   newScheme,
-				Recorder: record.NewFakeRecorder(1),
+				Recorder: events.NewFakeRecorder(1),
 			}
 
 			activeCluster, pendingCluster, err := r.reconcileRayCluster(ctx, service)
@@ -609,7 +609,7 @@ func TestReconcileRayCluster_UpdatePendingCluster(t *testing.T) {
 	r := RayServiceReconciler{
 		Client:   fakeClient,
 		Scheme:   newScheme,
-		Recorder: record.NewFakeRecorder(1),
+		Recorder: events.NewFakeRecorder(1),
 	}
 
 	activeCluster, pendingCluster, err := r.reconcileRayCluster(ctx, service)
@@ -703,7 +703,7 @@ func TestLabelHeadPodForServeStatus(t *testing.T) {
 			// Initialize RayService reconciler.
 			r := &RayServiceReconciler{
 				Client:   fakeClient,
-				Recorder: &record.FakeRecorder{},
+				Recorder: &events.FakeRecorder{},
 				Scheme:   newScheme,
 				httpProxyClientFunc: func(_, _, _ string, _ int) utils.RayHttpProxyClientInterface {
 					return fakeRayHttpProxyClient
@@ -906,7 +906,7 @@ func TestCalculateConditions(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.TODO()
 			fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).Build()
-			fakeRecorder := record.NewFakeRecorder(10)
+			fakeRecorder := events.NewFakeRecorder(10)
 
 			r := &RayServiceReconciler{
 				Client:   fakeClient,
@@ -1388,7 +1388,7 @@ func TestRayClusterDeletionDelaySeconds(t *testing.T) {
 			r := RayServiceReconciler{
 				Client:                       fakeClient,
 				Scheme:                       newScheme,
-				Recorder:                     record.NewFakeRecorder(1),
+				Recorder:                     events.NewFakeRecorder(1),
 				RayClusterDeletionTimestamps: cmap.New[time.Time](),
 			}
 
@@ -1657,7 +1657,7 @@ func TestCreateHTTPRoute(t *testing.T) {
 			reconciler := RayServiceReconciler{
 				Client:   fakeClient,
 				Scheme:   newScheme,
-				Recorder: record.NewFakeRecorder(1),
+				Recorder: events.NewFakeRecorder(1),
 			}
 
 			route, err := reconciler.createHTTPRoute(ctx, rayService, tt.isPendingClusterReady)
@@ -1815,7 +1815,7 @@ func TestReconcileHTTPRoute(t *testing.T) {
 			}
 
 			fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(runtimeObjects...).Build()
-			reconciler := RayServiceReconciler{Client: fakeClient, Scheme: newScheme, Recorder: record.NewFakeRecorder(10)}
+			reconciler := RayServiceReconciler{Client: fakeClient, Scheme: newScheme, Recorder: events.NewFakeRecorder(10)}
 
 			reconciledRoute, err := reconciler.reconcileHTTPRoute(ctx, rayService, tt.isPendingClusterReady)
 			require.NoError(t, err)
@@ -1892,7 +1892,7 @@ func TestReconcileGateway(t *testing.T) {
 			reconciler := RayServiceReconciler{
 				Client:   fakeClient,
 				Scheme:   newScheme,
-				Recorder: record.NewFakeRecorder(10),
+				Recorder: events.NewFakeRecorder(10),
 			}
 
 			err := reconciler.reconcileGateway(ctx, rayService)
@@ -2153,7 +2153,7 @@ func TestCheckIfNeedTargetCapacityUpdate(t *testing.T) {
 			ctx := context.TODO()
 			r := RayServiceReconciler{
 				Client:   fakeClient,
-				Recorder: &record.FakeRecorder{},
+				Recorder: &events.FakeRecorder{},
 				Scheme:   scheme.Scheme,
 			}
 			rayService := &rayv1.RayService{
@@ -2259,7 +2259,7 @@ func TestReconcilePerClusterServeService(t *testing.T) {
 			reconciler := RayServiceReconciler{
 				Client:   fakeClient,
 				Scheme:   newScheme,
-				Recorder: record.NewFakeRecorder(1),
+				Recorder: events.NewFakeRecorder(1),
 			}
 
 			err := reconciler.reconcilePerClusterServeService(ctx, rayService, tt.rayCluster)
@@ -2524,7 +2524,7 @@ func TestMarkFailedIfInitializingTimedOut(t *testing.T) {
 
 			ctx := context.TODO()
 			fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).Build()
-			fakeRecorder := record.NewFakeRecorder(10)
+			fakeRecorder := events.NewFakeRecorder(10)
 
 			r := &RayServiceReconciler{
 				Client:   fakeClient,
@@ -2647,7 +2647,7 @@ func Test_RayServiceReconcileManagedBy(t *testing.T) {
 
 			testRayServiceReconciler := &RayServiceReconciler{
 				Client:                       fakeClient,
-				Recorder:                     &record.FakeRecorder{},
+				Recorder:                     &events.FakeRecorder{},
 				Scheme:                       newScheme,
 				ServeConfigs:                 lru.New(utils.ServeConfigLRUSize),
 				RayClusterDeletionTimestamps: cmap.New[time.Time](),
@@ -2765,7 +2765,7 @@ func TestReconcileRollbackState(t *testing.T) {
 			testPendingCluster.Annotations[utils.HashWithoutReplicasAndWorkersToDeleteKey] = tt.pendingHashOverride
 
 			reconciler := RayServiceReconciler{
-				Recorder: record.NewFakeRecorder(1),
+				Recorder: events.NewFakeRecorder(1),
 			}
 
 			err := reconciler.reconcileRollbackState(ctx, rayService, activeCluster, testPendingCluster)
@@ -2950,7 +2950,7 @@ func TestReconcileServe_SkipConfigUpdateDuringRollback(t *testing.T) {
 
 			reconciler := &RayServiceReconciler{
 				Client:   fakeClient,
-				Recorder: &record.FakeRecorder{},
+				Recorder: &events.FakeRecorder{},
 				dashboardClientFunc: func(_ *rayv1.RayCluster, _ string) (dashboardclient.RayDashboardClientInterface, error) {
 					return fakeDashboardClient, nil
 				},
@@ -3102,7 +3102,7 @@ func TestRayServiceFinalizer(t *testing.T) {
 
 			reconciler := &RayServiceReconciler{
 				Client:                       fakeClient,
-				Recorder:                     &record.FakeRecorder{},
+				Recorder:                     &events.FakeRecorder{},
 				Scheme:                       newScheme,
 				ServeConfigs:                 lru.New(10),
 				RayClusterDeletionTimestamps: cmap.New[time.Time](),
@@ -3116,4 +3116,57 @@ func TestRayServiceFinalizer(t *testing.T) {
 			tt.validate(t, fakeClient, namespacedName)
 		})
 	}
+}
+
+func TestHandleSuspendObservedGeneration(t *testing.T) {
+	ctx := context.Background()
+	reconciler := &RayServiceReconciler{}
+
+	t.Run("entering Suspending bumps observedGeneration on conditions", func(t *testing.T) {
+		rayService := &rayv1.RayService{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:       "rayservice",
+				Namespace:  "default",
+				Generation: 5,
+			},
+			Spec: rayv1.RayServiceSpec{Suspend: true},
+			Status: rayv1.RayServiceStatuses{
+				ObservedGeneration: 2,
+			},
+		}
+
+		_, err := reconciler.handleSuspend(ctx, rayService)
+		require.NoError(t, err)
+		assert.Equal(t, int64(5), rayService.Status.ObservedGeneration)
+
+		suspending := meta.FindStatusCondition(rayService.Status.Conditions, string(rayv1.RayServiceSuspending))
+		require.NotNil(t, suspending)
+		assert.Equal(t, metav1.ConditionTrue, suspending.Status)
+		assert.Equal(t, int64(5), suspending.ObservedGeneration)
+	})
+
+	t.Run("idle Suspended does not bump observedGeneration", func(t *testing.T) {
+		rayService := &rayv1.RayService{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:       "rayservice",
+				Namespace:  "default",
+				Generation: 9,
+			},
+			Spec: rayv1.RayServiceSpec{Suspend: true},
+			Status: rayv1.RayServiceStatuses{
+				ObservedGeneration: 4,
+				Conditions: []metav1.Condition{
+					{
+						Type:   string(rayv1.RayServiceSuspended),
+						Status: metav1.ConditionTrue,
+						Reason: string(rayv1.SuspendComplete),
+					},
+				},
+			},
+		}
+
+		_, err := reconciler.handleSuspend(ctx, rayService)
+		require.NoError(t, err)
+		assert.Equal(t, int64(4), rayService.Status.ObservedGeneration)
+	})
 }
