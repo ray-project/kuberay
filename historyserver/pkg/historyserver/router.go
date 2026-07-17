@@ -18,7 +18,6 @@ import (
 
 	"github.com/bmatcuk/doublestar/v4"
 	"github.com/emicklei/go-restful/v3"
-	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -1904,7 +1903,7 @@ func (s *ServerHandler) CookieHandle(req *restful.Request, resp *restful.Respons
 		// Always query K8s to get the service name to prevent SSRF attacks.
 		// Do not trust user-provided cookies for service name.
 		// TODO: here might be a bottleneck if there are many requests in the future.
-		svcInfo, rc, err := s.clientManager.GetClusterAndSvcInfo(clusterName.Value, clusterNamespace.Value)
+		svcInfo, err := s.clientManager.GetSvcInfo(clusterName.Value, clusterNamespace.Value)
 		if err != nil {
 			resp.WriteHeaderAndEntity(http.StatusBadRequest, err.Error())
 			return
@@ -1913,7 +1912,7 @@ func (s *ServerHandler) CookieHandle(req *restful.Request, resp *restful.Respons
 
 		// If auth token mode is enabled, fetch the auth token for this cluster
 		if s.useAuthTokenMode {
-			authToken, err := s.clientManager.GetAuthTokenForRayCluster(context.Background(), rc)
+			authToken, err := s.clientManager.GetAuthTokenForRayCluster(req.Request.Context(), clusterNamespace.Value, clusterName.Value)
 			if err != nil {
 				logrus.Errorf("Failed to get auth token for cluster %s/%s: %v", clusterNamespace.Value, clusterName.Value, err)
 				resp.WriteErrorString(
@@ -1937,30 +1936,21 @@ func (s *ServerHandler) CookieHandle(req *restful.Request, resp *restful.Respons
 	chain.ProcessFilter(req, resp)
 }
 
-// fetchClusterAndSvcInfo retrieves the RayCluster once and derives the head service info.
-// This avoids doing multiple GETs for the same cluster when auth token mode is enabled.
-func fetchClusterAndSvcInfo(clientList []client.Client, name, namespace string) (ServiceInfo, *rayv1.RayCluster, error) {
+// fetchSvcInfo retrieves the RayCluster and derives the head service routing info.
+func fetchSvcInfo(clientList []client.Client, name, namespace string) (ServiceInfo, error) {
 	if len(clientList) == 0 {
-		return ServiceInfo{}, nil, errors.New("No available kubernetes config found")
+		return ServiceInfo{}, errors.New("No available kubernetes config found")
 	}
 
-	// Try each client in turn and use the first one that can find the RayCluster.
-	var rc rayv1.RayCluster
-	var cli client.Client
-	found := false
-	for _, c := range clientList {
-		if err := c.Get(context.Background(), types.NamespacedName{Namespace: namespace, Name: name}, &rc); err == nil {
-			cli = c
-			found = true
-			break
-		}
-	}
-	if !found {
-		return ServiceInfo{}, nil, errors.New("RayCluster not found")
+	// Fetch the RayCluster and the client that served it, so the head service is looked up
+	// from the same cluster.
+	rc, cli, err := getRayCluster(context.Background(), clientList, namespace, name)
+	if err != nil {
+		return ServiceInfo{}, err
 	}
 	svcName := rc.Status.Head.ServiceName
 	if svcName == "" {
-		return ServiceInfo{}, nil, errors.New("RayCluster head service not ready")
+		return ServiceInfo{}, errors.New("RayCluster head service not ready")
 	}
 
 	// Look up the actual dashboard port from the head service instead of hardcoding the default,
@@ -1978,7 +1968,7 @@ func fetchClusterAndSvcInfo(clientList []client.Client, name, namespace string) 
 		logrus.Warnf("Could not fetch head service %s/%s to determine dashboard port, falling back to %d: %v", namespace, svcName, port, err)
 	}
 
-	return ServiceInfo{ServiceName: svcName, Namespace: namespace, Port: port}, &rc, nil
+	return ServiceInfo{ServiceName: svcName, Namespace: namespace, Port: port}, nil
 }
 
 // formatNodeSummaryReplayForResp formats a node summary replay of a single node for the response.

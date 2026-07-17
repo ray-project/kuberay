@@ -34,17 +34,11 @@ const (
 	svcInfoCacheTTL = 30 * time.Second
 )
 
-// svcInfoEntry holds a ServiceInfo and its associated RayCluster.
-type svcInfoEntry struct {
-	svcInfo ServiceInfo
-	rc      *rayv1.RayCluster
-}
-
 type ClientManager struct {
 	configs      []*rest.Config
 	clients      []client.Client
 	tokenCache   *TTLCache[string]
-	svcInfoCache *TTLCache[svcInfoEntry]
+	svcInfoCache *TTLCache[ServiceInfo]
 }
 
 // Client returns the primary controller-runtime client.
@@ -75,24 +69,31 @@ type ClientManagerConfig struct {
 	Burst              int
 }
 
-// GetAuthTokenForRayCluster retrieves the auth token from the RayCluster's secret.
+// GetAuthTokenForRayCluster retrieves the auth token for the named RayCluster from its Secret.
 // Returns empty string if auth is not enabled; otherwise returns an error when token retrieval fails.
-// Tokens are cached for authTokenCacheTTL to avoid hitting the K8s API on every request
-func (c *ClientManager) GetAuthTokenForRayCluster(ctx context.Context, rayCluster *rayv1.RayCluster) (string, error) {
+//
+// The RayCluster spec is always read fresh from the K8s API (never from the svcInfo cache) so that
+// enabling or updating auth is picked up immediately: a stale cached spec could otherwise skip the
+// token fetch after auth is enabled and silently break proxying.
+// Tokens are cached for authTokenCacheTTL to avoid hitting the K8s API on every request.
+func (c *ClientManager) GetAuthTokenForRayCluster(ctx context.Context, namespace, name string) (string, error) {
 	if len(c.clients) == 0 {
 		return "", fmt.Errorf("no Kubernetes client available")
 	}
-	if rayCluster == nil {
-		return "", fmt.Errorf("nil RayCluster provided")
+
+	// Read the current spec fresh so the auth decision is never based on stale cached data.
+	rayCluster, cli, err := getRayCluster(ctx, c.clients, namespace, name)
+	if err != nil {
+		return "", err
 	}
 
 	// Check if auth is enabled
 	if rayCluster.Spec.AuthOptions == nil || rayCluster.Spec.AuthOptions.Mode != rayv1.AuthModeToken {
-		logrus.Debugf("Auth not enabled for RayCluster %s/%s", rayCluster.Namespace, rayCluster.Name)
+		logrus.Debugf("Auth not enabled for RayCluster %s/%s", namespace, name)
 		return "", nil
 	}
 
-	cacheKey := rayCluster.Namespace + "/" + rayCluster.Name
+	cacheKey := namespace + "/" + name
 
 	// Check the cache first.
 	if token, ok := c.tokenCache.Get(cacheKey); ok {
@@ -102,33 +103,22 @@ func (c *ClientManager) GetAuthTokenForRayCluster(ctx context.Context, rayCluste
 
 	// Honor a user-supplied secret name when set, matching the operator's
 	// SetContainerTokenAuthEnvVars logic; otherwise fall back to the default.
-	secretName := rayutils.CheckName(rayCluster.Name)
+	secretName := rayutils.CheckName(name)
 	if secret := rayCluster.Spec.AuthOptions.SecretName; secret != nil && *secret != "" {
 		secretName = *secret
 	}
 
-	// Cache miss or expired — fetch from K8s.
-	// Try each client in turn and use the first successful response. A fresh
-	// object is used per attempt so nothing can leak from a failed Get.
-	var secret *corev1.Secret
-	var err error
-	for _, cli := range c.clients {
-		candidate := &corev1.Secret{}
-		if getErr := cli.Get(ctx, types.NamespacedName{Namespace: rayCluster.Namespace, Name: secretName}, candidate); getErr == nil {
-			secret = candidate
-			break
-		} else {
-			err = getErr
-		}
-	}
-	if secret == nil {
-		return "", fmt.Errorf("failed to get auth secret %s/%s: %w", rayCluster.Namespace, secretName, err)
+	// Cache miss or expired — fetch from K8s using the same client that served the RayCluster,
+	// since the auth Secret lives alongside its cluster.
+	secret := &corev1.Secret{}
+	if err := cli.Get(ctx, types.NamespacedName{Namespace: namespace, Name: secretName}, secret); err != nil {
+		return "", fmt.Errorf("failed to get auth secret %s/%s: %w", namespace, secretName, err)
 	}
 
 	// Extract the token from the secret.
 	tokenBytes, exists := secret.Data[AuthTokenSecretKey]
 	if !exists {
-		return "", fmt.Errorf("%s key not found in secret %s/%s", AuthTokenSecretKey, rayCluster.Namespace, secretName)
+		return "", fmt.Errorf("%s key not found in secret %s/%s", AuthTokenSecretKey, namespace, secretName)
 	}
 
 	token := string(tokenBytes)
@@ -137,27 +127,45 @@ func (c *ClientManager) GetAuthTokenForRayCluster(ctx context.Context, rayCluste
 	return token, nil
 }
 
-// Look up the cluster's service info, using a short-lived cache to reduce K8s API calls.
-// The cache is invalidated after svcInfoCacheTTL (30s) to pick up changes while avoiding
-// excessive network overhead on every request.
-func (c *ClientManager) GetClusterAndSvcInfo(name, namespace string) (ServiceInfo, *rayv1.RayCluster, error) {
+// getRayCluster fetches the named RayCluster fresh from the K8s API, trying each client in turn
+// and returning the first successful response together with the client that served it (so callers
+// can reuse the same client for related objects, e.g. the head service or the auth Secret).
+func getRayCluster(ctx context.Context, clients []client.Client, namespace, name string) (*rayv1.RayCluster, client.Client, error) {
+	var err error
+	for _, cli := range clients {
+		rc := &rayv1.RayCluster{}
+		if getErr := cli.Get(ctx, types.NamespacedName{Namespace: namespace, Name: name}, rc); getErr == nil {
+			return rc, cli, nil
+		} else {
+			err = getErr
+		}
+	}
+	return nil, nil, fmt.Errorf("failed to get RayCluster %s/%s: %w", namespace, name, err)
+}
+
+// GetSvcInfo looks up the cluster's head service routing info, using a short-lived cache to reduce
+// K8s API calls. The cache is invalidated after svcInfoCacheTTL (30s) to pick up changes while
+// avoiding excessive network overhead on every request. This info is only used for request routing
+// and is not security-sensitive; auth decisions read the RayCluster spec fresh (see
+// GetAuthTokenForRayCluster).
+func (c *ClientManager) GetSvcInfo(name, namespace string) (ServiceInfo, error) {
 	cacheKey := namespace + "/" + name
 
 	// Check the cache first.
 	if cached, ok := c.svcInfoCache.Get(cacheKey); ok {
 		logrus.Debugf("svcInfo cache hit for cluster %s", cacheKey)
-		return cached.svcInfo, cached.rc, nil
+		return cached, nil
 	}
 
 	// Cache miss or expired — fetch from K8s.
-	svcInfo, rc, err := fetchClusterAndSvcInfo(c.clients, name, namespace)
+	svcInfo, err := fetchSvcInfo(c.clients, name, namespace)
 	if err != nil {
-		return ServiceInfo{}, nil, err
+		return ServiceInfo{}, err
 	}
 
-	c.svcInfoCache.Set(cacheKey, svcInfoEntry{svcInfo: svcInfo, rc: rc})
+	c.svcInfoCache.Set(cacheKey, svcInfo)
 
-	return svcInfo, rc, nil
+	return svcInfo, nil
 }
 
 func NewClientManager(cfg ClientManagerConfig) (*ClientManager, error) {
@@ -230,7 +238,7 @@ func NewClientManager(cfg ClientManagerConfig) (*ClientManager, error) {
 		configs:      kubeconfigList,
 		clients:      clientList,
 		tokenCache:   NewTTLCache[string](authTokenCacheTTL),
-		svcInfoCache: NewTTLCache[svcInfoEntry](svcInfoCacheTTL),
+		svcInfoCache: NewTTLCache[ServiceInfo](svcInfoCacheTTL),
 	}
 	return clientManager, nil
 }

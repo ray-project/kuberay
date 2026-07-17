@@ -7,6 +7,7 @@ import (
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -50,37 +51,38 @@ func TestGetAuthTokenForCluster(t *testing.T) {
 	clientManager := &ClientManager{
 		clients:      []client.Client{fakeClient},
 		tokenCache:   NewTTLCache[string](authTokenCacheTTL),
-		svcInfoCache: NewTTLCache[svcInfoEntry](svcInfoCacheTTL),
+		svcInfoCache: NewTTLCache[ServiceInfo](svcInfoCacheTTL),
 	}
 
-	token, err := clientManager.GetAuthTokenForRayCluster(context.Background(), rc)
+	token, err := clientManager.GetAuthTokenForRayCluster(context.Background(), namespace, clusterName)
 	assert.NoError(t, err)
 	assert.Equal(t, secretKey, token)
 
 	// Second call should be served from cache (fake client still has same secret, result unchanged)
-	token, err = clientManager.GetAuthTokenForRayCluster(context.Background(), rc)
+	token, err = clientManager.GetAuthTokenForRayCluster(context.Background(), namespace, clusterName)
 	assert.NoError(t, err)
 	assert.Equal(t, secretKey, token)
 
 	// Expired cache entry should trigger a re-fetch from K8s
 	clientManager.tokenCache.SetWithExpiry(cacheKey, "stale-token", time.Now().Add(-1*time.Second))
-	token, err = clientManager.GetAuthTokenForRayCluster(context.Background(), rc)
+	token, err = clientManager.GetAuthTokenForRayCluster(context.Background(), namespace, clusterName)
 	assert.NoError(t, err)
 	assert.Equal(t, secretKey, token)
 
 	// Auth disabled returns empty token without error
 	rcAuthDisabled := rc.DeepCopy()
 	rcAuthDisabled.Spec.AuthOptions = &rayv1.AuthOptions{Mode: rayv1.AuthModeDisabled}
-	token, err = clientManager.GetAuthTokenForRayCluster(context.Background(), rcAuthDisabled)
+	require.NoError(t, fakeClient.Update(context.Background(), rcAuthDisabled))
+	token, err = clientManager.GetAuthTokenForRayCluster(context.Background(), namespace, clusterName)
 	assert.NoError(t, err)
 	assert.Equal(t, "", token)
 
-	// Nil RayCluster should error
-	_, err = clientManager.GetAuthTokenForRayCluster(context.Background(), nil)
+	// Non-existent cluster should error (spec is read fresh from K8s)
+	_, err = clientManager.GetAuthTokenForRayCluster(context.Background(), namespace, "not-exists")
 	assert.Error(t, err)
 }
 
-func TestGetClusterAndSvcInfo(t *testing.T) {
+func TestGetSvcInfo(t *testing.T) {
 	scheme := runtime.NewScheme()
 	_ = rayv1.AddToScheme(scheme)
 	_ = corev1.AddToScheme(scheme)
@@ -131,47 +133,42 @@ func TestGetClusterAndSvcInfo(t *testing.T) {
 	clientManager := &ClientManager{
 		clients:      []client.Client{fakeClient},
 		tokenCache:   NewTTLCache[string](authTokenCacheTTL),
-		svcInfoCache: NewTTLCache[svcInfoEntry](svcInfoCacheTTL),
+		svcInfoCache: NewTTLCache[ServiceInfo](svcInfoCacheTTL),
 	}
 
 	// First call should fetch from K8s and populate cache.
-	svcInfo, retRC, err := clientManager.GetClusterAndSvcInfo(clusterName, namespace)
+	svcInfo, err := clientManager.GetSvcInfo(clusterName, namespace)
 	assert.NoError(t, err)
 	assert.Equal(t, serviceName, svcInfo.ServiceName)
 	assert.Equal(t, namespace, svcInfo.Namespace)
 	assert.Equal(t, int(portalPort), svcInfo.Port)
-	assert.Equal(t, clusterName, retRC.Name)
 
 	// Second call should be served from cache.
-	svcInfo2, retRC2, err := clientManager.GetClusterAndSvcInfo(clusterName, namespace)
+	svcInfo2, err := clientManager.GetSvcInfo(clusterName, namespace)
 	assert.NoError(t, err)
 	assert.Equal(t, svcInfo, svcInfo2)
-	assert.Equal(t, retRC.Name, retRC2.Name)
 
 	// Expired cache entry should trigger a re-fetch.
-	clientManager.svcInfoCache.SetWithExpiry(cacheKey, svcInfoEntry{
-		svcInfo: ServiceInfo{
-			ServiceName: "stale-svc",
-			Namespace:   namespace,
-			Port:        int(portalPort),
-		},
-		rc: rc,
+	clientManager.svcInfoCache.SetWithExpiry(cacheKey, ServiceInfo{
+		ServiceName: "stale-svc",
+		Namespace:   namespace,
+		Port:        int(portalPort),
 	}, time.Now().Add(-1*time.Second))
 
-	svcInfo3, _, err := clientManager.GetClusterAndSvcInfo(clusterName, namespace)
+	svcInfo3, err := clientManager.GetSvcInfo(clusterName, namespace)
 	assert.NoError(t, err)
 	assert.Equal(t, serviceName, svcInfo3.ServiceName)
 	assert.Equal(t, int(portalPort), svcInfo3.Port)
 
 	// Non-existent cluster should error.
-	_, _, err = clientManager.GetClusterAndSvcInfo("not-exists", namespace)
+	_, err = clientManager.GetSvcInfo("not-exists", namespace)
 	assert.Error(t, err)
 
 	// No clients should error.
 	emptyMgr := &ClientManager{
 		clients:      []client.Client{},
-		svcInfoCache: NewTTLCache[svcInfoEntry](svcInfoCacheTTL),
+		svcInfoCache: NewTTLCache[ServiceInfo](svcInfoCacheTTL),
 	}
-	_, _, err = emptyMgr.GetClusterAndSvcInfo(clusterName, namespace)
+	_, err = emptyMgr.GetSvcInfo(clusterName, namespace)
 	assert.Error(t, err)
 }
