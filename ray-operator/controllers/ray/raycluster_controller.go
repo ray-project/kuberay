@@ -487,55 +487,41 @@ func (r *RayClusterReconciler) reconcileRouteOpenShift(ctx context.Context, inst
 
 func (r *RayClusterReconciler) reconcileIngressKubernetes(ctx context.Context, instance *rayv1.RayCluster) error {
 	logger := ctrl.LoggerFrom(ctx)
-	var existingIngress *networkingv1.Ingress
-	candidate := &networkingv1.Ingress{}
-	key := types.NamespacedName{Name: utils.GenerateIngressName(instance.Name), Namespace: instance.Namespace}
-	switch err := r.Get(ctx, key, candidate); {
-	case err == nil:
-		if !metav1.IsControlledBy(candidate, instance) {
-			// An Ingress with our generated name already exists but is not owned
-			// by this RayCluster. Surface the collision via an event instead of
-			// silently swallowing the AlreadyExists error on create, and leave the
-			// user's Ingress untouched.
-			logger.Info("reconcileIngresses", "skipping Ingress not owned by this RayCluster", candidate.Name)
-			r.Recorder.Eventf(instance, nil, corev1.EventTypeWarning, string(utils.FailedToCreateIngress), string(utils.CreateAction), "Ingress %s/%s already exists and is not owned by this RayCluster; not modifying it", candidate.Namespace, candidate.Name)
-			return nil
-		}
-		existingIngress = candidate
-	case !errors.IsNotFound(err):
-		return err
-	}
 
-	if existingIngress != nil {
-		desiredIngress, err := common.BuildIngressForHeadService(ctx, *instance)
-		if err != nil {
-			return err
-		}
-
-		if ingressNeedsUpdate(existingIngress, desiredIngress) {
-			if err := r.Update(ctx, existingIngress); err != nil {
-				r.Recorder.Eventf(instance, nil, corev1.EventTypeWarning, string(utils.FailedToUpdateIngress), string(utils.UpdateAction), "Failed updating ingress %s/%s, %v", existingIngress.Namespace, existingIngress.Name, err)
-				return err
-			}
-			r.Recorder.Eventf(instance, nil, corev1.EventTypeNormal, string(utils.UpdatedIngress), string(utils.UpdateAction), "Updated ingress %s/%s", existingIngress.Namespace, existingIngress.Name)
-			logger.Info("reconcileIngresses", "head service ingress updated", existingIngress.Name)
-		} else {
-			logger.Info("reconcileIngresses", "head service ingress found", existingIngress.Name)
-		}
-		return nil
-	}
-
-	// No Ingress owned by this RayCluster exists yet; create one.
-	ingress, err := common.BuildIngressForHeadService(ctx, *instance)
+	desiredIngress, err := common.BuildIngressForHeadService(ctx, *instance)
 	if err != nil {
 		return err
 	}
 
-	if err := ctrl.SetControllerReference(instance, ingress, r.Scheme); err != nil {
+	existingIngress := &networkingv1.Ingress{}
+	switch err := r.Get(ctx, client.ObjectKeyFromObject(desiredIngress), existingIngress); {
+	case errors.IsNotFound(err):
+		return r.createHeadIngress(ctx, desiredIngress, instance)
+	case err != nil:
 		return err
 	}
 
-	return r.createHeadIngress(ctx, ingress, instance)
+	if !metav1.IsControlledBy(existingIngress, instance) {
+		// An Ingress with our generated name already exists but is not owned
+		// by this RayCluster. Surface the collision via an event instead of
+		// silently swallowing the AlreadyExists error on create, and leave the
+		// user's Ingress untouched.
+		logger.Info("reconcileIngresses", "skipping Ingress not owned by this RayCluster", existingIngress.Name)
+		r.Recorder.Eventf(instance, nil, corev1.EventTypeWarning, string(utils.FailedToCreateIngress), string(utils.CreateAction), "Ingress %s/%s already exists and is not owned by this RayCluster; not modifying it", existingIngress.Namespace, existingIngress.Name)
+		return nil
+	}
+
+	if ingressNeedsUpdate(existingIngress, desiredIngress) {
+		if err := r.Update(ctx, existingIngress); err != nil {
+			r.Recorder.Eventf(instance, nil, corev1.EventTypeWarning, string(utils.FailedToUpdateIngress), string(utils.UpdateAction), "Failed updating ingress %s/%s, %v", existingIngress.Namespace, existingIngress.Name, err)
+			return err
+		}
+		r.Recorder.Eventf(instance, nil, corev1.EventTypeNormal, string(utils.UpdatedIngress), string(utils.UpdateAction), "Updated ingress %s/%s", existingIngress.Namespace, existingIngress.Name)
+		logger.Info("reconcileIngresses", "head service ingress updated", existingIngress.Name)
+	} else {
+		logger.Info("reconcileIngresses", "head service ingress found", existingIngress.Name)
+	}
+	return nil
 }
 
 func ingressNeedsUpdate(existingIngress, desiredIngress *networkingv1.Ingress) bool {
