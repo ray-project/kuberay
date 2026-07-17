@@ -100,7 +100,12 @@ func (c *ClientManager) GetAuthTokenForRayCluster(ctx context.Context, rayCluste
 		return token, nil
 	}
 
+	// Honor a user-supplied secret name when set, matching the operator's
+	// SetContainerTokenAuthEnvVars logic; otherwise fall back to the default.
 	secretName := rayutils.CheckName(rayCluster.Name)
+	if secret := rayCluster.Spec.AuthOptions.SecretName; secret != nil && *secret != "" {
+		secretName = *secret
+	}
 
 	// Cache miss or expired — fetch from K8s.
 	// Try each client in turn and use the first successful response. A fresh
