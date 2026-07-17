@@ -52,6 +52,15 @@ func TestGetAuthTokenForCluster(t *testing.T) {
 		svcInfoCache: NewTTLCache[ServiceInfo](svcInfoCacheTTL),
 	}
 
+	// setAuthOptions reads the current RayCluster and updates its AuthOptions, so successive
+	// updates carry the latest resourceVersion (the fake client enforces optimistic concurrency).
+	setAuthOptions := func(opts *rayv1.AuthOptions) {
+		cur := &rayv1.RayCluster{}
+		require.NoError(t, fakeClient.Get(context.Background(), client.ObjectKeyFromObject(rc), cur))
+		cur.Spec.AuthOptions = opts
+		require.NoError(t, fakeClient.Update(context.Background(), cur))
+	}
+
 	token, err := clientManager.GetAuthTokenForRayCluster(context.Background(), namespace, clusterName)
 	assert.NoError(t, err)
 	assert.Equal(t, secretKey, token)
@@ -64,10 +73,17 @@ func TestGetAuthTokenForCluster(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "rotated-token", token)
 
+	// K8s-delegated token auth has no static auth_token Secret; it must return empty without
+	// erroring even when the Secret does not exist (otherwise the lookup would 500).
+	enableK8sTokenAuth := true
+	setAuthOptions(&rayv1.AuthOptions{Mode: rayv1.AuthModeToken, EnableK8sTokenAuth: &enableK8sTokenAuth})
+	require.NoError(t, fakeClient.Delete(context.Background(), rotated))
+	token, err = clientManager.GetAuthTokenForRayCluster(context.Background(), namespace, clusterName)
+	assert.NoError(t, err)
+	assert.Equal(t, "", token)
+
 	// Auth disabled returns empty token without error
-	rcAuthDisabled := rc.DeepCopy()
-	rcAuthDisabled.Spec.AuthOptions = &rayv1.AuthOptions{Mode: rayv1.AuthModeDisabled}
-	require.NoError(t, fakeClient.Update(context.Background(), rcAuthDisabled))
+	setAuthOptions(&rayv1.AuthOptions{Mode: rayv1.AuthModeDisabled})
 	token, err = clientManager.GetAuthTokenForRayCluster(context.Background(), namespace, clusterName)
 	assert.NoError(t, err)
 	assert.Equal(t, "", token)

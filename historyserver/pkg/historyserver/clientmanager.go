@@ -90,6 +90,14 @@ func (c *ClientManager) GetAuthTokenForRayCluster(ctx context.Context, namespace
 		return "", nil
 	}
 
+	// Kubernetes-delegated token auth has no operator-managed auth_token Secret: Ray authenticates
+	// against the K8s API server directly. There is no static bearer token to inject, so return
+	// empty without erroring instead of failing the Secret lookup and turning it into a 500.
+	if rayCluster.Spec.AuthOptions.EnableK8sTokenAuth != nil && *rayCluster.Spec.AuthOptions.EnableK8sTokenAuth {
+		logrus.Debugf("K8s token auth enabled for RayCluster %s/%s; no static token to inject", namespace, name)
+		return "", nil
+	}
+
 	// Honor a user-supplied secret name when set, matching the operator's
 	// SetContainerTokenAuthEnvVars logic; otherwise fall back to the default.
 	secretName := rayutils.CheckName(name)
