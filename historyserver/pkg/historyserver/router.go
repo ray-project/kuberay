@@ -1940,7 +1940,6 @@ func (s *ServerHandler) CookieHandle(req *restful.Request, resp *restful.Respons
 // fetchClusterAndSvcInfo retrieves the RayCluster once and derives the head service info.
 // This avoids doing multiple GETs for the same cluster when auth token mode is enabled.
 func fetchClusterAndSvcInfo(clientList []client.Client, name, namespace string) (ServiceInfo, *rayv1.RayCluster, error) {
-
 	if len(clientList) == 0 {
 		return ServiceInfo{}, nil, errors.New("No available kubernetes config found")
 	}

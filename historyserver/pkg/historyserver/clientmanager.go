@@ -7,6 +7,7 @@ import (
 	"time"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
+	rayutils "github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 
@@ -99,27 +100,30 @@ func (c *ClientManager) GetAuthTokenForRayCluster(ctx context.Context, rayCluste
 		return token, nil
 	}
 
+	secretName := rayutils.CheckName(rayCluster.Name)
+
 	// Cache miss or expired — fetch from K8s.
-	// Try each client in turn and use the first successful response.
-	secret := &corev1.Secret{}
+	// Try each client in turn and use the first successful response. A fresh
+	// object is used per attempt so nothing can leak from a failed Get.
+	var secret *corev1.Secret
 	var err error
-	fetched := false
 	for _, cli := range c.clients {
-		if fetchErr := cli.Get(ctx, types.NamespacedName{Namespace: rayCluster.Namespace, Name: rayCluster.Name}, secret); fetchErr == nil {
-			fetched = true
+		candidate := &corev1.Secret{}
+		if getErr := cli.Get(ctx, types.NamespacedName{Namespace: rayCluster.Namespace, Name: secretName}, candidate); getErr == nil {
+			secret = candidate
 			break
 		} else {
-			err = fetchErr
+			err = getErr
 		}
 	}
-	if !fetched {
-		return "", fmt.Errorf("failed to get auth secret %s/%s: %w", rayCluster.Namespace, rayCluster.Name, err)
+	if secret == nil {
+		return "", fmt.Errorf("failed to get auth secret %s/%s: %w", rayCluster.Namespace, secretName, err)
 	}
 
 	// Extract the token from the secret.
 	tokenBytes, exists := secret.Data[AuthTokenSecretKey]
 	if !exists {
-		return "", fmt.Errorf("%s key not found in secret %s/%s", AuthTokenSecretKey, rayCluster.Namespace, rayCluster.Name)
+		return "", fmt.Errorf("%s key not found in secret %s/%s", AuthTokenSecretKey, rayCluster.Namespace, secretName)
 	}
 
 	token := string(tokenBytes)
