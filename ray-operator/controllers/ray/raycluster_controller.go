@@ -1299,8 +1299,6 @@ func getRayContainerStateTerminated(pod corev1.Pod) *corev1.ContainerStateTermin
 func (r *RayClusterReconciler) createHeadIngress(ctx context.Context, ingress *networkingv1.Ingress, instance *rayv1.RayCluster) error {
 	logger := ctrl.LoggerFrom(ctx)
 
-	// making sure the name is valid
-	ingress.Name = utils.CheckName(ingress.Name)
 	if err := controllerutil.SetControllerReference(instance, ingress, r.Scheme); err != nil {
 		return err
 	}

@@ -89,7 +89,7 @@ func BuildIngressForHeadService(ctx context.Context, cluster rayv1.RayCluster) (
 
 	ingress := &networkingv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:        utils.GenerateIngressName(cluster.Name),
+			Name:        utils.CheckName(utils.GenerateIngressName(cluster.Name)),
 			Namespace:   cluster.Namespace,
 			Labels:      labels,
 			Annotations: annotation,

@@ -4246,6 +4246,51 @@ func TestReconcileIngressKubernetesFindsOwnedIngressByNameWhenLabelsDrift(t *tes
 	assert.Equal(t, desired.Spec.Rules, updated.Spec.Rules, "owned Ingress found by name must be reconciled to the desired spec")
 }
 
+func TestReconcileIngressKubernetesFindsOwnedIngressWhenNameIsShortened(t *testing.T) {
+	setupTest(t)
+
+	newScheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(newScheme)
+	_ = networkingv1.AddToScheme(newScheme)
+
+	// A cluster name long enough that utils.CheckName shortens the generated
+	// ingress name, so the Get and Create must agree on the shortened name.
+	cluster := testRayCluster.DeepCopy()
+	cluster.Name = "this-is-a-very-long-raycluster-name-that-exceeds-limits"
+	cluster.UID = "raycluster-uid"
+	cluster.Spec.HeadGroupSpec.IngressSpec = &rayv1.IngressSpec{Host: ptr.To("a.example.com")}
+
+	require.NotEqual(t,
+		utils.GenerateIngressName(cluster.Name),
+		utils.CheckName(utils.GenerateIngressName(cluster.Name)),
+		"test requires a cluster name whose ingress name gets shortened",
+	)
+
+	fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).WithRuntimeObjects(cluster).Build()
+	ctx := context.TODO()
+	r := &RayClusterReconciler{
+		Client:   fakeClient,
+		Recorder: &events.FakeRecorder{},
+		Scheme:   newScheme,
+	}
+
+	require.NoError(t, r.reconcileIngressKubernetes(ctx, cluster))
+
+	ingresses := &networkingv1.IngressList{}
+	require.NoError(t, fakeClient.List(ctx, ingresses, client.InNamespace(cluster.Namespace)))
+	require.Len(t, ingresses.Items, 1, "first reconcile should create exactly one ingress")
+	assert.Equal(t, utils.CheckName(utils.GenerateIngressName(cluster.Name)), ingresses.Items[0].Name)
+
+	cluster.Spec.HeadGroupSpec.IngressSpec.Host = ptr.To("b.example.com")
+	require.NoError(t, r.reconcileIngressKubernetes(ctx, cluster))
+
+	ingresses = &networkingv1.IngressList{}
+	require.NoError(t, fakeClient.List(ctx, ingresses, client.InNamespace(cluster.Namespace)))
+	require.Len(t, ingresses.Items, 1, "second reconcile must not create a duplicate ingress")
+	assert.Equal(t, "b.example.com", ingresses.Items[0].Spec.Rules[0].Host,
+		"operator must find and update its own ingress under the shortened name")
+}
+
 func TestReconcileIngressKubernetesSkipsUnownedIngressWithGeneratedName(t *testing.T) {
 	setupTest(t)
 
