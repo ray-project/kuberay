@@ -24,7 +24,6 @@ func TestGetAuthTokenForCluster(t *testing.T) {
 	clusterName := "test-cluster"
 	namespace := "default"
 	secretKey := "test-token-123"
-	cacheKey := namespace + "/" + clusterName
 
 	rc := &rayv1.RayCluster{
 		ObjectMeta: metav1.ObjectMeta{
@@ -50,7 +49,6 @@ func TestGetAuthTokenForCluster(t *testing.T) {
 
 	clientManager := &ClientManager{
 		clients:      []client.Client{fakeClient},
-		tokenCache:   NewTTLCache[string](authTokenCacheTTL),
 		svcInfoCache: NewTTLCache[ServiceInfo](svcInfoCacheTTL),
 	}
 
@@ -58,16 +56,13 @@ func TestGetAuthTokenForCluster(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, secretKey, token)
 
-	// Second call should be served from cache (fake client still has same secret, result unchanged)
+	// A rotated Secret must take effect immediately, since tokens are never cached.
+	rotated := secret.DeepCopy()
+	rotated.Data[AuthTokenSecretKey] = []byte("rotated-token")
+	require.NoError(t, fakeClient.Update(context.Background(), rotated))
 	token, err = clientManager.GetAuthTokenForRayCluster(context.Background(), namespace, clusterName)
 	assert.NoError(t, err)
-	assert.Equal(t, secretKey, token)
-
-	// Expired cache entry should trigger a re-fetch from K8s
-	clientManager.tokenCache.SetWithExpiry(cacheKey, "stale-token", time.Now().Add(-1*time.Second))
-	token, err = clientManager.GetAuthTokenForRayCluster(context.Background(), namespace, clusterName)
-	assert.NoError(t, err)
-	assert.Equal(t, secretKey, token)
+	assert.Equal(t, "rotated-token", token)
 
 	// Auth disabled returns empty token without error
 	rcAuthDisabled := rc.DeepCopy()
@@ -132,7 +127,6 @@ func TestGetSvcInfo(t *testing.T) {
 
 	clientManager := &ClientManager{
 		clients:      []client.Client{fakeClient},
-		tokenCache:   NewTTLCache[string](authTokenCacheTTL),
 		svcInfoCache: NewTTLCache[ServiceInfo](svcInfoCacheTTL),
 	}
 

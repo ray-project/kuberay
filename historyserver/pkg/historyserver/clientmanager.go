@@ -28,8 +28,6 @@ const (
 
 	// AuthTokenSecretKey is the key used to store the auth token in a Kubernetes Secret
 	AuthTokenSecretKey = "auth_token"
-	// authTokenCacheTTL is how long a cached token is considered valid before re-fetching from K8s
-	authTokenCacheTTL = 5 * time.Minute
 	// svcInfoCacheTTL is how long a cached ServiceInfo entry is considered valid before re-fetching from K8s
 	svcInfoCacheTTL = 30 * time.Second
 )
@@ -37,7 +35,6 @@ const (
 type ClientManager struct {
 	configs      []*rest.Config
 	clients      []client.Client
-	tokenCache   *TTLCache[string]
 	svcInfoCache *TTLCache[ServiceInfo]
 }
 
@@ -72,10 +69,10 @@ type ClientManagerConfig struct {
 // GetAuthTokenForRayCluster retrieves the auth token for the named RayCluster from its Secret.
 // Returns empty string if auth is not enabled; otherwise returns an error when token retrieval fails.
 //
-// The RayCluster spec is always read fresh from the K8s API (never from the svcInfo cache) so that
-// enabling or updating auth is picked up immediately: a stale cached spec could otherwise skip the
-// token fetch after auth is enabled and silently break proxying.
-// Tokens are cached for authTokenCacheTTL to avoid hitting the K8s API on every request.
+// Both the RayCluster spec and the backing Secret are always read fresh from the K8s API (never
+// cached) so that enabling/updating auth and rotating the token take effect immediately: a stale
+// cached spec could skip the token fetch after auth is enabled, and a stale cached token would keep
+// being sent after the operator rotates the Secret — both silently breaking proxying.
 func (c *ClientManager) GetAuthTokenForRayCluster(ctx context.Context, namespace, name string) (string, error) {
 	if len(c.clients) == 0 {
 		return "", fmt.Errorf("no Kubernetes client available")
@@ -93,14 +90,6 @@ func (c *ClientManager) GetAuthTokenForRayCluster(ctx context.Context, namespace
 		return "", nil
 	}
 
-	cacheKey := namespace + "/" + name
-
-	// Check the cache first.
-	if token, ok := c.tokenCache.Get(cacheKey); ok {
-		logrus.Debugf("Auth token cache hit for RayCluster %s", cacheKey)
-		return token, nil
-	}
-
 	// Honor a user-supplied secret name when set, matching the operator's
 	// SetContainerTokenAuthEnvVars logic; otherwise fall back to the default.
 	secretName := rayutils.CheckName(name)
@@ -108,8 +97,11 @@ func (c *ClientManager) GetAuthTokenForRayCluster(ctx context.Context, namespace
 		secretName = *secret
 	}
 
-	// Cache miss or expired — fetch from K8s using the same client that served the RayCluster,
-	// since the auth Secret lives alongside its cluster.
+	// Read the Secret fresh on every request, using the same client that served the RayCluster
+	// (the auth Secret lives alongside its cluster). We deliberately do not cache the token: the
+	// history server uses a direct (non-watching) client, so there is no cheap way to invalidate a
+	// cached token when the operator rotates or updates the Secret. Reading fresh ensures a rotated
+	// token takes effect on the very next request instead of after a TTL.
 	secret := &corev1.Secret{}
 	if err := cli.Get(ctx, types.NamespacedName{Namespace: namespace, Name: secretName}, secret); err != nil {
 		return "", fmt.Errorf("failed to get auth secret %s/%s: %w", namespace, secretName, err)
@@ -121,10 +113,7 @@ func (c *ClientManager) GetAuthTokenForRayCluster(ctx context.Context, namespace
 		return "", fmt.Errorf("%s key not found in secret %s/%s", AuthTokenSecretKey, namespace, secretName)
 	}
 
-	token := string(tokenBytes)
-	c.tokenCache.Set(cacheKey, token)
-
-	return token, nil
+	return string(tokenBytes), nil
 }
 
 // getRayCluster fetches the named RayCluster fresh from the K8s API, trying each client in turn
@@ -237,7 +226,6 @@ func NewClientManager(cfg ClientManagerConfig) (*ClientManager, error) {
 	clientManager := &ClientManager{
 		configs:      kubeconfigList,
 		clients:      clientList,
-		tokenCache:   NewTTLCache[string](authTokenCacheTTL),
 		svcInfoCache: NewTTLCache[ServiceInfo](svcInfoCacheTTL),
 	}
 	return clientManager, nil
