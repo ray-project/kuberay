@@ -23,6 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/ray-project/kuberay/historyserver/html"
 	"github.com/ray-project/kuberay/historyserver/pkg/eventserver"
 	eventtypes "github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
@@ -259,7 +260,6 @@ func routerAPI(s *ServerHandler) {
 // }
 
 func routerHealthz(s *ServerHandler) {
-
 	http.HandleFunc("/readz", func(w http.ResponseWriter, r *http.Request) {
 		logrus.Infof("Received request: %s %s", r.Method, r.URL.String())
 		w.Header().Set("Content-Type", "text/plain")
@@ -273,6 +273,18 @@ func routerHealthz(s *ServerHandler) {
 		logrus.Debugf("request /livez")
 	})
 
+}
+
+func routerSelectCluster(s *ServerHandler) {
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		logrus.Infof("Serving cluster selector page: %s %s", r.Method, r.URL.String())
+		w.Header().Set("Content-Type", "text/html")
+		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self'")
+		w.Write(html.ClusterSelectorHTML)
+	}
+	http.HandleFunc("/select_cluster", handler)
 }
 
 func routerLogical(s *ServerHandler) {
@@ -376,6 +388,7 @@ func (s *ServerHandler) RegisterRouter() {
 	routerNodes(s)
 	routerEvents(s)
 	routerAPI(s)
+	routerSelectCluster(s)
 	// routerRoot(s)
 	// routerHomepage(s)
 	routerHealthz(s)

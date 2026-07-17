@@ -21,6 +21,7 @@ COPY pkg/storage/ pkg/storage/
 COPY pkg/utils/ pkg/utils/
 COPY pkg/eventserver/ pkg/eventserver/
 COPY pkg/compression/ pkg/compression/
+COPY html/ html/
 
 # Build the historyserver binary.
 COPY Makefile Makefile
