@@ -7,7 +7,7 @@ remain proposed but **not implemented** in this pass - deliberately
 scoped out to keep the first PR small and reviewable, matching the
 project's own contribution guidance. See the PR this document accompanies
 for exactly what shipped.
-**Author:** Ganga (gangavh@gmail.com)
+**Author:** Ganga (<gangavh@gmail.com>)
 **Created:** 2026-07-12
 **Scope:** `ray-operator` (RayCluster, RayJob controllers)
 **Grounding:** every claim below is cited to a real file:line in
@@ -174,7 +174,7 @@ exact scenario this document is about — and a direct Python binding,
 (`ray/python/ray/includes/gcs_client.pxi:636-654`). Exact CLI signature,
 confirmed from source (`scripts.py:2606-2699`):
 
-```
+```text
 ray drain-node \
   --address <gcs-address> \
   --node-id <hex-node-id> \
@@ -472,7 +472,7 @@ mid-flight.
 
 **Baseline (`gracefulTerminationOptions` unset):**
 
-```
+```text
 22:10:28.515  driver submits task
 22:10:28.951  task starts on worker (ip=10.244.0.22)
 22:10:32      kubectl delete pod issued
@@ -492,7 +492,7 @@ first attempt any time to finish.
 **With graceful termination enabled**, same task, same timing of the
 delete:
 
-```
+```text
 22:11:46.395  driver submits task
 22:11:46.781  task starts on worker (ip=10.244.0.26)
 22:11:50      kubectl delete pod issued (~3s into the task)
@@ -538,7 +538,7 @@ below.
 **Baseline (no `gracefulTerminationOptions`, default 30s grace period, no
 `preStop` hook):**
 
-```
+```text
 10:16:33  driver submits task
 10:16:34  task starts on worker (ip=10.244.0.9)
 10:20:15  task log: "TASK RUNNING t+220s" (last line before the delete)
@@ -560,7 +560,7 @@ were thrown away just as completely as the first 10 would have been.
 240`, `drainDeadlineSeconds: 240`), identical task, identical delete
 timing:
 
-```
+```text
 10:09:42  driver submits task
 10:09:43  task starts on worker (ip=10.244.0.6, pid=179)
 10:13:24  task log: "TASK RUNNING t+220s" (last line before the delete)
