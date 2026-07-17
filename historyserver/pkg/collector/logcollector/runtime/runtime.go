@@ -16,7 +16,7 @@ import (
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
-func NewCollector(config *types.RayCollectorConfig, writer storage.StorageWriter) RayLogCollector {
+func NewCollector(config *types.RayCollectorConfig, writer storage.StorageWriter, reader storage.StorageReader) RayLogCollector {
 	handler := logcollector.RayLogHandler{
 		IsHead:   config.Role == "Head",
 		LogFiles: make(chan string),
@@ -42,6 +42,7 @@ func NewCollector(config *types.RayCollectorConfig, writer storage.StorageWriter
 			},
 		},
 		Writer:       writer,
+		Reader:       reader,
 		ShutdownChan: make(chan struct{}),
 	}
 

@@ -3,6 +3,7 @@ package azureblob
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -13,8 +14,10 @@ import (
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/blob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/container"
 	"github.com/sirupsen/logrus"
 
@@ -68,6 +71,47 @@ func (r *RayLogsHandler) WriteFile(file string, reader io.ReadSeeker) error {
 	}
 
 	return nil
+}
+
+func (r *RayLogsHandler) WriteMeta(path string, meta utils.MetaJson) error {
+	data, err := json.Marshal(meta)
+	if err != nil {
+		return fmt.Errorf("failed to marshal meta json: %w", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), uploadTimeout)
+	defer cancel()
+
+	blobClient := r.ContainerClient.NewBlockBlobClient(path)
+	_, err = blobClient.UploadStream(ctx, bytes.NewReader(data), &azblob.UploadStreamOptions{
+		HTTPHeaders: &blob.HTTPHeaders{
+			BlobContentType: to.Ptr("application/json"),
+		},
+	})
+	return err
+}
+
+func (r *RayLogsHandler) ReadMeta(path string) (*utils.MetaJson, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), downloadTimeout)
+	defer cancel()
+
+	blobClient := r.ContainerClient.NewBlockBlobClient(path)
+	resp, err := blobClient.DownloadStream(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	body := resp.Body
+	defer body.Close()
+
+	data, err := io.ReadAll(body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read meta json: %w", err)
+	}
+
+	var meta utils.MetaJson
+	if err := json.Unmarshal(data, &meta); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal meta json: %w", err)
+	}
+	return &meta, nil
 }
 
 func (r *RayLogsHandler) listBlobs(prefix string, delimiter string, onlyBase bool) []string {
@@ -183,11 +227,23 @@ func (r *RayLogsHandler) List() (res []utils.ClusterInfo) {
 			prefix, len(resp.Segment.BlobItems))
 
 		for _, blob := range resp.Segment.BlobItems {
+			// Skip meta.json files - they are not session markers
+			if strings.HasSuffix(*blob.Name, ".meta.json") {
+				continue
+			}
 			c, err := clustermetadata.DecodePath(*blob.Name, r.RootDir)
 			if err != nil {
 				logrus.Errorf("Failed to parse meta file path: %s, error: %v", *blob.Name, err)
 				continue
 			}
+
+			// Enrich with meta.json data if available
+			metaPath := clustermetadata.MetaJsonPath(c, r.RootDir, c.SessionName)
+			if meta, metaErr := r.ReadMeta(metaPath); metaErr == nil {
+				c.Status = meta.Status
+				c.EndTime = meta.EndTime
+			}
+
 			clusters = append(clusters, c)
 		}
 	}

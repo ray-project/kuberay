@@ -3,6 +3,7 @@ package gcs
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -86,6 +87,45 @@ func (h *RayLogsHandler) WriteFile(file string, reader io.ReadSeeker) error {
 	return nil
 }
 
+func (h *RayLogsHandler) WriteMeta(path string, meta utils.MetaJson) error {
+	data, err := json.Marshal(meta)
+	if err != nil {
+		return fmt.Errorf("failed to marshal meta json: %w", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	writer := h.StorageClient.Bucket(h.GCSBucket).Object(path).NewWriter(ctx)
+	writer.ContentType = "application/json"
+	if _, err := io.Copy(writer, bytes.NewReader(data)); err != nil {
+		writer.Close() // best-effort close to release resources
+		return fmt.Errorf("GCS Client failed to write meta json: %w", err)
+	}
+	return writer.Close()
+}
+
+func (h *RayLogsHandler) ReadMeta(path string) (*utils.MetaJson, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	reader, err := h.StorageClient.Bucket(h.GCSBucket).Object(path).NewReader(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer reader.Close()
+
+	data, err := io.ReadAll(reader)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read meta json: %w", err)
+	}
+
+	var meta utils.MetaJson
+	if err := json.Unmarshal(data, &meta); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal meta json: %w", err)
+	}
+	return &meta, nil
+}
+
 // ListFiles will return all files within the directory.
 func (h *RayLogsHandler) ListFiles(clusterId string, directory string) []string {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
@@ -159,13 +199,25 @@ func (h *RayLogsHandler) List() []utils.ClusterInfo {
 			return nil
 		}
 
+		// Skip meta.json files - they are not session markers
+		if strings.HasSuffix(objectAttr.Name, ".meta.json") {
+			continue
+		}
+
 		c, err := clustermetadata.DecodePath(objectAttr.Name, h.RootDir)
 		if err != nil {
 			logrus.Errorf("Failed to parse meta file path: %s, error: %v", objectAttr.Name, err)
 			continue
 		}
 
-		logrus.Infof("Parsed cluster %s for session %s to list", c.Name, c.SessionName)
+		// Enrich with meta.json data if available
+		metaPath := clustermetadata.MetaJsonPath(c, h.RootDir, c.SessionName)
+		metaPath = strings.TrimPrefix(metaPath, "/")
+		if meta, metaErr := h.ReadMeta(metaPath); metaErr == nil {
+			c.Status = meta.Status
+			c.EndTime = meta.EndTime
+		}
+
 		clusterList = append(clusterList, c)
 	}
 

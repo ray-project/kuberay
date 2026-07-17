@@ -2,7 +2,9 @@ package logcollector
 
 import (
 	"bytes"
+	"context"
 	"fmt"
+	"io"
 	"io/fs"
 	"net/http"
 	"os"
@@ -22,7 +24,9 @@ import (
 
 type RayLogHandler struct {
 	Writer                 storage.StorageWriter
+	Reader                 storage.StorageReader // optional: for finalizing previous in_progress sessions
 	LogFiles               chan string
+	finalizedPrev          bool
 	HttpClient             *http.Client
 	ShutdownChan           chan struct{}
 	logFilePaths           map[string]bool
@@ -82,8 +86,164 @@ func (r *RayLogHandler) Run(stop <-chan struct{}) error {
 		r.processAdditionalEndpoints()
 	}
 	close(r.ShutdownChan)
+	// Update meta.json to mark the session as completed.
+	// Must happen after ShutdownChan is closed so that WatchSessionLatestLoops
+	// has exited — a late fsnotify event could otherwise overwrite the
+	// completed status back to in_progress.
+	// Only the head collector owns the session-wide meta.json — worker
+	// collectors must not overwrite it on shutdown.
+	if r.IsHead {
+		r.updateMetaJsonOnShutdown()
+	}
 
 	return nil
+}
+
+// updateMetaJsonOnShutdown updates the session's meta.json to mark it as completed.
+func (r *RayLogHandler) updateMetaJsonOnShutdown() {
+	sessionLatestDir := utils.GetRaySessionLatestPath()
+	sessionRealDir, err := filepath.EvalSymlinks(sessionLatestDir)
+	if err != nil {
+		logrus.Errorf("Failed to resolve session_latest symlink for meta.json update: %v", err)
+		return
+	}
+	sessionName := filepath.Base(sessionRealDir)
+	metaPath := clustermetadata.MetaJsonPath(utils.ClusterInfo{
+		Name:      r.RayClusterName,
+		Namespace: r.RayClusterNamespace,
+		OwnerKind: r.OwnerKind,
+		OwnerName: r.OwnerName,
+	}, r.RootDir, sessionName)
+
+	startTime, err := utils.GetDateTimeFromSessionID(sessionName)
+	var startUnix int64
+	if err == nil {
+		startUnix = startTime.Unix()
+	}
+
+	// Best-effort: capture the latest Ray resource status during termination.
+	rayStatus := r.fetchRayStatusOnShutdown()
+	meta := utils.MetaJson{
+		SessionName:      sessionName,
+		ClusterID:        r.RayClusterName,
+		ClusterNamespace: r.RayClusterNamespace,
+		StartTime:        startUnix,
+		EndTime:          time.Now().Unix(),
+		Status:           utils.SessionStatusCompleted,
+		RayStatus:        rayStatus,
+	}
+	if err := r.Writer.WriteMeta(metaPath, meta); err != nil {
+		logrus.Errorf("Failed to update meta.json on shutdown %s: %v", metaPath, err)
+	} else {
+		logrus.Infof("Updated meta.json to completed for session %s", sessionName)
+	}
+}
+
+// fetchRayStatusOnShutdown attempts a best-effort fetch of the Ray resource
+// status from the dashboard during collector termination. Uses a short timeout
+// to avoid blocking shutdown.
+//
+// NOTE: Uses /api/v0/cluster_status (v0 prefix) which is available in Ray >= 2.x.
+func (r *RayLogHandler) fetchRayStatusOnShutdown() string {
+	if r.DashboardAddress == "" || r.HttpClient == nil {
+		return ""
+	}
+	url := r.DashboardAddress + "/api/v0/cluster_status"
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return ""
+	}
+	resp, err := r.HttpClient.Do(req)
+	if err != nil {
+		logrus.Debugf("Ray status fetch skipped (dashboard unreachable): %v", err)
+		return ""
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return ""
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return ""
+	}
+	return string(body)
+}
+
+// writeMetaJsonInProgress writes a meta.json with in_progress status for a new session.
+// Called only when a new session is first discovered (WatchSessionLatestLoops).
+func (r *RayLogHandler) writeMetaJsonInProgress(sessionID string) {
+	sessionBase := path.Base(sessionID)
+	metaPath := clustermetadata.MetaJsonPath(utils.ClusterInfo{
+		Name:      r.RayClusterName,
+		Namespace: r.RayClusterNamespace,
+		OwnerKind: r.OwnerKind,
+		OwnerName: r.OwnerName,
+	}, r.RootDir, sessionBase)
+	startTime, parseErr := utils.GetDateTimeFromSessionID(sessionBase)
+	var startUnix int64
+	if parseErr == nil {
+		startUnix = startTime.Unix()
+	}
+	meta := utils.MetaJson{
+		SessionName:      sessionBase,
+		ClusterID:        r.RayClusterName,
+		ClusterNamespace: r.RayClusterNamespace,
+		StartTime:        startUnix,
+		Status:           utils.SessionStatusInProgress,
+	}
+	if err := r.Writer.WriteMeta(metaPath, meta); err != nil {
+		logrus.Errorf("Failed to write meta.json %s: %v", metaPath, err)
+	}
+
+	// Finalize any previous sessions for the same cluster that are still
+	// stuck in_progress (e.g. from a killed previous collector).
+	r.finalizePreviousSessions(sessionBase)
+}
+
+// finalizePreviousSessions scans all stored clusters and finalizes any
+// in_progress sessions for the same cluster (namespace + name) that are
+// NOT the current session.
+func (r *RayLogHandler) finalizePreviousSessions(currentSession string) {
+	if r.Reader == nil || r.finalizedPrev {
+		return
+	}
+	r.finalizedPrev = true
+
+	clusters := r.Reader.List()
+	for _, c := range clusters {
+		if c.Namespace != r.RayClusterNamespace || c.Name != r.RayClusterName {
+			continue
+		}
+		if c.SessionName == currentSession {
+			continue
+		}
+		if c.Status != utils.SessionStatusInProgress {
+			continue
+		}
+
+		metaPath := clustermetadata.MetaJsonPath(utils.ClusterInfo{
+			Name:      c.Name,
+			Namespace: c.Namespace,
+			OwnerKind: c.OwnerKind,
+			OwnerName: c.OwnerName,
+		}, r.RootDir, c.SessionName)
+
+		meta := utils.MetaJson{
+			SessionName:      c.SessionName,
+			ClusterID:        c.Name,
+			ClusterNamespace: c.Namespace,
+			StartTime:        c.CreateTimeStamp,
+			EndTime:          time.Now().Unix(),
+			Status:           utils.SessionStatusCompleted,
+		}
+		if err := r.Writer.WriteMeta(metaPath, meta); err != nil {
+			logrus.Errorf("Failed to finalize previous session %s: %v", c.SessionName, err)
+		} else {
+			logrus.Infof("Finalized previous session %s (was in_progress, now completed)", c.SessionName)
+		}
+	}
 }
 
 // processSessionLatestLogs processes logs in the configured session_latest/logs directory
@@ -767,6 +927,9 @@ func (r *RayLogHandler) WatchSessionLatestLoops() {
 					logrus.Errorf("Failed to write session file %s error %v", metafile, err)
 					return
 				}
+
+				// Write meta.json for session lifecycle tracking
+				r.writeMetaJsonInProgress(sessionID)
 			}
 		case err, ok := <-watcher.Errors:
 			if !ok {

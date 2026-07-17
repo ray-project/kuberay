@@ -19,6 +19,7 @@ import (
 	"github.com/ray-project/kuberay/historyserver/pkg/collector/eventcollector"
 	"github.com/ray-project/kuberay/historyserver/pkg/collector/logcollector/runtime"
 	"github.com/ray-project/kuberay/historyserver/pkg/collector/types"
+	"github.com/ray-project/kuberay/historyserver/pkg/storage"
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
 
@@ -130,6 +131,23 @@ func main() {
 		panic(fmt.Sprintf("Failed to create writer for runtime class name: %s for role: %s, err: %+v", runtimeClassName, role, err))
 	}
 
+	// Create a storage reader for finalizing previous in_progress sessions.
+	readerRegistry := collector.GetReaderRegistry()
+	readerFactory, readerOk := readerRegistry[runtimeClassName]
+	var reader storage.StorageReader
+	if readerOk {
+		readerConfig := types.RayHistoryServerConfig{
+			RootDir: globalConfig.RootDir,
+		}
+		var readerErr error
+		reader, readerErr = readerFactory(&readerConfig, jsonData)
+		if readerErr != nil {
+			logrus.Warnf("Failed to create storage reader (old session finalization disabled): %v", readerErr)
+		}
+	} else {
+		logrus.Warnf("No reader registered for runtime class %q (old session finalization disabled)", runtimeClassName)
+	}
+
 	var wg sync.WaitGroup
 
 	sigChan := make(chan os.Signal, 1)
@@ -148,7 +166,7 @@ func main() {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		logCollector := runtime.NewCollector(&globalConfig, writer)
+		logCollector := runtime.NewCollector(&globalConfig, writer, reader)
 		logCollector.Run(stop)
 		logrus.Info("Log collector shutdown")
 	}()

@@ -35,16 +35,23 @@ func (c *ClientManager) Client() client.Client {
 
 func (c *ClientManager) ListRayClusters(ctx context.Context) ([]*rayv1.RayCluster, error) {
 	list := []*rayv1.RayCluster{}
-	for _, c := range c.clients {
+	var errs []error
+	for _, cl := range c.clients {
 		listOfRayCluster := rayv1.RayClusterList{}
-		err := c.List(ctx, &listOfRayCluster)
+		err := cl.List(ctx, &listOfRayCluster)
 		if err != nil {
 			logrus.Errorf("Failed to list RayClusters: %v", err)
+			errs = append(errs, err)
 			continue
 		}
 		for _, rayCluster := range listOfRayCluster.Items {
 			list = append(list, &rayCluster)
 		}
+	}
+	// If any client failed, return an error so callers skip crash detection
+	// rather than reasoning over an incomplete live set.
+	if len(errs) > 0 {
+		return list, fmt.Errorf("%d of %d client(s) failed to list RayClusters", len(errs), len(c.clients))
 	}
 	return list, nil
 }

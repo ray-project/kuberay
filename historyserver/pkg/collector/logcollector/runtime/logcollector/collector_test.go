@@ -44,6 +44,10 @@ func (m *MockStorageWriter) WriteFile(file string, reader io.ReadSeeker) error {
 	return nil
 }
 
+func (m *MockStorageWriter) WriteMeta(path string, meta utils.MetaJson) error {
+	return nil
+}
+
 // setupRayTestEnvironment creates test directories under /tmp/ray for realistic testing
 // This matches the actual paths used by the logcollector
 func setupRayTestEnvironment(t *testing.T) (string, func()) {
