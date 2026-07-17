@@ -302,14 +302,12 @@ func routerRayClusterSet(s *ServerHandler) {
 
 	ws.Path("/enter_cluster").Consumes(restful.MIME_JSON).Produces(restful.MIME_JSON).Filter(RequestLogFilter)
 	enterHandler := func(r1 *restful.Request, r2 *restful.Response, namespace, name, session string) {
-		resolvedSession, found := s.findSessionInMap(namespace, name, session)
-		if !found {
-			if s.clientManager != nil && s.reader != nil {
-				s.listClusters(s.maxClusters)
-			}
-			resolvedSession, found = s.findSessionInMap(namespace, name, session)
+		resolvedSession, found, err := s.resolveSession(r1.Request.Context(), namespace, name, session)
+		if err != nil {
+			logrus.Errorf("Failed to resolve session %s/%s/%s: %v", namespace, name, session, err)
+			r2.WriteErrorString(http.StatusInternalServerError, err.Error())
+			return
 		}
-
 		if !found {
 			r2.WriteErrorString(http.StatusNotFound, fmt.Sprintf("cluster %s/%s with session %s not found", namespace, name, session))
 			return
@@ -359,6 +357,16 @@ func routerRayClusterSet(s *ServerHandler) {
 		Param(ws.PathParameter("name", "name")).
 		Param(ws.PathParameter("session", "session")).
 		Writes("")) // Placeholder for specific return type
+
+	ws.Route(ws.GET("/{namespace}/{name}").To(func(r1 *restful.Request, r2 *restful.Response) {
+		name := r1.PathParameter("name")
+		namespace := r1.PathParameter("namespace")
+		enterHandler(r1, r2, namespace, name, "latest")
+	}).
+		Doc("set cookie for cluster (defaults session to latest)").
+		Param(ws.PathParameter("namespace", "namespace")).
+		Param(ws.PathParameter("name", "name")).
+		Writes(""))
 }
 
 func (s *ServerHandler) RegisterRouter() {
