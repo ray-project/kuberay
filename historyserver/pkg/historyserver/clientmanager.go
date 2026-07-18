@@ -27,7 +27,7 @@ const (
 	DefaultKubeAPIBurst = 200
 
 	// AuthTokenSecretKey is the key used to store the auth token in a Kubernetes Secret
-	AuthTokenSecretKey = rayutils.RAY_AUTH_TOKEN_SECRET_KEY 
+	AuthTokenSecretKey = rayutils.RAY_AUTH_TOKEN_SECRET_KEY
 	// svcInfoCacheTTL is how long a cached ServiceInfo entry is considered valid before re-fetching from K8s
 	svcInfoCacheTTL = 30 * time.Second
 )
@@ -90,12 +90,11 @@ func (c *ClientManager) GetAuthTokenForRayCluster(ctx context.Context, namespace
 		return "", nil
 	}
 
-	// Kubernetes-delegated token auth has no operator-managed auth_token Secret: Ray authenticates
-	// against the K8s API server directly. There is no static bearer token to inject, so return
-	// empty without erroring instead of failing the Secret lookup and turning it into a 500.
+	// Kubernetes-delegated token auth has no static bearer token to inject (Ray authenticates against
+	// the K8s API server directly). Fail explicitly instead of proxying unauthenticated and letting
+	// the dashboard reject the call with a confusing auth error.
 	if rayCluster.Spec.AuthOptions.EnableK8sTokenAuth != nil && *rayCluster.Spec.AuthOptions.EnableK8sTokenAuth {
-		logrus.Debugf("K8s token auth enabled for RayCluster %s/%s; no static token to inject", namespace, name)
-		return "", nil
+		return "", fmt.Errorf("cannot authenticate proxied requests to RayCluster %s/%s: Kubernetes-delegated token auth (enableK8sTokenAuth) is not supported by the history server", namespace, name)
 	}
 
 	// Honor a user-supplied secret name when set, matching the operator's
@@ -121,7 +120,13 @@ func (c *ClientManager) GetAuthTokenForRayCluster(ctx context.Context, namespace
 		return "", fmt.Errorf("%s key not found in secret %s/%s", AuthTokenSecretKey, namespace, secretName)
 	}
 
-	return string(tokenBytes), nil
+	// Auth is enabled, so an empty token is a misconfiguration: fail instead of proxying unauthenticated.
+	token := string(tokenBytes)
+	if token == "" {
+		return "", fmt.Errorf("%s key in secret %s/%s is empty", AuthTokenSecretKey, namespace, secretName)
+	}
+
+	return token, nil
 }
 
 // getRayCluster fetches the named RayCluster fresh from the K8s API, trying each client in turn

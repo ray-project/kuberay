@@ -73,14 +73,23 @@ func TestGetAuthTokenForCluster(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "rotated-token", token)
 
-	// K8s-delegated token auth has no static auth_token Secret; it must return empty without
-	// erroring even when the Secret does not exist (otherwise the lookup would 500).
+	// K8s-delegated token auth has no static token to inject, so it must fail explicitly rather than
+	// let a live proxy request go out unauthenticated.
 	enableK8sTokenAuth := true
 	setAuthOptions(&rayv1.AuthOptions{Mode: rayv1.AuthModeToken, EnableK8sTokenAuth: &enableK8sTokenAuth})
 	require.NoError(t, fakeClient.Delete(context.Background(), rotated))
-	token, err = clientManager.GetAuthTokenForRayCluster(context.Background(), namespace, clusterName)
-	assert.NoError(t, err)
-	assert.Equal(t, "", token)
+	_, err = clientManager.GetAuthTokenForRayCluster(context.Background(), namespace, clusterName)
+	assert.Error(t, err)
+
+	// Auth enabled but the token value is empty: a misconfiguration that must error.
+	setAuthOptions(&rayv1.AuthOptions{Mode: rayv1.AuthModeToken})
+	emptySecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: namespace},
+		Data:       map[string][]byte{AuthTokenSecretKey: []byte("")},
+	}
+	require.NoError(t, fakeClient.Create(context.Background(), emptySecret))
+	_, err = clientManager.GetAuthTokenForRayCluster(context.Background(), namespace, clusterName)
+	assert.Error(t, err)
 
 	// Auth disabled returns empty token without error
 	setAuthOptions(&rayv1.AuthOptions{Mode: rayv1.AuthModeDisabled})

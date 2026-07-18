@@ -427,7 +427,9 @@ func (s *ServerHandler) redirectRequest(req *restful.Request, resp *restful.Resp
 
 	// Add auth token header if auth token mode is enabled
 	if s.useAuthTokenMode {
-		// Get the auth token from request attribute (set by CookieHandle filter)
+		// Get the auth token from request attribute (set by CookieHandle filter). An empty token means
+		// auth is disabled on the target cluster (the only case GetAuthTokenForRayCluster returns one),
+		// so no header is needed; auth-enabled clusters without a token fail before reaching here.
 		if authTokenAttr := req.Attribute(ATTRIBUTE_AUTH_TOKEN); authTokenAttr != nil {
 			if authToken, ok := authTokenAttr.(string); ok && authToken != "" {
 				proxyReq.Header.Set("x-ray-authorization", fmt.Sprintf("Bearer %s", authToken))
