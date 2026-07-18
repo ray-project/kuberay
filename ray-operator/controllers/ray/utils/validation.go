@@ -227,6 +227,14 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 				}
 			}
 		}
+
+		if IsAutoscalingV1Enabled(spec) {
+			for _, workerGroup := range spec.WorkerGroupSpecs {
+				if workerGroup.Template.Spec.RestartPolicy != "" && workerGroup.Template.Spec.RestartPolicy != corev1.RestartPolicyNever {
+					return fmt.Errorf("restartPolicy for worker group %s should be Never or unset when using autoscaler V1", workerGroup.GroupName)
+				}
+			}
+		}
 	}
 
 	// Validate AutoscalerOptions.IdleTimeoutSeconds (works with both v1 and v2 autoscaler)
