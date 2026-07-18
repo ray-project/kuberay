@@ -14,7 +14,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -33,14 +33,14 @@ import (
 type NetworkPolicyController struct {
 	client.Client
 	Scheme   *runtime.Scheme
-	Recorder record.EventRecorder
+	Recorder events.EventRecorder
 }
 
 func NewNetworkPolicyController(mgr manager.Manager) (*NetworkPolicyController, error) {
 	return &NetworkPolicyController{
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
-		Recorder: mgr.GetEventRecorderFor("networkpolicy-controller"),
+		Recorder: mgr.GetEventRecorder("networkpolicy-controller"),
 	}, nil
 }
 
@@ -112,7 +112,7 @@ func (r *NetworkPolicyController) createOrUpdateNetworkPolicy(ctx context.Contex
 			}
 
 			if !metav1.IsControlledBy(existing, instance) {
-				r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.NetworkPolicyNameCollision),
+				r.Recorder.Eventf(instance, nil, corev1.EventTypeWarning, string(utils.NetworkPolicyNameCollision), string(utils.ValidateAction),
 					"NetworkPolicy %s/%s already exists and is not owned by this RayCluster, network isolation will not be applied. "+
 						"Rename the existing NetworkPolicy or use a different RayCluster name to avoid the collision",
 					networkPolicy.Namespace, networkPolicy.Name)
@@ -129,22 +129,22 @@ func (r *NetworkPolicyController) createOrUpdateNetworkPolicy(ctx context.Contex
 			existing.Labels = networkPolicy.Labels
 
 			if err := r.Update(ctx, existing); err != nil {
-				r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.FailedToUpdateNetworkPolicy),
+				r.Recorder.Eventf(instance, nil, corev1.EventTypeWarning, string(utils.FailedToUpdateNetworkPolicy), string(utils.UpdateAction),
 					"Failed to update NetworkPolicy %s/%s: %v", networkPolicy.Namespace, networkPolicy.Name, err)
 				return err
 			}
 
 			logger.Info("Successfully updated NetworkPolicy", "name", networkPolicy.Name)
-			r.Recorder.Eventf(instance, corev1.EventTypeNormal, string(utils.UpdatedNetworkPolicy),
+			r.Recorder.Eventf(instance, nil, corev1.EventTypeNormal, string(utils.UpdatedNetworkPolicy), string(utils.UpdateAction),
 				"Updated NetworkPolicy %s/%s", networkPolicy.Namespace, networkPolicy.Name)
 		} else {
-			r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.FailedToCreateNetworkPolicy),
+			r.Recorder.Eventf(instance, nil, corev1.EventTypeWarning, string(utils.FailedToCreateNetworkPolicy), string(utils.CreateAction),
 				"Failed to create NetworkPolicy %s/%s: %v", networkPolicy.Namespace, networkPolicy.Name, err)
 			return err
 		}
 	} else {
 		logger.Info("Successfully created NetworkPolicy", "name", networkPolicy.Name)
-		r.Recorder.Eventf(instance, corev1.EventTypeNormal, string(utils.CreatedNetworkPolicy),
+		r.Recorder.Eventf(instance, nil, corev1.EventTypeNormal, string(utils.CreatedNetworkPolicy), string(utils.CreateAction),
 			"Created NetworkPolicy %s/%s", networkPolicy.Namespace, networkPolicy.Name)
 	}
 
@@ -405,12 +405,12 @@ func (r *NetworkPolicyController) cleanupNetworkPoliciesIfNeeded(ctx context.Con
 			logger.V(1).Info("Head NetworkPolicy exists but is not owned by this RayCluster, skipping deletion", "name", headName)
 		} else if err := r.Delete(ctx, headNetworkPolicy); err != nil {
 			logger.Error(err, "Failed to delete head NetworkPolicy", "name", headName)
-			r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.FailedToDeleteNetworkPolicy),
+			r.Recorder.Eventf(instance, nil, corev1.EventTypeWarning, string(utils.FailedToDeleteNetworkPolicy), string(utils.DeleteAction),
 				"Failed to delete NetworkPolicy %s/%s: %v", instance.Namespace, headName, err)
 			return ctrl.Result{}, err
 		} else {
 			logger.Info("Deleted head NetworkPolicy", "name", headName)
-			r.Recorder.Eventf(instance, corev1.EventTypeNormal, string(utils.DeletedNetworkPolicy),
+			r.Recorder.Eventf(instance, nil, corev1.EventTypeNormal, string(utils.DeletedNetworkPolicy), string(utils.DeleteAction),
 				"Deleted NetworkPolicy %s/%s", instance.Namespace, headName)
 		}
 	} else if !errors.IsNotFound(err) {
@@ -427,12 +427,12 @@ func (r *NetworkPolicyController) cleanupNetworkPoliciesIfNeeded(ctx context.Con
 			logger.V(1).Info("Worker NetworkPolicy exists but is not owned by this RayCluster, skipping deletion", "name", workerName)
 		} else if err := r.Delete(ctx, workerNetworkPolicy); err != nil {
 			logger.Error(err, "Failed to delete worker NetworkPolicy", "name", workerName)
-			r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.FailedToDeleteNetworkPolicy),
+			r.Recorder.Eventf(instance, nil, corev1.EventTypeWarning, string(utils.FailedToDeleteNetworkPolicy), string(utils.DeleteAction),
 				"Failed to delete NetworkPolicy %s/%s: %v", instance.Namespace, workerName, err)
 			return ctrl.Result{}, err
 		} else {
 			logger.Info("Deleted worker NetworkPolicy", "name", workerName)
-			r.Recorder.Eventf(instance, corev1.EventTypeNormal, string(utils.DeletedNetworkPolicy),
+			r.Recorder.Eventf(instance, nil, corev1.EventTypeNormal, string(utils.DeletedNetworkPolicy), string(utils.DeleteAction),
 				"Deleted NetworkPolicy %s/%s", instance.Namespace, workerName)
 		}
 	} else if !errors.IsNotFound(err) {

@@ -154,8 +154,8 @@ metrics:
     interval: 30s
     # -- When true, honorLabels preserves the metric’s labels when they collide with the target’s labels.
     honorLabels: true
-    # -- Prometheus ServiceMonitor selector
-    selector: {}
+    # -- Additional labels to add to the ServiceMonitor's metadata.
+    additionalLabels: {}
       #  release: prometheus
     # -- Prometheus ServiceMonitor namespace
     namespace: ""  # "monitoring"

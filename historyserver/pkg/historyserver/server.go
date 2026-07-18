@@ -5,12 +5,10 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"sync"
 	"time"
 
 	"github.com/ray-project/kuberay/historyserver/pkg/collector/types"
 	"github.com/ray-project/kuberay/historyserver/pkg/storage"
-	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 	"github.com/sirupsen/logrus"
 	"k8s.io/client-go/transport"
 )
@@ -27,9 +25,6 @@ type ServerHandler struct {
 
 	useKubernetesProxy bool
 	useAuthTokenMode   bool
-
-	mu          sync.RWMutex
-	clustersMap map[utils.ClusterKey][]utils.ClusterInfo
 }
 
 func NewServerHandler(
