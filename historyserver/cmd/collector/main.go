@@ -36,7 +36,10 @@ func main() {
 	runtimeClassConfigPath := "/var/collector-config/data"
 	ownerKind := ""
 	ownerName := ""
-
+	enableEventCollector := true
+	enableLogCollector := true
+	flag.BoolVar(&enableEventCollector, "enable-event-collector", true, "")
+	flag.BoolVar(&enableLogCollector, "enable-log-collector", true, "")
 	flag.StringVar(&role, "role", "Worker", "")
 	flag.StringVar(&runtimeClassName, "runtime-class-name", "", "")
 	flag.StringVar(&rayClusterName, "ray-cluster-name", "", "")
@@ -135,23 +138,25 @@ func main() {
 	sigChan := make(chan os.Signal, 1)
 	stop := make(chan struct{}, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-
-	wg.Add(1)
-	// Create and initialize EventCollector
-	go func() {
-		defer wg.Done()
-		eventCollector := eventcollector.NewEventCollector(writer, rayRootDir, sessionDir, rayNodeId, rayClusterName, rayClusterNamespace, sessionName)
-		eventCollector.Run(stop, eventsPort)
-		logrus.Info("Event collector shutdown")
-	}()
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		logCollector := runtime.NewCollector(&globalConfig, writer)
-		logCollector.Run(stop)
-		logrus.Info("Log collector shutdown")
-	}()
+	if enableEventCollector {
+		wg.Add(1)
+		// Create and initialize EventCollector
+		go func() {
+			defer wg.Done()
+			eventCollector := eventcollector.NewEventCollector(writer, rayRootDir, sessionDir, rayNodeId, rayClusterName, rayClusterNamespace, sessionName)
+			eventCollector.Run(stop, eventsPort)
+			logrus.Info("Event collector shutdown")
+		}()
+	}
+	if enableLogCollector {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			logCollector := runtime.NewCollector(&globalConfig, writer)
+			logCollector.Run(stop)
+			logrus.Info("Log collector shutdown")
+		}()
+	}
 
 	<-sigChan
 	logrus.Info("Received shutdown signal, initiating graceful shutdown...")
