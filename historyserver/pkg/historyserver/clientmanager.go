@@ -27,7 +27,7 @@ const (
 	DefaultKubeAPIBurst = 200
 
 	// AuthTokenSecretKey is the key used to store the auth token in a Kubernetes Secret
-	AuthTokenSecretKey = "auth_token"
+	AuthTokenSecretKey = rayutils.RAY_AUTH_TOKEN_SECRET_KEY 
 	// svcInfoCacheTTL is how long a cached ServiceInfo entry is considered valid before re-fetching from K8s
 	svcInfoCacheTTL = 30 * time.Second
 )
