@@ -54,7 +54,7 @@ func main() {
 
 	flag.Parse()
 
-	if err := validateFlags(&rayClusterName, &rayClusterNamespace, &ownerKind, &ownerName); err != nil {
+	if err := validateFlags(&rayClusterName, &rayClusterNamespace, &ownerKind, &ownerName, &enableEventCollector, &enableLogCollector); err != nil {
 		logrus.Fatalf("Failed to validate flags: %v", err)
 	}
 
@@ -169,7 +169,10 @@ func main() {
 	logrus.Info("Graceful shutdown complete")
 }
 
-func validateFlags(rayClusterName, rayClusterNamespace, ownerKind, ownerName *string) error {
+func validateFlags(rayClusterName, rayClusterNamespace, ownerKind, ownerName *string, enableEventCollector, enableLogCollector *bool) error {
+	if !*enableEventCollector && !*enableLogCollector {
+		return fmt.Errorf("at least one of --enable-event-collector or --enable-log-collector must be enabled")
+	}
 	*rayClusterName = strings.TrimSpace(*rayClusterName)
 	*rayClusterNamespace = strings.TrimSpace(*rayClusterNamespace)
 
