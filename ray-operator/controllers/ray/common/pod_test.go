@@ -1543,6 +1543,9 @@ func TestDefaultWorkerPodTemplate_Autoscaling(t *testing.T) {
 	clusterNoAutoscaling := instance.DeepCopy()
 	clusterAutoscalingV1 := instance.DeepCopy()
 	clusterAutoscalingV1.Spec.EnableInTreeAutoscaling = new(true)
+	clusterAutoscalingV1.Spec.AutoscalerOptions = &rayv1.AutoscalerOptions{
+		Version: ptr.To(rayv1.AutoscalerVersionV1),
+	}
 	clusterAutoscalingV2 := instance.DeepCopy()
 	clusterAutoscalingV2.Spec.EnableInTreeAutoscaling = new(true)
 	clusterAutoscalingV2.Spec.AutoscalerOptions = &rayv1.AutoscalerOptions{
@@ -1563,7 +1566,7 @@ func TestDefaultWorkerPodTemplate_Autoscaling(t *testing.T) {
 		},
 		"Pod template with autoscaling v1 enabled should the correct autoscaler v1 fields": {
 			cluster:               *clusterAutoscalingV1,
-			expectedRestartPolicy: "",
+			expectedRestartPolicy: corev1.RestartPolicyNever,
 		},
 		"Pod template with autoscaling v2 enabled should the correct autoscaler v2 fields": {
 			cluster:               *clusterAutoscalingV2,
