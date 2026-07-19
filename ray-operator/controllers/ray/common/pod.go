@@ -174,7 +174,7 @@ func configureRedisFT(podTemplate *corev1.PodTemplateSpec, instance *rayv1.RayCl
 
 // configureEmbeddedFT wires the embedded RocksDB GCS FT settings onto the head
 // Pod: selects the RocksDB backend, points it at the mounted persistent volume,
-// sets the cluster-id marker, and mounts the PVC backing the store.
+// and mounts the PVC backing the store.
 func configureEmbeddedFT(podTemplate *corev1.PodTemplateSpec, instance rayv1.RayCluster, container *corev1.Container) {
 	options := instance.Spec.GcsFaultToleranceOptions
 
@@ -188,17 +188,6 @@ func configureEmbeddedFT(podTemplate *corev1.PodTemplateSpec, instance rayv1.Ray
 		container.Env = append(container.Env, corev1.EnvVar{
 			Name:  utils.RAY_GCS_STORAGE_PATH,
 			Value: utils.GCSStorageMountPath,
-		})
-	}
-	if !utils.EnvVarExists(utils.RAY_CLUSTER_ID, container.Env) {
-		// Use the RayCluster UID as a stable cluster-id marker. The RocksDbStoreClient
-		// writes it into the store on first open and fails fast if a later open finds a
-		// mismatched marker (i.e. a stale PVC from a different cluster). It must be stable
-		// across head-pod restarts, so it is sourced from the RayCluster UID (not the
-		// Pod UID via the downward API, which changes on every restart).
-		container.Env = append(container.Env, corev1.EnvVar{
-			Name:  utils.RAY_CLUSTER_ID,
-			Value: string(instance.UID),
 		})
 	}
 

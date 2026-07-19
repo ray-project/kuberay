@@ -146,7 +146,6 @@ const (
 	RAY_EXTERNAL_STORAGE_NS                 = "RAY_external_storage_namespace"
 	RAY_GCS_STORAGE                         = "RAY_gcs_storage"
 	RAY_GCS_STORAGE_PATH                    = "RAY_gcs_storage_path"
-	RAY_CLUSTER_ID                          = "RAY_CLUSTER_ID"
 	RAY_GCS_RPC_SERVER_RECONNECT_TIMEOUT_S  = "RAY_gcs_rpc_server_reconnect_timeout_s"
 	RAY_TIMEOUT_MS_TASK_WAIT_FOR_DEATH_INFO = "RAY_timeout_ms_task_wait_for_death_info"
 	RAY_GCS_SERVER_REQUEST_TIMEOUT_SECONDS  = "RAY_gcs_server_request_timeout_seconds"

@@ -701,7 +701,6 @@ func TestConfigureGCSFaultToleranceEmbedded(t *testing.T) {
 			// The RocksDB backend env vars are set.
 			assert.Equal(t, utils.GCSStorageRocksDBValue, getEnvVar(container, utils.RAY_GCS_STORAGE).Value)
 			assert.Equal(t, utils.GCSStorageMountPath, getEnvVar(container, utils.RAY_GCS_STORAGE_PATH).Value)
-			assert.Equal(t, "test-uid", getEnvVar(container, utils.RAY_CLUSTER_ID).Value)
 
 			// No Redis env vars leak onto the embedded path.
 			assert.False(t, utils.EnvVarExists(utils.RAY_REDIS_ADDRESS, container.Env))

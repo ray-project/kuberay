@@ -567,18 +567,26 @@ func (r *RayClusterReconciler) reconcileHeadService(ctx context.Context, instanc
 }
 
 // reconcileGCSStoragePVC provisions the persistent volume backing the embedded
-// RocksDB GCS store. It is a no-op unless GCS FT uses the embedded backend. When
-// the user brings their own claim (Storage.ExistingClaim), the operator never
-// creates, deletes, or takes ownership of the PVC. Otherwise it creates an
-// operator-managed PVC ({cluster}-gcs-pvc) owned by the RayCluster, so it is
-// garbage-collected together with the cluster.
+// RocksDB GCS store. It is a no-op unless GCS FT uses the embedded backend.
 //
-// Note: the PVC is intentionally owned by the RayCluster (not a parent RayService).
-// Each RayCluster gets its own PVC keyed by its name, and the embedded store's
-// stale-PVC marker is the RayCluster UID, so a PVC cannot be reused across
-// clusters. Preserving GCS state across a RayService zero-downtime upgrade (where
-// the old and new RayClusters run concurrently) requires an RWX / active-passive
-// topology and is out of scope here (REP non-goal).
+// Two lifecycles are supported:
+//
+//   - Operator-managed (default): the operator creates a PVC ({cluster}-gcs-pvc)
+//     owned by the RayCluster, so it is garbage-collected together with the
+//     cluster. This is the sane default for a standalone RayCluster. Because the
+//     PVC is keyed by (and owned by) the RayCluster, it does NOT survive a
+//     RayService zero-downtime upgrade: the new RayCluster gets a new name and a
+//     fresh PVC, and the old PVC is GC'd with the old RayCluster.
+//
+//   - User-managed (Storage.ExistingClaim): the operator never creates, deletes,
+//     or takes ownership of the PVC. This is the path for persisting GCS state
+//     across RayService upgrades: point every RayService generation at the same
+//     stable claim. During a zero-downtime upgrade the old and new head Pods run
+//     concurrently, so the claim must allow concurrent attach (ReadWriteMany) and
+//     single-writer semantics must be coordinated externally (RocksDB tolerates
+//     only one writer at a time; Ray hands off via its persisted session_name
+//     marker). ReadWriteOnce is acceptable for active-passive / non-overlapping
+//     handoffs where only one Pod attaches at a time.
 func (r *RayClusterReconciler) reconcileGCSStoragePVC(ctx context.Context, instance *rayv1.RayCluster) error {
 	logger := ctrl.LoggerFrom(ctx)
 
@@ -601,10 +609,18 @@ func (r *RayClusterReconciler) reconcileGCSStoragePVC(ctx context.Context, insta
 		return err
 	}
 
-	// Operator-managed PVC: create if absent, treat as immutable once created.
+	// Operator-managed PVC: create if absent. Once created the PVC is effectively
+	// immutable (StorageClassName and AccessModes cannot change, and most
+	// StorageClasses do not allow shrinking); if the desired spec later diverges
+	// from the live PVC we surface a warning event rather than silently dropping
+	// the change.
 	existing := &corev1.PersistentVolumeClaim{}
 	err := r.Get(ctx, types.NamespacedName{Name: pvcName, Namespace: instance.Namespace}, existing)
 	if err == nil {
+		if drift := gcsStoragePVCDrift(common.BuildGCSStoragePVC(instance), existing); drift != "" {
+			r.Recorder.Eventf(instance, nil, corev1.EventTypeWarning, string(utils.FailedToCreatePVC), string(utils.UpdateAction),
+				"GCS storage PVC %s/%s already exists and cannot be reconfigured in place (%s); delete the PVC to recreate it with the new settings", existing.Namespace, existing.Name, drift)
+		}
 		return nil
 	} else if !errors.IsNotFound(err) {
 		return err
@@ -627,6 +643,51 @@ func (r *RayClusterReconciler) reconcileGCSStoragePVC(ctx context.Context, insta
 	r.Recorder.Eventf(instance, nil, corev1.EventTypeNormal, string(utils.CreatedPVC), string(utils.CreateAction),
 		"Created GCS storage PVC %s/%s", pvc.Namespace, pvc.Name)
 	return nil
+}
+
+// gcsStoragePVCDrift returns a human-readable description of the fields that
+// differ between the desired operator-managed GCS storage PVC and the live one,
+// or "" when they are equivalent for the immutable/relevant fields. It only
+// compares fields the operator manages and that Kubernetes cannot reconcile in
+// place (requested size, StorageClassName, AccessModes).
+func gcsStoragePVCDrift(desired, existing *corev1.PersistentVolumeClaim) string {
+	var diffs []string
+
+	wantSize := desired.Spec.Resources.Requests[corev1.ResourceStorage]
+	gotSize := existing.Spec.Resources.Requests[corev1.ResourceStorage]
+	if wantSize.Cmp(gotSize) != 0 {
+		diffs = append(diffs, fmt.Sprintf("requested size %s != current %s", wantSize.String(), gotSize.String()))
+	}
+
+	if !ptr.Equal(desired.Spec.StorageClassName, existing.Spec.StorageClassName) {
+		diffs = append(diffs, fmt.Sprintf("storageClassName %s != current %s",
+			ptr.Deref(desired.Spec.StorageClassName, "<default>"), ptr.Deref(existing.Spec.StorageClassName, "<default>")))
+	}
+
+	if !equalAccessModes(desired.Spec.AccessModes, existing.Spec.AccessModes) {
+		diffs = append(diffs, fmt.Sprintf("accessModes %v != current %v", desired.Spec.AccessModes, existing.Spec.AccessModes))
+	}
+
+	return strings.Join(diffs, "; ")
+}
+
+func equalAccessModes(a, b []corev1.PersistentVolumeAccessMode) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	seen := make(map[corev1.PersistentVolumeAccessMode]int, len(a))
+	for _, m := range a {
+		seen[m]++
+	}
+	for _, m := range b {
+		seen[m]--
+	}
+	for _, count := range seen {
+		if count != 0 {
+			return false
+		}
+	}
+	return true
 }
 
 // Return nil only when the serve service successfully created or already exists.

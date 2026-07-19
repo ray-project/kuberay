@@ -69,7 +69,6 @@ func TestRayClusterEmbeddedGCSFaultToleranceWiring(t *testing.T) {
 
 		g.Expect(getEnvVarValue(container.Env, utils.RAY_GCS_STORAGE)).To(Equal(utils.GCSStorageRocksDBValue))
 		g.Expect(getEnvVarValue(container.Env, utils.RAY_GCS_STORAGE_PATH)).To(Equal(utils.GCSStorageMountPath))
-		g.Expect(getEnvVarValue(container.Env, utils.RAY_CLUSTER_ID)).To(Equal(string(rayCluster.UID)))
 		// No Redis env vars leak onto the embedded path.
 		g.Expect(utils.EnvVarExists(utils.RAY_REDIS_ADDRESS, container.Env)).To(BeFalse())
 

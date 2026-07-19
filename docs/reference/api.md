@@ -231,6 +231,11 @@ _Appears in:_
 
 GcsEmbeddedStorage configures the PVC backing the embedded RocksDB store.
 
+RocksDB tolerates only a single writer at a time. The operator mounts the
+volume on the head Pod but does not itself enforce mutual exclusion, so when a
+volume can be attached to more than one Pod concurrently (see AccessModes) the
+caller is responsible for ensuring only one Ray head writes to it at a time.
+
 
 
 _Appears in:_
@@ -238,10 +243,10 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `existingClaim` _string_ | ExistingClaim, if set, makes the operator consume a user-provided PVC as-is<br />(no create, no delete, no ownerReferences). Mutually exclusive with<br />Size/StorageClassName/AccessModes. |  |  |
-| `size` _[Quantity](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#quantity-resource-api)_ | Size of the operator-managed PVC (e.g. "1Gi"). Ignored when ExistingClaim<br />is set. Defaults to 1Gi. |  |  |
+| `existingClaim` _string_ | ExistingClaim, if set, makes the operator consume a user-provided PVC as-is<br />(no create, no delete, no ownerReferences). Mutually exclusive with<br />Size/StorageClassName/AccessModes.<br />This is the supported path for persisting GCS state across a RayService<br />zero-downtime upgrade: point every RayService generation at the same claim.<br />The operator-managed PVC (used when this is empty) is keyed by and owned by<br />the RayCluster, so it is not reused across upgrades. Because the old and new<br />head Pods overlap during a zero-downtime upgrade, the claim must permit<br />concurrent attach (ReadWriteMany) with externally-coordinated single-writer<br />semantics, or an active-passive handoff where only one Pod attaches at once. |  |  |
+| `size` _[Quantity](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#quantity-resource-api)_ | Size of the operator-managed PVC (e.g. "1Gi"). Ignored when ExistingClaim<br />is set. Defaults to 1Gi. The operator-managed PVC is created once and not<br />reconfigured in place; to change size/class/accessModes, delete the PVC (or<br />switch to ExistingClaim). A warning event is emitted if this diverges from<br />the live PVC. |  |  |
 | `storageClassName` _string_ | StorageClassName for the operator-managed PVC. Uses the cluster default<br />StorageClass when omitted. |  |  |
-| `accessModes` _[PersistentVolumeAccessMode](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#persistentvolumeaccessmode-v1-core) array_ | AccessModes for the operator-managed PVC. Defaults to [ReadWriteOnce]. |  |  |
+| `accessModes` _[PersistentVolumeAccessMode](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#persistentvolumeaccessmode-v1-core) array_ | AccessModes for the operator-managed PVC. Defaults to [ReadWriteOnce].<br />ReadWriteOnce is the sane default for a standalone RayCluster (one head Pod<br />attaches at a time). ReadWriteMany is a valid choice when you need the volume<br />attached to multiple Pods concurrently (e.g. to overlap the old and new head<br />during a RayService upgrade); RocksDB still requires that only one of them<br />writes at a time, which you must coordinate externally. |  |  |
 | `subPath` _string_ | SubPath mounts a subdirectory of the volume instead of its root. |  |  |
 
 

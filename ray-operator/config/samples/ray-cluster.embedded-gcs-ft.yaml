@@ -11,14 +11,20 @@ spec:
     backend: rocksdb
     storage:
       # Operator-managed PVC. KubeRay creates `{cluster}-gcs-pvc` and garbage-collects
-      # it via ownerReferences when the RayCluster is deleted.
+      # it via ownerReferences when the RayCluster is deleted. It is created once and
+      # not reconfigured in place; to change size/class/accessModes, delete the PVC.
       size: 1Gi
       # storageClassName: ssd            # optional; defaults to the cluster default StorageClass
-      # accessModes: [ReadWriteOnce]     # optional; default
+      # accessModes: [ReadWriteOnce]     # optional; default. RocksDB is single-writer:
+      #                                  # ReadWriteOnce suits a standalone RayCluster; use
+      #                                  # ReadWriteMany only when multiple Pods must attach
+      #                                  # concurrently (single-writer coordinated externally).
       # subPath: clusters/my-ray/gcs     # optional; mount a subdirectory of the volume
       #
       # To bring your own PVC instead of an operator-managed one, set existingClaim
-      # (mutually exclusive with size/storageClassName/accessModes):
+      # (mutually exclusive with size/storageClassName/accessModes). This is also the
+      # path for persisting GCS state across a RayService zero-downtime upgrade: point
+      # every generation at the same claim (see the field docs in the API reference).
       # existingClaim: my-gcs-pvc
   headGroupSpec:
     rayStartParams:

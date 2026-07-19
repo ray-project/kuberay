@@ -155,15 +155,31 @@ type GcsFaultToleranceOptions struct {
 }
 
 // GcsEmbeddedStorage configures the PVC backing the embedded RocksDB store.
+//
+// RocksDB tolerates only a single writer at a time. The operator mounts the
+// volume on the head Pod but does not itself enforce mutual exclusion, so when a
+// volume can be attached to more than one Pod concurrently (see AccessModes) the
+// caller is responsible for ensuring only one Ray head writes to it at a time.
 type GcsEmbeddedStorage struct {
 	// ExistingClaim, if set, makes the operator consume a user-provided PVC as-is
 	// (no create, no delete, no ownerReferences). Mutually exclusive with
 	// Size/StorageClassName/AccessModes.
+	//
+	// This is the supported path for persisting GCS state across a RayService
+	// zero-downtime upgrade: point every RayService generation at the same claim.
+	// The operator-managed PVC (used when this is empty) is keyed by and owned by
+	// the RayCluster, so it is not reused across upgrades. Because the old and new
+	// head Pods overlap during a zero-downtime upgrade, the claim must permit
+	// concurrent attach (ReadWriteMany) with externally-coordinated single-writer
+	// semantics, or an active-passive handoff where only one Pod attaches at once.
 	// +optional
 	ExistingClaim string `json:"existingClaim,omitempty"`
 
 	// Size of the operator-managed PVC (e.g. "1Gi"). Ignored when ExistingClaim
-	// is set. Defaults to 1Gi.
+	// is set. Defaults to 1Gi. The operator-managed PVC is created once and not
+	// reconfigured in place; to change size/class/accessModes, delete the PVC (or
+	// switch to ExistingClaim). A warning event is emitted if this diverges from
+	// the live PVC.
 	// +optional
 	Size *resource.Quantity `json:"size,omitempty"`
 
@@ -173,6 +189,12 @@ type GcsEmbeddedStorage struct {
 	StorageClassName *string `json:"storageClassName,omitempty"`
 
 	// AccessModes for the operator-managed PVC. Defaults to [ReadWriteOnce].
+	//
+	// ReadWriteOnce is the sane default for a standalone RayCluster (one head Pod
+	// attaches at a time). ReadWriteMany is a valid choice when you need the volume
+	// attached to multiple Pods concurrently (e.g. to overlap the old and new head
+	// during a RayService upgrade); RocksDB still requires that only one of them
+	// writes at a time, which you must coordinate externally.
 	// +optional
 	AccessModes []corev1.PersistentVolumeAccessMode `json:"accessModes,omitempty"`
 

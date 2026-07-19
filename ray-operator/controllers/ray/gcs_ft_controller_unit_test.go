@@ -163,4 +163,61 @@ func TestReconcileGCSStoragePVC(t *testing.T) {
 		require.False(t, k8serrors.IsNotFound(err))
 		require.NoError(t, err)
 	})
+
+	t.Run("emits a warning event when the existing PVC diverges from the desired spec", func(t *testing.T) {
+		instance := newGCSStorageRayCluster(&rayv1.GcsFaultToleranceOptions{
+			Backend: rayv1.GcsFTBackendRocksDB,
+			Storage: &rayv1.GcsEmbeddedStorage{Size: ptr.To(resource.MustParse("5Gi"))},
+		})
+		// Pre-existing PVC provisioned with a smaller size (drift).
+		existing := &corev1.PersistentVolumeClaim{
+			ObjectMeta: metav1.ObjectMeta{Name: "test-cluster-gcs-pvc", Namespace: "default"},
+			Spec: corev1.PersistentVolumeClaimSpec{
+				AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+				Resources: corev1.VolumeResourceRequirements{
+					Requests: corev1.ResourceList{corev1.ResourceStorage: resource.MustParse("1Gi")},
+				},
+			},
+		}
+		fakeClient := clientFake.NewClientBuilder().WithScheme(scheme).WithObjects(instance, existing).Build()
+		recorder := events.NewFakeRecorder(10)
+		r := &RayClusterReconciler{Client: fakeClient, Recorder: recorder, Scheme: scheme, rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient)}
+
+		require.NoError(t, r.reconcileGCSStoragePVC(ctx, instance))
+
+		select {
+		case event := <-recorder.Events:
+			assert.Contains(t, event, string(utils.FailedToCreatePVC))
+			assert.Contains(t, event, "cannot be reconfigured in place")
+		default:
+			t.Fatal("expected a drift warning event, got none")
+		}
+	})
+
+	t.Run("no drift event when the existing PVC matches the desired spec", func(t *testing.T) {
+		instance := newGCSStorageRayCluster(&rayv1.GcsFaultToleranceOptions{
+			Backend: rayv1.GcsFTBackendRocksDB,
+			Storage: &rayv1.GcsEmbeddedStorage{Size: ptr.To(resource.MustParse("1Gi"))},
+		})
+		existing := &corev1.PersistentVolumeClaim{
+			ObjectMeta: metav1.ObjectMeta{Name: "test-cluster-gcs-pvc", Namespace: "default"},
+			Spec: corev1.PersistentVolumeClaimSpec{
+				AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+				Resources: corev1.VolumeResourceRequirements{
+					Requests: corev1.ResourceList{corev1.ResourceStorage: resource.MustParse("1Gi")},
+				},
+			},
+		}
+		fakeClient := clientFake.NewClientBuilder().WithScheme(scheme).WithObjects(instance, existing).Build()
+		recorder := events.NewFakeRecorder(10)
+		r := &RayClusterReconciler{Client: fakeClient, Recorder: recorder, Scheme: scheme, rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient)}
+
+		require.NoError(t, r.reconcileGCSStoragePVC(ctx, instance))
+
+		select {
+		case event := <-recorder.Events:
+			t.Fatalf("expected no event, got %q", event)
+		default:
+		}
+	})
 }
