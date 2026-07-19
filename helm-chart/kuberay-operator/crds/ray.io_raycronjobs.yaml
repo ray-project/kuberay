@@ -436,6 +436,11 @@ spec:
                         type: boolean
                       gcsFaultToleranceOptions:
                         properties:
+                          backend:
+                            enum:
+                            - redis
+                            - rocksdb
+                            type: string
                           externalStorageNamespace:
                             type: string
                           redisAddress:
@@ -594,8 +599,25 @@ spec:
                                     x-kubernetes-map-type: atomic
                                 type: object
                             type: object
-                        required:
-                        - redisAddress
+                          storage:
+                            properties:
+                              accessModes:
+                                items:
+                                  type: string
+                                type: array
+                              existingClaim:
+                                type: string
+                              size:
+                                anyOf:
+                                - type: integer
+                                - type: string
+                                pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                x-kubernetes-int-or-string: true
+                              storageClassName:
+                                type: string
+                              subPath:
+                                type: string
+                            type: object
                         type: object
                       headGroupSpec:
                         properties:

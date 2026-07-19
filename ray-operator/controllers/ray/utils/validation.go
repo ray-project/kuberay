@@ -181,6 +181,10 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 			return fmt.Errorf("cannot set `ray.io/external-storage-namespace` annotation when " +
 				"GcsFaultToleranceOptions is enabled - use GcsFaultToleranceOptions.ExternalStorageNamespace instead")
 		}
+
+		if err := validateGcsFaultToleranceBackend(spec.GcsFaultToleranceOptions, headContainer); err != nil {
+			return err
+		}
 	}
 	if spec.HeadGroupSpec.RayStartParams["redis-username"] != "" || EnvVarExists(REDIS_USERNAME, headContainer.Env) {
 		return fmt.Errorf("cannot set redis username in rayStartParams or environment variables" +
@@ -293,6 +297,45 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 		return fmt.Errorf("spec.networkIsolation requires the RayClusterNetworkIsolation feature gate to be enabled")
 	}
 	return validateNetworkIsolation(spec)
+}
+
+// validateGcsFaultToleranceBackend enforces backend-specific rules for GCS FT.
+// The redis backend (default) requires a RedisAddress; the embedded RocksDB backend
+// rejects redis-only fields and operator-managed env/mounts that users must not set.
+func validateGcsFaultToleranceBackend(options *rayv1.GcsFaultToleranceOptions, headContainer corev1.Container) error {
+	switch GetGcsFaultToleranceBackend(options) {
+	case rayv1.GcsFTBackendRocksDB:
+		if options.RedisAddress != "" {
+			return fmt.Errorf("cannot set GcsFaultToleranceOptions.RedisAddress when backend is 'rocksdb'")
+		}
+		if options.RedisUsername != nil {
+			return fmt.Errorf("cannot set GcsFaultToleranceOptions.RedisUsername when backend is 'rocksdb'")
+		}
+		if options.RedisPassword != nil {
+			return fmt.Errorf("cannot set GcsFaultToleranceOptions.RedisPassword when backend is 'rocksdb'")
+		}
+		if options.ExternalStorageNamespace != "" {
+			return fmt.Errorf("cannot set GcsFaultToleranceOptions.ExternalStorageNamespace when backend is 'rocksdb'")
+		}
+		if storage := options.Storage; storage != nil && storage.ExistingClaim != "" {
+			if storage.Size != nil || storage.StorageClassName != nil || len(storage.AccessModes) > 0 {
+				return fmt.Errorf("GcsFaultToleranceOptions.Storage.ExistingClaim is mutually exclusive with size, storageClassName, and accessModes")
+			}
+		}
+		if EnvVarExists(RAY_GCS_STORAGE, headContainer.Env) || EnvVarExists(RAY_GCS_STORAGE_PATH, headContainer.Env) {
+			return fmt.Errorf("cannot set `%s` or `%s` env var in head Pod when the embedded GCS FT backend is used - these are managed by KubeRay", RAY_GCS_STORAGE, RAY_GCS_STORAGE_PATH)
+		}
+		for _, mount := range headContainer.VolumeMounts {
+			if mount.MountPath == GCSStorageMountPath {
+				return fmt.Errorf("cannot mount a volume at %s in the head container when the embedded GCS FT backend is used - it is managed by KubeRay", GCSStorageMountPath)
+			}
+		}
+	default: // redis
+		if options.RedisAddress == "" {
+			return fmt.Errorf("GcsFaultToleranceOptions.RedisAddress is required when backend is 'redis'")
+		}
+	}
+	return nil
 }
 
 // validateNetworkIsolation checks that the NetworkIsolation config is internally consistent.

@@ -642,6 +642,84 @@ func TestConfigureGCSFaultToleranceWithGcsFTOptions(t *testing.T) {
 	}
 }
 
+func TestConfigureGCSFaultToleranceEmbedded(t *testing.T) {
+	emptyPodTemplate := corev1.PodTemplateSpec{
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
+				{Env: []corev1.EnvVar{}},
+			},
+		},
+	}
+
+	tests := []struct {
+		name          string
+		options       *rayv1.GcsFaultToleranceOptions
+		wantClaimName string
+		wantSubPath   string
+	}{
+		{
+			name:          "operator-managed PVC",
+			options:       &rayv1.GcsFaultToleranceOptions{Backend: rayv1.GcsFTBackendRocksDB},
+			wantClaimName: "test-cluster-gcs-pvc",
+		},
+		{
+			name: "existingClaim resolves to user PVC",
+			options: &rayv1.GcsFaultToleranceOptions{
+				Backend: rayv1.GcsFTBackendRocksDB,
+				Storage: &rayv1.GcsEmbeddedStorage{ExistingClaim: "my-pvc"},
+			},
+			wantClaimName: "my-pvc",
+		},
+		{
+			name: "subPath is wired onto the mount",
+			options: &rayv1.GcsFaultToleranceOptions{
+				Backend: rayv1.GcsFTBackendRocksDB,
+				Storage: &rayv1.GcsEmbeddedStorage{SubPath: "clusters/foo"},
+			},
+			wantClaimName: "test-cluster-gcs-pvc",
+			wantSubPath:   "clusters/foo",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			cluster := rayv1.RayCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster", UID: "test-uid"},
+				Spec: rayv1.RayClusterSpec{
+					GcsFaultToleranceOptions: test.options,
+					HeadGroupSpec: rayv1.HeadGroupSpec{
+						RayStartParams: map[string]string{},
+						Template:       *emptyPodTemplate.DeepCopy(),
+					},
+				},
+			}
+
+			podTemplate := &cluster.Spec.HeadGroupSpec.Template
+			configureGCSFaultTolerance(podTemplate, cluster, rayv1.HeadNode)
+			container := podTemplate.Spec.Containers[utils.RayContainerIndex]
+
+			// The RocksDB backend env vars are set.
+			assert.Equal(t, utils.GCSStorageRocksDBValue, getEnvVar(container, utils.RAY_GCS_STORAGE).Value)
+			assert.Equal(t, utils.GCSStorageMountPath, getEnvVar(container, utils.RAY_GCS_STORAGE_PATH).Value)
+			assert.Equal(t, "test-uid", getEnvVar(container, utils.RAY_CLUSTER_ID).Value)
+
+			// No Redis env vars leak onto the embedded path.
+			assert.False(t, utils.EnvVarExists(utils.RAY_REDIS_ADDRESS, container.Env))
+			assert.False(t, utils.EnvVarExists(utils.RAY_EXTERNAL_STORAGE_NS, container.Env))
+
+			// The volume + mount are wired to the resolved claim name.
+			require.Len(t, container.VolumeMounts, 1)
+			assert.Equal(t, utils.GCSStorageVolumeName, container.VolumeMounts[0].Name)
+			assert.Equal(t, utils.GCSStorageMountPath, container.VolumeMounts[0].MountPath)
+			assert.Equal(t, test.wantSubPath, container.VolumeMounts[0].SubPath)
+
+			require.Len(t, podTemplate.Spec.Volumes, 1)
+			require.NotNil(t, podTemplate.Spec.Volumes[0].PersistentVolumeClaim)
+			assert.Equal(t, test.wantClaimName, podTemplate.Spec.Volumes[0].PersistentVolumeClaim.ClaimName)
+		})
+	}
+}
+
 func TestBuildPod(t *testing.T) {
 	cluster := instance.DeepCopy()
 	ctx := context.Background()

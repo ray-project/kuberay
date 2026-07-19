@@ -92,6 +92,7 @@ type RayClusterReconcilerOptions struct {
 // +kubebuilder:rbac:groups=core,resources=pods/resize,verbs=patch
 // +kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;create;
 // +kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=core,resources=persistentvolumeclaims,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=services/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=coordination.k8s.io,resources=leases,verbs=get;list;create;update
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=ingressclasses,verbs=get;list;watch
@@ -312,6 +313,7 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 		r.reconcileHeadService,
 		r.reconcileHeadlessService,
 		r.reconcileServeService,
+		r.reconcileGCSStoragePVC,
 		r.reconcilePods,
 	}
 
@@ -564,6 +566,82 @@ func (r *RayClusterReconciler) reconcileHeadService(ctx context.Context, instanc
 }
 
 // Return nil only when the serve service successfully created or already exists.
+// reconcileGCSStoragePVC provisions the persistent volume backing the embedded
+// RocksDB GCS store. It is a no-op unless GCS FT uses the embedded backend. When
+// the user brings their own claim (Storage.ExistingClaim), the operator never
+// creates, deletes, or takes ownership of the PVC. Otherwise it creates an
+// operator-managed PVC ({cluster}-gcs-pvc). If the RayCluster is itself owned by a
+// RayService, the PVC's owner is set to that RayService so a zero-downtime upgrade
+// that replaces the RayCluster does not garbage-collect the GCS state mid-upgrade.
+func (r *RayClusterReconciler) reconcileGCSStoragePVC(ctx context.Context, instance *rayv1.RayCluster) error {
+	logger := ctrl.LoggerFrom(ctx)
+
+	if !utils.IsGCSFaultToleranceEnabled(&instance.Spec, instance.Annotations) ||
+		!utils.IsGCSFaultToleranceEmbedded(instance.Spec.GcsFaultToleranceOptions) {
+		return nil
+	}
+
+	pvcName := utils.GetGCSStoragePVCName(instance)
+
+	// BYO PVC: the user owns the lifecycle. Verify it exists and surface an event if not.
+	if storage := instance.Spec.GcsFaultToleranceOptions.Storage; storage != nil && storage.ExistingClaim != "" {
+		existing := &corev1.PersistentVolumeClaim{}
+		err := r.Get(ctx, types.NamespacedName{Name: pvcName, Namespace: instance.Namespace}, existing)
+		if errors.IsNotFound(err) {
+			r.Recorder.Eventf(instance, nil, corev1.EventTypeWarning, string(utils.FailedToCreatePVC), string(utils.ValidateAction),
+				"GcsFaultToleranceOptions.Storage.ExistingClaim %q not found in namespace %s; the head Pod will not start until it exists", pvcName, instance.Namespace)
+			return nil
+		}
+		return err
+	}
+
+	// Operator-managed PVC: create if absent, treat as immutable once created.
+	existing := &corev1.PersistentVolumeClaim{}
+	err := r.Get(ctx, types.NamespacedName{Name: pvcName, Namespace: instance.Namespace}, existing)
+	if err == nil {
+		return nil
+	} else if !errors.IsNotFound(err) {
+		return err
+	}
+
+	pvc := common.BuildGCSStoragePVC(instance)
+	if err := r.setGCSStoragePVCOwner(instance, pvc); err != nil {
+		return err
+	}
+
+	if err := r.Create(ctx, pvc); err != nil {
+		if errors.IsAlreadyExists(err) {
+			return nil
+		}
+		r.Recorder.Eventf(instance, nil, corev1.EventTypeWarning, string(utils.FailedToCreatePVC), string(utils.CreateAction),
+			"Failed to create GCS storage PVC %s/%s, %v", pvc.Namespace, pvc.Name, err)
+		return err
+	}
+	logger.Info("Created GCS storage PVC for embedded RocksDB backend", "name", pvc.Name)
+	r.Recorder.Eventf(instance, nil, corev1.EventTypeNormal, string(utils.CreatedPVC), string(utils.CreateAction),
+		"Created GCS storage PVC %s/%s", pvc.Namespace, pvc.Name)
+	return nil
+}
+
+// setGCSStoragePVCOwner sets the controller owner reference on the GCS storage PVC.
+// When the RayCluster is owned by a RayService, the PVC is owned by that RayService
+// (so the PVC survives a RayCluster replacement during a zero-downtime upgrade);
+// otherwise the RayCluster owns the PVC.
+func (r *RayClusterReconciler) setGCSStoragePVCOwner(instance *rayv1.RayCluster, pvc *corev1.PersistentVolumeClaim) error {
+	for _, ownerRef := range instance.OwnerReferences {
+		if ownerRef.Kind == string(utils.RayServiceCRD) {
+			// Reuse the RayCluster's controller owner reference (the RayService) as the
+			// PVC's owner so K8s GC ties the PVC to the RayService, not the ephemeral cluster.
+			ref := ownerRef
+			ref.Controller = ptr.To(true)
+			ref.BlockOwnerDeletion = ptr.To(true)
+			pvc.OwnerReferences = []metav1.OwnerReference{ref}
+			return nil
+		}
+	}
+	return ctrl.SetControllerReference(instance, pvc, r.Scheme)
+}
+
 func (r *RayClusterReconciler) reconcileServeService(ctx context.Context, instance *rayv1.RayCluster) error {
 	// Only reconcile the K8s service for Ray Serve when the "ray.io/enable-serve-service" annotation is set to true.
 	if enableServeServiceValue, exist := instance.Annotations[utils.EnableServeServiceKey]; !exist || enableServeServiceValue != utils.EnableServeServiceTrue {

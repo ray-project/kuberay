@@ -225,6 +225,44 @@ _Appears in:_
 
 
 
+#### GcsEmbeddedStorage
+
+
+
+GcsEmbeddedStorage configures the PVC backing the embedded RocksDB store.
+
+
+
+_Appears in:_
+- [GcsFaultToleranceOptions](#gcsfaulttoleranceoptions)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `existingClaim` _string_ | ExistingClaim, if set, makes the operator consume a user-provided PVC as-is<br />(no create, no delete, no ownerReferences). Mutually exclusive with<br />Size/StorageClassName/AccessModes. |  |  |
+| `size` _[Quantity](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#quantity-resource-api)_ | Size of the operator-managed PVC (e.g. "1Gi"). Ignored when ExistingClaim<br />is set. Defaults to 1Gi. |  |  |
+| `storageClassName` _string_ | StorageClassName for the operator-managed PVC. Uses the cluster default<br />StorageClass when omitted. |  |  |
+| `accessModes` _[PersistentVolumeAccessMode](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#persistentvolumeaccessmode-v1-core) array_ | AccessModes for the operator-managed PVC. Defaults to [ReadWriteOnce]. |  |  |
+| `subPath` _string_ | SubPath mounts a subdirectory of the volume instead of its root. |  |  |
+
+
+#### GcsFaultToleranceBackend
+
+_Underlying type:_ _string_
+
+GcsFaultToleranceBackend selects the GCS fault tolerance persistence backend.
+
+_Validation:_
+- Enum: [redis rocksdb]
+
+_Appears in:_
+- [GcsFaultToleranceOptions](#gcsfaulttoleranceoptions)
+
+| Field | Description |
+| --- | --- |
+| `redis` | GcsFTBackendRedis persists GCS metadata in an external Redis service.<br /> |
+| `rocksdb` | GcsFTBackendRocksDB persists GCS metadata in an embedded RocksDB store on a<br />persistent volume mounted on the head Pod.<br /> |
+
+
 #### GcsFaultToleranceOptions
 
 
@@ -238,10 +276,12 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
+| `backend` _[GcsFaultToleranceBackend](#gcsfaulttolerancebackend)_ | Backend selects the GCS FT persistence backend. Defaults to "redis" for<br />backward compatibility. |  | Enum: [redis rocksdb] <br /> |
 | `redisUsername` _[RedisCredential](#rediscredential)_ |  |  |  |
 | `redisPassword` _[RedisCredential](#rediscredential)_ |  |  |  |
 | `externalStorageNamespace` _string_ |  |  |  |
-| `redisAddress` _string_ |  |  |  |
+| `redisAddress` _string_ | RedisAddress is required when Backend is "redis" (enforced by validation). |  |  |
+| `storage` _[GcsEmbeddedStorage](#gcsembeddedstorage)_ | Storage configures the persistent volume backing the embedded RocksDB<br />store. Only used when Backend is "rocksdb". |  |  |
 
 
 #### HeadGroupSpec

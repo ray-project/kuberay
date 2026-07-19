@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 
@@ -136,7 +137,7 @@ func TestValidateRayClusterSpecGcsFaultToleranceOptions(t *testing.T) {
 		},
 		{
 			name:                     "ray.io/ft-enabled is not set and GcsFaultToleranceOptions is set",
-			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{},
+			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{RedisAddress: "redis:6379"},
 			expectError:              false,
 		},
 		{
@@ -200,9 +201,72 @@ func TestValidateRayClusterSpecGcsFaultToleranceOptions(t *testing.T) {
 			annotations: map[string]string{
 				RayExternalStorageNSAnnotationKey: "myns",
 			},
-			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{},
+			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{RedisAddress: "redis:6379"},
 			expectError:              true,
 			errorMessage:             errorMessageExternalStorageNamespaceConflict,
+		},
+		// redis backend requires RedisAddress.
+		{
+			name:                     "redis backend without RedisAddress is rejected",
+			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{Backend: rayv1.GcsFTBackendRedis},
+			expectError:              true,
+			errorMessage:             "GcsFaultToleranceOptions.RedisAddress is required when backend is 'redis'",
+		},
+		// rocksdb backend rules.
+		{
+			name:                     "rocksdb backend is valid with no redis fields",
+			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{Backend: rayv1.GcsFTBackendRocksDB},
+			expectError:              false,
+		},
+		{
+			name: "rocksdb backend with operator-managed storage is valid",
+			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{
+				Backend: rayv1.GcsFTBackendRocksDB,
+				Storage: &rayv1.GcsEmbeddedStorage{Size: ptr.To(resource.MustParse("2Gi"))},
+			},
+			expectError: false,
+		},
+		{
+			name: "rocksdb backend rejects RedisAddress",
+			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{
+				Backend:      rayv1.GcsFTBackendRocksDB,
+				RedisAddress: "redis:6379",
+			},
+			expectError:  true,
+			errorMessage: "cannot set GcsFaultToleranceOptions.RedisAddress when backend is 'rocksdb'",
+		},
+		{
+			name: "rocksdb backend rejects ExternalStorageNamespace",
+			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{
+				Backend:                  rayv1.GcsFTBackendRocksDB,
+				ExternalStorageNamespace: "ns",
+			},
+			expectError:  true,
+			errorMessage: "cannot set GcsFaultToleranceOptions.ExternalStorageNamespace when backend is 'rocksdb'",
+		},
+		{
+			name: "rocksdb backend rejects existingClaim combined with size",
+			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{
+				Backend: rayv1.GcsFTBackendRocksDB,
+				Storage: &rayv1.GcsEmbeddedStorage{
+					ExistingClaim: "my-pvc",
+					Size:          ptr.To(resource.MustParse("1Gi")),
+				},
+			},
+			expectError:  true,
+			errorMessage: "GcsFaultToleranceOptions.Storage.ExistingClaim is mutually exclusive with size, storageClassName, and accessModes",
+		},
+		{
+			name: "rocksdb backend rejects user-set RAY_gcs_storage env",
+			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{
+				Backend: rayv1.GcsFTBackendRocksDB,
+			},
+			envVars: []corev1.EnvVar{
+				{Name: RAY_GCS_STORAGE, Value: "rocksdb"},
+			},
+			expectError: true,
+			errorMessage: fmt.Sprintf("cannot set `%s` or `%s` env var in head Pod when the embedded GCS FT backend is used - these are managed by KubeRay",
+				RAY_GCS_STORAGE, RAY_GCS_STORAGE_PATH),
 		},
 	}
 
@@ -255,6 +319,7 @@ func TestValidateRayClusterSpecRedisPassword(t *testing.T) {
 		{
 			name: "GcsFaultToleranceOptions.RedisPassword is set",
 			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{
+				RedisAddress: "redis:6379",
 				RedisPassword: &rayv1.RedisCredential{
 					Value: "password",
 				},
@@ -317,6 +382,7 @@ func TestValidateRayClusterSpecRedisUsername(t *testing.T) {
 		{
 			name: "GcsFaultToleranceOptions.RedisUsername is set",
 			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{
+				RedisAddress: "redis:6379",
 				RedisUsername: &rayv1.RedisCredential{
 					Value: "username",
 				},

@@ -115,15 +115,70 @@ type AuthOptions struct {
 	Mode AuthMode `json:"mode,omitempty"`
 }
 
+// GcsFaultToleranceBackend selects the GCS fault tolerance persistence backend.
+// +kubebuilder:validation:Enum=redis;rocksdb
+type GcsFaultToleranceBackend string
+
+const (
+	// GcsFTBackendRedis persists GCS metadata in an external Redis service.
+	GcsFTBackendRedis GcsFaultToleranceBackend = "redis"
+	// GcsFTBackendRocksDB persists GCS metadata in an embedded RocksDB store on a
+	// persistent volume mounted on the head Pod.
+	GcsFTBackendRocksDB GcsFaultToleranceBackend = "rocksdb"
+)
+
 // GcsFaultToleranceOptions contains configs for GCS FT
 type GcsFaultToleranceOptions struct {
+	// Backend selects the GCS FT persistence backend. Defaults to "redis" for
+	// backward compatibility.
+	// +optional
+	Backend GcsFaultToleranceBackend `json:"backend,omitempty"`
+
+	// ----- Redis backend fields -----
+
 	// +optional
 	RedisUsername *RedisCredential `json:"redisUsername,omitempty"`
 	// +optional
 	RedisPassword *RedisCredential `json:"redisPassword,omitempty"`
 	// +optional
 	ExternalStorageNamespace string `json:"externalStorageNamespace,omitempty"`
-	RedisAddress             string `json:"redisAddress"`
+	// RedisAddress is required when Backend is "redis" (enforced by validation).
+	// +optional
+	RedisAddress string `json:"redisAddress,omitempty"`
+
+	// ----- RocksDB (embedded) backend fields -----
+
+	// Storage configures the persistent volume backing the embedded RocksDB
+	// store. Only used when Backend is "rocksdb".
+	// +optional
+	Storage *GcsEmbeddedStorage `json:"storage,omitempty"`
+}
+
+// GcsEmbeddedStorage configures the PVC backing the embedded RocksDB store.
+type GcsEmbeddedStorage struct {
+	// ExistingClaim, if set, makes the operator consume a user-provided PVC as-is
+	// (no create, no delete, no ownerReferences). Mutually exclusive with
+	// Size/StorageClassName/AccessModes.
+	// +optional
+	ExistingClaim string `json:"existingClaim,omitempty"`
+
+	// Size of the operator-managed PVC (e.g. "1Gi"). Ignored when ExistingClaim
+	// is set. Defaults to 1Gi.
+	// +optional
+	Size *resource.Quantity `json:"size,omitempty"`
+
+	// StorageClassName for the operator-managed PVC. Uses the cluster default
+	// StorageClass when omitted.
+	// +optional
+	StorageClassName *string `json:"storageClassName,omitempty"`
+
+	// AccessModes for the operator-managed PVC. Defaults to [ReadWriteOnce].
+	// +optional
+	AccessModes []corev1.PersistentVolumeAccessMode `json:"accessModes,omitempty"`
+
+	// SubPath mounts a subdirectory of the volume instead of its root.
+	// +optional
+	SubPath string `json:"subPath,omitempty"`
 }
 
 // RedisCredential is the redis username/password or a reference to the source containing the username/password
