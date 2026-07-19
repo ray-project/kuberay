@@ -228,13 +228,6 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 			}
 		}
 
-		if IsAutoscalingV1Enabled(spec) {
-			for _, workerGroup := range spec.WorkerGroupSpecs {
-				if workerGroup.Template.Spec.RestartPolicy != "" && workerGroup.Template.Spec.RestartPolicy != corev1.RestartPolicyNever {
-					return fmt.Errorf("restartPolicy for worker group %s should be Never or unset when using autoscaler V1", workerGroup.GroupName)
-				}
-			}
-		}
 	}
 
 	// Validate AutoscalerOptions.IdleTimeoutSeconds (works with both v1 and v2 autoscaler)
@@ -293,6 +286,22 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 		return fmt.Errorf("spec.networkIsolation requires the RayClusterNetworkIsolation feature gate to be enabled")
 	}
 	return validateNetworkIsolation(spec)
+}
+
+// ValidateRayClusterAutoscalerV1 returns the names of worker groups whose restartPolicy
+// is neither empty nor "Never" when autoscaler V1 is enabled. The caller should emit a
+// single consolidated warning log and Kubernetes event listing all returned group names.
+func ValidateRayClusterAutoscalerV1(spec *rayv1.RayClusterSpec) []string {
+	if !IsAutoscalingEnabled(spec) || !IsAutoscalingV1Enabled(spec) {
+		return nil
+	}
+	var groupNames []string
+	for _, workerGroup := range spec.WorkerGroupSpecs {
+		if workerGroup.Template.Spec.RestartPolicy != "" && workerGroup.Template.Spec.RestartPolicy != corev1.RestartPolicyNever {
+			groupNames = append(groupNames, workerGroup.GroupName)
+		}
+	}
+	return groupNames
 }
 
 // validateNetworkIsolation checks that the NetworkIsolation config is internally consistent.

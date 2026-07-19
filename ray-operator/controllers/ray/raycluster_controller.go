@@ -170,6 +170,13 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 		return ctrl.Result{}, nil
 	}
 
+	if groupNames := utils.ValidateRayClusterAutoscalerV1(&instance.Spec); len(groupNames) > 0 {
+		msg := fmt.Sprintf("restartPolicy for worker groups [%s] should be Never or unset when using autoscaler V1", strings.Join(groupNames, ", "))
+		logger.Info("RayCluster spec warning that the worker pod's restartPolicy should not be other than Never or unset.", "groupNames", groupNames)
+		r.Recorder.Eventf(instance, nil, corev1.EventTypeWarning, string(utils.InvalidRayClusterSpec), string(utils.ValidateAction),
+			"RayCluster spec warning %s/%s: %s", instance.Namespace, instance.Name, msg)
+	}
+
 	if err := utils.ValidateRayClusterUpgradeOptions(instance); err != nil {
 		logger.Error(err, "The RayCluster UpgradeStrategy is invalid")
 		r.Recorder.Eventf(instance, nil, corev1.EventTypeWarning, string(utils.InvalidRayClusterSpec), string(utils.ValidateAction),
