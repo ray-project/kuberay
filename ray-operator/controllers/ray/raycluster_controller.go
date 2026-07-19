@@ -194,6 +194,26 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 	// manually after the RayCluster CR deletion.
 	enableGCSFTRedisCleanup := strings.ToLower(os.Getenv(utils.ENABLE_GCS_FT_REDIS_CLEANUP)) != "false"
 
+	// A RayCluster that was created with the Redis backend (and therefore received
+	// the Redis cleanup finalizer) and later switched to the embedded RocksDB
+	// backend still carries that finalizer. The embedded backend has no Redis to
+	// clean up and the main Redis-cleanup block below is skipped for it, so the
+	// finalizer-removal path would never run — leaving the CR stuck Terminating.
+	// Remove the stale finalizer here on deletion.
+	if !instance.DeletionTimestamp.IsZero() &&
+		utils.IsGCSFaultToleranceEmbedded(instance.Spec.GcsFaultToleranceOptions) &&
+		controllerutil.ContainsFinalizer(instance, utils.GCSFaultToleranceRedisCleanupFinalizer) {
+		logger.Info(
+			"Removing the stale Redis cleanup finalizer from an embedded-backend RayCluster that is being deleted.",
+			"finalizer", utils.GCSFaultToleranceRedisCleanupFinalizer,
+		)
+		controllerutil.RemoveFinalizer(instance, utils.GCSFaultToleranceRedisCleanupFinalizer)
+		if err := r.Update(ctx, instance); err != nil {
+			return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
+		}
+		return ctrl.Result{}, nil
+	}
+
 	if enableGCSFTRedisCleanup && utils.IsGCSFaultToleranceEnabled(&instance.Spec, instance.Annotations) &&
 		!utils.IsGCSFaultToleranceEmbedded(instance.Spec.GcsFaultToleranceOptions) {
 		if instance.DeletionTimestamp.IsZero() {
@@ -587,6 +607,32 @@ func (r *RayClusterReconciler) reconcileHeadService(ctx context.Context, instanc
 //     only one writer at a time; Ray hands off via its persisted session_name
 //     marker). ReadWriteOnce is acceptable for active-passive / non-overlapping
 //     handoffs where only one Pod attaches at a time.
+//
+// Why not an operator-managed PVC re-parented to the RayService for automatic
+// cross-upgrade persistence?
+//
+// Re-parenting (keying the PVC by RayService name + ownerReference to the
+// RayService) would make the volume survive an upgrade, and Ray does resume the
+// prior session automatically (a head that mounts an existing store adopts the
+// persisted session_name), but that alone is NOT sufficient and would deadlock
+// the default zero-downtime (NewCluster) upgrade:
+//
+//   - RocksDB is a hard single-writer, enforced by its own on-disk LOCK file (not
+//     by the PVC access mode). A second DB open on the same directory fails rather
+//     than queueing/handing off.
+//   - In a zero-downtime upgrade the old and new RayClusters run concurrently, both
+//     wanting the one store. With RWX the new head's GCS cannot open the DB while
+//     the old head holds the lock (crash-loop); with RWO the new head cannot even
+//     attach the volume (multi-attach). Either way the new cluster never becomes
+//     healthy, so the RayService never tears down the old cluster -> the upgrade
+//     hangs.
+//
+// Making operator-managed cross-upgrade persistence safe requires an active-passive
+// handoff (stop the old head's GCS so it closes the DB, detach, then start the new
+// head) -- i.e. an in-place / RecreateCluster upgrade with a brief GCS-unavailability
+// window, which is a different upgrade strategy than the concurrent NewCluster path.
+// That is deferred as follow-up work; today, cross-upgrade persistence is served by
+// the user-managed ExistingClaim path above.
 func (r *RayClusterReconciler) reconcileGCSStoragePVC(ctx context.Context, instance *rayv1.RayCluster) error {
 	logger := ctrl.LoggerFrom(ctx)
 
