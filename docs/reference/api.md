@@ -497,7 +497,8 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `activeDeadlineSeconds` _integer_ | ActiveDeadlineSeconds is the duration in seconds that the RayJob may be active before<br />KubeRay actively tries to terminate the RayJob; value must be positive integer. |  |  |
-| `backoffLimit` _integer_ | Specifies the number of retries before marking this job failed.<br />Each retry creates a new RayCluster. | 0 |  |
+| `backoffLimit` _integer_ | Specifies the number of retries before marking this job failed.<br />By default, each retry creates a new RayCluster; see RetryRayClusterStrategy<br />to reuse the same RayCluster across retries. | 0 |  |
+| `retryRayClusterStrategy` _[RetryRayClusterStrategy](#retryrayclusterstrategy)_ | RetryRayClusterStrategy controls RayCluster handling during backoffLimit retries.<br />"RecreateRayCluster" (default) recreates the RayCluster each retry.<br />"ReuseRayCluster" keeps the same RayCluster and only re-submits the Ray job,<br />allowing RayCluster-level fault tolerance to handle recovery. Currently only<br />supported in HTTPMode. | RecreateRayCluster | Enum: [RecreateRayCluster ReuseRayCluster] <br /> |
 | `rayClusterSpec` _[RayClusterSpec](#rayclusterspec)_ | RayClusterSpec is the cluster template to run the job |  |  |
 | `submitterPodTemplate` _[PodTemplateSpec](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#podtemplatespec-v1-core)_ | SubmitterPodTemplate is the template for the pod that will run `ray job submit`. |  |  |
 | `metadata` _object (keys:string, values:string)_ | Refer to Kubernetes API documentation for fields of `metadata`. |  |  |
@@ -621,6 +622,23 @@ _Appears in:_
 | --- | --- | --- | --- |
 | `valueFrom` _[EnvVarSource](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#envvarsource-v1-core)_ |  |  |  |
 | `value` _string_ |  |  |  |
+
+
+#### RetryRayClusterStrategy
+
+_Underlying type:_ _string_
+
+
+
+
+
+_Appears in:_
+- [RayJobSpec](#rayjobspec)
+
+| Field | Description |
+| --- | --- |
+| `RecreateRayCluster` | RecreateRayCluster deletes and recreates the RayCluster on each retry (current behavior).<br /> |
+| `ReuseRayCluster` | ReuseRayCluster keeps the RayCluster across retries and only re-submits the Ray job.<br /> |
 
 
 #### ScaleStrategy
