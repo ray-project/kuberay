@@ -123,7 +123,7 @@ func TestReconcileGCSStoragePVC(t *testing.T) {
 		assert.Empty(t, pvcList.Items)
 	})
 
-	t.Run("RayService-owned cluster sets PVC owner to the RayService", func(t *testing.T) {
+	t.Run("RayService-owned cluster still owns the PVC by the RayCluster", func(t *testing.T) {
 		instance := newGCSStorageRayCluster(&rayv1.GcsFaultToleranceOptions{Backend: rayv1.GcsFTBackendRocksDB})
 		instance.OwnerReferences = []metav1.OwnerReference{
 			{
@@ -141,11 +141,11 @@ func TestReconcileGCSStoragePVC(t *testing.T) {
 
 		pvc := &corev1.PersistentVolumeClaim{}
 		require.NoError(t, fakeClient.Get(ctx, types.NamespacedName{Name: "test-cluster-gcs-pvc", Namespace: "default"}, pvc))
+		// The PVC is owned by the RayCluster (not the parent RayService), so it is
+		// garbage-collected with the cluster and never orphaned across upgrades.
 		require.Len(t, pvc.OwnerReferences, 1)
-		assert.Equal(t, "RayService", pvc.OwnerReferences[0].Kind)
-		assert.Equal(t, "my-service", pvc.OwnerReferences[0].Name)
-		require.NotNil(t, pvc.OwnerReferences[0].Controller)
-		assert.True(t, *pvc.OwnerReferences[0].Controller)
+		assert.Equal(t, "RayCluster", pvc.OwnerReferences[0].Kind)
+		assert.Equal(t, "test-cluster", pvc.OwnerReferences[0].Name)
 	})
 
 	t.Run("idempotent when PVC already exists", func(t *testing.T) {

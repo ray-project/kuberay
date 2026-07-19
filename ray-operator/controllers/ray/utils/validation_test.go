@@ -289,6 +289,64 @@ func TestValidateRayClusterSpecGcsFaultToleranceOptions(t *testing.T) {
 	}
 }
 
+func TestValidateGcsFaultToleranceEmbeddedReservedVolume(t *testing.T) {
+	// The operator reserves the "gcs-storage" volume name and the /data/gcs-state
+	// mount path for the embedded backend. A user-supplied head volume, volume
+	// mount by that name, or mount at that path must be rejected, otherwise
+	// configureEmbeddedFT would append a duplicate and the head Pod would fail.
+	newSpec := func(mounts []corev1.VolumeMount, volumes []corev1.Volume) *rayv1.RayClusterSpec {
+		return &rayv1.RayClusterSpec{
+			GcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{Backend: rayv1.GcsFTBackendRocksDB},
+			HeadGroupSpec: rayv1.HeadGroupSpec{
+				Template: corev1.PodTemplateSpec{
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{{VolumeMounts: mounts}},
+						Volumes:    volumes,
+					},
+				},
+			},
+		}
+	}
+
+	tests := []struct {
+		name        string
+		spec        *rayv1.RayClusterSpec
+		expectError bool
+	}{
+		{
+			name:        "no reserved volume is valid",
+			spec:        newSpec(nil, nil),
+			expectError: false,
+		},
+		{
+			name:        "reserved mount path is rejected",
+			spec:        newSpec([]corev1.VolumeMount{{Name: "user-vol", MountPath: GCSStorageMountPath}}, nil),
+			expectError: true,
+		},
+		{
+			name:        "reserved volume mount name is rejected",
+			spec:        newSpec([]corev1.VolumeMount{{Name: GCSStorageVolumeName, MountPath: "/somewhere/else"}}, nil),
+			expectError: true,
+		},
+		{
+			name:        "reserved volume name is rejected",
+			spec:        newSpec(nil, []corev1.Volume{{Name: GCSStorageVolumeName}}),
+			expectError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateRayClusterSpec(tt.spec, nil)
+			if tt.expectError {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
 func TestValidateRayClusterSpecRedisPassword(t *testing.T) {
 	tests := []struct {
 		gcsFaultToleranceOptions *rayv1.GcsFaultToleranceOptions

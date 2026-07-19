@@ -11,7 +11,7 @@ spec:
     backend: rocksdb
     storage:
       # Operator-managed PVC. KubeRay creates `{cluster}-gcs-pvc` and garbage-collects
-      # it via ownerReferences when the RayCluster (or owning RayService) is deleted.
+      # it via ownerReferences when the RayCluster is deleted.
       size: 1Gi
       # storageClassName: ssd            # optional; defaults to the cluster default StorageClass
       # accessModes: [ReadWriteOnce]     # optional; default

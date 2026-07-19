@@ -194,7 +194,8 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 	// manually after the RayCluster CR deletion.
 	enableGCSFTRedisCleanup := strings.ToLower(os.Getenv(utils.ENABLE_GCS_FT_REDIS_CLEANUP)) != "false"
 
-	if enableGCSFTRedisCleanup && utils.IsGCSFaultToleranceEnabled(&instance.Spec, instance.Annotations) {
+	if enableGCSFTRedisCleanup && utils.IsGCSFaultToleranceEnabled(&instance.Spec, instance.Annotations) &&
+		!utils.IsGCSFaultToleranceEmbedded(instance.Spec.GcsFaultToleranceOptions) {
 		if instance.DeletionTimestamp.IsZero() {
 			if !controllerutil.ContainsFinalizer(instance, utils.GCSFaultToleranceRedisCleanupFinalizer) {
 				logger.Info(
@@ -565,14 +566,19 @@ func (r *RayClusterReconciler) reconcileHeadService(ctx context.Context, instanc
 	return nil
 }
 
-// Return nil only when the serve service successfully created or already exists.
 // reconcileGCSStoragePVC provisions the persistent volume backing the embedded
 // RocksDB GCS store. It is a no-op unless GCS FT uses the embedded backend. When
 // the user brings their own claim (Storage.ExistingClaim), the operator never
 // creates, deletes, or takes ownership of the PVC. Otherwise it creates an
-// operator-managed PVC ({cluster}-gcs-pvc). If the RayCluster is itself owned by a
-// RayService, the PVC's owner is set to that RayService so a zero-downtime upgrade
-// that replaces the RayCluster does not garbage-collect the GCS state mid-upgrade.
+// operator-managed PVC ({cluster}-gcs-pvc) owned by the RayCluster, so it is
+// garbage-collected together with the cluster.
+//
+// Note: the PVC is intentionally owned by the RayCluster (not a parent RayService).
+// Each RayCluster gets its own PVC keyed by its name, and the embedded store's
+// stale-PVC marker is the RayCluster UID, so a PVC cannot be reused across
+// clusters. Preserving GCS state across a RayService zero-downtime upgrade (where
+// the old and new RayClusters run concurrently) requires an RWX / active-passive
+// topology and is out of scope here (REP non-goal).
 func (r *RayClusterReconciler) reconcileGCSStoragePVC(ctx context.Context, instance *rayv1.RayCluster) error {
 	logger := ctrl.LoggerFrom(ctx)
 
@@ -605,7 +611,7 @@ func (r *RayClusterReconciler) reconcileGCSStoragePVC(ctx context.Context, insta
 	}
 
 	pvc := common.BuildGCSStoragePVC(instance)
-	if err := r.setGCSStoragePVCOwner(instance, pvc); err != nil {
+	if err := ctrl.SetControllerReference(instance, pvc, r.Scheme); err != nil {
 		return err
 	}
 
@@ -623,25 +629,7 @@ func (r *RayClusterReconciler) reconcileGCSStoragePVC(ctx context.Context, insta
 	return nil
 }
 
-// setGCSStoragePVCOwner sets the controller owner reference on the GCS storage PVC.
-// When the RayCluster is owned by a RayService, the PVC is owned by that RayService
-// (so the PVC survives a RayCluster replacement during a zero-downtime upgrade);
-// otherwise the RayCluster owns the PVC.
-func (r *RayClusterReconciler) setGCSStoragePVCOwner(instance *rayv1.RayCluster, pvc *corev1.PersistentVolumeClaim) error {
-	for _, ownerRef := range instance.OwnerReferences {
-		if ownerRef.Kind == string(utils.RayServiceCRD) {
-			// Reuse the RayCluster's controller owner reference (the RayService) as the
-			// PVC's owner so K8s GC ties the PVC to the RayService, not the ephemeral cluster.
-			ref := ownerRef
-			ref.Controller = ptr.To(true)
-			ref.BlockOwnerDeletion = ptr.To(true)
-			pvc.OwnerReferences = []metav1.OwnerReference{ref}
-			return nil
-		}
-	}
-	return ctrl.SetControllerReference(instance, pvc, r.Scheme)
-}
-
+// Return nil only when the serve service successfully created or already exists.
 func (r *RayClusterReconciler) reconcileServeService(ctx context.Context, instance *rayv1.RayCluster) error {
 	// Only reconcile the K8s service for Ray Serve when the "ray.io/enable-serve-service" annotation is set to true.
 	if enableServeServiceValue, exist := instance.Annotations[utils.EnableServeServiceKey]; !exist || enableServeServiceValue != utils.EnableServeServiceTrue {

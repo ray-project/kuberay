@@ -2613,6 +2613,48 @@ func Test_RedisCleanupFeatureFlag(t *testing.T) {
 	}
 }
 
+func Test_RedisCleanupSkippedForEmbeddedBackend(t *testing.T) {
+	setupTest(t)
+	defer os.Unsetenv(utils.ENABLE_GCS_FT_REDIS_CLEANUP)
+	// Redis cleanup is enabled by default; the embedded RocksDB backend must still
+	// not receive the Redis cleanup finalizer (there is no Redis to clean up, so
+	// the finalizer/Job would stall deletion).
+	os.Unsetenv(utils.ENABLE_GCS_FT_REDIS_CLEANUP)
+
+	newScheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(newScheme)
+	_ = corev1.AddToScheme(newScheme)
+
+	cluster := testRayCluster.DeepCopy()
+	cluster.Spec.EnableInTreeAutoscaling = nil
+	cluster.Spec.GcsFaultToleranceOptions = &rayv1.GcsFaultToleranceOptions{
+		Backend: rayv1.GcsFTBackendRocksDB,
+	}
+	ctx := context.Background()
+
+	fakeClient := clientFake.NewClientBuilder().
+		WithScheme(newScheme).
+		WithObjects(cluster).
+		WithStatusSubresource(cluster).
+		Build()
+
+	testRayClusterReconciler := &RayClusterReconciler{
+		Client:                     fakeClient,
+		Recorder:                   &events.FakeRecorder{},
+		Scheme:                     newScheme,
+		rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
+	}
+
+	_, err := testRayClusterReconciler.rayClusterReconcile(ctx, cluster)
+	require.NoError(t, err)
+
+	rayClusterList := rayv1.RayClusterList{}
+	require.NoError(t, fakeClient.List(ctx, &rayClusterList, client.InNamespace(namespaceStr)))
+	require.Len(t, rayClusterList.Items, 1)
+	assert.False(t, controllerutil.ContainsFinalizer(&rayClusterList.Items[0], utils.GCSFaultToleranceRedisCleanupFinalizer),
+		"embedded RocksDB backend must not receive the Redis cleanup finalizer")
+}
+
 func TestEvents_RedisCleanup(t *testing.T) {
 	setupTest(t)
 	newScheme := runtime.NewScheme()

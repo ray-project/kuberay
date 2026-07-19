@@ -182,7 +182,7 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 				"GcsFaultToleranceOptions is enabled - use GcsFaultToleranceOptions.ExternalStorageNamespace instead")
 		}
 
-		if err := validateGcsFaultToleranceBackend(spec.GcsFaultToleranceOptions, headContainer); err != nil {
+		if err := validateGcsFaultToleranceBackend(spec.GcsFaultToleranceOptions, headContainer, spec.HeadGroupSpec.Template.Spec.Volumes); err != nil {
 			return err
 		}
 	}
@@ -302,7 +302,7 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 // validateGcsFaultToleranceBackend enforces backend-specific rules for GCS FT.
 // The redis backend (default) requires a RedisAddress; the embedded RocksDB backend
 // rejects redis-only fields and operator-managed env/mounts that users must not set.
-func validateGcsFaultToleranceBackend(options *rayv1.GcsFaultToleranceOptions, headContainer corev1.Container) error {
+func validateGcsFaultToleranceBackend(options *rayv1.GcsFaultToleranceOptions, headContainer corev1.Container, headVolumes []corev1.Volume) error {
 	switch GetGcsFaultToleranceBackend(options) {
 	case rayv1.GcsFTBackendRocksDB:
 		if options.RedisAddress != "" {
@@ -326,8 +326,13 @@ func validateGcsFaultToleranceBackend(options *rayv1.GcsFaultToleranceOptions, h
 			return fmt.Errorf("cannot set `%s` or `%s` env var in head Pod when the embedded GCS FT backend is used - these are managed by KubeRay", RAY_GCS_STORAGE, RAY_GCS_STORAGE_PATH)
 		}
 		for _, mount := range headContainer.VolumeMounts {
-			if mount.MountPath == GCSStorageMountPath {
-				return fmt.Errorf("cannot mount a volume at %s in the head container when the embedded GCS FT backend is used - it is managed by KubeRay", GCSStorageMountPath)
+			if mount.MountPath == GCSStorageMountPath || mount.Name == GCSStorageVolumeName {
+				return fmt.Errorf("cannot set a volume mount named %q or mounted at %s in the head container when the embedded GCS FT backend is used - it is managed by KubeRay", GCSStorageVolumeName, GCSStorageMountPath)
+			}
+		}
+		for _, volume := range headVolumes {
+			if volume.Name == GCSStorageVolumeName {
+				return fmt.Errorf("cannot set a volume named %q in the head Pod when the embedded GCS FT backend is used - it is managed by KubeRay", GCSStorageVolumeName)
 			}
 		}
 	default: // redis
