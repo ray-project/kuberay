@@ -7,11 +7,11 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 )
 
-// IngressSpecApplyConfiguration represents a declarative configuration of the IngressSpec type for use
+// IngressOptionsApplyConfiguration represents a declarative configuration of the IngressOptions type for use
 // with apply.
 //
-// IngressSpec defines the host, path, and TLS configuration for the ingress generated for the head group.
-type IngressSpecApplyConfiguration struct {
+// IngressOptions defines the host, path, and TLS configuration for the ingress generated for the head group.
+type IngressOptionsApplyConfiguration struct {
 	// Host is the fully-qualified domain name used to route external traffic to the
 	// Ray head dashboard. When unset, the generated ingress rule matches any host.
 	Host *string `json:"host,omitempty"`
@@ -27,16 +27,16 @@ type IngressSpecApplyConfiguration struct {
 	TLS []networkingv1.IngressTLS `json:"tls,omitempty"`
 }
 
-// IngressSpecApplyConfiguration constructs a declarative configuration of the IngressSpec type for use with
+// IngressOptionsApplyConfiguration constructs a declarative configuration of the IngressOptions type for use with
 // apply.
-func IngressSpec() *IngressSpecApplyConfiguration {
-	return &IngressSpecApplyConfiguration{}
+func IngressOptions() *IngressOptionsApplyConfiguration {
+	return &IngressOptionsApplyConfiguration{}
 }
 
 // WithHost sets the Host field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Host field is set to the value of the last call.
-func (b *IngressSpecApplyConfiguration) WithHost(value string) *IngressSpecApplyConfiguration {
+func (b *IngressOptionsApplyConfiguration) WithHost(value string) *IngressOptionsApplyConfiguration {
 	b.Host = &value
 	return b
 }
@@ -44,7 +44,7 @@ func (b *IngressSpecApplyConfiguration) WithHost(value string) *IngressSpecApply
 // WithPath sets the Path field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Path field is set to the value of the last call.
-func (b *IngressSpecApplyConfiguration) WithPath(value string) *IngressSpecApplyConfiguration {
+func (b *IngressOptionsApplyConfiguration) WithPath(value string) *IngressOptionsApplyConfiguration {
 	b.Path = &value
 	return b
 }
@@ -52,7 +52,7 @@ func (b *IngressSpecApplyConfiguration) WithPath(value string) *IngressSpecApply
 // WithPathType sets the PathType field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the PathType field is set to the value of the last call.
-func (b *IngressSpecApplyConfiguration) WithPathType(value rayv1.IngressPathType) *IngressSpecApplyConfiguration {
+func (b *IngressOptionsApplyConfiguration) WithPathType(value rayv1.IngressPathType) *IngressOptionsApplyConfiguration {
 	b.PathType = &value
 	return b
 }
@@ -60,7 +60,7 @@ func (b *IngressSpecApplyConfiguration) WithPathType(value rayv1.IngressPathType
 // WithTLS adds the given value to the TLS field in the declarative configuration
 // and returns the receiver, so that objects can be build by chaining "With" function invocations.
 // If called multiple times, values provided by each call will be appended to the TLS field.
-func (b *IngressSpecApplyConfiguration) WithTLS(values ...networkingv1.IngressTLS) *IngressSpecApplyConfiguration {
+func (b *IngressOptionsApplyConfiguration) WithTLS(values ...networkingv1.IngressTLS) *IngressOptionsApplyConfiguration {
 	for i := range values {
 		b.TLS = append(b.TLS, values[i])
 	}

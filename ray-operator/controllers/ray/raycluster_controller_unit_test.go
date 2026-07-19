@@ -4258,7 +4258,7 @@ func TestReconcileIngressKubernetesFindsOwnedIngressWhenNameIsShortened(t *testi
 	cluster := testRayCluster.DeepCopy()
 	cluster.Name = "this-is-a-very-long-raycluster-name-that-exceeds-limits"
 	cluster.UID = "raycluster-uid"
-	cluster.Spec.HeadGroupSpec.IngressSpec = &rayv1.IngressSpec{Host: ptr.To("a.example.com")}
+	cluster.Spec.HeadGroupSpec.IngressOptions = &rayv1.IngressOptions{Host: ptr.To("a.example.com")}
 
 	require.NotEqual(t,
 		utils.GenerateIngressName(cluster.Name),
@@ -4281,7 +4281,7 @@ func TestReconcileIngressKubernetesFindsOwnedIngressWhenNameIsShortened(t *testi
 	require.Len(t, ingresses.Items, 1, "first reconcile should create exactly one ingress")
 	assert.Equal(t, utils.CheckName(utils.GenerateIngressName(cluster.Name)), ingresses.Items[0].Name)
 
-	cluster.Spec.HeadGroupSpec.IngressSpec.Host = ptr.To("b.example.com")
+	cluster.Spec.HeadGroupSpec.IngressOptions.Host = ptr.To("b.example.com")
 	require.NoError(t, r.reconcileIngressKubernetes(ctx, cluster))
 
 	ingresses = &networkingv1.IngressList{}

@@ -204,9 +204,9 @@ type HeadGroupSpec struct {
 	// EnableIngress indicates whether operator should create ingress object for head service or not.
 	// +optional
 	EnableIngress *bool `json:"enableIngress,omitempty"`
-	// IngressSpec specifies optional ingress configuration for the head service.
+	// IngressOptions specifies optional ingress configuration for the head service.
 	// +optional
-	IngressSpec *IngressSpec `json:"ingressSpec,omitempty"`
+	IngressOptions *IngressOptions `json:"ingressOptions,omitempty"`
 	// Resources specifies the resource quantities for the head group.
 	// These values override the resources passed to `rayStartParams` for the group, but
 	// have no effect on the resources set at the K8s Pod container level.
@@ -234,8 +234,8 @@ const (
 	IngressPathTypeImplementationSpecific IngressPathType = "ImplementationSpecific"
 )
 
-// IngressSpec defines the host, path, and TLS configuration for the ingress generated for the head group.
-type IngressSpec struct {
+// IngressOptions defines the host, path, and TLS configuration for the ingress generated for the head group.
+type IngressOptions struct {
 	// Host is the fully-qualified domain name used to route external traffic to the
 	// Ray head dashboard. When unset, the generated ingress rule matches any host.
 	// +optional

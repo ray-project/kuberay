@@ -797,7 +797,7 @@ spec:
                                 type: object
                             type: object
                         type: object
-                      ingressSpec:
+                      ingressOptions:
                         properties:
                           host:
                             type: string
