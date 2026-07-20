@@ -186,7 +186,7 @@ const (
 	// GCSStorageVolumeName is the name of the volume backing the embedded RocksDB GCS store.
 	GCSStorageVolumeName = "gcs-storage"
 	// GCSStorageMountPath is the mount path of the embedded RocksDB GCS store on the head Pod.
-	GCSStorageMountPath = "/data/gcs-state"
+	GCSStorageMountPath = "/data/gcs"
 	// GCSStorageRocksDBValue is the value of the RAY_gcs_storage env var selecting the embedded backend.
 	GCSStorageRocksDBValue = "rocksdb"
 	// GCSStoragePVCSuffix is appended to the RayCluster name for the operator-managed PVC.

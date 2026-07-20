@@ -48,6 +48,12 @@ type GcsEmbeddedStorageApplyConfiguration struct {
 	AccessModes []corev1.PersistentVolumeAccessMode `json:"accessModes,omitempty"`
 	// SubPath mounts a subdirectory of the volume instead of its root.
 	SubPath *string `json:"subPath,omitempty"`
+	// RetainOnClusterDeletion, when true, keeps the operator-managed PVC (and its
+	// data) after the owning RayCluster is deleted, so GCS state can be recovered
+	// by pointing a new cluster's ExistingClaim at the retained PVC. When false
+	// (the default) the PVC is owned by the RayCluster and garbage-collected with
+	// it. Ignored when ExistingClaim is set (the operator never owns a BYO PVC).
+	RetainOnClusterDeletion *bool `json:"retainOnClusterDeletion,omitempty"`
 }
 
 // GcsEmbeddedStorageApplyConfiguration constructs a declarative configuration of the GcsEmbeddedStorage type for use with
@@ -95,5 +101,13 @@ func (b *GcsEmbeddedStorageApplyConfiguration) WithAccessModes(values ...corev1.
 // If called multiple times, the SubPath field is set to the value of the last call.
 func (b *GcsEmbeddedStorageApplyConfiguration) WithSubPath(value string) *GcsEmbeddedStorageApplyConfiguration {
 	b.SubPath = &value
+	return b
+}
+
+// WithRetainOnClusterDeletion sets the RetainOnClusterDeletion field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the RetainOnClusterDeletion field is set to the value of the last call.
+func (b *GcsEmbeddedStorageApplyConfiguration) WithRetainOnClusterDeletion(value bool) *GcsEmbeddedStorageApplyConfiguration {
+	b.RetainOnClusterDeletion = &value
 	return b
 }

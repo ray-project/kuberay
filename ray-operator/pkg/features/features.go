@@ -62,6 +62,15 @@ const (
 	//
 	// Enables NetworkPolicy-based network isolation for RayClusters (spec.networkIsolation).
 	RayClusterNetworkIsolation featuregate.Feature = "RayClusterNetworkIsolation"
+
+	// owner: @jhasm
+	// rep: https://github.com/ray-project/enhancements/pull/65
+	// alpha: v1.7
+	//
+	// Enables the embedded RocksDB storage backend for GCS fault tolerance
+	// (GcsFaultToleranceOptions.Backend: rocksdb). Mirrors the alpha status of the
+	// corresponding Ray Core feature (ray-project/ray#63657).
+	GCSFaultToleranceEmbeddedStorage featuregate.Feature = "GCSFaultToleranceEmbeddedStorage"
 )
 
 func init() {
@@ -69,13 +78,14 @@ func init() {
 }
 
 var defaultFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
-	RayClusterStatusConditions:   {Default: true, PreRelease: featuregate.Beta},
-	RayJobDeletionPolicy:         {Default: true, PreRelease: featuregate.Beta},
-	RayMultiHostIndexing:         {Default: true, PreRelease: featuregate.Beta},
-	RayServiceIncrementalUpgrade: {Default: false, PreRelease: featuregate.Alpha},
-	RayCronJob:                   {Default: false, PreRelease: featuregate.Alpha},
-	SidecarSubmitterRestart:      {Default: false, PreRelease: featuregate.Alpha},
-	RayClusterNetworkIsolation:   {Default: false, PreRelease: featuregate.Alpha},
+	RayClusterStatusConditions:       {Default: true, PreRelease: featuregate.Beta},
+	RayJobDeletionPolicy:             {Default: true, PreRelease: featuregate.Beta},
+	RayMultiHostIndexing:             {Default: true, PreRelease: featuregate.Beta},
+	RayServiceIncrementalUpgrade:     {Default: false, PreRelease: featuregate.Alpha},
+	RayCronJob:                       {Default: false, PreRelease: featuregate.Alpha},
+	SidecarSubmitterRestart:          {Default: false, PreRelease: featuregate.Alpha},
+	RayClusterNetworkIsolation:       {Default: false, PreRelease: featuregate.Alpha},
+	GCSFaultToleranceEmbeddedStorage: {Default: false, PreRelease: featuregate.Alpha},
 }
 
 // SetFeatureGateDuringTest is a helper method to override feature gates in tests.

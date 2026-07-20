@@ -8,6 +8,10 @@ spec:
     # Use the embedded RocksDB backend for GCS fault tolerance. RocksDB is linked
     # into the GCS process (no external Redis service). KubeRay provisions a PVC,
     # mounts it on the head Pod, and sets the required env vars automatically.
+    #
+    # NOTE: this backend is alpha and gated behind the KubeRay
+    # `GCSFaultToleranceEmbeddedStorage` feature gate. Enable it on the operator,
+    # e.g. `--feature-gates=GCSFaultToleranceEmbeddedStorage=true`.
     backend: rocksdb
     storage:
       # Operator-managed PVC. KubeRay creates `{cluster}-gcs-pvc` and garbage-collects
@@ -20,6 +24,9 @@ spec:
       #                                  # ReadWriteMany only when multiple Pods must attach
       #                                  # concurrently (single-writer coordinated externally).
       # subPath: clusters/my-ray/gcs     # optional; mount a subdirectory of the volume
+      # retainOnClusterDeletion: false   # optional; default. Set true to keep the PVC (and its
+      #                                  # data) after the RayCluster is deleted, so GCS state can
+      #                                  # be recovered by a new cluster via existingClaim.
       #
       # To bring your own PVC instead of an operator-managed one, set existingClaim
       # (mutually exclusive with size/storageClassName/accessModes). This is also the

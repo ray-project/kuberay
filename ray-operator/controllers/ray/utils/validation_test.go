@@ -272,6 +272,7 @@ func TestValidateRayClusterSpecGcsFaultToleranceOptions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			features.SetFeatureGateDuringTest(t, features.GCSFaultToleranceEmbeddedStorage, true)
 			err := ValidateRayClusterSpec(&rayv1.RayClusterSpec{
 				GcsFaultToleranceOptions: tt.gcsFaultToleranceOptions,
 				HeadGroupSpec: rayv1.HeadGroupSpec{
@@ -289,8 +290,29 @@ func TestValidateRayClusterSpecGcsFaultToleranceOptions(t *testing.T) {
 	}
 }
 
+// TestValidateRayClusterSpecEmbeddedGCSFeatureGate verifies the embedded RocksDB
+// backend is rejected unless the GCSFaultToleranceEmbeddedStorage feature gate is
+// enabled.
+func TestValidateRayClusterSpecEmbeddedGCSFeatureGate(t *testing.T) {
+	spec := &rayv1.RayClusterSpec{
+		GcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{Backend: rayv1.GcsFTBackendRocksDB},
+		HeadGroupSpec: rayv1.HeadGroupSpec{
+			Template: podTemplateSpec(nil, nil),
+		},
+	}
+
+	features.SetFeatureGateDuringTest(t, features.GCSFaultToleranceEmbeddedStorage, false)
+	err := ValidateRayClusterSpec(spec, nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "requires the GCSFaultToleranceEmbeddedStorage feature gate")
+
+	features.SetFeatureGateDuringTest(t, features.GCSFaultToleranceEmbeddedStorage, true)
+	require.NoError(t, ValidateRayClusterSpec(spec, nil))
+}
+
 func TestValidateGcsFaultToleranceEmbeddedReservedVolume(t *testing.T) {
-	// The operator reserves the "gcs-storage" volume name and the /data/gcs-state
+	features.SetFeatureGateDuringTest(t, features.GCSFaultToleranceEmbeddedStorage, true)
+	// The operator reserves the "gcs-storage" volume name and the /data/gcs
 	// mount path for the embedded backend. A user-supplied head volume, volume
 	// mount by that name, or mount at that path must be rejected, otherwise
 	// configureEmbeddedFT would append a duplicate and the head Pod would fail.

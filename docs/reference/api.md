@@ -248,6 +248,7 @@ _Appears in:_
 | `storageClassName` _string_ | StorageClassName for the operator-managed PVC. Uses the cluster default<br />StorageClass when omitted. |  |  |
 | `accessModes` _[PersistentVolumeAccessMode](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#persistentvolumeaccessmode-v1-core) array_ | AccessModes for the operator-managed PVC. Defaults to [ReadWriteOnce].<br />ReadWriteOnce is the sane default for a standalone RayCluster (one head Pod<br />attaches at a time). ReadWriteMany is a valid choice when you need the volume<br />attached to multiple Pods concurrently (e.g. to overlap the old and new head<br />during a RayService upgrade); RocksDB still requires that only one of them<br />writes at a time, which you must coordinate externally. |  |  |
 | `subPath` _string_ | SubPath mounts a subdirectory of the volume instead of its root. |  |  |
+| `retainOnClusterDeletion` _boolean_ | RetainOnClusterDeletion, when true, keeps the operator-managed PVC (and its<br />data) after the owning RayCluster is deleted, so GCS state can be recovered<br />by pointing a new cluster's ExistingClaim at the retained PVC. When false<br />(the default) the PVC is owned by the RayCluster and garbage-collected with<br />it. Ignored when ExistingClaim is set (the operator never owns a BYO PVC). |  |  |
 
 
 #### GcsFaultToleranceBackend

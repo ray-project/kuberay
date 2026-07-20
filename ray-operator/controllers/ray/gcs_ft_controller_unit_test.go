@@ -31,6 +31,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	clientFake "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
+	ctrl "sigs.k8s.io/controller-runtime"
+
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/expectations"
 	"github.com/ray-project/kuberay/ray-operator/controllers/ray/utils"
@@ -219,5 +221,45 @@ func TestReconcileGCSStoragePVC(t *testing.T) {
 			t.Fatalf("expected no event, got %q", event)
 		default:
 		}
+	})
+
+	t.Run("retainOnClusterDeletion omits the RayCluster owner reference on create", func(t *testing.T) {
+		instance := newGCSStorageRayCluster(&rayv1.GcsFaultToleranceOptions{
+			Backend: rayv1.GcsFTBackendRocksDB,
+			Storage: &rayv1.GcsEmbeddedStorage{RetainOnClusterDeletion: true},
+		})
+		fakeClient := clientFake.NewClientBuilder().WithScheme(scheme).WithObjects(instance).Build()
+		r := &RayClusterReconciler{Client: fakeClient, Recorder: &events.FakeRecorder{}, Scheme: scheme, rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient)}
+
+		require.NoError(t, r.reconcileGCSStoragePVC(ctx, instance))
+
+		pvc := &corev1.PersistentVolumeClaim{}
+		require.NoError(t, fakeClient.Get(ctx, types.NamespacedName{Name: "test-cluster-gcs-pvc", Namespace: "default"}, pvc))
+		assert.False(t, metav1.IsControlledBy(pvc, instance), "retained PVC must not be owned by the RayCluster")
+	})
+
+	t.Run("toggling retainOnClusterDeletion removes the owner reference from an existing PVC", func(t *testing.T) {
+		instance := newGCSStorageRayCluster(&rayv1.GcsFaultToleranceOptions{
+			Backend: rayv1.GcsFTBackendRocksDB,
+			Storage: &rayv1.GcsEmbeddedStorage{RetainOnClusterDeletion: true},
+		})
+		existing := &corev1.PersistentVolumeClaim{
+			ObjectMeta: metav1.ObjectMeta{Name: "test-cluster-gcs-pvc", Namespace: "default"},
+			Spec: corev1.PersistentVolumeClaimSpec{
+				AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+				Resources: corev1.VolumeResourceRequirements{
+					Requests: corev1.ResourceList{corev1.ResourceStorage: resource.MustParse(utils.GCSStorageDefaultSize)},
+				},
+			},
+		}
+		require.NoError(t, ctrl.SetControllerReference(instance, existing, scheme))
+		fakeClient := clientFake.NewClientBuilder().WithScheme(scheme).WithObjects(instance, existing).Build()
+		r := &RayClusterReconciler{Client: fakeClient, Recorder: &events.FakeRecorder{}, Scheme: scheme, rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient)}
+
+		require.NoError(t, r.reconcileGCSStoragePVC(ctx, instance))
+
+		pvc := &corev1.PersistentVolumeClaim{}
+		require.NoError(t, fakeClient.Get(ctx, types.NamespacedName{Name: "test-cluster-gcs-pvc", Namespace: "default"}, pvc))
+		assert.False(t, metav1.IsControlledBy(pvc, instance), "owner reference should be removed once retention is enabled")
 	})
 }

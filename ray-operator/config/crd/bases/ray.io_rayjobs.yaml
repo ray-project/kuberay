@@ -608,6 +608,8 @@ spec:
                             type: array
                           existingClaim:
                             type: string
+                          retainOnClusterDeletion:
+                            type: boolean
                           size:
                             anyOf:
                             - type: integer

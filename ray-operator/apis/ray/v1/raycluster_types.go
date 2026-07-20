@@ -201,6 +201,14 @@ type GcsEmbeddedStorage struct {
 	// SubPath mounts a subdirectory of the volume instead of its root.
 	// +optional
 	SubPath string `json:"subPath,omitempty"`
+
+	// RetainOnClusterDeletion, when true, keeps the operator-managed PVC (and its
+	// data) after the owning RayCluster is deleted, so GCS state can be recovered
+	// by pointing a new cluster's ExistingClaim at the retained PVC. When false
+	// (the default) the PVC is owned by the RayCluster and garbage-collected with
+	// it. Ignored when ExistingClaim is set (the operator never owns a BYO PVC).
+	// +optional
+	RetainOnClusterDeletion bool `json:"retainOnClusterDeletion,omitempty"`
 }
 
 // RedisCredential is the redis username/password or a reference to the source containing the username/password

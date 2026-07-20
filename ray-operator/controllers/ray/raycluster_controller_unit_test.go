@@ -2616,6 +2616,7 @@ func Test_RedisCleanupFeatureFlag(t *testing.T) {
 func Test_RedisCleanupSkippedForEmbeddedBackend(t *testing.T) {
 	setupTest(t)
 	defer os.Unsetenv(utils.ENABLE_GCS_FT_REDIS_CLEANUP)
+	features.SetFeatureGateDuringTest(t, features.GCSFaultToleranceEmbeddedStorage, true)
 	// Redis cleanup is enabled by default; the embedded RocksDB backend must still
 	// not receive the Redis cleanup finalizer (there is no Redis to clean up, so
 	// the finalizer/Job would stall deletion).
@@ -2659,6 +2660,7 @@ func Test_StaleRedisCleanupFinalizerRemovedForEmbeddedBackend(t *testing.T) {
 	setupTest(t)
 	defer os.Unsetenv(utils.ENABLE_GCS_FT_REDIS_CLEANUP)
 	os.Unsetenv(utils.ENABLE_GCS_FT_REDIS_CLEANUP)
+	features.SetFeatureGateDuringTest(t, features.GCSFaultToleranceEmbeddedStorage, true)
 
 	newScheme := runtime.NewScheme()
 	_ = rayv1.AddToScheme(newScheme)

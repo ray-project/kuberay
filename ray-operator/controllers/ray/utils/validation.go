@@ -305,6 +305,9 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 func validateGcsFaultToleranceBackend(options *rayv1.GcsFaultToleranceOptions, headContainer corev1.Container, headVolumes []corev1.Volume) error {
 	switch GetGcsFaultToleranceBackend(options) {
 	case rayv1.GcsFTBackendRocksDB:
+		if !features.Enabled(features.GCSFaultToleranceEmbeddedStorage) {
+			return fmt.Errorf("the embedded RocksDB GCS fault tolerance backend (GcsFaultToleranceOptions.Backend: 'rocksdb') requires the %s feature gate to be enabled", features.GCSFaultToleranceEmbeddedStorage)
+		}
 		if options.RedisAddress != "" {
 			return fmt.Errorf("cannot set GcsFaultToleranceOptions.RedisAddress when backend is 'rocksdb'")
 		}
