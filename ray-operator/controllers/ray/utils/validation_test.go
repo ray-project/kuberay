@@ -645,7 +645,7 @@ func TestValidateRayClusterSpecAutoscaler(t *testing.T) {
 					},
 				},
 			},
-			// No error expected; this is now a warning surfaced via ValidateRayClusterAutoscalerV1.
+			// No error expected; this is now a warning surfaced.
 		},
 		"should not return error if autoscaler v1 is enabled and all worker groups have restartPolicy Never or unset": {
 			spec: rayv1.RayClusterSpec{
