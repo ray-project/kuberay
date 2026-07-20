@@ -800,9 +800,12 @@ func TestValidateRayClusterSpec_NoDriverTimeoutSeconds(t *testing.T) {
 			}(),
 			expectedErr: "",
 		},
-		"Valid: noDriverTimeoutSeconds with implicit autoscaler version": {
+		"Valid: noDriverTimeoutSeconds with v2 enabled via env var": {
 			spec: func() rayv1.RayClusterSpec {
 				s := createSpec()
+				s.HeadGroupSpec.Template = podTemplateSpec([]corev1.EnvVar{
+					{Name: RAY_ENABLE_AUTOSCALER_V2, Value: "1"},
+				}, nil)
 				s.AutoscalerOptions = &rayv1.AutoscalerOptions{
 					NoDriverTimeoutSeconds: new(int32(600)),
 				}
@@ -814,6 +817,7 @@ func TestValidateRayClusterSpec_NoDriverTimeoutSeconds(t *testing.T) {
 			spec: func() rayv1.RayClusterSpec {
 				s := createSpec()
 				s.AutoscalerOptions = &rayv1.AutoscalerOptions{
+					Version:                ptr.To(rayv1.AutoscalerVersionV2),
 					NoDriverTimeoutSeconds: new(int32(0)),
 				}
 				return s
@@ -824,6 +828,7 @@ func TestValidateRayClusterSpec_NoDriverTimeoutSeconds(t *testing.T) {
 			spec: func() rayv1.RayClusterSpec {
 				s := createSpec()
 				s.AutoscalerOptions = &rayv1.AutoscalerOptions{
+					Version:                ptr.To(rayv1.AutoscalerVersionV2),
 					NoDriverTimeoutSeconds: new(int32(-1)),
 				}
 				return s
@@ -841,6 +846,16 @@ func TestValidateRayClusterSpec_NoDriverTimeoutSeconds(t *testing.T) {
 			}(),
 			expectedErr: "autoscalerOptions.noDriverTimeoutSeconds requires enableInTreeAutoscaling to be true",
 		},
+		"Invalid: autoscaler v2 not enabled": {
+			spec: func() rayv1.RayClusterSpec {
+				s := createSpec()
+				s.AutoscalerOptions = &rayv1.AutoscalerOptions{
+					NoDriverTimeoutSeconds: new(int32(600)),
+				}
+				return s
+			}(),
+			expectedErr: "autoscalerOptions.noDriverTimeoutSeconds requires autoscaler v2. Please set .spec.autoscalerOptions.version to 'v2' (or set RAY_enable_autoscaler_v2 environment variable to 'true' in the head pod if using KubeRay < 1.4.0)",
+		},
 		"Invalid: noDriverTimeoutSeconds with autoscaler v1": {
 			spec: func() rayv1.RayClusterSpec {
 				s := createSpec()
@@ -850,13 +865,14 @@ func TestValidateRayClusterSpec_NoDriverTimeoutSeconds(t *testing.T) {
 				}
 				return s
 			}(),
-			expectedErr: "autoscalerOptions.noDriverTimeoutSeconds is only supported by autoscaler v2, but autoscaler v1 is configured",
+			expectedErr: "autoscalerOptions.noDriverTimeoutSeconds requires autoscaler v2. Please set .spec.autoscalerOptions.version to 'v2' (or set RAY_enable_autoscaler_v2 environment variable to 'true' in the head pod if using KubeRay < 1.4.0)",
 		},
 		"Invalid: noDriverTimeoutSeconds with Ray version below minimum": {
 			spec: func() rayv1.RayClusterSpec {
 				s := createSpec()
 				s.RayVersion = "2.55.0"
 				s.AutoscalerOptions = &rayv1.AutoscalerOptions{
+					Version:                ptr.To(rayv1.AutoscalerVersionV2),
 					NoDriverTimeoutSeconds: new(int32(600)),
 				}
 				return s

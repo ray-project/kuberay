@@ -3456,7 +3456,10 @@ func Test_ReconcileNoDriverTimeoutTermination(t *testing.T) {
 			mutate: func(c *rayv1.RayCluster) {
 				c.Spec.EnableInTreeAutoscaling = ptr.To(true)
 				c.Spec.RayVersion = "2.56.0"
-				c.Spec.AutoscalerOptions = &rayv1.AutoscalerOptions{NoDriverTimeoutSeconds: ptr.To[int32](600)}
+				c.Spec.AutoscalerOptions = &rayv1.AutoscalerOptions{
+					Version:                ptr.To(rayv1.AutoscalerVersionV2),
+					NoDriverTimeoutSeconds: ptr.To[int32](600),
+				}
 				c.Annotations = map[string]string{utils.NoDriverTTLExpiredAnnotationKey: "true"}
 			},
 			expectDeleted: true,
