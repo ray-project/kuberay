@@ -305,6 +305,7 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 
 	// When the cluster has had no user driver attached for longer than spec.autoscalerOptions.noDriverTimeoutSeconds,
 	// the Ray autoscaler v2 sets the `ray.io/no-driver-ttl-expired` annotation.
+	// TODO: need a more robust approach to address the security concerns instead of relying on this annotation
 	if utils.IsNoDriverTimeoutTerminationEnabled(&instance.Spec) && instance.Annotations[utils.NoDriverTTLExpiredAnnotationKey] == "true" {
 		logger.Info("Deleting RayCluster because no user driver has been attached for longer than noDriverTimeoutSeconds",
 			"noDriverTimeoutSeconds", *instance.Spec.AutoscalerOptions.NoDriverTimeoutSeconds)
