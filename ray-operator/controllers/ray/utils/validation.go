@@ -252,15 +252,21 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 		if !isAutoscalingEnabled {
 			return fmt.Errorf("autoscalerOptions.noDriverTimeoutSeconds requires enableInTreeAutoscaling to be true")
 		}
-		if IsAutoscalingV1Enabled(spec) {
-			return fmt.Errorf("autoscalerOptions.noDriverTimeoutSeconds is only supported by autoscaler v2, but autoscaler v1 is configured")
+
+		v2Enabled := IsAutoscalingV2Enabled(spec)
+		if !v2Enabled {
+			if envVar, exists := EnvVarByName(RAY_ENABLE_AUTOSCALER_V2, spec.HeadGroupSpec.Template.Spec.Containers[RayContainerIndex].Env); exists {
+				v2Enabled = envVar.Value == "1" || envVar.Value == "true"
+			}
+		}
+		if !v2Enabled {
+			return fmt.Errorf("autoscalerOptions.noDriverTimeoutSeconds requires autoscaler v2. Please set .spec.autoscalerOptions.version to 'v2' (or set %s environment variable to 'true' in the head pod if using KubeRay < 1.4.0)", RAY_ENABLE_AUTOSCALER_V2)
 		}
 
 		rayVersion, err := version.ParseGeneric(spec.RayVersion)
 		if err != nil {
 			return fmt.Errorf("autoscalerOptions.noDriverTimeoutSeconds is set but RayVersion format is invalid: %s, %w", spec.RayVersion, err)
 		}
-		// Require minimum Ray version 2.56.0
 		minVersion := version.MustParseGeneric("2.56.0")
 		if rayVersion.LessThan(minVersion) {
 			return fmt.Errorf("autoscalerOptions.noDriverTimeoutSeconds requires minimum Ray version 2.56.0, got %s", spec.RayVersion)
