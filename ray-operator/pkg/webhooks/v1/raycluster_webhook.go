@@ -2,7 +2,9 @@ package v1
 
 import (
 	"context"
+	"fmt"
 
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/validation/field"
@@ -57,6 +59,10 @@ func (w *RayClusterWebhook) validateRayCluster(rayCluster *rayv1.RayCluster) err
 		allErrs = append(allErrs, err)
 	}
 
+	if err := w.validateGracefulTermination(rayCluster); err != nil {
+		allErrs = append(allErrs, err)
+	}
+
 	if len(allErrs) == 0 {
 		return nil
 	}
@@ -74,6 +80,42 @@ func (w *RayClusterWebhook) validateWorkerGroups(rayCluster *rayv1.RayCluster) *
 			return field.Invalid(field.NewPath("spec").Child("workerGroupSpecs").Index(i), workerGroup, "worker group names must be unique")
 		}
 		workerGroupNames[workerGroup.GroupName] = true
+	}
+
+	return nil
+}
+
+// validateGracefulTermination rejects a drainDeadlineSeconds that can never
+// be honored: kubelet kills the preStop hook, and the container right after
+// it, once a Pod's terminationGracePeriodSeconds elapses, regardless of
+// where the drain loop the hook runs is. A drainDeadlineSeconds beyond the
+// effective grace period is therefore always a misconfiguration, not a
+// choice - the Pod builder (common.configureGracefulTermination) also
+// clamps it defensively, but rejecting it here catches the mistake at
+// apply time instead of silently capping it at runtime.
+func (w *RayClusterWebhook) validateGracefulTermination(rayCluster *rayv1.RayCluster) *field.Error {
+	if !utils.IsGracefulTerminationEnabled(&rayCluster.Spec, rayCluster.Annotations) {
+		return nil
+	}
+	opts := rayCluster.Spec.GracefulTerminationOptions
+
+	checkGroup := func(podSpec *corev1.PodSpec, path *field.Path) *field.Error {
+		gracePeriodSeconds, drainDeadlineSeconds := utils.ResolveGracefulTerminationSeconds(podSpec, opts)
+		if drainDeadlineSeconds > gracePeriodSeconds {
+			return field.Invalid(path, drainDeadlineSeconds, fmt.Sprintf(
+				"gracefulTerminationOptions.drainDeadlineSeconds (%d) must not exceed the effective terminationGracePeriodSeconds (%d); kubelet kills the preStop hook once the grace period elapses regardless of drain progress",
+				drainDeadlineSeconds, gracePeriodSeconds))
+		}
+		return nil
+	}
+
+	if err := checkGroup(&rayCluster.Spec.HeadGroupSpec.Template.Spec, field.NewPath("spec").Child("headGroupSpec").Child("template").Child("spec").Child("terminationGracePeriodSeconds")); err != nil {
+		return err
+	}
+	for i, workerGroup := range rayCluster.Spec.WorkerGroupSpecs {
+		if err := checkGroup(&workerGroup.Template.Spec, field.NewPath("spec").Child("workerGroupSpecs").Index(i).Child("template").Child("spec").Child("terminationGracePeriodSeconds")); err != nil {
+			return err
+		}
 	}
 
 	return nil

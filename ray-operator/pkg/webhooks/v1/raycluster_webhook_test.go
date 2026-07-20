@@ -9,6 +9,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/rand"
+	"k8s.io/utils/ptr"
 
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 )
@@ -115,6 +116,42 @@ var _ = Describe("RayCluster validating webhook", func() {
 			Expect(err).To(HaveOccurred())
 
 			Expect(err.Error()).To(ContainSubstring("worker group names must be unique"))
+		})
+	})
+
+	Context("when graceful termination's drainDeadlineSeconds exceeds the grace period", func() {
+		var name, namespace string
+		var rayCluster rayv1.RayCluster
+
+		BeforeEach(func() {
+			namespace = "default"
+			name = fmt.Sprintf("test-raycluster-%d", rand.IntnRange(1000, 9000))
+		})
+
+		It("should return error", func() {
+			rayCluster = rayv1.RayCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      name,
+					Namespace: namespace,
+				},
+				Spec: rayv1.RayClusterSpec{
+					GracefulTerminationOptions: &rayv1.GracefulTerminationOptions{
+						DrainDeadlineSeconds: ptr.To(int64(120)),
+					},
+					HeadGroupSpec: rayv1.HeadGroupSpec{
+						Template: corev1.PodTemplateSpec{
+							Spec: corev1.PodSpec{
+								Containers: []corev1.Container{},
+							},
+						},
+					},
+				},
+			}
+
+			err := k8sClient.Create(context.TODO(), &rayCluster)
+			Expect(err).To(HaveOccurred())
+
+			Expect(err.Error()).To(ContainSubstring("drainDeadlineSeconds (120) must not exceed the effective terminationGracePeriodSeconds (30)"))
 		})
 	})
 })
