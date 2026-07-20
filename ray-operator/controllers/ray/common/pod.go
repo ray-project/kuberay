@@ -467,7 +467,10 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 	}
 
 	if utils.IsAutoscalingEnabled(&instance.Spec) {
-		podTemplate.Spec.RestartPolicy = corev1.RestartPolicyNever
+		if !utils.IsAutoscalingV1Enabled(&instance.Spec) || (utils.IsAutoscalingV1Enabled(&instance.Spec) && len(podTemplate.Spec.RestartPolicy) == 0) {
+			// The autoscaler enabled without version specified is v2 by default.
+			podTemplate.Spec.RestartPolicy = corev1.RestartPolicyNever
+		}
 	}
 
 	if utils.IsAuthEnabled(&instance.Spec) {
