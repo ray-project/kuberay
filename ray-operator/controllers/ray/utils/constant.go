@@ -227,6 +227,11 @@ const (
 	RAYJOB_DEPLOYMENT_STATUS_TRANSITION_GRACE_PERIOD_SECONDS         = "RAYJOB_DEPLOYMENT_STATUS_TRANSITION_GRACE_PERIOD_SECONDS"
 	DEFAULT_RAYJOB_DEPLOYMENT_STATUS_TRANSITION_GRACE_PERIOD_SECONDS = 300
 
+	// If job status checks keep failing for longer than
+	/// RAYJOB_STATUS_CHECK_TIMEOUT_SECONDS, KubeRay will transition the RayJob's JobDeploymentStatus to Failed.
+	RAYJOB_STATUS_CHECK_TIMEOUT_SECONDS         = "RAYJOB_STATUS_CHECK_TIMEOUT_SECONDS"
+	DEFAULT_RAYJOB_STATUS_CHECK_TIMEOUT_SECONDS = 300
+
 	// This environment variable for the KubeRay operator determines whether to enable
 	// a login shell by passing the -l option to the container command /bin/bash.
 	// The -l flag was added by default before KubeRay v1.4.0, but it is no longer added
@@ -467,4 +472,26 @@ const (
 	// RoleBinding list
 	CreatedRoleBinding        K8sEventType = "CreatedRoleBinding"
 	FailedToCreateRoleBinding K8sEventType = "FailedToCreateRoleBinding"
+
+	// NetworkPolicy event list
+	CreatedNetworkPolicy        K8sEventType = "CreatedNetworkPolicy"
+	UpdatedNetworkPolicy        K8sEventType = "UpdatedNetworkPolicy"
+	DeletedNetworkPolicy        K8sEventType = "DeletedNetworkPolicy"
+	FailedToCreateNetworkPolicy K8sEventType = "FailedToCreateNetworkPolicy"
+	FailedToUpdateNetworkPolicy K8sEventType = "FailedToUpdateNetworkPolicy"
+	FailedToDeleteNetworkPolicy K8sEventType = "FailedToDeleteNetworkPolicy"
+	NetworkPolicyNameCollision  K8sEventType = "NetworkPolicyNameCollision"
+)
+
+// K8sEventAction describes what action the controller took when recording an event.
+type K8sEventAction string
+
+const (
+	CreateAction    K8sEventAction = "Create"
+	DeleteAction    K8sEventAction = "Delete"
+	UpdateAction    K8sEventAction = "Update"
+	ValidateAction  K8sEventAction = "Validate"
+	ReconcileAction K8sEventAction = "Reconcile"
+	CleanupAction   K8sEventAction = "Cleanup"
+	SuspendAction   K8sEventAction = "Suspend"
 )

@@ -196,3 +196,46 @@ func TestScanAndProcess(t *testing.T) {
 	// Signal the background goroutine to exit gracefully
 	close(handler.ShutdownChan)
 }
+
+// TestProcessLogs_SkipSymlinks verifies that symlinks are skipped during directory scanning in prev-logs (processPrevLogsDir).
+func TestProcessLogs_SkipSymlinks(t *testing.T) {
+	baseDir, cleanup := setupRayTestEnvironment(t)
+	defer cleanup()
+
+	mockWriter := NewMockStorageWriter()
+	handler := &RayLogHandler{
+		Writer:                 mockWriter,
+		RootDir:                "/test-root",
+		prevLogsDir:            filepath.Join(baseDir, "prev-logs"),
+		persistCompleteLogsDir: filepath.Join(baseDir, "persist-complete-logs"),
+		RayClusterName:         "test-cluster",
+		RayClusterNamespace:    "cluster-123",
+	}
+
+	sessionID := "session-symlinks"
+	nodeID := "node-1"
+	logsDir := filepath.Join(handler.prevLogsDir, sessionID, nodeID, utils.RAY_SESSIONDIR_LOGDIR_NAME)
+
+	// Create a regular log file and a symlink in prev-logs
+	regularFile := filepath.Join(logsDir, "regular.log")
+	createTestLogFile(t, regularFile, "regular content")
+	symlinkFile := filepath.Join(logsDir, "symlink.log")
+	if err := os.Symlink(regularFile, symlinkFile); err != nil {
+		t.Fatalf("Failed to create symlink: %v", err)
+	}
+
+	// Run processPrevLogsDir synchronously
+	handler.processPrevLogsDir(filepath.Join(handler.prevLogsDir, sessionID, nodeID))
+
+	// Verify only regular.log was uploaded, and symlink.log was skipped
+	mockWriter.mu.Lock()
+	if len(mockWriter.writtenFiles) != 1 {
+		t.Errorf("Expected 1 file written to storage, got %d", len(mockWriter.writtenFiles))
+	}
+	for path := range mockWriter.writtenFiles {
+		if filepath.Base(path) == "symlink.log" {
+			t.Errorf("Symlink was incorrectly uploaded to storage: %s", path)
+		}
+	}
+	mockWriter.mu.Unlock()
+}

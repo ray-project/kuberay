@@ -150,20 +150,6 @@ rules:
 - apiGroups:
   - ""
   resources:
-  - events
-  - pods/status
-  - services
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - ""
-  resources:
   - pods
   verbs:
   - create
@@ -189,6 +175,19 @@ rules:
   - pods/resize
   verbs:
   - patch
+- apiGroups:
+  - ""
+  resources:
+  - pods/status
+  - services
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
 - apiGroups:
   - ""
   resources:
@@ -247,6 +246,13 @@ rules:
   - list
   - watch
 - apiGroups:
+  - events.k8s.io
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+- apiGroups:
   - extensions
   - networking.k8s.io
   resources:
@@ -278,6 +284,17 @@ rules:
   verbs:
   - get
   - list
+  - watch
+- apiGroups:
+  - networking.k8s.io
+  resources:
+  - networkpolicies
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - update
   - watch
 - apiGroups:
   - ray.io

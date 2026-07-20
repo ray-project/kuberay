@@ -14,9 +14,11 @@ import (
 	"strings"
 
 	"github.com/bmatcuk/doublestar/v4"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"github.com/ray-project/kuberay/historyserver/pkg/compression"
 	eventtypes "github.com/ray-project/kuberay/historyserver/pkg/eventserver/types"
 	"github.com/sirupsen/logrus"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/ray-project/kuberay/historyserver/pkg/utils"
 )
@@ -47,16 +49,23 @@ func (s *ServerHandler) listClusters(limit int) []utils.ClusterInfo {
 	// Initial continuation marker
 	logrus.Debugf("Prepare to get list clusters info ...")
 	ctx := context.Background()
-	liveClusters, _ := s.clientManager.ListRayClusters(ctx)
 	liveClusterNames := []string{}
 	liveClusterInfos := []utils.ClusterInfo{}
+	liveClusters, _ := s.clientManager.ListRayClusters(ctx)
 	for _, liveCluster := range liveClusters {
+		var ownerKind, ownerName string
+		if ownerRef := metav1.GetControllerOf(liveCluster); ownerRef != nil {
+			ownerKind = strings.ToLower(ownerRef.Kind)
+			ownerName = ownerRef.Name
+		}
 		liveClusterInfo := utils.ClusterInfo{
 			Name:            liveCluster.Name,
 			Namespace:       liveCluster.Namespace,
 			CreateTime:      liveCluster.CreationTimestamp.String(),
 			CreateTimeStamp: liveCluster.CreationTimestamp.Unix(),
 			SessionName:     "live",
+			OwnerKind:       ownerKind,
+			OwnerName:       ownerName,
 		}
 		liveClusterInfos = append(liveClusterInfos, liveClusterInfo)
 		liveClusterNames = append(liveClusterNames, liveCluster.Name)
@@ -69,44 +78,42 @@ func (s *ServerHandler) listClusters(limit int) []utils.ClusterInfo {
 	}
 	clusters = append(liveClusterInfos, clusters...)
 
-	clustersMap := make(map[utils.ClusterKey][]utils.ClusterInfo)
-	for _, c := range clusters {
-		key := utils.ClusterKey{
-			Namespace: c.Namespace,
-			Name:      c.Name,
-		}
-		clustersMap[key] = append(clustersMap[key], c)
-	}
-
-	for key := range clustersMap {
-		sort.Sort(utils.ClusterInfoList(clustersMap[key]))
-	}
-
-	s.mu.Lock()
-	s.clustersMap = clustersMap
-	s.mu.Unlock()
-
 	return clusters
 }
 
-func (s *ServerHandler) findSessionInMap(namespace, name, session string) (string, bool) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	key := utils.ClusterKey{
-		Namespace: namespace,
-		Name:      name,
-	}
-	if list, ok := s.clustersMap[key]; ok {
-		if len(list) == 0 {
-			return "", false
+// resolveSession maps (namespace, name, session) to a concrete session name.
+func (s *ServerHandler) resolveSession(ctx context.Context, namespace, name, session string) (sessionName string, found bool, err error) {
+	isLatestOrEmpty := session == "latest" || session == ""
+
+	if isLatestOrEmpty || session == "live" {
+		_, err := s.clientManager.GetRayCluster(ctx, namespace, name)
+		if err == nil {
+			return "live", true, nil
 		}
-		for _, c := range list {
-			if c.SessionName == session {
-				return c.SessionName, true
-			}
+		if !apierrors.IsNotFound(err) {
+			return "", false, fmt.Errorf("failed to check live RayCluster %s/%s: %w", namespace, name, err)
+		}
+		if session == "live" {
+			return "", false, nil
 		}
 	}
-	return "", false
+
+	var sessions []utils.ClusterInfo
+	for _, c := range s.reader.List() {
+		if c.Namespace != namespace || c.Name != name {
+			continue
+		}
+		if c.SessionName == session {
+			return session, true, nil
+		}
+		sessions = append(sessions, c)
+	}
+
+	if isLatestOrEmpty && len(sessions) > 0 {
+		sort.Sort(utils.ClusterInfoList(sessions))
+		return sessions[0].SessionName, true, nil
+	}
+	return "", false, nil
 }
 
 func (s *ServerHandler) _getNodeLogs(rayClusterNameNamespace, sessionId, nodeId, folder, glob string) ([]byte, error) {

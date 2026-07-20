@@ -44,7 +44,7 @@ import (
 	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	clientFake "sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -512,7 +512,7 @@ func TestReconcile_RemoveWorkersToDelete_RandomDelete(t *testing.T) {
 			assert.Len(t, testRayCluster.Spec.WorkerGroupSpecs[0].ScaleStrategy.WorkersToDelete, expectedNumWorkersToDelete)
 			testRayClusterReconciler := &RayClusterReconciler{
 				Client:                     fakeClient,
-				Recorder:                   &record.FakeRecorder{},
+				Recorder:                   &events.FakeRecorder{},
 				Scheme:                     scheme.Scheme,
 				rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
 			}
@@ -608,7 +608,7 @@ func TestReconcile_RemoveWorkersToDelete_NoRandomDelete(t *testing.T) {
 
 			testRayClusterReconciler := &RayClusterReconciler{
 				Client:                     fakeClient,
-				Recorder:                   &record.FakeRecorder{},
+				Recorder:                   &events.FakeRecorder{},
 				Scheme:                     scheme.Scheme,
 				rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
 			}
@@ -654,7 +654,7 @@ func TestReconcile_RandomDelete_OK(t *testing.T) {
 	assert.Len(t, podList.Items, len(testPods), "Init pod list len is wrong")
 	testRayClusterReconciler := &RayClusterReconciler{
 		Client:                     fakeClient,
-		Recorder:                   &record.FakeRecorder{},
+		Recorder:                   &events.FakeRecorder{},
 		Scheme:                     scheme.Scheme,
 		rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
 	}
@@ -716,7 +716,7 @@ func TestReconcile_PodDeleted_Diff0_OK(t *testing.T) {
 	// Initialize a new RayClusterReconciler.
 	testRayClusterReconciler := &RayClusterReconciler{
 		Client:                     fakeClient,
-		Recorder:                   &record.FakeRecorder{},
+		Recorder:                   &events.FakeRecorder{},
 		Scheme:                     scheme.Scheme,
 		rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
 	}
@@ -774,7 +774,7 @@ func TestReconcile_PodDeleted_DiffLess0_OK(t *testing.T) {
 	// Initialize a new RayClusterReconciler.
 	testRayClusterReconciler := &RayClusterReconciler{
 		Client:                     fakeClient,
-		Recorder:                   &record.FakeRecorder{},
+		Recorder:                   &events.FakeRecorder{},
 		Scheme:                     scheme.Scheme,
 		rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
 	}
@@ -830,7 +830,7 @@ func TestReconcile_Diff0_WorkersToDelete_OK(t *testing.T) {
 	// Initialize a new RayClusterReconciler.
 	testRayClusterReconciler := &RayClusterReconciler{
 		Client:                     fakeClient,
-		Recorder:                   &record.FakeRecorder{},
+		Recorder:                   &events.FakeRecorder{},
 		Scheme:                     scheme.Scheme,
 		rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
 	}
@@ -906,7 +906,7 @@ func TestReconcile_PodCrash_DiffLess0_OK(t *testing.T) {
 			// Initialize a new RayClusterReconciler.
 			testRayClusterReconciler := &RayClusterReconciler{
 				Client:                     fakeClient,
-				Recorder:                   &record.FakeRecorder{},
+				Recorder:                   &events.FakeRecorder{},
 				Scheme:                     scheme.Scheme,
 				rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
 			}
@@ -985,7 +985,7 @@ func TestReconcile_PodEvicted_DiffLess0_OK(t *testing.T) {
 
 			testRayClusterReconciler := &RayClusterReconciler{
 				Client:                     fakeClient,
-				Recorder:                   &record.FakeRecorder{},
+				Recorder:                   &events.FakeRecorder{},
 				Scheme:                     scheme.Scheme,
 				rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
 			}
@@ -1046,7 +1046,7 @@ func TestReconcileHeadService(t *testing.T) {
 	// Initialize RayCluster reconciler.
 	r := &RayClusterReconciler{
 		Client:                     fakeClient,
-		Recorder:                   &record.FakeRecorder{},
+		Recorder:                   &events.FakeRecorder{},
 		Scheme:                     scheme.Scheme,
 		rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
 	}
@@ -1116,7 +1116,7 @@ func TestReconcileHeadlessService(t *testing.T) {
 	// Initialize RayCluster reconciler.
 	r := &RayClusterReconciler{
 		Client:                     fakeClient,
-		Recorder:                   &record.FakeRecorder{},
+		Recorder:                   &events.FakeRecorder{},
 		Scheme:                     scheme.Scheme,
 		rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
 	}
@@ -1182,7 +1182,7 @@ func TestReconcile_AutoscalerServiceAccount(t *testing.T) {
 
 	testRayClusterReconciler := &RayClusterReconciler{
 		Client:                     fakeClient,
-		Recorder:                   &record.FakeRecorder{},
+		Recorder:                   &events.FakeRecorder{},
 		Scheme:                     scheme.Scheme,
 		rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
 	}
@@ -1216,7 +1216,7 @@ func TestReconcile_Autoscaler_ServiceAccountName(t *testing.T) {
 	// Initialize the reconciler
 	testRayClusterReconciler := &RayClusterReconciler{
 		Client:                     fakeClient,
-		Recorder:                   &record.FakeRecorder{},
+		Recorder:                   &events.FakeRecorder{},
 		Scheme:                     scheme.Scheme,
 		rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
 	}
@@ -1237,7 +1237,7 @@ func TestReconcile_Autoscaler_ServiceAccountName(t *testing.T) {
 	// Initialize the reconciler
 	testRayClusterReconciler = &RayClusterReconciler{
 		Client:   fakeClient,
-		Recorder: &record.FakeRecorder{},
+		Recorder: &events.FakeRecorder{},
 		Scheme:   scheme.Scheme,
 	}
 
@@ -1262,7 +1262,7 @@ func TestReconcile_AutoscalerRoleBinding(t *testing.T) {
 
 	testRayClusterReconciler := &RayClusterReconciler{
 		Client:                     fakeClient,
-		Recorder:                   &record.FakeRecorder{},
+		Recorder:                   &events.FakeRecorder{},
 		Scheme:                     scheme.Scheme,
 		rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
 	}
@@ -1299,7 +1299,7 @@ func TestReconcile_UpdateClusterReason(t *testing.T) {
 
 	testRayClusterReconciler := &RayClusterReconciler{
 		Client:                     fakeClient,
-		Recorder:                   &record.FakeRecorder{},
+		Recorder:                   &events.FakeRecorder{},
 		Scheme:                     scheme.Scheme,
 		rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
 	}
@@ -1323,7 +1323,7 @@ func TestUpdateEndpoints(t *testing.T) {
 	ctx := context.Background()
 	testRayClusterReconciler := &RayClusterReconciler{
 		Client:   fakeClient,
-		Recorder: &record.FakeRecorder{},
+		Recorder: &events.FakeRecorder{},
 		Scheme:   scheme.Scheme,
 	}
 
@@ -1470,7 +1470,7 @@ func TestGetHeadServiceIPAndName(t *testing.T) {
 			fakeClient := clientFake.NewClientBuilder().WithRuntimeObjects(tc.services...).Build()
 			testRayClusterReconciler := &RayClusterReconciler{
 				Client:                     fakeClient,
-				Recorder:                   &record.FakeRecorder{},
+				Recorder:                   &events.FakeRecorder{},
 				Scheme:                     scheme.Scheme,
 				rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
 			}
@@ -1501,7 +1501,7 @@ func TestGetHeadServiceIPAndNameOnHeadlessService(t *testing.T) {
 
 	testRayClusterReconciler := &RayClusterReconciler{
 		Client:   fakeClient,
-		Recorder: &record.FakeRecorder{},
+		Recorder: &events.FakeRecorder{},
 		Scheme:   scheme.Scheme,
 	}
 
@@ -1554,7 +1554,7 @@ func TestUpdateStatusObservedGeneration(t *testing.T) {
 	// Initialize RayCluster reconciler.
 	testRayClusterReconciler := &RayClusterReconciler{
 		Client:                     fakeClient,
-		Recorder:                   &record.FakeRecorder{},
+		Recorder:                   &events.FakeRecorder{},
 		Scheme:                     scheme.Scheme,
 		rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
 	}
@@ -1591,7 +1591,7 @@ func TestReconcile_UpdateClusterState(t *testing.T) {
 
 	testRayClusterReconciler := &RayClusterReconciler{
 		Client:                     fakeClient,
-		Recorder:                   &record.FakeRecorder{},
+		Recorder:                   &events.FakeRecorder{},
 		Scheme:                     newScheme,
 		rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
 	}
@@ -1670,7 +1670,7 @@ func TestCalculateStatus(t *testing.T) {
 	// Initialize a RayCluster reconciler.
 	r := &RayClusterReconciler{
 		Client:   fakeClient,
-		Recorder: &record.FakeRecorder{},
+		Recorder: &events.FakeRecorder{},
 		Scheme:   scheme.Scheme,
 	}
 
@@ -1766,7 +1766,7 @@ func TestCalculateStatusWithoutDesiredReplicas(t *testing.T) {
 	// Initialize a RayCluster reconciler.
 	r := &RayClusterReconciler{
 		Client:   fakeClient,
-		Recorder: &record.FakeRecorder{},
+		Recorder: &events.FakeRecorder{},
 		Scheme:   scheme.Scheme,
 	}
 
@@ -1831,7 +1831,7 @@ func TestCalculateStatusWithSuspendedWorkerGroups(t *testing.T) {
 	// Initialize a RayCluster reconciler.
 	r := &RayClusterReconciler{
 		Client:   fakeClient,
-		Recorder: &record.FakeRecorder{},
+		Recorder: &events.FakeRecorder{},
 		Scheme:   scheme.Scheme,
 	}
 
@@ -1906,7 +1906,7 @@ func TestCalculateStatusWithReconcileErrorBackAndForth(t *testing.T) {
 	// Initialize a RayCluster reconciler.
 	r := &RayClusterReconciler{
 		Client:   fakeClient,
-		Recorder: &record.FakeRecorder{},
+		Recorder: &events.FakeRecorder{},
 		Scheme:   scheme.Scheme,
 	}
 
@@ -1999,7 +1999,7 @@ func TestRayClusterProvisionedCondition(t *testing.T) {
 	ctx := context.Background()
 	r := &RayClusterReconciler{
 		Client:   fakeClient,
-		Recorder: &record.FakeRecorder{},
+		Recorder: &events.FakeRecorder{},
 		Scheme:   scheme.Scheme,
 	}
 
@@ -2078,7 +2078,7 @@ func TestStateTransitionTimes_NoStateChange(t *testing.T) {
 	// Initialize a RayCluster reconciler.
 	r := &RayClusterReconciler{
 		Client:   fakeClient,
-		Recorder: &record.FakeRecorder{},
+		Recorder: &events.FakeRecorder{},
 		Scheme:   scheme.Scheme,
 	}
 
@@ -2134,7 +2134,7 @@ func Test_TerminatedWorkers_NoAutoscaler(t *testing.T) {
 	// Initialize a new RayClusterReconciler.
 	testRayClusterReconciler := &RayClusterReconciler{
 		Client:                     fakeClient,
-		Recorder:                   &record.FakeRecorder{},
+		Recorder:                   &events.FakeRecorder{},
 		Scheme:                     scheme.Scheme,
 		rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
 	}
@@ -2258,7 +2258,7 @@ func Test_TerminatedHead_RestartPolicy(t *testing.T) {
 	// Initialize a new RayClusterReconciler.
 	testRayClusterReconciler := &RayClusterReconciler{
 		Client:                     fakeClient,
-		Recorder:                   &record.FakeRecorder{},
+		Recorder:                   &events.FakeRecorder{},
 		Scheme:                     newScheme,
 		rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
 	}
@@ -2356,7 +2356,7 @@ func Test_RunningPods_RayContainerTerminated(t *testing.T) {
 	// Initialize a new RayClusterReconciler.
 	testRayClusterReconciler := &RayClusterReconciler{
 		Client:                     fakeClient,
-		Recorder:                   &record.FakeRecorder{},
+		Recorder:                   &events.FakeRecorder{},
 		Scheme:                     newScheme,
 		rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
 	}
@@ -2563,7 +2563,7 @@ func Test_RedisCleanupFeatureFlag(t *testing.T) {
 			// Initialize the reconciler
 			testRayClusterReconciler := &RayClusterReconciler{
 				Client:                     fakeClient,
-				Recorder:                   &record.FakeRecorder{},
+				Recorder:                   &events.FakeRecorder{},
 				Scheme:                     newScheme,
 				rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
 			}
@@ -2676,7 +2676,7 @@ func TestEvents_RedisCleanup(t *testing.T) {
 			// Buffer length of 100 is arbitrary here. We should have only 1 event generated, but we keep 100
 			// if that isn't the case in the future. If this test starts timing out because of a full
 			// channel, this is probably the reason, and we should change our approach or increase buffer length.
-			recorder := record.NewFakeRecorder(100)
+			recorder := events.NewFakeRecorder(100)
 
 			testRayClusterReconciler := &RayClusterReconciler{
 				Client:   fakeClient,
@@ -2822,7 +2822,7 @@ func Test_RedisCleanup(t *testing.T) {
 
 			testRayClusterReconciler := &RayClusterReconciler{
 				Client:   fakeClient,
-				Recorder: &record.FakeRecorder{},
+				Recorder: &events.FakeRecorder{},
 				Scheme:   newScheme,
 			}
 
@@ -2941,7 +2941,7 @@ func TestReconcile_Replicas_Optional(t *testing.T) {
 			// Initialize a new RayClusterReconciler.
 			testRayClusterReconciler := &RayClusterReconciler{
 				Client:                     fakeClient,
-				Recorder:                   &record.FakeRecorder{},
+				Recorder:                   &events.FakeRecorder{},
 				Scheme:                     scheme.Scheme,
 				rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
 			}
@@ -3040,7 +3040,7 @@ func TestReconcile_Multihost_Replicas(t *testing.T) {
 			// Initialize a new RayClusterReconciler.
 			testRayClusterReconciler := &RayClusterReconciler{
 				Client:                     fakeClient,
-				Recorder:                   &record.FakeRecorder{},
+				Recorder:                   &events.FakeRecorder{},
 				Scheme:                     scheme.Scheme,
 				rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
 			}
@@ -3112,7 +3112,7 @@ func TestReconcile_NumOfHosts(t *testing.T) {
 			// Initialize a new RayClusterReconciler.
 			testRayClusterReconciler := &RayClusterReconciler{
 				Client:                     fakeClient,
-				Recorder:                   &record.FakeRecorder{},
+				Recorder:                   &events.FakeRecorder{},
 				Scheme:                     scheme.Scheme,
 				rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
 			}
@@ -3235,7 +3235,7 @@ func TestDeleteAllPods(t *testing.T) {
 
 	testRayClusterReconciler := &RayClusterReconciler{
 		Client:   fakeClient,
-		Recorder: &record.FakeRecorder{},
+		Recorder: &events.FakeRecorder{},
 		Scheme:   newScheme,
 	}
 	ctx := context.Background()
@@ -3337,7 +3337,7 @@ func TestEvents_FailedPodCreation(t *testing.T) {
 			// Buffer length of 100 is arbitrary here. We should have only 1 event genereated, but we keep 100
 			// if that isn't the case in the future. If this test starts timining out because of a full
 			// channel, this is probably the reason and we should change our approach or increase buffer length.
-			recorder := record.NewFakeRecorder(100)
+			recorder := events.NewFakeRecorder(100)
 
 			// Initialize a new RayClusterReconciler.
 			testRayClusterReconciler := &RayClusterReconciler{
@@ -3420,7 +3420,7 @@ func Test_ReconcileManagedBy(t *testing.T) {
 				Build()
 			testRayClusterReconciler := &RayClusterReconciler{
 				Client:                     fakeClient,
-				Recorder:                   &record.FakeRecorder{},
+				Recorder:                   &events.FakeRecorder{},
 				Scheme:                     newScheme,
 				rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
 			}
@@ -3484,7 +3484,7 @@ func Test_ReconcileNoDriverTimeoutTermination(t *testing.T) {
 				WithObjects(cluster).
 				WithStatusSubresource(cluster).
 				Build()
-			recorder := record.NewFakeRecorder(10)
+			recorder := events.NewFakeRecorder(10)
 			reconciler := &RayClusterReconciler{
 				Client:                     fakeClient,
 				Recorder:                   recorder,
@@ -3645,7 +3645,7 @@ func TestReconcile_AuthSecret(t *testing.T) {
 
 	testRayClusterReconciler := &RayClusterReconciler{
 		Client:                     fakeClient,
-		Recorder:                   &record.FakeRecorder{},
+		Recorder:                   &events.FakeRecorder{},
 		Scheme:                     scheme.Scheme,
 		rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
 	}
@@ -3680,7 +3680,7 @@ func TestReconcile_AuthSecret_SkipWhenK8sTokenAuthEnabled(t *testing.T) {
 
 	testRayClusterReconciler := &RayClusterReconciler{
 		Client:                     fakeClient,
-		Recorder:                   &record.FakeRecorder{},
+		Recorder:                   &events.FakeRecorder{},
 		Scheme:                     scheme.Scheme,
 		rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
 	}
@@ -3703,7 +3703,7 @@ func TestReconcile_PodsWithAuthToken(t *testing.T) {
 
 	testRayClusterReconciler := &RayClusterReconciler{
 		Client:                     fakeClient,
-		Recorder:                   &record.FakeRecorder{},
+		Recorder:                   &events.FakeRecorder{},
 		Scheme:                     scheme.Scheme,
 		rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
 	}
@@ -3875,7 +3875,7 @@ func TestShouldRecreatePodsForUpgrade(t *testing.T) {
 			testRayClusterReconciler := &RayClusterReconciler{
 				Client:   fakeClient,
 				Scheme:   scheme.Scheme,
-				Recorder: &record.FakeRecorder{},
+				Recorder: &events.FakeRecorder{},
 			}
 
 			result := testRayClusterReconciler.shouldRecreatePodsForUpgrade(ctx, cluster)
@@ -3898,7 +3898,7 @@ func TestReconcileAuthSecret_WithSecretName(t *testing.T) {
 
 	testRayClusterReconciler := &RayClusterReconciler{
 		Client:                     fakeClient,
-		Recorder:                   &record.FakeRecorder{},
+		Recorder:                   &events.FakeRecorder{},
 		Scheme:                     scheme.Scheme,
 		rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
 	}
@@ -3927,7 +3927,7 @@ func TestReconcilePodsWithAuthTokenSecretName(t *testing.T) {
 
 	testRayClusterReconciler := &RayClusterReconciler{
 		Client:                     fakeClient,
-		Recorder:                   &record.FakeRecorder{},
+		Recorder:                   &events.FakeRecorder{},
 		Scheme:                     scheme.Scheme,
 		rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient),
 	}
