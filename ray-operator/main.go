@@ -12,6 +12,7 @@ import (
 	"go.uber.org/zap/zapcore"
 	"gopkg.in/natefinch/lumberjack.v2"
 	batchv1 "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -71,6 +72,10 @@ func main() {
 	var enableMetrics bool
 	var qps float64
 	var burst int
+	var enableEventForwarder bool
+	var eventForwarderSources string
+	var eventForwarderReasons string
+	var eventForwarderTypes string
 
 	// TODO: remove flag-based config once Configuration API graduates to v1.
 	flag.StringVar(&metricsAddr, "metrics-addr", configapi.DefaultMetricsAddr, "The address the metric endpoint binds to.")
@@ -104,6 +109,14 @@ func main() {
 	flag.BoolVar(&enableMetrics, "enable-metrics", false, "Enable the emission of control plane metrics.")
 	flag.Float64Var(&qps, "qps", float64(configapi.DefaultQPS), "The QPS value for the client communicating with the Kubernetes API server.")
 	flag.IntVar(&burst, "burst", configapi.DefaultBurst, "The maximum burst for throttling requests from this client to the Kubernetes API server.")
+	flag.BoolVar(&enableEventForwarder, "enable-event-forwarder", false,
+		"Enable the Selective Event Forwarder, which re-emits Kubernetes Node events onto the Ray custom resources whose Pods run on the affected node.")
+	flag.StringVar(&eventForwarderSources, "event-forwarder-sources", "",
+		"Comma-separated list of event sources to forward Node events from, e.g. node-problem-detector. Empty means all sources.")
+	flag.StringVar(&eventForwarderReasons, "event-forwarder-reasons", "",
+		"Comma-separated list of event reasons to forward, e.g. XIDError,KernelDeadlock. Empty means all reasons.")
+	flag.StringVar(&eventForwarderTypes, "event-forwarder-types", "",
+		"Comma-separated list of event types to forward (Warning, Normal). Empty defaults to Warning only.")
 
 	opts := k8szap.Options{
 		TimeEncoder: zapcore.ISO8601TimeEncoder,
@@ -136,6 +149,10 @@ func main() {
 		config.EnableMetrics = enableMetrics
 		config.QPS = &qps
 		config.Burst = &burst
+		config.EnableEventForwarder = enableEventForwarder
+		config.EventForwarderSources = splitCommaSeparated(eventForwarderSources)
+		config.EventForwarderReasons = splitCommaSeparated(eventForwarderReasons)
+		config.EventForwarderTypes = splitCommaSeparated(eventForwarderTypes)
 	}
 
 	stdoutEncoder, err := newLogEncoder(logStdoutEncoder)
@@ -243,6 +260,11 @@ func main() {
 	// These labels are provided to the manager cache as selectors for Job and Pod resources.
 	selectorsByObject, err := managercache.K8sControllerRuntimeCacheSelectors()
 	exitOnError(err, "unable to build manager cache ByObject")
+	if config.EnableEventForwarder {
+		// Scope the Event informer server-side to Node events only; without this
+		// the event forwarder's watch would receive every Event in the cluster.
+		selectorsByObject[&corev1.Event{}] = managercache.EventForwarderCacheByObject()
+	}
 	options.Cache.ByObject = selectorsByObject
 
 	if watchNamespaces := strings.Split(config.WatchNamespace, ","); len(watchNamespaces) == 1 { // It is not possible for len(watchNamespaces) == 0 to be true. The length of `strings.Split("", ",")` is still 1.
@@ -334,6 +356,18 @@ func main() {
 		setupLog.Info("RayCronJob feature gate is disabled, skipping RayCronJob controller setup")
 	}
 
+	if config.EnableEventForwarder {
+		setupLog.Info("Event forwarder is enabled, starting EventForwarder controller",
+			"sources", config.EventForwarderSources, "reasons", config.EventForwarderReasons, "types", config.EventForwarderTypes)
+		eventForwarderOptions := ray.EventForwarderOptions{
+			Sources: config.EventForwarderSources,
+			Reasons: config.EventForwarderReasons,
+			Types:   config.EventForwarderTypes,
+		}
+		exitOnError(ray.NewEventForwarderReconciler(mgr, eventForwarderOptions).SetupWithManager(mgr, config.ReconcileConcurrency),
+			"unable to create controller", "controller", "EventForwarder")
+	}
+
 	if features.Enabled(features.RayClusterNetworkIsolation) {
 		setupLog.Info("RayClusterNetworkIsolation feature gate is enabled, starting NetworkPolicy controller")
 		networkPolicyController, err := ray.NewNetworkPolicyController(mgr)
@@ -350,6 +384,18 @@ func main() {
 
 	setupLog.Info("starting manager")
 	exitOnError(mgr.Start(ctx), "problem running manager")
+}
+
+// splitCommaSeparated splits a comma-separated flag value into its non-empty,
+// space-trimmed items. It returns nil for an empty value.
+func splitCommaSeparated(value string) []string {
+	var items []string
+	for item := range strings.SplitSeq(value, ",") {
+		if item = strings.TrimSpace(item); item != "" {
+			items = append(items, item)
+		}
+	}
+	return items
 }
 
 func exitOnError(err error, msg string, keysAndValues ...any) {

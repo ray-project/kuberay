@@ -3,6 +3,7 @@ package managercache
 import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
@@ -35,4 +36,18 @@ func K8sControllerRuntimeCacheSelectors() (map[client.Object]cache.ByObject, err
 		&batchv1.Job{}: {Label: jobSelector},
 		&corev1.Pod{}:  {Label: podSelector},
 	}, nil
+}
+
+// EventForwarderCacheByObject returns the cache.ByObject scoping the Event informer
+// used by the Selective Event Forwarder. The field selector makes the API server
+// filter the watch to Node events server-side, so the operator never receives or
+// caches the (high-churn) Events of other objects. Events involving cluster-scoped
+// objects like Nodes are recorded in namespaces the operator may not otherwise
+// watch (typically "default" or "kube-system"), so the Event informer always
+// watches all namespaces regardless of --watch-namespace.
+func EventForwarderCacheByObject() cache.ByObject {
+	return cache.ByObject{
+		Field:      fields.OneTermEqualSelector("involvedObject.kind", "Node"),
+		Namespaces: map[string]cache.Config{cache.AllNamespaces: {}},
+	}
 }
