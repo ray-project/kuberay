@@ -299,33 +299,33 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 // For example, ingress rules should only be specified when ingress is being denied,
 // and egress rules should only be specified when egress is being denied.
 func validateNetworkPolicy(spec *rayv1.RayClusterSpec) error {
-	ni := spec.NetworkPolicy
-	if ni == nil {
+	np := spec.NetworkPolicy
+	if np == nil {
 		return nil
 	}
 
 	// Resolve mode, defaulting to DenyAll if not set (matches kubebuilder default).
 	mode := rayv1.NetworkPolicyDenyAll
-	if ni.Mode != nil {
-		mode = *ni.Mode
+	if np.Mode != nil {
+		mode = *np.Mode
 	}
 
 	// Validate head rules against mode.
-	if ni.Head != nil {
-		if mode == rayv1.NetworkPolicyDenyAllEgress && len(ni.Head.IngressRules) > 0 {
+	if np.Head != nil {
+		if mode == rayv1.NetworkPolicyDenyAllEgress && len(np.Head.IngressRules) > 0 {
 			return fmt.Errorf("networkPolicy.head.ingressRules cannot be set when mode is %q (ingress is not restricted)", mode)
 		}
-		if mode == rayv1.NetworkPolicyDenyAllIngress && len(ni.Head.EgressRules) > 0 {
+		if mode == rayv1.NetworkPolicyDenyAllIngress && len(np.Head.EgressRules) > 0 {
 			return fmt.Errorf("networkPolicy.head.egressRules cannot be set when mode is %q (egress is not restricted)", mode)
 		}
 	}
 
 	// Validate worker rules against mode.
-	if ni.Worker != nil {
-		if mode == rayv1.NetworkPolicyDenyAllEgress && len(ni.Worker.IngressRules) > 0 {
+	if np.Worker != nil {
+		if mode == rayv1.NetworkPolicyDenyAllEgress && len(np.Worker.IngressRules) > 0 {
 			return fmt.Errorf("networkPolicy.worker.ingressRules cannot be set when mode is %q (ingress is not restricted)", mode)
 		}
-		if mode == rayv1.NetworkPolicyDenyAllIngress && len(ni.Worker.EgressRules) > 0 {
+		if mode == rayv1.NetworkPolicyDenyAllIngress && len(np.Worker.EgressRules) > 0 {
 			return fmt.Errorf("networkPolicy.worker.egressRules cannot be set when mode is %q (egress is not restricted)", mode)
 		}
 	}
