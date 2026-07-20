@@ -20,6 +20,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	schedulingv1alpha2 "k8s.io/api/scheduling/v1alpha2"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -101,6 +102,7 @@ type RayClusterReconcilerOptions struct {
 // +kubebuilder:rbac:groups=core,resources=serviceaccounts,verbs=get;list;watch;create;delete
 // +kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=roles,verbs=get;list;watch;create;delete;update
 // +kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=rolebindings,verbs=get;list;watch;create;delete
+// +kubebuilder:rbac:groups=scheduling.k8s.io,resources=podgroups;workloads,verbs=get;list;watch;create;update;patch;delete
 
 // [WARNING]: There MUST be a newline after kubebuilder markers.
 
@@ -299,7 +301,17 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 	}
 
 	if instance.DeletionTimestamp != nil && !instance.DeletionTimestamp.IsZero() {
-		logger.Info("RayCluster is being deleted, just ignore")
+		logger.Info("RayCluster is being deleted, cleaning up k8s workload scheduling resources")
+		// Always clean up Workload/PodGroups explicitly rather than relying on garbage
+		// collection, because PodGroups may have a scheduler-added finalizer that blocks GC
+		// deletion and would leave the RayCluster stuck in Terminating. This runs regardless
+		// of the K8sWorkloadScheduling feature gate: if the gate was disabled after the
+		// resources were created, gating the cleanup here would strand the cluster.
+		// deleteK8sWorkloadSchedulingResources is a no-op when no scheduling resources (or
+		// the scheduling API itself) exist.
+		if err := r.deleteK8sWorkloadSchedulingResources(ctx, instance); err != nil {
+			return ctrl.Result{RequeueAfter: DefaultRequeueDuration}, err
+		}
 		return ctrl.Result{}, nil
 	}
 
@@ -646,6 +658,11 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 				instance.Namespace, instance.Name, err)
 			return errstd.Join(utils.ErrFailedDeleteAllPods, err)
 		}
+		if shouldCleanupK8sWorkloadSchedulingResources() {
+			if err := r.deleteK8sWorkloadSchedulingResources(ctx, instance); err != nil {
+				return err
+			}
+		}
 
 		r.Recorder.Eventf(instance, nil, corev1.EventTypeNormal, string(utils.DeletedPod), string(utils.DeleteAction),
 			"Deleted Pods for RayCluster %s/%s due to suspension",
@@ -672,6 +689,11 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 				instance.Namespace, instance.Name, err)
 			return errstd.Join(utils.ErrFailedDeleteAllPods, err)
 		}
+		if shouldCleanupK8sWorkloadSchedulingResources() {
+			if err := r.deleteK8sWorkloadSchedulingResources(ctx, instance); err != nil {
+				return err
+			}
+		}
 		r.rayClusterScaleExpectation.Delete(instance.Name, instance.Namespace)
 		r.Recorder.Eventf(instance, nil, corev1.EventTypeNormal, string(utils.DeletedPod), string(utils.DeleteAction),
 			"Deleted all Pods for RayCluster %s/%s due to spec change with Recreate upgradeStrategy",
@@ -695,6 +717,12 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 			return err
 		}
 	}
+
+	// Create Workload and PodGroup resources for k8s workload scheduling
+	if err := r.reconcileK8sWorkloadScheduling(ctx, instance); err != nil {
+		return err
+	}
+
 	// Reconcile head Pod
 	if !r.rayClusterScaleExpectation.IsSatisfied(ctx, instance.Namespace, instance.Name, expectations.HeadGroup) {
 		logger.Info("reconcilePods", "Expectation", "NotSatisfiedHeadExpectations, reconcile head later")
@@ -1336,6 +1364,11 @@ func (r *RayClusterReconciler) createHeadPod(ctx context.Context, instance rayv1
 		}
 	}
 
+	// K8s workload scheduling: set schedulingGroup on head pod.
+	if r.shouldSetSchedulingGroup(&instance) {
+		setSchedulingGroup(&pod, podGroupName(instance.Name, "head"))
+	}
+
 	if err := r.Create(ctx, &pod); err != nil {
 		r.Recorder.Eventf(&instance, nil, corev1.EventTypeWarning, string(utils.FailedToCreateHeadPod), string(utils.CreateAction), "Failed to create head Pod %s/%s, %v", pod.Namespace, pod.Name, err)
 		return err
@@ -1357,6 +1390,11 @@ func (r *RayClusterReconciler) createWorkerPod(ctx context.Context, instance ray
 		} else {
 			return err
 		}
+	}
+
+	// K8s workload scheduling: set schedulingGroup on worker pod.
+	if r.shouldSetSchedulingGroup(&instance) {
+		setSchedulingGroup(&pod, podGroupName(instance.Name, "worker-"+worker.GroupName))
 	}
 
 	replica := pod
@@ -1381,6 +1419,11 @@ func (r *RayClusterReconciler) createWorkerPodWithIndex(ctx context.Context, ins
 		} else {
 			return err
 		}
+	}
+
+	// K8s workload scheduling: set schedulingGroup on worker pod.
+	if r.shouldSetSchedulingGroup(&instance) {
+		setSchedulingGroup(&pod, podGroupName(instance.Name, "worker-"+worker.GroupName))
 	}
 
 	replica := pod
@@ -1545,6 +1588,11 @@ func (r *RayClusterReconciler) SetupWithManager(mgr ctrl.Manager, reconcileConcu
 		r.options.BatchSchedulerManager.ConfigureReconciler(b)
 	}
 
+	if features.Enabled(features.K8sWorkloadScheduling) {
+		b = b.Owns(&schedulingv1alpha2.Workload{}).
+			Owns(&schedulingv1alpha2.PodGroup{})
+	}
+
 	return b.
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: reconcileConcurrency,
@@ -1701,6 +1749,8 @@ func (r *RayClusterReconciler) calculateStatus(ctx context.Context, instance *ra
 				})
 			}
 		}
+
+		r.setWorkloadScheduledCondition(ctx, newInstance, suspendStatus)
 	}
 
 	if newInstance.Spec.Suspend != nil && *newInstance.Spec.Suspend && len(runtimePods.Items) == 0 {
