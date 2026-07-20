@@ -288,22 +288,6 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 	return validateNetworkIsolation(spec)
 }
 
-// ValidateRayClusterAutoscalerV1 returns the names of worker groups whose restartPolicy
-// is neither empty nor "Never" when autoscaler V1 is enabled. The caller should emit a
-// single consolidated warning log and Kubernetes event listing all returned group names.
-func ValidateRayClusterAutoscalerV1(spec *rayv1.RayClusterSpec) []string {
-	if !IsAutoscalingEnabled(spec) || !IsAutoscalingV1Enabled(spec) {
-		return nil
-	}
-	var groupNames []string
-	for _, workerGroup := range spec.WorkerGroupSpecs {
-		if workerGroup.Template.Spec.RestartPolicy != "" && workerGroup.Template.Spec.RestartPolicy != corev1.RestartPolicyNever {
-			groupNames = append(groupNames, workerGroup.GroupName)
-		}
-	}
-	return groupNames
-}
-
 // validateNetworkIsolation checks that the NetworkIsolation config is internally consistent.
 // For example, ingress rules should only be specified when ingress is being denied,
 // and egress rules should only be specified when egress is being denied.
