@@ -663,10 +663,10 @@ func TestConfigureGCSFaultToleranceEmbedded(t *testing.T) {
 			wantClaimName: "test-cluster-gcs-pvc",
 		},
 		{
-			name: "existingClaim resolves to user PVC",
+			name: "claimName resolves to user PVC",
 			options: &rayv1.GcsFaultToleranceOptions{
 				Backend: rayv1.GcsFTBackendRocksDB,
-				Storage: &rayv1.GcsEmbeddedStorage{ExistingClaim: "my-pvc"},
+				Storage: &rayv1.GcsEmbeddedStorage{ClaimName: "my-pvc"},
 			},
 			wantClaimName: "my-pvc",
 		},

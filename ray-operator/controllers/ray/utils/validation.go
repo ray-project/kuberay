@@ -300,8 +300,9 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 }
 
 // validateGcsFaultToleranceBackend enforces backend-specific rules for GCS FT.
-// The redis backend (default) requires a RedisAddress; the embedded RocksDB backend
-// rejects redis-only fields and operator-managed env/mounts that users must not set.
+// The embedded RocksDB backend rejects redis-only fields and operator-managed
+// env/mounts that users must not set. The redis backend (default) has no required
+// fields here (RedisAddress may be supplied via env vars/annotations elsewhere).
 func validateGcsFaultToleranceBackend(options *rayv1.GcsFaultToleranceOptions, headContainer corev1.Container, headVolumes []corev1.Volume) error {
 	switch GetGcsFaultToleranceBackend(options) {
 	case rayv1.GcsFTBackendRocksDB:
@@ -320,9 +321,9 @@ func validateGcsFaultToleranceBackend(options *rayv1.GcsFaultToleranceOptions, h
 		if options.ExternalStorageNamespace != "" {
 			return fmt.Errorf("cannot set GcsFaultToleranceOptions.ExternalStorageNamespace when backend is 'rocksdb'")
 		}
-		if storage := options.Storage; storage != nil && storage.ExistingClaim != "" {
+		if storage := options.Storage; storage != nil && storage.ClaimName != "" {
 			if storage.Size != nil || storage.StorageClassName != nil || len(storage.AccessModes) > 0 {
-				return fmt.Errorf("GcsFaultToleranceOptions.Storage.ExistingClaim is mutually exclusive with size, storageClassName, and accessModes")
+				return fmt.Errorf("GcsFaultToleranceOptions.Storage.ClaimName is mutually exclusive with size, storageClassName, and accessModes")
 			}
 		}
 		if EnvVarExists(RAY_GCS_STORAGE, headContainer.Env) || EnvVarExists(RAY_GCS_STORAGE_PATH, headContainer.Env) {
@@ -339,9 +340,6 @@ func validateGcsFaultToleranceBackend(options *rayv1.GcsFaultToleranceOptions, h
 			}
 		}
 	default: // redis
-		if options.RedisAddress == "" {
-			return fmt.Errorf("GcsFaultToleranceOptions.RedisAddress is required when backend is 'redis'")
-		}
 	}
 	return nil
 }

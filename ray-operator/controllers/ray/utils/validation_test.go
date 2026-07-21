@@ -205,12 +205,12 @@ func TestValidateRayClusterSpecGcsFaultToleranceOptions(t *testing.T) {
 			expectError:              true,
 			errorMessage:             errorMessageExternalStorageNamespaceConflict,
 		},
-		// redis backend requires RedisAddress.
+		// The redis backend does not require RedisAddress here: it may be supplied
+		// via env vars/annotations elsewhere, and master never enforced it.
 		{
-			name:                     "redis backend without RedisAddress is rejected",
+			name:                     "redis backend without RedisAddress is accepted",
 			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{Backend: rayv1.GcsFTBackendRedis},
-			expectError:              true,
-			errorMessage:             "GcsFaultToleranceOptions.RedisAddress is required when backend is 'redis'",
+			expectError:              false,
 		},
 		// rocksdb backend rules.
 		{
@@ -245,16 +245,16 @@ func TestValidateRayClusterSpecGcsFaultToleranceOptions(t *testing.T) {
 			errorMessage: "cannot set GcsFaultToleranceOptions.ExternalStorageNamespace when backend is 'rocksdb'",
 		},
 		{
-			name: "rocksdb backend rejects existingClaim combined with size",
+			name: "rocksdb backend rejects claimName combined with size",
 			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{
 				Backend: rayv1.GcsFTBackendRocksDB,
 				Storage: &rayv1.GcsEmbeddedStorage{
-					ExistingClaim: "my-pvc",
-					Size:          ptr.To(resource.MustParse("1Gi")),
+					ClaimName: "my-pvc",
+					Size:      ptr.To(resource.MustParse("1Gi")),
 				},
 			},
 			expectError:  true,
-			errorMessage: "GcsFaultToleranceOptions.Storage.ExistingClaim is mutually exclusive with size, storageClassName, and accessModes",
+			errorMessage: "GcsFaultToleranceOptions.Storage.ClaimName is mutually exclusive with size, storageClassName, and accessModes",
 		},
 		{
 			name: "rocksdb backend rejects user-set RAY_gcs_storage env",

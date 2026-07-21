@@ -2490,6 +2490,6 @@ func TestGetGCSStoragePVCName(t *testing.T) {
 	}
 	assert.Equal(t, "my-cluster-gcs-pvc", GetGCSStoragePVCName(instance))
 
-	instance.Spec.GcsFaultToleranceOptions.Storage = &rayv1.GcsEmbeddedStorage{ExistingClaim: "byo-pvc"}
+	instance.Spec.GcsFaultToleranceOptions.Storage = &rayv1.GcsEmbeddedStorage{ClaimName: "byo-pvc"}
 	assert.Equal(t, "byo-pvc", GetGCSStoragePVCName(instance))
 }

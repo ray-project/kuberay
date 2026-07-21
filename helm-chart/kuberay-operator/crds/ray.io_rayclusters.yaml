@@ -511,10 +511,13 @@ spec:
                         items:
                           type: string
                         type: array
-                      existingClaim:
+                      claimName:
                         type: string
-                      retainOnClusterDeletion:
-                        type: boolean
+                      deletionPolicy:
+                        enum:
+                        - DeleteWithCluster
+                        - Retain
+                        type: string
                       size:
                         anyOf:
                         - type: integer

@@ -110,10 +110,10 @@ func TestReconcileGCSStoragePVC(t *testing.T) {
 		assert.Equal(t, resource.MustParse("5Gi"), pvc.Spec.Resources.Requests[corev1.ResourceStorage])
 	})
 
-	t.Run("existingClaim creates no PVC", func(t *testing.T) {
+	t.Run("claimName creates no PVC", func(t *testing.T) {
 		instance := newGCSStorageRayCluster(&rayv1.GcsFaultToleranceOptions{
 			Backend: rayv1.GcsFTBackendRocksDB,
-			Storage: &rayv1.GcsEmbeddedStorage{ExistingClaim: "my-pvc"},
+			Storage: &rayv1.GcsEmbeddedStorage{ClaimName: "my-pvc"},
 		})
 		fakeClient := clientFake.NewClientBuilder().WithScheme(scheme).WithObjects(instance).Build()
 		r := &RayClusterReconciler{Client: fakeClient, Recorder: &events.FakeRecorder{}, Scheme: scheme, rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient)}
@@ -285,10 +285,10 @@ func TestReconcileGCSStoragePVC(t *testing.T) {
 		}
 	})
 
-	t.Run("retainOnClusterDeletion omits the RayCluster owner reference on create", func(t *testing.T) {
+	t.Run("deletionPolicy Retain omits the RayCluster owner reference on create", func(t *testing.T) {
 		instance := newGCSStorageRayCluster(&rayv1.GcsFaultToleranceOptions{
 			Backend: rayv1.GcsFTBackendRocksDB,
-			Storage: &rayv1.GcsEmbeddedStorage{RetainOnClusterDeletion: true},
+			Storage: &rayv1.GcsEmbeddedStorage{DeletionPolicy: ptr.To(rayv1.RetainGCSStorageDeletionPolicy)},
 		})
 		fakeClient := clientFake.NewClientBuilder().WithScheme(scheme).WithObjects(instance).Build()
 		r := &RayClusterReconciler{Client: fakeClient, Recorder: &events.FakeRecorder{}, Scheme: scheme, rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient)}
@@ -300,10 +300,10 @@ func TestReconcileGCSStoragePVC(t *testing.T) {
 		assert.False(t, metav1.IsControlledBy(pvc, instance), "retained PVC must not be owned by the RayCluster")
 	})
 
-	t.Run("toggling retainOnClusterDeletion removes the owner reference from an existing PVC", func(t *testing.T) {
+	t.Run("setting deletionPolicy Retain removes the owner reference from an existing PVC", func(t *testing.T) {
 		instance := newGCSStorageRayCluster(&rayv1.GcsFaultToleranceOptions{
 			Backend: rayv1.GcsFTBackendRocksDB,
-			Storage: &rayv1.GcsEmbeddedStorage{RetainOnClusterDeletion: true},
+			Storage: &rayv1.GcsEmbeddedStorage{DeletionPolicy: ptr.To(rayv1.RetainGCSStorageDeletionPolicy)},
 		})
 		existing := &corev1.PersistentVolumeClaim{
 			ObjectMeta: metav1.ObjectMeta{Name: "test-cluster-gcs-pvc", Namespace: "default"},

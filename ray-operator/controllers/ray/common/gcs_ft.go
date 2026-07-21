@@ -12,7 +12,7 @@ import (
 // BuildGCSStoragePVC builds the operator-managed PersistentVolumeClaim that backs
 // the embedded RocksDB GCS store for the given RayCluster. It is only meaningful
 // when GCS FT uses the embedded backend and the user has not supplied their own
-// claim via Storage.ExistingClaim. The caller is responsible for setting the
+// claim via Storage.ClaimName. The caller is responsible for setting the
 // owner reference.
 func BuildGCSStoragePVC(instance *rayv1.RayCluster) *corev1.PersistentVolumeClaim {
 	storage := instance.Spec.GcsFaultToleranceOptions.Storage

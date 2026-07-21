@@ -599,10 +599,10 @@ func (r *RayClusterReconciler) reconcileHeadService(ctx context.Context, instanc
 //     PVC is keyed by (and owned by) the RayCluster, it does NOT survive a
 //     RayService zero-downtime upgrade: the new RayCluster gets a new name and a
 //     fresh PVC, and the old PVC is GC'd with the old RayCluster. Set
-//     Storage.RetainOnClusterDeletion to keep the PVC (and its data) after the
-//     cluster is deleted so it can be recovered later via ExistingClaim.
+//     Storage.DeletionPolicy: Retain to keep the PVC (and its data) after the
+//     cluster is deleted so it can be recovered later via ClaimName.
 //
-//   - User-managed (Storage.ExistingClaim): the operator never creates, deletes,
+//   - User-managed (Storage.ClaimName): the operator never creates, deletes,
 //     or takes ownership of the PVC. This is the path for persisting GCS state
 //     across RayService upgrades: point every RayService generation at the same
 //     stable claim. During a zero-downtime upgrade the old and new head Pods run
@@ -636,7 +636,7 @@ func (r *RayClusterReconciler) reconcileHeadService(ctx context.Context, instanc
 // head) -- i.e. an in-place / RecreateCluster upgrade with a brief GCS-unavailability
 // window, which is a different upgrade strategy than the concurrent NewCluster path.
 // That is deferred as follow-up work; today, cross-upgrade persistence is served by
-// the user-managed ExistingClaim path above.
+// the user-managed ClaimName path above.
 func (r *RayClusterReconciler) reconcileGCSStoragePVC(ctx context.Context, instance *rayv1.RayCluster) error {
 	logger := ctrl.LoggerFrom(ctx)
 
@@ -648,12 +648,12 @@ func (r *RayClusterReconciler) reconcileGCSStoragePVC(ctx context.Context, insta
 	pvcName := utils.GetGCSStoragePVCName(instance)
 
 	// BYO PVC: the user owns the lifecycle. Verify it exists and surface an event if not.
-	if storage := instance.Spec.GcsFaultToleranceOptions.Storage; storage != nil && storage.ExistingClaim != "" {
+	if storage := instance.Spec.GcsFaultToleranceOptions.Storage; storage != nil && storage.ClaimName != "" {
 		existing := &corev1.PersistentVolumeClaim{}
 		err := r.Get(ctx, types.NamespacedName{Name: pvcName, Namespace: instance.Namespace}, existing)
 		if errors.IsNotFound(err) {
 			r.Recorder.Eventf(instance, nil, corev1.EventTypeWarning, string(utils.FailedToCreatePVC), string(utils.ValidateAction),
-				"GcsFaultToleranceOptions.Storage.ExistingClaim %q not found in namespace %s; the head Pod will not start until it exists", pvcName, instance.Namespace)
+				"GcsFaultToleranceOptions.Storage.ClaimName %q not found in namespace %s; the head Pod will not start until it exists", pvcName, instance.Namespace)
 			return nil
 		}
 		return err
@@ -671,17 +671,17 @@ func (r *RayClusterReconciler) reconcileGCSStoragePVC(ctx context.Context, insta
 			r.Recorder.Eventf(instance, nil, corev1.EventTypeWarning, string(utils.FailedToCreatePVC), string(utils.UpdateAction),
 				"GCS storage PVC %s/%s already exists and cannot be reconfigured in place (%s); delete the PVC to recreate it with the new settings", existing.Namespace, existing.Name, drift)
 		}
-		// Reconcile the controller ownerReference so that toggling
-		// RetainOnClusterDeletion takes effect on an already-provisioned PVC.
+		// Reconcile the controller ownerReference so that changing
+		// DeletionPolicy takes effect on an already-provisioned PVC.
 		return r.reconcileGCSStoragePVCOwnerRef(ctx, instance, existing)
 	} else if !errors.IsNotFound(err) {
 		return err
 	}
 
 	pvc := common.BuildGCSStoragePVC(instance)
-	// When RetainOnClusterDeletion is set, deliberately omit the controller
+	// When DeletionPolicy is Retain, deliberately omit the controller
 	// ownerReference so the PVC (and its data) outlives the RayCluster and can be
-	// recovered via ExistingClaim on a future cluster.
+	// recovered via ClaimName on a future cluster.
 	if !gcsStorageRetainOnDeletion(instance) {
 		if err := ctrl.SetControllerReference(instance, pvc, r.Scheme); err != nil {
 			return err
@@ -692,7 +692,7 @@ func (r *RayClusterReconciler) reconcileGCSStoragePVC(ctx context.Context, insta
 		if errors.IsAlreadyExists(err) {
 			// Lost a create race after the NotFound Get above: fetch the live PVC
 			// and reconcile its ownerReference, consistent with the already-exists
-			// path so RetainOnClusterDeletion is still honored.
+			// path so DeletionPolicy is still honored.
 			if getErr := r.Get(ctx, types.NamespacedName{Name: pvcName, Namespace: instance.Namespace}, existing); getErr != nil {
 				return getErr
 			}
@@ -710,17 +710,18 @@ func (r *RayClusterReconciler) reconcileGCSStoragePVC(ctx context.Context, insta
 
 // gcsStorageRetainOnDeletion reports whether the operator-managed GCS storage PVC
 // should be retained (kept without a controller ownerReference) after the owning
-// RayCluster is deleted.
+// RayCluster is deleted, i.e. whether Storage.DeletionPolicy is Retain.
 func gcsStorageRetainOnDeletion(instance *rayv1.RayCluster) bool {
 	storage := instance.Spec.GcsFaultToleranceOptions.Storage
-	return storage != nil && storage.RetainOnClusterDeletion
+	return storage != nil && storage.DeletionPolicy != nil &&
+		*storage.DeletionPolicy == rayv1.RetainGCSStorageDeletionPolicy
 }
 
 // reconcileGCSStoragePVCOwnerRef aligns the controller ownerReference on an
-// already-provisioned operator-managed PVC with the desired RetainOnClusterDeletion
-// setting: it removes the RayCluster's controller ownerReference when retention is
-// requested, and (re)adds it otherwise. This makes toggling the field effective on
-// an existing PVC without recreating it.
+// already-provisioned operator-managed PVC with the desired DeletionPolicy: it
+// removes the RayCluster's controller ownerReference when retention is requested
+// (DeletionPolicy: Retain), and (re)adds it otherwise. This makes changing the
+// policy effective on an existing PVC without recreating it.
 func (r *RayClusterReconciler) reconcileGCSStoragePVCOwnerRef(ctx context.Context, instance *rayv1.RayCluster, pvc *corev1.PersistentVolumeClaim) error {
 	retain := gcsStorageRetainOnDeletion(instance)
 	hasOwnerRef := metav1.IsControlledBy(pvc, instance)

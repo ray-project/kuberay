@@ -161,34 +161,38 @@ type GcsFaultToleranceOptions struct {
 // volume can be attached to more than one Pod concurrently (see AccessModes) the
 // caller is responsible for ensuring only one Ray head writes to it at a time.
 type GcsEmbeddedStorage struct {
-	// ExistingClaim, if set, makes the operator consume a user-provided PVC as-is
-	// (no create, no delete, no ownerReferences). Mutually exclusive with
-	// Size/StorageClassName/AccessModes.
+	// ClaimName is the name of an existing, user-provided PersistentVolumeClaim to
+	// use as the RocksDB store ("bring your own" PVC). When set, the operator
+	// consumes that PVC as-is: it does not create, delete, resize, or set
+	// ownerReferences on it -- the user owns its entire lifecycle. Mutually
+	// exclusive with Size/StorageClassName/AccessModes (those configure an
+	// operator-managed PVC, which is used instead when ClaimName is empty).
 	//
 	// This is the supported path for persisting GCS state across a RayService
 	// zero-downtime upgrade: point every RayService generation at the same claim.
-	// The operator-managed PVC (used when this is empty) is keyed by and owned by
-	// the RayCluster, so it is not reused across upgrades. Because the old and new
-	// head Pods overlap during a zero-downtime upgrade, the claim must permit
-	// concurrent attach (ReadWriteMany) with externally-coordinated single-writer
-	// semantics, or an active-passive handoff where only one Pod attaches at once.
+	// (An operator-managed PVC is keyed by and owned by the RayCluster, so it is
+	// not reused across upgrades.) Because the old and new head Pods overlap during
+	// a zero-downtime upgrade, the claim must permit concurrent attach
+	// (ReadWriteMany) with externally-coordinated single-writer semantics, or an
+	// active-passive handoff where only one Pod attaches at once.
 	// +optional
-	ExistingClaim string `json:"existingClaim,omitempty"`
+	ClaimName string `json:"claimName,omitempty"`
 
-	// Size of the operator-managed PVC (e.g. "1Gi"). Ignored when ExistingClaim
-	// is set. Defaults to 1Gi. The operator-managed PVC is created once and not
+	// Size of the operator-managed PVC (e.g. "1Gi"). Ignored when ClaimName is set.
+	// Defaults to 1Gi. The operator-managed PVC is created once and not
 	// reconfigured in place; to change size/class/accessModes, delete the PVC (or
-	// switch to ExistingClaim). A warning event is emitted if this diverges from
-	// the live PVC.
+	// switch to ClaimName). A warning event is emitted if this diverges from the
+	// live PVC.
 	// +optional
 	Size *resource.Quantity `json:"size,omitempty"`
 
 	// StorageClassName for the operator-managed PVC. Uses the cluster default
-	// StorageClass when omitted.
+	// StorageClass when omitted. Ignored when ClaimName is set.
 	// +optional
 	StorageClassName *string `json:"storageClassName,omitempty"`
 
 	// AccessModes for the operator-managed PVC. Defaults to [ReadWriteOnce].
+	// Ignored when ClaimName is set.
 	//
 	// ReadWriteOnce is the sane default for a standalone RayCluster (one head Pod
 	// attaches at a time). ReadWriteMany is a valid choice when you need the volume
@@ -202,14 +206,30 @@ type GcsEmbeddedStorage struct {
 	// +optional
 	SubPath string `json:"subPath,omitempty"`
 
-	// RetainOnClusterDeletion, when true, keeps the operator-managed PVC (and its
-	// data) after the owning RayCluster is deleted, so GCS state can be recovered
-	// by pointing a new cluster's ExistingClaim at the retained PVC. When false
-	// (the default) the PVC is owned by the RayCluster and garbage-collected with
-	// it. Ignored when ExistingClaim is set (the operator never owns a BYO PVC).
+	// DeletionPolicy controls the lifecycle of the operator-managed PVC relative to
+	// the owning RayCluster. Defaults to DeleteWithCluster. Ignored when ClaimName
+	// is set (the operator never owns a bring-your-own PVC, so it is never deleted
+	// or retained by the operator).
 	// +optional
-	RetainOnClusterDeletion bool `json:"retainOnClusterDeletion,omitempty"`
+	DeletionPolicy *GCSStorageDeletionPolicy `json:"deletionPolicy,omitempty"`
 }
+
+// GCSStorageDeletionPolicy specifies what happens to the operator-managed GCS
+// storage PVC when the owning RayCluster is deleted.
+// +kubebuilder:validation:Enum=DeleteWithCluster;Retain
+type GCSStorageDeletionPolicy string
+
+const (
+	// DeleteWithClusterGCSStorageDeletionPolicy (the default) makes the
+	// operator-managed PVC a child of the RayCluster via an ownerReference, so it
+	// (and its RocksDB data) is garbage-collected together with the cluster.
+	DeleteWithClusterGCSStorageDeletionPolicy GCSStorageDeletionPolicy = "DeleteWithCluster"
+	// RetainGCSStorageDeletionPolicy keeps the operator-managed PVC (and its data)
+	// after the owning RayCluster is deleted: the operator omits the ownerReference
+	// so the PVC outlives the cluster. Recover the GCS state by pointing a new
+	// cluster's ClaimName at the retained PVC.
+	RetainGCSStorageDeletionPolicy GCSStorageDeletionPolicy = "Retain"
+)
 
 // RedisCredential is the redis username/password or a reference to the source containing the username/password
 type RedisCredential struct {

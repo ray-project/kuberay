@@ -3,6 +3,7 @@
 package v1
 
 import (
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	corev1 "k8s.io/api/core/v1"
 	resource "k8s.io/apimachinery/pkg/api/resource"
 )
@@ -17,28 +18,32 @@ import (
 // volume can be attached to more than one Pod concurrently (see AccessModes) the
 // caller is responsible for ensuring only one Ray head writes to it at a time.
 type GcsEmbeddedStorageApplyConfiguration struct {
-	// ExistingClaim, if set, makes the operator consume a user-provided PVC as-is
-	// (no create, no delete, no ownerReferences). Mutually exclusive with
-	// Size/StorageClassName/AccessModes.
+	// ClaimName is the name of an existing, user-provided PersistentVolumeClaim to
+	// use as the RocksDB store ("bring your own" PVC). When set, the operator
+	// consumes that PVC as-is: it does not create, delete, resize, or set
+	// ownerReferences on it -- the user owns its entire lifecycle. Mutually
+	// exclusive with Size/StorageClassName/AccessModes (those configure an
+	// operator-managed PVC, which is used instead when ClaimName is empty).
 	//
 	// This is the supported path for persisting GCS state across a RayService
 	// zero-downtime upgrade: point every RayService generation at the same claim.
-	// The operator-managed PVC (used when this is empty) is keyed by and owned by
-	// the RayCluster, so it is not reused across upgrades. Because the old and new
-	// head Pods overlap during a zero-downtime upgrade, the claim must permit
-	// concurrent attach (ReadWriteMany) with externally-coordinated single-writer
-	// semantics, or an active-passive handoff where only one Pod attaches at once.
-	ExistingClaim *string `json:"existingClaim,omitempty"`
-	// Size of the operator-managed PVC (e.g. "1Gi"). Ignored when ExistingClaim
-	// is set. Defaults to 1Gi. The operator-managed PVC is created once and not
+	// (An operator-managed PVC is keyed by and owned by the RayCluster, so it is
+	// not reused across upgrades.) Because the old and new head Pods overlap during
+	// a zero-downtime upgrade, the claim must permit concurrent attach
+	// (ReadWriteMany) with externally-coordinated single-writer semantics, or an
+	// active-passive handoff where only one Pod attaches at once.
+	ClaimName *string `json:"claimName,omitempty"`
+	// Size of the operator-managed PVC (e.g. "1Gi"). Ignored when ClaimName is set.
+	// Defaults to 1Gi. The operator-managed PVC is created once and not
 	// reconfigured in place; to change size/class/accessModes, delete the PVC (or
-	// switch to ExistingClaim). A warning event is emitted if this diverges from
-	// the live PVC.
+	// switch to ClaimName). A warning event is emitted if this diverges from the
+	// live PVC.
 	Size *resource.Quantity `json:"size,omitempty"`
 	// StorageClassName for the operator-managed PVC. Uses the cluster default
-	// StorageClass when omitted.
+	// StorageClass when omitted. Ignored when ClaimName is set.
 	StorageClassName *string `json:"storageClassName,omitempty"`
 	// AccessModes for the operator-managed PVC. Defaults to [ReadWriteOnce].
+	// Ignored when ClaimName is set.
 	//
 	// ReadWriteOnce is the sane default for a standalone RayCluster (one head Pod
 	// attaches at a time). ReadWriteMany is a valid choice when you need the volume
@@ -48,12 +53,11 @@ type GcsEmbeddedStorageApplyConfiguration struct {
 	AccessModes []corev1.PersistentVolumeAccessMode `json:"accessModes,omitempty"`
 	// SubPath mounts a subdirectory of the volume instead of its root.
 	SubPath *string `json:"subPath,omitempty"`
-	// RetainOnClusterDeletion, when true, keeps the operator-managed PVC (and its
-	// data) after the owning RayCluster is deleted, so GCS state can be recovered
-	// by pointing a new cluster's ExistingClaim at the retained PVC. When false
-	// (the default) the PVC is owned by the RayCluster and garbage-collected with
-	// it. Ignored when ExistingClaim is set (the operator never owns a BYO PVC).
-	RetainOnClusterDeletion *bool `json:"retainOnClusterDeletion,omitempty"`
+	// DeletionPolicy controls the lifecycle of the operator-managed PVC relative to
+	// the owning RayCluster. Defaults to DeleteWithCluster. Ignored when ClaimName
+	// is set (the operator never owns a bring-your-own PVC, so it is never deleted
+	// or retained by the operator).
+	DeletionPolicy *rayv1.GCSStorageDeletionPolicy `json:"deletionPolicy,omitempty"`
 }
 
 // GcsEmbeddedStorageApplyConfiguration constructs a declarative configuration of the GcsEmbeddedStorage type for use with
@@ -62,11 +66,11 @@ func GcsEmbeddedStorage() *GcsEmbeddedStorageApplyConfiguration {
 	return &GcsEmbeddedStorageApplyConfiguration{}
 }
 
-// WithExistingClaim sets the ExistingClaim field in the declarative configuration to the given value
+// WithClaimName sets the ClaimName field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the ExistingClaim field is set to the value of the last call.
-func (b *GcsEmbeddedStorageApplyConfiguration) WithExistingClaim(value string) *GcsEmbeddedStorageApplyConfiguration {
-	b.ExistingClaim = &value
+// If called multiple times, the ClaimName field is set to the value of the last call.
+func (b *GcsEmbeddedStorageApplyConfiguration) WithClaimName(value string) *GcsEmbeddedStorageApplyConfiguration {
+	b.ClaimName = &value
 	return b
 }
 
@@ -104,10 +108,10 @@ func (b *GcsEmbeddedStorageApplyConfiguration) WithSubPath(value string) *GcsEmb
 	return b
 }
 
-// WithRetainOnClusterDeletion sets the RetainOnClusterDeletion field in the declarative configuration to the given value
+// WithDeletionPolicy sets the DeletionPolicy field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the RetainOnClusterDeletion field is set to the value of the last call.
-func (b *GcsEmbeddedStorageApplyConfiguration) WithRetainOnClusterDeletion(value bool) *GcsEmbeddedStorageApplyConfiguration {
-	b.RetainOnClusterDeletion = &value
+// If called multiple times, the DeletionPolicy field is set to the value of the last call.
+func (b *GcsEmbeddedStorageApplyConfiguration) WithDeletionPolicy(value rayv1.GCSStorageDeletionPolicy) *GcsEmbeddedStorageApplyConfiguration {
+	b.DeletionPolicy = &value
 	return b
 }

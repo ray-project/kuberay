@@ -24,15 +24,17 @@ spec:
       #                                  # ReadWriteMany only when multiple Pods must attach
       #                                  # concurrently (single-writer coordinated externally).
       # subPath: clusters/my-ray/gcs     # optional; mount a subdirectory of the volume
-      # retainOnClusterDeletion: false   # optional; default. Set true to keep the PVC (and its
-      #                                  # data) after the RayCluster is deleted, so GCS state can
-      #                                  # be recovered by a new cluster via existingClaim.
+      # deletionPolicy: DeleteWithCluster # optional; default. The operator-managed PVC is owned
+      #                                  # by the RayCluster and garbage-collected with it. Set to
+      #                                  # Retain to keep the PVC (and its data) after the
+      #                                  # RayCluster is deleted, so GCS state can be recovered by
+      #                                  # a new cluster via claimName.
       #
-      # To bring your own PVC instead of an operator-managed one, set existingClaim
+      # To bring your own PVC instead of an operator-managed one, set claimName
       # (mutually exclusive with size/storageClassName/accessModes). This is also the
       # path for persisting GCS state across a RayService zero-downtime upgrade: point
       # every generation at the same claim (see the field docs in the API reference).
-      # existingClaim: my-gcs-pvc
+      # claimName: my-gcs-pvc
   headGroupSpec:
     rayStartParams:
       # Setting "num-cpus: 0" to avoid any Ray actors or tasks being scheduled on the Ray head Pod.

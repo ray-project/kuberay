@@ -782,12 +782,12 @@ func IsGCSFaultToleranceEmbedded(options *rayv1.GcsFaultToleranceOptions) bool {
 }
 
 // GetGCSStoragePVCName returns the name of the PVC backing the embedded RocksDB GCS
-// store. When the user brings their own claim via Storage.ExistingClaim, that name is
+// store. When the user brings their own claim via Storage.ClaimName, that name is
 // returned; otherwise the operator-managed name "{cluster}-gcs-pvc" is used.
 func GetGCSStoragePVCName(instance *rayv1.RayCluster) string {
 	options := instance.Spec.GcsFaultToleranceOptions
-	if options != nil && options.Storage != nil && options.Storage.ExistingClaim != "" {
-		return options.Storage.ExistingClaim
+	if options != nil && options.Storage != nil && options.Storage.ClaimName != "" {
+		return options.Storage.ClaimName
 	}
 	return instance.Name + GCSStoragePVCSuffix
 }
