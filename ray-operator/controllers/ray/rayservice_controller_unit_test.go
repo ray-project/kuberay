@@ -1551,6 +1551,68 @@ func TestCreateGatewayWithExistingGatewayRef(t *testing.T) {
 	assert.Nil(t, gw, "createGateway should return nil Gateway when ExistingGatewayRef is set")
 }
 
+// Suspending a RayService that attaches to a shared Gateway via ExistingGatewayRef
+// must NOT delete that Gateway (KubeRay does not own it — deleting it would break
+// ingress for every other RayService on it). The KubeRay-owned HTTPRoute in the
+// RayService namespace must still be deleted.
+func TestDeleteRayServiceOwnedResourcesPreservesExistingGateway(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.RayServiceIncrementalUpgrade, true)
+
+	ctx := context.TODO()
+	rsNamespace := "test-ns"
+	gwNamespace := "gateways"
+
+	sharedGateway := &gwv1.Gateway{ObjectMeta: metav1.ObjectMeta{Name: "shared-gateway", Namespace: gwNamespace}}
+
+	rayService := &rayv1.RayService{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-rayservice", Namespace: rsNamespace},
+		Spec: rayv1.RayServiceSpec{
+			UpgradeStrategy: &rayv1.RayServiceUpgradeStrategy{
+				Type: ptr.To(rayv1.RayServiceNewClusterWithIncrementalUpgrade),
+				ClusterUpgradeOptions: &rayv1.ClusterUpgradeOptions{
+					StepSizePercent: new(int32(10)),
+					IntervalSeconds: new(int32(30)),
+					ExistingGatewayRef: &rayv1.GatewayRef{
+						Name:      sharedGateway.Name,
+						Namespace: sharedGateway.Namespace,
+					},
+				},
+			},
+		},
+	}
+	// KubeRay-owned HTTPRoute lives in the RayService namespace.
+	httpRoute := &gwv1.HTTPRoute{ObjectMeta: metav1.ObjectMeta{
+		Name:      rayService.Name + "-httproute",
+		Namespace: rsNamespace,
+	}}
+
+	newScheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(newScheme)
+	_ = corev1.AddToScheme(newScheme)
+	_ = gwv1.Install(newScheme)
+	fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).
+		WithRuntimeObjects(sharedGateway, httpRoute, rayService).Build()
+
+	reconciler := &RayServiceReconciler{
+		Client:   fakeClient,
+		Scheme:   newScheme,
+		Recorder: events.NewFakeRecorder(10),
+	}
+
+	_, err := reconciler.deleteRayServiceOwnedResources(ctx, rayService)
+	require.NoError(t, err)
+
+	// The shared Gateway must still exist.
+	gotGateway := &gwv1.Gateway{}
+	err = fakeClient.Get(ctx, types.NamespacedName{Name: sharedGateway.Name, Namespace: gwNamespace}, gotGateway)
+	require.NoError(t, err, "shared Gateway must NOT be deleted on suspend when ExistingGatewayRef is set")
+
+	// The KubeRay-owned HTTPRoute must be deleted.
+	gotRoute := &gwv1.HTTPRoute{}
+	err = fakeClient.Get(ctx, types.NamespacedName{Name: httpRoute.Name, Namespace: rsNamespace}, gotRoute)
+	assert.True(t, errors.IsNotFound(err), "HTTPRoute should be deleted on suspend, got err=%v", err)
+}
+
 func TestCreateHTTPRoute(t *testing.T) {
 	ctx := context.TODO()
 	namespace := "test-ns"
