@@ -1532,6 +1532,25 @@ func TestCreateGateway(t *testing.T) {
 	}
 }
 
+// When ExistingGatewayRef is set, createGateway must not build a Gateway: it
+// returns (nil, nil) so reconcileGateway skips creation and KubeRay only manages
+// the HTTPRoute on the referenced (shared) Gateway.
+func TestCreateGatewayWithExistingGatewayRef(t *testing.T) {
+	reconciler := &RayServiceReconciler{
+		Client: clientFake.NewClientBuilder().WithScheme(runtime.NewScheme()).Build(),
+	}
+
+	rayService := makeIncrementalUpgradeRayService(true, "", new(int32(50)), new(int32(10)), new(int32(80)), &metav1.Time{Time: time.Now()})
+	rayService.Spec.UpgradeStrategy.ClusterUpgradeOptions.ExistingGatewayRef = &rayv1.GatewayRef{
+		Name:      "shared-gateway",
+		Namespace: "gateways",
+	}
+
+	gw, err := reconciler.createGateway(rayService)
+	require.NoError(t, err)
+	assert.Nil(t, gw, "createGateway should return nil Gateway when ExistingGatewayRef is set")
+}
+
 func TestCreateHTTPRoute(t *testing.T) {
 	ctx := context.TODO()
 	namespace := "test-ns"
@@ -1688,6 +1707,82 @@ func TestCreateHTTPRoute(t *testing.T) {
 			}
 		})
 	}
+}
+
+// When ExistingGatewayRef references a shared Gateway in another namespace, the
+// HTTPRoute's ParentRef must target that Gateway, while the HTTPRoute itself and
+// its backendRefs stay in the RayService's namespace (so owner-ref GC works and
+// the Serve services resolve).
+func TestCreateHTTPRouteWithExistingGatewayRef(t *testing.T) {
+	ctx := context.TODO()
+	rsNamespace := "test-ns"
+	gwNamespace := "gateways"
+	stepSize := int32(10)
+	interval := int32(30)
+
+	activeCluster := &rayv1.RayCluster{ObjectMeta: metav1.ObjectMeta{Name: "rayservice-active", Namespace: rsNamespace}}
+	// Shared Gateway lives in a different namespace from the RayService.
+	sharedGateway := &gwv1.Gateway{ObjectMeta: metav1.ObjectMeta{Name: "shared-gateway", Namespace: gwNamespace}}
+	activeServeService := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: utils.GenerateServeServiceName(activeCluster.Name), Namespace: rsNamespace}}
+
+	rayService := &rayv1.RayService{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-rayservice", Namespace: rsNamespace},
+		Spec: rayv1.RayServiceSpec{
+			UpgradeStrategy: &rayv1.RayServiceUpgradeStrategy{
+				Type: ptr.To(rayv1.RayServiceNewClusterWithIncrementalUpgrade),
+				ClusterUpgradeOptions: &rayv1.ClusterUpgradeOptions{
+					StepSizePercent: &stepSize,
+					IntervalSeconds: &interval,
+					ExistingGatewayRef: &rayv1.GatewayRef{
+						Name:      sharedGateway.Name,
+						Namespace: sharedGateway.Namespace,
+					},
+				},
+			},
+		},
+		Status: rayv1.RayServiceStatuses{
+			ActiveServiceStatus: rayv1.RayServiceStatus{
+				RayClusterName:       activeCluster.Name,
+				TrafficRoutedPercent: new(int32(100)),
+				TargetCapacity:       new(int32(100)),
+			},
+		},
+	}
+
+	newScheme := runtime.NewScheme()
+	_ = rayv1.AddToScheme(newScheme)
+	_ = corev1.AddToScheme(newScheme)
+	_ = gwv1.Install(newScheme)
+	fakeClient := clientFake.NewClientBuilder().WithScheme(newScheme).
+		WithRuntimeObjects(activeCluster, sharedGateway, activeServeService, rayService).Build()
+
+	reconciler := RayServiceReconciler{
+		Client:   fakeClient,
+		Scheme:   newScheme,
+		Recorder: events.NewFakeRecorder(1),
+	}
+
+	route, err := reconciler.createHTTPRoute(ctx, rayService, false)
+	require.NoError(t, err)
+	require.NotNil(t, route)
+
+	// HTTPRoute lives in the RayService namespace.
+	assert.Equal(t, "test-rayservice-httproute", route.Name)
+	assert.Equal(t, rsNamespace, route.Namespace)
+
+	// ParentRef targets the shared Gateway in its own namespace.
+	require.Len(t, route.Spec.ParentRefs, 1)
+	assert.Equal(t, gwv1.ObjectName(sharedGateway.Name), route.Spec.ParentRefs[0].Name)
+	require.NotNil(t, route.Spec.ParentRefs[0].Namespace)
+	assert.Equal(t, gwv1.Namespace(gwNamespace), *route.Spec.ParentRefs[0].Namespace)
+
+	// Backend service references use the RayService namespace, not the Gateway's.
+	require.Len(t, route.Spec.Rules, 1)
+	require.GreaterOrEqual(t, len(route.Spec.Rules[0].BackendRefs), 1)
+	backend := route.Spec.Rules[0].BackendRefs[0].BackendRef
+	assert.Equal(t, gwv1.ObjectName(activeServeService.Name), backend.Name)
+	require.NotNil(t, backend.Namespace)
+	assert.Equal(t, gwv1.Namespace(rsNamespace), *backend.Namespace)
 }
 
 func TestReconcileHTTPRoute(t *testing.T) {
