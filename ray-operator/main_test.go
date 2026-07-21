@@ -104,6 +104,43 @@ workerSidecarContainers:
 			expectErr: false,
 		},
 		{
+			name: "config with default pod metadata",
+			configData: `apiVersion: config.ray.io/v1alpha1
+kind: Configuration
+metricsAddr: ":8080"
+probeAddr: ":8082"
+enableLeaderElection: true
+reconcileConcurrency: 1
+defaultPodAnnotations:
+  monitoring.example.com/scrape: "true"
+  monitoring.example.com/port: "8080"
+defaultPodLabels:
+  app.kubernetes.io/managed-by: kuberay
+  team: platform
+`,
+			expectedConfig: configapi.Configuration{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "Configuration",
+					APIVersion: "config.ray.io/v1alpha1",
+				},
+				MetricsAddr:          ":8080",
+				ProbeAddr:            ":8082",
+				EnableLeaderElection: new(true),
+				ReconcileConcurrency: 1,
+				DefaultPodAnnotations: map[string]string{
+					"monitoring.example.com/scrape": "true",
+					"monitoring.example.com/port":   "8080",
+				},
+				DefaultPodLabels: map[string]string{
+					"app.kubernetes.io/managed-by": "kuberay",
+					"team":                         "platform",
+				},
+				QPS:   ptr.To(configapi.DefaultQPS),
+				Burst: ptr.To(configapi.DefaultBurst),
+			},
+			expectErr: false,
+		},
+		{
 			name: "unknown filed ignored",
 			configData: `apiVersion: config.ray.io/v1alpha1
 kind: Configuration

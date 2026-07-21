@@ -303,6 +303,8 @@ func main() {
 		RayClusterMetricsManager: rayClusterMetricsManager,
 		BatchSchedulerManager:    batchSchedulerManager,
 		DefaultContainerEnvs:     config.DefaultContainerEnvs,
+		DefaultPodAnnotations:    config.DefaultPodAnnotations,
+		DefaultPodLabels:         config.DefaultPodLabels,
 	}
 	exitOnError(ray.NewReconciler(mgr, rayClusterOptions).SetupWithManager(mgr, config.ReconcileConcurrency),
 		"unable to create controller", "controller", "RayCluster")
