@@ -230,7 +230,7 @@ const (
 	NoPendingCluster               RayServiceConditionReason = "NoPendingCluster"
 	NoActiveCluster                RayServiceConditionReason = "NoActiveCluster"
 	RayServiceValidationFailed     RayServiceConditionReason = "ValidationFailed"
-	TargetClusterChanged           RayServiceConditionReason = "TargetClusterChanged"
+	DesiredClusterSpecChanged      RayServiceConditionReason = "DesiredClusterSpecChanged"
 	SuspendRequested               RayServiceConditionReason = "SuspendRequested"
 	SuspendInProgress              RayServiceConditionReason = "SuspendInProgress"
 	SuspendComplete                RayServiceConditionReason = "SuspendComplete"
