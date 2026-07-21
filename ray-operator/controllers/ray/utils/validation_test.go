@@ -2464,7 +2464,7 @@ func TestValidateRayCronJobSpec(t *testing.T) {
 				},
 				Spec: rayv1.RayCronJobSpec{
 					Schedule: "0 9 * * *",
-					TimeZone: ptr.To("Asia/Taipei"),
+					TimeZone: new("Asia/Taipei"),
 					JobTemplate: rayv1.RayJobSpec{
 						Entrypoint: "python test.py",
 						RayClusterSpec: &rayv1.RayClusterSpec{
@@ -2495,7 +2495,7 @@ func TestValidateRayCronJobSpec(t *testing.T) {
 				},
 				Spec: rayv1.RayCronJobSpec{
 					Schedule: "0 0 * * *",
-					TimeZone: ptr.To("UTC"),
+					TimeZone: new("UTC"),
 					JobTemplate: rayv1.RayJobSpec{
 						Entrypoint: "python test.py",
 						RayClusterSpec: &rayv1.RayClusterSpec{
@@ -2526,7 +2526,7 @@ func TestValidateRayCronJobSpec(t *testing.T) {
 				},
 				Spec: rayv1.RayCronJobSpec{
 					Schedule: "*/5 * * * *",
-					TimeZone: ptr.To("Invalid/Zone"),
+					TimeZone: new("Invalid/Zone"),
 					JobTemplate: rayv1.RayJobSpec{
 						Entrypoint: "python test.py",
 						RayClusterSpec: &rayv1.RayClusterSpec{
@@ -3099,8 +3099,8 @@ func TestValidateRayClusterSpec_NetworkIsolationRequiresFeatureGate(t *testing.T
 				{
 					GroupName:   "worker-group",
 					Template:    podTemplateSpec(nil, nil),
-					MinReplicas: ptr.To(int32(1)),
-					MaxReplicas: ptr.To(int32(1)),
+					MinReplicas: new(int32(1)),
+					MaxReplicas: new(int32(1)),
 				},
 			},
 		},

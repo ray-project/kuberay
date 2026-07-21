@@ -3015,7 +3015,7 @@ func TestRayServiceFinalizer(t *testing.T) {
 			rayService: &rayv1.RayService{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-rayservice", Namespace: namespace},
 				Spec: rayv1.RayServiceSpec{
-					ManagedBy: ptr.To("kueue.x-k8s.io/multikueue"),
+					ManagedBy: new("kueue.x-k8s.io/multikueue"),
 				},
 			},
 			validate: func(t *testing.T, fakeClient client.Client, namespacedName types.NamespacedName) {
