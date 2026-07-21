@@ -690,7 +690,13 @@ func (r *RayClusterReconciler) reconcileGCSStoragePVC(ctx context.Context, insta
 
 	if err := r.Create(ctx, pvc); err != nil {
 		if errors.IsAlreadyExists(err) {
-			return nil
+			// Lost a create race after the NotFound Get above: fetch the live PVC
+			// and reconcile its ownerReference, consistent with the already-exists
+			// path so RetainOnClusterDeletion is still honored.
+			if getErr := r.Get(ctx, types.NamespacedName{Name: pvcName, Namespace: instance.Namespace}, existing); getErr != nil {
+				return getErr
+			}
+			return r.reconcileGCSStoragePVCOwnerRef(ctx, instance, existing)
 		}
 		r.Recorder.Eventf(instance, nil, corev1.EventTypeWarning, string(utils.FailedToCreatePVC), string(utils.CreateAction),
 			"Failed to create GCS storage PVC %s/%s, %v", pvc.Namespace, pvc.Name, err)
@@ -749,7 +755,11 @@ func gcsStoragePVCDrift(desired, existing *corev1.PersistentVolumeClaim) string 
 		diffs = append(diffs, fmt.Sprintf("requested size %s != current %s", wantSize.String(), gotSize.String()))
 	}
 
-	if !ptr.Equal(desired.Spec.StorageClassName, existing.Spec.StorageClassName) {
+	// Only compare StorageClassName when the desired value is explicitly set.
+	// When it is omitted (nil), the caller asked for the cluster's default
+	// StorageClass and Kubernetes populates the live PVC with the resolved default
+	// class name, so a nil-vs-resolved-default comparison would be a false positive.
+	if desired.Spec.StorageClassName != nil && !ptr.Equal(desired.Spec.StorageClassName, existing.Spec.StorageClassName) {
 		diffs = append(diffs, fmt.Sprintf("storageClassName %s != current %s",
 			ptr.Deref(desired.Spec.StorageClassName, "<default>"), ptr.Deref(existing.Spec.StorageClassName, "<default>")))
 	}

@@ -223,6 +223,68 @@ func TestReconcileGCSStoragePVC(t *testing.T) {
 		}
 	})
 
+	t.Run("no drift event when storageClassName is omitted and the live PVC has a default class", func(t *testing.T) {
+		// storageClassName omitted in the spec (nil); Kubernetes populates the live
+		// PVC with the resolved default class. This must not be reported as drift.
+		instance := newGCSStorageRayCluster(&rayv1.GcsFaultToleranceOptions{
+			Backend: rayv1.GcsFTBackendRocksDB,
+			Storage: &rayv1.GcsEmbeddedStorage{Size: ptr.To(resource.MustParse(utils.GCSStorageDefaultSize))},
+		})
+		existing := &corev1.PersistentVolumeClaim{
+			ObjectMeta: metav1.ObjectMeta{Name: "test-cluster-gcs-pvc", Namespace: "default"},
+			Spec: corev1.PersistentVolumeClaimSpec{
+				AccessModes:      []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+				StorageClassName: ptr.To("standard"),
+				Resources: corev1.VolumeResourceRequirements{
+					Requests: corev1.ResourceList{corev1.ResourceStorage: resource.MustParse(utils.GCSStorageDefaultSize)},
+				},
+			},
+		}
+		fakeClient := clientFake.NewClientBuilder().WithScheme(scheme).WithObjects(instance, existing).Build()
+		recorder := events.NewFakeRecorder(10)
+		r := &RayClusterReconciler{Client: fakeClient, Recorder: recorder, Scheme: scheme, rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient)}
+
+		require.NoError(t, r.reconcileGCSStoragePVC(ctx, instance))
+
+		select {
+		case event := <-recorder.Events:
+			t.Fatalf("expected no drift event, got %q", event)
+		default:
+		}
+	})
+
+	t.Run("emits a drift event when an explicitly-set storageClassName diverges", func(t *testing.T) {
+		instance := newGCSStorageRayCluster(&rayv1.GcsFaultToleranceOptions{
+			Backend: rayv1.GcsFTBackendRocksDB,
+			Storage: &rayv1.GcsEmbeddedStorage{
+				Size:             ptr.To(resource.MustParse(utils.GCSStorageDefaultSize)),
+				StorageClassName: ptr.To("fast"),
+			},
+		})
+		existing := &corev1.PersistentVolumeClaim{
+			ObjectMeta: metav1.ObjectMeta{Name: "test-cluster-gcs-pvc", Namespace: "default"},
+			Spec: corev1.PersistentVolumeClaimSpec{
+				AccessModes:      []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+				StorageClassName: ptr.To("standard"),
+				Resources: corev1.VolumeResourceRequirements{
+					Requests: corev1.ResourceList{corev1.ResourceStorage: resource.MustParse(utils.GCSStorageDefaultSize)},
+				},
+			},
+		}
+		fakeClient := clientFake.NewClientBuilder().WithScheme(scheme).WithObjects(instance, existing).Build()
+		recorder := events.NewFakeRecorder(10)
+		r := &RayClusterReconciler{Client: fakeClient, Recorder: recorder, Scheme: scheme, rayClusterScaleExpectation: expectations.NewRayClusterScaleExpectation(fakeClient)}
+
+		require.NoError(t, r.reconcileGCSStoragePVC(ctx, instance))
+
+		select {
+		case event := <-recorder.Events:
+			assert.Contains(t, event, "storageClassName")
+		default:
+			t.Fatal("expected a storageClassName drift warning event, got none")
+		}
+	})
+
 	t.Run("retainOnClusterDeletion omits the RayCluster owner reference on create", func(t *testing.T) {
 		instance := newGCSStorageRayCluster(&rayv1.GcsFaultToleranceOptions{
 			Backend: rayv1.GcsFTBackendRocksDB,
