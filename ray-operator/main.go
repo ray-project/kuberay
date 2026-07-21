@@ -13,7 +13,6 @@ import (
 	"go.uber.org/zap/zapcore"
 	"gopkg.in/natefinch/lumberjack.v2"
 	batchv1 "k8s.io/api/batch/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -270,6 +269,11 @@ func main() {
 	restConfig.QPS = float32(*config.QPS)
 	restConfig.Burst = *config.Burst
 
+	// Check if cert-manager API is available before registering the mTLS controller.
+	// If cert-manager is not installed, the controller's Certificate/Issuer cache would
+	// never sync and the manager would fail to start (e.g. in E2E environments without cert-manager).
+	certManagerAvailable := certManagerAPIAvailable(restConfig)
+
 	mgr, err := ctrl.NewManager(restConfig, options)
 	exitOnError(err, "unable to start manager")
 
@@ -301,15 +305,6 @@ func main() {
 	isOpenShift, err := utils.IsOpenShiftCluster(restConfig)
 	exitOnError(err, "unable to detect cluster type (OpenShift vs Kubernetes)")
 
-	// Check if cert-manager API is available before registering the mTLS controller.
-	// If cert-manager is not installed, the controller's Certificate/Issuer cache would
-	// never sync and the manager would fail to start (e.g. in E2E environments without cert-manager).
-	certManagerAvailable := false
-	if features.Enabled(features.RayClusterMTLS) {
-		certManagerAvailable, err = certManagerAPIAvailable(restConfig)
-		exitOnError(err, "unable to determine cert-manager API availability")
-	}
-
 	rayClusterOptions := ray.RayClusterReconcilerOptions{
 		HeadSidecarContainers:    config.HeadSidecarContainers,
 		WorkerSidecarContainers:  config.WorkerSidecarContainers,
@@ -318,6 +313,8 @@ func main() {
 		RayClusterMetricsManager: rayClusterMetricsManager,
 		BatchSchedulerManager:    batchSchedulerManager,
 		DefaultContainerEnvs:     config.DefaultContainerEnvs,
+		DefaultPodAnnotations:    config.DefaultPodAnnotations,
+		DefaultPodLabels:         config.DefaultPodLabels,
 		CertManagerAvailable:     certManagerAvailable,
 	}
 	exitOnError(ray.NewReconciler(mgr, rayClusterOptions).SetupWithManager(mgr, config.ReconcileConcurrency),
@@ -328,7 +325,7 @@ func main() {
 			exitOnError(ray.NewRayClusterMTLSController(mgr).SetupWithManager(mgr),
 				"unable to create controller", "controller", "RayClusterMTLS")
 		} else {
-			setupLog.Info("cert-manager API not found; mTLS controller disabled (RayClusters with tlsOptions set will not get auto-generated certs)")
+			setupLog.Info("cert-manager API not found; mTLS controller disabled (RayClusters with tlsOptions and no CertificateSecretName will not get auto-generated certs)")
 		}
 	} else {
 		setupLog.Info("RayClusterMTLS feature gate is disabled, skipping mTLS controller setup")
@@ -347,6 +344,10 @@ func main() {
 	if os.Getenv("ENABLE_WEBHOOKS") == "true" {
 		exitOnError(webhooks.SetupRayClusterWebhookWithManager(mgr),
 			"unable to create webhook", "webhook", "RayCluster")
+		exitOnError(webhooks.SetupRayJobWebhookWithManager(mgr),
+			"unable to create webhook", "webhook", "RayJob")
+		exitOnError(webhooks.SetupRayServiceWebhookWithManager(mgr),
+			"unable to create webhook", "webhook", "RayService")
 	}
 
 	if features.Enabled(features.RayCronJob) {
@@ -357,14 +358,14 @@ func main() {
 		setupLog.Info("RayCronJob feature gate is disabled, skipping RayCronJob controller setup")
 	}
 
-	if features.Enabled(features.RayClusterNetworkIsolation) {
-		setupLog.Info("RayClusterNetworkIsolation feature gate is enabled, starting NetworkPolicy controller")
+	if features.Enabled(features.RayClusterNetworkPolicy) {
+		setupLog.Info("RayClusterNetworkPolicy feature gate is enabled, starting NetworkPolicy controller")
 		networkPolicyController, err := ray.NewNetworkPolicyController(mgr)
 		exitOnError(err, "unable to create controller", "controller", "NetworkPolicy")
 		exitOnError(networkPolicyController.SetupWithManager(mgr, config.ReconcileConcurrency),
 			"unable to setup controller", "controller", "NetworkPolicy")
 	} else {
-		setupLog.Info("RayClusterNetworkIsolation feature gate is disabled, skipping NetworkPolicy controller setup")
+		setupLog.Info("RayClusterNetworkPolicy feature gate is disabled, skipping NetworkPolicy controller setup")
 	}
 
 	// +kubebuilder:scaffold:builder
@@ -376,22 +377,24 @@ func main() {
 	exitOnError(mgr.Start(ctx), "problem running manager")
 }
 
-// certManagerAPIAvailable returns true if the cert-manager.io/v1 API is
-// available in the cluster. Used to avoid registering the mTLS controller when
-// cert-manager is not installed, which would cause manager startup to time out
-// waiting for the Certificate cache to sync.
-func certManagerAPIAvailable(restConfig *rest.Config) (bool, error) {
+// certManagerAPIAvailable returns true if the cert-manager.io/v1 API (Certificate, Issuer) is
+// available in the cluster. Used to avoid registering the mTLS controller when cert-manager
+// is not installed, which would cause manager startup to time out waiting for the Certificate cache to sync.
+func certManagerAPIAvailable(restConfig *rest.Config) bool {
 	discoveryClient, err := discovery.NewDiscoveryClientForConfig(restConfig)
+	if err != nil || discoveryClient == nil {
+		return false
+	}
+	_, resources, err := discoveryClient.ServerGroupsAndResources()
 	if err != nil {
-		return false, err
+		return false
 	}
-	if _, err := discoveryClient.ServerResourcesForGroupVersion(certmanagerv1.SchemeGroupVersion.String()); err != nil {
-		if apierrors.IsNotFound(err) {
-			return false, nil
+	for _, r := range resources {
+		if r.GroupVersion == "cert-manager.io/v1" {
+			return true
 		}
-		return false, err
 	}
-	return true, nil
+	return false
 }
 
 func exitOnError(err error, msg string, keysAndValues ...any) {

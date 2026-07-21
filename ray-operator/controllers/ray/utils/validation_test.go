@@ -625,6 +625,49 @@ func TestValidateRayClusterSpecAutoscaler(t *testing.T) {
 			},
 			expectedErr: "restartPolicy for head Pod should be Never or unset when using autoscaler V2",
 		},
+		"should return error if autoscaler v1 is enabled and a worker group has a restartPolicy other than Never or unset": {
+			spec: rayv1.RayClusterSpec{
+				EnableInTreeAutoscaling: new(true),
+				AutoscalerOptions: &rayv1.AutoscalerOptions{
+					Version: ptr.To(rayv1.AutoscalerVersionV1),
+				},
+				HeadGroupSpec: rayv1.HeadGroupSpec{
+					Template: podTemplateSpec(nil, nil),
+				},
+				WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+					{
+						GroupName: "worker-group-1",
+						Template:  podTemplateSpec(nil, ptr.To(corev1.RestartPolicyNever)),
+					},
+					{
+						GroupName: "worker-group-2",
+						Template:  podTemplateSpec(nil, ptr.To(corev1.RestartPolicyAlways)),
+					},
+				},
+			},
+			expectedErr: "restartPolicy for worker group worker-group-2 should be Never or unset when using autoscaler V1",
+		},
+		"should not return error if autoscaler v1 is enabled and all worker groups have restartPolicy Never or unset": {
+			spec: rayv1.RayClusterSpec{
+				EnableInTreeAutoscaling: new(true),
+				AutoscalerOptions: &rayv1.AutoscalerOptions{
+					Version: ptr.To(rayv1.AutoscalerVersionV1),
+				},
+				HeadGroupSpec: rayv1.HeadGroupSpec{
+					Template: podTemplateSpec(nil, nil),
+				},
+				WorkerGroupSpecs: []rayv1.WorkerGroupSpec{
+					{
+						GroupName: "worker-group-1",
+						Template:  podTemplateSpec(nil, nil),
+					},
+					{
+						GroupName: "worker-group-2",
+						Template:  podTemplateSpec(nil, ptr.To(corev1.RestartPolicyNever)),
+					},
+				},
+			},
+		},
 		"should return error if autoscaler v2 is enabled and a worker group has a restartPolicy other than Never or unset": {
 			spec: rayv1.RayClusterSpec{
 				EnableInTreeAutoscaling: ptr.To(true),
@@ -2991,61 +3034,61 @@ func TestValidateRayClusterSpec_Auth(t *testing.T) {
 	}
 }
 
-func TestValidateNetworkIsolation(t *testing.T) {
+func TestValidateNetworkPolicy(t *testing.T) {
 	tests := []struct {
-		ni          *rayv1.NetworkIsolationConfig
+		ni          *rayv1.NetworkPolicyConfig
 		name        string
 		errorMsg    string
 		expectError bool
 	}{
 		{
 			name: "DenyAllEgress with head IngressRules set returns error",
-			ni: &rayv1.NetworkIsolationConfig{
-				Mode: ptr.To(rayv1.NetworkIsolationDenyAllEgress),
+			ni: &rayv1.NetworkPolicyConfig{
+				Mode: ptr.To(rayv1.NetworkPolicyDenyAllEgress),
 				Head: &rayv1.NetworkPolicyRules{
 					IngressRules: []networkingv1.NetworkPolicyIngressRule{{}},
 				},
 			},
 			expectError: true,
-			errorMsg:    `networkIsolation.head.ingressRules cannot be set when mode is "DenyAllEgress" (ingress is not restricted)`,
+			errorMsg:    `networkPolicy.head.ingressRules cannot be set when mode is "DenyAllEgress" (ingress is not restricted)`,
 		},
 		{
 			name: "DenyAllEgress with worker IngressRules set returns error",
-			ni: &rayv1.NetworkIsolationConfig{
-				Mode: ptr.To(rayv1.NetworkIsolationDenyAllEgress),
+			ni: &rayv1.NetworkPolicyConfig{
+				Mode: ptr.To(rayv1.NetworkPolicyDenyAllEgress),
 				Worker: &rayv1.NetworkPolicyRules{
 					IngressRules: []networkingv1.NetworkPolicyIngressRule{{}},
 				},
 			},
 			expectError: true,
-			errorMsg:    `networkIsolation.worker.ingressRules cannot be set when mode is "DenyAllEgress" (ingress is not restricted)`,
+			errorMsg:    `networkPolicy.worker.ingressRules cannot be set when mode is "DenyAllEgress" (ingress is not restricted)`,
 		},
 		{
 			name: "DenyAllIngress with head EgressRules set returns error",
-			ni: &rayv1.NetworkIsolationConfig{
-				Mode: ptr.To(rayv1.NetworkIsolationDenyAllIngress),
+			ni: &rayv1.NetworkPolicyConfig{
+				Mode: ptr.To(rayv1.NetworkPolicyDenyAllIngress),
 				Head: &rayv1.NetworkPolicyRules{
 					EgressRules: []networkingv1.NetworkPolicyEgressRule{{}},
 				},
 			},
 			expectError: true,
-			errorMsg:    `networkIsolation.head.egressRules cannot be set when mode is "DenyAllIngress" (egress is not restricted)`,
+			errorMsg:    `networkPolicy.head.egressRules cannot be set when mode is "DenyAllIngress" (egress is not restricted)`,
 		},
 		{
 			name: "DenyAllIngress with worker EgressRules set returns error",
-			ni: &rayv1.NetworkIsolationConfig{
-				Mode: ptr.To(rayv1.NetworkIsolationDenyAllIngress),
+			ni: &rayv1.NetworkPolicyConfig{
+				Mode: ptr.To(rayv1.NetworkPolicyDenyAllIngress),
 				Worker: &rayv1.NetworkPolicyRules{
 					EgressRules: []networkingv1.NetworkPolicyEgressRule{{}},
 				},
 			},
 			expectError: true,
-			errorMsg:    `networkIsolation.worker.egressRules cannot be set when mode is "DenyAllIngress" (egress is not restricted)`,
+			errorMsg:    `networkPolicy.worker.egressRules cannot be set when mode is "DenyAllIngress" (egress is not restricted)`,
 		},
 		{
 			name: "DenyAll with both head and worker rules is valid",
-			ni: &rayv1.NetworkIsolationConfig{
-				Mode: ptr.To(rayv1.NetworkIsolationDenyAll),
+			ni: &rayv1.NetworkPolicyConfig{
+				Mode: ptr.To(rayv1.NetworkPolicyDenyAll),
 				Head: &rayv1.NetworkPolicyRules{
 					IngressRules: []networkingv1.NetworkPolicyIngressRule{{}},
 					EgressRules:  []networkingv1.NetworkPolicyEgressRule{{}},
@@ -3058,22 +3101,22 @@ func TestValidateNetworkIsolation(t *testing.T) {
 			expectError: false,
 		},
 		{
-			name:        "nil NetworkIsolation is valid",
+			name:        "nil NetworkPolicy is valid",
 			ni:          nil,
 			expectError: false,
 		},
 		{
 			name: "mode only with no head or worker rules is valid",
-			ni: &rayv1.NetworkIsolationConfig{
-				Mode: ptr.To(rayv1.NetworkIsolationDenyAll),
+			ni: &rayv1.NetworkPolicyConfig{
+				Mode: ptr.To(rayv1.NetworkPolicyDenyAll),
 			},
 			expectError: false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			spec := &rayv1.RayClusterSpec{NetworkIsolation: tt.ni}
-			err := validateNetworkIsolation(spec)
+			spec := &rayv1.RayClusterSpec{NetworkPolicy: tt.ni}
+			err := validateNetworkPolicy(spec)
 			if tt.expectError {
 				require.Error(t, err)
 				assert.EqualError(t, err, tt.errorMsg)
@@ -3084,12 +3127,12 @@ func TestValidateNetworkIsolation(t *testing.T) {
 	}
 }
 
-func TestValidateRayClusterSpec_NetworkIsolationRequiresFeatureGate(t *testing.T) {
-	features.SetFeatureGateDuringTest(t, features.RayClusterNetworkIsolation, false)
+func TestValidateRayClusterSpec_NetworkPolicyRequiresFeatureGate(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.RayClusterNetworkPolicy, false)
 	cluster := &rayv1.RayCluster{
 		Spec: rayv1.RayClusterSpec{
-			NetworkIsolation: &rayv1.NetworkIsolationConfig{
-				Mode: ptr.To(rayv1.NetworkIsolationDenyAll),
+			NetworkPolicy: &rayv1.NetworkPolicyConfig{
+				Mode: ptr.To(rayv1.NetworkPolicyDenyAll),
 			},
 			HeadGroupSpec: rayv1.HeadGroupSpec{
 				Template: podTemplateSpec(nil, nil),
@@ -3106,7 +3149,7 @@ func TestValidateRayClusterSpec_NetworkIsolationRequiresFeatureGate(t *testing.T
 	}
 	err := ValidateRayClusterSpec(&cluster.Spec, cluster.Annotations)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "RayClusterNetworkIsolation")
+	assert.Contains(t, err.Error(), "RayClusterNetworkPolicy")
 }
 
 func TestValidateTLSOptions(t *testing.T) {

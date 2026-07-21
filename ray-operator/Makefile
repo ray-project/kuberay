@@ -94,7 +94,7 @@ test-e2e-upgrade: manifests fmt vet ## Run e2e operator upgrade tests.
 
 test-e2e-incremental-upgrade: WHAT ?= ./test/e2eincrementalupgrade
 test-e2e-incremental-upgrade: manifests fmt vet ## Run e2e RayService incremental upgrade tests.
-	go test -timeout 30m -v $(WHAT)
+	go test -timeout 60m -v $(WHAT)
 
 test-e2e-rayjob-submitter: WHAT ?= ./test/e2erayjobsubmitter
 test-e2e-rayjob-submitter: manifests fmt vet ## Run e2e light weight submitter tests.

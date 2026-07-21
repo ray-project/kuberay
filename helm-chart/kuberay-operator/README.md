@@ -169,6 +169,8 @@ spec:
 | batchScheduler.name | string | `""` |  |
 | configuration.enabled | bool | `false` | Whether to enable the configuration feature. If enabled, a ConfigMap will be created and mounted to the operator. When enabled, flag-based configuration values (leaderElectionEnabled, metrics.enabled, kubeClient.qps, etc.) will be injected into the ConfigMap. The operator will use the ConfigMap and ignore command-line flags. |
 | configuration.defaultContainerEnvs | list | `[]` | Default environment variables to inject into all Ray containers in all RayCluster CRs. This allows user to set feature flags across all Ray pods. Example: defaultContainerEnvs: - name: RAY_enable_open_telemetry   value: "true" - name: RAY_metric_cardinality_level   value: "recommended" |
+| configuration.defaultPodAnnotations | object | `{}` | Default annotations to add to all Ray pod templates. User-specified annotations take precedence. Example: defaultPodAnnotations:   prometheus.io/scrape: "true"   prometheus.io/port: "8080" |
+| configuration.defaultPodLabels | object | `{}` | Default labels to add to all Ray pod templates. User-specified labels take precedence. Example: defaultPodLabels:   app.kubernetes.io/managed-by: kuberay |
 | configuration.headSidecarContainers | list | `[]` | Sidecar containers to inject into every Ray head pod. Example: headSidecarContainers: - name: fluentbit   image: fluent/fluent-bit:1.9 |
 | configuration.workerSidecarContainers | list | `[]` | Sidecar containers to inject into every Ray worker pod. Example: workerSidecarContainers: - name: fluentbit   image: fluent/fluent-bit:1.9 |
 | featureGates[0].name | string | `"RayClusterStatusConditions"` |  |
@@ -187,7 +189,7 @@ spec:
 | metrics.serviceMonitor.enabled | bool | `false` | Enable a prometheus ServiceMonitor |
 | metrics.serviceMonitor.interval | string | `"30s"` | Prometheus ServiceMonitor interval |
 | metrics.serviceMonitor.honorLabels | bool | `true` | When true, honorLabels preserves the metric’s labels when they collide with the target’s labels. |
-| metrics.serviceMonitor.selector | object | `{}` | Prometheus ServiceMonitor selector |
+| metrics.serviceMonitor.additionalLabels | object | `{}` | Additional labels to add to the ServiceMonitor's metadata. |
 | metrics.serviceMonitor.namespace | string | `""` | Prometheus ServiceMonitor namespace |
 | operatorCommand | string | `"/manager"` | Path to the operator binary |
 | leaderElectionEnabled | bool | `true` | If leaderElectionEnabled is set to true, the KubeRay operator will use leader election for high availability. |

@@ -465,7 +465,7 @@ func CalculateReadyReplicas(pods corev1.PodList) int32 {
 func CalculateAvailableReplicas(pods corev1.PodList) int32 {
 	count := int32(0)
 	for _, pod := range pods.Items {
-		if val, ok := pod.Labels["ray.io/node-type"]; !ok || val != string(rayv1.WorkerNode) {
+		if val, ok := pod.Labels[RayNodeTypeLabelKey]; !ok || val != string(rayv1.WorkerNode) {
 			continue
 		}
 		if pod.Status.Phase == corev1.PodRunning {
@@ -485,10 +485,9 @@ func CalculateDesiredResources(cluster *rayv1.RayCluster) corev1.ResourceList {
 			continue
 		}
 		podResource := CalculatePodResource(nodeGroup.Template.Spec)
-		calculateReplicaResource(&podResource, nodeGroup.NumOfHosts)
-		for i := int32(0); i < *nodeGroup.Replicas; i++ {
-			desiredResourcesList = append(desiredResourcesList, podResource)
-		}
+		replicas := ptr.Deref(nodeGroup.Replicas, int32(0))
+		calculatePodResources(&podResource, int64(nodeGroup.NumOfHosts)*int64(replicas))
+		desiredResourcesList = append(desiredResourcesList, podResource)
 	}
 	return SumResourceList(desiredResourcesList)
 }
@@ -502,23 +501,21 @@ func CalculateMinResources(cluster *rayv1.RayCluster) corev1.ResourceList {
 			continue
 		}
 		podResource := CalculatePodResource(nodeGroup.Template.Spec)
-		calculateReplicaResource(&podResource, nodeGroup.NumOfHosts)
 		minReplicas := ptr.Deref(nodeGroup.MinReplicas, int32(0))
-		for range minReplicas {
-			minResourcesList = append(minResourcesList, podResource)
-		}
+		calculatePodResources(&podResource, int64(nodeGroup.NumOfHosts)*int64(minReplicas))
+		minResourcesList = append(minResourcesList, podResource)
 	}
 	return SumResourceList(minResourcesList)
 }
 
-// calculateReplicaResource adjusts the resource quantities in a given ResourceList
+// calculatePodResources adjusts the resource quantities in a given ResourceList
 // to account for the specified number of hosts. It multiplies each resource quantity
 // in the ResourceList by the number of hosts.
 //
 // Note: This function modifies the provided ResourceList in place.
-func calculateReplicaResource(podResource *corev1.ResourceList, numOfHosts int32) {
+func calculatePodResources(podResource *corev1.ResourceList, numPods int64) {
 	for name, quantity := range *podResource {
-		quantity.Mul(int64(numOfHosts))
+		quantity.Mul(numPods)
 		(*podResource)[name] = quantity
 	}
 }
@@ -528,7 +525,7 @@ func calculateReplicaResource(podResource *corev1.ResourceList, numOfHosts int32
 func CalculatePodResource(podSpec corev1.PodSpec) corev1.ResourceList {
 	podResource := corev1.ResourceList{}
 	for _, container := range podSpec.Containers {
-		containerResource := container.Resources.Requests
+		containerResource := container.Resources.Requests.DeepCopy()
 		if containerResource == nil {
 			containerResource = corev1.ResourceList{}
 		}

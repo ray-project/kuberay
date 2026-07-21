@@ -634,7 +634,7 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 		podTemplate.Spec.Containers[utils.RayContainerIndex].Ports = append(podTemplate.Spec.Containers[utils.RayContainerIndex].Ports, metricsPort)
 	}
 
-	if utils.IsAutoscalingEnabled(&instance.Spec) && utils.IsAutoscalingV2Enabled(&instance.Spec) {
+	if utils.IsAutoscalingEnabled(&instance.Spec) && (utils.IsAutoscalingV1Enabled(&instance.Spec) || utils.IsAutoscalingV2Enabled(&instance.Spec)) {
 		podTemplate.Spec.RestartPolicy = corev1.RestartPolicyNever
 	}
 

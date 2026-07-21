@@ -60,8 +60,8 @@ const (
 	// rep: N/A
 	// alpha: v1.7
 	//
-	// Enables NetworkPolicy-based network isolation for RayClusters (spec.networkIsolation).
-	RayClusterNetworkIsolation featuregate.Feature = "RayClusterNetworkIsolation"
+	// Enables NetworkPolicy-based network isolation for RayClusters (spec.networkPolicy).
+	RayClusterNetworkPolicy featuregate.Feature = "RayClusterNetworkPolicy"
 
 	// owner: @chipspeak @kryanbeane
 	// rep: N/A
@@ -82,8 +82,8 @@ var defaultFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
 	RayServiceIncrementalUpgrade: {Default: false, PreRelease: featuregate.Alpha},
 	RayCronJob:                   {Default: false, PreRelease: featuregate.Alpha},
 	SidecarSubmitterRestart:      {Default: false, PreRelease: featuregate.Alpha},
-	RayClusterNetworkIsolation:   {Default: false, PreRelease: featuregate.Alpha},
 	RayClusterMTLS:               {Default: false, PreRelease: featuregate.Alpha},
+	RayClusterNetworkPolicy:      {Default: false, PreRelease: featuregate.Alpha},
 }
 
 // SetFeatureGateDuringTest is a helper method to override feature gates in tests.

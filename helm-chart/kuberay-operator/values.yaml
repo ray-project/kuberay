@@ -117,6 +117,21 @@ configuration:
   #   value: "recommended"
   defaultContainerEnvs: []
 
+  # -- Default annotations to add to all Ray pod templates.
+  # User-specified annotations take precedence.
+  # Example:
+  # defaultPodAnnotations:
+  #   prometheus.io/scrape: "true"
+  #   prometheus.io/port: "8080"
+  defaultPodAnnotations: {}
+
+  # -- Default labels to add to all Ray pod templates.
+  # User-specified labels take precedence.
+  # Example:
+  # defaultPodLabels:
+  #   app.kubernetes.io/managed-by: kuberay
+  defaultPodLabels: {}
+
   # -- Sidecar containers to inject into every Ray head pod.
   # Example:
   # headSidecarContainers:
@@ -156,8 +171,8 @@ metrics:
     interval: 30s
     # -- When true, honorLabels preserves the metric’s labels when they collide with the target’s labels.
     honorLabels: true
-    # -- Prometheus ServiceMonitor selector
-    selector: {}
+    # -- Additional labels to add to the ServiceMonitor's metadata.
+    additionalLabels: {}
       #  release: prometheus
     # -- Prometheus ServiceMonitor namespace
     namespace: ""  # "monitoring"

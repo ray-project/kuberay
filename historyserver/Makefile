@@ -79,7 +79,7 @@ buildhistoryserver:
 simplebuild:
 	@echo ""
 	@echo "go build ..."
-	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -v $(GO_BUILD_FLAGS)  -o $(BIN_DIR)/$(BINARY_NAME)
+	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -v $(GO_BUILD_FLAGS) -o $(BIN_DIR)/$(BINARY_NAME)
 
 .PHONY: localimage-build
 localimage-build: localimage-collector localimage-historyserver
@@ -106,6 +106,23 @@ ifdef PLATFORM
 else
 	${ENGINE} build -t $(HISTORYSERVER_IMG) --build-arg GOPROXY=$(GOPROXY) -f Dockerfile.historyserver .
 endif
+
+.PHONY: buildhistoryserver-multi-arch
+buildhistoryserver-multi-arch:
+	@echo ""
+	@echo "go build multi-arch $(BINARY_NAME) ..."
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -v $(GO_BUILD_FLAGS) -o $(BIN_DIR)/$(BINARY_NAME)-amd64 ./cmd/historyserver/main.go
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -v $(GO_BUILD_FLAGS) -o $(BIN_DIR)/$(BINARY_NAME)-arm64 ./cmd/historyserver/main.go
+
+.PHONY: buildcollector-multi-arch
+buildcollector-multi-arch:
+	@echo ""
+	@echo "go build multi-arch $(BINARY_NAME_COLLECTOR) ..."
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -v $(GO_BUILD_FLAGS) -o $(BIN_DIR)/$(BINARY_NAME_COLLECTOR)-amd64 ./cmd/collector/main.go
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -v $(GO_BUILD_FLAGS) -o $(BIN_DIR)/$(BINARY_NAME_COLLECTOR)-arm64 ./cmd/collector/main.go
+
+.PHONY: build-multi-arch
+build-multi-arch: buildhistoryserver-multi-arch buildcollector-multi-arch ## Build multi-arch binaries for historyserver and collector.
 
 .PHONY: dockerbuilder_instance
 dockerbuilder_instance:
@@ -162,24 +179,3 @@ else
 	echo 'Successfully installed' ;\
 	}
 endif
-
-
-
-# Generate manifests e.g. CRD, RBAC etc.
-#manifests: controller-gen
-#	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=manager-role webhook paths="./..." output:crd:artifacts:config=config/crd/bases
-
-# Generate code
-#generate: controller-gen
-#	$(CONTROLLER_GEN) object:headerFile=./hack/boilerplate.go.txt paths=./api/...
-
-
-# find or download controller-gen
-# download controller-gen if necessary
-#controller-gen:
-#ifeq (, $(shell which controller-gen))
-#	go get sigs.k8s.io/controller-tools/cmd/controller-gen@v0.2.0-beta.2
-#CONTROLLER_GEN=$(shell go env GOPATH)/bin/controller-gen
-#else
-#CONTROLLER_GEN=$(shell which controller-gen)
-#endif

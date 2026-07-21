@@ -153,8 +153,8 @@ func (r *RayLogHandler) processSessionLatestLogs() {
 			return nil
 		}
 
-		// Skip directories
-		if info.IsDir() {
+		// Skip non-regular files (e.g. symlinks, directories, sockets, devices)
+		if !info.Type().IsRegular() {
 			return nil
 		}
 
@@ -579,8 +579,8 @@ func (r *RayLogHandler) processPrevLogsDir(sessionNodeDir string) {
 			return nil
 		}
 
-		// Skip directories
-		if info.IsDir() {
+		// Skip non-regular files (e.g. symlinks, directories, sockets, devices)
+		if !info.Type().IsRegular() {
 			return nil
 		}
 

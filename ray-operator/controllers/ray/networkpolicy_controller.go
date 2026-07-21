@@ -14,7 +14,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -33,14 +33,14 @@ import (
 type NetworkPolicyController struct {
 	client.Client
 	Scheme   *runtime.Scheme
-	Recorder record.EventRecorder
+	Recorder events.EventRecorder
 }
 
 func NewNetworkPolicyController(mgr manager.Manager) (*NetworkPolicyController, error) {
 	return &NetworkPolicyController{
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
-		Recorder: mgr.GetEventRecorderFor("networkpolicy-controller"),
+		Recorder: mgr.GetEventRecorder("networkpolicy-controller"),
 	}, nil
 }
 
@@ -68,18 +68,18 @@ func (r *NetworkPolicyController) Reconcile(ctx context.Context, req ctrl.Reques
 		return ctrl.Result{}, nil
 	}
 
-	if instance.Spec.NetworkIsolation == nil {
-		logger.V(1).Info("NetworkIsolation not configured for RayCluster", "cluster", instance.Name, "namespace", instance.Namespace)
-		// If NetworkPolicies exist but NetworkIsolation is removed, clean them up
+	if instance.Spec.NetworkPolicy == nil {
+		logger.V(1).Info("NetworkPolicy not configured for RayCluster", "cluster", instance.Name, "namespace", instance.Namespace)
+		// If NetworkPolicies exist but NetworkPolicy config is removed, clean them up
 		return r.cleanupNetworkPoliciesIfNeeded(ctx, instance)
 	}
 
 	logger.Info("Reconciling NetworkPolicies for RayCluster", "cluster", instance.Name, "namespace", instance.Namespace)
 
 	// Determine mode (default to DenyAll)
-	mode := rayv1.NetworkIsolationDenyAll
-	if instance.Spec.NetworkIsolation.Mode != nil {
-		mode = *instance.Spec.NetworkIsolation.Mode
+	mode := rayv1.NetworkPolicyDenyAll
+	if instance.Spec.NetworkPolicy.Mode != nil {
+		mode = *instance.Spec.NetworkPolicy.Mode
 	}
 
 	headNetworkPolicy := r.buildHeadNetworkPolicy(instance, mode)
@@ -112,7 +112,7 @@ func (r *NetworkPolicyController) createOrUpdateNetworkPolicy(ctx context.Contex
 			}
 
 			if !metav1.IsControlledBy(existing, instance) {
-				r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.NetworkPolicyNameCollision),
+				r.Recorder.Eventf(instance, nil, corev1.EventTypeWarning, string(utils.NetworkPolicyNameCollision), string(utils.ValidateAction),
 					"NetworkPolicy %s/%s already exists and is not owned by this RayCluster, network isolation will not be applied. "+
 						"Rename the existing NetworkPolicy or use a different RayCluster name to avoid the collision",
 					networkPolicy.Namespace, networkPolicy.Name)
@@ -129,22 +129,22 @@ func (r *NetworkPolicyController) createOrUpdateNetworkPolicy(ctx context.Contex
 			existing.Labels = networkPolicy.Labels
 
 			if err := r.Update(ctx, existing); err != nil {
-				r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.FailedToUpdateNetworkPolicy),
+				r.Recorder.Eventf(instance, nil, corev1.EventTypeWarning, string(utils.FailedToUpdateNetworkPolicy), string(utils.UpdateAction),
 					"Failed to update NetworkPolicy %s/%s: %v", networkPolicy.Namespace, networkPolicy.Name, err)
 				return err
 			}
 
 			logger.Info("Successfully updated NetworkPolicy", "name", networkPolicy.Name)
-			r.Recorder.Eventf(instance, corev1.EventTypeNormal, string(utils.UpdatedNetworkPolicy),
+			r.Recorder.Eventf(instance, nil, corev1.EventTypeNormal, string(utils.UpdatedNetworkPolicy), string(utils.UpdateAction),
 				"Updated NetworkPolicy %s/%s", networkPolicy.Namespace, networkPolicy.Name)
 		} else {
-			r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.FailedToCreateNetworkPolicy),
+			r.Recorder.Eventf(instance, nil, corev1.EventTypeWarning, string(utils.FailedToCreateNetworkPolicy), string(utils.CreateAction),
 				"Failed to create NetworkPolicy %s/%s: %v", networkPolicy.Namespace, networkPolicy.Name, err)
 			return err
 		}
 	} else {
 		logger.Info("Successfully created NetworkPolicy", "name", networkPolicy.Name)
-		r.Recorder.Eventf(instance, corev1.EventTypeNormal, string(utils.CreatedNetworkPolicy),
+		r.Recorder.Eventf(instance, nil, corev1.EventTypeNormal, string(utils.CreatedNetworkPolicy), string(utils.CreateAction),
 			"Created NetworkPolicy %s/%s", networkPolicy.Namespace, networkPolicy.Name)
 	}
 
@@ -159,7 +159,7 @@ func workerNetworkPolicyName(clusterName string) string {
 	return fmt.Sprintf("%s-workers", clusterName)
 }
 
-func (r *NetworkPolicyController) buildHeadNetworkPolicy(instance *rayv1.RayCluster, mode rayv1.NetworkIsolationMode) *networkingv1.NetworkPolicy {
+func (r *NetworkPolicyController) buildHeadNetworkPolicy(instance *rayv1.RayCluster, mode rayv1.NetworkPolicyMode) *networkingv1.NetworkPolicy {
 	labels := map[string]string{
 		utils.RayClusterLabelKey:                instance.Name,
 		utils.KubernetesApplicationNameLabelKey: utils.ApplicationName,
@@ -172,20 +172,20 @@ func (r *NetworkPolicyController) buildHeadNetworkPolicy(instance *rayv1.RayClus
 
 	// Only restrict ingress when mode includes ingress denial.
 	// Including PolicyTypeIngress causes K8s to deny all ingress not covered by a rule.
-	if mode == rayv1.NetworkIsolationDenyAll || mode == rayv1.NetworkIsolationDenyAllIngress {
+	if mode == rayv1.NetworkPolicyDenyAll || mode == rayv1.NetworkPolicyDenyAllIngress {
 		policyTypes = append(policyTypes, networkingv1.PolicyTypeIngress)
 		ingressRules = r.buildHeadIngressRules(instance)
-		if instance.Spec.NetworkIsolation.Head != nil {
-			ingressRules = append(ingressRules, instance.Spec.NetworkIsolation.Head.IngressRules...)
+		if instance.Spec.NetworkPolicy.Head != nil {
+			ingressRules = append(ingressRules, instance.Spec.NetworkPolicy.Head.IngressRules...)
 		}
 	}
 
 	// Only restrict egress when mode includes egress denial.
-	if mode == rayv1.NetworkIsolationDenyAll || mode == rayv1.NetworkIsolationDenyAllEgress {
+	if mode == rayv1.NetworkPolicyDenyAll || mode == rayv1.NetworkPolicyDenyAllEgress {
 		policyTypes = append(policyTypes, networkingv1.PolicyTypeEgress)
 		egressRules = r.buildBaseEgressRules(instance)
-		if instance.Spec.NetworkIsolation.Head != nil {
-			egressRules = append(egressRules, instance.Spec.NetworkIsolation.Head.EgressRules...)
+		if instance.Spec.NetworkPolicy.Head != nil {
+			egressRules = append(egressRules, instance.Spec.NetworkPolicy.Head.EgressRules...)
 		}
 	}
 
@@ -209,7 +209,7 @@ func (r *NetworkPolicyController) buildHeadNetworkPolicy(instance *rayv1.RayClus
 	}
 }
 
-func (r *NetworkPolicyController) buildWorkerNetworkPolicy(instance *rayv1.RayCluster, mode rayv1.NetworkIsolationMode) *networkingv1.NetworkPolicy {
+func (r *NetworkPolicyController) buildWorkerNetworkPolicy(instance *rayv1.RayCluster, mode rayv1.NetworkPolicyMode) *networkingv1.NetworkPolicy {
 	labels := map[string]string{
 		utils.RayClusterLabelKey:                instance.Name,
 		utils.KubernetesApplicationNameLabelKey: utils.ApplicationName,
@@ -221,20 +221,20 @@ func (r *NetworkPolicyController) buildWorkerNetworkPolicy(instance *rayv1.RayCl
 	var egressRules []networkingv1.NetworkPolicyEgressRule
 
 	// Only restrict ingress when mode includes ingress denial.
-	if mode == rayv1.NetworkIsolationDenyAll || mode == rayv1.NetworkIsolationDenyAllIngress {
+	if mode == rayv1.NetworkPolicyDenyAll || mode == rayv1.NetworkPolicyDenyAllIngress {
 		policyTypes = append(policyTypes, networkingv1.PolicyTypeIngress)
 		ingressRules = r.buildBaseIngressRules(instance)
-		if instance.Spec.NetworkIsolation.Worker != nil {
-			ingressRules = append(ingressRules, instance.Spec.NetworkIsolation.Worker.IngressRules...)
+		if instance.Spec.NetworkPolicy.Worker != nil {
+			ingressRules = append(ingressRules, instance.Spec.NetworkPolicy.Worker.IngressRules...)
 		}
 	}
 
 	// Only restrict egress when mode includes egress denial.
-	if mode == rayv1.NetworkIsolationDenyAll || mode == rayv1.NetworkIsolationDenyAllEgress {
+	if mode == rayv1.NetworkPolicyDenyAll || mode == rayv1.NetworkPolicyDenyAllEgress {
 		policyTypes = append(policyTypes, networkingv1.PolicyTypeEgress)
 		egressRules = r.buildBaseEgressRules(instance)
-		if instance.Spec.NetworkIsolation.Worker != nil {
-			egressRules = append(egressRules, instance.Spec.NetworkIsolation.Worker.EgressRules...)
+		if instance.Spec.NetworkPolicy.Worker != nil {
+			egressRules = append(egressRules, instance.Spec.NetworkPolicy.Worker.EgressRules...)
 		}
 	}
 
@@ -279,9 +279,9 @@ func (r *NetworkPolicyController) buildBaseIngressRules(instance *rayv1.RayClust
 // buildHeadIngressRules returns the base ingress rules for the head NetworkPolicy:
 // intra-cluster communication, and (for K8sJobMode RayJob-owned clusters) the per-job
 // submitter rule. Operator access is intentionally omitted here — platforms that need
-// it should inject it via spec.networkIsolation.head.ingressRules (e.g. via a mutating webhook).
+// it should inject it via spec.networkPolicy.head.ingressRules (e.g. via a mutating webhook).
 // For RayClusters that are NOT owned by a RayJob (e.g. clusterSelector use cases),
-// users must allow their submitter pods explicitly via NetworkIsolation.Head.IngressRules
+// users must allow their submitter pods explicitly via NetworkPolicy.Head.IngressRules
 // (e.g. a podSelector matching the submitterPodTemplate labels). Users who need any
 // other external access must likewise add explicit rules in Head.IngressRules.
 func (r *NetworkPolicyController) buildHeadIngressRules(instance *rayv1.RayCluster) []networkingv1.NetworkPolicyIngressRule {
@@ -351,7 +351,7 @@ func (r *NetworkPolicyController) getHeadPort(instance *rayv1.RayCluster, raySta
 // IMPORTANT: under DenyAll/DenyAllEgress this denies DNS by default. Ray workers
 // reach the head via its service FQDN (see GenerateFQDNServiceName), so users
 // MUST add a DNS egress rule via Head.EgressRules / Worker.EgressRules or the
-// cluster will fail to start. See the network-isolation-deny-all sample.
+// cluster will fail to start. See the network-policy-deny-all sample.
 func (r *NetworkPolicyController) buildBaseEgressRules(instance *rayv1.RayCluster) []networkingv1.NetworkPolicyEgressRule {
 	return []networkingv1.NetworkPolicyEgressRule{
 		// Intra-cluster egress (all ports) to pods in the same RayCluster.
@@ -391,7 +391,7 @@ func normalizeNetworkPolicyPorts(spec *networkingv1.NetworkPolicySpec) {
 	}
 }
 
-// cleanupNetworkPoliciesIfNeeded removes NetworkPolicies if they exist but NetworkIsolation is disabled
+// cleanupNetworkPoliciesIfNeeded removes NetworkPolicies if they exist but NetworkPolicy is disabled
 func (r *NetworkPolicyController) cleanupNetworkPoliciesIfNeeded(ctx context.Context, instance *rayv1.RayCluster) (ctrl.Result, error) {
 	logger := ctrl.LoggerFrom(ctx)
 
@@ -405,12 +405,12 @@ func (r *NetworkPolicyController) cleanupNetworkPoliciesIfNeeded(ctx context.Con
 			logger.V(1).Info("Head NetworkPolicy exists but is not owned by this RayCluster, skipping deletion", "name", headName)
 		} else if err := r.Delete(ctx, headNetworkPolicy); err != nil {
 			logger.Error(err, "Failed to delete head NetworkPolicy", "name", headName)
-			r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.FailedToDeleteNetworkPolicy),
+			r.Recorder.Eventf(instance, nil, corev1.EventTypeWarning, string(utils.FailedToDeleteNetworkPolicy), string(utils.DeleteAction),
 				"Failed to delete NetworkPolicy %s/%s: %v", instance.Namespace, headName, err)
 			return ctrl.Result{}, err
 		} else {
 			logger.Info("Deleted head NetworkPolicy", "name", headName)
-			r.Recorder.Eventf(instance, corev1.EventTypeNormal, string(utils.DeletedNetworkPolicy),
+			r.Recorder.Eventf(instance, nil, corev1.EventTypeNormal, string(utils.DeletedNetworkPolicy), string(utils.DeleteAction),
 				"Deleted NetworkPolicy %s/%s", instance.Namespace, headName)
 		}
 	} else if !errors.IsNotFound(err) {
@@ -427,12 +427,12 @@ func (r *NetworkPolicyController) cleanupNetworkPoliciesIfNeeded(ctx context.Con
 			logger.V(1).Info("Worker NetworkPolicy exists but is not owned by this RayCluster, skipping deletion", "name", workerName)
 		} else if err := r.Delete(ctx, workerNetworkPolicy); err != nil {
 			logger.Error(err, "Failed to delete worker NetworkPolicy", "name", workerName)
-			r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.FailedToDeleteNetworkPolicy),
+			r.Recorder.Eventf(instance, nil, corev1.EventTypeWarning, string(utils.FailedToDeleteNetworkPolicy), string(utils.DeleteAction),
 				"Failed to delete NetworkPolicy %s/%s: %v", instance.Namespace, workerName, err)
 			return ctrl.Result{}, err
 		} else {
 			logger.Info("Deleted worker NetworkPolicy", "name", workerName)
-			r.Recorder.Eventf(instance, corev1.EventTypeNormal, string(utils.DeletedNetworkPolicy),
+			r.Recorder.Eventf(instance, nil, corev1.EventTypeNormal, string(utils.DeletedNetworkPolicy), string(utils.DeleteAction),
 				"Deleted NetworkPolicy %s/%s", instance.Namespace, workerName)
 		}
 	} else if !errors.IsNotFound(err) {
