@@ -893,6 +893,13 @@ func (r *RayServiceReconciler) createGateway(rayServiceInstance *rayv1.RayServic
 		return nil, errstd.New("Missing RayService ClusterUpgradeOptions during upgrade.")
 	}
 
+	// When attaching to a pre-existing (shared) Gateway, KubeRay does not own or
+	// create a Gateway — only the HTTPRoute is managed. Returning nil here makes
+	// reconcileGateway skip creation (see its desiredGateway == nil guard).
+	if options.ExistingGatewayRef != nil {
+		return nil, nil
+	}
+
 	gatewayName := rayServiceInstance.Name + "-gateway"
 	// Define the desired Gateway object
 	rayServiceGateway := &gwv1.Gateway{
@@ -1078,12 +1085,16 @@ func (r *RayServiceReconciler) createHTTPRoute(ctx context.Context, rayServiceIn
 	activeClusterServeSvcName := utils.GenerateServeServiceName(activeRayCluster.Name)
 	activeServePort := common.GetServePort(activeRayCluster)
 
+	// Serve services live in the RayService's namespace. This equals the Gateway's
+	// namespace in the default (KubeRay-created) case, but differs when attaching to
+	// a shared Gateway in another namespace (ExistingGatewayRef), so reference the
+	// RayService namespace explicitly for the backends.
 	backendRefs := []gwv1.HTTPBackendRef{
 		{
 			BackendRef: gwv1.BackendRef{
 				BackendObjectReference: gwv1.BackendObjectReference{
 					Name:      gwv1.ObjectName(activeClusterServeSvcName),
-					Namespace: new(gwv1.Namespace(gatewayInstance.Namespace)),
+					Namespace: new(gwv1.Namespace(rayServiceInstance.Namespace)),
 					Port:      new(activeServePort),
 				},
 				Weight: new(activeClusterWeight),
@@ -1100,7 +1111,7 @@ func (r *RayServiceReconciler) createHTTPRoute(ctx context.Context, rayServiceIn
 			BackendRef: gwv1.BackendRef{
 				BackendObjectReference: gwv1.BackendObjectReference{
 					Name:      gwv1.ObjectName(pendingClusterServeSvcName),
-					Namespace: new(gwv1.Namespace(gatewayInstance.Namespace)),
+					Namespace: new(gwv1.Namespace(rayServiceInstance.Namespace)),
 					Port:      new(pendingServePort),
 				},
 				Weight: new(pendingClusterWeight),
@@ -1108,9 +1119,12 @@ func (r *RayServiceReconciler) createHTTPRoute(ctx context.Context, rayServiceIn
 		})
 	}
 
+	// The HTTPRoute lives in the RayService's namespace (so the RayService owner
+	// reference and GC work), while its ParentRef below targets the Gateway —
+	// which may be in a different namespace when using ExistingGatewayRef.
 	httpRouteName := rayServiceInstance.Name + "-httproute"
 	desiredHTTPRoute := &gwv1.HTTPRoute{
-		ObjectMeta: metav1.ObjectMeta{Name: httpRouteName, Namespace: gatewayInstance.Namespace},
+		ObjectMeta: metav1.ObjectMeta{Name: httpRouteName, Namespace: rayServiceInstance.Namespace},
 		Spec: gwv1.HTTPRouteSpec{
 			CommonRouteSpec: gwv1.CommonRouteSpec{
 				ParentRefs: []gwv1.ParentReference{

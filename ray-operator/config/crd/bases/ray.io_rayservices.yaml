@@ -9012,6 +9012,16 @@ spec:
                 properties:
                   clusterUpgradeOptions:
                     properties:
+                      existingGatewayRef:
+                        properties:
+                          name:
+                            type: string
+                          namespace:
+                            type: string
+                        required:
+                        - name
+                        - namespace
+                        type: object
                       gatewayClassName:
                         type: string
                       intervalSeconds:
@@ -9025,7 +9035,6 @@ spec:
                         format: int32
                         type: integer
                     required:
-                    - gatewayClassName
                     - intervalSeconds
                     - stepSizePercent
                     type: object
