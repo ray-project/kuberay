@@ -377,6 +377,9 @@ func ValidateRayJobSpec(rayJob *rayv1.RayJob) error {
 		if rayJob.Spec.Suspend && rayJob.Spec.JobId != "" {
 			return fmt.Errorf("The RayJob spec is invalid: setting a fixed JobId with suspend in ClusterSelector mode is not supported because the same job ID cannot be re-submitted to the Ray cluster after resume")
 		}
+		if rayJob.Spec.Suspend && rayJob.Spec.SubmissionMode == rayv1.InteractiveMode {
+			return fmt.Errorf("The RayJob spec is invalid: suspend with ClusterSelector is not supported in InteractiveMode because the operator cannot determine the Ray Job ID for externally submitted jobs")
+		}
 	}
 
 	// InteractiveMode does not support backoffLimit > 1.
