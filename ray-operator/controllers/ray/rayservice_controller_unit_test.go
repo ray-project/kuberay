@@ -2688,6 +2688,9 @@ func TestReconcileRollbackState(t *testing.T) {
 	updatedSpec := baseSpec.DeepCopy()
 	updatedSpec.RayVersion = "2.50.0"
 
+	thirdSpec := baseSpec.DeepCopy()
+	thirdSpec.RayVersion = "2.56.0"
+
 	baseHash, err := utils.GenerateHashWithoutReplicasAndWorkersToDelete(baseSpec)
 	require.NoError(t, err)
 
@@ -2735,6 +2738,13 @@ func TestReconcileRollbackState(t *testing.T) {
 			pendingHashOverride:  updatedHash,
 			isRollbackInProgress: true,
 			expectRollbackStatus: false,
+		},
+		{
+			name:                 "Third-spec scenario: Goal updated to third spec mid-upgrade",
+			rayServiceSpec:       *thirdSpec,
+			pendingHashOverride:  updatedHash,
+			isRollbackInProgress: false,
+			expectRollbackStatus: true,
 		},
 		{
 			name:                 "Fast rollback: Goal matches active, but pending already updated to match active",
