@@ -15,7 +15,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -38,7 +38,7 @@ const (
 type RayClusterMTLSController struct {
 	client.Client
 	Scheme   *k8sruntime.Scheme
-	Recorder record.EventRecorder
+	Recorder events.EventRecorder
 }
 
 // NewRayClusterMTLSController creates a new mTLS controller instance.
@@ -46,7 +46,7 @@ func NewRayClusterMTLSController(mgr ctrl.Manager) *RayClusterMTLSController {
 	return &RayClusterMTLSController{
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
-		Recorder: mgr.GetEventRecorderFor("raycluster-mtls-controller"),
+		Recorder: mgr.GetEventRecorder("raycluster-mtls-controller"),
 	}
 }
 
@@ -108,7 +108,7 @@ func (r *RayClusterMTLSController) handleAutoGenerate(ctx context.Context, insta
 	for _, step := range steps {
 		if err := step.fn(ctx, instance); err != nil {
 			logger.Error(err, "Failed to reconcile TLS resource", "resource", step.name)
-			r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.MTLSFailedToReconcile),
+			r.Recorder.Eventf(instance, nil, corev1.EventTypeWarning, string(utils.MTLSFailedToReconcile), string(utils.ReconcileAction),
 				"Failed to reconcile mTLS %s: %v", step.name, err)
 			return ctrl.Result{RequeueAfter: mtlsDefaultRequeueDuration}, err
 		}
@@ -121,12 +121,12 @@ func (r *RayClusterMTLSController) handleAutoGenerate(ctx context.Context, insta
 	}
 	if !ready {
 		logger.Info("TLS certificates not ready yet, will requeue")
-		r.Recorder.Event(instance, corev1.EventTypeNormal, string(utils.MTLSCertsNotReady),
+		r.Recorder.Eventf(instance, nil, corev1.EventTypeNormal, string(utils.MTLSCertsNotReady), string(utils.ReconcileAction),
 			"Waiting for cert-manager to issue mTLS certificates")
 		return ctrl.Result{RequeueAfter: mtlsDefaultRequeueDuration}, nil
 	}
 
-	r.Recorder.Event(instance, corev1.EventTypeNormal, string(utils.MTLSPKIReady),
+	r.Recorder.Eventf(instance, nil, corev1.EventTypeNormal, string(utils.MTLSPKIReady), string(utils.ReconcileAction),
 		"mTLS PKI is ready: CA, head, and worker certificates issued")
 
 	r.checkTLSCertificateExpiry(ctx, instance)
@@ -338,7 +338,7 @@ func (r *RayClusterMTLSController) reconcileHeadCertificate(ctx context.Context,
 		}
 		logger := ctrl.LoggerFrom(ctx)
 		logger.Info("Updating head certificate", "certificate", certName, "ipAddresses", desiredIPAddresses)
-		r.Recorder.Eventf(instance, corev1.EventTypeNormal, string(utils.MTLSCertificatesUpdated),
+		r.Recorder.Eventf(instance, nil, corev1.EventTypeNormal, string(utils.MTLSCertificatesUpdated), string(utils.UpdateAction),
 			"Updated head certificate SANs (IPs: %v)", desiredIPAddresses)
 		if err := r.Update(ctx, existing); err != nil {
 			return err
@@ -409,7 +409,7 @@ func (r *RayClusterMTLSController) reconcileWorkerCertificate(ctx context.Contex
 		}
 		logger := ctrl.LoggerFrom(ctx)
 		logger.Info("Updating worker certificate", "certificate", certName, "ipAddresses", desiredIPAddresses)
-		r.Recorder.Eventf(instance, corev1.EventTypeNormal, string(utils.MTLSCertificatesUpdated),
+		r.Recorder.Eventf(instance, nil, corev1.EventTypeNormal, string(utils.MTLSCertificatesUpdated), string(utils.UpdateAction),
 			"Updated worker certificate SANs (IPs: %v)", desiredIPAddresses)
 		if err := r.Update(ctx, existing); err != nil {
 			return err
@@ -480,7 +480,7 @@ func (r *RayClusterMTLSController) checkTLSCertificateExpiry(ctx context.Context
 		if cert.Status.NotAfter != nil {
 			remaining := time.Until(cert.Status.NotAfter.Time)
 			if remaining < 24*time.Hour {
-				r.Recorder.Eventf(instance, corev1.EventTypeWarning, string(utils.MTLSCertificateExpiringSoon),
+				r.Recorder.Eventf(instance, nil, corev1.EventTypeWarning, string(utils.MTLSCertificateExpiringSoon), string(utils.ReconcileAction),
 					"TLS certificate %s expires in %.1f hours; Ray does not hot-reload certs so a pod restart will be needed after renewal",
 					name, remaining.Hours())
 			}
