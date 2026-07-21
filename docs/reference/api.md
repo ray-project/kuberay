@@ -113,7 +113,8 @@ _Appears in:_
 | `maxSurgePercent` _integer_ | The capacity of serve requests the upgraded cluster should scale to handle each interval.<br />Defaults to 100%. | 100 |  |
 | `stepSizePercent` _integer_ | The percentage of traffic to switch to the upgraded RayCluster at a set interval after scaling by MaxSurgePercent.<br />StepSizePercent must be less than or equal to MaxSurgePercent. |  |  |
 | `intervalSeconds` _integer_ | The interval in seconds between transferring StepSize traffic from the old to new RayCluster. |  |  |
-| `gatewayClassName` _string_ | The name of the Gateway Class installed by the Kubernetes Cluster admin. |  |  |
+| `gatewayClassName` _string_ | The name of the Gateway Class installed by the Kubernetes Cluster admin.<br />Ignored when ExistingGatewayRef is set. |  |  |
+| `existingGatewayRef` _[GatewayRef](#gatewayref)_ | ExistingGatewayRef, when set, attaches the RayService's HTTPRoute to a<br />pre-existing Gateway instead of creating a per-RayService Gateway. Use this<br />when the cluster's Gateway controller only reconciles a specific shared<br />Gateway (e.g. Contour's static gateway.gatewayRef mode, where controller-<br />created Gateways are never programmed). When set, KubeRay skips Gateway<br />creation and only manages the HTTPRoute's backend weights on the referenced<br />Gateway. The Gateway must allow HTTPRoutes from the RayService's namespace. |  |  |
 
 
 #### DeletionCondition
@@ -223,6 +224,23 @@ _Appears in:_
 | `deletionRules` _[DeletionRule](#deletionrule) array_ | DeletionRules is a list of deletion rules, processed based on their trigger conditions.<br />While the rules can be used to define a sequence, if multiple rules are overdue (e.g., due to controller downtime),<br />the most impactful rule (e.g., DeleteSelf) will be executed first to prioritize resource cleanup. |  | MinItems: 1 <br /> |
 
 
+
+
+#### GatewayRef
+
+
+
+GatewayRef references an existing Gateway resource.
+
+
+
+_Appears in:_
+- [ClusterUpgradeOptions](#clusterupgradeoptions)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `name` _string_ | Name of the existing Gateway. |  |  |
+| `namespace` _string_ | Namespace of the existing Gateway. |  |  |
 
 
 #### GcsFaultToleranceOptions
