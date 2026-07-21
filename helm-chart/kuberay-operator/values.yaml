@@ -117,6 +117,21 @@ configuration:
   #   value: "recommended"
   defaultContainerEnvs: []
 
+  # -- Default annotations to add to all Ray pod templates.
+  # User-specified annotations take precedence.
+  # Example:
+  # defaultPodAnnotations:
+  #   prometheus.io/scrape: "true"
+  #   prometheus.io/port: "8080"
+  defaultPodAnnotations: {}
+
+  # -- Default labels to add to all Ray pod templates.
+  # User-specified labels take precedence.
+  # Example:
+  # defaultPodLabels:
+  #   app.kubernetes.io/managed-by: kuberay
+  defaultPodLabels: {}
+
   # -- Sidecar containers to inject into every Ray head pod.
   # Example:
   # headSidecarContainers:

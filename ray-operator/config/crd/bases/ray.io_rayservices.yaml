@@ -4561,7 +4561,7 @@ spec:
                     - message: the managedBy field value must be either 'ray.io/kuberay-operator'
                         or 'kueue.x-k8s.io/multikueue'
                       rule: self in ['ray.io/kuberay-operator', 'kueue.x-k8s.io/multikueue']
-                  networkIsolation:
+                  networkPolicy:
                     properties:
                       head:
                         properties:

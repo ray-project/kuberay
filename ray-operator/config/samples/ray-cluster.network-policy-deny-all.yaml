@@ -3,7 +3,7 @@ kind: RayCluster
 metadata:
   name: raycluster-deny-all
 spec:
-  # NetworkIsolation makes the operator create separate head/worker NetworkPolicies.
+  # NetworkPolicy makes the operator create separate head/worker NetworkPolicies.
   # Intra-cluster pod-to-pod is always allowed;
   # everything else is denied unless you add it via head/worker rules below.
   #
@@ -28,12 +28,12 @@ spec:
   #   - EKS / some managed distros: may need the Service ClusterIP instead.
   # Discussion: https://github.com/ray-project/kuberay/pull/4638#issuecomment-4660268151
   #
-  # To enable autoscaling under NetworkIsolation, you must do BOTH:
+  # To enable autoscaling under NetworkPolicy, you must do BOTH:
   #   1. set enableInTreeAutoscaling: true   (uncomment the line below)
   #   2. uncomment the api-server egress rule in head.egressRules
   #      (the operator no longer adds it; see per-CNI details above)
   # enableInTreeAutoscaling: true   # <- uncomment to enable (default off)
-  networkIsolation:
+  networkPolicy:
     mode: DenyAll
     # Head rules: applied only to the head pod's NetworkPolicy.
     # The base head policy already allows intra-cluster traffic

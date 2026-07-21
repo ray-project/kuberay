@@ -76,6 +76,8 @@ type RayClusterReconcilerOptions struct {
 	HeadSidecarContainers    []corev1.Container
 	WorkerSidecarContainers  []corev1.Container
 	DefaultContainerEnvs     []corev1.EnvVar
+	DefaultPodAnnotations    map[string]string
+	DefaultPodLabels         map[string]string
 	IsOpenShift              bool
 	UseIngressOnOpenShift    bool
 }
@@ -1622,6 +1624,26 @@ func (r *RayClusterReconciler) buildHeadPod(ctx context.Context, instance rayv1.
 	if len(r.options.HeadSidecarContainers) > 0 {
 		podConf.Spec.Containers = append(podConf.Spec.Containers, r.options.HeadSidecarContainers...)
 	}
+	if len(r.options.DefaultPodAnnotations) > 0 {
+		if podConf.Annotations == nil {
+			podConf.Annotations = make(map[string]string)
+		}
+		for k, v := range r.options.DefaultPodAnnotations {
+			if _, exists := podConf.Annotations[k]; !exists {
+				podConf.Annotations[k] = v
+			}
+		}
+	}
+	if len(r.options.DefaultPodLabels) > 0 {
+		if podConf.Labels == nil {
+			podConf.Labels = make(map[string]string)
+		}
+		for k, v := range r.options.DefaultPodLabels {
+			if _, exists := podConf.Labels[k]; !exists {
+				podConf.Labels[k] = v
+			}
+		}
+	}
 	logger.Info("head pod labels", "labels", podConf.Labels)
 	creatorCRDType := getCreatorCRDType(instance)
 	pod := common.BuildPod(ctx, podConf, rayv1.HeadNode, instance.Spec.HeadGroupSpec.RayStartParams, headPort, autoscalingEnabled, creatorCRDType, fqdnRayIP, r.options.DefaultContainerEnvs, instance.Spec.RayVersion)
@@ -1649,6 +1671,26 @@ func (r *RayClusterReconciler) buildWorkerPod(ctx context.Context, instance rayv
 	podTemplateSpec := common.DefaultWorkerPodTemplate(ctx, instance, worker, podName, fqdnRayIP, headPort, replicaGrpName, replicaIndex, hostIndex)
 	if len(r.options.WorkerSidecarContainers) > 0 {
 		podTemplateSpec.Spec.Containers = append(podTemplateSpec.Spec.Containers, r.options.WorkerSidecarContainers...)
+	}
+	if len(r.options.DefaultPodAnnotations) > 0 {
+		if podTemplateSpec.Annotations == nil {
+			podTemplateSpec.Annotations = make(map[string]string)
+		}
+		for k, v := range r.options.DefaultPodAnnotations {
+			if _, exists := podTemplateSpec.Annotations[k]; !exists {
+				podTemplateSpec.Annotations[k] = v
+			}
+		}
+	}
+	if len(r.options.DefaultPodLabels) > 0 {
+		if podTemplateSpec.Labels == nil {
+			podTemplateSpec.Labels = make(map[string]string)
+		}
+		for k, v := range r.options.DefaultPodLabels {
+			if _, exists := podTemplateSpec.Labels[k]; !exists {
+				podTemplateSpec.Labels[k] = v
+			}
+		}
 	}
 	creatorCRDType := getCreatorCRDType(instance)
 	pod := common.BuildPod(ctx, podTemplateSpec, rayv1.WorkerNode, worker.RayStartParams, headPort, autoscalingEnabled, creatorCRDType, fqdnRayIP, r.options.DefaultContainerEnvs, instance.Spec.RayVersion)

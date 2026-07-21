@@ -4039,3 +4039,96 @@ func TestGetGCSFTDeletionTimeout(t *testing.T) {
 		})
 	}
 }
+
+func TestBuildPodsInjectDefaultPodMetadata(t *testing.T) {
+	cluster := rayClusterTemplate("raycluster-default-pod-metadata", "default")
+	cluster.Spec.HeadGroupSpec.RayStartParams = map[string]string{}
+	cluster.Spec.HeadGroupSpec.Template.Annotations = map[string]string{
+		"shared-annotation": "head",
+		"user-annotation":   "head-only",
+	}
+	cluster.Spec.HeadGroupSpec.Template.Labels = map[string]string{
+		"shared-label": "head",
+		"user-label":   "head-only",
+	}
+
+	worker := &cluster.Spec.WorkerGroupSpecs[0]
+	worker.RayStartParams = map[string]string{}
+	worker.Template.Annotations = map[string]string{
+		"shared-annotation": "worker",
+		"user-annotation":   "worker-only",
+	}
+	worker.Template.Labels = map[string]string{
+		"shared-label": "worker",
+		"user-label":   "worker-only",
+	}
+
+	reconciler := &RayClusterReconciler{
+		Client: clientFake.NewClientBuilder().Build(),
+		Scheme: scheme.Scheme,
+		options: RayClusterReconcilerOptions{
+			DefaultPodAnnotations: map[string]string{
+				"monitoring.example.com/scrape": "true",
+				"shared-annotation":             "default",
+			},
+			DefaultPodLabels: map[string]string{
+				"fleet":        "managed",
+				"shared-label": "default",
+			},
+		},
+	}
+
+	headPod := reconciler.buildHeadPod(context.Background(), *cluster)
+	assert.Equal(t, "true", headPod.Annotations["monitoring.example.com/scrape"])
+	assert.Equal(t, "head", headPod.Annotations["shared-annotation"])
+	assert.Equal(t, "head-only", headPod.Annotations["user-annotation"])
+	assert.Equal(t, "managed", headPod.Labels["fleet"])
+	assert.Equal(t, "head", headPod.Labels["shared-label"])
+	assert.Equal(t, "head-only", headPod.Labels["user-label"])
+
+	workerPod := reconciler.buildWorkerPod(context.Background(), *cluster, cluster.Spec.WorkerGroupSpecs[0], "", 0, 0)
+	assert.Equal(t, "true", workerPod.Annotations["monitoring.example.com/scrape"])
+	assert.Equal(t, "worker", workerPod.Annotations["shared-annotation"])
+	assert.Equal(t, "worker-only", workerPod.Annotations["user-annotation"])
+	assert.Equal(t, "managed", workerPod.Labels["fleet"])
+	assert.Equal(t, "worker", workerPod.Labels["shared-label"])
+	assert.Equal(t, "worker-only", workerPod.Labels["user-label"])
+}
+
+func TestBuildPodsWithoutDefaultPodMetadata(t *testing.T) {
+	cluster := rayClusterTemplate("raycluster-no-default-pod-metadata", "default")
+	cluster.Spec.HeadGroupSpec.RayStartParams = map[string]string{}
+	cluster.Spec.HeadGroupSpec.Template.Annotations = map[string]string{
+		"user-annotation": "head-only",
+	}
+	cluster.Spec.HeadGroupSpec.Template.Labels = map[string]string{
+		"user-label": "head-only",
+	}
+
+	worker := &cluster.Spec.WorkerGroupSpecs[0]
+	worker.RayStartParams = map[string]string{}
+	worker.Template.Annotations = map[string]string{
+		"user-annotation": "worker-only",
+	}
+	worker.Template.Labels = map[string]string{
+		"user-label": "worker-only",
+	}
+
+	reconciler := &RayClusterReconciler{
+		Client:  clientFake.NewClientBuilder().Build(),
+		Scheme:  scheme.Scheme,
+		options: RayClusterReconcilerOptions{},
+	}
+
+	headPod := reconciler.buildHeadPod(context.Background(), *cluster)
+	assert.Equal(t, "head-only", headPod.Annotations["user-annotation"])
+	assert.Equal(t, "head-only", headPod.Labels["user-label"])
+	assert.NotContains(t, headPod.Annotations, "monitoring.example.com/scrape")
+	assert.NotContains(t, headPod.Labels, "fleet")
+
+	workerPod := reconciler.buildWorkerPod(context.Background(), *cluster, cluster.Spec.WorkerGroupSpecs[0], "", 0, 0)
+	assert.Equal(t, "worker-only", workerPod.Annotations["user-annotation"])
+	assert.Equal(t, "worker-only", workerPod.Labels["user-label"])
+	assert.NotContains(t, workerPod.Annotations, "monitoring.example.com/scrape")
+	assert.NotContains(t, workerPod.Labels, "fleet")
+}
