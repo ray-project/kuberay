@@ -58,6 +58,8 @@ type RayClusterSpec struct {
 	RayVersion string `json:"rayVersion,omitempty"`
 	// WorkerGroupSpecs are the specs for the worker pods
 	// +optional
+	// +listType=map
+	// +listMapKey=groupName
 	WorkerGroupSpecs []WorkerGroupSpec `json:"workerGroupSpecs,omitempty"`
 }
 
