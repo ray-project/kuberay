@@ -112,10 +112,10 @@ func TestEnterCluster(t *testing.T) {
 			return SessionStatusEventsErr, nil, fmt.Errorf("unknown session")
 		},
 	}
-	handler.sessionLoader = NewSessionLoader(fp, context.Background(), DefaultSessionProcessTimeout, DefaultSessionCacheSize, DefaultSessionCacheTTL)
+	handler.sessionLoader = NewSessionLoader(fp, DefaultSessionProcessTimeout, DefaultSessionCacheSize, DefaultSessionCacheTTL)
 
 	// Register actual router
-	routerRayClusterSet(handler)
+	routerRayClusterSet(handler, context.Background())
 
 	container := restful.DefaultContainer
 
