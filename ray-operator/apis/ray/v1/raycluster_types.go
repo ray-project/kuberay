@@ -173,8 +173,26 @@ type NetworkPolicyConfig struct {
 	// Worker specifies custom NetworkPolicy rules applied only to worker pods' policy.
 	// The base worker policy always allows intra-cluster traffic.
 	// Rules here are appended to that base rule.
+	// Acts as the default for all worker groups; see WorkerGroups for per-group overrides.
 	// +optional
 	Worker *NetworkPolicyRules `json:"worker,omitempty"`
+
+	// WorkerGroups specifies per-worker-group NetworkPolicy rules, keyed by group name.
+	// If an entry exists for a worker group, it replaces (not merges with) Worker for
+	// that group. Worker groups without an entry fall back to Worker.
+	// +optional
+	// +listType=map
+	// +listMapKey=groupName
+	WorkerGroups []WorkerGroupNetworkPolicyRules `json:"workerGroups,omitempty"`
+}
+
+// WorkerGroupNetworkPolicyRules is NetworkPolicyRules bound to one worker group.
+type WorkerGroupNetworkPolicyRules struct {
+	// GroupName matches WorkerGroupSpec.GroupName.
+	// +kubebuilder:validation:Required
+	GroupName string `json:"groupName"`
+
+	NetworkPolicyRules `json:",inline"`
 }
 
 // NetworkPolicyRules defines custom ingress and egress rules for a NetworkPolicy.

@@ -29,7 +29,12 @@ type NetworkPolicyConfigApplyConfiguration struct {
 	// Worker specifies custom NetworkPolicy rules applied only to worker pods' policy.
 	// The base worker policy always allows intra-cluster traffic.
 	// Rules here are appended to that base rule.
+	// Acts as the default for all worker groups; see WorkerGroups for per-group overrides.
 	Worker *NetworkPolicyRulesApplyConfiguration `json:"worker,omitempty"`
+	// WorkerGroups specifies per-worker-group NetworkPolicy rules, keyed by group name.
+	// If an entry exists for a worker group, it replaces (not merges with) Worker for
+	// that group. Worker groups without an entry fall back to Worker.
+	WorkerGroups []WorkerGroupNetworkPolicyRulesApplyConfiguration `json:"workerGroups,omitempty"`
 }
 
 // NetworkPolicyConfigApplyConfiguration constructs a declarative configuration of the NetworkPolicyConfig type for use with
@@ -59,5 +64,18 @@ func (b *NetworkPolicyConfigApplyConfiguration) WithHead(value *NetworkPolicyRul
 // If called multiple times, the Worker field is set to the value of the last call.
 func (b *NetworkPolicyConfigApplyConfiguration) WithWorker(value *NetworkPolicyRulesApplyConfiguration) *NetworkPolicyConfigApplyConfiguration {
 	b.Worker = value
+	return b
+}
+
+// WithWorkerGroups adds the given value to the WorkerGroups field in the declarative configuration
+// and returns the receiver, so that objects can be build by chaining "With" function invocations.
+// If called multiple times, values provided by each call will be appended to the WorkerGroups field.
+func (b *NetworkPolicyConfigApplyConfiguration) WithWorkerGroups(values ...*WorkerGroupNetworkPolicyRulesApplyConfiguration) *NetworkPolicyConfigApplyConfiguration {
+	for i := range values {
+		if values[i] == nil {
+			panic("nil value passed to WithWorkerGroups")
+		}
+		b.WorkerGroups = append(b.WorkerGroups, *values[i])
+	}
 	return b
 }
