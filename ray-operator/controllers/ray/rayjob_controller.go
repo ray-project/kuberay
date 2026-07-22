@@ -824,10 +824,8 @@ func (r *RayJobReconciler) deleteClusterResources(ctx context.Context, rayJobIns
 				return false, err
 			}
 			if err := rayDashboardClient.StopJob(ctx, rayJobInstance.Status.JobId); err != nil {
-				logger.Error(err, "Failed to stop Ray job for clusterSelector suspend")
-				r.Recorder.Eventf(rayJobInstance, corev1.EventTypeWarning, string(utils.FailedToStopRayJob),
-					"Failed to stop Ray job %s on RayJob %s/%s: %v",
-					rayJobInstance.Status.JobId, rayJobInstance.Namespace, rayJobInstance.Name, err)
+				logger.Error(err, "Failed to stop Ray job for clusterSelector suspend",
+					"JobId", rayJobInstance.Status.JobId, "RayJob", rayJobInstance.Namespace+"/"+rayJobInstance.Name)
 				return false, err
 			}
 		}
