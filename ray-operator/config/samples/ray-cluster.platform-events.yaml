@@ -1,0 +1,52 @@
+apiVersion: ray.io/v1
+kind: RayCluster
+metadata:
+  name: raycluster-platform-events
+spec:
+  rayVersion: "2.56.0" # Platform events feature is available in 2.56.0+
+  headGroupSpec:
+    rayStartParams: {}
+    template:
+      spec:
+        # Note: A RoleBinding with "events" and "rayclusters" read permissions is
+        # required for the ServiceAccount used by the head pod.
+        # See documentation for details on RBAC requirements.
+        serviceAccountName: default
+        containers:
+        - name: ray-head
+          image: rayproject/ray:2.56.0
+          env:
+          - name: RAY_DASHBOARD_INGEST_PLATFORM_EVENTS
+            value: "true"
+          resources:
+            limits:
+              cpu: "1"
+              memory: "5Gi"
+            requests:
+              cpu: "1"
+              memory: "5Gi"
+          ports:
+          - containerPort: 6379
+            name: gcs-server
+          - containerPort: 8265
+            name: dashboard
+          - containerPort: 10001
+            name: client
+  workerGroupSpecs:
+  - replicas: 1
+    minReplicas: 1
+    maxReplicas: 5
+    groupName: workergroup
+    rayStartParams: {}
+    template:
+      spec:
+        containers:
+        - name: ray-worker
+          image: rayproject/ray:2.56.0
+          resources:
+            limits:
+              cpu: "1"
+              memory: "1Gi"
+            requests:
+              cpu: "1"
+              memory: "1Gi"
