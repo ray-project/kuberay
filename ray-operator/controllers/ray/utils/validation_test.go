@@ -2392,6 +2392,7 @@ func TestValidateRayClusterSpec_Priority(t *testing.T) {
 	// Util function to create a RayCluster spec.
 	createSpec := func() rayv1.RayClusterSpec {
 		return rayv1.RayClusterSpec{
+			RayVersion:              "2.56.0",
 			EnableInTreeAutoscaling: new(true),
 			HeadGroupSpec: rayv1.HeadGroupSpec{
 				Template: podTemplateSpec(nil, nil),
@@ -2507,6 +2508,66 @@ func TestValidateRayClusterSpec_Priority(t *testing.T) {
 				return s
 			}(),
 			expectedErr: "worker group worker-group-1: priority is set to 2, but autoscaler v2 is not enabled. Priority is only supported with autoscaler v2 enabled",
+		},
+		"Invalid: Worker group priority with empty Ray version": {
+			spec: func() rayv1.RayClusterSpec {
+				s := createSpec()
+				s.RayVersion = ""
+				s.AutoscalerOptions = &rayv1.AutoscalerOptions{
+					Version: ptr.To(rayv1.AutoscalerVersionV2),
+				}
+				s.WorkerGroupSpecs = []rayv1.WorkerGroupSpec{
+					{
+						GroupName:   "worker-group-1",
+						Template:    podTemplateSpec(nil, nil),
+						Priority:    ptr.To(int32(1)),
+						MinReplicas: new(int32(0)),
+						MaxReplicas: new(int32(10)),
+					},
+				}
+				return s
+			}(),
+			expectedErr: "worker group worker-group-1: priority is set, but RayVersion was not specified. Ray version 2.56.0 or later is required",
+		},
+		"Invalid: Worker group priority with invalid Ray version": {
+			spec: func() rayv1.RayClusterSpec {
+				s := createSpec()
+				s.RayVersion = "invalid"
+				s.AutoscalerOptions = &rayv1.AutoscalerOptions{
+					Version: ptr.To(rayv1.AutoscalerVersionV2),
+				}
+				s.WorkerGroupSpecs = []rayv1.WorkerGroupSpec{
+					{
+						GroupName:   "worker-group-1",
+						Template:    podTemplateSpec(nil, nil),
+						Priority:    ptr.To(int32(1)),
+						MinReplicas: new(int32(0)),
+						MaxReplicas: new(int32(10)),
+					},
+				}
+				return s
+			}(),
+			expectedErr: "worker group worker-group-1: priority is set, but RayVersion format is invalid: invalid, could not parse \"invalid\" as version",
+		},
+		"Invalid: Worker group priority with Ray version below 2.56.0": {
+			spec: func() rayv1.RayClusterSpec {
+				s := createSpec()
+				s.RayVersion = "2.55.0"
+				s.AutoscalerOptions = &rayv1.AutoscalerOptions{
+					Version: ptr.To(rayv1.AutoscalerVersionV2),
+				}
+				s.WorkerGroupSpecs = []rayv1.WorkerGroupSpec{
+					{
+						GroupName:   "worker-group-1",
+						Template:    podTemplateSpec(nil, nil),
+						Priority:    ptr.To(int32(1)),
+						MinReplicas: new(int32(0)),
+						MaxReplicas: new(int32(10)),
+					},
+				}
+				return s
+			}(),
+			expectedErr: "worker group worker-group-1: priority is set, but minimum Ray version is 2.56.0, got 2.55.0",
 		},
 	}
 

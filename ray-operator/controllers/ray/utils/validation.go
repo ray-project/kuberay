@@ -846,6 +846,19 @@ func validateWorkerGroupPriority(workerGroup rayv1.WorkerGroupSpec, spec *rayv1.
 		return nil
 	}
 
+	// The priority field was added in Ray 2.56.0.
+	if spec.RayVersion == "" {
+		return fmt.Errorf("worker group %s: priority is set, but RayVersion was not specified. Ray version 2.56.0 or later is required", workerGroup.GroupName)
+	}
+	rayVersion, err := version.ParseGeneric(spec.RayVersion)
+	if err != nil {
+		return fmt.Errorf("worker group %s: priority is set, but RayVersion format is invalid: %s, %w", workerGroup.GroupName, spec.RayVersion, err)
+	}
+	minVersion := version.MustParseGeneric("2.56.0")
+	if rayVersion.LessThan(minVersion) {
+		return fmt.Errorf("worker group %s: priority is set, but minimum Ray version is 2.56.0, got %s", workerGroup.GroupName, spec.RayVersion)
+	}
+
 	if IsAutoscalingV2Enabled(spec) {
 		return nil
 	}
