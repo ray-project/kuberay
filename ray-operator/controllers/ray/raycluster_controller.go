@@ -608,9 +608,8 @@ func (r *RayClusterReconciler) reconcileHeadService(ctx context.Context, instanc
 //     stable claim. During a zero-downtime upgrade the old and new head Pods run
 //     concurrently, so the claim must allow concurrent attach (ReadWriteMany) and
 //     single-writer semantics must be coordinated externally (RocksDB tolerates
-//     only one writer at a time; Ray hands off via its persisted session_name
-//     marker). ReadWriteOnce is acceptable for active-passive / non-overlapping
-//     handoffs where only one Pod attaches at a time.
+//     only one writer at a time). ReadWriteOnce is acceptable for active-passive /
+//     non-overlapping handoffs where only one Pod attaches at a time.
 //
 // Why not an operator-managed PVC re-parented to the RayService for automatic
 // cross-upgrade persistence?
@@ -667,6 +666,15 @@ func (r *RayClusterReconciler) reconcileGCSStoragePVC(ctx context.Context, insta
 	existing := &corev1.PersistentVolumeClaim{}
 	err := r.Get(ctx, types.NamespacedName{Name: pvcName, Namespace: instance.Namespace}, existing)
 	if err == nil {
+		// An existing {cluster}-gcs-pvc is adopted as-is (drift is reported but the
+		// PVC is not recreated). This is deliberate: a same-named cluster recreated
+		// after a `deletionPolicy: Retain` delete reuses the retained RocksDB state,
+		// which is the documented same-name recovery path (see the GcsEmbeddedStorage
+		// field docs). We intentionally do NOT error on an "unowned" existing PVC to
+		// force explicit opt-in, because a `Retain` cluster deliberately creates its
+		// own PVC without an ownerReference: erroring on unowned PVCs would break the
+		// steady-state reconcile / restart of a Retain cluster (its own PVC would be
+		// rejected). To start from a fresh store instead, delete the leftover PVC.
 		if drift := gcsStoragePVCDrift(common.BuildGCSStoragePVC(instance), existing); drift != "" {
 			r.Recorder.Eventf(instance, nil, corev1.EventTypeWarning, string(utils.FailedToCreatePVC), string(utils.UpdateAction),
 				"GCS storage PVC %s/%s already exists and cannot be reconfigured in place (%s); delete the PVC to recreate it with the new settings", existing.Namespace, existing.Name, drift)
@@ -1808,7 +1816,8 @@ func (r *RayClusterReconciler) SetupWithManager(mgr ctrl.Manager, reconcileConcu
 		))).
 		Owns(&corev1.Pod{}).
 		Owns(&corev1.Service{}).
-		Owns(&corev1.Secret{})
+		Owns(&corev1.Secret{}).
+		Owns(&corev1.PersistentVolumeClaim{})
 	if r.options.BatchSchedulerManager != nil {
 		r.options.BatchSchedulerManager.ConfigureReconciler(b)
 	}

@@ -340,6 +340,9 @@ func validateGcsFaultToleranceBackend(options *rayv1.GcsFaultToleranceOptions, h
 			}
 		}
 	default: // redis
+		if options != nil && options.Storage != nil {
+			return fmt.Errorf("cannot set GcsFaultToleranceOptions.Storage when backend is 'redis' - it only applies to the 'rocksdb' backend")
+		}
 	}
 	return nil
 }

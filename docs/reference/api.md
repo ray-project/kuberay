@@ -267,7 +267,7 @@ _Appears in:_
 | `storageClassName` _string_ | StorageClassName for the operator-managed PVC. Uses the cluster default<br />StorageClass when omitted. Ignored when ClaimName is set. |  |  |
 | `accessModes` _[PersistentVolumeAccessMode](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#persistentvolumeaccessmode-v1-core) array_ | AccessModes for the operator-managed PVC. Defaults to [ReadWriteOnce].<br />Ignored when ClaimName is set.<br />ReadWriteOnce is the sane default for a standalone RayCluster (one head Pod<br />attaches at a time). ReadWriteMany is a valid choice when you need the volume<br />attached to multiple Pods concurrently (e.g. to overlap the old and new head<br />during a RayService upgrade); RocksDB still requires that only one of them<br />writes at a time, which you must coordinate externally. |  |  |
 | `subPath` _string_ | SubPath mounts a subdirectory of the volume instead of its root. |  |  |
-| `deletionPolicy` _[GCSStorageDeletionPolicy](#gcsstoragedeletionpolicy)_ | DeletionPolicy controls the lifecycle of the operator-managed PVC relative to<br />the owning RayCluster. Defaults to DeleteWithCluster. Ignored when ClaimName<br />is set (the operator never owns a bring-your-own PVC, so it is never deleted<br />or retained by the operator). |  | Enum: [DeleteWithCluster Retain] <br /> |
+| `deletionPolicy` _[GCSStorageDeletionPolicy](#gcsstoragedeletionpolicy)_ | DeletionPolicy controls the lifecycle of the operator-managed PVC relative to<br />the owning RayCluster. Defaults to DeleteWithCluster. Ignored when ClaimName<br />is set (the operator never owns a bring-your-own PVC, so it is never deleted<br />or retained by the operator).<br />Recovery after Retain: a PVC left behind by a Retain delete can be recovered<br />either by pointing a new cluster's ClaimName at it, or by recreating a<br />RayCluster with the same name on the operator-managed path -- the operator<br />adopts the existing \{cluster\}-gcs-pvc and reuses its RocksDB state. To start<br />from a fresh store instead, delete the leftover PVC first. |  | Enum: [DeleteWithCluster Retain] <br /> |
 
 
 #### GcsFaultToleranceBackend
@@ -305,7 +305,7 @@ _Appears in:_
 | `redisUsername` _[RedisCredential](#rediscredential)_ |  |  |  |
 | `redisPassword` _[RedisCredential](#rediscredential)_ |  |  |  |
 | `externalStorageNamespace` _string_ |  |  |  |
-| `redisAddress` _string_ | RedisAddress is required when Backend is "redis" (enforced by validation). |  |  |
+| `redisAddress` _string_ | RedisAddress is the address of the external Redis service used when Backend<br />is "redis". It may alternatively be supplied via env vars/annotations. |  |  |
 | `storage` _[GcsEmbeddedStorage](#gcsembeddedstorage)_ | Storage configures the persistent volume backing the embedded RocksDB<br />store. Only used when Backend is "rocksdb". |  |  |
 
 

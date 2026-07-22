@@ -28,7 +28,9 @@ spec:
       #                                  # by the RayCluster and garbage-collected with it. Set to
       #                                  # Retain to keep the PVC (and its data) after the
       #                                  # RayCluster is deleted, so GCS state can be recovered by
-      #                                  # a new cluster via claimName.
+      #                                  # a new cluster via claimName, or by recreating a cluster
+      #                                  # with the same name (the operator adopts the retained
+      #                                  # {cluster}-gcs-pvc). Delete the leftover PVC for a fresh store.
       #
       # To bring your own PVC instead of an operator-managed one, set claimName
       # (mutually exclusive with size/storageClassName/accessModes). This is also the

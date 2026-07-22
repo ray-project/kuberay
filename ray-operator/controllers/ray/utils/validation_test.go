@@ -212,6 +212,15 @@ func TestValidateRayClusterSpecGcsFaultToleranceOptions(t *testing.T) {
 			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{Backend: rayv1.GcsFTBackendRedis},
 			expectError:              false,
 		},
+		{
+			name: "redis backend rejects rocksdb-only storage field",
+			gcsFaultToleranceOptions: &rayv1.GcsFaultToleranceOptions{
+				Backend: rayv1.GcsFTBackendRedis,
+				Storage: &rayv1.GcsEmbeddedStorage{Size: ptr.To(resource.MustParse("1Gi"))},
+			},
+			expectError:  true,
+			errorMessage: "cannot set GcsFaultToleranceOptions.Storage when backend is 'redis' - it only applies to the 'rocksdb' backend",
+		},
 		// rocksdb backend rules.
 		{
 			name:                     "rocksdb backend is valid with no redis fields",

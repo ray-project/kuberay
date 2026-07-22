@@ -142,7 +142,8 @@ type GcsFaultToleranceOptions struct {
 	RedisPassword *RedisCredential `json:"redisPassword,omitempty"`
 	// +optional
 	ExternalStorageNamespace string `json:"externalStorageNamespace,omitempty"`
-	// RedisAddress is required when Backend is "redis" (enforced by validation).
+	// RedisAddress is the address of the external Redis service used when Backend
+	// is "redis". It may alternatively be supplied via env vars/annotations.
 	// +optional
 	RedisAddress string `json:"redisAddress,omitempty"`
 
@@ -210,6 +211,12 @@ type GcsEmbeddedStorage struct {
 	// the owning RayCluster. Defaults to DeleteWithCluster. Ignored when ClaimName
 	// is set (the operator never owns a bring-your-own PVC, so it is never deleted
 	// or retained by the operator).
+	//
+	// Recovery after Retain: a PVC left behind by a Retain delete can be recovered
+	// either by pointing a new cluster's ClaimName at it, or by recreating a
+	// RayCluster with the same name on the operator-managed path -- the operator
+	// adopts the existing {cluster}-gcs-pvc and reuses its RocksDB state. To start
+	// from a fresh store instead, delete the leftover PVC first.
 	// +optional
 	DeletionPolicy *GCSStorageDeletionPolicy `json:"deletionPolicy,omitempty"`
 }
