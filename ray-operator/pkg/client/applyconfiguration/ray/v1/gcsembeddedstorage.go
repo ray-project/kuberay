@@ -57,6 +57,12 @@ type GcsEmbeddedStorageApplyConfiguration struct {
 	// the owning RayCluster. Defaults to DeleteWithCluster. Ignored when ClaimName
 	// is set (the operator never owns a bring-your-own PVC, so it is never deleted
 	// or retained by the operator).
+	//
+	// Recovery after Retain: a PVC left behind by a Retain delete can be recovered
+	// either by pointing a new cluster's ClaimName at it, or by recreating a
+	// RayCluster with the same name on the operator-managed path -- the operator
+	// adopts the existing {cluster}-gcs-pvc and reuses its RocksDB state. To start
+	// from a fresh store instead, delete the leftover PVC first.
 	DeletionPolicy *rayv1.GCSStorageDeletionPolicy `json:"deletionPolicy,omitempty"`
 }
 

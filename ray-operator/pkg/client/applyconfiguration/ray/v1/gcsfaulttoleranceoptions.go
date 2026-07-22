@@ -12,12 +12,15 @@ import (
 // GcsFaultToleranceOptions contains configs for GCS FT
 type GcsFaultToleranceOptionsApplyConfiguration struct {
 	// Backend selects the GCS FT persistence backend. Defaults to "redis" for
-	// backward compatibility.
+	// backward compatibility. Immutable: the backend cannot be switched on an
+	// existing RayCluster (doing so would swap the entire GCS store and head-Pod
+	// wiring, losing fault-tolerance state).
 	Backend                  *rayv1.GcsFaultToleranceBackend    `json:"backend,omitempty"`
 	RedisUsername            *RedisCredentialApplyConfiguration `json:"redisUsername,omitempty"`
 	RedisPassword            *RedisCredentialApplyConfiguration `json:"redisPassword,omitempty"`
 	ExternalStorageNamespace *string                            `json:"externalStorageNamespace,omitempty"`
-	// RedisAddress is required when Backend is "redis" (enforced by validation).
+	// RedisAddress is the address of the external Redis service used when Backend
+	// is "redis". It may alternatively be supplied via env vars/annotations.
 	RedisAddress *string `json:"redisAddress,omitempty"`
 	// Storage configures the persistent volume backing the embedded RocksDB
 	// store. Only used when Backend is "rocksdb".
