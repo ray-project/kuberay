@@ -441,6 +441,9 @@ spec:
                             - redis
                             - rocksdb
                             type: string
+                            x-kubernetes-validations:
+                            - message: gcsFaultToleranceOptions.backend is immutable
+                              rule: self == oldSelf
                           externalStorageNamespace:
                             type: string
                           redisAddress:

@@ -130,8 +130,11 @@ const (
 // GcsFaultToleranceOptions contains configs for GCS FT
 type GcsFaultToleranceOptions struct {
 	// Backend selects the GCS FT persistence backend. Defaults to "redis" for
-	// backward compatibility.
+	// backward compatibility. Immutable: the backend cannot be switched on an
+	// existing RayCluster (doing so would swap the entire GCS store and head-Pod
+	// wiring, losing fault-tolerance state).
 	// +optional
+	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="gcsFaultToleranceOptions.backend is immutable"
 	Backend GcsFaultToleranceBackend `json:"backend,omitempty"`
 
 	// ----- Redis backend fields -----
