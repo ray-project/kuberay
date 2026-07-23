@@ -23,6 +23,16 @@ fullnameOverride: ""
 imagePullSecrets: []
   # - name: an-existing-secret
 
+# upgradeStrategy defines how the KubeRay operator rolls out changes to the
+# RayCluster spec (requires KubeRay v1.6.0+). With `type: Recreate`, the
+# operator automatically deletes and recreates all Ray cluster Pods when the
+# spec changes (e.g. a new image tag) — no manual Pod deletion needed. With
+# `type: None` (the default behavior when unset), running Pods are left
+# untouched on spec changes. Not recommended if Ray cluster state needs to be
+# persisted in-cluster.
+upgradeStrategy: {}
+  # type: Recreate
+
 # gcsFaultTolerance specifies configuration for GCS fault tolerance.
 # See https://docs.ray.io/en/latest/cluster/kubernetes/user-guides/kuberay-gcs-ft.html#kuberay-gcs-ft
 # for more details.
