@@ -2569,3 +2569,202 @@ func TestUpdateRayStartParamsResources(t *testing.T) {
 		})
 	}
 }
+
+func TestConfigureTLS_Disabled(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.RayClusterMTLS, true)
+	cluster := instance.DeepCopy()
+	// TLSOptions is nil by default => TLS disabled.
+	ctx := context.Background()
+
+	podName := "test-head"
+	podTemplate := DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
+
+	// No TLS volume should be added.
+	for _, vol := range podTemplate.Spec.Volumes {
+		assert.NotEqual(t, utils.RayTLSVolumeName, vol.Name)
+	}
+	// No TLS env vars should be added.
+	rayContainer := podTemplate.Spec.Containers[utils.RayContainerIndex]
+	assert.Nil(t, getEnvVar(rayContainer, utils.RAY_USE_TLS))
+}
+
+func TestConfigureTLS_AutoGenerate_HeadPod(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.RayClusterMTLS, true)
+	cluster := instance.DeepCopy()
+	cluster.Spec.TLSOptions = &rayv1.TLSOptions{}
+	ctx := context.Background()
+
+	podName := "test-head"
+	podTemplate := DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, podName, "6379")
+
+	// Auto-generate mode mounts the cert-manager head secret.
+	var tlsVolume *corev1.Volume
+	for i := range podTemplate.Spec.Volumes {
+		if podTemplate.Spec.Volumes[i].Name == utils.RayTLSVolumeName {
+			tlsVolume = &podTemplate.Spec.Volumes[i]
+			break
+		}
+	}
+	require.NotNil(t, tlsVolume, "TLS volume should be added")
+	require.NotNil(t, tlsVolume.Secret, "auto-generate mode should use Secret volume")
+	expectedSecret := utils.GetTLSSecretName(cluster.Name, rayv1.HeadNode)
+	assert.Equal(t, expectedSecret, tlsVolume.Secret.SecretName)
+
+	// Verify TLS env vars on Ray container.
+	rayContainer := podTemplate.Spec.Containers[utils.RayContainerIndex]
+	checkContainerEnv(t, rayContainer, utils.RAY_USE_TLS, "1")
+	checkContainerEnv(t, rayContainer, utils.RAY_TLS_SERVER_CERT, utils.RayTLSCertMountPath+"/tls.crt")
+	checkContainerEnv(t, rayContainer, utils.RAY_TLS_SERVER_KEY, utils.RayTLSCertMountPath+"/tls.key")
+	checkContainerEnv(t, rayContainer, utils.RAY_TLS_CA_CERT, utils.RayTLSCertMountPath+"/ca.crt")
+
+	// Verify TLS volume mount on Ray container.
+	var tlsMount *corev1.VolumeMount
+	for i := range rayContainer.VolumeMounts {
+		if rayContainer.VolumeMounts[i].Name == utils.RayTLSVolumeName {
+			tlsMount = &rayContainer.VolumeMounts[i]
+			break
+		}
+	}
+	require.NotNil(t, tlsMount, "TLS volume mount should be added to Ray container")
+	assert.Equal(t, utils.RayTLSCertMountPath, tlsMount.MountPath)
+	assert.True(t, tlsMount.ReadOnly)
+
+	// wait-for-tls-ip-san must be the first init container on head pods (auto-generate only).
+	require.NotEmpty(t, podTemplate.Spec.InitContainers, "head pod should have init containers when TLS is enabled")
+	assert.Equal(t, "wait-for-tls-ip-san", podTemplate.Spec.InitContainers[0].Name,
+		"wait-for-tls-ip-san must be the first init container")
+	waitInit := podTemplate.Spec.InitContainers[0]
+	// Must have access to the TLS cert.
+	hasTLSMount := false
+	for _, vm := range waitInit.VolumeMounts {
+		if vm.Name == utils.RayTLSVolumeName {
+			hasTLSMount = true
+			break
+		}
+	}
+	assert.True(t, hasTLSMount, "wait-for-tls-ip-san should mount the TLS volume")
+	// Must receive POD_IP from the downward API.
+	hasPodIPEnv := false
+	for _, e := range waitInit.Env {
+		if e.Name == "POD_IP" && e.ValueFrom != nil &&
+			e.ValueFrom.FieldRef != nil && e.ValueFrom.FieldRef.FieldPath == "status.podIP" {
+			hasPodIPEnv = true
+			break
+		}
+	}
+	assert.True(t, hasPodIPEnv, "wait-for-tls-ip-san should receive POD_IP via downward API")
+}
+
+func TestConfigureTLS_AutoGenerate_WorkerPod(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.RayClusterMTLS, true)
+	cluster := instance.DeepCopy()
+	cluster.Spec.TLSOptions = &rayv1.TLSOptions{}
+	ctx := context.Background()
+
+	worker := cluster.Spec.WorkerGroupSpecs[0]
+	fqdnRayIP := utils.GenerateFQDNServiceName(ctx, *cluster, cluster.Namespace)
+	podTemplate := DefaultWorkerPodTemplate(ctx, *cluster, worker, "test-worker", fqdnRayIP, "6379", "", 0, 0)
+
+	// Auto-generate mode mounts the cert-manager worker secret.
+	var tlsVolume *corev1.Volume
+	for i := range podTemplate.Spec.Volumes {
+		if podTemplate.Spec.Volumes[i].Name == utils.RayTLSVolumeName {
+			tlsVolume = &podTemplate.Spec.Volumes[i]
+			break
+		}
+	}
+	require.NotNil(t, tlsVolume, "TLS volume should be added")
+	require.NotNil(t, tlsVolume.Secret, "auto-generate mode should use Secret volume")
+	expectedSecret := utils.GetTLSSecretName(cluster.Name, rayv1.WorkerNode)
+	assert.Equal(t, expectedSecret, tlsVolume.Secret.SecretName)
+
+	// Verify TLS env vars on Ray container.
+	rayContainer := podTemplate.Spec.Containers[utils.RayContainerIndex]
+	checkContainerEnv(t, rayContainer, utils.RAY_USE_TLS, "1")
+	checkContainerEnv(t, rayContainer, utils.RAY_TLS_SERVER_CERT, utils.RayTLSCertMountPath+"/tls.crt")
+	checkContainerEnv(t, rayContainer, utils.RAY_TLS_SERVER_KEY, utils.RayTLSCertMountPath+"/tls.key")
+	checkContainerEnv(t, rayContainer, utils.RAY_TLS_CA_CERT, utils.RayTLSCertMountPath+"/ca.crt")
+	// Verify TLS volume mount on Ray container.
+	var tlsMount *corev1.VolumeMount
+	for i := range rayContainer.VolumeMounts {
+		if rayContainer.VolumeMounts[i].Name == utils.RayTLSVolumeName {
+			tlsMount = &rayContainer.VolumeMounts[i]
+			break
+		}
+	}
+	require.NotNil(t, tlsMount, "TLS volume mount should be added to Ray container")
+	assert.Equal(t, utils.RayTLSCertMountPath, tlsMount.MountPath)
+	assert.True(t, tlsMount.ReadOnly)
+
+	// wait-for-tls-ip-san must be the first init container on worker pods. GCS connects back
+	// to each worker's raylet using the worker's pod IP; if the cert doesn't yet list that IP
+	// the TLS handshake fails and GCS marks the worker dead, causing the RayJob to fail.
+	require.NotEmpty(t, podTemplate.Spec.InitContainers, "worker pod should have init containers")
+	assert.Equal(t, "wait-for-tls-ip-san", podTemplate.Spec.InitContainers[0].Name,
+		"wait-for-tls-ip-san must be the first init container on worker pods")
+
+	// wait-gcs-ready should exist and have TLS config.
+	var gcsReadyContainer *corev1.Container
+	for i := range podTemplate.Spec.InitContainers {
+		if podTemplate.Spec.InitContainers[i].Name == "wait-gcs-ready" {
+			gcsReadyContainer = &podTemplate.Spec.InitContainers[i]
+			break
+		}
+	}
+	require.NotNil(t, gcsReadyContainer, "worker pod should have wait-gcs-ready init container")
+	assert.NotNil(t, getEnvVar(*gcsReadyContainer, utils.RAY_USE_TLS), "wait-gcs-ready should have RAY_USE_TLS")
+}
+
+func TestConfigureTLS_AutoscalerContainer(t *testing.T) {
+	features.SetFeatureGateDuringTest(t, features.RayClusterMTLS, true)
+	cluster := instance.DeepCopy()
+	cluster.Spec.TLSOptions = &rayv1.TLSOptions{}
+	cluster.Spec.EnableInTreeAutoscaling = ptr.To(true)
+	ctx := context.Background()
+
+	podTemplate := DefaultHeadPodTemplate(ctx, *cluster, cluster.Spec.HeadGroupSpec, "test-head", "6379")
+
+	// Find the autoscaler container.
+	var autoscalerContainer *corev1.Container
+	for i, c := range podTemplate.Spec.Containers {
+		if c.Name == "autoscaler" {
+			autoscalerContainer = &podTemplate.Spec.Containers[i]
+			break
+		}
+	}
+	require.NotNil(t, autoscalerContainer, "autoscaler container should exist when autoscaling is enabled")
+
+	// Verify TLS env vars on autoscaler container.
+	env := getEnvVar(*autoscalerContainer, utils.RAY_USE_TLS)
+	assert.NotNil(t, env, "autoscaler container should have RAY_USE_TLS")
+	checkContainerEnv(t, *autoscalerContainer, utils.RAY_TLS_SERVER_CERT, utils.RayTLSCertMountPath+"/tls.crt")
+	checkContainerEnv(t, *autoscalerContainer, utils.RAY_TLS_SERVER_KEY, utils.RayTLSCertMountPath+"/tls.key")
+	checkContainerEnv(t, *autoscalerContainer, utils.RAY_TLS_CA_CERT, utils.RayTLSCertMountPath+"/ca.crt")
+
+	// Verify TLS volume mount on autoscaler container.
+	var tlsMount *corev1.VolumeMount
+	for i := range autoscalerContainer.VolumeMounts {
+		if autoscalerContainer.VolumeMounts[i].Name == utils.RayTLSVolumeName {
+			tlsMount = &autoscalerContainer.VolumeMounts[i]
+			break
+		}
+	}
+	assert.NotNil(t, tlsMount, "autoscaler container should have TLS volume mount")
+}
+
+func TestSetContainerTLSConfig(t *testing.T) {
+	container := &corev1.Container{Name: "test"}
+	SetContainerTLSConfig(container)
+
+	assert.Len(t, container.Env, 4, "should add 4 TLS env vars")
+	assert.Equal(t, utils.RAY_USE_TLS, container.Env[0].Name)
+	assert.Equal(t, "1", container.Env[0].Value)
+	assert.Equal(t, utils.RAY_TLS_SERVER_CERT, container.Env[1].Name)
+	assert.Equal(t, utils.RAY_TLS_SERVER_KEY, container.Env[2].Name)
+	assert.Equal(t, utils.RAY_TLS_CA_CERT, container.Env[3].Name)
+
+	require.Len(t, container.VolumeMounts, 1, "should add 1 TLS volume mount")
+	assert.Equal(t, utils.RayTLSVolumeName, container.VolumeMounts[0].Name)
+	assert.Equal(t, utils.RayTLSCertMountPath, container.VolumeMounts[0].MountPath)
+	assert.True(t, container.VolumeMounts[0].ReadOnly)
+}

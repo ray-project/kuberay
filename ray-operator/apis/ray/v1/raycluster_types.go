@@ -51,6 +51,12 @@ type RayClusterSpec struct {
 	// allow DNS egress via Head/Worker EgressRules or the cluster will fail to start.
 	// +optional
 	NetworkPolicy *NetworkPolicyConfig `json:"networkPolicy,omitempty"`
+	// TLSOptions specifies optional TLS encryption settings for the RayCluster.
+	// If omitted, TLS is disabled. When set, the mode field controls the
+	// security level (defaults to "MutualTLS" for mutual TLS).
+	// Requires the RayClusterMTLS feature gate on the operator.
+	// +optional
+	TLSOptions *TLSOptions `json:"tlsOptions,omitempty"`
 	// HeadGroupSpec is the spec for the head pod
 	HeadGroupSpec HeadGroupSpec `json:"headGroupSpec"`
 	// RayVersion is used to determine the command for the Kubernetes Job managed by RayJob
@@ -59,6 +65,29 @@ type RayClusterSpec struct {
 	// WorkerGroupSpecs are the specs for the worker pods
 	// +optional
 	WorkerGroupSpecs []WorkerGroupSpec `json:"workerGroupSpecs,omitempty"`
+}
+
+// TLSMode selects the TLS security level for a RayCluster.
+type TLSMode string
+
+const (
+	// TLSModeMutual enables mutual TLS (client & server authentication).
+	TLSModeMutual TLSMode = "MutualTLS"
+)
+
+// TLSOptions configures TLS encryption for the RayCluster.
+// When TLSOptions is nil, TLS is disabled. When set, the operator uses
+// cert-manager to automatically provision a full PKI (self-signed CA, head
+// and worker leaf certificates) and keeps certificates up to date as pod IPs
+// change during autoscaling.
+type TLSOptions struct {
+	// Mode selects the TLS security mode.
+	// Supported values: "MutualTLS" (mutual TLS, client & server authentication).
+	// Defaults to "MutualTLS".
+	// +kubebuilder:validation:Enum=MutualTLS
+	// +kubebuilder:default=MutualTLS
+	// +optional
+	Mode TLSMode `json:"mode,omitempty"`
 }
 
 // +kubebuilder:validation:Enum=Recreate;None

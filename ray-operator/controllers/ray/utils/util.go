@@ -776,6 +776,56 @@ func IsK8sAuthEnabled(authOptions *rayv1.AuthOptions) bool {
 	return authOptions != nil && authOptions.EnableK8sTokenAuth != nil && *authOptions.EnableK8sTokenAuth
 }
 
+// IsTLSEnabled returns whether TLS is enabled for the RayCluster.
+// TLS is enabled when the RayClusterMTLS feature gate is on and spec.TLSOptions is non-nil.
+func IsTLSEnabled(spec *rayv1.RayClusterSpec) bool {
+	if !features.Enabled(features.RayClusterMTLS) {
+		return false
+	}
+	return spec != nil && spec.TLSOptions != nil
+}
+
+// GetCASecretName returns the cert-manager CA secret name with a UID-based suffix.
+// Format: {clusterName}-ca-secret-{first 8 chars of UID}
+// The UID suffix guarantees uniqueness per cluster instance. If a cluster is deleted
+// and recreated with the same name, it gets a new CA secret rather than reusing a
+// potentially stale one from a previous instance.
+func GetCASecretName(clusterName string, clusterUID types.UID) string {
+	uidSuffix := string(clusterUID)[:8]
+	return fmt.Sprintf("%s-%s-%s", clusterName, RayCASecretPrefix, uidSuffix)
+}
+
+// GetTLSSecretName returns the cert-manager generated TLS secret name for the given node type.
+func GetTLSSecretName(clusterName string, nodeType rayv1.RayNodeType) string {
+	if nodeType == rayv1.HeadNode {
+		return fmt.Sprintf("%s-%s", RayHeadSecretPrefix, clusterName)
+	}
+	return fmt.Sprintf("%s-%s", RayWorkerSecretPrefix, clusterName)
+}
+
+// GetTLSCertName returns the cert-manager Certificate name for the given node type.
+func GetTLSCertName(clusterName string, nodeType rayv1.RayNodeType) string {
+	if nodeType == rayv1.HeadNode {
+		return fmt.Sprintf("%s-%s", RayHeadCertPrefix, clusterName)
+	}
+	return fmt.Sprintf("%s-%s", RayWorkerCertPrefix, clusterName)
+}
+
+// GetSelfSignedIssuerName returns the self-signed Issuer name for the given cluster.
+func GetSelfSignedIssuerName(clusterName string) string {
+	return fmt.Sprintf("%s-%s", RaySelfSignedIssuerPrefix, clusterName)
+}
+
+// GetCACertName returns the CA Certificate name for the given cluster.
+func GetCACertName(clusterName string) string {
+	return fmt.Sprintf("%s-%s", RayCACertificatePrefix, clusterName)
+}
+
+// GetCAIssuerName returns the CA Issuer name for the given cluster.
+func GetCAIssuerName(clusterName string) string {
+	return fmt.Sprintf("%s-%s", RayCAIssuerPrefix, clusterName)
+}
+
 // GetRayClusterNameFromService returns the name of the RayCluster that the service points to
 func GetRayClusterNameFromService(svc *corev1.Service) string {
 	if svc == nil || svc.Spec.Selector == nil {

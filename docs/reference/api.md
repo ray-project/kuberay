@@ -388,6 +388,7 @@ _Appears in:_
 | `enableInTreeAutoscaling` _boolean_ | EnableInTreeAutoscaling indicates whether operator should create in tree autoscaling configs |  |  |
 | `gcsFaultToleranceOptions` _[GcsFaultToleranceOptions](#gcsfaulttoleranceoptions)_ | GcsFaultToleranceOptions for enabling GCS FT |  |  |
 | `networkPolicy` _[NetworkPolicyConfig](#networkpolicyconfig)_ | NetworkPolicy specifies optional configuration for network isolation.<br />When set, separate NetworkPolicies are created for head and worker pods.<br />The reconciler always permits intra-cluster pod-to-pod traffic.<br />Note: under DenyAll/DenyAllEgress, DNS egress is not added<br />automatically; since Ray pods reach the head via its service FQDN, you must<br />allow DNS egress via Head/Worker EgressRules or the cluster will fail to start. |  |  |
+| `tlsOptions` _[TLSOptions](#tlsoptions)_ | TLSOptions specifies optional TLS encryption settings for the RayCluster.<br />If omitted, TLS is disabled. When set, the mode field controls the<br />security level (defaults to "MutualTLS" for mutual TLS).<br />Requires the RayClusterMTLS feature gate on the operator. |  |  |
 | `headGroupSpec` _[HeadGroupSpec](#headgroupspec)_ | HeadGroupSpec is the spec for the head pod |  |  |
 | `rayVersion` _string_ | RayVersion is used to determine the command for the Kubernetes Job managed by RayJob |  |  |
 | `workerGroupSpecs` _[WorkerGroupSpec](#workergroupspec) array_ | WorkerGroupSpecs are the specs for the worker pods |  |  |
@@ -653,6 +654,42 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `backoffLimit` _integer_ | BackoffLimit of the submitter. In K8sJobMode, this is the K8s Job backoffLimit.<br />In SidecarMode with SidecarSubmitterRestart enabled, this is the maximum container restart count. |  |  |
+
+
+#### TLSMode
+
+_Underlying type:_ _string_
+
+TLSMode selects the TLS security level for a RayCluster.
+
+
+
+_Appears in:_
+- [TLSOptions](#tlsoptions)
+
+| Field | Description |
+| --- | --- |
+| `MutualTLS` | TLSModeMutual enables mutual TLS (client & server authentication).<br /> |
+
+
+#### TLSOptions
+
+
+
+TLSOptions configures TLS encryption for the RayCluster.
+When TLSOptions is nil, TLS is disabled. When set, the operator uses
+cert-manager to automatically provision a full PKI (self-signed CA, head
+and worker leaf certificates) and keeps certificates up to date as pod IPs
+change during autoscaling.
+
+
+
+_Appears in:_
+- [RayClusterSpec](#rayclusterspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `mode` _[TLSMode](#tlsmode)_ | Mode selects the TLS security mode.<br />Supported values: "MutualTLS" (mutual TLS, client & server authentication).<br />Defaults to "MutualTLS". | MutualTLS | Enum: [MutualTLS] <br /> |
 
 
 #### UpscalingMode

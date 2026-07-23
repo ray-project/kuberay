@@ -209,6 +209,20 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 			SetContainerTokenAuthEnvVars(instance.Name, &autoscalerContainer, instance.Spec.AuthOptions)
 		}
 
+		// Configure mTLS env vars and volume mount for the autoscaler sidecar.
+		// validateTLSOptions rejects forbidden TLS env vars in autoscalerOptions.env,
+		// preventing the user from overriding these via the merge below.
+		//
+		// GCS address alignment: the autoscaler co-located in the head pod reaches GCS
+		// via localhost (127.0.0.1) or the head pod IP. Both are always present in the
+		// head certificate SANs — 127.0.0.1 is added unconditionally, and the pod IP
+		// SAN is guaranteed by the wait-for-tls-ip-san init container (injected by
+		// configureTLS below) before any containers, including this sidecar, start.
+		// No additional RAY_ADDRESS injection is required.
+		if utils.IsTLSEnabled(&instance.Spec) {
+			SetContainerTLSConfig(&autoscalerContainer)
+		}
+
 		// Merge the user overrides from autoscalerOptions into the autoscaler container config.
 		mergeAutoscalerOverrides(&autoscalerContainer, instance.Spec.AutoscalerOptions)
 		podTemplate.Spec.Containers = append(podTemplate.Spec.Containers, autoscalerContainer)
@@ -236,6 +250,8 @@ func DefaultHeadPodTemplate(ctx context.Context, instance rayv1.RayCluster, head
 	if utils.IsAuthEnabled(&instance.Spec) {
 		configureTokenAuth(instance.Name, &podTemplate, instance.Spec.AuthOptions)
 	}
+
+	configureTLS(&podTemplate, instance, rayv1.HeadNode)
 
 	return podTemplate
 }
@@ -345,6 +361,158 @@ func SetContainerTokenAuthEnvVars(clusterName string, container *corev1.Containe
 				},
 			})
 		}
+	}
+}
+
+// configureTLS injects mTLS configuration into the pod template.
+// Mounts the cert-manager generated TLS secret and sets TLS environment variables.
+// Idempotent: skips adding the TLS volume if one with RayTLSVolumeName already exists.
+func configureTLS(podTemplate *corev1.PodTemplateSpec, instance rayv1.RayCluster, rayNodeType rayv1.RayNodeType) {
+	if !utils.IsTLSEnabled(&instance.Spec) {
+		return
+	}
+
+	// Get the TLS secret name. cert-manager creates separate secrets for head and worker.
+	secretName := utils.GetTLSSecretName(instance.Name, rayNodeType)
+
+	// Add the TLS volume if not already present (avoid duplicates on re-entry).
+	hasTLSVolume := false
+	for i := range podTemplate.Spec.Volumes {
+		if podTemplate.Spec.Volumes[i].Name == utils.RayTLSVolumeName {
+			hasTLSVolume = true
+			break
+		}
+	}
+	if !hasTLSVolume {
+		podTemplate.Spec.Volumes = append(podTemplate.Spec.Volumes, corev1.Volume{
+			Name: utils.RayTLSVolumeName,
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName: secretName,
+				},
+			},
+		})
+	}
+
+	// Inject env vars and volume mount into the Ray container.
+	SetContainerTLSConfig(&podTemplate.Spec.Containers[utils.RayContainerIndex])
+
+	// Inject into the wait-gcs-ready init container only (not user-defined init containers).
+	for i := range podTemplate.Spec.InitContainers {
+		if podTemplate.Spec.InitContainers[i].Name != "wait-gcs-ready" {
+			continue
+		}
+		SetContainerTLSConfig(&podTemplate.Spec.InitContainers[i])
+	}
+
+	// Prepend an init container that waits until cert-manager has added the pod's IP to the
+	// certificate as an IP SAN. Required for both head and worker pods:
+	//   - Head: ensures the cert has the pod IP before GCS starts, so the autoscaler sidecar
+	//     and connecting workers are not hit by a TLS SAN mismatch on first connection.
+	//   - Worker: GCS (on the head) connects back to each worker's raylet using the worker's
+	//     pod IP. If the worker cert does not yet list that IP the TLS handshake fails, GCS
+	//     marks the worker dead, and the RayJob fails. Relying on KubeRay pod recreation is
+	//     not sufficient because the RayJob itself fails before a retry can succeed.
+	certPath := utils.RayTLSCertMountPath + "/tls.crt"
+	waitScript := fmt.Sprintf(`CERT="%s"
+if [ -z "${POD_IP}" ]; then
+  POD_IP=$(hostname -i 2>/dev/null | awk '{print $1}')
+fi
+if ! command -v openssl >/dev/null 2>&1; then
+  echo "openssl not found; cannot verify IP SAN" >&2
+  exit 1
+fi
+echo "Waiting for TLS cert to include IP SAN for ${POD_IP}..."
+while true; do
+  if openssl x509 -in "${CERT}" -noout -text 2>/dev/null | grep -qE "IP Address:${POD_IP}([^0-9.]|$)"; then
+    echo "TLS cert now includes IP SAN for ${POD_IP}"
+    exit 0
+  fi
+  echo "IP SAN for ${POD_IP} not yet in cert, retrying in 5s..."
+  sleep 5
+done`, certPath)
+
+	waitInitContainer := corev1.Container{
+		Name:            "wait-for-tls-ip-san",
+		Image:           podTemplate.Spec.Containers[utils.RayContainerIndex].Image,
+		ImagePullPolicy: podTemplate.Spec.Containers[utils.RayContainerIndex].ImagePullPolicy,
+		Command:         []string{"sh", "-c"},
+		Args:            []string{waitScript},
+		SecurityContext: podTemplate.Spec.Containers[utils.RayContainerIndex].SecurityContext.DeepCopy(),
+		Env: []corev1.EnvVar{
+			{
+				Name: "POD_IP",
+				ValueFrom: &corev1.EnvVarSource{
+					FieldRef: &corev1.ObjectFieldSelector{
+						FieldPath: "status.podIP",
+					},
+				},
+			},
+		},
+		VolumeMounts: []corev1.VolumeMount{
+			{
+				Name:      utils.RayTLSVolumeName,
+				MountPath: utils.RayTLSCertMountPath,
+				ReadOnly:  true,
+			},
+		},
+		Resources: corev1.ResourceRequirements{
+			Limits: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("50m"),
+				corev1.ResourceMemory: resource.MustParse("64Mi"),
+			},
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("50m"),
+				corev1.ResourceMemory: resource.MustParse("64Mi"),
+			},
+		},
+	}
+	// Prepend so it runs before wait-gcs-ready; skip if already present.
+	for i := range podTemplate.Spec.InitContainers {
+		if podTemplate.Spec.InitContainers[i].Name == "wait-for-tls-ip-san" {
+			return
+		}
+	}
+	podTemplate.Spec.InitContainers = append([]corev1.Container{waitInitContainer}, podTemplate.Spec.InitContainers...)
+}
+
+// SetContainerTLSConfig adds TLS environment variables and volume mount to a container.
+// Idempotent: only appends env vars and volume mount if not already present (avoids duplicates).
+// Exported so it can be reused by RayJob submitter containers when needed.
+func SetContainerTLSConfig(container *corev1.Container) {
+	// Add TLS env vars only if not already present.
+	// Use a slice (not a map) to ensure deterministic ordering.
+	tlsEnvVars := []corev1.EnvVar{
+		{Name: utils.RAY_USE_TLS, Value: "1"},
+		{Name: utils.RAY_TLS_SERVER_CERT, Value: utils.RayTLSCertMountPath + "/tls.crt"},
+		{Name: utils.RAY_TLS_SERVER_KEY, Value: utils.RayTLSCertMountPath + "/tls.key"},
+		{Name: utils.RAY_TLS_CA_CERT, Value: utils.RayTLSCertMountPath + "/ca.crt"},
+	}
+	existingEnvNames := make(map[string]struct{}, len(container.Env))
+	for _, e := range container.Env {
+		existingEnvNames[e.Name] = struct{}{}
+	}
+	for _, ev := range tlsEnvVars {
+		if _, ok := existingEnvNames[ev.Name]; !ok {
+			container.Env = append(container.Env, ev)
+		}
+	}
+
+	// Add TLS volume mount only if not already present (by name or mount path).
+	hasTLSMount := false
+	for i := range container.VolumeMounts {
+		m := &container.VolumeMounts[i]
+		if m.Name == utils.RayTLSVolumeName || m.MountPath == utils.RayTLSCertMountPath {
+			hasTLSMount = true
+			break
+		}
+	}
+	if !hasTLSMount {
+		container.VolumeMounts = append(container.VolumeMounts, corev1.VolumeMount{
+			Name:      utils.RayTLSVolumeName,
+			MountPath: utils.RayTLSCertMountPath,
+			ReadOnly:  true,
+		})
 	}
 }
 
@@ -473,6 +641,8 @@ func DefaultWorkerPodTemplate(ctx context.Context, instance rayv1.RayCluster, wo
 	if utils.IsAuthEnabled(&instance.Spec) {
 		configureTokenAuth(instance.Name, &podTemplate, instance.Spec.AuthOptions)
 	}
+
+	configureTLS(&podTemplate, instance, rayv1.WorkerNode)
 
 	return podTemplate
 }

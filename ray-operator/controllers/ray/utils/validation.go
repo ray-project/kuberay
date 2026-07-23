@@ -292,7 +292,14 @@ func ValidateRayClusterSpec(spec *rayv1.RayClusterSpec, annotations map[string]s
 	if spec.NetworkPolicy != nil && !features.Enabled(features.RayClusterNetworkPolicy) {
 		return fmt.Errorf("spec.networkPolicy requires the RayClusterNetworkPolicy feature gate to be enabled")
 	}
-	return validateNetworkPolicy(spec)
+	if err := validateNetworkPolicy(spec); err != nil {
+		return err
+	}
+
+	if spec.TLSOptions != nil && !features.Enabled(features.RayClusterMTLS) {
+		return fmt.Errorf("spec.tlsOptions requires the RayClusterMTLS feature gate to be enabled")
+	}
+	return validateTLSOptions(spec)
 }
 
 // validateNetworkPolicy checks that the NetworkPolicy config is internally consistent.
@@ -330,6 +337,86 @@ func validateNetworkPolicy(spec *rayv1.RayClusterSpec) error {
 		}
 	}
 
+	return nil
+}
+
+// validateTLSOptions checks that the TLS config is internally consistent.
+// It prevents users from setting TLS environment variables or volume mounts manually when TLS is enabled.
+func validateTLSOptions(spec *rayv1.RayClusterSpec) error {
+	if !IsTLSEnabled(spec) {
+		return nil
+	}
+
+	// Prevent conflict: user should not set any operator-managed TLS env vars when TLS is enabled.
+	forbiddenEnvVars := []string{RAY_USE_TLS, RAY_TLS_SERVER_CERT, RAY_TLS_SERVER_KEY, RAY_TLS_CA_CERT}
+
+	if len(spec.HeadGroupSpec.Template.Spec.Containers) > 0 {
+		headContainer := spec.HeadGroupSpec.Template.Spec.Containers[RayContainerIndex]
+		for _, envName := range forbiddenEnvVars {
+			if EnvVarExists(envName, headContainer.Env) {
+				return fmt.Errorf("cannot set %s environment variable in head Pod when tlsOptions is set "+
+					"- the operator manages TLS configuration automatically", envName)
+			}
+		}
+		if err := validateNoConflictingTLSVolumeMount(headContainer, "head Pod"); err != nil {
+			return err
+		}
+	}
+
+	for i := range spec.WorkerGroupSpecs {
+		worker := &spec.WorkerGroupSpecs[i]
+		if len(worker.Template.Spec.Containers) > 0 {
+			workerContainer := worker.Template.Spec.Containers[RayContainerIndex]
+			for _, envName := range forbiddenEnvVars {
+				if EnvVarExists(envName, workerContainer.Env) {
+					return fmt.Errorf("cannot set %s environment variable in worker group %q when tlsOptions is set "+
+						"- the operator manages TLS configuration automatically", envName, worker.GroupName)
+				}
+			}
+			if err := validateNoConflictingTLSVolumeMount(workerContainer, fmt.Sprintf("worker group %q", worker.GroupName)); err != nil {
+				return err
+			}
+		}
+	}
+
+	// Prevent conflict in autoscalerOptions: user-supplied env vars are appended after
+	// operator-managed TLS vars, so duplicates would silently override them at runtime.
+	// Volume mounts at the managed TLS path have the same risk.
+	if spec.AutoscalerOptions != nil {
+		for _, envName := range forbiddenEnvVars {
+			if EnvVarExists(envName, spec.AutoscalerOptions.Env) {
+				return fmt.Errorf("cannot set %s environment variable in autoscalerOptions.env when tlsOptions is set "+
+					"- the operator manages TLS configuration for the autoscaler automatically", envName)
+			}
+		}
+		for _, m := range spec.AutoscalerOptions.VolumeMounts {
+			if m.Name == RayTLSVolumeName {
+				return fmt.Errorf("cannot use volume mount named %q in autoscalerOptions.volumeMounts when tlsOptions is set "+
+					"- the operator manages TLS configuration automatically", RayTLSVolumeName)
+			}
+			if m.MountPath == RayTLSCertMountPath {
+				return fmt.Errorf("cannot use volume mount at path %q in autoscalerOptions.volumeMounts when tlsOptions is set "+
+					"- the operator manages TLS configuration automatically", RayTLSCertMountPath)
+			}
+		}
+	}
+
+	return nil
+}
+
+// validateNoConflictingTLSVolumeMount returns an error if the container already has a volume
+// mount that conflicts with the operator-managed TLS mount (same name or same mount path).
+func validateNoConflictingTLSVolumeMount(container corev1.Container, location string) error {
+	for _, m := range container.VolumeMounts {
+		if m.Name == RayTLSVolumeName {
+			return fmt.Errorf("cannot use volume mount named %q in %s when tlsOptions is set "+
+				"- the operator manages TLS configuration automatically", RayTLSVolumeName, location)
+		}
+		if m.MountPath == RayTLSCertMountPath {
+			return fmt.Errorf("cannot use volume mount at path %q in %s when tlsOptions is set "+
+				"- the operator manages TLS configuration automatically", RayTLSCertMountPath, location)
+		}
+	}
 	return nil
 }
 

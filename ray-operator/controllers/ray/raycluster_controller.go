@@ -10,10 +10,12 @@ import (
 	"os"
 	"reflect"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
 
+	certmanagerv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
 	"github.com/go-logr/logr"
 	routev1 "github.com/openshift/api/route/v1"
 	batchv1 "k8s.io/api/batch/v1"
@@ -80,6 +82,7 @@ type RayClusterReconcilerOptions struct {
 	DefaultPodLabels         map[string]string
 	IsOpenShift              bool
 	UseIngressOnOpenShift    bool
+	CertManagerAvailable     bool
 }
 
 // Reconcile reads that state of the cluster for a RayCluster object and makes changes based on it
@@ -92,7 +95,7 @@ type RayClusterReconcilerOptions struct {
 // +kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch;create;update;patch;delete;deletecollection
 // +kubebuilder:rbac:groups=core,resources=pods/status,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=pods/resize,verbs=patch
-// +kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;create;
+// +kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;create
 // +kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=services/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=coordination.k8s.io,resources=leases,verbs=get;list;create;update
@@ -167,6 +170,15 @@ func (r *RayClusterReconciler) rayClusterReconcile(ctx context.Context, instance
 
 	if err := utils.ValidateRayClusterSpec(&instance.Spec, instance.Annotations); err != nil {
 		logger.Error(err, "The RayCluster spec is invalid")
+		r.Recorder.Eventf(instance, nil, corev1.EventTypeWarning, string(utils.InvalidRayClusterSpec), string(utils.ValidateAction),
+			"The RayCluster spec is invalid %s/%s: %v", instance.Namespace, instance.Name, err)
+		return ctrl.Result{}, nil
+	}
+
+	// Fail fast when mTLS is requested but cert-manager is not installed.
+	if utils.IsTLSEnabled(&instance.Spec) && !r.options.CertManagerAvailable {
+		err := fmt.Errorf("tlsOptions requires cert-manager, but cert-manager is not installed")
+		logger.Error(err, "cert-manager not available for mTLS")
 		r.Recorder.Eventf(instance, nil, corev1.EventTypeWarning, string(utils.InvalidRayClusterSpec), string(utils.ValidateAction),
 			"The RayCluster spec is invalid %s/%s: %v", instance.Namespace, instance.Name, err)
 		return ctrl.Result{}, nil
@@ -744,6 +756,12 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 		}
 		// Create head Pod if it does not exist.
 		logger.Info("reconcilePods: Found 0 head Pods; creating a head Pod for the RayCluster.")
+		if utils.IsTLSEnabled(&instance.Spec) {
+			if err := r.checkMTLSSecretsReady(ctx, instance); err != nil {
+				logger.Info("mTLS secrets not ready, requeuing before head pod creation", "error", err.Error())
+				return fmt.Errorf("mTLS secrets not ready: %w", err)
+			}
+		}
 		if err := r.createHeadPod(ctx, *instance, clusterHash); err != nil {
 			return errstd.Join(utils.ErrFailedCreateHeadPod, err)
 		}
@@ -877,6 +895,12 @@ func (r *RayClusterReconciler) reconcilePods(ctx context.Context, instance *rayv
 		if diff > 0 {
 			// pods need to be added
 			logger.Info("reconcilePods", "Number workers to add", diff, "Worker group", worker.GroupName)
+			if utils.IsTLSEnabled(&instance.Spec) {
+				if err := r.checkMTLSSecretsReady(ctx, instance); err != nil {
+					logger.Info("mTLS secrets not ready, requeuing before worker pod creation", "error", err.Error())
+					return fmt.Errorf("mTLS secrets not ready: %w", err)
+				}
+			}
 			if features.Enabled(features.RayMultiHostIndexing) {
 				newReplicaIndex := 0
 				// create all workers of this group
@@ -1001,7 +1025,8 @@ func (r *RayClusterReconciler) reconcileMultiHostWorkerGroup(ctx context.Context
 		if _, alreadyDeleted := deletedPods[pod.Name]; alreadyDeleted {
 			continue
 		}
-		if shouldDelete, reason := shouldDeletePod(pod, rayv1.WorkerNode); shouldDelete {
+		shouldDelete, reason := shouldDeletePod(pod, rayv1.WorkerNode)
+		if shouldDelete {
 			replicaName := pod.Labels[utils.RayWorkerReplicaNameKey]
 			podsToDelete, ok := replicaMap[replicaName]
 			if !ok {
@@ -1090,6 +1115,12 @@ func (r *RayClusterReconciler) reconcileMultiHostWorkerGroup(ctx context.Context
 	logger.Info("Reconciling multi-host group", "group", worker.GroupName, "expectedReplicas", numExpectedReplicas, "runningReplicas", numRunningReplicas, "replicasToCreate", replicasToCreate, "inUseIndices", validReplicaIndices)
 	if replicasToCreate > 0 {
 		logger.Info("Scaling up multi-host group", "group", worker.GroupName, "replicasToCreate", replicasToCreate)
+		if utils.IsTLSEnabled(&instance.Spec) {
+			if err := r.checkMTLSSecretsReady(ctx, instance); err != nil {
+				logger.Info("mTLS secrets not ready, requeuing before multi-host worker pod creation", "error", err.Error())
+				return fmt.Errorf("mTLS secrets not ready: %w", err)
+			}
+		}
 		newReplicaIndex := 0 // Find the next available index starting from 0
 		for range replicasToCreate {
 			for validReplicaIndices[newReplicaIndex] {
@@ -1496,6 +1527,15 @@ func (r *RayClusterReconciler) buildRedisCleanupJob(ctx context.Context, instanc
 
 	// Only keep the Ray container in the Redis cleanup Job.
 	pod.Spec.Containers = []corev1.Container{pod.Spec.Containers[utils.RayContainerIndex]}
+
+	// Remove the wait-for-tls-ip-san init container if present. The cleanup pod's IP is
+	// never added to the head certificate SANs (the mTLS controller only tracks running
+	// Ray pods), so the init container would block for the full timeout and then fail,
+	// preventing Redis cleanup from running at all.
+	pod.Spec.InitContainers = slices.DeleteFunc(pod.Spec.InitContainers, func(c corev1.Container) bool {
+		return c.Name == "wait-for-tls-ip-san"
+	})
+
 	pod.Spec.Containers[utils.RayContainerIndex].Command = utils.GetContainerCommand([]string{})
 	pod.Spec.Containers[utils.RayContainerIndex].Args = []string{
 		"echo \"To get more information about manually deleting the storage namespace in Redis and removing the RayCluster's finalizer, please check https://docs.ray.io/en/master/cluster/kubernetes/user-guides/kuberay-gcs-ft.html for more details.\" && " +
@@ -1570,6 +1610,45 @@ func (r *RayClusterReconciler) buildRedisCleanupJob(ctx context.Context, instanc
 	}
 
 	return redisCleanupJob
+}
+
+// checkMTLSSecretsReady verifies that cert-manager has finished (re)issuing the TLS
+// certificates at the current generation and that the resulting secrets exist and contain
+// the required keys. This prevents pods from being created while an older secret is still
+// mounted during a SAN reissue (e.g. after a pod IP is added). Checking ObservedGeneration
+// on the condition ensures Ready=True reflects the current spec, not a previous generation.
+func (r *RayClusterReconciler) checkMTLSSecretsReady(ctx context.Context, instance *rayv1.RayCluster) error {
+	certNames := []string{
+		utils.GetTLSCertName(instance.Name, rayv1.HeadNode),
+		utils.GetTLSCertName(instance.Name, rayv1.WorkerNode),
+	}
+	for _, certName := range certNames {
+		cert := &certmanagerv1.Certificate{}
+		if err := r.Get(ctx, client.ObjectKey{Name: certName, Namespace: instance.Namespace}, cert); err != nil {
+			return fmt.Errorf("certificate %s not found: %w", certName, err)
+		}
+		if !isCertificateReady(cert) {
+			return fmt.Errorf("certificate %s is not ready at current generation %d", certName, cert.Generation)
+		}
+	}
+
+	secretNames := []string{
+		utils.GetTLSSecretName(instance.Name, rayv1.HeadNode),
+		utils.GetTLSSecretName(instance.Name, rayv1.WorkerNode),
+	}
+	requiredKeys := []string{"tls.crt", "tls.key", "ca.crt"}
+	for _, secretName := range secretNames {
+		secret := &corev1.Secret{}
+		if err := r.Get(ctx, client.ObjectKey{Name: secretName, Namespace: instance.Namespace}, secret); err != nil {
+			return fmt.Errorf("secret %s not found: %w", secretName, err)
+		}
+		for _, key := range requiredKeys {
+			if _, ok := secret.Data[key]; !ok {
+				return fmt.Errorf("secret %s missing required key %s", secretName, key)
+			}
+		}
+	}
+	return nil
 }
 
 // SetupWithManager builds the reconciler.

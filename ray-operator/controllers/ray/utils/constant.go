@@ -156,6 +156,26 @@ const (
 	KUBERAY_GEN_AUTOSCALER_START_CMD        = "KUBERAY_GEN_AUTOSCALER_START_CMD"
 	RAY_START_ULIMIT_OPEN_FILES             = "RAY_START_ULIMIT_OPEN_FILES"
 
+	// TLS-related environment variables for Ray. See: https://docs.ray.io/en/latest/ray-core/configure.html#tls-authentication
+	RAY_USE_TLS         = "RAY_USE_TLS"
+	RAY_TLS_SERVER_CERT = "RAY_TLS_SERVER_CERT"
+	RAY_TLS_SERVER_KEY  = "RAY_TLS_SERVER_KEY"
+	RAY_TLS_CA_CERT     = "RAY_TLS_CA_CERT"
+
+	// TLS volume and mount path constants for certificate mounting into Ray pods.
+	RayTLSVolumeName    = "ray-tls"
+	RayTLSCertMountPath = "/etc/ray/tls"
+
+	// cert-manager resource naming prefixes for auto-generated PKI resources.
+	RaySelfSignedIssuerPrefix = "ray-selfsigned-issuer"
+	RayCACertificatePrefix    = "ray-ca-certificate"
+	RayCAIssuerPrefix         = "ray-ca-issuer"
+	RayHeadCertPrefix         = "ray-head-cert"
+	RayWorkerCertPrefix       = "ray-worker-cert"
+	RayHeadSecretPrefix       = "ray-head-secret"
+	RayWorkerSecretPrefix     = "ray-worker-secret" //nolint:gosec // G101 -- secret name prefix, not a credential
+	RayCASecretPrefix         = "ca-secret"
+
 	// Environment variables for RayJob submitter Kubernetes Job.
 	// Example: ray job submit --address=http://$RAY_DASHBOARD_ADDRESS --submission-id=$RAY_JOB_SUBMISSION_ID ...
 	RAY_DASHBOARD_ADDRESS = "RAY_DASHBOARD_ADDRESS"
@@ -287,7 +307,6 @@ const (
 
 	// Finalizers for RayService
 	RayServiceFinalizer = "ray.io/rayservice-finalizer"
-
 	// RayNodeHeadGroupLabelValue is the value for the RayNodeGroupLabelKey label on a head node
 	RayNodeHeadGroupLabelValue      = "headgroup"
 	RayNodeSubmitterGroupLabelValue = "submittergroup"
@@ -476,6 +495,13 @@ const (
 	FailedToUpdateNetworkPolicy K8sEventType = "FailedToUpdateNetworkPolicy"
 	FailedToDeleteNetworkPolicy K8sEventType = "FailedToDeleteNetworkPolicy"
 	NetworkPolicyNameCollision  K8sEventType = "NetworkPolicyNameCollision"
+
+	// mTLS event list
+	MTLSPKIReady                K8sEventType = "MTLSPKIReady"
+	MTLSCertsNotReady           K8sEventType = "MTLSCertsNotReady"
+	MTLSFailedToReconcile       K8sEventType = "MTLSFailedToReconcile"
+	MTLSCertificatesUpdated     K8sEventType = "MTLSCertificatesUpdated"
+	MTLSCertificateExpiringSoon K8sEventType = "MTLSCertificateExpiringSoon"
 )
 
 // K8sEventAction describes what action the controller took when recording an event.

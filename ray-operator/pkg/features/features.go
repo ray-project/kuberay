@@ -62,6 +62,13 @@ const (
 	//
 	// Enables NetworkPolicy-based network isolation for RayClusters (spec.networkPolicy).
 	RayClusterNetworkPolicy featuregate.Feature = "RayClusterNetworkPolicy"
+
+	// owner: @chipspeak @kryanbeane
+	// rep: N/A
+	// alpha: v1.7
+	//
+	// Enables mTLS (spec.tlsOptions) for RayClusters via cert-manager.
+	RayClusterMTLS featuregate.Feature = "RayClusterMTLS"
 )
 
 func init() {
@@ -75,6 +82,7 @@ var defaultFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
 	RayServiceIncrementalUpgrade: {Default: false, PreRelease: featuregate.Alpha},
 	RayCronJob:                   {Default: false, PreRelease: featuregate.Alpha},
 	SidecarSubmitterRestart:      {Default: false, PreRelease: featuregate.Alpha},
+	RayClusterMTLS:               {Default: false, PreRelease: featuregate.Alpha},
 	RayClusterNetworkPolicy:      {Default: false, PreRelease: featuregate.Alpha},
 }
 
