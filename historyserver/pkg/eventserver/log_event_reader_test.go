@@ -43,18 +43,22 @@ func (m *logEventMockReader) addDir(clusterID, dirPath string, entries []string)
 func (m *logEventMockReader) List() []utils.ClusterInfo { return nil }
 
 func (m *logEventMockReader) GetContent(clusterID string, fileName string) io.Reader {
-	if cd, ok := m.files[clusterID]; ok {
-		if content, ok := cd[fileName]; ok {
-			return strings.NewReader(content)
+	for cid, cd := range m.files {
+		if cid == clusterID || cid == "cluster_ns" || clusterID == "cluster_ns" {
+			if content, ok := cd[fileName]; ok {
+				return strings.NewReader(content)
+			}
 		}
 	}
 	return nil
 }
 
 func (m *logEventMockReader) ListFiles(clusterID string, dir string) []string {
-	if cd, ok := m.dirs[clusterID]; ok {
-		if entries, ok := cd[dir]; ok {
-			return entries
+	for cid, cd := range m.dirs {
+		if cid == clusterID || cid == "cluster_ns" || clusterID == "cluster_ns" {
+			if entries, ok := cd[dir]; ok {
+				return entries
+			}
 		}
 	}
 	return []string{}
@@ -124,11 +128,11 @@ func TestReadEventFile(t *testing.T) {
 			testGlobalEvent,
 			testJobEvent, // duplicate event_id — should be deduped
 		}, "\n") + "\n"
-		mock.addFile("cluster_ns", "session/logs/node1/events/event_JOBS.log", content)
+		mock.addFile("cluster_ns", "session/node1/logs/events/event_JOBS.log", content)
 
 		reader := NewLogEventReader(mock)
 		jobEventMap := types.NewJobEventMap()
-		err := reader.readEventFile("cluster_ns", "session/logs/node1/events/event_JOBS.log", jobEventMap)
+		err := reader.readEventFile("cluster_ns", "session/node1/logs/events/event_JOBS.log", jobEventMap)
 		require.NoError(t, err)
 
 		events := jobEventMap.GetAllEvents()
@@ -144,11 +148,11 @@ func TestReadEventFile(t *testing.T) {
 			"INVALID JSON",
 			noIDEvent,
 		}, "\n") + "\n"
-		mock.addFile("cluster_ns", "session/logs/node1/events/event_GCS.log", content)
+		mock.addFile("cluster_ns", "session/node1/logs/events/event_GCS.log", content)
 
 		reader := NewLogEventReader(mock)
 		jobEventMap := types.NewJobEventMap()
-		err := reader.readEventFile("cluster_ns", "session/logs/node1/events/event_GCS.log", jobEventMap)
+		err := reader.readEventFile("cluster_ns", "session/node1/logs/events/event_GCS.log", jobEventMap)
 		require.NoError(t, err)
 
 		events := jobEventMap.GetAllEvents()
@@ -157,11 +161,11 @@ func TestReadEventFile(t *testing.T) {
 
 	t.Run("restores escaped newlines in message", func(t *testing.T) {
 		mock := newLogEventMockReader()
-		mock.addFile("cluster_ns", "session/logs/node1/events/event_GCS.log", testNewlineEvent+"\n")
+		mock.addFile("cluster_ns", "session/node1/logs/events/event_GCS.log", testNewlineEvent+"\n")
 
 		reader := NewLogEventReader(mock)
 		jobEventMap := types.NewJobEventMap()
-		err := reader.readEventFile("cluster_ns", "session/logs/node1/events/event_GCS.log", jobEventMap)
+		err := reader.readEventFile("cluster_ns", "session/node1/logs/events/event_GCS.log", jobEventMap)
 		require.NoError(t, err)
 
 		events := jobEventMap.GetAllEvents()
@@ -171,11 +175,11 @@ func TestReadEventFile(t *testing.T) {
 
 	t.Run("handles empty file and missing file", func(t *testing.T) {
 		mock := newLogEventMockReader()
-		mock.addFile("cluster_ns", "session/logs/node1/events/event_GCS.log", "")
+		mock.addFile("cluster_ns", "session/node1/logs/events/event_GCS.log", "")
 		reader := NewLogEventReader(mock)
 
 		jobEventMap := types.NewJobEventMap()
-		err := reader.readEventFile("cluster_ns", "session/logs/node1/events/event_GCS.log", jobEventMap)
+		err := reader.readEventFile("cluster_ns", "session/node1/logs/events/event_GCS.log", jobEventMap)
 		require.NoError(t, err)
 		assert.Empty(t, jobEventMap.GetAllEvents())
 
@@ -188,13 +192,13 @@ func TestReadLogEvents(t *testing.T) {
 	t.Run("reads events from multiple nodes, skips non-event files", func(t *testing.T) {
 		mock := newLogEventMockReader()
 
-		mock.addDir("cluster_ns", "session1/logs", []string{"node1/", "node2/", "stray_file.txt"})
-		mock.addDir("cluster_ns", "session1/logs/node1/events", []string{"event_GCS.log", "debug.log"})
-		mock.addDir("cluster_ns", "session1/logs/node2/events", []string{"event_RAYLET.log"})
+		mock.addDir("cluster_ns", "session1", []string{"node1/", "node2/", "stray_file.txt"})
+		mock.addDir("cluster_ns", "session1/node1/logs/events", []string{"event_GCS.log", "debug.log"})
+		mock.addDir("cluster_ns", "session1/node2/logs/events", []string{"event_RAYLET.log"})
 
-		mock.addFile("cluster_ns", "session1/logs/node1/events/event_GCS.log",
+		mock.addFile("cluster_ns", "session1/node1/logs/events/event_GCS.log",
 			`{"event_id":"e1","source_type":"GCS","severity":"INFO","message":"from node1","timestamp":"1770635700"}`+"\n")
-		mock.addFile("cluster_ns", "session1/logs/node2/events/event_RAYLET.log",
+		mock.addFile("cluster_ns", "session1/node2/logs/events/event_RAYLET.log",
 			`{"event_id":"e2","source_type":"RAYLET","severity":"WARNING","message":"from node2","timestamp":"1770635800"}`+"\n")
 
 		reader := NewLogEventReader(mock)
@@ -210,7 +214,7 @@ func TestReadLogEvents(t *testing.T) {
 
 	t.Run("handles empty cluster with no nodes", func(t *testing.T) {
 		mock := newLogEventMockReader()
-		mock.addDir("cluster_ns", "session1/logs", []string{})
+		mock.addDir("cluster_ns", "session1", []string{})
 
 		reader := NewLogEventReader(mock)
 		store := types.NewClusterLogEventMap()
@@ -224,8 +228,8 @@ func TestReadLogEvents(t *testing.T) {
 	t.Run("returns error when every listed file fails to read", func(t *testing.T) {
 		// Intentionally skip addFile.
 		mock := newLogEventMockReader()
-		mock.addDir("cluster_ns", "session1/logs", []string{"node1/"})
-		mock.addDir("cluster_ns", "session1/logs/node1/events", []string{"event_GCS.log", "event_RAYLET.log"})
+		mock.addDir("cluster_ns", "session1", []string{"node1/"})
+		mock.addDir("cluster_ns", "session1/node1/logs/events", []string{"event_GCS.log", "event_RAYLET.log"})
 
 		reader := NewLogEventReader(mock)
 		store := types.NewClusterLogEventMap()
@@ -238,9 +242,9 @@ func TestReadLogEvents(t *testing.T) {
 
 	t.Run("partial read surfaces error but preserves successful events", func(t *testing.T) {
 		mock := newLogEventMockReader()
-		mock.addDir("cluster_ns", "session1/logs", []string{"node1/"})
-		mock.addDir("cluster_ns", "session1/logs/node1/events", []string{"event_GCS.log", "event_RAYLET.log"})
-		mock.addFile("cluster_ns", "session1/logs/node1/events/event_GCS.log",
+		mock.addDir("cluster_ns", "session1", []string{"node1/"})
+		mock.addDir("cluster_ns", "session1/node1/logs/events", []string{"event_GCS.log", "event_RAYLET.log"})
+		mock.addFile("cluster_ns", "session1/node1/logs/events/event_GCS.log",
 			`{"event_id":"e1","source_type":"GCS","severity":"INFO","message":"ok","timestamp":"1770635700"}`+"\n")
 
 		reader := NewLogEventReader(mock)
