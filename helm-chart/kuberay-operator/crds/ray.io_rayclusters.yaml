@@ -4934,12 +4934,6 @@ spec:
               suspend:
                 type: boolean
               tlsOptions:
-                properties:
-                  mode:
-                    default: MutualTLS
-                    enum:
-                    - MutualTLS
-                    type: string
                 type: object
               upgradeStrategy:
                 properties:

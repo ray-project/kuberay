@@ -52,8 +52,8 @@ type RayClusterSpec struct {
 	// +optional
 	NetworkPolicy *NetworkPolicyConfig `json:"networkPolicy,omitempty"`
 	// TLSOptions specifies optional TLS encryption settings for the RayCluster.
-	// If omitted, TLS is disabled. When set, the mode field controls the
-	// security level (defaults to "MutualTLS" for mutual TLS).
+	// If omitted, TLS is disabled. When set, the operator enables mTLS using
+	// cert-manager to provision and manage certificates.
 	// Requires the RayClusterMTLS feature gate on the operator.
 	// +optional
 	TLSOptions *TLSOptions `json:"tlsOptions,omitempty"`
@@ -67,28 +67,12 @@ type RayClusterSpec struct {
 	WorkerGroupSpecs []WorkerGroupSpec `json:"workerGroupSpecs,omitempty"`
 }
 
-// TLSMode selects the TLS security level for a RayCluster.
-type TLSMode string
-
-const (
-	// TLSModeMutual enables mutual TLS (client & server authentication).
-	TLSModeMutual TLSMode = "MutualTLS"
-)
-
 // TLSOptions configures TLS encryption for the RayCluster.
 // When TLSOptions is nil, TLS is disabled. When set, the operator uses
 // cert-manager to automatically provision a full PKI (self-signed CA, head
 // and worker leaf certificates) and keeps certificates up to date as pod IPs
 // change during autoscaling.
-type TLSOptions struct {
-	// Mode selects the TLS security mode.
-	// Supported values: "MutualTLS" (mutual TLS, client & server authentication).
-	// Defaults to "MutualTLS".
-	// +kubebuilder:validation:Enum=MutualTLS
-	// +kubebuilder:default=MutualTLS
-	// +optional
-	Mode TLSMode `json:"mode,omitempty"`
-}
+type TLSOptions struct{}
 
 // +kubebuilder:validation:Enum=Recreate;None
 type RayClusterUpgradeType string
