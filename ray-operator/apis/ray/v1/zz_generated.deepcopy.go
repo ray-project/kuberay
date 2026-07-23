@@ -1276,6 +1276,11 @@ func (in *WorkerGroupSpec) DeepCopyInto(out *WorkerGroupSpec) {
 		*out = new(int32)
 		**out = **in
 	}
+	if in.Priority != nil {
+		in, out := &in.Priority, &out.Priority
+		*out = new(int32)
+		**out = **in
+	}
 	if in.Resources != nil {
 		in, out := &in.Resources, &out.Resources
 		*out = make(map[string]string, len(*in))
