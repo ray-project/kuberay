@@ -109,6 +109,11 @@ func TestRayClusterSuspend(t *testing.T) {
 	g.Eventually(RayCluster(test, namespace.Name, rayCluster.Name), TestTimeoutMedium).
 		Should(WithTransform(StatusCondition(rayv1.RayClusterProvisioned), MatchCondition(metav1.ConditionFalse, rayv1.RayClusterPodsProvisioning)))
 
+	// Only Pods consume quota, so suspend deletes them to free it for e.g. Kueue.
+	g.Eventually(Pods(test, namespace.Name,
+		LabelSelector(utils.RayClusterLabelKey+"="+rayCluster.Name)), TestTimeoutMedium).
+		Should(BeEmpty())
+
 	rayClusterAC = rayClusterAC.WithSpec(rayClusterAC.Spec.WithSuspend(false))
 	rayCluster, err = test.Client().Ray().RayV1().RayClusters(namespace.Name).Apply(test.Ctx(), rayClusterAC, TestApplyOptions)
 	g.Expect(err).NotTo(HaveOccurred())
